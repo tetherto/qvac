@@ -5,9 +5,19 @@ import type {
   ReloadConfigRequest,
   ResolveContext,
 } from "@/schemas";
-import { normalizeModelType } from "@/schemas";
+import {
+  normalizeModelType,
+  PROFILING_KEY,
+  OPERATION_EVENT_KEY,
+  type OperationEvent,
+} from "@/schemas";
 import { loadModel } from "@/server/bare/ops/load-model";
-import { resolveModelPath } from "@/server/rpc/handlers/load-model/resolve";
+import {
+  resolveModelPath,
+  resolveModelPathWithStats,
+} from "@/server/rpc/handlers/load-model/resolve";
+import type { ResolveResult } from "./types";
+import { nowMs, generateProfileId } from "@/profiling/clock";
 import {
   getModelEntry,
   updateModelConfig,
@@ -31,21 +41,6 @@ import { getPlugin } from "@/server/plugins";
 
 const logger = getServerLogger();
 
-type ResolveFn = (src: unknown) => Promise<string>;
-
-// ---------------------------------------------------------------------------
-// Generic parallel resolver — resolves a named set of sources concurrently
-// ---------------------------------------------------------------------------
-
-async function resolveInParallel(
-  resolve: ResolveFn,
-  sources: Record<string, unknown>,
-): Promise<Record<string, string>> {
-  const entries = Object.entries(sources);
-  const paths = await Promise.all(entries.map(([, src]) => resolve(src)));
-  return Object.fromEntries(entries.map(([key], i) => [key, paths[i]!]));
-}
-
 // ---------------------------------------------------------------------------
 // Handler
 // ---------------------------------------------------------------------------
@@ -60,6 +55,11 @@ export async function handleLoadModel(
 
   const { modelSrc, modelName, seed } = request;
   const canonicalModelType = normalizeModelType(request.modelType);
+
+  const profilingMeta = (request as Record<string, unknown>)[PROFILING_KEY] as
+    | { enabled?: boolean; id?: string }
+    | undefined;
+  const profilingEnabled = profilingMeta?.enabled !== false && !!profilingMeta;
 
   try {
     const plugin = getPlugin(canonicalModelType);
@@ -87,12 +87,25 @@ export async function handleLoadModel(
     }
     resolvedModelConfig = parseResult.data as Record<string, unknown>;
 
-    const resolve: ResolveFn = (src) =>
-      resolveModelPath(src, progressCallback, seed);
+    const totalLoadStart = profilingEnabled ? nowMs() : 0;
 
-    const resolved = await resolveInParallel(resolve, {
-      modelPath: modelSrc,
-    });
+    let resolveResult: ResolveResult | undefined;
+    let resolvedModelPath: string;
+
+    if (profilingEnabled) {
+      resolveResult = await resolveModelPathWithStats(
+        modelSrc,
+        progressCallback,
+        seed,
+      );
+      resolvedModelPath = resolveResult.path;
+    } else {
+      resolvedModelPath = await resolveModelPath(
+        modelSrc,
+        progressCallback,
+        seed,
+      );
+    }
 
     let pluginArtifacts: Record<string, string> = {};
     if (plugin.resolveConfig) {
@@ -116,39 +129,91 @@ export async function handleLoadModel(
     const modelHashInput = `${request.modelType}:${modelSrc}:${configStr}`;
     const modelId = generateShortHash(modelHashInput);
 
-    const collisions = Object.keys(pluginArtifacts).filter(
-      (k) => k in resolved,
-    );
-    if (collisions.length > 0) {
+    if ("modelPath" in pluginArtifacts) {
       logger.warn(
-        `Plugin returned artifact keys that were overridden by core: ${collisions.join(", ")}`,
+        "Plugin returned 'modelPath' artifact which was overridden by core",
       );
     }
 
-    const allArtifacts = { ...pluginArtifacts, ...resolved };
-    const { modelPath: resolvedModelPath, ...artifacts } = allArtifacts;
+    // eslint-disable-next-line @typescript-eslint/no-unused-vars
+    const { modelPath: _, ...artifacts } = pluginArtifacts;
 
     if (!resolvedModelPath) {
       throw new ModelLoadFailedError("modelPath resolution failed");
     }
 
-    await loadModel({
-      modelId,
-      modelPath: resolvedModelPath,
-      options: {
-        ...request,
-        modelType: canonicalModelType,
-        modelConfig: resolvedModelConfig,
+    const loadResult = await loadModel(
+      {
+        modelId,
+        modelPath: resolvedModelPath,
+        options: {
+          ...request,
+          modelType: canonicalModelType,
+          modelConfig: resolvedModelConfig,
+        },
+        artifacts: Object.keys(artifacts).length > 0 ? artifacts : undefined,
+        modelName,
       },
-      artifacts: Object.keys(artifacts).length > 0 ? artifacts : undefined,
-      modelName,
-    });
+      profilingEnabled ? { collectTiming: true } : undefined,
+    );
 
-    return {
+    const response: LoadModelResponse = {
       type: "loadModel",
       success: true,
       modelId,
     };
+
+    if (profilingEnabled) {
+      const totalLoadTimeMs = nowMs() - totalLoadStart;
+      const profileId = profilingMeta?.id ?? generateProfileId();
+
+      const gauges: Record<string, number> = {
+        totalLoadTime: totalLoadTimeMs,
+      };
+      if (loadResult.timing?.modelInitializationTimeMs !== undefined) {
+        gauges["modelInitializationTime"] =
+          loadResult.timing.modelInitializationTimeMs;
+      }
+      if (resolveResult?.downloadStats) {
+        const ds = resolveResult.downloadStats;
+        if (ds.downloadTimeMs !== undefined) {
+          gauges["downloadTime"] = ds.downloadTimeMs;
+        }
+        if (ds.totalBytesDownloaded !== undefined) {
+          gauges["totalBytesDownloaded"] = ds.totalBytesDownloaded;
+        }
+        if (ds.downloadSpeedBps !== undefined) {
+          gauges["downloadSpeedBps"] = ds.downloadSpeedBps;
+        }
+        if (ds.checksumValidationTimeMs !== undefined) {
+          gauges["checksumValidationTime"] = ds.checksumValidationTimeMs;
+        }
+      }
+
+      const tags: Record<string, string> = {};
+      if (canonicalModelType) {
+        tags["modelType"] = canonicalModelType;
+      }
+      if (resolveResult?.sourceType) {
+        tags["sourceType"] = resolveResult.sourceType;
+      }
+      if (resolveResult?.downloadStats?.cacheHit !== undefined) {
+        tags["cacheHit"] = resolveResult.downloadStats.cacheHit ? "true" : "false";
+      }
+
+      const operationEvent: OperationEvent = {
+        op: "loadModel",
+        kind: "handler",
+        ms: totalLoadTimeMs,
+        profileId,
+        gauges: Object.keys(gauges).length > 0 ? gauges : undefined,
+        tags: Object.keys(tags).length > 0 ? tags : undefined,
+      };
+
+      (response as LoadModelResponse & { [OPERATION_EVENT_KEY]?: OperationEvent })[OPERATION_EVENT_KEY] = operationEvent;
+    }
+
+    return response;
   } catch (error) {
     logger.error("Error loading model:", error);
     return {
