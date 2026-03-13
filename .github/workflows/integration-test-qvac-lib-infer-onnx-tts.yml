@@ -43,7 +43,7 @@ jobs:
   run-integration-tests:
     continue-on-error: true
     runs-on: ${{ matrix.os }}
-    name: test-${{ matrix.platform }}-${{ matrix.arch }}
+    name: test-${{ matrix.platform }}-${{ matrix.arch }}${{ matrix.os_version && format('-{0}', matrix.os_version) || '' }}-${{ matrix.variant }}
     env:
       AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
       AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
@@ -53,16 +53,30 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
+        variant: [fp32, fp16]
+        os:
+          - ubuntu-22.04
+          - ubuntu-24.04
+          - ubuntu-24.04-arm
+          - macos-14-xlarge
+          - macos-15-large
+          - windows-2022
+        exclude:
+          - os: ubuntu-24.04-arm
+            variant: fp16
         include:
           - os: ubuntu-22.04
             platform: linux
             arch: x64
+            os_version: u22
           - os: ubuntu-24.04
             platform: linux
             arch: x64
+            os_version: u24
           - os: ubuntu-24.04-arm
             platform: linux
             arch: arm64
+            os_version: u24
           - os: macos-14-xlarge
             platform: darwin
             arch: arm64
@@ -153,4 +167,5 @@ jobs:
         working-directory: ${{ inputs.workdir }}
         run: npm run test:integration
         env:
+          CHATTERBOX_VARIANT: ${{ matrix.variant }}
           QASE_API_TOKEN: ${{ secrets.QASE_API_TOKEN }}

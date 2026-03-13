@@ -117,6 +117,15 @@ export const customTree: Node[] = [
     name: "References",
   },
   {
+    name: 'SDK API',
+    type: 'folder',
+    icon: resolveIcon('Code'),
+    index: {type: 'page', name: 'SDK API', url: '/sdk/api/latest'},
+    children: [
+      { name: 'Latest', url: '/sdk/api/latest', type: 'page', icon: resolveIcon('Tag') },
+    ],
+  },
+  {
     name: 'API',
     type: 'folder',
     icon: resolveIcon('BookA'),

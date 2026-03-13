@@ -5,7 +5,11 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-## [0.6.1] - 2026-03-11
+## [0.6.2]
+
+Fix Chatterbox models with FP16 quantization not working on linux-arm64 platform.
+
+## [0.6.1]
 
 This release fixes CMake configuration errors that were preventing the TTS addon from building correctly with updated onnxruntime dependencies, and pins onnxruntime to a minimum version constraint to avoid future compatibility issues.
 
