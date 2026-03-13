@@ -24,11 +24,11 @@ if (!args[0]) {
 
 const audioFilePath = args[0];
 
-const parakeetEncoderSrc = args[1] || PARAKEET_TDT_ENCODER_FP32;
-const parakeetEncoderDataSrc = args[2] || PARAKEET_TDT_ENCODER_DATA_FP32;
-const parakeetDecoderSrc = args[3] || PARAKEET_TDT_DECODER_FP32;
-const parakeetVocabSrc = args[4] || PARAKEET_TDT_VOCAB;
-const parakeetPreprocessorSrc = args[5] || PARAKEET_TDT_PREPROCESSOR_FP32;
+const parakeetEncoderSrc = args[1] ?? PARAKEET_TDT_ENCODER_FP32;
+const parakeetEncoderDataSrc = args[2] ?? PARAKEET_TDT_ENCODER_DATA_FP32;
+const parakeetDecoderSrc = args[3] ?? PARAKEET_TDT_DECODER_FP32;
+const parakeetVocabSrc = args[4] ?? PARAKEET_TDT_VOCAB;
+const parakeetPreprocessorSrc = args[5] ?? PARAKEET_TDT_PREPROCESSOR_FP32;
 
 try {
   console.log("Starting Parakeet transcription example...");
