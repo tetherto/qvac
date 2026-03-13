@@ -1,5 +1,20 @@
 # Changelog
 
+## [0.12.1] - 2026-03-12
+
+### Added
+
+#### Per-request generation parameter overrides
+
+`model.run(prompt, { generationParams: { temp: 0.7, predict: 256 } })` applies sampling parameter overrides for a single inference call without reloading the model. Load-time defaults are automatically restored after each request.
+
+- Supported parameters: `temp`, `top_p`, `top_k`, `predict`, `seed`, `frequency_penalty`, `presence_penalty`, `repeat_penalty`.
+- `generationParams` is passed as a direct property on the addon input (same transport as `prefill`), parsed via N-API in `AddonJs.hpp`.
+- C++ `applyGenerationParams()` returns a restore callable that captures saved state; exception-safe via try/catch in `processPrompt()`.
+- Supported for both text and multimodal (`MtmdLlmContext`) models.
+- Integration tests cover seed reproducibility, predict token limits, and defaults restoration.
+
+
 ## [0.12.0] - 2026-03-09
 
 ### Added
@@ -27,6 +42,7 @@ This means `reload()` blocks until all in-flight operations complete, while conc
 
 - Refactored `LlamaModel` internals: extracted `processPromptImpl` and `cancelImpl` (lock-free implementations) to separate locking concerns from business logic.
 - `initializeBackend()` is now private — it is only called internally during `init()`.
+
 
 ## [0.11.1] - 2026-03-09
 

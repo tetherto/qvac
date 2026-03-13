@@ -555,6 +555,43 @@ async function ensureModelForType (modelType) {
   return targetPath
 }
 
+/**
+ * Build the named-paths config properties for a given model type.
+ * C++ loads directly from these paths (no JS buffer loading needed).
+ * @param {string} modelType - 'tdt', 'ctc', 'eou', or 'sortformer'
+ * @param {string} modelDir - absolute path to the model directory
+ * @returns {Object} named path config properties to spread into ParakeetInterface config
+ */
+function getNamedPathsConfig (modelType, modelDir) {
+  switch (modelType) {
+    case 'ctc':
+      return {
+        ctcModelPath: path.join(modelDir, 'model.onnx'),
+        ctcModelDataPath: path.join(modelDir, 'model.onnx_data'),
+        tokenizerPath: path.join(modelDir, 'tokenizer.json')
+      }
+    case 'eou':
+      return {
+        eouEncoderPath: path.join(modelDir, 'encoder.onnx'),
+        eouDecoderPath: path.join(modelDir, 'decoder_joint.onnx'),
+        tokenizerPath: path.join(modelDir, 'tokenizer.json')
+      }
+    case 'sortformer':
+      return {
+        sortformerPath: path.join(modelDir, 'sortformer.onnx')
+      }
+    case 'tdt':
+    default:
+      return {
+        encoderPath: path.join(modelDir, 'encoder-model.onnx'),
+        encoderDataPath: path.join(modelDir, 'encoder-model.onnx.data'),
+        decoderPath: path.join(modelDir, 'decoder_joint-model.onnx'),
+        vocabPath: path.join(modelDir, 'vocab.txt'),
+        preprocessorPath: path.join(modelDir, 'preprocessor.onnx')
+      }
+  }
+}
+
 module.exports = {
   detectPlatform,
   waitUntilIdle,
@@ -570,6 +607,7 @@ module.exports = {
   ensureModel,
   ensureModelForType,
   readFileChunked,
+  getNamedPathsConfig,
   isMobile,
   platform,
   arch,
