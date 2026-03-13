@@ -554,8 +554,11 @@ void MtmdLlmContext::resetState(bool resetStats) {
   // Reset the first msg token length
   firstMsgTokens_ = 0;
 
-  // Reset slide counter
-  nSlides_ = 0;
+  // Reset slide counter (only when full stats reset is requested;
+  // runtimeStats() reads nSlides_ after a resetState(false) call)
+  if (resetStats) {
+    nSlides_ = 0;
+  }
 
   // Clear UTF-8 buffer when resetting state
   utf8Buffer_.clear();
