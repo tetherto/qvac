@@ -1,6 +1,7 @@
 #include "SdModel.hpp"
 
 #include <chrono>
+#include <cstdlib>
 #include <cstring>
 #include <filesystem>
 #include <sstream>
@@ -36,6 +37,20 @@ thread_local ProgressCtx tl_progressCtx;
 // tl_progressCtx for progress.  Avoids relying on the process-global
 // sd_abort_cb_data when multiple SdModel instances could coexist.
 thread_local const SdModel* tl_abortModel = nullptr;
+
+// Guard against calling free_sd_ctx during process exit.
+// When process.exit() is called, ggml's backend (Metal/Vulkan) may have
+// already started tearing down its global state.  Calling free_sd_ctx at
+// that point causes a SIGSEGV (exit code 139).  We register an atexit
+// handler to flip this flag before static destructors run, then skip the
+// reset in unload() — the OS will reclaim all memory anyway.
+std::atomic<bool> g_processExiting{false};
+// NOLINTNEXTLINE(cert-err58-cpp)
+const int g_exitGuardRegistered = []() {
+  std::atexit(
+      []() { g_processExiting.store(true, std::memory_order_relaxed); });
+  return 0;
+}();
 
 void sdProgressCallback(int step, int steps, float /*time*/, void* /*data*/) {
   if (!tl_progressCtx.job || !tl_progressCtx.job->progressCallback)
@@ -227,7 +242,14 @@ void SdModel::load() {
 void SdModel::unload() {
   if (!isLoaded())
     return;
-  sdCtx_.reset(); // calls free_sd_ctx via custom deleter
+  // Skip free_sd_ctx during process exit — ggml's backend globals (Metal,
+  // Vulkan) may be partially torn down already, causing SIGSEGV (exit 139).
+  // The OS reclaims all memory on process exit regardless.
+  if (!g_processExiting.load(std::memory_order_relaxed)) {
+    sdCtx_.reset(); // calls free_sd_ctx via custom deleter
+  } else {
+    sdCtx_.release(); // drop pointer without calling free_sd_ctx
+  }
   lastStats_.clear();
   cancelRequested_.store(false);
 
