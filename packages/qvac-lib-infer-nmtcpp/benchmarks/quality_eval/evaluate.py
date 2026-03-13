@@ -91,7 +91,23 @@ FLORES_LANG_CODES = {
         "uk": "ukr_Cyrl",
         "ur": "urd_Arab",
         "vi": "vie_Latn",
-        "zh": "zho_Hans"
+        "zh": "zho_Hans",
+        "sw": "swh_Latn",
+        "yo": "yor_Latn",
+        "ha": "hau_Latn",
+        "zu": "zul_Latn",
+        "am": "amh_Ethi",
+        "ig": "ibo_Latn",
+        "wo": "wol_Latn",
+        "sn": "sna_Latn",
+        "rw": "kin_Latn",
+        "lg": "lug_Latn",
+        "ts": "tso_Latn",
+        "tw": "twi_Latn",
+        "xh": "xho_Latn",
+        "ny": "nya_Latn",
+        "so": "som_Latn",
+        "ln": "lin_Latn"
     }
 }
 
@@ -125,7 +141,34 @@ SUPPORTED_PAIRS = {
     "google": set(),  # Google supports almost all pairs
     "nllb": set(),  # NLLB supports many pairs
     "bergamot": set(),  # Bergamot supports many pairs via translatelocally.com
-    "qvac_bergamot": set()  # QVAC backend with Bergamot/Firefox model format
+    "qvac_bergamot": set(),  # QVAC backend with Bergamot/Firefox model format
+    "afriquegemma_llm": {
+        # AfriqueGemma-4B: 20 African languages + En/Fr/Pt/Ar — bidirectional with English
+        ("en", "sw"), ("en", "yo"), ("en", "ha"), ("en", "zu"), ("en", "am"),
+        ("en", "ig"), ("en", "wo"), ("en", "sn"), ("en", "rw"), ("en", "lg"),
+        ("en", "ts"), ("en", "tw"), ("en", "xh"), ("en", "ny"), ("en", "so"), ("en", "ln"),
+        ("sw", "en"), ("yo", "en"), ("ha", "en"), ("zu", "en"), ("am", "en"),
+        ("ig", "en"), ("wo", "en"), ("sn", "en"), ("rw", "en"), ("lg", "en"),
+        ("ts", "en"), ("tw", "en"), ("xh", "en"), ("ny", "en"), ("so", "en"), ("ln", "en"),
+        # High-resource languages supported by AfriqueGemma
+        ("en", "fr"), ("fr", "en"), ("en", "pt"), ("pt", "en"),
+        ("en", "ar"), ("ar", "en"),
+        # Cross-lingual African pairs via AfriqueGemma
+        ("fr", "sw"), ("sw", "fr"), ("fr", "yo"), ("yo", "fr"),
+        ("fr", "ha"), ("ha", "fr"), ("fr", "wo"), ("wo", "fr"),
+    },
+    "afriquegemma_llamacpp": {
+        ("en", "sw"), ("en", "yo"), ("en", "ha"), ("en", "zu"), ("en", "am"),
+        ("en", "ig"), ("en", "wo"), ("en", "sn"), ("en", "rw"), ("en", "lg"),
+        ("en", "ts"), ("en", "tw"), ("en", "xh"), ("en", "ny"), ("en", "so"), ("en", "ln"),
+        ("sw", "en"), ("yo", "en"), ("ha", "en"), ("zu", "en"), ("am", "en"),
+        ("ig", "en"), ("wo", "en"), ("sn", "en"), ("rw", "en"), ("lg", "en"),
+        ("ts", "en"), ("tw", "en"), ("xh", "en"), ("ny", "en"), ("so", "en"), ("ln", "en"),
+        ("en", "fr"), ("fr", "en"), ("en", "pt"), ("pt", "en"),
+        ("en", "ar"), ("ar", "en"),
+        ("fr", "sw"), ("sw", "fr"), ("fr", "yo"), ("yo", "fr"),
+        ("fr", "ha"), ("ha", "fr"), ("fr", "wo"), ("wo", "fr"),
+    },
 }
 
 
@@ -222,6 +265,17 @@ def copy_dataset_files(dataset_name, src_lang, trg_lang, results_dir, data_dir):
     return dest_src, dest_trg
 
 
+def truncate_file(filepath, max_lines):
+    """Truncate a file to the first max_lines lines."""
+    with open(filepath, "r", encoding="utf-8") as f:
+        lines = f.readlines()
+    if len(lines) > max_lines:
+        with open(filepath, "w", encoding="utf-8") as f:
+            f.writelines(lines[:max_lines])
+        return max_lines
+    return len(lines)
+
+
 def translate_file(translator, src_lang, trg_lang, input_file, output_file, use_pivot=False, is_quantized_model=False, hyperparams=None, use_batch=False):
     """Run translation using the specified translator. Returns elapsed time in seconds.
 
@@ -286,6 +340,10 @@ def translate_file(translator, src_lang, trg_lang, input_file, output_file, use_
         cmd = ["python3", str(script_dir / "nllb.py")]
     elif translator == "bergamot":
         cmd = ["python3.10", str(script_dir / "bergamot_translator.py")]
+    elif translator == "afriquegemma_llm":
+        cmd = ["python3", str(script_dir / "afriquegemma_llm.py")]
+    elif translator == "afriquegemma_llamacpp":
+        cmd = [sys.executable, str(script_dir / "afriquegemma_llamacpp.py")]
     else:
         raise ValueError(f"Unknown translator: {translator}")
 
@@ -312,16 +370,20 @@ def translate_file(translator, src_lang, trg_lang, input_file, output_file, use_
     with open(input_file, "r") as infile:
         with open(output_file, "w") as outfile:
             try:
-                # Set a timeout of 2 hours (same as qvac.py internal timeout)
-                # stderr=None allows real-time progress output from qvac.py
+                # Timeout scales with input size: 6h for LLM translators
+                # (e.g. afriquegemma_llm at ~8s/sentence × 1012 ≈ 2.3h),
+                # 2h for conventional MT backends.
+                is_llm_translator = translator.startswith("afriquegemma")
+                timeout_sec = 21600 if is_llm_translator else 7200
+                # stderr=None allows real-time progress output
                 result = subprocess.run(
                     cmd,
                     stdin=infile,
                     stdout=outfile,
-                    stderr=None,  # Stream stderr in real-time (shows progress)
+                    stderr=None,
                     env=env,
                     check=True,
-                    timeout=7200,  # 2 hour timeout
+                    timeout=timeout_sec,
                     text=True
                 )
 
@@ -428,7 +490,7 @@ def calculate_comet(source_file, reference_file, hypothesis_file):
     return result.system_score * 100
 
 
-def evaluate_pair(src_lang, trg_lang, translators, dataset_name, results_dir, data_dir, metrics=["bleu"], skip_existing=True, use_pivot=False, is_quantized_model=False, hyperparams=None, use_batch=False):
+def evaluate_pair(src_lang, trg_lang, translators, dataset_name, results_dir, data_dir, metrics=["bleu"], skip_existing=True, use_pivot=False, is_quantized_model=False, hyperparams=None, use_batch=False, max_samples=0):
     """Evaluate all translators for a language pair with multiple metrics
 
     Args:
@@ -444,6 +506,7 @@ def evaluate_pair(src_lang, trg_lang, translators, dataset_name, results_dir, da
         is_quantized_model: If True, then QVAC will try to use q4 gguf format model.
         hyperparams: Dictionary of hyperparameters (beamsize, lengthpenalty, etc.)
         use_batch: If True, use batch translation API (qvac_bergamot only)
+        max_samples: Limit to first N sentences (0 = use all)
     """
     pair = (src_lang, trg_lang)
     pair_name = f"{src_lang}-{trg_lang}"
@@ -455,6 +518,11 @@ def evaluate_pair(src_lang, trg_lang, translators, dataset_name, results_dir, da
 
     # Copy dataset files
     src_file, trg_file = copy_dataset_files(dataset_name, src_lang, trg_lang, results_dir, data_dir)
+
+    if max_samples > 0:
+        n_src = truncate_file(src_file, max_samples)
+        n_trg = truncate_file(trg_file, max_samples)
+        print(f"  Truncated to {min(n_src, n_trg)} samples (--max-samples {max_samples})")
 
     # Define metric calculators
     metric_calculators = {}
@@ -677,7 +745,13 @@ def evaluate_pair(src_lang, trg_lang, translators, dataset_name, results_dir, da
     default=False,
     help="Use batch translation API for qvac_bergamot (faster for multiple texts)"
 )
-def main(pairs, translators, dataset, metrics, results_dir, data_dir, skip_existing, use_pivot, is_quantized_model, beamsize, lengthpenalty, repetitionpenalty, norepeatngramsize, temperature, topk, topp, maxlength, batch):
+@click.option(
+    "--max-samples",
+    default=0,
+    type=int,
+    help="Limit evaluation to first N samples (0 = all, default: 0)"
+)
+def main(pairs, translators, dataset, metrics, results_dir, data_dir, skip_existing, use_pivot, is_quantized_model, beamsize, lengthpenalty, repetitionpenalty, norepeatngramsize, temperature, topk, topp, maxlength, batch, max_samples):
     """Translation Quality Evaluation Framework
 
     Examples:
@@ -702,6 +776,9 @@ def main(pairs, translators, dataset, metrics, results_dir, data_dir, skip_exist
 
       # Use batch translation API for faster processing (works with qvac_bergamot only)
       python evaluate.py --pairs en-de --translators qvac_bergamot --batch
+
+      # Evaluate AfriqueGemma LLM on first 30 samples with chrF++
+      python evaluate.py --pairs en-sw --translators afriquegemma_llm --metrics chrfpp --max-samples 30
     """
     # Parse pairs
     pair_list = []
@@ -760,6 +837,9 @@ def main(pairs, translators, dataset, metrics, results_dir, data_dir, skip_exist
     else:
         print(f"  Batch mode: DISABLED")
 
+    if max_samples > 0:
+        print(f"  Max samples: {max_samples}")
+
     # Download dataset if needed
     download_dataset(data_dir, dataset)
 
@@ -777,7 +857,8 @@ def main(pairs, translators, dataset, metrics, results_dir, data_dir, skip_exist
             use_pivot,
             is_quantized_model,
             hyperparams,
-            batch
+            batch,
+            max_samples
         )
         all_results[f"{src}-{trg}"] = results
 
