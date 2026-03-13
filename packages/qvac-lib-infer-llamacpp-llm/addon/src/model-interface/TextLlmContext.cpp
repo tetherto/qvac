@@ -491,6 +491,41 @@ bool TextLlmContext::generateResponse(
   return true;
 }
 
+std::function<void()> TextLlmContext::applyGenerationParams(
+    const GenerationParams& overrides) {
+  if (!overrides.hasOverrides()) {
+    return []() {};
+  }
+
+  common_params_sampling savedSampling = params_.sampling;
+  int savedPredict = params_.n_predict;
+
+  auto setIf = [](const auto& src, auto& dst) {
+    if (src) {
+      dst = *src;
+    }
+  };
+  setIf(overrides.temp, params_.sampling.temp);
+  setIf(overrides.top_p, params_.sampling.top_p);
+  setIf(overrides.top_k, params_.sampling.top_k);
+  setIf(overrides.n_predict, params_.n_predict);
+  setIf(overrides.seed, params_.sampling.seed);
+  setIf(overrides.frequency_penalty, params_.sampling.penalty_freq);
+  setIf(overrides.presence_penalty, params_.sampling.penalty_present);
+  setIf(overrides.repeat_penalty, params_.sampling.penalty_repeat);
+
+  smpl_.reset(common_sampler_init(model_, params_.sampling));
+
+  bool restored = false;
+  return [this, savedSampling, savedPredict, restored]() mutable {
+    if (restored) return;
+    restored = true;
+    params_.sampling = savedSampling;
+    params_.n_predict = savedPredict;
+    smpl_.reset(common_sampler_init(model_, params_.sampling));
+  };
+}
+
 void TextLlmContext::stop() { stopGeneration_.store(true); }
 
 void TextLlmContext::resetState(bool resetStats) {
