@@ -120,7 +120,7 @@
     "@qvac/ocr-onnx": "^0.2.0",
     "@qvac/rag": "^0.4.2",
     "@qvac/registry-client": "^0.2.0",
-    "@qvac/transcription-parakeet": "^0.1.9",
+    "@qvac/transcription-parakeet": "^0.1.11",
     "@qvac/transcription-whispercpp": "^0.5.0",
     "@qvac/translation-nmtcpp": "^0.6.1",
     "@qvac/tts-onnx": "^0.6.1",

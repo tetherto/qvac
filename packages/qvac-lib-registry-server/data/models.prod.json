@@ -5582,7 +5582,7 @@
     "notes": "McGill-NLP/AfriqueGemma-4B. 20 African languages: af, am, ar, ha, ig, mg, ny, om, rw, sn, so, st, sw, ti, tn, xh, yo, zu + en, fr, pt. GGUF by mradermacher."
   },
   {
-    "source": "s3:///qvac_models_compiled/ggml/bitnet/2026-03-06/bitnet_b1_58-3B-TQ2_0.gguf",
+    "source": "s3:///qvac_models_compiled/ggml/bitnet/2026-03-05/bitnet_b1_58-3B-TQ2_0.gguf",
     "engine": "@qvac/llm-llamacpp",
     "link": "https://huggingface.co/1bitLLM/bitnet_b1_58-3B",
     "description": "Bitnet 3B model",
@@ -5597,7 +5597,7 @@
     ]
   },
   {
-    "source": "s3:///qvac_models_compiled/ggml/bitnet/2026-03-06/bitnet_b1_58-large-TQ2_0.gguf",
+    "source": "s3:///qvac_models_compiled/ggml/bitnet/2026-03-05/bitnet_b1_58-large-TQ2_0.gguf",
     "engine": "@qvac/llm-llamacpp",
     "link": "https://huggingface.co/1bitLLM/bitnet_b1_58-large",
     "description": "Bitnet 0.7B model",
@@ -5612,7 +5612,7 @@
     ]
   },
   {
-    "source": "s3:///qvac_models_compiled/ggml/bitnet/2026-03-06/bitnet_b1_58-xl-TQ2_0.gguf",
+    "source": "s3:///qvac_models_compiled/ggml/bitnet/2026-03-05/bitnet_b1_58-xl-TQ2_0.gguf",
     "engine": "@qvac/llm-llamacpp",
     "link": "https://huggingface.co/1bitLLM/bitnet_b1_58-xl",
     "description": "Bitnet 1B model",
