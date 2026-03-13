@@ -61,7 +61,6 @@ jobs:
       workdir: packages/lib-infer-diffusion
 
   ts-checks:
-    if: contains( github.event.pull_request.labels.*.name, 'verify') || github.event_name == 'workflow_dispatch'
     runs-on: ubuntu-latest
     steps:
       - name: Checkout code
@@ -90,6 +89,7 @@ jobs:
         run: npm run test:dts
 
   prebuild:
+    needs: sanity-checks
     if: contains( github.event.pull_request.labels.*.name, 'verify') || github.event_name == 'workflow_dispatch'
     permissions:
       contents: write
