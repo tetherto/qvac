@@ -10,7 +10,7 @@ const {
   setupJsLogger,
   getTestPaths,
   ensureModel,
-  readFileChunked,
+  getNamedPathsConfig,
   isMobile
 } = require('./helpers.js')
 
@@ -55,7 +55,8 @@ test('Multiple consecutive transcriptions should work without errors', { timeout
     maxThreads: 4,
     useGPU: false,
     sampleRate: 16000,
-    channels: 1
+    channels: 1,
+    ...getNamedPathsConfig('tdt', modelPath)
   }
 
   let parakeet = null
@@ -77,33 +78,6 @@ test('Multiple consecutive transcriptions should work without errors', { timeout
 
     parakeet = new ParakeetInterface(binding, config, outputCallback)
 
-    // Load model weights once
-    const modelFiles = [
-      'encoder-model.onnx',
-      'encoder-model.onnx.data',
-      'decoder_joint-model.onnx',
-      'vocab.txt',
-      'preprocessor.onnx'
-    ]
-
-    for (const file of modelFiles) {
-      const filePath = path.join(modelPath, file)
-      if (fs.existsSync(filePath)) {
-        const stat = fs.statSync(filePath)
-        const fileSize = stat.size
-
-        const chunks = []
-        for (const buffer of readFileChunked(filePath)) {
-          chunks.push(buffer)
-        }
-        const fullBuffer = Buffer.concat(chunks)
-        const chunk = new Uint8Array(fullBuffer.buffer, fullBuffer.byteOffset, fullBuffer.byteLength)
-        await parakeet.loadWeights({ filename: file, chunk, completed: true })
-        console.log(`   Loaded ${file} (${(fileSize / 1024 / 1024).toFixed(2)} MB)`)
-      }
-    }
-
-    // Activate
     await parakeet.activate()
     console.log('   Model activated\n')
 
@@ -277,34 +251,13 @@ test('Fresh model instance per transcription (app restart simulation)', { timeou
       maxThreads: 4,
       useGPU: false,
       sampleRate: 16000,
-      channels: 1
+      channels: 1,
+      ...getNamedPathsConfig('tdt', modelPath)
     }
 
     let parakeet = null
     try {
       parakeet = new ParakeetInterface(binding, config, outputCallback)
-
-      // Load weights
-      const modelFiles = [
-        'encoder-model.onnx',
-        'encoder-model.onnx.data',
-        'decoder_joint-model.onnx',
-        'vocab.txt',
-        'preprocessor.onnx'
-      ]
-
-      for (const file of modelFiles) {
-        const filePath = path.join(modelPath, file)
-        if (fs.existsSync(filePath)) {
-          const chunks = []
-          for (const buffer of readFileChunked(filePath)) {
-            chunks.push(buffer)
-          }
-          const fullBuffer = Buffer.concat(chunks)
-          const chunk = new Uint8Array(fullBuffer.buffer, fullBuffer.byteOffset, fullBuffer.byteLength)
-          await parakeet.loadWeights({ filename: file, chunk, completed: true })
-        }
-      }
 
       const loadTime = Date.now() - instanceStartTime
 

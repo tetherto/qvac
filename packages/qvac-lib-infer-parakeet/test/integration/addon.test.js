@@ -11,7 +11,7 @@ const {
   getTestPaths,
   validateAccuracy,
   ensureModel,
-  readFileChunked
+  getNamedPathsConfig
 } = require('./helpers.js')
 
 const platform = detectPlatform()
@@ -60,7 +60,8 @@ test('English transcription and WER verification', { timeout: 300000 }, async (t
     maxThreads: 4,
     useGPU: false,
     sampleRate: 16000,
-    channels: 1
+    channels: 1,
+    ...getNamedPathsConfig('tdt', modelPath)
   }
 
   // Track transcription results
@@ -90,35 +91,6 @@ test('English transcription and WER verification', { timeout: 300000 }, async (t
     console.log('\n=== Creating instance and loading model ===')
     parakeet = new ParakeetInterface(binding, config, outputCallback)
 
-    // Load model weights
-    const modelFiles = [
-      'encoder-model.onnx',
-      'encoder-model.onnx.data',
-      'decoder_joint-model.onnx',
-      'vocab.txt',
-      'preprocessor.onnx'
-    ]
-
-    for (const file of modelFiles) {
-      const filePath = path.join(modelPath, file)
-      if (fs.existsSync(filePath)) {
-        const stat = fs.statSync(filePath)
-        const fileSize = stat.size
-
-        // Read file in chunks to handle bare-fs large file limitations,
-        // then concatenate and pass as single buffer for reliable native loading
-        const chunks = []
-        for (const buffer of readFileChunked(filePath)) {
-          chunks.push(buffer)
-        }
-        const fullBuffer = Buffer.concat(chunks)
-        const chunk = new Uint8Array(fullBuffer.buffer, fullBuffer.byteOffset, fullBuffer.byteLength)
-        await parakeet.loadWeights({ filename: file, chunk, completed: true })
-        console.log(`   Loaded ${file} (${(fileSize / 1024 / 1024).toFixed(2)} MB)`)
-      }
-    }
-
-    // Activate
     await parakeet.activate()
     console.log('   Model activated')
 

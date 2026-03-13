@@ -1,6 +1,6 @@
 {
   "name": "@qvac/diagnostics",
-  "version": "0.1.0",
+  "version": "0.1.1",
   "description": "Diagnostic report generation library for QVAC",
   "main": "index.js",
   "types": "index.d.ts",

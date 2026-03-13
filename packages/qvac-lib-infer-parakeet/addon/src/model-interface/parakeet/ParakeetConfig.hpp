@@ -6,35 +6,43 @@
 
 namespace qvac_lib_infer_parakeet {
 
-/**
- * Configuration for Parakeet model
- */
 struct ParakeetConfig {
-  std::string modelPath;                // Path to model directory
-  std::string encoderPath;              // Absolute path to encoder ONNX file
-  std::string encoderDataPath;  // Absolute path to encoder external data file
-  std::string decoderPath;      // Absolute path to decoder ONNX file
-  std::string vocabPath;        // Absolute path to vocabulary file
-  std::string preprocessorPath; // Absolute path to preprocessor ONNX file
+  std::string modelPath;
+  std::string encoderPath;
+  std::string encoderDataPath;
+  std::string decoderPath;
+  std::string vocabPath;
+  std::string preprocessorPath;
+  std::string ctcModelPath;
+  std::string ctcModelDataPath;
+  std::string tokenizerPath;
+  std::string eouEncoderPath;
+  std::string eouDecoderPath;
+  std::string sortformerPath;
   ModelType modelType = ModelType::TDT;
-  int maxThreads = 4;                   // Maximum CPU threads to use
-  bool useGPU = false;                  // Enable GPU acceleration
-  int sampleRate = 16000;               // Audio sample rate
-  int channels = 1;                     // Number of audio channels
-  bool captionEnabled = false;          // Enable caption/subtitle mode
-  bool timestampsEnabled = true;        // Include timestamps in output
-  int seed = -1;                        // Random seed (-1 for random)
+  int maxThreads = 4;
+  bool useGPU = false;
+  int sampleRate = 16000;
+  int channels = 1;
+  bool captionEnabled = false;
+  bool timestampsEnabled = true;
+  int seed = -1;
 
   ParakeetConfig() = default;
 
   explicit ParakeetConfig(const std::string& path) : modelPath(path) {}
 
-  // Comparison for config change detection
   bool operator==(const ParakeetConfig& other) const {
     return modelPath == other.modelPath && encoderPath == other.encoderPath &&
            encoderDataPath == other.encoderDataPath &&
            decoderPath == other.decoderPath && vocabPath == other.vocabPath &&
            preprocessorPath == other.preprocessorPath &&
+           ctcModelPath == other.ctcModelPath &&
+           ctcModelDataPath == other.ctcModelDataPath &&
+           tokenizerPath == other.tokenizerPath &&
+           eouEncoderPath == other.eouEncoderPath &&
+           eouDecoderPath == other.eouDecoderPath &&
+           sortformerPath == other.sortformerPath &&
            modelType == other.modelType && maxThreads == other.maxThreads &&
            useGPU == other.useGPU && sampleRate == other.sampleRate &&
            channels == other.channels &&
@@ -48,4 +56,3 @@ struct ParakeetConfig {
 };
 
 } // namespace qvac_lib_infer_parakeet
-
