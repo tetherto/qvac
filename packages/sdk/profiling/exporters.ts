@@ -78,6 +78,20 @@ function formatDuration(ms: number): string {
   return `${(ms / 60000).toFixed(2)}m`;
 }
 
+function formatBytes(bytes: number): string {
+  if (bytes < 1024) return `${bytes.toFixed(0)} B`;
+  if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(1)} KB`;
+  if (bytes < 1024 * 1024 * 1024) return `${(bytes / (1024 * 1024)).toFixed(2)} MB`;
+  return `${(bytes / (1024 * 1024 * 1024)).toFixed(2)} GB`;
+}
+
+function formatThroughput(bps: number): string {
+  if (bps < 1024) return `${bps.toFixed(0)} B/s`;
+  if (bps < 1024 * 1024) return `${(bps / 1024).toFixed(1)} KB/s`;
+  if (bps < 1024 * 1024 * 1024) return `${(bps / (1024 * 1024)).toFixed(2)} MB/s`;
+  return `${(bps / (1024 * 1024 * 1024)).toFixed(2)} GB/s`;
+}
+
 function formatNumber(n: number): string {
   if (Number.isInteger(n)) {
     return n.toLocaleString();
@@ -87,6 +101,60 @@ function formatNumber(n: number): string {
   if (Math.abs(n) < 1) return n.toFixed(3);
   if (Math.abs(n) < 100) return n.toFixed(2);
   return n.toFixed(1);
+}
+
+type MetricType = "duration" | "bytes" | "throughput" | "number";
+
+function detectMetricType(metricName: string): MetricType {
+  const lowerName = metricName.toLowerCase();
+  
+  if (lowerName.includes("bps") || lowerName.includes("speed")) {
+    return "throughput";
+  }
+  
+  if (lowerName.includes("bytes") || lowerName.includes("downloaded") || lowerName.includes("size")) {
+    return "bytes";
+  }
+  
+  if (
+    lowerName.endsWith("time") ||
+    lowerName.endsWith("ms") ||
+    lowerName.endsWith("duration") ||
+    lowerName.includes("ttfb") ||
+    lowerName.includes("latency") ||
+    lowerName.includes("wait") ||
+    lowerName.includes("overhead") ||
+    lowerName.includes("parse") ||
+    lowerName.includes("stringify") ||
+    lowerName.includes("validation") ||
+    lowerName.includes("execution") ||
+    lowerName.includes("serialization") ||
+    lowerName.includes("connection")
+  ) {
+    return "duration";
+  }
+  
+  if (lowerName.includes("count") || lowerName.includes("token")) {
+    return "number";
+  }
+  
+  // Default to duration for unknown metrics (most profiling is timing)
+  return "duration";
+}
+
+function formatMetricValue(value: number, metricName: string): string {
+  const type = detectMetricType(metricName);
+  switch (type) {
+    case "bytes":
+      return formatBytes(value);
+    case "throughput":
+      return formatThroughput(value);
+    case "number":
+      return formatNumber(value);
+    case "duration":
+    default:
+      return formatDuration(value);
+  }
 }
 
 function pad(s: string, len: number, align: "left" | "right" = "left"): string {
@@ -118,15 +186,15 @@ export function exportTable(): string {
   const separator = "-".repeat(header.length);
 
   const rows = entries
-    .sort((a, b) => b[1].sum - a[1].sum)
+    .sort((a, b) => a[0].localeCompare(b[0]))
     .map(([metric, stats]) => {
       return [
         pad(metric, metricWidth),
         pad(formatNumber(stats.count), numWidth, "right"),
-        pad(formatDuration(stats.min), numWidth, "right"),
-        pad(formatDuration(stats.max), numWidth, "right"),
-        pad(formatDuration(stats.avg), numWidth, "right"),
-        pad(formatDuration(stats.sum), numWidth, "right"),
+        pad(formatMetricValue(stats.min, metric), numWidth, "right"),
+        pad(formatMetricValue(stats.max, metric), numWidth, "right"),
+        pad(formatMetricValue(stats.avg, metric), numWidth, "right"),
+        pad(formatMetricValue(stats.sum, metric), numWidth, "right"),
       ].join(" | ");
     });
 
