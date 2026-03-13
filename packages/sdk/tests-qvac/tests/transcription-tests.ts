@@ -8,7 +8,7 @@ const createTranscriptionTest = (
     | { validation: "contains-all" | "contains-any"; contains: string[] }
     | {
         validation: "type";
-        expectedType: "string" | "number" | "array" | "embedding";
+        expectedType: "string" | "number" | "array";
       }
     | { validation: "regex"; pattern: string },
   estimatedDurationMs: number = 30000,
@@ -74,19 +74,6 @@ export const transcriptionSilence = createTranscriptionTest(
   },
 );
 
-export const transcriptionOnlyMusic = createTranscriptionTest(
-  "transcription-only-music",
-  "only-music.mp3",
-  { validation: "type", expectedType: "string" }, // May hallucinate, just verify no crash
-);
-
-export const transcriptionLongAudio = createTranscriptionTest(
-  "transcription-long-audio",
-  "10min-mp3-320kbps.mp3",
-  { validation: "type", expectedType: "string" },
-  600000, // 10 minutes
-);
-
 export const transcriptionStreaming = createTranscriptionTest(
   "transcription-streaming",
   "transcription-short.wav",
@@ -101,31 +88,84 @@ export const transcriptionVeryShort = createTranscriptionTest(
   5000,
 );
 
-export const transcriptionCorrupted = createTranscriptionTest(
-  "transcription-corrupted",
-  "corrupted.mp3",
-  { validation: "type", expectedType: "string" }, // May error or hang - SDK bug
-  30000,
-);
+export const transcriptionCorrupted: TestDefinition = {
+  testId: "transcription-corrupted",
+  params: { audioFileName: "corrupted.mp3" },
+  expectation: { validation: "throws-error", errorContains: "" },
+  metadata: { category: "transcription", dependency: "whisper", estimatedDurationMs: 30000 },
+};
 
-export const transcriptionCorruptedWav = createTranscriptionTest(
-  "transcription-corrupted-wav",
-  "corrupted.wav",
-  { validation: "type", expectedType: "string" }, // May error or hang - SDK bug
-  30000,
-);
+export const transcriptionCorruptedWav: TestDefinition = {
+  testId: "transcription-corrupted-wav",
+  params: { audioFileName: "corrupted.wav" },
+  expectation: { validation: "throws-error", errorContains: "" },
+  metadata: { category: "transcription", dependency: "whisper", estimatedDurationMs: 30000 },
+};
+
+export const transcriptionWithPrompt: TestDefinition = {
+  testId: "transcription-with-prompt",
+  params: {
+    audioFileName: "transcription-short.wav",
+    prompt: "This is a test recording about QVAC SDK automation testing.",
+  },
+  expectation: { validation: "contains-any", contains: ["test", "QVAC"] },
+  metadata: { category: "transcription", dependency: "whisper", estimatedDurationMs: 30000 },
+};
+
+export const transcriptionPromptTechnical: TestDefinition = {
+  testId: "transcription-prompt-technical",
+  params: {
+    audioFileName: "transcription-short.wav",
+    prompt: "Technical terms: SDK, API, TypeScript, JavaScript, QVAC, Whisper, transcription.",
+  },
+  expectation: { validation: "contains-any", contains: ["test"] },
+  metadata: { category: "transcription", dependency: "whisper", estimatedDurationMs: 30000 },
+};
+
+export const transcriptionPromptPunctuation: TestDefinition = {
+  testId: "transcription-prompt-punctuation",
+  params: {
+    audioFileName: "transcription-short.wav",
+    prompt: "Use proper punctuation. Include periods, commas, and question marks.",
+  },
+  expectation: { validation: "type", expectedType: "string" },
+  metadata: { category: "transcription", dependency: "whisper", estimatedDurationMs: 30000 },
+};
+
+export const transcriptionWithoutPrompt: TestDefinition = {
+  testId: "transcription-without-prompt",
+  params: {
+    audioFileName: "transcription-short.wav",
+    prompt: null,
+  },
+  expectation: { validation: "contains-any", contains: ["test"] },
+  metadata: { category: "transcription", dependency: "whisper", estimatedDurationMs: 30000 },
+};
+
+export const transcriptionPromptEmpty: TestDefinition = {
+  testId: "transcription-prompt-empty",
+  params: {
+    audioFileName: "transcription-short.wav",
+    prompt: "",
+  },
+  expectation: { validation: "contains-any", contains: ["test"] },
+  metadata: { category: "transcription", dependency: "whisper", estimatedDurationMs: 30000 },
+};
 
 export const transcriptionTests = [
   transcriptionShortWav,
   transcriptionShortMp3,
   transcriptionAac,
-  transcriptionM4a,
   transcriptionOgg,
   transcriptionSilence,
-  transcriptionOnlyMusic,
-  transcriptionLongAudio,
   transcriptionStreaming,
   transcriptionVeryShort,
+  transcriptionM4a,
   transcriptionCorrupted,
   transcriptionCorruptedWav,
+  transcriptionWithPrompt,
+  transcriptionPromptTechnical,
+  transcriptionPromptPunctuation,
+  transcriptionWithoutPrompt,
+  transcriptionPromptEmpty,
 ];

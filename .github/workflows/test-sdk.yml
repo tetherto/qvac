@@ -1,12 +1,43 @@
 # QVAC SDK Tests
-# Uses reusable workflow from qvac-devops
-# Originally from sdk/.github/workflows/qvac-tests.yml
+# Runs desktop and/or mobile (Android/iOS) e2e tests for the SDK package
 
 name: QVAC Tests (sdk)
 
 on:
-  # Disabled until it's stabilised, to not waste compute resources
   workflow_dispatch:
+    inputs:
+      targets:
+        description: "Which platforms to test"
+        type: choice
+        options:
+          - all
+          - desktop
+          - mobile
+          - android
+          - ios
+        default: desktop
+      filter:
+        description: "Test filter (comma-separated categories/prefixes, empty = all tests)"
+        type: string
+      desktop-consumer-timeout:
+        description: "Desktop consumer timeout (seconds)"
+        type: number
+        default: 60
+      mobile-consumer-timeout:
+        description: "Mobile consumer timeout (seconds)"
+        type: number
+        default: 600
+      device-farm-timeout:
+        description: "Device Farm session timeout (minutes)"
+        type: number
+        default: 30
+      desktop-platforms:
+        description: "JSON array of runner labels for desktop tests"
+        type: string
+        default: '["win11-rtx4000-hetzner", "ai-run-linux-gpu", "macos-latest-xlarge"]'
+      test-version:
+        description: "Git ref to checkout for the tested project (branch, tag, or SHA). Defaults to current branch HEAD."
+        type: string
   # pull_request:
   #   paths:
   #     - "packages/sdk/**"
@@ -29,13 +60,16 @@ permissions:
 
 jobs:
   desktop-tests:
+    # Runs for: all, desktop, empty (future PR/push)
+    if: inputs.targets != 'mobile' && inputs.targets != 'android' && inputs.targets != 'ios'
     uses: ./.github/workflows/test-desktop-sdk.yml
     with:
       project-directory: "packages/sdk"
       working-directory: "packages/sdk/tests-qvac"
-      platforms: '["ai-run-linux-gpu", "macos-latest-xlarge"]'
-      consumer-timeout: 60
-      filter: "model-load-llm,completion-streaming"
+      platforms: ${{ inputs.desktop-platforms || '["win11-rtx4000-hetzner", "ai-run-linux-gpu", "macos-latest-xlarge"]' }}
+      consumer-timeout: ${{ fromJSON(inputs.desktop-consumer-timeout || '60') }}
+      filter: ${{ inputs.filter }}
+      test-version: ${{ inputs.test-version || '' }}
     secrets:
       MQTT_PROTOCOL: ${{ secrets.MQTT_PROTOCOL }}
       MQTT_HOST: ${{ secrets.MQTT_HOST }}
@@ -45,3 +79,35 @@ jobs:
       MQTT_CA_CERT: ${{ secrets.MQTT_CA_CERT }}
       PAT_TOKEN: ${{ secrets.PAT_TOKEN }}
       NPM_TOKEN: ${{ secrets.NPM_TOKEN }}
+
+  android-tests:
+    # Runs for: all, mobile, android, empty (future PR/push)
+    if: inputs.targets != 'desktop' && inputs.targets != 'ios'
+    uses: ./.github/workflows/test-android-sdk.yml
+    with:
+      project-directory: "packages/sdk"
+      working-directory: "packages/sdk/tests-qvac"
+      consumer-timeout: ${{ fromJSON(inputs.mobile-consumer-timeout || '600') }}
+      filter: ${{ inputs.filter }}
+      device-farm-timeout: ${{ fromJSON(inputs.device-farm-timeout || '30') }}
+      device-farm-project-arn: ${{ vars.SDK_DEVICE_FARM_PROJECT_ARN }}
+      device-pools: ${{ vars.SDK_DEVICE_FARM_POOLS }}
+      test-version: ${{ inputs.test-version || '' }}
+    secrets:
+      PAT_TOKEN: ${{ secrets.PAT_TOKEN }}
+      NPM_TOKEN: ${{ secrets.NPM_TOKEN }}
+      MQTT_PROTOCOL: ${{ secrets.MQTT_PROTOCOL }}
+      MQTT_HOST: ${{ secrets.MQTT_HOST }}
+      MQTT_PORT: ${{ secrets.MQTT_PORT }}
+      MQTT_USERNAME: ${{ secrets.MQTT_USERNAME }}
+      MQTT_PASSWORD: ${{ secrets.MQTT_PASSWORD }}
+      MQTT_CA_CERT: ${{ secrets.MQTT_CA_CERT }}
+      AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
+      AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+
+  # ios-tests:
+  #   # Runs for: all, mobile, ios, empty (future PR/push)
+  #   if: inputs.targets != 'desktop' && inputs.targets != 'android'
+  #   uses: ./.github/workflows/test-ios-sdk.yml
+  #   with:
+  #     ...

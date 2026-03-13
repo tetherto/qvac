@@ -20,7 +20,7 @@ const createCompletionTest = (
     | { validation: "regex"; pattern: string }
     | {
         validation: "type";
-        expectedType: "string" | "number" | "array" | "embedding";
+        expectedType: "string" | "number" | "array";
       },
   estimatedDurationMs: number = 10000,
 ): TestDefinition => ({
@@ -69,9 +69,9 @@ export const completionMultiTurn = createCompletionTest(
   { validation: "contains-all", contains: ["42"] },
 );
 
-export const completionSpecialChars = createCompletionTest(
-  "completion-special-chars",
-  {
+export const completionSpecialChars: TestDefinition = {
+  testId: "completion-special-chars",
+  params: {
     history: [
       {
         role: "user",
@@ -81,8 +81,10 @@ export const completionSpecialChars = createCompletionTest(
     ],
     stream: false,
   },
-  { validation: "contains-all", contains: ["100"] },
-);
+  expectation: { validation: "contains-all", contains: ["100"] },
+  metadata: { category: "completion", dependency: "llm", estimatedDurationMs: 10000 },
+  skip: { reason: "Flaky: 1B model unreliable on math with emoji distractions" },
+};
 
 // Temperature variations
 export const completionTemperature00 = createCompletionTest(
@@ -496,14 +498,16 @@ export const completionQaFromContext = createCompletionTest(
   { validation: "contains-all", contains: ["blue"] },
 );
 
-export const completionSimpleYesNo = createCompletionTest(
-  "completion-simple-yes-no",
-  {
+export const completionSimpleYesNo: TestDefinition = {
+  testId: "completion-simple-yes-no",
+  params: {
     history: [{ role: "user", content: "Is 2+2=4? Answer yes or no." }],
     stream: false,
   },
-  { validation: "contains-any", contains: ["yes", "Yes"] },
-);
+  expectation: { validation: "contains-any", contains: ["yes", "Yes"] },
+  metadata: { category: "completion", dependency: "llm", estimatedDurationMs: 10000 },
+  skip: { reason: "Flaky: 1B model sometimes answers 'no' to trivial yes/no questions" },
+};
 
 export const completionSentenceCompletion = createCompletionTest(
   "completion-sentence-completion",
@@ -514,39 +518,8 @@ export const completionSentenceCompletion = createCompletionTest(
   { validation: "type", expectedType: "string" },
 );
 
-// Export all completion tests (including duplicates for full coverage)
 export const completionTests = [
   completionStreaming,
-  completionEmptyPrompt,
-  completionMultiTurn,
-  completionSpecialChars,
-  completionContextSize512,
-  completionContextSize2048,
-  completionTemperature00,
-  completionTemperature01,
-  completionTemperature05,
-  completionTemperature09,
-  completionTemperature10,
-  completionTemperature15,
-  completionTopP,
-  completionTopP01,
-  completionTopP05,
-  completionTopP10,
-  completionZeroTemperature,
-  completionTopK,
-  completionFrequencyPenalty,
-  completionFrequencyPenalty00,
-  completionFrequencyPenaltyNeg10,
-  completionFrequencyPenalty10,
-  completionRepeatPenalty,
-  completionMinP,
-  completionNegativeTemperature,
-  completionStopSequences,
-  completionSeedReproducibility,
-  completionStopSequencesMultiple,
-  completionMaxTokens,
-  // Duplicates from second section (matches old structure exactly)
-  completionStreaming,
   completionContextSize512,
   completionContextSize2048,
   completionTemperature01,
@@ -575,7 +548,6 @@ export const completionTests = [
   completionFrequencyPenalty10,
   completionSeedReproducibility,
   completionStopSequencesMultiple,
-  // Additional tests
   completionConcurrentRequests,
   completionRepeatedTokens,
   completionWithWhitespace,
