@@ -5340,68 +5340,6 @@
     "notes": "Full INT8 quantization of https://huggingface.co/istupakov/parakeet-tdt-0.6b-v3-onnx"
   },
   {
-    "source": "https://huggingface.co/istupakov/parakeet-ctc-0.6b-onnx/resolve/658f956396c5a6e41f23ed50838bdb7d1d1b6056/model.onnx",
-    "engine": "@qvac/transcription-parakeet",
-    "description": "Parakeet CTC 0.6B (graph)",
-    "quantization": "fp32",
-    "params": "0.6B",
-    "license": "CC-BY-4.0",
-    "tags": [
-      "transcription",
-      "parakeet",
-      "ctc",
-      "en"
-    ],
-    "notes": ""
-  },
-  {
-    "source": "https://huggingface.co/istupakov/parakeet-ctc-0.6b-onnx/resolve/658f956396c5a6e41f23ed50838bdb7d1d1b6056/model.onnx.data",
-    "engine": "@qvac/transcription-parakeet",
-    "description": "Parakeet CTC 0.6B (weights)",
-    "quantization": "fp32",
-    "params": "0.6B",
-    "license": "CC-BY-4.0",
-    "tags": [
-      "transcription",
-      "parakeet",
-      "ctc",
-      "en"
-    ],
-    "notes": ""
-  },
-  {
-    "source": "https://huggingface.co/istupakov/parakeet-ctc-0.6b-onnx/resolve/658f956396c5a6e41f23ed50838bdb7d1d1b6056/model.int8.onnx",
-    "engine": "@qvac/transcription-parakeet",
-    "description": "Parakeet CTC 0.6B (graph+weights INT8)",
-    "quantization": "int8",
-    "params": "0.6B",
-    "license": "CC-BY-4.0",
-    "tags": [
-      "transcription",
-      "parakeet",
-      "ctc",
-      "en",
-      "int8"
-    ],
-    "notes": ""
-  },
-  {
-    "source": "https://huggingface.co/istupakov/parakeet-ctc-0.6b-onnx/resolve/658f956396c5a6e41f23ed50838bdb7d1d1b6056/vocab.txt",
-    "engine": "@qvac/transcription-parakeet",
-    "link": "https://huggingface.co/istupakov/parakeet-ctc-0.6b-onnx",
-    "description": "Parakeet CTC 0.6B vocabulary",
-    "quantization": "",
-    "params": "0.6B",
-    "license": "CC-BY-4.0",
-    "tags": [
-      "transcription",
-      "parakeet",
-      "vocab",
-      "en"
-    ],
-    "notes": ""
-  },
-  {
     "source": "https://huggingface.co/onnx-community/parakeet-ctc-0.6b-ONNX/resolve/7df2cab7aed886b8b7f80d68a8214007e4847601/onnx/model.onnx",
     "engine": "@qvac/transcription-parakeet",
     "link": "https://huggingface.co/onnx-community/parakeet-ctc-0.6b-ONNX",
@@ -5446,22 +5384,6 @@
       "parakeet",
       "ctc",
       "tokenizer",
-      "en"
-    ],
-    "notes": ""
-  },
-  {
-    "source": "https://huggingface.co/istupakov/parakeet-ctc-0.6b-onnx/resolve/658f956396c5a6e41f23ed50838bdb7d1d1b6056/config.json",
-    "engine": "@qvac/transcription-parakeet",
-    "link": "https://huggingface.co/istupakov/parakeet-ctc-0.6b-onnx",
-    "description": "Parakeet CTC 0.6B config",
-    "quantization": "",
-    "params": "0.6B",
-    "license": "CC-BY-4.0",
-    "tags": [
-      "transcription",
-      "parakeet",
-      "config",
       "en"
     ],
     "notes": ""
