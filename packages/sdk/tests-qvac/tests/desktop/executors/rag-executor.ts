@@ -1,4 +1,3 @@
-// RAG executor
 import { ragIngest } from "@qvac/sdk";
 import * as fs from "node:fs";
 import * as path from "node:path";
@@ -7,34 +6,15 @@ import {
   type TestResult,
   type Expectation,
 } from "@tetherto/qvac-test-suite";
+import { AbstractModelExecutor } from "../../shared/executors/abstract-model-executor.js";
 import { ragTests } from "../../rag-tests.js";
-import { ModelManager } from "../model-manager.js";
 
-export class RagExecutor {
+export class RagExecutor extends AbstractModelExecutor<typeof ragTests> {
   pattern = /^rag-/;
 
-  // All RAG tests use generic handler
-  handlers = Object.fromEntries(
-    ragTests.map((test) => [test.testId, this.generic]),
-  );
-
-  async execute(
-    testId: string,
-    context: unknown,
-    params: unknown,
-    expectation: unknown,
-  ): Promise<TestResult> {
-    const handler = this.handlers[testId];
-    if (handler) {
-      return await (
-        handler as (
-          params: unknown,
-          expectation: unknown,
-        ) => Promise<TestResult>
-      ).call(this, params, expectation);
-    }
-    return { passed: false, output: `Unknown test: ${testId}` };
-  }
+  protected handlers = Object.fromEntries(
+    ragTests.map((test) => [test.testId, this.generic.bind(this)]),
+  ) as never;
 
   async generic(params: unknown, expectation: unknown): Promise<TestResult> {
     const p = params as {
@@ -45,15 +25,15 @@ export class RagExecutor {
       chunkOverlap: number;
       chunkStrategy?: string;
     };
-    const embeddingModelId = await ModelManager.getEmbeddingModel();
+    const exp = expectation as Expectation;
+    const embeddingModelId = await this.resources.ensureLoaded("embeddings");
 
     try {
-      // Get document content
       let content: string;
       if (p.documentFile) {
         const docPath = path.resolve(
           process.cwd(),
-          "../shared-test-data/documents",
+          "assets/documents",
           p.documentFile,
         );
         content = fs.readFileSync(docPath, "utf-8");
@@ -61,23 +41,30 @@ export class RagExecutor {
         content = p.documentContent || "";
       }
 
-      // Ingest documents (chunks, embeds, and saves to RAG storage)
+      const uniqueWorkspace = `${p.workspace}-${embeddingModelId.substring(0, 8)}`;
+
       const result = await ragIngest({
         modelId: embeddingModelId,
-        workspace: p.workspace,
-        documents: content,
+        workspace: uniqueWorkspace,
+        documents: [content] as never,
         chunk: true,
         chunkOpts: {
           chunkSize: p.chunkSize,
           chunkOverlap: p.chunkOverlap,
+          ...(p.chunkStrategy ? { chunkStrategy: p.chunkStrategy as "paragraph" | "character" } : {}),
         },
       });
 
-      // Result contains processed array and droppedIndices - check processed is truthy
+      if (exp.validation === "throws-error") {
+        return { passed: false, output: "Expected error but RAG succeeded" };
+      }
       const resultStr = result.processed.length > 0 ? "success" : "failed";
-      return ValidationHelpers.validate(resultStr, expectation as Expectation);
+      return ValidationHelpers.validate(resultStr, exp);
     } catch (error) {
       const errorMsg = error instanceof Error ? error.message : String(error);
+      if (exp.validation === "throws-error") {
+        return ValidationHelpers.validate(errorMsg, exp);
+      }
       return { passed: false, output: `RAG failed: ${errorMsg}` };
     }
   }

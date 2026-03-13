@@ -27,6 +27,7 @@
 #include "qvac-lib-inference-addon-cpp/LlamacppUtils.hpp"
 #include "utils/BackendSelection.hpp"
 #include "utils/LoggingMacros.hpp"
+#include "utils/ScopeGuard.hpp"
 #include "utils/SharedSnapshot.hpp"
 
 using namespace qvac_lib_inference_addon_llama::errors;
@@ -360,6 +361,10 @@ std::string LlamaModel::processPromptImpl(const Prompt& prompt) {
         "No messages to process after session commands - returning early\n");
     return out;
   }
+
+  auto restore =
+      state_->llmContext_->applyGenerationParams(prompt.generationParams);
+  ScopeGuard paramsGuard([&] { restore(); });
 
   bool evalOk =
       resolved.tools.empty()

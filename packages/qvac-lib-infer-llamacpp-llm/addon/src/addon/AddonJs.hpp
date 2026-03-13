@@ -62,6 +62,27 @@ inline js_value_t* runJob(js_env_t* env, js_callback_info_t* info) try {
     prompt.prefill =
         inputObj.getOptionalPropertyAs<js::Boolean, bool>(env, "prefill")
             .value_or(false);
+
+    auto configObj =
+        inputObj.getOptionalProperty<js::Object>(env, "generationParams");
+    if (configObj.has_value()) {
+      auto readNum = [&](const char* key, auto& out) {
+        auto v =
+            configObj->getOptionalPropertyAs<js::Number, double>(env, key);
+        if (v.has_value()) {
+          out = static_cast<std::decay_t<decltype(out)>>(*v);
+        }
+      };
+      GenerationParams& ov = prompt.generationParams;
+      readNum("temp", ov.temp);
+      readNum("top_p", ov.top_p);
+      readNum("top_k", ov.top_k);
+      readNum("predict", ov.n_predict);
+      readNum("seed", ov.seed);
+      readNum("frequency_penalty", ov.frequency_penalty);
+      readNum("presence_penalty", ov.presence_penalty);
+      readNum("repeat_penalty", ov.repeat_penalty);
+    }
   };
 
   auto parseMedia = [&](js::Object& inputObj) {
