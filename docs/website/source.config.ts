@@ -15,6 +15,7 @@ export const docs = defineDocs({
   docs: {
     schema: frontmatterSchema.extend({
       titleStyle: z.enum(["code", "text"]).optional(),
+      version: z.string().optional(),
     }),
     postprocess: {
       includeProcessedMarkdown: true,

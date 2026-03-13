@@ -1,5 +1,33 @@
 # Changelog
 
+## [0.12.0] - 2026-03-09
+
+### Added
+
+#### Hot-reload support (`LlamaModel::reload()`)
+
+`LlamaModel` now stores its construction arguments (`modelPath`, `projectionPath`, `configFilemap`) and exposes a `reload()` method that rebuilds the model in-place from the stored args with `IMMEDIATE` loading (synchronous, blocking). This avoids tearing down and reconstructing the entire `LlamaModel` instance when the same model needs to be reloaded — for example, to reclaim GPU memory or recover from a corrupted context state.
+
+All mutable model state (context, cache manager, backends handle, async weights loader, etc.) is grouped into an internal `ReloadableState` struct. On reload, the old state is replaced atomically with a freshly initialized one.
+
+#### Thread-safe reload with `shared_mutex`
+
+`LlamaModel` is now protected by a `std::shared_mutex` (`stateMtx_`):
+
+- **Shared lock** for all read/use operations: `processPrompt`, `process`, `cancel`, `reset`, `runtimeStats`, `isLoaded`, `waitForLoadInitialization`, and `setWeightsForFile`.
+- **Exclusive lock** only in `reload()` via `setInitLoader()`.
+
+This means `reload()` blocks until all in-flight operations complete, while concurrent reads (e.g. multiple inference queries) can proceed in parallel. `cancel()` uses `std::try_to_lock` to gracefully skip cancellation if a reload is already in progress, since there would be nothing to cancel after the reload completes.
+
+#### Streaming-loaded model reload guard
+
+`reload()` now throws `ReloadNotSupportedForStreamedModel` (`StatusError`, error code 24) when called on a model that was loaded via streamed shards (`setWeightsForFile`). The streamed weight buffers are consumed (moved out) by llama.cpp during the initial load and cannot be replayed on reload.
+
+### Changed
+
+- Refactored `LlamaModel` internals: extracted `processPromptImpl` and `cancelImpl` (lock-free implementations) to separate locking concerns from business logic.
+- `initializeBackend()` is now private — it is only called internally during `init()`.
+
 ## [0.11.1] - 2026-03-09
 
 ### Added
@@ -11,7 +39,6 @@
 - Prefill runs report `TTFT=0`, `TPS=0`, `generatedTokens=0`, `promptTokens=0`, while `CacheTokens` reflects actual KV cache occupancy.
 - JS `normalizeRunOptions` validates `prefill` as a boolean; a `TypeError` is thrown otherwise.
 - C++ `evalMessage`/`evalMessageWithTools` suppress logits on the last token when prefill is set; `processPrompt` returns immediately after evaluation.
-
 
 ## [0.11.0] - 2026-03-05
 
