@@ -136,7 +136,7 @@ Pipeline::Output Pipeline::process(Pipeline::Input input) {
       cv::Mat bgr = decodeEncodedImage(input.data);
       cv::cvtColor(bgr, image, cv::COLOR_BGR2RGB);
     } else {
-      image = cv::Mat(input.imageHeight, input.imageWidth, CV_8UC3, input.data.data()).clone();
+      image = cv::Mat(input.imageHeight, input.imageWidth, CV_8UC3, input.data.data());
     }
 
     // Resize image to max 1200px on longest side (EasyOCR only)

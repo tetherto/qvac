@@ -6,6 +6,10 @@ require('./integration-runtime.cjs')
 
 /* global runIntegrationModule */
 
+async function runCancelTest (options = {}) { // eslint-disable-line no-unused-vars
+  return runIntegrationModule('../integration/cancel.test.js', options)
+}
+
 async function runDoctrBasicTest (options = {}) { // eslint-disable-line no-unused-vars
   return runIntegrationModule('../integration/doctr-basic.test.js', options)
 }
