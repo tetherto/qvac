@@ -2,6 +2,7 @@
 
 const test = require('brittle')
 const os = require('bare-os')
+const proc = require('bare-process')
 
 const ImgStableDiffusion = require('../../index.js')
 const { ensureModel } = require('./utils')
@@ -10,7 +11,8 @@ const platform = os.platform()
 const arch = os.arch()
 const isDarwinX64 = platform === 'darwin' && arch === 'x64'
 const isLinuxArm64 = platform === 'linux' && arch === 'arm64'
-const useCpu = isDarwinX64 || isLinuxArm64
+const noGpu = proc.env && proc.env.NO_GPU === 'true'
+const useCpu = isDarwinX64 || isLinuxArm64 || noGpu
 
 const DEFAULT_MODEL = {
   name: 'stable-diffusion-v2-1-Q8_0.gguf',

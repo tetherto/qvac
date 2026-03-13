@@ -2,6 +2,8 @@
 
 const fs = require('bare-fs')
 const path = require('bare-path')
+const os = require('bare-os')
+const proc = require('bare-process')
 const test = require('brittle')
 const binding = require('../../binding')
 const ImgStableDiffusion = require('../../index')
@@ -13,13 +15,19 @@ const {
 } = require('./utils')
 
 const platform = detectPlatform()
+const isDarwinX64 = os.platform() === 'darwin' && os.arch() === 'x64'
+const isLinuxArm64 = os.platform() === 'linux' && os.arch() === 'arm64'
+const isMobile = os.platform() === 'ios' || os.platform() === 'android'
+const noGpu = proc.env && proc.env.NO_GPU === 'true'
+const useCpu = isDarwinX64 || isLinuxArm64 || noGpu
+const skip = isMobile || noGpu
 
 const DEFAULT_MODEL = {
   name: 'stable-diffusion-v2-1-Q8_0.gguf',
   url: 'https://huggingface.co/gpustack/stable-diffusion-v2-1-GGUF/resolve/main/stable-diffusion-v2-1-Q8_0.gguf'
 }
 
-test('SD2.1 txt2img — generates a valid PNG image', { timeout: 600000 }, async (t) => {
+test('SD2.1 txt2img — generates a valid PNG image', { timeout: 600000, skip }, async (t) => {
   setupJsLogger(binding)
 
   const [downloadedModelName, modelDir] = await ensureModel({
@@ -45,6 +53,7 @@ test('SD2.1 txt2img — generates a valid PNG image', { timeout: 600000 }, async
     },
     {
       threads: 4,
+      device: useCpu ? 'cpu' : 'gpu',
       prediction: 'v' // SD2.1 uses v-prediction
     }
   )

@@ -2,6 +2,7 @@
 
 const test = require('brittle')
 const os = require('bare-os')
+const proc = require('bare-process')
 const binding = require('../../binding')
 const ImgStableDiffusion = require('../../index')
 const {
@@ -12,7 +13,9 @@ const {
 const isDarwinX64 = os.platform() === 'darwin' && os.arch() === 'x64'
 const isLinuxArm64 = os.platform() === 'linux' && os.arch() === 'arm64'
 const isMobile = os.platform() === 'ios' || os.platform() === 'android'
-const useCpu = isDarwinX64 || isLinuxArm64
+const noGpu = proc.env && proc.env.NO_GPU === 'true'
+const useCpu = isDarwinX64 || isLinuxArm64 || noGpu
+const skip = isMobile || noGpu
 
 // Smallest model for fast behavior tests
 const MODEL = {
@@ -70,7 +73,7 @@ async function setupModel (t) {
   return { model }
 }
 
-test('idle | run: allowed, returns QvacResponse', { timeout: 600000, skip: isMobile }, async t => {
+test('idle | run: allowed, returns QvacResponse', { timeout: 600000, skip }, async t => {
   const { model } = await setupModel(t)
   const response = await model.run(SHORT_PARAMS)
   t.ok(response, 'run() returns a response')
@@ -85,13 +88,13 @@ test('idle | run: allowed, returns QvacResponse', { timeout: 600000, skip: isMob
   t.ok(images.length > 0, 'run produces at least one image')
 })
 
-test('idle | cancel: allowed, no-op', { timeout: 600000, skip: isMobile }, async t => {
+test('idle | cancel: allowed, no-op', { timeout: 600000, skip }, async t => {
   const { model } = await setupModel(t)
   await model.cancel()
   t.pass('cancel when idle does not throw')
 })
 
-test('run | cancel: cancels current job', { timeout: 600000, skip: isMobile }, async t => {
+test('run | cancel: cancels current job', { timeout: 600000, skip }, async t => {
   const { model } = await setupModel(t)
   const response = await model.run(LONG_PARAMS)
 
@@ -114,7 +117,7 @@ test('run | cancel: cancels current job', { timeout: 600000, skip: isMobile }, a
   t.pass('cancel during run resolves and stops job')
 })
 
-test('run | run: second run() throws busy error', { timeout: 600000, skip: isMobile }, async t => {
+test('run | run: second run() throws busy error', { timeout: 600000, skip }, async t => {
   const { model } = await setupModel(t)
   const firstResponse = await model.run(LONG_PARAMS)
   let firstError = null
@@ -151,7 +154,7 @@ test('run | run: second run() throws busy error', { timeout: 600000, skip: isMob
   t.ok(!firstError, 'first response did not fail')
 })
 
-test('cancel | run: can run again after cancel', { timeout: 600000, skip: isMobile }, async t => {
+test('cancel | run: can run again after cancel', { timeout: 600000, skip }, async t => {
   const { model } = await setupModel(t)
 
   // Start a long job and cancel after first progress tick

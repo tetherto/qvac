@@ -13,11 +13,15 @@ const {
   isPng
 } = require('./utils')
 
+const proc = require('bare-process')
+
 const platform = detectPlatform()
 const isDarwinX64 = os.platform() === 'darwin' && os.arch() === 'x64'
 const isLinuxArm64 = os.platform() === 'linux' && os.arch() === 'arm64'
 const isMobile = os.platform() === 'ios' || os.platform() === 'android'
-const useCpu = isDarwinX64 || isLinuxArm64
+const noGpu = proc.env && proc.env.NO_GPU === 'true'
+const useCpu = isDarwinX64 || isLinuxArm64 || noGpu
+const skip = isMobile || noGpu
 
 const DIFFUSION_MODEL = {
   name: 'flux-2-klein-4b-Q8_0.gguf',
@@ -34,7 +38,7 @@ const VAE_MODEL = {
   url: 'https://huggingface.co/Comfy-Org/vae-text-encorder-for-flux-klein-4b/resolve/main/split_files/vae/flux2-vae.safetensors'
 }
 
-test('FLUX.2 klein txt2img — generates a valid PNG image', { timeout: 1800000, skip: isMobile }, async (t) => {
+test('FLUX.2 klein txt2img — generates a valid PNG image', { timeout: 1800000, skip }, async (t) => {
   setupJsLogger(binding)
 
   const [downloadedModelName, modelDir] = await ensureModel({
