@@ -203,7 +203,13 @@ const loadModelOptionsToRequestBaseSchema = z.union([
       modelType: ModelType.nmtcppTranslation,
       modelSrc: modelInputToSrcSchema.parse(data.modelSrc),
       modelName: modelInputToNameSchema.parse(data.modelSrc),
-      modelConfig: data.modelConfig,
+        modelConfig: (data.modelConfig.engine === "Bergamot" && data.modelConfig.pivotModel) ? {
+            ...data.modelConfig,
+            pivotModel: {
+                ...data.modelConfig.pivotModel,
+                modelSrc: modelInputToSrcSchema.parse(data.modelConfig.pivotModel.modelSrc),
+            },
+        } : data.modelConfig,
       seed: data.seed ?? false,
       withProgress: data.withProgress ?? !!data.onProgress,
       delegate: data.delegate,
