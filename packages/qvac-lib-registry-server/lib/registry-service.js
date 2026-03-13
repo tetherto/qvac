@@ -1152,7 +1152,7 @@ class RegistryService extends ReadyResource {
     const existing = await this.getLicenseByKey({ spdxId: licenseId })
     if (existing) return
 
-    if (!/^[A-Za-z0-9._-]+$/.test(licenseId)) {
+    if (!/^[A-Za-z0-9._+\-]+$/.test(licenseId)) {
       throw new TypeError('Invalid licenseId: must contain only alphanumeric, dot, dash, or underscore characters')
     }
 
