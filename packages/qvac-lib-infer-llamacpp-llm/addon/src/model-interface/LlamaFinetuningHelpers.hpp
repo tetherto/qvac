@@ -82,6 +82,7 @@ struct TrainingCheckpointState {
   int64_t expectedFirstBatchAfterResume = -1;
   bool firstBatchAfterResumeLogged = false;
   int64_t batchOffsetWithinEpoch = -1;
+  int64_t resumeGlobalStepSkip = 0;
   bool finetuningStartedEmitted = false;
   bool suppressProgressBar = false;
   std::function<void(const FinetuneProgressStats&)> progressCallback;

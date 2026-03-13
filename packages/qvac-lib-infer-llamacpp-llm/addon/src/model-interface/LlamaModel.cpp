@@ -1263,10 +1263,30 @@ std::string LlamaModel::finetune(
         }
         checkpointState->batchOffsetWithinEpoch = resumeBatchCursor;
 
+        const int64_t epochStartStep =
+            static_cast<int64_t>(resumeStartEpoch) * stepsPerEpoch;
+        const int64_t ibatchAtPause =
+            resumeMeta.globalStep - epochStartStep;
+        const int64_t firstIbatchOnResume = (resumeBatchCursor >= 0)
+            ? (resumeBatchCursor + 1) * ubatchPerSample
+            : 0;
+        checkpointState->resumeGlobalStepSkip =
+            std::max(int64_t{0}, ibatchAtPause - firstIbatchOnResume);
+
         std::ostringstream batchOffsetMsg;
         batchOffsetMsg << "Resuming from epoch " << (resumeStartEpoch + 1)
-                       << " | idata batch cursor=" << resumeBatchCursor;
+                       << " | idata batch cursor=" << resumeBatchCursor
+                       << " | globalStep skip="
+                       << checkpointState->resumeGlobalStepSkip;
         QLOG_IF(Priority::DEBUG, batchOffsetMsg.str());
+
+        if (checkpointState->resumeGlobalStepSkip > 0) {
+          std::ostringstream skipMsg;
+          skipMsg << "Replaying "
+                  << checkpointState->resumeGlobalStepSkip
+                  << " pre-pause micro-batches";
+          QLOG_IF(Priority::INFO, skipMsg.str());
+        }
       }
     }
 
@@ -1781,8 +1801,7 @@ void LlamaModel::executeTrainingLoop(
     }
 
     int64_t resumeFromBatch = -1;
-    if (resumingFromPause && checkpointState &&
-        checkpointState->batchOffsetWithinEpoch >= 0 && epoch == startEpoch) {
+    if (resumingFromPause && checkpointState && epoch == startEpoch) {
       resumeFromBatch = checkpointState->batchOffsetWithinEpoch;
     }
 

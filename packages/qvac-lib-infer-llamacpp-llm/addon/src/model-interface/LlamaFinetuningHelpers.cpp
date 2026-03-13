@@ -513,10 +513,12 @@ void optEpochCallback(
     int64_t tStartUs, TrainingCheckpointState* checkpointState) {
   const bool isFinalBatch = (ibatch == ibatchMax);
   const int64_t displayBatch = ibatch;
+  const bool isReplayBatch = train && checkpointState != nullptr &&
+                             checkpointState->resumeGlobalStepSkip > 0;
 
   bool suppress = checkpointState != nullptr &&
                   checkpointState->suppressProgressBar;
-  if (!suppress) {
+  if (!suppress && !isReplayBatch) {
     ggml_opt_epoch_callback_progress_bar(
         train, optCtx, dataset, result, displayBatch, ibatchMax, tStartUs);
     std::fflush(stdout);
@@ -539,10 +541,14 @@ void optEpochCallback(
     if (pauseCheckpointAlreadySaved && shouldExitAlreadySet) {
       return;
     }
-    state->globalStep += 1;
+    if (state->resumeGlobalStepSkip > 0) {
+      state->resumeGlobalStepSkip--;
+    } else {
+      state->globalStep += 1;
+    }
   }
 
-  if (state->progressCallback) {
+  if (state->progressCallback && !isReplayBatch) {
     double loss = 0.0;
     double lossUnc = 0.0;
     double accuracy = 0.0;
