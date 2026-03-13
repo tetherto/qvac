@@ -3,6 +3,7 @@ import {
   type ProfilingRequestMeta,
   type ServerBreakdown,
   type DelegationBreakdown,
+  type OperationEvent,
 } from "@/schemas";
 import { nowMs } from "@/profiling";
 
@@ -36,20 +37,22 @@ function buildServerBreakdown(ctx: ServerProfilingContext): ServerBreakdown {
 export interface ProfilingInjectionOptions {
   ctx?: ServerProfilingContext;
   delegation?: DelegationBreakdown;
+  operation?: OperationEvent;
 }
 
 export function injectProfilingIntoString(
   jsonString: string,
   options: ProfilingInjectionOptions,
 ): string {
-  const { ctx, delegation } = options;
+  const { ctx, delegation, operation } = options;
   const includeServer = ctx?.meta.includeServer ?? false;
 
-  // Nothing to inject or invalid JSON
-  if ((!includeServer && !delegation) || !jsonString.endsWith("}")) {
+  const hasContent = includeServer || !!delegation || !!operation;
+  if (!hasContent || !jsonString.endsWith("}")) {
     return jsonString;
   }
-  const id = ctx?.meta.id ?? delegation?.profileId ?? "";
+
+  const id = ctx?.meta.id ?? delegation?.profileId ?? operation?.profileId ?? "";
   const profilingMeta: Record<string, unknown> = { id };
 
   if (includeServer && ctx) {
@@ -60,6 +63,10 @@ export function injectProfilingIntoString(
     const { profileId: _unused, ...delegationWithoutId } = delegation;
     void _unused;
     profilingMeta["delegation"] = delegationWithoutId;
+  }
+
+  if (operation) {
+    profilingMeta["operation"] = operation;
   }
 
   return (

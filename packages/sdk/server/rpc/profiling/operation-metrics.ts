@@ -5,10 +5,13 @@
 
 import type { CompletionStats, TranslationStats, OCRStats } from "@/schemas";
 import type { ProfilingEvent, ProfilingEventKind } from "@/profiling/types";
+import type { LoadModelProfilingMeta, DownloadStats } from "@/server/rpc/handlers/load-model/types";
 
 export type MetricExtractor<T> = (
   data: T,
 ) => Record<string, number> | undefined;
+
+export type TagExtractor<T> = (data: T) => Record<string, string> | undefined;
 
 export interface OperationMetricsConfig<
   TRequest = unknown,
@@ -20,9 +23,40 @@ export interface OperationMetricsConfig<
   fromFinalChunk?: MetricExtractor<TResponse>;
   fromResult?: MetricExtractor<TResponse>;
   getTags?: (request: TRequest) => Record<string, string>;
+  getTagsFromResult?: TagExtractor<TResponse>;
 }
 
 const metricsRegistry = new Map<string, OperationMetricsConfig>();
+
+export interface DownloadAssetProfilingMeta {
+  sourceType?: string;
+  downloadStats?: DownloadStats;
+  totalDownloadTimeMs?: number;
+}
+
+interface DownloadStatsShape {
+  downloadTimeMs?: number;
+  totalBytesDownloaded?: number;
+  downloadSpeedBps?: number;
+}
+
+type ResponseWithProfilingMeta<T> = { __profilingMeta?: T };
+
+
+function extractDownloadStatsGauges(
+  stats: DownloadStatsShape | undefined,
+  gauges: Record<string, number>,
+): void {
+  if (stats?.downloadTimeMs !== undefined) {
+    gauges["downloadTime"] = stats.downloadTimeMs;
+  }
+  if (stats?.totalBytesDownloaded !== undefined) {
+    gauges["totalBytesDownloaded"] = stats.totalBytesDownloaded;
+  }
+  if (stats?.downloadSpeedBps !== undefined) {
+    gauges["downloadSpeedBps"] = stats.downloadSpeedBps;
+  }
+}
 
 export function registerOperationMetrics<TRequest, TResponse>(
   config: OperationMetricsConfig<TRequest, TResponse>,
@@ -71,9 +105,12 @@ export function buildOperationEvent(
     if (extracted) Object.assign(gauges, extracted);
   }
 
-  const tags = config.getTags?.(request as never);
+  const requestTags = config.getTags?.(request as never);
+  const resultTags = config.getTagsFromResult?.(finalResponse as never);
+  const tags = { ...requestTags, ...resultTags };
+
   const hasGauges = Object.keys(gauges).length > 0;
-  const hasTags = tags && Object.keys(tags).length > 0;
+  const hasTags = Object.keys(tags).length > 0;
 
   const event: ProfilingEvent = {
     ts,
@@ -179,5 +216,59 @@ registerOperationMetrics<{ modelId?: string; handler?: string }, unknown>({
     if (req.modelId) tags["modelId"] = req.modelId;
     if (req.handler) tags["handler"] = req.handler;
     return tags;
+  },
+});
+
+registerOperationMetrics<
+  { modelType?: string },
+  ResponseWithProfilingMeta<LoadModelProfilingMeta>
+>({
+  op: "loadModel",
+  kind: "handler",
+  getTags: (req) => (req.modelType ? { modelType: req.modelType } : {}),
+  getTagsFromResult: (res) => {
+    const sourceType = res.__profilingMeta?.sourceType;
+    return sourceType ? { sourceType } : undefined;
+  },
+  fromResult: (res) => {
+    const meta = res.__profilingMeta;
+    if (!meta) return undefined;
+
+    const gauges: Record<string, number> = {};
+    extractDownloadStatsGauges(meta.downloadStats, gauges);
+
+    if (meta.modelInitializationTimeMs !== undefined) {
+      gauges["modelInitializationTime"] = meta.modelInitializationTimeMs;
+    }
+    if (meta.totalLoadTimeMs !== undefined) {
+      gauges["totalLoadTime"] = meta.totalLoadTimeMs;
+    }
+
+    return Object.keys(gauges).length > 0 ? gauges : undefined;
+  },
+});
+
+registerOperationMetrics<
+  unknown,
+  ResponseWithProfilingMeta<DownloadAssetProfilingMeta>
+>({
+  op: "downloadAsset",
+  kind: "handler",
+  getTagsFromResult: (res) => {
+    const sourceType = res.__profilingMeta?.sourceType;
+    return sourceType ? { sourceType } : undefined;
+  },
+  fromResult: (res) => {
+    const meta = res.__profilingMeta;
+    if (!meta) return undefined;
+
+    const gauges: Record<string, number> = {};
+    extractDownloadStatsGauges(meta.downloadStats, gauges);
+
+    if (meta.totalDownloadTimeMs !== undefined) {
+      gauges["totalDownloadTime"] = meta.totalDownloadTimeMs;
+    }
+
+    return Object.keys(gauges).length > 0 ? gauges : undefined;
   },
 });
