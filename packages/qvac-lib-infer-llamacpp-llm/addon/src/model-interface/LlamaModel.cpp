@@ -1936,10 +1936,6 @@ bool LlamaModel::requestPause() {
     return false;
   }
   state->pauseRequested.store(true);
-  llama_context* ctx = getContext();
-  if (ctx != nullptr) {
-    llama_opt_request_stop(ctx);
-  }
   return true;
 }
 

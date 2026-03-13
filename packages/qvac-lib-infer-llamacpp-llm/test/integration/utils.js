@@ -353,7 +353,7 @@ function setupParams (modelDir, overrides = {}) {
     assistantLossOnly: true,
     checkpointSaveSteps: 5,
     checkpointSaveDir: checkpointDir,
-    validation: { type: 'split', fraction: 0.05 },
+    validation: { type: 'split', fraction: 0.125 },
     ...finetuneOverrides
   }
 }

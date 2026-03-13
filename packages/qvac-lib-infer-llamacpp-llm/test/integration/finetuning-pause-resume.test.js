@@ -186,6 +186,24 @@ test('finetuning pause and resume', { timeout: PAUSE_RESUME_TIMEOUT_MS, skip: sk
       assertLossAndAccuracyAreFinite(t, pauseResult, modelVariant.id)
       if (pauseResult?.status === 'COMPLETED') {
         t.comment(`[${modelVariant.id}] Finetune result: ${JSON.stringify(pauseResult)}`)
+
+        const expectedGlobalSteps = isMobile ? 7 : 14
+        t.is(
+          pauseResult.stats?.global_steps, expectedGlobalSteps,
+          `[${modelVariant.id}] global_steps should be ${expectedGlobalSteps}, got ${pauseResult.stats?.global_steps}`
+        )
+
+        const earlyStats = pauseResult.stats
+        t.ok(earlyStats?.train_loss != null, `[${modelVariant.id}] train_loss must not be null`)
+        t.ok(earlyStats?.train_loss_uncertainty != null, `[${modelVariant.id}] train_loss_uncertainty must not be null`)
+        t.ok(earlyStats?.train_accuracy != null, `[${modelVariant.id}] train_accuracy must not be null`)
+        t.ok(earlyStats?.train_accuracy_uncertainty != null, `[${modelVariant.id}] train_accuracy_uncertainty must not be null`)
+        t.ok(earlyStats?.val_loss != null, `[${modelVariant.id}] val_loss must not be null`)
+        t.ok(earlyStats?.val_loss !== 0, `[${modelVariant.id}] val_loss must not be 0`)
+        t.ok(earlyStats?.val_loss_uncertainty != null, `[${modelVariant.id}] val_loss_uncertainty must not be null`)
+        t.ok(earlyStats?.val_accuracy != null, `[${modelVariant.id}] val_accuracy must not be null`)
+        t.ok(earlyStats?.val_accuracy_uncertainty != null, `[${modelVariant.id}] val_accuracy_uncertainty must not be null`)
+
         await handleEarlyCompletion(
           t,
           finetuneHandle,
@@ -232,12 +250,25 @@ test('finetuning pause and resume', { timeout: PAUSE_RESUME_TIMEOUT_MS, skip: sk
         'number',
         `[${modelVariant.id}] Finetune stats.epochs_completed should be a number`
       )
+      const expectedGlobalSteps = isMobile ? 7 : 14
+      t.is(
+        result.stats?.global_steps, expectedGlobalSteps,
+        `[${modelVariant.id}] global_steps should be ${expectedGlobalSteps}, got ${result.stats?.global_steps}`
+      )
+
       const stats = result.stats
       t.ok(stats, `[${modelVariant.id}] Terminal result must include stats`)
       t.ok(!isNaN(stats.train_loss) && stats.train_loss > 0, `[${modelVariant.id}] train_loss must be a positive number`)
+      t.ok(stats.train_loss_uncertainty != null, `[${modelVariant.id}] train_loss_uncertainty must not be null`)
       t.ok(!isNaN(stats.train_accuracy) && stats.train_accuracy >= 0, `[${modelVariant.id}] train_accuracy must not be NaN`)
+      t.ok(stats.train_accuracy_uncertainty != null, `[${modelVariant.id}] train_accuracy_uncertainty must not be null`)
+      t.ok(stats.val_loss != null, `[${modelVariant.id}] val_loss must not be null`)
       t.ok(!isNaN(stats.val_loss), `[${modelVariant.id}] val_loss must not be NaN`)
+      t.ok(stats.val_loss !== 0, `[${modelVariant.id}] val_loss must not be 0`)
+      t.ok(stats.val_loss_uncertainty != null, `[${modelVariant.id}] val_loss_uncertainty must not be null`)
+      t.ok(stats.val_accuracy != null, `[${modelVariant.id}] val_accuracy must not be null`)
       t.ok(!isNaN(stats.val_accuracy), `[${modelVariant.id}] val_accuracy must not be NaN`)
+      t.ok(stats.val_accuracy_uncertainty != null, `[${modelVariant.id}] val_accuracy_uncertainty must not be null`)
 
       assertLossAndAccuracyAreFinite(t, result, modelVariant.id)
       t.comment(`[${modelVariant.id}] Finetune terminal stats: ${JSON.stringify(result.stats)}`)
@@ -266,7 +297,7 @@ test('cancel() stops finetuning and removes pause checkpoint', { timeout: PAUSE_
     downloadUrl: modelVariant.url
   })
 
-  const finetuneConfig = setupParams(modelDir, { checkpointSaveSteps: 5, testId: 'cancel-test' })
+  const finetuneConfig = setupParams(modelDir, { checkpointSaveSteps: 5, datasetSize: isMobile ? 8 : 16, testId: 'cancel-test' })
   const checkpointDir = finetuneConfig.checkpointSaveDir
 
   const loader = new FilesystemDL({ dirPath: modelDir })
@@ -307,6 +338,14 @@ test('cancel() stops finetuning and removes pause checkpoint', { timeout: PAUSE_
       `cancel() resolves with PAUSED or COMPLETED, got: ${result.status}`
     )
 
+    if (result.status === 'COMPLETED') {
+      const expectedGlobalSteps = isMobile ? 7 : 14
+      t.is(
+        result.stats?.global_steps, expectedGlobalSteps,
+        `global_steps should be ${expectedGlobalSteps}, got ${result.stats?.global_steps}`
+      )
+    }
+
     const hasPauseCheckpoint = fs.existsSync(checkpointDir) &&
       fs.readdirSync(checkpointDir).some(f => f.startsWith('pause_checkpoint_step_'))
     t.ok(!hasPauseCheckpoint, 'cancel() must remove pause checkpoint so next finetune() starts fresh')
@@ -327,7 +366,7 @@ test('inference with session cache works after finetuning', { timeout: PAUSE_RES
     downloadUrl: modelVariant.url
   })
 
-  const finetuneConfig = setupParams(modelDir, { checkpointSaveSteps: 5 })
+  const finetuneConfig = setupParams(modelDir, { checkpointSaveSteps: 5, datasetSize: isMobile ? 8 : 16 })
   const checkpointDir = finetuneConfig.checkpointSaveDir
   const sessionFile = path.join(modelDir, 'test-session-finetune.bin')
 
@@ -374,6 +413,12 @@ test('inference with session cache works after finetuning', { timeout: PAUSE_RES
     const result = await finetuneHandle.await()
     t.ok(result, 'Finetune should return a result')
     t.comment(`Finetune result: ${JSON.stringify(result)}`)
+
+    const expectedGlobalSteps = isMobile ? 7 : 14
+    t.is(
+      result.stats?.global_steps, expectedGlobalSteps,
+      `global_steps should be ${expectedGlobalSteps}, got ${result.stats?.global_steps}`
+    )
 
     const postPrompt = [
       { role: 'session', content: sessionFile },
