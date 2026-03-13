@@ -2,11 +2,11 @@ import {
   loadModel,
   unloadModel,
   transcribeStream,
-  PARAKEET_ENCODER_FP32,
-  PARAKEET_ENCODER_DATA_FP32,
-  PARAKEET_DECODER_FP32,
-  PARAKEET_VOCAB,
-  PARAKEET_PREPROCESSOR_FP32,
+  PARAKEET_TDT_ENCODER_FP32,
+  PARAKEET_TDT_ENCODER_DATA_FP32,
+  PARAKEET_TDT_DECODER_FP32,
+  PARAKEET_TDT_VOCAB,
+  PARAKEET_TDT_PREPROCESSOR_FP32,
 } from "@qvac/sdk";
 import { spawn, spawnSync } from "child_process";
 import { platform } from "os";
@@ -49,14 +49,14 @@ checkFFmpeg();
 
 console.log("Loading Parakeet model...");
 const modelId = await loadModel({
-  modelSrc: PARAKEET_ENCODER_FP32,
+  modelSrc: PARAKEET_TDT_ENCODER_FP32,
   modelType: "parakeet",
   modelConfig: {
-    parakeetEncoderSrc: PARAKEET_ENCODER_FP32,
-    parakeetEncoderDataSrc: PARAKEET_ENCODER_DATA_FP32,
-    parakeetDecoderSrc: PARAKEET_DECODER_FP32,
-    parakeetVocabSrc: PARAKEET_VOCAB,
-    parakeetPreprocessorSrc: PARAKEET_PREPROCESSOR_FP32,
+    parakeetEncoderSrc: PARAKEET_TDT_ENCODER_FP32,
+    parakeetEncoderDataSrc: PARAKEET_TDT_ENCODER_DATA_FP32,
+    parakeetDecoderSrc: PARAKEET_TDT_DECODER_FP32,
+    parakeetVocabSrc: PARAKEET_TDT_VOCAB,
+    parakeetPreprocessorSrc: PARAKEET_TDT_PREPROCESSOR_FP32,
   },
   onProgress: (p) => console.log(`Download: ${p.percentage.toFixed(1)}%`),
 });
