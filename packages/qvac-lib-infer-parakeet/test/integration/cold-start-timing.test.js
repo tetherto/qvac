@@ -23,7 +23,7 @@ const {
   setupJsLogger,
   getTestPaths,
   ensureModel,
-  readFileChunked,
+  getNamedPathsConfig,
   isMobile
 } = require('./helpers.js')
 
@@ -85,7 +85,8 @@ test('Cold start timing: first vs subsequent transcription times', { timeout: 60
     maxThreads: 4,
     useGPU: false,
     sampleRate: 16000,
-    channels: 1
+    channels: 1,
+    ...getNamedPathsConfig('tdt', modelPath)
   }
 
   // Track results for each run
@@ -109,28 +110,6 @@ test('Cold start timing: first vs subsequent transcription times', { timeout: 60
     const loadStartTime = getTimeMs()
 
     parakeet = new ParakeetInterface(binding, config, outputCallback)
-
-    // Load model weights
-    const modelFiles = [
-      'encoder-model.onnx',
-      'encoder-model.onnx.data',
-      'decoder_joint-model.onnx',
-      'vocab.txt',
-      'preprocessor.onnx'
-    ]
-
-    for (const file of modelFiles) {
-      const filePath = path.join(modelPath, file)
-      if (fs.existsSync(filePath)) {
-        const chunks = []
-        for (const buffer of readFileChunked(filePath)) {
-          chunks.push(buffer)
-        }
-        const fullBuffer = Buffer.concat(chunks)
-        const chunk = new Uint8Array(fullBuffer.buffer, fullBuffer.byteOffset, fullBuffer.byteLength)
-        await parakeet.loadWeights({ filename: file, chunk, completed: true })
-      }
-    }
 
     console.log('🔄 Activating model...')
     await parakeet.activate()
@@ -340,34 +319,13 @@ test('Fresh instance timing: new model per transcription (app restart simulation
       maxThreads: 4,
       useGPU: false,
       sampleRate: 16000,
-      channels: 1
+      channels: 1,
+      ...getNamedPathsConfig('tdt', modelPath)
     }
 
     let parakeet = null
     try {
       parakeet = new ParakeetInterface(binding, config, outputCallback)
-
-      // Load weights
-      const modelFiles = [
-        'encoder-model.onnx',
-        'encoder-model.onnx.data',
-        'decoder_joint-model.onnx',
-        'vocab.txt',
-        'preprocessor.onnx'
-      ]
-
-      for (const file of modelFiles) {
-        const filePath = path.join(modelPath, file)
-        if (fs.existsSync(filePath)) {
-          const chunks = []
-          for (const buffer of readFileChunked(filePath)) {
-            chunks.push(buffer)
-          }
-          const fullBuffer = Buffer.concat(chunks)
-          const chunk = new Uint8Array(fullBuffer.buffer, fullBuffer.byteOffset, fullBuffer.byteLength)
-          await parakeet.loadWeights({ filename: file, chunk, completed: true })
-        }
-      }
 
       const loadTime = getTimeMs() - instanceStartTime
 
