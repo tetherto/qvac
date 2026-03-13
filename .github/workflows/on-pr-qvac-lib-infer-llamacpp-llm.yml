@@ -61,6 +61,7 @@ jobs:
       workdir: packages/qvac-lib-infer-llamacpp-llm
 
   ts-checks:
+    if: contains( github.event.pull_request.labels.*.name, 'verify') || github.event_name == 'workflow_dispatch'
     runs-on: ubuntu-latest
     steps:
       - name: Checkout code
