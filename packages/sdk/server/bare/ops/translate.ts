@@ -5,9 +5,22 @@ import {
   ModelType,
   type TranslateParams,
   type TranslationStats,
+  AFRICAN_LANGUAGES_MAP,
 } from "@/schemas";
 import type TranslationNmtcpp from "@qvac/translation-nmtcpp";
-import { getLanguage, isAfrican } from "./translate-llm-utils";
+
+import { getLangName } from "@qvac/langdetect-text";
+
+export function getLanguage(code: string | undefined): string {
+  if (!code) return "";
+  if (AFRICAN_LANGUAGES_MAP.has(code)) return AFRICAN_LANGUAGES_MAP.get(code)!;
+  const fullName = getLangName(code);
+  return fullName ?? code.toUpperCase();
+}
+
+export function isAfrican(code: string | undefined) {
+  return !!code && AFRICAN_LANGUAGES_MAP.has(code);
+}
 
 export async function* translate(
   params: TranslateParams,
@@ -18,7 +31,7 @@ export async function* translate(
   const from = isLlm ? (params as { from?: string }).from : undefined;
   const to = isLlm ? (params as { to: string }).to : undefined;
   const context = isLlm ? (params as { context?: string }).context : undefined;
-  const afriquePrompt = isLlm && (isAfrican(from) || isAfrican(to))
+  const afriquePrompt = isLlm && (isAfrican(from) || isAfrican(to));
   translateServerParamsSchema.parse(params);
 
   const model = getModel(modelId);
