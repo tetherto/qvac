@@ -29,8 +29,7 @@
 template <typename T> class SharedSnapshot {
 public:
   SharedSnapshot(const std::shared_ptr<T>& source, std::shared_mutex& mtx)
-      : source_(&source),
-        readLock_(mtx, std::defer_lock),
+      : source_(&source), readLock_(mtx, std::defer_lock),
         writeLock_(mtx, std::defer_lock) {
     assert(source_ != nullptr && "source must not be null");
   }
@@ -72,11 +71,13 @@ public:
   [[nodiscard]] bool isValid() const { return *source_ == snapshot_; }
 
   T* operator->() const {
-    assert(snapshot_ != nullptr && "snapshot not captured; call lockRead first");
+    assert(
+        snapshot_ != nullptr && "snapshot not captured; call lockRead first");
     return snapshot_.get();
   }
   T& operator*() const {
-    assert(snapshot_ != nullptr && "snapshot not captured; call lockRead first");
+    assert(
+        snapshot_ != nullptr && "snapshot not captured; call lockRead first");
     return *snapshot_;
   }
   const std::shared_ptr<T>& get() const { return snapshot_; }

@@ -52,6 +52,15 @@ struct FinetuneTerminalResult {
   std::optional<Stats> stats;
 };
 
+struct FinetuneConfigOverrides {
+  bool active{false};
+  int64_t batchSize{128};
+  int64_t microBatchSize{128};
+  int64_t contextLength{128};
+  bool gpuSupportsF16OutProd{true};
+  bool flashAttn{false};
+};
+
 class LlamaModel : public IModel, public IModelAsyncLoad, public IModelCancel {
 public:
   LlamaModel(const LlamaModel&) = delete;
@@ -71,9 +80,12 @@ public:
   /// @param configFilemap The user-supplied config map (will be written to).
   /// @param metadata Model metadata (architecture, quantization info).
   /// @param adrenoVersion Detected Adreno GPU version, if any.
+  /// @param finetuneOverrides If set, finetuning mode is active with these
+  /// context/batch params and GPU caps.
   static void tuneConfigMap(
       std::unordered_map<std::string, std::string>& configFilemap,
-      const ModelMetaData& metadata, const std::optional<int>& adrenoVersion);
+      const ModelMetaData& metadata, const std::optional<int>& adrenoVersion,
+      const FinetuneConfigOverrides& finetuneOverrides = {});
 
   /**
    * The Constructor for llama model.
@@ -133,7 +145,12 @@ public:
   /// Acquires exclusive lock on stateMtx_; tries to cancel and blocks until
   /// any in-flight operation that access the state finishes, then safely swaps
   /// the state.
-  void reload();
+  /// @param newFinetuneOverrides  When provided, pendingFinetuneOverrides_ is
+  ///   atomically replaced under the exclusive lock before the reload proceeds.
+  ///   Omit (or std::nullopt) to leave pendingFinetuneOverrides_ unchanged.
+  void reload(
+      std::optional<FinetuneConfigOverrides> newFinetuneOverrides =
+          std::nullopt);
 
   /**
    * Check if model is loaded.
@@ -200,6 +217,7 @@ private:
     // configuration values parsed from configFilemap
     llama_pos configuredNDiscarded_ = 0;
     std::optional<CacheManager> cacheManager_;
+
     bool lastRunWasPrefill_ = false;
   };
 
@@ -231,12 +249,11 @@ private:
   bool loadMedia(const std::vector<uint8_t>& input);
 
   void setInitLoader(
-      std::optional<InitLoader::LOADER_TYPE> loaderType = std::nullopt);
+      std::optional<InitLoader::LOADER_TYPE> loaderType = std::nullopt,
+      std::optional<FinetuneConfigOverrides> newFinetuneOverrides =
+          std::nullopt);
 
   void init(bool acquireLock);
-  void reinitialize(
-      const std::unordered_map<std::string, std::string>& configOverrides,
-      bool training = false);
 
   const std::string loadingContext_;
   ModelMetaData metadata_;
@@ -300,6 +317,12 @@ private:
   void setPausedCheckpointStateShared(
       std::shared_ptr<llama_finetuning_helpers::TrainingCheckpointState> state);
   void clearPausedCheckpointStateShared();
+
+  // Guarded by stateMtx_: written and read exclusively inside
+  // setInitLoader() / init() → commonParamsParse(), both of which run
+  // under the stateMtx_ unique_lock. Callers set it via reload()'s
+  // newFinetuneOverrides parameter to avoid any unsynchronised window.
+  FinetuneConfigOverrides pendingFinetuneOverrides_;
 
   mutable std::mutex checkpointStateMutex_;
   std::shared_ptr<llama_finetuning_helpers::TrainingCheckpointState>

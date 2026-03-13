@@ -1,8 +1,10 @@
 #include "LlamaModel.hpp"
 
 #include <algorithm>
+#include <array>
 #include <cctype>
 #include <chrono>
+#include <cinttypes>
 #include <cmath>
 #include <cstddef>
 #include <filesystem>
@@ -88,14 +90,48 @@ void LlamaModel::resolveShardPaths(
 
 void LlamaModel::tuneConfigMap(
     std::unordered_map<std::string, std::string>& configFilemap,
-    const ModelMetaData& metadata, const std::optional<int>& adrenoVersion) {
+    const ModelMetaData& metadata, const std::optional<int>& adrenoVersion,
+    const FinetuneConfigOverrides& finetuneOverrides) {
+
+  const bool isFinetuning = finetuneOverrides.active;
+
+  auto notUserSet = [&](const char* hyphenKey, const char* underscoreKey) {
+    return configFilemap.find(hyphenKey) == configFilemap.end() &&
+           configFilemap.find(underscoreKey) == configFilemap.end();
+  };
 
   const bool isBitnet =
       metadata.hasOneBitQuantization() &&
       metadata.tryGetString("general.architecture") == "bitnet";
 
-  if (isBitnet && configFilemap.find("flash-attn") == configFilemap.end() &&
-      configFilemap.find("flash_attn") == configFilemap.end()) {
+  if (isFinetuning) {
+    configFilemap.erase("ctx_size");
+    configFilemap["ctx-size"] = std::to_string(finetuneOverrides.contextLength);
+    configFilemap.erase("batch_size");
+    configFilemap["batch-size"] = std::to_string(finetuneOverrides.batchSize);
+    configFilemap.erase("ubatch_size");
+    configFilemap["ubatch-size"] =
+        std::to_string(finetuneOverrides.microBatchSize);
+    QLOG_IF(
+        Priority::DEBUG,
+        string_format(
+            "[LlamaModel] Finetuning: ctx-size=%" PRId64 " batch-size=%" PRId64
+            " ubatch-size=%" PRId64 "\n",
+            finetuneOverrides.contextLength,
+            finetuneOverrides.batchSize,
+            finetuneOverrides.microBatchSize));
+  }
+
+  if (isFinetuning) {
+    configFilemap.erase("flash_attn");
+    configFilemap["flash-attn"] = finetuneOverrides.flashAttn ? "on" : "off";
+    QLOG_IF(
+        Priority::INFO,
+        (finetuneOverrides.flashAttn
+             ? "[LlamaModel] Finetuning: enabling flash attention\n"
+             : "[LlamaModel] Finetuning: disabling flash attention\n"));
+  } else if (isBitnet && notUserSet("flash-attn", "flash_attn")) {
+    configFilemap.erase("flash_attn");
     configFilemap["flash-attn"] = "off";
     QLOG_IF(
         Priority::INFO,
@@ -103,14 +139,64 @@ void LlamaModel::tuneConfigMap(
   }
 
   constexpr int kAdrenoUbatchThreshold = 800;
-  if (isBitnet && adrenoVersion.has_value() &&
-      adrenoVersion.value() >= kAdrenoUbatchThreshold &&
-      configFilemap.find("ubatch-size") == configFilemap.end() &&
-      configFilemap.find("ubatch_size") == configFilemap.end()) {
-    configFilemap["ubatch-size"] = "128";
-    QLOG_IF(
-        Priority::INFO,
-        "[LlamaModel] BitNet on Adreno 800+: defaulting ubatch-size=128\n");
+  const bool needsUbatch = (isBitnet || isFinetuning) &&
+                           adrenoVersion.has_value() &&
+                           adrenoVersion.value() >= kAdrenoUbatchThreshold;
+  if (needsUbatch) {
+    constexpr int64_t kAdrenoUbatchCap = 128;
+    if (notUserSet("ubatch-size", "ubatch_size")) {
+      configFilemap["ubatch-size"] = std::to_string(kAdrenoUbatchCap);
+      QLOG_IF(
+          Priority::INFO,
+          "[LlamaModel] Adreno 800+ (Vulkan): defaulting ubatch-size=128\n");
+    } else {
+      const std::string& key =
+          configFilemap.count("ubatch-size") ? "ubatch-size" : "ubatch_size";
+      int64_t userVal;
+      try {
+        userVal = std::stoll(configFilemap[key]);
+      } catch (const std::exception& e) {
+        QLOG_IF(
+            Priority::ERROR,
+            string_format(
+                "[LlamaModel] Adreno 800+ (Vulkan): invalid ubatch-size "
+                "\"%s\" (%s), falling back to %" PRId64 "\n",
+                configFilemap[key].c_str(),
+                e.what(),
+                kAdrenoUbatchCap));
+        userVal = kAdrenoUbatchCap;
+      }
+      const int64_t clamped = std::min(userVal, kAdrenoUbatchCap);
+      if (clamped < userVal) {
+        QLOG_IF(
+            Priority::WARNING,
+            string_format(
+                "[LlamaModel] Adreno 800+ (Vulkan): ubatch-size=%" PRId64
+                " exceeds safe maximum %" PRId64 ", clamping to %" PRId64 "\n",
+                userVal,
+                kAdrenoUbatchCap,
+                clamped));
+      }
+      configFilemap.erase("ubatch_size");
+      configFilemap["ubatch-size"] = std::to_string(clamped);
+    }
+  }
+
+  if (isFinetuning && !finetuneOverrides.gpuSupportsF16OutProd) {
+    if (notUserSet("cache-type-k", "cache_type_k")) {
+      configFilemap["cache-type-k"] = "f32";
+      QLOG_IF(
+          Priority::INFO,
+          "[LlamaModel] Finetuning: GPU lacks F16 out_prod, using f32 K for KV "
+          "cache\n");
+    }
+    if (notUserSet("cache-type-v", "cache_type_v")) {
+      configFilemap["cache-type-v"] = "f32";
+      QLOG_IF(
+          Priority::INFO,
+          "[LlamaModel] Finetuning: GPU lacks F16 out_prod, using f32 V for KV "
+          "cache\n");
+    }
   }
 }
 
@@ -125,7 +211,8 @@ LlamaModel::LlamaModel(
   setInitLoader(InitLoader::LOADER_TYPE::DELAYED);
 }
 
-void LlamaModel::reload() {
+void LlamaModel::reload(
+    std::optional<FinetuneConfigOverrides> newFinetuneOverrides) {
   {
     std::shared_lock lock(stateMtx_);
     if (state_->asyncWeightsLoader_.isStreaming()) {
@@ -138,13 +225,17 @@ void LlamaModel::reload() {
           "the streamed weights have already been consumed.");
     }
   }
-  setInitLoader(InitLoader::LOADER_TYPE::IMMEDIATE);
+  setInitLoader(InitLoader::LOADER_TYPE::IMMEDIATE, newFinetuneOverrides);
 }
 
 void LlamaModel::setInitLoader(
-    std::optional<InitLoader::LOADER_TYPE> loaderType) {
+    std::optional<InitLoader::LOADER_TYPE> loaderType,
+    std::optional<FinetuneConfigOverrides> newFinetuneOverrides) {
   cancel();
   std::unique_lock lock(stateMtx_);
+  if (newFinetuneOverrides.has_value()) {
+    pendingFinetuneOverrides_ = *newFinetuneOverrides;
+  }
   if (loaderType.has_value()) {
     constructionArgs_.loaderType = loaderType.value();
   }
@@ -256,61 +347,6 @@ void LlamaModel::init(bool acquireLock) {
   }
 }
 
-void LlamaModel::reinitialize(
-    const std::unordered_map<std::string, std::string>& configOverrides,
-    bool training) {
-  state_->cacheManager_.reset();
-  state_->llmContext_.reset();
-  state_->backendsHandle_.reset();
-
-  std::unordered_map<std::string, std::string> configFilemap =
-      constructionArgs_.configFilemap;
-  for (const auto& [key, value] : configOverrides) {
-    configFilemap[key] = value;
-  }
-
-  std::string backendsDir;
-  if (auto it = configFilemap.find("backendsDir"); it != configFilemap.end()) {
-    backendsDir = it->second;
-    configFilemap.erase(it);
-  }
-
-  state_->backendsHandle_ = LlamaBackendsHandle(backendsDir);
-
-  common_params params;
-  std::optional<int> adrenoVersion;
-  commonParamsParse(
-      constructionArgs_.modelPath, configFilemap, params, adrenoVersion);
-  params.training = training;
-
-  const std::string errorWhenFailed = toString(UnableToLoadModel);
-  std::map<std::string, std::unique_ptr<std::basic_streambuf<char>>> noStreams;
-  common_init_result llamaInit = initFromConfig(
-      params,
-      constructionArgs_.modelPath,
-      noStreams,
-      state_->shards_,
-      loadingContext_,
-      false,
-      ADDON_ID,
-      errorWhenFailed);
-
-  std::string projPath = constructionArgs_.projectionPath;
-  state_->llmContext_ =
-      createContext(std::move(projPath), params, std::move(llamaInit));
-
-  if (state_->configuredNDiscarded_ > 0 && state_->llmContext_) {
-    state_->llmContext_->setNDiscarded(state_->configuredNDiscarded_);
-  }
-
-  if (state_->llmContext_) {
-    state_->cacheManager_.emplace(
-        state_->llmContext_.get(),
-        state_->configuredNDiscarded_,
-        [this](bool resetStats) { this->resetState(resetStats); });
-  }
-}
-
 void LlamaModel::setWeightsForFile(
     const std::string& filename,
     std::unique_ptr<std::basic_streambuf<char>>&& shard) {
@@ -403,6 +439,10 @@ std::any LlamaModel::process(const std::any& input) {
 #ifndef STANDALONE_TEST_BUILD
   if (prompt.finetuningParams.has_value()) {
     FinetuneTerminalResult::Stats stats{};
+    // Release the shared lock before finetune() because reload() inside it
+    // acquires an exclusive lock on stateMtx_; safe since JobRunner serialises
+    // all jobs onto a single worker thread.
+    lock.unlock();
     std::string status =
         finetune(*prompt.finetuningParams, &stats, prompt.progressCallback);
     FinetuneTerminalResult result{"finetune", std::move(status)};
@@ -596,39 +636,13 @@ void LlamaModel::commonParamsParse(
 
     const std::optional<MainGpu> mainGpu = tryMainGpuFromMap(configFilemap);
 
-    bool disableOpenCl = false;
-#ifdef __ANDROID__
-    if (auto it = configFilemap.find("disable_opencl");
-        it != configFilemap.end()) {
-      disableOpenCl = (it->second == "true");
-      configFilemap.erase(it);
-    }
-
-    if (preferredBackend == BackendType::GPU && !disableOpenCl &&
-        isBitnetModel()) {
-      const auto adrenoGen = detectAdrenoGeneration();
-      if (adrenoGen == AdrenoGeneration::Adreno800) {
-        disableOpenCl = true;
-      } else if (
-          adrenoGen == AdrenoGeneration::Adreno700 ||
-          adrenoGen == AdrenoGeneration::Adreno600) {
-        deviceIt->second = "cpu";
-      }
-    }
-    configFilemap["ubatch_size"] = "128";
-#endif
-
-    if (isBitnetModel()) {
-      configFilemap["flash_attn"] = "off";
-    }
-
     const std::pair<BackendType, std::string> chosenBackend = chooseBackend(
-        preferredBackendTypeFromString(deviceIt->second),
+        preferredBackend,
         LlamaModel::llamaLogCallback,
         mainGpu,
         &metadata_,
         &outAdrenoVersion,
-        disableOpenCl);
+        pendingFinetuneOverrides_.active);
 
     if (chosenBackend.first == BackendType::GPU) {
       params.mmproj_backend = chosenBackend.second;
@@ -651,7 +665,8 @@ void LlamaModel::commonParamsParse(
     configFilemap.erase(deviceIt);
   }
 
-  tuneConfigMap(configFilemap, metadata_, outAdrenoVersion);
+  tuneConfigMap(
+      configFilemap, metadata_, outAdrenoVersion, pendingFinetuneOverrides_);
 
   // Handle both reverse-prompt variants
   for (const std::string& key : {"reverse-prompt", "reverse_prompt"}) {
@@ -681,6 +696,7 @@ void LlamaModel::commonParamsParse(
 
   // disable warmup run
   params.warmup = false;
+  params.training = pendingFinetuneOverrides_.active;
   // add model path to  model parameters
   params.model.path = modelPath;
 
@@ -1056,46 +1072,32 @@ std::string LlamaModel::finetune(
 
   validateModelForFinetuning();
 
-  if (state_->cacheManager_.has_value() &&
-      state_->cacheManager_->hasActiveCache()) {
-    state_->cacheManager_->saveCache();
+  {
+    std::shared_lock lock(stateMtx_);
+    if (state_->cacheManager_.has_value() &&
+        state_->cacheManager_->hasActiveCache()) {
+      state_->cacheManager_->saveCache();
+    }
   }
 
-  std::unordered_map<std::string, std::string> configOverrides = {
-      {"flash_attn", "off"}, {"no_mmap", ""}};
-  if (params.batchSize > 0) {
-    configOverrides["batch_size"] = std::to_string(params.batchSize);
-  }
-  if (params.microBatchSize > 0) {
-    configOverrides["ubatch_size"] = std::to_string(params.microBatchSize);
-  }
-  if (!gpuSupportsOutProdF16()) {
-    configOverrides["cache_type_k"] = "f32";
-    configOverrides["cache_type_v"] = "f32";
-  }
-  if (params.contextLength > 0) {
-    configOverrides["ctx_size"] = std::to_string(params.contextLength);
-  }
-
-#ifdef __ANDROID__
-  using backend_selection::AdrenoGeneration;
-  const auto adrenoGen = backend_selection::detectAdrenoGeneration();
-  if (adrenoGen == AdrenoGeneration::Adreno800) {
-    configOverrides["disable_opencl"] = "true";
-  } else if (
-      adrenoGen == AdrenoGeneration::Adreno700 ||
-      adrenoGen == AdrenoGeneration::Adreno600) {
-    configOverrides["device"] = "cpu";
-  }
-#endif
-
-  reinitialize(configOverrides, true);
+  // Always reload: ensures tuneConfigMap applies finetuning-specific config
+  // (e.g. flash-attn off, ubatch sizing) and gives a clean llama_context.
+  // TODO: investigate recreating the context without a full weights reload
+  // to reduce latency when the backend itself does not change.
+  reload(
+      FinetuneConfigOverrides{
+          .active = true,
+          .batchSize = params.batchSize,
+          .microBatchSize = params.microBatchSize,
+          .contextLength = params.contextLength,
+          .gpuSupportsF16OutProd = gpuSupportsOutProdF16(),
+          .flashAttn = params.flashAttn});
 
   llama_context* ctx = getContext();
   llama_model* mdl = getModel();
   if (ctx == nullptr || mdl == nullptr) {
     throw std::runtime_error(
-        "Finetune error: model/context not available after reinitialize.");
+        "Finetune error: model/context not available after reload.");
   }
 
   try {
@@ -1378,7 +1380,7 @@ std::string LlamaModel::finetune(
     }
 
     const std::string status = wasPaused ? "PAUSED" : "COMPLETED";
-    reinitialize({});
+    reload(FinetuneConfigOverrides{});
     return status;
   } catch (...) {
     auto state = getCurrentCheckpointStateShared();
@@ -1394,8 +1396,9 @@ std::string LlamaModel::finetune(
     llama_finetuning_helpers::clearCurrentCheckpointState();
     clearCurrentCheckpointStateShared();
     try {
-      reinitialize({});
+      reload(FinetuneConfigOverrides{});
     } catch (...) {
+      QLOG_IF(Priority::ERROR, "Failed to reload model after finetuning error");
     }
     throw;
   }
@@ -1405,10 +1408,15 @@ void LlamaModel::validateModelForFinetuning() {
   auto fileType = metadata_.tryGetU32("general.file_type");
   if (fileType.has_value()) {
     const uint32_t ft = *fileType;
+    constexpr std::array<llama_ftype, 6> kSupportedQuants = {
+        LLAMA_FTYPE_ALL_F32,
+        LLAMA_FTYPE_MOSTLY_F16,
+        LLAMA_FTYPE_MOSTLY_Q4_0,
+        LLAMA_FTYPE_MOSTLY_Q8_0,
+        LLAMA_FTYPE_MOSTLY_TQ1_0,
+        LLAMA_FTYPE_MOSTLY_TQ2_0};
     const bool supportedQuant =
-        ft == LLAMA_FTYPE_ALL_F32 || ft == LLAMA_FTYPE_MOSTLY_F16 ||
-        ft == LLAMA_FTYPE_MOSTLY_Q4_0 || ft == LLAMA_FTYPE_MOSTLY_Q8_0 ||
-        ft == LLAMA_FTYPE_MOSTLY_TQ1_0 || ft == LLAMA_FTYPE_MOSTLY_TQ2_0;
+        std::ranges::any_of(kSupportedQuants, [ft](auto q) { return q == ft; });
     if (!supportedQuant) {
       throw std::runtime_error(
           "Finetuning is not supported for this quantization type "
@@ -1418,21 +1426,10 @@ void LlamaModel::validateModelForFinetuning() {
     }
   }
 
-  llama_model* mdl = getModel();
-  if (mdl != nullptr) {
-    char arch[64] = {0};
-    int len = llama_model_meta_val_str(
-        mdl, "general.architecture", arch, sizeof(arch));
-    if (len > 0 && len < static_cast<int>(sizeof(arch))) {
-      std::string archStr(arch, static_cast<size_t>(len));
-      const bool supportedArch =
-          archStr == "gemma3" || archStr == "qwen3" || archStr == "bitnet";
-      if (!supportedArch) {
-        throw std::runtime_error(
-            "Finetuning is not supported for architecture '" + archStr +
-            "'. Supported: gemma3, qwen3, bitnet");
-      }
-    }
+  if (auto unsupported =
+          backend_selection::getUnknownFinetuneArchitecture(&metadata_)) {
+    throw std::runtime_error(
+        "Finetuning is not supported for architecture: " + unsupported.value());
   }
 }
 
@@ -1837,7 +1834,8 @@ void LlamaModel::executeTrainingLoop(
     }
 
     ggml_opt_result_loss(trainResult.get(), &lastTrainLoss, &lastTrainLossUnc);
-    ggml_opt_result_accuracy(trainResult.get(), &lastTrainAccuracy, &lastTrainAccuracyUnc);
+    ggml_opt_result_accuracy(
+        trainResult.get(), &lastTrainAccuracy, &lastTrainAccuracyUnc);
 
     if (checkpointState && checkpointState->shouldExit.load()) {
       break;
@@ -1845,7 +1843,8 @@ void LlamaModel::executeTrainingLoop(
 
     if (hasEval) {
       ggml_opt_result_loss(evalResult.get(), &lastValLoss, &lastValLossUnc);
-      ggml_opt_result_accuracy(evalResult.get(), &lastValAccuracy, &lastValAccuracyUnc);
+      ggml_opt_result_accuracy(
+          evalResult.get(), &lastValAccuracy, &lastValAccuracyUnc);
     }
 
     completedEpochs = static_cast<int32_t>(epoch + 1);

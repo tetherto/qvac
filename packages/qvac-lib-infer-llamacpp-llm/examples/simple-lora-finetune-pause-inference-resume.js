@@ -400,7 +400,7 @@ async function main () {
     console.log('Step 3: Resuming finetuning')
     console.log('='.repeat(60))
     console.log('▶️  Resuming finetuning...')
-    const resumeHandle = await client.finetune()
+    const resumeHandle = await client.finetune(finetuneOptions)
     resumeHandle.on('stats', stats => {
       console.log(`  ${formatProgress(stats, finetuneOptions.numberOfEpochs)}`)
     })

@@ -32,6 +32,7 @@ struct LlamaFinetuningParams {
   bool warmupRatioSet{false};
   double validationSplit{0.05};
   bool useEvalDatasetForValidation{false};
+  bool flashAttn{false};
 };
 
 } // namespace qvac_lib_inference_addon_llama
