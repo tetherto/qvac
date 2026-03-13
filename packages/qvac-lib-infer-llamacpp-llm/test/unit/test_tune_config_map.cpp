@@ -266,6 +266,7 @@ TEST_F(TuneConfigMapTest, Finetuning_Adreno830_OverridesUserUbatchUnderscore) {
       configFilemap_, meta, 830, FtOverrides{.active = true});
 
   EXPECT_EQ(configFilemap_["ubatch-size"], "128");
+  EXPECT_EQ(configFilemap_.count("ubatch_size"), 0);
 }
 
 // ---- Finetuning context/batch param injection ----
@@ -344,6 +345,7 @@ TEST_F(TuneConfigMapTest, Finetuning_OverridesUserCtxSizeUnderscore) {
   LlamaModel::tuneConfigMap(configFilemap_, meta, std::nullopt, ov);
 
   EXPECT_EQ(configFilemap_["ctx-size"], "256");
+  EXPECT_EQ(configFilemap_.count("ctx_size"), 0);
 }
 
 TEST_F(TuneConfigMapTest, Finetuning_OverridesUserBatchSizeHyphen) {
@@ -364,6 +366,7 @@ TEST_F(TuneConfigMapTest, Finetuning_OverridesUserBatchSizeUnderscore) {
   LlamaModel::tuneConfigMap(configFilemap_, meta, std::nullopt, ov);
 
   EXPECT_EQ(configFilemap_["batch-size"], "64");
+  EXPECT_EQ(configFilemap_.count("batch_size"), 0);
 }
 
 // Finetuning microBatchSize takes precedence over Adreno 800+ default

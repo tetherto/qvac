@@ -105,8 +105,11 @@ void LlamaModel::tuneConfigMap(
       metadata.tryGetString("general.architecture") == "bitnet";
 
   if (isFinetuning) {
+    configFilemap.erase("ctx_size");
     configFilemap["ctx-size"] = std::to_string(finetuneOverrides.contextLength);
+    configFilemap.erase("batch_size");
     configFilemap["batch-size"] = std::to_string(finetuneOverrides.batchSize);
+    configFilemap.erase("ubatch_size");
     configFilemap["ubatch-size"] =
         std::to_string(finetuneOverrides.microBatchSize);
     QLOG_IF(
