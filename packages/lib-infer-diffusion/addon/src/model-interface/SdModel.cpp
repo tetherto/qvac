@@ -8,12 +8,11 @@
 #define STB_IMAGE_IMPLEMENTATION
 #include <stb_image.h>
 #define STB_IMAGE_WRITE_IMPLEMENTATION
+#include <ggml-backend.h>
 #include <picojson/picojson.h>
 #include <qvac-lib-inference-addon-cpp/Errors.hpp>
 #include <qvac-lib-inference-addon-cpp/Logger.hpp>
 #include <stb_image_write.h>
-
-#include <ggml-backend.h>
 
 #include "utils/BackendSelection.hpp"
 #include "utils/LoggingMacros.hpp"
@@ -132,8 +131,9 @@ void SdModel::load() {
         backendsDirPath = backendsDirPath / BACKENDS_SUBDIR;
         backendsDirPath = backendsDirPath.lexically_normal();
 #endif
-        QLOG_IF(Priority::INFO,
-                 "Loading GPU backends from: " + backendsDirPath.string());
+        QLOG_IF(
+            Priority::INFO,
+            "Loading GPU backends from: " + backendsDirPath.string());
         ggml_backend_load_all_from_path(backendsDirPath.string().c_str());
       } else {
         QLOG_IF(Priority::INFO, "Loading GPU backends from default path");

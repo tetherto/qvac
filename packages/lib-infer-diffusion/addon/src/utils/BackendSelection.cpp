@@ -144,8 +144,9 @@ bool shouldPreferOpenClForAdreno(BackendDevice preferred) {
       continue;
     }
 
-    const std::string desc =
-        ggml_backend_dev_description(dev) ? ggml_backend_dev_description(dev) : "";
+    const std::string desc = ggml_backend_dev_description(dev)
+                                 ? ggml_backend_dev_description(dev)
+                                 : "";
     const std::string backendName =
         ggml_backend_dev_name(dev) ? ggml_backend_dev_name(dev) : "";
 
