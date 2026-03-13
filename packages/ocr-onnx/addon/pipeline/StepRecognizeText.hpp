@@ -1,10 +1,5 @@
 #pragma once
 
-#include "Steps.hpp"
-
-// #include <onnxruntime_cxx_api.h>
-#include <opencv2/imgproc.hpp>
-
 #include <array>
 #include <atomic>
 #include <chrono>
@@ -14,6 +9,11 @@
 #include <string>
 #include <utility>
 #include <vector>
+
+#include <opencv2/imgproc.hpp>
+#include <qvac-onnx/OnnxSession.hpp>
+
+#include "Steps.hpp"
 
 namespace qvac_lib_inference_addon_onnx_ocr_fasttext {
 
@@ -47,8 +47,13 @@ public:
   };
 
   StepRecognizeText(
-      const ORTCHAR_T* pathRecognizer, std::span<const std::string> langList,
+      const std::string& pathRecognizer, std::span<const std::string> langList,
       bool useGPU = false, const Config& config = Config{});
+
+#if defined(_WIN32) || defined(_WIN64)
+  // On Windows, defer session destruction to avoid the ORT global-state crash.
+  ~StepRecognizeText() { deferWindowsSessionLeak(std::move(session_)); }
+#endif
 
   CONSTRUCT_FROM_TUPLE(StepRecognizeText)
 
@@ -64,7 +69,7 @@ public:
 
 private:
   Config config_;
-  Ort::Session ortSession_{nullptr};
+  onnx_addon::OnnxSession session_;
 
   std::wstring_convert<std::codecvt_utf8<char32_t>, char32_t> converter_;
   std::u32string_view utf32Characters_;

@@ -112,6 +112,7 @@ export const translationError: TestDefinition = {
 export const translationTests = [
   translationEnToEs,
   translationEsToEn,
+  translationError,
   translationEnToFr,
   translationDeToFr,
   translationItToFr,
@@ -120,5 +121,4 @@ export const translationTests = [
   translationFrToDe,
   translationFrToEn,
   translationEnToPt,
-  translationError,
 ];

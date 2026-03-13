@@ -9,7 +9,10 @@
     "dev": "next dev --turbo -p 3001",
     "start": "next start",
     "serve": "serve dist -p 8080",
-    "postinstall": "fumadocs-mdx"
+    "postinstall": "fumadocs-mdx",
+    "docs:generate": "bun run scripts/run-docs-generate.ts",
+    "docs:generate-api": "bun run scripts/generate-api-docs.ts",
+    "docs:update-versions": "bun run scripts/update-versions-list.ts"
   },
   "dependencies": {
     "@ai-sdk/openai-compatible": "^1.0.29",

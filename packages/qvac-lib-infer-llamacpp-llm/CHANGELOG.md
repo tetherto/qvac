@@ -1,5 +1,34 @@
 # Changelog
 
+## [0.12.2] - 2026-03-13
+
+This release fixes antiprompt (reverse-prompt) detection for short stop sequences like `\n`, which is critical for translation workloads that rely on newline-based early stopping.
+
+## Bug Fixes
+
+### Antiprompt detection for short stop sequences
+
+Fixed a bug where `checkAntiprompt()` in both `TextLlmContext` and `MtmdLlmContext` only searched the last few characters of the decoded output buffer for the antiprompt string. For short antiprompts like `"\n"` (length 1), the search window was limited to 3 characters at the tail. However, a single llama.cpp token can decode to many characters, placing `"\n"` far from the string's tail end — causing the antiprompt to be missed entirely.
+
+The model would then run to `n_predict` (typically 256 tokens) instead of stopping after the first translated line, wasting compute and producing multi-line output that required post-processing to recover.
+
+The fix widens the search to the entire `kNPrev`-token decoded window (32 tokens by default), reliably catching the antiprompt regardless of where it appears in the decoded string. This only affects models that use the `reverse-prompt` configuration — in practice, the AfriqueGemma translation workflow where `"\n"` signals end of translation.
+
+## [0.12.1] - 2026-03-12
+
+### Added
+
+#### Per-request generation parameter overrides
+
+`model.run(prompt, { generationParams: { temp: 0.7, predict: 256 } })` applies sampling parameter overrides for a single inference call without reloading the model. Load-time defaults are automatically restored after each request.
+
+- Supported parameters: `temp`, `top_p`, `top_k`, `predict`, `seed`, `frequency_penalty`, `presence_penalty`, `repeat_penalty`.
+- `generationParams` is passed as a direct property on the addon input (same transport as `prefill`), parsed via N-API in `AddonJs.hpp`.
+- C++ `applyGenerationParams()` returns a restore callable that captures saved state; exception-safe via try/catch in `processPrompt()`.
+- Supported for both text and multimodal (`MtmdLlmContext`) models.
+- Integration tests cover seed reproducibility, predict token limits, and defaults restoration.
+
+
 ## [0.12.0] - 2026-03-09
 
 ### Added
@@ -27,6 +56,7 @@ This means `reload()` blocks until all in-flight operations complete, while conc
 
 - Refactored `LlamaModel` internals: extracted `processPromptImpl` and `cancelImpl` (lock-free implementations) to separate locking concerns from business logic.
 - `initializeBackend()` is now private — it is only called internally during `init()`.
+
 
 ## [0.11.1] - 2026-03-09
 
