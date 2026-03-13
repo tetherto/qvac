@@ -5353,6 +5353,7 @@
       "ctc",
       "en"
     ],
+    "deprecated": false,
     "notes": "onnx-community export, uses model.onnx_data naming"
   },
   {
@@ -5369,6 +5370,7 @@
       "ctc",
       "en"
     ],
+    "deprecated": false,
     "notes": "onnx-community export, external data for model.onnx"
   },
   {
@@ -5386,6 +5388,7 @@
       "tokenizer",
       "en"
     ],
+    "deprecated": false,
     "notes": ""
   },
   {
@@ -5403,6 +5406,7 @@
       "decoder",
       "en"
     ],
+    "deprecated": false,
     "notes": ""
   },
   {
@@ -5420,6 +5424,7 @@
       "encoder",
       "en"
     ],
+    "deprecated": false,
     "notes": ""
   },
   {
@@ -5437,6 +5442,7 @@
       "tokenizer",
       "en"
     ],
+    "deprecated": false,
     "notes": ""
   },
   {
@@ -5454,6 +5460,7 @@
       "4spk",
       "en"
     ],
+    "deprecated": false,
     "notes": ""
   },
   {
