@@ -11,10 +11,9 @@ on:
         type: string
         default: "."
       project-directory:
-        description: "Root project directory (where package.json lives). Defaults to repo root."
-        required: false
+        description: "Root project directory (where package.json lives)"
+        required: true
         type: string
-        default: "."
       platforms:
         description: 'JSON array of runner labels (e.g., ["ubuntu-latest"] or ["ai-run-linux-gpu", "macos-latest-xlarge"])'
         required: true
@@ -26,6 +25,10 @@ on:
         default: 30
       filter:
         description: 'Filter tests by category or testId prefix (comma-separated, e.g., "model,completion")'
+        required: false
+        type: string
+      test-version:
+        description: "Git ref to checkout (branch, tag, or SHA). Defaults to trigger ref."
         required: false
         type: string
     secrets:
@@ -68,8 +71,9 @@ jobs:
     steps:
       - uses: actions/checkout@v6
         with:
-          ref: ${{ github.event.pull_request.head.sha || github.sha }}
+          ref: ${{ inputs.test-version || github.event.pull_request.head.sha || github.sha }}
           token: ${{ secrets.PAT_TOKEN }}
+          sparse-checkout: ${{ inputs.project-directory }}
 
       - uses: actions/setup-node@v6
         with:
@@ -96,10 +100,9 @@ jobs:
             `//npm.pkg.github.com/:_authToken=${process.env.PAT_TOKEN}`
           ];
           const npmrc = lines.join('\n');
-          const projectDir = '${{ inputs.project-directory }}';
-          const target = projectDir === '.' ? '.npmrc' : path.join(projectDir, '.npmrc');
+          const target = path.join('${{ inputs.project-directory }}', '.npmrc');
           fs.writeFileSync(target, npmrc, 'utf8');
-          console.log(`✅ .npmrc configured at ${target}`);
+          console.log(`.npmrc configured at ${target}`);
 
       - name: Setup MQTT certificates
         shell: node {0}
@@ -163,12 +166,10 @@ jobs:
           const projectDir = '${{ inputs.project-directory }}';
           const consumerDir = '${{ inputs.working-directory }}';
           if (consumerDir !== projectDir) {
-            const source = projectDir === '.' ? '.npmrc' : path.join(projectDir, '.npmrc');
+            const source = path.join(projectDir, '.npmrc');
             const npmrcContent = fs.readFileSync(source, 'utf8');
             fs.writeFileSync(path.join(consumerDir, '.npmrc'), npmrcContent, 'utf8');
-            console.log('✅ .npmrc copied to consumer directory');
-          } else {
-            console.log('ℹ️  Consumer directory is project root, .npmrc already present');
+            console.log('.npmrc copied to consumer directory');
           }
 
       - name: Install dependencies (consumer)
@@ -202,7 +203,7 @@ jobs:
 
       - name: Run tests (consumer + producer)
         working-directory: ${{ inputs.working-directory }}
-        timeout-minutes: 15
+        timeout-minutes: 45
         shell: node {0}
         run: |
           (async () => {
@@ -212,18 +213,14 @@ jobs:
             const filter = '${{ inputs.filter }}';
             const filterArgs = filter ? ['--filter=' + filter] : [];
 
-            const logStream = fs.createWriteStream('consumer.log', { flags: 'w' });
             const consumer = spawn('npx', [
               'qvac-test', 'run:consumer:desktop',
               '--runId=${{ steps.runid.outputs.runId }}',
               '--config=.'
-            ], { detached: false, shell: true });
+            ], { detached: false, shell: true, stdio: 'inherit' });
 
             let consumerClosed = false;
             let consumerExitCode = 0;
-
-            consumer.stdout.pipe(logStream, { end: false });
-            consumer.stderr.pipe(logStream, { end: false });
 
             consumer.on('exit', (code, signal) => {
               if (code !== 0 || signal) {
@@ -253,12 +250,6 @@ jobs:
               console.log(`✅ Consumer running (PID: ${consumer.pid})`);
             } else {
               console.log('❌ Consumer died immediately');
-              logStream.end();
-              await new Promise(resolve => logStream.on('finish', resolve));
-              if (fs.existsSync('consumer.log')) {
-                console.log('\n--- Consumer log ---');
-                console.log(fs.readFileSync('consumer.log', 'utf8'));
-              }
               process.exit(1);
             }
 
@@ -303,9 +294,6 @@ jobs:
               ]);
             }
 
-            logStream.end();
-            await new Promise(resolve => logStream.on('finish', resolve));
-            console.log('📄 Consumer log written to consumer.log');
 
             const exitCode = producerExit || consumerExitCode;
             if (exitCode !== 0) {
@@ -395,7 +383,9 @@ jobs:
     steps:
       - uses: actions/checkout@v6
         with:
+          ref: ${{ inputs.test-version || github.event.pull_request.head.sha || github.sha }}
           token: ${{ secrets.PAT_TOKEN }}
+          sparse-checkout: ${{ inputs.project-directory }}
 
       - uses: actions/setup-node@v6
         with:
@@ -415,8 +405,7 @@ jobs:
             `//npm.pkg.github.com/:_authToken=${process.env.PAT_TOKEN}`
           ];
           const npmrc = lines.join('\n');
-          const projectDir = '${{ inputs.project-directory }}';
-          const target = projectDir === '.' ? '.npmrc' : path.join(projectDir, '.npmrc');
+          const target = path.join('${{ inputs.project-directory }}', '.npmrc');
           fs.writeFileSync(target, npmrc, 'utf8');
 
       - name: Copy .npmrc to consumer directory
@@ -427,7 +416,7 @@ jobs:
           const projectDir = '${{ inputs.project-directory }}';
           const consumerDir = '${{ inputs.working-directory }}';
           if (consumerDir !== projectDir) {
-            const source = projectDir === '.' ? '.npmrc' : path.join(projectDir, '.npmrc');
+            const source = path.join(projectDir, '.npmrc');
             const npmrcContent = fs.readFileSync(source, 'utf8');
             fs.writeFileSync(path.join(consumerDir, '.npmrc'), npmrcContent, 'utf8');
           }

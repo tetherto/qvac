@@ -93,6 +93,14 @@ const opusConfigSchema = nmtGenerationParamsSchema.extend({
   to: z.enum(MARIAN_LANGUAGES),
 });
 
+// Pivot model configuration for Bergamot (for translation via intermediate language)
+const bergamotPivotModelSchema = nmtGenerationParamsSchema.extend({
+  modelSrc: modelSrcInputSchema,
+  srcVocabSrc: modelSrcInputSchema.optional(),
+  dstVocabSrc:  modelSrcInputSchema.optional(),
+  normalize: z.number().optional(),
+}).optional();
+
 // Bergamot engine config - supports BERGAMOT_LANGUAGES
 const bergamotConfigSchema = nmtGenerationParamsSchema.extend({
   engine: z.literal("Bergamot"),
@@ -101,6 +109,7 @@ const bergamotConfigSchema = nmtGenerationParamsSchema.extend({
   srcVocabSrc: modelSrcInputSchema.optional(),
   dstVocabSrc: modelSrcInputSchema.optional(),
   normalize: z.number().optional(),
+  pivotModel: bergamotPivotModelSchema
 });
 
 // IndicTrans engine config - supports INDICTRANS_LANGUAGES

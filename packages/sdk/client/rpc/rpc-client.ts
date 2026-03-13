@@ -13,7 +13,7 @@ import { getRPC, close as closeRPC } from "#rpc";
 
 const logger = getClientLogger();
 
-let rpcInstance: RPC | null = null;
+let rpcInstance: Promise<RPC> | null = null;
 let commandCounter = 0;
 
 function getNextCommandId() {
@@ -27,9 +27,9 @@ function checkAndThrowError(response: Response): void {
   }
 }
 
-async function getRPCInstance(): Promise<RPC> {
+function getRPCInstance(): Promise<RPC> {
   if (rpcInstance) return rpcInstance;
-  rpcInstance = await (getRPC() as unknown as Promise<RPC>);
+  rpcInstance = getRPC() as unknown as Promise<RPC>;
   return rpcInstance;
 }
 
