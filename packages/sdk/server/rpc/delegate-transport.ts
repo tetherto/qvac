@@ -11,11 +11,13 @@ import {
   responseSchema,
   PROFILING_KEY,
   DELEGATION_BREAKDOWN_KEY,
+  OPERATION_EVENT_KEY,
   type Request,
   type Response,
   type RPCOptions,
   type ProfilingRequestMeta,
   type DelegationBreakdown,
+  type OperationEvent,
 } from "@/schemas";
 import {
   nowMs,
@@ -45,6 +47,7 @@ export interface DelegateOptions extends RPCOptions, DelegatedHandlerOptions {
 
 export type ResponseWithDelegation = Response & {
   [DELEGATION_BREAKDOWN_KEY]?: DelegationBreakdown;
+  [OPERATION_EVENT_KEY]?: OperationEvent;
 };
 
 const logger = getServerLogger();
@@ -176,6 +179,10 @@ async function sendProfiled<T extends Request>(
       connectionMs,
     );
     resPayload[DELEGATION_BREAKDOWN_KEY] = delegationBreakdown;
+
+    if (serverMeta?.operation) {
+      resPayload[OPERATION_EVENT_KEY] = serverMeta.operation;
+    }
 
     return resPayload;
   } catch (error) {
@@ -311,7 +318,10 @@ async function* streamProfiled<T extends Request>(
 
       for (const line of lines) {
         if (line.trim()) {
-          const response = responseSchema.parse(JSON.parse(line));
+          const rawPayload = JSON.parse(line) as unknown;
+          const response = responseSchema.parse(
+            rawPayload,
+          ) as ResponseWithDelegation;
           checkAndThrowError(response);
 
           timings.chunkCount++;
@@ -319,6 +329,11 @@ async function* streamProfiled<T extends Request>(
             timings.firstChunkAt = nowMs();
           }
           timings.lastChunkAt = nowMs();
+
+          const serverMeta = extractProfilingMeta(rawPayload);
+          if (serverMeta?.operation) {
+            response[OPERATION_EVENT_KEY] = serverMeta.operation;
+          }
 
           yield response;
         }
