@@ -446,34 +446,49 @@ function generateOcrName({
 
 function generateParakeetName({
   filename,
-  tagName,
-  modelName,
+  lowerPath,
   quantization,
 }: BaseNameInput): string {
-  const name = tagName || modelName || "";
-  let fileType = name;
+  const lower = filename.toLowerCase();
 
-  if (!fileType) {
-    const lower = filename.toLowerCase();
-    if (lower.includes("encoder") && lower.endsWith(".data")) {
-      fileType = "ENCODER_DATA";
-    } else if (lower.includes("encoder")) {
-      fileType = "ENCODER";
-    } else if (lower.includes("decoder")) {
-      fileType = "DECODER";
-    } else if (lower.includes("vocab")) {
-      fileType = "VOCAB";
-    } else if (lower.includes("preprocessor") || lower.includes("nemo")) {
-      fileType = "PREPROCESSOR";
-    } else {
-      fileType = cleanPart(filename.replace(/\.\w+$/, ""));
-    }
+  // Detect model variant from registry path
+  let variant = "";
+  if (lowerPath.includes("parakeet-tdt") || lowerPath.includes("parakeet/")) {
+    variant = "TDT";
+  } else if (lowerPath.includes("parakeet-ctc")) {
+    variant = "CTC";
+  } else if (lowerPath.includes("eou") || lowerPath.includes("parakeet-rs")) {
+    variant = "EOU";
+  } else if (lowerPath.includes("sortformer")) {
+    variant = "SORTFORMER";
   }
 
-  if (fileType.toLowerCase() === "encoder" && filename.toLowerCase().endsWith(".data")) {
-    fileType = "ENCODER_DATA";
+  // Detect file role from filename
+  let fileRole = "";
+  if (lower.includes("encoder") && (lower.endsWith(".data") || lower.endsWith(".onnx.data"))) {
+    fileRole = "ENCODER_DATA";
+  } else if (lower.includes("encoder")) {
+    fileRole = "ENCODER";
+  } else if (lower.includes("decoder")) {
+    fileRole = "DECODER";
+  } else if (lower.includes("vocab")) {
+    fileRole = "VOCAB";
+  } else if (lower.includes("tokenizer")) {
+    fileRole = "TOKENIZER";
+  } else if (lower.includes("preprocessor") || lower.includes("nemo")) {
+    fileRole = "PREPROCESSOR";
+  } else if (lower === "config.json") {
+    fileRole = "CONFIG";
+  } else if (lower.endsWith(".onnx.data") || lower.endsWith(".onnx_data")) {
+    fileRole = "DATA";
+  } else if (lower.includes("sortformer")) {
+    fileRole = "";
+  } else if (lower.endsWith(".onnx") || lower.endsWith(".int8.onnx")) {
+    fileRole = "";
+  } else {
+    fileRole = cleanPart(filename.replace(/\.\w+$/, ""));
   }
 
-  const nameParts = [fileType, quantization].filter((p) => p && p !== "");
+  const nameParts = [variant, fileRole, quantization].filter((p) => p && p !== "");
   return `PARAKEET_${nameParts.map(cleanPart).join("_")}`;
 }
