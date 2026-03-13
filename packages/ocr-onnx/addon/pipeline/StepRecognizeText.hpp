@@ -77,6 +77,7 @@ private:
   bool isLeftToRightScript_;
 
   std::vector<std::vector<SubImage>> imgListOfLists_;
+  std::vector<float> batchBuffer_;
 
   /**
    * @brief populates imgListOfLists_ with the SubImages from the original image based on bounding boxes information
@@ -110,7 +111,7 @@ private:
    * @param img : the recognizer input
    * @return cv::Mat : the recognizer predictions
    */
-  cv::Mat runInferenceOnImg(const cv::Mat &img);
+  std::pair<std::vector<Ort::Value>, cv::Mat> runInferenceOnImg(const cv::Mat &img);
 
   /**
    * @brief runs ONNX batch inference on multiple images with dynamic width
@@ -119,7 +120,7 @@ private:
    * @param dynamicWidth : the width of input images (for dynamic-width models)
    * @return cv::Mat : the recognizer predictions with shape [batch, seq_len, num_chars]
    */
-  cv::Mat runBatchInference(const std::vector<cv::Mat> &images, int dynamicWidth);
+  std::pair<std::vector<Ort::Value>, cv::Mat> runBatchInference(const std::vector<cv::Mat> &images, int dynamicWidth);
 
   /**
    * @brief processes the sub image to run recognizer inference and populate text and confidence score

@@ -45,9 +45,9 @@ private:
    * @brief runs ONNX inference on an image
    *
    * @param inputBlob : detector input
-   * @return std::vector<onnx_addon::OutputTensor> : ONNX inference results
+   * @return std::vector<Ort::Value> : raw ONNX inference results (zero-copy)
    */
-  std::vector<onnx_addon::OutputTensor> runInference(cv::Mat inputBlob);
+  std::vector<Ort::Value> runInference(cv::Mat inputBlob);
 };
 
 } // namespace qvac_lib_inference_addon_onnx_ocr_fasttext

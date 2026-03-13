@@ -1,5 +1,19 @@
 # Changelog
 
+## [0.13.0] - 2026-03-13
+
+### Added
+
+- `runRaw()` method on `OnnxSession` returning `std::vector<Ort::Value>` for zero-copy output access, avoiding the `memcpy` into `OutputTensor` on every inference call
+- `inputName(size_t)` and `outputName(size_t)` accessors on `IOnnxSession` and `OnnxSession` for direct O(1) access to cached input/output names without querying the ORT API
+
+### Changed
+
+- `IOnnxSession` interface now requires `inputName()` and `outputName()` pure virtual methods
+- Cached `Ort::MemoryInfo` as a class member instead of recreating it on every `run()` call
+- Refactored `run()` to delegate to `runRaw()` internally (no behavior change for existing callers)
+
+
 ## [0.12.12] - 2026-03-12
 
 ### Fixed

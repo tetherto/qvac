@@ -5,6 +5,16 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.3.1]
+2026-03-13
+
+### Changed
+
+- Switched all inference steps to `runRaw()` for zero-copy output access, eliminating a full `memcpy` of output tensors per inference call (~50MB saved per detection frame at 2560x2560)
+- Replaced `getInputInfo()[0].name` calls with `inputName(0)` in `StepDoctrDetection` and `StepDoctrRecognition`, avoiding ORT API queries and vector allocations on every inference
+- `StepDetectionInference::runInference()` now returns `std::vector<Ort::Value>` instead of `std::vector<OutputTensor>`
+- Updated `@qvac/onnx` dependency
+
 ## [0.3.0]
 2026-03-11
 
