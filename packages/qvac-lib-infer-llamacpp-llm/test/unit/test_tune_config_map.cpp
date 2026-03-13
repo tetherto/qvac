@@ -171,6 +171,15 @@ TEST_F(TuneConfigMapTest, Bitnet_Adreno830_UserSetUbatchUnderscore_Respected) {
   EXPECT_EQ(configFilemap_.count("ubatch_size"), 0);
 }
 
+TEST_F(TuneConfigMapTest, Bitnet_Adreno830_InvalidUbatch_FallsBackToDefault) {
+  MockModelMetaData meta(true, "bitnet");
+  configFilemap_["ubatch-size"] = "auto";
+
+  LlamaModel::tuneConfigMap(configFilemap_, meta, 830);
+
+  EXPECT_EQ(configFilemap_["ubatch-size"], "128");
+}
+
 // ---- Edge: Adreno 799 (just below threshold) ----
 
 TEST_F(TuneConfigMapTest, Bitnet_Adreno799_UbatchUnchanged) {

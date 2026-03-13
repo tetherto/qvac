@@ -152,7 +152,20 @@ void LlamaModel::tuneConfigMap(
     } else {
       const std::string& key =
           configFilemap.count("ubatch-size") ? "ubatch-size" : "ubatch_size";
-      const int64_t userVal = std::stoll(configFilemap[key]);
+      int64_t userVal;
+      try {
+        userVal = std::stoll(configFilemap[key]);
+      } catch (const std::exception& e) {
+        QLOG_IF(
+            Priority::ERROR,
+            string_format(
+                "[LlamaModel] Adreno 800+ (Vulkan): invalid ubatch-size "
+                "\"%s\" (%s), falling back to %" PRId64 "\n",
+                configFilemap[key].c_str(),
+                e.what(),
+                kAdrenoUbatchCap));
+        userVal = kAdrenoUbatchCap;
+      }
       const int64_t clamped = std::min(userVal, kAdrenoUbatchCap);
       if (clamped < userVal) {
         QLOG_IF(
