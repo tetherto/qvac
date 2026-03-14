@@ -546,3 +546,17 @@ export class ModelRegistryQueryFailedError extends QvacErrorBase {
     );
   }
 }
+
+// ============== Profiler Errors ==============
+
+export class ProfilerInvalidCapacityError extends QvacErrorBase {
+  constructor(minCapacity: number, cause?: unknown) {
+    super(
+      createErrorOptions(
+        SDK_CLIENT_ERROR_CODES.PROFILER_INVALID_CAPACITY,
+        [minCapacity],
+        cause,
+      ),
+    );
+  }
+}
