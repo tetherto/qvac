@@ -1,6 +1,6 @@
 ---
 title: Completion
-description: LLM inference for text generation and chat — i.e., use a large language model to generate text output based on input prompts.
+description: LLM inference for text generation and chat — i.e., use a large language model to generate text output based on input prompts and context.
 ---
 
 ## Overview
@@ -33,7 +33,7 @@ You can load any `llama.cpp`-compatible text-generation/chat model. Model file f
 ## Features
 
 * Tool calls: let the model emit structured tool calls and stream tool-call events alongside tokens.
-* MCP: plug MCP servers into `completion()` so the model can use external tools (e.g. web search) via the same tool-call mechanism.
+* MCP: plug MCP servers into `completion()` so the model can use external tools (e.g., web search) via the same tool-call mechanism.
 * KV cache: cache and reuse the model’s key/value attention state to speed up follow-up turns in long conversations.
 
 ## Examples
