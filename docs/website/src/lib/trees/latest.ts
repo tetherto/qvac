@@ -167,12 +167,12 @@ export const tree: Node[] = [
     icon: resolveIcon('Blocks'),
     index: { type: 'page', name: 'Addons', url: '/addons' },
     children: [
-      { name: 'embed-llamacpp', url: '/addons/embed-llamacpp', type: 'page' },
-      { name: 'llm-llamacpp', url: '/addons/llm-llamacpp', type: 'page' },
-      { name: 'ocr-onnx', url: '/addons/ocr-onnx', type: 'page' },
-      { name: 'transcription-whispercpp', url: '/addons/transcription-whispercpp', type: 'page' },
-      { name: 'translation-nmtcpp', url: '/addons/translation-nmtcpp', type: 'page' },
-      { name: 'tts-onnx', url: '/addons/tts-onnx', type: 'page' },
+      { name: 'llm-llamacpp', url: '/v0.7.0/addons/llm-llamacpp', type: 'page' },
+      { name: 'embed-llamacpp', url: '/v0.7.0/addons/embed-llamacpp', type: 'page' },
+      { name: 'translation-nmtcpp', url: '/v0.7.0/addons/translation-nmtcpp', type: 'page' },
+      { name: 'transcription-whispercpp', url: '/v0.7.0/addons/transcription-whispercpp', type: 'page' },
+      { name: 'tts-onnx', url: '/v0.7.0/addons/tts-onnx', type: 'page' },
+      { name: 'ocr-onnx', url: '/v0.7.0/addons/ocr-onnx', type: 'page' },      
     ],
   },
   {
