@@ -7,8 +7,8 @@ import {
   PARAKEET_TDT_DECODER_INT8,
   PARAKEET_TDT_PREPROCESSOR_INT8,
   PARAKEET_TDT_VOCAB,
-  PARAKEET_CTC_FP32_1,
-  PARAKEET_CTC_DATA_FP32_1,
+  PARAKEET_CTC_FP32,
+  PARAKEET_CTC_DATA_FP32,
   PARAKEET_CTC_TOKENIZER,
   PARAKEET_SORTFORMER_FP32,
 } from "@qvac/sdk";
@@ -50,13 +50,13 @@ resources.define("parakeet-tdt", {
 
 // Parakeet CTC FP32 — streaming-capable speech-to-text
 resources.define("parakeet-ctc", {
-  constant: PARAKEET_CTC_FP32_1,
+  constant: PARAKEET_CTC_FP32,
   type: "parakeet",
   skipPreDownload: true,
   config: {
     modelType: "ctc",
-    parakeetCtcModelSrc: PARAKEET_CTC_FP32_1,
-    parakeetCtcModelDataSrc: PARAKEET_CTC_DATA_FP32_1,
+    parakeetCtcModelSrc: PARAKEET_CTC_FP32,
+    parakeetCtcModelDataSrc: PARAKEET_CTC_DATA_FP32,
     parakeetTokenizerSrc: PARAKEET_CTC_TOKENIZER,
   },
 });
