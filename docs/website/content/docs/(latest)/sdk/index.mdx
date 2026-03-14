@@ -7,10 +7,12 @@ description: Use the JS/TS SDK to build local and P2P AI applications and system
 
 Install the npm package `@qvac/sdk` in your project. Then, load models and use them to perform AI inference locally, or delegate inference to peers using the built-in P2P capability.
 
+{/*
 ## Releases
 
 - [Latest version: v0.7.0](https://www.npmjs.com/package/@qvac/sdk)
 - [Release notes for this version](https://github.com/tetherto/qvac-sdk/releases/tag/v0.5.0)
+*/}
 
 ## Description
 
@@ -83,7 +85,7 @@ Each [AI task](#ai-tasks) works with different model families, and among the sup
  
 The SDK package does not ship with built-in models, **but** its API exposes constants representing preconfigured models (e.g., `LLAMA_3_2_1B_INST_Q4_0`). Each constant maps a model already published to our model registry. When calling `loadModel()`, you can provide one of these constants instead of a location, making model retrieval transparent.
 
-<Card href="https://github.com/tetherto/qvac/blob/main/packages/qvac-sdk/models/registry/models.ts" title="Model registry index">
+<Card href="https://github.com/tetherto/qvac/blob/main/packages/sdk/models/registry/models.ts" title="Model registry index">
   See the index of models available in our distributed model registry.
 </Card>
 
@@ -123,6 +125,5 @@ For more on loading models, see [`loadModel()` at `@qvac/sdk` API reference](/sd
 
 ## Other resources
 
-- [SDK landing page and FAQ](https://qvac.tether.dev/products/how-tos/)
-- [Source code at GitHub](https://github.com/tetherto/qvac-sdk)
+- [SDK landing page](https://qvac.tether.io/dev/sdk/)
 - [Package at npm](https://www.npmjs.com/package/@qvac/sdk)
