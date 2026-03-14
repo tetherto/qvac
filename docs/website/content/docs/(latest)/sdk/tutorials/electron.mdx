@@ -36,7 +36,7 @@ Some commands are Bash‑specific. On Windows, use PowerShell/WSL or adapt them.
 
 ## Step 1: set up an Electron project
 
-First, let's create a minimal Electron app structure: a main process that opens a window and a simple renderer page.
+We'll use [electron-vite](https://electron-vite.org) to scaffold a full Electron + React + TypeScript project in a single command.
 
 <Steps>
 
@@ -44,365 +44,208 @@ First, let's create a minimal Electron app structure: a main process that opens 
 Create a new project:
 
 ```bash
-# run on terminal
-mkdir llm-desktop-app
+npm create @quick-start/electron@latest llm-desktop-app -- --template react-ts
+```
+
+When prompted, answer **No** to both "Add Electron updater plugin?" and "Enable Electron download mirror proxy?".
+</Step>
+
+<Step>
+
+Install dependencies and configure the dev script:
+```bash
 cd llm-desktop-app
-npm init -y
+npm install
+npm pkg set scripts.dev="electron-vite dev -- --no-sandbox"
 ```
+The `--no-sandbox` flag disables the Chromium sandbox, which is required on Linux when the SUID helper is not configured.
 </Step>
 
 <Step>
 
-Install Electron:
+Start the app:
 ```bash
-npm i -D electron
-```
-</Step>
-
-<Step>
-
-Install TypeScript tooling for the main process:
-```bash
-npm i -D typescript @types/node
-```
-</Step>
-
-<Step>
-
-Create `main.ts`:
-```ts title="main.ts" lineNumbers
-const { app, BrowserWindow } = require('electron')
-
-const createWindow = () => {
-  const win = new BrowserWindow({
-    width: 800,
-    height: 600
-  })
-
-  win.loadFile('index.html')
-}
-
-app.whenReady().then(() => {
-  createWindow()
-})
-```
-`main.ts` is the Electron main process entry point. It bootstraps the app and creates the desktop window, so everything else (renderer/UI) depends on it.
-</Step>
-
-<Step>
-
-Create `tsconfig.json` for the main process:
-```json title="tsconfig.json"
-{
-  "compilerOptions": {
-    "target": "ES2022",
-    "module": "CommonJS",
-    "strict": false,
-    "esModuleInterop": true,
-    "skipLibCheck": true
-  },
-  "include": ["main.ts", "preload.ts"]
-}
-```
-This emits `main.js` and `preload.js` next to their `.ts` sources so Electron can run them.
-</Step>
-
-<Step>
-
-Create `index.html`:
-```html title="index.html" lineNumbers
-<!DOCTYPE html>
-<html>
-  <body>
-    <h1>Hello from Electron renderer!</h1>
-  </body>
-</html>
-```
-`index.html` is a minimal renderer page used only to confirm Electron can load and display content. We’ll replace it later when the React/Vite renderer takes over.
-</Step>
-
-<Step>
-
-Set the entry point and scripts in `package.json`:
-```bash
-npm pkg set main="main.js"
-npm pkg set scripts.build:main="tsc -p tsconfig.json"
-npm pkg set scripts.start="npm run build:main && electron . --no-sandbox"
-```
-
-</Step>
-
-<Step>
-
-Start the application:
-```bash
-npm start
+npm run dev
 ```
 </Step>
 </Steps>
 
-Confirm that an Electron window opens and renders the "Hello from Electron renderer!" page:
+Confirm that an Electron window opens and renders the default electron-vite page:
 
 <div style={{ display: "flex", justifyContent: "center" }}>
   <img
-    src="/screenshots/electron-window.png"
+    src="/screenshots/electron-vite-window.png"
     alt="Electron window"
     style={{ width: "50%", height: "auto" }}
   />
 </div>
 
-## Step 2: add a React frontend
+The scaffold gives us a working Electron app with React, TypeScript, Vite HMR, and a preload script — all pre-configured. The key files we'll modify are:
 
-In this step, we'll scaffold a React renderer with Vite, install its dependencies, and have Electron load it from the Vite dev server.
+| File | Purpose |
+|------|---------|
+| `src/main/index.ts` | Electron main process |
+| `src/preload/index.ts` | IPC bridge between main and renderer |
+| `src/preload/index.d.ts` | Type declarations for the bridge |
+| `src/renderer/src/App.tsx` | React root component |
+| `electron.vite.config.ts` | Vite config for all three processes |
 
-<Steps>
-<Step>
+## Step 2: create the chat UI
 
-Create a React renderer using Vite (TypeScript template):
-```bash
-npm create vite@latest renderer -- --template react-ts
-```
-
-When prompted, answer **No** to both questions.
-
-</Step>
-
-<Step>
-
-Install the renderer dependencies:
-```bash
-cd renderer
-npm i
-cd ..
-```
-
-This installs the packages scaffolded by Vite (React, Vite, and related tooling).
-</Step>
-
-<Step>
-
-Modify `main.ts` to load the Vite dev server URL from Electron:
-```ts title="main.ts" lineNumbers
-const { app, BrowserWindow } = require('electron')
-
-const createWindow = () => {
-  const win = new BrowserWindow({
-    width: 800,
-    height: 600
-  })
-
-  win.loadFile('index.html') // [!code --]
-  win.loadURL('http://localhost:5173') // [!code ++]
-}
-
-app.whenReady().then(() => {
-  createWindow()
-})
-```
-This switches the window from the static `index.html` to the Vite dev server, so the React UI loads and can hot‑reload during development.
-</Step>
-</Steps>
-
-## Step 3: enable hot reload
-
-In this step, we’ll enable fast feedback: Vite HMR for the React renderer, and `electronmon` to restart Electron when main/preload files change. _You should run the following commands from the project root and update the root `package.json`._
+In this step, we'll add Tailwind CSS and replace the scaffold's default UI with a chat interface. The chat will use stub responses for now — we'll wire it to QVAC in the next step.
 
 <Steps>
-<Step>
 
-Install dev dependencies:
+<Step>
+Install Tailwind CSS:
+
 ```bash
-npm i -D electronmon concurrently wait-on
+npm i tailwindcss @tailwindcss/vite
 ```
 </Step>
 
 <Step>
+Add the Tailwind plugin to the renderer in `electron.vite.config.ts`:
 
-Add the following scripts to `package.json`:
-```bash
-npm pkg set scripts.dev="concurrently \"npm run dev:renderer\" \"npm run dev:main\" \"npm run dev:electron\""
-npm pkg set scripts.dev:renderer="cd renderer && npm run dev"
-npm pkg set scripts.dev:main="tsc -w -p tsconfig.json"
-npm pkg set scripts.dev:electron="wait-on http://localhost:5173 main.js && electronmon . --no-sandbox"
-```
-These scripts run the Vite dev server, keep the Electron main/preload TypeScript compiled, and start Electron only after Vite and `main.ts` are ready.
-</Step>
-
-<Step>
-
-Add the following property to `package.json`:
-```bash
-npm pkg set 'electronmon.pattern[0]=!renderer' 'electronmon.pattern[1]=!renderer/**/*'
-```
-This prevents Electron from restarting on renderer changes, since Vite already handles UI hot reload.
-</Step>
-
-<Step>
-
-Start the combined dev workflow (Vite + Electron):
-```bash
-npm run dev
-```
-
-</Step>
-</Steps>
-
-Confirm that an Electron window loads the Vite renderer, and that changes under `renderer/` hot‑reload without restarting Electron:
-
-<div style={{ display: "flex", justifyContent: "center" }}>
-  <img
-    src="/screenshots/vite-renderer.png"
-    alt="Vite renderer"
-    style={{ width: "50%", height: "auto" }}
-  />
-</div>
-
-## Step 4: add Tailwind CSS
-
-In this step, we add Tailwind CSS to the React renderer and enable the Vite plugin so utility classes are processed.
-
-<Steps>
-<Step>
-
-Install Tailwind CSS in the React renderer:
-```bash
-# in project root
-cd renderer
-npm i tailwindcss @tailwindcss/vite clsx
-cd ..
-```
-</Step>
-
-<Step>
-
-Update `renderer/vite.config.ts` to enable the Tailwind Vite plugin:
-```ts title="renderer/vite.config.ts" lineNumbers
-import { defineConfig } from 'vite'
+```ts title="electron.vite.config.ts" lineNumbers
+import { resolve } from 'path'
+import { defineConfig } from 'electron-vite'
 import react from '@vitejs/plugin-react'
 import tailwindcss from '@tailwindcss/vite' // [!code ++]
 
-// https://vite.dev/config/
 export default defineConfig({
-  plugins: [react()], // [!code --]
-  plugins: [react(), tailwindcss()], // [!code ++]
+  main: {},
+  preload: {},
+  renderer: {
+    resolve: {
+      alias: {
+        '@renderer': resolve('src/renderer/src')
+      }
+    },
+    plugins: [react()] // [!code --]
+    plugins: [react(), tailwindcss()] // [!code ++]
+  }
 })
 ```
-This tells Vite to process Tailwind classes at build time, so utility styles are available in the renderer.
+This tells Vite to process Tailwind utility classes in the renderer.
 </Step>
 
 <Step>
+Replace the entire contents of `src/renderer/src/assets/main.css` with the following code:
 
-Replace the entire contents of `renderer/src/index.css` with the following code:
-```css title="renderer/src/index.css"
+```css title="src/renderer/src/assets/main.css"
 @import 'tailwindcss';
 ```
-This replaces the default Vite styles with Tailwind’s base layer, so utility classes apply consistently.
-
+This replaces the scaffold's default styles with Tailwind's base layer.
 </Step>
-</Steps>
-
-If you have `npm run dev` running, restart it so the Vite config changes take effect:
-
-<div style={{ display: "flex", justifyContent: "center" }}>
-  <img
-    src="/screenshots/tailwindcss.png"
-    alt="Tailwind CSS"
-    style={{ width: "50%", height: "auto" }}
-  />
-</div>
-
-## Step 5: create the chat UI
-
-In this step, we’ll replace the default Vite scaffold with a minimal chat UI (no inference yet).
-
-<Steps>
 
 <Step>
+Replace the entire contents of `src/renderer/src/main.tsx` with the following code:
 
-Remove the `StrictMode` wrapper in `renderer/src/main.tsx`:
-```ts title="renderer/src/main.tsx" lineNumbers
-import { StrictMode } from 'react' // [!code --]
+```ts title="src/renderer/src/main.tsx" lineNumbers
+import './assets/main.css'
 import { createRoot } from 'react-dom/client'
-import './index.css'
 import App from './App'
 
-createRoot(document.getElementById('root')).render(<StrictMode> <App /> </StrictMode>,)// [!code --]
-createRoot(document.getElementById('root')).render(<App />) // [!code ++]
+createRoot(document.getElementById('root')!).render(<App />)
 ```
-This keeps the same entry point but removes React Strict Mode, which avoids double-invoked effects in development.
+This removes React Strict Mode, which avoids double-invoked effects in development. That matters when we load a model in `useEffect`.
 </Step>
 
 <Step>
 
-Replace the entire contents of `renderer/src/App.tsx` with the following code:
+Replace the entire contents of `src/renderer/src/App.tsx` with the following code:
+
 <WrapCode>
 
-```ts title="renderer/src/App.tsx" lineNumbers
+```ts title="src/renderer/src/App.tsx" lineNumbers
 import { useState } from 'react'
-import clsx from 'clsx'
 
-function App() {
+type Message = { role: 'user' | 'assistant'; content: string }
+
+function App(): React.JSX.Element {
   const [loading, setLoading] = useState(false)
-  const [msgHistory, setMsgHistory] = useState([])
-  const [inputText, setInputText] = useState('')
+  const [messages, setMessages] = useState<Message[]>([])
+  const [input, setInput] = useState('')
 
-  // Append a user message and a stub assistant response.
-  const handleSend = () => {
-    const newMsgHistory = [
-      ...msgHistory,
-      { role: 'user', content: inputText },
-      { role: 'assistant', content: 'Response from the assistant' }
-    ]
-    setInputText('')
-    setMsgHistory(newMsgHistory)
+  const handleSend = (): void => {
+    if (!input.trim()) return
+    setMessages(prev => [
+      ...prev,
+      { role: 'user', content: input },
+      { role: 'assistant', content: 'Stub response from the assistant.' }
+    ])
+    setInput('')
   }
 
   return (
-    <div className="h-screen w-[100vw] text-white bg-gray-900 p-4 flex flex-col gap-4">
-      {/* Main output area */}
-      <div className="flex-1 rounded-lg border-2 border-teal-500 p-4 flex flex-col gap-4 overflow-y-auto">
+    <div className="h-screen flex flex-col bg-zinc-950 text-zinc-100">
+      {/* Header */}
+      <header className="flex items-center gap-3 px-6 py-4 border-b border-zinc-800">
+        <h1 className="text-lg font-semibold">LLM Desktop App</h1>
+        <span className="ml-auto flex items-center gap-2 text-sm text-zinc-500">
+          <span
+            className={`inline-block w-2 h-2 rounded-full ${
+              loading ? 'bg-amber-400 animate-pulse' : 'bg-emerald-400'
+            }`}
+          />
+          {loading ? 'Loading model…' : 'Ready'}
+        </span>
+      </header>
+
+      {/* Messages */}
+      <main className="flex-1 overflow-y-auto px-6 py-4 space-y-3">
         {loading ? (
-          <div className="min-h-0 flex-1 flex items-center justify-center text-2xl">
-            Loading...
+          <div className="flex-1 flex items-center justify-center h-full">
+            <div className="flex gap-1">
+              <span className="w-2 h-2 rounded-full bg-zinc-600 animate-bounce [animation-delay:0ms]" />
+              <span className="w-2 h-2 rounded-full bg-zinc-600 animate-bounce [animation-delay:150ms]" />
+              <span className="w-2 h-2 rounded-full bg-zinc-600 animate-bounce [animation-delay:300ms]" />
+            </div>
           </div>
         ) : (
-          msgHistory.map((msg, index) => (
+          messages.map((msg, i) => (
             <div
-              key={index}
-              className={clsx(
-                'flex',
-                msg.role === 'user' ? 'justify-end' : 'justify-start'
-              )}
+              key={i}
+              className={`flex ${msg.role === 'user' ? 'justify-end' : 'justify-start'}`}
             >
-              {/* Message bubble */}
-              <div className="p-2 rounded-lg bg-gray-600 prose max-w-3/4">
+              <div
+                className={`max-w-[75%] px-4 py-2.5 rounded-2xl text-sm leading-relaxed ${
+                  msg.role === 'user'
+                    ? 'bg-indigo-600 text-white rounded-br-md'
+                    : 'bg-zinc-800 text-zinc-100 rounded-bl-md'
+                }`}
+              >
                 {msg.content}
               </div>
             </div>
           ))
         )}
-      </div>
+      </main>
 
-      {/* Input area */}
-      <div className="h-[108px] rounded-lg border-2 border-teal-500 flex p-4 gap-4">
-        <textarea
-          className="flex-1 resize-none bg-transparent outline-none"
-          placeholder="Type your message here..."
-          value={inputText}
-          onChange={e => setInputText(e.target.value)}
-          onKeyDown={e => {
-            if (e.key === 'Enter' && !e.shiftKey) {
-              e.preventDefault()
-              handleSend()
-            }
-          }}
-        />
-        <button
-          onClick={handleSend}
-          className=" text-teal-500 outline-none underline underline-offset-4"
-        >
-          Send
-        </button>
+      {/* Input */}
+      <div className="px-6 py-4 border-t border-zinc-800">
+        <div className="flex gap-3">
+          <textarea
+            className="flex-1 resize-none rounded-xl bg-zinc-800 px-4 py-3 text-sm outline-none placeholder:text-zinc-500 focus:ring-2 focus:ring-indigo-500/50"
+            rows={1}
+            placeholder="Type a message…"
+            value={input}
+            onChange={e => setInput(e.target.value)}
+            onKeyDown={e => {
+              if (e.key === 'Enter' && !e.shiftKey) {
+                e.preventDefault()
+                handleSend()
+              }
+            }}
+          />
+          <button
+            onClick={handleSend}
+            className="self-end rounded-xl bg-indigo-600 px-4 py-3 text-sm font-medium text-white hover:bg-indigo-500 transition-colors"
+          >
+            Send
+          </button>
+        </div>
       </div>
     </div>
   )
@@ -410,12 +253,17 @@ function App() {
 
 export default App
 ```
-We replaced the default Vite `App.tsx` content. Before, it was the starter counter UI from the Vite template. Now it is a minimal chat UI that collects input and renders message history (with a stub assistant response).
+
+We replaced the scaffold's default UI with a dark-themed chat interface. The header shows the app name and a status indicator. Messages render as right-aligned (user) or left-aligned (assistant) bubbles. For now, `handleSend` appends a stub response — we'll connect it to QVAC next.
 </WrapCode>
+</Step>
+
+<Step>
+Restart `npm run dev` so the Vite config changes take effect.
 </Step>
 </Steps>
 
-Confirm that you see a simple chat UI, and that clicking **Send** appends a user message and a stub assistant response:
+Confirm that you see the chat UI and that clicking **Send** appends a user message and a stub response:
 
 <div style={{ display: "flex", justifyContent: "center" }}>
   <img
@@ -425,103 +273,123 @@ Confirm that you see a simple chat UI, and that clicking **Send** appends a user
   />
 </div>
 
-## Step 6: add QVAC
+## Step 3: add QVAC
 
-Finally, in this step we’ll add QVAC by wiring the Electron main process to the SDK, exposing a safe preload API, and streaming completions into the chat UI.
-Except for substep 4, all actions in this step should be done from the project root.
+Finally, in this step we'll wire the Electron main process to the QVAC SDK, expose a safe preload API, and stream completions into the chat UI.
+
 <Steps>
 
 <Step>
-
 Install QVAC SDK:
+
 ```bash
 npm i @qvac/sdk
 ```
 </Step>
 
 <Step>
+Replace the entire contents of `src/preload/index.ts` with the following code:
 
-Create `preload.ts` to expose a small, safe API from the main process to the renderer:
-```ts title="preload.ts" lineNumbers
-const { contextBridge, ipcRenderer } = require('electron')
+```ts title="src/preload/index.ts" lineNumbers
+import { contextBridge, ipcRenderer } from 'electron'
 
-// Expose a narrow, safe API to the renderer via IPC.
-contextBridge.exposeInMainWorld('qvacSDK', {
-  loadModel: () => ipcRenderer.invoke('load-model'),
-  infer: history => ipcRenderer.invoke('infer', history),
-  onCompletionStream: cb =>
-    ipcRenderer.on('completion-stream', (event, token) => cb(token)),
-  unloadModel: () => ipcRenderer.invoke('unload-model')
+contextBridge.exposeInMainWorld('qvacAPI', {
+  loadModel: (): Promise<string> => ipcRenderer.invoke('load-model'),
+  infer: (history: { role: string; content: string }[]): Promise<void> =>
+    ipcRenderer.invoke('infer', history),
+  onCompletionStream: (cb: (token: string) => void): void => {
+    ipcRenderer.on('completion-stream', (_event, token) => cb(token))
+  },
+  unloadModel: (): Promise<string> => ipcRenderer.invoke('unload-model')
 })
 ```
-This bridges the renderer to the main process without enabling full Node access, which keeps the app safer while still allowing QVAC calls.
+This bridges the renderer to the main process via IPC. Each method maps to a handler we'll define next. The renderer never gets direct Node.js access.
 </Step>
 
 <Step>
+Replace the entire contents of `src/preload/index.d.ts` with the following code:
 
-Replace the entire contents of `main.ts` with the following code:
+```ts title="src/preload/index.d.ts"
+declare global {
+  interface Window {
+    qvacAPI: {
+      loadModel: () => Promise<string>
+      infer: (history: { role: string; content: string }[]) => Promise<void>
+      onCompletionStream: (cb: (token: string) => void) => void
+      unloadModel: () => Promise<string>
+    }
+  }
+}
+
+export {}
+```
+This tells TypeScript about the `window.qvacAPI` shape so the renderer gets full type checking.
+</Step>
+
+<Step>
+Replace the entire contents of `src/main/index.ts` with the following code:
+
 <WrapCode>
 
-```ts title="main.ts" lineNumbers
-const { app, BrowserWindow, ipcMain } = require('electron')
-const path = require('path')
-const {
+```ts title="src/main/index.ts" lineNumbers
+import { app, BrowserWindow, ipcMain } from 'electron'
+import { join } from 'path'
+import { electronApp, optimizer, is } from '@electron-toolkit/utils'
+import {
   LLAMA_3_2_1B_INST_Q4_0,
   loadModel,
   unloadModel,
   completion
-} = require('@qvac/sdk')
+} from '@qvac/sdk'
 
-let win
-let modelId
+app.commandLine.appendSwitch('no-sandbox')
 
-// Create the Electron window and load the renderer.
-const createWindow = () => {
+let win: BrowserWindow | null = null
+let modelId: string | null = null
+
+function createWindow(): void {
   win = new BrowserWindow({
-    width: 800,
-    height: 600,
+    width: 900,
+    height: 670,
+    show: false,
     webPreferences: {
-      preload: path.join(__dirname, 'preload.js'),
+      preload: join(__dirname, '../preload/index.js'),
       contextIsolation: true,
       nodeIntegration: false
     }
   })
 
-  win.loadURL('http://localhost:5173')
+  win.on('ready-to-show', () => win!.show())
+
+  if (is.dev && process.env['ELECTRON_RENDERER_URL']) {
+    win.loadURL(process.env['ELECTRON_RENDERER_URL'])
+  } else {
+    win.loadFile(join(__dirname, '../renderer/index.html'))
+  }
 }
 
-// IPC handlers: load model, run completion, unload model.
-const setupHandlers = () => {
+function setupHandlers(): void {
   ipcMain.handle('load-model', async () => {
     modelId = await loadModel({
       modelSrc: LLAMA_3_2_1B_INST_Q4_0,
       modelType: 'llm',
-      onProgress: progress => {
-        console.log(progress)
-      }
+      onProgress: (progress) => console.log(progress)
     })
     return 'model loaded'
   })
 
-  ipcMain.handle('infer', async (event, history) => {
-    if (!modelId) {
-      throw new Error('Model not loaded. This should not happen.')
-    }
+  ipcMain.handle('infer', async (_event, history) => {
+    if (!modelId) throw new Error('Model not loaded.')
 
     const result = completion({ modelId, history, stream: true })
-    // Stream tokens back to the renderer.
     for await (const token of result.tokenStream) {
-      win.webContents.send('completion-stream', token)
+      win?.webContents.send('completion-stream', token)
     }
-    // Signal completion to the renderer.
-    win.webContents.send('completion-stream', '')
+    win?.webContents.send('completion-stream', '')
   })
 
   ipcMain.handle('unload-model', async () => {
-    if (!modelId) {
-      throw new Error('Model not loaded. This should not happen.')
-    }
-
+    if (!modelId) throw new Error('Model not loaded.')
     await unloadModel({ modelId })
     modelId = null
     return 'model unloaded'
@@ -529,115 +397,149 @@ const setupHandlers = () => {
 }
 
 app.whenReady().then(() => {
+  electronApp.setAppUserModelId('com.electron')
+  app.on('browser-window-created', (_, window) => {
+    optimizer.watchWindowShortcuts(window)
+  })
   createWindow()
   setupHandlers()
 })
+
+app.on('window-all-closed', () => {
+  if (process.platform !== 'darwin') app.quit()
+})
 ```
+
 </WrapCode>
 
-Before, `main.ts` only created a window and loaded the Vite dev server. Now we add IPC handlers to load a model, run `completion()` with streaming, and unload the model. After this change, the main process becomes the bridge between the renderer UI and QVAC.
+The main process now loads `LLAMA_3_2_1B_INST_Q4_0` via `loadModel()`, runs streaming `completion()` calls, and forwards each token to the renderer over IPC. The `no-sandbox` flag is required for QVAC on Linux.
 </Step>
 
 <Step>
-
-Replace the entire contents of `renderer/src/App.tsx` with the following code:
+Replace the entire contents of `src/renderer/src/App.tsx` with the following code:
 
 <WrapCode>
 
-```ts title="renderer/src/App.tsx" lineNumbers
-import { useEffect, useState } from 'react'
-import clsx from 'clsx'
+```ts title="src/renderer/src/App.tsx" lineNumbers
+import { useEffect, useRef, useState } from 'react'
 
-const { loadModel, infer, onCompletionStream, unloadModel } = window.qvacSDK
+type Message = { role: 'user' | 'assistant'; content: string }
 
-function App() {
+function App(): React.JSX.Element {
   const [loading, setLoading] = useState(true)
   const [processing, setProcessing] = useState(false)
-  const [msgHistory, setMsgHistory] = useState([])
-  const [inputText, setInputText] = useState('')
+  const [messages, setMessages] = useState<Message[]>([])
+  const [input, setInput] = useState('')
+  const bottomRef = useRef<HTMLDivElement>(null)
 
-  // Load the model once and subscribe to streaming tokens.
   useEffect(() => {
-    loadModel().then(() => setLoading(false))
+    window.qvacAPI.loadModel().then(() => setLoading(false))
 
-    onCompletionStream(token => {
-      console.log(token)
+    window.qvacAPI.onCompletionStream((token) => {
       if (token === '') {
         setProcessing(false)
       } else {
-        setMsgHistory(prev => {
-          const newMsgHistory = [...prev]
-          newMsgHistory[newMsgHistory.length - 1].content += token
-          return newMsgHistory
+        setMessages(prev => {
+          const updated = [...prev]
+          updated[updated.length - 1].content += token
+          return updated
         })
       }
     })
 
-    return () => unloadModel()
+    return () => { window.qvacAPI.unloadModel() }
   }, [])
 
-  // Send the latest user message and start streaming the response.
-  const handleSend = () => {
-    const nextHistory = [
-      ...msgHistory,
-      { role: 'user', content: inputText }
+  useEffect(() => {
+    bottomRef.current?.scrollIntoView({ behavior: 'smooth' })
+  }, [messages])
+
+  const handleSend = (): void => {
+    if (!input.trim() || processing || loading) return
+
+    const nextHistory: Message[] = [
+      ...messages,
+      { role: 'user', content: input }
     ]
-    setMsgHistory([...nextHistory, { role: 'assistant', content: '' }])
-    infer([
+    setMessages([...nextHistory, { role: 'assistant', content: '' }])
+    window.qvacAPI.infer([
       { role: 'system', content: 'You are a helpful assistant.' },
       ...nextHistory
     ])
-    setInputText('')
+    setInput('')
     setProcessing(true)
   }
 
   return (
-    <div className="h-screen w-[100vw] text-white bg-gray-900 p-4 flex flex-col gap-4">
-      {/* Output area */}
-      <div className="flex-1 rounded-lg border-2 border-teal-500 p-4 flex flex-col gap-4 overflow-y-auto">
+    <div className="h-screen flex flex-col bg-zinc-950 text-zinc-100">
+      {/* Header */}
+      <header className="flex items-center gap-3 px-6 py-4 border-b border-zinc-800">
+        <h1 className="text-lg font-semibold">LLM Desktop App</h1>
+        <span className="ml-auto flex items-center gap-2 text-sm text-zinc-500">
+          <span
+            className={`inline-block w-2 h-2 rounded-full ${
+              loading ? 'bg-amber-400 animate-pulse' : 'bg-emerald-400'
+            }`}
+          />
+          {loading ? 'Loading model…' : 'Ready'}
+        </span>
+      </header>
+
+      {/* Messages */}
+      <main className="flex-1 overflow-y-auto px-6 py-4 space-y-3">
         {loading ? (
-          <div className="min-h-0 flex-1 flex items-center justify-center text-2xl">
-            Loading...
+          <div className="flex-1 flex items-center justify-center h-full">
+            <div className="flex gap-1">
+              <span className="w-2 h-2 rounded-full bg-zinc-600 animate-bounce [animation-delay:0ms]" />
+              <span className="w-2 h-2 rounded-full bg-zinc-600 animate-bounce [animation-delay:150ms]" />
+              <span className="w-2 h-2 rounded-full bg-zinc-600 animate-bounce [animation-delay:300ms]" />
+            </div>
           </div>
         ) : (
-          msgHistory.map((msg, index) => (
+          messages.map((msg, i) => (
             <div
-              key={index}
-              className={clsx(
-                'flex',
-                msg.role === 'user' ? 'justify-end' : 'justify-start'
-              )}
+              key={i}
+              className={`flex ${msg.role === 'user' ? 'justify-end' : 'justify-start'}`}
             >
-              {/* Message bubble */}
-              <div className="p-2 rounded-lg bg-gray-600 prose max-w-3/4">
+              <div
+                className={`max-w-[75%] px-4 py-2.5 rounded-2xl text-sm leading-relaxed ${
+                  msg.role === 'user'
+                    ? 'bg-indigo-600 text-white rounded-br-md'
+                    : 'bg-zinc-800 text-zinc-100 rounded-bl-md'
+                }`}
+              >
                 {msg.content}
               </div>
             </div>
           ))
         )}
-      </div>
+        <div ref={bottomRef} />
+      </main>
 
-      {/* Input area */}
-      <div className="h-[108px] rounded-lg border-2 border-teal-500 flex p-4 gap-4">
-        <textarea
-          className="flex-1 resize-none bg-transparent outline-none"
-          placeholder="Type your message here..."
-          value={inputText}
-          onChange={e => setInputText(e.target.value)}
-          onKeyDown={e => {
-            if (e.key === 'Enter' && !e.shiftKey) {
-              e.preventDefault()
-              handleSend()
-            }
-          }}
-        />
-        <button
-          onClick={handleSend}
-          disabled={processing || loading}
-          className=" text-teal-500 outline-none underline underline-offset-4 disabled:cursor-not-allowed"
-        >
-          Send
-        </button>
+      {/* Input */}
+      <div className="px-6 py-4 border-t border-zinc-800">
+        <div className="flex gap-3">
+          <textarea
+            className="flex-1 resize-none rounded-xl bg-zinc-800 px-4 py-3 text-sm outline-none placeholder:text-zinc-500 focus:ring-2 focus:ring-indigo-500/50"
+            rows={1}
+            placeholder="Type a message…"
+            value={input}
+            onChange={e => setInput(e.target.value)}
+            onKeyDown={e => {
+              if (e.key === 'Enter' && !e.shiftKey) {
+                e.preventDefault()
+                handleSend()
+              }
+            }}
+          />
+          <button
+            onClick={handleSend}
+            disabled={processing || loading}
+            className="self-end rounded-xl bg-indigo-600 px-4 py-3 text-sm font-medium text-white hover:bg-indigo-500 transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
+          >
+            Send
+          </button>
+        </div>
       </div>
     </div>
   )
@@ -645,8 +547,10 @@ function App() {
 
 export default App
 ```
+
 </WrapCode>
-Before, `App.jsx` only rendered a static chat UI with a stub response. Now it calls the preload API to load the model, stream tokens into the UI, and send messages through `completion()`. After this change, the chat UI becomes fully wired to QVAC inference.
+
+The chat UI is now fully wired to QVAC. On mount, it loads the model and subscribes to streaming tokens. `handleSend` pushes the conversation history through the preload bridge, and each token appends to the latest assistant bubble. The `bottomRef` keeps the view scrolled to the newest message.
 </Step>
 </Steps>
 
