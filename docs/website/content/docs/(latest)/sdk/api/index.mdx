@@ -1,0 +1,54 @@
+---
+title: "@qvac/sdk"
+titleStyle: code
+description: API reference — v0.7.0
+---
+
+## Overview
+
+`@qvac/sdk` npm package exposes a function-centric, typed JS API.
+
+## Functions
+
+| Function | Summary | Signature |
+| --- | --- | --- |
+| [`cancel()`](./cancel) | Cancels an ongoing operation. | `cancel(params: infer): Promise` |
+| [`close()`](./close) | No description available | `close(): Promise` |
+| [`completion()`](./completion) | Generates completion from a language model based on conversation history. | `completion(params: CompletionParams): { stats: Promise<any>; text: Promise<string>; tokenStream: AsyncGenerator<string>; toolCalls: Promise<any[]>; toolCallStream: AsyncGenerator<infer<any>> }` |
+| [`defineHandler()`](./defineHandler) | Helper function to define a handler with full type inference. | `defineHandler(definition: PluginHandlerDefinition): PluginHandlerDefinition` |
+| [`definePlugin()`](./definePlugin) | Helper function to define a plugin with full type inference. | `definePlugin(plugin: T): T` |
+| [`deleteCache()`](./deleteCache) | Deletes KV cache files. | `deleteCache(params: { all: true } \| { kvCacheKey: string; modelId?: string }): Promise` |
+| [`downloadAsset()`](./downloadAsset) | Downloads an asset (model file) without loading it into memory. | `downloadAsset(options: any): Promise` |
+| [`embed()`](./embed) | Generates embeddings for a single text using a specified model. | `embed(params: { modelId: string; text: string }): Promise` |
+| [`getLogger()`](./getLogger) | No description available | `getLogger(namespace: string, options?: LoggerOptions): Logger` |
+| [`getModelByName()`](./getModelByName) | No description available | `getModelByName(name: string): RegistryItem \| undefined` |
+| [`getModelByPath()`](./getModelByPath) | No description available | `getModelByPath(registryPath: string): RegistryItem \| undefined` |
+| [`getModelBySrc()`](./getModelBySrc) | No description available | `getModelBySrc(modelId: string, blobCoreKey: string): RegistryItem \| undefined` |
+| [`getModelInfo()`](./getModelInfo) | No description available | `getModelInfo(params: input): Promise` |
+| [`invokePlugin()`](./invokePlugin) | Invoke a non-streaming plugin handler. | `invokePlugin(options: InvokePluginOptions): Promise` |
+| [`invokePluginStream()`](./invokePluginStream) | Invoke a streaming plugin handler. | `invokePluginStream(options: InvokePluginOptions): AsyncGenerator` |
+| [`loadModel()`](./loadModel) | Loads a machine learning model from a local path, remote URL, or Hyperdrive key. | `loadModel(options: any): Promise` |
+| [`loggingStream()`](./loggingStream) | Opens a logging stream to receive real-time logs. | `loggingStream(params: infer): AsyncGenerator` |
+| [`modelRegistryGetModel()`](./modelRegistryGetModel) | No description available | `modelRegistryGetModel(registryPath: string, registrySource: string): Promise` |
+| [`modelRegistryList()`](./modelRegistryList) | No description available | `modelRegistryList(): Promise` |
+| [`modelRegistrySearch()`](./modelRegistrySearch) | No description available | `modelRegistrySearch(params: ModelRegistrySearchParams): Promise` |
+| [`ocr()`](./ocr) | Performs Optical Character Recognition (OCR) on an image to extract text. | `ocr(params: OCRClientParams): { blocks: Promise<infer<any>[]>; blockStream: AsyncGenerator<infer<any>[]>; stats: Promise<any> }` |
+| [`ping()`](./ping) | Sends a ping request to the server and returns the pong response. | `ping(): Promise` |
+| [`ragChunk()`](./ragChunk) | Chunks documents into smaller pieces for embedding. | `ragChunk(params: infer): Promise` |
+| [`ragCloseWorkspace()`](./ragCloseWorkspace) | Closes a RAG workspace, releasing in-memory resources (Corestore, HyperDB adapter, RAG instance). | `ragCloseWorkspace(params?: any): Promise` |
+| [`ragDeleteEmbeddings()`](./ragDeleteEmbeddings) | Deletes document embeddings from the RAG vector database. | `ragDeleteEmbeddings(params: infer): Promise` |
+| [`ragDeleteWorkspace()`](./ragDeleteWorkspace) | Deletes a RAG workspace and all its data. | `ragDeleteWorkspace(params: infer): Promise` |
+| [`ragIngest()`](./ragIngest) | Ingests documents into the RAG vector database. | `ragIngest(params: any): Promise` |
+| [`ragListWorkspaces()`](./ragListWorkspaces) | Lists all RAG workspaces with their open status. | `ragListWorkspaces(): Promise` |
+| [`ragReindex()`](./ragReindex) | Reindexes the RAG database to optimize search performance. | `ragReindex(params: any): Promise` |
+| [`ragSaveEmbeddings()`](./ragSaveEmbeddings) | Saves pre-embedded documents to the RAG vector database. | `ragSaveEmbeddings(params: any): Promise` |
+| [`ragSearch()`](./ragSearch) | Searches for similar documents in the RAG vector database. | `ragSearch(params: input): Promise` |
+| [`startQVACProvider()`](./startQVACProvider) | Starts a provider service that offers QVAC capabilities to remote peers. | `startQVACProvider(params: infer): Promise` |
+| [`stopQVACProvider()`](./stopQVACProvider) | Stops a running provider service and leaves the specified topic. | `stopQVACProvider(params: infer): Promise` |
+| [`textToSpeech()`](./textToSpeech) | No description available | `textToSpeech(params: infer): { buffer: Promise<number[]>; bufferStream: AsyncGenerator<number>; done: Promise<boolean> }` |
+| [`transcribe()`](./transcribe) | This function provides a simple interface for transcribing audio by
+collecting all streaming results into a single string response. | `transcribe(params: TranscribeClientParams): Promise` |
+| [`transcribeStream()`](./transcribeStream) | This function streams audio transcription results in real-time, yielding
+text chunks as they become available from the model. | `transcribeStream(params: TranscribeClientParams): AsyncGenerator` |
+| [`translate()`](./translate) | Translates text from one language to another using a specified translation model. | `translate(params: TranslateClientParams): { stats: Promise<any>; text: Promise<string>; tokenStream: AsyncGenerator<string> }` |
+| [`unloadModel()`](./unloadModel) | Unloads a previously loaded model from the server. | `unloadModel(params: input): Promise` |

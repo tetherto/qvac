@@ -1,0 +1,172 @@
+---
+title: Write a custom plugin
+description: Guidelines to ship your custom plugin as a single npm package.
+---
+
+import { File, Folder, Files } from "fumadocs-ui/components/files";
+
+## Entrypoints
+
+Your package must expose two entrypoints:
+
+- `.`: client-side wrappers (Metro-safe, cross-platform)
+- `./plugin`: worker-side plugin definition (Bare-only; addon imports allowed)
+
+Example:
+
+```json title="package.json"
+{
+  "name": "qvac-echo-plugin",
+  "exports": {
+    ".": {
+      "types": "./dist/client.d.ts",
+      "import": "./dist/client.js"
+    },
+    "./plugin": {
+      "types": "./dist/plugin.d.ts",
+      "import": "./dist/plugin.js"
+    }
+  }
+}
+```
+
+## Project structure
+
+Keep client and plugin code split:
+
+<Files>
+  <Folder name="qvac-echo-plugin" defaultOpen>
+    <File name="package.json" />
+    <Folder name="src" defaultOpen>
+      <Folder name="client" defaultOpen>
+        <File name="index.ts" />
+      </Folder>
+      <Folder name="plugin" defaultOpen>
+        <File name="index.ts" />
+      </Folder>
+    </Folder>
+    <Folder name="dist" defaultOpen>
+      <Folder name="client" defaultOpen>
+        <File name="index.js" />
+      </Folder>
+      <Folder name="plugin" defaultOpen>
+        <File name="index.js" />
+      </Folder>
+    </Folder>
+  </Folder>
+</Files>
+
+## Bare and bundling constraints
+
+Write plugin code that can be statically bundled. Guidelines:
+
+- Avoid Node-only standard library usage in worker/plugin code.
+- Avoid dynamic imports in worker/plugin code.
+- Keep worker/plugin imports static and predictable.
+
+## Handler payload rules
+
+Keep all handler I/O JSON-serializable. Guidelines:
+
+- Request payloads must be plain JSON.
+- Response payloads must be plain JSON.
+- Avoid classes, Dates, Buffers, Maps/Sets, functions, and non-serializable types.
+
+## Client wrappers
+
+Expose a wrapper-first API. Do not ask consumers to call `invokePlugin` directly. Guidelines:
+
+- Export all public functions from the package root (`.`).
+- Keep wrapper code Metro-safe.
+- Forward calls to the worker using `invokePlugin` / `invokePluginStream`.
+- Use typed request/response payloads.
+- Prefer an options object signature (for example `{ modelId, ...params }`) for consistency with SDK usage.
+
+Example:
+
+```ts title="src/client/index.ts"
+import { invokePlugin, invokePluginStream } from "@qvac/sdk";
+
+export async function echo(options: { modelId: string; message: string }) {
+  return invokePlugin<{ echoed: string; timestamp: number }>({
+    modelId: options.modelId,
+    handler: "echo",
+    params: options,
+  });
+}
+
+export async function* echoStream(options: { modelId: string; message: string }) {
+  for await (const chunk of invokePluginStream<{ char: string | null; done: boolean }>({
+    modelId: options.modelId,
+    handler: "echoStream",
+    params: options,
+  })) {
+    if (!chunk.done && chunk.char) {
+      yield chunk.char;
+    }
+  }
+}
+```
+
+## Worker-side plugin definition
+
+Implement the worker-side plugin in the `./plugin` entrypoint. Guidelines:
+
+- Define the plugin with `definePlugin` and handlers with `defineHandler`.
+- Use a unique `modelType`.
+- Set a human-readable `displayName`.
+- Set `addonPackage` if your plugin uses an addon (use `"none"` for pure JS plugins).
+- Implement `createModel(params)` using `params.modelPath` when your plugin requires model files.
+
+Example:
+
+```ts title="src/plugin/index.ts"
+import { z } from "zod";
+import { definePlugin, defineHandler } from "@qvac/sdk/plugin-utils";
+import type { CreateModelParams, PluginModelResult } from "@qvac/sdk";
+
+export const echoPlugin = definePlugin({
+  modelType: "echo",
+  displayName: "Echo Plugin",
+  addonPackage: "none",
+
+  createModel: (params: CreateModelParams): PluginModelResult => {
+    const model = { id: params.modelId, load: async () => {} };
+    return { model, loader: null };
+  },
+
+  handlers: {
+    echo: defineHandler({
+      requestSchema: z.object({ message: z.string() }),
+      responseSchema: z.object({ echoed: z.string(), timestamp: z.number() }),
+      handler: async (request) => ({
+        echoed: `Echo: ${request.message}`,
+        timestamp: Date.now(),
+      }),
+    }),
+  },
+});
+```
+
+## Local development (workspace linking)
+
+Use workspace linking during development:
+
+```bash
+# In the plugin directory
+bun link
+
+# In the SDK/app project
+bun link qvac-echo-plugin
+```
+
+Then reference the plugin by package name.
+
+## Publishing checklist
+
+- Package exports `.` and `./plugin`.
+- Root entrypoint exports only Metro-safe client wrappers.
+- `./plugin` exports the worker-side plugin definition.
+- If your plugin requires model files, `createModel` consumes a resolved `modelPath`.
+- Handler requests and responses are JSON-serializable.
+- Worker/plugin code is Bare-compatible and statically importable.
