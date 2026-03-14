@@ -1,5 +1,19 @@
 # Changelog
 
+## [0.12.2] - 2026-03-13
+
+This release fixes antiprompt (reverse-prompt) detection for short stop sequences like `\n`, which is critical for translation workloads that rely on newline-based early stopping.
+
+## Bug Fixes
+
+### Antiprompt detection for short stop sequences
+
+Fixed a bug where `checkAntiprompt()` in both `TextLlmContext` and `MtmdLlmContext` only searched the last few characters of the decoded output buffer for the antiprompt string. For short antiprompts like `"\n"` (length 1), the search window was limited to 3 characters at the tail. However, a single llama.cpp token can decode to many characters, placing `"\n"` far from the string's tail end — causing the antiprompt to be missed entirely.
+
+The model would then run to `n_predict` (typically 256 tokens) instead of stopping after the first translated line, wasting compute and producing multi-line output that required post-processing to recover.
+
+The fix widens the search to the entire `kNPrev`-token decoded window (32 tokens by default), reliably catching the antiprompt regardless of where it appears in the decoded string. This only affects models that use the `reverse-prompt` configuration — in practice, the AfriqueGemma translation workflow where `"\n"` signals end of translation.
+
 ## [0.12.1] - 2026-03-12
 
 ### Added
