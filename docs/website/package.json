@@ -8,11 +8,14 @@
     "build:static": "next build && npx @vahor/next-broken-links",
     "dev": "next dev --turbo -p 3001",
     "start": "next start",
-    "serve": "serve dist -p 8080",
+    "serve": "npx http-server dist -p 8080 -c-1",
     "postinstall": "fumadocs-mdx",
     "docs:generate": "bun run scripts/run-docs-generate.ts",
     "docs:generate-api": "bun run scripts/generate-api-docs.ts",
-    "docs:update-versions": "bun run scripts/update-versions-list.ts"
+    "docs:update-versions": "bun run scripts/update-versions-list.ts",
+    "docs:create-version": "bun run scripts/create-version-bundle.ts",
+    "test": "vitest run",
+    "test:watch": "vitest"
   },
   "dependencies": {
     "@ai-sdk/openai-compatible": "^1.0.29",
@@ -64,6 +67,7 @@
     "typedoc-plugin-markdown": "^4.10.0",
     "typescript": "^5.9.2",
     "unified": "^11.0.2",
-    "unist-util-visit": "^5.0.0"
+    "unist-util-visit": "^5.0.0",
+    "vitest": "^4.0.18"
   }
 }

@@ -19,11 +19,7 @@ import {
   type ToolCall,
   type TranslationStats,
 } from "@/schemas";
-import {
-  ADDON_NAMESPACES,
-  createStreamLogger,
-  registerAddonLogger,
-} from "@/logging";
+import { createStreamLogger, registerAddonLogger } from "@/logging";
 import { parseModelPath } from "@/server/utils";
 import FilesystemDL from "@qvac/dl-filesystem";
 import { asLoader } from "@/server/bare/utils/loader-adapter";
@@ -65,8 +61,8 @@ function createLlmModel(
 ) {
   const { dirPath, basePath } = parseModelPath(modelPath);
   const loader = new FilesystemDL({ dirPath });
-  const logger = createStreamLogger(modelId, ADDON_NAMESPACES.LLAMACPP_LLM);
-  registerAddonLogger(modelId, ADDON_NAMESPACES.LLAMACPP_LLM, logger);
+  const logger = createStreamLogger(modelId, ModelType.llamacppCompletion);
+  registerAddonLogger(modelId, ModelType.llamacppCompletion, logger);
   const llmConfigStrings = transformLlmConfig(llmConfig);
 
   const args = {
@@ -215,6 +211,6 @@ export const llmPlugin = definePlugin({
 
   logging: {
     module: llmAddonLogging,
-    namespace: ADDON_NAMESPACES.LLAMACPP_LLM,
+    namespace: ModelType.llamacppCompletion,
   },
 });
