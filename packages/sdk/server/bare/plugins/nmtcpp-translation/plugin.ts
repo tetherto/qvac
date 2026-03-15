@@ -18,7 +18,7 @@ import {
   type ResolveContext,
   type ResolveResult,
 } from "@/schemas";
-import { ADDON_NAMESPACES, createStreamLogger } from "@/logging";
+import { createStreamLogger, registerAddonLogger } from "@/logging";
 import { parseModelPath } from "@/server/utils";
 import FilesystemDL from "@qvac/dl-filesystem";
 import {
@@ -76,7 +76,8 @@ function createNmtModel(
 ) {
   const { dirPath, basePath } = parseModelPath(modelPath);
   const loader = new FilesystemDL({ dirPath });
-  const logger = createStreamLogger(modelId, "nmtcpp");
+  const logger = createStreamLogger(modelId, ModelType.nmtcppTranslation);
+  registerAddonLogger(modelId, ModelType.nmtcppTranslation, logger);
 
   const {
     mode,
@@ -301,6 +302,6 @@ export const nmtPlugin = definePlugin({
 
   logging: {
     module: nmtAddonLogging,
-    namespace: ADDON_NAMESPACES.NMTCPP,
+    namespace: ModelType.nmtcppTranslation,
   },
 });
