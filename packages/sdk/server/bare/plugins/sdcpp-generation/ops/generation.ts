@@ -49,16 +49,16 @@ export async function* generation(
       };
     } else if (typeof chunk === "string") {
       try {
-        const tick = JSON.parse(chunk);
+        const tick = JSON.parse(chunk) as Record<string, unknown>;
         if ("step" in tick) {
           yield {
             type: "generationStream",
-            step: tick.step,
-            totalSteps: tick.total,
-            elapsedMs: tick.elapsed_ms,
+            step: tick["step"] as number,
+            totalSteps: tick["total"] as number,
+            elapsedMs: tick["elapsed_ms"] as number,
           };
         }
-      } catch (_) {
+      } catch {
         // Non-JSON string output — skip
       }
     }

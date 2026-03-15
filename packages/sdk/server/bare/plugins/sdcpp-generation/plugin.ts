@@ -105,7 +105,7 @@ export const diffusionPlugin = definePlugin({
       }).filter(([, v]) => v !== undefined),
     );
 
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any, @typescript-eslint/no-unsafe-argument
     const model = new ImgStableDiffusion(addonArgs as any, addonConfig);
 
     return { model, loader: undefined };

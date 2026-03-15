@@ -137,7 +137,7 @@ export class GenerationExecutor {
 
       const match =
         buffers1[0]!.length === buffers2[0]!.length &&
-        buffers1[0]!.every((byte, i) => byte === buffers2[0]![i]);
+        buffers1[0]!.every((byte: number, i: number) => byte === buffers2[0]![i]);
 
       return {
         passed: match,

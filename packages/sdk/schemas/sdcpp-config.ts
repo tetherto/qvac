@@ -117,23 +117,8 @@ export type GenerationStreamRequest = z.infer<
   typeof generationStreamRequestSchema
 >;
 
-// Client params (no `type` field — added by the client wrapper)
-export type GenerationClientParams = {
-  modelId: string;
-  prompt: string;
-  negative_prompt?: string;
-  width?: number;
-  height?: number;
-  steps?: number;
-  cfg_scale?: number;
-  guidance?: number;
-  sampling_method?: GenerationRequest["sampling_method"];
-  scheduler?: GenerationRequest["scheduler"];
-  seed?: number;
-  batch_count?: number;
-  vae_tiling?: boolean;
-  cache_preset?: string;
+// Client params — derived from server schema with client-specific overrides
+export type GenerationClientParams = Omit<GenerationRequest, "init_image"> & {
   init_image?: string | Buffer;
-  strength?: number;
   stream?: boolean;
 };
