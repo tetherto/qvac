@@ -1,21 +1,33 @@
 ---
 title: "modelRegistryList( )"
 titleStyle: code
-description: "No description available"
+description: Lists all available models from the QVAC model registry.
 ---
 
-```typescript
-function modelRegistryList(): Promise
+```ts
+function modelRegistryList(): Promise<ModelRegistryEntry[]>;
 ```
 
-## Description
+## Parameters
 
-No description available
-
-
+None.
 
 ## Returns
 
+`Promise<`[`ModelRegistryEntry[]`](../modelRegistryGetModel#modelregistryentry)`>` — Array of all available model entries. See [`modelRegistryGetModel()`](../modelRegistryGetModel#modelregistryentry) for the `ModelRegistryEntry` shape.
+
+## Throws
+
+| Error | When |
+| --- | --- |
+| `QVAC_MODEL_REGISTRY_QUERY_FAILED` | The registry query fails |
+
+## Example
+
 ```typescript
-Promise
+const models = await modelRegistryList();
+console.log(`Available models: ${models.length}`);
+for (const model of models) {
+  console.log(`${model.name} (${model.addon}, ${model.quantization})`);
+}
 ```

@@ -1,21 +1,18 @@
 ---
 title: "close( )"
 titleStyle: code
-description: "No description available"
+description: Closes the RPC connection to the QVAC server.
 ---
 
-```typescript
-function close(): Promise
+
+```ts
+function close(): Promise<void>;
 ```
 
-## Description
+## Parameters
 
-No description available
-
-
+None.
 
 ## Returns
 
-```typescript
-Promise
-```
+`Promise<void>` — Resolves when the connection is closed. If no connection exists, resolves immediately.
