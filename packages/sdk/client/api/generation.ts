@@ -62,33 +62,23 @@ export function generation(params: GenerationClientParams): GenerationResult {
 
   let diffusionStats: DiffusionStats | undefined;
   let statsResolver: (value: DiffusionStats | undefined) => void = () => {};
-  let statsRejecter: (error: unknown) => void = () => {};
-  const statsPromise = new Promise<DiffusionStats | undefined>(
-    (resolve, reject) => {
-      statsResolver = resolve;
-      statsRejecter = reject;
-    },
-  );
+  const statsPromise = new Promise<DiffusionStats | undefined>((resolve) => {
+    statsResolver = resolve;
+  });
 
   if (streaming) {
     const outputStream = (async function* () {
-      try {
-        for await (const response of streamRpc(request)) {
-          if (response.type === "generationStream") {
-            const parsed = generationStreamResponseSchema.parse(response);
-            if (parsed.data) {
-              yield { data: parsed.data, outputIndex: parsed.outputIndex ?? 0 };
-            }
-            if (parsed.done) {
-              diffusionStats = parsed.stats;
-              statsResolver(diffusionStats);
-            }
+      for await (const response of streamRpc(request)) {
+        if (response.type === "generationStream") {
+          const parsed = generationStreamResponseSchema.parse(response);
+          if (parsed.data) {
+            yield { data: parsed.data, outputIndex: parsed.outputIndex ?? 0 };
+          }
+          if (parsed.done) {
+            diffusionStats = parsed.stats;
+            statsResolver(diffusionStats);
           }
         }
-        statsResolver(diffusionStats);
-      } catch (error) {
-        statsRejecter(error);
-        throw error;
       }
     })();
 
@@ -104,26 +94,20 @@ export function generation(params: GenerationClientParams): GenerationResult {
   })();
 
   const outputsPromise = (async () => {
-    try {
-      const collected: Buffer[] = [];
-      for await (const response of streamRpc(request)) {
-        if (response.type === "generationStream") {
-          const parsed = generationStreamResponseSchema.parse(response);
-          if (parsed.data) {
-            collected.push(Buffer.from(parsed.data, "base64"));
-          }
-          if (parsed.done) {
-            diffusionStats = parsed.stats;
-            statsResolver(diffusionStats);
-          }
+    const collected: Buffer[] = [];
+    for await (const response of streamRpc(request)) {
+      if (response.type === "generationStream") {
+        const parsed = generationStreamResponseSchema.parse(response);
+        if (parsed.data) {
+          collected.push(Buffer.from(parsed.data, "base64"));
+        }
+        if (parsed.done) {
+          diffusionStats = parsed.stats;
+          statsResolver(diffusionStats);
         }
       }
-      statsResolver(diffusionStats);
-      return collected;
-    } catch (error) {
-      statsRejecter(error);
-      throw error;
     }
+    return collected;
   })();
 
   return {
