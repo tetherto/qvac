@@ -6,15 +6,15 @@
       "dependencies": {
         "@qvac/decoder-audio": "^0.3.3",
         "@qvac/dl-filesystem": "^0.2.0",
-        "@qvac/embed-llamacpp": "^0.11.3",
+        "@qvac/embed-llamacpp": "^0.12.0",
         "@qvac/error": "^0.1.1",
         "@qvac/langdetect-text": "^0.1.0",
-        "@qvac/llm-llamacpp": "^0.9.2",
+        "@qvac/llm-llamacpp": "^0.12.1",
         "@qvac/logging": "^0.1.0",
         "@qvac/ocr-onnx": "^0.2.0",
         "@qvac/rag": "^0.4.2",
-        "@qvac/registry-client": "^0.2.0",
-        "@qvac/transcription-parakeet": "^0.1.9",
+        "@qvac/registry-client": "^0.2.1",
+        "@qvac/transcription-parakeet": "^0.1.11",
         "@qvac/transcription-whispercpp": "^0.5.0",
         "@qvac/translation-nmtcpp": "^0.6.1",
         "@qvac/tts-onnx": "^0.6.1",
@@ -511,7 +511,7 @@
 
     "@qvac/dl-hyperdrive": ["@qvac/dl-hyperdrive@0.2.0", "", { "dependencies": { "@qvac/dl-base": "^0.2.0", "@qvac/error": "^0.1.0", "@qvac/infer-base": "^0.1.0", "corestore": "^7.1.0", "hypercore-id-encoding": "1.3.0", "hyperdrive": "^13.0.1", "hyperswarm": "^4.10.1", "test-tmp": "^1.3.0", "z32": "1.1.0" } }, "sha512-dkaTPL6yTwEX3zStJU5ihdV1ndzYmSEImXQZBWVPPF2fCAEFhEu4o2ciof1XAwaCVDciP0yfXdywGEqgZRsjew=="],
 
-    "@qvac/embed-llamacpp": ["@qvac/embed-llamacpp@0.11.3", "", { "dependencies": { "@qvac/infer-base": "^0.2.2", "@qvac/logging": "^0.1.0", "bare-path": "^3.0.0" }, "peerDependencies": { "@qvac/dl-hyperdrive": "^0.1.0" } }, "sha512-980Vy+LKMYQY9I2ZNsy2bzob1ZJHdRQA5zhPYTBVkTVzqTFZhYlCuarF6gO4sfbevoysCfm9IM5mo5Ra1YOaTQ=="],
+    "@qvac/embed-llamacpp": ["@qvac/embed-llamacpp@0.12.0", "", { "dependencies": { "@qvac/infer-base": "^0.2.2", "@qvac/logging": "^0.1.0", "bare-path": "^3.0.0" }, "peerDependencies": { "@qvac/dl-hyperdrive": "^0.1.0" } }, "sha512-OKmz4LqqqCxw7ESosAvDB+8btkVYzo7f5jzVF/fauN3DRA9O6U7YKOD1VcwCmstqyOdV3KTZ/X0Hd4DkpmBpdQ=="],
 
     "@qvac/error": ["@qvac/error@0.1.1", "", {}, "sha512-Xv7p1wnC/JmsKimGrkvXlcq+AHsG1r33f+uayANuEYe5ThFi+FR3txnN2UPjulwBdDorEnger9/+9ftShAFOAw=="],
 
@@ -519,7 +519,7 @@
 
     "@qvac/langdetect-text": ["@qvac/langdetect-text@0.1.1", "", { "dependencies": { "tinyld": "1.3.4" } }, "sha512-VLyKuRqMXfW9KQOjsPmI+W1OFcppeWPkGOX45bzehh8ukeiA4LhlD8v7/+v4UAHkrF1C7JtDWeGVYi4krUFBAg=="],
 
-    "@qvac/llm-llamacpp": ["@qvac/llm-llamacpp@0.9.2", "", { "dependencies": { "@qvac/infer-base": "^0.2.2", "bare-path": "^3.0.0", "bare-process": "^4.2.2" }, "peerDependencies": { "@qvac/dl-hyperdrive": "^0.1.1" } }, "sha512-vv2z2YJF4xTR+bqM64/aY+o9CU46oqMu+b4pL0xHhvjkMDTtiKSqSBp5L8lG5nQgTR/JTpJabNvyQqSnEtUXGw=="],
+    "@qvac/llm-llamacpp": ["@qvac/llm-llamacpp@0.12.2", "", { "dependencies": { "@qvac/infer-base": "^0.2.2", "bare-path": "^3.0.0", "bare-process": "^4.2.2" }, "peerDependencies": { "@qvac/dl-hyperdrive": "^0.1.1" } }, "sha512-yx1bCK0Lp1XwsKbFyMNQ7BPy4vt95WLN3iMO2gSTTJW225trAFDBee9xktOJ4V4onhClKzdOm1fKAvy2ZNCJXA=="],
 
     "@qvac/logging": ["@qvac/logging@0.1.0", "", {}, "sha512-B9JayZKJGzSsM/9JmMdO7wiOOZ2mY5aWTbXl2aIKzy+l2Uqzkoby0IxMjKSVtYo6uMDs2zcrZqLtjI2dDSaYog=="],
 
@@ -527,13 +527,13 @@
 
     "@qvac/rag": ["@qvac/rag@0.4.2", "", { "dependencies": { "@qvac/error": "^0.1.0", "bare-crypto": "^1.11.2", "hyperdht": "^6.23.0", "ready-resource": "^1.1.2", "uuid-random": "^1.3.2", "zod": "^4.1.13" }, "peerDependencies": { "bare-fetch": "^2.5.0", "hyperdb": "^4.19.0", "hyperschema": "^1.13.0", "llm-splitter": "^0.2.0" }, "optionalPeers": ["bare-fetch", "hyperdb", "hyperschema", "llm-splitter"] }, "sha512-vjDhgv5AG/n3d8dI0K9iS5xGhxHfnX+mzaefBnuaIDatf/z1PNm6c4d91j8jDNGprrBAz23pj4po0wUlFZe+ig=="],
 
-    "@qvac/registry-client": ["@qvac/registry-client@0.2.0", "", { "dependencies": { "@qvac/error": "^0.1.0", "@qvac/registry-schema": "^0.1.1", "b4a": "^1.6.7", "bare-fs": "^4.5.2", "bare-os": "^3.6.2", "bare-path": "^3.0.0", "bare-process": "^4.2.2", "corestore": "^7.4.5", "hyperblobs": "^2.8.0", "hypercore-id-encoding": "^1.3.0", "hyperdb": "^4.16.1", "hyperswarm": "^4.14.0", "paparam": "^1.10.0", "ready-resource": "^1.0.1" }, "bin": { "qvac-registry": "bin/cli.js" } }, "sha512-ZdcKKIy7wAYbeh7iRNW9Wn2LUZNPPTihvwQN1yCNDx7n835DKqw8xy9396giikkNzXiT3RMf8mnccWldjmHnwg=="],
+    "@qvac/registry-client": ["@qvac/registry-client@0.2.1", "", { "dependencies": { "@qvac/error": "^0.1.0", "@qvac/registry-schema": "^0.1.1", "b4a": "^1.6.7", "bare-fs": "^4.5.2", "bare-os": "^3.6.2", "bare-path": "^3.0.0", "bare-process": "^4.2.2", "corestore": "^7.4.5", "hyperblobs": "^2.8.0", "hypercore-id-encoding": "^1.3.0", "hyperdb": "^4.16.1", "hyperswarm": "^4.14.0", "paparam": "^1.10.0", "ready-resource": "^1.0.1" }, "bin": { "qvac-registry": "bin/cli.js" } }, "sha512-ekT7MvFbX1MjTusS+Z/kbw1rLI5k9mpw41gNZv3rvL1ZDTfjuJ++iRYDUDZO9wT5ehyqChVwsPjoDuBiZpcC3A=="],
 
     "@qvac/registry-schema": ["@qvac/registry-schema@0.1.1", "", { "dependencies": { "hyperdb": "^4.16.0", "hyperdispatch": "^1.4.0", "hyperschema": "^1.13.0", "ready-resource": "^1.2.0" } }, "sha512-Mm0zQqc/KTplE2wtdFseSd2995H4RK0hAW63ZDE/9TXfCxuW0medjcpVOXVGFoI+mkTM2cxubcO/eJvJlZih1A=="],
 
     "@qvac/response": ["@qvac/response@0.1.2", "", { "dependencies": { "bare-events": "2.4.2" } }, "sha512-xWAsUyxOd7kqOayjFwUGOGiWlwQ8z6bzy5lOTUdI3uHGCAbdsqUMivpMymktd3ub+ZvF7F/iCM4dxdDCTISSdA=="],
 
-    "@qvac/transcription-parakeet": ["@qvac/transcription-parakeet@0.1.9", "", { "dependencies": { "@qvac/error": "^0.1.0", "@qvac/infer-base": "^0.2.0", "@qvac/logging": "^0.1.0", "bare-fs": "^4.5.1", "bare-path": "^3.0.0", "path": "npm:bare-path", "process": "npm:bare-process@^4.2.2" } }, "sha512-BhQ6B0DHrmT049fAWfb+Sj6+rUw8sRlUw5ZQOTI4yRY5931DeKwrpXy4g4qex5AprnVbOYs9UzEKWUH1UjxFsA=="],
+    "@qvac/transcription-parakeet": ["@qvac/transcription-parakeet@0.1.11", "", { "dependencies": { "@qvac/error": "^0.1.0", "@qvac/infer-base": "^0.2.0", "@qvac/logging": "^0.1.0", "bare-fs": "^4.5.1", "bare-path": "^3.0.0", "path": "npm:bare-path", "process": "npm:bare-process@^4.2.2" } }, "sha512-moJWNNf6s1DCNMXk5t+yWj+EQqnr+ohl9pOhIho1bGtJbsUWBfOa+kD4Jut0h0SBbb25VKN8zWQ3t5DhL7j/sQ=="],
 
     "@qvac/transcription-whispercpp": ["@qvac/transcription-whispercpp@0.5.0", "", { "dependencies": { "@qvac/decoder-audio": "^0.3.3", "@qvac/error": "^0.1.0", "@qvac/infer-base": "^0.2.0", "@qvac/logging": "^0.1.0", "bare-channel": "^5.2.2", "bare-ffmpeg": "^1.0.0-32", "bare-node-worker-threads": "^1.0.0", "bare-path": "^3.0.0", "bare-stream": "^2.7.0", "bare-worker": "^4.1.0", "path": "npm:bare-path", "process": "npm:bare-process@^4.2.2", "stream": "npm:bare-node-stream", "worker_threads": "npm:bare-node-worker-threads@^1.0.0" } }, "sha512-CxKeMlWj1Nhca+rK4gVtSPfZyiXkqegRjHua1Y/lsRNfERSQn3xMwnBzDj9yHn9CGFXV244KKE8/A1ZLXn6fBw=="],
 

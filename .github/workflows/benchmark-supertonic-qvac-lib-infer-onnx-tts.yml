@@ -44,14 +44,12 @@ on:
         type: boolean
         default: true
 
-  pull_request:
-    types: [closed]
-    paths:
-      - "packages/qvac-lib-infer-onnx-tts/**"
+  release:
+    types: [published]
 
 jobs:
   benchmark-supertonic:
-    if: github.event_name != 'pull_request' || github.event.pull_request.merged == true
+    if: github.event_name == 'workflow_dispatch' || (github.event_name == 'release' && startsWith(github.event.release.tag_name, 'onnx-tts-v'))
     runs-on: macos-14-xlarge
     timeout-minutes: 180
     env:
@@ -104,8 +102,16 @@ jobs:
 
       - name: Determine addon version
         id: version
+        env:
+          EVENT_NAME: ${{ github.event_name }}
+          RELEASE_TAG: ${{ github.event.release.tag_name }}
+          INPUT_VERSION: ${{ github.event.inputs.addon_version }}
         run: |
-          VERSION="${{ github.event.inputs.addon_version || 'latest' }}"
+          if [ "$EVENT_NAME" = "release" ]; then
+            VERSION="${RELEASE_TAG#onnx-tts-v}"
+          else
+            VERSION="${INPUT_VERSION:-latest}"
+          fi
           echo "version=$VERSION" >> $GITHUB_OUTPUT
 
       - name: Update addon version in package.json

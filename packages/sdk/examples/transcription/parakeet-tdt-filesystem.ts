@@ -16,9 +16,7 @@ if (!args[0]) {
     "Usage: bun run examples/transcription/parakeet-tdt-filesystem.ts <wav-file-path> " +
       "[encoder-onnx] [encoder-data] [decoder-onnx] [vocab-txt] [preprocessor-onnx]",
   );
-  console.error(
-    "\nIf model paths are omitted, defaults to registry models.",
-  );
+  console.error("\nIf model paths are omitted, defaults to registry models.");
   process.exit(1);
 }
 
@@ -45,9 +43,7 @@ try {
       parakeetPreprocessorSrc,
     },
     onProgress: (progress) => {
-      console.log(
-        `Download progress: ${progress.percentage.toFixed(1)}%`,
-      );
+      console.log(`Download progress: ${progress.percentage.toFixed(1)}%`);
     },
   });
 

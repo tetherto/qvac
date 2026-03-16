@@ -18,6 +18,7 @@ import { nmtTests } from "./nmt-tests.js";
 import { bergamotTests } from "./bergamot-tests.js";
 import { shardedModelTests } from "./sharded-model-tests.js";
 import { httpEmbeddingTests } from "./http-embedding-tests.js";
+import { parakeetTests } from "./parakeet-tests.js";
 
 // Model loading tests
 export const modelLoadLlm: TestDefinition = {
@@ -192,6 +193,9 @@ export const tests = [
 
   // Registry tests
   ...registryTests,
+
+  // Parakeet transcription tests
+  ...parakeetTests,
 
   // Additional model tests
   modelSwitchLlm,
