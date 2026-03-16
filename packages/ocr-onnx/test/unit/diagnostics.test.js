@@ -18,13 +18,23 @@ class TestOCR {
     }
     this._packageName = '@qvac/ocr-onnx'
     this._packageVersion = require('../../package.json').version
+    this.addon = null
   }
 
   _getDiagnosticsJSON () {
-    return JSON.stringify({
+    const jsInfo = {
       status: this.state.destroyed ? 'destroyed' : (this.state.configLoaded ? 'loaded' : 'not_loaded'),
       params: this.params
-    })
+    }
+    if (this.addon && typeof this.addon.getDiagnostics === 'function') {
+      try {
+        const cppDiag = JSON.parse(this.addon.getDiagnostics())
+        return JSON.stringify({ ...jsInfo, native: cppDiag })
+      } catch (e) {
+        // Fall back to JS-only info
+      }
+    }
+    return JSON.stringify(jsInfo)
   }
 }
 
@@ -89,6 +99,136 @@ test('_getDiagnosticsJSON passes through all params', t => {
   const parsed = JSON.parse(ocr._getDiagnosticsJSON())
   t.alike(parsed.params.langList, ['en'], 'langList passed through')
   t.is(parsed.params.custom, 'value', 'custom params passed through')
+})
+
+test('_getDiagnosticsJSON includes native field when addon has getDiagnostics', t => {
+  const ocr = new TestOCR({ params: { langList: ['en'] } })
+
+  const mockNative = {
+    onnxRuntimeVersion: 21,
+    availableExecutionProviders: ['CPUExecutionProvider'],
+    modelPaths: { detector: '/path/to/det.onnx', recognizer: '/path/to/rec.onnx' },
+    modelLoaded: true,
+    useGPU: false,
+    pipelineMode: 'EASYOCR',
+    timeout: 120,
+    sessionOptions: {
+      recognizerBatchSize: 32,
+      decodingMethod: 'CTC',
+      magRatio: 1.5,
+      contrastRetry: false,
+      straightenPages: false
+    },
+    langList: ['en']
+  }
+
+  ocr.addon = {
+    getDiagnostics: () => JSON.stringify(mockNative)
+  }
+
+  const parsed = JSON.parse(ocr._getDiagnosticsJSON())
+  t.ok('native' in parsed, 'should include native field')
+  t.is(parsed.native.onnxRuntimeVersion, 21, 'native should contain onnxRuntimeVersion')
+  t.alike(parsed.native.availableExecutionProviders, ['CPUExecutionProvider'], 'native should contain providers')
+  t.is(parsed.native.modelPaths.detector, '/path/to/det.onnx', 'native should contain detector path')
+  t.is(parsed.native.pipelineMode, 'EASYOCR', 'native should contain pipelineMode')
+  t.is(parsed.native.sessionOptions.recognizerBatchSize, 32, 'native should contain sessionOptions')
+})
+
+test('_getDiagnosticsJSON falls back gracefully when addon has no getDiagnostics', t => {
+  const ocr = new TestOCR({ params: { langList: ['en'] } })
+
+  // addon exists but without getDiagnostics method
+  ocr.addon = {}
+
+  const parsed = JSON.parse(ocr._getDiagnosticsJSON())
+  t.absent(parsed.native, 'should not include native field when addon lacks getDiagnostics')
+  t.ok('status' in parsed, 'should still include status')
+  t.ok('params' in parsed, 'should still include params')
+})
+
+test('_getDiagnosticsJSON falls back gracefully when addon.getDiagnostics throws', t => {
+  const ocr = new TestOCR({ params: { langList: ['en'] } })
+
+  ocr.addon = {
+    getDiagnostics: () => { throw new Error('native error') }
+  }
+
+  const parsed = JSON.parse(ocr._getDiagnosticsJSON())
+  t.absent(parsed.native, 'should not include native field when getDiagnostics throws')
+  t.ok('status' in parsed, 'should still include status')
+  t.ok('params' in parsed, 'should still include params')
+})
+
+test('_getDiagnosticsJSON falls back when addon.getDiagnostics returns invalid JSON', t => {
+  const ocr = new TestOCR({ params: { langList: ['en'] } })
+
+  ocr.addon = {
+    getDiagnostics: () => 'not valid json{'
+  }
+
+  const parsed = JSON.parse(ocr._getDiagnosticsJSON())
+  t.absent(parsed.native, 'should not include native field when JSON is invalid')
+  t.ok('status' in parsed, 'should still include status')
+})
+
+test('native binding getDiagnostics returns valid diagnostics', t => {
+  let binding
+  try {
+    binding = require('../../binding')
+  } catch (e) {
+    t.comment('Native binding not available, skipping: ' + e.message)
+    return
+  }
+
+  if (typeof binding.getDiagnostics !== 'function') {
+    t.comment('binding.getDiagnostics not available, skipping')
+    return
+  }
+
+  // Create a minimal instance to call getDiagnostics on
+  let handle
+  try {
+    handle = binding.createInstance(
+      {},
+      {
+        pathDetector: '/tmp/nonexistent-det.onnx',
+        pathRecognizer: '/tmp/nonexistent-rec.onnx',
+        langList: ['en'],
+        useGPU: false,
+        timeout: 30
+      },
+      () => {},
+      null
+    )
+  } catch (e) {
+    t.comment('Could not create instance, skipping: ' + e.message)
+    return
+  }
+
+  try {
+    const result = binding.getDiagnostics(handle)
+    t.ok(typeof result === 'string', 'getDiagnostics should return a string')
+
+    const parsed = JSON.parse(result)
+    t.ok(typeof parsed.onnxRuntimeVersion === 'number', 'onnxRuntimeVersion should be a number')
+    t.ok(parsed.onnxRuntimeVersion > 0, 'onnxRuntimeVersion should be > 0')
+    t.ok(Array.isArray(parsed.availableExecutionProviders), 'availableExecutionProviders should be an array')
+    t.ok(parsed.availableExecutionProviders.length > 0, 'availableExecutionProviders should not be empty')
+    t.ok('modelPaths' in parsed, 'should have modelPaths')
+    t.ok('modelLoaded' in parsed, 'should have modelLoaded')
+    t.ok('useGPU' in parsed, 'should have useGPU')
+    t.ok('pipelineMode' in parsed, 'should have pipelineMode')
+    t.ok('timeout' in parsed, 'should have timeout')
+    t.ok('sessionOptions' in parsed, 'should have sessionOptions')
+    t.ok('langList' in parsed, 'should have langList')
+  } finally {
+    try {
+      binding.destroyInstance(handle)
+    } catch (e) {
+      // ignore cleanup errors
+    }
+  }
 })
 
 test('round-trip: registerAddon with OCR callback, generateReport shows addon', { skip: !diagnostics }, t => {

@@ -30,10 +30,19 @@ class ONNXOcr extends ONNXBase {
   }
 
   _getDiagnosticsJSON () {
-    return JSON.stringify({
+    const jsInfo = {
       status: this.state.destroyed ? 'destroyed' : (this.state.configLoaded ? 'loaded' : 'not_loaded'),
       params: this.params
-    })
+    }
+    if (this.addon && typeof this.addon.getDiagnostics === 'function') {
+      try {
+        const cppDiag = JSON.parse(this.addon.getDiagnostics())
+        return JSON.stringify({ ...jsInfo, native: cppDiag })
+      } catch (e) {
+        // Fall back to JS-only info
+      }
+    }
+    return JSON.stringify(jsInfo)
   }
 
   /**

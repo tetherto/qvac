@@ -10,6 +10,9 @@
 #include <opencv2/imgcodecs.hpp>
 #include <opencv2/imgproc.hpp>
 
+#include <onnxruntime_cxx_api.h>
+#include <qvac-onnx/OnnxRuntime.hpp>
+
 #include "AndroidLog.hpp"
 #include "qvac-lib-inference-addon-cpp/Errors.hpp"
 #include "qvac-lib-inference-addon-cpp/Logger.hpp"
@@ -49,7 +52,12 @@ Pipeline::Pipeline(
     const std::string& pathDetector, const std::string& pathRecognizer,
     std::span<const std::string> langList, bool useGPU, int timeout,
     const PipelineConfig& config)
-    : config_(config), timeout_(timeout) {
+    : config_(config),
+      pathDetector_(pathDetector),
+      pathRecognizer_(pathRecognizer),
+      langList_(langList.begin(), langList.end()),
+      useGPU_(useGPU),
+      timeout_(timeout) {
 
   std::string modeStr = (config.mode == PipelineMode::DOCTR) ? "DOCTR" : "EASYOCR";
   QLOG(qvac_lib_inference_addon_cpp::logger::Priority::INFO,
@@ -469,6 +477,96 @@ qvac_lib_inference_addon_cpp::RuntimeStats Pipeline::runtimeStats() const {
     {"recognitionTime", lastRecognitionTime},
     {"textRegionsCount", static_cast<int64_t>(lastTextRegionsCount)}
   };
+}
+
+namespace {
+
+std::string escapeJsonString(const std::string& input) {
+  std::string output;
+  output.reserve(input.size());
+  for (char ch : input) {
+    switch (ch) {
+      case '"':  output += "\\\""; break;
+      case '\\': output += "\\\\"; break;
+      case '\b': output += "\\b"; break;
+      case '\f': output += "\\f"; break;
+      case '\n': output += "\\n"; break;
+      case '\r': output += "\\r"; break;
+      case '\t': output += "\\t"; break;
+      default:   output += ch; break;
+    }
+  }
+  return output;
+}
+
+} // namespace
+
+std::string Pipeline::getDiagnostics() const {
+  std::string json = "{";
+
+  // onnxRuntimeVersion
+  json += "\"onnxRuntimeVersion\":" + std::to_string(ORT_API_VERSION);
+
+  // availableExecutionProviders
+  auto providers = onnx_addon::OnnxRuntime::getAvailableProviders();
+  json += ",\"availableExecutionProviders\":[";
+  for (size_t i = 0; i < providers.size(); i++) {
+    if (i > 0) json += ",";
+    json += "\"" + escapeJsonString(providers[i]) + "\"";
+  }
+  json += "]";
+
+  // modelPaths
+  json += ",\"modelPaths\":{";
+  json += "\"detector\":\"" + escapeJsonString(pathDetector_) + "\"";
+  json += ",\"recognizer\":\"" + escapeJsonString(pathRecognizer_) + "\"";
+  json += "}";
+
+  // modelLoaded
+  json += ",\"modelLoaded\":";
+  json += isLoaded() ? "true" : "false";
+
+  // useGPU
+  json += ",\"useGPU\":";
+  json += useGPU_ ? "true" : "false";
+
+  // pipelineMode
+  json += ",\"pipelineMode\":\"";
+  json += (config_.mode == PipelineMode::DOCTR) ? "DOCTR" : "EASYOCR";
+  json += "\"";
+
+  // timeout
+  json += ",\"timeout\":" + std::to_string(timeout_);
+
+  // sessionOptions
+  json += ",\"sessionOptions\":{";
+  json += "\"recognizerBatchSize\":" + std::to_string(config_.recognizerBatchSize);
+
+  std::string decodingStr = (config_.decodingMethod == DecodingMethod::CTC) ? "CTC" : "ATTENTION";
+  json += ",\"decodingMethod\":\"" + decodingStr + "\"";
+
+  if (config_.mode == PipelineMode::EASYOCR) {
+    json += ",\"magRatio\":" + std::to_string(config_.magRatio);
+  }
+
+  json += ",\"contrastRetry\":";
+  json += config_.contrastRetry ? "true" : "false";
+
+  json += ",\"straightenPages\":";
+  json += config_.straightenPages ? "true" : "false";
+
+  json += "}";
+
+  // langList
+  json += ",\"langList\":[";
+  for (size_t i = 0; i < langList_.size(); i++) {
+    if (i > 0) json += ",";
+    json += "\"" + escapeJsonString(langList_[i]) + "\"";
+  }
+  json += "]";
+
+  json += "}";
+  return json;
 }
 
 } // namespace qvac_lib_inference_addon_onnx_ocr_fasttext

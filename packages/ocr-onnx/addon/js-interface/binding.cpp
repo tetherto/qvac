@@ -19,6 +19,7 @@ js_value_t* qvacLibInferenceAddonOnnxOcrFasttextExports(
 
   V("createInstance", qvac_lib_inference_addon_onnx_ocr_fasttext::createInstance)
   V("runJob", qvac_lib_inference_addon_onnx_ocr_fasttext::runJob)
+  V("getDiagnostics", qvac_lib_inference_addon_onnx_ocr_fasttext::getDiagnostics)
 
   V("loadWeights", qvac_lib_inference_addon_cpp::JsInterface::loadWeights)
   V("activate", qvac_lib_inference_addon_cpp::JsInterface::activate)

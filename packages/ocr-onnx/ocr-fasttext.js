@@ -88,6 +88,10 @@ class OcrFasttextInterface {
     }
   }
 
+  getDiagnostics () {
+    return binding.getDiagnostics(this._handle)
+  }
+
   async unload () {
     return this.destroy()
   }

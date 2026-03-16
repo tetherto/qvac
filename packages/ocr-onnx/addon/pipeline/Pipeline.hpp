@@ -104,6 +104,8 @@ public:
 
   [[nodiscard]] std::string getName() const final { return "Pipeline"; }
 
+  [[nodiscard]] std::string getDiagnostics() const;
+
   void cancel() const final {
     cancelFlag_.store(true, std::memory_order_relaxed);
   }
@@ -127,6 +129,11 @@ public:
 
 private:
   PipelineConfig config_;
+
+  std::string pathDetector_;
+  std::string pathRecognizer_;
+  std::vector<std::string> langList_;
+  bool useGPU_;
 
   // EasyOCR pipeline steps (constructed when mode == EASYOCR)
   std::unique_ptr<StepDetectionInference> stepDetection_;
