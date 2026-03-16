@@ -104,6 +104,7 @@ set(CMAKE_POSITION_INDEPENDENT_CODE ON)
 
 find_path(QVAC_LIB_INFERENCE_ADDON_CPP_INCLUDE_DIRS "qvac-lib-inference-addon-cpp/JsInterface.hpp")
 find_package(OpenCV REQUIRED)
+find_package(nlohmann_json CONFIG REQUIRED)
 set(qvac-onnx_DIR "${CMAKE_CURRENT_SOURCE_DIR}/node_modules/@qvac/onnx/prebuilds/share/qvac-onnx/cmake")
 find_package(qvac-onnx CONFIG REQUIRED)
 
@@ -136,6 +137,7 @@ if((ANDROID OR (APPLE AND CMAKE_SYSTEM_NAME STREQUAL "iOS")) AND NOT MOBILE_DYNA
     PRIVATE
       ${OpenCV_LIBS}
       qvac-onnx::qvac-onnx-static
+      nlohmann_json::nlohmann_json
   )
 else()
   # Desktop and mobile (dynamic): link against @qvac/onnx.bare shared module
@@ -146,6 +148,7 @@ else()
     PRIVATE
       ${OpenCV_LIBS}
       qvac-onnx::headers
+      nlohmann_json::nlohmann_json
   )
   target_link_libraries(
     ${qvac-lib-inference-addon-onnx-ocr-fasttext}_module
@@ -234,7 +237,7 @@ if(BUILD_TESTING)
     )
     target_link_libraries(
         pipeline
-        PRIVATE ${OpenCV_LIBS} qvac-onnx::headers
+        PRIVATE ${OpenCV_LIBS} qvac-onnx::headers nlohmann_json::nlohmann_json
     )
 
     add_executable(unit_tests test/lang_test.cpp)

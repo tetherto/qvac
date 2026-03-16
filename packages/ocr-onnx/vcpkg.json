@@ -20,7 +20,8 @@
     {
       "name": "qvac-lint-cpp",
       "version>=": "1.4.4"
-    }
+    },
+    "nlohmann-json"
   ],
   "features": {
     "tests": {

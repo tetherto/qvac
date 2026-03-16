@@ -57,7 +57,8 @@
         "libxcrypt",
         "lz4",
         "zstd",
-        "gtest"
+        "gtest",
+        "nlohmann-json"
       ]
     }
   ]

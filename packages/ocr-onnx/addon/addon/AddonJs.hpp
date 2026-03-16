@@ -290,4 +290,23 @@ inline js_value_t* runJob(js_env_t* env, js_callback_info_t* info) try {
 }
 JSCATCH
 
+inline js_value_t* getDiagnostics(js_env_t* env, js_callback_info_t* info) try {
+  using namespace qvac_lib_inference_addon_cpp;
+
+  auto args = js::getArguments(env, info);
+  if (args.size() != 1) {
+    throw StatusError{general_error::InvalidArgument, "Expected 1 parameter"};
+  }
+
+  auto& instance = JsInterface::getInstance(env, args[0]);
+  auto* pipeline = dynamic_cast<Pipeline*>(&instance.addonCpp->model.get());
+  if (pipeline == nullptr) {
+    throw StatusError{general_error::InvalidArgument, "Instance is not a Pipeline"};
+  }
+
+  std::string jsonStr = pipeline->getDiagnosticsJSON();
+  return js::String::create(env, jsonStr);
+}
+JSCATCH
+
 } // namespace qvac_lib_inference_addon_onnx_ocr_fasttext

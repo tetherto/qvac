@@ -10,6 +10,8 @@
 #include <opencv2/imgcodecs.hpp>
 #include <opencv2/imgproc.hpp>
 
+#include <qvac-onnx/OnnxRuntime.hpp>
+
 #include "AndroidLog.hpp"
 #include "qvac-lib-inference-addon-cpp/Errors.hpp"
 #include "qvac-lib-inference-addon-cpp/Logger.hpp"
@@ -49,7 +51,11 @@ Pipeline::Pipeline(
     const std::string& pathDetector, const std::string& pathRecognizer,
     std::span<const std::string> langList, bool useGPU, int timeout,
     const PipelineConfig& config)
-    : config_(config), timeout_(timeout) {
+    : config_(config),
+      detectorModelPath_(pathDetector),
+      recognizerModelPath_(pathRecognizer),
+      useGPU_(useGPU),
+      timeout_(timeout) {
 
   std::string modeStr = (config.mode == PipelineMode::DOCTR) ? "DOCTR" : "EASYOCR";
   QLOG(qvac_lib_inference_addon_cpp::logger::Priority::INFO,
@@ -433,6 +439,51 @@ Pipeline::Output Pipeline::processDocTR(const cv::Mat& image, Input& input, floa
   }
 
   return recognitionOutput;
+}
+
+std::string Pipeline::getDiagnosticsJSON() const {
+  nlohmann::json diagnostics;
+
+  // ONNX Runtime version (C API)
+  diagnostics["onnxRuntimeVersion"] = OrtGetApiBase()->GetVersionString();
+
+  // Available execution providers
+  auto providers = onnx_addon::OnnxRuntime::getAvailableProviders();
+  diagnostics["availableProviders"] = providers;
+
+  // Active execution provider
+  if (useGPU_) {
+#if defined(__APPLE__)
+    diagnostics["executionProvider"] = "CoreMLExecutionProvider";
+#elif defined(_WIN32) || defined(_WIN64)
+    diagnostics["executionProvider"] = "DmlExecutionProvider";
+#elif defined(ANDROID)
+    diagnostics["executionProvider"] = "NnapiExecutionProvider";
+#else
+    diagnostics["executionProvider"] = "CUDAExecutionProvider";
+#endif
+  } else {
+    diagnostics["executionProvider"] = "CPUExecutionProvider";
+  }
+
+  // Pipeline mode
+  diagnostics["pipelineMode"] =
+      (config_.mode == PipelineMode::DOCTR) ? "DocTR" : "EasyOCR";
+
+  // Model paths
+  diagnostics["detectorModelPath"] = detectorModelPath_;
+  diagnostics["recognizerModelPath"] = recognizerModelPath_;
+
+  // Model loaded state
+  diagnostics["modelLoaded"] = isLoaded();
+
+  // Session options
+  nlohmann::json sessionOpts;
+  sessionOpts["useGPU"] = useGPU_;
+  sessionOpts["optimization"] = "EXTENDED";
+  diagnostics["sessionOptions"] = sessionOpts;
+
+  return diagnostics.dump();
 }
 
 void Pipeline::reset() {
