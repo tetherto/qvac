@@ -4,9 +4,13 @@ const test = require('brittle')
 const path = require('bare-path')
 const fs = require('bare-fs')
 const os = require('bare-os')
-const TranscriptionParakeet = require('../../index.js')
-const FakeDL = require('../mocks/loader.fake.js')
-const { ensureModel, getTestPaths, isMobile } = require('./helpers.js')
+const {
+  TranscriptionParakeet,
+  FakeDL,
+  ensureModel,
+  getTestPaths,
+  isMobile
+} = require('./helpers.js')
 
 function createLoader () {
   return new FakeDL({})

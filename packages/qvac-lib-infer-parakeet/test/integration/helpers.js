@@ -6,16 +6,29 @@ const os = require('bare-os')
 const process = require('bare-process')
 const { Readable } = require('bare-stream')
 const { spawn } = require('bare-subprocess')
-const TranscriptionParakeet = require('../../index.js')
 
 const platform = os.platform()
 const arch = os.arch()
 const isMobile = platform === 'ios' || platform === 'android'
 
+// Use computed paths so bare-pack cannot statically trace into the package
+// root (../../) which doesn't exist in the mobile test-framework layout.
+// On desktop the relative path resolves normally; on mobile the installed
+// npm package name is used instead.
+function _resolve (desktopPath, mobilePath) {
+  const p = isMobile ? mobilePath : desktopPath
+  return require(p)
+}
+
+const binding = _resolve('../../binding', '@qvac/transcription-parakeet/binding.js')
+const { ParakeetInterface } = _resolve('../../parakeet', '@qvac/transcription-parakeet/parakeet.js')
+const TranscriptionParakeet = _resolve('../../index.js', '@qvac/transcription-parakeet')
+
 let FakeDL = null
 if (!isMobile) {
   try {
-    FakeDL = require('../mocks/loader.fake.js')
+    const mockPath = '../mocks/loader.fake.js'
+    FakeDL = require(mockPath)
   } catch (e) {}
 }
 
@@ -141,8 +154,8 @@ function makePcmNoise (numSamples, amplitude = 0.3) {
  * @param {Object} [binding] - Optional binding instance (will require if not provided)
  * @returns {Object} The binding instance with logger configured
  */
-function setupJsLogger (binding = null) {
-  const actualBinding = binding || require('../../binding')
+function setupJsLogger (overrideBinding = null) {
+  const actualBinding = overrideBinding || binding
   // Logger lifecycle in integration can crash or hang when repeatedly toggled.
   // Keep release as a no-op and only enable native logging explicitly when requested.
   if (!actualBinding.__qvacReleaseLoggerPatched) {
@@ -608,6 +621,10 @@ function getNamedPathsConfig (modelType, modelDir) {
 }
 
 module.exports = {
+  binding,
+  ParakeetInterface,
+  TranscriptionParakeet,
+  FakeDL,
   detectPlatform,
   waitUntilIdle,
   runTranscription,

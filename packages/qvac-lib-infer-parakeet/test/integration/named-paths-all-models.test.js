@@ -3,11 +3,11 @@
 const test = require('brittle')
 const path = require('bare-path')
 const fs = require('bare-fs')
-const binding = require('../../binding')
-const { ParakeetInterface } = require('../../parakeet')
-const TranscriptionParakeet = require('../../index.js')
-const FakeDL = require('../mocks/loader.fake.js')
 const {
+  binding,
+  ParakeetInterface,
+  TranscriptionParakeet,
+  FakeDL,
   setupJsLogger,
   getTestPaths,
   ensureModel,
