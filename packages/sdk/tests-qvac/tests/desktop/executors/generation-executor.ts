@@ -7,16 +7,15 @@ import {
   type TestResult,
   type Expectation,
 } from "@tetherto/qvac-test-suite";
+import { AbstractModelExecutor } from "../../shared/executors/abstract-model-executor.js";
 import { generationTests } from "../../generation-tests.js";
-import { ModelManager } from "../model-manager.js";
 
-export class GenerationExecutor {
+export class GenerationExecutor extends AbstractModelExecutor<typeof generationTests> {
   pattern = /^generation-/;
 
-  // Most tests use the generic handler
-  handlers = Object.fromEntries(
-    generationTests.map((test) => [test.testId, this.generic]),
-  );
+  protected handlers = Object.fromEntries(
+    generationTests.map((test) => [test.testId, this.generic.bind(this)]),
+  ) as never;
 
   async execute(
     testId: string,
@@ -24,7 +23,6 @@ export class GenerationExecutor {
     params: unknown,
     expectation: unknown,
   ): Promise<TestResult> {
-    // Route custom tests to dedicated methods
     if (testId === "generation-seed-reproducibility") {
       return await this.seedReproducibility(params, expectation);
     }
@@ -35,14 +33,9 @@ export class GenerationExecutor {
       return await this.statsPresent(params, expectation);
     }
 
-    const handler = this.handlers[testId];
+    const handler = (this.handlers as Record<string, (params: unknown, expectation: unknown) => Promise<TestResult>>)[testId];
     if (handler) {
-      return await (
-        handler as (
-          params: unknown,
-          expectation: unknown,
-        ) => Promise<TestResult>
-      ).call(this, params, expectation);
+      return await handler.call(this, params, expectation);
     }
     return { passed: false, output: `Unknown test: ${testId}` };
   }
@@ -84,7 +77,7 @@ export class GenerationExecutor {
 
   async generic(params: unknown, expectation: unknown): Promise<TestResult> {
     const p = params as Record<string, unknown>;
-    const modelId = await ModelManager.getDiffusionModel();
+    const modelId = await this.resources.ensureLoaded("diffusion");
 
     try {
       const genParams = this.buildParams(modelId, p);
@@ -119,7 +112,7 @@ export class GenerationExecutor {
     _expectation: unknown,
   ): Promise<TestResult> {
     const p = params as Record<string, unknown>;
-    const modelId = await ModelManager.getDiffusionModel();
+    const modelId = await this.resources.ensureLoaded("diffusion");
 
     try {
       const genParams = this.buildParams(modelId, p);
@@ -159,7 +152,7 @@ export class GenerationExecutor {
     _expectation: unknown,
   ): Promise<TestResult> {
     const p = params as Record<string, unknown>;
-    const modelId = await ModelManager.getDiffusionModel();
+    const modelId = await this.resources.ensureLoaded("diffusion");
 
     try {
       const genParams = this.buildParams(modelId, { ...p, stream: true });
@@ -192,7 +185,7 @@ export class GenerationExecutor {
     _expectation: unknown,
   ): Promise<TestResult> {
     const p = params as Record<string, unknown>;
-    const modelId = await ModelManager.getDiffusionModel();
+    const modelId = await this.resources.ensureLoaded("diffusion");
 
     try {
       const genParams = this.buildParams(modelId, p);
