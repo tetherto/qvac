@@ -122,27 +122,57 @@ inline OnnxSession::OnnxSession(const std::string& modelPath,
   auto& env = OnnxRuntime::instance().env();
   Ort::SessionOptions sessionOptions = buildSessionOptions(config);
 
-  // Create the session. If XNNPACK is enabled and session creation fails
-  // (e.g. due to com.ms.internal.nhwc schema issues in certain models),
-  // retry without XNNPACK as a plain CPU fallback.
+  // Create the session with fallback chain:
+  //   1. Try with requested config (may include GPU EP + XNNPACK)
+  //   2. If XNNPACK enabled and init fails, retry without XNNPACK
+  //   3. If a non-CPU provider was requested and init fails, retry CPU-only
   try {
     session_ = createOrtSession(env, modelPath, sessionOptions);
   } catch (const Ort::Exception& e) {
-    if (!config.enableXnnpack) {
+    bool retried = false;
+
+    // Retry without XNNPACK (e.g. NHWC schema conflicts)
+    if (config.enableXnnpack) {
+      QLOG(logger::Priority::WARNING,
+           std::string("[OnnxSession] Session init failed: ") + e.what() +
+           ", retrying without XNNPACK");
+      ONNX_ALOG("[OnnxSession] Session init failed: %s, retrying without XNNPACK", e.what());
+      try {
+        SessionConfig fallbackConfig = config;
+        fallbackConfig.enableXnnpack = false;
+        session_ = createOrtSession(
+            env, modelPath, buildSessionOptions(fallbackConfig));
+        retried = true;
+        QLOG(logger::Priority::INFO, "[OnnxSession] Session created without XNNPACK");
+        ONNX_ALOG("[OnnxSession] Session created without XNNPACK");
+      } catch (const Ort::Exception&) {
+        // Fall through to CPU-only retry below
+      }
+    }
+
+    // Retry with CPU-only (e.g. DirectML OOM on machines without a real GPU)
+    if (!retried && config.provider != ExecutionProvider::CPU) {
+      QLOG(logger::Priority::WARNING,
+           std::string("[OnnxSession] Session init failed: ") + e.what() +
+           ", retrying with CPU-only");
+      ONNX_ALOG("[OnnxSession] Session init failed: %s, retrying with CPU-only", e.what());
+      try {
+        SessionConfig cpuConfig = config;
+        cpuConfig.provider = ExecutionProvider::CPU;
+        cpuConfig.enableXnnpack = false;
+        session_ = createOrtSession(
+            env, modelPath, buildSessionOptions(cpuConfig));
+        retried = true;
+        QLOG(logger::Priority::INFO, "[OnnxSession] Session created with CPU fallback");
+        ONNX_ALOG("[OnnxSession] Session created with CPU fallback");
+      } catch (const Ort::Exception&) {
+        // All retries exhausted
+      }
+    }
+
+    if (!retried) {
       throw;
     }
-    QLOG(logger::Priority::WARNING,
-         std::string("[OnnxSession] XNNPACK session failed: ") + e.what() +
-         ", retrying without XNNPACK");
-    ONNX_ALOG("[OnnxSession] XNNPACK session failed: %s, retrying without XNNPACK", e.what());
-
-    SessionConfig fallbackConfig = config;
-    fallbackConfig.enableXnnpack = false;
-    session_ = createOrtSession(
-        env, modelPath, buildSessionOptions(fallbackConfig));
-
-    QLOG(logger::Priority::INFO, "[OnnxSession] Session created with CPU fallback (no XNNPACK)");
-    ONNX_ALOG("[OnnxSession] Session created with CPU fallback (no XNNPACK)");
   }
 
   // Cache input/output names
