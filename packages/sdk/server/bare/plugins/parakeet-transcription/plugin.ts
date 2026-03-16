@@ -18,7 +18,7 @@ import {
   type ResolveContext,
   type ResolveResult,
 } from "@/schemas";
-import { ADDON_NAMESPACES, createStreamLogger } from "@/logging";
+import { createStreamLogger, registerAddonLogger } from "@/logging";
 import { parseModelPath } from "@/server/utils";
 import {
   ModelLoadFailedError,
@@ -169,7 +169,8 @@ function createParakeetModel(
 
   const { dirPath } = parseModelPath(primaryPath);
   const loader = new FilesystemDL({ dirPath });
-  const logger = createStreamLogger(params.modelId, "parakeet");
+  const logger = createStreamLogger(modelId, ModelType.parakeetTranscription);
+  registerAddonLogger(modelId, ModelType.parakeetTranscription, logger);
 
   const addonConfig: TranscriptionParakeetConfig = {
     path: dirPath,
@@ -256,6 +257,6 @@ export const parakeetPlugin = definePlugin({
 
   logging: {
     module: parakeetAddonLogging,
-    namespace: ADDON_NAMESPACES.PARAKEET,
+    namespace: ModelType.parakeetTranscription,
   },
 });

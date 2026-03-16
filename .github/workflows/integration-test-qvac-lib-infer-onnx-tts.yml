@@ -53,7 +53,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        variant: [fp32, fp16]
+        variant: [fp32, fp16, q4, q4f16]
         os:
           - ubuntu-22.04
           - ubuntu-24.04
@@ -64,6 +64,10 @@ jobs:
         exclude:
           - os: ubuntu-24.04-arm
             variant: fp16
+          - os: ubuntu-24.04-arm
+            variant: q4
+          - os: ubuntu-24.04-arm
+            variant: q4f16
         include:
           - os: ubuntu-22.04
             platform: linux
@@ -80,12 +84,15 @@ jobs:
           - os: macos-14-xlarge
             platform: darwin
             arch: arm64
+            os_version: u14
           - os: macos-15-large
             platform: darwin
             arch: x64
+            os_version: u15
           - os: windows-2022
             platform: win32
             arch: x64
+            os_version: w22
 
     steps:
       - name: Setup Node.js
