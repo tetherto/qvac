@@ -1,5 +1,15 @@
 # Changelog
 
+## [0.2.1]
+
+Release Date: 2026-03-16
+
+### 🐛 Fixed
+
+- Add bulk block prefetch (`core.download()`) before `blobs.createReadStream()` to restore download throughput lost in the migration from Hyperdrive to the registry — benchmarked at ~2.4x faster (#835)
+- Clear downloaded blob blocks from corestore after successful download using `core.clear()` + `core.compact()` to reclaim disk space — prevents the `registry-corestore` folder from growing indefinitely (#835)
+- Switch stream cleanup from `'close'` to `'end'` event so corestore cleanup triggers automatically when the consumer finishes reading, without requiring explicit `stream.destroy()` (#835)
+
 ## [0.2.0]
 
 Release Date: 2026-02-26
