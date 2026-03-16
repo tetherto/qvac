@@ -3,12 +3,6 @@
 #include <filesystem>
 #include <string>
 
-#include <cstdlib>
-
-#ifdef __GLIBC__
-#include <stdlib.h> // on_exit (GNU/glibc extension)
-#endif
-
 #include <llama.h>
 
 #include "LlamaModel.hpp"
@@ -60,23 +54,6 @@ bool LlamaLazyInitializeBackend::initialize(const std::string& backendsDir) {
   }
 
   llama_backend_init();
-
-  // Dynamically-loaded GPU backend libraries (Vulkan, Metal, etc.) register
-  // static destructors that can SIGSEGV during process exit when they
-  // reference the ggml backend registry after it has been partially
-  // destroyed. Skip static destructors by calling _Exit() at process exit.
-  // The OS reclaims all process resources on exit.
-#ifdef __GLIBC__
-  // on_exit() (GNU/glibc) preserves the original exit status.
-  // NOLINTNEXTLINE(cppcoreguidelines-pro-type-cstyle-cast)
-  on_exit([](int status, void*) { _Exit(status); }, nullptr);
-#else
-  // std::atexit does not receive the exit status, so we use _Exit(0).
-  // This is acceptable: on non-Linux the crash is intermittent and rare,
-  // and test failures surface via other mechanisms (assertions, exceptions)
-  // before atexit handlers run.
-  std::atexit([]() { _Exit(0); });
-#endif
 
   g_initialized = true;
   return true;
