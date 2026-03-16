@@ -42,6 +42,28 @@ class TestOCR {
   }
 }
 
+// Extended test class that also simulates the lifecycle registration behaviour
+// added in index.js: auto-register on load, auto-unregister on unload.
+class TestOCRWithLifecycle extends TestOCR {
+  async simulateLoad () {
+    this.state.configLoaded = true
+    if (diagnostics) {
+      diagnostics.registerAddon({
+        name: this._packageName,
+        version: this._packageVersion,
+        getDiagnostics: () => this._getDiagnosticsJSON()
+      })
+    }
+  }
+
+  async simulateUnload () {
+    this.addon = null
+    if (diagnostics) {
+      diagnostics.unregisterAddon(this._packageName)
+    }
+  }
+}
+
 test('ONNXOcr constructor sets _packageName', t => {
   const ocr = new TestOCR({ params: { langList: ['en'] } })
   t.is(ocr._packageName, '@qvac/ocr-onnx', '_packageName should be @qvac/ocr-onnx')
@@ -285,6 +307,39 @@ test('integration: generateReport after unregister does not include ocr-onnx', {
   const report = diagnostics.generateReport({ app: { name: 'test', version: '1.0.0' } })
   const ocrEntry = report.addons.find(a => a.name === '@qvac/ocr-onnx')
   t.absent(ocrEntry, 'ocr-onnx addon should not appear after unregister')
+
+  diagnostics.reset()
+})
+
+test('lifecycle: auto-registers on load, addon appears in report', { skip: !diagnostics }, async t => {
+  diagnostics.reset()
+
+  const ocr = new TestOCRWithLifecycle({ params: { langList: ['en'], useGPU: false } })
+  await ocr.simulateLoad()
+
+  const report = diagnostics.generateReport({ app: { name: 'test', version: '1.0.0' } })
+  const ocrEntry = report.addons.find(a => a.name === '@qvac/ocr-onnx')
+  t.ok(ocrEntry, 'ocr-onnx should appear in report after load')
+  t.ok(typeof ocrEntry.diagnostics === 'string', 'diagnostics is a string')
+
+  const diag = JSON.parse(ocrEntry.diagnostics)
+  t.ok(typeof diag.onnxRuntimeVersion === 'string', 'onnxRuntimeVersion is a string')
+  t.ok(typeof diag.modelLoaded === 'boolean', 'modelLoaded is a boolean')
+  t.ok(Array.isArray(diag.supportedFormats), 'supportedFormats is an array')
+
+  diagnostics.reset()
+})
+
+test('lifecycle: auto-unregisters on unload, addon absent from report', { skip: !diagnostics }, async t => {
+  diagnostics.reset()
+
+  const ocr = new TestOCRWithLifecycle({ params: { langList: ['en'], useGPU: false } })
+  await ocr.simulateLoad()
+  await ocr.simulateUnload()
+
+  const report = diagnostics.generateReport({ app: { name: 'test', version: '1.0.0' } })
+  const ocrEntry = report.addons.find(a => a.name === '@qvac/ocr-onnx')
+  t.absent(ocrEntry, 'ocr-onnx should not appear in report after unload')
 
   diagnostics.reset()
 })

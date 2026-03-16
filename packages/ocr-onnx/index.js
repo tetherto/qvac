@@ -10,6 +10,9 @@ const binding = require('./binding')
 const addonLogging = require('./addonLogging')
 const addon = require.addon.resolve('.')
 
+let diagnostics
+try { diagnostics = require('@qvac/diagnostics') } catch (e) { diagnostics = null }
+
 /**
  * ONNX client implementation for OCR model
  */
@@ -128,6 +131,14 @@ class ONNXOcr extends ONNXBase {
 
     this.addon = this._createAddon(OcrFasttextInterface, onnxOcrParams, this._addonOutputCallback.bind(this), console.log)
     await this.addon.activate()
+
+    if (diagnostics) {
+      diagnostics.registerAddon({
+        name: this._packageName,
+        version: this._packageVersion,
+        getDiagnostics: () => this._getDiagnosticsJSON()
+      })
+    }
   }
 
   _addonOutputCallback (addon, event, data, error) {
@@ -153,6 +164,9 @@ class ONNXOcr extends ONNXBase {
     if (this.addon) {
       await this.addon.destroy()
       this.addon = null
+    }
+    if (diagnostics) {
+      diagnostics.unregisterAddon(this._packageName)
     }
   }
 
