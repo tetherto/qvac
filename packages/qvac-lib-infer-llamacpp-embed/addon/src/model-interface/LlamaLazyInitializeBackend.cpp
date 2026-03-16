@@ -3,6 +3,10 @@
 #include <filesystem>
 #include <string>
 
+#ifdef __linux__
+#include <stdlib.h> // on_exit (GNU/glibc extension)
+#endif
+
 #include <llama.h>
 
 #include "logging.hpp"
@@ -54,6 +58,18 @@ bool LlamaLazyInitializeBackend::initialize(const std::string& backendsDir) {
   }
 
   llama_backend_init();
+
+#ifdef __linux__
+  // Dynamically-loaded GPU backend libraries (especially Vulkan) register
+  // static destructors that can SIGSEGV during process exit when they
+  // reference the ggml backend registry after it has been partially
+  // destroyed. Skip static destructors by calling _Exit() with the
+  // original exit status. The OS reclaims all process resources on exit.
+  // on_exit() is a GNU/glibc extension available on Linux.
+  // NOLINTNEXTLINE(cppcoreguidelines-pro-type-cstyle-cast)
+  on_exit([](int status, void*) { _Exit(status); }, nullptr);
+#endif
+
   g_initialized = true;
   return true;
 }
