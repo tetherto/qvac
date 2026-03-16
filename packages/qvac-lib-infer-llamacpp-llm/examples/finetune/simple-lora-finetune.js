@@ -1,6 +1,6 @@
 'use strict'
 
-const LlmLlamacpp = require('../index.js')
+const LlmLlamacpp = require('../../index.js')
 const FilesystemDL = require('@qvac/dl-filesystem')
 const fs = require('bare-fs')
 const path = require('bare-path')
