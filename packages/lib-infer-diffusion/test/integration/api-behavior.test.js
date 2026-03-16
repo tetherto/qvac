@@ -13,8 +13,10 @@ const {
 const isDarwinX64 = os.platform() === 'darwin' && os.arch() === 'x64'
 const isLinuxArm64 = os.platform() === 'linux' && os.arch() === 'arm64'
 const isAndroid = os.platform() === 'android'
+const isMobile = os.platform() === 'ios' || isAndroid
 const noGpu = proc.env && proc.env.NO_GPU === 'true'
 const useCpu = isDarwinX64 || isLinuxArm64 || noGpu
+const skip = noGpu && !isMobile
 
 // Smallest model for fast behavior tests
 const MODEL = {
@@ -74,7 +76,7 @@ async function setupModel (t) {
   return { model }
 }
 
-test('idle | run: allowed, returns QvacResponse', { timeout: 600000 }, async t => {
+test('idle | run: allowed, returns QvacResponse', { timeout: 600000, skip }, async t => {
   const { model } = await setupModel(t)
   const response = await model.run(SHORT_PARAMS)
   t.ok(response, 'run() returns a response')
@@ -89,13 +91,13 @@ test('idle | run: allowed, returns QvacResponse', { timeout: 600000 }, async t =
   t.ok(images.length > 0, 'run produces at least one image')
 })
 
-test('idle | cancel: allowed, no-op', { timeout: 600000 }, async t => {
+test('idle | cancel: allowed, no-op', { timeout: 600000, skip }, async t => {
   const { model } = await setupModel(t)
   await model.cancel()
   t.pass('cancel when idle does not throw')
 })
 
-test('run | cancel: cancels current job', { timeout: 600000 }, async t => {
+test('run | cancel: cancels current job', { timeout: 600000, skip }, async t => {
   const { model } = await setupModel(t)
   const response = await model.run(LONG_PARAMS)
 
@@ -118,7 +120,7 @@ test('run | cancel: cancels current job', { timeout: 600000 }, async t => {
   t.pass('cancel during run resolves and stops job')
 })
 
-test('run | run: second run() throws busy error', { timeout: 600000 }, async t => {
+test('run | run: second run() throws busy error', { timeout: 600000, skip }, async t => {
   const { model } = await setupModel(t)
   const firstResponse = await model.run(SHORT_PARAMS)
   let firstError = null
@@ -155,7 +157,7 @@ test('run | run: second run() throws busy error', { timeout: 600000 }, async t =
   t.ok(!firstError, 'first response did not fail')
 })
 
-test('cancel | run: can run again after cancel', { timeout: 600000 }, async t => {
+test('cancel | run: can run again after cancel', { timeout: 600000, skip }, async t => {
   const { model } = await setupModel(t)
 
   // Start a job and cancel after first progress tick
