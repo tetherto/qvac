@@ -1,32 +1,26 @@
 ---
 title: "getModelBySrc( )"
 titleStyle: code
-description: Retrieves a model constant from the built-in registry by its model ID and blob core key.
+description: "No description available"
 ---
 
-
-```ts
-function getModelBySrc(modelId: string, blobCoreKey: string): RegistryItem | undefined;
+```typescript
+function getModelBySrc(modelId: string, blobCoreKey: string): RegistryItem | —
 ```
+
+## Description
+
+No description available
 
 ## Parameters
 
 | Name | Type | Required? | Description |
 | --- | --- | :---: | --- |
-| modelId | `string` | ✓ | The unique model identifier |
-| blobCoreKey | `string` | ✓ | The Hyperdrive blob core key |
+| `modelId` | `string` | ✓ | No description |
+| `blobCoreKey` | `string` | ✓ | No description |
 
 ## Returns
 
-[`RegistryItem`](/sdk/api/getModelByName#registryitem) ` | undefined` — The matching model constant, or `undefined` if not found. See [`getModelByName()`](/sdk/api/getModelByName#registryitem) for the full `RegistryItem` shape.
-
-## Example
-
 ```typescript
-import { getModelBySrc } from "@qvac/sdk";
-
-const model = getModelBySrc("model-abc123", "blob-core-key-hex");
-if (model) {
-  console.log(model.name, model.expectedSize);
-}
+RegistryItem | —
 ```

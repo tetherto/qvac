@@ -1,0 +1,53 @@
+---
+title: OCR
+description: Optical character recognition (OCR) for extracting text from images.
+---
+
+## Overview
+
+OCR uses **ONNX runtime** as the inference engine. It runs a two-stage pipeline and requires compatible models for both stages:
+* **Text detection**: locate text regions in an image
+* **Text recognition**: decode characters in detected regions
+
+Load supported models using `modelType: "ocr"`. Then, provide an image as either a file path (string) or an in-memory buffer. Each OCR block contains extracted text and may include `bbox` (bounding box coordinates) and `confidence` (recognition score).
+
+## Functions
+
+Use the following sequence of function calls:
+1. [`loadModel()`](/v0.7.0/sdk/api/loadModel)
+2. [`ocr()`](/v0.7.0/sdk/api/ocr)
+3. [`unloadModel()`](/v0.7.0/sdk/api/unloadModel)
+
+For how to use each function, see [SDK — API reference](/v0.7.0/sdk/api/).
+
+## Models
+
+You can load any ONNX Runtime-compatible OCR pipeline. Required files: `detector_craft.onnx` + `recognizer_<lang>.onnx` (file format: `*.onnx`).
+
+For models available as constants, see [SDK — Models](/v0.7.0/sdk#models).
+
+## Example
+
+The following script shows an example of OCR:
+
+<Tabs>
+<Tab value="js" label="JavaScript" default>
+<WrapCode>
+
+```js file=<rootDir>/packages/sdk/dist/examples/ocr-fasttext.js title="ocr.js" lineNumbers
+```
+</WrapCode>
+</Tab>
+
+<Tab value="ts" label="TypeScript">
+<WrapCode>
+
+```ts file=<rootDir>/packages/sdk/examples/ocr-fasttext.ts title="ocr.ts" lineNumbers
+```
+</WrapCode>
+</Tab>
+</Tabs>
+
+<Callout type="success">
+**Tip:** all examples throughout this documentation are self-contained and runnable. For instructions on how to run them, see [SDK quickstart](/v0.7.0/sdk/quickstart).
+</Callout>

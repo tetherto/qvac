@@ -1,0 +1,167 @@
+---
+title: Configuration
+description: Use qvac.config.* to configure the SDK's overall behavior.
+---
+
+## Overview
+
+SDK configuration is loaded once during initialization from `qvac.config.*` file — `qvac.config.json`, `qvac.config.js`, or `qvac.config.ts` — and remains immutable for the lifetime of the SDK instance.
+
+_Providing the configuration file is **not required**._ If you don't, the SDK still works using the defaults.
+
+## Usage
+
+The SDK initializes lazily on first use, either when you call `loadModel()` or any AI task function. Its life cycle ends when you call `close()`.
+
+To provide configuration, either set the `QVAC_CONFIG_PATH` environment variable or place a `qvac.config.*` file at the root of your project.
+
+## Examples
+
+Below are examples of `qvac.config.*` files. Values marked with `<placeholders>` should be replaced with your actual values.
+
+<Tabs>
+<Tab value="json" label="JSON" default>
+<WrapCode>
+```json title="qvac.config.json" lineNumbers
+{
+  "plugins": ["<builtin_plugin_1>", "<custom_plugin_2>"],
+  "loggerConsoleOutput": true,
+  "loggerLevel": "info",
+  "swarmRelays": ["<hyperbee_key_1>", "<hyperbee_key_2>"],
+  "cacheDirectory": "</absolute/path/to/.qvac/models>",
+  "httpDownloadConcurrency": 3,
+  "httpConnectionTimeoutMs": 10000,
+  "deviceDefaults": [
+    {
+      "name": "Samsung Galaxy force CPU",
+      "match": { "platform": "android", "deviceBrand": "samsung" },
+      "defaults": { "llm": { "device": "cpu" } }
+    }
+  ]
+  "httpConnectionTimeoutMs": 10000,
+  "deviceDefaults": [
+    {
+      "name": "Samsung Galaxy force CPU",
+      "match": { "platform": "android", "deviceBrand": "samsung" },
+      "defaults": { "llm": { "device": "cpu" } }
+    }
+  ]
+}
+```
+</WrapCode>
+</Tab>
+
+<Tab value="js" label="JavaScript">
+<WrapCode>
+```js title="qvac.config.js" lineNumbers
+module.exports = {
+  plugins: ["<builtin_plugin_1>", "<custom_plugin_2>"],
+  loggerConsoleOutput: true,
+  loggerLevel: "info",
+  swarmRelays: ["<hyperbee_key_1>", "<hyperbee_key_2>"],
+  cacheDirectory: "</absolute/path/to/.qvac/models>",
+  httpDownloadConcurrency: 3,
+  httpConnectionTimeoutMs: 10000,
+  deviceDefaults: [
+    {
+      name: "Samsung Galaxy force CPU",
+      match: { platform: "android", deviceBrand: "samsung" },
+      defaults: { llm: { device: "cpu" } },
+    },
+  ],
+  deviceDefaults: [
+    {
+      name: "Samsung Galaxy force CPU",
+      match: { platform: "android", deviceBrand: "samsung" },
+      defaults: { llm: { device: "cpu" } },
+    },
+  ],
+};
+```
+</WrapCode>
+</Tab>
+
+<Tab value="ts" label="TypeScript">
+<WrapCode>
+
+```ts title="qvac.config.ts" lineNumbers
+import type { QvacConfig } from "@qvac/sdk";
+
+const config: QvacConfig = {
+  plugins: ["<builtin_plugin_1>", "<custom_plugin_2>"],
+  loggerConsoleOutput: true,
+  loggerLevel: "info",
+  swarmRelays: ["<hyperbee_key_1>", "<hyperbee_key_2>"],
+  cacheDirectory: "</absolute/path/to/.qvac/models>",
+  httpDownloadConcurrency: 3,
+  httpConnectionTimeoutMs: 10000,
+  deviceDefaults: [
+    {
+      name: "Samsung Galaxy force CPU",
+      match: { platform: "android", deviceBrand: "samsung" },
+      defaults: { llm: { device: "cpu" } },
+    },
+  ],
+  deviceDefaults: [
+    {
+      name: "Samsung Galaxy force CPU",
+      match: { platform: "android", deviceBrand: "samsung" },
+      defaults: { llm: { device: "cpu" } },
+    },
+  ],
+};
+
+export default config;
+```
+</WrapCode>
+</Tab>
+</Tabs>
+
+## Options
+
+The following table lists all supported configuration options for `qvac.config.*`:
+
+| Option | Description | Type | Required | Default |
+| --- | --- | --- | --- | --- |
+| [`plugins`](/v0.7.0/sdk/utilities/plugin-system) | Plugin specifiers to bundle (built-in and/or custom). | `string[]` | No | [All built-in plugins](/v0.7.0/sdk/utilities/plugin-system#built-in) |
+| `loggerConsoleOutput` | Enable or disable console output for SDK loggers. | `boolean` | No | `true` |
+| `loggerLevel` | Global log level for all SDK loggers. | `"error" \| "warn" \| "info" \| "debug"` | No | `"info"` |
+| `swarmRelays` | Hyperswarm relay public keys (hex strings) for improved P2P connectivity (blind relays). | `string[]` | No | — |
+| `cacheDirectory` | Absolute path to the directory where models and other cached assets are stored. | `string` | No | `~/.qvac/models` |
+| `httpDownloadConcurrency` | Maximum number of concurrent HTTP downloads for sharded models. | `number` | No | `3` |
+| `httpConnectionTimeoutMs` | Timeout in milliseconds for HTTP connection establishment (applies to HEAD and GET requests). | `number` | No | `10000` |
+| `deviceDefaults` | Override loaded model config for specific devices. First matching pattern wins. Use it to optimize for different hardware. | [`DevicePattern[]`](#devicepattern) | No | — |
+
+### `DevicePattern`
+
+| Field | Description | Type | Required |
+| --- | --- | --- | --- |
+| `name` | Human-readable label for this pattern (used in logs). | `string` | Yes |
+| `match` | Which device(s) to target. All specified fields must match. | [`DeviceMatch`](#devicematch) | Yes |
+| `defaults` | Model config overrides to apply when matched. | [`DeviceConfigDefaults`](#deviceconfigdefaults) | Yes |
+
+#### `DeviceMatch`
+
+| Field | Description | Type | Required |
+| --- | --- | --- | --- |
+| `platform` | Target platform. | `"android" \| "ios"` | Yes |
+| `deviceBrand` | Case-insensitive exact brand (e.g., `"samsung"`, `"google"`). | `string` | No |
+| `deviceModelPrefix` | Case-sensitive prefix match on the device model (e.g., `"Pixel 10"` matches `"Pixel 10 Pro"`). | `string` | No |
+| `deviceModelContains` | Substring match on the device model (e.g., `"Galaxy"` matches `"Samsung Galaxy S25"`). | `string` | No |
+
+#### `DeviceConfigDefaults`
+
+Maps each model-type key to a model config object. For example (inside `DevicePattern.defaults`):
+
+```json
+{
+  "llm": { "device": "cpu", "ctx_size": 1024 },
+  "embeddings": { "device": "cpu", "flashAttention": "off" }
+}
+```
+
+Model types (allowed keys): `llm` | `embeddings` | `whisper` | `nmt` | `tts` | `ocr`
+
+<Callout type="info">
+**Important:** for the exact config fields supported by each model type (key), see [`modelConfig` — `loadModel()` at `@qvac/sdk` API reference](/v0.7.0/sdk/api/loadModel/#modelconfig-varies-by-model-type).
+</Callout>
