@@ -3,7 +3,7 @@ import fs from "fs";
 import path from "path";
 
 const modelSrc = process.argv[2] || FLUX_2_KLEIN_4B_Q4_0;
-const inputImagePath = process.argv[3] || path.resolve(import.meta.dirname, "image/test.jpg");
+const inputImagePath = process.argv[3] || path.resolve("examples/image/test.jpg");
 
 if (!fs.existsSync(inputImagePath)) {
   console.error(`Input image not found: ${inputImagePath}`);
