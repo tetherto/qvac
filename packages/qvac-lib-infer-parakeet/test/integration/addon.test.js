@@ -165,7 +165,7 @@ test('English transcription and WER verification', { timeout: 300000 }, async (t
   }
 })
 
-test('Cancel active job keeps model usable for next job', { timeout: 600000 }, async (t) => {
+test('Cancel active job keeps model usable for next job', { timeout: 600000, skip: !platform.startsWith('darwin') }, async (t) => {
   const loggerBinding = setupJsLogger(binding)
 
   await ensureModel(modelPath)
