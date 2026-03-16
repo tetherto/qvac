@@ -1,35 +1,24 @@
-import { loadModel, unloadModel, generation } from "@qvac/sdk";
+import { loadModel, unloadModel, generation, FLUX_2_KLEIN_4B_Q4_0, FLUX_2_KLEIN_4B_VAE, QWEN3_4B_Q4_K_M } from "@qvac/sdk";
 import fs from "fs";
 import path from "path";
 
-// FLUX.2 [klein] uses a split-layout: separate diffusion model + LLM text encoder
-const diffusionModelPath = process.argv[2];
-const llmModelPath = process.argv[3];
-
-if (!diffusionModelPath || !llmModelPath) {
-  console.error(
-    "Usage: bun run examples/diffusion-flux2-klein.ts <diffusion-gguf> <llm-gguf> [vae-path] [prompt] [output-dir]",
-  );
-  process.exit(1);
-}
-
-const vaePath = process.argv[4] || undefined;
+// FLUX.2 [klein] uses a split-layout: separate diffusion model + LLM text encoder + VAE
+const diffusionModelSrc = process.argv[2] || FLUX_2_KLEIN_4B_Q4_0;
+const llmModelSrc = process.argv[3] || QWEN3_4B_Q4_K_M;
+const vaeModelSrc = process.argv[4] || FLUX_2_KLEIN_4B_VAE;
 const prompt = process.argv[5] || "a futuristic city at sunset, photorealistic";
 const outputDir = process.argv[6] || ".";
 
 console.log("Loading FLUX.2 [klein] split-layout model...");
-console.log(`  Diffusion: ${diffusionModelPath}`);
-console.log(`  LLM encoder: ${llmModelPath}`);
-if (vaePath) console.log(`  VAE: ${vaePath}`);
 
 const modelId = await loadModel({
-  modelSrc: diffusionModelPath,
+  modelSrc: diffusionModelSrc,
   modelType: "diffusion",
   modelConfig: {
-    device: "cpu",
+    device: "gpu",
     threads: 4,
-    llmModelSrc: llmModelPath,
-    ...(vaePath ? { vaeModelSrc: vaePath } : {}),
+    llmModelSrc,
+    vaeModelSrc,
   },
   onProgress: (p) => console.log(`Loading: ${p.percentage.toFixed(1)}%`),
 });
