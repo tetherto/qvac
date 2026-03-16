@@ -306,7 +306,7 @@ export async function createDuplexSession(payload: string) {
   const audioInput = new PassThrough();
   const textOutput = new PassThrough();
 
-  (async () => {
+  void (async () => {
     try {
       for await (const response of handler(request, audioInput)) {
         textOutput.write(JSON.stringify(response) + "\n", "utf-8");

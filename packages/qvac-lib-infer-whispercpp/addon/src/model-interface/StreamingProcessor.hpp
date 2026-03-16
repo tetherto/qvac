@@ -19,11 +19,14 @@ class StreamingProcessor {
 public:
   struct Config {
     int sampleRate = 16000;
-    float energyThreshold = 0.005F;
-    int minSilenceSamples = 8000;   // 500ms at 16kHz
-    int minSpeechSamples = 4000;    // 250ms at 16kHz
-    int maxBufferSamples = 480000;  // 30s at 16kHz
-    int energyWindowSamples = 1600; // 100ms RMS window
+    float energyThreshold = 0.02F;
+    int minSilenceSamples = 8000;    // 500ms at 16kHz
+    int minSpeechSamples = 4000;     // 250ms at 16kHz
+    int maxBufferSamples = 480000;   // 30s at 16kHz
+    int energyWindowSamples = 1600;  // 100ms RMS window
+    int calibrationSamples = 32000;  // 2s noise-floor calibration
+    float speechMultiplier = 3.0F;   // threshold = noiseFloor * this
+    float maxThreshold = 0.10F;      // safety cap
   };
 
   StreamingProcessor(
@@ -43,8 +46,9 @@ public:
 
 private:
   void processLoop();
-  bool shouldProcess() const;
+  bool shouldProcessLocked() const;
   void processCurrentBuffer();
+  void finalizeCalibration();
   static float computeEnergy(const float* data, int n);
 
   model::IModel& model_;
@@ -59,6 +63,11 @@ private:
 
   bool inSpeech_ = false;
   int silenceSamples_ = 0;
+
+  int calibrationRemaining_;
+  bool calibrated_ = false;
+  float activeThreshold_;
+  std::vector<float> calibrationEnergies_;
 
   std::thread thread_;
 };

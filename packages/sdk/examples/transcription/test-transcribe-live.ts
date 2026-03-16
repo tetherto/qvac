@@ -2,6 +2,8 @@
  * Test script: pipes a WAV file through transcribeLive to verify
  * the bidirectional streaming + addon processing works end-to-end.
  *
+ * Usage: bun run examples/transcription/test-transcribe-live.ts
+ *
  * Uses FFmpeg to convert the WAV to raw f32le and streams chunks
  * through the duplex RPC session to the whisper addon.
  */
