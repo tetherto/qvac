@@ -8,6 +8,7 @@ import {
 import {
   whisperConfigSchema,
   parakeetConfigSchema,
+  parakeetRuntimeConfigSchema,
   type WhisperConfig,
 } from "./transcription-config";
 import { delegateSchema } from "./delegate";
@@ -294,7 +295,7 @@ export const loadWhisperModelRequestSchema = commonModelConfigSchema
 export const loadParakeetModelRequestSchema = commonModelConfigSchema
   .extend({
     modelType: z.literal(ModelType.parakeetTranscription),
-    modelConfig: parakeetConfigSchema,
+    modelConfig: z.union([parakeetConfigSchema, parakeetRuntimeConfigSchema]),
   })
   .strict();
 

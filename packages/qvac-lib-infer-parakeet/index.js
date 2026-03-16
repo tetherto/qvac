@@ -110,6 +110,8 @@ class TranscriptionParakeet extends BaseInference {
     this._modelName = modelName
     this._config = config
     this.weightsProvider = new WeightsProvider(loader, this.logger)
+    this._isStreaming = false
+    this._streamingOutputResolve = null
 
     this.params = config.parakeetConfig || {}
 
@@ -120,6 +122,29 @@ class TranscriptionParakeet extends BaseInference {
     })
 
     this.validateModelFiles()
+  }
+
+  /**
+   * Override output callback to handle Parakeet's async processing model.
+   * The C++ addon may fire JobEnded before Output. During streaming mode,
+   * we bypass the response system entirely and route Output events directly
+   * to the streaming output resolver.
+   */
+  _outputCallback (addon, event, jobId, data, error) {
+    if (this._isStreaming) {
+      if (event === 'Output' && this._streamingOutputResolve) {
+        this._streamingOutputResolve(data)
+        return
+      }
+      if (event === 'JobEnded') return
+      if (event === 'Error' && this._streamingOutputResolve) {
+        this._streamingOutputResolve(null)
+        return
+      }
+      return
+    }
+
+    super._outputCallback(addon, event, jobId, data, error)
   }
 
   /**
@@ -395,6 +420,223 @@ class TranscriptionParakeet extends BaseInference {
     }
     this.logger.debug('Sending end-of-input signal')
     await this.addon.append({ type: END_OF_INPUT })
+  }
+
+  /**
+   * Run streaming transcription with energy-based speech segmentation.
+   * Buffers incoming audio, detects speech pauses via adaptive RMS energy
+   * analysis, and processes each speech segment through the addon pipeline.
+   * @param {AsyncIterable<Buffer>} audioStream - Stream of f32le audio (16kHz mono)
+   * @returns {Promise<{iterate: AsyncGenerator, await: () => Promise}>}
+   */
+  async runStreaming (audioStream) {
+    if (this.exclusiveRun) {
+      return await this._withExclusiveRun(() => this._runStreamingInternal(audioStream))
+    }
+    return await this._runStreamingInternal(audioStream)
+  }
+
+  async _runStreamingInternal (audioStream) {
+    const self = this
+    self._isStreaming = true
+
+    const SAMPLE_RATE = 16000
+    const ENERGY_THRESHOLD = 0.02
+    const MIN_SILENCE_SAMPLES = 8000
+    const MIN_SPEECH_SAMPLES = 4000
+    const MAX_BUFFER_SAMPLES = 480000
+    const ENERGY_WINDOW_SAMPLES = 1600
+    const CALIBRATION_SAMPLES = 32000
+    const SPEECH_MULTIPLIER = 3.0
+    const MAX_THRESHOLD = 0.10
+
+    let calibrationEnergies = []
+    let calibrationRemaining = CALIBRATION_SAMPLES
+    let calibrated = false
+    let activeThreshold = ENERGY_THRESHOLD
+    let inSpeech = false
+    let silenceSamples = 0
+    const audioChunks = []
+    let totalBufferSamples = 0
+
+    const resultQueue = []
+    let resultResolve = null
+    let streamDone = false
+    let streamError = null
+
+    function computeEnergy (samples, offset, length) {
+      if (length <= 0) return 0
+      let sum = 0
+      for (let i = offset; i < offset + length; i++) {
+        sum += samples[i] * samples[i]
+      }
+      return Math.sqrt(sum / length)
+    }
+
+    function finalizeCalibration () {
+      calibrated = true
+      if (calibrationEnergies.length === 0) {
+        activeThreshold = ENERGY_THRESHOLD
+        return
+      }
+      calibrationEnergies.sort((a, b) => a - b)
+      const idx = Math.floor(calibrationEnergies.length / 4)
+      const noiseFloor = calibrationEnergies[idx]
+      activeThreshold = Math.min(
+        Math.max(ENERGY_THRESHOLD, noiseFloor * SPEECH_MULTIPLIER),
+        MAX_THRESHOLD
+      )
+      self.logger.debug(
+        `Streaming: calibrated noiseFloor=${noiseFloor.toFixed(4)} ` +
+        `threshold=${activeThreshold.toFixed(4)} (${calibrationEnergies.length} energies)`
+      )
+      calibrationEnergies = null
+    }
+
+    function concatenateFloat32 (chunks) {
+      let total = 0
+      for (const c of chunks) total += c.length
+      const result = new Float32Array(total)
+      let offset = 0
+      for (const c of chunks) {
+        result.set(c, offset)
+        offset += c.length
+      }
+      return result
+    }
+
+    function pushResult (output) {
+      resultQueue.push(output)
+      if (resultResolve) {
+        const r = resultResolve
+        resultResolve = null
+        r()
+      }
+    }
+
+    function signalDone () {
+      streamDone = true
+      if (resultResolve) {
+        const r = resultResolve
+        resultResolve = null
+        r()
+      }
+    }
+
+    async function processSegment (float32Audio) {
+      if (float32Audio.length < MIN_SPEECH_SAMPLES) return
+
+      let resolveOutput
+      const outputPromise = new Promise(resolve => { resolveOutput = resolve })
+      self._streamingOutputResolve = (data) => {
+        if (resolveOutput) {
+          const r = resolveOutput
+          resolveOutput = null
+          r(data)
+        }
+      }
+
+      await self.addon.append({
+        type: 'audio',
+        data: float32Audio.buffer
+      })
+
+      await self.addon.append({ type: END_OF_INPUT })
+
+      const output = await outputPromise
+      self._streamingOutputResolve = null
+
+      if (output) pushResult(output)
+
+      await self.addon.activate()
+    }
+
+    const processingPromise = (async () => {
+      try {
+        for await (const rawChunk of audioStream) {
+          let float32
+          if (rawChunk instanceof Float32Array) {
+            float32 = rawChunk
+          } else if (rawChunk.byteOffset % 4 === 0) {
+            float32 = new Float32Array(
+              rawChunk.buffer,
+              rawChunk.byteOffset,
+              rawChunk.byteLength / 4
+            )
+          } else {
+            const aligned = new Uint8Array(rawChunk.byteLength)
+            aligned.set(new Uint8Array(rawChunk.buffer, rawChunk.byteOffset, rawChunk.byteLength))
+            float32 = new Float32Array(aligned.buffer)
+          }
+
+          const numSamples = float32.length
+          audioChunks.push(float32)
+          totalBufferSamples += numSamples
+
+          const windowLen = Math.min(ENERGY_WINDOW_SAMPLES, numSamples)
+          const energy = computeEnergy(float32, numSamples - windowLen, windowLen)
+
+          if (!calibrated) {
+            calibrationEnergies.push(energy)
+            calibrationRemaining -= numSamples
+            if (calibrationRemaining <= 0) {
+              finalizeCalibration()
+            }
+            continue
+          }
+
+          if (energy > activeThreshold) {
+            inSpeech = true
+            silenceSamples = 0
+          } else {
+            silenceSamples += numSamples
+          }
+
+          if (totalBufferSamples >= MIN_SPEECH_SAMPLES) {
+            const silenceAfterSpeech = inSpeech && silenceSamples >= MIN_SILENCE_SAMPLES
+            const bufferOverflow = totalBufferSamples >= MAX_BUFFER_SAMPLES
+
+            if (silenceAfterSpeech || bufferOverflow) {
+              const fullAudio = concatenateFloat32(audioChunks)
+              audioChunks.length = 0
+              totalBufferSamples = 0
+              inSpeech = false
+              silenceSamples = 0
+
+              await processSegment(fullAudio)
+            }
+          }
+        }
+
+        if (audioChunks.length > 0 && totalBufferSamples >= MIN_SPEECH_SAMPLES) {
+          const fullAudio = concatenateFloat32(audioChunks)
+          await processSegment(fullAudio)
+        }
+
+        self._isStreaming = false
+        signalDone()
+      } catch (err) {
+        self._isStreaming = false
+        self.logger.error(`Streaming error: ${err.message}`, err)
+        streamError = err
+        signalDone()
+      }
+    })()
+
+    let resultIdx = 0
+    return {
+      iterate: async function * () {
+        while (true) {
+          while (resultIdx < resultQueue.length) {
+            yield resultQueue[resultIdx++]
+          }
+          if (streamDone) break
+          await new Promise(r => { resultResolve = r })
+        }
+        if (streamError) throw streamError
+      },
+      await: () => processingPromise
+    }
   }
 
   /**
