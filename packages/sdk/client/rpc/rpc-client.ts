@@ -337,6 +337,7 @@ async function* streamProfiled<T extends Request>(
             profilingMeta = chunkMeta;
           }
 
+          if (rawParsed["__profilingTrailer"] === true) continue;
           const cleanPayload = stripProfilingMeta(rawParsed);
           const response = responseSchema.parse(cleanPayload);
 

@@ -16,6 +16,7 @@ import {
   type Response,
   type RPCOptions,
   type ProfilingRequestMeta,
+  type ProfilingResponseMeta,
   type DelegationBreakdown,
   type OperationEvent,
 } from "@/schemas";
@@ -34,6 +35,7 @@ import {
   createDelegationStreamTimings,
   recordDelegationEvents,
   recordDelegationStreamEvents,
+  buildDelegationStreamBreakdown,
   flushServerConnectionEvent,
   consumeBreakdownConnectionTime,
   type DelegationTimings,
@@ -310,6 +312,8 @@ async function* streamProfiled<T extends Request>(
       options?.timeout,
     );
 
+    let lastServerMeta: ProfilingResponseMeta | undefined;
+
     for await (const chunk of streamWithTimeout) {
       buffer += chunk.toString();
 
@@ -334,12 +338,19 @@ async function* streamProfiled<T extends Request>(
           if (serverMeta?.operation) {
             response[OPERATION_EVENT_KEY] = serverMeta.operation;
           }
+          if (serverMeta) {
+            lastServerMeta = serverMeta;
+          }
+
+          response[DELEGATION_BREAKDOWN_KEY] =
+            buildDelegationStreamBreakdown(timings);
 
           yield response;
         }
       }
     }
-    recordDelegationStreamEvents(timings);
+
+    recordDelegationStreamEvents(timings, lastServerMeta);
   } catch (error) {
     const base = {
       ts: nowMs(),

@@ -24,7 +24,7 @@ export type ServerProfiler = {
   markRequestValidated: (ms: number) => void;
   startHandler: () => void;
   endHandler: () => void;
-  serialize: (response: Response, final?: boolean) => string;
+  serialize: (response?: Response, final?: boolean) => string;
   serializeError: (json: string) => string;
   getContext: () => ServerProfilingContext | undefined;
 };
@@ -35,6 +35,8 @@ const noopProfiler: ServerProfiler = {
   startHandler: () => {},
   endHandler: () => {},
   serialize: (response) => {
+    if (!response) return "";
+
     const extended = response as ResponseWithProfilingMeta;
     const delegation = extended[DELEGATION_BREAKDOWN_KEY];
     const operation = extended[OPERATION_EVENT_KEY];
@@ -55,6 +57,8 @@ function createActiveProfiler(meta: ProfilingRequestMeta): ServerProfiler {
   const ctx = createProfilingContext(meta);
   let handlerStart = 0;
   let handlerEnded = false;
+  let cachedDelegation: DelegationBreakdown | undefined;
+  let cachedOperation: OperationEvent | undefined;
 
   return {
     markRequestParsed: (ms) => {
@@ -73,9 +77,19 @@ function createActiveProfiler(meta: ProfilingRequestMeta): ServerProfiler {
       ctx.handlerExecutionMs = nowMs() - handlerStart;
     },
     serialize: (response, final = true) => {
+      if (!response) {
+        const opts: Parameters<typeof injectProfilingIntoString>[1] = { ctx };
+        if (cachedDelegation) opts.delegation = cachedDelegation;
+        if (cachedOperation) opts.operation = cachedOperation;
+        return injectProfilingIntoString('{"__profilingTrailer":true}', opts);
+      }
+
       const extended = response as ResponseWithProfilingMeta;
       const delegation = extended[DELEGATION_BREAKDOWN_KEY];
       const operation = extended[OPERATION_EVENT_KEY];
+
+      if (delegation) cachedDelegation = delegation;
+      if (operation) cachedOperation = operation;
 
       const zodStart = nowMs();
       const validated = responseSchema.parse(response);

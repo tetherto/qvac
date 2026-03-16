@@ -158,7 +158,7 @@ export function recordClientEvents(
       recordPhase(
         base,
         "clientOverhead",
-        totalClientTime - serverMeta.server.totalServerMs,
+        Math.max(0, totalClientTime - serverMeta.server.totalServerMs),
       );
     }
   }
