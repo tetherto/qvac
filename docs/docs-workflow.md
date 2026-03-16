@@ -1,6 +1,6 @@
 # Docs Workflow
 
-How the documentation site automation works: generating API docs locally, CI triggers, and troubleshooting.
+How the documentation site works: architecture, local development, CI, deployment, and troubleshooting.
 
 For general contribution guidelines (PR labels, changelog format), see the [root CONTRIBUTING.md](../CONTRIBUTING.md).
 
@@ -15,11 +15,17 @@ For general contribution guidelines (PR labels, changelog format), see the [root
   - [Generating API Docs Locally](#generating-api-docs-locally)
   - [Updating the Versions List](#updating-the-versions-list)
   - [Full Generation (Orchestrated)](#full-generation-orchestrated)
+- [Versioning](#versioning)
+- [Branch Strategy and Deployment](#branch-strategy-and-deployment)
+  - [Branch Strategy](#branch-strategy)
+  - [Staging (automatic)](#staging-automatic)
+  - [Production (manual PR)](#production-manual-pr)
 - [CI Workflows](#ci-workflows)
   - [PR Checks](#1-docs-website-pr-checks)
   - [Post-Merge Sync](#2-docs-post-merge-sync)
   - [Generate API Documentation](#3-generate-api-documentation)
   - [Deploy Notify](#4-docs-deploy-notify)
+  - [CI Doctor](#5-docs-ci-doctor)
 - [Script Reference](#script-reference)
 - [Troubleshooting](#troubleshooting)
 
@@ -27,14 +33,27 @@ For general contribution guidelines (PR labels, changelog format), see the [root
 
 ## Overview
 
-The docs site is a [Next.js](https://nextjs.org/) app using [Fumadocs](https://www.fumadocs.dev) for MDX-based documentation. Content lives in `content/docs/` and falls into two categories:
+The docs site lives in `docs/website/`. It is a fully static site (Next.js `output: 'export'`) served via CDN by the hosting provider. GitHub stores only the source code -- the hosting provider watches repo branches, runs the build (SSG), and deploys automatically. There are no GitHub Actions deploy workflows; GitHub Actions handles validation and gating only.
+
+| Component | Details |
+|-----------|---------|
+| Framework | Next.js 15 (App Router) + React 19 |
+| Docs framework | Fumadocs (`fumadocs-core`, `fumadocs-mdx`, `fumadocs-ui`) |
+| Styling | Tailwind CSS |
+| Content | MDX files in `docs/website/content/docs/` |
+| API docs | Auto-generated via TypeDoc (`docs/website/scripts/generate-api-docs.ts`) |
+| Build output | `docs/website/dist/` (static HTML/CSS/JS) |
+| Hosting | Static site CDN (hosting provider runs the build and serves the output) |
+| Config | `next.config.mjs` (`output: 'export'`, `distDir: 'dist'`, `trailingSlash: true`) |
+
+Content falls into two categories:
 
 | Category | Path | Committed? |
 |---|---|---|
 | Baseline pages (Overview, Health, Workbench, Contributors) | `content/docs/overview/`, `content/docs/health/`, etc. | Yes |
 | SDK API reference (generated) | `content/docs/sdk/api/vX.Y.Z/`, `content/docs/sdk/api/latest/` | No (`.gitignore`) |
 
-SDK API docs are **generated from TypeScript source** via [TypeDoc](https://typedoc.org/) and written as MDX files. They are not committed to the repository — generate them locally or let CI handle it.
+SDK API docs are **generated from TypeScript source** via [TypeDoc](https://typedoc.org/) and written as MDX files. They are not committed to the repository -- generate them locally or let CI handle it.
 
 ### How the Pipeline Works
 
@@ -136,9 +155,94 @@ This runs `generate-api-docs.ts` followed by `update-versions-list.ts` in sequen
 
 ---
 
+## Versioning
+
+SDK API documentation is versioned per release. Each version lives in its own directory:
+
+```
+content/docs/sdk/api/
+├── latest/         -> physical copy of the most recent version
+├── v0.5.0/
+├── v0.6.0/
+├── v0.6.1/
+└── v0.7.0/
+```
+
+- **Format**: `vX.Y.Z` (always 3-part semver with `v` prefix)
+- **`latest/`**: A physical copy (not symlink) of the most recent version, kept in sync automatically
+- **Version list**: Managed in `src/lib/versions.ts`, updated by `scripts/update-versions-list.ts`
+
+When SDK code changes are merged to `main`, the **Docs Post-Merge Sync** workflow regenerates API docs and commits to `main`. This commit triggers the hosting provider to rebuild staging automatically.
+
+---
+
+## Branch Strategy and Deployment
+
+### Branch Strategy
+
+```
+main = staging              docs-production = production
+──────────────              ────────────────────────────
+
+New commit on main          Merge PR: main -> docs-production
+      │                              │
+      ▼                              ▼
+Hosting provider builds     Hosting provider builds
+& deploys to staging        & deploys to production
+```
+
+- **`main`** is the staging environment. The hosting provider watches this branch; any new commit triggers a build and deploy to the staging site.
+- **`docs-production`** is the production environment. The hosting provider watches this branch; any new commit (via merged PR from `main`) triggers a build and deploy to the production site.
+
+With `main` + `docs-production`, every production deploy has a reviewable PR showing exactly what changed. The CI Doctor workflow gates PRs to `docs-production`, verifying all docs CI jobs are green before the merge is allowed.
+
+### Staging (automatic)
+
+```
+SDK release merged to main
+    │
+    ▼
+Docs Post-Merge Sync runs (regenerates API docs, commits to main)
+    │
+    ▼
+Hosting provider detects new commit on main
+    │
+    ▼
+Hosting provider builds the static site and deploys to staging
+```
+
+Any push to `main` -- whether from a merged PR, a docs content change, or the post-merge sync bot -- triggers the hosting provider to rebuild staging. No GitHub Actions deploy workflow is involved.
+
+### Production (manual PR)
+
+```
+Staging is verified and ready
+    │
+    ▼
+Open PR: main -> docs-production
+    │
+    ▼
+CI Doctor runs (verifies all docs workflows are green)
+    │
+    ▼
+Review the diff, approve, merge
+    │
+    ▼
+Hosting provider detects new commit on docs-production
+    │
+    ▼
+Hosting provider builds the static site and deploys to production
+```
+
+**Gate**: The `Docs CI Doctor` workflow (`.github/workflows/docs-ci-doctor.yml`) must pass before the PR can be merged.
+
+When a `release-*` branch is pushed, the **Docs Deploy Notify** workflow creates a GitHub issue reminding the docs owner to open a PR from `main` to `docs-production`.
+
+---
+
 ## CI Workflows
 
-Four GitHub Actions workflows automate the docs lifecycle:
+Five GitHub Actions workflows automate the docs lifecycle:
 
 ### 1. Docs Website PR Checks
 
@@ -213,6 +317,27 @@ Four GitHub Actions workflows automate the docs lifecycle:
 | Name | Type | Purpose |
 |---|---|---|
 | `DOCS_DEPLOY_NOTIFY_USER` | Secret | GitHub username to `@mention` in the deploy issue |
+
+### 5. Docs CI Doctor
+
+**File:** `.github/workflows/docs-ci-doctor.yml`
+
+**Triggers:** Pull requests targeting `docs-production`, or manual dispatch.
+
+**What it does:**
+- Runs `.github/scripts/docs-ci-doctor.sh`
+- Queries the GitHub API for the latest runs of all docs-related workflows on `main`
+- Reports pass/fail status for each and exits non-zero if any are not green
+
+**Purpose:** Gates merges to `docs-production` by verifying all docs CI jobs succeeded.
+
+**Running locally:**
+
+Requires [GitHub CLI](https://cli.github.com) and a token with repo read access:
+
+```bash
+GH_TOKEN=ghp_... bash .github/scripts/docs-ci-doctor.sh
+```
 
 ---
 

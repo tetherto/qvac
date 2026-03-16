@@ -75,7 +75,10 @@ export async function handleLoadModel(
     const parseResult = plugin.loadConfigSchema.safeParse(resolvedModelConfig);
     if (!parseResult.success) {
       const details = parseResult.error.issues
-        .map((i: { path: unknown[]; message: string }) => `${String(i.path.join("."))}: ${i.message}`)
+        .map(
+          (i: { path: unknown[]; message: string }) =>
+            `${String(i.path.join("."))}: ${i.message}`,
+        )
         .join(", ");
       throw new PluginLoadConfigValidationFailedError(
         canonicalModelType,
@@ -132,7 +135,11 @@ export async function handleLoadModel(
     await loadModel({
       modelId,
       modelPath: resolvedModelPath,
-      options: { ...request, modelConfig: resolvedModelConfig },
+      options: {
+        ...request,
+        modelType: canonicalModelType,
+        modelConfig: resolvedModelConfig,
+      },
       artifacts: Object.keys(artifacts).length > 0 ? artifacts : undefined,
       modelName,
     });

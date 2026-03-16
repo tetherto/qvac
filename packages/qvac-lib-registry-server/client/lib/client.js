@@ -247,11 +247,21 @@ class QVACRegistryClient extends ReadyResource {
 
       const totalSize = model.blobBinding.byteLength
 
+      const rangeDownload = core.download({
+        start: model.blobBinding.blockOffset,
+        length: model.blobBinding.blockLength
+      })
+
+      const blockStart = model.blobBinding.blockOffset
+      const blockEnd = blockStart + model.blobBinding.blockLength
+
       let artifact
       if (options.outputFile) {
         await this._streamBlobToFile(blobs, core, model.blobBinding, options.outputFile, options)
         artifact = { path: options.outputFile, totalSize }
 
+        rangeDownload.destroy()
+        await this._clearBlobBlocks(core, blockStart, blockEnd)
         if (blobs) await blobs.close()
         if (core) await core.close()
       } else {
@@ -262,6 +272,8 @@ class QVACRegistryClient extends ReadyResource {
         artifact = { stream, totalSize }
 
         const cleanup = async () => {
+          rangeDownload.destroy()
+          await this._clearBlobBlocks(core, blockStart, blockEnd)
           if (blobs) {
             try {
               await blobs.close()
@@ -279,7 +291,7 @@ class QVACRegistryClient extends ReadyResource {
           this.logger.debug('Blob resources closed after stream end')
         }
 
-        stream.on('close', cleanup)
+        stream.once('end', cleanup)
       }
 
       this.logger.info('Model downloaded successfully')
@@ -359,11 +371,21 @@ class QVACRegistryClient extends ReadyResource {
       }
       const totalSize = blobBinding.byteLength
 
+      const blockStart = pointer.blockOffset
+      const blockEnd = blockStart + pointer.blockLength
+
+      const rangeDownload = core.download({
+        start: pointer.blockOffset,
+        length: pointer.blockLength
+      })
+
       let artifact
       if (options.outputFile) {
         await this._streamBlobToFile(blobs, core, pointer, options.outputFile, options)
         artifact = { path: options.outputFile, totalSize }
 
+        rangeDownload.destroy()
+        await this._clearBlobBlocks(core, blockStart, blockEnd)
         if (blobs) await blobs.close()
         if (core) await core.close()
       } else {
@@ -374,6 +396,8 @@ class QVACRegistryClient extends ReadyResource {
         artifact = { stream, totalSize }
 
         const cleanup = async () => {
+          rangeDownload.destroy()
+          await this._clearBlobBlocks(core, blockStart, blockEnd)
           if (blobs) {
             try { await blobs.close() } catch (e) {
               this.logger.warn('Error closing blob instance', { error: e.message })
@@ -387,7 +411,7 @@ class QVACRegistryClient extends ReadyResource {
           this.logger.debug('Blob resources closed after stream end')
         }
 
-        stream.on('close', cleanup)
+        stream.once('end', cleanup)
       }
 
       this.logger.info('Blob download complete (direct)')
@@ -408,6 +432,16 @@ class QVACRegistryClient extends ReadyResource {
       }
 
       throw error
+    }
+  }
+
+  async _clearBlobBlocks (core, start, end) {
+    try {
+      const cleared = await core.clear(start, end, { diff: true })
+      await core.compact()
+      this.logger.info('Cleared blob blocks from corestore', { start, end, blocks: cleared ? cleared.blocks : end - start })
+    } catch (err) {
+      this.logger.warn('Failed to clear blob blocks from corestore', { error: err.message })
     }
   }
 
@@ -450,6 +484,11 @@ class QVACRegistryClient extends ReadyResource {
 
     core.on('download', progressHandler)
 
+    const rangeDownload = core.download({
+      start: blobPointer.blockOffset,
+      length: blobPointer.blockLength
+    })
+
     const stream = blobs.createReadStream(blobPointer, {
       wait: true,
       timeout: options.timeout || 30000
@@ -482,6 +521,7 @@ class QVACRegistryClient extends ReadyResource {
         }
       })
     } finally {
+      rangeDownload.destroy()
       core.off('download', progressHandler)
     }
   }

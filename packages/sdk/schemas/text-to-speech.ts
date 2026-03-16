@@ -9,9 +9,26 @@ export const TTS_LANGUAGES = [
   "it", // Italian
 ] as const;
 
-export const ttsChatterboxConfigSchema = z.object({
+const ttsLanguageSchema = z.enum(TTS_LANGUAGES);
+
+export const ttsChatterboxRuntimeConfigSchema = z.object({
   ttsEngine: z.literal("chatterbox"),
-  language: z.enum(TTS_LANGUAGES),
+  language: ttsLanguageSchema,
+});
+
+export const ttsSupertonicRuntimeConfigSchema = z.object({
+  ttsEngine: z.literal("supertonic"),
+  language: ttsLanguageSchema,
+  ttsSpeed: z.number().optional(),
+  ttsNumInferenceSteps: z.number().optional(),
+});
+
+export const ttsRuntimeConfigSchema = z.union([
+  ttsChatterboxRuntimeConfigSchema,
+  ttsSupertonicRuntimeConfigSchema,
+]);
+
+export const ttsChatterboxConfigSchema = ttsChatterboxRuntimeConfigSchema.extend({
   ttsTokenizerSrc: modelSrcInputSchema,
   ttsSpeechEncoderSrc: modelSrcInputSchema,
   ttsEmbedTokensSrc: modelSrcInputSchema,
@@ -20,16 +37,12 @@ export const ttsChatterboxConfigSchema = z.object({
   referenceAudioSrc: modelSrcInputSchema,
 });
 
-export const ttsSupertonicConfigSchema = z.object({
-  ttsEngine: z.literal("supertonic"),
-  language: z.enum(TTS_LANGUAGES),
+export const ttsSupertonicConfigSchema = ttsSupertonicRuntimeConfigSchema.extend({
   ttsTokenizerSrc: modelSrcInputSchema,
   ttsTextEncoderSrc: modelSrcInputSchema,
   ttsLatentDenoiserSrc: modelSrcInputSchema,
   ttsVoiceDecoderSrc: modelSrcInputSchema,
   ttsVoiceSrc: modelSrcInputSchema,
-  ttsSpeed: z.number().optional(),
-  ttsNumInferenceSteps: z.number().optional(),
 });
 
 export const ttsConfigSchema = z.union([
@@ -58,6 +71,13 @@ export type TtsLanguage = (typeof TTS_LANGUAGES)[number];
 export type TtsChatterboxConfig = z.infer<typeof ttsChatterboxConfigSchema>;
 export type TtsSupertonicConfig = z.infer<typeof ttsSupertonicConfigSchema>;
 export type TtsConfig = z.infer<typeof ttsConfigSchema>;
+export type TtsChatterboxRuntimeConfig = z.infer<
+  typeof ttsChatterboxRuntimeConfigSchema
+>;
+export type TtsSupertonicRuntimeConfig = z.infer<
+  typeof ttsSupertonicRuntimeConfigSchema
+>;
+export type TtsRuntimeConfig = z.infer<typeof ttsRuntimeConfigSchema>;
 export type TtsClientParams = z.infer<typeof ttsClientParamsSchema>;
 export type TtsRequest = z.infer<typeof ttsRequestSchema>;
 export type TtsResponse = z.infer<typeof ttsResponseSchema>;
