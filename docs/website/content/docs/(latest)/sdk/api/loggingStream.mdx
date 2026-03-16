@@ -1,53 +1,41 @@
 ---
 title: "loggingStream( )"
 titleStyle: code
-description: Opens a logging stream to receive real-time logs.
+description: "Opens a logging stream to receive real-time logs."
 ---
 
-```ts
-function loggingStream(params): AsyncGenerator<LoggingStreamResponse>;
+```typescript
+function loggingStream(params: infer): AsyncGenerator
 ```
+
+## Description
+
+Opens a logging stream to receive real-time logs.
 
 ## Parameters
 
 | Name | Type | Required? | Description |
 | --- | --- | :---: | --- |
-| params | `object` | ✓ | The logging stream parameters |
-| params.id | `string` | ✓ | The identifier to stream logs for. Pass a model ID for model logs, or the exported constant `SDK_LOG_ID` for SDK server logs. |
+| `params` | `infer` | ✓ | The arguments for the logging stream |
 
 ## Returns
 
-`AsyncGenerator<`[`LoggingStreamResponse`](#loggingstreamresponse)`>` — Yields log messages in real time.
+```typescript
+AsyncGenerator
+```
 
-### `LoggingStreamResponse`
 
-| Field | Type | Description |
-| --- | --- | --- |
-| type | `"loggingStream"` | Response type |
-| id | `string` | Identifier being streamed |
-| level | `"error" \| "warn" \| "info" \| "debug"` | Log level |
-| namespace | `string` | Logger namespace |
-| message | `string` | Log message |
-| timestamp | `number` | Unix timestamp |
 
-## Throws
-
-| Error | When |
-| --- | --- |
-| `INVALID_RESPONSE_TYPE` | A chunk's type does not match expected `"loggingStream"` |
-
-## Example
+## Examples
 
 ```typescript
-import { loggingStream, SDK_LOG_ID } from "@qvac/sdk";
+// Open a logging stream for a model
+const logStream = loggingStream({ id: 'my-model-id' });
 
-// Stream logs from a loaded model
-const logStream = loggingStream({ id: "my-model-id" });
+// Or stream SDK server logs
+const sdkLogs = loggingStream({ id: SDK_LOG_ID });
 
 for await (const logMessage of logStream) {
   console.log(`[${logMessage.level}] ${logMessage.namespace}: ${logMessage.message}`);
 }
-
-// Or stream SDK server logs
-const sdkLogs = loggingStream({ id: SDK_LOG_ID });
 ```

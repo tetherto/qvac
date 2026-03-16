@@ -1,32 +1,34 @@
 ---
 title: "ragDeleteWorkspace( )"
 titleStyle: code
-description: Deletes a RAG workspace and all its data.
+description: "Deletes a RAG workspace and all its data.
+The workspace must not be currently loaded/in-use."
 ---
 
-```ts
-function ragDeleteWorkspace(params): Promise<void>;
+```typescript
+function ragDeleteWorkspace(params: infer): Promise
 ```
 
+## Description
+
+Deletes a RAG workspace and all its data.
 The workspace must not be currently loaded/in-use.
 
 ## Parameters
 
 | Name | Type | Required? | Description |
 | --- | --- | :---: | --- |
-| params.workspace | `string` | ✓ | Name of the workspace to delete |
+| `params` | `infer` | ✓ | The parameters for deletion |
 
 ## Returns
 
-`Promise<void>` — Resolves when the workspace is deleted.
+```typescript
+Promise
+```
 
-## Throws
 
-| Error | When |
-| --- | --- |
-| `RAG_DELETE_FAILED` | The workspace doesn't exist or is currently loaded |
 
-## Example
+## Examples
 
 ```typescript
 await ragDeleteWorkspace({ workspace: "my-docs" });

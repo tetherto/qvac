@@ -1,0 +1,97 @@
+---
+title: Text-to-Speech
+description: Speech synthesis for text-to-speech (TTS) — i.e., generate audio using custom voices from written input.
+---
+
+## Overview
+
+Text-to-Speech uses [ONNX runtime](https://onnxruntime.ai) as inference engine. Load any supported model using `modelType: "tts"`. Then, provide `text` as input (with `inputType: "text"`) to generate speech audio.
+
+`textToSpeech()` returns an object containing `buffer` and, when streaming is enabled, a `bufferStream` for incremental audio output.
+
+## Functions
+
+Use the following sequence of function calls:
+1. [`loadModel()`](/v0.7.0/sdk/api/loadModel)
+2. [`textToSpeech()`](/v0.7.0/sdk/api/textToSpeech)
+3. [`unloadModel()`](/v0.7.0/sdk/api/unloadModel)
+
+For how to use each function, see [SDK — API reference](/v0.7.0/sdk/api/).
+
+## Models
+
+You can load any [**Chatterbox**](https://www.resemble.ai/chatterbox/) or [**Supertonic**](https://supertonictts.com) model bundle compatible with ONNX Runtime. Required files: an `onnx/` directory with one or more `*.onnx` graphs (and optional `*.onnx_data`) plus the model assets required by the bundle (tokenizer/config files and voice assets such as `voices/*.bin` or a reference `*.wav`).
+
+For models available as constants, see [SDK — Models](/v0.7.0/sdk#models).
+
+## Example
+
+### Chatterbox
+
+The following script shows an example of Chatterbox TTS with voice cloning from a reference audio file. Use it with [`utils.js` / `utils.ts`](#utils):
+
+<Tabs>
+<Tab value="js" label="JavaScript" default>
+<WrapCode>
+
+```js file=<rootDir>/packages/sdk/dist/examples/tts/chatterbox.js title="tts-chatterbox.js" lineNumbers
+```
+</WrapCode>
+</Tab>
+
+<Tab value="ts" label="TypeScript">
+<WrapCode>
+
+```ts file=<rootDir>/packages/sdk/examples/tts/chatterbox.ts title="tts-chatterbox.ts" lineNumbers
+```
+</WrapCode>
+</Tab>
+</Tabs>
+
+### Supertonic
+
+The following script shows an example of Supertonic TTS for general-purpose speech synthesis. Use it with [`utils.js` / `utils.ts`](#utils):
+
+<Tabs>
+<Tab value="js" label="JavaScript" default>
+<WrapCode>
+
+```js file=<rootDir>/packages/sdk/dist/examples/tts/supertonic.js title="tts-supertonic.js" lineNumbers
+```
+</WrapCode>
+</Tab>
+
+<Tab value="ts" label="TypeScript">
+<WrapCode>
+
+```ts file=<rootDir>/packages/sdk/examples/tts/supertonic.ts title="tts-supertonic.ts" lineNumbers
+```
+</WrapCode>
+</Tab>
+</Tabs>
+
+### Utils
+
+The following helper script is used by both examples above to convert the raw PCM samples returned by `textToSpeech()` into a WAV file and play it back:
+
+<Tabs>
+<Tab value="js" label="JavaScript" default>
+<WrapCode>
+
+```js file=<rootDir>/packages/sdk/dist/examples/tts/utils.js title="utils.js" lineNumbers
+```
+</WrapCode>
+</Tab>
+
+<Tab value="ts" label="TypeScript">
+<WrapCode>
+
+```ts file=<rootDir>/packages/sdk/examples/tts/utils.ts title="utils.ts" lineNumbers
+```
+</WrapCode>
+</Tab>
+</Tabs>
+
+<Callout type="success">
+**Tip:** all examples throughout this documentation are self-contained and runnable. For instructions on how to run them, see [SDK quickstart](/v0.7.0/sdk/quickstart).
+</Callout>

@@ -1,40 +1,38 @@
 ---
 title: "ragSearch( )"
 titleStyle: code
-description: Searches for similar documents in the RAG vector database.
+description: "Searches for similar documents in the RAG vector database.
+
+**Workspace lifecycle:** This operation requires an existing workspace. If the workspace
+doesn't exist, returns an empty array."
 ---
 
-```ts
-function ragSearch(params): Promise<RagSearchResult[]>;
+```typescript
+function ragSearch(params: input): Promise
 ```
+
+## Description
+
+Searches for similar documents in the RAG vector database.
+
+**Workspace lifecycle:** This operation requires an existing workspace. If the workspace
+doesn't exist, returns an empty array.
 
 ## Parameters
 
-| Name | Type | Required? | Default | Description |
-| --- | --- | :---: | --- | --- |
-| params.modelId | `string` | ✓ | — | The embedding model identifier |
-| params.query | `string` | ✓ | — | The search query text |
-| params.topK | `number` | ✗ | `5` | Number of top results to retrieve |
-| params.n | `number` | ✗ | `3` | Number of centroids for IVF index search |
-| params.workspace | `string` | ✗ | `"default"` | Workspace to search in |
+| Name | Type | Required? | Description |
+| --- | --- | :---: | --- |
+| `params` | `input` | ✓ | The parameters for searching |
 
 ## Returns
 
-`Promise<RagSearchResult[]>` — Array of search results. Empty array if workspace doesn't exist.
+```typescript
+Promise
+```
 
-| Field | Type | Description |
-| --- | --- | --- |
-| id | `string` | Document identifier |
-| content | `string` | Document text content |
-| score | `number` | Similarity score |
 
-## Throws
 
-| Error | When |
-| --- | --- |
-| `RAG_SEARCH_FAILED` | The search operation fails |
-
-## Example
+## Examples
 
 ```typescript
 const results = await ragSearch({
