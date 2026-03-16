@@ -127,7 +127,9 @@ async function downloadSingleFileFromRegistry(
 
   if (blobBinding) {
     logger.info(`📥 Downloading blob directly: ${modelFileName}`);
-    const result = await client.downloadBlob(blobBinding, { timeout: REGISTRY_STREAM_TIMEOUT_MS });
+    const result = await client.downloadBlob(blobBinding, {
+      timeout: REGISTRY_STREAM_TIMEOUT_MS,
+    });
     if (!("stream" in result.artifact)) {
       throw new RegistryDownloadFailedError(
         `No stream returned for blob ${modelFileName}`,
@@ -281,7 +283,14 @@ async function downloadShardedFilesFromRegistry(
     throw new DownloadCancelledError();
   }
 
-  type ShardEntry = { filename: string; size: number; checksum: string; path: string; source: string; blobBinding?: QVACBlobBinding };
+  type ShardEntry = {
+    filename: string;
+    size: number;
+    checksum: string;
+    path: string;
+    source: string;
+    blobBinding?: QVACBlobBinding;
+  };
   let shards: ShardEntry[];
 
   if (localShardMetadata?.length) {
@@ -771,7 +780,8 @@ export async function downloadModelFromRegistry(
       logger.info(`✅ ONNX model and data file both cached`);
 
       if (progressCallback) {
-        const total = (modelMetadata?.expectedSize || 0) + companionDataFile.expectedSize;
+        const total =
+          (modelMetadata?.expectedSize || 0) + companionDataFile.expectedSize;
         progressCallback({
           type: "modelProgress",
           downloaded: total,
@@ -792,7 +802,9 @@ export async function downloadModelFromRegistry(
       return mainCached;
     }
 
-    const mainBlobBinding = modelMetadata ? buildBlobBinding(modelMetadata) : undefined;
+    const mainBlobBinding = modelMetadata
+      ? buildBlobBinding(modelMetadata)
+      : undefined;
     const dataBlobBinding = companionDataFile.blobCoreKey
       ? buildBlobBinding(companionDataFile)
       : undefined;
@@ -847,7 +859,9 @@ export async function downloadModelFromRegistry(
     return cachedPath;
   }
 
-  const blobBinding = modelMetadata ? buildBlobBinding(modelMetadata) : undefined;
+  const blobBinding = modelMetadata
+    ? buildBlobBinding(modelMetadata)
+    : undefined;
 
   return createManagedDownload(
     downloadKey,

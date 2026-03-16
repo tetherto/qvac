@@ -1,4 +1,5 @@
 import { z } from "zod";
+import { perCallProfilingSchema } from "./profiling";
 import { pingRequestSchema, pingResponseSchema } from "./ping";
 import {
   completionStreamRequestSchema,
@@ -120,6 +121,7 @@ export const responseSchema = z.discriminatedUnion("type", [
 export const rpcOptionsSchema = z.object({
   timeout: z.number().min(100).optional(),
   forceNewConnection: z.boolean().optional(),
+  profiling: perCallProfilingSchema.optional(),
 });
 
 export type Request = z.infer<typeof requestSchema>;
