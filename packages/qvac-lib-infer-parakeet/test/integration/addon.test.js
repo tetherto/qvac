@@ -12,6 +12,7 @@ const {
   getTestPaths,
   validateAccuracy,
   ensureModel,
+  readFileChunked,
   getNamedPathsConfig
 } = require('./helpers.js')
 
@@ -183,7 +184,8 @@ test('Cancel active job keeps model usable for next job', { timeout: 600000 }, a
     maxThreads: 4,
     useGPU: false,
     sampleRate: 16000,
-    channels: 1
+    channels: 1,
+    ...getNamedPathsConfig('tdt', modelPath)
   }
 
   const outputsByJob = new Map()

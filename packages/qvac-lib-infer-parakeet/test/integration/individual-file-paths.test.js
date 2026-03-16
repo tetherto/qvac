@@ -20,15 +20,19 @@ const { modelPath, samplesDir } = getTestPaths()
 const expectedText = 'Alice was beginning to get very tired of sitting by her sister on the bank and of having nothing to do. Once or twice she had peeped into the book her sister was reading, but it had no pictures or conversations in it. And what is the use of a book thought Alice without pictures or conversations'
 
 /**
- * Test both directory-based and individual file path loading methods,
- * verifying each produces correct transcription output and that both
+ * Test both low-level activation styles that are still valid after the
+ * addon-cpp migration:
+ * 1. named file paths with manual loadWeights staging
+ * 2. named file paths with direct native disk loading
+ *
+ * Verifies each produces correct transcription output and that both
  * methods yield equivalent results.
  */
 test('Directory and individual file path loading both produce correct transcriptions', { timeout: 600000 }, async (t) => {
   const loggerBinding = setupJsLogger(binding)
 
   console.log('\n' + '='.repeat(60))
-  console.log('DIRECTORY vs INDIVIDUAL FILE PATHS TEST')
+  console.log('PRELOADED vs DIRECT FILE PATHS TEST')
   console.log('='.repeat(60))
   console.log(` Platform: ${platform}`)
   console.log(` Model path: ${modelPath}`)
@@ -64,8 +68,8 @@ test('Directory and individual file path loading both produce correct transcript
   let directoryText = ''
   let filePathText = ''
 
-  // Run 1: directory-based loading
-  console.log('=== Run 1: Directory-based loading ===')
+  // Run 1: named file paths + manual loadWeights staging
+  console.log('=== Run 1: Preloaded weights + file paths ===')
   {
     const transcriptions = []
     let outputResolve = null
@@ -89,7 +93,12 @@ test('Directory and individual file path loading both produce correct transcript
       maxThreads: 4,
       useGPU: false,
       sampleRate: 16000,
-      channels: 1
+      channels: 1,
+      encoderPath,
+      encoderDataPath,
+      decoderPath,
+      vocabPath,
+      preprocessorPath
     }
 
     const parakeet = new ParakeetInterface(binding, config, outputCallback)
@@ -116,7 +125,7 @@ test('Directory and individual file path loading both produce correct transcript
     }
 
     await parakeet.activate()
-    console.log('   Model activated (directory-based)')
+    console.log('   Model activated (preloaded weights + file paths)')
 
     await parakeet.append({ type: 'audio', data: audioData.buffer })
     await parakeet.append({ type: 'end of job' })
@@ -128,12 +137,12 @@ test('Directory and individual file path loading both produce correct transcript
     directoryText = transcriptions.map(s => s.text).join(' ').trim()
     console.log(`   Text: "${directoryText.substring(0, 80)}..."`)
 
-    t.ok(transcriptions.length > 0, `Directory: should produce segments (got ${transcriptions.length})`)
-    t.ok(directoryText.length > 0, `Directory: should produce text (got ${directoryText.length} chars)`)
+    t.ok(transcriptions.length > 0, `Preloaded: should produce segments (got ${transcriptions.length})`)
+    t.ok(directoryText.length > 0, `Preloaded: should produce text (got ${directoryText.length} chars)`)
 
     const werResult = validateAccuracy(expectedText, directoryText, 0.3)
     console.log(`   WER: ${werResult.werPercent}`)
-    t.ok(werResult.wer <= 0.3, `Directory: WER should be <= 30% (got ${werResult.werPercent})`)
+    t.ok(werResult.wer <= 0.3, `Preloaded: WER should be <= 30% (got ${werResult.werPercent})`)
 
     try { await parakeet.destroyInstance() } catch (e) {}
     console.log('   Instance destroyed\n')
@@ -142,7 +151,7 @@ test('Directory and individual file path loading both produce correct transcript
   await new Promise(resolve => setTimeout(resolve, 1000))
 
   // Run 2: individual file path loading
-  console.log('=== Run 2: Individual file paths loading ===')
+  console.log('=== Run 2: Direct file paths loading ===')
   console.log(`   encoderPath: ${encoderPath}`)
   console.log(`   encoderDataPath: ${encoderDataPath}`)
   console.log(`   decoderPath: ${decoderPath}`)
@@ -208,8 +217,8 @@ test('Directory and individual file path loading both produce correct transcript
 
   console.log('=== Comparison ===')
   const werBetween = validateAccuracy(directoryText, filePathText, 0.05)
-  console.log(`   Directory:   "${directoryText.substring(0, 80)}..."`)
-  console.log(`   File paths:  "${filePathText.substring(0, 80)}..."`)
+    console.log(`   Preloaded:   "${directoryText.substring(0, 80)}..."`)
+    console.log(`   File paths:  "${filePathText.substring(0, 80)}..."`)
   console.log(`   WER between: ${werBetween.werPercent}`)
 
   t.ok(werBetween.wer <= 0.05, `Both methods should produce near-identical output (WER: ${werBetween.werPercent})`)
@@ -217,7 +226,7 @@ test('Directory and individual file path loading both produce correct transcript
   console.log('\n' + '='.repeat(60))
   console.log('TEST SUMMARY')
   console.log('='.repeat(60))
-  console.log(`  Directory:      ${directoryText.length} chars, WER ${validateAccuracy(expectedText, directoryText, 0.3).werPercent}`)
+  console.log(`  Preloaded:      ${directoryText.length} chars, WER ${validateAccuracy(expectedText, directoryText, 0.3).werPercent}`)
   console.log(`  File paths:     ${filePathText.length} chars, WER ${validateAccuracy(expectedText, filePathText, 0.3).werPercent}`)
   console.log(`  Cross-method:   WER ${werBetween.werPercent}`)
   console.log('='.repeat(60) + '\n')
