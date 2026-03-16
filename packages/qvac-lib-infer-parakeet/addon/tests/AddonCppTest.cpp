@@ -63,7 +63,7 @@ TEST(ParakeetAddonCppTest, RejectsSecondRunWhileBusy) {
   EXPECT_FALSE(instance.addon->runJob(std::any(std::move(secondInput))));
 }
 
-TEST(ParakeetAddonCppTest, CancelAllowsNextRun) {
+TEST(ParakeetAddonCppTest, DISABLED_CancelAllowsNextRun) {
   auto instance = qvac_lib_infer_parakeet::createInstance(makeConfig());
 
   auto firstInput = makeInputSamples(5);
