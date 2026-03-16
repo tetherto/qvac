@@ -67,13 +67,14 @@ void LlamaLazyInitializeBackend::decrementRefCount() {
   std::lock_guard<std::mutex> lock(g_initMutex);
   if (g_refCount > 0) {
     g_refCount--;
-    if (g_refCount == 0 && g_initialized) {
-      QLOG_IF(
-          Priority::DEBUG, "Freeing backend (reference count reached zero)");
-      llama_backend_free();
-      g_initialized = false;
-      g_recordedBackendsDir.clear();
-    }
+    // Intentionally never call llama_backend_free(). The backend is
+    // process-global state: dynamically-loaded backend libraries (Vulkan,
+    // Metal, etc.) register static destructors that reference the ggml
+    // backend registry. Freeing the registry here causes use-after-free
+    // (SIGSEGV / exit 139) when those static destructors run at process
+    // exit. Keeping the backend alive is safe — the OS reclaims all
+    // memory on exit — and avoids repeated ggml_backend_load_all() calls
+    // that can corrupt the global registry on re-init.
   }
 }
 
