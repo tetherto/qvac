@@ -88,6 +88,14 @@ class OcrFasttextInterface {
     }
   }
 
+  /**
+   * Returns ONNX Runtime diagnostic information as a JSON string from the C++ addon.
+   * @returns {string} JSON string with diagnostic info
+   */
+  getDiagnostics () {
+    return binding.getDiagnostics(this._handle)
+  }
+
   async unload () {
     return this.destroy()
   }

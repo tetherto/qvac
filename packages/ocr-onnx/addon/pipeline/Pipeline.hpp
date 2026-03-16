@@ -125,7 +125,14 @@ public:
 
   const PipelineConfig& config() const { return config_; }
 
+  /// Returns a JSON string with ONNX Runtime diagnostic information
+  [[nodiscard]] std::string getDiagnosticsJSON() const;
+
 private:
+  std::string pathDetector_;
+  std::string pathRecognizer_;
+  bool useGPU_{false};
+
   PipelineConfig config_;
 
   // EasyOCR pipeline steps (constructed when mode == EASYOCR)

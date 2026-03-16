@@ -10,9 +10,14 @@
 #include <opencv2/imgcodecs.hpp>
 #include <opencv2/imgproc.hpp>
 
+#include <nlohmann/json.hpp>
+
 #include "AndroidLog.hpp"
 #include "qvac-lib-inference-addon-cpp/Errors.hpp"
 #include "qvac-lib-inference-addon-cpp/Logger.hpp"
+
+#include <qvac-onnx/OnnxConfig.hpp>
+#include <qvac-onnx/OnnxRuntime.hpp>
 
 namespace qvac_lib_inference_addon_onnx_ocr_fasttext {
 
@@ -49,7 +54,8 @@ Pipeline::Pipeline(
     const std::string& pathDetector, const std::string& pathRecognizer,
     std::span<const std::string> langList, bool useGPU, int timeout,
     const PipelineConfig& config)
-    : config_(config), timeout_(timeout) {
+    : config_(config), pathDetector_(pathDetector),
+      pathRecognizer_(pathRecognizer), useGPU_(useGPU), timeout_(timeout) {
 
   std::string modeStr = (config.mode == PipelineMode::DOCTR) ? "DOCTR" : "EASYOCR";
   QLOG(qvac_lib_inference_addon_cpp::logger::Priority::INFO,
@@ -433,6 +439,51 @@ Pipeline::Output Pipeline::processDocTR(const cv::Mat& image, Input& input, floa
   }
 
   return recognitionOutput;
+}
+
+std::string Pipeline::getDiagnosticsJSON() const {
+  nlohmann::json diag;
+
+  // ONNX Runtime version from the API version macro
+  diag["onnxRuntimeVersion"] = std::to_string(ORT_API_VERSION);
+
+  // Execution provider info
+  nlohmann::json epInfo;
+  epInfo["configured"] = useGPU_
+      ? onnx_addon::providerToString(onnx_addon::ExecutionProvider::AUTO_GPU)
+      : onnx_addon::providerToString(onnx_addon::ExecutionProvider::CPU);
+  epInfo["available"] = onnx_addon::OnnxRuntime::getAvailableProviders();
+  diag["executionProvider"] = epInfo;
+
+  // Model paths
+  nlohmann::json modelPaths;
+  modelPaths["detector"] = pathDetector_;
+  modelPaths["recognizer"] = pathRecognizer_;
+  diag["modelPaths"] = modelPaths;
+
+  // Model loaded state
+  diag["modelLoaded"] = isLoaded();
+
+  // Pipeline mode
+  diag["pipelineMode"] = (config_.mode == PipelineMode::DOCTR) ? "doctr" : "easyocr";
+
+  // Session options / config
+  nlohmann::json sessionOpts;
+  sessionOpts["recognizerBatchSize"] = config_.recognizerBatchSize;
+  sessionOpts["useGPU"] = useGPU_;
+  sessionOpts["timeout"] = timeout_;
+  if (config_.mode == PipelineMode::EASYOCR) {
+    sessionOpts["magRatio"] = config_.magRatio;
+    sessionOpts["contrastRetry"] = config_.contrastRetry;
+    sessionOpts["lowConfidenceThreshold"] = config_.lowConfidenceThreshold;
+  } else {
+    sessionOpts["straightenPages"] = config_.straightenPages;
+    std::string decodingStr = (config_.decodingMethod == DecodingMethod::CTC) ? "CTC" : "ATTENTION";
+    sessionOpts["decodingMethod"] = decodingStr;
+  }
+  diag["sessionOptions"] = sessionOpts;
+
+  return diag.dump();
 }
 
 void Pipeline::reset() {
