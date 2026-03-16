@@ -56,7 +56,7 @@ export async function downloadAsset(
 
   if (options.onProgress) {
     // Use streaming for progress updates
-    for await (const response of stream(request, undefined, rpcOptions)) {
+    for await (const response of stream(request, rpcOptions)) {
       if (response.type === "modelProgress") {
         options.onProgress(response);
       } else if (response.type === "downloadAsset") {
@@ -70,7 +70,7 @@ export async function downloadAsset(
     throw new StreamEndedError();
   } else {
     // Use regular send for simple downloading
-    const response = await send(request, undefined, rpcOptions);
+    const response = await send(request, rpcOptions);
     if (response.type !== "downloadAsset") {
       throw new InvalidResponseError("downloadAsset");
     }

@@ -43,7 +43,7 @@ export async function embed(
     ...params,
   };
 
-  const response = await send(request, undefined, options);
+  const response = await send(request, options);
   if (response.type !== "embed") {
     throw new InvalidResponseError("embed");
   }

@@ -172,7 +172,7 @@ export async function loadModel(
 
   if (onProgress) {
     // Use streaming for progress updates
-    for await (const response of stream(request, undefined, rpcOptions)) {
+    for await (const response of stream(request, rpcOptions)) {
       if (response.type === "modelProgress") {
         onProgress(response);
       } else if (response.type === "loadModel") {
@@ -201,7 +201,7 @@ export async function loadModel(
   }
 
   // Use regular send for simple loading
-  const response = await send(request, undefined, rpcOptions);
+  const response = await send(request, rpcOptions);
   if (response.type !== "loadModel") {
     throw new InvalidResponseError("loadModel");
   }

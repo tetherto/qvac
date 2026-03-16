@@ -96,8 +96,8 @@ async function prepareRPCContext(
 
 export async function send<T extends Request>(
   request: T,
-  rpc?: RPC,
   options?: RPCOptions,
+  rpc?: RPC,
 ): Promise<Response> {
   const ctx = await prepareRPCContext(request.type, options?.profiling, rpc);
 
@@ -209,8 +209,8 @@ async function sendProfiled<T extends Request>(
 
 export async function* stream<T extends Request>(
   request: T,
-  rpc?: RPC,
   options: RPCOptions = {},
+  rpc?: RPC,
 ): AsyncGenerator<Response> {
   const ctx = await prepareRPCContext(request.type, options?.profiling, rpc);
 

@@ -32,7 +32,7 @@ export async function* transcribeStream(
     ...(params.prompt && { prompt: params.prompt }),
   };
 
-  for await (const response of stream(request, undefined, options)) {
+  for await (const response of stream(request, options)) {
     if (response.type === "transcribeStream") {
       const streamResponse = transcribeStreamResponseSchema.parse(response);
 
