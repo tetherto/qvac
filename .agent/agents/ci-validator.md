@@ -15,9 +15,18 @@ You are an expert CI/CD engineer and cross-platform build specialist. Your prima
    - Locate the relevant CI workflow files (e.g., `.github/workflows/`, `.circleci/`, etc.)
    - Determine which CI jobs/workflows need to run for the affected package(s)
 
-2. **Trigger CI**:
-   - Ensure the PR CI pipeline is triggered for the correct package
-   - If CI needs to be manually triggered or re-triggered, do so using the appropriate commands (e.g., `gh workflow run`, pushing a commit, or using CI-specific APIs)
+2. **Trigger CI manually**:
+   - **Always trigger the workflow manually** — do not wait for automatic triggers or passively monitor existing runs
+   - For native addon packages, trigger the on-PR workflow:
+     ```
+     gh workflow run "On PR Trigger (<Package>)" --repo tetherto/qvac --ref <branch>
+     ```
+     Package names: `LLM`, `Embed`, `OCR`, `TTS`, `Whispercpp`, `Parakeet`, `NMTCPP`, `Decoder-audio`
+   - Wait 5 seconds, then find the run ID:
+     ```
+     gh run list --repo tetherto/qvac --workflow "On PR Trigger (<Package>)" --branch <branch> --limit 1 --json databaseId,status
+     ```
+   - See `.agent/knowledge/ci-validation.md` for full details on workflows, triggers, and troubleshooting
 
 3. **Monitor CI using /loop**:
    - Use the `/loop` skill to periodically check CI status
