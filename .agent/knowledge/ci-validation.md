@@ -75,14 +75,26 @@ These delegate to `tetherto/qvac-devops` reusable workflows for publishing.
 - **`workflow_dispatch`** — all workflows support manual triggering. Common inputs: `ref`, `workdir`, `run_verify`.
 - **`workflow_call`** — reusable workflow interface. Prebuilds, integration tests, and mobile tests are called this way from `on-pr-*.yml`.
 
+### CI Package Mapping
+
+These are the native addon packages that have full CI workflows. The **short name** is used as the argument to `/ci-validate` and in the `gh workflow run` trigger command.
+
+| Short name | Package directory | Workflow trigger name |
+|---|---|---|
+| `LLM` | `packages/qvac-lib-infer-llamacpp-llm` | `On PR Trigger (LLM)` |
+| `Embed` | `packages/qvac-lib-infer-llamacpp-embed` | `On PR Trigger (Embed)` |
+| `OCR` | `packages/ocr-onnx` | `On PR Trigger (OCR)` |
+| `TTS` | `packages/qvac-lib-infer-onnx-tts` | `On PR Trigger (TTS)` |
+| `Whispercpp` | `packages/qvac-lib-infer-whispercpp` | `On PR Trigger (Whispercpp)` |
+| `Parakeet` | `packages/qvac-lib-infer-parakeet` | `On PR Trigger (Parakeet)` |
+| `NMTCPP` | `packages/qvac-lib-infer-nmtcpp` | `On PR Trigger (NMTCPP)` |
+| `Decoder-audio` | `packages/qvac-lib-decoder-audio` | `On PR Trigger (Decoder-audio)` |
+
 ### How to trigger manually
 
 ```bash
-# Trigger the PR workflow for a package
+# Trigger the PR workflow for a package (use short name from table above)
 gh workflow run "On PR Trigger (<Package>)" --repo tetherto/qvac --ref <branch>
-
-# Package names for the trigger:
-#   LLM, Embed, OCR, TTS, Whispercpp, Parakeet, NMTCPP, Decoder-audio
 
 # Find the run ID (wait ~5 seconds after trigger)
 gh run list --repo tetherto/qvac --workflow "On PR Trigger (<Package>)" --branch <branch> --limit 1 --json databaseId,status

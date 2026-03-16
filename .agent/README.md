@@ -105,18 +105,9 @@ The orchestrator stops and reports at any failure point. The Asana task is updat
 
 ### When CI Runs
 
-| Changed files | CI? | Package |
-|---|---|---|
-| `packages/qvac-lib-infer-llamacpp-llm/**` | Yes | LLM |
-| `packages/qvac-lib-infer-llamacpp-embed/**` | Yes | Embed |
-| `packages/ocr-onnx/**` | Yes | OCR |
-| `packages/qvac-lib-infer-onnx-tts/**` | Yes | TTS |
-| `packages/qvac-lib-infer-whispercpp/**` | Yes | Whispercpp |
-| `packages/qvac-lib-infer-parakeet/**` | Yes | Parakeet |
-| `packages/qvac-lib-infer-nmtcpp/**` | Yes | NMTCPP |
-| `packages/qvac-lib-decoder-audio/**` | Yes | Decoder-audio |
-| SDK / TS packages | No | — |
-| Docs, workflows, config, markdown | No | — |
+Native addon packages have full CI workflows. See the **CI Package Mapping** table in `.agent/knowledge/ci-validation.md` for the list of 8 packages with CI and their short names.
+
+SDK/TS packages get automatic PR checks via `pr-checks-sdk-pod`. All other packages (simple libraries, docs, config) have no CI triggers.
 
 ## Agents
 

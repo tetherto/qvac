@@ -11,17 +11,9 @@ Trigger a CI workflow for a package, wait for it to complete, and report results
 
 ## Argument
 
-The argument `$ARGUMENTS` is the package short name. Valid values:
-- `LLM` — qvac-lib-infer-llamacpp-llm
-- `Embed` — qvac-lib-infer-llamacpp-embed
-- `OCR` — ocr-onnx
-- `TTS` — qvac-lib-infer-onnx-tts
-- `Whispercpp` — qvac-lib-infer-whispercpp
-- `Parakeet` — qvac-lib-infer-parakeet
-- `NMTCPP` — qvac-lib-infer-nmtcpp
-- `Decoder-audio` — qvac-lib-decoder-audio
+The argument `$ARGUMENTS` is the package short name. See the **CI Package Mapping** table in `.agent/knowledge/ci-validation.md` for valid short names and their corresponding package directories.
 
-The workflow name is: `On PR Trigger (<package>)` where `<package>` is the argument.
+The workflow name is: `On PR Trigger (<short-name>)` where `<short-name>` is the argument.
 
 ## Steps
 

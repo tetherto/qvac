@@ -81,39 +81,11 @@ After implementation, analyze the changed files and the Asana task to decide wha
 
 Run `git diff --name-only main...HEAD` and apply these rules:
 
-| Changed files | CI needed? | CI package name |
-|---|---|---|
-| `packages/qvac-lib-infer-llamacpp-llm/**` | Yes | `LLM` |
-| `packages/qvac-lib-infer-llamacpp-embed/**` | Yes | `Embed` |
-| `packages/ocr-onnx/**` | Yes | `OCR` |
-| `packages/qvac-lib-infer-onnx-tts/**` | Yes | `TTS` |
-| `packages/qvac-lib-infer-whispercpp/**` | Yes | `Whispercpp` |
-| `packages/qvac-lib-infer-parakeet/**` | Yes | `Parakeet` |
-| `packages/qvac-lib-infer-nmtcpp/**` | Yes | `NMTCPP` |
-| `packages/qvac-lib-decoder-audio/**` | Yes | `Decoder-audio` |
-| `packages/qvac-sdk/**` | SDK CI | — (pr-checks-sdk-pod) |
-| `packages/rag/**` | SDK CI | — (pr-checks-sdk-pod) |
-| `packages/cli/**` | SDK CI | — (pr-checks-sdk-pod) |
-| `packages/logging/**` | No (has unit tests locally) | — |
-| `packages/error/**` | No (has unit tests locally) | — |
-| `packages/qvac-lib-dl-filesystem/**` | No | — |
-| `packages/qvac-lib-dl-hyperdrive/**` | No | — |
-| `packages/qvac-lib-dl-base/**` | No | — |
-| `packages/qvac-lib-infer-base/**` | No | — |
-| `packages/qvac-lib-inference-addon-cpp/**` | No | — |
-| `packages/qvac-lib-infer-onnx/**` | No | — |
-| `packages/qvac-lib-langdetect-text/**` | No | — |
-| `packages/qvac-lib-langdetect-text-cld2/**` | No | — |
-| `packages/qvac-lib-diagnostics/**` | No | — |
-| `packages/qvac-lib-registry-server/**` | No | — |
-| `packages/qvac-lint-cpp/**` | No | — |
-| `packages/sdk/**` | No | — |
-| `packages/docs/**` | No | — |
-| `.github/workflows/**` only | No | — |
-| `*.md` only | No | — |
-| Config/tooling files only | No | — |
+1. **Native addon packages** — if changed files match a package in the **CI Package Mapping** table in `.agent/knowledge/ci-validation.md`, CI is needed. Use the short name from that table. If multiple addon packages changed, run CI for each.
 
-If multiple native addon packages changed, run CI for each affected package.
+2. **SDK / TS packages** (`packages/qvac-sdk/**`, `packages/rag/**`, `packages/cli/**`) — SDK CI runs automatically via `pr-checks-sdk-pod` on PR creation. No manual trigger needed.
+
+3. **Everything else** (simple libraries, docs, workflows, config, markdown) — no CI needed.
 
 If CI is needed, inform the user which packages will be validated and why.
 
