@@ -13,18 +13,22 @@ const {
   isPng
 } = require('./utils')
 
+const proc = require('bare-process')
+
 const platform = detectPlatform()
 const isDarwinX64 = os.platform() === 'darwin' && os.arch() === 'x64'
 const isLinuxArm64 = os.platform() === 'linux' && os.arch() === 'arm64'
 const isMobile = os.platform() === 'ios' || os.platform() === 'android'
-const useCpu = isDarwinX64 || isLinuxArm64
+const noGpu = proc.env && proc.env.NO_GPU === 'true'
+const useCpu = isDarwinX64 || isLinuxArm64 || noGpu
+const skip = isMobile || noGpu
 
 const DEFAULT_MODEL = {
   name: 'sd3_medium_incl_clips.safetensors',
   url: 'https://huggingface.co/adamo1139/stable-diffusion-3-medium-ungated/resolve/main/sd3_medium_incl_clips.safetensors'
 }
 
-test('SD3 Medium txt2img — generates a valid PNG image', { timeout: 900000, skip: isMobile }, async (t) => {
+test('SD3 Medium txt2img — generates a valid PNG image', { timeout: 900000, skip }, async (t) => {
   setupJsLogger(binding)
 
   const [downloadedModelName, modelDir] = await ensureModel({

@@ -13,18 +13,22 @@ const {
   isPng
 } = require('./utils')
 
+const proc = require('bare-process')
+
 const platform = detectPlatform()
 const isDarwinX64 = os.platform() === 'darwin' && os.arch() === 'x64'
 const isLinuxArm64 = os.platform() === 'linux' && os.arch() === 'arm64'
 const isMobile = os.platform() === 'ios' || os.platform() === 'android'
-const useCpu = isDarwinX64 || isLinuxArm64
+const noGpu = proc.env && proc.env.NO_GPU === 'true'
+const useCpu = isDarwinX64 || isLinuxArm64 || noGpu
+const skip = isMobile || noGpu
 
 const DEFAULT_MODEL = {
   name: 'stable-diffusion-xl-base-1.0-Q4_0.gguf',
   url: 'https://huggingface.co/gpustack/stable-diffusion-xl-base-1.0-GGUF/resolve/main/stable-diffusion-xl-base-1.0-Q4_0.gguf'
 }
 
-test('SDXL txt2img — generates a valid PNG image', { timeout: 900000, skip: isMobile }, async (t) => {
+test('SDXL txt2img — generates a valid PNG image', { timeout: 900000, skip }, async (t) => {
   setupJsLogger(binding)
 
   const [downloadedModelName, modelDir] = await ensureModel({
