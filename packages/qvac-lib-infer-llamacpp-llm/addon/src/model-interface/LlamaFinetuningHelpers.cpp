@@ -287,8 +287,8 @@ static void writeCheckpointMetadata(
       << "current_step=" << meta.currentStep << '\n'
       << "resume_epoch=" << meta.resumeEpoch << '\n'
       << "resume_batch=" << meta.resumeBatch << '\n'
-      << "paused_during_validation="
-      << (meta.pausedDuringValidation ? 1 : 0) << '\n';
+      << "paused_during_validation=" << (meta.pausedDuringValidation ? 1 : 0)
+      << '\n';
   if (!out) {
     throw std::runtime_error(
         "Failed to write checkpoint metadata: " + path.string());
@@ -423,15 +423,14 @@ void savePauseCheckpoint(
       pausedDuringValidation ? state.globalStep + 1 : state.globalStep;
   meta.currentStep = state.scheduler ? state.scheduler->currentStep : 0;
   meta.pausedDuringValidation = pausedDuringValidation;
-  meta.resumeEpoch = pausedDuringValidation
-                         ? (state.currentEpoch + 1)
-                         : state.currentEpoch;
+  meta.resumeEpoch =
+      pausedDuringValidation ? (state.currentEpoch + 1) : state.currentEpoch;
   if (pausedDuringValidation) {
     meta.resumeBatch = -1;
   } else {
     const int64_t nCtx = static_cast<int64_t>(llama_n_ctx(state.ctx));
-    const int64_t nUbatch =
-        std::max<int64_t>(int64_t{1}, static_cast<int64_t>(llama_n_ubatch(state.ctx)));
+    const int64_t nUbatch = std::max<int64_t>(
+        int64_t{1}, static_cast<int64_t>(llama_n_ubatch(state.ctx)));
     const int64_t ubatchPerCtx = std::max<int64_t>(int64_t{1}, nCtx / nUbatch);
     // Store the idata index *before* the one being processed when pause fired,
     // so that opt_epoch's `idata = resume_from_batch + 1` restarts from the
@@ -471,8 +470,7 @@ bool tryHandlePauseRequest(
   }
   pauseMsg << " at batch " << ibatch << "/" << ibatchMax << " | epoch "
            << (state->currentEpoch + 1)
-           << " | Checkpoint saved at: "
-           << state->pauseCheckpointPath.string();
+           << " | Checkpoint saved at: " << state->pauseCheckpointPath.string();
   QLOG_IF(Priority::DEBUG, pauseMsg.str());
   return true;
 }
@@ -516,8 +514,8 @@ void optEpochCallback(
   const bool isReplayBatch = train && checkpointState != nullptr &&
                              checkpointState->resumeGlobalStepSkip > 0;
 
-  bool suppress = checkpointState != nullptr &&
-                  checkpointState->suppressProgressBar;
+  bool suppress =
+      checkpointState != nullptr && checkpointState->suppressProgressBar;
   if (!suppress && !isReplayBatch) {
     ggml_opt_epoch_callback_progress_bar(
         train, optCtx, dataset, result, displayBatch, ibatchMax, tStartUs);

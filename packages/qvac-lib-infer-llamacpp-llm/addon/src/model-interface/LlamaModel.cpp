@@ -1193,8 +1193,7 @@ std::string LlamaModel::finetune(
     // The LR scheduler advances once per optimizer step (once per sample),
     // not once per micro-batch callback, so use trainSplit directly.
     const int64_t schedulerTotalSteps = std::max<int64_t>(
-        int64_t{1},
-        static_cast<int64_t>(params.numberOfEpochs) * trainSplit);
+        int64_t{1}, static_cast<int64_t>(params.numberOfEpochs) * trainSplit);
 
     auto schedulerState = createLrScheduler(params, schedulerTotalSteps);
 
@@ -1274,11 +1273,10 @@ std::string LlamaModel::finetune(
 
         const int64_t epochStartStep =
             static_cast<int64_t>(resumeStartEpoch) * stepsPerEpoch;
-        const int64_t ibatchAtPause =
-            resumeMeta.globalStep - epochStartStep;
-        const int64_t firstIbatchOnResume = (resumeBatchCursor >= 0)
-            ? (resumeBatchCursor + 1) * ubatchPerSample
-            : 0;
+        const int64_t ibatchAtPause = resumeMeta.globalStep - epochStartStep;
+        const int64_t firstIbatchOnResume =
+            (resumeBatchCursor >= 0) ? (resumeBatchCursor + 1) * ubatchPerSample
+                                     : 0;
         checkpointState->resumeGlobalStepSkip =
             std::max(int64_t{0}, ibatchAtPause - firstIbatchOnResume);
 
@@ -1291,8 +1289,7 @@ std::string LlamaModel::finetune(
 
         if (checkpointState->resumeGlobalStepSkip > 0) {
           std::ostringstream skipMsg;
-          skipMsg << "Replaying "
-                  << checkpointState->resumeGlobalStepSkip
+          skipMsg << "Replaying " << checkpointState->resumeGlobalStepSkip
                   << " pre-pause micro-batches";
           QLOG_IF(Priority::INFO, skipMsg.str());
         }
