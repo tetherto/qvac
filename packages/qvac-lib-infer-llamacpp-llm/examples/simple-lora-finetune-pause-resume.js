@@ -14,6 +14,26 @@ const MODEL = {
 
 const sleep = (ms) => new Promise(resolve => setTimeout(resolve, ms))
 
+function waitForProgress (handle, minSteps, timeoutMs) {
+  minSteps = minSteps || 5
+  timeoutMs = timeoutMs || 300_000
+  return new Promise((resolve, reject) => {
+    let count = 0
+    const timer = setTimeout(() => {
+      handle.removeListener('stats', onStats)
+      reject(new Error(`waitForProgress: no progress after ${timeoutMs}ms (received ${count}/${minSteps} steps)`))
+    }, timeoutMs)
+    const onStats = () => {
+      if (++count >= minSteps) {
+        clearTimeout(timer)
+        handle.removeListener('stats', onStats)
+        resolve()
+      }
+    }
+    handle.on('stats', onStats)
+  })
+}
+
 const PAUSE_CHECKPOINT_PREFIX = 'pause_checkpoint_step_'
 
 function formatTime (ms) {
@@ -245,15 +265,22 @@ async function main () {
       console.log(`  ${formatProgress(stats, finetuneOptions.numberOfEpochs)}`)
     })
 
-    console.log('Training for 20 seconds to allow several batches to complete...')
-    await sleep(20000)
+    console.log('Waiting for 5 training steps before pausing...')
+    await waitForProgress(finetuneHandle, 5)
 
     console.log('')
     console.log('⏸️  Pausing finetuning...')
     await client.pause()
     const pauseResult = await finetuneHandle.await()
-    console.log('✅ Finetuning is now PAUSED\n')
     console.log('Pause result:', pauseResult)
+
+    if (pauseResult?.status === 'COMPLETED') {
+      console.log('✅ Training completed before pause took effect\n')
+      console.log('\n=== Test Complete ===')
+      return
+    }
+
+    console.log('✅ Finetuning is now PAUSED\n')
 
     console.log('Verifying pause checkpoint was created...')
     const maxRetries = 10
@@ -273,19 +300,12 @@ async function main () {
     }
     console.log('')
 
-    console.log('Keeping finetuning paused for 5 seconds...')
-    await sleep(5000)
-
-    console.log('')
     console.log('▶️  Resuming finetuning...')
     const resumeHandle = await client.finetune(finetuneOptions)
     resumeHandle.on('stats', stats => {
       console.log(`  ${formatProgress(stats, finetuneOptions.numberOfEpochs)}`)
     })
-    console.log('✅ Finetuning has RESUMED')
-
-    await sleep(500)
-    console.log('')
+    console.log('✅ Finetuning has RESUMED\n')
 
     console.log('Waiting for finetuning to complete...')
     const finetuneResult = await resumeHandle.await()

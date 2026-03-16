@@ -14,6 +14,38 @@ const MODEL = {
 
 const sleep = (ms) => new Promise(resolve => setTimeout(resolve, ms))
 
+function waitForProgress (handle, minSteps, timeoutMs) {
+  minSteps = minSteps || 5
+  timeoutMs = timeoutMs || 300_000
+  return new Promise((resolve, reject) => {
+    let count = 0
+    let settled = false
+    const timer = setTimeout(() => {
+      if (settled) return
+      settled = true
+      handle.removeListener('stats', onStats)
+      reject(new Error(`waitForProgress: no progress after ${timeoutMs}ms (received ${count}/${minSteps} steps)`))
+    }, timeoutMs)
+    const onStats = () => {
+      if (settled) return
+      if (++count >= minSteps) {
+        settled = true
+        clearTimeout(timer)
+        handle.removeListener('stats', onStats)
+        resolve()
+      }
+    }
+    handle.on('stats', onStats)
+    handle.await().then(() => {
+      if (settled) return
+      settled = true
+      clearTimeout(timer)
+      handle.removeListener('stats', onStats)
+      resolve()
+    })
+  })
+}
+
 function formatTime (ms) {
   if (!Number.isFinite(ms) || ms < 0) return '--:--'
   const totalSec = Math.floor(ms / 1000)
@@ -303,23 +335,30 @@ async function main () {
       return null
     }
 
-    const trainSeconds = 90
-    const resumeWaitSeconds = 10
+    const stepsBeforePause = 10
     const numberOfCycles = 2
+    let trainingFinished = false
 
     for (let cycle = 1; cycle <= numberOfCycles; cycle++) {
       console.log(`\n${'='.repeat(60)}`)
       console.log(`Pause/Resume Cycle ${cycle}`)
       console.log(`${'='.repeat(60)}\n`)
 
-      console.log(`Training for ${trainSeconds} seconds (1 minute 30 seconds)...`)
-      await sleep(trainSeconds * 1000)
+      console.log(`Waiting for ${stepsBeforePause} training steps before pausing...`)
+      await waitForProgress(finetuneHandle, stepsBeforePause)
 
       console.log(`⏸️  Pausing finetuning (cycle ${cycle})...`)
       await client.pause()
       const pauseResult = await finetuneHandle.await()
+
+      if (pauseResult?.status === 'COMPLETED') {
+        console.log(`✅ Training completed before pause took effect (cycle ${cycle})`)
+        trainingFinished = true
+        break
+      }
+
       if (pauseResult?.status !== 'PAUSED') {
-        console.log(`⚠️  Pause status: ${pauseResult?.status} (cycle ${cycle})`)
+        console.log(`⚠️  Unexpected pause status: ${pauseResult?.status} (cycle ${cycle})`)
       }
 
       const pauseStep = await getPauseStepNumber(finetuneOptions.checkpointSaveDir)
@@ -330,8 +369,6 @@ async function main () {
       }
 
       const resumeCheckpointStep = pauseStep
-
-      await sleep(resumeWaitSeconds * 1000)
 
       const checkpointBeforeResume = await getPauseStepNumber(finetuneOptions.checkpointSaveDir)
       if (resumeCheckpointStep !== null && checkpointBeforeResume !== resumeCheckpointStep) {
@@ -358,9 +395,11 @@ async function main () {
       }
     }
 
-    console.log(`\n${'='.repeat(60)}`)
-    console.log('All pause/resume cycles completed')
-    console.log(`${'='.repeat(60)}\n`)
+    if (!trainingFinished) {
+      console.log(`\n${'='.repeat(60)}`)
+      console.log('All pause/resume cycles completed, waiting for training to finish...')
+      console.log(`${'='.repeat(60)}\n`)
+    }
 
     const finetuneResult = await finetuneHandle.await()
     console.log('\n✅ Finetune completed:', finetuneResult)

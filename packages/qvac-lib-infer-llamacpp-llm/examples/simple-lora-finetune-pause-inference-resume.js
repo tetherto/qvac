@@ -14,6 +14,26 @@ const MODEL = {
 
 const sleep = (ms) => new Promise(resolve => setTimeout(resolve, ms))
 
+function waitForProgress (handle, minSteps, timeoutMs) {
+  minSteps = minSteps || 5
+  timeoutMs = timeoutMs || 300_000
+  return new Promise((resolve, reject) => {
+    let count = 0
+    const timer = setTimeout(() => {
+      handle.removeListener('stats', onStats)
+      reject(new Error(`waitForProgress: no progress after ${timeoutMs}ms (received ${count}/${minSteps} steps)`))
+    }, timeoutMs)
+    const onStats = () => {
+      if (++count >= minSteps) {
+        clearTimeout(timer)
+        handle.removeListener('stats', onStats)
+        resolve()
+      }
+    }
+    handle.on('stats', onStats)
+  })
+}
+
 function formatTime (ms) {
   if (!Number.isFinite(ms) || ms < 0) return '--:--'
   const totalSec = Math.floor(ms / 1000)
@@ -297,12 +317,20 @@ async function main () {
       console.log(`  ${formatProgress(stats, finetuneOptions.numberOfEpochs)}`)
     })
 
-    console.log('Training for 90 seconds (1 minute 30 seconds) before pausing...')
-    await sleep(90000)
+    console.log('Waiting for 10 training steps before pausing...')
+    await waitForProgress(finetuneHandle, 10)
 
     console.log('⏸️  Pausing finetuning...')
     await client.pause()
     const pauseResult = await finetuneHandle.await()
+
+    if (pauseResult?.status === 'COMPLETED') {
+      console.log('✅ Training completed before pause took effect\n')
+      console.log('\n✅ Finetune completed:', pauseResult)
+      console.log('\n=== Test Complete ===')
+      return
+    }
+
     console.log('✅ Finetuning is now PAUSED:', pauseResult?.status, '\n')
 
     console.log('Verifying pause checkpoint was created...')
@@ -405,9 +433,6 @@ async function main () {
       console.log(`  ${formatProgress(stats, finetuneOptions.numberOfEpochs)}`)
     })
     console.log('✅ Finetuning has RESUMED\n')
-
-    console.log('Training for another 5 seconds after resume...')
-    await sleep(5000)
 
     console.log('Waiting for finetuning to complete...')
     const finetuneResult = await resumeHandle.await()
