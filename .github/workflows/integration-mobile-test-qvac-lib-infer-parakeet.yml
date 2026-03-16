@@ -1099,7 +1099,6 @@ jobs:
           echo ""
 
           MAX_WAIT_TIME=7200  # 120 minutes
-          MAX_SCHEDULING_WAIT=1800  # 30 minutes
           ELAPSED=0
 
           while true; do
@@ -1112,24 +1111,6 @@ jobs:
               echo ""
               echo "Test run completed!"
               break
-            fi
-
-            if [ "${{ matrix.platform }}" = "iOS" ] && [ "$STATUS" = "SCHEDULING" ] && [ $ELAPSED -ge $MAX_SCHEDULING_WAIT ]; then
-              echo ""
-              echo "Device Farm remained in SCHEDULING for $MAX_SCHEDULING_WAIT seconds on iOS."
-              echo "Treating this as an infrastructure capacity issue and not failing the workflow."
-              echo "test_result=INFRA_SCHEDULING_TIMEOUT" >> $GITHUB_OUTPUT
-              echo "test_counters<<EOF" >> $GITHUB_OUTPUT
-              echo "{}" >> $GITHUB_OUTPUT
-              echo "EOF" >> $GITHUB_OUTPUT
-              echo "test_total=0" >> $GITHUB_OUTPUT
-              echo "test_passed=0" >> $GITHUB_OUTPUT
-              echo "test_failed=0" >> $GITHUB_OUTPUT
-              echo "test_skipped=0" >> $GITHUB_OUTPUT
-              echo "user_test_count=0" >> $GITHUB_OUTPUT
-              echo "user_test_passed=0" >> $GITHUB_OUTPUT
-              echo "user_test_failed=0" >> $GITHUB_OUTPUT
-              exit 0
             fi
 
             if [ $ELAPSED -ge $MAX_WAIT_TIME ]; then

@@ -22,7 +22,8 @@ const ERR_CODES = Object.freeze({
   VOCAB_NOT_FOUND: 24012,
   ENCODER_NOT_FOUND: 24013,
   DECODER_NOT_FOUND: 24014,
-  INVALID_CONFIG: 24015
+  INVALID_CONFIG: 24015,
+  JOB_ALREADY_RUNNING: 24016
 })
 
 addCodes({
@@ -85,6 +86,10 @@ addCodes({
   [ERR_CODES.INVALID_CONFIG]: {
     name: 'INVALID_CONFIG',
     message: (message) => `Invalid configuration: ${message}`
+  },
+  [ERR_CODES.JOB_ALREADY_RUNNING]: {
+    name: 'JOB_ALREADY_RUNNING',
+    message: () => 'Cannot set new job: a job is already set or being processed'
   }
 }, {
   name,

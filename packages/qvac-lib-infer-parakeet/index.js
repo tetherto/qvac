@@ -9,7 +9,6 @@ const { ParakeetInterface } = require('./parakeet')
 const { QvacErrorAddonParakeet, ERR_CODES } = require('./lib/error')
 
 const END_OF_INPUT = 'end of job'
-const RUN_BUSY_ERROR_MESSAGE = 'Cannot set new job: a job is already set or being processed'
 
 /**
  * Required model files for TDT model
@@ -350,7 +349,9 @@ class TranscriptionParakeet extends BaseInference {
    */
   async _runInternal (audioStream) {
     if (this.exclusiveRun && this._hasActiveResponse) {
-      throw new Error(RUN_BUSY_ERROR_MESSAGE)
+      throw new QvacErrorAddonParakeet({
+        code: ERR_CODES.JOB_ALREADY_RUNNING
+      })
     }
 
     const jobId = await this.addon.append({

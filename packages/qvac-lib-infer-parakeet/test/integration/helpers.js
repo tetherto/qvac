@@ -3,6 +3,7 @@
 const fs = require('bare-fs')
 const path = require('bare-path')
 const os = require('bare-os')
+const process = require('bare-process')
 const { Readable } = require('bare-stream')
 const { spawn } = require('bare-subprocess')
 const TranscriptionParakeet = require('../../index.js')
@@ -149,10 +150,8 @@ function setupJsLogger (binding = null) {
     actualBinding.__qvacReleaseLoggerPatched = true
   }
 
-  const shouldEnableNativeLogs = typeof globalThis.process !== 'undefined' &&
-    globalThis.process &&
-    globalThis.process.env &&
-    globalThis.process.env.QVAC_TEST_NATIVE_LOGS === '1'
+  const shouldEnableNativeLogs = process.env &&
+    process.env.QVAC_TEST_NATIVE_LOGS === '1'
 
   if (shouldEnableNativeLogs && !actualBinding.__qvacLoggerSet) {
     const LOG_PRIORITIES = ['ERROR', 'WARNING', 'INFO', 'DEBUG']

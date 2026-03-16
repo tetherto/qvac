@@ -86,6 +86,7 @@ class ParakeetInterface {
     this._nextJobId = 1
     this._activeJobId = null
     this._bufferedAudio = []
+    this._ignoreNextCancelledError = false
 
     // Create the native instance
     this._handle = this._binding.createInstance(
@@ -122,6 +123,15 @@ class ParakeetInterface {
       mappedEvent = 'JobEnded'
     } else if (isTranscriptOutput || String(event).includes('Output')) {
       mappedEvent = 'Output'
+    }
+
+    // Cancellation is cooperative in the shared addon-cpp runner, so a
+    // terminal "Job cancelled" callback for the previous job can arrive after
+    // the next job has already been accepted. Swallow that one stale callback
+    // so the new job keeps ownership of its Output/JobEnded events.
+    if (mappedEvent === 'Error' && this._ignoreNextCancelledError && error === 'Job cancelled') {
+      this._ignoreNextCancelledError = false
+      return
     }
 
     const jobId = this._activeJobId
@@ -186,7 +196,6 @@ class ParakeetInterface {
       if (data?.type === END_OF_INPUT) {
         const currentJobId = this._nextJobId
         const input = this._concatBufferedAudio()
-        const previousJobId = this._activeJobId
         const previousState = this._state
         let accepted = false
         try {
@@ -195,16 +204,15 @@ class ParakeetInterface {
             input
           })
         } catch (error) {
-          this._activeJobId = previousJobId
           this._setState(previousState)
           throw error
         }
         if (!accepted) {
-          this._activeJobId = previousJobId
           this._setState(previousState)
           throw new Error('Cannot set new job: a job is already set or being processed')
         }
 
+        // Only replace the active job after the native runner accepts it.
         this._activeJobId = currentJobId
         this._nextJobId += 1
         this._bufferedAudio = []
@@ -274,6 +282,7 @@ class ParakeetInterface {
       await this._binding.cancel(this._handle, jobId)
       this._bufferedAudio = []
       this._activeJobId = null
+      this._ignoreNextCancelledError = true
       this._setState(state.LISTENING)
     } catch (error) {
       throw createParakeetError(ERR_CODES.FAILED_TO_CANCEL, error.message, error)
