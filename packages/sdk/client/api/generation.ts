@@ -69,98 +69,125 @@ export function generation(params: GenerationClientParams): GenerationResult {
     }),
   };
 
-  let diffusionStats: DiffusionStats | undefined;
   let statsResolver: (value: DiffusionStats | undefined) => void = () => {};
-  const statsPromise = new Promise<DiffusionStats | undefined>((resolve) => {
-    statsResolver = resolve;
-  });
+  let statsRejecter: (error: unknown) => void = () => {};
+  const statsPromise = new Promise<DiffusionStats | undefined>(
+    (resolve, reject) => {
+      statsResolver = resolve;
+      statsRejecter = reject;
+    },
+  );
+  statsPromise.catch(() => {});
 
-  const progressTicks: GenerationProgressTick[] = [];
+  const outputQueue: { data: string; outputIndex: number }[] = [];
+  const progressQueue: GenerationProgressTick[] = [];
+  const collectedBuffers: Buffer[] = [];
+  let outputDone = false;
   let progressDone = false;
-  let progressNotify: (() => void) | undefined;
+  let outputResolve: (() => void) | null = null;
+  let progressResolve: (() => void) | null = null;
+  let streamError: Error | null = null;
 
-  function pushProgress(tick: GenerationProgressTick) {
-    progressTicks.push(tick);
-    if (progressNotify) {
-      progressNotify();
-      progressNotify = undefined;
+  let outputsResolver: (value: Buffer[]) => void = () => {};
+  let outputsRejecter: (error: unknown) => void = () => {};
+  const outputsPromise = new Promise<Buffer[]>((resolve, reject) => {
+    outputsResolver = resolve;
+    outputsRejecter = reject;
+  });
+  outputsPromise.catch(() => {});
+
+  const processResponses = async () => {
+    try {
+      for await (const response of streamRpc(request)) {
+        if (
+          response &&
+          typeof response === "object" &&
+          "type" in response &&
+          response.type === "generationStream"
+        ) {
+          const parsed = generationStreamResponseSchema.parse(response);
+
+          if (parsed.step != null && parsed.totalSteps != null && parsed.elapsedMs != null) {
+            progressQueue.push({ step: parsed.step, totalSteps: parsed.totalSteps, elapsedMs: parsed.elapsedMs });
+            if (progressResolve) {
+              progressResolve();
+              progressResolve = null;
+            }
+          }
+
+          if (parsed.data) {
+            const outputEntry = { data: parsed.data, outputIndex: parsed.outputIndex ?? 0 };
+            outputQueue.push(outputEntry);
+            collectedBuffers.push(Buffer.from(parsed.data, "base64"));
+            if (outputResolve) {
+              outputResolve();
+              outputResolve = null;
+            }
+          }
+
+          if (parsed.done) {
+            statsResolver(parsed.stats);
+            outputsResolver(collectedBuffers);
+          }
+        }
+      }
+    } catch (error) {
+      streamError = error instanceof Error ? error : new Error(String(error));
+      statsRejecter(streamError);
+      outputsRejecter(streamError);
     }
-  }
 
-  function finishProgress() {
+    outputDone = true;
     progressDone = true;
-    if (progressNotify) {
-      progressNotify();
-      progressNotify = undefined;
+    if (outputResolve) {
+      outputResolve();
+      outputResolve = null;
     }
-  }
+    if (progressResolve) {
+      progressResolve();
+      progressResolve = null;
+    }
+  };
+
+  void processResponses();
 
   const progressStream = (async function* (): AsyncGenerator<GenerationProgressTick> {
-    let index = 0;
     while (true) {
-      if (index < progressTicks.length) {
-        yield progressTicks[index++]!;
+      if (progressQueue.length > 0) {
+        yield progressQueue.shift()!;
       } else if (progressDone) {
+        if (streamError) throw streamError;
         return;
       } else {
-        await new Promise<void>((resolve) => { progressNotify = resolve; });
+        await new Promise<void>((resolve) => { progressResolve = resolve; });
       }
     }
   })();
 
   if (streaming) {
     const outputStream = (async function* () {
-      for await (const response of streamRpc(request)) {
-        if (response.type === "generationStream") {
-          const parsed = generationStreamResponseSchema.parse(response);
-          if (parsed.step != null && parsed.totalSteps != null && parsed.elapsedMs != null) {
-            pushProgress({ step: parsed.step, totalSteps: parsed.totalSteps, elapsedMs: parsed.elapsedMs });
-          }
-          if (parsed.data) {
-            yield { data: parsed.data, outputIndex: parsed.outputIndex ?? 0 };
-          }
-          if (parsed.done) {
-            diffusionStats = parsed.stats;
-            statsResolver(diffusionStats);
-            finishProgress();
-          }
+      while (true) {
+        if (outputQueue.length > 0) {
+          yield outputQueue.shift()!;
+        } else if (outputDone) {
+          if (streamError) throw streamError;
+          return;
+        } else {
+          await new Promise<void>((resolve) => { outputResolve = resolve; });
         }
       }
-      finishProgress();
     })();
 
     return {
       outputStream,
       progressStream,
-      outputs: Promise.resolve([]),
+      outputs: outputsPromise,
       stats: statsPromise,
     };
   }
 
   const outputStream = (async function* () {
     // Empty generator for non-streaming mode
-  })();
-
-  const outputsPromise = (async () => {
-    const collected: Buffer[] = [];
-    for await (const response of streamRpc(request)) {
-      if (response.type === "generationStream") {
-        const parsed = generationStreamResponseSchema.parse(response);
-        if (parsed.step != null && parsed.totalSteps != null && parsed.elapsedMs != null) {
-          pushProgress({ step: parsed.step, totalSteps: parsed.totalSteps, elapsedMs: parsed.elapsedMs });
-        }
-        if (parsed.data) {
-          collected.push(Buffer.from(parsed.data, "base64"));
-        }
-        if (parsed.done) {
-          diffusionStats = parsed.stats;
-          statsResolver(diffusionStats);
-          finishProgress();
-        }
-      }
-    }
-    finishProgress();
-    return collected;
   })();
 
   return {
