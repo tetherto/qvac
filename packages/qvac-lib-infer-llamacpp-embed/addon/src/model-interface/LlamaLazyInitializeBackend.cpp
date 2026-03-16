@@ -3,6 +3,7 @@
 #include <filesystem>
 #include <string>
 
+#include <ggml-backend.h>
 #include <llama.h>
 
 #include "logging.hpp"
@@ -68,15 +69,30 @@ void LlamaLazyInitializeBackend::decrementRefCount() {
   std::lock_guard<std::mutex> lock(g_initMutex);
   if (g_refCount > 0) {
     g_refCount--;
-    // Intentionally never call llama_backend_free(). The backend is
-    // process-global state: dynamically-loaded backend libraries (Vulkan,
-    // Metal, etc.) register static destructors that reference the ggml
-    // backend registry. Freeing the registry here causes use-after-free
-    // (SIGSEGV / exit 139) when those static destructors run at process
-    // exit. Keeping the backend alive is safe — the OS reclaims all
-    // memory on exit — and avoids repeated ggml_backend_load_all() calls
-    // that can corrupt the global registry on re-init.
+    if (g_refCount == 0 && g_initialized) {
+      shutdownLocked();
+    }
   }
+}
+
+void LlamaLazyInitializeBackend::shutdownLocked() {
+  // Explicitly unload all dynamically-loaded backend libraries (Vulkan,
+  // Metal, DirectX, etc.) BEFORE freeing the llama backend. This triggers
+  // their static destructors / atexit handlers while the ggml backend
+  // registry is still alive and valid. Without this, those destructors
+  // run during process exit in undefined order relative to the ggml
+  // registry destruction, causing use-after-free (SIGSEGV / exit 139).
+  //
+  // Unload in reverse order to respect potential inter-backend dependencies.
+  for (auto i = static_cast<int>(ggml_backend_reg_count()) - 1; i >= 0;
+       --i) {
+    ggml_backend_reg_t reg =
+        ggml_backend_reg_get(static_cast<size_t>(i));
+    ggml_backend_unload(reg);
+  }
+
+  llama_backend_free();
+  g_initialized = false;
 }
 
 LlamaBackendsHandle::LlamaBackendsHandle(const std::string& backendsDir)

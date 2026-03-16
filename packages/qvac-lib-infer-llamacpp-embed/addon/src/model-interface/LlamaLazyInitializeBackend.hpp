@@ -25,9 +25,20 @@ public:
   static void incrementRefCount();
 
   /**
-   * Decrement the reference count and free backend if count reaches zero.
+   * Decrement the reference count. When it reaches zero, explicitly unloads
+   * all dynamically-loaded backends and frees the llama backend.
    */
   static void decrementRefCount();
+
+  /**
+   * Explicitly shut down the backend: unload all dynamically-loaded GPU
+   * backend libraries (triggering their destructors while ggml state is
+   * still alive), then free the llama backend. This prevents SIGSEGV at
+   * process exit from static destructor ordering issues.
+   *
+   * Must be called under g_initMutex.
+   */
+  static void shutdownLocked();
 
 private:
   static std::mutex g_initMutex;

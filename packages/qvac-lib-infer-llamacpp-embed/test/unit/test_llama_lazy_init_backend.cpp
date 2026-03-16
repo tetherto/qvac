@@ -72,11 +72,11 @@ TEST_F(LlamaLazyInitializeBackendTest, RefCountOperations) {
     LlamaLazyInitializeBackend::decrementRefCount();
   });
 
-  // Backend remains initialized even after refcount reaches zero
-  // (intentionally never freed to avoid static destructor ordering issues)
+  // Backend is shut down when refcount reaches zero (explicit backend unload
+  // + llama_backend_free). Re-initialization should succeed.
   bool canReinitialize = LlamaLazyInitializeBackend::initialize("");
-  EXPECT_FALSE(canReinitialize)
-      << "Backend should remain initialized (never freed)";
+  EXPECT_TRUE(canReinitialize)
+      << "Backend should be freed and re-initializable after refcount = 0";
 }
 
 TEST_F(LlamaLazyInitializeBackendTest, BackendsHandleConstruction) {
@@ -91,12 +91,12 @@ TEST_F(LlamaLazyInitializeBackendTest, BackendsHandleConstruction) {
     EXPECT_FALSE(alreadyInitialized)
         << "Backend should already be initialized by handle";
   }
-  // Handle destroyed — refcount decremented but backend stays initialized
-  // (intentionally never freed)
-  bool stillInitialized =
-      !LlamaLazyInitializeBackend::initialize(backendsDir);
-  EXPECT_TRUE(stillInitialized)
-      << "Backend should remain initialized after handle destruction";
+  // Handle destroyed — refcount reached zero, backend shut down.
+  // Re-initialization should succeed.
+  bool canReinitialize =
+      LlamaLazyInitializeBackend::initialize(backendsDir);
+  EXPECT_TRUE(canReinitialize)
+      << "Backend should be freed after last handle destruction";
 }
 
 TEST_F(LlamaLazyInitializeBackendTest, BackendsHandleMoveConstruction) {
@@ -185,13 +185,11 @@ TEST_F(LlamaLazyInitializeBackendTest, RefCountReachesZero) {
     LlamaLazyInitializeBackend::decrementRefCount();
   });
 
-  // Backend remains initialized even after refcount reaches zero.
-  // Intentionally never freed to avoid static destructor ordering issues
-  // (dynamically-loaded backend libraries register atexit handlers that
-  // reference the ggml registry).
+  // Backend is shut down when refcount reaches zero (explicit backend unload
+  // + llama_backend_free). Re-initialization should succeed.
   bool canReinitialize = LlamaLazyInitializeBackend::initialize("");
-  EXPECT_FALSE(canReinitialize)
-      << "Backend should remain initialized (never freed)";
+  EXPECT_TRUE(canReinitialize)
+      << "Backend should be freed and re-initializable after refcount = 0";
 }
 
 TEST_F(LlamaLazyInitializeBackendTest, BackendsHandleSelfAssignment) {

@@ -16,8 +16,8 @@ protected:
 };
 
 TEST_F(LlamaLazyInitializeBackendTest, InitializeWithEmptyDir) {
-  // Backend may already be initialized by a prior test (process-global state,
-  // intentionally never freed). Just verify idempotency.
+  // Backend may already be initialized by a prior test. Just verify
+  // idempotency.
   LlamaLazyInitializeBackend::initialize("");
 
   bool result2 = LlamaLazyInitializeBackend::initialize("");
@@ -114,12 +114,10 @@ TEST_F(LlamaLazyInitializeBackendTest, RefCountReachesZero) {
     LlamaLazyInitializeBackend::decrementRefCount();
   });
 
-  // Backend remains initialized even after refcount reaches zero.
-  // Intentionally never freed to avoid static destructor ordering issues
-  // (dynamically-loaded backend libraries register atexit handlers that
-  // reference the ggml registry).
+  // Backend is shut down when refcount reaches zero (explicit backend unload
+  // + llama_backend_free). Re-initialization should succeed.
   bool canReinitialize = LlamaLazyInitializeBackend::initialize("");
-  EXPECT_FALSE(canReinitialize);
+  EXPECT_TRUE(canReinitialize);
 }
 
 TEST_F(LlamaLazyInitializeBackendTest, BackendsHandleSelfAssignment) {
