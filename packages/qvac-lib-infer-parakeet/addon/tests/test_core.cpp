@@ -67,7 +67,7 @@ TEST_F(ParakeetModelTest, ConstructorCreatesModel) {
 
 TEST_F(ParakeetModelTest, GetNameReturnsCorrectName) {
   ParakeetModel model(config);
-  EXPECT_EQ(model.getName(), "ParakeetModel");
+  EXPECT_EQ(model.getName(), "Parakeet-TDT");
 }
 
 TEST_F(ParakeetModelTest, GetDisplayNameForDifferentModels) {
