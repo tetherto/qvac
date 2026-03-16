@@ -88,19 +88,11 @@ struct ThreadPoolDeleter{
     void operator()(ggml_threadpool* ptr) noexcept {
       if (ptr == nullptr) return;
       auto* cpuDev = ggml_backend_dev_by_type(GGML_BACKEND_DEVICE_TYPE_CPU);
-      if (cpuDev == nullptr) {
-        QLOG(qvac_lib_inference_addon_cpp::logger::Priority::ERROR,
-             "ThreadPoolDeleter: no CPU backend found, leaking threadpool");
-        return;
-      }
+      if (cpuDev == nullptr) return;
       auto* reg = ggml_backend_dev_backend_reg(cpuDev);
       void* procAddr =
           ggml_backend_reg_get_proc_address(reg, "ggml_threadpool_free");
-      if (procAddr == nullptr) {
-        QLOG(qvac_lib_inference_addon_cpp::logger::Priority::ERROR,
-             "ThreadPoolDeleter: ggml_threadpool_free not found, leaking threadpool");
-        return;
-      }
+      if (procAddr == nullptr) return;
       // NOLINTNEXTLINE(cppcoreguidelines-pro-type-reinterpret-cast)
       auto* ggmlThreadpoolFreeFn =
           reinterpret_cast<decltype(ggml_threadpool_free)*>(procAddr);
