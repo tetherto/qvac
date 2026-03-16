@@ -167,5 +167,6 @@ jobs:
         working-directory: ${{ inputs.workdir }}
         run: npm run test:integration
         env:
+          NODE_OPTIONS: "--max-old-space-size=4096"
           CHATTERBOX_VARIANT: ${{ matrix.variant }}
           QASE_API_TOKEN: ${{ secrets.QASE_API_TOKEN }}
