@@ -32,6 +32,7 @@ jobs:
       AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
       AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
       WORKDIR: packages/lib-infer-diffusion
+      NO_GPU: ${{ matrix.no_gpu || 'false' }}
     permissions:
       contents: read
       packages: read
@@ -43,6 +44,7 @@ jobs:
             platform: linux
             arch: x64
             runner: ubuntu-22.04
+            no_gpu: 'true'
           - os: ubuntu-24.04
             platform: linux
             arch: x64
@@ -51,18 +53,21 @@ jobs:
             platform: linux
             arch: arm64
             runner: ubuntu-24.04-arm
+            no_gpu: 'true'
           - os: ubuntu-22.04-arm
             platform: linux
             arch: arm64
             runner: ubuntu-22.04-arm
-          - os: macos-15-xlarge
+            no_gpu: 'true'
+          - os: macos-26-xlarge
             platform: darwin
             arch: arm64
-            runner: macos-15-xlarge
+            runner: macos-26-xlarge
           - os: macos-15-large
             platform: darwin
             arch: x64
             runner: macos-15-large
+            no_gpu: 'true'
           - os: windows-11
             platform: win32
             arch: x64

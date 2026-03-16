@@ -3,7 +3,8 @@ import type {
   PluginInvokeRequest,
   PluginInvokeStreamRequest,
   PluginInvokeStreamResponse,
-} from "@/schemas/plugin";
+  RPCOptions,
+} from "@/schemas";
 import { InvalidResponseError } from "@/utils/errors-client";
 
 export interface InvokePluginOptions<TParams = unknown> {
@@ -17,6 +18,7 @@ export interface InvokePluginOptions<TParams = unknown> {
  */
 export async function invokePlugin<TResponse = unknown, TParams = unknown>(
   options: InvokePluginOptions<TParams>,
+  rpcOptions?: RPCOptions,
 ): Promise<TResponse> {
   const request: PluginInvokeRequest = {
     type: "pluginInvoke",
@@ -25,7 +27,7 @@ export async function invokePlugin<TResponse = unknown, TParams = unknown>(
     params: options.params,
   };
 
-  const response = await send(request);
+  const response = await send(request, undefined, rpcOptions);
 
   if (response.type !== "pluginInvoke") {
     throw new InvalidResponseError("pluginInvoke");
@@ -40,7 +42,10 @@ export async function invokePlugin<TResponse = unknown, TParams = unknown>(
 export async function* invokePluginStream<
   TResponse = unknown,
   TParams = unknown,
->(options: InvokePluginOptions<TParams>): AsyncGenerator<TResponse> {
+>(
+  options: InvokePluginOptions<TParams>,
+  rpcOptions?: RPCOptions,
+): AsyncGenerator<TResponse> {
   const request: PluginInvokeStreamRequest = {
     type: "pluginInvokeStream",
     modelId: options.modelId,
@@ -48,7 +53,7 @@ export async function* invokePluginStream<
     params: options.params,
   };
 
-  for await (const chunk of stream(request)) {
+  for await (const chunk of stream(request, undefined, rpcOptions)) {
     const response = chunk as PluginInvokeStreamResponse;
     if (response.type !== "pluginInvokeStream") {
       throw new InvalidResponseError("pluginInvokeStream");

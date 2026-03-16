@@ -8,7 +8,7 @@ on:
     branches:
       - main
     paths:
-      - 'packages/qvac-sdk/**'
+      - 'packages/sdk/**'
       - 'docs/website/scripts/**'
 
 concurrency:
@@ -37,13 +37,13 @@ jobs:
         run: bun install
 
       - name: Install SDK dependencies
-        working-directory: packages/qvac-sdk
+        working-directory: packages/sdk
         run: bun install
 
       - name: Generate docs
         working-directory: docs/website
         env:
-          SDK_PATH: ${{ github.workspace }}/packages/qvac-sdk
+          SDK_PATH: ${{ github.workspace }}/packages/sdk
         run: bun run docs:generate
 
       - name: Check for doc changes

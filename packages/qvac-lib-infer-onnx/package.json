@@ -1,6 +1,6 @@
 {
   "name": "@qvac/onnx",
-  "version": "0.12.8",
+  "version": "0.12.12",
   "description": "Bare addon for ONNX Runtime session management",
   "addon": true,
   "engines": {
@@ -20,6 +20,7 @@
   "files": [
     "binding.js",
     "prebuilds/*/*.bare",
+    "prebuilds/*/*.bare.exports",
     "prebuilds/include",
     "prebuilds/share/qvac-onnx",
     "LICENSE",
@@ -32,7 +33,7 @@
   "author": "Tether",
   "license": "Apache-2.0",
   "devDependencies": {
-    "cmake-bare": "1.7.5",
+    "cmake-bare": "^1.7.5",
     "cmake-vcpkg": "^1.1.0",
     "standard": "^17.0.0"
   }

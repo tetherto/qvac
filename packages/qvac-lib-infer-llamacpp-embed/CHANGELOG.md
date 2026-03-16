@@ -1,5 +1,11 @@
 # Changelog
 
+## [0.12.0] - 2026-03-13
+
+### Changed
+
+- Updated qvac-fabric dependency from 7248.1.3 to 7248.1.4.
+
 ## [0.11.3] - 2026-03-06
 
 ### Fixed

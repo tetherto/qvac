@@ -9,7 +9,7 @@ const {
   setupJsLogger,
   getTestPaths,
   ensureModelForType,
-  readFileChunked
+  getNamedPathsConfig
 } = require('./helpers.js')
 
 const { samplesDir } = getTestPaths()
@@ -22,22 +22,6 @@ function loadAudioSample () {
   const audio = new Float32Array(pcm.length)
   for (let i = 0; i < pcm.length; i++) audio[i] = pcm[i] / 32768.0
   return audio
-}
-
-function loadWeightsFromDir (parakeet, modelDir, files) {
-  const promises = []
-  for (const file of files) {
-    const filePath = path.join(modelDir, file)
-    if (!fs.existsSync(filePath)) continue
-    const chunks = []
-    for (const buffer of readFileChunked(filePath)) {
-      chunks.push(buffer)
-    }
-    const fullBuffer = Buffer.concat(chunks)
-    const chunk = new Uint8Array(fullBuffer.buffer, fullBuffer.byteOffset, fullBuffer.byteLength)
-    promises.push(parakeet.loadWeights({ filename: file, chunk, completed: true }))
-  }
-  return Promise.all(promises)
 }
 
 test('CTC desktop integration — English transcription', { timeout: 600000 }, async (t) => {
@@ -67,7 +51,8 @@ test('CTC desktop integration — English transcription', { timeout: 600000 }, a
       maxThreads: 4,
       useGPU: false,
       sampleRate: 16000,
-      channels: 1
+      channels: 1,
+      ...getNamedPathsConfig('ctc', modelDir)
     }, (_, event, __, output, error) => {
       if (event === 'Output' && output) {
         const segments = Array.isArray(output) ? output : [output]
@@ -82,7 +67,6 @@ test('CTC desktop integration — English transcription', { timeout: 600000 }, a
       if (error) console.error('[ctc] Error:', error)
     })
 
-    await loadWeightsFromDir(parakeet, modelDir, ['model.onnx', 'model.onnx_data', 'tokenizer.json'])
     await parakeet.activate()
 
     await parakeet.append({ type: 'audio', data: audio.buffer })
@@ -130,7 +114,8 @@ test('EOU desktop integration — streaming transcription', { timeout: 600000 },
       maxThreads: 4,
       useGPU: false,
       sampleRate: 16000,
-      channels: 1
+      channels: 1,
+      ...getNamedPathsConfig('eou', modelDir)
     }, (_, event, __, output, error) => {
       if (event === 'Output' && output) {
         const segments = Array.isArray(output) ? output : [output]
@@ -145,7 +130,6 @@ test('EOU desktop integration — streaming transcription', { timeout: 600000 },
       if (error) console.error('[eou] Error:', error)
     })
 
-    await loadWeightsFromDir(parakeet, modelDir, ['encoder.onnx', 'decoder_joint.onnx', 'tokenizer.json'])
     await parakeet.activate()
 
     await parakeet.append({ type: 'audio', data: audio.buffer })
@@ -193,7 +177,8 @@ test('Sortformer desktop integration — speaker diarization', { timeout: 600000
       maxThreads: 4,
       useGPU: false,
       sampleRate: 16000,
-      channels: 1
+      channels: 1,
+      ...getNamedPathsConfig('sortformer', modelDir)
     }, (_, event, __, output, error) => {
       if (event === 'Output' && output) {
         const segments = Array.isArray(output) ? output : [output]
@@ -208,7 +193,6 @@ test('Sortformer desktop integration — speaker diarization', { timeout: 600000
       if (error) console.error('[sortformer] Error:', error)
     })
 
-    await loadWeightsFromDir(parakeet, modelDir, ['sortformer.onnx'])
     await parakeet.activate()
 
     await parakeet.append({ type: 'audio', data: audio.buffer })

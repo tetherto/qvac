@@ -5,15 +5,16 @@
   "type": "module",
   "description": "SDK tests using QVAC test framework",
   "scripts": {
-    "build": "tsc",
+    "build": "npm run clean && tsc",
     "typecheck": "tsc --noEmit",
     "clean": "rm -rf dist",
     "consumer:desktop:run": "qvac-test run:consumer:desktop"
   },
   "dependencies": {
     "@qvac/sdk": "file:..",
-    "@tetherto/qvac-test-suite": "^0.1.2",
-    "mqtt": "^5.14.1"
+    "@tetherto/qvac-test-suite": "0.3.0",
+    "mqtt": "^5.14.1",
+    "react-native-bare-kit": "^0.11.4"
   },
   "devDependencies": {
     "typescript": "^5.9.3"

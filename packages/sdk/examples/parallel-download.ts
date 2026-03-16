@@ -18,7 +18,10 @@ const assets = [
   { name: "GTE Large FP16", src: GTE_LARGE_FP16 },
 ];
 
-const timers: Record<string, { start: number; firstProgress?: number; end?: number }> = {};
+const timers: Record<
+  string,
+  { start: number; firstProgress?: number; end?: number }
+> = {};
 
 console.log(`\n=== Parallel Download (${assets.length} assets) ===\n`);
 const wallStart = now();
@@ -59,14 +62,16 @@ try {
 
     const status = result.status === "fulfilled" ? "OK" : "FAILED";
     const reason = result.status === "rejected" ? ` — ${result.reason}` : "";
-    const timeToFirst = t.firstProgress != null
-      ? `${((t.firstProgress - t.start) / 1000).toFixed(1)}s`
-      : "N/A";
-    const total = t.end != null
-      ? `${((t.end - t.start) / 1000).toFixed(1)}s`
-      : "N/A";
+    const timeToFirst =
+      t.firstProgress != null
+        ? `${((t.firstProgress - t.start) / 1000).toFixed(1)}s`
+        : "N/A";
+    const total =
+      t.end != null ? `${((t.end - t.start) / 1000).toFixed(1)}s` : "N/A";
 
-    console.log(`${status} ${asset.name}: first-progress=${timeToFirst}, total=${total}${reason}`);
+    console.log(
+      `${status} ${asset.name}: first-progress=${timeToFirst}, total=${total}${reason}`,
+    );
   }
 
   console.log(`\nWall time: ${((wallEnd - wallStart) / 1000).toFixed(1)}s`);

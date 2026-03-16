@@ -1,6 +1,10 @@
 import { getModelEntry } from "@/server/bare/registry/model-registry";
 import { getPlugin } from "@/server/plugins";
 import {
+  profileReplyHandler,
+  profileStreamHandler,
+} from "@/server/rpc/profiling";
+import {
   ModelNotFoundError,
   ModelIsDelegatedError,
   PluginNotFoundError,
@@ -64,17 +68,23 @@ export async function dispatchPluginReply<TRequest, TResponse>(
   handlerName: string,
   request: TRequest,
 ): Promise<TResponse> {
-  const { result, streaming } = resolvePluginHandler<TRequest, TResponse>(
-    modelId,
-    handlerName,
-    request,
-  );
+  return profileReplyHandler({ op: handlerName, request }, async () => {
+    const { result, streaming } = resolvePluginHandler<TRequest, TResponse>(
+      modelId,
+      handlerName,
+      request,
+    );
 
-  if (streaming) {
-    throw new PluginHandlerTypeMismatchError(handlerName, "reply", "streaming");
-  }
+    if (streaming) {
+      throw new PluginHandlerTypeMismatchError(
+        handlerName,
+        "reply",
+        "streaming",
+      );
+    }
 
-  return result as Promise<TResponse>;
+    return result as Promise<TResponse>;
+  });
 }
 
 /**
@@ -88,15 +98,21 @@ export async function* dispatchPluginStream<TRequest, TResponse>(
   handlerName: string,
   request: TRequest,
 ): AsyncGenerator<TResponse> {
-  const { result, streaming } = resolvePluginHandler<TRequest, TResponse>(
-    modelId,
-    handlerName,
-    request,
-  );
+  yield* profileStreamHandler({ op: handlerName, request }, async function* () {
+    const { result, streaming } = resolvePluginHandler<TRequest, TResponse>(
+      modelId,
+      handlerName,
+      request,
+    );
 
-  if (!streaming) {
-    throw new PluginHandlerTypeMismatchError(handlerName, "streaming", "reply");
-  }
+    if (!streaming) {
+      throw new PluginHandlerTypeMismatchError(
+        handlerName,
+        "streaming",
+        "reply",
+      );
+    }
 
-  yield* result as AsyncGenerator<TResponse>;
+    yield* result as AsyncGenerator<TResponse>;
+  });
 }

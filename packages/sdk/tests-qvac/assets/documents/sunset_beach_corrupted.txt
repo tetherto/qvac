@@ -1,0 +1,15 @@
+SUNSET BEACH REPORT - CORRUPTED VERSION
+
+Date: March 15, 2024
+Location: Pacific Coast
+Weather: Clear skies, gentle breeze
+
+The golden sun dipped below the horizon, painting the sky in vibrant shades of orange and pink. Waves gently lapped against the shore as seagulls called overhead. Temperature: 72°F.
+
+This file appears normal but contains hidden null bytes and invalid UTF-8 sequences:
+Illegal chars: 
+Hidden nulls: ✗✗✗✗
+Invalid UTF-8: ��������
+Control chars: 
+
+Truncated content follows... The rest of the file should appear here but is intentionally cut off to simulate file corruption or incomplete downloads. This tests whether applications handle partial or corrupted text files gracefully.

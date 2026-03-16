@@ -32,11 +32,10 @@ constexpr double PIXEL_INTENSITY_MAX = 255.0;
  *
  * @throws std::runtime_error if the Detector inference results are not in expected format
  */
-std::pair<cv::Mat, cv::Mat> extractOutputFromOrtValue(Ort::Value &outTensor) {
-  auto *outData = outTensor.GetTensorMutableData<float>();
-  Ort::TypeInfo typeInfo = outTensor.GetTypeInfo();
-  auto tensorInfo = typeInfo.GetTensorTypeAndShapeInfo();
-  std::vector<int64_t> outputShape = tensorInfo.GetShape();
+std::pair<cv::Mat, cv::Mat>
+extractOutputFromOrtValue(onnx_addon::OutputTensor& outTensor) {
+  auto* outData = outTensor.asMutable<float>();
+  const auto& outputShape = outTensor.shape;
 
   if (outputShape.size() != 4) {
     throw std::runtime_error("Expected output tensor with 4 dimensions, got " + std::to_string(outputShape.size()));
@@ -146,33 +145,32 @@ void normalizeMeanVariance(cv::Mat &inputImage,
 } // namespace
 
 StepDetectionInference::StepDetectionInference(
-    const ORTCHAR_T* pathDetector, bool useGPU, float magRatio)
-    : magRatio_(magRatio),
-      ortSession_(getSharedOrtEnv(), pathDetector, getOrtSessionOptions(useGPU)) {}
+    const std::string& pathDetector, bool useGPU, float magRatio)
+    : magRatio_(magRatio), session_(pathDetector, [&] {
+        onnx_addon::SessionConfig cfg;
+        cfg.provider = useGPU ? onnx_addon::ExecutionProvider::AUTO_GPU
+                              : onnx_addon::ExecutionProvider::CPU;
+        cfg.optimization = onnx_addon::GraphOptimizationLevel::EXTENDED;
+        return cfg;
+      }()) {}
 
-std::vector<Ort::Value> StepDetectionInference::runInference(cv::Mat inputBlob) {
+std::vector<onnx_addon::OutputTensor>
+StepDetectionInference::runInference(cv::Mat inputBlob) {
   int dims = inputBlob.dims;
   std::vector<int64_t> inputShape(dims);
   for (int i = 0; i < dims; i++) {
     inputShape[i] = inputBlob.size[i];
   }
-  size_t inputTensorSize = inputBlob.total();
   assert(sizeof(float) == inputBlob.elemSize());
-  auto *inputData = inputBlob.ptr<float>();
 
-  Ort::MemoryInfo memoryInfo = Ort::MemoryInfo::CreateCpu(OrtArenaAllocator, OrtMemTypeDefault);
-  Ort::Value inputTensor = Ort::Value::CreateTensor<float>(memoryInfo, inputData, inputTensorSize, inputShape.data(), inputShape.size());
+  onnx_addon::InputTensor input;
+  input.name = "input";
+  input.shape = inputShape;
+  input.type = onnx_addon::TensorType::FLOAT32;
+  input.data = inputBlob.ptr<float>();
+  input.dataSize = inputBlob.total() * sizeof(float);
 
-  constexpr std::array<const char*, 1> inputNames = {"input"};
-  constexpr std::array<const char*, 2> outputNames = {"output", "feature"};
-
-  return ortSession_.Run(
-      Ort::RunOptions{nullptr},
-      inputNames.data(),
-      &inputTensor,
-      1,
-      outputNames.data(),
-      2);
+  return session_.run(input);
 }
 
 StepDetectionInference::Output StepDetectionInference::process(const StepDetectionInference::Input &input) {
@@ -205,7 +203,7 @@ StepDetectionInference::Output StepDetectionInference::process(const StepDetecti
   QLOG(qvac_lib_inference_addon_cpp::logger::Priority::DEBUG, "[DetectionInference] Running ONNX inference...");
   ALOG_DEBUG(std::string("[DetectionInference] Running ONNX inference..."));
   auto t0 = std::chrono::high_resolution_clock::now();
-  std::vector<Ort::Value> outputTensors = runInference(inputBlob);
+  std::vector<onnx_addon::OutputTensor> outputTensors = runInference(inputBlob);
   auto t1 = std::chrono::high_resolution_clock::now();
   auto detectionMs = std::chrono::duration_cast<std::chrono::milliseconds>(t1 - t0).count();
   std::string inferenceMsg = "[DetectionInference] ONNX inference: " + std::to_string(detectionMs) + " ms";

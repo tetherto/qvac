@@ -17,7 +17,7 @@ const createToolsTest = (
   }>,
   expectation: {
     validation: "type";
-    expectedType: "string" | "number" | "array" | "embedding";
+    expectedType: "string" | "number" | "array";
   } = {
     validation: "type",
     expectedType: "string",
@@ -138,8 +138,8 @@ const toolsTestIds = [
   "tools-string-pattern-validation",
   "tools-boolean-parameter",
   "tools-integer-vs-number",
-  "tools-no-tools-model-behavior",
-  "tools-raw-field",
+  "tools-model-without-support",
+  "tools-raw-field-preservation",
   "tools-multiple-calls-same-turn",
   "tools-text-response-fallback",
   "tools-empty-parameters",
@@ -148,7 +148,7 @@ const toolsTestIds = [
   "tools-optional-nested-object",
   "tools-default-values",
   "tools-nullable-parameter",
-  "tools-readonly-parameters",
+  "tools-readonly-parameters-ignored",
   "tools-context-size-impact",
 ];
 

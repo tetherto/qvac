@@ -12,7 +12,7 @@ const RUN_BUSY_ERROR_MESSAGE = 'Cannot set new job: a job is already set or bein
 
 function normalizeRunOptions (runOptions) {
   if (runOptions === undefined) {
-    return { prefill: false }
+    return { prefill: false, generationParams: undefined }
   }
 
   if (!runOptions || typeof runOptions !== 'object' || Array.isArray(runOptions)) {
@@ -24,8 +24,14 @@ function normalizeRunOptions (runOptions) {
     throw new TypeError('prefill must be a boolean when provided')
   }
 
+  if (runOptions.generationParams !== undefined &&
+      (typeof runOptions.generationParams !== 'object' || runOptions.generationParams === null || Array.isArray(runOptions.generationParams))) {
+    throw new TypeError('generationParams must be a plain object when provided')
+  }
+
   return {
-    prefill: runOptions.prefill === true
+    prefill: runOptions.prefill === true,
+    generationParams: runOptions.generationParams
   }
 }
 
@@ -205,7 +211,7 @@ class LlmLlamacpp extends BaseInference {
       if (!Array.isArray(prompt)) {
         throw new TypeError('Prompt input must be Message[]')
       }
-      const { prefill } = normalizeRunOptions(runOptions)
+      const { prefill, generationParams } = normalizeRunOptions(runOptions)
 
       this.logger.info('Starting inference with prompt:', prompt)
 
@@ -236,7 +242,8 @@ class LlmLlamacpp extends BaseInference {
       promptMessages.push({
         type: 'text',
         input: JSON.stringify(textMessages),
-        prefill
+        prefill,
+        generationParams
       })
 
       const response = this._createResponse('OnlyOneJob')

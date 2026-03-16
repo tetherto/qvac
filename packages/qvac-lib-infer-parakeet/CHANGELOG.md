@@ -5,6 +5,18 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.1.11]
+
+### Changed
+- All model types (TDT, CTC, EOU, Sortformer) now require named file paths — buffer-based `_loadModelWeights` fallback removed
+- `_hasNamedPaths()` unified to cover all model types; `_hasAnyNamedPaths()` removed
+- `_load()` passes all named paths (TDT, CTC, EOU, Sortformer) to C++
+- `JSAdapter` parses CTC (`ctcModelPath`, `ctcModelDataPath`, `tokenizerPath`), EOU (`eouEncoderPath`, `eouDecoderPath`), and Sortformer (`sortformerPath`) path properties
+- `loadTDTSessions` requires `encoderPath` and `decoderPath`, removes buffer fallback
+- `loadCTCSessions` requires `ctcModelPath`, loads with C++-side temp staging for ONNX external data, reads tokenizer from `tokenizerPath`
+- `loadEOUSessions` requires `eouEncoderPath` and `eouDecoderPath`, reads tokenizer from `tokenizerPath`
+- `loadSortformerSessions` requires `sortformerPath`
+
 ## [0.1.10]
 
 ### Added

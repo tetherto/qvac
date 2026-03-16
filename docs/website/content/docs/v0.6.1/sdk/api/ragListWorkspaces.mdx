@@ -1,0 +1,35 @@
+---
+title: "ragListWorkspaces( )"
+titleStyle: code
+description: Lists all RAG workspaces with their open status.
+---
+
+```ts
+function ragListWorkspaces(): Promise<RagWorkspaceInfo[]>;
+```
+
+## Parameters
+
+None.
+
+## Returns
+
+`Promise<RagWorkspaceInfo[]>` — Array of workspace info.
+
+| Field | Type | Description |
+| --- | --- | --- |
+| name | `string` | Workspace name |
+| open | `boolean` | Whether the workspace is currently loaded in memory |
+
+## Throws
+
+| Error | When |
+| --- | --- |
+| `RAG_LIST_WORKSPACES_FAILED` | The operation fails |
+
+## Example
+
+```typescript
+const workspaces = await ragListWorkspaces();
+// [{ name: "default", open: true }, { name: "my-docs", open: false }]
+```

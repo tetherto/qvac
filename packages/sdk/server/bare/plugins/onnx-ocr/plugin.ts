@@ -14,7 +14,7 @@ import {
 } from "@/schemas";
 import { ModelLoadFailedError } from "@/utils/errors-server";
 import { hyperdriveUrlSchema } from "@/schemas/load-model";
-import { createStreamLogger } from "@/logging";
+import { createStreamLogger, registerAddonLogger } from "@/logging";
 import { parseModelPath } from "@/server/utils";
 import FilesystemDL from "@qvac/dl-filesystem";
 import { ONNXOcr } from "@qvac/ocr-onnx";
@@ -42,7 +42,8 @@ function createOCRModel(
 ) {
   const { dirPath } = parseModelPath(detectorPath);
   const loader = new FilesystemDL({ dirPath });
-  const logger = createStreamLogger(modelId, "ocr");
+  const logger = createStreamLogger(modelId, ModelType.onnxOcr);
+  registerAddonLogger(modelId, ModelType.onnxOcr, logger);
 
   const params = {
     pathDetector: detectorPath,

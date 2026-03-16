@@ -1,0 +1,36 @@
+---
+title: "ragDeleteEmbeddings( )"
+titleStyle: code
+description: Deletes document embeddings from the RAG vector database.
+---
+
+```ts
+function ragDeleteEmbeddings(params): Promise<void>;
+```
+
+## Parameters
+
+| Name | Type | Required? | Default | Description |
+| --- | --- | :---: | --- | --- |
+| params.ids | `string[]` | ✓ | — | Array of document IDs to delete |
+| params.modelId | `string` | ✗ | — | Embedding model ID (required if no cached RAG instance) |
+| params.workspace | `string` | ✗ | `"default"` | Workspace to delete from |
+
+## Returns
+
+`Promise<void>` — Resolves when the embeddings are deleted.
+
+## Throws
+
+| Error | When |
+| --- | --- |
+| `RAG_DELETE_FAILED` | The delete operation fails or workspace doesn't exist |
+
+## Example
+
+```typescript
+await ragDeleteEmbeddings({
+  ids: ["doc-1", "doc-2"],
+  workspace: "my-docs",
+});
+```

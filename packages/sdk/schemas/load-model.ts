@@ -12,11 +12,7 @@ import {
 } from "./transcription-config";
 import { delegateSchema } from "./delegate";
 import { nmtConfigSchema } from "./translation-config";
-import {
-  ttsConfigSchema,
-  ttsChatterboxConfigSchema,
-  ttsSupertonicConfigSchema,
-} from "./text-to-speech";
+import { ttsConfigSchema } from "./text-to-speech";
 import { ocrConfigSchema } from "./ocr";
 import {
   modelSrcInputSchema,
@@ -203,7 +199,13 @@ const loadModelOptionsToRequestBaseSchema = z.union([
       modelType: ModelType.nmtcppTranslation,
       modelSrc: modelInputToSrcSchema.parse(data.modelSrc),
       modelName: modelInputToNameSchema.parse(data.modelSrc),
-      modelConfig: data.modelConfig,
+        modelConfig: (data.modelConfig.engine === "Bergamot" && data.modelConfig.pivotModel) ? {
+            ...data.modelConfig,
+            pivotModel: {
+                ...data.modelConfig.pivotModel,
+                modelSrc: modelInputToSrcSchema.parse(data.modelConfig.pivotModel.modelSrc),
+            },
+        } : data.modelConfig,
       seed: data.seed ?? false,
       withProgress: data.withProgress ?? !!data.onProgress,
       delegate: data.delegate,
@@ -312,20 +314,6 @@ export const loadNmtModelRequestSchema = commonModelConfigSchema
   })
   .strict();
 
-export const loadTtsChatterboxModelRequestSchema = commonModelConfigSchema
-  .extend({
-    modelType: z.literal(ModelType.onnxTts),
-    modelConfig: ttsChatterboxConfigSchema,
-  })
-  .strict();
-
-export const loadTtsSupertonicModelRequestSchema = commonModelConfigSchema
-  .extend({
-    modelType: z.literal(ModelType.onnxTts),
-    modelConfig: ttsSupertonicConfigSchema,
-  })
-  .strict();
-
 export const loadTtsModelRequestSchema = commonModelConfigSchema
   .extend({
     modelType: z.literal(ModelType.onnxTts),
@@ -341,14 +329,13 @@ export const loadOcrModelRequestSchema = commonModelConfigSchema
   .strict();
 
 // Custom plugin catch-all: accepts any modelType string EXCEPT built-ins
-export const loadCustomPluginModelRequestSchema = commonModelConfigSchema.extend(
-  {
+export const loadCustomPluginModelRequestSchema =
+  commonModelConfigSchema.extend({
     modelType: z.string().refine((val) => !builtInModelTypes.has(val), {
       message: "Built-in model types must use their specific schema",
     }),
     modelConfig: z.record(z.string(), z.unknown()).optional(),
-  },
-);
+  });
 
 // Union of all load model request types (using z.union since each modelType accepts multiple values)
 export const loadModelSrcRequestSchema = z
@@ -438,10 +425,15 @@ export const registryUrlSchema = z
     };
   });
 
+const loadModelServerOptionsSchema = commonModelConfigSchema.extend({
+  modelType: z.string(),
+  modelConfig: z.record(z.string(), z.unknown()).optional(),
+});
+
 export const loadModelServerParamsSchema = z.object({
   modelId: z.string(),
   modelPath: z.string(),
-  options: loadModelSrcRequestSchema,
+  options: loadModelServerOptionsSchema,
   artifacts: z.record(z.string(), z.string()).optional(),
   modelName: z.string().optional(),
 });

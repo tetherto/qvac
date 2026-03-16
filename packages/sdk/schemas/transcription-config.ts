@@ -81,9 +81,7 @@ export type WhisperConfig = z.infer<typeof whisperConfigSchema>;
 
 // === Parakeet (NVIDIA NeMo ONNX) engine config ===
 
-// Only TDT is currently supported
-// Other variants (ctc, eou, sortformer) can be added once available upstream.
-export const parakeetModelTypeEnumSchema = z.enum(["tdt"]);
+export const parakeetModelTypeEnumSchema = z.enum(["tdt", "ctc", "sortformer"]);
 export type ParakeetModelVariant = z.infer<typeof parakeetModelTypeEnumSchema>;
 
 export const parakeetRuntimeConfigSchema = z.object({
@@ -97,11 +95,18 @@ export const parakeetRuntimeConfigSchema = z.object({
 });
 
 export const parakeetConfigSchema = parakeetRuntimeConfigSchema.extend({
-  parakeetEncoderSrc: modelSrcInputSchema,
+  // TDT sources
+  parakeetEncoderSrc: modelSrcInputSchema.optional(),
   parakeetEncoderDataSrc: modelSrcInputSchema.optional(),
-  parakeetDecoderSrc: modelSrcInputSchema,
-  parakeetVocabSrc: modelSrcInputSchema,
-  parakeetPreprocessorSrc: modelSrcInputSchema,
+  parakeetDecoderSrc: modelSrcInputSchema.optional(),
+  parakeetVocabSrc: modelSrcInputSchema.optional(),
+  parakeetPreprocessorSrc: modelSrcInputSchema.optional(),
+  // CTC sources
+  parakeetCtcModelSrc: modelSrcInputSchema.optional(),
+  parakeetCtcModelDataSrc: modelSrcInputSchema.optional(),
+  parakeetTokenizerSrc: modelSrcInputSchema.optional(),
+  // Sortformer source
+  parakeetSortformerSrc: modelSrcInputSchema.optional(),
 });
 
 export type ParakeetRuntimeConfig = z.infer<typeof parakeetRuntimeConfigSchema>;

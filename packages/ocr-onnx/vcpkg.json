@@ -3,31 +3,6 @@
   "version": "0.1.14",
   "dependencies": [
     {
-      "name": "onnxruntime",
-      "features": [
-        "nnapi-ep"
-      ],
-      "platform": "android"
-    },
-    {
-      "name": "onnxruntime",
-      "features": [
-        "dml-ep"
-      ],
-      "platform": "windows"
-    },
-    {
-      "name": "onnxruntime",
-      "features": [
-        "coreml-ep"
-      ],
-      "platform": "osx | ios"
-    },
-    {
-      "name": "onnxruntime",
-      "platform": "!(android | osx | ios | windows)"
-    },
-    {
       "name": "opencv4",
       "default-features": false,
       "features": [
@@ -53,23 +28,6 @@
       "dependencies": [
         "gtest"
       ]
-    },
-    "xnnpack": {
-      "description": "Enable XNNPack execution provider for optimized CPU inference",
-      "dependencies": [
-        {
-          "name": "onnxruntime",
-          "features": [
-            "xnnpack-ep"
-          ]
-        }
-      ]
     }
-  },
-  "overrides": [
-    {
-      "name": "flatbuffers",
-      "version": "23.5.26"
-    }
-  ]
+  }
 }

@@ -66,11 +66,10 @@ async function checkOnly(
     }
 
     const addedWithNames = assignNames(rawAdded);
-    const {
-      added,
-      updated,
-      removed,
-    } = separateUpdates(addedWithNames, rawRemoved);
+    const { added, updated, removed } = separateUpdates(
+      addedWithNames,
+      rawRemoved,
+    );
 
     console.log("");
     console.log("━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━");
@@ -168,8 +167,11 @@ async function updateModels(
       HISTORY_DIR,
     );
     if (historyFile) {
-      const { added: trulyAdded, updated, removed: trulyRemoved } =
-        separateUpdates(addedWithNames, removed);
+      const {
+        added: trulyAdded,
+        updated,
+        removed: trulyRemoved,
+      } = separateUpdates(addedWithNames, removed);
       console.log(`📜 Created history file → ${historyFile}`);
       console.log(
         `   Added: ${trulyAdded.length}, Updated: ${updated.length}, Removed: ${trulyRemoved.length}`,

@@ -1,7 +1,7 @@
 cmake_minimum_required(VERSION 3.25)
 
 option(BUILD_TESTING "Build tests" OFF)
-option(ENABLE_XNNPACK "Enable XNNPack execution provider" ON)
+option(MOBILE_DYNAMIC_LINK "Use dynamic linking for ONNX Runtime on mobile" ON)
 
 # Force Apple Clang instead of Homebrew LLVM
 if(APPLE)
@@ -66,10 +66,6 @@ if(BUILD_TESTING)
   list(APPEND VCPKG_MANIFEST_FEATURES "tests")
 endif()
 
-if(ENABLE_XNNPACK)
-  list(APPEND VCPKG_MANIFEST_FEATURES "xnnpack")
-endif()
-
 find_package(cmake-bare REQUIRED PATHS node_modules/cmake-bare)
 find_package(cmake-vcpkg REQUIRED PATHS node_modules/cmake-vcpkg)
 
@@ -104,22 +100,14 @@ set(CMAKE_CXX_STANDARD_REQUIRED ON)
 set(CMAKE_CXX_EXTENSIONS OFF)
 set(CMAKE_POSITION_INDEPENDENT_CODE ON)
 
-# Note: We use a linker version script (symbols.map) to hide internal symbols
-# instead of visibility presets, so that bare_* symbols remain exportable.
-
-
-
 
 
 find_path(QVAC_LIB_INFERENCE_ADDON_CPP_INCLUDE_DIRS "qvac-lib-inference-addon-cpp/JsInterface.hpp")
 find_package(OpenCV REQUIRED)
-find_package(onnxruntime CONFIG REQUIRED)
+set(qvac-onnx_DIR "${CMAKE_CURRENT_SOURCE_DIR}/node_modules/@qvac/onnx/prebuilds/share/qvac-onnx/cmake")
+find_package(qvac-onnx CONFIG REQUIRED)
 
 add_bare_module(qvac-lib-inference-addon-onnx-ocr-fasttext EXPORTS)
-
-if(CMAKE_SYSTEM_NAME STREQUAL "Linux")
-  target_link_options(${qvac-lib-inference-addon-onnx-ocr-fasttext}_module PRIVATE -Wl,--exclude-libs,ALL)
-endif()
 
 target_sources(
   ${qvac-lib-inference-addon-onnx-ocr-fasttext}
@@ -140,30 +128,37 @@ target_include_directories(
     ${QVAC_LIB_INFERENCE_ADDON_CPP_INCLUDE_DIRS}
     addon
 )
-target_link_libraries(
-  ${qvac-lib-inference-addon-onnx-ocr-fasttext}
-  PRIVATE
-    ${OpenCV_LIBS}
-    onnxruntime::onnxruntime_static
-)
 
-# Use version script to hide internal symbols (including ONNX runtime)
-# This prevents symbol conflicts when multiple ONNX-based addons are loaded
-# Note: We target the _module shared library, not the object library
-if(UNIX AND NOT APPLE)
-  target_link_options(
+if((ANDROID OR (APPLE AND CMAKE_SYSTEM_NAME STREQUAL "iOS")) AND NOT MOBILE_DYNAMIC_LINK)
+  # Mobile (static): each addon embeds ONNX Runtime
+  target_link_libraries(
+    ${qvac-lib-inference-addon-onnx-ocr-fasttext}
+    PRIVATE
+      ${OpenCV_LIBS}
+      qvac-onnx::qvac-onnx-static
+  )
+else()
+  # Desktop and mobile (dynamic): link against @qvac/onnx.bare shared module
+  include_bare_module("@qvac/onnx" qvac_onnx_target PREBUILD)
+
+  target_link_libraries(
+    ${qvac-lib-inference-addon-onnx-ocr-fasttext}
+    PRIVATE
+      ${OpenCV_LIBS}
+      qvac-onnx::headers
+  )
+  target_link_libraries(
     ${qvac-lib-inference-addon-onnx-ocr-fasttext}_module
     PRIVATE
-      -Wl,--version-script=${CMAKE_CURRENT_SOURCE_DIR}/symbols.map
+      ${qvac_onnx_target}_module
   )
-elseif(APPLE)
-  # macOS uses -exported_symbols_list instead of version script
-  target_link_options(
-    ${qvac-lib-inference-addon-onnx-ocr-fasttext}_module
-    PRIVATE
-      -Wl,-exported_symbol,_bare_get_module_name_v0
-      -Wl,-exported_symbol,_bare_register_module_v0
-  )
+
+  # Install @qvac/onnx.bare as companion library
+  bare_target(host)
+  bare_module_target("." _unused NAME addon_name)
+  install(FILES $<TARGET_FILE:${qvac_onnx_target}_module>
+    DESTINATION ${host}/${addon_name}
+    RENAME qvac__onnx@0.bare)
 endif()
 
 target_compile_definitions(
@@ -187,7 +182,7 @@ endfunction()
 if(ANDROID)
   find_package(Vulkan REQUIRED)
   target_link_libraries(${qvac-lib-inference-addon-onnx-ocr-fasttext} PRIVATE ${Vulkan_LIBRARY} log)
-  
+
   # Strip vcpkg installed binaries for Android builds
   find_program(LLVM_STRIP llvm-strip)
 
@@ -195,14 +190,11 @@ if(ANDROID)
     message(WARNING "-- llvm-strip not found. Skipping library stripping for Android build.")
   else()
     message("-- llvm-strip found: ${LLVM_STRIP}")
-    set(LIBRARIES_TO_STRIP_IN_LIB_DIR libonnx.a libprotobuf.a libprotoc.a)
     set(LIBRARIES_TO_STRIP_IN_SDK_DIR libopencv_calib3d4.a libopencv_core4.a libopencv_imgproc4.a libopencv_objdetect4.a)
 
     set(VCPKG_INSTALLED_DIR "${CMAKE_BINARY_DIR}/_vcpkg/${VCPKG_TARGET_TRIPLET}")
-    set(LIBS_DIR_PATH "${VCPKG_INSTALLED_DIR}/lib")
     set(SDK_DIR_PATH "${VCPKG_INSTALLED_DIR}/sdk/native/staticlibs/${CMAKE_ANDROID_ARCH_ABI}")
 
-    strip_libraries(${LIBS_DIR_PATH} "${LIBRARIES_TO_STRIP_IN_LIB_DIR}")
     strip_libraries(${SDK_DIR_PATH} "${LIBRARIES_TO_STRIP_IN_SDK_DIR}")
   endif()
 endif()
@@ -242,7 +234,7 @@ if(BUILD_TESTING)
     )
     target_link_libraries(
         pipeline
-        PRIVATE ${OpenCV_LIBS} onnxruntime::onnxruntime_static
+        PRIVATE ${OpenCV_LIBS} qvac-onnx::headers
     )
 
     add_executable(unit_tests test/lang_test.cpp)

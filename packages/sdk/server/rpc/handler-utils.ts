@@ -1,9 +1,10 @@
 import {
-  responseSchema,
   type QvacConfig,
   type Request,
   type Response,
   type RuntimeContext,
+  type ProfilingRequestMeta,
+  PROFILING_KEY,
 } from "@/schemas";
 import type RPC from "bare-rpc";
 import {
@@ -12,16 +13,27 @@ import {
 } from "@/server/error-handlers";
 import { setSDKConfig } from "@/server/bare/registry/config-registry";
 import { setRuntimeContext } from "@/server/bare/registry/runtime-context-registry";
+import { type ServerProfiler } from "./profiling";
 
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-type ReplyHandler = (request: any) => Promise<Response> | Response;
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-type StreamHandler = (request: any) => AsyncGenerator<Response>;
-type ProgressHandler = (
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+function getProfilingMetaFromRequest(
+  request: Request,
+): ProfilingRequestMeta | undefined {
+  if (PROFILING_KEY in request) {
+    return (request as Record<string, unknown>)[
+      PROFILING_KEY
+    ] as ProfilingRequestMeta;
+  }
+  return undefined;
+}
+
+/* eslint-disable @typescript-eslint/no-explicit-any */
+type ReplyHandler = (
   request: any,
-  onProgress?: (update: Response) => void,
-) => Promise<Response>;
+  ...args: any[]
+) => Promise<Response> | Response;
+type StreamHandler = (request: any, ...args: any[]) => AsyncGenerator<Response>;
+type ProgressHandler = (request: any, ...args: any[]) => Promise<Response>;
+/* eslint-enable @typescript-eslint/no-explicit-any */
 
 export type HandlerEntry = {
   type: "reply" | "stream";
@@ -31,23 +43,30 @@ export type HandlerEntry = {
   supportsProgress?: boolean | ((request: Request) => boolean);
 };
 
-function writeToStream(
-  stream: ReturnType<RPC.IncomingRequest["createResponseStream"]>,
-  response: Response,
-) {
-  stream.write(JSON.stringify(responseSchema.parse(response)) + "\n", "utf-8");
-}
-
 async function executeReplyHandler(
   req: RPC.IncomingRequest,
   request: Request,
   handler: ReplyHandler,
+  profiler: ServerProfiler,
+  isDelegated: boolean,
 ) {
+  profiler.startHandler();
   try {
-    const response = await handler(request);
-    req.reply(JSON.stringify(responseSchema.parse(response)), "utf-8");
+    let response: Response;
+    if (isDelegated) {
+      const profilingMeta = getProfilingMetaFromRequest(request);
+      response = await handler(
+        request,
+        profilingMeta ? { profilingMeta } : undefined,
+      );
+    } else {
+      response = await handler(request);
+    }
+    profiler.endHandler();
+    req.reply(profiler.serialize(response, true), "utf-8");
   } catch (error) {
-    sendErrorResponse(req, error);
+    profiler.endHandler();
+    sendErrorResponse(req, error, profiler);
   }
 }
 
@@ -55,18 +74,32 @@ async function executeStreamHandler(
   req: RPC.IncomingRequest,
   request: Request,
   handler: StreamHandler,
+  profiler: ServerProfiler,
+  isDelegated: boolean,
 ) {
   const stream = req.createResponseStream();
+  profiler.startHandler();
+
   try {
-    for await (const response of handler(request)) {
-      stream.write(
-        JSON.stringify(responseSchema.parse(response)) + "\n",
-        "utf-8",
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    let generator: AsyncGenerator<Response, any, any>;
+    if (isDelegated) {
+      const profilingMeta = getProfilingMetaFromRequest(request);
+      generator = handler(
+        request,
+        profilingMeta ? { profilingMeta } : undefined,
       );
+    } else {
+      generator = handler(request);
     }
+    for await (const response of generator) {
+      stream.write(profiler.serialize(response, false) + "\n", "utf-8");
+    }
+    profiler.endHandler();
     stream.end();
   } catch (error) {
-    sendStreamErrorResponse(stream, error);
+    profiler.endHandler();
+    sendStreamErrorResponse(stream, error, profiler);
   }
 }
 
@@ -74,16 +107,37 @@ async function executeProgressHandler(
   req: RPC.IncomingRequest,
   request: Request,
   handler: ProgressHandler,
+  profiler: ServerProfiler,
+  isDelegated: boolean,
 ) {
   const stream = req.createResponseStream();
+  profiler.startHandler();
+
+  const progressCallback = (update: Response) => {
+    stream.write(profiler.serialize(update, false) + "\n", "utf-8");
+  };
+
   try {
-    const response = await handler(request, (update) =>
-      writeToStream(stream, update),
-    );
-    writeToStream(stream, response);
+    let response: Response;
+    if (isDelegated) {
+      const profilingMeta = getProfilingMetaFromRequest(request);
+      const options: {
+        progressCallback: typeof progressCallback;
+        profilingMeta?: ProfilingRequestMeta;
+      } = { progressCallback };
+      if (profilingMeta) {
+        options.profilingMeta = profilingMeta;
+      }
+      response = await handler(request, options);
+    } else {
+      response = await handler(request, progressCallback);
+    }
+    profiler.endHandler();
+    stream.write(profiler.serialize(response, true) + "\n", "utf-8");
     stream.end();
   } catch (error) {
-    sendStreamErrorResponse(stream, error);
+    profiler.endHandler();
+    sendStreamErrorResponse(stream, error, profiler);
   }
 }
 
@@ -92,11 +146,12 @@ export async function executeHandler(
   req: RPC.IncomingRequest,
   request: Request,
   entry: HandlerEntry,
+  profiler: ServerProfiler,
 ) {
-  const handler =
+  const isDelegated = !!(
     entry.delegatedHandler && entry.isDelegated?.(request)
-      ? entry.delegatedHandler
-      : entry.handler;
+  );
+  const handler = isDelegated ? entry.delegatedHandler! : entry.handler;
 
   const wantsProgress =
     "withProgress" in request &&
@@ -105,16 +160,30 @@ export async function executeHandler(
       ? entry.supportsProgress(request)
       : entry.supportsProgress);
 
-  try {
-    if (entry.type === "stream") {
-      await executeStreamHandler(req, request, handler as StreamHandler);
-    } else if (wantsProgress) {
-      await executeProgressHandler(req, request, handler as ProgressHandler);
-    } else {
-      await executeReplyHandler(req, request, handler as ReplyHandler);
-    }
-  } catch (error) {
-    sendErrorResponse(req, error);
+  if (entry.type === "stream") {
+    await executeStreamHandler(
+      req,
+      request,
+      handler as StreamHandler,
+      profiler,
+      isDelegated,
+    );
+  } else if (wantsProgress) {
+    await executeProgressHandler(
+      req,
+      request,
+      handler as ProgressHandler,
+      profiler,
+      isDelegated,
+    );
+  } else {
+    await executeReplyHandler(
+      req,
+      request,
+      handler as ReplyHandler,
+      profiler,
+      isDelegated,
+    );
   }
 }
 

@@ -119,6 +119,11 @@ async function syncModels () {
             // Include deprecation fields
             if (entry.deprecated !== undefined) {
               updateRequest.deprecated = entry.deprecated
+            } else if (existing.deprecated) {
+              // Un-deprecate: model is in config without deprecated flag but is deprecated in DB
+              updateRequest.deprecated = false
+              updateRequest.deprecatedAt = ''
+              updateRequest.deprecationReason = ''
             }
             if (entry.deprecatedAt) {
               updateRequest.deprecatedAt = entry.deprecatedAt
@@ -189,6 +194,8 @@ function needsMetadataUpdate (config, existing, sourceInfo) {
     (config.params || '') !== (existing.params || '') ||
     (config.notes || '') !== (existing.notes || '') ||
     JSON.stringify(config.tags || []) !== JSON.stringify(existing.tags || []) ||
+    // Un-deprecate: model is deprecated in DB but config doesn't mark it deprecated
+    (existing.deprecated && config.deprecated === undefined) ||
     (config.deprecated !== undefined && config.deprecated !== existing.deprecated) ||
     (config.replacedBy !== undefined && config.replacedBy !== (existing.replacedBy || '')) ||
     (config.deprecationReason !== undefined && config.deprecationReason !== (existing.deprecationReason || ''))

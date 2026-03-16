@@ -38,6 +38,22 @@ export {
   type DeviceConfigDefaults,
   type DevicePattern,
 } from "./sdk-config";
+export {
+  PROFILING_KEY,
+  DELEGATION_BREAKDOWN_KEY,
+  profilerModeSchema,
+  serverBreakdownSchema,
+  delegationBreakdownSchema,
+  profilingRequestMetaSchema,
+  profilingResponseMetaSchema,
+  perCallProfilingSchema,
+  type ProfilerMode,
+  type ServerBreakdown,
+  type DelegationBreakdown,
+  type ProfilingRequestMeta,
+  type ProfilingResponseMeta,
+  type PerCallProfiling,
+} from "./profiling";
 export { runtimeContextSchema, type RuntimeContext } from "./runtime-context";
 export * from "./get-model-info";
 export * from "./model-src-utils";

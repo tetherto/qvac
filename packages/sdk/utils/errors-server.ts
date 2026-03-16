@@ -155,6 +155,18 @@ export class TtsReferenceAudioRequiredError extends QvacErrorBase {
   }
 }
 
+export class ParakeetArtifactsRequiredError extends QvacErrorBase {
+  constructor(details?: string, cause?: unknown) {
+    super(
+      createErrorOptions(
+        SDK_SERVER_ERROR_CODES.PARAKEET_ARTIFACTS_REQUIRED,
+        details ? [details] : undefined,
+        cause,
+      ),
+    );
+  }
+}
+
 // ============== Model Unloading Errors ==============
 
 export class ModelUnloadFailedError extends QvacErrorBase {

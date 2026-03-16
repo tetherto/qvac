@@ -1,0 +1,38 @@
+---
+title: "ragCloseWorkspace( )"
+titleStyle: code
+description: Closes a RAG workspace, releasing in-memory resources (Corestore, HyperDB adapter, RAG instance).
+---
+
+```ts
+function ragCloseWorkspace(params?): Promise<void>;
+```
+
+Releases Corestore, HyperDB adapter, and RAG instance. Workspace data remains on disk unless `deleteOnClose` is set.
+
+## Parameters
+
+| Name | Type | Required? | Default | Description |
+| --- | --- | :---: | --- | --- |
+| params.workspace | `string` | ✗ | `"default"` | Workspace to close |
+| params.deleteOnClose | `boolean` | ✗ | `false` | If true, deletes workspace data from disk after closing |
+
+## Returns
+
+`Promise<void>` — Resolves when the workspace is closed.
+
+## Throws
+
+| Error | When |
+| --- | --- |
+| `RAG_WORKSPACE_CLOSE_FAILED` | The close operation fails |
+
+## Example
+
+```typescript
+// Close a workspace
+await ragCloseWorkspace({ workspace: "my-docs" });
+
+// Close and delete in one call
+await ragCloseWorkspace({ workspace: "my-docs", deleteOnClose: true });
+```

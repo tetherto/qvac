@@ -11,8 +11,6 @@
       "repository": "https://github.com/microsoft/vcpkg",
       "packages": [
         "opencv4",
-        "directx-headers",
-        "flatbuffers",
         "gtk3",
         "libjpeg-turbo",
         "libpng",
@@ -30,7 +28,6 @@
         "libepoxy",
         "liblzma",
         "pango",
-        "utf8-range",
         "vcpkg-tool-meson",
         "at-spi2-core",
         "dbus",
@@ -60,25 +57,7 @@
         "libxcrypt",
         "lz4",
         "zstd",
-        "benchmark",
-        "boost-config",
-        "boost-mp11",
-        "cxxopts",
-        "date",
-        "dlpack",
-        "ms-gsl",
-        "nlohmann-json",
-        "optional-lite",
-        "re2",
-        "safeint",
-        "boost-cmake",
-        "boost-headers",
-        "boost-uninstall",
-        "vcpkg-boost",
-        "mimalloc",
-        "wil",
-        "gtest",
-        "fxdiv"
+        "gtest"
       ]
     }
   ]

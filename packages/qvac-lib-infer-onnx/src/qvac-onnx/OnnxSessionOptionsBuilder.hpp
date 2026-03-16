@@ -13,10 +13,6 @@
 #include <nnapi_provider_factory.h>
 #endif
 
-#if defined(_WIN32) || defined(_WIN64)
-#include <dml_provider_factory.h>
-#endif
-
 namespace onnx_addon {
 
 // Try to append XNNPack execution provider if available and enabled.
@@ -170,8 +166,7 @@ inline Ort::SessionOptions buildSessionOptions(const SessionConfig& config) {
       if (dmlAvailable) {
         sessionOptions.SetExecutionMode(::ExecutionMode::ORT_SEQUENTIAL);
         sessionOptions.DisableMemPattern();
-        Ort::ThrowOnError(
-            OrtSessionOptionsAppendExecutionProvider_DML(sessionOptions, 0));
+        sessionOptions.AppendExecutionProvider("DML", {{"device_id", "0"}});
         QLOG(logger::Priority::INFO, "[OnnxSession] DirectML EP appended");
       } else {
         QLOG(logger::Priority::WARNING, "[OnnxSession] DirectML EP not available, falling back to CPU");

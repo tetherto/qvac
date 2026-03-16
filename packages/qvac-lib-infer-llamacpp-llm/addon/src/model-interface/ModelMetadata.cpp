@@ -29,6 +29,10 @@ void ModelMetaData::parse(
     const std::string& modelPath, const GGUFShards& shards, bool isStreaming,
     const char* addonId) {
 
+  if (metadata_ != nullptr) {
+    return;
+  }
+
   auto loadFromStreambuf = [&modelPath,
                             outMetadata = &this->metadata_,
                             addonId](std::basic_streambuf<char>& streambuf) {

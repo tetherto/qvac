@@ -16,7 +16,7 @@ const createVisionTest = (
     | { validation: "contains-all" | "contains-any"; contains: string[] }
     | {
         validation: "type";
-        expectedType: "string" | "number" | "array" | "embedding";
+        expectedType: "string" | "number" | "array";
       },
 ): TestDefinition => ({
   testId,

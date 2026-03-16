@@ -3,9 +3,15 @@ import type {
   LoadModelResponse,
   ModelProgressUpdate,
 } from "@/schemas";
-import { modelInputToSrcSchema } from "@/schemas";
+import { DELEGATION_BREAKDOWN_KEY, modelInputToSrcSchema } from "@/schemas";
+import type { DelegatedHandlerOptions } from "@/server/rpc/profiling";
+import type { ResponseWithDelegation } from "@/server/rpc/delegate-transport";
 import { registerModel } from "@/server/bare/registry/model-registry";
-import { send, stream } from "@/server/rpc/delegate-transport";
+import {
+  send,
+  stream,
+  type DelegateOptions,
+} from "@/server/rpc/delegate-transport";
 import {
   getRPC,
   cleanupStaleConnection,
@@ -19,10 +25,15 @@ import { getServerLogger } from "@/logging";
 
 const logger = getServerLogger();
 
+export interface HandleLoadModelDelegatedOptions extends DelegatedHandlerOptions {
+  progressCallback?: (update: ModelProgressUpdate) => void;
+}
+
 export async function handleLoadModelDelegated(
   request: LoadModelSrcRequest,
-  progressCallback?: (update: ModelProgressUpdate) => void,
+  options?: HandleLoadModelDelegatedOptions,
 ): Promise<LoadModelResponse> {
+  const { progressCallback, profilingMeta } = options ?? {};
   if (!request.delegate) {
     throw new ModelLoadFailedError(
       "Delegate information is required for delegated load model",
@@ -54,15 +65,21 @@ export async function handleLoadModelDelegated(
     const { delegate: _, ...providerRequest } = request;
 
     let finalResponse: LoadModelResponse | undefined;
+    let delegationBreakdown: ResponseWithDelegation[typeof DELEGATION_BREAKDOWN_KEY];
+
+    // Build delegate options with profiling metadata
+    const delegateOpts: DelegateOptions = { peerKey: providerPublicKey };
+    if (profilingMeta) {
+      delegateOpts.profilingMeta = profilingMeta;
+    }
+    if (timeout) {
+      delegateOpts.timeout = timeout;
+    }
 
     if (request.withProgress) {
       // Use streaming for progress updates
       logger.debug("📊 Using streaming mode for loadModel with progress");
-      const responseStream = stream(
-        providerRequest,
-        rpc,
-        timeout ? { timeout } : {},
-      );
+      const responseStream = stream(providerRequest, rpc, delegateOpts);
 
       for await (const response of responseStream) {
         if (response.type === "modelProgress") {
@@ -82,11 +99,11 @@ export async function handleLoadModelDelegated(
     } else {
       // Use simple send for non-progress requests
       logger.debug("📤 Using simple send mode for loadModel");
-      finalResponse = (await send(
-        providerRequest,
-        rpc,
-        timeout ? { timeout } : {},
-      )) as LoadModelResponse;
+      const providerResponse = await send(providerRequest, rpc, delegateOpts);
+      finalResponse = providerResponse as LoadModelResponse;
+      delegationBreakdown = (providerResponse as ResponseWithDelegation)[
+        DELEGATION_BREAKDOWN_KEY
+      ];
     }
 
     if (!finalResponse || !finalResponse.success) {
@@ -121,11 +138,18 @@ export async function handleLoadModelDelegated(
       `✅ Delegated model registered: ${modelId} -> provider: ${providerPublicKey}`,
     );
 
-    return {
+    const result: LoadModelResponse = {
       type: "loadModel",
       success: true,
       modelId,
     };
+
+    if (delegationBreakdown) {
+      (result as ResponseWithDelegation)[DELEGATION_BREAKDOWN_KEY] =
+        delegationBreakdown;
+    }
+
+    return result;
   } catch (error) {
     logger.error("Error in delegated load model:", error);
 

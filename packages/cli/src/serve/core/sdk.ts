@@ -2,6 +2,17 @@ const MIN_SDK_VERSION = '0.7.0'
 const SDK_SPECIFIER = '@qvac/sdk'
 const SDK_PACKAGE_SPECIFIER = '@qvac/sdk/package'
 
+export interface SDKGenerationParams {
+  temp?: number
+  top_p?: number
+  top_k?: number
+  predict?: number
+  seed?: number
+  frequency_penalty?: number
+  presence_penalty?: number
+  repeat_penalty?: number
+}
+
 interface SDKModule {
   loadModel: (opts: { modelSrc: string; modelType: string; modelConfig: Record<string, unknown> }) => Promise<string>
   unloadModel: (opts: { modelId: string }) => Promise<void>
@@ -10,6 +21,7 @@ interface SDKModule {
     history: Array<{ role: string; content: string }>
     stream: boolean
     tools?: SDKTool[]
+    generationParams?: SDKGenerationParams
   }) => Promise<CompletionResult>
   embed: (opts: { modelId: string; text: string | string[] }) => Promise<number[] | number[][]>
   close: () => Promise<void>
@@ -28,7 +40,20 @@ export interface CompletionResult {
   stats: Promise<Record<string, unknown>>
   toolCalls: Promise<SDKToolCall[] | null>
   tokenStream: AsyncIterable<string>
+  toolCallStream: AsyncIterable<SDKToolEvent>
 }
+
+export interface SDKToolCallEvent {
+  type: 'toolCall'
+  call: SDKToolCall
+}
+
+export interface SDKToolCallErrorEvent {
+  type: 'toolCallError'
+  error: { code: string; message: string; raw?: string }
+}
+
+export type SDKToolEvent = SDKToolCallEvent | SDKToolCallErrorEvent
 
 export interface SDKToolCall {
   id: string
@@ -109,6 +134,7 @@ export async function sdkCompletion (opts: {
   history: Array<{ role: string; content: string }>
   stream: boolean
   tools?: SDKTool[] | undefined
+  generationParams?: SDKGenerationParams | undefined
 }): Promise<CompletionResult> {
   const { completion } = await getSDK()
   const params: Record<string, unknown> = {
@@ -118,6 +144,9 @@ export async function sdkCompletion (opts: {
   }
   if (opts.tools) {
     params['tools'] = opts.tools
+  }
+  if (opts.generationParams) {
+    params['generationParams'] = opts.generationParams
   }
   return completion(params as Parameters<SDKModule['completion']>[0])
 }

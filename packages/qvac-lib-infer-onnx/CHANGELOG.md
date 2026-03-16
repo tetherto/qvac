@@ -1,5 +1,20 @@
 # Changelog
 
+## [0.12.12] - 2026-03-12
+
+### Fixed
+
+- Windows runtime loading: export `OrtGetApiBase` from the bare module using `/EXPORT` linker flag (a `.def` file overrides `WINDOWS_EXPORT_ALL_SYMBOLS`, suppressing the `bare_*`/`napi_*` auto-exports and causing DLL initialization failure)
+- macOS runtime loading: set `INSTALL_NAME_DIR` to `@rpath` so that consumer addons can resolve the companion `qvac__onnx@0.bare` via their `@loader_path` rpath entries (cmake-bare's default empty install_name caused dyld to skip rpath search entirely)
+
+
+## [0.12.10] - 2026-03-12
+
+### Fixed
+
+- Windows C++20 clang-cl build: replaced legacy `OrtSessionOptionsAppendExecutionProvider_DML` C API with generic `AppendExecutionProvider("DML")`, removing `#include <dml_provider_factory.h>` which pulled in the Windows SDK and caused `byte` ambiguity with `std::byte`
+
+
 ## [0.12.8] - 2026-03-11
 
 ### Added

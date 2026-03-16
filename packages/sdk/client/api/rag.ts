@@ -18,6 +18,7 @@ import type {
   RagWorkspaceInfo,
   RagCloseWorkspaceParams,
   RagDeleteWorkspaceParams,
+  RPCOptions,
 } from "@/schemas";
 import {
   InvalidResponseError,
@@ -55,14 +56,17 @@ import {
  * });
  * ```
  */
-export async function ragChunk(params: RagChunkParams): Promise<RagDoc[]> {
+export async function ragChunk(
+  params: RagChunkParams,
+  options?: RPCOptions,
+): Promise<RagDoc[]> {
   const request: RagRequest = {
     type: "rag",
     operation: "chunk",
     ...params,
   };
 
-  const response = await send(request);
+  const response = await send(request, undefined, options);
 
   if (response.type !== "rag") {
     throw new InvalidResponseError("rag");
@@ -121,6 +125,7 @@ export async function ragChunk(params: RagChunkParams): Promise<RagDoc[]> {
  */
 export async function ragIngest(
   params: RagIngestParams,
+  options?: RPCOptions,
 ): Promise<{ processed: RagSaveEmbeddingsResult[]; droppedIndices: number[] }> {
   const { onProgress, ...requestParams } = params;
 
@@ -134,7 +139,7 @@ export async function ragIngest(
 
   if (onProgress) {
     // Use streaming for progress updates
-    for await (const event of stream(request)) {
+    for await (const event of stream(request, undefined, options)) {
       if (event.type === "rag:progress" && event.operation === "ingest") {
         const progress: RagProgressUpdate = event;
         onProgress(
@@ -160,7 +165,7 @@ export async function ragIngest(
     throw new StreamEndedError();
   }
 
-  const response = await send(request);
+  const response = await send(request, undefined, options);
   if (response.type !== "rag") {
     throw new InvalidResponseError("rag");
   }
@@ -215,6 +220,7 @@ export async function ragIngest(
  */
 export async function ragSaveEmbeddings(
   params: RagSaveEmbeddingsParams,
+  options?: RPCOptions,
 ): Promise<RagSaveEmbeddingsResult[]> {
   const { onProgress, ...requestParams } = params;
 
@@ -226,7 +232,7 @@ export async function ragSaveEmbeddings(
   };
 
   if (onProgress) {
-    for await (const event of stream(request)) {
+    for await (const event of stream(request, undefined, options)) {
       if (
         event.type === "rag:progress" &&
         event.operation === "saveEmbeddings"
@@ -252,7 +258,7 @@ export async function ragSaveEmbeddings(
     throw new StreamEndedError();
   }
 
-  const response = await send(request);
+  const response = await send(request, undefined, options);
 
   if (response.type !== "rag") {
     throw new InvalidResponseError("rag");
@@ -298,6 +304,7 @@ export async function ragSaveEmbeddings(
  */
 export async function ragSearch(
   params: RagSearchParams,
+  options?: RPCOptions,
 ): Promise<RagSearchResult[]> {
   const request: RagRequest = {
     type: "rag",
@@ -307,7 +314,7 @@ export async function ragSearch(
     n: params.n ?? 3,
   };
 
-  const response = await send(request);
+  const response = await send(request, undefined, options);
   if (response.type !== "rag") {
     throw new InvalidResponseError("rag");
   }
@@ -345,6 +352,7 @@ export async function ragSearch(
  */
 export async function ragDeleteEmbeddings(
   params: RagDeleteEmbeddingsParams,
+  options?: RPCOptions,
 ): Promise<void> {
   const request: RagRequest = {
     type: "rag",
@@ -352,7 +360,7 @@ export async function ragDeleteEmbeddings(
     ...params,
   };
 
-  const response = await send(request);
+  const response = await send(request, undefined, options);
   if (response.type !== "rag") {
     throw new InvalidResponseError("rag");
   }
@@ -408,6 +416,7 @@ export async function ragDeleteEmbeddings(
  */
 export async function ragReindex(
   params: RagReindexParams,
+  options?: RPCOptions,
 ): Promise<RagReindexResult> {
   const { onProgress, ...requestParams } = params;
 
@@ -419,7 +428,7 @@ export async function ragReindex(
   };
 
   if (onProgress) {
-    for await (const event of stream(request)) {
+    for await (const event of stream(request, undefined, options)) {
       if (event.type === "rag:progress" && event.operation === "reindex") {
         const progress: RagProgressUpdate = event;
         onProgress(
@@ -442,7 +451,7 @@ export async function ragReindex(
     throw new StreamEndedError();
   }
 
-  const response = await send(request);
+  const response = await send(request, undefined, options);
 
   if (response.type !== "rag") {
     throw new InvalidResponseError("rag");
@@ -477,13 +486,15 @@ export async function ragReindex(
  * // [{ name: "default", open: true }, { name: "my-docs", open: false }]
  * ```
  */
-export async function ragListWorkspaces(): Promise<RagWorkspaceInfo[]> {
+export async function ragListWorkspaces(
+  options?: RPCOptions,
+): Promise<RagWorkspaceInfo[]> {
   const request: RagRequest = {
     type: "rag",
     operation: "listWorkspaces",
   };
 
-  const response = await send(request);
+  const response = await send(request, undefined, options);
 
   if (response.type !== "rag") {
     throw new InvalidResponseError("rag");
@@ -525,6 +536,7 @@ export async function ragListWorkspaces(): Promise<RagWorkspaceInfo[]> {
  */
 export async function ragCloseWorkspace(
   params?: RagCloseWorkspaceParams,
+  options?: RPCOptions,
 ): Promise<void> {
   const request: RagRequest = {
     type: "rag",
@@ -532,7 +544,7 @@ export async function ragCloseWorkspace(
     ...params,
   };
 
-  const response = await send(request);
+  const response = await send(request, undefined, options);
 
   if (response.type !== "rag") {
     throw new InvalidResponseError("rag");
@@ -564,6 +576,7 @@ export async function ragCloseWorkspace(
  */
 export async function ragDeleteWorkspace(
   params: RagDeleteWorkspaceParams,
+  options?: RPCOptions,
 ): Promise<void> {
   const request: RagRequest = {
     type: "rag",
@@ -571,7 +584,7 @@ export async function ragDeleteWorkspace(
     ...params,
   };
 
-  const response = await send(request);
+  const response = await send(request, undefined, options);
 
   if (response.type !== "rag") {
     throw new InvalidResponseError("rag");

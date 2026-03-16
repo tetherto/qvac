@@ -95,8 +95,20 @@ export type Message =
   | UserMediaMessage
   | ChatFunctionDefinition
 
+export interface GenerationParams {
+  temp?: number
+  top_p?: number
+  top_k?: number
+  predict?: number
+  seed?: number
+  frequency_penalty?: number
+  presence_penalty?: number
+  repeat_penalty?: number
+}
+
 export interface RunOptions {
   prefill?: boolean
+  generationParams?: GenerationParams
 }
 
 export interface DownloadWeightsOptions {

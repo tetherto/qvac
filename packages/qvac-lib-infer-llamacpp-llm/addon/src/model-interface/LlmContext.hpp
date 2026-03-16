@@ -1,11 +1,30 @@
 #pragma once
 
+#include <functional>
+#include <optional>
+
 #include "addon/LlmErrors.hpp"
 #include "common/chat.h"
 #include "common/sampling.h"
 #include "llama.h"
 
 using namespace qvac_lib_inference_addon_llama::errors;
+
+struct GenerationParams {
+  std::optional<int> n_predict;
+  std::optional<float> temp;
+  std::optional<float> top_p;
+  std::optional<int> top_k;
+  std::optional<float> frequency_penalty;
+  std::optional<float> presence_penalty;
+  std::optional<float> repeat_penalty;
+  std::optional<uint32_t> seed;
+
+  [[nodiscard]] bool hasOverrides() const {
+    return n_predict || temp || top_p || top_k || frequency_penalty ||
+           presence_penalty || repeat_penalty || seed;
+  }
+};
 
 struct CommonSamplerDeleter {
   void operator()(common_sampler* ptr) {
@@ -200,6 +219,20 @@ public:
    * @throws std::runtime_error if media loading fails in multimodal contexts
    */
   virtual void loadMedia(const std::string& fname) {};
+
+  /**
+   * Apply per-inference generation parameter overrides and return a callable
+   * that restores the original (load-time) values when invoked.
+   * Default implementation is a no-op (e.g. for multimodal contexts).
+   *
+   * @param params - the generation parameter overrides to apply.
+   * @return a callable that restores original parameters; safe to call
+   *         multiple times (subsequent calls are no-ops).
+   */
+  virtual std::function<void()> applyGenerationParams(
+      const GenerationParams& params) {
+    return []() {};
+  }
 
   /**
    * The reset state method. It resets the context.

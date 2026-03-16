@@ -10,8 +10,7 @@ const {
   setupJsLogger,
   getTestPaths,
   validateAccuracy,
-  ensureModel,
-  readFileChunked
+  ensureModel
 } = require('./helpers.js')
 
 const platform = detectPlatform()
@@ -20,15 +19,14 @@ const { modelPath, samplesDir } = getTestPaths()
 const expectedText = 'Alice was beginning to get very tired of sitting by her sister on the bank and of having nothing to do. Once or twice she had peeped into the book her sister was reading, but it had no pictures or conversations in it. And what is the use of a book thought Alice without pictures or conversations'
 
 /**
- * Test both directory-based and individual file path loading methods,
- * verifying each produces correct transcription output and that both
- * methods yield equivalent results.
+ * Verify that explicit individual file paths produce correct transcriptions.
+ * All model types now require named paths — C++ loads directly from disk.
  */
-test('Directory and individual file path loading both produce correct transcriptions', { timeout: 600000 }, async (t) => {
+test('Individual file paths produce correct transcription', { timeout: 600000 }, async (t) => {
   const loggerBinding = setupJsLogger(binding)
 
   console.log('\n' + '='.repeat(60))
-  console.log('DIRECTORY vs INDIVIDUAL FILE PATHS TEST')
+  console.log('INDIVIDUAL FILE PATHS TEST')
   console.log('='.repeat(60))
   console.log(` Platform: ${platform}`)
   console.log(` Model path: ${modelPath}`)
@@ -61,64 +59,49 @@ test('Directory and individual file path loading both produce correct transcript
   }
   console.log(`Audio duration: ${(audioData.length / 16000).toFixed(2)}s\n`)
 
-  let directoryText = ''
-  let filePathText = ''
+  const transcriptions = []
+  let outputResolve = null
+  const outputPromise = new Promise(resolve => { outputResolve = resolve })
 
-  // ──────────────────────────────────────────────────────────
-  // Run 1 — Directory-based loading (buffer weight streaming)
-  // ──────────────────────────────────────────────────────────
-  console.log('=== Run 1: Directory-based loading ===')
-  {
-    const transcriptions = []
-    let outputResolve = null
-    const outputPromise = new Promise(resolve => { outputResolve = resolve })
-
-    function outputCallback (handle, event, id, output, error) {
-      if (event === 'Output' && Array.isArray(output)) {
-        for (const segment of output) {
-          if (segment && segment.text) transcriptions.push(segment)
-        }
-        if (transcriptions.length > 0 && outputResolve) {
-          outputResolve()
-          outputResolve = null
-        }
+  function outputCallback (handle, event, id, output, error) {
+    if (event === 'Output' && Array.isArray(output)) {
+      for (const segment of output) {
+        if (segment && segment.text) transcriptions.push(segment)
+      }
+      if (transcriptions.length > 0 && outputResolve) {
+        outputResolve()
+        outputResolve = null
       }
     }
+  }
 
-    const config = {
-      modelPath,
-      modelType: 'tdt',
-      maxThreads: 4,
-      useGPU: false,
-      sampleRate: 16000,
-      channels: 1
-    }
+  console.log(`  encoderPath:      ${encoderPath}`)
+  console.log(`  encoderDataPath:  ${encoderDataPath}`)
+  console.log(`  decoderPath:      ${decoderPath}`)
+  console.log(`  vocabPath:        ${vocabPath}`)
+  console.log(`  preprocessorPath: ${preprocessorPath}\n`)
 
-    const parakeet = new ParakeetInterface(binding, config, outputCallback)
+  const config = {
+    modelPath,
+    modelType: 'tdt',
+    maxThreads: 4,
+    useGPU: false,
+    sampleRate: 16000,
+    channels: 1,
+    encoderPath,
+    encoderDataPath,
+    decoderPath,
+    vocabPath,
+    preprocessorPath
+  }
 
-    const modelFiles = [
-      'encoder-model.onnx',
-      'encoder-model.onnx.data',
-      'decoder_joint-model.onnx',
-      'vocab.txt',
-      'preprocessor.onnx'
-    ]
+  let parakeet = null
 
-    for (const file of modelFiles) {
-      const filePath = path.join(modelPath, file)
-      if (fs.existsSync(filePath)) {
-        const chunks = []
-        for (const buffer of readFileChunked(filePath)) {
-          chunks.push(buffer)
-        }
-        const fullBuffer = Buffer.concat(chunks)
-        const chunk = new Uint8Array(fullBuffer.buffer, fullBuffer.byteOffset, fullBuffer.byteLength)
-        await parakeet.loadWeights({ filename: file, chunk, completed: true })
-      }
-    }
+  try {
+    parakeet = new ParakeetInterface(binding, config, outputCallback)
 
     await parakeet.activate()
-    console.log('   Model activated (directory-based)')
+    console.log('  Model activated\n')
 
     await parakeet.append({ type: 'audio', data: audioData.buffer })
     await parakeet.append({ type: 'end of job' })
@@ -127,108 +110,27 @@ test('Directory and individual file path loading both produce correct transcript
     await outputPromise
     clearTimeout(timeout)
 
-    directoryText = transcriptions.map(s => s.text).join(' ').trim()
-    console.log(`   Text: "${directoryText.substring(0, 80)}..."`)
+    const fullText = transcriptions.map(s => s.text).join(' ').trim()
+    console.log(`  Text: "${fullText.substring(0, 100)}..."`)
 
-    t.ok(transcriptions.length > 0, `Directory: should produce segments (got ${transcriptions.length})`)
-    t.ok(directoryText.length > 0, `Directory: should produce text (got ${directoryText.length} chars)`)
+    t.ok(transcriptions.length > 0, `Should produce segments (got ${transcriptions.length})`)
+    t.ok(fullText.length > 0, `Should produce text (got ${fullText.length} chars)`)
 
-    const werResult = validateAccuracy(expectedText, directoryText, 0.3)
-    console.log(`   WER: ${werResult.werPercent}`)
-    t.ok(werResult.wer <= 0.3, `Directory: WER should be <= 30% (got ${werResult.werPercent})`)
+    const werResult = validateAccuracy(expectedText, fullText, 0.3)
+    console.log(`  WER: ${werResult.werPercent}`)
+    t.ok(werResult.wer <= 0.3, `WER should be <= 30% (got ${werResult.werPercent})`)
 
-    try { parakeet.destroyInstance() } catch (e) {}
-    console.log('   Instance destroyed\n')
-  }
-
-  // Allow native resources to be fully released
-  await new Promise(resolve => setTimeout(resolve, 1000))
-
-  // ──────────────────────────────────────────────────────────
-  // Run 2 — Individual file path loading (direct ONNX load)
-  // ──────────────────────────────────────────────────────────
-  console.log('=== Run 2: Individual file paths loading ===')
-  console.log(`   encoderPath: ${encoderPath}`)
-  console.log(`   encoderDataPath: ${encoderDataPath}`)
-  console.log(`   decoderPath: ${decoderPath}`)
-  console.log(`   vocabPath: ${vocabPath}`)
-  console.log(`   preprocessorPath: ${preprocessorPath}`)
-  {
-    const transcriptions = []
-    let outputResolve = null
-    const outputPromise = new Promise(resolve => { outputResolve = resolve })
-
-    function outputCallback (handle, event, id, output, error) {
-      if (event === 'Output' && Array.isArray(output)) {
-        for (const segment of output) {
-          if (segment && segment.text) transcriptions.push(segment)
-        }
-        if (transcriptions.length > 0 && outputResolve) {
-          outputResolve()
-          outputResolve = null
-        }
-      }
+    console.log('\n' + '='.repeat(60))
+    console.log('TEST SUMMARY')
+    console.log('='.repeat(60))
+    console.log(`  Segments: ${transcriptions.length}`)
+    console.log(`  Text length: ${fullText.length} chars`)
+    console.log(`  WER: ${werResult.werPercent}`)
+    console.log('='.repeat(60) + '\n')
+  } finally {
+    if (parakeet) {
+      try { parakeet.destroyInstance() } catch (e) {}
     }
-
-    const config = {
-      modelPath,
-      modelType: 'tdt',
-      maxThreads: 4,
-      useGPU: false,
-      sampleRate: 16000,
-      channels: 1,
-      encoderPath,
-      encoderDataPath,
-      decoderPath,
-      vocabPath,
-      preprocessorPath
-    }
-
-    const parakeet = new ParakeetInterface(binding, config, outputCallback)
-
-    // No loadWeights() needed — C++ addon loads directly from file paths
-    await parakeet.activate()
-    console.log('   Model activated (individual file paths)')
-
-    await parakeet.append({ type: 'audio', data: audioData.buffer })
-    await parakeet.append({ type: 'end of job' })
-
-    const timeout = setTimeout(() => { if (outputResolve) { outputResolve(); outputResolve = null } }, 600000)
-    await outputPromise
-    clearTimeout(timeout)
-
-    filePathText = transcriptions.map(s => s.text).join(' ').trim()
-    console.log(`   Text: "${filePathText.substring(0, 80)}..."`)
-
-    t.ok(transcriptions.length > 0, `File paths: should produce segments (got ${transcriptions.length})`)
-    t.ok(filePathText.length > 0, `File paths: should produce text (got ${filePathText.length} chars)`)
-
-    const werResult = validateAccuracy(expectedText, filePathText, 0.3)
-    console.log(`   WER: ${werResult.werPercent}`)
-    t.ok(werResult.wer <= 0.3, `File paths: WER should be <= 30% (got ${werResult.werPercent})`)
-
-    try { parakeet.destroyInstance() } catch (e) {}
-    console.log('   Instance destroyed\n')
+    try { loggerBinding.releaseLogger() } catch (e) {}
   }
-
-  // ──────────────────────────────────────────────────────────
-  // Compare results from both methods
-  // ──────────────────────────────────────────────────────────
-  console.log('=== Comparison ===')
-  const werBetween = validateAccuracy(directoryText, filePathText, 0.05)
-  console.log(`   Directory:   "${directoryText.substring(0, 80)}..."`)
-  console.log(`   File paths:  "${filePathText.substring(0, 80)}..."`)
-  console.log(`   WER between: ${werBetween.werPercent}`)
-
-  t.ok(werBetween.wer <= 0.05, `Both methods should produce near-identical output (WER: ${werBetween.werPercent})`)
-
-  console.log('\n' + '='.repeat(60))
-  console.log('TEST SUMMARY')
-  console.log('='.repeat(60))
-  console.log(`  Directory:      ${directoryText.length} chars, WER ${validateAccuracy(expectedText, directoryText, 0.3).werPercent}`)
-  console.log(`  File paths:     ${filePathText.length} chars, WER ${validateAccuracy(expectedText, filePathText, 0.3).werPercent}`)
-  console.log(`  Cross-method:   WER ${werBetween.werPercent}`)
-  console.log('='.repeat(60) + '\n')
-
-  try { loggerBinding.releaseLogger() } catch (e) {}
 })

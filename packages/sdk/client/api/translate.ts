@@ -6,6 +6,7 @@ import {
   type TranslateRequest,
   type TranslateClientParams,
   type TranslationStats,
+  type RPCOptions,
 } from "@/schemas";
 import { detectOne } from "@qvac/langdetect-text";
 import { TranslationFailedError } from "@/utils/errors-client";
@@ -50,7 +51,10 @@ import { TranslationFailedError } from "@/utils/errors-client";
  * console.log(await response.text);
  * ```
  */
-export function translate(params: TranslateClientParams): {
+export function translate(
+  params: TranslateClientParams,
+  options?: RPCOptions,
+): {
   tokenStream: AsyncGenerator<string>;
   stats: Promise<TranslationStats | undefined>;
   text: Promise<string>;
@@ -86,7 +90,7 @@ export function translate(params: TranslateClientParams): {
 
   if (params.stream) {
     const tokenStream = (async function* () {
-      for await (const response of streamRpc(request)) {
+      for await (const response of streamRpc(request, undefined, options)) {
         if (response.type === "translate") {
           const streamResponse = translateResponseSchema.parse(response);
           if (!streamResponse.done) {
@@ -114,7 +118,7 @@ export function translate(params: TranslateClientParams): {
     const textPromise = (async () => {
       let buffer = "";
 
-      for await (const response of streamRpc(request)) {
+      for await (const response of streamRpc(request, undefined, options)) {
         if (response.type === "translate") {
           const streamResponse = translateResponseSchema.parse(response);
           buffer += streamResponse.token;

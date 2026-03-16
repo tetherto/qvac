@@ -1,6 +1,10 @@
+#include <atomic>
+#include <chrono>
+#include <exception>
 #include <filesystem>
 #include <memory>
 #include <string>
+#include <thread>
 #include <unordered_map>
 
 #include <gtest/gtest.h>
@@ -101,13 +105,72 @@ TEST_F(LlamaModelTest, IsLoadedMethodBeforeInit) {
   EXPECT_FALSE(model.isLoaded());
 }
 
-TEST_F(LlamaModelTest, InitializeBackend) {
+TEST_F(LlamaModelTest, ReloadLoadsImmediatelyAndInferenceStillWorks) {
   if (!fs::exists(getValidModelPath())) {
     FAIL() << "Test model not found at: " << getValidModelPath();
   }
 
   LlamaModel model = createModel();
-  EXPECT_NO_THROW(model.initializeBackend());
+  model.waitForLoadInitialization();
+  if (!model.isLoaded()) {
+    FAIL() << "Model failed to load before reload";
+  }
+
+  LlamaModel::Prompt prompt;
+  prompt.input = R"([{"role": "user", "content": "Hello before reload"}])";
+  EXPECT_NO_THROW({
+    std::string output = model.processPrompt(prompt);
+    EXPECT_GE(output.length(), 0);
+  });
+
+  EXPECT_NO_THROW(model.reload());
+  EXPECT_TRUE(model.isLoaded());
+
+  prompt.input = R"([{"role": "user", "content": "Hello after reload"}])";
+  EXPECT_NO_THROW({
+    std::string output = model.processPrompt(prompt);
+    EXPECT_GE(output.length(), 0);
+  });
+}
+
+TEST_F(LlamaModelTest, ReloadWithoutArgsUsesStoredConstructionArgs) {
+  if (!fs::exists(getValidModelPath())) {
+    FAIL() << "Test model not found at: " << getValidModelPath();
+  }
+
+  LlamaModel model = createModel();
+  model.waitForLoadInitialization();
+  if (!model.isLoaded()) {
+    FAIL() << "Model failed to load before reload";
+  }
+
+  LlamaModel::Prompt prompt;
+  prompt.input = R"([{"role": "user", "content": "First pass"}])";
+  EXPECT_NO_THROW({
+    std::string output = model.processPrompt(prompt);
+    EXPECT_GE(output.length(), 0);
+  });
+
+  EXPECT_NO_THROW(model.reload());
+  EXPECT_TRUE(model.isLoaded());
+
+  prompt.input = R"([{"role": "user", "content": "Second pass"}])";
+  EXPECT_NO_THROW({
+    std::string output = model.processPrompt(prompt);
+    EXPECT_GE(output.length(), 0);
+  });
+}
+
+TEST_F(LlamaModelTest, ReloadThrowsForModelBuiltWithInvalidPath) {
+  std::string invalidPath = getInvalidModelPath();
+  std::string projectionPath = test_projection_path;
+  std::unordered_map<std::string, std::string> config = config_files;
+  LlamaModel model(
+      std::move(invalidPath), std::move(projectionPath), std::move(config));
+
+  // Constructor uses delayed init and does not throw immediately.
+  EXPECT_FALSE(model.isLoaded());
+  EXPECT_THROW(model.reload(), qvac_errors::StatusError);
 }
 
 TEST_F(LlamaModelTest, InvalidModelPath) {
@@ -893,4 +956,99 @@ TEST_F(LlamaModelTest, CommonParamsParseInvalidChatTemplate) {
         model.waitForLoadInitialization();
       },
       qvac_errors::StatusError);
+}
+
+TEST_F(LlamaModelTest, ReloadThrowsForStreamedShardedModel) {
+  using MP = test_common::TestModelPath;
+  MP shardedModel(
+      "Qwen3-0.6B-UD-IQ1_S-00001-of-00003.gguf",
+      "SHARDED_MODEL_FIRST_SHARD_PATH",
+      MP::OnMissing::Fail,
+      "https://huggingface.co/jmb95/Qwen3-0.6B-UD-IQ1_S-sharded",
+      true /* isSharded */);
+  REQUIRE_MODEL(shardedModel);
+  LlamaModel::resolveShardPaths(shardedModel.shards, shardedModel.path);
+
+  std::string path = shardedModel.path;
+  std::string projection;
+  auto cfg = config_files;
+  LlamaModel model(std::move(path), std::move(projection), std::move(cfg));
+
+  {
+    std::string tensorsBasename =
+        fs::path(shardedModel.shards.tensors_file).filename().string();
+    auto tensorsBuf = test_common::readFileToStreambufBinary(
+        shardedModel.shards.tensors_file);
+    ASSERT_NE(tensorsBuf, nullptr);
+    model.setWeightsForFile(tensorsBasename, std::move(tensorsBuf));
+
+    for (const auto& shardPath : shardedModel.shards.gguf_files) {
+      auto streambuf = test_common::readFileToStreambufBinary(shardPath);
+      ASSERT_NE(streambuf, nullptr);
+      model.setWeightsForFile(
+          fs::path(shardPath).filename().string(), std::move(streambuf));
+    }
+  }
+
+  model.waitForLoadInitialization();
+  ASSERT_TRUE(model.isLoaded());
+
+  EXPECT_THROW(model.reload(), qvac_errors::StatusError);
+}
+
+TEST_F(LlamaModelTest, ReloadDuringProcessingWaitsAndDoesNotCrash) {
+  if (!fs::exists(getValidModelPath())) {
+    FAIL() << "Test model not found at: " << getValidModelPath();
+  }
+
+  config_files["n_predict"] = "64";
+  LlamaModel model = createModel();
+  model.waitForLoadInitialization();
+
+  if (!model.isLoaded()) {
+    FAIL() << "Model failed to load";
+  }
+
+  std::atomic<bool> generationStarted{false};
+  std::string inferenceOutput;
+  std::exception_ptr inferenceException;
+
+  std::thread inferenceThread([&]() {
+    try {
+      LlamaModel::Prompt prompt;
+      prompt.input = R"([{"role": "user", "content": "Tell me a long story"}])";
+      prompt.outputCallback = [&](const std::string& token) {
+        generationStarted.store(true, std::memory_order_release);
+        inferenceOutput += token;
+        std::this_thread::sleep_for(std::chrono::milliseconds(5));
+      };
+      model.processPrompt(prompt);
+    } catch (...) {
+      inferenceException = std::current_exception();
+    }
+  });
+
+  while (!generationStarted.load(std::memory_order_acquire)) {
+    std::this_thread::sleep_for(std::chrono::milliseconds(1));
+  }
+
+  EXPECT_NO_THROW(model.reload());
+  EXPECT_TRUE(model.isLoaded());
+
+  // Inference must have completed before reload() returned, because
+  // processPrompt holds a shared lock and reload needs an exclusive one.
+  EXPECT_FALSE(inferenceOutput.empty());
+
+  inferenceThread.join();
+
+  if (inferenceException) {
+    FAIL() << "Inference thread threw unexpectedly";
+  }
+
+  LlamaModel::Prompt postReload;
+  postReload.input = R"([{"role": "user", "content": "Hello after reload"}])";
+  EXPECT_NO_THROW({
+    std::string output = model.processPrompt(postReload);
+    EXPECT_GE(output.length(), 0);
+  });
 }

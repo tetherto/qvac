@@ -13,6 +13,10 @@ import {
   registerRagOperation,
   unregisterRagOperation,
 } from "@/server/bare/rag-hyperdb";
+import {
+  profileReplyHandler,
+  registerOperationMetrics,
+} from "@/server/rpc/profiling";
 
 type ProgressOperation = "ingest" | "saveEmbeddings" | "reindex";
 
@@ -20,6 +24,26 @@ interface HandlerOptions {
   onProgress?: (stage: string, current: number, total: number) => void;
   signal?: AbortSignal;
 }
+
+registerOperationMetrics<
+  { operation?: string; workspace?: string },
+  { processed?: number; results?: unknown[] }
+>({
+  op: "rag",
+  kind: "handler",
+  getTags: (req) => {
+    const tags: Record<string, string> = {};
+    if (req.operation) tags["operation"] = req.operation;
+    if (req.workspace) tags["workspace"] = req.workspace;
+    return tags;
+  },
+  fromResult: (res) => {
+    const gauges: Record<string, number> = {};
+    if (res.processed !== undefined) gauges["processed"] = res.processed;
+    if (res.results !== undefined) gauges["resultsCount"] = res.results.length;
+    return Object.keys(gauges).length > 0 ? gauges : undefined;
+  },
+});
 
 function createHandlerOptions(
   operation: ProgressOperation,
@@ -56,6 +80,15 @@ function omitOnProgress<T extends Record<string, unknown>>(
 }
 
 export async function handleRag(
+  request: RagRequest,
+  onProgress?: (update: RagProgressUpdate) => void,
+): Promise<RagResponse> {
+  return profileReplyHandler({ op: "rag", request }, async () =>
+    handleRagInternal(request, onProgress),
+  );
+}
+
+async function handleRagInternal(
   request: RagRequest,
   onProgress?: (update: RagProgressUpdate) => void,
 ): Promise<RagResponse> {

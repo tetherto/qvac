@@ -37,10 +37,7 @@ async function applyPrompt(
   prompt: string | undefined,
   engineType: string,
 ): Promise<WhisperConfig | null> {
-  if (
-    engineType !== ModelType.whispercppTranscription ||
-    !prompt
-  ) {
+  if (engineType !== ModelType.whispercppTranscription || !prompt) {
     return null;
   }
 

@@ -9,13 +9,43 @@ import type RPC from "bare-rpc";
 import {
   requestSchema,
   responseSchema,
+  PROFILING_KEY,
+  DELEGATION_BREAKDOWN_KEY,
   type Request,
   type Response,
   type RPCOptions,
+  type ProfilingRequestMeta,
+  type DelegationBreakdown,
 } from "@/schemas";
+import {
+  nowMs,
+  extractProfilingMeta,
+  recordFailure,
+  generateId,
+} from "@/profiling";
 import { withTimeout, withTimeoutStream } from "@/utils/withTimeout";
 import { getServerLogger } from "@/logging";
 import { DelegateProviderError } from "@/utils/errors-server";
+import {
+  shouldProfileDelegation,
+  createDelegationTimings,
+  createDelegationStreamTimings,
+  recordDelegationEvents,
+  recordDelegationStreamEvents,
+  flushServerConnectionEvent,
+  consumeBreakdownConnectionTime,
+  type DelegationTimings,
+  type DelegationStreamTimings,
+} from "./profiling/delegation-profiler";
+import type { DelegatedHandlerOptions } from "./profiling";
+
+export interface DelegateOptions extends RPCOptions, DelegatedHandlerOptions {
+  peerKey?: string;
+}
+
+export type ResponseWithDelegation = Response & {
+  [DELEGATION_BREAKDOWN_KEY]?: DelegationBreakdown;
+};
 
 const logger = getServerLogger();
 
@@ -38,14 +68,34 @@ function checkAndThrowError(response: Response): void {
 export async function send<T extends Request>(
   request: T,
   rpc: RPC,
-  options?: RPCOptions,
+  options?: DelegateOptions,
+): Promise<Response> {
+  const { profilingMeta } = options ?? {};
+  const shouldProfile = shouldProfileDelegation(request.type, profilingMeta);
+
+  if (!shouldProfile) {
+    return sendBase(request, rpc, options, profilingMeta);
+  }
+  return sendProfiled(request, rpc, options, profilingMeta);
+}
+
+async function sendBase<T extends Request>(
+  request: T,
+  rpc: RPC,
+  options?: DelegateOptions,
+  profilingMeta?: ProfilingRequestMeta,
 ): Promise<Response> {
   const parsedRequest = requestSchema.parse(request);
   const req = rpc.request(getNextCommandId());
 
   logger.debug("[delegate-transport] Sending:", { type: request.type });
 
-  const payload = JSON.stringify(parsedRequest);
+  // Propagate per-call disable signal to delegated provider
+  const finalRequest =
+    profilingMeta?.enabled === false
+      ? { ...parsedRequest, [PROFILING_KEY]: { enabled: false } }
+      : parsedRequest;
+  const payload = JSON.stringify(finalRequest);
   req.send(payload, "utf-8");
 
   const response = await withTimeout(req.reply("utf-8"), options?.timeout);
@@ -60,17 +110,118 @@ export async function send<T extends Request>(
   return resPayload;
 }
 
+async function sendProfiled<T extends Request>(
+  request: T,
+  rpc: RPC,
+  options?: DelegateOptions,
+  profilingMeta?: ProfilingRequestMeta,
+): Promise<ResponseWithDelegation> {
+  const profileId = profilingMeta?.id ?? generateId();
+  const includeServerBreakdown = profilingMeta?.includeServer ?? false;
+  const timings: DelegationTimings = createDelegationTimings(
+    profileId,
+    request.type,
+  );
+
+  try {
+    if (options?.peerKey) {
+      flushServerConnectionEvent(options.peerKey);
+    }
+    const connectionMs = options?.peerKey
+      ? consumeBreakdownConnectionTime(options.peerKey)
+      : undefined;
+
+    const parsedRequest = requestSchema.parse(request);
+    const req = rpc.request(getNextCommandId());
+
+    logger.debug("[delegate-transport] Sending (profiled):", {
+      type: request.type,
+    });
+
+    const stringifyStart = nowMs();
+    const profilingEnvelope: Record<string, unknown> = { id: profileId };
+    if (includeServerBreakdown) {
+      profilingEnvelope["includeServer"] = true;
+    }
+    const requestWithProfiling = {
+      ...parsedRequest,
+      [PROFILING_KEY]: profilingEnvelope,
+    };
+    const payload = JSON.stringify(requestWithProfiling);
+    timings.requestStringifyMs = nowMs() - stringifyStart;
+
+    timings.sendStart = nowMs();
+    req.send(payload, "utf-8");
+
+    const response = await withTimeout(req.reply("utf-8"), options?.timeout);
+    timings.firstResponseAt = nowMs();
+
+    const parseStart = nowMs();
+    const rawPayload = JSON.parse(response?.toString() || "{}") as unknown;
+    timings.responseJsonParseMs = nowMs() - parseStart;
+
+    const resPayload = responseSchema.parse(
+      rawPayload,
+    ) as ResponseWithDelegation;
+    logger.debug("[delegate-transport] Response (profiled):", {
+      type: resPayload.type,
+    });
+
+    checkAndThrowError(resPayload);
+
+    const serverMeta = extractProfilingMeta(rawPayload);
+    const delegationBreakdown = recordDelegationEvents(
+      timings,
+      serverMeta,
+      connectionMs,
+    );
+    resPayload[DELEGATION_BREAKDOWN_KEY] = delegationBreakdown;
+
+    return resPayload;
+  } catch (error) {
+    const base = {
+      ts: nowMs(),
+      op: timings.requestType,
+      kind: "delegation" as const,
+      profileId: timings.profileId,
+    };
+    recordFailure(base, timings.requestStart, error);
+    throw error;
+  }
+}
+
 export async function* stream<T extends Request>(
   request: T,
   rpc: RPC,
-  options: RPCOptions = {},
+  options: DelegateOptions = {},
+): AsyncGenerator<Response> {
+  const { profilingMeta } = options;
+  const shouldProfile = shouldProfileDelegation(request.type, profilingMeta);
+
+  if (!shouldProfile) {
+    yield* streamBase(request, rpc, options, profilingMeta);
+    return;
+  }
+  yield* streamProfiled(request, rpc, options, profilingMeta);
+}
+
+async function* streamBase<T extends Request>(
+  request: T,
+  rpc: RPC,
+  options: DelegateOptions = {},
+  profilingMeta?: ProfilingRequestMeta,
 ): AsyncGenerator<Response> {
   const parsedRequest = requestSchema.parse(request);
   const req = rpc.request(getNextCommandId());
 
   logger.debug("[delegate-transport] Streaming:", { type: request.type });
 
-  req.send(JSON.stringify(parsedRequest), "utf-8");
+  // Propagate per-call disable signal to delegated provider
+  const finalRequest =
+    profilingMeta?.enabled === false
+      ? { ...parsedRequest, [PROFILING_KEY]: { enabled: false } }
+      : parsedRequest;
+  req.send(JSON.stringify(finalRequest), "utf-8");
 
   const responseStream = req.createResponseStream({ encoding: "utf-8" });
   let buffer = "";
@@ -96,11 +247,92 @@ export async function* stream<T extends Request>(
     for (const line of lines) {
       if (line.trim()) {
         const response = responseSchema.parse(JSON.parse(line));
-
         checkAndThrowError(response);
-
         yield response;
       }
     }
+  }
+}
+
+async function* streamProfiled<T extends Request>(
+  request: T,
+  rpc: RPC,
+  options: DelegateOptions = {},
+  profilingMeta?: ProfilingRequestMeta,
+): AsyncGenerator<Response> {
+  const profileId = profilingMeta?.id ?? generateId();
+  const timings: DelegationStreamTimings = createDelegationStreamTimings(
+    profileId,
+    request.type,
+  );
+
+  try {
+    if (options.peerKey) {
+      flushServerConnectionEvent(options.peerKey);
+    }
+
+    const parsedRequest = requestSchema.parse(request);
+    const req = rpc.request(getNextCommandId());
+
+    logger.debug("[delegate-transport] Streaming (profiled):", {
+      type: request.type,
+    });
+
+    const stringifyStart = nowMs();
+    const requestWithProfiling = {
+      ...parsedRequest,
+      [PROFILING_KEY]: { id: profileId },
+    };
+    const payload = JSON.stringify(requestWithProfiling);
+    timings.requestStringifyMs = nowMs() - stringifyStart;
+
+    timings.sendStart = nowMs();
+    req.send(payload, "utf-8");
+
+    const responseStream = req.createResponseStream({ encoding: "utf-8" });
+    let buffer = "";
+
+    async function* processStream(): AsyncGenerator<Buffer> {
+      for await (const chunk of responseStream as AsyncIterable<Buffer>) {
+        yield chunk;
+      }
+    }
+
+    const streamWithTimeout = withTimeoutStream(
+      processStream(),
+      options?.timeout,
+    );
+
+    for await (const chunk of streamWithTimeout) {
+      buffer += chunk.toString();
+
+      const lines = buffer.split("\n");
+      buffer = lines.pop() || "";
+
+      for (const line of lines) {
+        if (line.trim()) {
+          const response = responseSchema.parse(JSON.parse(line));
+          checkAndThrowError(response);
+
+          timings.chunkCount++;
+          if (timings.firstChunkAt === undefined) {
+            timings.firstChunkAt = nowMs();
+          }
+          timings.lastChunkAt = nowMs();
+
+          yield response;
+        }
+      }
+    }
+    recordDelegationStreamEvents(timings);
+  } catch (error) {
+    const base = {
+      ts: nowMs(),
+      op: timings.requestType,
+      kind: "delegation" as const,
+      profileId: timings.profileId,
+    };
+    recordFailure(base, timings.requestStart, error);
+    throw error;
   }
 }

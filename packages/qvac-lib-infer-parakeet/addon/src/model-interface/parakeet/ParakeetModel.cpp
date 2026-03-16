@@ -549,22 +549,17 @@ void ParakeetModel::warmup() {
 // ═════════════════════════════════════════════════════════════════════════════
 
 void ParakeetModel::loadCTCSessions(Ort::SessionOptions& session_options) {
-  auto modelIt = model_weights_.find("model.onnx");
-  if (modelIt == model_weights_.end()) {
-    QLOG(
-        qvac_lib_inference_addon_cpp::logger::Priority::ERROR,
-        "CTC model weights not found");
-    throw errors::makeStatus(
-        errors::Code::CTCModelNotLoaded, "CTC model weights not found");
+  if (cfg_.ctcModelPath.empty()) {
+    throw errors::makeStatus(errors::Code::CTCModelNotLoaded,
+                             "ctcModelPath is required");
   }
 
   QLOG(
       qvac_lib_inference_addon_cpp::logger::Priority::DEBUG,
       "Loading CTC model session...");
 
-  std::string modelPath = cfg_.modelPath + "/model.onnx";
-  std::string modelDataPath = cfg_.modelPath + "/model.onnx_data";
-  bool hasExternalData = std::filesystem::exists(modelDataPath);
+  bool hasExternalData = !cfg_.ctcModelDataPath.empty() &&
+                         std::filesystem::exists(cfg_.ctcModelDataPath);
 
   if (hasExternalData) {
     auto stagingDir =
@@ -573,11 +568,12 @@ void ParakeetModel::loadCTCSessions(Ort::SessionOptions& session_options) {
     std::filesystem::create_directories(stagingDir);
 
     auto modelLink = stagingDir / "model.onnx";
-    auto dataLink = stagingDir / "model.onnx_data";
-    std::filesystem::create_symlink(
-        std::filesystem::absolute(modelPath), modelLink);
-    std::filesystem::create_symlink(
-        std::filesystem::absolute(modelDataPath), dataLink);
+    std::filesystem::create_symlink(cfg_.ctcModelPath, modelLink);
+    // ONNX exports use either model.onnx_data or model.onnx.data — create both
+    std::filesystem::create_symlink(cfg_.ctcModelDataPath,
+                                    stagingDir / "model.onnx_data");
+    std::filesystem::create_symlink(cfg_.ctcModelDataPath,
+                                    stagingDir / "model.onnx.data");
 
     try {
       ctc_session_ = std::make_unique<Ort::Session>(
@@ -588,181 +584,148 @@ void ParakeetModel::loadCTCSessions(Ort::SessionOptions& session_options) {
     }
     std::filesystem::remove_all(stagingDir);
   } else {
+#ifdef _WIN32
+    std::wstring wPath(cfg_.ctcModelPath.begin(), cfg_.ctcModelPath.end());
+    ctc_session_ = std::make_unique<Ort::Session>(*ort_env_, wPath.c_str(),
+                                                  session_options);
+#else
     ctc_session_ = std::make_unique<Ort::Session>(
-        *ort_env_,
-        modelIt->second.data(),
-        modelIt->second.size(),
-        session_options);
+        *ort_env_, cfg_.ctcModelPath.c_str(), session_options);
+#endif
+  }
+
+  if (!cfg_.tokenizerPath.empty() && vocab_.empty()) {
+    std::ifstream file(cfg_.tokenizerPath, std::ios::binary);
+    if (file.is_open()) {
+      std::vector<uint8_t> data((std::istreambuf_iterator<char>(file)),
+                                std::istreambuf_iterator<char>());
+      loadTokenizerJson(data);
+    }
   }
 }
 
 void ParakeetModel::loadEOUSessions(Ort::SessionOptions& session_options) {
-  auto encoderIt = model_weights_.find("encoder.onnx");
-  if (encoderIt == model_weights_.end()) {
-    QLOG(
-        qvac_lib_inference_addon_cpp::logger::Priority::ERROR,
-        "EOU encoder weights not found");
-    throw errors::makeStatus(
-        errors::Code::EOUEncoderNotLoaded, "EOU encoder weights not found");
+  if (cfg_.eouEncoderPath.empty()) {
+    throw errors::makeStatus(errors::Code::EOUEncoderNotLoaded,
+                             "eouEncoderPath is required");
+  }
+  if (cfg_.eouDecoderPath.empty()) {
+    throw errors::makeStatus(errors::Code::EOUDecoderNotLoaded,
+                             "eouDecoderPath is required");
   }
 
   QLOG(
       qvac_lib_inference_addon_cpp::logger::Priority::DEBUG,
       "Loading EOU encoder session...");
+#ifdef _WIN32
+  std::wstring wEncPath(cfg_.eouEncoderPath.begin(), cfg_.eouEncoderPath.end());
+  encoder_session_ = std::make_unique<Ort::Session>(*ort_env_, wEncPath.c_str(),
+                                                    session_options);
+#else
   encoder_session_ = std::make_unique<Ort::Session>(
-      *ort_env_,
-      encoderIt->second.data(),
-      encoderIt->second.size(),
-      session_options);
-
-  auto decoderIt = model_weights_.find("decoder_joint.onnx");
-  if (decoderIt == model_weights_.end()) {
-    QLOG(
-        qvac_lib_inference_addon_cpp::logger::Priority::ERROR,
-        "EOU decoder weights not found");
-    throw errors::makeStatus(
-        errors::Code::EOUDecoderNotLoaded, "EOU decoder weights not found");
-  }
+      *ort_env_, cfg_.eouEncoderPath.c_str(), session_options);
+#endif
 
   QLOG(
       qvac_lib_inference_addon_cpp::logger::Priority::DEBUG,
       "Loading EOU decoder session...");
+#ifdef _WIN32
+  std::wstring wDecPath(cfg_.eouDecoderPath.begin(), cfg_.eouDecoderPath.end());
+  decoder_session_ = std::make_unique<Ort::Session>(*ort_env_, wDecPath.c_str(),
+                                                    session_options);
+#else
   decoder_session_ = std::make_unique<Ort::Session>(
-      *ort_env_,
-      decoderIt->second.data(),
-      decoderIt->second.size(),
-      session_options);
+      *ort_env_, cfg_.eouDecoderPath.c_str(), session_options);
+#endif
+
+  if (!cfg_.tokenizerPath.empty() && vocab_.empty()) {
+    std::ifstream file(cfg_.tokenizerPath, std::ios::binary);
+    if (file.is_open()) {
+      std::vector<uint8_t> data((std::istreambuf_iterator<char>(file)),
+                                std::istreambuf_iterator<char>());
+      loadTokenizerJson(data);
+    }
+  }
 }
 
 void ParakeetModel::loadSortformerSessions(
     Ort::SessionOptions& session_options) {
-  auto modelIt = model_weights_.find("sortformer.onnx");
-  if (modelIt == model_weights_.end()) {
-    QLOG(
-        qvac_lib_inference_addon_cpp::logger::Priority::ERROR,
-        "Sortformer model weights not found");
-    throw errors::makeStatus(
-        errors::Code::SortformerNotLoaded,
-        "Sortformer model weights not found");
+  if (cfg_.sortformerPath.empty()) {
+    throw errors::makeStatus(errors::Code::SortformerNotLoaded,
+                             "sortformerPath is required");
   }
 
   QLOG(
       qvac_lib_inference_addon_cpp::logger::Priority::DEBUG,
       "Loading Sortformer session...");
+#ifdef _WIN32
+  std::wstring wPath(cfg_.sortformerPath.begin(), cfg_.sortformerPath.end());
+  sortformer_session_ =
+      std::make_unique<Ort::Session>(*ort_env_, wPath.c_str(), session_options);
+#else
   sortformer_session_ = std::make_unique<Ort::Session>(
-      *ort_env_,
-      modelIt->second.data(),
-      modelIt->second.size(),
-      session_options);
+      *ort_env_, cfg_.sortformerPath.c_str(), session_options);
+#endif
 }
 
 void ParakeetModel::loadTDTSessions(Ort::SessionOptions& session_options) {
-  const bool useNamedPaths = !cfg_.encoderPath.empty();
-  std::filesystem::path stagingDir;
+  if (cfg_.encoderPath.empty()) {
+    throw errors::makeStatus(errors::Code::EncoderNotLoaded,
+                             "encoderPath is required");
+  }
+  if (cfg_.decoderPath.empty()) {
+    throw errors::makeStatus(errors::Code::DecoderNotLoaded,
+                             "decoderPath is required");
+  }
 
-  if (useNamedPaths) {
-    QLOG(
-        qvac_lib_inference_addon_cpp::logger::Priority::DEBUG,
-        "Loading encoder from path: " + cfg_.encoderPath);
+  QLOG(qvac_lib_inference_addon_cpp::logger::Priority::DEBUG,
+       "Loading encoder from path: " + cfg_.encoderPath);
 
-    bool hasExternalData = !cfg_.encoderDataPath.empty() &&
-                           std::filesystem::exists(cfg_.encoderDataPath);
+  bool hasExternalData = !cfg_.encoderDataPath.empty() &&
+                         std::filesystem::exists(cfg_.encoderDataPath);
 
-    if (hasExternalData) {
-      stagingDir =
-          std::filesystem::temp_directory_path() /
-          ("parakeet_enc_" + std::to_string(reinterpret_cast<uintptr_t>(this)));
-      std::filesystem::create_directories(stagingDir);
+  if (hasExternalData) {
+    auto stagingDir =
+        std::filesystem::temp_directory_path() /
+        ("parakeet_enc_" + std::to_string(reinterpret_cast<uintptr_t>(this)));
+    std::filesystem::create_directories(stagingDir);
 
-      auto encLink = stagingDir / "encoder-model.onnx";
-      auto dataLink = stagingDir / "encoder-model.onnx.data";
-      std::filesystem::create_symlink(cfg_.encoderPath, encLink);
-      std::filesystem::create_symlink(cfg_.encoderDataPath, dataLink);
+    auto encLink = stagingDir / "encoder-model.onnx";
+    auto dataLink = stagingDir / "encoder-model.onnx.data";
+    std::filesystem::create_symlink(cfg_.encoderPath, encLink);
+    std::filesystem::create_symlink(cfg_.encoderDataPath, dataLink);
 
-      try {
-        encoder_session_ = std::make_unique<Ort::Session>(
-            *ort_env_, encLink.c_str(), session_options);
-      } catch (...) {
-        std::filesystem::remove_all(stagingDir);
-        throw;
-      }
+    try {
+      encoder_session_ = std::make_unique<Ort::Session>(
+          *ort_env_, encLink.c_str(), session_options);
+    } catch (...) {
       std::filesystem::remove_all(stagingDir);
-      stagingDir.clear();
-    } else {
-#ifdef _WIN32
-      std::wstring wPath(cfg_.encoderPath.begin(), cfg_.encoderPath.end());
-      encoder_session_ = std::make_unique<Ort::Session>(
-          *ort_env_, wPath.c_str(), session_options);
-#else
-      encoder_session_ = std::make_unique<Ort::Session>(
-          *ort_env_, cfg_.encoderPath.c_str(), session_options);
-#endif
+      throw;
     }
+    std::filesystem::remove_all(stagingDir);
   } else {
-    auto encoderIt = model_weights_.find("encoder-model.onnx");
-    if (encoderIt == model_weights_.end()) {
-      QLOG(
-          qvac_lib_inference_addon_cpp::logger::Priority::ERROR,
-          "Encoder model weights not found");
-      throw errors::makeStatus(
-          errors::Code::EncoderNotLoaded, "Encoder model weights not found");
-    }
-
-    QLOG(
-        qvac_lib_inference_addon_cpp::logger::Priority::DEBUG,
-        "Loading encoder session...");
-
-    std::string encoderPath = cfg_.modelPath + "/encoder-model.onnx";
-    std::string encoderDataPath = cfg_.modelPath + "/encoder-model.onnx.data";
-    bool hasExternalData = std::filesystem::exists(encoderDataPath);
-
-    if (hasExternalData) {
 #ifdef _WIN32
-      std::wstring wEncoderPath(encoderPath.begin(), encoderPath.end());
-      encoder_session_ = std::make_unique<Ort::Session>(
-          *ort_env_, wEncoderPath.c_str(), session_options);
+    std::wstring wPath(cfg_.encoderPath.begin(), cfg_.encoderPath.end());
+    encoder_session_ = std::make_unique<Ort::Session>(*ort_env_, wPath.c_str(),
+                                                      session_options);
 #else
-      encoder_session_ = std::make_unique<Ort::Session>(
-          *ort_env_, encoderPath.c_str(), session_options);
+    encoder_session_ = std::make_unique<Ort::Session>(
+        *ort_env_, cfg_.encoderPath.c_str(), session_options);
 #endif
-    } else {
-      encoder_session_ = std::make_unique<Ort::Session>(
-          *ort_env_,
-          encoderIt->second.data(),
-          encoderIt->second.size(),
-          session_options);
-    }
   }
 
-  QLOG(
-      qvac_lib_inference_addon_cpp::logger::Priority::DEBUG,
-      "Loading decoder session...");
-  if (useNamedPaths && !cfg_.decoderPath.empty()) {
+  QLOG(qvac_lib_inference_addon_cpp::logger::Priority::DEBUG,
+       "Loading decoder session...");
 #ifdef _WIN32
-    std::wstring wPath(cfg_.decoderPath.begin(), cfg_.decoderPath.end());
-    decoder_session_ = std::make_unique<Ort::Session>(
-        *ort_env_, wPath.c_str(), session_options);
+  std::wstring wDecoderPath(cfg_.decoderPath.begin(), cfg_.decoderPath.end());
+  decoder_session_ = std::make_unique<Ort::Session>(
+      *ort_env_, wDecoderPath.c_str(), session_options);
 #else
-    decoder_session_ = std::make_unique<Ort::Session>(
-        *ort_env_, cfg_.decoderPath.c_str(), session_options);
+  decoder_session_ = std::make_unique<Ort::Session>(
+      *ort_env_, cfg_.decoderPath.c_str(), session_options);
 #endif
-  } else {
-    auto decoderIt = model_weights_.find("decoder_joint-model.onnx");
-    if (decoderIt == model_weights_.end()) {
-      QLOG(
-          qvac_lib_inference_addon_cpp::logger::Priority::ERROR,
-          "Decoder model weights not found");
-      throw errors::makeStatus(
-          errors::Code::DecoderNotLoaded, "Decoder model weights not found");
-    }
-    decoder_session_ = std::make_unique<Ort::Session>(
-        *ort_env_,
-        decoderIt->second.data(),
-        decoderIt->second.size(),
-        session_options);
-  }
 
-  if (useNamedPaths && !cfg_.preprocessorPath.empty()) {
+  if (!cfg_.preprocessorPath.empty()) {
     QLOG(
         qvac_lib_inference_addon_cpp::logger::Priority::DEBUG,
         "Loading preprocessor session...");
@@ -775,21 +738,9 @@ void ParakeetModel::loadTDTSessions(Ort::SessionOptions& session_options) {
     preprocessor_session_ = std::make_unique<Ort::Session>(
         *ort_env_, cfg_.preprocessorPath.c_str(), session_options);
 #endif
-  } else {
-    auto preprocessorIt = model_weights_.find("preprocessor.onnx");
-    if (preprocessorIt != model_weights_.end()) {
-      QLOG(
-          qvac_lib_inference_addon_cpp::logger::Priority::DEBUG,
-          "Loading preprocessor session...");
-      preprocessor_session_ = std::make_unique<Ort::Session>(
-          *ort_env_,
-          preprocessorIt->second.data(),
-          preprocessorIt->second.size(),
-          session_options);
-    }
   }
 
-  if (useNamedPaths && vocab_.empty() && !cfg_.vocabPath.empty()) {
+  if (vocab_.empty() && !cfg_.vocabPath.empty()) {
     std::ifstream vocabFile(cfg_.vocabPath, std::ios::binary);
     if (vocabFile.is_open()) {
       std::vector<uint8_t> vocabData(

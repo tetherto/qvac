@@ -18,7 +18,7 @@ import {
   type ResolveContext,
   type ResolveResult,
 } from "@/schemas";
-import { ADDON_NAMESPACES, createStreamLogger } from "@/logging";
+import { createStreamLogger, registerAddonLogger } from "@/logging";
 import { parseModelPath } from "@/server/utils";
 import FilesystemDL from "@qvac/dl-filesystem";
 import {
@@ -70,10 +70,14 @@ function createNmtModel(
   nmtConfig: NmtConfig,
   srcVocabPath?: string,
   dstVocabPath?: string,
+  pivotModelPath?: string,
+  pivotSrcVocabPath?: string,
+  pivotDstVocabPath?: string,
 ) {
   const { dirPath, basePath } = parseModelPath(modelPath);
   const loader = new FilesystemDL({ dirPath });
-  const logger = createStreamLogger(modelId, "nmtcpp");
+  const logger = createStreamLogger(modelId, ModelType.nmtcppTranslation);
+  registerAddonLogger(modelId, ModelType.nmtcppTranslation, logger);
 
   const {
     mode,
@@ -122,6 +126,24 @@ function createNmtModel(
       ...(nmtConfig.normalize !== undefined && {
         normalize: nmtConfig.normalize,
       }),
+      // Add pivot model configuration if present
+      ...(nmtConfig.pivotModel && {
+        bergamotPivotModel: (() => {
+          // eslint-disable-next-line @typescript-eslint/no-unused-vars
+          const {modelSrc, dstVocabSrc, srcVocabSrc, ...config} = nmtConfig.pivotModel
+          const { dirPath, basePath } = parseModelPath(pivotModelPath!);
+          return {
+            loader: asLoader<Loader>(new FilesystemDL({ dirPath })),
+            modelName: basePath,
+            diskPath: dirPath,
+            config: {
+              ...config,
+              srcVocabPath: pivotSrcVocabPath,
+              dstVocabPath: pivotDstVocabPath
+            }
+          };
+        })(),
+      }),
     }),
   };
 
@@ -149,7 +171,9 @@ export const nmtPlugin = definePlugin({
     const { srcVocabSrc, dstVocabSrc, ...nmtConfig } = cfg as {
       srcVocabSrc?: ModelSrcInput;
       dstVocabSrc?: ModelSrcInput;
+      pivotModel?: { srcVocabSrc?: ModelSrcInput, dstVocabSrc?: ModelSrcInput, modelSrc: string };
     } & NmtConfig;
+
 
     if (nmtConfig.engine !== "Bergamot") {
       return { config: nmtConfig };
@@ -176,14 +200,51 @@ export const nmtPlugin = definePlugin({
       );
     }
 
-    const [srcVocabPath, dstVocabPath] = await Promise.all([
+    const pivotModel = nmtConfig.pivotModel
+    if (!pivotModel) {
+      const [srcVocabPath, dstVocabPath] = await Promise.all([
+        ctx.resolveModelPath(srcSrc),
+        ctx.resolveModelPath(dstSrc),
+      ]);
+
+      return {
+        config: nmtConfig,
+        artifacts: { srcVocabPath, dstVocabPath },
+      };
+    }
+
+    let pivotSrcSrc: ModelSrcInput | undefined = pivotModel.srcVocabSrc;
+    let pivotDstSrc: ModelSrcInput | undefined = pivotModel.dstVocabSrc;
+
+    if (!pivotSrcSrc || !pivotDstSrc) {
+      const pivotDerived = pivotModel.modelSrc.startsWith("pear://")
+          ? deriveBergamotVocabSources(pivotModel.modelSrc)
+          : pivotModel.modelSrc.startsWith("registry://")
+              ? deriveBergamotRegistryVocabSources(pivotModel.modelSrc)
+              : null;
+      if (pivotDerived) {
+        pivotSrcSrc = pivotSrcSrc ?? pivotDerived.srcVocabSrc;
+        pivotDstSrc = pivotDstSrc ?? pivotDerived.dstVocabSrc;
+      }
+    }
+
+    if (!pivotSrcSrc || !pivotDstSrc) {
+      throw new ModelLoadFailedError(
+          "Bergamot pivot model requires srcVocabSrc and dstVocabSrc. Provide them in modelConfig or use a pear:// or registry:// model source for auto-derivation.",
+      );
+    }
+
+    const [srcVocabPath, dstVocabPath, pivotSrcVocabPath, pivotDstVocabPath, pivotModelPath] = await Promise.all([
       ctx.resolveModelPath(srcSrc),
       ctx.resolveModelPath(dstSrc),
+      ctx.resolveModelPath(pivotSrcSrc),
+      ctx.resolveModelPath(pivotDstSrc),
+      ctx.resolveModelPath(pivotModel.modelSrc),
     ]);
 
     return {
       config: nmtConfig,
-      artifacts: { srcVocabPath, dstVocabPath },
+      artifacts: { srcVocabPath, dstVocabPath, pivotSrcVocabPath, pivotDstVocabPath, pivotModelPath },
     };
   },
 
@@ -196,6 +257,9 @@ export const nmtPlugin = definePlugin({
       nmtConfig,
       params.artifacts?.["srcVocabPath"],
       params.artifacts?.["dstVocabPath"],
+      params.artifacts?.["pivotModelPath"],
+      params.artifacts?.["pivotSrcVocabPath"],
+      params.artifacts?.["pivotDstVocabPath"],
     );
 
     return { model, loader };
@@ -238,6 +302,6 @@ export const nmtPlugin = definePlugin({
 
   logging: {
     module: nmtAddonLogging,
-    namespace: ADDON_NAMESPACES.NMTCPP,
+    namespace: ModelType.nmtcppTranslation,
   },
 });
