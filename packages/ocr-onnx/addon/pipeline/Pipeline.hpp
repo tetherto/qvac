@@ -134,6 +134,7 @@ private:
   std::string pathRecognizer_;
   std::vector<std::string> langList_;
   bool useGPU_;
+  int timeout_;
 
   // EasyOCR pipeline steps (constructed when mode == EASYOCR)
   std::unique_ptr<StepDetectionInference> stepDetection_;
@@ -143,8 +144,6 @@ private:
   // DocTR pipeline steps (constructed when mode == DOCTR)
   std::unique_ptr<StepDoctrDetection> stepDoctrDetection_;
   std::unique_ptr<StepDoctrRecognition> stepDoctrRecognition_;
-
-  int timeout_;
 
   // Cooperative cancellation flag. Set by cancel(), checked between pipeline steps
   // and between recognition batches. Mutable so cancel() can set it in a const context.

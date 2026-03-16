@@ -2,6 +2,7 @@
 
 #include <chrono>
 #include <cmath>
+#include <cstdio>
 #include <iostream>
 #include <string>
 #include <string_view>
@@ -484,7 +485,7 @@ namespace {
 std::string escapeJsonString(const std::string& input) {
   std::string output;
   output.reserve(input.size());
-  for (char ch : input) {
+  for (unsigned char ch : input) {
     switch (ch) {
       case '"':  output += "\\\""; break;
       case '\\': output += "\\\\"; break;
@@ -493,7 +494,16 @@ std::string escapeJsonString(const std::string& input) {
       case '\n': output += "\\n"; break;
       case '\r': output += "\\r"; break;
       case '\t': output += "\\t"; break;
-      default:   output += ch; break;
+      default:
+        if (ch < 0x20) {
+          // Escape remaining control characters as \u00XX per JSON spec
+          char buf[8];
+          snprintf(buf, sizeof(buf), "\\u%04x", ch);
+          output += buf;
+        } else {
+          output += static_cast<char>(ch);
+        }
+        break;
     }
   }
   return output;
