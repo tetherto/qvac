@@ -24,32 +24,16 @@ If no task ID is given, work from the user's description.
 
 Read `.claude/agent-conduct.md` and follow all rules strictly.
 
-### Step 3: Create an implementation plan
+### Step 3: Implement
 
-Before writing any code, create a plan:
+If an approved plan was provided (by the orchestrator or user), follow it. Otherwise, work from the task description.
 
-1. **Read the relevant source files** to understand the current codebase
-2. **Draft a plan** that includes:
-   - Summary of what will be changed and why
-   - Files to create or modify (with brief description of changes per file)
-   - Approach and key design decisions
-   - Dependencies or packages to add (if any)
-   - How it will be verified (build, test commands)
-3. **Present the plan to the user** and ask for approval before proceeding
-4. **Comment on Asana** (if task ID provided) with the approved plan
-
-Do NOT write any code until the user approves the plan. If the user requests changes to the plan, update it and ask again.
-
-### Step 4: Implement
-
-After the plan is approved:
-
-- Stay within the approved file scope — do not modify files outside your plan
+- Stay within the assigned file scope — do not modify files outside your scope
 - Follow existing code patterns and conventions (see CLAUDE.md)
 - Commit after each meaningful, working change
 - Write clear commit messages in the format: `prefix[tags]?: subject`
 
-### Step 5: Verify the implementation
+### Step 4: Verify the implementation
 
 **If the task includes verification instructions**: follow them exactly.
 
@@ -62,7 +46,7 @@ After the plan is approved:
 
 Execute the verification plan. If verification fails: fix and retry, up to 3 attempts. After 3 failures, comment on Asana with error details and stop.
 
-### Step 6: Create draft PR
+### Step 5: Create draft PR
 
 After verification passes:
 
@@ -73,7 +57,7 @@ After verification passes:
    - Use `gh pr create --draft --base main`
 3. Comment on the Asana task with the PR link
 
-### Step 7: Report
+### Step 6: Report
 
 On completion, report:
 - What was implemented

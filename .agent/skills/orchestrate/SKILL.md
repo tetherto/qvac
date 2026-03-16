@@ -43,15 +43,34 @@ Accepts either:
    ```
    Task: <task-title>
    Branch: <branch-name>
-   Starting implementation...
    ```
+
+### Phase 0.5: Plan
+
+Before any implementation, create a plan for the user to approve:
+
+1. **Read the relevant source files** mentioned in the task description or likely affected by the changes
+2. **Draft an implementation plan** that includes:
+   - Summary of what will be changed and why
+   - Files to create or modify (with brief description of changes per file)
+   - Approach and key design decisions
+   - Dependencies or packages to add (if any)
+   - How it will be verified (build commands, test commands)
+3. **Present the plan to the user** and wait for approval
+   - If the user requests changes, update the plan and ask again
+   - Do NOT proceed until the user explicitly approves
+4. **Comment on the Asana task** with the approved plan
 
 ### Phase 1: Implement
 
-Launch the **implementer** agent with the Asana task ID.
+Launch the **implementer** agent with the Asana task ID **and the approved plan**.
 
 ```
-Implement Asana task <task-id>. Read the task, understand requirements, write code within scope, verify build/tests pass, and commit working changes. Do not push.
+Implement Asana task <task-id>. Follow this approved plan:
+
+<paste the approved plan here>
+
+Write code within scope of the plan, verify build/tests pass, and commit working changes.
 ```
 
 Wait for completion. If the implementer reports failure (e.g., ambiguous requirements, build failures after 3 retries), stop the pipeline and report to the user.
