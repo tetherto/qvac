@@ -1,13 +1,13 @@
 'use strict'
 
 // Try to load QVAC error module, fallback to simple Error class
-let QvacErrorAddonParakeet, ERR_CODES
+let QvacErrorAddonParakeet, ERR_CODES, END_OF_INPUT
 try {
   const errorModule = require('./lib/error')
   QvacErrorAddonParakeet = errorModule.QvacErrorAddonParakeet
   ERR_CODES = errorModule.ERR_CODES
+  END_OF_INPUT = errorModule.END_OF_INPUT
 } catch (e) {
-  // Fallback for standalone use without @qvac/error
   class SimpleParakeetError extends Error {
     constructor (code, message) {
       super(message)
@@ -33,6 +33,7 @@ try {
     DECODER_NOT_FOUND: 7014,
     INVALID_CONFIG: 7015
   }
+  END_OF_INPUT = 'end of job'
 }
 
 const state = Object.freeze({
@@ -43,8 +44,6 @@ const state = Object.freeze({
   PAUSED: 'paused',
   STOPPED: 'stopped'
 })
-
-const END_OF_INPUT = 'end of job'
 
 function createParakeetError (code, message, cause = undefined) {
   // @qvac/error expects an options object, while the local fallback class

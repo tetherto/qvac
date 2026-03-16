@@ -96,7 +96,10 @@ addCodes({
   version
 })
 
+const END_OF_INPUT = 'end of job'
+
 module.exports = {
   ERR_CODES,
-  QvacErrorAddonParakeet
+  QvacErrorAddonParakeet,
+  END_OF_INPUT
 }

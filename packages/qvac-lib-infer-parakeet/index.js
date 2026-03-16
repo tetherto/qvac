@@ -6,9 +6,7 @@ const BaseInference = require('@qvac/infer-base/WeightsProvider/BaseInference')
 const WeightsProvider = require('@qvac/infer-base/WeightsProvider/WeightsProvider')
 
 const { ParakeetInterface } = require('./parakeet')
-const { QvacErrorAddonParakeet, ERR_CODES } = require('./lib/error')
-
-const END_OF_INPUT = 'end of job'
+const { QvacErrorAddonParakeet, ERR_CODES, END_OF_INPUT } = require('./lib/error')
 
 /**
  * Required model files for TDT model
