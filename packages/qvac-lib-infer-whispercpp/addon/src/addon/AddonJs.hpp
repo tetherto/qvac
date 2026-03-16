@@ -2,8 +2,10 @@
 
 #include <any>
 #include <memory>
+#include <mutex>
 #include <span>
 #include <string>
+#include <unordered_map>
 #include <vector>
 
 #include <js.h>
@@ -16,11 +18,20 @@
 #include <qvac-lib-inference-addon-cpp/queue/OutputCallbackJs.hpp>
 #include <whisper.h>
 
+#include "model-interface/StreamingProcessor.hpp"
 #include "model-interface/WhisperTypes.hpp"
 #include "model-interface/whisper.cpp/WhisperModel.hpp"
 #include "src/js-interface/JSAdapter.hpp"
 
 namespace qvac_lib_inference_addon_whisper {
+
+namespace {
+std::mutex g_streamingMtx;
+std::unordered_map<
+    qvac_lib_inference_addon_cpp::AddonJs*,
+    std::unique_ptr<StreamingProcessor>>
+    g_streamingProcessors;
+} // namespace
 
 namespace js = qvac_lib_inference_addon_cpp::js;
 using qvac_lib_inference_addon_cpp::OutputQueue;
@@ -170,6 +181,134 @@ inline js_value_t* reload(js_env_t* env, js_callback_info_t* info) try {
         }
         whisperModel->setConfig(config);
       });
+}
+JSCATCH
+
+inline js_value_t*
+startStreaming(js_env_t* env, js_callback_info_t* info) try {
+  using namespace qvac_lib_inference_addon_cpp;
+
+  JsArgsParser args(env, info);
+  AddonJs& instance = JsInterface::getInstance(env, args.get(0, "instance"));
+  auto configObj = args.getJsObject(1, "config");
+
+  StreamingProcessor::Config config;
+
+  auto maybeThreshold =
+      configObj.getOptionalProperty<js::Number>(env, "energyThreshold");
+  if (maybeThreshold.has_value()) {
+    config.energyThreshold =
+        static_cast<float>(maybeThreshold.value().as<double>(env));
+  }
+
+  auto maybeMinSilence =
+      configObj.getOptionalProperty<js::Number>(env, "minSilenceDurationMs");
+  if (maybeMinSilence.has_value()) {
+    config.minSilenceSamples =
+        static_cast<int>(maybeMinSilence.value().as<double>(env)) *
+        config.sampleRate / 1000;
+  }
+
+  auto maybeMinSpeech =
+      configObj.getOptionalProperty<js::Number>(env, "minSpeechDurationMs");
+  if (maybeMinSpeech.has_value()) {
+    config.minSpeechSamples =
+        static_cast<int>(maybeMinSpeech.value().as<double>(env)) *
+        config.sampleRate / 1000;
+  }
+
+  auto maybeMaxSpeech =
+      configObj.getOptionalProperty<js::Number>(env, "maxSpeechDurationS");
+  if (maybeMaxSpeech.has_value()) {
+    config.maxBufferSamples =
+        static_cast<int>(maybeMaxSpeech.value().as<double>(env)) *
+        config.sampleRate;
+  }
+
+  {
+    std::lock_guard lock(g_streamingMtx);
+
+    auto it = g_streamingProcessors.find(&instance);
+    if (it != g_streamingProcessors.end()) {
+      throw std::runtime_error(
+          "Streaming session already active for this instance");
+    }
+
+    g_streamingProcessors[&instance] = std::make_unique<StreamingProcessor>(
+        instance.addonCpp->model.get(),
+        instance.addonCpp->outputQueue,
+        config);
+  }
+
+  return js::Boolean::create(env, true);
+}
+JSCATCH
+
+inline js_value_t*
+appendStreamingAudio(js_env_t* env, js_callback_info_t* info) try {
+  using namespace qvac_lib_inference_addon_cpp;
+
+  JsArgsParser args(env, info);
+  AddonJs& instance = JsInterface::getInstance(env, args.get(0, "instance"));
+  auto [type, jsInput] = JsInterface::getInput(args);
+  auto inputObj = args.getJsObject(1, "inputObj");
+
+  if (type != "audio") {
+    throw qvac_errors::StatusError(
+        qvac_errors::general_error::InvalidArgument,
+        "Unknown input type: " + type);
+  }
+
+  std::string audioFormat = "s16le";
+  auto maybeAudioFormat =
+      inputObj.getOptionalProperty<js::String>(env, "audio_format");
+  if (maybeAudioFormat.has_value()) {
+    audioFormat = maybeAudioFormat.value().as<std::string>(env);
+  }
+
+  auto audioBytes =
+      js::TypedArray<uint8_t>(env, jsInput).as<std::vector<uint8_t>>(env);
+  auto samples = WhisperModel::preprocessAudioData(audioBytes, audioFormat);
+
+  if (samples.empty()) {
+    return js::Boolean::create(env, false);
+  }
+
+  StreamingProcessor* processor = nullptr;
+  {
+    std::lock_guard lock(g_streamingMtx);
+    auto it = g_streamingProcessors.find(&instance);
+    if (it == g_streamingProcessors.end()) {
+      throw std::runtime_error("No active streaming session for this instance");
+    }
+    processor = it->second.get();
+  }
+
+  processor->appendAudio(std::move(samples));
+  return js::Boolean::create(env, true);
+}
+JSCATCH
+
+inline js_value_t*
+endStreaming(js_env_t* env, js_callback_info_t* info) try {
+  using namespace qvac_lib_inference_addon_cpp;
+
+  JsArgsParser args(env, info);
+  AddonJs& instance = JsInterface::getInstance(env, args.get(0, "instance"));
+
+  std::unique_ptr<StreamingProcessor> processor;
+  {
+    std::lock_guard lock(g_streamingMtx);
+    auto it = g_streamingProcessors.find(&instance);
+    if (it == g_streamingProcessors.end()) {
+      return js::Boolean::create(env, false);
+    }
+    processor = std::move(it->second);
+    g_streamingProcessors.erase(it);
+  }
+
+  processor->end();
+  return js::Boolean::create(env, true);
 }
 JSCATCH
 

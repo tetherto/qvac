@@ -4,6 +4,7 @@ import { handleLoadModel } from "./load-model";
 import { handleUnloadModel } from "./unload-model";
 import { handleEmbed } from "./embed";
 import { handleTranscribeStream } from "./transcribe-stream";
+import { handleTranscribeLive } from "./transcribe-live";
 import { provideHandler } from "./provideHandler";
 import { stopProvideHandler } from "./stopProvideHandler";
 import { handleTranslate } from "./translate";
@@ -31,6 +32,7 @@ export const handlers = {
   unloadModel: handleUnloadModel,
   embed: handleEmbed,
   transcribeStream: handleTranscribeStream,
+  transcribeLive: handleTranscribeLive,
   provide: provideHandler,
   stopProvide: stopProvideHandler,
   translate: handleTranslate,

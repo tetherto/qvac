@@ -10,7 +10,7 @@ import {
 import { RPCError } from "./rpc-error";
 import { withTimeout, withTimeoutStream } from "@/utils/withTimeout";
 import { getClientLogger, summarizeRequest } from "@/logging";
-import { getRPC, close as closeRPC } from "#rpc";
+import { getRPC, close as closeRPC, createDuplexSession } from "#rpc";
 import {
   nowMs,
   shouldProfile,
@@ -365,6 +365,13 @@ async function* streamProfiled<T extends Request>(
       recordClientStreamEvents(timings, profilingMeta);
     }
   }
+}
+
+export async function duplex<T extends Request>(request: T) {
+  const parsedRequest = requestSchema.parse(request);
+  logger.debug("RPC Client duplex:", summarizeRequest(request));
+  const payload = JSON.stringify(parsedRequest);
+  return createDuplexSession(payload);
 }
 
 export async function close() {

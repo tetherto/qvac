@@ -1,4 +1,5 @@
 import {
+  responseSchema,
   type QvacConfig,
   type Request,
   type Response,
@@ -33,12 +34,13 @@ type ReplyHandler = (
 ) => Promise<Response> | Response;
 type StreamHandler = (request: any, ...args: any[]) => AsyncGenerator<Response>;
 type ProgressHandler = (request: any, ...args: any[]) => Promise<Response>;
+type DuplexStreamHandler = (request: any, inputStream: any) => AsyncGenerator<Response>;
 /* eslint-enable @typescript-eslint/no-explicit-any */
 
 export type HandlerEntry = {
-  type: "reply" | "stream";
-  handler: ReplyHandler | StreamHandler | ProgressHandler;
-  delegatedHandler?: ReplyHandler | StreamHandler | ProgressHandler;
+  type: "reply" | "stream" | "duplex";
+  handler: ReplyHandler | StreamHandler | ProgressHandler | DuplexStreamHandler;
+  delegatedHandler?: ReplyHandler | StreamHandler | ProgressHandler | DuplexStreamHandler;
   isDelegated?: (request: Request) => boolean;
   supportsProgress?: boolean | ((request: Request) => boolean);
 };
@@ -143,6 +145,34 @@ async function executeProgressHandler(
   } catch (error) {
     profiler.endHandler();
     sendStreamErrorResponse(stream, error, profiler);
+  }
+}
+
+export async function executeDuplexHandler(
+  _req: RPC.IncomingRequest,
+  request: Request,
+  entry: HandlerEntry,
+  inputStream: ReturnType<RPC.IncomingRequest["createRequestStream"]>,
+  outputStream: ReturnType<RPC.IncomingRequest["createResponseStream"]>,
+) {
+  const handler =
+    entry.delegatedHandler && entry.isDelegated?.(request)
+      ? entry.delegatedHandler
+      : entry.handler;
+
+  try {
+    for await (const response of (handler as DuplexStreamHandler)(
+      request,
+      inputStream,
+    )) {
+      outputStream.write(
+        JSON.stringify(responseSchema.parse(response)) + "\n",
+        "utf-8",
+      );
+    }
+    outputStream.end();
+  } catch (error) {
+    sendStreamErrorResponse(outputStream, error);
   }
 }
 

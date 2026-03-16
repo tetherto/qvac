@@ -280,3 +280,44 @@ export async function getRPC() {
 export function close() {
   // noop
 }
+
+type DuplexHandler = (
+  req: Request,
+  inputStream: unknown,
+) => AsyncGenerator<Response>;
+
+function getDuplexHandler(type: string): DuplexHandler | undefined {
+  const handler = handlers[type as keyof typeof handlers];
+  return typeof handler === "function"
+    ? (handler as unknown as DuplexHandler)
+    : undefined;
+}
+
+export async function createDuplexSession(payload: string) {
+  // Ensure worker and config are initialized
+  await getRPC();
+
+  const { PassThrough } = await import("bare-stream");
+  const request = JSON.parse(payload) as Request;
+
+  const handler = getDuplexHandler(request.type);
+  if (!handler) throw new RPCNoHandlerError(request.type);
+
+  const audioInput = new PassThrough();
+  const textOutput = new PassThrough();
+
+  (async () => {
+    try {
+      for await (const response of handler(request, audioInput)) {
+        textOutput.write(JSON.stringify(response) + "\n", "utf-8");
+      }
+    } finally {
+      textOutput.end();
+    }
+  })();
+
+  return {
+    requestStream: audioInput,
+    responseStream: textOutput,
+  };
+}

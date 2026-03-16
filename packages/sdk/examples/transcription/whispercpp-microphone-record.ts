@@ -2,12 +2,18 @@ import {
   loadModel,
   unloadModel,
   transcribe,
-  transcribeStream,
+  transcribeLive,
   WHISPER_TINY,
 } from "@qvac/sdk";
 import { spawn, spawnSync } from "child_process";
 import * as readline from "readline";
 import { platform } from "os";
+
+// ── Audio constants ──
+
+const SAMPLE_RATE = 16000;
+
+// ── Helpers ──
 
 function checkFFmpegAvailable() {
   try {
@@ -22,353 +28,251 @@ function checkFFmpegAvailable() {
   }
 }
 
-function getAudioDevice(platformName: string): string {
-  switch (platformName) {
+function getAudioInputArgs(): string[] {
+  switch (platform()) {
     case "darwin":
-      return ":0";
+      return ["-f", "avfoundation", "-i", ":0"];
     case "win32":
-      // Change as per your system
-      return "audio=@device_cm_{33D9A762-90C8-11D0-BD43-00A0C911CE86}\\wave_{58C07110-A4FD-4FF8-BA10-5A3C14389F71}";
+      return [
+        "-f",
+        "dshow",
+        "-i",
+        "audio=@device_cm_{33D9A762-90C8-11D0-BD43-00A0C911CE86}\\wave_{58C07110-A4FD-4FF8-BA10-5A3C14389F71}",
+      ];
     case "linux":
-      return "default";
+      return ["-f", "pulse", "-i", "default"];
     default:
-      throw new Error(
-        `Unsupported platform for audio recording: ${platformName}`,
-      );
+      throw new Error(`Unsupported platform for audio recording: ${platform()}`);
   }
 }
 
-// Parse command line arguments
-const args = process.argv.slice(2);
-const isStreamingMode = args.includes("--stream");
-
-// Show help if needed
-if (args.includes("--help") || args.includes("-h")) {
-  console.log("🎤 Microphone Transcription Demo");
-  console.log("");
-  console.log("Usage:");
-  console.log(
-    "  bun run examples/microphone-record-transcription.ts [options]",
+function spawnMicrophone(): ReturnType<typeof spawn> {
+  return spawn(
+    "ffmpeg",
+    [
+      ...getAudioInputArgs(),
+      "-ar",
+      String(SAMPLE_RATE),
+      "-ac",
+      "1",
+      "-sample_fmt",
+      "flt",
+      "-f",
+      "f32le",
+      "pipe:1",
+    ],
+    { stdio: ["ignore", "pipe", "ignore"] },
   );
-  console.log("");
-  console.log("Options:");
-  console.log(
-    "  --stream              Enable real-time streaming transcription",
-  );
-  console.log("  --help, -h            Show this help message");
-  console.log("");
-  console.log(
-    "Default behavior: Record audio, then transcribe when you stop recording",
-  );
-  console.log("With --stream: Transcribe audio in real-time as you speak");
-  process.exit(0);
 }
 
-// Clean readline-based transcription session
-function startInteractiveSession(rl: readline.Interface, modelId: string) {
-  let isRecording = false;
+// ── Stream mode: true bidirectional streaming with addon VAD ──
+
+async function runStreamMode(modelId: string, rl: readline.Interface) {
+  const ffmpeg = spawnMicrophone();
+  if (!ffmpeg.stdout) throw new Error("Failed to open microphone stream");
+
+  console.log("\n" + "═".repeat(60));
+  console.log("  TRUE STREAMING VAD TRANSCRIPTION");
+  console.log("═".repeat(60));
+  console.log("Audio streams directly to the Whisper addon.");
+  console.log("The addon's native VAD detects speech and emits transcriptions.");
+  console.log("Press Enter or Ctrl+C to quit.\n");
+
+  const session = await transcribeLive({ modelId });
+
+  // Pipe microphone audio into the live session
+  ffmpeg.stdout.on("data", (chunk: Buffer) => {
+    session.write(chunk);
+  });
+
+  ffmpeg.on("close", () => {
+    session.end();
+  });
+
+  // Read transcription results as they arrive from the addon's VAD
+  const transcriptionDone = (async () => {
+    for await (const text of session) {
+      process.stdout.write("\r" + " ".repeat(60) + "\r");
+      console.log(`  ${text.trim()}`);
+    }
+  })();
+
+  // Wait for user to press Enter to stop
+  await new Promise<void>((resolve) => {
+    rl.once("line", resolve);
+  });
+
+  ffmpeg.kill();
+  session.end();
+  await transcriptionDone;
+}
+
+// ── Batch mode: record then transcribe ──
+
+async function runBatchMode(modelId: string, rl: readline.Interface) {
   let ffmpeg: ReturnType<typeof spawn> | null = null;
+  let isRecording = false;
   let audioBuffer = Buffer.alloc(0);
-  let audioChunkBuffer = Buffer.alloc(0);
-  const chunkSizeBytes = 96000; // ~3 seconds of audio at 16kHz 16-bit mono
-  let lastProcessTime = 0;
 
-  const showInstructions = () => {
-    if (isStreamingMode) {
-      console.log("🎤 Real-Time Transcription Session");
-      console.log("📊 Format: 16kHz, 32-bit float, mono, f32le");
-      console.log(
-        `🎙️  Using ${platform() === "darwin" ? "macOS" : platform() === "win32" ? "Windows" : "Linux"} microphone`,
-      );
-      console.log("⏯️  Press Enter to START/STOP real-time transcription");
-      console.log("🛑 Type 'q' and press Enter to quit");
-    } else {
-      console.log("🎤 Record-and-Transcribe Session");
-      console.log("📊 Format: 16kHz, 32-bit float, mono, f32le");
-      console.log(
-        `🎙️  Using ${platform() === "darwin" ? "macOS" : platform() === "win32" ? "Windows" : "Linux"} microphone`,
-      );
-      console.log("⏯️  Press Enter to START/STOP recording");
-      console.log("🛑 Type 'q' and press Enter to quit");
-    }
-    console.log("");
-  };
+  console.log("\n🎤 Record-and-Transcribe Session");
+  console.log("📊 Format: 16kHz, 32-bit float, mono, f32le");
+  console.log("⏯️  Press Enter to START/STOP recording");
+  console.log("🛑 Type 'q' and press Enter to quit\n");
 
-  const startRecording = () => {
-    if (isStreamingMode) {
-      console.log("🔴 Starting real-time transcription...");
-      audioChunkBuffer = Buffer.alloc(0);
-      console.log("\n" + "═".repeat(80));
-      console.log("🗣️  REAL-TIME TRANSCRIPTION");
-      console.log("═".repeat(80));
-      console.log("📝 Speak now, transcription will appear as you talk...");
-      console.log("");
-    } else {
-      console.log("🔴 Starting recording...");
-      audioBuffer = Buffer.alloc(0);
-    }
-
-    const currentPlatform = platform();
-
-    const audioInputArgs = (() => {
-      switch (currentPlatform) {
-        case "darwin":
-          return ["-f", "avfoundation", "-i", getAudioDevice(currentPlatform)];
-        case "win32":
-          return ["-f", "dshow", "-i", getAudioDevice(currentPlatform)];
-        case "linux":
-          return ["-f", "pulse", "-i", getAudioDevice(currentPlatform)];
-        default:
-          throw new Error(
-            `Unsupported platform for audio recording: ${currentPlatform}`,
-          );
-      }
-    })();
-
-    ffmpeg = spawn(
-      "ffmpeg",
-      [
-        ...audioInputArgs,
-        "-ar",
-        "16000", // 16kHz
-        "-ac",
-        "1", // Mono
-        "-sample_fmt",
-        "flt", // 32-bit float
-        "-f",
-        "f32le", // f32le output format
-        "pipe:1", // Output to stdout
-      ],
-      { stdio: ["ignore", "pipe", "ignore"] },
-    );
-
+  function startRecording() {
+    audioBuffer = Buffer.alloc(0);
+    ffmpeg = spawnMicrophone();
     if (!ffmpeg.stdout) {
       console.error("Failed to create microphone stream");
       return;
     }
-
-    if (isStreamingMode) {
-      // Process audio chunks in real-time
-      ffmpeg.stdout.on("data", (chunk: Buffer) => {
-        audioChunkBuffer = Buffer.concat([audioChunkBuffer, chunk]);
-
-        const now = Date.now();
-        if (
-          audioChunkBuffer.length >= chunkSizeBytes &&
-          now - lastProcessTime > 1000
-        ) {
-          const chunkToProcess = audioChunkBuffer.slice(0, chunkSizeBytes);
-          audioChunkBuffer = audioChunkBuffer.slice(chunkSizeBytes);
-          lastProcessTime = now;
-
-          if (chunkToProcess.length < 32000) return;
-
-          void (async () => {
-            try {
-              for await (const textChunk of transcribeStream({
-                modelId,
-                audioChunk: chunkToProcess,
-              })) {
-                if (textChunk.trim() && !textChunk.includes("[BLANK_AUDIO]")) {
-                  process.stdout.write(textChunk);
-                }
-              }
-            } catch (error) {
-              console.error(
-                "\n⚠️  Transcription error:",
-                error instanceof Error ? error.message : String(error),
-              );
-            }
-          })();
-        }
-      });
-    } else {
-      // Buffer all audio data for later transcription
-      ffmpeg.stdout.on("data", (chunk: Buffer) => {
-        audioBuffer = Buffer.concat([audioBuffer, chunk]);
-      });
-    }
-
+    ffmpeg.stdout.on("data", (chunk: Buffer) => {
+      audioBuffer = Buffer.concat([audioBuffer, chunk]);
+    });
     isRecording = true;
-    if (isStreamingMode) {
-      console.log("✅ Real-time transcription active!");
-      console.log("⏹️  Press Enter to STOP");
-    } else {
-      console.log("✅ Recording... speak now!");
-      console.log("⏹️  Press Enter to STOP and transcribe");
-    }
-  };
+    console.log("🔴 Recording... speak now!");
+    console.log("⏹️  Press Enter to STOP and transcribe");
+  }
 
-  const stopRecording = async () => {
+  async function stopRecordingAndTranscribe() {
     if (!isRecording) return;
-
-    if (ffmpeg) {
-      ffmpeg.kill();
-    }
+    if (ffmpeg) ffmpeg.kill();
     isRecording = false;
 
-    if (isStreamingMode) {
-      console.log("\n🛑 Stopping real-time transcription...");
+    console.log("🛑 Stopping recording...");
+    console.log(`📦 Recorded ${audioBuffer.length} bytes of audio`);
+    console.log("🔄 Transcribing...");
 
-      if (audioChunkBuffer.length > 0) {
-        try {
-          for await (const textChunk of transcribeStream({
-            modelId,
-            audioChunk: audioChunkBuffer,
-          })) {
-            if (textChunk.trim() && !textChunk.includes("[BLANK_AUDIO]")) {
-              process.stdout.write(textChunk);
-            }
-          }
-        } catch (error) {
-          console.error(
-            "\n❌ Final transcription failed:",
-            error instanceof Error ? error.message : String(error),
-          );
+    const startTime = Date.now();
+    console.log("\n" + "═".repeat(60));
+    console.log("🗣️  TRANSCRIPTION RESULT");
+    console.log("═".repeat(60));
+
+    try {
+      const text = await transcribe({ modelId, audioChunk: audioBuffer });
+      const elapsed = ((Date.now() - startTime) / 1000).toFixed(1);
+      console.log(`📝 "${text}"`);
+      console.log("═".repeat(60));
+      console.log(`✅ Transcription completed in ${elapsed}s`);
+    } catch (error) {
+      console.error(
+        "\n❌ Transcription failed:",
+        error instanceof Error ? error.message : String(error),
+      );
+    }
+    console.log("\n⏯️  Press Enter to record again...");
+  }
+
+  await new Promise<void>((resolve) => {
+    rl.on("line", (input: string) => {
+      const cmd = input.trim().toLowerCase();
+      if (cmd === "q") {
+        if (ffmpeg) ffmpeg.kill();
+        resolve();
+        return;
+      }
+      if (cmd === "") {
+        if (isRecording) {
+          void stopRecordingAndTranscribe();
+        } else {
+          startRecording();
         }
       }
-
-      console.log("\n═".repeat(80));
-      console.log("✅ Real-time transcription stopped");
-      console.log("⏯️  Press Enter to start again...");
-    } else {
-      console.log("🛑 Stopping recording...");
-      console.log(`📦 Recorded ${audioBuffer.length} bytes of audio`);
-      console.log("🔄 Transcribing...");
-
-      const startTime = Date.now();
-      console.log("\n" + "═".repeat(80));
-      console.log("🗣️  TRANSCRIPTION RESULT");
-      console.log("═".repeat(80));
-
-      try {
-        const text = await transcribe({ modelId, audioChunk: audioBuffer });
-        const elapsed = ((Date.now() - startTime) / 1000).toFixed(1);
-
-        console.log(`📝 "${text}"`);
-        console.log("═".repeat(80));
-        console.log(`✅ Transcription completed in ${elapsed}s`);
-        console.log("\n⏯️  Press Enter to record again...");
-      } catch (error) {
-        console.error(
-          "\n❌ Transcription failed:",
-          error instanceof Error ? error.message : String(error),
-        );
-        console.log("\n⏯️  Press Enter to record again...");
-      }
-    }
-  };
-
-  showInstructions();
-
-  const handleInput = (input: string) => {
-    const command = input.trim().toLowerCase();
-
-    if (command === "") {
-      // Just pressed Enter - toggle recording
-      if (isRecording) {
-        void stopRecording();
-      } else {
-        startRecording();
-      }
-    } else if (command === "q") {
-      console.log("\n🛑 Exiting...");
-      if (ffmpeg) {
-        ffmpeg.kill();
-      }
-      rl.close();
-      return;
-    } else {
-      console.log(`❓ Unknown command: ${command}`);
-      console.log("💡 Press Enter to start/stop, 'q' to quit");
-    }
-
-    rl.prompt();
-  };
-
-  rl.on("line", handleInput);
-  rl.on("close", () => {
-    if (ffmpeg) {
-      ffmpeg.kill();
-    }
-  });
-
-  rl.prompt();
-}
-
-async function main() {
-  let modelId: string | null = null;
-  let rl: readline.Interface | null = null;
-
-  // Set up readline interface FIRST to keep event loop alive during model loading
-  rl = readline.createInterface({
-    input: process.stdin,
-    output: process.stdout,
-  });
-
-  try {
-    if (isStreamingMode) {
-      console.log("🎤 Streaming Transcription Microphone Demo");
-      console.log("✨ Mode: Real-time streaming transcription");
-    } else {
-      console.log("🎤 Record-and-Transcribe Microphone Demo");
-      console.log("✨ Mode: Record first, then transcribe");
-      console.log("💡 Tip: Use --stream flag for real-time transcription");
-    }
-    console.log("⚠️  Requirements:");
-    console.log("   - Microphone connected and accessible");
-    console.log("   - FFmpeg installed");
-
-    // Check FFmpeg availability
-    checkFFmpegAvailable();
-
-    // Load the Whisper model with VAD
-    console.log("\n📥 Loading Whisper model with VAD...");
-    modelId = await loadModel({
-      modelSrc: WHISPER_TINY,
-      modelType: "whisper",
-      modelConfig: {
-        audio_format: "f32le",
-        vad_params: {
-          threshold: 0.6,
-          min_speech_duration_ms: 250,
-          min_silence_duration_ms: 2000,
-          max_speech_duration_s: 30.0,
-        },
-      },
-      onProgress: (progress) => {
-        console.log(progress);
-      },
     });
-
-    console.log(`✅ Whisper model loaded with ID: ${modelId}`);
-
-    // Start interactive session using the existing readline interface
-    console.log("\n🎧 Starting interactive session...");
-    startInteractiveSession(rl, modelId);
-  } catch (error) {
-    console.error(
-      "❌ Error during transcription setup:",
-      error instanceof Error ? error.message : String(error),
-    );
-
-    // Clean up on error
-    if (rl) {
-      rl.close();
-    }
-    if (modelId) {
-      console.log("\n🧹 Unloading Whisper model...");
-      await unloadModel({ modelId });
-      console.log("✅ Whisper model unloaded successfully");
-    }
-    process.exit(1);
-  }
+  });
 }
 
-// Handle graceful shutdown
-process.on("SIGINT", () => {
-  console.log("\n🛑 Stopping microphone transcription...");
+// ── Main ──
+
+const args = process.argv.slice(2);
+const isStreamMode = args.includes("--stream");
+
+if (args.includes("--help") || args.includes("-h")) {
+  console.log("🎤 Microphone Transcription Demo\n");
+  console.log("Usage:");
+  console.log(
+    "  bun run examples/transcription/whispercpp-microphone-record.ts [options]\n",
+  );
+  console.log("Options:");
+  console.log(
+    "  --stream    True bidirectional streaming — audio streams to the addon,",
+  );
+  console.log(
+    "              addon VAD detects speech and emits transcriptions (recommended)",
+  );
+  console.log("  --help, -h  Show this help message\n");
+  console.log(
+    "Default: Record first (press Enter to toggle), then transcribe the whole recording",
+  );
+  process.exit(0);
+}
+
+let modelId: string | null = null;
+const rl = readline.createInterface({
+  input: process.stdin,
+  output: process.stdout,
 });
 
-// Start the application
-main().catch(console.error);
+try {
+  if (isStreamMode) {
+    console.log("🎤 True Streaming VAD Transcription Demo");
+    console.log("✨ Mode: Bidirectional stream — addon VAD drives transcription");
+  } else {
+    console.log("🎤 Record-and-Transcribe Microphone Demo");
+    console.log("✨ Mode: Record first, then transcribe");
+    console.log("💡 Tip: Use --stream for real-time VAD transcription");
+  }
+  console.log("⚠️  Requirements: Microphone + FFmpeg installed");
+
+  checkFFmpegAvailable();
+
+  console.log("\n📥 Loading Whisper model...");
+  modelId = await loadModel({
+    modelSrc: WHISPER_TINY,
+    modelType: "whisper",
+    modelConfig: {
+      audio_format: "f32le",
+      strategy: "greedy",
+      n_threads: 4,
+      language: "en",
+      no_timestamps: true,
+      suppress_blank: true,
+      suppress_nst: true,
+      temperature: 0.0,
+      vad_params: {
+        threshold: 0.6,
+        min_speech_duration_ms: 250,
+        min_silence_duration_ms: 100,
+        max_speech_duration_s: 30.0,
+        speech_pad_ms: 200,
+      },
+    },
+    onProgress: (progress) => {
+      console.log(progress);
+    },
+  });
+
+  console.log(`✅ Whisper model loaded with ID: ${modelId}`);
+
+  if (isStreamMode) {
+    await runStreamMode(modelId, rl);
+  } else {
+    await runBatchMode(modelId, rl);
+  }
+
+  console.log("\n🧹 Unloading Whisper model...");
+  await unloadModel({ modelId });
+  console.log("✅ Whisper model unloaded successfully");
+  rl.close();
+  process.exit(0);
+} catch (error) {
+  console.error(
+    "❌ Error:",
+    error instanceof Error ? error.message : String(error),
+  );
+  rl.close();
+  if (modelId) {
+    await unloadModel({ modelId });
+  }
+  process.exit(1);
+}

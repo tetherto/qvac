@@ -21,6 +21,8 @@ import {
 import {
   transcribeStreamRequestSchema,
   transcribeStreamResponseSchema,
+  transcribeLiveRequestSchema,
+  transcribeLiveResponseSchema,
 } from "./transcription";
 import { embedRequestSchema, embedResponseSchema } from "./embed";
 import { cancelRequestSchema, cancelResponseSchema } from "./cancel";
@@ -72,6 +74,7 @@ export const requestSchema = z.union([
   completionStreamRequestSchema,
   unloadModelRequestSchema,
   transcribeStreamRequestSchema,
+  transcribeLiveRequestSchema,
   loggingStreamRequestSchema,
   embedRequestSchema,
   translateRequestSchema,
@@ -98,6 +101,7 @@ export const responseSchema = z.discriminatedUnion("type", [
   unloadModelResponseSchema,
   modelProgressUpdateSchema,
   transcribeStreamResponseSchema,
+  transcribeLiveResponseSchema,
   loggingStreamResponseSchema,
   embedResponseSchema,
   translateResponseSchema,
