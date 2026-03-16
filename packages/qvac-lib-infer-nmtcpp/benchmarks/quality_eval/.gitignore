@@ -5,6 +5,7 @@ data/flores200_dataset/
 
 # Python virtual environment
 venv/
+.venv/
 __pycache__/
 *.pyc
 

@@ -11,7 +11,7 @@ import { validateAndJoinPath } from "@/server/utils/path-security";
 import {
   createStreamLogger,
   getServerLogger,
-  ADDON_NAMESPACES,
+  RAG_NAMESPACE,
 } from "@/logging";
 import { cancelAllRagOperations } from "@/server/bare/rag-hyperdb/rag-operation-manager";
 
@@ -94,7 +94,7 @@ export async function getRagInstance(
     return entry.rag;
   }
 
-  const workspaceLogger = createStreamLogger(key, ADDON_NAMESPACES.RAG_HYPERDB);
+  const workspaceLogger = createStreamLogger(key, RAG_NAMESPACE);
 
   const rag = new RAG({
     dbAdapter: entry.dbAdapter,
