@@ -40,6 +40,7 @@ Review the diff systematically for:
 
 - **Requirements match**: Does the implementation satisfy the task requirements and acceptance criteria?
 - **Bugs and logic errors**: Off-by-one, null/undefined, race conditions, edge cases
+- **Fragile patterns**: Hand-rolled serialization (e.g., manual JSON string concatenation in C++), custom escaping, reinventing existing libraries. Flag and suggest proper libraries or existing patterns.
 - **Project conventions**: Code style, naming, patterns (see CLAUDE.md)
 - **Security concerns**: Injection, XSS, credential exposure, unsafe input handling
 - **Forbidden files**: `.npmrc`, `.env`, or credentials must NOT be staged — if found, unstage them and warn the user
