@@ -9,6 +9,7 @@ import {
   type Tool,
   type ToolCallEvent,
   type ToolCallWithCall,
+  type RPCOptions,
 } from "@/schemas";
 import { getMcpToolsWithHandlers } from "@/utils/mcp-adapter";
 import {
@@ -23,6 +24,7 @@ const logger = getClientLogger();
 type CompletionParams = Omit<CompletionClientParams, "tools"> & {
   tools?: Tool[] | ToolInput[];
   mcp?: McpClientInput[];
+  rpcOptions?: RPCOptions;
 };
 
 /**
@@ -154,7 +156,11 @@ export function completion(params: CompletionParams): {
         stream: params.stream ?? true,
       };
 
-      const responses: AsyncGenerator<unknown> = streamRpc(request);
+      const responses: AsyncGenerator<unknown> = streamRpc(
+        request,
+        undefined,
+        params.rpcOptions,
+      );
 
       for await (const response of responses) {
         if (

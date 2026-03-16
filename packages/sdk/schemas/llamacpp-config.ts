@@ -71,7 +71,9 @@ export const embedConfigBaseSchema = z.object({
   attention: z.enum(["causal", "non-causal"]).optional(),
   embdNormalize: z.number().int().optional(),
   flashAttention: z.enum(["on", "off", "auto"]).optional(),
-  mainGpu: z.union([z.number().int().min(0), z.enum(["integrated", "dedicated"])]).optional(),
+  mainGpu: z
+    .union([z.number().int().min(0), z.enum(["integrated", "dedicated"])])
+    .optional(),
   verbosity: verbositySchema.optional(),
 });
 
