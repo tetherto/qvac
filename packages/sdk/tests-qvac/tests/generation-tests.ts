@@ -178,7 +178,7 @@ export const generationImg2img = createGenerationTest(
     steps: 4,
     strength: 0.75,
     seed: 42,
-    initImageFileName: "photo.png",
+    initImageFileName: "elephant.jpg",
   },
   { validation: "type", expectedType: "array" },
 );
@@ -192,7 +192,7 @@ export const generationImg2imgLowStrength = createGenerationTest(
     steps: 4,
     strength: 0.3,
     seed: 42,
-    initImageFileName: "photo.png",
+    initImageFileName: "elephant.jpg",
   },
   { validation: "type", expectedType: "array" },
 );
