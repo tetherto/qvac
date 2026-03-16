@@ -240,8 +240,22 @@ if(BUILD_TESTING)
         PRIVATE ${OpenCV_LIBS} qvac-onnx::headers nlohmann_json::nlohmann_json
     )
 
-    add_executable(unit_tests test/lang_test.cpp)
+    add_executable(unit_tests test/lang_test.cpp test/pipeline_diagnostics_test.cpp)
     target_include_directories(unit_tests PRIVATE addon)
-    target_link_libraries(unit_tests PRIVATE pipeline GTest::gmock_main)
+    target_link_libraries(unit_tests PRIVATE pipeline GTest::gmock_main nlohmann_json::nlohmann_json qvac-onnx::headers
+        ${CMAKE_CURRENT_SOURCE_DIR}/node_modules/@qvac/onnx/prebuilds/linux-x64/qvac__onnx.bare)
+    # The ONNX runtime .bare module has SONAME "qvac__onnx@0.bare" but the
+    # file on disk is named "qvac__onnx.bare".  Create a SONAME-compatible
+    # symlink in the build directory so the dynamic linker can find it
+    # without requiring LD_LIBRARY_PATH at test discovery and run time.
+    add_custom_command(TARGET unit_tests POST_BUILD
+        COMMAND ${CMAKE_COMMAND} -E create_symlink
+            ${CMAKE_CURRENT_SOURCE_DIR}/node_modules/@qvac/onnx/prebuilds/linux-x64/qvac__onnx.bare
+            ${CMAKE_CURRENT_BINARY_DIR}/qvac__onnx@0.bare
+        COMMENT "Creating SONAME symlink for qvac__onnx@0.bare"
+    )
+    set_target_properties(unit_tests PROPERTIES
+        BUILD_RPATH "${CMAKE_CURRENT_BINARY_DIR}"
+    )
     gtest_discover_tests(unit_tests)
 endif()
