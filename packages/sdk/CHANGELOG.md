@@ -94,7 +94,12 @@ const model = await modelRegistryGetModel(registryPath, registrySource);
 Build custom model integrations with the new plugin architecture. Plugins support both request/reply and streaming patterns.
 
 ```typescript
-import { invokePlugin, invokePluginStream, definePlugin, defineHandler } from "@qvac/sdk";
+import {
+  invokePlugin,
+  invokePluginStream,
+  definePlugin,
+  defineHandler,
+} from "@qvac/sdk";
 
 // Invoke a plugin handler
 const result = await invokePlugin<MyResponse>({
@@ -157,7 +162,7 @@ const modelId = await loadModel({
     ttsLatentDenoiserSrc,
     ttsVoiceDecoderSrc,
     ttsVoiceSrc,
-    ttsSpeed: 1.0,           // Playback speed
+    ttsSpeed: 1.0, // Playback speed
     ttsNumInferenceSteps: 5, // Quality vs speed tradeoff
   },
 });
@@ -198,7 +203,7 @@ Map between engine names and addon types:
 import { resolveCanonicalEngine, getAddonFromEngine } from "@qvac/sdk";
 
 const engine = resolveCanonicalEngine("@qvac/llm-llamacpp"); // "llamacpp-completion"
-const addon = getAddonFromEngine("llamacpp-completion");     // "llm"
+const addon = getAddonFromEngine("llamacpp-completion"); // "llm"
 ```
 
 ---
@@ -300,6 +305,7 @@ await ragSaveEmbeddings({
 ```
 
 Other RAG changes:
+
 - `ragSaveEmbeddings` no longer returns `droppedIndices`
 - `ragDeleteEmbeddings` now returns `void` instead of `boolean` (throws on failure)
 - `ragDeleteEmbeddings` no longer requires `modelId` (uses cached workspace)
@@ -365,7 +371,7 @@ const modelId = await loadModel({
   modelSrc: MARIAN_OPUS_EN_IT_Q0F32,
   modelType: "nmt",
   modelConfig: {
-    engine: "Opus",  // Required: "Opus" | "Bergamot" | "IndicTrans"
+    engine: "Opus", // Required: "Opus" | "Bergamot" | "IndicTrans"
     from: "en",
     to: "it",
   },
@@ -390,7 +396,7 @@ const modelId = await loadModel({
     engine: "Bergamot",
     from: "en",
     to: "fr",
-    normalize: 1,  // Bergamot-specific option
+    normalize: 1, // Bergamot-specific option
   },
 });
 
@@ -433,7 +439,11 @@ const result = await blocks;
 await done;
 
 // Or stream blocks as they're detected
-const { blockStream, done } = ocr({ modelId, image: imageBuffer, stream: true });
+const { blockStream, done } = ocr({
+  modelId,
+  image: imageBuffer,
+  stream: true,
+});
 for await (const blocks of blockStream) {
   console.log(blocks);
   // [{ text: "Hello", bbox: [10, 20, 100, 50], confidence: 0.95 }]
@@ -447,7 +457,8 @@ Load large models split across multiple files, from URLs or archives.
 ```typescript
 // Pattern-based sharded URLs (auto-detects shard pattern)
 await loadModel({
-  modelSrc: "https://huggingface.co/user/model/resolve/main/model-00001-of-00003.gguf",
+  modelSrc:
+    "https://huggingface.co/user/model/resolve/main/model-00001-of-00003.gguf",
   modelType: "llm",
 });
 
@@ -568,10 +579,10 @@ The SDK searches for configuration in this order:
 
 #### Supported Formats
 
-| Format     | Filename           | Notes                        |
-| ---------- | ------------------ | ---------------------------- |
-| JSON       | `qvac.config.json` | Simplest option              |
-| JavaScript | `qvac.config.js`   | Use `export default`         |
+| Format     | Filename           | Notes                         |
+| ---------- | ------------------ | ----------------------------- |
+| JSON       | `qvac.config.json` | Simplest option               |
+| JavaScript | `qvac.config.js`   | Use `export default`          |
 | TypeScript | `qvac.config.ts`   | Fully typed with `QvacConfig` |
 
 **TypeScript example:**
@@ -592,7 +603,7 @@ export default config;
 
 1. Remove all `setConfig()` calls from your code
 2. Create a config file in your project root
-3. *(Optional)* For non-standard locations, set `QVAC_CONFIG_PATH` before importing the SDK
+3. _(Optional)_ For non-standard locations, set `QVAC_CONFIG_PATH` before importing the SDK
 
 ---
 
@@ -602,14 +613,14 @@ Some model constants have been renamed for clarity, and duplicate constants have
 
 **Changes:**
 
-| Before                     | After                                             |
-| -------------------------- | ------------------------------------------------- |
-| `WHISPER_SMALL`            | `WHISPER_SMALL_Q8`                                |
-| `WHISPER_NORWEGIAN_TINY_1` | *(removed — use `WHISPER_NORWEGIAN_TINY`)*        |
-| `WHISPER_TINY_SILERO`      | *(removed — use `WHISPER_TINY`)*                  |
-| `MARIAN_OPUS_EN_FR_Q4_0_1` | *(removed — use `MARIAN_OPUS_EN_FR_Q4_0`)*        |
-| `MARIAN_OPUS_FR_EN_Q4_0_1` | *(removed — use `MARIAN_OPUS_FR_EN_Q4_0`)*        |
-| `MARIAN_OPUS_IT_EN`        | *(removed — use `MARIAN_OPUS_EN_IT`)*             |
+| Before                     | After                                      |
+| -------------------------- | ------------------------------------------ |
+| `WHISPER_SMALL`            | `WHISPER_SMALL_Q8`                         |
+| `WHISPER_NORWEGIAN_TINY_1` | _(removed — use `WHISPER_NORWEGIAN_TINY`)_ |
+| `WHISPER_TINY_SILERO`      | _(removed — use `WHISPER_TINY`)_           |
+| `MARIAN_OPUS_EN_FR_Q4_0_1` | _(removed — use `MARIAN_OPUS_EN_FR_Q4_0`)_ |
+| `MARIAN_OPUS_FR_EN_Q4_0_1` | _(removed — use `MARIAN_OPUS_FR_EN_Q4_0`)_ |
+| `MARIAN_OPUS_IT_EN`        | _(removed — use `MARIAN_OPUS_EN_IT`)_      |
 
 All model metadata and hyperdrive keys remain unchanged—only the constant names were affected.
 

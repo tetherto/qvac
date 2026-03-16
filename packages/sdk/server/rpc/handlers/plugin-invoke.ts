@@ -7,6 +7,10 @@ import type {
 import { getModelEntry } from "@/server/bare/registry/model-registry";
 import { getPlugin, getPluginHandler } from "@/server/plugins";
 import {
+  profileReplyHandler,
+  profileStreamHandler,
+} from "@/server/rpc/profiling";
+import {
   PluginNotFoundError,
   PluginHandlerNotFoundError,
   PluginHandlerTypeMismatchError,
@@ -50,69 +54,32 @@ function resolvePluginHandler(modelId: string, handlerName: string) {
 export async function handlePluginInvoke(
   request: PluginInvokeRequest,
 ): Promise<PluginInvokeResponse> {
-  const { modelId, handler: handlerName, params } = request;
+  return profileReplyHandler({ op: "pluginInvoke", request }, async () => {
+    const { modelId, handler: handlerName, params } = request;
 
-  logger.debug(`[pluginInvoke] modelId=${modelId} handler=${handlerName}`);
+    logger.debug(`[pluginInvoke] modelId=${modelId} handler=${handlerName}`);
 
-  const { handlerDef } = resolvePluginHandler(modelId, handlerName);
+    const { handlerDef } = resolvePluginHandler(modelId, handlerName);
 
-  if (handlerDef.streaming) {
-    throw new PluginHandlerTypeMismatchError(handlerName, "reply", "streaming");
-  }
+    if (handlerDef.streaming) {
+      throw new PluginHandlerTypeMismatchError(
+        handlerName,
+        "reply",
+        "streaming",
+      );
+    }
 
-  const parseResult = handlerDef.requestSchema.safeParse(params);
-  if (!parseResult.success) {
-    const details = parseResult.error.issues
-      .map((i) => `${String(i.path.join("."))}: ${i.message}`)
-      .join(", ");
-    throw new PluginRequestValidationFailedError(handlerName, details);
-  }
+    const parseResult = handlerDef.requestSchema.safeParse(params);
+    if (!parseResult.success) {
+      const details = parseResult.error.issues
+        .map((i) => `${String(i.path.join("."))}: ${i.message}`)
+        .join(", ");
+      throw new PluginRequestValidationFailedError(handlerName, details);
+    }
 
-  const result = await handlerDef.handler(parseResult.data);
+    const result = await handlerDef.handler(parseResult.data);
 
-  const responseParseResult = handlerDef.responseSchema.safeParse(result);
-  if (!responseParseResult.success) {
-    const details = responseParseResult.error.issues
-      .map((i) => `${String(i.path.join("."))}: ${i.message}`)
-      .join(", ");
-    throw new PluginResponseValidationFailedError(handlerName, details);
-  }
-
-  return {
-    type: "pluginInvoke",
-    result: responseParseResult.data,
-  };
-}
-
-export async function* handlePluginInvokeStream(
-  request: PluginInvokeStreamRequest,
-): AsyncGenerator<PluginInvokeStreamResponse> {
-  const { modelId, handler: handlerName, params } = request;
-
-  logger.debug(
-    `[pluginInvokeStream] modelId=${modelId} handler=${handlerName}`,
-  );
-
-  const { handlerDef } = resolvePluginHandler(modelId, handlerName);
-
-  if (!handlerDef.streaming) {
-    throw new PluginHandlerTypeMismatchError(handlerName, "streaming", "reply");
-  }
-
-  const parseResult = handlerDef.requestSchema.safeParse(params);
-  if (!parseResult.success) {
-    const details = parseResult.error.issues
-      .map((i) => `${String(i.path.join("."))}: ${i.message}`)
-      .join(", ");
-    throw new PluginRequestValidationFailedError(handlerName, details);
-  }
-
-  const generator = handlerDef.handler(
-    parseResult.data,
-  ) as AsyncGenerator<unknown>;
-
-  for await (const chunk of generator) {
-    const responseParseResult = handlerDef.responseSchema.safeParse(chunk);
+    const responseParseResult = handlerDef.responseSchema.safeParse(result);
     if (!responseParseResult.success) {
       const details = responseParseResult.error.issues
         .map((i) => `${String(i.path.join("."))}: ${i.message}`)
@@ -120,16 +87,68 @@ export async function* handlePluginInvokeStream(
       throw new PluginResponseValidationFailedError(handlerName, details);
     }
 
-    yield {
-      type: "pluginInvokeStream",
+    return {
+      type: "pluginInvoke" as const,
       result: responseParseResult.data,
-      done: false,
     };
-  }
+  });
+}
 
-  yield {
-    type: "pluginInvokeStream",
-    result: null,
-    done: true,
-  };
+export async function* handlePluginInvokeStream(
+  request: PluginInvokeStreamRequest,
+): AsyncGenerator<PluginInvokeStreamResponse> {
+  yield* profileStreamHandler(
+    { op: "pluginInvokeStream", request },
+    async function* () {
+      const { modelId, handler: handlerName, params } = request;
+
+      logger.debug(
+        `[pluginInvokeStream] modelId=${modelId} handler=${handlerName}`,
+      );
+
+      const { handlerDef } = resolvePluginHandler(modelId, handlerName);
+
+      if (!handlerDef.streaming) {
+        throw new PluginHandlerTypeMismatchError(
+          handlerName,
+          "streaming",
+          "reply",
+        );
+      }
+
+      const parseResult = handlerDef.requestSchema.safeParse(params);
+      if (!parseResult.success) {
+        const details = parseResult.error.issues
+          .map((i) => `${String(i.path.join("."))}: ${i.message}`)
+          .join(", ");
+        throw new PluginRequestValidationFailedError(handlerName, details);
+      }
+
+      const generator = handlerDef.handler(
+        parseResult.data,
+      ) as AsyncGenerator<unknown>;
+
+      for await (const chunk of generator) {
+        const responseParseResult = handlerDef.responseSchema.safeParse(chunk);
+        if (!responseParseResult.success) {
+          const details = responseParseResult.error.issues
+            .map((i) => `${String(i.path.join("."))}: ${i.message}`)
+            .join(", ");
+          throw new PluginResponseValidationFailedError(handlerName, details);
+        }
+
+        yield {
+          type: "pluginInvokeStream" as const,
+          result: responseParseResult.data,
+          done: false,
+        };
+      }
+
+      yield {
+        type: "pluginInvokeStream" as const,
+        result: null,
+        done: true,
+      };
+    },
+  );
 }
