@@ -6,7 +6,7 @@ Reference for CI specialist sub-agents. Read this before triggering, monitoring,
 
 QVAC CI is **path-scoped**: only workflows matching changed `packages/<pkg>/**` paths run. The repo uses a **fork-first model** — contributors PR from forks into upstream branches. CI runs on `pull_request_target` (not `pull_request`) for addon PRs, which means the workflow definition comes from the base branch.
 
-There are 85+ workflow files in `.github/workflows/`. They fall into distinct categories by package type.
+Workflow files live in `.github/workflows/` and fall into distinct categories by package type.
 
 ## Package Types & Their CI Flows
 
@@ -39,10 +39,22 @@ Packages: `qvac-sdk`, `qvac-cli`, `qvac-lib-rag`, `qvac-lib-logging`, `qvac-lib-
 | PR checks | `pr-checks-sdk-pod.yml` | Lint, typecheck, build, unit tests (dynamic matrix of changed packages) |
 | Publish | `publish-qvac-sdk.yml` | Build + publish SDK to GPR/npm |
 | Desktop tests | `test-qvac-sdk.yml` | GPU integration tests (currently workflow_dispatch only) |
+| Release notes | `release-notes-check-<pkg>.yml` | Verify CHANGELOG matches version bumps |
+| GitHub release | `create-github-release-<pkg>.yml` | Create GitHub release on npm publish |
+
+### Simple Libraries with Unit Tests
+
+Packages: `qvac-lib-logging`, `qvac-lib-error-base`
+
+These have unit tests (`npm run test:unit`) but use simple publish workflows for CI.
+
+| Workflow | File pattern | Purpose |
+|----------|-------------|---------|
+| Publish | `trigger-reusable-lib-<pkg>.yml` | Publish to GPR/npm on merge |
 
 ### Simple Libraries (pure JS, no native code)
 
-Packages: `qvac-lib-logging`, `qvac-lib-error-base`, `qvac-lib-dl-filesystem`, `qvac-lib-dl-hyperdrive`, `qvac-lib-dl-base`, `qvac-lib-infer-base`, `qvac-lib-langdetect-text`, `qvac-cli`
+Packages: `qvac-lib-dl-filesystem`, `qvac-lib-dl-hyperdrive`, `qvac-lib-dl-base`, `qvac-lib-infer-base`, `qvac-lib-langdetect-text`, `qvac-cli`
 
 | Workflow | File pattern | Purpose |
 |----------|-------------|---------|

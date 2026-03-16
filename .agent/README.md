@@ -30,7 +30,7 @@ The `<task>` argument accepts an Asana task ID or full URL:
 │   ├── ci-validator.md
 │   ├── code-reviewer.md
 │   ├── model-registry-updater.md
-│   └── llama-cpp-android-runner.md
+│   └── android-runner.md
 ├── knowledge/              # Domain knowledge docs (loaded on-demand)
 │   ├── ci-validation.md
 │   ├── vcpkg-management.md
@@ -46,6 +46,21 @@ The `<task>` argument accepts an Asana task ID or full URL:
 ```
 
 After running `/setup`, agents, knowledge, and skills are copied into `.claude/` (or `.cursor/`). Generated files are gitignored — edit sources in `.agent/` instead.
+
+## Tool Compatibility
+
+Not all features work in both tools:
+
+| Feature | Claude Code | Cursor |
+|---|---|---|
+| Skills (`/release`, `/ci-validate`) | Yes | Yes |
+| Knowledge files (CI, vcpkg, etc.) | Yes (`.claude/knowledge/`) | Yes (`.cursor/rules/*.mdc`) |
+| Conduct rules | Yes | Yes (as `.mdc` rules) |
+| MCP (Asana) | Manual setup (`~/.claude/settings.json`) | Auto-generated (`.cursor/mcp.json`) |
+| Agent definitions (implementer, reviewer, etc.) | Yes (`.claude/agents/`) | No — Cursor has no sub-agent spawning |
+| `/orchestrate` (multi-agent pipeline) | Yes | No — relies on agent spawning |
+
+**Cursor users** can use skills directly (`/release`, `/ci-validate`), get knowledge/rules context, and use Asana MCP. But the multi-agent orchestration pipeline (`/orchestrate`) and individual agent launching are Claude Code-only features.
 
 ## How Setup Works
 
@@ -107,12 +122,12 @@ The orchestrator stops and reports at any failure point. The Asana task is updat
 
 | Agent | Role | Model |
 |---|---|---|
-| `implementer` | Write code, verify build/tests, commit | Sonnet |
+| `implementer` | Write code, verify build/tests, commit | Opus |
 | `test-writer` | Write automated tests for new/changed code | Sonnet |
 | `ci-validator` | Trigger CI, monitor, diagnose failures | Sonnet |
-| `code-reviewer` | Review diff, find bugs, fix issues | Sonnet |
+| `code-reviewer` | Review diff, find bugs, fix issues | Opus |
 | `model-registry-updater` | Add/update models in the registry | Sonnet |
-| `llama-cpp-android-runner` | Deploy and benchmark models on Android | Sonnet |
+| `android-runner` | Deploy and benchmark models on Android | Sonnet |
 
 Each agent runs in isolation with fresh context and access to project knowledge.
 

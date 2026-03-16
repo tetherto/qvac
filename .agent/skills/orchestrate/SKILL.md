@@ -62,7 +62,7 @@ After implementation, analyze the changed files and the Asana task to decide wha
 
 Run `git diff --name-only main...HEAD` and apply these rules:
 
-| Changed files | CI needed? | Package |
+| Changed files | CI needed? | CI package name |
 |---|---|---|
 | `packages/qvac-lib-infer-llamacpp-llm/**` | Yes | `LLM` |
 | `packages/qvac-lib-infer-llamacpp-embed/**` | Yes | `Embed` |
@@ -72,7 +72,23 @@ Run `git diff --name-only main...HEAD` and apply these rules:
 | `packages/qvac-lib-infer-parakeet/**` | Yes | `Parakeet` |
 | `packages/qvac-lib-infer-nmtcpp/**` | Yes | `NMTCPP` |
 | `packages/qvac-lib-decoder-audio/**` | Yes | `Decoder-audio` |
-| `packages/qvac-sdk/**` (TS only) | No | — |
+| `packages/qvac-sdk/**` | SDK CI | — (pr-checks-sdk-pod) |
+| `packages/rag/**` | SDK CI | — (pr-checks-sdk-pod) |
+| `packages/cli/**` | SDK CI | — (pr-checks-sdk-pod) |
+| `packages/logging/**` | No (has unit tests locally) | — |
+| `packages/error/**` | No (has unit tests locally) | — |
+| `packages/qvac-lib-dl-filesystem/**` | No | — |
+| `packages/qvac-lib-dl-hyperdrive/**` | No | — |
+| `packages/qvac-lib-dl-base/**` | No | — |
+| `packages/qvac-lib-infer-base/**` | No | — |
+| `packages/qvac-lib-inference-addon-cpp/**` | No | — |
+| `packages/qvac-lib-infer-onnx/**` | No | — |
+| `packages/qvac-lib-langdetect-text/**` | No | — |
+| `packages/qvac-lib-langdetect-text-cld2/**` | No | — |
+| `packages/qvac-lib-diagnostics/**` | No | — |
+| `packages/qvac-lib-registry-server/**` | No | — |
+| `packages/qvac-lint-cpp/**` | No | — |
+| `packages/sdk/**` | No | — |
 | `packages/docs/**` | No | — |
 | `.github/workflows/**` only | No | — |
 | `*.md` only | No | — |

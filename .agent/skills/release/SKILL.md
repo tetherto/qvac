@@ -1,31 +1,37 @@
 ---
 name: release
 description: Release a package to NPM. Validates version bump, changelog, creates release branch, monitors CI, verifies publish.
-argument-hint: "<package-name>"
+argument-hint: "<package-name> [base-branch]"
 disable-model-invocation: true
 ---
 
 # Release Package
 
-Release an add-on or SDK package to NPM. Ensures version bump, changelog, release branch, CI pipeline, and npm publish.
+Release a package to NPM. Ensures version bump, changelog, release branch, CI pipeline, and npm publish.
+
+The package is identified by the `<package-name>` argument, which is the directory name under `packages/` (e.g., `ocr-onnx`, `qvac-sdk`, `qvac-lib-infer-onnx-tts`). The skill reads `packages/<package-name>/package.json` to determine the package type and npm scope.
 
 ## Usage
 
-`/release <package-name>`
+`/release <package-name> [base-branch]`
 
-Where `<package-name>` is the directory name under `packages/` (e.g., `ocr-onnx`, `qvac-lib-infer-onnx-tts`).
+Where:
+- `<package-name>` is the directory name under `packages/` (e.g., `ocr-onnx`, `qvac-lib-infer-onnx-tts`)
+- `[base-branch]` is optional — the branch to create the release from. Defaults to `main`. Use this for patches, e.g., `/release ocr-onnx release-ocr-onnx-0.6.0`
 
 ## Workflow
 
 ### Step 1: Validate prerequisites
 
 1. Read `packages/$ARGUMENTS/package.json` to get the current version.
-2. Compare version against `main`:
+2. Compare version against the base branch (provided argument or `main`):
    ```bash
-   git show main:packages/<package>/package.json
+   git show <base-branch>:packages/<package>/package.json
    ```
-3. If version is **not bumped** compared to `main`, stop and ask the user to bump the version first.
-4. Check that `packages/<package>/CHANGELOG.md` has a section matching the current version (`## [X.Y.Z]`). If missing, run `/addon-changelog` first to generate it, then continue.
+3. If version is **not bumped** compared to the base branch, stop and ask the user to bump the version first.
+4. Check that `packages/<package>/CHANGELOG.md` has a section matching the current version (`## [X.Y.Z]`). If missing, generate it first then continue:
+   - For addon packages (native C++): run `/addon-changelog`
+   - For SDK pod packages (TypeScript): run `/sdk-changelog`
 
 ### Step 2: Confirm with user
 
@@ -43,21 +49,22 @@ Proceed? (y/n)
 
 ### Step 3: Create release branch
 
-1. Ensure we're on `main` and up to date:
+1. Ensure we're on the base branch and up to date:
    ```bash
-   git checkout main
-   git pull origin main
+   git checkout <base-branch>
+   git pull origin <base-branch>
    ```
+   Where `<base-branch>` is determined in Step 1 (`main` for new releases, `release-<package>-<base-version>` for patches).
 2. Create the release branch:
    ```bash
    git checkout -b release-<package>-<version>
    ```
-3. Push to origin:
+3. **Do NOT push.** Instead, trigger the release workflow manually:
    ```bash
-   git push -u origin release-<package>-<version>
+   gh workflow run "on-merge-<package>.yml" --repo tetherto/qvac --ref release-<package>-<version>
    ```
 
-This triggers the `on-merge-<package>.yml` workflow which:
+This workflow:
 - Runs `release-merge-guard` (validates version bump + changelog)
 - Builds prebuilds across platforms
 - Publishes to NPM with `latest` tag
@@ -103,13 +110,13 @@ git checkout main
 
 ## Error handling
 
-- If `release-merge-guard` fails: the version or changelog is missing/incorrect. Fix and push again.
+- If `release-merge-guard` fails: the version or changelog is missing/incorrect. Fix and re-trigger the workflow.
 - If prebuild jobs fail: check the failing platform logs with `gh run view <run-id> --log-failed`.
 - If npm publish fails: check if the version already exists (`npm view`), or if `NPM_TOKEN` is valid.
 - If the release branch already exists: ask the user whether to use the existing branch or abort.
 
 ## Important notes
 
-- This skill pushes a branch to origin and triggers CI. Confirm with the user before proceeding.
-- The on-merge workflow handles everything after the branch push — do not manually publish.
+- This skill creates a local release branch and triggers CI manually — it does NOT push to remote.
+- The on-merge workflow handles building and publishing — do not manually publish.
 - Release branches are never merged back to main automatically. If main needs the changes, a separate PR is required.

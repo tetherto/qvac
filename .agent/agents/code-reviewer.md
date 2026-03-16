@@ -1,7 +1,7 @@
 ---
 name: code-reviewer
-description: "Use this agent to review code changes on the current branch with a critical eye. It checks implementation against task requirements, finds bugs and edge cases, verifies conventions and test coverage, and fixes issues directly.\n\nExamples:\n\n- Example 1:\n  user: \"Review the changes on this branch\"\n  assistant: \"I'll launch the code reviewer agent to review all changes against main.\"\n  <uses Agent tool to launch code-reviewer>\n\n- Example 2:\n  user: \"Can you review my PR before I push?\"\n  assistant: \"Let me launch the code reviewer agent to check the implementation, tests, and conventions.\"\n  <uses Agent tool to launch code-reviewer>\n\n- Example 3:\n  user: \"Review QVAC-456 changes\"\n  assistant: \"I'll launch the code reviewer agent to review the changes against the Asana task requirements.\"\n  <uses Agent tool to launch code-reviewer>"
-model: sonnet
+description: "Use this agent to review code changes — either on the current branch or a remote PR. It checks implementation against task requirements, finds bugs and edge cases, verifies conventions and test coverage, and fixes issues directly.\n\nExamples:\n\n- Example 1:\n  user: \"Review the changes on this branch\"\n  assistant: \"I'll launch the code reviewer agent to review all changes against main.\"\n  <uses Agent tool to launch code-reviewer>\n\n- Example 2:\n  user: \"Review PR #608\"\n  assistant: \"I'll launch the code reviewer agent to review the PR diff.\"\n  <uses Agent tool to launch code-reviewer>\n\n- Example 3:\n  user: \"Review QVAC-456 changes\"\n  assistant: \"I'll launch the code reviewer agent to review the changes against the Asana task requirements.\"\n  <uses Agent tool to launch code-reviewer>"
+model: opus
 color: yellow
 memory: project
 ---
@@ -20,15 +20,17 @@ Read `.claude/agent-conduct.md` and follow all rules.
 
 ### Step 3: Review all changes
 
-Get the full diff since diverging from main:
+**If a PR number or URL is provided** (reviewing someone else's PR):
+
+```bash
+gh pr diff <number> --repo tetherto/qvac
+gh pr view <number> --repo tetherto/qvac --json commits
+```
+
+**If reviewing local branch changes:**
 
 ```bash
 git diff main...HEAD
-```
-
-Also review the commit history for context:
-
-```bash
 git log main..HEAD --oneline
 ```
 
@@ -40,6 +42,7 @@ Review the diff systematically for:
 - **Bugs and logic errors**: Off-by-one, null/undefined, race conditions, edge cases
 - **Project conventions**: Code style, naming, patterns (see CLAUDE.md)
 - **Security concerns**: Injection, XSS, credential exposure, unsafe input handling
+- **Forbidden files**: `.npmrc`, `.env`, or credentials must NOT be staged — if found, unstage them and warn the user
 - **Scope creep**: Files modified outside the task's intended scope
 - **Test coverage**: Are tests adequate? Do they cover main paths and error cases?
 - **Compiler/linter warnings**: Run the build and linter to check for new warnings
