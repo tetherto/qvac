@@ -1832,12 +1832,16 @@ void LlamaModel::executeTrainingLoop(
     }
 
     if (!checkpointState || !checkpointState->shouldExit.load()) {
-      if (checkpointEnabled) {
-        std::cout << "\r";
+      const bool usingJsProgress =
+          checkpointState && checkpointState->suppressProgressBar;
+      if (!usingJsProgress) {
+        if (checkpointEnabled) {
+          std::cout << "\r";
+          std::cout.flush();
+        }
+        std::cout << std::endl;
         std::cout.flush();
       }
-      std::cout << std::endl;
-      std::cout.flush();
     }
 
     ggml_opt_result_loss(trainResult.get(), &lastTrainLoss, &lastTrainLossUnc);
