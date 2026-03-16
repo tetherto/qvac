@@ -172,7 +172,6 @@ Example: `QVAC-123 feat[api]: add new endpoint`
 - `main` — development main, publishes dev builds
 - `release-<package>-<x.y.z>` — release lines, publishes to npm
 - `feature-*` / `tmp-*` — shared dev streams (GitHub Packages)
-- `temp-pitch/{name}` — agent-first pitch branches (one PR per pitch to main)
 
 ## Agent Conduct
 
