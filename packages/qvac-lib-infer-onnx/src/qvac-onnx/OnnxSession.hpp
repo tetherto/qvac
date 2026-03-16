@@ -128,7 +128,7 @@ inline OnnxSession::OnnxSession(const std::string& modelPath,
   //   3. If a non-CPU provider was requested and init fails, retry CPU-only
   try {
     session_ = createOrtSession(env, modelPath, sessionOptions);
-  } catch (const Ort::Exception& e) {
+  } catch (const std::exception& e) {
     bool retried = false;
 
     // Retry without XNNPACK (e.g. NHWC schema conflicts)
@@ -145,7 +145,7 @@ inline OnnxSession::OnnxSession(const std::string& modelPath,
         retried = true;
         QLOG(logger::Priority::INFO, "[OnnxSession] Session created without XNNPACK");
         ONNX_ALOG("[OnnxSession] Session created without XNNPACK");
-      } catch (const Ort::Exception&) {
+      } catch (const std::exception&) {
         // Fall through to CPU-only retry below
       }
     }
@@ -165,7 +165,7 @@ inline OnnxSession::OnnxSession(const std::string& modelPath,
         retried = true;
         QLOG(logger::Priority::INFO, "[OnnxSession] Session created with CPU fallback");
         ONNX_ALOG("[OnnxSession] Session created with CPU fallback");
-      } catch (const Ort::Exception&) {
+      } catch (const std::exception&) {
         // All retries exhausted
       }
     }

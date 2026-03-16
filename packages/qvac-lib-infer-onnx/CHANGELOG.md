@@ -1,5 +1,11 @@
 # Changelog
 
+## [0.13.2] - 2026-03-16
+
+### Fixed
+
+- Session creation fallback chain now catches `std::exception` (including `std::bad_alloc`) instead of only `Ort::Exception`, fixing DirectML OOM failures on Windows CI machines without a real GPU
+
 ## [0.13.1] - 2026-03-16
 
 ### Added
