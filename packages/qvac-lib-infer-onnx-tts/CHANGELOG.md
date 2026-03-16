@@ -5,6 +5,20 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.6.3]
+
+This release fixes a logging issue in the JS layer where two log statements during model load were bypassing the addon logging pipeline.
+
+## Bug Fixes
+
+### JS Layer Logs Now Routed Through Addon Logger
+
+Two `console.log` calls in the `_load()` method — logging the active engine type and language — were writing directly to stdout instead of going through the addon's logger. This meant those messages would not be captured or filtered by the logging infrastructure used everywhere else in the package. Both calls have been replaced with `this.logger.info(...)`, consistent with all other logging in the file.
+
+## Pull Requests
+
+- [#875](https://github.com/tetherto/qvac/pull/875) - QVAC-14098 fix: route JS layer logs through addon logger
+
 ## [0.6.2]
 
 Fix Chatterbox models with FP16 quantization not working on linux-arm64 platform.
