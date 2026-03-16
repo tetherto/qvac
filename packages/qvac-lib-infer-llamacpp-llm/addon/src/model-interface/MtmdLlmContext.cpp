@@ -423,8 +423,8 @@ bool MtmdLlmContext::generateResponse(
   return true;
 }
 
-std::function<void()> MtmdLlmContext::applyGenerationParams(
-    const GenerationParams& overrides) {
+std::function<void()>
+MtmdLlmContext::applyGenerationParams(const GenerationParams& overrides) {
   if (!overrides.hasOverrides()) {
     return []() {};
   }
@@ -450,7 +450,8 @@ std::function<void()> MtmdLlmContext::applyGenerationParams(
 
   bool restored = false;
   return [this, savedSampling, savedPredict, restored]() mutable {
-    if (restored) return;
+    if (restored)
+      return;
     restored = true;
     params_.sampling = savedSampling;
     params_.n_predict = savedPredict;

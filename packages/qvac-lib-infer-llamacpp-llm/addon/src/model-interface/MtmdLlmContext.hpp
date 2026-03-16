@@ -65,8 +65,8 @@ public:
   bool generateResponse(
       const std::function<void(const std::string&)>& outputCallback) override;
 
-  std::function<void()> applyGenerationParams(
-      const GenerationParams& overrides) override;
+  std::function<void()>
+  applyGenerationParams(const GenerationParams& overrides) override;
 
   /**
    * The stop method. It stops the model inference.

@@ -325,8 +325,7 @@ inline js_value_t* runJob(js_env_t* env, js_callback_info_t* info) try {
         inputObj.getOptionalProperty<js::Object>(env, "generationParams");
     if (configObj.has_value()) {
       auto readNum = [&](const char* key, auto& out) {
-        auto v =
-            configObj->getOptionalPropertyAs<js::Number, double>(env, key);
+        auto v = configObj->getOptionalPropertyAs<js::Number, double>(env, key);
         if (v.has_value()) {
           out = static_cast<std::decay_t<decltype(out)>>(*v);
         }

@@ -240,8 +240,8 @@ public:
    * @return a callable that restores original parameters; safe to call
    *         multiple times (subsequent calls are no-ops).
    */
-  virtual std::function<void()> applyGenerationParams(
-      const GenerationParams& params) {
+  virtual std::function<void()>
+  applyGenerationParams(const GenerationParams& params) {
     return []() {};
   }
 
