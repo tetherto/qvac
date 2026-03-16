@@ -1,32 +1,25 @@
 ---
 title: "stopQVACProvider( )"
 titleStyle: code
-description: Stops a running provider service and leaves the specified topic.
+description: "Stops a running provider service and leaves the specified topic."
 ---
 
-```ts
-function stopQVACProvider(params): Promise<object>;
+```typescript
+function stopQVACProvider(params: infer): Promise
 ```
+
+## Description
+
+Stops a running provider service and leaves the specified topic.
 
 ## Parameters
 
 | Name | Type | Required? | Description |
 | --- | --- | :---: | --- |
-| params.topic | `string` | ✓ | Topic hex string to leave |
+| `params` | `infer` | ✓ | No description |
 
 ## Returns
 
-`Promise<object>` — The stop provide response containing `success` and optional `error`.
-
-## Throws
-
-| Error | When |
-| --- | --- |
-| `INVALID_RESPONSE_TYPE` | Response type does not match expected `"stopProvide"` |
-| `PROVIDER_STOP_FAILED` | The server reports provider stop failure |
-
-## Example
-
 ```typescript
-await stopQVACProvider({ topic: "a1b2c3d4..." });
+Promise
 ```
