@@ -148,7 +148,7 @@ class TranscriptionWhispercpp extends BaseInference {
     const vadParams = this.params?.vad_params || {}
 
     await this.addon.startStreaming({
-      energyThreshold: streamingConfig.energyThreshold || 0.005,
+      energyThreshold: streamingConfig.energyThreshold || 0.02,
       minSilenceDurationMs: vadParams.min_silence_duration_ms || 500,
       minSpeechDurationMs: vadParams.min_speech_duration_ms || 250,
       maxSpeechDurationS: vadParams.max_speech_duration_s || 30
