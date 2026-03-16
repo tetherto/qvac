@@ -1,5 +1,11 @@
 # Changelog
 
+## [0.13.1] - 2026-03-16
+
+### Added
+
+- Fallback chain in `OnnxSession` constructor: if session init fails with a non-CPU provider (e.g. DirectML OOM on CI machines without a real GPU), automatically retries with CPU-only configuration
+
 ## [0.13.0] - 2026-03-13
 
 ### Added
