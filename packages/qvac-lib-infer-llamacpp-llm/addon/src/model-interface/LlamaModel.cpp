@@ -1190,11 +1190,13 @@ std::string LlamaModel::finetune(
             static_cast<int64_t>(llama_n_ubatch(ctx)));
     const int64_t stepsPerEpoch =
         std::max<int64_t>(int64_t{1}, trainSplit * ubatchPerSample);
-    const int64_t totalSteps = std::max<int64_t>(
+    // The LR scheduler advances once per optimizer step (once per sample),
+    // not once per micro-batch callback, so use trainSplit directly.
+    const int64_t schedulerTotalSteps = std::max<int64_t>(
         int64_t{1},
-        static_cast<int64_t>(params.numberOfEpochs) * stepsPerEpoch);
+        static_cast<int64_t>(params.numberOfEpochs) * trainSplit);
 
-    auto schedulerState = createLrScheduler(params, totalSteps);
+    auto schedulerState = createLrScheduler(params, schedulerTotalSteps);
 
     CheckpointMetadata resumeMeta{};
     bool resumingFromPause = false;
