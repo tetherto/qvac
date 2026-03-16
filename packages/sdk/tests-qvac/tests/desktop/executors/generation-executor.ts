@@ -156,20 +156,33 @@ export class GenerationExecutor extends AbstractModelExecutor<typeof generationT
 
     try {
       const genParams = this.buildParams(modelId, { ...p, stream: true });
-      const { outputStream, stats } = generation(genParams);
+      const { outputStream, progressStream, stats } = generation(genParams);
+
+      const progressTicks: { step: number; totalSteps: number; elapsedMs: number }[] = [];
+      const progressDone = (async () => {
+        for await (const tick of progressStream) {
+          progressTicks.push(tick);
+        }
+      })();
 
       let outputCount = 0;
       for await (const _chunk of outputStream) {
         outputCount++;
       }
 
+      await progressDone;
       const finalStats = await stats;
+
       const hasOutputs = outputCount > 0;
       const hasStats = finalStats != null;
+      const hasProgress = progressTicks.length > 0;
+      const progressValid = progressTicks.every(
+        (t) => typeof t.step === "number" && typeof t.totalSteps === "number" && typeof t.elapsedMs === "number",
+      );
 
       return {
-        passed: hasOutputs && hasStats,
-        output: `Received ${outputCount} output(s), stats: ${hasStats ? "present" : "missing"}`,
+        passed: hasOutputs && hasStats && hasProgress && progressValid,
+        output: `Received ${outputCount} output(s), ${progressTicks.length} progress tick(s), stats: ${hasStats ? "present" : "missing"}, progress valid: ${progressValid}`,
       };
     } catch (error) {
       const errorMsg = error instanceof Error ? error.message : String(error);

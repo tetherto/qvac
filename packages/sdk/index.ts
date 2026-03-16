@@ -29,6 +29,7 @@ export {
   invokePlugin,
   invokePluginStream,
   generation,
+  type GenerationProgressTick,
   modelRegistryList,
   modelRegistrySearch,
   modelRegistryGetModel,
