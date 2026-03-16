@@ -10,6 +10,19 @@ const kvCacheSchema = z.union([
   z.string().min(1, "KV cache key cannot be empty string"),
 ]);
 
+export const generationParamsSchema = z
+  .object({
+    temp: z.number().optional(),
+    top_p: z.number().optional(),
+    top_k: z.number().optional(),
+    predict: z.number().optional(),
+    seed: z.number().optional(),
+    frequency_penalty: z.number().optional(),
+    presence_penalty: z.number().optional(),
+    repeat_penalty: z.number().optional(),
+  })
+  .strict();
+
 export const completionParamsSchema = z.object({
   history: z.array(
     z.object({
@@ -26,6 +39,7 @@ export const completionClientParamsSchema = completionParamsSchema.extend({
   tools: z.array(toolSchema).optional(),
   stream: z.boolean(),
   kvCache: kvCacheSchema.optional(),
+  generationParams: generationParamsSchema.optional(),
 });
 
 export const completionStreamRequestSchema =
@@ -49,6 +63,7 @@ export const completionStreamResponseSchema = z.object({
   error: z.string().optional(),
 });
 
+export type GenerationParams = z.infer<typeof generationParamsSchema>;
 export type CompletionParams = z.infer<typeof completionParamsSchema>;
 export type CompletionClientParams = z.input<
   typeof completionClientParamsSchema

@@ -154,6 +154,7 @@ export function completion(params: CompletionParams): {
         kvCache: params.kvCache,
         tools: allTools.length > 0 ? allTools : undefined,
         stream: params.stream ?? true,
+        generationParams: params.generationParams,
       };
 
       const responses: AsyncGenerator<unknown> = streamRpc(
