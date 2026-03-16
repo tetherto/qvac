@@ -5,6 +5,41 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.1.11]
+
+### Changed
+- All model types (TDT, CTC, EOU, Sortformer) now require named file paths — buffer-based `_loadModelWeights` fallback removed
+- `_hasNamedPaths()` unified to cover all model types; `_hasAnyNamedPaths()` removed
+- `_load()` passes all named paths (TDT, CTC, EOU, Sortformer) to C++
+- `JSAdapter` parses CTC (`ctcModelPath`, `ctcModelDataPath`, `tokenizerPath`), EOU (`eouEncoderPath`, `eouDecoderPath`), and Sortformer (`sortformerPath`) path properties
+- `loadTDTSessions` requires `encoderPath` and `decoderPath`, removes buffer fallback
+- `loadCTCSessions` requires `ctcModelPath`, loads with C++-side temp staging for ONNX external data, reads tokenizer from `tokenizerPath`
+- `loadEOUSessions` requires `eouEncoderPath` and `eouDecoderPath`, reads tokenizer from `tokenizerPath`
+- `loadSortformerSessions` requires `sortformerPath`
+
+## [0.1.10]
+
+### Added
+- CTC model support (`parakeet-ctc-0.6b`) with tokenizer.json-based vocabulary decoding
+- End-of-Utterance (EOU) streaming model support (`parakeet-eou-120m-v1`) for real-time transcription
+- Sortformer speaker diarization model support (`sortformer-4spk-v2`) with per-speaker labelled output
+- Named file path parameters for CTC (`ctcModelPath`, `ctcModelDataPath`), EOU (`eouEncoderPath`, `eouDecoderPath`), and Sortformer (`sortformerPath`) models
+- Shared `tokenizerPath` config for CTC and EOU tokenizer.json loading
+- `modelType` configuration parameter (`'tdt'`, `'ctc'`, `'eou'`, `'sortformer'`) to select inference pipeline
+- Integration tests for all model types (desktop and mobile)
+- `nlohmann-json` vcpkg dependency for tokenizer.json parsing
+
+### Changed
+- C++ `ParakeetModel` refactored to support multiple model architectures with shared mel-spectrogram and encoder pipeline
+- `_resolveFilePath` extended to map CTC/EOU/Sortformer file names to named config paths
+- `_hasAnyNamedPaths()` added to detect any named path override (TDT or non-TDT)
+- `_loadModelWeights` routes weight files by model type using `getRequiredModelFiles()`
+- Mobile integration tests hardened with explicit `unloadWeights()` and `destroyInstance()` cleanup in `finally` blocks
+
+### Fixed
+- Tokenizer vocabulary validation rejects empty vocab after parsing
+- JobEnded/Output race condition in C++ job tracker
+
 ## [0.1.9]
 
 ### Changed

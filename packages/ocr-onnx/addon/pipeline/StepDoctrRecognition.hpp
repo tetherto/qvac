@@ -1,12 +1,13 @@
 #pragma once
 
-#include "Steps.hpp"
-
-#include <onnxruntime_cxx_api.h>
-#include <opencv2/imgproc.hpp>
-
+#include <atomic>
 #include <string>
 #include <vector>
+
+#include <opencv2/imgproc.hpp>
+#include <qvac-onnx/OnnxSession.hpp>
+
+#include "Steps.hpp"
 
 namespace qvac_lib_inference_addon_onnx_ocr_fasttext {
 
@@ -20,16 +21,20 @@ public:
   static constexpr int RECOG_HEIGHT = 32;
   static constexpr int RECOG_WIDTH = 128;
 
-  StepDoctrRecognition(const ORTCHAR_T* pathRecognizer, bool useGPU = true,
-                       int batchSize = 32,
-                       DecodingMethod decoding = DecodingMethod::CTC);
+  StepDoctrRecognition(
+      const std::string& pathRecognizer, bool useGPU = false,
+      int batchSize = 32, DecodingMethod decoding = DecodingMethod::CTC);
 
 #if defined(_WIN32) || defined(_WIN64)
   // On Windows, defer session destruction to avoid the ORT global-state crash.
-  ~StepDoctrRecognition() { deferWindowsSessionLeak(std::move(ortSession_)); }
+  ~StepDoctrRecognition() { deferWindowsSessionLeak(std::move(session_)); }
 #endif
 
-  Output process(Input input);
+  /**
+   * @param input : detection output with polygons to recognize
+   * @param cancelFlag : optional pointer to an atomic cancel flag; breaks early between batches and returns partial results
+   */
+  Output process(Input input, const std::atomic<bool>* cancelFlag = nullptr);
 
 private:
   struct SoftmaxResult {
@@ -37,7 +42,7 @@ private:
     float bestProb;
   };
 
-  Ort::Session ortSession_{nullptr};
+  onnx_addon::OnnxSession session_;
   int batchSize_;
   DecodingMethod decodingMethod_;
 

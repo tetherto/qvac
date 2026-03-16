@@ -1,0 +1,52 @@
+---
+title: "modelRegistryGetModel( )"
+titleStyle: code
+description: Retrieves a single model entry from the QVAC model registry by path and source.
+---
+
+```ts
+function modelRegistryGetModel(registryPath: string, registrySource: string): Promise<ModelRegistryEntry>;
+```
+
+## Parameters
+
+| Name | Type | Required? | Description |
+| --- | --- | :---: | --- |
+| registryPath | `string` | ✓ | The registry path of the model |
+| registrySource | `string` | ✓ | The registry source identifier |
+
+## Returns
+
+`Promise<`[`ModelRegistryEntry`](#modelregistryentry)`>` — The matching model entry.
+
+### `ModelRegistryEntry`
+
+| Field | Type | Description |
+| --- | --- | --- |
+| name | `string` | Human-readable model name |
+| registryPath | `string` | Registry path |
+| registrySource | `string` | Registry source |
+| blobCoreKey | `string` | Hyperdrive blob core key |
+| blobBlockOffset | `number` | Blob block offset |
+| blobBlockLength | `number` | Blob block length |
+| blobByteOffset | `number` | Blob byte offset |
+| modelId | `string` | Unique model identifier |
+| addon | `"llm" \| "whisper" \| "embeddings" \| "nmt" \| "vad" \| "tts" \| "ocr" \| "other"` | Model addon type |
+| expectedSize | `number` | Expected file size in bytes |
+| sha256Checksum | `string` | SHA-256 checksum |
+| engine | `string` | Inference engine |
+| quantization | `string` | Quantization level |
+| params | `string` | Parameter count |
+
+## Throws
+
+| Error | When |
+| --- | --- |
+| `QVAC_MODEL_REGISTRY_QUERY_FAILED` | The registry query fails or model is not found |
+
+## Example
+
+```typescript
+const model = await modelRegistryGetModel("llama-3.2-3b-q4", "qvac");
+console.log(model.name, model.expectedSize);
+```

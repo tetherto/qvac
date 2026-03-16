@@ -27,9 +27,21 @@ import type { LogLevel } from "@qvac/logging";
 import type { Logger } from "./types";
 
 const REGISTRY_KEY = Symbol.for("@qvac/sdk:logger-registry");
+const GLOBAL_LEVEL_KEY = Symbol.for("@qvac/sdk:global-log-level");
+const GLOBAL_CONSOLE_KEY = Symbol.for("@qvac/sdk:global-console-output");
+
+type GlobalState = {
+  [REGISTRY_KEY]?: Set<Logger>;
+  [GLOBAL_LEVEL_KEY]?: LogLevel;
+  [GLOBAL_CONSOLE_KEY]?: boolean;
+};
+
+function getGlobal(): GlobalState {
+  return globalThis as GlobalState;
+}
 
 function getRegistry(): Set<Logger> {
-  const global = globalThis as { [REGISTRY_KEY]?: Set<Logger> };
+  const global = getGlobal();
   if (!global[REGISTRY_KEY]) {
     global[REGISTRY_KEY] = new Set<Logger>();
   }
@@ -37,7 +49,15 @@ function getRegistry(): Set<Logger> {
 }
 
 export function registerLogger(logger: Logger) {
+  const global = getGlobal();
   getRegistry().add(logger);
+
+  if (global[GLOBAL_LEVEL_KEY] !== undefined) {
+    logger.setLevel(global[GLOBAL_LEVEL_KEY]);
+  }
+  if (global[GLOBAL_CONSOLE_KEY] !== undefined) {
+    logger.setConsoleOutput(global[GLOBAL_CONSOLE_KEY]);
+  }
 }
 
 export function unregisterLogger(logger: Logger) {
@@ -45,12 +65,14 @@ export function unregisterLogger(logger: Logger) {
 }
 
 export function setGlobalLogLevel(level: LogLevel) {
+  getGlobal()[GLOBAL_LEVEL_KEY] = level;
   for (const logger of getRegistry()) {
     logger.setLevel(level);
   }
 }
 
 export function setGlobalConsoleOutput(enabled: boolean) {
+  getGlobal()[GLOBAL_CONSOLE_KEY] = enabled;
   for (const logger of getRegistry()) {
     logger.setConsoleOutput(enabled);
   }

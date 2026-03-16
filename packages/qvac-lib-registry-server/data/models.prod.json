@@ -5340,6 +5340,130 @@
     "notes": "Full INT8 quantization of https://huggingface.co/istupakov/parakeet-tdt-0.6b-v3-onnx"
   },
   {
+    "source": "https://huggingface.co/onnx-community/parakeet-ctc-0.6b-ONNX/resolve/7df2cab7aed886b8b7f80d68a8214007e4847601/onnx/model.onnx",
+    "engine": "@qvac/transcription-parakeet",
+    "link": "https://huggingface.co/onnx-community/parakeet-ctc-0.6b-ONNX",
+    "description": "Parakeet CTC 0.6B onnx-community (graph)",
+    "quantization": "fp32",
+    "params": "0.6B",
+    "license": "CC-BY-4.0",
+    "tags": [
+      "transcription",
+      "parakeet",
+      "ctc",
+      "en"
+    ],
+    "deprecated": false,
+    "notes": "onnx-community export, uses model.onnx_data naming"
+  },
+  {
+    "source": "https://huggingface.co/onnx-community/parakeet-ctc-0.6b-ONNX/resolve/7df2cab7aed886b8b7f80d68a8214007e4847601/onnx/model.onnx_data",
+    "engine": "@qvac/transcription-parakeet",
+    "link": "https://huggingface.co/onnx-community/parakeet-ctc-0.6b-ONNX",
+    "description": "Parakeet CTC 0.6B onnx-community (weights)",
+    "quantization": "fp32",
+    "params": "0.6B",
+    "license": "CC-BY-4.0",
+    "tags": [
+      "transcription",
+      "parakeet",
+      "ctc",
+      "en"
+    ],
+    "deprecated": false,
+    "notes": "onnx-community export, external data for model.onnx"
+  },
+  {
+    "source": "https://huggingface.co/onnx-community/parakeet-ctc-0.6b-ONNX/resolve/7df2cab7aed886b8b7f80d68a8214007e4847601/tokenizer.json",
+    "engine": "@qvac/transcription-parakeet",
+    "link": "https://huggingface.co/onnx-community/parakeet-ctc-0.6b-ONNX",
+    "description": "Parakeet CTC 0.6B tokenizer",
+    "quantization": "",
+    "params": "0.6B",
+    "license": "CC-BY-4.0",
+    "tags": [
+      "transcription",
+      "parakeet",
+      "ctc",
+      "tokenizer",
+      "en"
+    ],
+    "deprecated": false,
+    "notes": ""
+  },
+  {
+    "source": "https://huggingface.co/altunenes/parakeet-rs/resolve/0bd721ca2837b3aef5f98d1de5726d6796a80da4/realtime_eou_120m-v1-onnx/decoder_joint.onnx",
+    "engine": "@qvac/transcription-parakeet",
+    "link": "https://huggingface.co/altunenes/parakeet-rs",
+    "description": "Parakeet EOU 120M Decoder",
+    "quantization": "fp32",
+    "params": "120M",
+    "license": "CC-BY-4.0",
+    "tags": [
+      "transcription",
+      "parakeet",
+      "eou",
+      "decoder",
+      "en"
+    ],
+    "deprecated": false,
+    "notes": ""
+  },
+  {
+    "source": "https://huggingface.co/altunenes/parakeet-rs/resolve/0bd721ca2837b3aef5f98d1de5726d6796a80da4/realtime_eou_120m-v1-onnx/encoder.onnx",
+    "engine": "@qvac/transcription-parakeet",
+    "link": "https://huggingface.co/altunenes/parakeet-rs",
+    "description": "Parakeet EOU 120M Encoder",
+    "quantization": "fp32",
+    "params": "120M",
+    "license": "CC-BY-4.0",
+    "tags": [
+      "transcription",
+      "parakeet",
+      "eou",
+      "encoder",
+      "en"
+    ],
+    "deprecated": false,
+    "notes": ""
+  },
+  {
+    "source": "https://huggingface.co/altunenes/parakeet-rs/resolve/0bd721ca2837b3aef5f98d1de5726d6796a80da4/realtime_eou_120m-v1-onnx/tokenizer.json",
+    "engine": "@qvac/transcription-parakeet",
+    "link": "https://huggingface.co/altunenes/parakeet-rs",
+    "description": "Parakeet EOU 120M Tokenizer",
+    "quantization": "",
+    "params": "120M",
+    "license": "CC-BY-4.0",
+    "tags": [
+      "transcription",
+      "parakeet",
+      "eou",
+      "tokenizer",
+      "en"
+    ],
+    "deprecated": false,
+    "notes": ""
+  },
+  {
+    "source": "https://huggingface.co/cgus/diar_streaming_sortformer_4spk-v2-onnx/resolve/a3e0e6c8485b963cfdee82e4e961af1a9daca99d/diar_streaming_sortformer_4spk-v2.onnx",
+    "engine": "@qvac/transcription-parakeet",
+    "link": "https://huggingface.co/altunenes/parakeet-rs",
+    "description": "Parakeet Sortformer 4SPK v2",
+    "quantization": "fp32",
+    "params": "123M",
+    "license": "CC-BY-4.0",
+    "tags": [
+      "transcription",
+      "parakeet",
+      "sortformer",
+      "4spk",
+      "en"
+    ],
+    "deprecated": false,
+    "notes": ""
+  },
+  {
     "source": "https://huggingface.co/noctrex/LightOnOCR-2-1B-ocr-soup-GGUF/resolve/main/LightOnOCR-2-1B-ocr-soup-Q4_K_M.gguf",
     "engine": "@qvac/llm-llamacpp",
     "description": "OCR-specialized vision-language model for document understanding",
@@ -5387,7 +5511,7 @@
     "notes": "McGill-NLP/AfriqueGemma-4B. 20 African languages: af, am, ar, ha, ig, mg, ny, om, rw, sn, so, st, sw, ti, tn, xh, yo, zu + en, fr, pt. GGUF by mradermacher."
   },
   {
-    "source": "s3:///qvac_models_compiled/ggml/bitnet/2026-03-06/bitnet_b1_58-3B-TQ2_0.gguf",
+    "source": "s3:///qvac_models_compiled/ggml/bitnet/2026-03-05/bitnet_b1_58-3B-TQ2_0.gguf",
     "engine": "@qvac/llm-llamacpp",
     "link": "https://huggingface.co/1bitLLM/bitnet_b1_58-3B",
     "description": "Bitnet 3B model",
@@ -5402,7 +5526,7 @@
     ]
   },
   {
-    "source": "s3:///qvac_models_compiled/ggml/bitnet/2026-03-06/bitnet_b1_58-large-TQ2_0.gguf",
+    "source": "s3:///qvac_models_compiled/ggml/bitnet/2026-03-05/bitnet_b1_58-large-TQ2_0.gguf",
     "engine": "@qvac/llm-llamacpp",
     "link": "https://huggingface.co/1bitLLM/bitnet_b1_58-large",
     "description": "Bitnet 0.7B model",
@@ -5417,7 +5541,7 @@
     ]
   },
   {
-    "source": "s3:///qvac_models_compiled/ggml/bitnet/2026-03-06/bitnet_b1_58-xl-TQ2_0.gguf",
+    "source": "s3:///qvac_models_compiled/ggml/bitnet/2026-03-05/bitnet_b1_58-xl-TQ2_0.gguf",
     "engine": "@qvac/llm-llamacpp",
     "link": "https://huggingface.co/1bitLLM/bitnet_b1_58-xl",
     "description": "Bitnet 1B model",

@@ -8,18 +8,18 @@ import {
   translateRequestSchema,
   translateResponseSchema,
   ModelType,
+  llmConfigBaseSchema,
+  ADDON_LLM,
   type CreateModelParams,
   type PluginModelResult,
+  type ResolveContext,
   type LlmConfig,
+  type LlmConfigInput,
   type CompletionStats,
   type ToolCall,
   type TranslationStats,
 } from "@/schemas";
-import {
-  ADDON_NAMESPACES,
-  createStreamLogger,
-  registerAddonLogger,
-} from "@/logging";
+import { createStreamLogger, registerAddonLogger } from "@/logging";
 import { parseModelPath } from "@/server/utils";
 import FilesystemDL from "@qvac/dl-filesystem";
 import { asLoader } from "@/server/bare/utils/loader-adapter";
@@ -61,8 +61,8 @@ function createLlmModel(
 ) {
   const { dirPath, basePath } = parseModelPath(modelPath);
   const loader = new FilesystemDL({ dirPath });
-  const logger = createStreamLogger(modelId, ADDON_NAMESPACES.LLAMACPP_LLM);
-  registerAddonLogger(modelId, ADDON_NAMESPACES.LLAMACPP_LLM, logger);
+  const logger = createStreamLogger(modelId, ModelType.llamacppCompletion);
+  registerAddonLogger(modelId, ModelType.llamacppCompletion, logger);
   const llmConfigStrings = transformLlmConfig(llmConfig);
 
   const args = {
@@ -86,7 +86,22 @@ function createLlmModel(
 export const llmPlugin = definePlugin({
   modelType: ModelType.llamacppCompletion,
   displayName: "LLM (llama.cpp)",
-  addonPackage: "@qvac/llm-llamacpp",
+  addonPackage: ADDON_LLM,
+  loadConfigSchema: llmConfigBaseSchema,
+
+  async resolveConfig(cfg: LlmConfigInput, ctx: ResolveContext) {
+    const { projectionModelSrc, ...llmConfig } = cfg;
+
+    if (!projectionModelSrc) {
+      return { config: llmConfig };
+    }
+
+    const projectionModelPath = await ctx.resolveModelPath(projectionModelSrc);
+    return {
+      config: llmConfig,
+      artifacts: { projectionModelPath },
+    };
+  },
 
   createModel(params: CreateModelParams): PluginModelResult {
     const llmConfig = (params.modelConfig ?? {}) as LlmConfig;
@@ -121,6 +136,7 @@ export const llmPlugin = definePlugin({
           modelId: request.modelId,
           kvCache: request.kvCache,
           ...(request.tools && { tools: request.tools }),
+          ...(request.generationParams && { generationParams: request.generationParams }),
         });
 
         let stats: CompletionStats | undefined;
@@ -196,6 +212,6 @@ export const llmPlugin = definePlugin({
 
   logging: {
     module: llmAddonLogging,
-    namespace: ADDON_NAMESPACES.LLAMACPP_LLM,
+    namespace: ModelType.llamacppCompletion,
   },
 });

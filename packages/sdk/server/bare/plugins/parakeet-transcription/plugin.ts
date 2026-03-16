@@ -10,69 +10,174 @@ import {
   transcribeStreamRequestSchema,
   transcribeStreamResponseSchema,
   ModelType,
-  type ParakeetRuntimeConfig,
+  parakeetConfigSchema,
+  ADDON_PARAKEET,
+  type ModelSrcInput,
   type CreateModelParams,
   type PluginModelResult,
-  type ResolveModelPath,
+  type ResolveContext,
+  type ResolveResult,
 } from "@/schemas";
-import { ADDON_NAMESPACES, createStreamLogger } from "@/logging";
+import { createStreamLogger, registerAddonLogger } from "@/logging";
 import { parseModelPath } from "@/server/utils";
-import { ModelLoadFailedError } from "@/utils/errors-server";
+import {
+  ModelLoadFailedError,
+  ParakeetArtifactsRequiredError,
+} from "@/utils/errors-server";
 import FilesystemDL from "@qvac/dl-filesystem";
 import { transcribe } from "@/server/bare/ops/transcribe";
 
-type ParakeetModelConfig = ParakeetRuntimeConfig & {
-  encoderDataPath?: string;
-  decoderPath?: string;
-  vocabPath?: string;
-  preprocessorPath?: string;
+type ParakeetModelConfig = {
+  modelType?: string;
+  maxThreads?: number;
+  useGPU?: boolean;
+  sampleRate?: number;
+  channels?: number;
+  captionEnabled?: boolean;
+  timestampsEnabled?: boolean;
+  // TDT
+  parakeetEncoderSrc?: ModelSrcInput;
+  parakeetEncoderDataSrc?: ModelSrcInput;
+  parakeetDecoderSrc?: ModelSrcInput;
+  parakeetVocabSrc?: ModelSrcInput;
+  parakeetPreprocessorSrc?: ModelSrcInput;
+  // CTC
+  parakeetCtcModelSrc?: ModelSrcInput;
+  parakeetCtcModelDataSrc?: ModelSrcInput;
+  parakeetTokenizerSrc?: ModelSrcInput;
+  // Sortformer
+  parakeetSortformerSrc?: ModelSrcInput;
 };
 
-function createParakeetModel(
-  modelId: string,
-  modelPath: string,
-  config: ParakeetModelConfig,
-) {
-  const { dirPath } = parseModelPath(modelPath);
+async function resolveTdtConfig(
+  cfg: ParakeetModelConfig,
+  ctx: ResolveContext,
+): Promise<ResolveResult<ParakeetModelConfig>> {
+  const {
+    parakeetEncoderSrc,
+    parakeetEncoderDataSrc,
+    parakeetDecoderSrc,
+    parakeetVocabSrc,
+    parakeetPreprocessorSrc,
+  } = cfg;
 
-  const { encoderDataPath, decoderPath, vocabPath, preprocessorPath } = config;
-
-  if (!decoderPath || !vocabPath || !preprocessorPath) {
-    throw new ModelLoadFailedError(
-      "Parakeet requires model file paths: parakeetDecoderSrc, parakeetVocabSrc, parakeetPreprocessorSrc in modelConfig",
+  if (
+    !parakeetEncoderSrc ||
+    !parakeetDecoderSrc ||
+    !parakeetVocabSrc ||
+    !parakeetPreprocessorSrc
+  ) {
+    throw new ParakeetArtifactsRequiredError(
+      "TDT requires: parakeetEncoderSrc, parakeetDecoderSrc, parakeetVocabSrc, parakeetPreprocessorSrc",
     );
   }
 
-  const loader = new FilesystemDL({ dirPath });
-  const logger = createStreamLogger(modelId, "parakeet");
-
-  const args: TranscriptionParakeetArgs = {
-    loader,
-    logger,
-    modelName: parseModelPath(dirPath).basePath,
-    diskPath: dirPath,
-  };
-
-  const filePaths: Record<string, string> = {
-    "encoder-model.onnx": modelPath,
-    "decoder_joint-model.onnx": decoderPath,
-    "vocab.txt": vocabPath,
-    "preprocessor.onnx": preprocessorPath,
-  };
-  if (encoderDataPath) {
-    filePaths["encoder-model.onnx.data"] = encoderDataPath;
-  }
-
-  const addonConfig: TranscriptionParakeetConfig = {
-    path: dirPath,
-    filePaths,
-    encoderPath: modelPath,
-    ...(encoderDataPath ? { encoderDataPath } : {}),
+  const resolve = ctx.resolveModelPath;
+  const [
+    encoderPath,
+    encoderDataPath,
     decoderPath,
     vocabPath,
     preprocessorPath,
+  ] = await Promise.all([
+    resolve(parakeetEncoderSrc),
+    parakeetEncoderDataSrc ? resolve(parakeetEncoderDataSrc) : undefined,
+    resolve(parakeetDecoderSrc),
+    resolve(parakeetVocabSrc),
+    resolve(parakeetPreprocessorSrc),
+  ]);
+
+  return {
+    config: cfg,
+    artifacts: {
+      encoderPath,
+      ...(encoderDataPath !== undefined && { encoderDataPath }),
+      ...(decoderPath !== undefined && { decoderPath }),
+      ...(vocabPath !== undefined && { vocabPath }),
+      ...(preprocessorPath !== undefined && { preprocessorPath }),
+    },
+  };
+}
+
+async function resolveCtcConfig(
+  cfg: ParakeetModelConfig,
+  ctx: ResolveContext,
+): Promise<ResolveResult<ParakeetModelConfig>> {
+  const { parakeetCtcModelSrc, parakeetCtcModelDataSrc, parakeetTokenizerSrc } =
+    cfg;
+
+  if (!parakeetCtcModelSrc || !parakeetTokenizerSrc) {
+    throw new ParakeetArtifactsRequiredError(
+      "CTC requires: parakeetCtcModelSrc, parakeetTokenizerSrc",
+    );
+  }
+
+  const resolve = ctx.resolveModelPath;
+  const [ctcModelPath, ctcModelDataPath, tokenizerPath] = await Promise.all([
+    resolve(parakeetCtcModelSrc),
+    parakeetCtcModelDataSrc ? resolve(parakeetCtcModelDataSrc) : undefined,
+    resolve(parakeetTokenizerSrc),
+  ]);
+
+  return {
+    config: cfg,
+    artifacts: {
+      ctcModelPath,
+      ...(ctcModelDataPath !== undefined && { ctcModelDataPath }),
+      ...(tokenizerPath !== undefined && { tokenizerPath }),
+    },
+  };
+}
+
+async function resolveSortformerConfig(
+  cfg: ParakeetModelConfig,
+  ctx: ResolveContext,
+): Promise<ResolveResult<ParakeetModelConfig>> {
+  const { parakeetSortformerSrc } = cfg;
+
+  if (!parakeetSortformerSrc) {
+    throw new ParakeetArtifactsRequiredError(
+      "Sortformer requires: parakeetSortformerSrc",
+    );
+  }
+
+  const resolve = ctx.resolveModelPath;
+  const sortformerPath = await resolve(parakeetSortformerSrc);
+
+  return {
+    config: cfg,
+    artifacts: {
+      ...(sortformerPath !== undefined && { sortformerPath }),
+    },
+  };
+}
+
+function createParakeetModel(
+  params: CreateModelParams,
+  addonPathKey: string,
+): PluginModelResult {
+  const config = (params.modelConfig ?? {}) as ParakeetModelConfig;
+  const artifacts = params.artifacts ?? {};
+  const modelType = config.modelType ?? "tdt";
+  const primaryPath = artifacts[addonPathKey] ?? params.modelPath;
+
+  if (!primaryPath) {
+    throw new ModelLoadFailedError(
+      `Parakeet ${modelType} requires a model source`,
+    );
+  }
+
+  const { dirPath } = parseModelPath(primaryPath);
+  const loader = new FilesystemDL({ dirPath });
+  const logger = createStreamLogger(modelId, ModelType.parakeetTranscription);
+  registerAddonLogger(modelId, ModelType.parakeetTranscription, logger);
+
+  const addonConfig: TranscriptionParakeetConfig = {
+    path: dirPath,
+    [addonPathKey]: primaryPath,
+    ...artifacts,
     parakeetConfig: {
-      modelType: config.modelType ?? "tdt",
+      modelType,
       maxThreads: config.maxThreads,
       useGPU: config.useGPU,
       sampleRate: config.sampleRate,
@@ -82,7 +187,15 @@ function createParakeetModel(
     } as ParakeetConfig,
   };
 
-  const model = new TranscriptionParakeet(args, addonConfig);
+  const model = new TranscriptionParakeet(
+    {
+      loader,
+      logger,
+      modelName: parseModelPath(dirPath).basePath,
+      diskPath: dirPath,
+    } as TranscriptionParakeetArgs,
+    addonConfig,
+  );
 
   return { model, loader };
 }
@@ -90,33 +203,29 @@ function createParakeetModel(
 export const parakeetPlugin = definePlugin({
   modelType: ModelType.parakeetTranscription,
   displayName: "Parakeet (NVIDIA NeMo ONNX)",
-  addonPackage: "@qvac/transcription-parakeet",
+  addonPackage: ADDON_PARAKEET,
+  loadConfigSchema: parakeetConfigSchema,
+  skipPrimaryModelPathValidation: true,
 
   async resolveConfig(
-    modelConfig: Record<string, unknown>,
-    resolve: ResolveModelPath,
-  ): Promise<Record<string, unknown>> {
-    const config = modelConfig as {
-      parakeetEncoderDataSrc?: string;
-      parakeetDecoderSrc?: string;
-      parakeetVocabSrc?: string;
-      parakeetPreprocessorSrc?: string;
-    };
+    cfg: ParakeetModelConfig,
+    ctx: ResolveContext,
+  ): Promise<ResolveResult<ParakeetModelConfig>> {
+    const modelType = cfg.modelType ?? "tdt";
 
-    const [encoderDataPath, decoderPath, vocabPath, preprocessorPath] = await Promise.all([
-      config.parakeetEncoderDataSrc ? resolve(config.parakeetEncoderDataSrc) : undefined,
-      config.parakeetDecoderSrc ? resolve(config.parakeetDecoderSrc) : undefined,
-      config.parakeetVocabSrc ? resolve(config.parakeetVocabSrc) : undefined,
-      config.parakeetPreprocessorSrc ? resolve(config.parakeetPreprocessorSrc) : undefined,
-    ]);
-
-    return { ...modelConfig, encoderDataPath, decoderPath, vocabPath, preprocessorPath };
+    if (modelType === "ctc") return resolveCtcConfig(cfg, ctx);
+    if (modelType === "sortformer") return resolveSortformerConfig(cfg, ctx);
+    return resolveTdtConfig(cfg, ctx);
   },
 
   createModel(params: CreateModelParams): PluginModelResult {
-    const config = (params.modelConfig ?? {}) as ParakeetModelConfig;
+    const modelType =
+      ((params.modelConfig ?? {}) as ParakeetModelConfig).modelType ?? "tdt";
 
-    return createParakeetModel(params.modelId, params.modelPath, config);
+    if (modelType === "ctc") return createParakeetModel(params, "ctcModelPath");
+    if (modelType === "sortformer")
+      return createParakeetModel(params, "sortformerPath");
+    return createParakeetModel(params, "encoderPath");
   },
 
   handlers: {
@@ -148,6 +257,6 @@ export const parakeetPlugin = definePlugin({
 
   logging: {
     module: parakeetAddonLogging,
-    namespace: ADDON_NAMESPACES.PARAKEET,
+    namespace: ModelType.parakeetTranscription,
   },
 });

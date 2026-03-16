@@ -279,7 +279,6 @@ class TranslationNmtcpp extends BaseInference {
         ...configurationParams.config,
         pivotModel: pivotConfig
       }
-      console.log(configurationParams)
     }
   }
 
@@ -510,8 +509,16 @@ class TranslationNmtcpp extends BaseInference {
 
   _addonOutputCallback (addon, event, data, error) {
     // Map C++ mangled type names to expected event names
-    // Check stats FIRST (before basic_string check, since stats event name also contains 'basic_string')
-    if (typeof data === 'object' && data !== null && 'TPS' in data) {
+    // Check if this is a stats object by looking for stats-related keys
+    // Stats objects contain runtime statistics like TPS, totalTime, decodeTime, etc.
+    const isStatsObject = typeof data === 'object' && data !== null && !Array.isArray(data) &&
+                         (('TPS' in data) ||
+                          ('BERGAMOT : ->TPS' in data) ||
+                          ('firstModel_TPS' in data) ||
+                          ('totalTime' in data) ||
+                          ('decodeTime' in data))
+
+    if (isStatsObject) {
       // Stats object received - this signals job completion
       // Pass stats with JobEnded event (base class expects stats in JobEnded data)
       return this._outputCallback(addon, 'JobEnded', JOB_ID, data, null)

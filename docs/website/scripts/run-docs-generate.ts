@@ -6,7 +6,7 @@
  * Usage: bun run scripts/run-docs-generate.ts
  *
  * Expects to run from docs/website/ inside the monorepo.
- * Set SDK_PATH to override the SDK location (default: ../../packages/qvac-sdk).
+ * Set SDK_PATH to override the SDK location (default: ../../packages/sdk).
  */
 
 import { execSync } from "child_process";
@@ -15,7 +15,7 @@ import { resolve } from "path";
 
 const sdkPkgPath = resolve(
   process.cwd(),
-  "../../packages/qvac-sdk/package.json"
+  "../../packages/sdk/package.json"
 );
 
 let version: string;
@@ -28,12 +28,12 @@ try {
 }
 
 if (!version) {
-  console.error("No version field in packages/qvac-sdk/package.json");
+  console.error("No version field in packages/sdk/package.json");
   process.exit(1);
 }
 
 const sdkPath =
-  process.env.SDK_PATH || resolve(process.cwd(), "../../packages/qvac-sdk");
+  process.env.SDK_PATH || resolve(process.cwd(), "../../packages/sdk");
 
 console.log(`SDK version: ${version}`);
 console.log(`SDK path:    ${sdkPath}`);

@@ -78,7 +78,7 @@ OrtElementType onnxTypeToOurType(ONNXTensorElementDataType onnxType) {
 OnnxInferSession::OnnxInferSession(const std::string &modelPath) {
   Ort::SessionOptions options;
   options.SetIntraOpNumThreads(1);
-  options.SetGraphOptimizationLevel(GraphOptimizationLevel::ORT_ENABLE_ALL);
+  options.SetGraphOptimizationLevel(GraphOptimizationLevel::ORT_ENABLE_EXTENDED);
 
   session_ = qvac::ttslib::createOrtSession(modelPath, options);
 

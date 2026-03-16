@@ -1,6 +1,8 @@
 #include "TTSModel.hpp"
 
+#include <any>
 #include <sstream>
+#include <stdexcept>
 
 #include "qvac-lib-inference-addon-cpp/Logger.hpp"
 #include "src/addon/TTSErrors.hpp"
@@ -208,6 +210,10 @@ void TTSModel::initializeBackend() {
 bool TTSModel::isLoaded() const { return loaded_; }
 
 TTSModel::Output TTSModel::process(const Input &text) {
+  if (cancelRequested_.exchange(false)) {
+    throw std::runtime_error("Job cancelled");
+  }
+
   if (text.empty() || text == " ") {
     return {};
   }
@@ -226,6 +232,10 @@ TTSModel::Output TTSModel::process(const Input &text) {
     result = chatterboxEngine_->synthesize(text);
   } else if (engineType_ == EngineType::Supertonic) {
     result = supertonicEngine_->synthesize(text);
+  }
+
+  if (cancelRequested_.exchange(false)) {
+    throw std::runtime_error("Job cancelled");
   }
 
   auto endTime = std::chrono::high_resolution_clock::now();
@@ -261,6 +271,22 @@ TTSModel::process(const Input &text,
   return result;
 }
 
+std::any TTSModel::process(const std::any &input) {
+  if (input.type() == typeid(Input)) {
+    return std::any{process(std::any_cast<const Input &>(input))};
+  }
+  if (input.type() == typeid(AnyInput)) {
+    const auto &jobInput = std::any_cast<const AnyInput &>(input);
+    if (!jobInput.config.empty()) {
+      saveLoadParams(jobInput.config);
+    }
+    return std::any{process(jobInput.text)};
+  }
+  throw qvac_errors::StatusError(
+      qvac_errors::general_error::InvalidArgument,
+      std::string("Unsupported TTS input type: ") + input.type().name());
+}
+
 qvac_lib_inference_addon_cpp::RuntimeStats TTSModel::runtimeStats() const {
   qvac_lib_inference_addon_cpp::RuntimeStats stats;
 
@@ -271,6 +297,13 @@ qvac_lib_inference_addon_cpp::RuntimeStats TTSModel::runtimeStats() const {
   stats.emplace_back("totalSamples", totalSamples_);
 
   return stats;
+}
+
+std::string TTSModel::getName() const { return "TTSModel"; }
+
+void TTSModel::cancel() const {
+  cancelRequested_.store(true);
+  QLOG(Priority::INFO, "TTSModel cancellation requested");
 }
 
 void TTSModel::resetRuntimeStats() {

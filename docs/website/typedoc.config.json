@@ -1,6 +1,6 @@
 {
   "$schema": "https://typedoc.org/schema.json",
-  "entryPoints": ["../sdk/index.ts"],
+  "entryPoints": ["../../packages/sdk/index.ts"],
   "entryPointStrategy": "expand",
   "out": ".typedoc-temp",
   "readme": "none",
@@ -9,5 +9,5 @@
   "excludeExternals": true,
   "skipErrorChecking": true,
   "plugin": [],
-  "tsconfig": "../sdk/tsconfig.json"
+  "tsconfig": "../../packages/sdk/tsconfig.json"
 }

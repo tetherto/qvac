@@ -9,15 +9,13 @@ import {
   embedRequestSchema,
   embedResponseSchema,
   ModelType,
+  embedConfigBaseSchema,
+  ADDON_EMBEDDING,
   type CreateModelParams,
   type PluginModelResult,
   type EmbedConfig,
 } from "@/schemas";
-import {
-  ADDON_NAMESPACES,
-  createStreamLogger,
-  registerAddonLogger,
-} from "@/logging";
+import { createStreamLogger, registerAddonLogger } from "@/logging";
 import { parseModelPath } from "@/server/utils";
 import FilesystemDL from "@qvac/dl-filesystem";
 import { asLoader } from "@/server/bare/utils/loader-adapter";
@@ -67,8 +65,8 @@ function createEmbeddingsModel(
 ) {
   const { dirPath, basePath } = parseModelPath(modelPath);
   const loader = new FilesystemDL({ dirPath });
-  const logger = createStreamLogger(modelId, ADDON_NAMESPACES.LLAMACPP_EMBED);
-  registerAddonLogger(modelId, ADDON_NAMESPACES.LLAMACPP_EMBED, logger);
+  const logger = createStreamLogger(modelId, ModelType.llamacppEmbedding);
+  registerAddonLogger(modelId, ModelType.llamacppEmbedding, logger);
 
   const config = transformEmbedConfig(embedConfig);
 
@@ -89,7 +87,8 @@ function createEmbeddingsModel(
 export const embeddingsPlugin = definePlugin({
   modelType: ModelType.llamacppEmbedding,
   displayName: "Embeddings (llama.cpp)",
-  addonPackage: "@qvac/embed-llamacpp",
+  addonPackage: ADDON_EMBEDDING,
+  loadConfigSchema: embedConfigBaseSchema,
 
   createModel(params: CreateModelParams): PluginModelResult {
     const embedConfig = (params.modelConfig ?? {}) as EmbedConfig;
@@ -126,6 +125,6 @@ export const embeddingsPlugin = definePlugin({
 
   logging: {
     module: embedAddonLogging,
-    namespace: ADDON_NAMESPACES.LLAMACPP_EMBED,
+    namespace: ModelType.llamacppEmbedding,
   },
 });

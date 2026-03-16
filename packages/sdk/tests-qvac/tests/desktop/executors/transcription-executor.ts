@@ -1,4 +1,3 @@
-// Transcription executor
 import { transcribe } from "@qvac/sdk";
 import * as path from "node:path";
 import {
@@ -6,60 +5,50 @@ import {
   type TestResult,
   type Expectation,
 } from "@tetherto/qvac-test-suite";
+import { AbstractModelExecutor } from "../../shared/executors/abstract-model-executor.js";
 import { transcriptionTests } from "../../transcription-tests.js";
-import { ModelManager } from "../model-manager.js";
 
-export class TranscriptionExecutor {
+export class TranscriptionExecutor extends AbstractModelExecutor<
+  typeof transcriptionTests
+> {
   pattern = /^transcription-/;
 
-  // All transcription tests use generic handler
-  handlers = Object.fromEntries(
-    transcriptionTests.map((test) => [test.testId, this.generic]),
-  );
-
-  async execute(
-    testId: string,
-    context: unknown,
-    params: unknown,
-    expectation: unknown,
-  ): Promise<TestResult> {
-    const handler = this.handlers[testId];
-    if (handler) {
-      return await (
-        handler as (
-          params: unknown,
-          expectation: unknown,
-        ) => Promise<TestResult>
-      ).call(this, params, expectation);
-    }
-    return { passed: false, output: `Unknown test: ${testId}` };
-  }
+  protected handlers = Object.fromEntries(
+    transcriptionTests.map((test) => [test.testId, this.generic.bind(this)]),
+  ) as never;
 
   async generic(params: unknown, expectation: unknown): Promise<TestResult> {
-    const p = params as { audioFileName: string; timeout?: number };
-    const whisperModelId = await ModelManager.getWhisperModel();
+    const p = params as { audioFileName: string; timeout?: number; prompt?: string | null };
+    const exp = expectation as Expectation;
+    const whisperModelId = await this.resources.ensureLoaded("whisper");
 
-    // Get audio file path (resolve from current working directory up to repo root)
     const audioPath = path.resolve(
       process.cwd(),
-      "../shared-test-data/audio",
+      "assets/audio",
       p.audioFileName,
     );
 
     try {
-      const text = await transcribe({
+      const transcribeParams: { modelId: string; audioChunk: string; prompt?: string } = {
         modelId: whisperModelId,
         audioChunk: audioPath,
-      });
+      };
+      if (p.prompt && typeof p.prompt === "string" && p.prompt.trim().length > 0) {
+        transcribeParams.prompt = p.prompt;
+      }
+
+      const text = await transcribe(transcribeParams);
       const trimmedText = text.trim();
 
-      return ValidationHelpers.validate(
-        trimmedText,
-        expectation as Expectation,
-      );
+      if (exp.validation === "throws-error") {
+        return { passed: false, output: "Expected error but transcription succeeded" };
+      }
+      return ValidationHelpers.validate(trimmedText, exp);
     } catch (error) {
       const errorMsg = error instanceof Error ? error.message : String(error);
-      // Some tests expect errors (corrupted files)
+      if (exp.validation === "throws-error") {
+        return ValidationHelpers.validate(errorMsg, exp);
+      }
       return { passed: false, output: `Transcription failed: ${errorMsg}` };
     }
   }

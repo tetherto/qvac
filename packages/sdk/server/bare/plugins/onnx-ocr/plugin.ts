@@ -4,15 +4,35 @@ import {
   ocrStreamRequestSchema,
   ocrStreamResponseSchema,
   ModelType,
+  ocrConfigSchema,
+  ADDON_OCR,
   type CreateModelParams,
   type PluginModelResult,
   type OCRConfig,
+  type ResolveContext,
+  type ResolveResult,
 } from "@/schemas";
-import { createStreamLogger } from "@/logging";
+import { ModelLoadFailedError } from "@/utils/errors-server";
+import { hyperdriveUrlSchema } from "@/schemas/load-model";
+import { createStreamLogger, registerAddonLogger } from "@/logging";
 import { parseModelPath } from "@/server/utils";
 import FilesystemDL from "@qvac/dl-filesystem";
 import { ONNXOcr } from "@qvac/ocr-onnx";
 import { ocr } from "@/server/bare/plugins/onnx-ocr/ops/ocr-stream";
+import { OCR_CRAFT_DETECTOR } from "@/models/registry";
+
+const OCR_DETECTOR_FILENAME = "detector_craft.onnx";
+
+function deriveDetectorSource(modelSrc: string): string | undefined {
+  if (modelSrc.startsWith("pear://")) {
+    const { key } = hyperdriveUrlSchema.parse(modelSrc);
+    return `pear://${key}/${OCR_DETECTOR_FILENAME}`;
+  }
+  if (modelSrc.startsWith("registry://")) {
+    return OCR_CRAFT_DETECTOR.src;
+  }
+  return undefined;
+}
 
 function createOCRModel(
   modelId: string,
@@ -22,7 +42,8 @@ function createOCRModel(
 ) {
   const { dirPath } = parseModelPath(detectorPath);
   const loader = new FilesystemDL({ dirPath });
-  const logger = createStreamLogger(modelId, "ocr");
+  const logger = createStreamLogger(modelId, ModelType.onnxOcr);
+  registerAddonLogger(modelId, ModelType.onnxOcr, logger);
 
   const params = {
     pathDetector: detectorPath,
@@ -70,14 +91,42 @@ function createOCRModel(
 export const ocrPlugin = definePlugin({
   modelType: ModelType.onnxOcr,
   displayName: "OCR (ONNX)",
-  addonPackage: "@qvac/ocr-onnx",
+  addonPackage: ADDON_OCR,
+  loadConfigSchema: ocrConfigSchema,
+
+  async resolveConfig(
+    cfg: OCRConfig,
+    ctx: ResolveContext,
+  ): Promise<ResolveResult<Record<string, unknown>, "detectorModelPath">> {
+    const { detectorModelSrc, ...ocrConfig } = cfg;
+
+    const detectorSrc = detectorModelSrc ?? deriveDetectorSource(ctx.modelSrc);
+    if (!detectorSrc) {
+      throw new ModelLoadFailedError(
+        "Detector model required for OCR. Use a hyperdrive source or provide detectorModelSrc",
+      );
+    }
+
+    const detectorModelPath = await ctx.resolveModelPath(detectorSrc);
+    return {
+      config: ocrConfig,
+      artifacts: { detectorModelPath },
+    };
+  },
 
   createModel(params: CreateModelParams): PluginModelResult {
     const ocrConfig = (params.modelConfig ?? {}) as OCRConfig;
+    const detectorModelPath = params.artifacts?.["detectorModelPath"];
+
+    if (!detectorModelPath) {
+      throw new ModelLoadFailedError(
+        "Detector model path missing. Ensure detectorModelSrc is provided in modelConfig.",
+      );
+    }
 
     const { model, loader } = createOCRModel(
       params.modelId,
-      params.artifacts?.["detectorModelPath"] ?? "",
+      detectorModelPath,
       params.modelPath, // recognizerPath
       ocrConfig,
     );

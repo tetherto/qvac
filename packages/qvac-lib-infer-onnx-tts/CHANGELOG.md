@@ -5,6 +5,51 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.6.3]
+
+This release fixes a logging issue in the JS layer where two log statements during model load were bypassing the addon logging pipeline.
+
+## Bug Fixes
+
+### JS Layer Logs Now Routed Through Addon Logger
+
+Two `console.log` calls in the `_load()` method — logging the active engine type and language — were writing directly to stdout instead of going through the addon's logger. This meant those messages would not be captured or filtered by the logging infrastructure used everywhere else in the package. Both calls have been replaced with `this.logger.info(...)`, consistent with all other logging in the file.
+
+## Pull Requests
+
+- [#875](https://github.com/tetherto/qvac/pull/875) - QVAC-14098 fix: route JS layer logs through addon logger
+
+## [0.6.2]
+
+Fix Chatterbox models with FP16 quantization not working on linux-arm64 platform.
+
+## [0.6.1]
+
+This release fixes CMake configuration errors that were preventing the TTS addon from building correctly with updated onnxruntime dependencies, and pins onnxruntime to a minimum version constraint to avoid future compatibility issues.
+
+## Bug Fixes
+
+### CMake Configuration Errors in onnxruntime Integration
+
+Fixed build failures caused by incorrect onnxruntime target configuration in `CMakeLists.txt`. Three issues were resolved:
+
+- A duplicate `find_package(onnxruntime CONFIG REQUIRED)` call was removed, which was causing the `safeint_interface` target to be defined twice and result in a build conflict.
+- An `add_library(onnxruntime ALIAS onnxruntime::onnxruntime_static)` statement was removed — the `onnxruntime::onnxruntime_static` target does not exist in the package, making this ALIAS definition invalid.
+- The `target_link_libraries` reference was corrected from `onnxruntime::onnxruntime_static` to `onnxruntime::onnxruntime`, matching the actual exported target name from the onnxruntime package.
+
+### onnxruntime Version Constraint
+
+Instead of bumping the vcpkg registry baseline, a `version>=: "1.24.2"` constraint has been added to all four `onnxruntime` dependency entries in `vcpkg.json`. This ensures a known-compatible minimum version is used across all platform-specific feature variants (NNAPI, DirectML, CoreML, and the default Linux build) without unnecessarily updating unrelated dependencies.
+
+## [0.6.0]
+
+### Changed
+- Migrated the native addon implementation to `qvac-lib-inference-addon-cpp` 1.x (`IModel` + `AddonJs`/`AddonCpp`), replacing the removed legacy templated addon API
+- Updated JS/native runtime flow to `createInstance` + `runJob` semantics while preserving package-level behavior
+
+### Fixed
+- Removed nested `exclusiveRun` locking paths that could deadlock `run()`, `reload()`, or `unload()` when `exclusiveRun: true`
+
 ## [0.5.5]
 
 ### Added

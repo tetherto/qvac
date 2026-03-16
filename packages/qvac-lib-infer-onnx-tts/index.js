@@ -3,12 +3,18 @@
 const { platform } = require('bare-os')
 const path = require('bare-path')
 const { TTSInterface } = require('./tts')
+const { QvacErrorAddonTTS, ERR_CODES } = require('./lib/error')
 const InferBase = require('@qvac/infer-base/WeightsProvider/BaseInference')
 const WeightsProvider = require('@qvac/infer-base/WeightsProvider/WeightsProvider')
 
 // Engine types
 const ENGINE_CHATTERBOX = 'chatterbox'
 const ENGINE_SUPERTONIC = 'supertonic'
+const ONLY_ONE_JOB_ID = 'OnlyOneJob'
+
+function createBusyJobError () {
+  return new QvacErrorAddonTTS({ code: ERR_CODES.JOB_ALREADY_RUNNING })
+}
 
 class ONNXTTS extends InferBase {
   constructor ({
@@ -37,10 +43,11 @@ class ONNXTTS extends InferBase {
     this._cache = cache || '.'
     this._config = config
     this._logger = logger
+    this._hasActiveResponse = false
 
     this._lazySessionLoading = lazySessionLoading != null
       ? lazySessionLoading
-      : platform() === 'ios'
+      : (platform() === 'ios' || platform() === 'android')
 
     const hasSupertonicPaths = (textEncoderPath != null && textEncoderPath !== '') ||
       (modelDir != null && modelDir !== '' && voiceName != null && voiceName !== '')
@@ -77,8 +84,8 @@ class ONNXTTS extends InferBase {
   async _load (closeLoader = false, reportProgressCallback) {
     await this._downloadWeights(reportProgressCallback, { closeLoader })
 
-    console.log('[TTS] Engine type:', this._engineType)
-    console.log('[TTS] Language:', this._config?.language || 'en')
+    this.logger.info('[TTS] Engine type:', this._engineType)
+    this.logger.info('[TTS] Language:', this._config?.language || 'en')
 
     let ttsParams
     if (this._engineType === ENGINE_SUPERTONIC) {
@@ -99,7 +106,7 @@ class ONNXTTS extends InferBase {
       }
     }
 
-    this.addon = this._createAddon(ttsParams, this._outputCallback.bind(this), this._logger)
+    this.addon = this._createAddon(ttsParams, this._addonOutputCallback.bind(this))
     await this.addon.activate()
   }
 
@@ -137,12 +144,11 @@ class ONNXTTS extends InferBase {
    * Instantiate the native addon with the given parameters.
    * @param {Object} configurationParams - Configuration parameters for the addon
    * @param {Function} outputCb - Callback for inference events
-   * @param {Object} logger - Logger instance
    * @returns {TTSInterface} The instantiated addon interface
    */
-  _createAddon (configurationParams, outputCb, logger) {
+  _createAddon (configurationParams, outputCb) {
     const binding = require('./binding')
-    return new TTSInterface(binding, configurationParams, outputCb, logger)
+    return new TTSInterface(binding, configurationParams, outputCb)
   }
 
   _resolvePath (filePath) {
@@ -192,20 +198,80 @@ class ONNXTTS extends InferBase {
   }
 
   async unload () {
+    await this.cancel()
+    this._failAndClearActiveResponse('Model was unloaded')
     if (this.addon) {
-      return this.addon.destroyInstance()
+      await this.addon.destroyInstance()
     }
+    this.state.configLoaded = false
+    this.state.weightsLoaded = false
   }
 
   async _runInternal (input) {
-    const jobId = await this.addon.append({
-      type: input.type || 'text',
-      input: input.input
-    })
-    const response = this._createResponse(jobId)
-    this._saveJobToResponseMapping(jobId, response)
-    await this.addon.append({ type: 'end of job' })
+    if (this._hasActiveResponse) {
+      throw createBusyJobError()
+    }
+
+    const response = this._createResponse(ONLY_ONE_JOB_ID)
+    let accepted
+    try {
+      accepted = await this.addon.runJob({
+        type: input.type || 'text',
+        input: input.input
+      })
+    } catch (error) {
+      this._deleteJobMapping(ONLY_ONE_JOB_ID)
+      response.failed(error)
+      throw error
+    }
+
+    if (!accepted) {
+      this._deleteJobMapping(ONLY_ONE_JOB_ID)
+      const busyError = createBusyJobError()
+      response.failed(busyError)
+      throw busyError
+    }
+
+    this._hasActiveResponse = true
+    const finalized = response.await().finally(() => { this._hasActiveResponse = false })
+    finalized.catch(() => {})
+    response.await = () => finalized
     return response
+  }
+
+  _addonOutputCallback (addon, event, data, error) {
+    if (typeof error === 'string' && error.length > 0) {
+      return this._outputCallback(addon, 'Error', ONLY_ONE_JOB_ID, data, error)
+    }
+
+    if (data && typeof data === 'object' && data.outputArray) {
+      return this._outputCallback(addon, 'Output', ONLY_ONE_JOB_ID, data, null)
+    }
+
+    if (
+      data &&
+      typeof data === 'object' &&
+      ('totalTime' in data || 'audioDurationMs' in data || 'totalSamples' in data)
+    ) {
+      return this._outputCallback(addon, 'JobEnded', ONLY_ONE_JOB_ID, data, null)
+    }
+
+    return this._outputCallback(addon, event, ONLY_ONE_JOB_ID, data, error)
+  }
+
+  async cancel () {
+    if (this.addon?.cancel) {
+      await this.addon.cancel()
+    }
+  }
+
+  _failAndClearActiveResponse (reason) {
+    const currentJobResponse = this._jobToResponse.get(ONLY_ONE_JOB_ID)
+    if (currentJobResponse) {
+      currentJobResponse.failed(new Error(reason))
+      this._deleteJobMapping(ONLY_ONE_JOB_ID)
+    }
+    this._hasActiveResponse = false
   }
 
   /**
@@ -245,9 +311,18 @@ class ONNXTTS extends InferBase {
         useGPU: this._config?.useGPU || false,
         lazySessionLoading: this._lazySessionLoading
       }
+      if (this._referenceAudio != null) {
+        ttsParams.referenceAudio = this._referenceAudio
+      }
     }
 
-    await this.addon.reload(ttsParams)
+    await this.cancel()
+    this._failAndClearActiveResponse('Model was reloaded')
+
+    if (this.addon) {
+      await this.addon.destroyInstance()
+    }
+    this.addon = this._createAddon(ttsParams, this._addonOutputCallback.bind(this))
     await this.addon.activate()
   }
 

@@ -1,6 +1,7 @@
 #pragma once
 
 #include <any>
+#include <atomic>
 #include <memory>
 #include <mutex>
 #include <optional>
@@ -84,8 +85,8 @@ public:
   using Config = PipelineConfig;
 
   Pipeline(
-      const ORTCHAR_T* pathDetector, const ORTCHAR_T* pathRecognizer,
-      std::span<const std::string> langList, bool useGPU = true,
+      const std::string& pathDetector, const std::string& pathRecognizer,
+      std::span<const std::string> langList, bool useGPU = false,
       int timeout = DEFAULT_PIPELINE_TIMEOUT_SECONDS,
       const PipelineConfig& config = PipelineConfig{});
 
@@ -104,7 +105,7 @@ public:
   [[nodiscard]] std::string getName() const final { return "Pipeline"; }
 
   void cancel() const final {
-    // Pipeline doesn't support cancellation during processing
+    cancelFlag_.store(true, std::memory_order_relaxed);
   }
 
   void setWeightsForFile(
@@ -137,6 +138,10 @@ private:
   std::unique_ptr<StepDoctrRecognition> stepDoctrRecognition_;
 
   int timeout_;
+
+  // Cooperative cancellation flag. Set by cancel(), checked between pipeline steps
+  // and between recognition batches. Mutable so cancel() can set it in a const context.
+  mutable std::atomic<bool> cancelFlag_{false};
 
   Output processEasyOCR(const cv::Mat& image, Input& input, float initialResizeRatio);
   Output processDocTR(const cv::Mat& image, Input& input, float initialResizeRatio);

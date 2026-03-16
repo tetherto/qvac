@@ -155,6 +155,18 @@ export class TtsReferenceAudioRequiredError extends QvacErrorBase {
   }
 }
 
+export class ParakeetArtifactsRequiredError extends QvacErrorBase {
+  constructor(details?: string, cause?: unknown) {
+    super(
+      createErrorOptions(
+        SDK_SERVER_ERROR_CODES.PARAKEET_ARTIFACTS_REQUIRED,
+        details ? [details] : undefined,
+        cause,
+      ),
+    );
+  }
+}
+
 // ============== Model Unloading Errors ==============
 
 export class ModelUnloadFailedError extends QvacErrorBase {
@@ -874,6 +886,30 @@ export class PluginAlreadyRegisteredError extends QvacErrorBase {
       createErrorOptions(
         SDK_SERVER_ERROR_CODES.PLUGIN_ALREADY_REGISTERED,
         [modelType],
+        cause,
+      ),
+    );
+  }
+}
+
+export class PluginModelTypeReservedError extends QvacErrorBase {
+  constructor(modelType: string, cause?: unknown) {
+    super(
+      createErrorOptions(
+        SDK_SERVER_ERROR_CODES.PLUGIN_MODEL_TYPE_RESERVED,
+        [modelType],
+        cause,
+      ),
+    );
+  }
+}
+
+export class PluginLoadConfigValidationFailedError extends QvacErrorBase {
+  constructor(modelType: string, details: string, cause?: unknown) {
+    super(
+      createErrorOptions(
+        SDK_SERVER_ERROR_CODES.PLUGIN_LOAD_CONFIG_VALIDATION_FAILED,
+        [modelType, details],
         cause,
       ),
     );

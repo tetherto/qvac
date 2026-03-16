@@ -1,4 +1,5 @@
 import { z } from "zod";
+import { modelSrcInputSchema } from "./model-src-utils";
 
 export const VERBOSITY = {
   ERROR: 0,
@@ -40,6 +41,7 @@ export const llmConfigBaseSchema = z.object({
   stop_sequences: z.array(z.string()).optional(),
   n_discarded: z.number().optional(),
   tools: z.boolean().optional(),
+  projectionModelSrc: modelSrcInputSchema.optional(),
 });
 
 export type LlmConfigInput = z.infer<typeof llmConfigBaseSchema>;
@@ -69,7 +71,9 @@ export const embedConfigBaseSchema = z.object({
   attention: z.enum(["causal", "non-causal"]).optional(),
   embdNormalize: z.number().int().optional(),
   flashAttention: z.enum(["on", "off", "auto"]).optional(),
-  mainGpu: z.union([z.number().int().min(0), z.enum(["integrated", "dedicated"])]).optional(),
+  mainGpu: z
+    .union([z.number().int().min(0), z.enum(["integrated", "dedicated"])])
+    .optional(),
   verbosity: verbositySchema.optional(),
 });
 

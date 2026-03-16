@@ -31,6 +31,22 @@ const CTC_MODEL_FILES = [
 ]
 
 /**
+ * Required model files for EOU model
+ */
+const EOU_MODEL_FILES = [
+  'encoder.onnx',
+  'decoder_joint.onnx',
+  'tokenizer.json'
+]
+
+/**
+ * Required model files for Sortformer model
+ */
+const SORTFORMER_MODEL_FILES = [
+  'sortformer.onnx'
+]
+
+/**
  * Get required model files based on model type
  * @param {string} modelType - 'tdt', 'ctc', 'eou', or 'sortformer'
  * @returns {string[]} - array of required file names
@@ -39,9 +55,11 @@ function getRequiredModelFiles (modelType) {
   switch (modelType) {
     case 'ctc':
       return CTC_MODEL_FILES
-    case 'tdt':
     case 'eou':
+      return EOU_MODEL_FILES
     case 'sortformer':
+      return SORTFORMER_MODEL_FILES
+    case 'tdt':
     default:
       return TDT_MODEL_FILES
   }
@@ -68,6 +86,12 @@ class TranscriptionParakeet extends BaseInference {
    * @param {string} [config.decoderPath] - Absolute path to decoder-joint ONNX file
    * @param {string} [config.vocabPath] - Absolute path to vocabulary file
    * @param {string} [config.preprocessorPath] - Absolute path to preprocessor ONNX file
+   * @param {string} [config.ctcModelPath] - Absolute path to CTC model.onnx file
+   * @param {string} [config.ctcModelDataPath] - Absolute path to CTC model.onnx_data file
+   * @param {string} [config.tokenizerPath] - Absolute path to tokenizer.json file (CTC/EOU)
+   * @param {string} [config.eouEncoderPath] - Absolute path to EOU encoder.onnx file
+   * @param {string} [config.eouDecoderPath] - Absolute path to EOU decoder_joint.onnx file
+   * @param {string} [config.sortformerPath] - Absolute path to sortformer.onnx file
    * @param {Object} config.parakeetConfig - Parakeet-specific configuration
    * @param {string} [config.parakeetConfig.modelType='tdt'] - Model type: 'tdt', 'ctc', 'eou', or 'sortformer'
    * @param {number} [config.parakeetConfig.maxThreads=4] - Max CPU threads for inference
@@ -164,11 +188,22 @@ class TranscriptionParakeet extends BaseInference {
    */
   _resolveFilePath (modelPath, filename) {
     const namedPaths = {
+      // TDT
       'encoder-model.onnx': this._config.encoderPath,
       'encoder-model.onnx.data': this._config.encoderDataPath,
       'decoder_joint-model.onnx': this._config.decoderPath,
       'vocab.txt': this._config.vocabPath,
-      'preprocessor.onnx': this._config.preprocessorPath
+      'preprocessor.onnx': this._config.preprocessorPath,
+      // CTC
+      'model.onnx': this._config.ctcModelPath,
+      'model.onnx_data': this._config.ctcModelDataPath,
+      // CTC / EOU shared
+      'tokenizer.json': this._config.tokenizerPath,
+      // EOU
+      'encoder.onnx': this._config.eouEncoderPath,
+      'decoder_joint.onnx': this._config.eouDecoderPath,
+      // Sortformer
+      'sortformer.onnx': this._config.sortformerPath
     }
     if (namedPaths[filename]) {
       return namedPaths[filename]
@@ -177,13 +212,19 @@ class TranscriptionParakeet extends BaseInference {
   }
 
   /**
-   * Whether individual file paths have been provided via named config params.
+   * Whether individual file paths have been provided for any model type.
+   * When true, C++ loads directly from these paths (skip JS weight loading).
    * @returns {boolean}
    * @private
    */
   _hasNamedPaths () {
-    return !!(this._config.encoderPath || this._config.encoderDataPath ||
-      this._config.decoderPath || this._config.vocabPath || this._config.preprocessorPath)
+    return !!(
+      this._config.encoderPath || this._config.encoderDataPath ||
+      this._config.decoderPath || this._config.vocabPath || this._config.preprocessorPath ||
+      this._config.ctcModelPath || this._config.ctcModelDataPath || this._config.tokenizerPath ||
+      this._config.eouEncoderPath || this._config.eouDecoderPath ||
+      this._config.sortformerPath
+    )
   }
 
   /**
@@ -211,21 +252,27 @@ class TranscriptionParakeet extends BaseInference {
       seed: this.params.seed ?? -1
     }
 
-    // Pass individual file paths to native addon when available
+    // Pass individual file paths to C++ which loads directly from disk
     if (this._hasNamedPaths()) {
+      // TDT
       if (this._config.encoderPath) configurationParams.encoderPath = this._config.encoderPath
       if (this._config.encoderDataPath) configurationParams.encoderDataPath = this._config.encoderDataPath
       if (this._config.decoderPath) configurationParams.decoderPath = this._config.decoderPath
       if (this._config.vocabPath) configurationParams.vocabPath = this._config.vocabPath
       if (this._config.preprocessorPath) configurationParams.preprocessorPath = this._config.preprocessorPath
+      // CTC
+      if (this._config.ctcModelPath) configurationParams.ctcModelPath = this._config.ctcModelPath
+      if (this._config.ctcModelDataPath) configurationParams.ctcModelDataPath = this._config.ctcModelDataPath
+      if (this._config.tokenizerPath) configurationParams.tokenizerPath = this._config.tokenizerPath
+      // EOU
+      if (this._config.eouEncoderPath) configurationParams.eouEncoderPath = this._config.eouEncoderPath
+      if (this._config.eouDecoderPath) configurationParams.eouDecoderPath = this._config.eouDecoderPath
+      // Sortformer
+      if (this._config.sortformerPath) configurationParams.sortformerPath = this._config.sortformerPath
     }
 
     this.logger.info('Creating Parakeet addon with configuration:', configurationParams)
     this.addon = this._createAddon(configurationParams)
-
-    if (!this._hasNamedPaths()) {
-      await this._loadModelWeights(modelPath, modelType)
-    }
 
     // Activate the model
     await this.addon.activate()
