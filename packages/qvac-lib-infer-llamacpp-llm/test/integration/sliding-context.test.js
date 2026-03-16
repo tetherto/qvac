@@ -345,3 +345,10 @@ test('Cached follow-up overflows when sliding is disabled and context is full', 
   // sleep for 10 seconds to allow the model to cleanup
   await new Promise(resolve => setTimeout(resolve, 10000))
 })
+
+// Keep event loop alive briefly to let pending async operations complete.
+// Prevents C++ destructors from running while async cleanup is still happening,
+// which can cause segfaults (exit code 139).
+setImmediate(() => {
+  setTimeout(() => {}, 500)
+})
