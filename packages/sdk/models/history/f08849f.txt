@@ -1,0 +1,8 @@
+commit=f08849f3a51d8beb6e4a05974acbb600c03acb8b
+timestamp=2026-03-10T12:07:20.109Z
+previous_count=297
+new_count=298
+
+[added]
+AFRICAN_4B_TRANSLATION_Q4_K_M
+

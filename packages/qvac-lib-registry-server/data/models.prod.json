@@ -5340,9 +5340,10 @@
     "notes": "Full INT8 quantization of https://huggingface.co/istupakov/parakeet-tdt-0.6b-v3-onnx"
   },
   {
-    "source": "https://huggingface.co/istupakov/parakeet-ctc-0.6b-onnx/resolve/658f956396c5a6e41f23ed50838bdb7d1d1b6056/model.onnx",
+    "source": "https://huggingface.co/onnx-community/parakeet-ctc-0.6b-ONNX/resolve/7df2cab7aed886b8b7f80d68a8214007e4847601/onnx/model.onnx",
     "engine": "@qvac/transcription-parakeet",
-    "description": "Parakeet CTC 0.6B (graph)",
+    "link": "https://huggingface.co/onnx-community/parakeet-ctc-0.6b-ONNX",
+    "description": "Parakeet CTC 0.6B onnx-community (graph)",
     "quantization": "fp32",
     "params": "0.6B",
     "license": "CC-BY-4.0",
@@ -5352,12 +5353,14 @@
       "ctc",
       "en"
     ],
-    "notes": ""
+    "deprecated": false,
+    "notes": "onnx-community export, uses model.onnx_data naming"
   },
   {
-    "source": "https://huggingface.co/istupakov/parakeet-ctc-0.6b-onnx/resolve/658f956396c5a6e41f23ed50838bdb7d1d1b6056/model.onnx.data",
+    "source": "https://huggingface.co/onnx-community/parakeet-ctc-0.6b-ONNX/resolve/7df2cab7aed886b8b7f80d68a8214007e4847601/onnx/model.onnx_data",
     "engine": "@qvac/transcription-parakeet",
-    "description": "Parakeet CTC 0.6B (weights)",
+    "link": "https://huggingface.co/onnx-community/parakeet-ctc-0.6b-ONNX",
+    "description": "Parakeet CTC 0.6B onnx-community (weights)",
     "quantization": "fp32",
     "params": "0.6B",
     "license": "CC-BY-4.0",
@@ -5367,54 +5370,25 @@
       "ctc",
       "en"
     ],
-    "notes": ""
+    "deprecated": false,
+    "notes": "onnx-community export, external data for model.onnx"
   },
   {
-    "source": "https://huggingface.co/istupakov/parakeet-ctc-0.6b-onnx/resolve/658f956396c5a6e41f23ed50838bdb7d1d1b6056/model.int8.onnx",
+    "source": "https://huggingface.co/onnx-community/parakeet-ctc-0.6b-ONNX/resolve/7df2cab7aed886b8b7f80d68a8214007e4847601/tokenizer.json",
     "engine": "@qvac/transcription-parakeet",
-    "description": "Parakeet CTC 0.6B (graph+weights INT8)",
-    "quantization": "int8",
+    "link": "https://huggingface.co/onnx-community/parakeet-ctc-0.6b-ONNX",
+    "description": "Parakeet CTC 0.6B tokenizer",
+    "quantization": "",
     "params": "0.6B",
     "license": "CC-BY-4.0",
     "tags": [
       "transcription",
       "parakeet",
       "ctc",
-      "en",
-      "int8"
-    ],
-    "notes": ""
-  },
-  {
-    "source": "https://huggingface.co/istupakov/parakeet-ctc-0.6b-onnx/resolve/658f956396c5a6e41f23ed50838bdb7d1d1b6056/vocab.txt",
-    "engine": "@qvac/transcription-parakeet",
-    "link": "https://huggingface.co/istupakov/parakeet-ctc-0.6b-onnx",
-    "description": "Parakeet CTC 0.6B vocabulary",
-    "quantization": "",
-    "params": "0.6B",
-    "license": "CC-BY-4.0",
-    "tags": [
-      "transcription",
-      "parakeet",
-      "vocab",
+      "tokenizer",
       "en"
     ],
-    "notes": ""
-  },
-  {
-    "source": "https://huggingface.co/istupakov/parakeet-ctc-0.6b-onnx/resolve/658f956396c5a6e41f23ed50838bdb7d1d1b6056/config.json",
-    "engine": "@qvac/transcription-parakeet",
-    "link": "https://huggingface.co/istupakov/parakeet-ctc-0.6b-onnx",
-    "description": "Parakeet CTC 0.6B config",
-    "quantization": "",
-    "params": "0.6B",
-    "license": "CC-BY-4.0",
-    "tags": [
-      "transcription",
-      "parakeet",
-      "config",
-      "en"
-    ],
+    "deprecated": false,
     "notes": ""
   },
   {
@@ -5432,6 +5406,7 @@
       "decoder",
       "en"
     ],
+    "deprecated": false,
     "notes": ""
   },
   {
@@ -5449,6 +5424,7 @@
       "encoder",
       "en"
     ],
+    "deprecated": false,
     "notes": ""
   },
   {
@@ -5466,6 +5442,7 @@
       "tokenizer",
       "en"
     ],
+    "deprecated": false,
     "notes": ""
   },
   {
@@ -5483,6 +5460,7 @@
       "4spk",
       "en"
     ],
+    "deprecated": false,
     "notes": ""
   },
   {
@@ -5533,7 +5511,7 @@
     "notes": "McGill-NLP/AfriqueGemma-4B. 20 African languages: af, am, ar, ha, ig, mg, ny, om, rw, sn, so, st, sw, ti, tn, xh, yo, zu + en, fr, pt. GGUF by mradermacher."
   },
   {
-    "source": "s3:///qvac_models_compiled/ggml/bitnet/2026-03-06/bitnet_b1_58-3B-TQ2_0.gguf",
+    "source": "s3:///qvac_models_compiled/ggml/bitnet/2026-03-05/bitnet_b1_58-3B-TQ2_0.gguf",
     "engine": "@qvac/llm-llamacpp",
     "link": "https://huggingface.co/1bitLLM/bitnet_b1_58-3B",
     "description": "Bitnet 3B model",
@@ -5548,7 +5526,7 @@
     ]
   },
   {
-    "source": "s3:///qvac_models_compiled/ggml/bitnet/2026-03-06/bitnet_b1_58-large-TQ2_0.gguf",
+    "source": "s3:///qvac_models_compiled/ggml/bitnet/2026-03-05/bitnet_b1_58-large-TQ2_0.gguf",
     "engine": "@qvac/llm-llamacpp",
     "link": "https://huggingface.co/1bitLLM/bitnet_b1_58-large",
     "description": "Bitnet 0.7B model",
@@ -5563,7 +5541,7 @@
     ]
   },
   {
-    "source": "s3:///qvac_models_compiled/ggml/bitnet/2026-03-06/bitnet_b1_58-xl-TQ2_0.gguf",
+    "source": "s3:///qvac_models_compiled/ggml/bitnet/2026-03-05/bitnet_b1_58-xl-TQ2_0.gguf",
     "engine": "@qvac/llm-llamacpp",
     "link": "https://huggingface.co/1bitLLM/bitnet_b1_58-xl",
     "description": "Bitnet 1B model",

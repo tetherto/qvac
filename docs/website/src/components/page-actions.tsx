@@ -1,11 +1,18 @@
 'use client';
 import { useEffect, useMemo, useRef, useState } from 'react';
-import { Check, ChevronDown, Copy, ExternalLinkIcon, MessageSquare, Sparkles } from 'lucide-react';
+import { usePathname } from 'next/navigation';
+import { Check, ChevronDown, Copy, ExternalLinkIcon, MessageSquare, Sparkles, Tag } from 'lucide-react';
 import { cn } from '../lib/cn';
 import { useCopyButton } from 'fumadocs-ui/utils/use-copy-button';
 import { buttonVariants } from './ui/button';
 import { Popover, PopoverClose, PopoverContent, PopoverTrigger } from './ui/popover';
 import { cva } from 'class-variance-authority';
+import {
+  VERSIONS,
+  LATEST_VERSION,
+  getVersionFromPath,
+  computeVersionedUrl,
+} from '@/lib/versions';
 
 const cache = new Map<string, string>();
 
@@ -228,6 +235,65 @@ export function ViewOptions({
             {item.title}
             <ExternalLinkIcon className="text-fd-muted-foreground size-3.5 ms-auto" />
           </a>
+        ))}
+      </PopoverContent>
+    </Popover>
+  );
+}
+
+export function VersionSelector() {
+  const pathname = usePathname();
+
+  const currentVersion = getVersionFromPath(pathname) ?? LATEST_VERSION;
+  const currentLabel = VERSIONS.find((v) => v.value === currentVersion)?.label ?? currentVersion;
+
+  async function handleVersionChange(targetVersion: string) {
+    if (targetVersion === currentVersion) return;
+    const targetUrl = computeVersionedUrl(pathname, targetVersion);
+    const targetIsLatest = VERSIONS.find((v) => v.value === targetVersion)?.isLatest;
+    const homeUrl = targetIsLatest ? '/' : `/${targetVersion}/`;
+
+    try {
+      const res = await fetch(targetUrl, { method: 'HEAD' });
+      window.location.href = res.ok ? targetUrl : homeUrl;
+    } catch {
+      window.location.href = homeUrl;
+    }
+  }
+
+  return (
+    <Popover>
+      <PopoverTrigger
+        aria-label="Select version"
+        className={cn(
+          buttonVariants({
+            color: 'secondary',
+            size: 'sm',
+            className: 'gap-1.5 font-mono',
+          }),
+        )}
+      >
+        <Tag className="size-3.5 text-fd-muted-foreground" />
+        {currentLabel}
+        <ChevronDown className="size-3.5 text-fd-muted-foreground" />
+      </PopoverTrigger>
+      <PopoverContent className="flex flex-col">
+        {VERSIONS.map((version) => (
+          <PopoverClose asChild key={version.value}>
+            <button
+              type="button"
+              className={cn(optionVariants())}
+              onClick={() => handleVersionChange(version.value)}
+            >
+              <Check
+                className={cn(
+                  'text-fd-muted-foreground',
+                  currentVersion === version.value ? 'opacity-100' : 'opacity-0',
+                )}
+              />
+              {version.label}
+            </button>
+          </PopoverClose>
         ))}
       </PopoverContent>
     </Popover>

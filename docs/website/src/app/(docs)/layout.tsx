@@ -1,11 +1,11 @@
-import { DocsLayout } from 'fumadocs-ui/layouts/docs';
 import { baseOptions } from '@/lib/layout.shared';
 import { source } from '@/lib/source';
-import { customTree } from '@/lib/custom-tree';
 import type { LinkItemType } from 'fumadocs-ui/layouts/shared';
 import { FaGithub, FaDiscord } from 'react-icons/fa6';
 import { SiHuggingface } from '@icons-pack/react-simple-icons';
 import { FeaturebaseIcon } from '@/components/featurebase-icon';
+import { VersionedLayout } from '@/components/versioned-layout';
+import { getAllTrees } from '@/lib/trees';
 
 export default function Layout({ children }: LayoutProps<'/'>) {
 
@@ -55,18 +55,15 @@ export default function Layout({ children }: LayoutProps<'/'>) {
     },
   ];
 
+  const versionedTrees = getAllTrees();
+
   return (
-    <DocsLayout 
-      {...baseOptions()}  
-      tree={{ 
-          name: 'docs',
-          children: customTree
-        }} 
-      //{...base}
-      //nav={{ ...nav, mode: 'top' }}
+    <VersionedLayout
+      {...baseOptions()}
       links={linkItems}
-      >
+      versionedTrees={versionedTrees}
+    >
       {children}
-    </DocsLayout>
+    </VersionedLayout>
   );
 }
