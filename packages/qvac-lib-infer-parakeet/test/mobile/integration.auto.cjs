@@ -333,9 +333,9 @@ async function _disabled_runEOUStreamingTest (dirPath, getAssetPath) { // eslint
   })
 }
 
-const SF_HF_BASE = 'https://huggingface.co/cgus/diar_streaming_sortformer_4spk-v2-onnx/resolve/main'
+const SF_HF_BASE = 'https://huggingface.co/cgus/diar_streaming_sortformer_4spk-v2-onnx/resolve/main' // eslint-disable-line no-unused-vars
 
-async function runSortformerDiarizationTest (dirPath, getAssetPath) { // eslint-disable-line no-unused-vars
+async function _disabled_runSortformerDiarizationTest (dirPath, getAssetPath) { // eslint-disable-line no-unused-vars
   return runModelTest({
     tag: 'test-sf',
     dirPath,
