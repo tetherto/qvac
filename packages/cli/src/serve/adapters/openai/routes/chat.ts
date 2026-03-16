@@ -2,11 +2,13 @@ import type { IncomingMessage, ServerResponse } from 'node:http'
 import { readBody, sendJson, sendError, initSSE, sendSSE, endSSE } from '../../../http.js'
 import { resolveModelAlias } from '../../../config.js'
 import { sdkCompletion } from '../../../core/sdk.js'
-import type { SDKTool } from '../../../core/sdk.js'
+import type { SDKTool, SDKGenerationParams } from '../../../core/sdk.js'
 import {
   openaiMessagesToHistory,
   openaiToolsToSdk,
   sdkToolCallsToOpenai,
+  sdkToolCallsToOpenaiDeltas,
+  extractGenerationParams,
   logUnsupportedParams
 } from '../translate.js'
 import type { RouteContext } from '../../types.js'
@@ -54,19 +56,25 @@ export async function handleChatCompletions (req: IncomingMessage, res: ServerRe
   logUnsupportedParams(body, ctx.logger)
 
   const sdkModelId = registryEntry.sdkModelId ?? registryEntry.id
-  const history = openaiMessagesToHistory(body['messages'] as Array<{ role: string; content: string }>)
+  const history = openaiMessagesToHistory(body['messages'] as Array<{
+    role: string
+    content: string | null | undefined
+    tool_calls?: Array<{ id: string; type: string; function: { name: string; arguments: string } }>
+    tool_call_id?: string
+  }>)
   const tools = openaiToolsToSdk(body['tools'] as Array<{ type: string; function?: { name: string; description?: string; parameters?: Record<string, unknown> } }> | undefined)
+  const generationParams = extractGenerationParams(body)
   const modelAlias = alias
   const streaming = Boolean(body['stream'])
   const msgCount = (body['messages'] as unknown[]).length
 
-  ctx.logger.info(`  chat model=${modelAlias} messages=${msgCount} stream=${streaming}${tools ? ` tools=${tools.length}` : ''}`)
+  ctx.logger.info(`  chat model=${modelAlias} messages=${msgCount} stream=${streaming}${tools ? ` tools=${tools.length}` : ''}${generationParams ? ` genParams=${JSON.stringify(generationParams)}` : ''}`)
 
   try {
     if (streaming) {
-      await handleStreamingCompletion(res, { sdkModelId, history, tools, modelAlias, logger: ctx.logger })
+      await handleStreamingCompletion(res, { sdkModelId, history, tools, generationParams, modelAlias, logger: ctx.logger })
     } else {
-      await handleBlockingCompletion(res, { sdkModelId, history, tools, modelAlias, logger: ctx.logger })
+      await handleBlockingCompletion(res, { sdkModelId, history, tools, generationParams, modelAlias, logger: ctx.logger })
     }
   } catch (err) {
     const message = err instanceof Error ? err.message : String(err)
@@ -79,6 +87,7 @@ interface CompletionParams {
   sdkModelId: string
   history: Array<{ role: string; content: string }>
   tools?: SDKTool[] | undefined
+  generationParams?: SDKGenerationParams | undefined
   modelAlias: string
   logger: import('../../../../logger.js').Logger
 }
@@ -88,7 +97,8 @@ async function handleBlockingCompletion (res: ServerResponse, params: Completion
     modelId: params.sdkModelId,
     history: params.history,
     stream: false,
-    tools: params.tools
+    tools: params.tools,
+    generationParams: params.generationParams
   })
 
   const text = await result.text
@@ -97,7 +107,10 @@ async function handleBlockingCompletion (res: ServerResponse, params: Completion
   const hasToolCalls = toolCalls !== null && toolCalls !== undefined && toolCalls.length > 0
   const finishReason = hasToolCalls ? 'tool_calls' : 'stop'
 
-  const message: Record<string, unknown> = { role: 'assistant', content: text || null }
+  const message: Record<string, unknown> = {
+    role: 'assistant',
+    content: hasToolCalls ? null : (text || null)
+  }
   if (hasToolCalls) {
     message['tool_calls'] = sdkToolCallsToOpenai(toolCalls)
   }
@@ -129,7 +142,8 @@ async function handleStreamingCompletion (res: ServerResponse, params: Completio
     modelId: params.sdkModelId,
     history: params.history,
     stream: true,
-    tools: params.tools
+    tools: params.tools,
+    generationParams: params.generationParams
   })
 
   initSSE(res)
@@ -137,68 +151,37 @@ async function handleStreamingCompletion (res: ServerResponse, params: Completio
   const id = `chatcmpl-${randomId()}`
   const created = Math.floor(Date.now() / 1000)
 
-  sendSSE(res, {
+  const chunk = (delta: Record<string, unknown>, finishReason: string | null, extra?: Record<string, unknown>) => ({
     id,
     object: 'chat.completion.chunk',
     created,
     model: params.modelAlias,
-    choices: [{
-      index: 0,
-      delta: { role: 'assistant', content: '' },
-      finish_reason: null
-    }]
+    choices: [{ index: 0, delta, finish_reason: finishReason }],
+    ...extra
   })
+
+  sendSSE(res, chunk({ role: 'assistant', content: '' }, null))
 
   let tokenCount = 0
 
   for await (const token of result.tokenStream) {
     tokenCount++
-    sendSSE(res, {
-      id,
-      object: 'chat.completion.chunk',
-      created,
-      model: params.modelAlias,
-      choices: [{
-        index: 0,
-        delta: { content: token },
-        finish_reason: null
-      }]
-    })
+    sendSSE(res, chunk({ content: token }, null))
   }
 
   params.logger.info(`  streaming done tokens=${tokenCount}`)
 
   const toolCalls = await result.toolCalls
-  if (toolCalls && toolCalls.length > 0) {
-    const openaiToolCalls = sdkToolCallsToOpenai(toolCalls)
-    sendSSE(res, {
-      id,
-      object: 'chat.completion.chunk',
-      created,
-      model: params.modelAlias,
-      choices: [{
-        index: 0,
-        delta: { tool_calls: openaiToolCalls },
-        finish_reason: 'tool_calls'
-      }]
-    })
+  const hasToolCalls = toolCalls !== null && toolCalls !== undefined && toolCalls.length > 0
+
+  if (hasToolCalls) {
+    const openaiToolCalls = sdkToolCallsToOpenaiDeltas(toolCalls)
+    sendSSE(res, chunk({ tool_calls: openaiToolCalls }, null))
+    sendSSE(res, chunk({}, 'tool_calls'))
   } else {
-    sendSSE(res, {
-      id,
-      object: 'chat.completion.chunk',
-      created,
-      model: params.modelAlias,
-      choices: [{
-        index: 0,
-        delta: {},
-        finish_reason: 'stop'
-      }],
-      usage: {
-        prompt_tokens: 0,
-        completion_tokens: tokenCount,
-        total_tokens: tokenCount
-      }
-    })
+    sendSSE(res, chunk({}, 'stop', {
+      usage: { prompt_tokens: 0, completion_tokens: tokenCount, total_tokens: tokenCount }
+    }))
   }
 
   endSSE(res)
