@@ -30,7 +30,20 @@ class ONNXOcr extends ONNXBase {
   }
 
   _getDiagnosticsJSON () {
+    const onnxRuntimeVersion = (this.addon && typeof this.addon.getOnnxRuntimeVersion === 'function')
+      ? this.addon.getOnnxRuntimeVersion()
+      : 'unknown'
+    const modelLoaded = !this.state.destroyed && this.state.configLoaded
+    const supportedFormats = ['jpeg', 'png', 'bmp']
+    const backendInfo = (this.params && this.params.useGPU !== undefined)
+      ? (this.params.useGPU ? 'gpu' : 'cpu')
+      : 'gpu'
     return JSON.stringify({
+      onnxRuntimeVersion,
+      modelLoaded,
+      supportedFormats,
+      backendInfo,
+      modelPath: this.params ? (this.params.pathDetector || null) : null,
       status: this.state.destroyed ? 'destroyed' : (this.state.configLoaded ? 'loaded' : 'not_loaded'),
       params: this.params
     })
