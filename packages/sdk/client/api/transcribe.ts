@@ -1,9 +1,13 @@
 import {
   transcribeStreamResponseSchema,
+  transcribeLiveResponseSchema,
   type TranscribeStreamRequest,
   type TranscribeClientParams,
+  type TranscribeLiveRequest,
+  type TranscribeLiveClientParams,
+  type TranscribeLiveSession,
 } from "@/schemas";
-import { stream } from "@/client/rpc/rpc-client";
+import { stream, duplex } from "@/client/rpc/rpc-client";
 
 /**
  * This function streams audio transcription results in real-time, yielding
@@ -61,4 +65,59 @@ export async function transcribe(
     fullText += textChunk;
   }
   return fullText;
+}
+
+/**
+ * Opens a live bidirectional transcription session. Audio is streamed in
+ * via `write()`, and transcription text is yielded as the model's VAD
+ * detects complete speech segments.
+ *
+ * @param params.modelId - The loaded whisper model to use
+ * @param params.prompt - Optional initial prompt to guide transcription
+ * @returns A session object: call `write(buffer)` to feed audio,
+ *          iterate with `for await (const text of session)` to receive
+ *          transcription, and `end()` to signal end of audio.
+ */
+export async function transcribeLive(
+  params: TranscribeLiveClientParams,
+): Promise<TranscribeLiveSession> {
+  const request: TranscribeLiveRequest = {
+    type: "transcribeLive",
+    modelId: params.modelId,
+    ...(params.prompt && { prompt: params.prompt }),
+  };
+
+  const { requestStream, responseStream } = await duplex(request);
+
+  async function* parseResponses(): AsyncGenerator<string> {
+    let buffer = "";
+    for await (const chunk of responseStream as AsyncIterable<Buffer>) {
+      buffer += chunk.toString();
+      const lines = buffer.split("\n");
+      buffer = lines.pop() || "";
+
+      for (const line of lines) {
+        if (!line.trim()) continue;
+        const response = transcribeLiveResponseSchema.parse(JSON.parse(line));
+        if (response.done) return;
+        if (response.text?.trim()) {
+          yield response.text;
+        }
+      }
+    }
+  }
+
+  const responses = parseResponses();
+
+  return {
+    write(audioChunk: Buffer) {
+      (requestStream as { write(chunk: Buffer): void }).write(audioChunk);
+    },
+    end() {
+      (requestStream as { end(): void }).end();
+    },
+    [Symbol.asyncIterator]() {
+      return responses;
+    },
+  };
 }

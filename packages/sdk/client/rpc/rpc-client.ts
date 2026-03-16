@@ -9,7 +9,7 @@ import {
 import { RPCError } from "./rpc-error";
 import { withTimeout, withTimeoutStream } from "@/utils/withTimeout";
 import { getClientLogger, summarizeRequest } from "@/logging";
-import { getRPC, close as closeRPC } from "#rpc";
+import { getRPC, close as closeRPC, createDuplexSession } from "#rpc";
 
 const logger = getClientLogger();
 
@@ -99,6 +99,13 @@ export async function* stream<T extends Request>(
       }
     }
   }
+}
+
+export async function duplex<T extends Request>(request: T) {
+  const parsedRequest = requestSchema.parse(request);
+  logger.debug("RPC Client duplex:", summarizeRequest(request));
+  const payload = JSON.stringify(parsedRequest);
+  return createDuplexSession(payload);
 }
 
 export async function close() {

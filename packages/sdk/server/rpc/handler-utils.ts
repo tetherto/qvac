@@ -22,11 +22,13 @@ type ProgressHandler = (
   request: any,
   onProgress?: (update: Response) => void,
 ) => Promise<Response>;
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+type DuplexStreamHandler = (request: any, inputStream: any) => AsyncGenerator<Response>;
 
 export type HandlerEntry = {
-  type: "reply" | "stream";
-  handler: ReplyHandler | StreamHandler | ProgressHandler;
-  delegatedHandler?: ReplyHandler | StreamHandler | ProgressHandler;
+  type: "reply" | "stream" | "duplex";
+  handler: ReplyHandler | StreamHandler | ProgressHandler | DuplexStreamHandler;
+  delegatedHandler?: ReplyHandler | StreamHandler | ProgressHandler | DuplexStreamHandler;
   isDelegated?: (request: Request) => boolean;
   supportsProgress?: boolean | ((request: Request) => boolean);
 };
@@ -84,6 +86,34 @@ async function executeProgressHandler(
     stream.end();
   } catch (error) {
     sendStreamErrorResponse(stream, error);
+  }
+}
+
+export async function executeDuplexHandler(
+  _req: RPC.IncomingRequest,
+  request: Request,
+  entry: HandlerEntry,
+  inputStream: ReturnType<RPC.IncomingRequest["createRequestStream"]>,
+  outputStream: ReturnType<RPC.IncomingRequest["createResponseStream"]>,
+) {
+  const handler =
+    entry.delegatedHandler && entry.isDelegated?.(request)
+      ? entry.delegatedHandler
+      : entry.handler;
+
+  try {
+    for await (const response of (handler as DuplexStreamHandler)(
+      request,
+      inputStream,
+    )) {
+      outputStream.write(
+        JSON.stringify(responseSchema.parse(response)) + "\n",
+        "utf-8",
+      );
+    }
+    outputStream.end();
+  } catch (error) {
+    sendStreamErrorResponse(outputStream, error);
   }
 }
 
