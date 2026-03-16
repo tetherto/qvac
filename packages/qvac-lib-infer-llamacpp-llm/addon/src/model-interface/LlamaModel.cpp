@@ -1089,14 +1089,13 @@ std::string LlamaModel::finetune(
   // (e.g. flash-attn off, ubatch sizing) and gives a clean llama_context.
   // TODO: investigate recreating the context without a full weights reload
   // to reduce latency when the backend itself does not change.
-  reload(
-      FinetuneConfigOverrides{
-          .active = true,
-          .batchSize = params.batchSize,
-          .microBatchSize = params.microBatchSize,
-          .contextLength = params.contextLength,
-          .gpuSupportsF16OutProd = gpuSupportsOutProdF16(),
-          .flashAttn = params.flashAttn});
+  reload(FinetuneConfigOverrides{
+      .active = true,
+      .batchSize = params.batchSize,
+      .microBatchSize = params.microBatchSize,
+      .contextLength = params.contextLength,
+      .gpuSupportsF16OutProd = gpuSupportsOutProdF16(),
+      .flashAttn = params.flashAttn});
 
   llama_context* ctx = getContext();
   llama_model* mdl = getModel();
