@@ -2,8 +2,8 @@ import {
   loadModel,
   unloadModel,
   transcribe,
-  PARAKEET_CTC_FP32_1,
-  PARAKEET_CTC_DATA_FP32_1,
+  PARAKEET_CTC_FP32,
+  PARAKEET_CTC_DATA_FP32,
   PARAKEET_CTC_TOKENIZER,
 } from "@qvac/sdk";
 
@@ -19,8 +19,8 @@ if (!args[0]) {
 }
 
 const audioFilePath = args[0];
-const parakeetCtcModelSrc = args[1] ?? PARAKEET_CTC_FP32_1;
-const parakeetCtcModelDataSrc = args[2] ?? PARAKEET_CTC_DATA_FP32_1;
+const parakeetCtcModelSrc = args[1] ?? PARAKEET_CTC_FP32;
+const parakeetCtcModelDataSrc = args[2] ?? PARAKEET_CTC_DATA_FP32;
 const parakeetTokenizerSrc = args[3] ?? PARAKEET_CTC_TOKENIZER;
 
 try {
