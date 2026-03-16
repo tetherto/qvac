@@ -16,8 +16,9 @@ protected:
 };
 
 TEST_F(LlamaLazyInitializeBackendTest, InitializeWithEmptyDir) {
-  bool result1 = LlamaLazyInitializeBackend::initialize("");
-  EXPECT_TRUE(result1);
+  // Backend may already be initialized by a prior test (process-global state,
+  // intentionally never freed). Just verify idempotency.
+  LlamaLazyInitializeBackend::initialize("");
 
   bool result2 = LlamaLazyInitializeBackend::initialize("");
   EXPECT_FALSE(result2);
@@ -92,17 +93,13 @@ TEST_F(LlamaLazyInitializeBackendTest, BackendsHandleEmptyDir) {
 TEST_F(LlamaLazyInitializeBackendTest, BackendDirectoryTracking) {
   std::string backendsDir = getTestBackendsDir();
 
-  bool result1 = LlamaLazyInitializeBackend::initialize(backendsDir);
-  EXPECT_TRUE(result1);
+  // Ensure backend is initialized (may already be from a prior test).
+  LlamaLazyInitializeBackend::initialize(backendsDir);
 
   // Try to initialize with different directory - should return false and log
   // warning
   bool result2 = LlamaLazyInitializeBackend::initialize("/different/path");
   EXPECT_FALSE(result2);
-
-  // Clean up
-  LlamaLazyInitializeBackend::decrementRefCount();
-  LlamaLazyInitializeBackend::decrementRefCount();
 }
 
 TEST_F(LlamaLazyInitializeBackendTest, RefCountReachesZero) {
@@ -117,8 +114,12 @@ TEST_F(LlamaLazyInitializeBackendTest, RefCountReachesZero) {
     LlamaLazyInitializeBackend::decrementRefCount();
   });
 
+  // Backend remains initialized even after refcount reaches zero.
+  // Intentionally never freed to avoid static destructor ordering issues
+  // (dynamically-loaded backend libraries register atexit handlers that
+  // reference the ggml registry).
   bool canReinitialize = LlamaLazyInitializeBackend::initialize("");
-  EXPECT_TRUE(canReinitialize);
+  EXPECT_FALSE(canReinitialize);
 }
 
 TEST_F(LlamaLazyInitializeBackendTest, BackendsHandleSelfAssignment) {
