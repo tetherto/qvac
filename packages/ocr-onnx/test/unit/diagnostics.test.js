@@ -5,6 +5,8 @@ const test = require('brittle')
 let diagnostics
 try { diagnostics = require('@qvac/diagnostics') } catch (e) { diagnostics = null }
 
+const SUPPORTED_FORMATS = ['bmp', 'jpeg', 'png']
+
 // Minimal test class that replicates the ONNXOcr constructor fields and
 // _getDiagnosticsJSON method without requiring native bindings.
 // This mirrors the exact implementation in index.js.
@@ -22,6 +24,9 @@ class TestOCR {
 
   _getDiagnosticsJSON () {
     return JSON.stringify({
+      onnxRuntimeVersion: 'unavailable',
+      modelLoaded: this.state.configLoaded && !this.state.destroyed,
+      supportedFormats: SUPPORTED_FORMATS,
       status: this.state.destroyed ? 'destroyed' : (this.state.configLoaded ? 'loaded' : 'not_loaded'),
       params: this.params
     })
@@ -72,6 +77,35 @@ test('_getDiagnosticsJSON includes expected fields', t => {
   t.is(parsed.params.timeout, 60, 'timeout should match params')
 })
 
+test('_getDiagnosticsJSON includes onnxRuntimeVersion', t => {
+  const ocr = new TestOCR({ params: { langList: ['en'] } })
+  const parsed = JSON.parse(ocr._getDiagnosticsJSON())
+  t.ok('onnxRuntimeVersion' in parsed, 'should include onnxRuntimeVersion field')
+  t.is(typeof parsed.onnxRuntimeVersion, 'string', 'onnxRuntimeVersion should be a string')
+})
+
+test('_getDiagnosticsJSON includes modelLoaded boolean', t => {
+  const ocr = new TestOCR({ params: { langList: ['en'] } })
+
+  let parsed = JSON.parse(ocr._getDiagnosticsJSON())
+  t.is(parsed.modelLoaded, false, 'modelLoaded should be false initially')
+
+  ocr.state.configLoaded = true
+  parsed = JSON.parse(ocr._getDiagnosticsJSON())
+  t.is(parsed.modelLoaded, true, 'modelLoaded should be true when configLoaded=true')
+
+  ocr.state.destroyed = true
+  parsed = JSON.parse(ocr._getDiagnosticsJSON())
+  t.is(parsed.modelLoaded, false, 'modelLoaded should be false when destroyed=true')
+})
+
+test('_getDiagnosticsJSON includes supportedFormats', t => {
+  const ocr = new TestOCR({ params: { langList: ['en'] } })
+  const parsed = JSON.parse(ocr._getDiagnosticsJSON())
+  t.ok(Array.isArray(parsed.supportedFormats), 'supportedFormats should be an array')
+  t.alike(parsed.supportedFormats, ['bmp', 'jpeg', 'png'], 'supportedFormats should list bmp, jpeg, png')
+})
+
 test('_getDiagnosticsJSON status reflects state correctly', t => {
   const ocr = new TestOCR({ params: { langList: ['en'] } })
 
@@ -119,6 +153,33 @@ test('round-trip: registerAddon with OCR callback, generateReport shows addon', 
   const addonDiag = JSON.parse(report.addons[0].diagnostics)
   t.ok('status' in addonDiag, 'diagnostics should include status')
   t.ok('params' in addonDiag, 'diagnostics should include params')
+  t.ok('onnxRuntimeVersion' in addonDiag, 'diagnostics should include onnxRuntimeVersion')
+  t.is(typeof addonDiag.modelLoaded, 'boolean', 'diagnostics should include modelLoaded as boolean')
+  t.ok(Array.isArray(addonDiag.supportedFormats), 'diagnostics should include supportedFormats array')
+
+  diagnostics.reset()
+})
+
+test('unregisterAddon removes addon from report', { skip: !diagnostics }, t => {
+  diagnostics.reset()
+
+  const ocr = new TestOCR({
+    params: { langList: ['en'] }
+  })
+
+  diagnostics.registerAddon({
+    name: ocr._packageName,
+    version: ocr._packageVersion,
+    getDiagnostics: () => ocr._getDiagnosticsJSON()
+  })
+
+  const before = diagnostics.generateReport({ app: { name: 'test-app', version: '1.0.0' } })
+  t.is(before.addons.length, 1, 'should have one addon before unregister')
+
+  diagnostics.unregisterAddon(ocr._packageName)
+
+  const after = diagnostics.generateReport({ app: { name: 'test-app', version: '1.0.0' } })
+  t.is(after.addons.length, 0, 'should have no addons after unregister')
 
   diagnostics.reset()
 })

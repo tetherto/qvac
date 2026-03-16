@@ -10,6 +10,15 @@ const binding = require('./binding')
 const addonLogging = require('./addonLogging')
 const addon = require.addon.resolve('.')
 
+let diagnostics
+try { diagnostics = require('@qvac/diagnostics') } catch (e) { diagnostics = null }
+
+/**
+ * Supported image formats for OCR processing
+ * @type {string[]}
+ */
+const SUPPORTED_FORMATS = ['bmp', 'jpeg', 'png']
+
 /**
  * ONNX client implementation for OCR model
  */
@@ -31,6 +40,9 @@ class ONNXOcr extends ONNXBase {
 
   _getDiagnosticsJSON () {
     return JSON.stringify({
+      onnxRuntimeVersion: 'unavailable',
+      modelLoaded: this.state.configLoaded && !this.state.destroyed,
+      supportedFormats: SUPPORTED_FORMATS,
       status: this.state.destroyed ? 'destroyed' : (this.state.configLoaded ? 'loaded' : 'not_loaded'),
       params: this.params
     })
@@ -140,6 +152,10 @@ class ONNXOcr extends ONNXBase {
     if (this.addon) {
       await this.addon.destroy()
       this.addon = null
+    }
+
+    if (diagnostics && this._packageName) {
+      diagnostics.unregisterAddon(this._packageName)
     }
   }
 
