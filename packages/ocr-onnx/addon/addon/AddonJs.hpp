@@ -231,6 +231,9 @@ inline js_value_t* createInstance(js_env_t* env, js_callback_info_t* info) try {
   auto optEnableCpuMemArena = args1.getOptionalProperty<js::Boolean>(env, "enableCpuMemArena");
   if (optEnableCpuMemArena) config.sessionConfig.enableCpuMemArena = optEnableCpuMemArena->as<bool>(env);
 
+  auto optIntraOpThreads = args1.getOptionalProperty<js::Number>(env, "intraOpThreads");
+  if (optIntraOpThreads) config.sessionConfig.intraOpThreads = static_cast<int>(optIntraOpThreads->as<double>(env));
+
   auto model = std::make_unique<Pipeline>(
       pathDetector,
       pathRecognizer,

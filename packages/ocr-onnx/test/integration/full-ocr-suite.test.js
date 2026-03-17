@@ -69,13 +69,14 @@ test('Full OCR test suite', { timeout: 40 * 60 * 1000, skip: isMobile }, async f
       useGPU: false,
       timeout
     }
-    // Windows CI runners have limited memory (~7GB): use BASIC optimization
-    // + XNNPACK for efficient Conv/Relu ops, and disable BFC arena whose
-    // pre-allocation fails on the constrained runner.
+    // Windows CI runners have limited memory (~7GB): use BASIC optimization,
+    // XNNPACK for efficient Conv/Relu ops, disable BFC arena pre-allocation,
+    // and limit to 1 thread to reduce per-thread scratch buffer memory.
     if (isWindows) {
       params.graphOptimization = 'basic'
       params.enableXnnpack = true
       params.enableCpuMemArena = false
+      params.intraOpThreads = 1
     }
 
     const onnxOcr = new ONNXOcr({ params, opts: { stats: true } })
