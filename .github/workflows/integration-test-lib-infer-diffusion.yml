@@ -23,7 +23,7 @@ on:
 
 jobs:
   run-integration-tests:
-    timeout-minutes: 360
+    timeout-minutes: ${{ matrix.timeout || 360 }}
     continue-on-error: true
     runs-on: ${{ matrix.runner }}
     name: test-${{ matrix.platform }}-${{ matrix.arch }}
@@ -72,6 +72,7 @@ jobs:
             platform: win32
             arch: x64
             runner: ai-run-windows11-gpu
+            timeout: 600
 
     steps:
       - name: Setup Node.js
@@ -274,7 +275,6 @@ jobs:
         shell: bash
         env:
           QASE_API_TOKEN: ${{ secrets.QASE_API_TOKEN }}
-          SD_CPU_ONLY: '1'
 
       - name: Run integration test (Windows)
         if: ${{ matrix.platform == 'win32' }}

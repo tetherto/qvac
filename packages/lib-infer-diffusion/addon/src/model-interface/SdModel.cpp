@@ -41,16 +41,11 @@ thread_local const SdModel* tl_abortModel = nullptr;
 // Guard against calling free_sd_ctx during process exit.
 // When process.exit() is called, ggml's backend (Metal/Vulkan) may have
 // already started tearing down its global state.  Calling free_sd_ctx at
-// that point causes a SIGSEGV (exit code 139).  We register an atexit
-// handler to flip this flag before static destructors run, then skip the
-// reset in unload() — the OS will reclaim all memory anyway.
+// that point causes a SIGSEGV (exit code 139).
+// JavaScript calls SdModel::setProcessExiting() (via notifyProcessExit binding)
+// from process.on('exit') before destructors run, so unload() can skip the
+// free_sd_ctx call.  The OS reclaims all memory on process exit regardless.
 std::atomic<bool> g_processExiting{false};
-// NOLINTNEXTLINE(cert-err58-cpp)
-const int g_exitGuardRegistered = []() {
-  std::atexit(
-      []() { g_processExiting.store(true, std::memory_order_relaxed); });
-  return 0;
-}();
 
 void sdProgressCallback(int step, int steps, float /*time*/, void* /*data*/) {
   if (!tl_progressCtx.job || !tl_progressCtx.job->progressCallback)
@@ -75,6 +70,40 @@ void sdProgressCallback(int step, int steps, float /*time*/, void* /*data*/) {
 bool sdAbortCallback(void* /*data*/) {
   return tl_abortModel && tl_abortModel->isCancelRequested();
 }
+
+// RAII wrapper for the sd_image_t* array returned by generate_image().
+// Frees each image's pixel buffer and the array itself on destruction,
+// even if an exception is thrown mid-iteration (e.g. in encodeToPng or
+// outputCallback).  Call release(i) after processing image i to free
+// its pixel buffer immediately rather than waiting until destruction.
+class SdImageBatch {
+public:
+  SdImageBatch(sd_image_t* data, int count) : data_(data), count_(count) {}
+  ~SdImageBatch() {
+    for (int i = 0; i < count_; ++i) {
+      free(data_[i].data);
+    }
+    free(data_);
+  }
+
+  SdImageBatch(const SdImageBatch&) = delete;
+  SdImageBatch& operator=(const SdImageBatch&) = delete;
+  SdImageBatch(SdImageBatch&&) = delete;
+  SdImageBatch& operator=(SdImageBatch&&) = delete;
+
+  [[nodiscard]] int count() const { return count_; }
+  [[nodiscard]] const sd_image_t& operator[](int i) const { return data_[i]; }
+
+  // Release pixel buffer for image i immediately after it has been consumed.
+  void release(int i) {
+    free(data_[i].data);
+    data_[i].data = nullptr;
+  }
+
+private:
+  sd_image_t* const data_;
+  const int count_;
+};
 
 } // namespace
 
@@ -111,21 +140,17 @@ void SdModel::load() {
   // For FLUX.2 [klein] the GGUF contains only diffusion weights with no SD
   // version metadata KV pairs, so we must use diffusion_model_path.
   // Classic all-in-one SD1.x / SDXL checkpoints use model_path.
-  params.model_path =
-      config_.modelPath.empty() ? nullptr : config_.modelPath.c_str();
-  params.diffusion_model_path = config_.diffusionModelPath.empty()
-                                    ? nullptr
-                                    : config_.diffusionModelPath.c_str();
-  params.clip_l_path =
-      config_.clipLPath.empty() ? nullptr : config_.clipLPath.c_str();
-  params.clip_g_path =
-      config_.clipGPath.empty() ? nullptr : config_.clipGPath.c_str();
-  params.t5xxl_path =
-      config_.t5XxlPath.empty() ? nullptr : config_.t5XxlPath.c_str();
-  params.llm_path = config_.llmPath.empty() ? nullptr : config_.llmPath.c_str();
-  params.vae_path = config_.vaePath.empty() ? nullptr : config_.vaePath.c_str();
-  params.taesd_path =
-      config_.taesdPath.empty() ? nullptr : config_.taesdPath.c_str();
+  auto optPath = [](const std::string& s) -> const char* {
+    return s.empty() ? nullptr : s.c_str();
+  };
+  params.model_path = optPath(config_.modelPath);
+  params.diffusion_model_path = optPath(config_.diffusionModelPath);
+  params.clip_l_path = optPath(config_.clipLPath);
+  params.clip_g_path = optPath(config_.clipGPath);
+  params.t5xxl_path = optPath(config_.t5XxlPath);
+  params.llm_path = optPath(config_.llmPath);
+  params.vae_path = optPath(config_.vaePath);
+  params.taesd_path = optPath(config_.taesdPath);
 
   // ── Compute ────────────────────────────────────────────────────────────────
   params.n_threads = config_.nThreads;
@@ -230,9 +255,9 @@ void SdModel::load() {
 
   sdCtx_.reset(raw);
 
-  modelLoadMs_ = std::chrono::duration_cast<std::chrono::milliseconds>(
-                     std::chrono::steady_clock::now() - tLoadStart)
-                     .count();
+  stats_.modelLoadMs = std::chrono::duration_cast<std::chrono::milliseconds>(
+                           std::chrono::steady_clock::now() - tLoadStart)
+                           .count();
 }
 
 // ---------------------------------------------------------------------------
@@ -253,13 +278,7 @@ void SdModel::unload() {
   lastStats_.clear();
   cancelRequested_.store(false);
 
-  modelLoadMs_ = 0;
-  totalGenerationMs_ = 0;
-  totalWallMs_ = 0;
-  totalSteps_ = 0;
-  totalGenerations_ = 0;
-  totalImages_ = 0;
-  totalPixels_ = 0;
+  stats_ = {};
 }
 
 // ---------------------------------------------------------------------------
@@ -377,29 +396,26 @@ std::any SdModel::process(const std::any& input) {
   // ── Generate ──────────────────────────────────────────────────────────────
   const auto t0 = std::chrono::steady_clock::now();
 
-  sd_image_t* results = generate_image(sdCtx_.get(), &genParams);
+  SdImageBatch results(
+      generate_image(sdCtx_.get(), &genParams), gen.batchCount);
 
-  if (initImg.data)
+  if (initImg.data) {
     free(initImg.data);
+  }
 
   const bool wasCancelled = cancelRequested_.load();
 
-  // Always free native image buffers, whether cancelled or not.
   int outputCount = 0;
-  if (results) {
-    for (int i = 0; i < gen.batchCount; ++i) {
-      if (results[i].data) {
-        if (!wasCancelled) {
-          auto png = encodeToPng(results[i]);
-          if (!png.empty() && job.outputCallback) {
-            job.outputCallback(png);
-            ++outputCount;
-          }
-        }
-        free(results[i].data);
+  for (int i = 0; i < results.count(); ++i) {
+    if (results[i].data && !wasCancelled) {
+      auto png = encodeToPng(results[i]);
+      if (!png.empty() && job.outputCallback) {
+        job.outputCallback(png);
+        ++outputCount;
       }
     }
-    free(results);
+    results.release(
+        i); // free pixel buffer immediately; destructor handles the rest
   }
 
   // If cancelled, propagate as an exception so JobRunner emits
@@ -419,23 +435,27 @@ std::any SdModel::process(const std::any& input) {
 
   // ── Accumulate cumulative counters ─────────────────────────────────────────
   const int64_t genMsI = static_cast<int64_t>(genMs);
-  totalGenerationMs_ += genMsI;
-  totalWallMs_ += genMsI;
-  totalSteps_ += gen.steps;
-  totalGenerations_++;
-  totalImages_ += outputCount;
-  totalPixels_ += static_cast<int64_t>(gen.width) * gen.height * outputCount;
+  stats_.totalGenerationMs += genMsI;
+  stats_.totalWallMs += genMsI;
+  stats_.totalSteps += gen.steps;
+  stats_.totalGenerations++;
+  stats_.totalImages += outputCount;
+  stats_.totalPixels +=
+      static_cast<int64_t>(gen.width) * gen.height * outputCount;
 
   // ── Derived metrics ────────────────────────────────────────────────────────
-  const double totalTimeSec = totalWallMs_ / 1000.0;
+  const double totalTimeSec = stats_.totalWallMs / 1000.0;
   const double stepsPerSecond =
-      totalTimeSec > 0.0 ? (static_cast<double>(totalSteps_) / totalTimeSec)
-                         : 0.0;
+      totalTimeSec > 0.0
+          ? (static_cast<double>(stats_.totalSteps) / totalTimeSec)
+          : 0.0;
   const double msPerStep =
-      totalSteps_ > 0 ? (static_cast<double>(totalWallMs_) / totalSteps_) : 0.0;
+      stats_.totalSteps > 0
+          ? (static_cast<double>(stats_.totalWallMs) / stats_.totalSteps)
+          : 0.0;
   const double megapixelsPerSecond =
       totalTimeSec > 0.0
-          ? (static_cast<double>(totalPixels_) / 1e6 / totalTimeSec)
+          ? (static_cast<double>(stats_.totalPixels) / 1e6 / totalTimeSec)
           : 0.0;
 
   // ── Build stats for runtimeStats() ─────────────────────────────────────────
@@ -450,15 +470,15 @@ std::any SdModel::process(const std::any& input) {
   lastStats_.emplace_back("msPerStep", msPerStep);
   lastStats_.emplace_back("megapixelsPerSecond", megapixelsPerSecond);
 
-  lastStats_.emplace_back("totalSteps", totalSteps_);
-  lastStats_.emplace_back("totalGenerations", totalGenerations_);
-  lastStats_.emplace_back("totalImages", totalImages_);
-  lastStats_.emplace_back("totalPixels", totalPixels_);
+  lastStats_.emplace_back("totalSteps", stats_.totalSteps);
+  lastStats_.emplace_back("totalGenerations", stats_.totalGenerations);
+  lastStats_.emplace_back("totalImages", stats_.totalImages);
+  lastStats_.emplace_back("totalPixels", stats_.totalPixels);
 
-  lastStats_.emplace_back("modelLoadMs", modelLoadMs_);
+  lastStats_.emplace_back("modelLoadMs", stats_.modelLoadMs);
   lastStats_.emplace_back("generationMs", genMsI);
-  lastStats_.emplace_back("totalGenerationMs", totalGenerationMs_);
-  lastStats_.emplace_back("totalWallMs", totalWallMs_);
+  lastStats_.emplace_back("totalGenerationMs", stats_.totalGenerationMs);
+  lastStats_.emplace_back("totalWallMs", stats_.totalWallMs);
 
   lastStats_.emplace_back("steps", static_cast<int64_t>(gen.steps));
   lastStats_.emplace_back("width", static_cast<int64_t>(gen.width));
@@ -515,6 +535,14 @@ sd_image_t SdModel::decodePng(const std::vector<uint8_t>& pngBytes) {
     return sd_image_t{};
   return sd_image_t{
       static_cast<uint32_t>(w), static_cast<uint32_t>(h), 3, data};
+}
+
+// ---------------------------------------------------------------------------
+// Process-exit guard
+// ---------------------------------------------------------------------------
+
+void SdModel::setProcessExiting() noexcept {
+  g_processExiting.store(true, std::memory_order_relaxed);
 }
 
 // ---------------------------------------------------------------------------

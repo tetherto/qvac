@@ -24,8 +24,9 @@ int parseAdrenoModel(const std::string& description) {
       });
 
   auto pos = lower.find("adreno");
-  if (pos == std::string::npos)
+  if (pos == std::string::npos) {
     return 0;
+  }
 
   // Scan forward from "adreno" to find the first digit sequence
   for (size_t i = pos + 6; i < lower.size(); ++i) {
@@ -55,10 +56,12 @@ BackendDevice preferredDeviceFromMap(
   }
 
   const std::string& device = it->second;
-  if (device == "gpu")
+  if (device == "gpu") {
     return BackendDevice::GPU;
-  if (device == "cpu")
+  }
+  if (device == "cpu") {
     return BackendDevice::CPU;
+  }
 
   throw StatusError(
       general_error::InvalidArgument,
@@ -68,8 +71,9 @@ BackendDevice preferredDeviceFromMap(
 int threadsFromMap(
     const std::unordered_map<std::string, std::string>& configMap) {
   auto it = configMap.find("threads");
-  if (it == configMap.end())
+  if (it == configMap.end()) {
     return -1; // auto
+  }
   try {
     return std::stoi(it->second);
   } catch (...) {
@@ -94,8 +98,9 @@ BackendDevice resolveBackendForDevice(BackendDevice preferred) {
     ggml_backend_dev_t dev = ggml_backend_dev_get(i);
     enum ggml_backend_dev_type devType = ggml_backend_dev_type(dev);
     if (devType != GGML_BACKEND_DEVICE_TYPE_GPU &&
-        devType != GGML_BACKEND_DEVICE_TYPE_IGPU)
+        devType != GGML_BACKEND_DEVICE_TYPE_IGPU) {
       continue;
+    }
 
     const char* desc = ggml_backend_dev_description(dev);
     const char* name = ggml_backend_dev_name(dev);

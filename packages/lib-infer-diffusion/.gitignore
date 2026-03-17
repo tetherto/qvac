@@ -21,5 +21,6 @@ logs/
 # Added by qvac-lint-cpp
 .clang-format
 output/
+temp/
 *.deb
 test/integration/all.js

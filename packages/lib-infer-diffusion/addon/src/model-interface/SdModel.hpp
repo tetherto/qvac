@@ -4,7 +4,6 @@
 #include <atomic>
 #include <functional>
 #include <memory>
-#include <streambuf>
 #include <string>
 #include <vector>
 
@@ -35,7 +34,6 @@
  *      The destructor calls unload() automatically if the caller forgets.
  */
 class SdModel : public qvac_lib_inference_addon_cpp::model::IModel,
-                public qvac_lib_inference_addon_cpp::model::IModelAsyncLoad,
                 public qvac_lib_inference_addon_cpp::model::IModelCancel {
 public:
   SdModel(const SdModel&) = delete;
@@ -78,14 +76,6 @@ public:
    */
   [[nodiscard]] bool isLoaded() const noexcept { return sdCtx_ != nullptr; }
 
-  // ── IModelAsyncLoad ────────────────────────────────────────────────────────
-
-  void waitForLoadInitialization() final { load(); }
-
-  void setWeightsForFile(
-      const std::string& /*filename*/,
-      std::unique_ptr<std::basic_streambuf<char>>&& /*buf*/) final {}
-
   // ── IModel ─────────────────────────────────────────────────────────────────
 
   /**
@@ -106,6 +96,16 @@ public:
 
   [[nodiscard]] qvac_lib_inference_addon_cpp::RuntimeStats
   runtimeStats() const final;
+
+  // ── Process-exit guard ─────────────────────────────────────────────────────
+
+  /**
+   * Call before the process exits so that unload() skips free_sd_ctx.
+   * ggml's Metal/Vulkan backends may already be partially torn down at that
+   * point; calling free_sd_ctx would cause a SIGSEGV (exit 139).
+   * The OS reclaims all memory on process exit regardless.
+   */
+  static void setProcessExiting() noexcept;
 
   // ── Log callback ───────────────────────────────────────────────────────────
 
@@ -133,11 +133,14 @@ private:
   mutable qvac_lib_inference_addon_cpp::RuntimeStats lastStats_{};
 
   // ── Cumulative stats ──────────────────────────────────────────────────────
-  int64_t modelLoadMs_{0};
-  int64_t totalGenerationMs_{0};
-  int64_t totalWallMs_{0};
-  int64_t totalSteps_{0};
-  int64_t totalGenerations_{0};
-  int64_t totalImages_{0};
-  int64_t totalPixels_{0};
+  struct CumulativeStats {
+    int64_t modelLoadMs{0};
+    int64_t totalGenerationMs{0};
+    int64_t totalWallMs{0};
+    int64_t totalSteps{0};
+    int64_t totalGenerations{0};
+    int64_t totalImages{0};
+    int64_t totalPixels{0};
+  };
+  CumulativeStats stats_{};
 };

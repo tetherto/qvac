@@ -1,5 +1,10 @@
 #include "SdGenHandlers.hpp"
 
+#include <charconv>
+#include <string_view>
+#include <unordered_map>
+#include <utility>
+
 #include <qvac-lib-inference-addon-cpp/Errors.hpp>
 
 namespace qvac_lib_inference_addon_sd {
@@ -27,95 +32,111 @@ requireStr(const picojson::value& v, const std::string& key) {
 // ── Enum parsers ─────────────────────────────────────────────────────────────
 
 static sample_method_t parseSampler(const std::string& name) {
-  // Euler (FLUX default)
-  if (name == "euler")
-    return EULER_SAMPLE_METHOD;
-  if (name == "euler_a")
-    return EULER_A_SAMPLE_METHOD;
-  // Classic SD
-  if (name == "heun")
-    return HEUN_SAMPLE_METHOD;
-  if (name == "dpm2")
-    return DPM2_SAMPLE_METHOD;
-  if (name == "dpm++2m")
-    return DPMPP2M_SAMPLE_METHOD;
-  if (name == "dpm++2mv2")
-    return DPMPP2Mv2_SAMPLE_METHOD;
-  if (name == "dpm++2s_a")
-    return DPMPP2S_A_SAMPLE_METHOD;
-  if (name == "lcm")
-    return LCM_SAMPLE_METHOD;
-  // Additional
-  if (name == "ipndm")
-    return IPNDM_SAMPLE_METHOD;
-  if (name == "ipndm_v")
-    return IPNDM_V_SAMPLE_METHOD;
-  if (name == "ddim_trailing")
-    return DDIM_TRAILING_SAMPLE_METHOD;
-  if (name == "tcd")
-    return TCD_SAMPLE_METHOD;
-  if (name == "res_multistep")
-    return RES_MULTISTEP_SAMPLE_METHOD;
-  if (name == "res_2s")
-    return RES_2S_SAMPLE_METHOD;
+  static const std::unordered_map<std::string, sample_method_t> samplers{
+      {"euler", EULER_SAMPLE_METHOD},
+      {"euler_a", EULER_A_SAMPLE_METHOD},
+      {"heun", HEUN_SAMPLE_METHOD},
+      {"dpm2", DPM2_SAMPLE_METHOD},
+      {"dpm++2m", DPMPP2M_SAMPLE_METHOD},
+      {"dpm++2mv2", DPMPP2Mv2_SAMPLE_METHOD},
+      {"dpm++2s_a", DPMPP2S_A_SAMPLE_METHOD},
+      {"lcm", LCM_SAMPLE_METHOD},
+      {"ipndm", IPNDM_SAMPLE_METHOD},
+      {"ipndm_v", IPNDM_V_SAMPLE_METHOD},
+      {"ddim_trailing", DDIM_TRAILING_SAMPLE_METHOD},
+      {"tcd", TCD_SAMPLE_METHOD},
+      {"res_multistep", RES_MULTISTEP_SAMPLE_METHOD},
+      {"res_2s", RES_2S_SAMPLE_METHOD},
+  };
+  if (auto it = samplers.find(name); it != samplers.end()) {
+    return it->second;
+  }
   throw StatusError(
       general_error::InvalidArgument,
       "sampling_method: unknown value '" + name +
-          "'. "
-          "Valid: euler, euler_a, heun, dpm2, dpm++2m, dpm++2mv2, "
+          "'. Valid: euler, euler_a, heun, dpm2, dpm++2m, dpm++2mv2, "
           "dpm++2s_a, lcm, ipndm, ipndm_v, ddim_trailing, tcd, "
           "res_multistep, res_2s");
 }
 
 static scheduler_t parseScheduler(const std::string& name) {
-  if (name == "discrete")
-    return DISCRETE_SCHEDULER;
-  if (name == "karras")
-    return KARRAS_SCHEDULER;
-  if (name == "exponential")
-    return EXPONENTIAL_SCHEDULER;
-  if (name == "ays")
-    return AYS_SCHEDULER;
-  if (name == "gits")
-    return GITS_SCHEDULER;
-  if (name == "sgm_uniform")
-    return SGM_UNIFORM_SCHEDULER;
-  if (name == "simple")
-    return SIMPLE_SCHEDULER;
-  if (name == "lcm")
-    return LCM_SCHEDULER;
-  if (name == "smoothstep")
-    return SMOOTHSTEP_SCHEDULER;
-  if (name == "kl_optimal")
-    return KL_OPTIMAL_SCHEDULER;
-  if (name == "bong_tangent")
-    return BONG_TANGENT_SCHEDULER;
+  static const std::unordered_map<std::string, scheduler_t> schedulers{
+      {"discrete", DISCRETE_SCHEDULER},
+      {"karras", KARRAS_SCHEDULER},
+      {"exponential", EXPONENTIAL_SCHEDULER},
+      {"ays", AYS_SCHEDULER},
+      {"gits", GITS_SCHEDULER},
+      {"sgm_uniform", SGM_UNIFORM_SCHEDULER},
+      {"simple", SIMPLE_SCHEDULER},
+      {"lcm", LCM_SCHEDULER},
+      {"smoothstep", SMOOTHSTEP_SCHEDULER},
+      {"kl_optimal", KL_OPTIMAL_SCHEDULER},
+      {"bong_tangent", BONG_TANGENT_SCHEDULER},
+  };
+  if (auto it = schedulers.find(name); it != schedulers.end()) {
+    return it->second;
+  }
   throw StatusError(
       general_error::InvalidArgument,
       "scheduler: unknown value '" + name +
-          "'. "
-          "Valid: discrete, karras, exponential, ays, gits, "
+          "'. Valid: discrete, karras, exponential, ays, gits, "
           "sgm_uniform, simple, lcm, smoothstep, kl_optimal, bong_tangent");
 }
 
+// Parses "vae_tile_size": accepts either an integer (applied to both axes)
+// or a "WxH" string (e.g. "128x64").
+static std::pair<int, int> parseVaeTileSize(const picojson::value& v) {
+  if (v.is<double>()) {
+    int sz = static_cast<int>(v.get<double>());
+    return {sz, sz};
+  }
+  if (!v.is<std::string>()) {
+    throw StatusError(
+        general_error::InvalidArgument,
+        "vae_tile_size must be a number or 'WxH' string");
+  }
+
+  const std::string_view s = v.get<std::string>();
+  const auto xPos = s.find('x');
+  if (xPos == std::string_view::npos) {
+    throw StatusError(
+        general_error::InvalidArgument,
+        "vae_tile_size string must be 'WxH', got: '" + std::string(s) + "'");
+  }
+
+  int w{}, h{};
+  const auto wSv = s.substr(0, xPos);
+  const auto hSv = s.substr(xPos + 1);
+  if (std::from_chars(wSv.data(), wSv.data() + wSv.size(), w).ec !=
+          std::errc{} ||
+      std::from_chars(hSv.data(), hSv.data() + hSv.size(), h).ec !=
+          std::errc{}) {
+    throw StatusError(
+        general_error::InvalidArgument,
+        "vae_tile_size: could not parse dimensions from '" + std::string(s) +
+            "'");
+  }
+  return {w, h};
+}
+
 static sd_cache_mode_t parseCacheMode(const std::string& name) {
-  if (name == "disabled" || name == "")
-    return SD_CACHE_DISABLED;
-  if (name == "easycache")
-    return SD_CACHE_EASYCACHE;
-  if (name == "ucache")
-    return SD_CACHE_UCACHE;
-  if (name == "dbcache")
-    return SD_CACHE_DBCACHE;
-  if (name == "taylorseer")
-    return SD_CACHE_TAYLORSEER;
-  if (name == "cache-dit")
-    return SD_CACHE_CACHE_DIT;
+  static const std::unordered_map<std::string, sd_cache_mode_t> cacheModes{
+      {"", SD_CACHE_DISABLED},
+      {"disabled", SD_CACHE_DISABLED},
+      {"easycache", SD_CACHE_EASYCACHE},
+      {"ucache", SD_CACHE_UCACHE},
+      {"dbcache", SD_CACHE_DBCACHE},
+      {"taylorseer", SD_CACHE_TAYLORSEER},
+      {"cache-dit", SD_CACHE_CACHE_DIT},
+  };
+  if (auto it = cacheModes.find(name); it != cacheModes.end()) {
+    return it->second;
+  }
   throw StatusError(
       general_error::InvalidArgument,
       "cache_mode: unknown value '" + name +
-          "'. "
-          "Valid: disabled, easycache, ucache, dbcache, taylorseer, cache-dit");
+          "'. Valid: disabled, easycache, ucache, dbcache, taylorseer, "
+          "cache-dit");
 }
 
 // ── Handler map
@@ -282,30 +303,9 @@ const SdGenHandlersMap SD_GEN_HANDLERS = {
     // string.
     {"vae_tile_size",
      [](SdGenConfig& c, const picojson::value& v) {
-       if (v.is<double>()) {
-         int sz = static_cast<int>(v.get<double>());
-         c.vaeTileSizeX = sz;
-         c.vaeTileSizeY = sz;
-       } else if (v.is<std::string>()) {
-         const auto& s = v.get<std::string>();
-         size_t xPos = s.find('x');
-         if (xPos == std::string::npos)
-           throw StatusError(
-               general_error::InvalidArgument,
-               "vae_tile_size string must be 'WxH', got: '" + s + "'");
-         try {
-           c.vaeTileSizeX = std::stoi(s.substr(0, xPos));
-           c.vaeTileSizeY = std::stoi(s.substr(xPos + 1));
-         } catch (...) {
-           throw StatusError(
-               general_error::InvalidArgument,
-               "vae_tile_size: could not parse dimensions from '" + s + "'");
-         }
-       } else {
-         throw StatusError(
-             general_error::InvalidArgument,
-             "vae_tile_size must be a number or 'WxH' string");
-       }
+       auto [w, h] = parseVaeTileSize(v);
+       c.vaeTileSizeX = w;
+       c.vaeTileSizeY = h;
      }},
 
     {"vae_tile_overlap",
@@ -330,31 +330,27 @@ const SdGenHandlersMap SD_GEN_HANDLERS = {
      }},
 
     // cache_preset — shorthand for "easycache + threshold".
-    // Approximate threshold values mirroring the stable-diffusion.cpp CLI
-    // presets:
-    //   slow   ≈ 0.60   (safest, ~10% speed-up)
-    //   medium ≈ 0.40   (~25% speed-up)
-    //   fast   ≈ 0.25   (~40% speed-up)
-    //   ultra  ≈ 0.15   (fastest, some quality loss)
     {"cache_preset",
      [](SdGenConfig& c, const picojson::value& v) {
+       // Approximate threshold values mirroring the stable-diffusion.cpp CLI
+       // presets:  slow ≈ 0.60 (~10% speed-up)  medium ≈ 0.40 (~25%)
+       //           fast ≈ 0.25 (~40%)            ultra  ≈ 0.15 (fastest)
+       using Preset = std::pair<sd_cache_mode_t, float>;
+       static const std::unordered_map<std::string, Preset> presets{
+           {"slow", {SD_CACHE_EASYCACHE, 0.60f}},
+           {"medium", {SD_CACHE_EASYCACHE, 0.40f}},
+           {"fast", {SD_CACHE_EASYCACHE, 0.25f}},
+           {"ultra", {SD_CACHE_EASYCACHE, 0.15f}},
+       };
        const auto preset = requireStr(v, "cache_preset");
-       if (preset == "slow") {
-         c.cacheMode = SD_CACHE_EASYCACHE;
-         c.cacheThreshold = 0.60f;
-       } else if (preset == "medium") {
-         c.cacheMode = SD_CACHE_EASYCACHE;
-         c.cacheThreshold = 0.40f;
-       } else if (preset == "fast") {
-         c.cacheMode = SD_CACHE_EASYCACHE;
-         c.cacheThreshold = 0.25f;
-       } else if (preset == "ultra") {
-         c.cacheMode = SD_CACHE_EASYCACHE;
-         c.cacheThreshold = 0.15f;
-       } else
+       if (auto it = presets.find(preset); it != presets.end()) {
+         c.cacheMode = it->second.first;
+         c.cacheThreshold = it->second.second;
+       } else {
          throw StatusError(
              general_error::InvalidArgument,
              "cache_preset must be 'slow', 'medium', 'fast', or 'ultra'");
+       }
      }},
 
     // cache_threshold — direct override for reuse_threshold; 0 = library

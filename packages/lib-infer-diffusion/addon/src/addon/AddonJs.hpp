@@ -101,6 +101,32 @@ inline js_value_t* runJob(js_env_t* env, js_callback_info_t* info) try {
 JSCATCH
 
 /**
+ * Activate the addon — loads model weights by calling SdModel::load() directly.
+ * SdModel does not implement IModelAsyncLoad, so we bypass AddonCpp::activate()
+ * (which routes through that interface) and call load() here instead.
+ * Args: [0] instance handle
+ */
+inline js_value_t* activate(js_env_t* env, js_callback_info_t* info) try {
+  using namespace qvac_lib_inference_addon_cpp;
+
+  JsArgsParser args(env, info);
+  AddonJs& instance = JsInterface::getInstance(env, args.get(0, "instance"));
+
+  auto* sdModel = dynamic_cast<SdModel*>(&instance.addonCpp->model.get());
+  if (sdModel == nullptr) {
+    throw StatusError(
+        general_error::InternalError, "activate: model is not an SdModel");
+  }
+
+  sdModel->load();
+
+  js_value_t* result = nullptr;
+  js_get_undefined(env, &result);
+  return result;
+}
+JSCATCH
+
+/**
  * Explicitly unload the model — releases the sd_ctx and all GPU/CPU memory.
  * The instance remains valid and can be reloaded via activate().
  * Args: [0] instance handle
@@ -118,6 +144,22 @@ inline js_value_t* unloadModel(js_env_t* env, js_callback_info_t* info) try {
 
   sdModel->unload();
 
+  js_value_t* result = nullptr;
+  js_get_undefined(env, &result);
+  return result;
+}
+JSCATCH
+
+/**
+ * Notify the native layer that the JS process is about to exit.
+ * Sets the process-exiting flag so that SdModel::unload() skips free_sd_ctx,
+ * preventing a SIGSEGV when ggml's Metal/Vulkan backends are already torn down.
+ * Called from JS via process.on('exit').
+ * Args: none
+ */
+inline js_value_t*
+notifyProcessExit(js_env_t* env, js_callback_info_t* /*info*/) try {
+  SdModel::setProcessExiting();
   js_value_t* result = nullptr;
   js_get_undefined(env, &result);
   return result;
