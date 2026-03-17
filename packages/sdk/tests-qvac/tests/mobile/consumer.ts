@@ -37,7 +37,7 @@ import { ToolsExecutor } from "../shared/executors/tools-executor.js";
 import { NmtExecutor } from "../shared/executors/nmt-executor.js";
 import { BergamotExecutor } from "../shared/executors/bergamot-executor.js";
 import { ShardedModelExecutor } from "../shared/executors/sharded-model-executor.js";
-import { MobileHttpEmbeddingExecutor } from "./executors/http-embedding-executor.js";
+import { HttpEmbeddingExecutor } from "../shared/executors/http-embedding-executor.js";
 import { KvCacheExecutor } from "../shared/executors/kv-cache-executor.js";
 import { LoggingExecutor } from "../shared/executors/logging-executor.js";
 import { RegistryExecutor } from "../shared/executors/registry-executor.js";
@@ -217,7 +217,7 @@ export const executor = createExecutor({
     new MobileConfigReloadExecutor(resources),
     new LoggingExecutor(resources),
     new RegistryExecutor(resources),
-    new MobileHttpEmbeddingExecutor(resources),
+    new HttpEmbeddingExecutor(resources),
     new KvCacheExecutor(resources),
     new MobileParakeetExecutor(resources),
   ],
