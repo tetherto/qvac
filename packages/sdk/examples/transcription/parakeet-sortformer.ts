@@ -18,7 +18,7 @@ const __dirname = dirname(fileURLToPath(import.meta.url));
 
 const args = process.argv.slice(2);
 const sortformerSrc = args[0] ?? PARAKEET_SORTFORMER_FP32;
-// Resolve default audio path so it works when run from dist/ (no audio copied there)
+
 const defaultAudioPath = join(
   __dirname,
   "..",
