@@ -30,8 +30,8 @@
  *   1. Construct  — stores SdCtxConfig, allocates nothing
  *   2. load()     — calls new_sd_ctx(); weights are read from disk here
  *   3. process()  — runs txt2img / img2img via generate_image()
- *   4. unload()   — calls free_sd_ctx() and releases all GPU/CPU memory
- *      The destructor calls unload() automatically if the caller forgets.
+ *   4. Destroy    — destructor calls free_sd_ctx() and releases all GPU/CPU
+ *                   memory; to unload simply let the object go out of scope
  */
 class SdModel : public qvac_lib_inference_addon_cpp::model::IModel,
                 public qvac_lib_inference_addon_cpp::model::IModelCancel {
@@ -49,7 +49,7 @@ public:
   explicit SdModel(qvac_lib_inference_addon_sd::SdCtxConfig config);
 
   /**
-   * Calls unload() — releases the sd_ctx if still alive.
+   * Releases the sd_ctx and all associated GPU/CPU memory.
    */
   ~SdModel() override;
 
@@ -64,12 +64,6 @@ public:
    * No-op if already loaded.
    */
   void load();
-
-  /**
-   * Release all model memory (calls free_sd_ctx).
-   * Safe to call multiple times. The object can be load()-ed again afterwards.
-   */
-  void unload();
 
   /**
    * Returns true if weights are currently loaded (sd_ctx is live).
@@ -100,7 +94,7 @@ public:
   // ── Process-exit guard ─────────────────────────────────────────────────────
 
   /**
-   * Call before the process exits so that unload() skips free_sd_ctx.
+   * Call before the process exits so that the destructor skips free_sd_ctx.
    * ggml's Metal/Vulkan backends may already be partially torn down at that
    * point; calling free_sd_ctx would cause a SIGSEGV (exit 139).
    * The OS reclaims all memory on process exit regardless.

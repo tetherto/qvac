@@ -32,10 +32,7 @@ protected:
   }
 
   static void TearDownTestSuite() {
-    if (model) {
-      model->unload();
-      model.reset();
-    }
+    model.reset(); // destructor releases GPU memory
   }
 
   void SetUp() override {

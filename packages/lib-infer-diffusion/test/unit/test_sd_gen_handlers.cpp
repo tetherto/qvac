@@ -399,13 +399,12 @@ TEST(SdImageBatch, EarlyReleaseAllowsImmediateMemoryRecovery) {
 TEST(SdModel_ProcessExit, SetProcessExitingDoesNotThrow) {
   // Calling setProcessExiting() is a no-op from a user perspective — it just
   // sets an internal atomic flag.  The main contract is that it doesn't crash
-  // and that an already-unloaded model still behaves correctly after the call.
-  SdCtxConfig cfg{};
-  SdModel model(std::move(cfg));
-
+  // and that destroying a never-loaded model after the call is safe.
   EXPECT_NO_THROW(SdModel::setProcessExiting());
-  // unload() on an unloaded model is always a no-op regardless of the flag.
-  EXPECT_NO_THROW(model.unload());
+  EXPECT_NO_THROW({
+    SdCtxConfig cfg{};
+    SdModel model(std::move(cfg));
+  }); // destructor runs with g_processExiting=true — must not crash
 }
 
 // ─────────────────────────────────────────────────────────────────────────────

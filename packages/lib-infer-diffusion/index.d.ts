@@ -13,14 +13,20 @@ export interface Addon {
 
 /** Supported diffusion sampling methods */
 export type SamplerMethod =
-  | 'euler_a'
   | 'euler'
+  | 'euler_a'
   | 'heun'
   | 'dpm2'
-  | 'dpm++_2m'
-  | 'dpm++_2m_v2'
-  | 'dpm++_2s_a'
+  | 'dpm++2m'
+  | 'dpm++2mv2'
+  | 'dpm++2s_a'
   | 'lcm'
+  | 'ipndm'
+  | 'ipndm_v'
+  | 'ddim_trailing'
+  | 'tcd'
+  | 'res_multistep'
+  | 'res_2s'
 
 /** Supported weight quantization types */
 export type WeightType =
@@ -34,10 +40,22 @@ export type WeightType =
   | 'q8_0'
 
 /** Supported RNG types */
-export type RngType = 'cuda' | 'cpu'
+export type RngType = 'cpu' | 'cuda' | 'std_default'
 
 /** Supported sampling schedules */
-export type ScheduleType = 'default' | 'discrete' | 'karras' | 'exponential' | 'ays' | 'gits'
+export type ScheduleType =
+  | 'default'
+  | 'discrete'
+  | 'karras'
+  | 'exponential'
+  | 'ays'
+  | 'gits'
+  | 'sgm_uniform'
+  | 'simple'
+  | 'lcm'
+  | 'smoothstep'
+  | 'kl_optimal'
+  | 'bong_tangent'
 
 export interface SdConfig {
   /** Number of CPU threads (-1 = auto) */

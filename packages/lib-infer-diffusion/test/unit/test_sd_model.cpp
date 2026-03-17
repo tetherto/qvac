@@ -24,9 +24,8 @@ TEST_F(SdModelTest, GetNameReturnsSdModel) {
   EXPECT_EQ(model.getName(), "SdModel");
 }
 
-TEST_F(SdModelTest, UnloadOnUnloadedModelIsNoop) {
+TEST_F(SdModelTest, DestroyUnloadedModelIsNoop) {
   SdCtxConfig config{};
-  SdModel model(std::move(config));
-  EXPECT_NO_THROW(model.unload());
-  EXPECT_FALSE(model.isLoaded());
+  // Destructor on a never-loaded model must not crash.
+  EXPECT_NO_THROW({ SdModel model(std::move(config)); });
 }

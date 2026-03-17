@@ -35,30 +35,15 @@ TEST_F(SdModelLoadingTest, LoadSD2ModelSucceeds) {
 
   EXPECT_NO_THROW(model->load());
   EXPECT_TRUE(model->isLoaded());
-
-  model->unload();
+  // model goes out of scope here — destructor releases GPU memory
 }
 
-TEST_F(SdModelLoadingTest, UnloadReleasesResources) {
-  auto model = makeModel();
-  model->load();
-  ASSERT_TRUE(model->isLoaded());
-
-  model->unload();
-  EXPECT_FALSE(model->isLoaded());
-}
-
-TEST_F(SdModelLoadingTest, ReloadAfterUnload) {
-  auto model = makeModel();
-
-  model->load();
-  ASSERT_TRUE(model->isLoaded());
-
-  model->unload();
-  ASSERT_FALSE(model->isLoaded());
-
-  EXPECT_NO_THROW(model->load());
-  EXPECT_TRUE(model->isLoaded());
-
-  model->unload();
+TEST_F(SdModelLoadingTest, DestructorReleasesResources) {
+  // Verify that a loaded model is reported as loaded, then let the destructor
+  // free resources by going out of scope.
+  {
+    auto model = makeModel();
+    model->load();
+    ASSERT_TRUE(model->isLoaded());
+  } // destructor called here — must not crash
 }
