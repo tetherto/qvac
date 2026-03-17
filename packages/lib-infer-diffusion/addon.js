@@ -90,4 +90,3 @@ function notifyProcessExit (binding) {
 }
 
 module.exports = { SdInterface, notifyProcessExit }
-
