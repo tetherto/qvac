@@ -41,15 +41,8 @@ float boxScore(const cv::Mat& probMap, const cv::Rect& bbox) {
 } // namespace
 
 StepDoctrDetection::StepDoctrDetection(
-    const std::string& pathDetector, bool useGPU)
-    : session_(pathDetector, [&] {
-        onnx_addon::SessionConfig cfg;
-        cfg.provider = useGPU ? onnx_addon::ExecutionProvider::AUTO_GPU
-                              : onnx_addon::ExecutionProvider::CPU;
-        cfg.optimization = onnx_addon::GraphOptimizationLevel::EXTENDED;
-        cfg.enableXnnpack = false;
-        return cfg;
-      }()) {
+    const std::string& pathDetector, const onnx_addon::SessionConfig& sessionConfig)
+    : session_(pathDetector, sessionConfig) {
   QLOG(qvac_lib_inference_addon_cpp::logger::Priority::INFO,
        "[DoctrDetection] ONNX session created");
   ALOG_INFO(std::string("[DoctrDetection] ONNX session created"));

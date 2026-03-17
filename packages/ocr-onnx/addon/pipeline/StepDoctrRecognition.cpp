@@ -83,17 +83,9 @@ std::vector<std::string> parseVocabToChars(const std::string& vocab) {
 } // namespace
 
 StepDoctrRecognition::StepDoctrRecognition(
-    const std::string& pathRecognizer, bool useGPU, int batchSize,
-    DecodingMethod decoding)
-    : session_(
-          pathRecognizer,
-          [&] {
-            onnx_addon::SessionConfig cfg;
-            cfg.provider = useGPU ? onnx_addon::ExecutionProvider::AUTO_GPU
-                                  : onnx_addon::ExecutionProvider::CPU;
-            cfg.optimization = onnx_addon::GraphOptimizationLevel::EXTENDED;
-            return cfg;
-          }()),
+    const std::string& pathRecognizer, const onnx_addon::SessionConfig& sessionConfig,
+    int batchSize, DecodingMethod decoding)
+    : session_(pathRecognizer, sessionConfig),
       batchSize_(batchSize), decodingMethod_(decoding),
       vocabChars_(parseVocabToChars(VOCAB)) {
   std::string decodingStr = (decoding == DecodingMethod::CTC) ? "CTC" : "ATTENTION";

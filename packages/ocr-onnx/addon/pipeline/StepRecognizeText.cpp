@@ -472,18 +472,11 @@ std::array<cv::Point2f, 4> rotateBox(const std::array<cv::Point2f, 4> &box, int 
 
 StepRecognizeText::StepRecognizeText(
     const std::string& pathRecognizer, std::span<const std::string> langList,
-    bool useGPU, const Config& config)
+    const onnx_addon::SessionConfig& sessionConfig, const Config& config)
     : config_(config),
       session_(
           pathRecognizer,
-          [&] {
-            onnx_addon::SessionConfig cfg;
-            cfg.provider = useGPU ? onnx_addon::ExecutionProvider::AUTO_GPU
-                                  : onnx_addon::ExecutionProvider::CPU;
-            cfg.optimization = onnx_addon::GraphOptimizationLevel::EXTENDED;
-            cfg.enableXnnpack = false;
-            return cfg;
-          }()),
+          sessionConfig),
       isLeftToRightScript_{true} {
   QLOG(qvac_lib_inference_addon_cpp::logger::Priority::INFO, "[Recognition] Constructor: ONNX session created, validating languages...");
   ALOG_INFO(std::string("[Recognition] Constructor: ONNX session created, validating languages..."));
