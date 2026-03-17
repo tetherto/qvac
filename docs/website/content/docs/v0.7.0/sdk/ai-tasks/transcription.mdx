@@ -1,0 +1,55 @@
+---
+title: Transcription
+description: Automatic speech recognition (ASR) for speech-to-text — i.e., generate text transcriptions from audio input.
+---
+
+## Overview
+
+Transcription uses [`whisper.cpp`](https://github.com/ggml-org/whisper.cpp) as inference engine. Load any supported model using `modelType: "whisper"`. Then, provide audio input as `audioChunk`, either as a file path (string) or an in-memory audio buffer.
+
+Optionally (recommended), also pass an ancillary voice activity detection (VAD) model (e.g., Silero) to improve speech segmentation.
+
+`transcribe()` returns the full transcription as a single `string`. If you need partial results as they become available, use `transcribeStream()` to receive text chunks in real-time.
+
+## Functions
+
+Use the following sequence of function calls:
+1. [`loadModel()`](/v0.7.0/sdk/api/loadModel)
+2. [`transcribe()`](/v0.7.0/sdk/api/transcribe) or [`transcribeStream()`](/v0.7.0/sdk/api/transcribeStream)
+3. [`unloadModel()`](/v0.7.0/sdk/api/unloadModel)
+
+For how to use each function, see [SDK — API reference](/v0.7.0/sdk/api/).
+
+## Models
+
+You should load two models:
+- a `whisper.cpp`-compatible model for transcription. Model file format: `*.bin`; and
+- a VAD model (e.g., Silero) converted to GGML. Model file format: `*.bin` _(optional, recommended)_.
+
+For models available as constants, see [SDK — Models](/v0.7.0/sdk#models).
+
+## Example
+
+The following script shows an example of transcription:
+
+<Tabs>
+<Tab value="js" label="JavaScript" default>
+<WrapCode>
+
+```js file=<rootDir>/packages/sdk/dist/examples/transcription/whispercpp-prompt.js title="transcription.js" lineNumbers
+```
+</WrapCode>
+</Tab>
+
+<Tab value="ts" label="TypeScript">
+<WrapCode>
+
+```ts file=<rootDir>/packages/sdk/examples/transcription/whispercpp-prompt.ts title="transcription.ts" lineNumbers
+```
+</WrapCode>
+</Tab>
+</Tabs>
+
+<Callout type="success">
+**Tip:** all examples throughout this documentation are self-contained and runnable. For instructions on how to run them, see [SDK quickstart](/v0.7.0/sdk/quickstart).
+</Callout>

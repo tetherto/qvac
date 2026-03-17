@@ -1,0 +1,51 @@
+---
+title: Blind relays
+description: Establish peer connections through NAT/firewalls by routing traffic via relay nodes.
+---
+
+## Overview
+
+Blind relays help establish peer connections through NAT/firewalls by routing traffic through relay nodes. Use it for model downloads from [our model registry](/v0.7.0/sdk#models) and for delegated inference scenarios where peers may be behind restrictive network configurations.
+
+## Configuration
+
+Configure relays via QVAC config file (`qvac.config.json`, `qvac.config.js`, or `qvac.config.ts`) in your project root:
+
+```json
+{
+  "swarmRelays": ["<relay-public-key-hex>", "<relay-public-key-hex>"]
+}
+```
+
+## Example
+
+The following script shows a basic example of downloading a model via Hyperdrive with blind relays enabled:
+
+<Tabs>
+<Tab value="js" label="JavaScript" default>
+<WrapCode>
+
+```js file=<rootDir>/packages/sdk/dist/examples/download-with-blind-relays.js title="blind-relays.js" lineNumbers
+```
+</WrapCode>
+</Tab>
+
+<Tab value="ts" label="TypeScript">
+<WrapCode>
+
+```ts file=<rootDir>/packages/sdk/examples/download-with-blind-relays.ts title="blind-relays.ts" lineNumbers
+```
+</WrapCode>
+</Tab>
+</Tabs>
+
+<Callout type="success">
+**Tip:** all examples throughout this documentation are self-contained and runnable. For instructions on how to run them, see [SDK quickstart](/v0.7.0/sdk/quickstart).
+</Callout>
+
+## Notes
+
+The examples use mock relay keys. For real deployments, you **must** use your own relay servers or trusted public relays.
+
+The same `swarmRelays` config also applies to delegated inference (provider/consumer). Configure it via [`qvac.config.*` file (or `QVAC_CONFIG_PATH`)](https://github.com/tetherto/qvac/blob/main/packages/qvac-sdk/schemas/translation-config.ts) and then start your provider/consumer as usual.
+

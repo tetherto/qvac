@@ -1,47 +1,25 @@
 ---
 title: "textToSpeech( )"
 titleStyle: code
-description: Converts text to speech audio.
+description: "No description available"
 ---
 
-
-```ts
-function textToSpeech(params): {
-  bufferStream: AsyncGenerator<number>;
-  buffer: Promise<number[]>;
-  done: Promise<boolean>;
-};
+```typescript
+function textToSpeech(params: infer): { buffer: Promise<number[]>; bufferStream: AsyncGenerator<number>; done: Promise<boolean> }
 ```
+
+## Description
+
+No description available
 
 ## Parameters
 
-| Name | Type | Required? | Default | Description |
-| --- | --- | :---: | --- | --- |
-| params.modelId | `string` | ✓ | — | The identifier of the loaded TTS model |
-| params.text | `string` | ✓ | — | The text to convert to speech (non-empty) |
-| params.inputType | `string` | ✗ | `"text"` | Input type |
-| params.stream | `boolean` | ✗ | `true` | Whether to stream audio samples or return all at once |
+| Name | Type | Required? | Description |
+| --- | --- | :---: | --- |
+| `params` | `infer` | ✓ | No description |
 
 ## Returns
 
-`object` — Object with the following fields:
-
-| Field | Type | Description |
-| --- | --- | --- |
-| bufferStream | `AsyncGenerator<number>` | Stream of audio samples (active when `stream: true`) |
-| buffer | `Promise<number[]>` | Complete audio buffer (populated when `stream: false`) |
-| done | `Promise<boolean>` | Resolves to `true` when generation completes |
-
-## Example
-
 ```typescript
-// Streaming mode
-const { bufferStream } = textToSpeech({ modelId, text: "Hello world" });
-for await (const sample of bufferStream) {
-  // process audio sample
-}
-
-// Non-streaming mode
-const { buffer } = textToSpeech({ modelId, text: "Hello world", stream: false });
-const audioData = await buffer;
+{ buffer: Promise<number[]>; bufferStream: AsyncGenerator<number>; done: Promise<boolean> }
 ```

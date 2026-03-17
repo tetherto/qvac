@@ -1,30 +1,27 @@
 ---
 title: "defineHandler( )"
 titleStyle: code
-description: Helper function to define a handler with full type inference.
+description: "Helper function to define a handler with full type inference.
+This is an identity function that provides type checking."
 ---
 
-```ts
-function defineHandler<TRequest extends ZodType, TResponse extends ZodType>(
-  definition: PluginHandlerDefinition<TRequest, TResponse>
-): PluginHandlerDefinition<TRequest, TResponse>;
+```typescript
+function defineHandler(definition: PluginHandlerDefinition): PluginHandlerDefinition
 ```
+
+## Description
+
+Helper function to define a handler with full type inference.
+This is an identity function that provides type checking.
 
 ## Parameters
 
 | Name | Type | Required? | Description |
 | --- | --- | :---: | --- |
-| definition | [`PluginHandlerDefinition`](#pluginhandlerdefinition) | ✓ | The handler definition with schemas and handler function |
-
-### `PluginHandlerDefinition`
-
-| Field | Type | Required? | Description |
-| --- | --- | :---: | --- |
-| requestSchema | `ZodType` | ✓ | Zod schema for validating incoming requests |
-| responseSchema | `ZodType` | ✓ | Zod schema for validating outgoing responses |
-| streaming | `boolean` | ✓ | Whether this handler uses streaming responses |
-| handler | `(request) => Promise<response> \| AsyncGenerator<response>` | ✓ | The handler function — receives validated request, returns validated response |
+| `definition` | `PluginHandlerDefinition` | ✓ | No description |
 
 ## Returns
 
-`PluginHandlerDefinition<TRequest, TResponse>` — The same definition object, with full type inference applied. This is an identity function used for type checking.
+```typescript
+PluginHandlerDefinition
+```
