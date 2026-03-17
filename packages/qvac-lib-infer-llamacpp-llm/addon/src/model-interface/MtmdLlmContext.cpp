@@ -480,6 +480,7 @@ void MtmdLlmContext::setNDiscarded(llama_pos nDiscarded) {
 }
 
 int32_t MtmdLlmContext::getNSlides() const { return nSlides_; }
+void MtmdLlmContext::resetNSlides() { nSlides_ = 0; }
 
 void MtmdLlmContext::loadMedia(const std::vector<uint8_t>& media) {
   if (media.empty()) {
@@ -554,11 +555,9 @@ void MtmdLlmContext::resetState(bool resetStats) {
   // Reset the first msg token length
   firstMsgTokens_ = 0;
 
-  // Reset slide counter (only when full stats reset is requested;
-  // runtimeStats() reads nSlides_ after a resetState(false) call)
-  if (resetStats) {
-    nSlides_ = 0;
-  }
+  // nSlides_ is intentionally NOT reset here — it's reset at the start
+  // of each inference run via resetNSlides(), so runtimeStats() can
+  // read the correct per-inference value after resetState(false).
 
   // Clear UTF-8 buffer when resetting state
   utf8Buffer_.clear();

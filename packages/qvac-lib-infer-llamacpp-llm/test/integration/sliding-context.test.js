@@ -95,8 +95,8 @@ async function setupModel (t, overrides = {}) {
   return { model, dirPath }
 }
 
-async function runAndCollect (model, prompt) {
-  const response = await model.run(prompt)
+async function runAndCollect (model, prompt, runOptions) {
+  const response = await model.run(prompt, runOptions)
   const chunks = []
   response.onUpdate(data => { chunks.push(data) })
   // Bare runtime on arm64 may not drain promise microtasks from native addon
@@ -234,13 +234,15 @@ test('Sliding context works with minimal n_discarded of 1', {
   )
 })
 
-// n_discarded=64, n_predict=200
+// n_discarded=64, n_predict=200 (first run), n_predict=10 (second run)
 // First run: n_past = 44 + 200 = 244, firstMsgTokens = 44
 // Second run follow-up (~20 tokens):
 //   n_past + nTokens = 244 + ~20 = ~264 >= 256 (outer condition)
 //   leftTokens = 244 - 44 - 64 = 136 >= 0
 //   n_past + nTokens - n_discarded = ~264 - 64 = ~200 < 256
 // :> discards n_discarded (64) tokens after first message
+// Second run uses predict=10 via generationParams so generation can't
+// reach the context limit — any contextSlides must come from prefill.
 test('Cached follow-up discards middle tokens to fit new message', {
   timeout: 900_000,
   skip
@@ -259,22 +261,27 @@ test('Cached follow-up discards middle tokens to fit new message', {
   const first = await runAndCollect(model, buildPrompt(cachePath, STORY_PROMPT))
   t.is(first.stats.promptTokens, PROMPT_TOKENS, 'first run: prompt tokens match')
   t.ok(first.stats.generatedTokens > 0, 'first run: generated output')
+  t.is(first.stats.contextSlides, 0, 'first run: no slides (n_past 244 < n_ctx 256)')
 
-  const slidesAfterFirstRun = first.stats.contextSlides
-
-  // Second run: follow-up message triggers prefill discard
-  const second = await runAndCollect(model, buildPrompt(cachePath, [FOLLOW_UP_MSG]))
+  // Second run: low predict so only prefill discard can cause slides
+  // After prefill discard: n_past ~200, generate 10 → ~210 < 256 (no generation sliding)
+  const second = await runAndCollect(
+    model,
+    buildPrompt(cachePath, [FOLLOW_UP_MSG]),
+    { generationParams: { predict: 10 } }
+  )
   t.ok(second.stats.generatedTokens > 0, 'second run: generated output after prefill discard')
-  t.ok(second.stats.contextSlides > slidesAfterFirstRun, 'prefill discard incremented slide count')
+  t.is(second.stats.contextSlides, 1, 'exactly one prefill discard slide')
 })
 
-// n_discarded=250 (clamped to 211), n_predict=200
+// n_discarded=250 (clamped to 211), n_predict=200 (first run), predict=10 (second run)
 // First run: n_past = 244, firstMsgTokens = 44, n_discarded = 211
 // Second run follow-up (~20 tokens):
 //   leftTokens = 244 - 44 - 211 = -11 < 0
 //   firstMsgTokens + nTokens = 44 + ~20 = ~64 < 256
 //   n_discarded = 211 > 0
 // :> removes all middle tokens from pos 44 to 244
+// Second run uses predict=10 so generation can't cause slides.
 test('Cached follow-up clears all middle tokens when discard window is exhausted', {
   timeout: 900_000,
   skip
@@ -293,13 +300,17 @@ test('Cached follow-up clears all middle tokens when discard window is exhausted
   const first = await runAndCollect(model, buildPrompt(cachePath, STORY_PROMPT))
   t.is(first.stats.promptTokens, PROMPT_TOKENS, 'first run: prompt tokens match')
   t.ok(first.stats.generatedTokens > 0, 'first run: generated output')
+  t.is(first.stats.contextSlides, 0, 'first run: no slides (n_past 244 < n_ctx 256)')
 
-  const slidesAfterFirstRun = first.stats.contextSlides
-
-  // Second run: follow-up triggers full middle token discard
-  const second = await runAndCollect(model, buildPrompt(cachePath, [FOLLOW_UP_MSG]))
+  // Second run: low predict so only prefill full-middle-discard can cause slides
+  // After discard: n_past = 44 (firstMsgTokens), generate 10 → 54 < 256
+  const second = await runAndCollect(
+    model,
+    buildPrompt(cachePath, [FOLLOW_UP_MSG]),
+    { generationParams: { predict: 10 } }
+  )
   t.ok(second.stats.generatedTokens > 0, 'second run: generated output after full middle token discard')
-  t.ok(second.stats.contextSlides > slidesAfterFirstRun, 'full middle token discard incremented slide count')
+  t.is(second.stats.contextSlides, 1, 'exactly one full middle token discard slide')
 })
 
 // n_discarded=0, n_predict=200

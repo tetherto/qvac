@@ -348,6 +348,9 @@ std::string LlamaModel::processPrompt(const Prompt& prompt) {
 std::string LlamaModel::processPromptImpl(const Prompt& prompt) {
   state_->lastRunWasPrefill_ = prompt.prefill;
 
+  // Reset per-inference slide counter so it doesn't leak across runs
+  state_->llmContext_->resetNSlides();
+
   for (const auto& media : prompt.media) {
     loadMedia(media);
   }

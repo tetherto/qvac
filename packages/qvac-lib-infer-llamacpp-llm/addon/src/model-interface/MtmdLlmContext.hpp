@@ -116,6 +116,7 @@ public:
   void setNDiscarded(llama_pos nDiscarded) override;
 
   [[nodiscard]] int32_t getNSlides() const override;
+  void resetNSlides() override;
 
   /**
    * The load media method. It loads the media from memory buffer.
