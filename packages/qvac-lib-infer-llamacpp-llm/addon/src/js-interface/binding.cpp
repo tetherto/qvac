@@ -1,6 +1,17 @@
 #include <bare.h>
 
 #include "../addon/AddonJs.hpp"
+#include "../model-interface/LlamaLazyInitializeBackend.hpp"
+
+// Explicitly unload all dynamically-loaded GPU backend libraries and free
+// the llama backend. Called from JS at process exit (Bare 'exit' event)
+// before the runtime dlclose's this addon, ensuring backend destructors
+// run while ggml state is still alive.
+static js_value_t*
+shutdownBackends(js_env_t* /*env*/, js_callback_info_t* /*info*/) {
+  LlamaLazyInitializeBackend::shutdownBackends();
+  return nullptr;
+}
 
 js_value_t*
 qvacLibInferenceAddonLlamaExports(js_env_t* env, js_value_t* exports) {
@@ -27,6 +38,7 @@ qvacLibInferenceAddonLlamaExports(js_env_t* env, js_value_t* exports) {
     qvac_lib_inference_addon_cpp::JsInterface::destroyInstance)
   V("setLogger", qvac_lib_inference_addon_cpp::JsInterface::setLogger)
   V("releaseLogger", qvac_lib_inference_addon_cpp::JsInterface::releaseLogger)
+  V("shutdownBackends", shutdownBackends)
 
 #undef V
   return exports;

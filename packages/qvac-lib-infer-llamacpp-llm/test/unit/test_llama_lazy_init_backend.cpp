@@ -114,10 +114,10 @@ TEST_F(LlamaLazyInitializeBackendTest, RefCountReachesZero) {
     LlamaLazyInitializeBackend::decrementRefCount();
   });
 
-  // Backend is shut down when refcount reaches zero (explicit backend unload
-  // + llama_backend_free). Re-initialization should succeed.
+  // Backend remains initialized even after refcount reaches zero.
+  // Shutdown is handled at process exit from the JS layer, not on refcount 0.
   bool canReinitialize = LlamaLazyInitializeBackend::initialize("");
-  EXPECT_TRUE(canReinitialize);
+  EXPECT_FALSE(canReinitialize);
 }
 
 TEST_F(LlamaLazyInitializeBackendTest, BackendsHandleSelfAssignment) {

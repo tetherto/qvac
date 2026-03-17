@@ -72,11 +72,11 @@ TEST_F(LlamaLazyInitializeBackendTest, RefCountOperations) {
     LlamaLazyInitializeBackend::decrementRefCount();
   });
 
-  // Backend is shut down when refcount reaches zero (explicit backend unload
-  // + llama_backend_free). Re-initialization should succeed.
+  // Backend remains initialized even after refcount reaches zero.
+  // Shutdown is handled at process exit from the JS layer, not on refcount 0.
   bool canReinitialize = LlamaLazyInitializeBackend::initialize("");
-  EXPECT_TRUE(canReinitialize)
-      << "Backend should be freed and re-initializable after refcount = 0";
+  EXPECT_FALSE(canReinitialize)
+      << "Backend should remain initialized (shutdown only at process exit)";
 }
 
 TEST_F(LlamaLazyInitializeBackendTest, BackendsHandleConstruction) {
@@ -91,12 +91,12 @@ TEST_F(LlamaLazyInitializeBackendTest, BackendsHandleConstruction) {
     EXPECT_FALSE(alreadyInitialized)
         << "Backend should already be initialized by handle";
   }
-  // Handle destroyed — refcount reached zero, backend shut down.
-  // Re-initialization should succeed.
-  bool canReinitialize =
-      LlamaLazyInitializeBackend::initialize(backendsDir);
-  EXPECT_TRUE(canReinitialize)
-      << "Backend should be freed after last handle destruction";
+  // Handle destroyed — refcount decremented but backend stays initialized.
+  // Shutdown only happens at process exit from the JS layer.
+  bool stillInitialized =
+      !LlamaLazyInitializeBackend::initialize(backendsDir);
+  EXPECT_TRUE(stillInitialized)
+      << "Backend should remain initialized after handle destruction";
 }
 
 TEST_F(LlamaLazyInitializeBackendTest, BackendsHandleMoveConstruction) {
@@ -185,11 +185,11 @@ TEST_F(LlamaLazyInitializeBackendTest, RefCountReachesZero) {
     LlamaLazyInitializeBackend::decrementRefCount();
   });
 
-  // Backend is shut down when refcount reaches zero (explicit backend unload
-  // + llama_backend_free). Re-initialization should succeed.
+  // Backend remains initialized even after refcount reaches zero.
+  // Shutdown is handled at process exit from the JS layer, not on refcount 0.
   bool canReinitialize = LlamaLazyInitializeBackend::initialize("");
-  EXPECT_TRUE(canReinitialize)
-      << "Backend should be freed and re-initializable after refcount = 0";
+  EXPECT_FALSE(canReinitialize)
+      << "Backend should remain initialized (shutdown only at process exit)";
 }
 
 TEST_F(LlamaLazyInitializeBackendTest, BackendsHandleSelfAssignment) {

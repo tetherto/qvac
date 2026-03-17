@@ -69,19 +69,28 @@ void LlamaLazyInitializeBackend::decrementRefCount() {
   std::lock_guard<std::mutex> lock(g_initMutex);
   if (g_refCount > 0) {
     g_refCount--;
-    if (g_refCount == 0 && g_initialized) {
-      shutdownLocked();
-    }
+    // Intentionally never call shutdownBackends() here. The backend is
+    // process-global state and ggml does not support clean re-initialization
+    // after unloading backends. Shutdown is handled at process exit via
+    // shutdownBackends() called from the JS layer.
   }
 }
 
-void LlamaLazyInitializeBackend::shutdownLocked() {
+void LlamaLazyInitializeBackend::shutdownBackends() {
+  std::lock_guard<std::mutex> lock(g_initMutex);
+  if (!g_initialized) {
+    return;
+  }
+
   // Explicitly unload all dynamically-loaded backend libraries (Vulkan,
   // Metal, DirectX, etc.) BEFORE freeing the llama backend. This triggers
   // their static destructors / atexit handlers while the ggml backend
   // registry is still alive and valid. Without this, those destructors
   // run during process exit in undefined order relative to the ggml
   // registry destruction, causing use-after-free (SIGSEGV / exit 139).
+  //
+  // Called once at process exit from the JS layer (Bare 'exit' event),
+  // before the runtime dlclose's the addon .so.
   //
   // Unload in reverse order to respect potential inter-backend dependencies.
   for (auto i = static_cast<int>(ggml_backend_reg_count()) - 1; i >= 0;

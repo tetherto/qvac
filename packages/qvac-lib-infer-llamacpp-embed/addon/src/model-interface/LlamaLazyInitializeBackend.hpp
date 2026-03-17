@@ -36,9 +36,10 @@ public:
    * still alive), then free the llama backend. This prevents SIGSEGV at
    * process exit from static destructor ordering issues.
    *
-   * Must be called under g_initMutex.
+   * Called once at process exit from the JS layer, before the runtime
+   * unloads the addon. Must not be called while models are still active.
    */
-  static void shutdownLocked();
+  static void shutdownBackends();
 
 private:
   static std::mutex g_initMutex;
