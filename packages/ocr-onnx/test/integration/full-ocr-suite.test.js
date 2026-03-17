@@ -69,11 +69,13 @@ test('Full OCR test suite', { timeout: 40 * 60 * 1000, skip: isMobile }, async f
       useGPU: false,
       timeout
     }
-    // Windows CI runners have limited memory: use BASIC optimization
-    // (avoids FusedConv workspace OOM) and disable BFC arena pre-allocation.
+    // Windows CI runners have limited memory (~7GB): use BASIC optimization
+    // (avoids FusedConv workspace OOM), disable BFC arena pre-allocation,
+    // and reduce magRatio to shrink detector input (less Conv workspace).
     if (isWindows) {
       params.graphOptimization = 'basic'
       params.enableCpuMemArena = false
+      params.magRatio = 1.0
     }
 
     const onnxOcr = new ONNXOcr({ params, opts: { stats: true } })

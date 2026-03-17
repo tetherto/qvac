@@ -122,6 +122,7 @@ cv::Mat normalizeAndBuildCHW(const cv::Mat& img) {
   const int height = img.rows;
   const int width = img.cols;
   const int numChannels = img.channels();
+  CV_Assert(numChannels == 3);
   const size_t totalPixels = static_cast<size_t>(height) * width;
 
   // Pre-compute normalization constants: result = (pixel - mean*255) * (1 / (var*255))
