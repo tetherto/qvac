@@ -11,7 +11,7 @@
 import {
   loadModel,
   unloadModel,
-  transcribeLive,
+  transcribeStream,
   WHISPER_TINY,
   VAD_SILERO_5_1_2,
 } from "@qvac/sdk";
@@ -80,7 +80,7 @@ const ffmpeg = spawn(
 );
 if (!ffmpeg.stdout) throw new Error("Failed to open microphone");
 
-const session = await transcribeLive({ modelId });
+const session = await transcribeStream({ modelId });
 
 ffmpeg.stdout.on("data", (chunk: Buffer) => session.write(chunk));
 ffmpeg.on("close", () => session.end());

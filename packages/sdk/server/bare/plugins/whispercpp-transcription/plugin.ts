@@ -5,8 +5,8 @@ import TranscriptionWhispercpp, {
 import {
   definePlugin,
   defineHandler,
-  transcribeStreamRequestSchema,
-  transcribeStreamResponseSchema,
+  transcribeRequestSchema,
+  transcribeResponseSchema,
   ModelType,
   whisperConfigSchema,
   ADDON_WHISPER,
@@ -95,9 +95,9 @@ export const whisperPlugin = definePlugin({
   },
 
   handlers: {
-    transcribeStream: defineHandler({
-      requestSchema: transcribeStreamRequestSchema,
-      responseSchema: transcribeStreamResponseSchema,
+    transcribe: defineHandler({
+      requestSchema: transcribeRequestSchema,
+      responseSchema: transcribeResponseSchema,
       streaming: true,
 
       handler: async function* (request) {
@@ -107,13 +107,13 @@ export const whisperPlugin = definePlugin({
           prompt: request.prompt,
         })) {
           yield {
-            type: "transcribeStream" as const,
+            type: "transcribe" as const,
             text,
           };
         }
 
         yield {
-          type: "transcribeStream" as const,
+          type: "transcribe" as const,
           text: "",
           done: true,
         };
