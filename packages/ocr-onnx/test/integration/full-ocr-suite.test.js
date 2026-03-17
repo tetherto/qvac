@@ -69,9 +69,12 @@ test('Full OCR test suite', { timeout: 40 * 60 * 1000, skip: isMobile }, async f
       useGPU: false,
       timeout
     }
-    // EXTENDED optimization creates FusedConv nodes whose workspace buffers
-    // exceed available memory on Windows CI runners.
-    if (isWindows) params.graphOptimization = 'basic'
+    // Windows CI runners have limited memory: use BASIC optimization
+    // (avoids FusedConv workspace OOM) and disable BFC arena pre-allocation.
+    if (isWindows) {
+      params.graphOptimization = 'basic'
+      params.enableCpuMemArena = false
+    }
 
     const onnxOcr = new ONNXOcr({ params, opts: { stats: true } })
     await onnxOcr.load()

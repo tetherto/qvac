@@ -228,6 +228,9 @@ inline js_value_t* createInstance(js_env_t* env, js_callback_info_t* info) try {
   auto optEnableXnnpack = args1.getOptionalProperty<js::Boolean>(env, "enableXnnpack");
   if (optEnableXnnpack) config.sessionConfig.enableXnnpack = optEnableXnnpack->as<bool>(env);
 
+  auto optEnableCpuMemArena = args1.getOptionalProperty<js::Boolean>(env, "enableCpuMemArena");
+  if (optEnableCpuMemArena) config.sessionConfig.enableCpuMemArena = optEnableCpuMemArena->as<bool>(env);
+
   auto model = std::make_unique<Pipeline>(
       pathDetector,
       pathRecognizer,
