@@ -1,46 +1,25 @@
 ---
 title: "invokePlugin( )"
 titleStyle: code
-description: Invoke a non-streaming plugin handler.
+description: "Invoke a non-streaming plugin handler."
 ---
 
-```ts
-function invokePlugin<TResponse = unknown, TParams = unknown>(
-  options: InvokePluginOptions<TParams>
-): Promise<TResponse>;
+```typescript
+function invokePlugin(options: InvokePluginOptions): Promise
 ```
+
+## Description
+
+Invoke a non-streaming plugin handler.
 
 ## Parameters
 
 | Name | Type | Required? | Description |
 | --- | --- | :---: | --- |
-| options | [`InvokePluginOptions`](#invokepluginoptions) | ✓ | The invocation options |
-
-### `InvokePluginOptions`
-
-| Field | Type | Required? | Description |
-| --- | --- | :---: | --- |
-| modelId | `string` | ✓ | The model ID of the loaded plugin model |
-| handler | `string` | ✓ | The handler name to invoke (as defined in the plugin) |
-| params | `TParams` | ✓ | Parameters to pass to the handler (validated against the handler's `requestSchema`) |
+| `options` | `InvokePluginOptions` | ✓ | No description |
 
 ## Returns
 
-`Promise<TResponse>` — The handler's response (validated against the handler's `responseSchema`).
-
-## Throws
-
-| Error | When |
-| --- | --- |
-| `INVALID_RESPONSE_TYPE` | Response type does not match expected `"pluginInvoke"` |
-
-## Example
-
 ```typescript
-const result = await invokePlugin<{ answer: string }>({
-  modelId: "my-custom-model",
-  handler: "summarize",
-  params: { text: "Long document..." },
-});
-console.log(result.answer);
+Promise
 ```

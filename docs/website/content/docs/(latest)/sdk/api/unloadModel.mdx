@@ -1,38 +1,33 @@
 ---
 title: "unloadModel( )"
 titleStyle: code
-description: Unloads a previously loaded model from the server.
+description: "Unloads a previously loaded model from the server.
+
+When the last model is unloaded (no more models remain), this function
+automatically closes the RPC connection, allowing the process to exit
+naturally without requiring manual cleanup."
 ---
 
-```ts
-function unloadModel(params): Promise<void>;
+```typescript
+function unloadModel(params: input): Promise
 ```
 
-When the last model is unloaded and no providers are active, the RPC connection is automatically closed, allowing the process to exit naturally.
+## Description
+
+Unloads a previously loaded model from the server.
+
+When the last model is unloaded (no more models remain), this function
+automatically closes the RPC connection, allowing the process to exit
+naturally without requiring manual cleanup.
 
 ## Parameters
 
-| Name | Type | Required? | Default | Description |
-| --- | --- | :---: | --- | --- |
-| params.modelId | `string` | ✓ | — | The unique identifier of the model to unload |
-| params.clearStorage | `boolean` | ✗ | `false` | Whether to clear the storage for the model |
+| Name | Type | Required? | Description |
+| --- | --- | :---: | --- |
+| `params` | `input` | ✓ | The parameters for unloading the model |
 
 ## Returns
 
-`Promise<void>` — Resolves when the model is unloaded.
-
-## Throws
-
-| Error | When |
-| --- | --- |
-| `INVALID_RESPONSE_TYPE` | Response type does not match expected `"unloadModel"` |
-| `MODEL_UNLOAD_FAILED` | The server reports unload failure |
-
-## Example
-
 ```typescript
-await unloadModel({ modelId: "model-123" });
-
-// Unload and clear cached files
-await unloadModel({ modelId: "model-123", clearStorage: true });
+Promise
 ```
