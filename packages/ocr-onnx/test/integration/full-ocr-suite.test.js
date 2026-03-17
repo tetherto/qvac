@@ -1,6 +1,6 @@
 'use strict'
 
-const { ONNXOcr } = require('../..')
+const { ONNXOcr, addonLogging } = require('../..')
 const test = require('brittle')
 const fs = require('bare-fs')
 const path = require('bare-path')
@@ -9,6 +9,11 @@ const { isMobile } = require('./utils')
 
 const isMacCI = os.platform() === 'darwin'
 const isWindows = os.platform() === 'win32'
+
+const levelNames = { 0: 'ERROR', 1: 'WARNING', 2: 'INFO', 3: 'DEBUG' }
+addonLogging.setLogger((level, message) => {
+  console.log(`[C++] [${levelNames[level] || 'UNKNOWN'}]: ${message}`)
+})
 
 const arabicLangList = ['ar', 'fa', 'ug', 'ur']
 const bengaliLangList = ['bn', 'as', 'mni']
