@@ -49,3 +49,8 @@ export interface ProfilerExport {
   recentEvents?: ProfilingEvent[];
   exportedAt: number;
 }
+
+export interface LoadTimingStats {
+  modelInitializationTimeMs?: number;
+  totalLoadTimeMs?: number;
+}

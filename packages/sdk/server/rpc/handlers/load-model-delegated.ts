@@ -3,7 +3,7 @@ import type {
   LoadModelResponse,
   ModelProgressUpdate,
 } from "@/schemas";
-import { DELEGATION_BREAKDOWN_KEY, modelInputToSrcSchema } from "@/schemas";
+import { DELEGATION_BREAKDOWN_KEY, OPERATION_EVENT_KEY, modelInputToSrcSchema } from "@/schemas";
 import type { DelegatedHandlerOptions } from "@/server/rpc/profiling";
 import type { ResponseWithDelegation } from "@/server/rpc/delegate-transport";
 import { registerModel } from "@/server/bare/registry/model-registry";
@@ -66,6 +66,7 @@ export async function handleLoadModelDelegated(
 
     let finalResponse: LoadModelResponse | undefined;
     let delegationBreakdown: ResponseWithDelegation[typeof DELEGATION_BREAKDOWN_KEY];
+    let operationEvent: ResponseWithDelegation[typeof OPERATION_EVENT_KEY];
 
     // Build delegate options with profiling metadata
     const delegateOpts: DelegateOptions = { peerKey: providerPublicKey };
@@ -89,6 +90,7 @@ export async function handleLoadModelDelegated(
           }
         } else if (response.type === "loadModel") {
           finalResponse = response;
+          operationEvent = (response as ResponseWithDelegation)[OPERATION_EVENT_KEY];
           break;
         }
       }
@@ -101,9 +103,9 @@ export async function handleLoadModelDelegated(
       logger.debug("📤 Using simple send mode for loadModel");
       const providerResponse = await send(providerRequest, rpc, delegateOpts);
       finalResponse = providerResponse as LoadModelResponse;
-      delegationBreakdown = (providerResponse as ResponseWithDelegation)[
-        DELEGATION_BREAKDOWN_KEY
-      ];
+      const typedResponse = providerResponse as ResponseWithDelegation;
+      delegationBreakdown = typedResponse[DELEGATION_BREAKDOWN_KEY];
+      operationEvent = typedResponse[OPERATION_EVENT_KEY];
     }
 
     if (!finalResponse || !finalResponse.success) {
@@ -147,6 +149,9 @@ export async function handleLoadModelDelegated(
     if (delegationBreakdown) {
       (result as ResponseWithDelegation)[DELEGATION_BREAKDOWN_KEY] =
         delegationBreakdown;
+    }
+    if (operationEvent) {
+      (result as ResponseWithDelegation)[OPERATION_EVENT_KEY] = operationEvent;
     }
 
     return result;
