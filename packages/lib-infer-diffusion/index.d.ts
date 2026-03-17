@@ -17,10 +17,16 @@ export type SamplerMethod =
   | 'euler'
   | 'heun'
   | 'dpm2'
-  | 'dpm++_2m'
-  | 'dpm++_2m_v2'
-  | 'dpm++_2s_a'
+  | 'dpm++2m'
+  | 'dpm++2mv2'
+  | 'dpm++2s_a'
   | 'lcm'
+  | 'ipndm'
+  | 'ipndm_v'
+  | 'ddim_trailing'
+  | 'tcd'
+  | 'res_multistep'
+  | 'res_2s'
 
 /** Supported weight quantization types */
 export type WeightType =
@@ -34,10 +40,24 @@ export type WeightType =
   | 'q8_0'
 
 /** Supported RNG types */
-export type RngType = 'cuda' | 'cpu'
+export type RngType = 'cuda' | 'cpu' | 'std_default'
 
 /** Supported sampling schedules */
-export type ScheduleType = 'default' | 'discrete' | 'karras' | 'exponential' | 'ays' | 'gits'
+export type ScheduleType =
+  | 'discrete'
+  | 'karras'
+  | 'exponential'
+  | 'ays'
+  | 'gits'
+  | 'sgm_uniform'
+  | 'simple'
+  | 'lcm'
+  | 'smoothstep'
+  | 'kl_optimal'
+  | 'bong_tangent'
+
+/** Supported noise prediction types */
+export type PredictionType = 'auto' | 'eps' | 'v' | 'edm_v' | 'flow' | 'flux_flow' | 'flux2_flow'
 
 export interface SdConfig {
   /** Number of CPU threads (-1 = auto) */
@@ -58,6 +78,8 @@ export interface SdConfig {
   vae_tiling?: boolean
   /** Enable flash attention for memory efficiency */
   flash_attn?: boolean
+  /** Noise prediction type override (auto-detected from model by default) */
+  prediction?: PredictionType
   /** Logging verbosity: 0=error, 1=warn, 2=info, 3=debug */
   verbosity?: NumericLike
   [key: string]: string | number | boolean | undefined
@@ -73,7 +95,7 @@ export interface GenerationParams {
   cfg_scale?: number
   /** Distilled guidance (FLUX.2) */
   guidance?: number
-  /** Sampler name (e.g. 'euler', 'dpm++_2m') */
+  /** Sampler name (e.g. 'euler', 'dpm++2m') */
   sampling_method?: SamplerMethod
   /** Scheduler name */
   scheduler?: ScheduleType
