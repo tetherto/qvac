@@ -533,9 +533,12 @@ void TextLlmContext::resetState(bool resetStats) {
   // Reset the first msg token length
   firstMsgTokens_ = 0;
 
-  // nSlides_ is intentionally NOT reset here — it's reset at the start
-  // of each inference run via resetNSlides(), so runtimeStats() can
-  // read the correct per-inference value after resetState(false).
+  // On partial reset (resetStats=false), preserve nSlides_ so
+  // runtimeStats() can read the per-inference value.
+  // On full reset (resetStats=true), clear it along with perf stats.
+  if (resetStats) {
+    nSlides_ = 0;
+  }
 
   // Clear UTF-8 buffer when resetting state
   utf8Buffer_.clear();
