@@ -167,7 +167,7 @@ jobs:
   run-integration-tests:
     needs: [changes, prebuild]
     if: |
-      (needs.changes.outputs.pkg == 'true') &&
+      (needs.changes.outputs.pkg == 'true' || github.event_name == 'workflow_dispatch') &&
       (
         github.event_name == 'workflow_dispatch' ||
         contains(format(' {0} ', join(github.event.pull_request.labels.*.name, ' ')), ' verify ')
@@ -181,7 +181,7 @@ jobs:
   run-mobile-integration-tests:
     needs: [changes, prebuild]
     if: |
-      (needs.changes.outputs.pkg == 'true') &&
+      (needs.changes.outputs.pkg == 'true' || github.event_name == 'workflow_dispatch') &&
       (
         github.event_name == 'workflow_dispatch' ||
         contains(format(' {0} ', join(github.event.pull_request.labels.*.name, ' ')), ' verify ')
