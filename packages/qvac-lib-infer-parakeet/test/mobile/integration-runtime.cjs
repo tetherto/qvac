@@ -18,3 +18,4 @@ async function runIntegrationModule (relativeModulePath, options = {}) {
 }
 
 global.runIntegrationModule = runIntegrationModule
+

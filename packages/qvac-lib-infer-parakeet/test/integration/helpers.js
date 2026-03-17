@@ -5,7 +5,6 @@ const path = require('bare-path')
 const os = require('bare-os')
 const process = require('bare-process')
 const { Readable } = require('bare-stream')
-const { spawn } = require('bare-subprocess')
 
 const platform = os.platform()
 const arch = os.arch()
@@ -371,6 +370,7 @@ async function downloadFile (url, destPath) {
   if (isMobile) {
     return downloadWithHttp(url, destPath)
   }
+  const { spawn } = require('bare-subprocess')
   return new Promise((resolve, reject) => {
     const curl = spawn('curl', ['-L', '-o', destPath, url])
     curl.on('exit', (code) => {
@@ -391,18 +391,19 @@ async function ensureModel (modelPath = null) {
   const { modelsDir } = getTestPaths()
   const targetPath = modelPath || path.join(modelsDir, 'parakeet-tdt-0.6b-v3-onnx')
 
-  // Check if model already exists with all required files
   const requiredFiles = [
-    'encoder-model.onnx',
-    'encoder-model.onnx.data',
-    'decoder_joint-model.onnx',
-    'vocab.txt',
-    'preprocessor.onnx'
+    { file: 'encoder-model.onnx', minSize: 1000 },
+    { file: 'encoder-model.onnx.data', minSize: 100000000 },
+    { file: 'decoder_joint-model.onnx', minSize: 1000000 },
+    { file: 'vocab.txt', minSize: 100 },
+    { file: 'preprocessor.onnx', minSize: 100000 }
   ]
 
-  const allFilesExist = requiredFiles.every(file =>
-    fs.existsSync(path.join(targetPath, file))
-  )
+  const allFilesExist = requiredFiles.every(({ file, minSize }) => {
+    const p = path.join(targetPath, file)
+    if (!fs.existsSync(p)) return false
+    return fs.statSync(p).size >= minSize
+  })
 
   if (allFilesExist) {
     console.log('Model already downloaded')
@@ -420,19 +421,23 @@ async function ensureModel (modelPath = null) {
   const preprocessorUrl = 'https://huggingface.co/ysdede/parakeet-tdt-0.6b-v2-onnx/resolve/main/nemo128.onnx'
 
   const downloads = [
-    { url: `${baseUrl}/encoder-model.onnx`, file: 'encoder-model.onnx' },
-    { url: `${baseUrl}/encoder-model.onnx.data`, file: 'encoder-model.onnx.data' },
-    { url: `${baseUrl}/decoder_joint-model.onnx`, file: 'decoder_joint-model.onnx' },
-    { url: `${baseUrl}/vocab.txt`, file: 'vocab.txt' },
-    { url: preprocessorUrl, file: 'preprocessor.onnx' }
+    { url: `${baseUrl}/encoder-model.onnx`, file: 'encoder-model.onnx', minSize: 1000 },
+    { url: `${baseUrl}/encoder-model.onnx.data`, file: 'encoder-model.onnx.data', minSize: 100000000 },
+    { url: `${baseUrl}/decoder_joint-model.onnx`, file: 'decoder_joint-model.onnx', minSize: 1000000 },
+    { url: `${baseUrl}/vocab.txt`, file: 'vocab.txt', minSize: 100 },
+    { url: preprocessorUrl, file: 'preprocessor.onnx', minSize: 100000 }
   ]
 
-  for (const { url, file } of downloads) {
+  for (const { url, file, minSize } of downloads) {
     const destPath = path.join(targetPath, file)
-    if (!fs.existsSync(destPath)) {
-      console.log(`  Downloading ${file}...`)
-      await downloadFile(url, destPath)
+    if (fs.existsSync(destPath)) {
+      const size = fs.statSync(destPath).size
+      if (size >= minSize) continue
+      console.log(`  Cached ${file} too small (${size} bytes), re-downloading...`)
+      fs.unlinkSync(destPath)
     }
+    console.log(`  Downloading ${file}...`)
+    await downloadFile(url, destPath)
   }
 
   console.log('Model download complete')
@@ -486,6 +491,13 @@ async function runTranscription (params, expectation = {}) {
   const modelDir = path.dirname(modelPath)
   const modelName = params.modelName || path.basename(modelPath)
   const diskPath = params.diskPath || modelDir
+  if (!params.loader && !FakeDL) {
+    return {
+      output: 'Error: No loader provided and FakeDL not available (mobile)',
+      passed: false,
+      data: { error: 'No loader provided and FakeDL not available (mobile)' }
+    }
+  }
   const loader = params.loader || new FakeDL({})
   const parakeetConfig = params.parakeetConfig || {}
 
@@ -619,23 +631,23 @@ const MODEL_CONFIGS = {
   ctc: {
     dirName: 'parakeet-ctc-0.6b-onnx',
     files: [
-      { url: 'https://huggingface.co/onnx-community/parakeet-ctc-0.6b-ONNX/resolve/main/onnx/model.onnx', file: 'model.onnx' },
-      { url: 'https://huggingface.co/onnx-community/parakeet-ctc-0.6b-ONNX/resolve/main/onnx/model.onnx_data', file: 'model.onnx_data' },
-      { url: 'https://huggingface.co/onnx-community/parakeet-ctc-0.6b-ONNX/resolve/main/tokenizer.json', file: 'tokenizer.json' }
+      { url: 'https://huggingface.co/onnx-community/parakeet-ctc-0.6b-ONNX/resolve/main/onnx/model.onnx', file: 'model.onnx', minSize: 1000 },
+      { url: 'https://huggingface.co/onnx-community/parakeet-ctc-0.6b-ONNX/resolve/main/onnx/model.onnx_data', file: 'model.onnx_data', minSize: 100000000 },
+      { url: 'https://huggingface.co/onnx-community/parakeet-ctc-0.6b-ONNX/resolve/main/tokenizer.json', file: 'tokenizer.json', minSize: 100 }
     ]
   },
   eou: {
     dirName: 'parakeet-eou-120m-v1-onnx',
     files: [
-      { url: 'https://huggingface.co/altunenes/parakeet-rs/resolve/main/realtime_eou_120m-v1-onnx/encoder.onnx', file: 'encoder.onnx' },
-      { url: 'https://huggingface.co/altunenes/parakeet-rs/resolve/main/realtime_eou_120m-v1-onnx/decoder_joint.onnx', file: 'decoder_joint.onnx' },
-      { url: 'https://huggingface.co/altunenes/parakeet-rs/resolve/main/realtime_eou_120m-v1-onnx/tokenizer.json', file: 'tokenizer.json' }
+      { url: 'https://huggingface.co/altunenes/parakeet-rs/resolve/main/realtime_eou_120m-v1-onnx/encoder.onnx', file: 'encoder.onnx', minSize: 100000 },
+      { url: 'https://huggingface.co/altunenes/parakeet-rs/resolve/main/realtime_eou_120m-v1-onnx/decoder_joint.onnx', file: 'decoder_joint.onnx', minSize: 100000 },
+      { url: 'https://huggingface.co/altunenes/parakeet-rs/resolve/main/realtime_eou_120m-v1-onnx/tokenizer.json', file: 'tokenizer.json', minSize: 100 }
     ]
   },
   sortformer: {
     dirName: 'sortformer-4spk-v2-onnx',
     files: [
-      { url: 'https://huggingface.co/cgus/diar_streaming_sortformer_4spk-v2-onnx/resolve/main/diar_streaming_sortformer_4spk-v2.onnx', file: 'sortformer.onnx' }
+      { url: 'https://huggingface.co/cgus/diar_streaming_sortformer_4spk-v2-onnx/resolve/main/diar_streaming_sortformer_4spk-v2.onnx', file: 'sortformer.onnx', minSize: 1000000 }
     ]
   }
 }
@@ -652,11 +664,13 @@ async function ensureModelForType (modelType) {
   const { modelsDir } = getTestPaths()
   const targetPath = path.join(modelsDir, cfg.dirName)
 
-  const allFilesExist = cfg.files.every(f =>
-    fs.existsSync(path.join(targetPath, f.file))
-  )
+  const allFilesValid = cfg.files.every(f => {
+    const p = path.join(targetPath, f.file)
+    if (!fs.existsSync(p)) return false
+    return fs.statSync(p).size >= (f.minSize || 0)
+  })
 
-  if (allFilesExist) {
+  if (allFilesValid) {
     console.log(`${modelType.toUpperCase()} model already downloaded`)
     return targetPath
   }
@@ -666,12 +680,16 @@ async function ensureModelForType (modelType) {
     fs.mkdirSync(targetPath, { recursive: true })
   }
 
-  for (const { url, file } of cfg.files) {
+  for (const { url, file, minSize } of cfg.files) {
     const destPath = path.join(targetPath, file)
-    if (!fs.existsSync(destPath)) {
-      console.log(`  Downloading ${file}...`)
-      await downloadFile(url, destPath)
+    if (fs.existsSync(destPath)) {
+      const size = fs.statSync(destPath).size
+      if (size >= (minSize || 0)) continue
+      console.log(`  Cached ${file} too small (${size} bytes), re-downloading...`)
+      fs.unlinkSync(destPath)
     }
+    console.log(`  Downloading ${file}...`)
+    await downloadFile(url, destPath)
   }
 
   console.log(`${modelType.toUpperCase()} model download complete`)
