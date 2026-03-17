@@ -8,6 +8,7 @@ const { ParakeetInterface } = require('../../parakeet')
 const {
   detectPlatform,
   setupJsLogger,
+  waitUntilIdle,
   getTestPaths,
   validateAccuracy,
   ensureModel,
@@ -77,11 +78,10 @@ test('English transcription and WER verification', { timeout: 300000 }, async (t
           transcriptions.push(segment)
         }
       }
-      // Resolve when we get actual output (transcription completed)
-      if (transcriptions.length > 0 && outputResolve) {
-        outputResolve()
-        outputResolve = null
-      }
+    }
+    if ((event === 'JobEnded' || event === 'Error') && outputResolve) {
+      outputResolve()
+      outputResolve = null
     }
   }
 
@@ -149,7 +149,8 @@ test('English transcription and WER verification', { timeout: 300000 }, async (t
     console.log('\n=== Cleanup ===')
     if (parakeet) {
       try {
-        parakeet.destroyInstance()
+        await waitUntilIdle(parakeet, 60000)
+        await parakeet.destroyInstance()
         console.log('   Instance destroyed')
       } catch (e) {
         console.log('   Instance destroy error:', e.message)
@@ -161,5 +162,163 @@ test('English transcription and WER verification', { timeout: 300000 }, async (t
     } catch (e) {
       console.log('   Logger release error:', e.message)
     }
+  }
+})
+
+test('Cancel active job keeps model usable for next job', { timeout: 600000, skip: !platform.startsWith('darwin') }, async (t) => {
+  const loggerBinding = setupJsLogger(binding)
+
+  await ensureModel(modelPath)
+
+  const samplePath = path.join(samplesDir, 'sample.raw')
+  if (!fs.existsSync(samplePath)) {
+    loggerBinding.releaseLogger()
+    t.fail(`Required audio file not found: ${samplePath}`)
+    return
+  }
+
+  const config = {
+    modelPath,
+    modelType: 'tdt',
+    maxThreads: 4,
+    useGPU: false,
+    sampleRate: 16000,
+    channels: 1,
+    ...getNamedPathsConfig('tdt', modelPath)
+  }
+
+  const outputsByJob = new Map()
+  const resolvers = new Map()
+  const waitForJob = (jobId, timeoutMs = 180000, errorGraceMs = 5000) => new Promise((resolve) => {
+    let pendingError = null
+    let errorGraceTimeout = null
+
+    const finish = (event, error) => {
+      clearTimeout(timeout)
+      if (errorGraceTimeout) clearTimeout(errorGraceTimeout)
+      resolvers.delete(jobId)
+      resolve({ event, error: error || null })
+    }
+
+    const timeout = setTimeout(() => {
+      finish('Timeout', null)
+    }, timeoutMs)
+
+    resolvers.set(jobId, (event, error) => {
+      // Cancellation is cooperative, and the shared addon-cpp queue can emit a
+      // late terminal Error for the cancelled job shortly after the next job is
+      // accepted. Give that transient Error a short grace window before
+      // treating it as terminal so a subsequent JobEnded can win.
+      if (event === 'Error') {
+        pendingError = error || null
+        if (!errorGraceTimeout) {
+          errorGraceTimeout = setTimeout(() => {
+            finish('Error', pendingError)
+          }, errorGraceMs)
+        }
+        return
+      }
+
+      finish(event, error)
+    })
+  })
+
+  async function submitJobWhenReady (audioBuffer, timeoutMs = 180000, retryDelayMs = 1000) {
+    const deadline = Date.now() + timeoutMs
+    let buffered = false
+    let lastBusyError = null
+
+    while (Date.now() < deadline) {
+      if (!buffered) {
+        await parakeet.append({ type: 'audio', data: audioBuffer })
+        buffered = true
+      }
+
+      try {
+        return await parakeet.append({ type: 'end of job' })
+      } catch (error) {
+        const message = error?.message || ''
+        const causeMessage = error?.cause?.message || ''
+        const isBusy =
+          message.includes('Cannot set new job: a job is already set or being processed') ||
+          causeMessage.includes('Cannot set new job: a job is already set or being processed')
+
+        if (!isBusy) {
+          throw error
+        }
+
+        lastBusyError = error
+        await new Promise(resolve => setTimeout(resolve, retryDelayMs))
+      }
+    }
+
+    throw lastBusyError || new Error('Timed out waiting for the model to accept the next job')
+  }
+
+  function toFloat32Audio (rawBuffer) {
+    const pcmData = new Int16Array(rawBuffer.buffer, rawBuffer.byteOffset, rawBuffer.length / 2)
+    const audioData = new Float32Array(pcmData.length)
+    for (let i = 0; i < pcmData.length; i++) {
+      audioData[i] = pcmData[i] / 32768.0
+    }
+    return audioData
+  }
+
+  function outputCallback (handle, event, id, output, error) {
+    if (event === 'Output' && Array.isArray(output)) {
+      if (!outputsByJob.has(id)) outputsByJob.set(id, [])
+      for (const segment of output) {
+        if (segment && segment.text) {
+          outputsByJob.get(id).push(segment)
+        }
+      }
+    }
+    if ((event === 'JobEnded' || event === 'Error') && resolvers.has(id)) {
+      const resolve = resolvers.get(id)
+      resolvers.delete(id)
+      resolve(event, error)
+    }
+  }
+
+  let parakeet = null
+  try {
+    parakeet = new ParakeetInterface(binding, config, outputCallback)
+
+    await parakeet.activate()
+
+    const shortAudio = toFloat32Audio(fs.readFileSync(samplePath))
+
+    // Start a job and cancel it immediately.
+    await parakeet.append({ type: 'audio', data: shortAudio.buffer })
+    const firstJobId = await parakeet.append({ type: 'end of job' })
+    await parakeet.cancel(firstJobId)
+
+    const statusAfterCancel = await parakeet.status()
+    t.ok(statusAfterCancel === 'listening', `Status should return to listening after cancel (got ${statusAfterCancel})`)
+
+    // Ensure model still accepts and completes the next job.
+    // Cancellation is cooperative, and some slower runners can briefly keep the
+    // native worker busy even after JS-side state returns to listening.
+    const secondJobId = await submitJobWhenReady(shortAudio.buffer)
+
+    const secondJobResult = await waitForJob(secondJobId)
+
+    t.ok(secondJobId > firstJobId, `Second job id should increment (first=${firstJobId}, second=${secondJobId})`)
+    t.ok(secondJobResult.event === 'JobEnded', `Second job should finish successfully (got ${secondJobResult.event})`)
+
+    const secondSegments = outputsByJob.get(secondJobId) || []
+    const secondText = secondSegments.map(s => s.text).join(' ').trim()
+    t.ok(secondSegments.length > 0, `Second job should produce output segments (got ${secondSegments.length})`)
+    t.ok(secondText.length > 0, `Second job should produce non-empty text (got ${secondText.length} chars)`)
+  } finally {
+    if (parakeet) {
+      try {
+        await waitUntilIdle(parakeet, 60000)
+        await parakeet.destroyInstance()
+      } catch {}
+    }
+    try {
+      loggerBinding.releaseLogger()
+    } catch {}
   }
 })

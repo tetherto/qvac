@@ -164,7 +164,7 @@ test('Multiple consecutive transcriptions should work without errors', { timeout
 
     // Verify each run produced output
     const runsWithOutput = new Set(allResults.map(r => r.jobId)).size
-    t.ok(runsWithOutput >= 1, `Multiple runs should produce output (got ${runsWithOutput} unique job IDs)`)
+    t.ok(runsWithOutput === NUM_TRANSCRIPTIONS, `Multiple runs should produce output for every job (got ${runsWithOutput}/${NUM_TRANSCRIPTIONS} unique job IDs)`)
 
     console.log('✅ Multiple transcriptions test completed successfully!\n')
   } finally {
@@ -172,7 +172,7 @@ test('Multiple consecutive transcriptions should work without errors', { timeout
     console.log('=== Cleanup ===')
     if (parakeet) {
       try {
-        parakeet.destroyInstance()
+        await parakeet.destroyInstance()
         console.log('   Instance destroyed')
       } catch (e) {
         console.log('   Instance destroy error:', e.message)
@@ -238,10 +238,10 @@ test('Fresh model instance per transcription (app restart simulation)', { timeou
             transcriptions.push(segment)
           }
         }
-        if (transcriptions.length > 0 && outputResolve) {
-          outputResolve()
-          outputResolve = null
-        }
+      }
+      if ((event === 'JobEnded' || event === 'Error') && outputResolve) {
+        outputResolve()
+        outputResolve = null
       }
     }
 
@@ -293,7 +293,7 @@ test('Fresh model instance per transcription (app restart simulation)', { timeou
     } finally {
       if (parakeet) {
         try {
-          parakeet.destroyInstance()
+          await parakeet.destroyInstance()
         } catch (e) {
           // Ignore cleanup errors
         }
