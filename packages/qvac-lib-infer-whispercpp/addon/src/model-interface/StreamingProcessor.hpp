@@ -1,11 +1,12 @@
 #pragma once
 
-#include <atomic>
 #include <condition_variable>
-#include <cstdint>
 #include <mutex>
+#include <string>
 #include <thread>
 #include <vector>
+
+#include <whisper.h>
 
 #include "qvac-lib-inference-addon-cpp/queue/OutputQueue.hpp"
 
@@ -19,14 +20,15 @@ class StreamingProcessor {
 public:
   struct Config {
     int sampleRate = 16000;
-    float energyThreshold = 0.02F;
-    int minSilenceSamples = 8000;    // 500ms at 16kHz
-    int minSpeechSamples = 4000;     // 250ms at 16kHz
-    int maxBufferSamples = 480000;   // 30s at 16kHz
-    int energyWindowSamples = 1600;  // 100ms RMS window
-    int calibrationSamples = 32000;  // 2s noise-floor calibration
-    float speechMultiplier = 3.0F;   // threshold = noiseFloor * this
-    float maxThreshold = 0.10F;      // safety cap
+    std::string vadModelPath;
+    float vadThreshold = 0.5F;
+    int minSilenceDurationMs = 500;
+    int minSpeechDurationMs = 250;
+    float maxSpeechDurationS = 30.0F;
+    int speechPadMs = 30;
+    float samplesOverlap = 0.1F;
+    int maxBufferSamples = 480000; // 30s safety cap
+    int vadRunIntervalSamples = 4800; // run VAD every ~300ms of new audio
   };
 
   StreamingProcessor(
@@ -46,10 +48,7 @@ public:
 
 private:
   void processLoop();
-  bool shouldProcessLocked() const;
-  void processCurrentBuffer();
-  void finalizeCalibration();
-  static float computeEnergy(const float* data, int n);
+  void processAudioRange(int startSample, int endSample);
 
   model::IModel& model_;
   std::shared_ptr<qvac_lib_inference_addon_cpp::OutputQueue> outputQueue_;
@@ -61,13 +60,8 @@ private:
   std::vector<float> processBuffer_;
   bool ended_ = false;
 
-  bool inSpeech_ = false;
-  int silenceSamples_ = 0;
-
-  int calibrationRemaining_;
-  bool calibrated_ = false;
-  float activeThreshold_;
-  std::vector<float> calibrationEnergies_;
+  whisper_vad_context* vadCtx_ = nullptr;
+  int bufferSizeAtLastVadRun_ = 0;
 
   std::thread thread_;
 };
