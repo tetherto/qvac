@@ -14,7 +14,7 @@
         "@qvac/ocr-onnx": "^0.2.0",
         "@qvac/rag": "^0.4.2",
         "@qvac/registry-client": "^0.2.1",
-        "@qvac/transcription-parakeet": "^0.1.11",
+        "@qvac/transcription-parakeet": "^0.2.0",
         "@qvac/transcription-whispercpp": "^0.5.0",
         "@qvac/translation-nmtcpp": "^0.6.1",
         "@qvac/tts-onnx": "^0.6.1",
@@ -533,7 +533,7 @@
 
     "@qvac/response": ["@qvac/response@0.1.2", "", { "dependencies": { "bare-events": "2.4.2" } }, "sha512-xWAsUyxOd7kqOayjFwUGOGiWlwQ8z6bzy5lOTUdI3uHGCAbdsqUMivpMymktd3ub+ZvF7F/iCM4dxdDCTISSdA=="],
 
-    "@qvac/transcription-parakeet": ["@qvac/transcription-parakeet@0.1.11", "", { "dependencies": { "@qvac/error": "^0.1.0", "@qvac/infer-base": "^0.2.0", "@qvac/logging": "^0.1.0", "bare-fs": "^4.5.1", "bare-path": "^3.0.0", "path": "npm:bare-path", "process": "npm:bare-process@^4.2.2" } }, "sha512-moJWNNf6s1DCNMXk5t+yWj+EQqnr+ohl9pOhIho1bGtJbsUWBfOa+kD4Jut0h0SBbb25VKN8zWQ3t5DhL7j/sQ=="],
+    "@qvac/transcription-parakeet": ["@qvac/transcription-parakeet@0.2.0", "", { "dependencies": { "@qvac/error": "^0.1.0", "@qvac/infer-base": "^0.2.0", "@qvac/logging": "^0.1.0", "bare-fs": "^4.5.1", "bare-path": "^3.0.0", "path": "npm:bare-path", "process": "npm:bare-process@^4.2.2" } }, "sha512-KHydEwRkRyZidXg+UIFhPBP2dS7TXc2jkGknG/WeLyB6QI5LlK/2SWqc1lVXyytG/C6myfRo1pQhfObvSWiZqg=="],
 
     "@qvac/transcription-whispercpp": ["@qvac/transcription-whispercpp@0.5.0", "", { "dependencies": { "@qvac/decoder-audio": "^0.3.3", "@qvac/error": "^0.1.0", "@qvac/infer-base": "^0.2.0", "@qvac/logging": "^0.1.0", "bare-channel": "^5.2.2", "bare-ffmpeg": "^1.0.0-32", "bare-node-worker-threads": "^1.0.0", "bare-path": "^3.0.0", "bare-stream": "^2.7.0", "bare-worker": "^4.1.0", "path": "npm:bare-path", "process": "npm:bare-process@^4.2.2", "stream": "npm:bare-node-stream", "worker_threads": "npm:bare-node-worker-threads@^1.0.0" } }, "sha512-CxKeMlWj1Nhca+rK4gVtSPfZyiXkqegRjHua1Y/lsRNfERSQn3xMwnBzDj9yHn9CGFXV244KKE8/A1ZLXn6fBw=="],
 

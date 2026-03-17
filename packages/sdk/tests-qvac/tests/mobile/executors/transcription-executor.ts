@@ -49,6 +49,7 @@ export class MobileTranscriptionExecutor extends AssetExecutor<
     expectation: unknown,
   ): Promise<TestResult> {
     const p = params as { audioFileName: string; timeout?: number };
+    const exp = expectation as Expectation;
 
     const whisperModelId = await this.resources.ensureLoaded("whisper");
 
@@ -69,12 +70,15 @@ export class MobileTranscriptionExecutor extends AssetExecutor<
       });
       const trimmedText = text.trim();
 
-      return ValidationHelpers.validate(
-        trimmedText,
-        expectation as Expectation,
-      );
+      if (exp.validation === "throws-error") {
+        return { passed: false, output: "Expected error but transcription succeeded" };
+      }
+      return ValidationHelpers.validate(trimmedText, exp);
     } catch (error) {
       const errorMsg = error instanceof Error ? error.message : String(error);
+      if (exp.validation === "throws-error") {
+        return ValidationHelpers.validate(errorMsg, exp);
+      }
       return { passed: false, output: `Transcription failed: ${errorMsg}` };
     }
   }
