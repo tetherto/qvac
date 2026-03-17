@@ -30,13 +30,19 @@ export type SamplerMethod =
 
 /** Supported weight quantization types */
 export type WeightType =
-  | 'default'
+  | 'auto'
   | 'f32'
   | 'f16'
+  | 'bf16'
+  | 'q2_k'
+  | 'q3_k'
   | 'q4_0'
   | 'q4_1'
+  | 'q4_k'
   | 'q5_0'
   | 'q5_1'
+  | 'q5_k'
+  | 'q6_k'
   | 'q8_0'
 
 /** Supported RNG types */
@@ -59,6 +65,12 @@ export type ScheduleType =
 /** Supported noise prediction types */
 export type PredictionType = 'auto' | 'eps' | 'v' | 'edm_v' | 'flow' | 'flux_flow' | 'flux2_flow'
 
+/** LoRA application mode */
+export type LoraApplyMode = 'auto' | 'immediately' | 'at_runtime'
+
+/** Step-caching algorithm */
+export type CacheMode = 'disabled' | 'easycache' | 'ucache' | 'dbcache' | 'taylorseer' | 'cache-dit'
+
 export interface SdConfig {
   /** Number of CPU threads (-1 = auto) */
   threads?: NumericLike
@@ -68,6 +80,8 @@ export interface SdConfig {
   wtype?: WeightType
   /** RNG type for reproducible generation */
   rng?: RngType
+  /** RNG type for the sampler (separate from context RNG) */
+  sampler_rng?: RngType
   /** Sampling schedule */
   schedule?: ScheduleType
   /** Run CLIP encoder on CPU even when GPU is available */
@@ -78,8 +92,32 @@ export interface SdConfig {
   vae_tiling?: boolean
   /** Enable flash attention for memory efficiency */
   flash_attn?: boolean
+  /** Enable flash attention for diffusion model specifically */
+  diffusion_fa?: boolean
+  /** Use memory-mapped model loading */
+  mmap?: boolean
+  /** Offload model weights to CPU when not in use */
+  offload_to_cpu?: boolean
   /** Noise prediction type override (auto-detected from model by default) */
   prediction?: PredictionType
+  /** Flow-matching guidance shift */
+  flow_shift?: number
+  /** Use direct convolution in diffusion model */
+  diffusion_conv_direct?: boolean
+  /** Use direct convolution in VAE */
+  vae_conv_direct?: boolean
+  /** Enable circular padding on X axis (for seamless tiling) */
+  circular_x?: boolean
+  /** Enable circular padding on Y axis (for seamless tiling) */
+  circular_y?: boolean
+  /** Force SDXL VAE conv scale factor */
+  force_sdxl_vae_conv_scale?: boolean
+  /** Custom backends directory path */
+  backends_dir?: string
+  /** Custom tensor type rules string */
+  tensor_type_rules?: string
+  /** LoRA application mode */
+  lora_apply_mode?: LoraApplyMode
   /** Logging verbosity: 0=error, 1=warn, 2=info, 3=debug */
   verbosity?: NumericLike
   [key: string]: string | number | boolean | undefined
@@ -103,8 +141,22 @@ export interface GenerationParams {
   batch_count?: number
   /** Enable VAE tiling (for large images) */
   vae_tiling?: boolean
-  /** Cache preset: slow/medium/fast/ultra */
+  /** VAE tile dimensions — integer or 'WxH' string (e.g. '512x512') */
+  vae_tile_size?: number | string
+  /** VAE tile overlap fraction (0.0–1.0) */
+  vae_tile_overlap?: number
+  /** Step-caching algorithm */
+  cache_mode?: CacheMode
+  /** Cache preset: slow/medium/fast/ultra (shorthand for cache_mode + threshold) */
   cache_preset?: string
+  /** Direct cache reuse threshold override (0 = library default) */
+  cache_threshold?: number
+  /** Stochasticity parameter for DDIM/TCD samplers */
+  eta?: number
+  /** Image CFG scale for img2img/inpaint (-1 = use cfg_scale) */
+  img_cfg_scale?: number
+  /** Skip last N CLIP encoder layers (SD1.x/SD2.x) */
+  clip_skip?: number
   /** Input image as PNG/JPEG bytes — if provided, runs img2img instead of txt2img */
   init_image?: Uint8Array
   /** img2img denoising strength (0.0–1.0). 0 = keep source, 1 = ignore source */

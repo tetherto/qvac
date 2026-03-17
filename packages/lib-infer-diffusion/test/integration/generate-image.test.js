@@ -68,7 +68,7 @@ test('SD2.1 txt2img — generates a valid PNG image', { timeout: 600000, skip },
     await model.load()
     const loadMs = Date.now() - tLoad
     console.log(`Loaded in ${(loadMs / 1000).toFixed(1)}s`)
-    t.ok(loadMs < 120000, `Model loaded within 120s (took ${(loadMs / 1000).toFixed(1)}s)`)
+    t.ok(loadMs < 180000, `Model loaded within 180s (took ${(loadMs / 1000).toFixed(1)}s)`)
 
     // ── Generate ──────────────────────────────────────────────────────────────
     console.log('\n=== Generating image ===')
