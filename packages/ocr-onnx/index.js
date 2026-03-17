@@ -106,7 +106,7 @@ class ONNXOcr extends ONNXBase {
       'pipelineMode', 'magRatio', 'defaultRotationAngles',
       'contrastRetry', 'lowConfidenceThreshold',
       'recognizerBatchSize', 'decodingMethod', 'straightenPages',
-      'graphOptimization', 'enableXnnpack'
+      'graphOptimization', 'enableXnnpack', 'enableCpuMemArena'
     ]
     for (const field of optionalFields) {
       if (this.params[field] !== undefined) {
