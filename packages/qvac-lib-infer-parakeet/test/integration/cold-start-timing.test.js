@@ -240,7 +240,7 @@ test('Cold start timing: first vs subsequent transcription times', { timeout: 60
     // Cleanup
     if (parakeet) {
       try {
-        parakeet.destroyInstance()
+        await parakeet.destroyInstance()
       } catch (e) {
         // Ignore
       }
@@ -306,10 +306,10 @@ test('Fresh instance timing: new model per transcription (app restart simulation
             transcriptions.push(segment)
           }
         }
-        if (transcriptions.length > 0 && outputResolve) {
-          outputResolve()
-          outputResolve = null
-        }
+      }
+      if ((event === 'JobEnded' || event === 'Error') && outputResolve) {
+        outputResolve()
+        outputResolve = null
       }
     }
 
@@ -361,7 +361,7 @@ test('Fresh instance timing: new model per transcription (app restart simulation
     } finally {
       if (parakeet) {
         try {
-          parakeet.destroyInstance()
+          await parakeet.destroyInstance()
         } catch (e) {
           // Ignore
         }

@@ -22,6 +22,7 @@
 
 /* global Bare */
 const path = require('bare-path')
+const process = require('bare-process')
 const binding = require('../binding.js')
 const { ParakeetInterface } = require('../parakeet.js')
 const {
@@ -125,7 +126,7 @@ async function main () {
   if (!args.file) {
     console.error('Error: --file argument is required\n')
     printUsage()
-    Bare.exit(1)
+    process.exit(1)
   }
 
   // Resolve paths
@@ -143,7 +144,7 @@ async function main () {
 
   if (!validatePaths({ model: modelPath, audio: audioPath })) {
     binding.releaseLogger()
-    Bare.exit(1)
+    process.exit(1)
   }
 
   console.log(`Model: ${modelPath}`)

@@ -22,7 +22,11 @@ if(CMAKE_SYSTEM_NAME STREQUAL "Linux")
 endif()
 
 # Find dependencies
-find_path(QVAC_LIB_INFERENCE_ADDON_CPP_INCLUDE_DIRS "qvac-lib-inference-addon-cpp/Addon.hpp" REQUIRED)
+find_path(
+  QVAC_LIB_INFERENCE_ADDON_CPP_INCLUDE_DIRS
+  "qvac-lib-inference-addon-cpp/ModelInterfaces.hpp"
+  REQUIRED
+)
 
 # Find ONNX Runtime
 find_package(onnxruntime CONFIG REQUIRED)
@@ -49,6 +53,8 @@ set(LIB_SRCS
         ${LIB_SRCS_PATH}/parakeet/ParakeetModel.cpp
         ${LIB_SRCS_PATH}/parakeet/ParakeetConfig.hpp
         ${LIB_SRCS_PATH}/parakeet/ParakeetConfig.cpp
+        ${LIB_SRCS_PATH}/parakeet/ParakeetHandlers.hpp
+        ${LIB_SRCS_PATH}/parakeet/ParakeetHandlers.cpp
         ${PROJECT_SOURCE_DIR}/addon/src/js-interface/JSAdapter.hpp
         ${PROJECT_SOURCE_DIR}/addon/src/js-interface/JSAdapter.cpp
 )
@@ -80,8 +86,6 @@ target_sources(
   ${qvac_lib_infer_parakeet}
   PRIVATE
     addon/src/js-interface/binding.cpp
-    addon/src/js-interface/qvac-lib-infer-parakeet.cpp
-    addon/src/addon/Addon.cpp
 )
 
 target_include_directories(
@@ -288,6 +292,7 @@ if(BUILD_TESTING)
     add_executable(
         parakeet_tests
         addon/tests/test_core.cpp
+        addon/tests/AddonCppTest.cpp
         addon/src/model-interface/parakeet/ParakeetModel.cpp
         addon/src/model-interface/parakeet/ParakeetConfig.cpp
     )
