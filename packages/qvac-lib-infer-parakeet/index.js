@@ -6,9 +6,7 @@ const BaseInference = require('@qvac/infer-base/WeightsProvider/BaseInference')
 const WeightsProvider = require('@qvac/infer-base/WeightsProvider/WeightsProvider')
 
 const { ParakeetInterface } = require('./parakeet')
-const { QvacErrorAddonParakeet, ERR_CODES } = require('./lib/error')
-
-const END_OF_INPUT = 'end of job'
+const { QvacErrorAddonParakeet, ERR_CODES, END_OF_INPUT } = require('./lib/error')
 
 /**
  * Required model files for TDT model
@@ -112,6 +110,7 @@ class TranscriptionParakeet extends BaseInference {
     this.weightsProvider = new WeightsProvider(loader, this.logger)
 
     this.params = config.parakeetConfig || {}
+    this._hasActiveResponse = false
 
     this.logger.debug('TranscriptionParakeet constructor called', {
       params: this.params,
@@ -347,14 +346,28 @@ class TranscriptionParakeet extends BaseInference {
    * @returns {Promise<QvacResponse>} - Response object for tracking the transcription job
    */
   async _runInternal (audioStream) {
+    if (this.exclusiveRun && this._hasActiveResponse) {
+      throw new QvacErrorAddonParakeet({
+        code: ERR_CODES.JOB_ALREADY_RUNNING
+      })
+    }
+
     const jobId = await this.addon.append({
       type: 'audio',
       data: new Float32Array(0).buffer
     })
 
     const response = this._createResponse(jobId)
+    this._hasActiveResponse = true
+    const finalized = response.await().finally(() => { this._hasActiveResponse = false })
+    finalized.catch(() => {})
+    response.await = () => finalized
 
-    this._handleAudioStream(audioStream).catch(response.failed.bind(response))
+    const normalizedAudioStream = this._normalizeAudioStream(audioStream)
+    this._handleAudioStream(normalizedAudioStream).catch((error) => {
+      response.failed(error)
+      this._deleteJobMapping(jobId)
+    })
     return response
   }
 
@@ -390,6 +403,30 @@ class TranscriptionParakeet extends BaseInference {
     await this.addon.append({ type: END_OF_INPUT })
   }
 
+  _normalizeAudioStream (audioStream) {
+    if (!audioStream) {
+      throw new Error('audioStream is required')
+    }
+
+    if (typeof audioStream[Symbol.asyncIterator] === 'function') {
+      return audioStream
+    }
+
+    if (audioStream instanceof Uint8Array || audioStream instanceof Float32Array) {
+      return [audioStream]
+    }
+
+    if (Array.isArray(audioStream)) {
+      return audioStream
+    }
+
+    if (typeof audioStream[Symbol.iterator] === 'function') {
+      return [Uint8Array.from(audioStream)]
+    }
+
+    throw new Error('Unsupported audio input. Expected stream, TypedArray, or chunk array.')
+  }
+
   /**
    * Reload the model with new configuration parameters.
    * Useful for changing settings without destroying the instance.
@@ -397,33 +434,37 @@ class TranscriptionParakeet extends BaseInference {
    * @param {Object} [newConfig.parakeetConfig] - Parakeet-specific settings
    */
   async reload (newConfig = {}) {
-    this.logger.debug('Reloading addon with new configuration', newConfig)
+    return await this._withExclusiveRun(async () => {
+      this.logger.debug('Reloading addon with new configuration', newConfig)
 
-    // Merge new config with existing params
-    if (newConfig.parakeetConfig) {
-      this.params = { ...this.params, ...newConfig.parakeetConfig }
-    }
+      // Merge new config with existing params
+      if (newConfig.parakeetConfig) {
+        this.params = { ...this.params, ...newConfig.parakeetConfig }
+      }
 
-    const modelPath = this._config.path || this._getModelFilePath()
-    const modelType = this.params.modelType || 'tdt'
+      const modelPath = this._config.path || this._getModelFilePath()
+      const modelType = this.params.modelType || 'tdt'
 
-    const configurationParams = {
-      modelPath,
-      modelType,
-      maxThreads: this.params.maxThreads || 4,
-      useGPU: this.params.useGPU || false,
-      sampleRate: this.params.sampleRate || 16000,
-      channels: this.params.channels || 1,
-      captionEnabled: this.params.captionEnabled || false,
-      timestampsEnabled: this.params.timestampsEnabled !== false, // default true
-      seed: this.params.seed ?? -1
-    }
+      const configurationParams = {
+        modelPath,
+        modelType,
+        maxThreads: this.params.maxThreads || 4,
+        useGPU: this.params.useGPU || false,
+        sampleRate: this.params.sampleRate || 16000,
+        channels: this.params.channels || 1,
+        captionEnabled: this.params.captionEnabled || false,
+        timestampsEnabled: this.params.timestampsEnabled !== false, // default true
+        seed: this.params.seed ?? -1
+      }
 
-    await this.addon.reload(configurationParams)
-    await this._loadModelWeights(modelPath, modelType)
-    await this.addon.activate()
+      await this.cancel()
+      this._failAndClearActiveResponse('Model was reloaded')
+      await this.addon.reload(configurationParams)
+      await this._loadModelWeights(modelPath, modelType)
+      await this.addon.activate()
 
-    this.logger.debug('Addon reloaded and activated successfully')
+      this.logger.debug('Addon reloaded and activated successfully')
+    })
   }
 
   /**
@@ -480,11 +521,42 @@ class TranscriptionParakeet extends BaseInference {
    * Override unload to call destroyInstance for proper cleanup.
    */
   async unload () {
-    if (this.addon) {
-      await this.addon.destroyInstance()
+    return await this._withExclusiveRun(async () => {
+      await this.cancel()
+      this._failAndClearActiveResponse('Model was unloaded')
+      if (this.addon) {
+        await this.addon.destroyInstance()
+      }
+      this.state.configLoaded = false
+      this.state.weightsLoaded = false
+    })
+  }
+
+  async cancel () {
+    if (this.addon?.cancel) {
+      await this.addon.cancel()
     }
-    this.state.configLoaded = false
-    this.state.weightsLoaded = false
+  }
+
+  async destroy () {
+    return await this._withExclusiveRun(async () => {
+      await this.cancel()
+      this._failAndClearActiveResponse('Model was destroyed')
+      if (this.addon) {
+        await this.addon.destroyInstance()
+      }
+      this.state.configLoaded = false
+      this.state.weightsLoaded = false
+      this.state.destroyed = true
+    })
+  }
+
+  _failAndClearActiveResponse (reason) {
+    for (const [jobId, response] of this._jobToResponse.entries()) {
+      response.failed(new Error(reason))
+      this._deleteJobMapping(jobId)
+    }
+    this._hasActiveResponse = false
   }
 }
 

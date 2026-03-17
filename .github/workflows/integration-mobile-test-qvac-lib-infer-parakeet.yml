@@ -144,7 +144,8 @@ jobs:
           npm install -g @expo/cli@latest
 
       - name: Download Android prebuilds (from artifacts)
-        if: matrix.platform == 'Android' && github.event_name != 'workflow_dispatch'
+        if: matrix.platform == 'Android'
+        id: artifact_android
         uses: actions/download-artifact@v7
         with:
           path: ${{ env.ADDON_DIR }}/prebuilds
@@ -153,7 +154,8 @@ jobs:
         continue-on-error: true
 
       - name: Download iOS prebuilds (from artifacts)
-        if: matrix.platform == 'iOS' && github.event_name != 'workflow_dispatch'
+        if: matrix.platform == 'iOS'
+        id: artifact_ios
         uses: actions/download-artifact@v7
         with:
           path: ${{ env.ADDON_DIR }}/prebuilds
@@ -161,12 +163,17 @@ jobs:
           merge-multiple: true
         continue-on-error: true
 
-      - name: Download prebuilds (from npm - workflow_dispatch)
-        if: github.event_name == 'workflow_dispatch'
+      - name: Download prebuilds (from npm - fallback)
+        if: >-
+          github.event_name == 'workflow_dispatch'
+          && (
+            (matrix.platform == 'Android' && steps.artifact_android.outcome != 'success')
+            || (matrix.platform == 'iOS' && steps.artifact_ios.outcome != 'success')
+          )
         working-directory: ${{ env.ADDON_DIR }}
         run: |
           PACKAGE_SPEC="${{ inputs.package_spec || '@qvac/transcription-parakeet@latest' }}"
-          echo "Downloading $PACKAGE_SPEC for manual trigger..."
+          echo "No artifacts found, downloading $PACKAGE_SPEC from registry..."
 
           if ! npm pack "$PACKAGE_SPEC"; then
             echo "ERROR: Failed to download $PACKAGE_SPEC"
