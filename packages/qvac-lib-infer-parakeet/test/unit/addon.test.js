@@ -118,7 +118,7 @@ test('Model emits error events when an error occurs during processing', async (t
   // Create a custom binding that throws an error on append
   const binding = {
     createInstance: () => ({ id: 1 }),
-    append: () => { throw new Error('Forced error for testing') },
+    runJob: () => { throw new Error('Forced error for testing') },
     loadWeights: () => { },
     activate: () => { },
     pause: () => { },
@@ -132,8 +132,9 @@ test('Model emits error events when an error occurs during processing', async (t
   await model.load()
 
   try {
-    await model.run('trigger error')
-    t.fail('Should have thrown an error')
+    const response = await model.run('trigger error')
+    await response.await()
+    t.fail('Should have rejected the response')
   } catch (error) {
     // The error should be a QvacErrorAddonParakeet
     t.ok(error.constructor.name === 'QvacErrorAddonParakeet', 'Error should be a QvacErrorAddonParakeet')
@@ -195,13 +196,13 @@ test('ParakeetInterface full sequence: status, append, and job boundaries', asyn
   t.ok(appendResult1 === 1, 'Job ID should be 1 for the first appended chunk')
 
   await wait()
-  const outputEvent = events.find(e => e.event === 'Output' && e.jobId === 1)
-  t.ok(outputEvent, 'Output callback should be triggered for audio chunk')
 
   const appendResult2 = await addon.append({ type: 'end of job' })
   t.ok(appendResult2 === 1, 'Job ID should remain 1 for the end-of-job signal')
 
   await wait()
+  const outputEvent = events.find(e => e.event === 'Output' && e.jobId === 1)
+  t.ok(outputEvent, 'Output callback should be triggered for audio chunk')
   t.ok(
     events.find(e => e.event === 'JobEnded' && e.jobId === 1),
     'JobEnded callback should be emitted for job 1'
@@ -228,4 +229,155 @@ test('ParakeetInterface full sequence: status, append, and job boundaries', asyn
   )
 
   t.end()
+})
+
+test('ParakeetInterface runJob preserves active job when native rejects new job', async (t) => {
+  const binding = new MockedBinding()
+  const addon = new ParakeetInterface(binding, {
+    modelPath: './models/parakeet-tdt-0.6b-v3-onnx',
+    modelType: 'tdt'
+  }, () => {})
+
+  addon._activeJobId = 42
+  addon._nextJobId = 43
+  addon._setState('processing')
+  binding.runJob = () => false
+
+  const accepted = await addon.runJob({
+    type: 'audio',
+    input: new Float32Array([0.1, 0.2, 0.3])
+  })
+
+  t.is(accepted, false, 'runJob should report rejected when native side is busy')
+  t.is(addon._activeJobId, 42, 'Current active job ID should remain unchanged')
+  t.is(addon._nextJobId, 43, 'Next job counter should not advance on rejection')
+  t.is(await addon.status(), 'processing', 'State should remain unchanged for the current active job')
+})
+
+test('ParakeetInterface cancel clears active job only after cancel resolves', async (t) => {
+  const binding = new MockedBinding()
+  const addon = new ParakeetInterface(binding, {
+    modelPath: './models/parakeet-tdt-0.6b-v3-onnx',
+    modelType: 'tdt'
+  }, () => {})
+
+  addon._activeJobId = 7
+  addon._setState('processing')
+  let sawActiveJobDuringCancel = false
+
+  binding.cancel = async (handle, jobId) => {
+    t.is(handle, addon._handle, 'cancel should be called with current handle')
+    t.is(jobId, 7, 'cancel should target the provided job ID')
+    sawActiveJobDuringCancel = addon._activeJobId === 7
+    await wait(5)
+  }
+
+  await addon.cancel(7)
+
+  t.ok(sawActiveJobDuringCancel, 'Active job should still be set while cancel is in-flight')
+  t.is(addon._activeJobId, null, 'Active job should be cleared after cancel resolves')
+  t.is(await addon.status(), 'listening', 'State should return to listening after cancel resolves')
+})
+
+test('ParakeetInterface ignores stale cancel error after next job starts', async (t) => {
+  const events = []
+  const binding = new MockedBinding()
+  const addon = new ParakeetInterface(binding, {
+    modelPath: './models/parakeet-tdt-0.6b-v3-onnx',
+    modelType: 'tdt'
+  }, (handle, event, jobId, output, error) => {
+    events.push({ event, jobId, output, error })
+  })
+
+  addon._activeJobId = 1
+  addon._nextJobId = 2
+  addon._setState('processing')
+
+  binding.cancel = async () => {}
+  await addon.cancel(1)
+
+  t.is(addon._ignoreNextCancelledError, true, 'cancel should arm stale cancel error suppression')
+
+  addon._activeJobId = 2
+  addon._setState('processing')
+
+  addon._addonOutputCallback(addon, 'Error', undefined, 'Job cancelled')
+
+  t.is(addon._ignoreNextCancelledError, false, 'stale cancel error should be consumed once')
+  t.is(addon._activeJobId, 2, 'stale cancel error should not clear the new active job')
+
+  addon._addonOutputCallback(addon, 'Output', [{ text: 'second job', toAppend: true }], null)
+  addon._addonOutputCallback(addon, 'RuntimeStats', { totalTime: 1, audioDurationMs: 1, totalSamples: 1 }, null)
+
+  t.ok(events.find(e => e.event === 'Output' && e.jobId === 2), 'new job output should still be delivered')
+  t.ok(events.find(e => e.event === 'JobEnded' && e.jobId === 2), 'new job completion should still be delivered')
+  t.absent(events.find(e => e.event === 'Error' && e.error === 'Job cancelled'), 'stale cancel error should not be forwarded')
+  t.is(addon._activeJobId, null, 'job completion should clear the new active job normally')
+})
+
+test('ParakeetInterface unloadWeights throws unsupported operation error', async (t) => {
+  const addon = new ParakeetInterface(new MockedBinding(), {
+    modelPath: './models/parakeet-tdt-0.6b-v3-onnx',
+    modelType: 'tdt'
+  }, () => {})
+
+  let threw = false
+  try {
+    await addon.unloadWeights()
+  } catch (error) {
+    threw = true
+    t.is(error.code, 24007, 'unloadWeights should map to FAILED_TO_RESET')
+    t.ok(String(error.message).includes('unloadWeights is not supported'), 'Error should explain supported alternatives')
+  }
+  t.ok(threw, 'unloadWeights should throw')
+})
+
+test('ParakeetInterface destroyInstance awaits active cancel before teardown', async (t) => {
+  const binding = new MockedBinding()
+  const addon = new ParakeetInterface(binding, {
+    modelPath: './models/parakeet-tdt-0.6b-v3-onnx',
+    modelType: 'tdt'
+  }, () => {})
+
+  addon._activeJobId = 9
+  addon._setState('processing')
+
+  let cancelResolved = false
+  let destroySawResolvedCancel = false
+
+  const originalDestroy = binding.destroyInstance.bind(binding)
+  binding.cancel = async (handle, jobId) => {
+    t.is(handle, addon._handle, 'cancel should receive current handle')
+    t.is(jobId, 9, 'cancel should target the active job')
+    await wait(5)
+    cancelResolved = true
+  }
+  binding.destroyInstance = (handle) => {
+    destroySawResolvedCancel = cancelResolved
+    originalDestroy(handle)
+  }
+
+  await addon.destroyInstance()
+
+  t.ok(destroySawResolvedCancel, 'destroy should run only after cancel promise resolves')
+  t.is(addon._handle, null, 'handle should be cleared after destroy')
+  t.is(addon._activeJobId, null, 'active job should be cleared after destroy')
+  t.is(await addon.status(), 'idle', 'state should transition to idle after destroy')
+})
+
+test('ParakeetInterface destroyInstance skips cancel with no active job', async (t) => {
+  const binding = new MockedBinding()
+  const addon = new ParakeetInterface(binding, {
+    modelPath: './models/parakeet-tdt-0.6b-v3-onnx',
+    modelType: 'tdt'
+  }, () => {})
+
+  let cancelCalls = 0
+  binding.cancel = async () => {
+    cancelCalls += 1
+  }
+
+  await addon.destroyInstance()
+
+  t.is(cancelCalls, 0, 'destroy should not call cancel when there is no active job')
 })
