@@ -19,7 +19,7 @@ import {
   getShardedModelCacheDir,
   getShardPath,
   checkShardCompleteness,
-  calculateFileChecksum,
+  measureChecksum,
   extractTensorsFromShards,
   calculatePercentage,
 } from "@/server/utils";
@@ -42,6 +42,7 @@ import {
   NoBlobFoundError,
 } from "@/utils/errors-server";
 import { getServerLogger } from "@/logging";
+import type { DownloadMetricsHooks } from "./types";
 
 const logger = getServerLogger();
 
@@ -223,6 +224,7 @@ async function validateCachedFile(
   modelFileName: string,
   expectedSize: number,
   expectedChecksum?: string,
+  hooks?: DownloadMetricsHooks,
 ): Promise<string | null> {
   try {
     await fsPromises.access(modelPath);
@@ -237,7 +239,7 @@ async function validateCachedFile(
 
       // Always validate checksum if provided, even when size matches
       if (expectedChecksum && expectedChecksum.length === 64) {
-        const checksum = await calculateFileChecksum(modelPath);
+        const checksum = await measureChecksum(modelPath, hooks);
         if (checksum !== expectedChecksum) {
           throw new ChecksumValidationFailedError(
             `${modelFileName}. Expected: ${expectedChecksum}. Actual: ${checksum}. File may be corrupted`,
@@ -267,6 +269,7 @@ async function downloadSingleFileToFilesystem(
   progressCallback?: (progress: ModelProgressUpdate) => void,
   seed?: boolean,
   signal?: AbortSignal,
+  hooks?: DownloadMetricsHooks,
 ): Promise<void> {
   // Check if already aborted
   if (signal?.aborted) {
@@ -306,6 +309,7 @@ async function downloadSingleFileToFilesystem(
       expectedChecksum,
       progressContext,
       signal,
+      hooks,
     );
 
     logger.info(`✅ Model downloaded successfully to ${modelPath}`);
@@ -372,6 +376,7 @@ async function downloadAndValidateFile(
   expectedChecksum: string,
   progressContext?: ProgressContext,
   signal?: AbortSignal,
+  hooks?: DownloadMetricsHooks,
 ): Promise<void> {
   const {
     entry,
@@ -475,7 +480,7 @@ async function downloadAndValidateFile(
 
     // Validate checksum
     if (expectedChecksum && expectedChecksum.length === 64) {
-      const checksum = await calculateFileChecksum(targetFilePath);
+      const checksum = await measureChecksum(targetFilePath, hooks);
       if (checksum !== expectedChecksum) {
         await fsPromises.unlink(targetFilePath);
         throw new ChecksumValidationFailedError(
@@ -537,6 +542,7 @@ async function downloadShardedFilesToFilesystem(
   progressCallback?: (progress: ModelProgressUpdate) => void,
   seed?: boolean,
   signal?: AbortSignal,
+  hooks?: DownloadMetricsHooks,
 ): Promise<string> {
   if (signal?.aborted) {
     throw new DownloadCancelledError();
@@ -562,12 +568,14 @@ async function downloadShardedFilesToFilesystem(
     hyperdriveKey,
     allFiles,
     shardMetadata,
+    hooks ? (ms) => hooks.addChecksumValidationTimeMs(ms) : undefined,
   );
 
   if (invalidIndices.length === 0) {
     logger.info(
       `✅ All ${allFiles.length} files already downloaded and validated`,
     );
+    hooks?.markCacheHit();
 
     if (progressCallback) {
       const overallTotal = shardMetadata.reduce(
@@ -603,6 +611,7 @@ async function downloadShardedFilesToFilesystem(
   logger.info(
     `📥 Need to download ${invalidIndices.length} of ${allFiles.length} files`,
   );
+  hooks?.markCacheMiss();
 
   // Setup hyperdrive once for all shards
   const corestoreDir = getCorestoreDir(hyperdriveKey);
@@ -698,6 +707,7 @@ async function downloadShardedFilesToFilesystem(
         fileMeta.sha256Checksum,
         progressContext,
         signal,
+        hooks,
       );
 
       if (signal?.aborted) {
@@ -778,6 +788,7 @@ export async function downloadModelFromHyperdrive(
   modelFileName: string,
   seed?: boolean,
   progressCallback?: (progress: ModelProgressUpdate) => void,
+  hooks?: DownloadMetricsHooks,
   expectedChecksum?: string,
 ): Promise<string> {
   const downloadKey = createHyperdriveDownloadKey(hyperdriveKey, modelFileName);
@@ -785,6 +796,7 @@ export async function downloadModelFromHyperdrive(
   // Check if already downloading
   const existing = getActiveDownload(downloadKey);
   if (existing) {
+    hooks?.markCacheMiss();
     return existing.promise;
   }
 
@@ -804,6 +816,7 @@ export async function downloadModelFromHyperdrive(
           progressCallback,
           seed,
           signal,
+          hooks,
         ),
       progressCallback,
     );
@@ -822,9 +835,11 @@ export async function downloadModelFromHyperdrive(
       modelFileName,
       model.expectedSize,
       expectedChecksum || model.sha256Checksum,
+      hooks,
     );
 
     if (cachedPath) {
+      hooks?.markCacheHit();
       if (progressCallback) {
         progressCallback({
           type: "modelProgress",
@@ -843,6 +858,7 @@ export async function downloadModelFromHyperdrive(
     }
   }
 
+  hooks?.markCacheMiss();
   return createManagedDownload(
     downloadKey,
     hyperdriveKey,
@@ -861,6 +877,7 @@ export async function downloadModelFromHyperdrive(
         progressCallback,
         seed,
         signal,
+        hooks,
       );
 
       return modelPath;
