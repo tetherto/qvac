@@ -2,11 +2,19 @@
 /**
  * Updates src/lib/versions.ts from content/docs/ version folders.
  *
- * Scans content/docs/ for top-level vX.Y.Z directories (excludes (latest)
- * and dot-prefixed dirs). The newest version is tagged as latest.
+ * Scans content/docs/ for top-level vX.Y.Z directories and the dev/ folder.
+ * Supports deferred versioning: use --latest=X.Y.Z to specify the current
+ * latest version when it has no vX.Y.Z folder yet.
  *
- * Usage: bun run scripts/update-versions-list.ts [version]
- * Version arg is optional; if provided, ensures that version is included.
+ * Usage:
+ *   bun run scripts/update-versions-list.ts [version] [--latest=X.Y.Z]
+ *
+ * Arguments:
+ *   version         Optional. After generating a new version, pass it to
+ *                   verify it exists in the scan.
+ *   --latest=X.Y.Z  Override which version is marked as latest.
+ *                   Required when the current latest has no vX.Y.Z folder
+ *                   (deferred versioning).
  */
 
 import * as fs from "fs/promises";
@@ -21,7 +29,16 @@ function compareSemverDesc(a: string, b: string): number {
   return 0;
 }
 
-async function updateVersionsList(newVersion?: string) {
+async function dirExists(dirPath: string): Promise<boolean> {
+  try {
+    const stat = await fs.stat(dirPath);
+    return stat.isDirectory();
+  } catch {
+    return false;
+  }
+}
+
+async function updateVersionsList(newVersion?: string, latestOverride?: string) {
   console.log(`📋 Updating versions list...`);
 
   const versionsFile = path.join(process.cwd(), "src", "lib", "versions.ts");
@@ -42,7 +59,7 @@ async function updateVersionsList(newVersion?: string) {
     .filter((name) => /^v\d+\.\d+\.\d+$/.test(name))
     .sort(compareSemverDesc);
 
-  console.log(`✓ Found ${versions.length} versions:`, versions.join(", ") || "(none)");
+  console.log(`✓ Found ${versions.length} versioned folders:`, versions.join(", ") || "(none)");
 
   if (newVersion) {
     const normalized = newVersion.startsWith("v") ? newVersion : `v${newVersion}`;
@@ -55,35 +72,58 @@ async function updateVersionsList(newVersion?: string) {
     console.log(`✓ Confirmed ${normalized} is present`);
   }
 
-  if (versions.length === 0) {
+  const hasDevApi = await dirExists(path.join(docsDir, "dev", "sdk", "api"));
+  if (hasDevApi) {
+    console.log(`✓ Found dev/sdk/api/`);
+  }
+
+  let latestVersion: string;
+  if (latestOverride) {
+    latestVersion = latestOverride.startsWith("v") ? latestOverride : `v${latestOverride}`;
+    console.log(`✓ Using --latest override: ${latestVersion}`);
+  } else if (versions.length > 0) {
+    latestVersion = versions[0];
+  } else {
     throw new Error(
-      "No valid version directories (vX.Y.Z) found. Run docs:generate-api first."
+      "No version directories found and no --latest override provided."
     );
   }
 
-  const latestVersion = versions[0];
+  const versionEntries: string[] = [];
+
+  if (hasDevApi) {
+    versionEntries.push(`  { label: 'dev', value: 'dev', isDev: true },`);
+  }
+
+  versionEntries.push(
+    `  { label: 'latest (${latestVersion})', value: '${latestVersion}', isLatest: true },`
+  );
+
+  for (const v of versions) {
+    if (v === latestVersion) continue;
+    versionEntries.push(`  { label: '${v}', value: '${v}' },`);
+  }
+
   const content = `export interface Version {
   label: string;
   value: string;
   isLatest?: boolean;
+  isDev?: boolean;
 }
 
 export const VERSIONS: Version[] = [
-${versions.map((v, i) => {
-  const label = i === 0 ? `${v} (latest)` : v;
-  const isLatest = i === 0 ? ", isLatest: true" : "";
-  return `  { label: '${label}', value: '${v}'${isLatest} },`;
-}).join("\n")}
+${versionEntries.join("\n")}
 ];
 
 export const LATEST_VERSION = '${latestVersion}';
 
-const VERSION_PREFIX_RE = /^\\/(v\\d+\\.\\d+\\.\\d+)(\\\/|$)/;
+const VERSION_PREFIX_RE = /^\\/(v\\d+\\.\\d+\\.\\d+|dev)(\\\/|$)/;
 
 /**
  * Extract the version prefix from a URL pathname.
  * Returns null when on the (latest) version (no prefix in the URL).
  * @example getVersionFromPath('/v0.6.1/sdk/quickstart') → 'v0.6.1'
+ * @example getVersionFromPath('/dev/sdk/api')           → 'dev'
  * @example getVersionFromPath('/sdk/quickstart')         → null
  */
 export function getVersionFromPath(pathname: string): string | null {
@@ -97,6 +137,8 @@ export function getVersionFromPath(pathname: string): string | null {
  * - latest → v0.6.1: prepend /v0.6.1
  * - v0.6.1 → latest: strip /v0.6.1
  * - v0.6.1 → v0.7.0: replace /v0.6.1 with /v0.7.0
+ * - latest → dev: prepend /dev
+ * - dev → latest: strip /dev
  */
 export function computeVersionedUrl(
   pathname: string,
@@ -122,17 +164,26 @@ export function computeVersionedUrl(
   await fs.writeFile(versionsFile, content, "utf-8");
   console.log(`✅ Updated ${versionsFile}`);
   console.log(`   Latest: ${latestVersion}`);
-  console.log(`   Total versions: ${versions.length}`);
+  console.log(`   Total entries: ${versionEntries.length}${hasDevApi ? " (including dev)" : ""}`);
 }
 
-const newVersion = process.argv[2];
-if (process.argv.includes("--help") || process.argv.includes("-h")) {
-  console.log("Usage: bun run scripts/update-versions-list.ts [version]");
-  console.log("  version  Optional. After generating a new version, pass it to refresh the list.");
+// CLI
+const args = process.argv.slice(2);
+
+if (args.includes("--help") || args.includes("-h")) {
+  console.log("Usage: bun run scripts/update-versions-list.ts [version] [--latest=X.Y.Z]");
+  console.log("");
+  console.log("  version         Optional. Verify this version exists after scan.");
+  console.log("  --latest=X.Y.Z  Override which version is marked as latest");
+  console.log("                  (for deferred versioning where latest has no folder).");
   process.exit(0);
 }
 
-updateVersionsList(newVersion).catch((error) => {
+const latestFlag = args.find((a) => a.startsWith("--latest="));
+const latestOverride = latestFlag?.split("=")[1];
+const newVersion = args.find((a) => !a.startsWith("--"));
+
+updateVersionsList(newVersion, latestOverride).catch((error) => {
   console.error("❌ Error updating versions list:", error.message);
   if (error.stack) console.error(error.stack);
   process.exit(1);

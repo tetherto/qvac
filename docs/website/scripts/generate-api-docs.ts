@@ -5,7 +5,11 @@
  *
  * Usage:
  *   bun run scripts/generate-api-docs.ts <version> [--no-update-latest]
+ *   bun run scripts/generate-api-docs.ts --dev
  *   bun run scripts/generate-api-docs.ts --rollback
+ *
+ * --dev writes to content/docs/dev/sdk/api/ without creating a versioned folder
+ * or updating (latest). Use during day-to-day development of the next version.
  *
  * Path format: content/docs/v{X.Y.Z}/sdk/api/ and content/docs/(latest)/sdk/api/
  * SDK path: Set SDK_PATH env to point to sdk package (default: ../../packages/sdk from cwd).
@@ -34,6 +38,7 @@ interface ApiFunction {
 
 interface GenerateOptions {
   updateLatest: boolean;
+  devMode?: boolean;
 }
 
 const SDK_PATH =
@@ -44,16 +49,19 @@ async function generateApiDocs(
   version: string,
   options: GenerateOptions = { updateLatest: true }
 ) {
-  if (!/^\d+\.\d+\.\d+$/.test(version)) {
+  if (!options.devMode && !/^\d+\.\d+\.\d+$/.test(version)) {
     throw new Error(
       `Invalid version format: "${version}"\nExpected semver: X.Y.Z (e.g., 0.6.1)`
     );
   }
 
-  console.log(`📚 Generating API docs for v${version}...`);
-  console.log(
-    `   Update latest: ${options.updateLatest ? "yes" : "no (backfill mode)"}`
-  );
+  const label = options.devMode ? "dev" : `v${version}`;
+  console.log(`📚 Generating API docs for ${label}...`);
+  if (!options.devMode) {
+    console.log(
+      `   Update latest: ${options.updateLatest ? "yes" : "no (backfill mode)"}`
+    );
+  }
   console.log(`   SDK path: ${SDK_PATH}`);
 
   const entryPoint = path.join(SDK_PATH, "index.ts");
@@ -107,11 +115,12 @@ async function generateApiDocs(
   }
   console.log(`✓ Validation passed for all ${apiFunctions.length} functions`);
 
+  const outputFolder = options.devMode ? "dev" : `v${version}`;
   const outputDir = path.join(
     process.cwd(),
     "content",
     "docs",
-    `v${version}`,
+    outputFolder,
     "sdk",
     "api"
   );
@@ -134,19 +143,19 @@ async function generateApiDocs(
 
   console.log(`✓ Generated ${apiFunctions.length} MDX files`);
 
-  const indexMDX = generateIndexMDX(apiFunctions, version);
+  const indexMDX = generateIndexMDX(apiFunctions, label);
   await fs.writeFile(path.join(outputDir, "index.mdx"), indexMDX, "utf-8");
   console.log(`✓ Generated index.mdx`);
 
-  if (options.updateLatest) {
+  if (!options.devMode && options.updateLatest) {
     await updateLatestSafely(version);
-  } else {
+  } else if (!options.devMode) {
     console.log(`⏭️  Skipping latest update (--no-update-latest flag)`);
   }
 
-  await smokeTest(version);
+  await smokeTestDir(outputDir);
 
-  console.log(`✅ API docs generation complete for v${version}`);
+  console.log(`✅ API docs generation complete for ${label}`);
   console.log(`   Location: ${outputDir}`);
   console.log(
     `   Files: ${apiFunctions.length + 1} (${apiFunctions.length} functions + index)`
@@ -324,7 +333,7 @@ function formatShortSignature(fn: ApiFunction): string {
   return sig.replace(/\|/g, "\\|");
 }
 
-function generateIndexMDX(functions: ApiFunction[], version: string): string {
+function generateIndexMDX(functions: ApiFunction[], versionLabel: string): string {
   const firstSentence = (text: string) => {
     const match = text.match(/^[^.!?]+[.!?]/);
     return match ? match[0] : text;
@@ -333,7 +342,7 @@ function generateIndexMDX(functions: ApiFunction[], version: string): string {
   return `---
 title: "@qvac/sdk"
 titleStyle: code
-description: API reference — v${version}
+description: API reference — ${versionLabel}
 ---
 
 ## Overview
@@ -378,11 +387,8 @@ async function updateLatestSafely(version: string) {
   console.log(`✓ Updated (latest)/sdk/api/ → v${version}`);
 }
 
-async function smokeTest(version: string): Promise<void> {
+async function smokeTestDir(apiDir: string): Promise<void> {
   console.log(`🧪 Running smoke test...`);
-  const apiDir = path.join(
-    process.cwd(), "content", "docs", `v${version}`, "sdk", "api"
-  );
 
   const indexPath = path.join(apiDir, "index.mdx");
   await fs.stat(indexPath);
@@ -440,6 +446,7 @@ const args = process.argv.slice(2);
 const versionArg = args.find((arg) => !arg.startsWith("--"));
 const updateLatest = !args.includes("--no-update-latest");
 const rollback = args.includes("--rollback");
+const devMode = args.includes("--dev");
 
 if (rollback) {
   rollbackLatest()
@@ -448,16 +455,27 @@ if (rollback) {
       console.error("❌ Rollback failed:", err);
       process.exit(1);
     });
+} else if (devMode) {
+  generateApiDocs("dev", { updateLatest: false, devMode: true }).catch((error) => {
+    console.error("❌ Error generating dev API docs:", error.message);
+    if (error.stack) console.error("\nStack trace:", error.stack);
+    process.exit(1);
+  });
 } else if (!versionArg) {
-  console.error("❌ Error: Version argument required\n");
+  console.error("❌ Error: Version argument required (or use --dev)\n");
   console.error("Usage:");
-  console.error("  bun run scripts/generate-api-docs.ts <version> [flags]\n");
+  console.error("  bun run scripts/generate-api-docs.ts <version> [flags]");
+  console.error("  bun run scripts/generate-api-docs.ts --dev\n");
   console.error("Flags:");
+  console.error(
+    "  --dev                 Generate into dev/sdk/api/ (no versioned folder)"
+  );
   console.error(
     "  --no-update-latest    Skip updating latest/ (use for backfills)"
   );
   console.error("  --rollback            Restore previous version of latest/\n");
   console.error("Examples:");
+  console.error("  bun run scripts/generate-api-docs.ts --dev");
   console.error("  bun run scripts/generate-api-docs.ts 0.6.1");
   console.error(
     "  bun run scripts/generate-api-docs.ts 0.5.0 --no-update-latest"
