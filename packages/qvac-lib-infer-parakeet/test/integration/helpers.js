@@ -270,12 +270,107 @@ function getTestPaths (modelsDir = null) {
 }
 
 /**
- * Downloads a file from URL using curl
+ * Mobile-friendly HTTPS download using bare-https.
+ * Handles redirects and streams directly to file.
+ * Mirrors the pattern used by TTS's downloadModel.js.
+ */
+async function downloadWithHttp (url, filepath, maxRedirects = 10) {
+  return new Promise((resolve, reject) => {
+    const https = require('bare-https')
+    const { URL } = require('bare-url')
+
+    const parsedUrl = new URL(url)
+
+    const options = {
+      hostname: parsedUrl.hostname,
+      port: parsedUrl.port || 443,
+      path: parsedUrl.pathname + parsedUrl.search,
+      method: 'GET',
+      headers: {
+        'User-Agent': 'Mozilla/5.0 (compatible; bare-download/1.0)'
+      }
+    }
+
+    console.log(` [HTTPS] Requesting: ${parsedUrl.hostname}${parsedUrl.pathname}`)
+
+    const req = https.request(options, (res) => {
+      if (res.statusCode >= 300 && res.statusCode < 400 && res.headers.location) {
+        if (maxRedirects <= 0) {
+          reject(new Error('Too many redirects'))
+          return
+        }
+        const location = res.headers.location
+        let redirectUrl
+        if (location.startsWith('http://') || location.startsWith('https://')) {
+          redirectUrl = location
+        } else if (location.startsWith('/')) {
+          redirectUrl = `${parsedUrl.protocol}//${parsedUrl.host}${location}`
+        } else {
+          const basePath = parsedUrl.pathname.substring(0, parsedUrl.pathname.lastIndexOf('/') + 1)
+          redirectUrl = `${parsedUrl.protocol}//${parsedUrl.host}${basePath}${location}`
+        }
+        console.log(` [HTTPS] Redirecting to: ${redirectUrl}`)
+        downloadWithHttp(redirectUrl, filepath, maxRedirects - 1)
+          .then(resolve)
+          .catch(reject)
+        return
+      }
+
+      if (res.statusCode !== 200) {
+        reject(new Error(`HTTP ${res.statusCode}: ${res.statusMessage}`))
+        return
+      }
+
+      const dir = path.dirname(filepath)
+      if (!fs.existsSync(dir)) {
+        fs.mkdirSync(dir, { recursive: true })
+      }
+
+      const writeStream = fs.createWriteStream(filepath)
+      let downloadedBytes = 0
+      const contentLength = parseInt(res.headers['content-length'] || '0', 10)
+
+      res.on('data', (chunk) => {
+        writeStream.write(chunk)
+        downloadedBytes += chunk.length
+        if (contentLength > 0 && downloadedBytes % (1024 * 1024) < chunk.length) {
+          const percent = ((downloadedBytes / contentLength) * 100).toFixed(1)
+          console.log(` [HTTPS] Progress: ${percent}% (${downloadedBytes} / ${contentLength} bytes)`)
+        }
+      })
+
+      res.on('end', () => {
+        writeStream.end(() => {
+          console.log(` [HTTPS] Download complete: ${downloadedBytes} bytes`)
+          resolve()
+        })
+      })
+
+      res.on('error', (err) => {
+        writeStream.end()
+        reject(err)
+      })
+    })
+
+    req.on('error', (err) => {
+      reject(err)
+    })
+
+    req.end()
+  })
+}
+
+/**
+ * Downloads a file from URL.
+ * Uses bare-https on mobile (no curl available), curl on desktop.
  * @param {string} url - URL to download from
  * @param {string} destPath - Destination file path
  * @returns {Promise<void>}
  */
 async function downloadFile (url, destPath) {
+  if (isMobile) {
+    return downloadWithHttp(url, destPath)
+  }
   return new Promise((resolve, reject) => {
     const curl = spawn('curl', ['-L', '-o', destPath, url])
     curl.on('exit', (code) => {
