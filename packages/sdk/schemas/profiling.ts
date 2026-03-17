@@ -3,6 +3,9 @@ import { z } from "zod";
 /** Internal envelope key for profiling metadata in RPC payloads */
 export const PROFILING_KEY = "__profiling";
 
+/** Marker key for profiling-only trailer frames in streaming responses */
+export const PROFILING_TRAILER_KEY = "__profilingTrailer";
+
 /**
  * Symbol key for attaching delegation breakdown to response objects.
  */

@@ -19,7 +19,7 @@ import {
   getShardedModelCacheDir,
   getShardPath,
   checkShardCompleteness,
-  calculateFileChecksum,
+  measureChecksum,
   extractTensorsFromShards,
   calculatePercentage,
 } from "@/server/utils";
@@ -42,20 +42,9 @@ import {
   NoBlobFoundError,
 } from "@/utils/errors-server";
 import { getServerLogger } from "@/logging";
-import { nowMs } from "@/profiling";
 import type { DownloadMetricsHooks } from "./types";
 
 const logger = getServerLogger();
-
-async function measureChecksum(
-  filePath: string,
-  hooks?: DownloadMetricsHooks,
-): Promise<string> {
-  const start = nowMs();
-  const checksum = await calculateFileChecksum(filePath);
-  hooks?.addChecksumValidationTimeMs(nowMs() - start);
-  return checksum;
-}
 
 interface HyperdriveSetup {
   corestore: Corestore;

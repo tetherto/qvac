@@ -40,6 +40,7 @@ export {
 } from "./sdk-config";
 export {
   PROFILING_KEY,
+  PROFILING_TRAILER_KEY,
   DELEGATION_BREAKDOWN_KEY,
   OPERATION_EVENT_KEY,
   profilerModeSchema,

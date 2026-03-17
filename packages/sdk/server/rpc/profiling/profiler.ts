@@ -3,6 +3,7 @@ import {
   responseSchema,
   DELEGATION_BREAKDOWN_KEY,
   OPERATION_EVENT_KEY,
+  PROFILING_TRAILER_KEY,
   type Response,
   type ProfilingRequestMeta,
   type DelegationBreakdown,
@@ -81,7 +82,7 @@ function createActiveProfiler(meta: ProfilingRequestMeta): ServerProfiler {
         const opts: Parameters<typeof injectProfilingIntoString>[1] = { ctx };
         if (cachedDelegation) opts.delegation = cachedDelegation;
         if (cachedOperation) opts.operation = cachedOperation;
-        return injectProfilingIntoString('{"__profilingTrailer":true}', opts);
+        return injectProfilingIntoString(`{"${PROFILING_TRAILER_KEY}":true}`, opts);
       }
 
       const extended = response as ResponseWithProfilingMeta;

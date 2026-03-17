@@ -2,6 +2,7 @@ import type RPC from "bare-rpc";
 import {
   requestSchema,
   responseSchema,
+  PROFILING_TRAILER_KEY,
   type Request,
   type Response,
   type RPCOptions,
@@ -337,7 +338,7 @@ async function* streamProfiled<T extends Request>(
             profilingMeta = chunkMeta;
           }
 
-          if (rawParsed["__profilingTrailer"] === true) continue;
+          if (rawParsed[PROFILING_TRAILER_KEY] === true) continue;
           const cleanPayload = stripProfilingMeta(rawParsed);
           const response = responseSchema.parse(cleanPayload);
 

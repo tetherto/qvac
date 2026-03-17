@@ -11,7 +11,7 @@ import {
   getShardedModelCacheDir,
   getShardPath,
   getOnnxModelPath,
-  calculateFileChecksum,
+  measureChecksum,
   extractTensorsFromShards,
   calculatePercentage,
 } from "@/server/utils";
@@ -31,20 +31,9 @@ import {
   RegistryDownloadFailedError,
 } from "@/utils/errors-server";
 import { getServerLogger } from "@/logging";
-import { nowMs } from "@/profiling";
 import type { DownloadMetricsHooks } from "./types";
 
 const logger = getServerLogger();
-
-async function measureChecksum(
-  filePath: string,
-  hooks?: DownloadMetricsHooks,
-): Promise<string> {
-  const start = nowMs();
-  const checksum = await calculateFileChecksum(filePath);
-  hooks?.addChecksumValidationTimeMs(nowMs() - start);
-  return checksum;
-}
 
 const REGISTRY_STREAM_TIMEOUT_MS = 60_000;
 
