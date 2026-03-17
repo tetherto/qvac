@@ -65,7 +65,7 @@ async function setupModel (t, overrides = {}) {
     temp: '0.9',
     top_p: '0.95',
     seed: '42',
-    verbosity: '3'
+    verbosity: '2'
   }
 
   const model = new LlmLlamacpp({
