@@ -1,172 +1,32 @@
 ---
 title: "completion( )"
 titleStyle: code
-description: Generates completion from a language model based on conversation history.
+description: "Generates completion from a language model based on conversation history."
 ---
 
-```ts
-function completion(params): {
-  tokenStream: AsyncGenerator<string>;
-  toolCallStream: AsyncGenerator<ToolCallEvent>;
-  text: Promise<string>;
-  toolCalls: Promise<ToolCallWithCall[]>;
-  stats: Promise<CompletionStats | undefined>;
-};
+```typescript
+function completion(params: CompletionParams): { stats: Promise<any>; text: Promise<string>; tokenStream: AsyncGenerator<string>; toolCalls: Promise<any[]>; toolCallStream: AsyncGenerator<infer<any>> }
 ```
+
+## Description
+
+Generates completion from a language model based on conversation history.
 
 ## Parameters
 
 | Name | Type | Required? | Description |
 | --- | --- | :---: | --- |
-| params | [`CompletionParams`](#completionparams) | ✓ | The completion parameters |
-
-### `CompletionParams`
-
-| Field | Type | Required? | Default | Description |
-| --- | --- | :---: | --- | --- |
-| modelId | `string` | ✓ | — | The identifier of the model to use for completion |
-| history | [`HistoryMessage[]`](#historymessage) | ✓ | — | Array of conversation messages |
-| stream | `boolean` | ✗ | `true` | Whether to stream tokens or return complete response |
-| tools | [`Tool[]`](#tool) ` \| ` [`ToolInput[]`](#toolinput) | ✗ | — | Optional array of tools (Zod-schema ToolInput or full Tool objects) |
-| mcp | [`McpClientInput[]`](#mcpclientinput) | ✗ | — | Optional array of MCP client inputs for tool integration |
-| kvCache | `boolean \| string` | ✗ | — | KV cache configuration — see [kvCache](#kvcache) |
-
-#### `HistoryMessage`
-
-| Field | Type | Required? | Description |
-| --- | --- | :---: | --- |
-| role | `string` | ✓ | Message role (e.g., `"user"`, `"assistant"`, `"system"`) |
-| content | `string` | ✓ | Message content |
-| attachments | [`Attachment[]`](#attachment) | ✗ | Optional file attachments for multimodal models |
-
-##### `Attachment`
-
-| Field | Type | Required? | Description |
-| --- | --- | :---: | --- |
-| path | `string` | ✓ | File path to the attachment |
-
-#### `Tool`
-
-Full tool definition in JSON Schema format (sent to the model):
-
-| Field | Type | Required? | Description |
-| --- | --- | :---: | --- |
-| type | `"function"` | ✓ | Always `"function"` |
-| name | `string` | ✓ | Tool name |
-| description | `string` | ✓ | What the tool does |
-| parameters | `object` | ✓ | JSON Schema object describing the tool's input |
-| parameters.type | `"object"` | ✓ | Always `"object"` |
-| parameters.properties | `Record<string, { type, description?, enum? }>` | ✓ | Parameter definitions |
-| parameters.required | `string[]` | ✗ | Required parameter names |
-
-#### `ToolInput`
-
-Simplified tool definition using Zod schemas (auto-converted to `Tool` internally):
-
-| Field | Type | Required? | Description |
-| --- | --- | :---: | --- |
-| name | `string` | ✓ | Tool name |
-| description | `string` | ✓ | What the tool does |
-| parameters | `ZodObject` | ✓ | Zod schema describing the tool's input |
-| handler | `(args: Record<string, unknown>) => Promise<unknown>` | ✗ | Handler function — when provided, returned `ToolCallWithCall` objects include an `invoke()` method |
-
-#### `McpClientInput`
-
-MCP (Model Context Protocol) client input for tool integration:
-
-| Field | Type | Required? | Description |
-| --- | --- | :---: | --- |
-| client | [`McpClient`](#mcpclient) | ✓ | An MCP client instance |
-| includeResources | `boolean` | ✗ | Whether to include MCP resources |
-
-##### `McpClient`
-
-Duck-typed MCP client interface:
-
-| Method | Signature | Required? | Description |
-| --- | --- | :---: | --- |
-| listTools | `() => Promise<{ tools: McpTool[] }>` | ✓ | Lists available tools |
-| callTool | `(params: { name, arguments }) => Promise<McpToolCallResult>` | ✓ | Calls a tool by name |
-| listResources | `() => Promise<{ resources: McpResource[] }>` | ✗ | Lists available resources |
-| readResource | `(params: { uri }) => Promise<{ contents: unknown[] }>` | ✗ | Reads a resource by URI |
-
-#### `kvCache`
-
-Cache files are organized hierarchically: `{kvCacheKey}/{modelId}/{configHash}.bin`
-
-The `configHash` includes model config + system prompt to ensure cache isolation.
-
-| Value | Behavior |
-| --- | --- |
-| `true` | Auto-generate cache key based on conversation history |
-| `"custom-key"` | Use provided string as cache key for manual session management |
-| `false` / `undefined` | No caching |
-
-When cache exists, only the last message is sent to the model (includes multimodal attachments). Use [`deleteCache()`](/sdk/api/deleteCache) to remove cached sessions.
+| `params` | `CompletionParams` | ✓ | The completion parameters |
 
 ## Returns
 
-`object` — Object with the following fields:
+```typescript
+{ stats: Promise<any>; text: Promise<string>; tokenStream: AsyncGenerator<string>; toolCalls: Promise<any[]>; toolCallStream: AsyncGenerator<infer<any>> }
+```
 
-| Field | Type | Description |
-| --- | --- | --- |
-| tokenStream | `AsyncGenerator<string>` | Stream of generated tokens |
-| toolCallStream | `AsyncGenerator<`[`ToolCallEvent`](#toolcallevent)`>` | Stream of tool call events |
-| text | `Promise<string>` | Complete generated text (resolves after stream ends) |
-| toolCalls | `Promise<`[`ToolCallWithCall[]`](#toolcallwithcall)`>` | Tool calls made during completion (may include `invoke()` when handler is available) |
-| stats | `Promise<`[`CompletionStats`](#completionstats) `\| undefined>` | Performance statistics |
 
-### `CompletionStats`
 
-| Field | Type | Description |
-| --- | --- | --- |
-| timeToFirstToken | `number` | Time to first token in milliseconds |
-| tokensPerSecond | `number` | Tokens generated per second |
-| cacheTokens | `number` | Number of cached tokens |
-
-### `ToolCallEvent`
-
-Discriminated union on `type`. One of:
-
-**Tool call:**
-
-| Field | Type | Description |
-| --- | --- | --- |
-| type | `"toolCall"` | Event type |
-| call.id | `string` | Call identifier |
-| call.name | `string` | Tool name |
-| call.arguments | `Record<string, unknown>` | Tool arguments |
-| call.raw | `string` | Raw call text (optional) |
-
-**Tool call error:**
-
-| Field | Type | Description |
-| --- | --- | --- |
-| type | `"toolCallError"` | Event type |
-| error.code | `"PARSE_ERROR" \| "VALIDATION_ERROR" \| "UNKNOWN_TOOL"` | Error code |
-| error.message | `string` | Error message |
-| error.raw | `string` | Raw text (optional) |
-
-### `ToolCallWithCall`
-
-Extends `ToolCall` with an optional `invoke()` method:
-
-| Field | Type | Description |
-| --- | --- | --- |
-| id | `string` | Call identifier |
-| name | `string` | Tool name |
-| arguments | `Record<string, unknown>` | Tool arguments |
-| raw | `string` | Raw call text (optional) |
-| invoke | `() => Promise<unknown>` | Executes the tool handler (present when a matching handler was provided) |
-
-## Throws
-
-| Error | When |
-| --- | --- |
-| `INVALID_TOOLS_ARRAY` | Invalid tools array provided |
-| `INVALID_TOOL_SCHEMA` | A tool has an invalid schema |
-
-## Example
+## Examples
 
 ```typescript
 import { z } from "zod";

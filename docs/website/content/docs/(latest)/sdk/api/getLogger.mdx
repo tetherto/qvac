@@ -1,56 +1,26 @@
 ---
 title: "getLogger( )"
 titleStyle: code
-description: Creates or retrieves a cached logger instance for the given namespace.
+description: "No description available"
 ---
 
-
-```ts
-function getLogger(namespace: string, options?: LoggerOptions): Logger;
+```typescript
+function getLogger(namespace: string, options?: LoggerOptions): Logger
 ```
+
+## Description
+
+No description available
 
 ## Parameters
 
 | Name | Type | Required? | Description |
 | --- | --- | :---: | --- |
-| namespace | `string` | ✓ | Logger namespace (used for identification and filtering) |
-| options | [`LoggerOptions`](#loggeroptions) | ✗ | Optional logger configuration. When omitted, the logger is cached by namespace. When provided, a new logger is always created. |
-
-### `LoggerOptions`
-
-| Field | Type | Required? | Description |
-| --- | --- | :---: | --- |
-| level | `"error" \| "warn" \| "info" \| "debug" \| "trace"` | ✗ | Log level |
-| namespace | `string` | ✗ | Override namespace |
-| transports | [`LogTransport[]`](#logtransport) | ✗ | Custom log transports |
-| enableConsole | `boolean` | ✗ | Whether to output logs to console |
-
-### `LogTransport`
-
-```ts
-type LogTransport = (
-  level: LogLevel,
-  namespace: string,
-  message: string,
-) => void | Promise<void>;
-```
-
-A callback function invoked for each log entry. `LogLevel` is `"error" | "warn" | "info" | "debug" | "trace"`.
+| `namespace` | `string` | ✓ | No description |
+| `options` | `LoggerOptions` | ✗ | No description |
 
 ## Returns
 
-[`Logger`](#logger) — A logger instance.
-
-### `Logger`
-
-| Method | Signature | Description |
-| --- | --- | --- |
-| error | `(...args: unknown[]) => void` | Log at error level |
-| warn | `(...args: unknown[]) => void` | Log at warn level |
-| info | `(...args: unknown[]) => void` | Log at info level |
-| debug | `(...args: unknown[]) => void` | Log at debug level |
-| trace | `(...args: unknown[]) => void` | Log at trace level |
-| setLevel | `(level) => void` | Change the log level |
-| getLevel | `() => LogLevel` | Get the current log level |
-| addTransport | `(transport:` [`LogTransport`](#logtransport)`) => void` | Add a custom transport |
-| setConsoleOutput | `(enabled: boolean) => void` | Enable or disable console output |
+```typescript
+Logger
+```

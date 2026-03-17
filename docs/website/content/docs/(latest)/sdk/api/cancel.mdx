@@ -1,79 +1,54 @@
 ---
 title: "cancel( )"
 titleStyle: code
-description: Cancels an ongoing operation.
+description: "Cancels an ongoing operation."
 ---
 
-```ts
-function cancel(params): Promise<void>;
+```typescript
+function cancel(params: infer): Promise
 ```
+
+## Description
+
+Cancels an ongoing operation.
 
 ## Parameters
 
 | Name | Type | Required? | Description |
 | --- | --- | :---: | --- |
-| params | [`CancelParams`](#cancelparams) | ✓ | The parameters for the cancellation |
-
-### `CancelParams`
-
-Discriminated union on `operation`. One of:
-
-#### Cancel inference
-
-| Field | Type | Required? | Description |
-| --- | --- | :---: | --- |
-| operation | `"inference"` | ✓ | Operation type |
-| modelId | `string` | ✓ | The model ID to cancel inference for |
-
-#### Cancel download
-
-| Field | Type | Required? | Default | Description |
-| --- | --- | :---: | --- | --- |
-| operation | `"downloadAsset"` | ✓ | — | Operation type |
-| downloadKey | `string` | ✓ | — | The download key to cancel |
-| clearCache | `boolean` | ✗ | `false` | If true, deletes the partial download file |
-
-#### Cancel RAG
-
-| Field | Type | Required? | Default | Description |
-| --- | --- | :---: | --- | --- |
-| operation | `"rag"` | ✓ | — | Operation type |
-| workspace | `string` | ✗ | `"default"` | The RAG workspace to cancel |
+| `params` | `infer` | ✓ | The parameters for the cancellation |
 
 ## Returns
 
-`Promise<void>` — Resolves when the operation is cancelled.
+```typescript
+Promise
+```
 
-## Throws
 
-| Error | When |
-| --- | --- |
-| `INVALID_RESPONSE_TYPE` | Response type does not match expected `"cancel"` |
-| `CANCEL_FAILED` | The server reports cancellation failure |
 
 ## Examples
 
-```ts
+```typescript
 // Cancel inference
 await cancel({ operation: "inference", modelId: "model-123" });
 ```
 
-```ts
+```typescript
 // Pause download (preserves partial file for automatic resume)
 await cancel({ operation: "downloadAsset", downloadKey: "download-key" });
 ```
 
-```ts
+```typescript
 // Cancel download completely (deletes partial file)
 await cancel({ operation: "downloadAsset", downloadKey: "download-key", clearCache: true });
 ```
 
-```ts
+```typescript
 // Cancel RAG operation on default workspace
 await cancel({ operation: "rag" });
 ```
 
-```ts
+```typescript
 // Cancel RAG operation on specific workspace
 await cancel({ operation: "rag", workspace: "my-workspace" });
 ```

@@ -1,32 +1,36 @@
 ---
 title: "ragDeleteEmbeddings( )"
 titleStyle: code
-description: Deletes document embeddings from the RAG vector database.
+description: "Deletes document embeddings from the RAG vector database.
+
+**Workspace lifecycle:** This operation requires an existing workspace."
 ---
 
-```ts
-function ragDeleteEmbeddings(params): Promise<void>;
+```typescript
+function ragDeleteEmbeddings(params: infer): Promise
 ```
+
+## Description
+
+Deletes document embeddings from the RAG vector database.
+
+**Workspace lifecycle:** This operation requires an existing workspace.
 
 ## Parameters
 
-| Name | Type | Required? | Default | Description |
-| --- | --- | :---: | --- | --- |
-| params.ids | `string[]` | ✓ | — | Array of document IDs to delete |
-| params.modelId | `string` | ✗ | — | Embedding model ID (required if no cached RAG instance) |
-| params.workspace | `string` | ✗ | `"default"` | Workspace to delete from |
+| Name | Type | Required? | Description |
+| --- | --- | :---: | --- |
+| `params` | `infer` | ✓ | The parameters for deleting embeddings |
 
 ## Returns
 
-`Promise<void>` — Resolves when the embeddings are deleted.
+```typescript
+Promise
+```
 
-## Throws
 
-| Error | When |
-| --- | --- |
-| `RAG_DELETE_FAILED` | The delete operation fails or workspace doesn't exist |
 
-## Example
+## Examples
 
 ```typescript
 await ragDeleteEmbeddings({

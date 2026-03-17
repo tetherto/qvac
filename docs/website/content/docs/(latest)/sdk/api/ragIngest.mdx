@@ -1,44 +1,49 @@
 ---
 title: "ragIngest( )"
 titleStyle: code
-description: Ingests documents into the RAG vector database.
+description: "Ingests documents into the RAG vector database.
+Full pipeline: chunk → embed → save
+
+**Workspace lifecycle:** This operation implicitly opens (or creates) the workspace.
+The workspace remains open until closed."
 ---
 
-```ts
-function ragIngest(params): Promise<{ processed: RagSaveEmbeddingsResult[]; droppedIndices: number[] }>;
+```typescript
+function ragIngest(params: any): Promise
 ```
 
-Full pipeline: chunk → embed → save. Implicitly opens (or creates) the workspace.
+## Description
+
+Ingests documents into the RAG vector database.
+Full pipeline: chunk → embed → save
+
+**Workspace lifecycle:** This operation implicitly opens (or creates) the workspace.
+The workspace remains open until closed.
 
 ## Parameters
 
-| Name | Type | Required? | Default | Description |
-| --- | --- | :---: | --- | --- |
-| params.modelId | `string` | ✓ | — | The embedding model identifier |
-| params.documents | `string \| string[]` | ✓ | — | Documents to ingest |
-| params.chunk | `boolean` | ✗ | `true` | Whether to chunk documents before embedding |
-| params.chunkOpts | [`ChunkOptions`](/sdk/api/ragChunk#chunkoptions) | ✗ | — | Chunking options |
-| params.workspace | `string` | ✗ | `"default"` | Workspace for isolated storage. Created if it doesn't exist. |
-| params.onProgress | `(stage, current, total) => void` | ✗ | — | Progress callback |
-| params.progressInterval | `number` | ✗ | — | Minimum interval between progress updates in ms |
+| Name | Type | Required? | Description |
+| --- | --- | :---: | --- |
+| `params` | `any` | ✓ | The parameters for ingestion |
 
 ## Returns
 
-| Field | Type | Description |
-| --- | --- | --- |
-| processed | `RagSaveEmbeddingsResult[]` | Array of `{ status: "fulfilled" \| "rejected", id?, error? }` |
-| droppedIndices | `number[]` | Indices of documents that were dropped |
+```typescript
+Promise
+```
 
-## Throws
 
-| Error | When |
-| --- | --- |
-| `RAG_SAVE_FAILED` | The ingestion operation fails |
-| `STREAM_ENDED_WITHOUT_RESPONSE` | Streaming ends unexpectedly (when using `onProgress`) |
 
-## Example
+## Examples
 
 ```typescript
+// Simple ingest
+const result = await ragIngest({
+  modelId,
+  documents: ["Document 1", "Document 2"],
+});
+
+// With progress tracking
 const result = await ragIngest({
   modelId,
   documents: ["Document 1", "Document 2"],

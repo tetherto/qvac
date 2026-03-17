@@ -4,7 +4,6 @@ import {
   GTE_LARGE_FP16,
   GTE_LARGE_335M_FP16_SHARD,
   WHISPER_TINY,
-  VAD_SILERO_5_1_2,
   QWEN3_1_7B_INST_Q4,
   OCR_LATIN_RECOGNIZER_1,
   MARIAN_OPUS_DE_EN_Q4_0,
@@ -19,6 +18,14 @@ import {
   TTS_LATENT_DENOISER_SUPERTONIC_FP32,
   TTS_VOICE_DECODER_SUPERTONIC_FP32,
   TTS_VOICE_STYLE_SUPERTONIC,
+  PARAKEET_TDT_ENCODER_INT8,
+  PARAKEET_TDT_DECODER_INT8,
+  PARAKEET_TDT_PREPROCESSOR_INT8,
+  PARAKEET_TDT_VOCAB,
+  PARAKEET_CTC_FP32,
+  PARAKEET_CTC_DATA_FP32,
+  PARAKEET_CTC_TOKENIZER,
+  PARAKEET_SORTFORMER_FP32,
 } from "@qvac/sdk";
 import * as path from "node:path";
 import { ResourceManager } from "../shared/resource-manager.js";
@@ -41,6 +48,7 @@ import { RegistryExecutor } from "../shared/executors/registry-executor.js";
 import { ModelInfoExecutor } from "../shared/executors/model-info-executor.js";
 import { ErrorExecutor } from "../shared/executors/error-executor.js";
 import { TtsExecutor } from "../shared/executors/tts-executor.js";
+import { ParakeetExecutor } from "./executors/parakeet-executor.js";
 
 const resources = new ResourceManager();
 
@@ -155,6 +163,43 @@ resources.define("tts-supertonic", {
   },
 });
 
+// Parakeet TDT 0.6B (INT8) — multilingual speech-to-text (~700MB)
+resources.define("parakeet-tdt", {
+  constant: PARAKEET_TDT_ENCODER_INT8,
+  type: "parakeet",
+  skipPreDownload: true,
+  config: {
+    parakeetEncoderSrc: PARAKEET_TDT_ENCODER_INT8,
+    parakeetDecoderSrc: PARAKEET_TDT_DECODER_INT8,
+    parakeetVocabSrc: PARAKEET_TDT_VOCAB,
+    parakeetPreprocessorSrc: PARAKEET_TDT_PREPROCESSOR_INT8,
+  },
+});
+
+// Parakeet CTC FP32 — streaming-capable speech-to-text
+resources.define("parakeet-ctc", {
+  constant: PARAKEET_CTC_FP32,
+  type: "parakeet",
+  skipPreDownload: true,
+  config: {
+    modelType: "ctc",
+    parakeetCtcModelSrc: PARAKEET_CTC_FP32,
+    parakeetCtcModelDataSrc: PARAKEET_CTC_DATA_FP32,
+    parakeetTokenizerSrc: PARAKEET_CTC_TOKENIZER,
+  },
+});
+
+// Parakeet Sortformer — speaker diarization
+resources.define("parakeet-sortformer", {
+  constant: PARAKEET_SORTFORMER_FP32,
+  type: "parakeet",
+  skipPreDownload: true,
+  config: {
+    modelType: "sortformer",
+    parakeetSortformerSrc: PARAKEET_SORTFORMER_FP32,
+  },
+});
+
 export const executor = createExecutor({
   handlers: [
     new ModelLoadingExecutor(resources),
@@ -177,5 +222,6 @@ export const executor = createExecutor({
     new RegistryExecutor(resources),
     new HttpEmbeddingExecutor(resources),
     new KvCacheExecutor(resources),
+    new ParakeetExecutor(resources),
   ],
 });
