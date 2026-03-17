@@ -1,5 +1,5 @@
 /**
- * Test script: pipes a WAV file through transcribeLive to verify
+ * Test script: pipes a WAV file through transcribeStream to verify
  * the bidirectional streaming + addon processing works end-to-end.
  *
  * Usage: bun run examples/transcription/test-transcribe-live.ts
@@ -7,7 +7,7 @@
  * Uses FFmpeg to convert the WAV to raw f32le and streams chunks
  * through the duplex RPC session to the whisper addon.
  */
-import { loadModel, unloadModel, transcribeLive, WHISPER_TINY, VAD_SILERO_5_1_2 } from "@qvac/sdk";
+import { loadModel, unloadModel, transcribeStream, WHISPER_TINY, VAD_SILERO_5_1_2 } from "@qvac/sdk";
 import { spawn } from "child_process";
 import path from "path";
 import { fileURLToPath } from "url";
@@ -24,7 +24,7 @@ const SAMPLE_RATE = 16000;
 const BYTES_PER_SAMPLE = 4; // f32le
 const CHUNK_SIZE = Math.floor(0.1 * SAMPLE_RATE) * BYTES_PER_SAMPLE; // 100ms chunks
 
-console.log("=== transcribeLive file test ===");
+console.log("=== transcribeStream file test ===");
 console.log(`File: ${SAMPLE_FILE}`);
 console.log(`Chunk size: ${CHUNK_SIZE} bytes (100ms)\n`);
 
@@ -54,7 +54,7 @@ const modelId = await loadModel({
 console.log(`Model loaded: ${modelId}\n`);
 
 console.log("Opening live session...");
-const session = await transcribeLive({ modelId });
+const session = await transcribeStream({ modelId });
 console.log("Session open. Streaming audio...\n");
 
 const ffmpeg = spawn(

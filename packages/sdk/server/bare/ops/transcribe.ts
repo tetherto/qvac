@@ -111,7 +111,7 @@ export async function* transcribe(
   }
 }
 
-export async function* transcribeLive(
+export async function* transcribeStream(
   modelId: string,
   audioInputStream: Readable,
   prompt?: string,
