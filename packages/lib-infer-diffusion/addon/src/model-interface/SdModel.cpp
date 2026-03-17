@@ -118,10 +118,22 @@ SdModel::SdModel(qvac_lib_inference_addon_sd::SdCtxConfig config)
 }
 
 // ---------------------------------------------------------------------------
-// Destructor — delegates to unload()
+// Destructor — releases the sd_ctx and all associated GPU/CPU memory
 // ---------------------------------------------------------------------------
 
-SdModel::~SdModel() { unload(); }
+SdModel::~SdModel() {
+  if (!isLoaded()) {
+    return;
+  }
+  // Skip free_sd_ctx during process exit — ggml's backend globals (Metal,
+  // Vulkan) may be partially torn down already, causing SIGSEGV (exit 139).
+  // The OS reclaims all memory on process exit regardless.
+  if (!g_processExiting.load(std::memory_order_relaxed)) {
+    sdCtx_.reset(); // calls free_sd_ctx via custom deleter
+  } else {
+    sdCtx_.release(); // drop pointer without calling free_sd_ctx
+  }
+}
 
 // ---------------------------------------------------------------------------
 // load() — maps SdCtxConfig → sd_ctx_params_t, then calls new_sd_ctx()
@@ -258,27 +270,6 @@ void SdModel::load() {
   stats_.modelLoadMs = std::chrono::duration_cast<std::chrono::milliseconds>(
                            std::chrono::steady_clock::now() - tLoadStart)
                            .count();
-}
-
-// ---------------------------------------------------------------------------
-// unload() — releases the sd_ctx and all associated GPU/CPU memory
-// ---------------------------------------------------------------------------
-
-void SdModel::unload() {
-  if (!isLoaded())
-    return;
-  // Skip free_sd_ctx during process exit — ggml's backend globals (Metal,
-  // Vulkan) may be partially torn down already, causing SIGSEGV (exit 139).
-  // The OS reclaims all memory on process exit regardless.
-  if (!g_processExiting.load(std::memory_order_relaxed)) {
-    sdCtx_.reset(); // calls free_sd_ctx via custom deleter
-  } else {
-    sdCtx_.release(); // drop pointer without calling free_sd_ctx
-  }
-  lastStats_.clear();
-  cancelRequested_.store(false);
-
-  stats_ = {};
 }
 
 // ---------------------------------------------------------------------------

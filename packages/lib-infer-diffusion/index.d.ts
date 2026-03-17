@@ -13,8 +13,8 @@ export interface Addon {
 
 /** Supported diffusion sampling methods */
 export type SamplerMethod =
-  | 'euler_a'
   | 'euler'
+  | 'euler_a'
   | 'heun'
   | 'dpm2'
   | 'dpm++2m'
@@ -46,7 +46,7 @@ export type WeightType =
   | 'q8_0'
 
 /** Supported RNG types */
-export type RngType = 'cuda' | 'cpu' | 'std_default'
+export type RngType = 'cpu' | 'cuda' | 'std_default'
 
 /** Supported sampling schedules */
 export type ScheduleType =
