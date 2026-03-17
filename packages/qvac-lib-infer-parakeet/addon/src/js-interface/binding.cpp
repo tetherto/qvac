@@ -1,3 +1,4 @@
+#include <cstdlib>
 #include <iostream>
 #include <vector>
 
@@ -5,6 +6,19 @@
 #include <js.h>
 
 #include "qvac-lib-infer-parakeet.hpp"
+
+namespace {
+js_value_t* forceExit(js_env_t* env, js_callback_info_t* info) {
+  size_t argc = 1;
+  js_value_t* argv[1];
+  js_get_callback_info(env, info, &argc, argv, nullptr, nullptr);
+  int32_t code = 0;
+  if (argc > 0) {
+    js_get_value_int32(env, argv[0], &code);
+  }
+  _Exit(code);
+}
+} // namespace
 
 // NOLINTBEGIN(cppcoreguidelines-macro-usage,readability-function-cognitive-complexity,modernize-use-trailing-return-type,readability-identifier-naming)
 auto qvac_lib_infer_parakeet_exports(js_env_t* env, js_value_t* exports)
@@ -36,6 +50,7 @@ auto qvac_lib_infer_parakeet_exports(js_env_t* env, js_value_t* exports)
   V("destroyInstance", qvac_lib_infer_parakeet::destroyInstance)
   V("setLogger", qvac_lib_infer_parakeet::setLogger)
   V("releaseLogger", qvac_lib_infer_parakeet::releaseLogger)
+  V("forceExit", forceExit)
 #undef V
 
   return exports;

@@ -1,6 +1,21 @@
+#include <cstdlib>
+
 #include <bare.h>
 
 #include "../addon/AddonJs.hpp"
+
+namespace {
+js_value_t* forceExit(js_env_t* env, js_callback_info_t* info) {
+  size_t argc = 1;
+  js_value_t* argv[1];
+  js_get_callback_info(env, info, &argc, argv, nullptr, nullptr);
+  int32_t code = 0;
+  if (argc > 0) {
+    js_get_value_int32(env, argv[0], &code);
+  }
+  _Exit(code);
+}
+} // namespace
 
 js_value_t* qvacLibInferenceAddonOnnxOcrFasttextExports(
     js_env_t* env, js_value_t* exports) {
@@ -27,6 +42,7 @@ js_value_t* qvacLibInferenceAddonOnnxOcrFasttextExports(
     qvac_lib_inference_addon_cpp::JsInterface::destroyInstance)
   V("setLogger", qvac_lib_inference_addon_cpp::JsInterface::setLogger)
   V("releaseLogger", qvac_lib_inference_addon_cpp::JsInterface::releaseLogger)
+  V("forceExit", forceExit)
 #undef V
 // NOLINTEND(cppcoreguidelines-macro-usage)
 

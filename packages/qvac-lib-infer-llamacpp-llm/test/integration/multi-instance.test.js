@@ -267,7 +267,3 @@ test('Multiple load/unload cycles on one instance while another generates', {
   t.ok(output1.length > 0, 'instance 1 completed generation')
   t.ok(cyclesCompleted > 0, `completed ${cyclesCompleted} load/unload cycles during generation`)
 })
-
-setImmediate(() => {
-  setTimeout(() => {}, 500)
-})

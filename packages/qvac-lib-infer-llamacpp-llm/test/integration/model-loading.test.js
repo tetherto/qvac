@@ -182,10 +182,3 @@ test('network loader can run inference end-to-end with sharded model', { timeout
     await loader.close().catch(() => {})
   }
 })
-
-// Keep event loop alive briefly to let pending async operations complete
-// This prevents C++ destructors from running while async cleanup is still happening
-// which can cause segfaults (exit code 139)
-setImmediate(() => {
-  setTimeout(() => {}, 500)
-})
