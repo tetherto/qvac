@@ -13,10 +13,6 @@ const createOcrTest = (
   params: { imageFileName, timeout: 300000, ...options },
   expectation,
   metadata: { category: "ocr", dependency: "ocr", estimatedDurationMs },
-  skip: {
-    reason: "OCR causes OOM crash on mobile after accumulated memory pressure",
-    platforms: ["mobile-ios", "mobile-android"],
-  },
 });
 
 export const ocrBasicPng = createOcrTest(
