@@ -23,7 +23,8 @@ public:
   static constexpr int RECOG_WIDTH = 128;
 
   StepDoctrRecognition(
-      const std::string& pathRecognizer, bool useGPU = false,
+      const std::string& pathRecognizer,
+      const onnx_addon::SessionConfig& sessionConfig = {},
       int batchSize = 32, DecodingMethod decoding = DecodingMethod::CTC);
 
 #if defined(_WIN32) || defined(_WIN64)

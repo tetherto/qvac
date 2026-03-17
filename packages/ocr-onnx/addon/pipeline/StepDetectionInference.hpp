@@ -13,7 +13,8 @@ public:
   using Output = StepDetectionInferenceOutput;
 
   explicit StepDetectionInference(
-      const std::string& pathDetector, bool useGPU = false,
+      const std::string& pathDetector,
+      const onnx_addon::SessionConfig& sessionConfig = {},
       float magRatio = 1.5F);
 
 #if defined(_WIN32) || defined(_WIN64)

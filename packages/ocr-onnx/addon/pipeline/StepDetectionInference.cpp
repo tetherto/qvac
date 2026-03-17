@@ -167,15 +167,8 @@ cv::Mat normalizeAndBuildCHW(const cv::Mat& img) {
 } // namespace
 
 StepDetectionInference::StepDetectionInference(
-    const std::string& pathDetector, bool useGPU, float magRatio)
-    : magRatio_(magRatio), session_(pathDetector, [&] {
-        onnx_addon::SessionConfig cfg;
-        cfg.provider = useGPU ? onnx_addon::ExecutionProvider::AUTO_GPU
-                              : onnx_addon::ExecutionProvider::CPU;
-        cfg.optimization = onnx_addon::GraphOptimizationLevel::EXTENDED;
-        cfg.enableXnnpack = false;
-        return cfg;
-      }()) {}
+    const std::string& pathDetector, const onnx_addon::SessionConfig& sessionConfig, float magRatio)
+    : magRatio_(magRatio), session_(pathDetector, sessionConfig) {}
 
 std::vector<Ort::Value>
 StepDetectionInference::runInference(cv::Mat inputBlob) {
