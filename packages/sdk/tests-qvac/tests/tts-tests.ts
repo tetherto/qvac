@@ -5,6 +5,7 @@ export const ttsChatterboxShortText: TestDefinition = {
   params: { text: "Hello, how are you today?", stream: false },
   expectation: { validation: "type", expectedType: "string" },
   metadata: { category: "tts", dependency: "tts-chatterbox", estimatedDurationMs: 30000 },
+  skip: { reason: "Chatterbox model (~2.15GB) causes OOM crash on mobile devices", platforms: ["mobile-ios", "mobile-android"] },
 };
 
 export const ttsChatterboxMediumText: TestDefinition = {
@@ -15,6 +16,7 @@ export const ttsChatterboxMediumText: TestDefinition = {
   },
   expectation: { validation: "type", expectedType: "string" },
   metadata: { category: "tts", dependency: "tts-chatterbox", estimatedDurationMs: 45000 },
+  skip: { reason: "Chatterbox model (~2.15GB) causes OOM crash on mobile devices", platforms: ["mobile-ios", "mobile-android"] },
 };
 
 export const ttsChatterboxStreaming: TestDefinition = {
@@ -22,6 +24,7 @@ export const ttsChatterboxStreaming: TestDefinition = {
   params: { text: "This is a streaming test for the Chatterbox engine.", stream: true },
   expectation: { validation: "type", expectedType: "string" },
   metadata: { category: "tts", dependency: "tts-chatterbox", estimatedDurationMs: 45000 },
+  skip: { reason: "Chatterbox model (~2.15GB) causes OOM crash on mobile devices", platforms: ["mobile-ios", "mobile-android"] },
 };
 
 export const ttsChatterboxEmptyTextError: TestDefinition = {
@@ -29,6 +32,7 @@ export const ttsChatterboxEmptyTextError: TestDefinition = {
   params: { text: "", stream: false },
   expectation: { validation: "type", expectedType: "string" },
   metadata: { category: "tts", dependency: "tts-chatterbox", estimatedDurationMs: 10000 },
+  skip: { reason: "Chatterbox model (~2.15GB) causes OOM crash on mobile devices", platforms: ["mobile-ios", "mobile-android"] },
 };
 
 export const ttsSupertonicShortText: TestDefinition = {

@@ -140,6 +140,9 @@ export const tests = [
   modelLoadConcurrent,
   modelReloadLlm,
 
+  // Parakeet transcription tests
+  ...parakeetTests,
+
   // Completion tests
   ...completionTests,
 
@@ -193,9 +196,6 @@ export const tests = [
 
   // Registry tests
   ...registryTests,
-
-  // Parakeet transcription tests
-  ...parakeetTests,
 
   // Additional model tests
   modelSwitchLlm,

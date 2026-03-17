@@ -35,6 +35,7 @@ export const httpArchiveEmbedLoad: TestDefinition = {
   params: { modelType: "embeddings", modelUrl: ARCHIVE_URL },
   expectation: { validation: "type", expectedType: "string" },
   metadata: { category: "http", dependency: "none", estimatedDurationMs: 300000 },
+  skip: { reason: "Causes OOM on mobile devices", platforms: ["mobile-ios", "mobile-android"] },
 };
 
 export const httpArchiveEmbedProgress: TestDefinition = {
@@ -42,6 +43,7 @@ export const httpArchiveEmbedProgress: TestDefinition = {
   params: { modelType: "embeddings", modelUrl: ARCHIVE_URL, trackProgress: true },
   expectation: { validation: "type", expectedType: "string" },
   metadata: { category: "http", dependency: "none", estimatedDurationMs: 300000 },
+  skip: { reason: "Causes OOM on mobile devices", platforms: ["mobile-ios", "mobile-android"] },
 };
 
 export const httpArchiveEmbedInference: TestDefinition = {
@@ -53,6 +55,7 @@ export const httpArchiveEmbedInference: TestDefinition = {
   },
   expectation: { validation: "type", expectedType: "array" },
   metadata: { category: "http", dependency: "none", estimatedDurationMs: 300000 },
+  skip: { reason: "Causes OOM on mobile devices", platforms: ["mobile-ios", "mobile-android"] },
 };
 
 export const httpEmbeddingTests = [
