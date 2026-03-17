@@ -107,13 +107,15 @@ export interface SdConfig {
   /** Use direct convolution in VAE */
   vae_conv_direct?: boolean
   /** Enable circular padding on X axis (for seamless tiling) */
-  circular_x?: boolean
+  circularx?: boolean
   /** Enable circular padding on Y axis (for seamless tiling) */
-  circular_y?: boolean
+  circulary?: boolean
+  /** Enable circular padding on both axes */
+  circular?: boolean
   /** Force SDXL VAE conv scale factor */
   force_sdxl_vae_conv_scale?: boolean
-  /** Custom backends directory path */
-  backends_dir?: string
+  /** Custom backends directory path (defaults to prebuilds/) */
+  backendsDir?: string
   /** Custom tensor type rules string */
   tensor_type_rules?: string
   /** LoRA application mode */
