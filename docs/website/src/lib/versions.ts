@@ -6,7 +6,6 @@ export interface Version {
 
 export const VERSIONS: Version[] = [
   { label: 'v0.7.0 (latest)', value: 'v0.7.0', isLatest: true },
-  { label: 'v0.6.1', value: 'v0.6.1' },
 ];
 
 export const LATEST_VERSION = 'v0.7.0';

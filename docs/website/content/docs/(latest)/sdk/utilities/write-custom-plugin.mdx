@@ -129,6 +129,7 @@ export const echoPlugin = definePlugin({
   modelType: "echo",
   displayName: "Echo Plugin",
   addonPackage: "none",
+  loadConfigSchema: z.object({}).catchall(z.unknown()),
 
   createModel: (params: CreateModelParams): PluginModelResult => {
     const model = { id: params.modelId, load: async () => {} };

@@ -42,6 +42,7 @@ import {
   ResponseBodyNotReadableError,
 } from "@/utils/errors-server";
 import { getServerLogger } from "@/logging";
+import type { DownloadMetricsHooks } from "./types";
 
 const logger = getServerLogger();
 
@@ -436,17 +437,18 @@ async function performHttpDownload(
 export async function downloadModelFromHttp(
   url: string,
   progressCallback?: (progress: ModelProgressUpdate) => void,
+  hooks?: DownloadMetricsHooks,
 ) {
   const filename = extractFilenameFromUrl(url);
 
   if (isArchiveUrl(url)) {
-    return downloadShardedModelFromArchive(url, progressCallback);
+    return downloadShardedModelFromArchive(url, progressCallback, hooks);
   }
 
   const shardInfo = detectShardedModel(filename);
 
   if (shardInfo.isSharded && shardInfo.totalShards) {
-    return downloadShardedModelFromHttp(url, progressCallback);
+    return downloadShardedModelFromHttp(url, progressCallback, hooks);
   }
 
   const downloadKey = createHttpDownloadKey(url);
@@ -454,6 +456,7 @@ export async function downloadModelFromHttp(
   const existing = getActiveDownload(downloadKey);
   if (existing) {
     logger.info(`📥 Reusing existing download for: ${downloadKey}`);
+    hooks?.markCacheMiss();
     return existing.promise;
   }
 
@@ -473,6 +476,7 @@ export async function downloadModelFromHttp(
         abortController.signal,
       );
       if (cachedPath) {
+        hooks?.markCacheHit();
         if (progressCallback) {
           try {
             const stats = await fsPromises.stat(cachedPath);
@@ -494,6 +498,7 @@ export async function downloadModelFromHttp(
       }
 
       // Download the file
+      hooks?.markCacheMiss();
       await performHttpDownload(
         url,
         modelPath,
@@ -576,6 +581,7 @@ export async function downloadModelFromHttp(
 async function downloadShardedModelFromHttp(
   shardUrl: string,
   progressCallback?: (progress: ModelProgressUpdate) => void,
+  hooks?: DownloadMetricsHooks,
 ) {
   const config = getSDKConfig();
   const concurrency = config.httpDownloadConcurrency ?? DEFAULT_CONCURRENCY;
@@ -590,6 +596,7 @@ async function downloadShardedModelFromHttp(
   const existing = getActiveDownload(downloadKey);
   if (existing) {
     logger.info(`📥 Reusing existing sharded download for: ${downloadKey}`);
+    hooks?.markCacheMiss();
     return existing.promise;
   }
 
@@ -665,6 +672,12 @@ async function downloadShardedModelFromHttp(
         `📥 ${shardsToDownload.length} of ${shardInfos.length} shards need downloading`,
       );
 
+      if (shardsToDownload.length === 0) {
+        hooks?.markCacheHit();
+      } else {
+        hooks?.markCacheMiss();
+      }
+
       await downloadShardsWithConcurrency(
         shardsToDownload,
         shardStates,
@@ -724,6 +737,7 @@ async function downloadShardedModelFromHttp(
 async function downloadShardedModelFromArchive(
   archiveUrl: string,
   progressCallback?: (progress: ModelProgressUpdate) => void,
+  hooks?: DownloadMetricsHooks,
 ) {
   const filename = extractFilenameFromUrl(archiveUrl);
   const sourceHash = generateShortHash(archiveUrl);
@@ -734,6 +748,7 @@ async function downloadShardedModelFromArchive(
   const existing = getActiveDownload(downloadKey);
   if (existing) {
     logger.info(`📥 Reusing existing archive download for: ${downloadKey}`);
+    hooks?.markCacheMiss();
     return existing.promise;
   }
 
@@ -751,6 +766,7 @@ async function downloadShardedModelFromArchive(
       );
 
       if (!shardedFile) {
+        hooks?.markCacheMiss();
         return downloadAndExtractArchive();
       }
 
@@ -762,6 +778,7 @@ async function downloadShardedModelFromArchive(
 
       if (!allShardsExist) {
         logger.warn(`⚠️ Incomplete shards found, re-downloading archive`);
+        hooks?.markCacheMiss();
         return downloadAndExtractArchive();
       }
 
@@ -774,6 +791,7 @@ async function downloadShardedModelFromArchive(
 
       if (isComplete) {
         logger.info(`✅ Archive already extracted: ${extractDir}`);
+        hooks?.markCacheHit();
         if (progressCallback) {
           progressCallback({
             type: "modelProgress",
@@ -792,6 +810,7 @@ async function downloadShardedModelFromArchive(
       try {
         await extractTensorsFromShards(extractDir, shardFilename);
         logger.info(`✅ Tensors extracted successfully`);
+        hooks?.markCacheHit();
         if (progressCallback) {
           progressCallback({
             type: "modelProgress",
@@ -806,6 +825,7 @@ async function downloadShardedModelFromArchive(
         logger.warn(`Failed to extract tensors, will re-download archive`, {
           error,
         });
+        hooks?.markCacheMiss();
         return downloadAndExtractArchive();
       }
     } catch (error) {

@@ -265,7 +265,7 @@ function generateMDXForFunction(fn: ApiFunction): string {
 ${fn.parameters
   .map(
     (p) =>
-      `| \`${p.name}\` | \`${p.type}\` | ${p.required ? "✓" : "✗"} | ${p.description || "No description"} |`
+      `| \`${p.name}\` | \`${p.type.replace(/\{/g, "\\{").replace(/\}/g, "\\}")}\` | ${p.required ? "✓" : "✗"} | ${(p.description || "No description").replace(/\{/g, "\\{").replace(/\}/g, "\\}")} |`
   )
   .join("\n")}`
       : "";
@@ -275,9 +275,10 @@ ${fn.parameters
 
 ${fn.examples
   .map(
-    (ex) => `\`\`\`typescript
-${ex}
-\`\`\``
+    (ex) => {
+      const stripped = ex.replace(/^```\w*\n?/, "").replace(/\n?```\s*$/, "");
+      return `\`\`\`typescript\n${stripped}\n\`\`\``;
+    }
   )
   .join("\n\n")}`
     : "";

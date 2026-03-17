@@ -1,0 +1,53 @@
+---
+title: "downloadAsset( )"
+titleStyle: code
+description: Downloads an asset (model file) without loading it into memory.
+---
+
+```ts
+function downloadAsset(options): Promise<string>;
+```
+
+## Parameters
+
+| Name | Type | Required? | Description |
+| --- | --- | :---: | --- |
+| options | [`DownloadAssetOptions`](#downloadassetoptions) | ✓ | Download configuration |
+
+### `DownloadAssetOptions`
+
+| Field | Type | Required? | Description |
+| --- | --- | :---: | --- |
+| assetSrc | `string` | ✓ | The location from which the asset is downloaded (local path, remote URL, or Hyperdrive `pear://` URL) |
+| seed | `boolean` | ✗ | Whether to seed the asset on Hyperdrive after download |
+| onProgress | `(progress:` [`ModelProgressUpdate`](../loadModel#modelprogressupdate)`) => void` | ✗ | Callback for real-time download progress updates. When provided, streaming is used. |
+
+## Returns
+
+`Promise<string>` — Resolves to the asset ID (either the provided `assetSrc` or a generated ID).
+
+## Throws
+
+| Error | When |
+| --- | --- |
+| `DOWNLOAD_ASSET_FAILED` | The download operation fails |
+| `STREAM_ENDED_WITHOUT_RESPONSE` | Streaming ends without a final response (when using `onProgress`) |
+| `INVALID_RESPONSE_TYPE` | Response type does not match expected `"downloadAsset"` |
+
+## Example
+
+```typescript
+// Download model without loading
+const assetId = await downloadAsset({
+  assetSrc: "/path/to/model.gguf",
+  seed: true
+});
+
+// Download with progress tracking
+const assetId = await downloadAsset({
+  assetSrc: "pear://key123/model.gguf",
+  onProgress: (progress) => {
+    console.log(`Downloaded: ${progress.percentage}%`);
+  }
+});
+```

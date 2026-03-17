@@ -169,8 +169,8 @@ function createParakeetModel(
 
   const { dirPath } = parseModelPath(primaryPath);
   const loader = new FilesystemDL({ dirPath });
-  const logger = createStreamLogger(modelId, ModelType.parakeetTranscription);
-  registerAddonLogger(modelId, ModelType.parakeetTranscription, logger);
+  const logger = createStreamLogger(params.modelId, ModelType.parakeetTranscription);
+  registerAddonLogger(params.modelId, ModelType.parakeetTranscription, logger);
 
   const addonConfig: TranscriptionParakeetConfig = {
     path: dirPath,

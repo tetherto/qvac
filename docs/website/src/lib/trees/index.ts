@@ -1,6 +1,6 @@
 import type { Node } from 'fumadocs-core/page-tree';
 import { tree as latestTree } from './latest';
-import { tree as v061Tree } from './v0.6.1';
+import { tree as v070Tree } from './v0.7.0';
 
 /**
  * All sidebar trees keyed by version.
@@ -10,7 +10,7 @@ import { tree as v061Tree } from './v0.6.1';
  */
 export function getAllTrees(): Record<string, Node[]> {
   return {
+    'v0.7.0': v070Tree,
     'latest': latestTree,
-    'v0.6.1': v061Tree,
   };
 }

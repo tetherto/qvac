@@ -1,43 +1,63 @@
 ---
 title: "ragReindex( )"
 titleStyle: code
-description: Reindexes the RAG database to optimize search performance.
+description: "Reindexes the RAG database to optimize search performance.
+For HyperDB, this rebalances centroids using k-means clustering.
+
+**Workspace lifecycle:** This operation requires an existing workspace.
+
+**Note:** Reindex requires a minimum number of documents to perform clustering.
+For HyperDB, this is 16 documents by default. If there are insufficient documents,
+`reindexed` will be `false` with `details` explaining the reason."
 ---
 
-```ts
-function ragReindex(params): Promise<RagReindexResult>;
+```typescript
+function ragReindex(params: any): Promise
 ```
 
-For HyperDB, rebalances centroids using k-means clustering. Requires a minimum number of documents (16 by default).
+## Description
+
+Reindexes the RAG database to optimize search performance.
+For HyperDB, this rebalances centroids using k-means clustering.
+
+**Workspace lifecycle:** This operation requires an existing workspace.
+
+**Note:** Reindex requires a minimum number of documents to perform clustering.
+For HyperDB, this is 16 documents by default. If there are insufficient documents,
+`reindexed` will be `false` with `details` explaining the reason.
 
 ## Parameters
 
-| Name | Type | Required? | Default | Description |
-| --- | --- | :---: | --- | --- |
-| params.modelId | `string` | ✗ | — | Embedding model ID (required if no cached RAG instance) |
-| params.workspace | `string` | ✗ | `"default"` | Workspace to reindex. Must already exist. |
-| params.onProgress | `(stage, current, total) => void` | ✗ | — | Progress callback |
+| Name | Type | Required? | Description |
+| --- | --- | :---: | --- |
+| `params` | `any` | ✓ | The parameters for reindexing |
 
 ## Returns
 
-| Field | Type | Description |
-| --- | --- | --- |
-| reindexed | `boolean` | Whether reindexing was performed |
-| details | `Record<string, unknown>` | Additional details (e.g., reason if skipped) — optional |
+```typescript
+Promise
+```
 
-## Throws
 
-| Error | When |
-| --- | --- |
-| `RAG_SAVE_FAILED` | The reindex operation fails or workspace doesn't exist |
-| `STREAM_ENDED_WITHOUT_RESPONSE` | Streaming ends unexpectedly (when using `onProgress`) |
 
-## Example
+## Examples
 
 ```typescript
-const result = await ragReindex({ workspace: "my-docs" });
+// Simple reindex
+const result = await ragReindex({
+  workspace: "my-docs",
+});
 
+// Check result
 if (!result.reindexed) {
   console.log("Reindex skipped:", result.details?.reason);
 }
+
+// With progress tracking
+const result = await ragReindex({
+  workspace: "my-docs",
+  onProgress: (stage, current, total) => {
+    console.log(`[${stage}] ${current}/${total}`);
+  },
+});
 ```
