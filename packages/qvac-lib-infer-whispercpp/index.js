@@ -30,7 +30,7 @@ class TranscriptionWhispercpp extends BaseInference {
 
     this._diskPath = diskPath || ''
     this._modelName = modelName
-    this._vadModelName = config.vad_model_path
+    this._vadModelName = vadModelName || config.vad_model_path
     this._config = config
     this.weightsProvider = new WeightsProvider(loader, this.logger)
 
@@ -145,13 +145,21 @@ class TranscriptionWhispercpp extends BaseInference {
   }
 
   async _runStreaming (audioStream, streamingConfig = {}) {
+    const vadModelPath = this._config.vadModelPath || this._getVadModelFilePath()
+    if (!vadModelPath) {
+      throw new Error('VAD model path is required for streaming transcription')
+    }
+
     const vadParams = this.params?.vad_params || {}
 
     await this.addon.startStreaming({
-      energyThreshold: streamingConfig.energyThreshold || 0.02,
+      vadModelPath,
+      vadThreshold: vadParams.threshold || 0.5,
       minSilenceDurationMs: vadParams.min_silence_duration_ms || 500,
       minSpeechDurationMs: vadParams.min_speech_duration_ms || 250,
-      maxSpeechDurationS: vadParams.max_speech_duration_s || 30
+      maxSpeechDurationS: vadParams.max_speech_duration_s || 30,
+      speechPadMs: vadParams.speech_pad_ms || 30,
+      samplesOverlap: vadParams.samples_overlap || 0.1
     })
 
     const jobId = this.addon._activeJobId

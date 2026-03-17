@@ -65,9 +65,9 @@ const modelId = await loadModel({
     vad_params: {
       threshold: 0.6,
       min_speech_duration_ms: 250,
-      min_silence_duration_ms: 500,
+      min_silence_duration_ms: 300,
       max_speech_duration_s: 15.0,
-      speech_pad_ms: 200,
+      speech_pad_ms: 100,
     },
   },
 });
@@ -85,8 +85,6 @@ const session = await transcribeStream({ modelId });
 ffmpeg.stdout.on("data", (chunk: Buffer) => session.write(chunk));
 ffmpeg.on("close", () => session.end());
 
-console.log("Calibrating microphone (2 seconds, stay quiet)...");
-await new Promise((resolve) => setTimeout(resolve, 2500));
 console.log("Listening... speak and pause to see transcriptions.");
 console.log("Press Enter to stop.\n");
 

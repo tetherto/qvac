@@ -2,6 +2,7 @@
 
 #include <algorithm>
 #include <cmath>
+#include <stdexcept>
 
 #include "qvac-lib-inference-addon-cpp/Logger.hpp"
 #include "qvac-lib-inference-addon-cpp/ModelInterfaces.hpp"
@@ -14,11 +15,22 @@ StreamingProcessor::StreamingProcessor(
     std::shared_ptr<qvac_lib_inference_addon_cpp::OutputQueue> outputQueue,
     Config config)
     : model_(model), outputQueue_(std::move(outputQueue)),
-      config_(std::move(config)),
-      calibrationRemaining_(config_.calibrationSamples),
-      activeThreshold_(config_.energyThreshold) {
-  calibrationEnergies_.reserve(
-      config_.calibrationSamples / config_.energyWindowSamples + 1);
+      config_(std::move(config)) {
+
+  whisper_vad_context_params vadCParams = whisper_vad_default_context_params();
+  vadCtx_ = whisper_vad_init_from_file_with_params(
+      config_.vadModelPath.c_str(), vadCParams);
+  if (vadCtx_ == nullptr) {
+    throw std::runtime_error(
+        "StreamingProcessor: failed to initialize VAD context from " +
+        config_.vadModelPath);
+  }
+
+  QLOG(
+      qvac_lib_inference_addon_cpp::logger::Priority::DEBUG,
+      "StreamingProcessor: VAD context initialized from " +
+          config_.vadModelPath);
+
   thread_ = std::thread([this]() { processLoop(); });
 }
 
@@ -31,41 +43,10 @@ StreamingProcessor::~StreamingProcessor() {
   if (thread_.joinable()) {
     thread_.join();
   }
-}
-
-void StreamingProcessor::finalizeCalibration() {
-  calibrated_ = true;
-
-  if (calibrationEnergies_.empty()) {
-    activeThreshold_ = config_.energyThreshold;
-    QLOG(
-        qvac_lib_inference_addon_cpp::logger::Priority::DEBUG,
-        "StreamingProcessor: calibration empty, using default threshold " +
-            std::to_string(activeThreshold_));
-    return;
+  if (vadCtx_ != nullptr) {
+    whisper_vad_free(vadCtx_);
+    vadCtx_ = nullptr;
   }
-
-  std::sort(calibrationEnergies_.begin(), calibrationEnergies_.end());
-  size_t idx = calibrationEnergies_.size() / 4; // 25th percentile
-  float noiseFloor = calibrationEnergies_[idx];
-
-  float adaptive = noiseFloor * config_.speechMultiplier;
-  activeThreshold_ = std::max(config_.energyThreshold, adaptive);
-  activeThreshold_ = std::min(activeThreshold_, config_.maxThreshold);
-
-  QLOG(
-      qvac_lib_inference_addon_cpp::logger::Priority::DEBUG,
-      "StreamingProcessor: calibrated noiseFloor=" +
-          std::to_string(noiseFloor) +
-          " threshold=" + std::to_string(activeThreshold_) +
-          " (from " + std::to_string(calibrationEnergies_.size()) +
-          " samples, min=" +
-          std::to_string(calibrationEnergies_.front()) +
-          " max=" +
-          std::to_string(calibrationEnergies_.back()) + ")");
-
-  calibrationEnergies_.clear();
-  calibrationEnergies_.shrink_to_fit();
 }
 
 void StreamingProcessor::appendAudio(std::vector<float>&& samples) {
@@ -74,32 +55,7 @@ void StreamingProcessor::appendAudio(std::vector<float>&& samples) {
     if (ended_) {
       return;
     }
-
-    int numSamples = static_cast<int>(samples.size());
-
-    pendingAudio_.insert(
-        pendingAudio_.end(), samples.begin(), samples.end());
-
-    int totalSize = static_cast<int>(pendingAudio_.size());
-    int windowStart = std::max(0, totalSize - config_.energyWindowSamples);
-    int windowLen = totalSize - windowStart;
-    float energy =
-        computeEnergy(pendingAudio_.data() + windowStart, windowLen);
-
-    if (!calibrated_) {
-      calibrationEnergies_.push_back(energy);
-      calibrationRemaining_ -= numSamples;
-      if (calibrationRemaining_ <= 0) {
-        finalizeCalibration();
-      }
-    } else {
-      if (energy > activeThreshold_) {
-        inSpeech_ = true;
-        silenceSamples_ = 0;
-      } else {
-        silenceSamples_ += numSamples;
-      }
-    }
+    pendingAudio_.insert(pendingAudio_.end(), samples.begin(), samples.end());
   }
   cv_.notify_one();
 }
@@ -115,47 +71,27 @@ void StreamingProcessor::end() {
   }
 }
 
-bool StreamingProcessor::shouldProcessLocked() const {
-  int totalSamples = static_cast<int>(processBuffer_.size());
-  if (totalSamples < config_.minSpeechSamples) {
-    return false;
-  }
-
-  bool silenceAfterSpeech =
-      inSpeech_ && silenceSamples_ >= config_.minSilenceSamples;
-  bool bufferOverflow = totalSamples >= config_.maxBufferSamples;
-
-  return silenceAfterSpeech || bufferOverflow;
-}
-
-float StreamingProcessor::computeEnergy(const float* data, int n) {
-  if (n <= 0) {
-    return 0.0F;
-  }
-  float sum = 0.0F;
-  for (int i = 0; i < n; i++) {
-    sum += data[i] * data[i];
-  }
-  return std::sqrt(sum / static_cast<float>(n));
-}
-
-void StreamingProcessor::processCurrentBuffer() {
-  if (processBuffer_.empty()) {
+void StreamingProcessor::processAudioRange(int startSample, int endSample) {
+  int len = endSample - startSample;
+  if (len <= 0) {
     return;
   }
 
   QLOG(
       qvac_lib_inference_addon_cpp::logger::Priority::DEBUG,
-      "StreamingProcessor: processing " +
-          std::to_string(processBuffer_.size()) + " samples (" +
+      "StreamingProcessor: processing " + std::to_string(len) + " samples (" +
           std::to_string(
-              static_cast<double>(processBuffer_.size()) /
+              static_cast<double>(len) /
               static_cast<double>(config_.sampleRate)) +
           "s)");
 
+  std::vector<float> segment(
+      processBuffer_.begin() + startSample,
+      processBuffer_.begin() + endSample);
+
   try {
     std::any result =
-        model_.process(std::any(WhisperModel::Input(processBuffer_)));
+        model_.process(std::any(WhisperModel::Input(std::move(segment))));
     if (result.has_value()) {
       const auto* transcripts =
           std::any_cast<WhisperModel::Output>(&result);
@@ -168,17 +104,22 @@ void StreamingProcessor::processCurrentBuffer() {
         qvac_lib_inference_addon_cpp::logger::Priority::ERROR,
         std::string("StreamingProcessor: processing error: ") + e.what());
   }
-
-  processBuffer_.clear();
 }
 
 void StreamingProcessor::processLoop() {
   QLOG(
       qvac_lib_inference_addon_cpp::logger::Priority::DEBUG,
-      "StreamingProcessor: thread started");
+      "StreamingProcessor: thread started (VAD-based segmentation)");
+
+  whisper_vad_params vadParams = whisper_vad_default_params();
+  vadParams.threshold = config_.vadThreshold;
+  vadParams.min_speech_duration_ms = config_.minSpeechDurationMs;
+  vadParams.min_silence_duration_ms = config_.minSilenceDurationMs;
+  vadParams.max_speech_duration_s = config_.maxSpeechDurationS;
+  vadParams.speech_pad_ms = config_.speechPadMs;
+  vadParams.samples_overlap = config_.samplesOverlap;
 
   while (true) {
-    bool doProcess = false;
     bool done = false;
 
     {
@@ -191,18 +132,108 @@ void StreamingProcessor::processLoop() {
           processBuffer_.end(), pendingAudio_.begin(), pendingAudio_.end());
       pendingAudio_.clear();
 
-      doProcess = shouldProcessLocked();
-
-      if (doProcess) {
-        inSpeech_ = false;
-        silenceSamples_ = 0;
-      }
-
       done = ended_ && pendingAudio_.empty();
     }
 
-    if (doProcess) {
-      processCurrentBuffer();
+    int bufferSize = static_cast<int>(processBuffer_.size());
+
+    // Only run VAD when enough new audio has arrived since the last run
+    bool shouldRunVad =
+        (bufferSize - bufferSizeAtLastVadRun_) >=
+            config_.vadRunIntervalSamples ||
+        done;
+
+    if (shouldRunVad && bufferSize > 0) {
+      bufferSizeAtLastVadRun_ = bufferSize;
+
+      whisper_vad_segments* segments = whisper_vad_segments_from_samples(
+          vadCtx_, vadParams, processBuffer_.data(), bufferSize);
+
+      if (segments != nullptr) {
+        int nSeg = whisper_vad_segments_n_segments(segments);
+        float totalDurationS =
+            static_cast<float>(bufferSize) /
+            static_cast<float>(config_.sampleRate);
+
+        // whisper_vad timestamps are in centiseconds (cs); convert to seconds
+        constexpr float CS_TO_SEC = 0.01F;
+
+        // Find the last "complete" segment: one where t1 is well before the
+        // end of the buffer, meaning confirmed silence follows it.
+        int lastComplete = -1;
+        for (int i = 0; i < nSeg; i++) {
+          float t1S =
+              whisper_vad_segments_get_segment_t1(segments, i) * CS_TO_SEC;
+          float marginS = static_cast<float>(config_.speechPadMs) / 1000.0F;
+          if (t1S + marginS < totalDurationS) {
+            lastComplete = i;
+          }
+        }
+
+        // When stream ended, treat ALL segments as complete
+        if (done && nSeg > 0) {
+          lastComplete = nSeg - 1;
+        }
+
+        if (lastComplete >= 0) {
+          QLOG(
+              qvac_lib_inference_addon_cpp::logger::Priority::DEBUG,
+              "StreamingProcessor: VAD found " + std::to_string(nSeg) +
+                  " segment(s), " + std::to_string(lastComplete + 1) +
+                  " complete, totalDuration=" +
+                  std::to_string(totalDurationS) + "s");
+
+          for (int i = 0; i <= lastComplete; i++) {
+            float t0S =
+                whisper_vad_segments_get_segment_t0(segments, i) * CS_TO_SEC;
+            float t1S =
+                whisper_vad_segments_get_segment_t1(segments, i) * CS_TO_SEC;
+            int startSample = std::max(
+                0,
+                static_cast<int>(
+                    t0S * static_cast<float>(config_.sampleRate)));
+            int endSample = std::min(
+                static_cast<int>(
+                    t1S * static_cast<float>(config_.sampleRate)),
+                bufferSize);
+            QLOG(
+                qvac_lib_inference_addon_cpp::logger::Priority::DEBUG,
+                "StreamingProcessor: segment " + std::to_string(i) +
+                    " [" + std::to_string(t0S) + "s - " +
+                    std::to_string(t1S) + "s] samples=[" +
+                    std::to_string(startSample) + ", " +
+                    std::to_string(endSample) + "]");
+            if (endSample > startSample) {
+              processAudioRange(startSample, endSample);
+            }
+          }
+
+          float lastT1S =
+              whisper_vad_segments_get_segment_t1(segments, lastComplete) *
+              CS_TO_SEC;
+          int trimPoint = std::min(
+              static_cast<int>(
+                  lastT1S * static_cast<float>(config_.sampleRate)),
+              bufferSize);
+          processBuffer_.erase(
+              processBuffer_.begin(), processBuffer_.begin() + trimPoint);
+          bufferSizeAtLastVadRun_ = 0;
+        }
+
+        whisper_vad_free_segments(segments);
+      }
+
+      // Safety: force-process if buffer exceeds max even after VAD
+      if (static_cast<int>(processBuffer_.size()) >=
+          config_.maxBufferSamples) {
+        QLOG(
+            qvac_lib_inference_addon_cpp::logger::Priority::DEBUG,
+            "StreamingProcessor: buffer overflow, force-processing " +
+                std::to_string(processBuffer_.size()) + " samples");
+        processAudioRange(0, static_cast<int>(processBuffer_.size()));
+        processBuffer_.clear();
+        bufferSizeAtLastVadRun_ = 0;
+      }
     }
 
     if (done) {
@@ -210,20 +241,14 @@ void StreamingProcessor::processLoop() {
     }
   }
 
+  // Process any remaining audio in the buffer
   if (!processBuffer_.empty()) {
-    float energy = computeEnergy(
-        processBuffer_.data(), static_cast<int>(processBuffer_.size()));
-    if (energy > activeThreshold_ &&
-        static_cast<int>(processBuffer_.size()) >= config_.minSpeechSamples) {
-      processCurrentBuffer();
-    } else {
-      QLOG(
-          qvac_lib_inference_addon_cpp::logger::Priority::DEBUG,
-          "StreamingProcessor: discarding final buffer (energy=" +
-              std::to_string(energy) + " threshold=" +
-              std::to_string(activeThreshold_) + ")");
-      processBuffer_.clear();
-    }
+    QLOG(
+        qvac_lib_inference_addon_cpp::logger::Priority::DEBUG,
+        "StreamingProcessor: processing final buffer of " +
+            std::to_string(processBuffer_.size()) + " samples");
+    processAudioRange(0, static_cast<int>(processBuffer_.size()));
+    processBuffer_.clear();
   }
 
   QLOG(

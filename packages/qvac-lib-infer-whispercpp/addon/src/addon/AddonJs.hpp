@@ -194,35 +194,57 @@ startStreaming(js_env_t* env, js_callback_info_t* info) try {
 
   StreamingProcessor::Config config;
 
-  auto maybeThreshold =
-      configObj.getOptionalProperty<js::Number>(env, "energyThreshold");
-  if (maybeThreshold.has_value()) {
-    config.energyThreshold =
-        static_cast<float>(maybeThreshold.value().as<double>(env));
+  auto maybeVadModelPath =
+      configObj.getOptionalProperty<js::String>(env, "vadModelPath");
+  if (maybeVadModelPath.has_value()) {
+    config.vadModelPath = maybeVadModelPath.value().as<std::string>(env);
+  }
+  if (config.vadModelPath.empty()) {
+    throw std::runtime_error("vadModelPath is required for streaming");
+  }
+
+  auto maybeVadThreshold =
+      configObj.getOptionalProperty<js::Number>(env, "vadThreshold");
+  if (maybeVadThreshold.has_value()) {
+    config.vadThreshold =
+        static_cast<float>(maybeVadThreshold.value().as<double>(env));
   }
 
   auto maybeMinSilence =
       configObj.getOptionalProperty<js::Number>(env, "minSilenceDurationMs");
   if (maybeMinSilence.has_value()) {
-    config.minSilenceSamples =
-        static_cast<int>(maybeMinSilence.value().as<double>(env)) *
-        config.sampleRate / 1000;
+    config.minSilenceDurationMs =
+        static_cast<int>(maybeMinSilence.value().as<double>(env));
   }
 
   auto maybeMinSpeech =
       configObj.getOptionalProperty<js::Number>(env, "minSpeechDurationMs");
   if (maybeMinSpeech.has_value()) {
-    config.minSpeechSamples =
-        static_cast<int>(maybeMinSpeech.value().as<double>(env)) *
-        config.sampleRate / 1000;
+    config.minSpeechDurationMs =
+        static_cast<int>(maybeMinSpeech.value().as<double>(env));
   }
 
   auto maybeMaxSpeech =
       configObj.getOptionalProperty<js::Number>(env, "maxSpeechDurationS");
   if (maybeMaxSpeech.has_value()) {
+    config.maxSpeechDurationS =
+        static_cast<float>(maybeMaxSpeech.value().as<double>(env));
     config.maxBufferSamples =
-        static_cast<int>(maybeMaxSpeech.value().as<double>(env)) *
-        config.sampleRate;
+        static_cast<int>(config.maxSpeechDurationS) * config.sampleRate;
+  }
+
+  auto maybeSpeechPad =
+      configObj.getOptionalProperty<js::Number>(env, "speechPadMs");
+  if (maybeSpeechPad.has_value()) {
+    config.speechPadMs =
+        static_cast<int>(maybeSpeechPad.value().as<double>(env));
+  }
+
+  auto maybeSamplesOverlap =
+      configObj.getOptionalProperty<js::Number>(env, "samplesOverlap");
+  if (maybeSamplesOverlap.has_value()) {
+    config.samplesOverlap =
+        static_cast<float>(maybeSamplesOverlap.value().as<double>(env));
   }
 
   {
