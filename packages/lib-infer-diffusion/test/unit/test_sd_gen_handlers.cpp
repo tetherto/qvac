@@ -34,28 +34,22 @@ using namespace qvac_errors;
 // ─────────────────────────────────────────────────────────────────────────────
 
 // Build a one-key picojson::object so we can exercise individual handlers.
-static picojson::object makeObj(
-    const std::string& key,
-    const picojson::value& val) {
+static picojson::object
+makeObj(const std::string& key, const picojson::value& val) {
   picojson::object obj;
   obj[key] = val;
   return obj;
 }
 
-static picojson::value str(const std::string& s) {
-  return picojson::value(s);
-}
+static picojson::value str(const std::string& s) { return picojson::value(s); }
 
-static picojson::value num(double n) {
-  return picojson::value(n);
-}
+static picojson::value num(double n) { return picojson::value(n); }
 
-static picojson::value boolean(bool b) {
-  return picojson::value(b);
-}
+static picojson::value boolean(bool b) { return picojson::value(b); }
 
 // Apply a single handler by name and return the resulting config.
-static SdGenConfig applyOne(const std::string& key, const picojson::value& val) {
+static SdGenConfig
+applyOne(const std::string& key, const picojson::value& val) {
   SdGenConfig cfg;
   applySdGenHandlers(cfg, makeObj(key, val));
   return cfg;
@@ -82,24 +76,25 @@ TEST(SdGenHandlers_Sampler, HeunMapsCorrectly) {
 
 TEST(SdGenHandlers_Sampler, AllSamplersAccepted) {
   const std::vector<std::pair<std::string, sample_method_t>> cases{
-      {"euler",         EULER_SAMPLE_METHOD},
-      {"euler_a",       EULER_A_SAMPLE_METHOD},
-      {"heun",          HEUN_SAMPLE_METHOD},
-      {"dpm2",          DPM2_SAMPLE_METHOD},
-      {"dpm++2m",       DPMPP2M_SAMPLE_METHOD},
-      {"dpm++2mv2",     DPMPP2Mv2_SAMPLE_METHOD},
-      {"dpm++2s_a",     DPMPP2S_A_SAMPLE_METHOD},
-      {"lcm",           LCM_SAMPLE_METHOD},
-      {"ipndm",         IPNDM_SAMPLE_METHOD},
-      {"ipndm_v",       IPNDM_V_SAMPLE_METHOD},
+      {"euler", EULER_SAMPLE_METHOD},
+      {"euler_a", EULER_A_SAMPLE_METHOD},
+      {"heun", HEUN_SAMPLE_METHOD},
+      {"dpm2", DPM2_SAMPLE_METHOD},
+      {"dpm++2m", DPMPP2M_SAMPLE_METHOD},
+      {"dpm++2mv2", DPMPP2Mv2_SAMPLE_METHOD},
+      {"dpm++2s_a", DPMPP2S_A_SAMPLE_METHOD},
+      {"lcm", LCM_SAMPLE_METHOD},
+      {"ipndm", IPNDM_SAMPLE_METHOD},
+      {"ipndm_v", IPNDM_V_SAMPLE_METHOD},
       {"ddim_trailing", DDIM_TRAILING_SAMPLE_METHOD},
-      {"tcd",           TCD_SAMPLE_METHOD},
+      {"tcd", TCD_SAMPLE_METHOD},
       {"res_multistep", RES_MULTISTEP_SAMPLE_METHOD},
-      {"res_2s",        RES_2S_SAMPLE_METHOD},
+      {"res_2s", RES_2S_SAMPLE_METHOD},
   };
   for (const auto& [name, expected] : cases) {
     SdGenConfig cfg;
-    EXPECT_NO_THROW(applySdGenHandlers(cfg, makeObj("sampling_method", str(name))))
+    EXPECT_NO_THROW(
+        applySdGenHandlers(cfg, makeObj("sampling_method", str(name))))
         << "sampler: " << name;
     EXPECT_EQ(cfg.sampleMethod, expected) << "sampler: " << name;
   }
@@ -114,7 +109,7 @@ TEST(SdGenHandlers_Sampler, UnknownSamplerThrows) {
 
 TEST(SdGenHandlers_Sampler, BothAliasesRouteToSameField) {
   auto cfgA = applyOne("sampling_method", str("euler"));
-  auto cfgB = applyOne("sampler",         str("euler"));
+  auto cfgB = applyOne("sampler", str("euler"));
   EXPECT_EQ(cfgA.sampleMethod, cfgB.sampleMethod);
 }
 
@@ -124,17 +119,17 @@ TEST(SdGenHandlers_Sampler, BothAliasesRouteToSameField) {
 
 TEST(SdGenHandlers_Scheduler, AllSchedulersAccepted) {
   const std::vector<std::pair<std::string, scheduler_t>> cases{
-      {"discrete",    DISCRETE_SCHEDULER},
-      {"karras",      KARRAS_SCHEDULER},
+      {"discrete", DISCRETE_SCHEDULER},
+      {"karras", KARRAS_SCHEDULER},
       {"exponential", EXPONENTIAL_SCHEDULER},
-      {"ays",         AYS_SCHEDULER},
-      {"gits",        GITS_SCHEDULER},
+      {"ays", AYS_SCHEDULER},
+      {"gits", GITS_SCHEDULER},
       {"sgm_uniform", SGM_UNIFORM_SCHEDULER},
-      {"simple",      SIMPLE_SCHEDULER},
-      {"lcm",         LCM_SCHEDULER},
-      {"smoothstep",  SMOOTHSTEP_SCHEDULER},
-      {"kl_optimal",  KL_OPTIMAL_SCHEDULER},
-      {"bong_tangent",BONG_TANGENT_SCHEDULER},
+      {"simple", SIMPLE_SCHEDULER},
+      {"lcm", LCM_SCHEDULER},
+      {"smoothstep", SMOOTHSTEP_SCHEDULER},
+      {"kl_optimal", KL_OPTIMAL_SCHEDULER},
+      {"bong_tangent", BONG_TANGENT_SCHEDULER},
   };
   for (const auto& [name, expected] : cases) {
     SdGenConfig cfg;
@@ -168,13 +163,13 @@ TEST(SdGenHandlers_CacheMode, EmptyStringMapsToDisabled) {
 
 TEST(SdGenHandlers_CacheMode, AllCacheModesAccepted) {
   const std::vector<std::pair<std::string, sd_cache_mode_t>> cases{
-      {"",           SD_CACHE_DISABLED},
-      {"disabled",   SD_CACHE_DISABLED},
-      {"easycache",  SD_CACHE_EASYCACHE},
-      {"ucache",     SD_CACHE_UCACHE},
-      {"dbcache",    SD_CACHE_DBCACHE},
+      {"", SD_CACHE_DISABLED},
+      {"disabled", SD_CACHE_DISABLED},
+      {"easycache", SD_CACHE_EASYCACHE},
+      {"ucache", SD_CACHE_UCACHE},
+      {"dbcache", SD_CACHE_DBCACHE},
       {"taylorseer", SD_CACHE_TAYLORSEER},
-      {"cache-dit",  SD_CACHE_CACHE_DIT},
+      {"cache-dit", SD_CACHE_CACHE_DIT},
   };
   for (const auto& [name, expected] : cases) {
     SdGenConfig cfg;
@@ -220,14 +215,15 @@ TEST(SdGenHandlers_CachePreset, UltraPreset) {
 }
 
 TEST(SdGenHandlers_CachePreset, PresetsOrderedByThreshold) {
-  // Sanity check: slow > medium > fast > ultra (higher threshold = safer/slower)
-  auto slow   = applyOne("cache_preset", str("slow"));
+  // Sanity check: slow > medium > fast > ultra (higher threshold =
+  // safer/slower)
+  auto slow = applyOne("cache_preset", str("slow"));
   auto medium = applyOne("cache_preset", str("medium"));
-  auto fast   = applyOne("cache_preset", str("fast"));
-  auto ultra  = applyOne("cache_preset", str("ultra"));
-  EXPECT_GT(slow.cacheThreshold,   medium.cacheThreshold);
+  auto fast = applyOne("cache_preset", str("fast"));
+  auto ultra = applyOne("cache_preset", str("ultra"));
+  EXPECT_GT(slow.cacheThreshold, medium.cacheThreshold);
   EXPECT_GT(medium.cacheThreshold, fast.cacheThreshold);
-  EXPECT_GT(fast.cacheThreshold,   ultra.cacheThreshold);
+  EXPECT_GT(fast.cacheThreshold, ultra.cacheThreshold);
 }
 
 TEST(SdGenHandlers_CachePreset, UnknownPresetThrows) {
@@ -309,18 +305,21 @@ public:
     free(data_);
   }
 
-  SdImageBatchTest(const SdImageBatchTest&)            = delete;
+  SdImageBatchTest(const SdImageBatchTest&) = delete;
   SdImageBatchTest& operator=(const SdImageBatchTest&) = delete;
-  SdImageBatchTest(SdImageBatchTest&&)                 = delete;
-  SdImageBatchTest& operator=(SdImageBatchTest&&)      = delete;
+  SdImageBatchTest(SdImageBatchTest&&) = delete;
+  SdImageBatchTest& operator=(SdImageBatchTest&&) = delete;
 
   [[nodiscard]] int count() const { return count_; }
   [[nodiscard]] const sd_image_t& operator[](int i) const { return data_[i]; }
-  void release(int i) { free(data_[i].data); data_[i].data = nullptr; }
+  void release(int i) {
+    free(data_[i].data);
+    data_[i].data = nullptr;
+  }
 
 private:
   sd_image_t* const data_;
-  const int         count_;
+  const int count_;
 };
 
 // Build a heap-allocated sd_image_t array with real malloc'd pixel buffers
@@ -328,10 +327,10 @@ private:
 static sd_image_t* makeFakeImages(int count, int pixelBytes = 4) {
   auto* arr = static_cast<sd_image_t*>(malloc(sizeof(sd_image_t) * count));
   for (int i = 0; i < count; ++i) {
-    arr[i].width  = 1;
+    arr[i].width = 1;
     arr[i].height = 1;
     arr[i].channel = pixelBytes;
-    arr[i].data   = static_cast<uint8_t*>(malloc(pixelBytes));
+    arr[i].data = static_cast<uint8_t*>(malloc(pixelBytes));
   }
   return arr;
 }
@@ -351,9 +350,9 @@ TEST(SdImageBatch, DestructorFreesAllBuffersOnNormalExit) {
 
 TEST(SdImageBatch, ReleaseNullsPointerSoDestructorSkipsIt) {
   SdImageBatchTest batch(makeFakeImages(2), 2);
-  batch.release(0); // free pixel buf for image 0 early
-  EXPECT_EQ(batch[0].data, nullptr);  // release() sets data to nullptr
-  EXPECT_NE(batch[1].data, nullptr);  // image 1 still valid
+  batch.release(0);                  // free pixel buf for image 0 early
+  EXPECT_EQ(batch[0].data, nullptr); // release() sets data to nullptr
+  EXPECT_NE(batch[1].data, nullptr); // image 1 still valid
   // destructor calls free(nullptr) for slot 0 (no-op) and frees slot 1
 }
 
@@ -372,7 +371,8 @@ TEST(SdImageBatch, DestructorFiresEvenWhenExceptionThrown) {
     Guard g{destructorRan};
     (void)g; // suppress unused warning
     throw std::runtime_error("simulated callback failure");
-  } catch (const std::runtime_error&) {}
+  } catch (const std::runtime_error&) {
+  }
 
   EXPECT_TRUE(destructorRan);
   // If SdImageBatchTest destructor did NOT run, ASan would report leaks above.
@@ -386,7 +386,7 @@ TEST(SdImageBatch, EarlyReleaseAllowsImmediateMemoryRecovery) {
   for (int i = 0; i < batch.count(); ++i) {
     // "process" image i
     EXPECT_NE(batch[i].data, nullptr);
-    batch.release(i);           // pixel buffer freed immediately
+    batch.release(i); // pixel buffer freed immediately
     EXPECT_EQ(batch[i].data, nullptr);
   }
   // destructor: all data_[i].data are nullptr → only the array itself is freed
@@ -417,7 +417,8 @@ TEST(SdModel_NoAsyncLoad, SdModelDoesNotImplementIModelAsyncLoad) {
   SdModel model(std::move(cfg));
 
   const auto* asyncLoad =
-      dynamic_cast<qvac_lib_inference_addon_cpp::model::IModelAsyncLoad*>(&model);
+      dynamic_cast<qvac_lib_inference_addon_cpp::model::IModelAsyncLoad*>(
+          &model);
 
   EXPECT_EQ(asyncLoad, nullptr)
       << "SdModel should not implement IModelAsyncLoad — it uses a custom "
