@@ -219,20 +219,6 @@ std::array<cv::Point2f, 4> StepBoundingBox::getBoxFromComponent(Input &input, in
 }
 
 cv::Mat StepBoundingBox::createSegmentationMap(cv::Size imgSize, int component) {
-  // Reuse segmap_ across components: allocate once, zero only the previous ROI
-  if (segmap_.empty() || segmap_.size() != imgSize) {
-    segmap_ = cv::Mat::zeros(imgSize, CV_8U);
-    prevSegmapROI_ = cv::Rect();
-  } else if (prevSegmapROI_.area() > 0) {
-    segmap_(prevSegmapROI_).setTo(0);
-  }
-
-  cv::Mat mask = (labels_ == component);
-  segmap_.setTo(UINT8_MAX_VAL, mask);
-
-  cv::Mat linkMask = (linkMapBinary_ == UINT8_MAX_VAL) & (textMapBinary_ == 0);
-  segmap_.setTo(0, linkMask);
-
   const int leftX = stats_.at<int>(component, cv::CC_STAT_LEFT);
   const int topY = stats_.at<int>(component, cv::CC_STAT_TOP);
   const int width = stats_.at<int>(component, cv::CC_STAT_WIDTH);
@@ -246,13 +232,34 @@ cv::Mat StepBoundingBox::createSegmentationMap(cv::Size imgSize, int component) 
   const int startY = std::max(topY - niter, 0);
   const int endY = std::min(topY + height + niter + 1, imgSize.height);
 
+  cv::Rect currentROI(startX, startY, endX - startX, endY - startY);
+
+  // Reuse segmap_ across components: allocate once, then zero only the
+  // previous ROI plus the current component's expanded ROI to clear any
+  // stale data from earlier components that may overlap.
+  if (segmap_.empty() || segmap_.size() != imgSize) {
+    segmap_ = cv::Mat::zeros(imgSize, CV_8U);
+  } else {
+    if (prevSegmapROI_.area() > 0) {
+      segmap_(prevSegmapROI_).setTo(0);
+    }
+    // Also zero the current component's ROI to clear stale 255s from
+    // earlier components that fall outside prevSegmapROI_.
+    segmap_(currentROI).setTo(0);
+  }
+
+  cv::Mat mask = (labels_ == component);
+  segmap_.setTo(UINT8_MAX_VAL, mask);
+
+  cv::Mat linkMask = (linkMapBinary_ == UINT8_MAX_VAL) & (textMapBinary_ == 0);
+  segmap_.setTo(0, linkMask);
+
   cv::Mat kernel = cv::getStructuringElement(cv::MORPH_RECT, {1 + niter, 1 + niter});
-  cv::Rect regionOfInterest(startX, startY, endX - startX, endY - startY);
-  cv::Mat segRoi = segmap_(regionOfInterest);
+  cv::Mat segRoi = segmap_(currentROI);
   cv::dilate(segRoi, segRoi, kernel);
 
   // Track the dilated ROI so next call can zero just this region
-  prevSegmapROI_ = regionOfInterest;
+  prevSegmapROI_ = currentROI;
 
   return segmap_;
 }

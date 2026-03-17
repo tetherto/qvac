@@ -390,8 +390,7 @@ inline std::vector<Ort::Value> OnnxSession::runRaw(
   size_t outCount;
   std::vector<const char*> customOutputNamePtrs;
 
-  if (&outputNames == &outputNames_ ||
-      outputNames.size() == outputNames_.size()) {
+  if (&outputNames == &outputNames_) {
     // Common path: requesting all outputs — use cached pointers
     outPtrs = outputNamePtrs_.data();
     outCount = outputNamePtrs_.size();
