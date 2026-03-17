@@ -1,0 +1,298 @@
+---
+title: "@qvac/transcription-parakeet"
+titleStyle: code
+description: Automatic speech recognition (ASR) for speech-to-text with speaker diarization.
+---
+
+## Overview
+
+[Bare module](https://bare.pears.com) that adds support for transcription in QVAC using [NVIDIA Parakeet](https://huggingface.co/nvidia/parakeet-tdt-0.6b-v2) ASR models via [ONNX Runtime](https://onnxruntime.ai) as the inference engine.
+
+Parakeet supports multiple model variants:
+
+- **TDT** — multilingual transcription (~25 languages) with automatic language detection.
+- **CTC** — english-only, fast transcription with punctuation and capitalization.
+- **EOU** — real-time streaming with end-of-utterance detection (optimized for low latency).
+- **Sortformer** — speaker diarization (up to 4 speakers).
+
+## Models
+
+Parakeet uses multiple model files depending on the variant:
+
+**TDT (multilingual):**
+- Encoder ONNX model
+- Encoder data file
+- Decoder ONNX model
+- Vocabulary file
+- Preprocessor ONNX model
+
+**CTC (English-only):**
+- Model ONNX file
+- Model data file
+- Tokenizer file
+
+**Sortformer (diarization):**
+- Single ONNX model file
+
+**EOU (streaming):**
+- Encoder ONNX model
+- Decoder ONNX model
+- Tokenizer file
+
+Model files are available from Hugging Face:
+- **CTC:** [parakeet-ctc-0.6b-ONNX](https://huggingface.co/onnx-community/parakeet-ctc-0.6b-ONNX/tree/main/onnx)
+- **TDT:** [parakeet-tdt-0.6b-v3-onnx](https://huggingface.co/istupakov/parakeet-tdt-0.6b-v3-onnx)
+- **EOU:** [parakeet-rs realtime_eou_120m-v1-onnx](https://huggingface.co/altunene/parakeet-rs/tree/main/realtime_eou_120m-v1-onnx)
+- **Sortformer:** [parakeet-rs sortformer](https://huggingface.co/altunene/parakeet-rs/tree/main)
+
+## Requirement
+
+Bare $\geq$ v1.20
+
+## Installation
+
+```bash
+npm i @qvac/transcription-parakeet
+```
+
+## Quickstart
+
+<Steps>
+
+<Step>
+If you don't have Bare runtime, install it:
+
+```bash
+npm i -g bare
+```
+</Step>
+
+<Step>
+Create a new project:
+
+```bash
+mkdir qvac-parakeet-quickstart
+cd qvac-parakeet-quickstart
+npm init -y
+```
+</Step>
+
+<Step>
+Install dependencies:
+
+```bash
+npm i @qvac/dl-filesystem @qvac/transcription-parakeet bare-path bare-process
+```
+</Step>
+
+<Step>
+Download the TDT model files and place them in `models/parakeet-tdt-0.6b-v3-onnx/`:
+- `encoder.onnx`
+- `encoder.onnx_data`
+- `decoder.onnx`
+- `vocab.txt`
+- `preprocessor.onnx`
+
+Download from [Hugging Face](https://huggingface.co/istupakov/parakeet-tdt-0.6b-v3-onnx).
+</Step>
+
+<Step>
+Create `index.js`:
+</Step>
+
+<WrapCode>
+
+```js title="index.js" lineNumbers
+'use strict'
+
+const path = require('bare-path')
+const process = require('bare-process')
+const binding = require('@qvac/transcription-parakeet/binding')
+const { ParakeetInterface } = require('@qvac/transcription-parakeet/parakeet')
+
+async function main () {
+  const modelPath = path.join('.', 'models', 'parakeet-tdt-0.6b-v3-onnx')
+  const audioPath = path.join('.', 'my-audio.wav')
+
+  const config = {
+    modelPath,
+    modelType: 'tdt',
+    maxThreads: 4,
+    useGPU: false
+  }
+
+  const transcriptions = []
+
+  const outputCallback = (handle, event, data, error) => {
+    if (event === 'transcription' && data && data.text) {
+      transcriptions.push(data.text)
+    }
+  }
+
+  const parakeet = new ParakeetInterface(binding, config, outputCallback)
+
+  await parakeet.loadWeights()
+  await parakeet.activate()
+
+  const fs = require('bare-fs')
+  const audioBuffer = fs.readFileSync(audioPath)
+  const audioData = audioBuffer.subarray(44) // Skip WAV header
+
+  await parakeet.append({ type: 'audio', data: audioData.buffer })
+  await parakeet.append({ type: 'end of job' })
+
+  // Wait briefly for processing
+  await new Promise(resolve => setTimeout(resolve, 5000))
+
+  console.log('=== TRANSCRIPTION ===')
+  console.log(transcriptions.join(' '))
+  console.log('=====================')
+
+  await parakeet.destroyInstance()
+}
+
+main().catch(err => {
+  console.error(err)
+  process.exit(1)
+})
+```
+</WrapCode>
+
+<Step>
+Run `index.js`:
+
+```bash
+bare index.js
+```
+</Step>
+</Steps>
+
+## Usage
+
+### 1. Choose a Data Loader
+
+First, select and instantiate a data loader that provides access to model files:
+
+```javascript
+// Option A: Filesystem Data Loader - for local model files
+const FilesystemDL = require('@qvac/dl-filesystem')
+const fsDL = new FilesystemDL({
+  dirPath: './path/to/model/files'
+})
+
+// Option B: Hyperdrive Data Loader - for peer-to-peer distributed models
+const HyperDriveDL = require('@qvac/dl-hyperdrive')
+const hdDL = new HyperDriveDL({
+  key: 'hd://<driveKey>',
+  store: corestore
+})
+```
+
+### 2. Configure Parakeet Parameters
+
+The addon accepts the following configuration:
+
+| Key | Type | Description |
+| --- | --- | --- |
+| `modelPath` | string | Path to the model directory |
+| `modelType` | string | `'ctc'`, `'tdt'`, `'eou'`, or `'sortformer'` |
+| `maxThreads` | number | Maximum CPU threads to use |
+| `useGPU` | boolean | Enable GPU acceleration |
+| `language` | string | Language code or `'auto'` (TDT only) |
+
+### 3. Configuration Example
+
+```javascript
+// TDT (multilingual, recommended)
+const config = {
+  modelPath: './models/parakeet-tdt-0.6b-v3-onnx',
+  modelType: 'tdt',
+  maxThreads: 4,
+  useGPU: false,
+  language: 'auto'
+}
+
+// CTC (English-only, fastest)
+const ctcConfig = {
+  modelPath: './models/parakeet-ctc-0.6b-ONNX',
+  modelType: 'ctc',
+  maxThreads: 4,
+  useGPU: false
+}
+
+// Sortformer (speaker diarization)
+const sortformerConfig = {
+  modelPath: './models/sortformer',
+  modelType: 'sortformer',
+  maxThreads: 4,
+  useGPU: false
+}
+```
+
+### 4. Create Model Instance
+
+```javascript
+const binding = require('@qvac/transcription-parakeet/binding')
+const { ParakeetInterface } = require('@qvac/transcription-parakeet/parakeet')
+
+const outputCallback = (handle, event, data, error) => {
+  if (event === 'transcription' && data && data.text) {
+    console.log('Transcription:', data.text)
+  }
+}
+
+const parakeet = new ParakeetInterface(binding, config, outputCallback)
+```
+
+### 5. Load Model
+
+Load model weights and activate the inference engine:
+
+```javascript
+try {
+  await parakeet.loadWeights()
+  await parakeet.activate()
+} catch (error) {
+  console.error('Failed to load model:', error)
+}
+```
+
+### 6. Run Transcription
+
+Pass audio data to the model for transcription:
+
+```javascript
+try {
+  const fs = require('bare-fs')
+  const audioBuffer = fs.readFileSync('path/to/your/audio.wav')
+  const audioData = audioBuffer.subarray(44) // Skip WAV header for raw PCM
+
+  await parakeet.append({ type: 'audio', data: audioData.buffer })
+  await parakeet.append({ type: 'end of job' })
+} catch (error) {
+  console.error('Transcription failed:', error)
+}
+```
+
+**Output Callback Events:**
+- **`transcription`** — partial or complete transcription result (`data.text`, `data.confidence`, `data.isFinal`)
+- **`progress`** — processing progress (`data.percent`, `data.timeElapsed`)
+- **`diarization`** — speaker identification (`data.speakerId`, `data.startTime`, `data.endTime`)
+- **`complete`** — job completed successfully
+- **`error`** — error occurred (`error` string)
+
+### 7. Release Resources
+
+Always destroy the instance when finished to free memory and resources:
+
+```javascript
+try {
+  await parakeet.destroyInstance()
+} catch (error) {
+  console.error('Failed to destroy instance:', error)
+}
+```
+
+## More resources
+
+[Package at npm](https://www.npmjs.com/package/@qvac/transcription-parakeet)

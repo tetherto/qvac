@@ -158,6 +158,7 @@ export const tree: Node[] = [
       { name: 'embed-llamacpp', url: '/addons/embed-llamacpp', type: 'page' },
       { name: 'translation-nmtcpp', url: '/addons/translation-nmtcpp', type: 'page' },
       { name: 'transcription-whispercpp', url: '/addons/transcription-whispercpp', type: 'page' },
+      { name: 'transcription-parakeet', url: '/addons/transcription-parakeet', type: 'page' },
       { name: 'tts-onnx', url: '/addons/tts-onnx', type: 'page' },
       { name: 'ocr-onnx', url: '/addons/ocr-onnx', type: 'page' },
     ],
