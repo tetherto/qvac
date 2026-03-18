@@ -61,10 +61,10 @@ class LlamaInterface {
     if (typeof this._binding.finetune !== 'function') {
       throw new Error('Finetuning is not exposed by this native binding')
     }
-    if (finetuningParams !== undefined) {
-      return this._binding.finetune(this._handle, finetuningParams)
+    if (finetuningParams === undefined) {
+      throw new Error('Finetuning parameters are required')
     }
-    return this._binding.finetune(this._handle)
+    return this._binding.finetune(this._handle, finetuningParams)
   }
 
   /**
