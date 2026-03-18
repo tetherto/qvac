@@ -5,6 +5,47 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.3.3]
+2026-03-18
+
+### Added
+
+- Exposed `enableCpuMemArena` and `intraOpThreads` as configurable JS API params
+- Shared `windowsOrtParams` helper in test utils for consistent Windows CI ORT configuration across all integration tests
+
+### Changed
+
+- All integration tests use `windowsOrtParams` spread for Windows CI (BASIC + XNNPACK + no arena + 1 thread)
+- Updated `@qvac/onnx` dependency to ^0.13.3
+
+### Fixed
+
+- Stale segmap data in `createSegmentationMap`: now zeros both the previous ROI and the current component's expanded ROI before setting values, preventing incorrect bounding boxes when component ROIs overlap with earlier stale data
+
+## [0.3.2]
+2026-03-17
+
+### Added
+
+- Configurable ORT session settings from JS API: `graphOptimization` (`'basic'|'extended'|'all'|'disable'`) and `enableXnnpack` (boolean) are now exposed as optional params alongside the existing `useGPU`
+- `PipelineConfig` now holds an `onnx_addon::SessionConfig sessionConfig` member, replacing the separate `graphOptimization` field and the hardcoded `enableXnnpack = false` in each step constructor
+
+### Changed
+
+- Refactored all step constructors (`StepDetectionInference`, `StepRecognizeText`, `StepDoctrDetection`, `StepDoctrRecognition`) to accept `const onnx_addon::SessionConfig&` instead of individual `useGPU` + `optimization` parameters
+- `AddonJs.hpp` parses `useGPU`, `graphOptimization`, and `enableXnnpack` into `config.sessionConfig` in a single block
+- Integration test uses `graphOptimization: 'basic'` on Windows CI to avoid FusedConv OOM from EXTENDED optimization
+
+## [0.3.1]
+2026-03-13
+
+### Changed
+
+- Switched all inference steps to `runRaw()` for zero-copy output access, eliminating a full `memcpy` of output tensors per inference call (~50MB saved per detection frame at 2560x2560)
+- Replaced `getInputInfo()[0].name` calls with `inputName(0)` in `StepDoctrDetection` and `StepDoctrRecognition`, avoiding ORT API queries and vector allocations on every inference
+- `StepDetectionInference::runInference()` now returns `std::vector<Ort::Value>` instead of `std::vector<OutputTensor>`
+- Updated `@qvac/onnx` dependency
+
 ## [0.3.0]
 2026-03-11
 
