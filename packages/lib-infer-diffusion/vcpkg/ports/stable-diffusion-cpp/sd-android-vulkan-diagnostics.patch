@@ -57,7 +57,7 @@ index 004ddabf..f7a97fc1 100644
                  if (!name) {
                      continue;
                  }
-@@ -212,18 +245,55 @@ public:
+@@ -212,18 +245,78 @@ public:
                  if (!is_opencl) {
                      continue;
                  }
@@ -86,10 +86,12 @@ index 004ddabf..f7a97fc1 100644
 -        backend = ggml_backend_init_by_type(GGML_BACKEND_DEVICE_TYPE_GPU, NULL);
 +        const size_t n_devices = ggml_backend_dev_count();
 +        bool attempted_gpu_device_init = false;
++
++        // Prefer dedicated GPUs first.
 +        for (size_t i = 0; i < n_devices; ++i) {
 +            ggml_backend_dev_t dev = ggml_backend_dev_get(i);
 +            const enum ggml_backend_dev_type dev_type = ggml_backend_dev_type(dev);
-+            if (dev_type != GGML_BACKEND_DEVICE_TYPE_GPU && dev_type != GGML_BACKEND_DEVICE_TYPE_IGPU) {
++            if (dev_type != GGML_BACKEND_DEVICE_TYPE_GPU) {
 +                continue;
 +            }
 +            const char* name = ggml_backend_dev_name(dev);
@@ -102,6 +104,27 @@ index 004ddabf..f7a97fc1 100644
 +                break;
 +            }
 +            LOG_WARN("Failed to initialize GPU device candidate[%zu] '%s'", i, name ? name : "<null>");
++        }
++
++        // If no dedicated GPU worked, try integrated GPUs.
++        if (!backend) {
++            for (size_t i = 0; i < n_devices; ++i) {
++                ggml_backend_dev_t dev = ggml_backend_dev_get(i);
++                const enum ggml_backend_dev_type dev_type = ggml_backend_dev_type(dev);
++                if (dev_type != GGML_BACKEND_DEVICE_TYPE_IGPU) {
++                    continue;
++                }
++                const char* name = ggml_backend_dev_name(dev);
++                const char* desc = ggml_backend_dev_description(dev);
++                LOG_INFO("IGPU init candidate[%zu]: name='%s' desc='%s' type=%s", i, name ? name : "<null>", desc ? desc : "<null>", ggml_backend_device_type_name(dev_type));
++                attempted_gpu_device_init = true;
++                backend = ggml_backend_dev_init(dev, NULL);
++                if (backend) {
++                    LOG_INFO("Initialized IGPU backend from explicit device candidate[%zu] '%s'", i, name ? name : "<null>");
++                    break;
++                }
++                LOG_WARN("Failed to initialize IGPU device candidate[%zu] '%s'", i, name ? name : "<null>");
++            }
 +        }
 +
          if (!backend) {
