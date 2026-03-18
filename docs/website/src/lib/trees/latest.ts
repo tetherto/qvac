@@ -34,6 +34,12 @@ export const tree: Node[] = [
         icon: resolveIcon('DoorOpen'),
       },
       {
+        name: 'Our Vision',
+        url: '/vision',
+        type: 'page',
+        icon: resolveIcon('Binoculars'),
+      },
+      {
         name: 'How it works',
         url: '/sdk/how-it-works',
         type: 'page',
