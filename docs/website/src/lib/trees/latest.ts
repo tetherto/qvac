@@ -97,7 +97,7 @@ export const tree: Node[] = [
     ],
   },
   {
-    name: 'Examples',
+    name: 'Usage Examples',
     type: 'folder',
     icon: resolveIcon('ListChecks'),
     children: [
