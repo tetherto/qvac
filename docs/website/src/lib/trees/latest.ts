@@ -47,18 +47,6 @@ export const tree: Node[] = [
         icon: resolveIcon('Globe'),
       },
       {
-        name: 'Public launch',
-        url: '/about-qvac/public-launch',
-        type: 'page',
-        icon: resolveIcon('Globe'),
-      },
-      {
-        name: 'Public launch',
-        url: '/public-launch',
-        type: 'page',
-        icon: resolveIcon('Globe'),
-      },
-      {
         name: 'How it works',
         url: '/about-qvac/how-it-works',
         type: 'page',
