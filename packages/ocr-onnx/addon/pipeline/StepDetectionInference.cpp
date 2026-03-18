@@ -32,8 +32,7 @@ constexpr double PIXEL_INTENSITY_MAX = 255.0;
  *
  * @throws std::runtime_error if the Detector inference results are not in expected format
  */
-std::pair<cv::Mat, cv::Mat>
-extractOutputFromOrtValue(Ort::Value& ortOutput) {
+std::pair<cv::Mat, cv::Mat> extractOutputFromOrtValue(Ort::Value& ortOutput) {
   auto typeInfo = ortOutput.GetTypeInfo();
   auto tensorInfo = typeInfo.GetTensorTypeAndShapeInfo();
   auto outputShape = tensorInfo.GetShape();
@@ -103,8 +102,15 @@ std::tuple<cv::Mat, float> resizeAspectRatio(const cv::Mat &img, float magRatio)
   }
 
   cv::Mat resized;
-  cv::copyMakeBorder(proc, resized, 0, targetH32 - targetH, 0, targetW32 - targetW,
-                     cv::BORDER_CONSTANT, cv::Scalar::all(0));
+  cv::copyMakeBorder(
+      proc,
+      resized,
+      0,
+      targetH32 - targetH,
+      0,
+      targetW32 - targetW,
+      cv::BORDER_CONSTANT,
+      cv::Scalar::all(0));
 
   return {resized, inputResizeRatio};
 }
@@ -125,38 +131,37 @@ cv::Mat normalizeAndBuildCHW(const cv::Mat& img) {
   CV_Assert(numChannels == 3);
   const size_t totalPixels = static_cast<size_t>(height) * width;
 
-  // Pre-compute normalization constants: result = (pixel - mean*255) * (1 / (var*255))
+  // Pre-compute normalization constants: result = (pixel - mean*255) * (1 /
+  // (var*255))
   const float meanVals[3] = {
-    static_cast<float>(DEFAULT_MEAN[0] * PIXEL_INTENSITY_MAX),
-    static_cast<float>(DEFAULT_MEAN[1] * PIXEL_INTENSITY_MAX),
-    static_cast<float>(DEFAULT_MEAN[2] * PIXEL_INTENSITY_MAX)
-  };
+      static_cast<float>(DEFAULT_MEAN[0] * PIXEL_INTENSITY_MAX),
+      static_cast<float>(DEFAULT_MEAN[1] * PIXEL_INTENSITY_MAX),
+      static_cast<float>(DEFAULT_MEAN[2] * PIXEL_INTENSITY_MAX)};
   const float invVarVals[3] = {
-    static_cast<float>(1.0 / (DEFAULT_VARIANCE[0] * PIXEL_INTENSITY_MAX)),
-    static_cast<float>(1.0 / (DEFAULT_VARIANCE[1] * PIXEL_INTENSITY_MAX)),
-    static_cast<float>(1.0 / (DEFAULT_VARIANCE[2] * PIXEL_INTENSITY_MAX))
-  };
+      static_cast<float>(1.0 / (DEFAULT_VARIANCE[0] * PIXEL_INTENSITY_MAX)),
+      static_cast<float>(1.0 / (DEFAULT_VARIANCE[1] * PIXEL_INTENSITY_MAX)),
+      static_cast<float>(1.0 / (DEFAULT_VARIANCE[2] * PIXEL_INTENSITY_MAX))};
 
   cv::Mat chwBlob(numChannels, static_cast<int>(totalPixels), CV_32F);
   float* planes[3] = {
-    chwBlob.ptr<float>(0),
-    chwBlob.ptr<float>(1),
-    chwBlob.ptr<float>(2)
-  };
+      chwBlob.ptr<float>(0), chwBlob.ptr<float>(1), chwBlob.ptr<float>(2)};
 
   if (img.depth() == CV_8U) {
     const uint8_t* src = img.ptr<uint8_t>();
     for (size_t i = 0; i < totalPixels; ++i) {
       const size_t si = i * 3;
-      planes[0][i] = (static_cast<float>(src[si    ]) - meanVals[0]) * invVarVals[0];
-      planes[1][i] = (static_cast<float>(src[si + 1]) - meanVals[1]) * invVarVals[1];
-      planes[2][i] = (static_cast<float>(src[si + 2]) - meanVals[2]) * invVarVals[2];
+      planes[0][i] =
+          (static_cast<float>(src[si]) - meanVals[0]) * invVarVals[0];
+      planes[1][i] =
+          (static_cast<float>(src[si + 1]) - meanVals[1]) * invVarVals[1];
+      planes[2][i] =
+          (static_cast<float>(src[si + 2]) - meanVals[2]) * invVarVals[2];
     }
   } else {
     const float* src = img.ptr<float>();
     for (size_t i = 0; i < totalPixels; ++i) {
       const size_t si = i * 3;
-      planes[0][i] = (src[si    ] - meanVals[0]) * invVarVals[0];
+      planes[0][i] = (src[si] - meanVals[0]) * invVarVals[0];
       planes[1][i] = (src[si + 1] - meanVals[1]) * invVarVals[1];
       planes[2][i] = (src[si + 2] - meanVals[2]) * invVarVals[2];
     }
@@ -168,7 +173,8 @@ cv::Mat normalizeAndBuildCHW(const cv::Mat& img) {
 } // namespace
 
 StepDetectionInference::StepDetectionInference(
-    const std::string& pathDetector, const onnx_addon::SessionConfig& sessionConfig, float magRatio)
+    const std::string& pathDetector,
+    const onnx_addon::SessionConfig& sessionConfig, float magRatio)
     : magRatio_(magRatio), session_(pathDetector, sessionConfig) {}
 
 std::vector<Ort::Value>

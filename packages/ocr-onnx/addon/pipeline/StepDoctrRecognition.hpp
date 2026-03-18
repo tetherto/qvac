@@ -24,8 +24,8 @@ public:
 
   StepDoctrRecognition(
       const std::string& pathRecognizer,
-      const onnx_addon::SessionConfig& sessionConfig = {},
-      int batchSize = 32, DecodingMethod decoding = DecodingMethod::CTC);
+      const onnx_addon::SessionConfig& sessionConfig = {}, int batchSize = 32,
+      DecodingMethod decoding = DecodingMethod::CTC);
 
 #if defined(_WIN32) || defined(_WIN64)
   // On Windows, defer session destruction to avoid the ORT global-state crash.
@@ -60,7 +60,8 @@ private:
   cv::Mat preprocessCrop(const cv::Mat& origImg, const std::array<cv::Point2f, 4>& polygon);
 
   // Run batch ONNX inference, returns raw logits [batch, seq_len, vocab_size+3]
-  std::pair<std::vector<Ort::Value>, cv::Mat> runBatchInference(const std::vector<cv::Mat>& images);
+  std::pair<std::vector<Ort::Value>, cv::Mat>
+  runBatchInference(const std::vector<cv::Mat>& images);
 
   // Softmax + argmax for a single timestep, returns best index and its probability
   SoftmaxResult softmaxArgmax(const cv::Mat& preds, int batchIdx, int timestep, int vocabSize);

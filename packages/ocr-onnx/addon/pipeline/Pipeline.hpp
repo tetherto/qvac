@@ -56,7 +56,8 @@ struct PipelineConfig {
   int recognizerBatchSize{DEFAULT_RECOGNIZER_BATCH_SIZE};   // Batch size for recognizer inference
   DecodingMethod decodingMethod{DecodingMethod::CTC};       // Recognition decoding: CTC for CRNN, ATTENTION for PARSeq
   bool straightenPages{false};                              // Detect and correct page rotation before detection
-  onnx_addon::SessionConfig sessionConfig{.provider = onnx_addon::ExecutionProvider::CPU};
+  onnx_addon::SessionConfig sessionConfig{
+      .provider = onnx_addon::ExecutionProvider::CPU};
 };
 
 struct PipelineInput {

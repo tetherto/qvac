@@ -218,7 +218,8 @@ std::array<cv::Point2f, 4> StepBoundingBox::getBoxFromComponent(Input &input, in
   return convertedBox;
 }
 
-cv::Mat StepBoundingBox::createSegmentationMap(cv::Size imgSize, int component) {
+cv::Mat
+StepBoundingBox::createSegmentationMap(cv::Size imgSize, int component) {
   const int leftX = stats_.at<int>(component, cv::CC_STAT_LEFT);
   const int topY = stats_.at<int>(component, cv::CC_STAT_TOP);
   const int width = stats_.at<int>(component, cv::CC_STAT_WIDTH);

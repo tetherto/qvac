@@ -41,7 +41,8 @@ float boxScore(const cv::Mat& probMap, const cv::Rect& bbox) {
 } // namespace
 
 StepDoctrDetection::StepDoctrDetection(
-    const std::string& pathDetector, const onnx_addon::SessionConfig& sessionConfig)
+    const std::string& pathDetector,
+    const onnx_addon::SessionConfig& sessionConfig)
     : session_(pathDetector, sessionConfig) {
   QLOG(qvac_lib_inference_addon_cpp::logger::Priority::INFO,
        "[DoctrDetection] ONNX session created");
@@ -135,8 +136,8 @@ cv::Mat StepDoctrDetection::runInference(const cv::Mat& preprocessed) {
   }
 
   // Output can be [1, 1, H, W] or [1, H, W] - extract as 2D logit map
-  // No clone needed: probMap (computed via cv::exp) is independent of the ORT buffer,
-  // and ortOutputs stays alive until the end of this function
+  // No clone needed: probMap (computed via cv::exp) is independent of the ORT
+  // buffer, and ortOutputs stays alive until the end of this function
   cv::Mat logitMap;
   if (outShape.size() == 4) {
     // [batch, channels, height, width]
