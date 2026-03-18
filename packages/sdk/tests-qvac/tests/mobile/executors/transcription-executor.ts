@@ -26,12 +26,13 @@ export class MobileTranscriptionExecutor extends AssetExecutor<
     await this.resources.downloadAllOnce(console.log);
     const dep = ctx.dependency as string | undefined;
     if (dep && dep !== "none") {
+      await this.resources.evictAll();
       await this.resources.ensureLoaded(dep);
     }
   }
 
-  async teardown(testId: string, context: unknown) {
-    await this.resources.evictStale(5);
+  async teardown() {
+    await this.resources.evictAll();
   }
 
   private async loadAudioAssets() {

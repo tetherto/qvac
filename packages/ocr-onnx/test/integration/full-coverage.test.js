@@ -2,7 +2,7 @@
 
 const { ONNXOcr, QvacErrorAddonOcr, ERR_CODES, binding } = require('../..')
 const test = require('brittle')
-const { isMobile, ensureModelPath, getImagePath } = require('./utils')
+const { isMobile, ensureModelPath, getImagePath, windowsOrtParams } = require('./utils')
 
 const MOBILE_TIMEOUT = 600 * 1000
 const DESKTOP_TIMEOUT = 120 * 1000
@@ -14,7 +14,8 @@ function createMinimalOcr () {
       pathDetector: 'models/ocr/rec_dyn/detector_craft.onnx',
       pathRecognizer: 'models/ocr/rec_dyn/recognizer_latin.onnx',
       langList: ['en'],
-      useGPU: false
+      useGPU: false,
+      ...windowsOrtParams
     }
   })
 }
@@ -28,7 +29,8 @@ async function loadOcr () {
       pathDetector: detectorPath,
       pathRecognizer: recognizerPath,
       langList: ['en'],
-      useGPU: false
+      useGPU: false,
+      ...windowsOrtParams
     }
   })
 
@@ -172,6 +174,7 @@ test('load() accepts defaultRotationAngles and contrastRetry', { timeout: TEST_T
       pathRecognizer: recognizerPath,
       langList: ['en'],
       useGPU: false,
+      ...windowsOrtParams,
       defaultRotationAngles: [90, 180, 270],
       contrastRetry: true
     }

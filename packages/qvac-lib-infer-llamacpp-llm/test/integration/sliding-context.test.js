@@ -5,7 +5,6 @@ const path = require('bare-path')
 const FilesystemDL = require('@qvac/dl-filesystem')
 const LlmLlamacpp = require('../../index.js')
 const { ensureModel } = require('./utils')
-const { attachSpecLogger } = require('./spec-logger')
 const os = require('bare-os')
 
 const platform = os.platform()
@@ -57,13 +56,6 @@ async function setupModel (t, overrides = {}) {
   })
 
   const loader = new FilesystemDL({ dirPath })
-  const specLogger = attachSpecLogger({ forwardToConsole: true })
-  let loggerReleased = false
-  function releaseLogger () {
-    if (loggerReleased) return
-    loggerReleased = true
-    specLogger.release()
-  }
 
   const baseConfig = {
     device: useCpu ? 'cpu' : 'gpu',
@@ -73,7 +65,7 @@ async function setupModel (t, overrides = {}) {
     temp: '0.9',
     top_p: '0.95',
     seed: '42',
-    verbosity: '3'
+    verbosity: '2'
   }
 
   const model = new LlmLlamacpp({
@@ -87,15 +79,9 @@ async function setupModel (t, overrides = {}) {
   try {
     await model.load()
   } catch (err) {
-    releaseLogger()
     await loader.close().catch(() => {})
     throw err
   }
-
-  // Clear any late C++ log callbacks from previous tests that arrived during model setup.
-  // model.load() is a long async operation that yields many times, guaranteeing all
-  // pending callbacks from prior tests have been processed by this point.
-  specLogger.logs.length = 0
 
   t.teardown(async () => {
     // Guard against model.unload() hanging after context overflow (seen on darwin-arm64 CI).
@@ -104,14 +90,13 @@ async function setupModel (t, overrides = {}) {
     const unloadTimeout = new Promise(resolve => setTimeout(resolve, 30_000))
     await Promise.race([unloadDone, unloadTimeout])
     await loader.close().catch(() => {})
-    releaseLogger()
   })
 
-  return { model, dirPath, logs: specLogger.logs }
+  return { model, dirPath }
 }
 
-async function runAndCollect (model, prompt) {
-  const response = await model.run(prompt)
+async function runAndCollect (model, prompt, runOptions) {
+  const response = await model.run(prompt, runOptions)
   const chunks = []
   response.onUpdate(data => { chunks.push(data) })
   // Bare runtime on arm64 may not drain promise microtasks from native addon
@@ -124,29 +109,12 @@ async function runAndCollect (model, prompt) {
   } finally {
     clearInterval(ticker)
   }
-  // Native log callbacks (JsLogger) and output/completion callbacks (OutputCallbackJs)
-  // are delivered via separate uv_async handles with no ordering guarantee. Yield to the
-  // event loop so any pending log callbacks are processed before the caller reads the
-  // shared logs array.
-  await new Promise(resolve => setTimeout(resolve, 50))
   return { text: chunks.join(''), stats: response.stats }
 }
 
 function buildPrompt (sessionPath, messages) {
   if (!sessionPath) return messages
   return [{ role: 'session', content: sessionPath }, ...messages]
-}
-
-function countDiscardLogs (logs) {
-  return logs.filter(entry =>
-    entry.includes('discarded') && entry.includes('tokens after the first message')
-  ).length
-}
-
-function countPrefillDiscardLogs (logs) {
-  return logs.filter(entry =>
-    entry.includes('Prefill step: discarded')
-  ).length
 }
 
 function expectedSlides (nPredict, nDiscarded) {
@@ -162,7 +130,7 @@ test('Basic generation sliding', {
   timeout: 900_000,
   skip
 }, async t => {
-  const { model, logs } = await setupModel(t, {
+  const { model } = await setupModel(t, {
     n_predict: String(SLIDE_PREDICT),
     n_discarded: '32'
   })
@@ -171,10 +139,8 @@ test('Basic generation sliding', {
 
   t.is(stats.promptTokens, PROMPT_TOKENS, `prompt tokenizes to ${PROMPT_TOKENS} tokens`)
   t.is(stats.generatedTokens, SLIDE_PREDICT, 'model generated exactly n_predict tokens')
-
-  const discardCount = countDiscardLogs(logs)
   t.is(
-    discardCount,
+    stats.contextSlides,
     expectedSlides(SLIDE_PREDICT, 32),
     'slide count matches expected n_predict / n_discarded'
   )
@@ -185,7 +151,7 @@ test('Generation fails with context overflow when sliding disabled', {
   timeout: 900_000,
   skip
 }, async t => {
-  const { model, logs } = await setupModel(t, {
+  const { model } = await setupModel(t, {
     n_predict: String(SLIDE_PREDICT),
     n_discarded: '0'
   })
@@ -201,8 +167,6 @@ test('Generation fails with context overflow when sliding disabled', {
     )
   }
 
-  t.is(countDiscardLogs(logs), 0, 'no discard events when n_discarded=0')
-
   // sleep for 10 seconds to allow the model to cleanup
   await new Promise(resolve => setTimeout(resolve, 10000))
 })
@@ -212,7 +176,7 @@ test('Many slides with small n_discarded', {
   timeout: 900_000,
   skip
 }, async t => {
-  const { model, logs } = await setupModel(t, {
+  const { model } = await setupModel(t, {
     n_predict: String(MANY_SLIDES_PREDICT),
     n_discarded: '16'
   })
@@ -221,10 +185,8 @@ test('Many slides with small n_discarded', {
 
   t.is(stats.promptTokens, PROMPT_TOKENS, `prompt tokenizes to ${PROMPT_TOKENS} tokens`)
   t.is(stats.generatedTokens, MANY_SLIDES_PREDICT, 'model generated exactly n_predict tokens')
-
-  const discardCount = countDiscardLogs(logs)
   t.is(
-    discardCount,
+    stats.contextSlides,
     expectedSlides(MANY_SLIDES_PREDICT, 16),
     'slide count matches expected n_predict / n_discarded'
   )
@@ -235,7 +197,7 @@ test('Large n_discarded is clamped to fit available context space', {
   timeout: 900_000,
   skip
 }, async t => {
-  const { model, logs } = await setupModel(t, {
+  const { model } = await setupModel(t, {
     n_predict: String(SLIDE_PREDICT),
     n_discarded: '99999'
   })
@@ -244,10 +206,8 @@ test('Large n_discarded is clamped to fit available context space', {
 
   t.is(stats.promptTokens, PROMPT_TOKENS, `prompt tokenizes to ${PROMPT_TOKENS} tokens`)
   t.is(stats.generatedTokens, SLIDE_PREDICT, 'model generated exactly n_predict tokens')
-
-  const discardCount = countDiscardLogs(logs)
   t.is(
-    discardCount,
+    stats.contextSlides,
     expectedSlides(SLIDE_PREDICT, 99999),
     'slide count matches expected n_predict / clamped n_discarded'
   )
@@ -258,7 +218,7 @@ test('Sliding context works with minimal n_discarded of 1', {
   timeout: 900_000,
   skip
 }, async t => {
-  const { model, logs } = await setupModel(t, {
+  const { model } = await setupModel(t, {
     n_predict: String(SLIDE_PREDICT),
     n_discarded: '1'
   })
@@ -267,22 +227,22 @@ test('Sliding context works with minimal n_discarded of 1', {
 
   t.is(stats.promptTokens, PROMPT_TOKENS, `prompt tokenizes to ${PROMPT_TOKENS} tokens`)
   t.is(stats.generatedTokens, SLIDE_PREDICT, 'model generated exactly n_predict tokens')
-
-  const discardCount = countDiscardLogs(logs)
   t.is(
-    discardCount,
+    stats.contextSlides,
     expectedSlides(SLIDE_PREDICT, 1),
     'slide count matches expected n_predict / n_discarded'
   )
 })
 
-// n_discarded=64, n_predict=200
+// n_discarded=64, n_predict=200 (first run), n_predict=10 (second run)
 // First run: n_past = 44 + 200 = 244, firstMsgTokens = 44
 // Second run follow-up (~20 tokens):
 //   n_past + nTokens = 244 + ~20 = ~264 >= 256 (outer condition)
 //   leftTokens = 244 - 44 - 64 = 136 >= 0
 //   n_past + nTokens - n_discarded = ~264 - 64 = ~200 < 256
 // :> discards n_discarded (64) tokens after first message
+// Second run uses predict=10 via generationParams so generation can't
+// reach the context limit — any contextSlides must come from prefill.
 test('Cached follow-up discards middle tokens to fit new message', {
   timeout: 900_000,
   skip
@@ -292,7 +252,7 @@ test('Cached follow-up discards middle tokens to fit new message', {
     'sliding-prefill-branch1.bin'
   )
 
-  const { model, logs } = await setupModel(t, {
+  const { model } = await setupModel(t, {
     n_predict: '200',
     n_discarded: '64'
   })
@@ -301,27 +261,27 @@ test('Cached follow-up discards middle tokens to fit new message', {
   const first = await runAndCollect(model, buildPrompt(cachePath, STORY_PROMPT))
   t.is(first.stats.promptTokens, PROMPT_TOKENS, 'first run: prompt tokens match')
   t.ok(first.stats.generatedTokens > 0, 'first run: generated output')
+  t.is(first.stats.contextSlides, 0, 'first run: no slides (n_past 244 < n_ctx 256)')
 
-  const generationSlides = countDiscardLogs(logs)
-
-  // Second run: follow-up message triggers prefill discard
-  const second = await runAndCollect(model, buildPrompt(cachePath, [FOLLOW_UP_MSG]))
+  // Second run: low predict so only prefill discard can cause slides
+  // After prefill discard: n_past ~200, generate 10 → ~210 < 256 (no generation sliding)
+  const second = await runAndCollect(
+    model,
+    buildPrompt(cachePath, [FOLLOW_UP_MSG]),
+    { generationParams: { predict: 10 } }
+  )
   t.ok(second.stats.generatedTokens > 0, 'second run: generated output after prefill discard')
-
-  const prefillDiscards = countPrefillDiscardLogs(logs)
-  t.ok(prefillDiscards > 0, 'prefill discard log appeared')
-
-  const totalDiscards = countDiscardLogs(logs)
-  t.ok(totalDiscards >= generationSlides, 'total discards include prefill discard')
+  t.is(second.stats.contextSlides, 1, 'exactly one prefill discard slide')
 })
 
-// n_discarded=250 (clamped to 211), n_predict=200
+// n_discarded=250 (clamped to 211), n_predict=200 (first run), predict=10 (second run)
 // First run: n_past = 244, firstMsgTokens = 44, n_discarded = 211
 // Second run follow-up (~20 tokens):
 //   leftTokens = 244 - 44 - 211 = -11 < 0
 //   firstMsgTokens + nTokens = 44 + ~20 = ~64 < 256
 //   n_discarded = 211 > 0
 // :> removes all middle tokens from pos 44 to 244
+// Second run uses predict=10 so generation can't cause slides.
 test('Cached follow-up clears all middle tokens when discard window is exhausted', {
   timeout: 900_000,
   skip
@@ -331,7 +291,7 @@ test('Cached follow-up clears all middle tokens when discard window is exhausted
     'sliding-prefill-branch2.bin'
   )
 
-  const { model, logs } = await setupModel(t, {
+  const { model } = await setupModel(t, {
     n_predict: '200',
     n_discarded: '250'
   })
@@ -340,13 +300,17 @@ test('Cached follow-up clears all middle tokens when discard window is exhausted
   const first = await runAndCollect(model, buildPrompt(cachePath, STORY_PROMPT))
   t.is(first.stats.promptTokens, PROMPT_TOKENS, 'first run: prompt tokens match')
   t.ok(first.stats.generatedTokens > 0, 'first run: generated output')
+  t.is(first.stats.contextSlides, 0, 'first run: no slides (n_past 244 < n_ctx 256)')
 
-  // Second run: follow-up triggers full middle token discard
-  const second = await runAndCollect(model, buildPrompt(cachePath, [FOLLOW_UP_MSG]))
+  // Second run: low predict so only prefill full-middle-discard can cause slides
+  // After discard: n_past = 44 (firstMsgTokens), generate 10 → 54 < 256
+  const second = await runAndCollect(
+    model,
+    buildPrompt(cachePath, [FOLLOW_UP_MSG]),
+    { generationParams: { predict: 10 } }
+  )
   t.ok(second.stats.generatedTokens > 0, 'second run: generated output after full middle token discard')
-
-  const prefillDiscards = countPrefillDiscardLogs(logs)
-  t.ok(prefillDiscards > 0, 'prefill discard log appeared')
+  t.is(second.stats.contextSlides, 1, 'exactly one full middle token discard slide')
 })
 
 // n_discarded=0, n_predict=200
@@ -366,7 +330,7 @@ test('Cached follow-up overflows when sliding is disabled and context is full', 
     'sliding-prefill-branch3.bin'
   )
 
-  const { model, logs } = await setupModel(t, {
+  const { model } = await setupModel(t, {
     n_predict: '200',
     n_discarded: '0'
   })
@@ -375,6 +339,7 @@ test('Cached follow-up overflows when sliding is disabled and context is full', 
   const first = await runAndCollect(model, buildPrompt(cachePath, STORY_PROMPT))
   t.is(first.stats.promptTokens, PROMPT_TOKENS, 'first run: prompt tokens match')
   t.ok(first.stats.generatedTokens > 0, 'first run: generated output')
+  t.is(first.stats.contextSlides, 0, 'first run: no slides when n_discarded=0')
 
   // Second run: follow-up triggers context overflow (no discard possible)
   try {
@@ -387,8 +352,6 @@ test('Cached follow-up overflows when sliding is disabled and context is full', 
       `context overflow error surfaced: "${msg.slice(0, 120)}"`
     )
   }
-
-  t.is(countPrefillDiscardLogs(logs), 0, 'no prefill discard logs when n_discarded=0')
 
   // sleep for 10 seconds to allow the model to cleanup
   await new Promise(resolve => setTimeout(resolve, 10000))
