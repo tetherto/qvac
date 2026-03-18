@@ -7,6 +7,7 @@ import type {
 } from "@/schemas";
 import { normalizeModelType } from "@/schemas";
 import os from "bare-os";
+import type { Readable } from "bare-stream";
 import { handlers } from "@/server/rpc/handlers";
 import {
   PearWorkerEntryRequiredError,
@@ -283,7 +284,7 @@ export function close() {
 
 type DuplexHandler = (
   req: Request,
-  inputStream: unknown,
+  inputStream: Readable,
 ) => AsyncGenerator<Response>;
 
 function getDuplexHandler(type: string): DuplexHandler | undefined {
@@ -310,6 +311,13 @@ export async function createDuplexSession(payload: string) {
       for await (const response of handler(request, audioInput)) {
         textOutput.write(JSON.stringify(response) + "\n", "utf-8");
       }
+    } catch (error) {
+      const errorMsg =
+        error instanceof Error ? error.message : String(error);
+      textOutput.write(
+        JSON.stringify({ type: request.type, error: errorMsg }) + "\n",
+        "utf-8",
+      );
     } finally {
       textOutput.end();
     }

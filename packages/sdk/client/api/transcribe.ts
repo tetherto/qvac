@@ -88,7 +88,16 @@ export async function transcribeStream(
 
       for (const line of lines) {
         if (!line.trim()) continue;
-        const response = transcribeStreamResponseSchema.parse(JSON.parse(line));
+        let parsed: unknown;
+        try {
+          parsed = JSON.parse(line);
+        } catch {
+          continue;
+        }
+        const response = transcribeStreamResponseSchema.parse(parsed);
+        if (response.error) {
+          throw new Error(response.error);
+        }
         if (response.done) return;
         if (response.text?.trim()) {
           yield response.text;

@@ -2,7 +2,7 @@
  * Test script: pipes a WAV file through transcribeStream to verify
  * the bidirectional streaming + addon processing works end-to-end.
  *
- * Usage: bun run examples/transcription/test-transcribe-live.ts
+ * Usage: bun run examples/transcription/whispercpp-filesystem-streaming.ts
  *
  * Uses FFmpeg to convert the WAV to raw f32le and streams chunks
  * through the duplex RPC session to the whisper addon.
@@ -15,10 +15,7 @@ import { fileURLToPath } from "url";
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
-const SAMPLE_FILE = path.resolve(
-  __dirname,
-  "../../../qvac-lib-infer-parakeet/examples/samples/diarization-sample-16k.wav",
-);
+const SAMPLE_FILE = path.resolve(__dirname, "../audio/diarization-sample-16k.wav");
 
 const SAMPLE_RATE = 16000;
 const BYTES_PER_SAMPLE = 4; // f32le

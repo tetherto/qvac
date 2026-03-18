@@ -112,7 +112,7 @@ async function handleDuplexRequest(req: RPC.IncomingRequest): Promise<void> {
 
   try {
     const firstChunk = await new Promise<Buffer>((resolve, reject) => {
-      inputStream.once("data", (data: unknown) => {
+      inputStream.once("data", (data) => {
         inputStream.pause();
         resolve(data as Buffer);
       });
@@ -136,6 +136,7 @@ async function handleDuplexRequest(req: RPC.IncomingRequest): Promise<void> {
 
     await executeDuplexHandler(req, request, entry, inputStream, outputStream);
   } catch (error) {
+    inputStream.destroy();
     sendStreamErrorResponse(outputStream, error);
   }
 }

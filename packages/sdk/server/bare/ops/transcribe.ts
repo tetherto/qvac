@@ -1,4 +1,5 @@
 import {
+  type AnyModel,
   getModel,
   getModelConfig,
   getModelEntry,
@@ -16,20 +17,16 @@ import type { Readable } from "bare-stream";
 const logger = getServerLogger();
 
 interface ModelResponse {
-  iterate(): AsyncIterable<unknown>;
-  await(): Promise<unknown>;
+  iterate(): AsyncIterable<{ text: string }[]>;
+  await(): Promise<{ text: string }[]>;
 }
 
 interface StreamableModel {
   runStreaming(audioStream: Readable): Promise<ModelResponse>;
 }
 
-function isStreamableModel(model: unknown): model is StreamableModel {
-  return (
-    typeof model === "object" &&
-    model !== null &&
-    typeof (model as StreamableModel).runStreaming === "function"
-  );
+function isStreamableModel(model: AnyModel): model is AnyModel & StreamableModel {
+  return "runStreaming" in model && typeof model.runStreaming === "function";
 }
 
 const SILENCE_MARKERS: Record<string, string> = {
@@ -141,13 +138,11 @@ export async function* transcribeStream(
   try {
     const model = getModel(modelId);
 
-    // Use native streaming VAD if the addon supports it.
-    // The addon's StreamingProcessor runs its own C++ thread that buffers
-    // audio, detects speech boundaries via Silero VAD, and calls
-    // whisper_full per speech segment.
-    const response = isStreamableModel(model)
-      ? await model.runStreaming(audioInputStream)
-      : await runLegacyBuffered(model, audioInputStream);
+    if (!isStreamableModel(model)) {
+      throw new Error(`Model ${modelId} does not support streaming transcription`);
+    }
+
+    const response = await model.runStreaming(audioInputStream);
 
     for await (const output of response.iterate()) {
       logger.debug("Live Transcription Update:", output);
@@ -168,22 +163,3 @@ export async function* transcribeStream(
   }
 }
 
-const EMPTY_RESPONSE: ModelResponse = {
-  async *iterate() {},
-  await: () => Promise.resolve(undefined),
-};
-
-async function runLegacyBuffered(
-  model: { run: (input: unknown) => Promise<ModelResponse> },
-  audioInputStream: Readable,
-): Promise<ModelResponse> {
-  const chunks: Buffer[] = [];
-  for await (const chunk of audioInputStream) {
-    chunks.push(Buffer.from(chunk as Buffer));
-  }
-  const fullAudio = Buffer.concat(chunks);
-  if (fullAudio.length === 0) {
-    return EMPTY_RESPONSE;
-  }
-  return model.run([fullAudio]);
-}

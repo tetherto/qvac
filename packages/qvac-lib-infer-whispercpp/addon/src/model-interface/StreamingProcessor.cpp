@@ -156,7 +156,7 @@ void StreamingProcessor::processLoop() {
           processBuffer_.end(), pendingAudio_.begin(), pendingAudio_.end());
       pendingAudio_.clear();
 
-      done = ended_ && pendingAudio_.empty();
+      done = ended_;
     }
 
     int bufferSize = static_cast<int>(processBuffer_.size());

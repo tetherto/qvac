@@ -123,7 +123,7 @@ class TranscriptionWhispercpp extends BaseInference {
     const normalizedAudioStream = this._normalizeAudioStream(audioStream)
 
     if (opts.streaming) {
-      return this._runStreaming(normalizedAudioStream, opts.streamingConfig)
+      return this._runStreaming(normalizedAudioStream)
     }
 
     const jobId = await this.addon.append({
@@ -144,10 +144,12 @@ class TranscriptionWhispercpp extends BaseInference {
     return response
   }
 
-  async _runStreaming (audioStream, streamingConfig = {}) {
+  async _runStreaming (audioStream) {
     const vadModelPath = this._config.vadModelPath || this._getVadModelFilePath()
     if (!vadModelPath) {
-      throw new Error('VAD model path is required for streaming transcription')
+      throw new QvacErrorAddonWhisper({
+        code: ERR_CODES.VAD_MODEL_REQUIRED
+      })
     }
 
     const vadParams = this.params?.vad_params || {}
@@ -165,7 +167,11 @@ class TranscriptionWhispercpp extends BaseInference {
     const jobId = this.addon._activeJobId
     const response = this._createResponse(jobId)
     this._hasActiveResponse = true
-    const finalized = response.await().finally(() => { this._hasActiveResponse = false })
+    const finalized = response.await().finally(() => {
+      this._hasActiveResponse = false
+      this.addon._activeJobId = null
+      this.addon._setState('listening')
+    })
     finalized.catch(() => {})
     response.await = () => finalized
 

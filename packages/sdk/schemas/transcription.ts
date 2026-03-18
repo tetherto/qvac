@@ -22,11 +22,14 @@ export const transcribeRequestSchema = transcribeParamsSchema.extend({
   type: z.literal("transcribe"),
 });
 
-export const transcribeResponseSchema = z.object({
-  type: z.literal("transcribe"),
+const transcriptionResultBase = z.object({
   text: z.string().optional(),
   done: z.boolean().optional(),
   error: z.string().optional(),
+});
+
+export const transcribeResponseSchema = transcriptionResultBase.extend({
+  type: z.literal("transcribe"),
 });
 
 export type AudioInput = z.infer<typeof audioInputSchema>;
@@ -46,11 +49,8 @@ export const transcribeStreamRequestSchema = z.object({
   prompt: z.string().optional(),
 });
 
-export const transcribeStreamResponseSchema = z.object({
+export const transcribeStreamResponseSchema = transcriptionResultBase.extend({
   type: z.literal("transcribeStream"),
-  text: z.string().optional(),
-  done: z.boolean().optional(),
-  error: z.string().optional(),
 });
 
 export type TranscribeStreamRequest = z.infer<
