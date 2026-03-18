@@ -1,48 +1,34 @@
 ---
 title: "ragChunk( )"
 titleStyle: code
-description: Chunks documents into smaller pieces for embedding.
+description: "Chunks documents into smaller pieces for embedding.
+Part of the segregated flow: ragChunk() → embed() → ragSaveEmbeddings()"
 ---
 
-```ts
-function ragChunk(params): Promise<RagDoc[]>;
+```typescript
+function ragChunk(params: infer): Promise
 ```
 
-Part of the segregated flow: `ragChunk()` → [`embed()`](/sdk/api/embed) → [`ragSaveEmbeddings()`](/sdk/api/ragSaveEmbeddings)
+## Description
+
+Chunks documents into smaller pieces for embedding.
+Part of the segregated flow: ragChunk() → embed() → ragSaveEmbeddings()
 
 ## Parameters
 
 | Name | Type | Required? | Description |
 | --- | --- | :---: | --- |
-| params | `object` | ✓ | The chunking parameters |
-| params.documents | `string \| string[]` | ✓ | Documents to chunk |
-| params.chunkOpts | [`ChunkOptions`](#chunkoptions) | ✗ | Chunking options |
-
-### `ChunkOptions`
-
-| Field | Type | Required? | Description |
-| --- | --- | :---: | --- |
-| chunkSize | `number` | ✗ | Maximum chunk size |
-| chunkOverlap | `number` | ✗ | Overlap between chunks |
-| chunkStrategy | `"character" \| "paragraph"` | ✗ | Chunking strategy |
-| splitStrategy | `"character" \| "word" \| "token" \| "sentence" \| "line"` | ✗ | Text splitting strategy |
+| `params` | `infer` | ✓ | The parameters for chunking |
 
 ## Returns
 
-`Promise<RagDoc[]>` — Array of chunk results.
+```typescript
+Promise
+```
 
-| Field | Type | Description |
-| --- | --- | --- |
-| id | `string` | Chunk identifier |
-| content | `string` | Chunk text content |
 
-## Throws
 
-| Error | When |
-| --- | --- |
-| `RAG_CHUNK_FAILED` | The chunking operation fails |
-
-## Example
+## Examples
 
 ```typescript
 const chunks = await ragChunk({

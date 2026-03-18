@@ -3,6 +3,8 @@
  * Oldest events are overwritten when full.
  */
 
+import { ProfilerInvalidCapacityError } from "@/utils/errors-client";
+
 export interface RingBufferState<T> {
   buffer: (T | undefined)[];
   capacity: number;
@@ -13,7 +15,7 @@ export interface RingBufferState<T> {
 
 export function createRingBuffer<T>(capacity: number): RingBufferState<T> {
   if (capacity < 1) {
-    throw new Error("Ring buffer capacity must be at least 1");
+    throw new ProfilerInvalidCapacityError(1);
   }
 
   return {
@@ -104,7 +106,7 @@ export function ringBufferResize<T>(
   newCapacity: number,
 ): RingBufferState<T> {
   if (newCapacity < 1) {
-    throw new Error("Ring buffer capacity must be at least 1");
+    throw new ProfilerInvalidCapacityError(1);
   }
 
   const items = ringBufferToArray(state);

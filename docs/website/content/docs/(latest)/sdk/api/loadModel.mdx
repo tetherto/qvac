@@ -1,296 +1,95 @@
 ---
 title: "loadModel( )"
 titleStyle: code
-description: Loads a machine learning model from a local path, remote URL, or Hyperdrive key.
+description: "Loads a machine learning model from a local path, remote URL, or Hyperdrive key.
+
+This function supports multiple model types: LLM (Large Language Model), Whisper (speech recognition),
+embeddings, NMT (translation), and TTS. It can handle both local file paths and Hyperdrive URLs (pear://).
+
+When `onProgress` is provided, the function uses streaming to provide real-time download progress.
+Otherwise, it uses a simple request-response pattern for faster execution."
 ---
 
-```ts
-// Load new model
-function loadModel(options: LoadModelOptions): Promise<string>;
-
-// Hot-reload config on an already-loaded model
-function loadModel(options: ReloadConfigOptions): Promise<string>;
+```typescript
+function loadModel(options: any): Promise
 ```
 
-Supports multiple model types: LLM, Whisper (speech recognition), embeddings, NMT (translation), TTS, and OCR. Handles local file paths, HTTP/HTTPS URLs, Hyperdrive URLs (`pear://`), and registry URLs.
+## Description
 
-When `onProgress` is provided, streaming is used for real-time download progress. Otherwise, a simple request-response pattern is used.
+Loads a machine learning model from a local path, remote URL, or Hyperdrive key.
+
+This function supports multiple model types: LLM (Large Language Model), Whisper (speech recognition),
+embeddings, NMT (translation), and TTS. It can handle both local file paths and Hyperdrive URLs (pear://).
+
+When `onProgress` is provided, the function uses streaming to provide real-time download progress.
+Otherwise, it uses a simple request-response pattern for faster execution.
 
 ## Parameters
 
 | Name | Type | Required? | Description |
 | --- | --- | :---: | --- |
-| options | [`LoadModelOptions`](#loadmodeloptions) ` \| ` [`ReloadConfigOptions`](#reloadconfigoptions) | ✓ | Configuration for loading or hot-reloading a model |
-
-### `LoadModelOptions`
-
-Common fields present in all variants:
-
-| Field | Type | Required? | Default | Description |
-| --- | --- | :---: | --- | --- |
-| modelSrc | `string` | ✓ | — | Model source — local path, HTTP(S) URL, Hyperdrive `pear://` URL, or registry URL |
-| modelType | `string` | ✓ | — | The type of model — see [model type variants](#model-type-variants) |
-| modelConfig | `object` | ✗ | `{}` | Model-specific configuration (varies by `modelType`). LLM models accept a `verbosity` field — use the exported `VERBOSITY` constant (`VERBOSITY.ERROR`, `VERBOSITY.WARN`, `VERBOSITY.INFO`, `VERBOSITY.DEBUG`). |
-| seed | `boolean` | ✗ | `false` | Whether to seed the model on Hyperdrive after download |
-| delegate | [`Delegate`](#delegate) | ✗ | — | Delegation configuration for remote inference |
-| onProgress | `(progress: ModelProgressUpdate) => void` | ✗ | — | Callback for real-time download progress |
-| logger | `Logger` | ✗ | — | Logger instance — model operation logs are forwarded to this logger |
-
-### `Delegate`
-
-Optional delegation configuration for remote (P2P) inference:
-
-| Field | Type | Required? | Default | Description |
-| --- | --- | :---: | --- | --- |
-| topic | `string` | ✓ | — | P2P topic for delegation |
-| providerPublicKey | `string` | ✓ | — | Provider's public key |
-| timeout | `number` | ✗ | — | Timeout in milliseconds (min 100) |
-| fallbackToLocal | `boolean` | ✗ | `false` | Whether to fallback to local inference if delegation fails |
-| forceNewConnection | `boolean` | ✗ | `false` | Force a new connection to the provider |
-
-### `ReloadConfigOptions`
-
-Hot-reload configuration on an already-loaded model without reloading the model weights. Currently supported for Whisper models only.
-
-| Field | Type | Required? | Description |
-| --- | --- | :---: | --- |
-| modelId | `string` | ✓ | The ID of an existing loaded model (16-char hex) |
-| modelType | `string` | ✓ | The type of model (must match the loaded model) |
-| modelConfig | `object` | ✓ | New configuration to apply |
-
-### Model type variants
-
-Additional fields depend on `modelType`:
-
-#### `"llm"`
-
-| Field | Type | Required? | Default | Description |
-| --- | --- | :---: | --- | --- |
-| projectionModelSrc | `string` | ✗ | — | Projection model source for multimodal models |
-| toolFormat | `"json" \| "xml"` | ✗ | `"json"` | Tool call format |
-
-#### `"whisper"`
-
-| Field | Type | Required? | Description |
-| --- | --- | :---: | --- |
-| vadModelSrc | `string` | ✗ | VAD model source for voice activity detection |
-
-#### `"embeddings"`
-
-| Field | Type | Required? | Default | Description |
-| --- | --- | :---: | --- | --- |
-| modelConfig.gpuLayers | `number` | ✗ | `99` | Number of layers offloaded to GPU |
-| modelConfig.device | `string` | ✗ | `"gpu"` | Device to use |
-| modelConfig.batchSize | `number` | ✗ | `1024` | Embedding batch size |
-| modelConfig.ctxSize | `number` | ✗ | — | Context size |
-| modelConfig.flashAttention | `"on" \| "off"` | ✗ | — | Flash attention toggle |
-| modelConfig.rawConfig | `string` | ✗ | — | Raw CLI override (advanced) |
-
-#### `"nmt"`
-
-`modelConfig` is **required** and is a discriminated union on `engine`:
-
-| Field | Type | Required? | Description |
-| --- | --- | :---: | --- |
-| modelConfig.engine | `"Opus" \| "Bergamot" \| "IndicTrans"` | ✓ | Translation engine (determines available languages) |
-| modelConfig.from | `string` | ✓ | Source language code |
-| modelConfig.to | `string` | ✓ | Target language code |
-| srcVocabSrc | `string` | ✗ | Source vocabulary file |
-| dstVocabSrc | `string` | ✗ | Destination vocabulary file |
-
-See [`modelConfig` details](#nmt-modelconfig) below for generation parameters.
-
-#### `"tts"`
-
-`modelConfig` is **required** and is a discriminated union on `ttsEngine`:
-
-**Chatterbox engine** (`ttsEngine: "chatterbox"`):
-
-| Field | Type | Required? | Description |
-| --- | --- | :---: | --- |
-| ttsEngine | `"chatterbox"` | ✓ | Engine discriminator |
-| language | `"en" \| "es" \| "de" \| "it"` | ✓ | Output language |
-| ttsTokenizerSrc | `string` | ✓ | Tokenizer model source |
-| ttsSpeechEncoderSrc | `string` | ✓ | Speech encoder model source |
-| ttsEmbedTokensSrc | `string` | ✓ | Embed tokens model source |
-| ttsConditionalDecoderSrc | `string` | ✓ | Conditional decoder model source |
-| ttsLanguageModelSrc | `string` | ✓ | Language model source |
-| referenceAudioSrc | `string` | ✓ | Reference WAV file for voice cloning |
-
-**Supertonic engine** (`ttsEngine: "supertonic"`):
-
-| Field | Type | Required? | Description |
-| --- | --- | :---: | --- |
-| ttsEngine | `"supertonic"` | ✓ | Engine discriminator |
-| language | `"en" \| "es" \| "de" \| "it"` | ✓ | Output language |
-| ttsTokenizerSrc | `string` | ✓ | Tokenizer model source |
-| ttsTextEncoderSrc | `string` | ✓ | Text encoder model source |
-| ttsLatentDenoiserSrc | `string` | ✓ | Latent denoiser model source |
-| ttsVoiceDecoderSrc | `string` | ✓ | Voice decoder model source |
-| ttsVoiceSrc | `string` | ✓ | Voice `.bin` file source |
-| ttsSpeed | `number` | ✗ | Speech speed multiplier |
-| ttsNumInferenceSteps | `number` | ✗ | Number of inference steps |
-
-#### `"ocr"`
-
-| Field | Type | Required? | Description |
-| --- | --- | :---: | --- |
-| detectorModelSrc | `string` | ✗ | Detector model source for OCR |
-
-### Custom plugin
-
-Any `modelType` string that is not a built-in type. `modelConfig` accepts `Record<string, unknown>`.
-
-### `modelConfig` reference
-
-#### LLM `modelConfig`
-
-| Field | Type | Default | Description |
-| --- | --- | --- | --- |
-| ctx_size | `number` | `1024` | Context window size |
-| device | `string` | `"gpu"` | Device to use |
-| gpu_layers | `number` | `99` | Number of layers offloaded to GPU |
-| system_prompt | `string` | `"You are a helpful assistant."` | System prompt |
-| temp | `number` | — | Temperature (0–2) |
-| top_p | `number` | — | Top-p sampling (0–1) |
-| top_k | `number` | — | Top-k sampling (0–128) |
-| seed | `number` | — | Random seed |
-| predict | `number` | — | Max tokens to predict. `-1` = until stop token, `-2` = until context filled |
-| lora | `string` | — | LoRA adapter path |
-| no_mmap | `boolean` | — | Disable memory-mapped I/O |
-| verbosity | `0 \| 1 \| 2 \| 3` | — | Engine verbosity — use exported `VERBOSITY` constant |
-| presence_penalty | `number` | — | Presence penalty |
-| frequency_penalty | `number` | — | Frequency penalty |
-| repeat_penalty | `number` | — | Repeat penalty |
-| stop_sequences | `string[]` | — | Custom stop sequences |
-| n_discarded | `number` | — | Number of discarded tokens |
-| tools | `boolean` | — | Enable tool calling support |
-
-#### Whisper `modelConfig`
-
-Common fields:
-
-| Field | Type | Description |
-| --- | --- | --- |
-| language | `string` | Language code (e.g., `"en"`) |
-| translate | `boolean` | Whether to translate to English |
-| strategy | `"greedy" \| "beam_search"` | Sampling strategy |
-| temperature | `number` | Temperature |
-| initial_prompt | `string` | Initial prompt for the decoder |
-| detect_language | `boolean` | Auto-detect language |
-| vad_params | `object` | VAD parameters — `{ threshold?, min_speech_duration_ms?, min_silence_duration_ms?, max_speech_duration_s?, speech_pad_ms?, samples_overlap? }` |
-| audio_format | `"f32le" \| "s16le"` | Audio format |
-| contextParams | `object` | Context parameters — `{ use_gpu?, flash_attn?, gpu_device? }` |
-
-Additional fields: `n_threads`, `n_max_text_ctx`, `offset_ms`, `duration_ms`, `audio_ctx`, `no_context`, `no_timestamps`, `single_segment`, `print_special`, `print_progress`, `print_realtime`, `print_timestamps`, `token_timestamps`, `thold_pt`, `thold_ptsum`, `max_len`, `split_on_word`, `max_tokens`, `debug_mode`, `tdrz_enable`, `suppress_regex`, `suppress_blank`, `suppress_nst`, `length_penalty`, `temperature_inc`, `entropy_thold`, `logprob_thold`, `greedy_best_of`, `beam_search_beam_size`. All optional. See `whisperConfigSchema` in the source for details.
-
-#### NMT `modelConfig`
-
-Discriminated union on `engine`. Common generation parameters (all optional):
-
-| Field | Type | Default | Description |
-| --- | --- | --- | --- |
-| mode | `"full"` | `"full"` | Translation mode |
-| beamsize | `number` | `4` | Beam size |
-| lengthpenalty | `number` | `1.0` | Length penalty |
-| maxlength | `number` | `512` | Max output length |
-| repetitionpenalty | `number` | `1.0` | Repetition penalty |
-| norepeatngramsize | `number` | `0` | No-repeat n-gram size |
-| temperature | `number` | `0.3` | Temperature |
-| topk | `number` | `0` | Top-k sampling |
-| topp | `number` | `1.0` | Top-p sampling |
-
-Engine-specific:
-
-- **Opus**: `from`/`to` accept `"en" | "de" | "es" | "it" | "ru" | "ja"`
-- **Bergamot**: `from`/`to` accept 24 languages (en, ar, bg, ca, cs, de, es, et, fi, fr, hu, is, it, ja, ko, lt, lv, nl, pl, pt, ru, sk, sl, uk, zh). Additional fields: `srcVocabPath`, `dstVocabPath`, `normalize`
-- **IndicTrans**: `from`/`to` accept 26 Indic language codes (e.g., `"eng_Latn"`, `"hin_Deva"`)
-
-#### OCR `modelConfig`
-
-| Field | Type | Description |
-| --- | --- | --- |
-| langList | `string[]` | Languages to detect |
-| useGPU | `boolean` | Use GPU acceleration |
-| timeout | `number` | Timeout in milliseconds |
-| magRatio | `number` | Magnification ratio for detection |
-| defaultRotationAngles | `number[]` | Rotation angles to try |
-| contrastRetry | `boolean` | Retry with contrast adjustment |
-| lowConfidenceThreshold | `number` | Threshold for low-confidence filtering |
-| recognizerBatchSize | `number` | Batch size for recognizer |
-
-### `ModelProgressUpdate`
-
-| Field | Type | Description |
-| --- | --- | --- |
-| type | `"modelProgress"` | Event type |
-| downloaded | `number` | Bytes downloaded so far |
-| total | `number` | Total bytes expected |
-| percentage | `number` | Download percentage |
-| downloadKey | `string` | Unique download key (use with [`cancel()`](/sdk/api/cancel)) |
-| shardInfo | `object` | Shard progress (optional, for sharded models) |
-| shardInfo.currentShard | `number` | Current shard index |
-| shardInfo.totalShards | `number` | Total number of shards |
-| shardInfo.shardName | `string` | Current shard file name |
-| shardInfo.overallDownloaded | `number` | Total bytes downloaded across all shards |
-| shardInfo.overallTotal | `number` | Total bytes across all shards |
-| shardInfo.overallPercentage | `number` | Overall percentage across all shards |
-| onnxInfo | `object` | ONNX multi-file progress (optional, for ONNX models) |
-| onnxInfo.currentFile | `string` | Current file being downloaded |
-| onnxInfo.fileIndex | `number` | Current file index |
-| onnxInfo.totalFiles | `number` | Total number of files |
-| onnxInfo.overallDownloaded | `number` | Total bytes downloaded across all files |
-| onnxInfo.overallTotal | `number` | Total bytes across all files |
-| onnxInfo.overallPercentage | `number` | Overall percentage across all files |
+| `options` | `any` | ✓ | An object that defines all configuration parameters required for loading the model, including:
+  - modelSrc: The location from which the model weights are fetched (local path, remote URL, or Hyperdrive URL)
+  - modelType: The type of model ("llm", "whisper", "embeddings", "nmt", or "tts")
+  - modelConfig: Model-specific configuration options
+  - projectionModelSrc: (LLM only) Projection model source for multimodal models
+  - vadModelSrc: (Whisper only) VAD model source for voice activity detection
+  - onProgress: Callback for download progress updates
+  - logger: Logger instance for model operation logs |
 
 ## Returns
 
-`Promise<string>` — Resolves to the model ID (used to reference the model in subsequent API calls).
+```typescript
+Promise
+```
 
-## Throws
 
-| Error | When |
-| --- | --- |
-| `MODEL_LOAD_FAILED` | Model loading fails |
-| `STREAM_ENDED_WITHOUT_RESPONSE` | Streaming ends without a final response (when using `onProgress`) |
-| `INVALID_RESPONSE_TYPE` | Response type does not match expected `"loadModel"` |
 
-## Example
+## Examples
 
 ```typescript
-// Local file path
-const modelId = await loadModel({
+// Local file path - absolute path
+const localModelId = await loadModel({
   modelSrc: "/home/user/models/llama-7b.gguf",
   modelType: "llm",
   modelConfig: { contextSize: 2048 }
 });
 
-// Remote URL with progress tracking
-const modelId = await loadModel({
-  modelSrc: "https://huggingface.co/.../model.gguf",
+// Local file path - relative path
+const relativeModelId = await loadModel({
+  modelSrc: "./models/whisper-base.gguf",
+  modelType: "whisper"
+});
+
+// Hyperdrive URL with key and path
+const hyperdriveId = await loadModel({
+  modelSrc: "pear://<hyperdrive-key>/llama-7b.gguf",
+  modelType: "llm",
+  modelConfig: { contextSize: 2048 }
+});
+
+// Remote HTTP/HTTPS URL with progress tracking
+const remoteId = await loadModel({
+  modelSrc: "https://huggingface.co/TheBloke/Llama-2-7B-Chat-GGUF/resolve/main/llama-2-7b-chat.Q4_K_M.gguf",
   modelType: "llm",
   onProgress: (progress) => {
     console.log(`Downloaded: ${progress.percentage}%`);
   }
 });
 
-// Hyperdrive URL
-const modelId = await loadModel({
-  modelSrc: "pear://<hyperdrive-key>/llama-7b.gguf",
-  modelType: "llm",
-  modelConfig: { contextSize: 2048 }
-});
-
 // Multimodal model with projection
-const modelId = await loadModel({
+const multimodalId = await loadModel({
   modelSrc: "https://huggingface.co/.../main-model.gguf",
   modelType: "llm",
   projectionModelSrc: "https://huggingface.co/.../projection-model.gguf",
-  modelConfig: { ctx_size: 512 }
+  modelConfig: { ctx_size: 512 },
+  onProgress: (progress) => {
+    console.log(`Loading: ${progress.percentage}%`);
+  }
 });
 
 // Whisper with VAD model
-const modelId = await loadModel({
+const whisperId = await loadModel({
   modelSrc: "https://huggingface.co/.../whisper-model.gguf",
   modelType: "whisper",
   vadModelSrc: "https://huggingface.co/.../vad-model.bin",
@@ -302,13 +101,13 @@ const modelId = await loadModel({
   }
 });
 
-// With logger forwarding
-import { getLogger } from "@qvac/sdk";
+// Load with automatic logging - logs from the model will be forwarded to your logger
+import { getLogger } from "@/logging";
 const logger = getLogger("my-app");
 
 const modelId = await loadModel({
   modelSrc: "/path/to/model.gguf",
   modelType: "llm",
-  logger
+  logger // Pass logger in options
 });
 ```

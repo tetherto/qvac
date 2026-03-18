@@ -1,33 +1,36 @@
 ---
 title: "ragListWorkspaces( )"
 titleStyle: code
-description: Lists all RAG workspaces with their open status.
+description: "Lists all RAG workspaces with their open status.
+
+Returns all workspaces that exist on disk. The `open` field indicates whether
+the workspace is currently loaded in memory and holding active resources
+(Corestore, HyperDB adapter, and possibly a RAG instance)."
 ---
 
-```ts
-function ragListWorkspaces(): Promise<RagWorkspaceInfo[]>;
+```typescript
+function ragListWorkspaces(): Promise
 ```
 
-## Parameters
+## Description
 
-None.
+Lists all RAG workspaces with their open status.
+
+Returns all workspaces that exist on disk. The `open` field indicates whether
+the workspace is currently loaded in memory and holding active resources
+(Corestore, HyperDB adapter, and possibly a RAG instance).
+
+
 
 ## Returns
 
-`Promise<RagWorkspaceInfo[]>` — Array of workspace info.
+```typescript
+Promise
+```
 
-| Field | Type | Description |
-| --- | --- | --- |
-| name | `string` | Workspace name |
-| open | `boolean` | Whether the workspace is currently loaded in memory |
 
-## Throws
 
-| Error | When |
-| --- | --- |
-| `RAG_LIST_WORKSPACES_FAILED` | The operation fails |
-
-## Example
+## Examples
 
 ```typescript
 const workspaces = await ragListWorkspaces();

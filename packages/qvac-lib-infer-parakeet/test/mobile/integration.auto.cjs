@@ -88,6 +88,13 @@ async function runTranscriptionTest (dirPath, getAssetPath) { // eslint-disable-
     binding.setLogger((p, m) => console.log(`[onnx:${p}] ${m}`))
     console.log('[test] ✓ Addon loaded')
 
+    const requiredFns = ['createInstance', 'runJob', 'activate', 'cancel', 'destroyInstance']
+    const missing = requiredFns.filter(fn => typeof binding[fn] !== 'function')
+    if (missing.length > 0) {
+      throw new Error(`Native binding missing functions: ${missing.join(', ')}. Rebuild prebuilds from the current branch.`)
+    }
+    console.log('[test] ✓ Binding API validated')
+
     if (!fs.existsSync(modelDir)) fs.mkdirSync(modelDir, { recursive: true })
 
     for (const name of MODEL_FILES) {
@@ -169,8 +176,6 @@ async function runTranscriptionTest (dirPath, getAssetPath) { // eslint-disable-
   } finally {
     try {
       if (parakeet) {
-        await parakeet.unloadWeights()
-        await new Promise(r => setTimeout(r, 1000))
         await parakeet.destroyInstance()
       }
     } catch (_) {}
@@ -205,6 +210,13 @@ async function runModelTest (opts) {
     const { ParakeetInterface } = require('@qvac/transcription-parakeet/parakeet.js')
     binding.setLogger((p, m) => console.log(`[onnx:${p}] ${m}`))
     console.log(`[${tag}] ✓ Addon loaded`)
+
+    const requiredFns = ['createInstance', 'runJob', 'activate', 'cancel', 'destroyInstance']
+    const missing = requiredFns.filter(fn => typeof binding[fn] !== 'function')
+    if (missing.length > 0) {
+      throw new Error(`Native binding missing functions: ${missing.join(', ')}. Rebuild prebuilds from the current branch.`)
+    }
+    console.log(`[${tag}] ✓ Binding API validated`)
 
     if (!fs.existsSync(modelDir)) fs.mkdirSync(modelDir, { recursive: true })
 
@@ -279,8 +291,6 @@ async function runModelTest (opts) {
   } finally {
     try {
       if (parakeet) {
-        await parakeet.unloadWeights()
-        await new Promise(r => setTimeout(r, 1000))
         await parakeet.destroyInstance()
       }
     } catch (_) {}
@@ -323,9 +333,9 @@ async function _disabled_runEOUStreamingTest (dirPath, getAssetPath) { // eslint
   })
 }
 
-const SF_HF_BASE = 'https://huggingface.co/cgus/diar_streaming_sortformer_4spk-v2-onnx/resolve/main'
+const SF_HF_BASE = 'https://huggingface.co/cgus/diar_streaming_sortformer_4spk-v2-onnx/resolve/main' // eslint-disable-line no-unused-vars
 
-async function runSortformerDiarizationTest (dirPath, getAssetPath) { // eslint-disable-line no-unused-vars
+async function _disabled_runSortformerDiarizationTest (dirPath, getAssetPath) { // eslint-disable-line no-unused-vars
   return runModelTest({
     tag: 'test-sf',
     dirPath,

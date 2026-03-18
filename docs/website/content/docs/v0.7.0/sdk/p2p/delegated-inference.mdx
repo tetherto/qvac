@@ -1,0 +1,93 @@
+---
+title: Delegated inference
+description: Perform peer-to-peer inference delegation out-of-the-box via Holepunch stack, enabling resource sharing.
+---
+
+## Overview
+
+Lets a **consumer** delegate inference requests to a remote **provider** in a P2P manner via [Hyperswarm](https://docs.pears.com/building-blocks/hyperswarm). Use it when an inference requires more resources than the local device are able to provide.
+
+Delegation is configured at model-load time by passing a `delegate` object to [`loadModel()`](/v0.7.0/sdk/api/loadModel). The provider is started separately using [`startQVACProvider()`](/v0.7.0/sdk/api/startQVACProvider).
+
+## Functions
+
+**Provider:**
+1. [`startQVACProvider()`](/v0.7.0/sdk/api/startQVACProvider) — join a topic and serve requests
+2. [`stopQVACProvider()`](/v0.7.0/sdk/api/stopQVACProvider) — leave the topic
+
+**Consumer:**
+1. [`loadModel()`](/v0.7.0/sdk/api/loadModel) — with `delegate` option
+2. [`completion()`](/v0.7.0/sdk/api/completion) / [`transcribe()`](/v0.7.0/sdk/api/transcribe) / [`translate()`](/v0.7.0/sdk/api/translate) / etc. — same as local
+3. [`unloadModel()`](/v0.7.0/sdk/api/unloadModel)
+
+For how to use each function, see [SDK — API reference](/v0.7.0/sdk/api/).
+
+## Provider
+
+Joins a topic and serves delegated requests. It publishes its public key to share with consumers.
+
+## Consumer
+
+Creates a delegated model via `loadModel({ delegate: ... })`.
+`delegate` main options:
+- `topic`: topic hex string
+- `providerPublicKey`: provider public key
+- `timeout`: request timeout in ms (optional)
+- `fallbackToLocal`: if `true`, run locally when delegation fails (optional)
+- `forceNewConnection`: if `true`, do not reuse cached connections (optional)
+
+## Examples
+
+### Consumer
+
+The following script shows an example of a consumer that delegates `completion()` requests to a provider:
+
+<Tabs>
+<Tab value="js" label="JavaScript" default>
+<WrapCode>
+
+```js file=<rootDir>/packages/sdk/dist/examples/delegated-inference/consumer.js title="delegated-inference-consumer.js" lineNumbers
+```
+</WrapCode>
+</Tab>
+
+<Tab value="ts" label="TypeScript">
+<WrapCode>
+
+```ts file=<rootDir>/packages/sdk/examples/delegated-inference/consumer.ts title="delegated-inference-consumer.ts" lineNumbers
+```
+</WrapCode>
+</Tab>
+</Tabs>
+
+### Provider
+
+The following script shows an example of starting a provider and printing the `topic` + provider `publicKey` for consumers:
+
+<Tabs>
+<Tab value="js" label="JavaScript" default>
+<WrapCode>
+
+```js file=<rootDir>/packages/sdk/dist/examples/delegated-inference/provider.js title="delegated-inference-provider.js" lineNumbers
+```
+</WrapCode>
+</Tab>
+
+<Tab value="ts" label="TypeScript">
+<WrapCode>
+
+```ts file=<rootDir>/packages/sdk/examples/delegated-inference/provider.ts title="delegated-inference-provider.ts" lineNumbers
+```
+</WrapCode>
+</Tab>
+</Tabs>
+
+<Callout type="success">
+**Tip:** all examples throughout this documentation are self-contained and runnable. For instructions on how to run them, see [SDK quickstart](/v0.7.0/sdk/quickstart).
+</Callout>
+
+## Notes
+
+- Consumers do not handle reconnection automatically yet. If the provider restarts, restart the consumer.
+- To stop a running provider and leave the topic, call [`stopQVACProvider()`](/v0.7.0/sdk/api/stopQVACProvider).
+- When starting the provider, you can optionally set a firewall rule to allow/deny specific consumer public keys.

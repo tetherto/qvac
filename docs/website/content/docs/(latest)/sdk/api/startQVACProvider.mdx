@@ -1,49 +1,27 @@
 ---
 title: "startQVACProvider( )"
 titleStyle: code
-description: Starts a provider service that offers QVAC capabilities to remote peers.
+description: "Starts a provider service that offers QVAC capabilities to remote peers.
+The provider's keypair can be controlled via the seed option or QVAC_HYPERSWARM_SEED environment variable."
 ---
 
-```ts
-function startQVACProvider(params): Promise<object>;
+```typescript
+function startQVACProvider(params: infer): Promise
 ```
 
-The provider's keypair can be controlled via the seed option or the `QVAC_HYPERSWARM_SEED` environment variable.
+## Description
+
+Starts a provider service that offers QVAC capabilities to remote peers.
+The provider's keypair can be controlled via the seed option or QVAC_HYPERSWARM_SEED environment variable.
 
 ## Parameters
 
 | Name | Type | Required? | Description |
 | --- | --- | :---: | --- |
-| params.topic | `string` | ✓ | Topic hex string for peer discovery |
-| params.firewall | [`FirewallConfig`](#firewallconfig) | ✗ | Optional firewall configuration |
-
-### `FirewallConfig`
-
-| Field | Type | Required? | Default | Description |
-| --- | --- | :---: | --- | --- |
-| mode | `"allow" \| "deny"` | ✗ | `"allow"` | Firewall mode |
-| publicKeys | `string[]` | ✗ | `[]` | Public keys to allow or deny |
+| `params` | `infer` | ✓ | No description |
 
 ## Returns
 
-`Promise<object>` — The provide response containing `success`, `publicKey`, and optional `error`.
-
-## Throws
-
-| Error | When |
-| --- | --- |
-| `INVALID_RESPONSE_TYPE` | Response type does not match expected `"provide"` |
-| `PROVIDER_START_FAILED` | The server reports provider start failure |
-
-## Example
-
 ```typescript
-const response = await startQVACProvider({
-  topic: "a1b2c3d4...",
-  firewall: {
-    mode: "allow",
-    publicKeys: ["peer-public-key-hex"],
-  },
-});
-console.log("Provider public key:", response.publicKey);
+Promise
 ```

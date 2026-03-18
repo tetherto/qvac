@@ -1,0 +1,57 @@
+---
+title: "@qvac/sdk"
+titleStyle: code
+description: API reference — v0.7.0
+---
+
+## Overview
+
+`@qvac/sdk` npm package exposes a function-centric, typed JS API.
+
+## Functions
+
+| Function | Summary | Signature |
+| --- | --- | --- |
+| [`cancel()`](./cancel) | Cancels an ongoing operation. | `cancel(params): Promise<void>` |
+| [`close()`](./close) | Closes the RPC connection to the QVAC server. | `close(): Promise<void>` |
+| [`completion()`](./completion) | Generates completion from a language model based on conversation history. | `completion(params): { tokenStream, toolCallStream, text, toolCalls, stats }` |
+| [`defineHandler()`](./defineHandler) | Helper function to define a handler with full type inference. | `defineHandler<TRequest, TResponse>(definition): PluginHandlerDefinition` |
+| [`definePlugin()`](./definePlugin) | Helper function to define a plugin with full type inference. | `definePlugin<T>(plugin): T` |
+| [`deleteCache()`](./deleteCache) | Deletes KV cache files. | `deleteCache(params): Promise<{ success: boolean }>` |
+| [`downloadAsset()`](./downloadAsset) | Downloads an asset (model file) without loading it into memory. | `downloadAsset(options): Promise<string>` |
+| [`embed()`](./embed) | Generates embeddings for a single text using a specified model. | `embed(params): Promise<number[]>` |
+| [`getLogger()`](./getLogger) | Creates or retrieves a cached logger instance for the given namespace. | `getLogger(namespace, options?): Logger` |
+| [`getModelByName()`](./getModelByName) | Retrieves a model constant from the built-in registry by its human-readable name. | `getModelByName(name): RegistryItem \| undefined` |
+| [`getModelBySrc()`](./getModelBySrc) | Retrieves a model constant from the built-in registry by its model ID and blob core key. | `getModelBySrc(modelId, blobCoreKey): RegistryItem \| undefined` |
+| [`getModelInfo()`](./getModelInfo) | Retrieves detailed information about a model, including cache status and loaded instances. | `getModelInfo(params): Promise<ModelInfo>` |
+| [`invokePlugin()`](./invokePlugin) | Invoke a non-streaming plugin handler. | `invokePlugin<TResponse, TParams>(options): Promise<TResponse>` |
+| [`invokePluginStream()`](./invokePluginStream) | Invoke a streaming plugin handler. | `invokePluginStream<TResponse, TParams>(options): AsyncGenerator<TResponse>` |
+| [`loadModel()`](./loadModel) | Loads a machine learning model from a local path, remote URL, or Hyperdrive key. | `loadModel(options): Promise<string>` |
+| [`loggingStream()`](./loggingStream) | Opens a logging stream to receive real-time logs. | `loggingStream(params): AsyncGenerator<LoggingStreamResponse>` |
+| [`modelRegistryGetModel()`](./modelRegistryGetModel) | Retrieves a single model entry from the QVAC model registry by path and source. | `modelRegistryGetModel(registryPath, registrySource): Promise<ModelRegistryEntry>` |
+| [`modelRegistryList()`](./modelRegistryList) | Lists all available models from the QVAC model registry. | `modelRegistryList(): Promise<ModelRegistryEntry[]>` |
+| [`modelRegistrySearch()`](./modelRegistrySearch) | Searches the QVAC model registry with optional filters. | `modelRegistrySearch(params?): Promise<ModelRegistryEntry[]>` |
+| [`ocr()`](./ocr) | Performs Optical Character Recognition (OCR) on an image to extract text. | `ocr(params): { blockStream, blocks, stats }` |
+| [`ping()`](./ping) | Sends a ping request to the server and returns the pong response. | `ping(): Promise<{ type: "pong", number: number }>` |
+| [`ragChunk()`](./ragChunk) | Chunks documents into smaller pieces for embedding. | `ragChunk(params): Promise<RagDoc[]>` |
+| [`ragCloseWorkspace()`](./ragCloseWorkspace) | Closes a RAG workspace, releasing in-memory resources (Corestore, HyperDB adapter, RAG instance). | `ragCloseWorkspace(params?): Promise<void>` |
+| [`ragDeleteEmbeddings()`](./ragDeleteEmbeddings) | Deletes document embeddings from the RAG vector database. | `ragDeleteEmbeddings(params): Promise<void>` |
+| [`ragDeleteWorkspace()`](./ragDeleteWorkspace) | Deletes a RAG workspace and all its data. | `ragDeleteWorkspace(params): Promise<void>` |
+| [`ragIngest()`](./ragIngest) | Ingests documents into the RAG vector database. | `ragIngest(params): Promise<{ processed, droppedIndices }>` |
+| [`ragListWorkspaces()`](./ragListWorkspaces) | Lists all RAG workspaces with their open status. | `ragListWorkspaces(): Promise<RagWorkspaceInfo[]>` |
+| [`ragReindex()`](./ragReindex) | Reindexes the RAG database to optimize search performance. | `ragReindex(params): Promise<RagReindexResult>` |
+| [`ragSaveEmbeddings()`](./ragSaveEmbeddings) | Saves pre-embedded documents to the RAG vector database. | `ragSaveEmbeddings(params): Promise<RagSaveEmbeddingsResult[]>` |
+| [`ragSearch()`](./ragSearch) | Searches for similar documents in the RAG vector database. | `ragSearch(params): Promise<RagSearchResult[]>` |
+| [`startQVACProvider()`](./startQVACProvider) | Starts a provider service that offers QVAC capabilities to remote peers. | `startQVACProvider(params): Promise<{ success, publicKey? }>` |
+| [`stopQVACProvider()`](./stopQVACProvider) | Stops a running provider service and leaves the specified topic. | `stopQVACProvider(params): Promise<{ success }>` |
+| [`textToSpeech()`](./textToSpeech) | Converts text to speech audio. | `textToSpeech(params): { bufferStream, buffer, done }` |
+| [`transcribe()`](./transcribe) | Provides a simple interface for transcribing audio by collecting all streaming results into a single string response. | `transcribe(params): Promise<string>` |
+| [`transcribeStream()`](./transcribeStream) | Streams audio transcription results in real-time, yielding text chunks as they become available from the model. | `transcribeStream(params): AsyncGenerator<string>` |
+| [`translate()`](./translate) | Translates text from one language to another using a specified translation model. | `translate(params): { tokenStream, text, stats }` |
+| [`unloadModel()`](./unloadModel) | Unloads a previously loaded model from the server. | `unloadModel(params): Promise<void>` |
+
+## Errors
+
+<Card href="./errors" title="Error codes">
+  All errors thrown by the SDK and how to handle them via `SDK_CLIENT_ERROR_CODES` and `SDK_SERVER_ERROR_CODES`.
+</Card>
