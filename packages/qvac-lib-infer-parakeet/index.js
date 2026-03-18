@@ -227,15 +227,11 @@ class TranscriptionParakeet extends BaseInference {
   }
 
   /**
-   * Load model, weights, and activate addon.
-   * @param {boolean} [closeLoader=false] - Close loader when done.
-   * @param {Function} [reportProgressCallback] - Hook for progress updates.
+   * Build native addon configuration (shared by _load and reload).
+   * @returns {Object} configurationParams for createInstance / reload / activate
+   * @private
    */
-  async _load (closeLoader = false, reportProgressCallback) {
-    this.logger.debug('Loader ready')
-
-    await this.downloadWeights(reportProgressCallback, { closeLoader })
-
+  _buildConfigurationParams () {
     const modelPath = this._config.path || this._getModelFilePath()
     const modelType = this.params.modelType || 'tdt'
 
@@ -251,24 +247,34 @@ class TranscriptionParakeet extends BaseInference {
       seed: this.params.seed ?? -1
     }
 
-    // Pass individual file paths to C++ which loads directly from disk
     if (this._hasNamedPaths()) {
-      // TDT
       if (this._config.encoderPath) configurationParams.encoderPath = this._config.encoderPath
       if (this._config.encoderDataPath) configurationParams.encoderDataPath = this._config.encoderDataPath
       if (this._config.decoderPath) configurationParams.decoderPath = this._config.decoderPath
       if (this._config.vocabPath) configurationParams.vocabPath = this._config.vocabPath
       if (this._config.preprocessorPath) configurationParams.preprocessorPath = this._config.preprocessorPath
-      // CTC
       if (this._config.ctcModelPath) configurationParams.ctcModelPath = this._config.ctcModelPath
       if (this._config.ctcModelDataPath) configurationParams.ctcModelDataPath = this._config.ctcModelDataPath
       if (this._config.tokenizerPath) configurationParams.tokenizerPath = this._config.tokenizerPath
-      // EOU
       if (this._config.eouEncoderPath) configurationParams.eouEncoderPath = this._config.eouEncoderPath
       if (this._config.eouDecoderPath) configurationParams.eouDecoderPath = this._config.eouDecoderPath
-      // Sortformer
       if (this._config.sortformerPath) configurationParams.sortformerPath = this._config.sortformerPath
     }
+
+    return configurationParams
+  }
+
+  /**
+   * Load model, weights, and activate addon.
+   * @param {boolean} [closeLoader=false] - Close loader when done.
+   * @param {Function} [reportProgressCallback] - Hook for progress updates.
+   */
+  async _load (closeLoader = false, reportProgressCallback) {
+    this.logger.debug('Loader ready')
+
+    await this.downloadWeights(reportProgressCallback, { closeLoader })
+
+    const configurationParams = this._buildConfigurationParams()
 
     this.logger.info('Creating Parakeet addon with configuration:', configurationParams)
     this.addon = this._createAddon(configurationParams)
@@ -442,25 +448,17 @@ class TranscriptionParakeet extends BaseInference {
         this.params = { ...this.params, ...newConfig.parakeetConfig }
       }
 
-      const modelPath = this._config.path || this._getModelFilePath()
-      const modelType = this.params.modelType || 'tdt'
-
-      const configurationParams = {
-        modelPath,
-        modelType,
-        maxThreads: this.params.maxThreads || 4,
-        useGPU: this.params.useGPU || false,
-        sampleRate: this.params.sampleRate || 16000,
-        channels: this.params.channels || 1,
-        captionEnabled: this.params.captionEnabled || false,
-        timestampsEnabled: this.params.timestampsEnabled !== false, // default true
-        seed: this.params.seed ?? -1
-      }
+      const configurationParams = this._buildConfigurationParams()
 
       await this.cancel()
       this._failAndClearActiveResponse('Model was reloaded')
       await this.addon.reload(configurationParams)
-      await this._loadModelWeights(modelPath, modelType)
+      if (!this._hasNamedPaths()) {
+        await this._loadModelWeights(
+          configurationParams.modelPath,
+          configurationParams.modelType
+        )
+      }
       await this.addon.activate()
 
       this.logger.debug('Addon reloaded and activated successfully')

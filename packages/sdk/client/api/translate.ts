@@ -90,7 +90,7 @@ export function translate(
 
   if (params.stream) {
     const tokenStream = (async function* () {
-      for await (const response of streamRpc(request, undefined, options)) {
+      for await (const response of streamRpc(request, options)) {
         if (response.type === "translate") {
           const streamResponse = translateResponseSchema.parse(response);
           if (!streamResponse.done) {
@@ -118,7 +118,7 @@ export function translate(
     const textPromise = (async () => {
       let buffer = "";
 
-      for await (const response of streamRpc(request, undefined, options)) {
+      for await (const response of streamRpc(request, options)) {
         if (response.type === "translate") {
           const streamResponse = translateResponseSchema.parse(response);
           buffer += streamResponse.token;

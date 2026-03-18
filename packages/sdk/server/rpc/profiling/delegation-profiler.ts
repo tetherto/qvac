@@ -149,6 +149,25 @@ export function buildDelegationBreakdown(
   return breakdown;
 }
 
+export function buildDelegationStreamBreakdown(
+  timings: DelegationStreamTimings,
+): DelegationBreakdown {
+  const now = nowMs();
+  const breakdown: DelegationBreakdown = {
+    profileId: timings.profileId,
+  };
+
+  if (timings.requestStringifyMs !== undefined) {
+    breakdown.requestStringifyMs = timings.requestStringifyMs;
+  }
+  if (timings.sendStart !== undefined && timings.firstChunkAt !== undefined) {
+    breakdown.serverWaitMs = timings.firstChunkAt - timings.sendStart;
+  }
+  breakdown.totalDelegationMs = now - timings.requestStart;
+
+  return breakdown;
+}
+
 export function recordDelegationEvents(
   timings: DelegationTimings,
   serverMeta?: ProfilingResponseMeta,

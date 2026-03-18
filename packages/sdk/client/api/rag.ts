@@ -66,7 +66,7 @@ export async function ragChunk(
     ...params,
   };
 
-  const response = await send(request, undefined, options);
+  const response = await send(request, options);
 
   if (response.type !== "rag") {
     throw new InvalidResponseError("rag");
@@ -139,7 +139,7 @@ export async function ragIngest(
 
   if (onProgress) {
     // Use streaming for progress updates
-    for await (const event of stream(request, undefined, options)) {
+    for await (const event of stream(request, options)) {
       if (event.type === "rag:progress" && event.operation === "ingest") {
         const progress: RagProgressUpdate = event;
         onProgress(
@@ -165,7 +165,7 @@ export async function ragIngest(
     throw new StreamEndedError();
   }
 
-  const response = await send(request, undefined, options);
+  const response = await send(request, options);
   if (response.type !== "rag") {
     throw new InvalidResponseError("rag");
   }
@@ -232,7 +232,7 @@ export async function ragSaveEmbeddings(
   };
 
   if (onProgress) {
-    for await (const event of stream(request, undefined, options)) {
+    for await (const event of stream(request, options)) {
       if (
         event.type === "rag:progress" &&
         event.operation === "saveEmbeddings"
@@ -258,7 +258,7 @@ export async function ragSaveEmbeddings(
     throw new StreamEndedError();
   }
 
-  const response = await send(request, undefined, options);
+  const response = await send(request, options);
 
   if (response.type !== "rag") {
     throw new InvalidResponseError("rag");
@@ -314,7 +314,7 @@ export async function ragSearch(
     n: params.n ?? 3,
   };
 
-  const response = await send(request, undefined, options);
+  const response = await send(request, options);
   if (response.type !== "rag") {
     throw new InvalidResponseError("rag");
   }
@@ -360,7 +360,7 @@ export async function ragDeleteEmbeddings(
     ...params,
   };
 
-  const response = await send(request, undefined, options);
+  const response = await send(request, options);
   if (response.type !== "rag") {
     throw new InvalidResponseError("rag");
   }
@@ -428,7 +428,7 @@ export async function ragReindex(
   };
 
   if (onProgress) {
-    for await (const event of stream(request, undefined, options)) {
+    for await (const event of stream(request, options)) {
       if (event.type === "rag:progress" && event.operation === "reindex") {
         const progress: RagProgressUpdate = event;
         onProgress(
@@ -451,7 +451,7 @@ export async function ragReindex(
     throw new StreamEndedError();
   }
 
-  const response = await send(request, undefined, options);
+  const response = await send(request, options);
 
   if (response.type !== "rag") {
     throw new InvalidResponseError("rag");
@@ -494,7 +494,7 @@ export async function ragListWorkspaces(
     operation: "listWorkspaces",
   };
 
-  const response = await send(request, undefined, options);
+  const response = await send(request, options);
 
   if (response.type !== "rag") {
     throw new InvalidResponseError("rag");
@@ -544,7 +544,7 @@ export async function ragCloseWorkspace(
     ...params,
   };
 
-  const response = await send(request, undefined, options);
+  const response = await send(request, options);
 
   if (response.type !== "rag") {
     throw new InvalidResponseError("rag");
@@ -584,7 +584,7 @@ export async function ragDeleteWorkspace(
     ...params,
   };
 
-  const response = await send(request, undefined, options);
+  const response = await send(request, options);
 
   if (response.type !== "rag") {
     throw new InvalidResponseError("rag");
