@@ -1,5 +1,5 @@
-'use strict'
-
+import { createRequire } from 'module'
+const require = createRequire(import.meta.url)
 const cld = require('cld')
 const isoLanguageCodes = require('iso-language-codes')
 
@@ -243,7 +243,7 @@ function getISO2FromName(languageName) {
   }
 }
 
-module.exports = {
+export {
   detectOne,
   detectMultiple,
   getLangName,

@@ -1,6 +1,4 @@
-'use strict'
-
-const { detectOne, detectMultiple, getLangName, getISO2FromName } = require('..')
+import { detectOne, detectMultiple, getLangName, getISO2FromName } from '../index.js'
 
 async function detectMostProbableLanguage (text) {
   const result = await detectOne(text)
