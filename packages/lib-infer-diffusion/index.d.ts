@@ -165,6 +165,45 @@ export interface GenerationParams {
   strength?: number
 }
 
+/**
+ * Shape of the stats object emitted on the 'stats' event of a QvacResponse.
+ *
+ * All time values are in milliseconds. Cumulative fields (totalGenerationMs,
+ * totalWallMs, totalSteps, totalGenerations, totalImages, totalPixels) accumulate
+ * across the lifetime of the model instance; per-job fields (generationMs, width,
+ * height, seed) reflect only the most recent generation.
+ *
+ * Derivable rates (stepsPerSecond, msPerStep, megapixelsPerSecond) are intentionally
+ * omitted — callers can compute them from the primitives provided:
+ *   stepsPerSecond    = totalSteps  / (totalWallMs / 1000)
+ *   msPerStep         = totalWallMs / totalSteps
+ *   megapixelsPerSec  = (totalPixels / 1e6) / (totalWallMs / 1000)
+ */
+export interface RuntimeStats {
+  /** Wall time to load the model weights (ms) */
+  modelLoadMs: number
+  /** Wall time for the most recent generation job (ms) */
+  generationMs: number
+  /** Cumulative generation time across all jobs (ms) */
+  totalGenerationMs: number
+  /** Cumulative wall time across all jobs (ms) */
+  totalWallMs: number
+  /** Cumulative diffusion steps across all jobs */
+  totalSteps: number
+  /** Cumulative number of generation calls */
+  totalGenerations: number
+  /** Cumulative number of images produced */
+  totalImages: number
+  /** Cumulative number of pixels produced */
+  totalPixels: number
+  /** Width of the most recent generated image (px) */
+  width: number
+  /** Height of the most recent generated image (px) */
+  height: number
+  /** Seed used for the most recent generation */
+  seed: number
+}
+
 export interface ImgStableDiffusionArgs {
   logger?: QvacLogger | Console | null
   opts?: { stats?: boolean }
@@ -197,4 +236,4 @@ export default class ImgStableDiffusion extends BaseInference {
   cancel(): Promise<void>
 }
 
-export { QvacResponse }
+export { QvacResponse, RuntimeStats }
