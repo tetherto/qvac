@@ -6,7 +6,7 @@
 
 #### `RuntimeStats` TypeScript interface
 
-Added a `RuntimeStats` type to `index.d.ts` covering all stats keys returned by the C++ addon: `total_tokens`, `total_time_ms`, `tokens_per_second`, `batch_size`, and `context_size`.
+Added a `RuntimeStats` type to `index.d.ts` covering all stats keys returned by the C++ addon: `total_tokens`, `total_time_ms`, `tokens_per_second` (optional — only present when processing time > 0), `batch_size`, and `context_size`.
 
 ## [0.12.0] - 2026-03-13
 

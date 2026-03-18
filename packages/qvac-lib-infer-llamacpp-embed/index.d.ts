@@ -70,7 +70,7 @@ export interface AddonConfigurationParams {
 export interface RuntimeStats {
   total_tokens: number
   total_time_ms: number
-  tokens_per_second: number
+  tokens_per_second?: number
   batch_size: number
   context_size: number
 }
