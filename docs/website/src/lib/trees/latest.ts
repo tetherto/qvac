@@ -40,6 +40,12 @@ export const tree: Node[] = [
         icon: resolveIcon('Binoculars'),
       },
       {
+        name: 'Public launch',
+        url: '/public-launch',
+        type: 'page',
+        icon: resolveIcon('Globe'),
+      },
+      {
         name: 'How it works',
         url: '/sdk/how-it-works',
         type: 'page',
