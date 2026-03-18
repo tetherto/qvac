@@ -134,20 +134,21 @@ class ImgStableDiffusion extends BaseInference {
   }
 
   _addonOutputCallback (addon, event, data, error) {
-    if (typeof data === 'object' && data !== null && 'generation_time' in data) {
+    if (event.includes('Error')) {
+      return this._outputCallback(addon, 'Error', 'OnlyOneJob', data, error)
+    }
+
+    if (data instanceof Uint8Array || typeof data === 'string') {
+      return this._outputCallback(addon, 'Output', 'OnlyOneJob', data, error)
+    }
+
+    // RuntimeStats is the only plain-object payload the C++ addon emits.
+    // Matching structurally avoids coupling to specific stats key names.
+    if (typeof data === 'object' && data !== null) {
       return this._outputCallback(addon, 'JobEnded', 'OnlyOneJob', data, null)
     }
 
-    let mappedEvent = event
-    if (event.includes('Error')) {
-      mappedEvent = 'Error'
-    } else if (data instanceof Uint8Array) {
-      mappedEvent = 'Output'
-    } else if (typeof data === 'string') {
-      mappedEvent = 'Output'
-    }
-
-    return this._outputCallback(addon, mappedEvent, 'OnlyOneJob', data, error)
+    return this._outputCallback(addon, event, 'OnlyOneJob', data, error)
   }
 
   /**
