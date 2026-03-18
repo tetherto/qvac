@@ -71,8 +71,6 @@
     "brittle": "^3.16.5",
     "cmake-bare": "1.7.5",
     "cmake-vcpkg": "^1.1.0",
-    "corestore": "^7.4.7",
-    "hyperswarm": "^4.14.0",
     "os": "npm:bare-os@^3.6.2",
     "process": "npm:bare-node-process",
     "sinon": "^21.0.0",
@@ -90,9 +88,7 @@
   "engines": {
     "bare": ">=1.24.0"
   },
-  "peerDependencies": {
-    "@qvac/dl-hyperdrive": "^0.1.0"
-  },
+  "peerDependencies": {},
   "exports": {
     "./package": "./package.json",
     ".": {
