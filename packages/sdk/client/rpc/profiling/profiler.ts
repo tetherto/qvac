@@ -158,7 +158,7 @@ export function recordClientEvents(
       recordPhase(
         base,
         "clientOverhead",
-        totalClientTime - serverMeta.server.totalServerMs,
+        Math.max(0, totalClientTime - serverMeta.server.totalServerMs),
       );
     }
   }
@@ -166,6 +166,24 @@ export function recordClientEvents(
   if (serverMeta?.delegation) {
     recordDelegationBreakdownPhases(base, serverMeta.delegation);
   }
+
+  if (serverMeta?.operation) {
+    recordOperationEvent(serverMeta.operation);
+  }
+}
+
+function recordOperationEvent(op: NonNullable<ProfilingResponseMeta["operation"]>): void {
+  const event: Parameters<typeof record>[0] = {
+    ts: nowMs(),
+    op: op.op,
+    kind: op.kind,
+    ms: op.ms,
+  };
+  if (op.profileId !== undefined) event.profileId = op.profileId;
+  if (op.gauges !== undefined) event.gauges = op.gauges;
+  if (op.tags !== undefined) event.tags = op.tags;
+  if (op.count !== undefined) event.count = op.count;
+  record(event);
 }
 
 export function recordClientStreamEvents(
@@ -204,6 +222,10 @@ export function recordClientStreamEvents(
 
   if (serverMeta?.delegation) {
     recordDelegationBreakdownPhases(base, serverMeta.delegation);
+  }
+
+  if (serverMeta?.operation) {
+    recordOperationEvent(serverMeta.operation);
   }
 }
 
