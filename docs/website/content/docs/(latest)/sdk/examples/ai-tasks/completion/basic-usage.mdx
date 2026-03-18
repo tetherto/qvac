@@ -5,9 +5,8 @@ description: Run a basic streaming completion — download/cache model, load, co
 
 Basic completion: download (or use cached) model, load it, run streaming completion, then unload.
 
-<Steps>
+## 1. Download the model (optional)
 
-<Step title="Download the model (optional)">
 Use [`downloadAsset()`](/sdk/api/downloadAsset) to fetch the model to the cache first; you can skip this and let [`loadModel()`](/sdk/api/loadModel) download on demand.
 <Tabs>
 <Tab value="js" label="JavaScript" default>
@@ -25,9 +24,9 @@ Use [`downloadAsset()`](/sdk/api/downloadAsset) to fetch the model to the cache 
 </WrapCode>
 </Tab>
 </Tabs>
-</Step>
 
-<Step title="Load the model">
+## 2. Load the model
+
 Call [`loadModel()`](/sdk/api/loadModel) with a model constant (e.g. `LLAMA_3_2_1B_INST_Q4_0`), `modelType: "llm"`, and any [`modelConfig`](/sdk/api/loadModel#modelconfig-varies-by-model-type) (e.g. `device`, `ctx_size`, `verbosity`) to load it from cache.
 <Tabs>
 <Tab value="js" label="JavaScript" default>
@@ -45,9 +44,9 @@ Call [`loadModel()`](/sdk/api/loadModel) with a model constant (e.g. `LLAMA_3_2_
 </WrapCode>
 </Tab>
 </Tabs>
-</Step>
 
-<Step title="Build history and run completion">
+## 3. Build history and run completion
+
 Build a `history` array of `{ role, content }` messages. Call [`completion()`](/sdk/api/completion) with `modelId`, `history`, and `stream: true`.
 <Tabs>
 <Tab value="js" label="JavaScript" default>
@@ -65,9 +64,9 @@ Build a `history` array of `{ role, content }` messages. Call [`completion()`](/
 </WrapCode>
 </Tab>
 </Tabs>
-</Step>
 
-<Step title="Consume the stream and stats">
+## 4. Consume the stream and stats
+
 Iterate over `result.tokenStream` to print tokens. Await `result.stats` for timing and token counts (see [completion()](/sdk/api/completion) return value).
 <Tabs>
 <Tab value="js" label="JavaScript" default>
@@ -85,9 +84,9 @@ Iterate over `result.tokenStream` to print tokens. Await `result.stats` for timi
 </WrapCode>
 </Tab>
 </Tabs>
-</Step>
 
-<Step title="Unload the model">
+## 5. Unload the model
+
 Call [`unloadModel({ modelId })`](/sdk/api/unloadModel) when done. Use `clearStorage: true` only if you want to remove cached files from disk.
 <Tabs>
 <Tab value="js" label="JavaScript" default>
@@ -105,11 +104,8 @@ Call [`unloadModel({ modelId })`](/sdk/api/unloadModel) when done. Use `clearSto
 </WrapCode>
 </Tab>
 </Tabs>
-</Step>
 
-</Steps>
-
-**Full example:**
+## Full example
 
 <Tabs>
 <Tab value="js" label="JavaScript" default>

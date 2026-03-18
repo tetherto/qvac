@@ -5,9 +5,8 @@ description: Define tools with Zod, pass them to completion(), and consume toolC
 
 Let the model emit structured tool calls; define tools with Zod schemas, pass them to [`completion()`](/sdk/api/completion), and consume `toolCallStream` events.
 
-<Steps>
+## 1. Define tools with Zod schemas
 
-<Step title="Define tools with Zod schemas">
 Create Zod schemas for each tool's parameters and a `tools` array with `name`, `description`, and `parameters` (the schema). The same schemas can be used later to validate [`toolCall.arguments`](/sdk/api/completion#tool-call-events).
 <Tabs>
 <Tab value="js" label="JavaScript" default>
@@ -25,9 +24,9 @@ Create Zod schemas for each tool's parameters and a `tools` array with `name`, `
 </WrapCode>
 </Tab>
 </Tabs>
-</Step>
 
-<Step title="Load a tools-capable model">
+## 2. Load a tools-capable model
+
 Call [`loadModel()`](/sdk/api/loadModel) with `modelConfig: { tools: true }` so the model can emit tool calls.
 <Tabs>
 <Tab value="js" label="JavaScript" default>
@@ -45,9 +44,9 @@ Call [`loadModel()`](/sdk/api/loadModel) with `modelConfig: { tools: true }` so 
 </WrapCode>
 </Tab>
 </Tabs>
-</Step>
 
-<Step title="Run completion with tools">
+## 3. Run completion with tools
+
 Pass the `tools` array to [`completion()`](/sdk/api/completion). Use `stream: true` and consume both `result.tokenStream` and [`result.toolCallStream`](/sdk/api/completion#toolcallstream).
 <Tabs>
 <Tab value="js" label="JavaScript" default>
@@ -65,9 +64,9 @@ Pass the `tools` array to [`completion()`](/sdk/api/completion). Use `stream: tr
 </WrapCode>
 </Tab>
 </Tabs>
-</Step>
 
-<Step title="Handle tool calls and continue">
+## 4. Handle tool calls and continue
+
 Await `result.toolCalls` for the parsed tool calls, validate arguments with your Zod schemas, run your handlers, then append assistant and tool messages to `history` and call [`completion()`](/sdk/api/completion) again for the follow-up response.
 <Tabs>
 <Tab value="js" label="JavaScript" default>
@@ -85,11 +84,8 @@ Await `result.toolCalls` for the parsed tool calls, validate arguments with your
 </WrapCode>
 </Tab>
 </Tabs>
-</Step>
 
-</Steps>
-
-**Full example:**
+## Full example
 
 <Tabs>
 <Tab value="js" label="JavaScript" default>

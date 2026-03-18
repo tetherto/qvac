@@ -5,9 +5,8 @@ description: Attach an MCP client to completion() so the model can call external
 
 Attach an MCP client to [`completion()`](/sdk/api/completion) so the model can use external tools (e.g. web search). You create and connect the MCP client, then pass it via the `mcp` option.
 
-<Steps>
+## 1. Install and create the MCP client
 
-<Step title="Install and create the MCP client">
 Install and import [`@modelcontextprotocol/sdk`](https://github.com/modelcontextprotocol/sdk), then create a [`Client`](https://github.com/modelcontextprotocol/sdk/blob/main/packages/sdk/client/index.ts) and connect it to your MCP server(s) (e.g. via `StdioClientTransport` for a subprocess server).
 <Tabs>
 <Tab value="js" label="JavaScript" default>
@@ -37,9 +36,9 @@ Install and import [`@modelcontextprotocol/sdk`](https://github.com/modelcontext
 </WrapCode>
 </Tab>
 </Tabs>
-</Step>
 
-<Step title="Load the model">
+## 2. Load the model
+
 Call [`loadModel()`](/sdk/api/loadModel) as usual with an LLM model constant and `modelType: "llm"`. Enable `tools: true` in `modelConfig` when the model will call MCP tools.
 <Tabs>
 <Tab value="js" label="JavaScript" default>
@@ -57,9 +56,9 @@ Call [`loadModel()`](/sdk/api/loadModel) as usual with an LLM model constant and
 </WrapCode>
 </Tab>
 </Tabs>
-</Step>
 
-<Step title="Run completion with the MCP client">
+## 3. Run completion with the MCP client
+
 Pass the MCP client to [`completion()`](/sdk/api/completion) via the `mcp` option. The model can then call tools provided by the server; tool invocations are routed to the MCP client.
 <Tabs>
 <Tab value="js" label="JavaScript" default>
@@ -77,9 +76,9 @@ Pass the MCP client to [`completion()`](/sdk/api/completion) via the `mcp` optio
 </WrapCode>
 </Tab>
 </Tabs>
-</Step>
 
-<Step title="Unload and close">
+## 4. Unload and close
+
 Call [`unloadModel({ modelId })`](/sdk/api/unloadModel) and close the MCP client when done.
 <Tabs>
 <Tab value="js" label="JavaScript" default>
@@ -103,11 +102,8 @@ Call [`unloadModel({ modelId })`](/sdk/api/unloadModel) and close the MCP client
 </WrapCode>
 </Tab>
 </Tabs>
-</Step>
 
-</Steps>
-
-**Full example:**
+## Full example
 
 <Tabs>
 <Tab value="js" label="JavaScript" default>

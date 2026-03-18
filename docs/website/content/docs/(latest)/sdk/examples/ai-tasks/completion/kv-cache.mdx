@@ -5,9 +5,8 @@ description: 'Use kvCache: true to speed up follow-up turns in a conversation.'
 
 Use `kvCache: true` in [`completion()`](/sdk/api/completion) to cache and reuse the model's key/value attention state so follow-up turns in a conversation are faster.
 
-<Steps>
+## 1. Load the model
 
-<Step title="Load the model">
 Call [`loadModel()`](/sdk/api/loadModel) with your LLM model and config as usual.
 <Tabs>
 <Tab value="js" label="JavaScript" default>
@@ -25,9 +24,9 @@ Call [`loadModel()`](/sdk/api/loadModel) with your LLM model and config as usual
 </WrapCode>
 </Tab>
 </Tabs>
-</Step>
 
-<Step title="First turn with cache enabled">
+## 2. First turn with cache enabled
+
 Call [`completion()`](/sdk/api/completion) with `history` (e.g. one user message), `stream: true`, and `kvCache: true`. Consume `tokenStream` and save the assistant reply for the next turn.
 <Tabs>
 <Tab value="js" label="JavaScript" default>
@@ -45,9 +44,9 @@ Call [`completion()`](/sdk/api/completion) with `history` (e.g. one user message
 </WrapCode>
 </Tab>
 </Tabs>
-</Step>
 
-<Step title="Follow-up turn reusing cache">
+## 3. Follow-up turn reusing cache
+
 Append the previous assistant reply to `history` and add the new user message. Call [`completion()`](/sdk/api/completion) again with `kvCache: true`; the SDK reuses the cached state for the prefix and only runs the new turn.
 <Tabs>
 <Tab value="js" label="JavaScript" default>
@@ -65,9 +64,9 @@ Append the previous assistant reply to `history` and add the new user message. C
 </WrapCode>
 </Tab>
 </Tabs>
-</Step>
 
-<Step title="Compare with cache disabled (optional)">
+## 4. Compare with cache disabled (optional)
+
 Run the same conversation with `kvCache: false` and compare `result.stats` to see the speed difference.
 <Tabs>
 <Tab value="js" label="JavaScript" default>
@@ -85,11 +84,8 @@ Run the same conversation with `kvCache: false` and compare `result.stats` to se
 </WrapCode>
 </Tab>
 </Tabs>
-</Step>
 
-</Steps>
-
-**Full example:**
+## Full example
 
 <Tabs>
 <Tab value="js" label="JavaScript" default>
