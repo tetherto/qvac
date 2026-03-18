@@ -13,8 +13,10 @@
     "postinstall": "fumadocs-mdx",
     "docs:generate": "bun run scripts/run-docs-generate.ts",
     "docs:generate-api": "bun run scripts/generate-api-docs.ts",
+    "docs:gen-api-dev": "bun run scripts/generate-api-docs.ts --dev",
     "docs:update-versions": "bun run scripts/update-versions-list.ts",
     "docs:create-version": "bun run scripts/create-version-bundle.ts",
+    "docs:release-version": "bun run scripts/release-version.ts",
     "test": "vitest run",
     "test:watch": "vitest"
   },

@@ -2,6 +2,7 @@
 
 #include <atomic>
 #include <string>
+#include <utility>
 #include <vector>
 
 #include <opencv2/imgproc.hpp>
@@ -22,8 +23,9 @@ public:
   static constexpr int RECOG_WIDTH = 128;
 
   StepDoctrRecognition(
-      const std::string& pathRecognizer, bool useGPU = false,
-      int batchSize = 32, DecodingMethod decoding = DecodingMethod::CTC);
+      const std::string& pathRecognizer,
+      const onnx_addon::SessionConfig& sessionConfig = {}, int batchSize = 32,
+      DecodingMethod decoding = DecodingMethod::CTC);
 
 #if defined(_WIN32) || defined(_WIN64)
   // On Windows, defer session destruction to avoid the ORT global-state crash.
@@ -52,12 +54,14 @@ private:
   static constexpr int SPECIAL_TOKEN_IDX = 126;
   // Parsed vocab characters (initialized once in constructor)
   std::vector<std::string> vocabChars_;
+  std::vector<float> batchBuffer_;
 
   // Crop, perspective-transform, and preprocess a text region for recognition
   cv::Mat preprocessCrop(const cv::Mat& origImg, const std::array<cv::Point2f, 4>& polygon);
 
   // Run batch ONNX inference, returns raw logits [batch, seq_len, vocab_size+3]
-  cv::Mat runBatchInference(const std::vector<cv::Mat>& images);
+  std::pair<std::vector<Ort::Value>, cv::Mat>
+  runBatchInference(const std::vector<cv::Mat>& images);
 
   // Softmax + argmax for a single timestep, returns best index and its probability
   SoftmaxResult softmaxArgmax(const cv::Mat& preds, int batchIdx, int timestep, int vocabSize);
