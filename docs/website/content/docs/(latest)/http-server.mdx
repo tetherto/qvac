@@ -79,7 +79,7 @@ curl http://localhost:11434/v1/chat/completions \
 
 ## Configuration
 
-Models are declared in `qvac.config.*` under the `serve.models` key. Only models listed here can be loaded by the server — requests for unlisted models return 404. Each key in `serve.models` is a **model alias** — the name that HTTP clients use in the `model` field of their requests. For the full schema of `serve.models`, see [Configuration — `ServeConfig`](/sdk/configuration#serveconfig).
+Models are declared in `qvac.config.*` under the `serve.models` key. The server can only load models listed under this key — requests for unlisted models return 404. Each key in `serve.models` is a **model alias** — the name that HTTP clients use in the `model` field of their requests. For the full schema of `serve.models`, see [Configuration — `ServeConfig`](/sdk/configuration#serveconfig).
 
 ### Example
 
