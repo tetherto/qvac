@@ -37,7 +37,7 @@ export const tree: Node[] = [
         name: 'Our Vision',
         url: '/vision',
         type: 'page',
-        icon: resolveIcon('Binoculars'),
+        icon: resolveIcon('Telescope'),
       },
       {
         name: 'Public launch',
