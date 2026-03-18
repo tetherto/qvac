@@ -171,6 +171,7 @@ Rules:
 | Agent stops on ambiguity | Answer the question in Asana, re-run |
 | CI fails after push | Check `gh run list`; fix if related, note if not |
 | Agent can't connect to Asana | See [Asana connection troubleshooting](#asana-connection-troubleshooting) below |
+| `gh: command not found` or PR creation fails | See [GitHub CLI troubleshooting](#github-cli-gh-troubleshooting) below |
 
 ### Asana Connection Troubleshooting
 
@@ -221,3 +222,93 @@ You should see a JSON response with your Asana user info. If you get `401 Unauth
 | MCP server not available (Claude Code) | Token not in `~/.claude/settings.json` | Add token to settings or export in shell |
 | `401 Unauthorized` from API | Token expired or revoked | Generate a new token at https://app.asana.com/0/my-apps |
 | Agent falls back to WebFetch | MCP server not connected | Verify token is set, restart the tool, re-run `/setup` |
+
+### GitHub CLI (`gh`) Troubleshooting
+
+The `/orchestrate` pipeline uses `gh` to create pull requests and interact with GitHub. If `gh` is not installed or not authenticated, PR creation will fail.
+
+#### 1. Install the latest GitHub CLI
+
+The `gh` package in default OS repos is often outdated. Install from GitHub's official APT repository to get the latest version:
+
+**Debian / Ubuntu:**
+
+```bash
+sudo mkdir -p -m 755 /etc/apt/keyrings
+wget -qO- https://cli.github.com/packages/githubcli-archive-keyring.gpg | sudo tee /etc/apt/keyrings/githubcli-archive-keyring.gpg > /dev/null
+sudo chmod go+r /etc/apt/keyrings/githubcli-archive-keyring.gpg
+echo "deb [arch=$(dpkg --print-architecture) signed-by=/etc/apt/keyrings/githubcli-archive-keyring.gpg] https://cli.github.com/packages stable main" | sudo tee /etc/apt/sources.list.d/github-cli.list > /dev/null
+sudo apt update
+sudo apt install gh -y
+```
+
+**macOS:**
+
+```bash
+brew install gh
+```
+
+Verify installation:
+
+```bash
+gh --version
+```
+
+#### 2. Authenticate with SSH
+
+If you use SSH keys for git operations (recommended for this repo's fork-first workflow):
+
+```bash
+gh auth login
+```
+
+When prompted, select:
+1. **GitHub.com**
+2. **SSH** as the preferred protocol for git operations
+3. Select your existing SSH key (or let `gh` generate one)
+4. **Login with a web browser** — this opens a browser to complete the OAuth flow
+
+Verify authentication:
+
+```bash
+gh auth status
+```
+
+You should see output like:
+
+```
+github.com
+  ✓ Logged in to github.com account <username>
+  - Active account: true
+  - Git operations protocol: ssh
+  - Token: gho_****
+  - Token scopes: 'admin:public_key', 'gist', 'read:org', 'repo'
+```
+
+The `repo` scope is required for creating PRs on private repositories.
+
+#### 3. Authenticate non-interactively (CI / headless)
+
+If you cannot open a browser (e.g. remote server, CI), authenticate with a Personal Access Token:
+
+```bash
+echo "<your-github-pat>" | gh auth login --with-token
+```
+
+The token needs the `repo` scope. Generate one at https://github.com/settings/tokens.
+
+Then set the git protocol to SSH:
+
+```bash
+gh config set git_protocol ssh
+```
+
+#### Common issues
+
+| Symptom | Cause | Fix |
+|---|---|---|
+| `gh: command not found` | Not installed or not in PATH | Install from GitHub's official repo (see step 1) |
+| `gh version 2.4.0` or similar old version | Installed from default OS repo | Remove and reinstall from GitHub's official APT repo |
+| `You are not logged into any GitHub hosts` | Not authenticated | Run `gh auth login` (see step 2) |
+| `HTTP 403` or `Resource not accessible` | Token missing `repo` scope | Re-authenticate or generate a new token with `repo` scope |
+| PR creation fails with `GraphQL: ...` | Fork not synced or branch not pushed | Push branch first: `git push -u origin HEAD` |
