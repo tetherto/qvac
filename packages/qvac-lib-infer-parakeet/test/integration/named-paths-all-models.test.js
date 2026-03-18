@@ -118,7 +118,7 @@ test('CTC with named file paths — full load and transcription', { timeout: 600
     t.ok(fullText.length > 10, `CTC named paths produced text (${fullText.length} chars)`)
     t.ok(fullText.toLowerCase().includes('alice'), 'CTC transcription includes expected content')
   } finally {
-    if (parakeet) try { parakeet.destroyInstance() } catch (e) {}
+    if (parakeet) try { await parakeet.destroyInstance() } catch (e) {}
     try { loggerBinding.releaseLogger() } catch (e) {}
   }
 })
@@ -208,7 +208,7 @@ test('EOU with named file paths — full load and transcription', { timeout: 600
     t.ok(transcriptions.length > 0, `EOU produced ${transcriptions.length} segments`)
     t.ok(fullText.length > 0, `EOU named paths produced text (${fullText.length} chars)`)
   } finally {
-    if (parakeet) try { parakeet.destroyInstance() } catch (e) {}
+    if (parakeet) try { await parakeet.destroyInstance() } catch (e) {}
     try { loggerBinding.releaseLogger() } catch (e) {}
   }
 })
@@ -291,7 +291,7 @@ test('Sortformer with named file paths — full load and diarization', { timeout
     t.ok(transcriptions.length > 0, `Sortformer produced ${transcriptions.length} segments`)
     t.ok(fullText.includes('Speaker'), 'Sortformer output contains speaker labels')
   } finally {
-    if (parakeet) try { parakeet.destroyInstance() } catch (e) {}
+    if (parakeet) try { await parakeet.destroyInstance() } catch (e) {}
     try { loggerBinding.releaseLogger() } catch (e) {}
   }
 })

@@ -2,6 +2,7 @@
 
 const fs = require('bare-fs')
 const path = require('bare-path')
+const process = require('bare-process')
 
 const LOG_PRIORITIES = ['ERROR', 'WARNING', 'INFO', 'DEBUG']
 
@@ -49,10 +50,23 @@ const SORTFORMER_MODEL_FILES = [
  * @param {Object} binding - The native binding
  */
 function setupLogger (binding) {
+  const shouldEnableNativeLogs = process.env &&
+    process.env.QVAC_EXAMPLE_NATIVE_LOGS === '1'
+
+  if (!shouldEnableNativeLogs) {
+    if (!binding.__qvacExampleReleaseLoggerPatched) {
+      binding.releaseLogger = () => {}
+      binding.__qvacExampleReleaseLoggerPatched = true
+    }
+    return
+  }
+
+  if (binding.__qvacExampleLoggerSet) return
   binding.setLogger((priority, message) => {
     const priorityName = LOG_PRIORITIES[priority] || `UNKNOWN(${priority})`
     console.log(`[C++ ${priorityName}] ${message}`)
   })
+  binding.__qvacExampleLoggerSet = true
 }
 
 /**

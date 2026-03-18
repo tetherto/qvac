@@ -17,12 +17,40 @@ import { downloadModelFromHttp } from "./http";
 import { downloadModelFromHyperdrive } from "./hyperdrive";
 import { downloadModelFromRegistry } from "./registry";
 import {
+  downloadModelFromHttpWithStats,
+  downloadModelFromHyperdriveWithStats,
+  downloadModelFromRegistryWithStats,
+} from "./download-stats";
+import type { ResolveResult, DownloadResult } from "./types";
+import {
   ModelLoadFailedError,
   ModelNotFoundError,
   SeedingNotSupportedError,
 } from "@/utils/errors-server";
 import { validateAndJoinPath } from "@/server/utils/path-security";
 import { getServerLogger } from "@/logging";
+import { modelInputToSrcSchema } from "@/schemas";
+
+type ResolveMode = "base" | "stats";
+
+type DownloadHttpFn = (
+  url: string,
+  progressCallback?: (progress: ModelProgressUpdate) => void,
+) => Promise<string | DownloadResult>;
+
+type DownloadRegistryFn = (
+  registryPath: string,
+  registrySource: string,
+  progressCallback?: (progress: ModelProgressUpdate) => void,
+  expectedChecksum?: string,
+) => Promise<string | DownloadResult>;
+
+type DownloadHyperdriveFn = (
+  hyperdriveKey: string,
+  modelFileName: string,
+  seed?: boolean,
+  progressCallback?: (progress: ModelProgressUpdate) => void,
+) => Promise<string | DownloadResult>;
 
 const logger = getServerLogger();
 
@@ -93,15 +121,45 @@ async function resolveLocalOrCachedFile(modelIdOrPath: string) {
   }
 }
 
-import { modelInputToSrcSchema } from "@/schemas";
+function selectDownloaders(mode: ResolveMode) {
+  if (mode === "stats") {
+    return {
+      http: downloadModelFromHttpWithStats as DownloadHttpFn,
+      registry: downloadModelFromRegistryWithStats as DownloadRegistryFn,
+      hyperdrive: downloadModelFromHyperdriveWithStats as DownloadHyperdriveFn,
+    };
+  }
+  return {
+    http: downloadModelFromHttp as DownloadHttpFn,
+    registry: downloadModelFromRegistry as DownloadRegistryFn,
+    hyperdrive: downloadModelFromHyperdrive as DownloadHyperdriveFn,
+  };
+}
 
-export async function resolveModelPath(
+function isDownloadResult(value: string | DownloadResult): value is DownloadResult {
+  return value !== null && typeof value === "object" && "path" in value;
+}
+
+function buildResult(
+  pathOrResult: string | DownloadResult,
+  sourceType: ResolveResult["sourceType"],
+): ResolveResult {
+  if (isDownloadResult(pathOrResult)) {
+    return pathOrResult.stats
+      ? { path: pathOrResult.path, sourceType, downloadStats: pathOrResult.stats }
+      : { path: pathOrResult.path, sourceType };
+  }
+  return { path: pathOrResult, sourceType };
+}
+
+async function resolveModelPathCore(
   modelSrc: unknown,
-  progressCallback?: (progress: ModelProgressUpdate) => void,
-  seed?: boolean,
-): Promise<string> {
-  // Extract src and validate using Zod schema transform
+  progressCallback: ((progress: ModelProgressUpdate) => void) | undefined,
+  seed: boolean | undefined,
+  mode: ResolveMode,
+): Promise<ResolveResult> {
   const srcString = modelInputToSrcSchema.parse(modelSrc);
+  const downloaders = selectDownloaders(mode);
 
   // Parse hyperdrive URLs if present
   let hyperdriveKey: string | undefined;
@@ -113,7 +171,7 @@ export async function resolveModelPath(
     actualModelSrc = pathValue;
   }
 
-  // Handle registry:// URLs
+  // Registry source
   if (srcString.startsWith("registry://")) {
     const { registryPath, registrySource } = registryUrlSchema.parse(srcString);
     logger.info(`Loading from registry: ${registryPath}`);
@@ -122,59 +180,78 @@ export async function resolveModelPath(
     const modelMetadata = getModelByPath(registryPath);
     const expectedChecksum = modelMetadata?.sha256Checksum;
 
-    const actualPath = await downloadModelFromRegistry(
+    const result = await downloaders.registry(
       registryPath,
       registrySource,
       progressCallback,
       expectedChecksum,
     );
-    logger.info(`Loaded Model to ${actualPath}`);
-    return actualPath;
+    logger.info(`Loaded Model to ${isDownloadResult(result) ? result.path : result}`);
+    return buildResult(result, "registry");
   }
-
-  let actualPath: string;
 
   // Validate seeding is only used with hyperdrive models
   if (seed && !hyperdriveKey) {
     throw new SeedingNotSupportedError();
   }
 
-  // Check if it's an HTTP/HTTPS URL
+  // HTTP source
   if (
     actualModelSrc.startsWith("http://") ||
     actualModelSrc.startsWith("https://")
   ) {
     logger.info(`Loading from HTTP URL: ${actualModelSrc}`);
-    actualPath = await downloadModelFromHttp(actualModelSrc, progressCallback);
-    logger.info(`Loaded Model to ${actualPath}`);
-  } else if (hyperdriveKey) {
-    // Direct hyperdrive loading
+    const result = await downloaders.http(actualModelSrc, progressCallback);
+    logger.info(`Loaded Model to ${isDownloadResult(result) ? result.path : result}`);
+    return buildResult(result, "http");
+  }
+
+  // Hyperdrive source
+  if (hyperdriveKey) {
     logger.info(`Loading from hyperdrive: ${hyperdriveKey}`);
-    actualPath = await downloadModelFromHyperdrive(
+    const result = await downloaders.hyperdrive(
       hyperdriveKey,
       actualModelSrc,
       seed,
       progressCallback,
     );
-  } else if (actualModelSrc.includes("/") || actualModelSrc.includes("\\")) {
-    // Handle file paths (absolute or relative with slashes)
+    return buildResult(result, "hyperdrive");
+  }
 
-    // Check if it's a local archive file
+  // Filesystem source (local files, cached files)
+  let resolvedPath: string;
+  if (actualModelSrc.includes("/") || actualModelSrc.includes("\\")) {
     if (isArchivePath(actualModelSrc)) {
       logger.info(`Extracting local archive: ${actualModelSrc}`);
       const archiveHash = generateShortHash(actualModelSrc);
       const extractDir = getShardedModelCacheDir(archiveHash);
-      actualPath = await extractAndValidateShardedArchive(
+      resolvedPath = await extractAndValidateShardedArchive(
         actualModelSrc,
         extractDir,
       );
     } else {
-      actualPath = actualModelSrc;
+      resolvedPath = actualModelSrc;
     }
   } else {
-    // Handle local files and cached files
-    actualPath = await resolveLocalOrCachedFile(actualModelSrc);
+    resolvedPath = await resolveLocalOrCachedFile(actualModelSrc);
   }
 
-  return actualPath;
+  return { path: resolvedPath, sourceType: "filesystem" };
+}
+
+export async function resolveModelPath(
+  modelSrc: unknown,
+  progressCallback?: (progress: ModelProgressUpdate) => void,
+  seed?: boolean,
+): Promise<string> {
+  const result = await resolveModelPathCore(modelSrc, progressCallback, seed, "base");
+  return result.path;
+}
+
+export async function resolveModelPathWithStats(
+  modelSrc: unknown,
+  progressCallback?: (progress: ModelProgressUpdate) => void,
+  seed?: boolean,
+): Promise<ResolveResult> {
+  return resolveModelPathCore(modelSrc, progressCallback, seed, "stats");
 }

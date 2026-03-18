@@ -43,6 +43,45 @@ try {
   console.log(profiler.exportTable());
 
   const json = profiler.exportJSON();
+  console.log("\n=== Load Model Metrics ===");
+  // Filter for operation-level event (kind: "handler"), not RPC phase events
+  const loadModelEvent = json.recentEvents?.find(
+    (e) => e.op === "loadModel" && e.kind === "handler",
+  );
+  if (loadModelEvent) {
+    const tags = loadModelEvent.tags ?? {};
+    const gauges = loadModelEvent.gauges ?? {};
+    console.log("  sourceType:", tags["sourceType"] ?? "(not set)");
+    console.log("  cacheHit:", tags["cacheHit"] ?? "(not set)");
+    console.log("  totalLoadTime:", gauges["totalLoadTime"], "ms");
+    console.log(
+      "  modelInitializationTime:",
+      gauges["modelInitializationTime"],
+      "ms",
+    );
+    if (tags["cacheHit"] !== "true") {
+      console.log("  downloadTime:", gauges["downloadTime"] ?? "(cached)", "ms");
+      console.log(
+        "  totalBytesDownloaded:",
+        gauges["totalBytesDownloaded"] ?? "(cached)",
+      );
+      console.log(
+        "  downloadSpeedBps:",
+        gauges["downloadSpeedBps"] ?? "(cached)",
+      );
+    } else {
+      console.log("  (download metrics omitted - cache hit)");
+    }
+    if (gauges["checksumValidationTime"] !== undefined) {
+      console.log("  checksumValidationTime:", gauges["checksumValidationTime"], "ms");
+    }
+  } else {
+    console.log("  (no loadModel handler event captured)");
+    // Debug: show what ops are available
+    const ops = [...new Set(json.recentEvents?.map((e) => `${e.op}:${e.kind}`) ?? [])];
+    console.log("  Available ops:", ops.join(", "));
+  }
+
   console.log("\n=== Profiler JSON (structure) ===");
   console.log("  aggregates:", Object.keys(json.aggregates).length, "metrics");
   console.log("  recentEvents:", json.recentEvents?.length ?? 0, "events");

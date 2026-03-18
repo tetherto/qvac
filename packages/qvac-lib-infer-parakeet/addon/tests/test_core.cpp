@@ -1,3 +1,11 @@
+#include "model-interface/parakeet/ParakeetModel.hpp"
+#include "model-interface/parakeet/ParakeetConfig.hpp"
+#include "model-interface/ParakeetTypes.hpp"
+
+#include <any>
+#include <gtest/gtest.h>
+#include <memory>
+#include <vector>
 #include <filesystem>
 #include <fstream>
 #include <memory>
@@ -62,22 +70,22 @@ TEST_F(ParakeetModelTest, GetNameReturnsCorrectName) {
   EXPECT_EQ(model.getName(), "Parakeet-TDT");
 }
 
-TEST_F(ParakeetModelTest, GetNameForDifferentModels) {
+TEST_F(ParakeetModelTest, GetDisplayNameForDifferentModels) {
   config.modelType = ModelType::CTC;
   ParakeetModel ctcModel(config);
-  EXPECT_EQ(ctcModel.getName(), "Parakeet-CTC");
+  EXPECT_EQ(ctcModel.getDisplayName(), "Parakeet-CTC");
 
   config.modelType = ModelType::EOU;
   ParakeetModel eouModel(config);
-  EXPECT_EQ(eouModel.getName(), "Parakeet-EOU");
+  EXPECT_EQ(eouModel.getDisplayName(), "Parakeet-EOU");
 
   config.modelType = ModelType::SORTFORMER;
   ParakeetModel sortformerModel(config);
-  EXPECT_EQ(sortformerModel.getName(), "Parakeet-Sortformer");
+  EXPECT_EQ(sortformerModel.getDisplayName(), "Parakeet-Sortformer");
   
   config.modelType = static_cast<ModelType>(999);
   ParakeetModel unknownModel(config);
-  EXPECT_EQ(unknownModel.getName(), "Parakeet");
+  EXPECT_EQ(unknownModel.getDisplayName(), "Parakeet");
 }
 
 TEST_F(ParakeetModelTest, LoadUnloadCycle) {
@@ -250,7 +258,7 @@ TEST_F(ParakeetModelTest, SetConfigChangesConfiguration) {
   
   model.setConfig(newConfig);
   
-  EXPECT_EQ(model.getName(), "Parakeet-CTC");
+  EXPECT_EQ(model.getDisplayName(), "Parakeet-CTC");
 }
 
 TEST_F(ParakeetModelTest, UnloadWeightsCallsUnload) {
@@ -272,6 +280,38 @@ TEST_F(ParakeetModelTest, ProcessEmptyAudioDoesNotCrash) {
   
   std::vector<float> emptyAudio;
   EXPECT_NO_THROW({ model.process(emptyAudio); });
+}
+
+TEST_F(ParakeetModelTest, ProcessAnyAcceptsAudioVectorInput) {
+  ParakeetModel model(config);
+  std::vector<float> dummyAudio(16000, 0.1f);
+
+  auto outputAny = model.process(std::any(dummyAudio));
+  ASSERT_EQ(outputAny.type(), typeid(ParakeetModel::Output));
+  auto output = std::any_cast<ParakeetModel::Output>(outputAny);
+  EXPECT_FALSE(output.empty());
+}
+
+TEST_F(ParakeetModelTest, ProcessAnyRejectsUnsupportedInputType) {
+  ParakeetModel model(config);
+
+  EXPECT_THROW({ model.process(std::any(42)); }, std::exception);
+}
+
+TEST_F(ParakeetModelTest, CancelCausesProcessToThrow) {
+  ParakeetModel model(config);
+  std::vector<float> dummyAudio(16000, 0.1f);
+  model.cancel();
+
+  EXPECT_THROW({ model.process(dummyAudio); }, std::runtime_error);
+}
+
+TEST_F(ParakeetModelTest, CancelCausesProcessAnyToThrow) {
+  ParakeetModel model(config);
+  std::vector<float> dummyAudio(16000, 0.1f);
+  model.cancel();
+
+  EXPECT_THROW({ model.process(std::any(dummyAudio)); }, std::runtime_error);
 }
 
 TEST_F(ParakeetModelTest, ProcessWithCallbackReturnsOutput) {

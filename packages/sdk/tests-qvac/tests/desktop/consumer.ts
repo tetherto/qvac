@@ -4,6 +4,7 @@ import {
   GTE_LARGE_FP16,
   GTE_LARGE_335M_FP16_SHARD,
   WHISPER_TINY,
+  VAD_SILERO_5_1_2,
   QWEN3_1_7B_INST_Q4,
   OCR_LATIN_RECOGNIZER_1,
   MARIAN_OPUS_DE_EN_Q4_0,
@@ -67,6 +68,7 @@ resources.define("whisper", {
   constant: WHISPER_TINY,
   type: "whisper",
   config: {
+    vadModelSrc: VAD_SILERO_5_1_2,
     audio_format: "f32le",
     strategy: "greedy",
     language: "en",

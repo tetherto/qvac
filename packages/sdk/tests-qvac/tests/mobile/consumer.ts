@@ -3,6 +3,7 @@ import {
   LLAMA_3_2_1B_INST_Q4_0,
   GTE_LARGE_FP16,
   WHISPER_TINY,
+  VAD_SILERO_5_1_2,
   PARAKEET_TDT_ENCODER_INT8,
   PARAKEET_TDT_DECODER_INT8,
   PARAKEET_TDT_PREPROCESSOR_INT8,
@@ -33,6 +34,26 @@ resources.define("embeddings", {
 resources.define("whisper", {
   constant: WHISPER_TINY,
   type: "whisper",
+  config: {
+    vadModelSrc: VAD_SILERO_5_1_2,
+    audio_format: "f32le",
+    strategy: "greedy",
+    language: "en",
+    translate: false,
+    no_timestamps: false,
+    single_segment: false,
+    temperature: 0.0,
+    suppress_blank: true,
+    suppress_nst: true,
+    vad_params: {
+      threshold: 0.35,
+      min_speech_duration_ms: 200,
+      min_silence_duration_ms: 150,
+      max_speech_duration_s: 30.0,
+      speech_pad_ms: 600,
+      samples_overlap: 0.3,
+    },
+  },
 });
 
 // Parakeet TDT 0.6B (INT8) — multilingual speech-to-text (~700MB)
