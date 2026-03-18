@@ -44,6 +44,12 @@ export function createOpenAIAdapter (): APIAdapter {
         return true
       }
 
+      if (method === 'POST' && path === '/v1/audio/transcriptions') {
+        const { handleTranscriptions } = await import('./routes/transcriptions.js')
+        await handleTranscriptions(req, res, ctx)
+        return true
+      }
+
       sendError(res, 404, 'not_found', `Unknown endpoint: ${method} ${path}`)
       return true
     }

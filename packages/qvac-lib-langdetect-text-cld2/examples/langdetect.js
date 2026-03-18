@@ -1,6 +1,4 @@
-'use strict'
-
-const { detectOne, detectMultiple, getLangName, getISO2FromName } = require('..')
+import { detectOne, detectMultiple, getLangName, getISO2FromName } from '../index.js'
 
 async function detectMostProbableLanguage (text) {
   const result = await detectOne(text)
@@ -40,29 +38,29 @@ function iso2Lookup () {
   console.log('')
 }
 
-async function runExamples() {
+async function runExamples () {
   console.log('=== CLD2 Language Detection Examples ===\n')
-  
+
   // Detect single language
   await detectMostProbableLanguage('How are you and how was your holiday? I hope you had a great time!')
   await detectMostProbableLanguage('Bonjour, comment allez-vous? J\'espère que vous passez une bonne journée.')
   await detectMostProbableLanguage('Hola, ¿cómo estás? Espero que tengas un buen día.')
-  
+
   // Detect multiple languages
   await detectMultipleLanguages('Hello world, this is a test. We are testing language detection.', 3)
   await detectMultipleLanguages('Bonjour le monde, ceci est un test de détection de langue.', 2)
-  
+
   // Mixed language text
   await detectMultipleLanguages('Hello, bonjour, hola! This text contains mixed languages here.', 3)
-  
+
   // Test with various scripts
-  await detectMostProbableLanguage('これは日本語のテキストです。日本語の検出をテストしています。')  // Japanese
-  await detectMostProbableLanguage('这是中文文本。我们正在测试中文检测功能。')  // Chinese (Simplified)
-  await detectMostProbableLanguage('這是中文文本。我們正在測試中文檢測功能。')  // Chinese (Traditional)
-  await detectMostProbableLanguage('Это русский текст. Мы тестируем определение русского языка.')  // Russian
-  await detectMostProbableLanguage('هذا نص عربي. نحن نختبر الكشف عن اللغة العربية.')  // Arabic
-  await detectMostProbableLanguage('זה טקסט בעברית. אנחנו בודקים זיהוי של השפה העברית.')  // Hebrew
-  
+  await detectMostProbableLanguage('これは日本語のテキストです。日本語の検出をテストしています。') // Japanese
+  await detectMostProbableLanguage('这是中文文本。我们正在测试中文检测功能。') // Chinese (Simplified)
+  await detectMostProbableLanguage('這是中文文本。我們正在測試中文檢測功能。') // Chinese (Traditional)
+  await detectMostProbableLanguage('Это русский текст. Мы тестируем определение русского языка.') // Russian
+  await detectMostProbableLanguage('هذا نص عربي. نحن نختبر الكشف عن اللغة العربية.') // Arabic
+  await detectMostProbableLanguage('זה טקסט בעברית. אנחנו בודקים זיהוי של השפה העברית.') // Hebrew
+
   // Language name and ISO lookups (synchronous functions)
   languageNameLookup()
   iso2Lookup()
