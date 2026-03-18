@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.13.3] - 2026-03-18
+
+### Changed
+
+- Logging adjustments
+
+
 ## [0.13.2] - 2026-03-16
 
 ### Fixed
