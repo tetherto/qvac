@@ -22,7 +22,8 @@ test('OCR processes JPEG images correctly', { timeout: TEST_TIMEOUT }, async fun
       pathDetector: detectorPath,
       pathRecognizer: recognizerPath,
       langList: ['en'],
-      useGPU: false
+      useGPU: false,
+      enableXnnpack: true //TODO: remove
     },
     opts: { stats: true }
   })
@@ -71,7 +72,8 @@ test('OCR processes PNG images correctly', { timeout: TEST_TIMEOUT }, async func
       pathDetector: detectorPath,
       pathRecognizer: recognizerPath,
       langList: ['en'],
-      useGPU: false
+      useGPU: false,
+      enableXnnpack: true //TODO: remove
     },
     opts: { stats: true }
   })
@@ -119,7 +121,8 @@ test('BMP and JPEG produce consistent results', { timeout: TEST_TIMEOUT }, async
       pathDetector: detectorPath,
       pathRecognizer: recognizerPath,
       langList: ['en'],
-      useGPU: false
+      useGPU: false,
+      enableXnnpack: true //TODO: remove
     },
     opts: { stats: true }
   })

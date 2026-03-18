@@ -19,7 +19,8 @@ test('Test for a fix of missing end of job event', { timeout: TEST_TIMEOUT }, as
     params: {
       pathDetector: detectorPath,
       pathRecognizer: recognizerPath,
-      langList: ['en']
+      langList: ['en'],
+      enableXnnpack: true //TODO: remove
     },
     opts: { stats: true }
   })

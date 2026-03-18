@@ -31,7 +31,8 @@ async function createAndLoadOcr (t) {
       pathDetector: detectorPath,
       pathRecognizer: recognizerPath,
       langList: ['en'],
-      useGPU: false
+      useGPU: false,
+      enableXnnpack: true //TODO: remove
     },
     opts: { stats: true }
   })
