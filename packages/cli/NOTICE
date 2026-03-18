@@ -12,11 +12,11 @@ JavaScript Dependencies
 
 --- apache-2.0 (Apache License 2.0) ---
 
-  b4a@1.7.5
+  b4a@1.8.0
     https://github.com/holepunchto/b4a
   bare-addon-resolve@1.10.0
     https://github.com/holepunchto/bare-addon-resolve
-  bare-buffer@3.4.4
+  bare-buffer@3.5.0
     https://github.com/holepunchto/bare-buffer
   bare-bundle@1.10.0
     https://github.com/holepunchto/bare-bundle
@@ -24,7 +24,7 @@ JavaScript Dependencies
     https://github.com/holepunchto/bare-bundle-id
   bare-events@2.8.2
     https://github.com/holepunchto/bare-events
-  bare-fs@4.5.4
+  bare-fs@4.5.5
     https://github.com/holepunchto/bare-fs
   bare-module-lexer@1.4.7
     https://github.com/holepunchto/bare-module-lexer
@@ -32,7 +32,7 @@ JavaScript Dependencies
     https://github.com/holepunchto/bare-module-resolve
   bare-module-traverse@2.0.1
     https://github.com/holepunchto/bare-module-traverse
-  bare-os@3.6.2
+  bare-os@3.7.1
     https://github.com/holepunchto/bare-os
   bare-pack@2.0.0
     https://github.com/holepunchto/bare-pack
@@ -40,7 +40,7 @@ JavaScript Dependencies
     https://github.com/holepunchto/bare-path
   bare-semver@1.0.2
     https://github.com/holepunchto/bare-semver
-  bare-stream@2.7.0
+  bare-stream@2.8.0
     https://github.com/holepunchto/bare-stream
   bare-url@2.3.2
     https://github.com/holepunchto/bare-url
@@ -77,6 +77,8 @@ JavaScript Dependencies
     https://github.com/holepunchto/sodium-native
   streamx@2.23.0
     https://github.com/mafintosh/streamx
+  teex@1.0.1
+    https://github.com/mafintosh/teex
   tsx@4.21.0
     https://github.com/privatenumber/tsx
 
