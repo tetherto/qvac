@@ -61,13 +61,6 @@ jobs:
           - macos-14-xlarge
           - macos-15-large
           - windows-2022
-        exclude:
-          - os: ubuntu-24.04-arm
-            variant: fp16
-          - os: ubuntu-24.04-arm
-            variant: q4
-          - os: ubuntu-24.04-arm
-            variant: q4f16
         include:
           - os: ubuntu-22.04
             platform: linux
@@ -84,11 +77,11 @@ jobs:
           - os: macos-14-xlarge
             platform: darwin
             arch: arm64
-            os_version: u14
+            os_version: m14
           - os: macos-15-large
             platform: darwin
             arch: x64
-            os_version: u15
+            os_version: m15
           - os: windows-2022
             platform: win32
             arch: x64
