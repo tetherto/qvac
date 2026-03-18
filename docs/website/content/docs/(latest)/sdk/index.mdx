@@ -20,10 +20,10 @@ The JS SDK is cross-platform, type-safe, and pluggable, exposing all QVAC capabi
 
 ### Key features
 
-- **Unified interface:** multiple AI tasks, one single npm package to install in your project.
 - **Cross-platform:** portable code across Linux, macOS, and Windows (Node.js / [Bare runtime](https://bare.pears.com)); Android and iOS ([Expo](https://expo.dev)).
 - **Pluggable**: build lean apps by including only what you need, and extend the SDK with custom plugins.
 - **Type-safe:** typed JS API.
+- **Unified interface:** multiple AI tasks, one single npm package to install in your project.
 
 ## Quickstart
 
@@ -85,7 +85,7 @@ Each [AI task](#ai-tasks) works with different model families, and among the sup
  
 The SDK package does not ship with built-in models, **but** its API exposes constants representing preconfigured models (e.g., `LLAMA_3_2_1B_INST_Q4_0`). Each constant maps a model already published to our model registry. When calling `loadModel()`, you can provide one of these constants instead of a location, making model retrieval transparent.
 
-<Card href="https://github.com/tetherto/qvac/blob/main/packages/sdk/models/registry/models.ts" title="Model registry index">
+<Card href="https://github.com/tetherto/qvac/blob/main/packages/qvac-sdk/models/registry/models.ts" title="Model registry index">
   See the index of models available in our distributed model registry.
 </Card>
 
@@ -96,7 +96,7 @@ For more on loading models, see [`loadModel()` at `@qvac/sdk` API reference](/sd
 ## Configuration
 
 <Card href="/sdk/configuration" title="qvac.config.*">
-  Use `qvac.config.*` to configure the SDK's overall behavior.
+  Use `qvac.config.*` to configure QVAC's overall behavior.
 </Card>
 
 ### Plugin system
@@ -111,7 +111,7 @@ For more on loading models, see [`loadModel()` at `@qvac/sdk` API reference](/sd
   </Card>
 </Cards>
 
-## API
+## JS API
 
 <Card href="/sdk/api" title="API reference">
   `@qvac/sdk` npm package exposes a function-centric, typed JS API.
