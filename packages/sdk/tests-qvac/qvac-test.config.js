@@ -48,6 +48,8 @@ export default {
       assets: {
         patterns: [
           "./assets/audio/**/*",
+          "./assets/images/**/*",
+          "./assets/documents/**/*",
         ],
       },
     },

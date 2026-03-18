@@ -201,6 +201,16 @@ public:
   virtual void setNDiscarded(llama_pos nDiscarded) = 0;
 
   /**
+   * Get the number of context slides (discards) that have occurred.
+   */
+  [[nodiscard]] virtual int32_t getNSlides() const = 0;
+
+  /**
+   * Reset the slide counter to zero. Called at the start of each inference.
+   */
+  virtual void resetNSlides() = 0;
+
+  /**
    * The load media method. It loads the media from memory buffer.
    * Default implementation does nothing (for text-only contexts).
    * Override in multimodal contexts to provide media loading functionality.
