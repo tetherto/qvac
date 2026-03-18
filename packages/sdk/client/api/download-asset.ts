@@ -1,6 +1,7 @@
 import { send, stream } from "@/client/rpc/rpc-client";
 import {
   type DownloadAssetOptions as BaseDownloadAssetOptions,
+  type RPCOptions,
   downloadAssetOptionsToRequestSchema,
 } from "@/schemas";
 import {
@@ -22,6 +23,7 @@ export type DownloadAssetOptions = BaseDownloadAssetOptions;
  *   - assetSrc: The location from which the asset is downloaded (local path, remote URL, or Hyperdrive URL)
  *   - seed: Optional boolean for hyperdrive seeding
  *   - onProgress: Optional callback for download progress
+ * @param rpcOptions - Optional RPC options including per-call profiling configuration
  *
  * @returns Promise that resolves to the asset ID (either the provided assetSrc or a generated ID)
  *
@@ -48,12 +50,13 @@ export type DownloadAssetOptions = BaseDownloadAssetOptions;
  */
 export async function downloadAsset(
   options: DownloadAssetOptions,
+  rpcOptions?: RPCOptions,
 ): Promise<string> {
   const request = downloadAssetOptionsToRequestSchema.parse(options);
 
   if (options.onProgress) {
     // Use streaming for progress updates
-    for await (const response of stream(request)) {
+    for await (const response of stream(request, rpcOptions)) {
       if (response.type === "modelProgress") {
         options.onProgress(response);
       } else if (response.type === "downloadAsset") {
@@ -67,7 +70,7 @@ export async function downloadAsset(
     throw new StreamEndedError();
   } else {
     // Use regular send for simple downloading
-    const response = await send(request);
+    const response = await send(request, rpcOptions);
     if (response.type !== "downloadAsset") {
       throw new InvalidResponseError("downloadAsset");
     }

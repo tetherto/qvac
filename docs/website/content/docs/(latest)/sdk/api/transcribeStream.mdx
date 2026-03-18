@@ -1,55 +1,27 @@
 ---
 title: "transcribeStream( )"
 titleStyle: code
-description: Streams audio transcription results in real-time, yielding text chunks as they become available from the model.
+description: "This function streams audio transcription results in real-time, yielding
+text chunks as they become available from the model."
 ---
 
-```ts
-function transcribeStream(params): AsyncGenerator<string>;
+```typescript
+function transcribeStream(params: TranscribeClientParams): AsyncGenerator
 ```
 
-Yields text chunks as they become available from the model.
+## Description
+
+This function streams audio transcription results in real-time, yielding
+text chunks as they become available from the model.
 
 ## Parameters
 
 | Name | Type | Required? | Description |
 | --- | --- | :---: | --- |
-| params.modelId | `string` | ✓ | The identifier of the transcription model |
-| params.audioChunk | `string \| Buffer` | ✓ | Audio input as file path (string) or audio buffer |
-| params.prompt | `string` | ✗ | Optional initial prompt to guide the transcription |
+| `params` | `TranscribeClientParams` | ✓ | The arguments for the transcription |
 
 ## Returns
 
-`AsyncGenerator<string>` — Yields text chunks as they are transcribed.
-
-## Throws
-
-| Error | When |
-| --- | --- |
-| `TRANSCRIPTION_FAILED` | Transcription fails |
-
-## Example
-
 ```typescript
-const stream = transcribeStream({
-  modelId: "whisper-model",
-  audioChunk: "/path/to/audio.wav",
-});
-
-for await (const textChunk of stream) {
-  process.stdout.write(textChunk);
-}
-```
-
-## `SUPPORTED_AUDIO_FORMATS`
-
-Use this exported constant to check which audio formats are accepted before passing a file to `transcribeStream()`. Avoids runtime errors from unsupported formats.
-
-```typescript
-import { SUPPORTED_AUDIO_FORMATS } from "@qvac/sdk";
-
-const ext = filePath.split(".").pop();
-if (!SUPPORTED_AUDIO_FORMATS.includes(ext)) {
-  console.error(`Unsupported format: ${ext}`);
-}
+AsyncGenerator
 ```

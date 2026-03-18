@@ -1,0 +1,52 @@
+---
+title: Text embeddings
+description: Vector embedding generation for semantic search, clustering, and retrieval.
+---
+
+## Overview
+
+Text embeddings uses [`llama.cpp`](https://github.com/ggml-org/llama.cpp) as inference engine. Load any supported model using `modelType: "embeddings"`. Then, provide text input as `text` where the value is either a single `string` or an array of strings.
+
+`embed()` returns a single embedding vector (`number[]`) for single text input, or an array of embedding vectors (`number[][]`) for batch input.
+
+## Functions
+
+Use the following sequence of function calls:
+1. [`loadModel()`](/v0.7.0/sdk/api/loadModel)
+2. [`embed()`](/v0.7.0/sdk/api/embed)
+3. [`unloadModel()`](/v0.7.0/sdk/api/unloadModel)
+
+For how to use each function, see [SDK — API reference](/v0.7.0/sdk/api/).
+
+## Models
+
+You can load any `llama.cpp`-compatible embeddings model. Model file format: `*.gguf`.
+
+- If the model is sharded across multiple files (a multi-file bundle), see [Sharded models](/v0.7.0/sdk/utilities/sharded-models).
+- For models available as constants, see [SDK — Models](/v0.7.0/sdk#models).
+
+## Example
+
+The following script shows an example of embedding:
+
+<Tabs>
+<Tab value="js" label="JavaScript" default>
+<WrapCode>
+
+```js file=<rootDir>/packages/sdk/dist/examples/embed-hyperdrive.js title="text-embeddings.js" lineNumbers
+```
+</WrapCode>
+</Tab>
+
+<Tab value="ts" label="TypeScript">
+<WrapCode>
+
+```ts file=<rootDir>/packages/sdk/examples/embed-hyperdrive.ts title="text-embeddings.ts" lineNumbers
+```
+</WrapCode>
+</Tab>
+</Tabs>
+
+<Callout type="success">
+**Tip:** all examples throughout this documentation are self-contained and runnable. For instructions on how to run them, see [SDK quickstart](/v0.7.0/sdk/quickstart).
+</Callout>

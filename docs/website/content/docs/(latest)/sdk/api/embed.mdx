@@ -1,49 +1,25 @@
 ---
 title: "embed( )"
 titleStyle: code
-description: Generates embeddings for a single text using a specified model.
+description: "Generates embeddings for a single text using a specified model."
 ---
 
-```ts
-function embed(params: { modelId: string; text: string }): Promise<number[]>;
-function embed(params: { modelId: string; text: string[] }): Promise<number[][]>;
+```typescript
+function embed(params: { modelId: string; text: string }): Promise
 ```
+
+## Description
+
+Generates embeddings for a single text using a specified model.
 
 ## Parameters
 
 | Name | Type | Required? | Description |
 | --- | --- | :---: | --- |
-| params | [`EmbedParams`](#embedparams) | ✓ | The embedding parameters |
-
-### `EmbedParams`
-
-| Field | Type | Required? | Description |
-| --- | --- | :---: | --- |
-| modelId | `string` | ✓ | The identifier of the embedding model to use |
-| text | `string \| string[]` | ✓ | The input text(s) to embed. A single string returns `number[]`; an array returns `number[][]`. |
+| `params` | `\{ modelId: string; text: string \}` | ✓ | The parameters for the embedding |
 
 ## Returns
 
-- `Promise<number[]>` — When `text` is a single string, returns the embedding vector.
-- `Promise<number[][]>` — When `text` is an array, returns an array of embedding vectors.
-
-## Throws
-
-| Error | When |
-| --- | --- |
-| `INVALID_RESPONSE_TYPE` | Response type does not match expected `"embed"` |
-
-## Examples
-
 ```typescript
-// Single text
-const vector = await embed({ modelId: "embedding-model", text: "Hello world" });
-console.log(vector.length); // e.g. 384
-
-// Multiple texts (batch)
-const vectors = await embed({
-  modelId: "embedding-model",
-  text: ["Hello world", "How are you?"]
-});
-console.log(vectors.length); // 2
+Promise
 ```
