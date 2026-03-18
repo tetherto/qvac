@@ -29,31 +29,31 @@ export const tree: Node[] = [
     children: [
       {
         name: 'Welcome',
-        url: '/welcome',
+        url: '/about-qvac/welcome',
         type: 'page',
         icon: resolveIcon('DoorOpen'),
       },
       {
         name: 'Our Vision',
-        url: '/vision',
+        url: '/about-qvac/vision',
         type: 'page',
         icon: resolveIcon('Telescope'),
       },
       {
         name: 'Public launch',
-        url: '/public-launch',
+        url: '/about-qvac/public-launch',
         type: 'page',
         icon: resolveIcon('Globe'),
       },
       {
         name: 'How it works',
-        url: '/sdk/how-it-works',
+        url: '/about-qvac/how-it-works',
         type: 'page',
         icon: resolveIcon('Cog'),
       },
       {
         name: 'Flagship apps',
-        url: '/flagship-apps',
+        url: '/about-qvac/flagship-apps',
         type: 'page',
         icon: resolveIcon('LayoutGrid'),
       },
