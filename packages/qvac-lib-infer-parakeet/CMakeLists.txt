@@ -22,11 +22,23 @@ if(CMAKE_SYSTEM_NAME STREQUAL "Linux")
 endif()
 
 # Find dependencies
+set(
+  QVAC_LIB_INFERENCE_ADDON_CPP_LOCAL_INCLUDE_DIR
+  "${CMAKE_CURRENT_SOURCE_DIR}/../qvac-lib-inference-addon-cpp/src"
+)
 find_path(
   QVAC_LIB_INFERENCE_ADDON_CPP_INCLUDE_DIRS
   "qvac-lib-inference-addon-cpp/ModelInterfaces.hpp"
-  REQUIRED
+  PATHS "${QVAC_LIB_INFERENCE_ADDON_CPP_LOCAL_INCLUDE_DIR}"
+  NO_DEFAULT_PATH
 )
+if(NOT QVAC_LIB_INFERENCE_ADDON_CPP_INCLUDE_DIRS)
+  find_path(
+    QVAC_LIB_INFERENCE_ADDON_CPP_INCLUDE_DIRS
+    "qvac-lib-inference-addon-cpp/ModelInterfaces.hpp"
+    REQUIRED
+  )
+endif()
 
 # Find ONNX Runtime
 find_package(onnxruntime CONFIG REQUIRED)

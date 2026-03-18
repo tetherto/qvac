@@ -43,12 +43,18 @@ private:
 };
 
 class JobRunner {
+  struct PendingJob {
+    JobId jobId;
+    std::any input;
+  };
+
   std::shared_ptr<OutputQueue> outputQueue_;
   model::IModel* const model_;
   model::IModelCancel* const modelCancel_;
   mutable std::timed_mutex mtx_;
   mutable std::condition_variable_any processCv_;
-  std::optional<std::any> job_;
+  std::optional<PendingJob> job_;
+  JobId nextJobId_{1};
   mutable std::thread processingThread_;
   mutable std::atomic_bool running_ = false;
   mutable std::atomic_bool ready_ = false;
@@ -83,21 +89,29 @@ class JobRunner {
         // Unlock main lock to ensure cancel() can acquire without blocking
         lock.unlock();
 
-        std::any output = model_->process(job_.value());
+        const auto currentJobId = job_->jobId;
+        std::any output = model_->process(job_->input);
 
         // Make sure to reset job before queue result. Client might
         // be waiting to queue a new job as soon as current is ended.
         finalizeJob(lock);
 
-        outputQueue_->queueResult(std::move(output));
-        outputQueue_->queueJobEnded();
+        outputQueue_->queueResult(currentJobId, std::move(output));
+        outputQueue_->queueJobEnded(currentJobId);
       } catch (const std::exception& e) {
+        const auto currentJobId = job_.has_value() ? job_->jobId : JobId{0};
         finalizeJob(lock);
-        outputQueue_->queueException(e);
+        if (currentJobId != JobId{0}) {
+          outputQueue_->queueException(currentJobId, e);
+        }
       } catch (...) {
+        const auto currentJobId = job_.has_value() ? job_->jobId : JobId{0};
         finalizeJob(lock);
-        outputQueue_->queueException(
-            std::runtime_error("Unknown exception in processing loop"));
+        if (currentJobId != JobId{0}) {
+          outputQueue_->queueException(
+              currentJobId,
+              std::runtime_error("Unknown exception in processing loop"));
+        }
       }
     }
   }
@@ -144,26 +158,29 @@ public:
       // Return a boolean instead.
       return false;
     }
-    job_ = std::move(input);
+    job_ = PendingJob{nextJobId_++, std::move(input)};
     lock.unlock();
     processCv_.notify_one();
     return true;
   }
 
-  void cancel() {
+  void cancel(std::optional<JobId> jobId = std::nullopt) {
     std::scoped_lock lock{mtx_};
     if (modelCancel_ == nullptr) {
       QLOG(logger::Priority::WARNING, "Model does not support cancellation");
       return;
     }
-    if (job_.has_value()) {
+    if (job_.has_value() &&
+        (!jobId.has_value() || job_->jobId == jobId.value())) {
+      const auto activeJobId = job_->jobId;
       modelCancel_->cancel();
       processingSync_.waitInactive();
       job_.reset();
       if (ready_.load()) {
         // If the worker has not taken the job yet (ready_ == true, still in
         // wait), it will never run queueJobEnded. Signal finished now.
-        outputQueue_->queueException(std::runtime_error("Job cancelled"));
+        outputQueue_->queueException(
+            activeJobId, std::runtime_error("Job cancelled"));
       }
     }
   }
