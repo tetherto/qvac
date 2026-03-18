@@ -148,6 +148,19 @@ StepBoundingBox::Output StepBoundingBox::process(StepBoundingBox::Input input) {
        std::to_string(input.textMap.cols) + "x" + std::to_string(input.textMap.rows) +
        ", linkMap size=" + std::to_string(input.linkMap.cols) + "x" + std::to_string(input.linkMap.rows));
 
+  // Single-pass max-per-label: O(pixels) instead of O(N × pixels)
+  std::vector<float> maxPerLabel(nLabels_, 0.0f);
+  {
+    const int* labelsPtr = labels_.ptr<int>();
+    const float* textPtr = input.textMap.ptr<float>();
+    size_t total = labels_.total();
+    for (size_t p = 0; p < total; ++p) {
+      int label = labelsPtr[p];
+      if (label > 0 && textPtr[p] > maxPerLabel[label])
+        maxPerLabel[label] = textPtr[p];
+    }
+  }
+
   // ExecutorTorch approach: extract all components first (with low area threshold),
   // merge them, then filter small boxes after merging.
   // This allows small words like "or" to be merged with adjacent text before filtering.
@@ -158,10 +171,7 @@ StepBoundingBox::Output StepBoundingBox::process(StepBoundingBox::Input input) {
       continue;
     }
 
-    double maxVal = std::numeric_limits<double>::quiet_NaN();
-    cv::minMaxLoc(input.textMap, nullptr, &maxVal, nullptr, nullptr, (labels_ == i));
-
-    if (maxVal < MIN_TEXT_VALUE_REQUIRED_IN_COMPONENT) {
+    if (maxPerLabel[i] < MIN_TEXT_VALUE_REQUIRED_IN_COMPONENT) {
       continue;
     }
 
@@ -208,14 +218,8 @@ std::array<cv::Point2f, 4> StepBoundingBox::getBoxFromComponent(Input &input, in
   return convertedBox;
 }
 
-cv::Mat StepBoundingBox::createSegmentationMap(cv::Size imgSize, int component) {
-  cv::Mat segmap = cv::Mat::zeros(imgSize, CV_8U);
-  cv::Mat mask = (labels_ == component);
-  segmap.setTo(UINT8_MAX_VAL, mask);
-
-  cv::Mat linkMask = (linkMapBinary_ == UINT8_MAX_VAL) & (textMapBinary_ == 0);
-  segmap.setTo(0, linkMask);
-
+cv::Mat
+StepBoundingBox::createSegmentationMap(cv::Size imgSize, int component) {
   const int leftX = stats_.at<int>(component, cv::CC_STAT_LEFT);
   const int topY = stats_.at<int>(component, cv::CC_STAT_TOP);
   const int width = stats_.at<int>(component, cv::CC_STAT_WIDTH);
@@ -229,11 +233,36 @@ cv::Mat StepBoundingBox::createSegmentationMap(cv::Size imgSize, int component) 
   const int startY = std::max(topY - niter, 0);
   const int endY = std::min(topY + height + niter + 1, imgSize.height);
 
+  cv::Rect currentROI(startX, startY, endX - startX, endY - startY);
+
+  // Reuse segmap_ across components: allocate once, then zero only the
+  // previous ROI plus the current component's expanded ROI to clear any
+  // stale data from earlier components that may overlap.
+  if (segmap_.empty() || segmap_.size() != imgSize) {
+    segmap_ = cv::Mat::zeros(imgSize, CV_8U);
+  } else {
+    if (prevSegmapROI_.area() > 0) {
+      segmap_(prevSegmapROI_).setTo(0);
+    }
+    // Also zero the current component's ROI to clear stale 255s from
+    // earlier components that fall outside prevSegmapROI_.
+    segmap_(currentROI).setTo(0);
+  }
+
+  cv::Mat mask = (labels_ == component);
+  segmap_.setTo(UINT8_MAX_VAL, mask);
+
+  cv::Mat linkMask = (linkMapBinary_ == UINT8_MAX_VAL) & (textMapBinary_ == 0);
+  segmap_.setTo(0, linkMask);
+
   cv::Mat kernel = cv::getStructuringElement(cv::MORPH_RECT, {1 + niter, 1 + niter});
-  cv::Rect regionOfInterest(startX, startY, endX - startX, endY - startY);
-  cv::Mat segRoi = segmap(regionOfInterest);
+  cv::Mat segRoi = segmap_(currentROI);
   cv::dilate(segRoi, segRoi, kernel);
-  return segmap;
+
+  // Track the dilated ROI so next call can zero just this region
+  prevSegmapROI_ = currentROI;
+
+  return segmap_;
 }
 
 std::pair<std::vector<std::array<float, ALIGNED_META_SIZE>>, std::vector<std::array<cv::Point2f, 4>>>
