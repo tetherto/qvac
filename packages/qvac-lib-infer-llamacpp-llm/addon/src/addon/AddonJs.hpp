@@ -381,10 +381,11 @@ inline js_value_t* cancel(js_env_t* env, js_callback_info_t* info) try {
 
   return js::JsAsyncTask::run(env, [llamaModel, addonCpp]() {
     if (llamaModel && llamaModel->isFinetuneRunning() &&
-        llamaModel->requestPause())
+        llamaModel->requestPause()) {
       llamaModel->waitUntilFinetuningPauseComplete();
-    else
+    } else {
       addonCpp->cancelJob();
+    }
   });
 }
 JSCATCH

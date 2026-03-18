@@ -56,15 +56,10 @@
   "bugs": "https://github.com/tetherto/qvac-lib-infer-llamacpp-llm/issues",
   "homepage": "https://github.com/tetherto/qvac-lib-infer-llamacpp-llm#readme",
   "devDependencies": {
-    "@babel/parser": "^7.28.0",
-    "@babel/traverse": "^7.28.0",
     "@qvac/dl-base": "^0.1.0",
     "@qvac/dl-filesystem": "^0.1.2",
-    "@qvac/dl-hyperdrive": "^0.1.1",
     "@qvac/logging": "^0.1.0",
     "@types/node": "^24.2.1",
-    "bare-buffer": "^3.4.2",
-    "bare-fetch": "^2.5.1",
     "bare-fs": "^4.5.1",
     "bare-process": "^4.2.2",
     "bare-url": "^2.1.6",
@@ -73,7 +68,6 @@
     "cmake-vcpkg": "^1.1.0",
     "os": "npm:bare-os@^3.6.2",
     "process": "npm:bare-node-process",
-    "sinon": "^21.0.0",
     "standard": "^17.0.0",
     "tty": "npm:bare-tty@^5.0.3",
     "typescript": "^5.9.2",
@@ -82,8 +76,7 @@
   "dependencies": {
     "@qvac/infer-base": "^0.3.0",
     "bare-path": "^3.0.0",
-    "bare-process": "^4.2.2",
-    "require-asset": "^1.1.0"
+    "bare-process": "^4.2.2"
   },
   "engines": {
     "bare": ">=1.24.0"
