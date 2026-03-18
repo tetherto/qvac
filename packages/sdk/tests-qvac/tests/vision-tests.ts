@@ -1,12 +1,4 @@
-// Vision test definitions (DISABLED - SDK bug)
 import type { TestDefinition } from "@tetherto/qvac-test-suite";
-
-const visionSkipReason = {
-  reason:
-    'Vision model randomly crashes with "process: context overflow". Crash kills SDK, causing 87+ tests to timeout (66 min wasted).',
-  issue: "P0 bug reported to SDK team",
-  impact: "Critical - crashes entire test suite",
-};
 
 const createVisionTest = (
   testId: string,
@@ -35,7 +27,6 @@ const createVisionTest = (
     dependency: "vision",
     estimatedDurationMs: 20000,
   },
-  skip: visionSkipReason,
 });
 
 export const visionSimpleImage = createVisionTest(
@@ -144,7 +135,6 @@ const remainingVisionTests: TestDefinition[] = [
     dependency: "vision",
     estimatedDurationMs: 20000,
   },
-  skip: visionSkipReason,
 }));
 
 export const visionTests = [

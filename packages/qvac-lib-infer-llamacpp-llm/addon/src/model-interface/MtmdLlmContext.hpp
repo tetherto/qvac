@@ -115,6 +115,9 @@ public:
    */
   void setNDiscarded(llama_pos nDiscarded) override;
 
+  [[nodiscard]] int32_t getNSlides() const override;
+  void resetNSlides() override;
+
   /**
    * The load media method. It loads the media from memory buffer.
    *
@@ -198,6 +201,7 @@ private:
   llama_pos nPast_ = 0;
   llama_pos nDiscarded_ = 0;
   llama_pos firstMsgTokens_ = 0;
+  int32_t nSlides_ = 0;
 
   // UTF-8 token buffer for handling incomplete emoji sequences
   qvac_lib_inference_addon_llama::UTF8TokenBuffer utf8Buffer_;

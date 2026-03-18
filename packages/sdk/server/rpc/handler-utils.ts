@@ -96,6 +96,11 @@ async function executeStreamHandler(
       stream.write(profiler.serialize(response, false) + "\n", "utf-8");
     }
     profiler.endHandler();
+    const trailer = profiler.serialize();
+    if (trailer) {
+      stream.write(trailer + "\n", "utf-8");
+    }
+
     stream.end();
   } catch (error) {
     profiler.endHandler();

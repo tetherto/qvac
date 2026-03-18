@@ -1,5 +1,7 @@
 import fs from "bare-fs";
 import crypto from "bare-crypto";
+import { nowMs } from "@/profiling";
+import type { DownloadMetricsHooks } from "@/server/rpc/handlers/load-model/types";
 
 export async function calculateFileChecksum(filePath: string): Promise<string> {
   return new Promise((resolve, reject) => {
@@ -26,4 +28,14 @@ export async function calculateFileChecksum(filePath: string): Promise<string> {
       );
     }
   });
+}
+
+export async function measureChecksum(
+  filePath: string,
+  hooks?: DownloadMetricsHooks,
+): Promise<string> {
+  const start = nowMs();
+  const checksum = await calculateFileChecksum(filePath);
+  hooks?.addChecksumValidationTimeMs(nowMs() - start);
+  return checksum;
 }

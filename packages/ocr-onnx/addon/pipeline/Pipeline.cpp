@@ -47,7 +47,7 @@ cv::Mat decodeEncodedImage(const std::vector<uint8_t>& data) {
 
 Pipeline::Pipeline(
     const std::string& pathDetector, const std::string& pathRecognizer,
-    std::span<const std::string> langList, bool useGPU, int timeout,
+    std::span<const std::string> langList, int timeout,
     const PipelineConfig& config)
     : config_(config), timeout_(timeout) {
 
@@ -57,21 +57,32 @@ Pipeline::Pipeline(
   ALOG_INFO(std::string("[Pipeline] Creating pipeline in " + modeStr + " mode"));
 
   if (config.mode == PipelineMode::DOCTR) {
-    stepDoctrDetection_ = std::make_unique<StepDoctrDetection>(pathDetector, useGPU);
+    stepDoctrDetection_ = std::make_unique<StepDoctrDetection>(
+        pathDetector, config.sessionConfig);
     stepDoctrRecognition_ = std::make_unique<StepDoctrRecognition>(
-        pathRecognizer, useGPU, config.recognizerBatchSize, config.decodingMethod);
+        pathRecognizer,
+        config.sessionConfig,
+        config.recognizerBatchSize,
+        config.decodingMethod);
   } else {
-    stepDetection_ = std::make_unique<StepDetectionInference>(pathDetector, useGPU, config.magRatio);
+    stepDetection_ = std::make_unique<StepDetectionInference>(
+        pathDetector, config.sessionConfig, config.magRatio);
     stepBoundingBox_ = std::make_unique<StepBoundingBox>();
     stepRecognition_ = std::make_unique<StepRecognizeText>(
-        pathRecognizer, langList, useGPU,
-        StepRecognizeText::Config{config.defaultRotationAngles, config.contrastRetry,
-                                  config.lowConfidenceThreshold, config.recognizerBatchSize});
+        pathRecognizer,
+        langList,
+        config.sessionConfig,
+        StepRecognizeText::Config{
+            config.defaultRotationAngles,
+            config.contrastRetry,
+            config.lowConfidenceThreshold,
+            config.recognizerBatchSize});
   }
 
   // Log all config parameters
-  std::string configMsg = "[Pipeline] Config: mode=" + modeStr +
-      ", useGPU=" + std::string(useGPU ? "true" : "false") +
+  std::string configMsg =
+      "[Pipeline] Config: mode=" + modeStr + ", provider=" +
+      onnx_addon::providerToString(config.sessionConfig.provider) +
       ", timeout=" + std::to_string(timeout) +
       ", recognizerBatchSize=" + std::to_string(config.recognizerBatchSize);
   if (config.mode == PipelineMode::EASYOCR) {
@@ -136,7 +147,8 @@ Pipeline::Output Pipeline::process(Pipeline::Input input) {
       cv::Mat bgr = decodeEncodedImage(input.data);
       cv::cvtColor(bgr, image, cv::COLOR_BGR2RGB);
     } else {
-      image = cv::Mat(input.imageHeight, input.imageWidth, CV_8UC3, input.data.data()).clone();
+      image = cv::Mat(
+          input.imageHeight, input.imageWidth, CV_8UC3, input.data.data());
     }
 
     // Resize image to max 1200px on longest side (EasyOCR only)
