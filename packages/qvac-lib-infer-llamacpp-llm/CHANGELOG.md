@@ -1,5 +1,16 @@
 # Changelog
 
+## [0.12.4] - 2026-03-18
+
+### Added
+
+#### LoRA finetuning support
+
+`model.finetune(options)` trains a LoRA adapter on top of a loaded GGUF base model. The adapter is saved as a `.gguf` file and can be loaded at inference time via the `lora` config option. Supports SFT (chat) and causal (next-token) training modes, configurable LoRA parameters (rank, alpha, target modules), validation (none / split / separate dataset), learning rate schedulers with warmup, pause/resume from checkpoints, and inference while paused. The returned `FinetuneHandle` emits `'stats'` progress events during training.
+
+- Added typed `FinetuneOptions`, `FinetuneValidation`, `FinetuneProgressStats`, `FinetuneStats`, `FinetuneResult`, and `FinetuneHandle` interfaces to `index.d.ts`
+- Added finetuning guide at `docs/finetuning.md`
+
 ## [0.12.3] - 2026-03-17
 
 ### Added
