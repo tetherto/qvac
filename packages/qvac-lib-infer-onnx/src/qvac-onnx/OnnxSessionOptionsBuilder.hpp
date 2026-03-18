@@ -16,10 +16,10 @@
 namespace onnx_addon {
 
 // Try to append XNNPack execution provider if available and enabled.
-// Downgrades optimization to BASIC to avoid com.ms.internal.nhwc schema
-// issues (ORT bug: XNNPACK fused nodes reference NHWC schemas that are
-// only registered at EXTENDED level, but EXTENDED's NhwcTransformer
-// conflicts with XNNPACK fusion).
+// Does NOT downgrade the caller's optimization level. If XNNPACK is
+// incompatible with the chosen optimization (e.g. EXTENDED triggers
+// NhwcTransformer conflicts), OnnxSession's constructor catches the
+// ORT exception and retries without XNNPACK automatically.
 inline void tryAppendXnnpack(Ort::SessionOptions& sessionOptions) {
   try {
     const auto providers = Ort::GetAvailableProviders();
@@ -27,11 +27,9 @@ inline void tryAppendXnnpack(Ort::SessionOptions& sessionOptions) {
         std::find(providers.begin(), providers.end(),
                   "XnnpackExecutionProvider") != providers.end();
     if (available) {
-      sessionOptions.SetGraphOptimizationLevel(
-          ::GraphOptimizationLevel::ORT_ENABLE_BASIC);
       sessionOptions.AppendExecutionProvider("XNNPACK", {});
-      QLOG(logger::Priority::INFO, "[OnnxSession] XNNPack EP appended (optimization set to BASIC)");
-      ONNX_ALOG("[OnnxSession] XNNPack EP appended (optimization set to BASIC)");
+      QLOG(logger::Priority::INFO, "[OnnxSession] XNNPack EP appended");
+      ONNX_ALOG("[OnnxSession] XNNPack EP appended");
     } else {
       QLOG(logger::Priority::DEBUG, "[OnnxSession] XNNPack EP not available");
       ONNX_ALOG("[OnnxSession] XNNPack EP not available");
@@ -49,9 +47,9 @@ inline Ort::SessionOptions buildSessionOptions(const SessionConfig& config) {
 
   QLOG(logger::Priority::DEBUG,
        std::string("[OnnxSession] buildSessionOptions - provider=") +
-       providerToString(config.provider) + ", optimization=" +
-       optimizationToString(config.optimization) + ", enableXnnpack=" +
-       (config.enableXnnpack ? "true" : "false"));
+           providerToString(config.provider) +
+           ", optimization=" + optimizationToString(config.optimization) +
+           ", enableXnnpack=" + (config.enableXnnpack ? "true" : "false"));
   ONNX_ALOG("[OnnxSession] buildSessionOptions - provider=%s, optimization=%s, xnnpack=%s",
             providerToString(config.provider).c_str(),
             optimizationToString(config.optimization).c_str(),

@@ -95,6 +95,13 @@ export function recordEvent(
     const key = event.phase ? `${event.op}.${event.phase}` : event.op;
     recordStats(key, event.ms);
   }
+
+  if (event.gauges) {
+    const baseKey = event.phase ? `${event.op}.${event.phase}` : event.op;
+    for (const [gaugeName, value] of Object.entries(event.gauges)) {
+      recordStats(`${baseKey}.${gaugeName}`, value);
+    }
+  }
 }
 
 export function getAggregates(): Record<string, AggregatedStats> {

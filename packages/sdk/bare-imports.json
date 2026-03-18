@@ -31,5 +31,14 @@
   "readline": {
     "bare": "bare-readline",
     "default": "readline"
+  },
+  "url": {
+    "bare": "bare-url",
+    "default": "url"
+  },
+  "node:url": {
+    "bare": "bare-url",
+    "default": "node:url"
   }
 }
+

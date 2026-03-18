@@ -1,0 +1,77 @@
+---
+title: CLI
+description: QVAC CLI provides tools and an HTTP server that exposes an OpenAI-compatible API.
+---
+
+## Overview
+
+QVAC CLI is provided through the `@qvac/cli` npm package and requires `@qvac/sdk` to be installed alongside it in your project. At the moment, it provides the following functionality:
+- OpenAI-compatible HTTP server
+- SDK bundling
+
+## Usage
+
+<Steps>
+<Step>
+Install the SDK and CLI in your project:
+
+```bash
+npm install @qvac/sdk @qvac/cli
+```
+
+See [Installation](/sdk/installation) for environment-specific instructions of the SDK.
+</Step>
+
+<Step>
+Create a `qvac.config.*` file in the root of your project and add the configuration required for the functionality you want to use. See [Configuration](/sdk/configuration) to learn how to do this.
+
+</Step>
+
+<Step>
+Run a command:
+
+```bash
+qvac --help
+```
+</Step>
+
+</Steps>
+
+## OpenAI-compatible HTTP server
+
+QVAC CLI provides an HTTP server that is compatible with the [OpenAI REST API](https://developers.openai.com/api/reference/overview), enabling broad integration with the AI ecosystem. It internally translates HTTP requests into SDK calls. As a result, any system compatible with the OpenAI REST API can point to `http://localhost:11434/v1/` and work without changes. See [HTTP server](/http-server) to learn how to set it up.
+
+## SDK bundling
+
+The `qvac bundle sdk` command allows you to select only the plugins you need in your project and reduce your application's final bundle size. See [Plugin system](/sdk/utilities/plugin-system) to learn how to use it.
+
+## Reference
+
+Run `qvac --help` to see all available commands and `qvac <command> --help` for command-specific options.
+
+### `qvac bundle sdk`
+
+Generate a tree-shaken Bare worker bundle with selected plugins.
+
+| Option | Description |
+| --- | --- |
+| `-c, --config <path>` | Config file path (default: auto-detect `qvac.config.*`) |
+| `--sdk-path <path>` | Path to SDK package (default: auto-detect in node_modules) |
+| `--host <target>` | Target host (repeatable) |
+| `--defer <module>` | Defer a module (repeatable) |
+| `-q, --quiet` | Minimal output |
+| `-v, --verbose` | Detailed output |
+
+### `qvac serve openai`
+
+Start an OpenAI-compatible REST API server.
+
+| Option | Description |
+| --- | --- |
+| `-c, --config <path>` | Config file path (default: auto-detect `qvac.config.*`) |
+| `-p, --port <number>` | Port to listen on (default: `11434`) |
+| `-H, --host <address>` | Host to bind to (default: `127.0.0.1`) |
+| `--model <alias>` | Model alias to preload (repeatable, must be in config) |
+| `--api-key <key>` | Require Bearer token authentication |
+| `--cors` | Enable CORS headers |
+| `-v, --verbose` | Detailed output |

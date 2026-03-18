@@ -2,6 +2,7 @@ import fs from 'node:fs'
 import path from 'node:path'
 import { createRequire } from 'node:module'
 import { spawn } from 'node:child_process'
+import { platform, execPath } from 'node:process'
 import { BarePackNotInstalledError, BarePackError } from '../errors.js'
 import type { Logger } from '../logger.js'
 
@@ -57,9 +58,13 @@ export async function runBarePack (options: RunBarePackOptions): Promise<void> {
       entryPath
     ]
 
-    logger.debug(`\n📦 Running: ${barePackBin} ${args.join(' ')}`)
+    const isWindows = platform === 'win32'
+    const command = isWindows ? execPath : barePackBin
+    const spawnArgs = isWindows ? [barePackBin, ...args] : args
 
-    const proc = spawn(barePackBin, args, {
+    logger.debug(`\n📦 Running: ${command} ${spawnArgs.join(' ')}`)
+
+    const proc = spawn(command, spawnArgs, {
       stdio: logLevel === 'silent' ? 'ignore' : 'inherit'
     })
 

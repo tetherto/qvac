@@ -108,6 +108,9 @@ public:
    */
   void setNDiscarded(llama_pos nDiscarded) override;
 
+  [[nodiscard]] int32_t getNSlides() const override;
+  void resetNSlides() override;
+
   /**
    * The reset state method. It resets the context.
    *
@@ -168,6 +171,7 @@ private:
   llama_pos nPast_ = 0;
   llama_pos nDiscarded_ = 0;
   llama_pos firstMsgTokens_ = 0;
+  int32_t nSlides_ = 0;
   ThreadPoolPtr threadpool_;
   ThreadPoolPtr threadpoolBatch_;
 

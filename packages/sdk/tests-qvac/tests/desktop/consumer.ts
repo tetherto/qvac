@@ -1,9 +1,11 @@
 import { createExecutor } from "@tetherto/qvac-test-suite";
 import {
+  profiler,
   LLAMA_3_2_1B_INST_Q4_0,
   GTE_LARGE_FP16,
   GTE_LARGE_335M_FP16_SHARD,
   WHISPER_TINY,
+  VAD_SILERO_5_1_2,
   QWEN3_1_7B_INST_Q4,
   OCR_LATIN_RECOGNIZER_1,
   MARIAN_OPUS_DE_EN_Q4_0,
@@ -26,6 +28,8 @@ import {
   PARAKEET_CTC_DATA_FP32,
   PARAKEET_CTC_TOKENIZER,
   PARAKEET_SORTFORMER_FP32,
+  SMOLVLM2_500M_MULTIMODAL_Q8_0,
+  MMPROJ_SMOLVLM2_500M_MULTIMODAL_Q8_0,
 } from "@qvac/sdk";
 import * as path from "node:path";
 import { ResourceManager } from "../shared/resource-manager.js";
@@ -49,6 +53,7 @@ import { ModelInfoExecutor } from "../shared/executors/model-info-executor.js";
 import { ErrorExecutor } from "../shared/executors/error-executor.js";
 import { TtsExecutor } from "../shared/executors/tts-executor.js";
 import { ParakeetExecutor } from "./executors/parakeet-executor.js";
+import { VisionExecutor } from "./executors/vision-executor.js";
 
 const resources = new ResourceManager();
 
@@ -67,6 +72,7 @@ resources.define("whisper", {
   constant: WHISPER_TINY,
   type: "whisper",
   config: {
+    vadModelSrc: VAD_SILERO_5_1_2,
     audio_format: "f32le",
     strategy: "greedy",
     language: "en",
@@ -200,6 +206,16 @@ resources.define("parakeet-sortformer", {
   },
 });
 
+resources.define("vision", {
+  constant: SMOLVLM2_500M_MULTIMODAL_Q8_0,
+  type: "llm",
+  skipPreDownload: true,
+  config: {
+    ctx_size: 1024,
+    projectionModelSrc: MMPROJ_SMOLVLM2_500M_MULTIMODAL_Q8_0,
+  },
+});
+
 export const executor = createExecutor({
   handlers: [
     new ModelLoadingExecutor(resources),
@@ -223,5 +239,10 @@ export const executor = createExecutor({
     new HttpEmbeddingExecutor(resources),
     new KvCacheExecutor(resources),
     new ParakeetExecutor(resources),
+    new VisionExecutor(resources),
   ],
+  profiling: {
+    init: () => profiler.enable({ mode: "summary", includeServerBreakdown: true }),
+    exportData: () => profiler.exportJSON(),
+  },
 });
