@@ -348,6 +348,9 @@ std::string LlamaModel::processPrompt(const Prompt& prompt) {
 std::string LlamaModel::processPromptImpl(const Prompt& prompt) {
   state_->lastRunWasPrefill_ = prompt.prefill;
 
+  // Reset per-inference slide counter so it doesn't leak across runs
+  state_->llmContext_->resetNSlides();
+
   for (const auto& media : prompt.media) {
     loadMedia(media);
   }
@@ -425,12 +428,15 @@ qvac_lib_inference_addon_cpp::RuntimeStats LlamaModel::runtimeStats() const {
   int32_t promptTokens = state_->lastRunWasPrefill_ ? 0 : perfData.n_p_eval;
   llama_perf_context_reset(state_->llmContext_->getCtx());
 
+  int32_t contextSlides = state_->llmContext_->getNSlides();
+
   return {
       {"TTFT", timeToFirstToken},
       {"TPS", tokensPerSecond},
       {"CacheTokens", state_->llmContext_->getNPast()},
       {"generatedTokens", generatedTokens},
-      {"promptTokens", promptTokens}};
+      {"promptTokens", promptTokens},
+      {"contextSlides", static_cast<int64_t>(contextSlides)}};
 }
 
 // NOLINTNEXTLINE(readability-convert-member-functions-to-static,readability-function-cognitive-complexity)

@@ -27,6 +27,8 @@ import {
   PARAKEET_CTC_DATA_FP32,
   PARAKEET_CTC_TOKENIZER,
   PARAKEET_SORTFORMER_FP32,
+  SMOLVLM2_500M_MULTIMODAL_Q8_0,
+  MMPROJ_SMOLVLM2_500M_MULTIMODAL_Q8_0,
 } from "@qvac/sdk";
 import { ResourceManager } from "../shared/resource-manager.js";
 import { ModelLoadingExecutor } from "../shared/executors/model-loading-executor.js";
@@ -45,6 +47,7 @@ import { ModelInfoExecutor } from "../shared/executors/model-info-executor.js";
 import { ErrorExecutor } from "../shared/executors/error-executor.js";
 import { MobileTranscriptionExecutor } from "./executors/transcription-executor.js";
 import { MobileParakeetExecutor } from "./executors/parakeet-executor.js";
+import { MobileVisionExecutor } from "./executors/vision-executor.js";
 import { MobileOcrExecutor } from "./executors/ocr-executor.js";
 import { MobileRagExecutor } from "./executors/rag-executor.js";
 import { MobileConfigReloadExecutor } from "./executors/config-reload-executor.js";
@@ -198,6 +201,16 @@ resources.define("parakeet-sortformer", {
   },
 });
 
+resources.define("vision", {
+  constant: SMOLVLM2_500M_MULTIMODAL_Q8_0,
+  type: "llm",
+  skipPreDownload: true,
+  config: {
+    ctx_size: 1024,
+    projectionModelSrc: MMPROJ_SMOLVLM2_500M_MULTIMODAL_Q8_0,
+  },
+});
+
 export const executor = createExecutor({
   handlers: [
     new ModelLoadingExecutor(resources),
@@ -220,5 +233,6 @@ export const executor = createExecutor({
     new HttpEmbeddingExecutor(resources),
     new KvCacheExecutor(resources),
     new MobileParakeetExecutor(resources),
+    new MobileVisionExecutor(resources),
   ],
 });

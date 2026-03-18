@@ -5628,7 +5628,6 @@
       "vae"
     ]
   },
-
   {
     "source": "https://huggingface.co/gpustack/stable-diffusion-v2-1-GGUF/resolve/12ddc22724f6da35f0b6006e459fae66eaf56931/stable-diffusion-v2-1-Q8_0.gguf",
     "engine": "@qvac/diffusion-cpp",
@@ -5680,5 +5679,52 @@
       "generation",
       "diffusion"
     ]
+  },
+  {
+    "source": "s3:///qvac_models_compiled/ggml/gpt-oss120b/2026-03-17/gpt-oss-120b-Q4_K_M-00001-of-00002.gguf",
+    "engine": "@qvac/llm-llamacpp",
+    "link": "https://huggingface.co/unsloth/gpt-oss-120b-GGUF/blob/main/Q4_K_M/gpt-oss-120b-Q4_K_M-00001-of-00002.gguf",
+    "description": "GPT-OSS 120B model",
+    "notes": "shard 1/2",
+    "license": "Apache-2.0",
+    "quantization": "q4_k_m",
+    "params": "120B",
+    "tags": [
+      "generation",
+      "instruct",
+      "gpt-oss",
+      "shard"
+    ]
+  },
+  {
+    "source": "s3:///qvac_models_compiled/ggml/gpt-oss120b/2026-03-17/gpt-oss-120b-Q4_K_M-00002-of-00002.gguf",
+    "engine": "@qvac/llm-llamacpp",
+    "link": "https://huggingface.co/unsloth/gpt-oss-120b-GGUF/blob/main/Q4_K_M/gpt-oss-120b-Q4_K_M-00002-of-00002.gguf",
+    "description": "GPT-OSS 120B model",
+    "notes": "shard 2/2",
+    "license": "Apache-2.0",
+    "quantization": "q4_k_m",
+    "params": "120B",
+    "tags": [
+      "generation",
+      "instruct",
+      "gpt-oss",
+      "shard"
+    ]
+  },
+  {
+    "source": "s3:///qvac_models_compiled/ggml/gpt-oss120b/2026-03-17/gpt-oss-120b-Q4_K_M.tensors.txt",
+    "engine": "@qvac/llm-llamacpp",
+    "description": "Required for Llamacpp to create the model layers before the weights are loaded",
+    "quantization": "q4_k_m",
+    "params": "120B",
+    "license": "Apache-2.0",
+    "tags": [
+      "generation",
+      "instruct",
+      "gpt-oss",
+      "shard"
+    ],
+    "notes": "tensors config"
   }
 ]
