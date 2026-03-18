@@ -283,6 +283,7 @@ bool TextLlmContext::evalMessageWithTools(
       llama_memory_seq_add(
           mem, 0, firstMsgTokens_ + nDiscarded_, nPast_, -nDiscarded_);
       nPast_ -= nDiscarded_;
+      ++nSlides_;
       QLOG_IF(
           Priority::DEBUG,
           string_format(
@@ -295,6 +296,7 @@ bool TextLlmContext::evalMessageWithTools(
       auto* mem = llama_get_memory(lctx_);
       llama_memory_seq_rm(mem, 0, firstMsgTokens_, nPast_);
       nPast_ = firstMsgTokens_;
+      ++nSlides_;
       QLOG_IF(
           Priority::DEBUG,
           string_format(
@@ -384,6 +386,7 @@ void TextLlmContext::applyContextDiscard() {
   llama_memory_seq_add(
       mem, 0, firstMsgTokens_ + nDiscarded_, nPast_, -nDiscarded_);
   nPast_ -= nDiscarded_;
+  ++nSlides_;
   QLOG_IF(
       Priority::DEBUG,
       string_format(
@@ -530,6 +533,13 @@ void TextLlmContext::resetState(bool resetStats) {
   // Reset the first msg token length
   firstMsgTokens_ = 0;
 
+  // On partial reset (resetStats=false), preserve nSlides_ so
+  // runtimeStats() can read the per-inference value.
+  // On full reset (resetStats=true), clear it along with perf stats.
+  if (resetStats) {
+    nSlides_ = 0;
+  }
+
   // Clear UTF-8 buffer when resetting state
   utf8Buffer_.clear();
 
@@ -563,6 +573,9 @@ void TextLlmContext::setFirstMsgTokens(llama_pos firstMsgTokens) {
 void TextLlmContext::setNDiscarded(llama_pos nDiscarded) {
   this->nDiscarded_ = nDiscarded;
 }
+
+int32_t TextLlmContext::getNSlides() const { return nSlides_; }
+void TextLlmContext::resetNSlides() { nSlides_ = 0; }
 
 llama_pos TextLlmContext::removeLastNTokens(llama_pos count) {
   // Validate input
