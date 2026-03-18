@@ -1,7 +1,8 @@
 {
   "name": "@qvac/langdetect-text-cld2",
-  "version": "0.1.0",
+  "version": "0.2.0",
   "description": "Language detection using CLD2 with same API as @qvac/langdetect-text",
+  "type": "module",
   "main": "index.js",
   "types": "index.d.ts",
   "scripts": {
@@ -17,7 +18,8 @@
   "license": "Apache-2.0",
   "dependencies": {
     "cld": "^2.10.1",
-    "iso-language-codes": "^2.0.0"
+    "iso-language-codes": "^2.0.0",
+    "module": "npm:bare-module"
   },
   "devDependencies": {
     "@types/node": "22.12.0",

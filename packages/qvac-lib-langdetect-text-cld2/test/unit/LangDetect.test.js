@@ -1,7 +1,5 @@
-'use strict'
-
-const test = require('brittle')
-const { detectOne, detectMultiple, getLangName, getISO2FromName } = require('../..')
+import test from 'brittle'
+import { detectOne, detectMultiple, getLangName, getISO2FromName } from '../../index.js'
 
 test('Should detect one language for English text', async (t) => {
   const text = 'This is a simple test sentence in English.'

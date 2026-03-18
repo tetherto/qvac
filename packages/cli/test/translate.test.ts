@@ -144,6 +144,97 @@ describe('openaiToolsToSdk', () => {
     assert.equal(result[0]!.name, 'fn_a')
     assert.equal(result[1]!.name, 'fn_b')
   })
+
+  it('normalizes composite types like ["string", "null"] to "string"', () => {
+    const tools = [{
+      type: 'function',
+      function: {
+        name: 'read_file',
+        description: 'Read a file',
+        parameters: {
+          type: 'object',
+          properties: {
+            path: { type: ['string', 'null'], description: 'File path' },
+            glob: { type: ['string', 'null'], description: 'Glob pattern' }
+          },
+          required: ['path']
+        }
+      }
+    }]
+    const result = openaiToolsToSdk(tools)
+    assert.ok(result)
+    const props = result[0]!.parameters as { properties: Record<string, { type: string }> }
+    assert.equal(props.properties['path']!.type, 'string')
+    assert.equal(props.properties['glob']!.type, 'string')
+  })
+
+  it('normalizes ["integer", "null"] to "integer"', () => {
+    const tools = [{
+      type: 'function',
+      function: {
+        name: 'fetch',
+        description: 'Fetch data',
+        parameters: {
+          type: 'object',
+          properties: {
+            limit: { type: ['integer', 'null'] }
+          }
+        }
+      }
+    }]
+    const result = openaiToolsToSdk(tools)
+    assert.ok(result)
+    const props = result[0]!.parameters as { properties: Record<string, { type: string }> }
+    assert.equal(props.properties['limit']!.type, 'integer')
+  })
+
+  it('falls back to "string" for unrecognized types', () => {
+    const tools = [{
+      type: 'function',
+      function: {
+        name: 'test',
+        description: 'Test',
+        parameters: {
+          type: 'object',
+          properties: {
+            field: { type: 'unknown_type' }
+          }
+        }
+      }
+    }]
+    const result = openaiToolsToSdk(tools)
+    assert.ok(result)
+    const props = result[0]!.parameters as { properties: Record<string, { type: string }> }
+    assert.equal(props.properties['field']!.type, 'string')
+  })
+
+  it('preserves valid simple types unchanged', () => {
+    const tools = [{
+      type: 'function',
+      function: {
+        name: 'test',
+        description: 'Test',
+        parameters: {
+          type: 'object',
+          properties: {
+            name: { type: 'string' },
+            count: { type: 'number' },
+            enabled: { type: 'boolean' },
+            items: { type: 'array' },
+            config: { type: 'object' }
+          }
+        }
+      }
+    }]
+    const result = openaiToolsToSdk(tools)
+    assert.ok(result)
+    const props = result[0]!.parameters as { properties: Record<string, { type: string }> }
+    assert.equal(props.properties['name']!.type, 'string')
+    assert.equal(props.properties['count']!.type, 'number')
+    assert.equal(props.properties['enabled']!.type, 'boolean')
+    assert.equal(props.properties['items']!.type, 'array')
+    assert.equal(props.properties['config']!.type, 'object')
+  })
 })
 
 describe('sdkToolCallsToOpenai', () => {
