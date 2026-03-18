@@ -1,5 +1,17 @@
 # Changelog
 
+## [0.12.3] - 2026-03-17
+
+### Added
+
+#### `contextSlides` runtime stat
+
+`runtimeStats()` now includes a `contextSlides` counter that reports how many times the KV cache context window was slid during inference. This replaces the previous approach of parsing log messages to detect sliding context events, providing a reliable, structured stat for downstream consumers.
+
+#### `RuntimeStats` TypeScript interface
+
+Added a `RuntimeStats` type to `index.d.ts` covering all stats keys returned by the C++ addon: `TTFT`, `TPS`, `CacheTokens`, `generatedTokens`, `promptTokens`, and `contextSlides`.
+
 ## [0.12.2] - 2026-03-13
 
 This release fixes antiprompt (reverse-prompt) detection for short stop sequences like `\n`, which is critical for translation workloads that rely on newline-based early stopping.

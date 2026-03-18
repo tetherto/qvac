@@ -1,0 +1,33 @@
+---
+title: "unloadModel( )"
+titleStyle: code
+description: "Unloads a previously loaded model from the server.
+
+When the last model is unloaded (no more models remain), this function
+automatically closes the RPC connection, allowing the process to exit
+naturally without requiring manual cleanup."
+---
+
+```typescript
+function unloadModel(params: input): Promise
+```
+
+## Description
+
+Unloads a previously loaded model from the server.
+
+When the last model is unloaded (no more models remain), this function
+automatically closes the RPC connection, allowing the process to exit
+naturally without requiring manual cleanup.
+
+## Parameters
+
+| Name | Type | Required? | Description |
+| --- | --- | :---: | --- |
+| `params` | `input` | ✓ | The parameters for unloading the model |
+
+## Returns
+
+```typescript
+Promise
+```

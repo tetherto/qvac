@@ -242,3 +242,22 @@ test("profiler: per-call enabled:false suppresses when globally enabled", (t: an
     "per-call disable suppresses recording",
   );
 });
+
+test("profiler: exportJSON contract top-level keys are stable by mode", (t: any) => {
+  reset();
+
+  enable({ mode: "summary" });
+  record(testEvent("contract", "phase", 10));
+
+  const summary = exportJSON();
+  t.alike(Object.keys(summary).sort(), ["aggregates", "config", "exportedAt"]);
+  t.ok(summary.aggregates["contract.phase"], "aggregate metric key exported");
+  t.is(summary.recentEvents, undefined, "summary omits recentEvents");
+
+  enable({ mode: "verbose" });
+  record(testEvent("contract", "phase", 20));
+
+  const verbose = exportJSON();
+  t.ok(Array.isArray(verbose.recentEvents), "verbose includes recentEvents");
+  t.is(verbose.recentEvents?.length, 1, "verbose export includes buffered event");
+});

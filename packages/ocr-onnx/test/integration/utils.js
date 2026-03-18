@@ -6,6 +6,14 @@ const os = require('bare-os')
 
 const platform = os.platform()
 const isMobile = platform === 'ios' || platform === 'android'
+const isWindows = platform === 'win32'
+
+// Windows CI runners have limited memory (~7GB): use BASIC optimization,
+// XNNPACK for efficient Conv/Relu ops, disable BFC arena pre-allocation,
+// and limit to 1 thread to reduce per-thread scratch buffer memory.
+const windowsOrtParams = isWindows
+  ? { graphOptimization: 'basic', enableXnnpack: true, enableCpuMemArena: false, intraOpThreads: 1 }
+  : {}
 
 // DocTR model download URLs from OnnxTR GitHub releases
 const DOCTR_MODEL_URLS = {
@@ -322,6 +330,7 @@ async function runDoctrOCR (t, params, imagePath) {
     params: {
       langList: ['en'],
       useGPU: false,
+      ...windowsOrtParams,
       pipelineMode: 'doctr',
       ...params
     },
@@ -363,6 +372,8 @@ async function runDoctrOCR (t, params, imagePath) {
 
 module.exports = {
   isMobile,
+  isWindows,
+  windowsOrtParams,
   platform,
   getImagePath,
   ensureModelPath,

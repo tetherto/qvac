@@ -115,6 +115,15 @@ export interface DownloadWeightsOptions {
   closeLoader?: boolean
 }
 
+export interface RuntimeStats {
+  TTFT: number
+  TPS: number
+  CacheTokens: number
+  generatedTokens: number
+  promptTokens: number
+  contextSlides: number
+}
+
 export interface DownloadResult {
   filePath: string | null
   error: boolean
