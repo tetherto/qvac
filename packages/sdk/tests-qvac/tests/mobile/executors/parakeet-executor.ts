@@ -32,15 +32,13 @@ export class MobileParakeetExecutor extends AssetExecutor<
     await this.resources.downloadAllOnce(console.log);
     const dep = ctx.dependency as string | undefined;
     if (dep && dep !== "none") {
-      // Evict any loaded models that are NOT the one we need before loading,
-      // so large models don't stack in memory (critical on iOS with tight limits).
-      await this.resources.evictExcept([dep]);
+      await this.resources.evictAll();
       await this.resources.ensureLoaded(dep);
     }
   }
 
   async teardown(testId: string, context: unknown) {
-    await this.resources.evictStale(3);
+    await this.resources.evictAll();
   }
 
   private async loadAudioAssets() {
