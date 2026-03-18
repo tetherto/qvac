@@ -39,7 +39,8 @@ for (const deviceConfig of DEVICE_CONFIGS) {
         pathDetector: detectorPath,
         pathRecognizer: recognizerPath,
         langList: ['en'],
-        useGPU: deviceConfig.useGpu
+        useGPU: deviceConfig.useGpu,
+        enableXnnpack: true //TODO: remove
       },
       opts: { stats: true }
     })

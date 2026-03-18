@@ -18,7 +18,8 @@ async function createAndLoadOcr (t) {
       pathDetector: detectorPath,
       pathRecognizer: recognizerPath,
       langList: ['en'],
-      useGPU: false
+      useGPU: false,
+      enableXnnpack: true //TODO: remove
     },
     opts: { stats: true }
   })
@@ -145,7 +146,8 @@ test('Run before load throws error', { timeout: TEST_TIMEOUT }, async function (
       pathDetector: detectorPath,
       pathRecognizer: recognizerPath,
       langList: ['en'],
-      useGPU: false
+      useGPU: false,
+      enableXnnpack: true //TODO: remove
     }
   })
 
@@ -238,6 +240,7 @@ test('Performance parameters are accepted without error', { timeout: TEST_TIMEOU
       pathRecognizer: recognizerPath,
       langList: ['en'],
       useGPU: false,
+      enableXnnpack: true, //TODO: remove
       magRatio: 1.5,
       recognizerBatchSize: 4,
       lowConfidenceThreshold: 0.3

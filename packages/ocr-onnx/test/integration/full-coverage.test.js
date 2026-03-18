@@ -14,7 +14,8 @@ function createMinimalOcr () {
       pathDetector: 'models/ocr/rec_dyn/detector_craft.onnx',
       pathRecognizer: 'models/ocr/rec_dyn/recognizer_latin.onnx',
       langList: ['en'],
-      useGPU: false
+      useGPU: false,
+      enableXnnpack: true //TODO: remove
     }
   })
 }
@@ -28,7 +29,8 @@ async function loadOcr () {
       pathDetector: detectorPath,
       pathRecognizer: recognizerPath,
       langList: ['en'],
-      useGPU: false
+      useGPU: false,
+      enableXnnpack: true //TODO: remove
     }
   })
 
@@ -172,6 +174,7 @@ test('load() accepts defaultRotationAngles and contrastRetry', { timeout: TEST_T
       pathRecognizer: recognizerPath,
       langList: ['en'],
       useGPU: false,
+      enableXnnpack: true, //TODO: remove
       defaultRotationAngles: [90, 180, 270],
       contrastRetry: true
     }

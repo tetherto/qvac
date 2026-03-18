@@ -29,7 +29,8 @@ test('Large images are resized internally with coordinates in original space', {
       pathDetector: detectorPath,
       pathRecognizer: recognizerPath,
       langList: ['en'],
-      useGPU: false
+      useGPU: false,
+      enableXnnpack: true //TODO: remove
     },
     opts: { stats: true }
   })

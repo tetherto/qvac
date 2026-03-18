@@ -322,6 +322,7 @@ async function runDoctrOCR (t, params, imagePath) {
     params: {
       langList: ['en'],
       useGPU: false,
+      enableXnnpack: true, //TODO: remove
       pipelineMode: 'doctr',
       ...params
     },

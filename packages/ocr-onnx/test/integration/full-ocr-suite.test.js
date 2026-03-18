@@ -84,6 +84,8 @@ test('Full OCR test suite', { timeout: 40 * 60 * 1000, skip: isMobile }, async f
       params.intraOpThreads = 1
     }
 
+    params.enableXnnpack = true //TODO: remove
+
     const onnxOcr = new ONNXOcr({ params, opts: { stats: true } })
     await onnxOcr.load()
 
