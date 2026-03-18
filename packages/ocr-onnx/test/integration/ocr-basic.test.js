@@ -2,7 +2,7 @@
 
 const { ONNXOcr } = require('../..')
 const test = require('brittle')
-const { isMobile, platform, getImagePath, ensureModelPath, formatOCRPerformanceMetrics } = require('./utils')
+const { isMobile, platform, getImagePath, ensureModelPath, formatOCRPerformanceMetrics, windowsOrtParams } = require('./utils')
 
 const MOBILE_TIMEOUT = 600 * 1000 // 10 minutes for mobile
 const DESKTOP_TIMEOUT = 120 * 1000 // 2 minutes for desktop
@@ -40,7 +40,7 @@ for (const deviceConfig of DEVICE_CONFIGS) {
         pathRecognizer: recognizerPath,
         langList: ['en'],
         useGPU: deviceConfig.useGpu,
-        enableXnnpack: true //TODO: remove
+        ...windowsOrtParams
       },
       opts: { stats: true }
     })

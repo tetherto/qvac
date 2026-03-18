@@ -1,19 +1,13 @@
 'use strict'
 
-const { ONNXOcr, addonLogging } = require('../..')
+const { ONNXOcr } = require('../..')
 const test = require('brittle')
 const fs = require('bare-fs')
 const path = require('bare-path')
 const os = require('bare-os')
-const { isMobile } = require('./utils')
+const { isMobile, windowsOrtParams } = require('./utils')
 
 const isMacCI = os.platform() === 'darwin'
-const isWindows = os.platform() === 'win32'
-
-const levelNames = { 0: 'ERROR', 1: 'WARNING', 2: 'INFO', 3: 'DEBUG' }
-addonLogging.setLogger((level, message) => {
-  console.log(`[C++] [${levelNames[level] || 'UNKNOWN'}]: ${message}`)
-})
 
 const arabicLangList = ['ar', 'fa', 'ug', 'ur']
 const bengaliLangList = ['bn', 'as', 'mni']
@@ -72,19 +66,9 @@ test('Full OCR test suite', { timeout: 40 * 60 * 1000, skip: isMobile }, async f
       pathRecognizer: `models/ocr/rec_dyn/recognizer_${recognizerModelName}.onnx`,
       langList: testCase.langList,
       useGPU: false,
-      timeout
+      timeout,
+      ...windowsOrtParams
     }
-    // Windows CI runners have limited memory (~7GB): use BASIC optimization,
-    // XNNPACK for efficient Conv/Relu ops, disable BFC arena pre-allocation,
-    // and limit to 1 thread to reduce per-thread scratch buffer memory.
-    if (isWindows) {
-      params.graphOptimization = 'basic'
-      params.enableXnnpack = true
-      params.enableCpuMemArena = false
-      params.intraOpThreads = 1
-    }
-
-    params.enableXnnpack = true //TODO: remove
 
     const onnxOcr = new ONNXOcr({ params, opts: { stats: true } })
     await onnxOcr.load()
