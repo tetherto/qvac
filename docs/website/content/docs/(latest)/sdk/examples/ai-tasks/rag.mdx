@@ -5,7 +5,7 @@ description: Out-of-the-box retrieval-augmented generation workflow.
 
 ## Overview
 
-RAG (retrieval-augmented generation) uses [text embeddings](/sdk/ai-tasks/text-embeddings): you embed (vectorize) documents, store them in a vector DB, and later retrieve the most relevant chunks for a query using similarity search.
+RAG (retrieval-augmented generation) uses [text embeddings](/sdk/examples/ai-tasks/text-embeddings): you embed (vectorize) documents, store them in a vector DB, and later retrieve the most relevant chunks for a query using similarity search.
 
 Compared to generating text embeddings only, the key differences are:
 - You must **persist embeddings** (vectors) alongside the original text (and optional metadata) in a vector DB.
@@ -34,7 +34,7 @@ For how to use each function, see [SDK — API reference](/sdk/api/).
 
 ## Pipeline
 
-Create your RAG pipeline using [text embeddings](/sdk/ai-tasks/text-embeddings) and [completion](/sdk/ai-tasks/completion).
+Create your RAG pipeline using [text embeddings](/sdk/examples/ai-tasks/text-embeddings) and [completion](/sdk/examples/ai-tasks/completion).
 
 <Callout type="info">
 **Important:** make sure your vector DB schema matches the embedding dimensionality produced by your model (e.g., GTE Large embeddings used in the example are 1024‑dimensional).
