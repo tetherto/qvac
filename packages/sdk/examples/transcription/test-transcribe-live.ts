@@ -97,4 +97,4 @@ if (segments.length > 0) {
 console.log("\nUnloading model...");
 await unloadModel({ modelId });
 console.log("Done.");
-process.exit(0);
+

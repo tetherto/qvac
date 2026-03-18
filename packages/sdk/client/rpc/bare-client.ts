@@ -287,10 +287,9 @@ type DuplexHandler = (
 ) => AsyncGenerator<Response>;
 
 function getDuplexHandler(type: string): DuplexHandler | undefined {
-  const handler = handlers[type as keyof typeof handlers];
-  return typeof handler === "function"
-    ? (handler as unknown as DuplexHandler)
-    : undefined;
+  const entry = handlers[type as keyof typeof handlers];
+  if (typeof entry !== "function") return undefined;
+  return entry as DuplexHandler;
 }
 
 export async function createDuplexSession(payload: string) {

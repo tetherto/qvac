@@ -357,7 +357,7 @@ class WhisperInterface {
     }
   }
 
-  async startStreaming (config = {}) {
+  startStreaming (config = {}) {
     try {
       this._activeJobId = this._nextJobId
       this._nextJobId += 1
@@ -367,14 +367,14 @@ class WhisperInterface {
       this._activeJobId = null
       this._setState(state.LISTENING)
       throw new QvacErrorAddonWhisper({
-        code: ERR_CODES.FAILED_TO_APPEND,
+        code: ERR_CODES.FAILED_TO_START_STREAMING,
         adds: err.message,
         cause: err
       })
     }
   }
 
-  async appendStreamingAudio (data) {
+  appendStreamingAudio (data) {
     try {
       if (!(data.input instanceof Uint8Array)) {
         throw new Error('Audio input must be Uint8Array')
@@ -386,19 +386,19 @@ class WhisperInterface {
       })
     } catch (err) {
       throw new QvacErrorAddonWhisper({
-        code: ERR_CODES.FAILED_TO_APPEND,
+        code: ERR_CODES.FAILED_TO_APPEND_STREAMING,
         adds: err.message,
         cause: err
       })
     }
   }
 
-  async endStreaming () {
+  endStreaming () {
     try {
       this._binding.endStreaming(this._handle)
     } catch (err) {
       throw new QvacErrorAddonWhisper({
-        code: ERR_CODES.FAILED_TO_APPEND,
+        code: ERR_CODES.FAILED_TO_END_STREAMING,
         adds: err.message,
         cause: err
       })

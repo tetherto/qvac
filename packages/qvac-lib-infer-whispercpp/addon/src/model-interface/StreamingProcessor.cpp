@@ -1,12 +1,21 @@
 #include "StreamingProcessor.hpp"
 
 #include <algorithm>
-#include <cmath>
+#include <memory>
 #include <stdexcept>
 
 #include "qvac-lib-inference-addon-cpp/Logger.hpp"
 #include "qvac-lib-inference-addon-cpp/ModelInterfaces.hpp"
 #include "whisper.cpp/WhisperModel.hpp"
+
+namespace {
+struct VadSegmentsDeleter {
+  void operator()(whisper_vad_segments* s) const {
+    if (s != nullptr) whisper_vad_free_segments(s);
+  }
+};
+using VadSegmentsPtr = std::unique_ptr<whisper_vad_segments, VadSegmentsDeleter>;
+} // namespace
 
 namespace qvac_lib_inference_addon_whisper {
 
@@ -55,7 +64,22 @@ void StreamingProcessor::appendAudio(std::vector<float>&& samples) {
     if (ended_) {
       return;
     }
-    pendingAudio_.insert(pendingAudio_.end(), samples.begin(), samples.end());
+    if (pendingAudio_.empty()) {
+      pendingAudio_ = std::move(samples);
+    } else {
+      pendingAudio_.insert(pendingAudio_.end(), samples.begin(), samples.end());
+    }
+    // Drop oldest audio when backlog exceeds safety cap
+    if (static_cast<int>(pendingAudio_.size()) > config_.maxBufferSamples) {
+      int excess = static_cast<int>(pendingAudio_.size()) -
+                   config_.maxBufferSamples;
+      pendingAudio_.erase(
+          pendingAudio_.begin(), pendingAudio_.begin() + excess);
+      QLOG(
+          qvac_lib_inference_addon_cpp::logger::Priority::DEBUG,
+          "StreamingProcessor: dropped " + std::to_string(excess) +
+              " samples from pendingAudio_ (backpressure)");
+    }
   }
   cv_.notify_one();
 }
@@ -146,31 +170,28 @@ void StreamingProcessor::processLoop() {
     if (shouldRunVad && bufferSize > 0) {
       bufferSizeAtLastVadRun_ = bufferSize;
 
-      whisper_vad_segments* segments = whisper_vad_segments_from_samples(
-          vadCtx_, vadParams, processBuffer_.data(), bufferSize);
+      VadSegmentsPtr segments(whisper_vad_segments_from_samples(
+          vadCtx_, vadParams, processBuffer_.data(), bufferSize));
 
-      if (segments != nullptr) {
-        int nSeg = whisper_vad_segments_n_segments(segments);
+      if (segments) {
+        int nSeg = whisper_vad_segments_n_segments(segments.get());
         float totalDurationS =
             static_cast<float>(bufferSize) /
             static_cast<float>(config_.sampleRate);
 
-        // whisper_vad timestamps are in centiseconds (cs); convert to seconds
         constexpr float CS_TO_SEC = 0.01F;
 
-        // Find the last "complete" segment: one where t1 is well before the
-        // end of the buffer, meaning confirmed silence follows it.
         int lastComplete = -1;
         for (int i = 0; i < nSeg; i++) {
           float t1S =
-              whisper_vad_segments_get_segment_t1(segments, i) * CS_TO_SEC;
+              whisper_vad_segments_get_segment_t1(segments.get(), i) *
+              CS_TO_SEC;
           float marginS = static_cast<float>(config_.speechPadMs) / 1000.0F;
           if (t1S + marginS < totalDurationS) {
             lastComplete = i;
           }
         }
 
-        // When stream ended, treat ALL segments as complete
         if (done && nSeg > 0) {
           lastComplete = nSeg - 1;
         }
@@ -185,9 +206,11 @@ void StreamingProcessor::processLoop() {
 
           for (int i = 0; i <= lastComplete; i++) {
             float t0S =
-                whisper_vad_segments_get_segment_t0(segments, i) * CS_TO_SEC;
+                whisper_vad_segments_get_segment_t0(segments.get(), i) *
+                CS_TO_SEC;
             float t1S =
-                whisper_vad_segments_get_segment_t1(segments, i) * CS_TO_SEC;
+                whisper_vad_segments_get_segment_t1(segments.get(), i) *
+                CS_TO_SEC;
             int startSample = std::max(
                 0,
                 static_cast<int>(
@@ -209,7 +232,8 @@ void StreamingProcessor::processLoop() {
           }
 
           float lastT1S =
-              whisper_vad_segments_get_segment_t1(segments, lastComplete) *
+              whisper_vad_segments_get_segment_t1(
+                  segments.get(), lastComplete) *
               CS_TO_SEC;
           int trimPoint = std::min(
               static_cast<int>(
@@ -219,8 +243,6 @@ void StreamingProcessor::processLoop() {
               processBuffer_.begin(), processBuffer_.begin() + trimPoint);
           bufferSizeAtLastVadRun_ = 0;
         }
-
-        whisper_vad_free_segments(segments);
       }
 
       // Safety: force-process if buffer exceeds max even after VAD

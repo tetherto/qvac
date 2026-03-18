@@ -152,7 +152,7 @@ class TranscriptionWhispercpp extends BaseInference {
 
     const vadParams = this.params?.vad_params || {}
 
-    await this.addon.startStreaming({
+    this.addon.startStreaming({
       vadModelPath,
       vadThreshold: vadParams.threshold || 0.5,
       minSilenceDurationMs: vadParams.min_silence_duration_ms || 500,
@@ -192,12 +192,12 @@ class TranscriptionWhispercpp extends BaseInference {
   async _handleStreamingAudio (audioStream) {
     this.logger.debug('Start handling streaming audio')
     for await (const chunk of audioStream) {
-      await this.addon.appendStreamingAudio({
+      this.addon.appendStreamingAudio({
         input: new Uint8Array(chunk.buffer, chunk.byteOffset, chunk.byteLength)
       })
     }
     this.logger.debug('Ending streaming session')
-    await this.addon.endStreaming()
+    this.addon.endStreaming()
   }
 
   _normalizeAudioStream (audioStream) {

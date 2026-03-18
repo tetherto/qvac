@@ -80,36 +80,40 @@ const ffmpeg = spawn(
 );
 if (!ffmpeg.stdout) throw new Error("Failed to open microphone");
 
-const session = await transcribeStream({ modelId });
+try {
+  const session = await transcribeStream({ modelId });
 
-ffmpeg.stdout.on("data", (chunk: Buffer) => session.write(chunk));
-ffmpeg.on("close", () => session.end());
+  ffmpeg.stdout.on("data", (chunk: Buffer) => session.write(chunk));
+  ffmpeg.on("close", () => session.end());
 
-console.log("Listening... speak and pause to see transcriptions.");
-console.log("Press Enter to stop.\n");
+  console.log("Listening... speak and pause to see transcriptions.");
+  console.log("Press Enter to stop.\n");
 
-const done = (async () => {
-  for await (const text of session) {
-    console.log(`> ${text.trim()}`);
-  }
-})();
-
-process.stdin.resume();
-process.stdin.setEncoding("utf8");
-await new Promise<void>((resolve) => {
-  const onData = (data: string) => {
-    if (data.includes("\n") || data.includes("\r")) {
-      process.stdin.off("data", onData);
-      resolve();
+  const done = (async () => {
+    for await (const text of session) {
+      console.log(`> ${text.trim()}`);
     }
-  };
-  process.stdin.on("data", onData);
-});
+  })();
 
-ffmpeg.kill();
-session.end();
-await done;
+  process.stdin.resume();
+  process.stdin.setEncoding("utf8");
+  await new Promise<void>((resolve) => {
+    const onData = (data: string) => {
+      if (data.includes("\n") || data.includes("\r")) {
+        process.stdin.off("data", onData);
+        resolve();
+      }
+    };
+    process.stdin.on("data", onData);
+  });
 
-console.log("\nUnloading model...");
-await unloadModel({ modelId });
-process.exit(0);
+  ffmpeg.kill();
+  session.end();
+  await done;
+} finally {
+  console.log("\nUnloading model...");
+  await unloadModel({ modelId });
+  // Force exit — stdin/stream handles may keep the event loop alive
+  process.exit(0);
+}
+

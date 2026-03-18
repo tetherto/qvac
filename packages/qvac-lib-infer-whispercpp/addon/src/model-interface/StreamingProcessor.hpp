@@ -19,16 +19,22 @@ class WhisperModel;
 class StreamingProcessor {
 public:
   struct Config {
-    int sampleRate = 16000;
+    static constexpr int kDefaultSampleRate = 16000;
+    static constexpr float kDefaultMaxSpeechDurationS = 30.0F;
+    static constexpr float kVadRunIntervalS = 0.3F;
+
+    int sampleRate = kDefaultSampleRate;
     std::string vadModelPath;
     float vadThreshold = 0.5F;
     int minSilenceDurationMs = 500;
     int minSpeechDurationMs = 250;
-    float maxSpeechDurationS = 30.0F;
+    float maxSpeechDurationS = kDefaultMaxSpeechDurationS;
     int speechPadMs = 30;
     float samplesOverlap = 0.1F;
-    int maxBufferSamples = 480000; // 30s safety cap
-    int vadRunIntervalSamples = 4800; // run VAD every ~300ms of new audio
+    int maxBufferSamples =
+        static_cast<int>(kDefaultMaxSpeechDurationS) * kDefaultSampleRate;
+    int vadRunIntervalSamples =
+        static_cast<int>(kVadRunIntervalS * kDefaultSampleRate);
   };
 
   StreamingProcessor(

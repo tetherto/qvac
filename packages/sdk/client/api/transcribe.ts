@@ -56,6 +56,10 @@ export async function transcribe(
  * in via `write()`, and transcription text is yielded as the model's VAD
  * detects complete speech segments.
  *
+ * The returned session is single-use: calling `[Symbol.asyncIterator]`
+ * returns the same generator instance each time. A second iteration will
+ * yield nothing.
+ *
  * @param params.modelId - The loaded transcription model to use
  * @param params.prompt - Optional initial prompt to guide transcription
  * @returns A session object: call `write(buffer)` to feed audio,
@@ -72,6 +76,8 @@ export async function transcribeStream(
   };
 
   const { requestStream, responseStream } = await duplex(request);
+
+  const writable = requestStream as { write(chunk: Buffer): void; end(): void };
 
   async function* parseResponses(): AsyncGenerator<string> {
     let buffer = "";
@@ -95,10 +101,10 @@ export async function transcribeStream(
 
   return {
     write(audioChunk: Buffer) {
-      (requestStream as { write(chunk: Buffer): void }).write(audioChunk);
+      writable.write(audioChunk);
     },
     end() {
-      (requestStream as { end(): void }).end();
+      writable.end();
     },
     [Symbol.asyncIterator]() {
       return responses;

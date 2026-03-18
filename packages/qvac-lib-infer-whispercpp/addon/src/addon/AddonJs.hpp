@@ -25,13 +25,11 @@
 
 namespace qvac_lib_inference_addon_whisper {
 
-namespace {
-std::mutex g_streamingMtx;
-std::unordered_map<
+inline std::mutex g_streamingMtx;
+inline std::unordered_map<
     qvac_lib_inference_addon_cpp::AddonJs*,
     std::unique_ptr<StreamingProcessor>>
     g_streamingProcessors;
-} // namespace
 
 namespace js = qvac_lib_inference_addon_cpp::js;
 using qvac_lib_inference_addon_cpp::OutputQueue;
@@ -311,26 +309,32 @@ appendStreamingAudio(js_env_t* env, js_callback_info_t* info) try {
 }
 JSCATCH
 
+// Tear down and remove any active streaming session for `instance`.
+// Returns true if a session was cleaned up, false if none existed.
+inline bool
+cleanupStreamingSession(qvac_lib_inference_addon_cpp::AddonJs& instance) {
+  std::unique_ptr<StreamingProcessor> processor;
+  {
+    std::lock_guard lock(g_streamingMtx);
+    auto it = g_streamingProcessors.find(&instance);
+    if (it == g_streamingProcessors.end()) {
+      return false;
+    }
+    processor = std::move(it->second);
+    g_streamingProcessors.erase(it);
+  }
+  processor->end();
+  return true;
+}
+
 inline js_value_t*
 endStreaming(js_env_t* env, js_callback_info_t* info) try {
   using namespace qvac_lib_inference_addon_cpp;
 
   JsArgsParser args(env, info);
   AddonJs& instance = JsInterface::getInstance(env, args.get(0, "instance"));
-
-  std::unique_ptr<StreamingProcessor> processor;
-  {
-    std::lock_guard lock(g_streamingMtx);
-    auto it = g_streamingProcessors.find(&instance);
-    if (it == g_streamingProcessors.end()) {
-      return js::Boolean::create(env, false);
-    }
-    processor = std::move(it->second);
-    g_streamingProcessors.erase(it);
-  }
-
-  processor->end();
-  return js::Boolean::create(env, true);
+  bool cleaned = cleanupStreamingSession(instance);
+  return js::Boolean::create(env, cleaned);
 }
 JSCATCH
 

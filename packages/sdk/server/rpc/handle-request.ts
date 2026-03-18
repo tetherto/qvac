@@ -134,6 +134,7 @@ async function handleDuplexRequest(req: RPC.IncomingRequest): Promise<void> {
       );
     }
 
+    inputStream.resume();
     await executeDuplexHandler(req, request, entry, inputStream, outputStream);
   } catch (error) {
     sendStreamErrorResponse(outputStream, error);
