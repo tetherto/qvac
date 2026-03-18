@@ -1,5 +1,38 @@
 # Changelog
 
+## [0.13.3] - 2026-03-18
+
+### Changed
+
+- Logging adjustments
+
+
+## [0.13.2] - 2026-03-16
+
+### Fixed
+
+- Session creation fallback chain now catches `std::exception` (including `std::bad_alloc`) instead of only `Ort::Exception`, fixing DirectML OOM failures on Windows CI machines without a real GPU
+
+## [0.13.1] - 2026-03-16
+
+### Added
+
+- Fallback chain in `OnnxSession` constructor: if session init fails with a non-CPU provider (e.g. DirectML OOM on CI machines without a real GPU), automatically retries with CPU-only configuration
+
+## [0.13.0] - 2026-03-13
+
+### Added
+
+- `runRaw()` method on `OnnxSession` returning `std::vector<Ort::Value>` for zero-copy output access, avoiding the `memcpy` into `OutputTensor` on every inference call
+- `inputName(size_t)` and `outputName(size_t)` accessors on `IOnnxSession` and `OnnxSession` for direct O(1) access to cached input/output names without querying the ORT API
+
+### Changed
+
+- `IOnnxSession` interface now requires `inputName()` and `outputName()` pure virtual methods
+- Cached `Ort::MemoryInfo` as a class member instead of recreating it on every `run()` call
+- Refactored `run()` to delegate to `runRaw()` internally (no behavior change for existing callers)
+
+
 ## [0.12.12] - 2026-03-12
 
 ### Fixed

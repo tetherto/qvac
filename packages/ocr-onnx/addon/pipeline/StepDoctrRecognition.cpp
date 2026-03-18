@@ -83,19 +83,11 @@ std::vector<std::string> parseVocabToChars(const std::string& vocab) {
 } // namespace
 
 StepDoctrRecognition::StepDoctrRecognition(
-    const std::string& pathRecognizer, bool useGPU, int batchSize,
+    const std::string& pathRecognizer,
+    const onnx_addon::SessionConfig& sessionConfig, int batchSize,
     DecodingMethod decoding)
-    : session_(
-          pathRecognizer,
-          [&] {
-            onnx_addon::SessionConfig cfg;
-            cfg.provider = useGPU ? onnx_addon::ExecutionProvider::AUTO_GPU
-                                  : onnx_addon::ExecutionProvider::CPU;
-            cfg.optimization = onnx_addon::GraphOptimizationLevel::EXTENDED;
-            return cfg;
-          }()),
-      batchSize_(batchSize), decodingMethod_(decoding),
-      vocabChars_(parseVocabToChars(VOCAB)) {
+    : session_(pathRecognizer, sessionConfig), batchSize_(batchSize),
+      decodingMethod_(decoding), vocabChars_(parseVocabToChars(VOCAB)) {
   std::string decodingStr = (decoding == DecodingMethod::CTC) ? "CTC" : "ATTENTION";
   QLOG(qvac_lib_inference_addon_cpp::logger::Priority::INFO,
        "[DoctrRecognition] ONNX session created, batchSize=" + std::to_string(batchSize) +
@@ -142,9 +134,10 @@ cv::Mat StepDoctrRecognition::preprocessCrop(const cv::Mat& origImg,
   return floatImg;
 }
 
-cv::Mat StepDoctrRecognition::runBatchInference(const std::vector<cv::Mat>& images) {
+std::pair<std::vector<Ort::Value>, cv::Mat>
+StepDoctrRecognition::runBatchInference(const std::vector<cv::Mat>& images) {
   if (images.empty()) {
-    return cv::Mat();
+    return std::make_pair(std::vector<Ort::Value>{}, cv::Mat());
   }
 
   const int batchSz = static_cast<int>(images.size());
@@ -155,8 +148,8 @@ cv::Mat StepDoctrRecognition::runBatchInference(const std::vector<cv::Mat>& imag
   QLOG(qvac_lib_inference_addon_cpp::logger::Priority::DEBUG,
        "[DoctrRecognition] runBatchInference batch_size=" + std::to_string(batchSz));
 
-  // Create batch tensor: [batch, channels, height, width] in CHW format
-  std::vector<float> batchData(batchSz * numChannels * height * width);
+  // Reuse batch buffer to avoid per-batch allocation
+  batchBuffer_.resize(batchSz * numChannels * height * width);
 
   for (int b = 0; b < batchSz; b++) {
     const cv::Mat& img = images[b];
@@ -166,7 +159,8 @@ cv::Mat StepDoctrRecognition::runBatchInference(const std::vector<cv::Mat>& imag
     std::vector<cv::Mat> channels;
     cv::split(img, channels);
     for (int c = 0; c < numChannels; c++) {
-      float* dest = batchData.data() + b * numChannels * height * width + c * height * width;
+      float* dest = batchBuffer_.data() + b * numChannels * height * width +
+                    c * height * width;
       CV_Assert(channels[c].isContinuous());
       std::memcpy(dest, channels[c].ptr<float>(), sizeof(float) * height * width);
     }
@@ -175,17 +169,19 @@ cv::Mat StepDoctrRecognition::runBatchInference(const std::vector<cv::Mat>& imag
   std::vector<int64_t> inputShape = {batchSz, numChannels, height, width};
 
   onnx_addon::InputTensor inputTensor;
-  inputTensor.name = session_.getInputInfo()[0].name;
+  inputTensor.name = session_.inputName(0);
   inputTensor.shape = inputShape;
   inputTensor.type = onnx_addon::TensorType::FLOAT32;
-  inputTensor.data = batchData.data();
-  inputTensor.dataSize = batchData.size() * sizeof(float);
+  inputTensor.data = batchBuffer_.data();
+  inputTensor.dataSize = batchBuffer_.size() * sizeof(float);
 
-  auto outputTensors = session_.run(inputTensor);
+  auto ortOutputs = session_.runRaw(inputTensor);
 
-  // Extract predictions
-  const auto& predsTensor = outputTensors[0];
-  const auto& predsShape = predsTensor.shape;
+  // Extract predictions (zero-copy access to ORT buffer)
+  auto& ortOutput = ortOutputs[0];
+  auto outTypeInfo = ortOutput.GetTypeInfo();
+  auto outTensorInfo = outTypeInfo.GetTensorTypeAndShapeInfo();
+  auto predsShape = outTensorInfo.GetShape();
 
   auto predsDims = static_cast<int>(predsShape.size());
   std::vector<int> cvSizes(predsDims);
@@ -209,27 +205,35 @@ cv::Mat StepDoctrRecognition::runBatchInference(const std::vector<cv::Mat>& imag
                              std::to_string(predsDims) + " dimensions");
   }
 
+  // Return ORT values alongside a cv::Mat view (no clone needed - caller keeps
+  // ortValues alive)
   cv::Mat preds(
       predsDims,
       cvSizes.data(),
       CV_32F,
-      const_cast<float*>(predsTensor.as<float>()));
-  return preds.clone();
+      const_cast<float*>(ortOutput.GetTensorData<float>()));
+  return std::make_pair(std::move(ortOutputs), preds);
 }
 
 StepDoctrRecognition::SoftmaxResult StepDoctrRecognition::softmaxArgmax(
     const cv::Mat& preds, int batchIdx, int timestep, int vocabSize) {
+  // Use pointer arithmetic instead of .at<>() for performance
+  const size_t batchStride = preds.step[0] / sizeof(float);
+  const size_t seqStride = preds.step[1] / sizeof(float);
+  const float* row =
+      preds.ptr<float>() + batchIdx * batchStride + timestep * seqStride;
+
   // Numerically stable softmax: subtract max before exp
   float maxVal = -std::numeric_limits<float>::infinity();
   for (int v = 0; v < vocabSize; v++) {
-    maxVal = std::max(maxVal, preds.at<float>(batchIdx, timestep, v));
+    maxVal = std::max(maxVal, row[v]);
   }
 
   float sumExp = 0.0F;
   int bestIdx = 0;
   float bestExp = 0.0F;
   for (int v = 0; v < vocabSize; v++) {
-    float expVal = std::exp(preds.at<float>(batchIdx, timestep, v) - maxVal);
+    float expVal = std::exp(row[v] - maxVal);
     sumExp += expVal;
     if (expVal > bestExp) {
       bestExp = expVal;
@@ -360,8 +364,9 @@ StepDoctrRecognition::Output StepDoctrRecognition::process(Input input,
       preparedImages.push_back(crop);
     }
 
-    // Run batch inference
-    cv::Mat batchPreds = runBatchInference(preparedImages);
+    // Run batch inference (ortValues keeps buffer alive while batchPreds is
+    // used)
+    auto [ortValues, batchPreds] = runBatchInference(preparedImages);
 
     if (batchPreds.empty()) {
       continue;
