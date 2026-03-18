@@ -2,20 +2,23 @@ export interface Version {
   label: string;
   value: string;
   isLatest?: boolean;
+  isDev?: boolean;
 }
 
 export const VERSIONS: Version[] = [
-  { label: 'v0.7.0 (latest)', value: 'v0.7.0', isLatest: true },
+  { label: 'dev', value: 'dev', isDev: true },
+  { label: 'latest (v0.7.0)', value: 'v0.7.0', isLatest: true },
 ];
 
 export const LATEST_VERSION = 'v0.7.0';
 
-const VERSION_PREFIX_RE = /^\/(v\d+\.\d+\.\d+)(\/|$)/;
+const VERSION_PREFIX_RE = /^\/(v\d+\.\d+\.\d+|dev)(\/|$)/;
 
 /**
  * Extract the version prefix from a URL pathname.
  * Returns null when on the (latest) version (no prefix in the URL).
  * @example getVersionFromPath('/v0.6.1/sdk/quickstart') → 'v0.6.1'
+ * @example getVersionFromPath('/dev/sdk/api')           → 'dev'
  * @example getVersionFromPath('/sdk/quickstart')         → null
  */
 export function getVersionFromPath(pathname: string): string | null {
@@ -29,6 +32,8 @@ export function getVersionFromPath(pathname: string): string | null {
  * - latest → v0.6.1: prepend /v0.6.1
  * - v0.6.1 → latest: strip /v0.6.1
  * - v0.6.1 → v0.7.0: replace /v0.6.1 with /v0.7.0
+ * - latest → dev: prepend /dev
+ * - dev → latest: strip /dev
  */
 export function computeVersionedUrl(
   pathname: string,
