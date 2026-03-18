@@ -36,13 +36,13 @@ export const tree: Node[] = [
       }, 
       {
         name: 'Our Vision',
-        url: '/vision',
+        url: '/about-qvac/vision',
         type: 'page',
         icon: resolveIcon('Telescope'),
       },
       {
         name: 'Public launch',
-        url: '/public-launch',
+        url: '/about-qvac/public-launch',
         type: 'page',
         icon: resolveIcon('Globe'),
       },
