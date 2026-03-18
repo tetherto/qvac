@@ -2,7 +2,6 @@
 .env
 .npmrc
 .vscode
-.cursor/skills/my-*.md
 /.sync-repos
 sync-monorepo.sh
 reset_history.sh
@@ -12,3 +11,10 @@ packages/**/.npmrc
 NOTICE_LOG.txt
 NOTICE_FULL_REPORT.txt
 .claude/worktrees
+
+# Auto-generated agent config (run /setup to regenerate)
+.claude/agent-conduct.md
+.claude/knowledge/
+.claude/agents/
+.claude/skills/*
+!.claude/skills/setup/

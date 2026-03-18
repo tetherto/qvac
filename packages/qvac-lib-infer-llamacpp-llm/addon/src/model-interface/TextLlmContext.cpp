@@ -157,17 +157,12 @@ bool TextLlmContext::checkAntiprompt() {
     std::string lastOutput =
         common_sampler_prev_str(smpl_.get(), lctx_, kNPrev);
 
-    // Check if each of the reverse prompts appears at the end of the output.
-    for (std::string& antiprompt : params_.antiprompt) {
-      size_t extraPadding = 2;
-      size_t searchStartPos =
-          lastOutput.length() >
-                  static_cast<size_t>(antiprompt.length() + extraPadding)
-              ? lastOutput.length() -
-                    static_cast<size_t>(antiprompt.length() + extraPadding)
-              : 0;
-
-      if (lastOutput.find(antiprompt, searchStartPos) != std::string::npos) {
+    // Check if each of the reverse prompts appears anywhere in the recent
+    // output. We search the full kNPrev-token window because a single token
+    // can decode to many characters, and a short antiprompt like "\n" may
+    // appear at the start of such a token, far from the string's tail.
+    for (const std::string& antiprompt : params_.antiprompt) {
+      if (lastOutput.find(antiprompt) != std::string::npos) {
         return true;
       }
     }

@@ -112,8 +112,8 @@ async function runLanguageTest (t, langConfig, loggerBinding) {
 
   // Track transcription
   const transcriptions = []
-  let outputResolve = null
-  const outputPromise = new Promise(resolve => { outputResolve = resolve })
+  let jobDoneResolve = null
+  const jobDonePromise = new Promise(resolve => { jobDoneResolve = resolve })
 
   function outputCallback (handle, event, id, output, error) {
     if (event === 'Output' && Array.isArray(output)) {
@@ -122,16 +122,18 @@ async function runLanguageTest (t, langConfig, loggerBinding) {
           transcriptions.push(segment)
         }
       }
-      if (transcriptions.length > 0 && outputResolve) {
-        outputResolve()
-        outputResolve = null
-      }
     }
     if (event === 'Error') {
       console.log(`   Error: ${error}`)
-      if (outputResolve) {
-        outputResolve()
-        outputResolve = null
+      if (jobDoneResolve) {
+        jobDoneResolve()
+        jobDoneResolve = null
+      }
+    }
+    if (event === 'JobEnded') {
+      if (jobDoneResolve) {
+        jobDoneResolve()
+        jobDoneResolve = null
       }
     }
   }
@@ -148,8 +150,13 @@ async function runLanguageTest (t, langConfig, loggerBinding) {
     await parakeet.append({ type: 'end of job' })
 
     // Wait for output with timeout (10 min should be enough for truncated audio)
-    const timeout = setTimeout(() => { if (outputResolve) { outputResolve(); outputResolve = null } }, 600000)
-    await outputPromise
+    const timeout = setTimeout(() => {
+      if (jobDoneResolve) {
+        jobDoneResolve()
+        jobDoneResolve = null
+      }
+    }, 600000)
+    await jobDonePromise
     clearTimeout(timeout)
 
     // Get results
@@ -195,7 +202,7 @@ async function runLanguageTest (t, langConfig, loggerBinding) {
   } finally {
     if (parakeet) {
       try {
-        parakeet.destroyInstance()
+        await parakeet.destroyInstance()
       } catch (e) {
         // Ignore cleanup errors
       }
@@ -231,11 +238,7 @@ test('Accuracy test - English (primary language)', { timeout: 300000 }, async (t
       t.ok(result.segmentCount > 0, `Should produce segments (got ${result.segmentCount})`)
     }
   } finally {
-    try {
-      loggerBinding.releaseLogger()
-    } catch (e) {
-      // Ignore
-    }
+    // Logger is released once at the end of the summary test.
   }
 })
 
@@ -260,16 +263,13 @@ test('Transcription test - Spanish (non-primary language)', { timeout: 300000 },
     } else if (result.error) {
       t.fail(`Spanish test failed: ${result.error}`)
     } else {
-      // For non-English, we just verify the model doesn't crash and produces some output
-      t.ok(result.actualText.length >= 0, 'Should handle Spanish audio without crashing')
+      // For non-English, verify no crash and non-empty transcription payload.
+      t.ok(result.segmentCount > 0, `Should produce at least one segment for Spanish audio (got ${result.segmentCount})`)
+      t.ok(result.actualText.length > 0, `Should produce non-empty text for Spanish audio (got ${result.actualText.length} chars)`)
       console.log('\n✅ Spanish audio handled gracefully')
     }
   } finally {
-    try {
-      loggerBinding.releaseLogger()
-    } catch (e) {
-      // Ignore
-    }
+    // Logger is released once at the end of the summary test.
   }
 })
 
@@ -294,15 +294,12 @@ test('Transcription test - French (non-primary language)', { timeout: 300000 }, 
     } else if (result.error) {
       t.fail(`French test failed: ${result.error}`)
     } else {
-      t.ok(result.actualText.length >= 0, 'Should handle French audio without crashing')
+      t.ok(result.segmentCount > 0, `Should produce at least one segment for French audio (got ${result.segmentCount})`)
+      t.ok(result.actualText.length > 0, `Should produce non-empty text for French audio (got ${result.actualText.length} chars)`)
       console.log('\n✅ French audio handled gracefully')
     }
   } finally {
-    try {
-      loggerBinding.releaseLogger()
-    } catch (e) {
-      // Ignore
-    }
+    // Logger is released once at the end of the summary test.
   }
 })
 
@@ -327,15 +324,12 @@ test('Transcription test - Croatian (non-primary language)', { timeout: 300000 }
     } else if (result.error) {
       t.fail(`Croatian test failed: ${result.error}`)
     } else {
-      t.ok(result.actualText.length >= 0, 'Should handle Croatian audio without crashing')
+      t.ok(result.segmentCount > 0, `Should produce at least one segment for Croatian audio (got ${result.segmentCount})`)
+      t.ok(result.actualText.length > 0, `Should produce non-empty text for Croatian audio (got ${result.actualText.length} chars)`)
       console.log('\n✅ Croatian audio handled gracefully')
     }
   } finally {
-    try {
-      loggerBinding.releaseLogger()
-    } catch (e) {
-      // Ignore
-    }
+    // Logger is released once at the end of the summary test.
   }
 })
 

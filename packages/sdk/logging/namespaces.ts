@@ -1,15 +1,8 @@
-export const ADDON_NAMESPACES = {
-  LLAMACPP_LLM: "llamacpp:llm",
-  LLAMACPP_EMBED: "llamacpp:embed",
-  WHISPERCPP: "whispercpp",
-  PARAKEET: "parakeet",
-  TTS: "tts",
-  NMTCPP: "nmtcpp",
-  RAG_HYPERDB: "rag:hyperdb",
-} as const;
+import { type CanonicalModelType } from "@/schemas/model-types";
 
-export type AddonNamespace =
-  (typeof ADDON_NAMESPACES)[keyof typeof ADDON_NAMESPACES];
+export const RAG_NAMESPACE = "rag:hyperdb" as const;
+
+export type AddonNamespace = CanonicalModelType | typeof RAG_NAMESPACE;
 
 // Reserved ID for SDK server logs
 export const SDK_LOG_ID = "__sdk__";

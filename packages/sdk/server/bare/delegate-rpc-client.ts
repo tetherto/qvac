@@ -6,6 +6,11 @@ import { withTimeout } from "@/utils/withTimeout";
 import type { RPCOptions } from "@/schemas";
 import { DelegateConnectionFailedError } from "@/utils/errors-server";
 import { getServerLogger } from "@/logging";
+import { nowMs } from "@/profiling";
+import {
+  cacheDelegationConnectionTime,
+  clearPeerConnectionTracking,
+} from "@/server/rpc/profiling/delegation-profiler";
 
 const logger = getServerLogger();
 
@@ -53,12 +58,14 @@ function ensureConnectionHandler(): void {
       logger.debug(`Connection closed for peer: ${peerPubkey}`);
       activeRPCs.delete(peerPubkey);
       activeConnections.delete(peerPubkey);
+      clearPeerConnectionTracking(peerPubkey);
     });
 
     conn.on("error", (err) => {
       logger.error(`Connection error for peer ${peerPubkey}:`, err);
       activeRPCs.delete(peerPubkey);
       activeConnections.delete(peerPubkey);
+      clearPeerConnectionTracking(peerPubkey);
     });
   });
 }
@@ -81,6 +88,7 @@ async function closeConnection(publicKey: string): Promise<void> {
 
     activeConnections.delete(publicKey);
     activeRPCs.delete(publicKey);
+    clearPeerConnectionTracking(publicKey);
   }
 }
 
@@ -97,6 +105,7 @@ async function ensureRPCConnection(
   }
 
   const swarm = getSwarm();
+  const connectionStart = nowMs();
 
   // Track the listener so we can clean it up on timeout
   let onConnection: (conn: Connection) => void = () => {};
@@ -167,7 +176,12 @@ async function ensureRPCConnection(
       });
     });
 
-    return await withTimeout(connectionPromise, timeout);
+    const rpc = await withTimeout(connectionPromise, timeout);
+
+    const connectionDuration = nowMs() - connectionStart;
+    cacheDelegationConnectionTime(publicKey, connectionDuration);
+
+    return rpc;
   } catch (error: unknown) {
     // Clean up the per-request connection listener
     swarm.removeListener("connection", onConnection);
@@ -225,4 +239,5 @@ export function cleanupStaleConnection(publicKey: string): void {
     conn.destroy();
     activeConnections.delete(publicKey);
   }
+  clearPeerConnectionTracking(publicKey);
 }

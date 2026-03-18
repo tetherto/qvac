@@ -1,0 +1,74 @@
+---
+title: Logging
+description: Visibility into what's happening during loading, inference, and other operations.
+---
+
+## Overview
+
+QVAC provides two complementary logging primitives:
+
+- `loggingStream()`: stream real-time logs emitted by the SDK server and native addons (llamacpp, whispercpp, etc.). You decide what to do with each log line (print, persist, filter).
+- `getLogger()`: create a logger for your own application code (namespaced, configurable level, optional transports).
+
+## Functions
+
+1. [`getLogger()`](/v0.7.0/sdk/api/getLogger) — create a logger
+2. [`loadModel()`](/v0.7.0/sdk/api/loadModel) — pass logger via `logger` option
+3. [`loggingStream()`](/v0.7.0/sdk/api/loggingStream) — stream real-time logs from models or SDK server
+
+For how to use each function, see [SDK — API reference](/v0.7.0/sdk/api/).
+
+## Flow
+
+1. Pass a logger when loading your model.
+2. When logging is enabled, you'll see real-time logs from the underlying model libraries:
+
+```
+[DEBUG] llamacpp:llm: Loading model weights...
+[INFO] llamacpp:llm: Model loaded successfully, vocab_size=32000
+[DEBUG] llamacpp:llm: Starting inference...
+[DEBUG] llamacpp:llm: Inference completed, tokens=12
+```
+
+## Features
+
+* **Streaming API (`loggingStream`)** — Consume real-time logs programmatically. Stream either:
+  - SDK server logs using `SDK_LOG_ID`, or
+  - per-model addon logs using the model ID returned by `loadModel()`.
+
+* **Logger API (`getLogger`)** — Create loggers for your application code with custom transports. Console output enabled by default; set `enableConsole: false` to use only custom transports.
+
+It works for all model types (LLM, Whisper, NMT, Embeddings) and provides valuable insight into model performance and behavior.
+
+## Configuration
+
+To configure global logging (level and console output), use a config file (`qvac.config.json`, `qvac.config.js`, or `qvac.config.ts`) and set:
+- `loggerLevel`: `"error" | "warn" | "info" | "debug"`
+- `loggerConsoleOutput`: `boolean`
+
+## Example
+
+The following script shows an example of streaming logs from loaded models:
+
+<Tabs>
+<Tab value="js" label="JavaScript" default>
+<WrapCode>
+
+```js file=<rootDir>/packages/sdk/dist/examples/logging-streaming.js title="logging.js" lineNumbers
+```
+</WrapCode>
+</Tab>
+
+<Tab value="ts" label="TypeScript">
+<WrapCode>
+
+```ts file=<rootDir>/packages/sdk/examples/logging-streaming.ts title="logging.ts" lineNumbers
+```
+</WrapCode>
+</Tab>
+</Tabs>
+
+<Callout type="success">
+**Tip:** all examples throughout this documentation are self-contained and runnable. For instructions on how to run them, see [SDK quickstart](/v0.7.0/sdk/quickstart).
+</Callout>
+

@@ -15,7 +15,7 @@ import {
   type ResolveContext,
   type WhisperConfig,
 } from "@/schemas";
-import { ADDON_NAMESPACES, createStreamLogger } from "@/logging";
+import { createStreamLogger, registerAddonLogger } from "@/logging";
 import { parseModelPath } from "@/server/utils";
 import FilesystemDL from "@qvac/dl-filesystem";
 import { transcribe } from "@/server/bare/ops/transcribe";
@@ -35,7 +35,8 @@ function createWhisperModel(
   }
 
   const loader = new FilesystemDL({ dirPath });
-  const logger = createStreamLogger(modelId, "whispercpp");
+  const logger = createStreamLogger(modelId, ModelType.whispercppTranscription);
+  registerAddonLogger(modelId, ModelType.whispercppTranscription, logger);
 
   const args = {
     loader,
@@ -123,6 +124,6 @@ export const whisperPlugin = definePlugin({
 
   logging: {
     module: whisperAddonLogging,
-    namespace: ADDON_NAMESPACES.WHISPERCPP,
+    namespace: ModelType.whispercppTranscription,
   },
 });

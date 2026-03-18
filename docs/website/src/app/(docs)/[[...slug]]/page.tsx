@@ -11,7 +11,7 @@ import { createRelativeLink } from 'fumadocs-ui/mdx';
 import { getMDXComponents } from '@/mdx-components';
 import { resolveIcon } from "@/lib/resolveIcon";
 import { cloneElement, isValidElement } from "react";
-import { LLMCopyButton, ViewOptions } from '@/components/page-actions';
+import { LLMCopyButton, ViewOptions, VersionSelector } from '@/components/page-actions';
 
 function TitleText({
   title,
@@ -71,6 +71,7 @@ export default async function Page(props: PageProps<'/[[...slug]]'>) {
       </DocsTitle>
       <DocsDescription>{page.data.description}</DocsDescription>
       <div className="flex flex-row gap-2 items-center border-b pb-6 -mt-6">
+        <VersionSelector />
         <LLMCopyButton markdownUrl={`/llms-full.txt`} />
         <ViewOptions
           markdownUrl={`/llms-full.txt`}

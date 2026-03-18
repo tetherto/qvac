@@ -1,0 +1,66 @@
+---
+title: Sharded models
+description: Download a model that is sharded into multiple parts.
+---
+
+## Overview
+
+Some models may be distributed as **multiple files** (shards) instead of a single large one. [`loadModel()`](/v0.7.0/sdk/api/loadModel) supports sharded models and ensures that all shards are available before loading it. For this, shard file names **must** follow the pattern: `<name>-00001-of-0000X.<ext>`.
+
+<Callout type="info">
+**Important:** for now, sharded models are supported only for GGUF models.
+</Callout>
+
+## Supported formats
+
+- Archives (`.tar`, `.tar.gz`, `.tgz`): HTTP or local with automatic extraction
+- HTTP sharded URL: pass the download URL of any shard and the SDK will fetch the remaining shards
+- Local shards: pass the path to any shard file.
+
+## Local sharded models
+
+All files **must** be present in the same directory:
+
+- All numbered shard files, for example:
+  - `model-00001-of-00005.gguf`
+  - `model-00002-of-00005.gguf`
+  - …
+  - `model-00005-of-00005.gguf`
+- A companion tensors manifest file:
+  - `model.tensors.txt`
+
+When using `loadModel()`, you pass the path to the first shard (e.g., `model-00001-of-00005.gguf`), and the SDK automatically detects and loads the remaining shards.
+
+## Functions
+
+1. [`loadModel()`](/v0.7.0/sdk/api/loadModel) — pass the path/URL of any shard; SDK fetches remaining shards
+2. Use the model as usual ([`completion()`](/v0.7.0/sdk/api/completion), [`embed()`](/v0.7.0/sdk/api/embed), etc.)
+3. [`unloadModel()`](/v0.7.0/sdk/api/unloadModel)
+
+For how to use each function, see [SDK — API reference](/v0.7.0/sdk/api/).
+
+## Example
+
+The following script shows an example of loading a sharded model with per-shard progress tracking:
+
+<Tabs>
+<Tab value="js" label="JavaScript" default>
+<WrapCode>
+
+```js file=<rootDir>/packages/sdk/dist/examples/llamacpp-sharded.js title="sharded-models.js" lineNumbers
+```
+</WrapCode>
+</Tab>
+
+<Tab value="ts" label="TypeScript">
+<WrapCode>
+
+```ts file=<rootDir>/packages/sdk/examples/llamacpp-sharded.ts title="sharded-models.ts" lineNumbers
+```
+</WrapCode>
+</Tab>
+</Tabs>
+
+<Callout type="success">
+**Tip:** all examples throughout this documentation are self-contained and runnable. For instructions on how to run them, see [SDK quickstart](/v0.7.0/sdk/quickstart).
+</Callout>

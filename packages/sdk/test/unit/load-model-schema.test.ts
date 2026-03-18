@@ -55,6 +55,9 @@ test("loadModelRequestSchema: custom plugin allows unknown modelConfig keys", (t
   const result = loadModelSrcRequestSchema.safeParse(customPluginRequest);
   t.is(result.success, true);
   if (result.success) {
-    t.is((result.data.modelConfig as Record<string, unknown>)?.customOption1, "value1");
+    t.is(
+      (result.data.modelConfig as Record<string, unknown>)?.customOption1,
+      "value1",
+    );
   }
 });
