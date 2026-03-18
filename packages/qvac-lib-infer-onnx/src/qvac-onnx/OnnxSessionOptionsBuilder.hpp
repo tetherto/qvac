@@ -31,7 +31,7 @@ inline void tryAppendXnnpack(Ort::SessionOptions& sessionOptions) {
       QLOG(logger::Priority::INFO, "[OnnxSession] XNNPack EP appended");
       ONNX_ALOG("[OnnxSession] XNNPack EP appended");
     } else {
-      QLOG_DEBUG("[OnnxSession] XNNPack EP not available");
+      QLOG(logger::Priority::DEBUG, "[OnnxSession] XNNPack EP not available");
       ONNX_ALOG("[OnnxSession] XNNPack EP not available");
     }
   } catch (const std::exception& e) {
@@ -45,7 +45,7 @@ inline void tryAppendXnnpack(Ort::SessionOptions& sessionOptions) {
 inline Ort::SessionOptions buildSessionOptions(const SessionConfig& config) {
   Ort::SessionOptions sessionOptions;
 
-  QLOG_DEBUG(std::string("[OnnxSession] buildSessionOptions - provider=") +
+  QLOG(logger::Priority::DEBUG, std::string("[OnnxSession] buildSessionOptions - provider=") +
              providerToString(config.provider) + ", optimization=" +
              optimizationToString(config.optimization) + ", enableXnnpack=" +
              (config.enableXnnpack ? "true" : "false"));

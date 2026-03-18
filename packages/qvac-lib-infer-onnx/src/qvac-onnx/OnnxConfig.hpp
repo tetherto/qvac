@@ -33,7 +33,7 @@ enum class ExecutionMode {
 };
 
 struct EnvironmentConfig {
-  LoggingLevel loggingLevel = LoggingLevel::WARNING;
+  LoggingLevel loggingLevel = LoggingLevel::ERROR;  // Suppress ORT EP node-assignment warnings
   std::string loggingId = "qvac-onnx";
 };
 
