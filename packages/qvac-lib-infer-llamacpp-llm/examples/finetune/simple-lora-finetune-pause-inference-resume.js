@@ -341,7 +341,7 @@ async function main () {
     for (let retry = 0; retry < maxRetries; retry++) {
       pauseCheckpointPath = findPauseCheckpoint(finetuneOptions.checkpointSaveDir)
       if (pauseCheckpointPath) {
-        const metadataPath = path.join(pauseCheckpointPath, 'metadata.json')
+        const metadataPath = path.join(pauseCheckpointPath, 'metadata.txt')
         const modelPath = path.join(pauseCheckpointPath, 'model.gguf')
         if (fs.existsSync(metadataPath) && fs.existsSync(modelPath)) {
           console.log(`✅ Pause checkpoint found: ${pauseCheckpointPath}`)

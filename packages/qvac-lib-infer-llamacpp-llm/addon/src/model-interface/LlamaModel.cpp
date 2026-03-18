@@ -1207,7 +1207,7 @@ std::string LlamaModel::finetune(
           llama_finetuning_helpers::findLatestPauseCheckpoint(checkpointDir);
 
       if (!pausePath.empty() && pauseCheckpointExists(checkpointDir)) {
-        const auto metadataPath = pausePath / "metadata.json";
+        const auto metadataPath = pausePath / "metadata.txt";
         if (parseCheckpointMetadata(metadataPath, resumeMeta)) {
           resumingFromPause = true;
           std::ostringstream resumeMsg;

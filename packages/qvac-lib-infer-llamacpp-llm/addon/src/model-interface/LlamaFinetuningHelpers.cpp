@@ -333,7 +333,7 @@ void saveCheckpoint(ggml_opt_context_t optCtx, TrainingCheckpointState& state) {
   meta.targetModules = state.targetModules;
   meta.globalStep = state.globalStep;
   meta.currentStep = state.scheduler ? state.scheduler->currentStep : 0;
-  writeCheckpointMetadata(stepDir / "metadata.json", meta);
+  writeCheckpointMetadata(stepDir / "metadata.txt", meta);
 }
 
 bool parseCheckpointMetadata(
@@ -437,7 +437,7 @@ void savePauseCheckpoint(
     // same sample whose callback triggered the pause.
     meta.resumeBatch = (ibatch - 1) / ubatchPerCtx - 1;
   }
-  writeCheckpointMetadata(pauseDir / "metadata.json", meta);
+  writeCheckpointMetadata(pauseDir / "metadata.txt", meta);
 
   state.pauseCheckpointPath = pauseDir;
   std::ostringstream msg;
@@ -483,7 +483,7 @@ bool loadPauseCheckpoint(
     return false;
   }
 
-  const auto metadataPath = checkpointPath / "metadata.json";
+  const auto metadataPath = checkpointPath / "metadata.txt";
   if (!parseCheckpointMetadata(metadataPath, meta)) {
     return false;
   }
