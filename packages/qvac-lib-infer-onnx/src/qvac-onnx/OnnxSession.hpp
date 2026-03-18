@@ -45,10 +45,10 @@ class OnnxSession : public IOnnxSession {
   [[nodiscard]] inline std::vector<TensorInfo> getOutputInfo() const override;
 
   // Direct access to cached input/output names (avoids ORT API queries)
-  [[nodiscard]] inline const std::string& inputName(
-      size_t index) const override;
-  [[nodiscard]] inline const std::string& outputName(
-      size_t index) const override;
+  [[nodiscard]] inline const std::string &
+  inputName(size_t index) const override;
+  [[nodiscard]] inline const std::string &
+  outputName(size_t index) const override;
 
   // Run inference - single input, all outputs
   inline std::vector<OutputTensor> run(const InputTensor& input) override;
@@ -63,13 +63,13 @@ class OnnxSession : public IOnnxSession {
       const std::vector<std::string>& outputNames) override;
 
   // Run inference returning raw ORT values (zero-copy output).
-  // Only available on OnnxSession (not IOnnxSession) since it exposes ORT types.
-  inline std::vector<Ort::Value> runRaw(const InputTensor& input);
-  inline std::vector<Ort::Value> runRaw(
-      const std::vector<InputTensor>& inputs);
-  inline std::vector<Ort::Value> runRaw(
-      const std::vector<InputTensor>& inputs,
-      const std::vector<std::string>& outputNames);
+  // Only available on OnnxSession (not IOnnxSession) since it exposes ORT
+  // types.
+  inline std::vector<Ort::Value> runRaw(const InputTensor &input);
+  inline std::vector<Ort::Value> runRaw(const std::vector<InputTensor> &inputs);
+  inline std::vector<Ort::Value>
+  runRaw(const std::vector<InputTensor> &inputs,
+         const std::vector<std::string> &outputNames);
 
   // Check if session is valid and ready
   [[nodiscard]] inline bool isValid() const override;
@@ -85,11 +85,11 @@ class OnnxSession : public IOnnxSession {
       Ort::MemoryInfo::CreateCpu(OrtArenaAllocator, OrtMemTypeDefault);
   std::vector<std::string> inputNames_;
   std::vector<std::string> outputNames_;
-  std::vector<const char*> outputNamePtrs_;
+  std::vector<const char *> outputNamePtrs_;
   Ort::RunOptions runOptions_;
 
   // Create an ORT tensor from a single InputTensor (avoids duplication)
-  inline Ort::Value createInputOrtValue(const InputTensor& input);
+  inline Ort::Value createInputOrtValue(const InputTensor &input);
 
   // Platform-aware session construction (Windows needs wide strings)
   static inline std::unique_ptr<Ort::Session> createOrtSession(
@@ -128,24 +128,27 @@ inline OnnxSession::OnnxSession(const std::string& modelPath,
   //   3. If a non-CPU provider was requested and init fails, retry CPU-only
   try {
     session_ = createOrtSession(env, modelPath, sessionOptions);
-  } catch (const std::exception& e) {
+  } catch (const std::exception &e) {
     bool retried = false;
 
     // Retry without XNNPACK (e.g. NHWC schema conflicts)
     if (config.enableXnnpack) {
       QLOG(logger::Priority::WARNING,
            std::string("[OnnxSession] Session init failed: ") + e.what() +
-           ", retrying without XNNPACK");
-      ONNX_ALOG("[OnnxSession] Session init failed: %s, retrying without XNNPACK", e.what());
+               ", retrying without XNNPACK");
+      ONNX_ALOG(
+          "[OnnxSession] Session init failed: %s, retrying without XNNPACK",
+          e.what());
       try {
         SessionConfig fallbackConfig = config;
         fallbackConfig.enableXnnpack = false;
-        session_ = createOrtSession(
-            env, modelPath, buildSessionOptions(fallbackConfig));
+        session_ = createOrtSession(env, modelPath,
+                                    buildSessionOptions(fallbackConfig));
         retried = true;
-        QLOG(logger::Priority::INFO, "[OnnxSession] Session created without XNNPACK");
+        QLOG(logger::Priority::INFO,
+             "[OnnxSession] Session created without XNNPACK");
         ONNX_ALOG("[OnnxSession] Session created without XNNPACK");
-      } catch (const std::exception&) {
+      } catch (const std::exception &) {
         // Fall through to CPU-only retry below
       }
     }
@@ -154,18 +157,20 @@ inline OnnxSession::OnnxSession(const std::string& modelPath,
     if (!retried && config.provider != ExecutionProvider::CPU) {
       QLOG(logger::Priority::WARNING,
            std::string("[OnnxSession] Session init failed: ") + e.what() +
-           ", retrying with CPU-only");
-      ONNX_ALOG("[OnnxSession] Session init failed: %s, retrying with CPU-only", e.what());
+               ", retrying with CPU-only");
+      ONNX_ALOG("[OnnxSession] Session init failed: %s, retrying with CPU-only",
+                e.what());
       try {
         SessionConfig cpuConfig = config;
         cpuConfig.provider = ExecutionProvider::CPU;
         cpuConfig.enableXnnpack = false;
-        session_ = createOrtSession(
-            env, modelPath, buildSessionOptions(cpuConfig));
+        session_ =
+            createOrtSession(env, modelPath, buildSessionOptions(cpuConfig));
         retried = true;
-        QLOG(logger::Priority::INFO, "[OnnxSession] Session created with CPU fallback");
+        QLOG(logger::Priority::INFO,
+             "[OnnxSession] Session created with CPU fallback");
         ONNX_ALOG("[OnnxSession] Session created with CPU fallback");
-      } catch (const std::exception&) {
+      } catch (const std::exception &) {
         // All retries exhausted
       }
     }
@@ -190,7 +195,7 @@ inline OnnxSession::OnnxSession(const std::string& modelPath,
     auto namePtr = session_->GetOutputNameAllocated(i, allocator_);
     outputNames_.emplace_back(namePtr.get());
   }
-  for (const auto& name : outputNames_) {
+  for (const auto &name : outputNames_) {
     outputNamePtrs_.push_back(name.c_str());
   }
 
@@ -244,11 +249,11 @@ inline std::vector<TensorInfo> OnnxSession::getOutputInfo() const {
   return infos;
 }
 
-inline const std::string& OnnxSession::inputName(size_t index) const {
+inline const std::string &OnnxSession::inputName(size_t index) const {
   return inputNames_[index];
 }
 
-inline const std::string& OnnxSession::outputName(size_t index) const {
+inline const std::string &OnnxSession::outputName(size_t index) const {
   return outputNames_[index];
 }
 
@@ -296,48 +301,46 @@ inline std::vector<OutputTensor> OnnxSession::run(
   return outputs;
 }
 
-inline Ort::Value OnnxSession::createInputOrtValue(const InputTensor& input) {
+inline Ort::Value OnnxSession::createInputOrtValue(const InputTensor &input) {
   switch (input.type) {
-    case TensorType::FLOAT32:
-      return Ort::Value::CreateTensor<float>(
-          memoryInfo_,
-          const_cast<float*>(static_cast<const float*>(input.data)),
-          input.dataSize / sizeof(float), input.shape.data(),
-          input.shape.size());
-    case TensorType::INT64:
-      return Ort::Value::CreateTensor<int64_t>(
-          memoryInfo_,
-          const_cast<int64_t*>(static_cast<const int64_t*>(input.data)),
-          input.dataSize / sizeof(int64_t), input.shape.data(),
-          input.shape.size());
-    case TensorType::INT32:
-      return Ort::Value::CreateTensor<int32_t>(
-          memoryInfo_,
-          const_cast<int32_t*>(static_cast<const int32_t*>(input.data)),
-          input.dataSize / sizeof(int32_t), input.shape.data(),
-          input.shape.size());
-    case TensorType::UINT8:
-      return Ort::Value::CreateTensor<uint8_t>(
-          memoryInfo_,
-          const_cast<uint8_t*>(static_cast<const uint8_t*>(input.data)),
-          input.dataSize / sizeof(uint8_t), input.shape.data(),
-          input.shape.size());
-    case TensorType::INT8:
-      return Ort::Value::CreateTensor<int8_t>(
-          memoryInfo_,
-          const_cast<int8_t*>(static_cast<const int8_t*>(input.data)),
-          input.dataSize / sizeof(int8_t), input.shape.data(),
-          input.shape.size());
-    default:
-      return Ort::Value::CreateTensor<float>(
-          memoryInfo_,
-          const_cast<float*>(static_cast<const float*>(input.data)),
-          input.dataSize / sizeof(float), input.shape.data(),
-          input.shape.size());
+  case TensorType::FLOAT32:
+    return Ort::Value::CreateTensor<float>(
+        memoryInfo_,
+        const_cast<float *>(static_cast<const float *>(input.data)),
+        input.dataSize / sizeof(float), input.shape.data(), input.shape.size());
+  case TensorType::INT64:
+    return Ort::Value::CreateTensor<int64_t>(
+        memoryInfo_,
+        const_cast<int64_t *>(static_cast<const int64_t *>(input.data)),
+        input.dataSize / sizeof(int64_t), input.shape.data(),
+        input.shape.size());
+  case TensorType::INT32:
+    return Ort::Value::CreateTensor<int32_t>(
+        memoryInfo_,
+        const_cast<int32_t *>(static_cast<const int32_t *>(input.data)),
+        input.dataSize / sizeof(int32_t), input.shape.data(),
+        input.shape.size());
+  case TensorType::UINT8:
+    return Ort::Value::CreateTensor<uint8_t>(
+        memoryInfo_,
+        const_cast<uint8_t *>(static_cast<const uint8_t *>(input.data)),
+        input.dataSize / sizeof(uint8_t), input.shape.data(),
+        input.shape.size());
+  case TensorType::INT8:
+    return Ort::Value::CreateTensor<int8_t>(
+        memoryInfo_,
+        const_cast<int8_t *>(static_cast<const int8_t *>(input.data)),
+        input.dataSize / sizeof(int8_t), input.shape.data(),
+        input.shape.size());
+  default:
+    return Ort::Value::CreateTensor<float>(
+        memoryInfo_,
+        const_cast<float *>(static_cast<const float *>(input.data)),
+        input.dataSize / sizeof(float), input.shape.data(), input.shape.size());
   }
 }
 
-inline std::vector<Ort::Value> OnnxSession::runRaw(const InputTensor& input) {
+inline std::vector<Ort::Value> OnnxSession::runRaw(const InputTensor &input) {
   if (!isValid()) {
     QLOG(logger::Priority::ERROR,
          std::string(
@@ -348,21 +351,21 @@ inline std::vector<Ort::Value> OnnxSession::runRaw(const InputTensor& input) {
   QLOG_DEBUG(std::string("[OnnxSession] Running inference on ") + modelPath_ +
              " with 1 input(s)");
 
-  const char* inputNamePtr = input.name.c_str();
+  const char *inputNamePtr = input.name.c_str();
   Ort::Value inputTensor = createInputOrtValue(input);
 
   return session_->Run(runOptions_, &inputNamePtr, &inputTensor, 1,
                        outputNamePtrs_.data(), outputNamePtrs_.size());
 }
 
-inline std::vector<Ort::Value> OnnxSession::runRaw(
-    const std::vector<InputTensor>& inputs) {
+inline std::vector<Ort::Value>
+OnnxSession::runRaw(const std::vector<InputTensor> &inputs) {
   return runRaw(inputs, outputNames_);
 }
 
-inline std::vector<Ort::Value> OnnxSession::runRaw(
-    const std::vector<InputTensor>& inputs,
-    const std::vector<std::string>& outputNames) {
+inline std::vector<Ort::Value>
+OnnxSession::runRaw(const std::vector<InputTensor> &inputs,
+                    const std::vector<std::string> &outputNames) {
   if (!isValid()) {
     QLOG(logger::Priority::ERROR,
          std::string(
@@ -377,18 +380,18 @@ inline std::vector<Ort::Value> OnnxSession::runRaw(
   std::vector<Ort::Value> inputTensors;
   inputTensors.reserve(inputs.size());
 
-  std::vector<const char*> inputNamePtrs;
+  std::vector<const char *> inputNamePtrs;
   inputNamePtrs.reserve(inputs.size());
 
-  for (const auto& input : inputs) {
+  for (const auto &input : inputs) {
     inputNamePtrs.push_back(input.name.c_str());
     inputTensors.push_back(createInputOrtValue(input));
   }
 
   // Use cached output name pointers when requesting all outputs
-  const char* const* outPtrs;
+  const char *const *outPtrs;
   size_t outCount;
-  std::vector<const char*> customOutputNamePtrs;
+  std::vector<const char *> customOutputNamePtrs;
 
   if (&outputNames == &outputNames_) {
     // Common path: requesting all outputs — use cached pointers
@@ -396,7 +399,7 @@ inline std::vector<Ort::Value> OnnxSession::runRaw(
     outCount = outputNamePtrs_.size();
   } else {
     customOutputNamePtrs.reserve(outputNames.size());
-    for (const auto& name : outputNames) {
+    for (const auto &name : outputNames) {
       customOutputNamePtrs.push_back(name.c_str());
     }
     outPtrs = customOutputNamePtrs.data();
@@ -404,9 +407,8 @@ inline std::vector<Ort::Value> OnnxSession::runRaw(
   }
 
   // Run inference
-  return session_->Run(runOptions_, inputNamePtrs.data(),
-                       inputTensors.data(), inputTensors.size(),
-                       outPtrs, outCount);
+  return session_->Run(runOptions_, inputNamePtrs.data(), inputTensors.data(),
+                       inputTensors.size(), outPtrs, outCount);
 }
 
 inline bool OnnxSession::isValid() const {

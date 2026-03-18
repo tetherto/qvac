@@ -45,10 +45,11 @@ inline void tryAppendXnnpack(Ort::SessionOptions& sessionOptions) {
 inline Ort::SessionOptions buildSessionOptions(const SessionConfig& config) {
   Ort::SessionOptions sessionOptions;
 
-  QLOG(logger::Priority::DEBUG, std::string("[OnnxSession] buildSessionOptions - provider=") +
-             providerToString(config.provider) + ", optimization=" +
-             optimizationToString(config.optimization) + ", enableXnnpack=" +
-             (config.enableXnnpack ? "true" : "false"));
+  QLOG(logger::Priority::DEBUG,
+       std::string("[OnnxSession] buildSessionOptions - provider=") +
+           providerToString(config.provider) +
+           ", optimization=" + optimizationToString(config.optimization) +
+           ", enableXnnpack=" + (config.enableXnnpack ? "true" : "false"));
   ONNX_ALOG("[OnnxSession] buildSessionOptions - provider=%s, optimization=%s, xnnpack=%s",
             providerToString(config.provider).c_str(),
             optimizationToString(config.optimization).c_str(),

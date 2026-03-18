@@ -18,11 +18,11 @@ class MockOnnxSession : public IOnnxSession {
     return outputInfo_;
   }
 
-  [[nodiscard]] const std::string& inputName(size_t index) const override {
+  [[nodiscard]] const std::string &inputName(size_t index) const override {
     return inputInfo_[index].name;
   }
 
-  [[nodiscard]] const std::string& outputName(size_t index) const override {
+  [[nodiscard]] const std::string &outputName(size_t index) const override {
     return outputInfo_[index].name;
   }
 

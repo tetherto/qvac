@@ -33,7 +33,8 @@ enum class ExecutionMode {
 };
 
 struct EnvironmentConfig {
-  LoggingLevel loggingLevel = LoggingLevel::ERROR;  // Suppress ORT EP node-assignment warnings
+  LoggingLevel loggingLevel =
+      LoggingLevel::ERROR; // Suppress ORT EP node-assignment warnings
   std::string loggingId = "qvac-onnx";
 };
 
@@ -44,7 +45,8 @@ struct SessionConfig {
   int interOpThreads = 0;  // 0 = auto
   bool enableMemoryPattern = true;
   bool enableCpuMemArena = true;
-  bool enableXnnpack = false;  // XNNPack EP (opt-in: may cause node fallback warnings)
+  bool enableXnnpack =
+      false; // XNNPack EP (opt-in: may cause node fallback warnings)
   ExecutionMode executionMode = ExecutionMode::SEQUENTIAL;
 };
 
