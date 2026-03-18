@@ -17,11 +17,11 @@ int computeOptimalThreads() {
 constexpr std::array VALID_SAMPLE_RATES = {8000, 16000, 22050, 44100, 48000};
 
 const HandlersMap<ParakeetConfig> PARAKEET_MODEL_HANDLERS = {
-    {"model", [](ParakeetConfig &config, const JSValueVariant &value) {}},
+    {"model", [](ParakeetConfig& config, const JSValueVariant& value) {}},
 
     {"modelPath",
-     [](ParakeetConfig &config, const JSValueVariant &value) {
-       const auto &path = std::get<std::string>(value);
+     [](ParakeetConfig& config, const JSValueVariant& value) {
+       const auto& path = std::get<std::string>(value);
        if (path.empty()) {
          throw qvac_errors::StatusError(
              qvac_errors::general_error::InvalidArgument,
@@ -31,8 +31,8 @@ const HandlersMap<ParakeetConfig> PARAKEET_MODEL_HANDLERS = {
      }},
 
     {"path",
-     [](ParakeetConfig &config, const JSValueVariant &value) {
-       const auto &path = std::get<std::string>(value);
+     [](ParakeetConfig& config, const JSValueVariant& value) {
+       const auto& path = std::get<std::string>(value);
        if (path.empty()) {
          throw qvac_errors::StatusError(
              qvac_errors::general_error::InvalidArgument,
@@ -42,8 +42,8 @@ const HandlersMap<ParakeetConfig> PARAKEET_MODEL_HANDLERS = {
      }},
 
     {"modelType",
-     [](ParakeetConfig &config, const JSValueVariant &value) {
-       const auto &typeStr = std::get<std::string>(value);
+     [](ParakeetConfig& config, const JSValueVariant& value) {
+       const auto& typeStr = std::get<std::string>(value);
        if (typeStr == "ctc") {
          config.modelType = ModelType::CTC;
        } else if (typeStr == "tdt") {
@@ -60,12 +60,12 @@ const HandlersMap<ParakeetConfig> PARAKEET_MODEL_HANDLERS = {
      }},
 
     {"useGPU",
-     [](ParakeetConfig &config, const JSValueVariant &value) {
+     [](ParakeetConfig& config, const JSValueVariant& value) {
        config.useGPU = std::get<bool>(value);
      }},
 
     {"maxThreads",
-     [](ParakeetConfig &config, const JSValueVariant &value) {
+     [](ParakeetConfig& config, const JSValueVariant& value) {
        int threads = static_cast<int>(std::get<double>(value));
        if (threads < 0) {
          throw qvac_errors::StatusError(
@@ -82,7 +82,7 @@ const HandlersMap<ParakeetConfig> PARAKEET_MODEL_HANDLERS = {
 
 const HandlersMap<ParakeetConfig> PARAKEET_AUDIO_HANDLERS = {
     {"sampleRate",
-     [](ParakeetConfig &config, const JSValueVariant &value) {
+     [](ParakeetConfig& config, const JSValueVariant& value) {
        int rate = static_cast<int>(std::get<double>(value));
        if (std::ranges::find(VALID_SAMPLE_RATES, rate) ==
            VALID_SAMPLE_RATES.end()) {
@@ -94,7 +94,7 @@ const HandlersMap<ParakeetConfig> PARAKEET_AUDIO_HANDLERS = {
      }},
 
     {"channels",
-     [](ParakeetConfig &config, const JSValueVariant &value) {
+     [](ParakeetConfig& config, const JSValueVariant& value) {
        int ch = static_cast<int>(std::get<double>(value));
        if (ch != 1 && ch != 2) {
          throw qvac_errors::StatusError(
@@ -109,17 +109,17 @@ const HandlersMap<ParakeetConfig> PARAKEET_TRANSCRIPTION_HANDLERS = {};
 
 const HandlersMap<MiscConfig> PARAKEET_MISC_HANDLERS = {
     {"captionEnabled",
-     [](MiscConfig &config, const JSValueVariant &value) {
+     [](MiscConfig& config, const JSValueVariant& value) {
        config.captionEnabled = std::get<bool>(value);
      }},
 
     {"timestampsEnabled",
-     [](MiscConfig &config, const JSValueVariant &value) {
+     [](MiscConfig& config, const JSValueVariant& value) {
        config.timestampsEnabled = std::get<bool>(value);
      }},
 
     {"seed",
-     [](MiscConfig &config, const JSValueVariant &value) {
+     [](MiscConfig& config, const JSValueVariant& value) {
        int seed = static_cast<int>(std::get<double>(value));
        config.seed = seed;
      }},
