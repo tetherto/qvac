@@ -60,8 +60,6 @@
     "@qvac/dl-filesystem": "^0.1.2",
     "@qvac/logging": "^0.1.0",
     "@types/node": "^24.2.1",
-    "bare-fs": "^4.5.1",
-    "bare-process": "^4.2.2",
     "bare-url": "^2.1.6",
     "brittle": "^3.16.5",
     "cmake-bare": "1.7.5",
@@ -75,6 +73,7 @@
   },
   "dependencies": {
     "@qvac/infer-base": "^0.3.0",
+    "bare-fs": "^4.5.1",
     "bare-path": "^3.0.0",
     "bare-process": "^4.2.2"
   },

@@ -32,9 +32,9 @@ export type AddonRunJobMessage = AddonMessage | AddonMediaMessage
 export interface Addon {
   loadWeights(data: { filename: string; chunk: Uint8Array | null; completed: boolean }, logger?: QvacLogger): Promise<void>
   activate(): Promise<void>
-  runJob(data: Array<{ type: 'text'; input?: string } | { type: 'media'; content?: Uint8Array }>): Promise<unknown>
+  runJob(data: AddonRunJobMessage[]): Promise<boolean>
   cancel(): Promise<void>
-  finetune?(params?: FinetuneOptions): Promise<void>
+  finetune?(params: FinetuneOptions): Promise<boolean>
   unload(): Promise<void>
 }
 
@@ -204,7 +204,23 @@ export interface FinetuneOptions {
   weightDecay?: number
 }
 
+export interface FinetuneProgressStats {
+  is_train: boolean
+  loss: number
+  loss_uncertainty: number
+  accuracy: number
+  accuracy_uncertainty: number
+  global_steps: number
+  current_epoch: number
+  current_batch: number
+  total_batches: number
+  elapsed_ms: number
+  eta_ms: number
+}
+
 export interface FinetuneHandle {
+  on(event: 'stats', cb: (stats: FinetuneProgressStats) => void): this
+  removeListener(event: 'stats', cb: (stats: FinetuneProgressStats) => void): this
   await(): Promise<FinetuneResult>
 }
 
@@ -233,8 +249,7 @@ export default class LlmLlamacpp extends BaseInference {
 
   constructor(
     args: LlmLlamacppArgs,
-    config: LlamaConfig,
-    finetuningParams?: FinetuneOptions | null
+    config: LlamaConfig
   )
   _load(
     closeLoader?: boolean,
@@ -260,7 +275,7 @@ export default class LlmLlamacpp extends BaseInference {
 
   run(prompt: Message[], runOptions?: RunOptions): Promise<QvacResponse>
 
-  finetune(finetuningOptions?: FinetuneOptions): Promise<FinetuneHandle>
+  finetune(finetuningOptions: FinetuneOptions): Promise<FinetuneHandle>
 
   cancel(): Promise<void>
 
@@ -268,4 +283,4 @@ export default class LlmLlamacpp extends BaseInference {
 
 }
 
-export { ReportProgressCallback, QvacResponse, FinetuneHandle, FinetuneOptions, FinetuneValidation }
+export { ReportProgressCallback, QvacResponse, FinetuneHandle, FinetuneProgressStats, FinetuneOptions, FinetuneValidation }
