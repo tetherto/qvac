@@ -1,5 +1,6 @@
 import { createExecutor } from "@tetherto/qvac-test-suite/mobile";
 import {
+  profiler,
   LLAMA_3_2_1B_INST_Q4_0,
   GTE_LARGE_FP16,
   WHISPER_TINY,
@@ -99,4 +100,8 @@ export const executor = createExecutor({
     new MobileTranscriptionExecutor(resources),
     new MobileParakeetExecutor(resources),
   ],
+  profiling: {
+    init: () => profiler.enable({ mode: "summary", includeServerBreakdown: true }),
+    exportData: () => profiler.exportJSON(),
+  },
 });
