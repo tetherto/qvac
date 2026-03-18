@@ -135,11 +135,23 @@ export const tree: Node[] = [
     name: 'References',
   },
   {
-    name: 'API',
+    name: 'JS API',
     type: 'folder',
     icon: resolveIcon('BookA'),
     index: { type: 'page', name: 'API', url: '/sdk/api' },
     children: findFolderChildren(source.pageTree.children, '/sdk/api'),
+  },
+  {
+    name: 'CLI',
+    url: '/cli',
+    type: 'page',
+    icon: resolveIcon('Terminal'),
+  },
+  {
+    name: 'HTTP server',
+    url: '/http-server',
+    type: 'page',
+    icon: resolveIcon('Server'),
   },
   {
     name: 'Release notes',

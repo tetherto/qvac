@@ -1,19 +1,13 @@
 ---
 title: Configuration
-description: Use qvac.config.* to configure the SDK's overall behavior.
+description: Use qvac.config.* to configure QVAC's overall behavior.
 ---
 
 ## Overview
 
-SDK configuration is loaded once during initialization from `qvac.config.*` file — `qvac.config.json`, `qvac.config.js`, or `qvac.config.ts` — and remains immutable for the lifetime of the SDK instance.
+QVAC configuration is loaded once during initialization from `qvac.config.*` file — `qvac.config.json`, `qvac.config.js`, or `qvac.config.ts` — and remains immutable for the lifetime of the SDK instance. To provide configuration, either set the `QVAC_CONFIG_PATH` environment variable or place a `qvac.config.*` file at the root of your project.
 
-_Providing the configuration file is **not required**._ If you don't, the SDK still works using the defaults.
-
-## Usage
-
-The SDK initializes lazily on first use, either when you call `loadModel()` or any AI task function. Its life cycle ends when you call `close()`.
-
-To provide configuration, either set the `QVAC_CONFIG_PATH` environment variable or place a `qvac.config.*` file at the root of your project.
+When using only the SDK, providing a configuration is **not required**. If you do not provide one, the SDK uses the default settings. *When using the HTTP server, however, providing a configuration **is required**.*
 
 ## Examples
 
@@ -37,15 +31,17 @@ Below are examples of `qvac.config.*` files. Values marked with `<placeholders>`
       "match": { "platform": "android", "deviceBrand": "samsung" },
       "defaults": { "llm": { "device": "cpu" } }
     }
-  ]
-  "httpConnectionTimeoutMs": 10000,
-  "deviceDefaults": [
-    {
-      "name": "Samsung Galaxy force CPU",
-      "match": { "platform": "android", "deviceBrand": "samsung" },
-      "defaults": { "llm": { "device": "cpu" } }
+  ],
+  "serve": {
+    "models": {
+      "<model_alias>": {
+        "model": "<SDK_MODEL_CONSTANT>",
+        "default": true,
+        "preload": true,
+        "config": {}
+      }
     }
-  ]
+  }
 }
 ```
 </WrapCode>
@@ -69,13 +65,16 @@ module.exports = {
       defaults: { llm: { device: "cpu" } },
     },
   ],
-  deviceDefaults: [
-    {
-      name: "Samsung Galaxy force CPU",
-      match: { platform: "android", deviceBrand: "samsung" },
-      defaults: { llm: { device: "cpu" } },
+  serve: {
+    models: {
+      "<model_alias>": {
+        model: "<SDK_MODEL_CONSTANT>",
+        default: true,
+        preload: true,
+        config: {},
+      },
     },
-  ],
+  },
 };
 ```
 </WrapCode>
@@ -102,13 +101,16 @@ const config: QvacConfig = {
       defaults: { llm: { device: "cpu" } },
     },
   ],
-  deviceDefaults: [
-    {
-      name: "Samsung Galaxy force CPU",
-      match: { platform: "android", deviceBrand: "samsung" },
-      defaults: { llm: { device: "cpu" } },
+  serve: {
+    models: {
+      "<model_alias>": {
+        model: "<SDK_MODEL_CONSTANT>",
+        default: true,
+        preload: true,
+        config: {},
+      },
     },
-  ],
+  },
 };
 
 export default config;
@@ -131,6 +133,7 @@ The following table lists all supported configuration options for `qvac.config.*
 | `httpDownloadConcurrency` | Maximum number of concurrent HTTP downloads for sharded models. | `number` | No | `3` |
 | `httpConnectionTimeoutMs` | Timeout in milliseconds for HTTP connection establishment (applies to HEAD and GET requests). | `number` | No | `10000` |
 | `deviceDefaults` | Override loaded model config for specific devices. First matching pattern wins. Use it to optimize for different hardware. | [`DevicePattern[]`](#devicepattern) | No | — |
+| `serve` | Configuration for the [HTTP server](/http-server). | [`ServeConfig`](#serveconfig) | No | — |
 
 ### `DevicePattern`
 
@@ -165,3 +168,34 @@ Model types (allowed keys): `llm` | `embeddings` | `whisper` | `parakeet` | `nmt
 <Callout type="info">
 **Important:** for the exact config fields supported by each model type (key), see [`modelConfig` — `loadModel()` at `@qvac/sdk` API reference](/sdk/api/loadModel/#modelconfig-varies-by-model-type).
 </Callout>
+
+### `ServeConfig`
+
+The `serve.models` field is a map of model aliases to model entries. Keys are the **model aliases** — the names that HTTP clients use in the `model` field of their requests. Values can be either a **string** (SDK model constant name, e.g., `"QWEN3_600M_INST_Q4"`) or a **`ModelEntry` object**:
+
+| Field | Description | Type | Required |
+| --- | --- | --- | --- |
+| `model` | SDK model constant name. | `string` | Yes (unless using `src` + `type`) |
+| `src` | Explicit model source (URL or path). | `string` | Yes (if no `model`) |
+| `type` | Model type: `llm` \| `embeddings` \| `whisper` \| `parakeet` \| `nmt` \| `tts` \| `ocr`. | `string` | Yes (if using `src`) |
+| `default` | Use as the default model for its endpoint category. | `boolean` | No (`false`) |
+| `preload` | Load model into memory on server startup. | `boolean` | No (`true` for constant entries, `false` for explicit) |
+| `config` | Model config overrides (same as [`modelConfig` in `loadModel()`](/sdk/api/loadModel/#modelconfig-varies-by-model-type)). | `object` | No |
+
+Example:
+
+```json
+{
+  "serve": {
+    "models": {
+      "my-llm": {
+        "model": "QWEN3_600M_INST_Q4",
+        "default": true,
+        "preload": true,
+        "config": { "ctx_size": 8192 }
+      },
+      "my-embed": "GTE_LARGE_FP16"
+    }
+  }
+}
+```

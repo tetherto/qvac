@@ -46,7 +46,7 @@ All the built-in plugins you can select, along with the AI tasks that depend on 
 
 <Tabs>
 <Tab value="desktop" label="Node.js/Bare" default>
-When developing for desktop environment, use the SDK CLI to (re)bundle the SDK only with the selected plugins:
+When developing for desktop environment, use the QVAC CLI to (re)bundle the SDK only with the selected plugins:
 
 ```bash
 npx qvac bundle sdk
@@ -64,6 +64,10 @@ npx expo prebuild
 </Steps>
 
 Only the selected plugins are included in your bundle, significantly reducing your application size. If `plugins` is omitted or an empty array, it bundles all built-in plugins by default.
+
+<Callout type="info">
+See [QVAC CLI](/cli) to learn how to install and use it.
+</Callout>
 
 ## Custom plugins
 
