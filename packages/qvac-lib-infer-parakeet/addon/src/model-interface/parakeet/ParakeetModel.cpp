@@ -404,7 +404,6 @@ void ParakeetModel::load() {
        "Loading Parakeet models from: " + cfg_.modelPath);
 
   auto loadStart = std::chrono::high_resolution_clock::now();
-  std::string weights_staging_dir;
 
   try {
     memory_info_ = std::make_unique<Ort::MemoryInfo>(
@@ -420,37 +419,6 @@ void ParakeetModel::load() {
       QLOG(qvac_lib_inference_addon_cpp::logger::Priority::INFO,
            "Deterministic compute enabled (seed=" + std::to_string(cfg_.seed) +
                ")");
-    }
-
-    const bool is_tdt = (cfg_.modelType == ModelType::TDT);
-    const bool has_encoder_weights =
-        model_weights_.count("encoder-model.onnx") > 0;
-    const bool has_decoder_weights =
-        model_weights_.count("decoder_joint-model.onnx") > 0;
-    if (is_tdt && cfg_.encoderPath.empty() && cfg_.decoderPath.empty() &&
-        has_encoder_weights && has_decoder_weights) {
-      weights_staging_dir =
-          (std::filesystem::temp_directory_path() /
-           ("parakeet_weights_" +
-            std::to_string(reinterpret_cast<uintptr_t>(this))))
-              .string();
-      std::filesystem::create_directories(weights_staging_dir);
-      const auto write_weight =
-          [this, &weights_staging_dir](const std::string &name) {
-            auto it = model_weights_.find(name);
-            if (it == model_weights_.end())
-              return;
-            std::ofstream f(weights_staging_dir + "/" + name, std::ios::binary);
-            f.write(reinterpret_cast<const char *>(it->second.data()),
-                    static_cast<std::streamsize>(it->second.size()));
-          };
-      write_weight("encoder-model.onnx");
-      write_weight("decoder_joint-model.onnx");
-      write_weight("preprocessor.onnx");
-      cfg_.encoderPath = weights_staging_dir + "/encoder-model.onnx";
-      cfg_.decoderPath = weights_staging_dir + "/decoder_joint-model.onnx";
-      if (model_weights_.count("preprocessor.onnx") > 0)
-        cfg_.preprocessorPath = weights_staging_dir + "/preprocessor.onnx";
     }
 
     switch (cfg_.modelType) {
@@ -470,10 +438,6 @@ void ParakeetModel::load() {
 
     is_loaded_ = true;
     model_weights_.clear();
-    if (!weights_staging_dir.empty()) {
-      std::error_code ec;
-      std::filesystem::remove_all(weights_staging_dir, ec);
-    }
 
     auto loadEnd = std::chrono::high_resolution_clock::now();
     modelLoadMs_ = std::chrono::duration_cast<std::chrono::milliseconds>(
