@@ -26,6 +26,7 @@ export const tree: Node[] = [
     name: 'About QVAC',
     type: 'folder',
     icon: resolveIcon('Info'),
+    index: { type: 'page', name: 'About QVAC', url: '/about-qvac/welcome' },
     children: [
       {
         name: 'Welcome',
@@ -67,28 +68,29 @@ export const tree: Node[] = [
     name: 'Getting started',
     type: 'folder',
     icon: resolveIcon('Compass'),
+    index: { type: 'page', name: 'Getting started', url: '/sdk/getting-started' },
     children: [
       {
         name: 'Overview',
-        url: '/sdk',
+        url: '/sdk/getting-started',
         type: 'page',
         icon: resolveIcon('Map'),
       },
       {
         name: 'Quickstart',
-        url: '/sdk/quickstart',
+        url: '/sdk/getting-started/quickstart',
         type: 'page',
         icon: resolveIcon('Rocket'),
       },
       {
         name: 'Installation',
-        url: '/sdk/installation',
+        url: '/sdk/getting-started/installation',
         type: 'page',
         icon: resolveIcon('Package'),
       },
       {
         name: 'Configuration',
-        url: '/sdk/configuration',
+        url: '/sdk/getting-started/configuration',
         type: 'page',
         icon: resolveIcon('SlidersHorizontal'),
       },
