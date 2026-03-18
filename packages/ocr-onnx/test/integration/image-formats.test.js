@@ -2,7 +2,7 @@
 
 const { ONNXOcr } = require('../..')
 const test = require('brittle')
-const { isMobile, getImagePath, ensureModelPath } = require('./utils')
+const { isMobile, getImagePath, ensureModelPath, windowsOrtParams } = require('./utils')
 
 const MOBILE_TIMEOUT = 600 * 1000 // 10 minutes for mobile
 const DESKTOP_TIMEOUT = 120 * 1000 // 2 minutes for desktop
@@ -23,7 +23,7 @@ test('OCR processes JPEG images correctly', { timeout: TEST_TIMEOUT }, async fun
       pathRecognizer: recognizerPath,
       langList: ['en'],
       useGPU: false,
-      enableXnnpack: true //TODO: remove
+      ...windowsOrtParams
     },
     opts: { stats: true }
   })
@@ -73,7 +73,7 @@ test('OCR processes PNG images correctly', { timeout: TEST_TIMEOUT }, async func
       pathRecognizer: recognizerPath,
       langList: ['en'],
       useGPU: false,
-      enableXnnpack: true //TODO: remove
+      ...windowsOrtParams
     },
     opts: { stats: true }
   })
@@ -122,7 +122,7 @@ test('BMP and JPEG produce consistent results', { timeout: TEST_TIMEOUT }, async
       pathRecognizer: recognizerPath,
       langList: ['en'],
       useGPU: false,
-      enableXnnpack: true //TODO: remove
+      ...windowsOrtParams
     },
     opts: { stats: true }
   })
