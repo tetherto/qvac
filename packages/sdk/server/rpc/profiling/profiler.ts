@@ -2,22 +2,30 @@ import { nowMs } from "@/profiling";
 import {
   responseSchema,
   DELEGATION_BREAKDOWN_KEY,
+  OPERATION_EVENT_KEY,
+  PROFILING_TRAILER_KEY,
   type Response,
   type ProfilingRequestMeta,
+  type DelegationBreakdown,
+  type OperationEvent,
 } from "@/schemas";
 import {
   createProfilingContext,
   injectProfilingIntoString,
   type ServerProfilingContext,
 } from "./context";
-import type { ResponseWithDelegation } from "../delegate-transport";
+
+type ResponseWithProfilingMeta = Response & {
+  [DELEGATION_BREAKDOWN_KEY]?: DelegationBreakdown;
+  [OPERATION_EVENT_KEY]?: OperationEvent;
+};
 
 export type ServerProfiler = {
   markRequestParsed: (ms: number) => void;
   markRequestValidated: (ms: number) => void;
   startHandler: () => void;
   endHandler: () => void;
-  serialize: (response: Response, final?: boolean) => string;
+  serialize: (response?: Response, final?: boolean) => string;
   serializeError: (json: string) => string;
   getContext: () => ServerProfilingContext | undefined;
 };
@@ -28,12 +36,17 @@ const noopProfiler: ServerProfiler = {
   startHandler: () => {},
   endHandler: () => {},
   serialize: (response) => {
-    const delegation = (response as ResponseWithDelegation)[
-      DELEGATION_BREAKDOWN_KEY
-    ];
+    if (!response) return "";
+
+    const extended = response as ResponseWithProfilingMeta;
+    const delegation = extended[DELEGATION_BREAKDOWN_KEY];
+    const operation = extended[OPERATION_EVENT_KEY];
     const json = JSON.stringify(responseSchema.parse(response));
-    if (delegation) {
-      return injectProfilingIntoString(json, { delegation });
+    if (delegation || operation) {
+      const opts: Parameters<typeof injectProfilingIntoString>[1] = {};
+      if (delegation) opts.delegation = delegation;
+      if (operation) opts.operation = operation;
+      return injectProfilingIntoString(json, opts);
     }
     return json;
   },
@@ -45,6 +58,8 @@ function createActiveProfiler(meta: ProfilingRequestMeta): ServerProfiler {
   const ctx = createProfilingContext(meta);
   let handlerStart = 0;
   let handlerEnded = false;
+  let cachedDelegation: DelegationBreakdown | undefined;
+  let cachedOperation: OperationEvent | undefined;
 
   return {
     markRequestParsed: (ms) => {
@@ -63,9 +78,19 @@ function createActiveProfiler(meta: ProfilingRequestMeta): ServerProfiler {
       ctx.handlerExecutionMs = nowMs() - handlerStart;
     },
     serialize: (response, final = true) => {
-      const delegation = (response as ResponseWithDelegation)[
-        DELEGATION_BREAKDOWN_KEY
-      ];
+      if (!response) {
+        const opts: Parameters<typeof injectProfilingIntoString>[1] = { ctx };
+        if (cachedDelegation) opts.delegation = cachedDelegation;
+        if (cachedOperation) opts.operation = cachedOperation;
+        return injectProfilingIntoString(`{"${PROFILING_TRAILER_KEY}":true}`, opts);
+      }
+
+      const extended = response as ResponseWithProfilingMeta;
+      const delegation = extended[DELEGATION_BREAKDOWN_KEY];
+      const operation = extended[OPERATION_EVENT_KEY];
+
+      if (delegation) cachedDelegation = delegation;
+      if (operation) cachedOperation = operation;
 
       const zodStart = nowMs();
       const validated = responseSchema.parse(response);
@@ -77,8 +102,13 @@ function createActiveProfiler(meta: ProfilingRequestMeta): ServerProfiler {
       ctx.responseStringifyMs =
         (ctx.responseStringifyMs ?? 0) + (nowMs() - stringifyStart);
 
-      const injectionOpts = delegation ? { ctx, delegation } : { ctx };
-      return final ? injectProfilingIntoString(json, injectionOpts) : json;
+      if (final) {
+        const opts: Parameters<typeof injectProfilingIntoString>[1] = { ctx };
+        if (delegation) opts.delegation = delegation;
+        if (operation) opts.operation = operation;
+        return injectProfilingIntoString(json, opts);
+      }
+      return json;
     },
     serializeError: (json) => injectProfilingIntoString(json, { ctx }),
     getContext: () => ctx,

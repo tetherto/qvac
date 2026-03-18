@@ -67,6 +67,14 @@ export interface AddonConfigurationParams {
   backendsDir?: string
 }
 
+export interface RuntimeStats {
+  total_tokens: number
+  total_time_ms: number
+  tokens_per_second?: number
+  batch_size: number
+  context_size: number
+}
+
 export default class GGMLBert extends BaseInference {
   protected addon: Addon
   

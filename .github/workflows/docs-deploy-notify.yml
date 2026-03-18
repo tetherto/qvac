@@ -1,5 +1,9 @@
 # Notify docs owner when a release branch is pushed (e.g. after merge).
 # Deploy is via PR main → docs-production.
+#
+# DISABLED: This workflow floods the issues tab in a monorepo with frequent
+# releases. The notify job is gated with `if: false` until we redesign the
+# notification strategy (e.g. batch summary, Slack, or PR comment).
 name: Docs Deploy Notify
 
 on:
@@ -15,6 +19,7 @@ on:
 
 jobs:
   notify:
+    if: false # DISABLED — see comment at top of file
     runs-on: ubuntu-latest
     permissions:
       issues: write

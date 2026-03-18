@@ -29,7 +29,7 @@ export function textToSpeech(
 
   if (params.stream) {
     const bufferStream = (async function* () {
-      for await (const response of streamRpc(request, undefined, options)) {
+      for await (const response of streamRpc(request, options)) {
         if (response.type === "textToSpeech") {
           const streamResponse = ttsResponseSchema.parse(response);
           if (streamResponse.buffer.length > 0) {
@@ -54,7 +54,7 @@ export function textToSpeech(
 
     const bufferPromise = (async () => {
       let buffer: number[] = [];
-      for await (const response of streamRpc(request, undefined, options)) {
+      for await (const response of streamRpc(request, options)) {
         if (response.type === "textToSpeech") {
           const streamResponse = ttsResponseSchema.parse(response);
           buffer = buffer.concat(streamResponse.buffer);
