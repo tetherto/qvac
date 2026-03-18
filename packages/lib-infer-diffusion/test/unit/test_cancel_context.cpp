@@ -236,14 +236,16 @@ TEST_F(SdCancelContextTest, RuntimeStatsPopulatedAfterGeneration) {
   EXPECT_FALSE(stats.empty()) << "Stats should be populated after generation";
 
   // Check expected stat keys exist
-  bool hasGenerationTime = false;
-  bool hasOutputCount = false;
+  bool hasGenerationMs = false;
+  bool hasTotalImages = false;
   for (const auto& [key, value] : stats) {
-    if (key == "generation_time")
-      hasGenerationTime = true;
-    if (key == "output_count")
-      hasOutputCount = true;
+    if (key == "generationMs") {
+      hasGenerationMs = true;
+    }
+    if (key == "totalImages") {
+      hasTotalImages = true;
+    }
   }
-  EXPECT_TRUE(hasGenerationTime) << "Stats must include generation_time";
-  EXPECT_TRUE(hasOutputCount) << "Stats must include output_count";
+  EXPECT_TRUE(hasGenerationMs) << "Stats must include generationMs";
+  EXPECT_TRUE(hasTotalImages) << "Stats must include totalImages";
 }

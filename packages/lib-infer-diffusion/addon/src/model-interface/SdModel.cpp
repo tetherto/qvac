@@ -400,11 +400,10 @@ std::any SdModel::process(const std::any& input) {
   }
 
   const auto t1 = std::chrono::steady_clock::now();
-  const double genMs =
-      std::chrono::duration<double, std::milli>(t1 - t0).count();
 
   // ── Accumulate cumulative counters ─────────────────────────────────────────
-  const int64_t genMsI = static_cast<int64_t>(genMs);
+  const int64_t genMsI = static_cast<int64_t>(
+      std::chrono::duration<double, std::milli>(t1 - t0).count());
   stats_.totalGenerationMs += genMsI;
   stats_.totalWallMs += genMsI;
   stats_.totalSteps += gen.steps;
@@ -413,48 +412,28 @@ std::any SdModel::process(const std::any& input) {
   stats_.totalPixels +=
       static_cast<int64_t>(gen.width) * gen.height * outputCount;
 
-  // ── Derived metrics ────────────────────────────────────────────────────────
-  const double totalTimeSec = stats_.totalWallMs / 1000.0;
-  const double stepsPerSecond =
-      totalTimeSec > 0.0
-          ? (static_cast<double>(stats_.totalSteps) / totalTimeSec)
-          : 0.0;
-  const double msPerStep =
-      stats_.totalSteps > 0
-          ? (static_cast<double>(stats_.totalWallMs) / stats_.totalSteps)
-          : 0.0;
-  const double megapixelsPerSecond =
-      totalTimeSec > 0.0
-          ? (static_cast<double>(stats_.totalPixels) / 1e6 / totalTimeSec)
-          : 0.0;
-
   // ── Build stats for runtimeStats() ─────────────────────────────────────────
   // Stats are stored and emitted via queueJobEnded() → runtimeStats().
   // process() returns std::any{} (empty) so images delivered via
   // outputCallback are not duplicated as a queueResult event.
+  //
+  // Only primitive (non-derivable) values are reported. Callers can compute
+  // rates such as stepsPerSecond = totalSteps / (totalWallMs / 1000.0).
   lastStats_.clear();
-
-  lastStats_.emplace_back("generation_time", genMs);
-  lastStats_.emplace_back("totalTime", totalTimeSec);
-  lastStats_.emplace_back("stepsPerSecond", stepsPerSecond);
-  lastStats_.emplace_back("msPerStep", msPerStep);
-  lastStats_.emplace_back("megapixelsPerSecond", megapixelsPerSecond);
-
-  lastStats_.emplace_back("totalSteps", stats_.totalSteps);
-  lastStats_.emplace_back("totalGenerations", stats_.totalGenerations);
-  lastStats_.emplace_back("totalImages", stats_.totalImages);
-  lastStats_.emplace_back("totalPixels", stats_.totalPixels);
 
   lastStats_.emplace_back("modelLoadMs", stats_.modelLoadMs);
   lastStats_.emplace_back("generationMs", genMsI);
   lastStats_.emplace_back("totalGenerationMs", stats_.totalGenerationMs);
   lastStats_.emplace_back("totalWallMs", stats_.totalWallMs);
 
-  lastStats_.emplace_back("steps", static_cast<int64_t>(gen.steps));
+  lastStats_.emplace_back("totalSteps", stats_.totalSteps);
+  lastStats_.emplace_back("totalGenerations", stats_.totalGenerations);
+  lastStats_.emplace_back("totalImages", stats_.totalImages);
+  lastStats_.emplace_back("totalPixels", stats_.totalPixels);
+
   lastStats_.emplace_back("width", static_cast<int64_t>(gen.width));
   lastStats_.emplace_back("height", static_cast<int64_t>(gen.height));
   lastStats_.emplace_back("seed", gen.seed);
-  lastStats_.emplace_back("output_count", static_cast<int64_t>(outputCount));
 
   // Return empty — images are already delivered via outputCallback,
   // and stats are emitted by queueJobEnded() → runtimeStats().
