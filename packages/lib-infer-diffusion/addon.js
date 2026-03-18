@@ -76,17 +76,4 @@ class SdInterface {
   }
 }
 
-/**
- * Notify the native addon that the process is about to exit.
- * Must be called from process.on('exit') so that SdModel::unload() skips
- * free_sd_ctx and avoids a SIGSEGV when ggml's Metal backend is already
- * partially torn down.
- * @param {object} binding - The native addon binding
- */
-function notifyProcessExit (binding) {
-  try {
-    binding.notifyProcessExit()
-  } catch (_) {}
-}
-
-module.exports = { SdInterface, notifyProcessExit }
+module.exports = { SdInterface }

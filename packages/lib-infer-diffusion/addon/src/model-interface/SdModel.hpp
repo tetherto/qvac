@@ -91,16 +91,6 @@ public:
   [[nodiscard]] qvac_lib_inference_addon_cpp::RuntimeStats
   runtimeStats() const final;
 
-  // ── Process-exit guard ─────────────────────────────────────────────────────
-
-  /**
-   * Call before the process exits so that the destructor skips free_sd_ctx.
-   * ggml's Metal/Vulkan backends may already be partially torn down at that
-   * point; calling free_sd_ctx would cause a SIGSEGV (exit 139).
-   * The OS reclaims all memory on process exit regardless.
-   */
-  static void setProcessExiting() noexcept;
-
   // ── Log callback ───────────────────────────────────────────────────────────
 
   static void

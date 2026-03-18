@@ -20,7 +20,6 @@ js_value_t* qvacLibInferenceAddonSdExports(js_env_t* env, js_value_t* exports) {
   V("runJob", qvac_lib_inference_addon_sd::runJob)
 
   V("activate", qvac_lib_inference_addon_sd::activate)
-  V("notifyProcessExit", qvac_lib_inference_addon_sd::notifyProcessExit)
   V("cancel", qvac_lib_inference_addon_cpp::JsInterface::cancel)
   V("destroyInstance",
     qvac_lib_inference_addon_cpp::JsInterface::destroyInstance)

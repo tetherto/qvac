@@ -12,8 +12,7 @@
  *   6.  SdImageBatch   – RAII wrapper: pixel buffers freed on scope exit,
  *                        release(i) for early per-image free, and
  *                        exception safety during iteration
- *   7.  SdModel::setProcessExiting() – process-exit guard for unload()
- *   8.  IModelAsyncLoad removed – SdModel no longer implements it
+ *   7.  IModelAsyncLoad removed – SdModel no longer implements it
  */
 
 #include <cstdlib>
@@ -393,22 +392,7 @@ TEST(SdImageBatch, EarlyReleaseAllowsImmediateMemoryRecovery) {
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
-// 7. SdModel::setProcessExiting() – process-exit guard
-// ─────────────────────────────────────────────────────────────────────────────
-
-TEST(SdModel_ProcessExit, SetProcessExitingDoesNotThrow) {
-  // Calling setProcessExiting() is a no-op from a user perspective — it just
-  // sets an internal atomic flag.  The main contract is that it doesn't crash
-  // and that destroying a never-loaded model after the call is safe.
-  EXPECT_NO_THROW(SdModel::setProcessExiting());
-  EXPECT_NO_THROW({
-    SdCtxConfig cfg{};
-    SdModel model(std::move(cfg));
-  }); // destructor runs with g_processExiting=true — must not crash
-}
-
-// ─────────────────────────────────────────────────────────────────────────────
-// 8. IModelAsyncLoad removed – SdModel must NOT implement that interface
+// 7. IModelAsyncLoad removed – SdModel must NOT implement that interface
 // ─────────────────────────────────────────────────────────────────────────────
 
 TEST(SdModel_NoAsyncLoad, SdModelDoesNotImplementIModelAsyncLoad) {

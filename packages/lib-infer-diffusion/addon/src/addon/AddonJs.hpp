@@ -126,20 +126,4 @@ inline js_value_t* activate(js_env_t* env, js_callback_info_t* info) try {
 }
 JSCATCH
 
-/**
- * Notify the native layer that the JS process is about to exit.
- * Sets the process-exiting flag so that SdModel::unload() skips free_sd_ctx,
- * preventing a SIGSEGV when ggml's Metal/Vulkan backends are already torn down.
- * Called from JS via process.on('exit').
- * Args: none
- */
-inline js_value_t*
-notifyProcessExit(js_env_t* env, js_callback_info_t* /*info*/) try {
-  SdModel::setProcessExiting();
-  js_value_t* result = nullptr;
-  js_get_undefined(env, &result);
-  return result;
-}
-JSCATCH
-
 } // namespace qvac_lib_inference_addon_sd

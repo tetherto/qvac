@@ -38,15 +38,6 @@ thread_local ProgressCtx tl_progressCtx;
 // sd_abort_cb_data when multiple SdModel instances could coexist.
 thread_local const SdModel* tl_abortModel = nullptr;
 
-// Guard against calling free_sd_ctx during process exit.
-// When process.exit() is called, ggml's backend (Metal/Vulkan) may have
-// already started tearing down its global state.  Calling free_sd_ctx at
-// that point causes a SIGSEGV (exit code 139).
-// JavaScript calls SdModel::setProcessExiting() (via notifyProcessExit binding)
-// from process.on('exit') before destructors run, so unload() can skip the
-// free_sd_ctx call.  The OS reclaims all memory on process exit regardless.
-std::atomic<bool> g_processExiting{false};
-
 void sdProgressCallback(int step, int steps, float /*time*/, void* /*data*/) {
   if (!tl_progressCtx.job || !tl_progressCtx.job->progressCallback)
     return;
@@ -121,19 +112,7 @@ SdModel::SdModel(qvac_lib_inference_addon_sd::SdCtxConfig config)
 // Destructor — releases the sd_ctx and all associated GPU/CPU memory
 // ---------------------------------------------------------------------------
 
-SdModel::~SdModel() {
-  if (!isLoaded()) {
-    return;
-  }
-  // Skip free_sd_ctx during process exit — ggml's backend globals (Metal,
-  // Vulkan) may be partially torn down already, causing SIGSEGV (exit 139).
-  // The OS reclaims all memory on process exit regardless.
-  if (!g_processExiting.load(std::memory_order_relaxed)) {
-    sdCtx_.reset(); // calls free_sd_ctx via custom deleter
-  } else {
-    sdCtx_.release(); // drop pointer without calling free_sd_ctx
-  }
-}
+SdModel::~SdModel() = default;
 
 // ---------------------------------------------------------------------------
 // load() — maps SdCtxConfig → sd_ctx_params_t, then calls new_sd_ctx()
@@ -526,14 +505,6 @@ sd_image_t SdModel::decodePng(const std::vector<uint8_t>& pngBytes) {
     return sd_image_t{};
   return sd_image_t{
       static_cast<uint32_t>(w), static_cast<uint32_t>(h), 3, data};
-}
-
-// ---------------------------------------------------------------------------
-// Process-exit guard
-// ---------------------------------------------------------------------------
-
-void SdModel::setProcessExiting() noexcept {
-  g_processExiting.store(true, std::memory_order_relaxed);
 }
 
 // ---------------------------------------------------------------------------
