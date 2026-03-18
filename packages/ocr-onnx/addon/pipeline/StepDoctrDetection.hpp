@@ -19,7 +19,8 @@ public:
   static constexpr int MIN_SIZE_BOX = 2;
 
   explicit StepDoctrDetection(
-      const std::string& pathDetector, bool useGPU = false);
+      const std::string& pathDetector,
+      const onnx_addon::SessionConfig& sessionConfig = {});
 
 #if defined(_WIN32) || defined(_WIN64)
   // On Windows, defer session destruction to avoid the ORT global-state crash.

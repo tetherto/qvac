@@ -1,6 +1,6 @@
 {
   "name": "@qvac/ocr-onnx",
-  "version": "0.3.0",
+  "version": "0.3.3",
   "description": "OCR addon for qvac",
   "addon": true,
   "engines": {
@@ -73,7 +73,7 @@
     "@qvac/dl-hyperdrive": "^0.1.0",
     "@qvac/error": "^0.1.0",
     "@qvac/infer-base": "^0.1.0",
-    "@qvac/onnx": "^0.12.12",
+    "@qvac/onnx": "^0.13.3",
     "@qvac/response": "^0.1.2",
     "bare-fetch": "^2.5.1",
     "bare-fs": "^4.5.1",
