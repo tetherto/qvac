@@ -135,11 +135,23 @@ export const tree: Node[] = [
     name: 'References',
   },
   {
-    name: 'API',
+    name: 'JS API',
     type: 'folder',
     icon: resolveIcon('BookA'),
     index: { type: 'page', name: 'API', url: '/sdk/api' },
     children: findFolderChildren(source.pageTree.children, '/sdk/api'),
+  },
+  {
+    name: 'CLI',
+    url: '/cli',
+    type: 'page',
+    icon: resolveIcon('Terminal'),
+  },
+  {
+    name: 'HTTP server',
+    url: '/http-server',
+    type: 'page',
+    icon: resolveIcon('Server'),
   },
   {
     name: 'Release notes',
@@ -158,6 +170,7 @@ export const tree: Node[] = [
       { name: 'embed-llamacpp', url: '/addons/embed-llamacpp', type: 'page' },
       { name: 'translation-nmtcpp', url: '/addons/translation-nmtcpp', type: 'page' },
       { name: 'transcription-whispercpp', url: '/addons/transcription-whispercpp', type: 'page' },
+      { name: 'transcription-parakeet', url: '/addons/transcription-parakeet', type: 'page' },
       { name: 'tts-onnx', url: '/addons/tts-onnx', type: 'page' },
       { name: 'ocr-onnx', url: '/addons/ocr-onnx', type: 'page' },
     ],
