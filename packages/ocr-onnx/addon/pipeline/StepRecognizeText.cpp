@@ -83,9 +83,25 @@ cv::Mat resizeImgForRecognizerInput(const cv::Mat &img, float width, float heigh
   cv::Mat resizedImg;
   if (ratioLocal < 1.0F) {
     ratioLocal = calculateRatio(width, height);
-    cv::resize(img, resizedImg, cv::Size(RECOGNIZER_MODEL_HEIGHT, static_cast<int>(RECOGNIZER_MODEL_HEIGHT * ratioLocal)), 0, 0, cv::INTER_LINEAR);
+    cv::resize(
+        img,
+        resizedImg,
+        cv::Size(
+            RECOGNIZER_MODEL_HEIGHT,
+            static_cast<int>(RECOGNIZER_MODEL_HEIGHT * ratioLocal)),
+        0,
+        0,
+        cv::INTER_LINEAR);
   } else {
-    cv::resize(img, resizedImg, cv::Size(static_cast<int>(RECOGNIZER_MODEL_HEIGHT * ratioLocal), RECOGNIZER_MODEL_HEIGHT), 0, 0, cv::INTER_LINEAR);
+    cv::resize(
+        img,
+        resizedImg,
+        cv::Size(
+            static_cast<int>(RECOGNIZER_MODEL_HEIGHT * ratioLocal),
+            RECOGNIZER_MODEL_HEIGHT),
+        0,
+        0,
+        cv::INTER_LINEAR);
   }
   return resizedImg;
 }
@@ -204,7 +220,14 @@ cv::Mat normalizeAndPad(const cv::Mat &img, int channels, int height, int maxWid
   cv::Mat cropped = imgFloat(cv::Rect(0, 0, imgW, imgH));
 
   cv::Mat padImg;
-  cv::copyMakeBorder(cropped, padImg, 0, height - imgH, 0, maxWidth - imgW, cv::BORDER_REPLICATE);
+  cv::copyMakeBorder(
+      cropped,
+      padImg,
+      0,
+      height - imgH,
+      0,
+      maxWidth - imgW,
+      cv::BORDER_REPLICATE);
 
   return padImg;
 }
@@ -256,7 +279,13 @@ cv::Mat alignAndCollate(const SubImage &subImage, int targetWidth, double adjust
   int proportionalWidth = calculateProportionalWidth(width, height);
 
   cv::Mat resizedImage;
-  cv::resize(image, resizedImage, cv::Size(proportionalWidth, RECOGNIZER_MODEL_HEIGHT), 0, 0, cv::INTER_LINEAR);
+  cv::resize(
+      image,
+      resizedImage,
+      cv::Size(proportionalWidth, RECOGNIZER_MODEL_HEIGHT),
+      0,
+      0,
+      cv::INTER_LINEAR);
 
   return normalizeAndPad(resizedImage, 1 /*grayscale*/, RECOGNIZER_MODEL_HEIGHT, targetWidth);
 }
@@ -473,10 +502,7 @@ std::array<cv::Point2f, 4> rotateBox(const std::array<cv::Point2f, 4> &box, int 
 StepRecognizeText::StepRecognizeText(
     const std::string& pathRecognizer, std::span<const std::string> langList,
     const onnx_addon::SessionConfig& sessionConfig, const Config& config)
-    : config_(config),
-      session_(
-          pathRecognizer,
-          sessionConfig),
+    : config_(config), session_(pathRecognizer, sessionConfig),
       isLeftToRightScript_{true} {
   QLOG(qvac_lib_inference_addon_cpp::logger::Priority::INFO, "[Recognition] Constructor: ONNX session created, validating languages...");
   ALOG_INFO(std::string("[Recognition] Constructor: ONNX session created, validating languages..."));
@@ -726,7 +752,8 @@ std::pair<std::string, float> StepRecognizeText::getTextAndConfidenceFromPreds(c
   return {predictedText, confidenceScore};
 }
 
-std::pair<std::vector<Ort::Value>, cv::Mat> StepRecognizeText::runInferenceOnImg(const cv::Mat &img) {
+std::pair<std::vector<Ort::Value>, cv::Mat>
+StepRecognizeText::runInferenceOnImg(const cv::Mat& img) {
   int height = img.rows;
   int width = img.cols;
   int numChannels = img.channels();
@@ -742,7 +769,10 @@ std::pair<std::vector<Ort::Value>, cv::Mat> StepRecognizeText::runInferenceOnImg
     cv::Mat chwBlob(numChannels, height * width, CV_32F);
     for (int i = 0; i < numChannels; i++) {
       CV_Assert(channels[i].isContinuous());
-      memcpy(chwBlob.ptr<float>(i), channels[i].data, sizeof(float) * height * width);
+      memcpy(
+          chwBlob.ptr<float>(i),
+          channels[i].data,
+          sizeof(float) * height * width);
     }
     inputBlob = chwBlob.reshape(1, {1, numChannels, height, width});
   }
@@ -776,7 +806,8 @@ std::pair<std::vector<Ort::Value>, cv::Mat> StepRecognizeText::runInferenceOnImg
     cvSizes[i] = static_cast<int>(predsShape[i]);
   }
 
-  // Return ORT values alongside a cv::Mat view (no clone - caller keeps ortValues alive)
+  // Return ORT values alongside a cv::Mat view (no clone - caller keeps
+  // ortValues alive)
   cv::Mat preds(
       predsDims,
       cvSizes.data(),
@@ -786,7 +817,9 @@ std::pair<std::vector<Ort::Value>, cv::Mat> StepRecognizeText::runInferenceOnImg
   return std::make_pair(std::move(ortOutputs), preds);
 }
 
-std::pair<std::vector<Ort::Value>, cv::Mat> StepRecognizeText::runBatchInference(const std::vector<cv::Mat> &images, int dynamicWidth) {
+std::pair<std::vector<Ort::Value>, cv::Mat>
+StepRecognizeText::runBatchInference(
+    const std::vector<cv::Mat>& images, int dynamicWidth) {
   auto t0 = std::chrono::high_resolution_clock::now();
   if (images.empty()) {
     return std::make_pair(std::vector<Ort::Value>{}, cv::Mat());
@@ -838,7 +871,8 @@ std::pair<std::vector<Ort::Value>, cv::Mat> StepRecognizeText::runBatchInference
     cvSizes[i] = static_cast<int>(predsShape[i]);
   }
 
-  // Return ORT values alongside a cv::Mat view (no clone - caller keeps ortValues alive)
+  // Return ORT values alongside a cv::Mat view (no clone - caller keeps
+  // ortValues alive)
   cv::Mat preds(
       predsDims,
       cvSizes.data(),
@@ -936,7 +970,8 @@ std::vector<InferredText> StepRecognizeText::processImgList(const std::atomic<bo
       preparedImages.push_back(preparedImg);
     }
 
-    auto [ortValues, batchPreds] = runBatchInference(preparedImages, maxProportionalWidth);
+    auto [ortValues, batchPreds] =
+        runBatchInference(preparedImages, maxProportionalWidth);
 
     // Decode results and populate SubImages for this batch
     for (size_t i = 0; i < currentBatchSize; i++) {
@@ -1000,7 +1035,8 @@ std::vector<InferredText> StepRecognizeText::processImgList(const std::atomic<bo
           contrastImages.push_back(contrastImg);
         }
 
-        auto [contrastOrtValues, contrastPreds] = runBatchInference(contrastImages, maxProportionalWidth);
+        auto [contrastOrtValues, contrastPreds] =
+            runBatchInference(contrastImages, maxProportionalWidth);
 
         for (size_t j = 0; j < contrastImages.size(); j++) {
           auto &idx = lowConfidenceIndices[batchStart + j];
