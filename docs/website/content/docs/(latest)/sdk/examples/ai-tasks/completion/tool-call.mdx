@@ -1,0 +1,114 @@
+---
+title: Tool call
+description: Define tools with Zod, pass them to completion(), and consume toolCallStream events.
+---
+
+Let the model emit structured tool calls; define tools with Zod schemas, pass them to [`completion()`](/sdk/api/completion), and consume `toolCallStream` events.
+
+<Steps>
+
+<Step title="Define tools with Zod schemas">
+Create Zod schemas for each tool's parameters and a `tools` array with `name`, `description`, and `parameters` (the schema). The same schemas can be used later to validate [`toolCall.arguments`](/sdk/api/completion#tool-call-events).
+<Tabs>
+<Tab value="js" label="JavaScript" default>
+<WrapCode>
+
+```js file=<rootDir>/packages/sdk/dist/examples/llamacpp-native-tools.js#L3-L28 title="completion-tool-call.js#L3-L28" 
+```
+</WrapCode>
+</Tab>
+<Tab value="ts" label="TypeScript">
+<WrapCode>
+
+```ts file=<rootDir>/packages/sdk/examples/llamacpp-native-tools.ts#L11-L39 title="completion-tool-call.ts#L11-L39" 
+```
+</WrapCode>
+</Tab>
+</Tabs>
+</Step>
+
+<Step title="Load a tools-capable model">
+Call [`loadModel()`](/sdk/api/loadModel) with `modelConfig: { tools: true }` so the model can emit tool calls.
+<Tabs>
+<Tab value="js" label="JavaScript" default>
+<WrapCode>
+
+```js file=<rootDir>/packages/sdk/dist/examples/llamacpp-native-tools.js#L31-L39 title="completion-tool-call.js#L31-L39" 
+```
+</WrapCode>
+</Tab>
+<Tab value="ts" label="TypeScript">
+<WrapCode>
+
+```ts file=<rootDir>/packages/sdk/examples/llamacpp-native-tools.ts#L43-L52 title="completion-tool-call.ts#L43-L52" 
+```
+</WrapCode>
+</Tab>
+</Tabs>
+</Step>
+
+<Step title="Run completion with tools">
+Pass the `tools` array to [`completion()`](/sdk/api/completion). Use `stream: true` and consume both `result.tokenStream` and [`result.toolCallStream`](/sdk/api/completion#toolcallstream).
+<Tabs>
+<Tab value="js" label="JavaScript" default>
+<WrapCode>
+
+```js file=<rootDir>/packages/sdk/dist/examples/llamacpp-native-tools.js#L42-L73 title="completion-tool-call.js#L42-L73" 
+```
+</WrapCode>
+</Tab>
+<Tab value="ts" label="TypeScript">
+<WrapCode>
+
+```ts file=<rootDir>/packages/sdk/examples/llamacpp-native-tools.ts#L56-L93 title="completion-tool-call.ts#L56-L93" 
+```
+</WrapCode>
+</Tab>
+</Tabs>
+</Step>
+
+<Step title="Handle tool calls and continue">
+Await `result.toolCalls` for the parsed tool calls, validate arguments with your Zod schemas, run your handlers, then append assistant and tool messages to `history` and call [`completion()`](/sdk/api/completion) again for the follow-up response.
+<Tabs>
+<Tab value="js" label="JavaScript" default>
+<WrapCode>
+
+```js file=<rootDir>/packages/sdk/dist/examples/llamacpp-native-tools.js#L74-L137 title="completion-tool-call.js#L74-L137" 
+```
+</WrapCode>
+</Tab>
+<Tab value="ts" label="TypeScript">
+<WrapCode>
+
+```ts file=<rootDir>/packages/sdk/examples/llamacpp-native-tools.ts#L95-L168 title="completion-tool-call.ts#L95-L168" 
+```
+</WrapCode>
+</Tab>
+</Tabs>
+</Step>
+
+</Steps>
+
+**Full example:**
+
+<Tabs>
+<Tab value="js" label="JavaScript" default>
+<WrapCode>
+
+```js file=<rootDir>/packages/sdk/dist/examples/llamacpp-native-tools.js title="completion-tool-call.js" lineNumbers
+```
+</WrapCode>
+</Tab>
+
+<Tab value="ts" label="TypeScript">
+<WrapCode>
+
+```ts file=<rootDir>/packages/sdk/examples/llamacpp-native-tools.ts title="completion-tool-call.ts" lineNumbers
+```
+</WrapCode>
+</Tab>
+</Tabs>
+
+<Callout type="success">
+**Tip:** all examples throughout this documentation are self-contained and runnable. For instructions on how to run them, see [SDK quickstart](/sdk/getting-started/quickstart).
+</Callout>

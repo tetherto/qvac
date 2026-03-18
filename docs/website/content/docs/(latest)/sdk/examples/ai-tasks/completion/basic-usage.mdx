@@ -1,0 +1,134 @@
+---
+title: Basic usage
+description: Run a basic streaming completion — download/cache model, load, complete, unload.
+---
+
+Basic completion: download (or use cached) model, load it, run streaming completion, then unload.
+
+<Steps>
+
+<Step title="Download the model (optional)">
+Use [`downloadAsset()`](/sdk/api/downloadAsset) to fetch the model to the cache first; you can skip this and let [`loadModel()`](/sdk/api/loadModel) download on demand.
+<Tabs>
+<Tab value="js" label="JavaScript" default>
+<WrapCode>
+
+```js file=<rootDir>/packages/sdk/dist/examples/llamacpp-hyperdrive.js#L4-L9 title="completion.js#L4-L9" 
+```
+</WrapCode>
+</Tab>
+<Tab value="ts" label="TypeScript">
+<WrapCode>
+
+```ts file=<rootDir>/packages/sdk/examples/llamacpp-hyperdrive.ts#L12-L17 title="completion.ts#L12-L17" 
+```
+</WrapCode>
+</Tab>
+</Tabs>
+</Step>
+
+<Step title="Load the model">
+Call [`loadModel()`](/sdk/api/loadModel) with a model constant (e.g. `LLAMA_3_2_1B_INST_Q4_0`), `modelType: "llm"`, and any [`modelConfig`](/sdk/api/loadModel#modelconfig-varies-by-model-type) (e.g. `device`, `ctx_size`, `verbosity`) to load it from cache.
+<Tabs>
+<Tab value="js" label="JavaScript" default>
+<WrapCode>
+
+```js file=<rootDir>/packages/sdk/dist/examples/llamacpp-hyperdrive.js#L11-L19 title="completion.js#L11-L19" 
+```
+</WrapCode>
+</Tab>
+<Tab value="ts" label="TypeScript">
+<WrapCode>
+
+```ts file=<rootDir>/packages/sdk/examples/llamacpp-hyperdrive.ts#L20-L28 title="completion.ts#L20-L28" 
+```
+</WrapCode>
+</Tab>
+</Tabs>
+</Step>
+
+<Step title="Build history and run completion">
+Build a `history` array of `{ role, content }` messages. Call [`completion()`](/sdk/api/completion) with `modelId`, `history`, and `stream: true`.
+<Tabs>
+<Tab value="js" label="JavaScript" default>
+<WrapCode>
+
+```js file=<rootDir>/packages/sdk/dist/examples/llamacpp-hyperdrive.js#L20-L26 title="completion.js#L20-L26" 
+```
+</WrapCode>
+</Tab>
+<Tab value="ts" label="TypeScript">
+<WrapCode>
+
+```ts file=<rootDir>/packages/sdk/examples/llamacpp-hyperdrive.ts#L30-L37 title="completion.ts#L30-L37" 
+```
+</WrapCode>
+</Tab>
+</Tabs>
+</Step>
+
+<Step title="Consume the stream and stats">
+Iterate over `result.tokenStream` to print tokens. Await `result.stats` for timing and token counts (see [completion()](/sdk/api/completion) return value).
+<Tabs>
+<Tab value="js" label="JavaScript" default>
+<WrapCode>
+
+```js file=<rootDir>/packages/sdk/dist/examples/llamacpp-hyperdrive.js#L27-L30 title="completion.js#L27-L30" 
+```
+</WrapCode>
+</Tab>
+<Tab value="ts" label="TypeScript">
+<WrapCode>
+
+```ts file=<rootDir>/packages/sdk/examples/llamacpp-hyperdrive.ts#L39-L43 title="completion.ts#L39-L43" 
+```
+</WrapCode>
+</Tab>
+</Tabs>
+</Step>
+
+<Step title="Unload the model">
+Call [`unloadModel({ modelId })`](/sdk/api/unloadModel) when done. Use `clearStorage: true` only if you want to remove cached files from disk.
+<Tabs>
+<Tab value="js" label="JavaScript" default>
+<WrapCode>
+
+```js file=<rootDir>/packages/sdk/dist/examples/llamacpp-hyperdrive.js#L33 title="completion.js#L33" 
+```
+</WrapCode>
+</Tab>
+<Tab value="ts" label="TypeScript">
+<WrapCode>
+
+```ts file=<rootDir>/packages/sdk/examples/llamacpp-hyperdrive.ts#L47 title="completion.ts#L47" 
+```
+</WrapCode>
+</Tab>
+</Tabs>
+</Step>
+
+</Steps>
+
+**Full example:**
+
+<Tabs>
+<Tab value="js" label="JavaScript" default>
+<WrapCode>
+
+```js file=<rootDir>/packages/sdk/dist/examples/llamacpp-hyperdrive.js title="completion.js" lineNumbers
+```
+</WrapCode>
+</Tab>
+
+<Tab value="ts" label="TypeScript">
+<WrapCode>
+
+```ts file=<rootDir>/packages/sdk/examples/llamacpp-hyperdrive.ts title="completion.ts" lineNumbers
+```
+</WrapCode>
+</Tab>
+</Tabs>
+
+<Callout type="success">
+**Tip:** all examples throughout this documentation are self-contained and runnable. For instructions on how to run them, see [SDK quickstart](/sdk/getting-started/quickstart).
+</Callout>

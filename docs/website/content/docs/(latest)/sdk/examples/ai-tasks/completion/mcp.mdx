@@ -1,0 +1,132 @@
+---
+title: MCP
+description: Attach an MCP client to completion() so the model can call external tools (e.g. web search).
+---
+
+Attach an MCP client to [`completion()`](/sdk/api/completion) so the model can use external tools (e.g. web search). You create and connect the MCP client, then pass it via the `mcp` option.
+
+<Steps>
+
+<Step title="Install and create the MCP client">
+Install and import [`@modelcontextprotocol/sdk`](https://github.com/modelcontextprotocol/sdk), then create a [`Client`](https://github.com/modelcontextprotocol/sdk/blob/main/packages/sdk/client/index.ts) and connect it to your MCP server(s) (e.g. via `StdioClientTransport` for a subprocess server).
+<Tabs>
+<Tab value="js" label="JavaScript" default>
+<WrapCode>
+
+```js file=<rootDir>/packages/sdk/dist/examples/mcp-websearch.js#L15-L16 title="completion-mcp.js#L15-L16" 
+```
+</WrapCode>
+
+<WrapCode>
+
+```js file=<rootDir>/packages/sdk/dist/examples/mcp-websearch.js#L51-L59 title="completion-mcp.js#L51-L59" 
+```
+</WrapCode>
+</Tab>
+<Tab value="ts" label="TypeScript">
+<WrapCode>
+
+```ts file=<rootDir>/packages/sdk/examples/mcp-websearch.ts#L23-L24 title="completion-mcp.ts#L23-L24" 
+```
+</WrapCode>
+
+<WrapCode>
+
+```ts file=<rootDir>/packages/sdk/examples/mcp-websearch.ts#L94-L104 title="completion-mcp.ts#L94-L104" 
+```
+</WrapCode>
+</Tab>
+</Tabs>
+</Step>
+
+<Step title="Load the model">
+Call [`loadModel()`](/sdk/api/loadModel) as usual with an LLM model constant and `modelType: "llm"`. Enable `tools: true` in `modelConfig` when the model will call MCP tools.
+<Tabs>
+<Tab value="js" label="JavaScript" default>
+<WrapCode>
+
+```js file=<rootDir>/packages/sdk/dist/examples/mcp-websearch.js#L65-L73 title="completion-mcp.js#L65-L73"
+```
+</WrapCode>
+</Tab>
+<Tab value="ts" label="TypeScript">
+<WrapCode>
+
+```ts file=<rootDir>/packages/sdk/examples/mcp-websearch.ts#L111-L120 title="completion-mcp.ts#L111-L120" 
+```
+</WrapCode>
+</Tab>
+</Tabs>
+</Step>
+
+<Step title="Run completion with the MCP client">
+Pass the MCP client to [`completion()`](/sdk/api/completion) via the `mcp` option. The model can then call tools provided by the server; tool invocations are routed to the MCP client.
+<Tabs>
+<Tab value="js" label="JavaScript" default>
+<WrapCode>
+
+```js file=<rootDir>/packages/sdk/dist/examples/mcp-websearch.js#L78-L102 title="completion-mcp.js#L78-L102" 
+```
+</WrapCode>
+</Tab>
+<Tab value="ts" label="TypeScript">
+<WrapCode>
+
+```ts file=<rootDir>/packages/sdk/examples/mcp-websearch.ts#L126-L152 title="completion-mcp.ts#L126-L152" 
+```
+</WrapCode>
+</Tab>
+</Tabs>
+</Step>
+
+<Step title="Unload and close">
+Call [`unloadModel({ modelId })`](/sdk/api/unloadModel) and close the MCP client when done.
+<Tabs>
+<Tab value="js" label="JavaScript" default>
+<WrapCode>
+```js file=<rootDir>/packages/sdk/dist/examples/mcp-websearch.js#L158 title="completion-mcp.js#L158" 
+```
+</WrapCode>
+<WrapCode>
+```js file=<rootDir>/packages/sdk/dist/examples/mcp-websearch.js#L170 title="completion-mcp.js#L170" 
+```
+</WrapCode>
+</Tab>
+<Tab value="ts" label="TypeScript">
+<WrapCode>
+```ts file=<rootDir>/packages/sdk/examples/mcp-websearch.ts#L226 title="completion-mcp.ts#L226" 
+```
+</WrapCode>
+<WrapCode>
+```ts file=<rootDir>/packages/sdk/examples/mcp-websearch.ts#L237 title="completion-mcp.ts#L237" 
+```
+</WrapCode>
+</Tab>
+</Tabs>
+</Step>
+
+</Steps>
+
+**Full example:**
+
+<Tabs>
+<Tab value="js" label="JavaScript" default>
+<WrapCode>
+
+```js file=<rootDir>/packages/sdk/dist/examples/mcp-websearch.js title="completion-mcp.js" lineNumbers
+```
+</WrapCode>
+</Tab>
+
+<Tab value="ts" label="TypeScript">
+<WrapCode>
+
+```ts file=<rootDir>/packages/sdk/examples/mcp-websearch.ts title="completion-mcp.ts" lineNumbers
+```
+</WrapCode>
+</Tab>
+</Tabs>
+
+<Callout type="success">
+**Tip:** all examples throughout this documentation are self-contained and runnable. For instructions on how to run them, see [SDK quickstart](/sdk/getting-started/quickstart).
+</Callout>

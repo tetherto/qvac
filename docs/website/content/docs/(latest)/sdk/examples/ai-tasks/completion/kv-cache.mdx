@@ -1,0 +1,114 @@
+---
+title: KV cache
+description: 'Use kvCache: true to speed up follow-up turns in a conversation.'
+---
+
+Use `kvCache: true` in [`completion()`](/sdk/api/completion) to cache and reuse the model's key/value attention state so follow-up turns in a conversation are faster.
+
+<Steps>
+
+<Step title="Load the model">
+Call [`loadModel()`](/sdk/api/loadModel) with your LLM model and config as usual.
+<Tabs>
+<Tab value="js" label="JavaScript" default>
+<WrapCode>
+
+```js file=<rootDir>/packages/sdk/dist/examples/kv-cache-example.js#L4-L12 title="completion-kv-cache.js#L4-L12" 
+```
+</WrapCode>
+</Tab>
+<Tab value="ts" label="TypeScript">
+<WrapCode>
+
+```ts file=<rootDir>/packages/sdk/examples/kv-cache-example.ts#L11-L20 title="completion-kv-cache.ts#L11-L20"
+```
+</WrapCode>
+</Tab>
+</Tabs>
+</Step>
+
+<Step title="First turn with cache enabled">
+Call [`completion()`](/sdk/api/completion) with `history` (e.g. one user message), `stream: true`, and `kvCache: true`. Consume `tokenStream` and save the assistant reply for the next turn.
+<Tabs>
+<Tab value="js" label="JavaScript" default>
+<WrapCode>
+
+```js file=<rootDir>/packages/sdk/dist/examples/kv-cache-example.js#L16-L30 title="completion-kv-cache.js#L16-L30" 
+```
+</WrapCode>
+</Tab>
+<Tab value="ts" label="TypeScript">
+<WrapCode>
+
+```ts file=<rootDir>/packages/sdk/examples/kv-cache-example.ts#L25-L42 title="completion-kv-cache.ts#L25-L42"
+```
+</WrapCode>
+</Tab>
+</Tabs>
+</Step>
+
+<Step title="Follow-up turn reusing cache">
+Append the previous assistant reply to `history` and add the new user message. Call [`completion()`](/sdk/api/completion) again with `kvCache: true`; the SDK reuses the cached state for the prefix and only runs the new turn.
+<Tabs>
+<Tab value="js" label="JavaScript" default>
+<WrapCode>
+
+```js file=<rootDir>/packages/sdk/dist/examples/kv-cache-example.js#L34-L52 title="completion-kv-cache.js#L34-L52" 
+```
+</WrapCode>
+</Tab>
+<Tab value="ts" label="TypeScript">
+<WrapCode>
+
+```ts file=<rootDir>/packages/sdk/examples/kv-cache-example.ts#L47-L68 title="completion-kv-cache.ts#L47-L68"
+```
+</WrapCode>
+</Tab>
+</Tabs>
+</Step>
+
+<Step title="Compare with cache disabled (optional)">
+Run the same conversation with `kvCache: false` and compare `result.stats` to see the speed difference.
+<Tabs>
+<Tab value="js" label="JavaScript" default>
+<WrapCode>
+
+```js file=<rootDir>/packages/sdk/dist/examples/kv-cache-example.js#L56-L65 title="completion-kv-cache.js#L56-L65" 
+```
+</WrapCode>
+</Tab>
+<Tab value="ts" label="TypeScript">
+<WrapCode>
+
+```ts file=<rootDir>/packages/sdk/examples/kv-cache-example.ts#L73-L84 title="completion-kv-cache.ts#L73-L84"
+```
+</WrapCode>
+</Tab>
+</Tabs>
+</Step>
+
+</Steps>
+
+**Full example:**
+
+<Tabs>
+<Tab value="js" label="JavaScript" default>
+<WrapCode>
+
+```js file=<rootDir>/packages/sdk/dist/examples/kv-cache-example.js title="completion-kv-cache.js" lineNumbers
+```
+</WrapCode>
+</Tab>
+
+<Tab value="ts" label="TypeScript">
+<WrapCode>
+
+```ts file=<rootDir>/packages/sdk/examples/kv-cache-example.ts title="completion-kv-cache.ts" lineNumbers
+```
+</WrapCode>
+</Tab>
+</Tabs>
+
+<Callout type="success">
+**Tip:** all examples throughout this documentation are self-contained and runnable. For instructions on how to run them, see [SDK quickstart](/sdk/getting-started/quickstart).
+</Callout>

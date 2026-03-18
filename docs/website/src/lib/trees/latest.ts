@@ -106,7 +106,18 @@ export const tree: Node[] = [
         type: 'folder',
         icon: resolveIcon('Sparkles'),
         children: [
-          { name: 'Completion', url: '/sdk/examples/ai-tasks/completion', type: 'page', icon: resolveIcon('MessagesSquare') },
+          {
+            name: 'Completion',
+            type: 'folder',
+            icon: resolveIcon('MessagesSquare'),
+            index: { type: 'page', name: 'Completion', url: '/sdk/examples/ai-tasks/completion' },
+            children: [
+              { name: 'Basic usage', url: '/sdk/examples/ai-tasks/completion/basic-usage', type: 'page' },
+              { name: 'Tool call', url: '/sdk/examples/ai-tasks/completion/tool-call', type: 'page' },
+              { name: 'MCP', url: '/sdk/examples/ai-tasks/completion/mcp', type: 'page' },
+              { name: 'KV cache', url: '/sdk/examples/ai-tasks/completion/kv-cache', type: 'page' },
+            ],
+          },
           { name: 'Text embeddings', url: '/sdk/examples/ai-tasks/text-embeddings', type: 'page', icon: resolveIcon('Hash') },
           { name: 'Translation', url: '/sdk/examples/ai-tasks/translation', type: 'page', icon: resolveIcon('Languages') },
           { name: 'Transcription', url: '/sdk/examples/ai-tasks/transcription', type: 'page', icon: resolveIcon('Mic') },
