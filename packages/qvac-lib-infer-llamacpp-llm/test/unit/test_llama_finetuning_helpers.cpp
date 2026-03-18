@@ -327,7 +327,7 @@ TEST(
                     ("finetune_test_resume_meta_" + uniqueTestId());
   fs::create_directories(tmpDir);
 
-  const fs::path metaPath = tmpDir / "metadata.json";
+  const fs::path metaPath = tmpDir / "metadata.txt";
   {
     std::ofstream out(metaPath);
     out << "epoch=2\n"
@@ -362,7 +362,7 @@ TEST(LlamaFinetuningHelpers, ParseCheckpointMetadata_DefaultsForMissingFields) {
                     ("finetune_test_defaults_meta_" + uniqueTestId());
   fs::create_directories(tmpDir);
 
-  const fs::path metaPath = tmpDir / "metadata.json";
+  const fs::path metaPath = tmpDir / "metadata.txt";
   {
     std::ofstream out(metaPath);
     out << "epoch=1\n"
@@ -514,7 +514,7 @@ TEST(LlamaFinetuningHelpers, LoadPauseCheckpoint_SucceedsWithValidMetadata) {
   fs::path ckptDir = tmpDir / "pause_checkpoint_step_00000025";
   fs::create_directories(ckptDir);
   {
-    std::ofstream out(ckptDir / "metadata.json");
+    std::ofstream out(ckptDir / "metadata.txt");
     out << "epoch=1\n"
         << "lora_rank=8\n"
         << "lora_alpha=16.000000\n"

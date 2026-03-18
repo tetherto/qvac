@@ -133,17 +133,13 @@ test('Live stream simulation: chunked audio feeding', { timeout: 300000 }, async
           segments.push(segment)
         }
       }
-      if (segments.length > 0 && outputResolve) {
-        outputResolve()
-        outputResolve = null
-      }
     }
-    if (event === 'Error') {
-      console.log(`[error] ${error}`)
-      if (outputResolve) {
-        outputResolve()
-        outputResolve = null
+    if ((event === 'JobEnded' || event === 'Error') && outputResolve) {
+      if (event === 'Error') {
+        console.log(`[error] ${error}`)
       }
+      outputResolve()
+      outputResolve = null
     }
   }
 
@@ -215,7 +211,7 @@ test('Live stream simulation: chunked audio feeding', { timeout: 300000 }, async
   } finally {
     if (parakeet) {
       try {
-        parakeet.destroyInstance()
+        await parakeet.destroyInstance()
       } catch (e) {
         // Ignore
       }
@@ -281,10 +277,10 @@ test('Rapid chunk feeding: stress test with no delay', { timeout: 300000 }, asyn
           segments.push(segment)
         }
       }
-      if (segments.length > 0 && outputResolve) {
-        outputResolve()
-        outputResolve = null
-      }
+    }
+    if ((event === 'JobEnded' || event === 'Error') && outputResolve) {
+      outputResolve()
+      outputResolve = null
     }
   }
 
@@ -334,7 +330,7 @@ test('Rapid chunk feeding: stress test with no delay', { timeout: 300000 }, asyn
   } finally {
     if (parakeet) {
       try {
-        parakeet.destroyInstance()
+        await parakeet.destroyInstance()
       } catch (e) {
         // Ignore
       }
@@ -395,10 +391,10 @@ test('Variable chunk sizes: small to large chunks', { timeout: 300000 }, async (
             segments.push(segment)
           }
         }
-        if (segments.length > 0 && outputResolve) {
-          outputResolve()
-          outputResolve = null
-        }
+      }
+      if ((event === 'JobEnded' || event === 'Error') && outputResolve) {
+        outputResolve()
+        outputResolve = null
       }
     }
 
@@ -443,7 +439,7 @@ test('Variable chunk sizes: small to large chunks', { timeout: 300000 }, async (
     } finally {
       if (parakeet) {
         try {
-          parakeet.destroyInstance()
+          await parakeet.destroyInstance()
         } catch (e) {
           // Ignore
         }

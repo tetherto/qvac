@@ -27,7 +27,7 @@ interface HandlerOptions {
 
 registerOperationMetrics<
   { operation?: string; workspace?: string },
-  { processed?: number; results?: unknown[] }
+  { processed?: unknown[]; results?: unknown[] }
 >({
   op: "rag",
   kind: "handler",
@@ -39,7 +39,7 @@ registerOperationMetrics<
   },
   fromResult: (res) => {
     const gauges: Record<string, number> = {};
-    if (res.processed !== undefined) gauges["processed"] = res.processed;
+    if (res.processed !== undefined) gauges["processed"] = res.processed.length;
     if (res.results !== undefined) gauges["resultsCount"] = res.results.length;
     return Object.keys(gauges).length > 0 ? gauges : undefined;
   },

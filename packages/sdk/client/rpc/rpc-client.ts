@@ -2,6 +2,7 @@ import type RPC from "bare-rpc";
 import {
   requestSchema,
   responseSchema,
+  PROFILING_TRAILER_KEY,
   type Request,
   type Response,
   type RPCOptions,
@@ -96,8 +97,8 @@ async function prepareRPCContext(
 
 export async function send<T extends Request>(
   request: T,
-  rpc?: RPC,
   options?: RPCOptions,
+  rpc?: RPC,
 ): Promise<Response> {
   const ctx = await prepareRPCContext(request.type, options?.profiling, rpc);
 
@@ -209,8 +210,8 @@ async function sendProfiled<T extends Request>(
 
 export async function* stream<T extends Request>(
   request: T,
-  rpc?: RPC,
   options: RPCOptions = {},
+  rpc?: RPC,
 ): AsyncGenerator<Response> {
   const ctx = await prepareRPCContext(request.type, options?.profiling, rpc);
 
@@ -337,6 +338,7 @@ async function* streamProfiled<T extends Request>(
             profilingMeta = chunkMeta;
           }
 
+          if (rawParsed[PROFILING_TRAILER_KEY] === true) continue;
           const cleanPayload = stripProfilingMeta(rawParsed);
           const response = responseSchema.parse(cleanPayload);
 

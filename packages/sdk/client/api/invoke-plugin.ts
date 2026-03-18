@@ -27,7 +27,7 @@ export async function invokePlugin<TResponse = unknown, TParams = unknown>(
     params: options.params,
   };
 
-  const response = await send(request, undefined, rpcOptions);
+  const response = await send(request, rpcOptions);
 
   if (response.type !== "pluginInvoke") {
     throw new InvalidResponseError("pluginInvoke");
@@ -53,7 +53,7 @@ export async function* invokePluginStream<
     params: options.params,
   };
 
-  for await (const chunk of stream(request, undefined, rpcOptions)) {
+  for await (const chunk of stream(request, rpcOptions)) {
     const response = chunk as PluginInvokeStreamResponse;
     if (response.type !== "pluginInvokeStream") {
       throw new InvalidResponseError("pluginInvokeStream");

@@ -287,7 +287,7 @@ async function main () {
     const retryDelayMs = 500
     for (let retry = 0; retry < maxRetries; retry++) {
       const pausePath = latestPauseCheckpointPath(finetuneOptions.checkpointSaveDir)
-      if (pausePath && fs.existsSync(path.join(pausePath, 'metadata.json'))) {
+      if (pausePath && fs.existsSync(path.join(pausePath, 'metadata.txt'))) {
         console.log(`✅ Pause checkpoint directory exists: ${pausePath}`)
         console.log('✅ Pause checkpoint metadata file exists')
         break

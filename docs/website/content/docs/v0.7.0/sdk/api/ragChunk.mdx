@@ -1,0 +1,56 @@
+---
+title: "ragChunk( )"
+titleStyle: code
+description: Chunks documents into smaller pieces for embedding.
+---
+
+```ts
+function ragChunk(params): Promise<RagDoc[]>;
+```
+
+Part of the segregated flow: `ragChunk()` → [`embed()`](../embed) → [`ragSaveEmbeddings()`](../ragSaveEmbeddings)
+
+## Parameters
+
+| Name | Type | Required? | Description |
+| --- | --- | :---: | --- |
+| params | `object` | ✓ | The chunking parameters |
+| params.documents | `string \| string[]` | ✓ | Documents to chunk |
+| params.chunkOpts | [`ChunkOptions`](#chunkoptions) | ✗ | Chunking options |
+
+### `ChunkOptions`
+
+| Field | Type | Required? | Description |
+| --- | --- | :---: | --- |
+| chunkSize | `number` | ✗ | Maximum chunk size |
+| chunkOverlap | `number` | ✗ | Overlap between chunks |
+| chunkStrategy | `"character" \| "paragraph"` | ✗ | Chunking strategy |
+| splitStrategy | `"character" \| "word" \| "token" \| "sentence" \| "line"` | ✗ | Text splitting strategy |
+
+## Returns
+
+`Promise<RagDoc[]>` — Array of chunk results.
+
+| Field | Type | Description |
+| --- | --- | --- |
+| id | `string` | Chunk identifier |
+| content | `string` | Chunk text content |
+
+## Throws
+
+| Error | When |
+| --- | --- |
+| `RAG_CHUNK_FAILED` | The chunking operation fails |
+
+## Example
+
+```typescript
+const chunks = await ragChunk({
+  documents: ["Long document text here..."],
+  chunkOpts: {
+    chunkSize: 256,
+    chunkOverlap: 50,
+    chunkStrategy: "paragraph",
+  },
+});
+```

@@ -1,40 +1,43 @@
 ---
 title: "downloadAsset( )"
 titleStyle: code
-description: Downloads an asset (model file) without loading it into memory.
+description: "Downloads an asset (model file) without loading it into memory.
+
+This function is specifically designed for download-only operations and
+doesn't accept runtime configuration options like modelConfig or delegate.
+Use this for download-only operations instead of loadModel for better semantic clarity."
 ---
 
-```ts
-function downloadAsset(options): Promise<string>;
+```typescript
+function downloadAsset(options: any): Promise
 ```
+
+## Description
+
+Downloads an asset (model file) without loading it into memory.
+
+This function is specifically designed for download-only operations and
+doesn't accept runtime configuration options like modelConfig or delegate.
+Use this for download-only operations instead of loadModel for better semantic clarity.
 
 ## Parameters
 
 | Name | Type | Required? | Description |
 | --- | --- | :---: | --- |
-| options | [`DownloadAssetOptions`](#downloadassetoptions) | ✓ | Download configuration |
-
-### `DownloadAssetOptions`
-
-| Field | Type | Required? | Description |
-| --- | --- | :---: | --- |
-| assetSrc | `string` | ✓ | The location from which the asset is downloaded (local path, remote URL, or Hyperdrive `pear://` URL) |
-| seed | `boolean` | ✗ | Whether to seed the asset on Hyperdrive after download |
-| onProgress | `(progress:` [`ModelProgressUpdate`](/sdk/api/loadModel#modelprogressupdate)`) => void` | ✗ | Callback for real-time download progress updates. When provided, streaming is used. |
+| `options` | `any` | ✓ | Download configuration including:
+  - assetSrc: The location from which the asset is downloaded (local path, remote URL, or Hyperdrive URL)
+  - seed: Optional boolean for hyperdrive seeding
+  - onProgress: Optional callback for download progress |
 
 ## Returns
 
-`Promise<string>` — Resolves to the asset ID (either the provided `assetSrc` or a generated ID).
+```typescript
+Promise
+```
 
-## Throws
 
-| Error | When |
-| --- | --- |
-| `DOWNLOAD_ASSET_FAILED` | The download operation fails |
-| `STREAM_ENDED_WITHOUT_RESPONSE` | Streaming ends without a final response (when using `onProgress`) |
-| `INVALID_RESPONSE_TYPE` | Response type does not match expected `"downloadAsset"` |
 
-## Example
+## Examples
 
 ```typescript
 // Download model without loading

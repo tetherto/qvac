@@ -14,7 +14,7 @@ Translation input is defined by:
 
 `translate()` returns an object containing `text` and when streaming is enabled, a `tokenStream` for real-time output.
 
-For a list of supported languages and their ids (string abbreviations), see [qvac-sdk/schemas/translation-config.ts](https://github.com/tetherto/qvac-sdk/blob/dev/schemas/translation-config.ts).
+For a list of supported languages and their ids (string abbreviations), see [qvac-sdk/schemas/translation-config.ts](https://github.com/tetherto/qvac/blob/main/packages/sdk/schemas/translation-config.ts).
 
 ## Functions
 
@@ -41,40 +41,7 @@ The following script shows an example of translation:
 <Tab value="js" label="JavaScript" default>
 <WrapCode>
 
-```js file=./dist/examples/translation/translation-opus.js title="translation.js" lineNumbers
-import { loadModel, translate, unloadModel, MARIAN_OPUS_EN_IT_Q4_0, } from "@qvac/sdk";
-try {
-    const modelId = await loadModel({
-        modelSrc: MARIAN_OPUS_EN_IT_Q4_0,
-        modelType: "nmt",
-        modelConfig: {
-            engine: "Opus",
-            from: "en",
-            to: "it",
-            temperature: 0.2,
-            norepeatngramsize: 3,
-            lengthpenalty: 1.2,
-        },
-        onProgress: (progress) => {
-            console.log(progress);
-        },
-    });
-    console.log(`✅ Model loaded: ${modelId}`);
-    const text = "Hello, how are you today?";
-    const result = translate({
-        modelId,
-        text,
-        modelType: "nmt",
-        stream: false,
-    });
-    const translatedText = await result.text;
-    console.log(`Translated text EN -> IT: ${text} -> "${translatedText}"`);
-    await unloadModel({ modelId });
-}
-catch (error) {
-    console.error("❌ Error:", error);
-    process.exit(1);
-}
+```js file=<rootDir>/packages/sdk/dist/examples/translation/translation-opus.js title="translation.js" lineNumbers
 ```
 </WrapCode>
 </Tab>
@@ -82,49 +49,7 @@ catch (error) {
 <Tab value="ts" label="TypeScript">
 <WrapCode>
 
-```ts file=./examples/translation/translation-opus.ts title="translation.ts" lineNumbers
-import {
-  loadModel,
-  translate,
-  unloadModel,
-  MARIAN_OPUS_EN_IT_Q4_0,
-} from "@qvac/sdk";
-
-try {
-  const modelId = await loadModel({
-    modelSrc: MARIAN_OPUS_EN_IT_Q4_0,
-    modelType: "nmt",
-    modelConfig: {
-      engine: "Opus",
-      from: "en",
-      to: "it",
-      temperature: 0.2,
-      norepeatngramsize: 3,
-      lengthpenalty: 1.2,
-    },
-    onProgress: (progress) => {
-      console.log(progress);
-    },
-  });
-
-  console.log(`✅ Model loaded: ${modelId}`);
-
-  const text = "Hello, how are you today?";
-  const result = translate({
-    modelId,
-    text,
-    modelType: "nmt",
-    stream: false,
-  });
-
-  const translatedText = await result.text;
-  console.log(`Translated text EN -> IT: ${text} -> "${translatedText}"`);
-
-  await unloadModel({ modelId });
-} catch (error) {
-  console.error("❌ Error:", error);
-  process.exit(1);
-}
+```ts file=<rootDir>/packages/sdk/examples/translation/translation-opus.ts title="translation.ts" lineNumbers
 ```
 </WrapCode>
 </Tab>

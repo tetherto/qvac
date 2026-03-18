@@ -34,7 +34,7 @@ export interface Addon {
   activate(): Promise<void>
   runJob(data: Array<{ type: 'text'; input?: string } | { type: 'media'; content?: Uint8Array }>): Promise<unknown>
   cancel(): Promise<void>
-  finetune?(params?: Record<string, any>): Promise<void>
+  finetune?(params?: FinetuneOptions): Promise<void>
   unload(): Promise<void>
 }
 
@@ -117,10 +117,91 @@ export interface DownloadWeightsOptions {
   closeLoader?: boolean
 }
 
+export interface RuntimeStats {
+  TTFT: number
+  TPS: number
+  CacheTokens: number
+  generatedTokens: number
+  promptTokens: number
+  contextSlides: number
+}
+
 export interface DownloadResult {
   filePath: string | null
   error: boolean
   completed: boolean
+}
+
+export interface FinetuneValidationNone {
+  type: 'none'
+}
+
+export interface FinetuneValidationSplit {
+  type: 'split'
+  /** Fraction of training data to hold out for validation (0–1). Default 0.05. */
+  fraction?: number
+}
+
+export interface FinetuneValidationDataset {
+  type: 'dataset'
+  /** Path to a separate eval dataset file. Must differ from trainDatasetDir. */
+  path: string
+}
+
+export type FinetuneValidation =
+  | FinetuneValidationNone
+  | FinetuneValidationSplit
+  | FinetuneValidationDataset
+
+export interface FinetuneOptions {
+  /** Path to training dataset file (.jsonl for SFT, .txt for causal). */
+  trainDatasetDir: string
+  /** How to run validation. */
+  validation: FinetuneValidation
+  /** Directory (or file path ending in .gguf) for the final LoRA adapter. */
+  outputParametersDir: string
+  /** Number of training epochs. Default 1. */
+  numberOfEpochs?: number
+  /** Initial learning rate. Default 1e-4. */
+  learningRate?: number
+  /** Training sequence length. Default 128. */
+  contextLength?: number
+  /** Backend n_batch (tokens per batch). Must be >= microBatchSize and divisible by it. Default 128. */
+  batchSize?: number
+  /** Backend n_ubatch (micro-batch size). Must be <= batchSize. Default 128. */
+  microBatchSize?: number
+  /** Use SFT (chat) mode when true; causal (next-token) when false. Default false. */
+  assistantLossOnly?: boolean
+  /** Comma-separated LoRA target modules (e.g. 'attn_q,attn_k,attn_v,attn_o'). Default: attention Q/K/V/O. */
+  loraModules?: string
+  /** LoRA rank. Default 8. */
+  loraRank?: number
+  /** LoRA alpha (scaling factor). Default 16.0. */
+  loraAlpha?: number
+  /** LoRA init standard deviation. Default 0.02. */
+  loraInitStd?: number
+  /** Seed for LoRA weight initialization (0 = non-deterministic). Default 42. */
+  loraSeed?: number
+  /** Directory for checkpoints. Default './checkpoints'. */
+  checkpointSaveDir?: string
+  /** Save a checkpoint every N optimizer steps (0 = only on pause). Default 0. */
+  checkpointSaveSteps?: number
+  /** Path to a custom chat template file (for SFT). */
+  chatTemplatePath?: string
+  /** Learning rate scheduler: 'constant', 'cosine', or 'linear'. Default 'cosine'. */
+  lrScheduler?: 'constant' | 'cosine' | 'linear'
+  /** Minimum learning rate (for cosine/linear schedulers). Default 0. */
+  lrMin?: number
+  /** Warmup ratio (0–1). Requires warmupRatioSet: true. Default 0.1. */
+  warmupRatio?: number
+  /** When true, compute warmup steps from warmupRatio. */
+  warmupRatioSet?: boolean
+  /** Explicit warmup steps (used when warmupStepsSet is true). Default 0. */
+  warmupSteps?: number
+  /** When true, use warmupSteps directly instead of ratio. */
+  warmupStepsSet?: boolean
+  /** Weight decay. Default 0.01. */
+  weightDecay?: number
 }
 
 export interface FinetuneHandle {
@@ -153,7 +234,7 @@ export default class LlmLlamacpp extends BaseInference {
   constructor(
     args: LlmLlamacppArgs,
     config: LlamaConfig,
-    finetuningParams?: Record<string, any> | null
+    finetuningParams?: FinetuneOptions | null
   )
   _load(
     closeLoader?: boolean,
@@ -179,7 +260,7 @@ export default class LlmLlamacpp extends BaseInference {
 
   run(prompt: Message[], runOptions?: RunOptions): Promise<QvacResponse>
 
-  finetune(finetuningOptions?: Record<string, any>): Promise<FinetuneHandle>
+  finetune(finetuningOptions?: FinetuneOptions): Promise<FinetuneHandle>
 
   cancel(): Promise<void>
 
@@ -187,4 +268,4 @@ export default class LlmLlamacpp extends BaseInference {
 
 }
 
-export { ReportProgressCallback, QvacResponse, FinetuneHandle }
+export { ReportProgressCallback, QvacResponse, FinetuneHandle, FinetuneOptions, FinetuneValidation }

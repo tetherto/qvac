@@ -1,0 +1,48 @@
+---
+title: Download lifecycle
+description: Pause and resume model downloads.
+---
+
+## Overview
+
+Downloads in QVAC are _resumable by default_. When you download an asset via [`downloadAsset()`](/v0.7.0/sdk/api/downloadAsset) or [`loadModel()`](/v0.7.0/sdk/api/loadModel)), the SDK writes partial files to disk so the next run can continue from where it left off. The progress callback provides a `downloadKey`. Persist it if you want to programmatically pause/cancel the download.
+
+## Functions
+
+1. [`downloadAsset()`](/v0.7.0/sdk/api/downloadAsset) or [`loadModel()`](/v0.7.0/sdk/api/loadModel) — with `onProgress` for progress tracking
+2. [`cancel()`](/v0.7.0/sdk/api/cancel) — pause/cancel a download using the `downloadKey`
+
+For how to use each function, see [SDK — API reference](/v0.7.0/sdk/api/).
+
+## Flow
+
+- Pause: call [`cancel()`](/v0.7.0/sdk/api/cancel) with `operation: "downloadAsset"` and the `downloadKey` from progress events.
+- Resume: run the same `downloadAsset()` / `loadModel()` call again — the SDK will reuse the partial file and continue downloading.
+- Discard partial file: call `cancel({ ..., clearCache: true })`.
+
+## Example
+
+The following script shows an example of pausing and resuming a download using `cancel()` + `downloadKey`:
+
+<Tabs>
+<Tab value="js" label="JavaScript" default>
+<WrapCode>
+
+```js file=<rootDir>/packages/sdk/dist/examples/download-with-cancel.js title="download-lifecycle.js" lineNumbers
+```
+</WrapCode>
+</Tab>
+
+<Tab value="ts" label="TypeScript">
+<WrapCode>
+
+```ts file=<rootDir>/packages/sdk/examples/download-with-cancel.ts title="download-lifecycle.ts" lineNumbers
+```
+</WrapCode>
+</Tab>
+</Tabs>
+
+<Callout type="success">
+**Tip:** all examples throughout this documentation are self-contained and runnable. For instructions on how to run them, see [SDK quickstart](/v0.7.0/sdk/quickstart).
+</Callout>
+

@@ -46,64 +46,7 @@ The following script shows an example of a consumer that delegates `completion()
 <Tab value="js" label="JavaScript" default>
 <WrapCode>
 
-```js file=./dist/examples/delegated-inference/consumer.js title="delegated-inference-consumer.js" lineNumbers
-import { completion, LLAMA_3_2_1B_INST_Q4_0, loadModel, close, } from "@qvac/sdk";
-// Topic hex (required)
-const topicHex = process.argv[2];
-if (!topicHex) {
-    console.error("❌ Topic hex is required. Usage: node consumer.ts <topic-hex> <provider-public-key> [consumer-seed]");
-    process.exit(1);
-}
-// Provider public key (required)
-const providerPublicKey = process.argv[3];
-if (!providerPublicKey) {
-    console.error("❌ Provider public key is required. Usage: node consumer.ts <topic-hex> <provider-public-key> [consumer-seed]");
-    process.exit(1);
-}
-try {
-    // Optional: Consumer seed for deterministic consumer identity (for firewall testing)
-    const consumerSeed = process.argv[4];
-    process.env["QVAC_HYPERSWARM_SEED"] = consumerSeed;
-    console.log(`🚀 Testing delegated inference`);
-    console.log(`📡 Topic: ${topicHex}`);
-    console.log(`🔑 Provider: ${providerPublicKey}`);
-    if (consumerSeed) {
-        console.log(`🔑 Consumer seed: ${consumerSeed.substring(0, 16)}... (deterministic identity)`);
-    }
-    else {
-        console.log(`🎲 No consumer seed provided (random identity)`);
-    }
-    const modelId = await loadModel({
-        modelSrc: LLAMA_3_2_1B_INST_Q4_0,
-        modelType: "llm",
-        delegate: {
-            topic: topicHex,
-            providerPublicKey,
-            timeout: 5_000, // Optional: 5 second timeout for delegated requests
-            fallbackToLocal: true, // Optional: Fall back to local inference if delegation fails
-            // forceNewConnection: true, // Optional: Force a new connection instead of reusing cached one
-        },
-        onProgress: (progress) => {
-            console.log(`📊 Download progress: ${progress.percentage.toFixed(1)}% (${progress.downloaded}/${progress.total} bytes)`);
-        },
-    });
-    console.log(`✅ Delegated model registered: ${modelId}`);
-    const response = completion({
-        modelId,
-        history: [{ role: "user", content: "Hello!" }],
-        stream: true,
-    });
-    for await (const token of response.tokenStream) {
-        console.log(`📨 Response: ${token}`);
-    }
-    console.log("🔍 Stats:", await response.stats);
-    console.log("\n🎯 Delegation infrastructure working! Server correctly detected and routed the delegated request.");
-    void close();
-}
-catch (error) {
-    console.error("❌ Error:", error);
-    process.exit(1);
-}
+```js file=<rootDir>/packages/sdk/dist/examples/delegated-inference/consumer.js title="delegated-inference-consumer.js" lineNumbers
 ```
 </WrapCode>
 </Tab>
@@ -111,89 +54,7 @@ catch (error) {
 <Tab value="ts" label="TypeScript">
 <WrapCode>
 
-```ts file=./examples/delegated-inference/consumer.ts title="delegated-inference-consumer.ts" lineNumbers
-import {
-  completion,
-  LLAMA_3_2_1B_INST_Q4_0,
-  loadModel,
-  close,
-} from "@qvac/sdk";
-
-// Topic hex (required)
-const topicHex = process.argv[2];
-if (!topicHex) {
-  console.error(
-    "❌ Topic hex is required. Usage: node consumer.ts <topic-hex> <provider-public-key> [consumer-seed]",
-  );
-  process.exit(1);
-}
-
-// Provider public key (required)
-const providerPublicKey = process.argv[3];
-if (!providerPublicKey) {
-  console.error(
-    "❌ Provider public key is required. Usage: node consumer.ts <topic-hex> <provider-public-key> [consumer-seed]",
-  );
-  process.exit(1);
-}
-
-try {
-  // Optional: Consumer seed for deterministic consumer identity (for firewall testing)
-  const consumerSeed = process.argv[4];
-
-  process.env["QVAC_HYPERSWARM_SEED"] = consumerSeed;
-
-  console.log(`🚀 Testing delegated inference`);
-  console.log(`📡 Topic: ${topicHex}`);
-  console.log(`🔑 Provider: ${providerPublicKey}`);
-  if (consumerSeed) {
-    console.log(
-      `🔑 Consumer seed: ${consumerSeed.substring(0, 16)}... (deterministic identity)`,
-    );
-  } else {
-    console.log(`🎲 No consumer seed provided (random identity)`);
-  }
-
-  const modelId = await loadModel({
-    modelSrc: LLAMA_3_2_1B_INST_Q4_0,
-    modelType: "llm",
-    delegate: {
-      topic: topicHex,
-      providerPublicKey,
-      timeout: 5_000, // Optional: 5 second timeout for delegated requests
-      fallbackToLocal: true, // Optional: Fall back to local inference if delegation fails
-      // forceNewConnection: true, // Optional: Force a new connection instead of reusing cached one
-    },
-    onProgress: (progress) => {
-      console.log(
-        `📊 Download progress: ${progress.percentage.toFixed(1)}% (${progress.downloaded}/${progress.total} bytes)`,
-      );
-    },
-  });
-
-  console.log(`✅ Delegated model registered: ${modelId}`);
-
-  const response = completion({
-    modelId,
-    history: [{ role: "user", content: "Hello!" }],
-    stream: true,
-  });
-
-  for await (const token of response.tokenStream) {
-    console.log(`📨 Response: ${token}`);
-  }
-
-  console.log("🔍 Stats:", await response.stats);
-
-  console.log(
-    "\n🎯 Delegation infrastructure working! Server correctly detected and routed the delegated request.",
-  );
-
-  void close();
-} catch (error) {
-  console.error("❌ Error:", error);
-  process.exit(1);
-}
+```ts file=<rootDir>/packages/sdk/examples/delegated-inference/consumer.ts title="delegated-inference-consumer.ts" lineNumbers
 ```
 </WrapCode>
 </Tab>
@@ -207,64 +68,7 @@ The following script shows an example of starting a provider and printing the `t
 <Tab value="js" label="JavaScript" default>
 <WrapCode>
 
-```js file=./dist/examples/delegated-inference/provider.js title="delegated-inference-provider.js" lineNumbers
-import { startQVACProvider } from "@qvac/sdk";
-// Random topic if not provided
-const topic = process.argv[2] ||
-    "66646f696865726f6569686a726530776a66646f696865726f6569686a726530";
-// Optional: Seed for deterministic provider identity (64-character hex string)
-const seed = process.argv[3];
-process.env["QVAC_HYPERSWARM_SEED"] = seed;
-// Optional: Consumer public key for firewall (allow only this consumer)
-const allowedConsumerPublicKey = process.argv[4];
-console.log(`🚀 Starting provider service with topic: ${topic}...`);
-try {
-    if (allowedConsumerPublicKey) {
-        console.log(`🔒 Firewall enabled: only allowing consumer ${allowedConsumerPublicKey}`);
-    }
-    // Start the provider service with optional firewall and seed
-    const response = await startQVACProvider({
-        topic,
-        firewall: allowedConsumerPublicKey
-            ? {
-                mode: "allow",
-                publicKeys: [allowedConsumerPublicKey],
-            }
-            : undefined,
-    });
-    console.log("✅ Provider service started successfully!");
-    console.log("🔗 Provider is now available for delegated inference requests");
-    console.log("");
-    console.log("📋 Connection Details:");
-    console.log(`   📡 Topic (shared): ${topic}`);
-    console.log(`   🆔 Provider Public Key (unique): ${response.publicKey}`);
-    console.log("");
-    console.log("💡 Consumer command:");
-    console.log(`   node consumer.ts ${topic} ${response.publicKey}`);
-    console.log("");
-    console.log("💡 To reproduce this provider identity:");
-    console.log(`   node provider.ts ${topic} ${seed || "<random-seed>"}`);
-    if (!seed) {
-        console.log("   (Note: seed was random this time, set one for reproducible identity)");
-    }
-    console.log("");
-    console.log("🔒 For firewall testing:");
-    console.log("   1. Generate a consumer seed (64-char hex)");
-    console.log("   2. Get consumer public key: getConsumerPublicKey(consumerSeed)");
-    console.log("   3. Restart provider with consumer public key as 4th argument");
-    console.log(`   4. Run consumer with: node consumer.ts ${topic} ${response.publicKey} <consumer-seed>`);
-    // Keep the process running
-    console.log("📡 Provider is running... Press Ctrl+C to stop");
-    process.on("SIGINT", () => {
-        console.log("\n🛑 Provider service stopped");
-        process.exit(0);
-    });
-    process.stdin.resume();
-}
-catch (error) {
-    console.error("❌ Error:", error);
-    process.exit(1);
-}
+```js file=<rootDir>/packages/sdk/dist/examples/delegated-inference/provider.js title="delegated-inference-provider.js" lineNumbers
 ```
 </WrapCode>
 </Tab>
@@ -272,84 +76,7 @@ catch (error) {
 <Tab value="ts" label="TypeScript">
 <WrapCode>
 
-```ts file=./examples/delegated-inference/provider.ts title="delegated-inference-provider.ts" lineNumbers
-import { startQVACProvider } from "@qvac/sdk";
-
-// Random topic if not provided
-const topic =
-  process.argv[2] ||
-  "66646f696865726f6569686a726530776a66646f696865726f6569686a726530";
-
-// Optional: Seed for deterministic provider identity (64-character hex string)
-const seed: string | undefined = process.argv[3];
-
-process.env["QVAC_HYPERSWARM_SEED"] = seed;
-
-// Optional: Consumer public key for firewall (allow only this consumer)
-const allowedConsumerPublicKey: string | undefined = process.argv[4];
-
-console.log(`🚀 Starting provider service with topic: ${topic}...`);
-
-try {
-  if (allowedConsumerPublicKey) {
-    console.log(
-      `🔒 Firewall enabled: only allowing consumer ${allowedConsumerPublicKey}`,
-    );
-  }
-
-  // Start the provider service with optional firewall and seed
-  const response = await startQVACProvider({
-    topic,
-    firewall: allowedConsumerPublicKey
-      ? {
-          mode: "allow" as const,
-          publicKeys: [allowedConsumerPublicKey],
-        }
-      : undefined,
-  });
-
-  console.log("✅ Provider service started successfully!");
-  console.log("🔗 Provider is now available for delegated inference requests");
-  console.log("");
-  console.log("📋 Connection Details:");
-  console.log(`   📡 Topic (shared): ${topic}`);
-  console.log(`   🆔 Provider Public Key (unique): ${response.publicKey}`);
-  console.log("");
-  console.log("💡 Consumer command:");
-  console.log(`   node consumer.ts ${topic} ${response.publicKey}`);
-  console.log("");
-  console.log("💡 To reproduce this provider identity:");
-  console.log(`   node provider.ts ${topic} ${seed || "<random-seed>"}`);
-  if (!seed) {
-    console.log(
-      "   (Note: seed was random this time, set one for reproducible identity)",
-    );
-  }
-  console.log("");
-  console.log("🔒 For firewall testing:");
-  console.log("   1. Generate a consumer seed (64-char hex)");
-  console.log(
-    "   2. Get consumer public key: getConsumerPublicKey(consumerSeed)",
-  );
-  console.log(
-    "   3. Restart provider with consumer public key as 4th argument",
-  );
-  console.log(
-    `   4. Run consumer with: node consumer.ts ${topic} ${response.publicKey} <consumer-seed>`,
-  );
-
-  // Keep the process running
-  console.log("📡 Provider is running... Press Ctrl+C to stop");
-  process.on("SIGINT", () => {
-    console.log("\n🛑 Provider service stopped");
-    process.exit(0);
-  });
-
-  process.stdin.resume();
-} catch (error) {
-  console.error("❌ Error:", error);
-  process.exit(1);
-}
+```ts file=<rootDir>/packages/sdk/examples/delegated-inference/provider.ts title="delegated-inference-provider.ts" lineNumbers
 ```
 </WrapCode>
 </Tab>

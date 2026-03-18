@@ -1,0 +1,153 @@
+---
+title: Plugin system
+description: Enable and disable built-in AI capabilities, and add new ones via custom plugins.
+---
+
+## Overview
+
+Each QVAC AI capability maps to a **built-in plugin** in the SDK. This lets you enable only what you need for your project and reduce your application's final bundle size.
+
+In addition, you can add **custom plugins** — both your own and community ones — that extend QVAC's capabilities. In both cases, you'll use the QVAC configuration file and the SDK CLI.
+
+## Built-in plugins
+
+### Catalog
+
+All the built-in plugins you can select, along with the AI tasks that depend on each one:
+
+| Plugin | Use in `qvac.config.*` | AI tasks that require it |
+| --- | --- | --- |
+| LLM | `@qvac/sdk/llamacpp-completion/plugin` | [Completion](/v0.7.0/sdk/ai-tasks/completion); [multimodal](/v0.7.0/sdk/ai-tasks/multimodal); [RAG](/v0.7.0/sdk/ai-tasks/rag) |
+| Embeddings | `@qvac/sdk/llamacpp-embedding/plugin` | [Text embeddings](/v0.7.0/sdk/ai-tasks/text-embeddings); [RAG](/v0.7.0/sdk/ai-tasks/rag) |
+| ASR | `@qvac/sdk/whispercpp-transcription/plugin` | [Transcription](/v0.7.0/sdk/ai-tasks/transcription) |
+| NMT | `@qvac/sdk/nmtcpp-translation/plugin` | [Translation](/v0.7.0/sdk/ai-tasks/translation) |
+| TTS | `@qvac/sdk/onnx-tts/plugin` | [Text-to-Speech](/v0.7.0/sdk/ai-tasks/text-to-speech) |
+| OCR | `@qvac/sdk/onnx-ocr/plugin` | [OCR](/v0.7.0/sdk/ai-tasks/ocr) |
+
+### Enabling
+
+<Steps>
+
+<Step>
+[In your `qvac.config.*`, add the built-in plugins you’ll need in your project](/v0.7.0/sdk/configuration). For example:
+
+```json title="qvac.config.json"
+{
+  "plugins": [
+    "@qvac/sdk/llamacpp-completion/plugin",
+    "@qvac/sdk/onnx-ocr/plugin"
+  ]
+}
+```
+</Step>
+
+<Step>
+
+<Tabs>
+<Tab value="desktop" label="Node.js/Bare" default>
+When developing for desktop environment, use the SDK CLI to (re)bundle the SDK only with the selected plugins:
+
+```bash
+npx qvac bundle sdk
+```
+</Tab>
+<Tab value="mobile" label="Expo">
+[When developing for mobile environment, use the Expo CLI to prebuild your project only with the selected plugins:](/v0.7.0/sdk/installation/#expo)
+
+```bash
+npx expo prebuild
+```
+</Tab>
+</Tabs>
+</Step>
+</Steps>
+
+Only the selected plugins are included in your bundle, significantly reducing your application size. If `plugins` is omitted or an empty array, it bundles all built-in plugins by default.
+
+## Custom plugins
+
+Custom plugins are consumed as npm packages. Install the package, enable it in your `qvac.config.*` file like any built-in plugin, then import and use its API alongside the SDK's regular API.
+
+### Enabling
+
+<Steps>
+
+<Step>
+Install the plugin package in your project. For example:
+
+```bash
+npm i qvac-echo-plugin
+```
+</Step>
+
+<Step>
+
+[In your `qvac.config.*`, add its `<package_name>/plugin` specifier alongside any built-in plugins](/v0.7.0/sdk/configuration). For example:
+
+```json title="qvac.config.json"
+{
+  "plugins": [
+    "@qvac/sdk/llamacpp-completion/plugin",
+    "qvac-echo-plugin/plugin" // [!code highlight]
+  ]
+}
+```
+</Step>
+
+<Step>
+
+<Tabs>
+<Tab value="desktop" label="Node.js/Bare" default>
+When developing for desktop environment, use the SDK CLI to (re)bundle the SDK with all listed plugins:
+
+```bash
+npx qvac bundle sdk
+```
+</Tab>
+<Tab value="mobile" label="Expo">
+[When developing for mobile environment, use the Expo CLI to prebuild your project with all listed plugins:](/v0.7.0/sdk/installation/#expo)
+
+```bash
+npx expo prebuild
+```
+</Tab>
+</Tabs>
+</Step>
+</Steps>
+
+<Callout type="success">
+**Tip:** when adding one or more custom plugins, you **must** also add **all** the built-in plugins you will need to use.
+</Callout>
+
+### Usage
+
+Custom plugins are consumed as npm packages. Install the package, enable it in your `qvac.config.*` file like any built-in plugin, then import and use its API alongside the SDK’s regular API.
+
+```ts 
+import { loadModel, unloadModel } from "@qvac/sdk";
+
+// 1. Import the API you need from the custom plugin package:
+import { echo, echoStream } from "qvac-echo-plugin";
+
+// 2. Load the model(s) required by the custom plugin:
+const modelId = await loadModel({
+  modelSrc: "/path/to/echo-model.bin",
+  modelType: "echo",
+});
+
+// 3. Call functions exposed by the custom plugin API:
+const result = await echo({ modelId, message: "Hello, plugin system!" });
+console.log(result);
+
+for await (const char of echoStream({ modelId, message: "Streaming test!" })) {
+  process.stdout.write(char);
+}
+
+await unloadModel({ modelId });
+```
+
+## Notes
+
+* In `qvac.config.*`, if `plugins` is omitted or set to an empty array, the SDK bundles all built-in plugins. If `plugins` is set, it bundles only the listed plugins.
+* [Each plugin maps to one QVAC addon](/v0.7.0/addons).
+* [Write a custom plugin](/v0.7.0/sdk/utilities/write-custom-plugin).

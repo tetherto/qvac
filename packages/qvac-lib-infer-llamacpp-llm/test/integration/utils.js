@@ -404,7 +404,7 @@ function setupFinetuneTestData (testDataDir, testCheckpointDir, testId) {
 }
 
 function parsePauseCheckpointMetadata (pauseCheckpointPath) {
-  const metadataPath = path.join(pauseCheckpointPath, 'metadata.json')
+  const metadataPath = path.join(pauseCheckpointPath, 'metadata.txt')
   if (!fs.existsSync(metadataPath)) {
     return null
   }
@@ -435,8 +435,8 @@ function verifyPauseCheckpoint (t, checkpointDir) {
   t.ok(verifyCheckpointExists(pauseCheckpointPath), 'Pause checkpoint should exist')
   t.comment(`Pause checkpoint found: ${path.basename(pauseCheckpointPath)}`)
 
-  const metadataPath = path.join(pauseCheckpointPath, 'metadata.json')
-  t.ok(fs.existsSync(metadataPath), 'Pause checkpoint must contain metadata.json')
+  const metadataPath = path.join(pauseCheckpointPath, 'metadata.txt')
+  t.ok(fs.existsSync(metadataPath), 'Pause checkpoint must contain metadata.txt')
   if (fs.existsSync(metadataPath)) {
     const metadataContent = fs.readFileSync(metadataPath, 'utf8')
     t.ok(metadataContent.length > 0, 'Metadata should not be empty')
