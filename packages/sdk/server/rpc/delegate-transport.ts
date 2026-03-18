@@ -11,11 +11,14 @@ import {
   responseSchema,
   PROFILING_KEY,
   DELEGATION_BREAKDOWN_KEY,
+  OPERATION_EVENT_KEY,
   type Request,
   type Response,
   type RPCOptions,
   type ProfilingRequestMeta,
+  type ProfilingResponseMeta,
   type DelegationBreakdown,
+  type OperationEvent,
 } from "@/schemas";
 import {
   nowMs,
@@ -32,6 +35,7 @@ import {
   createDelegationStreamTimings,
   recordDelegationEvents,
   recordDelegationStreamEvents,
+  buildDelegationStreamBreakdown,
   flushServerConnectionEvent,
   consumeBreakdownConnectionTime,
   type DelegationTimings,
@@ -45,6 +49,7 @@ export interface DelegateOptions extends RPCOptions, DelegatedHandlerOptions {
 
 export type ResponseWithDelegation = Response & {
   [DELEGATION_BREAKDOWN_KEY]?: DelegationBreakdown;
+  [OPERATION_EVENT_KEY]?: OperationEvent;
 };
 
 const logger = getServerLogger();
@@ -177,6 +182,10 @@ async function sendProfiled<T extends Request>(
     );
     resPayload[DELEGATION_BREAKDOWN_KEY] = delegationBreakdown;
 
+    if (serverMeta?.operation) {
+      resPayload[OPERATION_EVENT_KEY] = serverMeta.operation;
+    }
+
     return resPayload;
   } catch (error) {
     const base = {
@@ -303,6 +312,8 @@ async function* streamProfiled<T extends Request>(
       options?.timeout,
     );
 
+    let lastServerMeta: ProfilingResponseMeta | undefined;
+
     for await (const chunk of streamWithTimeout) {
       buffer += chunk.toString();
 
@@ -311,7 +322,10 @@ async function* streamProfiled<T extends Request>(
 
       for (const line of lines) {
         if (line.trim()) {
-          const response = responseSchema.parse(JSON.parse(line));
+          const rawPayload = JSON.parse(line) as unknown;
+          const response = responseSchema.parse(
+            rawPayload,
+          ) as ResponseWithDelegation;
           checkAndThrowError(response);
 
           timings.chunkCount++;
@@ -320,11 +334,23 @@ async function* streamProfiled<T extends Request>(
           }
           timings.lastChunkAt = nowMs();
 
+          const serverMeta = extractProfilingMeta(rawPayload);
+          if (serverMeta?.operation) {
+            response[OPERATION_EVENT_KEY] = serverMeta.operation;
+          }
+          if (serverMeta) {
+            lastServerMeta = serverMeta;
+          }
+
+          response[DELEGATION_BREAKDOWN_KEY] =
+            buildDelegationStreamBreakdown(timings);
+
           yield response;
         }
       }
     }
-    recordDelegationStreamEvents(timings);
+
+    recordDelegationStreamEvents(timings, lastServerMeta);
   } catch (error) {
     const base = {
       ts: nowMs(),

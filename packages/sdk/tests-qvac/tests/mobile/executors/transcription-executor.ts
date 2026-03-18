@@ -26,12 +26,13 @@ export class MobileTranscriptionExecutor extends AssetExecutor<
     await this.resources.downloadAllOnce(console.log);
     const dep = ctx.dependency as string | undefined;
     if (dep && dep !== "none") {
+      await this.resources.evictAll();
       await this.resources.ensureLoaded(dep);
     }
   }
 
-  async teardown(testId: string, context: unknown) {
-    await this.resources.evictStale(5);
+  async teardown() {
+    await this.resources.evictAll();
   }
 
   private async loadAudioAssets() {
@@ -49,6 +50,7 @@ export class MobileTranscriptionExecutor extends AssetExecutor<
     expectation: unknown,
   ): Promise<TestResult> {
     const p = params as { audioFileName: string; timeout?: number };
+    const exp = expectation as Expectation;
 
     const whisperModelId = await this.resources.ensureLoaded("whisper");
 
@@ -69,12 +71,15 @@ export class MobileTranscriptionExecutor extends AssetExecutor<
       });
       const trimmedText = text.trim();
 
-      return ValidationHelpers.validate(
-        trimmedText,
-        expectation as Expectation,
-      );
+      if (exp.validation === "throws-error") {
+        return { passed: false, output: "Expected error but transcription succeeded" };
+      }
+      return ValidationHelpers.validate(trimmedText, exp);
     } catch (error) {
       const errorMsg = error instanceof Error ? error.message : String(error);
+      if (exp.validation === "throws-error") {
+        return ValidationHelpers.validate(errorMsg, exp);
+      }
       return { passed: false, output: `Transcription failed: ${errorMsg}` };
     }
   }

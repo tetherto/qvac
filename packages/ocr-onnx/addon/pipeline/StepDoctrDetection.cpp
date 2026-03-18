@@ -41,14 +41,9 @@ float boxScore(const cv::Mat& probMap, const cv::Rect& bbox) {
 } // namespace
 
 StepDoctrDetection::StepDoctrDetection(
-    const std::string& pathDetector, bool useGPU)
-    : session_(pathDetector, [&] {
-        onnx_addon::SessionConfig cfg;
-        cfg.provider = useGPU ? onnx_addon::ExecutionProvider::AUTO_GPU
-                              : onnx_addon::ExecutionProvider::CPU;
-        cfg.optimization = onnx_addon::GraphOptimizationLevel::EXTENDED;
-        return cfg;
-      }()) {
+    const std::string& pathDetector,
+    const onnx_addon::SessionConfig& sessionConfig)
+    : session_(pathDetector, sessionConfig) {
   QLOG(qvac_lib_inference_addon_cpp::logger::Priority::INFO,
        "[DoctrDetection] ONNX session created");
   ALOG_INFO(std::string("[DoctrDetection] ONNX session created"));
@@ -114,18 +109,20 @@ cv::Mat StepDoctrDetection::runInference(const cv::Mat& preprocessed) {
   std::vector<int64_t> inputShape = {1, numChannels, height, width};
 
   onnx_addon::InputTensor inputTensor;
-  inputTensor.name = session_.getInputInfo()[0].name;
+  inputTensor.name = session_.inputName(0);
   inputTensor.shape = inputShape;
   inputTensor.type = onnx_addon::TensorType::FLOAT32;
   inputTensor.data = inputData.data();
   inputTensor.dataSize = inputData.size() * sizeof(float);
 
-  auto outputTensors = session_.run(inputTensor);
+  auto ortOutputs = session_.runRaw(inputTensor);
 
-  // Extract probability map from output
-  auto& outTensor = outputTensors[0];
-  auto* outData = outTensor.asMutable<float>();
-  const auto& outShape = outTensor.shape;
+  // Extract probability map from output (zero-copy access to ORT buffer)
+  auto& ortOutput = ortOutputs[0];
+  auto outTypeInfo = ortOutput.GetTypeInfo();
+  auto outTensorInfo = outTypeInfo.GetTensorTypeAndShapeInfo();
+  auto outShape = outTensorInfo.GetShape();
+  const float* outData = ortOutput.GetTensorData<float>();
 
   {
     std::string shapeStr = "[";
@@ -139,17 +136,19 @@ cv::Mat StepDoctrDetection::runInference(const cv::Mat& preprocessed) {
   }
 
   // Output can be [1, 1, H, W] or [1, H, W] - extract as 2D logit map
+  // No clone needed: probMap (computed via cv::exp) is independent of the ORT
+  // buffer, and ortOutputs stays alive until the end of this function
   cv::Mat logitMap;
   if (outShape.size() == 4) {
     // [batch, channels, height, width]
     int outH = static_cast<int>(outShape[2]);
     int outW = static_cast<int>(outShape[3]);
-    logitMap = cv::Mat(outH, outW, CV_32F, outData).clone();
+    logitMap = cv::Mat(outH, outW, CV_32F, const_cast<float*>(outData));
   } else if (outShape.size() == 3) {
     // [batch, height, width]
     int outH = static_cast<int>(outShape[1]);
     int outW = static_cast<int>(outShape[2]);
-    logitMap = cv::Mat(outH, outW, CV_32F, outData).clone();
+    logitMap = cv::Mat(outH, outW, CV_32F, const_cast<float*>(outData));
   } else {
     throw std::runtime_error("[DoctrDetection] Unexpected output tensor shape with " +
                              std::to_string(outShape.size()) + " dimensions");
