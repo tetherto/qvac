@@ -60,7 +60,51 @@ function assertErrorEnvelope (body: unknown, code: string): void {
   assert.ok(typeof (err as Record<string, unknown>)['message'] === 'string')
 }
 
-describe('serve e2e (no models)', () => {
+async function multipartReq (
+  urlPath: string,
+  fields: Record<string, string>,
+  file?: { name: string; data: Buffer }
+): Promise<{ status: number; headers: http.IncomingHttpHeaders; body: unknown }> {
+  const boundary = '----TestBoundary' + Math.random().toString(36).slice(2)
+  const parts: Buffer[] = []
+
+  for (const [key, value] of Object.entries(fields)) {
+    parts.push(Buffer.from(
+      `--${boundary}\r\nContent-Disposition: form-data; name="${key}"\r\n\r\n${value}\r\n`
+    ))
+  }
+
+  if (file) {
+    parts.push(Buffer.from(
+      `--${boundary}\r\nContent-Disposition: form-data; name="file"; filename="${file.name}"\r\nContent-Type: application/octet-stream\r\n\r\n`
+    ))
+    parts.push(file.data)
+    parts.push(Buffer.from('\r\n'))
+  }
+
+  parts.push(Buffer.from(`--${boundary}--\r\n`))
+  const body = Buffer.concat(parts)
+
+  const res = await fetch(`${BASE}${urlPath}`, {
+    method: 'POST',
+    headers: { 'Content-Type': `multipart/form-data; boundary=${boundary}` },
+    body
+  })
+  const text = await res.text()
+  let parsed: unknown
+  try {
+    parsed = JSON.parse(text)
+  } catch {
+    parsed = text
+  }
+  return {
+    status: res.status,
+    headers: Object.fromEntries(res.headers.entries()),
+    body: parsed
+  }
+}
+
+describe('serve (no models)', () => {
   before(async () => {
     server = await startTestServer({ cors: true })
   })
@@ -157,6 +201,76 @@ describe('serve e2e (no models)', () => {
     assertErrorEnvelope(res.body, 'model_not_found')
   })
 
+  // -- Transcriptions --
+
+  it('POST /v1/audio/transcriptions with JSON content-type returns 400', async () => {
+    const res = await req('POST', '/v1/audio/transcriptions', { model: 'test' })
+    assert.equal(res.status, 400)
+    assertErrorEnvelope(res.body, 'invalid_content_type')
+  })
+
+  it('POST /v1/audio/transcriptions without file returns 400', async () => {
+    const res = await multipartReq('/v1/audio/transcriptions', { model: 'test' })
+    assert.equal(res.status, 400)
+    assertErrorEnvelope(res.body, 'missing_file')
+  })
+
+  it('POST /v1/audio/transcriptions without model returns 400', async () => {
+    const res = await multipartReq('/v1/audio/transcriptions', {}, { name: 'audio.wav', data: Buffer.from('fake-audio') })
+    assert.equal(res.status, 400)
+    assertErrorEnvelope(res.body, 'missing_model')
+  })
+
+  it('POST /v1/audio/transcriptions with unsupported response_format returns 400', async () => {
+    const res = await multipartReq(
+      '/v1/audio/transcriptions',
+      { model: 'test', response_format: 'srt' },
+      { name: 'audio.wav', data: Buffer.from('fake-audio') }
+    )
+    assert.equal(res.status, 400)
+    assertErrorEnvelope(res.body, 'unsupported_response_format')
+  })
+
+  it('POST /v1/audio/transcriptions with vtt response_format returns 400', async () => {
+    const res = await multipartReq(
+      '/v1/audio/transcriptions',
+      { model: 'test', response_format: 'vtt' },
+      { name: 'audio.wav', data: Buffer.from('fake-audio') }
+    )
+    assert.equal(res.status, 400)
+    assertErrorEnvelope(res.body, 'unsupported_response_format')
+  })
+
+  it('POST /v1/audio/transcriptions with verbose_json response_format returns 400', async () => {
+    const res = await multipartReq(
+      '/v1/audio/transcriptions',
+      { model: 'test', response_format: 'verbose_json' },
+      { name: 'audio.wav', data: Buffer.from('fake-audio') }
+    )
+    assert.equal(res.status, 400)
+    assertErrorEnvelope(res.body, 'unsupported_response_format')
+  })
+
+  it('POST /v1/audio/transcriptions with unknown response_format returns 400', async () => {
+    const res = await multipartReq(
+      '/v1/audio/transcriptions',
+      { model: 'test', response_format: 'xml' },
+      { name: 'audio.wav', data: Buffer.from('fake-audio') }
+    )
+    assert.equal(res.status, 400)
+    assertErrorEnvelope(res.body, 'invalid_response_format')
+  })
+
+  it('POST /v1/audio/transcriptions with unknown model returns 404', async () => {
+    const res = await multipartReq(
+      '/v1/audio/transcriptions',
+      { model: 'nonexistent' },
+      { name: 'audio.wav', data: Buffer.from('fake-audio') }
+    )
+    assert.equal(res.status, 404)
+    assertErrorEnvelope(res.body, 'model_not_found')
+  })
+
   // -- Routing --
 
   it('GET /unknown returns 404', async () => {
@@ -186,7 +300,7 @@ describe('serve e2e (no models)', () => {
   })
 })
 
-describe('serve e2e (auth)', () => {
+describe('serve (auth)', () => {
   let authServer: http.Server
   const API_KEY = 'test-secret-key-12345'
   const AUTH_PORT = 19877
@@ -232,7 +346,7 @@ describe('serve e2e (auth)', () => {
   })
 })
 
-describe('serve e2e (no CORS)', () => {
+describe('serve (no CORS)', () => {
   let noCorsServer: http.Server
   const NO_CORS_PORT = 19878
   const NO_CORS_BASE = `http://127.0.0.1:${NO_CORS_PORT}`
