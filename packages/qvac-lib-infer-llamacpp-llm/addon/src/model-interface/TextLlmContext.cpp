@@ -489,8 +489,8 @@ bool TextLlmContext::generateResponse(
   return true;
 }
 
-std::function<void()> TextLlmContext::applyGenerationParams(
-    const GenerationParams& overrides) {
+std::function<void()>
+TextLlmContext::applyGenerationParams(const GenerationParams& overrides) {
   if (!overrides.hasOverrides()) {
     return []() {};
   }
@@ -516,7 +516,8 @@ std::function<void()> TextLlmContext::applyGenerationParams(
 
   bool restored = false;
   return [this, savedSampling, savedPredict, restored]() mutable {
-    if (restored) return;
+    if (restored)
+      return;
     restored = true;
     params_.sampling = savedSampling;
     params_.n_predict = savedPredict;

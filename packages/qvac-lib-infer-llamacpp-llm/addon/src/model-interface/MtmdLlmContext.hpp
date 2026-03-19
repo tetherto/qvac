@@ -65,8 +65,8 @@ public:
   bool generateResponse(
       const std::function<void(const std::string&)>& outputCallback) override;
 
-  std::function<void()> applyGenerationParams(
-      const GenerationParams& overrides) override;
+  std::function<void()>
+  applyGenerationParams(const GenerationParams& overrides) override;
 
   /**
    * The stop method. It stops the model inference.
@@ -79,6 +79,16 @@ public:
    * @return - the context.
    */
   llama_context* getCtx() override;
+
+  /**
+   * Access the underlying llama model pointer.
+   */
+  llama_model* getModel() override { return model_; }
+
+  /**
+   * Access the mutable common parameters associated with this context.
+   */
+  common_params& getParams() override { return params_; }
 
   /**
    * The get n_past method. It returns the n_past.

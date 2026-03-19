@@ -17,6 +17,7 @@ This native C++ addon, built using the `Bare` Runtime, simplifies running Large 
   - [8. Release Resources](#8-release-resources)
 - [API behavior by state](#api-behavior-by-state)
 - [Quickstart Example](#quickstart-example)
+- [Fine-tuning](#fine-tuning)
 - [Other Examples](#other-examples)
 - [Architecture](#architecture)
 - [Benchmarking](#benchmarking)
@@ -46,7 +47,6 @@ BitNet models require special backend handling on Adreno GPUs. When a BitNet mod
 - qvac-fabric-llm.cpp (≥7248.1.4): Inference engine
 - Bare Runtime (≥1.24.0): JavaScript runtime
 - Linux requires Clang/LLVM 19 with libc++
-
 ## Installation
 
 ### Prerequisites
@@ -283,6 +283,11 @@ Run the quickstart example (uses examples/quickstart.js):
 npm run quickstart
 ```
 
+## Fine-tuning
+
+The library supports **LoRA finetuning** of GGUF models: train small adapter weights on top of a base model, then save the adapter and load it at inference time via the `lora` config option. You can pause and resume training from checkpoints.
+
+For the full API, dataset format, parameters, and examples, see the **[Finetuning guide](docs/finetuning.md)**.
 
 ## Other examples
 
@@ -291,6 +296,9 @@ npm run quickstart
 -   [Multi-Cache](./examples/multiCache.js) – Demonstrates session handling and caching capabilities.
 -   [Native Logging](./examples/nativelog.js) – Demonstrates C++ addon logging integration.
 -   [Tool Calling](./examples/toolCalling.js) – Demonstrates tool calling capabilities.
+-   [LoRA Finetuning](./examples/simple-lora-finetune.js) – Basic LoRA finetuning.
+-   [LoRA Finetuning Pause/Resume](./examples/simple-lora-finetune-pause-resume.js) – Pause and resume finetuning.
+-   [LoRA Inference](./examples/simple-lora-inference.js) – Inference with a finetuned LoRA adapter.
 
 ## OCR with Vision-Language Models
 
