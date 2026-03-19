@@ -49,7 +49,7 @@ jobs:
       - name: Check for doc changes
         id: changes
         run: |
-          git add docs/website/content/docs/sdk/api/ docs/website/src/lib/versions.ts 2>/dev/null || true
+          git add "docs/website/content/docs/(latest)/sdk/api/" "docs/website/content/docs/v"*/sdk/api/ docs/website/src/lib/versions.ts 2>/dev/null || true
           if git diff --staged --quiet; then
             echo "has_doc_changes=false" >> "$GITHUB_OUTPUT"
           else
