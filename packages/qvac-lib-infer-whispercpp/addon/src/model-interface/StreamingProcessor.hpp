@@ -13,8 +13,6 @@
 
 namespace qvac_lib_inference_addon_whisper {
 
-namespace model = qvac_lib_inference_addon_cpp::model;
-
 class WhisperModel;
 
 class StreamingProcessor {
@@ -39,7 +37,7 @@ public:
   };
 
   StreamingProcessor(
-      model::IModel& model,
+      WhisperModel& model,
       std::shared_ptr<qvac_lib_inference_addon_cpp::OutputQueue> outputQueue,
       Config config);
 
@@ -52,12 +50,13 @@ public:
 
   void appendAudio(std::vector<float>&& samples);
   void end();
+  void cancel();
 
 private:
   void processLoop();
   void processAudioRange(int startSample, int endSample);
 
-  model::IModel& model_;
+  WhisperModel& model_;
   std::shared_ptr<qvac_lib_inference_addon_cpp::OutputQueue> outputQueue_;
   Config config_;
 
@@ -66,6 +65,8 @@ private:
   std::vector<float> pendingAudio_;
   std::vector<float> processBuffer_;
   bool ended_ = false;
+  bool cancelled_ = false;
+  bool hasError_ = false;
 
   whisper_vad_context* vadCtx_ = nullptr;
   int bufferSizeAtLastVadRun_ = 0;

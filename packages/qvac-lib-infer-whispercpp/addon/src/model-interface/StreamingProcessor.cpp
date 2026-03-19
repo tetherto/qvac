@@ -20,7 +20,7 @@ using VadSegmentsPtr = std::unique_ptr<whisper_vad_segments, VadSegmentsDeleter>
 namespace qvac_lib_inference_addon_whisper {
 
 StreamingProcessor::StreamingProcessor(
-    model::IModel& model,
+    WhisperModel& model,
     std::shared_ptr<qvac_lib_inference_addon_cpp::OutputQueue> outputQueue,
     Config config)
     : model_(model), outputQueue_(std::move(outputQueue)),
@@ -95,6 +95,19 @@ void StreamingProcessor::end() {
   }
 }
 
+void StreamingProcessor::cancel() {
+  model_.cancel();
+  {
+    std::lock_guard lock(mtx_);
+    cancelled_ = true;
+    ended_ = true;
+  }
+  cv_.notify_one();
+  if (thread_.joinable()) {
+    thread_.join();
+  }
+}
+
 void StreamingProcessor::processAudioRange(int startSample, int endSample) {
   int len = endSample - startSample;
   if (len <= 0) {
@@ -114,16 +127,13 @@ void StreamingProcessor::processAudioRange(int startSample, int endSample) {
       processBuffer_.begin() + endSample);
 
   try {
-    std::any result =
-        model_.process(std::any(WhisperModel::Input(std::move(segment))));
-    if (result.has_value()) {
-      const auto* transcripts =
-          std::any_cast<WhisperModel::Output>(&result);
-      if (transcripts != nullptr && !transcripts->empty()) {
-        outputQueue_->queueResult(std::move(result));
-      }
+    model_.process(segment);
+    auto transcripts = model_.takeOutput();
+    if (!transcripts.empty()) {
+      outputQueue_->queueResult(std::any(std::move(transcripts)));
     }
   } catch (const std::exception& e) {
+    hasError_ = true;
     QLOG(
         qvac_lib_inference_addon_cpp::logger::Priority::ERROR,
         std::string("StreamingProcessor: processing error: ") + e.what());
@@ -135,6 +145,8 @@ void StreamingProcessor::processLoop() {
       qvac_lib_inference_addon_cpp::logger::Priority::DEBUG,
       "StreamingProcessor: thread started (VAD-based segmentation)");
 
+  model_.prepareForStreaming();
+
   whisper_vad_params vadParams = whisper_vad_default_params();
   vadParams.threshold = config_.vadThreshold;
   vadParams.min_speech_duration_ms = config_.minSpeechDurationMs;
@@ -145,6 +157,7 @@ void StreamingProcessor::processLoop() {
 
   while (true) {
     bool done = false;
+    bool wasCancelled = false;
 
     {
       std::unique_lock lock(mtx_);
@@ -157,6 +170,11 @@ void StreamingProcessor::processLoop() {
       pendingAudio_.clear();
 
       done = ended_;
+      wasCancelled = cancelled_;
+    }
+
+    if (wasCancelled) {
+      break;
     }
 
     int bufferSize = static_cast<int>(processBuffer_.size());
@@ -263,6 +281,17 @@ void StreamingProcessor::processLoop() {
     }
   }
 
+  {
+    std::lock_guard lock(mtx_);
+    if (cancelled_) {
+      QLOG(
+          qvac_lib_inference_addon_cpp::logger::Priority::DEBUG,
+          "StreamingProcessor: cancelled, queueing cancellation");
+      outputQueue_->queueException(std::runtime_error("Job cancelled"));
+      return;
+    }
+  }
+
   // Process any remaining audio in the buffer
   if (!processBuffer_.empty()) {
     QLOG(
@@ -273,10 +302,18 @@ void StreamingProcessor::processLoop() {
     processBuffer_.clear();
   }
 
-  QLOG(
-      qvac_lib_inference_addon_cpp::logger::Priority::DEBUG,
-      "StreamingProcessor: stream ended, queueing job completion");
-  outputQueue_->queueJobEnded();
+  if (hasError_) {
+    QLOG(
+        qvac_lib_inference_addon_cpp::logger::Priority::DEBUG,
+        "StreamingProcessor: stream ended with errors");
+    outputQueue_->queueException(std::runtime_error(
+        "StreamingProcessor: one or more segments failed during processing"));
+  } else {
+    QLOG(
+        qvac_lib_inference_addon_cpp::logger::Priority::DEBUG,
+        "StreamingProcessor: stream ended, queueing job completion");
+    outputQueue_->queueJobEnded();
+  }
 }
 
 } // namespace qvac_lib_inference_addon_whisper
