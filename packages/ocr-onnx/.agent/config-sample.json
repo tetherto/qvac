@@ -1,0 +1,40 @@
+{
+  "version": 2,
+  "tools": {
+    "claude": {
+      "capabilities": {
+        "namedAgents": true,
+        "modelSelection": true,
+        "mcp": true,
+        "persistentMemory": true,
+        "loopPolling": true
+      },
+      "cli": {
+        "command": "claude",
+        "args": ["-p", "--permission-mode", "acceptEdits", "--no-session-persistence"]
+      }
+    },
+    "cursor": {
+      "capabilities": {
+        "namedAgents": false,
+        "modelSelection": false,
+        "mcp": true,
+        "persistentMemory": false,
+        "loopPolling": false
+      },
+      "cli": {
+        "command": "cursor-agent",
+        "args": ["-p", "--trust"]
+      }
+    }
+  },
+  "roles": {
+    "plan-reviewer": ["claude", "cursor"],
+    "implementer": "claude",
+    "test-writer": "cursor",
+    "ci-validator": "cursor",
+    "code-reviewer": "claude",
+    "model-registry-updater": "cursor",
+    "android-runner": "cursor"
+  }
+}

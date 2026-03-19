@@ -6,9 +6,10 @@ Canonical source for agent config used by both **Claude Code** and **Cursor**. R
 
 ```bash
 git clone https://github.com/tetherto/qvac
-cd qvac
-/setup claude          # or: /setup cursor, /setup all
-/orchestrate <task>    # run full pipeline for an Asana task
+cd qvac                            # any directory within the repo works
+claude                             # or cursor, or any supported tool
+/setup all                         # or: /setup claude, /setup cursor
+/orchestrate <task>                # run full pipeline for an Asana task
 ```
 
 The `<task>` argument accepts an Asana task ID or full URL:
@@ -18,35 +19,41 @@ The `<task>` argument accepts an Asana task ID or full URL:
 ## Directory Layout
 
 ```
-.agent/
-├── README.md               # This file
-├── conduct.md              # Behavioral rules for all agents
-├── mcp.json                # Shared MCP server definitions (Asana)
-├── settings.json           # Canonical settings (permission allowlist)
-├── setup.sh                # Copies .agent/ config into .claude/ or .cursor/
-├── agents/                 # Agent definitions
-│   ├── implementer.md
-│   ├── test-writer.md
-│   ├── ci-validator.md
-│   ├── code-reviewer.md
-│   ├── model-registry-updater.md
-│   └── android-runner.md
-├── knowledge/              # Domain knowledge docs (loaded on-demand)
-│   ├── ci-validation.md
-│   ├── vcpkg-management.md
-│   ├── llama-cpp-android.md
-│   └── registry-models.md
-└── skills/                 # New skills (directory-based, SKILL.md format)
-    ├── orchestrate/
-    ├── release/
-    ├── ci-validate/
-    └── commit-trace/
-
-.claude/skills/setup/       # Bootstrap skill (tracked in git)
-.cursor/skills/setup/       # Bootstrap skill (tracked in git)
+<repo-root>/                       # Git repository root (git rev-parse --show-toplevel)
+├── .agent-handoff/                # Ephemeral handoff workspace (gitignored, created by setup)
+├── .claude/                       # Generated Claude Code config (gitignored, created by setup)
+├── .cursor/                       # Generated Cursor config (gitignored, created by setup)
+└── packages/ocr-onnx/             # (or wherever .agent/ lives in the monorepo)
+    └── .agent/                    # Canonical agent config (this directory)
+        ├── README.md              # This file
+        ├── conduct.md             # Behavioral rules for all agents
+        ├── config.json            # Tool registry + role assignments (empty roles by default)
+        ├── config-sample.json     # Sample config with recommended multi-tool roles
+        ├── mcp.json               # Shared MCP server definitions (Asana)
+        ├── settings.json          # Canonical settings (permission allowlist)
+        ├── setup.sh               # Generates .claude/ and .cursor/ at the repo root
+        ├── agents/                # Agent definitions
+        │   ├── plan-reviewer.md
+        │   ├── implementer.md
+        │   ├── test-writer.md
+        │   ├── ci-validator.md
+        │   ├── code-reviewer.md
+        │   ├── model-registry-updater.md
+        │   └── android-runner.md
+        ├── knowledge/             # Domain knowledge docs (loaded on-demand)
+        │   ├── ci-validation.md
+        │   ├── vcpkg-management.md
+        │   ├── llama-cpp-android.md
+        │   └── registry-models.md
+        └── skills/                # Skills (directory-based, SKILL.md format)
+            ├── orchestrate/
+            ├── release/
+            ├── ci-validate/
+            ├── commit-trace/
+            └── handoff/
 ```
 
-After running `/setup`, agents, knowledge, and skills are copied into `.claude/` (or `.cursor/`). Generated files are gitignored — edit sources in `.agent/` instead.
+`setup.sh` resolves the git repo root via `git rev-parse --show-toplevel` and writes generated files there. This ensures both Cursor and Claude Code discover the config regardless of where `.agent/` lives in the repo. Generated files are gitignored — edit sources in `.agent/` instead.
 
 ## Tool Compatibility
 
@@ -63,12 +70,183 @@ Not all features work identically in both tools:
 | Model selection per agent (`opus` / `sonnet`) | Yes | No — Cursor Task tool only supports `fast` or inherited default |
 | Persistent agent memory | Yes (`memory: project`) | No — sub-agents have no persistent memory |
 | `/loop` (CI polling) | Yes (built-in) | No — use `Shell` with `gh run watch` or manual polling |
+| Role dispatch (multi-tool) | Yes | Yes |
+| `/handoff` receiver | Yes | Yes |
 
 **Cursor users** get skills, knowledge, conduct rules, agent prompts, and Asana MCP. Agent definitions are available as `.mdc` reference prompts that can be passed to `Task(subagent_type="generalPurpose")` sub-agents. The `/orchestrate` pipeline works with modifications — it delegates phases to Task sub-agents instead of named agents. Limitations: no per-agent model selection, no persistent agent memory, no `/loop` built-in.
 
+## Multi-Tool Setup
+
+Assign different agent roles to different tools so Claude Code and Cursor (or other tools) run simultaneously with different responsibilities.
+
+### Initial Setup
+
+Run `/setup all` to configure both tools and create the shared handoff directory:
+
+```bash
+/setup all
+```
+
+This does three things:
+1. Generates tool-specific config at the **git repo root** for Claude Code (`.claude/`) and Cursor (`.cursor/`)
+2. Creates `.agent-handoff/` — the shared directory for inter-tool phase delegation
+3. Generates tool-specific `/handoff` and `/orchestrate` skills with hardcoded tool identity (so each tool knows who it is when filtering handoff requests)
+
+If you only use one tool, `/setup claude` or `/setup cursor` still works — the `.agent-handoff/` directory is created regardless.
+
+Re-run `/setup all` after pulling changes to `.agent/`. If files have changed, the script reports conflicts and prompts for a strategy (`--force` to overwrite, `--keep` to skip, `--clean` to regenerate). Setup also cleans stale handoff files from `.agent-handoff/`.
+
+### Role Configuration
+
+Edit `.agent/config.json` → `roles` section to assign agents to tools. By default, `roles` is empty (`{}`) — all phases run locally on whichever tool is active. No config changes are needed for the default single-tool workflow.
+
+To enable multi-tool role dispatch, copy the sample config and adjust as needed:
+
+```bash
+cp .agent/config-sample.json .agent/config.json
+```
+
+The sample (`config-sample.json`) ships with the recommended role assignments:
+
+```json
+{
+  "roles": {
+    "plan-reviewer": ["claude", "cursor"],
+    "implementer": "claude",
+    "test-writer": "cursor",
+    "ci-validator": "cursor",
+    "code-reviewer": "claude",
+    "model-registry-updater": "cursor",
+    "android-runner": "cursor"
+  }
+}
+```
+
+- **String value** (e.g., `"implementer": "claude"`): single tool handles the role
+- **Array value** (e.g., `"plan-reviewer": ["claude", "cursor"]`): multi-reviewer consensus mode — each tool runs its own plan-reviewer independently. Only `plan-reviewer` supports array assignment.
+
+#### Why this split?
+
+The recommended assignment routes high-judgment roles to Claude Code and mechanical roles to Cursor:
+
+| Role | Tool | Why |
+|---|---|---|
+| `plan-reviewer` | Both | Two independent reviewers with different models catch more issues than one. Opus finds architectural flaws; Cursor's default model finds practical gaps. |
+| `implementer` | Claude | Most capability-demanding role. Benefits from Opus (complex reasoning), named agents (isolated context), and persistent memory (learns codebase patterns). |
+| `code-reviewer` | Claude | Opus catches subtle bugs and security issues that cheaper models miss. Persistent memory remembers past review patterns. |
+| `test-writer` | Cursor | Follows existing test patterns mechanically. Default model is sufficient. Frees Claude's context for higher-judgment work. |
+| `ci-validator` | Cursor | Mostly waiting and log parsing. Loses `/loop` but `gh run watch` is a functional substitute. |
+| `model-registry-updater` | Cursor | Procedural — follows registry format from knowledge docs. No special model needed. |
+| `android-runner` | Cursor | Shell-heavy device interaction. No special model needed. |
+
+To customize, edit `.agent/config.json` directly. Both Claude Code (`claude -p`) and Cursor (`cursor-agent -p --trust`) have headless CLIs, so all handoffs are auto-invoked regardless of which tool is assigned.
+
+### User Workflow
+
+1. Open both Claude Code and Cursor in the same repo
+2. Run `/setup all` in either tool (only needed once, or after pulling `.agent/` changes)
+3. Edit `.agent/config.json` to assign roles (or copy from `config-sample.json` — see above)
+4. Run `/orchestrate <task>` in the orchestrating tool (typically Claude Code — it has the most capabilities)
+5. When the orchestrator reaches a phase assigned to another tool, it auto-invokes that tool's CLI in the background — no user action needed
+6. The receiving tool executes the agent, pushes commits, writes a result file
+7. The orchestrator detects the result, pulls commits, and continues the pipeline
+
+**User interaction**: The only user interaction points are in **Phase 0.5 (reviewer feedback rounds + plan approval)**. All other phases — including all cross-tool handoffs — run automatically via CLI auto-invocation.
+
+### When to Use Multi-Tool vs Single-Tool
+
+Multi-tool is opt-in (`roles: {}` = single-tool). The handoff protocol adds overhead, so it's not always worth it.
+
+**Multi-tool benefits:**
+- **Parallelism** — phases on different tools can overlap, cutting wall-clock time on long pipelines
+- **Model diversity** — route Opus to high-judgment work (implementation, review) and cheaper models to mechanical work (tests, CI)
+- **Context isolation** — each tool gets a fresh context window per handoff instead of accumulating all phases in one window
+- **Independent plan review** — `plan-reviewer: ["claude", "cursor"]` runs two reviewers with different models/biases simultaneously
+
+**Multi-tool costs:**
+- **Handoff latency** — each cross-tool phase adds ~30-60s overhead (commit, push, CLI invocation, checkout, pull)
+- **More failure modes** — push failures, heartbeat staleness, CLI crashes, stale files, TOCTOU races on the status lock
+- **Config complexity** — `config.json` roles, CLI fields, capability validation vs zero-config single-tool
+- **Harder debugging** — errors are in result files on disk, not inline in your terminal
+
+**Use multi-tool when:** the pipeline takes 30+ minutes single-tool, you want independent plan reviewers, or you're cost-optimizing across tool tiers. **Use single-tool when:** the task is small, you want the simplest debugging experience, or you only have one tool set up.
+
+### Capability Warnings
+
+At startup, the orchestrator validates role assignments against tool capabilities. It warns (but does not block) when a tool is missing a preferred capability for its assigned role. There are no hard blocks — the handoff protocol covers all roles.
+
+### Docker Isolation (Recommended)
+
+AI coding tools execute arbitrary shell commands, install packages, and spawn background processes as part of normal operation. Running them directly on the host exposes your system to unintended side effects — stale processes, modified system config, leaked credentials, or dependency pollution. A single Docker container that hosts all tools provides a clean boundary between agent activity and your host environment.
+
+**Architecture**: All tool CLIs run inside one container with the repo bind-mounted from the host. Claude Code (`claude -p`) and Cursor (`cursor-agent -p`) both run headlessly — no GUI or display server required. The container holds all build dependencies (clang, Node, Bare, vcpkg) so the host only needs Docker.
+
+```
+┌──────────────────────────────────────────────────┐
+│  Host (only needs Docker)                        │
+│                                                  │
+│  ┌────────────────────────────────────────────┐  │
+│  │  qvac-dev container                        │  │
+│  │                                            │  │
+│  │  claude cli  ·  cursor-agent cli            │  │
+│  │  clang-19  ·  node 22  ·  bare  ·  vcpkg  │  │
+│  │                                            │  │
+│  │  /repo/qvac  ← bind mount from host        │  │
+│  │    ├── .agent-handoff/                     │  │
+│  │    ├── .claude/                            │  │
+│  │    └── .cursor/                            │  │
+│  └────────────────────────────────────────────┘  │
+└──────────────────────────────────────────────────┘
+```
+
+**Advantages:**
+
+- **Host protection** — agents cannot modify system packages, global configs, or files outside the bind mount. A misbehaving agent that spawns runaway processes or writes to unexpected paths is contained within the container.
+- **Dependency pinning** — the Dockerfile locks exact versions of clang, Node, Bare, vcpkg, and other build tools. Every developer and CI runner gets the same environment, eliminating "works on my machine" drift.
+- **Simplified host setup** — the host only needs Docker installed. No clang-19, libc++-19-dev, vcpkg, bare, or any other build dependency on the host.
+- **Clean state on restart** — stop and restart the container to get a fresh environment. No stale processes, leaked file handles, corrupted caches, or orphaned temp files surviving between sessions.
+- **Resource control** — set CPU and memory limits on the container (`--cpus`, `--memory`) to prevent agents from consuming all host resources during intensive builds or inference workloads.
+- **Credential isolation** — tokens (`GH_TOKEN`, `HF_TOKEN`, `ASANA_ACCESS_TOKEN`) are passed as environment variables to the container, not stored in host dotfiles where other processes can read them.
+- **Reproducible debugging** — when something breaks, the exact container image can be shared or inspected. No need to reconstruct the host environment.
+
+**Example `docker-compose.yml`:**
+
+```yaml
+services:
+  dev:
+    image: qvac-agent:latest
+    volumes:
+      - .:/repo/qvac
+    environment:
+      - GH_TOKEN
+      - HF_TOKEN
+      - ASANA_ACCESS_TOKEN
+    cpus: 8
+    mem_limit: 16g
+    working_dir: /repo/qvac
+```
+
+Both tool CLIs (`claude` and `cursor-agent`) run directly inside the container terminal. The orchestrator auto-invokes whichever tool is needed for each phase — no GUI, no display server, no Remote SSH. Both tools share the same filesystem, same git state, and same `.agent-handoff/` directory.
+
+**Caveats:**
+
+- **File permissions** — ensure the container user's UID/GID matches the host user to avoid permission issues on the bind mount (`--user $(id -u):$(id -g)` or matching `USER` in the Dockerfile).
+- **GPU access** — for Android runner or inference workloads that need GPU, pass `--gpus all` to the container (requires NVIDIA Container Toolkit on the host).
+- **CLI installation** — the Dockerfile must install both CLIs. Claude Code: `npm install -g @anthropic-ai/claude-code`. Cursor: `curl https://cursor.com/install -fsSL | bash` (installs `cursor-agent`).
+
+## Adding New Tools
+
+1. Add a tool entry to `.agent/config.json` → `tools` with capability flags and a `cli` field (set `cli` to the tool's non-interactive CLI command and args, or `null` if the tool has no headless CLI)
+2. Add a `setup_<tool>()` function to `setup.sh` (following the pattern of `setup_cursor()`)
+3. Assign roles in `.agent/config.json` → `roles`
+
+No changes to the orchestrator or handoff protocol are needed — they work with any tool that has a `cli` field (auto-invoked) or supports the `/handoff` skill (manual fallback). For tools without a skill system or CLI, the user can manually read request files and write result files (or use a future `handoff-helper.sh` scaffold script).
+
 ## How Setup Works
 
-| Source in `.agent/` | Claude Code destination | Cursor destination |
+`setup.sh` reads source files from `.agent/` and writes generated config to the **git repo root**:
+
+| Source in `.agent/` | Claude Code destination (repo root) | Cursor destination (repo root) |
 |---|---|---|
 | `conduct.md` | `.claude/agent-conduct.md` | `.cursor/rules/agent-conduct.mdc` (always-applied rule) |
 | `knowledge/*.md` | `.claude/knowledge/` | `.cursor/rules/knowledge/*.mdc` (requestable rules) |
@@ -81,10 +259,23 @@ Agent files copied to Cursor have Claude-specific frontmatter (`model`, `color`,
 
 Existing skills in `.cursor/skills/` (addon-changelog, sdk-changelog, etc.) are not managed by setup — they remain as-is.
 
+### Conflict Detection
+
+On re-run, `setup.sh` checks each file before writing:
+- **New** (`[N]`): written immediately
+- **Unchanged** (`[=]`): skipped
+- **Differs** (`[M]`): conflict — reported but not overwritten (default mode)
+
+If conflicts are found, the script exits with code 3 and prints resolution options:
+- `--force`: overwrite all differing files
+- `--keep`: keep existing files, only write new ones
+- `--clean`: delete all setup-managed files (identified by `AUTO-GENERATED` header) and regenerate
+
 ## Full Pipeline (`/orchestrate`)
 
 ```
 Phase 0:    Setup         Parse Asana URL → read task → create feature branch
+Phase 0.5:  Plan Review   plan-reviewer agent → review plan (if needed)
 Phase 1:    Implement     implementer agent → write code, verify build/tests
 Phase 1.5:  Analyze       Auto-detect if tests and CI are needed
 Phase 1.75: Test          test-writer agent → add tests (if needed)
@@ -119,6 +310,7 @@ SDK/TS packages get automatic PR checks via `pr-checks-sdk-pod`. All other packa
 
 | Agent | Role | Claude Code | Cursor |
 |---|---|---|---|
+| `plan-reviewer` | Review/analyze plans, identify risks, provide recommendations | Named agent, Opus | `Task(generalPurpose)` + prompt from `.cursor/rules/agents/` |
 | `implementer` | Write code, verify build/tests, commit | Named agent, Opus | `Task(generalPurpose)` + prompt from `.cursor/rules/agents/` |
 | `test-writer` | Write automated tests for new/changed code | Named agent, Sonnet | `Task(generalPurpose, model="fast")` + prompt |
 | `ci-validator` | Trigger CI, monitor, diagnose failures | Named agent, Sonnet | `Task(generalPurpose)` + prompt (no `/loop`) |
@@ -136,6 +328,7 @@ SDK/TS packages get automatic PR checks via `pr-checks-sdk-pod`. All other packa
 |---|---|
 | `/setup <agent>` | Install skills, knowledge, agents for Claude Code or Cursor |
 | `/orchestrate <task>` | Full pipeline: implement → test → CI → review → PR |
+| `/handoff` | Pick up delegated phases from another tool (inter-tool protocol) |
 | `/release <package>` | Release a package to NPM |
 | `/ci-validate <package>` | Trigger and monitor CI for a package |
 
@@ -160,6 +353,76 @@ Rules:
 - Parallel tasks **must not** modify the same files
 - Review diffs between waves — cheapest moment to catch wrong approaches
 - Check Asana for agent comments flagging ambiguity
+
+### Git Worktrees for True Parallel Isolation
+
+The single-working-tree approach above requires careful file-scope discipline — if two tasks touch any of the same files, they collide. **Git worktrees** eliminate this constraint by giving each task its own independent working directory backed by the same repository.
+
+```bash
+# Create worktrees for each task (from the main checkout)
+git worktree add ../qvac-task-1 -b feat/QVAC-100-feature-a
+git worktree add ../qvac-task-2 -b feat/QVAC-200-feature-b
+
+# Run setup in each worktree (each gets its own .claude/, .cursor/, .agent-handoff/)
+cd ../qvac-task-1 && bash packages/ocr-onnx/.agent/setup.sh all
+cd ../qvac-task-2 && bash packages/ocr-onnx/.agent/setup.sh all
+
+# Launch a tool in each worktree and orchestrate independently
+# Worktree 1: claude → /orchestrate QVAC-100
+# Worktree 2: claude → /orchestrate QVAC-200
+```
+
+**Advantages over single-tree parallel execution:**
+
+- **No file-scope constraint** — tasks can freely modify the same files (even the same lines) because each worktree has its own working directory. Conflicts are resolved at merge time, not during development.
+- **Independent git state** — each worktree has its own branch, index, and HEAD. One task's commits, stashes, and rebases don't affect the other. No risk of one agent's `git checkout` disrupting another agent's work.
+- **Isolated build artifacts** — each worktree has its own `node_modules/`, build output, and native addon caches. Builds in one worktree can't corrupt another's intermediate files or trigger unnecessary rebuilds.
+- **Independent handoff state** — each worktree gets its own `.agent-handoff/` directory, so multi-tool handoffs for different tasks don't interfere with each other.
+- **Clean rollback** — if a task goes off the rails, delete the worktree (`git worktree remove ../qvac-task-1`) without affecting the main checkout or other tasks. The branch remains in the repository for inspection.
+- **Full context windows** — each tool instance starts fresh in its worktree with no accumulated context from other tasks, avoiding the context pollution that degrades agent quality in long sessions.
+- **No wave sequencing** — tasks run fully in parallel without needing wave-based dependency ordering. Merge to main when each task is independently complete.
+
+**Disk and setup cost:**
+
+Worktrees share the `.git` object store, so the disk overhead is only the working tree files (no full clone). However, each worktree needs its own `node_modules/` and native build artifacts, which can be significant for native addon packages. For a typical QVAC worktree:
+
+| Component | Approximate size |
+|---|---|
+| Working tree files (source) | ~50 MB |
+| `node_modules/` (after install) | ~200-500 MB per package |
+| Native build artifacts (cmake, vcpkg) | ~500 MB - 2 GB per addon |
+
+Run `npm install` and `bare-make generate && bare-make build` in each worktree that needs native builds. Worktrees that only touch TS/SDK packages skip the native build step.
+
+**Combining worktrees with Docker:**
+
+For maximum isolation, run all worktrees inside a single Docker container. Bind-mount the parent directory so the container has access to every worktree and the shared git object store:
+
+```yaml
+services:
+  dev:
+    image: qvac-agent:latest
+    volumes:
+      - .:/repo/qvac
+      - ../qvac-task-1:/repo/qvac-task-1
+      - ../qvac-task-2:/repo/qvac-task-2
+    working_dir: /repo/qvac
+```
+
+Each tool CLI session (`claude` or `cursor-agent`) targets a different worktree path inside the container.
+
+**Cleanup:**
+
+```bash
+# List active worktrees
+git worktree list
+
+# Remove a worktree after its PR is merged
+git worktree remove ../qvac-task-1
+
+# Prune stale worktree metadata (if a worktree directory was deleted manually)
+git worktree prune
+```
 
 ## Troubleshooting
 
