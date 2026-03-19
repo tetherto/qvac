@@ -96,10 +96,6 @@ struct SdCtxConfig {
   bool diffusionConvDirect = false; // ggml_conv2d_direct in diffusion model
   bool vaeConvDirect = false;       // ggml_conv2d_direct in VAE
 
-  // ── Tiling convolutions (produces seamlessly tileable images) ─────────────
-  bool circularX = false; // circular RoPE wrap on X-axis (width)
-  bool circularY = false; // circular RoPE wrap on Y-axis (height)
-
   // ── SDXL compatibility ────────────────────────────────────────────────────
   bool forceSDXLVaeConvScale = false; // force SDXL VAE conv scale (compat fix)
 

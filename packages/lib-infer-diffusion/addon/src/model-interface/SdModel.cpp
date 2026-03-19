@@ -387,8 +387,6 @@ void SdModel::load() {
   // ── Convolution options ───────────────────────────────────────────────────
   params.diffusion_conv_direct = config_.diffusionConvDirect;
   params.vae_conv_direct = config_.vaeConvDirect;
-  params.circular_x = config_.circularX;
-  params.circular_y = config_.circularY;
   params.force_sdxl_vae_conv_scale = config_.forceSDXLVaeConvScale;
 
   // ── Internal ──────────────────────────────────────────────────────────────

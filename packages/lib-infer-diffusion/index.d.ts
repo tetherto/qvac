@@ -106,12 +106,6 @@ export interface SdConfig {
   diffusion_conv_direct?: boolean
   /** Use direct convolution in VAE */
   vae_conv_direct?: boolean
-  /** Enable circular padding on X axis (for seamless tiling) */
-  circularx?: boolean
-  /** Enable circular padding on Y axis (for seamless tiling) */
-  circulary?: boolean
-  /** Enable circular padding on both axes */
-  circular?: boolean
   /** Force SDXL VAE conv scale factor */
   force_sdxl_vae_conv_scale?: boolean
   /** Custom backends directory path (defaults to prebuilds/) */

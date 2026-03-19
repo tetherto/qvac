@@ -234,25 +234,6 @@ const SdCtxHandlersMap SD_CTX_HANDLERS = {
        c.vaeConvDirect = parseBool(v, "vae_conv_direct");
      }},
 
-    // ── Tiling convolutions
-    // ────────────────────────────────────────────────────
-
-    // "circular" enables both axes at once.
-    {"circular",
-     [](SdCtxConfig& c, const std::string& v) {
-       bool enabled = parseBool(v, "circular");
-       c.circularX = enabled;
-       c.circularY = enabled;
-     }},
-    {"circularx",
-     [](SdCtxConfig& c, const std::string& v) {
-       c.circularX = parseBool(v, "circularx");
-     }},
-    {"circulary",
-     [](SdCtxConfig& c, const std::string& v) {
-       c.circularY = parseBool(v, "circulary");
-     }},
-
     // ── SDXL compat
     // ────────────────────────────────────────────────────────────
 

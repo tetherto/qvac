@@ -33,8 +33,8 @@ const PROMPT = [
 const NEGATIVE_PROMPT = 'blurry, low quality, watermark, text, bad anatomy'
 
 const STEPS = 30 // SD2.1 benefits from more steps than FLUX distilled
-const WIDTH = 712 // native training resolution for SD2.1
-const HEIGHT = 712
+const WIDTH = 768 // native training resolution for SD2.1
+const HEIGHT = 768
 const CFG = 7.5 // classifier-free guidance scale
 const SEED = -1 // -1 = random
 
