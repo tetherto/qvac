@@ -175,6 +175,12 @@ jobs:
         with:
           node-version: lts/*
 
+      - if: ${{ matrix.os == 'ai-run-windows11-gpu' }}
+        name: Setup Python on self-hosted Windows runner
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+
       - name: Configure scoped registry for @tetherto and @qvac packages
         working-directory: ${{ env.WORKDIR }}
         env:
