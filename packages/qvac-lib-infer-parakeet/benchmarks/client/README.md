@@ -157,19 +157,19 @@ model:
   model_type: "ctc"  # or "tdt", "eou", "sortformer"
 ```
 
-### Trigger Scripts
+### Trigger Script
 
-Trigger benchmarks from the command line using the scripts in `../../scripts/`:
+Trigger benchmarks from the command line using the script in `../../scripts/`:
 
 ```bash
 # Trigger a single model type
 ../../scripts/trigger-benchmark.sh -t ctc
 
-# Trigger all model types
-../../scripts/trigger-benchmark-all.sh
+# Trigger all model types in one run
+../../scripts/trigger-benchmark.sh -t all
 
-# Trigger specific types with options
-../../scripts/trigger-benchmark-all.sh --only "ctc,eou" -m 100 -W
+# With custom sample count and watch mode
+../../scripts/trigger-benchmark.sh -t eou -m 100 -W
 ```
 
 ## Output
