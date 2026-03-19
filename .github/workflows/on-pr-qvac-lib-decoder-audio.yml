@@ -51,13 +51,74 @@ concurrency:
   cancel-in-progress: true
 
 permissions:
-  contents: write
+  contents: read
   pull-requests: write
-  packages: write
-  checks: write
 
 jobs:
+  authorize:
+    runs-on: ubuntu-latest
+    outputs:
+      allowed: ${{ steps.check.outputs.allowed }}
+      has_write: ${{ steps.perm.outputs.has-permission }}
+    steps:
+      - name: Check actor write permission
+        id: perm
+        uses: scherermichael-oss/action-has-permission@17f29510f1bf987b916c8cbb451566a56eed23f1
+        with:
+          required-permission: write
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
+
+      - name: Check authorization
+        id: check
+        shell: bash
+        env:
+          EVENT: ${{ github.event_name }}
+          HEAD_REPO: ${{ github.event.pull_request.head.repo.full_name }}
+          BASE_REPO: ${{ github.repository }}
+          AUTHOR_ASSOC: ${{ github.event.pull_request.author_association }}
+          HAS_LABEL: ${{ contains(github.event.pull_request.labels.*.name, 'safe-to-test') }}
+          HAS_WRITE: ${{ steps.perm.outputs.has-permission }}
+        run: |
+          if [ "$EVENT" = "workflow_dispatch" ] || [ "$EVENT" = "workflow_call" ]; then
+            echo "allowed=true" >> "$GITHUB_OUTPUT"; exit 0
+          fi
+          if [ "$HEAD_REPO" = "$BASE_REPO" ]; then
+            echo "allowed=true" >> "$GITHUB_OUTPUT"; exit 0
+          fi
+          if [ "$HAS_WRITE" = "1" ]; then
+            echo "allowed=true" >> "$GITHUB_OUTPUT"; exit 0
+          fi
+          if [[ "$AUTHOR_ASSOC" =~ ^(MEMBER|OWNER|COLLABORATOR)$ ]]; then
+            echo "allowed=true" >> "$GITHUB_OUTPUT"; exit 0
+          fi
+          if [ "$HAS_LABEL" = "true" ]; then
+            echo "allowed=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "::warning::External fork PR without safe-to-test label — skipping"
+            echo "allowed=false" >> "$GITHUB_OUTPUT"
+          fi
+
+  strip-label:
+    needs: authorize
+    if: |
+      needs.authorize.outputs.has_write != '1' &&
+      github.event.action == 'synchronize' &&
+      github.event.pull_request.head.repo.full_name != github.repository
+    runs-on: ubuntu-latest
+    steps:
+      - name: Remove safe-to-test label
+        env:
+          GH_TOKEN: ${{ github.token }}
+          PR_NUMBER: ${{ github.event.pull_request.number }}
+          REPO: ${{ github.repository }}
+        run: |
+          gh api -X DELETE "repos/${REPO}/issues/${PR_NUMBER}/labels/safe-to-test" 2>/dev/null || true
+          echo "::warning::Removed safe-to-test label — new commits pushed. Re-review required."
+
   context:
+    needs: authorize
+    if: needs.authorize.outputs.allowed == 'true'
     name: Resolve Context
     runs-on: ubuntu-latest
     outputs:
@@ -120,7 +181,8 @@ jobs:
           echo "  workdir=$workdir"
 
   release-notes-check:
-    needs: context
+    needs: [authorize, context]
+    if: needs.authorize.outputs.allowed == 'true'
     permissions:
       contents: read
       pull-requests: read
@@ -132,7 +194,8 @@ jobs:
       workdir: ${{ needs.context.outputs.workdir }}
 
   sanity-checks:
-    needs: context
+    needs: [authorize, context]
+    if: needs.authorize.outputs.allowed == 'true'
     runs-on: ubuntu-latest
     steps:
       - name: Run Sanity checks
@@ -145,8 +208,8 @@ jobs:
           workdir: ${{ needs.context.outputs.workdir }}
 
   run-integration-tests:
-    needs: context
-    if: needs.context.outputs.run_verify == 'true' || github.event_name == 'workflow_dispatch'
+    needs: [authorize, context]
+    if: needs.authorize.outputs.allowed == 'true' && (needs.context.outputs.run_verify == 'true' || github.event_name == 'workflow_dispatch')
     uses: ./.github/workflows/integration-test-qvac-lib-decoder-audio.yml
     secrets: inherit
     with:
@@ -155,8 +218,8 @@ jobs:
       workdir: ${{ needs.context.outputs.workdir }}
 
   run-mobile-integration-tests:
-    needs: context
-    if: needs.context.outputs.run_verify == 'true' || github.event_name == 'workflow_dispatch'
+    needs: [authorize, context]
+    if: needs.authorize.outputs.allowed == 'true' && (needs.context.outputs.run_verify == 'true' || github.event_name == 'workflow_dispatch')
     uses: ./.github/workflows/integration-mobile-test-qvac-lib-decoder-audio.yml
     secrets: inherit
     with:
@@ -165,8 +228,8 @@ jobs:
       workdir: ${{ needs.context.outputs.workdir }}
 
   merge-guard:
-    needs: [release-notes-check, sanity-checks, run-integration-tests, run-mobile-integration-tests]
-    if: always()
+    needs: [authorize, release-notes-check, sanity-checks, run-integration-tests, run-mobile-integration-tests]
+    if: always() && needs.authorize.outputs.allowed == 'true'
     uses: tetherto/qvac-devops/.github/workflows/public-pr.yml@monorepo_update
     with:
       sanity-checks-status: ${{ needs.sanity-checks.result == 'success' && needs.release-notes-check.result == 'success' }}
