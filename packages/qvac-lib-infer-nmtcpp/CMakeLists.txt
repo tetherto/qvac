@@ -61,13 +61,9 @@ endif()
 find_path(QVAC_LIB_INFERENCE_ADDON_CPP_INCLUDE_DIRS "qvac-lib-inference-addon-cpp/BlobsStream.hpp")
 
 if(CMAKE_SYSTEM_NAME STREQUAL "iOS")
-  find_library(ACCELERATE_FRAMEWORK Accelerate
-    PATHS "${CMAKE_OSX_SYSROOT}/System/Library/Frameworks"
-    NO_DEFAULT_PATH)
-  if(ACCELERATE_FRAMEWORK)
-    set(BLAS_LIBRARIES "${ACCELERATE_FRAMEWORK}" CACHE FILEPATH "BLAS library" FORCE)
-    set(BLAS_FOUND TRUE CACHE BOOL "BLAS found" FORCE)
-  endif()
+  set(CMAKE_SHARED_LINKER_FLAGS "${CMAKE_SHARED_LINKER_FLAGS} -F${CMAKE_OSX_SYSROOT}/System/Library/Frameworks")
+  set(BLAS_LIBRARIES "-framework Accelerate" CACHE STRING "BLAS library" FORCE)
+  set(BLAS_FOUND TRUE CACHE BOOL "BLAS found" FORCE)
 endif()
 
 find_package(ggml CONFIG REQUIRED)
@@ -145,10 +141,6 @@ if(USE_BERGAMOT)
 endif()
 
 add_bare_module(qvac-lib-infer-nmtcpp EXPORTS)
-
-if(CMAKE_SYSTEM_NAME STREQUAL "iOS")
-  target_link_options(${qvac-lib-infer-nmtcpp}_module PRIVATE "-F${CMAKE_OSX_SYSROOT}/System/Library/Frameworks")
-endif()
 
 if(CMAKE_SYSTEM_NAME STREQUAL "Linux")
   target_link_options(${qvac-lib-infer-nmtcpp}_module PRIVATE -Wl,--exclude-libs,ALL)
