@@ -331,8 +331,20 @@ jobs:
         run: echo "VCPKG_ROOT=$VCPKG_INSTALLATION_ROOT" >> $GITHUB_ENV
 
       - if: ${{ matrix.os == 'ai-run-windows11-gpu' }}
-        name: Configure vcpkg in windows
-        run: echo ("VCPKG_ROOT=$env:VCPKG_INSTALLATION_ROOT" -replace '\\', '/') >> $env:GITHUB_ENV
+        name: Install vcpkg in windows
+        shell: powershell
+        run: |
+          if ($env:VCPKG_INSTALLATION_ROOT -and (Test-Path $env:VCPKG_INSTALLATION_ROOT)) {
+            $vcpkgRoot = $env:VCPKG_INSTALLATION_ROOT -replace '\\', '/'
+          } else {
+            cd ..
+            git clone --branch 2025.12.12 --single-branch https://github.com/microsoft/vcpkg.git
+            cd vcpkg
+            .\bootstrap-vcpkg.bat -disableMetrics
+            $vcpkgRoot = (Get-Location).Path -replace '\\', '/'
+          }
+          echo "VCPKG_ROOT=$vcpkgRoot" >> $env:GITHUB_ENV
+          echo $vcpkgRoot >> $env:GITHUB_PATH
 
       - if: ${{ matrix.os == 'ai-run-windows11-gpu' }}
         name: Configure cmake generator in windows
