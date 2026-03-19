@@ -93,7 +93,6 @@ jobs:
 
   release-merge-guard-schema:
     name: Release Merge Guard (Schema)
-    continue-on-error: true
     if: >-
       github.event_name == 'push' &&
       startsWith(github.ref_name, 'release-qvac-registry-schema') &&
@@ -115,7 +114,6 @@ jobs:
 
   release-merge-guard-client:
     name: Release Merge Guard (Client)
-    continue-on-error: true
     if: >-
       github.event_name == 'push' &&
       startsWith(github.ref_name, 'release-qvac-registry-client') &&

@@ -17,6 +17,9 @@ on:
         required: false
         default: ''
 
+permissions:
+  contents: read
+
 jobs:
   notify:
     if: false # DISABLED — see comment at top of file

@@ -1,6 +1,9 @@
 on:
   workflow_dispatch:
 
+permissions:
+  contents: read
+
 jobs:
   # build-win11-nvidia-image:
   #   runs-on:  generator-windows11

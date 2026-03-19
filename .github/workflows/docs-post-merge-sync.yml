@@ -11,6 +11,9 @@ on:
       - 'packages/sdk/**'
       - 'docs/website/scripts/**'
 
+permissions:
+  contents: read
+
 concurrency:
   group: docs-post-merge-sync-${{ github.ref }}
   cancel-in-progress: false

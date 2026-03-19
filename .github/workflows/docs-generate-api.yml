@@ -16,6 +16,9 @@ on:
   repository_dispatch:
     types: [generate-api-docs]
 
+permissions:
+  contents: read
+
 env:
   SDK_SUBPATH: "packages/sdk"
   DOCS_DIR: "docs/website"
