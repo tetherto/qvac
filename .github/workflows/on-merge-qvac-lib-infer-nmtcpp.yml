@@ -24,6 +24,9 @@ on:
           - temp
           - latest
 
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+
 permissions:
   contents: write
   pull-requests: write

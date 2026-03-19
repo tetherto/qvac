@@ -21,6 +21,9 @@ on:
       - "packages/qvac-lib-registry-server/client/**"
   workflow_dispatch:
 
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+
 permissions:
   contents: read
   pull-requests: write

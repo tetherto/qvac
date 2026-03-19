@@ -21,7 +21,10 @@ on:
         options:
           - latest
           - dev
-          
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+
 permissions:
   contents: write
   pull-requests: write
