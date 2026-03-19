@@ -209,7 +209,11 @@ class ImgStableDiffusion extends BaseInference {
    * @returns {Promise<QvacResponse>}
    */
   async _runInternal (params) {
-    const mode = params.init_image ? 'img2img' : 'txt2img'
+    if (params.init_image) {
+      throw new Error('img2img is not yet supported — omit init_image to run txt2img')
+    }
+
+    const mode = 'txt2img'
     this.logger.info('Starting generation with mode:', mode)
 
     return await this._withExclusiveRun(async () => {

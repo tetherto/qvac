@@ -25,14 +25,12 @@ const MODEL_NAME = 'stable-diffusion-v2-1-Q8_0.gguf'
 // cfg_scale 7–9 is the typical range; guidance (FLUX-specific) is not used.
 // ---------------------------------------------------------------------------
 const PROMPT = [
-  'a majestic red fox standing in a snowy forest at dusk,',
-  'soft golden light through the pine trees,',
-  'photorealistic, 8k, detailed fur'
+  'an elegant flower in a glass vase, watercolor painting, with textures around the leaves'
 ].join(' ')
 
 const NEGATIVE_PROMPT = 'blurry, low quality, watermark, text, bad anatomy'
 
-const STEPS = 30 // SD2.1 benefits from more steps than FLUX distilled
+const STEPS = 5 // SD2.1 benefits from more steps than FLUX distilled
 const WIDTH = 768 // native training resolution for SD2.1
 const HEIGHT = 768
 const CFG = 7.5 // classifier-free guidance scale
@@ -60,7 +58,7 @@ async function main () {
       // No vaeModel — the VAE is baked into the checkpoint.
     },
     {
-      threads: 4,
+      threads: 8,
       // SD2.1 uses v-prediction. This safetensors file has no GGUF metadata so
       // auto-detection cannot determine the prediction type; set it explicitly.
       prediction: 'v'
