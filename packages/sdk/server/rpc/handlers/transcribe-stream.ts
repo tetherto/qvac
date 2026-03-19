@@ -2,13 +2,27 @@ import type {
   TranscribeStreamRequest,
   TranscribeStreamResponse,
 } from "@/schemas";
-import { dispatchPluginStream } from "@/server/rpc/handlers/plugin-dispatch";
+import { transcribeStream } from "@/server/bare/ops/transcribe";
+import type { Readable } from "bare-stream";
 
 export async function* handleTranscribeStream(
   request: TranscribeStreamRequest,
+  audioInputStream: Readable,
 ): AsyncGenerator<TranscribeStreamResponse> {
-  yield* dispatchPluginStream<
-    TranscribeStreamRequest,
-    TranscribeStreamResponse
-  >(request.modelId, "transcribeStream", request);
+  for await (const text of transcribeStream(
+    request.modelId,
+    audioInputStream,
+    request.prompt,
+  )) {
+    yield {
+      type: "transcribeStream" as const,
+      text,
+    };
+  }
+
+  yield {
+    type: "transcribeStream" as const,
+    text: "",
+    done: true,
+  };
 }

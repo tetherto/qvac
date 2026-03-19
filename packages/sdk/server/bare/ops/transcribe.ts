@@ -1,4 +1,5 @@
 import {
+  type AnyModel,
   getModel,
   getModelConfig,
   getModelEntry,
@@ -11,8 +12,22 @@ import {
 } from "@/schemas";
 import { createAudioStream } from "@/server/bare/utils/audio-input";
 import { getServerLogger } from "@/logging";
+import type { Readable } from "bare-stream";
 
 const logger = getServerLogger();
+
+interface ModelResponse {
+  iterate(): AsyncIterable<{ text: string }[]>;
+  await(): Promise<{ text: string }[]>;
+}
+
+interface StreamableModel {
+  runStreaming(audioStream: Readable): Promise<ModelResponse>;
+}
+
+function isStreamableModel(model: AnyModel): model is AnyModel & StreamableModel {
+  return "runStreaming" in model && typeof model.runStreaming === "function";
+}
 
 const SILENCE_MARKERS: Record<string, string> = {
   [ModelType.whispercppTranscription]: "[BLANK_AUDIO]",
@@ -109,3 +124,42 @@ export async function* transcribe(
     }
   }
 }
+
+export async function* transcribeStream(
+  modelId: string,
+  audioInputStream: Readable,
+  prompt?: string,
+): AsyncGenerator<string, void, void> {
+  const engineType = getEngineModelType(modelId);
+  const silenceMarker = SILENCE_MARKERS[engineType] ?? "";
+
+  const originalConfig = await applyPrompt(modelId, prompt, engineType);
+
+  try {
+    const model = getModel(modelId);
+
+    if (!isStreamableModel(model)) {
+      throw new Error(`Model ${modelId} does not support streaming transcription`);
+    }
+
+    const response = await model.runStreaming(audioInputStream);
+
+    for await (const output of response.iterate()) {
+      logger.debug("Live Transcription Update:", output);
+
+      const segments = output as { text: string }[];
+      for (const segment of segments) {
+        if (!segment.text) continue;
+        if (silenceMarker && segment.text.includes(silenceMarker)) continue;
+        if (segment.text.trim()) {
+          yield segment.text;
+        }
+      }
+    }
+  } finally {
+    if (originalConfig) {
+      await restorePrompt(modelId, originalConfig);
+    }
+  }
+}
+

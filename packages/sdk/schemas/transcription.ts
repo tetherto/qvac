@@ -17,16 +17,19 @@ export const transcribeParamsSchema = z.object({
   prompt: z.string().optional(),
 });
 
-// Streaming Transcribe Schema (for real-time audio streaming)
-export const transcribeStreamRequestSchema = transcribeParamsSchema.extend({
-  type: z.literal("transcribeStream"),
+// Batch Transcribe Schema (send audio, get text back)
+export const transcribeRequestSchema = transcribeParamsSchema.extend({
+  type: z.literal("transcribe"),
 });
 
-export const transcribeStreamResponseSchema = z.object({
-  type: z.literal("transcribeStream"),
+const transcriptionResultBase = z.object({
   text: z.string().optional(),
   done: z.boolean().optional(),
   error: z.string().optional(),
+});
+
+export const transcribeResponseSchema = transcriptionResultBase.extend({
+  type: z.literal("transcribe"),
 });
 
 export type AudioInput = z.infer<typeof audioInputSchema>;
@@ -36,9 +39,34 @@ export type TranscribeClientParams = {
   audioChunk: string | Buffer;
   prompt?: string;
 };
+export type TranscribeRequest = z.infer<typeof transcribeRequestSchema>;
+export type TranscribeResponse = z.infer<typeof transcribeResponseSchema>;
+
+// Streaming Transcription Schema (bidirectional: audio stream in, text stream out)
+export const transcribeStreamRequestSchema = z.object({
+  type: z.literal("transcribeStream"),
+  modelId: z.string(),
+  prompt: z.string().optional(),
+});
+
+export const transcribeStreamResponseSchema = transcriptionResultBase.extend({
+  type: z.literal("transcribeStream"),
+});
+
 export type TranscribeStreamRequest = z.infer<
   typeof transcribeStreamRequestSchema
 >;
 export type TranscribeStreamResponse = z.infer<
   typeof transcribeStreamResponseSchema
 >;
+
+export type TranscribeStreamClientParams = {
+  modelId: string;
+  prompt?: string;
+};
+
+export interface TranscribeStreamSession {
+  write(audioChunk: Buffer): void;
+  end(): void;
+  [Symbol.asyncIterator](): AsyncIterator<string>;
+}

@@ -46,6 +46,7 @@ export {
   type CompletionStats,
   VERBOSITY,
   type Attachment,
+  type TranscribeStreamSession,
   type CompletionParams,
   type RagSearchResult,
   type RagSaveEmbeddingsResult,

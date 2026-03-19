@@ -126,3 +126,15 @@ export function close() {
   rpcInstance = null;
   rpcPromise = null;
 }
+
+let commandCounter = 0;
+
+export async function createDuplexSession(payload: string) {
+  const rpc = await getRPC();
+  const command = (commandCounter = (commandCounter + 1) % Number.MAX_SAFE_INTEGER);
+  const req = rpc.request(command);
+  const requestStream = req.createRequestStream();
+  const responseStream = req.createResponseStream({ encoding: "utf-8" });
+  requestStream.write(payload, "utf-8");
+  return { requestStream, responseStream };
+}

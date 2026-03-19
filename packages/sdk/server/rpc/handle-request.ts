@@ -9,14 +9,15 @@ import {
 import { nowMs } from "@/profiling";
 import { resolveModelConfig } from "@/server/bare/registry/model-config-registry";
 import type RPC from "bare-rpc";
-import { sendErrorResponse } from "@/server/error-handlers";
 import {
-  RPCNoDataReceivedError,
-  RPCUnknownRequestTypeError,
-} from "@/utils/errors-server";
+  sendErrorResponse,
+  sendStreamErrorResponse,
+} from "@/server/error-handlers";
+import { RPCUnknownRequestTypeError } from "@/utils/errors-server";
 import { registry } from "./handler-registry";
 import {
   executeHandler,
+  executeDuplexHandler,
   handleInitConfig,
   isInitConfigMessage,
 } from "./handler-utils";
@@ -28,8 +29,12 @@ export async function handleRequest(req: RPC.IncomingRequest): Promise<void> {
 
   try {
     const rawData = req.data?.toString();
+
+    // Duplex stream request: metadata arrives as the first chunk on the
+    // request stream (client used createRequestStream instead of send).
     if (!rawData) {
-      throw new RPCNoDataReceivedError();
+      await handleDuplexRequest(req);
+      return;
     }
 
     // Timing runs unconditionally since we can't know if client
@@ -99,6 +104,41 @@ function extractProfilingMeta(data: unknown): {
     data: rest,
     profilingMeta: meta as ProfilingRequestMeta | undefined,
   };
+}
+
+async function handleDuplexRequest(req: RPC.IncomingRequest): Promise<void> {
+  const inputStream = req.createRequestStream();
+  const outputStream = req.createResponseStream();
+
+  try {
+    const firstChunk = await new Promise<Buffer>((resolve, reject) => {
+      inputStream.once("data", (data) => {
+        inputStream.pause();
+        resolve(data as Buffer);
+      });
+      inputStream.once("error", reject);
+    });
+
+    const jsonData: unknown = JSON.parse(firstChunk.toString());
+    const processedData = applyDeviceDefaultsToRequest(jsonData);
+    const request: Request = requestSchema.parse(processedData);
+    const entry = registry[request.type];
+
+    if (!entry) {
+      throw new RPCUnknownRequestTypeError(request.type);
+    }
+
+    if (entry.type !== "duplex") {
+      throw new RPCUnknownRequestTypeError(
+        `${request.type} (not a duplex handler)`,
+      );
+    }
+
+    await executeDuplexHandler(req, request, entry, inputStream, outputStream);
+  } catch (error) {
+    inputStream.destroy();
+    sendStreamErrorResponse(outputStream, error);
+  }
 }
 
 /**

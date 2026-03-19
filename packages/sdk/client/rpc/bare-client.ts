@@ -7,6 +7,7 @@ import type {
 } from "@/schemas";
 import { normalizeModelType } from "@/schemas";
 import os from "bare-os";
+import type { Readable } from "bare-stream";
 import { handlers } from "@/server/rpc/handlers";
 import {
   PearWorkerEntryRequiredError,
@@ -279,4 +280,51 @@ export async function getRPC() {
 
 export function close() {
   // noop
+}
+
+type DuplexHandler = (
+  req: Request,
+  inputStream: Readable,
+) => AsyncGenerator<Response>;
+
+function getDuplexHandler(type: string): DuplexHandler | undefined {
+  const entry = handlers[type as keyof typeof handlers];
+  if (typeof entry !== "function") return undefined;
+  return entry as DuplexHandler;
+}
+
+export async function createDuplexSession(payload: string) {
+  // Ensure worker and config are initialized
+  await getRPC();
+
+  const { PassThrough } = await import("bare-stream");
+  const request = JSON.parse(payload) as Request;
+
+  const handler = getDuplexHandler(request.type);
+  if (!handler) throw new RPCNoHandlerError(request.type);
+
+  const audioInput = new PassThrough();
+  const textOutput = new PassThrough();
+
+  void (async () => {
+    try {
+      for await (const response of handler(request, audioInput)) {
+        textOutput.write(JSON.stringify(response) + "\n", "utf-8");
+      }
+    } catch (error) {
+      const errorMsg =
+        error instanceof Error ? error.message : String(error);
+      textOutput.write(
+        JSON.stringify({ type: request.type, error: errorMsg }) + "\n",
+        "utf-8",
+      );
+    } finally {
+      textOutput.end();
+    }
+  })();
+
+  return {
+    requestStream: audioInput,
+    responseStream: textOutput,
+  };
 }
