@@ -2,7 +2,7 @@
 
 const { ONNXOcr } = require('../..')
 const test = require('brittle')
-const { isMobile, getImagePath, ensureModelPath } = require('./utils')
+const { isMobile, getImagePath, ensureModelPath, windowsOrtParams } = require('./utils')
 
 const MOBILE_TIMEOUT = 600 * 1000 // 10 minutes for mobile
 const DESKTOP_TIMEOUT = 60 * 1000 // 1 minute for desktop
@@ -19,7 +19,8 @@ test('Test for a fix of missing end of job event', { timeout: TEST_TIMEOUT }, as
     params: {
       pathDetector: detectorPath,
       pathRecognizer: recognizerPath,
-      langList: ['en']
+      langList: ['en'],
+      ...windowsOrtParams
     },
     opts: { stats: true }
   })

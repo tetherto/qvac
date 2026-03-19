@@ -2,7 +2,7 @@
 
 const { ONNXOcr } = require('../..')
 const test = require('brittle')
-const { isMobile, getImagePath, ensureModelPath } = require('./utils')
+const { isMobile, getImagePath, ensureModelPath, windowsOrtParams } = require('./utils')
 
 const MOBILE_TIMEOUT = 600 * 1000 // 10 minutes for mobile
 const DESKTOP_TIMEOUT = 120 * 1000 // 2 minutes for desktop
@@ -29,7 +29,8 @@ test('Large images are resized internally with coordinates in original space', {
       pathDetector: detectorPath,
       pathRecognizer: recognizerPath,
       langList: ['en'],
-      useGPU: false
+      useGPU: false,
+      ...windowsOrtParams
     },
     opts: { stats: true }
   })

@@ -3,6 +3,7 @@ import { startLoggingStreamForModel } from "@/client/logging-stream-registry";
 import {
   type LoadModelOptions,
   type ReloadConfigOptions,
+  type RPCOptions,
   loadModelOptionsToRequestSchema,
   reloadConfigOptionsToRequestSchema,
   isModelTypeAlias,
@@ -32,6 +33,7 @@ const logger = getClientLogger();
  *   - modelConfig: Model-specific configuration options (companion sources, model parameters, etc.)
  *   - onProgress: Callback for download progress updates
  *   - logger: Logger instance for model operation logs
+ * @param rpcOptions - Optional RPC options including per-call profiling configuration
  *
  * @returns Promise that resolves to the model ID (either the provided modelSrc or a generated ID)
  *
@@ -107,7 +109,10 @@ const logger = getClientLogger();
  * });
  * ```
  */
-export function loadModel(options: LoadModelOptions): Promise<string>;
+export function loadModel(
+  options: LoadModelOptions,
+  rpcOptions?: RPCOptions,
+): Promise<string>;
 
 /**
  * Hot-reloads configuration on an already loaded model.
@@ -116,6 +121,7 @@ export function loadModel(options: LoadModelOptions): Promise<string>;
  *   - modelId: The ID of an existing loaded model
  *   - modelType: The type of model (must match the loaded model)
  *   - modelConfig: New configuration to apply
+ * @param rpcOptions - Optional RPC options including per-call profiling configuration
  *
  * @returns Promise that resolves to the model ID
  *
@@ -139,10 +145,14 @@ export function loadModel(options: LoadModelOptions): Promise<string>;
  * });
  * ```
  */
-export function loadModel(options: ReloadConfigOptions): Promise<string>;
+export function loadModel(
+  options: ReloadConfigOptions,
+  rpcOptions?: RPCOptions,
+): Promise<string>;
 
 export async function loadModel(
   options: LoadModelOptions | ReloadConfigOptions,
+  rpcOptions?: RPCOptions,
 ): Promise<string> {
   const isReloadConfig = "modelId" in options && !("modelSrc" in options);
 
@@ -162,7 +172,7 @@ export async function loadModel(
 
   if (onProgress) {
     // Use streaming for progress updates
-    for await (const response of stream(request)) {
+    for await (const response of stream(request, rpcOptions)) {
       if (response.type === "modelProgress") {
         onProgress(response);
       } else if (response.type === "loadModel") {
@@ -191,7 +201,7 @@ export async function loadModel(
   }
 
   // Use regular send for simple loading
-  const response = await send(request);
+  const response = await send(request, rpcOptions);
   if (response.type !== "loadModel") {
     throw new InvalidResponseError("loadModel");
   }

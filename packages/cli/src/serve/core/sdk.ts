@@ -24,6 +24,7 @@ interface SDKModule {
     generationParams?: SDKGenerationParams
   }) => Promise<CompletionResult>
   embed: (opts: { modelId: string; text: string | string[] }) => Promise<number[] | number[][]>
+  transcribe: (opts: { modelId: string; audioChunk: string | Buffer; prompt?: string }) => Promise<string>
   close: () => Promise<void>
   [key: string]: unknown
 }
@@ -157,6 +158,33 @@ export async function sdkEmbed (opts: {
 }): Promise<number[] | number[][]> {
   const { embed } = await getSDK()
   return embed({ modelId: opts.modelId, text: opts.text })
+}
+
+export async function sdkTranscribe (opts: {
+  modelId: string
+  audioChunk: Buffer
+  fileName: string
+  prompt?: string | undefined
+}): Promise<string> {
+  const fs = await import('node:fs')
+  const os = await import('node:os')
+  const path = await import('node:path')
+
+  const ext = path.extname(opts.fileName) || '.wav'
+  const id = `${Date.now()}-${Math.random().toString(36).slice(2, 10)}`
+  const tmpFile = path.join(os.tmpdir(), `qvac-audio-${id}${ext}`)
+  fs.writeFileSync(tmpFile, opts.audioChunk)
+
+  try {
+    const { transcribe } = await getSDK()
+    return await transcribe({
+      modelId: opts.modelId,
+      audioChunk: tmpFile,
+      ...(opts.prompt && { prompt: opts.prompt })
+    })
+  } finally {
+    try { fs.unlinkSync(tmpFile) } catch {}
+  }
 }
 
 export async function sdkClose (): Promise<void> {

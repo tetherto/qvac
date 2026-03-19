@@ -159,7 +159,6 @@ export function completion(params: CompletionParams): {
 
       const responses: AsyncGenerator<unknown> = streamRpc(
         request,
-        undefined,
         params.rpcOptions,
       );
 

@@ -1,0 +1,363 @@
+---
+title: HTTP server
+description: Run a local HTTP server that exposes an OpenAI-compatible API.
+---
+
+## Overview
+
+To run the server, you need the `@qvac/sdk` and `@qvac/cli` npm packages installed in your project. The server is provided by `@qvac/cli` and internally translates HTTP requests into SDK calls. As a result, any system compatible with the [OpenAI REST API](https://developers.openai.com/api/reference/overview) can point to `http://localhost:11434/v1/` and work without changes.
+
+### AI capabilities
+
+At present, the HTTP server supports the following QVAC AI capabilities:
+* [Completion](/sdk/ai-tasks/completion)
+* [Text embeddings](/sdk/ai-tasks/text-embeddings)
+* [Transcription](/sdk/ai-tasks/transcription)
+
+### Compatible tools
+
+The following tools have been verified to work as drop-in replacements by pointing their base URL to the QVAC server:
+
+| Tool | Required endpoints |
+| --- | --- |
+| [Continue.dev](https://continue.dev) | `/v1/chat/completions` (streaming SSE), `/v1/models` |
+| [LangChain](https://langchain.com) | `/v1/chat/completions`, `/v1/embeddings`, `/v1/models` |
+| [Open Interpreter](https://openinterpreter.com) | `/v1/chat/completions` (streaming, tool calls), `/v1/models` |
+
+## Running the server
+
+<Steps>
+<Step>
+Install the SDK and CLI in your project:
+
+```bash
+npm install @qvac/sdk @qvac/cli
+```
+
+See [Installation](/sdk/installation) for environment-specific instructions of the SDK.
+</Step>
+
+<Step>
+Create the `qvac.config.*` file at the root of your project declaring which models the server can load. For example:
+
+```json title="qvac.config.json"
+{
+  "serve": {
+    "models": {
+      "my-llm": {
+        "model": "QWEN3_600M_INST_Q4",
+        "default": true,
+        "config": { "ctx_size": 8192 }
+      }
+    }
+  }
+}
+```
+</Step>
+
+<Step>
+Start the server:
+
+```bash
+qvac serve openai
+```
+</Step>
+
+<Step>
+Send a request:
+
+```bash
+curl http://localhost:11434/v1/chat/completions \
+  -H "Content-Type: application/json" \
+  -d '{
+    "model": "my-llm",
+    "messages": [{"role": "user", "content": "Hello!"}]
+  }'
+```
+</Step>
+</Steps>
+
+## Configuration
+
+Models are declared in `qvac.config.*` under the `serve.models` key. The server can only load models listed under this key — requests for unlisted models return 404. Each key in `serve.models` is a **model alias** — the name that HTTP clients use in the `model` field of their requests. For the full schema of `serve.models`, see [Configuration — `ServeConfig`](/sdk/configuration#serveconfig).
+
+### Example
+
+```json title="qvac.config.json"
+{
+  "serve": {
+    "models": {
+      "my-llm": {
+        "model": "QWEN3_600M_INST_Q4",
+        "default": true,
+        "preload": true,
+        "config": { "ctx_size": 8192, "tools": true }
+      },
+      "my-embed": {
+        "model": "GTE_LARGE_FP16",
+        "default": true
+      },
+      "whisper": {
+        "model": "WHISPER_TINY",
+        "default": true,
+        "preload": true,
+        "config": { "language": "en", "strategy": "greedy" }
+      }
+    }
+  }
+}
+```
+
+- **`model`**: SDK model constant name (e.g., `QWEN3_600M_INST_Q4`). The server resolves it to a download source and addon type automatically.
+- **`default`**: when `true`, this model is used when a request doesn't specify a `model` field, or when a tool picks the default for an endpoint category.
+- **`preload`**: when `true`, the model is loaded into memory on server startup. When `false`, it is loaded on first request (cold start).
+- **`config`**: model config overrides passed to the underlying addon. Same options as [`modelConfig` in `loadModel()`](/sdk/api/loadModel/#modelconfig-varies-by-model-type).
+
+## CLI
+
+```
+qvac serve openai [options]
+  -c, --config <path>    Config file path (default: auto-detect qvac.config.*)
+  -p, --port <number>    Port to listen on (default: 11434)
+  -H, --host <address>   Host to bind to (default: 127.0.0.1)
+  --model <alias>        Model alias to preload (repeatable, must be in config)
+  --api-key <key>        Require Bearer token authentication
+  --cors                 Enable CORS headers
+  -v, --verbose          Detailed output
+```
+
+## API
+
+All endpoints follow the [OpenAI API](https://platform.openai.com/docs/api-reference) request and response format. Base path: `/v1`.
+
+### Endpoints
+
+- `GET /v1/models` — list loaded models
+- `GET /v1/models/:id` — get model details
+- `DELETE /v1/models/:id` — unload a model
+- `POST /v1/chat/completions` — chat completions (blocking + SSE streaming)
+- `POST /v1/embeddings` — text embeddings (single + batch)
+- `POST /v1/audio/transcriptions` — audio transcription
+
+### `GET /v1/models`
+
+List all loaded models.
+
+```bash
+curl http://localhost:11434/v1/models
+```
+
+Response:
+
+```json
+{
+  "object": "list",
+  "data": [
+    { "id": "my-llm", "object": "model", "created": 1718000000, "owned_by": "qvac" }
+  ]
+}
+```
+
+### `GET /v1/models/:id`
+
+Get details of a specific loaded model.
+
+```bash
+curl http://localhost:11434/v1/models/my-llm
+```
+
+### `DELETE /v1/models/:id`
+
+Unload a model, releasing its resources.
+
+```bash
+curl -X DELETE http://localhost:11434/v1/models/my-llm
+```
+
+Response:
+
+```json
+{ "id": "my-llm", "object": "model", "deleted": true }
+```
+
+### `POST /v1/chat/completions`
+
+Generate a chat completion. Supports both blocking and streaming (SSE) modes, tool/function calling, and per-request generation parameters.
+
+**Blocking request:**
+
+```bash
+curl http://localhost:11434/v1/chat/completions \
+  -H "Content-Type: application/json" \
+  -d '{
+    "model": "my-llm",
+    "messages": [{"role": "user", "content": "What is the capital of France?"}],
+    "temperature": 0.7,
+    "max_tokens": 256
+  }'
+```
+
+**Streaming request (server-sent events):**
+
+```bash
+curl http://localhost:11434/v1/chat/completions \
+  -H "Content-Type: application/json" \
+  -d '{
+    "model": "my-llm",
+    "messages": [{"role": "user", "content": "What is the capital of France?"}],
+    "stream": true
+  }'
+```
+
+**Tool calling:**
+
+```bash
+curl http://localhost:11434/v1/chat/completions \
+  -H "Content-Type: application/json" \
+  -d '{
+    "model": "my-llm",
+    "messages": [{"role": "user", "content": "What is the weather in London?"}],
+    "tools": [{
+      "type": "function",
+      "function": {
+        "name": "get_weather",
+        "description": "Get current weather for a location",
+        "parameters": {
+          "type": "object",
+          "properties": { "location": { "type": "string" } },
+          "required": ["location"]
+        }
+      }
+    }]
+  }'
+```
+
+#### Generation parameters
+
+The following OpenAI parameters are forwarded to the model on each request:
+
+| OpenAI parameter | SDK parameter | Description |
+| --- | --- | --- |
+| `temperature` | `temp` | Sampling temperature |
+| `max_tokens` | `predict` | Maximum tokens to generate |
+| `max_completion_tokens` | `predict` | Alias for `max_tokens` |
+| `top_p` | `top_p` | Nucleus sampling threshold |
+| `seed` | `seed` | Random seed for deterministic output |
+| `frequency_penalty` | `frequency_penalty` | Penalize frequent tokens |
+| `presence_penalty` | `presence_penalty` | Penalize already-present tokens |
+
+#### Unsupported parameters
+
+The following OpenAI parameters are accepted but ignored (a warning is logged): `n`, `logprobs`, `response_format`, `stop`, `top_logprobs`, `logit_bias`, `parallel_tool_calls`, `stream_options`.
+
+### `POST /v1/embeddings`
+
+Generate text embeddings. Accepts a single string or a batch of strings.
+
+**Single input:**
+
+```bash
+curl http://localhost:11434/v1/embeddings \
+  -H "Content-Type: application/json" \
+  -d '{
+    "model": "my-embed",
+    "input": "The quick brown fox"
+  }'
+```
+
+**Batch input:**
+
+```bash
+curl http://localhost:11434/v1/embeddings \
+  -H "Content-Type: application/json" \
+  -d '{
+    "model": "my-embed",
+    "input": ["First sentence", "Second sentence"]
+  }'
+```
+
+Response:
+
+```json
+{
+  "object": "list",
+  "data": [
+    { "object": "embedding", "index": 0, "embedding": [0.012, -0.034, ...] }
+  ],
+  "model": "my-embed",
+  "usage": { "prompt_tokens": 0, "total_tokens": 0 }
+}
+```
+
+<Callout type="info">
+`encoding_format` (only `float` is supported) and `dimensions` are accepted but ignored.
+</Callout>
+
+### `POST /v1/audio/transcriptions`
+
+Transcribe audio using Whisper or Parakeet models. This endpoint uses `multipart/form-data` (not JSON). Maximum file size: 25 MB.
+
+**For receiving a JSON response (default):**
+
+```bash
+curl http://localhost:11434/v1/audio/transcriptions \
+  -F "file=@audio.wav" \
+  -F "model=whisper" \
+  -F "response_format=json"
+```
+
+Response:
+
+```json
+{ "text": "transcribed text here" }
+```
+
+**For receiving a plain text response:**
+
+```bash
+curl http://localhost:11434/v1/audio/transcriptions \
+  -F "file=@audio.wav" \
+  -F "model=whisper" \
+  -F "response_format=text"
+```
+
+**With prompt** (Whisper uses it as `initial_prompt`):
+
+```bash
+curl http://localhost:11434/v1/audio/transcriptions \
+  -F "file=@audio.wav" \
+  -F "model=whisper" \
+  -F "prompt=President Kennedy speech about space exploration"
+```
+
+#### Parameters
+
+| Parameter | Description | Required |
+| --- | --- | --- |
+| `file` | Audio file to transcribe. | Yes |
+| `model` | Model alias (must be in config). | Yes |
+| `response_format` | `json` (default) or `text`. | No |
+| `prompt` | Optional prompt forwarded to the model. | No |
+
+Unsupported `response_format` values (`srt`, `vtt`, `verbose_json`) return a `400` error.
+
+<Callout type="info">
+`language` and `temperature` are accepted but currently only configurable at model load time (via `serve.models` config), not per-request. A warning is logged when these are sent.
+</Callout>
+
+## Authentication
+
+By default, the server accepts unauthenticated requests on `127.0.0.1`. To require a Bearer token, run the server with the `--api-key` flag:
+
+```bash
+qvac serve openai --api-key my-secret-token
+```
+
+Clients must then include the token in the `Authorization` header:
+
+```bash
+curl http://localhost:11434/v1/models \
+  -H "Authorization: Bearer my-secret-token"
+```
+
+Requests without a valid token receive a `401` response.
