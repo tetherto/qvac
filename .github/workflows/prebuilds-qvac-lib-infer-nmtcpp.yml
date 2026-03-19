@@ -66,16 +66,16 @@ jobs:
           - os: macos-14
             platform: darwin
             arch: arm64
-          - os: macos-14
+          - os: macos-26
             platform: ios
             arch: arm64
             flags: -D BUILD_TESTING=OFF
-          - os: macos-14
+          - os: macos-26
             platform: ios
             arch: arm64
             tags: -simulator
             flags: --simulator -D BUILD_TESTING=OFF
-          - os: macos-14
+          - os: macos-26
             platform: ios
             arch: x64
             tags: -simulator
@@ -631,13 +631,6 @@ jobs:
           fi
 
           echo "-march=native removal complete"
-
-      - if: ${{ matrix.platform == 'ios' }}
-        name: Use Xcode clang for iOS builds
-        shell: bash
-        run: |
-          echo "CC=/usr/bin/clang" >> $GITHUB_ENV
-          echo "CXX=/usr/bin/clang++" >> $GITHUB_ENV
 
       - name: Run bare-make generate
         working-directory: ${{ env.PKG_DIR }}
