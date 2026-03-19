@@ -7,7 +7,6 @@ Native C++ addon for text-to-image and image-to-image generation using [stable-d
 ## Table of Contents
 
 - [Supported platforms](#supported-platforms)
-- [Prerequisites](#prerequisites)
 - [Building from Source](#building-from-source)
 - [Downloading Model Files](#downloading-model-files)
 - [Running the Example](#running-the-example)
@@ -45,50 +44,17 @@ Native C++ addon for text-to-image and image-to-image generation using [stable-d
 
 ---
 
-## Prerequisites
-
-Install the Bare Runtime globally:
-
-```bash
-npm install -g bare@latest
-```
-
-Verify the build toolchain is available:
-
-```bash
-cmake --version       # must be 3.25+
-clang++ --version     # or g++ --version (g++-13 required on Ubuntu 22)
-git --version
-```
-
-On **macOS**, Xcode Command Line Tools are required for Metal support:
-
-```bash
-xcode-select --install
-```
-
----
-
 ## Building from Source
 
-**1. Install npm dependencies** (fetches cmake-bare, cmake-vcpkg, and all JS dependencies):
+See [build.md](./build.md) for prerequisites, platform-specific setup, cross-compilation, and troubleshooting.
+
+Quick start:
 
 ```bash
+npm install -g bare bare-make
 npm install
-```
-
-**2. Build the native addon** (generates, compiles, and installs the `.bare` shared library into `prebuilds/`):
-
-```bash
 npm run build
 ```
-
-The build process:
-- Runs `bare-make generate` to configure CMake and download/build vcpkg dependencies (including `stable-diffusion.cpp` and `ggml`)
-- Runs `bare-make build` to compile the C++ addon
-- Runs `bare-make install` to copy the built `.bare` file to `prebuilds/`
-
-> **First build note:** The vcpkg step clones and compiles `stable-diffusion.cpp` from source, which can take **5–15 minutes** depending on your machine and internet connection.
 
 ---
 
