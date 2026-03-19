@@ -215,6 +215,8 @@ jobs:
           npm install -g bare bare-make
 
       - name: Download prebuilds
+        id: prebuilds
+        continue-on-error: true
         env:
           GH_TOKEN: ${{ secrets.PAT_TOKEN }}
         run: |
@@ -225,7 +227,7 @@ jobs:
           RUN_ID=$(gh run list --workflow=prebuilds-qvac-lib-infer-parakeet.yml --status=success --limit 1 --json databaseId --jq '.[0].databaseId')
 
           if [ -z "$RUN_ID" ]; then
-            echo "No successful prebuilds run found"
+            echo "::warning::No successful prebuilds run found — will fall back to published npm package"
             exit 1
           fi
 
@@ -339,6 +341,7 @@ jobs:
           echo "BENCHMARK_CONFIG_FILE=${CONFIG_FILE}" >> $GITHUB_ENV
 
       - name: Install main package dependencies
+        if: steps.prebuilds.outcome == 'success'
         working-directory: ${{ env.PKG_DIR }}
         run: npm install
 
@@ -346,8 +349,13 @@ jobs:
         working-directory: ${{ env.PKG_DIR }}/benchmarks/server
         run: |
           npm install
-          # Install the main package from the local repo (uses current branch code)
-          npm install ../../
+          if [ "${{ steps.prebuilds.outcome }}" = "success" ]; then
+            echo "Installing addon from local source (prebuilds available)..."
+            npm install ../../
+          else
+            echo "Installing addon from npm (prebuilds not available)..."
+            npm install @qvac/transcription-parakeet@latest
+          fi
 
       - name: Install benchmark client dependencies
         working-directory: ${{ env.PKG_DIR }}/benchmarks/client
