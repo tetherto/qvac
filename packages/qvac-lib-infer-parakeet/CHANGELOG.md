@@ -5,6 +5,26 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.2.3] - 2026-03-19
+
+This release finishes the desktop prebuild packaging update for Parakeet so each platform ships a single `.bare` addon artifact while preserving Linux runtime loading in CI and downstream environments.
+
+It also keeps the secondary native build path aligned with the static-linking configuration, so the old shared-library packaging behavior does not get reintroduced from a stale CMake entrypoint.
+
+## Bug Fixes
+
+### Static Desktop Prebuild Packaging
+
+Desktop builds now link Parakeet against the static ONNX Runtime target instead of copying ONNX shared libraries into `prebuilds/`. This keeps the published artifact layout consistent with the other native addons that ship only a `.bare` file and its exports file per platform.
+
+### Linux Runtime Loading
+
+Linux builds now use the same static standard-library linking flags already used by the other successful native addons in this repository. That avoids the `libc++.so.1` runtime loader failure seen in the Linux integration jobs after the ONNX shared libraries were removed from the package.
+
+## Pull Requests
+
+- [#1001](https://github.com/tetherto/qvac/pull/1001) - fix: statically link parakeet prebuilds
+
 ## [0.2.2]
 
 This release documents Parakeet runtime statistics and transcription output in TypeScript so consumers can type `response.stats` and `run()` results against the native addon.

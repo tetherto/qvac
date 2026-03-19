@@ -18,7 +18,7 @@ project(qvac_lib_infer_parakeet
 
 if(CMAKE_SYSTEM_NAME STREQUAL "Linux")
   add_compile_options(-stdlib=libc++)
-  add_link_options(-stdlib=libc++)
+  add_link_options(-stdlib=libc++ -static-libstdc++)
 endif()
 
 # Find dependencies
