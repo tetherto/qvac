@@ -10,7 +10,8 @@ Native C++ addon for text-to-image and image-to-image generation using [stable-d
 - [Prerequisites](#prerequisites)
 - [Building from Source](#building-from-source)
 - [Downloading Model Files](#downloading-model-files)
-- [Running the Examples](#running-the-examples)
+- [Running the Example](#running-the-example)
+- [Other Examples](#other-examples)
 - [Usage](#usage)
   - [1. Import the Model Class](#1-import-the-model-class)
   - [2. Create the `args` object](#2-create-the-args-object)
@@ -130,7 +131,7 @@ A machine with **16 GB of unified memory** (e.g. MacBook Air M-series) can run t
 
 ---
 
-## Running the Examples
+## Running the Example
 
 Two runnable examples are provided.
 
@@ -180,6 +181,14 @@ Saved → .../output/output_seed42_0.png
 Source: [`examples/generate-image.js`](./examples/generate-image.js)
 
 > **Performance note:** On an M1 MacBook Air (16 GB) with Metal enabled, loading takes ~15 s and 20 steps at 512 × 512 take ~10 minutes. Reduce `STEPS` to 4 for quick tests — FLUX.2's distilled model is designed for low step counts.
+
+## Other Exampless
+
+-   [Quickstart](./examples/quickstart.js) – Minimal text-to-image generation with SD2.1.
+-   [Generate Image (SD2.1)](./examples/generate-image-sd2.js) – Text-to-image with an SD2.1 all-in-one GGUF model.
+-   [Generate Image (SD3)](./examples/generate-image-sd3.js) – Text-to-image with SD3 Medium (safetensors, diffusion + CLIP encoders).
+-   [Generate Image (SDXL)](./examples/generate-image-sdxl.js) – Text-to-image with an SDXL base all-in-one GGUF model.
+-   [Runtime Stats](./examples/runtime-stats-sd2.js) – Run SD2.1 inference and report runtime statistics.
 
 ---
 
