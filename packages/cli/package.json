@@ -33,6 +33,7 @@
     "directory": "packages/cli"
   },
   "scripts": {
+    "prepare": "npm run build",
     "build": "rm -rf dist && tsc",
     "build:watch": "tsc --watch",
     "typecheck": "tsc --noEmit",

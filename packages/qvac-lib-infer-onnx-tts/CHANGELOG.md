@@ -5,9 +5,19 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.6.5]
+
+This release improves TypeScript support for consumers of the ONNX TTS package. Runtime statistics that the native addon already exposes when `opts.stats` is enabled are now described in `index.d.ts`, and `run()` is typed so inference responses carry structured output chunks.
+
+## New APIs
+
+### `RuntimeStats` and related types in `index.d.ts`
+
+The `ONNXTTS` namespace now exports **`RuntimeStats`**, matching the keys returned by `TTSModel::runtimeStats()` in the addon: `totalTime`, `tokensPerSecond`, `realTimeFactor`, `audioDurationMs`, and `totalSamples`. **`TTSOutputChunk`** (`outputArray`) and **`TTSRunInput`** describe the `run()` input and streamed output shape. **`run()`** is declared to return **`Promise<QvacResponse<ONNXTTS.TTSOutputChunk>>`**, with documentation that `response.stats` aligns with **`RuntimeStats`** when stats collection is turned on at construction time.
+
 ## [0.6.4]
 
-Fix q4f16 chatterbox models for linux-arm64 
+Fix q4f16 chatterbox models for linux-arm64
 
 ## [0.6.3]
 
