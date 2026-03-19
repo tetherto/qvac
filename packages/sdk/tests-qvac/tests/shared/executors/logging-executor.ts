@@ -1,11 +1,9 @@
-import { loggingStream, completion, embed, SDK_LOG_ID } from "@qvac/sdk";
-import {
-  ValidationHelpers,
-  type TestResult,
-  type Expectation,
-} from "@tetherto/qvac-test-suite";
+import { loggingStream, completion, embed, unloadModel, SDK_LOG_ID } from "@qvac/sdk";
+import { type TestResult } from "@tetherto/qvac-test-suite";
 import { AbstractModelExecutor } from "./abstract-model-executor.js";
 import { loggingTests } from "../../logging-tests.js";
+
+type LogEntry = { timestamp: number; level: string; namespace: string; message: string };
 
 export class LoggingExecutor extends AbstractModelExecutor<typeof loggingTests> {
   pattern = /^(addon-logging-|logging-)/;
@@ -15,7 +13,9 @@ export class LoggingExecutor extends AbstractModelExecutor<typeof loggingTests> 
       if (test.testId === "addon-logging-invalid-model-id") return [test.testId, this.invalidModelId.bind(this)];
       if (test.testId === "addon-logging-during-inference") return [test.testId, this.duringInference.bind(this)];
       if (test.testId.startsWith("addon-logging-")) return [test.testId, this.makeAddonStream(test.testId)];
-      return [test.testId, this.edgeCase.bind(this)];
+      if (test.testId === "logging-concurrent-operations") return [test.testId, this.concurrentOperations.bind(this)];
+      if (test.testId === "logging-persist-across-reload") return [test.testId, this.persistAcrossReload.bind(this)];
+      return [test.testId, this.loggingDuringInference.bind(this)];
     }),
   ) as never;
 
@@ -29,7 +29,7 @@ export class LoggingExecutor extends AbstractModelExecutor<typeof loggingTests> 
 
   private makeAddonStream(testId: string) {
     const modelType = this.getModelType(testId);
-    return async (params: unknown, expectation: unknown): Promise<TestResult> => {
+    return async (): Promise<TestResult> => {
       let targetId: string;
       if (modelType === "sdk") {
         targetId = SDK_LOG_ID ?? "__sdk__";
@@ -38,7 +38,7 @@ export class LoggingExecutor extends AbstractModelExecutor<typeof loggingTests> 
         targetId = await this.resources.ensureLoaded(dep);
       }
 
-      const logs: unknown[] = [];
+      const logs: LogEntry[] = [];
       try {
         const collectPromise = (async () => {
           for await (const log of loggingStream({ id: targetId })) {
@@ -59,10 +59,12 @@ export class LoggingExecutor extends AbstractModelExecutor<typeof loggingTests> 
 
         await Promise.race([collectPromise, triggerPromise.then(() => new Promise((r) => setTimeout(r, 5000)))]);
 
-        return ValidationHelpers.validate(
-          `Received ${logs.length} logs from ${modelType}`,
-          expectation as Expectation,
-        );
+        return {
+          passed: logs.length > 0,
+          output: logs.length > 0
+            ? `Received ${logs.length} log(s) from ${modelType}`
+            : `No logs received from ${modelType} within timeout`,
+        };
       } catch (error) {
         const errorMsg = error instanceof Error ? error.message : String(error);
         return { passed: false, output: `Addon logging error: ${errorMsg}` };
@@ -70,7 +72,7 @@ export class LoggingExecutor extends AbstractModelExecutor<typeof loggingTests> 
     };
   }
 
-  async invalidModelId(params: unknown, expectation: unknown): Promise<TestResult> {
+  async invalidModelId(params: unknown): Promise<TestResult> {
     const p = params as { invalidModelId: string };
 
     try {
@@ -86,23 +88,20 @@ export class LoggingExecutor extends AbstractModelExecutor<typeof loggingTests> 
 
       await Promise.race([streamPromise, new Promise((r) => setTimeout(r, 3000))]);
 
-      return ValidationHelpers.validate(
-        receivedLogs === 0
-          ? "Invalid model ID handled correctly - no logs"
-          : `Received ${receivedLogs} logs (unexpected)`,
-        expectation as Expectation,
-      );
+      return {
+        passed: receivedLogs === 0,
+        output: receivedLogs === 0
+          ? "Invalid model ID produced no logs"
+          : `Unexpectedly received ${receivedLogs} log(s)`,
+      };
     } catch (error) {
-      return ValidationHelpers.validate(
-        `Invalid model ID handled: ${error}`,
-        expectation as Expectation,
-      );
+      return { passed: true, output: `Invalid model ID correctly rejected: ${error}` };
     }
   }
 
-  async duringInference(params: unknown, expectation: unknown): Promise<TestResult> {
+  async duringInference(): Promise<TestResult> {
     const modelId = await this.resources.ensureLoaded("llm");
-    const logs: unknown[] = [];
+    const logs: LogEntry[] = [];
 
     try {
       const logPromise = (async () => {
@@ -119,34 +118,144 @@ export class LoggingExecutor extends AbstractModelExecutor<typeof loggingTests> 
         history: [{ role: "user", content: "Say hello in one word." }],
         stream: true,
       });
-      let tokens = "";
-      for await (const token of result.tokenStream) {
-        tokens += token;
-      }
+      for await (const _token of result.tokenStream) { /* drain */ }
 
       await Promise.race([logPromise, new Promise((r) => setTimeout(r, 1000))]);
 
-      return ValidationHelpers.validate(
-        `Received ${logs.length} logs during inference`,
-        expectation as Expectation,
-      );
+      return {
+        passed: logs.length > 0,
+        output: logs.length > 0
+          ? `Received ${logs.length} log(s) during streaming inference`
+          : "No logs received during inference",
+      };
     } catch (error) {
       const errorMsg = error instanceof Error ? error.message : String(error);
       return { passed: false, output: `Inference logging error: ${errorMsg}` };
     }
   }
 
-  async edgeCase(params: unknown, expectation: unknown): Promise<TestResult> {
+  async concurrentOperations(params: unknown): Promise<TestResult> {
+    const p = params as { operations: string[]; runConcurrently: boolean };
+    const llmModelId = await this.resources.ensureLoaded("llm");
+
+    const logs: LogEntry[] = [];
     try {
-      return ValidationHelpers.validate(
-        "Logging edge case test completed",
-        expectation as Expectation,
-      );
+      const collectPromise = (async () => {
+        for await (const log of loggingStream({ id: llmModelId })) {
+          logs.push(log);
+          if (logs.length >= 5) break;
+        }
+      })();
+
+      await new Promise((r) => setTimeout(r, 100));
+
+      const operations: Promise<unknown>[] = [];
+      if (p.operations.includes("completion")) {
+        const r = completion({ modelId: llmModelId, history: [{ role: "user", content: "Test concurrent logging" }], stream: false });
+        operations.push(r.text);
+      }
+      if (p.operations.includes("embedding")) {
+        const embeddingModelId = await this.resources.ensureLoaded("embeddings");
+        operations.push(embed({ modelId: embeddingModelId, text: "test concurrent" }));
+      }
+
+      await Promise.allSettled(operations);
+      await Promise.race([collectPromise, new Promise((r) => setTimeout(r, 3000))]);
+
+      return {
+        passed: logs.length > 0,
+        output: logs.length > 0
+          ? `${p.operations.length} concurrent operations produced ${logs.length} log(s)`
+          : `No logs received from ${p.operations.length} concurrent operations`,
+      };
     } catch (error) {
-      return ValidationHelpers.validate(
-        `Logging edge case handled: ${error}`,
-        expectation as Expectation,
-      );
+      const errorMsg = error instanceof Error ? error.message : String(error);
+      return { passed: false, output: `Concurrent logging error: ${errorMsg}` };
+    }
+  }
+
+  async persistAcrossReload(): Promise<TestResult> {
+    try {
+      const originalModelId = this.resources.getModelId("llm");
+      if (originalModelId) {
+        await unloadModel({ modelId: originalModelId });
+        this.resources.unregister(originalModelId);
+      }
+
+      const reloadedModelId = await this.resources.ensureLoaded("llm");
+
+      const logs: LogEntry[] = [];
+      const collectPromise = (async () => {
+        for await (const log of loggingStream({ id: reloadedModelId })) {
+          logs.push(log);
+          if (logs.length >= 1) break;
+        }
+      })();
+
+      await new Promise((r) => setTimeout(r, 100));
+
+      const r = completion({ modelId: reloadedModelId, history: [{ role: "user", content: "Post-reload test" }], stream: false });
+      await r.text;
+
+      await Promise.race([collectPromise, new Promise((r) => setTimeout(r, 5000))]);
+
+      return {
+        passed: logs.length > 0,
+        output: logs.length > 0
+          ? `Logging works after reload (${logs.length} log(s) received)`
+          : "No logs received after model reload",
+      };
+    } catch (error) {
+      const errorMsg = error instanceof Error ? error.message : String(error);
+      return { passed: false, output: `Persist across reload error: ${errorMsg}` };
+    }
+  }
+
+  async loggingDuringInference(params: unknown): Promise<TestResult> {
+    const p = params as { operationCount?: number; verifyTimestamps?: boolean };
+    const modelId = await this.resources.ensureLoaded("llm");
+    const operationCount = p.operationCount || 1;
+
+    const logs: LogEntry[] = [];
+    try {
+      const collectPromise = (async () => {
+        for await (const log of loggingStream({ id: modelId })) {
+          logs.push(log);
+          if (logs.length >= operationCount * 5) break;
+        }
+      })();
+
+      await new Promise((r) => setTimeout(r, 100));
+
+      for (let i = 0; i < operationCount; i++) {
+        const r = completion({ modelId, history: [{ role: "user", content: `Logging test ${i + 1}` }], stream: false });
+        await r.text;
+      }
+
+      await Promise.race([collectPromise, new Promise((r) => setTimeout(r, 5000))]);
+
+      if (p.verifyTimestamps) {
+        if (logs.length < 2) {
+          return { passed: false, output: `Need >= 2 logs to verify timestamps, got ${logs.length}` };
+        }
+        const outOfOrder = logs.some((log, i) => i > 0 && log.timestamp < logs[i - 1].timestamp);
+        return {
+          passed: !outOfOrder,
+          output: outOfOrder
+            ? `Timestamps out of order in ${logs.length} logs`
+            : `Timestamps monotonic across ${logs.length} logs`,
+        };
+      }
+
+      return {
+        passed: logs.length > 0,
+        output: logs.length > 0
+          ? `${operationCount} operation(s) produced ${logs.length} log(s)`
+          : `No logs received from ${operationCount} operation(s)`,
+      };
+    } catch (error) {
+      const errorMsg = error instanceof Error ? error.message : String(error);
+      return { passed: false, output: `Logging during inference error: ${errorMsg}` };
     }
   }
 }

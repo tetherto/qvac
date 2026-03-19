@@ -1,5 +1,24 @@
 # Changelog
 
+## [0.13.0] - 2026-03-18
+
+### Added
+
+#### LoRA finetuning support
+
+`model.finetune(options)` trains a LoRA adapter on top of a loaded GGUF base model. The adapter is saved as a `.gguf` file and can be loaded at inference time via the `lora` config option. Supports SFT (chat) and causal (next-token) training modes, configurable LoRA parameters (rank, alpha, target modules), validation (none / split / separate dataset), learning rate schedulers with warmup, pause/resume from checkpoints, and inference while paused. The returned `FinetuneHandle` emits `'stats'` progress events during training.
+
+#### New public methods
+
+- `model.finetune(options)` — starts LoRA finetuning, returns a `FinetuneHandle` with `on('stats', cb)` and `await()`.
+- `model.pause()` — pauses finetuning and saves a checkpoint so training can resume later. Also cancels an in-flight inference job.
+- Added typed `FinetuneOptions`, `FinetuneValidation`, `FinetuneProgressStats`, `FinetuneStats`, `FinetuneResult`, and `FinetuneHandle` interfaces to `index.d.ts`
+- Added finetuning guide at `docs/finetuning.md`
+
+### Changed
+
+- `model.cancel()` now also clears pause checkpoints (`pause_checkpoint_step_*`) from the checkpoint directory, so the next `finetune()` call starts fresh instead of resuming.
+
 ## [0.12.3] - 2026-03-17
 
 ### Added
