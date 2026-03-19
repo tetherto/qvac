@@ -8,6 +8,7 @@ const { parseCanonicalSource } = require('../lib/source-helpers')
 
 const ENGINE_PATTERN = /^@qvac\/[a-z][a-z0-9-]*$/
 const S3_DATE_FOLDER_PATTERN = /\/\d{4}-\d{2}-\d{2}\//
+const HF_COMMIT_HASH_PATTERN = /huggingface\.co\/.+\/(resolve|blob)\/([a-f0-9]{40})\//
 
 const SOURCE_REFINE = (val) => {
   try {
@@ -33,10 +34,25 @@ function loadS3LegacyPaths () {
   return _s3LegacyPaths
 }
 
+let _hfLegacyMainSources = null
+function loadHfLegacyMainSources () {
+  if (!_hfLegacyMainSources) {
+    const legacyFile = path.resolve(__dirname, '../data/hf-legacy-main-sources.json')
+    _hfLegacyMainSources = new Set(JSON.parse(require('fs').readFileSync(legacyFile, 'utf8')))
+  }
+  return _hfLegacyMainSources
+}
+
 const S3_DATE_FOLDER = (val) => {
   if (!val.startsWith('s3://')) return true
   if (loadS3LegacyPaths().has(val)) return true
   return S3_DATE_FOLDER_PATTERN.test(val)
+}
+
+const HF_COMMIT_PIN = (val) => {
+  if (!val.startsWith('https://huggingface.co/')) return true
+  if (loadHfLegacyMainSources().has(val)) return true
+  return HF_COMMIT_HASH_PATTERN.test(val)
 }
 
 const baseFields = {
@@ -44,7 +60,8 @@ const baseFields = {
     .min(1, 'source is required')
     .refine(SOURCE_REFINE, { message: 'Invalid source URL (must be s3:// or https://huggingface.co/)' })
     .refine(S3_NO_BUCKET, { message: 'S3 URLs must not contain a bucket name. Use s3:///key format; bucket is resolved from QVAC_S3_BUCKET env var.' })
-    .refine(S3_DATE_FOLDER, { message: 'S3 URLs must include a date folder (YYYY-MM-DD) in the path. Upload artifacts to a dated directory to ensure registry consistency when models are updated.' }),
+    .refine(S3_DATE_FOLDER, { message: 'S3 URLs must include a date folder (YYYY-MM-DD) in the path. Upload artifacts to a dated directory to ensure registry consistency when models are updated.' })
+    .refine(HF_COMMIT_PIN, { message: 'HuggingFace source URLs must pin to a specific commit hash, not a branch name. Use https://huggingface.co/<org>/<repo>/resolve/<full-commit-sha>/<file>' }),
 
   engine: z.string()
     .min(1, 'engine is required')

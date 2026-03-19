@@ -1,9 +1,11 @@
 #include "BackendSelection.hpp"
 
 #include <algorithm>
+#include <array>
 #include <cctype>
 #include <optional>
 #include <regex>
+#include <string_view>
 #include <variant>
 #include <vector>
 
@@ -16,6 +18,30 @@
 using namespace backend_selection;
 
 namespace {
+
+constexpr std::array<std::string_view, 3> kSupportedFinetuneArchitectures = {
+    "gemma3", "qwen3", "bitnet"};
+
+bool isSupportedFinetuneArchitecture(std::string_view arch) {
+  return std::ranges::find(kSupportedFinetuneArchitectures, arch) !=
+         kSupportedFinetuneArchitectures.end();
+}
+
+} // namespace
+
+std::optional<std::string> backend_selection::getUnknownFinetuneArchitecture(
+    const ModelMetaData* metadata) {
+  const auto arch = metadata != nullptr
+                        ? metadata->tryGetString("general.architecture")
+                        : std::nullopt;
+  if (arch.has_value() && isSupportedFinetuneArchitecture(arch.value())) {
+    return std::nullopt;
+  }
+  return arch.value_or("unknown");
+}
+
+namespace {
+
 std::optional<int> parseAdrenoVersion(const std::string& gpuDescription) {
   static const std::regex adrenoRegex(R"(dreno.*?(\d+))");
   std::smatch matches;
@@ -228,7 +254,7 @@ std::optional<MainGpu> backend_selection::tryMainGpuFromMap(
 std::pair<BackendType, std::string> backend_selection::chooseBackend(
     const BackendType preferredBackendType, const BackendInterface& bckI,
     const ModelMetaData* metadata, const std::optional<MainGpu>& mainGpu,
-    std::optional<int>* outAdrenoVersion) {
+    std::optional<int>* outAdrenoVersion, const bool isFinetuning) {
 
   std::vector<std::string> gpuBackends;
   std::vector<std::string> igpuBackends;
@@ -278,46 +304,66 @@ std::pair<BackendType, std::string> backend_selection::chooseBackend(
     }
   }
 
-  const bool isBitnetOneBitAdreno =
-      !mainGpu.has_value() && // No explicit selection
-      metadata != nullptr && metadata->hasOneBitQuantization() &&
-      metadata->tryGetString("general.architecture") == "bitnet" &&
-      maxAdrenoVersion.has_value();
-
-  constexpr int kAdrenoVulkanThreshold = 800;
-  if (isBitnetOneBitAdreno &&
-      maxAdrenoVersion.value() < kAdrenoVulkanThreshold) {
-    bckI.llamaLogCallback(
-        GGML_LOG_LEVEL_INFO,
-        "BitNet TQ on Adreno <800: only CPU supported",
-        nullptr);
+  auto clearAllGpuBackends = [&]() {
     openClBackends.clear();
     gpuBackends.clear();
     igpuBackends.clear();
-  } else if (
-      isBitnetOneBitAdreno &&
-      maxAdrenoVersion.value() >= kAdrenoVulkanThreshold) {
-    bckI.llamaLogCallback(
-        GGML_LOG_LEVEL_INFO,
-        "BitNet TQ on Adreno 800+: preferring Vulkan over OpenCL",
-        nullptr);
-    openClBackends.clear();
+  };
+
+  constexpr int kAdreno800Threshold = 800;
+
+  const bool noMainGpuOverride = !mainGpu.has_value();
+  const bool isAdreno = maxAdrenoVersion.has_value();
+
+  if (auto unsupported = getUnknownFinetuneArchitecture(metadata);
+      isFinetuning && unsupported) {
+    throw qvac_errors::StatusError(
+        qvac_errors::general_error::InvalidArgument,
+        "Finetuning is not supported for architecture: " + unsupported.value());
+  }
+
+  const bool isBitnetOneBit =
+      metadata != nullptr && metadata->hasOneBitQuantization() &&
+      metadata->tryGetString("general.architecture") == "bitnet";
+
+  if (noMainGpuOverride && isAdreno && isFinetuning) {
+    if (maxAdrenoVersion.value() >= kAdreno800Threshold) {
+      bckI.llamaLogCallback(
+          GGML_LOG_LEVEL_INFO,
+          "Finetuning on Adreno 800+: preferring Vulkan",
+          nullptr);
+      openClBackends.clear();
+    } else {
+      bckI.llamaLogCallback(
+          GGML_LOG_LEVEL_INFO, "Finetuning on Adreno <800: CPU only", nullptr);
+      clearAllGpuBackends();
+    }
+  } else if (noMainGpuOverride && isAdreno) {
+    if (isBitnetOneBit && maxAdrenoVersion.value() < kAdreno800Threshold) {
+      bckI.llamaLogCallback(
+          GGML_LOG_LEVEL_INFO,
+          "BitNet TQ on Adreno <800: only CPU supported",
+          nullptr);
+      clearAllGpuBackends();
+    } else if (
+        isBitnetOneBit && maxAdrenoVersion.value() >= kAdreno800Threshold) {
+      bckI.llamaLogCallback(
+          GGML_LOG_LEVEL_INFO,
+          "BitNet TQ on Adreno 800+: preferring Vulkan over OpenCL",
+          nullptr);
+      openClBackends.clear();
+    }
   }
 
   if (outAdrenoVersion != nullptr) {
     *outAdrenoVersion = maxAdrenoVersion;
   }
 
-  // Normally, check if Adreno GPU is present and force OpenCL backend,
-  // otherwise let llama.cpp choose Vulkan GPU backend. There are some
-  // exceptions such as BitNet models which do not currently support OpenCl,
-  // cl backends should have been cleared at this point for those cases.
   if (!openClBackends.empty()) {
     bckI.llamaLogCallback(GGML_LOG_LEVEL_INFO, "Chosen GPU OpenCL", nullptr);
     return {BackendType::GPU, openClBackends.front()};
   }
 
-  // Prefer GPU over iGPU when possible
   if (!gpuBackends.empty()) {
     bckI.llamaLogCallback(GGML_LOG_LEVEL_INFO, "Chosen GPU Backend", nullptr);
     return {BackendType::GPU, gpuBackends.front()};
@@ -335,7 +381,7 @@ std::pair<BackendType, std::string> backend_selection::chooseBackend(
 std::pair<BackendType, std::string> backend_selection::chooseBackend(
     const BackendType preferredBackendType, llamaLogCallbackF llamaLogcallback,
     const std::optional<MainGpu>& mainGpu, const ModelMetaData* metadata,
-    std::optional<int>* outAdrenoVersion) {
+    std::optional<int>* outAdrenoVersion, const bool isFinetuning) {
   BackendInterface bckI{
       ggml_backend_dev_count,
       ggml_backend_dev_backend_reg,
@@ -346,5 +392,10 @@ std::pair<BackendType, std::string> backend_selection::chooseBackend(
       ggml_backend_dev_type,
       llamaLogcallback};
   return backend_selection::chooseBackend(
-      preferredBackendType, bckI, metadata, mainGpu, outAdrenoVersion);
+      preferredBackendType,
+      bckI,
+      metadata,
+      mainGpu,
+      outAdrenoVersion,
+      isFinetuning);
 }
