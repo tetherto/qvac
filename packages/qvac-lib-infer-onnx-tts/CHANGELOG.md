@@ -17,7 +17,7 @@ The `ONNXTTS` namespace now exports **`RuntimeStats`**, matching the keys return
 
 ## [0.6.4]
 
-Fix q4f16 chatterbox models for linux-arm64.
+Fix q4f16 chatterbox models for linux-arm64
 
 ## [0.6.3]
 
