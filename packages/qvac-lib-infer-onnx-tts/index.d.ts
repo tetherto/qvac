@@ -1,5 +1,6 @@
 import { Loader } from '@qvac/infer-base'
 import InferBase from '@qvac/infer-base/WeightsProvider/BaseInference'
+import type QvacResponse from '@qvac/infer-base/src/QvacResponse'
 
 /**
  * Arguments for Chatterbox TTS engine
@@ -78,15 +79,45 @@ declare class ONNXTTS extends InferBase {
    * @param config - Language and options
    */
   constructor(args: ONNXTTSArgs, config?: ONNXTTSConfig)
+
+  /**
+   * Run text-to-speech inference. When `opts.stats` was set on construction, `response.stats` matches {@link ONNXTTS.RuntimeStats}.
+   */
+  run(input: ONNXTTS.TTSRunInput): Promise<QvacResponse<ONNXTTS.TTSOutputChunk>>
 }
 
 declare namespace ONNXTTS {
+  /**
+   * Keys returned by the native addon `TTSModel::runtimeStats()` when stats are enabled.
+   */
+  export interface RuntimeStats {
+    /** Wall-clock inference time in seconds */
+    totalTime: number
+    tokensPerSecond: number
+    realTimeFactor: number
+    /** Duration of synthesized audio in milliseconds */
+    audioDurationMs: number
+    totalSamples: number
+  }
+
+  export interface TTSOutputChunk {
+    outputArray: ArrayBuffer
+  }
+
+  export type TTSRunInput = {
+    type?: string
+    input: string
+  }
+
   export {
     ONNXTTS as default,
     ONNXTTSArgs,
     ChatterboxTTSArgs,
     SupertonicTTSArgs,
-    ONNXTTSConfig
+    ONNXTTSConfig,
+    RuntimeStats,
+    TTSOutputChunk,
+    TTSRunInput
   }
 }
 
