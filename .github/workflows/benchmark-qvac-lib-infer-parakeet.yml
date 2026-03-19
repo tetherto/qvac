@@ -273,8 +273,8 @@ jobs:
             curl -L -o decoder_joint.onnx "${EOU_REPO}/decoder_joint.onnx"
             curl -L -o tokenizer.json "${EOU_REPO}/tokenizer.json"
           elif [ "$MODEL_TYPE" = "sortformer" ]; then
-            REPO_URL="https://huggingface.co/tetherto/sortformer-4spk-v2-onnx/resolve/main"
-            curl -L -o sortformer.onnx "${REPO_URL}/sortformer.onnx"
+            REPO_URL="https://huggingface.co/cgus/diar_streaming_sortformer_4spk-v2-onnx/resolve/main"
+            curl -L -o sortformer.onnx "${REPO_URL}/diar_streaming_sortformer_4spk-v2.onnx"
           else
             echo "Model type ${MODEL_TYPE} not supported for auto-download"
             exit 1
