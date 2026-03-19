@@ -61,7 +61,7 @@ endif()
 find_path(QVAC_LIB_INFERENCE_ADDON_CPP_INCLUDE_DIRS "qvac-lib-inference-addon-cpp/BlobsStream.hpp")
 
 if(CMAKE_SYSTEM_NAME STREQUAL "iOS")
-  set(CMAKE_SHARED_LINKER_FLAGS "${CMAKE_SHARED_LINKER_FLAGS} -F${CMAKE_OSX_SYSROOT}/System/Library/Frameworks")
+  set(CMAKE_SHARED_LINKER_FLAGS "${CMAKE_SHARED_LINKER_FLAGS} -Wl,-syslibroot,${CMAKE_OSX_SYSROOT}")
   set(BLAS_LIBRARIES "-framework Accelerate" CACHE STRING "BLAS library" FORCE)
   set(BLAS_FOUND TRUE CACHE BOOL "BLAS found" FORCE)
 endif()
