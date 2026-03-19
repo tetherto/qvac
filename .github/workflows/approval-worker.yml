@@ -47,7 +47,7 @@ jobs:
       pull-requests: write
       statuses: write
       issues: write
-    uses: tetherto/qvac-devops/.github/workflows/approval-check-worker.yml@monorepo_update
+    uses: tetherto/qvac-devops/.github/workflows/approval-check-worker.yml@08479e5599445272d410398ff94f8e44991ddcb5  # monorepo_update
     secrets: inherit
     with:
       pr_number: ${{ fromJSON(needs.run-when-command.outputs.number) }}
