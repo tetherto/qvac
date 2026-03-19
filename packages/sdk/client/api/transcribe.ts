@@ -9,6 +9,10 @@ import {
   type TranscribeStreamSession,
 } from "@/schemas";
 import { stream, duplex } from "@/client/rpc/rpc-client";
+import { getClientLogger } from "@/logging";
+import { TranscriptionFailedError } from "@/utils/errors-client";
+
+const logger = getClientLogger();
 
 /**
  * Transcribe audio and return the complete text. Accepts either a file
@@ -92,11 +96,12 @@ export async function transcribeStream(
         try {
           parsed = JSON.parse(line);
         } catch {
+          logger.warn("transcribeStream: malformed JSON from server:", line);
           continue;
         }
         const response = transcribeStreamResponseSchema.parse(parsed);
         if (response.error) {
-          throw new Error(response.error);
+          throw new TranscriptionFailedError(response.error);
         }
         if (response.done) return;
         if (response.text?.trim()) {

@@ -1,5 +1,4 @@
 import {
-  responseSchema,
   type QvacConfig,
   type Request,
   type Response,
@@ -201,11 +200,14 @@ export async function executeDuplexHandler(
   entry: HandlerEntry,
   inputStream: ReturnType<RPC.IncomingRequest["createRequestStream"]>,
   outputStream: ReturnType<RPC.IncomingRequest["createResponseStream"]>,
+  profiler: ServerProfiler,
 ) {
   const handler =
     entry.delegatedHandler && entry.isDelegated?.(request)
       ? entry.delegatedHandler
       : entry.handler;
+
+  profiler.startHandler();
 
   try {
     for await (const response of (handler as DuplexStreamHandler)(
@@ -213,13 +215,19 @@ export async function executeDuplexHandler(
       inputStream,
     )) {
       outputStream.write(
-        JSON.stringify(responseSchema.parse(response)) + "\n",
+        profiler.serialize(response, false) + "\n",
         "utf-8",
       );
     }
+    profiler.endHandler();
+    const trailer = profiler.serialize();
+    if (trailer) {
+      outputStream.write(trailer + "\n", "utf-8");
+    }
     outputStream.end();
   } catch (error) {
-    sendStreamErrorResponse(outputStream, error);
+    profiler.endHandler();
+    sendStreamErrorResponse(outputStream, error, profiler);
   }
 }
 

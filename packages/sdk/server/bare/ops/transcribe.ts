@@ -12,6 +12,7 @@ import {
 } from "@/schemas";
 import { createAudioStream } from "@/server/bare/utils/audio-input";
 import { getServerLogger } from "@/logging";
+import { TranscriptionFailedError } from "@/utils/errors-server";
 import type { Readable } from "bare-stream";
 
 const logger = getServerLogger();
@@ -139,7 +140,9 @@ export async function* transcribeStream(
     const model = getModel(modelId);
 
     if (!isStreamableModel(model)) {
-      throw new Error(`Model ${modelId} does not support streaming transcription`);
+      throw new TranscriptionFailedError(
+        `Model ${modelId} does not support streaming transcription`,
+      );
     }
 
     const response = await model.runStreaming(audioInputStream);

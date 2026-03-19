@@ -11,10 +11,13 @@ export const audioInputSchema = z.discriminatedUnion("type", [
   }),
 ]);
 
-export const transcribeParamsSchema = z.object({
+const transcribeBaseSchema = z.object({
   modelId: z.string(),
-  audioChunk: audioInputSchema,
   prompt: z.string().optional(),
+});
+
+export const transcribeParamsSchema = transcribeBaseSchema.extend({
+  audioChunk: audioInputSchema,
 });
 
 // Batch Transcribe Schema (send audio, get text back)
@@ -43,10 +46,8 @@ export type TranscribeRequest = z.infer<typeof transcribeRequestSchema>;
 export type TranscribeResponse = z.infer<typeof transcribeResponseSchema>;
 
 // Streaming Transcription Schema (bidirectional: audio stream in, text stream out)
-export const transcribeStreamRequestSchema = z.object({
+export const transcribeStreamRequestSchema = transcribeBaseSchema.extend({
   type: z.literal("transcribeStream"),
-  modelId: z.string(),
-  prompt: z.string().optional(),
 });
 
 export const transcribeStreamResponseSchema = transcriptionResultBase.extend({

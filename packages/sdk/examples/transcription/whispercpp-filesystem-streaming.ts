@@ -7,7 +7,13 @@
  * Uses FFmpeg to convert the WAV to raw f32le and streams chunks
  * through the duplex RPC session to the whisper addon.
  */
-import { loadModel, unloadModel, transcribeStream, WHISPER_TINY, VAD_SILERO_5_1_2 } from "@qvac/sdk";
+import {
+  loadModel,
+  unloadModel,
+  transcribeStream,
+  WHISPER_TINY,
+  VAD_SILERO_5_1_2,
+} from "@qvac/sdk";
 import { spawn } from "child_process";
 import path from "path";
 import { fileURLToPath } from "url";
@@ -15,7 +21,10 @@ import { fileURLToPath } from "url";
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
-const SAMPLE_FILE = path.resolve(__dirname, "../audio/diarization-sample-16k.wav");
+const SAMPLE_FILE = path.resolve(
+  __dirname,
+  "../audio/diarization-sample-16k.wav",
+);
 
 const SAMPLE_RATE = 16000;
 const BYTES_PER_SAMPLE = 4; // f32le
@@ -56,7 +65,14 @@ console.log("Session open. Streaming audio...\n");
 
 const ffmpeg = spawn(
   "ffmpeg",
-  ["-i", SAMPLE_FILE, "-ar", String(SAMPLE_RATE), "-ac", "1", "-sample_fmt", "flt", "-f", "f32le", "pipe:1"],
+  [
+    "-i", SAMPLE_FILE,
+    "-ar", String(SAMPLE_RATE),
+    "-ac", "1",
+    "-sample_fmt", "flt",
+    "-f", "f32le",
+    "pipe:1",
+  ],
   { stdio: ["ignore", "pipe", "ignore"] },
 );
 
@@ -72,7 +88,9 @@ ffmpeg.stdout.on("data", (raw: Buffer) => {
 
 ffmpeg.on("close", () => {
   const durationSec = totalBytes / (SAMPLE_RATE * BYTES_PER_SAMPLE);
-  console.log(`Audio streamed: ${totalBytes} bytes (~${durationSec.toFixed(1)}s)`);
+  console.log(
+    `Audio streamed: ${totalBytes} bytes (~${durationSec.toFixed(1)}s)`,
+  );
   console.log("Waiting for transcription...\n");
   session.end();
 });

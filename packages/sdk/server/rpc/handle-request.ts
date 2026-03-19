@@ -109,6 +109,7 @@ function extractProfilingMeta(data: unknown): {
 async function handleDuplexRequest(req: RPC.IncomingRequest): Promise<void> {
   const inputStream = req.createRequestStream();
   const outputStream = req.createResponseStream();
+  let profiler: ServerProfiler | undefined;
 
   try {
     const firstChunk = await new Promise<Buffer>((resolve, reject) => {
@@ -119,9 +120,19 @@ async function handleDuplexRequest(req: RPC.IncomingRequest): Promise<void> {
       inputStream.once("error", reject);
     });
 
+    const parseStart = nowMs();
     const jsonData: unknown = JSON.parse(firstChunk.toString());
-    const processedData = applyDeviceDefaultsToRequest(jsonData);
+    const jsonParseMs = nowMs() - parseStart;
+
+    const { data: cleanData, profilingMeta } = extractProfilingMeta(jsonData);
+    profiler = createServerProfiler(profilingMeta);
+    profiler.markRequestParsed(jsonParseMs);
+
+    const validationStart = nowMs();
+    const processedData = applyDeviceDefaultsToRequest(cleanData);
     const request: Request = requestSchema.parse(processedData);
+    profiler.markRequestValidated(nowMs() - validationStart);
+
     const entry = registry[request.type];
 
     if (!entry) {
@@ -134,10 +145,17 @@ async function handleDuplexRequest(req: RPC.IncomingRequest): Promise<void> {
       );
     }
 
-    await executeDuplexHandler(req, request, entry, inputStream, outputStream);
+    await executeDuplexHandler(
+      req,
+      request,
+      entry,
+      inputStream,
+      outputStream,
+      profiler,
+    );
   } catch (error) {
     inputStream.destroy();
-    sendStreamErrorResponse(outputStream, error);
+    sendStreamErrorResponse(outputStream, error, profiler);
   }
 }
 

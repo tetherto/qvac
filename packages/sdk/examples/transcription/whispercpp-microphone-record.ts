@@ -75,7 +75,14 @@ console.log("Model loaded.\n");
 
 const ffmpeg = spawn(
   "ffmpeg",
-  [...getAudioInputArgs(), "-ar", String(SAMPLE_RATE), "-ac", "1", "-sample_fmt", "flt", "-f", "f32le", "pipe:1"],
+  [
+    ...getAudioInputArgs(),
+    "-ar", String(SAMPLE_RATE),
+    "-ac", "1",
+    "-sample_fmt", "flt",
+    "-f", "f32le",
+    "pipe:1",
+  ],
   { stdio: ["ignore", "pipe", "ignore"] },
 );
 if (!ffmpeg.stdout) throw new Error("Failed to open microphone");

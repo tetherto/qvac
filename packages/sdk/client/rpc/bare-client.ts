@@ -287,7 +287,10 @@ type DuplexHandler = (
   inputStream: Readable,
 ) => AsyncGenerator<Response>;
 
+const DUPLEX_HANDLER_TYPES: ReadonlySet<string> = new Set(["transcribeStream"]);
+
 function getDuplexHandler(type: string): DuplexHandler | undefined {
+  if (!DUPLEX_HANDLER_TYPES.has(type)) return undefined;
   const entry = handlers[type as keyof typeof handlers];
   if (typeof entry !== "function") return undefined;
   return entry as DuplexHandler;
