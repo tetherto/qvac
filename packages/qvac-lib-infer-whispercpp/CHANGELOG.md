@@ -5,6 +5,16 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.5.1]
+
+This release documents runtime statistics and transcription output shapes in TypeScript so consumers can type `response.stats` and `run()` results against the native addon.
+
+## New APIs
+
+### `RuntimeStats` and related types in `index.d.ts`
+
+The `TranscriptionWhispercpp` namespace now exports **`RuntimeStats`**, aligned with `WhisperModel::runtimeStats()` (`totalTime`, `realTimeFactor`, `tokensPerSecond`, `audioDurationMs`, `totalSamples`, `totalTokens`, `totalSegments`, `processCalls`, and Whisper-internal timing fields through `totalWallMs`). **`WhisperTranscriptionSegment`** and **`WhisperRunOutput`** describe transcription payloads passed to `onUpdate`. **`run()`** is typed to return **`Promise<QvacResponse<WhisperRunOutput>>`**, with a note that **`response.stats`** matches **`RuntimeStats`** when stats collection is enabled via `opts.stats`.
+
 ## [0.5.0]
 
 ### Changed
