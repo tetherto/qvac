@@ -61,7 +61,12 @@ endif()
 find_path(QVAC_LIB_INFERENCE_ADDON_CPP_INCLUDE_DIRS "qvac-lib-inference-addon-cpp/BlobsStream.hpp")
 
 if(CMAKE_SYSTEM_NAME STREQUAL "iOS")
-  set(BLA_VENDOR Apple)
+  set(CMAKE_DISABLE_FIND_PACKAGE_BLAS TRUE)
+  find_library(ACCELERATE_FRAMEWORK Accelerate)
+  if(ACCELERATE_FRAMEWORK)
+    add_library(BLAS::BLAS INTERFACE IMPORTED)
+    set_target_properties(BLAS::BLAS PROPERTIES INTERFACE_LINK_LIBRARIES "${ACCELERATE_FRAMEWORK}")
+  endif()
 endif()
 
 find_package(ggml CONFIG REQUIRED)
