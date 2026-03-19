@@ -403,7 +403,7 @@ jobs:
         working-directory: ${{ env.WORKDIR }}
         run: |
           if [[ "${{ matrix.platform }}" == "android" ]]; then
-            find prebuilds -name "*.bare" -exec $ANDROID_NDK/toolchains/llvm/prebuilt/linux-x86_64/bin/llvm-strip {} \;
+            find prebuilds \( -name "*.bare" -o -name "*.so" \) -exec $ANDROID_NDK/toolchains/llvm/prebuilt/linux-x86_64/bin/llvm-strip {} \;
           elif [[ "${{ matrix.platform }}" == "darwin" || "${{ matrix.platform }}" == "ios" ]]; then
             find prebuilds -name "*.bare" -exec strip -S {} \;
           else
