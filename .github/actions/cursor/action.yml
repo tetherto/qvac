@@ -1,0 +1,32 @@
+name: cursor-agent-action
+description: Install Cursor CLI and run Cursor agent with a custom prompt on repository changes
+
+inputs:
+  prompt:
+    description: Prompt for cursor
+    required: true
+
+  model:
+    description: Model to use with cursor-agent (e.g. auto, gpt-4.1, claude-3.7)
+    required: false
+    default: auto
+
+runs:
+  using: composite
+
+  steps:
+    - name: Install Cursor CLI
+      shell: bash
+      run: |
+        curl https://cursor.com/install -fsS | bash
+        echo "$HOME/.cursor/bin" >> $GITHUB_PATH
+
+    - name: Run Cursor agent
+      shell: bash
+      env:
+        CURSOR_API_KEY: ${{ env.CURSOR_API_KEY }}
+      run: |
+        cursor-agent \
+          -p "${{ inputs.prompt }}" \
+          --model "${{ inputs.model }}" \
+          --trust
