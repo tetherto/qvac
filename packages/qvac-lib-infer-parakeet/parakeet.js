@@ -85,6 +85,7 @@ class ParakeetInterface {
     this._nextJobId = 1
     this._activeJobId = null
     this._bufferedAudio = []
+    this._ignoreNextCancelledError = false
 
     // Create the native instance
     this._handle = this._binding.createInstance(
@@ -102,7 +103,7 @@ class ParakeetInterface {
     }
   }
 
-  _addonOutputCallback (addon, event, data, error, nativeJobId) {
+  _addonOutputCallback (addon, event, data, error) {
     const isError = typeof error === 'string' && error.length > 0
     const isStats = data && typeof data === 'object' && (
       'totalTime' in data ||
@@ -115,20 +116,29 @@ class ParakeetInterface {
     )
 
     let mappedEvent = event
-    if (event === 'Error' || isError || String(event).includes('Error')) {
+    if (isError || String(event).includes('Error')) {
       mappedEvent = 'Error'
-    } else if (event === 'JobEnded' || isStats || String(event).includes('RuntimeStats')) {
+    } else if (isStats || String(event).includes('RuntimeStats')) {
       mappedEvent = 'JobEnded'
-    } else if (event === 'Output' || isTranscriptOutput || String(event).includes('Output')) {
+    } else if (isTranscriptOutput || String(event).includes('Output')) {
       mappedEvent = 'Output'
     }
 
-    const jobId = Number.isFinite(nativeJobId) ? nativeJobId : null
-    if (jobId === null) {
+    // Cancellation is cooperative in the shared addon-cpp runner, so a
+    // terminal "Job cancelled" callback for the previous job can arrive after
+    // the next job has already been accepted. Swallow that one stale callback
+    // so the new job keeps ownership of its Output/JobEnded events.
+    if (mappedEvent === 'Error' && this._ignoreNextCancelledError && error === 'Job cancelled') {
+      this._ignoreNextCancelledError = false
       return
     }
 
-    if (mappedEvent === 'Output' && this._activeJobId === jobId) {
+    const jobId = this._activeJobId
+    if (jobId === null || jobId === undefined) {
+      return
+    }
+
+    if (mappedEvent === 'Output') {
       this._setState(state.PROCESSING)
     }
 
@@ -137,10 +147,8 @@ class ParakeetInterface {
     }
 
     if (mappedEvent === 'Error' || mappedEvent === 'JobEnded') {
-      if (this._activeJobId === jobId) {
-        this._activeJobId = null
-        this._setState(state.LISTENING)
-      }
+      this._activeJobId = null
+      this._setState(state.LISTENING)
     }
   }
 
@@ -273,6 +281,7 @@ class ParakeetInterface {
       await this._binding.cancel(this._handle, jobId)
       this._bufferedAudio = []
       this._activeJobId = null
+      this._ignoreNextCancelledError = true
       this._setState(state.LISTENING)
     } catch (error) {
       throw createParakeetError(ERR_CODES.FAILED_TO_CANCEL, error.message, error)

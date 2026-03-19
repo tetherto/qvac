@@ -17,8 +17,6 @@ class MockedBinding {
     this._scriptedOutputs = null
     this._runToken = 0
     this._baseInferenceCallback = null // Store reference to BaseInference callback
-    this._nextJobId = 1
-    this._currentJobId = null
   }
 
   enableVadTestMode () {
@@ -48,15 +46,16 @@ class MockedBinding {
   }
 
   // Helper method to call both callbacks
-  _callCallbacks (event, output, error, jobId = this._currentJobId) {
+  _callCallbacks (event, output, error) {
+    const currentJobId = this._interfaceType?._activeJobId || 1
     // Call the test's onOutput function
     if (this.outputCb) {
-      this.outputCb(this._interfaceType, event, output, error, jobId)
+      this.outputCb(this._interfaceType, event, output, error)
     }
 
     // Call the BaseInference callback to resolve _finishPromise
     if (this._baseInferenceCallback) {
-      this._baseInferenceCallback(this._interfaceType, event, jobId, output, error)
+      this._baseInferenceCallback(this._interfaceType, event, currentJobId, output, error)
     }
   }
 
@@ -99,7 +98,6 @@ class MockedBinding {
     console.log(`Cancel job id: ${jobId}`)
     this._runToken += 1
     this._busy = false
-    this._currentJobId = null
     this._state = state.LISTENING
     if (this.transitionCb) {
       this.transitionCb(this, this._state)
@@ -119,9 +117,7 @@ class MockedBinding {
       return false
     }
     const runToken = ++this._runToken
-    const jobId = this._nextJobId++
     this._busy = true
-    this._currentJobId = jobId
     this._state = state.PROCESSING
     if (this.transitionCb) this.transitionCb(this, this._state)
 
@@ -132,23 +128,22 @@ class MockedBinding {
 
       if (this._scriptedOutputs && this._scriptedOutputs.length > 0) {
         for (const output of this._scriptedOutputs) {
-          this._callCallbacks('Output', output, null, jobId)
+          this._callCallbacks('Output', output, null)
         }
       } else if (this.isVadTest) {
         const mockTranscription = data.input.length > 0
           ? { text: `Mock transcription for ${data.input.length} bytes of audio`, toAppend: false, start: 0, end: 1, id: 0 }
           : { text: 'Silent audio detected', toAppend: false, start: 0, end: 1, id: 0 }
-        this._callCallbacks('Output', mockTranscription, null, jobId)
+        this._callCallbacks('Output', mockTranscription, null)
       } else {
-        this._callCallbacks('Output', { data: data.input.length }, null, jobId)
+        this._callCallbacks('Output', { data: data.input.length }, null)
       }
 
       if (!this._busy || runToken !== this._runToken) {
         return
       }
-      this._callCallbacks('JobEnded', { totalTime: 0.01, audioDurationMs: data.input.length, totalSamples: data.input.length }, null, jobId)
+      this._callCallbacks('JobEnded', { totalTime: 0.01, audioDurationMs: data.input.length, totalSamples: data.input.length }, null)
       this._busy = false
-      this._currentJobId = null
       this._state = state.LISTENING
       if (this.transitionCb) this.transitionCb(this, this._state)
     }
@@ -185,7 +180,6 @@ class MockedBinding {
     if (handle !== this._handle) throw new Error('Invalid handle')
     this._runToken += 1
     this._busy = false
-    this._currentJobId = null
     this._handle = null
     console.log('Destroyed the addon')
     // Clear resources on the C++ side.
