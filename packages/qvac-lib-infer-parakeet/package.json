@@ -22,6 +22,8 @@
     "coverage:cpp:summary": "cd build && llvm-cov report ./parakeet_tests --instr-profile=coverage.profdata -ignore-filename-regex='(tests|build|node_modules|gtest|gmock|\\.vcpkg|/usr)/' > coverage-summary.txt",
     "coverage:cpp:report": "cd build && ls -lha && llvm-profdata merge -sparse default.profraw -o coverage.profdata && llvm-cov show ./parakeet_tests -instr-profile=coverage.profdata -format=html -output-dir=coverage-html -ignore-filename-regex='(tests|build|node_modules|gtest|gmock|\\.vcpkg|/usr)/' && llvm-cov export ./parakeet_tests -instr-profile=coverage.profdata -format=lcov -ignore-filename-regex='(tests|build|node_modules|gtest|gmock|\\.vcpkg|/usr)/' > lcov.info && npm run coverage:cpp:summary",
     "coverage:cpp": "npm run coverage:cpp:build && npm run test:cpp:run && npm run coverage:cpp:report",
+    "test:mobile:generate": "node scripts/generate-mobile-integration-tests.js",
+    "test:mobile:validate": "node scripts/validate-mobile-tests.js",
     "test:dts": "tsc index.d.ts --noEmit",
     "download-models": "./scripts/download-models.sh",
     "example": "bare examples/transcribe.js",
