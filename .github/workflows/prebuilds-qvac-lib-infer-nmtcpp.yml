@@ -213,7 +213,7 @@ jobs:
           Rename-Item -Path "C:\Program Files (x86)\Windows Kits\10\bin\10.0.26100.0" -NewName "C:\Program Files (x86)\Windows Kits\10\bin\old-10.0.26100.0"
           Rename-Item -Path "C:\Program Files (x86)\Windows Kits\10\Lib\10.0.26100.0" -NewName "C:\Program Files (x86)\Windows Kits\10\Lib\old-10.0.26100.0"
 
-      - if: ${{ matrix.os == 'macos-14' }}
+      - if: ${{ startsWith(matrix.os, 'macos-') }}
         name: Install vcpkg in macos
         run: |
           cd ..
