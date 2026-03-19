@@ -1,9 +1,25 @@
 import { createExecutor } from "@tetherto/qvac-test-suite/mobile";
 import {
+  profiler,
   LLAMA_3_2_1B_INST_Q4_0,
   GTE_LARGE_FP16,
+  GTE_LARGE_335M_FP16_SHARD,
   WHISPER_TINY,
   VAD_SILERO_5_1_2,
+  QWEN3_1_7B_INST_Q4,
+  OCR_LATIN_RECOGNIZER_1,
+  MARIAN_OPUS_DE_EN_Q4_0,
+  BERGAMOT_EN_FR,
+  TTS_TOKENIZER_EN_CHATTERBOX,
+  TTS_SPEECH_ENCODER_EN_CHATTERBOX_FP32,
+  TTS_EMBED_TOKENS_EN_CHATTERBOX_FP32,
+  TTS_CONDITIONAL_DECODER_EN_CHATTERBOX_FP32,
+  TTS_LANGUAGE_MODEL_EN_CHATTERBOX_FP32,
+  TTS_TOKENIZER_SUPERTONIC,
+  TTS_TEXT_ENCODER_SUPERTONIC_FP32,
+  TTS_LATENT_DENOISER_SUPERTONIC_FP32,
+  TTS_VOICE_DECODER_SUPERTONIC_FP32,
+  TTS_VOICE_STYLE_SUPERTONIC,
   PARAKEET_TDT_ENCODER_INT8,
   PARAKEET_TDT_DECODER_INT8,
   PARAKEET_TDT_PREPROCESSOR_INT8,
@@ -17,9 +33,26 @@ import {
 } from "@qvac/sdk";
 import { ResourceManager } from "../shared/resource-manager.js";
 import { ModelLoadingExecutor } from "../shared/executors/model-loading-executor.js";
+import { CompletionExecutor } from "../shared/executors/completion-executor.js";
+import { EmbeddingExecutor } from "../shared/executors/embedding-executor.js";
+import { TranslationExecutor } from "../shared/executors/translation-executor.js";
+import { ToolsExecutor } from "../shared/executors/tools-executor.js";
+import { NmtExecutor } from "../shared/executors/nmt-executor.js";
+import { BergamotExecutor } from "../shared/executors/bergamot-executor.js";
+import { ShardedModelExecutor } from "../shared/executors/sharded-model-executor.js";
+import { HttpEmbeddingExecutor } from "../shared/executors/http-embedding-executor.js";
+import { KvCacheExecutor } from "../shared/executors/kv-cache-executor.js";
+import { LoggingExecutor } from "../shared/executors/logging-executor.js";
+import { RegistryExecutor } from "../shared/executors/registry-executor.js";
+import { ModelInfoExecutor } from "../shared/executors/model-info-executor.js";
+import { ErrorExecutor } from "../shared/executors/error-executor.js";
 import { MobileTranscriptionExecutor } from "./executors/transcription-executor.js";
 import { MobileParakeetExecutor } from "./executors/parakeet-executor.js";
 import { MobileVisionExecutor } from "./executors/vision-executor.js";
+import { MobileOcrExecutor } from "./executors/ocr-executor.js";
+import { MobileRagExecutor } from "./executors/rag-executor.js";
+import { MobileConfigReloadExecutor } from "./executors/config-reload-executor.js";
+import { MobileTtsExecutor } from "./executors/tts-executor.js";
 
 const resources = new ResourceManager();
 
@@ -56,6 +89,79 @@ resources.define("whisper", {
       speech_pad_ms: 600,
       samples_overlap: 0.3,
     },
+  },
+});
+
+resources.define("tools", {
+  constant: QWEN3_1_7B_INST_Q4,
+  type: "llm",
+  config: { ctx_size: 4096, tools: true },
+});
+
+resources.define("ocr", {
+  constant: OCR_LATIN_RECOGNIZER_1,
+  type: "ocr",
+  config: { langList: ["en"] },
+});
+
+resources.define("sharded-embeddings", {
+  constant: GTE_LARGE_335M_FP16_SHARD,
+  type: "embeddings",
+  skipPreDownload: true,
+});
+
+resources.define("nmt", {
+  constant: MARIAN_OPUS_DE_EN_Q4_0,
+  type: "nmt",
+  config: {
+    engine: "Opus",
+    from: "de",
+    to: "en",
+    beamsize: 4,
+    lengthpenalty: 1.0,
+    maxlength: 512,
+    temperature: 0.3,
+    norepeatngramsize: 3,
+  },
+});
+
+resources.define("bergamot", {
+  constant: BERGAMOT_EN_FR,
+  type: "nmt",
+  config: {
+    engine: "Bergamot",
+    from: "en",
+    to: "fr",
+  },
+});
+
+resources.define("tts-chatterbox", {
+  constant: TTS_TOKENIZER_EN_CHATTERBOX,
+  type: "tts",
+  skipPreDownload: true,
+  config: {
+    ttsEngine: "chatterbox",
+    language: "en",
+    ttsTokenizerSrc: TTS_TOKENIZER_EN_CHATTERBOX,
+    ttsSpeechEncoderSrc: TTS_SPEECH_ENCODER_EN_CHATTERBOX_FP32,
+    ttsEmbedTokensSrc: TTS_EMBED_TOKENS_EN_CHATTERBOX_FP32,
+    ttsConditionalDecoderSrc: TTS_CONDITIONAL_DECODER_EN_CHATTERBOX_FP32,
+    ttsLanguageModelSrc: TTS_LANGUAGE_MODEL_EN_CHATTERBOX_FP32,
+  },
+});
+
+resources.define("tts-supertonic", {
+  constant: TTS_TOKENIZER_SUPERTONIC,
+  type: "tts",
+  skipPreDownload: true,
+  config: {
+    ttsEngine: "supertonic",
+    language: "en",
+    ttsTokenizerSrc: TTS_TOKENIZER_SUPERTONIC,
+    ttsTextEncoderSrc: TTS_TEXT_ENCODER_SUPERTONIC_FP32,
+    ttsLatentDenoiserSrc: TTS_LATENT_DENOISER_SUPERTONIC_FP32,
+    ttsVoiceDecoderSrc: TTS_VOICE_DECODER_SUPERTONIC_FP32,
+    ttsVoiceSrc: TTS_VOICE_STYLE_SUPERTONIC,
   },
 });
 
@@ -109,8 +215,29 @@ resources.define("vision", {
 export const executor = createExecutor({
   handlers: [
     new ModelLoadingExecutor(resources),
+    new CompletionExecutor(resources),
     new MobileTranscriptionExecutor(resources),
+    new EmbeddingExecutor(resources),
+    new MobileRagExecutor(resources),
+    new TranslationExecutor(resources),
+    new ModelInfoExecutor(resources),
+    new ErrorExecutor(resources),
+    new ToolsExecutor(resources),
+    new NmtExecutor(resources),
+    new BergamotExecutor(resources),
+    new ShardedModelExecutor(resources),
+    new MobileOcrExecutor(resources),
+    new MobileTtsExecutor(resources),
+    new MobileConfigReloadExecutor(resources),
+    new LoggingExecutor(resources),
+    new RegistryExecutor(resources),
+    new HttpEmbeddingExecutor(resources),
+    new KvCacheExecutor(resources),
     new MobileParakeetExecutor(resources),
     new MobileVisionExecutor(resources),
   ],
+  profiling: {
+    init: () => profiler.enable({ mode: "summary", includeServerBreakdown: true }),
+    exportData: () => profiler.exportJSON(),
+  },
 });

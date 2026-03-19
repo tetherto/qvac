@@ -136,8 +136,6 @@ inline js_value_t* createInstance(js_env_t* env, js_callback_info_t* info) try {
       getPath(env, args1.getProperty<js::String>(env, "pathRecognizer"));
   auto langList = js::toVector<js::String, std::string>(
       env, args1.getProperty<js::Array>(env, "langList"));
-  auto optUseGPU = args1.getOptionalProperty<js::Boolean>(env, "useGPU");
-  bool useGPU = optUseGPU ? optUseGPU->as<bool>(env) : false;
   auto optTimeout = args1.getOptionalProperty<js::Number>(env, "timeout");
   int timeout = optTimeout ? static_cast<int>(optTimeout->as<double>(env))
                            : DEFAULT_PIPELINE_TIMEOUT_SECONDS;
@@ -205,11 +203,53 @@ inline js_value_t* createInstance(js_env_t* env, js_callback_info_t* info) try {
     config.straightenPages = optStraighten->as<bool>(env);
   }
 
+  auto optUseGPU = args1.getOptionalProperty<js::Boolean>(env, "useGPU");
+  if (optUseGPU) {
+    config.sessionConfig.provider =
+        optUseGPU->as<bool>(env) ? onnx_addon::ExecutionProvider::AUTO_GPU
+                                 : onnx_addon::ExecutionProvider::CPU;
+  }
+
+  auto optGraphOptimization =
+      args1.getOptionalProperty<js::String>(env, "graphOptimization");
+  if (optGraphOptimization) {
+    auto str = optGraphOptimization->as<std::string>(env);
+    if (str == "basic") {
+      config.sessionConfig.optimization =
+          onnx_addon::GraphOptimizationLevel::BASIC;
+    } else if (str == "extended") {
+      config.sessionConfig.optimization =
+          onnx_addon::GraphOptimizationLevel::EXTENDED;
+    } else if (str == "all") {
+      config.sessionConfig.optimization =
+          onnx_addon::GraphOptimizationLevel::ALL;
+    } else if (str == "disable") {
+      config.sessionConfig.optimization =
+          onnx_addon::GraphOptimizationLevel::DISABLE;
+    }
+  }
+
+  auto optEnableXnnpack =
+      args1.getOptionalProperty<js::Boolean>(env, "enableXnnpack");
+  if (optEnableXnnpack)
+    config.sessionConfig.enableXnnpack = optEnableXnnpack->as<bool>(env);
+
+  auto optEnableCpuMemArena =
+      args1.getOptionalProperty<js::Boolean>(env, "enableCpuMemArena");
+  if (optEnableCpuMemArena)
+    config.sessionConfig.enableCpuMemArena =
+        optEnableCpuMemArena->as<bool>(env);
+
+  auto optIntraOpThreads =
+      args1.getOptionalProperty<js::Number>(env, "intraOpThreads");
+  if (optIntraOpThreads)
+    config.sessionConfig.intraOpThreads =
+        static_cast<int>(optIntraOpThreads->as<double>(env));
+
   auto model = std::make_unique<Pipeline>(
       pathDetector,
       pathRecognizer,
       std::span<const std::string>(langList),
-      useGPU,
       timeout,
       config);
 
