@@ -122,6 +122,22 @@ jobs:
       WORKDIR: ${{ inputs.workdir || github.event.inputs.workdir || 'packages/qvac-lib-infer-onnx-tts' }}
 
     steps:
+      - if: ${{ matrix.os == 'ai-run-windows11-gpu' }}
+        name: Install AWS CLI on self-hosted Windows runner
+        shell: powershell
+        run: |
+          if (Get-Command aws -ErrorAction SilentlyContinue) {
+            Write-Host "AWS CLI already installed"
+            aws --version
+          } else {
+            Write-Host "Installing AWS CLI v2..."
+            Invoke-WebRequest -Uri https://awscli.amazonaws.com/AWSCLIV2.msi -OutFile $env:TEMP\AWSCLIV2.msi
+            Start-Process msiexec.exe -Wait -ArgumentList '/I', "$env:TEMP\AWSCLIV2.msi", '/qn'
+            $env:PATH = "C:\Program Files\Amazon\AWSCLIV2;$env:PATH"
+            echo "C:\Program Files\Amazon\AWSCLIV2" >> $env:GITHUB_PATH
+            aws --version
+          }
+
       - if: ${{ matrix.platform == 'android' }}
         name: Select NDK
         run: |
