@@ -164,12 +164,7 @@ jobs:
         continue-on-error: true
 
       - name: Download prebuilds (from npm - fallback)
-        if: >-
-          github.event_name == 'workflow_dispatch'
-          && (
-            (matrix.platform == 'Android' && steps.artifact_android.outcome != 'success')
-            || (matrix.platform == 'iOS' && steps.artifact_ios.outcome != 'success')
-          )
+        if: (matrix.platform == 'Android' && steps.artifact_android.outcome != 'success') || (matrix.platform == 'iOS' && steps.artifact_ios.outcome != 'success')
         working-directory: ${{ env.ADDON_DIR }}
         run: |
           PACKAGE_SPEC="${{ inputs.package_spec || '@qvac/transcription-parakeet@latest' }}"
