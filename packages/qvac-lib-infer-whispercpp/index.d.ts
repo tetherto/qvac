@@ -49,6 +49,14 @@ declare interface TranscriptionWhispercppConfig {
 declare type ReportProgressCallback = (progressData: ProgressData) => void;
 
 /**
+ * A single transcription segment emitted by the Whisper addon in an output update.
+ */
+declare interface WhisperTranscriptionSegment {
+  text: string
+  [key: string]: unknown
+}
+
+/**
  * GGML client implementation for the Whisper transcription model
  */
 declare class TranscriptionWhispercpp extends BaseInference {
@@ -86,10 +94,43 @@ declare class TranscriptionWhispercpp extends BaseInference {
     audio_format?: string;
   }): Promise<void>;
 
-  run(audioStream: Readable): Promise<QvacResponse>;
+  /**
+   * Run transcription on an audio stream. When `opts.stats` was set on construction, `response.stats` matches {@link TranscriptionWhispercpp.RuntimeStats}.
+   */
+  run(
+    audioStream: Readable
+  ): Promise<QvacResponse<TranscriptionWhispercpp.WhisperRunOutput>>;
 }
 
 declare namespace TranscriptionWhispercpp {
+  /**
+   * Keys returned by the native addon `WhisperModel::runtimeStats()` when stats are enabled.
+   * `totalTime` is wall time in seconds; `audioDurationMs` and whisper-prefixed fields are milliseconds where applicable.
+   */
+  export interface RuntimeStats {
+    totalTime: number
+    realTimeFactor: number
+    tokensPerSecond: number
+    audioDurationMs: number
+    totalSamples: number
+    totalTokens: number
+    totalSegments: number
+    processCalls: number
+    whisperSampleMs: number
+    whisperEncodeMs: number
+    whisperDecodeMs: number
+    whisperBatchdMs: number
+    whisperPromptMs: number
+    totalWallMs: number
+  }
+
+  /**
+   * Payload passed to `onUpdate` for transcription output (array of segments or a single segment object).
+   */
+  export type WhisperRunOutput =
+    | WhisperTranscriptionSegment[]
+    | WhisperTranscriptionSegment
+
   export {
     TranscriptionWhispercpp as default,
     TranscriptionWhispercpp,
@@ -99,6 +140,7 @@ declare namespace TranscriptionWhispercpp {
     TranscriptionWhispercppConfig,
     ProgressData,
     ReportProgressCallback,
+    WhisperTranscriptionSegment,
   };
 }
 

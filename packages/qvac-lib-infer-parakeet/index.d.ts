@@ -184,10 +184,13 @@ declare class TranscriptionParakeet extends BaseInference {
 
   /**
    * Run transcription on an audio stream.
+   * When `opts.stats` was set on construction, `response.stats` matches {@link TranscriptionParakeet.RuntimeStats}.
    * @param audioStream - Stream of audio data (16kHz mono)
    * @returns A QvacResponse representing the transcription job
    */
-  run(audioStream: AsyncIterable<Buffer>): Promise<QvacResponse>;
+  run(
+    audioStream: AsyncIterable<Buffer>
+  ): Promise<QvacResponse<TranscriptionParakeet.ParakeetRunOutput>>;
 
   /**
    * Reload the model with new configuration parameters.
@@ -214,6 +217,34 @@ declare class TranscriptionParakeet extends BaseInference {
 }
 
 declare namespace TranscriptionParakeet {
+  /**
+   * Keys returned by the native addon `ParakeetModel::runtimeStats()` when stats are enabled.
+   * `totalTime` is wall time in seconds; `audioDurationMs` and other `*Ms` fields are milliseconds where applicable.
+   */
+  export interface RuntimeStats {
+    totalTime: number
+    realTimeFactor: number
+    tokensPerSecond: number
+    msPerToken: number
+    audioDurationMs: number
+    totalSamples: number
+    totalTokens: number
+    totalTranscriptions: number
+    processCalls: number
+    modelLoadMs: number
+    melSpecMs: number
+    encoderMs: number
+    decoderMs: number
+    totalWallMs: number
+    totalMelFrames: number
+    totalEncodedFrames: number
+  }
+
+  /**
+   * Payload passed to `onUpdate` for transcription output (segment array or a single segment).
+   */
+  export type ParakeetRunOutput = TranscriptionSegment[] | TranscriptionSegment
+
   export {
     TranscriptionParakeet as default,
     TranscriptionParakeet,
