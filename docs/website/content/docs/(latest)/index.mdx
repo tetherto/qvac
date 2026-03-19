@@ -1,9 +1,9 @@
 ---
 title: QVAC by Tether
-description: Local AI JS/TS SDK, libraries, and tools for building local-first, P2P AI applications. Run AI tasks like LLMs, speech, RAG, and more across Linux, macOS, Windows, Android, and iOS.
+description: Local AI JS/TS SDK, libraries, and tools for building local-first, P2P AI applications and systems. Run AI tasks like LLMs, speech, RAG, and more across Linux, macOS, Windows, Android, and iOS.
 ---
 
-import { Sparkles, Telescope, Compass, Rocket, BookA, LayoutGrid, FolderTree, Blocks, MessageCircleQuestionMark, Wrench, DoorOpen, Package } from 'lucide-react'
+import { Sparkles, Telescope, Compass, Rocket, BookA, LayoutGrid, FolderTree, Blocks, MessageCircleQuestionMark, Wrench, DoorOpen, Package, Terminal } from 'lucide-react'
 import { SiDiscord, SiHuggingface, SiExpo, SiElectron } from '@icons-pack/react-simple-icons';
 import { CopyInline } from '@/components/copy-inline'
 import { FeaturebaseIcon } from '@/components/featurebase-icon';
@@ -31,8 +31,11 @@ import { FeaturebaseIcon } from '@/components/featurebase-icon';
   <Card href="/sdk/installation" icon={<Package className="text-[var(--color-fd-primary)]" />} title="Installation">
     Supported environments and how to install the SDK for each one: Node.js, Bare, and Expo.
   </Card>
-  <Card href="/sdk/api" icon={<BookA className="text-[var(--color-fd-primary)]" />} title="API reference">
+  <Card href="/sdk/api" icon={<BookA className="text-[var(--color-fd-primary)]" />} title="JS API reference">
     `@qvac/sdk` npm package exposes a function-centric, typed JS API.
+  </Card>
+  <Card href="/cli" icon={<Terminal className="text-[var(--color-fd-primary)]" />} title="CLI">
+    `@qvac/cli` npm package provides tools and an HTTP server that exposes an OpenAI-compatible API.
   </Card>
 </Cards>
 

@@ -5,6 +5,10 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.6.4]
+
+Fix q4f16 chatterbox models for linux-arm64 
+
 ## [0.6.3]
 
 This release fixes a logging issue in the JS layer where two log statements during model load were bypassing the addon logging pipeline.

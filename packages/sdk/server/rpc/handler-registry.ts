@@ -6,6 +6,7 @@ import { handleLoadModelDelegated } from "@/server/rpc/handlers/load-model-deleg
 import { handleCompletionStreamDelegated } from "@/server/rpc/handlers/completion-stream-delegated";
 import { getModelEntry } from "@/server/bare/registry/model-registry";
 import { handleUnloadModel } from "@/server/rpc/handlers/unload-model";
+import { handleUnloadModelDelegated } from "@/server/rpc/handlers/unload-model-delegated";
 import { handleTranscribeStream } from "@/server/rpc/handlers/transcribe-stream";
 import { handleEmbed } from "@/server/rpc/handlers/embed";
 import { handleTranslate } from "@/server/rpc/handlers/translate";
@@ -44,7 +45,12 @@ function isModelDelegated(request: Request): boolean {
 export const registry: Record<string, HandlerEntry> = {
   // Simple Reply handlers
   ping: { type: "reply", handler: handlePing },
-  unloadModel: { type: "reply", handler: handleUnloadModel },
+  unloadModel: {
+    type: "reply",
+    handler: handleUnloadModel,
+    delegatedHandler: handleUnloadModelDelegated,
+    isDelegated: isModelDelegated,
+  },
   embed: { type: "reply", handler: handleEmbed },
   cancel: { type: "reply", handler: cancelHandler },
   provide: { type: "reply", handler: provideHandler },
