@@ -632,6 +632,13 @@ jobs:
 
           echo "-march=native removal complete"
 
+      - if: ${{ matrix.platform == 'ios' }}
+        name: Use Xcode clang for iOS builds
+        shell: bash
+        run: |
+          echo "CC=/usr/bin/clang" >> $GITHUB_ENV
+          echo "CXX=/usr/bin/clang++" >> $GITHUB_ENV
+
       - name: Run bare-make generate
         working-directory: ${{ env.PKG_DIR }}
         run: bare-make generate --platform ${{ matrix.platform }} --arch ${{ matrix.arch }} ${{ matrix.flags }}

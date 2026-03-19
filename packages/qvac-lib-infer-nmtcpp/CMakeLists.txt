@@ -60,28 +60,7 @@ endif()
 
 find_path(QVAC_LIB_INFERENCE_ADDON_CPP_INCLUDE_DIRS "qvac-lib-inference-addon-cpp/BlobsStream.hpp")
 
-if(CMAKE_SYSTEM_NAME STREQUAL "iOS")
-  set(BLAS_LIBRARIES "${CMAKE_OSX_SYSROOT}/System/Library/Frameworks/Accelerate.framework" CACHE STRING "BLAS library" FORCE)
-  set(BLAS_FOUND TRUE CACHE BOOL "BLAS found" FORCE)
-  message(STATUS "[iOS BLAS fix] BLAS_LIBRARIES=${BLAS_LIBRARIES}")
-  message(STATUS "[iOS BLAS fix] CMAKE_OSX_SYSROOT=${CMAKE_OSX_SYSROOT}")
-endif()
-
 find_package(ggml CONFIG REQUIRED)
-
-if(CMAKE_SYSTEM_NAME STREQUAL "iOS")
-  # Replace -framework Accelerate with absolute path to iOS Accelerate in all ggml targets
-  foreach(_target ggml::ggml ggml::ggml-cpu ggml::ggml-base ggml::ggml-blas)
-    if(TARGET ${_target})
-      get_target_property(_libs ${_target} INTERFACE_LINK_LIBRARIES)
-      if(_libs)
-        string(REPLACE "-framework Accelerate" "${CMAKE_OSX_SYSROOT}/System/Library/Frameworks/Accelerate.framework" _libs "${_libs}")
-        set_target_properties(${_target} PROPERTIES INTERFACE_LINK_LIBRARIES "${_libs}")
-        message(STATUS "[iOS BLAS fix] ${_target} libs: ${_libs}")
-      endif()
-    endif()
-  endforeach()
-endif()
 find_package(absl CONFIG QUIET)
 find_package(protobuf CONFIG REQUIRED)
 
