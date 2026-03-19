@@ -144,7 +144,7 @@ jobs:
           npm install -g @expo/cli@latest
 
       - name: Download Android prebuilds (from artifacts)
-        if: matrix.platform == 'Android' && github.event_name != 'workflow_dispatch'
+        if: matrix.platform == 'Android'
         id: artifact_android
         uses: actions/download-artifact@v7
         with:
@@ -154,7 +154,7 @@ jobs:
         continue-on-error: true
 
       - name: Download iOS prebuilds (from artifacts)
-        if: matrix.platform == 'iOS' && github.event_name != 'workflow_dispatch'
+        if: matrix.platform == 'iOS'
         id: artifact_ios
         uses: actions/download-artifact@v7
         with:
