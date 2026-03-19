@@ -6,7 +6,7 @@ import type {
 import { DELEGATION_BREAKDOWN_KEY, OPERATION_EVENT_KEY, modelInputToSrcSchema } from "@/schemas";
 import type { DelegatedHandlerOptions } from "@/server/rpc/profiling";
 import type { ResponseWithDelegation } from "@/server/rpc/delegate-transport";
-import { registerModel } from "@/server/bare/registry/model-registry";
+import { registerModel, isModelLoaded, unregisterModel } from "@/server/bare/registry/model-registry";
 import {
   send,
   stream,
@@ -134,8 +134,14 @@ export async function handleLoadModelDelegated(
       delegateOptions.timeout = timeout;
     }
 
-    registerModel(modelId, delegateOptions);
+    if (isModelLoaded(modelId)) {
+      logger.info(
+        `Delegated model ${modelId} is already registered, replacing with new provider: ${providerPublicKey}`,
+      );
+      unregisterModel(modelId);
+    }
 
+    registerModel(modelId, delegateOptions);
     logger.info(
       `✅ Delegated model registered: ${modelId} -> provider: ${providerPublicKey}`,
     );
