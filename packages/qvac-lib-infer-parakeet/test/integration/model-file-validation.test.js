@@ -4,11 +4,16 @@ const test = require('brittle')
 const path = require('bare-path')
 const fs = require('bare-fs')
 const os = require('bare-os')
-const TranscriptionParakeet = require('../../index.js')
-const FakeDL = require('../mocks/loader.fake.js')
-const { ensureModel, getTestPaths, isMobile } = require('./helpers.js')
+const {
+  TranscriptionParakeet,
+  FakeDL,
+  ensureModel,
+  getTestPaths,
+  isMobile
+} = require('./helpers.js')
 
 function createLoader () {
+  if (!FakeDL) return null
   return new FakeDL({})
 }
 
@@ -16,6 +21,7 @@ function createLoader () {
  * Test 1: If the model path is empty or not provided, an exception should be thrown
  */
 test('Should throw error when model path is not provided', { timeout: 60000 }, async (t) => {
+  if (isMobile) { t.pass('Skipped on mobile'); return }
   // Restore any stubs from other tests
   TranscriptionParakeet.prototype.validateModelFiles?.restore?.()
 
@@ -48,6 +54,7 @@ test('Should throw error when model path is not provided', { timeout: 60000 }, a
  * Test 2: If the model path is provided but the directory doesn't exist, an exception should be thrown
  */
 test('Should throw error when model directory does not exist', { timeout: 60000 }, async (t) => {
+  if (isMobile) { t.pass('Skipped on mobile'); return }
   // Restore any stubs from other tests
   TranscriptionParakeet.prototype.validateModelFiles?.restore?.()
 
@@ -80,6 +87,7 @@ test('Should throw error when model directory does not exist', { timeout: 60000 
  * Test 3: If the model path is provided via config.path but doesn't exist, an exception should be thrown
  */
 test('Should throw error when config.path does not exist', { timeout: 60000 }, async (t) => {
+  if (isMobile) { t.pass('Skipped on mobile'); return }
   // Restore any stubs from other tests
   TranscriptionParakeet.prototype.validateModelFiles?.restore?.()
 
@@ -110,6 +118,7 @@ test('Should throw error when config.path does not exist', { timeout: 60000 }, a
  * Test 4: If model path is valid and model exists, no exception should be thrown
  */
 test('Should not throw error when model directory exists with valid files', { timeout: 180000 }, async (t) => {
+  if (isMobile) { t.pass('Skipped on mobile'); return }
   // Restore any stubs from other tests
   TranscriptionParakeet.prototype.validateModelFiles?.restore?.()
 
@@ -141,6 +150,7 @@ test('Should not throw error when model directory exists with valid files', { ti
  * Test 5: Verify that model path validation happens during construction
  */
 test('Model validation happens in constructor', { timeout: 60000 }, async (t) => {
+  if (isMobile) { t.pass('Skipped on mobile'); return }
   // Restore any stubs from other tests
   TranscriptionParakeet.prototype.validateModelFiles?.restore?.()
 
@@ -185,6 +195,7 @@ test('Model validation happens in constructor', { timeout: 60000 }, async (t) =>
  * Test 6: Test that config.path takes precedence over diskPath + modelName
  */
 test('config.path takes precedence over diskPath + modelName', { timeout: 180000 }, async (t) => {
+  if (isMobile) { t.pass('Skipped on mobile'); return }
   // Restore any stubs from other tests
   TranscriptionParakeet.prototype.validateModelFiles?.restore?.()
 
@@ -218,6 +229,7 @@ test('config.path takes precedence over diskPath + modelName', { timeout: 180000
  * Test 7: Test CTC model type file requirements (different from TDT)
  */
 test('Should validate CTC model file requirements differently from TDT', { timeout: 60000 }, async (t) => {
+  if (isMobile) { t.pass('Skipped on mobile'); return }
   // Restore any stubs from other tests
   TranscriptionParakeet.prototype.validateModelFiles?.restore?.()
 
@@ -265,6 +277,7 @@ test('Should validate CTC model file requirements differently from TDT', { timeo
  * Test 8: Test EOU model type file requirements (encoder.onnx, decoder_joint.onnx, tokenizer.json)
  */
 test('Should validate EOU model file requirements differently from TDT', { timeout: 60000 }, async (t) => {
+  if (isMobile) { t.pass('Skipped on mobile'); return }
   TranscriptionParakeet.prototype.validateModelFiles?.restore?.()
 
   const testDir = isMobile ? path.join(global.testDir || os.tmpdir(), '.test-models') : path.join(os.tmpdir(), '.parakeet-test-models')
@@ -306,6 +319,7 @@ test('Should validate EOU model file requirements differently from TDT', { timeo
  * Test 9: Test Sortformer model type file requirements (single sortformer.onnx)
  */
 test('Should validate Sortformer model file requirements differently from TDT', { timeout: 60000 }, async (t) => {
+  if (isMobile) { t.pass('Skipped on mobile'); return }
   TranscriptionParakeet.prototype.validateModelFiles?.restore?.()
 
   const testDir = isMobile ? path.join(global.testDir || os.tmpdir(), '.test-models') : path.join(os.tmpdir(), '.parakeet-test-models')

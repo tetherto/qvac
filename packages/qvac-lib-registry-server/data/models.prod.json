@@ -1531,7 +1531,7 @@
   },
   {
     "source": "https://huggingface.co/ggml-org/SmolVLM2-500M-Video-Instruct-GGUF/resolve/ccd7aae53bcb1997355c2f094959e72b3642ce17/SmolVLM2-500M-Video-Instruct-f16.gguf",
-    "engine": "@qvac/translation-llamacpp",
+    "engine": "@qvac/llm-llamacpp",
     "description": "",
     "quantization": "f16",
     "params": "500M",
@@ -1546,7 +1546,7 @@
   },
   {
     "source": "https://huggingface.co/ggml-org/SmolVLM2-500M-Video-Instruct-GGUF/resolve/ccd7aae53bcb1997355c2f094959e72b3642ce17/mmproj-SmolVLM2-500M-Video-Instruct-f16.gguf",
-    "engine": "@qvac/translation-llamacpp",
+    "engine": "@qvac/llm-llamacpp",
     "description": "",
     "quantization": "f16",
     "params": "500M",

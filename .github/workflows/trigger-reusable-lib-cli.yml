@@ -1,6 +1,4 @@
 name: General CI/CD (cli)
-# This workflow is used to call the reusable workflows in the qvac-devops repository
-# https://github.com/tetherto/qvac-devops/blob/production-workflows-tag/.github/workflows/public-reusable.yml
 
 permissions:
   contents: write
@@ -29,6 +27,9 @@ on:
         required: false
         type: string
 
+env:
+  WORKDIR: packages/cli
+
 jobs:
   release-merge-guard:
     name: Release Merge Guard
@@ -51,6 +52,32 @@ jobs:
           package-slug: cli
           package-json-path: packages/cli/package.json
           changelog-path: packages/cli/CHANGELOG.md
+
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v6
+
+      - name: Setup Node
+        uses: actions/setup-node@v6
+        with:
+          node-version: 22
+
+      - name: Install dependencies
+        run: npm install
+        working-directory: ${{ env.WORKDIR }}
+
+      - name: Build
+        run: npm run build
+        working-directory: ${{ env.WORKDIR }}
+
+      - name: Upload build artifacts
+        uses: actions/upload-artifact@v6
+        with:
+          name: cli-dist
+          path: ${{ env.WORKDIR }}/dist/
+          retention-days: 1
 
   publish-logic:
     runs-on: ubuntu-latest
@@ -101,7 +128,7 @@ jobs:
           echo "gpr_tag=$gpr_tag" >> "$GITHUB_OUTPUT"
 
   publish-main-gpr-dev:
-    needs: publish-logic
+    needs: [build, publish-logic]
     if: needs.publish-logic.outputs.publish_main == 'true'
     runs-on: ubuntu-latest
     permissions:
@@ -111,6 +138,12 @@ jobs:
       - uses: actions/checkout@v6
         with:
           fetch-depth: 0
+
+      - name: Download build artifacts
+        uses: actions/download-artifact@v7
+        with:
+          name: cli-dist
+          path: ${{ env.WORKDIR }}/dist/
 
       - name: Rewrite SDK scope for GPR
         uses: ./.github/actions/cli-rewrite-sdk-scope-for-gpr
@@ -126,22 +159,38 @@ jobs:
           name-suffix: "-mono"
 
   publish-release-npm:
-    needs: [publish-logic]
+    needs: [build, publish-logic, release-merge-guard]
+    if: needs.publish-logic.outputs.publish_release == 'true'
+    runs-on: ubuntu-latest
+    outputs:
+      published_version: ${{ steps.publish.outputs.npm_published_version }}
     permissions:
       contents: write
       packages: write
       id-token: write
-    if: needs.publish-logic.outputs.publish_release == 'true'
-    uses: tetherto/qvac-devops/.github/workflows/public-reusable-npm.yml@monorepo_update
-    secrets: inherit
-    with:
-      workdir: packages/cli
-      repo_name: "cli"
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v6
 
-  # Create GitHub release only for actual releases (after NPM publish)
+      - name: Download build artifacts
+        uses: actions/download-artifact@v7
+        with:
+          name: cli-dist
+          path: ${{ env.WORKDIR }}/dist/
+
+      - name: Publish to NPM
+        id: publish
+        uses: ./.github/actions/publish-library-to-npm
+        with:
+          secret-token: ${{ secrets.NPM_TOKEN }}
+          tag: "latest"
+          git-token: ${{ secrets.GITHUB_TOKEN }}
+          repo_name: cli
+          workdir: ${{ env.WORKDIR }}
+
   publish-release:
     needs: [publish-release-npm]
-    if:  needs.publish-release-npm.result == 'success' && needs.publish-release-npm.outputs.published_version != ''
+    if: needs.publish-release-npm.result == 'success' && needs.publish-release-npm.outputs.published_version != ''
     permissions:
       contents: write
     uses: ./.github/workflows/create-github-release.yml
@@ -154,7 +203,7 @@ jobs:
       workdir: "packages/cli"
 
   publish-feature-gpr:
-    needs: publish-logic
+    needs: [build, publish-logic]
     if: needs.publish-logic.outputs.publish_feature == 'true'
     runs-on: ubuntu-latest
     permissions:
@@ -164,6 +213,12 @@ jobs:
       - uses: actions/checkout@v6
         with:
           fetch-depth: 0
+
+      - name: Download build artifacts
+        uses: actions/download-artifact@v7
+        with:
+          name: cli-dist
+          path: ${{ env.WORKDIR }}/dist/
 
       - name: Rewrite SDK scope for GPR
         uses: ./.github/actions/cli-rewrite-sdk-scope-for-gpr
@@ -179,7 +234,7 @@ jobs:
           name-suffix: "-mono"
 
   publish-tmp-gpr:
-    needs: publish-logic
+    needs: [build, publish-logic]
     if: needs.publish-logic.outputs.publish_tmp == 'true'
     runs-on: ubuntu-latest
     permissions:
@@ -189,6 +244,12 @@ jobs:
       - uses: actions/checkout@v6
         with:
           fetch-depth: 0
+
+      - name: Download build artifacts
+        uses: actions/download-artifact@v7
+        with:
+          name: cli-dist
+          path: ${{ env.WORKDIR }}/dist/
 
       - name: Rewrite SDK scope for GPR
         uses: ./.github/actions/cli-rewrite-sdk-scope-for-gpr

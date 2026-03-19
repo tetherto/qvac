@@ -3,9 +3,9 @@
 const fs = require('bare-fs')
 const path = require('bare-path')
 const test = require('brittle')
-const binding = require('../../binding')
-const { ParakeetInterface } = require('../../parakeet')
 const {
+  binding,
+  ParakeetInterface,
   setupJsLogger,
   getTestPaths,
   ensureModelForType,
