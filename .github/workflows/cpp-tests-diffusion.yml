@@ -33,6 +33,9 @@ jobs:
           - os: macos-14
             platform: darwin
             arch: arm64
+          - os: ubuntu-24.04
+            platform: linux
+            arch: x64
           - os: windows-11
             platform: windows
             runner: ai-run-windows11-gpu

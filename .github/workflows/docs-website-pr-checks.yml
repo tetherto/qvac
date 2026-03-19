@@ -35,8 +35,8 @@ jobs:
 
       - name: Create placeholder for generated API docs
         run: |
-          mkdir -p content/docs/sdk/api/latest
-          printf '%s\n' '---' 'title: API Reference' 'description: API Reference for the latest version of the QVAC SDK.' '---' > content/docs/sdk/api/latest/index.mdx
+          mkdir -p "content/docs/(latest)/sdk/api"
+          printf '%s\n' '---' 'title: "@qvac/sdk"' 'titleStyle: code' 'description: API Reference' '---' '' 'Placeholder for generated API docs.' > "content/docs/(latest)/sdk/api/index.mdx"
 
       - name: Build and validate
         run: bun run build

@@ -71,3 +71,12 @@ export function endSSE (res: ServerResponse): void {
   res.write('data: [DONE]\n\n')
   res.end()
 }
+
+export function sendText (res: ServerResponse, status: number, text: string): void {
+  if (res.headersSent) return
+  res.writeHead(status, {
+    'Content-Type': 'text/plain',
+    'Content-Length': Buffer.byteLength(text)
+  })
+  res.end(text)
+}

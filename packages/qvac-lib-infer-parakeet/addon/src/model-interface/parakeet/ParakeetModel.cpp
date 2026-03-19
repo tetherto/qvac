@@ -258,6 +258,12 @@ void ParakeetModel::set_weights_for_file(
 //  Vocabulary
 // ═════════════════════════════════════════════════════════════════════════════
 
+void ParakeetModel::setWeightsForFile(
+    const std::string& filename,
+    std::unique_ptr<std::basic_streambuf<char>>&& streambuf) {
+  set_weights_for_file(filename, std::move(streambuf));
+}
+
 void ParakeetModel::loadVocabulary(const std::vector<uint8_t>& vocabData) {
   std::string vocabStr(vocabData.begin(), vocabData.end());
   std::istringstream iss(vocabStr);
@@ -550,8 +556,8 @@ void ParakeetModel::warmup() {
 
 void ParakeetModel::loadCTCSessions(Ort::SessionOptions& session_options) {
   if (cfg_.ctcModelPath.empty()) {
-    throw errors::makeStatus(errors::Code::CTCModelNotLoaded,
-                             "ctcModelPath is required");
+    throw errors::makeStatus(
+        errors::Code::CTCModelNotLoaded, "ctcModelPath is required");
   }
 
   QLOG(
@@ -570,10 +576,10 @@ void ParakeetModel::loadCTCSessions(Ort::SessionOptions& session_options) {
     auto modelLink = stagingDir / "model.onnx";
     std::filesystem::create_symlink(cfg_.ctcModelPath, modelLink);
     // ONNX exports use either model.onnx_data or model.onnx.data — create both
-    std::filesystem::create_symlink(cfg_.ctcModelDataPath,
-                                    stagingDir / "model.onnx_data");
-    std::filesystem::create_symlink(cfg_.ctcModelDataPath,
-                                    stagingDir / "model.onnx.data");
+    std::filesystem::create_symlink(
+        cfg_.ctcModelDataPath, stagingDir / "model.onnx_data");
+    std::filesystem::create_symlink(
+        cfg_.ctcModelDataPath, stagingDir / "model.onnx.data");
 
     try {
       ctc_session_ = std::make_unique<Ort::Session>(
@@ -586,8 +592,8 @@ void ParakeetModel::loadCTCSessions(Ort::SessionOptions& session_options) {
   } else {
 #ifdef _WIN32
     std::wstring wPath(cfg_.ctcModelPath.begin(), cfg_.ctcModelPath.end());
-    ctc_session_ = std::make_unique<Ort::Session>(*ort_env_, wPath.c_str(),
-                                                  session_options);
+    ctc_session_ = std::make_unique<Ort::Session>(
+        *ort_env_, wPath.c_str(), session_options);
 #else
     ctc_session_ = std::make_unique<Ort::Session>(
         *ort_env_, cfg_.ctcModelPath.c_str(), session_options);
@@ -597,8 +603,9 @@ void ParakeetModel::loadCTCSessions(Ort::SessionOptions& session_options) {
   if (!cfg_.tokenizerPath.empty() && vocab_.empty()) {
     std::ifstream file(cfg_.tokenizerPath, std::ios::binary);
     if (file.is_open()) {
-      std::vector<uint8_t> data((std::istreambuf_iterator<char>(file)),
-                                std::istreambuf_iterator<char>());
+      std::vector<uint8_t> data(
+          (std::istreambuf_iterator<char>(file)),
+          std::istreambuf_iterator<char>());
       loadTokenizerJson(data);
     }
   }
@@ -606,12 +613,12 @@ void ParakeetModel::loadCTCSessions(Ort::SessionOptions& session_options) {
 
 void ParakeetModel::loadEOUSessions(Ort::SessionOptions& session_options) {
   if (cfg_.eouEncoderPath.empty()) {
-    throw errors::makeStatus(errors::Code::EOUEncoderNotLoaded,
-                             "eouEncoderPath is required");
+    throw errors::makeStatus(
+        errors::Code::EOUEncoderNotLoaded, "eouEncoderPath is required");
   }
   if (cfg_.eouDecoderPath.empty()) {
-    throw errors::makeStatus(errors::Code::EOUDecoderNotLoaded,
-                             "eouDecoderPath is required");
+    throw errors::makeStatus(
+        errors::Code::EOUDecoderNotLoaded, "eouDecoderPath is required");
   }
 
   QLOG(
@@ -619,8 +626,8 @@ void ParakeetModel::loadEOUSessions(Ort::SessionOptions& session_options) {
       "Loading EOU encoder session...");
 #ifdef _WIN32
   std::wstring wEncPath(cfg_.eouEncoderPath.begin(), cfg_.eouEncoderPath.end());
-  encoder_session_ = std::make_unique<Ort::Session>(*ort_env_, wEncPath.c_str(),
-                                                    session_options);
+  encoder_session_ = std::make_unique<Ort::Session>(
+      *ort_env_, wEncPath.c_str(), session_options);
 #else
   encoder_session_ = std::make_unique<Ort::Session>(
       *ort_env_, cfg_.eouEncoderPath.c_str(), session_options);
@@ -631,8 +638,8 @@ void ParakeetModel::loadEOUSessions(Ort::SessionOptions& session_options) {
       "Loading EOU decoder session...");
 #ifdef _WIN32
   std::wstring wDecPath(cfg_.eouDecoderPath.begin(), cfg_.eouDecoderPath.end());
-  decoder_session_ = std::make_unique<Ort::Session>(*ort_env_, wDecPath.c_str(),
-                                                    session_options);
+  decoder_session_ = std::make_unique<Ort::Session>(
+      *ort_env_, wDecPath.c_str(), session_options);
 #else
   decoder_session_ = std::make_unique<Ort::Session>(
       *ort_env_, cfg_.eouDecoderPath.c_str(), session_options);
@@ -641,8 +648,9 @@ void ParakeetModel::loadEOUSessions(Ort::SessionOptions& session_options) {
   if (!cfg_.tokenizerPath.empty() && vocab_.empty()) {
     std::ifstream file(cfg_.tokenizerPath, std::ios::binary);
     if (file.is_open()) {
-      std::vector<uint8_t> data((std::istreambuf_iterator<char>(file)),
-                                std::istreambuf_iterator<char>());
+      std::vector<uint8_t> data(
+          (std::istreambuf_iterator<char>(file)),
+          std::istreambuf_iterator<char>());
       loadTokenizerJson(data);
     }
   }
@@ -651,8 +659,8 @@ void ParakeetModel::loadEOUSessions(Ort::SessionOptions& session_options) {
 void ParakeetModel::loadSortformerSessions(
     Ort::SessionOptions& session_options) {
   if (cfg_.sortformerPath.empty()) {
-    throw errors::makeStatus(errors::Code::SortformerNotLoaded,
-                             "sortformerPath is required");
+    throw errors::makeStatus(
+        errors::Code::SortformerNotLoaded, "sortformerPath is required");
   }
 
   QLOG(
@@ -670,16 +678,17 @@ void ParakeetModel::loadSortformerSessions(
 
 void ParakeetModel::loadTDTSessions(Ort::SessionOptions& session_options) {
   if (cfg_.encoderPath.empty()) {
-    throw errors::makeStatus(errors::Code::EncoderNotLoaded,
-                             "encoderPath is required");
+    throw errors::makeStatus(
+        errors::Code::EncoderNotLoaded, "encoderPath is required");
   }
   if (cfg_.decoderPath.empty()) {
-    throw errors::makeStatus(errors::Code::DecoderNotLoaded,
-                             "decoderPath is required");
+    throw errors::makeStatus(
+        errors::Code::DecoderNotLoaded, "decoderPath is required");
   }
 
-  QLOG(qvac_lib_inference_addon_cpp::logger::Priority::DEBUG,
-       "Loading encoder from path: " + cfg_.encoderPath);
+  QLOG(
+      qvac_lib_inference_addon_cpp::logger::Priority::DEBUG,
+      "Loading encoder from path: " + cfg_.encoderPath);
 
   bool hasExternalData = !cfg_.encoderDataPath.empty() &&
                          std::filesystem::exists(cfg_.encoderDataPath);
@@ -706,16 +715,17 @@ void ParakeetModel::loadTDTSessions(Ort::SessionOptions& session_options) {
   } else {
 #ifdef _WIN32
     std::wstring wPath(cfg_.encoderPath.begin(), cfg_.encoderPath.end());
-    encoder_session_ = std::make_unique<Ort::Session>(*ort_env_, wPath.c_str(),
-                                                      session_options);
+    encoder_session_ = std::make_unique<Ort::Session>(
+        *ort_env_, wPath.c_str(), session_options);
 #else
     encoder_session_ = std::make_unique<Ort::Session>(
         *ort_env_, cfg_.encoderPath.c_str(), session_options);
 #endif
   }
 
-  QLOG(qvac_lib_inference_addon_cpp::logger::Priority::DEBUG,
-       "Loading decoder session...");
+  QLOG(
+      qvac_lib_inference_addon_cpp::logger::Priority::DEBUG,
+      "Loading decoder session...");
 #ifdef _WIN32
   std::wstring wDecoderPath(cfg_.decoderPath.begin(), cfg_.decoderPath.end());
   decoder_session_ = std::make_unique<Ort::Session>(
@@ -2095,6 +2105,10 @@ std::string ParakeetModel::processSortformer(const Input& input) {
 }
 
 void ParakeetModel::process(const Input& input) {
+  if (cancelRequested_.exchange(false)) {
+    throw std::runtime_error("Job cancelled");
+  }
+
   if (input.empty()) {
     QLOG(
         qvac_lib_inference_addon_cpp::logger::Priority::WARNING,
@@ -2178,6 +2192,23 @@ ParakeetModel::Output ParakeetModel::process(
 //  Audio preprocessing
 // ═════════════════════════════════════════════════════════════════════════════
 
+std::any ParakeetModel::process(const std::any& input) {
+  AnyInput modelInput;
+  if (const auto* anyInput = std::any_cast<AnyInput>(&input)) {
+    modelInput = *anyInput;
+  } else if (const auto* inputVector = std::any_cast<Input>(&input)) {
+    modelInput.input = *inputVector;
+  } else {
+    throw std::invalid_argument(
+        std::string("Invalid input type for ParakeetModel::process: ") +
+        input.type().name());
+  }
+
+  reset();
+  process(modelInput.input);
+  return output_;
+}
+
 std::vector<float> ParakeetModel::preprocessAudioData(
     const std::vector<uint8_t>& audioData, const std::string& audioFormat) {
   std::vector<float> result;
@@ -2205,7 +2236,6 @@ std::vector<float> ParakeetModel::preprocessAudioData(
 // ═════════════════════════════════════════════════════════════════════════════
 //  Runtime stats
 // ═════════════════════════════════════════════════════════════════════════════
-
 qvac_lib_inference_addon_cpp::RuntimeStats ParakeetModel::runtimeStats() const {
   qvac_lib_inference_addon_cpp::RuntimeStats stats;
 
@@ -2242,6 +2272,10 @@ qvac_lib_inference_addon_cpp::RuntimeStats ParakeetModel::runtimeStats() const {
   stats.emplace_back("totalEncodedFrames", totalEncodedFrames_);
 
   return stats;
+}
+
+void ParakeetModel::cancel() const {
+  cancelRequested_.store(true, std::memory_order_relaxed);
 }
 
 } // namespace qvac_lib_infer_parakeet
