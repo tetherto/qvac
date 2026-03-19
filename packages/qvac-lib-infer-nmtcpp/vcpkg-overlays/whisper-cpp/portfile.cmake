@@ -13,10 +13,6 @@ vcpkg_from_github(
 
 set(PLATFORM_OPTIONS)
 
-if (VCPKG_TARGET_IS_IOS)
-  list(APPEND PLATFORM_OPTIONS -DGGML_BLAS=OFF)
-endif()
-
 if (VCPKG_TARGET_IS_ANDROID)
   list(APPEND PLATFORM_OPTIONS -DWHISPER_NO_AVX=ON -DWHISPER_NO_AVX2=ON -DWHISPER_NO_FMA=ON)
   # Disable Vulkan on Android to avoid libvulkan.so dependency

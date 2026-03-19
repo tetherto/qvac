@@ -60,6 +60,16 @@ endif()
 
 find_path(QVAC_LIB_INFERENCE_ADDON_CPP_INCLUDE_DIRS "qvac-lib-inference-addon-cpp/BlobsStream.hpp")
 
+if(CMAKE_SYSTEM_NAME STREQUAL "iOS")
+  find_library(ACCELERATE_FRAMEWORK Accelerate
+    PATHS "${CMAKE_OSX_SYSROOT}/System/Library/Frameworks"
+    NO_DEFAULT_PATH)
+  if(ACCELERATE_FRAMEWORK)
+    set(BLAS_LIBRARIES "${ACCELERATE_FRAMEWORK}" CACHE FILEPATH "BLAS library" FORCE)
+    set(BLAS_FOUND TRUE CACHE BOOL "BLAS found" FORCE)
+  endif()
+endif()
+
 find_package(ggml CONFIG REQUIRED)
 find_package(absl CONFIG QUIET)
 find_package(protobuf CONFIG REQUIRED)
