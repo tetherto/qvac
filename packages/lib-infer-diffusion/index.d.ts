@@ -74,7 +74,7 @@ export type CacheMode = 'disabled' | 'easycache' | 'ucache' | 'dbcache' | 'taylo
 export interface SdConfig {
   /** Number of CPU threads (-1 = auto) */
   threads?: NumericLike
-  /** Preferred compute device: 'gpu' (Metal/CUDA/Vulkan) or 'cpu' */
+  /** Preferred compute device: 'gpu' (Metal/Vulkan) or 'cpu' */
   device?: 'gpu' | 'cpu'
   /** Weight quantization type */
   wtype?: WeightType

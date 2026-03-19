@@ -51,7 +51,7 @@
 - **Cross-platform**: macOS, Linux, Windows, iOS, Android
 - **Disk-local models**: Files must be present on disk at `diskPath`
 - **Progress tracking**: Step-by-step generation progress callbacks
-- **GPU acceleration**: Metal, Vulkan, CUDA, OpenCL
+- **GPU acceleration**: Metal, Vulkan, OpenCL
 - **Quantized models**: GGUF, safetensors, checkpoint formats
 - **Diffusion models**: SD1.x, SD2.x, SDXL, SD3, FLUX.2 [klein]
 - **Generation modes**: txt2img, img2img (auto-detected via `init_image` parameter)
@@ -62,9 +62,9 @@
 |----------|-------------|-------------|--------|-------------|
 | macOS | arm64, x64 | 14.0+ | ✅ Tier 1 | Metal |
 | iOS | arm64 | 17.0+ | ✅ Tier 1 | Metal |
-| Linux | arm64, x64 | Ubuntu-22+ | ✅ Tier 1 | Vulkan, CUDA |
+| Linux | arm64, x64 | Ubuntu-22+ | ✅ Tier 1 | Vulkan |
 | Android | arm64 | 12+ | ✅ Tier 1 | Vulkan, OpenCL |
-| Windows | x64 | 10+ | ✅ Tier 1 | Vulkan, CUDA |
+| Windows | x64 | 10+ | ✅ Tier 1 | Vulkan |
 
 **Dependencies:**
 - qvac-lib-inference-addon-cpp (≥1.1.2): C++ addon framework (single-job runner, runJob/activate/cancel/destroyInstance)
@@ -230,7 +230,7 @@ graph TB
     subgraph "Layer 5: Backend"
         SDCPP["stable-diffusion.cpp"]
         GGML["GGML"]
-        GPU["GPU Backends<br/>(Metal/Vulkan/CUDA/OpenCL)"]
+        GPU["GPU Backends<br/>(Metal/Vulkan/OpenCL)"]
     end
     
     APP --> IMGCLASS
@@ -340,10 +340,9 @@ graph TB
 
 **Responsibility:** GPU backend selection at runtime
 
-- Selects between CPU, Metal, Vulkan, CUDA, and OpenCL backends at runtime
+- Selects between CPU, Metal, Vulkan, and OpenCL backends at runtime
 - Metal compiled statically on macOS/iOS
-- CUDA available on Linux/Windows with NVIDIA GPUs
-- Vulkan as cross-platform fallback
+- Vulkan as cross-platform GPU backend
 - OpenCL for Adreno GPUs on Android
 
 #### **SamplerManager (model-interface/SamplerManager.cpp)**
@@ -468,7 +467,7 @@ Use stable-diffusion.cpp as the core inference engine instead of Python diffuser
 - Pure C/C++ implementation for maximum performance
 - GGML-based tensor operations (same as llama.cpp, familiar ecosystem)
 - Supports quantization reducing memory by 2-8x
-- GPU acceleration via Metal (Apple), Vulkan (cross-platform), CUDA (NVIDIA), OpenCL
+- GPU acceleration via Metal (Apple), Vulkan (cross-platform), OpenCL (Android/Adreno)
 
 **Model Support:**
 - Comprehensive support for diffusion models:
