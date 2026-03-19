@@ -5,7 +5,7 @@ const test = require('brittle')
 const fs = require('bare-fs')
 const path = require('bare-path')
 const os = require('bare-os')
-const { isMobile } = require('./utils')
+const { isMobile, windowsOrtParams } = require('./utils')
 
 const isMacCI = os.platform() === 'darwin'
 
@@ -61,16 +61,16 @@ test('Full OCR test suite', { timeout: 40 * 60 * 1000, skip: isMobile }, async f
     const timeout = testCase.timeout ?? defaultTimeout
     t.comment('Timeout: ' + timeout)
 
-    const onnxOcr = new ONNXOcr({
-      params: {
-        pathDetector: 'models/ocr/rec_dyn/detector_craft.onnx',
-        pathRecognizer: `models/ocr/rec_dyn/recognizer_${recognizerModelName}.onnx`,
-        langList: testCase.langList,
-        useGPU: false,
-        timeout
-      },
-      opts: { stats: true }
-    })
+    const params = {
+      pathDetector: 'models/ocr/rec_dyn/detector_craft.onnx',
+      pathRecognizer: `models/ocr/rec_dyn/recognizer_${recognizerModelName}.onnx`,
+      langList: testCase.langList,
+      useGPU: false,
+      timeout,
+      ...windowsOrtParams
+    }
+
+    const onnxOcr = new ONNXOcr({ params, opts: { stats: true } })
     await onnxOcr.load()
 
     try {

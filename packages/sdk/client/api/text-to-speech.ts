@@ -2,10 +2,14 @@ import {
   ttsResponseSchema,
   type TtsClientParams,
   type TtsRequest,
+  type RPCOptions,
 } from "@/schemas";
 import { stream as streamRpc } from "@/client/rpc/rpc-client";
 
-export function textToSpeech(params: TtsClientParams): {
+export function textToSpeech(
+  params: TtsClientParams,
+  options?: RPCOptions,
+): {
   bufferStream: AsyncGenerator<number>;
   buffer: Promise<number[]>;
   done: Promise<boolean>;
@@ -25,7 +29,7 @@ export function textToSpeech(params: TtsClientParams): {
 
   if (params.stream) {
     const bufferStream = (async function* () {
-      for await (const response of streamRpc(request)) {
+      for await (const response of streamRpc(request, options)) {
         if (response.type === "textToSpeech") {
           const streamResponse = ttsResponseSchema.parse(response);
           if (streamResponse.buffer.length > 0) {
@@ -50,7 +54,7 @@ export function textToSpeech(params: TtsClientParams): {
 
     const bufferPromise = (async () => {
       let buffer: number[] = [];
-      for await (const response of streamRpc(request)) {
+      for await (const response of streamRpc(request, options)) {
         if (response.type === "textToSpeech") {
           const streamResponse = ttsResponseSchema.parse(response);
           buffer = buffer.concat(streamResponse.buffer);

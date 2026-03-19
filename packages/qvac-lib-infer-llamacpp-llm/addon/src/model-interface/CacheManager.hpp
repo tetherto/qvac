@@ -26,6 +26,7 @@ public:
 
   bool loadCache();
   void saveCache();
+  void invalidate();
   bool isCacheDisabled() const;
   bool hasActiveCache() const;
   bool wasCacheUsedInLastPrompt() const;

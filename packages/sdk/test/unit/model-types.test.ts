@@ -69,10 +69,7 @@ test("normalizeModelType passes through canonical values unchanged", (t) => {
   );
   t.is(normalizeModelType("llamacpp-embedding"), "llamacpp-embedding");
   t.is(normalizeModelType("nmtcpp-translation"), "nmtcpp-translation");
-  t.is(
-    normalizeModelType("parakeet-transcription"),
-    "parakeet-transcription",
-  );
+  t.is(normalizeModelType("parakeet-transcription"), "parakeet-transcription");
   t.is(normalizeModelType("onnx-tts"), "onnx-tts");
   t.is(normalizeModelType("onnx-ocr"), "onnx-ocr");
 });

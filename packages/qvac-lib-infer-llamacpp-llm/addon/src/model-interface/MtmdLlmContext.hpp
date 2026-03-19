@@ -65,8 +65,8 @@ public:
   bool generateResponse(
       const std::function<void(const std::string&)>& outputCallback) override;
 
-  std::function<void()> applyGenerationParams(
-      const GenerationParams& overrides) override;
+  std::function<void()>
+  applyGenerationParams(const GenerationParams& overrides) override;
 
   /**
    * The stop method. It stops the model inference.
@@ -79,6 +79,16 @@ public:
    * @return - the context.
    */
   llama_context* getCtx() override;
+
+  /**
+   * Access the underlying llama model pointer.
+   */
+  llama_model* getModel() override { return model_; }
+
+  /**
+   * Access the mutable common parameters associated with this context.
+   */
+  common_params& getParams() override { return params_; }
 
   /**
    * The get n_past method. It returns the n_past.
@@ -114,6 +124,9 @@ public:
    * @param nDiscarded - the number of tokens to discard.
    */
   void setNDiscarded(llama_pos nDiscarded) override;
+
+  [[nodiscard]] int32_t getNSlides() const override;
+  void resetNSlides() override;
 
   /**
    * The load media method. It loads the media from memory buffer.
@@ -198,6 +211,7 @@ private:
   llama_pos nPast_ = 0;
   llama_pos nDiscarded_ = 0;
   llama_pos firstMsgTokens_ = 0;
+  int32_t nSlides_ = 0;
 
   // UTF-8 token buffer for handling incomplete emoji sequences
   qvac_lib_inference_addon_llama::UTF8TokenBuffer utf8Buffer_;

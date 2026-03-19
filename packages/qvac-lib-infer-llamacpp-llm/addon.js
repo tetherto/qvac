@@ -23,7 +23,8 @@ class LlamaInterface {
     this._handle = this._binding.createInstance(
       this,
       configurationParams,
-      outputCb
+      outputCb,
+      null
     )
   }
 
@@ -46,7 +47,7 @@ class LlamaInterface {
   }
 
   /**
-   * Cancel current task
+   * Cancel current inference job
    */
   async cancel () {
     if (!this._handle) return
@@ -54,9 +55,21 @@ class LlamaInterface {
   }
 
   /**
-   * @param {Object} data
-   * @param {String} data.type
-   * @param {String} data.input
+   * Run finetuning when native binding provides support.
+   */
+  async finetune (finetuningParams) {
+    if (typeof this._binding.finetune !== 'function') {
+      throw new Error('Finetuning is not exposed by this native binding')
+    }
+    if (finetuningParams === undefined) {
+      throw new Error('Finetuning parameters are required')
+    }
+    return this._binding.finetune(this._handle, finetuningParams)
+  }
+
+  /**
+   * Run one inference job with an array of message objects.
+   * @param {Array<{type: string, input?: string, content?: Uint8Array}>} data - messages (text and/or media)
    */
   async runJob (data) {
     return this._binding.runJob(this._handle, data)

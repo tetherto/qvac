@@ -3,19 +3,21 @@
 const test = require('brittle')
 const path = require('bare-path')
 const fs = require('bare-fs')
-const binding = require('../../binding')
-const { ParakeetInterface } = require('../../parakeet')
-const TranscriptionParakeet = require('../../index.js')
-const FakeDL = require('../mocks/loader.fake.js')
 const {
+  binding,
+  ParakeetInterface,
+  TranscriptionParakeet,
+  FakeDL,
   setupJsLogger,
   getTestPaths,
   ensureModel,
   ensureModelForType,
-  getNamedPathsConfig
+  getNamedPathsConfig,
+  isMobile
 } = require('./helpers.js')
 
 function createLoader () {
+  if (!FakeDL) return null
   return new FakeDL({})
 }
 
@@ -34,6 +36,7 @@ function loadAudioSample () {
 // ── Constructor / validation tests ──────────────────────────────────────────
 
 test('CTC with named file paths — constructor accepts and validates', { timeout: 60000 }, async (t) => {
+  if (isMobile) { t.pass('Skipped on mobile'); return }
   TranscriptionParakeet.prototype.validateModelFiles?.restore?.()
 
   const modelDir = await ensureModelForType('ctc')
@@ -67,6 +70,7 @@ test('CTC with named file paths — constructor accepts and validates', { timeou
 })
 
 test('CTC with named file paths — full load and transcription', { timeout: 600000 }, async (t) => {
+  if (isMobile) { t.pass('Skipped on mobile'); return }
   const loggerBinding = setupJsLogger(binding)
   let parakeet = null
 
@@ -118,12 +122,13 @@ test('CTC with named file paths — full load and transcription', { timeout: 600
     t.ok(fullText.length > 10, `CTC named paths produced text (${fullText.length} chars)`)
     t.ok(fullText.toLowerCase().includes('alice'), 'CTC transcription includes expected content')
   } finally {
-    if (parakeet) try { parakeet.destroyInstance() } catch (e) {}
+    if (parakeet) try { await parakeet.destroyInstance() } catch (e) {}
     try { loggerBinding.releaseLogger() } catch (e) {}
   }
 })
 
 test('EOU with named file paths — constructor accepts and validates', { timeout: 60000 }, async (t) => {
+  if (isMobile) { t.pass('Skipped on mobile'); return }
   TranscriptionParakeet.prototype.validateModelFiles?.restore?.()
 
   const modelDir = await ensureModelForType('eou')
@@ -157,6 +162,7 @@ test('EOU with named file paths — constructor accepts and validates', { timeou
 })
 
 test('EOU with named file paths — full load and transcription', { timeout: 600000 }, async (t) => {
+  if (isMobile) { t.pass('Skipped on mobile'); return }
   const loggerBinding = setupJsLogger(binding)
   let parakeet = null
 
@@ -208,12 +214,13 @@ test('EOU with named file paths — full load and transcription', { timeout: 600
     t.ok(transcriptions.length > 0, `EOU produced ${transcriptions.length} segments`)
     t.ok(fullText.length > 0, `EOU named paths produced text (${fullText.length} chars)`)
   } finally {
-    if (parakeet) try { parakeet.destroyInstance() } catch (e) {}
+    if (parakeet) try { await parakeet.destroyInstance() } catch (e) {}
     try { loggerBinding.releaseLogger() } catch (e) {}
   }
 })
 
 test('Sortformer with named file paths — constructor accepts and validates', { timeout: 60000 }, async (t) => {
+  if (isMobile) { t.pass('Skipped on mobile'); return }
   TranscriptionParakeet.prototype.validateModelFiles?.restore?.()
 
   const modelDir = await ensureModelForType('sortformer')
@@ -240,6 +247,7 @@ test('Sortformer with named file paths — constructor accepts and validates', {
 })
 
 test('Sortformer with named file paths — full load and diarization', { timeout: 600000 }, async (t) => {
+  if (isMobile) { t.pass('Skipped on mobile'); return }
   const loggerBinding = setupJsLogger(binding)
   let parakeet = null
 
@@ -291,7 +299,7 @@ test('Sortformer with named file paths — full load and diarization', { timeout
     t.ok(transcriptions.length > 0, `Sortformer produced ${transcriptions.length} segments`)
     t.ok(fullText.includes('Speaker'), 'Sortformer output contains speaker labels')
   } finally {
-    if (parakeet) try { parakeet.destroyInstance() } catch (e) {}
+    if (parakeet) try { await parakeet.destroyInstance() } catch (e) {}
     try { loggerBinding.releaseLogger() } catch (e) {}
   }
 })
@@ -299,6 +307,7 @@ test('Sortformer with named file paths — full load and diarization', { timeout
 // ── TDT constructor validation ──────────────────────────────────────────────
 
 test('TDT with named file paths — verify existing flow still works', { timeout: 60000 }, async (t) => {
+  if (isMobile) { t.pass('Skipped on mobile'); return }
   TranscriptionParakeet.prototype.validateModelFiles?.restore?.()
 
   const { modelPath } = getTestPaths()

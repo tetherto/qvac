@@ -11,7 +11,7 @@ import {
   getShardedModelCacheDir,
   getShardPath,
   getOnnxModelPath,
-  calculateFileChecksum,
+  measureChecksum,
   extractTensorsFromShards,
   calculatePercentage,
 } from "@/server/utils";
@@ -31,6 +31,7 @@ import {
   RegistryDownloadFailedError,
 } from "@/utils/errors-server";
 import { getServerLogger } from "@/logging";
+import type { DownloadMetricsHooks } from "./types";
 
 const logger = getServerLogger();
 
@@ -60,6 +61,7 @@ async function validateCachedFile(
   modelFileName: string,
   expectedSize: number,
   expectedChecksum?: string,
+  hooks?: DownloadMetricsHooks,
 ): Promise<string | null> {
   try {
     await fsPromises.access(modelPath);
@@ -72,7 +74,7 @@ async function validateCachedFile(
 
       // Validate checksum if provided
       if (expectedChecksum && expectedChecksum.length === 64) {
-        const checksum = await calculateFileChecksum(modelPath);
+        const checksum = await measureChecksum(modelPath, hooks);
         if (checksum !== expectedChecksum) {
           throw new ChecksumValidationFailedError(
             `${modelFileName}. Expected: ${expectedChecksum}. Actual: ${checksum}. File may be corrupted`,
@@ -116,6 +118,7 @@ async function downloadSingleFileFromRegistry(
   progressCallback?: (progress: ModelProgressUpdate) => void,
   signal?: AbortSignal,
   blobBinding?: QVACBlobBinding,
+  hooks?: DownloadMetricsHooks,
 ): Promise<void> {
   if (signal?.aborted) {
     throw new DownloadCancelledError();
@@ -127,7 +130,9 @@ async function downloadSingleFileFromRegistry(
 
   if (blobBinding) {
     logger.info(`📥 Downloading blob directly: ${modelFileName}`);
-    const result = await client.downloadBlob(blobBinding, { timeout: REGISTRY_STREAM_TIMEOUT_MS });
+    const result = await client.downloadBlob(blobBinding, {
+      timeout: REGISTRY_STREAM_TIMEOUT_MS,
+    });
     if (!("stream" in result.artifact)) {
       throw new RegistryDownloadFailedError(
         `No stream returned for blob ${modelFileName}`,
@@ -196,7 +201,7 @@ async function downloadSingleFileFromRegistry(
   }
 
   if (expectedChecksum && expectedChecksum.length === 64) {
-    const checksum = await calculateFileChecksum(modelPath);
+    const checksum = await measureChecksum(modelPath, hooks);
     if (checksum !== expectedChecksum) {
       await fsPromises.unlink(modelPath);
       throw new ChecksumValidationFailedError(
@@ -276,12 +281,20 @@ async function downloadShardedFilesFromRegistry(
   progressCallback?: (progress: ModelProgressUpdate) => void,
   signal?: AbortSignal,
   localShardMetadata?: RegistryItem["shardMetadata"],
+  hooks?: DownloadMetricsHooks,
 ): Promise<string> {
   if (signal?.aborted) {
     throw new DownloadCancelledError();
   }
 
-  type ShardEntry = { filename: string; size: number; checksum: string; path: string; source: string; blobBinding?: QVACBlobBinding };
+  type ShardEntry = {
+    filename: string;
+    size: number;
+    checksum: string;
+    path: string;
+    source: string;
+    blobBinding?: QVACBlobBinding;
+  };
   let shards: ShardEntry[];
 
   if (localShardMetadata?.length) {
@@ -344,6 +357,7 @@ async function downloadShardedFilesFromRegistry(
       shard.filename,
       shard.size,
       shard.checksum,
+      hooks,
     );
 
     if (cachedPath) {
@@ -409,6 +423,7 @@ async function downloadShardedFilesFromRegistry(
       shardProgressCallback,
       signal,
       shard.blobBinding,
+      hooks,
     );
 
     overallDownloaded += shard.size;
@@ -466,6 +481,7 @@ async function downloadOnnxWithDataFromRegistry(
   signal?: AbortSignal,
   mainBlobBinding?: QVACBlobBinding,
   dataBlobBinding?: QVACBlobBinding,
+  hooks?: DownloadMetricsHooks,
 ): Promise<string> {
   if (signal?.aborted) {
     throw new DownloadCancelledError();
@@ -497,6 +513,7 @@ async function downloadOnnxWithDataFromRegistry(
     mainFilename,
     mainExpectedSize,
     mainChecksum,
+    hooks,
   );
 
   if (cachedMainPath) {
@@ -536,6 +553,7 @@ async function downloadOnnxWithDataFromRegistry(
       mainProgressCallback,
       signal,
       mainBlobBinding,
+      hooks,
     );
 
     overallDownloaded += mainExpectedSize;
@@ -548,6 +566,7 @@ async function downloadOnnxWithDataFromRegistry(
     dataFilename,
     dataExpectedSize,
     dataChecksum,
+    hooks,
   );
 
   if (cachedDataPath) {
@@ -587,6 +606,7 @@ async function downloadOnnxWithDataFromRegistry(
       dataProgressCallback,
       signal,
       dataBlobBinding,
+      hooks,
     );
 
     logger.info(`✅ ONNX data file downloaded: ${dataFilename}`);
@@ -660,6 +680,7 @@ export async function downloadModelFromRegistry(
   registrySource: string,
   progressCallback?: (progress: ModelProgressUpdate) => void,
   expectedChecksum?: string,
+  hooks?: DownloadMetricsHooks,
 ): Promise<string> {
   const downloadKey = createRegistryDownloadKey(registryPath);
 
@@ -667,6 +688,7 @@ export async function downloadModelFromRegistry(
   const existing = getActiveDownload(downloadKey);
   if (existing) {
     logger.info(`📥 Reusing existing download for: ${downloadKey}`);
+    hooks?.markCacheMiss();
     return existing.promise;
   }
 
@@ -690,6 +712,7 @@ export async function downloadModelFromRegistry(
           shard.filename,
           shard.expectedSize,
           shard.sha256Checksum,
+          hooks,
         );
         if (!cached) {
           allCached = false;
@@ -700,6 +723,7 @@ export async function downloadModelFromRegistry(
       if (allCached) {
         const firstShardFilename = localShardMeta[0]!.filename;
         logger.info(`✅ All ${localShardMeta.length} shards cached`);
+        hooks?.markCacheHit();
 
         if (progressCallback) {
           const overallTotal = localShardMeta.reduce(
@@ -727,6 +751,7 @@ export async function downloadModelFromRegistry(
       }
     }
 
+    hooks?.markCacheMiss();
     return createManagedDownload(
       downloadKey,
       registryPath,
@@ -738,6 +763,7 @@ export async function downloadModelFromRegistry(
           progressCallback,
           signal,
           localShardMeta,
+          hooks,
         ),
       progressCallback,
     );
@@ -759,19 +785,23 @@ export async function downloadModelFromRegistry(
       mainFilename,
       modelMetadata?.expectedSize || 0,
       modelMetadata?.sha256Checksum,
+      hooks,
     );
     const dataCached = await validateCachedFile(
       dataPath,
       dataFilename,
       companionDataFile.expectedSize,
       companionDataFile.sha256Checksum,
+      hooks,
     );
 
     if (mainCached && dataCached) {
       logger.info(`✅ ONNX model and data file both cached`);
+      hooks?.markCacheHit();
 
       if (progressCallback) {
-        const total = (modelMetadata?.expectedSize || 0) + companionDataFile.expectedSize;
+        const total =
+          (modelMetadata?.expectedSize || 0) + companionDataFile.expectedSize;
         progressCallback({
           type: "modelProgress",
           downloaded: total,
@@ -792,11 +822,14 @@ export async function downloadModelFromRegistry(
       return mainCached;
     }
 
-    const mainBlobBinding = modelMetadata ? buildBlobBinding(modelMetadata) : undefined;
+    const mainBlobBinding = modelMetadata
+      ? buildBlobBinding(modelMetadata)
+      : undefined;
     const dataBlobBinding = companionDataFile.blobCoreKey
       ? buildBlobBinding(companionDataFile)
       : undefined;
 
+    hooks?.markCacheMiss();
     return createManagedDownload(
       downloadKey,
       registryPath,
@@ -810,6 +843,7 @@ export async function downloadModelFromRegistry(
           signal,
           mainBlobBinding,
           dataBlobBinding,
+          hooks,
         ),
       progressCallback,
     );
@@ -829,10 +863,12 @@ export async function downloadModelFromRegistry(
     filename,
     expectedSize,
     checksum,
+    hooks,
   );
 
   if (cachedPath) {
     logger.info(`✅ Using cached model: ${cachedPath}`);
+    hooks?.markCacheHit();
 
     if (progressCallback) {
       progressCallback({
@@ -847,8 +883,11 @@ export async function downloadModelFromRegistry(
     return cachedPath;
   }
 
-  const blobBinding = modelMetadata ? buildBlobBinding(modelMetadata) : undefined;
+  const blobBinding = modelMetadata
+    ? buildBlobBinding(modelMetadata)
+    : undefined;
 
+  hooks?.markCacheMiss();
   return createManagedDownload(
     downloadKey,
     registryPath,
@@ -864,6 +903,7 @@ export async function downloadModelFromRegistry(
         progressCallback,
         signal,
         blobBinding,
+        hooks,
       );
 
       return modelPath;

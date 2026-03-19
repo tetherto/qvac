@@ -2,6 +2,17 @@ const MIN_SDK_VERSION = '0.7.0'
 const SDK_SPECIFIER = '@qvac/sdk'
 const SDK_PACKAGE_SPECIFIER = '@qvac/sdk/package'
 
+export interface SDKGenerationParams {
+  temp?: number
+  top_p?: number
+  top_k?: number
+  predict?: number
+  seed?: number
+  frequency_penalty?: number
+  presence_penalty?: number
+  repeat_penalty?: number
+}
+
 interface SDKModule {
   loadModel: (opts: { modelSrc: string; modelType: string; modelConfig: Record<string, unknown> }) => Promise<string>
   unloadModel: (opts: { modelId: string }) => Promise<void>
@@ -10,8 +21,10 @@ interface SDKModule {
     history: Array<{ role: string; content: string }>
     stream: boolean
     tools?: SDKTool[]
+    generationParams?: SDKGenerationParams
   }) => Promise<CompletionResult>
   embed: (opts: { modelId: string; text: string | string[] }) => Promise<number[] | number[][]>
+  transcribe: (opts: { modelId: string; audioChunk: string | Buffer; prompt?: string }) => Promise<string>
   close: () => Promise<void>
   [key: string]: unknown
 }
@@ -28,7 +41,20 @@ export interface CompletionResult {
   stats: Promise<Record<string, unknown>>
   toolCalls: Promise<SDKToolCall[] | null>
   tokenStream: AsyncIterable<string>
+  toolCallStream: AsyncIterable<SDKToolEvent>
 }
+
+export interface SDKToolCallEvent {
+  type: 'toolCall'
+  call: SDKToolCall
+}
+
+export interface SDKToolCallErrorEvent {
+  type: 'toolCallError'
+  error: { code: string; message: string; raw?: string }
+}
+
+export type SDKToolEvent = SDKToolCallEvent | SDKToolCallErrorEvent
 
 export interface SDKToolCall {
   id: string
@@ -109,6 +135,7 @@ export async function sdkCompletion (opts: {
   history: Array<{ role: string; content: string }>
   stream: boolean
   tools?: SDKTool[] | undefined
+  generationParams?: SDKGenerationParams | undefined
 }): Promise<CompletionResult> {
   const { completion } = await getSDK()
   const params: Record<string, unknown> = {
@@ -119,6 +146,9 @@ export async function sdkCompletion (opts: {
   if (opts.tools) {
     params['tools'] = opts.tools
   }
+  if (opts.generationParams) {
+    params['generationParams'] = opts.generationParams
+  }
   return completion(params as Parameters<SDKModule['completion']>[0])
 }
 
@@ -128,6 +158,33 @@ export async function sdkEmbed (opts: {
 }): Promise<number[] | number[][]> {
   const { embed } = await getSDK()
   return embed({ modelId: opts.modelId, text: opts.text })
+}
+
+export async function sdkTranscribe (opts: {
+  modelId: string
+  audioChunk: Buffer
+  fileName: string
+  prompt?: string | undefined
+}): Promise<string> {
+  const fs = await import('node:fs')
+  const os = await import('node:os')
+  const path = await import('node:path')
+
+  const ext = path.extname(opts.fileName) || '.wav'
+  const id = `${Date.now()}-${Math.random().toString(36).slice(2, 10)}`
+  const tmpFile = path.join(os.tmpdir(), `qvac-audio-${id}${ext}`)
+  fs.writeFileSync(tmpFile, opts.audioChunk)
+
+  try {
+    const { transcribe } = await getSDK()
+    return await transcribe({
+      modelId: opts.modelId,
+      audioChunk: tmpFile,
+      ...(opts.prompt && { prompt: opts.prompt })
+    })
+  } finally {
+    try { fs.unlinkSync(tmpFile) } catch {}
+  }
 }
 
 export async function sdkClose (): Promise<void> {

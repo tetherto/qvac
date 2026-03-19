@@ -64,7 +64,18 @@ console.log("Model loaded. Speak into your microphone (Ctrl+C to stop):\n");
 
 const ffmpeg = spawn(
   "ffmpeg",
-  [...getAudioInputArgs(), "-ar", "16000", "-ac", "1", "-sample_fmt", "s16", "-f", "s16le", "pipe:1"],
+  [
+    ...getAudioInputArgs(),
+    "-ar",
+    "16000",
+    "-ac",
+    "1",
+    "-sample_fmt",
+    "s16",
+    "-f",
+    "s16le",
+    "pipe:1",
+  ],
   { stdio: ["ignore", "pipe", "ignore"] },
 );
 
@@ -88,7 +99,10 @@ ffmpeg.stdout.on("data", (chunk: Buffer) => {
           }
         }
       } catch (err) {
-        console.error("Transcription error:", err instanceof Error ? err.message : err);
+        console.error(
+          "Transcription error:",
+          err instanceof Error ? err.message : err,
+        );
       } finally {
         processing = false;
       }
