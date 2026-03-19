@@ -60,6 +60,56 @@ wrap_with_frontmatter() {
   echo "  copied: $dst (with frontmatter)"
 }
 
+wrap_mdc_rule() {
+  local src="$1"
+  local description="$2"
+  local always_apply="$3"
+  local dst="$4"
+  mkdir -p "$(dirname "$dst")"
+  {
+    printf '%s\n\n' "$HEADER"
+    printf -- '---\ndescription: %s\nalwaysApply: %s\n---\n\n' "$description" "$always_apply"
+    cat "$src"
+  } > "$dst"
+  echo "  generated: $dst"
+}
+
+extract_frontmatter_field() {
+  local file="$1"
+  local field="$2"
+  awk -v f="$field" '
+    BEGIN { in_front=0 }
+    NR==1 && /^---\s*$/ { in_front=1; next }
+    in_front && /^---\s*$/ { exit }
+    in_front && $0 ~ "^"f":" {
+      sub("^"f":[ ]*", "")
+      gsub(/^"/, ""); gsub(/"$/, "")
+      print
+      exit
+    }
+  ' "$file"
+}
+
+generate_cursor_agent_rule() {
+  local src="$1"
+  local dst="$2"
+  local agent_name
+  agent_name="$(extract_frontmatter_field "$src" "name")"
+  local description="Agent prompt: ${agent_name} — use as context when launching Task sub-agents"
+  local body
+  body="$(strip_yaml_frontmatter "$src")"
+
+  mkdir -p "$(dirname "$dst")"
+  {
+    printf '%s\n\n' "$HEADER"
+    printf -- '---\ndescription: %s\nalwaysApply: false\n---\n\n' "$description"
+    printf '%s\n' "$body" \
+      | sed 's|`\.claude/agent-conduct\.md`|the agent conduct rules (`.cursor/rules/agent-conduct.mdc`)|g'
+  } > "$dst"
+  echo "  generated: $dst"
+}
+
+
 # ---------------------------------------------------------------------------
 # Setup: Claude Code
 # ---------------------------------------------------------------------------
@@ -117,6 +167,29 @@ setup_claude() {
 setup_cursor() {
   echo ""
   echo "Setting up Cursor (.cursor/)..."
+
+  # Conduct → always-applied .mdc rule
+  wrap_mdc_rule \
+    "$SCRIPT_DIR/conduct.md" \
+    "Agent Code of Conduct — scope, quality gates, retry policy, Asana updates, code style, CI validation, and prohibited actions" \
+    "true" \
+    "$REPO_ROOT/.cursor/rules/agent-conduct.mdc"
+
+  # Knowledge → requestable .mdc rules
+  for f in "$SCRIPT_DIR"/knowledge/*.md; do
+    [ -f "$f" ] || continue
+    name="$(basename "$f" .md)"
+    desc="$(head -1 "$f" | sed 's/^# //')"
+    wrap_mdc_rule "$f" "$desc" "false" "$REPO_ROOT/.cursor/rules/knowledge/$name.mdc"
+  done
+
+  # Agents → requestable .mdc rules (stripped of Claude-specific frontmatter)
+  for f in "$SCRIPT_DIR"/agents/*.md; do
+    [ -f "$f" ] || continue
+    name="$(basename "$f" .md)"
+    generate_cursor_agent_rule "$f" "$REPO_ROOT/.cursor/rules/agents/$name.mdc"
+  done
+
 
   # Skills (directory-based: copy all skills to Cursor)
   for skill_dir in "$SCRIPT_DIR"/skills/*/; do

@@ -4,7 +4,7 @@ import { resolveIcon } from "@/lib/resolveIcon";
 import React from "react";
 import { SiExpo, SiElectron } from '@icons-pack/react-simple-icons';
 
-function findFolderChildren(nodes: Node[], indexUrl: string): Node[] {
+export function findFolderChildren(nodes: Node[], indexUrl: string): Node[] {
   for (const node of nodes) {
     if (node.type === 'folder') {
       if (node.index?.url === indexUrl) return node.children;
@@ -45,12 +45,6 @@ export const tree: Node[] = [
         type: 'page',
         icon: resolveIcon('LayoutGrid'),
       },
-      {
-        name: 'Vision',
-        url: '/vision',
-        type: 'page',
-        icon: resolveIcon('Telescope'),
-      },
     ],
   },
   {
@@ -58,16 +52,16 @@ export const tree: Node[] = [
     name: 'Build',
   },
   {
-    name: 'Overview',
-    url: '/sdk',
-    type: 'page',
-    icon: resolveIcon('Map'),
-  },
-  {
     name: 'Getting started',
     type: 'folder',
     icon: resolveIcon('Compass'),
     children: [
+      {
+        name: 'Overview',
+        url: '/sdk',
+        type: 'page',
+        icon: resolveIcon('Map'),
+      },
       {
         name: 'Quickstart',
         url: '/sdk/quickstart',
@@ -89,34 +83,17 @@ export const tree: Node[] = [
     ],
   },
   {
-    name: 'AI tasks',
+    name: 'How-to guides',
     type: 'folder',
-    icon: resolveIcon('Sparkles'),
+    icon: resolveIcon('ListChecks'),
     children: [
-      { name: 'Completion', url: '/sdk/ai-tasks/completion', type: 'page', icon: resolveIcon('MessagesSquare') },
-      { name: 'Text embeddings', url: '/sdk/ai-tasks/text-embeddings', type: 'page', icon: resolveIcon('Hash') },
-      { name: 'Translation', url: '/sdk/ai-tasks/translation', type: 'page', icon: resolveIcon('Languages') },
-      { name: 'Transcription', url: '/sdk/ai-tasks/transcription', type: 'page', icon: resolveIcon('Mic') },
-      { name: 'Text-to-Speech', url: '/sdk/ai-tasks/text-to-speech', type: 'page', icon: resolveIcon('Volume2') },
-      { name: 'OCR', url: '/sdk/ai-tasks/ocr', type: 'page', icon: resolveIcon('ScanText') },
-      { name: 'Multimodal', url: '/sdk/ai-tasks/multimodal', type: 'page', icon: resolveIcon('GalleryHorizontal') },
-      { name: 'RAG', url: '/sdk/ai-tasks/rag', type: 'page', icon: resolveIcon('ScanSearch') },
-    ],
-  },
-  {
-    name: 'P2P capabilities',
-    type: 'folder',
-    icon: resolveIcon('Network'),
-    children: [
-      { name: 'Delegated inference', url: '/sdk/p2p/delegated-inference', type: 'page', icon: resolveIcon('Share2') },
       { name: 'Blind relays', url: '/sdk/p2p/blind-relays', type: 'page', icon: resolveIcon('Router') },
-    ],
-  },
-  {
-    name: 'Utilities',
-    type: 'folder',
-    icon: resolveIcon('Wrench'),
-    children: [
+      { name: 'Completion', url: '/sdk/ai-tasks/completion', type: 'page', icon: resolveIcon('MessagesSquare') },
+      { name: 'Delegated inference', url: '/sdk/p2p/delegated-inference', type: 'page', icon: resolveIcon('Share2') },
+      { name: 'Download lifecycle', url: '/sdk/utilities/download-lifecycle', type: 'page', icon: resolveIcon('Download') },
+      { name: 'Logging', url: '/sdk/utilities/logging', type: 'page', icon: resolveIcon('Activity') },
+      { name: 'Multimodal', url: '/sdk/ai-tasks/multimodal', type: 'page', icon: resolveIcon('GalleryHorizontal') },
+      { name: 'OCR', url: '/sdk/ai-tasks/ocr', type: 'page', icon: resolveIcon('ScanText') },
       {
         name: 'Plugin system',
         type: 'folder',
@@ -126,17 +103,13 @@ export const tree: Node[] = [
           { name: 'Write a custom plugin', url: '/sdk/utilities/write-custom-plugin', type: 'page' },
         ],
       },
-      { name: 'Logging', url: '/sdk/utilities/logging', type: 'page', icon: resolveIcon('Activity') },
-      { name: 'Download lifecycle', url: '/sdk/utilities/download-lifecycle', type: 'page', icon: resolveIcon('Download') },
+      { name: 'RAG', url: '/sdk/ai-tasks/rag', type: 'page', icon: resolveIcon('ScanSearch') },
       { name: 'Sharded models', url: '/sdk/utilities/sharded-models', type: 'page', icon: resolveIcon('Merge') },
+      { name: 'Text embeddings', url: '/sdk/ai-tasks/text-embeddings', type: 'page', icon: resolveIcon('Hash') },
+      { name: 'Text-to-Speech', url: '/sdk/ai-tasks/text-to-speech', type: 'page', icon: resolveIcon('Volume2') },
+      { name: 'Transcription', url: '/sdk/ai-tasks/transcription', type: 'page', icon: resolveIcon('Mic') },
+      { name: 'Translation', url: '/sdk/ai-tasks/translation', type: 'page', icon: resolveIcon('Languages') },
     ],
-  },
-  {
-    name: 'API',
-    type: 'folder',
-    icon: resolveIcon('BookA'),
-    index: { type: 'page', name: 'API', url: '/sdk/api' },
-    children: findFolderChildren(source.pageTree.children, '/sdk/api'),
   },
   {
     name: 'Tutorials',
@@ -159,21 +132,26 @@ export const tree: Node[] = [
   },
   {
     type: 'separator',
-    name: 'Miscellaneous',
+    name: 'References',
   },
   {
-    name: 'Addons',
+    name: 'JS API',
     type: 'folder',
-    icon: resolveIcon('Blocks'),
-    index: { type: 'page', name: 'Addons', url: '/addons' },
-    children: [
-      { name: 'llm-llamacpp', url: '/v0.7.0/addons/llm-llamacpp', type: 'page' },
-      { name: 'embed-llamacpp', url: '/v0.7.0/addons/embed-llamacpp', type: 'page' },
-      { name: 'translation-nmtcpp', url: '/v0.7.0/addons/translation-nmtcpp', type: 'page' },
-      { name: 'transcription-whispercpp', url: '/v0.7.0/addons/transcription-whispercpp', type: 'page' },
-      { name: 'tts-onnx', url: '/v0.7.0/addons/tts-onnx', type: 'page' },
-      { name: 'ocr-onnx', url: '/v0.7.0/addons/ocr-onnx', type: 'page' },      
-    ],
+    icon: resolveIcon('BookA'),
+    index: { type: 'page', name: 'API', url: '/sdk/api' },
+    children: findFolderChildren(source.pageTree.children, '/sdk/api'),
+  },
+  {
+    name: 'CLI',
+    url: '/cli',
+    type: 'page',
+    icon: resolveIcon('Terminal'),
+  },
+  {
+    name: 'HTTP server',
+    url: '/http-server',
+    type: 'page',
+    icon: resolveIcon('Server'),
   },
   {
     name: 'Release notes',
@@ -181,6 +159,25 @@ export const tree: Node[] = [
     type: 'page',
     external: true,
     icon: resolveIcon('Tag'),
+  },
+  {
+    name: 'Addons',
+    type: 'folder',
+    icon: resolveIcon('Blocks'),
+    index: { type: 'page', name: 'Addons', url: '/addons' },
+    children: [
+      { name: 'llm-llamacpp', url: '/addons/llm-llamacpp', type: 'page' },
+      { name: 'embed-llamacpp', url: '/addons/embed-llamacpp', type: 'page' },
+      { name: 'translation-nmtcpp', url: '/addons/translation-nmtcpp', type: 'page' },
+      { name: 'transcription-whispercpp', url: '/addons/transcription-whispercpp', type: 'page' },
+      { name: 'transcription-parakeet', url: '/addons/transcription-parakeet', type: 'page' },
+      { name: 'tts-onnx', url: '/addons/tts-onnx', type: 'page' },
+      { name: 'ocr-onnx', url: '/addons/ocr-onnx', type: 'page' },
+    ],
+  },
+  {
+    type: "separator",
+    name: "Help",
   },
   {
     name: 'Support',
