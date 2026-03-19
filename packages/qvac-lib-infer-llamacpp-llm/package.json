@@ -1,6 +1,6 @@
 {
   "name": "@qvac/llm-llamacpp",
-  "version": "0.12.3",
+  "version": "0.13.0",
   "description": "llama addon for qvac",
   "addon": true,
   "scripts": {
@@ -32,6 +32,7 @@
   },
   "standard": {
     "ignore": [
+      "addon/lib/",
       "benchmarks/client/venv/"
     ]
   },
@@ -55,33 +56,31 @@
   "bugs": "https://github.com/tetherto/qvac-lib-infer-llamacpp-llm/issues",
   "homepage": "https://github.com/tetherto/qvac-lib-infer-llamacpp-llm#readme",
   "devDependencies": {
-    "@babel/parser": "^7.28.0",
-    "@babel/traverse": "^7.28.0",
+    "@qvac/dl-base": "^0.1.0",
     "@qvac/dl-filesystem": "^0.1.2",
-    "@qvac/dl-hyperdrive": "^0.1.1",
+    "@qvac/logging": "^0.1.0",
     "@types/node": "^24.2.1",
-    "bare-buffer": "^3.4.2",
-    "bare-fs": "^4.5.1",
     "bare-url": "^2.1.6",
     "brittle": "^3.16.5",
     "cmake-bare": "1.7.5",
     "cmake-vcpkg": "^1.1.0",
-    "corestore": "^7.4.7",
+    "os": "npm:bare-os@^3.6.2",
     "process": "npm:bare-node-process",
     "standard": "^17.0.0",
-    "typescript": "^5.9.2"
+    "tty": "npm:bare-tty@^5.0.3",
+    "typescript": "^5.9.2",
+    "util": "npm:bare-utils@^1.5.1"
   },
   "dependencies": {
-    "@qvac/infer-base": "^0.2.2",
+    "@qvac/infer-base": "^0.3.0",
+    "bare-fs": "^4.5.1",
     "bare-path": "^3.0.0",
     "bare-process": "^4.2.2"
   },
   "engines": {
     "bare": ">=1.24.0"
   },
-  "peerDependencies": {
-    "@qvac/dl-hyperdrive": "^0.1.1"
-  },
+  "peerDependencies": {},
   "exports": {
     "./package": "./package.json",
     ".": {

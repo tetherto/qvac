@@ -25,7 +25,7 @@ on:
 
 jobs:
   run-integration-tests:
-    timeout-minutes: 480
+    timeout-minutes: ${{ matrix.timeout_minutes || 360 }}
     continue-on-error: true
     runs-on: ${{ matrix.runner }}
     name: test-${{ matrix.platform }}-${{ matrix.arch }}
@@ -51,10 +51,12 @@ jobs:
             platform: linux
             arch: x64
             runner: ai-run-linux-gpu
+            timeout_minutes: 480
           - os: ubuntu-24.04-arm
             platform: linux
             arch: arm64
             runner: ubuntu-24.04-arm
+            no_gpu: 'true'
           - os: ubuntu-22.04-arm
             platform: linux
             arch: arm64
