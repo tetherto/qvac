@@ -397,6 +397,23 @@ jobs:
         working-directory: ${{ env.WORKDIR }}
         run: npm install
 
+      - if: ${{ matrix.os == 'ai-run-windows11-gpu' }}
+        name: Install Rust toolchain on Windows
+        shell: powershell
+        run: |
+          if (Get-Command rustup -ErrorAction SilentlyContinue) {
+            Write-Host "Rust already installed"
+            rustup default stable
+          } else {
+            Write-Host "Installing Rust via rustup..."
+            Invoke-WebRequest -Uri https://win.rustup.rs/x86_64 -OutFile $env:TEMP\rustup-init.exe
+            & $env:TEMP\rustup-init.exe -y --default-toolchain stable
+            $env:PATH = "$env:USERPROFILE\.cargo\bin;$env:PATH"
+            echo "$env:USERPROFILE\.cargo\bin" >> $env:GITHUB_PATH
+          }
+          rustc --version
+          cargo --version
+
       - if: ${{ matrix.platform == 'ios' && matrix.arch == 'arm64'}}
         name: Install Rust target for iOS arm64 device
         shell: bash
