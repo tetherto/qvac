@@ -30,7 +30,7 @@ Native C++ addon for text-to-image and image-to-image generation using [stable-d
 | Platform | Architecture | Status | GPU Backend |
 |----------|-------------|--------|-------------|
 | macOS | arm64 | ✅ Tier 1 | Metal |
-| macOS | x64 | ✅ Tier 1 | CPU / Metal |
+| macOS | x64 | ✅ Tier 1 | Metal |
 | Linux | arm64, x64 | ✅ Tier 1 | Vulkan |
 | Android | arm64 | ✅ Tier 1 | Vulkan, OpenCL |
 | iOS | arm64 | ✅ Tier 1 | Metal |
