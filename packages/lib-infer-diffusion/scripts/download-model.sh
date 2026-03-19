@@ -17,7 +17,6 @@ dl() {
 }
 
 dl "$HF/leejet/FLUX.2-klein-4B-GGUF/resolve/main/flux-2-klein-4b-Q8_0.gguf"        "$OUT/flux-2-klein-4b-Q8_0.gguf"
-# Qwen3-4B Q4_K_M GGUF text encoder — fp4 safetensors is NOT supported by ggml
 dl "$HF/unsloth/Qwen3-4B-GGUF/resolve/main/Qwen3-4B-Q4_K_M.gguf"                  "$OUT/Qwen3-4B-Q4_K_M.gguf"
 dl "$HF/black-forest-labs/FLUX.2-klein-4B/resolve/main/vae/diffusion_pytorch_model.safetensors" "$OUT/flux2-vae.safetensors"
 

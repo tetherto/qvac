@@ -2,8 +2,6 @@
 
 Native C++ addon for text-to-image and image-to-image generation using [stable-diffusion.cpp](https://github.com/leejet/stable-diffusion.cpp), built for the Bare Runtime. Supports **Stable Diffusion 1.x / 2.x / XL / 3** and **FLUX.2 [klein]**.
 
-> **Scope:** Video generation (Wan2.x) is not yet supported.
-
 ## Table of Contents
 
 - [Supported platforms](#supported-platforms)
@@ -71,7 +69,7 @@ This downloads three files into the `models/` directory:
 | File | Size | Description |
 |------|------|-------------|
 | `flux-2-klein-4b-Q8_0.gguf` | ~4.0 GB | FLUX.2 [klein] 4B diffusion model (Q8_0 quantised) |
-| `Qwen3-4B-Q6_K.gguf` | ~3.1 GB | Qwen3 4B text encoder (Q6_K quantised) |
+| `Qwen3-4B-Q4_K_M.gguf` | ~2.5 GB | Qwen3 4B text encoder (Q4_K_M quantised) |
 | `flux2-vae.safetensors` | ~321 MB | VAE decoder |
 
 > **Note:** Downloads can be resumed if interrupted — the script uses `curl -C -` for resumable transfers.
@@ -81,7 +79,7 @@ This downloads three files into the `models/` directory:
 FLUX.2 [klein] uses a split model layout. Three separate components are required:
 
 - **Diffusion model** (`flux-2-klein-4b-Q8_0.gguf`) — the main image transformer. This GGUF has no SD metadata KV pairs so it must be loaded via `diffusion_model_path` internally, not `model_path`.
-- **Text encoder** (`Qwen3-4B-Q6_K.gguf`) — Qwen3 4B in standard GGML Q6_K format. The FP4 safetensors variant from ComfyUI (`qwen_3_4b_fp4_flux2.safetensors`) is **not supported** by ggml and will fail with a tensor shape error.
+- **Text encoder** (`Qwen3-4B-Q4_K_M.gguf`) — Qwen3 4B in standard GGML Q4_K_M format.
 - **VAE** (`flux2-vae.safetensors`) — standard safetensors format, compatible as-is.
 
 ### Disk and RAM requirements
@@ -89,9 +87,9 @@ FLUX.2 [klein] uses a split model layout. Three separate components are required
 | Component | Disk | RAM at runtime |
 |-----------|------|----------------|
 | Diffusion model (Q8_0) | 4.0 GB | ~4.1 GB |
-| Text encoder (Q6_K) | 3.1 GB | ~4.3 GB |
+| Text encoder (Q4_K_M) | 2.5 GB | ~4.3 GB |
 | VAE | 321 MB | ~95 MB |
-| **Total** | **~7.4 GB** | **~8.5 GB** |
+| **Total** | **~6.8 GB** | **~8.5 GB** |
 
 A machine with **16 GB of unified memory** (e.g. MacBook Air M-series) can run this model.
 
@@ -176,7 +174,7 @@ const args = {
   logger: console,
   diskPath: MODELS_DIR,
   modelName:  'flux-2-klein-4b-Q8_0.gguf',
-  llmModel:   'Qwen3-4B-Q6_K.gguf',   // Qwen3 text encoder for FLUX.2 [klein]
+  llmModel:   'Qwen3-4B-Q4_K_M.gguf',   // Qwen3 text encoder for FLUX.2 [klein]
   vaeModel:   'flux2-vae.safetensors'
 }
 ```
@@ -310,11 +308,9 @@ await model.unload()
 
 | Role | File | Source |
 |------|------|--------|
-| Diffusion model | `flux-2-klein-4b-Q8_0.gguf` | `leejet/FLUX.2-klein-4B-GGUF` |
-| Text encoder | `Qwen3-4B-Q6_K.gguf` | `unsloth/Qwen3-4B-GGUF` |
-| VAE | `flux2-vae.safetensors` | `Comfy-Org/vae-text-encorder-for-flux-klein-4b` |
-
-> The `qwen_3_4b_fp4_flux2.safetensors` file from the ComfyUI repo **will not work** — FP4 quantisation is NVIDIA-specific and is not supported by ggml.
+| Diffusion model | `flux-2-klein-4b-Q8_0.gguf` | [leejet/FLUX.2-klein-4B-GGUF](https://huggingface.co/leejet/FLUX.2-klein-4B-GGUF) |
+| Text encoder | `Qwen3-4B-Q4_K_M.gguf` | [unsloth/Qwen3-4B-GGUF](https://huggingface.co/unsloth/Qwen3-4B-GGUF) |
+| VAE | `flux2-vae.safetensors` | [black-forest-labs/FLUX.2-klein-4B](https://huggingface.co/black-forest-labs/FLUX.2-klein-4B) |
 
 ### Stable Diffusion 1.x / 2.x
 
