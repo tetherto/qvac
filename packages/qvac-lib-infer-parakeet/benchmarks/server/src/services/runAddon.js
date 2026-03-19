@@ -157,6 +157,7 @@ const runAddon = async (payload) => {
 
       const modelConfig = {
         path: config.path,
+        ...namedPaths,
         parakeetConfig: {
           modelType: parakeetConfig.modelType || 'tdt',
           maxThreads: parakeetConfig.maxThreads || 4,
@@ -165,8 +166,7 @@ const runAddon = async (payload) => {
           channels: 1,
           captionEnabled: parakeetConfig.captionEnabled || false,
           timestampsEnabled: parakeetConfig.timestampsEnabled !== false,
-          seed: parakeetConfig.seed ?? -1,
-          ...namedPaths
+          seed: parakeetConfig.seed ?? -1
         }
       }
 
