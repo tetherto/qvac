@@ -146,6 +146,10 @@ endif()
 
 add_bare_module(qvac-lib-infer-nmtcpp EXPORTS)
 
+if(CMAKE_SYSTEM_NAME STREQUAL "iOS")
+  target_link_options(${qvac-lib-infer-nmtcpp}_module PRIVATE "-F${CMAKE_OSX_SYSROOT}/System/Library/Frameworks")
+endif()
+
 if(CMAKE_SYSTEM_NAME STREQUAL "Linux")
   target_link_options(${qvac-lib-infer-nmtcpp}_module PRIVATE -Wl,--exclude-libs,ALL)
 endif()
