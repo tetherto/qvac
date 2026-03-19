@@ -60,6 +60,10 @@ endif()
 
 find_path(QVAC_LIB_INFERENCE_ADDON_CPP_INCLUDE_DIRS "qvac-lib-inference-addon-cpp/BlobsStream.hpp")
 
+if(CMAKE_SYSTEM_NAME STREQUAL "iOS")
+  set(BLA_VENDOR Apple)
+endif()
+
 find_package(ggml CONFIG REQUIRED)
 find_package(absl CONFIG QUIET)
 find_package(protobuf CONFIG REQUIRED)
