@@ -23,12 +23,74 @@ on:
 
 permissions:
   contents: read
+  pull-requests: write
 
 env:
   PKG_DIR: packages/qvac-lib-registry-server
   NAME_SUFFIX: "-mono"
 
 jobs:
+  authorize:
+    runs-on: ubuntu-latest
+    outputs:
+      allowed: ${{ steps.check.outputs.allowed }}
+      has_write: ${{ steps.perm.outputs.has-permission }}
+    steps:
+      - name: Check actor write permission
+        id: perm
+        uses: scherermichael-oss/action-has-permission@17f29510f1bf987b916c8cbb451566a56eed23f1
+        with:
+          required-permission: write
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
+
+      - name: Check authorization
+        id: check
+        shell: bash
+        env:
+          EVENT: ${{ github.event_name }}
+          HEAD_REPO: ${{ github.event.pull_request.head.repo.full_name }}
+          BASE_REPO: ${{ github.repository }}
+          AUTHOR_ASSOC: ${{ github.event.pull_request.author_association }}
+          HAS_LABEL: ${{ contains(github.event.pull_request.labels.*.name, 'safe-to-test') }}
+          HAS_WRITE: ${{ steps.perm.outputs.has-permission }}
+        run: |
+          if [ "$EVENT" = "workflow_dispatch" ] || [ "$EVENT" = "workflow_call" ]; then
+            echo "allowed=true" >> "$GITHUB_OUTPUT"; exit 0
+          fi
+          if [ "$HEAD_REPO" = "$BASE_REPO" ]; then
+            echo "allowed=true" >> "$GITHUB_OUTPUT"; exit 0
+          fi
+          if [ "$HAS_WRITE" = "1" ]; then
+            echo "allowed=true" >> "$GITHUB_OUTPUT"; exit 0
+          fi
+          if [[ "$AUTHOR_ASSOC" =~ ^(MEMBER|OWNER|COLLABORATOR)$ ]]; then
+            echo "allowed=true" >> "$GITHUB_OUTPUT"; exit 0
+          fi
+          if [ "$HAS_LABEL" = "true" ]; then
+            echo "allowed=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "::warning::External fork PR without safe-to-test label — skipping"
+            echo "allowed=false" >> "$GITHUB_OUTPUT"
+          fi
+
+  strip-label:
+    needs: authorize
+    if: |
+      needs.authorize.outputs.has_write != '1' &&
+      github.event.action == 'synchronize' &&
+      github.event.pull_request.head.repo.full_name != github.repository
+    runs-on: ubuntu-latest
+    steps:
+      - name: Remove safe-to-test label
+        env:
+          GH_TOKEN: ${{ github.token }}
+          PR_NUMBER: ${{ github.event.pull_request.number }}
+          REPO: ${{ github.repository }}
+        run: |
+          gh api -X DELETE "repos/${REPO}/issues/${PR_NUMBER}/labels/safe-to-test" 2>/dev/null || true
+          echo "::warning::Removed safe-to-test label — new commits pushed. Re-review required."
+
   release-merge-guard-schema:
     name: Release Merge Guard (Schema)
     continue-on-error: true
@@ -74,8 +136,11 @@ jobs:
           changelog-path: packages/qvac-lib-registry-server/client/CHANGELOG.md
 
   detect-changes:
+    needs: authorize
     runs-on: ubuntu-latest
-    if: github.event_name == 'push' || github.event_name == 'workflow_dispatch' || contains(github.event.pull_request.labels.*.name, 'verify')
+    if: |
+      (needs.authorize.outputs.allowed == 'true' || github.event_name == 'push' || github.event_name == 'workflow_dispatch') &&
+      (github.event_name == 'push' || github.event_name == 'workflow_dispatch' || contains(github.event.pull_request.labels.*.name, 'verify'))
     outputs:
       schema_changed: ${{ steps.filter.outputs.schema }}
       client_changed: ${{ steps.filter.outputs.client }}
@@ -137,8 +202,11 @@ jobs:
           fi
 
   publish-logic:
+    needs: authorize
     runs-on: ubuntu-latest
-    if: github.event_name == 'push' || github.event_name == 'workflow_dispatch' || contains(github.event.pull_request.labels.*.name, 'verify')
+    if: |
+      (needs.authorize.outputs.allowed == 'true' || github.event_name == 'push' || github.event_name == 'workflow_dispatch') &&
+      (github.event_name == 'push' || github.event_name == 'workflow_dispatch' || contains(github.event.pull_request.labels.*.name, 'verify'))
     outputs:
       publish_main: ${{ steps.logic.outputs.publish_main }}
       publish_release: ${{ steps.logic.outputs.publish_release }}
@@ -186,8 +254,9 @@ jobs:
           echo "gpr_tag=$gpr_tag" >> "$GITHUB_OUTPUT"
 
   publish-schema-gpr:
-    needs: [detect-changes, publish-logic]
+    needs: [detect-changes, publish-logic, authorize]
     if: |
+      (needs.authorize.outputs.allowed == 'true' || github.event_name == 'push' || github.event_name == 'workflow_dispatch') &&
       (github.event_name == 'push' || github.event_name == 'workflow_dispatch' || contains(github.event.pull_request.labels.*.name, 'verify')) &&
       needs.detect-changes.outputs.schema_changed == 'true' &&
       (needs.publish-logic.outputs.publish_feature == 'true' ||
@@ -222,8 +291,9 @@ jobs:
           name-suffix: ${{ env.NAME_SUFFIX }}
 
   publish-schema-npm:
-    needs: [detect-changes, publish-logic]
+    needs: [detect-changes, publish-logic, authorize]
     if: |
+      (needs.authorize.outputs.allowed == 'true' || github.event_name == 'push' || github.event_name == 'workflow_dispatch') &&
       (github.event_name == 'push' || github.event_name == 'workflow_dispatch' || contains(github.event.pull_request.labels.*.name, 'verify')) &&
       needs.detect-changes.outputs.schema_changed == 'true' &&
       needs.publish-logic.outputs.publish_release == 'true'
@@ -261,8 +331,9 @@ jobs:
 
   publish-schema:
     name: Publish Schema (meta)
-    needs: [publish-schema-gpr, publish-schema-npm]
+    needs: [publish-schema-gpr, publish-schema-npm, authorize]
     if: |
+      (needs.authorize.outputs.allowed == 'true' || github.event_name == 'push' || github.event_name == 'workflow_dispatch') &&
       (github.event_name == 'push' || github.event_name == 'workflow_dispatch' || contains(github.event.pull_request.labels.*.name, 'verify')) &&
       (needs.publish-schema-gpr.result == 'success' || needs.publish-schema-gpr.result == 'skipped') &&
       (needs.publish-schema-npm.result == 'success' || needs.publish-schema-npm.result == 'skipped')
@@ -271,8 +342,10 @@ jobs:
       - run: echo "Schema publish completed or skipped."
 
   publish-schema-release:
-    needs: [publish-schema-npm]
-    if: needs.publish-schema-npm.result == 'success' && needs.publish-schema-npm.outputs.published_version != ''
+    needs: [publish-schema-npm, authorize]
+    if: |
+      (needs.authorize.outputs.allowed == 'true' || github.event_name == 'push' || github.event_name == 'workflow_dispatch') &&
+      needs.publish-schema-npm.result == 'success' && needs.publish-schema-npm.outputs.published_version != ''
     permissions:
       contents: write
     uses: ./.github/workflows/create-github-release.yml
@@ -285,8 +358,9 @@ jobs:
       workdir: "packages/qvac-lib-registry-server/shared"
 
   lint-and-test:
-    needs: detect-changes
+    needs: [detect-changes, authorize]
     if: |
+      (needs.authorize.outputs.allowed == 'true' || github.event_name == 'push' || github.event_name == 'workflow_dispatch') &&
       (github.event_name == 'push' || github.event_name == 'workflow_dispatch' || contains(github.event.pull_request.labels.*.name, 'verify')) &&
       needs.detect-changes.outputs.client_changed == 'true'
     permissions:
@@ -353,8 +427,9 @@ jobs:
         run: npm run typecheck
 
   publish-client-gpr:
-    needs: [detect-changes, publish-logic, lint-and-test]
+    needs: [detect-changes, publish-logic, lint-and-test, authorize]
     if: |
+      (needs.authorize.outputs.allowed == 'true' || github.event_name == 'push' || github.event_name == 'workflow_dispatch') &&
       (github.event_name == 'push' || github.event_name == 'workflow_dispatch' || contains(github.event.pull_request.labels.*.name, 'verify')) &&
       needs.detect-changes.outputs.client_changed == 'true' &&
       (needs.publish-logic.outputs.publish_feature == 'true' ||
@@ -391,8 +466,9 @@ jobs:
           name-suffix: ${{ env.NAME_SUFFIX }}
 
   publish-client-npm:
-    needs: [detect-changes, publish-logic, lint-and-test]
+    needs: [detect-changes, publish-logic, lint-and-test, authorize]
     if: |
+      (needs.authorize.outputs.allowed == 'true' || github.event_name == 'push' || github.event_name == 'workflow_dispatch') &&
       (github.event_name == 'push' || github.event_name == 'workflow_dispatch' || contains(github.event.pull_request.labels.*.name, 'verify')) &&
       needs.detect-changes.outputs.client_changed == 'true' &&
       needs.publish-logic.outputs.publish_release == 'true'
@@ -431,8 +507,10 @@ jobs:
           git-token: ${{ secrets.GITHUB_TOKEN }}
 
   publish-client-release:
-    needs: [publish-client-npm]
-    if: needs.publish-client-npm.result == 'success' && needs.publish-client-npm.outputs.published_version != ''
+    needs: [publish-client-npm, authorize]
+    if: |
+      (needs.authorize.outputs.allowed == 'true' || github.event_name == 'push' || github.event_name == 'workflow_dispatch') &&
+      needs.publish-client-npm.result == 'success' && needs.publish-client-npm.outputs.published_version != ''
     permissions:
       contents: write
     uses: ./.github/workflows/create-github-release.yml

@@ -18,17 +18,78 @@ on:
   workflow_dispatch:
 
 permissions:
-  contents: write
+  contents: read
   pull-requests: write
-  packages: write
 
 concurrency:
   group: pr-${{ github.event.pull_request.number || github.sha }}
   cancel-in-progress: true
 
 jobs:
+  authorize:
+    runs-on: ubuntu-latest
+    outputs:
+      allowed: ${{ steps.check.outputs.allowed }}
+      has_write: ${{ steps.perm.outputs.has-permission }}
+    steps:
+      - name: Check actor write permission
+        id: perm
+        uses: scherermichael-oss/action-has-permission@17f29510f1bf987b916c8cbb451566a56eed23f1
+        with:
+          required-permission: write
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
+
+      - name: Check authorization
+        id: check
+        shell: bash
+        env:
+          EVENT: ${{ github.event_name }}
+          HEAD_REPO: ${{ github.event.pull_request.head.repo.full_name }}
+          BASE_REPO: ${{ github.repository }}
+          AUTHOR_ASSOC: ${{ github.event.pull_request.author_association }}
+          HAS_LABEL: ${{ contains(github.event.pull_request.labels.*.name, 'safe-to-test') }}
+          HAS_WRITE: ${{ steps.perm.outputs.has-permission }}
+        run: |
+          if [ "$EVENT" = "workflow_dispatch" ] || [ "$EVENT" = "workflow_call" ]; then
+            echo "allowed=true" >> "$GITHUB_OUTPUT"; exit 0
+          fi
+          if [ "$HEAD_REPO" = "$BASE_REPO" ]; then
+            echo "allowed=true" >> "$GITHUB_OUTPUT"; exit 0
+          fi
+          if [ "$HAS_WRITE" = "1" ]; then
+            echo "allowed=true" >> "$GITHUB_OUTPUT"; exit 0
+          fi
+          if [[ "$AUTHOR_ASSOC" =~ ^(MEMBER|OWNER|COLLABORATOR)$ ]]; then
+            echo "allowed=true" >> "$GITHUB_OUTPUT"; exit 0
+          fi
+          if [ "$HAS_LABEL" = "true" ]; then
+            echo "allowed=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "::warning::External fork PR without safe-to-test label — skipping"
+            echo "allowed=false" >> "$GITHUB_OUTPUT"
+          fi
+
+  strip-label:
+    needs: authorize
+    if: |
+      needs.authorize.outputs.has_write != '1' &&
+      github.event.action == 'synchronize' &&
+      github.event.pull_request.head.repo.full_name != github.repository
+    runs-on: ubuntu-latest
+    steps:
+      - name: Remove safe-to-test label
+        env:
+          GH_TOKEN: ${{ github.token }}
+          PR_NUMBER: ${{ github.event.pull_request.number }}
+          REPO: ${{ github.repository }}
+        run: |
+          gh api -X DELETE "repos/${REPO}/issues/${PR_NUMBER}/labels/safe-to-test" 2>/dev/null || true
+          echo "::warning::Removed safe-to-test label — new commits pushed. Re-review required."
+
   sanity-checks:
-    if: contains( github.event.pull_request.labels.*.name, 'verify') || github.event_name == 'workflow_dispatch'
+    needs: authorize
+    if: needs.authorize.outputs.allowed == 'true' && (contains( github.event.pull_request.labels.*.name, 'verify') || github.event_name == 'workflow_dispatch')
     runs-on: ubuntu-latest
     steps:
       - name: Run Sanity checks
@@ -41,7 +102,8 @@ jobs:
           workdir: packages/qvac-lib-infer-llamacpp-embed
 
   cpp-lint:
-    if: contains( github.event.pull_request.labels.*.name, 'verify') || github.event_name == 'workflow_dispatch'
+    needs: authorize
+    if: needs.authorize.outputs.allowed == 'true' && (contains( github.event.pull_request.labels.*.name, 'verify') || github.event_name == 'workflow_dispatch')
     uses: tetherto/qvac-devops/.github/workflows/cpp-lint.yaml@monorepo_update
     secrets: inherit
     with:
@@ -50,8 +112,8 @@ jobs:
       workdir: packages/qvac-lib-infer-llamacpp-embed
 
   cpp-tests:
-    if: contains( github.event.pull_request.labels.*.name, 'verify') || github.event_name == 'workflow_dispatch'
-    needs: sanity-checks
+    needs: [sanity-checks, authorize]
+    if: needs.authorize.outputs.allowed == 'true' && (contains( github.event.pull_request.labels.*.name, 'verify') || github.event_name == 'workflow_dispatch')
     uses: ./.github/workflows/cpp-tests-embed.yml
     secrets: inherit
     with:
@@ -59,7 +121,8 @@ jobs:
       ref: ${{ github.event.pull_request.head.ref }}
 
   ts-checks:
-    if: contains( github.event.pull_request.labels.*.name, 'verify') || github.event_name == 'workflow_dispatch'
+    needs: authorize
+    if: needs.authorize.outputs.allowed == 'true' && (contains( github.event.pull_request.labels.*.name, 'verify') || github.event_name == 'workflow_dispatch')
     runs-on: ubuntu-latest
     steps:
       - name: Checkout code
@@ -88,8 +151,11 @@ jobs:
         run: npm run test:dts
 
   prebuild:
-    if: contains( github.event.pull_request.labels.*.name, 'verify') || github.event_name == 'workflow_dispatch'
-    needs: sanity-checks
+    needs: [sanity-checks, authorize]
+    if: needs.authorize.outputs.allowed == 'true' && (contains( github.event.pull_request.labels.*.name, 'verify') || github.event_name == 'workflow_dispatch')
+    permissions:
+      contents: write
+      packages: write
     uses: ./.github/workflows/prebuilds-qvac-lib-infer-llamacpp-embed.yml
     secrets: inherit
     with:
@@ -99,8 +165,8 @@ jobs:
       publish_target: 'gpr'
 
   integration-tests:
-    needs: prebuild
-    if:  contains( github.event.pull_request.labels.*.name, 'verify') || github.event_name == 'workflow_dispatch'
+    needs: [prebuild, authorize]
+    if: needs.authorize.outputs.allowed == 'true' && (contains( github.event.pull_request.labels.*.name, 'verify') || github.event_name == 'workflow_dispatch')
     uses: ./.github/workflows/integration-test-qvac-lib-infer-llamacpp-embed.yml
     secrets: inherit
     with:
@@ -108,8 +174,8 @@ jobs:
       ref: ${{ github.event.pull_request.head.ref }}
 
   run-mobile-integration-tests:
-    if:  contains( github.event.pull_request.labels.*.name, 'verify') || github.event_name == 'workflow_dispatch'
-    needs: prebuild
+    needs: [prebuild, authorize]
+    if: needs.authorize.outputs.allowed == 'true' && (contains( github.event.pull_request.labels.*.name, 'verify') || github.event_name == 'workflow_dispatch')
     uses: ./.github/workflows/integration-mobile-test-qvac-lib-infer-llamacpp-embed.yml
     secrets: inherit
     with:
@@ -117,8 +183,8 @@ jobs:
       ref: ${{ github.event.pull_request.head.ref }}
 
   merge-guard:
-    needs: [sanity-checks, cpp-lint, cpp-tests, prebuild, integration-tests, run-mobile-integration-tests, ts-checks]
-    if: always()
+    needs: [sanity-checks, cpp-lint, cpp-tests, prebuild, integration-tests, run-mobile-integration-tests, ts-checks, authorize]
+    if: always() && needs.authorize.outputs.allowed == 'true'
     uses: tetherto/qvac-devops/.github/workflows/public-pr.yml@monorepo_update
     with:
       sanity-checks-status: ${{ needs.sanity-checks.result == 'success' }}
