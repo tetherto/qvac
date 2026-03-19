@@ -1,0 +1,66 @@
+### Example workflow demonstrating how to use the Cursor CLI agent
+### to generate documentation automatically.
+### This workflow is only for reference and can be removed later.
+name: generate-docs
+
+on:
+  push:
+    branches:
+      - main
+
+permissions:
+  contents: write
+
+jobs:
+  docs:
+    if: github.actor != 'github-actions[bot]'
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout branch
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ github.ref_name }}
+          fetch-depth: 0
+
+      # Use the local composite action located at:
+      # .github/actions/cursor
+      #
+      # This action installs Cursor CLI and runs cursor-agent
+      # with the provided prompt.
+      #
+      # Required inputs:
+      #   prompt → text sent to cursor-agent
+      #   model  → (optional) model name, defaults to auto
+      #
+      # Required env:
+      #   CURSOR_API_KEY → stored in repository secrets
+      - name: Run cursor docs generator
+        uses: ./.github/actions/cursor
+        with:
+          prompt: |
+            Generate documentation for the repository.
+            Write output inside docs/auto.
+          model: auto
+        env:
+          CURSOR_API_KEY: ${{ secrets.CURSOR_API_KEY }}
+
+      - name: Commit docs to staging
+        run: |
+
+          git config user.name "docs-bot"
+          git config user.email "docs-bot@users.noreply.github.com"
+
+          git fetch origin staging || true
+          git checkout staging || git checkout -b staging
+
+          git add docs/auto
+
+          if git diff --cached --quiet; then
+            echo "No changes"
+            exit 0
+          fi
+
+          git commit -m "auto: update generated docs"
+
+          git push origin staging
