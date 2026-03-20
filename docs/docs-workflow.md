@@ -50,8 +50,8 @@ Content falls into two categories:
 
 | Category | Path | Committed? |
 |---|---|---|
-| Baseline pages (Overview, Health, Workbench, Contributors) | `content/docs/overview/`, `content/docs/health/`, etc. | Yes |
-| SDK API reference (generated) | `content/docs/sdk/api/vX.Y.Z/`, `content/docs/sdk/api/latest/` | No (`.gitignore`) |
+| Manual content (guides, tutorials, addons) | `content/docs/(latest)/sdk/`, `content/docs/(latest)/addons/`, etc. | Yes |
+| SDK API reference (generated) | `content/docs/(latest)/sdk/api/`, `content/docs/v{X.Y.Z}/sdk/api/` | No (`.gitignore`) |
 
 SDK API docs are **generated from TypeScript source** via [TypeDoc](https://typedoc.org/) and written as MDX files. They are not committed to the repository -- generate them locally or let CI handle it.
 
@@ -61,8 +61,8 @@ SDK API docs are **generated from TypeScript source** via [TypeDoc](https://type
 SDK source (packages/sdk)
   │
   ▼
-TypeDoc analysis  ──►  MDX generation  ──►  content/docs/sdk/api/vX.Y.Z/
-                                       ──►  content/docs/sdk/api/latest/
+TypeDoc analysis  ──►  MDX generation  ──►  content/docs/v{X.Y.Z}/sdk/api/
+                                       ──►  content/docs/(latest)/sdk/api/
                                        ──►  src/lib/versions.ts (version switcher)
 ```
 
@@ -116,21 +116,21 @@ bun run scripts/generate-api-docs.ts <version>
 Examples:
 
 ```bash
-# Generate v0.7.0 and update latest/
+# Generate v0.7.0 and update (latest)/sdk/api/
 bun run scripts/generate-api-docs.ts 0.7.0
 
-# Backfill an older version without overwriting latest/
+# Backfill an older version without overwriting (latest)/sdk/api/
 bun run scripts/generate-api-docs.ts 0.5.0 --no-update-latest
 
-# Rollback latest/ to the previous version
+# Rollback (latest)/sdk/api/ to the previous version
 bun run scripts/generate-api-docs.ts --rollback
 ```
 
 This will:
 1. Run TypeDoc against the SDK entry point (`SDK_PATH/index.ts`)
 2. Extract exported functions and their JSDoc comments
-3. Write MDX files to `content/docs/sdk/api/v<version>/`
-4. Copy the version to `content/docs/sdk/api/latest/` (unless `--no-update-latest`)
+3. Write MDX files to `content/docs/v<version>/sdk/api/`
+4. Copy the version to `content/docs/(latest)/sdk/api/` (unless `--no-update-latest`)
 5. Run a smoke test to verify generated files
 
 ### Updating the Versions List
@@ -141,11 +141,11 @@ After generating docs, update the version switcher:
 bun run scripts/update-versions-list.ts [version]
 ```
 
-This scans `content/docs/sdk/api/` for `vX.Y.Z` directories and regenerates `src/lib/versions.ts`. The optional `version` argument validates that the specified version exists.
+This scans `content/docs/` for `vX.Y.Z` directories and regenerates `src/lib/versions.ts`. The optional `version` argument validates that the specified version exists.
 
 ### Full Generation (Orchestrated)
 
-When running inside the monorepo, use the orchestrator script that reads the SDK version from `packages/qvac-sdk/package.json` automatically:
+When running inside the monorepo, use the orchestrator script that reads the SDK version from `packages/sdk/package.json` automatically:
 
 ```bash
 bun run docs:generate
@@ -157,20 +157,27 @@ This runs `generate-api-docs.ts` followed by `update-versions-list.ts` in sequen
 
 ## Versioning
 
-SDK API documentation is versioned per release. Each version lives in its own directory:
+The docs site uses Fumadocs' folder convention for versioning. All content is versioned together (SDK, addons, guides, tutorials) under top-level version folders:
 
 ```
-content/docs/sdk/api/
-├── latest/         -> physical copy of the most recent version
-├── v0.5.0/
-├── v0.6.0/
-├── v0.6.1/
-└── v0.7.0/
+content/docs/
+├── (latest)/       -> current working version (Fumadocs strips the parenthesized name from URLs)
+│   ├── sdk/
+│   │   ├── api/    -> generated API reference (not committed)
+│   │   └── ...     -> manual content (committed)
+│   └── addons/
+└── v0.7.0/         -> frozen snapshot of the previous version
+    ├── sdk/
+    │   ├── api/
+    │   └── ...
+    └── addons/
 ```
 
 - **Format**: `vX.Y.Z` (always 3-part semver with `v` prefix)
-- **`latest/`**: A physical copy (not symlink) of the most recent version, kept in sync automatically
+- **`(latest)/`**: The current working version. Fumadocs strips the parenthesized folder name, so content is served at root paths (e.g. `/sdk/quickstart`). API docs in `(latest)/sdk/api/` are kept in sync automatically.
+- **`vX.Y.Z/`**: Frozen snapshots of previous versions. Created by `scripts/create-version-bundle.ts` when a newer version replaces the outgoing one. Content is served at versioned paths (e.g. `/v0.7.0/sdk/quickstart`).
 - **Version list**: Managed in `src/lib/versions.ts`, updated by `scripts/update-versions-list.ts`
+- **Sidebar trees**: Each version has its own tree file in `src/lib/trees/`. The `latest.ts` tree uses unversioned URLs; versioned trees (e.g. `v0.7.0.ts`) prefix all URLs.
 
 When SDK code changes are merged to `main`, the **Docs Post-Merge Sync** workflow regenerates API docs and commits to `main`. This commit triggers the hosting provider to rebuild staging automatically.
 
@@ -252,7 +259,7 @@ Five GitHub Actions workflows automate the docs lifecycle:
 
 **What it does:**
 - Installs dependencies with Bun
-- Creates a placeholder `latest/index.mdx` (since generated API docs aren't committed)
+- Creates a placeholder `(latest)/sdk/api/index.mdx` (since generated API docs aren't committed)
 - Runs `bun run build` to validate the site compiles
 
 **Purpose:** Catches build errors in docs PRs before merge.
@@ -261,7 +268,7 @@ Five GitHub Actions workflows automate the docs lifecycle:
 
 **File:** `.github/workflows/docs-post-merge-sync.yml`
 
-**Triggers:** Push to `main` when files change in `packages/qvac-sdk/**` or `docs/website/scripts/**`.
+**Triggers:** Push to `main` when files change in `packages/sdk/**` or `docs/website/scripts/**`.
 
 **What it does:**
 1. Checks out the repo
@@ -350,6 +357,7 @@ All scripts live in `docs/website/scripts/` and are designed to run with Bun.
 | `generate-api-docs.ts` | `docs:generate-api` | TypeDoc → MDX for a given version |
 | `update-versions-list.ts` | `docs:update-versions` | Rebuilds `src/lib/versions.ts` from version directories |
 | `run-docs-generate.ts` | `docs:generate` | Orchestrates both scripts using the monorepo SDK version |
+| `create-version-bundle.ts` | `docs:create-version` | Freezes `(latest)` as a versioned bundle for the outgoing version |
 
 ---
 
@@ -395,7 +403,7 @@ No API functions extracted. Check that:
 ### Version not found after generation
 
 ```
-Version vX.Y.Z was not found in content/docs/sdk/api/
+Version vX.Y.Z was not found in content/docs/
 ```
 
 **Cause:** `update-versions-list.ts` ran but the version directory doesn't exist.
@@ -404,7 +412,7 @@ Version vX.Y.Z was not found in content/docs/sdk/api/
 
 ### Build fails in CI (PR checks)
 
-The PR check workflow creates a placeholder `latest/index.mdx` to avoid 404s during build. If the build still fails:
+The PR check workflow creates a placeholder `(latest)/sdk/api/index.mdx` to avoid 404s during build. If the build still fails:
 
 1. Check that `source.config.ts` and `next.config.mjs` are valid
 2. Run `bun run build` locally to reproduce
@@ -418,15 +426,15 @@ If the sync bot's commits keep triggering the workflow:
 2. The workflow skips runs when `github.actor` matches this variable
 3. Commits also use `[skip ci]` as an additional safeguard
 
-### Rollback latest to previous version
+### Rollback (latest)/sdk/api/ to previous version
 
-If a generation corrupted `latest/`:
+If a generation corrupted `(latest)/sdk/api/`:
 
 ```bash
 bun run scripts/generate-api-docs.ts --rollback
 ```
 
-This restores `latest/` from the `.latest-backup/` directory created during the previous generation.
+This restores `(latest)/sdk/api/` from the `.latest-api-backup/` directory created during the previous generation.
 
 ### Generated MDX contains "undefined" or "[object Object]"
 
