@@ -5448,6 +5448,7 @@
   {
     "source": "s3:///qvac_models_compiled/parakeet/parakeet-eou-onnx-int8/2026-03-17/encoder_int8.onnx",
     "engine": "@qvac/transcription-parakeet",
+    "link": "https://huggingface.co/nasedkinpv/parakeet-tdt-0.6b-v3-onnx-int8",
     "description": "Parakeet EOU 120M INT8 Encoder",
     "quantization": "int8",
     "params": "120M",
@@ -5465,6 +5466,7 @@
   {
     "source": "s3:///qvac_models_compiled/parakeet/parakeet-eou-onnx-int8/2026-03-17/decoder_joint_int8.onnx",
     "engine": "@qvac/transcription-parakeet",
+    "link": "https://huggingface.co/nasedkinpv/parakeet-tdt-0.6b-v3-onnx-int8",
     "description": "Parakeet EOU 120M INT8 Decoder",
     "quantization": "int8",
     "params": "120M",
@@ -5482,6 +5484,7 @@
   {
     "source": "s3:///qvac_models_compiled/parakeet/parakeet-eou-onnx-int8/2026-03-17/tokenizer.json",
     "engine": "@qvac/transcription-parakeet",
+    "link": "https://huggingface.co/nasedkinpv/parakeet-tdt-0.6b-v3-onnx-int8",
     "description": "Parakeet EOU 120M Tokenizer",
     "quantization": "",
     "params": "120M",
@@ -5516,6 +5519,7 @@
   {
     "source": "s3:///qvac_models_compiled/parakeet/parakeet-sortformer-onnx-int8/2026-03-20/sortformer_int8.onnx",
     "engine": "@qvac/transcription-parakeet",
+    "link":"https://huggingface.co/nvidia/diar_streaming_sortformer_4spk-v2",
     "description": "Parakeet Sortformer 4SPK v2 INT8",
     "quantization": "int8",
     "params": "123M",
