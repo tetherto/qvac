@@ -69,7 +69,7 @@
 
 **Dependencies:**
 - qvac-lib-inference-addon-cpp (≥1.1.2): C++ addon framework (single-job runner, runJob/activate/loadWeights/cancel/destroyInstance)
-- llama-cpp (≥7248.1.2): Inference engine
+- qvac-fabric-llm.cpp (≥7248.2.1): Inference engine
 - Bare Runtime (≥1.24.0): JavaScript runtime
 - Linux requires Clang/LLVM 19 with libc++
 
@@ -128,7 +128,7 @@ graph TB
 | @qvac/infer-base | Framework | ^0.2.0 | Base classes, WeightsProvider, QvacResponse |
 | @qvac/dl-hyperdrive | Peer | ^0.1.1 | P2P model loading |
 | qvac-lib-inference-addon-cpp | Native | ≥1.1.1 | C++ addon framework (single-job runner) |
-| llama.cpp | Native | ≥7248.1.2 | Inference engine |
+| qvac-fabric-llm.cpp | Native | ≥7248.2.1 | Inference engine |
 | Bare Runtime | Runtime | ≥1.24.0 | JavaScript execution |
 
 **Integration Points:**
