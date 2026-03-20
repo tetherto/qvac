@@ -59,7 +59,9 @@ public:
 
   /// @returns False if the job cannot be run (e.g. because a job is already set or being processed)
   bool runJob(std::any input) { return jobRunner_.runJob(std::move(input)); }
-  void cancelJob() { jobRunner_.cancel(); }
+  void cancelJob(std::optional<JobId> jobId = std::nullopt) {
+    jobRunner_.cancel(jobId);
+  }
 
   const std::reference_wrapper<model::IModel> model;
   model::IModelAsyncLoad* const asyncLoad;
