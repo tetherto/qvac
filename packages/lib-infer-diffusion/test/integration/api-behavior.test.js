@@ -43,7 +43,7 @@ const SHORT_PARAMS = {
   seed: 1
 }
 
-async function setupModel (t) {
+async function setupModel(t) {
   setupJsLogger(binding)
 
   const [modelName, modelDir] = await ensureModel({
@@ -69,14 +69,14 @@ async function setupModel (t) {
   await model.load()
 
   t.teardown(async () => {
-    await model.unload().catch(() => {})
-    try { binding.releaseLogger() } catch (_) {}
+    await model.unload().catch(() => { })
+    try { binding.releaseLogger() } catch (_) { }
   })
 
   return { model, modelDir }
 }
 
-function saveFirstGeneratedImage (modelDir, filename, images) {
+function saveFirstGeneratedImage(modelDir, filename, images) {
   if (images.length === 0) return
 
   const outPath = path.join(modelDir, filename)
@@ -84,7 +84,7 @@ function saveFirstGeneratedImage (modelDir, filename, images) {
   console.log(`\nSaved → ${outPath}`)
 }
 
-test('idle | run: allowed, returns QvacResponse', { timeout: 600000, skip: true }, async t => {
+test('idle | run: allowed, returns QvacResponse', { timeout: 600000 }, async t => {
   const { model, modelDir } = await setupModel(t)
   const response = await model.run(SHORT_PARAMS)
   t.ok(response, 'run() returns a response')
@@ -100,13 +100,13 @@ test('idle | run: allowed, returns QvacResponse', { timeout: 600000, skip: true 
   saveFirstGeneratedImage(modelDir, 'api-behavior--idle-run-seed1.png', images)
 })
 
-test('idle | cancel: allowed, no-op', { timeout: 600000, skip: true }, async t => {
+test('idle | cancel: allowed, no-op', { timeout: 600000 }, async t => {
   const { model } = await setupModel(t)
   await model.cancel()
   t.pass('cancel when idle does not throw')
 })
 
-test('run | cancel: cancels current job', { timeout: 600000, skip: true }, async t => {
+test('run | cancel: cancels current job', { timeout: 600000 }, async t => {
   const { model } = await setupModel(t)
   const response = await model.run(LONG_PARAMS)
 
@@ -129,7 +129,7 @@ test('run | cancel: cancels current job', { timeout: 600000, skip: true }, async
   t.pass('cancel during run resolves and stops job')
 })
 
-test('run | run: second run() throws busy error', { timeout: 600000, skip: true }, async t => {
+test('run | run: second run() throws busy error', { timeout: 600000 }, async t => {
   const { model, modelDir } = await setupModel(t)
   const firstResponse = await model.run(SHORT_PARAMS)
   let firstError = null
@@ -167,7 +167,7 @@ test('run | run: second run() throws busy error', { timeout: 600000, skip: true 
   saveFirstGeneratedImage(modelDir, 'api-behavior--run-run-first-response-seed1.png', images)
 })
 
-test('cancel | run: can run again after cancel', { timeout: 600000, skip: true }, async t => {
+test('cancel | run: can run again after cancel', { timeout: 600000 }, async t => {
   const { model, modelDir } = await setupModel(t)
 
   // Start a job and cancel after first progress tick
@@ -199,5 +199,5 @@ test('cancel | run: can run again after cancel', { timeout: 600000, skip: true }
 // Keep event loop alive briefly to let pending async operations complete.
 // Prevents C++ destructors from running while async cleanup is still happening.
 setImmediate(() => {
-  setTimeout(() => {}, 500)
+  setTimeout(() => { }, 500)
 })

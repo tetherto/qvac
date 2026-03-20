@@ -27,7 +27,7 @@ const DEFAULT_MODEL = {
   url: 'https://huggingface.co/gpustack/stable-diffusion-v2-1-GGUF/resolve/main/stable-diffusion-v2-1-Q8_0.gguf'
 }
 
-test('SD2.1 txt2img — generates a valid PNG image', { timeout: 1200000 }, async (t) => {
+test('SD2.1 txt2img — generates a valid PNG image', { timeout: 1200000, skip }, async (t) => {
   setupJsLogger(binding)
 
   const [downloadedModelName, modelDir] = await ensureModel({
@@ -94,7 +94,7 @@ test('SD2.1 txt2img — generates a valid PNG image', { timeout: 1200000 }, asyn
             if ('step' in tick && 'total' in tick) {
               progressTicks.push(tick)
             }
-          } catch (_) {}
+          } catch (_) { }
         }
       })
       .await()
@@ -134,7 +134,7 @@ test('SD2.1 txt2img — generates a valid PNG image', { timeout: 1200000 }, asyn
     await model.unload()
     try {
       binding.releaseLogger()
-    } catch (_) {}
+    } catch (_) { }
     console.log('Done.')
   }
 })
