@@ -1,0 +1,27 @@
+---
+title: "transcribeStream( )"
+titleStyle: code
+description: "This function streams audio transcription results in real-time, yielding
+text chunks as they become available from the model."
+---
+
+```typescript
+function transcribeStream(params: TranscribeClientParams): AsyncGenerator
+```
+
+## Description
+
+This function streams audio transcription results in real-time, yielding
+text chunks as they become available from the model.
+
+## Parameters
+
+| Name | Type | Required? | Description |
+| --- | --- | :---: | --- |
+| `params` | `TranscribeClientParams` | ✓ | The arguments for the transcription |
+
+## Returns
+
+```typescript
+AsyncGenerator
+```

@@ -44,7 +44,7 @@ BitNet models require special backend handling on Adreno GPUs. When a BitNet mod
 
 **Dependencies:**
 - qvac-lib-inference-addon-cpp (≥1.1.2): C++ addon framework (single-job runner)
-- qvac-fabric-llm.cpp (≥7248.1.4): Inference engine
+- qvac-fabric-llm.cpp (≥7248.2.1): Inference engine
 - Bare Runtime (≥1.24.0): JavaScript runtime
 - Linux requires Clang/LLVM 19 with libc++
 ## Installation
@@ -56,21 +56,6 @@ Ensure that the Bare Runtime is installed globally on your system. If it's not a
 ```bash
 npm install -g bare@latest
 ```
-Before proceeding with the installation, please generate a **granular Personal Access Token (PAT)** with the `read-only` scope. Once generated, add the token to your environment variables using the name `NPM_TOKEN`.
-
-```bash
-export NPM_TOKEN=your_personal_access_token
-```
-
-Next, create a `.npmrc` file in the root of your project with the following content:
-
-```ini
-@qvac:registry=https://registry.npmjs.org/
-//registry.npmjs.org/:_authToken={NPM_TOKEN}
-```
-
-This configuration ensures secure access to NPM Packages when installing scoped packages.
-
 ### Installing the Package
 
 ```bash
