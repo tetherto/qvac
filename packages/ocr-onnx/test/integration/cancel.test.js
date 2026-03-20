@@ -11,7 +11,7 @@
 
 const { ONNXOcr } = require('../..')
 const test = require('brittle')
-const { isMobile, getImagePath, ensureModelPath, safeUnload } = require('./utils')
+const { isMobile, getImagePath, ensureModelPath, safeUnload, windowsOrtParams } = require('./utils')
 
 const MOBILE_TIMEOUT = 600 * 1000
 const DESKTOP_TIMEOUT = 120 * 1000
@@ -31,7 +31,8 @@ async function createAndLoadOcr (t) {
       pathDetector: detectorPath,
       pathRecognizer: recognizerPath,
       langList: ['en'],
-      useGPU: false
+      useGPU: false,
+      ...windowsOrtParams
     },
     opts: { stats: true }
   })

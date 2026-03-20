@@ -172,6 +172,17 @@ public:
   virtual llama_context* getCtx() = 0;
 
   /**
+   * The get model method. It returns the underlying llama_model pointer.
+   */
+  virtual llama_model* getModel() = 0;
+
+  /**
+   * The get params method. It returns a reference to the common parameters
+   * associated with this context.
+   */
+  virtual common_params& getParams() = 0;
+
+  /**
    * The get nPast method. It returns the nPast.
    *
    * @return - the nPast.
@@ -199,6 +210,16 @@ public:
    * Set the number of tokens to discard when overflowing context.
    */
   virtual void setNDiscarded(llama_pos nDiscarded) = 0;
+
+  /**
+   * Get the number of context slides (discards) that have occurred.
+   */
+  [[nodiscard]] virtual int32_t getNSlides() const = 0;
+
+  /**
+   * Reset the slide counter to zero. Called at the start of each inference.
+   */
+  virtual void resetNSlides() = 0;
 
   /**
    * The load media method. It loads the media from memory buffer.
@@ -229,8 +250,8 @@ public:
    * @return a callable that restores original parameters; safe to call
    *         multiple times (subsequent calls are no-ops).
    */
-  virtual std::function<void()> applyGenerationParams(
-      const GenerationParams& params) {
+  virtual std::function<void()>
+  applyGenerationParams(const GenerationParams& params) {
     return []() {};
   }
 

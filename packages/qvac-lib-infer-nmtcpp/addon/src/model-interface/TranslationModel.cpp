@@ -411,7 +411,7 @@ TranslationModel::processBatch(const std::vector<std::string>& texts) {
           "length: " +
               std::to_string(text.length()));
       // check if text is just spaces
-      bool allAreSpace =
+      allAreSpace =
           std::all_of(text.begin(), text.end(), [](unsigned char chr) {
             return std::isspace(chr);
           });

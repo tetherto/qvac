@@ -244,14 +244,21 @@ export function ViewOptions({
 export function VersionSelector() {
   const pathname = usePathname();
 
+  const isApiPage = pathname.includes('/sdk/api');
+  if (!isApiPage) return null;
+
   const currentVersion = getVersionFromPath(pathname) ?? LATEST_VERSION;
   const currentLabel = VERSIONS.find((v) => v.value === currentVersion)?.label ?? currentVersion;
+
+  const visibleVersions = VERSIONS.filter(
+    (v) => !v.isDev || process.env.NEXT_PUBLIC_SHOW_DEV_DOCS === 'true'
+  );
 
   async function handleVersionChange(targetVersion: string) {
     if (targetVersion === currentVersion) return;
     const targetUrl = computeVersionedUrl(pathname, targetVersion);
     const targetIsLatest = VERSIONS.find((v) => v.value === targetVersion)?.isLatest;
-    const homeUrl = targetIsLatest ? '/' : `/${targetVersion}/`;
+    const homeUrl = targetIsLatest ? '/sdk/api/' : `/${targetVersion}/sdk/api/`;
 
     try {
       const res = await fetch(targetUrl, { method: 'HEAD' });
@@ -278,7 +285,7 @@ export function VersionSelector() {
         <ChevronDown className="size-3.5 text-fd-muted-foreground" />
       </PopoverTrigger>
       <PopoverContent className="flex flex-col">
-        {VERSIONS.map((version) => (
+        {visibleVersions.map((version) => (
           <PopoverClose asChild key={version.value}>
             <button
               type="button"

@@ -51,6 +51,10 @@ const VALIDATION_EXCEPTIONS = [
     name: "Squash commits",
     test: (message) => message.startsWith("squash!"),
   },
+  {
+    name: "Release PRs",
+    test: (message) => /^release\(.+\):\s+v?\d+\.\d+\.\d+/.test(message),
+  },
 ];
 
 /**
@@ -248,6 +252,10 @@ function validatePR(title, body) {
   const trimmedTitle = title.trim();
   if (!trimmedTitle) {
     return { valid: false, error: "PR title cannot be empty" };
+  }
+
+  if (shouldSkipValidation(trimmedTitle)) {
+    return { valid: true };
   }
 
   // Try matching with ticket first

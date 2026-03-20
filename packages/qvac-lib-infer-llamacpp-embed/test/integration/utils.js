@@ -15,39 +15,53 @@ const FilesystemDL = require('@qvac/dl-filesystem')
  */
 async function downloadFile (url, dest) {
   return new Promise((resolve, reject) => {
+    let resolved = false
+    const safeResolve = () => { if (!resolved) { resolved = true; resolve() } }
+    const safeReject = (err) => { if (!resolved) { resolved = true; reject(err) } }
+
     const file = fs.createWriteStream(dest)
+
+    file.on('error', (err) => {
+      file.destroy()
+      fs.unlink(dest, () => safeReject(err))
+    })
+
     const req = https.request(url, (response) => {
-      // Handle redirects (301, 302, 307, 308 for Windows model download)
       if ([301, 302, 307, 308].includes(response.statusCode)) {
         file.destroy()
-        fs.unlink(dest, () => {}) // Clean up partial file
+        fs.unlink(dest, (unlinkErr) => {
+          if (unlinkErr && unlinkErr.code !== 'ENOENT') {
+            return safeReject(unlinkErr)
+          }
 
-        let redirectUrl = response.headers.location
-        // Handle relative redirects
-        if (redirectUrl.startsWith('/')) {
-          const originalUrl = new URL(url)
-          redirectUrl = `${originalUrl.protocol}//${originalUrl.host}${redirectUrl}`
-        }
+          const redirectUrl = new URL(response.headers.location, url).href
 
-        return downloadFile(redirectUrl, dest).then(resolve).catch(reject)
+          downloadFile(redirectUrl, dest)
+            .then(safeResolve).catch(safeReject)
+        })
+        return
       }
 
       if (response.statusCode !== 200) {
         file.destroy()
-        fs.unlink(dest, () => {})
-        return reject(new Error(`Download failed: ${response.statusCode}`))
+        fs.unlink(dest, () => safeReject(new Error(`Download failed: ${response.statusCode}`)))
+        return
       }
 
-      response.pipe(file)
-      file.on('finish', () => {
+      response.on('error', (err) => {
         file.destroy()
-        resolve()
+        fs.unlink(dest, () => safeReject(err))
+      })
+
+      response.pipe(file)
+      file.on('close', () => {
+        safeResolve()
       })
     })
 
     req.on('error', (err) => {
       file.destroy()
-      fs.unlink(dest, () => reject(err))
+      fs.unlink(dest, () => safeReject(err))
     })
 
     req.end()

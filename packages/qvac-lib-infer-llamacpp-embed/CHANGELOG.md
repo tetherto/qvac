@@ -1,5 +1,19 @@
 # Changelog
 
+## [0.13.0] - 2026-03-20
+
+### Fixed
+
+- Updated qvac-fabric dependency to 7248.2.1#1, which disables BLAS and Accelerate for iOS builds. Fixes CMake configure failures and linker errors on CI where macOS SDK frameworks were resolved instead of the iOS sysroot.
+
+## [0.12.1] - 2026-03-18
+
+### Added
+
+#### `RuntimeStats` TypeScript interface
+
+Added a `RuntimeStats` type to `index.d.ts` covering all stats keys returned by the C++ addon: `total_tokens`, `total_time_ms`, `tokens_per_second` (optional — only present when processing time > 0), `batch_size`, and `context_size`.
+
 ## [0.12.0] - 2026-03-13
 
 ### Changed

@@ -1,9 +1,9 @@
 ---
 title: QVAC by Tether
-description: Local AI JS/TS SDK, libraries, and tools for building local-first, P2P AI applications. Run AI tasks like LLMs, speech, RAG, and more across Linux, macOS, Windows, Android, and iOS.
+description: Local AI JS/TS SDK, libraries, and tools for building local-first, P2P AI applications and systems. Run AI tasks like LLMs, speech, RAG, and more across Linux, macOS, Windows, Android, and iOS.
 ---
 
-import { Sparkles, Telescope, Compass, Rocket, BookA, LayoutGrid, FolderTree, Blocks, MessageCircleQuestionMark, Wrench, DoorOpen, Package } from 'lucide-react'
+import { Sparkles, Telescope, Compass, Rocket, BookA, LayoutGrid, FolderTree, Blocks, MessageCircleQuestionMark, Wrench, DoorOpen, Package, Terminal } from 'lucide-react'
 import { SiDiscord, SiHuggingface, SiExpo, SiElectron } from '@icons-pack/react-simple-icons';
 import { CopyInline } from '@/components/copy-inline'
 import { FeaturebaseIcon } from '@/components/featurebase-icon';
@@ -11,10 +11,10 @@ import { FeaturebaseIcon } from '@/components/featurebase-icon';
 ## Discover
 
 <Cards>
-  <Card href="/welcome" icon={<DoorOpen className="text-[var(--color-fd-primary)]" />} title="Welcome">
+  <Card href="/about-qvac/welcome" icon={<DoorOpen className="text-[var(--color-fd-primary)]" />} title="Welcome">
     Learn what QVAC is, why Tether built it, and what makes it different.
   </Card>
-  <Card href="/welcome" icon={<Telescope className="text-[var(--color-fd-primary)]" />} title="Our vision">
+  <Card href="/about-qvac/vision" icon={<Telescope className="text-[var(--color-fd-primary)]" />} title="Our vision">
     Learn about Tether's long-term vision for QVAC.
   </Card>
 </Cards>
@@ -22,24 +22,27 @@ import { FeaturebaseIcon } from '@/components/featurebase-icon';
 ## Build
 
 <Cards>
-  <Card href="/sdk" icon={<Compass className="text-[var(--color-fd-primary)]" />} title="Get started with QVAC SDK">
+  <Card href="/sdk/getting-started" icon={<Compass className="text-[var(--color-fd-primary)]" />} title="Get started with QVAC SDK">
     Use the JS/TS SDK to build local and P2P AI applications and systems.
   </Card>
-  <Card href="/sdk/quickstart" icon={<Rocket className="text-[var(--color-fd-primary)]" />} title="Quickstart">
+  <Card href="/sdk/getting-started/quickstart" icon={<Rocket className="text-[var(--color-fd-primary)]" />} title="Quickstart">
     Run your first example using the JS/TS SDK.
   </Card>
-  <Card href="/sdk/installation" icon={<Package className="text-[var(--color-fd-primary)]" />} title="Installation">
+  <Card href="/sdk/getting-started/installation" icon={<Package className="text-[var(--color-fd-primary)]" />} title="Installation">
     Supported environments and how to install the SDK for each one: Node.js, Bare, and Expo.
   </Card>
-  <Card href="/sdk/api" icon={<BookA className="text-[var(--color-fd-primary)]" />} title="API reference">
+  <Card href="/sdk/api" icon={<BookA className="text-[var(--color-fd-primary)]" />} title="JS API reference">
     `@qvac/sdk` npm package exposes a function-centric, typed JS API.
+  </Card>
+  <Card href="/cli" icon={<Terminal className="text-[var(--color-fd-primary)]" />} title="CLI">
+    `@qvac/cli` npm package provides tools and an HTTP server that exposes an OpenAI-compatible API.
   </Card>
 </Cards>
 
 ## Explore
 
 <Cards>
-  <Card href="/flagship-apps" icon={<LayoutGrid className="text-[var(--color-fd-primary)]" />} title="Flagship applications">
+  <Card href="/about-qvac/flagship-apps" icon={<LayoutGrid className="text-[var(--color-fd-primary)]" />} title="Flagship applications">
     Desktop and mobile apps to empower users and showcase QVAC capabilities.
   </Card>
 

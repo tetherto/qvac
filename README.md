@@ -14,11 +14,14 @@
 - **Local-first:** load AI models and perform inference on your own machine. No third-party APIs, SaaS, or cloud involved.
 - **P2P:** build unstoppable internet systems — like BitTorrent, IPFS, and blockchain networks, but for AI.
 - **Cross-platform:** consistent developer experience across hardware, operating systems, and JS runtime environments — write code once, run it everywhere.
+- **OpenAI-compatible API:** integrate with the broader AI ecosystem.
 - **Open source:** 100% free to use and modify — build on top, contribute back, be part of our community.
 
 ## Usage
 
 QVAC is composed of JavaScript libraries and tools that converge in the JS SDK. _The SDK is the main entry point for using QVAC_. It is type-safe and exposes all QVAC capabilities through a unified interface. It runs on Node.js, [Bare runtime](https://bare.pears.com), and [Expo](https://expo.dev).
+
+Additionally, QVAC provides a CLI with tools and an HTTP server that exposes an [**OpenAI-compatible API**](https://platform.openai.com/docs/api-reference). *By implementing the OpenAI API format, QVAC can integrate with the broader AI ecosystem.*
 
 Install the `@qvac/sdk` npm package in your project. Then load models and run AI inference locally, or delegate inference to peers using the built-in P2P features.
 
@@ -107,7 +110,7 @@ node quickstart.js
 
 > [!TIP]
 > For comprehensive QVAC documentation, see [https://docs.qvac.tether.io](https://docs.qvac.tether.io).
-> There, you'll find [the compatibility matrix, installation instructions per environment/platform](https://docs.qvac.tether.io/sdk/install/), [reference with code examples for using each functionality](https://docs.qvac.tether.io/sdk/), and much more.
+> There, you'll find [the compatibility matrix, installation instructions per environment/platform](https://docs.qvac.tether.io/sdk/getting-started/installation/), [reference with code examples for using each functionality](https://docs.qvac.tether.io/sdk/getting-started/), and much more.
 
 ## Contributing
 
@@ -127,6 +130,7 @@ Legend:
 | lib-decoder-audio | Audio decoder library leveraging FFmpeg for efficient audio decoding as preprocessing step for other addons | Addon |
 | lib-infer-llamacpp-embed | Native C++ addon for running text embedding models to generate high-quality contextual embeddings | Addon |
 | lib-infer-llamacpp-llm | Native C++ addon for running Large Language Models (LLMs) within QVAC runtime applications | Addon |
+| lib-infer-diffusion | Native C++ addon for text-to-image and image-to-image generation using stable-diffusion.cpp | Addon |
 | lib-infer-nmtcpp | Library for running various translation models supporting OPUS, Bergamot, and IndicTrans backends | Addon |
 | lib-infer-onnx | Bare addon for ONNX Runtime session management | Addon |
 | lib-infer-onnx-tts | Text-to-Speech (TTS) library using Chatterbox and Supertonic neural TTS model via ONNX Runtime | Addon |
@@ -144,11 +148,12 @@ Legend:
 | lib-infer-base | Base class for inference addon clients defining common lifecycle and generic methods for model interaction | Core |
 | logging | Logger wrapper that normalizes logging interface across QVAC libraries | Core |
 | cli | Command-line interface for the QVAC ecosystem with tooling for building, bundling, and managing QVAC-powered applications | Tool |
+| lib-diagnostics | Diagnostic report generation library for QVAC | Tool |
 | lib-registry-server | Distributed model registry for downloading AI models for local inference and contributing new models | Tool |
 | lint-cpp | Configuration files for formatting and linting C++ source files with pre-commit hooks | Tool |
 
 ### Development
 
-- For the standard development workflow used in this monorepo, see [`/docs/gitflow.md`](gitflow.md).
+- For the standard development workflow used in this monorepo, see [`/docs/gitflow.md`](./docs/gitflow.md).
 - For development specifics of each QVAC component, refer to the documentation in the respective subdirectory under `/packages`.
 - For the QVAC architecture as a whole, see `/docs/architecture`.
