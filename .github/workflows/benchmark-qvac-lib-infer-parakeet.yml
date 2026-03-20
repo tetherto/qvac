@@ -35,7 +35,7 @@ jobs:
       - name: Generate matrix based on configuration
         id: set-matrix
         run: |
-          MODEL_TYPE="${{ github.event.inputs.model_type || 'all' }}"
+          MODEL_TYPE="${{ github.event.inputs.model_type || 'tdt' }}"
           MAX_SAMPLES="${{ github.event.inputs.max_samples || '50' }}"
 
           MATRIX=$(python3 <<PYEOF

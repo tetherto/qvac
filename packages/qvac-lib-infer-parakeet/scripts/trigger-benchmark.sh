@@ -137,13 +137,11 @@ echo "  Max Samples:  $MAX_SAMPLES"
 echo "  Watch:        $WATCH"
 echo ""
 
-gh workflow run benchmark-qvac-lib-infer-parakeet.yml \
+if ! gh workflow run benchmark-qvac-lib-infer-parakeet.yml \
     -R "$REPO" \
     --ref "$BRANCH" \
     -f model_type="$MODEL_TYPE" \
-    -f max_samples="$MAX_SAMPLES"
-
-if [ $? -ne 0 ]; then
+    -f max_samples="$MAX_SAMPLES"; then
     echo -e "${RED}Failed to trigger workflow.${NC}"
     exit 1
 fi
