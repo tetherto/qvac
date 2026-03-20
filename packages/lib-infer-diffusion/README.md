@@ -5,6 +5,7 @@ Native C++ addon for text-to-image and image-to-image generation using [stable-d
 ## Table of Contents
 
 - [Supported platforms](#supported-platforms)
+- [Installation](#installation)
 - [Building from Source](#building-from-source)
 - [Downloading Model Files](#downloading-model-files)
 - [Running the Example](#running-the-example)
@@ -39,6 +40,35 @@ Native C++ addon for text-to-image and image-to-image generation using [stable-d
 - `ggml` (bundled alongside stable-diffusion.cpp)
 - Bare Runtime ≥ 1.24.0
 - CMake ≥ 3.25 and a C++20-capable compiler
+
+---
+
+## Installation
+
+### Prerequisites
+
+Ensure that the `Bare` Runtime is installed globally on your system. If it's not already installed, you can install it using:
+
+```bash
+npm install -g bare@latest
+```
+
+### Configure npm for @qvac packages
+
+Generate a **granular Personal Access Token (PAT)** with the `read-only` scope. Once generated, add the token to your environment variables using the name `NPM_TOKEN`.
+
+```bash
+export NPM_TOKEN=your_personal_access_token
+```
+
+Next, create a `.npmrc` file in the root of your project with the following content:
+
+```ini
+@qvac:registry=https://registry.npmjs.org/
+//registry.npmjs.org/:_authToken={NPM_TOKEN}
+```
+
+This configuration ensures secure access to NPM Packages when installing scoped packages.
 
 ---
 
