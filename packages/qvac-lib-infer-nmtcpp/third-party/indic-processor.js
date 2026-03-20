@@ -222,9 +222,9 @@ class IndicProcessor {
     this._URL_PATTERN =
       /\b(?<![\w/.])(?:(?:https?|ftp):\/\/)?(?:[\w-]+\.)+(?!\.)[\w/\-?#&=%.]*(?!\.\w+)\b/g
     this._NUMERAL_PATTERN =
-      /(~?\d+\.?\d*\s?%?\s?-?\s?~?\d+\.?\d*\s?%|~?\d+%|\d+[-/.,:']\d+[-/.,:']+\d+(?:\.\d+)?|\d+[-/.:'+]\d+(?:\.\d+)?)/g
+      /(~?\d+(?:\.\d+)?\s?%?\s?-?\s?~?\d+(?:\.\d+)?\s?%|~?\d+%|\d+[-/.,:']\d+[-/.,:']+\d+(?:\.\d+)?|\d+[-/.:'+]\d+(?:\.\d+)?)/g
     this._EMAIL_PATTERN = /[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Z|a-z]{2,}/g
-    this._OTHER_PATTERN = /[A-Za-z0-9]*[#|@]\w+/g
+    this._OTHER_PATTERN = /[A-Za-z0-9]{0,100}[#|@]\w+/g
 
     // Combined punctuation replacements
     this._PUNC_REPLACEMENTS = [
