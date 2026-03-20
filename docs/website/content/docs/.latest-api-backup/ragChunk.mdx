@@ -6,19 +6,15 @@ Part of the segregated flow: ragChunk() → embed() → ragSaveEmbeddings()"
 ---
 
 ```typescript
-function ragChunk(params: infer): Promise
+function ragChunk(params: { chunkOpts?: { chunkOverlap?: number; chunkSize?: number; chunkStrategy?: "character" | "paragraph"; splitStrategy?: "character" | "word" | "token" | "sentence" | "line" }; documents: string | string[] }, options?: { forceNewConnection?: boolean; profiling?: { enabled?: boolean; includeServerBreakdown?: boolean; mode?: "summary" | "verbose" }; timeout?: number }): Promise
 ```
-
-## Description
-
-Chunks documents into smaller pieces for embedding.
-Part of the segregated flow: ragChunk() → embed() → ragSaveEmbeddings()
 
 ## Parameters
 
 | Name | Type | Required? | Description |
 | --- | --- | :---: | --- |
-| `params` | `infer` | ✓ | The parameters for chunking |
+| `params` | `\{ chunkOpts?: \{ chunkOverlap?: number; chunkSize?: number; chunkStrategy?: "character" | "paragraph"; splitStrategy?: "character" | "word" | "token" | "sentence" | "line" \}; documents: string | string[] \}` | ✓ | The parameters for chunking |
+| `options` | `\{ forceNewConnection?: boolean; profiling?: \{ enabled?: boolean; includeServerBreakdown?: boolean; mode?: "summary" | "verbose" \}; timeout?: number \}` | ✗ | No description |
 
 ## Returns
 
@@ -28,7 +24,13 @@ Promise
 
 
 
-## Examples
+## Throws
+
+| Error | When |
+| --- | --- |
+| `When the operation fails` |  |
+
+## Example
 
 ```typescript
 const chunks = await ragChunk({

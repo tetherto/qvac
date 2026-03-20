@@ -9,25 +9,25 @@ naturally without requiring manual cleanup."
 ---
 
 ```typescript
-function unloadModel(params: input): Promise
+function unloadModel(params: { clearStorage?: boolean; modelId: string }): Promise
 ```
-
-## Description
-
-Unloads a previously loaded model from the server.
-
-When the last model is unloaded (no more models remain), this function
-automatically closes the RPC connection, allowing the process to exit
-naturally without requiring manual cleanup.
 
 ## Parameters
 
 | Name | Type | Required? | Description |
 | --- | --- | :---: | --- |
-| `params` | `input` | ✓ | The parameters for unloading the model |
+| `params` | `\{ clearStorage?: boolean; modelId: string \}` | ✓ | The parameters for unloading the model |
 
 ## Returns
 
 ```typescript
 Promise
 ```
+
+
+
+## Throws
+
+| Error | When |
+| --- | --- |
+| `When the response type is invalid or when the unload operation fails` |  |
