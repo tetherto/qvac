@@ -71,6 +71,7 @@ class JobRunner {
   void process() {
     while (running_) {
       std::unique_lock lock(mtx_);
+      std::optional<PendingJob> currentJob;
 
       try {
         // Signal that thread is ready for a new job
@@ -85,31 +86,29 @@ class JobRunner {
         // Acquire processing while holding the main `lock` for atomicity.
         ready_ = false;
         processingSync_.setActive(true);
+        currentJob = std::move(*job_);
 
         // Unlock main lock to ensure cancel() can acquire without blocking
         lock.unlock();
 
-        const auto currentJobId = job_->jobId;
-        std::any output = model_->process(job_->input);
+        std::any output = model_->process(currentJob->input);
 
         // Make sure to reset job before queue result. Client might
         // be waiting to queue a new job as soon as current is ended.
         finalizeJob(lock);
 
-        outputQueue_->queueResult(currentJobId, std::move(output));
-        outputQueue_->queueJobEnded(currentJobId);
+        outputQueue_->queueResult(currentJob->jobId, std::move(output));
+        outputQueue_->queueJobEnded(currentJob->jobId);
       } catch (const std::exception& e) {
-        const auto currentJobId = job_.has_value() ? job_->jobId : JobId{0};
         finalizeJob(lock);
-        if (currentJobId != JobId{0}) {
-          outputQueue_->queueException(currentJobId, e);
+        if (currentJob.has_value()) {
+          outputQueue_->queueException(currentJob->jobId, e);
         }
       } catch (...) {
-        const auto currentJobId = job_.has_value() ? job_->jobId : JobId{0};
         finalizeJob(lock);
-        if (currentJobId != JobId{0}) {
+        if (currentJob.has_value()) {
           outputQueue_->queueException(
-              currentJobId,
+              currentJob->jobId,
               std::runtime_error("Unknown exception in processing loop"));
         }
       }
