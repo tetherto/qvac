@@ -9,18 +9,14 @@ the workspace is currently loaded in memory and holding active resources
 ---
 
 ```typescript
-function ragListWorkspaces(): Promise
+function ragListWorkspaces(options?: { forceNewConnection?: boolean; profiling?: { enabled?: boolean; includeServerBreakdown?: boolean; mode?: "summary" | "verbose" }; timeout?: number }): Promise
 ```
 
-## Description
+## Parameters
 
-Lists all RAG workspaces with their open status.
-
-Returns all workspaces that exist on disk. The `open` field indicates whether
-the workspace is currently loaded in memory and holding active resources
-(Corestore, HyperDB adapter, and possibly a RAG instance).
-
-
+| Name | Type | Required? | Description |
+| --- | --- | :---: | --- |
+| `options` | `\{ forceNewConnection?: boolean; profiling?: \{ enabled?: boolean; includeServerBreakdown?: boolean; mode?: "summary" | "verbose" \}; timeout?: number \}` | ✗ | No description |
 
 ## Returns
 
@@ -30,7 +26,13 @@ Promise
 
 
 
-## Examples
+## Throws
+
+| Error | When |
+| --- | --- |
+| `When the operation fails` |  |
+
+## Example
 
 ```typescript
 const workspaces = await ragListWorkspaces();

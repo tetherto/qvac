@@ -4,7 +4,7 @@
   "description": "Official documentation and single source of truth for QVAC",
   "private": true,
   "scripts": {
-    "prebuild:examples": "npx tsc --noCheck --noResolve --skipLibCheck --module ESNext --target ESNext --rootDir ../../packages/sdk/examples --outDir ../../packages/sdk/dist/examples ../../packages/sdk/examples/*.ts ../../packages/sdk/examples/**/*.ts",
+    "prebuild:examples": "node -e \"const{globSync}=require('glob');const f=globSync('../../packages/sdk/examples/**/*.ts');if(!f.length){console.log('No example files found, skipping prebuild');process.exit(0)}const{execSync}=require('child_process');execSync('npx tsc --noCheck --noResolve --skipLibCheck --module ESNext --target ESNext --rootDir ../../packages/sdk/examples --outDir ../../packages/sdk/dist/examples '+f.join(' '),{stdio:'inherit'})\"",
     "build": "npm run prebuild:examples && next build && npx @vahor/next-broken-links",
     "build:static": "npm run prebuild:examples && next build && npx @vahor/next-broken-links",
     "dev": "npm run prebuild:examples && next dev --turbo -p 3001",

@@ -5,21 +5,26 @@ description: "No description available"
 ---
 
 ```typescript
-function textToSpeech(params: infer): { buffer: Promise<number[]>; bufferStream: AsyncGenerator<number>; done: Promise<boolean> }
+function textToSpeech(params: { inputType: string; modelId: string; stream: boolean; text: string }, options?: { forceNewConnection?: boolean; profiling?: { enabled?: boolean; includeServerBreakdown?: boolean; mode?: "summary" | "verbose" }; timeout?: number }): { buffer: Promise<number[]>; bufferStream: AsyncGenerator<number>; done: Promise<boolean> }
 ```
-
-## Description
-
-No description available
 
 ## Parameters
 
 | Name | Type | Required? | Description |
 | --- | --- | :---: | --- |
-| `params` | `infer` | ✓ | No description |
+| `params` | `\{ inputType: string; modelId: string; stream: boolean; text: string \}` | ✓ | No description |
+| `options` | `\{ forceNewConnection?: boolean; profiling?: \{ enabled?: boolean; includeServerBreakdown?: boolean; mode?: "summary" | "verbose" \}; timeout?: number \}` | ✗ | No description |
 
 ## Returns
 
 ```typescript
 { buffer: Promise<number[]>; bufferStream: AsyncGenerator<number>; done: Promise<boolean> }
 ```
+
+
+
+| Field | Type | Description |
+| --- | --- | --- |
+| `buffer` | `Promise` | — |
+| `bufferStream` | `AsyncGenerator` | — |
+| `done` | `Promise` | — |
