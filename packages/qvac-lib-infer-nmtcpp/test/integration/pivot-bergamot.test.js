@@ -14,11 +14,16 @@
  *   bare test/integration/pivot-bergamot.test.js
  */
 
+process.on('unhandledRejection', (err) => {
+  if (err && err.message && err.message.includes('Corestore is closed')) return
+  console.error('[pivot-bergamot] Unhandled rejection:', err)
+})
+
 const test = require('brittle')
 const path = require('bare-path')
 const fs = require('bare-fs')
 const TranslationNmtcpp = require('@qvac/translation-nmtcpp')
-const { ensureBergamotModelFiles } = require('@qvac/translation-nmtcpp/lib/bergamot-model-fetcher')
+const { downloadBergamotFromFirefox } = require('@qvac/translation-nmtcpp/lib/bergamot-model-fetcher')
 const {
   createLogger,
   createPerformanceCollector,
@@ -40,7 +45,8 @@ const DEVICE_CONFIGS = isMobile
 
 /**
  * Ensures a Bergamot model pair is available on disk.
- * Downloads via Hyperdrive (primary) or Firefox CDN (fallback).
+ * Downloads directly from Firefox CDN (skips Hyperdrive to avoid
+ * dangling connections that hang the process after tests complete).
  *
  * @param {string} src - source language code (e.g. 'es')
  * @param {string} dst - destination language code (e.g. 'en')
@@ -60,7 +66,7 @@ async function ensureModelPair (src, dst) {
 
   const writableRoot = isMobile ? (global.testDir || '/tmp') : path.resolve(__dirname, '../..')
   const destDir = path.join(writableRoot, 'model', 'bergamot', pairKey)
-  return ensureBergamotModelFiles(src, dst, destDir)
+  return downloadBergamotFromFirefox(src, dst, destDir)
 }
 
 /**
