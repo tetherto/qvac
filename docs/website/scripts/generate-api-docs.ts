@@ -82,8 +82,8 @@ async function generateApiDocs(
   }
   console.log(`   SDK path: ${SDK_PATH}`);
 
-  const entryPoint = path.join(SDK_PATH, "index.ts");
-  const tsconfigPath = path.join(SDK_PATH, "tsconfig.json");
+  const entryPoint = path.join(SDK_PATH, "index.ts").replace(/\\/g, "/");
+  const tsconfigPath = path.join(SDK_PATH, "tsconfig.json").replace(/\\/g, "/");
 
   try {
     await fs.stat(entryPoint);
@@ -619,6 +619,7 @@ function parseErrorCodes(source: string, constantName: string): ErrorEntry[] {
       if (raw) {
         entry.summary = raw
           .replace(/\$\{[^}]*\}/g, "…")
+          .replace(/\$\{.*$/g, "…")
           .replace(/\s*\+\s*\([\s\S]*?\)/g, "")
           .trim();
       }
@@ -661,7 +662,7 @@ async function generateErrorsPage(sdkPath: string, outputDir: string): Promise<v
   function renderTable(errors: ErrorEntry[]): string {
     return `| Error | Code | Summary |
 | --- | --- | --- |
-${errors.map((e) => `| \`${e.name}\` | ${e.code} | ${e.summary.replace(/\|/g, "\\|")} |`).join("\n")}`;
+${errors.map((e) => `| \`${e.name}\` | ${e.code} | ${e.summary.replace(/\|/g, "\\|").replace(/[{}]/g, "\\$&")} |`).join("\n")}`;
   }
 
   const sections: string[] = [];

@@ -1,0 +1,3 @@
+# Known false positive with N-API callbacks under ASan
+leak:SdModel::process
+leak:SdModel::load

@@ -10,9 +10,9 @@ To run the server, you need the `@qvac/sdk` and `@qvac/cli` npm packages install
 ### AI capabilities
 
 At present, the HTTP server supports the following QVAC AI capabilities:
-* [Completion](/sdk/ai-tasks/completion)
-* [Text embeddings](/sdk/ai-tasks/text-embeddings)
-* [Transcription](/sdk/ai-tasks/transcription)
+* [Completion](/sdk/examples/ai-tasks/completion)
+* [Text embeddings](/sdk/examples/ai-tasks/text-embeddings)
+* [Transcription](/sdk/examples/ai-tasks/transcription)
 
 ### Compatible tools
 
@@ -34,7 +34,7 @@ Install the SDK and CLI in your project:
 npm install @qvac/sdk @qvac/cli
 ```
 
-See [Installation](/sdk/installation) for environment-specific instructions of the SDK.
+See [Installation](/sdk/getting-started/installation) for environment-specific instructions of the SDK.
 </Step>
 
 <Step>
@@ -79,7 +79,7 @@ curl http://localhost:11434/v1/chat/completions \
 
 ## Configuration
 
-Models are declared in `qvac.config.*` under the `serve.models` key. The server can only load models listed under this key — requests for unlisted models return 404. Each key in `serve.models` is a **model alias** — the name that HTTP clients use in the `model` field of their requests. For the full schema of `serve.models`, see [Configuration — `ServeConfig`](/sdk/configuration#serveconfig).
+Models are declared in `qvac.config.*` under the `serve.models` key. The server can only load models listed under this key — requests for unlisted models return 404. Each key in `serve.models` is a **model alias** — the name that HTTP clients use in the `model` field of their requests. For the full schema of `serve.models`, see [Configuration — `ServeConfig`](/sdk/getting-started/configuration#serveconfig).
 
 ### Example
 
