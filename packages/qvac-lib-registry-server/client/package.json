@@ -63,8 +63,11 @@
   "devDependencies": {
     "brittle": "^3.4.0",
     "dotenv": "^17.2.3",
+    "hypercore-stats": "^2.4.0",
+    "hyperswarm-stats": "^1.3.0",
     "standard": "^17.1.0",
     "test-tmp": "^1.4.0",
+    "tiny-byte-size": "^1.1.0",
     "typescript": "^5.9.3"
   }
 }
