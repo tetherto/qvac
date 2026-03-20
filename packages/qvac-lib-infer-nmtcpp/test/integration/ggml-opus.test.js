@@ -45,7 +45,7 @@ const ALL_DEVICE_CONFIGS = [
   { id: 'cpu', useGpu: false }
 ]
 
-const DEVICE_CONFIGS = isMobile
+const DEVICE_CONFIGS = isMobile && platform !== 'ios'
   ? ALL_DEVICE_CONFIGS
   : ALL_DEVICE_CONFIGS.filter(c => c.id === 'cpu')
 

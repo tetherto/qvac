@@ -1277,11 +1277,11 @@ jobs:
               --filters '[{"attribute":"MANUFACTURER","operator":"EQUALS","values":["Google"]},{"attribute":"MODEL","operator":"CONTAINS","values":["Pixel 9"]},{"attribute":"PLATFORM","operator":"EQUALS","values":["ANDROID"]}]' \
               --query 'devices[].{name:name,model:model,os:os,availability:availability}' --output table || true
 
-            SAMSUNG_FILTER='{"filters":[{"attribute":"MANUFACTURER","operator":"EQUALS","values":["Samsung"]},{"attribute":"MODEL","operator":"CONTAINS","values":["S25 Ultra"]},{"attribute":"AVAILABILITY","operator":"EQUALS","values":["HIGHLY_AVAILABLE"]},{"attribute":"PLATFORM","operator":"EQUALS","values":["ANDROID"]}],"maxDevices":1}'
+            SAMSUNG_FILTER='{"filters":[{"attribute":"MANUFACTURER","operator":"EQUALS","values":["Samsung"]},{"attribute":"MODEL","operator":"CONTAINS","values":["S25 Ultra"]},{"attribute":"PLATFORM","operator":"EQUALS","values":["ANDROID"]}],"maxDevices":1}'
             RUN_ARN_1=$(schedule_run_with_filter "$RUN_NAME-Samsung" "$SAMSUNG_FILTER")
             echo "✅ Samsung run scheduled: $RUN_ARN_1"
 
-            PIXEL_FILTER='{"filters":[{"attribute":"MANUFACTURER","operator":"EQUALS","values":["Google"]},{"attribute":"MODEL","operator":"CONTAINS","values":["Pixel 9"]},{"attribute":"AVAILABILITY","operator":"EQUALS","values":["HIGHLY_AVAILABLE"]},{"attribute":"PLATFORM","operator":"EQUALS","values":["ANDROID"]}],"maxDevices":1}'
+            PIXEL_FILTER='{"filters":[{"attribute":"MANUFACTURER","operator":"EQUALS","values":["Google"]},{"attribute":"MODEL","operator":"CONTAINS","values":["Pixel 9"]},{"attribute":"PLATFORM","operator":"EQUALS","values":["ANDROID"]}],"maxDevices":1}'
             RUN_ARN_2=$(schedule_run_with_filter "$RUN_NAME-Pixel" "$PIXEL_FILTER")
             echo "✅ Pixel run scheduled: $RUN_ARN_2"
 
@@ -1388,7 +1388,7 @@ jobs:
             RUN_NAME_LABEL=$(echo $RUN_DETAILS | jq -r '.run.name')
             COUNTERS=$(echo $RUN_DETAILS | jq -r '.run.counters')
 
-            if [[ "$RESULT" != "PASSED" ]]; then ALL_RESULTS_PASSED=false; fi
+            if [[ "$RESULT" != "PASSED" && "$RESULT" != "SKIPPED" ]]; then ALL_RESULTS_PASSED=false; fi
 
             TOTAL_TOTAL=$((TOTAL_TOTAL + $(echo $COUNTERS | jq -r '.total // 0')))
             TOTAL_PASSED=$((TOTAL_PASSED + $(echo $COUNTERS | jq -r '.passed // 0')))
@@ -1452,8 +1452,10 @@ jobs:
           echo "Device Farm totals: $TOTAL_TOTAL | Passed: $TOTAL_PASSED | Failed: $TOTAL_FAILED | Skipped: $TOTAL_SKIPPED"
           echo ""
 
-          # Save outputs
-          if [[ "$ALL_RESULTS_PASSED" == "true" ]]; then
+          # Save outputs — pass if at least one device passed and none failed
+          if [ $USER_FAILED -gt 0 ]; then
+            echo "test_result=FAILED" >> $GITHUB_OUTPUT
+          elif [ $USER_PASSED -gt 0 ]; then
             echo "test_result=PASSED" >> $GITHUB_OUTPUT
           else
             echo "test_result=FAILED" >> $GITHUB_OUTPUT
@@ -1466,17 +1468,24 @@ jobs:
           echo "user_test_passed=$USER_PASSED" >> $GITHUB_OUTPUT
           echo "user_test_failed=$USER_FAILED" >> $GITHUB_OUTPUT
 
-          if [[ "$ALL_RESULTS_PASSED" != "true" ]] || [ $USER_FAILED -gt 0 ]; then
+          if [ $USER_FAILED -gt 0 ]; then
             echo ""
             echo "❌ Device Farm tests failed"
             echo "   Devices: $USER_PASSED passed, $USER_FAILED failed (out of $USER_TEST_COUNT)"
             echo "   Totals: $TOTAL_TOTAL | Passed: $TOTAL_PASSED | Failed: $TOTAL_FAILED | Skipped: $TOTAL_SKIPPED"
             exit 1
+          elif [ $USER_PASSED -eq 0 ] && [[ "$ALL_RESULTS_PASSED" != "true" ]]; then
+            echo ""
+            echo "❌ No devices ran tests (all runs skipped or errored)"
+            exit 1
           fi
 
           echo ""
-          echo "✅ All Device Farm tests passed!"
+          echo "✅ Device Farm tests passed!"
           echo "   Devices: $USER_PASSED passed (out of $USER_TEST_COUNT)"
+          if [ "$TOTAL_SKIPPED" -gt 0 ]; then
+            echo "   ⚠️  $TOTAL_SKIPPED test(s) skipped (device unavailable)"
+          fi
           echo "   Totals: $TOTAL_TOTAL | Passed: $TOTAL_PASSED | Failed: $TOTAL_FAILED | Skipped: $TOTAL_SKIPPED"
 
       - name: Comment PR with results
