@@ -1,0 +1,74 @@
+{
+  "dependencies": [
+    {
+      "name": "ggml",
+      "version>=": "2026-01-30#2"
+    },
+    "picojson",
+    {
+      "name": "qvac-lib-inference-addon-cpp",
+      "version>=": "1.1.2"
+    },
+    {
+      "name": "qvac-lint-cpp",
+      "version>=": "1.4.4"
+    },
+    {
+      "name": "stable-diffusion-cpp",
+      "version>=": "2026-03-01"
+    },
+    "stb"
+  ],
+  "features": {
+    "cuda": {
+      "description": "Enable CUDA GPU backend",
+      "dependencies": [
+        {
+          "name": "stable-diffusion-cpp",
+          "features": [
+            "cuda"
+          ]
+        }
+      ]
+    },
+    "metal": {
+      "description": "Enable Metal GPU backend (macOS/iOS)",
+      "dependencies": [
+        {
+          "name": "stable-diffusion-cpp",
+          "features": [
+            "metal"
+          ]
+        }
+      ]
+    },
+    "opencl": {
+      "description": "Enable OpenCL GPU backend (Android/Adreno)",
+      "dependencies": [
+        {
+          "name": "stable-diffusion-cpp",
+          "features": [
+            "opencl"
+          ]
+        }
+      ]
+    },
+    "tests": {
+      "description": "Build tests",
+      "dependencies": [
+        "gtest"
+      ]
+    },
+    "vulkan": {
+      "description": "Enable Vulkan GPU backend",
+      "dependencies": [
+        {
+          "name": "stable-diffusion-cpp",
+          "features": [
+            "vulkan"
+          ]
+        }
+      ]
+    }
+  }
+}

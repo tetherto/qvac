@@ -5,17 +5,29 @@ const path = require('bare-path')
 const os = require('bare-os')
 const process = require('bare-process')
 const { Readable } = require('bare-stream')
-const { spawn } = require('bare-subprocess')
-const TranscriptionParakeet = require('../../index.js')
 
 const platform = os.platform()
 const arch = os.arch()
 const isMobile = platform === 'ios' || platform === 'android'
 
+// Use computed paths so bare-pack cannot statically trace into the package
+// root (../../) which doesn't exist in the mobile test-framework layout.
+// On desktop the relative path resolves normally; on mobile the installed
+// npm package name is used instead.
+function _resolve (desktopPath, mobilePath) {
+  const p = isMobile ? mobilePath : desktopPath
+  return require(p)
+}
+
+const binding = _resolve('../../binding', '@qvac/transcription-parakeet/binding.js')
+const { ParakeetInterface } = _resolve('../../parakeet', '@qvac/transcription-parakeet/parakeet.js')
+const TranscriptionParakeet = _resolve('../../index.js', '@qvac/transcription-parakeet')
+
 let FakeDL = null
 if (!isMobile) {
   try {
-    FakeDL = require('../mocks/loader.fake.js')
+    const mockPath = '../mocks/loader.fake.js'
+    FakeDL = require(mockPath)
   } catch (e) {}
 }
 
@@ -141,8 +153,8 @@ function makePcmNoise (numSamples, amplitude = 0.3) {
  * @param {Object} [binding] - Optional binding instance (will require if not provided)
  * @returns {Object} The binding instance with logger configured
  */
-function setupJsLogger (binding = null) {
-  const actualBinding = binding || require('../../binding')
+function setupJsLogger (overrideBinding = null) {
+  const actualBinding = overrideBinding || binding
   // Logger lifecycle in integration can crash or hang when repeatedly toggled.
   // Keep release as a no-op and only enable native logging explicitly when requested.
   if (!actualBinding.__qvacReleaseLoggerPatched) {
@@ -257,12 +269,108 @@ function getTestPaths (modelsDir = null) {
 }
 
 /**
- * Downloads a file from URL using curl
+ * Mobile-friendly HTTPS download using bare-https.
+ * Handles redirects and streams directly to file.
+ * Mirrors the pattern used by TTS's downloadModel.js.
+ */
+async function downloadWithHttp (url, filepath, maxRedirects = 10) {
+  return new Promise((resolve, reject) => {
+    const https = require('bare-https')
+    const { URL } = require('bare-url')
+
+    const parsedUrl = new URL(url)
+
+    const options = {
+      hostname: parsedUrl.hostname,
+      port: parsedUrl.port || 443,
+      path: parsedUrl.pathname + parsedUrl.search,
+      method: 'GET',
+      headers: {
+        'User-Agent': 'Mozilla/5.0 (compatible; bare-download/1.0)'
+      }
+    }
+
+    console.log(` [HTTPS] Requesting: ${parsedUrl.hostname}${parsedUrl.pathname}`)
+
+    const req = https.request(options, (res) => {
+      if (res.statusCode >= 300 && res.statusCode < 400 && res.headers.location) {
+        if (maxRedirects <= 0) {
+          reject(new Error('Too many redirects'))
+          return
+        }
+        const location = res.headers.location
+        let redirectUrl
+        if (location.startsWith('http://') || location.startsWith('https://')) {
+          redirectUrl = location
+        } else if (location.startsWith('/')) {
+          redirectUrl = `${parsedUrl.protocol}//${parsedUrl.host}${location}`
+        } else {
+          const basePath = parsedUrl.pathname.substring(0, parsedUrl.pathname.lastIndexOf('/') + 1)
+          redirectUrl = `${parsedUrl.protocol}//${parsedUrl.host}${basePath}${location}`
+        }
+        console.log(` [HTTPS] Redirecting to: ${redirectUrl}`)
+        downloadWithHttp(redirectUrl, filepath, maxRedirects - 1)
+          .then(resolve)
+          .catch(reject)
+        return
+      }
+
+      if (res.statusCode !== 200) {
+        reject(new Error(`HTTP ${res.statusCode}: ${res.statusMessage}`))
+        return
+      }
+
+      const dir = path.dirname(filepath)
+      if (!fs.existsSync(dir)) {
+        fs.mkdirSync(dir, { recursive: true })
+      }
+
+      const writeStream = fs.createWriteStream(filepath)
+      let downloadedBytes = 0
+      const contentLength = parseInt(res.headers['content-length'] || '0', 10)
+
+      res.on('data', (chunk) => {
+        writeStream.write(chunk)
+        downloadedBytes += chunk.length
+        if (contentLength > 0 && downloadedBytes % (1024 * 1024) < chunk.length) {
+          const percent = ((downloadedBytes / contentLength) * 100).toFixed(1)
+          console.log(` [HTTPS] Progress: ${percent}% (${downloadedBytes} / ${contentLength} bytes)`)
+        }
+      })
+
+      res.on('end', () => {
+        writeStream.end(() => {
+          console.log(` [HTTPS] Download complete: ${downloadedBytes} bytes`)
+          resolve()
+        })
+      })
+
+      res.on('error', (err) => {
+        writeStream.end()
+        reject(err)
+      })
+    })
+
+    req.on('error', (err) => {
+      reject(err)
+    })
+
+    req.end()
+  })
+}
+
+/**
+ * Downloads a file from URL.
+ * Uses bare-https on mobile (no curl available), curl on desktop.
  * @param {string} url - URL to download from
  * @param {string} destPath - Destination file path
  * @returns {Promise<void>}
  */
 async function downloadFile (url, destPath) {
+  if (isMobile) {
+    return downloadWithHttp(url, destPath)
+  }
+  const { spawn } = require('bare-subprocess')
   return new Promise((resolve, reject) => {
     const curl = spawn('curl', ['-L', '-o', destPath, url])
     curl.on('exit', (code) => {
@@ -283,18 +391,19 @@ async function ensureModel (modelPath = null) {
   const { modelsDir } = getTestPaths()
   const targetPath = modelPath || path.join(modelsDir, 'parakeet-tdt-0.6b-v3-onnx')
 
-  // Check if model already exists with all required files
   const requiredFiles = [
-    'encoder-model.onnx',
-    'encoder-model.onnx.data',
-    'decoder_joint-model.onnx',
-    'vocab.txt',
-    'preprocessor.onnx'
+    { file: 'encoder-model.onnx', minSize: 1000 },
+    { file: 'encoder-model.onnx.data', minSize: 100000000 },
+    { file: 'decoder_joint-model.onnx', minSize: 1000000 },
+    { file: 'vocab.txt', minSize: 100 },
+    { file: 'preprocessor.onnx', minSize: 100000 }
   ]
 
-  const allFilesExist = requiredFiles.every(file =>
-    fs.existsSync(path.join(targetPath, file))
-  )
+  const allFilesExist = requiredFiles.every(({ file, minSize }) => {
+    const p = path.join(targetPath, file)
+    if (!fs.existsSync(p)) return false
+    return fs.statSync(p).size >= minSize
+  })
 
   if (allFilesExist) {
     console.log('Model already downloaded')
@@ -312,19 +421,23 @@ async function ensureModel (modelPath = null) {
   const preprocessorUrl = 'https://huggingface.co/ysdede/parakeet-tdt-0.6b-v2-onnx/resolve/main/nemo128.onnx'
 
   const downloads = [
-    { url: `${baseUrl}/encoder-model.onnx`, file: 'encoder-model.onnx' },
-    { url: `${baseUrl}/encoder-model.onnx.data`, file: 'encoder-model.onnx.data' },
-    { url: `${baseUrl}/decoder_joint-model.onnx`, file: 'decoder_joint-model.onnx' },
-    { url: `${baseUrl}/vocab.txt`, file: 'vocab.txt' },
-    { url: preprocessorUrl, file: 'preprocessor.onnx' }
+    { url: `${baseUrl}/encoder-model.onnx`, file: 'encoder-model.onnx', minSize: 1000 },
+    { url: `${baseUrl}/encoder-model.onnx.data`, file: 'encoder-model.onnx.data', minSize: 100000000 },
+    { url: `${baseUrl}/decoder_joint-model.onnx`, file: 'decoder_joint-model.onnx', minSize: 1000000 },
+    { url: `${baseUrl}/vocab.txt`, file: 'vocab.txt', minSize: 100 },
+    { url: preprocessorUrl, file: 'preprocessor.onnx', minSize: 100000 }
   ]
 
-  for (const { url, file } of downloads) {
+  for (const { url, file, minSize } of downloads) {
     const destPath = path.join(targetPath, file)
-    if (!fs.existsSync(destPath)) {
-      console.log(`  Downloading ${file}...`)
-      await downloadFile(url, destPath)
+    if (fs.existsSync(destPath)) {
+      const size = fs.statSync(destPath).size
+      if (size >= minSize) continue
+      console.log(`  Cached ${file} too small (${size} bytes), re-downloading...`)
+      fs.unlinkSync(destPath)
     }
+    console.log(`  Downloading ${file}...`)
+    await downloadFile(url, destPath)
   }
 
   console.log('Model download complete')
@@ -378,6 +491,13 @@ async function runTranscription (params, expectation = {}) {
   const modelDir = path.dirname(modelPath)
   const modelName = params.modelName || path.basename(modelPath)
   const diskPath = params.diskPath || modelDir
+  if (!params.loader && !FakeDL) {
+    return {
+      output: 'Error: No loader provided and FakeDL not available (mobile)',
+      passed: false,
+      data: { error: 'No loader provided and FakeDL not available (mobile)' }
+    }
+  }
   const loader = params.loader || new FakeDL({})
   const parakeetConfig = params.parakeetConfig || {}
 
@@ -511,23 +631,23 @@ const MODEL_CONFIGS = {
   ctc: {
     dirName: 'parakeet-ctc-0.6b-onnx',
     files: [
-      { url: 'https://huggingface.co/onnx-community/parakeet-ctc-0.6b-ONNX/resolve/main/onnx/model.onnx', file: 'model.onnx' },
-      { url: 'https://huggingface.co/onnx-community/parakeet-ctc-0.6b-ONNX/resolve/main/onnx/model.onnx_data', file: 'model.onnx_data' },
-      { url: 'https://huggingface.co/onnx-community/parakeet-ctc-0.6b-ONNX/resolve/main/tokenizer.json', file: 'tokenizer.json' }
+      { url: 'https://huggingface.co/onnx-community/parakeet-ctc-0.6b-ONNX/resolve/main/onnx/model.onnx', file: 'model.onnx', minSize: 1000 },
+      { url: 'https://huggingface.co/onnx-community/parakeet-ctc-0.6b-ONNX/resolve/main/onnx/model.onnx_data', file: 'model.onnx_data', minSize: 100000000 },
+      { url: 'https://huggingface.co/onnx-community/parakeet-ctc-0.6b-ONNX/resolve/main/tokenizer.json', file: 'tokenizer.json', minSize: 100 }
     ]
   },
   eou: {
     dirName: 'parakeet-eou-120m-v1-onnx',
     files: [
-      { url: 'https://huggingface.co/altunenes/parakeet-rs/resolve/main/realtime_eou_120m-v1-onnx/encoder.onnx', file: 'encoder.onnx' },
-      { url: 'https://huggingface.co/altunenes/parakeet-rs/resolve/main/realtime_eou_120m-v1-onnx/decoder_joint.onnx', file: 'decoder_joint.onnx' },
-      { url: 'https://huggingface.co/altunenes/parakeet-rs/resolve/main/realtime_eou_120m-v1-onnx/tokenizer.json', file: 'tokenizer.json' }
+      { url: 'https://huggingface.co/altunenes/parakeet-rs/resolve/main/realtime_eou_120m-v1-onnx/encoder.onnx', file: 'encoder.onnx', minSize: 100000 },
+      { url: 'https://huggingface.co/altunenes/parakeet-rs/resolve/main/realtime_eou_120m-v1-onnx/decoder_joint.onnx', file: 'decoder_joint.onnx', minSize: 100000 },
+      { url: 'https://huggingface.co/altunenes/parakeet-rs/resolve/main/realtime_eou_120m-v1-onnx/tokenizer.json', file: 'tokenizer.json', minSize: 100 }
     ]
   },
   sortformer: {
     dirName: 'sortformer-4spk-v2-onnx',
     files: [
-      { url: 'https://huggingface.co/cgus/diar_streaming_sortformer_4spk-v2-onnx/resolve/main/diar_streaming_sortformer_4spk-v2.onnx', file: 'sortformer.onnx' }
+      { url: 'https://huggingface.co/cgus/diar_streaming_sortformer_4spk-v2-onnx/resolve/main/diar_streaming_sortformer_4spk-v2.onnx', file: 'sortformer.onnx', minSize: 1000000 }
     ]
   }
 }
@@ -544,11 +664,13 @@ async function ensureModelForType (modelType) {
   const { modelsDir } = getTestPaths()
   const targetPath = path.join(modelsDir, cfg.dirName)
 
-  const allFilesExist = cfg.files.every(f =>
-    fs.existsSync(path.join(targetPath, f.file))
-  )
+  const allFilesValid = cfg.files.every(f => {
+    const p = path.join(targetPath, f.file)
+    if (!fs.existsSync(p)) return false
+    return fs.statSync(p).size >= (f.minSize || 0)
+  })
 
-  if (allFilesExist) {
+  if (allFilesValid) {
     console.log(`${modelType.toUpperCase()} model already downloaded`)
     return targetPath
   }
@@ -558,12 +680,16 @@ async function ensureModelForType (modelType) {
     fs.mkdirSync(targetPath, { recursive: true })
   }
 
-  for (const { url, file } of cfg.files) {
+  for (const { url, file, minSize } of cfg.files) {
     const destPath = path.join(targetPath, file)
-    if (!fs.existsSync(destPath)) {
-      console.log(`  Downloading ${file}...`)
-      await downloadFile(url, destPath)
+    if (fs.existsSync(destPath)) {
+      const size = fs.statSync(destPath).size
+      if (size >= (minSize || 0)) continue
+      console.log(`  Cached ${file} too small (${size} bytes), re-downloading...`)
+      fs.unlinkSync(destPath)
     }
+    console.log(`  Downloading ${file}...`)
+    await downloadFile(url, destPath)
   }
 
   console.log(`${modelType.toUpperCase()} model download complete`)
@@ -608,6 +734,10 @@ function getNamedPathsConfig (modelType, modelDir) {
 }
 
 module.exports = {
+  binding,
+  ParakeetInterface,
+  TranscriptionParakeet,
+  FakeDL,
   detectPlatform,
   waitUntilIdle,
   runTranscription,

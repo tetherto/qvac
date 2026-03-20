@@ -28,11 +28,13 @@ export interface AddonMediaMessage {
 }
 export type AddonRunJobMessage = AddonMessage | AddonMediaMessage
 
+
 export interface Addon {
   loadWeights(data: { filename: string; chunk: Uint8Array | null; completed: boolean }, logger?: QvacLogger): Promise<void>
   activate(): Promise<void>
-  runJob(messages: AddonRunJobMessage[]): Promise<boolean>
+  runJob(data: AddonRunJobMessage[]): Promise<boolean>
   cancel(): Promise<void>
+  finetune?(params: FinetuneOptions): Promise<boolean>
   unload(): Promise<void>
 }
 
@@ -130,11 +132,125 @@ export interface DownloadResult {
   completed: boolean
 }
 
+export interface FinetuneValidationNone {
+  type: 'none'
+}
+
+export interface FinetuneValidationSplit {
+  type: 'split'
+  /** Fraction of training data to hold out for validation (0–1). Default 0.05. */
+  fraction?: number
+}
+
+export interface FinetuneValidationDataset {
+  type: 'dataset'
+  /** Path to a separate eval dataset file. Must differ from trainDatasetDir. */
+  path: string
+}
+
+export type FinetuneValidation =
+  | FinetuneValidationNone
+  | FinetuneValidationSplit
+  | FinetuneValidationDataset
+
+export interface FinetuneOptions {
+  /** Path to training dataset file (.jsonl for SFT, .txt for causal). */
+  trainDatasetDir: string
+  /** How to run validation. */
+  validation: FinetuneValidation
+  /** Directory (or file path ending in .gguf) for the final LoRA adapter. */
+  outputParametersDir: string
+  /** Number of training epochs. Default 1. */
+  numberOfEpochs?: number
+  /** Initial learning rate. Default 1e-4. */
+  learningRate?: number
+  /** Training sequence length. Default 128. */
+  contextLength?: number
+  /** Backend n_batch (tokens per batch). Must be >= microBatchSize and divisible by it. Default 128. */
+  batchSize?: number
+  /** Backend n_ubatch (micro-batch size). Must be <= batchSize. Default 128. */
+  microBatchSize?: number
+  /** Use SFT (chat) mode when true; causal (next-token) when false. Default false. */
+  assistantLossOnly?: boolean
+  /** Comma-separated LoRA target modules (e.g. 'attn_q,attn_k,attn_v,attn_o'). Default: attention Q/K/V/O. */
+  loraModules?: string
+  /** LoRA rank. Default 8. */
+  loraRank?: number
+  /** LoRA alpha (scaling factor). Default 16.0. */
+  loraAlpha?: number
+  /** LoRA init standard deviation. Default 0.02. */
+  loraInitStd?: number
+  /** Seed for LoRA weight initialization (0 = non-deterministic). Default 42. */
+  loraSeed?: number
+  /** Directory for checkpoints. Default './checkpoints'. */
+  checkpointSaveDir?: string
+  /** Save a checkpoint every N optimizer steps (0 = only on pause). Default 0. */
+  checkpointSaveSteps?: number
+  /** Path to a custom chat template file (for SFT). */
+  chatTemplatePath?: string
+  /** Learning rate scheduler: 'constant', 'cosine', or 'linear'. Default 'cosine'. */
+  lrScheduler?: 'constant' | 'cosine' | 'linear'
+  /** Minimum learning rate (for cosine/linear schedulers). Default 0. */
+  lrMin?: number
+  /** Warmup ratio (0–1). Requires warmupRatioSet: true. Default 0.1. */
+  warmupRatio?: number
+  /** When true, compute warmup steps from warmupRatio. */
+  warmupRatioSet?: boolean
+  /** Explicit warmup steps (used when warmupStepsSet is true). Default 0. */
+  warmupSteps?: number
+  /** When true, use warmupSteps directly instead of ratio. */
+  warmupStepsSet?: boolean
+  /** Weight decay. Default 0.01. */
+  weightDecay?: number
+}
+
+export interface FinetuneProgressStats {
+  is_train: boolean
+  loss: number
+  loss_uncertainty: number
+  accuracy: number
+  accuracy_uncertainty: number
+  global_steps: number
+  current_epoch: number
+  current_batch: number
+  total_batches: number
+  elapsed_ms: number
+  eta_ms: number
+}
+
+export interface FinetuneHandle {
+  on(event: 'stats', cb: (stats: FinetuneProgressStats) => void): this
+  removeListener(event: 'stats', cb: (stats: FinetuneProgressStats) => void): this
+  await(): Promise<FinetuneResult>
+}
+
+export interface FinetuneStats {
+  train_loss?: number
+  train_loss_uncertainty?: number
+  val_loss?: number
+  val_loss_uncertainty?: number
+  train_accuracy?: number
+  train_accuracy_uncertainty?: number
+  val_accuracy?: number
+  val_accuracy_uncertainty?: number
+  learning_rate?: number
+  global_steps: number
+  epochs_completed: number
+}
+
+export interface FinetuneResult {
+  op: 'finetune'
+  status: 'COMPLETED' | 'PAUSED'
+  stats?: FinetuneStats
+}
+
 export default class LlmLlamacpp extends BaseInference {
   protected addon: Addon
 
-  constructor(args: LlmLlamacppArgs, config: LlamaConfig)
-
+  constructor(
+    args: LlmLlamacppArgs,
+    config: LlamaConfig
+  )
   _load(
     closeLoader?: boolean,
     onDownloadProgress?: ReportProgressCallback | ((bytes: number) => void)
@@ -159,11 +275,12 @@ export default class LlmLlamacpp extends BaseInference {
 
   run(prompt: Message[], runOptions?: RunOptions): Promise<QvacResponse>
 
-  unload(): Promise<void>
+  finetune(finetuningOptions: FinetuneOptions): Promise<FinetuneHandle>
 
   cancel(): Promise<void>
 
-  getApiDefinition(): string
+  unload(): Promise<void>
+
 }
 
-export { ReportProgressCallback, QvacResponse }
+export { ReportProgressCallback, QvacResponse, FinetuneHandle, FinetuneProgressStats, FinetuneOptions, FinetuneValidation }

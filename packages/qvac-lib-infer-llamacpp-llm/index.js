@@ -1,5 +1,6 @@
 'use strict'
 
+const fs = require('bare-fs')
 const path = require('bare-path')
 
 const BaseInference = require('@qvac/infer-base/WeightsProvider/BaseInference')
@@ -35,6 +36,58 @@ function normalizeRunOptions (runOptions) {
   }
 }
 
+const VALIDATION_TYPES = ['none', 'split', 'dataset']
+const DEFAULT_VALIDATION_FRACTION = 0.05
+
+function normalizeFinetuneParams (opts) {
+  const validation = opts.validation
+  if (Object.prototype.hasOwnProperty.call(opts, 'evalDatasetPath')) {
+    throw new Error(
+      "Top-level evalDatasetPath is no longer supported. Use validation.path with validation.type set to 'dataset'."
+    )
+  }
+  if (validation == null || typeof validation !== 'object' || !('type' in validation)) {
+    throw new Error(
+      'Finetuning options must include validation: { type: \'none\' | \'split\' | \'dataset\'[, fraction?: number][, path?: string] }. ' +
+      'Example: validation: { type: \'split\', fraction: 0.05 }, validation: { type: \'dataset\', path: \'./eval.jsonl\' }, or validation: { type: \'none\' }.'
+    )
+  }
+  const out = { ...opts }
+  const type = validation.type
+  if (!VALIDATION_TYPES.includes(type)) {
+    throw new Error(
+      `validation.type must be one of ${VALIDATION_TYPES.join(', ')}; got: ${type}`
+    )
+  }
+  if (type === 'none') {
+    out.validationSplit = 0
+    out.useEvalDatasetForValidation = false
+    delete out.evalDatasetPath
+  } else if (type === 'split') {
+    const fraction = validation.fraction ?? DEFAULT_VALIDATION_FRACTION
+    out.validationSplit = Math.max(0, Math.min(1, Number(fraction)))
+    out.useEvalDatasetForValidation = false
+    delete out.evalDatasetPath
+  } else {
+    const evalPath = validation.path
+    if (!evalPath || typeof evalPath !== 'string' || evalPath.trim() === '') {
+      throw new Error(
+        "validation.type is 'dataset' but no path is provided. Set validation.path to the eval dataset file path (e.g. validation: { type: 'dataset', path: './eval.jsonl' })."
+      )
+    }
+    if (evalPath === opts.trainDatasetDir) {
+      throw new Error(
+        "validation.type is 'dataset' but validation.path is the same as trainDatasetDir. Provide a separate eval dataset path."
+      )
+    }
+    out.evalDatasetPath = evalPath
+    out.validationSplit = 0
+    out.useEvalDatasetForValidation = true
+  }
+  delete out.validation
+  return out
+}
+
 /**
  * GGML client implementation for Llama LLM model
  */
@@ -53,16 +106,22 @@ class LlmLlamacpp extends BaseInference {
    * @param {string} args.projectionModel - Name of the projection model directory or file
    * @param {Object} config - Model-specific configuration settings
    */
-  constructor ({ opts = {}, loader, logger = null, diskPath = '.', modelName, projectionModel }, config) {
+  constructor (
+    { opts = {}, loader, logger = null, diskPath = '.', modelName, projectionModel },
+    config
+  ) {
     super({ logger, opts })
     this._config = config
     this._diskPath = diskPath
     this._modelName = modelName
     this._projectionModel = projectionModel
-    // _shards will be null if the modelName is not a sharded file.
     this._shards = WeightsProvider.expandGGUFIntoShards(this._modelName)
     this.weightsProvider = new WeightsProvider(loader, this.logger)
+    this._checkpointSaveDir = null
     this._hasActiveResponse = false
+    this._skipNextRuntimeStats = false
+    this._originalLogger = this.logger
+    this._baseOutputCallback = this._outputCallback.bind(this)
   }
 
   /**
@@ -75,10 +134,12 @@ class LlmLlamacpp extends BaseInference {
     this.logger.info('Starting model load')
 
     try {
+      const configForLoad = { ...this._config }
+
       const configurationParams = {
         path: path.join(this._diskPath, this._modelName),
         projectionPath: this._projectionModel ? path.join(this._diskPath, this._projectionModel) : '',
-        config: this._config
+        config: configForLoad
       }
 
       this.logger.info('Creating addon with configuration:', configurationParams)
@@ -123,6 +184,58 @@ class LlmLlamacpp extends BaseInference {
     await this.weightsProvider.streamFiles(this._shards, onChunk, reportProgressCallback)
   }
 
+  _isSuppressedNoResponseLog (args) {
+    const message = args.map(arg => {
+      if (typeof arg === 'string') return arg
+      if (arg && typeof arg === 'object') {
+        if (arg.message && typeof arg.message === 'string') return arg.message
+        return JSON.stringify(arg)
+      }
+      return String(arg)
+    }).join(' ')
+    return message && message.includes('No response found for job')
+  }
+
+  _createFilteredLogger (sourceLogger) {
+    const filteredLogger = sourceLogger ? Object.create(Object.getPrototypeOf(sourceLogger)) : {}
+    Object.assign(filteredLogger, sourceLogger)
+
+    const originalInfo = sourceLogger && typeof sourceLogger.info === 'function'
+      ? sourceLogger.info.bind(sourceLogger)
+      : null
+    const originalWarn = sourceLogger && typeof sourceLogger.warn === 'function'
+      ? sourceLogger.warn.bind(sourceLogger)
+      : null
+
+    filteredLogger.info = (...args) => {
+      if (this._isSuppressedNoResponseLog(args)) return
+      if (originalInfo) return originalInfo.apply(sourceLogger, args)
+    }
+
+    filteredLogger.warn = (...args) => {
+      if (this._isSuppressedNoResponseLog(args)) return
+      if (originalWarn) return originalWarn.apply(sourceLogger, args)
+    }
+
+    return filteredLogger
+  }
+
+  _handleAddonOutputEvent (originalOutputCb, originalLoggerRef, instance, eventType, jobId, data, extra) {
+    if (eventType === 'JobEnded' || eventType === 'Error') {
+      this._hasActiveResponse = false
+    }
+
+    if (eventType === 'LogMsg') {
+      const logMsg = typeof data === 'string' ? data : (data?.message || JSON.stringify(data))
+      originalLoggerRef?.info?.(logMsg)
+      return
+    }
+
+    if (originalOutputCb) {
+      return originalOutputCb(instance, eventType, jobId, data, extra)
+    }
+  }
+
   /**
    * Public API entrypoint for inference.
    * @param {Message[]} prompt - Input prompt array of messages
@@ -142,6 +255,21 @@ class LlmLlamacpp extends BaseInference {
    */
   _createAddon (configurationParams) {
     const binding = require('./binding')
+
+    this.logger = this._createFilteredLogger(this._originalLogger)
+
+    this._outputCallback = (instance, eventType, jobId, data, extra) => {
+      return this._handleAddonOutputEvent(
+        this._baseOutputCallback,
+        this._originalLogger,
+        instance,
+        eventType,
+        jobId,
+        data,
+        extra
+      )
+    }
+
     return new LlamaInterface(
       binding,
       configurationParams,
@@ -150,12 +278,28 @@ class LlmLlamacpp extends BaseInference {
   }
 
   _addonOutputCallback (addon, event, data, error) {
-    // Map C++ mangled type names to expected event names
-    // Check stats FIRST (before basic_string check, since stats event name also contains 'basic_string')
     if (typeof data === 'object' && data !== null && 'TPS' in data) {
-      // Stats object received - this signals job completion
-      // Pass stats with JobEnded event (base class expects stats in JobEnded data)
+      if (this._skipNextRuntimeStats) {
+        this._skipNextRuntimeStats = false
+        return
+      }
       return this._outputCallback(addon, 'JobEnded', 'OnlyOneJob', data, null)
+    }
+    if (
+      typeof data === 'object' &&
+      data !== null &&
+      data.op === 'finetune' &&
+      typeof data.status === 'string'
+    ) {
+      this._skipNextRuntimeStats = true
+      return this._outputCallback(addon, 'JobEnded', 'OnlyOneJob', data, null)
+    }
+    if (
+      typeof data === 'object' &&
+      data !== null &&
+      data.type === 'finetune_progress'
+    ) {
+      return this._outputCallback(addon, 'FinetuneProgress', 'OnlyOneJob', data, null)
     }
 
     let mappedEvent = event
@@ -169,25 +313,53 @@ class LlmLlamacpp extends BaseInference {
   }
 
   /**
-   * Cancel the current task
+   * Pause finetuning, saving a checkpoint so training can resume later.
+   * cancel inference job if it is running
    */
-  async cancel () {
+  async pause () {
     if (this.addon?.cancel) {
       await this.addon.cancel()
     }
   }
 
   /**
-   * Unload the model and clear resources. Ensures any in-flight job is resolved as failed.
+   * Cancel finetuning and remove the pause checkpoint so the next
+   * finetune() call starts fresh instead of resuming.
+   * cancel inference job if it is running
+   */
+  async cancel () {
+    if (this.addon?.cancel) {
+      await this.addon.cancel()
+    }
+    this._clearPauseCheckpoints()
+  }
+
+  _clearPauseCheckpoints () {
+    const checkpointDir = this._checkpointSaveDir
+    if (!checkpointDir) return
+    try {
+      const entries = fs.readdirSync(checkpointDir, { withFileTypes: true })
+      for (const entry of entries) {
+        if (entry.isDirectory() && entry.name.startsWith('pause_checkpoint_step_')) {
+          fs.rmSync(path.join(checkpointDir, entry.name), { recursive: true, force: true })
+        }
+      }
+    } catch (err) {
+      this.logger.error('Failed to clear pause checkpoints:', err)
+    }
+  }
+
+  /**
+   * Unload model safely by cancelling and clearing pending jobs.
    * @returns {Promise<void>}
    */
   async unload () {
     return await this._withExclusiveRun(async () => {
-      await this.cancel()
+      try {
+        await this.pause()
+      } catch (_) {}
       const currentJobResponse = this._jobToResponse.get('OnlyOneJob')
       if (currentJobResponse) {
-        // Make sure not to leak jobs to avoid "job already exists" errors after
-        // loading the model again.
         currentJobResponse.failed(new Error('Model was unloaded'))
         this._deleteJobMapping('OnlyOneJob')
       }
@@ -276,6 +448,56 @@ class LlmLlamacpp extends BaseInference {
       response.await = () => finalized
 
       this.logger.info('Inference job started successfully')
+
+      return response
+    })
+  }
+
+  async finetune (finetuningOptions = undefined) {
+    if (!this.addon) {
+      throw new Error(
+        'Addon not initialized. Call load() first.'
+      )
+    }
+
+    if (!finetuningOptions) {
+      throw new Error(
+        'Finetuning parameters are required.'
+      )
+    }
+    if (finetuningOptions.checkpointSaveDir) {
+      this._checkpointSaveDir = finetuningOptions.checkpointSaveDir
+    }
+    const paramsToSend = normalizeFinetuneParams(finetuningOptions)
+    this.logger?.info?.('finetune() called')
+    this.logger?.info?.('Finetuning parameters:', finetuningOptions)
+
+    return this._withExclusiveRun(async () => {
+      if (this._hasActiveResponse) {
+        throw new Error(RUN_BUSY_ERROR_MESSAGE)
+      }
+
+      const response = this._createResponse('OnlyOneJob')
+      let accepted
+      try {
+        accepted = await this.addon.finetune(paramsToSend)
+      } catch (err) {
+        this._deleteJobMapping('OnlyOneJob')
+        response.failed(err)
+        throw err
+      }
+
+      if (!accepted) {
+        this._deleteJobMapping('OnlyOneJob')
+        const msg = RUN_BUSY_ERROR_MESSAGE
+        response.failed(new Error(msg))
+        throw new Error(msg)
+      }
+
+      this._hasActiveResponse = true
+      const finalized = response.await().finally(() => { this._hasActiveResponse = false })
+      finalized.catch(() => {})
+      response.await = () => finalized
 
       return response
     })
