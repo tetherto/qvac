@@ -1,5 +1,7 @@
 'use strict'
 
+const fs = require('bare-fs')
+const path = require('bare-path')
 const test = require('brittle')
 const os = require('bare-os')
 const proc = require('bare-process')
@@ -71,11 +73,19 @@ async function setupModel (t) {
     try { binding.releaseLogger() } catch (_) {}
   })
 
-  return { model }
+  return { model, modelDir }
+}
+
+function saveFirstGeneratedImage (modelDir, filename, images) {
+  if (images.length === 0) return
+
+  const outPath = path.join(modelDir, filename)
+  fs.writeFileSync(outPath, images[0])
+  console.log(`\nSaved → ${outPath}`)
 }
 
 test('idle | run: allowed, returns QvacResponse', { timeout: 600000, skip: true }, async t => {
-  const { model } = await setupModel(t)
+  const { model, modelDir } = await setupModel(t)
   const response = await model.run(SHORT_PARAMS)
   t.ok(response, 'run() returns a response')
   t.ok(typeof response.onUpdate === 'function', 'response has onUpdate')
@@ -87,6 +97,7 @@ test('idle | run: allowed, returns QvacResponse', { timeout: 600000, skip: true 
   }).await()
 
   t.ok(images.length > 0, 'run produces at least one image')
+  saveFirstGeneratedImage(modelDir, 'api-behavior--idle-run-seed1.png', images)
 })
 
 test('idle | cancel: allowed, no-op', { timeout: 600000, skip: true }, async t => {
@@ -119,7 +130,7 @@ test('run | cancel: cancels current job', { timeout: 600000, skip: true }, async
 })
 
 test('run | run: second run() throws busy error', { timeout: 600000, skip: true }, async t => {
-  const { model } = await setupModel(t)
+  const { model, modelDir } = await setupModel(t)
   const firstResponse = await model.run(SHORT_PARAMS)
   let firstError = null
   if (typeof firstResponse.onError === 'function') {
@@ -153,10 +164,11 @@ test('run | run: second run() throws busy error', { timeout: 600000, skip: true 
   }).await()
   t.ok(images.length > 0, 'first response completes with output')
   t.ok(!firstError, 'first response did not fail')
+  saveFirstGeneratedImage(modelDir, 'api-behavior--run-run-first-response-seed1.png', images)
 })
 
 test('cancel | run: can run again after cancel', { timeout: 600000, skip: true }, async t => {
-  const { model } = await setupModel(t)
+  const { model, modelDir } = await setupModel(t)
 
   // Start a job and cancel after first progress tick
   const response1 = await model.run(SHORT_PARAMS)
@@ -181,6 +193,7 @@ test('cancel | run: can run again after cancel', { timeout: 600000, skip: true }
   }).await()
 
   t.ok(images.length > 0, 'can run again after cancel')
+  saveFirstGeneratedImage(modelDir, 'api-behavior--cancel-run-second-response-seed1.png', images)
 })
 
 // Keep event loop alive briefly to let pending async operations complete.
