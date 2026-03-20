@@ -9,11 +9,6 @@ This is an identity function that provides type checking."
 function definePlugin(plugin: T): T
 ```
 
-## Description
-
-Helper function to define a plugin with full type inference.
-This is an identity function that provides type checking.
-
 ## Parameters
 
 | Name | Type | Required? | Description |
@@ -25,3 +20,19 @@ This is an identity function that provides type checking.
 ```typescript
 T
 ```
+
+
+
+| Field | Type | Description |
+| --- | --- | --- |
+| `addonPackage` | `string` | — |
+| `createModel` | `(params: CreateModelParams) => PluginModelResult` | — |
+| `displayName` | `string` | — |
+| `handlers` | `Record` | — |
+| `loadConfigSchema` | `ZodType` | — |
+| `logging` | `PluginLogging` | — |
+| `modelType` | `string` | — |
+| `resolveConfig` | `(modelConfig: TConfig, ctx: ResolveContext) => Promise<ResolveResult<TConfig, TArtifactKeys>>` | Optional hook to resolve model sources in modelConfig to local paths.
+Called before createModel if the plugin needs to download/resolve artifacts.
+Returns transformed config and optional artifact paths. |
+| `skipPrimaryModelPathValidation` | `boolean` | When true, skips file-existence validation for modelPath. Use for plugins that derive paths from config. |

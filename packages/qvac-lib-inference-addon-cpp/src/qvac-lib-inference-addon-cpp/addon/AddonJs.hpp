@@ -42,9 +42,10 @@ public:
    * @return JavaScript Promise that resolves when cancellation completes
    * @note This is a non-blocking operation that returns a future/promise
    */
-  js_value_t* cancelJob() {
+  js_value_t* cancelJob(std::optional<JobId> jobId = std::nullopt) {
     return js::JsAsyncTask::run(
-        env_, [addonCppRef = addonCpp]() { addonCppRef->cancelJob(); });
+        env_,
+        [addonCppRef = addonCpp, jobId]() { addonCppRef->cancelJob(jobId); });
   }
 
   /**

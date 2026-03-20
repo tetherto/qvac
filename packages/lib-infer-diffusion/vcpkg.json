@@ -11,11 +11,11 @@
     },
     {
       "name": "qvac-lint-cpp",
-      "version>=": "1.4.4"
+      "version>=": "1.4.4#1"
     },
     {
       "name": "stable-diffusion-cpp",
-      "version>=": "2026-03-01"
+      "version>=": "2026-03-01#1"
     },
     "stb"
   ],

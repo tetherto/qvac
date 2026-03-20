@@ -98,7 +98,7 @@ TEST(CppOutputHandlerTest, OutputCallbackCppWithCustomStringHandler) {
       "Hello from OutputCallbackCpp!", "Second message", "Third message"};
 
   for (size_t i = 0; i < testStrings.size(); ++i) {
-    outputQueue->queueResult(std::any(testStrings[i]));
+    outputQueue->queueResult(static_cast<JobId>(i + 1), std::any(testStrings[i]));
   }
 
   // Pop items from the queue with timeout - no need for manual sleep

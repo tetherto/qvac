@@ -9,22 +9,15 @@ The workspace remains open until closed."
 ---
 
 ```typescript
-function ragIngest(params: any): Promise
+function ragIngest(params: RagIngestParams, options?: { forceNewConnection?: boolean; profiling?: { enabled?: boolean; includeServerBreakdown?: boolean; mode?: "summary" | "verbose" }; timeout?: number }): Promise
 ```
-
-## Description
-
-Ingests documents into the RAG vector database.
-Full pipeline: chunk → embed → save
-
-**Workspace lifecycle:** This operation implicitly opens (or creates) the workspace.
-The workspace remains open until closed.
 
 ## Parameters
 
 | Name | Type | Required? | Description |
 | --- | --- | :---: | --- |
-| `params` | `any` | ✓ | The parameters for ingestion |
+| `params` | `RagIngestParams` | ✓ | The parameters for ingestion |
+| `options` | `\{ forceNewConnection?: boolean; profiling?: \{ enabled?: boolean; includeServerBreakdown?: boolean; mode?: "summary" | "verbose" \}; timeout?: number \}` | ✗ | No description |
 
 ## Returns
 
@@ -34,7 +27,14 @@ Promise
 
 
 
-## Examples
+## Throws
+
+| Error | When |
+| --- | --- |
+| `When the operation fails` |  |
+| `When streaming ends unexpectedly (only when using onProgress)` |  |
+
+## Example
 
 ```typescript
 // Simple ingest
