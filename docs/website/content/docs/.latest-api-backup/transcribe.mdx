@@ -6,22 +6,26 @@ collecting all streaming results into a single string response."
 ---
 
 ```typescript
-function transcribe(params: TranscribeClientParams): Promise
+function transcribe(params: TranscribeClientParams, options?: { forceNewConnection?: boolean; profiling?: { enabled?: boolean; includeServerBreakdown?: boolean; mode?: "summary" | "verbose" }; timeout?: number }): Promise
 ```
-
-## Description
-
-This function provides a simple interface for transcribing audio by
-collecting all streaming results into a single string response.
 
 ## Parameters
 
 | Name | Type | Required? | Description |
 | --- | --- | :---: | --- |
 | `params` | `TranscribeClientParams` | ✓ | The arguments for the transcription |
+| `options` | `\{ forceNewConnection?: boolean; profiling?: \{ enabled?: boolean; includeServerBreakdown?: boolean; mode?: "summary" | "verbose" \}; timeout?: number \}` | ✗ | Optional RPC options including per-call profiling |
 
 ## Returns
 
 ```typescript
 Promise
 ```
+
+
+
+## Throws
+
+| Error | When |
+| --- | --- |
+| `When transcription fails (propagated from transcribeStream)` |  |
