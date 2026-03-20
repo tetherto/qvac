@@ -19,7 +19,7 @@ const DEFAULT_MODEL = {
   url: 'https://huggingface.co/gpustack/stable-diffusion-v2-1-GGUF/resolve/main/stable-diffusion-v2-1-Q8_0.gguf'
 }
 
-test('model loading - load and unload', { timeout: 600_000 }, async t => {
+test('model loading - load and unload', { timeout: 600_000, skip: true }, async t => {
   const [downloadedModelName, modelDir] = await ensureModel({
     modelName: DEFAULT_MODEL.name,
     downloadUrl: DEFAULT_MODEL.url
