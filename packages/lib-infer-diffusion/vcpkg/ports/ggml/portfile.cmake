@@ -99,6 +99,10 @@ set(PLATFORM_OPTIONS)
 # .so files loaded at runtime via dlopen — no libOpenCL.so NEEDED dependency.
 # The CPU backend is statically linked (GGML_CPU_STATIC) so that SD can call
 # ggml_set_f32, ggml_backend_cpu_init, etc. directly at link time.
+if(VCPKG_TARGET_IS_IOS)
+    list(APPEND PLATFORM_OPTIONS -DGGML_BLAS=OFF -DGGML_ACCELERATE=OFF)
+endif()
+
 if(VCPKG_TARGET_IS_ANDROID)
     list(APPEND PLATFORM_OPTIONS
         -DGGML_BACKEND_DL=ON
