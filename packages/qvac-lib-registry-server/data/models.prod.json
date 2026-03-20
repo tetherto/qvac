@@ -5482,23 +5482,6 @@
     "notes": ""
   },
   {
-    "source": "s3:///qvac_models_compiled/parakeet/parakeet-eou-onnx-int8/2026-03-17/tokenizer.json",
-    "engine": "@qvac/transcription-parakeet",
-    "link": "https://huggingface.co/nasedkinpv/parakeet-tdt-0.6b-v3-onnx-int8",
-    "description": "Parakeet EOU 120M Tokenizer",
-    "quantization": "",
-    "params": "120M",
-    "license": "CC-BY-4.0",
-    "tags": [
-      "transcription",
-      "parakeet",
-      "eou",
-      "tokenizer"
-    ],
-    "deprecated": false,
-    "notes": ""
-  },
-  {
     "source": "https://huggingface.co/cgus/diar_streaming_sortformer_4spk-v2-onnx/resolve/a3e0e6c8485b963cfdee82e4e961af1a9daca99d/diar_streaming_sortformer_4spk-v2.onnx",
     "engine": "@qvac/transcription-parakeet",
     "link": "https://huggingface.co/altunenes/parakeet-rs",
