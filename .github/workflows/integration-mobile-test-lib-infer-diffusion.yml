@@ -1036,7 +1036,8 @@ jobs:
             printf '  post_test:\n'
             printf '    commands:\n'
             printf '      - echo "Test completed"\n'
-            printf '      - mv tests/model/* $DEVICEFARM_LOG_DIR/ && echo "Moved model output files to artifact directory"\n'
+            printf '      - cd $DEVICEFARM_TEST_PACKAGE_PATH\n'
+            printf '      - mv test/model/* $DEVICEFARM_LOG_DIR/ && echo "Moved model output files to artifact directory"\n'
           
           # iOS-specific: Output captured device logs
           if [ "${{ matrix.platform }}" == "iOS" ]; then
