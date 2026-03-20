@@ -22,7 +22,7 @@ enum class BackendType {
 #endif
 };
 
-class TranslationModel : public qvac_lib_inference_addon_cpp::model::IModel , qvac_lib_inference_addon_cpp::model::IModelCancel {
+class TranslationModel : public qvac_lib_inference_addon_cpp::model::IModel, public qvac_lib_inference_addon_cpp::model::IModelCancel {
 public:
   TranslationModel() {};
 
