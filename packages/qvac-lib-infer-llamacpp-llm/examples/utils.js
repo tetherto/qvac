@@ -40,11 +40,7 @@ async function downloadModel (url, filename) {
             return safeReject(unlinkErr)
           }
 
-          let redirectUrl = response.headers.location
-          if (redirectUrl.startsWith('/')) {
-            const originalUrl = new URL(url)
-            redirectUrl = `${originalUrl.protocol}//${originalUrl.host}${redirectUrl}`
-          }
+          const redirectUrl = new URL(response.headers.location, url).href
 
           downloadModel(redirectUrl, filename)
             .then(safeResolve).catch(safeReject)
