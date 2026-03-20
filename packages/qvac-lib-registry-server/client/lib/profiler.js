@@ -39,7 +39,7 @@ function collectStats (swarmStats, hypercoreStats, blobCore, elapsedSec) {
   const peers = []
   for (const peer of blobCore.peers) {
     peers.push({
-      key: IdEnc.normalize(peer.remotePublicKey).slice(0, 12),
+      key: IdEnc.normalize(peer.remotePublicKey),
       remoteLength: peer.remoteLength,
       remoteContiguous: peer.remoteContiguousLength
     })
@@ -103,7 +103,7 @@ function formatStats (stats) {
   if (stats.peers.length > 0) {
     lines += '  Peers:\n'
     for (const p of stats.peers) {
-      lines += '    ' + p.key + '... remote=' + p.remoteContiguous + '/' + p.remoteLength + '\n'
+      lines += '    ' + p.key + ' remote=' + p.remoteContiguous + '/' + p.remoteLength + '\n'
     }
   }
 
@@ -166,11 +166,11 @@ async function profileDownload (opts) {
   const swStats = new HyperswarmStats(swarm)
 
   swarm.on('connection', (conn, peerInfo) => {
-    const key = peerInfo?.publicKey ? IdEnc.normalize(peerInfo.publicKey).slice(0, 12) : 'unknown'
-    onLog('  [conn] peer ' + key + '... connected')
+    const key = peerInfo?.publicKey ? IdEnc.normalize(peerInfo.publicKey) : 'unknown'
+    onLog('  [conn] peer ' + key + ' connected')
     store.replicate(conn)
     conn.on('error', (e) => onLog('  [conn] error: ' + e.message))
-    conn.on('close', () => onLog('  [conn] peer ' + key + '... disconnected'))
+    conn.on('close', () => onLog('  [conn] peer ' + key + ' disconnected'))
   })
 
   const cleanupResources = async () => {

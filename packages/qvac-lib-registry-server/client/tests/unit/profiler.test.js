@@ -160,7 +160,7 @@ test('formatStats - contains expected sections', async t => {
     },
     peers: [
       {
-        key: 'abc123456789',
+        key: 'o4o4o4o4o4o4o4o4o4o4o4o4o4o4o4o4o4o4o4o4o4o4o4o4o4o4o4o4',
         remoteLength: 60,
         remoteContiguous: 55
       }
@@ -176,7 +176,7 @@ test('formatStats - contains expected sections', async t => {
   t.ok(output.includes('Firewalled: true'), 'has firewall status')
   t.ok(output.includes('Blob peers: 2'), 'has peer count')
   t.ok(output.includes('50 / 60'), 'has contiguous/length')
-  t.ok(output.includes('abc123456789'), 'has peer key')
+  t.ok(output.includes('o4o4o4o4o4o4o4o4o4o4o4o4o4o4o4o4o4o4o4o4o4o4o4o4o4o4o4o4'), 'has peer key')
   t.ok(output.includes('remote=55/60'), 'has peer remote info')
 })
 
