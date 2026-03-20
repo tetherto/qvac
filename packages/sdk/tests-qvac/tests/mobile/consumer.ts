@@ -1,4 +1,5 @@
-import { createExecutor } from "@tetherto/qvac-test-suite/mobile";
+import { createExecutor, SkipExecutor } from "@tetherto/qvac-test-suite/mobile";
+import { Platform } from "react-native";
 import {
   profiler,
   LLAMA_3_2_1B_INST_Q4_0,
@@ -212,8 +213,26 @@ resources.define("vision", {
   },
 });
 
+function skipTests(testIds: string[], reason: string) {
+  return new SkipExecutor(new RegExp(`^(${testIds.join("|")})$`), reason);
+}
+
 export const executor = createExecutor({
   handlers: [
+    // Mobile platform skips (before real executors -- first match wins)
+    skipTests([
+      "http-sharded-embed-load",
+      "http-sharded-embed-progress",
+      "http-archive-embed-load",
+      "http-archive-embed-progress",
+      "http-archive-embed-inference",
+    ], "HTTP test disabled on mobile (OOM)"),
+    new SkipExecutor(/^tools-(?!simple-function$|no-function-match$)/, "Tools test disabled on mobile"),
+    ...(Platform.OS === "ios" ? [
+      new SkipExecutor(/^ocr-/, "OCR test disabled on iOS (OOM)"),
+    ] : []),
+
+    // Real executors
     new ModelLoadingExecutor(resources),
     new CompletionExecutor(resources),
     new MobileTranscriptionExecutor(resources),
