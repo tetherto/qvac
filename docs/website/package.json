@@ -18,7 +18,8 @@
     "docs:create-version": "bun run scripts/create-version-bundle.ts",
     "docs:release-version": "bun run scripts/release-version.ts",
     "test": "vitest run",
-    "test:watch": "vitest"
+    "test:watch": "vitest",
+    "test:examples": "bun run scripts/test-code-examples.ts"
   },
   "dependencies": {
     "@ai-sdk/openai-compatible": "^1.0.29",

@@ -23,7 +23,7 @@ on:
 
 jobs:
   run-integration-tests:
-    timeout-minutes: 360
+    timeout-minutes: ${{ matrix.timeout || 360 }}
     continue-on-error: true
     runs-on: ${{ matrix.runner }}
     name: test-${{ matrix.platform }}-${{ matrix.arch }}
@@ -72,6 +72,7 @@ jobs:
             platform: win32
             arch: x64
             runner: ai-run-windows11-gpu
+            timeout: 600
 
     steps:
       - name: Setup Node.js
@@ -237,6 +238,33 @@ jobs:
         if: matrix.platform == 'linux' || matrix.platform == 'android'
         shell: bash
         run: sudo apt-get update && sudo apt-get install -y mesa-vulkan-drivers
+
+      - name: macOS — Metal GPU diagnostic
+        if: matrix.platform == 'darwin'
+        shell: bash
+        run: |
+          echo "=== GPU Hardware ==="
+          system_profiler SPDisplaysDataType 2>/dev/null || echo "(system_profiler unavailable)"
+          echo ""
+          echo "=== Metal Device Check ==="
+          cat > /tmp/metal_check.m << 'OBJC'
+          #import <Metal/Metal.h>
+          #import <stdio.h>
+          int main() {
+            id<MTLDevice> dev = MTLCreateSystemDefaultDevice();
+            if (!dev) { printf("No Metal device available\n"); return 1; }
+            printf("Device    : %s\n", [[dev name] UTF8String]);
+            printf("Headless  : %s\n", dev.headless ? "yes" : "no");
+            printf("LowPower  : %s\n", dev.lowPower ? "yes" : "no");
+            printf("Apple4    : %d\n", [dev supportsFamily:MTLGPUFamilyApple4]);
+            printf("Apple7    : %d\n", [dev supportsFamily:MTLGPUFamilyApple7]);
+            printf("Metal3    : %d\n", [dev supportsFamily:MTLGPUFamilyMetal3]);
+            printf("simdgroup : %d\n", [dev supportsFamily:MTLGPUFamilyApple7]);
+            return 0;
+          }
+          OBJC
+          clang -x objective-c -framework Metal -framework Foundation \
+                -o /tmp/metal_check /tmp/metal_check.m 2>/dev/null && /tmp/metal_check || echo "(Metal check failed to compile/run)"
 
       - name: Run integration test (Linux/macOS)
         if: ${{ matrix.platform != 'win32' }}
