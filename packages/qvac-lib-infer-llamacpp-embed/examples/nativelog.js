@@ -47,7 +47,7 @@ async function main () {
     diskPath: dirPath,
     modelName
   }
-  const config = '-ngl\t25\nverbosity\t2'
+  const config = { device: 'gpu', gpu_layers: '25', verbosity: '2' }
 
   // 5. Loading model
   const model = new GGMLBert(args, config)
