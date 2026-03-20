@@ -72,7 +72,7 @@ Tier 1: Platform targets for which prebuilds are provided as defined by the .git
 
 **Dependencies:**
 - qvac-lib-inference-addon-cpp (≥1.1.2): C++ addon framework
-- llama.cpp (≥7248.1.0): Inference engine
+- qvac-fabric-llm.cpp (≥7248.2.1): Inference engine
 - Bare Runtime (≥1.24.0): JavaScript runtime
 
 ---
