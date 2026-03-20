@@ -222,9 +222,9 @@ class IndicProcessor {
     this._URL_PATTERN =
       /\b(?<![\w/.])(?:(?:https?|ftp):\/\/)?(?:[\w-]+\.)+(?!\.)[\w/\-?#&=%.]*(?!\.\w+)\b/g
     this._NUMERAL_PATTERN =
-      /(~?\d+(?:\.\d+)?\s?%?\s?-?\s?~?\d+(?:\.\d+)?\s?%|~?\d+%|\d+[-/.,:']\d+[-/.,:']+\d+(?:\.\d+)?|\d+[-/.:'+]\d+(?:\.\d+)?)/g
+      /(~?\d{1,20}(?:\.\d{1,20})?\s?%?\s?-?\s?~?\d{1,20}(?:\.\d{1,20})?\s?%|~?\d{1,20}%|\d{1,20}[-/.,:']\d{1,20}[-/.,:']{1,5}\d{1,20}(?:\.\d{1,20})?|\d{1,20}[-/.:'+]\d{1,20}(?:\.\d{1,20})?)/g
     this._EMAIL_PATTERN = /[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Z|a-z]{2,}/g
-    this._OTHER_PATTERN = /[A-Za-z0-9]{0,100}[#|@]\w+/g
+    this._OTHER_PATTERN = /[A-Za-z0-9]{0,100}[#|@]\w{1,100}/g
 
     // Combined punctuation replacements
     this._PUNC_REPLACEMENTS = [
