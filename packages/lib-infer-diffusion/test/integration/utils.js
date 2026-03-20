@@ -4,6 +4,50 @@ const path = require('bare-path')
 const https = require('bare-https')
 const os = require('bare-os')
 
+function isIosSyslogPlatform () {
+  return os.platform() === 'ios'
+}
+
+function createIntegrationLogger () {
+  if (!isIosSyslogPlatform()) {
+    return console
+  }
+
+  function writeToSyslog (level, messages) {
+    console.warn(`[${level.toUpperCase()}]`, ...messages)
+  }
+
+  return {
+    level: 'debug',
+    getLevel () {
+      return 'debug'
+    },
+    log (...messages) {
+      writeToSyslog('log', messages)
+    },
+    error (...messages) {
+      writeToSyslog('error', messages)
+    },
+    warn (...messages) {
+      writeToSyslog('warn', messages)
+    },
+    info (...messages) {
+      writeToSyslog('info', messages)
+    },
+    debug (...messages) {
+      writeToSyslog('debug', messages)
+    }
+  }
+}
+
+function enableIosSyslogLogging (processLike) {
+  if (!isIosSyslogPlatform() || !processLike?.env) {
+    return
+  }
+
+  processLike.env.QVAC_LOG_LEVEL = 'debug'
+}
+
 async function downloadFile (url, dest) {
   return new Promise((resolve, reject) => {
     let resolved = false
@@ -75,7 +119,7 @@ async function downloadFile (url, dest) {
   })
 }
 
-async function ensureModel ({ modelName, downloadUrl }) {
+async function ensureModel ({ modelName, downloadUrl, logger = console }) {
   const modelDir = path.resolve(__dirname, '../model')
 
   const modelPath = path.join(modelDir, modelName)
@@ -85,12 +129,12 @@ async function ensureModel ({ modelName, downloadUrl }) {
   }
 
   fs.mkdirSync(modelDir, { recursive: true })
-  console.log(`Downloading test model ${modelName}...`)
+  logger.log(`Downloading test model ${modelName}...`)
 
   await downloadFile(downloadUrl, modelPath)
 
   const stats = fs.statSync(modelPath)
-  console.log(`Model ready: ${(stats.size / 1024 / 1024).toFixed(1)}MB`)
+  logger.log(`Model ready: ${(stats.size / 1024 / 1024).toFixed(1)}MB`)
   return [modelName, modelDir]
 }
 
@@ -160,11 +204,11 @@ function detectPlatform () {
   return `${os.platform()}-${os.arch()}`
 }
 
-function setupJsLogger (binding) {
+function setupJsLogger (binding, logger = console) {
   const LOG_PRIORITIES = ['ERROR', 'WARNING', 'INFO', 'DEBUG']
   binding.setLogger((priority, message) => {
     const label = LOG_PRIORITIES[priority] || `UNKNOWN(${priority})`
-    console.log(`[C++ ${label}] ${message}`)
+    logger.log(`[C++ ${label}] ${message}`)
   })
   return binding
 }
@@ -184,6 +228,8 @@ function isPng (buf) {
 }
 
 module.exports = {
+  createIntegrationLogger,
+  enableIosSyslogLogging,
   ensureModel,
   ensureModelPath,
   getMediaPath,

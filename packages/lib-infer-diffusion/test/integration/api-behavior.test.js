@@ -8,6 +8,8 @@ const proc = require('bare-process')
 const binding = require('../../binding')
 const ImgStableDiffusion = require('../../index')
 const {
+  createIntegrationLogger,
+  enableIosSyslogLogging,
   ensureModel,
   setupJsLogger
 } = require('./utils')
@@ -17,6 +19,7 @@ const isLinuxArm64 = os.platform() === 'linux' && os.arch() === 'arm64'
 const isAndroid = os.platform() === 'android'
 const noGpu = proc.env && proc.env.NO_GPU === 'true'
 const useCpu = isDarwinX64 || isLinuxArm64 || noGpu
+const logger = createIntegrationLogger()
 
 // Smallest model for fast behavior tests
 const MODEL = {
@@ -44,16 +47,18 @@ const SHORT_PARAMS = {
 }
 
 async function setupModel(t) {
-  setupJsLogger(binding)
+  enableIosSyslogLogging(proc)
+  setupJsLogger(binding, logger)
 
   const [modelName, modelDir] = await ensureModel({
     modelName: MODEL.name,
-    downloadUrl: MODEL.url
+    downloadUrl: MODEL.url,
+    logger
   })
 
   const model = new ImgStableDiffusion(
     {
-      logger: console,
+      logger,
       diskPath: modelDir,
       modelName
     },
@@ -81,7 +86,7 @@ function saveFirstGeneratedImage(modelDir, filename, images) {
 
   const outPath = path.join(modelDir, filename)
   fs.writeFileSync(outPath, images[0])
-  console.log(`\nSaved → ${outPath}`)
+  logger.log(`\nSaved -> ${outPath}`)
 }
 
 test('idle | run: allowed, returns QvacResponse', { timeout: 600000 }, async t => {
