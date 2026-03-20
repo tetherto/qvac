@@ -170,9 +170,9 @@ jobs:
       - name: Upload RTF results
         if: always()
         continue-on-error: true
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v6
         with:
-          name: rtf-results-${{ matrix.platform }}-${{ matrix.arch }}
+          name: rtf-results-${{ matrix.os }}-${{ matrix.platform }}-${{ matrix.arch }}
           path: ${{ inputs.workdir }}/benchmarks/results/rtf-benchmark-*.json
           retention-days: 90
           if-no-files-found: ignore

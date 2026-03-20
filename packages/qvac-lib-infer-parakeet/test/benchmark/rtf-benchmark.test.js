@@ -30,7 +30,7 @@ const {
   ensureModel,
   getNamedPathsConfig,
   isMobile
-} = require('./helpers.js')
+} = require('../integration/helpers.js')
 
 const platform = detectPlatform()
 const { modelPath, samplesDir } = getTestPaths()
