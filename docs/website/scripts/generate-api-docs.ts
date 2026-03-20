@@ -619,7 +619,9 @@ function parseErrorCodes(source: string, constantName: string): ErrorEntry[] {
       if (raw) {
         entry.summary = raw
           .replace(/\$\{[^}]*\}/g, "…")
+          .replace(/\$\{.*$/g, "…")
           .replace(/\s*\+\s*\([\s\S]*?\)/g, "")
+          .replace(/…{2,}/g, "…")
           .trim();
       }
     }
@@ -661,7 +663,7 @@ async function generateErrorsPage(sdkPath: string, outputDir: string): Promise<v
   function renderTable(errors: ErrorEntry[]): string {
     return `| Error | Code | Summary |
 | --- | --- | --- |
-${errors.map((e) => `| \`${e.name}\` | ${e.code} | ${e.summary.replace(/\|/g, "\\|")} |`).join("\n")}`;
+${errors.map((e) => `| \`${e.name}\` | ${e.code} | ${e.summary.replace(/\{/g, "\\{").replace(/\}/g, "\\}").replace(/\|/g, "\\|")} |`).join("\n")}`;
   }
 
   const sections: string[] = [];
