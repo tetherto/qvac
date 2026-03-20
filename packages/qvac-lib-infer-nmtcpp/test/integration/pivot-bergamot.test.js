@@ -14,7 +14,7 @@
  *   bare test/integration/pivot-bergamot.test.js
  */
 
-process.on('unhandledRejection', (err) => {
+Bare.on('unhandledRejection', (err) => {
   if (err && err.message && err.message.includes('Corestore is closed')) return
   console.error('[pivot-bergamot] Unhandled rejection:', err)
 })
