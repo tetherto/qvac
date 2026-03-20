@@ -30,7 +30,7 @@ class TranscriptionWhispercpp extends BaseInference {
 
     this._diskPath = diskPath || ''
     this._modelName = modelName
-    this._vadModelName = config.vad_model_path
+    this._vadModelName = vadModelName || config.vad_model_path
     this._config = config
     this.weightsProvider = new WeightsProvider(loader, this.logger)
 
@@ -113,11 +113,17 @@ class TranscriptionWhispercpp extends BaseInference {
     return this._vadModelName ? path.join(this._diskPath, this._vadModelName) : null
   }
 
-  async _runInternal (audioStream) {
+  async _runInternal (audioStream, opts = {}) {
     if (this.exclusiveRun && this._hasActiveResponse) {
       throw new QvacErrorAddonWhisper({
         code: ERR_CODES.JOB_ALREADY_RUNNING
       })
+    }
+
+    const normalizedAudioStream = this._normalizeAudioStream(audioStream)
+
+    if (opts.streaming) {
+      return this._runStreaming(normalizedAudioStream)
     }
 
     const jobId = await this.addon.append({
@@ -131,8 +137,45 @@ class TranscriptionWhispercpp extends BaseInference {
     finalized.catch(() => {})
     response.await = () => finalized
 
-    const normalizedAudioStream = this._normalizeAudioStream(audioStream)
     this._handleAudioStream(normalizedAudioStream).catch((error) => {
+      response.failed(error)
+      this._deleteJobMapping(jobId)
+    })
+    return response
+  }
+
+  async _runStreaming (audioStream) {
+    const vadModelPath = this._config.vadModelPath || this._getVadModelFilePath()
+    if (!vadModelPath) {
+      throw new QvacErrorAddonWhisper({
+        code: ERR_CODES.VAD_MODEL_REQUIRED
+      })
+    }
+
+    const vadParams = this.params?.vad_params || {}
+
+    this.addon.startStreaming({
+      vadModelPath,
+      vadThreshold: vadParams.threshold || 0.5,
+      minSilenceDurationMs: vadParams.min_silence_duration_ms || 500,
+      minSpeechDurationMs: vadParams.min_speech_duration_ms || 250,
+      maxSpeechDurationS: vadParams.max_speech_duration_s || 30,
+      speechPadMs: vadParams.speech_pad_ms || 30,
+      samplesOverlap: vadParams.samples_overlap || 0.1
+    })
+
+    const jobId = this.addon._activeJobId
+    const response = this._createResponse(jobId)
+    this._hasActiveResponse = true
+    const finalized = response.await().finally(() => {
+      this._hasActiveResponse = false
+      this.addon._activeJobId = null
+      this.addon._setState('listening')
+    })
+    finalized.catch(() => {})
+    response.await = () => finalized
+
+    this._handleStreamingAudio(audioStream).catch((error) => {
       response.failed(error)
       this._deleteJobMapping(jobId)
     })
@@ -150,6 +193,17 @@ class TranscriptionWhispercpp extends BaseInference {
     }
     this.logger.debug('Sending end-of-input signal')
     await this.addon.append({ type: END_OF_INPUT })
+  }
+
+  async _handleStreamingAudio (audioStream) {
+    this.logger.debug('Start handling streaming audio')
+    for await (const chunk of audioStream) {
+      this.addon.appendStreamingAudio({
+        input: new Uint8Array(chunk.buffer, chunk.byteOffset, chunk.byteLength)
+      })
+    }
+    this.logger.debug('Ending streaming session')
+    this.addon.endStreaming()
   }
 
   _normalizeAudioStream (audioStream) {
@@ -298,6 +352,15 @@ class TranscriptionWhispercpp extends BaseInference {
       this.state.configLoaded = false
       this.state.weightsLoaded = false
     })
+  }
+
+  async runStreaming (audioStream) {
+    if (this.exclusiveRun) {
+      return await this._withExclusiveRun(() =>
+        this._runInternal(audioStream, { streaming: true })
+      )
+    }
+    return await this._runInternal(audioStream, { streaming: true })
   }
 
   async cancel () {
