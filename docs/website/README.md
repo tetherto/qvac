@@ -40,7 +40,7 @@ Generate static website:
 npm run build:static
 ```
 
-It generates static content into the `dist` directory and can be served using any static content hosting service.
+It generates static content into the `out` directory and can be served using any static content hosting service.
 
 Check in your local machine the static website:
 ```
