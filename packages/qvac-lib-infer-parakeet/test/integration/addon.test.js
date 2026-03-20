@@ -238,9 +238,11 @@ test('Cancel active job keeps model usable for next job', { timeout: 600000 }, a
 
     const shortAudio = toFloat32Audio(fs.readFileSync(samplePath))
 
-    // Start a job and cancel it immediately.
+    // Let the worker take the accepted job before canceling so this test
+    // exercises in-flight cancel/reuse rather than the queued-job edge case.
     await parakeet.append({ type: 'audio', data: shortAudio.buffer })
     const firstJobId = await parakeet.append({ type: 'end of job' })
+    await new Promise(resolve => setTimeout(resolve, 500))
     await parakeet.cancel(firstJobId)
 
     const statusAfterCancel = await parakeet.status()

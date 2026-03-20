@@ -68,6 +68,7 @@ TEST(ParakeetAddonCppTest, CancelAllowsNextRun) {
 
   auto firstInput = makeInputSamples(5);
   ASSERT_TRUE(instance.addon->runJob(std::any(std::move(firstInput))));
+  std::this_thread::sleep_for(std::chrono::milliseconds(50));
   instance.addon->cancelJob();
 
   auto maybeCancelError =
