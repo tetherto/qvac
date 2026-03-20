@@ -17,6 +17,9 @@ class MockedBinding {
     this._scriptedOutputs = null
     this._runToken = 0
     this._baseInferenceCallback = null // Store reference to BaseInference callback
+    this._streaming = false
+    this._streamingChunks = []
+    this._streamingErrorOnSegment = -1
   }
 
   enableVadTestMode () {
@@ -29,6 +32,10 @@ class MockedBinding {
 
   setJobDelayMs (delayMs) {
     this._jobDelayMs = Number.isFinite(delayMs) ? Math.max(0, delayMs) : 0
+  }
+
+  setStreamingErrorOnSegment (segmentIndex) {
+    this._streamingErrorOnSegment = segmentIndex
   }
 
   createInstance (interfaceType, configurationParams, outputCb, transitionCb = null) {
@@ -98,6 +105,8 @@ class MockedBinding {
     console.log(`Cancel job id: ${jobId}`)
     this._runToken += 1
     this._busy = false
+    this._streaming = false
+    this._streamingChunks = []
     this._state = state.LISTENING
     if (this.transitionCb) {
       this.transitionCb(this, this._state)
@@ -176,13 +185,71 @@ class MockedBinding {
     // Mock implementation - just log that it was called
   }
 
+  startStreaming (handle, config) {
+    if (handle !== this._handle) throw new Error('Invalid handle')
+    if (this._streaming) throw new Error('Streaming session already active')
+    this._streaming = true
+    this._streamingChunks = []
+    this._busy = true
+    this._state = state.PROCESSING
+    if (this.transitionCb) this.transitionCb(this, this._state)
+  }
+
+  appendStreamingAudio (handle, data) {
+    if (handle !== this._handle) throw new Error('Invalid handle')
+    if (!this._streaming) throw new Error('No active streaming session')
+    this._streamingChunks.push(data)
+  }
+
+  endStreaming (handle) {
+    if (handle !== this._handle) throw new Error('Invalid handle')
+    if (!this._streaming) return false
+    this._streaming = false
+    this._busy = false
+
+    const chunks = this._streamingChunks
+    this._streamingChunks = []
+
+    const emitStreamResults = () => {
+      const hasError = this._streamingErrorOnSegment >= 0 &&
+        this._scriptedOutputs &&
+        this._streamingErrorOnSegment < this._scriptedOutputs.length
+
+      if (this._scriptedOutputs && this._scriptedOutputs.length > 0) {
+        for (let i = 0; i < this._scriptedOutputs.length; i++) {
+          if (i === this._streamingErrorOnSegment) continue
+          this._callCallbacks('Output', this._scriptedOutputs[i], null)
+        }
+      }
+
+      if (hasError) {
+        this._callCallbacks('Error', null, new Error('One or more segments failed during processing'))
+      } else {
+        const totalSamples = chunks.reduce((sum, c) => sum + (c.input?.length || 0), 0)
+        this._callCallbacks('JobEnded', {
+          totalTime: 0.01 * Math.max(1, chunks.length),
+          audioDurationMs: totalSamples,
+          totalSamples,
+          processCalls: chunks.length
+        }, null)
+      }
+
+      this._state = state.LISTENING
+      if (this.transitionCb) this.transitionCb(this, this._state)
+    }
+
+    process.nextTick(emitStreamResults)
+    return true
+  }
+
   destroyInstance (handle) {
     if (handle !== this._handle) throw new Error('Invalid handle')
     this._runToken += 1
     this._busy = false
+    this._streaming = false
+    this._streamingChunks = []
     this._handle = null
     console.log('Destroyed the addon')
-    // Clear resources on the C++ side.
     this._state = state.IDLE
     if (this.transitionCb) {
       this.transitionCb(this, this._state)
