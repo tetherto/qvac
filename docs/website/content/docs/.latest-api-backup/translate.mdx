@@ -6,29 +6,37 @@ Supports both NMT (Neural Machine Translation) and LLM models."
 ---
 
 ```typescript
-function translate(params: TranslateClientParams): { stats: Promise<any>; text: Promise<string>; tokenStream: AsyncGenerator<string> }
+function translate(params: TranslateClientParams, options?: { forceNewConnection?: boolean; profiling?: { enabled?: boolean; includeServerBreakdown?: boolean; mode?: "summary" | "verbose" }; timeout?: number }): { stats: Promise<{ processedTokens: number; processingTime: number } | —>; text: Promise<string>; tokenStream: AsyncGenerator<string> }
 ```
-
-## Description
-
-Translates text from one language to another using a specified translation model.
-Supports both NMT (Neural Machine Translation) and LLM models.
 
 ## Parameters
 
 | Name | Type | Required? | Description |
 | --- | --- | :---: | --- |
 | `params` | `TranslateClientParams` | ✓ | Translation configuration object |
+| `options` | `\{ forceNewConnection?: boolean; profiling?: \{ enabled?: boolean; includeServerBreakdown?: boolean; mode?: "summary" | "verbose" \}; timeout?: number \}` | ✗ | No description |
 
 ## Returns
 
 ```typescript
-{ stats: Promise<any>; text: Promise<string>; tokenStream: AsyncGenerator<string> }
+{ stats: Promise<{ processedTokens: number; processingTime: number } | —>; text: Promise<string>; tokenStream: AsyncGenerator<string> }
 ```
 
 
 
-## Examples
+| Field | Type | Description |
+| --- | --- | --- |
+| `stats` | `Promise` | — |
+| `text` | `Promise` | — |
+| `tokenStream` | `AsyncGenerator` | — |
+
+## Throws
+
+| Error | When |
+| --- | --- |
+| `When translation fails with an error message or when language detection fails` |  |
+
+## Example
 
 ```typescript
 // Streaming mode (default)
@@ -36,7 +44,7 @@ const result = translate({
   modelId: "modelId",
   text: "Hello world",
   from: "en",
-  to: "es",
+  to: "es"
   modelType: "llm",
 });
 
@@ -49,7 +57,7 @@ const response = translate({
   modelId: "modelId",
   text: "Hello world",
   from: "en",
-  to: "es",
+  to: "es"
   modelType: "llm",
   stream: false,
 });
