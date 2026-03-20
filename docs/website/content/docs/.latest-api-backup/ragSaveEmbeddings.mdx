@@ -9,22 +9,15 @@ The workspace remains open until closed."
 ---
 
 ```typescript
-function ragSaveEmbeddings(params: any): Promise
+function ragSaveEmbeddings(params: RagSaveEmbeddingsParams, options?: { forceNewConnection?: boolean; profiling?: { enabled?: boolean; includeServerBreakdown?: boolean; mode?: "summary" | "verbose" }; timeout?: number }): Promise
 ```
-
-## Description
-
-Saves pre-embedded documents to the RAG vector database.
-Part of the segregated flow: chunk() → embed() → saveEmbeddings()
-
-**Workspace lifecycle:** This operation implicitly opens (or creates) the workspace.
-The workspace remains open until closed.
 
 ## Parameters
 
 | Name | Type | Required? | Description |
 | --- | --- | :---: | --- |
-| `params` | `any` | ✓ | The parameters for saving |
+| `params` | `RagSaveEmbeddingsParams` | ✓ | The parameters for saving |
+| `options` | `\{ forceNewConnection?: boolean; profiling?: \{ enabled?: boolean; includeServerBreakdown?: boolean; mode?: "summary" | "verbose" \}; timeout?: number \}` | ✗ | No description |
 
 ## Returns
 
@@ -34,7 +27,14 @@ Promise
 
 
 
-## Examples
+## Throws
+
+| Error | When |
+| --- | --- |
+| `When the operation fails` |  |
+| `When streaming ends unexpectedly (only when using onProgress)` |  |
+
+## Example
 
 ```typescript
 // Segregated flow
