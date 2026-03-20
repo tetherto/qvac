@@ -443,4 +443,5 @@ The underlying pattern across all these fixes is the same: our C++ config struct
 
 Apache-2.0 — see [LICENSE](./LICENSE) for details.
 
-Released as part of `qvac-lib-infer-stable-diffusion-cpp` v0.1.0.
+
+
