@@ -158,8 +158,9 @@ inline js_value_t* runJob(js_env_t* env, js_callback_info_t* info) try {
     std::vector<std::string> inputSequence;
     inputSequence.reserve(vectorOfJsValues.size());
 
-    std::ranges::transform(
-        vectorOfJsValues,
+    std::transform(
+        vectorOfJsValues.begin(),
+        vectorOfJsValues.end(),
         std::back_inserter(inputSequence),
         [&env](js_value_t* const string_value) {
           return js::String(env, string_value).as<std::string>(env);
