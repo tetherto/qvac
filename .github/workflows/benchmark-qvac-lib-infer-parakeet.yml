@@ -19,8 +19,6 @@ on:
         required: false
         type: number
         default: 50
-  schedule:
-    - cron: '0 4 * * 0'
 
 env:
   PKG_DIR: packages/qvac-lib-infer-parakeet
