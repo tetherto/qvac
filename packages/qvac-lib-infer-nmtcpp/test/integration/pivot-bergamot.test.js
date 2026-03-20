@@ -1,5 +1,7 @@
 'use strict'
 
+/* global Bare */
+
 /**
  * Bergamot Pivot Translation Integration Test
  *
