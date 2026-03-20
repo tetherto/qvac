@@ -33,6 +33,18 @@ export const tree: Node[] = [
         url: '/about-qvac/welcome',
         type: 'page',
         icon: resolveIcon('DoorOpen'),
+      }, 
+      {
+        name: 'Our Vision',
+        url: '/about-qvac/vision',
+        type: 'page',
+        icon: resolveIcon('Telescope'),
+      },
+      {
+        name: 'Public launch',
+        url: '/about-qvac/public-launch',
+        type: 'page',
+        icon: resolveIcon('Globe'),
       },
       {
         name: 'Our Vision',

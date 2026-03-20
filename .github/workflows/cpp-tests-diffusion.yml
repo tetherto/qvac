@@ -164,6 +164,13 @@ jobs:
           npm install
           npm install -g bare bare-make
 
+      - if: ${{ matrix.platform == 'darwin' }}
+        name: Use Apple clang for Apple platform builds
+        run: |
+          sudo mv /opt/homebrew/opt/llvm@18 /opt/homebrew/opt/llvm@18.bak 2>/dev/null || true
+          sudo mv /opt/homebrew/opt/llvm /opt/homebrew/opt/llvm.bak 2>/dev/null || true
+          sudo rm -f /opt/homebrew/bin/clang /opt/homebrew/bin/clang++ 2>/dev/null || true
+
       - name: Build C++ tests with coverage
         if: ${{ matrix.os == 'ubuntu-24.04' }}
         working-directory: ${{ env.WORKDIR }}
