@@ -563,4 +563,6 @@ node scripts/bin.js run --primary-key <hex-key> --storage ./corestore
 
 **Security Warning**: Reproducible keys are for testing/development only. In production, use random key generation (default).
 
+Passphrase-derived keys use PBKDF2-HMAC-SHA256 (310k iterations) with a fixed application salt. If you previously generated keys with `--passphrase` using an older registry-server release, regenerate keys after upgrading; the old single-pass SHA-256 derivation is no longer used.
+
 
