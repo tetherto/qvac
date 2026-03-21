@@ -4,6 +4,10 @@ option(BUILD_TESTING "Build tests" OFF)
 option(ENABLE_XNNPACK "Enable XNNPack execution provider" ON)
 option(QVAC_ONNX_ANDROID_LOG "Enable Android logcat debug logging" OFF)
 
+if(BUILD_TESTING)
+  list(APPEND VCPKG_MANIFEST_FEATURES "tests")
+endif()
+
 if(ENABLE_XNNPACK)
   list(APPEND VCPKG_MANIFEST_FEATURES "xnnpack")
 endif()
