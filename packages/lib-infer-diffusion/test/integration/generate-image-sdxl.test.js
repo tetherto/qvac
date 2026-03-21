@@ -10,6 +10,7 @@ const {
   ensureModel,
   detectPlatform,
   setupJsLogger,
+  saveGeneratedImageArtifact,
   isPng
 } = require('./utils')
 
@@ -114,9 +115,7 @@ test('SDXL txt2img — generates a valid PNG image', { timeout: 900000, skip }, 
     t.ok(img.length > 0, `Image is non-empty (${img.length} bytes)`)
     t.ok(isPng(img), 'Image has valid PNG magic bytes')
 
-    const outPath = path.join(modelDir, 'generate-image--sdxl-txt2img-seed15.png')
-    fs.writeFileSync(outPath, img)
-    console.log(`\nSaved → ${outPath}`)
+    saveGeneratedImageArtifact(modelDir, 'generate-image--sdxl-txt2img-seed15.png', img)
 
     // ── Summary ───────────────────────────────────────────────────────────────
     console.log('\n' + '='.repeat(60))

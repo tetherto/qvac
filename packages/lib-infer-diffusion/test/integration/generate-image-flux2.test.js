@@ -10,6 +10,7 @@ const {
   ensureModel,
   detectPlatform,
   setupJsLogger,
+  saveGeneratedImageArtifact,
   isPng
 } = require('./utils')
 
@@ -136,9 +137,7 @@ test('FLUX.2 klein txt2img — generates a valid PNG image', { timeout: 1800000,
     t.ok(img.length > 0, `Image is non-empty (${img.length} bytes)`)
     t.ok(isPng(img), 'Image has valid PNG magic bytes')
 
-    const outPath = path.join(modelDir, 'generate-image--flux2-txt2img-seed42.png')
-    fs.writeFileSync(outPath, img)
-    console.log(`\nSaved → ${outPath}`)
+    saveGeneratedImageArtifact(modelDir, 'generate-image--flux2-txt2img-seed42.png', img)
 
     // ── Summary ───────────────────────────────────────────────────────────────
     console.log('\n' + '='.repeat(60))

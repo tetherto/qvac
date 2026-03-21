@@ -11,6 +11,7 @@ const {
   createIntegrationLogger,
   enableIosSyslogLogging,
   ensureModel,
+  saveGeneratedImageArtifact,
   setupJsLogger
 } = require('./utils')
 
@@ -84,9 +85,7 @@ async function setupModel(t) {
 function saveFirstGeneratedImage(modelDir, filename, images) {
   if (images.length === 0) return
 
-  const outPath = path.join(modelDir, filename)
-  fs.writeFileSync(outPath, images[0])
-  logger.log(`\nSaved -> ${outPath}`)
+  saveGeneratedImageArtifact(modelDir, filename, images[0], logger)
 }
 
 test('idle | run: allowed, returns QvacResponse', { timeout: 600000 }, async t => {

@@ -11,6 +11,7 @@ const {
   ensureModel,
   detectPlatform,
   setupJsLogger,
+  saveGeneratedImageArtifact,
   isPng
 } = require('./utils')
 
@@ -115,9 +116,7 @@ test('SD2.1 txt2img — generates a valid PNG image', { timeout: 600000, skip },
 
     // Save output for CI artifact upload — filename encodes test origin
     // Saved to modelDir so mobile has write permission to the same path
-    const outPath = path.join(modelDir, 'generate-image--sd2-txt2img-seed42.png')
-    fs.writeFileSync(outPath, img)
-    console.log(`\nSaved → ${outPath}`)
+    saveGeneratedImageArtifact(modelDir, 'generate-image--sd2-txt2img-seed42.png', img)
 
     // ── Summary ───────────────────────────────────────────────────────────────
     console.log('\n' + '='.repeat(60))

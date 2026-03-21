@@ -213,6 +213,37 @@ function setupJsLogger (binding, logger = console) {
   return binding
 }
 
+function saveGeneratedImageArtifact (modelDir, filename, imageData, logger = console) {
+  const primaryOutPath = path.join(modelDir, filename)
+  fs.writeFileSync(primaryOutPath, imageData)
+  logger.log(`\nSaved -> ${primaryOutPath}`)
+
+  if (os.platform() !== 'android') {
+    return [primaryOutPath]
+  }
+
+  const androidArtifactDirs = [
+    '/sdcard/Download/qvac-generated-images',
+    '/storage/emulated/0/Download/qvac-generated-images'
+  ]
+  const savedPaths = [primaryOutPath]
+
+  for (const artifactDir of androidArtifactDirs) {
+    try {
+      fs.mkdirSync(artifactDir, { recursive: true })
+      const exportPath = path.join(artifactDir, filename)
+      fs.writeFileSync(exportPath, imageData)
+      logger.log(`Exported Android artifact -> ${exportPath}`)
+      savedPaths.push(exportPath)
+      break
+    } catch (err) {
+      logger.log(`Could not export Android artifact to ${artifactDir}: ${err.message}`)
+    }
+  }
+
+  return savedPaths
+}
+
 function isPng (buf) {
   if (!buf || buf.length < 8) return false
   return (
@@ -236,5 +267,6 @@ module.exports = {
   makeOutputCollector,
   detectPlatform,
   setupJsLogger,
+  saveGeneratedImageArtifact,
   isPng
 }

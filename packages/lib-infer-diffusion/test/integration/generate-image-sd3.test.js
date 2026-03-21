@@ -10,6 +10,7 @@ const {
   ensureModel,
   detectPlatform,
   setupJsLogger,
+  saveGeneratedImageArtifact,
   isPng
 } = require('./utils')
 
@@ -116,9 +117,7 @@ test('SD3 Medium txt2img — generates a valid PNG image', { timeout: 900000, sk
     t.ok(img.length > 0, `Image is non-empty (${img.length} bytes)`)
     t.ok(isPng(img), 'Image has valid PNG magic bytes')
 
-    const outPath = path.join(modelDir, 'generate-image--sd3-txt2img-seed42.png')
-    fs.writeFileSync(outPath, img)
-    console.log(`\nSaved → ${outPath}`)
+    saveGeneratedImageArtifact(modelDir, 'generate-image--sd3-txt2img-seed42.png', img)
 
     // ── Summary ───────────────────────────────────────────────────────────────
     console.log('\n' + '='.repeat(60))
