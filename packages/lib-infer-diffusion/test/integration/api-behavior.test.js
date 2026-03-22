@@ -19,13 +19,13 @@ const isDarwinX64 = os.platform() === 'darwin' && os.arch() === 'x64'
 const isLinuxArm64 = os.platform() === 'linux' && os.arch() === 'arm64'
 const isAndroid = os.platform() === 'android'
 const noGpu = proc.env && proc.env.NO_GPU === 'true'
-const useCpu = true
+const useCpu = isDarwinX64 || isLinuxArm64 || noGpu
 const logger = createIntegrationLogger()
 
 // Smallest model for fast behavior tests
 const MODEL = {
-  name: 'stable-diffusion-v2-1-Q8_0.gguf',
-  url: 'https://huggingface.co/gpustack/stable-diffusion-v2-1-GGUF/resolve/main/stable-diffusion-v2-1-Q8_0.gguf'
+  name: 'stable-diffusion-v2-1-Q4_0.gguf',
+  url: 'https://huggingface.co/gpustack/stable-diffusion-v2-1-GGUF/resolve/main/stable-diffusion-v2-1-Q4_0.gguf'
 }
 
 // Many steps so cancel has time to fire before completion
