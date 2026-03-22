@@ -40,7 +40,7 @@ const LONG_PARAMS = {
 
 const SHORT_PARAMS = {
   prompt: 'a red fox',
-  steps: 2,
+  steps: 15,
   width: 256,
   height: 256,
   cfg_scale: 7.5,
