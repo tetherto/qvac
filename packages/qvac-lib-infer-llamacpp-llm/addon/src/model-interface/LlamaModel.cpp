@@ -308,7 +308,9 @@ void LlamaModel::init(bool acquireLock) {
 
   common_params params;
   std::optional<int> adrenoVersion;
-  commonParamsParse(modelPath, configFilemap, params, adrenoVersion);
+  bool toolsAtEnd = false;
+  commonParamsParse(
+      modelPath, configFilemap, params, adrenoVersion, toolsAtEnd);
 
   const std::string errorWhenFailed = toString(UnableToLoadModel);
   auto streamedFiles =
@@ -334,7 +336,8 @@ void LlamaModel::init(bool acquireLock) {
   snap->llmContext_ = createContext(
       std::string(constructionArgs_.projectionPath),
       params,
-      std::move(llamaInit));
+      std::move(llamaInit),
+      toolsAtEnd);
 
   if (snap->configuredNDiscarded_ > 0 && snap->llmContext_) {
     snap->llmContext_->setNDiscarded(snap->configuredNDiscarded_);
@@ -358,6 +361,14 @@ void LlamaModel::setWeightsForFile(
 bool LlamaModel::isLoaded() {
   std::shared_lock lock(stateMtx_);
   return static_cast<bool>(state_->llmContext_);
+}
+
+llama_pos LlamaModel::getNPastBeforeTools() const {
+  std::shared_lock lock(stateMtx_);
+  if (state_->llmContext_) {
+    return state_->llmContext_->dynamicToolsState().nPastBeforeTools();
+  }
+  return -1;
 }
 
 llama_context* LlamaModel::getContext() {
@@ -504,6 +515,11 @@ std::string LlamaModel::processPromptImpl(const Prompt& prompt) {
   std::string out;
   ResolvedPrompt resolved = resolveChatAndTools(prompt.input);
 
+  if (resolved.shouldResetAfterInference &&
+      state_->llmContext_->getNPast() > 0) {
+    resetState(true);
+  }
+
   if (resolved.chatMsgs.empty() && resolved.tools.empty()) {
     QLOG_IF(
         Priority::INFO,
@@ -552,6 +568,18 @@ std::string LlamaModel::processPromptImpl(const Prompt& prompt) {
   if (!prompt.outputCallback) {
     out = oss.str();
   }
+  auto& dts = state_->llmContext_->dynamicToolsState();
+  if (dts.toolsAtEnd() && !resolved.tools.empty() &&
+      dts.nPastBeforeTools() > 0 &&
+      state_->llmContext_->getNPast() > dts.nPastBeforeTools()) {
+    state_->llmContext_->removeLastNTokens(
+        state_->llmContext_->getNPast() - dts.nPastBeforeTools());
+    dts.reset();
+    if (state_->llmContext_->getFirstMsgTokens() >
+        state_->llmContext_->getNPast()) {
+      state_->llmContext_->setFirstMsgTokens(state_->llmContext_->getNPast());
+    }
+  }
   if (resolved.shouldResetAfterInference) {
     resetState(false);
   }
@@ -589,7 +617,8 @@ qvac_lib_inference_addon_cpp::RuntimeStats LlamaModel::runtimeStats() const {
 void LlamaModel::commonParamsParse(
     const std::string& modelPath,
     std::unordered_map<std::string, std::string>& configFilemap,
-    common_params& params, std::optional<int>& outAdrenoVersion) {
+    common_params& params, std::optional<int>& outAdrenoVersion,
+    bool& outToolsAtEnd) {
 
   std::vector<std::string> configVector;
 
@@ -630,6 +659,26 @@ void LlamaModel::commonParamsParse(
           errorMsg);
     }
     configFilemap.erase(iter);
+  }
+
+  // parse tools_at_end flag from config
+  if (auto iter = configFilemap.find("tools_at_end");
+      iter != configFilemap.end()) {
+    std::string val = iter->second;
+    std::transform(val.begin(), val.end(), val.begin(), ::tolower);
+    outToolsAtEnd = (val == "true");
+    configFilemap.erase(iter);
+  }
+
+  if (outToolsAtEnd) {
+    auto arch = metadata_.tryGetString("general.architecture");
+    if (!arch.has_value() || arch.value() != "qwen3") {
+      QLOG_IF(
+          Priority::WARNING,
+          "[LlamaModel] tools_at_end is only supported for Qwen3 models, "
+          "ignoring\n");
+      outToolsAtEnd = false;
+    }
   }
 
   auto deviceIt = configFilemap.find("device");
@@ -968,12 +1017,14 @@ void LlamaModel::resetState(bool resetStats) {
 
 std::unique_ptr<LlmContext> LlamaModel::createContext(
     std::string&& projectionPath, common_params& params,
-    common_init_result&& llamaInit) {
+    common_init_result&& llamaInit, bool toolsAtEnd) {
   if (!projectionPath.empty()) {
     params.mmproj.path = std::move(projectionPath);
-    return std::make_unique<MtmdLlmContext>(params, std::move(llamaInit));
+    return std::make_unique<MtmdLlmContext>(
+        params, std::move(llamaInit), toolsAtEnd);
   }
-  return std::make_unique<TextLlmContext>(params, std::move(llamaInit));
+  return std::make_unique<TextLlmContext>(
+      params, std::move(llamaInit), toolsAtEnd);
 }
 
 bool LlamaModel::loadMedia(const std::vector<uint8_t>& input) {

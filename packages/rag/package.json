@@ -12,7 +12,13 @@
   },
   "license": "Apache-2.0",
   "author": "Tether",
-  "bugs": "https://github.com/tetherto/qvac-lib-rag/issues",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/tetherto/qvac.git",
+    "directory": "packages/rag"
+  },
+  "bugs": "https://github.com/tetherto/qvac/issues",
+  "homepage": "https://github.com/tetherto/qvac/tree/main/packages/rag#readme",
   "files": [
     "src",
     "index.js",

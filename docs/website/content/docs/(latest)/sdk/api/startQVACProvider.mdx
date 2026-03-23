@@ -6,22 +6,30 @@ The provider's keypair can be controlled via the seed option or QVAC_HYPERSWARM_
 ---
 
 ```typescript
-function startQVACProvider(params: infer): Promise
+function startQVACProvider(params: { firewall?: { mode: "allow" | "deny"; publicKeys: string[] }; topic: string }): Promise
 ```
-
-## Description
-
-Starts a provider service that offers QVAC capabilities to remote peers.
-The provider's keypair can be controlled via the seed option or QVAC_HYPERSWARM_SEED environment variable.
 
 ## Parameters
 
 | Name | Type | Required? | Description |
 | --- | --- | :---: | --- |
-| `params` | `infer` | ✓ | No description |
+| `params` | `\{ firewall?: \{ mode: "allow" | "deny"; publicKeys: string[] \}; topic: string \}` | ✓ | Provider configuration with the swarm topic to join and an optional firewall for access control |
+
+| Field | Type | Required? | Description |
+| --- | --- | :---: | --- |
+| `topic` | `string` | ✓ | The Hyperswarm topic to join. Remote peers connecting to this topic can access the provider's capabilities |
+| `firewall` | `\{ mode: "allow" \| "deny"; publicKeys: string[] \}` | ✗ | Access control firewall. In `"allow"` mode, only the listed public keys can connect. In `"deny"` mode, the listed keys are blocked and all others are allowed |
 
 ## Returns
 
 ```typescript
 Promise
 ```
+
+
+
+## Throws
+
+| Error | When |
+| --- | --- |
+| `When the response type is not "provide" or the request fails` |  |
