@@ -196,7 +196,7 @@ jobs:
                   name = r.get('name', '') or att.get('filename', '')
                   if loc and name:
                       print(f'{name}|{loc}')
-          ")
+          " | tr -d '\r')
 
           if [ -z "$URLS" ]; then
               echo "❌ No Firefox model found for ${SRC_LANG}-${DST_LANG}"
