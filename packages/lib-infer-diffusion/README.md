@@ -203,7 +203,7 @@ All config values are coerced to strings internally before being passed to the n
 | Parameter | Type | Default | Description |
 |-----------|------|---------|-------------|
 | `threads` | number | auto | Number of CPU threads for model loading and CPU ops |
-| `wtype` | `'f32'` \| `'f16'` \| `'q4_0'` \| `'q8_0'` \| … | auto | Override weight quantisation type |
+| `type` | `'f32'` \| `'f16'` \| `'q4_0'` \| `'q8_0'` \| … | auto | Override weight quantisation type |
 | `rng` | `'cpu'` \| `'cuda'` \| `'std_default'` | `'cuda'` | RNG backend (`'cuda'` = philox RNG — not GPU-specific despite the name; recommended) |
 | `clip_on_cpu` | `true` \| `false` | `false` | Force CLIP encoder to run on CPU |
 | `vae_on_cpu` | `true` \| `false` | `false` | Force VAE to run on CPU |

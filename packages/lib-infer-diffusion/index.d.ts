@@ -77,7 +77,7 @@ export interface SdConfig {
   /** Preferred compute device: 'gpu' (Metal/Vulkan) or 'cpu' */
   device?: 'gpu' | 'cpu'
   /** Weight quantization type */
-  wtype?: WeightType
+  type?: WeightType
   /** RNG type for reproducible generation */
   rng?: RngType
   /** RNG type for the sampler (separate from context RNG) */
