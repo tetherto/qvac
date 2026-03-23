@@ -113,7 +113,27 @@ function checkConfig (configObject) {
       throw new Error(`${userParam} is not a valid parameter for contextParams`)
     }
   }
+
+  if (typeof configObject.whisperConfig.suppress_regex === 'string') {
+    _validateSuppressRegex(configObject.whisperConfig.suppress_regex)
+  }
 };
+
+const MAX_SUPPRESS_REGEX_LENGTH = 512
+const NESTED_QUANTIFIER_PATTERN = /(\+|\*|\{[0-9,]+\})\s*(\+|\*|\?|\{[0-9,]+\})/
+
+function _validateSuppressRegex (pattern) {
+  if (pattern.length > MAX_SUPPRESS_REGEX_LENGTH) {
+    throw new Error(
+      'suppress_regex exceeds maximum length of ' + MAX_SUPPRESS_REGEX_LENGTH + ' characters'
+    )
+  }
+  if (NESTED_QUANTIFIER_PATTERN.test(pattern)) {
+    throw new Error(
+      'suppress_regex contains nested quantifiers which may cause catastrophic backtracking'
+    )
+  }
+}
 
 module.exports = {
   checkConfig
