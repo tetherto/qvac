@@ -1,0 +1,66 @@
+---
+title: "translate( )"
+titleStyle: code
+description: "Translates text from one language to another using a specified translation model.
+Supports both NMT (Neural Machine Translation) and LLM models."
+---
+
+```typescript
+function translate(params: TranslateClientParams, options?: { forceNewConnection?: boolean; profiling?: { enabled?: boolean; includeServerBreakdown?: boolean; mode?: "summary" | "verbose" }; timeout?: number }): { stats: Promise<{ processedTokens: number; processingTime: number } | —>; text: Promise<string>; tokenStream: AsyncGenerator<string> }
+```
+
+## Parameters
+
+| Name | Type | Required? | Description |
+| --- | --- | :---: | --- |
+| `params` | `TranslateClientParams` | ✓ | Translation configuration object |
+| `options` | `\{ forceNewConnection?: boolean; profiling?: \{ enabled?: boolean; includeServerBreakdown?: boolean; mode?: "summary" | "verbose" \}; timeout?: number \}` | ✗ | No description |
+
+## Returns
+
+```typescript
+{ stats: Promise<{ processedTokens: number; processingTime: number } | —>; text: Promise<string>; tokenStream: AsyncGenerator<string> }
+```
+
+
+
+| Field | Type | Description |
+| --- | --- | --- |
+| `stats` | `Promise` | — |
+| `text` | `Promise` | — |
+| `tokenStream` | `AsyncGenerator` | — |
+
+## Throws
+
+| Error | When |
+| --- | --- |
+| `When translation fails with an error message or when language detection fails` |  |
+
+## Example
+
+```typescript
+// Streaming mode (default)
+const result = translate({
+  modelId: "modelId",
+  text: "Hello world",
+  from: "en",
+  to: "es"
+  modelType: "llm",
+});
+
+for await (const token of result.tokenStream) {
+  console.log(token);
+}
+
+// Non-streaming mode
+const response = translate({
+  modelId: "modelId",
+  text: "Hello world",
+  from: "en",
+  to: "es"
+  modelType: "llm",
+  stream: false,
+});
+
+console.log(await response.text);
+```

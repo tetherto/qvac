@@ -2,6 +2,7 @@
 
 #include <any>
 #include <memory>
+#include <mutex>
 #include <span>
 #include <string>
 #include <vector>
@@ -16,11 +17,16 @@
 #include <qvac-lib-inference-addon-cpp/queue/OutputCallbackJs.hpp>
 #include <whisper.h>
 
+#include "model-interface/StreamingProcessor.hpp"
 #include "model-interface/WhisperTypes.hpp"
 #include "model-interface/whisper.cpp/WhisperModel.hpp"
 #include "src/js-interface/JSAdapter.hpp"
 
 namespace qvac_lib_inference_addon_whisper {
+
+inline std::mutex g_streamingMtx;
+inline qvac_lib_inference_addon_cpp::AddonJs* g_streamingInstance = nullptr;
+inline std::unique_ptr<StreamingProcessor> g_streamingProcessor;
 
 namespace js = qvac_lib_inference_addon_cpp::js;
 using qvac_lib_inference_addon_cpp::OutputQueue;
@@ -170,6 +176,209 @@ inline js_value_t* reload(js_env_t* env, js_callback_info_t* info) try {
         }
         whisperModel->setConfig(config);
       });
+}
+JSCATCH
+
+inline js_value_t*
+startStreaming(js_env_t* env, js_callback_info_t* info) try {
+  using namespace qvac_lib_inference_addon_cpp;
+
+  JsArgsParser args(env, info);
+  AddonJs& instance = JsInterface::getInstance(env, args.get(0, "instance"));
+  auto configObj = args.getJsObject(1, "config");
+
+  StreamingProcessor::Config config;
+
+  auto maybeVadModelPath =
+      configObj.getOptionalProperty<js::String>(env, "vadModelPath");
+  if (maybeVadModelPath.has_value()) {
+    config.vadModelPath = maybeVadModelPath.value().as<std::string>(env);
+  }
+  if (config.vadModelPath.empty()) {
+    throw std::runtime_error("vadModelPath is required for streaming");
+  }
+
+  auto maybeVadThreshold =
+      configObj.getOptionalProperty<js::Number>(env, "vadThreshold");
+  if (maybeVadThreshold.has_value()) {
+    config.vadThreshold =
+        static_cast<float>(maybeVadThreshold.value().as<double>(env));
+  }
+
+  auto maybeMinSilence =
+      configObj.getOptionalProperty<js::Number>(env, "minSilenceDurationMs");
+  if (maybeMinSilence.has_value()) {
+    config.minSilenceDurationMs =
+        static_cast<int>(maybeMinSilence.value().as<double>(env));
+  }
+
+  auto maybeMinSpeech =
+      configObj.getOptionalProperty<js::Number>(env, "minSpeechDurationMs");
+  if (maybeMinSpeech.has_value()) {
+    config.minSpeechDurationMs =
+        static_cast<int>(maybeMinSpeech.value().as<double>(env));
+  }
+
+  auto maybeMaxSpeech =
+      configObj.getOptionalProperty<js::Number>(env, "maxSpeechDurationS");
+  if (maybeMaxSpeech.has_value()) {
+    config.maxSpeechDurationS =
+        static_cast<float>(maybeMaxSpeech.value().as<double>(env));
+    config.maxBufferSamples =
+        static_cast<int>(config.maxSpeechDurationS) * config.sampleRate;
+  }
+
+  auto maybeSpeechPad =
+      configObj.getOptionalProperty<js::Number>(env, "speechPadMs");
+  if (maybeSpeechPad.has_value()) {
+    config.speechPadMs =
+        static_cast<int>(maybeSpeechPad.value().as<double>(env));
+  }
+
+  auto maybeSamplesOverlap =
+      configObj.getOptionalProperty<js::Number>(env, "samplesOverlap");
+  if (maybeSamplesOverlap.has_value()) {
+    config.samplesOverlap =
+        static_cast<float>(maybeSamplesOverlap.value().as<double>(env));
+  }
+
+  {
+    std::lock_guard lock(g_streamingMtx);
+
+    if (g_streamingProcessor) {
+      throw std::runtime_error(
+          "Streaming session already active");
+    }
+
+    auto& whisperModel =
+        dynamic_cast<WhisperModel&>(instance.addonCpp->model.get());
+    g_streamingInstance = &instance;
+    g_streamingProcessor = std::make_unique<StreamingProcessor>(
+        whisperModel,
+        instance.addonCpp->outputQueue,
+        config);
+  }
+
+  return js::Boolean::create(env, true);
+}
+JSCATCH
+
+inline js_value_t*
+appendStreamingAudio(js_env_t* env, js_callback_info_t* info) try {
+  using namespace qvac_lib_inference_addon_cpp;
+
+  JsArgsParser args(env, info);
+  AddonJs& instance = JsInterface::getInstance(env, args.get(0, "instance"));
+  auto [type, jsInput] = JsInterface::getInput(args);
+  auto inputObj = args.getJsObject(1, "inputObj");
+
+  if (type != "audio") {
+    throw qvac_errors::StatusError(
+        qvac_errors::general_error::InvalidArgument,
+        "Unknown input type: " + type);
+  }
+
+  std::string audioFormat = "s16le";
+  auto maybeAudioFormat =
+      inputObj.getOptionalProperty<js::String>(env, "audio_format");
+  if (maybeAudioFormat.has_value()) {
+    audioFormat = maybeAudioFormat.value().as<std::string>(env);
+  }
+
+  auto audioBytes =
+      js::TypedArray<uint8_t>(env, jsInput).as<std::vector<uint8_t>>(env);
+  auto samples = WhisperModel::preprocessAudioData(audioBytes, audioFormat);
+
+  if (samples.empty()) {
+    return js::Boolean::create(env, false);
+  }
+
+  StreamingProcessor* processor = nullptr;
+  {
+    std::lock_guard lock(g_streamingMtx);
+    if (!g_streamingProcessor || g_streamingInstance != &instance) {
+      throw std::runtime_error("No active streaming session for this instance");
+    }
+    processor = g_streamingProcessor.get();
+  }
+
+  processor->appendAudio(std::move(samples));
+  return js::Boolean::create(env, true);
+}
+JSCATCH
+
+// Tear down and remove any active streaming session for `instance`.
+// When `forceful` is true the model is asked to abort in-flight work first.
+// Returns true if a session was cleaned up, false if none existed.
+inline bool
+cleanupStreamingSession(
+    qvac_lib_inference_addon_cpp::AddonJs& instance, bool forceful = false) {
+  std::unique_ptr<StreamingProcessor> processor;
+  {
+    std::lock_guard lock(g_streamingMtx);
+    if (!g_streamingProcessor || g_streamingInstance != &instance) {
+      return false;
+    }
+    processor = std::move(g_streamingProcessor);
+    g_streamingInstance = nullptr;
+  }
+  if (forceful) {
+    processor->cancel();
+  } else {
+    processor->end();
+  }
+  return true;
+}
+
+inline js_value_t*
+cancelWithStreaming(js_env_t* env, js_callback_info_t* info) try {
+  using namespace qvac_lib_inference_addon_cpp;
+
+  JsArgsParser args(env, info);
+  AddonJs& instance = JsInterface::getInstance(env, args.get(0, "instance"));
+
+  std::shared_ptr<StreamingProcessor> processor;
+  {
+    std::lock_guard lock(g_streamingMtx);
+    if (g_streamingProcessor && g_streamingInstance == &instance) {
+      processor = std::shared_ptr<StreamingProcessor>(
+          std::move(g_streamingProcessor));
+      g_streamingInstance = nullptr;
+    }
+  }
+
+  return js::JsAsyncTask::run(
+      env,
+      [addonCppRef = instance.addonCpp, processor]() {
+        if (processor) {
+          processor->cancel();
+        }
+        addonCppRef->cancelJob();
+      });
+}
+JSCATCH
+
+inline js_value_t*
+destroyInstanceWithStreaming(js_env_t* env, js_callback_info_t* info) try {
+  using namespace qvac_lib_inference_addon_cpp;
+
+  JsArgsParser args(env, info);
+  AddonJs& instance = JsInterface::getInstance(env, args.get(0, "instance"));
+
+  cleanupStreamingSession(instance, true);
+
+  return JsInterface::destroyInstance(env, info);
+}
+JSCATCH
+
+inline js_value_t*
+endStreaming(js_env_t* env, js_callback_info_t* info) try {
+  using namespace qvac_lib_inference_addon_cpp;
+
+  JsArgsParser args(env, info);
+  AddonJs& instance = JsInterface::getInstance(env, args.get(0, "instance"));
+  bool cleaned = cleanupStreamingSession(instance, false);
+  return js::Boolean::create(env, cleaned);
 }
 JSCATCH
 

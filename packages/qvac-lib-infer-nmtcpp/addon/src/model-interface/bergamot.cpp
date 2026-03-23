@@ -43,16 +43,18 @@ static std::string validateBergamotFile(
     return file_type + " path is empty";
   }
 
-  if (!std::filesystem::exists(path)) {
+  // u8path interprets the string as UTF-8, avoiding ANSI
+  // code-page corruption on Windows for non-ASCII paths.
+  auto pathObj = std::filesystem::u8path(path);
+
+  if (!std::filesystem::exists(pathObj)) {
     return file_type + " file not found: " + path;
   }
 
-  if (!std::filesystem::is_regular_file(path)) {
+  if (!std::filesystem::is_regular_file(pathObj)) {
     return file_type + " path is not a regular file: " + path;
   }
 
-  // Check file extension
-  std::filesystem::path pathObj(path);
   std::string ext = pathObj.extension().string();
 
   if (ext != expected_ext) {
@@ -60,8 +62,7 @@ static std::string validateBergamotFile(
            " extension, got: " + ext + " (path: " + path + ")";
   }
 
-  // Check if file is readable
-  std::ifstream test(path);
+  std::ifstream test(pathObj);
   if (!test.good()) {
     return file_type + " file is not readable: " + path;
   }

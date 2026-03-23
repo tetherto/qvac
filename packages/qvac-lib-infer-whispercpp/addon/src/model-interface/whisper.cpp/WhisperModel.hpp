@@ -52,6 +52,18 @@ public:
   auto addTranscription(const Transcript& transcript) -> void {
     output_.push_back(transcript);
   }
+
+  Output takeOutput() {
+    Output result = std::move(output_);
+    output_.clear();
+    return result;
+  }
+
+  void prepareForStreaming() {
+    reset();
+    cancelRequested_.store(false, std::memory_order_relaxed);
+  }
+
   auto hasSegmentCallback() const -> bool {
     return static_cast<bool>(on_segment_);
   }

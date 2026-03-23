@@ -1,0 +1,37 @@
+---
+title: "ragDeleteWorkspace( )"
+titleStyle: code
+description: "Deletes a RAG workspace and all its data.
+The workspace must not be currently loaded/in-use."
+---
+
+```typescript
+function ragDeleteWorkspace(params: { workspace: string }, options?: { forceNewConnection?: boolean; profiling?: { enabled?: boolean; includeServerBreakdown?: boolean; mode?: "summary" | "verbose" }; timeout?: number }): Promise
+```
+
+## Parameters
+
+| Name | Type | Required? | Description |
+| --- | --- | :---: | --- |
+| `params` | `\{ workspace: string \}` | ✓ | The parameters for deletion |
+| `options` | `\{ forceNewConnection?: boolean; profiling?: \{ enabled?: boolean; includeServerBreakdown?: boolean; mode?: "summary" | "verbose" \}; timeout?: number \}` | ✗ | No description |
+
+## Returns
+
+```typescript
+Promise
+```
+
+
+
+## Throws
+
+| Error | When |
+| --- | --- |
+| `When the workspace doesn't exist or is currently loaded` |  |
+
+## Example
+
+```typescript
+await ragDeleteWorkspace({ workspace: "my-docs" });
+```

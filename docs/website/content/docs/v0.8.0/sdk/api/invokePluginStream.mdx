@@ -1,0 +1,22 @@
+---
+title: "invokePluginStream( )"
+titleStyle: code
+description: "Invoke a streaming plugin handler."
+---
+
+```typescript
+function invokePluginStream(options: InvokePluginOptions, rpcOptions?: { forceNewConnection?: boolean; profiling?: { enabled?: boolean; includeServerBreakdown?: boolean; mode?: "summary" | "verbose" }; timeout?: number }): AsyncGenerator
+```
+
+## Parameters
+
+| Name | Type | Required? | Description |
+| --- | --- | :---: | --- |
+| `options` | `InvokePluginOptions` | ✓ | No description |
+| `rpcOptions` | `\{ forceNewConnection?: boolean; profiling?: \{ enabled?: boolean; includeServerBreakdown?: boolean; mode?: "summary" | "verbose" \}; timeout?: number \}` | ✗ | No description |
+
+## Returns
+
+```typescript
+AsyncGenerator
+```
