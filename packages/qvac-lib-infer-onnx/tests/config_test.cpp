@@ -12,7 +12,7 @@ TEST(SessionConfigTest, Defaults) {
   EXPECT_EQ(config.interOpThreads, 0);
   EXPECT_TRUE(config.enableMemoryPattern);
   EXPECT_TRUE(config.enableCpuMemArena);
-  EXPECT_TRUE(config.enableXnnpack);
+  EXPECT_FALSE(config.enableXnnpack);
   EXPECT_EQ(config.executionMode, ExecutionMode::SEQUENTIAL);
 }
 
@@ -62,7 +62,7 @@ TEST(ExecutionModeTest, AllValues) {
 
 TEST(EnvironmentConfigTest, Defaults) {
   EnvironmentConfig cfg;
-  EXPECT_EQ(cfg.loggingLevel, LoggingLevel::WARNING);
+  EXPECT_EQ(cfg.loggingLevel, LoggingLevel::ERROR);
   EXPECT_EQ(cfg.loggingId, "qvac-onnx");
 }
 

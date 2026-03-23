@@ -9,16 +9,11 @@ This is an identity function that provides type checking."
 function defineHandler(definition: PluginHandlerDefinition): PluginHandlerDefinition
 ```
 
-## Description
-
-Helper function to define a handler with full type inference.
-This is an identity function that provides type checking.
-
 ## Parameters
 
 | Name | Type | Required? | Description |
 | --- | --- | :---: | --- |
-| `definition` | `PluginHandlerDefinition` | ✓ | No description |
+| `definition` | `PluginHandlerDefinition` | ✓ | The handler definition containing `requestSchema`, `responseSchema`, `streaming` flag, and the `handler` function |
 
 ## Returns
 

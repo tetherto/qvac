@@ -6,7 +6,7 @@ if(BUILD_TESTING)
 endif()
 
 project(qvac-lib-inference-addon-cpp
-  VERSION 1.1.2
+  VERSION 1.1.3
   LANGUAGES CXX)
 
 find_path(VCPKG_INSTALLED_PATH share/qvac-lint-cpp/.clang-format REQUIRED)

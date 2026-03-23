@@ -5,21 +5,29 @@ description: "Stops a running provider service and leaves the specified topic."
 ---
 
 ```typescript
-function stopQVACProvider(params: infer): Promise
+function stopQVACProvider(params: { topic: string }): Promise
 ```
-
-## Description
-
-Stops a running provider service and leaves the specified topic.
 
 ## Parameters
 
 | Name | Type | Required? | Description |
 | --- | --- | :---: | --- |
-| `params` | `infer` | ✓ | No description |
+| `params` | `\{ topic: string \}` | ✓ | An object containing the topic of the provider to stop |
+
+| Field | Type | Required? | Description |
+| --- | --- | :---: | --- |
+| `topic` | `string` | ✓ | The Hyperswarm topic of the running provider to stop and leave |
 
 ## Returns
 
 ```typescript
 Promise
 ```
+
+
+
+## Throws
+
+| Error | When |
+| --- | --- |
+| `When the response type is not "stopProvide" or the request fails` |  |
