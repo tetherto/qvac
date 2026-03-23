@@ -17,8 +17,8 @@ export function getLanguage(code: string | undefined): string {
   return fullName ?? code.toUpperCase();
 }
 
-export function isAfrican(code: string | undefined) {
-  return !!code && AFRICAN_LANGUAGES_SET.has(code.toLowerCase());
+export function isAfrican(language: string | undefined) {
+  return !!language && AFRICAN_LANGUAGES_SET.has(language);
 }
 
 export async function* translate(

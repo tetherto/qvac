@@ -64,7 +64,7 @@ export const INDICTRANS_LANGUAGES = [
 ] as const;
 
 export const AFRICAN_LANGUAGES_SET = new Set([
-  "afrikaans","swahili","somali","amharic","hausa","kinyarwanda","zulu","igbo","xhosa","shona","yoruba","nyanja","southern sotho","tigrinya","oromo","tswana","moroccan arabic","egyptian arabic","malagasy","tunisian arabic"
+  "Afrikaans","Swahili","Somali","Amharic","Hausa","Kinyarwanda","Zulu","Igbo","Xhosa","Shona","Yoruba","Nyanja","Southern Sotho","Tigrinya","Oromo","Tswana","Moroccan Arabic","Egyptian Arabic","Malagasy","Tunisian Arabic"
 ]);
 
 // Union of all NMT languages (for general type usage)

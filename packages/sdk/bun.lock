@@ -8,7 +8,7 @@
         "@qvac/dl-filesystem": "^0.2.0",
         "@qvac/embed-llamacpp": "^0.12.0",
         "@qvac/error": "^0.1.1",
-        "@qvac/langdetect-text-cld2": "0.2.0",
+        "@qvac/langdetect-text-cld2": "0.3.0",
         "@qvac/llm-llamacpp": "^0.12.1",
         "@qvac/logging": "^0.1.0",
         "@qvac/ocr-onnx": "^0.2.0",
@@ -517,7 +517,7 @@
 
     "@qvac/infer-base": ["@qvac/infer-base@0.1.1", "", { "dependencies": { "@qvac/error": "^0.1.0", "@qvac/logging": "^0.1.0", "@qvac/response": "^0.1.0", "bare-os": "^3.2.0", "bare-path": "^3.0.0" }, "peerDependencies": { "@qvac/dl-hyperdrive": "^0.1.0" } }, "sha512-rrW0ftceRoPmn4fLoQH8V+2BHJjbuWWpJuzR0UKLJOebMzWx0JunO12/lbunQ65w67IksuTzJAb064clPHfqeQ=="],
 
-    "@qvac/langdetect-text-cld2": ["@qvac/langdetect-text-cld2@0.2.0", "", { "dependencies": { "cld": "^2.10.1", "iso-language-codes": "^2.0.0", "module": "npm:bare-module" } }, "sha512-j/TZV9JyKc7BIK2aFoh05pmraDbWfJ6bT4L1/AwAty84XFCy6Z7bqoWPSJnUOX+Y70Mq6k0ft9bQ9UjbefrXMw=="],
+    "@qvac/langdetect-text-cld2": ["@qvac/langdetect-text-cld2@0.3.0", "", { "dependencies": { "cld": "^2.10.1", "language-tags": "^1.0.9", "module": "npm:bare-module" } }, "sha512-101mAyaFBQWi2RUoNzxgDhuWwj6ITgoX6XLvs4YpAAU7aZT6YKkimIAN0ToMjl+pGlROMIj4OBqC8HHpyBsh7A=="],
 
     "@qvac/llm-llamacpp": ["@qvac/llm-llamacpp@0.12.2", "", { "dependencies": { "@qvac/infer-base": "^0.2.2", "bare-path": "^3.0.0", "bare-process": "^4.2.2" }, "peerDependencies": { "@qvac/dl-hyperdrive": "^0.1.1" } }, "sha512-yx1bCK0Lp1XwsKbFyMNQ7BPy4vt95WLN3iMO2gSTTJW225trAFDBee9xktOJ4V4onhClKzdOm1fKAvy2ZNCJXA=="],
 
@@ -1531,8 +1531,6 @@
 
     "isexe": ["isexe@2.0.0", "", {}, "sha512-RHxMLp9lnKHGHRng9QFhRCMbYAcVpn69smSGcq3f36xjgVVWThj4qqLbTLlq7Ssj8B+fIQ1EuCEGI2lKsyQeIw=="],
 
-    "iso-language-codes": ["iso-language-codes@2.0.0", "", {}, "sha512-krdJem8Yu0DfublYzvHViZxTXGjkvqV5j8wcDzrGNgWiISW1Ow9Su5cy1R+HyuWL84zpuZ/MuYFg3fawbx9IjA=="],
-
     "istanbul-lib-coverage": ["istanbul-lib-coverage@3.2.2", "", {}, "sha512-O8dpsF+r0WV/8MNRKfnmrtCWhuKjxrq2w+jpzBL5UZKTi2LeVWnWOmWRxFlesJONmc+wLAGvKQZEOanko0LFTg=="],
 
     "istanbul-lib-instrument": ["istanbul-lib-instrument@5.2.1", "", { "dependencies": { "@babel/core": "^7.12.3", "@babel/parser": "^7.14.7", "@istanbuljs/schema": "^0.1.2", "istanbul-lib-coverage": "^3.2.0", "semver": "^6.3.0" } }, "sha512-pzqtp31nLv/XFOzXGuvhCb8qhjmTVo5vjVk19XE4CRlSWz0KoeJ3bw9XsA7nOp9YBf4qHjwBxkDzKcME/J29Yg=="],
@@ -1594,6 +1592,10 @@
     "kleur": ["kleur@3.0.3", "", {}, "sha512-eTIzlVOSUR+JxdDFepEYcBMtZ9Qqdef+rnzWdRZuMbOywu5tO2w2N7rqjoANZ5k9vywhL6Br1VRjUIgTQx4E8w=="],
 
     "lan-network": ["lan-network@0.1.7", "", { "bin": { "lan-network": "dist/lan-network-cli.js" } }, "sha512-mnIlAEMu4OyEvUNdzco9xpuB9YVcPkQec+QsgycBCtPZvEqWPCDPfbAE4OJMdBBWpZWtpCn1xw9jJYlwjWI5zQ=="],
+
+    "language-subtag-registry": ["language-subtag-registry@0.3.23", "", {}, "sha512-0K65Lea881pHotoGEa5gDlMxt3pctLi2RplBb7Ezh4rRdLEOtgi7n4EwK9lamnUCkKBqaeKRVebTq6BAxSkpXQ=="],
+
+    "language-tags": ["language-tags@1.0.9", "", { "dependencies": { "language-subtag-registry": "^0.3.20" } }, "sha512-MbjN408fEndfiQXbFQ1vnd+1NoLDsnQW41410oQBXiyXDMYH5z505juWa4KUE1LqxRC7DgOgZDbKLxHIwm27hA=="],
 
     "leven": ["leven@3.1.0", "", {}, "sha512-qsda+H8jTaUaN/x5vzW2rzc+8Rw4TAQ/4KjB46IwK5VH+IlVeeeje/EoZRpiXvIqjFgK84QffqPztGI3VBLG1A=="],
 

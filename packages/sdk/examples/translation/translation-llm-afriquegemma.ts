@@ -32,7 +32,7 @@ try {
     modelId,
     text: engText,
     from: "en",
-    to: "sw",
+    to: "arz",
     modelType: "llm",
     stream: false,
   });
