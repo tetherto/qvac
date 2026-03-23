@@ -426,9 +426,9 @@ const std::unordered_map<std::string, HandlerFunction<whisper_full_params>>
            params.vad = true;
          }},
         {"seed",
-         [](whisper_full_params& params, const JSValueVariant& value) {
-           int seed = static_cast<int>(std::get<double>(value));
-           params.seed = seed;
+         []([[maybe_unused]] whisper_full_params& params,
+            [[maybe_unused]] const JSValueVariant& value) {
+           // whisper_full_params.seed was removed in whisper.cpp >= 1.7.6
          }},
 };
 
