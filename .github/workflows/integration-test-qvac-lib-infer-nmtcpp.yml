@@ -235,11 +235,202 @@ jobs:
           echo "IndicTrans model files:"
           ls -la model/indictrans/
 
-      - name: Run integration test
+      - name: Run integration test (Linux/macOS)
+        if: ${{ matrix.platform != 'win32' }}
         working-directory: ${{ inputs.workdir || env.PKG_DIR }}
-        run: npm run test:integration ${{ matrix.platform }}-${{ matrix.arch }}
+        run: |
+          npm run test:integration ${{ matrix.platform }}-${{ matrix.arch }} 2>&1 | tee test-output.log
+          exit ${PIPESTATUS[0]}
+        shell: bash
         env:
           QASE_API_TOKEN: ${{ secrets.QASE_API_TOKEN }}
+
+      - name: Run integration test (Windows)
+        if: ${{ matrix.platform == 'win32' }}
+        working-directory: ${{ inputs.workdir || env.PKG_DIR }}
+        run: |
+          npm run test:integration ${{ matrix.platform }}-${{ matrix.arch }} | Tee-Object test-output.log
+        shell: powershell
+        env:
+          QASE_API_TOKEN: ${{ secrets.QASE_API_TOKEN }}
+
+      - name: Generate test report (Linux/macOS)
+        if: ${{ always() && matrix.platform != 'win32' }}
+        working-directory: ${{ inputs.workdir || env.PKG_DIR }}
+        shell: bash
+        run: |
+          REPORT="test-report.txt"
+          PLATFORM="${{ matrix.platform }}-${{ matrix.arch }}"
+
+          echo "========================================" > "$REPORT"
+          echo "  Integration Test Report — ${PLATFORM}" >> "$REPORT"
+          echo "  $(date -u '+%Y-%m-%d %H:%M:%S UTC')" >> "$REPORT"
+          echo "========================================" >> "$REPORT"
+          echo "" >> "$REPORT"
+
+          if [ ! -f test-output.log ]; then
+            echo "NO TEST OUTPUT — tests may not have started." >> "$REPORT"
+            cat "$REPORT"
+            exit 0
+          fi
+
+          awk '
+          /^ok [0-9]+ - / {
+            name = $0; sub(/^ok [0-9]+ - /, "", name)
+            passed++
+            results[++total] = "PASS: " name
+            next
+          }
+          /^not ok [0-9]+ - / {
+            name = $0; sub(/^not ok [0-9]+ - /, "", name)
+            failed++
+            results[++total] = "FAIL: " name
+            capturing = 1
+            fail_detail[total] = ""
+            next
+          }
+          /^# skip/ {
+            split($0, a, " "); skipped = a[3]
+            next
+          }
+          capturing && /^[^ \t#]/ { capturing = 0; next }
+          capturing {
+            fail_detail[total] = fail_detail[total] $0 "\n"
+          }
+          END {
+            printf "TOTAL: %d  |  PASSED: %d  |  FAILED: %d  |  SKIPPED: %s\n\n", total, passed, failed, (skipped ? skipped : "0")
+
+            if (failed > 0) {
+              print "======== ALL TESTS ========"
+              print ""
+            }
+            for (i = 1; i <= total; i++) {
+              print results[i]
+            }
+
+            has_failures = 0
+            for (i = 1; i <= total; i++) {
+              if (fail_detail[i] != "") has_failures = 1
+            }
+            if (has_failures) {
+              print ""
+              print "======== FAILURE DETAILS ========"
+              for (i = 1; i <= total; i++) {
+                if (fail_detail[i] != "") {
+                  print ""
+                  print results[i]
+                  print "--------"
+                  printf "%s", fail_detail[i]
+                }
+              }
+            }
+          }
+          ' test-output.log >> "$REPORT"
+
+          echo "" >> "$REPORT"
+          echo "Full log: test-output.log (uploaded as artifact)" >> "$REPORT"
+
+          echo "--- Test Report ---"
+          cat "$REPORT"
+
+          echo ""
+          echo "::group::📄 Full Raw Test Output (test-output.log)"
+          cat test-output.log 2>/dev/null || echo "(no test output captured)"
+          echo "::endgroup::"
+
+      - name: Generate test report (Windows)
+        if: ${{ always() && matrix.platform == 'win32' }}
+        working-directory: ${{ inputs.workdir || env.PKG_DIR }}
+        shell: powershell
+        run: |
+          $report = "test-report.txt"
+          $platform = "${{ matrix.platform }}-${{ matrix.arch }}"
+          $header = @"
+          ========================================
+            Integration Test Report — $platform
+            $(Get-Date -Format 'yyyy-MM-dd HH:mm:ss') UTC
+          ========================================
+
+          "@
+          $header | Out-File -FilePath $report -Encoding utf8
+
+          if (-not (Test-Path test-output.log)) {
+            "NO TEST OUTPUT — tests may not have started." | Out-File -Append -FilePath $report
+            Get-Content $report
+            exit 0
+          }
+
+          $lines = Get-Content test-output.log
+          $passed = @()
+          $failed = @()
+          $failDetails = @{}
+          $currentFail = $null
+
+          foreach ($line in $lines) {
+            if ($line -match '^ok \d+ - (.+)') {
+              $passed += "PASS: $($Matches[1])"
+              $currentFail = $null
+            }
+            elseif ($line -match '^not ok \d+ - (.+)') {
+              $testName = $Matches[1]
+              $failed += "FAIL: $testName"
+              $currentFail = $testName
+              $failDetails[$testName] = @()
+            }
+            elseif ($null -ne $currentFail) {
+              if ($line -match '^[^ \t#]') {
+                $currentFail = $null
+              } else {
+                $failDetails[$currentFail] += $line
+              }
+            }
+          }
+
+          $total = $passed.Count + $failed.Count
+          "TOTAL: $total  |  PASSED: $($passed.Count)  |  FAILED: $($failed.Count)" | Out-File -Append -FilePath $report
+          "" | Out-File -Append -FilePath $report
+
+          if ($failed.Count -gt 0) {
+            "======== ALL TESTS ========" | Out-File -Append -FilePath $report
+            "" | Out-File -Append -FilePath $report
+          }
+          foreach ($p in $passed) { $p | Out-File -Append -FilePath $report }
+          foreach ($f in $failed) { $f | Out-File -Append -FilePath $report }
+
+          if ($failed.Count -gt 0) {
+            "" | Out-File -Append -FilePath $report
+            "======== FAILURE DETAILS ========" | Out-File -Append -FilePath $report
+            foreach ($f in $failed) {
+              $testName = $f -replace '^FAIL: ', ''
+              "" | Out-File -Append -FilePath $report
+              $f | Out-File -Append -FilePath $report
+              "--------" | Out-File -Append -FilePath $report
+              if ($failDetails.ContainsKey($testName)) {
+                $failDetails[$testName] | Out-File -Append -FilePath $report
+              }
+            }
+          }
+
+          "" | Out-File -Append -FilePath $report
+          "Full log: test-output.log (uploaded as artifact)" | Out-File -Append -FilePath $report
+
+          Write-Host "--- Test Report ---"
+          Get-Content $report
+
+          Write-Host ""
+          Write-Host "::group::📄 Full Raw Test Output (test-output.log)"
+          if (Test-Path test-output.log) { Get-Content test-output.log } else { Write-Host "(no test output captured)" }
+          Write-Host "::endgroup::"
+
+      - name: Upload test logs
+        if: ${{ always() }}
+        uses: actions/upload-artifact@v4
+        with:
+          name: test-logs-${{ matrix.platform }}-${{ matrix.arch }}
+          path: |
+            ${{ inputs.workdir || env.PKG_DIR }}/test-report.txt
+            ${{ inputs.workdir || env.PKG_DIR }}/test-output.log
+          retention-days: 14
 
       - name: Run quickstart example with deps installed
         working-directory: ${{ inputs.workdir || env.PKG_DIR }}
@@ -247,4 +438,4 @@ jobs:
         run: |
           npm install "@qvac/translation-nmtcpp"
           npx bare examples/quickstart.js
-        continue-on-error: true # unreliable to block the PR, we want to see how it performs
+        continue-on-error: true
