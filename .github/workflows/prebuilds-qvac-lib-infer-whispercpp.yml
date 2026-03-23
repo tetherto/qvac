@@ -115,15 +115,23 @@ jobs:
 
       - name: Echo workflow inputs
         shell: bash
+        env:
+          INPUT_WORKDIR: ${{ env.WORKDIR }}
+          INPUT_TAG: ${{ inputs.tag || github.event.inputs.tag }}
+          INPUT_REF: ${{ inputs.ref || github.ref }}
+          INPUT_REPO: ${{ inputs.repository || github.repository }}
+          MATRIX_PLATFORM: ${{ matrix.platform }}
+          MATRIX_ARCH: ${{ matrix.arch }}
+          MATRIX_TAGS: ${{ matrix.tags }}
         run: |
           echo "Workflow inputs:"
-          echo "Workdir: ${{ env.WORKDIR }}"
-          echo "Tag: ${{ inputs.tag || github.event.inputs.tag }}"
-          echo "Ref: ${{ inputs.ref || github.ref }}"
-          echo "Repository: ${{ inputs.repository || github.repository }}"
-          echo "Matrix platform: ${{ matrix.platform }}"
-          echo "Matrix arch: ${{ matrix.arch }}"
-          echo "Matrix tags: ${{ matrix.tags }}"
+          echo "Workdir: $INPUT_WORKDIR"
+          echo "Tag: $INPUT_TAG"
+          echo "Ref: $INPUT_REF"
+          echo "Repository: $INPUT_REPO"
+          echo "Matrix platform: $MATRIX_PLATFORM"
+          echo "Matrix arch: $MATRIX_ARCH"
+          echo "Matrix tags: $MATRIX_TAGS"
 
       - if: ${{ matrix.os == 'windows-2022' }}
         name: Configure windows runner

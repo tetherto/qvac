@@ -70,23 +70,37 @@ jobs:
     steps:
       - id: ctx
         shell: bash
+        env:
+          EVENT_NAME: ${{ github.event_name }}
+          HEAD_REPO: ${{ github.event.pull_request.head.repo.full_name }}
+          HEAD_REF: ${{ github.event.pull_request.head.ref }}
+          HEAD_SHA: ${{ github.event.pull_request.head.sha }}
+          BASE_SHA: ${{ github.event.pull_request.base.sha }}
+          HAS_VERIFY: ${{ contains(github.event.pull_request.labels.*.name, 'verify') }}
+          INPUT_WORKDIR: ${{ inputs.workdir }}
+          INPUT_REPO: ${{ inputs.repository }}
+          INPUT_REF: ${{ inputs.ref }}
+          INPUT_VERIFY: ${{ inputs.run_verify }}
+          REPO: ${{ github.repository }}
+          REF_NAME: ${{ github.ref_name }}
+          SHA: ${{ github.sha }}
         run: |
           set -euo pipefail
 
-          if [[ "${{ github.event_name }}" == "workflow_dispatch" || "${{ github.event_name }}" == "workflow_call" ]]; then
-            workdir="${{ inputs.workdir || 'packages/qvac-lib-infer-whispercpp' }}"
-            repo="${{ inputs.repository || github.repository }}"
-            ref="${{ inputs.ref || github.ref_name }}"
-            run_verify="${{ inputs.run_verify }}"
-            base_sha="${{ github.sha }}"
-            head_sha="${{ github.sha }}"
+          if [[ "$EVENT_NAME" == "workflow_dispatch" || "$EVENT_NAME" == "workflow_call" ]]; then
+            workdir="${INPUT_WORKDIR:-packages/qvac-lib-infer-whispercpp}"
+            repo="${INPUT_REPO:-$REPO}"
+            ref="${INPUT_REF:-$REF_NAME}"
+            run_verify="$INPUT_VERIFY"
+            base_sha="$SHA"
+            head_sha="$SHA"
           else
             workdir="packages/qvac-lib-infer-whispercpp"
-            repo="${{ github.event.pull_request.head.repo.full_name }}"
-            ref="${{ github.event.pull_request.head.ref }}"
-            run_verify="${{ contains(github.event.pull_request.labels.*.name, 'verify') }}"
-            base_sha="${{ github.event.pull_request.base.sha }}"
-            head_sha="${{ github.event.pull_request.head.sha }}"
+            repo="$HEAD_REPO"
+            ref="$HEAD_REF"
+            run_verify="$HAS_VERIFY"
+            base_sha="$BASE_SHA"
+            head_sha="$HEAD_SHA"
           fi
 
           echo "repository=$repo" >> "$GITHUB_OUTPUT"
