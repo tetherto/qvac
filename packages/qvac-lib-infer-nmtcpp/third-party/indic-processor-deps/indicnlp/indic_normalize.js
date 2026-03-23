@@ -427,7 +427,7 @@ class DevanagariNormalizer extends BaseNormalizer {
     }
 
     // replace pipe character for poorna virama
-    text = text.replace('\u007c', '\u0964')
+    text = text.replace(/\u007c/g, '\u0964')
 
     // correct visarga
     text = text.replace(/([ऀ-ॿ]):/, '$1\u0903')
@@ -565,7 +565,7 @@ class GurmukhiNormalizer extends BaseNormalizer {
     text = text.replace('\u0a65', '\u0965')
 
     // replace pipe character for poorna virama
-    text = text.replace('\u007c', '\u0964')
+    text = text.replace(/\u007c/g, '\u0964')
 
     // correct visarga
     text = text.replace(/([਀-੿]):/, '$1\u0a03')
@@ -790,9 +790,9 @@ class BengaliNormalizer extends BaseNormalizer {
     text = text.replace('\u09e5', '\u0965')
 
     // replace pipe character for poorna virama
-    text = text.replace('\u007c', '\u0964')
+    text = text.replace(/\u007c/g, '\u0964')
     // replace bengali currency numerator four for poorna virama (it looks similar and is used as a substitute)
-    text = text.replace('\u09f7', '\u0964')
+    text = text.replace(/\u09f7/g, '\u0964')
 
     // two part dependent vowels
     text = text.replace('\u09c7\u09be', '\u09cb')

@@ -357,6 +357,54 @@ class WhisperInterface {
     }
   }
 
+  startStreaming (config = {}) {
+    try {
+      this._activeJobId = this._nextJobId
+      this._nextJobId += 1
+      this._setState(state.PROCESSING)
+      this._binding.startStreaming(this._handle, config)
+    } catch (err) {
+      this._activeJobId = null
+      this._setState(state.LISTENING)
+      throw new QvacErrorAddonWhisper({
+        code: ERR_CODES.FAILED_TO_START_STREAMING,
+        adds: err.message,
+        cause: err
+      })
+    }
+  }
+
+  appendStreamingAudio (data) {
+    try {
+      if (!(data.input instanceof Uint8Array)) {
+        throw new Error('Audio input must be Uint8Array')
+      }
+      this._binding.appendStreamingAudio(this._handle, {
+        type: 'audio',
+        input: data.input,
+        audio_format: data.audio_format || this._audioFormat
+      })
+    } catch (err) {
+      throw new QvacErrorAddonWhisper({
+        code: ERR_CODES.FAILED_TO_APPEND_STREAMING,
+        adds: err.message,
+        cause: err
+      })
+    }
+  }
+
+  endStreaming () {
+    try {
+      this._binding.endStreaming(this._handle)
+    } catch (err) {
+      throw new QvacErrorAddonWhisper({
+        code: ERR_CODES.FAILED_TO_END_STREAMING,
+        adds: err.message,
+        cause: err
+      })
+    }
+  }
+
   _concatBufferedAudio () {
     if (this._bufferedAudio.length === 0) {
       return new Uint8Array()

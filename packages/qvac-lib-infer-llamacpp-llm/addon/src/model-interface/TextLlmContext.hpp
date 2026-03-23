@@ -11,14 +11,16 @@
 #include "common/common.h"
 #include "qvac-lib-inference-addon-cpp/Logger.hpp"
 
-class TextLlmContext: public LlmContext {
+class TextLlmContext : public LlmContext {
 public:
   TextLlmContext(const TextLlmContext&) = delete;
   TextLlmContext& operator=(const TextLlmContext&) = delete;
   TextLlmContext(TextLlmContext&&) = delete;
   TextLlmContext& operator=(TextLlmContext&&) = delete;
   // Constructor
-  TextLlmContext(common_params& commonParams, common_init_result&& llamaInit);
+  TextLlmContext(
+      common_params& commonParams, common_init_result&& llamaInit,
+      bool toolsAtEnd = false);
 
   // Destructor
   ~TextLlmContext() override = default;
@@ -32,8 +34,8 @@ public:
    * @return - true if successful, false if inference is stopped.
    */
   bool evalMessage(
-      const std::vector<common_chat_msg>& chatMsgs,
-      bool isCacheLoaded, bool prefill) override;
+      const std::vector<common_chat_msg>& chatMsgs, bool isCacheLoaded,
+      bool prefill) override;
 
   /**
    * The eval message with tools method. It evaluates the message with tools and
@@ -59,8 +61,8 @@ public:
   bool generateResponse(
       const std::function<void(const std::string&)>& outputCallback) override;
 
-  std::function<void()> applyGenerationParams(
-      const GenerationParams& overrides) override;
+  std::function<void()>
+  applyGenerationParams(const GenerationParams& overrides) override;
 
   /**
    * The stop method. It stops the model inference.
@@ -73,6 +75,16 @@ public:
    * @return - the context.
    */
   llama_context* getCtx() override;
+
+  /**
+   * Access the underlying llama model pointer.
+   */
+  llama_model* getModel() override { return model_; }
+
+  /**
+   * Access the mutable common parameters associated with this context.
+   */
+  common_params& getParams() override { return params_; }
 
   /**
    * The get n_past method. It returns the n_past.
@@ -186,5 +198,3 @@ private:
 
   std::atomic<bool> stopGeneration_ = false;
 };
-
-

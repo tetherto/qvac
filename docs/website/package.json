@@ -18,13 +18,15 @@
     "docs:create-version": "bun run scripts/create-version-bundle.ts",
     "docs:release-version": "bun run scripts/release-version.ts",
     "test": "vitest run",
-    "test:watch": "vitest"
+    "test:watch": "vitest",
+    "test:examples": "bun run scripts/test-code-examples.ts"
   },
   "dependencies": {
     "@ai-sdk/openai-compatible": "^1.0.29",
     "@ai-sdk/react": "^2.0.118",
     "@icons-pack/react-simple-icons": "^13.8.0",
     "@inkeep/cxkit-react": "^0.5.111",
+    "@next/third-parties": "^16.2.0",
     "@orama/orama": "^3.1.14",
     "@radix-ui/react-popover": "^1.1.15",
     "@radix-ui/react-presence": "^1.1.5",
