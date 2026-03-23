@@ -372,7 +372,10 @@ class WhisperInterface {
       this._activeJobId = this._nextJobId
       this._nextJobId += 1
       this._setState(state.PROCESSING)
-      this._binding.startStreaming(this._handle, config)
+      this._binding.startStreaming(this._handle, {
+        ...config,
+        jobId: this._activeJobId
+      })
     } catch (err) {
       this._activeJobId = null
       this._setState(state.LISTENING)
