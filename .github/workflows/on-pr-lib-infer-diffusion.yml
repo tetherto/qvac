@@ -20,9 +20,9 @@ on:
   workflow_call:
 
 permissions:
-  contents: write
-  pull-requests: write
-  packages: write
+  contents: read
+  pull-requests: read
+  packages: read
 
 env:
   PKG_DIR: packages/lib-infer-diffusion

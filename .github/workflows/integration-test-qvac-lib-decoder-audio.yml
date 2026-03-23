@@ -14,13 +14,14 @@ on:
         required: false
         default: "packages/qvac-lib-decoder-audio"
 
+permissions:
+  contents: read
+  packages: read
+
 jobs:
   run-integration-tests:
     runs-on: ${{ matrix.os }}
     name: test-${{ matrix.platform }}-${{ matrix.arch }}
-    permissions:
-      contents: read
-      packages: read
     strategy:
       fail-fast: false
       matrix:

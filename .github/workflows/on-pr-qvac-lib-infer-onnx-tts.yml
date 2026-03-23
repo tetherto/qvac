@@ -51,10 +51,10 @@ concurrency:
   cancel-in-progress: true
 
 permissions:
-  contents: write
-  pull-requests: write
-  packages: write
-  checks: write
+  contents: read
+  pull-requests: read
+  packages: read
+  checks: read
 
 jobs:
   context:
@@ -152,6 +152,10 @@ jobs:
       workdir: ${{ needs.context.outputs.workdir }}
 
   prebuild:
+    permissions:
+      contents: write
+      packages: write
+      pull-requests: write
     needs: context
     if: needs.context.outputs.run_verify == 'true' || github.event_name == 'workflow_dispatch'
     uses: ./.github/workflows/prebuilds-qvac-lib-infer-onnx-tts.yml

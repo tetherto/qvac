@@ -25,6 +25,10 @@ on:
         default: "packages/qvac-lib-infer-whispercpp"
         type: string
 
+permissions:
+  contents: read
+  packages: read
+
 jobs:
   run-integration-tests:
     timeout-minutes: 60
@@ -34,10 +38,6 @@ jobs:
 
     env:
       GITHUB_TOKEN: ${{ secrets.PAT_TOKEN }}
-
-    permissions:
-      contents: read
-      packages: read
 
     strategy:
       fail-fast: false

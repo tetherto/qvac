@@ -19,14 +19,14 @@ on:
         description: "NPM package containing prebuilds (e.g. @qvac/embed-llamacpp@1.0.0)"
         type: string
         required: true
+permissions:
+  contents: read
+  packages: read
 
 jobs:
   run-integration-tests:
     runs-on: ${{ matrix.runner || matrix.os }}
     name: ${{ matrix.platform }}-${{ matrix.arch }}-integration-tests
-    permissions:
-      contents: read
-      packages: read
 
     env:
       WORKDIR: packages/qvac-lib-infer-llamacpp-embed

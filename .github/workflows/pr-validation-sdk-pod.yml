@@ -1,5 +1,8 @@
 name: PR Validation (SDK Pod)
 
+permissions:
+  contents: read
+
 on:
   pull_request_target:
     types:

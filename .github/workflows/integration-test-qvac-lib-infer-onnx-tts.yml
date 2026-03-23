@@ -39,6 +39,10 @@ on:
         default: "packages/qvac-lib-infer-onnx-tts"
         type: string
 
+permissions:
+  contents: read
+  packages: read
+  
 jobs:
   run-integration-tests:
     continue-on-error: true
@@ -47,9 +51,6 @@ jobs:
     env:
       AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
       AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
-    permissions:
-      contents: read
-      packages: read
     strategy:
       fail-fast: false
       matrix:

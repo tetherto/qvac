@@ -22,9 +22,9 @@ concurrency:
   cancel-in-progress: true
 
 permissions:
-  contents: write
-  pull-requests: write
-  packages: write
+  contents: read
+  pull-requests: read
+  packages: read
 
 env:
   PKG_DIR: packages/qvac-lib-infer-nmtcpp
@@ -120,6 +120,10 @@ jobs:
       repository: ${{ github.event.pull_request.head.repo.full_name }}
 
   prebuild:
+    permissions:
+      contents: write
+      packages: write
+      pull-requests: write
     needs: [changes, sanity-checks]
     if: |
       always() &&

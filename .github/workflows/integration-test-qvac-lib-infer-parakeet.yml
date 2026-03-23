@@ -29,6 +29,9 @@ on:
         required: false
         default: "packages/qvac-lib-infer-parakeet"
         type: string
+permissions:
+  contents: read
+  packages: read
 
 jobs:
   run-integration-tests:
@@ -38,9 +41,6 @@ jobs:
     name: ${{ matrix.os }}-${{ matrix.platform }}-${{ matrix.arch }}-integration-tests
     env:
       GITHUB_TOKEN: ${{ secrets.PAT_TOKEN }}
-    permissions:
-      contents: read
-      packages: read
     strategy:
       fail-fast: false
       matrix:

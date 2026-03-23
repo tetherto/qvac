@@ -26,14 +26,15 @@ on:
 env:
   PKG_DIR: packages/qvac-lib-infer-nmtcpp
 
+permissions:
+  contents: read
+  packages: read
+  
 jobs:
   run-integration-tests:
     timeout-minutes: 60
     runs-on: ${{ matrix.os }}
     name: ${{ matrix.platform }}-${{ matrix.arch }}-integration-tests
-    permissions:
-      contents: read
-      packages: read
     strategy:
       fail-fast: false
       matrix:

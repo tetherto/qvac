@@ -19,9 +19,9 @@ on:
   workflow_call:
 
 permissions:
-  contents: write
-  pull-requests: write
-  packages: write
+  contents: read
+  pull-requests: read
+  packages: read
 
 jobs:
   # Gate the workflow so label events (and other PR_target quirks) don't trigger unrelated packages.
@@ -150,6 +150,10 @@ jobs:
       workdir: packages/qvac-lib-infer-onnx
 
   prebuild:
+    permissions:
+      contents: write
+      packages: write
+      pull-requests: write
     needs: [sanity-checks, cpp-lint]
     if: |
       (needs.changes.outputs.pkg == 'true') &&
