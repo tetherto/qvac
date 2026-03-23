@@ -378,3 +378,26 @@ test('ParakeetInterface destroyInstance skips cancel with no active job', async 
 
   t.is(cancelCalls, 0, 'destroy should not call cancel when there is no active job')
 })
+
+test('ParakeetInterface reload resets wrapper job numbering for new native instance', async (t) => {
+  const binding = new MockedBinding()
+  const addon = new ParakeetInterface(binding, {
+    modelPath: './models/parakeet-tdt-0.6b-v3-onnx',
+    modelType: 'tdt'
+  }, () => {})
+
+  addon._nextJobId = 7
+  addon._activeJobId = 6
+  addon._bufferedAudio = [new Float32Array([0.1, 0.2])]
+
+  binding.cancel = async () => {}
+  await addon.reload({
+    modelPath: './models/parakeet-tdt-0.6b-v3-onnx',
+    modelType: 'tdt'
+  })
+
+  t.is(addon._nextJobId, 1, 'reload should realign wrapper job ids with the new native instance')
+  t.is(addon._activeJobId, null, 'reload should clear the previous active job')
+  t.is(addon._bufferedAudio.length, 0, 'reload should discard buffered audio from the old instance')
+  t.is(await addon.status(), 'loading', 'reload should leave the addon in loading state until activation')
+})
