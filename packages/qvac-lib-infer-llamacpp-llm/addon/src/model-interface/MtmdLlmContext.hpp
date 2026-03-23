@@ -9,7 +9,7 @@
 #include "LlmContext.hpp"
 #include "qvac-lib-inference-addon-cpp/Logger.hpp"
 
-class MtmdLlmContext: public LlmContext {
+class MtmdLlmContext : public LlmContext {
 public:
   /**
    * The constructor.
@@ -18,7 +18,9 @@ public:
    * @param _llama_init - The result of initializing/loading the model using
    * .gguf file(s)
    */
-  MtmdLlmContext(common_params& commonParams, common_init_result&& llamaInit);
+  MtmdLlmContext(
+      common_params& commonParams, common_init_result&& llamaInit,
+      bool toolsAtEnd = false);
 
   /**
    * The destructor.
@@ -38,8 +40,8 @@ public:
    * @return - true if successful, false if inference is stopped.
    */
   bool evalMessage(
-      const std::vector<common_chat_msg>& chatMsgs,
-      bool isCacheLoaded, bool prefill) override;
+      const std::vector<common_chat_msg>& chatMsgs, bool isCacheLoaded,
+      bool prefill) override;
 
   /**
    * The eval message with tools method. It evaluates the message with tools and
@@ -165,11 +167,11 @@ public:
   void resetMedia() override;
 
 private:
-    /**
-     * The check antiprompt method. It checks the antiprompt.
-     *
-     * @return - true if the antiprompt is found, false otherwise.
-    */
+  /**
+   * The check antiprompt method. It checks the antiprompt.
+   *
+   * @return - true if the antiprompt is found, false otherwise.
+   */
   bool checkAntiprompt();
 
   /**
@@ -217,5 +219,3 @@ private:
   qvac_lib_inference_addon_llama::UTF8TokenBuffer utf8Buffer_;
   std::atomic<bool> stopGeneration_ = false;
 };
-
-
