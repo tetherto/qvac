@@ -23,7 +23,7 @@ class ImgStableDiffusion extends BaseInference {
    * @param {string} [args.clipLModel] - Optional CLIP-L model file name (FLUX.1 / SD3)
    * @param {string} [args.clipGModel] - Optional CLIP-G model file name (SDXL / SD3)
    * @param {string} [args.t5XxlModel] - Optional T5-XXL text encoder file name (FLUX.1 / SD3)
-   * @param {string} [args.llmModel] - Optional LLM text encoder file name (FLUX.2 klein → Qwen3 8B)
+   * @param {string} [args.llmModel] - Optional LLM text encoder file name (FLUX.2 klein → Qwen3 4B)
    * @param {string} [args.vaeModel] - Optional VAE file name
    * @param {object} config - SD context configuration (threads, device, type, etc.)
    */

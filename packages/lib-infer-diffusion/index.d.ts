@@ -82,7 +82,7 @@ export interface SdConfig {
   rng?: RngType
   /** RNG type for the sampler (separate from context RNG) */
   sampler_rng?: RngType
-  /** Sampling schedule */
+  /** Sampling schedule — not parsed by C++ context config; use GenerationParams.scheduler instead */
   schedule?: ScheduleType
   /** Run CLIP encoder on CPU even when GPU is available */
   clip_on_cpu?: boolean
@@ -131,6 +131,8 @@ export interface GenerationParams {
   guidance?: number
   /** Sampler name (e.g. 'euler', 'dpm++2m') */
   sampling_method?: SamplerMethod
+  /** Alias for sampling_method — accepted by the C++ layer */
+  sampler?: SamplerMethod
   /** Scheduler name */
   scheduler?: ScheduleType
   seed?: number
@@ -209,7 +211,7 @@ export interface ImgStableDiffusionArgs {
   clipGModel?: string
   /** FLUX.1 / SD3: separate T5-XXL text encoder */
   t5XxlModel?: string
-  /** FLUX.2 [klein]: Qwen3 8B text encoder (llm_path) */
+  /** FLUX.2 [klein]: Qwen3 4B text encoder (llm_path) */
   llmModel?: string
   vaeModel?: string
 }
