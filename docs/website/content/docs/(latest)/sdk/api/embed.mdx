@@ -28,3 +28,16 @@ Promise
 | Error | When |
 | --- | --- |
 | `When the response type is invalid or when the embedding fails` |  |
+
+## Example
+
+```typescript
+import { embed } from "@qvac/sdk";
+
+const embedding = await embed({
+  modelId: "my-embeddings-model",
+  text: "The quick brown fox jumps over the lazy dog",
+});
+
+console.log("Embedding dimensions:", embedding.length);
+```
