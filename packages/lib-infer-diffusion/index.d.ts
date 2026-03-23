@@ -153,9 +153,9 @@ export interface GenerationParams {
   img_cfg_scale?: number
   /** Skip last N CLIP encoder layers (SD1.x/SD2.x) */
   clip_skip?: number
-  /** Input image as PNG/JPEG bytes — if provided, runs img2img instead of txt2img */
+  /** Input image as PNG/JPEG bytes — if provided, runs img2img instead of txt2img (not yet supported; throws at runtime) */
   init_image?: Uint8Array
-  /** img2img denoising strength (0.0–1.0). 0 = keep source, 1 = ignore source */
+  /** img2img denoising strength (0.0–1.0). 0 = keep source, 1 = ignore source (not yet supported) */
   strength?: number
 }
 

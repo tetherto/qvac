@@ -161,7 +161,7 @@ Source: [`examples/generate-image.js`](./examples/generate-image.js)
 ### 1. Import the Model Class
 
 ```js
-const ImgStableDiffusion = require('@qvac/img-stable-diffusion-cpp')
+const ImgStableDiffusion = require('@qvac/diffusion-cpp')
 ```
 
 ### 2. Create the `args` object
@@ -279,7 +279,9 @@ require('bare-fs').writeFileSync('output.png', images[0])
 
 > **Sampler note:** Do not set `sampling_method: 'euler_a'` for FLUX.2 models — it will produce random noise. Leave the field unset to let the library auto-select `euler` for flow-matching models.
 
-#### Image-to-image (via `model.run` with `init_image`)
+#### Image-to-image (not yet supported)
+
+> **Note:** img2img is not yet wired in the JS layer — calling `model.run()` with `init_image` will throw. The parameters below are reserved for a future release.
 
 ```js
 const inputPng = require('bare-fs').readFileSync('input.png')
