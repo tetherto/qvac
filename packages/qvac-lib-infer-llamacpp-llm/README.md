@@ -277,8 +277,10 @@ For the full API, dataset format, parameters, and examples, see the **[Finetunin
 
 A hands-on example that finetunes Qwen3-0.6B to act as a smart home tool-calling specialist. The base model tends to drift into conversational text or exhaust its token budget on reasoning — the finetuned adapter fixes both problems.
 
-1. **Train** — [`smart-home-finetune.js`](./examples/finetune/showcase/smart-home-finetune.js) runs a 1-epoch causal LoRA finetune on a [215-sample dataset](./examples/input/smart_home_specialist_train.jsonl) of user requests paired with `<tool_call>` responses (cameras, lights, thermostats, door locks).
+1. **Train** — [`smart-home-finetune.js`](./examples/finetune/showcase/smart-home-finetune.js) runs a 1-epoch causal LoRA finetune on a [215-sample dataset](./examples/input/smart_home_specialist_train.jsonl) of user requests paired with `<tool_call>` responses.
 2. **Evaluate** — [`smart-home-finetuned-test.js`](./examples/finetune/showcase/smart-home-finetuned-test.js) runs the same prompts against the base model and the finetuned model, then prints a side-by-side comparison report (strictness, accuracy, thinking token usage, multi-turn stability).
+
+> **Note on dataset diversity:** The training dataset intentionally includes tool-calling samples from many domains (medical, irrigation, quantum, etc.), not just the 4 smart-home tools used in evaluation. The goal is to teach the model the general *behavioral pattern* — produce structured `<tool_call>` output instead of conversational text — rather than memorize specific tool names. The evaluation then tests whether that pattern transfers to smart-home prompts the model wasn't explicitly drilled on.
 
 ```bash
 # Train the adapter
