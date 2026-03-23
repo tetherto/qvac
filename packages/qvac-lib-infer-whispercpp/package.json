@@ -51,7 +51,8 @@
   ],
   "repository": {
     "type": "git",
-    "url": "git+https://github.com/tetherto/qvac.git"
+    "url": "git+https://github.com/tetherto/qvac.git",
+    "directory": "packages/qvac-lib-infer-whispercpp"
   },
   "author": "Tether",
   "keywords": [
@@ -62,7 +63,7 @@
   ],
   "license": "Apache-2.0",
   "bugs": "https://github.com/tetherto/qvac/issues",
-  "homepage": "https://github.com/tetherto/qvac#readme",
+  "homepage": "https://github.com/tetherto/qvac/tree/main/packages/qvac-lib-infer-whispercpp#readme",
   "devDependencies": {
     "@qvac/dl-base": "^0.1.0",
     "@qvac/dl-filesystem": "^0.1.0",

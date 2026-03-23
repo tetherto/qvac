@@ -42,7 +42,13 @@
     "standard": "^17.1.0",
     "typescript": "^5.0.0"
   },
-  "bugs": "https://github.com/tetherto/qvac-lib-dl-hyperdrive/issues",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/tetherto/qvac.git",
+    "directory": "packages/qvac-lib-dl-hyperdrive"
+  },
+  "bugs": "https://github.com/tetherto/qvac/issues",
+  "homepage": "https://github.com/tetherto/qvac/tree/main/packages/qvac-lib-dl-hyperdrive#readme",
   "files": [
     "src",
     "index.d.ts",
