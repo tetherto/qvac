@@ -243,6 +243,10 @@ async function main () {
       { id: 'C1', name: 'Multi-Turn T1', analysis: baseAnalysisC1 },
       { id: 'C2', name: 'Multi-Turn T2', analysis: baseAnalysisC2 }
     ]
+  } catch (error) {
+    console.error('\nBaseline test failed:', error.message)
+    console.error('Stack:', error.stack)
+    process.exit(1)
   } finally {
     if (baselineClient) {
       console.log('\nUnloading base model...')
@@ -401,6 +405,7 @@ async function main () {
       await client.unload()
       console.log('Done.')
     }
+    await loader.close()
   }
 }
 
