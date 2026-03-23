@@ -8,7 +8,19 @@ const { Readable } = require('bare-stream')
 const process = require('bare-process')
 const path = require('bare-path')
 
+const ALLOWED_LIBS = [
+  '@qvac/transcription-whispercpp'
+]
+
 const loadedModels = new Map()
+
+const validateFilePath = (filePath) => {
+  const resolved = path.resolve(filePath)
+  if (!fs.existsSync(resolved)) {
+    throw new Error('File not found: ' + path.basename(filePath))
+  }
+  return resolved
+}
 
 const getPackageVersion = (lib) => {
   try {
@@ -72,6 +84,10 @@ const runAddon = async (payload) => {
 
   const { lib: whisperLib, version: whisperVerReq } = whisper
 
+  if (!ALLOWED_LIBS.includes(whisperLib)) {
+    throw new Error('Unsupported library: ' + whisperLib + '. Allowed: ' + ALLOWED_LIBS.join(', '))
+  }
+
   const whisperVersion = await ensurePackage(whisperLib, whisperVerReq)
   const TranscriptionWhispercpp = require(whisperLib)
 
@@ -93,6 +109,7 @@ const runAddon = async (payload) => {
     if (!config.path) {
       throw new Error('Model path is required in config')
     }
+    validateFilePath(config.path)
 
     const constructorArgs = {
       loader: new FakeLoader(),
@@ -150,7 +167,8 @@ const runAddon = async (payload) => {
   const runStart = process.hrtime()
 
   for (const audioFilePath of inputs) {
-    const audioBuffer = fs.readFileSync(audioFilePath)
+    const resolvedAudioPath = validateFilePath(audioFilePath)
+    const audioBuffer = fs.readFileSync(resolvedAudioPath)
     const segments = []
 
     let audioStream

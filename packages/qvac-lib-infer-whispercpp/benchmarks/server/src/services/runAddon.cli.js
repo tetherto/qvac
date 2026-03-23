@@ -6,7 +6,17 @@ const logger = require('../utils/logger')
 const fs = require('bare-fs')
 const process = require('bare-process')
 
+const path = require('bare-path')
+
 const WHISPER_CPP_PATH = '/path/to/whisper.cpp/build/bin/whisper-cli'
+
+const validatePath = (filePath) => {
+  const resolved = path.resolve(filePath)
+  if (!fs.existsSync(resolved)) {
+    throw new Error('File not found: ' + path.basename(filePath))
+  }
+  return resolved
+}
 
 const convertRawToWav = async (rawFilePath, wavFilePath) => {
   return new Promise((resolve, reject) => {
@@ -14,8 +24,8 @@ const convertRawToWav = async (rawFilePath, wavFilePath) => {
       '-f', 'f32le',
       '-ar', '16000',
       '-ac', '1',
-      '-i', rawFilePath,
-      wavFilePath
+      '-i', '--', rawFilePath,
+      '--', wavFilePath
     ]
 
     const proc = spawn('ffmpeg', args, { stdio: 'inherit' })
@@ -31,15 +41,17 @@ const convertRawToWav = async (rawFilePath, wavFilePath) => {
 }
 
 const runWhisperCppCli = async (audioFilePath, modelPath) => {
-  const wavFilePath = audioFilePath.replace('.raw', '.wav')
-  await convertRawToWav(audioFilePath, wavFilePath)
+  const resolvedAudio = validatePath(audioFilePath)
+  const resolvedModel = validatePath(modelPath)
+  const wavFilePath = resolvedAudio.replace(/\.raw$/, '.wav')
+  await convertRawToWav(resolvedAudio, wavFilePath)
 
   return new Promise((resolve, reject) => {
     let stdout = ''
     let stderr = ''
 
     const args = [
-      '-m', modelPath,
+      '-m', resolvedModel,
       '-f', wavFilePath,
       '--output-txt',
       '--no-timestamps'

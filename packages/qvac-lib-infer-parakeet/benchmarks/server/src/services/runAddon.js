@@ -8,7 +8,19 @@ const { Readable } = require('bare-stream')
 const process = require('bare-process')
 const path = require('bare-path')
 
+const ALLOWED_LIBS = [
+  '@qvac/transcription-parakeet'
+]
+
 const loadedModels = new Map()
+
+const validateFilePath = (filePath) => {
+  const resolved = path.resolve(filePath)
+  if (!fs.existsSync(resolved)) {
+    throw new Error('File not found: ' + path.basename(filePath))
+  }
+  return resolved
+}
 
 const getPackageVersion = (lib) => {
   try {
@@ -90,6 +102,10 @@ const runAddon = async (payload) => {
 
     const { lib: parakeetLib, version: parakeetVerReq } = parakeet
 
+    if (!ALLOWED_LIBS.includes(parakeetLib)) {
+      throw new Error('Unsupported library: ' + parakeetLib + '. Allowed: ' + ALLOWED_LIBS.join(', '))
+    }
+
     const parakeetVersion = await ensurePackage(parakeetLib, parakeetVerReq)
     logger.info(`Loading addon: ${parakeetLib}`)
     const TranscriptionParakeet = require(parakeetLib)
@@ -114,6 +130,7 @@ const runAddon = async (payload) => {
       if (!config.path) {
         throw new Error('Model path is required in config')
       }
+      validateFilePath(config.path)
 
       const constructorArgs = {
         loader: new FakeLoader(),
@@ -158,7 +175,8 @@ const runAddon = async (payload) => {
     const runStart = process.hrtime()
 
     for (const audioFilePath of inputs) {
-      const audioBuffer = fs.readFileSync(audioFilePath)
+      const resolvedAudioPath = validateFilePath(audioFilePath)
+      const audioBuffer = fs.readFileSync(resolvedAudioPath)
       const segments = []
 
       let audioStream
