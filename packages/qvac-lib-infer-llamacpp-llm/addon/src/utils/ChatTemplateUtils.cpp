@@ -4,6 +4,7 @@
 
 #include <llama.h>
 
+#include "Qwen3ToolsDynamicTemplate.hpp"
 #include "QwenTemplate.hpp"
 #include "utils/LoggingMacros.hpp"
 
@@ -58,27 +59,27 @@ bool isQwen3Model(const ::llama_model* model) {
 }
 
 std::string getChatTemplateForModel(
-    const ::llama_model* model, const std::string& manualOverride) {
-  // If manual override is provided, use it as-is
+    const ::llama_model* model, const std::string& manualOverride,
+    bool toolsAtEnd) {
   if (!manualOverride.empty()) {
     return manualOverride;
   }
 
-  // For Qwen3 models, use the fixed template
   if (isQwen3Model(model)) {
-    return getFixedQwen3Template();
+    return toolsAtEnd ? getToolsDynamicQwen3Template()
+                      : getFixedQwen3Template();
   }
 
-  // For other models, no override needed
   return "";
 }
 
-std::string
-getChatTemplate(const ::llama_model* model, const common_params& params) {
+std::string getChatTemplate(
+    const ::llama_model* model, const common_params& params, bool toolsAtEnd) {
   // Use fixed Qwen3 template if model is Qwen3 and Jinja is enabled
   std::string chatTemplate = params.chat_template;
   if (params.use_jinja) {
-    chatTemplate = getChatTemplateForModel(model, params.chat_template);
+    chatTemplate =
+        getChatTemplateForModel(model, params.chat_template, toolsAtEnd);
     if (!chatTemplate.empty() && chatTemplate != params.chat_template) {
       QLOG_IF(
           Priority::INFO, "[ChatTemplateUtils] Using fixed Qwen3 template\n");

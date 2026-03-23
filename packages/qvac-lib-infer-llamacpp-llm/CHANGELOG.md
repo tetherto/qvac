@@ -1,5 +1,17 @@
 # Changelog
 
+## [0.14.0] - 2026-03-19
+
+### Added
+
+#### `tools_at_end` configuration for dynamic tool management in multi-turn conversations
+
+New `tools_at_end` configuration option (`"true"` or `"false"`, default: `"false"`) places tool definitions at the end of the prompt (after conversation history) instead of in the system prompt. This enables KV cache optimization for multi-turn conversations with dynamic tool sets, where tools change between turns. Currently supports Qwen3 models only.
+
+- **KV cache trimming**: After each turn, tools are automatically removed from the KV cache, preventing stale tool definitions from accumulating
+- **Conversation history reuse**: History tokens are preserved in cache, saving recomputation on long conversations
+- **Dynamic tool replacement**: Different tool sets can be used per turn without cache bloat from unused tools
+
 ## [0.13.0] - 2026-03-18
 
 ### Added

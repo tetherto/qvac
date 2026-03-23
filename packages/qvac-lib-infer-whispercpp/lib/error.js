@@ -18,7 +18,10 @@ const ERR_CODES = Object.freeze({
   FAILED_TO_PAUSE: 6008,
   VAD_MODEL_REQUIRED: 6009,
   JOB_ALREADY_RUNNING: 6010,
-  INVALID_AUDIO_INPUT: 6011
+  INVALID_AUDIO_INPUT: 6011,
+  FAILED_TO_START_STREAMING: 6012,
+  FAILED_TO_APPEND_STREAMING: 6013,
+  FAILED_TO_END_STREAMING: 6014
 })
 
 addCodes({
@@ -65,6 +68,18 @@ addCodes({
   [ERR_CODES.INVALID_AUDIO_INPUT]: {
     name: 'INVALID_AUDIO_INPUT',
     message: (message) => `Invalid audio input: ${message}`
+  },
+  [ERR_CODES.FAILED_TO_START_STREAMING]: {
+    name: 'FAILED_TO_START_STREAMING',
+    message: (message) => `Failed to start streaming session: ${message}`
+  },
+  [ERR_CODES.FAILED_TO_APPEND_STREAMING]: {
+    name: 'FAILED_TO_APPEND_STREAMING',
+    message: (message) => `Failed to append streaming audio: ${message}`
+  },
+  [ERR_CODES.FAILED_TO_END_STREAMING]: {
+    name: 'FAILED_TO_END_STREAMING',
+    message: (message) => `Failed to end streaming session: ${message}`
   }
 }, {
   name,
