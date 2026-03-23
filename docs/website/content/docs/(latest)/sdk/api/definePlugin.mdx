@@ -13,7 +13,7 @@ function definePlugin(plugin: T): T
 
 | Name | Type | Required? | Description |
 | --- | --- | :---: | --- |
-| `plugin` | `T` | ✓ | No description |
+| `plugin` | `T` | ✓ | The plugin definition object conforming to the `QvacPlugin` interface |
 
 ## Returns
 
@@ -25,13 +25,13 @@ T
 
 | Field | Type | Description |
 | --- | --- | --- |
-| `addonPackage` | `string` | — |
-| `createModel` | `(params: CreateModelParams) => PluginModelResult` | — |
-| `displayName` | `string` | — |
-| `handlers` | `Record` | — |
-| `loadConfigSchema` | `ZodType` | — |
-| `logging` | `PluginLogging` | — |
-| `modelType` | `string` | — |
+| `addonPackage` | `string` | The npm package name of the native addon this plugin wraps |
+| `createModel` | `(params: CreateModelParams) => PluginModelResult` | Factory function called when a model is loaded. Receives resolved config and model path, returns the model instance and its capabilities |
+| `displayName` | `string` | Human-readable name shown in logs and UI |
+| `handlers` | `Record` | Map of handler names to `PluginHandlerDefinition` objects that define the plugin's RPC endpoints |
+| `loadConfigSchema` | `ZodType` | Zod schema used to validate and parse the `modelConfig` passed to `loadModel()` |
+| `logging` | `PluginLogging` | Configuration for plugin-level logging (log forwarding, verbosity) |
+| `modelType` | `string` | The model type identifier (e.g. `"llm"`, `"whisper"`, `"tts"`) |
 | `resolveConfig` | `(modelConfig: TConfig, ctx: ResolveContext) => Promise<ResolveResult<TConfig, TArtifactKeys>>` | Optional hook to resolve model sources in modelConfig to local paths.
 Called before createModel if the plugin needs to download/resolve artifacts.
 Returns transformed config and optional artifact paths. |
