@@ -55,10 +55,6 @@ permissions:
   pull-requests: read
   packages: read
   checks: read
-  # contents: write
-  # pull-requests: write
-  # packages: write
-  # checks: write
 
 jobs:
   context:
