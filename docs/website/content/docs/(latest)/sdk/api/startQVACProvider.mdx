@@ -13,7 +13,12 @@ function startQVACProvider(params: { firewall?: { mode: "allow" | "deny"; public
 
 | Name | Type | Required? | Description |
 | --- | --- | :---: | --- |
-| `params` | `\{ firewall?: \{ mode: "allow" | "deny"; publicKeys: string[] \}; topic: string \}` | ✓ | No description |
+| `params` | `\{ firewall?: \{ mode: "allow" | "deny"; publicKeys: string[] \}; topic: string \}` | ✓ | Provider configuration with the swarm topic to join and an optional firewall for access control |
+
+| Field | Type | Required? | Description |
+| --- | --- | :---: | --- |
+| `topic` | `string` | ✓ | The Hyperswarm topic to join. Remote peers connecting to this topic can access the provider's capabilities |
+| `firewall` | `\{ mode: "allow" \| "deny"; publicKeys: string[] \}` | ✗ | Access control firewall. In `"allow"` mode, only the listed public keys can connect. In `"deny"` mode, the listed keys are blocked and all others are allowed |
 
 ## Returns
 

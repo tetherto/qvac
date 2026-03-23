@@ -48,7 +48,7 @@ jobs:
   build-and-test:
     name: Build ${{ matrix.platform }} and Run E2E Tests (${{ matrix.variant }})
     runs-on: ${{ matrix.runner }}
-    timeout-minutes: 120
+    timeout-minutes: 210
     continue-on-error: true # Don't block PR merges if tests fail
     permissions:
       contents: read
@@ -57,7 +57,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        variant: [fp32] # [fp32, fp16]
+        variant: [q4, q4f16]
         platform: [Android, iOS]
         include:
           - platform: Android
@@ -1181,7 +1181,7 @@ jobs:
           echo "📊 Monitoring test run: $RUN_ARN"
           echo ""
 
-          MAX_WAIT_TIME=7200  # 120 minutes
+          MAX_WAIT_TIME=10800  # 180 minutes (SCHEDULING + RUNNING can exceed on-device duration)
           ELAPSED=0
 
           while true; do
