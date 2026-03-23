@@ -5,11 +5,13 @@ const tags = require('language-tags')
 
 /**
  * @typedef {Object} Language
+ * @property {string} code - ISO 639-1/2/3 code.
  * @property {string} language - The language name.
  */
 
 /**
  * @typedef {Object} LanguageProbability
+ * @property {string} code - ISO 639-1/2/3 code.
  * @property {string} language - The language name.
  * @property {number} probability - The probability of the language being detected.
  */
@@ -88,6 +90,7 @@ function getLanguageName (isoCode) {
 async function detectOne (text) {
   if (typeof text !== 'string' || text.trim().length === 0) {
     return {
+      code: 'und',
       language: 'Undetermined'
     }
   }
@@ -98,12 +101,14 @@ async function detectOne (text) {
   } catch (error) {
     // CLD2 throws an error if it can't detect the language
     return {
+      code: 'und',
       language: 'Undetermined'
     }
   }
 
   if (!result || !result.languages || result.languages.length === 0) {
     return {
+      code: 'und',
       language: 'Undetermined'
     }
   }
@@ -112,6 +117,7 @@ async function detectOne (text) {
   const isoCode = cldToISO(topLanguage.code)
 
   return {
+    code: isoCode,
     language: getLanguageName(isoCode)
   }
 }
@@ -125,6 +131,7 @@ async function detectOne (text) {
 async function detectMultiple (text, topK = 3) {
   if (typeof text !== 'string' || text.trim().length === 0) {
     return [{
+      code: 'und',
       language: 'Undetermined',
       probability: 1
     }]
@@ -139,6 +146,7 @@ async function detectMultiple (text, topK = 3) {
     result = await cld.detect(text)
   } catch (error) {
     return [{
+      code: 'und',
       language: 'Undetermined',
       probability: 1
     }]
@@ -146,6 +154,7 @@ async function detectMultiple (text, topK = 3) {
 
   if (!result || !result.languages || result.languages.length === 0) {
     return [{
+      code: 'und',
       language: 'Undetermined',
       probability: 1
     }]
@@ -155,6 +164,7 @@ async function detectMultiple (text, topK = 3) {
   const languages = result.languages.slice(0, topK).map(lang => {
     const isoCode = cldToISO(lang.code)
     return {
+      code: isoCode,
       language: getLanguageName(isoCode),
       probability: lang.percent / 100 // Convert percent to probability (0-1)
     }

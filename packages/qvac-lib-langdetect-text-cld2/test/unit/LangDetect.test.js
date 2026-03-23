@@ -6,9 +6,12 @@ test('Should detect one language for English text', async (t) => {
   const result = await detectOne(text)
   t.ok(result, 'Result should not be empty')
   t.is(typeof result, 'object', 'Result should be an object')
+  t.is(typeof result.code, 'string', 'Result code should be a string')
+  t.ok(result.code.length === 2 || result.code.length === 3, 'Result code should be a 2 or 3-letter ISO code')
   t.is(typeof result.language, 'string', 'Result language should be a string')
-  t.comment(`Detected language: ${result.language}`)
+  t.comment(`Detected language: ${result.language} (code: ${result.code})`)
 
+  t.is(result.code, 'en', 'Expected the ISO code to be "en" for English')
   t.is(result.language, 'English', 'Expected the detected language to be "English"')
 })
 
@@ -34,6 +37,7 @@ test('Should return "Undetermined" for empty text in detectOne', async (t) => {
   const result = await detectOne('')
 
   t.is(typeof result, 'object', 'detectOne should return an object')
+  t.is(result.code, 'und', 'Code should be "und" for undetermined text')
   t.is(result.language, 'Undetermined', 'Language should be "Undetermined" for empty text')
 })
 
@@ -42,6 +46,7 @@ test('Should return array with "Undetermined" for empty text in detectMultiple',
 
   t.is(Array.isArray(results), true, 'Should still return an array')
   t.is(results.length, 1, 'Array should contain exactly one element')
+  t.is(results[0].code, 'und', 'Code should be "und"')
   t.is(results[0].language, 'Undetermined', 'Language should be "Undetermined"')
   t.is(results[0].probability, 1, 'Probability should be 1')
 })
@@ -66,6 +71,7 @@ test('Should return an array of language probabilities in detectMultiple', async
   t.ok(results.length > 0, 'Should return at least one language result')
 
   for (const item of results) {
+    t.is(typeof item.code, 'string', 'Each item should have a language code (string)')
     t.is(typeof item.language, 'string', 'Each item should have a language name (string)')
     t.is(typeof item.probability, 'number', 'Each item should have a numeric probability')
   }
