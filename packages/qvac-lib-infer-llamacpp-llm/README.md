@@ -273,6 +273,21 @@ The library supports **LoRA finetuning** of GGUF models: train small adapter wei
 
 For the full API, dataset format, parameters, and examples, see the **[Finetuning guide](docs/finetuning.md)**.
 
+### Smart Home Showcase
+
+A hands-on example that finetunes Qwen3-0.6B to act as a smart home tool-calling specialist. The base model tends to drift into conversational text or exhaust its token budget on reasoning — the finetuned adapter fixes both problems.
+
+1. **Train** — [`smart-home-finetune.js`](./examples/finetune/showcase/smart-home-finetune.js) runs a 1-epoch causal LoRA finetune on a [215-sample dataset](./examples/input/smart_home_specialist_train.jsonl) of user requests paired with `<tool_call>` responses (cameras, lights, thermostats, door locks).
+2. **Evaluate** — [`smart-home-finetuned-test.js`](./examples/finetune/showcase/smart-home-finetuned-test.js) runs the same prompts against the base model and the finetuned model, then prints a side-by-side comparison report (strictness, accuracy, thinking token usage, multi-turn stability).
+
+```bash
+# Train the adapter
+bare examples/finetune/showcase/smart-home-finetune.js
+
+# Compare baseline vs finetuned
+bare examples/finetune/showcase/smart-home-finetuned-test.js
+```
+
 
 ## Quickstart Example
 
@@ -302,6 +317,7 @@ npm run quickstart
 -   [LoRA Finetuning](./examples/finetune/simple-lora-finetune.js) – Basic LoRA finetuning.
 -   [LoRA Finetuning Pause/Resume](./examples/finetune/simple-lora-finetune-pause-resume.js) – Pause and resume finetuning.
 -   [LoRA Inference](./examples/simple-lora-inference.js) – Inference with a finetuned LoRA adapter.
+-   [Smart Home Finetune Showcase](./examples/finetune/showcase/smart-home-finetune.js) – Train a smart home tool-calling specialist, then [evaluate](./examples/finetune/showcase/smart-home-finetuned-test.js) baseline vs finetuned.
 
 ## OCR with Vision-Language Models
 
