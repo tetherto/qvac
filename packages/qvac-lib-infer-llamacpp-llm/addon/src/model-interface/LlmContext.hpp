@@ -84,31 +84,57 @@ public:
   const llama_batch* operator->() const noexcept { return &batch_; }
 };
 
-struct ThreadPoolDeleter{
-    void operator()(ggml_threadpool* ptr) {
-      if (ptr != nullptr) {
-        auto* cpuDev = ggml_backend_dev_by_type(GGML_BACKEND_DEVICE_TYPE_CPU);
-        if (cpuDev == nullptr) {
-          throw qvac_errors::StatusError(
-              ADDON_ID, toString(NoBackendFound), "no CPU backend found");
-        }
-        auto* reg = ggml_backend_dev_backend_reg(cpuDev);
-        void* procAddr =
-            ggml_backend_reg_get_proc_address(reg, "ggml_threadpool_free");
-        if (procAddr == nullptr) {
-          throw qvac_errors::StatusError(
-              ADDON_ID,
-              toString(UnableToDeleteThreadPool),
-              "Failed to get ggml_threadpool_free function address");
-        }
-        // NOLINTNEXTLINE(cppcoreguidelines-pro-type-reinterpret-cast)
-        auto* ggmlThreadpoolFreeFn =
-            reinterpret_cast<decltype(ggml_threadpool_free)*>(procAddr);
-        ggmlThreadpoolFreeFn(ptr);
+struct ThreadPoolDeleter {
+  void operator()(ggml_threadpool* ptr) {
+    if (ptr != nullptr) {
+      auto* cpuDev = ggml_backend_dev_by_type(GGML_BACKEND_DEVICE_TYPE_CPU);
+      if (cpuDev == nullptr) {
+        throw qvac_errors::StatusError(
+            ADDON_ID, toString(NoBackendFound), "no CPU backend found");
       }
+      auto* reg = ggml_backend_dev_backend_reg(cpuDev);
+      void* procAddr =
+          ggml_backend_reg_get_proc_address(reg, "ggml_threadpool_free");
+      if (procAddr == nullptr) {
+        throw qvac_errors::StatusError(
+            ADDON_ID,
+            toString(UnableToDeleteThreadPool),
+            "Failed to get ggml_threadpool_free function address");
+      }
+      // NOLINTNEXTLINE(cppcoreguidelines-pro-type-reinterpret-cast)
+      auto* ggmlThreadpoolFreeFn =
+          reinterpret_cast<decltype(ggml_threadpool_free)*>(procAddr);
+      ggmlThreadpoolFreeFn(ptr);
     }
+  }
 };
 using ThreadPoolPtr = std::unique_ptr<ggml_threadpool, ThreadPoolDeleter>;
+
+class DynamicToolsState {
+public:
+  void setToolsAtEnd(bool v) { toolsAtEnd_ = v; }
+  [[nodiscard]] bool toolsAtEnd() const { return toolsAtEnd_; }
+  [[nodiscard]] llama_pos nPastBeforeTools() const { return nPastBeforeTools_; }
+  void setNPastBeforeTools(llama_pos pos) { nPastBeforeTools_ = pos; }
+  void recordToolBoundary(llama_pos nPast, llama_pos totalTokens) {
+    if (toolsAtEnd_ && nConversationOnlyTokens_ > 0) {
+      nPastBeforeTools_ = nPast - (totalTokens - nConversationOnlyTokens_);
+    }
+  }
+  void setConversationOnlyTokens(llama_pos n) { nConversationOnlyTokens_ = n; }
+  [[nodiscard]] llama_pos conversationOnlyTokens() const {
+    return nConversationOnlyTokens_;
+  }
+  void reset() {
+    nConversationOnlyTokens_ = 0;
+    nPastBeforeTools_ = -1;
+  }
+
+private:
+  bool toolsAtEnd_ = false;
+  llama_pos nConversationOnlyTokens_ = 0;
+  llama_pos nPastBeforeTools_ = -1;
+};
 
 class LlmContext { // NOLINT(cppcoreguidelines-special-member-functions)
 public:
@@ -172,6 +198,17 @@ public:
   virtual llama_context* getCtx() = 0;
 
   /**
+   * The get model method. It returns the underlying llama_model pointer.
+   */
+  virtual llama_model* getModel() = 0;
+
+  /**
+   * The get params method. It returns a reference to the common parameters
+   * associated with this context.
+   */
+  virtual common_params& getParams() = 0;
+
+  /**
    * The get nPast method. It returns the nPast.
    *
    * @return - the nPast.
@@ -199,6 +236,11 @@ public:
    * Set the number of tokens to discard when overflowing context.
    */
   virtual void setNDiscarded(llama_pos nDiscarded) = 0;
+
+  DynamicToolsState& dynamicToolsState() { return dynamicToolsState_; }
+  [[nodiscard]] const DynamicToolsState& dynamicToolsState() const {
+    return dynamicToolsState_;
+  }
 
   /**
    * Get the number of context slides (discards) that have occurred.
@@ -239,8 +281,8 @@ public:
    * @return a callable that restores original parameters; safe to call
    *         multiple times (subsequent calls are no-ops).
    */
-  virtual std::function<void()> applyGenerationParams(
-      const GenerationParams& params) {
+  virtual std::function<void()>
+  applyGenerationParams(const GenerationParams& params) {
     return []() {};
   }
 
@@ -265,6 +307,7 @@ public:
    *
    */
   virtual void resetMedia() {};
+
+private:
+  DynamicToolsState dynamicToolsState_;
 };
-
-

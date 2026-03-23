@@ -29,7 +29,8 @@ const ENGINE_MAP = {
   '@qvac/tts-onnx': 'qvac-lib-infer-onnx-tts',
   '@qvac/transcription-whispercpp': 'qvac-lib-infer-whispercpp',
   '@qvac/translation-llamacpp': 'qvac-lib-infer-llamacpp-llm',
-  '@qvac/ocr-onnx': 'ocr-onnx'
+  '@qvac/ocr-onnx': 'ocr-onnx',
+  '@qvac/diffusion-cpp': 'lib-infer-diffusion'
 }
 
 // Reverse map: package dir -> array of engines

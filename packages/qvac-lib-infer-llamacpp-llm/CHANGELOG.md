@@ -1,5 +1,36 @@
 # Changelog
 
+## [0.14.0] - 2026-03-19
+
+### Added
+
+#### `tools_at_end` configuration for dynamic tool management in multi-turn conversations
+
+New `tools_at_end` configuration option (`"true"` or `"false"`, default: `"false"`) places tool definitions at the end of the prompt (after conversation history) instead of in the system prompt. This enables KV cache optimization for multi-turn conversations with dynamic tool sets, where tools change between turns. Currently supports Qwen3 models only.
+
+- **KV cache trimming**: After each turn, tools are automatically removed from the KV cache, preventing stale tool definitions from accumulating
+- **Conversation history reuse**: History tokens are preserved in cache, saving recomputation on long conversations
+- **Dynamic tool replacement**: Different tool sets can be used per turn without cache bloat from unused tools
+
+## [0.13.0] - 2026-03-18
+
+### Added
+
+#### LoRA finetuning support
+
+`model.finetune(options)` trains a LoRA adapter on top of a loaded GGUF base model. The adapter is saved as a `.gguf` file and can be loaded at inference time via the `lora` config option. Supports SFT (chat) and causal (next-token) training modes, configurable LoRA parameters (rank, alpha, target modules), validation (none / split / separate dataset), learning rate schedulers with warmup, pause/resume from checkpoints, and inference while paused. The returned `FinetuneHandle` emits `'stats'` progress events during training.
+
+#### New public methods
+
+- `model.finetune(options)` — starts LoRA finetuning, returns a `FinetuneHandle` with `on('stats', cb)` and `await()`.
+- `model.pause()` — pauses finetuning and saves a checkpoint so training can resume later. Also cancels an in-flight inference job.
+- Added typed `FinetuneOptions`, `FinetuneValidation`, `FinetuneProgressStats`, `FinetuneStats`, `FinetuneResult`, and `FinetuneHandle` interfaces to `index.d.ts`
+- Added finetuning guide at `docs/finetuning.md`
+
+### Changed
+
+- `model.cancel()` now also clears pause checkpoints (`pause_checkpoint_step_*`) from the checkpoint directory, so the next `finetune()` call starts fresh instead of resuming.
+
 ## [0.12.3] - 2026-03-17
 
 ### Added

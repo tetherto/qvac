@@ -11,8 +11,11 @@ endif()
 add_executable(
   addon-test
   test_llama_model.cpp
+  test_llama_finetuning_helpers.cpp
   test_cache_management.cpp
+  test_cache_management_qwen3.cpp
   test_text_llm_context.cpp
+  test_text_llm_context_qwen3.cpp
   test_addon_cpp.cpp
   test_backend_selection.cpp
   test_tune_config_map.cpp
@@ -32,6 +35,7 @@ add_executable(
   ${CMAKE_SOURCE_DIR}/addon/src/model-interface/AsyncWeightsLoader.cpp
   ${CMAKE_SOURCE_DIR}/addon/src/model-interface/CacheManager.cpp
   ${CMAKE_SOURCE_DIR}/addon/src/model-interface/LlamaModel.cpp
+  ${CMAKE_SOURCE_DIR}/addon/src/model-interface/LlamaFinetuningHelpers.cpp
   ${CMAKE_SOURCE_DIR}/addon/src/model-interface/LlamaLazyInitializeBackend.cpp
   ${CMAKE_SOURCE_DIR}/addon/src/model-interface/ModelMetadata.cpp
   ${CMAKE_SOURCE_DIR}/addon/src/model-interface/MtmdLlmContext.cpp
@@ -41,6 +45,7 @@ add_executable(
   ${CMAKE_SOURCE_DIR}/addon/src/utils/ChatTemplateUtils.cpp
   ${CMAKE_SOURCE_DIR}/addon/src/utils/Qwen3ReasoningUtils.cpp
   ${CMAKE_SOURCE_DIR}/addon/src/utils/QwenTemplate.cpp
+  ${CMAKE_SOURCE_DIR}/addon/src/utils/Qwen3ToolsDynamicTemplate.cpp
 )
 
 target_compile_options(
@@ -79,7 +84,8 @@ endif()
 
 # Define test binary directory path for runtime use
 get_filename_component(TEST_BINARY_DIR "${CMAKE_CURRENT_BINARY_DIR}" ABSOLUTE)
-target_compile_definitions(addon-test PRIVATE 
+target_compile_definitions(addon-test PRIVATE
+  STANDALONE_TEST_BUILD
   TEST_BINARY_DIR="${TEST_BINARY_DIR}"
 )
 
