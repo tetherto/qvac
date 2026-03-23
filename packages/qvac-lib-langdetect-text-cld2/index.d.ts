@@ -1,10 +1,8 @@
 export interface Language {
-  code: string; // ISO 639-1 code
   language: string; // Language name
 }
 
 export interface LanguageProbability {
-  code: string; // ISO 639-1 code
   language: string; // Language name
   probability: number; // Probability of the language being detected
 }
