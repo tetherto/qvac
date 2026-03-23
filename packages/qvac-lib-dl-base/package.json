@@ -25,7 +25,13 @@
     "@qvac/logging": "^0.1.0",
     "ready-resource": "^1.1.1"
   },
-  "bugs": "https://github.com/tetherto/qvac-lib-dl-base/issues",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/tetherto/qvac.git",
+    "directory": "packages/qvac-lib-dl-base"
+  },
+  "bugs": "https://github.com/tetherto/qvac/issues",
+  "homepage": "https://github.com/tetherto/qvac/tree/main/packages/qvac-lib-dl-base#readme",
   "files": [
     "src",
     "index.d.ts",
