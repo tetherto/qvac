@@ -2,8 +2,7 @@
 
 #include <utility>
 
-template <typename F>
-class ScopeGuard {
+template <typename F> class ScopeGuard {
   F fn_;
   bool active_ = true;
 

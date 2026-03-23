@@ -1,0 +1,56 @@
+---
+title: "ocr( )"
+titleStyle: code
+description: "Performs Optical Character Recognition (OCR) on an image to extract text."
+---
+
+```typescript
+function ocr(params: OCRClientParams): { blocks: Promise<{ bbox?: [number, number, number, number]; confidence?: number; text: string }[]>; blockStream: AsyncGenerator<{ bbox?: [number, number, number, number]; confidence?: number; text: string }[]>; stats: Promise<{ detectionTime?: number; recognitionTime?: number; totalTime?: number } | —> }
+```
+
+## Parameters
+
+| Name | Type | Required? | Description |
+| --- | --- | :---: | --- |
+| `params` | [`OCRClientParams`](#ocrclientparams) | ✓ | The OCR parameters |
+
+### `OCRClientParams`
+
+| Field | Type | Required? | Description |
+| --- | --- | :---: | --- |
+| `image` | `string \| Buffer` | ✓ | — |
+| `modelId` | `string` | ✓ | — |
+| `options` | `OCROptions` | ✗ | — |
+| `stream` | `boolean` | ✗ | — |
+
+## Returns
+
+```typescript
+{ blocks: Promise<{ bbox?: [number, number, number, number]; confidence?: number; text: string }[]>; blockStream: AsyncGenerator<{ bbox?: [number, number, number, number]; confidence?: number; text: string }[]>; stats: Promise<{ detectionTime?: number; recognitionTime?: number; totalTime?: number } | —> }
+```
+
+
+
+| Field | Type | Description |
+| --- | --- | --- |
+| `blocks` | `Promise` | — |
+| `blockStream` | `AsyncGenerator` | — |
+| `stats` | `Promise` | — |
+
+
+
+## Example
+
+```typescript
+// Non-streaming mode (default) - get all blocks at once
+const { blocks } = ocr({ modelId, image: "/path/to/image.png" });
+for (const block of await blocks) {
+  console.log(block.text, block.bbox, block.confidence);
+}
+
+// Streaming mode - process blocks as they arrive
+const { blockStream } = ocr({ modelId, image: imageBuffer, stream: true });
+for await (const blocks of blockStream) {
+  console.log("Detected:", blocks);
+}
+```

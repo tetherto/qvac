@@ -329,14 +329,13 @@ export const loadOcrModelRequestSchema = commonModelConfigSchema
   .strict();
 
 // Custom plugin catch-all: accepts any modelType string EXCEPT built-ins
-export const loadCustomPluginModelRequestSchema = commonModelConfigSchema.extend(
-  {
+export const loadCustomPluginModelRequestSchema =
+  commonModelConfigSchema.extend({
     modelType: z.string().refine((val) => !builtInModelTypes.has(val), {
       message: "Built-in model types must use their specific schema",
     }),
     modelConfig: z.record(z.string(), z.unknown()).optional(),
-  },
-);
+  });
 
 // Union of all load model request types (using z.union since each modelType accepts multiple values)
 export const loadModelSrcRequestSchema = z

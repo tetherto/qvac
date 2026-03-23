@@ -1,0 +1,45 @@
+---
+title: "getLogger( )"
+titleStyle: code
+description: "No description available"
+---
+
+```typescript
+function getLogger(namespace: string, options?: LoggerOptions): Logger
+```
+
+## Parameters
+
+| Name | Type | Required? | Description |
+| --- | --- | :---: | --- |
+| `namespace` | `string` | ✓ | No description |
+| `options` | [`LoggerOptions`](#loggeroptions) | ✗ | No description |
+
+### `LoggerOptions`
+
+| Field | Type | Required? | Description |
+| --- | --- | :---: | --- |
+| `enableConsole` | `boolean` | ✗ | — |
+| `level` | `any` | ✗ | — |
+| `namespace` | `string` | ✗ | — |
+| `transports` | `LogTransport[]` | ✗ | — |
+
+## Returns
+
+```typescript
+Logger
+```
+
+
+
+| Field | Type | Description |
+| --- | --- | --- |
+| `addTransport` | `(transport: LogTransport) => void` | — |
+| `debug` | `(args: unknown[]) => void` | — |
+| `error` | `(args: unknown[]) => void` | — |
+| `getLevel` | `() => LogLevel` | — |
+| `info` | `(args: unknown[]) => void` | — |
+| `setConsoleOutput` | `(enabled: boolean) => void` | — |
+| `setLevel` | `(level: LogLevel) => void` | — |
+| `trace` | `(args: unknown[]) => void` | — |
+| `warn` | `(args: unknown[]) => void` | — |

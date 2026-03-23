@@ -4,21 +4,29 @@
   "description": "Official documentation and single source of truth for QVAC",
   "private": true,
   "scripts": {
-    "build": "next build && npx @vahor/next-broken-links",
-    "build:static": "next build && npx @vahor/next-broken-links",
-    "dev": "next dev --turbo -p 3001",
+    "prebuild:examples": "npx tsc --noCheck --noResolve --skipLibCheck --module ESNext --target ESNext --rootDir ../../packages/sdk/examples --outDir ../../packages/sdk/dist/examples ../../packages/sdk/examples/*.ts ../../packages/sdk/examples/**/*.ts",
+    "build": "npm run prebuild:examples && next build && npx @vahor/next-broken-links",
+    "build:static": "npm run prebuild:examples && next build && npx @vahor/next-broken-links",
+    "dev": "npm run prebuild:examples && next dev --turbo -p 3001",
     "start": "next start",
-    "serve": "serve dist -p 8080",
+    "serve": "npx http-server dist -p 8080 -c-1",
     "postinstall": "fumadocs-mdx",
     "docs:generate": "bun run scripts/run-docs-generate.ts",
     "docs:generate-api": "bun run scripts/generate-api-docs.ts",
-    "docs:update-versions": "bun run scripts/update-versions-list.ts"
+    "docs:gen-api-dev": "bun run scripts/generate-api-docs.ts --dev",
+    "docs:update-versions": "bun run scripts/update-versions-list.ts",
+    "docs:create-version": "bun run scripts/create-version-bundle.ts",
+    "docs:release-version": "bun run scripts/release-version.ts",
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "test:examples": "bun run scripts/test-code-examples.ts"
   },
   "dependencies": {
     "@ai-sdk/openai-compatible": "^1.0.29",
     "@ai-sdk/react": "^2.0.118",
     "@icons-pack/react-simple-icons": "^13.8.0",
     "@inkeep/cxkit-react": "^0.5.111",
+    "@next/third-parties": "^16.2.0",
     "@orama/orama": "^3.1.14",
     "@radix-ui/react-popover": "^1.1.15",
     "@radix-ui/react-presence": "^1.1.5",
@@ -54,6 +62,7 @@
     "glob": "^11.0.3",
     "postcss": "^8.5.6",
     "remark": "^15.0.1",
+    "remark-code-import": "^1.2.0",
     "remark-parse": "^11.0.0",
     "remark-stringify": "^11.0.0",
     "remark-validate-links": "^13.1.0",
@@ -64,6 +73,7 @@
     "typedoc-plugin-markdown": "^4.10.0",
     "typescript": "^5.9.2",
     "unified": "^11.0.2",
-    "unist-util-visit": "^5.0.0"
+    "unist-util-visit": "^5.0.0",
+    "vitest": "^4.0.18"
   }
 }

@@ -1,6 +1,7 @@
 #include "TextLlmContext.hpp"
 
 #include <algorithm>
+#include <cassert>
 #include <cmath>
 #include <cstddef>
 
@@ -23,8 +24,10 @@ using namespace qvac_lib_inference_addon_llama::utils;
 
 // NOLINTNEXTLINE(readability-function-cognitive-complexity)
 TextLlmContext::TextLlmContext(
-    common_params& commonParams, common_init_result&& llamaInit)
+    common_params& commonParams, common_init_result&& llamaInit,
+    bool toolsAtEnd)
     : llamaInit_(std::move(llamaInit)), params_(commonParams) {
+  dynamicToolsState().setToolsAtEnd(toolsAtEnd);
   {
 
     model_ = llamaInit_.model.get();
@@ -49,7 +52,8 @@ TextLlmContext::TextLlmContext(
           lctx_, reasoningState_);
     }
 
-    std::string chatTemplate = getChatTemplate(model_, params_);
+    std::string chatTemplate =
+        getChatTemplate(model_, params_, dynamicToolsState().toolsAtEnd());
     tmpls_ = common_chat_templates_init(model_, chatTemplate);
 
     smpl_.reset(common_sampler_init(model_, params_.sampling));
@@ -189,6 +193,7 @@ void TextLlmContext::tokenizeChat(
   bool addSpecial = false;
 
   if (nPast_ == 0 && !isCacheLoaded) {
+    dynamicToolsState().reset();
     isLastMessageFromUser = true;
     addSpecial = true;
   } else if (nPast_ > 0) {
@@ -212,6 +217,22 @@ void TextLlmContext::tokenizeChat(
 
   if (!prompt.empty()) {
     inputTokens = common_tokenize(lctx_, prompt, addSpecial, true);
+
+    if (dynamicToolsState().toolsAtEnd() && !tools.empty()) {
+      inputs.tools = {};
+      inputs.add_generation_prompt = false;
+      inputs.use_jinja = params_.use_jinja;
+      auto promptNoTools = getPrompt(tmpls_.get(), inputs);
+      auto tokensNoTools =
+          common_tokenize(lctx_, promptNoTools, addSpecial, true);
+      dynamicToolsState().setConversationOnlyTokens(tokensNoTools.size());
+      assert(
+          dynamicToolsState().conversationOnlyTokens() <=
+              static_cast<llama_pos>(inputTokens.size()) &&
+          "conversation-only tokens exceeds total tokens");
+    } else {
+      dynamicToolsState().setConversationOnlyTokens(0);
+    }
   } else {
     std::string errorMsg = string_format(
         "[TextLlm] %s: formatted chat prompt is empty\n", __func__);
@@ -266,7 +287,8 @@ bool TextLlmContext::evalMessageWithTools(
 
   if (nTokens >= llama_n_ctx(lctx_)) {
     std::string errorMsg = string_format(
-        "[TextLlm] context overflow at prefill step: prompt tokens %ld, max context tokens %d\n",
+        "[TextLlm] context overflow at prefill step: prompt tokens %ld, max "
+        "context tokens %d\n",
         nTokens,
         llama_n_ctx(lctx_));
     throw qvac_errors::StatusError(
@@ -283,6 +305,7 @@ bool TextLlmContext::evalMessageWithTools(
       llama_memory_seq_add(
           mem, 0, firstMsgTokens_ + nDiscarded_, nPast_, -nDiscarded_);
       nPast_ -= nDiscarded_;
+      ++nSlides_;
       QLOG_IF(
           Priority::DEBUG,
           string_format(
@@ -295,6 +318,7 @@ bool TextLlmContext::evalMessageWithTools(
       auto* mem = llama_get_memory(lctx_);
       llama_memory_seq_rm(mem, 0, firstMsgTokens_, nPast_);
       nPast_ = firstMsgTokens_;
+      ++nSlides_;
       QLOG_IF(
           Priority::DEBUG,
           string_format(
@@ -360,6 +384,8 @@ bool TextLlmContext::evalMessageWithTools(
       nDiscarded_ = ctxSize - firstMsgTokens_ - 1;
     }
   }
+  dynamicToolsState().recordToolBoundary(
+      nPast_, static_cast<llama_pos>(inputTokens.size()));
   return true;
 }
 
@@ -384,6 +410,7 @@ void TextLlmContext::applyContextDiscard() {
   llama_memory_seq_add(
       mem, 0, firstMsgTokens_ + nDiscarded_, nPast_, -nDiscarded_);
   nPast_ -= nDiscarded_;
+  ++nSlides_;
   QLOG_IF(
       Priority::DEBUG,
       string_format(
@@ -486,8 +513,8 @@ bool TextLlmContext::generateResponse(
   return true;
 }
 
-std::function<void()> TextLlmContext::applyGenerationParams(
-    const GenerationParams& overrides) {
+std::function<void()>
+TextLlmContext::applyGenerationParams(const GenerationParams& overrides) {
   if (!overrides.hasOverrides()) {
     return []() {};
   }
@@ -513,7 +540,8 @@ std::function<void()> TextLlmContext::applyGenerationParams(
 
   bool restored = false;
   return [this, savedSampling, savedPredict, restored]() mutable {
-    if (restored) return;
+    if (restored)
+      return;
     restored = true;
     params_.sampling = savedSampling;
     params_.n_predict = savedPredict;
@@ -525,10 +553,19 @@ void TextLlmContext::stop() { stopGeneration_.store(true); }
 
 void TextLlmContext::resetState(bool resetStats) {
   // Reset the n_past
+
+  dynamicToolsState().reset();
   nPast_ = 0;
 
   // Reset the first msg token length
   firstMsgTokens_ = 0;
+
+  // On partial reset (resetStats=false), preserve nSlides_ so
+  // runtimeStats() can read the per-inference value.
+  // On full reset (resetStats=true), clear it along with perf stats.
+  if (resetStats) {
+    nSlides_ = 0;
+  }
 
   // Clear UTF-8 buffer when resetting state
   utf8Buffer_.clear();
@@ -563,6 +600,9 @@ void TextLlmContext::setFirstMsgTokens(llama_pos firstMsgTokens) {
 void TextLlmContext::setNDiscarded(llama_pos nDiscarded) {
   this->nDiscarded_ = nDiscarded;
 }
+
+int32_t TextLlmContext::getNSlides() const { return nSlides_; }
+void TextLlmContext::resetNSlides() { nSlides_ = 0; }
 
 llama_pos TextLlmContext::removeLastNTokens(llama_pos count) {
   // Validate input

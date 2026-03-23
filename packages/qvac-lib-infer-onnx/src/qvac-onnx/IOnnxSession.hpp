@@ -20,6 +20,10 @@ class IOnnxSession {
   [[nodiscard]] virtual std::vector<TensorInfo> getInputInfo() const = 0;
   [[nodiscard]] virtual std::vector<TensorInfo> getOutputInfo() const = 0;
 
+  // Direct access to cached input/output names (avoids ORT API queries)
+  [[nodiscard]] virtual const std::string &inputName(size_t index) const = 0;
+  [[nodiscard]] virtual const std::string &outputName(size_t index) const = 0;
+
   // Run inference - single input, all outputs
   virtual std::vector<OutputTensor> run(const InputTensor& input) = 0;
 

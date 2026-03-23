@@ -10,7 +10,6 @@ import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
-import { RPCRequestNotSentError } from "@/utils/errors-client";
 import { initializeConfig } from "@/client/init-hooks";
 import { resolveConfig } from "@/client/config-loader/resolve-config.node";
 import { getClientLogger } from "@/logging";
@@ -239,60 +238,8 @@ async function ensureRPC(): Promise<RPC> {
   return rpc;
 }
 
-const mockRPC = {
-  request: (command: number) => {
-    let sentData: { data: string; encoding: BufferEncoding } | null = null;
-
-    return {
-      send: (data: string, encoding: BufferEncoding) => {
-        sentData = { data, encoding };
-      },
-
-      reply: async (encoding: BufferEncoding): Promise<Buffer> => {
-        if (!sentData) {
-          throw new RPCRequestNotSentError();
-        }
-
-        const rpc = await ensureRPC();
-        const req = rpc.request(command);
-        req.send(
-          sentData.data,
-          sentData.encoding as "utf-8" | "ascii" | "binary",
-        );
-
-        const response = await req.reply(
-          encoding as "utf-8" | "ascii" | "binary",
-        );
-        return Buffer.isBuffer(response)
-          ? response
-          : Buffer.from(typeof response === "string" ? response : "", encoding);
-      },
-
-      createResponseStream: async function* () {
-        if (!sentData) {
-          throw new RPCRequestNotSentError();
-        }
-
-        const rpc = await ensureRPC();
-        const req = rpc.request(command);
-        req.send(
-          sentData.data,
-          sentData.encoding as "utf-8" | "ascii" | "binary",
-        );
-        const stream = req.createResponseStream({
-          encoding: sentData.encoding as "utf-8" | "ascii" | "binary",
-        });
-
-        for await (const chunk of stream) {
-          yield chunk;
-        }
-      },
-    };
-  },
-};
-
-export function getRPC() {
-  return mockRPC;
+export async function getRPC() {
+  return ensureRPC();
 }
 
 export async function close() {

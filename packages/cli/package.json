@@ -37,7 +37,9 @@
     "build:watch": "tsc --watch",
     "typecheck": "tsc --noEmit",
     "lint": "tsc --noEmit",
-    "test:e2e": "tsx test/serve.e2e.test.ts"
+    "test": "tsx test/translate.test.ts && tsx test/serve.test.ts",
+    "test:unit": "tsx test/translate.test.ts",
+    "test:serve": "tsx test/serve.test.ts"
   },
   "dependencies": {
     "bare-pack": "^2.0.0",

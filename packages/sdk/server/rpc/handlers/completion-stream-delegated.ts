@@ -2,17 +2,23 @@ import type {
   CompletionStreamRequest,
   CompletionStreamResponse,
 } from "@/schemas";
+import type { DelegatedHandlerOptions } from "@/server/rpc/profiling";
 import { getModelEntry } from "@/server/bare/registry/model-registry";
 import { getRPC } from "@/server/bare/delegate-rpc-client";
-import { stream } from "@/server/rpc/delegate-transport";
+import { stream, type DelegateOptions } from "@/server/rpc/delegate-transport";
 import { ModelIsDelegatedError } from "@/utils/errors-server";
 import { getServerLogger } from "@/logging";
 
 const logger = getServerLogger();
 
+export type HandleCompletionStreamDelegatedOptions = DelegatedHandlerOptions;
+
 export async function* handleCompletionStreamDelegated(
   request: CompletionStreamRequest,
+  options?: HandleCompletionStreamDelegatedOptions,
 ): AsyncGenerator<CompletionStreamResponse> {
+  const { profilingMeta } = options ?? {};
+
   // Get delegation info from model registry
   const entry = getModelEntry(request.modelId);
 
@@ -30,8 +36,17 @@ export async function* handleCompletionStreamDelegated(
     // Create RPC instance for this HyperSwarm peer
     const rpc = await getRPC(topic, providerPublicKey, { timeout });
 
+    // Build delegate options with profiling metadata
+    const delegateOpts: DelegateOptions = { peerKey: providerPublicKey };
+    if (profilingMeta) {
+      delegateOpts.profilingMeta = profilingMeta;
+    }
+    if (timeout) {
+      delegateOpts.timeout = timeout;
+    }
+
     // Use the regular stream function with the HyperSwarm RPC instance
-    const responseStream = stream(request, rpc, { timeout });
+    const responseStream = stream(request, rpc, delegateOpts);
 
     // Yield each response from the stream
     for await (const response of responseStream) {

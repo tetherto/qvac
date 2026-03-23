@@ -1,6 +1,7 @@
 import type {
   CompletionParams,
   CompletionStats,
+  GenerationParams,
   Tool,
   ToolCall,
   ToolCallEvent,
@@ -185,12 +186,18 @@ async function* processModelResponse(
   messagesToSend: ChatHistory[],
   shouldSaveCache: boolean,
   tools?: Tool[],
+  generationParams?: GenerationParams,
 ): AsyncGenerator<
   { token: string; toolCallEvent?: ToolCallEvent },
   { stats: CompletionStats; toolCalls: ToolCall[] },
   unknown
 > {
-  const response = await model.run(messagesToSend);
+  const runFn = model.run.bind(model) as (
+    msgs: ChatHistory[],
+    opts?: unknown,
+  ) => ReturnType<typeof model.run>;
+  const runOptions = generationParams ? { generationParams } : undefined;
+  const response = await runFn(messagesToSend, runOptions);
 
   let accumulatedText = "";
   const emittedToolCallPositions = new Set<number>();
@@ -240,13 +247,13 @@ async function* processModelResponse(
 }
 
 export async function* completion(
-  params: CompletionParams & { tools?: Tool[] },
+  params: CompletionParams & { tools?: Tool[]; generationParams?: GenerationParams },
 ): AsyncGenerator<
   { token: string; toolCallEvent?: ToolCallEvent },
   { stats: CompletionStats; toolCalls: ToolCall[] },
   unknown
 > {
-  const { history, modelId, kvCache, tools } = params;
+  const { history, modelId, kvCache, tools, generationParams } = params;
 
   const modelConfig = getModelConfig(modelId);
   const toolsEnabled = (modelConfig as { tools?: boolean }).tools === true;
@@ -304,7 +311,7 @@ export async function* completion(
       );
       logMessagesToAddon(messagesToSend, "PROMPT_SEND");
 
-      return yield* processModelResponse(model, messagesToSend, true, tools);
+      return yield* processModelResponse(model, messagesToSend, true, tools, generationParams);
     } else {
       // Auto-generate cache key based on conversation history
       const cacheMessages: CacheMessage[] = history.map((msg) => ({
@@ -356,6 +363,7 @@ export async function* completion(
         messagesToSend,
         true,
         tools,
+        generationParams,
       );
 
       //If there was an existing cache, we rename it with new hash that includes the current message
@@ -374,6 +382,6 @@ export async function* completion(
   } else {
     logCacheDisabled();
     logMessagesToAddon(transformedHistory, "NO_CACHE");
-    return yield* processModelResponse(model, transformedHistory, false, tools);
+    return yield* processModelResponse(model, transformedHistory, false, tools, generationParams);
   }
 }

@@ -5,12 +5,48 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-## [0.1.12]
+## [0.2.3]
 
 ### Added
 - RTF benchmark integration test (`rtf-benchmark.test.js`) that captures Real-Time Factor and 12 other timing metrics from the C++ addon's `runtimeStats` callback
 - `test:benchmark:rtf` npm script for on-demand RTF benchmark runs
 - RTF benchmark step in integration test CI workflow (non-blocking, all 6 runners) with JSON artifact upload
+
+## [0.2.2]
+
+This release documents Parakeet runtime statistics and transcription output in TypeScript so consumers can type `response.stats` and `run()` results against the native addon.
+
+## New APIs
+
+### `RuntimeStats` and `ParakeetRunOutput` in `index.d.ts`
+
+The `TranscriptionParakeet` namespace now exports **`RuntimeStats`**, aligned with `ParakeetModel::runtimeStats()` (throughput, audio duration, token and transcription counts, pipeline timing fields through `totalEncodedFrames`). **`ParakeetRunOutput`** is **`TranscriptionSegment[] | TranscriptionSegment`**, matching array or single-segment updates from the addon. **`run()`** is typed to return **`Promise<QvacResponse<ParakeetRunOutput>>`**, with documentation that **`response.stats`** matches **`RuntimeStats`** when stats collection is enabled via `opts.stats`.
+
+## [0.2.1]
+
+This release fixes `reload()` for setups that use per-file model paths (TDT, CTC, EOU, Sortformer), so the native addon keeps receiving the same paths after a reload as on the initial load.
+
+## Bug Fixes
+
+### reload() missing named path passthrough
+
+`reload()` rebuilt configuration without the individual file paths (`encoderPath`, `decoderPath`, `vocabPath`, and the other named path fields). After `reload()`, the addon no longer saw those paths and could not load the model correctly. `reload()` now builds configuration through the same `_buildConfigurationParams()` helper as `_load()`, so named paths are always included. When named paths are in use, `reload()` also skips streaming weights via `_loadModelWeights`, matching initial load behavior and avoiding redundant large file reads.
+
+## Added
+
+### Integration coverage for reload with named paths
+
+A new integration test exercises `TranscriptionParakeet` with TDT named paths: transcribe, call `reload()` with updated `parakeetConfig`, then transcribe again and verify output quality.
+
+## [0.2.0]
+
+### Changed
+- Migrated the native addon implementation to `qvac-lib-inference-addon-cpp` 1.x (`IModel`/`IModelCancel` + `AddonJs`/`AddonCpp`), replacing the removed legacy templated addon API
+- Updated the JS/native pipeline to `createInstance` + `runJob` while preserving public transcription API behavior and output semantics
+- Hardened cancel/reload/job lifecycle behavior in runtime and integration paths to match expected production behavior
+
+### Added
+- Dedicated `AddonCpp` test coverage plus expanded cancellation and lifecycle regression coverage for the addon-cpp runtime path
 
 ## [0.1.11]
 

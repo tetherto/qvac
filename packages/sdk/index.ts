@@ -86,6 +86,7 @@ export {
   PLUGIN_OCR,
   SDK_DEFAULT_PLUGINS,
   type BuiltinPlugin,
+  type ProfilerMode,
 } from "./schemas";
 
 export { type ToolInput, type ToolHandler } from "./utils/tool-helpers";
@@ -101,3 +102,7 @@ export { SUPPORTED_AUDIO_FORMATS } from "./constants/audio";
 // Logging exports
 export { getLogger, SDK_LOG_ID } from "./logging";
 export type { Logger, LogTransport, LoggerOptions } from "./logging";
+
+// Profiler exports
+export { profiler } from "./profiling";
+export type { ProfilerRuntimeOptions, ProfilerExport } from "./profiling";

@@ -1,0 +1,41 @@
+---
+title: "invokePluginStream( )"
+titleStyle: code
+description: Invoke a streaming plugin handler.
+---
+
+```ts
+function invokePluginStream<TResponse = unknown, TParams = unknown>(
+  options: InvokePluginOptions<TParams>
+): AsyncGenerator<TResponse>;
+```
+
+## Parameters
+
+| Name | Type | Required? | Description |
+| --- | --- | :---: | --- |
+| options | [`InvokePluginOptions`](../invokePlugin#invokepluginoptions) | ✓ | The invocation options (same as [`invokePlugin()`](../invokePlugin)) |
+
+## Returns
+
+`AsyncGenerator<TResponse>` — Yields streamed chunks from the handler until `done` is received.
+
+## Throws
+
+| Error | When |
+| --- | --- |
+| `INVALID_RESPONSE_TYPE` | A chunk's type does not match expected `"pluginInvokeStream"` |
+
+## Example
+
+```typescript
+const stream = invokePluginStream<{ token: string }>({
+  modelId: "my-custom-model",
+  handler: "generateStream",
+  params: { prompt: "Tell me a story" },
+});
+
+for await (const chunk of stream) {
+  process.stdout.write(chunk.token);
+}
+```

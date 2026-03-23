@@ -1,6 +1,7 @@
 #include "MtmdLlmContext.hpp"
 
 #include <algorithm>
+#include <cassert>
 
 #include <common/log.h>
 #include <llama/mtmd/mtmd-helper.h>
@@ -20,9 +21,11 @@ using namespace qvac_lib_inference_addon_llama::utils;
 
 // NOLINTNEXTLINE(readability-function-cognitive-complexity)
 MtmdLlmContext::MtmdLlmContext(
-    common_params& commonParams, common_init_result&& llamaInit)
+    common_params& commonParams, common_init_result&& llamaInit,
+    bool toolsAtEnd)
     : llamaInit_(std::move(llamaInit)), params_(commonParams),
       model_(llamaInit_.model.get()), lctx_(llamaInit_.context.get()) {
+  dynamicToolsState().setToolsAtEnd(toolsAtEnd);
 
   if (model_ == nullptr) {
     throw qvac_errors::StatusError(
@@ -40,7 +43,8 @@ MtmdLlmContext::MtmdLlmContext(
 
   vocab_ = llama_model_get_vocab(model_);
 
-  std::string chatTemplate = getChatTemplate(model_, params_);
+  std::string chatTemplate =
+      getChatTemplate(model_, params_, dynamicToolsState().toolsAtEnd());
   tmpls_ = common_chat_templates_init(model_, chatTemplate);
 
   smpl_.reset(common_sampler_init(model_, params_.sampling));
@@ -153,6 +157,7 @@ void MtmdLlmContext::tokenizeChat(
   bool addSpecial = false;
 
   if (nPast_ == 0 && !isCacheLoaded) {
+    dynamicToolsState().reset();
     isLastMessageFromUser = true;
     addSpecial = true;
   } else if (nPast_ > 0) {
@@ -199,6 +204,40 @@ void MtmdLlmContext::tokenizeChat(
     throw qvac_errors::StatusError(ADDON_ID, toString(EncoderFailed), errorMsg);
   }
 
+  if (dynamicToolsState().toolsAtEnd() && !tools.empty()) {
+    inputs.tools = {};
+    inputs.add_generation_prompt = false;
+    inputs.use_jinja = params_.use_jinja;
+    auto promptNoTools = getPrompt(tmpls_.get(), inputs);
+
+    if (!promptNoTools.empty()) {
+      mtmd_input_text textNoTools;
+      textNoTools.text = promptNoTools.c_str();
+      textNoTools.add_special = addSpecial;
+      textNoTools.parse_special = true;
+
+      mtmd::input_chunks chunksNoTools(mtmd_input_chunks_init());
+      int32_t resNoTools = mtmd_tokenize(
+          ctxVision_.get(),
+          chunksNoTools.ptr.get(),
+          &textNoTools,
+          bitmapsCPtr.data(),
+          bitmapsCPtr.size());
+
+      if (resNoTools == 0) {
+        dynamicToolsState().setConversationOnlyTokens(
+            mtmd_helper_get_n_tokens(chunksNoTools.ptr.get()));
+        assert(
+            dynamicToolsState().conversationOnlyTokens() <=
+                static_cast<llama_pos>(
+                    mtmd_helper_get_n_tokens(chunks.ptr.get())) &&
+            "conversation-only tokens exceeds total tokens");
+      }
+    }
+  } else {
+    dynamicToolsState().setConversationOnlyTokens(0);
+  }
+
   resetMedia();
 }
 
@@ -240,6 +279,7 @@ bool MtmdLlmContext::evalMessageWithTools(
       llama_memory_seq_add(
           mem, 0, firstMsgTokens_ + nDiscarded_, nPast_, -nDiscarded_);
       nPast_ -= nDiscarded_;
+      ++nSlides_;
       QLOG_IF(
           Priority::DEBUG,
           string_format(
@@ -252,6 +292,7 @@ bool MtmdLlmContext::evalMessageWithTools(
       auto* mem = llama_get_memory(lctx_);
       llama_memory_seq_rm(mem, 0, firstMsgTokens_, nPast_);
       nPast_ = firstMsgTokens_;
+      ++nSlides_;
       QLOG_IF(
           Priority::DEBUG,
           string_format(
@@ -313,6 +354,8 @@ bool MtmdLlmContext::evalMessageWithTools(
       nDiscarded_ = ctxSize - firstMsgTokens_ - 1;
     }
   }
+  dynamicToolsState().recordToolBoundary(
+      nPast_, static_cast<llama_pos>(nTokens));
   return true;
 }
 
@@ -337,6 +380,7 @@ void MtmdLlmContext::applyContextDiscard() {
   llama_memory_seq_add(
       mem, 0, firstMsgTokens_ + nDiscarded_, nPast_, -nDiscarded_);
   nPast_ -= nDiscarded_;
+  ++nSlides_;
   QLOG_IF(
       Priority::DEBUG,
       string_format(
@@ -423,8 +467,8 @@ bool MtmdLlmContext::generateResponse(
   return true;
 }
 
-std::function<void()> MtmdLlmContext::applyGenerationParams(
-    const GenerationParams& overrides) {
+std::function<void()>
+MtmdLlmContext::applyGenerationParams(const GenerationParams& overrides) {
   if (!overrides.hasOverrides()) {
     return []() {};
   }
@@ -450,7 +494,8 @@ std::function<void()> MtmdLlmContext::applyGenerationParams(
 
   bool restored = false;
   return [this, savedSampling, savedPredict, restored]() mutable {
-    if (restored) return;
+    if (restored)
+      return;
     restored = true;
     params_.sampling = savedSampling;
     params_.n_predict = savedPredict;
@@ -475,6 +520,9 @@ void MtmdLlmContext::setFirstMsgTokens(llama_pos firstMsgTokens) {
 void MtmdLlmContext::setNDiscarded(llama_pos nDiscarded) {
   this->nDiscarded_ = nDiscarded;
 }
+
+int32_t MtmdLlmContext::getNSlides() const { return nSlides_; }
+void MtmdLlmContext::resetNSlides() { nSlides_ = 0; }
 
 void MtmdLlmContext::loadMedia(const std::vector<uint8_t>& media) {
   if (media.empty()) {
@@ -543,11 +591,20 @@ void MtmdLlmContext::loadMedia(const std::string& fname) {
 }
 
 void MtmdLlmContext::resetState(bool resetStats) {
+
+  dynamicToolsState().reset();
   // Reset the n_past
   nPast_ = 0;
 
   // Reset the first msg token length
   firstMsgTokens_ = 0;
+
+  // On partial reset (resetStats=false), preserve nSlides_ so
+  // runtimeStats() can read the per-inference value.
+  // On full reset (resetStats=true), clear it along with perf stats.
+  if (resetStats) {
+    nSlides_ = 0;
+  }
 
   // Clear UTF-8 buffer when resetting state
   utf8Buffer_.clear();

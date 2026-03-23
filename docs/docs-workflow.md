@@ -1,6 +1,6 @@
 # Docs Workflow
 
-How the documentation site automation works: generating API docs locally, CI triggers, and troubleshooting.
+How the documentation site works: architecture, local development, CI, deployment, and troubleshooting.
 
 For general contribution guidelines (PR labels, changelog format), see the [root CONTRIBUTING.md](../CONTRIBUTING.md).
 
@@ -15,11 +15,17 @@ For general contribution guidelines (PR labels, changelog format), see the [root
   - [Generating API Docs Locally](#generating-api-docs-locally)
   - [Updating the Versions List](#updating-the-versions-list)
   - [Full Generation (Orchestrated)](#full-generation-orchestrated)
+- [Versioning](#versioning)
+- [Branch Strategy and Deployment](#branch-strategy-and-deployment)
+  - [Branch Strategy](#branch-strategy)
+  - [Staging (automatic)](#staging-automatic)
+  - [Production (manual PR)](#production-manual-pr)
 - [CI Workflows](#ci-workflows)
   - [PR Checks](#1-docs-website-pr-checks)
   - [Post-Merge Sync](#2-docs-post-merge-sync)
   - [Generate API Documentation](#3-generate-api-documentation)
   - [Deploy Notify](#4-docs-deploy-notify)
+  - [CI Doctor](#5-docs-ci-doctor)
 - [Script Reference](#script-reference)
 - [Troubleshooting](#troubleshooting)
 
@@ -27,14 +33,27 @@ For general contribution guidelines (PR labels, changelog format), see the [root
 
 ## Overview
 
-The docs site is a [Next.js](https://nextjs.org/) app using [Fumadocs](https://www.fumadocs.dev) for MDX-based documentation. Content lives in `content/docs/` and falls into two categories:
+The docs site lives in `docs/website/`. It is a fully static site (Next.js `output: 'export'`) served via CDN by the hosting provider. GitHub stores only the source code -- the hosting provider watches repo branches, runs the build (SSG), and deploys automatically. There are no GitHub Actions deploy workflows; GitHub Actions handles validation and gating only.
+
+| Component | Details |
+|-----------|---------|
+| Framework | Next.js 15 (App Router) + React 19 |
+| Docs framework | Fumadocs (`fumadocs-core`, `fumadocs-mdx`, `fumadocs-ui`) |
+| Styling | Tailwind CSS |
+| Content | MDX files in `docs/website/content/docs/` |
+| API docs | Auto-generated via TypeDoc (`docs/website/scripts/generate-api-docs.ts`) |
+| Build output | `docs/website/dist/` (static HTML/CSS/JS) |
+| Hosting | Static site CDN (hosting provider runs the build and serves the output) |
+| Config | `next.config.mjs` (`output: 'export'`, `distDir: 'dist'`, `trailingSlash: true`) |
+
+Content falls into two categories:
 
 | Category | Path | Committed? |
 |---|---|---|
-| Baseline pages (Overview, Health, Workbench, Contributors) | `content/docs/overview/`, `content/docs/health/`, etc. | Yes |
-| SDK API reference (generated) | `content/docs/sdk/api/vX.Y.Z/`, `content/docs/sdk/api/latest/` | No (`.gitignore`) |
+| Manual content (guides, tutorials, addons) | `content/docs/(latest)/sdk/`, `content/docs/(latest)/addons/`, etc. | Yes |
+| SDK API reference (generated) | `content/docs/(latest)/sdk/api/`, `content/docs/v{X.Y.Z}/sdk/api/` | No (`.gitignore`) |
 
-SDK API docs are **generated from TypeScript source** via [TypeDoc](https://typedoc.org/) and written as MDX files. They are not committed to the repository — generate them locally or let CI handle it.
+SDK API docs are **generated from TypeScript source** via [TypeDoc](https://typedoc.org/) and written as MDX files. They are not committed to the repository -- generate them locally or let CI handle it.
 
 ### How the Pipeline Works
 
@@ -42,8 +61,8 @@ SDK API docs are **generated from TypeScript source** via [TypeDoc](https://type
 SDK source (packages/sdk)
   │
   ▼
-TypeDoc analysis  ──►  MDX generation  ──►  content/docs/sdk/api/vX.Y.Z/
-                                       ──►  content/docs/sdk/api/latest/
+TypeDoc analysis  ──►  MDX generation  ──►  content/docs/v{X.Y.Z}/sdk/api/
+                                       ──►  content/docs/(latest)/sdk/api/
                                        ──►  src/lib/versions.ts (version switcher)
 ```
 
@@ -97,21 +116,21 @@ bun run scripts/generate-api-docs.ts <version>
 Examples:
 
 ```bash
-# Generate v0.7.0 and update latest/
+# Generate v0.7.0 and update (latest)/sdk/api/
 bun run scripts/generate-api-docs.ts 0.7.0
 
-# Backfill an older version without overwriting latest/
+# Backfill an older version without overwriting (latest)/sdk/api/
 bun run scripts/generate-api-docs.ts 0.5.0 --no-update-latest
 
-# Rollback latest/ to the previous version
+# Rollback (latest)/sdk/api/ to the previous version
 bun run scripts/generate-api-docs.ts --rollback
 ```
 
 This will:
 1. Run TypeDoc against the SDK entry point (`SDK_PATH/index.ts`)
 2. Extract exported functions and their JSDoc comments
-3. Write MDX files to `content/docs/sdk/api/v<version>/`
-4. Copy the version to `content/docs/sdk/api/latest/` (unless `--no-update-latest`)
+3. Write MDX files to `content/docs/v<version>/sdk/api/`
+4. Copy the version to `content/docs/(latest)/sdk/api/` (unless `--no-update-latest`)
 5. Run a smoke test to verify generated files
 
 ### Updating the Versions List
@@ -122,11 +141,11 @@ After generating docs, update the version switcher:
 bun run scripts/update-versions-list.ts [version]
 ```
 
-This scans `content/docs/sdk/api/` for `vX.Y.Z` directories and regenerates `src/lib/versions.ts`. The optional `version` argument validates that the specified version exists.
+This scans `content/docs/` for `vX.Y.Z` directories and regenerates `src/lib/versions.ts`. The optional `version` argument validates that the specified version exists.
 
 ### Full Generation (Orchestrated)
 
-When running inside the monorepo, use the orchestrator script that reads the SDK version from `packages/qvac-sdk/package.json` automatically:
+When running inside the monorepo, use the orchestrator script that reads the SDK version from `packages/sdk/package.json` automatically:
 
 ```bash
 bun run docs:generate
@@ -136,9 +155,101 @@ This runs `generate-api-docs.ts` followed by `update-versions-list.ts` in sequen
 
 ---
 
+## Versioning
+
+The docs site uses Fumadocs' folder convention for versioning. All content is versioned together (SDK, addons, guides, tutorials) under top-level version folders:
+
+```
+content/docs/
+├── (latest)/       -> current working version (Fumadocs strips the parenthesized name from URLs)
+│   ├── sdk/
+│   │   ├── api/    -> generated API reference (not committed)
+│   │   └── ...     -> manual content (committed)
+│   └── addons/
+└── v0.7.0/         -> frozen snapshot of the previous version
+    ├── sdk/
+    │   ├── api/
+    │   └── ...
+    └── addons/
+```
+
+- **Format**: `vX.Y.Z` (always 3-part semver with `v` prefix)
+- **`(latest)/`**: The current working version. Fumadocs strips the parenthesized folder name, so content is served at root paths (e.g. `/sdk/quickstart`). API docs in `(latest)/sdk/api/` are kept in sync automatically.
+- **`vX.Y.Z/`**: Frozen snapshots of previous versions. Created by `scripts/create-version-bundle.ts` when a newer version replaces the outgoing one. Content is served at versioned paths (e.g. `/v0.7.0/sdk/quickstart`).
+- **Version list**: Managed in `src/lib/versions.ts`, updated by `scripts/update-versions-list.ts`
+- **Sidebar trees**: Each version has its own tree file in `src/lib/trees/`. The `latest.ts` tree uses unversioned URLs; versioned trees (e.g. `v0.7.0.ts`) prefix all URLs.
+
+When SDK code changes are merged to `main`, the **Docs Post-Merge Sync** workflow regenerates API docs and commits to `main`. This commit triggers the hosting provider to rebuild staging automatically.
+
+---
+
+## Branch Strategy and Deployment
+
+### Branch Strategy
+
+```
+main = staging              docs-production = production
+──────────────              ────────────────────────────
+
+New commit on main          Merge PR: main -> docs-production
+      │                              │
+      ▼                              ▼
+Hosting provider builds     Hosting provider builds
+& deploys to staging        & deploys to production
+```
+
+- **`main`** is the staging environment. The hosting provider watches this branch; any new commit triggers a build and deploy to the staging site.
+- **`docs-production`** is the production environment. The hosting provider watches this branch; any new commit (via merged PR from `main`) triggers a build and deploy to the production site.
+
+With `main` + `docs-production`, every production deploy has a reviewable PR showing exactly what changed. The CI Doctor workflow gates PRs to `docs-production`, verifying all docs CI jobs are green before the merge is allowed.
+
+### Staging (automatic)
+
+```
+SDK release merged to main
+    │
+    ▼
+Docs Post-Merge Sync runs (regenerates API docs, commits to main)
+    │
+    ▼
+Hosting provider detects new commit on main
+    │
+    ▼
+Hosting provider builds the static site and deploys to staging
+```
+
+Any push to `main` -- whether from a merged PR, a docs content change, or the post-merge sync bot -- triggers the hosting provider to rebuild staging. No GitHub Actions deploy workflow is involved.
+
+### Production (manual PR)
+
+```
+Staging is verified and ready
+    │
+    ▼
+Open PR: main -> docs-production
+    │
+    ▼
+CI Doctor runs (verifies all docs workflows are green)
+    │
+    ▼
+Review the diff, approve, merge
+    │
+    ▼
+Hosting provider detects new commit on docs-production
+    │
+    ▼
+Hosting provider builds the static site and deploys to production
+```
+
+**Gate**: The `Docs CI Doctor` workflow (`.github/workflows/docs-ci-doctor.yml`) must pass before the PR can be merged.
+
+When a `release-*` branch is pushed, the **Docs Deploy Notify** workflow creates a GitHub issue reminding the docs owner to open a PR from `main` to `docs-production`.
+
+---
+
 ## CI Workflows
 
-Four GitHub Actions workflows automate the docs lifecycle:
+Five GitHub Actions workflows automate the docs lifecycle:
 
 ### 1. Docs Website PR Checks
 
@@ -148,7 +259,7 @@ Four GitHub Actions workflows automate the docs lifecycle:
 
 **What it does:**
 - Installs dependencies with Bun
-- Creates a placeholder `latest/index.mdx` (since generated API docs aren't committed)
+- Creates a placeholder `(latest)/sdk/api/index.mdx` (since generated API docs aren't committed)
 - Runs `bun run build` to validate the site compiles
 
 **Purpose:** Catches build errors in docs PRs before merge.
@@ -157,7 +268,7 @@ Four GitHub Actions workflows automate the docs lifecycle:
 
 **File:** `.github/workflows/docs-post-merge-sync.yml`
 
-**Triggers:** Push to `main` when files change in `packages/qvac-sdk/**` or `docs/website/scripts/**`.
+**Triggers:** Push to `main` when files change in `packages/sdk/**` or `docs/website/scripts/**`.
 
 **What it does:**
 1. Checks out the repo
@@ -214,6 +325,27 @@ Four GitHub Actions workflows automate the docs lifecycle:
 |---|---|---|
 | `DOCS_DEPLOY_NOTIFY_USER` | Secret | GitHub username to `@mention` in the deploy issue |
 
+### 5. Docs CI Doctor
+
+**File:** `.github/workflows/docs-ci-doctor.yml`
+
+**Triggers:** Pull requests targeting `docs-production`, or manual dispatch.
+
+**What it does:**
+- Runs `.github/scripts/docs-ci-doctor.sh`
+- Queries the GitHub API for the latest runs of all docs-related workflows on `main`
+- Reports pass/fail status for each and exits non-zero if any are not green
+
+**Purpose:** Gates merges to `docs-production` by verifying all docs CI jobs succeeded.
+
+**Running locally:**
+
+Requires [GitHub CLI](https://cli.github.com) and a token with repo read access:
+
+```bash
+GH_TOKEN=ghp_... bash .github/scripts/docs-ci-doctor.sh
+```
+
 ---
 
 ## Script Reference
@@ -225,6 +357,7 @@ All scripts live in `docs/website/scripts/` and are designed to run with Bun.
 | `generate-api-docs.ts` | `docs:generate-api` | TypeDoc → MDX for a given version |
 | `update-versions-list.ts` | `docs:update-versions` | Rebuilds `src/lib/versions.ts` from version directories |
 | `run-docs-generate.ts` | `docs:generate` | Orchestrates both scripts using the monorepo SDK version |
+| `create-version-bundle.ts` | `docs:create-version` | Freezes `(latest)` as a versioned bundle for the outgoing version |
 
 ---
 
@@ -270,7 +403,7 @@ No API functions extracted. Check that:
 ### Version not found after generation
 
 ```
-Version vX.Y.Z was not found in content/docs/sdk/api/
+Version vX.Y.Z was not found in content/docs/
 ```
 
 **Cause:** `update-versions-list.ts` ran but the version directory doesn't exist.
@@ -279,7 +412,7 @@ Version vX.Y.Z was not found in content/docs/sdk/api/
 
 ### Build fails in CI (PR checks)
 
-The PR check workflow creates a placeholder `latest/index.mdx` to avoid 404s during build. If the build still fails:
+The PR check workflow creates a placeholder `(latest)/sdk/api/index.mdx` to avoid 404s during build. If the build still fails:
 
 1. Check that `source.config.ts` and `next.config.mjs` are valid
 2. Run `bun run build` locally to reproduce
@@ -293,15 +426,15 @@ If the sync bot's commits keep triggering the workflow:
 2. The workflow skips runs when `github.actor` matches this variable
 3. Commits also use `[skip ci]` as an additional safeguard
 
-### Rollback latest to previous version
+### Rollback (latest)/sdk/api/ to previous version
 
-If a generation corrupted `latest/`:
+If a generation corrupted `(latest)/sdk/api/`:
 
 ```bash
 bun run scripts/generate-api-docs.ts --rollback
 ```
 
-This restores `latest/` from the `.latest-backup/` directory created during the previous generation.
+This restores `(latest)/sdk/api/` from the `.latest-api-backup/` directory created during the previous generation.
 
 ### Generated MDX contains "undefined" or "[object Object]"
 

@@ -84,8 +84,8 @@ class ONNXTTS extends InferBase {
   async _load (closeLoader = false, reportProgressCallback) {
     await this._downloadWeights(reportProgressCallback, { closeLoader })
 
-    console.log('[TTS] Engine type:', this._engineType)
-    console.log('[TTS] Language:', this._config?.language || 'en')
+    this.logger.info('[TTS] Engine type:', this._engineType)
+    this.logger.info('[TTS] Language:', this._config?.language || 'en')
 
     let ttsParams
     if (this._engineType === ENGINE_SUPERTONIC) {

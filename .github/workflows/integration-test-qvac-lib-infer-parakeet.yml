@@ -3,6 +3,11 @@ name: Run Integration Tests (Parakeet)
 on:
   workflow_dispatch:
     inputs:
+      ref:
+        description: "Git ref (branch/tag/SHA) to test"
+        type: string
+        required: false
+        default: main
       prebuild_package:
         description: "NPM package containing prebuilds (e.g. @qvac/transcription-parakeet@1.0.0)"
         required: true

@@ -4,9 +4,13 @@ const test = require('brittle')
 const path = require('bare-path')
 const fs = require('bare-fs')
 const os = require('bare-os')
-const binding = require('../../binding')
-const { ParakeetInterface } = require('../../parakeet')
-const { setupJsLogger, getNamedPathsConfig, isMobile } = require('./helpers.js')
+const {
+  binding,
+  ParakeetInterface,
+  setupJsLogger,
+  getNamedPathsConfig,
+  isMobile
+} = require('./helpers.js')
 
 /**
  * Helper function to create a test directory with corrupted model files
@@ -120,7 +124,7 @@ test('Corrupted model files should emit Error event to JavaScript', { timeout: 6
   } finally {
     if (parakeet) {
       try {
-        parakeet.destroyInstance()
+        await parakeet.destroyInstance()
         console.log('   Instance destroyed successfully')
       } catch (e) {
         console.log('   Instance destroy note:', e.message)
@@ -231,7 +235,7 @@ test('Empty model files should emit Error event to JavaScript', { timeout: 60000
   } finally {
     if (parakeet) {
       try {
-        parakeet.destroyInstance()
+        await parakeet.destroyInstance()
         console.log('   Instance destroyed successfully')
       } catch (e) {
         console.log('   Instance destroy note:', e.message)
@@ -330,7 +334,7 @@ test('Truncated model files should emit Error event to JavaScript', { timeout: 6
   } finally {
     if (parakeet) {
       try {
-        parakeet.destroyInstance()
+        await parakeet.destroyInstance()
         console.log('   Instance destroyed successfully')
       } catch (e) {
         console.log('   Instance destroy note:', e.message)

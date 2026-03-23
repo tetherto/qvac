@@ -9,7 +9,7 @@
 #include "LlmContext.hpp"
 #include "qvac-lib-inference-addon-cpp/Logger.hpp"
 
-class MtmdLlmContext: public LlmContext {
+class MtmdLlmContext : public LlmContext {
 public:
   /**
    * The constructor.
@@ -18,7 +18,9 @@ public:
    * @param _llama_init - The result of initializing/loading the model using
    * .gguf file(s)
    */
-  MtmdLlmContext(common_params& commonParams, common_init_result&& llamaInit);
+  MtmdLlmContext(
+      common_params& commonParams, common_init_result&& llamaInit,
+      bool toolsAtEnd = false);
 
   /**
    * The destructor.
@@ -38,8 +40,8 @@ public:
    * @return - true if successful, false if inference is stopped.
    */
   bool evalMessage(
-      const std::vector<common_chat_msg>& chatMsgs,
-      bool isCacheLoaded, bool prefill) override;
+      const std::vector<common_chat_msg>& chatMsgs, bool isCacheLoaded,
+      bool prefill) override;
 
   /**
    * The eval message with tools method. It evaluates the message with tools and
@@ -65,8 +67,8 @@ public:
   bool generateResponse(
       const std::function<void(const std::string&)>& outputCallback) override;
 
-  std::function<void()> applyGenerationParams(
-      const GenerationParams& overrides) override;
+  std::function<void()>
+  applyGenerationParams(const GenerationParams& overrides) override;
 
   /**
    * The stop method. It stops the model inference.
@@ -79,6 +81,16 @@ public:
    * @return - the context.
    */
   llama_context* getCtx() override;
+
+  /**
+   * Access the underlying llama model pointer.
+   */
+  llama_model* getModel() override { return model_; }
+
+  /**
+   * Access the mutable common parameters associated with this context.
+   */
+  common_params& getParams() override { return params_; }
 
   /**
    * The get n_past method. It returns the n_past.
@@ -114,6 +126,9 @@ public:
    * @param nDiscarded - the number of tokens to discard.
    */
   void setNDiscarded(llama_pos nDiscarded) override;
+
+  [[nodiscard]] int32_t getNSlides() const override;
+  void resetNSlides() override;
 
   /**
    * The load media method. It loads the media from memory buffer.
@@ -152,11 +167,11 @@ public:
   void resetMedia() override;
 
 private:
-    /**
-     * The check antiprompt method. It checks the antiprompt.
-     *
-     * @return - true if the antiprompt is found, false otherwise.
-    */
+  /**
+   * The check antiprompt method. It checks the antiprompt.
+   *
+   * @return - true if the antiprompt is found, false otherwise.
+   */
   bool checkAntiprompt();
 
   /**
@@ -198,10 +213,9 @@ private:
   llama_pos nPast_ = 0;
   llama_pos nDiscarded_ = 0;
   llama_pos firstMsgTokens_ = 0;
+  int32_t nSlides_ = 0;
 
   // UTF-8 token buffer for handling incomplete emoji sequences
   qvac_lib_inference_addon_llama::UTF8TokenBuffer utf8Buffer_;
   std::atomic<bool> stopGeneration_ = false;
 };
-
-
