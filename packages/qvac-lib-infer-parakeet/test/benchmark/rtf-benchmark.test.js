@@ -313,15 +313,10 @@ test('RTF benchmark: collect real-time factor on CI device', { timeout: 600000 }
 
     t.ok(rtfStats.mean > 0, 'Mean RTF should be positive')
 
-    // RTF < 1.0 means faster-than-real-time.  On CI hardware this should
-    // hold comfortably for a ~5 s sample with the 0.6 B TDT model on CPU.
-    // Allow a generous 2.0 threshold so constrained runners don't flake.
     const RTF_UPPER_BOUND = isMobile ? 5.0 : 2.0
     t.ok(rtfStats.mean <= RTF_UPPER_BOUND,
       `Mean RTF ${rtfStats.mean.toFixed(4)} should be <= ${RTF_UPPER_BOUND}`)
 
-    // Variance sanity: stddev should not exceed the mean (would indicate
-    // wildly inconsistent runs, likely a setup problem).
     t.ok(rtfStats.stddev <= rtfStats.mean,
       `RTF stddev ${rtfStats.stddev.toFixed(4)} should be <= mean ${rtfStats.mean.toFixed(4)}`)
 
