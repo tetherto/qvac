@@ -345,13 +345,11 @@ jobs:
         run: |
           $report = "test-report.txt"
           $platform = "${{ matrix.platform }}-${{ matrix.arch }}"
-          $header = @"
-          ========================================
-            Integration Test Report — $platform
-            $(Get-Date -Format 'yyyy-MM-dd HH:mm:ss') UTC
-          ========================================
-
-          "@
+          $ts = Get-Date -Format 'yyyy-MM-dd HH:mm:ss'
+          $header = "========================================`n"
+          $header += "  Integration Test Report - $platform`n"
+          $header += "  $ts UTC`n"
+          $header += "========================================`n"
           $header | Out-File -FilePath $report -Encoding utf8
 
           if (-not (Test-Path test-output.log)) {
@@ -426,7 +424,7 @@ jobs:
         if: ${{ always() }}
         uses: actions/upload-artifact@v4
         with:
-          name: test-logs-${{ matrix.platform }}-${{ matrix.arch }}
+          name: test-logs-${{ matrix.os }}-${{ matrix.arch }}
           path: |
             ${{ inputs.workdir || env.PKG_DIR }}/test-report.txt
             ${{ inputs.workdir || env.PKG_DIR }}/test-output.log
