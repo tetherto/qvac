@@ -29,9 +29,10 @@
   "bugs": "https://github.com/tetherto/qvac/issues",
   "repository": {
     "type": "git",
-    "url": "https://github.com/tetherto/qvac.git",
+    "url": "git+https://github.com/tetherto/qvac.git",
     "directory": "packages/cli"
   },
+  "homepage": "https://github.com/tetherto/qvac/tree/main/packages/cli#readme",
   "scripts": {
     "build": "rm -rf dist && tsc",
     "build:watch": "tsc --watch",
