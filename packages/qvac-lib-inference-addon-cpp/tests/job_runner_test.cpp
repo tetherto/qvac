@@ -207,7 +207,7 @@ TEST_F(JobRunnerTest, CancelBeforeJobThenRunNormally) {
   // Verify we got a result (not an error)
   bool found_result = false;
   for (const auto& output : outputs) {
-    if (output.type() == typeid(std::string)) {
+    if (output.payload.type() == typeid(std::string)) {
       found_result = true;
     }
   }
@@ -420,8 +420,8 @@ TEST_F(
   // Check output queue for bad_optional_access errors
   auto outputs = outputQueue_->clear();
   for (const auto& output : outputs) {
-    if (output.type() == typeid(Output::Error)) {
-      auto error = std::any_cast<Output::Error>(output);
+    if (output.payload.type() == typeid(Output::Error)) {
+      auto error = std::any_cast<Output::Error>(output.payload);
       if (error.find("bad_optional_access") != std::string::npos ||
           error.find("optional") != std::string::npos) {
         FAIL() << "BUG DETECTED: bad_optional_access in output after "
@@ -460,6 +460,80 @@ TEST_F(JobRunnerTest, MultipleCancelsInSequence) {
 
   // Should complete without hanging or crashing
   SUCCEED();
+}
+
+TEST_F(JobRunnerTest, LateCancelEventsStayBoundToCancelledJob) {
+  model_ = std::make_unique<JobRunnerTestModel>(std::chrono::milliseconds{500});
+  outputQueue_ = std::make_shared<OutputQueue>(*callback_, *model_);
+  jobRunner_ =
+      std::make_unique<JobRunner>(outputQueue_, model_.get(), model_.get());
+  jobRunner_->start();
+
+  EXPECT_TRUE(jobRunner_->runJob(std::string("job-1")));
+  jobRunner_->cancel(1);
+
+  EXPECT_TRUE(jobRunner_->runJob(std::string("job-2")));
+  std::this_thread::sleep_for(std::chrono::milliseconds{700});
+
+  const auto outputs = outputQueue_->clear();
+  ASSERT_GE(outputs.size(), 3U);
+
+  bool sawJob1Cancel = false;
+  bool sawJob2Result = false;
+  bool sawJob2Ended = false;
+  for (const auto& output : outputs) {
+    if (output.jobId == 1 && output.payload.type() == typeid(Output::Error)) {
+      sawJob1Cancel =
+          std::any_cast<Output::Error>(output.payload) == "Job cancelled";
+    }
+    if (output.jobId == 2 && output.payload.type() == typeid(std::string)) {
+      sawJob2Result = std::any_cast<std::string>(output.payload) == "result";
+    }
+    if (output.jobId == 2 && output.payload.type() == typeid(RuntimeStats)) {
+      sawJob2Ended = true;
+    }
+  }
+
+  EXPECT_TRUE(sawJob1Cancel);
+  EXPECT_TRUE(sawJob2Result);
+  EXPECT_TRUE(sawJob2Ended);
+}
+
+TEST_F(JobRunnerTest, StaleCancelDoesNotClearNewerAcceptedJob) {
+  model_ = std::make_unique<JobRunnerTestModel>(std::chrono::milliseconds{150});
+  outputQueue_ = std::make_shared<OutputQueue>(*callback_, *model_);
+  jobRunner_ =
+      std::make_unique<JobRunner>(outputQueue_, model_.get(), model_.get());
+  jobRunner_->start();
+
+  EXPECT_TRUE(jobRunner_->runJob(std::string("job-1")));
+  std::this_thread::sleep_for(std::chrono::milliseconds{250});
+
+  EXPECT_TRUE(jobRunner_->runJob(std::string("job-2")));
+  jobRunner_->cancel(1);
+  std::this_thread::sleep_for(std::chrono::milliseconds{250});
+
+  const auto outputs = outputQueue_->clear();
+
+  bool sawJob2Result = false;
+  bool sawJob2Ended = false;
+  bool sawWrongJob2Cancel = false;
+  for (const auto& output : outputs) {
+    if (output.jobId == 2 && output.payload.type() == typeid(std::string)) {
+      sawJob2Result = true;
+    }
+    if (output.jobId == 2 && output.payload.type() == typeid(RuntimeStats)) {
+      sawJob2Ended = true;
+    }
+    if (output.jobId == 2 && output.payload.type() == typeid(Output::Error)) {
+      sawWrongJob2Cancel =
+          std::any_cast<Output::Error>(output.payload) == "Job cancelled";
+    }
+  }
+
+  EXPECT_TRUE(sawJob2Result);
+  EXPECT_TRUE(sawJob2Ended);
+  EXPECT_FALSE(sawWrongJob2Cancel);
 }
 
 } // namespace qvac_lib_inference_addon_cpp
