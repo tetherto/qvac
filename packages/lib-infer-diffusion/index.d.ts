@@ -82,8 +82,6 @@ export interface SdConfig {
   rng?: RngType
   /** RNG type for the sampler (separate from context RNG) */
   sampler_rng?: RngType
-  /** Sampling schedule — not parsed by C++ context config; use GenerationParams.scheduler instead */
-  schedule?: ScheduleType
   /** Run CLIP encoder on CPU even when GPU is available */
   clip_on_cpu?: boolean
   /** Run VAE decoder on CPU even when GPU is available */
