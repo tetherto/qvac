@@ -211,6 +211,15 @@ const profileCmd = command('profile',
     const interval = cmd.flags.interval ? parseInt(cmd.flags.interval, 10) : 5
     const timeout = cmd.flags.timeout ? parseInt(cmd.flags.timeout, 10) : 120000
 
+    if (Number.isNaN(interval) || interval <= 0) {
+      console.error('--interval must be a positive number')
+      process.exit(1)
+    }
+    if (Number.isNaN(timeout) || timeout <= 0) {
+      console.error('--timeout must be a positive number')
+      process.exit(1)
+    }
+
     await profileDownload({
       registryCoreKey,
       modelPath: cmd.args.path,
