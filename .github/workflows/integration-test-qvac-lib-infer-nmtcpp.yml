@@ -263,13 +263,13 @@ jobs:
           PLATFORM="${{ matrix.platform }}-${{ matrix.arch }}"
 
           echo "========================================" > "$REPORT"
-          echo "  Integration Test Report — ${PLATFORM}" >> "$REPORT"
+          echo "  Integration Test Report -- ${PLATFORM}" >> "$REPORT"
           echo "  $(date -u '+%Y-%m-%d %H:%M:%S UTC')" >> "$REPORT"
           echo "========================================" >> "$REPORT"
           echo "" >> "$REPORT"
 
           if [ ! -f test-output.log ]; then
-            echo "NO TEST OUTPUT — tests may not have started." >> "$REPORT"
+            echo "NO TEST OUTPUT -- tests may not have started." >> "$REPORT"
             cat "$REPORT"
             exit 0
           fi
@@ -353,7 +353,7 @@ jobs:
           $header | Out-File -FilePath $report -Encoding utf8
 
           if (-not (Test-Path test-output.log)) {
-            "NO TEST OUTPUT — tests may not have started." | Out-File -Append -FilePath $report
+            "NO TEST OUTPUT -- tests may not have started." | Out-File -Append -FilePath $report
             Get-Content $report
             exit 0
           }
@@ -416,7 +416,7 @@ jobs:
           Get-Content $report
 
           Write-Host ""
-          Write-Host "::group::📄 Full Raw Test Output (test-output.log)"
+          Write-Host "::group::Full Raw Test Output (test-output.log)"
           if (Test-Path test-output.log) { Get-Content test-output.log } else { Write-Host "(no test output captured)" }
           Write-Host "::endgroup::"
 
