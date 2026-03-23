@@ -26,6 +26,10 @@ async function runConfigParametersTest (options = {}) { // eslint-disable-line n
   return runIntegrationModule('../integration/config-parameters.test.js', options)
 }
 
+async function runDynamicToolsTest (options = {}) { // eslint-disable-line no-unused-vars
+  return runIntegrationModule('../integration/dynamic-tools.test.js', options)
+}
+
 async function runFinetuningPauseResumeTest (options = {}) { // eslint-disable-line no-unused-vars
   return runIntegrationModule('../integration/finetuning-pause-resume.test.js', options)
 }

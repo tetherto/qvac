@@ -1,5 +1,11 @@
 # Changelog
 
+## [1.1.3] - 2026-03-18
+- Add native job IDs to queued addon events so JS callbacks can distinguish late cancel/error delivery from newer accepted jobs.
+- Extend JS callback delivery with a trailing native `jobId` argument while keeping existing 4-argument handlers compatible.
+- Make shared `cancel(handle, jobId)` honor the requested job ID while remaining backward compatible for existing callers that omit it.
+- Add addon-cpp regression coverage for late cancel ownership and stale cancel isolation.
+
 ## [1.1.2] - 2026-02-20
 Reduce noise from logs, macro for compile-time enabling of debug logs.
 

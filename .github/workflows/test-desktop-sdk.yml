@@ -349,7 +349,7 @@ jobs:
         uses: actions/upload-artifact@v6
         with:
           name: results-${{ steps.runid.outputs.platform }}-${{ github.run_number }}
-          path: ${{ inputs.working-directory }}/reports/results-*.json
+          path: ${{ inputs.working-directory }}/reports/
           retention-days: 30
 
       - name: Upload baseline (main/develop only)

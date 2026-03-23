@@ -24,7 +24,7 @@ std::string TranslationModel::getName() const {
 #endif
   default:
     throw qvac_errors::StatusError(
-        qvac_errors::general_error::InternalError, "Invalid backed type.");
+        qvac_errors::general_error::InternalError, "Invalid backend type.");
   }
 }
 
@@ -49,7 +49,7 @@ BackendType TranslationModel::detectBackendType(const std::string& modelPath) {
         std::string filename = entry.path().filename().string();
         // Check for bergamot model signatures
         if (filename.find(".intgemm") != std::string::npos ||
-            filename.find("vocab.") != std::string::npos && filename.find(".spm") != std::string::npos) {
+            (filename.find("vocab.") != std::string::npos && filename.find(".spm") != std::string::npos)) {
           QLOG(
               qvac_lib_inference_addon_cpp::logger::Priority::INFO,
               "[TRANSLATION MODEL] Detected Bergamot backend based on model files");
@@ -411,7 +411,7 @@ TranslationModel::processBatch(const std::vector<std::string>& texts) {
           "length: " +
               std::to_string(text.length()));
       // check if text is just spaces
-      bool allAreSpace =
+      allAreSpace =
           std::all_of(text.begin(), text.end(), [](unsigned char chr) {
             return std::isspace(chr);
           });

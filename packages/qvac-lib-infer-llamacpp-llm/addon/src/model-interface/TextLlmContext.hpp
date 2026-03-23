@@ -18,7 +18,9 @@ public:
   TextLlmContext(TextLlmContext&&) = delete;
   TextLlmContext& operator=(TextLlmContext&&) = delete;
   // Constructor
-  TextLlmContext(common_params& commonParams, common_init_result&& llamaInit);
+  TextLlmContext(
+      common_params& commonParams, common_init_result&& llamaInit,
+      bool toolsAtEnd = false);
 
   // Destructor
   ~TextLlmContext() override = default;
@@ -32,8 +34,8 @@ public:
    * @return - true if successful, false if inference is stopped.
    */
   bool evalMessage(
-      const std::vector<common_chat_msg>& chatMsgs,
-      bool isCacheLoaded, bool prefill) override;
+      const std::vector<common_chat_msg>& chatMsgs, bool isCacheLoaded,
+      bool prefill) override;
 
   /**
    * The eval message with tools method. It evaluates the message with tools and
