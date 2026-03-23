@@ -7,6 +7,8 @@ import {
   defineHandler,
   transcribeRequestSchema,
   transcribeResponseSchema,
+  transcribeStreamRequestSchema,
+  transcribeStreamResponseSchema,
   ModelType,
   whisperConfigSchema,
   ADDON_WHISPER,
@@ -18,7 +20,8 @@ import {
 import { createStreamLogger, registerAddonLogger } from "@/logging";
 import { parseModelPath } from "@/server/utils";
 import FilesystemDL from "@qvac/dl-filesystem";
-import { transcribe } from "@/server/bare/ops/transcribe";
+import { transcribe, transcribeStream } from "@/server/bare/ops/transcribe";
+import type { Readable } from "bare-stream";
 
 function createWhisperModel(
   modelId: string,
@@ -120,6 +123,35 @@ export const whisperPlugin = definePlugin({
         };
       },
     }),
+
+    transcribeStream: {
+      requestSchema: transcribeStreamRequestSchema,
+      responseSchema: transcribeStreamResponseSchema,
+      streaming: true,
+      duplex: true,
+
+      handler: async function* (
+        request: { modelId: string; prompt?: string },
+        inputStream: Readable,
+      ) {
+        for await (const text of transcribeStream(
+          request.modelId,
+          inputStream,
+          request.prompt,
+        )) {
+          yield {
+            type: "transcribeStream" as const,
+            text,
+          };
+        }
+
+        yield {
+          type: "transcribeStream" as const,
+          text: "",
+          done: true,
+        };
+      },
+    } as unknown as ReturnType<typeof defineHandler>,
   },
 
   logging: {

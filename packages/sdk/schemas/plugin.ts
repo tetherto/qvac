@@ -12,6 +12,7 @@ export interface PluginHandlerDefinition<
   requestSchema: TRequest;
   responseSchema: TResponse;
   streaming: boolean;
+  duplex?: boolean;
   /** The handler function - receives validated request, returns validated response */
   handler: TRequest extends z.ZodType<infer I>
     ? TResponse extends z.ZodType<infer O>
@@ -199,6 +200,7 @@ export const pluginHandlerDefinitionRuntimeSchema = z
     requestSchema: zodSchemaLikeRuntimeSchema,
     responseSchema: zodSchemaLikeRuntimeSchema,
     streaming: z.boolean({ error: "streaming must be a boolean" }),
+    duplex: z.boolean().optional(),
     handler: functionRuntimeSchema,
   })
   .catchall(z.unknown());

@@ -287,47 +287,38 @@ type DuplexHandler = (
   inputStream: Readable,
 ) => AsyncGenerator<Response>;
 
-const DUPLEX_HANDLER_TYPES: ReadonlySet<string> = new Set(["transcribeStream"]);
-
-function getDuplexHandler(type: string): DuplexHandler | undefined {
-  if (!DUPLEX_HANDLER_TYPES.has(type)) return undefined;
-  const entry = handlers[type as keyof typeof handlers];
-  if (typeof entry !== "function") return undefined;
-  return entry as DuplexHandler;
-}
-
 export async function createDuplexSession(payload: string) {
-  // Ensure worker and config are initialized
   await getRPC();
 
   const { PassThrough } = await import("bare-stream");
   const request = JSON.parse(payload) as Request;
 
-  const handler = getDuplexHandler(request.type);
-  if (!handler) throw new RPCNoHandlerError(request.type);
+  const handlerFn = handlers[request.type];
+  if (!handlerFn) throw new RPCNoHandlerError(request.type);
+  const handler = handlerFn as unknown as DuplexHandler;
 
-  const audioInput = new PassThrough();
-  const textOutput = new PassThrough();
+  const inputStream = new PassThrough();
+  const outputStream = new PassThrough();
 
   void (async () => {
     try {
-      for await (const response of handler(request, audioInput)) {
-        textOutput.write(JSON.stringify(response) + "\n", "utf-8");
+      for await (const response of handler(request, inputStream)) {
+        outputStream.write(JSON.stringify(response) + "\n", "utf-8");
       }
     } catch (error) {
       const errorMsg =
         error instanceof Error ? error.message : String(error);
-      textOutput.write(
+      outputStream.write(
         JSON.stringify({ type: request.type, error: errorMsg }) + "\n",
         "utf-8",
       );
     } finally {
-      textOutput.end();
+      outputStream.end();
     }
   })();
 
   return {
-    requestStream: audioInput,
-    responseStream: textOutput,
+    requestStream: inputStream,
+    responseStream: outputStream,
   };
 }
