@@ -10,18 +10,22 @@ const platform = os.platform()
 const arch = os.arch()
 const isMobile = platform === 'ios' || platform === 'android'
 
-// Use computed paths so bare-pack cannot statically trace into the package
-// root (../../) which doesn't exist in the mobile test-framework layout.
-// On desktop the relative path resolves normally; on mobile the installed
-// npm package name is used instead.
-function _resolve (desktopPath, mobilePath) {
-  const p = isMobile ? mobilePath : desktopPath
-  return require(p)
-}
+// Mobile paths use static string literals so bare-pack can trace them into
+// the bundle.  Desktop paths use variables so bare-pack skips them — the
+// relative ../../ paths don't exist in the mobile test-framework layout.
+const _bindingDesktop = '../../binding'
+const _parakeetDesktop = '../../parakeet'
+const _indexDesktop = '../../index.js'
 
-const binding = _resolve('../../binding', '@qvac/transcription-parakeet/binding.js')
-const { ParakeetInterface } = _resolve('../../parakeet', '@qvac/transcription-parakeet/parakeet.js')
-const TranscriptionParakeet = _resolve('../../index.js', '@qvac/transcription-parakeet')
+const binding = isMobile
+  ? require('@qvac/transcription-parakeet/binding.js')
+  : require(_bindingDesktop)
+const { ParakeetInterface } = isMobile
+  ? require('@qvac/transcription-parakeet/parakeet.js')
+  : require(_parakeetDesktop)
+const TranscriptionParakeet = isMobile
+  ? require('@qvac/transcription-parakeet')
+  : require(_indexDesktop)
 
 let FakeDL = null
 if (!isMobile) {
