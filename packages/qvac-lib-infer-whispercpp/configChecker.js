@@ -120,7 +120,10 @@ function checkConfig (configObject) {
 };
 
 const MAX_SUPPRESS_REGEX_LENGTH = 512
-const NESTED_QUANTIFIER_PATTERN = /(\+|\*|\{[0-9,]+\})\s*(\+|\*|\?|\{[0-9,]+\})/
+
+// Only allow character classes, literals, simple quantifiers, alternation, and anchors.
+// Reject grouping constructs entirely to prevent nested quantifier patterns like (a+)+.
+const SAFE_SUPPRESS_REGEX = /^[^()]*$/
 
 function _validateSuppressRegex (pattern) {
   if (pattern.length > MAX_SUPPRESS_REGEX_LENGTH) {
@@ -128,9 +131,9 @@ function _validateSuppressRegex (pattern) {
       'suppress_regex exceeds maximum length of ' + MAX_SUPPRESS_REGEX_LENGTH + ' characters'
     )
   }
-  if (NESTED_QUANTIFIER_PATTERN.test(pattern)) {
+  if (!SAFE_SUPPRESS_REGEX.test(pattern)) {
     throw new Error(
-      'suppress_regex contains nested quantifiers which may cause catastrophic backtracking'
+      'suppress_regex must not contain grouping constructs (parentheses) to prevent catastrophic backtracking'
     )
   }
 }
