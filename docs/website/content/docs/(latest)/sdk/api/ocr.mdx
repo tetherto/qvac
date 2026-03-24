@@ -18,10 +18,10 @@ function ocr(params: OCRClientParams): { blocks: Promise<{ bbox?: [number, numbe
 
 | Field | Type | Required? | Description |
 | --- | --- | :---: | --- |
-| `image` | `string \| Buffer` | ✓ | — |
-| `modelId` | `string` | ✓ | — |
-| `options` | `OCROptions` | ✗ | — |
-| `stream` | `boolean` | ✗ | — |
+| `image` | `string \| Buffer` | ✓ | The image to process — either a file path string or a Buffer containing the image data |
+| `modelId` | `string` | ✓ | The ID of the loaded OCR model to use |
+| `options` | `OCROptions` | ✗ | Additional OCR processing options |
+| `stream` | `boolean` | ✗ | When `true`, text blocks are yielded incrementally via `blockStream`. Defaults to `false` |
 
 ## Returns
 
@@ -33,9 +33,9 @@ function ocr(params: OCRClientParams): { blocks: Promise<{ bbox?: [number, numbe
 
 | Field | Type | Description |
 | --- | --- | --- |
-| `blocks` | `Promise` | — |
-| `blockStream` | `AsyncGenerator` | — |
-| `stats` | `Promise` | — |
+| `blocks` | `Promise` | Resolves with all detected text blocks, each containing the recognized text, bounding box coordinates, and confidence score |
+| `blockStream` | `AsyncGenerator` | Yields arrays of text blocks as they are detected in streaming mode |
+| `stats` | `Promise` | Resolves with OCR timing metrics (detection time, recognition time, total time), or `undefined` if not available |
 
 
 
