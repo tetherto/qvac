@@ -286,9 +286,10 @@ class WhisperInterface {
           throw new Error('Audio input must be Uint8Array')
         }
         if (this._bufferedBytes + data.input.byteLength > MAX_BUFFERED_BYTES) {
-          throw new Error(
-            'Audio buffer size limit exceeded (' + MAX_BUFFERED_BYTES + ' bytes)'
-          )
+          throw new QvacErrorAddonWhisper({
+            code: ERR_CODES.BUFFER_LIMIT_EXCEEDED,
+            adds: MAX_BUFFERED_BYTES + ' bytes'
+          })
         }
         this._bufferedAudio.push(data.input)
         this._bufferedBytes += data.input.byteLength

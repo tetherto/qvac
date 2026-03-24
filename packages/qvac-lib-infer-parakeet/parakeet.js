@@ -31,7 +31,8 @@ try {
     VOCAB_NOT_FOUND: 7012,
     ENCODER_NOT_FOUND: 7013,
     DECODER_NOT_FOUND: 7014,
-    INVALID_CONFIG: 7015
+    INVALID_CONFIG: 7015,
+    BUFFER_LIMIT_EXCEEDED: 7016
   }
   END_OF_INPUT = 'end of job'
 }
@@ -230,9 +231,7 @@ class ParakeetInterface {
       if (data?.type === 'audio') {
         const normalized = this._normalizeAudioInput(data.data)
         if (this._bufferedBytes + normalized.byteLength > MAX_BUFFERED_BYTES) {
-          throw new Error(
-            'Audio buffer size limit exceeded (' + MAX_BUFFERED_BYTES + ' bytes)'
-          )
+          throw createParakeetError(ERR_CODES.BUFFER_LIMIT_EXCEEDED, MAX_BUFFERED_BYTES + ' bytes')
         }
         this._bufferedAudio.push(normalized)
         this._bufferedBytes += normalized.byteLength
