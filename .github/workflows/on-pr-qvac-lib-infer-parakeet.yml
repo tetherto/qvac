@@ -105,6 +105,7 @@ jobs:
           echo "  workdir=$workdir"
 
   sanity-checks:
+    if: contains(github.event.pull_request.labels.*.name, 'verify') || github.event_name == 'workflow_dispatch'
     needs: context
     runs-on: ubuntu-latest
     steps:
