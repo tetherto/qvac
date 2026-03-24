@@ -1,0 +1,25 @@
+server:
+  url: "http://localhost:8080/run"
+  timeout: 120
+  batch_size: 10
+  lib: "@qvac/transcription-parakeet"
+dataset:
+  dataset_type: "librispeech"
+  speaker_group: "clean"
+  language: "english"
+  max_samples: 0
+wer:
+  enabled: true
+cer:
+  enabled: true
+model:
+  path: "./models/parakeet-eou-120m-v1-onnx"
+  sample_rate: 16000
+  audio_format: "s16le"
+  model_type: "eou"
+  max_threads: 4
+  use_gpu: false
+  caption_enabled: false
+  timestamps_enabled: true
+  streaming: true
+  streaming_chunk_size: 64000
