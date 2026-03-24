@@ -89,7 +89,7 @@ jobs:
           git fetch origin ${{ github.event.pull_request.head.sha }}
 
       - name: Setup Bun
-        uses: oven-sh/setup-bun@v1
+        uses: oven-sh/setup-bun@f4d14e03ff726c06358e5557344e1da148b56cf7 # v1
         with:
           bun-version: latest
 

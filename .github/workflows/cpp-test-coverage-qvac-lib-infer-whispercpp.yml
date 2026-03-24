@@ -194,7 +194,7 @@ jobs:
         continue-on-error: true
 
       - name: Publish Test Results
-        uses: EnricoMi/publish-unit-test-result-action@v2
+        uses: EnricoMi/publish-unit-test-result-action@2ceeed2b8f26e15b06c3846719f75354febd9e7b # v2
         if: always() && steps.check-test-results.outputs.exists == 'true'
         with:
           files: ${{ env.WORKDIR }}/build/addon/tests/cpp-test-results.xml
