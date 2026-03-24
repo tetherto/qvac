@@ -1,7 +1,7 @@
 ---
 title: "modelRegistrySearch( )"
 titleStyle: code
-description: "No description available"
+description: "Searches the model registry with optional filters for model type, engine, quantization, and free-text query."
 ---
 
 ```typescript
@@ -12,20 +12,43 @@ function modelRegistrySearch(params: ModelRegistrySearchParams): Promise
 
 | Name | Type | Required? | Description |
 | --- | --- | :---: | --- |
-| `params` | [`ModelRegistrySearchParams`](#modelregistrysearchparams) | ✓ | No description |
+| `params` | [`ModelRegistrySearchParams`](#modelregistrysearchparams) | ✓ | Search filters to narrow down registry results |
 
 ### `ModelRegistrySearchParams`
 
 | Field | Type | Required? | Description |
 | --- | --- | :---: | --- |
-| `addon` | `"llm" \| "whisper" \| "embeddings" \| "nmt" \| "vad" \| "tts" \| "ocr" \| "parakeet" \| "other"` | ✗ | — |
-| `engine` | `string` | ✗ | — |
-| `filter` | `string` | ✗ | — |
-| `modelType` | `"llm" \| "whisper" \| "embeddings" \| "nmt" \| "vad" \| "tts" \| "ocr" \| "parakeet" \| "other"` | ✗ | — |
-| `quantization` | `string` | ✗ | — |
+| `addon` | `"llm" \| "whisper" \| "embeddings" \| "nmt" \| "vad" \| "tts" \| "ocr" \| "parakeet" \| "other"` | ✗ | Filter by addon type |
+| `engine` | `string` | ✗ | Filter by inference engine (e.g. `"llamacpp"`, `"whisper"`) |
+| `filter` | `string` | ✗ | Free-text search query matched against model names and metadata |
+| `modelType` | `"llm" \| "whisper" \| "embeddings" \| "nmt" \| "vad" \| "tts" \| "ocr" \| "parakeet" \| "other"` | ✗ | Alias for `addon` — filter by model type |
+| `quantization` | `string` | ✗ | Filter by quantization format (e.g. `"Q4_0"`, `"FP16"`) |
 
 ## Returns
 
 ```typescript
 Promise
+```
+
+Resolves with an array of `ModelRegistryEntry` objects matching the search criteria.
+
+## Throws
+
+| Error | When |
+| --- | --- |
+| `ModelRegistryQueryFailedError` | The registry query fails on the server |
+
+## Example
+
+```typescript
+import { modelRegistrySearch } from "@qvac/sdk";
+
+const llmModels = await modelRegistrySearch({
+  addon: "llm",
+  quantization: "Q4_0",
+});
+
+for (const model of llmModels) {
+  console.log(model.registryPath);
+}
 ```

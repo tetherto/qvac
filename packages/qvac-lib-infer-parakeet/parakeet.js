@@ -45,6 +45,10 @@ const state = Object.freeze({
   STOPPED: 'stopped'
 })
 
+function nextSafeId (current) {
+  return current >= Number.MAX_SAFE_INTEGER ? 1 : current + 1
+}
+
 function createParakeetError (code, message, cause = undefined) {
   // @qvac/error expects an options object, while the local fallback class
   // accepts positional args. Support both call shapes.
@@ -211,9 +215,8 @@ class ParakeetInterface {
           throw new Error('Cannot set new job: a job is already set or being processed')
         }
 
-        // Only replace the active job after the native runner accepts it.
         this._activeJobId = currentJobId
-        this._nextJobId += 1
+        this._nextJobId = nextSafeId(this._nextJobId)
         this._bufferedAudio = []
         this._setState(state.PROCESSING)
         return currentJobId
@@ -377,7 +380,7 @@ class ParakeetInterface {
         return false
       }
       this._activeJobId = currentJobId
-      this._nextJobId += 1
+      this._nextJobId = nextSafeId(this._nextJobId)
       this._setState(state.PROCESSING)
       return accepted
     } catch (error) {

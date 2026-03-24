@@ -64,7 +64,10 @@ export function initSSE (res: ServerResponse): void {
 }
 
 export function sendSSE (res: ServerResponse, data: unknown): void {
-  res.write(`data: ${JSON.stringify(data)}\n\n`)
+  const json = JSON.stringify(data)
+    .replace(/</g, '\\u003c')
+    .replace(/>/g, '\\u003e')
+  res.write(`data: ${json}\n\n`)
 }
 
 export function endSSE (res: ServerResponse): void {
