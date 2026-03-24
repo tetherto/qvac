@@ -62,6 +62,9 @@ on:
       AWS_SECRET_ACCESS_KEY:
         required: true
 
+permissions:
+  contents: read
+
 jobs:
   build:
     runs-on: ai-run-linux

@@ -50,6 +50,9 @@ on:
 env:
   WORKDIR: ${{ inputs.workdir }}
 
+permissions:
+  contents: read
+
 jobs:
   prebuild:
     permissions:

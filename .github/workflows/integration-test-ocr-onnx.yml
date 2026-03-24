@@ -25,6 +25,7 @@ on:
         type: string
         required: false
         default: "packages/ocr-onnx"
+
 permissions:
   contents: read
   packages: read

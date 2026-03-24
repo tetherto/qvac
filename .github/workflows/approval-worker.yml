@@ -17,10 +17,7 @@ jobs:
   run-when-command:
     runs-on: ubuntu-latest
     permissions:
-      contents: read
-      pull-requests: write
-      issues: write
-      statuses: write
+      pull-requests: read
 
     outputs:
       number: ${{ steps.pr.outputs.number }}
@@ -49,8 +46,8 @@ jobs:
   check-approvals:
     needs: run-when-command
     permissions:
-      contents: write
-      pull-requests: write
+      contents: read
+      pull-requests: read
       statuses: write
       issues: write
     uses: tetherto/qvac-devops/.github/workflows/approval-check-worker.yml@monorepo_update

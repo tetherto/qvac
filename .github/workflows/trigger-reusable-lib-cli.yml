@@ -30,6 +30,9 @@ on:
 env:
   WORKDIR: packages/cli
 
+permissions:
+  contents: read
+
 jobs:
   release-merge-guard:
     name: Release Merge Guard

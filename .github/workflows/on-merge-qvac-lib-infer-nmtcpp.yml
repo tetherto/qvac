@@ -25,9 +25,9 @@ on:
           - latest
 
 permissions:
-  contents: write
-  pull-requests: write
-  packages: write
+  contents: read
+  pull-requests: read
+  packages: read
 
 jobs:
   publish-logic:

@@ -28,6 +28,10 @@ on:
       custom_input_3:
         required: false
         type: string
+
+permissions:
+  contents: read
+
 jobs:
   release-merge-guard:
     name: Release Merge Guard

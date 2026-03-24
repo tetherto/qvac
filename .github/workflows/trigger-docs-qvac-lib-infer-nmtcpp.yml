@@ -9,6 +9,9 @@ on:
     paths:
       - "packages/qvac-lib-infer-nmtcpp/README.md"
 
+permissions:
+  contents: read
+
 jobs:
   dispatch:
     if: github.event.pull_request.merged == true && (github.event.pull_request.base.ref == 'main' || startsWith(github.event.pull_request.base.ref, 'release-'))

@@ -48,6 +48,9 @@ on:
 env:
   PKG_DIR: packages/ocr-onnx
   
+permissions:
+  contents: read
+
 jobs:
   prebuild:
     permissions:

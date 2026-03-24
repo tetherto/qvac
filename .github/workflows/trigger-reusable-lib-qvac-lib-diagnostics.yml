@@ -19,6 +19,9 @@ on:
       - "packages/qvac-lib-diagnostics/**"
   workflow_dispatch:
 
+permissions:
+  contents: read
+
 jobs:
   release-merge-guard:
     name: Release Merge Guard

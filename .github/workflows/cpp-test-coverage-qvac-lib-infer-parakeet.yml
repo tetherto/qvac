@@ -15,6 +15,9 @@ env:
   ENABLE_COVERAGE: ON
   PKG_DIR: packages/qvac-lib-infer-parakeet
 
+permissions:
+  contents: read
+
 jobs:
   cpp-tests:
     runs-on: ${{ matrix.os }}

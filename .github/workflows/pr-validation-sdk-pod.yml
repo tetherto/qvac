@@ -22,6 +22,9 @@ on:
       - feature-*
       - tmp-*
 
+permissions:
+  contents: read
+
 jobs:
   validate-pr:
     runs-on: ubuntu-latest
