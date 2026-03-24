@@ -19,6 +19,22 @@ compute_sha256() {
   fi
 }
 
+extract_lfs_sha256() {
+  local json=$1
+  local filename=$2
+  python3 -c "
+import json, sys
+data = json.loads(sys.stdin.read())
+for item in data:
+    if item.get('path','').endswith('$filename'):
+        lfs = item.get('lfs')
+        if lfs and 'oid' in lfs:
+            print(lfs['oid'])
+            sys.exit(0)
+sys.exit(1)
+" <<< "$json" 2>/dev/null
+}
+
 verify_file() {
   local dest=$1
   local repo=$2
@@ -45,10 +61,10 @@ verify_file() {
   metadata=$(curl -sL "https://huggingface.co/api/models/${repo}/tree/${tree_path}")
 
   local expected_sha
-  expected_sha=$(echo "$metadata" | grep -B2 "\"${basename_file}\"" | grep -o '"oid":"[a-f0-9]*"' | cut -d'"' -f4)
+  expected_sha=$(extract_lfs_sha256 "$metadata" "$basename_file")
 
   if [ -z "$expected_sha" ]; then
-    echo "  WARNING: could not fetch expected checksum from HuggingFace, skipping integrity check"
+    echo "  WARNING: could not fetch LFS checksum from HuggingFace (file may not be LFS-tracked), skipping integrity check"
     return 0
   fi
 
