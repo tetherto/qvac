@@ -103,7 +103,7 @@ jobs:
           fetch-depth: 0
 
       - name: Publish to GitHub Packages (dev)
-        uses: tetherto/qvac-devops/.github/actions/publish-library-to-gpr@monorepo_update
+        uses: tetherto/qvac-devops/.github/actions/publish-library-to-gpr@monorepo_tag
         with:
           secret-token: ${{ secrets.GITHUB_TOKEN }}
           pat-token: ${{ secrets.PAT_TOKEN }}
@@ -119,7 +119,7 @@ jobs:
       packages: write
       id-token: write
     if: needs.publish-logic.outputs.publish_release == 'true'
-    uses: tetherto/qvac-devops/.github/workflows/public-reusable-npm.yml@monorepo_update
+    uses: tetherto/qvac-devops/.github/workflows/public-reusable-npm.yml@monorepo_tag
     secrets: inherit
     with:
       workdir: packages/qvac-lib-diagnostics
@@ -154,7 +154,7 @@ jobs:
           fetch-depth: 0
 
       - name: Publish to GitHub Packages (feature)
-        uses: tetherto/qvac-devops/.github/actions/publish-library-to-gpr@monorepo_update
+        uses: tetherto/qvac-devops/.github/actions/publish-library-to-gpr@monorepo_tag
         with:
           secret-token: ${{ secrets.GITHUB_TOKEN }}
           pat-token: ${{ secrets.PAT_TOKEN }}
@@ -176,7 +176,7 @@ jobs:
           fetch-depth: 0
 
       - name: Publish to GitHub Packages (tmp)
-        uses: tetherto/qvac-devops/.github/actions/publish-library-to-gpr@monorepo_update
+        uses: tetherto/qvac-devops/.github/actions/publish-library-to-gpr@monorepo_tag
         with:
           secret-token: ${{ secrets.GITHUB_TOKEN }}
           pat-token: ${{ secrets.PAT_TOKEN }}

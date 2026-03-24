@@ -87,7 +87,7 @@ jobs:
 
       - name: Verify that yaml files are formatted
         id: yamlfmt
-        uses: tetherto/qvac-devops/.github/actions/yamlfmt@monorepo_update
+        uses: tetherto/qvac-devops/.github/actions/yamlfmt@monorepo_tag
         continue-on-error: true
 
       - name: Check for disallowed dependencies
@@ -103,7 +103,7 @@ jobs:
       - name: Run JavaScript tests
         id: run_js_tests
         continue-on-error: true
-        uses: tetherto/qvac-devops/.github/actions/run-lint-and-unit-tests@monorepo_update
+        uses: tetherto/qvac-devops/.github/actions/run-lint-and-unit-tests@monorepo_tag
         with:
           npm-token: ${{ secrets.NPM_TOKEN }}
           gpr-token: ${{ secrets.GITHUB_TOKEN }}
@@ -142,7 +142,7 @@ jobs:
   cpp-lint:
     needs: changes
     if: contains( github.event.pull_request.labels.*.name, 'verify') || github.event_name == 'workflow_dispatch'
-    uses: tetherto/qvac-devops/.github/workflows/cpp-lint.yaml@monorepo_update
+    uses: tetherto/qvac-devops/.github/workflows/cpp-lint.yaml@monorepo_tag
     secrets: inherit
     with:
       sha: ${{ github.event.pull_request.base.sha || github.sha }}
@@ -167,7 +167,7 @@ jobs:
   merge-guard:
     needs: [changes, sanity-checks, prebuild]
     if: always() && (needs.changes.outputs.pkg == 'true' || github.event_name == 'workflow_dispatch')
-    uses: tetherto/qvac-devops/.github/workflows/public-pr.yml@monorepo_update
+    uses: tetherto/qvac-devops/.github/workflows/public-pr.yml@monorepo_tag
     with:
       sanity-checks-status: ${{ needs.sanity-checks.result == 'success' }}
       build-status: ${{ needs.prebuild.result == 'success' }}

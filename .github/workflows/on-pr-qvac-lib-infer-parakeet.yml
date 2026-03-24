@@ -109,7 +109,7 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - name: Run Sanity checks
-        uses: tetherto/qvac-devops/.github/actions/sanity-checks@monorepo_update
+        uses: tetherto/qvac-devops/.github/actions/sanity-checks@monorepo_tag
         with:
           secret-token: ${{ secrets.GITHUB_TOKEN }}
           npm-token: ${{ secrets.NPM_TOKEN }}
@@ -129,7 +129,7 @@ jobs:
   cpp-lint:
     needs: context
     if: needs.context.outputs.run_verify == 'true' || github.event_name == 'workflow_dispatch'
-    uses: tetherto/qvac-devops/.github/workflows/cpp-lint.yaml@monorepo_update
+    uses: tetherto/qvac-devops/.github/workflows/cpp-lint.yaml@monorepo_tag
     secrets: inherit
     with:
       sha: ${{ needs.context.outputs.base_sha }}
@@ -178,7 +178,7 @@ jobs:
   merge-guard:
     needs: [sanity-checks, release-notes-check, cpp-lint, cpp-tests-coverage, prebuild, run-integration-tests, run-mobile-integration-tests]
     if: always()
-    uses: tetherto/qvac-devops/.github/workflows/public-pr.yml@monorepo_update
+    uses: tetherto/qvac-devops/.github/workflows/public-pr.yml@monorepo_tag
     with:
       sanity-checks-status: ${{ needs.sanity-checks.result == 'success' && needs.release-notes-check.result == 'success' && (needs.cpp-lint.result == 'success' || needs.cpp-lint.result == 'skipped') && (needs.cpp-tests-coverage.result == 'success' || needs.cpp-tests-coverage.result == 'skipped') }}
       build-status: ${{ needs.prebuild.result == 'success' || needs.prebuild.result == 'skipped' }}
