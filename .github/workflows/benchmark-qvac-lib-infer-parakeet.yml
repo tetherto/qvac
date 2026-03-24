@@ -13,6 +13,7 @@ on:
           - ctc
           - eou
           - sortformer
+          - all
       max_samples:
         description: 'Max samples per test (0 = unlimited)'
         required: false
@@ -43,7 +44,6 @@ jobs:
           model_type = "${MODEL_TYPE}"
           max_samples = int("${MAX_SAMPLES}")
 
-          # Model directory mapping
           model_dirs = {
               "tdt": "parakeet-tdt-0.6b-v3-onnx",
               "ctc": "parakeet-ctc-0.6b-onnx",
@@ -51,40 +51,52 @@ jobs:
               "sortformer": "sortformer-4spk-v2-onnx"
           }
 
-          # Sortformer is a diarization model — only run English batch (no WER/CER)
-          if model_type == "sortformer":
-              test_configs = [
-                  {"language": "english", "dataset_type": "librispeech", "use_gpu": False, "streaming": False},
-                  {"language": "english", "dataset_type": "librispeech", "use_gpu": True, "streaming": False},
-              ]
-          else:
-              # All test configurations to run in parallel
-              test_configs = [
-                  # English LibriSpeech tests
-                  {"language": "english", "dataset_type": "librispeech", "use_gpu": False, "streaming": False},
-                  {"language": "english", "dataset_type": "librispeech", "use_gpu": True, "streaming": False},
-                  {"language": "english", "dataset_type": "librispeech", "use_gpu": False, "streaming": True},
-                  # Multi-language FLEURS tests
-                  {"language": "french", "dataset_type": "fleurs", "use_gpu": False, "streaming": False},
-                  {"language": "german", "dataset_type": "fleurs", "use_gpu": False, "streaming": False},
-                  {"language": "spanish", "dataset_type": "fleurs", "use_gpu": False, "streaming": False},
-              ]
+          model_types = [model_type] if model_type != "all" else ["tdt", "ctc", "eou", "sortformer"]
+
+          def get_configs_for_type(mt):
+              if mt == "sortformer":
+                  return [
+                      {"language": "english", "dataset_type": "librispeech", "use_gpu": False, "streaming": False},
+                      {"language": "english", "dataset_type": "librispeech", "use_gpu": True, "streaming": False},
+                  ]
+              elif mt == "eou":
+                  return [
+                      {"language": "english", "dataset_type": "librispeech", "use_gpu": False, "streaming": True},
+                      {"language": "english", "dataset_type": "librispeech", "use_gpu": True, "streaming": True},
+                      {"language": "english", "dataset_type": "librispeech", "use_gpu": False, "streaming": False},
+                  ]
+              elif mt == "ctc":
+                  return [
+                      {"language": "english", "dataset_type": "librispeech", "use_gpu": False, "streaming": False},
+                      {"language": "english", "dataset_type": "librispeech", "use_gpu": True, "streaming": False},
+                      {"language": "english", "dataset_type": "librispeech", "use_gpu": False, "streaming": True},
+                  ]
+              else:
+                  return [
+                      {"language": "english", "dataset_type": "librispeech", "use_gpu": False, "streaming": False},
+                      {"language": "english", "dataset_type": "librispeech", "use_gpu": True, "streaming": False},
+                      {"language": "english", "dataset_type": "librispeech", "use_gpu": False, "streaming": True},
+                      {"language": "french", "dataset_type": "fleurs", "use_gpu": False, "streaming": False},
+                      {"language": "german", "dataset_type": "fleurs", "use_gpu": False, "streaming": False},
+                      {"language": "spanish", "dataset_type": "fleurs", "use_gpu": False, "streaming": False},
+                  ]
 
           include = []
-          for i, cfg in enumerate(test_configs):
-              mode_str = "streaming" if cfg["streaming"] else "batch"
-              gpu_str = "gpu" if cfg["use_gpu"] else "cpu"
-              variant = f"{cfg['language']}-{cfg['dataset_type']}-{gpu_str}-{mode_str}"
-              include.append({
-                  "model_variant": variant,
-                  "model_dir": model_dirs[model_type],
-                  "model_type": model_type,
-                  "use_gpu": cfg["use_gpu"],
-                  "language": cfg["language"],
-                  "dataset_type": cfg["dataset_type"],
-                  "streaming": cfg["streaming"],
-                  "max_samples": max_samples
-              })
+          for mt in model_types:
+              for cfg in get_configs_for_type(mt):
+                  mode_str = "streaming" if cfg["streaming"] else "batch"
+                  gpu_str = "gpu" if cfg["use_gpu"] else "cpu"
+                  variant = f"{mt}-{cfg['language']}-{cfg['dataset_type']}-{gpu_str}-{mode_str}"
+                  include.append({
+                      "model_variant": variant,
+                      "model_dir": model_dirs[mt],
+                      "model_type": mt,
+                      "use_gpu": cfg["use_gpu"],
+                      "language": cfg["language"],
+                      "dataset_type": cfg["dataset_type"],
+                      "streaming": cfg["streaming"],
+                      "max_samples": max_samples
+                  })
 
           variants = [cfg["model_variant"] for cfg in include]
           matrix = {
@@ -188,7 +200,7 @@ jobs:
       - name: Set up Python
         uses: actions/setup-python@v6
         with:
-          python-version: '3.14'
+          python-version: '3.13'
 
       - name: Install Poetry
         run: |
@@ -201,6 +213,8 @@ jobs:
           npm install -g bare bare-make
 
       - name: Download prebuilds
+        id: prebuilds
+        continue-on-error: true
         env:
           GH_TOKEN: ${{ secrets.PAT_TOKEN }}
         run: |
@@ -211,7 +225,7 @@ jobs:
           RUN_ID=$(gh run list --workflow=prebuilds-qvac-lib-infer-parakeet.yml --status=success --limit 1 --json databaseId --jq '.[0].databaseId')
 
           if [ -z "$RUN_ID" ]; then
-            echo "No successful prebuilds run found"
+            echo "::warning::No successful prebuilds run found — will fall back to published npm package"
             exit 1
           fi
 
@@ -257,8 +271,8 @@ jobs:
             curl -L -o decoder_joint.onnx "${EOU_REPO}/decoder_joint.onnx"
             curl -L -o tokenizer.json "${EOU_REPO}/tokenizer.json"
           elif [ "$MODEL_TYPE" = "sortformer" ]; then
-            REPO_URL="https://huggingface.co/tetherto/sortformer-4spk-v2-onnx/resolve/main"
-            curl -L -o sortformer.onnx "${REPO_URL}/sortformer.onnx"
+            REPO_URL="https://huggingface.co/cgus/diar_streaming_sortformer_4spk-v2-onnx/resolve/main"
+            curl -L -o sortformer.onnx "${REPO_URL}/diar_streaming_sortformer_4spk-v2.onnx"
           else
             echo "Model type ${MODEL_TYPE} not supported for auto-download"
             exit 1
@@ -280,13 +294,15 @@ jobs:
           STREAMING_CHUNK_SIZE="${{ github.event.inputs.streaming_chunk_size || '64000' }}"
           MAX_SAMPLES="${{ matrix.max_samples }}"
 
-          CONFIG_FILE="config.yaml"
+          # Select the appropriate config file for this model type
+          case "$MODEL_TYPE" in
+            ctc) CONFIG_FILE="config-ctc.yaml" ;;
+            eou) CONFIG_FILE="config-eou.yaml" ;;
+            sortformer) CONFIG_FILE="config-sortformer.yaml" ;;
+            *) CONFIG_FILE="config.yaml" ;;
+          esac
 
-          echo "Configuring benchmark:"
-          echo "  Dataset: $DATASET_TYPE / $DATASET_LANGUAGE"
-          echo "  Model: $MODEL_TYPE ($MODEL_DIR)"
-          echo "  GPU: $USE_GPU, Streaming: $STREAMING_MODE"
-          echo "  Max samples: $MAX_SAMPLES"
+          echo "Using config template: ${CONFIG_FILE}"
 
           # Set timeout based on model type
           case "$MODEL_TYPE" in
@@ -316,16 +332,14 @@ jobs:
           sed -i "/^model:/,/^[^ ]/ s|  streaming:.*|  streaming: ${STREAMING_MODE}|" "$CONFIG_PATH"
           sed -i "/^model:/,/^[^ ]/ s|  streaming_chunk_size:.*|  streaming_chunk_size: ${STREAMING_CHUNK_SIZE}|" "$CONFIG_PATH"
 
-          # Sortformer is a diarization model — disable WER/CER metrics
-          if [ "$MODEL_TYPE" = "sortformer" ]; then
-            sed -i "/^wer:/,/^[^ ]/ s|  enabled:.*|  enabled: false|" "$CONFIG_PATH"
-            sed -i "/^cer:/,/^[^ ]/ s|  enabled:.*|  enabled: false|" "$CONFIG_PATH"
-          fi
-
           echo "=== Updated ${CONFIG_FILE} ==="
           cat "$CONFIG_PATH"
 
+          # Export config file name for later steps
+          echo "BENCHMARK_CONFIG_FILE=${CONFIG_FILE}" >> $GITHUB_ENV
+
       - name: Install main package dependencies
+        if: steps.prebuilds.outcome == 'success'
         working-directory: ${{ env.PKG_DIR }}
         run: npm install
 
@@ -333,8 +347,13 @@ jobs:
         working-directory: ${{ env.PKG_DIR }}/benchmarks/server
         run: |
           npm install
-          # Install the main package from the local repo (uses current branch code)
-          npm install ../../
+          if [ "${{ steps.prebuilds.outcome }}" = "success" ]; then
+            echo "Installing addon from local source (prebuilds available)..."
+            npm install ../../
+          else
+            echo "Installing addon from npm (prebuilds not available)..."
+            npm install @qvac/transcription-parakeet@latest
+          fi
 
       - name: Install benchmark client dependencies
         working-directory: ${{ env.PKG_DIR }}/benchmarks/client
@@ -359,8 +378,8 @@ jobs:
           PYTHONUNBUFFERED: "1"
           HF_DATASETS_CACHE: /tmp/hf_cache
         run: |
-          echo "Running benchmark with config: config.yaml"
-          poetry run python -u -m src.parakeet.main --config config/config.yaml
+          echo "Running benchmark with config: ${{ env.BENCHMARK_CONFIG_FILE }}"
+          poetry run python -u -m src.parakeet.main --config config/${{ env.BENCHMARK_CONFIG_FILE }}
           rm -rf /tmp/hf_cache || true
 
       - name: Stop benchmark server
