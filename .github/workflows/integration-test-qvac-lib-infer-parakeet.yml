@@ -160,3 +160,49 @@ jobs:
           GITHUB_TOKEN: ${{ secrets.PAT_TOKEN }}
           LD_LIBRARY_PATH: ${{ github.workspace }}/${{ inputs.workdir }}/prebuilds/${{ matrix.platform }}-${{ matrix.arch }}
           DYLD_LIBRARY_PATH: ${{ github.workspace }}/${{ inputs.workdir }}/prebuilds/${{ matrix.platform }}-${{ matrix.arch }}
+
+      - name: Run RTF benchmark
+        if: always()
+        continue-on-error: true
+        shell: bash
+        working-directory: ${{ inputs.workdir }}
+        run: npm run test:benchmark:rtf
+        env:
+          GITHUB_TOKEN: ${{ secrets.PAT_TOKEN }}
+          LD_LIBRARY_PATH: ${{ github.workspace }}/${{ inputs.workdir }}/prebuilds/${{ matrix.platform }}-${{ matrix.arch }}
+          DYLD_LIBRARY_PATH: ${{ github.workspace }}/${{ inputs.workdir }}/prebuilds/${{ matrix.platform }}-${{ matrix.arch }}
+
+      - name: Upload RTF results
+        if: always()
+        continue-on-error: true
+        uses: actions/upload-artifact@v6
+        with:
+          name: rtf-results-${{ matrix.os }}-${{ matrix.platform }}-${{ matrix.arch }}
+          path: ${{ inputs.workdir }}/benchmarks/results/rtf-benchmark-*.json
+          retention-days: 30
+          if-no-files-found: ignore
+
+      - name: Add RTF summary
+        if: always()
+        continue-on-error: true
+        shell: bash
+        working-directory: ${{ inputs.workdir }}
+        run: |
+          RESULT_FILE="benchmarks/results/rtf-benchmark-${{ matrix.platform }}-${{ matrix.arch }}.json"
+
+          if [ -f "$RESULT_FILE" ]; then
+            echo "### RTF — ${{ matrix.platform }}-${{ matrix.arch }}" >> $GITHUB_STEP_SUMMARY
+            node -e "
+              const r = JSON.parse(require('fs').readFileSync('${RESULT_FILE}', 'utf8'));
+              const s = r.summary;
+              const lines = [
+                '| Metric | Mean | P50 | P95 |',
+                '|--------|------|-----|-----|',
+                '| RTF | ' + s.rtf.mean.toFixed(4) + ' | ' + s.rtf.p50.toFixed(4) + ' | ' + s.rtf.p95.toFixed(4) + ' |',
+                '| Wall (ms) | ' + s.wallMs.mean.toFixed(0) + ' | ' + s.wallMs.p50.toFixed(0) + ' | ' + s.wallMs.p95.toFixed(0) + ' |',
+                '| Tokens/s | ' + s.tokensPerSecond.mean.toFixed(1) + ' | ' + s.tokensPerSecond.p50.toFixed(1) + ' | ' + s.tokensPerSecond.p95.toFixed(1) + ' |',
+                '',
+              ];
+              console.log(lines.join('\n'));
+            " >> $GITHUB_STEP_SUMMARY
+          fi
