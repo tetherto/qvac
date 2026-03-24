@@ -426,7 +426,7 @@ jobs:
         run: npm install --install-links --ignore-scripts
 
       - name: Download current results
-        uses: actions/download-artifact@v7
+        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # 8.0.1
         with:
           path: ${{ inputs.working-directory }}/current-results/
           pattern: results-*
@@ -434,7 +434,7 @@ jobs:
 
       - name: Download baseline results
         id: download-baseline
-        uses: dawidd6/action-download-artifact@v6
+        uses: dawidd6/action-download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # 8.0.1
         continue-on-error: true
         with:
           workflow: test-desktop-sdk.yml

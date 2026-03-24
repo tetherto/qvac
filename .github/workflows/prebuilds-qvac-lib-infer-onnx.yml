@@ -401,7 +401,7 @@ jobs:
     needs: prebuild
     steps:
       - name: Download all build artifacts
-        uses: actions/download-artifact@v7
+        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # 8.0.1
         with:
           path: prebuilds
           merge-multiple: true
@@ -510,7 +510,7 @@ jobs:
           token: ${{ secrets.GITHUB_TOKEN }}
 
       - name: Download prebuild artifacts into package dir
-        uses: actions/download-artifact@v7
+        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # 8.0.1
         with:
           name: prebuilds
           path: ${{ env.PKG_DIR }}/prebuilds
@@ -543,7 +543,7 @@ jobs:
           token: ${{ secrets.PAT_TOKEN }}
 
       - name: Download prebuild artifacts into package dir
-        uses: actions/download-artifact@v7
+        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # 8.0.1
         with:
           name: prebuilds
           path: ${{ env.PKG_DIR }}/prebuilds

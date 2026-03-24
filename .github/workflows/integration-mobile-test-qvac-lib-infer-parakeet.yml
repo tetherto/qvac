@@ -146,7 +146,7 @@ jobs:
       - name: Download Android prebuilds (from artifacts)
         if: matrix.platform == 'Android'
         id: artifact_android
-        uses: actions/download-artifact@v7
+        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # 8.0.1
         with:
           path: ${{ env.ADDON_DIR }}/prebuilds
           pattern: ${{ env.PREBUILD_ARTIFACT_PREFIX }}android-*
@@ -156,7 +156,7 @@ jobs:
       - name: Download iOS prebuilds (from artifacts)
         if: matrix.platform == 'iOS'
         id: artifact_ios
-        uses: actions/download-artifact@v7
+        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # 8.0.1
         with:
           path: ${{ env.ADDON_DIR }}/prebuilds
           pattern: ${{ env.PREBUILD_ARTIFACT_PREFIX }}ios-*

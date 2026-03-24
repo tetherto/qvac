@@ -225,7 +225,7 @@ jobs:
         run: npm install -g bare-runtime
 
       - name: Download build artifact
-        uses: actions/download-artifact@v7
+        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # 8.0.1
         with:
           name: qvac-addon-build
           path: ${{ env.PKG_DIR }}
@@ -307,7 +307,7 @@ jobs:
     runs-on: macos-14
     steps:
       - name: Download all artifacts
-        uses: actions/download-artifact@v7
+        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # 8.0.1
         with:
           path: merged_raw
           pattern: ggml-opus-*
