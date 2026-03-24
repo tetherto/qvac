@@ -1,2 +1,3 @@
 * @tetherto/ai-runtime-merge @tetherto/ai-runtime-bk
 /docs/ @tetherto/docs
+/packages/sdk/examples/ @tetherto/docs
