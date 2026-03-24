@@ -209,8 +209,6 @@ TEST(BergamotValidation, DifferentDecodingParamsCanChangeOutput) {
   const std::string customOutput =
       bergamot_translate(customCtx.get(), input.c_str());
 
-  std::cout<<"Default output : "<<defaultOutput<<std::endl;
-  std::cout<<"Custom output"<<customOutput<<std::endl;
 
   EXPECT_FALSE(defaultOutput.empty());
   EXPECT_FALSE(customOutput.empty());
