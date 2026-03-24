@@ -77,7 +77,7 @@ jobs:
       MQTT_USERNAME: ${{ secrets.MQTT_USERNAME }}
       MQTT_PASSWORD: ${{ secrets.MQTT_PASSWORD }}
     steps:
-      - uses: actions/checkout@v6
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # 6.0.2
         with:
           ref: ${{ inputs.test-version || github.event.pull_request.head.sha || github.sha }}
           token: ${{ secrets.PAT_TOKEN }}
@@ -233,7 +233,7 @@ jobs:
       matrix:
         device: ${{ fromJson(inputs.device-pools) }}
     steps:
-      - uses: actions/checkout@v6
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # 6.0.2
         with:
           ref: ${{ inputs.test-version || github.event.pull_request.head.sha || github.sha }}
           sparse-checkout: ${{ inputs.working-directory }}/device-farm-test-spec.yml
@@ -408,7 +408,7 @@ jobs:
       MQTT_USERNAME: ${{ secrets.MQTT_USERNAME }}
       MQTT_PASSWORD: ${{ secrets.MQTT_PASSWORD }}
     steps:
-      - uses: actions/checkout@v6
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # 6.0.2
         with:
           ref: ${{ inputs.test-version || github.event.pull_request.head.sha || github.sha }}
           token: ${{ secrets.PAT_TOKEN }}
@@ -583,7 +583,7 @@ jobs:
     permissions:
       pull-requests: write
     steps:
-      - uses: actions/checkout@v6
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # 6.0.2
         with:
           ref: ${{ inputs.test-version || github.event.pull_request.head.sha || github.sha }}
           token: ${{ secrets.PAT_TOKEN }}

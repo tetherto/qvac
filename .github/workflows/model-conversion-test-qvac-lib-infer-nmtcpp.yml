@@ -66,7 +66,7 @@ jobs:
       quants: ${{ steps.prepare_quants.outputs.quants }}
     steps:
       - name: Checkout repository
-        uses: actions/checkout@v6
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # 6.0.2
         with:
           lfs: true
 
@@ -124,7 +124,7 @@ jobs:
     runs-on: macos-14
     steps:
       - name: Checkout repository
-        uses: actions/checkout@v6
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # 6.0.2
 
       - name: Set up Node.js
         uses: actions/setup-node@v6
@@ -212,7 +212,7 @@ jobs:
         quant: ${{ fromJson(needs.setup.outputs.quants) }}
     steps:
       - name: Checkout repository
-        uses: actions/checkout@v6
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # 6.0.2
 
       - name: Set up Python (with pip cache)
         uses: actions/setup-python@v6
