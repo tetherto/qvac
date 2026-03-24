@@ -38,7 +38,7 @@ on:
         required: false
         default: "packages/qvac-lib-infer-onnx-tts"
         type: string
-  
+
 jobs:
   run-integration-tests:
     continue-on-error: true
