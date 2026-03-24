@@ -118,34 +118,32 @@ void TranslationModel::load() {
     // Set model path
     params.model_path = modelPath_;
 
-    auto setBergamotParam = [&]<typename TValue>(
-                                const std::string& key,
-                                auto setter) {
-      auto iter = config_.find(key);
-      if (iter == config_.end()) {
-        return;
-      }
+    auto setBergamotParam =
+        [&]<typename TValue>(const std::string& key, auto setter) {
+          auto iter = config_.find(key);
+          if (iter == config_.end()) {
+            return;
+          }
 
-      if (std::holds_alternative<TValue>(iter->second)) {
-        setter(std::get<TValue>(iter->second));
-        return;
-      }
+          if (std::holds_alternative<TValue>(iter->second)) {
+            setter(std::get<TValue>(iter->second));
+            return;
+          }
 
-      QLOG(
-          qvac_lib_inference_addon_cpp::logger::Priority::WARNING,
-          "[TRANSLATION MODEL] Ignoring Bergamot config '" + key +
-              "' because the value type is unsupported");
-    };
+          QLOG(
+              qvac_lib_inference_addon_cpp::logger::Priority::WARNING,
+              "[TRANSLATION MODEL] Ignoring Bergamot config '" + key +
+                  "' because the value type is unsupported");
+        };
 
+    setBergamotParam.operator()<int64_t>("beamsize", [&](double value) {
+      params.beam_size = static_cast<int>(value);
+    });
     setBergamotParam.operator()<int64_t>(
-        "beamsize",
-        [&](double value) { params.beam_size = static_cast<int>(value); });
-    setBergamotParam.operator()<int64_t>(
-        "normalize",
-        [&](int64_t value) { params.normalize = (bool)value; });
-    setBergamotParam.operator()<double>(
-        "max_length_factor",
-        [&](double value) { params.max_length_factor = value; });
+        "normalize", [&](int64_t value) { params.normalize = (bool)value; });
+    setBergamotParam.operator()<double>("max_length_factor", [&](double value) {
+      params.max_length_factor = value;
+    });
     // Extract vocab paths from config
     auto src_vocab_iter = config_.find("src_vocab");
     auto dst_vocab_iter = config_.find("dst_vocab");

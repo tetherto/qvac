@@ -1,8 +1,8 @@
-#include <gtest/gtest.h>
-
 #include <filesystem>
 #include <fstream>
 #include <memory>
+
+#include <gtest/gtest.h>
 
 #include "model-interface/bergamot.hpp"
 
@@ -208,7 +208,6 @@ TEST(BergamotValidation, DifferentDecodingParamsCanChangeOutput) {
       bergamot_translate(defaultCtx.get(), input.c_str());
   const std::string customOutput =
       bergamot_translate(customCtx.get(), input.c_str());
-
 
   EXPECT_FALSE(defaultOutput.empty());
   EXPECT_FALSE(customOutput.empty());

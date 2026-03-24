@@ -66,4 +66,3 @@ void bergamot_reset_runtime_stats(bergamot_context* ctx);
 
 // Free bergamot context
 void bergamot_free(bergamot_context* ctx);
-
