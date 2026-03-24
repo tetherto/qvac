@@ -226,6 +226,47 @@ Downloading ... -> /absolute/path/ggml-tiny-q8_0.bin
 Download complete: 41.52 MB
 ```
 
+### Profile download performance
+
+Diagnose slow downloads by collecting UDX network stats, connection info, and hypercore metrics — similar to [hyperdrive-profiler](https://github.com/holepunchto/hyperdrive-profiler) but for registry Hyperblobs:
+
+```bash
+$ qvac-registry profile \
+    "ggerganov/whisper.cpp/resolve/5359861c739e955e79d9a303bcbc70fb988958b1/ggml-tiny.bin" hf
+
+--- 5.0s elapsed ---
+Network (UDX)
+  Bytes received:    42.1MB (8.4MB/s)
+  Bytes transmitted: 128kB (25.6kB/s)
+  Packets rx/tx:     29034 / 1842
+  Packets dropped:   0
+Connection
+  Firewalled: false
+  Blob peers: 2
+  Issues:     rto=0 fast-recoveries=0 retransmits=0
+Hypercore
+  Blob core: 665 / 665 (contiguous / length)
+  Hotswaps:  0
+...
+==================================================
+FINAL SUMMARY
+==================================================
+Download
+  Model:     ggerganov/whisper.cpp/resolve/.../ggml-tiny.bin
+  Size:      73.5MB (1120 blocks)
+  Metadata:  2.15s
+  Transfer:  8.72s
+  Avg speed: 8.4MB/s
+  Total:     10.87s
+```
+
+Flags:
+
+```
+--interval|-i [seconds]   Stats print interval (default: 5)
+--timeout|-t [ms]         Stream read timeout (default: 120000)
+```
+
 ### JSON output
 
 All commands support `--json` for machine-readable output:
@@ -250,6 +291,7 @@ See the `examples/` folder for complete working examples:
 - `download-model.js`: Download a single model to disk via metadata lookup
 - `download-blob.js`: Download a blob directly using known blob coordinates
 - `download-all-models.js`: Download all models in the registry
+- `profile-download.js`: Profile download performance with network/connection/hypercore stats
 
 Run examples:
 
@@ -259,6 +301,7 @@ node examples/example.js
 node examples/download-model.js
 node examples/download-blob.js
 node examples/download-all-models.js
+node examples/profile-download.js "model/path"
 ```
 
 ## Configuration
