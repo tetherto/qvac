@@ -16,8 +16,6 @@ permissions:
 jobs:
   run-when-command:
     runs-on: ubuntu-latest
-    permissions:
-      pull-requests: read
 
     outputs:
       number: ${{ steps.pr.outputs.number }}
