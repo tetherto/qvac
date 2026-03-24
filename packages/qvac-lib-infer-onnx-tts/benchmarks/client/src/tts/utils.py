@@ -40,19 +40,30 @@ def calculate_percentiles(values: List[float]) -> Dict[str, float]:
     }
 
 
-def save_single_result(cfg: Config, results: TTSResults, label: str, round_trip_metrics: Optional[Dict] = None):
+def save_single_result(
+    cfg: Config,
+    results: TTSResults,
+    label: str,
+    round_trip_metrics: Optional[Dict] = None,
+    *,
+    result_language: Optional[str] = None,
+):
     """Save results for a single implementation
-    
+
     Args:
         cfg: Configuration object
         results: TTS benchmark results
         label: Label for the implementation (e.g., "addon", "python-native")
         round_trip_metrics: Optional round-trip quality metrics (WER/CER)
+        result_language: If set, filename is {model}_{lang}_{label}.md (no merging across languages)
     """
     results_root = _get_results_root()
-    
+
     model_name = _get_model_name(cfg)
-    md_path = results_root / f"{model_name}_{label}.md"
+    if result_language:
+        md_path = results_root / f"{model_name}_{result_language}_{label}.md"
+    else:
+        md_path = results_root / f"{model_name}_{label}.md"
     
     rtf_values = [r.rtf for r in results.results]
     percentiles = calculate_percentiles(rtf_values)
@@ -65,8 +76,10 @@ def save_single_result(cfg: Config, results: TTSResults, label: str, round_trip_
         f"**Model:** {model_name}",
         f"**Dataset:** {cfg.dataset.name}",
         f"**Samples:** {len(results.results)}",
-        "",
     ]
+    if result_language:
+        lines.append(f"**Benchmark language:** {result_language}")
+    lines.extend(["", ""])
     
     # Add round-trip quality metrics if available
     if round_trip_metrics and round_trip_metrics.get('runs'):
@@ -150,7 +163,7 @@ def round_trip_single_implementation(
         runs: List of results from implementation (one per run)
         whisper_transcriber: Loaded WhisperTranscriber instance
         implementation_name: Name of implementation for logging
-        lang_per_result: Optional language code per result (e.g. for multi-language Supertonic)
+        lang_per_result: Optional per-sample Whisper language override
 
     Returns:
         Dict with WER/CER metrics for each run or None if samples not available
@@ -179,7 +192,7 @@ def round_trip_single_implementation(
 
         for i, (original, result) in enumerate(zip(original_texts, results.results)):
             if result.samples:
-                # Transcribe audio (use per-result language when provided, e.g. for en+es)
+                # Transcribe audio (use per-result language when provided)
                 samples = np.array(result.samples, dtype=np.int16)
                 lang = lang_per_result[i] if lang_per_result and i < len(lang_per_result) else None
                 transcription = whisper_transcriber.transcribe_samples(

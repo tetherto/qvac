@@ -10,6 +10,7 @@
       "baseline": "8c901fe2b0e69a542d02810d4089505fd0c480d8",
       "repository": "https://github.com/microsoft/vcpkg",
       "packages": [
+        "utf8proc",
         "flatbuffers",
         "gtest",
         "vcpkg-tool-meson",

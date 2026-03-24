@@ -11,7 +11,7 @@ target_sources(
   PRIVATE
     ${CMAKE_SOURCE_DIR}/addon/src/model-interface/TTSModel.cpp
     ${CMAKE_SOURCE_DIR}/addon/src/model-interface/ChatterboxEngine.cpp
-    ${CMAKE_SOURCE_DIR}/addon/src/model-interface/SupertonicEngine.cpp
+    ${CMAKE_SOURCE_DIR}/addon/src/model-interface/SupertoneOnnxEngine.cpp
     ${CMAKE_SOURCE_DIR}/addon/src/model-interface/OnnxInferSession.cpp
     ${CMAKE_SOURCE_DIR}/addon/src/model-interface/Fp16Utils.cpp
     ${CMAKE_SOURCE_DIR}/addon/src/model-interface/TensorFloatHandler.cpp
@@ -19,20 +19,24 @@ target_sources(
     ${TEST_MOCKS}
 )
 
+find_package(tokenizers_cpp CONFIG REQUIRED)
+find_package(nlohmann_json CONFIG REQUIRED)
+
 target_include_directories(
   qvac-lib-inference-tts-unit-test
   PRIVATE
     ${CMAKE_SOURCE_DIR}/addon
     ${CMAKE_SOURCE_DIR}/addon/test/unit/
+    ${UTF8PROC_INCLUDE_DIRS}
 )
-
-find_package(tokenizers_cpp CONFIG REQUIRED)
 
 target_link_libraries(
   qvac-lib-inference-tts-unit-test
   PRIVATE
     onnxruntime::onnxruntime
     tokenizers::tokenizers_cpp
+    nlohmann_json::nlohmann_json
+    ${UTF8PROC_LIBRARIES}
     GTest::gtest
     GTest::gtest_main
     GTest::gmock

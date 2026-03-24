@@ -130,6 +130,12 @@ if(WIN32)
 endif()
 
 find_package(onnxruntime CONFIG REQUIRED)
+find_package(nlohmann_json CONFIG REQUIRED)
+find_path(UTF8PROC_INCLUDE_DIRS "utf8proc.h")
+find_library(UTF8PROC_LIBRARIES NAMES utf8proc)
+if(NOT UTF8PROC_INCLUDE_DIRS OR NOT UTF8PROC_LIBRARIES)
+  message(FATAL_ERROR "utf8proc not found (vcpkg install utf8proc)")
+endif()
 
 include_directories(BEFORE ${CMAKE_BINARY_DIR}/_deps/flatbuffers-src/include)
 
@@ -146,7 +152,7 @@ target_sources(
     ${PROJECT_SOURCE_DIR}/addon/src/model-interface/TTSModel.cpp
     ${PROJECT_SOURCE_DIR}/addon/src/model-interface/ChatterboxEngine.cpp
     ${PROJECT_SOURCE_DIR}/addon/src/model-interface/OnnxInferSession.cpp
-    ${PROJECT_SOURCE_DIR}/addon/src/model-interface/SupertonicEngine.cpp
+    ${PROJECT_SOURCE_DIR}/addon/src/model-interface/SupertoneOnnxEngine.cpp
     ${PROJECT_SOURCE_DIR}/addon/src/model-interface/Fp16Utils.cpp
     ${PROJECT_SOURCE_DIR}/addon/src/model-interface/TensorFloatHandler.cpp
 )
@@ -159,6 +165,7 @@ target_include_directories(
   PRIVATE
     ${PROJECT_SOURCE_DIR}/addon
     ${QVAC_LIB_INFERENCE_ADDON_CPP_INCLUDE_DIRS}
+    ${UTF8PROC_INCLUDE_DIRS}
 )
 
 function(strip_libraries LIB_DIR LIB_NAMES)
@@ -198,6 +205,8 @@ target_link_libraries(
   PRIVATE
     onnxruntime::onnxruntime
     tokenizers::tokenizers_cpp
+    nlohmann_json::nlohmann_json
+    ${UTF8PROC_LIBRARIES}
 )
 
 option(BUILD_CLI "Build CLI tool example" FALSE)
@@ -208,7 +217,7 @@ if(BUILD_CLI)
     ${PROJECT_SOURCE_DIR}/addon/src/model-interface/TTSModel.cpp
     ${PROJECT_SOURCE_DIR}/addon/src/model-interface/ChatterboxEngine.cpp
     ${PROJECT_SOURCE_DIR}/addon/src/model-interface/OnnxInferSession.cpp
-    ${PROJECT_SOURCE_DIR}/addon/src/model-interface/SupertonicEngine.cpp
+    ${PROJECT_SOURCE_DIR}/addon/src/model-interface/SupertoneOnnxEngine.cpp
   )
 
   target_include_directories(
@@ -216,6 +225,7 @@ if(BUILD_CLI)
     PRIVATE
       ${PROJECT_SOURCE_DIR}/addon
       ${QVAC_LIB_INFERENCE_ADDON_CPP_INCLUDE_DIRS}
+      ${UTF8PROC_INCLUDE_DIRS}
   )
 
   target_link_libraries(
@@ -223,6 +233,8 @@ if(BUILD_CLI)
     PRIVATE
       onnxruntime::onnxruntime_static
       tokenizers::tokenizers_cpp
+      nlohmann_json::nlohmann_json
+      ${UTF8PROC_LIBRARIES}
   )
 
   if(WIN32)

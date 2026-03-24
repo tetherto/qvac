@@ -8,7 +8,7 @@ server:
 comparison:
   enabled: true
   run_addon: true
-  run_python: true
+  run_python: false
   round_trip_test: true
   whisper_model: "tiny"
   seed: 42
@@ -20,10 +20,13 @@ dataset:
   max_samples: 0
 
 model:
-  modelDir: "shared-data/models/supertonic"
+  # modelDirV1 = English weights, supertonicMultilingual false; modelDirMultilingual = HF supertonic-2, true for es etc.
+  modelDirV1: "shared-data/models/supertonic-v1"
+  modelDirMultilingual: "shared-data/models/supertonic-multilingual"
   voiceName: "F1"
   language: "en"
   sampleRate: 44100
   speed: 1.0
   numInferenceSteps: 5
+  supertonicMultilingual: false
   useGPU: false
