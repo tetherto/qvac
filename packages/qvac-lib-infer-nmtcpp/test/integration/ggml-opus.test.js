@@ -7,8 +7,7 @@
  * Uses HyperDrive to download model if not cached locally.
  *
  * Platform Behavior:
- *   - Mobile (iOS/Android): Tests both CPU and GPU modes
- *   - Desktop: Tests CPU mode only
+ *   - All platforms: CPU only (GPU crashes on iOS and benchmarks slower than CPU)
  *
  * Usage:
  *   bare test/integration/ggml-opus.test.js
@@ -37,17 +36,13 @@ const MODEL_NAME = 'model.bin'
 
 /**
  * Device configurations for testing
- * - Mobile (iOS/Android): Both CPU and GPU
- * - Desktop: CPU only
+ * GGML/Opus: CPU-only on all platforms. GPU mode crashes on iOS (Metal buffer
+ * allocation triggers disk-write resource limits) and benchmarks show GPU is
+ * slower than CPU for these models. Opus models are planned for deprecation.
  */
-const ALL_DEVICE_CONFIGS = [
-  { id: 'gpu', useGpu: true },
+const DEVICE_CONFIGS = [
   { id: 'cpu', useGpu: false }
 ]
-
-const DEVICE_CONFIGS = isMobile
-  ? ALL_DEVICE_CONFIGS
-  : ALL_DEVICE_CONFIGS.filter(c => c.id === 'cpu')
 
 /**
  * Gets the working directory for model storage
