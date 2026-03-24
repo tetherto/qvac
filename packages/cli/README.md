@@ -1,6 +1,5 @@
 # QVAC CLI
 
-
 A command-line interface for the QVAC ecosystem. QVAC CLI provides tooling for building, bundling, and managing QVAC-powered applications.
 
 ## Table of Contents
