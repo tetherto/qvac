@@ -1,8 +1,7 @@
 import type { ModelProgressUpdate, RegistryDownloadEntry } from "@/schemas";
 import type { QVACModelEntry, QVACBlobBinding } from "@qvac/registry-client";
-import fs, { promises as fsPromises } from "bare-fs";
+import { promises as fsPromises } from "bare-fs";
 import path from "bare-path";
-import { type Readable, type Writable } from "bare-stream";
 import { AbortController, type AbortSignal } from "bare-abort-controller";
 import {
   getModelsCacheDir,
@@ -126,69 +125,40 @@ async function downloadSingleFileFromRegistry(
 
   const client = await getRegistryClient();
 
-  let readStream: Readable;
-
-  if (blobBinding) {
-    logger.info(`📥 Downloading blob directly: ${modelFileName}`);
-    const result = await client.downloadBlob(blobBinding, {
-      timeout: REGISTRY_STREAM_TIMEOUT_MS,
-    });
-    if (!("stream" in result.artifact)) {
-      throw new RegistryDownloadFailedError(
-        `No stream returned for blob ${modelFileName}`,
-      );
-    }
-    readStream = result.artifact.stream as unknown as Readable;
-  } else {
-    logger.info(`📥 Downloading from registry: ${registryPath}`);
-    const result = await client.downloadModel(registryPath, registrySource, {
-      timeout: REGISTRY_STREAM_TIMEOUT_MS,
-    });
-    if (!("stream" in result.artifact)) {
-      throw new RegistryDownloadFailedError(
-        `No stream returned for ${registryPath}`,
-      );
-    }
-    readStream = result.artifact.stream as unknown as Readable;
-  }
-
   const dir = path.dirname(modelPath);
   await fsPromises.mkdir(dir, { recursive: true });
 
-  const writeStream = fs.createWriteStream(modelPath) as unknown as Writable;
+  // Adapt registry client's core.on("download") progress to SDK ModelProgressUpdate.
+  // This reports network-layer bytes, decoupled from disk I/O backpressure.
+  const onProgress = progressCallback
+    ? (progress: { downloaded: number; total: number }) => {
+        const total = progress.total || expectedSize || progress.downloaded;
+        progressCallback({
+          type: "modelProgress",
+          downloaded: progress.downloaded,
+          total,
+          percentage: total > 0
+            ? calculatePercentage(progress.downloaded, total)
+            : 0,
+          downloadKey,
+        });
+      }
+    : undefined;
 
-  let downloadedBytes = 0;
+  const clientOptions = {
+    timeout: REGISTRY_STREAM_TIMEOUT_MS,
+    outputFile: modelPath,
+    ...(onProgress && { onProgress }),
+    ...(signal && { signal: signal as unknown as globalThis.AbortSignal }),
+  };
 
-  readStream.on("data", (chunk: unknown) => {
-    const buffer = chunk as Buffer;
-    downloadedBytes += buffer.length;
-
-    if (progressCallback) {
-      progressCallback({
-        type: "modelProgress",
-        downloaded: downloadedBytes,
-        total: expectedSize || downloadedBytes,
-        percentage: expectedSize
-          ? calculatePercentage(downloadedBytes, expectedSize)
-          : 0,
-        downloadKey,
-      });
-    }
-  });
-
-  readStream.pipe(writeStream);
-
-  await new Promise<void>((resolve, reject) => {
-    writeStream.on("finish", resolve);
-    writeStream.on("error", reject);
-    readStream.on("error", reject);
-
-    signal?.addEventListener(
-      "abort",
-      () => reject(new Error("Download cancelled")),
-      { once: true },
-    );
-  });
+  if (blobBinding) {
+    logger.info(`📥 Downloading blob directly: ${modelFileName}`);
+    await client.downloadBlob(blobBinding, clientOptions);
+  } else {
+    logger.info(`📥 Downloading from registry: ${registryPath}`);
+    await client.downloadModel(registryPath, registrySource, clientOptions);
+  }
 
   logger.info(`✅ Downloaded to ${modelPath}`);
 
