@@ -185,7 +185,7 @@ jobs:
           submodules: recursive
 
       - name: Set up Node.js
-        uses: actions/setup-node@v6
+        uses: actions/setup-node@53b83947a5a98c8d113130e565377fae1a50d02f # 6.3.0
         with:
           node-version: lts/*
 
@@ -322,7 +322,7 @@ jobs:
 
       - name: Set up Node.js
         if: needs.setup.outputs.qvac_needed == 'true'
-        uses: actions/setup-node@v6
+        uses: actions/setup-node@53b83947a5a98c8d113130e565377fae1a50d02f # 6.3.0
         with:
           node-version: 20
 
