@@ -49,12 +49,13 @@
   ],
   "repository": {
     "type": "git",
-    "url": "git+https://github.com/tetherto/qvac-lib-infer-llamacpp-llm.git"
+    "url": "git+https://github.com/tetherto/qvac.git",
+    "directory": "packages/qvac-lib-infer-llamacpp-llm"
   },
   "author": "Tether",
   "license": "Apache-2.0",
-  "bugs": "https://github.com/tetherto/qvac-lib-infer-llamacpp-llm/issues",
-  "homepage": "https://github.com/tetherto/qvac-lib-infer-llamacpp-llm#readme",
+  "bugs": "https://github.com/tetherto/qvac/issues",
+  "homepage": "https://github.com/tetherto/qvac/tree/main/packages/qvac-lib-infer-llamacpp-llm#readme",
   "devDependencies": {
     "@qvac/dl-base": "^0.1.0",
     "@qvac/dl-filesystem": "^0.1.2",

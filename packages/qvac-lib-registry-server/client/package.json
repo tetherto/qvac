@@ -3,6 +3,13 @@
   "version": "0.2.1",
   "description": "QVAC Registry client library for read-only queries via Hyperswarm",
   "license": "Apache-2.0",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/tetherto/qvac.git",
+    "directory": "packages/qvac-lib-registry-server/client"
+  },
+  "bugs": "https://github.com/tetherto/qvac/issues",
+  "homepage": "https://github.com/tetherto/qvac/tree/main/packages/qvac-lib-registry-server/client#readme",
   "type": "commonjs",
   "main": "index.js",
   "bin": {
@@ -56,9 +63,12 @@
     "hyperblobs": "^2.8.0",
     "hypercore-id-encoding": "^1.3.0",
     "hyperdb": "^4.16.1",
+    "hypercore-stats": "^2.4.0",
     "hyperswarm": "^4.14.0",
+    "hyperswarm-stats": "^1.3.0",
     "paparam": "^1.10.0",
-    "ready-resource": "^1.0.1"
+    "ready-resource": "^1.0.1",
+    "tiny-byte-size": "^1.1.0"
   },
   "devDependencies": {
     "brittle": "^3.4.0",
