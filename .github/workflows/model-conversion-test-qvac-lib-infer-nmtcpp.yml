@@ -131,12 +131,6 @@ jobs:
         with:
           node-version: 20
 
-      - name: Enable Socket Firewall guard
-        uses: ./.github/actions/sfw-guard
-        with:
-          managers: npm
-          clear-caches: "true"
-
       - name: Configure scoped registry for @tetherto and @qvac packages
         working-directory: ${{ env.PKG_DIR }}
         env:
@@ -226,12 +220,6 @@ jobs:
           python-version: '3.14'
           cache: pip
           cache-dependency-path: ${{ env.PKG_DIR }}/scripts/conversion_scripts/requirements.txt
-
-      - name: Enable Socket Firewall guard
-        uses: ./.github/actions/sfw-guard
-        with:
-          managers: npm,pip
-          clear-caches: "true"
 
       - name: Install bare-runtime
         run: npm install -g bare-runtime

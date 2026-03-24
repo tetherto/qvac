@@ -64,12 +64,6 @@ jobs:
         with:
           node-version: 22
 
-      - name: Enable Socket Firewall guard
-        uses: ./.github/actions/sfw-guard
-        with:
-          managers: npm
-          clear-caches: "true"
-
       - name: Install dependencies
         run: npm install
         working-directory: ${{ env.WORKDIR }}

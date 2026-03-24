@@ -83,12 +83,6 @@ jobs:
         with:
           bun-version: latest
 
-      - name: Enable Socket Firewall guard
-        uses: ./.github/actions/sfw-guard
-        with:
-          managers: npm
-          clear-caches: "true"
-
       - name: Configure npm registries
         shell: node {0}
         run: |
@@ -396,12 +390,6 @@ jobs:
       - uses: actions/setup-node@v6
         with:
           node-version: 22
-
-      - name: Enable Socket Firewall guard
-        uses: ./.github/actions/sfw-guard
-        with:
-          managers: npm
-          clear-caches: "true"
 
       - name: Configure npm registries
         shell: node {0}

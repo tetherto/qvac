@@ -102,12 +102,6 @@ jobs:
         with:
           node-version: ${{ env.NODE_VERSION }}
 
-      - name: Enable Socket Firewall guard
-        uses: ./.github/actions/sfw-guard
-        with:
-          managers: npm
-          clear-caches: "true"
-
       - name: Configure scoped registry for @qvac and @tetherto packages
         env:
           GPR_TOKEN: ${{ secrets.GITHUB_TOKEN }}

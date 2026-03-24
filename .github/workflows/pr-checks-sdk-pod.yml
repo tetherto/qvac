@@ -217,12 +217,6 @@ jobs:
         with:
           node-version: 22
 
-      - name: Enable Socket Firewall guard
-        uses: ./.github/actions/sfw-guard
-        with:
-          managers: ${{ matrix.pkg_manager }}
-          clear-caches: "true"
-
       - name: Configure scoped registry
         env:
           NPM_TOKEN: ${{ secrets.NPM_TOKEN }}

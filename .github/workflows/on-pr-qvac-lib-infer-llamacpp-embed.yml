@@ -70,12 +70,6 @@ jobs:
         with:
           node-version: 20
 
-      - name: Enable Socket Firewall guard
-        uses: ./.github/actions/sfw-guard
-        with:
-          managers: npm
-          clear-caches: "true"
-
       - name: Configure npm auth
         working-directory: packages/qvac-lib-infer-llamacpp-embed
         run: |

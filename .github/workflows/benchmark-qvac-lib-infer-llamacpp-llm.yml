@@ -266,12 +266,6 @@ jobs:
           cache: pip
           cache-dependency-path: ${{ inputs.workdir }}/benchmarks/client/requirements.txt
 
-      - name: Enable Socket Firewall guard
-        uses: ./.github/actions/sfw-guard
-        with:
-          managers: npm,pip
-          clear-caches: "true"
-
       - name: Configure scoped registry for @tetherto and @qvac packages
         env:
           NPM_TOKEN: ${{ secrets.NPM_TOKEN }}
