@@ -12,8 +12,8 @@ function invokePluginStream(options: InvokePluginOptions, rpcOptions?: { forceNe
 
 | Name | Type | Required? | Description |
 | --- | --- | :---: | --- |
-| `options` | `InvokePluginOptions` | ✓ | No description |
-| `rpcOptions` | `\{ forceNewConnection?: boolean; profiling?: \{ enabled?: boolean; includeServerBreakdown?: boolean; mode?: "summary" | "verbose" \}; timeout?: number \}` | ✗ | No description |
+| `options` | `InvokePluginOptions` | ✓ | Plugin invocation options containing `modelId` (the loaded plugin model), `handler` (the handler name to call), and `params` (the request payload) |
+| `rpcOptions` | `\{ forceNewConnection?: boolean; profiling?: \{ enabled?: boolean; includeServerBreakdown?: boolean; mode?: "summary" | "verbose" \}; timeout?: number \}` | ✗ | Optional RPC transport options including connection reuse, timeout, and per-call profiling configuration |
 
 ## Returns
 
