@@ -159,8 +159,7 @@ async function main () {
     ctx_size: '4096',
     temp: '0.0',
     n_predict: '512',
-    repeat_penalty: '1.3',
-    reverse_prompt: '</tool_call>'
+    repeat_penalty: '1.3'
   }
 
   const baselineConfig = { ...sharedConfig }
