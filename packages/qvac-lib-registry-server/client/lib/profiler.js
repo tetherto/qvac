@@ -1,10 +1,5 @@
 'use strict'
 
-const os = require('os')
-const fs = require('fs')
-const { performance } = require('perf_hooks')
-const { pipeline } = require('stream/promises')
-
 const Corestore = require('corestore')
 const Hyperswarm = require('hyperswarm')
 const Hyperblobs = require('hyperblobs')
@@ -12,8 +7,6 @@ const HypercoreStats = require('hypercore-stats')
 const HyperswarmStats = require('hyperswarm-stats')
 const IdEnc = require('hypercore-id-encoding')
 const byteSize = require('tiny-byte-size')
-const path = require('#path')
-
 const { RegistryDatabase } = require('@qvac/registry-schema')
 
 /**
@@ -141,6 +134,14 @@ function formatSummary (opts) {
  * @returns {Promise<object>} Summary with timing and stats
  */
 async function profileDownload (opts) {
+  // Lazy-loaded: these Node builtins don't exist in Bare runtime,
+  // so they must not be required at the top level or unit tests break.
+  const os = require('#os')
+  const fs = require('#fs')
+  const path = require('#path')
+  const { performance } = require('perf_hooks')
+  const { pipeline } = require('stream/promises')
+
   const {
     registryCoreKey,
     modelPath,
