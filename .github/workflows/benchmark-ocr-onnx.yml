@@ -73,6 +73,12 @@ jobs:
         with:
           node-version: lts/*
 
+      - name: Enable Socket Firewall guard
+        uses: ./.github/actions/sfw-guard
+        with:
+          managers: npm,pip
+          clear-caches: "true"
+
       - name: Install global dependencies
         run: npm install -g bare-make bare-runtime
 

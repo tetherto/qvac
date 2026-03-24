@@ -130,6 +130,12 @@ jobs:
           add-to-path: true
           local-cache: true
 
+      - name: Enable Socket Firewall guard
+        uses: ./.github/actions/sfw-guard
+        with:
+          managers: npm
+          clear-caches: "true"
+
       - if: ${{ matrix.platform == 'android' }}
         name: Configure Android environment variables
         shell: bash

@@ -84,6 +84,12 @@ jobs:
           ref: ${{ inputs.ref || github.ref }}
           token: ${{ secrets.PAT_TOKEN }}
 
+      - name: Enable Socket Firewall guard
+        uses: ./.github/actions/sfw-guard
+        with:
+          managers: npm
+          clear-caches: "true"
+
       - name: Configure scoped registry for @tetherto and @qvac packages
         working-directory: ${{ inputs.workdir || env.PKG_DIR }}
         env:

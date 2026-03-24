@@ -76,6 +76,12 @@ jobs:
           which llvm-profdata-19 || echo "llvm-profdata-19 not in PATH"
           dpkg -l | grep llvm || echo "No LLVM packages found"
 
+      - name: Enable Socket Firewall guard
+        uses: ./.github/actions/sfw-guard
+        with:
+          managers: npm
+          clear-caches: "true"
+
       - name: Configure scoped registry for @tetherto and @qvac packages
         working-directory: ${{ env.WORKDIR }}
         env:

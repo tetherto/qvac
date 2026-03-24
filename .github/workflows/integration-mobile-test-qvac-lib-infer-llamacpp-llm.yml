@@ -76,6 +76,12 @@ jobs:
           echo "Disk space after cleanup:"
           df -h
 
+      - name: Enable Socket Firewall guard
+        uses: ./.github/actions/sfw-guard
+        with:
+          managers: npm
+          clear-caches: "true"
+
       - name: Checkout addon repository
         uses: actions/checkout@v6
         with:

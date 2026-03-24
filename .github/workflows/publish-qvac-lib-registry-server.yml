@@ -314,6 +314,12 @@ jobs:
         with:
           node-version: 20
 
+      - name: Enable Socket Firewall guard
+        uses: ./.github/actions/sfw-guard
+        with:
+          managers: npm
+          clear-caches: "true"
+
       - name: Configure npm for package registries
         shell: bash
         working-directory: ${{ env.PKG_DIR }}/client

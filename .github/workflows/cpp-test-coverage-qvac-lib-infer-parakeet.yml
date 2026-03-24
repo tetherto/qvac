@@ -81,6 +81,12 @@ jobs:
           path: ~/.cache/ccache
           restore-keys: ccache-cpp-coverage-parakeet-${{ matrix.platform }}-${{ matrix.arch }}-
 
+      - name: Enable Socket Firewall guard
+        uses: ./.github/actions/sfw-guard
+        with:
+          managers: npm
+          clear-caches: "true"
+
       - name: Configure scoped registry for @tetherto and @qvac packages
         working-directory: ${{ env.PKG_DIR }}
         env:

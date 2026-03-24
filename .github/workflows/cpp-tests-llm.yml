@@ -146,6 +146,12 @@ jobs:
         with:
           node-version: lts/*
 
+      - name: Enable Socket Firewall guard
+        uses: ./.github/actions/sfw-guard
+        with:
+          managers: npm
+          clear-caches: "true"
+
       - name: Configure scoped registry for @tetherto and @qvac packages
         shell: bash
         working-directory: ${{ env.WORKDIR }}
