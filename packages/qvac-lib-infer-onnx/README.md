@@ -48,7 +48,7 @@ Configures the process-wide ONNX Runtime environment. Must be called **before** 
 
 | Field | Type | Default | Description |
 |-------|------|---------|-------------|
-| `loggingLevel` | `string` | `"warning"` | `"verbose"`, `"info"`, `"warning"`, `"error"`, `"fatal"` |
+| `loggingLevel` | `string` | `"error"` | `"verbose"`, `"info"`, `"warning"`, `"error"`, `"fatal"` |
 | `loggingId` | `string` | `"qvac-onnx"` | Identifier used in ORT log messages |
 
 ### `getAvailableProviders() → string[]`
@@ -65,10 +65,20 @@ Creates an ONNX Runtime inference session for the given model file.
 | `optimization` | `string` | `"extended"` | `"disable"`, `"basic"`, `"extended"`, `"all"` |
 | `intraOpThreads` | `number` | `0` | Intra-op parallelism thread count (0 = auto) |
 | `interOpThreads` | `number` | `0` | Inter-op parallelism thread count (0 = auto) |
-| `enableXnnpack` | `boolean` | `true` | Enable XNNPack execution provider for CPU |
+| `enableXnnpack` | `boolean` | `false` | Enable XNNPack execution provider for CPU |
 | `enableMemoryPattern` | `boolean` | `true` | Enable memory pattern optimization |
 | `enableCpuMemArena` | `boolean` | `true` | Enable CPU memory arena |
 | `executionMode` | `string` | `"sequential"` | `"sequential"` or `"parallel"` |
+
+**Input format**: Each input: `{name: string, shape: number[], type: string, data: TypedArray}`.
+
+Supported tensor types and corresponding TypedArrays:
+- `float32` → `Float32Array`
+- `float16` → Special handling (no native JS TypedArray)
+- `int64` → `BigInt64Array`
+- `int32` → `Int32Array`
+- `int8` → `Int8Array`
+- `uint8` → `Uint8Array`
 
 ### `getInputInfo(handle) → Array<{name, shape, type}>`
 
@@ -82,7 +92,15 @@ Returns output tensor metadata for the session.
 
 Runs inference. Each input: `{name: string, shape: number[], type: string, data: TypedArray}`.
 
-Supported tensor types: `float32`, `float16`, `int64`, `int32`, `int8`, `uint8`.
+Supported tensor types and corresponding TypedArrays:
+- `float32` → `Float32Array`
+- `float16` → Special handling (no native JS TypedArray)
+- `int64` → `BigInt64Array`
+- `int32` → `Int32Array`
+- `int8` → `Int8Array`
+- `uint8` → `Uint8Array`
+
+Returns array of outputs: `{name: string, shape: number[], type: string, data: TypedArray}` where `data` contains the inference results as the appropriate TypedArray type.
 
 ### `destroySession(handle)`
 
@@ -104,13 +122,14 @@ All headers are under the `qvac-onnx/` include prefix.
 | `OnnxSessionOptionsBuilder.hpp` | Builds `Ort::SessionOptions` from `SessionConfig` |
 | `OnnxTypeConversions.hpp` | Maps ORT element types to `TensorType` |
 | `Logger.hpp` | Logging via stdout or JS (controlled by `JS_LOGGER` define) |
+| `AndroidLog.hpp` | Android logcat logging (controlled by `QVAC_ONNX_ENABLE_ANDROID_LOG` define) |
 
 ### Configuration types
 
 ```cpp
 // Environment (process-wide, one-time)
 onnx_addon::EnvironmentConfig envCfg;
-envCfg.loggingLevel = onnx_addon::LoggingLevel::INFO;    // VERBOSE, INFO, WARNING, ERROR, FATAL
+envCfg.loggingLevel = onnx_addon::LoggingLevel::ERROR;   // VERBOSE, INFO, WARNING, ERROR, FATAL
 envCfg.loggingId    = "my-addon";
 onnx_addon::OnnxRuntime::configure(envCfg);               // before first session
 
@@ -122,7 +141,7 @@ config.intraOpThreads    = 4;
 config.interOpThreads    = 2;
 config.enableMemoryPattern = true;
 config.enableCpuMemArena   = true;
-config.enableXnnpack       = true;
+config.enableXnnpack       = false;  // Default: false (must be explicitly enabled)
 config.executionMode       = onnx_addon::ExecutionMode::SEQUENTIAL;  // SEQUENTIAL, PARALLEL
 ```
 
@@ -143,7 +162,7 @@ onnx_addon::InputTensor input;
 input.name     = inputs[0].name;
 input.shape    = {1, 3, 224, 224};
 input.type     = onnx_addon::TensorType::FLOAT32;
-input.data     = floatData.data();
+input.data     = floatData.data();  // Replace with actual data pointer
 input.dataSize = floatData.size() * sizeof(float);
 
 auto results = session.run(input);

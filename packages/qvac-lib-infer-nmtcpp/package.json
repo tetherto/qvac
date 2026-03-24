@@ -12,6 +12,7 @@
     "mobile:copy-prebuilds": "cp -r prebuilds/android-arm64 prebuilds/android-ia32 || echo 'Warning: Failed to copy nmtcpp prebuilds to android-ia32'; cp -r prebuilds/android-arm64 prebuilds/android-arm || echo 'Warning: Failed to copy nmtcpp prebuilds to android-arm'; cp -r prebuilds/android-arm64 prebuilds/android-x64 || echo 'Warning: Failed to copy nmtcpp prebuilds to android-x64'; cp -r prebuilds/ios-arm64 prebuilds/ios-arm64-simulator 2>/dev/null || echo 'iOS prebuilds already present'; cp -r prebuilds/ios-arm64 prebuilds/ios-x64-simulator 2>/dev/null || echo 'iOS prebuilds already present'",
     "lint": "standard",
     "lint:fix": "standard --fix",
+    "lint-cpp": "clang-tidy -p build $(find addon/src -name '*.cpp')",
     "test:unit:generate": "brittle -r test/unit/all.js test/unit/*.test.js",
     "test:unit": "npm run test:unit:generate && bare test/unit/all.js",
     "test:integration:generate": "brittle -r test/integration/all.js test/integration/*.test.js && npm run test:mobile:generate",
@@ -50,7 +51,8 @@
   ],
   "repository": {
     "type": "git",
-    "url": "git+https://github.com/tetherto/qvac-lib-infer-nmtcpp.git"
+    "url": "git+https://github.com/tetherto/qvac.git",
+    "directory": "packages/qvac-lib-infer-nmtcpp"
   },
   "author": "Tether",
   "keywords": [
@@ -60,8 +62,8 @@
     "qvac"
   ],
   "license": "Apache-2.0",
-  "bugs": "https://github.com/tetherto/qvac-lib-infer-nmtcpp/issues",
-  "homepage": "https://github.com/tetherto/qvac-lib-infer-nmtcpp#readme",
+  "bugs": "https://github.com/tetherto/qvac/issues",
+  "homepage": "https://github.com/tetherto/qvac/tree/main/packages/qvac-lib-infer-nmtcpp#readme",
   "devDependencies": {
     "@qvac/dl-base": "^0.1.0",
     "@qvac/dl-filesystem": "^0.1.0",

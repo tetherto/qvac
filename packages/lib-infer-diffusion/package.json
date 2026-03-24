@@ -52,12 +52,13 @@
   ],
   "repository": {
     "type": "git",
-    "url": "git+https://github.com/tetherto/qvac-lib-infer-stable-diffusion-cpp.git"
+    "url": "git+https://github.com/tetherto/qvac.git",
+    "directory": "packages/lib-infer-diffusion"
   },
   "author": "Tether",
   "license": "Apache-2.0",
-  "bugs": "https://github.com/tetherto/qvac-lib-infer-stable-diffusion-cpp/issues",
-  "homepage": "https://github.com/tetherto/qvac-lib-infer-stable-diffusion-cpp#readme",
+  "bugs": "https://github.com/tetherto/qvac/issues",
+  "homepage": "https://github.com/tetherto/qvac/tree/main/packages/lib-infer-diffusion#readme",
   "devDependencies": {
     "@types/node": "^24.2.1",
     "bare-buffer": "^3.4.2",
