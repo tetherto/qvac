@@ -1,7 +1,7 @@
 ---
 title: "getLogger( )"
 titleStyle: code
-description: "No description available"
+description: "Creates or retrieves a namespaced logger instance. Loggers with the same namespace are cached and reused when no options are provided."
 ---
 
 ```typescript
@@ -12,17 +12,17 @@ function getLogger(namespace: string, options?: LoggerOptions): Logger
 
 | Name | Type | Required? | Description |
 | --- | --- | :---: | --- |
-| `namespace` | `string` | ✓ | No description |
-| `options` | [`LoggerOptions`](#loggeroptions) | ✗ | No description |
+| `namespace` | `string` | ✓ | A unique namespace identifier for this logger, used to prefix and filter log messages |
+| `options` | [`LoggerOptions`](#loggeroptions) | ✗ | Configuration options for the logger instance. When provided, bypasses the logger cache and creates a new instance |
 
 ### `LoggerOptions`
 
 | Field | Type | Required? | Description |
 | --- | --- | :---: | --- |
-| `enableConsole` | `boolean` | ✗ | — |
-| `level` | `any` | ✗ | — |
-| `namespace` | `string` | ✗ | — |
-| `transports` | `LogTransport[]` | ✗ | — |
+| `enableConsole` | `boolean` | ✗ | Whether to output log messages to the console. Defaults to `true` |
+| `level` | `LogLevel` | ✗ | Minimum log level to emit. One of `"error"`, `"warn"`, `"info"`, `"debug"`, or `"off"` |
+| `namespace` | `string` | ✗ | Override the namespace passed to the constructor |
+| `transports` | `LogTransport[]` | ✗ | Custom transport functions that receive log events. Each transport is called with `(level, namespace, message)` |
 
 ## Returns
 
@@ -30,16 +30,38 @@ function getLogger(namespace: string, options?: LoggerOptions): Logger
 Logger
 ```
 
-
+A logger instance with methods for emitting log messages at various severity levels.
 
 | Field | Type | Description |
 | --- | --- | --- |
-| `addTransport` | `(transport: LogTransport) => void` | — |
-| `debug` | `(args: unknown[]) => void` | — |
-| `error` | `(args: unknown[]) => void` | — |
-| `getLevel` | `() => LogLevel` | — |
-| `info` | `(args: unknown[]) => void` | — |
-| `setConsoleOutput` | `(enabled: boolean) => void` | — |
-| `setLevel` | `(level: LogLevel) => void` | — |
-| `trace` | `(args: unknown[]) => void` | — |
-| `warn` | `(args: unknown[]) => void` | — |
+| `addTransport` | `(transport: LogTransport) => void` | Registers an additional transport to receive log events |
+| `debug` | `(...args: unknown[]) => void` | Logs a debug-level message |
+| `error` | `(...args: unknown[]) => void` | Logs an error-level message |
+| `getLevel` | `() => LogLevel` | Returns the current minimum log level |
+| `info` | `(...args: unknown[]) => void` | Logs an info-level message |
+| `setConsoleOutput` | `(enabled: boolean) => void` | Enables or disables console output at runtime |
+| `setLevel` | `(level: LogLevel) => void` | Changes the minimum log level at runtime |
+| `trace` | `(...args: unknown[]) => void` | Logs a trace-level message (most verbose) |
+| `warn` | `(...args: unknown[]) => void` | Logs a warning-level message |
+
+## Example
+
+```typescript
+import { getLogger } from "@qvac/sdk";
+
+const logger = getLogger("my-app");
+
+logger.info("Application started");
+logger.debug("Debug details:", { key: "value" });
+
+logger.setLevel("error");
+logger.info("This will not be logged");
+
+const verboseLogger = getLogger("my-app:verbose", {
+  level: "debug",
+  enableConsole: true,
+  transports: [(level, namespace, message) => {
+    // Custom transport: write to file, send to server, etc.
+  }],
+});
+```
