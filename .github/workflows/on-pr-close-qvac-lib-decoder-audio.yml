@@ -63,4 +63,5 @@ jobs:
       pattern: ${{ inputs.pattern }}
       packages: ${{ inputs.packages || 'qvac-lib-decoder-audio' }}
       dry-run: ${{ github.event_name == 'pull_request' && true || inputs.dry-run }}
-    secrets: inherit
+    secrets:
+      GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

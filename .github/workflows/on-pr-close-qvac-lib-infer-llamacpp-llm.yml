@@ -58,4 +58,5 @@ jobs:
       pattern: ${{ inputs.pattern }}
       packages: ${{ inputs.packages }}
       dry-run: ${{ inputs.dry-run || true }}
-    secrets: inherit
+    secrets:
+      GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
