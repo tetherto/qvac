@@ -1,7 +1,6 @@
 'use strict'
 
 const { InferenceArgsSchema } = require('../validation')
-const { spawn } = require('bare-subprocess')
 const logger = require('../utils/logger')
 const fs = require('bare-fs')
 const { Readable } = require('bare-stream')
@@ -14,10 +13,20 @@ const ALLOWED_LIBS = [
 
 const loadedModels = new Map()
 
+const ALLOWED_AUDIO_DIRS = [
+  path.resolve('.'),
+  path.resolve('./models'),
+  path.resolve('./examples')
+]
+
 const validateFilePath = (filePath) => {
   const resolved = path.resolve(filePath)
   if (!fs.existsSync(resolved)) {
-    throw new Error('File not found: ' + path.basename(filePath))
+    throw new Error('File not found')
+  }
+  const isAllowed = ALLOWED_AUDIO_DIRS.some(dir => resolved.startsWith(dir + path.sep) || resolved === dir)
+  if (!isAllowed) {
+    throw new Error('File path is outside allowed directories')
   }
   return resolved
 }
@@ -31,43 +40,6 @@ const getPackageVersion = (lib) => {
     logger.debug(`Could not resolve version for ${lib}: ${err?.message || err}`)
     return null
   }
-}
-
-const ensurePackage = async (lib, requestedVersion) => {
-  const installed = getPackageVersion(lib)
-
-  // If package is already installed, use it (skip version check for local installs)
-  if (installed) {
-    if (!requestedVersion || installed === requestedVersion) {
-      logger.info(`Using installed ${lib}@${installed}`)
-      return installed
-    }
-    // Version mismatch but package is installed - use installed version with warning
-    logger.warn(`Requested ${lib}@${requestedVersion} but ${installed} is installed. Using installed version.`)
-    return installed
-  }
-
-  // Package not installed - try to install from npm
-  const versionSpec = requestedVersion ? `@${requestedVersion}` : ''
-  logger.info(`Installing ${lib}${versionSpec}...`)
-  await new Promise((resolve, reject) => {
-    const npm = spawn('npm', ['install', `${lib}${versionSpec}`], { stdio: 'inherit' })
-    npm
-      .on('exit', code => code === 0 ? resolve() : reject(new Error(`npm install ${lib}${versionSpec} failed (${code})`)))
-      .on('error', reject)
-  })
-
-  // Try to get version after install, but don't fail if we can't verify
-  // (Bare runtime has different module resolution than Node.js)
-  const newVersion = getPackageVersion(lib)
-  if (newVersion) {
-    logger.info(`Installed ${lib}@${newVersion}`)
-    return newVersion
-  }
-
-  // Package installed but version couldn't be verified - return 'unknown'
-  logger.warn(`Installed ${lib} but couldn't verify version (Bare runtime). Proceeding anyway.`)
-  return 'unknown'
 }
 
 class FakeLoader {
@@ -100,13 +72,13 @@ const runAddon = async (payload) => {
     const { inputs, parakeet, config } =
       InferenceArgsSchema.parse(payload)
 
-    const { lib: parakeetLib, version: parakeetVerReq } = parakeet
+    const { lib: parakeetLib } = parakeet
 
     if (!ALLOWED_LIBS.includes(parakeetLib)) {
       throw new Error('Unsupported library: ' + parakeetLib + '. Allowed: ' + ALLOWED_LIBS.join(', '))
     }
 
-    const parakeetVersion = await ensurePackage(parakeetLib, parakeetVerReq)
+    const parakeetVersion = getPackageVersion(parakeetLib) || 'unknown'
     logger.info(`Loading addon: ${parakeetLib}`)
     const TranscriptionParakeet = require(parakeetLib)
     logger.info('Addon loaded successfully')

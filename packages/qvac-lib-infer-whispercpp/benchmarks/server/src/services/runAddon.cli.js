@@ -10,10 +10,20 @@ const path = require('bare-path')
 
 const WHISPER_CPP_PATH = '/path/to/whisper.cpp/build/bin/whisper-cli'
 
+const ALLOWED_DIRS = [
+  path.resolve('.'),
+  path.resolve('./models'),
+  path.resolve('./examples')
+]
+
 const validatePath = (filePath) => {
   const resolved = path.resolve(filePath)
   if (!fs.existsSync(resolved)) {
-    throw new Error('File not found: ' + path.basename(filePath))
+    throw new Error('File not found')
+  }
+  const isAllowed = ALLOWED_DIRS.some(dir => resolved.startsWith(dir + path.sep) || resolved === dir)
+  if (!isAllowed) {
+    throw new Error('File path is outside allowed directories')
   }
   return resolved
 }
@@ -24,8 +34,8 @@ const convertRawToWav = async (rawFilePath, wavFilePath) => {
       '-f', 'f32le',
       '-ar', '16000',
       '-ac', '1',
-      '-i', '--', rawFilePath,
-      '--', wavFilePath
+      '-i', rawFilePath,
+      wavFilePath
     ]
 
     const proc = spawn('ffmpeg', args, { stdio: 'inherit' })
