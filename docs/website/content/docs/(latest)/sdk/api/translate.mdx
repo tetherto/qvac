@@ -14,7 +14,7 @@ function translate(params: TranslateClientParams, options?: { forceNewConnection
 | Name | Type | Required? | Description |
 | --- | --- | :---: | --- |
 | `params` | `TranslateClientParams` | ✓ | Translation configuration object |
-| `options` | `\{ forceNewConnection?: boolean; profiling?: \{ enabled?: boolean; includeServerBreakdown?: boolean; mode?: "summary" | "verbose" \}; timeout?: number \}` | ✗ | No description |
+| `options` | `\{ forceNewConnection?: boolean; profiling?: \{ enabled?: boolean; includeServerBreakdown?: boolean; mode?: "summary" | "verbose" \}; timeout?: number \}` | ✗ | Optional RPC transport options including connection reuse, timeout, and per-call profiling configuration |
 
 ## Returns
 
@@ -26,9 +26,9 @@ function translate(params: TranslateClientParams, options?: { forceNewConnection
 
 | Field | Type | Description |
 | --- | --- | --- |
-| `stats` | `Promise` | — |
-| `text` | `Promise` | — |
-| `tokenStream` | `AsyncGenerator` | — |
+| `stats` | `Promise` | Resolves with translation performance metrics (processed tokens and processing time), or `undefined` if profiling is not enabled |
+| `text` | `Promise` | Resolves with the full translated text once translation is complete |
+| `tokenStream` | `AsyncGenerator` | Yields translated tokens as they are generated in real-time |
 
 ## Throws
 
@@ -44,7 +44,7 @@ const result = translate({
   modelId: "modelId",
   text: "Hello world",
   from: "en",
-  to: "es"
+  to: "es",
   modelType: "llm",
 });
 
@@ -57,7 +57,7 @@ const response = translate({
   modelId: "modelId",
   text: "Hello world",
   from: "en",
-  to: "es"
+  to: "es",
   modelType: "llm",
   stream: false,
 });

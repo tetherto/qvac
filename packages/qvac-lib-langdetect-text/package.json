@@ -26,7 +26,13 @@
     "nyc": "17.1.0",
     "standard": "17.1.2"
   },
-  "bugs": "https://github.com/tetherto/qvac-lib-langdetect-text/issues",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/tetherto/qvac.git",
+    "directory": "packages/qvac-lib-langdetect-text"
+  },
+  "bugs": "https://github.com/tetherto/qvac/issues",
+  "homepage": "https://github.com/tetherto/qvac/tree/main/packages/qvac-lib-langdetect-text#readme",
   "files": [
     "src",
     "index.d.ts",
