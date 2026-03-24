@@ -33,3 +33,4 @@ compile_commands.json
 vcpkg_installed/
 package-lock.json
 data/
+benchmarks/results/
