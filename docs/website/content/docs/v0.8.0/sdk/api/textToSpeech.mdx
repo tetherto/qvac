@@ -1,30 +1,47 @@
 ---
 title: "textToSpeech( )"
 titleStyle: code
-description: "No description available"
+description: Converts text to speech audio.
 ---
 
-```typescript
-function textToSpeech(params: { inputType: string; modelId: string; stream: boolean; text: string }, options?: { forceNewConnection?: boolean; profiling?: { enabled?: boolean; includeServerBreakdown?: boolean; mode?: "summary" | "verbose" }; timeout?: number }): { buffer: Promise<number[]>; bufferStream: AsyncGenerator<number>; done: Promise<boolean> }
+```ts
+function textToSpeech(params, options?): {
+  bufferStream: AsyncGenerator<number>;
+  buffer: Promise<number[]>;
+  done: Promise<boolean>;
+};
 ```
 
 ## Parameters
 
-| Name | Type | Required? | Description |
-| --- | --- | :---: | --- |
-| `params` | `\{ inputType: string; modelId: string; stream: boolean; text: string \}` | ✓ | No description |
-| `options` | `\{ forceNewConnection?: boolean; profiling?: \{ enabled?: boolean; includeServerBreakdown?: boolean; mode?: "summary" | "verbose" \}; timeout?: number \}` | ✗ | No description |
+| Name | Type | Required? | Default | Description |
+| --- | --- | :---: | --- | --- |
+| params.modelId | `string` | ✓ | — | The identifier of the loaded TTS model |
+| params.text | `string` | ✓ | — | The text to convert to speech (non-empty) |
+| params.inputType | `string` | ✗ | `"text"` | Input type |
+| params.stream | `boolean` | ✗ | `true` | Whether to stream audio samples or return all at once |
+| options | [`RPCOptions`](../index#rpcoptions) | ✗ | — | Optional RPC transport options |
 
 ## Returns
 
-```typescript
-{ buffer: Promise<number[]>; bufferStream: AsyncGenerator<number>; done: Promise<boolean> }
-```
-
-
+`object` — Object with the following fields:
 
 | Field | Type | Description |
 | --- | --- | --- |
-| `buffer` | `Promise` | — |
-| `bufferStream` | `AsyncGenerator` | — |
-| `done` | `Promise` | — |
+| bufferStream | `AsyncGenerator<number>` | Stream of audio samples (active when `stream: true`) |
+| buffer | `Promise<number[]>` | Complete audio buffer (populated when `stream: false`) |
+| done | `Promise<boolean>` | Resolves to `true` when generation completes |
+
+## Example
+
+```typescript
+// Streaming mode
+const { bufferStream } = textToSpeech({ modelId, text: "Hello world" });
+for await (const sample of bufferStream) {
+  // process audio sample
+}
+
+// Non-streaming mode
+const { buffer } = textToSpeech({ modelId, text: "Hello world", stream: false });
+const audioData = await buffer;
+```
