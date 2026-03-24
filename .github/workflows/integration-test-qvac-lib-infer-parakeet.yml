@@ -179,7 +179,7 @@ jobs:
         with:
           name: rtf-results-${{ matrix.os }}-${{ matrix.platform }}-${{ matrix.arch }}
           path: ${{ inputs.workdir }}/benchmarks/results/rtf-benchmark-*.json
-          retention-days: 90
+          retention-days: 30
           if-no-files-found: ignore
 
       - name: Add RTF summary
