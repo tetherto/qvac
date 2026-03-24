@@ -115,7 +115,7 @@ jobs:
       - name: Enable Socket Firewall guard
         uses: ./.github/actions/sfw-guard
         with:
-          managers: bun,npm
+          managers: npm
           clear-caches: "true"
 
       - name: Configure npm registries
@@ -431,7 +431,7 @@ jobs:
       - name: Enable Socket Firewall guard
         uses: ./.github/actions/sfw-guard
         with:
-          managers: bun,npm
+          managers: npm
           clear-caches: "true"
 
       - name: Configure npm registries
