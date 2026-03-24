@@ -12,6 +12,10 @@ const state = Object.freeze({
 
 const END_OF_INPUT = 'end of job'
 
+function nextSafeId (current) {
+  return current >= Number.MAX_SAFE_INTEGER ? 1 : current + 1
+}
+
 /**
  * An interface between Bare addon in C++ and JS runtime.
  */
@@ -265,7 +269,7 @@ class WhisperInterface {
         }
 
         this._activeJobId = currentJobId
-        this._nextJobId += 1
+        this._nextJobId = nextSafeId(this._nextJobId)
         this._bufferedAudio = []
         this._setState(state.PROCESSING)
         return currentJobId
@@ -335,7 +339,7 @@ class WhisperInterface {
   async runJob (data) {
     try {
       this._activeJobId = this._nextJobId
-      this._nextJobId += 1
+      this._nextJobId = nextSafeId(this._nextJobId)
       this._setState(state.PROCESSING)
       const accepted = this._binding.runJob(this._handle, {
         ...data,
@@ -360,7 +364,7 @@ class WhisperInterface {
   startStreaming (config = {}) {
     try {
       this._activeJobId = this._nextJobId
-      this._nextJobId += 1
+      this._nextJobId = nextSafeId(this._nextJobId)
       this._setState(state.PROCESSING)
       this._binding.startStreaming(this._handle, config)
     } catch (err) {
