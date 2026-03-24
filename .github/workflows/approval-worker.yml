@@ -46,8 +46,8 @@ jobs:
   check-approvals:
     needs: run-when-command
     permissions:
-      contents: read
-      pull-requests: read
+      contents: write
+      pull-requests: write
       statuses: write
       issues: write
     uses: tetherto/qvac-devops/.github/workflows/approval-check-worker.yml@monorepo_update

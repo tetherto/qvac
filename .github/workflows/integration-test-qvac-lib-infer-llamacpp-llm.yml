@@ -23,10 +23,6 @@ on:
         type: string
         required: true
 
-permissions:
-  contents: read
-  packages: read
-
 jobs:
   run-integration-tests:
     timeout-minutes: ${{ matrix.timeout_minutes || 360 }}
@@ -39,6 +35,9 @@ jobs:
       AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
       WORKDIR: packages/qvac-lib-infer-llamacpp-llm
       NO_GPU: ${{ matrix.no_gpu || 'false' }}
+    permissions:
+      contents: read
+      packages: read
     strategy:
       fail-fast: false
       matrix:

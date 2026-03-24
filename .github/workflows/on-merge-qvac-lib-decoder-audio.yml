@@ -111,9 +111,6 @@ jobs:
       needs.publish-logic.outputs.publish_release == 'true' ||
       needs.publish-logic.outputs.publish_feature == 'true' ||
       needs.publish-logic.outputs.publish_tmp == 'true'
-    permissions:
-      contents: read
-      packages: read
     uses: ./.github/workflows/integration-test-qvac-lib-decoder-audio.yml
     secrets: inherit
     with:

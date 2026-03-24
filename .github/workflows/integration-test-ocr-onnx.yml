@@ -26,10 +26,6 @@ on:
         required: false
         default: "packages/ocr-onnx"
 
-permissions:
-  contents: read
-  packages: read
-
 env:
   PKG_DIR: packages/ocr-onnx
 
@@ -42,6 +38,10 @@ jobs:
     env:
       AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
       AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+
+    permissions:
+      contents: read
+      packages: read
 
     strategy:
       fail-fast: false

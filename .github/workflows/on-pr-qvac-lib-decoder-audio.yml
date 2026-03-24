@@ -140,7 +140,9 @@ jobs:
 
   run-mobile-integration-tests:
     permissions:
-      pull-requests: write
+      contents: read
+      packages: read
+      pull-requests: write # Allow commenting on PRs
     needs: context
     if: needs.context.outputs.run_verify == 'true' || github.event_name == 'workflow_dispatch'
     uses: ./.github/workflows/integration-mobile-test-qvac-lib-decoder-audio.yml

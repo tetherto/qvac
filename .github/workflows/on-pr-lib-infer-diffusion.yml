@@ -31,8 +31,6 @@ jobs:
   sanity-checks:
     if: contains( github.event.pull_request.labels.*.name, 'verify') || github.event_name == 'workflow_dispatch'
     runs-on: ubuntu-latest
-    permissions:
-      contents: read
     steps:
       - name: Run Sanity checks
         uses: tetherto/qvac-devops/.github/actions/sanity-checks@monorepo_update
@@ -116,6 +114,10 @@ jobs:
       ref: ${{ github.event.pull_request.head.ref }}
 
   run-mobile-integration-tests:
+    permissions:
+      contents: read
+      packages: read
+      pull-requests: write # Allow commenting on PRs
     if: contains( github.event.pull_request.labels.*.name, 'verify') || github.event_name == 'workflow_dispatch'
     needs: prebuild
     uses: ./.github/workflows/integration-mobile-test-lib-infer-diffusion.yml

@@ -156,6 +156,10 @@ jobs:
       ref: ${{ github.event.pull_request.head.ref }}
 
   run-mobile-integration-tests:
+    permissions:
+      contents: read
+      packages: read
+      pull-requests: write # Allow commenting on PRs
     needs: [changes, sanity-checks, prebuild]
     if: |
       always() &&

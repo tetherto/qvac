@@ -112,6 +112,10 @@ jobs:
       ref: ${{ github.event.pull_request.head.ref }}
 
   run-mobile-integration-tests:
+    permissions:
+      contents: read
+      packages: read
+      pull-requests: write # Allow commenting on PRs
     if:  contains( github.event.pull_request.labels.*.name, 'verify') || github.event_name == 'workflow_dispatch'
     needs: prebuild
     uses: ./.github/workflows/integration-mobile-test-qvac-lib-infer-llamacpp-embed.yml

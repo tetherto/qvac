@@ -51,8 +51,6 @@ jobs:
        contains(format(' {0} ', join(github.event.pull_request.labels.*.name, ' ')), ' verify ')) ||
       github.event_name == 'workflow_dispatch'
     runs-on: ubuntu-22.04
-    permissions:
-      contents: read
     env:
       VCPKG_BINARY_SOURCES: "clear;files,${{ github.workspace }}/packages/ocr-onnx/vcpkg/cache,readwrite"
       PKG_DIR: packages/ocr-onnx
@@ -186,7 +184,9 @@ jobs:
 
   run-mobile-integration-tests:
     permissions:
-      pull-requests: write
+      contents: read
+      packages: read
+      pull-requests: write # Allow commenting on PRs
     needs: [changes, prebuild]
     if: |
       (needs.changes.outputs.pkg == 'true' || github.event_name == 'workflow_dispatch') &&
