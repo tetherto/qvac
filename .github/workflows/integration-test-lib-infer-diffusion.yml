@@ -308,7 +308,7 @@ jobs:
 
       - name: Upload generated images
         if: always()
-        uses: actions/upload-artifact@v6
+        uses: actions/upload-artifact@bbbca2ddaa5d8feaa63e36b76fdaad77386f024f # 7.0.0
         with:
           name: sd-test-images-${{ matrix.os }}-${{ matrix.arch }}
           path: ${{ env.WORKDIR }}/test/model/*.png

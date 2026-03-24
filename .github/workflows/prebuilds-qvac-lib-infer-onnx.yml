@@ -389,7 +389,7 @@ jobs:
           path: ~\AppData\Local\ccache
           key: ccache-${{ matrix.platform }}-${{ matrix.arch }}-${{ github.sha }}
 
-      - uses: actions/upload-artifact@v6
+      - uses: actions/upload-artifact@bbbca2ddaa5d8feaa63e36b76fdaad77386f024f # 7.0.0
         with:
           name: onnx-${{ matrix.platform }}-${{ matrix.arch }}${{ matrix.tags }}
           path: ${{ env.PKG_DIR }}/prebuilds
@@ -414,7 +414,7 @@ jobs:
           cp -rv prebuilds/android-arm64/* prebuilds/android-ia32/
 
       - name: Upload merged artifacts
-        uses: actions/upload-artifact@v6
+        uses: actions/upload-artifact@bbbca2ddaa5d8feaa63e36b76fdaad77386f024f # 7.0.0
         with:
           name: prebuilds
           path: prebuilds

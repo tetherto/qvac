@@ -431,7 +431,7 @@ jobs:
           fi
 
       - name: Upload benchmark results
-        uses: actions/upload-artifact@v6
+        uses: actions/upload-artifact@bbbca2ddaa5d8feaa63e36b76fdaad77386f024f # 7.0.0
         if: always()
         with:
           name: benchmark-results-${{ github.run_number }}
@@ -441,7 +441,7 @@ jobs:
           retention-days: 90
 
       - name: Upload server logs
-        uses: actions/upload-artifact@v6
+        uses: actions/upload-artifact@bbbca2ddaa5d8feaa63e36b76fdaad77386f024f # 7.0.0
         if: failure()
         with:
           name: server-logs-${{ github.run_number }}
