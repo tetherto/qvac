@@ -24,11 +24,11 @@ function completion(params: CompletionParams): { stats: Promise<{ cacheTokens: n
 
 | Field | Type | Description |
 | --- | --- | --- |
-| `stats` | `Promise` | — |
-| `text` | `Promise` | — |
-| `tokenStream` | `AsyncGenerator` | — |
-| `toolCalls` | `Promise` | — |
-| `toolCallStream` | `AsyncGenerator` | — |
+| `stats` | `Promise` | Resolves with inference performance metrics (cache tokens used, time to first token, tokens per second), or `undefined` if profiling is not enabled |
+| `text` | `Promise` | Resolves with the full completion text once generation is finished |
+| `tokenStream` | `AsyncGenerator` | Yields individual tokens as they are generated in real-time |
+| `toolCalls` | `Promise` | Resolves with all parsed tool calls once generation is complete. Each entry includes an `invoke()` method to execute the tool handler |
+| `toolCallStream` | `AsyncGenerator` | Yields tool call events and tool call errors as they are parsed during generation |
 
 
 

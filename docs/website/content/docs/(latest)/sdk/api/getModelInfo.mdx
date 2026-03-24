@@ -1,7 +1,7 @@
 ---
 title: "getModelInfo( )"
 titleStyle: code
-description: "No description available"
+description: "Returns status information for a catalog model, including cache state, loaded instances, and metadata."
 ---
 
 ```typescript
@@ -12,10 +12,39 @@ function getModelInfo(params: { name: string }): Promise
 
 | Name | Type | Required? | Description |
 | --- | --- | :---: | --- |
-| `params` | `\{ name: string \}` | ✓ | No description |
+| `params` | `\{ name: string \}` | ✓ | An object containing the model name to query |
+
+| Field | Type | Required? | Description |
+| --- | --- | :---: | --- |
+| `name` | `string` | ✓ | The catalog name of the model (e.g. `"WHISPER_TINY"`) |
 
 ## Returns
 
 ```typescript
 Promise
+```
+
+Resolves with a `ModelInfo` object containing the model's metadata, cache status, and any active loaded instances.
+
+## Throws
+
+| Error | When |
+| --- | --- |
+| `InvalidResponseError` | The server returns an unexpected response type |
+
+## Example
+
+```typescript
+import { getModelInfo } from "@qvac/sdk";
+
+const info = await getModelInfo({ name: "LLAMA_3_2_1B_INST_Q4_0" });
+
+console.log("Cached:", info.isCached);
+console.log("Loaded:", info.isLoaded);
+
+if (info.loadedInstances) {
+  for (const instance of info.loadedInstances) {
+    console.log("Instance model ID:", instance.modelId);
+  }
+}
 ```
