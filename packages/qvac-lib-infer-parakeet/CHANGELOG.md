@@ -5,6 +5,13 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.2.3]
+
+### Added
+- RTF benchmark integration test (`rtf-benchmark.test.js`) that captures Real-Time Factor and 12 other timing metrics from the C++ addon's `runtimeStats` callback
+- `test:benchmark:rtf` npm script for on-demand RTF benchmark runs
+- RTF benchmark step in integration test CI workflow (non-blocking, all 6 runners) with JSON artifact upload
+
 ## [0.2.2]
 
 This release documents Parakeet runtime statistics and transcription output in TypeScript so consumers can type `response.stats` and `run()` results against the native addon.
