@@ -96,10 +96,11 @@ async function runChatterboxTTS (payload) {
 
   logger.info(`[Chatterbox] Processing ${texts.length} texts`)
 
-  // Resolve paths relative to benchmarks directory if not absolute
   let modelDir = config.modelDir || DEFAULT_MODEL_DIR
-  if (!path.isAbsolute(modelDir)) {
-    modelDir = path.join(BENCHMARKS_DIR, modelDir)
+  modelDir = path.isAbsolute(modelDir) ? modelDir : path.join(BENCHMARKS_DIR, modelDir)
+  modelDir = path.resolve(modelDir)
+  if (!modelDir.startsWith(BENCHMARKS_DIR) && !modelDir.startsWith(SHARED_DATA_DIR)) {
+    throw new Error('modelDir must be within the benchmarks or shared-data directory')
   }
 
   const tokenizerPath = path.join(modelDir, 'tokenizer.json')
