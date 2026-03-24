@@ -250,7 +250,14 @@ function getTestPaths (modelsDir = null) {
 
   if (isMobile && writableRoot) {
     actualModelsDir = modelsDir || path.join(writableRoot, 'models')
-    samplesDir = path.join(writableRoot, 'samples')
+    // Bundled testAssets are extracted to the cache dir by React Native.
+    // Resolve the directory from the asset manifest so integration tests
+    // can find sample audio files without an extra download step.
+    const assetPaths = global.assetPaths || {}
+    const firstAsset = Object.values(assetPaths)[0]
+    samplesDir = firstAsset
+      ? path.dirname(firstAsset.replace('file://', ''))
+      : path.join(writableRoot, 'samples')
   } else {
     actualModelsDir = modelsDir || path.resolve(__dirname, '../../models')
     samplesDir = path.resolve(__dirname, '../../examples/samples')
