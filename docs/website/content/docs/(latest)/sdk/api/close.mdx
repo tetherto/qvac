@@ -1,20 +1,18 @@
 ---
 title: "close( )"
 titleStyle: code
-description: "Closes the SDK client connection and releases all associated resources (RPC worker, IPC server). Safe to call multiple times — subsequent calls are a no-op if already closed."
+description: Closes the SDK client connection and releases all associated resources.
 ---
 
-```typescript
-function close(): Promise
+```ts
+function close(): Promise<void>;
 ```
 
-
+Safe to call multiple times — subsequent calls are a no-op if already closed.
 
 ## Returns
 
-```typescript
-Promise
-```
+`Promise<void>` — Resolves when the connection is closed.
 
 ## Example
 

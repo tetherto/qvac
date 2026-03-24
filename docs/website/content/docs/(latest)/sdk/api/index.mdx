@@ -53,6 +53,32 @@ text chunks as they become available from the model. | `transcribeStream(params:
 | [`translate()`](./translate) | Translates text from one language to another using a specified translation model. | `translate(params: TranslateClientParams, options?: { forceNewConnection?: boolean; profiling?: { enabled?: boolean; includeServerBreakdown?: boolean; mode?: "summary" \| "verbose" }; timeout?: number }): { stats: Promise<{ processedTokens: number; processingTime: number } \| undefined>; text: Promise<string>; tokenStream: AsyncGenerator<string> }` |
 | [`unloadModel()`](./unloadModel) | Unloads a previously loaded model from the server. | `unloadModel(params: { clearStorage?: boolean; modelId: string }): Promise` |
 
+## Objects
+
+| Object | Summary |
+| --- | --- |
+| [`profiler`](./profiler) | Client-side profiling controller for recording, aggregating, and exporting inference performance data |
+
+## Shared Types
+
+### `RPCOptions`
+
+Many functions accept an optional `rpcOptions` parameter for transport-level configuration:
+
+| Field | Type | Required? | Default | Description |
+| --- | --- | :---: | --- | --- |
+| timeout | `number` | ✗ | — | Request timeout in milliseconds (min 100) |
+| forceNewConnection | `boolean` | ✗ | `false` | Force a new RPC connection instead of reusing an existing one |
+| profiling | [`PerCallProfiling`](#percallprofiling) | ✗ | — | Per-call profiling configuration |
+
+#### `PerCallProfiling`
+
+| Field | Type | Required? | Description |
+| --- | --- | :---: | --- |
+| enabled | `boolean` | ✗ | Enable profiling for this call |
+| includeServerBreakdown | `boolean` | ✗ | Include server-side timing breakdown in profiling data |
+| mode | `"summary" \| "verbose"` | ✗ | Profiling detail level |
+
 ## Errors
 
 See [Errors](./errors) for the full list of SDK error codes.

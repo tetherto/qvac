@@ -1,25 +1,19 @@
 ---
 title: "ping( )"
 titleStyle: code
-description: "Sends a ping request to the server and returns the pong response."
+description: Sends a ping request to the server and returns the pong response.
 ---
 
-```typescript
-function ping(): Promise
+```ts
+function ping(): Promise<{ type: "pong"; number: number }>;
 ```
-
-
 
 ## Returns
 
-```typescript
-Promise
-```
-
-
+`Promise<{ type: "pong", number: number }>` — The server's pong response.
 
 ## Throws
 
 | Error | When |
 | --- | --- |
-| `When the response type is not "pong".` |  |
+| `INVALID_RESPONSE_TYPE` | Response type does not match expected `"pong"` |
