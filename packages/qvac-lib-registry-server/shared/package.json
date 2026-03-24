@@ -3,6 +3,13 @@
   "version": "0.1.2",
   "description": "HyperDB schema and database wrapper for QVAC Registry",
   "license": "Apache-2.0",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/tetherto/qvac.git",
+    "directory": "packages/qvac-lib-registry-server/shared"
+  },
+  "bugs": "https://github.com/tetherto/qvac/issues",
+  "homepage": "https://github.com/tetherto/qvac/tree/main/packages/qvac-lib-registry-server/shared#readme",
   "type": "commonjs",
   "main": "index.js",
   "files": [
