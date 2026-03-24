@@ -298,7 +298,7 @@ jobs:
       - name: Get vcpkg cache
         if: inputs.addon_version == ''
         id: cache-vcpkg
-        uses: actions/cache@v5
+        uses: actions/cache@668228422ae6a00e4ad889ee87cd7109ec5666a7 # 5.0.4
         with:
           key: linux-x64-${{ hashFiles( format('{0}/vcpkg.json', inputs.workdir), format('{0}/vcpkg-configuration.json', inputs.workdir), format('{0}/vcpkg/ports/**', inputs.workdir) ) }}
           path: ${{ inputs.workdir }}/vcpkg/cache

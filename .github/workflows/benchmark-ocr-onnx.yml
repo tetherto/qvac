@@ -101,7 +101,7 @@ jobs:
         run: echo "VCPKG_ROOT=$VCPKG_INSTALLATION_ROOT" >> $GITHUB_ENV
 
       - name: Cache vcpkg packages
-        uses: actions/cache@v5
+        uses: actions/cache@668228422ae6a00e4ad889ee87cd7109ec5666a7 # 5.0.4
         with:
           key: vcpkg-linux-x64-${{ hashFiles('packages/ocr-onnx/**/vcpkg.json', 'packages/ocr-onnx/**/CMakeLists.txt') }}
           path: |
@@ -111,7 +111,7 @@ jobs:
           restore-keys: vcpkg-linux-x64-
 
       - name: Cache ccache
-        uses: actions/cache@v5
+        uses: actions/cache@668228422ae6a00e4ad889ee87cd7109ec5666a7 # 5.0.4
         with:
           key: ccache-linux-x64-${{ github.sha }}
           path: ~/.ccache
@@ -132,7 +132,7 @@ jobs:
           ccache -z
 
       - name: Cache npm dependencies
-        uses: actions/cache@v5
+        uses: actions/cache@668228422ae6a00e4ad889ee87cd7109ec5666a7 # 5.0.4
         with:
           key: npm-${{ hashFiles('packages/ocr-onnx/package-lock.json') }}
           path: ~/.npm
