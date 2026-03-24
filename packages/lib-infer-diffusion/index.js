@@ -72,14 +72,15 @@ class ImgStableDiffusion extends BaseInference {
       // for SD3 split) the caller is using a pure diffusion GGUF that must be
       // loaded via diffusion_model_path.
       const isSplitLayout = !!this._llmModel || !!this._t5XxlModel
+      const resolve = (name) => name ? (path.isAbsolute(name) ? name : path.join(this._diskPath, name)) : ''
       const configurationParams = {
-        path: isSplitLayout ? '' : path.join(this._diskPath, this._modelName),
-        diffusionModelPath: isSplitLayout ? path.join(this._diskPath, this._modelName) : '',
-        clipLPath: this._clipLModel ? path.join(this._diskPath, this._clipLModel) : '',
-        clipGPath: this._clipGModel ? path.join(this._diskPath, this._clipGModel) : '',
-        t5XxlPath: this._t5XxlModel ? path.join(this._diskPath, this._t5XxlModel) : '',
-        llmPath: this._llmModel ? path.join(this._diskPath, this._llmModel) : '',
-        vaePath: this._vaeModel ? path.join(this._diskPath, this._vaeModel) : '',
+        path: isSplitLayout ? '' : resolve(this._modelName),
+        diffusionModelPath: isSplitLayout ? resolve(this._modelName) : '',
+        clipLPath: resolve(this._clipLModel),
+        clipGPath: resolve(this._clipGModel),
+        t5XxlPath: resolve(this._t5XxlModel),
+        llmPath: resolve(this._llmModel),
+        vaePath: resolve(this._vaeModel),
         config: this._config
       }
 
