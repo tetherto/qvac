@@ -83,6 +83,36 @@ class FakeLoader {
   }
 }
 
+const getNamedPaths = (modelType, modelDir) => {
+  switch (modelType) {
+    case 'ctc':
+      return {
+        ctcModelPath: path.join(modelDir, 'model.onnx'),
+        ctcModelDataPath: path.join(modelDir, 'model.onnx_data'),
+        tokenizerPath: path.join(modelDir, 'tokenizer.json')
+      }
+    case 'eou':
+      return {
+        eouEncoderPath: path.join(modelDir, 'encoder.onnx'),
+        eouDecoderPath: path.join(modelDir, 'decoder_joint.onnx'),
+        tokenizerPath: path.join(modelDir, 'tokenizer.json')
+      }
+    case 'sortformer':
+      return {
+        sortformerPath: path.join(modelDir, 'sortformer.onnx')
+      }
+    case 'tdt':
+    default:
+      return {
+        encoderPath: path.join(modelDir, 'encoder-model.onnx'),
+        encoderDataPath: path.join(modelDir, 'encoder-model.onnx.data'),
+        decoderPath: path.join(modelDir, 'decoder_joint-model.onnx'),
+        vocabPath: path.join(modelDir, 'vocab.txt'),
+        preprocessorPath: path.join(modelDir, 'preprocessor.onnx')
+      }
+  }
+}
+
 const runAddon = async (payload) => {
   try {
     const { inputs, parakeet, config } =
@@ -123,8 +153,11 @@ const runAddon = async (payload) => {
 
       const parakeetConfig = config.parakeetConfig || {}
 
+      const namedPaths = getNamedPaths(modelType, config.path)
+
       const modelConfig = {
         path: config.path,
+        ...namedPaths,
         parakeetConfig: {
           modelType: parakeetConfig.modelType || 'tdt',
           maxThreads: parakeetConfig.maxThreads || 4,

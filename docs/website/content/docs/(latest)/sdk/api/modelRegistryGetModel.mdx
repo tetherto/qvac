@@ -1,7 +1,7 @@
 ---
 title: "modelRegistryGetModel( )"
 titleStyle: code
-description: "No description available"
+description: "Fetches a single model entry from the distributed registry by its path and source identifier."
 ---
 
 ```typescript
@@ -12,11 +12,32 @@ function modelRegistryGetModel(registryPath: string, registrySource: string): Pr
 
 | Name | Type | Required? | Description |
 | --- | --- | :---: | --- |
-| `registryPath` | `string` | ✓ | No description |
-| `registrySource` | `string` | ✓ | No description |
+| `registryPath` | `string` | ✓ | The path of the model in the registry (e.g. `"llama-3.2-1b-instruct-q4_0-gguf"`) |
+| `registrySource` | `string` | ✓ | The source identifier for the registry entry (e.g. `"hf"` for HuggingFace) |
 
 ## Returns
 
 ```typescript
 Promise
+```
+
+Resolves with the `ModelRegistryEntry` for the requested model.
+
+## Throws
+
+| Error | When |
+| --- | --- |
+| `ModelRegistryQueryFailedError` | The model is not found or the registry query fails |
+
+## Example
+
+```typescript
+import { modelRegistryGetModel } from "@qvac/sdk";
+
+const model = await modelRegistryGetModel(
+  "llama-3.2-1b-instruct-q4_0-gguf",
+  "hf",
+);
+
+console.log(model.addon, model.engine);
 ```
