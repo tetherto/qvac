@@ -15,7 +15,7 @@ function ragDeleteEmbeddings(params: { ids: string[]; modelId?: string; workspac
 | Name | Type | Required? | Description |
 | --- | --- | :---: | --- |
 | `params` | `\{ ids: string[]; modelId?: string; workspace?: string \}` | ✓ | The parameters for deleting embeddings |
-| `options` | `\{ forceNewConnection?: boolean; profiling?: \{ enabled?: boolean; includeServerBreakdown?: boolean; mode?: "summary" | "verbose" \}; timeout?: number \}` | ✗ | No description |
+| `options` | `\{ forceNewConnection?: boolean; profiling?: \{ enabled?: boolean; includeServerBreakdown?: boolean; mode?: "summary" | "verbose" \}; timeout?: number \}` | ✗ | Optional RPC transport options including connection reuse, timeout, and per-call profiling configuration |
 
 ## Returns
 

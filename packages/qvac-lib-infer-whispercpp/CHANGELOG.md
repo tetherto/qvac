@@ -5,6 +5,28 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.5.3]
+
+### Changed
+- Bumped `qvac-lib-inference-addon-cpp` to `1.1.3`.
+- Updated the JS wrapper to consume the shared addon-cpp native job-id callback contract so late cancel/error events remain attached to the cancelled job instead of a newer accepted run.
+
+### Added
+- Regression coverage for rejected runs and stale cancel callbacks in the addon inference tests.
+
+## [0.5.2]
+
+Security hardening release from comprehensive security audit.
+
+### Fixed
+- Replace global streaming state with per-instance map to eliminate race condition and dangling pointer risk (#1079)
+- Add 500 MB buffer limit to audio accumulation to prevent OOM from unbounded buffering (#1080)
+- Add SHA-256 integrity verification to model download scripts using HuggingFace LFS checksums (#1081)
+- Validate `suppress_regex` parameter — ban grouping constructs (parentheses) and enforce 512-char length limit to prevent ReDoS (#1083)
+- Sanitize error messages to remove filesystem paths from thrown errors (#1084)
+- Wrap job ID counter at `Number.MAX_SAFE_INTEGER` to prevent precision loss (#1085)
+- Harden benchmark server: add library allowlist, restrict file paths to allowed directories, remove dynamic `npm install`, add body size limit, restrict CORS to localhost (#1086)
+
 ## [0.5.1]
 
 This release documents runtime statistics and transcription output shapes in TypeScript so consumers can type `response.stats` and `run()` results against the native addon.

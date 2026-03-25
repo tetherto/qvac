@@ -17,18 +17,20 @@ bool isQwen3Model(const ::llama_model* model);
 /**
  * @brief Gets the appropriate chat template for a model
  *
- * For Qwen3 models, returns the fixed template from QwenTemplate.hpp.
+ * For Qwen3 models, returns the fixed template or tools-at-end template
+ * based on the toolsAtEnd flag.
  * For other models, returns the manual override or empty string.
  */
 std::string getChatTemplateForModel(
-    const ::llama_model* model, const std::string& manualOverride);
+    const ::llama_model* model, const std::string& manualOverride,
+    bool toolsAtEnd);
 
 /**
  * @brief Gets the chat template for a model, applying Qwen3 fixes if Jinja is
  * enabled
  */
-std::string
-getChatTemplate(const ::llama_model* model, const common_params& params);
+std::string getChatTemplate(
+    const ::llama_model* model, const common_params& params, bool toolsAtEnd);
 
 /**
  * @brief Applies chat templates to generate a prompt, with fallback handling

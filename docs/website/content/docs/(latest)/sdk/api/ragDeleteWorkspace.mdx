@@ -14,7 +14,7 @@ function ragDeleteWorkspace(params: { workspace: string }, options?: { forceNewC
 | Name | Type | Required? | Description |
 | --- | --- | :---: | --- |
 | `params` | `\{ workspace: string \}` | ✓ | The parameters for deletion |
-| `options` | `\{ forceNewConnection?: boolean; profiling?: \{ enabled?: boolean; includeServerBreakdown?: boolean; mode?: "summary" | "verbose" \}; timeout?: number \}` | ✗ | No description |
+| `options` | `\{ forceNewConnection?: boolean; profiling?: \{ enabled?: boolean; includeServerBreakdown?: boolean; mode?: "summary" | "verbose" \}; timeout?: number \}` | ✗ | Optional RPC transport options including connection reuse, timeout, and per-call profiling configuration |
 
 ## Returns
 

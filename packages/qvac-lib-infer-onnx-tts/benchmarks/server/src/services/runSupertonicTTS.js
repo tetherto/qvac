@@ -23,8 +23,10 @@ async function runSupertonicTTS (payload) {
   logger.info(`[Supertonic] Processing ${texts.length} texts`)
 
   let modelDir = config.modelDir || DEFAULT_MODEL_DIR
-  if (!path.isAbsolute(modelDir)) {
-    modelDir = path.join(BENCHMARKS_DIR, modelDir)
+  modelDir = path.isAbsolute(modelDir) ? modelDir : path.join(BENCHMARKS_DIR, modelDir)
+  modelDir = path.resolve(modelDir)
+  if (!modelDir.startsWith(BENCHMARKS_DIR) && !modelDir.startsWith(SHARED_DATA_DIR)) {
+    throw new Error('modelDir must be within the benchmarks or shared-data directory')
   }
 
   const voiceName = config.voiceName || 'F1'
