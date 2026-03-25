@@ -8,11 +8,11 @@
 
 namespace qvac::ttslib::supertonic {
 
-/// Official Supertone 4-graph ONNX stack + unicode_indexer.json + voice_styles/*.json.
-class SupertoneOnnxEngine : public ISupertonicEngine {
+/// Official Supertonic 4-graph ONNX stack (Supertone HF layout) + unicode_indexer.json + voice_styles/*.json.
+class SupertonicEngine : public ISupertonicEngine {
 public:
-  explicit SupertoneOnnxEngine(const SupertonicConfig &cfg = {});
-  ~SupertoneOnnxEngine() override;
+  explicit SupertonicEngine(const SupertonicConfig &cfg = {});
+  ~SupertonicEngine() override;
 
   void load(const SupertonicConfig &cfg) override;
   void unload() override;
