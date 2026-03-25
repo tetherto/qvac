@@ -87,9 +87,13 @@ const handleRequest = async (req, res) => {
   }
 
   res.setHeader('Content-Type', 'application/json')
-  res.setHeader('Access-Control-Allow-Origin', '*')
+
+  const origin = req.headers.origin || ''
+  const allowedOrigin = /^https?:\/\/(localhost|127\.0\.0\.1)(:\d+)?$/.test(origin) ? origin : ''
+  res.setHeader('Access-Control-Allow-Origin', allowedOrigin)
   res.setHeader('Access-Control-Allow-Methods', 'GET, POST, OPTIONS')
   res.setHeader('Access-Control-Allow-Headers', 'Content-Type')
+  res.setHeader('Vary', 'Origin')
 
   if (method === HTTP_METHODS.OPTIONS) {
     res.statusCode = 204

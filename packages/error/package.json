@@ -27,7 +27,13 @@
     "standard": "17.1.0",
     "typescript": "^5.9.3"
   },
-  "bugs": "https://github.com/tetherto/qvac-lib-error-base/issues",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/tetherto/qvac.git",
+    "directory": "packages/error"
+  },
+  "bugs": "https://github.com/tetherto/qvac/issues",
+  "homepage": "https://github.com/tetherto/qvac/tree/main/packages/error#readme",
   "files": [
     "src",
     "index.d.ts",

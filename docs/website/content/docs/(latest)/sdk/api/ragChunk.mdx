@@ -14,7 +14,7 @@ function ragChunk(params: { chunkOpts?: { chunkOverlap?: number; chunkSize?: num
 | Name | Type | Required? | Description |
 | --- | --- | :---: | --- |
 | `params` | `\{ chunkOpts?: \{ chunkOverlap?: number; chunkSize?: number; chunkStrategy?: "character" | "paragraph"; splitStrategy?: "character" | "word" | "token" | "sentence" | "line" \}; documents: string | string[] \}` | ✓ | The parameters for chunking |
-| `options` | `\{ forceNewConnection?: boolean; profiling?: \{ enabled?: boolean; includeServerBreakdown?: boolean; mode?: "summary" | "verbose" \}; timeout?: number \}` | ✗ | No description |
+| `options` | `\{ forceNewConnection?: boolean; profiling?: \{ enabled?: boolean; includeServerBreakdown?: boolean; mode?: "summary" | "verbose" \}; timeout?: number \}` | ✗ | Optional RPC transport options including connection reuse, timeout, and per-call profiling configuration |
 
 ## Returns
 

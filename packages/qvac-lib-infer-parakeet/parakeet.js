@@ -31,7 +31,8 @@ try {
     VOCAB_NOT_FOUND: 7012,
     ENCODER_NOT_FOUND: 7013,
     DECODER_NOT_FOUND: 7014,
-    INVALID_CONFIG: 7015
+    INVALID_CONFIG: 7015,
+    BUFFER_LIMIT_EXCEEDED: 7016
   }
   END_OF_INPUT = 'end of job'
 }
@@ -44,6 +45,13 @@ const state = Object.freeze({
   PAUSED: 'paused',
   STOPPED: 'stopped'
 })
+
+function nextSafeId (current) {
+  return current >= Number.MAX_SAFE_INTEGER ? 1 : current + 1
+}
+
+// 500 MB — ~2.7 hours of 16 kHz f32le mono audio
+const MAX_BUFFERED_BYTES = 500 * 1024 * 1024
 
 function createParakeetError (code, message, cause = undefined) {
   // @qvac/error expects an options object, while the local fallback class
@@ -85,6 +93,7 @@ class ParakeetInterface {
     this._nextJobId = 1
     this._activeJobId = null
     this._bufferedAudio = []
+    this._bufferedBytes = 0
     this._ignoreNextCancelledError = false
 
     // Create the native instance
@@ -211,16 +220,21 @@ class ParakeetInterface {
           throw new Error('Cannot set new job: a job is already set or being processed')
         }
 
-        // Only replace the active job after the native runner accepts it.
         this._activeJobId = currentJobId
-        this._nextJobId += 1
+        this._nextJobId = nextSafeId(this._nextJobId)
         this._bufferedAudio = []
+        this._bufferedBytes = 0
         this._setState(state.PROCESSING)
         return currentJobId
       }
 
       if (data?.type === 'audio') {
-        this._bufferedAudio.push(this._normalizeAudioInput(data.data))
+        const normalized = this._normalizeAudioInput(data.data)
+        if (this._bufferedBytes + normalized.byteLength > MAX_BUFFERED_BYTES) {
+          throw createParakeetError(ERR_CODES.BUFFER_LIMIT_EXCEEDED, MAX_BUFFERED_BYTES + ' bytes')
+        }
+        this._bufferedAudio.push(normalized)
+        this._bufferedBytes += normalized.byteLength
         return this._nextJobId
       }
 
@@ -261,6 +275,7 @@ class ParakeetInterface {
   async stop () {
     try {
       this._bufferedAudio = []
+      this._bufferedBytes = 0
       if (this._activeJobId !== null) {
         await this._binding.cancel(this._handle, this._activeJobId)
         this._activeJobId = null
@@ -280,6 +295,7 @@ class ParakeetInterface {
     try {
       await this._binding.cancel(this._handle, jobId)
       this._bufferedAudio = []
+      this._bufferedBytes = 0
       this._activeJobId = null
       this._ignoreNextCancelledError = true
       this._setState(state.LISTENING)
@@ -359,6 +375,7 @@ class ParakeetInterface {
       this._handle = null
       this._activeJobId = null
       this._bufferedAudio = []
+      this._bufferedBytes = 0
       this._setState(state.IDLE)
     } catch (error) {
       throw createParakeetError(ERR_CODES.FAILED_TO_DESTROY, error.message, error)
@@ -377,7 +394,7 @@ class ParakeetInterface {
         return false
       }
       this._activeJobId = currentJobId
-      this._nextJobId += 1
+      this._nextJobId = nextSafeId(this._nextJobId)
       this._setState(state.PROCESSING)
       return accepted
     } catch (error) {
