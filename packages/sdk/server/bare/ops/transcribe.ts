@@ -147,10 +147,9 @@ export async function* transcribeStream(
 
     const response = await model.runStreaming(audioInputStream);
 
-    for await (const output of response.iterate()) {
-      logger.debug("Live Transcription Update:", output);
+    for await (const segments of response.iterate()) {
+      logger.debug("Live Transcription Update:", segments);
 
-      const segments = output as { text: string }[];
       for (const segment of segments) {
         if (!segment.text) continue;
         if (silenceMarker && segment.text.includes(silenceMarker)) continue;

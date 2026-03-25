@@ -367,11 +367,140 @@ async function* streamProfiled<T extends Request>(
   }
 }
 
-export async function duplex<T extends Request>(request: T) {
+export interface DuplexSession {
+  requestStream: unknown;
+  responseStream: unknown;
+}
+
+export async function duplex<T extends Request>(
+  request: T,
+  options?: RPCOptions,
+): Promise<DuplexSession> {
+  const ctx = await prepareRPCContext(request.type, options?.profiling);
+
+  if (!ctx.profilingEnabled) {
+    return duplexBase(request, ctx.signalDisable);
+  }
+  return duplexProfiled(request, options);
+}
+
+async function duplexBase<T extends Request>(
+  request: T,
+  signalDisable: boolean,
+): Promise<DuplexSession> {
   const parsedRequest = requestSchema.parse(request);
   logger.debug("RPC Client duplex:", summarizeRequest(request));
-  const payload = JSON.stringify(parsedRequest);
+
+  const payloadObj = signalDisable
+    ? injectProfilingMetaIntoObject(
+        parsedRequest as Record<string, unknown>,
+        createProfilingDisabledMeta(),
+      )
+    : parsedRequest;
+  const payload = JSON.stringify(payloadObj);
   return createDuplexSession(payload);
+}
+
+async function duplexProfiled<T extends Request>(
+  request: T,
+  options: RPCOptions = {},
+): Promise<DuplexSession> {
+  const requestType = request.type;
+  const profileId = createProfileId();
+  const includeServer = shouldIncludeServerBreakdown(options?.profiling);
+  const timings = createClientStreamTimings(profileId, requestType);
+
+  const zodStart = nowMs();
+  const parsedRequest = requestSchema.parse(request);
+  timings.requestZodValidationMs = nowMs() - zodStart;
+
+  logger.debug("RPC Client duplex:", summarizeRequest(request));
+
+  const requestMeta = createProfilingMeta(profileId, includeServer);
+  const requestWithMeta = injectProfilingMetaIntoObject(
+    parsedRequest as Record<string, unknown>,
+    requestMeta,
+  );
+
+  const stringifyStart = nowMs();
+  const payload = JSON.stringify(requestWithMeta);
+  timings.requestStringifyMs = nowMs() - stringifyStart;
+
+  timings.sendStart = nowMs();
+  const session = await createDuplexSession(payload);
+
+  let profilingMeta: ReturnType<typeof extractProfilingMeta> = undefined;
+
+  const rawResponseStream = session.responseStream as AsyncIterable<Buffer>;
+
+  async function* profiledResponseStream(): AsyncIterable<Buffer> {
+    try {
+      for await (const chunk of rawResponseStream) {
+        const chunkTime = nowMs();
+        if (timings.firstChunkAt === undefined) {
+          timings.firstChunkAt = chunkTime;
+        }
+        timings.lastChunkAt = chunkTime;
+
+        const text = chunk.toString();
+        const lines = text.split("\n");
+        const outputParts: string[] = [];
+
+        for (const line of lines) {
+          if (!line.trim()) {
+            outputParts.push(line);
+            continue;
+          }
+          let parsed: Record<string, unknown>;
+          try {
+            parsed = JSON.parse(line) as Record<string, unknown>;
+          } catch {
+            outputParts.push(line);
+            continue;
+          }
+
+          const chunkMeta = extractProfilingMeta(parsed);
+          if (chunkMeta) {
+            profilingMeta = chunkMeta;
+          }
+
+          if (parsed[PROFILING_TRAILER_KEY] === true) {
+            continue;
+          }
+
+          const clean = stripProfilingMeta(parsed);
+          outputParts.push(JSON.stringify(clean));
+        }
+
+        const output = outputParts.join("\n");
+        if (output) {
+          timings.chunkCount++;
+          yield Buffer.from(output);
+        }
+      }
+    } catch (error) {
+      if (timings.requestEnd === undefined) {
+        const base = {
+          ts: nowMs(),
+          op: timings.requestType,
+          kind: "rpc" as const,
+          profileId: timings.profileId,
+        };
+        recordFailure(base, timings.requestStart, error);
+      }
+      throw error;
+    } finally {
+      if (timings.chunkCount > 0) {
+        timings.requestEnd = nowMs();
+        recordClientStreamEvents(timings, profilingMeta);
+      }
+    }
+  }
+
+  return {
+    requestStream: session.requestStream,
+    responseStream: profiledResponseStream(),
+  };
 }
 
 export async function close() {

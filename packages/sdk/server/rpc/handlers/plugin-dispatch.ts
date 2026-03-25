@@ -116,7 +116,7 @@ export async function* dispatchPluginDuplex<TRequest, TResponse>(
   modelId: string,
   handlerName: string,
   request: TRequest,
-  inputStream: unknown,
+  inputStream: AsyncIterable<Buffer>,
 ): AsyncGenerator<TResponse> {
   yield* profileStreamHandler({ op: handlerName, request }, async function* () {
     const handlerDef = resolvePluginHandlerDef(modelId, handlerName);
@@ -129,11 +129,9 @@ export async function* dispatchPluginDuplex<TRequest, TResponse>(
       );
     }
 
-    const duplexHandler = handlerDef.handler as (
-      req: never,
-      stream: unknown,
-    ) => AsyncGenerator<TResponse>;
-
-    yield* duplexHandler(request as never, inputStream);
+    yield* handlerDef.handler(
+      request as never,
+      inputStream,
+    ) as AsyncGenerator<TResponse>;
   });
 }

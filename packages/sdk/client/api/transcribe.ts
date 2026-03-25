@@ -72,6 +72,7 @@ export async function transcribe(
  */
 export async function transcribeStream(
   params: TranscribeStreamClientParams,
+  options?: RPCOptions,
 ): Promise<TranscribeStreamSession> {
   const request: TranscribeStreamRequest = {
     type: "transcribeStream",
@@ -79,13 +80,20 @@ export async function transcribeStream(
     ...(params.prompt && { prompt: params.prompt }),
   };
 
-  const { requestStream, responseStream } = await duplex(request);
+  const { requestStream, responseStream } = await duplex(request, options);
 
-  const writable = requestStream as { write(chunk: Buffer): void; end(): void };
+  const writable = requestStream as {
+    write(chunk: Buffer): void;
+    end(): void;
+    destroy(): void;
+  };
+  const readable = responseStream as AsyncIterable<Buffer> & {
+    destroy(): void;
+  };
 
   async function* parseResponses(): AsyncGenerator<string> {
     let buffer = "";
-    for await (const chunk of responseStream as AsyncIterable<Buffer>) {
+    for await (const chunk of readable) {
       buffer += chunk.toString();
       const lines = buffer.split("\n");
       buffer = lines.pop() || "";
@@ -125,6 +133,10 @@ export async function transcribeStream(
     },
     end() {
       writable.end();
+    },
+    destroy() {
+      writable.destroy();
+      readable.destroy();
     },
     [Symbol.asyncIterator]() {
       return responses;

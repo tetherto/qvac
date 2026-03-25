@@ -69,5 +69,7 @@ export type TranscribeStreamClientParams = {
 export interface TranscribeStreamSession {
   write(audioChunk: Buffer): void;
   end(): void;
+  destroy(): void;
   [Symbol.asyncIterator](): AsyncIterator<string>;
 }
+
