@@ -130,7 +130,7 @@ Legend:
 | lib-decoder-audio | Audio decoder library leveraging FFmpeg for efficient audio decoding as preprocessing step for other addons | Addon |
 | lib-infer-llamacpp-embed | Native C++ addon for running text embedding models to generate high-quality contextual embeddings | Addon |
 | lib-infer-llamacpp-llm | Native C++ addon for running Large Language Models (LLMs) within QVAC runtime applications | Addon |
-| lib-infer-diffusion | Native C++ addon for text-to-image and image-to-image generation using stable-diffusion.cpp | Addon |
+| lib-infer-diffusion | Native C++ addon for text-to-image generation using stable-diffusion.cpp | Addon |
 | lib-infer-nmtcpp | Library for running various translation models supporting OPUS, Bergamot, and IndicTrans backends | Addon |
 | lib-infer-onnx | Bare addon for ONNX Runtime session management | Addon |
 | lib-infer-onnx-tts | Text-to-Speech (TTS) library using Chatterbox and Supertonic neural TTS model via ONNX Runtime | Addon |
