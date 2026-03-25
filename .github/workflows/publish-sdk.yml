@@ -133,12 +133,6 @@ jobs:
           "@tetherto" = { token = "${{ env.READ_NPM_TOKEN }}", url = "https://npm.pkg.github.com" }
           "@qvac" = { token = "${NPM_TOKEN}", url = "https://registry.npmjs.org" }
           EOF
-          
-          # Debug: show config
-          echo "=== .npmrc ==="
-          cat .npmrc
-          echo "=== bunfig.toml ==="
-          cat bunfig.toml
 
       - name: Install dependencies
         run: bun install
