@@ -65,7 +65,7 @@ private:
   std::unique_ptr<TranslationModel> firstModel_;
   std::unique_ptr<TranslationModel> secondModel_;
 
-  bool useGpu_ = true;
+  bool useGpu_ = false;
 
   std::unordered_map<std::string, std::variant<double, int64_t, std::string>>
       config_;
