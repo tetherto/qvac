@@ -134,12 +134,20 @@ jobs:
   cpp-lint:
     needs: context
     if: needs.context.outputs.run_verify == 'true' || github.event_name == 'workflow_dispatch'
-    uses: tetherto/qvac-devops/.github/workflows/cpp-lint.yaml@monorepo_update
-    secrets: inherit
-    with:
-      sha: ${{ needs.context.outputs.base_sha }}
-      pr_head_sha: ${{ needs.context.outputs.head_sha }}
-      workdir: ${{ needs.context.outputs.workdir }}
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      packages: read
+    steps:
+      - uses: ./.github/actions/cpp-lint
+        with:
+          secret-token: ${{ secrets.GITHUB_TOKEN }}
+          pat-token: ${{ secrets.PAT_TOKEN }}
+          repository: ${{ needs.context.outputs.repository }}
+          ref: ${{ needs.context.outputs.ref }}
+          target_sha: ${{ needs.context.outputs.base_sha }}
+          pr_head_sha: ${{ needs.context.outputs.head_sha }}
+          workdir: ${{ needs.context.outputs.workdir }}
 
   cpp-tests-coverage:
     needs: context

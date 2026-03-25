@@ -289,5 +289,8 @@ endif()
 target_compile_definitions(${qvac-lib-inference-tts} PUBLIC JS_LOGGER)
 
 if(BUILD_TESTING)
+  find_package(GTest CONFIG REQUIRED)
+  include(GoogleTest)
+  enable_testing()
   add_subdirectory(addon/test/unit)
 endif()

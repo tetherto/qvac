@@ -1,5 +1,3 @@
-find_package(GTest REQUIRED)
-
 add_executable(qvac-lib-inference-tts-unit-test)
 
 # collect all sources from src and mocks directories
@@ -47,6 +45,11 @@ target_link_libraries(
     GTest::gmock_main
 )
 
+gtest_discover_tests(
+  qvac-lib-inference-tts-unit-test
+  DISCOVERY_MODE PRE_TEST
+)
+
 if(WIN32)
   target_link_libraries(
     qvac-lib-inference-tts-unit-test
@@ -66,3 +69,4 @@ if(ENABLE_COVERAGE)
     message(WARNING "ENABLE_COVERAGE is not supported.")
   endif()
 endif()
+
