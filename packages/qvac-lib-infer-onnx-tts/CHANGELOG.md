@@ -5,6 +5,15 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.6.6]
+
+Security hardening release from comprehensive security audit.
+
+### Fixed
+- Add 1 MB request body size limit to benchmark server to prevent DoS via memory exhaustion (#1102)
+- Validate `modelDir` path in benchmark server to prevent directory traversal outside allowed directories (#1103)
+- Remove filesystem paths from C++ error messages in `FileUtils.hpp` to prevent path leakage (#1105)
+
 ## [0.6.5]
 
 This release improves TypeScript support for consumers of the ONNX TTS package. Runtime statistics that the native addon already exposes when `opts.stats` is enabled are now described in `index.d.ts`, and `run()` is typed so inference responses carry structured output chunks.

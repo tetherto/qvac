@@ -23,9 +23,9 @@ class ImgStableDiffusion extends BaseInference {
    * @param {string} [args.clipLModel] - Optional CLIP-L model file name (FLUX.1 / SD3)
    * @param {string} [args.clipGModel] - Optional CLIP-G model file name (SDXL / SD3)
    * @param {string} [args.t5XxlModel] - Optional T5-XXL text encoder file name (FLUX.1 / SD3)
-   * @param {string} [args.llmModel] - Optional LLM text encoder file name (FLUX.2 klein → Qwen3 8B)
+   * @param {string} [args.llmModel] - Optional LLM text encoder file name (FLUX.2 klein → Qwen3 4B)
    * @param {string} [args.vaeModel] - Optional VAE file name
-   * @param {object} config - SD context configuration (threads, device, wtype, etc.)
+   * @param {object} config - SD context configuration (threads, device, type, etc.)
    */
   constructor (
     {
@@ -72,14 +72,15 @@ class ImgStableDiffusion extends BaseInference {
       // for SD3 split) the caller is using a pure diffusion GGUF that must be
       // loaded via diffusion_model_path.
       const isSplitLayout = !!this._llmModel || !!this._t5XxlModel
+      const resolve = (name) => name ? (path.isAbsolute(name) ? name : path.join(this._diskPath, name)) : ''
       const configurationParams = {
-        path: isSplitLayout ? '' : path.join(this._diskPath, this._modelName),
-        diffusionModelPath: isSplitLayout ? path.join(this._diskPath, this._modelName) : '',
-        clipLPath: this._clipLModel ? path.join(this._diskPath, this._clipLModel) : '',
-        clipGPath: this._clipGModel ? path.join(this._diskPath, this._clipGModel) : '',
-        t5XxlPath: this._t5XxlModel ? path.join(this._diskPath, this._t5XxlModel) : '',
-        llmPath: this._llmModel ? path.join(this._diskPath, this._llmModel) : '',
-        vaePath: this._vaeModel ? path.join(this._diskPath, this._vaeModel) : '',
+        path: isSplitLayout ? '' : resolve(this._modelName),
+        diffusionModelPath: isSplitLayout ? resolve(this._modelName) : '',
+        clipLPath: resolve(this._clipLModel),
+        clipGPath: resolve(this._clipGModel),
+        t5XxlPath: resolve(this._t5XxlModel),
+        llmPath: resolve(this._llmModel),
+        vaePath: resolve(this._vaeModel),
         config: this._config
       }
 
@@ -182,9 +183,8 @@ class ImgStableDiffusion extends BaseInference {
   /**
    * Generate an image from a text prompt, or from an input image + text prompt.
    *
-   * Mode is determined automatically:
-   *   - If `params.init_image` is provided → img2img
-   *   - Otherwise → txt2img
+   * Currently supports txt2img only. img2img is not yet wired in the JS
+   * layer — passing `init_image` will throw.
    *
    * Returns a QvacResponse that streams two types of updates:
    *   - Uint8Array  — PNG-encoded output image (one per batch_count)
@@ -204,8 +204,8 @@ class ImgStableDiffusion extends BaseInference {
    * @param {number} [params.batch_count=1]         - Images per call
    * @param {boolean} [params.vae_tiling=false]     - Enable VAE tiling (for large images)
    * @param {string}  [params.cache_preset]         - Cache preset: slow/medium/fast/ultra
-   * @param {Uint8Array} [params.init_image]        - Source image bytes for img2img (PNG/JPEG)
-   * @param {number}    [params.strength=0.75]      - img2img: 0 = keep source, 1 = ignore source
+   * @param {Uint8Array} [params.init_image]        - Source image bytes for img2img (PNG/JPEG) — not yet supported
+   * @param {number}    [params.strength=0.75]      - img2img: 0 = keep source, 1 = ignore source — not yet supported
    * @returns {Promise<QvacResponse>}
    */
   async _runInternal (params) {

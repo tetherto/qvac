@@ -77,13 +77,11 @@ export interface SdConfig {
   /** Preferred compute device: 'gpu' (Metal/Vulkan) or 'cpu' */
   device?: 'gpu' | 'cpu'
   /** Weight quantization type */
-  wtype?: WeightType
+  type?: WeightType
   /** RNG type for reproducible generation */
   rng?: RngType
   /** RNG type for the sampler (separate from context RNG) */
   sampler_rng?: RngType
-  /** Sampling schedule */
-  schedule?: ScheduleType
   /** Run CLIP encoder on CPU even when GPU is available */
   clip_on_cpu?: boolean
   /** Run VAE decoder on CPU even when GPU is available */
@@ -131,6 +129,8 @@ export interface GenerationParams {
   guidance?: number
   /** Sampler name (e.g. 'euler', 'dpm++2m') */
   sampling_method?: SamplerMethod
+  /** Alias for sampling_method — accepted by the C++ layer */
+  sampler?: SamplerMethod
   /** Scheduler name */
   scheduler?: ScheduleType
   seed?: number
@@ -153,9 +153,9 @@ export interface GenerationParams {
   img_cfg_scale?: number
   /** Skip last N CLIP encoder layers (SD1.x/SD2.x) */
   clip_skip?: number
-  /** Input image as PNG/JPEG bytes — if provided, runs img2img instead of txt2img */
+  /** Input image as PNG/JPEG bytes for img2img (not yet supported — throws at runtime) */
   init_image?: Uint8Array
-  /** img2img denoising strength (0.0–1.0). 0 = keep source, 1 = ignore source */
+  /** img2img denoising strength (0.0–1.0). 0 = keep source, 1 = ignore source (not yet supported) */
   strength?: number
 }
 
@@ -209,7 +209,7 @@ export interface ImgStableDiffusionArgs {
   clipGModel?: string
   /** FLUX.1 / SD3: separate T5-XXL text encoder */
   t5XxlModel?: string
-  /** FLUX.2 [klein]: Qwen3 8B text encoder (llm_path) */
+  /** FLUX.2 [klein]: Qwen3 4B text encoder (llm_path) */
   llmModel?: string
   vaeModel?: string
 }

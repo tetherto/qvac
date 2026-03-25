@@ -143,6 +143,7 @@ const config = {
 | presence_penalty  | float                                       | 0                            | Presence penalty for sampling                         |
 | frequency_penalty | float                                       | 0                            | Frequency penalty for sampling                        |
 | tools             | `"true"` or `"false"`                       | `"false"`                    | Enable tool calling with jinja templating             |
+| tools_at_end      | `"true"` or `"false"`                       | `"false"`                    | Place tools at end of prompt ([details](./docs/tools-at-end.md)) |
 | verbosity         | 0 – 3 (0=ERROR, 1=WARNING, 2=INFO, 3=DEBUG) | 0                            | Logging verbosity level                               |
 | n_discarded       | integer                                     | 0                            | Tokens to discard in sliding window context           |
 | main-gpu          | integer, `"integrated"`, or `"dedicated"`   | —                            | GPU selection for multi-GPU systems                   |
@@ -258,6 +259,23 @@ The library supports **LoRA finetuning** of GGUF models: train small adapter wei
 
 For the full API, dataset format, parameters, and examples, see the **[Finetuning guide](docs/finetuning.md)**.
 
+### Smart Home Showcase
+
+A hands-on example that finetunes Qwen3-0.6B to act as a smart home tool-calling specialist. The base model tends to drift into conversational text or exhaust its token budget on reasoning — the finetuned adapter fixes both problems.
+
+1. **Train** — [`smart-home-finetune.js`](./examples/finetune/showcase/smart-home-finetune.js) runs a 1-epoch causal LoRA finetune on a [215-sample dataset](./examples/input/smart_home_specialist_train.jsonl) of user requests paired with `<tool_call>` responses.
+2. **Evaluate** — [`smart-home-finetuned-test.js`](./examples/finetune/showcase/smart-home-finetuned-test.js) runs the same prompts against the base model and the finetuned model, then prints a side-by-side comparison report (strictness, accuracy, thinking token usage, multi-turn stability).
+
+> **Note on dataset diversity:** The training dataset intentionally includes tool-calling samples from many domains (medical, irrigation, quantum, etc.), not just the 4 smart-home tools used in evaluation. The goal is to teach the model the general *behavioral pattern* — produce structured `<tool_call>` output instead of conversational text — rather than memorize specific tool names. The evaluation then tests whether that pattern transfers to smart-home prompts the model wasn't explicitly drilled on.
+
+```bash
+# Train the adapter
+bare examples/finetune/showcase/smart-home-finetune.js
+
+# Compare baseline vs finetuned
+bare examples/finetune/showcase/smart-home-finetuned-test.js
+```
+
 
 ## Quickstart Example
 
@@ -287,6 +305,9 @@ npm run quickstart
 -   [LoRA Finetuning](./examples/finetune/simple-lora-finetune.js) – Basic LoRA finetuning.
 -   [LoRA Finetuning Pause/Resume](./examples/finetune/simple-lora-finetune-pause-resume.js) – Pause and resume finetuning.
 -   [LoRA Inference](./examples/simple-lora-inference.js) – Inference with a finetuned LoRA adapter.
+-   [Smart Home Finetune Showcase](./examples/finetune/showcase/smart-home-finetune.js) – Train a smart home tool-calling specialist, then [evaluate](./examples/finetune/showcase/smart-home-finetuned-test.js) baseline vs finetuned.
+-   [Bench Tools Placement](./examples/benchToolsPlacement.js) – Benchmarks standard vs `tools_at_end` placement across multi-turn conversations.
+-   [Test Tool Removal](./examples/testToolRemoval.js) – Demonstrates dynamic tool addition and removal between turns.
 
 ## OCR with Vision-Language Models
 

@@ -2,6 +2,13 @@
   "name": "@qvac/sdk",
   "version": "0.8.0",
   "license": "Apache-2.0",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/tetherto/qvac.git",
+    "directory": "packages/sdk"
+  },
+  "bugs": "https://github.com/tetherto/qvac/issues",
+  "homepage": "https://github.com/tetherto/qvac/tree/main/packages/sdk#readme",
   "type": "module",
   "main": "./dist/index.js",
   "types": "./dist/index.d.ts",
@@ -114,7 +121,7 @@
     "@qvac/dl-filesystem": "^0.2.0",
     "@qvac/embed-llamacpp": "^0.12.0",
     "@qvac/error": "^0.1.1",
-    "@qvac/langdetect-text": "^0.1.0",
+    "@qvac/langdetect-text-cld2": "0.3.0",
     "@qvac/llm-llamacpp": "^0.12.1",
     "@qvac/logging": "^0.1.0",
     "@qvac/ocr-onnx": "^0.2.0",

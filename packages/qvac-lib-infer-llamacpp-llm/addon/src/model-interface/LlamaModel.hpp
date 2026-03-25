@@ -158,6 +158,14 @@ public:
    */
   bool isLoaded();
 
+  /**
+   * Get the nPast position before tool evaluation.
+   * This is used to find the boundary in the KV cache after evaluating
+   * conversation tokens but before tool tokens.
+   * @return the nPast position, or -1 if not set.
+   */
+  llama_pos getNPastBeforeTools() const;
+
   void waitForLoadInitialization() final {
     std::shared_ptr<ReloadableState> localState;
     {
@@ -233,7 +241,8 @@ private:
   void commonParamsParse(
       const std::string& modelPath,
       std::unordered_map<std::string, std::string>& configFilemap,
-      common_params& params, std::optional<int>& outAdrenoVersion);
+      common_params& params, std::optional<int>& outAdrenoVersion,
+      bool& outToolsAtEnd);
 
   /**
    * The Format prompt method. It formats the prompt json to chat messages.
@@ -246,7 +255,8 @@ private:
   void resetState(bool resetStats = true);
   std::unique_ptr<LlmContext> createContext(
       std::string&& projectionPath, common_params& params,
-      common_init_result&& llamaInit);
+      common_init_result&& llamaInit, bool toolsAtEnd);
+
   bool loadMedia(const std::vector<uint8_t>& input);
 
   void setInitLoader(
