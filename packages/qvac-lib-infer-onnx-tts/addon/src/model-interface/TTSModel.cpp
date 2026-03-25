@@ -7,14 +7,14 @@
 #include "qvac-lib-inference-addon-cpp/Logger.hpp"
 #include "src/addon/TTSErrors.hpp"
 #include "src/model-interface/ChatterboxEngine.hpp"
-#include "src/model-interface/SupertoneOnnxEngine.hpp"
+#include "src/model-interface/SupertonicEngine.hpp"
 
 using namespace qvac::ttslib::addon_model;
 using namespace qvac_lib_inference_addon_cpp::logger;
 
 namespace {
 
-bool isSupertoneOnnxConfigValid(
+bool isSupertonicOnnxConfigValid(
     const qvac::ttslib::supertonic::SupertonicConfig &c) {
   if (c.language.empty())
     return false;
@@ -55,9 +55,9 @@ TTSModel::TTSModel(
       supertonicEngine_ = supertonicEngine;
     } else {
       supertonicEngine_ =
-          std::make_shared<qvac::ttslib::supertonic::SupertoneOnnxEngine>();
+          std::make_shared<qvac::ttslib::supertonic::SupertonicEngine>();
     }
-    QLOG(Priority::INFO, "TTSModel initialized with Supertone-ONNX engine");
+    QLOG(Priority::INFO, "TTSModel initialized with Supertonic ONNX engine");
   }
 
   load();
@@ -183,7 +183,7 @@ qvac::ttslib::supertonic::SupertonicConfig TTSModel::createSupertonicConfig(
 
 bool TTSModel::isSupertonicConfigValid(
     const qvac::ttslib::supertonic::SupertonicConfig &config) const {
-  return isSupertoneOnnxConfigValid(config);
+  return isSupertonicOnnxConfigValid(config);
 }
 
 void TTSModel::saveLoadParams(

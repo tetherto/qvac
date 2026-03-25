@@ -152,7 +152,7 @@ target_sources(
     ${PROJECT_SOURCE_DIR}/addon/src/model-interface/TTSModel.cpp
     ${PROJECT_SOURCE_DIR}/addon/src/model-interface/ChatterboxEngine.cpp
     ${PROJECT_SOURCE_DIR}/addon/src/model-interface/OnnxInferSession.cpp
-    ${PROJECT_SOURCE_DIR}/addon/src/model-interface/SupertoneOnnxEngine.cpp
+    ${PROJECT_SOURCE_DIR}/addon/src/model-interface/SupertonicEngine.cpp
     ${PROJECT_SOURCE_DIR}/addon/src/model-interface/Fp16Utils.cpp
     ${PROJECT_SOURCE_DIR}/addon/src/model-interface/TensorFloatHandler.cpp
 )
@@ -217,7 +217,7 @@ if(BUILD_CLI)
     ${PROJECT_SOURCE_DIR}/addon/src/model-interface/TTSModel.cpp
     ${PROJECT_SOURCE_DIR}/addon/src/model-interface/ChatterboxEngine.cpp
     ${PROJECT_SOURCE_DIR}/addon/src/model-interface/OnnxInferSession.cpp
-    ${PROJECT_SOURCE_DIR}/addon/src/model-interface/SupertoneOnnxEngine.cpp
+    ${PROJECT_SOURCE_DIR}/addon/src/model-interface/SupertonicEngine.cpp
   )
 
   target_include_directories(

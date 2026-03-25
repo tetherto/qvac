@@ -1,4 +1,4 @@
-#include "SupertoneOnnxEngine.hpp"
+#include "SupertonicEngine.hpp"
 
 #include "FileUtils.hpp"
 #include "OrtSessionFactory.hpp"
@@ -302,7 +302,7 @@ const std::unordered_set<utf8proc_int32_t> &diacriticsSet() {
   return s;
 }
 
-std::string preprocessForSupertone(const std::string &rawUtf8,
+std::string preprocessForSupertonic(const std::string &rawUtf8,
                                    const std::string *langWrap) {
   utf8proc_uint8_t *nfkdRaw = utf8proc_NFKD(
       reinterpret_cast<const utf8proc_uint8_t *>(rawUtf8.c_str()));
@@ -524,13 +524,13 @@ std::vector<float> getLatentMask(const std::vector<int64_t> &wavLengthsSamples,
 
 } // namespace
 
-SupertoneOnnxEngine::SupertoneOnnxEngine(const SupertonicConfig &cfg) {
+SupertonicEngine::SupertonicEngine(const SupertonicConfig &cfg) {
   config_ = cfg;
 }
 
-SupertoneOnnxEngine::~SupertoneOnnxEngine() { unload(); }
+SupertonicEngine::~SupertonicEngine() { unload(); }
 
-void SupertoneOnnxEngine::unload() {
+void SupertonicEngine::unload() {
   loaded_ = false;
   dpSession_.reset();
   textEncSession_.reset();
@@ -544,9 +544,9 @@ void SupertoneOnnxEngine::unload() {
   config_ = {};
 }
 
-bool SupertoneOnnxEngine::isLoaded() const { return loaded_; }
+bool SupertonicEngine::isLoaded() const { return loaded_; }
 
-void SupertoneOnnxEngine::load(const SupertonicConfig &cfg) {
+void SupertonicEngine::load(const SupertonicConfig &cfg) {
   unload();
   config_ = cfg;
 
@@ -581,7 +581,7 @@ void SupertoneOnnxEngine::load(const SupertonicConfig &cfg) {
   if (dpPath.empty() || tePath.empty() || vePath.empty() || vocPath.empty() ||
       uniPath.empty() || ttsPath.empty() || voiceJson.empty()) {
     throw std::runtime_error(
-        "SupertoneOnnxEngine: missing model path(s); set modelDir and "
+        "SupertonicEngine: missing model path(s); set modelDir and "
         "voiceName/voiceStyleJsonPath or explicit ONNX/JSON paths");
   }
 
@@ -631,12 +631,12 @@ void SupertoneOnnxEngine::load(const SupertonicConfig &cfg) {
 
   loaded_ = true;
   QLOG(Priority::INFO,
-       "SupertoneOnnxEngine loaded (official 4-graph path, sample_rate=" +
+       "SupertonicEngine loaded (official 4-graph path, sample_rate=" +
            std::to_string(sampleRate_) + ")");
 }
 
 std::vector<std::string>
-SupertoneOnnxEngine::chunkText(const std::string &text, int maxCharLen) const {
+SupertonicEngine::chunkText(const std::string &text, int maxCharLen) const {
   if (maxCharLen < 10)
     throw std::invalid_argument("chunk max length must be >= 10");
 
@@ -686,12 +686,12 @@ SupertoneOnnxEngine::chunkText(const std::string &text, int maxCharLen) const {
   return chunks;
 }
 
-AudioResult SupertoneOnnxEngine::synthesizeChunk(const std::string &text) {
+AudioResult SupertonicEngine::synthesizeChunk(const std::string &text) {
   std::string prep =
-      preprocessForSupertone(text, config_.supertonicMultilingual ? &config_.language
+      preprocessForSupertonic(text, config_.supertonicMultilingual ? &config_.language
                                                                   : nullptr);
   if (prep.empty())
-    throw std::runtime_error("SupertoneOnnxEngine: empty text after preprocess");
+    throw std::runtime_error("SupertonicEngine: empty text after preprocess");
 
   const int64_t batch = 1;
   const int64_t textLen =
@@ -888,9 +888,9 @@ AudioResult SupertoneOnnxEngine::synthesizeChunk(const std::string &text) {
   return result;
 }
 
-AudioResult SupertoneOnnxEngine::synthesize(const std::string &text) {
+AudioResult SupertonicEngine::synthesize(const std::string &text) {
   if (!loaded_)
-    throw std::runtime_error("SupertoneOnnxEngine not loaded");
+    throw std::runtime_error("SupertonicEngine not loaded");
 
   const int maxChunk =
       (config_.language == "ko") ? 120 : 300;

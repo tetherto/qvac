@@ -11,7 +11,7 @@ target_sources(
   PRIVATE
     ${CMAKE_SOURCE_DIR}/addon/src/model-interface/TTSModel.cpp
     ${CMAKE_SOURCE_DIR}/addon/src/model-interface/ChatterboxEngine.cpp
-    ${CMAKE_SOURCE_DIR}/addon/src/model-interface/SupertoneOnnxEngine.cpp
+    ${CMAKE_SOURCE_DIR}/addon/src/model-interface/SupertonicEngine.cpp
     ${CMAKE_SOURCE_DIR}/addon/src/model-interface/OnnxInferSession.cpp
     ${CMAKE_SOURCE_DIR}/addon/src/model-interface/Fp16Utils.cpp
     ${CMAKE_SOURCE_DIR}/addon/src/model-interface/TensorFloatHandler.cpp
