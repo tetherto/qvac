@@ -200,6 +200,16 @@ startStreaming(js_env_t* env, js_callback_info_t* info) try {
     throw std::runtime_error("vadModelPath is required for streaming");
   }
 
+  auto maybeJobId = configObj.getOptionalProperty<js::Number>(env, "jobId");
+  if (!maybeJobId.has_value()) {
+    throw std::runtime_error("jobId is required for streaming");
+  }
+  const double jobIdDouble = maybeJobId.value().as<double>(env);
+  if (!(jobIdDouble >= 1.0)) {
+    throw std::runtime_error("jobId must be a positive integer");
+  }
+  config.jobId = static_cast<JobId>(jobIdDouble);
+
   auto maybeVadThreshold =
       configObj.getOptionalProperty<js::Number>(env, "vadThreshold");
   if (maybeVadThreshold.has_value()) {

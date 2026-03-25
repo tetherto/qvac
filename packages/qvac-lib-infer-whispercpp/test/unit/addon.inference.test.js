@@ -167,6 +167,80 @@ test('Cancel clears in-flight job and allows a new run', async (t) => {
   )
 })
 
+test('WhisperInterface runJob preserves active job when native rejects new job', async (t) => {
+  const binding = new MockedBinding()
+  const addon = new WhisperInterface(binding, {
+    contextParams: {
+      model: 'ggml-tiny.bin'
+    },
+    whisperConfig: {
+      language: 'en',
+      duration_ms: 0,
+      temperature: 0.0
+    },
+    miscConfig: {
+      caption_enabled: false
+    }
+  }, () => {})
+
+  addon._activeJobId = 42
+  addon._nextJobId = 43
+  addon._setState('processing')
+  binding.runJob = () => false
+
+  const accepted = await addon.runJob({
+    type: 'audio',
+    input: new Uint8Array([1, 2, 3])
+  })
+
+  t.is(accepted, false, 'runJob should report rejected when native side is busy')
+  t.is(addon._activeJobId, 42, 'Current active job ID should remain unchanged')
+  t.is(addon._nextJobId, 43, 'Next job counter should not advance on rejection')
+  t.is(await addon.status(), 'processing', 'State should remain unchanged for the current active job')
+})
+
+test('WhisperInterface keeps stale cancel events attached to the cancelled job', async (t) => {
+  const events = []
+  const binding = new MockedBinding()
+  const addon = new WhisperInterface(binding, {
+    contextParams: {
+      model: 'ggml-tiny.bin'
+    },
+    whisperConfig: {
+      language: 'en',
+      duration_ms: 0,
+      temperature: 0.0
+    },
+    miscConfig: {
+      caption_enabled: false
+    }
+  }, (handle, event, jobId, output, error) => {
+    events.push({ event, jobId, output, error })
+  })
+
+  addon._activeJobId = 1
+  addon._nextJobId = 2
+  addon._setState('processing')
+
+  binding.cancel = async () => {}
+  await addon.cancel(1)
+
+  addon._activeJobId = 2
+  addon._setState('processing')
+
+  addon._addonOutputCallback(addon, 'Error', undefined, 'Job cancelled', 1)
+
+  t.is(addon._activeJobId, 2, 'stale cancel error should not clear the new active job')
+
+  addon._addonOutputCallback(addon, 'Output', { text: 'second job', toAppend: true }, null, 2)
+  addon._addonOutputCallback(addon, 'JobEnded', { totalTime: 1, audioDurationMs: 1, totalSamples: 1 }, null, 2)
+
+  t.ok(events.find(e => e.event === 'Error' && e.jobId === 1 && e.error === 'Job cancelled'), 'stale cancel error should stay attached to the cancelled job')
+  t.ok(events.find(e => e.event === 'Output' && e.jobId === 2), 'new job output should still be delivered')
+  t.ok(events.find(e => e.event === 'JobEnded' && e.jobId === 2), 'new job completion should still be delivered')
+  t.is(addon._activeJobId, null, 'job completion should clear the new active job normally')
+})
+
 test('Destroy fails active response and clears job mapping', async (t) => {
   const binding = new MockedBinding()
   binding.setJobDelayMs(100)
