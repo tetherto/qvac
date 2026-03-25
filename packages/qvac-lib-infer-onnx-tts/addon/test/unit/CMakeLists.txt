@@ -27,7 +27,6 @@ target_include_directories(
   PRIVATE
     ${CMAKE_SOURCE_DIR}/addon
     ${CMAKE_SOURCE_DIR}/addon/test/unit/
-    ${UTF8PROC_INCLUDE_DIRS}
 )
 
 target_link_libraries(
@@ -36,7 +35,7 @@ target_link_libraries(
     onnxruntime::onnxruntime
     tokenizers::tokenizers_cpp
     nlohmann_json::nlohmann_json
-    ${UTF8PROC_LIBRARIES}
+    ${QVAC_UTF8PROC_TARGET}
     GTest::gtest
     GTest::gtest_main
     GTest::gmock
