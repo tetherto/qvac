@@ -121,7 +121,7 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - name: Run Sanity checks
-        uses: tetherto/qvac-devops/.github/actions/sanity-checks@monorepo_tag
+        uses: tetherto/qvac-devops/.github/actions/sanity-checks@v1.1.6
         with:
           secret-token: ${{ secrets.GITHUB_TOKEN }}
           npm-token: ${{ secrets.NPM_TOKEN }}
@@ -152,7 +152,7 @@ jobs:
   merge-guard:
     needs: [release-notes-check, sanity-checks, run-integration-tests, run-mobile-integration-tests]
     if: always()
-    uses: tetherto/qvac-devops/.github/workflows/public-pr.yml@monorepo_tag
+    uses: tetherto/qvac-devops/.github/workflows/public-pr.yml@v1.1.6
     with:
       sanity-checks-status: ${{ needs.sanity-checks.result == 'success' && needs.release-notes-check.result == 'success' }}
       build-status: ${{ needs.run-integration-tests.result == 'success' || needs.run-integration-tests.result == 'skipped' }}

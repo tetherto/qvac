@@ -33,7 +33,7 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - name: Run Sanity checks
-        uses: tetherto/qvac-devops/.github/actions/sanity-checks@monorepo_tag
+        uses: tetherto/qvac-devops/.github/actions/sanity-checks@v1.1.6
         with:
           secret-token: ${{ secrets.GITHUB_TOKEN }}
           npm-token: ${{ secrets.NPM_TOKEN }}
@@ -53,7 +53,7 @@ jobs:
 
   cpp-lint:
     if: contains( github.event.pull_request.labels.*.name, 'verify') || github.event_name == 'workflow_dispatch'
-    uses: tetherto/qvac-devops/.github/workflows/cpp-lint.yaml@monorepo_tag
+    uses: tetherto/qvac-devops/.github/workflows/cpp-lint.yaml@v1.1.6
     secrets: inherit
     with:
       sha: ${{ github.event.pull_request.base.sha }}
@@ -134,7 +134,7 @@ jobs:
         ts-checks,
       ]
     if: always()
-    uses: tetherto/qvac-devops/.github/workflows/public-pr.yml@monorepo_tag
+    uses: tetherto/qvac-devops/.github/workflows/public-pr.yml@v1.1.6
     with:
       sanity-checks-status: ${{ needs.sanity-checks.result == 'success' }}
       build-status: ${{ needs.prebuild.result == 'success'}}
