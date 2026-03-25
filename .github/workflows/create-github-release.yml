@@ -35,7 +35,7 @@ jobs:
       contents: write
     steps:
       - name: Checkout code
-        uses: actions/checkout@v6
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # 6.0.2
         with:
           fetch-depth: 0
 
@@ -75,7 +75,7 @@ jobs:
           echo "release_notes_path=${release_notes_path}" >> "${GITHUB_OUTPUT}"
 
       - name: Create GitHub Release
-        uses: softprops/action-gh-release@v2
+        uses: softprops/action-gh-release@153bb8e04406b158c6c84fc1615b65b24149a1fe # 2.6.1
         with:
           tag_name: ${{ inputs.repo_name }}-v${{ inputs.published_version }}
           name: ${{ inputs.release_name }} v${{ inputs.published_version }}
