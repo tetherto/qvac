@@ -167,7 +167,7 @@ bun run examples/path/to/example.ts
 ### Completion
 
 - `llama.cpp` with local files: [`examples/llamacpp-filesystem.ts`](examples/llamacpp-filesystem.ts)
-- `llama.cpp` with Hyperdrive: [`examples/llamacpp-hyperdrive.ts`](examples/llamacpp-hyperdrive.ts)
+- `llama.cpp` with P2P registry: [`examples/llamacpp-p2p.ts`](examples/llamacpp-p2p.ts)
 - `llama.cpp` with HTTP: [`examples/llamacpp-http.ts`](examples/llamacpp-http.ts)
 - `llama.cpp` with tools/function calls: [`examples/llamacpp-native-tools.ts`](examples/llamacpp-native-tools.ts)
 - `llama.cpp` with multimodal inference: [`examples/llamacpp-multimodal.ts`](examples/llamacpp-multimodal.ts)
@@ -180,7 +180,7 @@ bun run examples/path/to/example.ts
 
 ### Embeddings
 
-- Single and batch embeddings: [`examples/embed-hyperdrive.ts`](examples/embed-hyperdrive.ts)
+- Single and batch embeddings: [`examples/embed-p2p.ts`](examples/embed-p2p.ts)
 
 **RAG with HyperDB** (cross-platform):
 

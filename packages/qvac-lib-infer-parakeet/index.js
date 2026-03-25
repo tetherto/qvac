@@ -128,38 +128,37 @@ class TranscriptionParakeet extends BaseInference {
   validateModelFiles () {
     const modelPath = this._config.path || this._getModelFilePath()
 
-    // When using named path overrides, skip directory-level validation
     if (this._hasNamedPaths()) {
       const modelType = this.params.modelType || 'tdt'
       const requiredFiles = getRequiredModelFiles(modelType)
       for (const file of requiredFiles) {
         const filePath = this._resolveFilePath(modelPath, file)
         if (!fs.existsSync(filePath)) {
-          this.logger.warn(`Model file not found: ${file} (${filePath})`)
+          this.logger.warn('Model file not found', { file, path: filePath })
         }
       }
       return
     }
 
     if (!modelPath) {
-      return // Skip validation if no path specified yet
+      return
     }
 
     if (!fs.existsSync(modelPath)) {
+      this.logger.error('Model directory not found', { path: modelPath })
       throw new QvacErrorAddonParakeet({
         code: ERR_CODES.MODEL_NOT_FOUND,
-        adds: modelPath
+        adds: 'Model not found at the configured path'
       })
     }
 
-    // Check for required files based on model type
     const modelType = this.params.modelType || 'tdt'
     const requiredFiles = getRequiredModelFiles(modelType)
 
     for (const file of requiredFiles) {
       const filePath = path.join(modelPath, file)
       if (!fs.existsSync(filePath)) {
-        this.logger.warn(`Model file not found: ${file}`)
+        this.logger.warn('Required model file missing', { file })
       }
     }
   }
