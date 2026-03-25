@@ -394,14 +394,22 @@ class TranscriptionWhispercpp extends BaseInference {
     const modelPath = this._config.path || this._getModelFilePath()
     if (!modelPath || !fs.existsSync(modelPath)) {
       this.logger.error('Model file not found', { path: modelPath })
-      throw new Error('Required model file not found at the configured path')
+      throw new Error(
+        modelPath
+          ? `Model file doesn't exist: ${modelPath}`
+          : "Model file doesn't exist"
+      )
     }
 
     if (this._config.whisperConfig && this._config.whisperConfig.vad_model_path) {
       const vadModelPath = this._config.whisperConfig.vad_model_path
       if (!vadModelPath || !fs.existsSync(vadModelPath)) {
         this.logger.error('VAD model file not found', { path: vadModelPath })
-        throw new Error('Required VAD model file not found at the configured path')
+        throw new Error(
+          vadModelPath
+            ? `VAD model file doesn't exist: ${vadModelPath}`
+            : "VAD model file doesn't exist"
+        )
       }
     }
   }

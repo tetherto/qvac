@@ -10,9 +10,81 @@ HF_BASE="https://huggingface.co"
 echo "Creating models directory..."
 mkdir -p "$MODELS_DIR"
 
+compute_sha256() {
+  if command -v sha256sum >/dev/null 2>&1; then
+    sha256sum "$1" | cut -d' ' -f1
+  elif command -v shasum >/dev/null 2>&1; then
+    shasum -a 256 "$1" | cut -d' ' -f1
+  else
+    echo ""
+  fi
+}
+
+fetch_expected_sha256() {
+  local repo=$1
+  local file=$2
+  curl -sL "https://huggingface.co/api/models/${repo}/tree/main" \
+    | grep -o "\"oid\":\"[a-f0-9]*\"" \
+    | head -n 1 \
+    | cut -d'"' -f4 2>/dev/null || echo ""
+}
+
+extract_lfs_sha256() {
+  local json=$1
+  local filename=$2
+  python3 -c "
+import json, sys
+data = json.loads(sys.stdin.read())
+for item in data:
+    if item.get('path','').endswith('$filename'):
+        lfs = item.get('lfs')
+        if lfs and 'oid' in lfs:
+            print(lfs['oid'])
+            sys.exit(0)
+sys.exit(1)
+" <<< "$json" 2>/dev/null
+}
+
+verify_file() {
+  local dest=$1
+  local repo=$2
+  local file=$3
+
+  local actual_sha
+  actual_sha=$(compute_sha256 "$dest")
+  if [ -z "$actual_sha" ]; then
+    echo "  WARNING: sha256sum not available, skipping integrity check"
+    return 0
+  fi
+
+  local metadata
+  metadata=$(curl -sL "https://huggingface.co/api/models/${repo}/tree/main")
+
+  local expected_sha
+  expected_sha=$(extract_lfs_sha256 "$metadata" "$file")
+
+  if [ -z "$expected_sha" ]; then
+    echo "  WARNING: could not fetch LFS checksum from HuggingFace (file may not be LFS-tracked), skipping integrity check"
+    return 0
+  fi
+
+  if [ "$actual_sha" != "$expected_sha" ]; then
+    echo "  ERROR: checksum mismatch for $(basename "$dest")"
+    echo "    expected: $expected_sha"
+    echo "    actual:   $actual_sha"
+    rm -f "$dest"
+    return 1
+  fi
+
+  echo "  Verified: $(basename "$dest") (SHA-256 OK)"
+  return 0
+}
+
 download_file() {
   local url=$1
   local dest=$2
+  local repo=$3
+  local file=$4
 
   if [ -f "$dest" ]; then
     echo "  Already exists: $(basename $dest), skipping"
@@ -21,6 +93,10 @@ download_file() {
 
   echo "  Downloading $(basename $dest)..."
   curl -L -o "$dest" "$url"
+
+  if [ -n "$repo" ] && [ -n "$file" ]; then
+    verify_file "$dest" "$repo" "$file"
+  fi
 }
 
 echo "Which Whisper model would you like to download?"
@@ -48,11 +124,11 @@ read -p "Enter your choice (1-12): " choice
 
 download_whisper_model() {
   local model_file=$1
-  download_file "${HF_BASE}/${WHISPER_REPO}/resolve/main/${model_file}" "${MODELS_DIR}/${model_file}"
+  download_file "${HF_BASE}/${WHISPER_REPO}/resolve/main/${model_file}" "${MODELS_DIR}/${model_file}" "${WHISPER_REPO}" "${model_file}"
 }
 
 download_vad_model() {
-  download_file "${HF_BASE}/${VAD_REPO}/resolve/main/ggml-silero-v5.1.2.bin" "${MODELS_DIR}/ggml-silero-v5.1.2.bin"
+  download_file "${HF_BASE}/${VAD_REPO}/resolve/main/ggml-silero-v5.1.2.bin" "${MODELS_DIR}/ggml-silero-v5.1.2.bin" "${VAD_REPO}" "ggml-silero-v5.1.2.bin"
 }
 
 case $choice in
