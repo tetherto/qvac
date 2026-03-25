@@ -1,5 +1,5 @@
 ---
-description: 
+description: Core SDK conventions - Bun, TypeScript, Zod, function declarations, @ imports, no classes, structured errors
 globs: packages/sdk/**
 alwaysApply: false
 ---
