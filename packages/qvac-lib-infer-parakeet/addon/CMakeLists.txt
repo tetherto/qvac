@@ -30,7 +30,7 @@ target_include_directories(${LIB_NAME} PRIVATE
 # Link ONNX Runtime
 find_package(onnxruntime CONFIG REQUIRED)
 target_link_libraries(${LIB_NAME} PRIVATE
-        onnxruntime::onnxruntime
+        onnxruntime::onnxruntime_static
 )
 
 # Include path for addon src
