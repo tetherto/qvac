@@ -16,9 +16,6 @@ Security hardening release from comprehensive security audit.
 - Wrap job ID counter at `Number.MAX_SAFE_INTEGER` to prevent precision loss (#1085)
 - Harden benchmark server: add library allowlist, restrict file paths to allowed directories, remove dynamic `npm install`, add body size limit, restrict CORS to localhost (#1086)
 
-### Not Yet Merged
-- Bump onnxruntime from 1.21.0 to 1.24.2 to fix OOB read vulnerability (#1089 — pending CI)
-
 ## [0.2.3]
 
 ### Added

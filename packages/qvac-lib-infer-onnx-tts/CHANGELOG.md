@@ -14,9 +14,6 @@ Security hardening release from comprehensive security audit.
 - Validate `modelDir` path in benchmark server to prevent directory traversal outside allowed directories (#1103)
 - Remove filesystem paths from C++ error messages in `FileUtils.hpp` to prevent path leakage (#1105)
 
-### Not Yet Merged
-- Remove `error.message` from 500 error responses in benchmark server to prevent information disclosure (#1104 — pending review)
-
 ## [0.6.5]
 
 This release improves TypeScript support for consumers of the ONNX TTS package. Runtime statistics that the native addon already exposes when `opts.stats` is enabled are now described in `index.d.ts`, and `run()` is typed so inference responses carry structured output chunks.
