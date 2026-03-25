@@ -1,6 +1,22 @@
-# Generate Human-Readable Release Notes
+---
+name: addon-release-notes
+description: Generate release notes for addon packages (non-SDK inference addons, decoder, OCR). Use when preparing release notes or user asks to "generate release notes" for an addon package.
+---
 
-## Step 1: Identify version **and** changes (mandatory version bump check)
+# Addon Release Notes Generator
+
+## What
+
+Generate human-readable release notes for addon packages (non-SDK packages like inference addons, decoder, OCR). Collects changes, extracts PRs, validates version bump, and produces a formatted release notes file.
+
+## When to Use
+
+- Creating release notes for an addon package
+- User explicitly asks to "generate release notes" or "prepare release notes" while working in an addon package
+
+## Instructions
+
+### Step 1: Identify version and changes (mandatory version bump check)
 
 Identify the full set of changes that will land in `main` for the PR, and **validate the version bump in `package.json`** against `main`:
 
@@ -12,8 +28,8 @@ Identify the full set of changes that will land in `main` for the PR, and **vali
    - If the `version` in `package.json` is **unchanged** compared to `main`, **stop and display this exact warning** to the user:
 
    -----------------------------------
-   ⚠️⚠️⚠️ VERSION BUMP REQUIRED ⚠️⚠️⚠️  
-   The `version` in `package.json` is unchanged compared to `main`.  
+   WARNING: VERSION BUMP REQUIRED
+   The `version` in `package.json` is unchanged compared to `main`.
    If this PR includes any changes that must be released in the package, you **must** bump the package version, commit/push it and re-run this command.
    -----------------------------------
 
@@ -21,7 +37,7 @@ Identify the full set of changes that will land in `main` for the PR, and **vali
 
 The goal is to produce a single, combined change set that reflects **what will be merged**: all commits on the PR branch versus `main` only.
 
-## Step 2: Collect PRs included in this release
+### Step 2: Collect PRs included in this release
 
 1. **Extract PR numbers** from commit messages in the range `main...HEAD`
    - Look for patterns like `#123`, `(#123)`, or `Merge pull request #123`
@@ -31,14 +47,14 @@ The goal is to produce a single, combined change set that reflects **what will b
    - PR URL
 3. **Build a list** of PRs to include in the release notes
 
-## Step 3: Generate Release Notes file
+### Step 3: Generate Release Notes file
 
 Create `release-notes/vX.Y.Z.md` with these guidelines:
 
-### Format Requirements
+#### Format Requirements
 
 1. **Title**: `# QVAC <package_name_readable> v{VERSION} Release Notes`
-   Replace `<package_name_readable>` with a corresponding name, depending on which package the release notes are being generated for:
+   Replace `<package_name_readable>` with a corresponding name:
    - `qvac-lib-decoder-audio`: `Audio Decoder`
    - `qvac-lib-infer-llamacpp-embed`: `Embeddings Addon`
    - `qvac-lib-infer-llamacpp-llm`: `LLM Addon`
@@ -71,7 +87,7 @@ Create `release-notes/vX.Y.Z.md` with these guidelines:
    - Add context where helpful (why this matters)
    - Keep code examples clean and commented
    - Remove internal jargon, make it accessible
-   - **Skip entries with no informational value** — generic entries like "Updated models" or "Bumped dependencies" without specific details should be omitted
+   - **Skip entries with no informational value** -- generic entries like "Updated models" or "Bumped dependencies" without specific details should be omitted
 
 ### Example
 
