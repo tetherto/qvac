@@ -16,6 +16,9 @@ function nextSafeId (current) {
   return current >= Number.MAX_SAFE_INTEGER ? 1 : current + 1
 }
 
+// 500 MB — ~2.7 hours of 16 kHz s16le mono audio
+const MAX_BUFFERED_BYTES = 500 * 1024 * 1024
+
 /**
  * An interface between Bare addon in C++ and JS runtime.
  */
@@ -34,6 +37,7 @@ class WhisperInterface {
     this._nextJobId = 1
     this._activeJobId = null
     this._bufferedAudio = []
+    this._bufferedBytes = 0
     this._state = state.LOADING
     this._audioFormat = configurationParams?.audio_format || 's16le'
 
@@ -228,6 +232,7 @@ class WhisperInterface {
     try {
       await this._binding.cancel(this._handle, jobId)
       this._bufferedAudio = []
+      this._bufferedBytes = 0
       this._activeJobId = null
       this._setState(state.LISTENING)
     } catch (err) {
@@ -271,6 +276,7 @@ class WhisperInterface {
         this._activeJobId = currentJobId
         this._nextJobId = nextSafeId(this._nextJobId)
         this._bufferedAudio = []
+        this._bufferedBytes = 0
         this._setState(state.PROCESSING)
         return currentJobId
       }
@@ -279,7 +285,14 @@ class WhisperInterface {
         if (!(data.input instanceof Uint8Array)) {
           throw new Error('Audio input must be Uint8Array')
         }
+        if (this._bufferedBytes + data.input.byteLength > MAX_BUFFERED_BYTES) {
+          throw new QvacErrorAddonWhisper({
+            code: ERR_CODES.BUFFER_LIMIT_EXCEEDED,
+            adds: MAX_BUFFERED_BYTES + ' bytes'
+          })
+        }
         this._bufferedAudio.push(data.input)
+        this._bufferedBytes += data.input.byteLength
         return this._nextJobId
       }
 
@@ -325,6 +338,7 @@ class WhisperInterface {
       this._binding.destroyInstance(this._handle)
       this._handle = null
       this._bufferedAudio = []
+      this._bufferedBytes = 0
       this._activeJobId = null
       this._setState(state.IDLE)
     } catch (err) {

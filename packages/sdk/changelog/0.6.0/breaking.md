@@ -156,7 +156,7 @@ await loadModel({
 
 ```bash
 # Embed with structured config
-bun examples/embed-hyperdrive.ts
+bun examples/embed-p2p.ts
 ```
 
 ---

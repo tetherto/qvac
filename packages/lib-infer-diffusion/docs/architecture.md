@@ -1,6 +1,6 @@
 # Architecture Documentation
 
-**Package:** `@qvac/img-stable-diffusion-cpp` v0.1.0  
+**Package:** `@qvac/diffusion-cpp` v0.1.0  
 **Stack:** JavaScript, C++20, stable-diffusion.cpp, Bare Runtime, CMake, vcpkg  
 **License:** Apache-2.0
 
@@ -38,12 +38,12 @@
 
 ## Purpose
 
-`@qvac/img-stable-diffusion-cpp` is a cross-platform npm package providing diffusion model inference for Bare runtime applications. It wraps stable-diffusion.cpp in a JavaScript-friendly API, enabling local image and video generation on desktop and mobile with CPU/GPU acceleration.
+`@qvac/diffusion-cpp` is a cross-platform npm package providing diffusion model inference for Bare runtime applications. It wraps stable-diffusion.cpp in a JavaScript-friendly API, enabling local image generation on desktop and mobile with CPU/GPU acceleration.
 
 **Core value:**
 - High-level JavaScript API for diffusion model inference
 - Progress callback during generation steps
-- Text-to-image and image-to-image generation via single `run()` API
+- Text-to-image generation via `run()` API
 - Disk-local model files (no download/streaming layer)
 
 ## Key Features
@@ -54,7 +54,7 @@
 - **GPU acceleration**: Metal, Vulkan, OpenCL
 - **Quantized models**: GGUF, safetensors, checkpoint formats
 - **Diffusion models**: SD1.x, SD2.x, SDXL, SD3, FLUX.2 [klein]
-- **Generation modes**: txt2img, img2img (auto-detected via `init_image` parameter)
+- **Generation modes**: txt2img
 
 ## Target Platforms
 
@@ -87,7 +87,7 @@ graph TB
     end
     
     subgraph "Inference Addons"
-        IMG[img-stable-diffusion-cpp<br/>Image/Video Gen]
+        IMG[diffusion-cpp<br/>Image Gen]
         LLM[llm-llamacpp<br/>LLMs]
         EMBED[embed-llamacpp<br/>Embeddings]
         WHISPER[whispercpp<br/>STT]
@@ -629,7 +629,7 @@ Need to pass complex generation parameters from JavaScript to C++:
 - Prompt and negative prompt
 - Image dimensions (width, height)
 - Sampling parameters (steps, cfg_scale, sampler, seed)
-- Optional inputs (init image for img2img, LoRA configs, ControlNet)
+- Optional inputs (LoRA configs, ControlNet)
 
 ### Decision
 
@@ -669,12 +669,8 @@ interface GenerationParams {
   batch_count?: number;       // default: 1
   vae_tiling?: boolean;       // Enable VAE tiling (for large images)
   cache_preset?: string;      // 'slow' | 'medium' | 'fast' | 'ultra'
-  init_image?: Uint8Array;    // PNG/JPEG bytes — if provided, runs img2img
-  strength?: number;          // img2img: 0.0 = keep source, 1.0 = full redraw
 }
 ```
-
-Mode is determined automatically: if `init_image` is provided, runs img2img; otherwise txt2img.
 
 ---
 

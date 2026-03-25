@@ -38,9 +38,10 @@
     "build:watch": "tsc --watch",
     "typecheck": "tsc --noEmit",
     "lint": "tsc --noEmit",
-    "test": "tsx test/translate.test.ts && tsx test/serve.test.ts",
+    "test": "tsx test/translate.test.ts",
     "test:unit": "tsx test/translate.test.ts",
-    "test:serve": "tsx test/serve.test.ts"
+    "test:bats": "npm run build && bats test/cli.bats",
+    "test:e2e": "npm run build && bats test/cli.bats test/e2e.bats"
   },
   "dependencies": {
     "bare-pack": "^2.0.0",
@@ -48,7 +49,9 @@
     "tsx": "^4.21.0"
   },
   "devDependencies": {
+    "@qvac/sdk": "^0.8.0",
     "@types/node": "^25.3.3",
+    "bats": "^1.13.0",
     "typescript": "^5.9.3"
   }
 }
