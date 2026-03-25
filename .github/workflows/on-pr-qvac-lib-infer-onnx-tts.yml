@@ -139,6 +139,13 @@ jobs:
       contents: read
       packages: read
     steps:
+      - name: Checkout code
+        uses: actions/checkout@v6
+        with:
+          repository: ${{ needs.context.outputs.repository }}
+          ref: ${{ needs.context.outputs.ref }}
+          token: ${{ secrets.PAT_TOKEN }}
+          fetch-depth: 0
       - uses: ./.github/actions/cpp-lint
         with:
           secret-token: ${{ secrets.GITHUB_TOKEN }}
