@@ -5,6 +5,7 @@ import TranscriptionWhispercpp, {
 import {
   definePlugin,
   defineHandler,
+  defineDuplexHandler,
   transcribeRequestSchema,
   transcribeResponseSchema,
   transcribeStreamRequestSchema,
@@ -124,19 +125,16 @@ export const whisperPlugin = definePlugin({
       },
     }),
 
-    transcribeStream: {
+    transcribeStream: defineDuplexHandler({
       requestSchema: transcribeStreamRequestSchema,
       responseSchema: transcribeStreamResponseSchema,
       streaming: true,
       duplex: true,
 
-      handler: async function* (
-        request: { modelId: string; prompt?: string },
-        inputStream: Readable,
-      ) {
+      handler: async function* (request, inputStream) {
         for await (const text of transcribeStream(
           request.modelId,
-          inputStream,
+          inputStream as Readable,
           request.prompt,
         )) {
           yield {
@@ -151,7 +149,7 @@ export const whisperPlugin = definePlugin({
           done: true,
         };
       },
-    } as unknown as ReturnType<typeof defineHandler>,
+    }),
   },
 
   logging: {

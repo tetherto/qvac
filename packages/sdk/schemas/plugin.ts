@@ -181,6 +181,30 @@ export function defineHandler<
   return definition;
 }
 
+export interface DuplexPluginHandlerDefinition<
+  TRequest extends z.ZodType = z.ZodType,
+  TResponse extends z.ZodType = z.ZodType,
+> {
+  requestSchema: TRequest;
+  responseSchema: TResponse;
+  streaming: true;
+  duplex: true;
+  handler: TRequest extends z.ZodType<infer I>
+    ? TResponse extends z.ZodType<infer O>
+      ? (request: I, inputStream: unknown) => AsyncGenerator<O>
+      : never
+    : never;
+}
+
+export function defineDuplexHandler<
+  TRequest extends z.ZodType,
+  TResponse extends z.ZodType,
+>(
+  definition: DuplexPluginHandlerDefinition<TRequest, TResponse>,
+): PluginHandlerDefinition<TRequest, TResponse> {
+  return definition as unknown as PluginHandlerDefinition<TRequest, TResponse>;
+}
+
 // ============================================
 // Worker runtime validation
 // ============================================

@@ -282,27 +282,22 @@ export function close() {
   // noop
 }
 
-type DuplexHandler = (
-  req: Request,
-  inputStream: Readable,
-) => AsyncGenerator<Response>;
-
 export async function createDuplexSession(payload: string) {
   await getRPC();
 
   const { PassThrough } = await import("bare-stream");
   const request = JSON.parse(payload) as Request;
 
-  const handlerFn = handlers[request.type];
-  if (!handlerFn) throw new RPCNoHandlerError(request.type);
-  const handler = handlerFn as unknown as DuplexHandler;
+  const handler = getHandler(request.type);
+  if (!handler) throw new RPCNoHandlerError(request.type);
 
   const inputStream = new PassThrough();
   const outputStream = new PassThrough();
 
   void (async () => {
     try {
-      for await (const response of handler(request, inputStream)) {
+      const duplex = handler as (req: Request, stream: Readable) => AsyncGenerator<Response>;
+      for await (const response of duplex(request, inputStream)) {
         outputStream.write(JSON.stringify(response) + "\n", "utf-8");
       }
     } catch (error) {
