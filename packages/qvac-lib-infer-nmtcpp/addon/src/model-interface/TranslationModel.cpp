@@ -118,6 +118,32 @@ void TranslationModel::load() {
     // Set model path
     params.model_path = modelPath_;
 
+    auto setBergamotParam =
+        [&]<typename TValue>(const std::string& key, auto setter) {
+          auto iter = config_.find(key);
+          if (iter == config_.end()) {
+            return;
+          }
+
+          if (std::holds_alternative<TValue>(iter->second)) {
+            setter(std::get<TValue>(iter->second));
+            return;
+          }
+
+          QLOG(
+              qvac_lib_inference_addon_cpp::logger::Priority::WARNING,
+              "[TRANSLATION MODEL] Ignoring Bergamot config '" + key +
+                  "' because the value type is unsupported");
+        };
+
+    setBergamotParam.operator()<int64_t>("beamsize", [&](double value) {
+      params.beam_size = static_cast<int>(value);
+    });
+    setBergamotParam.operator()<int64_t>(
+        "normalize", [&](int64_t value) { params.normalize = (bool)value; });
+    setBergamotParam.operator()<double>("max_length_factor", [&](double value) {
+      params.max_length_factor = value;
+    });
     // Extract vocab paths from config
     auto src_vocab_iter = config_.find("src_vocab");
     auto dst_vocab_iter = config_.find("dst_vocab");
@@ -528,38 +554,6 @@ void TranslationModel::setConfig(
 void TranslationModel::setUseGpu(bool useGpu) { useGpu_ = useGpu; }
 
 void TranslationModel::updateConfig() {
-#ifdef HAVE_BERGAMOT
-  if (bergamotCtx_) {
-    // Apply Bergamot-specific configuration using lambdas
-    auto setIntParam = [&](const std::string& key, auto setter) {
-      auto iter = config_.find(key);
-      if (iter != config_.end() && std::holds_alternative<int64_t>(iter->second)) {
-        int value = static_cast<int>(std::get<int64_t>(iter->second));
-        setter(bergamotCtx_.get(), value);
-        QLOG(
-            qvac_lib_inference_addon_cpp::logger::Priority::INFO,
-            "[BERGAMOT] Set " + key + " to " + std::to_string(value));
-      }
-    };
-
-    auto setBoolParam = [&](const std::string& key, auto setter) {
-      auto iter = config_.find(key);
-      if (iter != config_.end() && std::holds_alternative<int64_t>(iter->second)) {
-        bool value = std::get<int64_t>(iter->second) != 0;
-        setter(bergamotCtx_.get(), value);
-        QLOG(
-            qvac_lib_inference_addon_cpp::logger::Priority::INFO,
-            "[BERGAMOT] Set " + key + " to " + std::string(value ? "true" : "false"));
-      }
-    };
-
-    setIntParam("beamsize", bergamot_set_beam_size);
-    setBoolParam("normalize", bergamot_set_normalize);
-    setIntParam("maxlengthfactor", bergamot_set_max_length_factor);
-    return;
-  }
-#endif
-
   if (nmtCtx_) {
     auto setInt64Param = [&](const std::string& key, auto setter) {
       auto iter = config_.find(key);
