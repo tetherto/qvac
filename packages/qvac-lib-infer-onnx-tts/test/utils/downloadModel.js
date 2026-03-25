@@ -561,65 +561,6 @@ async function ensureChatterboxModels (options = {}) {
 }
 
 /**
- * Fetch URL response body as string (for JSON etc.). Used when we need to write the received content to a file.
- * @param {string} url - URL to fetch
- * @returns {Promise<{ success: boolean, body?: string, error?: string }>}
- */
-async function fetchUrlBody (url) {
-  if (isMobile) {
-    const https = require('bare-https')
-    const { URL } = require('bare-url')
-    return new Promise((resolve) => {
-      const parsedUrl = new URL(url)
-      const options = {
-        hostname: parsedUrl.hostname,
-        port: parsedUrl.port || 443,
-        path: parsedUrl.pathname + parsedUrl.search,
-        method: 'GET',
-        headers: { 'User-Agent': 'Mozilla/5.0 (compatible; bare-download/1.0)' }
-      }
-      const req = https.request(options, (res) => {
-        if (res.statusCode >= 300 && res.statusCode < 400 && res.headers.location) {
-          const location = res.headers.location
-          let redirectUrl
-          if (location.startsWith('http://') || location.startsWith('https://')) {
-            redirectUrl = location
-          } else if (location.startsWith('/')) {
-            redirectUrl = `${parsedUrl.protocol}//${parsedUrl.host}${location}`
-          } else {
-            const basePath = parsedUrl.pathname.substring(0, parsedUrl.pathname.lastIndexOf('/') + 1)
-            redirectUrl = `${parsedUrl.protocol}//${parsedUrl.host}${basePath}${location}`
-          }
-          fetchUrlBody(redirectUrl).then(resolve).catch((e) => resolve({ success: false, error: e.message }))
-          return
-        }
-        if (res.statusCode !== 200) {
-          resolve({ success: false, error: `HTTP ${res.statusCode}` })
-          return
-        }
-        const chunks = []
-        res.on('data', (chunk) => chunks.push(chunk))
-        res.on('end', () => resolve({ success: true, body: Buffer.concat(chunks).toString('utf8') }))
-        res.on('error', (err) => resolve({ success: false, error: err.message }))
-      })
-      req.on('error', (err) => resolve({ success: false, error: err.message }))
-      req.end()
-    })
-  }
-  const { spawnSync } = require('bare-subprocess')
-  const result = spawnSync('curl', [
-    '-L', url,
-    '--fail', '--silent', '--show-error',
-    '--connect-timeout', '30',
-    '--max-time', '300'
-  ], { encoding: 'utf8', stdio: ['inherit', 'pipe', 'pipe'] })
-  if (result.status === 0 && result.stdout) {
-    return { success: true, body: result.stdout }
-  }
-  return { success: false, error: result.stderr || `exit code ${result.status}` }
-}
-
-/**
  * Ensure Supertone supertonic TTS models from a Hugging Face base URL (4-ONNX + JSON).
  * @param {Object} options
  * @param {string} options.baseUrl - e.g. .../Supertone/supertonic/resolve/main (English) or .../supertonic-2 (multilingual)
