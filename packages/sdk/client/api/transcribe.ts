@@ -99,6 +99,12 @@ export async function transcribeStream(
           logger.warn("transcribeStream: malformed JSON from server:", line);
           continue;
         }
+        const obj = parsed as Record<string, unknown>;
+        if (obj["type"] === "error") {
+          throw new TranscriptionFailedError(
+            (obj["error"] as string) ?? "Unknown server error",
+          );
+        }
         const response = transcribeStreamResponseSchema.parse(parsed);
         if (response.error) {
           throw new TranscriptionFailedError(response.error);
