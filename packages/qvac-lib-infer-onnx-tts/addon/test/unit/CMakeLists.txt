@@ -22,6 +22,12 @@ target_sources(
 find_package(tokenizers_cpp CONFIG REQUIRED)
 find_package(nlohmann_json CONFIG REQUIRED)
 
+if(TARGET onnxruntime::onnxruntime_static)
+  set(QVAC_TTS_UNITTEST_ONNXRUNTIME onnxruntime::onnxruntime_static)
+else()
+  set(QVAC_TTS_UNITTEST_ONNXRUNTIME onnxruntime::onnxruntime)
+endif()
+
 target_include_directories(
   qvac-lib-inference-tts-unit-test
   PRIVATE
@@ -32,7 +38,7 @@ target_include_directories(
 target_link_libraries(
   qvac-lib-inference-tts-unit-test
   PRIVATE
-    onnxruntime::onnxruntime
+    ${QVAC_TTS_UNITTEST_ONNXRUNTIME}
     tokenizers::tokenizers_cpp
     nlohmann_json::nlohmann_json
     ${QVAC_UTF8PROC_TARGET}
