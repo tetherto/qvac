@@ -74,7 +74,10 @@ EngineType TTSModel::detectEngineType(
   if (nonEmpty(configMap, "textEncoderPath") ||
       nonEmpty(configMap, "durationPredictorPath") ||
       nonEmpty(configMap, "unicodeIndexerPath") ||
-      nonEmpty(configMap, "ttsConfigPath")) {
+      nonEmpty(configMap, "ttsConfigPath") ||
+      nonEmpty(configMap, "vectorEstimatorPath") ||
+      nonEmpty(configMap, "vocoderPath") ||
+      (nonEmpty(configMap, "modelDir") && nonEmpty(configMap, "voiceName"))) {
     return EngineType::Supertonic;
   }
   return EngineType::Chatterbox;
