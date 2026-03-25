@@ -91,7 +91,6 @@ try {
   const session = await transcribeStream({ modelId });
 
   ffmpeg.stdout.on("data", (chunk: Buffer) => session.write(chunk));
-  ffmpeg.on("close", () => session.end());
 
   console.log("Listening... speak and pause to see transcriptions.");
   console.log("Press Enter to stop.\n");
