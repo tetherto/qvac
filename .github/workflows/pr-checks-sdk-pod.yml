@@ -47,7 +47,7 @@ jobs:
     steps:
       - name: Check actor write permission
         id: perm
-        uses: scherermichael-oss/action-has-permission@17f29510f1bf987b916c8cbb451566a56eed23f1
+        uses: scherermichael-oss/action-has-permission@136e061bfe093832d87f090dd768e14e27a740d3 # 1.0.6
         with:
           required-permission: write
         env:
