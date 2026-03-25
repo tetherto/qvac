@@ -9,6 +9,91 @@ MODELS_DIR="./models"
 echo "Creating models directory..."
 mkdir -p "$MODELS_DIR"
 
+compute_sha256() {
+  if command -v sha256sum >/dev/null 2>&1; then
+    sha256sum "$1" | cut -d' ' -f1
+  elif command -v shasum >/dev/null 2>&1; then
+    shasum -a 256 "$1" | cut -d' ' -f1
+  else
+    echo ""
+  fi
+}
+
+extract_lfs_sha256() {
+  local json=$1
+  local filename=$2
+  python3 -c "
+import json, sys
+data = json.loads(sys.stdin.read())
+for item in data:
+    if item.get('path','').endswith('$filename'):
+        lfs = item.get('lfs')
+        if lfs and 'oid' in lfs:
+            print(lfs['oid'])
+            sys.exit(0)
+sys.exit(1)
+" <<< "$json" 2>/dev/null
+}
+
+verify_file() {
+  local dest=$1
+  local repo=$2
+  local file=$3
+
+  local actual_sha
+  actual_sha=$(compute_sha256 "$dest")
+  if [ -z "$actual_sha" ]; then
+    echo "  WARNING: sha256sum not available, skipping integrity check"
+    return 0
+  fi
+
+  local dir_path
+  dir_path=$(dirname "$file")
+  local tree_path="main"
+  if [ "$dir_path" != "." ]; then
+    tree_path="main/${dir_path}"
+  fi
+
+  local basename_file
+  basename_file=$(basename "$file")
+
+  local metadata
+  metadata=$(curl -sL "https://huggingface.co/api/models/${repo}/tree/${tree_path}")
+
+  local expected_sha
+  expected_sha=$(extract_lfs_sha256 "$metadata" "$basename_file")
+
+  if [ -z "$expected_sha" ]; then
+    echo "  WARNING: could not fetch LFS checksum from HuggingFace (file may not be LFS-tracked), skipping integrity check"
+    return 0
+  fi
+
+  if [ "$actual_sha" != "$expected_sha" ]; then
+    echo "  ERROR: checksum mismatch for $(basename "$dest")"
+    echo "    expected: $expected_sha"
+    echo "    actual:   $actual_sha"
+    rm -f "$dest"
+    return 1
+  fi
+
+  echo "  Verified: $(basename "$dest") (SHA-256 OK)"
+  return 0
+}
+
+download_and_verify() {
+  local url=$1
+  local dest=$2
+  local repo=$3
+  local file=$4
+
+  echo "Downloading $file..."
+  curl -L -o "$dest" "$url"
+
+  if [ -n "$repo" ] && [ -n "$file" ]; then
+    verify_file "$dest" "$repo" "$file"
+  fi
+}
+
 # Function to download a model
 download_model() {
   local model_name=$1
@@ -24,9 +109,8 @@ download_model() {
   mkdir -p "$model_dir"
   
   for file in "${files[@]}"; do
-    echo "Downloading $file..."
     local url="https://huggingface.co/$repo/resolve/main/$file"
-    curl -L -o "$model_dir/$(basename $file)" "$url"
+    download_and_verify "$url" "$model_dir/$(basename $file)" "$repo" "$file"
   done
   
   echo "✓ $model_name downloaded successfully"
@@ -66,10 +150,11 @@ case $choice in
       "vocab.txt"
     
     # Download preprocessor (required for accurate mel spectrogram)
-    echo "Downloading preprocessor.onnx..."
-    curl -L -o "$MODELS_DIR/parakeet-tdt-0.6b-v3-onnx/preprocessor.onnx" \
-      "https://huggingface.co/ysdede/parakeet-tdt-0.6b-v2-onnx/resolve/main/nemo128.onnx"
-    echo "✓ preprocessor.onnx downloaded"
+    download_and_verify \
+      "https://huggingface.co/ysdede/parakeet-tdt-0.6b-v2-onnx/resolve/main/nemo128.onnx" \
+      "$MODELS_DIR/parakeet-tdt-0.6b-v3-onnx/preprocessor.onnx" \
+      "ysdede/parakeet-tdt-0.6b-v2-onnx" \
+      "nemo128.onnx"
     ;;
   2)
     download_model "parakeet-ctc-0.6b-onnx" \
@@ -77,10 +162,11 @@ case $choice in
       "onnx/model.onnx" \
       "onnx/model.onnx_data"
     # tokenizer.json lives at repo root, not inside onnx/
-    echo "Downloading tokenizer.json..."
-    curl -L -o "$MODELS_DIR/parakeet-ctc-0.6b-onnx/tokenizer.json" \
-      "https://huggingface.co/onnx-community/parakeet-ctc-0.6b-ONNX/resolve/main/tokenizer.json"
-    echo "✓ tokenizer.json downloaded"
+    download_and_verify \
+      "https://huggingface.co/onnx-community/parakeet-ctc-0.6b-ONNX/resolve/main/tokenizer.json" \
+      "$MODELS_DIR/parakeet-ctc-0.6b-onnx/tokenizer.json" \
+      "onnx-community/parakeet-ctc-0.6b-ONNX" \
+      "tokenizer.json"
     ;;
   3)
     download_model "parakeet-eou-120m-v1-onnx" \
@@ -104,19 +190,21 @@ case $choice in
       "vocab.txt"
     
     # Download preprocessor for TDT model
-    echo "Downloading preprocessor.onnx..."
-    curl -L -o "$MODELS_DIR/parakeet-tdt-0.6b-v3-onnx/preprocessor.onnx" \
-      "https://huggingface.co/ysdede/parakeet-tdt-0.6b-v2-onnx/resolve/main/nemo128.onnx"
-    echo "✓ preprocessor.onnx downloaded"
+    download_and_verify \
+      "https://huggingface.co/ysdede/parakeet-tdt-0.6b-v2-onnx/resolve/main/nemo128.onnx" \
+      "$MODELS_DIR/parakeet-tdt-0.6b-v3-onnx/preprocessor.onnx" \
+      "ysdede/parakeet-tdt-0.6b-v2-onnx" \
+      "nemo128.onnx"
     
     download_model "parakeet-ctc-0.6b-onnx" \
       "onnx-community/parakeet-ctc-0.6b-ONNX" \
       "onnx/model.onnx" \
       "onnx/model.onnx_data"
-    echo "Downloading tokenizer.json..."
-    curl -L -o "$MODELS_DIR/parakeet-ctc-0.6b-onnx/tokenizer.json" \
-      "https://huggingface.co/onnx-community/parakeet-ctc-0.6b-ONNX/resolve/main/tokenizer.json"
-    echo "✓ tokenizer.json downloaded"
+    download_and_verify \
+      "https://huggingface.co/onnx-community/parakeet-ctc-0.6b-ONNX/resolve/main/tokenizer.json" \
+      "$MODELS_DIR/parakeet-ctc-0.6b-onnx/tokenizer.json" \
+      "onnx-community/parakeet-ctc-0.6b-ONNX" \
+      "tokenizer.json"
     
     download_model "parakeet-eou-120m-v1-onnx" \
       "altunenes/parakeet-rs" \
