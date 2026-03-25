@@ -124,7 +124,7 @@ jobs:
 
       - if: ${{ matrix.platform == 'android' }}
         name: Setup Android NDK
-        uses: nttld/setup-ndk@v1
+        uses: nttld/setup-ndk@2817442ee7c3346c1eb7d2ec60263c93206ba14f # v1
         with:
           ndk-version: r27c
           add-to-path: true
