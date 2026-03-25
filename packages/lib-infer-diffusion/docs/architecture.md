@@ -54,7 +54,7 @@
 - **GPU acceleration**: Metal, Vulkan, OpenCL
 - **Quantized models**: GGUF, safetensors, checkpoint formats
 - **Diffusion models**: SD1.x, SD2.x, SDXL, SD3, FLUX.2 [klein]
-- **Generation modes**: txt2img, img2img (auto-detected via `init_image` parameter)
+- **Generation modes**: txt2img
 
 ## Target Platforms
 
@@ -629,7 +629,7 @@ Need to pass complex generation parameters from JavaScript to C++:
 - Prompt and negative prompt
 - Image dimensions (width, height)
 - Sampling parameters (steps, cfg_scale, sampler, seed)
-- Optional inputs (init image for img2img, LoRA configs, ControlNet)
+- Optional inputs (LoRA configs, ControlNet)
 
 ### Decision
 
@@ -669,12 +669,8 @@ interface GenerationParams {
   batch_count?: number;       // default: 1
   vae_tiling?: boolean;       // Enable VAE tiling (for large images)
   cache_preset?: string;      // 'slow' | 'medium' | 'fast' | 'ultra'
-  init_image?: Uint8Array;    // PNG/JPEG bytes — if provided, runs img2img
-  strength?: number;          // img2img: 0.0 = keep source, 1.0 = full redraw
 }
 ```
-
-Mode is determined automatically: if `init_image` is provided, runs img2img; otherwise txt2img.
 
 ---
 
