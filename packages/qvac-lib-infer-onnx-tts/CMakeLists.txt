@@ -131,10 +131,13 @@ endif()
 
 find_package(onnxruntime CONFIG REQUIRED)
 find_package(nlohmann_json CONFIG REQUIRED)
-find_path(UTF8PROC_INCLUDE_DIRS "utf8proc.h")
-find_library(UTF8PROC_LIBRARIES NAMES utf8proc)
-if(NOT UTF8PROC_INCLUDE_DIRS OR NOT UTF8PROC_LIBRARIES)
-  message(FATAL_ERROR "utf8proc not found (vcpkg install utf8proc)")
+find_package(unofficial-utf8proc CONFIG REQUIRED)
+if(TARGET utf8proc::utf8proc)
+  set(QVAC_UTF8PROC_TARGET utf8proc::utf8proc)
+elseif(TARGET utf8proc)
+  set(QVAC_UTF8PROC_TARGET utf8proc)
+else()
+  message(FATAL_ERROR "utf8proc CMake target missing (expected from unofficial-utf8proc)")
 endif()
 
 include_directories(BEFORE ${CMAKE_BINARY_DIR}/_deps/flatbuffers-src/include)
@@ -164,7 +167,6 @@ target_include_directories(
   PRIVATE
     ${PROJECT_SOURCE_DIR}/addon
     ${QVAC_LIB_INFERENCE_ADDON_CPP_INCLUDE_DIRS}
-    ${UTF8PROC_INCLUDE_DIRS}
 )
 
 function(strip_libraries LIB_DIR LIB_NAMES)
@@ -205,7 +207,7 @@ target_link_libraries(
     onnxruntime::onnxruntime
     tokenizers::tokenizers_cpp
     nlohmann_json::nlohmann_json
-    ${UTF8PROC_LIBRARIES}
+    ${QVAC_UTF8PROC_TARGET}
 )
 
 option(BUILD_CLI "Build CLI tool example" FALSE)
@@ -224,7 +226,6 @@ if(BUILD_CLI)
     PRIVATE
       ${PROJECT_SOURCE_DIR}/addon
       ${QVAC_LIB_INFERENCE_ADDON_CPP_INCLUDE_DIRS}
-      ${UTF8PROC_INCLUDE_DIRS}
   )
 
   target_link_libraries(
@@ -233,7 +234,7 @@ if(BUILD_CLI)
       onnxruntime::onnxruntime_static
       tokenizers::tokenizers_cpp
       nlohmann_json::nlohmann_json
-      ${UTF8PROC_LIBRARIES}
+      ${QVAC_UTF8PROC_TARGET}
   )
 
   if(WIN32)
