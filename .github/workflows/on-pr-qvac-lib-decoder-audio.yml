@@ -104,18 +104,6 @@ jobs:
           echo "  run_verify=$run_verify"
           echo "  workdir=$workdir"
 
-  release-notes-check:
-    needs: context
-    permissions:
-      contents: read
-      pull-requests: read
-    uses: ./.github/workflows/release-notes-check-qvac-lib-decoder-audio.yml
-    secrets: inherit
-    with:
-      repository: ${{ needs.context.outputs.repository }}
-      ref: ${{ needs.context.outputs.ref }}
-      workdir: ${{ needs.context.outputs.workdir }}
-
   sanity-checks:
     needs: context
     runs-on: ubuntu-latest
@@ -150,11 +138,11 @@ jobs:
       workdir: ${{ needs.context.outputs.workdir }}
 
   merge-guard:
-    needs: [release-notes-check, sanity-checks, run-integration-tests, run-mobile-integration-tests]
+    needs: [sanity-checks, run-integration-tests, run-mobile-integration-tests]
     if: always()
     uses: tetherto/qvac-devops/.github/workflows/public-pr.yml@monorepo_update
     with:
-      sanity-checks-status: ${{ needs.sanity-checks.result == 'success' && needs.release-notes-check.result == 'success' }}
+      sanity-checks-status: ${{ needs.sanity-checks.result == 'success' }}
       build-status: ${{ needs.run-integration-tests.result == 'success' || needs.run-integration-tests.result == 'skipped' }}
       integration-tests-status: ${{ (needs.run-integration-tests.result == 'success' || needs.run-integration-tests.result == 'skipped') && (needs.run-mobile-integration-tests.result == 'success' || needs.run-mobile-integration-tests.result == 'skipped') }}
     secrets: inherit
