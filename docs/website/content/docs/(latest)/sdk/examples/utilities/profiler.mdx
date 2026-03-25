@@ -5,50 +5,43 @@ description: Measure and export timing metrics across model loading, inference, 
 
 ## Overview
 
-Use the profiler to measure and analyze how long SDK operations take in your application. You can enable profiling in two ways:
+`@qvac/sdk` npm package exposes a `profiler` object that you can import and use to measure and analyze how long SDK operations take in your application. You can enable profiling in two ways:
+- [**Global:**](#enable-global) call `profiler.enable()` to profile all subsequent operations until `profiler.disable()` is called.
+- [**Per-call:**](#enable-per-call) pass `{ profiling: { enabled: true } }` in the options of an individual function call.
 
-- **Global:** call `profiler.enable()` to profile all subsequent operations until `profiler.disable()` is called.
-- **Per call:** pass `{ profiling: { enabled: true } }` in the options of an individual function call.
-
-You can also enable profiling globally and use a per-call override to opt out of specific calls by passing `{ profiling: { enabled: false } }`. Data collected through both modes is stored in and exported from the same `profiler` object.
-
-The following operations support profiling: `loadModel()` | `completion()` | `embed()` | `transcribe()` | `translate()` | `ragSearch()` | `invokePlugin()` | `downloadAsset()`.
+You can also enable profiling globally and use a per-call override to [opt out](#opt-out) of specific calls by passing `{ profiling: { enabled: false } }`. Data collected through both modes is stored in and exported from the same `profiler` singleton. See [Support](#support) for the list of SDK operations that support profiling.
 
 <Callout type="info">
 `profiler` is a process-wide singleton — its state persists until the process exits.
 </Callout>
 
-## Functions
+## `profiler`
+
+The `profiler` object provides the following methods:
 
 1. `profiler.enable(options?)` — enable profiling globally
-2. `profiler.isEnabled()` — check if profiler is active
+2. `profiler.isEnabled()` — return whether profiling is enabled
 3. `profiler.onRecord(callback)` — subscribe to profiling events in real time
-4. Export collected data using any of:
-   - `profiler.exportSummary()` — high-level summary string
-   - `profiler.exportTable()` — detailed aggregated metrics table
-   - `profiler.exportJSON(options?)` — full export as structured JSON
+4. Export collected data using any of the following:
+   - `profiler.exportSummary()` — return a high-level summary string
+   - `profiler.exportTable()` — return a detailed table of aggregated metrics
+   - `profiler.exportJSON(options?)` — return a full export as structured JSON
 5. `profiler.disable()` — disable profiling
-6. `profiler.clear()` — reset collected data
+6. `profiler.clear()` — clear collected data
 
-For the full metrics catalog of each export function and detailed usage, see [SDK — API reference](/sdk/api/).
+See [API — `profiler`](/sdk/api/) for the complete reference, including the full metrics catalog for each export function and detailed usage.
 
-## Precedence
+## Enable profiling
 
-Profiling behavior is determined in the following order:
+By default, profiling is disabled. You can enable it [globally](#enable-global) or [per-call](#enable-per-call). If you enable profiling globally, you can [opt out](#opt-out) of individual function calls.
 
-1. **Per-call override:** `{ profiling: { enabled: true/false } }` on an individual call always wins.
-2. **Global enablement:** `profiler.enable()` applies to all calls that don't carry a per-call override.
-3. **Default:** profiling is disabled.
-
-This means you can enable profiling globally and still opt out specific calls, or keep the profiler disabled and opt in only the calls you care about.
-
-## Enabling
-
-### Global
+### Global [#enable-global]
 
 Enable profiling globally by calling `profiler.enable()`:
 
 ```ts
+import { profiler } from "@qvac/sdk";
+
 profiler.enable({
   mode: "verbose",                 // "summary" (default) | "verbose"
   includeServerBreakdown: true,    // include server-side timing in responses
@@ -56,9 +49,9 @@ profiler.enable({
 });
 ```
 
-### Per call
+### Per-call [#enable-per-call]
 
-To profile a single call, pass the `profiling` option option when invoking a function:
+To profile a single call, pass the `profiling` option when invoking the function:
 
 ```ts
 await embed(
@@ -73,13 +66,11 @@ await embed(
 );
 ```
 
-<Callout type="info">
-Per-call profiling is supported on the following function calls: [`loadModel()`](/sdk/api/loadModel) | [`completion()`](/sdk/api/completion) | [`embed()`](/sdk/api/embed) | [`transcribe()`](/sdk/api/transcribe) | [`translate()`](/sdk/api/translate) | [`ragSearch()`](/sdk/api/ragSearch) | [`invokePlugin()`](/sdk/api/invokePlugin) | [`downloadAsset()`](/sdk/api/downloadAsset).
-</Callout>
+See [Support](#support) for the list of functions that accept the `profiling` option.
 
 ### Opt-out
 
-If you enabled profiling globally, you can pass the `profiling` option to opt out of a specific call:
+If you enabled profiling [globally](#enable-global), you can pass the `profiling` option to opt out of a specific call:
 
 ```ts
 await embed(
@@ -87,6 +78,12 @@ await embed(
   { profiling: { enabled: false } },
 );
 ```
+
+## Support
+
+The following SDK operations support profiling:
+
+[`completion()`](/sdk/api/completion) | [`downloadAsset()`](/sdk/api/downloadAsset) | [`embed()`](/sdk/api/embed) | [`invokePlugin()`](/sdk/api/invokePlugin) | [`invokePluginStream()`](/sdk/api/invokePluginStream) | [`loadModel()`](/sdk/api/loadModel) | [`ocr()`](/sdk/api/ocr) | [`ragChunk()`](/sdk/api/ragChunk) | [`ragCloseWorkspace()`](/sdk/api/ragCloseWorkspace) | [`ragDeleteEmbeddings()`](/sdk/api/ragDeleteEmbeddings) | [`ragDeleteWorkspace()`](/sdk/api/ragDeleteWorkspace) | [`ragIngest()`](/sdk/api/ragIngest) | [`ragListWorkspaces()`](/sdk/api/ragListWorkspaces) | [`ragReindex()`](/sdk/api/ragReindex) | [`ragSaveEmbeddings()`](/sdk/api/ragSaveEmbeddings) | [`ragSearch()`](/sdk/api/ragSearch) | [`textToSpeech()`](/sdk/api/textToSpeech) | [`transcribe()`](/sdk/api/transcribe) | [`transcribeStream()`](/sdk/api/transcribeStream) | [`translate()`](/sdk/api/translate)
 
 ## Examples
 
@@ -112,7 +109,7 @@ The following script enables profiling globally, loads a model, runs a completio
 </Tab>
 </Tabs>
 
-### Per call
+### Per-call
 
 The following script keeps the profiler disabled globally and selectively profiles individual `embed()` calls using the per-call option:
 
