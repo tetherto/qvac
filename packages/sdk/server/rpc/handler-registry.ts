@@ -29,6 +29,7 @@ import {
   handleModelRegistrySearch,
   handleModelRegistryGetModel,
 } from "@/server/rpc/handlers/registry";
+import { handleFinetune } from "@/server/rpc/handlers/finetune";
 import type { HandlerEntry } from "./handler-utils";
 
 function ragSupportsProgress(request: Request): boolean {
@@ -43,6 +44,9 @@ function isModelDelegated(request: Request): boolean {
 }
 
 export const registry: Record<string, HandlerEntry> = {
+  // Finetune (streaming — handles start/pause/cancel via op param)
+  finetune: { type: "stream", handler: handleFinetune },
+
   // Simple Reply handlers
   ping: { type: "reply", handler: handlePing },
   unloadModel: {

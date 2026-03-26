@@ -32,6 +32,10 @@ export {
   modelRegistrySearch,
   modelRegistryGetModel,
   type ModelRegistrySearchParams,
+  finetune,
+  finetunePause,
+  finetuneCancel,
+  type FinetuneHandle,
 } from "./client/api";
 export { close } from "./client";
 export {
@@ -87,6 +91,11 @@ export {
   SDK_DEFAULT_PLUGINS,
   type BuiltinPlugin,
   type ProfilerMode,
+  type FinetuneResponse,
+  type FinetuneProgress,
+  type FinetuneStats,
+  type FinetuneStatus,
+  type FinetuningOptions,
 } from "./schemas";
 
 export { type ToolInput, type ToolHandler } from "./utils/tool-helpers";

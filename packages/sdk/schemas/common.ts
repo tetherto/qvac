@@ -64,6 +64,11 @@ import {
   modelRegistryGetModelRequestSchema,
   modelRegistryGetModelResponseSchema,
 } from "./registry";
+import {
+  finetuneRequestSchema,
+  finetuneResponseSchema,
+  finetuneProgressSchema,
+} from "./finetune";
 
 export const requestSchema = z.union([
   pingRequestSchema,
@@ -88,6 +93,7 @@ export const requestSchema = z.union([
   modelRegistryListRequestSchema,
   modelRegistrySearchRequestSchema,
   modelRegistryGetModelRequestSchema,
+  finetuneRequestSchema,
 ]);
 
 export const responseSchema = z.discriminatedUnion("type", [
@@ -116,6 +122,8 @@ export const responseSchema = z.discriminatedUnion("type", [
   modelRegistryListResponseSchema,
   modelRegistrySearchResponseSchema,
   modelRegistryGetModelResponseSchema,
+  finetuneResponseSchema,
+  finetuneProgressSchema,
 ]);
 
 export const rpcOptionsSchema = z.object({

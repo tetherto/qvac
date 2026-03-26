@@ -74,3 +74,4 @@ export {
 } from "./model-types";
 export * from "./plugin";
 export * from "./registry";
+export * from "./finetune";

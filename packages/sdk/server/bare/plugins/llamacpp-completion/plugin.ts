@@ -7,6 +7,9 @@ import {
   completionStreamResponseSchema,
   translateRequestSchema,
   translateResponseSchema,
+  finetuneRequestSchema,
+  finetuneResponseSchema,
+  finetuneProgressSchema,
   ModelType,
   llmConfigBaseSchema,
   ADDON_LLM,
@@ -25,6 +28,7 @@ import FilesystemDL from "@qvac/dl-filesystem";
 import { asLoader } from "@/server/bare/utils/loader-adapter";
 import { completion } from "@/server/bare/plugins/llamacpp-completion/ops/completion-stream";
 import { translate } from "@/server/bare/ops/translate";
+import { finetuneStart } from "@/server/bare/plugins/llamacpp-completion/ops/finetune";
 
 function transformLlmConfig(llmConfig: LlmConfig) {
   const transformed = JSON.parse(
@@ -206,6 +210,17 @@ export const llmPlugin = definePlugin({
           done: true,
           ...(stats && { stats }),
         };
+      },
+    }),
+
+    finetune: defineHandler({
+      requestSchema: finetuneRequestSchema,
+      responseSchema: finetuneResponseSchema.or(finetuneProgressSchema),
+      streaming: true,
+
+      handler: async function* (request) {
+        if (request.op !== "start") return;
+        yield* finetuneStart(request);
       },
     }),
   },
