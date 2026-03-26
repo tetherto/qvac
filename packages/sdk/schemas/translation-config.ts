@@ -63,27 +63,8 @@ export const INDICTRANS_LANGUAGES = [
   "urd_Arab", // Urdu
 ] as const;
 
-export const AFRICAN_LANGUAGES_MAP = new Map([
-  ["afr_Latn", "Afrikaans"],
-  ["swh_Latn", "Swahili"],
-  ["ary_Arab", "Moroccan Arabic"],
-  ["som_Latn", "Somali"],
-  ["amh_Ethi", "Amharic"],
-  ["arz_Arab", "Egyptian Arabic"],
-  ["hau_Latn", "Hausa"],
-  ["kin_Latn", "Kinyarwanda"],
-  ["zul_Latn", "Zulu"],
-  ["ibo_Latn", "Igbo"],
-  ["plt_Latn", "Plateau Malagasy"],
-  ["xho_Latn", "Xhosa"],
-  ["sna_Latn", "Shona"],
-  ["yor_Latn", "Yoruba"],
-  ["nya_Latn", "Nyanja"],
-  ["sot_Latn", "Southern Sotho"],
-  ["tir_Ethi", "Tigrinya"],
-  ["aeb_Arab", "Tunisian Arabic"],
-  ["gaz_Latn", "Oromo"],
-  ["tsn_Latn", "Tswana"],
+export const AFRICAN_LANGUAGES_SET = new Set([
+  "Afrikaans","Swahili","Somali","Amharic","Hausa","Kinyarwanda","Zulu","Igbo","Xhosa","Shona","Yoruba","Nyanja","Southern Sotho","Tigrinya","Oromo","Tswana","Moroccan Arabic","Egyptian Arabic","Malagasy","Tunisian Arabic"
 ]);
 
 // Union of all NMT languages (for general type usage)

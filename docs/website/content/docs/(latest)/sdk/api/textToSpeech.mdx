@@ -1,7 +1,7 @@
 ---
 title: "textToSpeech( )"
 titleStyle: code
-description: "No description available"
+description: "Converts text to speech audio using a loaded TTS model. Supports both streaming and buffered modes."
 ---
 
 ```typescript
@@ -12,8 +12,15 @@ function textToSpeech(params: { inputType: string; modelId: string; stream: bool
 
 | Name | Type | Required? | Description |
 | --- | --- | :---: | --- |
-| `params` | `\{ inputType: string; modelId: string; stream: boolean; text: string \}` | ✓ | No description |
-| `options` | `\{ forceNewConnection?: boolean; profiling?: \{ enabled?: boolean; includeServerBreakdown?: boolean; mode?: "summary" | "verbose" \}; timeout?: number \}` | ✗ | No description |
+| `params` | `\{ inputType: string; modelId: string; stream: boolean; text: string \}` | ✓ | TTS synthesis parameters |
+| `options` | `\{ forceNewConnection?: boolean; profiling?: \{ enabled?: boolean; includeServerBreakdown?: boolean; mode?: "summary" | "verbose" \}; timeout?: number \}` | ✗ | Optional RPC transport options including connection reuse, timeout, and per-call profiling configuration |
+
+| Field | Type | Required? | Description |
+| --- | --- | :---: | --- |
+| `inputType` | `string` | ✓ | The type of input content, typically `"text"` |
+| `modelId` | `string` | ✓ | The ID of the loaded TTS model to use for synthesis |
+| `stream` | `boolean` | ✓ | When `true`, audio bytes are emitted incrementally via `bufferStream`. When `false`, the full audio is returned via `buffer` |
+| `text` | `string` | ✓ | The text content to synthesize into speech |
 
 ## Returns
 
@@ -25,6 +32,37 @@ function textToSpeech(params: { inputType: string; modelId: string; stream: bool
 
 | Field | Type | Description |
 | --- | --- | --- |
-| `buffer` | `Promise` | — |
-| `bufferStream` | `AsyncGenerator` | — |
-| `done` | `Promise` | — |
+| `buffer` | `Promise` | Resolves with the complete audio buffer as a byte array when `stream` is `false`. Resolves to an empty array in streaming mode |
+| `bufferStream` | `AsyncGenerator` | Yields audio bytes incrementally in streaming mode. Empty generator when `stream` is `false` |
+| `done` | `Promise` | Resolves to `true` when synthesis is complete |
+
+## Example
+
+```typescript
+import { textToSpeech } from "@qvac/sdk";
+
+// Streaming mode — process audio chunks as they arrive
+const { bufferStream, done } = textToSpeech({
+  modelId: "my-tts-model",
+  text: "Hello, welcome to QVAC!",
+  inputType: "text",
+  stream: true,
+});
+
+const audioChunks = [];
+for await (const byte of bufferStream) {
+  audioChunks.push(byte);
+}
+await done;
+
+// Buffered mode — wait for the full audio
+const { buffer } = textToSpeech({
+  modelId: "my-tts-model",
+  text: "Hello, welcome to QVAC!",
+  inputType: "text",
+  stream: false,
+});
+
+const audioBytes = await buffer;
+console.log("Audio size:", audioBytes.length, "bytes");
+```

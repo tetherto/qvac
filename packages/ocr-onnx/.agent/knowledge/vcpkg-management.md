@@ -345,7 +345,7 @@ env:
 This stores compiled vcpkg packages as files in a local directory, which is then cached using `actions/cache`:
 
 ```yaml
-- uses: actions/cache@v4
+- uses: actions/cache@668228422ae6a00e4ad889ee87cd7109ec5666a7 # 5.0.4
   with:
     path: ${{ env.WORKDIR }}/vcpkg/cache
     key: vcpkg-<platform>-<arch>-${{ hashFiles('vcpkg.json', 'vcpkg-configuration.json') }}

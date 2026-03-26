@@ -23,17 +23,15 @@ struct bergamot_context {
   double total_encode_time = 0.0;
   double total_decode_time = 0.0;
   int total_tokens = 0;
-
-  // Configuration parameters
-  int beam_size = 1;
-  bool normalize = false;
-  int max_length_factor = 2;
 };
 
 struct bergamot_params {
   bool use_gpu = false;
   int num_workers = 1;
   int cache_size = 0;
+  int beam_size = 1;
+  int normalize = 1; // 1 for true, 0 for false
+  double max_length_factor = 2.5;
   std::string model_path;
   std::string src_vocab_path;
   std::string dst_vocab_path;
@@ -68,8 +66,3 @@ void bergamot_reset_runtime_stats(bergamot_context* ctx);
 
 // Free bergamot context
 void bergamot_free(bergamot_context* ctx);
-
-// Set configuration parameters
-void bergamot_set_beam_size(bergamot_context* ctx, int beam_size);
-void bergamot_set_normalize(bergamot_context* ctx, bool normalize);
-void bergamot_set_max_length_factor(bergamot_context* ctx, int factor);

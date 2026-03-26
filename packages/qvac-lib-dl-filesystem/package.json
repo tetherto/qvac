@@ -28,7 +28,13 @@
     "standard": "17.1.0",
     "typescript": "^5.0.0"
   },
-  "bugs": "https://github.com/tetherto/qvac-lib-dl-filesystem/issues",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/tetherto/qvac.git",
+    "directory": "packages/qvac-lib-dl-filesystem"
+  },
+  "bugs": "https://github.com/tetherto/qvac/issues",
+  "homepage": "https://github.com/tetherto/qvac/tree/main/packages/qvac-lib-dl-filesystem#readme",
   "files": [
     "src",
     "index.d.ts",

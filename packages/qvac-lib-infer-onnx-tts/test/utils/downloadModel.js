@@ -424,7 +424,7 @@ async function ensureChatterboxModels (options = {}) {
       modelFiles[3].minSize = 2000000
       modelFiles[5].minSize = 20000000
     }
-    modelFiles[7].minSize = isMultilingual ? 300000000 : 20000000
+    modelFiles[7].minSize = isMultilingual ? 100000000 : 20000000
   }
 
   const results = {}
