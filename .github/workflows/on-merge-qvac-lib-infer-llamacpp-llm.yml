@@ -113,7 +113,13 @@ jobs:
       packages: write
       pull-requests: write
     uses: ./.github/workflows/prebuilds-qvac-lib-infer-llamacpp-llm.yml
-    secrets: inherit
+    secrets:
+      AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
+      AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+      GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      MODEL_S3_BUCKET: ${{ secrets.MODEL_S3_BUCKET }}
+      NPM_TOKEN: ${{ secrets.NPM_TOKEN }}
+      PAT_TOKEN: ${{ secrets.PAT_TOKEN }}
     with:
       tag: ${{ inputs.tag || needs.publish-logic.outputs.gpr_tag }}
       publish_target: "gpr"
@@ -127,7 +133,13 @@ jobs:
       packages: write
       pull-requests: write
     uses: ./.github/workflows/prebuilds-qvac-lib-infer-llamacpp-llm.yml
-    secrets: inherit
+    secrets:
+      AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
+      AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+      GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      MODEL_S3_BUCKET: ${{ secrets.MODEL_S3_BUCKET }}
+      NPM_TOKEN: ${{ secrets.NPM_TOKEN }}
+      PAT_TOKEN: ${{ secrets.PAT_TOKEN }}
     with:
       tag: ${{ inputs.tag || needs.publish-logic.outputs.gpr_tag }}
       publish_target: "gpr"
@@ -141,7 +153,13 @@ jobs:
       packages: write
       pull-requests: write
     uses: ./.github/workflows/prebuilds-qvac-lib-infer-llamacpp-llm.yml
-    secrets: inherit
+    secrets:
+      AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
+      AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+      GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      MODEL_S3_BUCKET: ${{ secrets.MODEL_S3_BUCKET }}
+      NPM_TOKEN: ${{ secrets.NPM_TOKEN }}
+      PAT_TOKEN: ${{ secrets.PAT_TOKEN }}
     with:
       tag: ${{ inputs.tag || needs.publish-logic.outputs.gpr_tag }}
       publish_target: "gpr"
@@ -155,7 +173,13 @@ jobs:
       packages: write
       pull-requests: write
     uses: ./.github/workflows/prebuilds-qvac-lib-infer-llamacpp-llm.yml
-    secrets: inherit
+    secrets:
+      AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
+      AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+      GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      MODEL_S3_BUCKET: ${{ secrets.MODEL_S3_BUCKET }}
+      NPM_TOKEN: ${{ secrets.NPM_TOKEN }}
+      PAT_TOKEN: ${{ secrets.PAT_TOKEN }}
     with:
       tag: "latest"
       publish_target: "npm"
@@ -168,7 +192,8 @@ jobs:
     permissions:
       contents: write
     uses: ./.github/workflows/create-github-release.yml
-    secrets: inherit
+    secrets:
+      GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
     with:
       repo_name: "llamacpp-llm"
       release_name: "QVAC LLM Addon"

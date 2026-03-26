@@ -2,6 +2,14 @@ name: CPP Tests (Embed)
 
 on:
   workflow_call:
+    secrets:
+      GITHUB_TOKEN:
+        required: true
+      NPM_TOKEN:
+        required: true
+      PAT_TOKEN:
+        required: true
+
     inputs:
       ref:
         description: "ref"

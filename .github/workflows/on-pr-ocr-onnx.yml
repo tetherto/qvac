@@ -147,7 +147,9 @@ jobs:
     needs: changes
     if: contains( github.event.pull_request.labels.*.name, 'verify') || github.event_name == 'workflow_dispatch'
     uses: tetherto/qvac-devops/.github/workflows/cpp-lint.yaml@v1.1.6
-    secrets: inherit
+    secrets:
+      NPM_TOKEN: ${{ secrets.NPM_TOKEN }}
+      PAT_TOKEN: ${{ secrets.PAT_TOKEN }}
     with:
       sha: ${{ github.event.pull_request.base.sha || github.sha }}
       pr_head_sha: ${{ github.event.pull_request.head.sha }}
@@ -162,7 +164,13 @@ jobs:
         contains(format(' {0} ', join(github.event.pull_request.labels.*.name, ' ')), ' verify ')
       )
     uses: ./.github/workflows/prebuilds-ocr-onnx.yml
-    secrets: inherit
+    secrets:
+      AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
+      AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+      GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      MODEL_S3_BUCKET: ${{ secrets.MODEL_S3_BUCKET }}
+      NPM_TOKEN: ${{ secrets.NPM_TOKEN }}
+      PAT_TOKEN: ${{ secrets.PAT_TOKEN }}
     with:
       repository: ${{ github.event.pull_request.head.repo.full_name || github.repository }}
       ref: ${{ github.event.pull_request.head.ref || github.ref }}
@@ -177,7 +185,14 @@ jobs:
         contains(format(' {0} ', join(github.event.pull_request.labels.*.name, ' ')), ' verify ')
       )
     uses: ./.github/workflows/integration-test-ocr-onnx.yml
-    secrets: inherit
+    secrets:
+      AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
+      AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+      GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      MODEL_S3_BUCKET: ${{ secrets.MODEL_S3_BUCKET }}
+      NPM_TOKEN: ${{ secrets.NPM_TOKEN }}
+      PAT_TOKEN: ${{ secrets.PAT_TOKEN }}
+      QASE_API_TOKEN: ${{ secrets.QASE_API_TOKEN }}
     with:
       repository: ${{ github.event.pull_request.head.repo.full_name || github.repository }}
       ref: ${{ github.event.pull_request.head.ref || github.ref }}
@@ -191,7 +206,21 @@ jobs:
         contains(format(' {0} ', join(github.event.pull_request.labels.*.name, ' ')), ' verify ')
       )
     uses: ./.github/workflows/integration-mobile-test-ocr-onnx.yml
-    secrets: inherit
+    secrets:
+      ANDROID_DEVICE_POOL_ARN_OCR_FASTTEXT: ${{ secrets.ANDROID_DEVICE_POOL_ARN_OCR_FASTTEXT }}
+      APPLE_KEYCHAIN_PASSWORD: ${{ secrets.APPLE_KEYCHAIN_PASSWORD }}
+      APPLE_P12_PASSWORD: ${{ secrets.APPLE_P12_PASSWORD }}
+      APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
+      AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
+      AWS_DEVICE_FARM_PROJECT_ARN_OCR_FASTTEXT: ${{ secrets.AWS_DEVICE_FARM_PROJECT_ARN_OCR_FASTTEXT }}
+      AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+      GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      IOS_DEVICE_POOL_ARN_OCR_FASTTEXT: ${{ secrets.IOS_DEVICE_POOL_ARN_OCR_FASTTEXT }}
+      MODEL_S3_BUCKET: ${{ secrets.MODEL_S3_BUCKET }}
+      NPM_TOKEN: ${{ secrets.NPM_TOKEN }}
+      PAT_TOKEN: ${{ secrets.PAT_TOKEN }}
+      TEST_APP_APPLE_DISTRIBUTION_CERTIFICATE: ${{ secrets.TEST_APP_APPLE_DISTRIBUTION_CERTIFICATE }}
+      TEST_APP_APPLE_PROVISIONING_PROFILE: ${{ secrets.TEST_APP_APPLE_PROVISIONING_PROFILE }}
     with:
       repository: ${{ github.event.pull_request.head.repo.full_name || github.repository }}
       ref: ${{ github.event.pull_request.head.ref || github.ref }}
@@ -204,4 +233,5 @@ jobs:
       sanity-checks-status: ${{ needs.sanity-checks.result == 'success' }}
       build-status: ${{ needs.prebuild.result == 'success' }}
       integration-tests-status: ${{ needs.run-integration-tests.result == 'success' }}
-    secrets: inherit
+    secrets:
+      GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

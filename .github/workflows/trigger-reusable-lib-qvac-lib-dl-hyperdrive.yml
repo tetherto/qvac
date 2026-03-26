@@ -129,7 +129,10 @@ jobs:
       id-token: write
     if: needs.publish-logic.outputs.publish_release == 'true'
     uses: tetherto/qvac-devops/.github/workflows/public-reusable-npm.yml@v1.1.6
-    secrets: inherit
+    secrets:
+      GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      PAT_TOKEN: ${{ secrets.PAT_TOKEN }}
+      NPM_TOKEN: ${{ secrets.NPM_TOKEN }}
     with:
       workdir: packages/qvac-lib-dl-hyperdrive
       repo_name: dl-hyperdrive
@@ -141,7 +144,8 @@ jobs:
     permissions:
       contents: write
     uses: ./.github/workflows/create-github-release.yml
-    secrets: inherit
+    secrets:
+      GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
     with:
       repo_name: "dl-hyperdrive"
       release_name: "QVAC dl-hyperdrive Lib"
