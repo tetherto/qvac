@@ -65,6 +65,9 @@ on:
   release:
     types: [published]
 
+permissions:
+  contents: read
+
 jobs:
   benchmark-chatterbox:
     if: github.event_name == 'workflow_dispatch' || (github.event_name == 'release' && startsWith(github.event.release.tag_name, 'onnx-tts-v'))

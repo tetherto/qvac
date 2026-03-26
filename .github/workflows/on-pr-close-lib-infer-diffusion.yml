@@ -34,7 +34,6 @@ run-name: Delete NPM Versions (diffusion-cpp) ${{ inputs.version }} ${{ inputs.p
 
 permissions:
   contents: read
-  packages: write
 
 jobs:
   print-context-trigger:

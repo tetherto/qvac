@@ -9,6 +9,9 @@ on:
 env:
   WORKDIR: packages/sdk
 
+permissions:
+  contents: read
+
 jobs:
   dispatch:
     if: github.event.pull_request.merged == true && github.event.pull_request.base.ref == 'main'

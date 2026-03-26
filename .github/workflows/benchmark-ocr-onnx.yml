@@ -27,6 +27,9 @@ on:
 env:
   PKG_DIR: packages/ocr-onnx
 
+permissions:
+  contents: read
+
 jobs:
   setup:
     runs-on: ubuntu-latest

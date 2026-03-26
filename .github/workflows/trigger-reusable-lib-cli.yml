@@ -1,11 +1,5 @@
 name: General CI/CD (cli)
 
-permissions:
-  contents: write
-  packages: write
-  pull-requests: write
-  id-token: write
-
 on:
   push:
     branches:
@@ -30,6 +24,8 @@ on:
 env:
   WORKDIR: packages/cli
 
+permissions:
+  contents: read
 concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}
   cancel-in-progress: false

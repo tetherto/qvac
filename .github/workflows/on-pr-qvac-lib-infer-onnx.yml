@@ -19,9 +19,9 @@ on:
   workflow_call:
 
 permissions:
-  contents: write
-  pull-requests: write
-  packages: write
+  contents: read
+  pull-requests: read
+  packages: read
 
 concurrency:
   group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.sha }}
@@ -172,6 +172,10 @@ jobs:
       workdir: packages/qvac-lib-infer-onnx
 
   prebuild:
+    permissions:
+      contents: write
+      packages: write
+      pull-requests: write
     needs: [authorize, sanity-checks, cpp-lint]
     if: |
       (needs.changes.outputs.pkg == 'true') &&

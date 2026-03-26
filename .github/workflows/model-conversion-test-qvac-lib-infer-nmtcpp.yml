@@ -64,6 +64,9 @@ on:
 env:
   PKG_DIR: packages/qvac-lib-infer-nmtcpp
 
+permissions:
+  contents: read
+
 jobs:
   setup:
     runs-on: macos-14

@@ -54,6 +54,9 @@ concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}
   cancel-in-progress: false
 
+permissions:
+  contents: read
+
 jobs:
   prebuild:
     permissions:
@@ -371,7 +374,7 @@ jobs:
         name: Enable vulkan profiling
         run: |
           echo "CFG_OPTS=-D VK_PROFILING=ON $CFG_OPTS" >> $GITHUB_ENV
-
+      
       - if: ${{ matrix.platform == 'ios' || matrix.platform == 'darwin' }}
         name: Use Apple clang for Apple platform builds
         run: |

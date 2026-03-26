@@ -39,7 +39,6 @@ run-name: >-
 
 permissions:
   contents: read
-  packages: write
 
 jobs:
   print-context:
