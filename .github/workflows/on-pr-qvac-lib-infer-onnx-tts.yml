@@ -65,6 +65,8 @@ jobs:
     outputs:
       allowed: ${{ steps.auth.outputs.allowed }}
     steps:
+      - name: Checkout
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # 6.0.2
       - name: Authorize
         id: auth
         uses: ./.github/actions/authorize-pr
@@ -97,7 +99,6 @@ jobs:
           SHA: ${{ github.sha }}
           HEAD_SHA: ${{ github.event.pull_request.head.sha }}
           BASE_SHA: ${{ github.event.pull_request.base.sha }}
-          HAS_VERIFY: ${{ contains(github.event.pull_request.labels.*.name, 'verify') }}
         run: |
           set -euo pipefail
 
@@ -114,7 +115,7 @@ jobs:
             workdir="packages/qvac-lib-infer-onnx-tts"
             repo="$REPO"
             ref="$HEAD_SHA"
-            run_verify="$HAS_VERIFY"
+            run_verify="true"
             base_sha="$BASE_SHA"
             head_sha="$HEAD_SHA"
           fi
@@ -149,7 +150,7 @@ jobs:
           workdir: ${{ needs.context.outputs.workdir }}
 
   cpp-lint:
-    needs: context
+    needs: [authorize, context]
     if: needs.authorize.outputs.allowed == 'true'
     uses: tetherto/qvac-devops/.github/workflows/cpp-lint.yaml@v1.1.7
     secrets:

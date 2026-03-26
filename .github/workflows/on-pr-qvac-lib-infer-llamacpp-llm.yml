@@ -40,6 +40,8 @@ jobs:
     outputs:
       allowed: ${{ steps.auth.outputs.allowed }}
     steps:
+      - name: Checkout
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # 6.0.2
       - name: Authorize
         id: auth
         uses: ./.github/actions/authorize-pr
@@ -75,6 +77,7 @@ jobs:
   cpp-lint:
     if: needs.authorize.outputs.allowed == 'true'
     uses: tetherto/qvac-devops/.github/workflows/cpp-lint.yaml@v1.1.7
+    needs: authorize
     secrets:
       NPM_TOKEN: ${{ secrets.NPM_TOKEN }}
       PAT_TOKEN: ${{ secrets.PAT_TOKEN }}
