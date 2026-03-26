@@ -55,7 +55,7 @@ function getCancelFn(model: AnyModel) {
     | Record<string, unknown>
     | undefined;
   if (addon && typeof addon["cancel"] === "function") {
-    return addon["cancel"] as () => Promise<void>;
+    return (addon["cancel"] as () => Promise<void>).bind(addon);
   }
   return undefined;
 }

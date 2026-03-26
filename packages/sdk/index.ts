@@ -33,8 +33,6 @@ export {
   modelRegistryGetModel,
   type ModelRegistrySearchParams,
   finetune,
-  finetunePause,
-  finetuneCancel,
   type FinetuneHandle,
 } from "./client/api";
 export { close } from "./client";

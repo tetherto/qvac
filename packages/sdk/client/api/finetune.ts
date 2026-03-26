@@ -9,11 +9,19 @@ import {
 } from "@/schemas";
 
 type FinetuneStartParams = FinetuningOptions & {
+  op?: "start";
   modelId: string;
   rpcOptions?: RPCOptions;
 };
 
-type FinetuneControlParams = {
+type FinetunePauseParams = {
+  op: "pause";
+  modelId: string;
+  rpcOptions?: RPCOptions;
+};
+
+type FinetuneCancelParams = {
+  op: "cancel";
   modelId: string;
   rpcOptions?: RPCOptions;
 };
@@ -23,7 +31,22 @@ export interface FinetuneHandle {
   result: Promise<FinetuneResponse>;
 }
 
-export function finetune(params: FinetuneStartParams): FinetuneHandle {
+export function finetune(params: FinetunePauseParams): Promise<FinetuneResponse>;
+export function finetune(params: FinetuneCancelParams): Promise<FinetuneResponse>;
+export function finetune(params: FinetuneStartParams): FinetuneHandle;
+export function finetune(
+  params: FinetuneStartParams | FinetunePauseParams | FinetuneCancelParams,
+): FinetuneHandle | Promise<FinetuneResponse> {
+  const op = params.op ?? "start";
+
+  if (op === "pause" || op === "cancel") {
+    return finetuneControl(params as FinetunePauseParams | FinetuneCancelParams);
+  }
+
+  return finetuneStart(params as FinetuneStartParams);
+}
+
+function finetuneStart(params: FinetuneStartParams): FinetuneHandle {
   const { rpcOptions, ...rest } = params;
 
   let resultResolver: (value: FinetuneResponse) => void = () => {};
@@ -115,10 +138,13 @@ export function finetune(params: FinetuneStartParams): FinetuneHandle {
   };
 }
 
-export async function finetunePause(params: FinetuneControlParams): Promise<FinetuneResponse> {
+async function finetuneControl(
+  params: FinetunePauseParams | FinetuneCancelParams,
+): Promise<FinetuneResponse> {
   const { rpcOptions, ...rest } = params;
+  const fallbackStatus = params.op === "pause" ? "PAUSED" : "CANCELLED";
   const responses = streamRpc(
-    { type: "finetune" as const, op: "pause" as const, ...rest },
+    { type: "finetune" as const, ...rest },
     rpcOptions,
   );
   for await (const response of responses) {
@@ -126,19 +152,5 @@ export async function finetunePause(params: FinetuneControlParams): Promise<Fine
       return finetuneResponseSchema.parse(response);
     }
   }
-  return { type: "finetune", status: "PAUSED" };
-}
-
-export async function finetuneCancel(params: FinetuneControlParams): Promise<FinetuneResponse> {
-  const { rpcOptions, ...rest } = params;
-  const responses = streamRpc(
-    { type: "finetune" as const, op: "cancel" as const, ...rest },
-    rpcOptions,
-  );
-  for await (const response of responses) {
-    if (response && typeof response === "object" && "type" in response && response.type === "finetune") {
-      return finetuneResponseSchema.parse(response);
-    }
-  }
-  return { type: "finetune", status: "CANCELLED" };
+  return { type: "finetune", status: fallbackStatus };
 }

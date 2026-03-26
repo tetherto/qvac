@@ -38,8 +38,6 @@
 import {
   loadModel,
   finetune,
-  finetunePause,
-  finetuneCancel,
   unloadModel,
   completion,
 } from "@qvac/sdk";
@@ -110,8 +108,8 @@ async function demoCancel(modelId: string) {
 
     if (stepCount >= cancelAfterSteps) {
       console.log(`\nHard-cancelling after ${stepCount} steps...`);
-      // Option A: explicit finetuneCancel() — clears checkpoints, cannot resume
-      await finetuneCancel({ modelId });
+      // Option A: op-based cancel — clears checkpoints, cannot resume
+      await finetune({ op: "cancel", modelId });
       break;
     }
   }
@@ -135,8 +133,8 @@ async function demoPauseResume(modelId: string) {
 
     if (stepCount >= pauseAfterSteps) {
       console.log(`\nPausing after ${stepCount} steps...`);
-      // Option A: explicit finetunePause() — saves checkpoint, can resume
-      await finetunePause({ modelId });
+      // Option A: op-based pause — saves checkpoint, can resume
+      await finetune({ op: "pause", modelId });
       break;
     }
   }

@@ -32,4 +32,4 @@ export {
   modelRegistryGetModel,
   type ModelRegistrySearchParams,
 } from "./registry";
-export { finetune, finetunePause, finetuneCancel, type FinetuneHandle } from "./finetune";
+export { finetune, type FinetuneHandle } from "./finetune";
