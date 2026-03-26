@@ -84,11 +84,9 @@ jobs:
 
   release-merge-guard:
     name: Release Merge Guard
-    continue-on-error: true
     if: >-
       github.event_name == 'push' &&
-      startsWith(github.ref_name, 'release-') &&
-      github.event.before != '0000000000000000000000000000000000000000'
+      startsWith(github.ref_name, 'release-')
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # 6.0.2
@@ -163,7 +161,9 @@ jobs:
 
   publish-release-npm:
     needs: [publish-logic, release-merge-guard, run-integration-tests, mobile-integration-tests]
-    if: needs.publish-logic.outputs.publish_release == 'true'
+    if: >-
+      needs.publish-logic.outputs.publish_release == 'true' &&
+      (needs.release-merge-guard.result == 'success' || needs.release-merge-guard.result == 'skipped')
     runs-on: ubuntu-latest
     outputs:
       published_version: ${{ steps.publish.outputs.npm_published_version }}

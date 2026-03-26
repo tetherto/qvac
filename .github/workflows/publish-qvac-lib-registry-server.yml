@@ -31,11 +31,9 @@ env:
 jobs:
   release-merge-guard-schema:
     name: Release Merge Guard (Schema)
-    continue-on-error: true
     if: >-
       github.event_name == 'push' &&
-      startsWith(github.ref_name, 'release-qvac-registry-schema') &&
-      github.event.before != '0000000000000000000000000000000000000000'
+      startsWith(github.ref_name, 'release-qvac-registry-schema')
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # 6.0.2
@@ -53,11 +51,9 @@ jobs:
 
   release-merge-guard-client:
     name: Release Merge Guard (Client)
-    continue-on-error: true
     if: >-
       github.event_name == 'push' &&
-      startsWith(github.ref_name, 'release-qvac-registry-client') &&
-      github.event.before != '0000000000000000000000000000000000000000'
+      startsWith(github.ref_name, 'release-qvac-registry-client')
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # 6.0.2
@@ -222,11 +218,12 @@ jobs:
           name-suffix: ${{ env.NAME_SUFFIX }}
 
   publish-schema-npm:
-    needs: [detect-changes, publish-logic]
+    needs: [detect-changes, publish-logic, release-merge-guard-schema]
     if: |
       (github.event_name == 'push' || github.event_name == 'workflow_dispatch' || contains(github.event.pull_request.labels.*.name, 'verify')) &&
       needs.detect-changes.outputs.schema_changed == 'true' &&
-      needs.publish-logic.outputs.publish_release == 'true'
+      needs.publish-logic.outputs.publish_release == 'true' &&
+      (needs.release-merge-guard-schema.result == 'success' || needs.release-merge-guard-schema.result == 'skipped')
     runs-on: ubuntu-latest
     outputs:
       published_version: ${{ steps.publish.outputs.npm_published_version }}
@@ -391,11 +388,12 @@ jobs:
           name-suffix: ${{ env.NAME_SUFFIX }}
 
   publish-client-npm:
-    needs: [detect-changes, publish-logic, lint-and-test]
+    needs: [detect-changes, publish-logic, lint-and-test, release-merge-guard-client]
     if: |
       (github.event_name == 'push' || github.event_name == 'workflow_dispatch' || contains(github.event.pull_request.labels.*.name, 'verify')) &&
       needs.detect-changes.outputs.client_changed == 'true' &&
-      needs.publish-logic.outputs.publish_release == 'true'
+      needs.publish-logic.outputs.publish_release == 'true' &&
+      (needs.release-merge-guard-client.result == 'success' || needs.release-merge-guard-client.result == 'skipped')
     runs-on: ubuntu-latest
     outputs:
       published_version: ${{ steps.publish.outputs.npm_published_version }}
