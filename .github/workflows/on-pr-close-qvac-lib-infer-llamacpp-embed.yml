@@ -63,5 +63,4 @@ jobs:
       packages: ${{ inputs.packages || 'qvac-lib-infer-llamacpp-embed' }}
       # PR-close runs default to dry-run=true for safety; manual runs respect the UI toggle (true/false)
       dry-run: ${{ github.event_name == 'pull_request' && true || inputs.dry-run }}
-    secrets:
-      GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+

@@ -101,7 +101,6 @@ jobs:
        github.event_name == 'workflow_dispatch')
     uses: tetherto/qvac-devops/.github/workflows/cpp-lint.yaml@v1.1.7
     secrets:
-      GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
       NPM_TOKEN: ${{ secrets.NPM_TOKEN }}
       PAT_TOKEN: ${{ secrets.PAT_TOKEN }}
     with:
@@ -187,5 +186,3 @@ jobs:
       sanity-checks-status: ${{ needs.sanity-checks.result == 'success' && needs.cpp-tests.result == 'success' && needs.ts-checks.result == 'success' }}
       build-status: ${{ needs.prebuild.result == 'success' }}
       integration-tests-status: ${{ needs.run-integration-tests.result == 'success' }}
-    secrets:
-      GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

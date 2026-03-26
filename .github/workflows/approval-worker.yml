@@ -49,7 +49,6 @@ jobs:
       issues: write
     uses: tetherto/qvac-devops/.github/workflows/approval-check-worker.yml@v1.1.7
     secrets:
-      GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
       pat_token: ${{ secrets.PAT_TOKEN }}
     with:
       pr_number: ${{ fromJSON(needs.run-when-command.outputs.number) }}
