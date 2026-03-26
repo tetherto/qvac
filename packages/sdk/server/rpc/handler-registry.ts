@@ -20,6 +20,7 @@ import { handleTextToSpeech } from "@/server/rpc/handlers/text-to-speech";
 import { handleGetModelInfo } from "@/server/rpc/handlers/get-model-info";
 import { handleOCRStream } from "@/server/rpc/handlers/ocr-stream";
 import { handlePing } from "@/server/rpc/handlers/ping";
+import { handlePingDelegated } from "@/server/rpc/handlers/ping-delegated";
 import {
   handlePluginInvoke,
   handlePluginInvokeStream,
@@ -44,7 +45,12 @@ function isModelDelegated(request: Request): boolean {
 
 export const registry: Record<string, HandlerEntry> = {
   // Simple Reply handlers
-  ping: { type: "reply", handler: handlePing },
+  ping: {
+    type: "reply",
+    handler: handlePing,
+    delegatedHandler: handlePingDelegated,
+    isDelegated: (r) => r.type === "ping" && !!r.delegate,
+  },
   unloadModel: {
     type: "reply",
     handler: handleUnloadModel,
