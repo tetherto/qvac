@@ -30,6 +30,10 @@ on:
 env:
   WORKDIR: packages/cli
 
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: false
+
 jobs:
   release-merge-guard:
     name: Release Merge Guard

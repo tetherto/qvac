@@ -23,6 +23,10 @@ permissions:
   pull-requests: write
   packages: write
 
+concurrency:
+  group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.sha }}
+  cancel-in-progress: true
+
 jobs:
   # Gate the workflow so label events (and other PR_target quirks) don't trigger unrelated packages.
   changes:

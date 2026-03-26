@@ -61,6 +61,10 @@ on:
         description: "Target registry to publish to (npm or gpr)"
         value: ${{ inputs.publish_target }}
 
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: false
+
 jobs:
   prebuild:
     permissions:

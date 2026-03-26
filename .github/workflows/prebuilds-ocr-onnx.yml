@@ -47,7 +47,11 @@ on:
 
 env:
   PKG_DIR: packages/ocr-onnx
-  
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: false
+
 jobs:
   prebuild:
     permissions:

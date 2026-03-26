@@ -58,6 +58,10 @@ on:
 env:
   WORKDIR: ${{ inputs.workdir }}
 
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: false
+
 jobs:
   prebuild:
     permissions:

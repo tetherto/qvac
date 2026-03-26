@@ -38,6 +38,10 @@ on:
 env:
   PKG_DIR: packages/qvac-lib-infer-nmtcpp
 
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: false
+
 jobs:
   prebuild:
     permissions:

@@ -17,6 +17,10 @@ on:
       - "packages/qvac-lib-registry-server/**"
   workflow_dispatch:
 
+concurrency:
+  group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.sha }}
+  cancel-in-progress: true
+
 env:
   PKG_DIR: packages/qvac-lib-registry-server
   MODELS_FILE: packages/qvac-lib-registry-server/data/models.prod.json
