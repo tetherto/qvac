@@ -117,6 +117,7 @@ export async function transcribeStream(
   }
 
   const responses = parseResponses();
+  let consumed = false;
 
   return {
     write(audioChunk: Buffer) {
@@ -130,6 +131,12 @@ export async function transcribeStream(
       responseStream.destroy();
     },
     [Symbol.asyncIterator]() {
+      if (consumed) {
+        throw new TranscriptionFailedError(
+          "TranscribeStreamSession can only be iterated once",
+        );
+      }
+      consumed = true;
       return responses;
     },
   };
