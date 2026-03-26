@@ -342,13 +342,19 @@ test('Chatterbox TTS: outputSampleRate resamples to 16kHz', { timeout: 1800000 }
 
   await model.load()
 
+  let outputArray = []
   const response = await model.run({ type: 'text', input: 'Hello world.' })
-  const result = await response.await()
+  await response
+    .onUpdate(data => {
+      if (data && data.outputArray) {
+        outputArray = outputArray.concat(Array.from(data.outputArray))
+      }
+    })
+    .await()
 
-  t.ok(result.data.outputArray, 'Should produce output audio')
-  t.ok(result.data.outputArray.length > 0, 'Output should be non-empty')
+  t.ok(outputArray.length > 0, 'Should produce non-empty output audio')
 
-  console.log(`Output length: ${result.data.outputArray.length} samples (resampled from 24kHz to 16kHz)`)
+  console.log(`Output length: ${outputArray.length} samples (resampled from 24kHz to 16kHz)`)
 
   await model.unload()
 })
