@@ -31,7 +31,7 @@ export async function handleUnloadModelDelegated(
     await send(
       { type: "unloadModel" as const, modelId: request.modelId, clearStorage: false },
       rpc,
-      { timeout },
+      { timeout, peerKey: providerPublicKey },
     );
 
     logger.info(`Delegated model ${request.modelId} unloaded on provider`);

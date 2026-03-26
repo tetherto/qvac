@@ -12,10 +12,7 @@ import {
   stream,
   type DelegateOptions,
 } from "@/server/rpc/delegate-transport";
-import {
-  getRPC,
-  cleanupStaleConnection,
-} from "@/server/bare/delegate-rpc-client";
+import { getRPC } from "@/server/bare/delegate-rpc-client";
 import { handleLoadModel } from "./load-model";
 import {
   ModelLoadFailedError,
@@ -163,9 +160,6 @@ export async function handleLoadModelDelegated(
     return result;
   } catch (error) {
     logger.error("Error in delegated load model:", error);
-
-    // Clean up stale RPC so next attempt creates a fresh connection
-    cleanupStaleConnection(providerPublicKey);
 
     if (fallbackToLocal) {
       logger.info(

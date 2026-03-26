@@ -27,6 +27,37 @@ const activeConnections = new Map<ConnectionKey, Connection>();
 
 // Track whether the global connection handler has been registered
 let connectionHandlerRegistered = false;
+const HEALTH_CHECK_TIMEOUT_MS = 1500;
+let commandCounter = 0;
+
+function getNextCommandId(): number {
+  commandCounter = (commandCounter + 1) % Number.MAX_SAFE_INTEGER;
+  return commandCounter;
+}
+
+function isPongResponse(payload: unknown): payload is { type: "pong" } {
+  return (
+    typeof payload === "object" &&
+    payload !== null &&
+    (payload as Record<string, unknown>)["type"] === "pong"
+  );
+}
+
+async function isRPCConnectionHealthy(
+  rpc: RPC,
+  timeout: number = HEALTH_CHECK_TIMEOUT_MS,
+): Promise<boolean> {
+  try {
+    const req = rpc.request(getNextCommandId());
+    req.send(JSON.stringify({ type: "ping" }), "utf-8");
+    const response = await withTimeout(req.reply("utf-8"), timeout);
+    const payload: unknown = JSON.parse(response?.toString() || "{}");
+    return isPongResponse(payload);
+  } catch (error: unknown) {
+    logger.debug("RPC health check failed", { error });
+    return false;
+  }
+}
 
 /**
  * Register the swarm "connection" handler once (not per getRPC call).
@@ -98,10 +129,31 @@ async function ensureRPCConnection(
   publicKey: string,
   timeout?: number,
 ): Promise<RPC> {
+  const operationStart = nowMs();
+  const getRemainingTimeout = (): number | undefined => {
+    if (timeout === undefined) {
+      return undefined;
+    }
+
+    return Math.max(timeout - (nowMs() - operationStart), 0);
+  };
+
   // Check if we already have an RPC instance for this peer
   const existingRpc = activeRPCs.get(publicKey);
   if (existingRpc) {
-    return existingRpc;
+    const remainingTimeout = getRemainingTimeout();
+    const probeTimeout =
+      remainingTimeout === undefined
+        ? HEALTH_CHECK_TIMEOUT_MS
+        : Math.min(remainingTimeout, HEALTH_CHECK_TIMEOUT_MS);
+    const isHealthy = await isRPCConnectionHealthy(existingRpc, probeTimeout);
+    if (isHealthy) {
+      return existingRpc;
+    }
+    logger.info(
+      `🧹 Cached RPC failed health check for peer ${publicKey}, reconnecting`,
+    );
+    cleanupStaleConnection(publicKey);
   }
 
   const swarm = getSwarm();
@@ -176,7 +228,7 @@ async function ensureRPCConnection(
       });
     });
 
-    const rpc = await withTimeout(connectionPromise, timeout);
+    const rpc = await withTimeout(connectionPromise, getRemainingTimeout());
 
     const connectionDuration = nowMs() - connectionStart;
     cacheDelegationConnectionTime(publicKey, connectionDuration);
@@ -188,15 +240,7 @@ async function ensureRPCConnection(
 
     // Remove stale connection so next attempt creates a fresh one
     // instead of reusing a dead RPC
-    logger.info(
-      `🗑️ Removing stale connection for peer: ${publicKey} after failed RPC attempt`,
-    );
-    activeRPCs.delete(publicKey);
-    const conn = activeConnections.get(publicKey);
-    if (conn) {
-      conn.destroy();
-      activeConnections.delete(publicKey);
-    }
+    cleanupStaleConnection(publicKey);
 
     logger.error("Failed to establish RPC connection:", error);
     throw new DelegateConnectionFailedError(
