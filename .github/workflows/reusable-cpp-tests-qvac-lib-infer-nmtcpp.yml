@@ -30,6 +30,7 @@ env:
 jobs:
   cpp-tests:
     runs-on: ubuntu-24.04
+    environment: release
     timeout-minutes: 90
     defaults:
       run:

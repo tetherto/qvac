@@ -68,6 +68,7 @@ permissions:
 jobs:
   build:
     runs-on: ai-run-linux
+    environment: release
     timeout-minutes: 30
     outputs:
       runId: ${{ steps.runid.outputs.runId }}
@@ -230,6 +231,7 @@ jobs:
   device-farm:
     needs: build
     runs-on: ubuntu-latest
+    environment: release
     timeout-minutes: 45
     strategy:
       fail-fast: false
@@ -401,6 +403,7 @@ jobs:
   run-producer:
     needs: build
     runs-on: ubuntu-latest
+    environment: release
     timeout-minutes: 45
     env:
       NPM_TOKEN: ${{ secrets.NPM_TOKEN }}
@@ -539,6 +542,7 @@ jobs:
     needs: [build, run-producer, device-farm]
     if: always()
     runs-on: ubuntu-latest
+    environment: release
     timeout-minutes: 5
     steps:
       - name: Configure AWS credentials
@@ -580,6 +584,7 @@ jobs:
     needs: [build, run-producer]
     if: github.event_name == 'pull_request'
     runs-on: ubuntu-latest
+    environment: release
     env:
       NPM_TOKEN: ${{ secrets.NPM_TOKEN }}
       PAT_TOKEN: ${{ secrets.PAT_TOKEN }}

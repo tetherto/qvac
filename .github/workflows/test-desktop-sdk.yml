@@ -63,6 +63,7 @@ jobs:
         os: ${{ fromJSON(inputs.platforms) }}
       fail-fast: false
     runs-on: ${{ matrix.os }}
+    environment: release
     env:
       NPM_TOKEN: ${{ secrets.NPM_TOKEN }}
       PAT_TOKEN: ${{ secrets.PAT_TOKEN }}
@@ -378,6 +379,7 @@ jobs:
     needs: test-desktop
     if: github.event_name == 'pull_request'
     runs-on: ubuntu-latest
+    environment: release
     env:
       NPM_TOKEN: ${{ secrets.NPM_TOKEN }}
       PAT_TOKEN: ${{ secrets.PAT_TOKEN }}

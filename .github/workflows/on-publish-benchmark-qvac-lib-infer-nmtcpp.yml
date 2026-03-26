@@ -38,6 +38,7 @@ permissions:
 jobs:
   prepare:
     runs-on: ubuntu-latest
+    environment: release
     outputs:
       opus_pairs: ${{ steps.read-opus.outputs.pairs }}
       bergamot_pairs: ${{ steps.read-bergamot.outputs.pairs }}
@@ -77,12 +78,7 @@ jobs:
   benchmark-opus:
     needs: prepare
     uses: ./.github/workflows/benchmark-qvac-lib-infer-nmtcpp.yml
-    secrets:
-      AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
-      AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
-      MODEL_S3_BUCKET: ${{ secrets.MODEL_S3_BUCKET }}
-      NPM_TOKEN: ${{ secrets.NPM_TOKEN }}
-      PAT_TOKEN: ${{ secrets.PAT_TOKEN }}
+    secrets: inherit
     with:
       pairs: ${{ needs.prepare.outputs.opus_pairs }}
       translators: 'qvac'
@@ -98,12 +94,7 @@ jobs:
   benchmark-bergamot:
     needs: prepare
     uses: ./.github/workflows/benchmark-qvac-lib-infer-nmtcpp.yml
-    secrets:
-      AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
-      AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
-      MODEL_S3_BUCKET: ${{ secrets.MODEL_S3_BUCKET }}
-      NPM_TOKEN: ${{ secrets.NPM_TOKEN }}
-      PAT_TOKEN: ${{ secrets.PAT_TOKEN }}
+    secrets: inherit
     with:
       pairs: ${{ needs.prepare.outputs.bergamot_pairs }}
       translators: 'qvac_bergamot'

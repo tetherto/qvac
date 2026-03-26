@@ -52,9 +52,6 @@ env:
 
 permissions:
   contents: read
-concurrency:
-  group: ${{ github.workflow }}-${{ github.ref }}
-  cancel-in-progress: false
 
 jobs:
   prebuild:
@@ -868,6 +865,9 @@ jobs:
   run-automated-benchmarks:
     needs: [publish-npm]
     if: needs.publish-npm.result == 'success' && needs.publish-npm.outputs.published_version != ''
+    permissions:
+      contents: read
+      packages: read
     uses: ./.github/workflows/on-publish-benchmark-qvac-lib-infer-nmtcpp.yml
     secrets:
       AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}

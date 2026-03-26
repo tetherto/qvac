@@ -69,10 +69,6 @@ on:
 env:
   WORKDIR: ${{ inputs.workdir }}
 
-concurrency:
-  group: ${{ github.workflow }}-${{ github.ref }}
-  cancel-in-progress: false
-
 permissions:
   contents: read
 
