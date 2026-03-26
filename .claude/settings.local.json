@@ -1,0 +1,20 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(grep -l \"release-merge-guard\" /c/Users/oluse/Downloads/Tether/qvac/.github/workflows/*.yml)",
+      "Bash(grep -A 5 'needs: \\\\[publish-logic, release-merge-guard' /c/Users/oluse/Downloads/Tether/qvac/.github/workflows/on-merge-*.yml)",
+      "Bash(grep -l \"release-merge-guard\" /c/Users/oluse/Downloads/Tether/qvac/.github/workflows/publish-*.yml)",
+      "Bash(for f:*)",
+      "Bash(do grep:*)",
+      "Bash(echo \"$f\")",
+      "Bash(done)",
+      "Bash(npm install:*)",
+      "Bash(npx ncc:*)",
+      "Bash(grep -rn \"continue-on-error\" /c/Users/oluse/Downloads/Tether/qvac/.github/workflows/on-merge-*.yml /c/Users/oluse/Downloads/Tether/qvac/.github/workflows/trigger-reusable-*.yml /c/Users/oluse/Downloads/Tether/qvac/.github/workflows/publish-sdk.yml /c/Users/oluse/Downloads/Tether/qvac/.github/workflows/publish-qvac-lib-registry-server.yml)",
+      "Bash(grep -rn release-merge-guard /c/Users/oluse/Downloads/Tether/qvac/.github/workflows/on-merge-*.yml /c/Users/oluse/Downloads/Tether/qvac/.github/workflows/trigger-reusable-*.yml /c/Users/oluse/Downloads/Tether/qvac/.github/workflows/publish-sdk.yml /c/Users/oluse/Downloads/Tether/qvac/.github/workflows/publish-qvac-lib-registry-server.yml)",
+      "Bash(grep -c \"release-merge-guard.result == ''success'' || needs.release-merge-guard.result == ''skipped''\" /c/Users/oluse/Downloads/Tether/qvac/.github/workflows/on-merge-*.yml /c/Users/oluse/Downloads/Tether/qvac/.github/workflows/trigger-reusable-*.yml /c/Users/oluse/Downloads/Tether/qvac/.github/workflows/publish-sdk.yml /c/Users/oluse/Downloads/Tether/qvac/.github/workflows/publish-qvac-lib-registry-server.yml)",
+      "Bash(echo '=== 1. No continue-on-error on merge guard jobs ===' grep -rn continue-on-error /c/Users/oluse/Downloads/Tether/qvac/.github/workflows/on-merge-*.yml /c/Users/oluse/Downloads/Tether/qvac/.github/workflows/trigger-reusable-*.yml /c/Users/oluse/Downloads/Tether/qvac/.github/workflows/publish-sdk.yml /c/Users/oluse/Downloads/Tether/qvac/.github/workflows/publish-qvac-lib-registry-server.yml 2)",
+      "Bash(/dev/null echo:*)"
+    ]
+  }
+}
