@@ -29,7 +29,7 @@ jobs:
 
   cpp-tests:
     # if: contains( github.event.pull_request.labels.*.name, 'verify') || github.event_name == 'workflow_dispatch'
-    needs: sanity-checks
+    # needs: sanity-checks
     uses: ./.github/workflows/cpp-tests-llm.yml
     secrets:
       NPM_TOKEN: ${{ secrets.NPM_TOKEN }}
