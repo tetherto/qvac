@@ -57,8 +57,28 @@ permissions:
   checks: write
 
 jobs:
+  # ---------------------------------------------------------------------------
+  # 1. Security Gate
+  # ---------------------------------------------------------------------------
+  authorize:
+    runs-on: ubuntu-latest
+    outputs:
+      allowed: ${{ steps.gate.outputs.allowed }}
+    steps:
+      - name: PR Security Gate
+        id: gate
+        uses: tetherto/qvac-devops/.github/actions/auth-gate@monorepo_update
+        with:
+          required-label: 'verify'
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+
+  # ---------------------------------------------------------------------------
+  # 2. Context Resolution (Gated by authorization)
+  # ---------------------------------------------------------------------------
   context:
     name: Resolve Context
+    needs: authorize
+    if: needs.authorize.outputs.allowed == 'true'
     runs-on: ubuntu-latest
     outputs:
       repository: ${{ steps.ctx.outputs.repository }}
@@ -81,10 +101,12 @@ jobs:
             base_sha="${{ github.sha }}"
             head_sha="${{ github.sha }}"
           else
+            # pull_request_target
             workdir="packages/qvac-lib-infer-whispercpp"
             repo="${{ github.event.pull_request.head.repo.full_name }}"
             ref="${{ github.event.pull_request.head.ref }}"
-            run_verify="${{ contains(github.event.pull_request.labels.*.name, 'verify') }}"
+            # If we reached this job, the PR is strictly authorized (trusted actor or verify label applied)
+            run_verify="true"
             base_sha="${{ github.event.pull_request.base.sha }}"
             head_sha="${{ github.event.pull_request.head.sha }}"
           fi
@@ -104,9 +126,12 @@ jobs:
           echo "  run_verify=$run_verify"
           echo "  workdir=$workdir"
 
+  # ---------------------------------------------------------------------------
+  # 3. Execution Jobs
+  # ---------------------------------------------------------------------------
   sanity-checks:
-    if: contains(github.event.pull_request.labels.*.name, 'verify') || github.event_name == 'workflow_dispatch'
-    needs: context
+    needs: [authorize, context]
+    if: needs.authorize.outputs.allowed == 'true'
     runs-on: ubuntu-latest
     steps:
       - name: Run Sanity checks
@@ -119,7 +144,8 @@ jobs:
           workdir: ${{ needs.context.outputs.workdir }}
 
   release-notes-check:
-    needs: context
+    needs: [authorize, context]
+    if: needs.authorize.outputs.allowed == 'true'
     uses: ./.github/workflows/release-notes-check-qvac-lib-infer-whispercpp.yml
     secrets: inherit
     with:
@@ -128,8 +154,10 @@ jobs:
       workdir: ${{ needs.context.outputs.workdir }}
 
   cpp-lint:
-    needs: context
-    if: needs.context.outputs.run_verify == 'true' || github.event_name == 'workflow_dispatch'
+    needs: [authorize, context]
+    if: |
+      needs.authorize.outputs.allowed == 'true' && 
+      (needs.context.outputs.run_verify == 'true' || github.event_name == 'workflow_dispatch' || github.event_name == 'workflow_call')
     uses: tetherto/qvac-devops/.github/workflows/cpp-lint.yaml@monorepo_update
     secrets: inherit
     with:
@@ -138,8 +166,10 @@ jobs:
       workdir: ${{ needs.context.outputs.workdir }}
 
   cpp-tests-coverage:
-    needs: context
-    if: needs.context.outputs.run_verify == 'true' || github.event_name == 'workflow_dispatch'
+    needs: [authorize, context]
+    if: |
+      needs.authorize.outputs.allowed == 'true' && 
+      (needs.context.outputs.run_verify == 'true' || github.event_name == 'workflow_dispatch' || github.event_name == 'workflow_call')
     uses: ./.github/workflows/cpp-test-coverage-qvac-lib-infer-whispercpp.yml
     secrets: inherit
     with:
@@ -147,8 +177,10 @@ jobs:
       ref: ${{ needs.context.outputs.ref }}
 
   prebuild:
-    needs: context
-    if: needs.context.outputs.run_verify == 'true' || github.event_name == 'workflow_dispatch'
+    needs: [authorize, context]
+    if: |
+      needs.authorize.outputs.allowed == 'true' && 
+      (needs.context.outputs.run_verify == 'true' || github.event_name == 'workflow_dispatch' || github.event_name == 'workflow_call')
     uses: ./.github/workflows/prebuilds-qvac-lib-infer-whispercpp.yml
     secrets: inherit
     with:
@@ -158,8 +190,10 @@ jobs:
       publish_target: 'gpr'
 
   run-integration-tests:
-    needs: [context, prebuild]
-    if: needs.context.outputs.run_verify == 'true' || github.event_name == 'workflow_dispatch'
+    needs: [authorize, context, prebuild]
+    if: |
+      needs.authorize.outputs.allowed == 'true' && 
+      (needs.context.outputs.run_verify == 'true' || github.event_name == 'workflow_dispatch' || github.event_name == 'workflow_call')
     uses: ./.github/workflows/integration-test-qvac-lib-infer-whispercpp.yml
     secrets: inherit
     with:
@@ -168,8 +202,10 @@ jobs:
       workdir: ${{ needs.context.outputs.workdir }}
 
   run-mobile-integration-tests:
-    needs: [context, prebuild]
-    if: needs.context.outputs.run_verify == 'true' || github.event_name == 'workflow_dispatch'
+    needs: [authorize, context, prebuild]
+    if: |
+      needs.authorize.outputs.allowed == 'true' && 
+      (needs.context.outputs.run_verify == 'true' || github.event_name == 'workflow_dispatch' || github.event_name == 'workflow_call')
     uses: ./.github/workflows/integration-mobile-test-qvac-lib-infer-whispercpp.yml
     secrets: inherit
     with:
@@ -177,12 +213,20 @@ jobs:
       ref: ${{ needs.context.outputs.ref }}
 
   merge-guard:
-    needs: [sanity-checks, release-notes-check, cpp-lint, cpp-tests-coverage, prebuild, run-integration-tests, run-mobile-integration-tests]
+    needs:
+      - authorize
+      - context
+      - sanity-checks
+      - release-notes-check
+      - cpp-lint
+      - cpp-tests-coverage
+      - prebuild
+      - run-integration-tests
+      - run-mobile-integration-tests
     if: always()
     uses: tetherto/qvac-devops/.github/workflows/public-pr.yml@monorepo_update
     with:
-      sanity-checks-status: ${{ needs.sanity-checks.result == 'success' && needs.release-notes-check.result == 'success' && (needs.cpp-lint.result == 'success' || needs.cpp-lint.result == 'skipped') && (needs.cpp-tests-coverage.result == 'success' || needs.cpp-tests-coverage.result == 'skipped') }}
+      sanity-checks-status: ${{ (needs.sanity-checks.result == 'success' || needs.sanity-checks.result == 'skipped') && (needs.release-notes-check.result == 'success' || needs.release-notes-check.result == 'skipped') && (needs.cpp-lint.result == 'success' || needs.cpp-lint.result == 'skipped') && (needs.cpp-tests-coverage.result == 'success' || needs.cpp-tests-coverage.result == 'skipped') }}
       build-status: ${{ needs.prebuild.result == 'success' || needs.prebuild.result == 'skipped' }}
       integration-tests-status: ${{ (needs.run-integration-tests.result == 'success' || needs.run-integration-tests.result == 'skipped') && (needs.run-mobile-integration-tests.result == 'success' || needs.run-mobile-integration-tests.result == 'skipped') }}
     secrets: inherit
- 
