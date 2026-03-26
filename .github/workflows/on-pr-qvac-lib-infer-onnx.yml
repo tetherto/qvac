@@ -28,6 +28,20 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
+  authorize:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      pull-requests: write
+    outputs:
+      allowed: ${{ steps.auth.outputs.allowed }}
+    steps:
+      - name: Authorize
+        id: auth
+        uses: ./.github/actions/authorize-pr
+        with:
+          github-token: ${{ github.token }}
+
   # Gate the workflow so label events (and other PR_target quirks) don't trigger unrelated packages.
   changes:
     runs-on: ubuntu-latest
@@ -49,10 +63,10 @@ jobs:
               - ".github/workflows/*qvac-lib-infer-onnx*.yml"
 
   sanity-checks:
-    needs: changes
+    needs: [authorize, changes]
     if: |
       (needs.changes.outputs.pkg == 'true' &&
-       contains(format(' {0} ', join(github.event.pull_request.labels.*.name, ' ')), ' verify ')) ||
+       needs.authorize.outputs.allowed == 'true') ||
       github.event_name == 'workflow_dispatch'
     runs-on: ubuntu-22.04
     permissions:
@@ -145,7 +159,7 @@ jobs:
 
   cpp-lint:
     needs: changes
-    if: contains( github.event.pull_request.labels.*.name, 'verify') || github.event_name == 'workflow_dispatch'
+    if: needs.authorize.outputs.allowed == 'true' || github.event_name == 'workflow_dispatch'
     uses: tetherto/qvac-devops/.github/workflows/cpp-lint.yaml@v1.1.7
     secrets:
       NPM_TOKEN: ${{ secrets.NPM_TOKEN }}
@@ -156,12 +170,12 @@ jobs:
       workdir: packages/qvac-lib-infer-onnx
 
   prebuild:
-    needs: [sanity-checks, cpp-lint]
+    needs: [authorize, sanity-checks, cpp-lint]
     if: |
       (needs.changes.outputs.pkg == 'true') &&
       (
         github.event_name == 'workflow_dispatch' ||
-        contains(format(' {0} ', join(github.event.pull_request.labels.*.name, ' ')), ' verify ')
+        needs.authorize.outputs.allowed == 'true'
       )
     uses: ./.github/workflows/prebuilds-qvac-lib-infer-onnx.yml
     secrets: inherit
@@ -171,7 +185,7 @@ jobs:
       publish_target: "gpr"
 
   merge-guard:
-    needs: [changes, sanity-checks, prebuild]
+    needs: [authorize, changes, sanity-checks, prebuild]
     if: always() && (needs.changes.outputs.pkg == 'true' || github.event_name == 'workflow_dispatch')
     uses: tetherto/qvac-devops/.github/workflows/public-pr.yml@v1.1.7
     with:

@@ -57,7 +57,23 @@ permissions:
   checks: write
 
 jobs:
+  authorize:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      pull-requests: write
+    outputs:
+      allowed: ${{ steps.auth.outputs.allowed }}
+    steps:
+      - name: Authorize
+        id: auth
+        uses: ./.github/actions/authorize-pr
+        with:
+          github-token: ${{ github.token }}
+
   context:
+    needs: authorize
+    if: needs.authorize.outputs.allowed == 'true'
     name: Resolve Context
     runs-on: ubuntu-latest
     outputs:
@@ -119,8 +135,8 @@ jobs:
           echo "  workdir=$workdir"
 
   sanity-checks:
-    if: contains(github.event.pull_request.labels.*.name, 'verify') || github.event_name == 'workflow_dispatch'
-    needs: context
+    if: needs.authorize.outputs.allowed == 'true'
+    needs: [authorize, context]
     runs-on: ubuntu-latest
     steps:
       - name: Run Sanity checks
@@ -129,12 +145,12 @@ jobs:
           secret-token: ${{ secrets.GITHUB_TOKEN }}
           npm-token: ${{ secrets.NPM_TOKEN }}
           pat-token: ${{ secrets.PAT_TOKEN }}
-          run-integration: ${{ needs.context.outputs.run_verify == 'true' }}
+          run-integration: ${{ needs.authorize.outputs.allowed == 'true' }}
           workdir: ${{ needs.context.outputs.workdir }}
 
   cpp-lint:
     needs: context
-    if: needs.context.outputs.run_verify == 'true' || github.event_name == 'workflow_dispatch'
+    if: needs.authorize.outputs.allowed == 'true'
     uses: tetherto/qvac-devops/.github/workflows/cpp-lint.yaml@v1.1.7
     secrets:
       NPM_TOKEN: ${{ secrets.NPM_TOKEN }}
@@ -145,8 +161,8 @@ jobs:
       workdir: ${{ needs.context.outputs.workdir }}
 
   cpp-tests-coverage:
-    needs: context
-    if: needs.context.outputs.run_verify == 'true' || github.event_name == 'workflow_dispatch'
+    needs: [authorize, context]
+    if: needs.authorize.outputs.allowed == 'true'
     uses: ./.github/workflows/cpp-test-coverage-qvac-lib-infer-onnx-tts.yml
     secrets: inherit
     with:
@@ -155,8 +171,8 @@ jobs:
       workdir: ${{ needs.context.outputs.workdir }}
 
   prebuild:
-    needs: context
-    if: needs.context.outputs.run_verify == 'true' || github.event_name == 'workflow_dispatch'
+    needs: [authorize, context]
+    if: needs.authorize.outputs.allowed == 'true'
     uses: ./.github/workflows/prebuilds-qvac-lib-infer-onnx-tts.yml
     secrets: inherit
     with:
@@ -166,8 +182,8 @@ jobs:
       workdir: ${{ needs.context.outputs.workdir }}
 
   run-integration-tests:
-    needs: [context, prebuild]
-    if: needs.context.outputs.run_verify == 'true' || github.event_name == 'workflow_dispatch'
+    needs: [authorize, context, prebuild]
+    if: needs.authorize.outputs.allowed == 'true'
     uses: ./.github/workflows/integration-test-qvac-lib-infer-onnx-tts.yml
     secrets: inherit
     with:
@@ -176,8 +192,8 @@ jobs:
       workdir: ${{ needs.context.outputs.workdir }}
 
   run-mobile-integration-tests:
-    needs: [context, prebuild]
-    if: needs.context.outputs.run_verify == 'true' || github.event_name == 'workflow_dispatch'
+    needs: [authorize, context, prebuild]
+    if: needs.authorize.outputs.allowed == 'true'
     uses: ./.github/workflows/integration-mobile-test-qvac-lib-infer-onnx-tts.yml
     secrets: inherit
     with:
@@ -188,6 +204,7 @@ jobs:
   merge-guard:
     needs:
       [
+        authorize,
         sanity-checks,
         cpp-lint,
         cpp-tests-coverage,
