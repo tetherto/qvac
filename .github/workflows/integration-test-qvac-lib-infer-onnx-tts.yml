@@ -25,6 +25,18 @@ on:
         required: false
         default: "packages/qvac-lib-infer-onnx-tts"
   workflow_call:
+    secrets:
+      AWS_ACCESS_KEY_ID:
+        required: true
+      AWS_SECRET_ACCESS_KEY:
+        required: true
+      NPM_TOKEN:
+        required: true
+      PAT_TOKEN:
+        required: true
+      QASE_API_TOKEN:
+        required: true
+
     inputs:
       ref:
         description: "ref"

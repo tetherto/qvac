@@ -13,6 +13,18 @@ on:
           - dev
 
   workflow_call:
+    secrets:
+      AWS_ACCESS_KEY_ID:
+        required: true
+      AWS_SECRET_ACCESS_KEY:
+        required: true
+      MODEL_S3_BUCKET:
+        required: true
+      NPM_TOKEN:
+        required: true
+      PAT_TOKEN:
+        required: true
+
     inputs:
       ref:
         description: "ref"
@@ -47,7 +59,11 @@ on:
 
 env:
   PKG_DIR: packages/ocr-onnx
-  
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: false
+
 jobs:
   prebuild:
     permissions:
@@ -119,14 +135,21 @@ jobs:
 
       - name: Echo workflow inputs
         shell: bash
+        env:
+          INPUT_TAG: ${{ inputs.tag || github.event.inputs.tag }}
+          INPUT_REF: ${{ inputs.ref || github.ref }}
+          INPUT_REPO: ${{ inputs.repository || github.repository }}
+          MATRIX_PLATFORM: ${{ matrix.platform }}
+          MATRIX_ARCH: ${{ matrix.arch }}
+          MATRIX_TAGS: ${{ matrix.tags }}
         run: |
           echo "Workflow inputs:"
-          echo "Tag: ${{ inputs.tag || github.event.inputs.tag }}"
-          echo "Ref: ${{ inputs.ref || github.ref }}"
-          echo "Repository: ${{ inputs.repository || github.repository }}"
-          echo "Matrix platform: ${{ matrix.platform }}"
-          echo "Matrix arch: ${{ matrix.arch }}"
-          echo "Matrix tags: ${{ matrix.tags }}"
+          echo "Tag: $INPUT_TAG"
+          echo "Ref: $INPUT_REF"
+          echo "Repository: $INPUT_REPO"
+          echo "Matrix platform: $MATRIX_PLATFORM"
+          echo "Matrix arch: $MATRIX_ARCH"
+          echo "Matrix tags: $MATRIX_TAGS"
 
       - if: ${{ matrix.variant == 'ubuntu' }}
         name: Update c++ tools
@@ -537,7 +560,7 @@ jobs:
 
       - name: Publish to GitHub Package Registry
         id: publish
-        uses: tetherto/qvac-devops/.github/actions/publish-library-to-gpr@monorepo_update
+        uses: tetherto/qvac-devops/.github/actions/publish-library-to-gpr@v1.1.7
         with:
           secret-token: ${{ secrets.GITHUB_TOKEN }}
           tag: ${{ needs.publish-logic.outputs.gpr_tag }}
@@ -570,7 +593,7 @@ jobs:
 
       - name: Publish to NPM Package Registry
         id: publish
-        uses: tetherto/qvac-devops/.github/actions/publish-library-to-npm@monorepo_update
+        uses: tetherto/qvac-devops/.github/actions/publish-library-to-npm@v1.1.7
         with:
           secret-token: ${{ secrets.NPM_TOKEN }}
           tag: "latest"
@@ -585,7 +608,6 @@ jobs:
     permissions:
       contents: write
     uses: ./.github/workflows/create-github-release-ocr-onnx.yml
-    secrets: inherit
     with:
       published_version: ${{ needs.publish-npm.outputs.published_version }}
       prev_sha: ${{ github.event.before }}
