@@ -18,6 +18,7 @@ class WhisperModel;
 class StreamingProcessor {
 public:
   struct Config {
+    qvac_lib_inference_addon_cpp::JobId jobId = 0;
     static constexpr int kDefaultSampleRate = 16000;
     static constexpr float kDefaultMaxSpeechDurationS = 30.0F;
     static constexpr float kVadRunIntervalS = 0.3F;
