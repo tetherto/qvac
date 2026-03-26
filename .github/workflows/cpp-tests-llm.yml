@@ -23,6 +23,11 @@ on:
         type: string
         required: false
         default: "packages/qvac-lib-infer-llamacpp-llm"
+    secrets:
+      NPM_TOKEN:
+        required: true  # or false, depending on your needs
+      PAT_TOKEN:
+        required: true
 
 jobs:
   test-cpp:
