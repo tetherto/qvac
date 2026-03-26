@@ -92,46 +92,32 @@ export async function* dispatchPluginStream<TRequest, TResponse>(
   modelId: string,
   handlerName: string,
   request: TRequest,
-): AsyncGenerator<TResponse> {
-  yield* profileStreamHandler({ op: handlerName, request }, async function* () {
-    const { result, streaming } = resolvePluginHandler<TRequest, TResponse>(
-      modelId,
-      handlerName,
-      request,
-    );
-
-    if (!streaming) {
-      throw new PluginHandlerTypeMismatchError(
-        handlerName,
-        "streaming",
-        "reply",
-      );
-    }
-
-    yield* result as AsyncGenerator<TResponse>;
-  });
-}
-
-export async function* dispatchPluginDuplex<TRequest, TResponse>(
-  modelId: string,
-  handlerName: string,
-  request: TRequest,
-  inputStream: AsyncIterable<Buffer>,
+  inputStream?: AsyncIterable<Buffer>,
 ): AsyncGenerator<TResponse> {
   yield* profileStreamHandler({ op: handlerName, request }, async function* () {
     const handlerDef = resolvePluginHandlerDef(modelId, handlerName);
 
-    if (!handlerDef.duplex) {
-      throw new PluginHandlerTypeMismatchError(
-        handlerName,
-        "duplex",
-        handlerDef.streaming ? "streaming" : "reply",
-      );
+    if (inputStream) {
+      if (!handlerDef.duplex) {
+        throw new PluginHandlerTypeMismatchError(
+          handlerName,
+          "duplex",
+          handlerDef.streaming ? "streaming" : "reply",
+        );
+      }
+      yield* handlerDef.handler(
+        request as never,
+        inputStream,
+      ) as AsyncGenerator<TResponse>;
+    } else {
+      if (!handlerDef.streaming) {
+        throw new PluginHandlerTypeMismatchError(
+          handlerName,
+          "streaming",
+          "reply",
+        );
+      }
+      yield* handlerDef.handler(request as never) as AsyncGenerator<TResponse>;
     }
-
-    yield* handlerDef.handler(
-      request as never,
-      inputStream,
-    ) as AsyncGenerator<TResponse>;
   });
 }

@@ -7,8 +7,9 @@ import {
   type TranscribeStreamRequest,
   type TranscribeStreamClientParams,
   type TranscribeStreamSession,
+  type TranscribeStreamResponse,
 } from "@/schemas";
-import { stream, duplex } from "@/client/rpc/rpc-client";
+import { stream, duplex, type DuplexReadable } from "@/client/rpc/rpc-client";
 import { getClientLogger } from "@/logging";
 import { TranscriptionFailedError } from "@/utils/errors-client";
 
@@ -81,41 +82,7 @@ export async function transcribeStream(
 
   const { requestStream, responseStream } = await duplex(request, options);
 
-  async function* parseResponses(): AsyncGenerator<string> {
-    let buffer = "";
-    for await (const chunk of responseStream) {
-      buffer += chunk.toString();
-      const lines = buffer.split("\n");
-      buffer = lines.pop() || "";
-
-      for (const line of lines) {
-        if (!line.trim()) continue;
-        let parsed: unknown;
-        try {
-          parsed = JSON.parse(line);
-        } catch {
-          logger.warn("transcribeStream: malformed JSON from server:", line);
-          continue;
-        }
-        const obj = parsed as Record<string, unknown>;
-        if (obj["type"] === "error") {
-          throw new TranscriptionFailedError(
-            (obj["error"] as string) ?? "Unknown server error",
-          );
-        }
-        const response = transcribeStreamResponseSchema.parse(parsed);
-        if (response.error) {
-          throw new TranscriptionFailedError(response.error);
-        }
-        if (response.done) return;
-        if (response.text?.trim()) {
-          yield response.text;
-        }
-      }
-    }
-  }
-
-  const responses = parseResponses();
+  const responses = parseResponseLines(responseStream);
   let consumed = false;
 
   return {
@@ -140,3 +107,55 @@ export async function transcribeStream(
     },
   };
 }
+
+async function* parseResponseLines(
+  responseStream: DuplexReadable,
+): AsyncGenerator<string> {
+  let buf = "";
+
+  for await (const chunk of responseStream) {
+    buf += chunk.toString();
+    const lines = buf.split("\n");
+    buf = lines.pop() || "";
+
+    for (const line of lines) {
+      const result = processLine(line);
+      if (result === null) return;
+      if (result !== undefined) yield result;
+    }
+  }
+
+  // Process any residual data after stream ends
+  if (buf.trim()) {
+    const result = processLine(buf);
+    if (result !== null && result !== undefined) yield result;
+  }
+}
+
+function processLine(line: string): string | undefined | null {
+  if (!line.trim()) return undefined;
+
+  let parsed: unknown;
+  try {
+    parsed = JSON.parse(line);
+  } catch {
+    logger.warn("transcribeStream: malformed JSON from server:", line);
+    return undefined;
+  }
+
+  const obj = parsed as Record<string, unknown>;
+  if (obj["type"] === "error") {
+    throw new TranscriptionFailedError(
+      (obj["error"] as string) ?? "Unknown server error",
+    );
+  }
+
+  const response: TranscribeStreamResponse =
+    transcribeStreamResponseSchema.parse(parsed);
+
+  if (response.error) throw new TranscriptionFailedError(response.error);
+  if (response.done) return null;
+  if (response.text?.trim()) return response.text;
+  return undefined;
+}
+

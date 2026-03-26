@@ -17,16 +17,16 @@ import type { Readable } from "bare-stream";
 
 const logger = getServerLogger();
 
-interface ModelResponse {
+interface StreamingModelResponse {
   iterate(): AsyncIterable<{ text: string }[]>;
   await(): Promise<{ text: string }[]>;
 }
 
 interface StreamableModel {
-  runStreaming(audioStream: Readable): Promise<ModelResponse>;
+  runStreaming(audioStream: Readable): Promise<StreamingModelResponse>;
 }
 
-function isStreamableModel(model: AnyModel): model is AnyModel & StreamableModel {
+function hasRunStreaming(model: AnyModel): model is AnyModel & StreamableModel {
   return "runStreaming" in model && typeof model.runStreaming === "function";
 }
 
@@ -139,7 +139,7 @@ export async function* transcribeStream(
   try {
     const model = getModel(modelId);
 
-    if (!isStreamableModel(model)) {
+    if (!hasRunStreaming(model)) {
       throw new TranscriptionFailedError(
         `Model ${modelId} does not support streaming transcription`,
       );

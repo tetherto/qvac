@@ -485,8 +485,8 @@ async function duplexProfiled<T extends Request>(
             continue;
           }
 
-          const clean = stripProfilingMeta(parsed);
-          outputParts.push(JSON.stringify(clean));
+          // Yield original line — consumer's Zod .parse() strips profiling keys
+          outputParts.push(line);
         }
 
         const output = outputParts.join("\n");
@@ -494,6 +494,11 @@ async function duplexProfiled<T extends Request>(
           timings.chunkCount++;
           yield Buffer.from(output);
         }
+      }
+
+      if (lineBuffer.trim()) {
+        timings.chunkCount++;
+        yield Buffer.from(lineBuffer);
       }
     } catch (error) {
       if (timings.requestEnd === undefined) {

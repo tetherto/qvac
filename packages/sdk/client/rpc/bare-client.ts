@@ -295,18 +295,16 @@ export async function createDuplexSession(payload: string) {
     throw new RPCNoHandlerError(request.type);
   }
 
-  const handler = getHandler(request.type);
-  if (!handler) throw new RPCNoHandlerError(request.type);
-
   const inputStream = new PassThrough();
   const outputStream = new PassThrough();
 
+  const duplexHandler = entry.handler as (
+    req: Request,
+    stream: Readable,
+  ) => AsyncGenerator<Response>;
+
   void (async () => {
     try {
-      const duplexHandler = handler as (
-        req: Request,
-        stream: Readable,
-      ) => AsyncGenerator<Response>;
       for await (const response of duplexHandler(request, inputStream)) {
         outputStream.write(JSON.stringify(response) + "\n", "utf-8");
       }
