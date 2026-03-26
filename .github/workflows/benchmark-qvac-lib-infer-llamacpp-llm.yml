@@ -180,6 +180,7 @@ permissions:
 jobs:
   benchmark:
     runs-on: ai-run-linux-gpu
+    environment: release
     timeout-minutes: 180
     name: "Benchmark ${{ inputs.gguf_model }}"
 

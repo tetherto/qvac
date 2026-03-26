@@ -92,6 +92,7 @@ jobs:
   detect-changes:
     needs: [authorize]
     runs-on: ubuntu-latest
+    environment: release
     if: needs.authorize.outputs.allowed == 'true'
     outputs:
       schema_changed: ${{ steps.filter.outputs.schema }}
@@ -212,6 +213,7 @@ jobs:
        needs.publish-logic.outputs.publish_main == 'true' ||
        needs.publish-logic.outputs.publish_tmp == 'true')
     runs-on: ubuntu-latest
+    environment: release
     permissions:
       contents: write
       packages: write
@@ -247,6 +249,7 @@ jobs:
       needs.publish-logic.outputs.publish_release == 'true' &&
       (needs.release-merge-guard-schema.result == 'success' || needs.release-merge-guard-schema.result == 'skipped')
     runs-on: ubuntu-latest
+    environment: release
     outputs:
       published_version: ${{ steps.publish.outputs.npm_published_version }}
     permissions:
@@ -311,6 +314,7 @@ jobs:
       contents: read
       packages: read
     runs-on: ubuntu-latest
+    environment: release
     steps:
       - name: Checkout base repository
         uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # 6.0.2
@@ -379,6 +383,7 @@ jobs:
        needs.publish-logic.outputs.publish_main == 'true' ||
        needs.publish-logic.outputs.publish_tmp == 'true')
     runs-on: ubuntu-latest
+    environment: release
     permissions:
       contents: write
       packages: write
@@ -416,6 +421,7 @@ jobs:
       needs.publish-logic.outputs.publish_release == 'true' &&
       (needs.release-merge-guard-client.result == 'success' || needs.release-merge-guard-client.result == 'skipped')
     runs-on: ubuntu-latest
+    environment: release
     outputs:
       published_version: ${{ steps.publish.outputs.npm_published_version }}
     permissions:

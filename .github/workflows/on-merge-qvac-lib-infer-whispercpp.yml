@@ -262,6 +262,7 @@ jobs:
   benchmark:
     name: Trigger Benchmark (Whispercpp)
     runs-on: ubuntu-latest
+    environment: release
     needs: prebuild
     if: always() && needs.prebuild.outputs.should_run_tests == 'true'
     steps:

@@ -54,6 +54,7 @@ permissions:
 jobs:
   cpp-tests:
     runs-on: ${{ matrix.os }}
+    environment: release
     name: ${{ matrix.platform }}-${{ matrix.arch }}-cpp-tests
 
     permissions:

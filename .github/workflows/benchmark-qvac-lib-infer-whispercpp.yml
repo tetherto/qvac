@@ -222,6 +222,7 @@ jobs:
   benchmark-whispercpp:
     needs: generate-matrix
     runs-on: ubuntu-latest
+    environment: release
     timeout-minutes: 1440
     env:
       GITHUB_TOKEN: ${{ secrets.PAT_TOKEN }}

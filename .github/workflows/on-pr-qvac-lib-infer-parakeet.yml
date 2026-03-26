@@ -139,6 +139,7 @@ jobs:
     if: needs.authorize.outputs.allowed == 'true'
     needs: [authorize, context]
     runs-on: ubuntu-latest
+    environment: release
     steps:
       - name: Run Sanity checks
         uses: tetherto/qvac-devops/.github/actions/sanity-checks@v1.1.7

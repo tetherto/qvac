@@ -74,6 +74,7 @@ jobs:
   build-and-test:
     name: Build ${{ matrix.platform }} and Run E2E Tests (${{ matrix.variant }})
     runs-on: ${{ matrix.runner }}
+    environment: release
     timeout-minutes: 210
     continue-on-error: true # Don't block PR merges if tests fail
     permissions:
