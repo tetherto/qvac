@@ -55,7 +55,7 @@ void nmt_free(struct nmt_context* ctx) {
 
 struct nmt_context_params nmt_context_default_params() {
   struct nmt_context_params result = {
-      /*.use_gpu              =*/true,
+      /*.use_gpu              =*/false,
       /*.flash_attn           =*/false,
       /*.gpu_device           =*/0,
   };

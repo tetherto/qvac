@@ -1,6 +1,22 @@
-# Generate PR Description
+---
+name: addon-pr-create
+description: Generate PR descriptions for addon packages (non-SDK inference addons, decoder, OCR). Use when creating a PR description or user asks to "prepare PR description" for an addon package.
+---
 
-## Step 1: Identify base/head, collect changes, and verify version bump
+# Addon PR Description Generator
+
+## What
+
+Generate PR descriptions for addon packages (non-SDK packages like inference addons, decoder, OCR). Collects changes from the remote tracked branch, validates the version bump, and fills in the PR template.
+
+## When to Use
+
+- Creating a PR description for an addon package
+- User explicitly asks to "generate a PR description" or "prepare PR description" while working in an addon package
+
+## Instructions
+
+### Step 1: Identify base/head, collect changes, and verify version bump
 
 Identify the PR base/head, collect the full change set from the **remote tracked branch**, and **validate the version bump in `package.json`** against `main`:
 
@@ -13,8 +29,8 @@ Identify the PR base/head, collect the full change set from the **remote tracked
    - If the `version` in `package.json` is **unchanged** compared to `main`, **display this exact warning** to the user:
 
    -----------------------------------
-   ⚠️⚠️⚠️ VERSION BUMP MAY BE REQUIRED ⚠️⚠️⚠️  
-   The `version` in `package.json` is unchanged compared to `main`.  
+   WARNING: VERSION BUMP MAY BE REQUIRED
+   The `version` in `package.json` is unchanged compared to `main`.
    If this PR includes any changes that must be released in the package, you **must** bump the package version, commit/push it and re-run this command.
    -----------------------------------
 
@@ -25,7 +41,12 @@ Identify the PR base/head, collect the full change set from the **remote tracked
 
 The goal is a single combined change set: all commits on the remote tracked branch vs `main`, while ensuring no unwanted changes end up in the PR description.
 
-## Step 2: Generate the PR description
+### Step 2: Generate the PR description
 
-Use `@PULL_REQUEST_TEMPLATE.md` as the template. Fill it in based on the combined change set. If there are additional instructions in the template file, follow them too. Return the completed PR description to the user as a message.
+Look for a `PULL_REQUEST_TEMPLATE.md` **in the addon's package directory** (e.g., `packages/<addon-package>/PULL_REQUEST_TEMPLATE.md`). Use it as the template. If there are additional instructions in the template file, follow them too.
+
+If no `PULL_REQUEST_TEMPLATE.md` exists in the package directory, use a standard PR format with these sections: Summary, Changes, Test Plan.
+
+Fill in the template based on the combined change set. Return the completed PR description to the user as a message.
+
 Do NOT create or modify any additional files when producing the PR description.
