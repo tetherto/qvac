@@ -51,10 +51,10 @@ concurrency:
   cancel-in-progress: true
 
 permissions:
-  contents: write
-  pull-requests: write
-  packages: write
-  checks: write
+  contents: read
+  pull-requests: read
+  packages: read
+  checks: read
 
 jobs:
   authorize:
@@ -176,6 +176,10 @@ jobs:
       workdir: ${{ needs.context.outputs.workdir }}
 
   prebuild:
+    permissions:
+      contents: write
+      packages: write
+      pull-requests: write
     needs: [authorize, context]
     if: needs.authorize.outputs.allowed == 'true'
     uses: ./.github/workflows/prebuilds-qvac-lib-infer-onnx-tts.yml
@@ -207,6 +211,10 @@ jobs:
       workdir: ${{ needs.context.outputs.workdir }}
 
   run-mobile-integration-tests:
+    permissions:
+      contents: read
+      packages: read
+      pull-requests: write # Allow commenting on PRs
     needs: [authorize, context, prebuild]
     if: needs.authorize.outputs.allowed == 'true'
     uses: ./.github/workflows/integration-mobile-test-qvac-lib-infer-onnx-tts.yml

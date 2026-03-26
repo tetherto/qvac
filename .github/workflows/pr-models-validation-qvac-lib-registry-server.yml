@@ -25,6 +25,9 @@ env:
   PKG_DIR: packages/qvac-lib-registry-server
   MODELS_FILE: packages/qvac-lib-registry-server/data/models.prod.json
 
+permissions:
+  contents: read
+
 jobs:
   authorize:
     runs-on: ubuntu-latest

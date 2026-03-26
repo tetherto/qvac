@@ -130,6 +130,9 @@ on:
         default: "packages/qvac-lib-infer-llamacpp-embed"
         type: string
 
+permissions:
+  contents: read
+
 jobs:
   benchmark:
     runs-on: ai-run-linux-gpu

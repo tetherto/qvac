@@ -31,6 +31,10 @@ on:
 env:
   PKG_DIR: packages/qvac-lib-infer-nmtcpp
 
+permissions:
+  contents: read
+  packages: read
+
 jobs:
   prepare:
     runs-on: ubuntu-latest

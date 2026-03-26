@@ -59,6 +59,9 @@ on:
 
 env:
   PKG_DIR: packages/ocr-onnx
+  
+permissions:
+  contents: read
 
 concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}

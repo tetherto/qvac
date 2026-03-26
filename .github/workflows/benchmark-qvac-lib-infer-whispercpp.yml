@@ -72,6 +72,9 @@ on:
         type: string
         default: 'packages/qvac-lib-infer-whispercpp'
 
+permissions:
+  contents: read
+
 jobs:
   generate-matrix:
     runs-on: ubuntu-latest

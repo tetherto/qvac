@@ -6,15 +6,16 @@ on:
     types: [created]
   pull_request_review:
     types: [submitted]
-    
+  
+permissions:
+  contents: read
+  pull-requests: read
+  issues: read
+  statuses: read
+  
 jobs:
   run-when-command:
     runs-on: ubuntu-latest
-    permissions:
-      contents: read
-      pull-requests: write
-      issues: write
-      statuses: write
 
     outputs:
       number: ${{ steps.pr.outputs.number }}

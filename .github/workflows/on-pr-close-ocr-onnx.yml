@@ -32,7 +32,6 @@ run-name: Delete NPM Versions ${{ inputs.version }} ${{ inputs.pr-number }} ${{ 
 
 permissions:
   contents: read
-  packages: write
   
 jobs:
   print-context:

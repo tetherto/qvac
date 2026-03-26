@@ -19,9 +19,9 @@ on:
   workflow_call:
 
 permissions:
-  contents: write
-  pull-requests: write
-  packages: write
+  contents: read
+  pull-requests: read
+  packages: read
 
 concurrency:
   group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.sha }}
@@ -71,8 +71,6 @@ jobs:
        needs.authorize.outputs.allowed == 'true') ||
       github.event_name == 'workflow_dispatch'
     runs-on: ubuntu-22.04
-    permissions:
-      contents: read
     env:
       VCPKG_BINARY_SOURCES: "clear;files,${{ github.workspace }}/packages/ocr-onnx/vcpkg/cache,readwrite"
       PKG_DIR: packages/ocr-onnx
@@ -176,6 +174,10 @@ jobs:
       workdir: packages/ocr-onnx
 
   prebuild:
+    permissions:
+      contents: write
+      pull-requests: write
+      packages: write
     needs: [authorize, changes]
     if: |
       (needs.changes.outputs.pkg == 'true' || github.event_name == 'workflow_dispatch') &&
@@ -196,6 +198,8 @@ jobs:
       publish_target: "gpr"
 
   run-integration-tests:
+    permissions:
+      pull-requests: write
     needs: [authorize, changes, prebuild]
     if: |
       (needs.changes.outputs.pkg == 'true' || github.event_name == 'workflow_dispatch') &&
@@ -216,6 +220,10 @@ jobs:
       ref: ${{ github.event.pull_request.head.ref || github.ref }}
 
   run-mobile-integration-tests:
+    permissions:
+      contents: read
+      packages: read
+      pull-requests: write # Allow commenting on PRs
     needs: [authorize, changes, prebuild]
     if: |
       (needs.changes.outputs.pkg == 'true' || github.event_name == 'workflow_dispatch') &&

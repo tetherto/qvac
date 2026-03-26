@@ -22,9 +22,9 @@ on:
           - dev
 
 permissions:
-  contents: write
-  pull-requests: write
-  packages: write
+  contents: read
+  pull-requests: read
+  packages: read
 
 concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}
@@ -113,9 +113,6 @@ jobs:
       needs.publish-logic.outputs.publish_release == 'true' ||
       needs.publish-logic.outputs.publish_feature == 'true' ||
       needs.publish-logic.outputs.publish_tmp == 'true'
-    permissions:
-      contents: read
-      packages: read
     uses: ./.github/workflows/integration-test-qvac-lib-decoder-audio.yml
     secrets:
       NPM_TOKEN: ${{ secrets.NPM_TOKEN }}

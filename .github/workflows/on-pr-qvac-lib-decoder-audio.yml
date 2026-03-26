@@ -51,10 +51,10 @@ concurrency:
   cancel-in-progress: true
 
 permissions:
-  contents: write
-  pull-requests: write
-  packages: write
-  checks: write
+  contents: read
+  pull-requests: read
+  packages: read
+  checks: read
 
 jobs:
   authorize:
@@ -163,6 +163,10 @@ jobs:
       workdir: ${{ needs.context.outputs.workdir }}
 
   run-mobile-integration-tests:
+    permissions:
+      contents: read
+      packages: read
+      pull-requests: write # Allow commenting on PRs
     needs: context
     if: needs.context.outputs.run_verify == 'true' || github.event_name == 'workflow_dispatch'
     uses: ./.github/workflows/integration-mobile-test-qvac-lib-decoder-audio.yml

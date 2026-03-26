@@ -30,6 +30,9 @@ on:
         required: false
         default: "packages/qvac-lib-infer-llamacpp-llm"
 
+permissions:
+  contents: read
+
 jobs:
   test-cpp:
     strategy:
