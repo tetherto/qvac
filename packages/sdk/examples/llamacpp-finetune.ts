@@ -135,8 +135,8 @@ async function demoPauseResume(modelId: string) {
     if (stepCount >= pauseAfterSteps) {
       console.log(`\nPausing after ${stepCount} steps...`);
       // Pause — saves checkpoint, can resume later
-      // cancel() without reset acts as pause for finetune jobs
-      await cancel({ operation: "inference", modelId });
+      // cancel() with reset: false acts as pause for finetune jobs
+      await cancel({ operation: "inference", modelId, reset: false });
       break;
     }
   }

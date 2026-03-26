@@ -10,7 +10,7 @@ export const cancelInferenceBaseSchema = z.object({
 
 const cancelInferenceParamsSchema = cancelInferenceBaseSchema.extend({
   operation: z.literal("inference"),
-  reset: z.boolean().optional(),
+  reset: z.boolean().default(true),
 });
 
 const cancelDownloadParamsSchema = z.object({
