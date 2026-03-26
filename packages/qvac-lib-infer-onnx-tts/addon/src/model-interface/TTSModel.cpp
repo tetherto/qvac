@@ -298,6 +298,8 @@ TTSModel::Output TTSModel::process(const Input &text) {
     result = postProcess(std::move(result));
   }
 
+  outputSampleRate_->store(result.sampleRate);
+
   if (cancelRequested_.exchange(false)) {
     throw std::runtime_error("Job cancelled");
   }
@@ -359,6 +361,8 @@ qvac_lib_inference_addon_cpp::RuntimeStats TTSModel::runtimeStats() const {
   stats.emplace_back("realTimeFactor", realTimeFactor_);
   stats.emplace_back("audioDurationMs", audioDurationMs_);
   stats.emplace_back("totalSamples", totalSamples_);
+  stats.emplace_back("sampleRate",
+                     static_cast<double>(outputSampleRate_->load()));
 
   return stats;
 }
@@ -445,7 +449,12 @@ AudioResult TTSModel::postProcess(AudioResult result) {
   int currentRate = result.sampleRate;
 
   // Denoise: resample to 16 kHz, run denoiser
-  if (lavaSRConfig_.denoise && denoiser_ && denoiser_->isLoaded()) {
+  if (lavaSRConfig_.denoise && !lavaSRConfig_.denoiserPath.empty()) {
+    if (!denoiser_ || !denoiser_->isLoaded()) {
+      denoiser_ = std::make_unique<lavasr::LavaSRDenoiser>(
+          lavaSRConfig_.denoiserPath);
+      denoiser_->load();
+    }
     QLOG(Priority::INFO, "Running LavaSR denoiser...");
     auto wav16k = dsp::Resampler::resample(audio, currentRate, 16000);
     audio = denoiser_->denoise(wav16k);
@@ -454,10 +463,15 @@ AudioResult TTSModel::postProcess(AudioResult result) {
   }
 
   // Enhance: resample to 48 kHz, run enhancer
-  if (lavaSRConfig_.enhance && enhancer_ && enhancer_->isLoaded()) {
+  if (lavaSRConfig_.enhance && !lavaSRConfig_.backbonePath.empty() &&
+      !lavaSRConfig_.specHeadPath.empty()) {
+    if (!enhancer_ || !enhancer_->isLoaded()) {
+      enhancer_ = std::make_unique<lavasr::LavaSREnhancer>(
+          lavaSRConfig_.backbonePath, lavaSRConfig_.specHeadPath);
+      enhancer_->load();
+    }
     QLOG(Priority::INFO, "Running LavaSR enhancer...");
     auto wav48k = dsp::Resampler::resample(audio, currentRate, 48000);
-    // Cutoff = half the original engine sample rate
     const float cutoffHz =
         static_cast<float>(result.sampleRate) / 2.0f;
     audio = enhancer_->enhance(wav48k, cutoffHz);

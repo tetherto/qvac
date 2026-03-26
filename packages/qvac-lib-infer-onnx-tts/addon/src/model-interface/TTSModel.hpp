@@ -70,6 +70,10 @@ public:
   // Set reference audio for Chatterbox voice cloning
   void setReferenceAudio(const std::vector<float> &referenceAudio);
 
+  std::shared_ptr<std::atomic<int>> outputSampleRatePtr() const {
+    return outputSampleRate_;
+  }
+
 private:
   EngineType engineType_ = EngineType::Chatterbox;
   std::shared_ptr<chatterbox::IChatterboxEngine> chatterboxEngine_;
@@ -95,6 +99,8 @@ private:
   size_t textLength_ = 0;
   bool loaded_ = false;
   mutable std::atomic_bool cancelRequested_ = false;
+  std::shared_ptr<std::atomic<int>> outputSampleRate_ =
+      std::make_shared<std::atomic<int>>(0);
 
   EngineType detectEngineType(
       const std::unordered_map<std::string, std::string> &configMap) const;

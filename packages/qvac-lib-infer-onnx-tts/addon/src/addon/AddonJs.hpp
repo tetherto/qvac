@@ -93,7 +93,10 @@ inline bool hasProperty(js_env_t *env, js::Object object, const char *name) {
 struct JsAudioOutputHandler
     : qvac_lib_inference_addon_cpp::out_handl::JsBaseOutputHandler<
           std::vector<int16_t>> {
-  JsAudioOutputHandler()
+  std::shared_ptr<std::atomic<int>> sampleRatePtr_;
+
+  explicit JsAudioOutputHandler(
+      std::shared_ptr<std::atomic<int>> sampleRatePtr = nullptr)
       : qvac_lib_inference_addon_cpp::out_handl::JsBaseOutputHandler<
             std::vector<int16_t>>([this](const std::vector<int16_t> &data)
                                       -> js_value_t * {
@@ -101,8 +104,16 @@ struct JsAudioOutputHandler
           std::span<const int16_t> outputSpan(data.data(), data.size());
           auto typedArray = js::TypedArray<int16_t>::create(this->env_, outputSpan);
           result.setProperty(this->env_, "outputArray", typedArray);
+          if (sampleRatePtr_) {
+            int sr = sampleRatePtr_->load();
+            if (sr > 0) {
+              result.setProperty(this->env_, "sampleRate",
+                                 js::Number::create(this->env_, sr));
+            }
+          }
           return result;
-        }) {}
+        }),
+        sampleRatePtr_(std::move(sampleRatePtr)) {}
 };
 
 inline js_value_t *createInstance(js_env_t *env, js_callback_info_t *info) try {
@@ -112,12 +123,14 @@ inline js_value_t *createInstance(js_env_t *env, js_callback_info_t *info) try {
   JsArgsParser args(env, info);
   auto configurationParams = args.getJsObject(1, "configurationParams");
 
-  unique_ptr<model::IModel> model = make_unique<TTSModel>(
+  auto ttsModel = make_unique<TTSModel>(
       getTTSConfigMap(env, configurationParams),
       getReferenceAudio(env, configurationParams));
+  auto sampleRatePtr = ttsModel->outputSampleRatePtr();
+  unique_ptr<model::IModel> model = std::move(ttsModel);
 
   out_handl::OutputHandlers<out_handl::JsOutputHandlerInterface> outHandlers;
-  outHandlers.add(make_shared<JsAudioOutputHandler>());
+  outHandlers.add(make_shared<JsAudioOutputHandler>(sampleRatePtr));
   unique_ptr<OutputCallBackInterface> callback = make_unique<OutputCallBackJs>(
       env,
       args.get(0, "jsHandle"),

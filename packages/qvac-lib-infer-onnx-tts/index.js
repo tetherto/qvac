@@ -541,10 +541,21 @@ class ONNXTTS {
   async _runInternal (input) {
     const response = this._job.start()
     try {
-      await this.addon.runJob({
+      const jobData = {
         type: input.type || 'text',
         input: input.input
-      })
+      }
+
+      if (input.enhance !== undefined || input.denoise !== undefined || input.outputSampleRate !== undefined) {
+        jobData.config = {}
+        if (input.enhance !== undefined) jobData.config.enhance = input.enhance
+        if (input.denoise !== undefined) jobData.config.denoise = input.denoise
+        if (input.outputSampleRate !== undefined) {
+          jobData.config.outputSampleRate = String(input.outputSampleRate)
+        }
+      }
+
+      accepted = await this.addon.runJob(jobData)
     } catch (error) {
       this._job.fail(error)
       throw error
