@@ -30,12 +30,34 @@ env:
   PKG_DIR: packages/qvac-lib-infer-nmtcpp
 
 jobs:
+  # ---------------------------------------------------------------------------
+  # 1. Security Gate
+  # ---------------------------------------------------------------------------
+  authorize:
+    runs-on: ubuntu-latest
+    outputs:
+      allowed: ${{ steps.gate.outputs.allowed }}
+    steps:
+      - name: Security Gate
+        id: gate
+        uses: tetherto/qvac-devops/.github/actions/auth-gate@main # Change to your branch/tag
+        with:
+          required-label: 'verify'
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+
+  # ---------------------------------------------------------------------------
+  # 3. Path Filter
+  # ---------------------------------------------------------------------------
   changes:
-    if: github.event_name != 'workflow_dispatch'
     runs-on: ubuntu-latest
     outputs:
       pkg: ${{ steps.filter.outputs.pkg }}
     steps:
+      - name: Checkout repository
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # 6.0.2
+        with:
+          fetch-depth: 0
+
       - uses: dorny/paths-filter@fbd0ab8f3e69293af611ebaee6363fc25e6d187d # 4.0.1
         id: filter
         with:
@@ -45,9 +67,14 @@ jobs:
               - "packages/qvac-lib-infer-nmtcpp/**"
               - ".github/workflows/*nmtcpp*.yml"
 
+  # ---------------------------------------------------------------------------
+  # 4. Execution Jobs
+  # ---------------------------------------------------------------------------
   sanity-checks:
-    needs: changes
-    if: always() && ((needs.changes.outputs.pkg == 'true' && contains(github.event.pull_request.labels.*.name, 'verify')) || github.event_name == 'workflow_dispatch')
+    needs: [authorize, changes]
+    if: |
+      needs.authorize.outputs.allowed == 'true' &&
+      (needs.changes.outputs.pkg == 'true' || github.event_name == 'workflow_dispatch')
     runs-on: ubuntu-latest
     steps:
       - name: Run Sanity checks
@@ -56,12 +83,14 @@ jobs:
           secret-token: ${{ secrets.GITHUB_TOKEN }}
           npm-token: ${{ secrets.NPM_TOKEN }}
           pat-token: ${{ secrets.PAT_TOKEN }}
-          run-integration: ${{ contains(github.event.pull_request.labels.*.name, 'verify') }}
+          run-integration: true
           workdir: packages/qvac-lib-infer-nmtcpp
 
   ts-checks:
-    needs: [changes, sanity-checks]
-    if: always() && (needs.changes.outputs.pkg == 'true' || github.event_name == 'workflow_dispatch')
+    needs: [authorize, changes, sanity-checks]
+    if: |
+      needs.authorize.outputs.allowed == 'true' &&
+      (needs.changes.outputs.pkg == 'true' || github.event_name == 'workflow_dispatch')
     runs-on: ubuntu-latest
     defaults:
       run:
@@ -93,12 +122,10 @@ jobs:
         run: npm run test:dts
 
   cpp-lint:
-    needs: [changes, sanity-checks]
+    needs: [authorize, changes, sanity-checks]
     if: |
-      always() &&
-      ((needs.changes.outputs.pkg == 'true' &&
-        contains(github.event.pull_request.labels.*.name, 'verify')) ||
-       github.event_name == 'workflow_dispatch')
+      needs.authorize.outputs.allowed == 'true' &&
+      (needs.changes.outputs.pkg == 'true' || github.event_name == 'workflow_dispatch')
     uses: tetherto/qvac-devops/.github/workflows/cpp-lint.yaml@monorepo_update
     secrets: inherit
     with:
@@ -107,12 +134,10 @@ jobs:
       workdir: packages/qvac-lib-infer-nmtcpp
 
   cpp-tests:
-    needs: [changes, sanity-checks]
+    needs: [authorize, changes, sanity-checks]
     if: |
-      always() &&
-      ((needs.changes.outputs.pkg == 'true' &&
-        contains(github.event.pull_request.labels.*.name, 'verify')) ||
-       github.event_name == 'workflow_dispatch')
+      needs.authorize.outputs.allowed == 'true' &&
+      (needs.changes.outputs.pkg == 'true' || github.event_name == 'workflow_dispatch')
     uses: ./.github/workflows/reusable-cpp-tests-qvac-lib-infer-nmtcpp.yml
     secrets: inherit
     with:
@@ -120,14 +145,10 @@ jobs:
       repository: ${{ github.event.pull_request.head.repo.full_name }}
 
   prebuild:
-    needs: [changes, sanity-checks]
+    needs: [authorize, changes, sanity-checks]
     if: |
-      always() &&
-      (needs.changes.outputs.pkg == 'true' || github.event_name == 'workflow_dispatch') &&
-      (
-        github.event_name == 'workflow_dispatch' ||
-        contains(github.event.pull_request.labels.*.name, 'verify')
-      )
+      needs.authorize.outputs.allowed == 'true' &&
+      (needs.changes.outputs.pkg == 'true' || github.event_name == 'workflow_dispatch')
     uses: ./.github/workflows/prebuilds-qvac-lib-infer-nmtcpp.yml
     secrets: inherit
     with:
@@ -137,14 +158,10 @@ jobs:
       publish_target: "gpr"
 
   run-integration-tests:
-    needs: [changes, sanity-checks, prebuild]
+    needs: [authorize, changes, sanity-checks, prebuild]
     if: |
-      always() &&
-      (needs.changes.outputs.pkg == 'true' || github.event_name == 'workflow_dispatch') &&
-      (
-        github.event_name == 'workflow_dispatch' ||
-        contains(github.event.pull_request.labels.*.name, 'verify')
-      )
+      needs.authorize.outputs.allowed == 'true' &&
+      (needs.changes.outputs.pkg == 'true' || github.event_name == 'workflow_dispatch')
     uses: ./.github/workflows/integration-test-qvac-lib-infer-nmtcpp.yml
     secrets: inherit
     with:
@@ -152,14 +169,10 @@ jobs:
       ref: ${{ github.event.pull_request.head.ref }}
 
   run-mobile-integration-tests:
-    needs: [changes, sanity-checks, prebuild]
+    needs: [authorize, changes, sanity-checks, prebuild]
     if: |
-      always() &&
-      (needs.changes.outputs.pkg == 'true' || github.event_name == 'workflow_dispatch') &&
-      (
-        github.event_name == 'workflow_dispatch' ||
-        contains(github.event.pull_request.labels.*.name, 'verify')
-      )
+      needs.authorize.outputs.allowed == 'true' &&
+      (needs.changes.outputs.pkg == 'true' || github.event_name == 'workflow_dispatch')
     uses: ./.github/workflows/integration-mobile-test-qvac-lib-infer-nmtcpp.yml
     secrets: inherit
     with:
@@ -168,20 +181,19 @@ jobs:
 
   merge-guard:
     needs:
-      [
-        changes,
-        sanity-checks,
-        ts-checks,
-        cpp-lint,
-        cpp-tests,
-        prebuild,
-        run-integration-tests,
-        run-mobile-integration-tests,
-      ]
+      - authorize
+      - changes
+      - sanity-checks
+      - ts-checks
+      - cpp-lint
+      - cpp-tests
+      - prebuild
+      - run-integration-tests
+      - run-mobile-integration-tests
     if: always() && (needs.changes.outputs.pkg == 'true' || github.event_name == 'workflow_dispatch')
     uses: tetherto/qvac-devops/.github/workflows/public-pr.yml@monorepo_update
     with:
-      sanity-checks-status: ${{ needs.sanity-checks.result == 'success' && needs.cpp-tests.result == 'success' && needs.ts-checks.result == 'success' }}
-      build-status: ${{ needs.prebuild.result == 'success' }}
-      integration-tests-status: ${{ needs.run-integration-tests.result == 'success' }}
+      sanity-checks-status: ${{ (needs.sanity-checks.result == 'success' || needs.sanity-checks.result == 'skipped') && (needs.cpp-tests.result == 'success' || needs.cpp-tests.result == 'skipped') && (needs.ts-checks.result == 'success' || needs.ts-checks.result == 'skipped') }}
+      build-status: ${{ needs.prebuild.result == 'success' || needs.prebuild.result == 'skipped' }}
+      integration-tests-status: ${{ needs.run-integration-tests.result == 'success' || needs.run-integration-tests.result == 'skipped' }}
     secrets: inherit

@@ -1,0 +1,95 @@
+name: "PR Security Gate"
+description: "Authorizes PRs based on actor permissions and required labels. Automatically strips the label on new untrusted commits."
+
+inputs:
+  required-label:
+    description: "The specific label required to authorize external forks (e.g., 'verify' or 'safe-to-test')"
+    required: true
+    default: "verify"
+  github-token:
+    description: "The GITHUB_TOKEN for API calls"
+    required: true
+
+outputs:
+  allowed:
+    description: "Returns 'true' if the pipeline is allowed to proceed"
+    value: ${{ steps.check.outputs.allowed }}
+  has_write:
+    description: "Returns '1' if the actor has write permission"
+    value: ${{ steps.perm.outputs.has-permission }}
+
+runs:
+  using: "composite"
+  steps:
+    - name: Check actor write permission
+      id: perm
+      uses: scherermichael-oss/action-has-permission@136e061bfe093832d87f090dd768e14e27a740d3 # 1.0.6
+      with:
+        required-permission: write
+      env:
+        GITHUB_TOKEN: ${{ inputs.github-token }}
+
+    - name: Check authorization
+      id: check
+      shell: bash
+      env:
+        EVENT: ${{ github.event_name }}
+        HEAD_REPO: ${{ github.event.pull_request.head.repo.full_name }}
+        BASE_REPO: ${{ github.repository }}
+        AUTHOR_ASSOC: ${{ github.event.pull_request.author_association }}
+        HAS_LABEL: ${{ contains(github.event.pull_request.labels.*.name, inputs.required-label) }}
+        HAS_WRITE: ${{ steps.perm.outputs.has-permission }}
+      run: |
+        # Allow manual dispatches and calls
+        if [[ "$EVENT" == "workflow_dispatch" || "$EVENT" == "workflow_call" ]]; then
+          echo "allowed=true" >> "$GITHUB_OUTPUT"
+          exit 0
+        fi
+
+        # Same-repo PRs are always trusted
+        if [ "$HEAD_REPO" = "$BASE_REPO" ]; then
+          echo "::notice::Same-repo PR — authorized"
+          echo "allowed=true" >> "$GITHUB_OUTPUT"
+          exit 0
+        fi
+
+        echo "::notice::Actor '$GITHUB_ACTOR' has write-or-higher permission: $HAS_WRITE"
+
+        # Actor with write (or higher) is trusted
+        if [ "$HAS_WRITE" = "1" ]; then
+          echo "::notice::Actor has write-or-higher permission — authorized"
+          echo "allowed=true" >> "$GITHUB_OUTPUT"
+          exit 0
+        fi
+
+        # Org members / collaborators are trusted
+        if [[ "$AUTHOR_ASSOC" =~ ^(MEMBER|OWNER|COLLABORATOR)$ ]]; then
+          echo "::notice::Trusted author ($AUTHOR_ASSOC) — authorized"
+          echo "allowed=true" >> "$GITHUB_OUTPUT"
+          exit 0
+        fi
+
+        # External fork PRs require the specific input label
+        if [ "$HAS_LABEL" = "true" ]; then
+          echo "::notice::Fork PR with '${{ inputs.required-label }}' label — authorized"
+          echo "allowed=true" >> "$GITHUB_OUTPUT"
+        else
+          echo "::warning::External fork PR without '${{ inputs.required-label }}' label — skipping checks"
+          echo "allowed=false" >> "$GITHUB_OUTPUT"
+        fi
+
+    - name: Remove label on new pushes
+      if: |
+        steps.perm.outputs.has-permission != '1' &&
+        github.event.action == 'synchronize' &&
+        github.event.pull_request.head.repo.full_name != github.repository
+      shell: bash
+      env:
+        GH_TOKEN: ${{ inputs.github-token }}
+        PR_NUMBER: ${{ github.event.pull_request.number }}
+        LABEL: ${{ inputs.required-label }}
+      run: |
+        gh api -X DELETE \
+          "repos/${{ github.repository }}/issues/${PR_NUMBER}/labels/${LABEL}" \
+          2>/dev/null || true
+        echo "::warning::Removed '${LABEL}' label — new commits pushed. Re-review required."
