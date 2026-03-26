@@ -27,8 +27,29 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
+  # ---------------------------------------------------------------------------
+  # 1. Security Gate (Powered by the new Reusable Action)
+  # ---------------------------------------------------------------------------
+  authorize:
+    runs-on: ubuntu-latest
+    outputs:
+      allowed: ${{ steps.gate.outputs.allowed }}
+    steps:
+      - name: PR Security Gate
+        id: gate
+        # I used @monorepo_update to match the branch of your other qvac-devops actions. 
+        # Update this to @main or whichever branch you merged the action into!
+        uses: tetherto/qvac-devops/.github/actions/auth-gate@monorepo_update
+        with:
+          required-label: 'verify'
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+
+  # ---------------------------------------------------------------------------
+  # 2. Execution Jobs (Gated by authorization)
+  # ---------------------------------------------------------------------------
   sanity-checks:
-    if: contains( github.event.pull_request.labels.*.name, 'verify') || github.event_name == 'workflow_dispatch'
+    needs: authorize
+    if: needs.authorize.outputs.allowed == 'true'
     runs-on: ubuntu-latest
     steps:
       - name: Run Sanity checks
@@ -37,11 +58,12 @@ jobs:
           secret-token: ${{ secrets.GITHUB_TOKEN }}
           npm-token: ${{ secrets.NPM_TOKEN }}
           pat-token: ${{ secrets.PAT_TOKEN }}
-          run-integration: ${{ contains( github.event.pull_request.labels.*.name, 'verify') }}
+          run-integration: true
           workdir: packages/qvac-lib-infer-llamacpp-embed
 
   cpp-lint:
-    if: contains( github.event.pull_request.labels.*.name, 'verify') || github.event_name == 'workflow_dispatch'
+    needs: authorize
+    if: needs.authorize.outputs.allowed == 'true'
     uses: tetherto/qvac-devops/.github/workflows/cpp-lint.yaml@monorepo_update
     secrets: inherit
     with:
@@ -50,8 +72,8 @@ jobs:
       workdir: packages/qvac-lib-infer-llamacpp-embed
 
   cpp-tests:
-    if: contains( github.event.pull_request.labels.*.name, 'verify') || github.event_name == 'workflow_dispatch'
-    needs: sanity-checks
+    needs: [authorize, sanity-checks]
+    if: needs.authorize.outputs.allowed == 'true'
     uses: ./.github/workflows/cpp-tests-embed.yml
     secrets: inherit
     with:
@@ -59,7 +81,8 @@ jobs:
       ref: ${{ github.event.pull_request.head.ref }}
 
   ts-checks:
-    if: contains( github.event.pull_request.labels.*.name, 'verify') || github.event_name == 'workflow_dispatch'
+    needs: authorize
+    if: needs.authorize.outputs.allowed == 'true'
     runs-on: ubuntu-latest
     steps:
       - name: Checkout code
@@ -88,8 +111,8 @@ jobs:
         run: npm run test:dts
 
   prebuild:
-    if: contains( github.event.pull_request.labels.*.name, 'verify') || github.event_name == 'workflow_dispatch'
-    needs: sanity-checks
+    needs: [authorize, sanity-checks]
+    if: needs.authorize.outputs.allowed == 'true'
     uses: ./.github/workflows/prebuilds-qvac-lib-infer-llamacpp-embed.yml
     secrets: inherit
     with:
@@ -99,8 +122,8 @@ jobs:
       publish_target: 'gpr'
 
   integration-tests:
-    needs: prebuild
-    if:  contains( github.event.pull_request.labels.*.name, 'verify') || github.event_name == 'workflow_dispatch'
+    needs: [authorize, prebuild]
+    if: needs.authorize.outputs.allowed == 'true'
     uses: ./.github/workflows/integration-test-qvac-lib-infer-llamacpp-embed.yml
     secrets: inherit
     with:
@@ -108,8 +131,8 @@ jobs:
       ref: ${{ github.event.pull_request.head.ref }}
 
   run-mobile-integration-tests:
-    if:  contains( github.event.pull_request.labels.*.name, 'verify') || github.event_name == 'workflow_dispatch'
-    needs: prebuild
+    needs: [authorize, prebuild]
+    if: needs.authorize.outputs.allowed == 'true'
     uses: ./.github/workflows/integration-mobile-test-qvac-lib-infer-llamacpp-embed.yml
     secrets: inherit
     with:
@@ -117,10 +140,18 @@ jobs:
       ref: ${{ github.event.pull_request.head.ref }}
 
   merge-guard:
-    needs: [sanity-checks, cpp-lint, cpp-tests, prebuild, integration-tests, run-mobile-integration-tests, ts-checks]
+    needs:
+      - authorize
+      - sanity-checks
+      - cpp-lint
+      - cpp-tests
+      - prebuild
+      - integration-tests
+      - run-mobile-integration-tests
+      - ts-checks
     if: always()
     uses: tetherto/qvac-devops/.github/workflows/public-pr.yml@monorepo_update
     with:
-      sanity-checks-status: ${{ needs.sanity-checks.result == 'success' }}
-      build-status: ${{ needs.prebuild.result == 'success' }}
+      sanity-checks-status: ${{ needs.sanity-checks.result == 'success' || needs.sanity-checks.result == 'skipped' }}
+      build-status: ${{ needs.prebuild.result == 'success' || needs.prebuild.result == 'skipped' }}
     secrets: inherit
