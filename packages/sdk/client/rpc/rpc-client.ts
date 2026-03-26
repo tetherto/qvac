@@ -386,12 +386,15 @@ export async function duplex<T extends Request>(
   request: T,
   options?: RPCOptions,
 ): Promise<DuplexSession> {
-  const ctx = await prepareRPCContext(request.type, options?.profiling);
+  const profilingEnabled = shouldProfile(request.type, options?.profiling);
 
-  if (!ctx.profilingEnabled) {
-    return duplexBase(request, ctx.signalDisable);
+  if (profilingEnabled) {
+    flushConnectionTime();
+    return duplexProfiled(request, options);
   }
-  return duplexProfiled(request, options);
+
+  const signalDisable = options?.profiling?.enabled === false;
+  return duplexBase(request, signalDisable);
 }
 
 async function duplexBase<T extends Request>(
@@ -448,6 +451,7 @@ async function duplexProfiled<T extends Request>(
   const rawReadable = session.responseStream as DuplexReadable;
 
   async function* profiledResponseStream(): AsyncIterable<Buffer> {
+    let lineBuffer = "";
     try {
       for await (const chunk of rawReadable) {
         const chunkTime = nowMs();
@@ -456,15 +460,14 @@ async function duplexProfiled<T extends Request>(
         }
         timings.lastChunkAt = chunkTime;
 
-        const text = chunk.toString();
-        const lines = text.split("\n");
+        lineBuffer += chunk.toString();
+        const lines = lineBuffer.split("\n");
+        lineBuffer = lines.pop() || "";
+
         const outputParts: string[] = [];
 
         for (const line of lines) {
-          if (!line.trim()) {
-            outputParts.push(line);
-            continue;
-          }
+          if (!line.trim()) continue;
           let parsed: Record<string, unknown>;
           try {
             parsed = JSON.parse(line) as Record<string, unknown>;

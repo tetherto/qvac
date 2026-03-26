@@ -9,6 +9,7 @@ import { normalizeModelType } from "@/schemas";
 import os from "bare-os";
 import type { Readable } from "bare-stream";
 import { handlers } from "@/server/rpc/handlers";
+import { registry } from "@/server/rpc/handler-registry";
 import { createErrorResponse } from "@/schemas";
 import {
   PearWorkerEntryRequiredError,
@@ -289,6 +290,11 @@ export async function createDuplexSession(payload: string) {
   const { PassThrough } = await import("bare-stream");
   const request = JSON.parse(payload) as Request;
 
+  const entry = registry[request.type];
+  if (!entry || entry.type !== "duplex") {
+    throw new RPCNoHandlerError(request.type);
+  }
+
   const handler = getHandler(request.type);
   if (!handler) throw new RPCNoHandlerError(request.type);
 
@@ -297,14 +303,15 @@ export async function createDuplexSession(payload: string) {
 
   void (async () => {
     try {
-      const duplex = handler as (
+      const duplexHandler = handler as (
         req: Request,
         stream: Readable,
       ) => AsyncGenerator<Response>;
-      for await (const response of duplex(request, inputStream)) {
+      for await (const response of duplexHandler(request, inputStream)) {
         outputStream.write(JSON.stringify(response) + "\n", "utf-8");
       }
     } catch (error) {
+      inputStream.destroy();
       const errorResponse = createErrorResponse(error);
       outputStream.write(JSON.stringify(errorResponse) + "\n", "utf-8");
     } finally {

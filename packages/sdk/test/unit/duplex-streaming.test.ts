@@ -5,13 +5,13 @@ import {
   defineHandler,
   defineDuplexHandler,
   type PluginHandlerDefinition,
-} from "../../schemas/plugin";
+} from "@/schemas/plugin";
 import {
   transcribeStreamRequestSchema,
   transcribeStreamResponseSchema,
   type TranscribeStreamSession,
-} from "../../schemas/transcription";
-import { createErrorResponse } from "../../schemas/error";
+} from "@/schemas/transcription";
+import { createErrorResponse } from "@/schemas/error";
 
 // =============================================================================
 // defineDuplexHandler — type-safe definition without unsafe casts
@@ -217,7 +217,7 @@ test("transcribeStreamResponseSchema: validates error response", (t: { ok: Funct
 // =============================================================================
 
 test("pluginHandlerDefinition: duplex field is optional in runtime validation", (t: { ok: Function }) => {
-  const { pluginHandlerDefinitionRuntimeSchema } = require("../../schemas/plugin");
+  const { pluginHandlerDefinitionRuntimeSchema } = require("@/schemas/plugin");
 
   const withoutDuplex = pluginHandlerDefinitionRuntimeSchema.safeParse({
     requestSchema: { safeParse: () => {} },

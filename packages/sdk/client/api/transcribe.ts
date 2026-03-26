@@ -60,9 +60,8 @@ export async function transcribe(
  * in via `write()`, and transcription text is yielded as the model's VAD
  * detects complete speech segments.
  *
- * The returned session is single-use: calling `[Symbol.asyncIterator]`
- * returns the same generator instance each time. A second iteration will
- * yield nothing.
+ * The returned session is single-use. Attempting to iterate a second
+ * time will throw a `TranscriptionFailedError`.
  *
  * @param params.modelId - The loaded transcription model to use
  * @param params.prompt - Optional initial prompt to guide transcription
