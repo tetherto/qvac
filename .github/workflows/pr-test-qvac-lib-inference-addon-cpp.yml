@@ -1,7 +1,9 @@
 name: Test pipeline for PRs (Inference-addon-cpp)
 
 permissions:
-  contents: read
+  contents: write
+  pull-requests: write
+  packages: write
 
 on:
   pull_request_target:
@@ -16,8 +18,27 @@ env:
   VCPKG_BINARY_SOURCES: "clear;files,${{ github.workspace }}/packages/qvac-lib-inference-addon-cpp/vcpkg/cache,readwrite"
 
 jobs:
+  # ---------------------------------------------------------------------------
+  # 1. Security Gate
+  # ---------------------------------------------------------------------------
+  authorize:
+    runs-on: ubuntu-latest
+    outputs:
+      allowed: ${{ steps.gate.outputs.allowed }}
+    steps:
+      - name: PR Security Gate
+        id: gate
+        uses: tetherto/qvac-devops/.github/actions/auth-gate@monorepo_update
+        with:
+          required-label: 'verify'
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+
+  # ---------------------------------------------------------------------------
+  # 2. Execution Job (Gated by authorization)
+  # ---------------------------------------------------------------------------
   run-unit-tests:
-    if: contains(github.event.pull_request.labels.*.name, 'verify') || github.event_name == 'workflow_dispatch'
+    needs: authorize
+    if: needs.authorize.outputs.allowed == 'true'
     strategy:
       fail-fast: false
       matrix:
