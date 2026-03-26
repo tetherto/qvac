@@ -143,9 +143,7 @@ jobs:
     needs: changes
     if: contains( github.event.pull_request.labels.*.name, 'verify') || github.event_name == 'workflow_dispatch'
     uses: tetherto/qvac-devops/.github/workflows/cpp-lint.yaml@v1.1.6
-    secrets:
-      NPM_TOKEN: ${{ secrets.NPM_TOKEN }}
-      PAT_TOKEN: ${{ secrets.PAT_TOKEN }}
+    secrets: inherit
     with:
       sha: ${{ github.event.pull_request.base.sha || github.sha }}
       pr_head_sha: ${{ github.event.pull_request.head.sha }}
@@ -160,10 +158,7 @@ jobs:
         contains(format(' {0} ', join(github.event.pull_request.labels.*.name, ' ')), ' verify ')
       )
     uses: ./.github/workflows/prebuilds-qvac-lib-infer-onnx.yml
-    secrets:
-      GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-      NPM_TOKEN: ${{ secrets.NPM_TOKEN }}
-      PAT_TOKEN: ${{ secrets.PAT_TOKEN }}
+    secrets: inherit
     with:
       repository: ${{ github.event.pull_request.head.repo.full_name || github.repository }}
       ref: ${{ github.event.pull_request.head.ref || github.ref }}
@@ -176,5 +171,4 @@ jobs:
     with:
       sanity-checks-status: ${{ needs.sanity-checks.result == 'success' }}
       build-status: ${{ needs.prebuild.result == 'success' }}
-    secrets:
-      GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+    secrets: inherit

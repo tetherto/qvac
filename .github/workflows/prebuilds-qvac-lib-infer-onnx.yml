@@ -572,8 +572,7 @@ jobs:
     permissions:
       contents: write
     uses: ./.github/workflows/create-github-release-qvac-lib-infer-onnx.yml
-    secrets:
-      GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+    secrets: inherit
     with:
       published_version: ${{ needs.publish-npm.outputs.published_version }}
       prev_sha: ${{ github.event.before }}
