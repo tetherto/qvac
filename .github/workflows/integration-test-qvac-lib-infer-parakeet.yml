@@ -41,6 +41,7 @@ jobs:
     timeout-minutes: 60
     continue-on-error: true
     runs-on: ${{ matrix.os }}
+    environment: release
     name: ${{ matrix.os }}-${{ matrix.platform }}-${{ matrix.arch }}-integration-tests
     env:
       GITHUB_TOKEN: ${{ secrets.PAT_TOKEN }}

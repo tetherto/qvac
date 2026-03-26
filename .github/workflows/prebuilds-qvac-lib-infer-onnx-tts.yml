@@ -124,6 +124,7 @@ jobs:
             arch: x64
 
     runs-on: ${{ matrix.os }}
+    environment: release
     name: ${{ matrix.platform }}-${{ matrix.arch }}${{ matrix.tags }}
 
     env:
@@ -484,6 +485,7 @@ jobs:
 
   merge:
     runs-on: ubuntu-latest
+    environment: release
     needs: prebuild
     permissions:
       contents: write
@@ -612,6 +614,7 @@ jobs:
     outputs:
       published_version: ${{ steps.capture_version.outputs.published_version }}
     runs-on: ubuntu-latest
+    environment: release
     permissions:
       contents: write
       packages: write

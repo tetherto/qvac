@@ -119,6 +119,7 @@ jobs:
   benchmark-parakeet:
     needs: generate-matrix
     runs-on: ai-run-linux
+    environment: release
     timeout-minutes: 1440
     env:
       GITHUB_TOKEN: ${{ secrets.PAT_TOKEN }}

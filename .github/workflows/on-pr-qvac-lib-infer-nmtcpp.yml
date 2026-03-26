@@ -65,6 +65,7 @@ jobs:
     needs: [authorize, changes]
     if: always() && ((needs.changes.outputs.pkg == 'true' && needs.authorize.outputs.allowed == 'true') || github.event_name == 'workflow_dispatch')
     runs-on: ubuntu-latest
+    environment: release
     steps:
       - name: Run Sanity checks
         uses: tetherto/qvac-devops/.github/actions/sanity-checks@v1.1.7
@@ -79,6 +80,7 @@ jobs:
     needs: [authorize, changes, sanity-checks]
     if: always() && needs.authorize.outputs.allowed == 'true' && (needs.changes.outputs.pkg == 'true' || github.event_name == 'workflow_dispatch')
     runs-on: ubuntu-latest
+    environment: release
     defaults:
       run:
         working-directory: ${{ env.PKG_DIR }}

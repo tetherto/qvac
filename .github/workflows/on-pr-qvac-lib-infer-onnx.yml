@@ -71,6 +71,7 @@ jobs:
        needs.authorize.outputs.allowed == 'true') ||
       github.event_name == 'workflow_dispatch'
     runs-on: ubuntu-22.04
+    environment: release
     permissions:
       contents: read
     env:

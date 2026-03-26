@@ -71,6 +71,7 @@ jobs:
        needs.authorize.outputs.allowed == 'true') ||
       github.event_name == 'workflow_dispatch'
     runs-on: ubuntu-22.04
+    environment: release
     env:
       VCPKG_BINARY_SOURCES: "clear;files,${{ github.workspace }}/packages/ocr-onnx/vcpkg/cache,readwrite"
       PKG_DIR: packages/ocr-onnx

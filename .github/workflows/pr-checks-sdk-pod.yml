@@ -180,6 +180,7 @@ jobs:
       needs.authorize.outputs.allowed == 'true' &&
       needs.changes.outputs.has_changes == 'true'
     runs-on: ubuntu-latest
+    environment: release
     strategy:
       matrix:
         include: ${{ fromJSON(needs.changes.outputs.matrix) }}

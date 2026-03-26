@@ -55,6 +55,7 @@ jobs:
   run-integration-tests:
     continue-on-error: true
     runs-on: ${{ matrix.os }}
+    environment: release
     name: test-${{ matrix.platform }}-${{ matrix.arch }}${{ matrix.os_version && format('-{0}', matrix.os_version) || '' }}-${{ matrix.variant }}
     env:
       AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
