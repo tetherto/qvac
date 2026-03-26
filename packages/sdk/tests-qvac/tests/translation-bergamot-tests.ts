@@ -130,6 +130,24 @@ export const bergamotEnEsStreaming = createBergamotTest(
   { validation: "contains-any", contains: ["buenos", "días", "cómo"] },
 );
 
+// --- ES → IT via EN pivot (bergamot-es-it-pivot) ---
+
+export const bergamotPivotBasic = createBergamotTest(
+  "translation-bergamot-pivot-basic",
+  "Era una mañana soleada cuando María decidió visitar el mercado local.",
+  "bergamot-es-it-pivot",
+  { validation: "contains-any", contains: ["mattina", "sole", "maria", "mercato", "locale", "visita"] },
+  30000,
+);
+
+export const bergamotPivotStreaming = createBergamotTest(
+  "translation-bergamot-pivot-streaming",
+  "Buenos días, ¿cómo estás hoy?",
+  "bergamot-es-it-pivot",
+  { validation: "contains-any", contains: ["buon", "giorno", "come", "stai", "oggi"] },
+  30000,
+);
+
 export const translationBergamotTests = [
   // EN → FR
   bergamotEnFrBasic,
@@ -148,4 +166,7 @@ export const translationBergamotTests = [
   bergamotEnEsLongText,
   bergamotEnEsQuestion,
   bergamotEnEsStreaming,
+  // ES → IT via EN pivot
+  bergamotPivotBasic,
+  bergamotPivotStreaming,
 ];

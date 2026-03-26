@@ -13,6 +13,8 @@ import {
   MARIAN_OPUS_ES_EN_Q4_0,
   BERGAMOT_EN_FR,
   BERGAMOT_EN_ES,
+  BERGAMOT_ES_EN,
+  BERGAMOT_EN_IT,
   MARIAN_EN_HI_INDIC_200M_Q4_0,
   MARIAN_HI_EN_INDIC_200M_Q4_0,
   TTS_TOKENIZER_EN_CHATTERBOX,
@@ -195,6 +197,21 @@ resources.define("bergamot-en-es", {
     engine: "Bergamot",
     from: "en",
     to: "es",
+  },
+});
+
+resources.define("bergamot-es-it-pivot", {
+  constant: BERGAMOT_ES_EN,
+  type: "nmt",
+  config: {
+    engine: "Bergamot",
+    from: "es",
+    to: "it",
+    pivotModel: {
+      modelSrc: BERGAMOT_EN_IT,
+      beamsize: 4,
+      temperature: 0.3,
+    },
   },
 });
 
