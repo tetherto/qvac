@@ -367,9 +367,19 @@ async function* streamProfiled<T extends Request>(
   }
 }
 
+export interface DuplexWritable {
+  write(chunk: Buffer): void;
+  end(): void;
+  destroy(): void;
+}
+
+export interface DuplexReadable extends AsyncIterable<Buffer> {
+  destroy(): void;
+}
+
 export interface DuplexSession {
-  requestStream: unknown;
-  responseStream: unknown;
+  requestStream: DuplexWritable;
+  responseStream: DuplexReadable;
 }
 
 export async function duplex<T extends Request>(
@@ -398,7 +408,11 @@ async function duplexBase<T extends Request>(
       )
     : parsedRequest;
   const payload = JSON.stringify(payloadObj);
-  return createDuplexSession(payload);
+  const session = await createDuplexSession(payload);
+  return {
+    requestStream: session.requestStream as DuplexWritable,
+    responseStream: session.responseStream as DuplexReadable,
+  };
 }
 
 async function duplexProfiled<T extends Request>(
@@ -431,11 +445,11 @@ async function duplexProfiled<T extends Request>(
 
   let profilingMeta: ReturnType<typeof extractProfilingMeta> = undefined;
 
-  const rawResponseStream = session.responseStream as AsyncIterable<Buffer>;
+  const rawReadable = session.responseStream as DuplexReadable;
 
   async function* profiledResponseStream(): AsyncIterable<Buffer> {
     try {
-      for await (const chunk of rawResponseStream) {
+      for await (const chunk of rawReadable) {
         const chunkTime = nowMs();
         if (timings.firstChunkAt === undefined) {
           timings.firstChunkAt = chunkTime;
@@ -497,9 +511,19 @@ async function duplexProfiled<T extends Request>(
     }
   }
 
+  const generator = profiledResponseStream();
+  const wrappedResponseStream: DuplexReadable = {
+    [Symbol.asyncIterator]() {
+      return generator[Symbol.asyncIterator]();
+    },
+    destroy() {
+      rawReadable.destroy();
+    },
+  };
+
   return {
-    requestStream: session.requestStream,
-    responseStream: profiledResponseStream(),
+    requestStream: session.requestStream as DuplexWritable,
+    responseStream: wrappedResponseStream,
   };
 }
 

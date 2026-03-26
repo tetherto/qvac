@@ -82,18 +82,9 @@ export async function transcribeStream(
 
   const { requestStream, responseStream } = await duplex(request, options);
 
-  const writable = requestStream as {
-    write(chunk: Buffer): void;
-    end(): void;
-    destroy(): void;
-  };
-  const readable = responseStream as AsyncIterable<Buffer> & {
-    destroy(): void;
-  };
-
   async function* parseResponses(): AsyncGenerator<string> {
     let buffer = "";
-    for await (const chunk of readable) {
+    for await (const chunk of responseStream) {
       buffer += chunk.toString();
       const lines = buffer.split("\n");
       buffer = lines.pop() || "";
@@ -129,14 +120,14 @@ export async function transcribeStream(
 
   return {
     write(audioChunk: Buffer) {
-      writable.write(audioChunk);
+      requestStream.write(audioChunk);
     },
     end() {
-      writable.end();
+      requestStream.end();
     },
     destroy() {
-      writable.destroy();
-      readable.destroy();
+      requestStream.destroy();
+      responseStream.destroy();
     },
     [Symbol.asyncIterator]() {
       return responses;
