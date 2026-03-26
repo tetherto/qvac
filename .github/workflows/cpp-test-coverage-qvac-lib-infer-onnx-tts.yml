@@ -7,6 +7,16 @@ on:
       - "packages/qvac-lib-infer-onnx-tts/**"
 
   workflow_call:
+     secrets:
+      AWS_ACCESS_KEY_ID:
+        required: true
+      AWS_SECRET_ACCESS_KEY:
+        required: true
+      NPM_TOKEN:
+        required: true
+      PAT_TOKEN:
+        required: true
+
     inputs:
       ref:
         description: "Git ref/sha to checkout"
@@ -23,16 +33,6 @@ on:
         default: "packages/qvac-lib-infer-onnx-tts"
 
   workflow_dispatch:
-    secrets:
-      AWS_ACCESS_KEY_ID:
-        required: true
-      AWS_SECRET_ACCESS_KEY:
-        required: true
-      NPM_TOKEN:
-        required: true
-      PAT_TOKEN:
-        required: true
-
     inputs:
       workdir:
         description: "Package working directory in monorepo"
@@ -96,7 +96,7 @@ jobs:
           fetch-depth: 0
 
       - name: Setup Node.js
-        uses: actions/setup-node@53b83947a5a98c8d113130e565377fae1a50d02f # 6.3.06
+        uses: actions/setup-node@53b83947a5a98c8d113130e565377fae1a50d02f # 6.3.0
         with:
           node-version: lts/*
 
