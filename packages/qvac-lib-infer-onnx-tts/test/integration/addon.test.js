@@ -308,6 +308,75 @@ test('Chatterbox Multilingual TTS: Synthesis across languages', { timeout: 36000
 })
 
 // ---------------------------------------------------------------------------
+// LavaSR outputSampleRate tests (no LavaSR models needed, tests resampling)
+// ---------------------------------------------------------------------------
+
+test('Chatterbox TTS: outputSampleRate resamples to 16kHz', { timeout: 1800000 }, async (t) => {
+  const baseDir = getBaseDir()
+  const modelDir = path.join(baseDir, 'models', 'chatterbox')
+
+  const downloadResult = await ensureChatterboxModels({ targetDir: modelDir, variant: CHATTERBOX_VARIANT })
+  if (!downloadResult.success) {
+    console.log('Failed to download Chatterbox models, skipping test')
+    return
+  }
+
+  const { loadChatterboxTTS } = require('../utils/runChatterboxTTS')
+  const model = await loadChatterboxTTS({
+    tokenizerPath: path.join(modelDir, 'tokenizer.json'),
+    speechEncoderPath: chatterboxPath(modelDir, 'speech_encoder'),
+    embedTokensPath: chatterboxPath(modelDir, 'embed_tokens'),
+    conditionalDecoderPath: chatterboxPath(modelDir, 'conditional_decoder'),
+    languageModelPath: chatterboxLmPath(modelDir),
+    language: 'en',
+    outputSampleRate: 16000
+  })
+
+  const response = await model.run({ type: 'text', input: 'Hello world.' })
+  const result = await response.await()
+
+  t.ok(result.data.outputArray, 'Should produce output audio')
+  t.ok(result.data.outputArray.length > 0, 'Output should be non-empty')
+
+  console.log(`Output length: ${result.data.outputArray.length} samples (resampled from 24kHz to 16kHz)`)
+
+  await model.unload()
+})
+
+test('Chatterbox TTS: no LavaSR flags = backward compatible output', { timeout: 1800000 }, async (t) => {
+  const baseDir = getBaseDir()
+  const modelDir = path.join(baseDir, 'models', 'chatterbox')
+
+  const downloadResult = await ensureChatterboxModels({ targetDir: modelDir, variant: CHATTERBOX_VARIANT })
+  if (!downloadResult.success) {
+    console.log('Failed to download Chatterbox models, skipping test')
+    return
+  }
+
+  const { loadChatterboxTTS, runChatterboxTTS } = require('../utils/runChatterboxTTS')
+  const model = await loadChatterboxTTS({
+    tokenizerPath: path.join(modelDir, 'tokenizer.json'),
+    speechEncoderPath: chatterboxPath(modelDir, 'speech_encoder'),
+    embedTokensPath: chatterboxPath(modelDir, 'embed_tokens'),
+    conditionalDecoderPath: chatterboxPath(modelDir, 'conditional_decoder'),
+    languageModelPath: chatterboxLmPath(modelDir),
+    language: 'en'
+  })
+
+  const result = await runChatterboxTTS(model, {
+    text: 'Testing backward compatibility.',
+    saveWav: false
+  })
+
+  t.ok(result.data.outputArray, 'Should produce output audio')
+  t.ok(result.data.outputArray.length > 0, 'Output should be non-empty')
+
+  console.log(`Output length: ${result.data.outputArray.length} samples (native 24kHz, no enhancement)`)
+
+  await model.unload()
+})
+
+// ---------------------------------------------------------------------------
 // Supertonic TTS tests
 // ---------------------------------------------------------------------------
 

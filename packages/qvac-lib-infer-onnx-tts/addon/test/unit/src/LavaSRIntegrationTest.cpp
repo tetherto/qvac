@@ -118,3 +118,62 @@ TEST(LavaSRIntegrationTest, fullPipelineChatterboxWithEnhance) {
   EXPECT_GT(output.size(), 24000u)
       << "Enhanced output (48kHz) should be longer than raw 24kHz output";
 }
+
+TEST(LavaSRIntegrationTest, fullPipelineDenoiseAndEnhance) {
+  if (!lavaSRModelsExist() || !chatterboxModelsExist()) {
+    GTEST_SKIP() << "Models not found";
+  }
+
+  std::unordered_map<std::string, std::string> config;
+  config["language"] = "en";
+  config["tokenizerPath"] = CHATTERBOX_DIR + "/tokenizer.json";
+  config["speechEncoderPath"] = CHATTERBOX_DIR + "/speech_encoder.onnx";
+  config["embedTokensPath"] = CHATTERBOX_DIR + "/embed_tokens.onnx";
+  config["conditionalDecoderPath"] =
+      CHATTERBOX_DIR + "/conditional_decoder.onnx";
+  config["languageModelPath"] = CHATTERBOX_DIR + "/language_model.onnx";
+  config["enhance"] = "true";
+  config["denoise"] = "true";
+  config["enhancerBackbonePath"] = LAVASR_DIR + "/enhancer_backbone.onnx";
+  config["enhancerSpecHeadPath"] = LAVASR_DIR + "/enhancer_spec_head.onnx";
+  config["denoiserPath"] = LAVASR_DIR + "/denoiser_core_legacy_fixed63.onnx";
+
+  std::vector<float> refAudio(24000, 0.1f);
+
+  addon_model::TTSModel model(config, refAudio);
+  ASSERT_TRUE(model.isLoaded());
+
+  auto output = model.process(std::string("Hi"));
+  EXPECT_FALSE(output.empty())
+      << "Denoised+enhanced TTS output should not be empty";
+  EXPECT_GT(output.size(), 24000u)
+      << "Denoised+enhanced output (48kHz) should be longer than raw 24kHz";
+}
+
+TEST(LavaSRIntegrationTest, enhanceWithOutputSampleRate) {
+  if (!lavaSRModelsExist() || !chatterboxModelsExist()) {
+    GTEST_SKIP() << "Models not found";
+  }
+
+  std::unordered_map<std::string, std::string> config;
+  config["language"] = "en";
+  config["tokenizerPath"] = CHATTERBOX_DIR + "/tokenizer.json";
+  config["speechEncoderPath"] = CHATTERBOX_DIR + "/speech_encoder.onnx";
+  config["embedTokensPath"] = CHATTERBOX_DIR + "/embed_tokens.onnx";
+  config["conditionalDecoderPath"] =
+      CHATTERBOX_DIR + "/conditional_decoder.onnx";
+  config["languageModelPath"] = CHATTERBOX_DIR + "/language_model.onnx";
+  config["enhance"] = "true";
+  config["outputSampleRate"] = "22050";
+  config["enhancerBackbonePath"] = LAVASR_DIR + "/enhancer_backbone.onnx";
+  config["enhancerSpecHeadPath"] = LAVASR_DIR + "/enhancer_spec_head.onnx";
+
+  std::vector<float> refAudio(24000, 0.1f);
+
+  addon_model::TTSModel model(config, refAudio);
+  ASSERT_TRUE(model.isLoaded());
+
+  auto output = model.process(std::string("Hi"));
+  EXPECT_FALSE(output.empty())
+      << "Enhanced+resampled output should not be empty";
+}
