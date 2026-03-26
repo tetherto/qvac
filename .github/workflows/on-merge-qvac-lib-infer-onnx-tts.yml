@@ -192,7 +192,6 @@ jobs:
     permissions:
       contents: write
     uses: ./.github/workflows/create-github-release.yml
-    secrets:
     with:
       repo_name: "onnx-tts"
       release_name: "QVAC TTS ONNX Addon"
@@ -241,6 +240,10 @@ jobs:
     uses: ./.github/workflows/integration-mobile-test-qvac-lib-infer-onnx-tts.yml
     needs: prebuild
     if: needs.prebuild.outputs.should_run_tests == 'true'
+    permissions:
+      contents: read
+      packages: read
+      pull-requests: write
     secrets:
       ANDROID_DEVICE_POOL_ARN_ONNX_TTS: ${{ secrets.ANDROID_DEVICE_POOL_ARN_ONNX_TTS }}
       APPLE_KEYCHAIN_PASSWORD: ${{ secrets.APPLE_KEYCHAIN_PASSWORD }}

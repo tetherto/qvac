@@ -238,6 +238,10 @@ jobs:
     uses: ./.github/workflows/integration-mobile-test-qvac-lib-infer-parakeet.yml
     needs: prebuild
     if: needs.prebuild.outputs.should_run_tests == 'true'
+    permissions:
+      contents: read
+      packages: read
+      pull-requests: write
     secrets:
       ANDROID_DEVICE_POOL_ARN_PARAKEET: ${{ secrets.ANDROID_DEVICE_POOL_ARN_PARAKEET }}
       APPLE_KEYCHAIN_PASSWORD: ${{ secrets.APPLE_KEYCHAIN_PASSWORD }}

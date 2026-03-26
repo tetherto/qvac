@@ -125,6 +125,10 @@ jobs:
 
   mobile-integration-tests:
     needs: publish-logic
+    permissions:
+      contents: read
+      packages: read
+      pull-requests: write
     if: |
       needs.publish-logic.outputs.publish_main == 'true' ||
       needs.publish-logic.outputs.publish_release == 'true' ||

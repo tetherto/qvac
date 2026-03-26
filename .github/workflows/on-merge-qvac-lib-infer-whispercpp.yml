@@ -238,6 +238,10 @@ jobs:
     uses: ./.github/workflows/integration-mobile-test-qvac-lib-infer-whispercpp.yml
     needs: prebuild
     if: needs.prebuild.outputs.should_run_tests == 'true'
+    permissions:
+      contents: read
+      packages: read
+      pull-requests: write
     secrets:
       ANDROID_DEVICE_POOL_ARN_WHISPERCPP: ${{ secrets.ANDROID_DEVICE_POOL_ARN_WHISPERCPP }}
       APPLE_KEYCHAIN_PASSWORD: ${{ secrets.APPLE_KEYCHAIN_PASSWORD }}
