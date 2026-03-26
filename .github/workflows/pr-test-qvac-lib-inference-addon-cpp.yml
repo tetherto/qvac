@@ -56,7 +56,7 @@ jobs:
           token: ${{ secrets.PAT_TOKEN }}
 
       - name: yamlfmt
-        uses: tetherto/qvac-devops/.github/actions/yamlfmt@monorepo_update
+        uses: tetherto/qvac-devops/.github/actions/yamlfmt@v1.1.6
         with:
           workdir: ${{ env.PKG_DIR }}
         

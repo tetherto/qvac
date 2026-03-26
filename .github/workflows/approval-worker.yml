@@ -47,7 +47,7 @@ jobs:
       pull-requests: write
       statuses: write
       issues: write
-    uses: tetherto/qvac-devops/.github/workflows/approval-check-worker.yml@monorepo_update
+    uses: tetherto/qvac-devops/.github/workflows/approval-check-worker.yml@v1.1.6
     secrets:
       GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
       pat_token: ${{ secrets.PAT_TOKEN }}

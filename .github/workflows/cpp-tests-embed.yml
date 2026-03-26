@@ -63,10 +63,14 @@ jobs:
     steps:
       - name: Echo workflow inputs
         shell: bash
+        env:
+          INPUT_REF: ${{ inputs.ref || github.ref }}
+          INPUT_REPO: ${{ inputs.repository || github.repository }}
+          INPUT_WORKDIR: ${{ env.WORKDIR }}
         run: |
-          echo "ref=${{ inputs.ref || github.ref }}"
-          echo "repository=${{ inputs.repository || github.repository }}"
-          echo "workdir=${{ env.WORKDIR }}"
+          echo "ref=$INPUT_REF"
+          echo "repository=$INPUT_REPO"
+          echo "workdir=$INPUT_WORKDIR"
 
       - name: Setup Node.js
         uses: actions/setup-node@53b83947a5a98c8d113130e565377fae1a50d02f # 6.3.0
