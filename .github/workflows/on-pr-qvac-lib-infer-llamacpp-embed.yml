@@ -23,7 +23,7 @@ permissions:
   packages: read
 
 concurrency:
-  group: pr-${{ github.event.pull_request.number || github.sha }}
+  group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.sha }}
   cancel-in-progress: true
 
 jobs:
