@@ -54,16 +54,15 @@ TEST(LavaSRBenchmarkTest, enhancerLatencyByDuration) {
                                   LAVASR_DIR + "/enhancer_spec_head.onnx");
   enhancer.load();
   auto t1 = std::chrono::high_resolution_clock::now();
-  double loadMs =
-      std::chrono::duration<double, std::milli>(t1 - t0).count();
+  double loadMs = std::chrono::duration<double, std::milli>(t1 - t0).count();
 
   std::vector<double> durations = {1.0, 3.0, 5.0, 10.0};
 
   std::cout << "\n===== LavaSR Enhancer Benchmark =====" << std::endl;
   std::cout << "Load time: " << std::fixed << std::setprecision(1) << loadMs
             << " ms" << std::endl;
-  std::cout << std::setw(12) << "Duration(s)" << std::setw(14)
-            << "Process(ms)" << std::setw(10) << "RTF" << std::endl;
+  std::cout << std::setw(12) << "Duration(s)" << std::setw(14) << "Process(ms)"
+            << std::setw(10) << "RTF" << std::endl;
   std::cout << std::string(36, '-') << std::endl;
 
   for (double durSec : durations) {
@@ -93,20 +92,19 @@ TEST(LavaSRBenchmarkTest, denoiserLatencyByDuration) {
   }
 
   auto t0 = std::chrono::high_resolution_clock::now();
-  lavasr::LavaSRDenoiser denoiser(
-      LAVASR_DIR + "/denoiser_core_legacy_fixed63.onnx");
+  lavasr::LavaSRDenoiser denoiser(LAVASR_DIR +
+                                  "/denoiser_core_legacy_fixed63.onnx");
   denoiser.load();
   auto t1 = std::chrono::high_resolution_clock::now();
-  double loadMs =
-      std::chrono::duration<double, std::milli>(t1 - t0).count();
+  double loadMs = std::chrono::duration<double, std::milli>(t1 - t0).count();
 
   std::vector<double> durations = {1.0, 3.0, 5.0, 10.0};
 
   std::cout << "\n===== LavaSR Denoiser Benchmark =====" << std::endl;
   std::cout << "Load time: " << std::fixed << std::setprecision(1) << loadMs
             << " ms" << std::endl;
-  std::cout << std::setw(12) << "Duration(s)" << std::setw(14)
-            << "Process(ms)" << std::setw(10) << "RTF" << std::endl;
+  std::cout << std::setw(12) << "Duration(s)" << std::setw(14) << "Process(ms)"
+            << std::setw(10) << "RTF" << std::endl;
   std::cout << std::string(36, '-') << std::endl;
 
   for (double durSec : durations) {
@@ -150,8 +148,7 @@ TEST(LavaSRBenchmarkTest, resamplerLatency) {
     double processMs =
         std::chrono::duration<double, std::milli>(end - start).count();
 
-    std::string label =
-        std::to_string(srIn) + "->" + std::to_string(srOut);
+    std::string label = std::to_string(srIn) + "->" + std::to_string(srOut);
     std::cout << std::setw(18) << label << std::setw(14) << std::fixed
               << std::setprecision(1) << processMs << std::endl;
 

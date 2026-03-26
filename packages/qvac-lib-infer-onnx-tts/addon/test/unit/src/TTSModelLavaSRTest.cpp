@@ -1,8 +1,8 @@
-#include <gtest/gtest.h>
 #include <gmock/gmock.h>
+#include <gtest/gtest.h>
 
-#include "src/model-interface/TTSModel.hpp"
 #include "mocks/ChatterboxEngineMock.hpp"
+#include "src/model-interface/TTSModel.hpp"
 
 using namespace qvac::ttslib::addon_model;
 using namespace qvac::ttslib;
@@ -53,7 +53,8 @@ TEST_F(TTSModelLavaSRTest, LavaSRConfigParsed) {
   EXPECT_CALL(*mockEngine, isLoaded()).WillRepeatedly(::testing::Return(true));
 
   // LavaSR load will throw because model files don't exist on disk
-  EXPECT_THROW(TTSModel model(config, dummyReferenceAudio(), mockEngine), std::exception);
+  EXPECT_THROW(TTSModel model(config, dummyReferenceAudio(), mockEngine),
+               std::exception);
 }
 
 TEST_F(TTSModelLavaSRTest, OutputSampleRateOnly) {

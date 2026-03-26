@@ -74,10 +74,11 @@ getTTSConfigMap(js_env_t *env, js::Object configurationParams) {
   return configMap;
 }
 
-inline std::vector<float> getReferenceAudio(
-    js_env_t *env, js::Object configurationParams) {
-  auto refAudio = configurationParams.getOptionalProperty<js::TypedArray<float>>(
-      env, "referenceAudio");
+inline std::vector<float> getReferenceAudio(js_env_t *env,
+                                            js::Object configurationParams) {
+  auto refAudio =
+      configurationParams.getOptionalProperty<js::TypedArray<float>>(
+          env, "referenceAudio");
   if (!refAudio.has_value()) {
     return {};
   }
@@ -98,21 +99,22 @@ struct JsAudioOutputHandler
   explicit JsAudioOutputHandler(
       std::shared_ptr<std::atomic<int>> sampleRatePtr = nullptr)
       : qvac_lib_inference_addon_cpp::out_handl::JsBaseOutputHandler<
-            std::vector<int16_t>>([this](const std::vector<int16_t> &data)
-                                      -> js_value_t * {
-          auto result = js::Object::create(this->env_);
-          std::span<const int16_t> outputSpan(data.data(), data.size());
-          auto typedArray = js::TypedArray<int16_t>::create(this->env_, outputSpan);
-          result.setProperty(this->env_, "outputArray", typedArray);
-          if (sampleRatePtr_) {
-            int sr = sampleRatePtr_->load();
-            if (sr > 0) {
-              result.setProperty(this->env_, "sampleRate",
-                                 js::Number::create(this->env_, sr));
-            }
-          }
-          return result;
-        }),
+            std::vector<int16_t>>(
+            [this](const std::vector<int16_t> &data) -> js_value_t * {
+              auto result = js::Object::create(this->env_);
+              std::span<const int16_t> outputSpan(data.data(), data.size());
+              auto typedArray =
+                  js::TypedArray<int16_t>::create(this->env_, outputSpan);
+              result.setProperty(this->env_, "outputArray", typedArray);
+              if (sampleRatePtr_) {
+                int sr = sampleRatePtr_->load();
+                if (sr > 0) {
+                  result.setProperty(this->env_, "sampleRate",
+                                     js::Number::create(this->env_, sr));
+                }
+              }
+              return result;
+            }),
         sampleRatePtr_(std::move(sampleRatePtr)) {}
 };
 
@@ -123,18 +125,16 @@ inline js_value_t *createInstance(js_env_t *env, js_callback_info_t *info) try {
   JsArgsParser args(env, info);
   auto configurationParams = args.getJsObject(1, "configurationParams");
 
-  auto ttsModel = make_unique<TTSModel>(
-      getTTSConfigMap(env, configurationParams),
-      getReferenceAudio(env, configurationParams));
+  auto ttsModel =
+      make_unique<TTSModel>(getTTSConfigMap(env, configurationParams),
+                            getReferenceAudio(env, configurationParams));
   auto sampleRatePtr = ttsModel->outputSampleRatePtr();
   unique_ptr<model::IModel> model = std::move(ttsModel);
 
   out_handl::OutputHandlers<out_handl::JsOutputHandlerInterface> outHandlers;
   outHandlers.add(make_shared<JsAudioOutputHandler>(sampleRatePtr));
   unique_ptr<OutputCallBackInterface> callback = make_unique<OutputCallBackJs>(
-      env,
-      args.get(0, "jsHandle"),
-      args.getFunction(2, "outputCallback"),
+      env, args.get(0, "jsHandle"), args.getFunction(2, "outputCallback"),
       std::move(outHandlers));
 
   auto addon = make_unique<AddonJs>(env, std::move(callback), std::move(model));
@@ -153,9 +153,8 @@ inline js_value_t *runJob(js_env_t *env, js_callback_info_t *info) try {
   auto inputObj = args.getJsObject(1, "inputObj");
 
   if (type != "text") {
-    throw qvac_errors::StatusError(
-        qvac_errors::general_error::InvalidArgument,
-        "Unknown input type: " + type);
+    throw qvac_errors::StatusError(qvac_errors::general_error::InvalidArgument,
+                                   "Unknown input type: " + type);
   }
 
   TTSModel::AnyInput modelInput;

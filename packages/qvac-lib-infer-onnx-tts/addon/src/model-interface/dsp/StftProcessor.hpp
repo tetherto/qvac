@@ -13,8 +13,7 @@ public:
   StftProcessor(int nFft, int hopLength, int winLength, bool centerPad);
 
   Spectrogram stft(const std::vector<float> &signal) const;
-  std::vector<float> istft(const Spectrogram &spec,
-                           int targetLen = 0) const;
+  std::vector<float> istft(const Spectrogram &spec, int targetLen = 0) const;
 
   static void fft(ComplexVec &x, bool inverse);
 
@@ -24,8 +23,8 @@ public:
 
 private:
   static std::vector<float> hannPeriodic(int length);
-  static std::vector<float> padReflect(const std::vector<float> &x,
-                                       int padLeft, int padRight);
+  static std::vector<float> padReflect(const std::vector<float> &x, int padLeft,
+                                       int padRight);
 
   int nFft_;
   int hopLength_;

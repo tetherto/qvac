@@ -14,8 +14,7 @@ const double PI = 3.14159265358979323846;
 std::vector<float> generateSine(float freq, int sampleRate, int numSamples) {
   std::vector<float> signal(numSamples);
   for (int i = 0; i < numSamples; i++) {
-    signal[i] =
-        std::sin(2.0f * static_cast<float>(PI) * freq * i / sampleRate);
+    signal[i] = std::sin(2.0f * static_cast<float>(PI) * freq * i / sampleRate);
   }
   return signal;
 }
@@ -72,7 +71,8 @@ TEST(StftProcessorTest, StftIstftRoundTripCenterPad) {
   for (size_t i = margin; i < signal.size() - margin; i++) {
     diff = std::max(diff, std::abs(reconstructed[i] - signal[i]));
   }
-  EXPECT_LT(diff, 0.01f) << "STFT->ISTFT round-trip error too large (center_pad=true)";
+  EXPECT_LT(diff, 0.01f)
+      << "STFT->ISTFT round-trip error too large (center_pad=true)";
 }
 
 TEST(StftProcessorTest, StftIstftRoundTripSamePad) {
@@ -88,7 +88,8 @@ TEST(StftProcessorTest, StftIstftRoundTripSamePad) {
   for (size_t i = margin; i < signal.size() - margin; i++) {
     diff = std::max(diff, std::abs(reconstructed[i] - signal[i]));
   }
-  EXPECT_LT(diff, 0.01f) << "STFT->ISTFT round-trip error too large (center_pad=false)";
+  EXPECT_LT(diff, 0.01f)
+      << "STFT->ISTFT round-trip error too large (center_pad=false)";
 }
 
 TEST(StftProcessorTest, StftOutputShape) {

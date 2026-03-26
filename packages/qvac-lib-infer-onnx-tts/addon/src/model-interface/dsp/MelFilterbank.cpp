@@ -9,16 +9,14 @@ namespace qvac::ttslib::dsp {
 
 float MelFilterbank::hzToMelSlaney(float f) {
   if (f >= 1000.0f) {
-    return 15.0f +
-           std::log(f / 1000.0f) / (std::log(6.4f) / 27.0f);
+    return 15.0f + std::log(f / 1000.0f) / (std::log(6.4f) / 27.0f);
   }
   return f / (200.0f / 3.0f);
 }
 
 float MelFilterbank::melToHzSlaney(float m) {
   if (m >= 15.0f) {
-    return 1000.0f *
-           std::exp((std::log(6.4f) / 27.0f) * (m - 15.0f));
+    return 1000.0f * std::exp((std::log(6.4f) / 27.0f) * (m - 15.0f));
   }
   return (200.0f / 3.0f) * m;
 }

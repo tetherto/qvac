@@ -25,23 +25,17 @@ void LavaSREnhancer::load() {
   Ort::SessionOptions options;
   options.SetIntraOpNumThreads(1);
   options.SetInterOpNumThreads(1);
-  options.SetGraphOptimizationLevel(
-      GraphOptimizationLevel::ORT_ENABLE_ALL);
+  options.SetGraphOptimizationLevel(GraphOptimizationLevel::ORT_ENABLE_ALL);
 
   backboneSession_ = createOrtSession(backbonePath_, options);
   specHeadSession_ = createOrtSession(specHeadPath_, options);
 
   Ort::AllocatorWithDefaultOptions alloc;
-  bbInputName_ =
-      backboneSession_->GetInputNameAllocated(0, alloc).get();
-  bbOutputName_ =
-      backboneSession_->GetOutputNameAllocated(0, alloc).get();
-  shInputName_ =
-      specHeadSession_->GetInputNameAllocated(0, alloc).get();
-  shOutputName1_ =
-      specHeadSession_->GetOutputNameAllocated(0, alloc).get();
-  shOutputName2_ =
-      specHeadSession_->GetOutputNameAllocated(1, alloc).get();
+  bbInputName_ = backboneSession_->GetInputNameAllocated(0, alloc).get();
+  bbOutputName_ = backboneSession_->GetOutputNameAllocated(0, alloc).get();
+  shInputName_ = specHeadSession_->GetInputNameAllocated(0, alloc).get();
+  shOutputName1_ = specHeadSession_->GetOutputNameAllocated(0, alloc).get();
+  shOutputName2_ = specHeadSession_->GetOutputNameAllocated(1, alloc).get();
 
   QLOG(Priority::INFO,
        "LavaSR enhancer loaded: " + backbonePath_ + ", " + specHeadPath_);
@@ -57,8 +51,8 @@ bool LavaSREnhancer::isLoaded() const {
   return backboneSession_ != nullptr && specHeadSession_ != nullptr;
 }
 
-std::vector<float>
-LavaSREnhancer::enhance(const std::vector<float> &wav48k, float cutoffHz) {
+std::vector<float> LavaSREnhancer::enhance(const std::vector<float> &wav48k,
+                                           float cutoffHz) {
   if (!isLoaded()) {
     throw std::runtime_error("LavaSR enhancer not loaded");
   }
@@ -81,22 +75,19 @@ LavaSREnhancer::enhance(const std::vector<float> &wav48k, float cutoffHz) {
   // Run backbone: [1, 80, T] -> hidden features
   std::vector<int64_t> bbShape = {1, N_MELS, static_cast<int64_t>(T)};
   Ort::Value bbTensor = Ort::Value::CreateTensor<float>(
-      memInfo, flatMel.data(), flatMel.size(), bbShape.data(),
-      bbShape.size());
+      memInfo, flatMel.data(), flatMel.size(), bbShape.data(), bbShape.size());
   const char *bbInNames[] = {bbInputName_.c_str()};
   const char *bbOutNames[] = {bbOutputName_.c_str()};
 
-  auto bbOutTensors = backboneSession_->Run(
-      Ort::RunOptions{nullptr}, bbInNames, &bbTensor, 1, bbOutNames, 1);
+  auto bbOutTensors = backboneSession_->Run(Ort::RunOptions{nullptr}, bbInNames,
+                                            &bbTensor, 1, bbOutNames, 1);
 
   // Run spec head: hidden -> real [F, T] + imag [F, T]
   const char *shInNames[] = {shInputName_.c_str()};
-  const char *shOutNames[] = {shOutputName1_.c_str(),
-                              shOutputName2_.c_str()};
+  const char *shOutNames[] = {shOutputName1_.c_str(), shOutputName2_.c_str()};
 
-  auto shOutTensors = specHeadSession_->Run(
-      Ort::RunOptions{nullptr}, shInNames, &bbOutTensors[0], 1,
-      shOutNames, 2);
+  auto shOutTensors = specHeadSession_->Run(Ort::RunOptions{nullptr}, shInNames,
+                                            &bbOutTensors[0], 1, shOutNames, 2);
 
   float *realPtr = shOutTensors[0].GetTensorMutableData<float>();
   float *imagPtr = shOutTensors[1].GetTensorMutableData<float>();

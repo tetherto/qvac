@@ -10,8 +10,8 @@ public:
                 float fMin = 0.0f, float fMax = 8000.0f);
 
   // Returns [nMels][T] log-mel spectrogram from raw audio
-  std::vector<std::vector<float>> melSpectrogram(
-      const std::vector<float> &wav, int hopLength) const;
+  std::vector<std::vector<float>> melSpectrogram(const std::vector<float> &wav,
+                                                 int hopLength) const;
 
   int nMels() const { return nMels_; }
   int nFft() const { return nFft_; }

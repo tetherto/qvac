@@ -13,8 +13,7 @@ const double PI = 3.14159265358979323846;
 std::vector<float> generateSine(float freq, int sampleRate, int numSamples) {
   std::vector<float> signal(numSamples);
   for (int i = 0; i < numSamples; i++) {
-    signal[i] =
-        std::sin(2.0f * static_cast<float>(PI) * freq * i / sampleRate);
+    signal[i] = std::sin(2.0f * static_cast<float>(PI) * freq * i / sampleRate);
   }
   return signal;
 }
@@ -115,6 +114,5 @@ TEST(ResamplerTest, LowFreqPreservation) {
   for (size_t i = 100; i < signal.size() - 100; i++) {
     maxErr = std::max(maxErr, std::abs(roundTrip[i] - signal[i]));
   }
-  EXPECT_LT(maxErr, 0.1f)
-      << "Low-frequency round-trip error too large";
+  EXPECT_LT(maxErr, 0.1f) << "Low-frequency round-trip error too large";
 }

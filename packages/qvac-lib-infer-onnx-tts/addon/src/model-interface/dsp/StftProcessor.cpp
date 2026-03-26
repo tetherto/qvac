@@ -85,8 +85,7 @@ std::vector<float> StftProcessor::padReflect(const std::vector<float> &x,
 }
 
 Spectrogram StftProcessor::stft(const std::vector<float> &signal) const {
-  const int pad =
-      centerPad_ ? (nFft_ / 2) : ((winLength_ - hopLength_) / 2);
+  const int pad = centerPad_ ? (nFft_ / 2) : ((winLength_ - hopLength_) / 2);
   std::vector<float> xpad = padReflect(signal, pad, pad);
   if (static_cast<int>(xpad.size()) < winLength_) {
     xpad.resize(winLength_, 0.0f);
@@ -114,8 +113,7 @@ Spectrogram StftProcessor::stft(const std::vector<float> &signal) const {
 
 std::vector<float> StftProcessor::istft(const Spectrogram &spec,
                                         int targetLen) const {
-  const int pad =
-      centerPad_ ? (nFft_ / 2) : ((winLength_ - hopLength_) / 2);
+  const int pad = centerPad_ ? (nFft_ / 2) : ((winLength_ - hopLength_) / 2);
   const int T = static_cast<int>(spec.size());
   const int outputSize = (T - 1) * hopLength_ + winLength_;
 

@@ -31,9 +31,8 @@ LavaSRDenoiser::~LavaSRDenoiser() { unload(); }
 void LavaSRDenoiser::buildChunkWeights() {
   chunkWeight_.resize(CHUNK_FRAMES);
   for (int i = 0; i < CHUNK_FRAMES; i++) {
-    float w = 0.5f *
-              (1.0f - std::cos(2.0f * static_cast<float>(PI) * i /
-                               (CHUNK_FRAMES - 1)));
+    float w = 0.5f * (1.0f - std::cos(2.0f * static_cast<float>(PI) * i /
+                                      (CHUNK_FRAMES - 1)));
     chunkWeight_[i] = std::max(w * w, 1e-4f);
   }
 }
@@ -46,8 +45,7 @@ void LavaSRDenoiser::load() {
   Ort::SessionOptions options;
   options.SetIntraOpNumThreads(1);
   options.SetInterOpNumThreads(1);
-  options.SetGraphOptimizationLevel(
-      GraphOptimizationLevel::ORT_DISABLE_ALL);
+  options.SetGraphOptimizationLevel(GraphOptimizationLevel::ORT_DISABLE_ALL);
 
   session_ = createOrtSession(modelPath_, options);
 
@@ -65,8 +63,7 @@ void LavaSRDenoiser::unload() {
 
 bool LavaSRDenoiser::isLoaded() const { return session_ != nullptr; }
 
-std::vector<float>
-LavaSRDenoiser::denoise(const std::vector<float> &wav16k) {
+std::vector<float> LavaSRDenoiser::denoise(const std::vector<float> &wav16k) {
   if (!session_) {
     throw std::runtime_error("LavaSR denoiser not loaded");
   }
@@ -156,8 +153,7 @@ LavaSRDenoiser::denoise(const std::vector<float> &wav16k) {
         for (int t = 0; t < L; t++) {
           for (int f = 0; f < FREQ_BINS; f++) {
             acc[c * T * FREQ_BINS + (start + t) * FREQ_BINS + f] +=
-                outPtr[c * L * FREQ_BINS + t * FREQ_BINS + f] *
-                chunkWeight_[t];
+                outPtr[c * L * FREQ_BINS + t * FREQ_BINS + f] * chunkWeight_[t];
           }
         }
       }
@@ -178,8 +174,7 @@ LavaSRDenoiser::denoise(const std::vector<float> &wav16k) {
   }
 
   // Reconstruct spectrogram from flat layout
-  dsp::Spectrogram specEnh(T,
-                           std::vector<std::complex<float>>(FREQ_BINS));
+  dsp::Spectrogram specEnh(T, std::vector<std::complex<float>>(FREQ_BINS));
   for (int t = 0; t < T; t++) {
     for (int f = 0; f < FREQ_BINS; f++) {
       specEnh[t][f] = {flatSpec[0 * T * FREQ_BINS + t * FREQ_BINS + f],

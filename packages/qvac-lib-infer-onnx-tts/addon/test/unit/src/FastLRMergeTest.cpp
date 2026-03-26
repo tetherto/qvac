@@ -13,8 +13,7 @@ const double PI = 3.14159265358979323846;
 std::vector<float> generateSine(float freq, int sampleRate, int numSamples) {
   std::vector<float> signal(numSamples);
   for (int i = 0; i < numSamples; i++) {
-    signal[i] =
-        std::sin(2.0f * static_cast<float>(PI) * freq * i / sampleRate);
+    signal[i] = std::sin(2.0f * static_cast<float>(PI) * freq * i / sampleRate);
   }
   return signal;
 }
@@ -54,7 +53,8 @@ TEST(FastLRMergeTest, LowFrequencyFromOriginal) {
   auto enhanced = generateSine(100.0f, 48000, 48000);
   std::vector<float> original(48000, 0.0f);
 
-  // 100 Hz is well below 4000 Hz cutoff -> output should be near zero (from original)
+  // 100 Hz is well below 4000 Hz cutoff -> output should be near zero (from
+  // original)
   auto result = FastLRMerge::merge(enhanced, original, 48000, 4000);
 
   float enhancedRms = rms(enhanced);

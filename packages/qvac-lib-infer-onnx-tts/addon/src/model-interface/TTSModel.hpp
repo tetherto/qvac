@@ -41,12 +41,12 @@ public:
     JobConfig config;
   };
 
-  TTSModel(const std::unordered_map<std::string, std::string> &configMap,
-           const std::vector<float> &referenceAudio = {},
-           std::shared_ptr<chatterbox::IChatterboxEngine> chatterboxEngine =
-               nullptr,
-           std::shared_ptr<supertonic::ISupertonicEngine> supertonicEngine =
-               nullptr);
+  TTSModel(
+      const std::unordered_map<std::string, std::string> &configMap,
+      const std::vector<float> &referenceAudio = {},
+      std::shared_ptr<chatterbox::IChatterboxEngine> chatterboxEngine = nullptr,
+      std::shared_ptr<supertonic::ISupertonicEngine> supertonicEngine =
+          nullptr);
 
   void unload();
   void unloadWeights() {};

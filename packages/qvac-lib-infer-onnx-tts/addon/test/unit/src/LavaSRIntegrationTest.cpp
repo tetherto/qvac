@@ -48,9 +48,8 @@ TEST(LavaSRIntegrationTest, enhancerLoadsAndRunsWithRealModels) {
     GTEST_SKIP() << "LavaSR models not found in " << LAVASR_DIR;
   }
 
-  lavasr::LavaSREnhancer enhancer(
-      LAVASR_DIR + "/enhancer_backbone.onnx",
-      LAVASR_DIR + "/enhancer_spec_head.onnx");
+  lavasr::LavaSREnhancer enhancer(LAVASR_DIR + "/enhancer_backbone.onnx",
+                                  LAVASR_DIR + "/enhancer_spec_head.onnx");
   enhancer.load();
   ASSERT_TRUE(enhancer.isLoaded());
 
@@ -60,7 +59,10 @@ TEST(LavaSRIntegrationTest, enhancerLoadsAndRunsWithRealModels) {
   EXPECT_EQ(enhanced.size(), input48k.size());
   bool allZero = true;
   for (float v : enhanced) {
-    if (std::abs(v) > 1e-6f) { allZero = false; break; }
+    if (std::abs(v) > 1e-6f) {
+      allZero = false;
+      break;
+    }
   }
   EXPECT_FALSE(allZero) << "Enhanced output should not be all zeros";
 }
@@ -70,8 +72,8 @@ TEST(LavaSRIntegrationTest, denoiserLoadsAndRunsWithRealModels) {
     GTEST_SKIP() << "LavaSR models not found in " << LAVASR_DIR;
   }
 
-  lavasr::LavaSRDenoiser denoiser(
-      LAVASR_DIR + "/denoiser_core_legacy_fixed63.onnx");
+  lavasr::LavaSRDenoiser denoiser(LAVASR_DIR +
+                                  "/denoiser_core_legacy_fixed63.onnx");
   denoiser.load();
   ASSERT_TRUE(denoiser.isLoaded());
 
@@ -81,7 +83,10 @@ TEST(LavaSRIntegrationTest, denoiserLoadsAndRunsWithRealModels) {
   EXPECT_EQ(denoised.size(), input16k.size());
   bool allZero = true;
   for (float v : denoised) {
-    if (std::abs(v) > 1e-6f) { allZero = false; break; }
+    if (std::abs(v) > 1e-6f) {
+      allZero = false;
+      break;
+    }
   }
   EXPECT_FALSE(allZero) << "Denoised output should not be all zeros";
 }
@@ -96,7 +101,8 @@ TEST(LavaSRIntegrationTest, fullPipelineChatterboxWithEnhance) {
   config["tokenizerPath"] = CHATTERBOX_DIR + "/tokenizer.json";
   config["speechEncoderPath"] = CHATTERBOX_DIR + "/speech_encoder.onnx";
   config["embedTokensPath"] = CHATTERBOX_DIR + "/embed_tokens.onnx";
-  config["conditionalDecoderPath"] = CHATTERBOX_DIR + "/conditional_decoder.onnx";
+  config["conditionalDecoderPath"] =
+      CHATTERBOX_DIR + "/conditional_decoder.onnx";
   config["languageModelPath"] = CHATTERBOX_DIR + "/language_model.onnx";
   config["enhance"] = "true";
   config["enhancerBackbonePath"] = LAVASR_DIR + "/enhancer_backbone.onnx";

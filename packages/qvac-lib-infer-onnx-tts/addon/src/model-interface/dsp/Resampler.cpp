@@ -19,8 +19,7 @@ std::vector<float> Resampler::resample(const std::vector<float> &input,
   }
 
   const double ratio = static_cast<double>(srOut) / srIn;
-  const auto outLen =
-      static_cast<size_t>(std::round(input.size() * ratio));
+  const auto outLen = static_cast<size_t>(std::round(input.size() * ratio));
   std::vector<float> output(outLen, 0.0f);
   const double scale = std::min(1.0, ratio);
 
@@ -28,9 +27,9 @@ std::vector<float> Resampler::resample(const std::vector<float> &input,
     const double center = i / ratio;
     const auto left =
         static_cast<int>(std::max(0.0, std::floor(center - LANCZOS_A / scale)));
-    const auto right = static_cast<int>(
-        std::min(static_cast<double>(input.size()) - 1,
-                 std::floor(center + LANCZOS_A / scale)));
+    const auto right =
+        static_cast<int>(std::min(static_cast<double>(input.size()) - 1,
+                                  std::floor(center + LANCZOS_A / scale)));
 
     float sum = 0.0f;
     float weightSum = 0.0f;
@@ -40,8 +39,8 @@ std::vector<float> Resampler::resample(const std::vector<float> &input,
       double weight = 1.0;
       if (x != 0.0) {
         const double piX = PI * x;
-        weight = std::sin(piX) * std::sin(piX / LANCZOS_A) /
-                 (piX * piX / LANCZOS_A);
+        weight =
+            std::sin(piX) * std::sin(piX / LANCZOS_A) / (piX * piX / LANCZOS_A);
       }
       sum += input[j] * static_cast<float>(weight);
       weightSum += static_cast<float>(weight);
