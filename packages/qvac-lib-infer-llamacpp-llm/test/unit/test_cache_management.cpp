@@ -1030,3 +1030,41 @@ TEST_F(CacheManagementTest, CacheTokensExceedContextSize) {
       { processPromptString(model_small, loadInput); },
       qvac_errors::StatusError);
 }
+
+TEST_F(CacheManagementTest, CacheWithToolsAtEndFalseSavesFullCache) {
+  if (!hasValidModel()) {
+    FAIL() << "Test model not found";
+  }
+
+  config_files["tools_at_end"] = "false";
+  auto model = createModel();
+  if (!model) {
+    FAIL() << "Model failed to load";
+  }
+
+  std::string inputWithTools =
+      R"([{"role": "session", "content": "test_session1.bin"}, {"role": "user", "content": "What is the weather in Tokyo?"}, {"type": "function", "name": "getWeather", "description": "Get weather forecast", "parameters": {"type": "object", "properties": {"city": {"type": "string"}}, "required": ["city"]}}])";
+
+  EXPECT_NO_THROW({
+    std::string output = processPromptString(model, inputWithTools);
+    EXPECT_GE(output.length(), 0);
+    auto stats = model->runtimeStats();
+    EXPECT_GE(stats.size(), 0);
+  });
+
+  auto statsBeforeSave = model->runtimeStats();
+  double cacheTokensBeforeSave = getStatValue(statsBeforeSave, "CacheTokens");
+  EXPECT_GT(cacheTokensBeforeSave, 0.0);
+
+  llama_pos nPastBeforeTools = model->getNPastBeforeTools();
+  EXPECT_EQ(nPastBeforeTools, -1);
+
+  std::string saveInput =
+      R"([{"role": "session", "content": "test_session1.bin"}, {"role": "session", "content": "save"}])";
+  EXPECT_NO_THROW({
+    std::string saveOutput = processPromptString(model, saveInput);
+    EXPECT_EQ(saveOutput.length(), 0);
+  });
+
+  EXPECT_TRUE(fs::exists(session1_path));
+}

@@ -25,7 +25,7 @@ jobs:
       issues: write
     steps:
       - name: Ensure docs-deploy label exists
-        uses: actions/github-script@v8
+        uses: actions/github-script@ed597411d8f924073f98dfc5c65a23a2325f34cd # 8.0.0
         with:
           script: |
             try {
@@ -47,7 +47,7 @@ jobs:
             }
 
       - name: Notify docs owner
-        uses: actions/github-script@v8
+        uses: actions/github-script@ed597411d8f924073f98dfc5c65a23a2325f34cd # 8.0.0
         env:
           NOTIFY_USER: ${{ secrets.DOCS_DEPLOY_NOTIFY_USER }}
           TEST_REF: ${{ github.event.inputs.test_ref }}

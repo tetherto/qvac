@@ -1,5 +1,5 @@
 ---
-description: 
+description: Registry server conventions - strict mode, private methods, ReadyResource, npm lint
 globs: packages/qvac-lib-registry-server/**
 alwaysApply: false
 ---
@@ -73,14 +73,4 @@ Use `lib/logger.js`. Avoid logging sensitive information (keys, tokens).
 
 ### Autobase + HyperDB Multi-Writer Patterns
 
-When working with Autobase, HyperDB, multi-writer patterns, or peer discovery, consult:
-
-1. `docs/hyperdb-learnings.md` - HyperDB schema, indexes, queries, networking
-2. `docs/hyperdb-autobase-learnings.md` - Multi-writer architecture
-3. `docs/hypercore-source.txt` - Hypercore fundamentals (base layer for Autobase and all Holepunch data structures)
-4. `docs/holepunchto-autobase-8a5edab282632443.txt` - Autobase source code reference
-5. `docs/holepunchto-corestore-8a5edab282632443.txt` - Corestore source code reference
-
-### Holepunch Library Reference
-
-`hp-deps-libraries.mdc` - Reference for all hp-deps libraries (auto-loaded)
+When working with Autobase, HyperDB, multi-writer patterns, or peer discovery, use the `registry-autobase-patterns` skill.

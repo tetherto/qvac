@@ -5,6 +5,16 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.3.5]
+
+Security hardening release from comprehensive security audit.
+
+### Changed
+- Replace deprecated `istanbul` with `nyc` for code coverage (#1082)
+
+### Fixed
+- Fix coverage script to use `.nyc_output` directory for correct HTML report generation (#1082)
+
 ## [0.3.4]
 
 ### Added

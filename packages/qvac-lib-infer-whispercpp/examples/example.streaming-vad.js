@@ -111,7 +111,7 @@ async function main () {
   try {
     await response.await()
     const elapsed = ((Date.now() - startTime) / 1000).toFixed(1)
-    console.log(`\n=== RESULTS ===`)
+    console.log('\n=== RESULTS ===')
     console.log(`Segments: ${segments.length}`)
     console.log(`Processing time: ${elapsed}s`)
     console.log(`Audio duration: ${totalDurationS.toFixed(1)}s`)
@@ -124,9 +124,9 @@ async function main () {
       .trim()
 
     if (fullText) {
-      console.log(`\n=== TRANSCRIPTION ===`)
+      console.log('\n=== TRANSCRIPTION ===')
       console.log(fullText)
-      console.log(`=== END ===\n`)
+      console.log('=== END ===\n')
     } else {
       console.log('No transcription output received.')
     }

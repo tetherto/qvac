@@ -21,7 +21,8 @@ const ERR_CODES = Object.freeze({
   INVALID_AUDIO_INPUT: 6011,
   FAILED_TO_START_STREAMING: 6012,
   FAILED_TO_APPEND_STREAMING: 6013,
-  FAILED_TO_END_STREAMING: 6014
+  FAILED_TO_END_STREAMING: 6014,
+  BUFFER_LIMIT_EXCEEDED: 6015
 })
 
 addCodes({
@@ -80,6 +81,10 @@ addCodes({
   [ERR_CODES.FAILED_TO_END_STREAMING]: {
     name: 'FAILED_TO_END_STREAMING',
     message: (message) => `Failed to end streaming session: ${message}`
+  },
+  [ERR_CODES.BUFFER_LIMIT_EXCEEDED]: {
+    name: 'BUFFER_LIMIT_EXCEEDED',
+    message: (message) => `Audio buffer size limit exceeded: ${message}`
   }
 }, {
   name,

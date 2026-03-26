@@ -12,6 +12,13 @@
   },
   "author": "Tether",
   "license": "Apache-2.0",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/tetherto/qvac.git",
+    "directory": "packages/logging"
+  },
+  "bugs": "https://github.com/tetherto/qvac/issues",
+  "homepage": "https://github.com/tetherto/qvac/tree/main/packages/logging#readme",
   "devDependencies": {
     "bare-process": "^4.2.1",
     "brittle": "^3.15.0",
