@@ -97,7 +97,9 @@ jobs:
       packages: write
       pull-requests: write
     uses: ./.github/workflows/prebuilds-qvac-lib-infer-llamacpp-llm.yml
-    secrets: inherit
+    secrets:
+      NPM_TOKEN: ${{ secrets.NPM_TOKEN }}
+      PAT_TOKEN: ${{ secrets.PAT_TOKEN }}
     with:
       repository: ${{ github.event.pull_request.head.repo.full_name }}
       ref: ${{ github.event.pull_request.head.ref }}
