@@ -53,6 +53,14 @@ declare interface ONNXTTSFiles {
   unicodeIndexerPath?: string
   ttsConfigPath?: string
   voiceStyleJsonPath?: string
+  /** Directory containing LavaSR ONNX files (auto-resolves individual paths) */
+  enhancerModelDir?: string
+  /** Path to enhancer backbone ONNX model */
+  enhancerBackbonePath?: string
+  /** Path to enhancer spec head ONNX model */
+  enhancerSpecHeadPath?: string
+  /** Path to denoiser ONNX model */
+  denoiserPath?: string
 }
 
 declare interface ONNXTTSRuntimeConfig {
@@ -60,6 +68,10 @@ declare interface ONNXTTSRuntimeConfig {
   language?: string
   /** Chatterbox: GPU — default false */
   useGPU?: boolean
+  /** Runtime toggles for LavaSR (used in reload) */
+  enhance?: boolean
+  denoise?: boolean
+  outputSampleRate?: number
 }
 
 declare interface ONNXTTSOptions {

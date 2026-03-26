@@ -16,6 +16,12 @@ target_sources(
     ${CMAKE_SOURCE_DIR}/addon/src/model-interface/OnnxInferSession.cpp
     ${CMAKE_SOURCE_DIR}/addon/src/model-interface/Fp16Utils.cpp
     ${CMAKE_SOURCE_DIR}/addon/src/model-interface/TensorFloatHandler.cpp
+    ${CMAKE_SOURCE_DIR}/addon/src/model-interface/LavaSRDenoiser.cpp
+    ${CMAKE_SOURCE_DIR}/addon/src/model-interface/LavaSREnhancer.cpp
+    ${CMAKE_SOURCE_DIR}/addon/src/model-interface/dsp/Resampler.cpp
+    ${CMAKE_SOURCE_DIR}/addon/src/model-interface/dsp/StftProcessor.cpp
+    ${CMAKE_SOURCE_DIR}/addon/src/model-interface/dsp/MelFilterbank.cpp
+    ${CMAKE_SOURCE_DIR}/addon/src/model-interface/dsp/FastLRMerge.cpp
     ${TEST_SOURCES}
     ${TEST_MOCKS}
 )

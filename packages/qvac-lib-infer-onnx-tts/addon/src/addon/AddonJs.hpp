@@ -63,6 +63,14 @@ getTTSConfigMap(js_env_t *env, js::Object configurationParams) {
   addBool("lazySessionLoading");
   addBool("supertonicMultilingual");
 
+  // LavaSR enhancement config
+  addBool("enhance");
+  addBool("denoise");
+  addString("outputSampleRate");
+  addString("enhancerBackbonePath");
+  addString("enhancerSpecHeadPath");
+  addString("denoiserPath");
+
   return configMap;
 }
 

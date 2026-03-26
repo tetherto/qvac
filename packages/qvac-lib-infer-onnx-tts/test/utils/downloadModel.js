@@ -904,4 +904,104 @@ async function ensureSupertonicModelsMultilingual (options = {}) {
   }
 }
 
-module.exports = { ensureFileDownloaded, ensureWhisperModel, ensureChatterboxModels, ensureSupertonicModels, ensureSupertonicModelsMultilingual }
+/**
+ * Ensure LavaSR enhancement ONNX models are present.
+ * Downloads from LavaSRcpp GitHub releases if missing.
+ * Source: https://github.com/Topping1/LavaSRcpp/releases/tag/Alpha-v.01
+ * @param {Object} options - Download options
+ * @param {string} [options.targetDir] - Target directory (default: getBaseDir()/models/lavasr)
+ * @returns {Promise<Object>} { success, results, targetDir }
+ */
+async function ensureLavaSRModels (options = {}) {
+  const targetDir = options.targetDir || path.join(getBaseDir(), 'models', 'lavasr')
+
+  console.log('\nEnsuring LavaSR enhancement models...')
+
+  if (!fs.existsSync(targetDir)) {
+    fs.mkdirSync(targetDir, { recursive: true })
+  }
+
+  const baseUrl = 'https://github.com/Topping1/LavaSRcpp/releases/download/Alpha-v.01'
+
+  const modelFiles = [
+    { name: 'denoiser_core_legacy_fixed63.onnx', minSize: 1500000 },
+    { name: 'enhancer_backbone.onnx', minSize: 100000 },
+    { name: 'enhancer_backbone.onnx.data', minSize: 50000000 },
+    { name: 'enhancer_spec_head.onnx', minSize: 5000 },
+    { name: 'enhancer_spec_head.onnx.data', minSize: 4000000 }
+  ]
+
+  const results = {}
+  let allSuccess = true
+
+  for (const file of modelFiles) {
+    const url = `${baseUrl}/${file.name}`
+    const targetPath = path.join(targetDir, file.name)
+
+    console.log(`\n Downloading ${file.name}...`)
+
+    if (fs.existsSync(targetPath)) {
+      const stats = fs.statSync(targetPath)
+      if (stats.size >= file.minSize) {
+        console.log(` ✓ Using cached: ${file.name} (${stats.size} bytes)`)
+        results[file.name] = { success: true, path: targetPath, cached: true }
+        continue
+      }
+      fs.unlinkSync(targetPath)
+    }
+
+    let downloadSuccess = false
+    if (isMobile) {
+      try {
+        const result = await downloadWithHttp(url, targetPath, 5)
+        downloadSuccess = result.success && fs.existsSync(targetPath)
+      } catch (e) {
+        console.log(` HTTP download error: ${e.message}`)
+      }
+    } else {
+      try {
+        const { spawnSync } = require('bare-subprocess')
+        const downloadResult = spawnSync('curl', [
+          '-L', '-o', targetPath, url,
+          '--fail', '--show-error',
+          '--connect-timeout', '30',
+          '--max-time', '600'
+        ], { stdio: ['inherit', 'inherit', 'pipe'] })
+        downloadSuccess = downloadResult.status === 0 && fs.existsSync(targetPath)
+      } catch (e) {
+        console.log(` Curl error: ${e.message}`)
+      }
+    }
+
+    if (downloadSuccess) {
+      const stats = fs.statSync(targetPath)
+      if (stats.size >= file.minSize) {
+        console.log(` ✓ Downloaded: ${file.name} (${stats.size} bytes)`)
+        results[file.name] = { success: true, path: targetPath, cached: false }
+      } else {
+        console.log(` ✗ File too small: ${file.name} (${stats.size} bytes, expected >= ${file.minSize})`)
+        results[file.name] = { success: false, error: 'File too small' }
+        allSuccess = false
+      }
+    } else {
+      console.log(` ✗ Failed to download: ${file.name}`)
+      results[file.name] = { success: false, error: 'Download failed' }
+      allSuccess = false
+    }
+  }
+
+  console.log('\nLavaSR model download summary:')
+  console.log('='.repeat(50))
+  for (const [name, result] of Object.entries(results)) {
+    console.log(` ${result.success ? '✓' : '✗'} ${name}${result.cached ? ' (cached)' : ''}`)
+  }
+  console.log('='.repeat(50))
+
+  return {
+    success: allSuccess,
+    results,
+    targetDir
+  }
+}
+
+module.exports = { ensureFileDownloaded, ensureWhisperModel, ensureChatterboxModels, ensureSupertonicModels, ensureSupertonicModelsMultilingual, ensureLavaSRModels }

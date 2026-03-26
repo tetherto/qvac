@@ -1,6 +1,7 @@
 #include "TTSModel.hpp"
 
 #include <any>
+#include <cmath>
 #include <sstream>
 #include <stdexcept>
 
@@ -8,9 +9,11 @@
 #include "src/addon/TTSErrors.hpp"
 #include "src/model-interface/ChatterboxEngine.hpp"
 #include "src/model-interface/SupertonicEngine.hpp"
+#include "src/model-interface/dsp/Resampler.hpp"
 
 using namespace qvac::ttslib::addon_model;
 using namespace qvac_lib_inference_addon_cpp::logger;
+using qvac::ttslib::AudioResult;
 
 namespace {
 
@@ -208,6 +211,7 @@ void TTSModel::saveLoadParams(
     supertonicConfig_ = createSupertonicConfig(configMap);
     configSet_ = isSupertonicConfigValid(supertonicConfig_);
   }
+  parseLavaSRConfig(configMap);
 }
 
 void TTSModel::load() {
@@ -225,6 +229,8 @@ void TTSModel::load() {
     loaded_ = supertonicEngine_->isLoaded();
     QLOG(Priority::INFO, "Supertone ONNX TTS model loaded successfully");
   }
+
+  initLavaSR();
 }
 
 void TTSModel::reload() {
@@ -241,6 +247,14 @@ void TTSModel::unload() {
     if (supertonicEngine_) {
       supertonicEngine_->unload();
     }
+  }
+  if (enhancer_) {
+    enhancer_->unload();
+    enhancer_.reset();
+  }
+  if (denoiser_) {
+    denoiser_->unload();
+    denoiser_.reset();
   }
   loaded_ = false;
   QLOG(Priority::INFO, "TTS model unloaded successfully");
@@ -277,6 +291,11 @@ TTSModel::Output TTSModel::process(const Input &text) {
     result = chatterboxEngine_->synthesize(text);
   } else if (engineType_ == EngineType::Supertonic) {
     result = supertonicEngine_->synthesize(text);
+  }
+
+  if (lavaSRConfig_.denoise || lavaSRConfig_.enhance ||
+      lavaSRConfig_.outputSampleRate > 0) {
+    result = postProcess(std::move(result));
   }
 
   if (cancelRequested_.exchange(false)) {
@@ -366,4 +385,108 @@ void TTSModel::setReferenceAudio(const std::vector<float> &referenceAudio) {
     QLOG(Priority::INFO,
          "Reference audio set, size: " + std::to_string(referenceAudio.size()));
   }
+}
+
+void TTSModel::parseLavaSRConfig(
+    const std::unordered_map<std::string, std::string> &configMap) {
+  auto getBool = [&](const std::string &key) -> bool {
+    auto it = configMap.find(key);
+    return it != configMap.end() && it->second == "true";
+  };
+  auto getString = [&](const std::string &key) -> std::string {
+    auto it = configMap.find(key);
+    return (it != configMap.end()) ? it->second : "";
+  };
+
+  lavaSRConfig_.enhance = getBool("enhance");
+  lavaSRConfig_.denoise = getBool("denoise");
+  lavaSRConfig_.backbonePath = getString("enhancerBackbonePath");
+  lavaSRConfig_.specHeadPath = getString("enhancerSpecHeadPath");
+  lavaSRConfig_.denoiserPath = getString("denoiserPath");
+
+  auto srIt = configMap.find("outputSampleRate");
+  if (srIt != configMap.end() && !srIt->second.empty()) {
+    try {
+      lavaSRConfig_.outputSampleRate = std::stoi(srIt->second);
+    } catch (...) {
+      lavaSRConfig_.outputSampleRate = 0;
+    }
+  }
+
+  std::stringstream ss;
+  ss << "LavaSR config: enhance=" << lavaSRConfig_.enhance
+     << " denoise=" << lavaSRConfig_.denoise
+     << " outputSampleRate=" << lavaSRConfig_.outputSampleRate;
+  QLOG(Priority::INFO, ss.str());
+}
+
+void TTSModel::initLavaSR() {
+  if (lavaSRConfig_.enhance && !lavaSRConfig_.backbonePath.empty() &&
+      !lavaSRConfig_.specHeadPath.empty()) {
+    enhancer_ = std::make_unique<lavasr::LavaSREnhancer>(
+        lavaSRConfig_.backbonePath, lavaSRConfig_.specHeadPath);
+    enhancer_->load();
+    QLOG(Priority::INFO, "LavaSR enhancer initialized");
+  }
+  if (lavaSRConfig_.denoise && !lavaSRConfig_.denoiserPath.empty()) {
+    denoiser_ = std::make_unique<lavasr::LavaSRDenoiser>(
+        lavaSRConfig_.denoiserPath);
+    denoiser_->load();
+    QLOG(Priority::INFO, "LavaSR denoiser initialized");
+  }
+}
+
+AudioResult TTSModel::postProcess(AudioResult result) {
+  // Convert PCM16 -> float
+  std::vector<float> audio(result.pcm16.size());
+  for (size_t i = 0; i < result.pcm16.size(); i++) {
+    audio[i] = result.pcm16[i] / 32767.0f;
+  }
+  int currentRate = result.sampleRate;
+
+  // Denoise: resample to 16 kHz, run denoiser
+  if (lavaSRConfig_.denoise && denoiser_ && denoiser_->isLoaded()) {
+    QLOG(Priority::INFO, "Running LavaSR denoiser...");
+    auto wav16k = dsp::Resampler::resample(audio, currentRate, 16000);
+    audio = denoiser_->denoise(wav16k);
+    currentRate = 16000;
+    QLOG(Priority::INFO, "LavaSR denoiser complete");
+  }
+
+  // Enhance: resample to 48 kHz, run enhancer
+  if (lavaSRConfig_.enhance && enhancer_ && enhancer_->isLoaded()) {
+    QLOG(Priority::INFO, "Running LavaSR enhancer...");
+    auto wav48k = dsp::Resampler::resample(audio, currentRate, 48000);
+    // Cutoff = half the original engine sample rate
+    const float cutoffHz =
+        static_cast<float>(result.sampleRate) / 2.0f;
+    audio = enhancer_->enhance(wav48k, cutoffHz);
+    currentRate = 48000;
+    QLOG(Priority::INFO, "LavaSR enhancer complete");
+  }
+
+  // Output sample rate: conventional resample if needed
+  const int targetRate = lavaSRConfig_.outputSampleRate > 0
+                             ? lavaSRConfig_.outputSampleRate
+                             : currentRate;
+  if (targetRate != currentRate) {
+    QLOG(Priority::INFO,
+         "Resampling from " + std::to_string(currentRate) + " to " +
+             std::to_string(targetRate));
+    audio = dsp::Resampler::resample(audio, currentRate, targetRate);
+    currentRate = targetRate;
+  }
+
+  // Convert float -> PCM16 and update result
+  result.pcm16.resize(audio.size());
+  for (size_t i = 0; i < audio.size(); i++) {
+    const float clamped = std::clamp(audio[i], -1.0f, 1.0f);
+    result.pcm16[i] = static_cast<int16_t>(clamped * 32767.0f);
+  }
+  result.sampleRate = currentRate;
+  result.samples = audio.size();
+  result.durationMs =
+      audio.size() * 1000.0 / static_cast<double>(currentRate);
+
+  return result;
 }

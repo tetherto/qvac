@@ -13,10 +13,21 @@
 #include "qvac-lib-inference-addon-cpp/RuntimeStats.hpp"
 #include "src/model-interface/IChatterboxEngine.hpp"
 #include "src/model-interface/ISupertonicEngine.hpp"
+#include "src/model-interface/LavaSRDenoiser.hpp"
+#include "src/model-interface/LavaSREnhancer.hpp"
 
 namespace qvac::ttslib::addon_model {
 
 enum class EngineType { Chatterbox, Supertonic };
+
+struct LavaSRConfig {
+  bool enhance = false;
+  bool denoise = false;
+  int outputSampleRate = 0; // 0 = keep engine native rate
+  std::string backbonePath;
+  std::string specHeadPath;
+  std::string denoiserPath;
+};
 
 class TTSModel : public qvac_lib_inference_addon_cpp::model::IModel,
                  public qvac_lib_inference_addon_cpp::model::IModelCancel {
@@ -66,6 +77,15 @@ private:
   chatterbox::ChatterboxConfig chatterboxConfig_;
   supertonic::SupertonicConfig supertonicConfig_;
   bool configSet_ = false;
+
+  LavaSRConfig lavaSRConfig_;
+  std::unique_ptr<lavasr::LavaSREnhancer> enhancer_;
+  std::unique_ptr<lavasr::LavaSRDenoiser> denoiser_;
+
+  AudioResult postProcess(AudioResult result);
+  void initLavaSR();
+  void parseLavaSRConfig(
+      const std::unordered_map<std::string, std::string> &configMap);
 
   double totalTime_ = 0.0;
   double tokensPerSecond_ = 0.0;
