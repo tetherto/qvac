@@ -20,20 +20,6 @@ on:
         type: string
         default: "packages/qvac-lib-infer-llamacpp-embed"
   workflow_call:
-    secrets:
-      AWS_ACCESS_KEY_ID:
-        required: true
-      AWS_SECRET_ACCESS_KEY:
-        required: true
-      GITHUB_TOKEN:
-        required: true
-      MODEL_S3_BUCKET:
-        required: true
-      NPM_TOKEN:
-        required: true
-      PAT_TOKEN:
-        required: true
-
     inputs:
       ref:
         description: "ref"
@@ -63,6 +49,10 @@ on:
         value: ${{ jobs.publish-npm.outputs.published_version || jobs.publish-gpr.outputs.published_version }}
 env:
   WORKDIR: ${{ inputs.workdir }}
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: false
 
 jobs:
   prebuild:
@@ -544,3 +534,4 @@ jobs:
           repo_name: "llamacpp-embed"
           git-token: ${{ secrets.GITHUB_TOKEN }}
           create-tag: "false"
+          
