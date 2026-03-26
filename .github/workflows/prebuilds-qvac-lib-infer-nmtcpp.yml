@@ -2,6 +2,18 @@ name: Prebuilds (NMTCPP)
 
 on:
   workflow_call:
+    secrets:
+      AWS_ACCESS_KEY_ID:
+        required: true
+      AWS_SECRET_ACCESS_KEY:
+        required: true
+      MODEL_S3_BUCKET:
+        required: true
+      NPM_TOKEN:
+        required: true
+      PAT_TOKEN:
+        required: true
+
     inputs:
       ref:
         description: "ref"
@@ -37,6 +49,10 @@ on:
 
 env:
   PKG_DIR: packages/qvac-lib-infer-nmtcpp
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: false
 
 jobs:
   prebuild:
@@ -796,7 +812,7 @@ jobs:
 
       - name: Publish to GitHub Package Registry
         id: publish
-        uses: tetherto/qvac-devops/.github/actions/publish-library-to-gpr@v1.1.6
+        uses: tetherto/qvac-devops/.github/actions/publish-library-to-gpr@v1.1.7
         with:
           secret-token: ${{ secrets.GITHUB_TOKEN }}
           tag: ${{ needs.publish-logic.outputs.gpr_tag }}
@@ -824,7 +840,7 @@ jobs:
 
       - name: Publish to NPM Package Registry
         id: publish
-        uses: tetherto/qvac-devops/.github/actions/publish-library-to-npm@v1.1.6
+        uses: tetherto/qvac-devops/.github/actions/publish-library-to-npm@v1.1.7
         with:
           secret-token: ${{ secrets.NPM_TOKEN }}
           tag: "latest"
@@ -838,7 +854,6 @@ jobs:
     permissions:
       contents: write
     uses: ./.github/workflows/create-github-release.yml
-    secrets: inherit
     with:
       repo_name: "nmtcpp"
       release_name: "QVAC Infer NMTCPP Lib"
@@ -850,6 +865,11 @@ jobs:
     needs: [publish-npm]
     if: needs.publish-npm.result == 'success' && needs.publish-npm.outputs.published_version != ''
     uses: ./.github/workflows/on-publish-benchmark-qvac-lib-infer-nmtcpp.yml
-    secrets: inherit
+    secrets:
+      AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
+      AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+      MODEL_S3_BUCKET: ${{ secrets.MODEL_S3_BUCKET }}
+      NPM_TOKEN: ${{ secrets.NPM_TOKEN }}
+      PAT_TOKEN: ${{ secrets.PAT_TOKEN }}
     with:
       version: ${{ needs.publish-npm.outputs.published_version }}

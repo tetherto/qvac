@@ -2,6 +2,12 @@ name: Model Conversion Test (NMTCPP)
 
 on:
   workflow_call:
+    secrets:
+      NPM_TOKEN:
+        required: true
+      PAT_TOKEN:
+        required: true
+
     inputs:
       items:
         description: "Comma-separated list of items"

@@ -13,6 +13,12 @@ on:
         required: false
         default: "packages/qvac-lib-infer-whispercpp"
   workflow_call:
+    secrets:
+      NPM_TOKEN:
+        required: true
+      PAT_TOKEN:
+        required: true
+
     inputs:
       ref:
         description: "ref"
