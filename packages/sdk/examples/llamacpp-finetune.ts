@@ -43,6 +43,8 @@ import {
   completion,
 } from "@qvac/sdk";
 import process from "bare-process";
+import fs from "bare-fs";
+import path from "bare-path";
 
 // Parse CLI args
 const args = process.argv.slice(2);
@@ -120,6 +122,24 @@ async function demoCancel(modelId: string) {
   console.log("Checkpoints cleared — cannot resume after cancel.\n");
 }
 
+function findPauseCheckpoint(dir: string): string | null {
+  if (!fs.existsSync(dir)) return null;
+  const entries = fs.readdirSync(dir) as string[];
+  const checkpoints = entries.filter((f: string) => f.startsWith("pause_checkpoint_step_"));
+  if (checkpoints.length === 0) return null;
+  checkpoints.sort((a: string, b: string) => {
+    const stepA = parseInt(a.match(/pause_checkpoint_step_(\d+)/)?.[1] ?? "0");
+    const stepB = parseInt(b.match(/pause_checkpoint_step_(\d+)/)?.[1] ?? "0");
+    return stepB - stepA;
+  });
+  return path.join(dir, checkpoints[0]!);
+}
+
+const inferencePrompt = [
+  { role: "system" as const, content: "You are a helpful healthcare assistant." },
+  { role: "user" as const, content: "Do nurses' involvement in patient education improve outcomes?" },
+];
+
 async function demoPauseResume(modelId: string) {
   console.log("\n=== Pause/Resume Demo ===");
   console.log("Starting finetuning (will pause after a few steps)...");
@@ -134,7 +154,6 @@ async function demoPauseResume(modelId: string) {
 
     if (stepCount >= pauseAfterSteps) {
       console.log(`\nPausing after ${stepCount} steps...`);
-      // Pause — saves checkpoint, can resume later
       // cancel() with reset: false acts as pause for finetune jobs
       await cancel({ operation: "inference", modelId, reset: false });
       break;
@@ -142,24 +161,64 @@ async function demoPauseResume(modelId: string) {
   }
 
   const pauseResult = await handle.result;
-  console.log(`Pause result: ${pauseResult.status}`); // → "PAUSED"
+  console.log(`Pause result: ${pauseResult.status}`);
 
   if (pauseResult.stats) {
     console.log("Stats at pause:", JSON.stringify(pauseResult.stats, null, 2));
   }
 
-  // (Optional) Run inference while paused
-  console.log("\nRunning inference while finetuning is paused...");
-  const { text: inferText } = completion({
-    modelId,
-    history: [{ role: "user", content: "What is 2+2?" }],
+  // Find the pause checkpoint's LoRA adapter
+  const pauseCheckpointPath = findPauseCheckpoint(checkpointDir);
+  if (!pauseCheckpointPath) {
+    throw new Error(`No pause checkpoint found in ${checkpointDir}`);
+  }
+  const loraAdapterPath = path.join(pauseCheckpointPath, "model.gguf");
+  console.log(`\nPause checkpoint found: ${pauseCheckpointPath}`);
+  console.log(`LoRA adapter path: ${loraAdapterPath}`);
+
+  // Step 1: Inference WITH the checkpoint's LoRA adapter
+  // This demonstrates partial fine-tuning effect
+  console.log("\n--- Inference with LoRA adapter (partial fine-tuning) ---");
+  const loraModelId = await loadModel({
+    modelType: "llm",
+    modelSrc: modelPath,
+    modelConfig: {
+      device: "cpu",
+      ctx_size: 4096,
+      lora: loraAdapterPath,
+    },
+  });
+
+  const { text: loraText } = completion({
+    modelId: loraModelId,
+    history: inferencePrompt,
     stream: false,
   });
-  console.log("Inference response:", await inferText);
+  console.log("With LoRA:", await loraText);
+  await unloadModel({ modelId: loraModelId });
 
-  // Resume — just call finetune() again with the same params
+  // Step 2: Inference WITHOUT LoRA (base model comparison)
+  console.log("\n--- Inference without LoRA (base model) ---");
+  const baseModelId = await loadModel({
+    modelType: "llm",
+    modelSrc: modelPath,
+    modelConfig: {
+      device: "cpu",
+      ctx_size: 4096,
+    },
+  });
+
+  const { text: baseText } = completion({
+    modelId: baseModelId,
+    history: inferencePrompt,
+    stream: false,
+  });
+  console.log("Without LoRA:", await baseText);
+  await unloadModel({ modelId: baseModelId });
+
+  // Step 3: Resume finetuning on the ORIGINAL model (never unloaded)
   // The addon auto-detects the checkpoint in checkpointSaveDir
-  console.log("\nResuming finetuning from checkpoint...");
+  console.log("\n--- Resuming finetuning from checkpoint ---");
   const resumed = finetune({ modelId, ...finetuneOptions });
 
   for await (const tick of resumed.progressStream) {
@@ -167,7 +226,7 @@ async function demoPauseResume(modelId: string) {
   }
 
   const resumeResult = await resumed.result;
-  console.log(`\nResume result: ${resumeResult.status}`); // → "COMPLETED"
+  console.log(`\nResume result: ${resumeResult.status}`);
 
   if (resumeResult.stats) {
     console.log("Final stats:", JSON.stringify(resumeResult.stats, null, 2));
