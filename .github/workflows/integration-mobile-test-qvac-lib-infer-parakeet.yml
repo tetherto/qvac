@@ -17,8 +17,6 @@ on:
         required: true
       AWS_SECRET_ACCESS_KEY:
         required: true
-      GITHUB_TOKEN:
-        required: true
       IOS_DEVICE_POOL_ARN_PARAKEET:
         required: true
       NPM_TOKEN:

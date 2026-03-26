@@ -165,7 +165,6 @@ jobs:
       )
     uses: ./.github/workflows/prebuilds-qvac-lib-infer-onnx.yml
     secrets:
-      GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
       NPM_TOKEN: ${{ secrets.NPM_TOKEN }}
       PAT_TOKEN: ${{ secrets.PAT_TOKEN }}
     with:

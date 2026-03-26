@@ -118,7 +118,6 @@ jobs:
       packages: read
     uses: ./.github/workflows/integration-test-qvac-lib-decoder-audio.yml
     secrets:
-      GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
       NPM_TOKEN: ${{ secrets.NPM_TOKEN }}
       PAT_TOKEN: ${{ secrets.PAT_TOKEN }}
       QASE_API_TOKEN: ${{ secrets.QASE_API_TOKEN }}
@@ -143,7 +142,6 @@ jobs:
       AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
       AWS_DEVICE_FARM_PROJECT_ARN_DECODER_AUDIO: ${{ secrets.AWS_DEVICE_FARM_PROJECT_ARN_DECODER_AUDIO }}
       AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
-      GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
       IOS_DEVICE_POOL_ARN_DECODER_AUDIO: ${{ secrets.IOS_DEVICE_POOL_ARN_DECODER_AUDIO }}
       NPM_TOKEN: ${{ secrets.NPM_TOKEN }}
       PAT_TOKEN: ${{ secrets.PAT_TOKEN }}
@@ -211,8 +209,6 @@ jobs:
     permissions:
       contents: write
     uses: ./.github/workflows/create-github-release.yml
-    secrets:
-      GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
     with:
       repo_name: "decoder-audio"
       release_name: "QVAC Decoder Audio Lib"

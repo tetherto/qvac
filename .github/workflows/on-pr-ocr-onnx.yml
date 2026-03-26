@@ -171,7 +171,6 @@ jobs:
     secrets:
       AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
       AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
-      GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
       MODEL_S3_BUCKET: ${{ secrets.MODEL_S3_BUCKET }}
       NPM_TOKEN: ${{ secrets.NPM_TOKEN }}
       PAT_TOKEN: ${{ secrets.PAT_TOKEN }}
@@ -192,7 +191,6 @@ jobs:
     secrets:
       AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
       AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
-      GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
       MODEL_S3_BUCKET: ${{ secrets.MODEL_S3_BUCKET }}
       NPM_TOKEN: ${{ secrets.NPM_TOKEN }}
       PAT_TOKEN: ${{ secrets.PAT_TOKEN }}
@@ -218,7 +216,6 @@ jobs:
       AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
       AWS_DEVICE_FARM_PROJECT_ARN_OCR_FASTTEXT: ${{ secrets.AWS_DEVICE_FARM_PROJECT_ARN_OCR_FASTTEXT }}
       AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
-      GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
       IOS_DEVICE_POOL_ARN_OCR_FASTTEXT: ${{ secrets.IOS_DEVICE_POOL_ARN_OCR_FASTTEXT }}
       MODEL_S3_BUCKET: ${{ secrets.MODEL_S3_BUCKET }}
       NPM_TOKEN: ${{ secrets.NPM_TOKEN }}

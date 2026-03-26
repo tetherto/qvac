@@ -2,10 +2,6 @@ name: Create GitHub Release (ONNX)
 
 on:
   workflow_call:
-    secrets:
-      GITHUB_TOKEN:
-        required: true
-
     inputs:
       published_version:
         description: "Version published in prebuild workflow"

@@ -7,8 +7,6 @@ on:
         required: true
       AWS_SECRET_ACCESS_KEY:
         required: true
-      GITHUB_TOKEN:
-        required: true
       MODEL_S3_BUCKET:
         required: true
       NPM_TOKEN:
@@ -856,8 +854,6 @@ jobs:
     permissions:
       contents: write
     uses: ./.github/workflows/create-github-release.yml
-    secrets:
-      GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
     with:
       repo_name: "nmtcpp"
       release_name: "QVAC Infer NMTCPP Lib"
@@ -872,7 +868,6 @@ jobs:
     secrets:
       AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
       AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
-      GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
       MODEL_S3_BUCKET: ${{ secrets.MODEL_S3_BUCKET }}
       NPM_TOKEN: ${{ secrets.NPM_TOKEN }}
       PAT_TOKEN: ${{ secrets.PAT_TOKEN }}

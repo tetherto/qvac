@@ -12,8 +12,6 @@ on:
         required: true
       AWS_SECRET_ACCESS_KEY:
         required: true
-      GITHUB_TOKEN:
-        required: true
       NPM_TOKEN:
         required: true
       PAT_TOKEN:

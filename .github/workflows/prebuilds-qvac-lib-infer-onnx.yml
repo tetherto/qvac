@@ -14,8 +14,6 @@ on:
 
   workflow_call:
     secrets:
-      GITHUB_TOKEN:
-        required: true
       NPM_TOKEN:
         required: true
       PAT_TOKEN:
@@ -584,8 +582,6 @@ jobs:
     permissions:
       contents: write
     uses: ./.github/workflows/create-github-release-qvac-lib-infer-onnx.yml
-    secrets:
-      GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
     with:
       published_version: ${{ needs.publish-npm.outputs.published_version }}
       prev_sha: ${{ github.event.before }}

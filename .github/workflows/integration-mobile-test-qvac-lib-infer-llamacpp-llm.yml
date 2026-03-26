@@ -13,8 +13,6 @@ on:
         required: true
       AWS_SECRET_ACCESS_KEY:
         required: true
-      GITHUB_TOKEN:
-        required: true
       LLM_ANDROID_DEVICE_POOL_ARN:
         required: true
       LLM_AWS_DEVICE_FARM_PROJECT_ARN:

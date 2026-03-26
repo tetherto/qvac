@@ -112,7 +112,6 @@ jobs:
       pull-requests: write
     uses: ./.github/workflows/prebuilds-qvac-lib-infer-onnx.yml
     secrets:
-      GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
       NPM_TOKEN: ${{ secrets.NPM_TOKEN }}
       PAT_TOKEN: ${{ secrets.PAT_TOKEN }}
     with:
@@ -128,7 +127,6 @@ jobs:
       pull-requests: write
     uses: ./.github/workflows/prebuilds-qvac-lib-infer-onnx.yml
     secrets:
-      GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
       NPM_TOKEN: ${{ secrets.NPM_TOKEN }}
       PAT_TOKEN: ${{ secrets.PAT_TOKEN }}
     with:
@@ -144,7 +142,6 @@ jobs:
       pull-requests: write
     uses: ./.github/workflows/prebuilds-qvac-lib-infer-onnx.yml
     secrets:
-      GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
       NPM_TOKEN: ${{ secrets.NPM_TOKEN }}
       PAT_TOKEN: ${{ secrets.PAT_TOKEN }}
     with:
@@ -162,7 +159,6 @@ jobs:
       pull-requests: write
     uses: ./.github/workflows/prebuilds-qvac-lib-infer-onnx.yml
     secrets:
-      GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
       NPM_TOKEN: ${{ secrets.NPM_TOKEN }}
       PAT_TOKEN: ${{ secrets.PAT_TOKEN }}
     with:
@@ -175,8 +171,6 @@ jobs:
     permissions:
       contents: write
     uses: ./.github/workflows/create-github-release-qvac-lib-infer-onnx.yml
-    secrets:
-      GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
     with:
       published_version: ${{ needs.publish-release-npm.outputs.published_version }}
       prev_sha: ${{ github.event.before }}

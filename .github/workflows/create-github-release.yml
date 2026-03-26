@@ -2,10 +2,6 @@ name: Create GitHub Release
 
 on:
   workflow_call:
-    secrets:
-      GITHUB_TOKEN:
-        required: true
-
     inputs:
       repo_name:
         description: "Short repository name for tag prefix (e.g., 'llamacpp-llm', 'onnx-tts')"
