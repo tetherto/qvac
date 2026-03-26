@@ -9,6 +9,12 @@ on:
         required: false
         default: "packages/lib-infer-diffusion"
   workflow_call:
+    secrets:
+      NPM_TOKEN:
+        required: true
+      PAT_TOKEN:
+        required: true
+
     inputs:
       ref:
         description: "Git ref to checkout"

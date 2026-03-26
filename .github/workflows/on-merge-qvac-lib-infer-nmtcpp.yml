@@ -113,7 +113,12 @@ jobs:
     needs: publish-logic
     if: needs.publish-logic.outputs.publish_main == 'true'
     uses: ./.github/workflows/prebuilds-qvac-lib-infer-nmtcpp.yml
-    secrets: inherit
+    secrets:
+      AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
+      AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+      MODEL_S3_BUCKET: ${{ secrets.MODEL_S3_BUCKET }}
+      NPM_TOKEN: ${{ secrets.NPM_TOKEN }}
+      PAT_TOKEN: ${{ secrets.PAT_TOKEN }}
     with:
       tag: ${{ needs.publish-logic.outputs.gpr_tag }}
       publish_target: "gpr"
@@ -122,7 +127,12 @@ jobs:
     needs: publish-logic
     if: needs.publish-logic.outputs.publish_feature == 'true'
     uses: ./.github/workflows/prebuilds-qvac-lib-infer-nmtcpp.yml
-    secrets: inherit
+    secrets:
+      AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
+      AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+      MODEL_S3_BUCKET: ${{ secrets.MODEL_S3_BUCKET }}
+      NPM_TOKEN: ${{ secrets.NPM_TOKEN }}
+      PAT_TOKEN: ${{ secrets.PAT_TOKEN }}
     with:
       tag: ${{ needs.publish-logic.outputs.gpr_tag }}
       publish_target: "gpr"
@@ -131,7 +141,12 @@ jobs:
     needs: publish-logic
     if: needs.publish-logic.outputs.publish_tmp == 'true'
     uses: ./.github/workflows/prebuilds-qvac-lib-infer-nmtcpp.yml
-    secrets: inherit
+    secrets:
+      AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
+      AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+      MODEL_S3_BUCKET: ${{ secrets.MODEL_S3_BUCKET }}
+      NPM_TOKEN: ${{ secrets.NPM_TOKEN }}
+      PAT_TOKEN: ${{ secrets.PAT_TOKEN }}
     with:
       tag: ${{ needs.publish-logic.outputs.gpr_tag }}
       publish_target: "gpr"
@@ -139,12 +154,20 @@ jobs:
   model-conversion-test:
     needs: [prebuild-main-gpr]
     uses: ./.github/workflows/model-conversion-test-qvac-lib-infer-nmtcpp.yml
-    secrets: inherit
+    secrets:
+      NPM_TOKEN: ${{ secrets.NPM_TOKEN }}
+      PAT_TOKEN: ${{ secrets.PAT_TOKEN }}
 
   run-integration-tests:
     needs: [prebuild-main-gpr]
     uses: ./.github/workflows/integration-test-qvac-lib-infer-nmtcpp.yml
-    secrets: inherit
+    secrets:
+      AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
+      AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+      MODEL_S3_BUCKET: ${{ secrets.MODEL_S3_BUCKET }}
+      NPM_TOKEN: ${{ secrets.NPM_TOKEN }}
+      PAT_TOKEN: ${{ secrets.PAT_TOKEN }}
+      QASE_API_TOKEN: ${{ secrets.QASE_API_TOKEN }}
     with:
       repository: ${{ github.repository }}
       ref: ${{ github.ref }}
@@ -153,7 +176,12 @@ jobs:
     needs: [publish-logic]
     if: needs.publish-logic.outputs.publish_release == 'true'
     uses: ./.github/workflows/prebuilds-qvac-lib-infer-nmtcpp.yml
-    secrets: inherit
+    secrets:
+      AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
+      AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+      MODEL_S3_BUCKET: ${{ secrets.MODEL_S3_BUCKET }}
+      NPM_TOKEN: ${{ secrets.NPM_TOKEN }}
+      PAT_TOKEN: ${{ secrets.PAT_TOKEN }}
     with:
       tag: "latest"
       publish_target: "npm"

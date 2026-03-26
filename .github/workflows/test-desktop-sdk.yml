@@ -43,7 +43,7 @@ on:
       MQTT_PASSWORD:
         required: true
       MQTT_CA_CERT:
-        required: false
+        required: true
       MQTT_CLIENT_CERT:
         required: false
       MQTT_CLIENT_KEY:

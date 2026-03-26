@@ -111,7 +111,9 @@ jobs:
       packages: write
       pull-requests: write
     uses: ./.github/workflows/prebuilds-qvac-lib-infer-onnx.yml
-    secrets: inherit
+    secrets:
+      NPM_TOKEN: ${{ secrets.NPM_TOKEN }}
+      PAT_TOKEN: ${{ secrets.PAT_TOKEN }}
     with:
       tag: ${{ inputs.tag || needs.publish-logic.outputs.gpr_tag }}
       publish_target: "gpr"
@@ -124,7 +126,9 @@ jobs:
       packages: write
       pull-requests: write
     uses: ./.github/workflows/prebuilds-qvac-lib-infer-onnx.yml
-    secrets: inherit
+    secrets:
+      NPM_TOKEN: ${{ secrets.NPM_TOKEN }}
+      PAT_TOKEN: ${{ secrets.PAT_TOKEN }}
     with:
       tag: ${{ inputs.tag || needs.publish-logic.outputs.gpr_tag }}
       publish_target: "gpr"
@@ -137,7 +141,9 @@ jobs:
       packages: write
       pull-requests: write
     uses: ./.github/workflows/prebuilds-qvac-lib-infer-onnx.yml
-    secrets: inherit
+    secrets:
+      NPM_TOKEN: ${{ secrets.NPM_TOKEN }}
+      PAT_TOKEN: ${{ secrets.PAT_TOKEN }}
     with:
       tag: ${{ inputs.tag || needs.publish-logic.outputs.gpr_tag }}
       publish_target: "gpr"
@@ -152,7 +158,9 @@ jobs:
       packages: write
       pull-requests: write
     uses: ./.github/workflows/prebuilds-qvac-lib-infer-onnx.yml
-    secrets: inherit
+    secrets:
+      NPM_TOKEN: ${{ secrets.NPM_TOKEN }}
+      PAT_TOKEN: ${{ secrets.PAT_TOKEN }}
     with:
       tag: "latest"
       publish_target: "npm"
@@ -163,7 +171,6 @@ jobs:
     permissions:
       contents: write
     uses: ./.github/workflows/create-github-release-qvac-lib-infer-onnx.yml
-    secrets: inherit
     with:
       published_version: ${{ needs.publish-release-npm.outputs.published_version }}
       prev_sha: ${{ github.event.before }}

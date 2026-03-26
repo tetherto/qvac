@@ -10,6 +10,18 @@ on:
         required: false
         type: string
   workflow_call:
+    secrets:
+      AWS_ACCESS_KEY_ID:
+        required: true
+      AWS_SECRET_ACCESS_KEY:
+        required: true
+      MODEL_S3_BUCKET:
+        required: true
+      NPM_TOKEN:
+        required: true
+      PAT_TOKEN:
+        required: true
+
     inputs:
       version:
         description: 'Addon version to benchmark'
@@ -61,7 +73,12 @@ jobs:
   benchmark-opus:
     needs: prepare
     uses: ./.github/workflows/benchmark-qvac-lib-infer-nmtcpp.yml
-    secrets: inherit
+    secrets:
+      AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
+      AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+      MODEL_S3_BUCKET: ${{ secrets.MODEL_S3_BUCKET }}
+      NPM_TOKEN: ${{ secrets.NPM_TOKEN }}
+      PAT_TOKEN: ${{ secrets.PAT_TOKEN }}
     with:
       pairs: ${{ needs.prepare.outputs.opus_pairs }}
       translators: 'qvac'
@@ -77,7 +94,12 @@ jobs:
   benchmark-bergamot:
     needs: prepare
     uses: ./.github/workflows/benchmark-qvac-lib-infer-nmtcpp.yml
-    secrets: inherit
+    secrets:
+      AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
+      AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+      MODEL_S3_BUCKET: ${{ secrets.MODEL_S3_BUCKET }}
+      NPM_TOKEN: ${{ secrets.NPM_TOKEN }}
+      PAT_TOKEN: ${{ secrets.PAT_TOKEN }}
     with:
       pairs: ${{ needs.prepare.outputs.bergamot_pairs }}
       translators: 'qvac_bergamot'
