@@ -13,9 +13,6 @@ const isMobile = platform === 'ios' || platform === 'android'
 const CHATTERBOX_VARIANT = os.getEnv('CHATTERBOX_VARIANT') || 'fp32'
 const VARIANT_SUFFIX = CHATTERBOX_VARIANT === 'fp32' ? '' : `_${CHATTERBOX_VARIANT}`
 
-const CHATTERBOX_SAMPLE_RATE = 24000
-const SUPERTONIC_SAMPLE_RATE = 44100
-const ENHANCED_SAMPLE_RATE = 48000
 
 function getBaseDir () {
   return isMobile && global.testDir ? global.testDir : '.'
