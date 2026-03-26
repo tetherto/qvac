@@ -26,6 +26,10 @@ permissions:
   pull-requests: write
   packages: write
 
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: false
+
 jobs:
   publish-logic:
     runs-on: ubuntu-latest
@@ -84,14 +88,12 @@ jobs:
 
   release-merge-guard:
     name: Release Merge Guard
-    continue-on-error: true
     if: >-
       github.event_name == 'push' &&
-      startsWith(github.ref_name, 'release-') &&
-      github.event.before != '0000000000000000000000000000000000000000'
+      startsWith(github.ref_name, 'release-')
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v6
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # 6.0.2
         with:
           fetch-depth: 0
       - uses: ./.github/actions/release-merge-guard
@@ -147,12 +149,12 @@ jobs:
       packages: write
     steps:
       - name: Checkout repository
-        uses: actions/checkout@v6
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # 6.0.2
         with:
           fetch-depth: 0
 
       - name: Publish to GitHub Packages
-        uses: tetherto/qvac-devops/.github/actions/publish-library-to-gpr@monorepo_update
+        uses: tetherto/qvac-devops/.github/actions/publish-library-to-gpr@v1.1.7
         with:
           secret-token: ${{ secrets.GITHUB_TOKEN }}
           pat-token: ${{ secrets.PAT_TOKEN }}
@@ -163,7 +165,9 @@ jobs:
 
   publish-release-npm:
     needs: [publish-logic, release-merge-guard, run-integration-tests, mobile-integration-tests]
-    if: needs.publish-logic.outputs.publish_release == 'true'
+    if: >-
+      needs.publish-logic.outputs.publish_release == 'true' &&
+      (needs.release-merge-guard.result == 'success' || needs.release-merge-guard.result == 'skipped')
     runs-on: ubuntu-latest
     outputs:
       published_version: ${{ steps.publish.outputs.npm_published_version }}
@@ -172,11 +176,11 @@ jobs:
       packages: write
     steps:
       - name: Checkout repository
-        uses: actions/checkout@v6
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # 6.0.2
 
       - name: Publish to NPM Package Registry
         id: publish
-        uses: tetherto/qvac-devops/.github/actions/publish-library-to-npm@monorepo_update
+        uses: tetherto/qvac-devops/.github/actions/publish-library-to-npm@v1.1.7
         with:
           secret-token: ${{ secrets.NPM_TOKEN }}
           tag: "latest"

@@ -58,6 +58,10 @@ on:
 env:
   WORKDIR: ${{ inputs.workdir }}
 
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: false
+
 jobs:
   prebuild:
     permissions:
@@ -128,15 +132,23 @@ jobs:
 
       - name: Echo workflow inputs
         shell: bash
+        env:
+          INPUT_TAG: ${{ inputs.tag || github.event.inputs.tag }}
+          INPUT_REF: ${{ inputs.ref || github.ref }}
+          INPUT_REPO: ${{ inputs.repository || github.repository }}
+          INPUT_WORKDIR: ${{ env.WORKDIR }}
+          MATRIX_PLATFORM: ${{ matrix.platform }}
+          MATRIX_ARCH: ${{ matrix.arch }}
+          MATRIX_TAGS: ${{ matrix.tags }}
         run: |
           echo "Workflow inputs:"
-          echo "Tag: ${{ inputs.tag || github.event.inputs.tag }}"
-          echo "Ref: ${{ inputs.ref || github.ref }}"
-          echo "Repository: ${{ inputs.repository || github.repository }}"
-          echo "Workdir: ${{ env.WORKDIR }}"
-          echo "Matrix platform: ${{ matrix.platform }}"
-          echo "Matrix arch: ${{ matrix.arch }}"
-          echo "Matrix tags: ${{ matrix.tags }}"
+          echo "Tag: $INPUT_TAG"
+          echo "Ref: $INPUT_REF"
+          echo "Repository: $INPUT_REPO"
+          echo "Workdir: $INPUT_WORKDIR"
+          echo "Matrix platform: $MATRIX_PLATFORM"
+          echo "Matrix arch: $MATRIX_ARCH"
+          echo "Matrix tags: $MATRIX_TAGS"
 
       - if: ${{ startsWith(matrix.os, 'ubuntu-') }}
         name: Install llvm-19
@@ -153,14 +165,14 @@ jobs:
           choco upgrade llvm
 
       - name: Checkout repository
-        uses: actions/checkout@v6
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # 6.0.2
         with:
           repository: ${{ inputs.repository || github.repository }}
           ref: ${{ inputs.ref || github.ref }}
           token: ${{ secrets.PAT_TOKEN }}
 
       - name: Setup node
-        uses: actions/setup-node@v6
+        uses: actions/setup-node@53b83947a5a98c8d113130e565377fae1a50d02f # 6.3.0
         with:
           node-version: lts/*
 
@@ -257,7 +269,7 @@ jobs:
 
       - if: ${{ matrix.os == 'ubuntu-22.04-arm' }}
         name: Get ccache cache
-        uses: actions/cache@v5
+        uses: actions/cache@668228422ae6a00e4ad889ee87cd7109ec5666a7 # 5.0.4
         with:
           key: ccache-${{ matrix.platform }}-${{ matrix.arch }}
           path: ~/.cache/ccache-arm
@@ -365,7 +377,7 @@ jobs:
 
       - name: Get vcpkg cache
         id: cache-vcpkg
-        uses: actions/cache@v5
+        uses: actions/cache@668228422ae6a00e4ad889ee87cd7109ec5666a7 # 5.0.4
         with:
           key: ${{ matrix.platform }}-${{ matrix.arch }}-${{ hashFiles(format('{0}/vcpkg.json', env.WORKDIR), format('{0}/vcpkg-configuration.json', env.WORKDIR), format('{0}/vcpkg/ports/**', env.WORKDIR)) }}
           path: ${{ env.WORKDIR }}/vcpkg/cache
@@ -430,7 +442,7 @@ jobs:
             find prebuilds -name "*.bare" -exec strip --strip-debug {} \;
           fi
 
-      - uses: actions/upload-artifact@v6
+      - uses: actions/upload-artifact@bbbca2ddaa5d8feaa63e36b76fdaad77386f024f # 7.0.0
         with:
           name: llama-cpp-${{ matrix.platform }}-${{ matrix.arch }}${{ matrix.tags }}
           path: ${{ env.WORKDIR }}/prebuilds
@@ -442,13 +454,13 @@ jobs:
       contents: write
     steps:
       - name: Download all build artifacts
-        uses: actions/download-artifact@v7
+        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # 8.0.1
         with:
           path: prebuilds
           merge-multiple: true
 
       - name: Upload merged artifacts
-        uses: actions/upload-artifact@v6
+        uses: actions/upload-artifact@bbbca2ddaa5d8feaa63e36b76fdaad77386f024f # 7.0.0
         with:
           name: prebuilds
           path: prebuilds
@@ -480,19 +492,19 @@ jobs:
       packages: write
     steps:
       - name: Checkout repository
-        uses: actions/checkout@v6
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # 6.0.2
         with:
           repository: ${{ inputs.repository || github.repository }}
           ref: ${{ inputs.ref || github.ref }}
           token: ${{ secrets.PAT_TOKEN }}
 
       - name: Setup node
-        uses: actions/setup-node@v6
+        uses: actions/setup-node@53b83947a5a98c8d113130e565377fae1a50d02f # 6.3.0
         with:
           node-version: lts/*
 
       - name: Download prebuild artifacts
-        uses: actions/download-artifact@v7
+        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # 8.0.1
         with:
           name: prebuilds
           path: ${{ env.WORKDIR }}/prebuilds
@@ -506,7 +518,7 @@ jobs:
 
       - name: Publish to GitHub Package Registry
         id: publish
-        uses: tetherto/qvac-devops/.github/actions/publish-library-to-gpr@monorepo_update
+        uses: tetherto/qvac-devops/.github/actions/publish-library-to-gpr@v1.1.7
         with:
           secret-token: ${{ secrets.GITHUB_TOKEN }}
           tag: ${{ inputs.tag || github.event.inputs.tag || 'dev' }}
@@ -534,19 +546,19 @@ jobs:
       packages: write
     steps:
       - name: Checkout repository
-        uses: actions/checkout@v6
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # 6.0.2
         with:
           repository: ${{ inputs.repository || github.repository }}
           ref: ${{ inputs.ref || github.ref }}
           token: ${{ secrets.PAT_TOKEN }}
 
       - name: Setup node
-        uses: actions/setup-node@v6
+        uses: actions/setup-node@53b83947a5a98c8d113130e565377fae1a50d02f # 6.3.0
         with:
           node-version: lts/*
 
       - name: Download prebuild artifacts
-        uses: actions/download-artifact@v7
+        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # 8.0.1
         with:
           name: prebuilds
           path: ${{ env.WORKDIR }}/prebuilds
@@ -562,7 +574,7 @@ jobs:
 
       - name: Publish to NPM Package Registry
         id: publish
-        uses: tetherto/qvac-devops/.github/actions/publish-library-to-npm@monorepo_update
+        uses: tetherto/qvac-devops/.github/actions/publish-library-to-npm@v1.1.7
         with:
           secret-token: ${{ secrets.NPM_TOKEN }}
           tag: 'latest'

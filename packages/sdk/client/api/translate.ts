@@ -8,8 +8,29 @@ import {
   type TranslationStats,
   type RPCOptions,
 } from "@/schemas";
-import { detectOne } from "@qvac/langdetect-text";
+import { detectOne } from "@qvac/langdetect-text-cld2";
 import { TranslationFailedError } from "@/utils/errors-client";
+
+/**
+ * Detects the source language if not provided for LLM models
+ * @internal
+ */
+async function detectSourceLanguage(
+  text: string,
+  providedLanguage: string | undefined,
+  isLlm: boolean
+): Promise<string | undefined> {
+  if (!isLlm) return undefined;
+  if (providedLanguage) return providedLanguage;
+
+  const detected = await detectOne(text);
+  if (detected.code === "und" || detected.language === "Undetermined") {
+    throw new TranslationFailedError(
+      "Could not detect the source language. Please specify the 'from' parameter explicitly.",
+    );
+  }
+  return detected.language;
+}
 
 /**
  * Translates text from one language to another using a specified translation model.
@@ -62,26 +83,6 @@ export function translate(
   const canonicalModelType = normalizeModelType(params.modelType);
   const isLlm = canonicalModelType === ModelType.llamacppCompletion;
 
-  let sourceLanguage = isLlm ? (params as { from?: string }).from : undefined;
-
-  if (!sourceLanguage && isLlm) {
-    const detected = detectOne(params.text as string);
-    if (detected.code === "und" || detected.language === "Undetermined") {
-      throw new TranslationFailedError(
-        "Could not detect the source language. Please specify the 'from' parameter explicitly.",
-      );
-    }
-    sourceLanguage = detected.language;
-  }
-
-  const request: TranslateRequest = {
-    type: "translate",
-    ...params,
-    ...(isLlm && {
-      from: sourceLanguage,
-    }),
-  } as TranslateRequest;
-
   let stats: TranslationStats | undefined;
   let statsResolver: (value: TranslationStats | undefined) => void = () => {};
   const statsPromise = new Promise<TranslationStats | undefined>((resolve) => {
@@ -90,6 +91,20 @@ export function translate(
 
   if (params.stream) {
     const tokenStream = (async function* () {
+      const sourceLanguage =  await detectSourceLanguage(
+        params.text as string,
+        isLlm ? (params as { from?: string }).from : undefined,
+       isLlm
+      );
+
+      const request: TranslateRequest = {
+        type: "translate",
+        ...params,
+        ...(isLlm && {
+          from: sourceLanguage,
+        }),
+      } as TranslateRequest;
+
       for await (const response of streamRpc(request, options)) {
         if (response.type === "translate") {
           const streamResponse = translateResponseSchema.parse(response);
@@ -116,6 +131,20 @@ export function translate(
     })();
 
     const textPromise = (async () => {
+      const sourceLanguage = await detectSourceLanguage(
+        params.text as string,
+        isLlm ? (params as { from?: string }).from : undefined,
+        isLlm
+      );
+
+      const request: TranslateRequest = {
+        type: "translate",
+        ...params,
+        ...(isLlm && {
+          from: sourceLanguage,
+        }),
+      } as TranslateRequest;
+
       let buffer = "";
 
       for await (const response of streamRpc(request, options)) {

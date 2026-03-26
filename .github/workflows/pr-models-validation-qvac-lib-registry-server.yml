@@ -17,6 +17,10 @@ on:
       - "packages/qvac-lib-registry-server/**"
   workflow_dispatch:
 
+concurrency:
+  group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.sha }}
+  cancel-in-progress: true
+
 env:
   PKG_DIR: packages/qvac-lib-registry-server
   MODELS_FILE: packages/qvac-lib-registry-server/data/models.prod.json
@@ -33,7 +37,7 @@ jobs:
       models_only: ${{ steps.filter.outputs.models == 'true' && steps.filter.outputs.other == 'false' }}
       other_changed: ${{ steps.filter.outputs.other }}
     steps:
-      - uses: actions/checkout@v6
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # 6.0.2
         with:
           ref: ${{ github.event.pull_request.head.sha || github.sha }}
           fetch-depth: 0
@@ -109,12 +113,12 @@ jobs:
        github.event_name == 'workflow_dispatch')
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v6
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # 6.0.2
         with:
           ref: ${{ github.event.pull_request.head.sha || github.sha }}
 
       - name: Setup Node.js
-        uses: actions/setup-node@v6
+        uses: actions/setup-node@53b83947a5a98c8d113130e565377fae1a50d02f # 6.3.0
         with:
           node-version: 20
           cache: npm
@@ -148,12 +152,12 @@ jobs:
        github.event_name == 'workflow_dispatch')
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v6
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # 6.0.2
         with:
           ref: ${{ github.event.pull_request.head.sha || github.sha }}
 
       - name: Setup Node.js
-        uses: actions/setup-node@v6
+        uses: actions/setup-node@53b83947a5a98c8d113130e565377fae1a50d02f # 6.3.0
         with:
           node-version: 20
           cache: npm
@@ -210,7 +214,7 @@ jobs:
       QVAC_WRITER_PUBLIC_KEY: ${{ secrets.QVAC_WRITER_PUBLIC_KEY }}
       QVAC_WRITER_SECRET_KEY: ${{ secrets.QVAC_WRITER_SECRET_KEY }}
     steps:
-      - uses: actions/checkout@v6
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # 6.0.2
 
       - name: Validate required secrets
         working-directory: ${{ env.PKG_DIR }}
@@ -228,7 +232,7 @@ jobs:
           echo "✓ All required secrets are set"
 
       - name: Setup Node.js
-        uses: actions/setup-node@v6
+        uses: actions/setup-node@53b83947a5a98c8d113130e565377fae1a50d02f # 6.3.0
         with:
           node-version: 20
           cache: npm
@@ -265,7 +269,7 @@ jobs:
     env:
       QVAC_REGISTRY_CORE_KEY: ${{ secrets.QVAC_REGISTRY_CORE_KEY }}
     steps:
-      - uses: actions/checkout@v6
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # 6.0.2
 
       - name: Validate required secrets
         shell: bash
@@ -278,7 +282,7 @@ jobs:
           echo "✓ All required secrets are set"
 
       - name: Setup Node.js
-        uses: actions/setup-node@v6
+        uses: actions/setup-node@53b83947a5a98c8d113130e565377fae1a50d02f # 6.3.0
         with:
           node-version: 20
           cache: npm
