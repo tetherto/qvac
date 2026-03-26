@@ -58,6 +58,10 @@ async function runOcrLightonTest (options = {}) { // eslint-disable-line no-unus
   return runIntegrationModule('../integration/ocr-lighton.test.js', options)
 }
 
+async function runQuantizedKvcacheTest (options = {}) { // eslint-disable-line no-unused-vars
+  return runIntegrationModule('../integration/quantized-kvcache.test.js', options)
+}
+
 async function runReasoningTest (options = {}) { // eslint-disable-line no-unused-vars
   return runIntegrationModule('../integration/reasoning.test.js', options)
 }
