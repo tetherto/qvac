@@ -5,7 +5,7 @@ description: Performs Optical Character Recognition (OCR) on an image to extract
 ---
 
 ```ts
-function ocr(params): {
+function ocr(params: OCRClientParams): {
   blockStream: AsyncGenerator<OCRTextBlock[]>;
   blocks: Promise<OCRTextBlock[]>;
   stats: Promise<OCRStats | undefined>;
