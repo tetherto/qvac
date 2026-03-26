@@ -51,7 +51,7 @@ jobs:
     with:
       workdir: packages/qvac-lib-infer-llamacpp-llm
       repository: ${{ github.event.pull_request.head.repo.full_name }}
-      ref: ${{ github.event.pull_request.head.ref }}
+      ref: fix/test-pr-fix
 
   cpp-lint:
     if: contains( github.event.pull_request.labels.*.name, 'verify') || github.event_name == 'workflow_dispatch'
