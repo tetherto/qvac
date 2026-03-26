@@ -1,12 +1,9 @@
 name: On PR Close (Decoder-audio)
 
 on:
-  pull_request:
-    types:
-      - closed
-    paths:
-      - "packages/qvac-lib-decoder-audio/**"
-      - ".github/workflows/*decoder-audio*.yml"
+  push:
+    branches:
+      - feat/fix-removal-of-github-token  
   workflow_dispatch:
     inputs:
       version:
@@ -63,5 +60,3 @@ jobs:
       pattern: ${{ inputs.pattern }}
       packages: ${{ inputs.packages || 'qvac-lib-decoder-audio' }}
       dry-run: ${{ github.event_name == 'pull_request' && true || inputs.dry-run }}
-    secrets:
-      GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
