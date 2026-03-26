@@ -11,7 +11,6 @@ type DelegationTarget = {
   topic: string;
   providerPublicKey: string;
   timeout?: number;
-  forceNewConnection?: boolean;
 };
 
 function resolveDelegationTarget(
@@ -36,7 +35,6 @@ function resolveDelegationTarget(
     const target: DelegationTarget = {
       topic: request.delegate.topic,
       providerPublicKey: request.delegate.providerPublicKey,
-      forceNewConnection: request.delegate.forceNewConnection,
     };
     if (request.delegate.timeout !== undefined) {
       target.timeout = request.delegate.timeout;
@@ -72,7 +70,6 @@ export async function handleCancelDelegated(
   try {
     const rpc = await getRPC(target.topic, target.providerPublicKey, {
       timeout: target.timeout,
-      forceNewConnection: target.forceNewConnection,
     });
 
     const delegateOpts: DelegateOptions = {
