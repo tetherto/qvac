@@ -23,9 +23,14 @@ on:
           - dev
           
 permissions:
-  contents: write
-  pull-requests: write
-  packages: write
+  contents: read
+  pull-requests: read
+  packages: read
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: false
+
 jobs:
   publish-logic:
     runs-on: ubuntu-latest
@@ -77,14 +82,12 @@ jobs:
 
   release-merge-guard:
     name: Release Merge Guard
-    continue-on-error: true
     if: >-
       github.event_name == 'push' &&
-      startsWith(github.ref_name, 'release-') &&
-      github.event.before != '0000000000000000000000000000000000000000'
+      startsWith(github.ref_name, 'release-')
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v6
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # 6.0.2
         with:
           fetch-depth: 0
       - uses: ./.github/actions/release-merge-guard
@@ -105,7 +108,12 @@ jobs:
       packages: write
       pull-requests: write
     uses: ./.github/workflows/prebuilds-qvac-lib-infer-llamacpp-embed.yml
-    secrets: inherit
+    secrets:
+      AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
+      AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+      MODEL_S3_BUCKET: ${{ secrets.MODEL_S3_BUCKET }}
+      NPM_TOKEN: ${{ secrets.NPM_TOKEN }}
+      PAT_TOKEN: ${{ secrets.PAT_TOKEN }}
     with:
       tag: ${{ inputs.tag || needs.publish-logic.outputs.gpr_tag }}
       publish_target: "gpr"
@@ -119,7 +127,12 @@ jobs:
       packages: write
       pull-requests: write
     uses: ./.github/workflows/prebuilds-qvac-lib-infer-llamacpp-embed.yml
-    secrets: inherit
+    secrets:
+      AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
+      AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+      MODEL_S3_BUCKET: ${{ secrets.MODEL_S3_BUCKET }}
+      NPM_TOKEN: ${{ secrets.NPM_TOKEN }}
+      PAT_TOKEN: ${{ secrets.PAT_TOKEN }}
     with:
       tag: ${{ inputs.tag || needs.publish-logic.outputs.gpr_tag }}
       publish_target: "gpr"
@@ -133,21 +146,33 @@ jobs:
       packages: write
       pull-requests: write
     uses: ./.github/workflows/prebuilds-qvac-lib-infer-llamacpp-embed.yml
-    secrets: inherit
+    secrets:
+      AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
+      AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+      MODEL_S3_BUCKET: ${{ secrets.MODEL_S3_BUCKET }}
+      NPM_TOKEN: ${{ secrets.NPM_TOKEN }}
+      PAT_TOKEN: ${{ secrets.PAT_TOKEN }}
     with:
       tag: ${{ inputs.tag || needs.publish-logic.outputs.gpr_tag }}
       publish_target: "gpr"
       workdir: "packages/qvac-lib-infer-llamacpp-embed"
 
   publish-release-npm:
-    needs: [publish-logic]
-    if: needs.publish-logic.outputs.publish_release == 'true'
+    needs: [publish-logic, release-merge-guard]
+    if: >-
+      needs.publish-logic.outputs.publish_release == 'true' &&
+      (needs.release-merge-guard.result == 'success' || needs.release-merge-guard.result == 'skipped')
     permissions:
       contents: write
       packages: write
       pull-requests: write
     uses: ./.github/workflows/prebuilds-qvac-lib-infer-llamacpp-embed.yml
-    secrets: inherit
+    secrets:
+      AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
+      AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+      MODEL_S3_BUCKET: ${{ secrets.MODEL_S3_BUCKET }}
+      NPM_TOKEN: ${{ secrets.NPM_TOKEN }}
+      PAT_TOKEN: ${{ secrets.PAT_TOKEN }}
     with:
       tag: "latest"
       publish_target: "npm"
@@ -160,7 +185,6 @@ jobs:
     permissions:
       contents: write
     uses: ./.github/workflows/create-github-release.yml
-    secrets: inherit
     with:
       repo_name: "llamacpp-embed"
       release_name: "QVAC Embed Addon"

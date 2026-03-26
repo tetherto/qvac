@@ -1,6 +1,8 @@
 on:
   workflow_dispatch:
 
+permissions: {}
+
 jobs:
   # build-win11-nvidia-image:
   #   runs-on:  generator-windows11
@@ -24,7 +26,7 @@ jobs:
   #         iex ((New-Object System.Net.WebClient).DownloadString('https://community.chocolatey.org/install.ps1'))
 
   #     - name: Install WinGet
-  #       uses: Cyberboss/install-winget@v1
+  #       uses: Cyberboss/install-winget@fc922bc7e0adb16f39ceab057cb2af88bd3799e1 # 1.2.0
 
   #     - name: Install git for windows with WinGet
   #       shell: powershell

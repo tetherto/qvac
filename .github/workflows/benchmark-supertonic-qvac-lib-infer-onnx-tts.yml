@@ -47,10 +47,14 @@ on:
   release:
     types: [published]
 
+permissions:
+  contents: read
+
 jobs:
   benchmark-supertonic:
     if: github.event_name == 'workflow_dispatch' || (github.event_name == 'release' && startsWith(github.event.release.tag_name, 'onnx-tts-v'))
     runs-on: macos-14-xlarge
+    environment: release
     timeout-minutes: 180
     env:
       GITHUB_TOKEN: ${{ secrets.PAT_TOKEN }}
@@ -61,7 +65,7 @@ jobs:
 
     steps:
       - name: Checkout repository
-        uses: actions/checkout@v4
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # 6.0.2
         with:
           token: ${{ secrets.PAT_TOKEN }}
           submodules: recursive
@@ -91,7 +95,7 @@ jobs:
           brew install ffmpeg cmake
 
       - name: Set up Python
-        uses: actions/setup-python@v5
+        uses: actions/setup-python@a309ff8b426b58ec0e2a45f0f869d46889d02405 # 6.2.0
         with:
           python-version: '3.14'
 
@@ -236,7 +240,7 @@ jobs:
 
       - name: Upload benchmark results
         if: always()
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@bbbca2ddaa5d8feaa63e36b76fdaad77386f024f # 7.0.0
         with:
           name: supertonic-benchmark-results-v${{ steps.version.outputs.version }}
           path: packages/qvac-lib-infer-onnx-tts/benchmarks/results/
