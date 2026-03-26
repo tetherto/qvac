@@ -120,6 +120,7 @@ export const responseSchema = z.discriminatedUnion("type", [
 
 export const rpcOptionsSchema = z.object({
   timeout: z.number().min(100).optional(),
+  healthCheckTimeout: z.number().min(100).optional(),
   forceNewConnection: z.boolean().optional(),
   profiling: perCallProfilingSchema.optional(),
 });

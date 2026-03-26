@@ -42,6 +42,7 @@ export async function handleLoadModelDelegated(
     topic,
     providerPublicKey,
     timeout,
+    healthCheckTimeout,
     fallbackToLocal,
     forceNewConnection,
   } = delegate;
@@ -54,6 +55,7 @@ export async function handleLoadModelDelegated(
     // Create RPC instance for this HyperSwarm peer
     const rpc = await getRPC(topic, providerPublicKey, {
       timeout,
+      healthCheckTimeout,
       forceNewConnection,
     });
 
@@ -123,12 +125,16 @@ export async function handleLoadModelDelegated(
       topic: string;
       providerPublicKey: string;
       timeout?: number;
+      healthCheckTimeout?: number;
     } = {
       topic,
       providerPublicKey,
     };
     if (timeout !== undefined) {
       delegateOptions.timeout = timeout;
+    }
+    if (healthCheckTimeout !== undefined) {
+      delegateOptions.healthCheckTimeout = healthCheckTimeout;
     }
 
     if (isModelLoaded(modelId)) {

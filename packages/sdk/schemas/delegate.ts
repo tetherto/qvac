@@ -5,6 +5,7 @@ export const delegateSchema = z
     topic: z.string(),
     providerPublicKey: z.string(),
     timeout: z.number().min(100).optional(),
+    healthCheckTimeout: z.number().min(100).optional(),
     fallbackToLocal: z.boolean().optional().default(false),
     forceNewConnection: z.boolean().optional().default(false),
   })

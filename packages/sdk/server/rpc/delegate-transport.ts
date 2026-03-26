@@ -55,12 +55,7 @@ export type ResponseWithDelegation = Response & {
 
 const logger = getServerLogger();
 
-let commandCounter = 0;
-
-function getNextCommandId() {
-  commandCounter = (commandCounter + 1) % Number.MAX_SAFE_INTEGER;
-  return commandCounter;
-}
+import { getNextCommandId } from "@/server/rpc/delegate-utils";
 
 function checkAndThrowError(response: Response): void {
   if (response.type === "error") {
@@ -71,8 +66,13 @@ function checkAndThrowError(response: Response): void {
   }
 }
 
-function cleanupDelegationPeer(options?: DelegateOptions): void {
+function isConnectionError(error: unknown): boolean {
+  return !(error instanceof DelegateProviderError);
+}
+
+function cleanupDelegationPeer(options?: DelegateOptions, error?: unknown): void {
   if (!options?.peerKey) return;
+  if (error !== undefined && !isConnectionError(error)) return;
   cleanupStaleConnection(options.peerKey);
 }
 
@@ -121,7 +121,7 @@ async function sendBase<T extends Request>(
 
     return resPayload;
   } catch (error) {
-    cleanupDelegationPeer(options);
+    cleanupDelegationPeer(options, error);
     throw error;
   }
 }
@@ -199,7 +199,7 @@ async function sendProfiled<T extends Request>(
 
     return resPayload;
   } catch (error) {
-    cleanupDelegationPeer(options);
+    cleanupDelegationPeer(options, error);
     const base = {
       ts: nowMs(),
       op: timings.requestType,
@@ -275,7 +275,7 @@ async function* streamBase<T extends Request>(
       }
     }
   } catch (error) {
-    cleanupDelegationPeer(options);
+    cleanupDelegationPeer(options, error);
     throw error;
   }
 }
@@ -369,7 +369,7 @@ async function* streamProfiled<T extends Request>(
 
     recordDelegationStreamEvents(timings, lastServerMeta);
   } catch (error) {
-    cleanupDelegationPeer(options);
+    cleanupDelegationPeer(options, error);
     const base = {
       ts: nowMs(),
       op: timings.requestType,

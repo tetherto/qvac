@@ -28,12 +28,7 @@ const activeConnections = new Map<ConnectionKey, Connection>();
 // Track whether the global connection handler has been registered
 let connectionHandlerRegistered = false;
 const HEALTH_CHECK_TIMEOUT_MS = 1500;
-let commandCounter = 0;
-
-function getNextCommandId(): number {
-  commandCounter = (commandCounter + 1) % Number.MAX_SAFE_INTEGER;
-  return commandCounter;
-}
+import { getNextCommandId } from "@/server/rpc/delegate-utils";
 
 function isPongResponse(payload: unknown): payload is { type: "pong" } {
   return (
@@ -128,7 +123,9 @@ async function ensureRPCConnection(
   topic: string,
   publicKey: string,
   timeout?: number,
+  healthCheckTimeout?: number,
 ): Promise<RPC> {
+  const healthCheckCap = healthCheckTimeout ?? HEALTH_CHECK_TIMEOUT_MS;
   const operationStart = nowMs();
   const getRemainingTimeout = (): number | undefined => {
     if (timeout === undefined) {
@@ -144,8 +141,8 @@ async function ensureRPCConnection(
     const remainingTimeout = getRemainingTimeout();
     const probeTimeout =
       remainingTimeout === undefined
-        ? HEALTH_CHECK_TIMEOUT_MS
-        : Math.min(remainingTimeout, HEALTH_CHECK_TIMEOUT_MS);
+        ? healthCheckCap
+        : Math.min(remainingTimeout / 2, healthCheckCap);
     const isHealthy = await isRPCConnectionHealthy(existingRpc, probeTimeout);
     if (isHealthy) {
       return existingRpc;
@@ -265,7 +262,12 @@ export async function getRPC(
     await closeConnection(publicKey);
   }
 
-  return await ensureRPCConnection(topic, publicKey, options.timeout);
+  return await ensureRPCConnection(
+    topic,
+    publicKey,
+    options.timeout,
+    options.healthCheckTimeout,
+  );
 }
 
 /**
