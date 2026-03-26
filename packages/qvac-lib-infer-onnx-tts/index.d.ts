@@ -53,8 +53,6 @@ declare interface ONNXTTSFiles {
   unicodeIndexerPath?: string
   ttsConfigPath?: string
   voiceStyleJsonPath?: string
-  /** Directory containing LavaSR ONNX files (auto-resolves individual paths) */
-  enhancerModelDir?: string
   /** Path to enhancer backbone ONNX model */
   enhancerBackbonePath?: string
   /** Path to enhancer spec head ONNX model */

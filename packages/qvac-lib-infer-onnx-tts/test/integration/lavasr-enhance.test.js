@@ -15,6 +15,14 @@ const VARIANT_SUFFIX = CHATTERBOX_VARIANT === 'fp32' ? '' : `_${CHATTERBOX_VARIA
 const CHATTERBOX_SAMPLE_RATE = 24000
 const SUPERTONIC_SAMPLE_RATE = 44100
 
+function lavasrPaths (lavasrDir) {
+  return {
+    enhancerBackbonePath: path.join(lavasrDir, 'enhancer_backbone.onnx'),
+    enhancerSpecHeadPath: path.join(lavasrDir, 'enhancer_spec_head.onnx'),
+    denoiserPath: path.join(lavasrDir, 'denoiser_core_legacy_fixed63.onnx')
+  }
+}
+
 function getBaseDir () {
   return isMobile && global.testDir ? global.testDir : '.'
 }
@@ -62,7 +70,7 @@ test('LavaSR: Chatterbox + enhance produces 48kHz output', { timeout: 1800000 },
     languageModelPath: chatterboxLmPath(chatterboxDir),
     referenceAudio,
     enhance: true,
-    enhancerModelDir: lavasrDir,
+    ...lavasrPaths(lavasrDir),
     opts: { stats: true }
   }, { language: 'en' })
 
@@ -104,7 +112,7 @@ test('LavaSR: Chatterbox + denoise + enhance', { timeout: 1800000 }, async (t) =
     referenceAudio,
     enhance: true,
     denoise: true,
-    enhancerModelDir: lavasrDir,
+    ...lavasrPaths(lavasrDir),
     opts: { stats: true }
   }, { language: 'en' })
 
@@ -181,7 +189,7 @@ test('LavaSR: enhance + custom outputSampleRate', { timeout: 1800000 }, async (t
     referenceAudio,
     enhance: true,
     outputSampleRate: targetRate,
-    enhancerModelDir: lavasrDir,
+    ...lavasrPaths(lavasrDir),
     opts: { stats: true }
   }, { language: 'en' })
 
@@ -215,7 +223,7 @@ test('LavaSR: Supertonic + enhance', { timeout: 1800000 }, async (t) => {
     modelDir: supertonicDir,
     voiceName: 'F1',
     enhance: true,
-    enhancerModelDir: lavasrDir,
+    ...lavasrPaths(lavasrDir),
     opts: { stats: true }
   }, { language: 'en' })
 

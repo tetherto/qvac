@@ -110,7 +110,6 @@ function normalizeOnnxTtsFiles (files) {
     ttsConfig: firstNonEmpty(f.ttsConfig, f.ttsConfigPath),
     voiceStyle: firstNonEmpty(f.voiceStyle, f.voiceStyleJsonPath),
     voicesDir: firstNonEmpty(f.voicesDir),
-    enhancerModelDir: firstNonEmpty(f.enhancerModelDir),
     enhancerBackbone: firstNonEmpty(f.enhancerBackbone, f.enhancerBackbonePath),
     enhancerSpecHead: firstNonEmpty(f.enhancerSpecHead, f.enhancerSpecHeadPath),
     denoiser: firstNonEmpty(f.denoiser, f.denoiserPath)
@@ -183,17 +182,9 @@ class ONNXTTS {
     this._enhance = this._config.enhance || false
     this._denoise = this._config.denoise || false
     this._outputSampleRate = this._config.outputSampleRate || null
-
-    const enhancerModelDir = normalizedFiles.enhancerModelDir
-    if (enhancerModelDir) {
-      this._enhancerBackbonePath = path.join(enhancerModelDir, 'enhancer_backbone.onnx')
-      this._enhancerSpecHeadPath = path.join(enhancerModelDir, 'enhancer_spec_head.onnx')
-      this._denoiserPath = path.join(enhancerModelDir, 'denoiser_core_legacy_fixed63.onnx')
-    } else {
-      this._enhancerBackbonePath = normalizedFiles.enhancerBackbone || null
-      this._enhancerSpecHeadPath = normalizedFiles.enhancerSpecHead || null
-      this._denoiserPath = normalizedFiles.denoiser || null
-    }
+    this._enhancerBackbonePath = normalizedFiles.enhancerBackbone || null
+    this._enhancerSpecHeadPath = normalizedFiles.enhancerSpecHead || null
+    this._denoiserPath = normalizedFiles.denoiser || null
 
 
     if (this._engineType === ENGINE_CHATTERBOX) {
