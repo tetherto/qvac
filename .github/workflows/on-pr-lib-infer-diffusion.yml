@@ -16,7 +16,6 @@ on:
       - "packages/lib-infer-diffusion/**"
       - ".github/workflows/*diffusion*.yml"
   workflow_dispatch:
-
   workflow_call:
 
 permissions:
@@ -28,8 +27,106 @@ env:
   PKG_DIR: packages/lib-infer-diffusion
 
 jobs:
+  # ---------------------------------------------------------------------------
+  # 1. Security Gate
+  # ---------------------------------------------------------------------------
+  authorize:
+    runs-on: ubuntu-latest
+    outputs:
+      allowed: ${{ steps.check.outputs.allowed }}
+      has_write: ${{ steps.perm.outputs.has-permission }}
+    steps:
+      - name: Check actor write permission
+        id: perm
+        uses: scherermichael-oss/action-has-permission@136e061bfe093832d87f090dd768e14e27a740d3 # 1.0.6
+        with:
+          required-permission: write
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
+
+      - name: Check authorization
+        id: check
+        shell: bash
+        env:
+          EVENT: ${{ github.event_name }}
+          HEAD_REPO: ${{ github.event.pull_request.head.repo.full_name }}
+          BASE_REPO: ${{ github.repository }}
+          AUTHOR_ASSOC: ${{ github.event.pull_request.author_association }}
+          HAS_LABEL: ${{ contains(github.event.pull_request.labels.*.name, 'verify') }}
+          HAS_WRITE: ${{ steps.perm.outputs.has-permission }}
+        run: |
+          # Allow manual dispatches and calls
+          if [[ "$EVENT" == "workflow_dispatch" || "$EVENT" == "workflow_call" ]]; then
+            echo "allowed=true" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+
+          # Same-repo PRs are always trusted
+          if [ "$HEAD_REPO" = "$BASE_REPO" ]; then
+            echo "::notice::Same-repo PR — authorized"
+            echo "allowed=true" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+
+          echo "::notice::Actor '$GITHUB_ACTOR' has write-or-higher permission: $HAS_WRITE"
+
+          # Actor with write (or higher) is trusted even when author_association is not MEMBER/COLLABORATOR.
+          if [ "$HAS_WRITE" = "1" ]; then
+            echo "::notice::Actor has write-or-higher permission — authorized"
+            echo "allowed=true" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+
+          # Org members / collaborators (by author_association) are trusted even from forks
+          if [[ "$AUTHOR_ASSOC" =~ ^(MEMBER|OWNER|COLLABORATOR)$ ]]; then
+            echo "::notice::Trusted author ($AUTHOR_ASSOC) — authorized"
+            echo "allowed=true" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+
+          # External fork PRs require the verify label
+          if [ "$HAS_LABEL" = "true" ]; then
+            echo "::notice::Fork PR with verify label — authorized"
+            echo "allowed=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "::warning::External fork PR without verify label — skipping checks"
+            echo "::warning::A team member must review the code and apply the 'verify' label"
+            echo "allowed=false" >> "$GITHUB_OUTPUT"
+          fi
+
+  # ---------------------------------------------------------------------------
+  # Strip verify label on new pushes from external contributors.
+  # Forces re-review before CI runs on updated code.
+  # Event actors with repo write permission are not stripped (from authorize output).
+  # ---------------------------------------------------------------------------
+  strip-label:
+    needs: authorize
+    if: |
+      needs.authorize.outputs.has_write != '1' &&
+      github.event.action == 'synchronize' &&
+      github.event.pull_request.head.repo.full_name != github.repository
+    runs-on: ubuntu-latest
+    steps:
+      - name: Log actor write permission check
+        shell: bash
+        run: |
+          echo "::notice::Actor '${{ github.actor }}' has write-or-higher permission: ${{ needs.authorize.outputs.has_write }}"
+      - name: Remove verify label
+        env:
+          GH_TOKEN: ${{ github.token }}
+          PR_NUMBER: ${{ github.event.pull_request.number }}
+        run: |
+          gh api -X DELETE \
+            "repos/${{ github.repository }}/issues/${PR_NUMBER}/labels/verify" \
+            2>/dev/null || true
+          echo "::warning::Removed verify label — new commits pushed. Re-review required."
+
+  # ---------------------------------------------------------------------------
+  # 3. Execution Jobs (Now gated by authorization)
+  # ---------------------------------------------------------------------------
   sanity-checks:
-    if: contains( github.event.pull_request.labels.*.name, 'verify') || github.event_name == 'workflow_dispatch'
+    needs: authorize
+    if: needs.authorize.outputs.allowed == 'true'
     runs-on: ubuntu-latest
     steps:
       - name: Run Sanity checks
@@ -38,12 +135,12 @@ jobs:
           secret-token: ${{ secrets.GITHUB_TOKEN }}
           npm-token: ${{ secrets.NPM_TOKEN }}
           pat-token: ${{ secrets.PAT_TOKEN }}
-          run-integration: ${{ contains(github.event.pull_request.labels.*.name, 'verify') }}
+          run-integration: true
           workdir: packages/lib-infer-diffusion
 
   cpp-tests:
-    if: contains( github.event.pull_request.labels.*.name, 'verify') || github.event_name == 'workflow_dispatch'
-    needs: sanity-checks
+    needs: [authorize, sanity-checks]
+    if: needs.authorize.outputs.allowed == 'true'
     uses: ./.github/workflows/cpp-tests-diffusion.yml
     secrets: inherit
     with:
@@ -52,7 +149,8 @@ jobs:
       ref: ${{ github.event.pull_request.head.ref }}
 
   cpp-lint:
-    if: contains( github.event.pull_request.labels.*.name, 'verify') || github.event_name == 'workflow_dispatch'
+    needs: authorize
+    if: needs.authorize.outputs.allowed == 'true'
     uses: tetherto/qvac-devops/.github/workflows/cpp-lint.yaml@monorepo_update
     secrets: inherit
     with:
@@ -61,7 +159,8 @@ jobs:
       workdir: packages/lib-infer-diffusion
 
   ts-checks:
-    if: contains( github.event.pull_request.labels.*.name, 'verify') || github.event_name == 'workflow_dispatch'
+    needs: authorize
+    if: needs.authorize.outputs.allowed == 'true'
     runs-on: ubuntu-latest
     steps:
       - name: Checkout code
@@ -90,8 +189,8 @@ jobs:
         run: npm run test:dts
 
   prebuild:
-    needs: sanity-checks
-    if: contains( github.event.pull_request.labels.*.name, 'verify') || github.event_name == 'workflow_dispatch'
+    needs: [authorize, sanity-checks]
+    if: needs.authorize.outputs.allowed == 'true'
     permissions:
       contents: write
       packages: write
@@ -105,8 +204,8 @@ jobs:
       tag: pr-${{ github.event.pull_request.number }}
 
   run-integration-tests:
-    if: contains( github.event.pull_request.labels.*.name, 'verify') || github.event_name == 'workflow_dispatch'
-    needs: prebuild
+    needs: [authorize, prebuild]
+    if: needs.authorize.outputs.allowed == 'true'
     uses: ./.github/workflows/integration-test-lib-infer-diffusion.yml
     secrets: inherit
     with:
@@ -114,8 +213,8 @@ jobs:
       ref: ${{ github.event.pull_request.head.ref }}
 
   run-mobile-integration-tests:
-    if: contains( github.event.pull_request.labels.*.name, 'verify') || github.event_name == 'workflow_dispatch'
-    needs: prebuild
+    needs: [authorize, prebuild]
+    if: needs.authorize.outputs.allowed == 'true'
     uses: ./.github/workflows/integration-mobile-test-lib-infer-diffusion.yml
     secrets: inherit
     with:
@@ -124,18 +223,16 @@ jobs:
 
   merge-guard:
     needs:
-      [
-        run-integration-tests,
-        run-mobile-integration-tests,
-        sanity-checks,
-        prebuild,
-        cpp-tests,
-        cpp-lint,
-        ts-checks,
-      ]
+      - run-integration-tests
+      - run-mobile-integration-tests
+      - sanity-checks
+      - prebuild
+      - cpp-tests
+      - cpp-lint
+      - ts-checks
     if: always()
     uses: tetherto/qvac-devops/.github/workflows/public-pr.yml@monorepo_update
     with:
-      sanity-checks-status: ${{ needs.sanity-checks.result == 'success' }}
-      build-status: ${{ needs.prebuild.result == 'success'}}
+      sanity-checks-status: ${{ needs.sanity-checks.result == 'success' || needs.sanity-checks.result == 'skipped' }}
+      build-status: ${{ needs.prebuild.result == 'success' || needs.prebuild.result == 'skipped' }}
     secrets: inherit
