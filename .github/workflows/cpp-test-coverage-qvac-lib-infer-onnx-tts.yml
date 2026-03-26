@@ -23,6 +23,16 @@ on:
         default: "packages/qvac-lib-infer-onnx-tts"
 
   workflow_dispatch:
+    secrets:
+      AWS_ACCESS_KEY_ID:
+        required: true
+      AWS_SECRET_ACCESS_KEY:
+        required: true
+      NPM_TOKEN:
+        required: true
+      PAT_TOKEN:
+        required: true
+
     inputs:
       workdir:
         description: "Package working directory in monorepo"
