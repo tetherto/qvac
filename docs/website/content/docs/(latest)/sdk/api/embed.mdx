@@ -5,8 +5,8 @@ description: Generates embeddings for a single text using a specified model.
 ---
 
 ```ts
-function embed(params: { modelId: string; text: string }): Promise<number[]>;
-function embed(params: { modelId: string; text: string[] }): Promise<number[][]>;
+function embed(params: { modelId: string; text: string }, options?: RPCOptions): Promise<number[]>;
+function embed(params: { modelId: string; text: string[] }, options?: RPCOptions): Promise<number[][]>;
 ```
 
 ## Parameters
@@ -14,7 +14,7 @@ function embed(params: { modelId: string; text: string[] }): Promise<number[][]>
 | Name | Type | Required? | Description |
 | --- | --- | :---: | --- |
 | params | [`EmbedParams`](#embedparams) | ✓ | The embedding parameters |
-| options | [`RPCOptions`](../index#rpcoptions) | ✗ | Optional RPC transport options |
+| options | [`RPCOptions`](../shared-types/#rpcoptions) | ✗ | Optional RPC transport options |
 
 ### `EmbedParams`
 
