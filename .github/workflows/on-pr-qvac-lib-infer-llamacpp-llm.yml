@@ -45,9 +45,9 @@ jobs:
     if: contains( github.event.pull_request.labels.*.name, 'verify') || github.event_name == 'workflow_dispatch'
     needs: sanity-checks
     uses: ./.github/workflows/cpp-tests-llm.yml
-    secrets:
-      NPM_TOKEN: ${{ secrets.NPM_TOKEN }}
-      PAT_TOKEN: ${{ secrets.PAT_TOKEN }}
+    secrets: inherit
+      # NPM_TOKEN: ${{ secrets.NPM_TOKEN }}
+      # PAT_TOKEN: ${{ secrets.PAT_TOKEN }}
     with:
       workdir: packages/qvac-lib-infer-llamacpp-llm
       repository: ${{ github.event.pull_request.head.repo.full_name }}
@@ -56,9 +56,9 @@ jobs:
   cpp-lint:
     if: contains( github.event.pull_request.labels.*.name, 'verify') || github.event_name == 'workflow_dispatch'
     uses: tetherto/qvac-devops/.github/workflows/cpp-lint.yaml@v1.1.6
-    secrets:
-      PAT_TOKEN: ${{ secrets.PAT_TOKEN }}
-      NPM_TOKEN: ${{ secrets.NPM_TOKEN }}
+    secrets: inherit
+      # PAT_TOKEN: ${{ secrets.PAT_TOKEN }}
+      # NPM_TOKEN: ${{ secrets.NPM_TOKEN }}
     with:
       sha: ${{ github.event.pull_request.base.sha }}
       pr_head_sha: ${{ github.event.pull_request.head.sha }}
