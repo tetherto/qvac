@@ -29,6 +29,7 @@ import {
   handleModelRegistrySearch,
   handleModelRegistryGetModel,
 } from "@/server/rpc/handlers/registry";
+import { handleFinetune } from "@/server/rpc/handlers/finetune";
 import type { HandlerEntry } from "./handler-utils";
 
 function ragSupportsProgress(request: Request): boolean {
@@ -66,6 +67,7 @@ export const registry: Record<string, HandlerEntry> = {
   },
 
   // Simple Stream handlers
+  finetune: { type: "stream", handler: handleFinetune },
   transcribeStream: { type: "stream", handler: handleTranscribeStream },
   loggingStream: { type: "stream", handler: handleLoggingStream },
   translate: { type: "stream", handler: handleTranslate },

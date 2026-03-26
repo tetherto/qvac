@@ -1,3 +1,4 @@
+import { z } from "zod";
 import LlmLlamacpp, { type Loader as LlmLoader } from "@qvac/llm-llamacpp";
 import llmAddonLogging from "@qvac/llm-llamacpp/addonLogging";
 import {
@@ -5,6 +6,9 @@ import {
   defineHandler,
   completionStreamRequestSchema,
   completionStreamResponseSchema,
+  finetuneRequestSchema,
+  finetuneResponseSchema,
+  finetuneProgressSchema,
   translateRequestSchema,
   translateResponseSchema,
   ModelType,
@@ -24,6 +28,7 @@ import { parseModelPath } from "@/server/utils";
 import FilesystemDL from "@qvac/dl-filesystem";
 import { asLoader } from "@/server/bare/utils/loader-adapter";
 import { completion } from "@/server/bare/plugins/llamacpp-completion/ops/completion-stream";
+import { finetune } from "@/server/bare/plugins/llamacpp-completion/ops/finetune";
 import { translate } from "@/server/bare/ops/translate";
 
 function transformLlmConfig(llmConfig: LlmConfig) {
@@ -206,6 +211,16 @@ export const llmPlugin = definePlugin({
           done: true,
           ...(stats && { stats }),
         };
+      },
+    }),
+
+    finetune: defineHandler({
+      requestSchema: finetuneRequestSchema,
+      responseSchema: z.union([finetuneResponseSchema, finetuneProgressSchema]),
+      streaming: true,
+
+      handler: async function* (request) {
+        yield* finetune(request);
       },
     }),
   },

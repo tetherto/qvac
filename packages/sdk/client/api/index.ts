@@ -9,6 +9,7 @@ export { transcribe, transcribeStream } from "./transcribe";
 export { embed } from "./embed";
 export { translate } from "./translate";
 export { cancel } from "./cancel";
+export { finetune, type FinetuneHandle } from "./finetune";
 export { startQVACProvider } from "./provide";
 export { stopQVACProvider } from "./stop-provider";
 export {

@@ -15,7 +15,7 @@ export async function cancelHandler(
   try {
     switch (request.operation) {
       case "inference":
-        await cancel({ modelId: request.modelId });
+        await cancel({ modelId: request.modelId, reset: request.reset });
         break;
       case "downloadAsset": {
         const cancelDownload = createCancelFunction(

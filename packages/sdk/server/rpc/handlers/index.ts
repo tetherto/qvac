@@ -21,9 +21,11 @@ import {
   handleModelRegistrySearch,
   handleModelRegistryGetModel,
 } from "./registry";
+import { handleFinetune } from "./finetune";
 
 export const handlers = {
   ping: handlePing,
+  finetune: handleFinetune,
   completionStream: handleCompletionStream,
   downloadAsset: handleDownloadAsset,
   deleteCache: handleDeleteCache,

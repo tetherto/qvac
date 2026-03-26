@@ -72,5 +72,6 @@ export {
   isCanonicalModelType,
   isModelTypeAlias,
 } from "./model-types";
+export * from "./finetune";
 export * from "./plugin";
 export * from "./registry";

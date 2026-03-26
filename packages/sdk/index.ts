@@ -13,6 +13,8 @@ export {
   embed,
   translate,
   cancel,
+  finetune,
+  type FinetuneHandle,
   ragChunk,
   ragIngest,
   ragSaveEmbeddings,
@@ -87,6 +89,11 @@ export {
   SDK_DEFAULT_PLUGINS,
   type BuiltinPlugin,
   type ProfilerMode,
+  type FinetuningOptions,
+  type FinetuneProgress,
+  type FinetuneStats,
+  type FinetuneStatus,
+  type FinetuneValidation,
 } from "./schemas";
 
 export { type ToolInput, type ToolHandler } from "./utils/tool-helpers";
