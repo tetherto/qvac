@@ -38,6 +38,8 @@ jobs:
     outputs:
       allowed: ${{ steps.auth.outputs.allowed }}
     steps:
+      - name: Checkout
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # 6.0.2
       - name: Authorize
         id: auth
         uses: ./.github/actions/authorize-pr

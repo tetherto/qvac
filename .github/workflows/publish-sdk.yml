@@ -43,6 +43,22 @@ concurrency:
   cancel-in-progress: ${{ github.event_name == 'pull_request_target' }}
 
 jobs:
+  authorize:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      pull-requests: write
+    outputs:
+      allowed: ${{ steps.auth.outputs.allowed }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # 6.0.2
+      - name: Authorize
+        id: auth
+        uses: ./.github/actions/authorize-pr
+        with:
+          github-token: ${{ github.token }}
+
   release-merge-guard:
     name: Release Merge Guard
     if: >-
@@ -64,10 +80,8 @@ jobs:
           changelog-path: packages/sdk/CHANGELOG.md
 
   build:
-    if: >
-      github.event_name != 'pull_request_target' ||
-      github.event.pull_request.head.repo.fork == false ||
-      contains(github.event.pull_request.labels.*.name, 'verify')
+    needs: [authorize]
+    if: needs.authorize.outputs.allowed == 'true'
     runs-on: ubuntu-latest
     permissions:
       contents: write
