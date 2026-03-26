@@ -14,6 +14,7 @@ target_sources(
     ${CMAKE_SOURCE_DIR}/addon/src/model-interface/SupertonicEngine.cpp
     ${CMAKE_SOURCE_DIR}/addon/src/model-interface/OnnxInferSession.cpp
     ${CMAKE_SOURCE_DIR}/addon/src/model-interface/Fp16Utils.cpp
+    ${CMAKE_SOURCE_DIR}/addon/src/model-interface/TensorFloatHandler.cpp
     ${TEST_SOURCES}
     ${TEST_MOCKS}
 )
@@ -30,7 +31,7 @@ find_package(tokenizers_cpp CONFIG REQUIRED)
 target_link_libraries(
   qvac-lib-inference-tts-unit-test
   PRIVATE
-    onnxruntime::onnxruntime_static
+    onnxruntime::onnxruntime
     tokenizers::tokenizers_cpp
     GTest::gtest
     GTest::gtest_main

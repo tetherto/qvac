@@ -1,7 +1,7 @@
 ---
 title: "getModelBySrc( )"
 titleStyle: code
-description: "No description available"
+description: "Looks up a model in the built-in catalog by its model file ID and blob core key. Used for resolving models from Hyperdrive-based sources."
 ---
 
 ```typescript
@@ -12,11 +12,24 @@ function getModelBySrc(modelId: string, blobCoreKey: string): RegistryItem | —
 
 | Name | Type | Required? | Description |
 | --- | --- | :---: | --- |
-| `modelId` | `string` | ✓ | No description |
-| `blobCoreKey` | `string` | ✓ | No description |
+| `modelId` | `string` | ✓ | The model file identifier |
+| `blobCoreKey` | `string` | ✓ | The Hyperdrive blob core key associated with the model source |
 
 ## Returns
 
 ```typescript
 RegistryItem | —
+```
+
+The matching `RegistryItem` if found, or `undefined` if no model matches the given source identifiers.
+
+## Example
+
+```typescript
+import { getModelBySrc } from "@qvac/sdk";
+
+const model = getModelBySrc("llama-7b.gguf", "abc123...");
+if (model) {
+  console.log(model.name, model.registryPath);
+}
 ```

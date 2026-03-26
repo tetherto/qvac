@@ -32,6 +32,13 @@
   },
   "author": "Tether",
   "license": "Apache-2.0",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/tetherto/qvac.git",
+    "directory": "packages/qvac-lib-infer-onnx"
+  },
+  "bugs": "https://github.com/tetherto/qvac/issues",
+  "homepage": "https://github.com/tetherto/qvac/tree/main/packages/qvac-lib-infer-onnx#readme",
   "devDependencies": {
     "cmake-bare": "^1.7.5",
     "cmake-vcpkg": "^1.1.0",

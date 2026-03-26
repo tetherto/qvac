@@ -1,0 +1,92 @@
+---
+description: Delegated inference implementation - remote peer completion via Hyperswarm
+alwaysApply: false
+---
+# Delegated Inference
+
+Delegate model loading and completion requests to a remote peer via Hyperswarm, while keeping the same SDK API surface.
+
+## Schema
+
+Defined in `packages/sdk/schemas/delegate.ts`. The `delegate` field (optional) includes `topic` (Hyperswarm topic hex), `providerPublicKey` (hex), optional `timeout`, `fallbackToLocal` (default false), and `forceNewConnection` (default false). It's included in every `loadModel` request variant via `loadModelCommonFields` in `schemas/load-model.ts`.
+
+## Architecture
+
+### Shared Hyperswarm — `server/bare/hyperswarm.ts`
+
+Module-scoped singleton created via `getSwarm()`. Uses deterministic seed from `QVAC_HYPERSWARM_SEED` env var (or random), configurable firewall function (allow/deny by public key), relay support via SDK config's `swarmRelays`. Also exports `registerProviderTopic()`, `unregisterProviderTopic()`, `hasActiveProviders()`, `destroySwarm()`.
+
+### Delegate RPC Client — `server/bare/delegate-rpc-client.ts`
+
+Manages Hyperswarm peer connections and `bare-rpc` instances. `getRPC(topic, publicKey, options)` returns an RPC instance connected to the target peer. Caches RPC/connection by public key, supports `forceNewConnection`. `cleanupStaleConnection(publicKey)` removes dead connections.
+
+### Delegate Transport — `server/rpc/delegate-transport.ts`
+
+`send(request, rpc, options)` for single request/response, `stream(request, rpc, options)` for streaming. Both serialize to JSON and support profiling when enabled.
+
+### Load Model Delegated — `server/rpc/handlers/load-model-delegated.ts`
+
+Gets RPC connection, strips `delegate` field from request (prevents infinite delegation), sends to provider. On success: registers model as delegated (`isDelegated: true`) with topic/publicKey/timeout. On failure with `fallbackToLocal: true`: attempts local `handleLoadModel()`.
+
+### Completion Stream Delegated — `server/rpc/handlers/completion-stream-delegated.ts`
+
+Looks up model in registry, verifies `entry.isDelegated`, gets RPC connection, streams completion, yields each chunk.
+
+### Model Registry — `server/bare/registry/model-registry.ts`
+
+`ModelEntry` supports both local and delegated models. `registerModel()` accepts either local options or `{ topic, providerPublicKey, timeout }` for delegation.
+
+## File Locations
+
+| Component | Path |
+|-----------|------|
+| Schema | `packages/sdk/schemas/delegate.ts` |
+| Shared Hyperswarm | `packages/sdk/server/bare/hyperswarm.ts` |
+| Delegate RPC Client | `packages/sdk/server/bare/delegate-rpc-client.ts` |
+| Delegate Transport | `packages/sdk/server/rpc/delegate-transport.ts` |
+| Load Model Handler | `packages/sdk/server/rpc/handlers/load-model-delegated.ts` |
+| Completion Stream Handler | `packages/sdk/server/rpc/handlers/completion-stream-delegated.ts` |
+| Model Registry | `packages/sdk/server/bare/registry/model-registry.ts` |
+| Example: Provider | `packages/sdk/examples/delegated-inference/provider.ts` |
+| Example: Consumer | `packages/sdk/examples/delegated-inference/consumer.ts` |
+
+## Usage
+
+### Provider
+
+```typescript
+import { startQVACProvider } from "@qvac/sdk"
+
+const response = await startQVACProvider({
+  topic: "66646f696865726f6569686a726530...",
+  firewall: { mode: "allow", publicKeys: [consumerKey] },
+})
+// response.publicKey — share this with consumers
+```
+
+### Consumer
+
+```typescript
+import { loadModel, completion, LLAMA_3_2_1B_INST_Q4_0 } from "@qvac/sdk"
+
+const modelId = await loadModel({
+  modelSrc: LLAMA_3_2_1B_INST_Q4_0,
+  modelType: "llm",
+  delegate: {
+    topic: topicHex,
+    providerPublicKey: providerPubKey,
+    timeout: 5_000,
+    fallbackToLocal: true,
+  },
+})
+
+const response = completion({
+  modelId,
+  history: [{ role: "user", content: "Hello!" }],
+  stream: true,
+})
+
+for await (const token of response.tokenStream) {
+  process.stdout.write(token)
+}
+```

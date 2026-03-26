@@ -1,7 +1,7 @@
 # Translation Addons
 
 [![License](https://img.shields.io/badge/License-Apache%202.0-blue.svg)](LICENSE)
-[![Bare](https://img.shields.io/badge/Bare-%3E%3D1.19.0-green.svg)](https://docs.pears.com/bare-reference/overview)
+[![Bare](https://img.shields.io/badge/Bare-%3E%3D1.19.0-green.svg)](https://docs.pears.com/reference/bare-overview.html)
 
 This library simplifies the process of running various translation models within [`QVAC`](#glossary) runtime applications. It provides a seamless interface to load, execute, and manage translation addons, offering support for multiple data sources (called data loaders).
 
@@ -52,7 +52,7 @@ Ensure that the [`Bare`](#glossary) Runtime is installed globally on your system
 npm i -g bare
 ```
 
-> **Note:** Bare version must be **1.17.3 or higher**. Verify your version with:
+> **Note:** Bare version must be **1.19.0 or higher**. Verify your version with:
 
 ```bash
 bare -v
@@ -449,7 +449,7 @@ try {
 
 ### Additional Features
 
-- **Pause and Resume:** Translation can be paused and resumed (see [`examples/pause.example.js`](examples/pause.example.js))
+- **Cancel:** Translation can be cancelled mid-inference (see [`examples/pause.example.js`](examples/pause.example.js) for long-text translation with cancellation)
 - **Progress Tracking:** Monitor loading progress with a callback function
 - **Performance Stats:** Measure inference time with the `stats` option
 
@@ -582,7 +582,8 @@ For more detailed examples covering different use cases, refer to the `examples/
 | [example.hd.js](examples/example.hd.js) | Hyperdrive Data Loader for Marian model inference | OPUS/Marian |
 | [indictrans.js](examples/indictrans.js) | English-to-Hindi translation with IndicTrans2 | IndicTrans2 |
 | [batch.example.js](examples/batch.example.js) | Batch translation with `runBatch()` method | Bergamot |
-| [pause.example.js](examples/pause.example.js) | Pausing and resuming during inference | Any |
+| [pause.example.js](examples/pause.example.js) | Long-text translation with cancel support | Any |
+| [pivot.example.hd.js](examples/pivot.example.hd.js) | Pivot translation (e.g., es→en→it) via Bergamot | Bergamot |
 | [quickstart.js](examples/quickstart.js) | Both GGML and Bergamot backends | Multiple |
 
 ## Model Registry
@@ -880,13 +881,7 @@ The main package supports all three backends and all their respective languages.
 
 This project supports multiple backends (e.g., Marian/OPUS, Bergamot/Firefox, IndicTrans2).
 
-Bergamot backend is enabled by default.
-
-```bash
-bare-make generate
-```
-
-To disable it, set the flag as follows during generation:
+The Bergamot backend is included in the build by default. To build without Bergamot support (reduces build time and dependencies):
 
 ```bash
 bare-make generate -D USE_BERGAMOT=OFF
@@ -1009,7 +1004,7 @@ npm run test:all           # Run both JavaScript and C++ tests
 
 ## Glossary
 
-- **Bare** – Lightweight, modular JavaScript runtime for desktop and mobile. [Docs](https://docs.pears.com/bare-reference/overview)
+- **Bare** – Lightweight, modular JavaScript runtime for desktop and mobile. [Docs](https://docs.pears.com/reference/bare-overview.html)
 - **Hyperdrive** – Secure, real-time distributed filesystem enabling P2P file sharing. [Docs](https://docs.pears.com/building-blocks/hyperdrive)
 - **Hyperbee** – Decentralized B-tree built on Hypercores, with a key-value API. [Docs](https://docs.pears.com/building-blocks/hyperbee)
 - **Corestore** – Factory for managing named collections of Hypercores. [Docs](https://docs.pears.com/helpers/corestore)
@@ -1023,7 +1018,7 @@ npm run test:all           # Run both JavaScript and C++ tests
 ## Resources
 
 - **Pear Platform** – Decentralized platform for deploying apps. [pears.com](https://pears.com/)
-- **Bare Runtime Docs** – For running QVAC apps in a lightweight environment. [docs.pears.com/bare](https://docs.pears.com/bare-reference/overview)
+- **Bare Runtime Docs** – For running QVAC apps in a lightweight environment. [docs.pears.com/bare](https://docs.pears.com/reference/bare-overview.html)
 - **IndicTrans2 Model** – Pretrained multilingual translation models. [AI4Bharat/IndicTrans2](https://github.com/AI4Bharat/IndicTrans2)
 - **Translation App Example** – QVAC-based translation application. [qvac-examples/translation-app](https://github.com/tetherto/qvac-examples/tree/main/translation-app)
 
@@ -1036,12 +1031,9 @@ We welcome contributions! Here's how to get started:
 This project contains C++ native addons that must be built before running tests.
 
 ```bash
-# 1. Clone with submodules
-git clone --recursive https://github.com/tetherto/qvac-lib-infer-nmtcpp.git
-cd qvac-lib-infer-nmtcpp
-
-# Or if already cloned, initialize submodules:
-git submodule update --init --recursive
+# 1. Clone the monorepo
+git clone https://github.com/tetherto/qvac.git
+cd qvac/packages/qvac-lib-infer-nmtcpp
 
 # 2. Install dependencies
 npm install
@@ -1054,18 +1046,15 @@ npm run build
 
 ### Development Workflow
 
-1. **Fork** the repository
-2. **Clone** your fork with submodules: `git clone --recursive https://github.com/YOUR_USERNAME/qvac-lib-infer-nmtcpp.git`
-3. **Install and build**: `npm install && npm run build`
-4. **Create a branch**: `git checkout -b feature/your-feature-name`
-5. **Make changes** and ensure tests pass: `npm test`
-6. **Bump version** in `package.json` if your changes require a release (bug fixes, features, breaking changes)
+1. **Fork** the monorepo
+2. **Clone** your fork: `git clone https://github.com/YOUR_USERNAME/qvac.git`
+3. **Navigate**: `cd qvac/packages/qvac-lib-infer-nmtcpp`
+4. **Install and build**: `npm install && npm run build`
+5. **Create a branch**: `git checkout -b feature/your-feature-name`
+6. **Make changes** and ensure tests pass: `npm test`
 7. **Commit** with a descriptive message: `git commit -m "feat: add your feature"`
 8. **Push** to your fork: `git push origin feature/your-feature-name`
-9. **Open a Pull Request**
-   * Use `/prepare_release_notes` in Cursor to generate release notes for your changes (creates `release-notes/vX.Y.Z.md`)
-   * Use `/prepare_pr` in Cursor to automatically generate a PR description and create the pull request
-   * The PR description will be populated based on `PULL_REQUEST_TEMPLATE.md`
+9. **Open a Pull Request** against the `main` branch
 
 ### Code Style
 

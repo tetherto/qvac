@@ -2,7 +2,6 @@
 
 #include <algorithm>
 #include <array>
-#include <ranges>
 #include <thread>
 
 #include "qvac-lib-inference-addon-cpp/Errors.hpp"
@@ -84,8 +83,8 @@ const HandlersMap<ParakeetConfig> PARAKEET_AUDIO_HANDLERS = {
     {"sampleRate",
      [](ParakeetConfig& config, const JSValueVariant& value) {
        int rate = static_cast<int>(std::get<double>(value));
-       if (std::ranges::find(VALID_SAMPLE_RATES, rate) ==
-           VALID_SAMPLE_RATES.end()) {
+       if (std::find(VALID_SAMPLE_RATES.begin(), VALID_SAMPLE_RATES.end(),
+                     rate) == VALID_SAMPLE_RATES.end()) {
          throw qvac_errors::StatusError(
              qvac_errors::general_error::InvalidArgument,
              "sampleRate must be one of: 8000, 16000, 22050, 44100, 48000");

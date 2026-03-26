@@ -22,7 +22,7 @@ enum class BackendType {
 #endif
 };
 
-class TranslationModel : public qvac_lib_inference_addon_cpp::model::IModel , qvac_lib_inference_addon_cpp::model::IModelCancel {
+class TranslationModel : public qvac_lib_inference_addon_cpp::model::IModel, public qvac_lib_inference_addon_cpp::model::IModelCancel {
 public:
   TranslationModel() {};
 
@@ -95,7 +95,7 @@ private:
 
   mutable bool isFirstSentence_ = true;
 
-  bool useGpu_ = true; // Default to GPU enabled
+  bool useGpu_ = false;
 
   std::unordered_map<std::string, std::variant<double, int64_t, std::string>>
       config_;

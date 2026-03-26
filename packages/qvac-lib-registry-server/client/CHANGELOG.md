@@ -1,5 +1,18 @@
 # Changelog
 
+## [0.3.0]
+
+Release Date: 2026-03-24
+
+### ✨ Features
+
+- Add download profiler for registry blob performance diagnostics — measures per-peer throughput, block timing, and connection stats for troubleshooting slow downloads (#1040)
+
+### 🐛 Fixed
+
+- Lazy-load Node.js builtins (`perf_hooks`, `worker_threads`) in profiler module for Bare runtime compatibility (#1096)
+- Update package.json repository URLs to point to the monorepo (#1088)
+
 ## [0.2.1]
 
 Release Date: 2026-03-16
