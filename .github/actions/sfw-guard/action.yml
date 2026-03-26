@@ -26,7 +26,7 @@ runs:
   steps:
     - name: Install Socket Firewall
       id: sfw
-      uses: SocketDev/action@v1
+      uses: SocketDev/action@937f824ec476dfd164d4a4d9995751427b0be143 # 1.3.0
       with:
         mode: ${{ inputs.firewall-mode }}
         socket-token: ${{ inputs.socket-token }}

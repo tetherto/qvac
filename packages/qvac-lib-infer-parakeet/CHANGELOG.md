@@ -5,6 +5,33 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.2.5]
+
+### Changed
+- Switched desktop Parakeet prebuilds to static ONNX Runtime linking so packaged platform artifacts stay as a single `.bare` addon plus exports file
+- Aligned the secondary native build path and Linux linkage behavior with the desktop packaging update to keep runtime loading working after removing bundled shared libraries
+
+### Fixed
+- Apple prebuild compatibility by replacing the `std::ranges::find` sample-rate check with a `std::find` implementation that works on the current Xcode toolchains
+
+## [0.2.4]
+
+Security hardening release from comprehensive security audit.
+
+### Fixed
+- Add 500 MB buffer limit to audio accumulation to prevent OOM from unbounded buffering (#1080)
+- Add SHA-256 integrity verification to model download scripts using HuggingFace LFS checksums (#1081)
+- Sanitize error messages to remove filesystem paths from thrown errors (#1084)
+- Wrap job ID counter at `Number.MAX_SAFE_INTEGER` to prevent precision loss (#1085)
+- Harden benchmark server: add library allowlist, restrict file paths to allowed directories, remove dynamic `npm install`, add body size limit, restrict CORS to localhost (#1086)
+
+## [0.2.3]
+
+### Added
+- RTF benchmark integration test (`rtf-benchmark.test.js`) that captures Real-Time Factor and 12 other timing metrics from the C++ addon's `runtimeStats` callback
+- `test:benchmark:rtf` npm script for on-demand RTF benchmark runs
+- RTF benchmark step in integration test CI workflow (non-blocking, all 6 runners) with JSON artifact upload
+
 ## [0.2.2]
 
 This release documents Parakeet runtime statistics and transcription output in TypeScript so consumers can type `response.stats` and `run()` results against the native addon.

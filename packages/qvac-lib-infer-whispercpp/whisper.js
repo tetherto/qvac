@@ -12,6 +12,13 @@ const state = Object.freeze({
 
 const END_OF_INPUT = 'end of job'
 
+function nextSafeId (current) {
+  return current >= Number.MAX_SAFE_INTEGER ? 1 : current + 1
+}
+
+// 500 MB — ~2.7 hours of 16 kHz s16le mono audio
+const MAX_BUFFERED_BYTES = 500 * 1024 * 1024
+
 /**
  * An interface between Bare addon in C++ and JS runtime.
  */
@@ -30,6 +37,7 @@ class WhisperInterface {
     this._nextJobId = 1
     this._activeJobId = null
     this._bufferedAudio = []
+    this._bufferedBytes = 0
     this._state = state.LOADING
     this._audioFormat = configurationParams?.audio_format || 's16le'
 
@@ -50,7 +58,7 @@ class WhisperInterface {
     }
   }
 
-  _addonOutputCallback (addon, event, data, error) {
+  _addonOutputCallback (addon, event, data, error, nativeJobId) {
     const isError = typeof error === 'string' && error.length > 0
     const isStats = data && typeof data === 'object' && (
       'totalTime' in data ||
@@ -63,11 +71,11 @@ class WhisperInterface {
     )
 
     let mappedEvent = event
-    if (isError || String(event).includes('Error')) {
+    if (event === 'Error' || isError || String(event).includes('Error')) {
       mappedEvent = 'Error'
-    } else if (isStats || String(event).includes('RuntimeStats')) {
+    } else if (event === 'JobEnded' || isStats || String(event).includes('RuntimeStats')) {
       mappedEvent = 'JobEnded'
-    } else if (isTranscriptOutput) {
+    } else if (event === 'Output' || isTranscriptOutput) {
       mappedEvent = 'Output'
     } else if (Array.isArray(data) && data.length === 0) {
       // WhisperModel::process returns an empty vector to avoid duplicate
@@ -75,12 +83,12 @@ class WhisperInterface {
       return
     }
 
-    const jobId = this._activeJobId
-    if (jobId === null || jobId === undefined) {
+    const jobId = Number.isFinite(nativeJobId) ? nativeJobId : null
+    if (jobId === null) {
       return
     }
 
-    if (mappedEvent === 'Output') {
+    if (mappedEvent === 'Output' && this._activeJobId === jobId) {
       this._setState(state.PROCESSING)
     }
 
@@ -95,8 +103,10 @@ class WhisperInterface {
     }
 
     if (mappedEvent === 'Error' || mappedEvent === 'JobEnded') {
-      this._activeJobId = null
-      this._setState(state.LISTENING)
+      if (this._activeJobId === jobId) {
+        this._activeJobId = null
+        this._setState(state.LISTENING)
+      }
     }
   }
 
@@ -224,6 +234,7 @@ class WhisperInterface {
     try {
       await this._binding.cancel(this._handle, jobId)
       this._bufferedAudio = []
+      this._bufferedBytes = 0
       this._activeJobId = null
       this._setState(state.LISTENING)
     } catch (err) {
@@ -247,6 +258,8 @@ class WhisperInterface {
       if (data?.type === END_OF_INPUT) {
         const currentJobId = this._nextJobId
         const input = this._concatBufferedAudio()
+        const previousJobId = this._activeJobId
+        const previousState = this._state
 
         let accepted = false
         try {
@@ -256,17 +269,20 @@ class WhisperInterface {
             audio_format: this._audioFormat
           })
         } catch (err) {
-          this._setState(state.LISTENING)
+          this._activeJobId = previousJobId
+          this._setState(previousState)
           throw err
         }
         if (!accepted) {
-          this._setState(state.LISTENING)
+          this._activeJobId = previousJobId
+          this._setState(previousState)
           throw new Error('Cannot set new job: a job is already set or being processed')
         }
 
         this._activeJobId = currentJobId
-        this._nextJobId += 1
+        this._nextJobId = nextSafeId(this._nextJobId)
         this._bufferedAudio = []
+        this._bufferedBytes = 0
         this._setState(state.PROCESSING)
         return currentJobId
       }
@@ -275,7 +291,14 @@ class WhisperInterface {
         if (!(data.input instanceof Uint8Array)) {
           throw new Error('Audio input must be Uint8Array')
         }
+        if (this._bufferedBytes + data.input.byteLength > MAX_BUFFERED_BYTES) {
+          throw new QvacErrorAddonWhisper({
+            code: ERR_CODES.BUFFER_LIMIT_EXCEEDED,
+            adds: MAX_BUFFERED_BYTES + ' bytes'
+          })
+        }
         this._bufferedAudio.push(data.input)
+        this._bufferedBytes += data.input.byteLength
         return this._nextJobId
       }
 
@@ -316,11 +339,12 @@ class WhisperInterface {
 
     try {
       try {
-        await this._binding.cancel(this._handle)
+        await this._binding.cancel(this._handle, this._activeJobId)
       } catch {}
       this._binding.destroyInstance(this._handle)
       this._handle = null
       this._bufferedAudio = []
+      this._bufferedBytes = 0
       this._activeJobId = null
       this._setState(state.IDLE)
     } catch (err) {
@@ -333,22 +357,26 @@ class WhisperInterface {
   }
 
   async runJob (data) {
+    const currentJobId = this._nextJobId
+    const previousJobId = this._activeJobId
+    const previousState = this._state
     try {
-      this._activeJobId = this._nextJobId
-      this._nextJobId += 1
-      this._setState(state.PROCESSING)
       const accepted = this._binding.runJob(this._handle, {
         ...data,
         audio_format: data?.audio_format || this._audioFormat
       })
       if (!accepted) {
-        this._activeJobId = null
-        this._setState(state.LISTENING)
+        this._activeJobId = previousJobId
+        this._setState(previousState)
+        return false
       }
-      return accepted
+      this._activeJobId = currentJobId
+      this._nextJobId = nextSafeId(this._nextJobId)
+      this._setState(state.PROCESSING)
+      return true
     } catch (err) {
-      this._activeJobId = null
-      this._setState(state.LISTENING)
+      this._activeJobId = previousJobId
+      this._setState(previousState)
       throw new QvacErrorAddonWhisper({
         code: ERR_CODES.FAILED_TO_APPEND,
         adds: err.message,
@@ -360,9 +388,12 @@ class WhisperInterface {
   startStreaming (config = {}) {
     try {
       this._activeJobId = this._nextJobId
-      this._nextJobId += 1
+      this._nextJobId = nextSafeId(this._nextJobId)
       this._setState(state.PROCESSING)
-      this._binding.startStreaming(this._handle, config)
+      this._binding.startStreaming(this._handle, {
+        ...config,
+        jobId: this._activeJobId
+      })
     } catch (err) {
       this._activeJobId = null
       this._setState(state.LISTENING)

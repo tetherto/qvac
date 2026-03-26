@@ -1,4 +1,5 @@
 #include "Fp16Utils.hpp"
+#include "TensorFloatHandler.hpp"
 
 #include <cstring>
 
@@ -88,43 +89,23 @@ bool isFp16(const chatterbox::OrtTensor &tensor) {
 void readTensorToFloatVector(const chatterbox::OrtTensor &tensor,
                              std::vector<float> &dest,
                              std::vector<float>::iterator destStart) {
-  const int64_t numElements = getNumElements(tensor);
-  if (isFp16(tensor)) {
-    const auto *src = static_cast<const uint16_t *>(tensor.data);
-    std::vector<float> converted(numElements);
-    for (int64_t i = 0; i < numElements; i++) {
-      converted[i] = toFp32(src[i]);
-    }
-    dest.insert(destStart, converted.begin(), converted.end());
-  } else {
-    const auto *src = static_cast<const float *>(tensor.data);
-    dest.insert(destStart, src, src + numElements);
-  }
+  const auto &h =
+      qvac::ttslib::tensor_float::TensorFloatHandlerFactory::get(tensor.type);
+  h.readToVector(tensor, dest, destStart);
 }
 
 void readTensorToFloatBuffer(const chatterbox::OrtTensor &tensor, float *dest,
                              int64_t offset, int64_t count) {
-  if (isFp16(tensor)) {
-    const auto *src = static_cast<const uint16_t *>(tensor.data) + offset;
-    for (int64_t i = 0; i < count; i++) {
-      dest[i] = toFp32(src[i]);
-    }
-  } else {
-    const auto *src = static_cast<const float *>(tensor.data) + offset;
-    std::memcpy(dest, src, count * sizeof(float));
-  }
+  const auto &h =
+      qvac::ttslib::tensor_float::TensorFloatHandlerFactory::get(tensor.type);
+  h.readToBuffer(tensor, dest, offset, count);
 }
 
 void writeFloatDataToTensor(const chatterbox::OrtTensor &tensor,
                             const float *src, size_t numElements) {
-  if (isFp16(tensor)) {
-    auto *dest = static_cast<uint16_t *>(tensor.data);
-    for (size_t i = 0; i < numElements; i++) {
-      dest[i] = fromFp32(src[i]);
-    }
-  } else {
-    std::memcpy(tensor.data, src, numElements * sizeof(float));
-  }
+  const auto &h =
+      qvac::ttslib::tensor_float::TensorFloatHandlerFactory::get(tensor.type);
+  h.writeFromFloat(tensor, src, numElements);
 }
 
 } // namespace qvac::ttslib::fp16
