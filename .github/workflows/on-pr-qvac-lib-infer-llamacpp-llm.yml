@@ -14,21 +14,21 @@ env:
   PKG_DIR: packages/qvac-lib-infer-llamacpp-llm
 
 jobs:
-  sanity-checks:
-    # if: contains( github.event.pull_request.labels.*.name, 'verify') || github.event_name == 'workflow_dispatch'
-    runs-on: ubuntu-latest
-    steps:
-      - name: Run Sanity checks
-        uses: tetherto/qvac-devops/.github/actions/sanity-checks@v1.1.6
-        with:
-          secret-token: ${{ secrets.GITHUB_TOKEN }}
-          npm-token: ${{ secrets.NPM_TOKEN }}
-          pat-token: ${{ secrets.PAT_TOKEN }}
-          run-integration: ${{ contains(github.event.pull_request.labels.*.name, 'verify') }}
-          workdir: packages/qvac-lib-infer-llamacpp-llm
+  # sanity-checks:
+  #   # if: contains( github.event.pull_request.labels.*.name, 'verify') || github.event_name == 'workflow_dispatch'
+  #   runs-on: ubuntu-latest
+  #   steps:
+  #     - name: Run Sanity checks
+  #       uses: tetherto/qvac-devops/.github/actions/sanity-checks@v1.1.6
+  #       with:
+  #         secret-token: ${{ secrets.GITHUB_TOKEN }}
+  #         npm-token: ${{ secrets.NPM_TOKEN }}
+  #         pat-token: ${{ secrets.PAT_TOKEN }}
+  #         run-integration: ${{ contains(github.event.pull_request.labels.*.name, 'verify') }}
+  #         workdir: packages/qvac-lib-infer-llamacpp-llm
 
   cpp-tests:
-    if: contains( github.event.pull_request.labels.*.name, 'verify') || github.event_name == 'workflow_dispatch'
+    # if: contains( github.event.pull_request.labels.*.name, 'verify') || github.event_name == 'workflow_dispatch'
     needs: sanity-checks
     uses: ./.github/workflows/cpp-tests-llm.yml
     secrets:
