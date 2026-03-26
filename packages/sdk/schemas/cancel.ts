@@ -1,4 +1,5 @@
 import { z } from "zod";
+import { delegateSchema } from "./delegate";
 
 const cancelBaseSchema = z.object({
   type: z.literal("cancel"),
@@ -16,6 +17,7 @@ const cancelDownloadParamsSchema = z.object({
   operation: z.literal("downloadAsset"),
   downloadKey: z.string(),
   clearCache: z.boolean().optional(),
+  delegate: delegateSchema,
 });
 
 const cancelRagParamsSchema = z.object({
