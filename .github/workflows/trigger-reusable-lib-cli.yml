@@ -30,14 +30,16 @@ on:
 env:
   WORKDIR: packages/cli
 
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: false
+
 jobs:
   release-merge-guard:
     name: Release Merge Guard
-    continue-on-error: true
     if: >-
       github.event_name == 'push' &&
-      startsWith(github.ref_name, 'release-') &&
-      github.event.before != '0000000000000000000000000000000000000000'
+      startsWith(github.ref_name, 'release-')
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # 6.0.2
@@ -149,7 +151,7 @@ jobs:
         uses: ./.github/actions/cli-rewrite-sdk-scope-for-gpr
 
       - name: Publish to GitHub Packages (dev)
-        uses: tetherto/qvac-devops/.github/actions/publish-library-to-gpr@v1.1.6
+        uses: tetherto/qvac-devops/.github/actions/publish-library-to-gpr@v1.1.7
         with:
           secret-token: ${{ secrets.GITHUB_TOKEN }}
           pat-token: ${{ secrets.PAT_TOKEN }}
@@ -160,7 +162,9 @@ jobs:
 
   publish-release-npm:
     needs: [build, publish-logic, release-merge-guard]
-    if: needs.publish-logic.outputs.publish_release == 'true'
+    if: >-
+      needs.publish-logic.outputs.publish_release == 'true' &&
+      (needs.release-merge-guard.result == 'success' || needs.release-merge-guard.result == 'skipped')
     runs-on: ubuntu-latest
     outputs:
       published_version: ${{ steps.publish.outputs.npm_published_version }}
@@ -225,7 +229,7 @@ jobs:
         uses: ./.github/actions/cli-rewrite-sdk-scope-for-gpr
 
       - name: Publish to GitHub Packages (feature)
-        uses: tetherto/qvac-devops/.github/actions/publish-library-to-gpr@v1.1.6
+        uses: tetherto/qvac-devops/.github/actions/publish-library-to-gpr@v1.1.7
         with:
           secret-token: ${{ secrets.GITHUB_TOKEN }}
           pat-token: ${{ secrets.PAT_TOKEN }}
@@ -256,7 +260,7 @@ jobs:
         uses: ./.github/actions/cli-rewrite-sdk-scope-for-gpr
 
       - name: Publish to GitHub Packages (tmp)
-        uses: tetherto/qvac-devops/.github/actions/publish-library-to-gpr@v1.1.6
+        uses: tetherto/qvac-devops/.github/actions/publish-library-to-gpr@v1.1.7
         with:
           secret-token: ${{ secrets.GITHUB_TOKEN }}
           pat-token: ${{ secrets.PAT_TOKEN }}

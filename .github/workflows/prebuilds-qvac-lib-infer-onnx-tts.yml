@@ -75,6 +75,10 @@ on:
         description: "Target registry to publish to (npm or gpr)"
         value: ${{ inputs.publish_target }}
 
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: false
+
 jobs:
   prebuild:
     permissions:
@@ -594,7 +598,7 @@ jobs:
 
       - name: Publish to GitHub Package Registry
         id: publish
-        uses: tetherto/qvac-devops/.github/actions/publish-library-to-gpr@v1.1.6
+        uses: tetherto/qvac-devops/.github/actions/publish-library-to-gpr@v1.1.7
         with:
           secret-token: ${{ secrets.GITHUB_TOKEN }}
           tag: ${{ needs.publish-logic.outputs.gpr_tag }}
@@ -625,7 +629,7 @@ jobs:
 
       - name: Publish to NPM Package Registry
         id: publish
-        uses: tetherto/qvac-devops/.github/actions/publish-library-to-npm@v1.1.6
+        uses: tetherto/qvac-devops/.github/actions/publish-library-to-npm@v1.1.7
         with:
           secret-token: ${{ secrets.NPM_TOKEN }}
           tag: "latest"

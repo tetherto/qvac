@@ -24,6 +24,10 @@ permissions:
   pull-requests: write
   packages: write
 
+concurrency:
+  group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.sha }}
+  cancel-in-progress: true
+
 env:
   PKG_DIR: packages/qvac-lib-infer-llamacpp-llm
 
@@ -33,7 +37,7 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - name: Run Sanity checks
-        uses: tetherto/qvac-devops/.github/actions/sanity-checks@v1.1.6
+        uses: tetherto/qvac-devops/.github/actions/sanity-checks@v1.1.7
         with:
           secret-token: ${{ secrets.GITHUB_TOKEN }}
           npm-token: ${{ secrets.NPM_TOKEN }}
@@ -55,10 +59,11 @@ jobs:
 
   cpp-lint:
     if: contains( github.event.pull_request.labels.*.name, 'verify') || github.event_name == 'workflow_dispatch'
-    uses: tetherto/qvac-devops/.github/workflows/cpp-lint.yaml@v1.1.6
+    uses: tetherto/qvac-devops/.github/workflows/cpp-lint.yaml@v1.1.7
     secrets:
-      PAT_TOKEN: ${{ secrets.PAT_TOKEN }}
+      GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
       NPM_TOKEN: ${{ secrets.NPM_TOKEN }}
+      PAT_TOKEN: ${{ secrets.PAT_TOKEN }}
     with:
       sha: ${{ github.event.pull_request.base.sha }}
       pr_head_sha: ${{ github.event.pull_request.head.sha }}
@@ -163,7 +168,7 @@ jobs:
         ts-checks,
       ]
     if: always()
-    uses: tetherto/qvac-devops/.github/workflows/public-pr.yml@v1.1.6
+    uses: tetherto/qvac-devops/.github/workflows/public-pr.yml@v1.1.7
     with:
       sanity-checks-status: ${{ needs.sanity-checks.result == 'success' }}
       build-status: ${{ needs.prebuild.result == 'success'}}
