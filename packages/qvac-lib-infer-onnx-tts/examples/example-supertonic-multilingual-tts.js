@@ -28,6 +28,7 @@ async function main () {
     files: {
       modelDir
     },
+    engine: 'supertonic',
     voiceName: 'F1',
     speed: 1.05,
     numInferenceSteps: 5,

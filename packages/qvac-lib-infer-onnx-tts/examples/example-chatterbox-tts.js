@@ -62,14 +62,18 @@ async function main () {
 
   console.log(`Mode: ${modeArg}, language: ${language}, models: ${modelsDir}`)
 
+  const modelDir = path.join(__dirname, '..', modelsDir)
+
   const model = new ONNXTTS({
     files: {
+      modelDir,
       tokenizer: tokenizerPath,
       speechEncoder: speechEncoderPath,
       embedTokens: embedTokensPath,
       conditionalDecoder: conditionalDecoderPath,
       languageModel: languageModelPath
     },
+    engine: 'chatterbox',
     referenceAudio,
     config: {
       language

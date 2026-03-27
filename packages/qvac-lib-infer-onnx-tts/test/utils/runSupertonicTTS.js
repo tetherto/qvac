@@ -13,6 +13,7 @@ async function loadSupertonicTTS (params = {}) {
     files: {
       modelDir: params.modelDir || defaultModelDir
     },
+    engine: 'supertonic',
     voiceName: params.voiceName || 'F1',
     speed: params.speed != null ? params.speed : 1,
     numInferenceSteps: params.numInferenceSteps != null ? params.numInferenceSteps : 5,

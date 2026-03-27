@@ -1,5 +1,6 @@
 'use strict'
 
+const path = require('bare-path')
 const test = require('brittle')
 const ONNXTTS = require('../../index.js')
 const { TTSInterface } = require('../../tts.js')
@@ -12,12 +13,9 @@ const sinon = require('sinon')
 function createMockedChatterboxModel ({ onOutput = () => { }, binding = undefined, exclusiveRun = false } = {}) {
   const model = new ONNXTTS({
     files: {
-      tokenizer: './models/chatterbox/tokenizer.json',
-      speechEncoder: './models/chatterbox/speech_encoder.onnx',
-      embedTokens: './models/chatterbox/embed_tokens.onnx',
-      conditionalDecoder: './models/chatterbox/conditional_decoder.onnx',
-      languageModel: './models/chatterbox/language_model.onnx'
+      modelDir: './models/chatterbox'
     },
+    engine: 'chatterbox',
     config: {
       language: 'en',
       useGPU: false
@@ -181,6 +179,24 @@ test('Chatterbox: Engine type is detected correctly', async (t) => {
     }
   })
   t.is(chatterboxModel._engineType, 'chatterbox', 'Should detect Chatterbox engine when Chatterbox paths are provided')
+
+  const fromBundle = new ONNXTTS({
+    files: { modelDir: './models/chatterbox' },
+    engine: 'chatterbox'
+  })
+  t.is(fromBundle._engineType, 'chatterbox', 'engine chatterbox + modelDir uses Chatterbox layout')
+  t.is(
+    fromBundle._tokenizerPath,
+    path.join('./models/chatterbox', 'tokenizer.json'),
+    'modelDir derives tokenizer path'
+  )
+})
+
+test('Chatterbox: invalid engine throws', async (t) => {
+  t.exception(
+    () => new ONNXTTS({ files: { modelDir: './x' }, engine: 'other' }),
+    /invalid engine/
+  )
 })
 
 test('Chatterbox: cancel propagates as job failure', async (t) => {

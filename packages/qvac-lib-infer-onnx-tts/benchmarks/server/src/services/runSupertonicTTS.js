@@ -62,6 +62,7 @@ async function runSupertonicTTS (payload) {
       files: {
         modelDir
       },
+      engine: 'supertonic',
       voiceName,
       speed,
       numInferenceSteps,

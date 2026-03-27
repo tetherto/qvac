@@ -14,6 +14,7 @@ function createMockedSupertonicModel ({ onOutput = () => { }, binding = undefine
     files: {
       modelDir: './models/supertonic'
     },
+    engine: 'supertonic',
     voiceName: 'F1',
     speed: 1,
     numInferenceSteps: 5,
@@ -69,6 +70,16 @@ test('Supertonic: Engine type is detected correctly', async (t) => {
     voiceName: 'F1'
   })
   t.is(modelFromDir._engineType, 'supertonic', 'Should detect Supertonic engine when modelDir + voiceName are provided')
+
+  const modelFromDirOnly = new ONNXTTS({
+    files: { modelDir: './models/supertonic' }
+  })
+  t.is(
+    modelFromDirOnly._engineType,
+    'supertonic',
+    'Should detect Supertonic when only modelDir is set (voiceName defaults to F1)'
+  )
+  t.is(modelFromDirOnly._voiceName, 'F1', 'Default voice when voiceName omitted')
 
   const modelFromPaths = new ONNXTTS({
     files: {

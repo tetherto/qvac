@@ -28,6 +28,48 @@ function firstNonEmpty (...candidates) {
  * Normalize `files` map: short keys, legacy *Path keys, and SDK-style aliases.
  * @param {Record<string, unknown>} files
  */
+function hasAnyExplicitArtifact (n) {
+  const keys = [
+    'tokenizer', 'speechEncoder', 'embedTokens', 'conditionalDecoder', 'languageModel',
+    'textEncoder', 'durationPredictor', 'vectorEstimator', 'vocoder',
+    'unicodeIndexer', 'ttsConfig', 'voiceStyle'
+  ]
+  for (let i = 0; i < keys.length; i++) {
+    const v = n[keys[i]]
+    if (v != null && v !== '') return true
+  }
+  return false
+}
+
+/**
+ * @param {{ engine?: string }} options
+ * @param {Record<string, string | undefined>} normalizedFiles
+ */
+function resolveEngineType (options, normalizedFiles) {
+  const e = options.engine
+  if (e != null && e !== '') {
+    if (e === ENGINE_CHATTERBOX || e === ENGINE_SUPERTONIC) return e
+    throw new Error(
+      `ONNXTTS: invalid engine "${e}"; use "${ENGINE_CHATTERBOX}" or "${ENGINE_SUPERTONIC}"`
+    )
+  }
+
+  const modelDirSet =
+    normalizedFiles.modelDir != null && normalizedFiles.modelDir !== ''
+  if (modelDirSet && !hasAnyExplicitArtifact(normalizedFiles)) {
+    return ENGINE_SUPERTONIC
+  }
+
+  if (
+    (normalizedFiles.textEncoder != null && normalizedFiles.textEncoder !== '') ||
+    (normalizedFiles.durationPredictor != null && normalizedFiles.durationPredictor !== '')
+  ) {
+    return ENGINE_SUPERTONIC
+  }
+
+  return ENGINE_CHATTERBOX
+}
+
 function normalizeOnnxTtsFiles (files) {
   if (files == null || typeof files !== 'object') {
     return {}
@@ -67,6 +109,7 @@ class ONNXTTS extends InferBase {
     const {
       files: filesInput = {},
       config = {},
+      engine,
       logger,
       loader,
       cache,
@@ -84,7 +127,10 @@ class ONNXTTS extends InferBase {
 
     const normalizedFiles = normalizeOnnxTtsFiles(filesInput)
 
+    this._engineType = resolveEngineType({ engine }, normalizedFiles)
+
     if (
+      this._engineType === ENGINE_SUPERTONIC &&
       !normalizedFiles.modelDir &&
       normalizedFiles.textEncoder &&
       !normalizedFiles.vectorEstimator
@@ -106,23 +152,36 @@ class ONNXTTS extends InferBase {
       ? lazySessionLoading
       : (platform() === 'ios' || platform() === 'android')
 
-    const hasSupertonicPaths =
-      (normalizedFiles.textEncoder != null && normalizedFiles.textEncoder !== '') ||
-      (normalizedFiles.durationPredictor != null && normalizedFiles.durationPredictor !== '') ||
-      (
-        normalizedFiles.modelDir != null &&
-        normalizedFiles.modelDir !== '' &&
-        voiceName != null &&
-        voiceName !== ''
-      )
-    this._engineType = hasSupertonicPaths ? ENGINE_SUPERTONIC : ENGINE_CHATTERBOX
-
     if (this._engineType === ENGINE_CHATTERBOX) {
-      this._tokenizerPath = normalizedFiles.tokenizer
-      this._speechEncoderPath = normalizedFiles.speechEncoder
-      this._embedTokensPath = normalizedFiles.embedTokens
-      this._conditionalDecoderPath = normalizedFiles.conditionalDecoder
-      this._languageModelPath = normalizedFiles.languageModel
+      const root = normalizedFiles.modelDir
+      if (root) {
+        this._tokenizerPath = firstNonEmpty(
+          normalizedFiles.tokenizer,
+          path.join(root, 'tokenizer.json')
+        )
+        this._speechEncoderPath = firstNonEmpty(
+          normalizedFiles.speechEncoder,
+          path.join(root, 'speech_encoder.onnx')
+        )
+        this._embedTokensPath = firstNonEmpty(
+          normalizedFiles.embedTokens,
+          path.join(root, 'embed_tokens.onnx')
+        )
+        this._conditionalDecoderPath = firstNonEmpty(
+          normalizedFiles.conditionalDecoder,
+          path.join(root, 'conditional_decoder.onnx')
+        )
+        this._languageModelPath = firstNonEmpty(
+          normalizedFiles.languageModel,
+          path.join(root, 'language_model.onnx')
+        )
+      } else {
+        this._tokenizerPath = normalizedFiles.tokenizer
+        this._speechEncoderPath = normalizedFiles.speechEncoder
+        this._embedTokensPath = normalizedFiles.embedTokens
+        this._conditionalDecoderPath = normalizedFiles.conditionalDecoder
+        this._languageModelPath = normalizedFiles.languageModel
+      }
       this._referenceAudio = referenceAudio
     } else {
       this._modelDir = normalizedFiles.modelDir
@@ -132,16 +191,37 @@ class ONNXTTS extends InferBase {
       this._supertonicMultilingual = supertonicMultilingual !== false
       if (normalizedFiles.modelDir) {
         const onnx = path.join(normalizedFiles.modelDir, 'onnx')
-        this._textEncoderPath = path.join(onnx, 'text_encoder.onnx')
-        this._durationPredictorPath = path.join(onnx, 'duration_predictor.onnx')
-        this._vectorEstimatorPath = path.join(onnx, 'vector_estimator.onnx')
-        this._vocoderPath = path.join(onnx, 'vocoder.onnx')
-        this._unicodeIndexerPath = path.join(onnx, 'unicode_indexer.json')
-        this._ttsConfigPath = path.join(onnx, 'tts.json')
-        this._voiceStyleJsonPath = path.join(
-          normalizedFiles.modelDir,
-          'voice_styles',
-          `${this._voiceName.replace(/\.json$/i, '')}.json`
+        this._textEncoderPath = firstNonEmpty(
+          normalizedFiles.textEncoder,
+          path.join(onnx, 'text_encoder.onnx')
+        )
+        this._durationPredictorPath = firstNonEmpty(
+          normalizedFiles.durationPredictor,
+          path.join(onnx, 'duration_predictor.onnx')
+        )
+        this._vectorEstimatorPath = firstNonEmpty(
+          normalizedFiles.vectorEstimator,
+          path.join(onnx, 'vector_estimator.onnx')
+        )
+        this._vocoderPath = firstNonEmpty(
+          normalizedFiles.vocoder,
+          path.join(onnx, 'vocoder.onnx')
+        )
+        this._unicodeIndexerPath = firstNonEmpty(
+          normalizedFiles.unicodeIndexer,
+          path.join(onnx, 'unicode_indexer.json')
+        )
+        this._ttsConfigPath = firstNonEmpty(
+          normalizedFiles.ttsConfig,
+          path.join(onnx, 'tts.json')
+        )
+        this._voiceStyleJsonPath = firstNonEmpty(
+          normalizedFiles.voiceStyle,
+          path.join(
+            normalizedFiles.modelDir,
+            'voice_styles',
+            `${this._voiceName.replace(/\.json$/i, '')}.json`
+          )
         )
       } else {
         this._textEncoderPath = normalizedFiles.textEncoder

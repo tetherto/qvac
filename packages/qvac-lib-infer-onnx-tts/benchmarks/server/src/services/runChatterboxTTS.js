@@ -143,12 +143,14 @@ async function runChatterboxTTS (payload) {
 
     cachedModel = new ONNXTTS({
       files: {
+        modelDir,
         tokenizer: tokenizerPath,
         speechEncoder: speechEncoderPath,
         embedTokens: embedTokensPath,
         conditionalDecoder: conditionalDecoderPath,
         languageModel: languageModelPath
       },
+      engine: 'chatterbox',
       referenceAudio,
       config: modelConfig,
       opts: { stats: true }

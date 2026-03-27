@@ -62,12 +62,14 @@ async function loadChatterboxTTS (params = {}) {
 
   const model = new ONNXTTS({
     files: {
+      modelDir: params.modelDir || defaultModelDir,
       tokenizer: tokenizerPath,
       speechEncoder: speechEncoderPath,
       embedTokens: embedTokensPath,
       conditionalDecoder: conditionalDecoderPath,
       languageModel: languageModelPath
     },
+    engine: 'chatterbox',
     referenceAudio,
     config: {
       language: params.language || 'en',

@@ -7,7 +7,12 @@ import type QvacResponse from '@qvac/infer-base/src/QvacResponse'
  * SDK aliases (`supertonicModel`, `latentDenoiser`, `voiceDecoder`, `supertonicVocoder`) are accepted.
  */
 declare interface ONNXTTSFiles {
-  /** Supertonic: HF layout root (`onnx/`, `voice_styles/`). */
+  /**
+   * Bundle root for either engine (same top-level option; layout differs).
+   * Chatterbox: `tokenizer.json`, `speech_encoder.onnx`, … at root.
+   * Supertonic: `onnx/`, `voice_styles/` (see README).
+   * Per-file entries override these defaults when both are set.
+   */
   modelDir?: string
   /** Chatterbox: tokenizer JSON. Supertonic explicit: may serve as unicode indexer if `unicodeIndexer` omitted. */
   tokenizer?: string
@@ -55,6 +60,11 @@ declare interface ONNXTTSRuntimeConfig {
 
 declare interface ONNXTTSOptions {
   files?: ONNXTTSFiles
+  /**
+   * Force engine when ambiguous (e.g. `files.modelDir` with no per-file paths: default is Supertonic).
+   * Use `"chatterbox"` for Chatterbox-only bundle layout under `modelDir`.
+   */
+  engine?: 'chatterbox' | 'supertonic'
   config?: ONNXTTSRuntimeConfig
   logger?: object
   loader?: Loader
@@ -62,7 +72,7 @@ declare interface ONNXTTSOptions {
   lazySessionLoading?: boolean
   /** Chatterbox voice cloning input */
   referenceAudio?: Float32Array | number[]
-  /** Supertonic — default "F1". Required with `files.modelDir` for engine detection (same as before). */
+  /** Supertonic voice id for `voice_styles/{voiceName}.json` — default `"F1"`. Optional when using `files.modelDir`. */
   voiceName?: string
   speed?: number
   numInferenceSteps?: number
@@ -72,8 +82,8 @@ declare interface ONNXTTSOptions {
 }
 
 /**
- * ONNX client for TTS (Chatterbox or Supertonic). Engine is inferred from `files`
- * (same rules as before: Supertonic if text/duration paths or `modelDir` + `voiceName`).
+ * ONNX client for TTS (Chatterbox or Supertonic). Prefer `files: { modelDir }` for both engines;
+ * set `engine` when `modelDir` is the only file field (defaults to Supertonic for back-compat).
  */
 declare class ONNXTTS extends InferBase {
   constructor(options?: ONNXTTSOptions)
