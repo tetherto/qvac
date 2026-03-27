@@ -34,7 +34,6 @@ run-name: Delete NPM Versions (diffusion-cpp) ${{ inputs.version }} ${{ inputs.p
 
 permissions:
   contents: read
-  packages: write
 
 jobs:
   print-context-trigger:
@@ -51,6 +50,8 @@ jobs:
           GITHUB_CONTEXT: ${{ toJSON(github) }}
 
   delete-npm-versions-trigger:
+    permissions:
+      packages: write
     uses: tetherto/qvac-devops/.github/workflows/public-delete-npm-versions.yml@v1.1.7
     with:
       version: ${{ inputs.version }}

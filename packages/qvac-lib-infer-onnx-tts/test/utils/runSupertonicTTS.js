@@ -14,6 +14,8 @@ async function loadSupertonicTTS (params = {}) {
     voiceName: params.voiceName || 'F1',
     speed: params.speed != null ? params.speed : 1,
     numInferenceSteps: params.numInferenceSteps != null ? params.numInferenceSteps : 5,
+    supertonicMultilingual:
+      params.supertonicMultilingual === true,
     opts: { stats: true }
   }
 

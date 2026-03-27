@@ -47,10 +47,14 @@ on:
   release:
     types: [published]
 
+permissions:
+  contents: read
+
 jobs:
   benchmark-supertonic:
     if: github.event_name == 'workflow_dispatch' || (github.event_name == 'release' && startsWith(github.event.release.tag_name, 'onnx-tts-v'))
     runs-on: macos-14-xlarge
+    environment: release
     timeout-minutes: 180
     env:
       GITHUB_TOKEN: ${{ secrets.PAT_TOKEN }}

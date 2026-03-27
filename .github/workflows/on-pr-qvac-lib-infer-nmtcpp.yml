@@ -18,13 +18,13 @@ on:
   workflow_dispatch:
 
 concurrency:
-  group: pr-${{ github.event.pull_request.number || github.sha }}
+  group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.sha }}
   cancel-in-progress: true
 
 permissions:
-  contents: write
-  pull-requests: write
-  packages: write
+  contents: read
+  pull-requests: read
+  packages: read
 
 env:
   PKG_DIR: packages/qvac-lib-infer-nmtcpp
@@ -38,6 +38,8 @@ jobs:
     outputs:
       allowed: ${{ steps.auth.outputs.allowed }}
     steps:
+      - name: Checkout
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # 6.0.2
       - name: Authorize
         id: auth
         uses: ./.github/actions/authorize-pr
@@ -63,6 +65,7 @@ jobs:
     needs: [authorize, changes]
     if: always() && ((needs.changes.outputs.pkg == 'true' && needs.authorize.outputs.allowed == 'true') || github.event_name == 'workflow_dispatch')
     runs-on: ubuntu-latest
+    environment: release
     steps:
       - name: Run Sanity checks
         uses: tetherto/qvac-devops/.github/actions/sanity-checks@v1.1.7
@@ -77,6 +80,7 @@ jobs:
     needs: [authorize, changes, sanity-checks]
     if: always() && needs.authorize.outputs.allowed == 'true' && (needs.changes.outputs.pkg == 'true' || github.event_name == 'workflow_dispatch')
     runs-on: ubuntu-latest
+    environment: release
     defaults:
       run:
         working-directory: ${{ env.PKG_DIR }}
@@ -139,6 +143,10 @@ jobs:
       repository: ${{ github.event.pull_request.head.repo.full_name }}
 
   prebuild:
+    permissions:
+      contents: write
+      packages: write
+      pull-requests: write
     needs: [authorize, changes, sanity-checks]
     if: |
       always() &&
@@ -176,6 +184,10 @@ jobs:
       ref: ${{ github.event.pull_request.head.ref }}
 
   run-mobile-integration-tests:
+    permissions:
+      contents: read
+      packages: read
+      pull-requests: write # Allow commenting on PRs
     needs: [authorize, changes, sanity-checks, prebuild]
     if: |
       always() &&

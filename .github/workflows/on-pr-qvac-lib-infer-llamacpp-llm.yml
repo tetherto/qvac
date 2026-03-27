@@ -20,9 +20,9 @@ on:
   workflow_call:
 
 permissions:
-  contents: write
-  pull-requests: write
-  packages: write
+  contents: read
+  pull-requests: read
+  packages: read
 
 concurrency:
   group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.sha }}
@@ -40,6 +40,8 @@ jobs:
     outputs:
       allowed: ${{ steps.auth.outputs.allowed }}
     steps:
+      - name: Checkout
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # 6.0.2
       - name: Authorize
         id: auth
         uses: ./.github/actions/authorize-pr
@@ -50,6 +52,7 @@ jobs:
     if: needs.authorize.outputs.allowed == 'true'
     needs: authorize
     runs-on: ubuntu-latest
+    environment: release
     steps:
       - name: Run Sanity checks
         uses: tetherto/qvac-devops/.github/actions/sanity-checks@v1.1.7
@@ -75,6 +78,7 @@ jobs:
   cpp-lint:
     if: needs.authorize.outputs.allowed == 'true'
     uses: tetherto/qvac-devops/.github/workflows/cpp-lint.yaml@v1.1.7
+    needs: authorize
     secrets:
       NPM_TOKEN: ${{ secrets.NPM_TOKEN }}
       PAT_TOKEN: ${{ secrets.PAT_TOKEN }}
@@ -87,6 +91,7 @@ jobs:
     if: needs.authorize.outputs.allowed == 'true'
     needs: authorize
     runs-on: ubuntu-latest
+    environment: release
     steps:
       - name: Checkout code
         uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # 6.0.2
@@ -148,6 +153,10 @@ jobs:
       ref: ${{ github.event.pull_request.head.ref }}
 
   run-mobile-integration-tests:
+    permissions:
+      contents: read
+      packages: read
+      pull-requests: write # Allow commenting on PRs
     if: needs.authorize.outputs.allowed == 'true'
     needs: [authorize, prebuild]
     uses: ./.github/workflows/integration-mobile-test-qvac-lib-infer-llamacpp-llm.yml

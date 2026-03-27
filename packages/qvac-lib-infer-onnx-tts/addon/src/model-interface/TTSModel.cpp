@@ -12,6 +12,25 @@
 using namespace qvac::ttslib::addon_model;
 using namespace qvac_lib_inference_addon_cpp::logger;
 
+namespace {
+
+bool isSupertonicOnnxConfigValid(
+    const qvac::ttslib::supertonic::SupertonicConfig &c) {
+  if (c.language.empty())
+    return false;
+  const bool haveVoice = !c.voiceStyleJsonPath.empty() ||
+                         (!c.modelDir.empty() && !c.voiceName.empty());
+  if (!haveVoice)
+    return false;
+  const bool haveOnnxMeta =
+      !c.durationPredictorPath.empty() && !c.textEncoderPath.empty() &&
+      !c.vectorEstimatorPath.empty() && !c.vocoderPath.empty() &&
+      !c.unicodeIndexerPath.empty() && !c.ttsConfigPath.empty();
+  return haveOnnxMeta || !c.modelDir.empty();
+}
+
+} // namespace
+
 TTSModel::TTSModel(
     const std::unordered_map<std::string, std::string> &configMap,
     const std::vector<float> &referenceAudio,
@@ -36,9 +55,9 @@ TTSModel::TTSModel(
       supertonicEngine_ = supertonicEngine;
     } else {
       supertonicEngine_ =
-          std::make_shared<qvac::ttslib::supertonic::SupertonicEngine>(supertonicConfig_);
+          std::make_shared<qvac::ttslib::supertonic::SupertonicEngine>();
     }
-    QLOG(Priority::INFO, "TTSModel initialized with Supertonic engine");
+    QLOG(Priority::INFO, "TTSModel initialized with Supertonic ONNX engine");
   }
 
   load();
@@ -47,8 +66,18 @@ TTSModel::TTSModel(
 
 EngineType TTSModel::detectEngineType(
     const std::unordered_map<std::string, std::string> &configMap) const {
-  auto it = configMap.find("textEncoderPath");
-  if (it != configMap.end() && !it->second.empty()) {
+  auto nonEmpty = [](const std::unordered_map<std::string, std::string> &m,
+                     const char *k) {
+    auto it = m.find(k);
+    return it != m.end() && !it->second.empty();
+  };
+  if (nonEmpty(configMap, "textEncoderPath") ||
+      nonEmpty(configMap, "durationPredictorPath") ||
+      nonEmpty(configMap, "unicodeIndexerPath") ||
+      nonEmpty(configMap, "ttsConfigPath") ||
+      nonEmpty(configMap, "vectorEstimatorPath") ||
+      nonEmpty(configMap, "vocoderPath") ||
+      (nonEmpty(configMap, "modelDir") && nonEmpty(configMap, "voiceName"))) {
     return EngineType::Supertonic;
   }
   return EngineType::Chatterbox;
@@ -109,13 +138,20 @@ qvac::ttslib::supertonic::SupertonicConfig TTSModel::createSupertonicConfig(
     }
   };
   updateConfig("modelDir", config.modelDir);
-  updateConfig("tokenizerPath", config.tokenizerPath);
   updateConfig("textEncoderPath", config.textEncoderPath);
-  updateConfig("latentDenoiserPath", config.latentDenoiserPath);
-  updateConfig("voiceDecoderPath", config.voiceDecoderPath);
-  updateConfig("voicesDir", config.voicesDir);
   updateConfig("voiceName", config.voiceName);
   updateConfig("language", config.language);
+  updateConfig("unicodeIndexerPath", config.unicodeIndexerPath);
+  updateConfig("ttsConfigPath", config.ttsConfigPath);
+  updateConfig("durationPredictorPath", config.durationPredictorPath);
+  updateConfig("vectorEstimatorPath", config.vectorEstimatorPath);
+  updateConfig("vocoderPath", config.vocoderPath);
+  updateConfig("voiceStyleJsonPath", config.voiceStyleJsonPath);
+
+  auto mulIt = configMap.find("supertonicMultilingual");
+  if (mulIt != configMap.end()) {
+    config.supertonicMultilingual = (mulIt->second == "true");
+  }
 
   auto it = configMap.find("speed");
   if (it != configMap.end() && !it->second.empty()) {
@@ -133,14 +169,16 @@ qvac::ttslib::supertonic::SupertonicConfig TTSModel::createSupertonicConfig(
   }
 
   std::stringstream ss;
-  ss << "Supertonic config: modelDir='" << config.modelDir
-     << "' tokenizerPath='" << config.tokenizerPath << "' textEncoderPath='"
-     << config.textEncoderPath << "' latentDenoiserPath='"
-     << config.latentDenoiserPath << "' voiceDecoderPath='"
-     << config.voiceDecoderPath << "' voicesDir='" << config.voicesDir
+  ss << "Supertone ONNX config: modelDir='" << config.modelDir
+     << "' textEncoderPath='" << config.textEncoderPath << "' durationPredictorPath='"
+     << config.durationPredictorPath << "' vectorEstimatorPath='"
+     << config.vectorEstimatorPath << "' vocoderPath='" << config.vocoderPath
+     << "' unicodeIndexerPath='" << config.unicodeIndexerPath << "' ttsConfigPath='"
+     << config.ttsConfigPath << "' voiceStyleJsonPath='" << config.voiceStyleJsonPath
      << "' voiceName='" << config.voiceName << "' language='" << config.language
      << "' speed=" << config.speed
-     << " numInferenceSteps=" << config.numInferenceSteps;
+     << " numInferenceSteps=" << config.numInferenceSteps
+     << " supertonicMultilingual=" << (config.supertonicMultilingual ? "true" : "false");
   QLOG(Priority::INFO, ss.str());
 
   return config;
@@ -148,10 +186,7 @@ qvac::ttslib::supertonic::SupertonicConfig TTSModel::createSupertonicConfig(
 
 bool TTSModel::isSupertonicConfigValid(
     const qvac::ttslib::supertonic::SupertonicConfig &config) const {
-  return !config.tokenizerPath.empty() && !config.textEncoderPath.empty() &&
-         !config.latentDenoiserPath.empty() &&
-         !config.voiceDecoderPath.empty() && !config.voicesDir.empty() &&
-         !config.voiceName.empty() && !config.language.empty();
+  return isSupertonicOnnxConfigValid(config);
 }
 
 void TTSModel::saveLoadParams(
@@ -178,7 +213,7 @@ void TTSModel::load() {
   } else if (engineType_ == EngineType::Supertonic) {
     supertonicEngine_->load(supertonicConfig_);
     loaded_ = supertonicEngine_->isLoaded();
-    QLOG(Priority::INFO, "Supertonic TTS model loaded successfully");
+    QLOG(Priority::INFO, "Supertone ONNX TTS model loaded successfully");
   }
 }
 

@@ -27,6 +27,9 @@ on:
 env:
   PKG_DIR: packages/ocr-onnx
 
+permissions:
+  contents: read
+
 jobs:
   setup:
     runs-on: ubuntu-latest
@@ -59,6 +62,7 @@ jobs:
     needs: setup
     if: needs.setup.outputs.qvac_needed == 'true'
     runs-on: ubuntu-24.04
+    environment: release
     timeout-minutes: 120
     name: Build QVAC addon
 
@@ -171,6 +175,7 @@ jobs:
       needs.setup.result == 'success' &&
       (needs.build.result == 'success' || needs.build.result == 'skipped')
     runs-on: ubuntu-24.04
+    environment: release
     timeout-minutes: 180
     name: Text Spotting Benchmark
 

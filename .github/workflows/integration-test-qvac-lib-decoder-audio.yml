@@ -25,6 +25,7 @@ on:
 jobs:
   run-integration-tests:
     runs-on: ${{ matrix.os }}
+    environment: release
     name: test-${{ matrix.platform }}-${{ matrix.arch }}
     permissions:
       contents: read

@@ -23,9 +23,9 @@ on:
           - dev
 
 permissions:
-  contents: write
-  pull-requests: write
-  packages: write
+  contents: read
+  pull-requests: read
+  packages: read
 
 concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}
@@ -238,6 +238,10 @@ jobs:
     uses: ./.github/workflows/integration-mobile-test-qvac-lib-infer-whispercpp.yml
     needs: prebuild
     if: needs.prebuild.outputs.should_run_tests == 'true'
+    permissions:
+      contents: read
+      packages: read
+      pull-requests: write
     secrets:
       ANDROID_DEVICE_POOL_ARN_WHISPERCPP: ${{ secrets.ANDROID_DEVICE_POOL_ARN_WHISPERCPP }}
       APPLE_KEYCHAIN_PASSWORD: ${{ secrets.APPLE_KEYCHAIN_PASSWORD }}
@@ -258,6 +262,7 @@ jobs:
   benchmark:
     name: Trigger Benchmark (Whispercpp)
     runs-on: ubuntu-latest
+    environment: release
     needs: prebuild
     if: always() && needs.prebuild.outputs.should_run_tests == 'true'
     steps:

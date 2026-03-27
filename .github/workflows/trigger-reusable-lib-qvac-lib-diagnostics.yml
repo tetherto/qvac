@@ -2,12 +2,6 @@ name: General CI/CD (Qvac-lib-diagnostics)
 # This workflow is used to call the reusable workflows in the qvac-devops repository
 # https://github.com/tetherto/qvac-devops/blob/production-workflows-tag/.github/workflows/public-reusable.yml
 
-permissions:
-  contents: write
-  packages: write
-  pull-requests: write
-  id-token: write
-
 on:
   push:
     branches:
@@ -19,6 +13,8 @@ on:
       - "packages/qvac-lib-diagnostics/**"
   workflow_dispatch:
 
+permissions:
+  contents: read
 concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}
   cancel-in-progress: false
@@ -96,6 +92,7 @@ jobs:
     needs: publish-logic
     if: needs.publish-logic.outputs.publish_main == 'true'
     runs-on: ubuntu-latest
+    environment: release
     permissions:
       contents: read
       packages: write
@@ -148,6 +145,7 @@ jobs:
     needs: publish-logic
     if: needs.publish-logic.outputs.publish_feature == 'true'
     runs-on: ubuntu-latest
+    environment: release
     permissions:
       contents: read
       packages: write
@@ -170,6 +168,7 @@ jobs:
     needs: publish-logic
     if: needs.publish-logic.outputs.publish_tmp == 'true'
     runs-on: ubuntu-latest
+    environment: release
     permissions:
       contents: read
       packages: write

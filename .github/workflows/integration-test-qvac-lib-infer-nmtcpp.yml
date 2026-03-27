@@ -44,6 +44,7 @@ jobs:
   run-integration-tests:
     timeout-minutes: 60
     runs-on: ${{ matrix.os }}
+    environment: release
     name: ${{ matrix.platform }}-${{ matrix.arch }}-integration-tests
     permissions:
       contents: read
