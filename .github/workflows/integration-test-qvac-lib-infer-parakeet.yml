@@ -48,6 +48,7 @@ jobs:
     permissions:
       contents: read
       packages: read
+      attestations: read
     strategy:
       fail-fast: false
       matrix:
@@ -128,15 +129,42 @@ jobs:
         uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # 8.0.1
         with:
           path: ${{ inputs.workdir }}/prebuilds
+          pattern: "prebuilds"
           merge-multiple: true
+
+      - name: Verify artifact attestation
+        if: ${{ !inputs.prebuild_package }}
+        working-directory: ${{ inputs.workdir }}
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          echo "Verifying artifact attestation for prebuilds..."
+          find prebuilds -type f | while read -r file; do
+            gh attestation verify "$file" --repo "${{ github.repository }}"
+          done
+          echo "All prebuild attestations verified successfully."
+
+      - name: Validate prebuild package scope
+        if: ${{ inputs.prebuild_package }}
+        shell: bash
+        env:
+          PACKAGE: ${{ inputs.prebuild_package }}
+        run: |
+          if [[ ! "$PACKAGE" =~ ^@(qvac|tetherto)/ ]]; then
+            echo "ERROR: prebuild_package must be from @qvac or @tetherto scope, got: $PACKAGE"
+            exit 1
+          fi
 
       - name: Download prebuilds from package
         if: ${{ inputs.prebuild_package }}
         working-directory: ${{ inputs.workdir }}
         shell: bash
+        env:
+          PREBUILD_PACKAGE: ${{ inputs.prebuild_package }}
         run: |
           mkdir -p prebuilds
-          npm pack ${{ inputs.prebuild_package }} --pack-destination /tmp
+          npm pack "$PREBUILD_PACKAGE" --pack-destination /tmp
           tar -xzf /tmp/*.tgz -C /tmp
           cp -r /tmp/package/prebuilds/* prebuilds/
 
