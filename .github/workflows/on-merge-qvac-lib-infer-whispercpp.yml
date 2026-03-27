@@ -7,6 +7,7 @@ on:
       - release-*
       - feature-*
       - tmp-*
+      - fix-*
     paths:
       - "packages/qvac-lib-infer-whispercpp/**"
       - ".github/workflows/*whispercpp*.yml"
