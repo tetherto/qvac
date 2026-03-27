@@ -59,7 +59,7 @@ jobs:
     environment: release
     steps:
       - name: Run Sanity checks
-        uses: tetherto/qvac-devops/.github/actions/sanity-checks@feat-v1-1-7
+        uses: tetherto/qvac-devops/.github/actions/sanity-checks@v1.1.7
         with:
           secret-token: ${{ secrets.GITHUB_TOKEN }}
           npm-token: ${{ secrets.NPM_TOKEN }}
@@ -79,7 +79,7 @@ jobs:
 
   cpp-lint:
     if: needs.authorize.outputs.allowed == 'true'
-    uses: tetherto/qvac-devops/.github/workflows/cpp-lint.yaml@feat-v1-1-7
+    uses: tetherto/qvac-devops/.github/workflows/cpp-lint.yaml@v1.1.7
     needs: authorize
     secrets: inherit
     with:
@@ -168,7 +168,7 @@ jobs:
         ts-checks,
       ]
     if: always()
-    uses: tetherto/qvac-devops/.github/workflows/public-pr.yml@feat-v1-1-7
+    uses: tetherto/qvac-devops/.github/workflows/public-pr.yml@v1.1.7
     with:
       sanity-checks-status: ${{ needs.sanity-checks.result == 'success' }}
       build-status: ${{ needs.prebuild.result == 'success'}}
