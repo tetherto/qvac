@@ -2,9 +2,18 @@
 
 const { platform } = require('bare-os')
 const path = require('bare-path')
+const QvacLogger = require('@qvac/logging')
 const { TTSInterface } = require('./tts')
 const { QvacErrorAddonTTS, ERR_CODES } = require('./lib/error')
-const InferBase = require('@qvac/infer-base/WeightsProvider/BaseInference')
+const { createJobHandler } = require('./lib/createJobHandler')
+
+const platformDefinitions = {
+  android: 'vulkan',
+  darwin: 'metal',
+  ios: 'metal',
+  win32: 'vulkan-32',
+  linux: 'vulkan'
+}
 
 // Engine types
 const ENGINE_CHATTERBOX = 'chatterbox'
@@ -103,7 +112,7 @@ function normalizeOnnxTtsFiles (files) {
   }
 }
 
-class ONNXTTS extends InferBase {
+class ONNXTTS {
   constructor (options = {}) {
     const {
       files: filesInput = {},
@@ -120,7 +129,21 @@ class ONNXTTS extends InferBase {
       exclusiveRun
     } = options
 
-    super({ opts, logger, exclusiveRun })
+    this.opts = opts || {}
+    this.exclusiveRun = !!exclusiveRun
+    this.logger = new QvacLogger(logger)
+    this.state = {
+      configLoaded: false,
+      weightsLoaded: false,
+      destroyed: false
+    }
+    this.addon = null
+    this._jobs = createJobHandler({
+      logger: this.logger,
+      opts: this.opts,
+      exclusiveRun: this.exclusiveRun,
+      getAddon: () => this.addon
+    })
 
     const normalizedFiles = normalizeOnnxTtsFiles(filesInput)
 
@@ -139,7 +162,6 @@ class ONNXTTS extends InferBase {
     }
 
     this._config = { ...config }
-    this._logger = logger
     this._hasActiveResponse = false
 
     this._lazySessionLoading = lazySessionLoading != null
@@ -232,6 +254,32 @@ class ONNXTTS extends InferBase {
     }
   }
 
+  getApiDefinition () {
+    const definition = platformDefinitions[platform()]
+    const api = definition ?? 'vulkan'
+    this.logger.debug(
+      `Using API definition: ${api} for platform: ${platform()}`
+    )
+    return api
+  }
+
+  getState () {
+    return this.state
+  }
+
+  async load (...args) {
+    if (this.state.configLoaded || this.state.weightsLoaded) {
+      this.logger.info('Reload requested - unloading existing model first')
+      await this.unload()
+    }
+    await this._load(...args)
+    this.state.configLoaded = true
+  }
+
+  async run (input) {
+    return this._jobs.run(() => this._runInternal(input))
+  }
+
   async _load () {
     this.logger.info('[TTS] Engine type:', this._engineType)
     this.logger.info('[TTS] Language:', this._config?.language || 'en')
@@ -241,11 +289,11 @@ class ONNXTTS extends InferBase {
       ttsParams = this._getSupertonicTtsParams()
     } else {
       ttsParams = {
-        tokenizerPath: this._resolvePath(this._tokenizerPath),
-        speechEncoderPath: this._resolvePath(this._speechEncoderPath),
-        embedTokensPath: this._resolvePath(this._embedTokensPath),
-        conditionalDecoderPath: this._resolvePath(this._conditionalDecoderPath),
-        languageModelPath: this._resolvePath(this._languageModelPath),
+        tokenizerPath: this._tokenizerPath || '',
+        speechEncoderPath: this._speechEncoderPath || '',
+        embedTokensPath: this._embedTokensPath || '',
+        conditionalDecoderPath: this._conditionalDecoderPath || '',
+        languageModelPath: this._languageModelPath || '',
         language: this._config?.language || 'en',
         useGPU: this._config?.useGPU || false,
         lazySessionLoading: this._lazySessionLoading
@@ -260,20 +308,16 @@ class ONNXTTS extends InferBase {
   }
 
   _getSupertonicTtsParams () {
-    const baseDir = this._modelDir
-      ? this._resolvePath(this._modelDir)
-      : ''
+    const baseDir = this._modelDir || ''
     return {
       modelDir: baseDir,
-      textEncoderPath: this._resolvePath(this._textEncoderPath),
-      durationPredictorPath: this._resolvePath(this._durationPredictorPath),
-      vectorEstimatorPath: this._resolvePath(this._vectorEstimatorPath),
-      vocoderPath: this._resolvePath(this._vocoderPath),
-      unicodeIndexerPath: this._resolvePath(this._unicodeIndexerPath),
-      ttsConfigPath: this._resolvePath(this._ttsConfigPath),
-      voiceStyleJsonPath: this._voiceStyleJsonPath
-        ? this._resolvePath(this._voiceStyleJsonPath)
-        : '',
+      textEncoderPath: this._textEncoderPath || '',
+      durationPredictorPath: this._durationPredictorPath || '',
+      vectorEstimatorPath: this._vectorEstimatorPath || '',
+      vocoderPath: this._vocoderPath || '',
+      unicodeIndexerPath: this._unicodeIndexerPath || '',
+      ttsConfigPath: this._ttsConfigPath || '',
+      voiceStyleJsonPath: this._voiceStyleJsonPath || '',
       voiceName: this._voiceName || 'F1',
       language: this._config?.language || 'en',
       speed: String(this._speed),
@@ -293,14 +337,6 @@ class ONNXTTS extends InferBase {
     return new TTSInterface(binding, configurationParams, outputCb)
   }
 
-  _resolvePath (filePath) {
-    if (!filePath) return ''
-    if (platform() === 'win32') {
-      return '\\\\?\\' + path.resolve(filePath)
-    }
-    return path.resolve(filePath)
-  }
-
   async unload () {
     await this.cancel()
     this._failAndClearActiveResponse('Model was unloaded')
@@ -316,7 +352,7 @@ class ONNXTTS extends InferBase {
       throw createBusyJobError()
     }
 
-    const response = this._createResponse(ONLY_ONE_JOB_ID)
+    const response = this._jobs.createResponse(ONLY_ONE_JOB_ID)
     let accepted
     try {
       accepted = await this.addon.runJob({
@@ -324,13 +360,13 @@ class ONNXTTS extends InferBase {
         input: input.input
       })
     } catch (error) {
-      this._deleteJobMapping(ONLY_ONE_JOB_ID)
+      this._jobs.deleteJobMapping(ONLY_ONE_JOB_ID)
       response.failed(error)
       throw error
     }
 
     if (!accepted) {
-      this._deleteJobMapping(ONLY_ONE_JOB_ID)
+      this._jobs.deleteJobMapping(ONLY_ONE_JOB_ID)
       const busyError = createBusyJobError()
       response.failed(busyError)
       throw busyError
@@ -345,11 +381,11 @@ class ONNXTTS extends InferBase {
 
   _addonOutputCallback (addon, event, data, error) {
     if (typeof error === 'string' && error.length > 0) {
-      return this._outputCallback(addon, 'Error', ONLY_ONE_JOB_ID, data, error)
+      return this._jobs.outputCallback(addon, 'Error', ONLY_ONE_JOB_ID, data, error)
     }
 
     if (data && typeof data === 'object' && data.outputArray) {
-      return this._outputCallback(addon, 'Output', ONLY_ONE_JOB_ID, data, null)
+      return this._jobs.outputCallback(addon, 'Output', ONLY_ONE_JOB_ID, data, null)
     }
 
     if (
@@ -357,10 +393,10 @@ class ONNXTTS extends InferBase {
       typeof data === 'object' &&
       ('totalTime' in data || 'audioDurationMs' in data || 'totalSamples' in data)
     ) {
-      return this._outputCallback(addon, 'JobEnded', ONLY_ONE_JOB_ID, data, null)
+      return this._jobs.outputCallback(addon, 'JobEnded', ONLY_ONE_JOB_ID, data, null)
     }
 
-    return this._outputCallback(addon, event, ONLY_ONE_JOB_ID, data, error)
+    return this._jobs.outputCallback(addon, event, ONLY_ONE_JOB_ID, data, error)
   }
 
   async cancel () {
@@ -370,10 +406,10 @@ class ONNXTTS extends InferBase {
   }
 
   _failAndClearActiveResponse (reason) {
-    const currentJobResponse = this._jobToResponse.get(ONLY_ONE_JOB_ID)
+    const currentJobResponse = this._jobs.jobToResponse.get(ONLY_ONE_JOB_ID)
     if (currentJobResponse) {
       currentJobResponse.failed(new Error(reason))
-      this._deleteJobMapping(ONLY_ONE_JOB_ID)
+      this._jobs.deleteJobMapping(ONLY_ONE_JOB_ID)
     }
     this._hasActiveResponse = false
   }
@@ -400,11 +436,11 @@ class ONNXTTS extends InferBase {
       ttsParams = this._getSupertonicTtsParams()
     } else {
       ttsParams = {
-        tokenizerPath: this._resolvePath(this._tokenizerPath),
-        speechEncoderPath: this._resolvePath(this._speechEncoderPath),
-        embedTokensPath: this._resolvePath(this._embedTokensPath),
-        conditionalDecoderPath: this._resolvePath(this._conditionalDecoderPath),
-        languageModelPath: this._resolvePath(this._languageModelPath),
+        tokenizerPath: this._tokenizerPath || '',
+        speechEncoderPath: this._speechEncoderPath || '',
+        embedTokensPath: this._embedTokensPath || '',
+        conditionalDecoderPath: this._conditionalDecoderPath || '',
+        languageModelPath: this._languageModelPath || '',
         language: this._config?.language || 'en',
         useGPU: this._config?.useGPU || false,
         lazySessionLoading: this._lazySessionLoading

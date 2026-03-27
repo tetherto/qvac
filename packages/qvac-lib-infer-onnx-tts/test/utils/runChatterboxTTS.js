@@ -9,7 +9,7 @@ const CHATTERBOX_SAMPLE_RATE = 24000
 
 async function loadChatterboxTTS (params = {}) {
   const baseDir = getBaseDir()
-  const defaultModelDir = path.join(baseDir, 'models', 'chatterbox')
+  const defaultModelDir = path.resolve(path.join(baseDir, 'models', 'chatterbox'))
 
   const tokenizerPath = params.tokenizerPath || path.join(defaultModelDir, 'tokenizer.json')
   const speechEncoderPath = params.speechEncoderPath || path.join(defaultModelDir, 'speech_encoder.onnx')

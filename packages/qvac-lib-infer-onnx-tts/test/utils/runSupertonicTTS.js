@@ -7,7 +7,7 @@ const { getBaseDir, runTTS } = require('./runTTS')
 const SUPERTONIC_SAMPLE_RATE = 44100
 
 async function loadSupertonicTTS (params = {}) {
-  const defaultModelDir = path.join(getBaseDir(), 'models', 'supertonic')
+  const defaultModelDir = path.resolve(path.join(getBaseDir(), 'models', 'supertonic'))
 
   const model = new ONNXTTS({
     files: {

@@ -8,7 +8,7 @@ const { setLogger, releaseLogger } = require('../addonLogging')
 const SUPERTONIC_SAMPLE_RATE = 44100
 
 // Supertone multilingual weights (HF supertonic-2); run `node scripts/ensure-models.js` or ensureSupertonicModelsMultilingual
-const modelDir = path.join(__dirname, '..', 'models', 'supertonic-multilingual')
+const modelDir = path.resolve(path.join(__dirname, '..', 'models', 'supertonic-multilingual'))
 
 async function main () {
   setLogger((priority, message) => {

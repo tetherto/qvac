@@ -1,9 +1,9 @@
-import InferBase from '@qvac/infer-base/WeightsProvider/BaseInference'
 import type QvacResponse from '@qvac/infer-base/src/QvacResponse'
 
 /**
  * Weight / config paths for ONNX TTS. Use short keys; legacy `*Path` names and
  * SDK aliases (`supertonicModel`, `latentDenoiser`, `voiceDecoder`, `supertonicVocoder`) are accepted.
+ * All file paths must be absolute (passed through to the native layer as-is).
  */
 declare interface ONNXTTSFiles {
   /**
@@ -81,9 +81,23 @@ declare interface ONNXTTSOptions {
 /**
  * ONNX client for TTS (Chatterbox or Supertonic). Prefer `files: { modelDir }` for both engines;
  * set `engine` when `modelDir` is the only file field (defaults to Supertonic for back-compat).
+ * `files` paths must be absolute.
  */
-declare class ONNXTTS extends InferBase {
+declare class ONNXTTS {
   constructor(options?: ONNXTTSOptions)
+
+  load(...args: unknown[]): Promise<void>
+  unload(): Promise<void>
+  reload(newConfig?: Record<string, unknown>): Promise<void>
+  cancel(): Promise<void>
+  getApiDefinition(): string
+  getState(): { configLoaded: boolean; weightsLoaded: boolean; destroyed: boolean }
+
+  opts: object
+  exclusiveRun: boolean
+  logger: object
+  state: { configLoaded: boolean; weightsLoaded: boolean; destroyed: boolean }
+  addon: unknown
 
   /**
    * Run text-to-speech. When `opts.stats` was set, `response.stats` matches {@link ONNXTTS.RuntimeStats}.
