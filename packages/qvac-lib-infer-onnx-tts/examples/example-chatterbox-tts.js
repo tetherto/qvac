@@ -62,22 +62,21 @@ async function main () {
 
   console.log(`Mode: ${modeArg}, language: ${language}, models: ${modelsDir}`)
 
-  const chatterboxArgs = {
-    tokenizerPath,
-    speechEncoderPath,
-    embedTokensPath,
-    conditionalDecoderPath,
-    languageModelPath,
+  const model = new ONNXTTS({
+    files: {
+      tokenizer: tokenizerPath,
+      speechEncoder: speechEncoderPath,
+      embedTokens: embedTokensPath,
+      conditionalDecoder: conditionalDecoderPath,
+      languageModel: languageModelPath
+    },
     referenceAudio,
-    opts: { stats: true },
-    logger: console
-  }
-
-  const config = {
-    language
-  }
-
-  const model = new ONNXTTS(chatterboxArgs, config)
+    config: {
+      language
+    },
+    logger: console,
+    opts: { stats: true }
+  })
 
   try {
     console.log('Loading Chatterbox TTS model...')

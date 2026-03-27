@@ -10,21 +10,21 @@ global.process = process
 const sinon = require('sinon')
 
 function createMockedChatterboxModel ({ onOutput = () => { }, binding = undefined, exclusiveRun = false } = {}) {
-  const args = {
+  const model = new ONNXTTS({
+    files: {
+      tokenizer: './models/chatterbox/tokenizer.json',
+      speechEncoder: './models/chatterbox/speech_encoder.onnx',
+      embedTokens: './models/chatterbox/embed_tokens.onnx',
+      conditionalDecoder: './models/chatterbox/conditional_decoder.onnx',
+      languageModel: './models/chatterbox/language_model.onnx'
+    },
+    config: {
+      language: 'en',
+      useGPU: false
+    },
     opts: { stats: true },
-    exclusiveRun,
-    tokenizerPath: './models/chatterbox/tokenizer.json',
-    speechEncoderPath: './models/chatterbox/speech_encoder.onnx',
-    embedTokensPath: './models/chatterbox/embed_tokens.onnx',
-    conditionalDecoderPath: './models/chatterbox/conditional_decoder.onnx',
-    languageModelPath: './models/chatterbox/language_model.onnx'
-    // No loader - _downloadWeights will skip
-  }
-  const config = {
-    language: 'en',
-    useGPU: false
-  }
-  const model = new ONNXTTS(args, config)
+    exclusiveRun
+  })
 
   sinon.stub(model, '_createAddon').callsFake((configurationParams, outputCb) => {
     const _binding = binding || new MockedBinding()
@@ -171,14 +171,15 @@ test('Chatterbox: Static methods return expected values', async (t) => {
 })
 
 test('Chatterbox: Engine type is detected correctly', async (t) => {
-  const chatterboxArgs = {
-    tokenizerPath: './tokenizer.json',
-    speechEncoderPath: './speech_encoder.onnx',
-    embedTokensPath: './embed_tokens.onnx',
-    conditionalDecoderPath: './conditional_decoder.onnx',
-    languageModelPath: './language_model.onnx'
-  }
-  const chatterboxModel = new ONNXTTS(chatterboxArgs, {})
+  const chatterboxModel = new ONNXTTS({
+    files: {
+      tokenizer: './tokenizer.json',
+      speechEncoder: './speech_encoder.onnx',
+      embedTokens: './embed_tokens.onnx',
+      conditionalDecoder: './conditional_decoder.onnx',
+      languageModel: './language_model.onnx'
+    }
+  })
   t.is(chatterboxModel._engineType, 'chatterbox', 'Should detect Chatterbox engine when Chatterbox paths are provided')
 })
 

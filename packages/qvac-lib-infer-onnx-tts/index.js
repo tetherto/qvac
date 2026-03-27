@@ -16,36 +16,89 @@ function createBusyJobError () {
   return new QvacErrorAddonTTS({ code: ERR_CODES.JOB_ALREADY_RUNNING })
 }
 
+function firstNonEmpty (...candidates) {
+  for (let i = 0; i < candidates.length; i++) {
+    const v = candidates[i]
+    if (v != null && v !== '') return v
+  }
+  return undefined
+}
+
+/**
+ * Normalize `files` map: short keys, legacy *Path keys, and SDK-style aliases.
+ * @param {Record<string, unknown>} files
+ */
+function normalizeOnnxTtsFiles (files) {
+  if (files == null || typeof files !== 'object') {
+    return {}
+  }
+  const f = files
+  return {
+    modelDir: firstNonEmpty(f.modelDir),
+    tokenizer: firstNonEmpty(f.tokenizer, f.tokenizerPath),
+    speechEncoder: firstNonEmpty(f.speechEncoder, f.speechEncoderPath),
+    embedTokens: firstNonEmpty(f.embedTokens, f.embedTokensPath),
+    conditionalDecoder: firstNonEmpty(f.conditionalDecoder, f.conditionalDecoderPath),
+    languageModel: firstNonEmpty(f.languageModel, f.languageModelPath),
+    textEncoder: firstNonEmpty(f.textEncoder, f.textEncoderPath, f.supertonicModel),
+    durationPredictor: firstNonEmpty(
+      f.durationPredictor,
+      f.durationPredictorPath,
+      f.latentDenoiser,
+      f.latentDenoiserPath
+    ),
+    vectorEstimator: firstNonEmpty(f.vectorEstimator, f.vectorEstimatorPath),
+    vocoder: firstNonEmpty(
+      f.vocoder,
+      f.vocoderPath,
+      f.voiceDecoder,
+      f.voiceDecoderPath,
+      f.supertonicVocoder
+    ),
+    unicodeIndexer: firstNonEmpty(f.unicodeIndexer, f.unicodeIndexerPath),
+    ttsConfig: firstNonEmpty(f.ttsConfig, f.ttsConfigPath),
+    voiceStyle: firstNonEmpty(f.voiceStyle, f.voiceStyleJsonPath),
+    voicesDir: firstNonEmpty(f.voicesDir)
+  }
+}
+
 class ONNXTTS extends InferBase {
-  constructor ({
-    tokenizerPath,
-    speechEncoderPath,
-    embedTokensPath,
-    conditionalDecoderPath,
-    languageModelPath,
-    referenceAudio,
-    // Supertone / Supertonic (official 4-ONNX + unicode + voice_styles JSON)
-    modelDir,
-    textEncoderPath,
-    durationPredictorPath,
-    vectorEstimatorPath,
-    vocoderPath,
-    unicodeIndexerPath,
-    ttsConfigPath,
-    voiceStyleJsonPath,
-    voiceName,
-    speed,
-    numInferenceSteps,
-    supertonicMultilingual,
-    lazySessionLoading,
-    loader, cache, logger, ...args
-  }, config = {}) {
-    super(args)
+  constructor (options = {}) {
+    const {
+      files: filesInput = {},
+      config = {},
+      logger,
+      loader,
+      cache,
+      lazySessionLoading,
+      referenceAudio,
+      voiceName,
+      speed,
+      numInferenceSteps,
+      supertonicMultilingual,
+      opts,
+      exclusiveRun
+    } = options
+
+    super({ opts, logger, exclusiveRun })
+
+    const normalizedFiles = normalizeOnnxTtsFiles(filesInput)
+
+    if (
+      !normalizedFiles.modelDir &&
+      normalizedFiles.textEncoder &&
+      !normalizedFiles.vectorEstimator
+    ) {
+      normalizedFiles.vectorEstimator = path.join(
+        path.dirname(normalizedFiles.textEncoder),
+        'vector_estimator.onnx'
+      )
+    }
 
     this._loader = loader
     this._weightsProvider = loader ? new WeightsProvider(loader, logger) : null
     this._cache = cache || '.'
-    this._config = config
+    this._config = { ...config }
     this._logger = logger
     this._hasActiveResponse = false
 
@@ -54,41 +107,53 @@ class ONNXTTS extends InferBase {
       : (platform() === 'ios' || platform() === 'android')
 
     const hasSupertonicPaths =
-      (textEncoderPath != null && textEncoderPath !== '') ||
-      (durationPredictorPath != null && durationPredictorPath !== '') ||
-      (modelDir != null && modelDir !== '' && voiceName != null && voiceName !== '')
+      (normalizedFiles.textEncoder != null && normalizedFiles.textEncoder !== '') ||
+      (normalizedFiles.durationPredictor != null && normalizedFiles.durationPredictor !== '') ||
+      (
+        normalizedFiles.modelDir != null &&
+        normalizedFiles.modelDir !== '' &&
+        voiceName != null &&
+        voiceName !== ''
+      )
     this._engineType = hasSupertonicPaths ? ENGINE_SUPERTONIC : ENGINE_CHATTERBOX
 
     if (this._engineType === ENGINE_CHATTERBOX) {
-      this._tokenizerPath = tokenizerPath
-      this._speechEncoderPath = speechEncoderPath
-      this._embedTokensPath = embedTokensPath
-      this._conditionalDecoderPath = conditionalDecoderPath
-      this._languageModelPath = languageModelPath
+      this._tokenizerPath = normalizedFiles.tokenizer
+      this._speechEncoderPath = normalizedFiles.speechEncoder
+      this._embedTokensPath = normalizedFiles.embedTokens
+      this._conditionalDecoderPath = normalizedFiles.conditionalDecoder
+      this._languageModelPath = normalizedFiles.languageModel
       this._referenceAudio = referenceAudio
     } else {
-      this._modelDir = modelDir
+      this._modelDir = normalizedFiles.modelDir
       this._voiceName = voiceName ?? 'F1'
       this._speed = speed != null ? speed : 1
       this._numInferenceSteps = numInferenceSteps != null ? numInferenceSteps : 5
       this._supertonicMultilingual = supertonicMultilingual !== false
-      if (modelDir) {
-        const onnx = path.join(modelDir, 'onnx')
+      if (normalizedFiles.modelDir) {
+        const onnx = path.join(normalizedFiles.modelDir, 'onnx')
         this._textEncoderPath = path.join(onnx, 'text_encoder.onnx')
         this._durationPredictorPath = path.join(onnx, 'duration_predictor.onnx')
         this._vectorEstimatorPath = path.join(onnx, 'vector_estimator.onnx')
         this._vocoderPath = path.join(onnx, 'vocoder.onnx')
         this._unicodeIndexerPath = path.join(onnx, 'unicode_indexer.json')
         this._ttsConfigPath = path.join(onnx, 'tts.json')
-        this._voiceStyleJsonPath = path.join(modelDir, 'voice_styles', `${this._voiceName.replace(/\.json$/i, '')}.json`)
+        this._voiceStyleJsonPath = path.join(
+          normalizedFiles.modelDir,
+          'voice_styles',
+          `${this._voiceName.replace(/\.json$/i, '')}.json`
+        )
       } else {
-        this._textEncoderPath = textEncoderPath
-        this._durationPredictorPath = durationPredictorPath
-        this._vectorEstimatorPath = vectorEstimatorPath
-        this._vocoderPath = vocoderPath
-        this._unicodeIndexerPath = unicodeIndexerPath
-        this._ttsConfigPath = ttsConfigPath
-        this._voiceStyleJsonPath = voiceStyleJsonPath
+        this._textEncoderPath = normalizedFiles.textEncoder
+        this._durationPredictorPath = normalizedFiles.durationPredictor
+        this._vectorEstimatorPath = normalizedFiles.vectorEstimator
+        this._vocoderPath = normalizedFiles.vocoder
+        this._unicodeIndexerPath = firstNonEmpty(
+          normalizedFiles.unicodeIndexer,
+          normalizedFiles.tokenizer
+        )
+        this._ttsConfigPath = normalizedFiles.ttsConfig
+        this._voiceStyleJsonPath = normalizedFiles.voiceStyle
       }
     }
   }

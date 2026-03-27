@@ -60,22 +60,21 @@ async function loadChatterboxTTS (params = {}) {
     console.log(`[Chatterbox] Using reference audio: ${defaultRefPath} (${referenceAudio.length} samples @ ${CHATTERBOX_SAMPLE_RATE / 1000}kHz)`)
   }
 
-  const args = {
-    tokenizerPath,
-    speechEncoderPath,
-    embedTokensPath,
-    conditionalDecoderPath,
-    languageModelPath,
+  const model = new ONNXTTS({
+    files: {
+      tokenizer: tokenizerPath,
+      speechEncoder: speechEncoderPath,
+      embedTokens: embedTokensPath,
+      conditionalDecoder: conditionalDecoderPath,
+      languageModel: languageModelPath
+    },
     referenceAudio,
+    config: {
+      language: params.language || 'en',
+      useGPU: params.useGPU || false
+    },
     opts: { stats: true }
-  }
-
-  const config = {
-    language: params.language || 'en',
-    useGPU: params.useGPU || false
-  }
-
-  const model = new ONNXTTS(args, config)
+  })
   await model.load()
 
   return model

@@ -24,21 +24,20 @@ async function main () {
     console.log(`[${timestamp}] [C++ log] [${priorityName}]: ${message}`)
   })
 
-  const supertonicArgs = {
-    modelDir,
+  const model = new ONNXTTS({
+    files: {
+      modelDir
+    },
     voiceName: 'F1',
     speed: 1.05,
     numInferenceSteps: 5,
     supertonicMultilingual: true,
-    opts: { stats: true },
-    logger: console
-  }
-
-  const config = {
-    language: 'es'
-  }
-
-  const model = new ONNXTTS(supertonicArgs, config)
+    config: {
+      language: 'es'
+    },
+    logger: console,
+    opts: { stats: true }
+  })
 
   try {
     console.log('Loading Supertonic multilingual (Spanish) TTS model...')
