@@ -3,7 +3,7 @@
 const test = require('brittle')
 const os = require('bare-os')
 const path = require('bare-path')
-const { loadChatterboxTTS, runChatterboxTTS } = require('../utils/runChatterboxTTS')
+const { loadChatterboxTTS, runChatterboxTTS, runChatterboxTTSWithSplit } = require('../utils/runChatterboxTTS')
 const { loadSupertonicTTS, runSupertonicTTS } = require('../utils/runSupertonicTTS')
 const { ensureChatterboxModels, ensureSupertonicModels, ensureSupertonicModelsMultilingual, ensureWhisperModel } = require('../utils/downloadModel')
 const { loadWhisper, runWhisper } = require('../utils/runWhisper')
@@ -299,6 +299,169 @@ test('Chatterbox TTS: Reload model from English to Spanish', { timeout: 1800000 
 
 const MULTILINGUAL_DATASET = {
   es: 'Hola mundo. Esta es una prueba del sistema de texto a voz.'
+}
+
+const MULTILINGUAL_SCRIPT_SAMPLE_ORDER = ['zh', 'ja', 'he', 'ko']
+const MULTILINGUAL_SCRIPT_SAMPLES = {
+  zh: '你好世界。',
+  ja: 'こんにちは。カタカナも使います。',
+  he: 'שלום עולם.',
+  ko: '안녕하세요. 한글입니다.'
+}
+
+const MULTILINGUAL_SCRIPT_SAMPLES_MEDIUM = {
+  zh: '今天早晨阳光照进窗户，我感觉精神很好。吃完早餐后，我计划去附近的咖啡店工作一会儿。路上我遇见一位老朋友，我们聊了几分钟。中午我在小餐馆点了一份简单的面条。下午回家的路上我买了一些水果。晚上我想早点休息，明天还有重要的会议。',
+  ja: '今朝は窓から明るい光が差し込み、とても清々しい気分でした。朝食のあと、近くのカフェで少し仕事をすることにしました。途中で旧友に会い、立ち話を楽しみました。昼食には小さな店でラーメンを食べました。帰り道に果物を買い、家で家族と穏やかな時間を過ごしました。明日は忙しい一日になりそうですが、今夜はゆっくり休みたいと思います。',
+  he: 'היום התעוררתי מוקדם והרגשתי מלא אנרגיה. אחרי ארוחת בוקר קלה יצאתי לריצה קצרה בשכונה. בדרך חזרה פגשתי שכן ודיברנו על מזג האוויר. בצהריים הכנתי סלט ולחם טרי במטבח. אחר הצהריים קראתי מאמר מקצועי והערותי כמה רעיונות חשובים. בערב אני מתכנן לצפות בסדרה ולישון מוקדם כדי להתחיל מחר רענן.',
+  ko: '오늘 아침 햇살이 창문으로 들어와 기분이 상쾌했습니다. 아침을 먹은 뒤 근처 카페에서 잠시 일을 하기로 했습니다. 길에서 옛 친구를 만나 잠깐 이야기를 나눴습니다. 점심에는 작은 식당에서 국수를 먹었습니다. 오후에는 과일가게에 들러 사과와 바나나를 샀습니다. 저녁에는 가족과 함께 식사하고 일찍 쉬려고 합니다.'
+}
+
+const MULTILINGUAL_SCRIPT_SAMPLES_LONG = {
+  zh: '春天悄悄来到这座城市，街道两旁的树木长出了嫩绿的新芽。人们脱下厚外套，在公园里散步、拍照，享受久违的温暖阳光。我喜欢在这个季节早起，泡一杯茶，坐在阳台上读几页书。\n\n上个周末我和家人去了郊外。我们在小山坡上野餐，孩子们放风筝，笑声在山谷里回荡。傍晚时分天空变成粉红色，我们收拾好东西，心满意足地开车回家。\n\n工作方面，最近项目进入了关键阶段。团队每天都在开会讨论方案，虽然辛苦，但大家都很有干劲。我学会了把大任务拆成小步骤，这样压力会小很多。\n\n晚上我喜欢听轻音乐放松，有时会给朋友打电话聊天。生活并不总是完美，但这些平凡的日子让我感到踏实。我期待明天的太阳照常升起。',
+  ja: '春が近づき、街路樹の枝に小さな芽が目立ち始めました。人々はコートを脱ぎ、公園で散歩したり写真を撮ったりして、久しぶりの暖かさを楽しんでいます。私も朝早く起きてお茶を淹れ、ベランダで本を読む時間が好きです。\n\n先週末は家族と郊外へ出かけました。小高い丘でピクニックをし、子どもたちは凧を揚げて大喜びでした。夕方には空がピンク色に染まり、片付けをして満足して家路につきました。\n\n仕事では最近プロジェクトが重要な局面に入っています。毎日のように打ち合わせがありますが、チームの士気は高いです。大きな仕事を小さなタスクに分けると、気持ちがずっと楽になります。\n\n夜は静かな音楽を聴いてリラックスし、時々友人に電話します。毎日が完璧ではありませんが、そんな平凡な日々に安心感を覚えます。明日も太陽が昇るのを楽しみにしています。',
+  he: 'האביב מגיע בהדרגה לעיר שלנו, והעצים לאורך הרחובות מתחילים להצמיח עלים חדשים וירוקים. אנשים מורידים מעילים כבדים, משוטטים בפארקים ומצלמים תמונות, ונהנים מהשמש החמה שחזרה אחרי החורף. אני אוהב להתעורר מוקדם בעונה הזו, להכין תה ולשבת במרפסת עם ספר.\n\nבסוף השבוע האחרון נסענו עם המשפחה אל הפריפריה. עשינו פיקניק על גבעה קטנה, הילדים העיפו עפיפונים והצחוק התפשט באוויר. לקראת ערב השמיים נצבעו בורוד, ארזנו הכל וחזרנו הביתה ברכב מלאי סיפוק.\n\nבעבודה הפרויקט נכנס לשלב קריטי לאחרונה. יש פגישות כמעט כל יום, אבל לצוות יש מוטיבציה גבוהה. למדתי לחלק משימות גדולות לשלבים קטנים, וזה מפחית מאוד את הלחץ.\n\nבערב אני נוהג להאזין למוזיקה שקטתה ולפעמים להתקשר לחברים. החיים לא מושלמים תמיד, אבל הימים הרגילים האלה נותנים לי יציבות. אני מצפה לשמש שתזרח שוב מחר.',
+  ko: '봄이 성큼 다가오면서 거리의 나무들에 연한 새순이 돋아납니다. 사람들은 두꺼운 외투를 벗고 공원에서 산책하고 사진을 찍으며 오랜만에 따뜻한 햇살을 즐깁니다. 저는 이 계절에 일찍 일어나 차 한 잔을 마시며 발코니에서 책을 읽는 시간을 좋아합니다.\n\n지난 주말에는 가족과 교외로 나들이를 갔습니다. 작은 언덕에서 도시락을 먹고 아이들은 연을 날리며 웃었습니다. 해가 질 무렵 하늘이 분홍빛으로 물들었고, 우리는 짐을 챙겨 만족스럽게 집으로 돌아왔습니다.\n\n업무적으로는 요즘 프로젝트가 중요한 국면에 들어섰습니다. 매일 회의가 있지만 팀 분위기는 좋습니다. 큰 일을 작은 단계로 나누면 스트레스가 훨씬 줄어듭니다.\n\n저녁에는 잔잔한 음악을 들으며 쉬고, 가끔 친구에게 전화를 겁니다. 매일이 완벽하진 않지만 이런 평범한 날들이 마음을 든든하게 합니다. 내일도 해가 뜨기를 기다립니다.'
+}
+
+const CHATTERBOX_OUTPUT_SAMPLE_RATE_HZ = 24000
+const MULTILINGUAL_MEDIUM_MIN_AUDIO_SECONDS = 11
+const MULTILINGUAL_LONG_MIN_AUDIO_SECONDS = 14
+
+const MULTILINGUAL_SCRIPT_EXPECTATION_SHORT = {
+  minSamples: 5000,
+  maxSamples: 5000000,
+  minDurationMs: 200,
+  maxDurationMs: 300000
+}
+
+const MULTILINGUAL_SCRIPT_EXPECTATION_MEDIUM = {
+  minSamples: CHATTERBOX_OUTPUT_SAMPLE_RATE_HZ * MULTILINGUAL_MEDIUM_MIN_AUDIO_SECONDS,
+  maxSamples: 5000000,
+  minDurationMs: MULTILINGUAL_MEDIUM_MIN_AUDIO_SECONDS * 1000,
+  maxDurationMs: 300000
+}
+
+const MULTILINGUAL_SCRIPT_EXPECTATION_LONG = {
+  minSamples: CHATTERBOX_OUTPUT_SAMPLE_RATE_HZ * MULTILINGUAL_LONG_MIN_AUDIO_SECONDS,
+  maxSamples: 5000000,
+  minDurationMs: MULTILINGUAL_LONG_MIN_AUDIO_SECONDS * 1000,
+  maxDurationMs: 300000
+}
+
+const MULTILINGUAL_SCRIPT_LOG_PREVIEW_GRAPHEMES = 72
+
+function formatCodePointsForLog (text) {
+  const parts = []
+  for (const ch of text) {
+    const cp = ch.codePointAt(0)
+    parts.push(`U+${cp.toString(16).toUpperCase().padStart(4, '0')}(${ch})`)
+  }
+  return parts.join(' ')
+}
+
+function logMultilingualScriptSample (lang, text, opts = {}) {
+  const compact = opts.compact === true
+  const graphemes = [...text]
+  console.log(`\n--- Multilingual script sample [${lang}] ---`)
+  console.log(`  Text length: ${text.length} UTF-16 units, ${graphemes.length} graphemes`)
+  if (compact && graphemes.length > MULTILINGUAL_SCRIPT_LOG_PREVIEW_GRAPHEMES) {
+    const preview = graphemes.slice(0, MULTILINGUAL_SCRIPT_LOG_PREVIEW_GRAPHEMES).join('')
+    console.log(`  Text (preview): ${preview}...`)
+    console.log(`  Code points (preview): ${formatCodePointsForLog(preview)}...`)
+  } else {
+    console.log(`  Text: ${text}`)
+    console.log(`  Code points: ${formatCodePointsForLog(text)}`)
+  }
+}
+
+function graphemeCountExceedsPreview (text) {
+  return [...text].length > MULTILINGUAL_SCRIPT_LOG_PREVIEW_GRAPHEMES
+}
+
+async function runSingleMultilingualScriptCase (t, lang, lengthKey, text, expectation) {
+  const baseDir = getBaseDir()
+  const modelDir = path.join(baseDir, 'models', 'chatterbox-multilingual')
+
+  console.log('\n=== Ensuring Chatterbox multilingual models + Cangjie table (for zh) ===')
+  const downloadResult = await ensureChatterboxModels({ targetDir: modelDir, language: 'multilingual', variant: CHATTERBOX_VARIANT })
+  t.ok(downloadResult.success, `Models should be available for [${lang}] ${lengthKey}`)
+  if (!downloadResult.success) {
+    return
+  }
+
+  const modelParams = {
+    tokenizerPath: path.join(modelDir, 'tokenizer.json'),
+    speechEncoderPath: chatterboxPath(modelDir, 'speech_encoder', true),
+    embedTokensPath: chatterboxPath(modelDir, 'embed_tokens', true),
+    conditionalDecoderPath: chatterboxPath(modelDir, 'conditional_decoder', true),
+    languageModelPath: chatterboxLmPath(modelDir),
+    language: lang
+  }
+
+  console.log(`\n=== [${lang}] ${lengthKey}: load and synthesize ===`)
+  const model = await loadChatterboxTTS(modelParams)
+  t.ok(model, 'Multilingual TTS model should be loaded')
+
+  logMultilingualScriptSample(lang, text, { compact: graphemeCountExceedsPreview(text) })
+
+  const saveWav = !isMobile
+  const wavPath = saveWav
+    ? path.join(baseDir, 'test', 'output', `chatterbox-multilingual-${lang}-${lengthKey}.wav`)
+    : undefined
+  const useSplit = lengthKey === 'medium' || lengthKey === 'long'
+  const synthesize = useSplit ? runChatterboxTTSWithSplit : runChatterboxTTS
+  const result = await synthesize(model, { text, saveWav, wavOutputPath: wavPath }, expectation)
+
+  console.log(`\n--- Synthesis [${lang}] ${lengthKey}${useSplit ? ' (split)' : ''} ---`)
+  console.log(result.output)
+  console.log(`  samples: ${result.data.sampleCount}, durationMs: ${result.data.durationMs?.toFixed(0) ?? 'N/A'}, rate: ${result.data.sampleRate}`)
+
+  t.ok(result.passed, `[${lang}] ${lengthKey} should pass expectations`)
+  t.ok(result.data.sampleCount > 0, `[${lang}] ${lengthKey} should produce audio`)
+  t.is(result.data.sampleRate, 24000, `[${lang}] ${lengthKey} sample rate should be 24kHz`)
+
+  await model.unload()
+}
+
+const MULTILINGUAL_SCRIPT_TEST_SEGMENTS = [
+  {
+    lengthKey: 'short',
+    title: 'short text',
+    texts: MULTILINGUAL_SCRIPT_SAMPLES,
+    expectation: MULTILINGUAL_SCRIPT_EXPECTATION_SHORT,
+    timeoutMs: 3600000
+  },
+  {
+    lengthKey: 'medium',
+    title: 'medium paragraph (5–6 sentences)',
+    texts: MULTILINGUAL_SCRIPT_SAMPLES_MEDIUM,
+    expectation: MULTILINGUAL_SCRIPT_EXPECTATION_MEDIUM,
+    timeoutMs: 3600000
+  },
+  {
+    lengthKey: 'long',
+    title: 'long text (~4 paragraphs)',
+    texts: MULTILINGUAL_SCRIPT_SAMPLES_LONG,
+    expectation: MULTILINGUAL_SCRIPT_EXPECTATION_LONG,
+    timeoutMs: 7200000
+  }
+]
+
+for (const segment of MULTILINGUAL_SCRIPT_TEST_SEGMENTS) {
+  for (const lang of MULTILINGUAL_SCRIPT_SAMPLE_ORDER) {
+    test(
+      `Chatterbox Multilingual TTS [${lang}] ${segment.title}`,
+      { timeout: segment.timeoutMs },
+      async (t) => {
+        if (isMobile) {
+          t.pass('Skipped on mobile')
+          return
+        }
+        const text = segment.texts[lang]
+        await runSingleMultilingualScriptCase(t, lang, segment.lengthKey, text, segment.expectation)
+      }
+    )
+  }
 }
 
 test('Chatterbox Multilingual TTS: Synthesis across multiple languages', { timeout: 3600000 }, async (t) => {
