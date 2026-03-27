@@ -1,12 +1,10 @@
-import type { TestDefinition } from "@tetherto/qvac-test-suite";
+import type { TestDefinition, Expectation } from "@tetherto/qvac-test-suite";
 
 const createSalamandraTest = (
   testId: string,
   text: string,
   to: string,
-  expectation:
-    | { validation: "contains-any"; contains: string[] }
-    | { validation: "type"; expectedType: "string" },
+  expectation: Expectation,
   opts: { from?: string; context?: string; estimatedDurationMs?: number } = {},
 ): TestDefinition => ({
   testId,

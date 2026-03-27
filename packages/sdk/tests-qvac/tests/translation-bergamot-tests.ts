@@ -1,12 +1,10 @@
-import type { TestDefinition } from "@tetherto/qvac-test-suite";
+import type { TestDefinition, Expectation } from "@tetherto/qvac-test-suite";
 
 const createBergamotTest = (
   testId: string,
   text: string,
   resource: string,
-  expectation:
-    | { validation: "contains-any"; contains: string[] }
-    | { validation: "type"; expectedType: "string" },
+  expectation: Expectation,
   estimatedDurationMs: number = 15000,
 ): TestDefinition => ({
   testId,

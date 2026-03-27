@@ -71,21 +71,21 @@ export class TranslationExecutor extends AbstractModelExecutor<typeof allTests> 
     return translate({ modelId, text: p.text, modelType: "nmt", stream });
   }
 
-  async generic(params: unknown, expectation: unknown): Promise<TestResult> {
+  async generic(params: unknown, expectation: Expectation): Promise<TestResult> {
     const p = params as TranslateTestParams;
     const modelId = await this.resources.ensureLoaded(p.resource);
 
     try {
       const result = this.callTranslate(modelId, p, false);
       const translatedText = await (result as { text: Promise<string> }).text;
-      return ValidationHelpers.validate(translatedText, expectation as Expectation);
+      return ValidationHelpers.validate(translatedText, expectation);
     } catch (error) {
       const errorMsg = error instanceof Error ? error.message : String(error);
       return { passed: false, output: `Translation error: ${errorMsg}` };
     }
   }
 
-  async streaming(params: unknown, expectation: unknown): Promise<TestResult> {
+  async streaming(params: unknown, expectation: Expectation): Promise<TestResult> {
     const p = params as TranslateTestParams;
     const modelId = await this.resources.ensureLoaded(p.resource);
 
@@ -101,7 +101,7 @@ export class TranslationExecutor extends AbstractModelExecutor<typeof allTests> 
         return { passed: false, output: "Streaming produced zero tokens" };
       }
 
-      const validation = ValidationHelpers.validate(translatedText, expectation as Expectation);
+      const validation = ValidationHelpers.validate(translatedText, expectation);
       return {
         ...validation,
         output: `${validation.output} (streamed ${tokens.length} tokens)`,
@@ -112,7 +112,7 @@ export class TranslationExecutor extends AbstractModelExecutor<typeof allTests> 
     }
   }
 
-  async withStats(params: unknown, expectation: unknown): Promise<TestResult> {
+  async withStats(params: unknown, expectation: Expectation): Promise<TestResult> {
     const p = params as TranslateTestParams;
     const modelId = await this.resources.ensureLoaded(p.resource);
 
@@ -121,7 +121,7 @@ export class TranslationExecutor extends AbstractModelExecutor<typeof allTests> 
       const translatedText = await (result as { text: Promise<string> }).text;
       const stats = await result.stats;
 
-      const textValidation = ValidationHelpers.validate(translatedText, expectation as Expectation);
+      const textValidation = ValidationHelpers.validate(translatedText, expectation);
       if (!textValidation.passed) return textValidation;
 
       if (!stats) {
@@ -141,7 +141,7 @@ export class TranslationExecutor extends AbstractModelExecutor<typeof allTests> 
     }
   }
 
-  async emptyText(params: unknown, expectation: unknown): Promise<TestResult> {
+  async emptyText(params: unknown, _expectation: Expectation): Promise<TestResult> {
     const p = params as TranslateTestParams;
     const modelId = await this.resources.ensureLoaded(p.resource);
 
@@ -158,14 +158,14 @@ export class TranslationExecutor extends AbstractModelExecutor<typeof allTests> 
     }
   }
 
-  async batch(params: unknown, expectation: unknown): Promise<TestResult> {
+  async batch(params: unknown, expectation: Expectation): Promise<TestResult> {
     const p = params as { texts: string[]; resource: string };
     const modelId = await this.resources.ensureLoaded(p.resource);
 
     try {
       const result = translate({ modelId, text: p.texts as never, modelType: "nmt", stream: false });
       const translatedText = await (result as { text: Promise<string> }).text;
-      return ValidationHelpers.validate(translatedText, expectation as Expectation);
+      return ValidationHelpers.validate(translatedText, expectation);
     } catch (error) {
       const errorMsg = error instanceof Error ? error.message : String(error);
       return { passed: false, output: `Translation batch error: ${errorMsg}` };
@@ -173,7 +173,7 @@ export class TranslationExecutor extends AbstractModelExecutor<typeof allTests> 
   }
 
   // LLM-only: translate without specifying source language (auto-detected via cld2)
-  async autodetect(params: unknown, expectation: unknown): Promise<TestResult> {
+  async autodetect(params: unknown, _expectation: Expectation): Promise<TestResult> {
     const p = params as TranslateTestParams;
     const modelId = await this.resources.ensureLoaded(p.resource);
 
@@ -202,7 +202,7 @@ export class TranslationExecutor extends AbstractModelExecutor<typeof allTests> 
   }
 
   // LLM-only: translate with disambiguation context
-  async withContext(params: unknown, expectation: unknown): Promise<TestResult> {
+  async withContext(params: unknown, _expectation: Expectation): Promise<TestResult> {
     const p = params as TranslateTestParams;
     const modelId = await this.resources.ensureLoaded(p.resource);
 
