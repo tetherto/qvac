@@ -16,9 +16,31 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [0.7.1]
 
-### Changed
+This release refactors the JavaScript client around a smaller public surface: one `files` map and explicit engines, no loader or download stubs, and composition-based job handling instead of inheriting infer-base. Callers should pass **absolute** artifact paths and use **`exclusiveRun: true`** when they need serialized `run()` / `reload()` / `unload()` with the native single-job model.
 
-- README: removed outdated npm Personal Access Token / `.npmrc` setup instructions for installing `@qvac/tts-onnx`.
+## Breaking Changes
+
+### Constructor and weight loading
+
+**`ONNXTTS`** now takes model locations through **`options.files`** (with **`modelDir`** for bundle layouts and optional **`engine`** to disambiguate). The previous loader, cache, and **`downloadWeights`** / weights-provider-style flow on this client are removed. Integrations that streamed weights through infer-base helpers must supply resolved paths (or perform download elsewhere) before calling **`load()`**.
+
+### `downloadWeights` removed
+
+The stub **`downloadWeights()`** method is no longer on **`ONNXTTS`** or in **`index.d.ts`**. There is no replacement on this class; use your own download or registry flow, then pass paths in **`files`**.
+
+### Paths are not normalized in JS
+
+The client no longer resolves relative paths or applies Windows extended-path prefixes. Every path in **`files`** must be **absolute** or the native layer may fail in hard-to-debug ways. Update examples and tests accordingly (for example **`path.resolve(...)`** at the call site).
+
+### Single active job and overlap errors
+
+Job/response wiring uses **one** active **`QvacResponse`**. Starting a new **`run()`** while the previous response is still active throws **`JOB_ALREADY_RUNNING`** unless the prior job has ended or been cleared. Overlapping work should use **`exclusiveRun: true`** so **`createJobHandler`**’s queue serializes **`run`**, **`reload`**, and **`unload`**. The old **`_hasActiveResponse`** guard and synthetic **`OnlyOneJob`** id are gone; **`runJob`** no longer uses an **`accepted`** flag in **`index.js`** (the test mock throws when the addon would not accept a job).
+
+## Other
+
+### Internal structure
+
+**`BaseInference`** inheritance is replaced by **`lib/createJobHandler.js`** (response map reduced to a single active slot, **`outputCallback`** without per-job ids, **`failActive`** for unload/reload teardown). **`tts.js`** **`runJob`** only forwards to the binding and maps thrown errors to **`FAILED_TO_APPEND`**.
 
 ## [0.7.0]
 
