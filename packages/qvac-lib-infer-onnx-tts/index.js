@@ -162,7 +162,6 @@ class ONNXTTS {
     }
 
     this._config = { ...config }
-    this._hasActiveResponse = false
 
     this._lazySessionLoading = lazySessionLoading != null
       ? lazySessionLoading
@@ -348,10 +347,6 @@ class ONNXTTS {
   }
 
   async _runInternal (input) {
-    if (this._hasActiveResponse) {
-      throw createBusyJobError()
-    }
-
     const response = this._jobs.createResponse(ONLY_ONE_JOB_ID)
     let accepted
     try {
@@ -372,10 +367,6 @@ class ONNXTTS {
       throw busyError
     }
 
-    this._hasActiveResponse = true
-    const finalized = response.await().finally(() => { this._hasActiveResponse = false })
-    finalized.catch(() => {})
-    response.await = () => finalized
     return response
   }
 
@@ -411,7 +402,6 @@ class ONNXTTS {
       currentJobResponse.failed(new Error(reason))
       this._jobs.deleteJobMapping(ONLY_ONE_JOB_ID)
     }
-    this._hasActiveResponse = false
   }
 
   /**
