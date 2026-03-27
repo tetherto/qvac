@@ -10,6 +10,18 @@ on:
         required: false
         type: string
   workflow_call:
+    secrets:
+      AWS_ACCESS_KEY_ID:
+        required: true
+      AWS_SECRET_ACCESS_KEY:
+        required: true
+      MODEL_S3_BUCKET:
+        required: true
+      NPM_TOKEN:
+        required: true
+      PAT_TOKEN:
+        required: true
+
     inputs:
       version:
         description: 'Addon version to benchmark'
@@ -19,9 +31,14 @@ on:
 env:
   PKG_DIR: packages/qvac-lib-infer-nmtcpp
 
+permissions:
+  contents: read
+  packages: read
+
 jobs:
   prepare:
     runs-on: ubuntu-latest
+    environment: release
     outputs:
       opus_pairs: ${{ steps.read-opus.outputs.pairs }}
       bergamot_pairs: ${{ steps.read-bergamot.outputs.pairs }}

@@ -72,8 +72,9 @@ test('Supertonic: Engine type is detected correctly', async (t) => {
 
   const supertonicExplicitArgs = {
     textEncoderPath: './onnx/text_encoder.onnx',
-    latentDenoiserPath: './onnx/latent_denoiser.onnx',
-    voiceDecoderPath: './onnx/voice_decoder.onnx'
+    durationPredictorPath: './onnx/duration_predictor.onnx',
+    vectorEstimatorPath: './onnx/vector_estimator.onnx',
+    vocoderPath: './onnx/vocoder.onnx'
   }
   const modelFromPaths = new ONNXTTS(supertonicExplicitArgs, {})
   t.is(modelFromPaths._engineType, 'supertonic', 'Should detect Supertonic engine when textEncoderPath is provided')

@@ -2,6 +2,12 @@ name: CPP Tests (Parakeet)
 
 on:
   workflow_call:
+    secrets:
+      NPM_TOKEN:
+        required: true
+      PAT_TOKEN:
+        required: true
+
     inputs:
       ref:
         description: 'ref'
@@ -15,9 +21,13 @@ env:
   ENABLE_COVERAGE: ON
   PKG_DIR: packages/qvac-lib-infer-parakeet
 
+permissions:
+  contents: read
+
 jobs:
   cpp-tests:
     runs-on: ${{ matrix.os }}
+    environment: release
     name: ${{ matrix.platform }}-${{ matrix.arch }}-cpp-tests
     permissions:
       contents: read

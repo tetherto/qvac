@@ -33,6 +33,22 @@ concurrency:
   cancel-in-progress: ${{ github.event_name == 'pull_request_target' }}
 
 jobs:
+  authorize:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      pull-requests: write
+    outputs:
+      allowed: ${{ steps.auth.outputs.allowed }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # 6.0.2
+      - name: Authorize
+        id: auth
+        uses: ./.github/actions/authorize-pr
+        with:
+          github-token: ${{ github.token }}
+
   release-merge-guard-schema:
     name: Release Merge Guard (Schema)
     if: >-
@@ -74,8 +90,10 @@ jobs:
           changelog-path: packages/qvac-lib-registry-server/client/CHANGELOG.md
 
   detect-changes:
+    needs: [authorize]
     runs-on: ubuntu-latest
-    if: github.event_name == 'push' || github.event_name == 'workflow_dispatch' || contains(github.event.pull_request.labels.*.name, 'verify')
+    environment: release
+    if: needs.authorize.outputs.allowed == 'true'
     outputs:
       schema_changed: ${{ steps.filter.outputs.schema }}
       client_changed: ${{ steps.filter.outputs.client }}
@@ -137,8 +155,9 @@ jobs:
           fi
 
   publish-logic:
+    needs: [authorize]
     runs-on: ubuntu-latest
-    if: github.event_name == 'push' || github.event_name == 'workflow_dispatch' || contains(github.event.pull_request.labels.*.name, 'verify')
+    if: needs.authorize.outputs.allowed == 'true'
     outputs:
       publish_main: ${{ steps.logic.outputs.publish_main }}
       publish_release: ${{ steps.logic.outputs.publish_release }}
@@ -186,14 +205,15 @@ jobs:
           echo "gpr_tag=$gpr_tag" >> "$GITHUB_OUTPUT"
 
   publish-schema-gpr:
-    needs: [detect-changes, publish-logic]
+    needs: [authorize, detect-changes, publish-logic]
     if: |
-      (github.event_name == 'push' || github.event_name == 'workflow_dispatch' || contains(github.event.pull_request.labels.*.name, 'verify')) &&
+      needs.authorize.outputs.allowed == 'true' &&
       needs.detect-changes.outputs.schema_changed == 'true' &&
       (needs.publish-logic.outputs.publish_feature == 'true' ||
        needs.publish-logic.outputs.publish_main == 'true' ||
        needs.publish-logic.outputs.publish_tmp == 'true')
     runs-on: ubuntu-latest
+    environment: release
     permissions:
       contents: write
       packages: write
@@ -222,13 +242,14 @@ jobs:
           name-suffix: ${{ env.NAME_SUFFIX }}
 
   publish-schema-npm:
-    needs: [detect-changes, publish-logic, release-merge-guard-schema]
+    needs: [authorize, detect-changes, publish-logic, release-merge-guard-schema]
     if: |
-      (github.event_name == 'push' || github.event_name == 'workflow_dispatch' || contains(github.event.pull_request.labels.*.name, 'verify')) &&
+      needs.authorize.outputs.allowed == 'true' &&
       needs.detect-changes.outputs.schema_changed == 'true' &&
       needs.publish-logic.outputs.publish_release == 'true' &&
       (needs.release-merge-guard-schema.result == 'success' || needs.release-merge-guard-schema.result == 'skipped')
     runs-on: ubuntu-latest
+    environment: release
     outputs:
       published_version: ${{ steps.publish.outputs.npm_published_version }}
     permissions:
@@ -262,9 +283,9 @@ jobs:
 
   publish-schema:
     name: Publish Schema (meta)
-    needs: [publish-schema-gpr, publish-schema-npm]
+    needs: [authorize, publish-schema-gpr, publish-schema-npm]
     if: |
-      (github.event_name == 'push' || github.event_name == 'workflow_dispatch' || contains(github.event.pull_request.labels.*.name, 'verify')) &&
+      needs.authorize.outputs.allowed == 'true' &&
       (needs.publish-schema-gpr.result == 'success' || needs.publish-schema-gpr.result == 'skipped') &&
       (needs.publish-schema-npm.result == 'success' || needs.publish-schema-npm.result == 'skipped')
     runs-on: ubuntu-latest
@@ -277,7 +298,6 @@ jobs:
     permissions:
       contents: write
     uses: ./.github/workflows/create-github-release.yml
-    secrets: inherit
     with:
       repo_name: "registry-server"
       release_name: "QVAC Registry Server"
@@ -286,14 +306,15 @@ jobs:
       workdir: "packages/qvac-lib-registry-server/shared"
 
   lint-and-test:
-    needs: detect-changes
+    needs: [authorize, detect-changes]
     if: |
-      (github.event_name == 'push' || github.event_name == 'workflow_dispatch' || contains(github.event.pull_request.labels.*.name, 'verify')) &&
+      needs.authorize.outputs.allowed == 'true' &&
       needs.detect-changes.outputs.client_changed == 'true'
     permissions:
       contents: read
       packages: read
     runs-on: ubuntu-latest
+    environment: release
     steps:
       - name: Checkout base repository
         uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # 6.0.2
@@ -354,14 +375,15 @@ jobs:
         run: npm run typecheck
 
   publish-client-gpr:
-    needs: [detect-changes, publish-logic, lint-and-test]
+    needs: [authorize, detect-changes, publish-logic, lint-and-test]
     if: |
-      (github.event_name == 'push' || github.event_name == 'workflow_dispatch' || contains(github.event.pull_request.labels.*.name, 'verify')) &&
+      needs.authorize.outputs.allowed == 'true' &&
       needs.detect-changes.outputs.client_changed == 'true' &&
       (needs.publish-logic.outputs.publish_feature == 'true' ||
        needs.publish-logic.outputs.publish_main == 'true' ||
        needs.publish-logic.outputs.publish_tmp == 'true')
     runs-on: ubuntu-latest
+    environment: release
     permissions:
       contents: write
       packages: write
@@ -392,13 +414,14 @@ jobs:
           name-suffix: ${{ env.NAME_SUFFIX }}
 
   publish-client-npm:
-    needs: [detect-changes, publish-logic, lint-and-test, release-merge-guard-client]
+    needs: [authorize, detect-changes, publish-logic, lint-and-test, release-merge-guard-client]
     if: |
-      (github.event_name == 'push' || github.event_name == 'workflow_dispatch' || contains(github.event.pull_request.labels.*.name, 'verify')) &&
+      needs.authorize.outputs.allowed == 'true' &&
       needs.detect-changes.outputs.client_changed == 'true' &&
       needs.publish-logic.outputs.publish_release == 'true' &&
       (needs.release-merge-guard-client.result == 'success' || needs.release-merge-guard-client.result == 'skipped')
     runs-on: ubuntu-latest
+    environment: release
     outputs:
       published_version: ${{ steps.publish.outputs.npm_published_version }}
     permissions:
@@ -438,7 +461,6 @@ jobs:
     permissions:
       contents: write
     uses: ./.github/workflows/create-github-release.yml
-    secrets: inherit
     with:
       repo_name: "registry-client"
       release_name: "QVAC Registry Client"

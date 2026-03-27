@@ -7,7 +7,7 @@ const { setLogger, releaseLogger } = require('../addonLogging')
 
 const SUPERTONIC_SAMPLE_RATE = 44100
 
-// Model dir relative to package root (run from package root or set SUPERTONIC_MODEL_DIR)
+// Supertone English: models/supertonic — use npm run models:ensure or ensureSupertonicModels
 const modelDir = path.join(__dirname, '..', 'models', 'supertonic')
 
 async function main () {
@@ -24,18 +24,21 @@ async function main () {
     console.log(`[${timestamp}] [C++ log] [${priorityName}]: ${message}`)
   })
 
-  // Supertonic configuration: modelDir + voiceName (paths are derived inside the package)
+  // Supertonic configuration: modelDir + voiceName (paths are derived inside the package).
+  // Recommended: HF Supertone/supertonic (English) + supertonicMultilingual: false for English quality.
+  // supertonic-2 (HF Supertone/supertonic-2): use supertonicMultilingual true with <lang> wrapping.
   const supertonicArgs = {
     modelDir,
     voiceName: 'F1',
-    speed: 1,
+    speed: 1.05,
     numInferenceSteps: 5,
+    supertonicMultilingual: false,
     opts: { stats: true },
     logger: console
   }
 
   const config = {
-    language: 'es'
+    language: 'en'
   }
 
   const model = new ONNXTTS(supertonicArgs, config)
@@ -45,7 +48,7 @@ async function main () {
     await model.load()
     console.log('Model loaded.')
 
-    const textToSynthesize = 'Hola mundo! Esto es una prueba de la sistema de TTS Supertonic.'
+    const textToSynthesize = 'The rolling hills of the willowed valley glimmered brilliantly under the mellowing autumn sun.'
     console.log(`Running TTS on: "${textToSynthesize}"`)
 
     const response = await model.run({

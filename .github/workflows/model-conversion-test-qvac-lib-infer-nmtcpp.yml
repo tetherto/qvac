@@ -2,6 +2,12 @@ name: Model Conversion Test (NMTCPP)
 
 on:
   workflow_call:
+    secrets:
+      NPM_TOKEN:
+        required: true
+      PAT_TOKEN:
+        required: true
+
     inputs:
       items:
         description: "Comma-separated list of items"
@@ -57,6 +63,9 @@ on:
 
 env:
   PKG_DIR: packages/qvac-lib-infer-nmtcpp
+
+permissions:
+  contents: read
 
 jobs:
   setup:
@@ -122,6 +131,7 @@ jobs:
   Build:
     needs: setup
     runs-on: macos-14
+    environment: release
     steps:
       - name: Checkout repository
         uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # 6.0.2

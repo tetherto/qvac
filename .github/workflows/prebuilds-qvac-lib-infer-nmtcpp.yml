@@ -2,6 +2,18 @@ name: Prebuilds (NMTCPP)
 
 on:
   workflow_call:
+    secrets:
+      AWS_ACCESS_KEY_ID:
+        required: true
+      AWS_SECRET_ACCESS_KEY:
+        required: true
+      MODEL_S3_BUCKET:
+        required: true
+      NPM_TOKEN:
+        required: true
+      PAT_TOKEN:
+        required: true
+
     inputs:
       ref:
         description: "ref"
@@ -38,9 +50,8 @@ on:
 env:
   PKG_DIR: packages/qvac-lib-infer-nmtcpp
 
-concurrency:
-  group: ${{ github.workflow }}-${{ github.ref }}
-  cancel-in-progress: false
+permissions:
+  contents: read
 
 jobs:
   prebuild:
@@ -89,6 +100,7 @@ jobs:
             arch: x64
 
     runs-on: ${{ matrix.os }}
+    environment: release
     name: ${{ matrix.platform }}-${{ matrix.arch }}${{ matrix.tags }}
 
     env:
@@ -813,6 +825,7 @@ jobs:
     outputs:
       published_version: ${{ steps.publish.outputs.npm_published_version }}
     runs-on: ubuntu-24.04
+    environment: release
     permissions:
       contents: write
       packages: write
@@ -842,7 +855,6 @@ jobs:
     permissions:
       contents: write
     uses: ./.github/workflows/create-github-release.yml
-    secrets: inherit
     with:
       repo_name: "nmtcpp"
       release_name: "QVAC Infer NMTCPP Lib"
@@ -853,7 +865,15 @@ jobs:
   run-automated-benchmarks:
     needs: [publish-npm]
     if: needs.publish-npm.result == 'success' && needs.publish-npm.outputs.published_version != ''
+    permissions:
+      contents: read
+      packages: read
     uses: ./.github/workflows/on-publish-benchmark-qvac-lib-infer-nmtcpp.yml
-    secrets: inherit
+    secrets:
+      AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
+      AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+      MODEL_S3_BUCKET: ${{ secrets.MODEL_S3_BUCKET }}
+      NPM_TOKEN: ${{ secrets.NPM_TOKEN }}
+      PAT_TOKEN: ${{ secrets.PAT_TOKEN }}
     with:
       version: ${{ needs.publish-npm.outputs.published_version }}

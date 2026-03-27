@@ -2,6 +2,12 @@ name: CPP Tests (Embed)
 
 on:
   workflow_call:
+    secrets:
+      NPM_TOKEN:
+        required: true
+      PAT_TOKEN:
+        required: true
+
     inputs:
       ref:
         description: "ref"
@@ -31,6 +37,7 @@ on:
 jobs:
   run-cpp-tests:
     runs-on: ${{ matrix.runner || matrix.os }}
+    environment: release
     name: ${{ matrix.platform }}-${{ matrix.arch || 'x64' }}-cpp-tests
     permissions:
       contents: read

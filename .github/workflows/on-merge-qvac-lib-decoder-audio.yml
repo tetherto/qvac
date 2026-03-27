@@ -22,9 +22,9 @@ on:
           - dev
 
 permissions:
-  contents: write
-  pull-requests: write
-  packages: write
+  contents: read
+  pull-requests: read
+  packages: read
 
 concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}
@@ -113,11 +113,11 @@ jobs:
       needs.publish-logic.outputs.publish_release == 'true' ||
       needs.publish-logic.outputs.publish_feature == 'true' ||
       needs.publish-logic.outputs.publish_tmp == 'true'
-    permissions:
-      contents: read
-      packages: read
     uses: ./.github/workflows/integration-test-qvac-lib-decoder-audio.yml
-    secrets: inherit
+    secrets:
+      NPM_TOKEN: ${{ secrets.NPM_TOKEN }}
+      PAT_TOKEN: ${{ secrets.PAT_TOKEN }}
+      QASE_API_TOKEN: ${{ secrets.QASE_API_TOKEN }}
     with:
       repository: ${{ github.repository }}
       ref: ${{ github.sha }}
@@ -125,13 +125,29 @@ jobs:
 
   mobile-integration-tests:
     needs: publish-logic
+    permissions:
+      contents: read
+      packages: read
+      pull-requests: write
     if: |
       needs.publish-logic.outputs.publish_main == 'true' ||
       needs.publish-logic.outputs.publish_release == 'true' ||
       needs.publish-logic.outputs.publish_feature == 'true' ||
       needs.publish-logic.outputs.publish_tmp == 'true'
     uses: ./.github/workflows/integration-mobile-test-qvac-lib-decoder-audio.yml
-    secrets: inherit
+    secrets:
+      ANDROID_DEVICE_POOL_ARN_DECODER_AUDIO: ${{ secrets.ANDROID_DEVICE_POOL_ARN_DECODER_AUDIO }}
+      APPLE_KEYCHAIN_PASSWORD: ${{ secrets.APPLE_KEYCHAIN_PASSWORD }}
+      APPLE_P12_PASSWORD: ${{ secrets.APPLE_P12_PASSWORD }}
+      APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
+      AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
+      AWS_DEVICE_FARM_PROJECT_ARN_DECODER_AUDIO: ${{ secrets.AWS_DEVICE_FARM_PROJECT_ARN_DECODER_AUDIO }}
+      AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+      IOS_DEVICE_POOL_ARN_DECODER_AUDIO: ${{ secrets.IOS_DEVICE_POOL_ARN_DECODER_AUDIO }}
+      NPM_TOKEN: ${{ secrets.NPM_TOKEN }}
+      PAT_TOKEN: ${{ secrets.PAT_TOKEN }}
+      TEST_APP_APPLE_DISTRIBUTION_CERTIFICATE: ${{ secrets.TEST_APP_APPLE_DISTRIBUTION_CERTIFICATE }}
+      TEST_APP_APPLE_PROVISIONING_PROFILE: ${{ secrets.TEST_APP_APPLE_PROVISIONING_PROFILE }}
     with:
       repository: ${{ github.repository }}
       ref: ${{ github.sha }}
@@ -144,6 +160,7 @@ jobs:
       needs.publish-logic.outputs.publish_feature == 'true' ||
       needs.publish-logic.outputs.publish_tmp == 'true'
     runs-on: ubuntu-latest
+    environment: release
     permissions:
       contents: write
       packages: write
@@ -169,6 +186,7 @@ jobs:
       needs.publish-logic.outputs.publish_release == 'true' &&
       (needs.release-merge-guard.result == 'success' || needs.release-merge-guard.result == 'skipped')
     runs-on: ubuntu-latest
+    environment: release
     outputs:
       published_version: ${{ steps.publish.outputs.npm_published_version }}
     permissions:
@@ -194,7 +212,6 @@ jobs:
     permissions:
       contents: write
     uses: ./.github/workflows/create-github-release.yml
-    secrets: inherit
     with:
       repo_name: "decoder-audio"
       release_name: "QVAC Decoder Audio Lib"
