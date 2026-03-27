@@ -1,42 +1,37 @@
 ---
 title: "ragCloseWorkspace( )"
 titleStyle: code
-description: "Closes a RAG workspace, releasing in-memory resources (Corestore, HyperDB adapter, RAG instance).
-
-**Workspace lifecycle:** Workspaces are implicitly opened.
-This function explicitly closes them, releasing memory and file locks. The workspace data
-remains on disk unless `deleteOnClose` is set to true."
+description: Closes a RAG workspace, releasing in-memory resources (Corestore, HyperDB adapter, RAG instance).
 ---
 
-```typescript
-function ragCloseWorkspace(params?: { deleteOnClose?: boolean; workspace?: string }, options?: { forceNewConnection?: boolean; profiling?: { enabled?: boolean; includeServerBreakdown?: boolean; mode?: "summary" | "verbose" }; timeout?: number }): Promise
+```ts
+function ragCloseWorkspace(params?, options?): Promise<void>;
 ```
+
+Releases Corestore, HyperDB adapter, and RAG instance. Workspace data remains on disk unless `deleteOnClose` is set.
 
 ## Parameters
 
-| Name | Type | Required? | Description |
-| --- | --- | :---: | --- |
-| `params` | `\{ deleteOnClose?: boolean; workspace?: string \}` | ✗ | The parameters for closing |
-| `options` | `\{ forceNewConnection?: boolean; profiling?: \{ enabled?: boolean; includeServerBreakdown?: boolean; mode?: "summary" | "verbose" \}; timeout?: number \}` | ✗ | Optional RPC transport options including connection reuse, timeout, and per-call profiling configuration |
+| Name | Type | Required? | Default | Description |
+| --- | --- | :---: | --- | --- |
+| params.workspace | `string` | ✗ | `"default"` | Workspace to close |
+| params.deleteOnClose | `boolean` | ✗ | `false` | If true, deletes workspace data from disk after closing |
+| options | [`RPCOptions`](../index#rpcoptions) | ✗ | — | Optional RPC transport options |
 
 ## Returns
 
-```typescript
-Promise
-```
-
-
+`Promise<void>` — Resolves when the workspace is closed.
 
 ## Throws
 
 | Error | When |
 | --- | --- |
-| `When the operation fails` |  |
+| `RAG_WORKSPACE_CLOSE_FAILED` | The close operation fails |
 
 ## Example
 
 ```typescript
-// Close a specific workspace
+// Close a workspace
 await ragCloseWorkspace({ workspace: "my-docs" });
 
 // Close and delete in one call
