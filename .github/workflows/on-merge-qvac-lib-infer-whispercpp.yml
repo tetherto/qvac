@@ -7,7 +7,6 @@ on:
       - release-*
       - feature-*
       - tmp-*
-      - fix-*
     paths:
       - "packages/qvac-lib-infer-whispercpp/**"
       - ".github/workflows/*whispercpp*.yml"
@@ -245,4 +244,3 @@ jobs:
             -f model_size=tiny \
             -f streaming_mode=false \
             -f workdir=packages/qvac-lib-infer-whispercpp
-

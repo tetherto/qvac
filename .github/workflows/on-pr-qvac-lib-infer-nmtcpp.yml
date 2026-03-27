@@ -1,9 +1,17 @@
 name: On PR Trigger (NMTCPP)
 
 on:
-  push:
+  pull_request_target:
+    types:
+      - opened
+      - synchronize
+      - reopened
+      - labeled
     branches:
-      - fix-reuseable-workflows-secrets
+      - main
+      - release-*
+      - feature-*
+      - tmp-*
     paths:
       - "packages/qvac-lib-infer-nmtcpp/**"
       - ".github/workflows/*nmtcpp*.yml"
