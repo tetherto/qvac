@@ -10,15 +10,18 @@ namespace qvac::ttslib::supertonic {
 
 struct SupertonicConfig {
   std::string modelDir;
-  std::string tokenizerPath;
   std::string textEncoderPath;
-  std::string latentDenoiserPath;
-  std::string voiceDecoderPath;
-  std::string voicesDir;
   std::string voiceName;
   std::string language;
   float speed = 1.0f;
   int numInferenceSteps = 5;
+  std::string unicodeIndexerPath;
+  std::string ttsConfigPath;
+  std::string durationPredictorPath;
+  std::string vectorEstimatorPath;
+  std::string vocoderPath;
+  std::string voiceStyleJsonPath;
+  bool supertonicMultilingual = true;
 };
 
 class ISupertonicEngine {

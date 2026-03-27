@@ -27,30 +27,29 @@ declare interface ChatterboxTTSArgs {
 }
 
 /**
- * Arguments for Supertonic TTS engine.
- * Either pass modelDir + voiceName, or explicit paths.
+ * Arguments for Supertone / Supertonic TTS (official 4-ONNX + unicode_indexer + voice_styles JSON).
+ * Either pass modelDir + voiceName, or explicit ONNX/JSON paths.
  */
 declare interface SupertonicTTSArgs {
   opts?: Object
   loader?: Loader
-  /** Base model directory (e.g. "models/supertonic"); optional if paths set */
+  /** Base model directory (HF Supertone/supertonic English layout: onnx/, voice_styles/) */
   modelDir?: string
-  /** Path to tokenizer JSON */
-  tokenizerPath?: string
-  /** Path to text encoder ONNX */
   textEncoderPath?: string
-  /** Path to latent denoiser ONNX */
-  latentDenoiserPath?: string
-  /** Path to voice decoder ONNX */
-  voiceDecoderPath?: string
-  /** Path to voices directory */
-  voicesDir?: string
-  /** Voice name (e.g. "F1") - default: "F1" */
+  durationPredictorPath?: string
+  vectorEstimatorPath?: string
+  vocoderPath?: string
+  unicodeIndexerPath?: string
+  ttsConfigPath?: string
+  voiceStyleJsonPath?: string
+  /** Voice id matching voice_styles/{voiceName}.json — default: "F1" */
   voiceName?: string
-  /** Speech speed - default: 1 */
+  /** Speech speed — default: 1 */
   speed?: number
-  /** Number of denoising steps - default: 5 */
+  /** Diffusion steps — default: 5 */
   numInferenceSteps?: number
+  /** Set false for English-only models (no &lt;lang&gt; tags). Default: true */
+  supertonicMultilingual?: boolean
   cache?: string
   logger?: Object
 }
@@ -70,7 +69,7 @@ declare interface ONNXTTSConfig {
 /**
  * ONNX client implementation for TTS model.
  * Supports Chatterbox and Supertonic engines.
- * Engine is auto-detected: Supertonic if textEncoderPath or (modelDir + voiceName) is provided.
+ * Engine is auto-detected: Supertone if textEncoderPath, durationPredictorPath, or (modelDir + voiceName) is provided.
  */
 declare class ONNXTTS extends InferBase {
   /**

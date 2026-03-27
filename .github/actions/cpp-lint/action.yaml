@@ -114,7 +114,7 @@ runs:
           echo "bare-make not installed, skipping"
           exit 0
         fi
-        bare-make generate
+        bare-make generate -D BUILD_TESTING=ON
 
     - name: Check C++ files format
       continue-on-error: true

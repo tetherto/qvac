@@ -18,6 +18,18 @@ on:
         type: string
 
   workflow_call:
+    secrets:
+      AWS_ACCESS_KEY_ID:
+        required: true
+      AWS_SECRET_ACCESS_KEY:
+        required: true
+      MODEL_S3_BUCKET:
+        required: true
+      NPM_TOKEN:
+        required: true
+      PAT_TOKEN:
+        required: true
+
     inputs:
       ref:
         description: "ref"
@@ -45,6 +57,9 @@ on:
       published_version:
         description: "The version that was published"
         value: ${{ jobs.publish-gpr.outputs.published_version || jobs.publish-npm.outputs.published_version }}
+
+permissions:
+  contents: read
 
 jobs:
   prebuild:
@@ -90,6 +105,7 @@ jobs:
             arch: x64
 
     runs-on: ${{ matrix.os }}
+    environment: release
     name: ${{ matrix.platform }}-${{ matrix.arch }}${{ matrix.tags }}
 
     env:
@@ -506,7 +522,7 @@ jobs:
 
       - name: Publish to GitHub Package Registry
         id: publish
-        uses: tetherto/qvac-devops/.github/actions/publish-library-to-gpr@v1.1.6
+        uses: tetherto/qvac-devops/.github/actions/publish-library-to-gpr@v1.1.7
         with:
           secret-token: ${{ secrets.GITHUB_TOKEN }}
           tag: ${{ inputs.tag || github.event.inputs.tag || 'dev' }}
@@ -548,6 +564,7 @@ jobs:
     outputs:
       published_version: ${{ steps.publish.outputs.npm_published_version }}
     runs-on: ubuntu-latest
+    environment: release
     permissions:
       contents: write
       packages: write
@@ -567,7 +584,7 @@ jobs:
 
       - name: Publish to NPM Package Registry
         id: publish
-        uses: tetherto/qvac-devops/.github/actions/publish-library-to-npm@v1.1.6
+        uses: tetherto/qvac-devops/.github/actions/publish-library-to-npm@v1.1.7
         with:
           secret-token: ${{ secrets.NPM_TOKEN }}
           tag: "latest"

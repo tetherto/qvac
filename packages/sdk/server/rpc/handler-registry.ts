@@ -20,6 +20,7 @@ import { handleTextToSpeech } from "@/server/rpc/handlers/text-to-speech";
 import { handleGetModelInfo } from "@/server/rpc/handlers/get-model-info";
 import { handleOCRStream } from "@/server/rpc/handlers/ocr-stream";
 import { handlePing } from "@/server/rpc/handlers/ping";
+import { handleCancelDelegated } from "@/server/rpc/handlers/cancel-delegated";
 import {
   handlePluginInvoke,
   handlePluginInvokeStream,
@@ -42,6 +43,20 @@ function isModelDelegated(request: Request): boolean {
   return entry?.isDelegated ?? false;
 }
 
+function isCancelDelegated(request: Request): boolean {
+  if (request.type !== "cancel") return false;
+
+  if (request.operation === "inference") {
+    return isModelDelegated(request);
+  }
+
+  if (request.operation === "downloadAsset") {
+    return !!request.delegate;
+  }
+
+  return false;
+}
+
 export const registry: Record<string, HandlerEntry> = {
   // Simple Reply handlers
   ping: { type: "reply", handler: handlePing },
@@ -52,7 +67,12 @@ export const registry: Record<string, HandlerEntry> = {
     isDelegated: isModelDelegated,
   },
   embed: { type: "reply", handler: handleEmbed },
-  cancel: { type: "reply", handler: cancelHandler },
+  cancel: {
+    type: "reply",
+    handler: cancelHandler,
+    delegatedHandler: handleCancelDelegated,
+    isDelegated: isCancelDelegated,
+  },
   provide: { type: "reply", handler: provideHandler },
   stopProvide: { type: "reply", handler: stopProvideHandler },
   deleteCache: { type: "reply", handler: handleDeleteCache },

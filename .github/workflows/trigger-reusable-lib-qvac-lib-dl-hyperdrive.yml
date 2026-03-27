@@ -2,12 +2,6 @@ name: General CI/CD (Qvac-lib-dl-hyperdrive)
 # This workflow is used to call the reusable workflows in the qvac-devops repository
 # (ported into the monorepo)
 
-permissions:
-  contents: write
-  packages: write
-  pull-requests: write
-  id-token: write
-
 on:
   push:
     branches:
@@ -28,6 +22,13 @@ on:
       custom_input_3:
         required: false
         type: string
+
+permissions:
+  contents: read
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: false
+
 jobs:
   release-merge-guard:
     name: Release Merge Guard
@@ -101,6 +102,7 @@ jobs:
     needs: publish-logic
     if: needs.publish-logic.outputs.publish_main == 'true'
     runs-on: ubuntu-latest
+    environment: release
     permissions:
       contents: read
       packages: write
@@ -110,7 +112,7 @@ jobs:
           fetch-depth: 0
 
       - name: Publish to GitHub Packages (dev)
-        uses: tetherto/qvac-devops/.github/actions/publish-library-to-gpr@v1.1.6
+        uses: tetherto/qvac-devops/.github/actions/publish-library-to-gpr@v1.1.7
         with:
           secret-token: ${{ secrets.GITHUB_TOKEN }}
           pat-token: ${{ secrets.PAT_TOKEN }}
@@ -126,8 +128,10 @@ jobs:
       packages: write
       id-token: write
     if: needs.publish-logic.outputs.publish_release == 'true'
-    uses: tetherto/qvac-devops/.github/workflows/public-reusable-npm.yml@v1.1.6
-    secrets: inherit
+    uses: tetherto/qvac-devops/.github/workflows/public-reusable-npm.yml@v1.1.7
+    secrets:
+      PAT_TOKEN: ${{ secrets.PAT_TOKEN }}
+      NPM_TOKEN: ${{ secrets.NPM_TOKEN }}
     with:
       workdir: packages/qvac-lib-dl-hyperdrive
       repo_name: dl-hyperdrive
@@ -139,7 +143,6 @@ jobs:
     permissions:
       contents: write
     uses: ./.github/workflows/create-github-release.yml
-    secrets: inherit
     with:
       repo_name: "dl-hyperdrive"
       release_name: "QVAC dl-hyperdrive Lib"
@@ -151,6 +154,7 @@ jobs:
     needs: publish-logic
     if: needs.publish-logic.outputs.publish_feature == 'true'
     runs-on: ubuntu-latest
+    environment: release
     permissions:
       contents: read
       packages: write
@@ -160,7 +164,7 @@ jobs:
           fetch-depth: 0
 
       - name: Publish to GitHub Packages (feature)
-        uses: tetherto/qvac-devops/.github/actions/publish-library-to-gpr@v1.1.6
+        uses: tetherto/qvac-devops/.github/actions/publish-library-to-gpr@v1.1.7
         with:
           secret-token: ${{ secrets.GITHUB_TOKEN }}
           pat-token: ${{ secrets.PAT_TOKEN }}
@@ -173,6 +177,7 @@ jobs:
     needs: publish-logic
     if: needs.publish-logic.outputs.publish_tmp == 'true'
     runs-on: ubuntu-latest
+    environment: release
     permissions:
       contents: read
       packages: write
@@ -182,7 +187,7 @@ jobs:
           fetch-depth: 0
 
       - name: Publish to GitHub Packages (tmp)
-        uses: tetherto/qvac-devops/.github/actions/publish-library-to-gpr@v1.1.6
+        uses: tetherto/qvac-devops/.github/actions/publish-library-to-gpr@v1.1.7
         with:
           secret-token: ${{ secrets.GITHUB_TOKEN }}
           pat-token: ${{ secrets.PAT_TOKEN }}
