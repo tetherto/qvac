@@ -37,6 +37,8 @@ import {
   PARAKEET_SORTFORMER_FP32,
   SMOLVLM2_500M_MULTIMODAL_Q8_0,
   MMPROJ_SMOLVLM2_500M_MULTIMODAL_Q8_0,
+  SALAMANDRATA_2B_INST_Q4,
+  AFRICAN_4B_TRANSLATION_Q4_K_M,
 } from "@qvac/sdk";
 import { ResourceManager } from "../shared/resource-manager.js";
 import { ModelLoadingExecutor } from "../shared/executors/model-loading-executor.js";
@@ -215,6 +217,26 @@ resources.define("bergamot-es-it-pivot", {
   },
 });
 
+resources.define("salamandra", {
+  constant: SALAMANDRATA_2B_INST_Q4,
+  type: "llm",
+});
+
+resources.define("afriquegemma", {
+  constant: AFRICAN_4B_TRANSLATION_Q4_K_M,
+  type: "llm",
+  config: {
+    tools: true,
+    ctx_size: 2048,
+    top_k: 1,
+    top_p: 1,
+    temp: 0,
+    repeat_penalty: 1,
+    seed: 42,
+    predict: 256,
+    stop_sequences: ["\n"],
+  },
+});
 
 
 resources.define("tts-chatterbox", {

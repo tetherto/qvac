@@ -7,6 +7,9 @@ import { ragTests } from "./rag-tests.js";
 import { translationMarianTests } from "./translation-marian-tests.js";
 import { translationIndicTransTests } from "./translation-indictrans-tests.js";
 import { translationBergamotTests } from "./translation-bergamot-tests.js";
+import { translationLlmTests } from "./translation-llm-tests.js";
+import { translationSalamandraTests } from "./translation-salamandra-tests.js";
+import { translationAfriquegemmaTests } from "./translation-afriquegemma-tests.js";
 import { modelInfoTests } from "./model-info-tests.js";
 import { kvCacheTests } from "./kv-cache-tests.js";
 import { errorTests } from "./error-tests.js";
@@ -164,6 +167,15 @@ export const tests = [
 
   // Translation: Bergamot (EN→FR, EN→ES)
   ...translationBergamotTests,
+
+  // Translation: LLM (open-vocabulary via from/to)
+  ...translationLlmTests,
+
+  // Translation: Salamandra (EU languages)
+  ...translationSalamandraTests,
+
+  // Translation: AfriqueGemma (African languages)
+  ...translationAfriquegemmaTests,
 
   // Sharded model tests
   ...shardedModelTests,

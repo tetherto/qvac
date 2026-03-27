@@ -8,15 +8,29 @@ import { AbstractModelExecutor } from "./abstract-model-executor.js";
 import { translationMarianTests } from "../../translation-marian-tests.js";
 import { translationIndicTransTests } from "../../translation-indictrans-tests.js";
 import { translationBergamotTests } from "../../translation-bergamot-tests.js";
+import { translationLlmTests } from "../../translation-llm-tests.js";
+import { translationSalamandraTests } from "../../translation-salamandra-tests.js";
+import { translationAfriquegemmaTests } from "../../translation-afriquegemma-tests.js";
+
+interface TranslateTestParams {
+  text: string;
+  resource: string;
+  from?: string;
+  to?: string;
+  context?: string;
+}
 
 const allTests = [
   ...translationMarianTests,
   ...translationIndicTransTests,
   ...translationBergamotTests,
+  ...translationLlmTests,
+  ...translationSalamandraTests,
+  ...translationAfriquegemmaTests,
 ];
 
 export class TranslationExecutor extends AbstractModelExecutor<typeof allTests> {
-  pattern = /^translation-(marian|indictrans|bergamot)-/;
+  pattern = /^translation-(marian|indictrans|bergamot|llm|salamandra|afriquegemma)-/;
 
   protected handlers = Object.fromEntries(
     allTests.map((test) => {
@@ -32,16 +46,37 @@ export class TranslationExecutor extends AbstractModelExecutor<typeof allTests> 
       if (test.testId.includes("-batch-")) {
         return [test.testId, this.batch.bind(this)];
       }
+      if (test.testId.endsWith("-autodetect")) {
+        return [test.testId, this.autodetect.bind(this)];
+      }
+      if (test.testId.endsWith("-context")) {
+        return [test.testId, this.withContext.bind(this)];
+      }
       return [test.testId, this.generic.bind(this)];
     }),
   ) as never;
 
+  // Presence of `to` distinguishes LLM (per-call languages) from NMT (model-level languages)
+  private callTranslate(modelId: string, p: TranslateTestParams, stream: boolean) {
+    if (p.to) {
+      return translate({
+        modelId,
+        text: p.text,
+        from: p.from,
+        to: p.to,
+        modelType: "llm",
+        stream,
+      });
+    }
+    return translate({ modelId, text: p.text, modelType: "nmt", stream });
+  }
+
   async generic(params: unknown, expectation: unknown): Promise<TestResult> {
-    const p = params as { text: string; resource: string };
+    const p = params as TranslateTestParams;
     const modelId = await this.resources.ensureLoaded(p.resource);
 
     try {
-      const result = translate({ modelId, text: p.text, modelType: "nmt", stream: false });
+      const result = this.callTranslate(modelId, p, false);
       const translatedText = await (result as { text: Promise<string> }).text;
       return ValidationHelpers.validate(translatedText, expectation as Expectation);
     } catch (error) {
@@ -51,11 +86,11 @@ export class TranslationExecutor extends AbstractModelExecutor<typeof allTests> 
   }
 
   async streaming(params: unknown, expectation: unknown): Promise<TestResult> {
-    const p = params as { text: string; resource: string };
+    const p = params as TranslateTestParams;
     const modelId = await this.resources.ensureLoaded(p.resource);
 
     try {
-      const result = translate({ modelId, text: p.text, modelType: "nmt", stream: true });
+      const result = this.callTranslate(modelId, p, true);
       const tokens: string[] = [];
       for await (const token of result.tokenStream) {
         tokens.push(token);
@@ -78,11 +113,11 @@ export class TranslationExecutor extends AbstractModelExecutor<typeof allTests> 
   }
 
   async withStats(params: unknown, expectation: unknown): Promise<TestResult> {
-    const p = params as { text: string; resource: string };
+    const p = params as TranslateTestParams;
     const modelId = await this.resources.ensureLoaded(p.resource);
 
     try {
-      const result = translate({ modelId, text: p.text, modelType: "nmt", stream: false });
+      const result = this.callTranslate(modelId, p, false);
       const translatedText = await (result as { text: Promise<string> }).text;
       const stats = await result.stats;
 
@@ -107,11 +142,11 @@ export class TranslationExecutor extends AbstractModelExecutor<typeof allTests> 
   }
 
   async emptyText(params: unknown, expectation: unknown): Promise<TestResult> {
-    const p = params as { text: string; resource: string };
+    const p = params as TranslateTestParams;
     const modelId = await this.resources.ensureLoaded(p.resource);
 
     try {
-      const result = translate({ modelId, text: p.text, modelType: "nmt", stream: false });
+      const result = this.callTranslate(modelId, p, false);
       const translatedText = await (result as { text: Promise<string> }).text;
       const isEmpty = !translatedText || translatedText.trim().length === 0;
       return {
@@ -134,6 +169,66 @@ export class TranslationExecutor extends AbstractModelExecutor<typeof allTests> 
     } catch (error) {
       const errorMsg = error instanceof Error ? error.message : String(error);
       return { passed: false, output: `Translation batch error: ${errorMsg}` };
+    }
+  }
+
+  // LLM-only: translate without specifying source language (auto-detected via cld2)
+  async autodetect(params: unknown, expectation: unknown): Promise<TestResult> {
+    const p = params as TranslateTestParams;
+    const modelId = await this.resources.ensureLoaded(p.resource);
+
+    try {
+      const result = translate({
+        modelId,
+        text: p.text,
+        to: p.to!,
+        modelType: "llm",
+        stream: false,
+      });
+      const translatedText = await (result as { text: Promise<string> }).text;
+
+      if (!translatedText || translatedText.trim().length === 0) {
+        return { passed: false, output: "Autodetect translation returned empty text" };
+      }
+
+      return {
+        passed: true,
+        output: `Autodetected source language, translated to: "${translatedText}"`,
+      };
+    } catch (error) {
+      const errorMsg = error instanceof Error ? error.message : String(error);
+      return { passed: false, output: `Autodetect translation error: ${errorMsg}` };
+    }
+  }
+
+  // LLM-only: translate with disambiguation context
+  async withContext(params: unknown, expectation: unknown): Promise<TestResult> {
+    const p = params as TranslateTestParams;
+    const modelId = await this.resources.ensureLoaded(p.resource);
+
+    try {
+      const result = translate({
+        modelId,
+        text: p.text,
+        from: p.from,
+        to: p.to!,
+        modelType: "llm",
+        stream: false,
+        context: p.context,
+      });
+      const translatedText = await (result as { text: Promise<string> }).text;
+
+      if (!translatedText || translatedText.trim().length === 0) {
+        return { passed: false, output: "Context translation returned empty text" };
+      }
+
+      return {
+        passed: true,
+        output: `Context translation: "${p.text}" -> "${translatedText}" (context: "${p.context}")`,
+      };
+    } catch (error) {
+      const errorMsg = error instanceof Error ? error.message : String(error);
+      return { passed: false, output: `Context translation error: ${errorMsg}` };
     }
   }
 }
