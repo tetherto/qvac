@@ -4,7 +4,6 @@ const { platform } = require('bare-os')
 const path = require('bare-path')
 const QvacLogger = require('@qvac/logging')
 const { TTSInterface } = require('./tts')
-const { QvacErrorAddonTTS, ERR_CODES } = require('./lib/error')
 const { createJobHandler } = require('./lib/createJobHandler')
 
 const platformDefinitions = {
@@ -18,11 +17,6 @@ const platformDefinitions = {
 // Engine types
 const ENGINE_CHATTERBOX = 'chatterbox'
 const ENGINE_SUPERTONIC = 'supertonic'
-const ONLY_ONE_JOB_ID = 'OnlyOneJob'
-
-function createBusyJobError () {
-  return new QvacErrorAddonTTS({ code: ERR_CODES.JOB_ALREADY_RUNNING })
-}
 
 function firstNonEmpty (...candidates) {
   for (let i = 0; i < candidates.length; i++) {
@@ -347,24 +341,15 @@ class ONNXTTS {
   }
 
   async _runInternal (input) {
-    const response = this._jobs.createResponse(ONLY_ONE_JOB_ID)
-    let accepted
+    const response = this._jobs.createResponse()
     try {
-      accepted = await this.addon.runJob({
+      await this.addon.runJob({
         type: input.type || 'text',
         input: input.input
       })
     } catch (error) {
-      this._jobs.deleteJobMapping(ONLY_ONE_JOB_ID)
-      response.failed(error)
+      this._jobs.failActive(error)
       throw error
-    }
-
-    if (!accepted) {
-      this._jobs.deleteJobMapping(ONLY_ONE_JOB_ID)
-      const busyError = createBusyJobError()
-      response.failed(busyError)
-      throw busyError
     }
 
     return response
@@ -372,11 +357,11 @@ class ONNXTTS {
 
   _addonOutputCallback (addon, event, data, error) {
     if (typeof error === 'string' && error.length > 0) {
-      return this._jobs.outputCallback(addon, 'Error', ONLY_ONE_JOB_ID, data, error)
+      return this._jobs.outputCallback(addon, 'Error', data, error)
     }
 
     if (data && typeof data === 'object' && data.outputArray) {
-      return this._jobs.outputCallback(addon, 'Output', ONLY_ONE_JOB_ID, data, null)
+      return this._jobs.outputCallback(addon, 'Output', data, null)
     }
 
     if (
@@ -384,10 +369,10 @@ class ONNXTTS {
       typeof data === 'object' &&
       ('totalTime' in data || 'audioDurationMs' in data || 'totalSamples' in data)
     ) {
-      return this._jobs.outputCallback(addon, 'JobEnded', ONLY_ONE_JOB_ID, data, null)
+      return this._jobs.outputCallback(addon, 'JobEnded', data, null)
     }
 
-    return this._jobs.outputCallback(addon, event, ONLY_ONE_JOB_ID, data, error)
+    return this._jobs.outputCallback(addon, event, data, error)
   }
 
   async cancel () {
@@ -397,11 +382,7 @@ class ONNXTTS {
   }
 
   _failAndClearActiveResponse (reason) {
-    const currentJobResponse = this._jobs.jobToResponse.get(ONLY_ONE_JOB_ID)
-    if (currentJobResponse) {
-      currentJobResponse.failed(new Error(reason))
-      this._jobs.deleteJobMapping(ONLY_ONE_JOB_ID)
-    }
+    this._jobs.failActive(reason)
   }
 
   /**

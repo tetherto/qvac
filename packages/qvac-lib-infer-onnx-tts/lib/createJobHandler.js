@@ -16,6 +16,7 @@ try {
 }
 
 const { QvacInferenceBaseError, ERR_CODES } = require(path.join(inferBaseSrcDir, 'error'))
+const { QvacErrorAddonTTS, ERR_CODES: TTS_ERR_CODES } = require('./error')
 
 function dataAsString (data) {
   if (!data) return ''
@@ -26,7 +27,7 @@ function dataAsString (data) {
 }
 
 /**
- * Job/response map, QvacResponse wiring, output routing, and optional exclusive run queue.
+ * Single active job response, QvacResponse wiring, output routing, and optional exclusive run queue.
  * @param {Object} params
  * @param {import('@qvac/logging')} params.logger
  * @param {Object} params.opts
@@ -34,25 +35,35 @@ function dataAsString (data) {
  * @param {() => unknown | null | undefined} params.getAddon
  */
 function createJobHandler ({ logger, opts, exclusiveRun, getAddon }) {
-  const jobToResponse = new Map()
+  let activeResponse = null
   let runQueueWaiter = Promise.resolve()
 
-  function saveJobToResponseMapping (jobId, response) {
-    jobToResponse.set(jobId, response)
+  function clearActiveResponse () {
+    activeResponse = null
   }
 
-  function deleteJobMapping (jobId) {
-    jobToResponse.delete(jobId)
+  /**
+   * Fail the current active response (e.g. unload/reload) and clear the slot.
+   * @param {Error | string} err
+   */
+  function failActive (err) {
+    if (!activeResponse) return
+    const e = err instanceof Error ? err : new Error(String(err))
+    activeResponse.failed(e)
+    clearActiveResponse()
   }
 
-  function createResponse (jobId) {
+  function createResponse () {
+    if (activeResponse) {
+      throw new QvacErrorAddonTTS({ code: TTS_ERR_CODES.JOB_ALREADY_RUNNING })
+    }
     const addon = getAddon()
     if (!addon) {
       throw new QvacInferenceBaseError({ code: ERR_CODES.ADDON_NOT_INITIALIZED })
     }
     const response = new QvacResponse({
       cancelHandler: () => {
-        return addon.cancel(jobId)
+        return addon.cancel()
       },
       pauseHandler: () => {
         return addon.pause()
@@ -61,27 +72,27 @@ function createJobHandler ({ logger, opts, exclusiveRun, getAddon }) {
         return addon.activate()
       }
     })
-    saveJobToResponseMapping(jobId, response)
+    activeResponse = response
     return response
   }
 
-  function outputCallback (addon, event, jobId, data, error) {
-    const response = jobToResponse.get(jobId)
+  function outputCallback (addon, event, data, error) {
+    const response = activeResponse
     if (!response) {
-      logger.warn(`No response found for job ${jobId}`)
+      logger.warn('No active TTS job response for addon output')
       return
     }
 
     if (event === 'Error') {
-      logger.error(`Job ${jobId} failed with error: ${error}`)
+      logger.error(`TTS job failed with error: ${error}`)
       response.failed(error)
-      deleteJobMapping(jobId)
+      clearActiveResponse()
     } else if (event === 'Output') {
       try {
-        logger.debug(`Job ${jobId} produced output: ${dataAsString(data)}`)
+        logger.debug(`TTS job produced output: ${dataAsString(data)}`)
       } catch (err) {
         if (err instanceof RangeError) {
-          logger.debug(`Job ${jobId} produced output: [data too large]`)
+          logger.debug('TTS job produced output: [data too large]')
         } else {
           throw err
         }
@@ -92,7 +103,7 @@ function createJobHandler ({ logger, opts, exclusiveRun, getAddon }) {
         response.updateStats(data.stats)
       }
     } else if (event === 'JobEnded') {
-      logger.info(`Job ${jobId} completed. Stats: ${JSON.stringify(data)}`)
+      logger.info(`TTS job completed. Stats: ${JSON.stringify(data)}`)
       const isFinetuneTerminal =
         data &&
         typeof data === 'object' &&
@@ -106,9 +117,9 @@ function createJobHandler ({ logger, opts, exclusiveRun, getAddon }) {
       } else {
         response.ended()
       }
-      deleteJobMapping(jobId)
+      clearActiveResponse()
     } else {
-      logger.debug(`Received event for job ${jobId}: ${event}`)
+      logger.debug(`Received TTS event: ${event}`)
     }
   }
 
@@ -134,11 +145,9 @@ function createJobHandler ({ logger, opts, exclusiveRun, getAddon }) {
   }
 
   return {
-    jobToResponse,
-    saveJobToResponseMapping,
-    deleteJobMapping,
     createResponse,
     outputCallback,
+    failActive,
     run
   }
 }
