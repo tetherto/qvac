@@ -2,6 +2,32 @@ name: Mobile Integration Tests (Decoder-audio)
 
 on:
   workflow_call:
+    secrets:
+      ANDROID_DEVICE_POOL_ARN_DECODER_AUDIO:
+        required: true
+      APPLE_KEYCHAIN_PASSWORD:
+        required: true
+      APPLE_P12_PASSWORD:
+        required: true
+      APPLE_TEAM_ID:
+        required: true
+      AWS_ACCESS_KEY_ID:
+        required: true
+      AWS_DEVICE_FARM_PROJECT_ARN_DECODER_AUDIO:
+        required: true
+      AWS_SECRET_ACCESS_KEY:
+        required: true
+      IOS_DEVICE_POOL_ARN_DECODER_AUDIO:
+        required: true
+      NPM_TOKEN:
+        required: true
+      PAT_TOKEN:
+        required: true
+      TEST_APP_APPLE_DISTRIBUTION_CERTIFICATE:
+        required: true
+      TEST_APP_APPLE_PROVISIONING_PROFILE:
+        required: true
+
     inputs:
       ref:
         description: "Git ref to checkout"
@@ -44,6 +70,7 @@ jobs:
   build-and-test:
     name: Build ${{ matrix.platform }} and Run E2E Tests
     runs-on: ${{ matrix.runner }}
+    environment: release
     timeout-minutes: 120
     permissions:
       contents: read

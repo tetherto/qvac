@@ -174,9 +174,13 @@ on:
         default: "packages/qvac-lib-infer-llamacpp-llm"
         type: string
 
+permissions:
+  contents: read
+
 jobs:
   benchmark:
     runs-on: ai-run-linux-gpu
+    environment: release
     timeout-minutes: 180
     name: "Benchmark ${{ inputs.gguf_model }}"
 

@@ -72,6 +72,9 @@ on:
         type: string
         default: 'packages/qvac-lib-infer-whispercpp'
 
+permissions:
+  contents: read
+
 jobs:
   generate-matrix:
     runs-on: ubuntu-latest
@@ -219,6 +222,7 @@ jobs:
   benchmark-whispercpp:
     needs: generate-matrix
     runs-on: ubuntu-latest
+    environment: release
     timeout-minutes: 1440
     env:
       GITHUB_TOKEN: ${{ secrets.PAT_TOKEN }}

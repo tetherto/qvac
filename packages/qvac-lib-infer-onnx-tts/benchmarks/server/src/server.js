@@ -97,7 +97,7 @@ const handleRequest = async (req, res) => {
         endpoints: {
           '/': 'Health check',
           '/synthesize-chatterbox': 'POST - Run Chatterbox TTS synthesis',
-          '/synthesize-supertonic': 'POST - Run Supertonic TTS synthesis'
+          '/synthesize-supertonic': 'POST - Run Supertone Supertonic ONNX TTS (English or multilingual weights per request)'
         }
       }))
     }

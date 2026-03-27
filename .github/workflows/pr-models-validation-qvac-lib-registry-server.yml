@@ -25,13 +25,30 @@ env:
   PKG_DIR: packages/qvac-lib-registry-server
   MODELS_FILE: packages/qvac-lib-registry-server/data/models.prod.json
 
+permissions:
+  contents: read
+
 jobs:
-  detect-changes:
+  authorize:
     runs-on: ubuntu-latest
-    if: |
-      contains(github.event.pull_request.labels.*.name, 'verify') ||
-      github.event_name == 'push' ||
-      github.event_name == 'workflow_dispatch'
+    permissions:
+      contents: read
+      pull-requests: write
+    outputs:
+      allowed: ${{ steps.auth.outputs.allowed }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # 6.0.2
+      - name: Authorize
+        id: auth
+        uses: ./.github/actions/authorize-pr
+        with:
+          github-token: ${{ github.token }}
+
+  detect-changes:
+    needs: authorize
+    runs-on: ubuntu-latest
+    if: needs.authorize.outputs.allowed == 'true'
     outputs:
       models_changed: ${{ steps.filter.outputs.models }}
       models_only: ${{ steps.filter.outputs.models == 'true' && steps.filter.outputs.other == 'false' }}
@@ -105,13 +122,12 @@ jobs:
           fi
 
   validate-json:
-    needs: detect-changes
+    needs: [authorize, detect-changes]
     if: |
-      needs.detect-changes.outputs.models_changed == 'true' &&
-      (contains(github.event.pull_request.labels.*.name, 'verify') ||
-       github.event_name == 'push' ||
-       github.event_name == 'workflow_dispatch')
+      needs.authorize.outputs.allowed == 'true' &&
+      needs.detect-changes.outputs.models_changed == 'true'
     runs-on: ubuntu-latest
+    environment: release
     steps:
       - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # 6.0.2
         with:
@@ -144,13 +160,12 @@ jobs:
         run: node scripts/validate-models-json.js --file=./data/models.prod.json
 
   test:
-    needs: detect-changes
+    needs: [authorize, detect-changes]
     if: |
-      needs.detect-changes.outputs.other_changed == 'true' &&
-      (contains(github.event.pull_request.labels.*.name, 'verify') ||
-       github.event_name == 'push' ||
-       github.event_name == 'workflow_dispatch')
+      needs.authorize.outputs.allowed == 'true' &&
+      needs.detect-changes.outputs.other_changed == 'true'
     runs-on: ubuntu-latest
+    environment: release
     steps:
       - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # 6.0.2
         with:
@@ -208,6 +223,7 @@ jobs:
       needs.validate-json.result == 'success' &&
       (needs.test.result == 'success' || needs.test.result == 'skipped')
     runs-on: ubuntu-latest
+    environment: release
     env:
       QVAC_AUTOBASE_KEY: ${{ secrets.QVAC_AUTOBASE_KEY }}
       QVAC_REGISTRY_CORE_KEY: ${{ secrets.QVAC_REGISTRY_CORE_KEY }}
@@ -266,6 +282,7 @@ jobs:
   smoke-test:
     needs: sync-staging
     runs-on: ubuntu-latest
+    environment: release
     env:
       QVAC_REGISTRY_CORE_KEY: ${{ secrets.QVAC_REGISTRY_CORE_KEY }}
     steps:

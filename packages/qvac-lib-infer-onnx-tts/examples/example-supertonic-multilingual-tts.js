@@ -1,14 +1,14 @@
 'use strict'
 
 const path = require('bare-path')
-const ONNXTTS = require('../')
+const ONNXTTS = require('..')
 const { createWav } = require('./wav-helper')
 const { setLogger, releaseLogger } = require('../addonLogging')
 
 const SUPERTONIC_SAMPLE_RATE = 44100
 
-// Supertone English: models/supertonic — use npm run models:ensure or ensureSupertonicModels
-const modelDir = path.join(__dirname, '..', 'models', 'supertonic')
+// Supertone multilingual weights (HF supertonic-2); run `node scripts/ensure-models.js` or ensureSupertonicModelsMultilingual
+const modelDir = path.join(__dirname, '..', 'models', 'supertonic-multilingual')
 
 async function main () {
   setLogger((priority, message) => {
@@ -24,31 +24,29 @@ async function main () {
     console.log(`[${timestamp}] [C++ log] [${priorityName}]: ${message}`)
   })
 
-  // Supertonic configuration: modelDir + voiceName (paths are derived inside the package).
-  // Recommended: HF Supertone/supertonic (English) + supertonicMultilingual: false for English quality.
-  // supertonic-2 (HF Supertone/supertonic-2): use supertonicMultilingual true with <lang> wrapping.
   const supertonicArgs = {
     modelDir,
     voiceName: 'F1',
     speed: 1.05,
     numInferenceSteps: 5,
-    supertonicMultilingual: false,
+    supertonicMultilingual: true,
     opts: { stats: true },
     logger: console
   }
 
   const config = {
-    language: 'en'
+    language: 'es'
   }
 
   const model = new ONNXTTS(supertonicArgs, config)
 
   try {
-    console.log('Loading Supertonic TTS model...')
+    console.log('Loading Supertonic multilingual (Spanish) TTS model...')
     await model.load()
     console.log('Model loaded.')
 
-    const textToSynthesize = 'The rolling hills of the willowed valley glimmered brilliantly under the mellowing autumn sun.'
+    const textToSynthesize =
+      'Hola mundo. Esta es una demostración de síntesis de voz con Supertonic en español.'
     console.log(`Running TTS on: "${textToSynthesize}"`)
 
     const response = await model.run({
@@ -56,7 +54,6 @@ async function main () {
       type: 'text'
     })
 
-    console.log('Waiting for TTS results...')
     let buffer = []
 
     await response
@@ -72,15 +69,12 @@ async function main () {
       console.log(`Inference stats: ${JSON.stringify(response.stats)}`)
     }
 
-    console.log('Writing to .wav file...')
-    createWav(buffer, SUPERTONIC_SAMPLE_RATE, 'supertonic-output.wav')
-    console.log('Finished writing to supertonic-output.wav')
+    createWav(buffer, SUPERTONIC_SAMPLE_RATE, 'supertonic-output-es.wav')
+    console.log('Finished writing to supertonic-output-es.wav')
   } catch (err) {
     console.error('Error during TTS processing:', err)
   } finally {
-    console.log('Unloading model...')
     await model.unload()
-    console.log('Model unloaded.')
     releaseLogger()
   }
 }

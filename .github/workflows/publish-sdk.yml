@@ -36,13 +36,28 @@ env:
 
 permissions:
   contents: read
-  pull-requests: write
 
 concurrency:
   group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
   cancel-in-progress: ${{ github.event_name == 'pull_request_target' }}
 
 jobs:
+  authorize:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      pull-requests: write
+    outputs:
+      allowed: ${{ steps.auth.outputs.allowed }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # 6.0.2
+      - name: Authorize
+        id: auth
+        uses: ./.github/actions/authorize-pr
+        with:
+          github-token: ${{ github.token }}
+
   release-merge-guard:
     name: Release Merge Guard
     if: >-
@@ -64,11 +79,10 @@ jobs:
           changelog-path: packages/sdk/CHANGELOG.md
 
   build:
-    if: >
-      github.event_name != 'pull_request_target' ||
-      github.event.pull_request.head.repo.fork == false ||
-      contains(github.event.pull_request.labels.*.name, 'verify')
+    needs: [authorize]
+    if: needs.authorize.outputs.allowed == 'true'
     runs-on: ubuntu-latest
+    environment: release
     permissions:
       contents: write
       packages: write
@@ -353,6 +367,7 @@ jobs:
       needs.publish-logic.outputs.publish_release == 'true' &&
       (needs.release-merge-guard.result == 'success' || needs.release-merge-guard.result == 'skipped')
     runs-on: ubuntu-latest
+    environment: release
     outputs:
       published_version: ${{ steps.publish.outputs.npm_published_version }}
     permissions:
@@ -385,7 +400,6 @@ jobs:
     permissions:
       contents: write
     uses: ./.github/workflows/create-github-release.yml
-    secrets: inherit
     with:
       repo_name: "sdk"
       release_name: "QVAC SDK"

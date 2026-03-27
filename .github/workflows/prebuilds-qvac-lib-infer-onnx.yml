@@ -13,6 +13,12 @@ on:
           - dev
 
   workflow_call:
+    secrets:
+      NPM_TOKEN:
+        required: true
+      PAT_TOKEN:
+        required: true
+
     inputs:
       ref:
         description: "ref"
@@ -48,9 +54,8 @@ on:
 env:
   PKG_DIR: packages/qvac-lib-infer-onnx
 
-concurrency:
-  group: ${{ github.workflow }}-${{ github.ref }}
-  cancel-in-progress: false
+permissions:
+  contents: read
 
 jobs:
   prebuild:
@@ -97,6 +102,7 @@ jobs:
             arch: x64
 
     runs-on: ${{ matrix.os }}
+    environment: release
     name: ${{ matrix.platform }}-${{ matrix.arch }}${{ matrix.tags }}
 
     env:
@@ -542,6 +548,7 @@ jobs:
     outputs:
       published_version: ${{ steps.publish.outputs.npm_published_version }}
     runs-on: ubuntu-latest
+    environment: release
     permissions:
       contents: write
       packages: write
@@ -576,7 +583,6 @@ jobs:
     permissions:
       contents: write
     uses: ./.github/workflows/create-github-release-qvac-lib-infer-onnx.yml
-    secrets: inherit
     with:
       published_version: ${{ needs.publish-npm.outputs.published_version }}
       prev_sha: ${{ github.event.before }}

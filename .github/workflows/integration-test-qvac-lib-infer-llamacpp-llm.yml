@@ -2,6 +2,18 @@ name: Integration Tests (LLM)
 
 on:
   workflow_call:
+    secrets:
+      AWS_ACCESS_KEY_ID:
+        required: true
+      AWS_SECRET_ACCESS_KEY:
+        required: true
+      NPM_TOKEN:
+        required: true
+      PAT_TOKEN:
+        required: true
+      QASE_API_TOKEN:
+        required: true
+
     inputs:
       ref:
         description: "ref"
@@ -28,6 +40,7 @@ jobs:
     timeout-minutes: ${{ matrix.timeout_minutes || 360 }}
     continue-on-error: true
     runs-on: ${{ matrix.runner }}
+    environment: release
     name: test-${{ matrix.platform }}-${{ matrix.arch }}
     env:
       GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

@@ -58,6 +58,18 @@ on:
           - fast
 
   workflow_call:
+    secrets:
+      AWS_ACCESS_KEY_ID:
+        required: true
+      AWS_SECRET_ACCESS_KEY:
+        required: true
+      MODEL_S3_BUCKET:
+        required: true
+      NPM_TOKEN:
+        required: true
+      PAT_TOKEN:
+        required: true
+
     inputs:
       pairs:
         description: 'Comma-separated language pairs (e.g., en-it,en-de,de-en)'
@@ -111,6 +123,9 @@ on:
 
 env:
   PKG_DIR: packages/qvac-lib-infer-nmtcpp
+
+permissions:
+  contents: read
 
 jobs:
   setup:
@@ -169,6 +184,7 @@ jobs:
     needs: setup
     if: needs.setup.outputs.qvac_needed == 'true'
     runs-on: ubuntu-24.04
+    environment: release
     timeout-minutes: 60
     name: Build QVAC addon
 
@@ -306,6 +322,7 @@ jobs:
       needs.setup.result == 'success' &&
       (needs.build.result == 'success' || needs.build.result == 'skipped')
     runs-on: ubuntu-24.04
+    environment: release
     timeout-minutes: 120
     strategy:
       fail-fast: false
