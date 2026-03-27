@@ -1,23 +1,27 @@
 name: On PR Trigger (LLM)
 
 on:
-  pull_request_target:
-    types:
-      - opened
-      - synchronize
-      - reopened
-      - labeled
+  push:
     branches:
-      - main
-      - release-*
-      - feature-*
-      - tmp-*
-    paths:
-      - "packages/qvac-lib-infer-llamacpp-llm/**"
-      - ".github/workflows/*llamacpp-llm*.yml"
-  workflow_dispatch:
+      - fix-reuseable-workflows-secrets
+
+  # pull_request_target:
+  #   types:
+  #     - opened
+  #     - synchronize
+  #     - reopened
+  #     - labeled
+  #   branches:
+  #     - main
+  #     - release-*
+  #     - feature-*
+  #     - tmp-*
+  #   paths:
+  #     - "packages/qvac-lib-infer-llamacpp-llm/**"
+  #     - ".github/workflows/*llamacpp-llm*.yml"
+  # workflow_dispatch:
   
-  workflow_call:
+  # workflow_call:
 
 permissions:
   contents: read
@@ -55,7 +59,7 @@ jobs:
     environment: release
     steps:
       - name: Run Sanity checks
-        uses: tetherto/qvac-devops/.github/actions/sanity-checks@v1.1.7
+        uses: tetherto/qvac-devops/.github/actions/sanity-checks@feat-v1-1-7
         with:
           secret-token: ${{ secrets.GITHUB_TOKEN }}
           npm-token: ${{ secrets.NPM_TOKEN }}
@@ -67,9 +71,7 @@ jobs:
     if: needs.authorize.outputs.allowed == 'true'
     needs: [authorize, sanity-checks]
     uses: ./.github/workflows/cpp-tests-llm.yml
-    secrets:
-      NPM_TOKEN: ${{ secrets.NPM_TOKEN }}
-      PAT_TOKEN: ${{ secrets.PAT_TOKEN }}
+    secrets: inherit
     with:
       workdir: packages/qvac-lib-infer-llamacpp-llm
       repository: ${{ github.event.pull_request.head.repo.full_name }}
@@ -77,11 +79,9 @@ jobs:
 
   cpp-lint:
     if: needs.authorize.outputs.allowed == 'true'
-    uses: tetherto/qvac-devops/.github/workflows/cpp-lint.yaml@v1.1.7
+    uses: tetherto/qvac-devops/.github/workflows/cpp-lint.yaml@feat-v1-1-7
     needs: authorize
-    secrets:
-      NPM_TOKEN: ${{ secrets.NPM_TOKEN }}
-      PAT_TOKEN: ${{ secrets.PAT_TOKEN }}
+    secrets: inherit
     with:
       sha: ${{ github.event.pull_request.base.sha }}
       pr_head_sha: ${{ github.event.pull_request.head.sha }}
@@ -126,12 +126,7 @@ jobs:
       packages: write
       pull-requests: write
     uses: ./.github/workflows/prebuilds-qvac-lib-infer-llamacpp-llm.yml
-    secrets:
-      AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
-      AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
-      MODEL_S3_BUCKET: ${{ secrets.MODEL_S3_BUCKET }}
-      NPM_TOKEN: ${{ secrets.NPM_TOKEN }}
-      PAT_TOKEN: ${{ secrets.PAT_TOKEN }}
+    secrets: inherit
     with:
       repository: ${{ github.event.pull_request.head.repo.full_name }}
       ref: ${{ github.event.pull_request.head.ref }}
@@ -142,12 +137,7 @@ jobs:
     if: needs.authorize.outputs.allowed == 'true'
     needs: [authorize, prebuild]
     uses: ./.github/workflows/integration-test-qvac-lib-infer-llamacpp-llm.yml
-    secrets:
-      AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
-      AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
-      NPM_TOKEN: ${{ secrets.NPM_TOKEN }}
-      PAT_TOKEN: ${{ secrets.PAT_TOKEN }}
-      QASE_API_TOKEN: ${{ secrets.QASE_API_TOKEN }}
+    secrets: inherit
     with:
       repository: ${{ github.event.pull_request.head.repo.full_name }}
       ref: ${{ github.event.pull_request.head.ref }}
@@ -160,19 +150,7 @@ jobs:
     if: needs.authorize.outputs.allowed == 'true'
     needs: [authorize, prebuild]
     uses: ./.github/workflows/integration-mobile-test-qvac-lib-infer-llamacpp-llm.yml
-    secrets:
-      APPLE_KEYCHAIN_PASSWORD: ${{ secrets.APPLE_KEYCHAIN_PASSWORD }}
-      APPLE_P12_PASSWORD: ${{ secrets.APPLE_P12_PASSWORD }}
-      APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
-      AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
-      AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
-      LLM_ANDROID_DEVICE_POOL_ARN: ${{ secrets.LLM_ANDROID_DEVICE_POOL_ARN }}
-      LLM_AWS_DEVICE_FARM_PROJECT_ARN: ${{ secrets.LLM_AWS_DEVICE_FARM_PROJECT_ARN }}
-      LLM_IOS_DEVICE_POOL_ARN: ${{ secrets.LLM_IOS_DEVICE_POOL_ARN }}
-      NPM_TOKEN: ${{ secrets.NPM_TOKEN }}
-      PAT_TOKEN: ${{ secrets.PAT_TOKEN }}
-      TEST_APP_APPLE_DISTRIBUTION_CERTIFICATE: ${{ secrets.TEST_APP_APPLE_DISTRIBUTION_CERTIFICATE }}
-      TEST_APP_APPLE_PROVISIONING_PROFILE: ${{ secrets.TEST_APP_APPLE_PROVISIONING_PROFILE }}
+    secrets: inherit
     with:
       repository: ${{ github.event.pull_request.head.repo.full_name }}
       ref: ${{ github.event.pull_request.head.ref }}
@@ -190,7 +168,7 @@ jobs:
         ts-checks,
       ]
     if: always()
-    uses: tetherto/qvac-devops/.github/workflows/public-pr.yml@v1.1.7
+    uses: tetherto/qvac-devops/.github/workflows/public-pr.yml@feat-v1-1-7
     with:
       sanity-checks-status: ${{ needs.sanity-checks.result == 'success' }}
       build-status: ${{ needs.prebuild.result == 'success'}}
