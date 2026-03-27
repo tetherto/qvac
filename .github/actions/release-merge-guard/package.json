@@ -6,8 +6,8 @@
     "build": "ncc build src/index.ts -o dist"
   },
   "dependencies": {
-    "@actions/core": "^1.11.0",
-    "@actions/github": "^6.0.0"
+    "@actions/core": "^2.0.0",
+    "@actions/github": "^8.0.0"
   },
   "devDependencies": {
     "@types/node": "^25.0.10",
