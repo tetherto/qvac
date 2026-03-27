@@ -260,6 +260,9 @@ jobs:
       - name: Configure vcpkg
         run: echo "VCPKG_ROOT=$VCPKG_INSTALLATION_ROOT" >> $GITHUB_ENV
 
+      - name: Update apt sources
+        run: sudo apt-get update
+
       - name: Download Vulkan SDK
         run: |
           sudo apt install -y xz-utils
@@ -274,18 +277,13 @@ jobs:
           VULKAN_SDK=~/vulkan/x86_64
           echo "VULKAN_SDK=$VULKAN_SDK" >> $GITHUB_ENV
 
-      - name: Install system dependencies
-        run: |
-          sudo apt-get update
-          sudo apt-get install -y \
-            cmake wget build-essential \
-            libprotobuf-dev protobuf-compiler \
-            libboost-all-dev \
-            ccache \
-            libunwind-dev
-
       - name: Configure git
-        run: git config --global --add url."https://${{ secrets.PAT_TOKEN }}@github.com/".insteadOf "https://github.com/"
+        shell: bash
+        run: |
+          GIT_PAT="${{ secrets.PAT_TOKEN || secrets.GITHUB_TOKEN }}"
+          git config --global --add url."https://${GIT_PAT}:x-oauth-basic@github.com/".insteadOf "https://github.com/"
+          git config --global --add url."https://${GIT_PAT}:x-oauth-basic@github.com/".insteadOf "git@github.com:"
+          git config --global --add url."https://${GIT_PAT}:x-oauth-basic@github.com/".insteadOf "ssh://git@github.com/"
 
       - name: Install npm dependencies
         working-directory: ${{ env.PKG_DIR }}
@@ -293,8 +291,11 @@ jobs:
 
       - name: Create config.cmake for Bergamot backend
         working-directory: ${{ env.PKG_DIR }}
+        shell: bash
         run: |
-          echo "set(USE_BERGAMOT ON CACHE BOOL \"Enable Bergamot backend support\")" > config.cmake
+          echo "set(USE_BERGAMOT ON CACHE BOOL \"Enable Bergamot backend support\" FORCE)" > config.cmake
+          echo "set(USE_INTGEMM ON CACHE BOOL \"Use INTGEMM for int8 quantized models\" FORCE)" >> config.cmake
+          echo "set(BUILD_ARCH x86-64-v2 CACHE STRING \"Target CPU architecture\" FORCE)" >> config.cmake
           echo "Configuration created:"
           cat config.cmake
 
