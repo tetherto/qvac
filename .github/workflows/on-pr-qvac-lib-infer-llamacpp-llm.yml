@@ -1,27 +1,23 @@
 name: On PR Trigger (LLM)
 
 on:
-  push:
+  pull_request_target:
+    types:
+      - opened
+      - synchronize
+      - reopened
+      - labeled
     branches:
-      - fix-reuseable-workflows-secrets
-
-  # pull_request_target:
-  #   types:
-  #     - opened
-  #     - synchronize
-  #     - reopened
-  #     - labeled
-  #   branches:
-  #     - main
-  #     - release-*
-  #     - feature-*
-  #     - tmp-*
-  #   paths:
-  #     - "packages/qvac-lib-infer-llamacpp-llm/**"
-  #     - ".github/workflows/*llamacpp-llm*.yml"
-  # workflow_dispatch:
+      - main
+      - release-*
+      - feature-*
+      - tmp-*
+    paths:
+      - "packages/qvac-lib-infer-llamacpp-llm/**"
+      - ".github/workflows/*llamacpp-llm*.yml"
+  workflow_dispatch:
   
-  # workflow_call:
+  workflow_call:
 
 permissions:
   contents: read
