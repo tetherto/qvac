@@ -18,6 +18,7 @@ NOTICE_FULL_REPORT.txt
 .claude/knowledge/
 .claude/agents/
 .claude/settings.json
+.claude/settings.local.json
 .claude/skills/*
 !.claude/skills/setup/
 

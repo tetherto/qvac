@@ -43,7 +43,7 @@ on:
       MQTT_PASSWORD:
         required: true
       MQTT_CA_CERT:
-        required: false
+        required: true
       MQTT_CLIENT_CERT:
         required: false
       MQTT_CLIENT_KEY:
@@ -53,6 +53,9 @@ on:
       PAT_TOKEN:
         required: true
 
+permissions:
+  contents: read
+
 jobs:
   test-desktop:
     strategy:
@@ -60,6 +63,7 @@ jobs:
         os: ${{ fromJSON(inputs.platforms) }}
       fail-fast: false
     runs-on: ${{ matrix.os }}
+    environment: release
     env:
       NPM_TOKEN: ${{ secrets.NPM_TOKEN }}
       PAT_TOKEN: ${{ secrets.PAT_TOKEN }}
@@ -375,6 +379,7 @@ jobs:
     needs: test-desktop
     if: github.event_name == 'pull_request'
     runs-on: ubuntu-latest
+    environment: release
     env:
       NPM_TOKEN: ${{ secrets.NPM_TOKEN }}
       PAT_TOKEN: ${{ secrets.PAT_TOKEN }}

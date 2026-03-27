@@ -2,6 +2,14 @@ name: Integration Tests (Decoder-audio)
 
 on:
   workflow_call:
+    secrets:
+      NPM_TOKEN:
+        required: true
+      PAT_TOKEN:
+        required: true
+      QASE_API_TOKEN:
+        required: true
+
     inputs:
       ref:
         description: "ref"
@@ -17,6 +25,7 @@ on:
 jobs:
   run-integration-tests:
     runs-on: ${{ matrix.os }}
+    environment: release
     name: test-${{ matrix.platform }}-${{ matrix.arch }}
     permissions:
       contents: read

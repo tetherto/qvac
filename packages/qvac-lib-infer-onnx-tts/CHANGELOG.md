@@ -5,6 +5,26 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.7.0]
+
+This release moves Supertonic onto the official Supertone ONNX graphs and multilingual Hugging Face weights, expands the JS surface and tooling for multilingual runs, and hardens benchmark and native build paths. Consumers using Supertonic should plan for updated models and configuration aligned with the new graphs.
+
+## Breaking Changes
+
+### Supertonic graphs and weights
+
+Supertonic inference now targets the official Supertone ONNX graphs and multilingual Hugging Face weight layout bundled with this line of work. Existing model directories or download scripts built for the previous graph or artifact layout may no longer load. Prefer the updated `ensure-models` / download flows, `example-supertonic-multilingual-tts.js`, and the current Supertonic config types in `index.d.ts` when migrating.
+
+## Features
+
+### Multilingual Supertonic
+
+The native Supertonic path gains multilingual support and related stabilization (including work to address stuttering), with integration and benchmark updates so non-English datasets and clients can exercise the addon consistently.
+
+### Examples and TypeScript
+
+A dedicated multilingual example script documents the new flow, and `index.d.ts` is expanded so Supertonic options and multilingual parameters are described accurately for TypeScript consumers.
+
 ## [0.6.6]
 
 Security hardening release from comprehensive security audit.

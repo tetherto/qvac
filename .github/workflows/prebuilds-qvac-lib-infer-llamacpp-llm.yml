@@ -50,6 +50,17 @@ on:
         required: false
         type: string
         default: "packages/qvac-lib-infer-llamacpp-llm"
+    secrets:
+      AWS_ACCESS_KEY_ID:
+        required: true
+      AWS_SECRET_ACCESS_KEY:
+        required: true
+      MODEL_S3_BUCKET:
+        required: true
+      NPM_TOKEN:
+        required: true
+      PAT_TOKEN:
+        required: true
     outputs:
       published_version:
         description: "The version that was published"
@@ -57,6 +68,9 @@ on:
 
 env:
   WORKDIR: ${{ inputs.workdir }}
+
+permissions:
+  contents: read
 
 jobs:
   prebuild:
@@ -101,6 +115,7 @@ jobs:
             arch: x64
 
     runs-on: ${{ matrix.os }}
+    environment: release
     name: ${{ matrix.platform }}-${{ matrix.arch }}${{ matrix.tags }}
 
     env:
@@ -128,15 +143,23 @@ jobs:
 
       - name: Echo workflow inputs
         shell: bash
+        env:
+          INPUT_TAG: ${{ inputs.tag || github.event.inputs.tag }}
+          INPUT_REF: ${{ inputs.ref || github.ref }}
+          INPUT_REPO: ${{ inputs.repository || github.repository }}
+          INPUT_WORKDIR: ${{ env.WORKDIR }}
+          MATRIX_PLATFORM: ${{ matrix.platform }}
+          MATRIX_ARCH: ${{ matrix.arch }}
+          MATRIX_TAGS: ${{ matrix.tags }}
         run: |
           echo "Workflow inputs:"
-          echo "Tag: ${{ inputs.tag || github.event.inputs.tag }}"
-          echo "Ref: ${{ inputs.ref || github.ref }}"
-          echo "Repository: ${{ inputs.repository || github.repository }}"
-          echo "Workdir: ${{ env.WORKDIR }}"
-          echo "Matrix platform: ${{ matrix.platform }}"
-          echo "Matrix arch: ${{ matrix.arch }}"
-          echo "Matrix tags: ${{ matrix.tags }}"
+          echo "Tag: $INPUT_TAG"
+          echo "Ref: $INPUT_REF"
+          echo "Repository: $INPUT_REPO"
+          echo "Workdir: $INPUT_WORKDIR"
+          echo "Matrix platform: $MATRIX_PLATFORM"
+          echo "Matrix arch: $MATRIX_ARCH"
+          echo "Matrix tags: $MATRIX_TAGS"
 
       - if: ${{ startsWith(matrix.os, 'ubuntu-') }}
         name: Install llvm-19
@@ -475,6 +498,7 @@ jobs:
     outputs:
       published_version: ${{ steps.publish.outputs.npm_published_version }}
     runs-on: ubuntu-latest
+    environment: release
     permissions:
       contents: write
       packages: write
@@ -506,7 +530,7 @@ jobs:
 
       - name: Publish to GitHub Package Registry
         id: publish
-        uses: tetherto/qvac-devops/.github/actions/publish-library-to-gpr@monorepo_update
+        uses: tetherto/qvac-devops/.github/actions/publish-library-to-gpr@v1.1.7
         with:
           secret-token: ${{ secrets.GITHUB_TOKEN }}
           tag: ${{ inputs.tag || github.event.inputs.tag || 'dev' }}
@@ -529,6 +553,7 @@ jobs:
     outputs:
       published_version: ${{ steps.publish.outputs.npm_published_version }}
     runs-on: ubuntu-latest
+    environment: release
     permissions:
       contents: write
       packages: write
@@ -562,7 +587,7 @@ jobs:
 
       - name: Publish to NPM Package Registry
         id: publish
-        uses: tetherto/qvac-devops/.github/actions/publish-library-to-npm@monorepo_update
+        uses: tetherto/qvac-devops/.github/actions/publish-library-to-npm@v1.1.7
         with:
           secret-token: ${{ secrets.NPM_TOKEN }}
           tag: 'latest'

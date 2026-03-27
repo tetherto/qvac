@@ -2,6 +2,12 @@ name: Integration Tests (EMBED)
 
 on:
   workflow_call:
+    secrets:
+      NPM_TOKEN:
+        required: true
+      PAT_TOKEN:
+        required: true
+
     inputs:
       ref:
         description: "ref"
@@ -23,6 +29,7 @@ on:
 jobs:
   run-integration-tests:
     runs-on: ${{ matrix.runner || matrix.os }}
+    environment: release
     name: ${{ matrix.platform }}-${{ matrix.arch }}-integration-tests
     permissions:
       contents: read

@@ -130,6 +130,15 @@ if(WIN32)
 endif()
 
 find_package(onnxruntime CONFIG REQUIRED)
+find_package(nlohmann_json CONFIG REQUIRED)
+find_package(unofficial-utf8proc CONFIG REQUIRED)
+if(TARGET utf8proc::utf8proc)
+  set(QVAC_UTF8PROC_TARGET utf8proc::utf8proc)
+elseif(TARGET utf8proc)
+  set(QVAC_UTF8PROC_TARGET utf8proc)
+else()
+  message(FATAL_ERROR "utf8proc CMake target missing (expected from unofficial-utf8proc)")
+endif()
 
 include_directories(BEFORE ${CMAKE_BINARY_DIR}/_deps/flatbuffers-src/include)
 
@@ -148,6 +157,7 @@ target_sources(
     ${PROJECT_SOURCE_DIR}/addon/src/model-interface/OnnxInferSession.cpp
     ${PROJECT_SOURCE_DIR}/addon/src/model-interface/SupertonicEngine.cpp
     ${PROJECT_SOURCE_DIR}/addon/src/model-interface/Fp16Utils.cpp
+    ${PROJECT_SOURCE_DIR}/addon/src/model-interface/TensorFloatHandler.cpp
 )
 
 find_path(QVAC_LIB_INFERENCE_ADDON_CPP_INCLUDE_DIRS "qvac-lib-inference-addon-cpp/RuntimeStats.hpp")
@@ -197,6 +207,8 @@ target_link_libraries(
   PRIVATE
     onnxruntime::onnxruntime
     tokenizers::tokenizers_cpp
+    nlohmann_json::nlohmann_json
+    ${QVAC_UTF8PROC_TARGET}
 )
 
 option(BUILD_CLI "Build CLI tool example" FALSE)
@@ -222,6 +234,8 @@ if(BUILD_CLI)
     PRIVATE
       onnxruntime::onnxruntime_static
       tokenizers::tokenizers_cpp
+      nlohmann_json::nlohmann_json
+      ${QVAC_UTF8PROC_TARGET}
   )
 
   if(WIN32)
@@ -276,5 +290,8 @@ endif()
 target_compile_definitions(${qvac-lib-inference-tts} PUBLIC JS_LOGGER)
 
 if(BUILD_TESTING)
+  find_package(GTest CONFIG REQUIRED)
+  include(GoogleTest)
+  enable_testing()
   add_subdirectory(addon/test/unit)
 endif()
