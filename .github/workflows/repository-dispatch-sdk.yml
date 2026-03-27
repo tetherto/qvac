@@ -9,13 +9,17 @@ on:
 env:
   WORKDIR: packages/sdk
 
+permissions:
+  contents: read
+
 jobs:
   dispatch:
     if: github.event.pull_request.merged == true && github.event.pull_request.base.ref == 'main'
     runs-on: ubuntu-latest
+    environment: release
     steps:
       - name: Checkout merge commit
-        uses: actions/checkout@v6
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # 6.0.2
         with:
           ref: ${{ github.event.pull_request.merge_commit_sha }}
           fetch-depth: 0
@@ -59,7 +63,7 @@ jobs:
 
       - name: Repository Dispatch
         if: steps.changed.outputs.readme_changed == 'true'
-        uses: peter-evans/repository-dispatch@v3
+        uses: peter-evans/repository-dispatch@28959ce8df70de7be546dd1250a005dd32156697 # 4.0.1
         with:
           token: ${{ secrets.PAT_TOKEN }}
           repository: tetherto/qvac-docs

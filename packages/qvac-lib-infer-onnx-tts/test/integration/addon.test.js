@@ -5,7 +5,7 @@ const os = require('bare-os')
 const path = require('bare-path')
 const { loadChatterboxTTS, runChatterboxTTS } = require('../utils/runChatterboxTTS')
 const { loadSupertonicTTS, runSupertonicTTS } = require('../utils/runSupertonicTTS')
-const { ensureChatterboxModels, ensureSupertonicModels, ensureWhisperModel } = require('../utils/downloadModel')
+const { ensureChatterboxModels, ensureSupertonicModels, ensureSupertonicModelsMultilingual, ensureWhisperModel } = require('../utils/downloadModel')
 const { loadWhisper, runWhisper } = require('../utils/runWhisper')
 
 const platform = os.platform()
@@ -501,7 +501,8 @@ test('Supertonic TTS: Basic synthesis test', { timeout: 1800000 }, async (t) => 
   const modelParams = {
     modelDir,
     voiceName: 'F1',
-    language: 'en'
+    language: 'en',
+    supertonicMultilingual: false
   }
 
   console.log('\n=== Loading Supertonic TTS model ===')
@@ -566,7 +567,8 @@ test('Supertonic TTS: Multiple sentences synthesis', { timeout: 1800000 }, async
   const modelParams = {
     modelDir,
     voiceName: 'F1',
-    language: 'en'
+    language: 'en',
+    supertonicMultilingual: false
   }
 
   const expectation = {
@@ -641,7 +643,7 @@ test('Supertonic TTS: WER test (TTS + Whisper)', { timeout: 1800000 }, async (t)
   }
 
   const text = 'The quick brown fox jumps over the lazy dog.'
-  const modelParams = { modelDir, voiceName: 'F1', language: 'en' }
+  const modelParams = { modelDir, voiceName: 'F1', language: 'en', supertonicMultilingual: false }
 
   console.log('\n=== Loading Supertonic TTS and running synthesis ===')
   const ttsModel = await loadSupertonicTTS(modelParams)
@@ -675,4 +677,44 @@ test('Supertonic TTS: WER test (TTS + Whisper)', { timeout: 1800000 }, async (t)
   }
 
   await whisperModel.unload()
+})
+
+test('Supertonic TTS multilingual (Spanish): basic synthesis with HF Supertone/supertonic-2 weights', { timeout: 1800000 }, async (t) => {
+  const baseDir = getBaseDir()
+  const modelDir = path.join(baseDir, 'models', 'supertonic-multilingual')
+
+  console.log('\n=== Ensuring Supertonic multilingual models (HF supertonic-2) ===')
+  const downloadResult = await ensureSupertonicModelsMultilingual({ targetDir: modelDir })
+  t.ok(downloadResult.success, 'Supertonic multilingual models should be downloaded')
+  if (!downloadResult.success) {
+    console.log('Failed to download Supertonic multilingual models, skipping test')
+    return
+  }
+
+  const modelParams = {
+    modelDir,
+    voiceName: 'F1',
+    language: 'es',
+    supertonicMultilingual: true
+  }
+
+  console.log('\n=== Loading Supertonic multilingual TTS model ===')
+  const model = await loadSupertonicTTS(modelParams)
+  t.ok(model, 'Supertonic multilingual TTS model should be loaded')
+
+  const text =
+    'Hola mundo. Esta es una prueba del sistema Supertonic de síntesis de voz en español.'
+  const expectation = {
+    minSamples: 8000,
+    maxSamples: 800000,
+    minDurationMs: 400,
+    maxDurationMs: 30000
+  }
+
+  const result = await runSupertonicTTS(model, { text }, expectation)
+  t.ok(result.passed, 'Supertonic multilingual Spanish synthesis should pass expectations')
+  t.ok(result.data.sampleCount > 0, 'Supertonic multilingual should produce audio samples')
+
+  await model.unload()
+  console.log('\nSupertonic multilingual TTS model unloaded')
 })
