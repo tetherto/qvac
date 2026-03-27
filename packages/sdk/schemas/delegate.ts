@@ -15,3 +15,4 @@ export const delegateSchema = delegateBaseSchema
 
 export type DelegateBase = z.infer<typeof delegateBaseSchema>;
 export type Delegate = z.infer<typeof delegateSchema>;
+

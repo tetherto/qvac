@@ -47,6 +47,7 @@ jobs:
   run-integration-tests:
     continue-on-error: true
     runs-on: ${{ matrix.os }}
+    environment: release
     name: test-${{ matrix.platform }}-${{ matrix.arch }}
 
     env:

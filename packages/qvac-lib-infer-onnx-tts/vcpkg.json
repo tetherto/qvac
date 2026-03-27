@@ -44,6 +44,11 @@
     {
       "name": "tokenizers-cpp",
       "version>=": "0.1.1#2"
+    },
+    "utf8proc",
+    {
+      "name": "nlohmann-json",
+      "version>=": "3.11.3"
     }
   ],
   "features": {

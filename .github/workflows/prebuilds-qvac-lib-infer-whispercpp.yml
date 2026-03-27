@@ -58,9 +58,8 @@ on:
         description: "The version that was published"
         value: ${{ jobs.publish-gpr.outputs.published_version || jobs.publish-npm.outputs.published_version }}
 
-concurrency:
-  group: ${{ github.workflow }}-${{ github.ref }}
-  cancel-in-progress: false
+permissions:
+  contents: read
 
 jobs:
   prebuild:
@@ -106,6 +105,7 @@ jobs:
             arch: x64
 
     runs-on: ${{ matrix.os }}
+    environment: release
     name: ${{ matrix.platform }}-${{ matrix.arch }}${{ matrix.tags }}
 
     env:
@@ -564,6 +564,7 @@ jobs:
     outputs:
       published_version: ${{ steps.publish.outputs.npm_published_version }}
     runs-on: ubuntu-latest
+    environment: release
     permissions:
       contents: write
       packages: write

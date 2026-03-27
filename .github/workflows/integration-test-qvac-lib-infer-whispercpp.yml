@@ -36,6 +36,7 @@ jobs:
     timeout-minutes: 60
     continue-on-error: true
     runs-on: ${{ matrix.os }}
+    environment: release
     name: ${{ matrix.platform }}-${{ matrix.arch }}-integration-tests
 
     env:
