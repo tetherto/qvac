@@ -1,4 +1,3 @@
-import { Loader } from '@qvac/infer-base'
 import InferBase from '@qvac/infer-base/WeightsProvider/BaseInference'
 import type QvacResponse from '@qvac/infer-base/src/QvacResponse'
 
@@ -67,8 +66,6 @@ declare interface ONNXTTSOptions {
   engine?: 'chatterbox' | 'supertonic'
   config?: ONNXTTSRuntimeConfig
   logger?: object
-  loader?: Loader
-  cache?: string
   lazySessionLoading?: boolean
   /** Chatterbox voice cloning input */
   referenceAudio?: Float32Array | number[]

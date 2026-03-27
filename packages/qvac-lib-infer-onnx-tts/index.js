@@ -5,7 +5,6 @@ const path = require('bare-path')
 const { TTSInterface } = require('./tts')
 const { QvacErrorAddonTTS, ERR_CODES } = require('./lib/error')
 const InferBase = require('@qvac/infer-base/WeightsProvider/BaseInference')
-const WeightsProvider = require('@qvac/infer-base/WeightsProvider/WeightsProvider')
 
 // Engine types
 const ENGINE_CHATTERBOX = 'chatterbox'
@@ -111,8 +110,6 @@ class ONNXTTS extends InferBase {
       config = {},
       engine,
       logger,
-      loader,
-      cache,
       lazySessionLoading,
       referenceAudio,
       voiceName,
@@ -141,9 +138,6 @@ class ONNXTTS extends InferBase {
       )
     }
 
-    this._loader = loader
-    this._weightsProvider = loader ? new WeightsProvider(loader, logger) : null
-    this._cache = cache || '.'
     this._config = { ...config }
     this._logger = logger
     this._hasActiveResponse = false
@@ -238,9 +232,7 @@ class ONNXTTS extends InferBase {
     }
   }
 
-  async _load (closeLoader = false, reportProgressCallback) {
-    await this._downloadWeights(reportProgressCallback, { closeLoader })
-
+  async _load () {
     this.logger.info('[TTS] Engine type:', this._engineType)
     this.logger.info('[TTS] Language:', this._config?.language || 'en')
 
@@ -303,50 +295,10 @@ class ONNXTTS extends InferBase {
 
   _resolvePath (filePath) {
     if (!filePath) return ''
-    if (this._loader) {
-      return path.join(this._cache, filePath)
-    }
     if (platform() === 'win32') {
       return '\\\\?\\' + path.resolve(filePath)
     }
     return path.resolve(filePath)
-  }
-
-  async _downloadWeights (reportProgressCallback, { closeLoader }) {
-    if (!this._weightsProvider) {
-      return
-    }
-
-    const files = this._engineType === ENGINE_SUPERTONIC
-      ? [
-          this._textEncoderPath,
-          this._durationPredictorPath,
-          this._vectorEstimatorPath,
-          this._vocoderPath,
-          this._unicodeIndexerPath,
-          this._ttsConfigPath,
-          this._voiceStyleJsonPath
-        ].filter(Boolean)
-      : [
-          this._tokenizerPath,
-          this._speechEncoderPath,
-          this._embedTokensPath,
-          this._conditionalDecoderPath,
-          this._languageModelPath
-        ].filter(Boolean)
-
-    this.logger.info('Loading weight files:', files)
-
-    const result = await this._weightsProvider.downloadFiles(
-      files,
-      this._cache,
-      {
-        closeLoader,
-        onDownloadProgress: reportProgressCallback
-      }
-    )
-    this.logger.info('Weight files downloaded successfully', { files })
-    return result
   }
 
   async unload () {
@@ -432,7 +384,6 @@ class ONNXTTS extends InferBase {
    * @param {Object} newConfig - New configuration parameters
    * @param {string} [newConfig.language] - Language setting (defaults to 'en')
    * @param {boolean} [newConfig.useGPU] - Whether to use GPU (defaults to false)
-   * @param {Function} [newConfig.reportProgressCallback] - Hook for download progress updates
    */
   async reload (newConfig = {}) {
     this.logger.debug('Reloading addon with new configuration', newConfig)
@@ -442,11 +393,6 @@ class ONNXTTS extends InferBase {
     }
     if (newConfig.useGPU !== undefined) {
       this._config.useGPU = newConfig.useGPU
-    }
-
-    // Download new weights if model changed and we have a loader
-    if (this._weightsProvider && (newConfig.mainModelUrl || newConfig.configJsonPath)) {
-      await this._downloadWeights(newConfig.reportProgressCallback, { closeLoader: false })
     }
 
     let ttsParams
