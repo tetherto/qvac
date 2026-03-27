@@ -188,6 +188,9 @@ jobs:
     timeout-minutes: 60
     name: Build QVAC addon
 
+    env:
+      VCPKG_BINARY_SOURCES: "clear;files,${{ github.workspace }}/packages/qvac-lib-infer-nmtcpp/vcpkg/cache,readwrite"
+
     steps:
       - name: Update C++ tools
         run: |
@@ -289,6 +292,20 @@ jobs:
         working-directory: ${{ env.PKG_DIR }}
         run: npm install
 
+      - name: Create vcpkg cache location
+        working-directory: ${{ env.PKG_DIR }}
+        run: mkdir -p vcpkg/cache
+
+      - name: Restore vcpkg cache
+        id: cache-vcpkg
+        uses: actions/cache/restore@668228422ae6a00e4ad889ee87cd7109ec5666a7 # 5.0.4
+        with:
+          path: ${{ env.PKG_DIR }}/vcpkg/cache
+          key: vcpkg-nmtcpp-v1-linux-x64-benchmark-${{ hashFiles('packages/qvac-lib-infer-nmtcpp/vcpkg.json', 'packages/qvac-lib-infer-nmtcpp/vcpkg-configuration.json', 'packages/qvac-lib-infer-nmtcpp/vcpkg-overlays/**') }}
+          restore-keys: |
+            vcpkg-nmtcpp-v1-linux-x64-benchmark-
+            vcpkg-nmtcpp-v1-linux-x64-
+
       - name: Create config.cmake for Bergamot backend
         working-directory: ${{ env.PKG_DIR }}
         shell: bash
@@ -381,6 +398,13 @@ jobs:
           bare-make generate --platform linux --arch x64
           bare-make build
           bare-make install
+
+      - if: ${{ steps.cache-vcpkg.outputs.cache-hit != 'true' }}
+        name: Save vcpkg cache
+        uses: actions/cache/save@668228422ae6a00e4ad889ee87cd7109ec5666a7 # 5.0.4
+        with:
+          path: ${{ env.PKG_DIR }}/vcpkg/cache
+          key: vcpkg-nmtcpp-v1-linux-x64-benchmark-${{ hashFiles('packages/qvac-lib-infer-nmtcpp/vcpkg.json', 'packages/qvac-lib-infer-nmtcpp/vcpkg-configuration.json', 'packages/qvac-lib-infer-nmtcpp/vcpkg-overlays/**') }}
 
       - name: Upload build artifact
         uses: actions/upload-artifact@bbbca2ddaa5d8feaa63e36b76fdaad77386f024f # 7.0.0
