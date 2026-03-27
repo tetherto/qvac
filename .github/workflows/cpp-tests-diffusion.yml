@@ -9,6 +9,12 @@ on:
         required: false
         default: "packages/lib-infer-diffusion"
   workflow_call:
+    secrets:
+      NPM_TOKEN:
+        required: true
+      PAT_TOKEN:
+        required: true
+
     inputs:
       ref:
         description: "Git ref to checkout"
@@ -23,6 +29,9 @@ on:
         type: string
         required: false
         default: "packages/lib-infer-diffusion"
+
+permissions:
+  contents: read
 
 jobs:
   test-cpp:
@@ -41,6 +50,7 @@ jobs:
             runner: ai-run-windows11-gpu
 
     runs-on: ${{ matrix.runner || matrix.os }}
+    environment: release
     name: cpp-tests-${{ matrix.platform }}-${{ matrix.arch }}
 
     env:

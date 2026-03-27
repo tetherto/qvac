@@ -561,114 +561,57 @@ async function ensureChatterboxModels (options = {}) {
 }
 
 /**
- * Fetch URL response body as string (for JSON etc.). Used when we need to write the received content to a file.
- * @param {string} url - URL to fetch
- * @returns {Promise<{ success: boolean, body?: string, error?: string }>}
+ * Ensure Supertone supertonic TTS models from a Hugging Face base URL (4-ONNX + JSON).
+ * @param {Object} options
+ * @param {string} options.baseUrl - e.g. .../Supertone/supertonic/resolve/main (English) or .../supertonic-2 (multilingual)
+ * @param {string} options.kindLabel - log label e.g. "english" | "multilingual"
+ * @param {string} [options.targetDir]
+ * @param {string[]} [options.voiceNames=['F1']]
  */
-async function fetchUrlBody (url) {
-  if (isMobile) {
-    const https = require('bare-https')
-    const { URL } = require('bare-url')
-    return new Promise((resolve) => {
-      const parsedUrl = new URL(url)
-      const options = {
-        hostname: parsedUrl.hostname,
-        port: parsedUrl.port || 443,
-        path: parsedUrl.pathname + parsedUrl.search,
-        method: 'GET',
-        headers: { 'User-Agent': 'Mozilla/5.0 (compatible; bare-download/1.0)' }
-      }
-      const req = https.request(options, (res) => {
-        if (res.statusCode >= 300 && res.statusCode < 400 && res.headers.location) {
-          const location = res.headers.location
-          let redirectUrl
-          if (location.startsWith('http://') || location.startsWith('https://')) {
-            redirectUrl = location
-          } else if (location.startsWith('/')) {
-            redirectUrl = `${parsedUrl.protocol}//${parsedUrl.host}${location}`
-          } else {
-            const basePath = parsedUrl.pathname.substring(0, parsedUrl.pathname.lastIndexOf('/') + 1)
-            redirectUrl = `${parsedUrl.protocol}//${parsedUrl.host}${basePath}${location}`
-          }
-          fetchUrlBody(redirectUrl).then(resolve).catch((e) => resolve({ success: false, error: e.message }))
-          return
-        }
-        if (res.statusCode !== 200) {
-          resolve({ success: false, error: `HTTP ${res.statusCode}` })
-          return
-        }
-        const chunks = []
-        res.on('data', (chunk) => chunks.push(chunk))
-        res.on('end', () => resolve({ success: true, body: Buffer.concat(chunks).toString('utf8') }))
-        res.on('error', (err) => resolve({ success: false, error: err.message }))
-      })
-      req.on('error', (err) => resolve({ success: false, error: err.message }))
-      req.end()
-    })
-  }
-  const { spawnSync } = require('bare-subprocess')
-  const result = spawnSync('curl', [
-    '-L', url,
-    '--fail', '--silent', '--show-error',
-    '--connect-timeout', '30',
-    '--max-time', '300'
-  ], { encoding: 'utf8', stdio: ['inherit', 'pipe', 'pipe'] })
-  if (result.status === 0 && result.stdout) {
-    return { success: true, body: result.stdout }
-  }
-  return { success: false, error: result.stderr || `exit code ${result.status}` }
-}
-
-/**
- * Ensure Supertonic TTS models are present. Downloads from Hugging Face if missing.
- * Source: https://huggingface.co/onnx-community/Supertonic-TTS-ONNX (onnx/, voices/, tokenizer.json).
- * tokenizer.json is fetched as content and written to file (resolve/main returns the file content).
- * @param {Object} options - Download options
- * @param {string} [options.targetDir] - Target directory (default: getBaseDir()/models/supertonic)
- * @param {string[]} [options.voiceNames=['F1']] - Voice files to download (e.g. F1.bin, M1.bin)
- * @returns {Promise<Object>} { success, results, targetDir }
- */
-async function ensureSupertonicModels (options = {}) {
+async function ensureSupertonicModelsFromHf (options = {}) {
+  const baseUrl = options.baseUrl
+  const kindLabel = options.kindLabel || 'supertonic'
   const targetDir = options.targetDir || path.join(getBaseDir(), 'models', 'supertonic')
   const voiceNames = options.voiceNames || ['F1']
 
-  console.log('\nEnsuring Supertonic TTS models...')
+  console.log(`\nEnsuring Supertone supertonic (${kindLabel}) TTS models...`)
 
   if (!fs.existsSync(targetDir)) {
     fs.mkdirSync(targetDir, { recursive: true })
   }
   const onnxDir = path.join(targetDir, 'onnx')
-  const voicesDir = path.join(targetDir, 'voices')
+  const voiceStylesDir = path.join(targetDir, 'voice_styles')
   if (!fs.existsSync(onnxDir)) fs.mkdirSync(onnxDir, { recursive: true })
-  if (!fs.existsSync(voicesDir)) fs.mkdirSync(voicesDir, { recursive: true })
+  if (!fs.existsSync(voiceStylesDir)) fs.mkdirSync(voiceStylesDir, { recursive: true })
 
-  const baseUrl = 'https://huggingface.co/onnx-community/Supertonic-TTS-ONNX/resolve/main'
-
-  // ONNX files (each has .onnx and .onnx_data) - sizes from Hugging Face
   const onnxFiles = [
-    { name: 'text_encoder.onnx', minSize: 100000 },
-    { name: 'text_encoder.onnx_data', minSize: 25000000 },
-    { name: 'latent_denoiser.onnx', minSize: 100000 },
-    { name: 'latent_denoiser.onnx_data', minSize: 120000000 },
-    { name: 'voice_decoder.onnx', minSize: 10000 },
-    { name: 'voice_decoder.onnx_data', minSize: 95000000 }
+    { name: 'duration_predictor.onnx', minSize: 1_000_000 },
+    { name: 'text_encoder.onnx', minSize: 1_000_000 },
+    { name: 'vector_estimator.onnx', minSize: 10_000_000 },
+    { name: 'vocoder.onnx', minSize: 10_000_000 }
+  ]
+
+  const jsonInOnnx = [
+    { name: 'tts.json', minSize: 1000 },
+    { name: 'unicode_indexer.json', minSize: 100_000 }
   ]
 
   const results = {}
   let allSuccess = true
 
-  for (const file of onnxFiles) {
-    const url = `${baseUrl}/onnx/${file.name}`
-    const targetPath = path.join(onnxDir, file.name)
+  const downloadOnnxOrJson = async (name, minSize, subdir) => {
+    const url = `${baseUrl}/${subdir}${name}`
+    const targetPath = path.join(onnxDir, name)
+    const key = `${subdir}${name}`
 
-    console.log(`\n Downloading onnx/${file.name}...`)
+    console.log(`\n Downloading ${key}...`)
 
     if (fs.existsSync(targetPath)) {
       const stats = fs.statSync(targetPath)
-      if (stats.size >= file.minSize) {
-        console.log(` ✓ Using cached: onnx/${file.name} (${stats.size} bytes)`)
-        results['onnx/' + file.name] = { success: true, path: targetPath, cached: true }
-        continue
+      if (stats.size >= minSize) {
+        console.log(` ✓ Using cached: ${key} (${stats.size} bytes)`)
+        results[key] = { success: true, path: targetPath, cached: true }
+        return
       }
       fs.unlinkSync(targetPath)
     }
@@ -698,33 +641,40 @@ async function ensureSupertonicModels (options = {}) {
 
     if (downloadSuccess) {
       const stats = fs.statSync(targetPath)
-      if (stats.size >= file.minSize) {
-        console.log(` ✓ Downloaded: onnx/${file.name} (${stats.size} bytes)`)
-        results['onnx/' + file.name] = { success: true, path: targetPath, cached: false }
+      if (stats.size >= minSize) {
+        console.log(` ✓ Downloaded: ${key} (${stats.size} bytes)`)
+        results[key] = { success: true, path: targetPath, cached: false }
       } else {
         fs.unlinkSync(targetPath)
-        results['onnx/' + file.name] = { success: false, path: targetPath }
+        results[key] = { success: false, path: targetPath }
         allSuccess = false
       }
     } else {
-      results['onnx/' + file.name] = { success: false, path: targetPath }
+      results[key] = { success: false, path: targetPath }
       allSuccess = false
     }
   }
 
-  // Voice files
-  for (const voice of voiceNames) {
-    const name = voice.endsWith('.bin') ? voice : `${voice}.bin`
-    const url = `${baseUrl}/voices/${name}`
-    const targetPath = path.join(voicesDir, name)
+  for (const f of onnxFiles) {
+    await downloadOnnxOrJson(f.name, f.minSize, 'onnx/')
+  }
+  for (const f of jsonInOnnx) {
+    await downloadOnnxOrJson(f.name, f.minSize, 'onnx/')
+  }
 
-    console.log(`\n Downloading voices/${name}...`)
+  for (const voice of voiceNames) {
+    const base = voice.replace(/\.json$/i, '')
+    const filename = `${base}.json`
+    const url = `${baseUrl}/voice_styles/${filename}`
+    const targetPath = path.join(voiceStylesDir, filename)
+
+    console.log(`\n Downloading voice_styles/${filename}...`)
 
     if (fs.existsSync(targetPath)) {
       const stats = fs.statSync(targetPath)
-      if (stats.size > 40000) {
-        console.log(` ✓ Using cached: voices/${name} (${stats.size} bytes)`)
-        results['voices/' + name] = { success: true, path: targetPath, cached: true }
+      if (stats.size > 100_000) {
+        console.log(` ✓ Using cached: voice_styles/${filename}`)
+        results[`voice_styles/${filename}`] = { success: true, path: targetPath, cached: true }
         continue
       }
       fs.unlinkSync(targetPath)
@@ -745,7 +695,7 @@ async function ensureSupertonicModels (options = {}) {
           '-L', '-o', targetPath, url,
           '--fail', '--show-error',
           '--connect-timeout', '30',
-          '--max-time', '300'
+          '--max-time', '600'
         ], { stdio: ['inherit', 'inherit', 'pipe'] })
         downloadSuccess = downloadResult.status === 0 && fs.existsSync(targetPath)
       } catch (e) {
@@ -753,54 +703,18 @@ async function ensureSupertonicModels (options = {}) {
       }
     }
 
-    if (downloadSuccess && fs.statSync(targetPath).size > 40000) {
-      console.log(` ✓ Downloaded: voices/${name}`)
-      results['voices/' + name] = { success: true, path: targetPath, cached: false }
+    if (downloadSuccess && fs.existsSync(targetPath) && fs.statSync(targetPath).size > 100_000) {
+      console.log(` ✓ Downloaded: voice_styles/${filename}`)
+      results[`voice_styles/${filename}`] = { success: true, path: targetPath, cached: false }
     } else {
       if (fs.existsSync(targetPath)) fs.unlinkSync(targetPath)
-      results['voices/' + name] = { success: false, path: targetPath }
-      allSuccess = false
-    }
-  }
-
-  // tokenizer.json: URL returns the JSON content; we fetch content and write the file
-  const tokenizerUrl = `${baseUrl}/tokenizer.json`
-  const tokenizerPath = path.join(targetDir, 'tokenizer.json')
-
-  console.log('\n Downloading tokenizer.json (fetch content and write file)...')
-
-  if (fs.existsSync(tokenizerPath) && isValidJsonCache(tokenizerPath)) {
-    console.log(' ✓ Using cached: tokenizer.json')
-    results['tokenizer.json'] = { success: true, path: tokenizerPath, cached: true }
-  } else {
-    if (fs.existsSync(tokenizerPath)) fs.unlinkSync(tokenizerPath)
-    const fetchResult = await fetchUrlBody(tokenizerUrl)
-    if (fetchResult.success && fetchResult.body) {
-      try {
-        const parsed = JSON.parse(fetchResult.body)
-        if (typeof parsed === 'object' && parsed !== null) {
-          fs.writeFileSync(tokenizerPath, fetchResult.body, 'utf8')
-          console.log(` ✓ Downloaded: tokenizer.json (${Buffer.byteLength(fetchResult.body, 'utf8')} bytes)`)
-          results['tokenizer.json'] = { success: true, path: tokenizerPath, cached: false }
-        } else {
-          console.log(' tokenizer.json response was not valid JSON object')
-          results['tokenizer.json'] = { success: false, path: tokenizerPath }
-          allSuccess = false
-        }
-      } catch (e) {
-        console.log(` tokenizer.json parse error: ${e.message}`)
-        results['tokenizer.json'] = { success: false, path: tokenizerPath }
-        allSuccess = false
-      }
-    } else {
-      console.log(` tokenizer.json fetch failed: ${fetchResult.error || 'unknown'}`)
-      results['tokenizer.json'] = { success: false, path: tokenizerPath }
+      results[`voice_styles/${filename}`] = { success: false, path: targetPath }
       allSuccess = false
     }
   }
 
   console.log('\n' + '='.repeat(50))
-  console.log('SUPERTONIC MODEL DOWNLOAD SUMMARY')
+  console.log(`SUPERTONIC ${kindLabel.toUpperCase()} MODEL DOWNLOAD SUMMARY`)
   console.log('='.repeat(50))
   for (const [name, result] of Object.entries(results)) {
     const status = result.success ? '✓' : '✗'
@@ -816,4 +730,36 @@ async function ensureSupertonicModels (options = {}) {
   }
 }
 
-module.exports = { ensureFileDownloaded, ensureWhisperModel, ensureChatterboxModels, ensureSupertonicModels }
+/**
+ * Supertone supertonic (English-focused). https://huggingface.co/Supertone/supertonic
+ */
+async function ensureSupertonicModels (options = {}) {
+  const targetDir = options.targetDir || path.join(getBaseDir(), 'models', 'supertonic')
+  return ensureSupertonicModelsFromHf({
+    ...options,
+    targetDir,
+    baseUrl: 'https://huggingface.co/Supertone/supertonic/resolve/main',
+    kindLabel: 'english'
+  })
+}
+
+/**
+ * Supertone supertonic multilingual weights (HF repo supertonic-2). https://huggingface.co/Supertone/supertonic-2
+ */
+async function ensureSupertonicModelsMultilingual (options = {}) {
+  const targetDir = options.targetDir || path.join(getBaseDir(), 'models', 'supertonic-multilingual')
+  return ensureSupertonicModelsFromHf({
+    ...options,
+    targetDir,
+    baseUrl: 'https://huggingface.co/Supertone/supertonic-2/resolve/main',
+    kindLabel: 'multilingual'
+  })
+}
+
+module.exports = {
+  ensureFileDownloaded,
+  ensureWhisperModel,
+  ensureChatterboxModels,
+  ensureSupertonicModels,
+  ensureSupertonicModelsMultilingual
+}

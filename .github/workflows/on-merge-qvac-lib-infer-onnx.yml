@@ -26,9 +26,9 @@ on:
           - latest
 
 permissions:
-  contents: write
-  pull-requests: write
-  packages: write
+  contents: read
+  pull-requests: read
+  packages: read
 
 concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}
@@ -37,6 +37,7 @@ concurrency:
 jobs:
   publish-logic:
     runs-on: ubuntu-latest
+    environment: release
     outputs:
       publish_main: ${{ steps.logic.outputs.publish_main }}
       publish_release: ${{ steps.logic.outputs.publish_release }}
@@ -89,6 +90,7 @@ jobs:
       github.event_name == 'push' &&
       startsWith(github.ref_name, 'release-')
     runs-on: ubuntu-latest
+    environment: release
     steps:
       - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # 6.0.2
         with:
@@ -163,7 +165,6 @@ jobs:
     permissions:
       contents: write
     uses: ./.github/workflows/create-github-release-qvac-lib-infer-onnx.yml
-    secrets: inherit
     with:
       published_version: ${{ needs.publish-release-npm.outputs.published_version }}
       prev_sha: ${{ github.event.before }}

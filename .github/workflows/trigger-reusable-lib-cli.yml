@@ -1,11 +1,5 @@
 name: General CI/CD (cli)
 
-permissions:
-  contents: write
-  packages: write
-  pull-requests: write
-  id-token: write
-
 on:
   push:
     branches:
@@ -30,6 +24,8 @@ on:
 env:
   WORKDIR: packages/cli
 
+permissions:
+  contents: read
 concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}
   cancel-in-progress: false
@@ -133,6 +129,7 @@ jobs:
     needs: [build, publish-logic]
     if: needs.publish-logic.outputs.publish_main == 'true'
     runs-on: ubuntu-latest
+    environment: release
     permissions:
       contents: read
       packages: write
@@ -166,6 +163,7 @@ jobs:
       needs.publish-logic.outputs.publish_release == 'true' &&
       (needs.release-merge-guard.result == 'success' || needs.release-merge-guard.result == 'skipped')
     runs-on: ubuntu-latest
+    environment: release
     outputs:
       published_version: ${{ steps.publish.outputs.npm_published_version }}
     permissions:
@@ -198,7 +196,6 @@ jobs:
     permissions:
       contents: write
     uses: ./.github/workflows/create-github-release.yml
-    secrets: inherit
     with:
       repo_name: "cli"
       release_name: "QVAC cli Lib"
@@ -210,6 +207,7 @@ jobs:
     needs: [build, publish-logic]
     if: needs.publish-logic.outputs.publish_feature == 'true'
     runs-on: ubuntu-latest
+    environment: release
     permissions:
       contents: read
       packages: write
@@ -241,6 +239,7 @@ jobs:
     needs: [build, publish-logic]
     if: needs.publish-logic.outputs.publish_tmp == 'true'
     runs-on: ubuntu-latest
+    environment: release
     permissions:
       contents: read
       packages: write

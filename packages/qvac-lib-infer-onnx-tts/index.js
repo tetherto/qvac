@@ -24,15 +24,19 @@ class ONNXTTS extends InferBase {
     conditionalDecoderPath,
     languageModelPath,
     referenceAudio,
-    // Supertonic-specific (if provided, engine is Supertonic)
+    // Supertone / Supertonic (official 4-ONNX + unicode + voice_styles JSON)
     modelDir,
     textEncoderPath,
-    latentDenoiserPath,
-    voiceDecoderPath,
-    voicesDir,
+    durationPredictorPath,
+    vectorEstimatorPath,
+    vocoderPath,
+    unicodeIndexerPath,
+    ttsConfigPath,
+    voiceStyleJsonPath,
     voiceName,
     speed,
     numInferenceSteps,
+    supertonicMultilingual,
     lazySessionLoading,
     loader, cache, logger, ...args
   }, config = {}) {
@@ -49,7 +53,9 @@ class ONNXTTS extends InferBase {
       ? lazySessionLoading
       : (platform() === 'ios' || platform() === 'android')
 
-    const hasSupertonicPaths = (textEncoderPath != null && textEncoderPath !== '') ||
+    const hasSupertonicPaths =
+      (textEncoderPath != null && textEncoderPath !== '') ||
+      (durationPredictorPath != null && durationPredictorPath !== '') ||
       (modelDir != null && modelDir !== '' && voiceName != null && voiceName !== '')
     this._engineType = hasSupertonicPaths ? ENGINE_SUPERTONIC : ENGINE_CHATTERBOX
 
@@ -65,18 +71,24 @@ class ONNXTTS extends InferBase {
       this._voiceName = voiceName ?? 'F1'
       this._speed = speed != null ? speed : 1
       this._numInferenceSteps = numInferenceSteps != null ? numInferenceSteps : 5
+      this._supertonicMultilingual = supertonicMultilingual !== false
       if (modelDir) {
-        this._tokenizerPath = path.join(modelDir, 'tokenizer.json')
-        this._textEncoderPath = path.join(modelDir, 'onnx', 'text_encoder.onnx')
-        this._latentDenoiserPath = path.join(modelDir, 'onnx', 'latent_denoiser.onnx')
-        this._voiceDecoderPath = path.join(modelDir, 'onnx', 'voice_decoder.onnx')
-        this._voicesDir = path.join(modelDir, 'voices')
+        const onnx = path.join(modelDir, 'onnx')
+        this._textEncoderPath = path.join(onnx, 'text_encoder.onnx')
+        this._durationPredictorPath = path.join(onnx, 'duration_predictor.onnx')
+        this._vectorEstimatorPath = path.join(onnx, 'vector_estimator.onnx')
+        this._vocoderPath = path.join(onnx, 'vocoder.onnx')
+        this._unicodeIndexerPath = path.join(onnx, 'unicode_indexer.json')
+        this._ttsConfigPath = path.join(onnx, 'tts.json')
+        this._voiceStyleJsonPath = path.join(modelDir, 'voice_styles', `${this._voiceName.replace(/\.json$/i, '')}.json`)
       } else {
-        this._tokenizerPath = tokenizerPath
         this._textEncoderPath = textEncoderPath
-        this._latentDenoiserPath = latentDenoiserPath
-        this._voiceDecoderPath = voiceDecoderPath
-        this._voicesDir = voicesDir
+        this._durationPredictorPath = durationPredictorPath
+        this._vectorEstimatorPath = vectorEstimatorPath
+        this._vocoderPath = vocoderPath
+        this._unicodeIndexerPath = unicodeIndexerPath
+        this._ttsConfigPath = ttsConfigPath
+        this._voiceStyleJsonPath = voiceStyleJsonPath
       }
     }
   }
@@ -114,29 +126,22 @@ class ONNXTTS extends InferBase {
     const baseDir = this._modelDir
       ? this._resolvePath(this._modelDir)
       : ''
-    const onnxDir = baseDir ? path.join(baseDir, 'onnx') : ''
-    const voicesDir = this._voicesDir
-      ? this._resolvePath(this._voicesDir)
-      : (baseDir ? path.join(baseDir, 'voices') : '')
     return {
       modelDir: baseDir,
-      tokenizerPath: this._tokenizerPath
-        ? this._resolvePath(this._tokenizerPath)
-        : (baseDir ? path.join(baseDir, 'tokenizer.json') : ''),
-      textEncoderPath: this._textEncoderPath
-        ? this._resolvePath(this._textEncoderPath)
-        : (onnxDir ? path.join(onnxDir, 'text_encoder.onnx') : ''),
-      latentDenoiserPath: this._latentDenoiserPath
-        ? this._resolvePath(this._latentDenoiserPath)
-        : (onnxDir ? path.join(onnxDir, 'latent_denoiser.onnx') : ''),
-      voiceDecoderPath: this._voiceDecoderPath
-        ? this._resolvePath(this._voiceDecoderPath)
-        : (onnxDir ? path.join(onnxDir, 'voice_decoder.onnx') : ''),
-      voicesDir,
+      textEncoderPath: this._resolvePath(this._textEncoderPath),
+      durationPredictorPath: this._resolvePath(this._durationPredictorPath),
+      vectorEstimatorPath: this._resolvePath(this._vectorEstimatorPath),
+      vocoderPath: this._resolvePath(this._vocoderPath),
+      unicodeIndexerPath: this._resolvePath(this._unicodeIndexerPath),
+      ttsConfigPath: this._resolvePath(this._ttsConfigPath),
+      voiceStyleJsonPath: this._voiceStyleJsonPath
+        ? this._resolvePath(this._voiceStyleJsonPath)
+        : '',
       voiceName: this._voiceName || 'F1',
       language: this._config?.language || 'en',
       speed: String(this._speed),
-      numInferenceSteps: String(this._numInferenceSteps)
+      numInferenceSteps: String(this._numInferenceSteps),
+      supertonicMultilingual: this._supertonicMultilingual
     }
   }
 
@@ -169,11 +174,13 @@ class ONNXTTS extends InferBase {
 
     const files = this._engineType === ENGINE_SUPERTONIC
       ? [
-          this._tokenizerPath,
           this._textEncoderPath,
-          this._latentDenoiserPath,
-          this._voiceDecoderPath,
-          this._voicesDir ? path.join(this._voicesDir, this._voiceName + '.bin') : null
+          this._durationPredictorPath,
+          this._vectorEstimatorPath,
+          this._vocoderPath,
+          this._unicodeIndexerPath,
+          this._ttsConfigPath,
+          this._voiceStyleJsonPath
         ].filter(Boolean)
       : [
           this._tokenizerPath,

@@ -14,7 +14,16 @@ let cachedModelKey = null
 let loadTimeMs = 0
 
 function generateModelKey (config) {
-  return `supertonic:${config.modelDir || 'default'}:${config.voiceName || 'F1'}`
+  const mul = config.supertonicMultilingual === true
+  return [
+    'supertonic',
+    config.modelDir || 'default',
+    config.voiceName || 'F1',
+    config.language || 'en',
+    mul ? 'mul' : 'enonly',
+    config.speed != null ? config.speed : 1,
+    config.numInferenceSteps != null ? config.numInferenceSteps : 5
+  ].join(':')
 }
 
 async function runSupertonicTTS (payload) {
@@ -32,18 +41,24 @@ async function runSupertonicTTS (payload) {
   const voiceName = config.voiceName || 'F1'
   const speed = config.speed != null ? config.speed : 1
   const numInferenceSteps = config.numInferenceSteps != null ? config.numInferenceSteps : 5
+  const supertonicMultilingual = config.supertonicMultilingual === true
+  const sampleRate =
+    config.sampleRate != null && config.sampleRate > 0 ? config.sampleRate : 44100
 
   const modelKey = generateModelKey(config)
 
   if (!cachedModel || cachedModelKey !== modelKey) {
     const loadStart = process.hrtime()
-    logger.info(`[Supertonic] Loading model from: ${modelDir} (voice: ${voiceName})`)
+    logger.info(
+      `[Supertonic] Loading Supertone ONNX from: ${modelDir} (voice: ${voiceName}, multilingual: ${supertonicMultilingual})`
+    )
 
     const args = {
       modelDir,
       voiceName,
       speed,
       numInferenceSteps,
+      supertonicMultilingual,
       opts: { stats: true }
     }
 
@@ -63,7 +78,6 @@ async function runSupertonicTTS (payload) {
     logger.info('[Supertonic] Using cached model')
   }
 
-  const SUPERTONIC_SAMPLE_RATE = 44100
   const outputs = []
   const genStart = process.hrtime()
 
@@ -94,7 +108,7 @@ async function runSupertonicTTS (payload) {
     const [textSec, textNano] = process.hrtime(textStart)
     const textGenMs = textSec * 1e3 + textNano / 1e6
     const sampleCount = buffer.length
-    const durationSec = sampleCount / SUPERTONIC_SAMPLE_RATE
+    const durationSec = sampleCount / sampleRate
 
     let rtf
     if (jobStats?.realTimeFactor != null) {
@@ -106,14 +120,14 @@ async function runSupertonicTTS (payload) {
     }
 
     logger.info(`  Text: "${text.substring(0, 50)}"`)
-    logger.info(`  Samples: ${sampleCount}, Sample Rate: ${SUPERTONIC_SAMPLE_RATE}`)
+    logger.info(`  Samples: ${sampleCount}, Sample Rate: ${sampleRate}`)
     logger.info(`  Duration: ${durationSec.toFixed(2)}s, Generation: ${textGenMs.toFixed(2)}ms`)
     logger.info(`  RTF: ${rtf.toFixed(4)} (${rtf > 0 ? (1 / rtf).toFixed(1) : 0}x real-time)`)
 
     const output = {
       text,
       sampleCount,
-      sampleRate: SUPERTONIC_SAMPLE_RATE,
+      sampleRate,
       durationSec,
       generationMs: textGenMs,
       rtf
@@ -140,7 +154,7 @@ async function runSupertonicTTS (payload) {
 
   return {
     outputs,
-    implementation: 'supertonic-addon',
+    implementation: 'supertone-onnx-addon',
     version,
     time: {
       loadModelMs: loadTimeMs,

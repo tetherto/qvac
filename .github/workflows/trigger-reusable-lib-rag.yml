@@ -2,12 +2,6 @@ name: General CI/CD (rag)
 # This workflow is used to call the reusable workflows in the qvac-devops repository
 # https://github.com/tetherto/qvac-devops/blob/production-workflows-tag/.github/workflows/public-reusable.yml
 
-permissions:
-  contents: write
-  packages: write
-  pull-requests: write
-  id-token: write
-
 on:
   push:
     branches:
@@ -29,6 +23,8 @@ on:
         required: false
         type: string
 
+permissions:
+  contents: read
 concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}
   cancel-in-progress: false
@@ -106,6 +102,7 @@ jobs:
     needs: publish-logic
     if: needs.publish-logic.outputs.publish_main == 'true'
     runs-on: ubuntu-latest
+    environment: release
     permissions:
       contents: read
       packages: write
@@ -133,7 +130,6 @@ jobs:
     if: needs.publish-logic.outputs.publish_release == 'true'
     uses: tetherto/qvac-devops/.github/workflows/public-reusable-npm.yml@v1.1.7
     secrets:
-      GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
       PAT_TOKEN: ${{ secrets.PAT_TOKEN }}
       NPM_TOKEN: ${{ secrets.NPM_TOKEN }}
     with:
@@ -147,7 +143,6 @@ jobs:
     permissions:
       contents: write
     uses: ./.github/workflows/create-github-release.yml
-    secrets: inherit
     with:
       repo_name: "rag"
       release_name: "QVAC rag Lib"
@@ -159,6 +154,7 @@ jobs:
     needs: publish-logic
     if: needs.publish-logic.outputs.publish_feature == 'true'
     runs-on: ubuntu-latest
+    environment: release
     permissions:
       contents: read
       packages: write
@@ -181,6 +177,7 @@ jobs:
     needs: publish-logic
     if: needs.publish-logic.outputs.publish_tmp == 'true'
     runs-on: ubuntu-latest
+    environment: release
     permissions:
       contents: read
       packages: write
