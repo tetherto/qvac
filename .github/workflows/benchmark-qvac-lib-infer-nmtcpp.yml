@@ -183,7 +183,7 @@ jobs:
   build:
     needs: setup
     if: needs.setup.outputs.qvac_needed == 'true'
-    runs-on: ubuntu-24.04
+    runs-on: ubuntu-22.04
     environment: release
     timeout-minutes: 60
     name: Build QVAC addon
