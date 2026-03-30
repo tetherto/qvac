@@ -195,7 +195,6 @@ jobs:
     permissions:
       contents: read
       packages: read
-      pull-requests: write
     needs: [authorize, changes, prebuild]
     if: |
       (needs.changes.outputs.pkg == 'true' || github.event_name == 'workflow_dispatch') &&

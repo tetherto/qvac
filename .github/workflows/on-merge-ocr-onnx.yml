@@ -199,7 +199,6 @@ jobs:
     permissions:
       contents: read
       packages: read
-      pull-requests: write
     uses: ./.github/workflows/integration-test-ocr-onnx.yml
     needs: prebuild
     if: needs.prebuild.outputs.should_run_tests == 'true'
