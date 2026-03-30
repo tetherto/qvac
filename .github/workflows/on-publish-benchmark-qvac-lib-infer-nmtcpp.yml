@@ -10,18 +10,6 @@ on:
         required: false
         type: string
   workflow_call:
-    secrets:
-      AWS_ACCESS_KEY_ID:
-        required: true
-      AWS_SECRET_ACCESS_KEY:
-        required: true
-      MODEL_S3_BUCKET:
-        required: true
-      NPM_TOKEN:
-        required: true
-      PAT_TOKEN:
-        required: true
-
     inputs:
       version:
         description: 'Addon version to benchmark'
