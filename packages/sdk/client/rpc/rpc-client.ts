@@ -386,15 +386,12 @@ export async function duplex<T extends Request>(
   request: T,
   options?: RPCOptions,
 ): Promise<DuplexSession> {
-  const profilingEnabled = shouldProfile(request.type, options?.profiling);
+  const ctx = await prepareRPCContext(request.type, options?.profiling);
 
-  if (profilingEnabled) {
-    flushConnectionTime();
-    return duplexProfiled(request, options);
+  if (!ctx.profilingEnabled) {
+    return duplexBase(request, ctx.signalDisable, options?.timeout);
   }
-
-  const signalDisable = options?.profiling?.enabled === false;
-  return duplexBase(request, signalDisable, options?.timeout);
+  return duplexProfiled(request, options);
 }
 
 async function duplexBase<T extends Request>(
@@ -466,7 +463,7 @@ async function duplexProfiled<T extends Request>(
 
   const rawReadable = session.responseStream as DuplexReadable;
 
-  async function* profiledResponseStream(): AsyncIterable<Buffer> {
+  async function* profiledResponseStream(): AsyncGenerator<Buffer> {
     let lineBuffer = "";
     try {
       for await (const chunk of rawReadable) {

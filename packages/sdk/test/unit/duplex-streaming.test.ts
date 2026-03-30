@@ -5,7 +5,6 @@ import {
   defineHandler,
   defineDuplexHandler,
   pluginHandlerDefinitionRuntimeSchema,
-  type PluginHandlerDefinition,
 } from "@/schemas/plugin";
 import {
   transcribeStreamRequestSchema,

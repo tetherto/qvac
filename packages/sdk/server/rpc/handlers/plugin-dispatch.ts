@@ -110,6 +110,13 @@ export async function* dispatchPluginStream<TRequest, TResponse>(
         inputStream,
       ) as AsyncGenerator<TResponse>;
     } else {
+      if (handlerDef.duplex) {
+        throw new PluginHandlerTypeMismatchError(
+          handlerName,
+          "streaming",
+          "duplex",
+        );
+      }
       if (!handlerDef.streaming) {
         throw new PluginHandlerTypeMismatchError(
           handlerName,

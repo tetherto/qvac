@@ -11,6 +11,7 @@ import {
   sendErrorResponse,
   sendStreamErrorResponse,
 } from "@/server/error-handlers";
+import { PluginHandlerTypeMismatchError } from "@/utils/errors-server";
 import { setSDKConfig } from "@/server/bare/registry/config-registry";
 import { setRuntimeContext } from "@/server/bare/registry/runtime-context-registry";
 import { type ServerProfiler } from "./profiling";
@@ -249,6 +250,14 @@ export async function executeHandler(
     (typeof entry.supportsProgress === "function"
       ? entry.supportsProgress(request)
       : entry.supportsProgress);
+
+  if (entry.type === "duplex") {
+    throw new PluginHandlerTypeMismatchError(
+      request.type,
+      "reply or stream",
+      "duplex",
+    );
+  }
 
   if (entry.type === "stream") {
     await executeStreamHandler(
