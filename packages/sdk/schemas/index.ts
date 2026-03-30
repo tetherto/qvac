@@ -13,7 +13,7 @@ export * from "./logging-stream";
 export * from "./provide";
 export * from "./stop-provide";
 export * from "./unload-model";
-export * from "./ping";
+export * from "./heartbeat";
 export * from "./common";
 export * from "./transcription";
 export * from "./translate";
