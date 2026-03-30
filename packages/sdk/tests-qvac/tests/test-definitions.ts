@@ -4,7 +4,12 @@ import { completionTests } from "./completion-tests.js";
 import { transcriptionTests } from "./transcription-tests.js";
 import { embeddingTests } from "./embedding-tests.js";
 import { ragTests } from "./rag-tests.js";
-import { translationTests } from "./translation-tests.js";
+import { translationMarianTests } from "./translation-marian-tests.js";
+import { translationIndicTransTests } from "./translation-indictrans-tests.js";
+import { translationBergamotTests } from "./translation-bergamot-tests.js";
+import { translationLlmTests } from "./translation-llm-tests.js";
+import { translationSalamandraTests } from "./translation-salamandra-tests.js";
+import { translationAfriquegemmaTests } from "./translation-afriquegemma-tests.js";
 import { modelInfoTests } from "./model-info-tests.js";
 import { kvCacheTests } from "./kv-cache-tests.js";
 import { errorTests } from "./error-tests.js";
@@ -14,8 +19,6 @@ import { ttsTests } from "./tts-tests.js";
 import { configReloadTests } from "./config-reload-tests.js";
 import { loggingTests } from "./logging-tests.js";
 import { registryTests } from "./registry-tests.js";
-import { nmtTests } from "./nmt-tests.js";
-import { bergamotTests } from "./bergamot-tests.js";
 import { shardedModelTests } from "./sharded-model-tests.js";
 import { httpEmbeddingTests } from "./http-embedding-tests.js";
 import { parakeetTests } from "./parakeet-tests.js";
@@ -156,14 +159,23 @@ export const tests = [
   // RAG tests
   ...ragTests,
 
-  // Translation tests
-  ...translationTests,
+  // Translation: Marian Opus (DE↔EN, EN↔FR, FR↔EN)
+  ...translationMarianTests,
 
-  // NMT tests
-  ...nmtTests,
+  // Translation: IndicTrans2 (EN↔HI)
+  ...translationIndicTransTests,
 
-  // Bergamot tests
-  ...bergamotTests,
+  // Translation: Bergamot (EN→FR, EN→ES)
+  ...translationBergamotTests,
+
+  // Translation: LLM (open-vocabulary via from/to)
+  ...translationLlmTests,
+
+  // Translation: Salamandra (EU languages)
+  ...translationSalamandraTests,
+
+  // Translation: AfriqueGemma (African languages)
+  ...translationAfriquegemmaTests,
 
   // Sharded model tests
   ...shardedModelTests,
