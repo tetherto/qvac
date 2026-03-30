@@ -35,7 +35,7 @@ export const tree: Node[] = [
         icon: resolveIcon('DoorOpen'),
       }, 
       {
-        name: 'Our Vision',
+        name: 'Our vision',
         url: '/about-qvac/vision',
         type: 'page',
         icon: resolveIcon('Telescope'),
