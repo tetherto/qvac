@@ -146,7 +146,7 @@ function processLine(line: string): string | undefined | null {
   const obj = parsed as Record<string, unknown>;
   if (obj["type"] === "error") {
     throw new TranscriptionFailedError(
-      (obj["error"] as string) ?? "Unknown server error",
+      (obj["message"] as string) ?? "Unknown server error",
     );
   }
 

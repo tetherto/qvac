@@ -113,14 +113,14 @@ async function handleDuplexRequest(req: RPC.IncomingRequest): Promise<void> {
 
   try {
     const firstChunk = await new Promise<Buffer>((resolve, reject) => {
-      const onData = (data: Buffer) => {
+      const onData = (data: unknown) => {
         inputStream.off("error", onError);
         inputStream.pause();
-        resolve(data);
+        resolve(data as Buffer);
       };
-      const onError = (err: Error) => {
+      const onError = (err: unknown) => {
         inputStream.off("data", onData);
-        reject(err);
+        reject(err instanceof Error ? err : new Error(String(err)));
       };
       inputStream.once("data", onData);
       inputStream.once("error", onError);
@@ -137,6 +137,7 @@ async function handleDuplexRequest(req: RPC.IncomingRequest): Promise<void> {
     const validationStart = nowMs();
     const processedData = applyDeviceDefaultsToRequest(cleanData);
     const request: Request = requestSchema.parse(processedData);
+    attachProfilingMetaToRequest(request, profilingMeta);
     profiler.markRequestValidated(nowMs() - validationStart);
 
     const entry = registry[request.type];

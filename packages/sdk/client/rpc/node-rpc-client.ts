@@ -242,13 +242,9 @@ export async function getRPC() {
   return ensureRPC();
 }
 
-let duplexCommandCounter = 0;
-
-export async function createDuplexSession(payload: string) {
+export async function createDuplexSession(payload: string, commandId: number) {
   const rpc = await ensureRPC();
-  duplexCommandCounter =
-    (duplexCommandCounter + 1) % Number.MAX_SAFE_INTEGER;
-  const req = rpc.request(duplexCommandCounter);
+  const req = rpc.request(commandId);
   const requestStream = req.createRequestStream();
   const responseStream = req.createResponseStream({ encoding: "utf-8" });
   requestStream.write(payload, "utf-8");

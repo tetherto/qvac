@@ -13,7 +13,6 @@ import {
 import { createAudioStream } from "@/server/bare/utils/audio-input";
 import { getServerLogger } from "@/logging";
 import { TranscriptionFailedError } from "@/utils/errors-server";
-import type { Readable } from "bare-stream";
 
 const logger = getServerLogger();
 
@@ -23,7 +22,7 @@ interface StreamingModelResponse {
 }
 
 interface StreamableModel {
-  runStreaming(audioStream: Readable): Promise<StreamingModelResponse>;
+  runStreaming(audioStream: AsyncIterable<Buffer>): Promise<StreamingModelResponse>;
 }
 
 function hasRunStreaming(model: AnyModel): model is AnyModel & StreamableModel {
@@ -128,7 +127,7 @@ export async function* transcribe(
 
 export async function* transcribeStream(
   modelId: string,
-  audioInputStream: Readable,
+  audioInputStream: AsyncIterable<Buffer>,
   prompt?: string,
 ): AsyncGenerator<string, void, void> {
   const engineType = getEngineModelType(modelId);

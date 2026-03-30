@@ -22,7 +22,6 @@ import { createStreamLogger, registerAddonLogger } from "@/logging";
 import { parseModelPath } from "@/server/utils";
 import FilesystemDL from "@qvac/dl-filesystem";
 import { transcribe, transcribeStream } from "@/server/bare/ops/transcribe";
-import type { Readable } from "bare-stream";
 
 function createWhisperModel(
   modelId: string,
@@ -134,7 +133,7 @@ export const whisperPlugin = definePlugin({
       handler: async function* (request, inputStream) {
         for await (const text of transcribeStream(
           request.modelId,
-          inputStream as Readable,
+          inputStream!,
           request.prompt,
         )) {
           yield {

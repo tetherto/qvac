@@ -394,12 +394,13 @@ export async function duplex<T extends Request>(
   }
 
   const signalDisable = options?.profiling?.enabled === false;
-  return duplexBase(request, signalDisable);
+  return duplexBase(request, signalDisable, options?.timeout);
 }
 
 async function duplexBase<T extends Request>(
   request: T,
   signalDisable: boolean,
+  timeout?: number,
 ): Promise<DuplexSession> {
   const parsedRequest = requestSchema.parse(request);
   logger.debug("RPC Client duplex:", summarizeRequest(request));
@@ -411,7 +412,8 @@ async function duplexBase<T extends Request>(
       )
     : parsedRequest;
   const payload = JSON.stringify(payloadObj);
-  const session = await createDuplexSession(payload);
+  const sessionPromise = createDuplexSession(payload, getNextCommandId());
+  const session = await withTimeout(sessionPromise, timeout);
   return {
     requestStream: session.requestStream as DuplexWritable,
     responseStream: session.responseStream as DuplexReadable,
@@ -427,24 +429,38 @@ async function duplexProfiled<T extends Request>(
   const includeServer = shouldIncludeServerBreakdown(options?.profiling);
   const timings = createClientStreamTimings(profileId, requestType);
 
-  const zodStart = nowMs();
-  const parsedRequest = requestSchema.parse(request);
-  timings.requestZodValidationMs = nowMs() - zodStart;
+  let session: Awaited<ReturnType<typeof createDuplexSession>>;
 
-  logger.debug("RPC Client duplex:", summarizeRequest(request));
+  try {
+    const zodStart = nowMs();
+    const parsedRequest = requestSchema.parse(request);
+    timings.requestZodValidationMs = nowMs() - zodStart;
 
-  const requestMeta = createProfilingMeta(profileId, includeServer);
-  const requestWithMeta = injectProfilingMetaIntoObject(
-    parsedRequest as Record<string, unknown>,
-    requestMeta,
-  );
+    logger.debug("RPC Client duplex:", summarizeRequest(request));
 
-  const stringifyStart = nowMs();
-  const payload = JSON.stringify(requestWithMeta);
-  timings.requestStringifyMs = nowMs() - stringifyStart;
+    const requestMeta = createProfilingMeta(profileId, includeServer);
+    const requestWithMeta = injectProfilingMetaIntoObject(
+      parsedRequest as Record<string, unknown>,
+      requestMeta,
+    );
 
-  timings.sendStart = nowMs();
-  const session = await createDuplexSession(payload);
+    const stringifyStart = nowMs();
+    const payload = JSON.stringify(requestWithMeta);
+    timings.requestStringifyMs = nowMs() - stringifyStart;
+
+    timings.sendStart = nowMs();
+    const sessionPromise = createDuplexSession(payload, getNextCommandId());
+    session = await withTimeout(sessionPromise, options?.timeout);
+  } catch (error) {
+    const base = {
+      ts: nowMs(),
+      op: timings.requestType,
+      kind: "rpc" as const,
+      profileId: timings.profileId,
+    };
+    recordFailure(base, timings.requestStart, error);
+    throw error;
+  }
 
   let profilingMeta: ReturnType<typeof extractProfilingMeta> = undefined;
 
@@ -489,16 +505,15 @@ async function duplexProfiled<T extends Request>(
           outputParts.push(line);
         }
 
-        const output = outputParts.join("\n");
-        if (output) {
-          timings.chunkCount++;
-          yield Buffer.from(output);
+        if (outputParts.length > 0) {
+          timings.chunkCount += outputParts.length;
+          yield Buffer.from(outputParts.join("\n") + "\n");
         }
       }
 
       if (lineBuffer.trim()) {
         timings.chunkCount++;
-        yield Buffer.from(lineBuffer);
+        yield Buffer.from(lineBuffer + "\n");
       }
     } catch (error) {
       if (timings.requestEnd === undefined) {

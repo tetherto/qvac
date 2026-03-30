@@ -284,7 +284,8 @@ export function close() {
   // noop
 }
 
-export async function createDuplexSession(payload: string) {
+// eslint-disable-next-line @typescript-eslint/no-unused-vars
+export async function createDuplexSession(payload: string, _commandId: number) {
   await getRPC();
 
   const { PassThrough } = await import("bare-stream");
