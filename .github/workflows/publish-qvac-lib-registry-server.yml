@@ -1,4 +1,4 @@
-name: Publish (Qvac-lib-registry-server)
+name: Publish (registry-server)
 
 on:
   pull_request_target:
@@ -8,8 +8,8 @@ on:
       - reopened
       - labeled
     paths:
-      - "packages/qvac-lib-registry-server/shared/**"
-      - "packages/qvac-lib-registry-server/client/**"
+      - "packages/registry-server/shared/**"
+      - "packages/registry-server/client/**"
   push:
     branches:
       - main
@@ -17,15 +17,15 @@ on:
       - feature-*
       - tmp-*
     paths:
-      - "packages/qvac-lib-registry-server/shared/**"
-      - "packages/qvac-lib-registry-server/client/**"
+      - "packages/registry-server/shared/**"
+      - "packages/registry-server/client/**"
   workflow_dispatch:
 
 permissions:
   contents: read
 
 env:
-  PKG_DIR: packages/qvac-lib-registry-server
+  PKG_DIR: packages/registry-server
   NAME_SUFFIX: "-mono"
 
 concurrency:
@@ -66,8 +66,8 @@ jobs:
           base-sha: ${{ github.event.before }}
           head-sha: ${{ github.sha }}
           package-slug: qvac-registry-schema
-          package-json-path: packages/qvac-lib-registry-server/shared/package.json
-          changelog-path: packages/qvac-lib-registry-server/shared/CHANGELOG.md
+          package-json-path: packages/registry-server/shared/package.json
+          changelog-path: packages/registry-server/shared/CHANGELOG.md
 
   release-merge-guard-client:
     name: Release Merge Guard (Client)
@@ -86,8 +86,8 @@ jobs:
           base-sha: ${{ github.event.before }}
           head-sha: ${{ github.sha }}
           package-slug: qvac-registry-client
-          package-json-path: packages/qvac-lib-registry-server/client/package.json
-          changelog-path: packages/qvac-lib-registry-server/client/CHANGELOG.md
+          package-json-path: packages/registry-server/client/package.json
+          changelog-path: packages/registry-server/client/CHANGELOG.md
 
   detect-changes:
     needs: [authorize]
@@ -303,7 +303,7 @@ jobs:
       release_name: "QVAC Registry Server"
       published_version: ${{ needs.publish-schema-npm.outputs.published_version }}
       prev_sha: ${{ github.event.before }}
-      workdir: "packages/qvac-lib-registry-server/shared"
+      workdir: "packages/registry-server/shared"
 
   lint-and-test:
     needs: [authorize, detect-changes]
@@ -466,4 +466,4 @@ jobs:
       release_name: "QVAC Registry Client"
       published_version: ${{ needs.publish-client-npm.outputs.published_version }}
       prev_sha: ${{ github.event.before }}
-      workdir: "packages/qvac-lib-registry-server/client"
+      workdir: "packages/registry-server/client"

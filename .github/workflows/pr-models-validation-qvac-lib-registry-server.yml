@@ -10,11 +10,11 @@ on:
     branches: [main, release-*, feature-*, tmp-*]
     types: [opened, synchronize, reopened, labeled]
     paths:
-      - "packages/qvac-lib-registry-server/**"
+      - "packages/registry-server/**"
   push:
     branches: [main]
     paths:
-      - "packages/qvac-lib-registry-server/**"
+      - "packages/registry-server/**"
   workflow_dispatch:
 
 concurrency:
@@ -22,8 +22,8 @@ concurrency:
   cancel-in-progress: true
 
 env:
-  PKG_DIR: packages/qvac-lib-registry-server
-  MODELS_FILE: packages/qvac-lib-registry-server/data/models.prod.json
+  PKG_DIR: packages/registry-server
+  MODELS_FILE: packages/registry-server/data/models.prod.json
 
 permissions:
   contents: read
