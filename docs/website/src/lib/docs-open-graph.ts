@@ -83,7 +83,7 @@ export function inferDiataxisOpenGraph(virtualPath: string): DiataxisOpenGraph {
   if (rel.startsWith('sdk/examples/')) {
     return {
       section: 'Usage examples',
-      tags: ['qvac', 'sdk', 'usage-examples', 'how-to', 'how-to'],
+      tags: ['qvac', 'sdk', 'usage-examples', 'how-to'],
     };
   }
 
