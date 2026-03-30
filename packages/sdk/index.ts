@@ -74,6 +74,7 @@ export {
   type OCROptions,
   definePlugin,
   defineHandler,
+  defineDuplexHandler,
   type QvacPlugin,
   type CreateModelParams,
   type PluginModelResult,

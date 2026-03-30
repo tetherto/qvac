@@ -13,7 +13,10 @@ import {
   sendErrorResponse,
   sendStreamErrorResponse,
 } from "@/server/error-handlers";
-import { RPCUnknownRequestTypeError } from "@/utils/errors-server";
+import {
+  RPCUnknownRequestTypeError,
+  PluginHandlerTypeMismatchError,
+} from "@/utils/errors-server";
 import { registry } from "./handler-registry";
 import {
   executeHandler,
@@ -147,8 +150,10 @@ async function handleDuplexRequest(req: RPC.IncomingRequest): Promise<void> {
     }
 
     if (entry.type !== "duplex") {
-      throw new RPCUnknownRequestTypeError(
-        `${request.type} (not a duplex handler)`,
+      throw new PluginHandlerTypeMismatchError(
+        request.type,
+        "duplex",
+        entry.type,
       );
     }
 

@@ -133,7 +133,7 @@ export const whisperPlugin = definePlugin({
       handler: async function* (request, inputStream) {
         for await (const text of transcribeStream(
           request.modelId,
-          inputStream!,
+          inputStream,
           request.prompt,
         )) {
           yield {

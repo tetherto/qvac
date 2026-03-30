@@ -4,10 +4,6 @@ import type { ModelSrcInput } from "./model-src-utils";
 /**
  * Definition for a plugin handler with explicit Zod schemas.
  * Each handler must define its request/response schemas for validation.
- *
- * When `duplex: true`, the handler receives a second `inputStream` argument
- * typed as `AsyncIterable<Buffer>` (the raw audio / data stream from the
- * client).
  */
 export interface PluginHandlerDefinition<
   TRequest extends z.ZodType = z.ZodType,
@@ -23,6 +19,28 @@ export interface PluginHandlerDefinition<
           request: I,
           inputStream?: AsyncIterable<Buffer>,
         ) => Promise<O> | AsyncGenerator<O>
+      : never
+    : never;
+}
+
+/**
+ * Variant of `PluginHandlerDefinition` for duplex handlers where
+ * `inputStream` is guaranteed to be present. Use with `defineDuplexHandler`.
+ */
+export interface DuplexPluginHandlerDefinition<
+  TRequest extends z.ZodType = z.ZodType,
+  TResponse extends z.ZodType = z.ZodType,
+> {
+  requestSchema: TRequest;
+  responseSchema: TResponse;
+  streaming: true;
+  duplex: true;
+  handler: TRequest extends z.ZodType<infer I>
+    ? TResponse extends z.ZodType<infer O>
+      ? (
+          request: I,
+          inputStream: AsyncIterable<Buffer>,
+        ) => AsyncGenerator<O>
       : never
     : never;
 }
@@ -191,12 +209,11 @@ export function defineDuplexHandler<
   TRequest extends z.ZodType,
   TResponse extends z.ZodType,
 >(
-  definition: PluginHandlerDefinition<TRequest, TResponse> & {
-    streaming: true;
-    duplex: true;
-  },
+  definition: DuplexPluginHandlerDefinition<TRequest, TResponse>,
 ): PluginHandlerDefinition<TRequest, TResponse> {
-  return definition;
+  // The duplex flag guarantees inputStream is always
+  // provided at call time; the cast bridges TS function-param contravariance.
+  return definition as unknown as PluginHandlerDefinition<TRequest, TResponse>;
 }
 
 // ============================================

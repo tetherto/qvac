@@ -4,6 +4,7 @@ import { z } from "zod";
 import {
   defineHandler,
   defineDuplexHandler,
+  pluginHandlerDefinitionRuntimeSchema,
   type PluginHandlerDefinition,
 } from "@/schemas/plugin";
 import {
@@ -228,8 +229,6 @@ test("transcribeStreamResponseSchema: validates error response", (t: BrittleT) =
 // =============================================================================
 
 test("pluginHandlerDefinition: duplex field is optional in runtime validation", (t: BrittleT) => {
-  const { pluginHandlerDefinitionRuntimeSchema } = require("@/schemas/plugin");
-
   const withoutDuplex = pluginHandlerDefinitionRuntimeSchema.safeParse({
     requestSchema: { safeParse: () => {} },
     responseSchema: { safeParse: () => {} },
