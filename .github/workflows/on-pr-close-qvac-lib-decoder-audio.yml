@@ -5,7 +5,7 @@ on:
     types:
       - closed
     paths:
-      - "packages/qvac-lib-decoder-audio/**"
+      - "packages/decoder-audio/**"
       - ".github/workflows/*decoder-audio*.yml"
   workflow_dispatch:
     inputs:
@@ -25,7 +25,7 @@ on:
         description: "Packages to target for deletion, space separated"
         required: false
         type: string
-        default: "qvac-lib-decoder-audio"
+        default: "decoder-audio"
       dry-run:
         description: "Is dry run? If true, lists versions without deleting."
         type: boolean
@@ -62,5 +62,5 @@ jobs:
       version: ${{ inputs.version }}
       pr-number: ${{ github.event_name == 'pull_request' && github.event.pull_request.number || inputs.pr-number }}
       pattern: ${{ inputs.pattern }}
-      packages: ${{ inputs.packages || 'qvac-lib-decoder-audio' }}
+      packages: ${{ inputs.packages || 'decoder-audio' }}
       dry-run: ${{ github.event_name == 'pull_request' && true || inputs.dry-run }}

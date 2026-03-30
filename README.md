@@ -127,7 +127,7 @@ Legend:
 | Package | Description | Category |
 | :--- | :--- | :--- |
 | sdk | Main entry point to develop AI applications with QVAC | SDK |
-| lib-decoder-audio | Audio decoder library leveraging FFmpeg for efficient audio decoding as preprocessing step for other addons | Addon |
+| decoder-audio | Audio decoder library leveraging FFmpeg for efficient audio decoding as preprocessing step for other addons | Addon |
 | lib-infer-llamacpp-embed | Native C++ addon for running text embedding models to generate high-quality contextual embeddings | Addon |
 | lib-infer-llamacpp-llm | Native C++ addon for running Large Language Models (LLMs) within QVAC runtime applications | Addon |
 | lib-infer-diffusion | Native C++ addon for text-to-image generation using stable-diffusion.cpp | Addon |

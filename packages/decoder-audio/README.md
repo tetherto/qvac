@@ -1,4 +1,4 @@
-# qvac-lib-decoder-audio
+# decoder-audio
 
 This decoder library leverages FFmpeg for efficient audio decoding. It simplifies processing of input audio, particularly as a preprocessing step for other addons.
 
@@ -65,7 +65,7 @@ This configuration ensures secure access to GitHub Packages when installing scop
 Install the latest version of the decoder addon with the following command:
 
 ```bash
-npm install @tetherto/qvac-lib-decoder-audio@latest
+npm install @tetherto/decoder-audio@latest
 ```
 
 ## Usage
@@ -77,7 +77,7 @@ This library provides a simple workflow for decoding audio streams.
 To get started, import the decoder and create an instance:
 
 ```javascript
-const { FFmpegDecoder } = require('@tetherto/qvac-lib-decoder-audio')
+const { FFmpegDecoder } = require('@tetherto/decoder-audio')
 
 const decoder = new FFmpegDecoder({
   config: {
@@ -165,7 +165,7 @@ npm init -y
 ### 2. Install the required dependencies:
    
 ```bash
-npm install bare-fs @tetherto/qvac-lib-decoder-audio
+npm install bare-fs @tetherto/decoder-audio
 ```
 
 ### 3. Create a file named `example.js` and paste the following code:
@@ -174,7 +174,7 @@ npm install bare-fs @tetherto/qvac-lib-decoder-audio
 'use strict'
 
 const fs = require('bare-fs')
-const { FFmpegDecoder } = require('@tetherto/qvac-lib-decoder-audio')
+const { FFmpegDecoder } = require('@tetherto/decoder-audio')
 
 const audioFilePath = './path/to/audio/file.ogg'
 const outputFilePath = './path/to/output/file.raw'
@@ -255,7 +255,7 @@ Coverage reports are generated in the 'coverage/unit/' directory. Open the corre
 
 ## Resources
 
-* GitHub Repo: [tetherto/qvac](https://github.com/tetherto/qvac/tree/main/packages/qvac-lib-decoder-audio)
+* GitHub Repo: [tetherto/qvac](https://github.com/tetherto/qvac/tree/main/packages/decoder-audio)
 
 ## License
 
