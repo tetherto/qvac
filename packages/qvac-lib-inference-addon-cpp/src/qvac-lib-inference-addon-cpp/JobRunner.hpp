@@ -177,7 +177,7 @@ public:
 
     // Queued: remove directly. Skip modelCancel_ to avoid stale stop flags.
     if (job_.has_value() && (matchAny || job_->jobId == jobId.value())) {
-      auto id = job_->jobId;
+      JobId id = job_->jobId;
       job_.reset();
       outputQueue_->queueException(id, std::runtime_error("Job cancelled"));
       return;
