@@ -15,7 +15,7 @@ on:
         description: "Working directory (optional)"
         required: false
         type: string
-        default: "packages/qvac-lib-infer-whispercpp"
+        default: "packages/transcription-whispercpp"
   workflow_dispatch:
     inputs:
       ref:
@@ -31,7 +31,7 @@ on:
         description: "Working directory (optional)"
         required: false
         type: string
-        default: "packages/qvac-lib-infer-whispercpp"
+        default: "packages/transcription-whispercpp"
 
 env:
   NODE_VERSION: 'lts/*'

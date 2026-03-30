@@ -20,7 +20,7 @@ A JS server for benchmarking Whisper transcription addons, built with `bare` run
 ```bash
 # Clone the repository
 git clone https://github.com/tetherto/qvac.git
-cd qvac/packages/qvac-lib-infer-whispercpp/benchmarks/server
+cd qvac/packages/transcription-whispercpp/benchmarks/server
 
 # Install dependencies
 npm install

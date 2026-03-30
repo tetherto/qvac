@@ -1,4 +1,4 @@
-# qvac-lib-infer-whispercpp
+# transcription-whispercpp
 
 This library simplifies running inference with the Whisper transcription model within QVAC runtime applications. It provides an easy interface to load, execute, and manage Whisper inference instances, supporting multiple data sources (data loaders).
 
@@ -185,7 +185,7 @@ sudo yum install vulkan-tools vulkan-devel vulkan-validation-layers-devel spirv-
 
 ```bash
 git clone https://github.com/tetherto/qvac.git
-cd qvac/packages/qvac-lib-infer-whispercpp
+cd qvac/packages/transcription-whispercpp
 
 # Initialize submodules (required for native dependencies)
 git submodule update --init --recursive
@@ -485,8 +485,8 @@ try {
 
 ### 1. Clone the repo & Install the dependencies
 ```bash
-git clone git@github.com:tetherto/qvac-lib-infer-whispercpp.git
-cd qvac-lib-infer-whispercpp
+git clone git@github.com:tetherto/transcription-whispercpp.git
+cd transcription-whispercpp
 npm install
 ```
 

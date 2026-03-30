@@ -102,7 +102,7 @@ graph TB
     
     subgraph "Inference Addons"
         LLAMA[qvac-lib-infer-llamacpp-llm]
-        WHISPER[qvac-lib-infer-whispercpp]
+        WHISPER[transcription-whispercpp]
         NMT[qvac-lib-infer-nmtcpp]
         TTS[qvac-lib-infer-onnx-tts]
         EMBED[qvac-lib-infer-llamacpp-embed]
@@ -145,7 +145,7 @@ graph TB
 | Runtime | V8 JavaScript Engine | JavaScript execution |
 | Bridging | qvac-lib-inference-addon-cpp | JavaScript bridging and addon orchestration framework (this library) |
 | Addons | qvac-lib-infer-llamacpp-llm | LLM inference using llama.cpp |
-| Addons | qvac-lib-infer-whispercpp | Speech-to-text using Whisper |
+| Addons | transcription-whispercpp | Speech-to-text using Whisper |
 | Addons | qvac-lib-infer-nmtcpp | Neural machine translation |
 | Addons | qvac-lib-infer-onnx-tts | Text-to-speech using ONNX |
 | Addons | qvac-lib-infer-llamacpp-embed | Text embeddings using llama.cpp |
@@ -160,7 +160,7 @@ graph TB
 
 Production addons built on this library:
 - **qvac-lib-infer-llamacpp-llm** - LLM inference using llama.cpp
-- **qvac-lib-infer-whispercpp** - Speech-to-text using Whisper
+- **transcription-whispercpp** - Speech-to-text using Whisper
 - **qvac-lib-infer-nmtcpp** - Neural machine translation
 - **qvac-lib-infer-onnx-tts** - Text-to-speech using ONNX
 - **qvac-lib-infer-llamacpp-embed** - Text embeddings using llama.cpp

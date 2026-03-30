@@ -4,10 +4,10 @@ on:
   pull_request:
     types: [closed]
     paths:
-      - "packages/qvac-lib-infer-whispercpp/**"
+      - "packages/transcription-whispercpp/**"
 
 env:
-  WORKDIR: packages/qvac-lib-infer-whispercpp
+  WORKDIR: packages/transcription-whispercpp
 
 permissions:
   contents: read

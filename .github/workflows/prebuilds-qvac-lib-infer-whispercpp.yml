@@ -14,7 +14,7 @@ on:
       workdir:
         description: "Working directory"
         required: false
-        default: "packages/qvac-lib-infer-whispercpp"
+        default: "packages/transcription-whispercpp"
         type: string
 
   workflow_call:
@@ -40,7 +40,7 @@ on:
         description: "Working directory"
         type: string
         required: false
-        default: "packages/qvac-lib-infer-whispercpp"
+        default: "packages/transcription-whispercpp"
     outputs:
       published_version:
         description: "The version that was published"
@@ -97,8 +97,8 @@ jobs:
     name: ${{ matrix.platform }}-${{ matrix.arch }}${{ matrix.tags }}
 
     env:
-      WORKDIR: ${{ inputs.workdir || 'packages/qvac-lib-infer-whispercpp' }}
-      VCPKG_BINARY_SOURCES: "clear;files,${{ github.workspace }}/${{ inputs.workdir || 'packages/qvac-lib-infer-whispercpp' }}/vcpkg/cache,readwrite"
+      WORKDIR: ${{ inputs.workdir || 'packages/transcription-whispercpp' }}
+      VCPKG_BINARY_SOURCES: "clear;files,${{ github.workspace }}/${{ inputs.workdir || 'packages/transcription-whispercpp' }}/vcpkg/cache,readwrite"
       VCPKG_BUILD_TYPE: release
 
     steps:
@@ -478,7 +478,7 @@ jobs:
       contents: read
       packages: write
     env:
-      WORKDIR: ${{ inputs.workdir || 'packages/qvac-lib-infer-whispercpp' }}
+      WORKDIR: ${{ inputs.workdir || 'packages/transcription-whispercpp' }}
     steps:
       - name: Checkout repository
         uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # 6.0.2
@@ -557,7 +557,7 @@ jobs:
       contents: write
       packages: write
     env:
-      WORKDIR: ${{ inputs.workdir || 'packages/qvac-lib-infer-whispercpp' }}
+      WORKDIR: ${{ inputs.workdir || 'packages/transcription-whispercpp' }}
     steps:
       - name: Checkout repository
         uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # 6.0.2

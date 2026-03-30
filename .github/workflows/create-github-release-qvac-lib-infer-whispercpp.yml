@@ -12,9 +12,9 @@ on:
         required: false
         type: string
       workdir:
-        description: 'Package working directory in monorepo (e.g., packages/qvac-lib-infer-whispercpp)'
+        description: 'Package working directory in monorepo (e.g., packages/transcription-whispercpp)'
         required: false
-        default: 'packages/qvac-lib-infer-whispercpp'
+        default: 'packages/transcription-whispercpp'
         type: string
 
 permissions:

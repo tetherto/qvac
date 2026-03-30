@@ -8,7 +8,7 @@ on:
       - feature-*
       - tmp-*
     paths:
-      - "packages/qvac-lib-infer-whispercpp/**"
+      - "packages/transcription-whispercpp/**"
       - ".github/workflows/*whispercpp*.yml"
 
   workflow_dispatch:
@@ -96,9 +96,9 @@ jobs:
           base-ref: ${{ github.ref_name }}
           base-sha: ${{ github.event.before }}
           head-sha: ${{ github.sha }}
-          package-slug: qvac-lib-infer-whispercpp
-          package-json-path: packages/qvac-lib-infer-whispercpp/package.json
-          changelog-path: packages/qvac-lib-infer-whispercpp/CHANGELOG.md
+          package-slug: transcription-whispercpp
+          package-json-path: packages/transcription-whispercpp/package.json
+          changelog-path: packages/transcription-whispercpp/CHANGELOG.md
 
   publish-main-gpr:
     needs: publish-logic
@@ -107,14 +107,14 @@ jobs:
       contents: write
       packages: write
       pull-requests: write
-    uses: ./.github/workflows/prebuilds-qvac-lib-infer-whispercpp.yml
+    uses: ./.github/workflows/prebuilds-transcription-whispercpp.yml
     secrets: inherit
     with:
       tag: ${{ (github.event_name == 'workflow_dispatch' && github.event.inputs.tag) || needs.publish-logic.outputs.gpr_tag }}
       publish_target: "gpr"
       repository: ${{ github.repository }}
       ref: ${{ github.ref }}
-      workdir: "packages/qvac-lib-infer-whispercpp"
+      workdir: "packages/transcription-whispercpp"
 
   publish-feature-gpr:
     needs: publish-logic
@@ -123,14 +123,14 @@ jobs:
       contents: write
       packages: write
       pull-requests: write
-    uses: ./.github/workflows/prebuilds-qvac-lib-infer-whispercpp.yml
+    uses: ./.github/workflows/prebuilds-transcription-whispercpp.yml
     secrets: inherit
     with:
       tag: ${{ (github.event_name == 'workflow_dispatch' && github.event.inputs.tag) || needs.publish-logic.outputs.gpr_tag }}
       publish_target: "gpr"
       repository: ${{ github.repository }}
       ref: ${{ github.ref }}
-      workdir: "packages/qvac-lib-infer-whispercpp"
+      workdir: "packages/transcription-whispercpp"
 
   publish-tmp-gpr:
     needs: publish-logic
@@ -139,14 +139,14 @@ jobs:
       contents: write
       packages: write
       pull-requests: write
-    uses: ./.github/workflows/prebuilds-qvac-lib-infer-whispercpp.yml
+    uses: ./.github/workflows/prebuilds-transcription-whispercpp.yml
     secrets: inherit
     with:
       tag: ${{ (github.event_name == 'workflow_dispatch' && github.event.inputs.tag) || needs.publish-logic.outputs.gpr_tag }}
       publish_target: "gpr"
       repository: ${{ github.repository }}
       ref: ${{ github.ref }}
-      workdir: "packages/qvac-lib-infer-whispercpp"
+      workdir: "packages/transcription-whispercpp"
 
   publish-release-npm:
     needs: [publish-logic, release-merge-guard]
@@ -157,14 +157,14 @@ jobs:
       contents: write
       packages: write
       pull-requests: write
-    uses: ./.github/workflows/prebuilds-qvac-lib-infer-whispercpp.yml
+    uses: ./.github/workflows/prebuilds-transcription-whispercpp.yml
     secrets: inherit
     with:
       tag: "latest"
       publish_target: "npm"
       repository: ${{ github.repository }}
       ref: ${{ github.ref }}
-      workdir: "packages/qvac-lib-infer-whispercpp"
+      workdir: "packages/transcription-whispercpp"
 
   publish-release:
     needs: [publish-release-npm]
@@ -177,7 +177,7 @@ jobs:
       release_name: "QVAC Transcription Whisper Addon"
       published_version: ${{ needs.publish-release-npm.outputs.published_version }}
       prev_sha: ${{ github.event.before }}
-      workdir: "packages/qvac-lib-infer-whispercpp"
+      workdir: "packages/transcription-whispercpp"
 
   prebuild:
     name: Prebuild Gate
@@ -203,17 +203,17 @@ jobs:
           echo "should_run_tests=$should" >> "$GITHUB_OUTPUT"
 
   integration-tests:
-    uses: ./.github/workflows/integration-test-qvac-lib-infer-whispercpp.yml
+    uses: ./.github/workflows/integration-test-transcription-whispercpp.yml
     needs: prebuild
     if: needs.prebuild.outputs.should_run_tests == 'true'
     secrets: inherit
     with:
       repository: ${{ github.repository }}
       ref: ${{ github.sha }}
-      workdir: "packages/qvac-lib-infer-whispercpp"
+      workdir: "packages/transcription-whispercpp"
 
   mobile-integration-tests:
-    uses: ./.github/workflows/integration-mobile-test-qvac-lib-infer-whispercpp.yml
+    uses: ./.github/workflows/integration-mobile-test-transcription-whispercpp.yml
     needs: prebuild
     if: needs.prebuild.outputs.should_run_tests == 'true'
     permissions:
@@ -236,11 +236,11 @@ jobs:
         env:
           GH_TOKEN: ${{ secrets.PAT_TOKEN }}
         run: |
-          gh workflow run benchmark-qvac-lib-infer-whispercpp.yml \
+          gh workflow run benchmark-transcription-whispercpp.yml \
             --repo ${{ github.repository }} \
             --ref ${{ github.ref_name }} \
             -f dataset_type=librispeech \
             -f language=english \
             -f model_size=tiny \
             -f streaming_mode=false \
-            -f workdir=packages/qvac-lib-infer-whispercpp
+            -f workdir=packages/transcription-whispercpp
