@@ -291,9 +291,9 @@ test('Runtime stats are populated when opts.stats=true', { timeout: 120000 }, as
   }
 
   const constructorArgs = {
-    modelName: path.basename(modelPath),
-    diskPath: path.dirname(modelPath),
-    loader: new (require('../mocks/loader.fake.js'))({}),
+    files: {
+      model: modelPath
+    },
     opts: { stats: true }
   }
 

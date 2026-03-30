@@ -1,9 +1,7 @@
 'use strict'
 
-const path = require('bare-path')
 const fs = require('bare-fs')
 const BaseInference = require('@qvac/infer-base/WeightsProvider/BaseInference')
-const WeightsProvider = require('@qvac/infer-base/WeightsProvider/WeightsProvider')
 
 const { WhisperInterface } = require('./whisper')
 const { checkConfig } = require('./configChecker')
@@ -18,21 +16,30 @@ class TranscriptionWhispercpp extends BaseInference {
   /**
    * Creates an instance of WhisperClient.
    * @constructor
-   * @param {Object} args - arguments for inference setup
+   * @param {Object} args - arguments for inference setup (`files`, `logger`, `exclusiveRun`, `opts`, …)
+   * @param {Object} args.files - local model file paths
+   * @param {string} args.files.model - path to the Whisper GGML model file
+   * @param {string} [args.files.vadModel] - optional path to the Silero VAD model
    * @param {Object} config - environment-specific inference setup configuration
    */
   constructor (
-    { loader, logger = null, modelName, vadModelName, diskPath, exclusiveRun = true, ...args },
+    { files, logger = null, exclusiveRun = true, ...args },
     config
   ) {
-    // Forward extra args (notably `opts`) to BaseInference so features like stats can be enabled.
-    super({ logger, loader, exclusiveRun, ...args })
+    if (!files || typeof files.model !== 'string' || files.model.length === 0) {
+      throw new Error('TranscriptionWhispercpp: files.model is required')
+    }
 
-    this._diskPath = diskPath || ''
-    this._modelName = modelName
-    this._vadModelName = vadModelName || config.vad_model_path
+    // Forward extra args (notably `opts`) to BaseInference so features like stats can be enabled.
+    super({ logger, exclusiveRun, ...args })
+
+    const vadModel =
+      typeof files.vadModel === 'string' && files.vadModel.length > 0
+        ? files.vadModel
+        : null
+
+    this._files = { model: files.model, vadModel }
     this._config = config
-    this.weightsProvider = new WeightsProvider(loader, this.logger)
 
     this.params = config.whisperConfig
     this._hasActiveResponse = false
@@ -40,10 +47,24 @@ class TranscriptionWhispercpp extends BaseInference {
     this.logger.debug('TranscriptionWhispercpp constructor called', {
       params: this.params,
       config: this._config,
-      diskPath: this._diskPath
+      modelPath: this._files.model,
+      vadModelPath: this._files.vadModel
     })
 
     this.validateModelFiles()
+  }
+
+  _resolveVadModelPath () {
+    if (this._config.vadModelPath) {
+      return this._config.vadModelPath
+    }
+    if (this._files.vadModel) {
+      return this._files.vadModel
+    }
+    if (this.params?.vad_model_path) {
+      return this.params.vad_model_path
+    }
+    return null
   }
 
   /**
@@ -52,7 +73,7 @@ class TranscriptionWhispercpp extends BaseInference {
    * @param {Function} [reportProgressCallback] - Hook for progress updates.
    */
   async _load (closeLoader = false, reportProgressCallback) {
-    this.logger.debug('Loader ready')
+    this.logger.debug('TranscriptionWhispercpp _load (local model files)')
 
     await this.downloadWeights(reportProgressCallback, { closeLoader })
 
@@ -73,7 +94,7 @@ class TranscriptionWhispercpp extends BaseInference {
     delete whisperConfig.vad_params
 
     // VAD model is required for whisper transcription
-    const vadModelPath = this._config.vadModelPath || this._getVadModelFilePath()
+    const vadModelPath = this._resolveVadModelPath()
     if (vadModelPath) {
       whisperConfig.vad_model_path = vadModelPath
       whisperConfig.vadParams = this.params.vad_params || { threshold: 0.6 }
@@ -103,14 +124,7 @@ class TranscriptionWhispercpp extends BaseInference {
   }
 
   _getModelFilePath () {
-    if (!this._modelName) {
-      return ''
-    }
-    return path.join(this._diskPath, this._modelName)
-  }
-
-  _getVadModelFilePath () {
-    return this._vadModelName ? path.join(this._diskPath, this._vadModelName) : null
+    return this._files.model
   }
 
   async _runInternal (audioStream, opts = {}) {
@@ -145,7 +159,7 @@ class TranscriptionWhispercpp extends BaseInference {
   }
 
   async _runStreaming (audioStream) {
-    const vadModelPath = this._config.vadModelPath || this._getVadModelFilePath()
+    const vadModelPath = this._resolveVadModelPath()
     if (!vadModelPath) {
       throw new QvacErrorAddonWhisper({
         code: ERR_CODES.VAD_MODEL_REQUIRED
@@ -271,7 +285,7 @@ class TranscriptionWhispercpp extends BaseInference {
       delete whisperConfig.vad_params
 
       // VAD model configuration
-      const vadModelPath = this._config.vadModelPath || this._getVadModelFilePath()
+      const vadModelPath = this._resolveVadModelPath()
       if (vadModelPath) {
         whisperConfig.vad_model_path = vadModelPath
         whisperConfig.vadParams = newConfig.whisperConfig?.vad_params || this.params.vad_params || { threshold: 0.6 }
@@ -298,23 +312,10 @@ class TranscriptionWhispercpp extends BaseInference {
   }
 
   async _downloadWeights (reportProgressCallback, opts) {
-    const models = [this._modelName]
-    if (this._vadModelName) {
-      models.push(this._vadModelName)
-    }
-
-    this.logger.info('Loading weight files:', models)
-
-    const result = await this.weightsProvider.downloadFiles(
-      models,
-      this._diskPath,
-      {
-        closeLoader: opts.closeLoader,
-        onDownloadProgress: reportProgressCallback
-      }
+    this.logger.debug(
+      'TranscriptionWhispercpp: skipping remote weight download (local files.model / files.vadModel)',
+      { closeLoader: opts?.closeLoader, hasProgressCallback: typeof reportProgressCallback === 'function' }
     )
-    this.logger.info('Weight files downloaded successfully', { models })
-    return result
   }
 
   /**
@@ -401,16 +402,10 @@ class TranscriptionWhispercpp extends BaseInference {
       )
     }
 
-    if (this._config.whisperConfig && this._config.whisperConfig.vad_model_path) {
-      const vadModelPath = this._config.whisperConfig.vad_model_path
-      if (!vadModelPath || !fs.existsSync(vadModelPath)) {
-        this.logger.error('VAD model file not found', { path: vadModelPath })
-        throw new Error(
-          vadModelPath
-            ? `VAD model file doesn't exist: ${vadModelPath}`
-            : "VAD model file doesn't exist"
-        )
-      }
+    const vadModelPath = this._resolveVadModelPath()
+    if (vadModelPath && !fs.existsSync(vadModelPath)) {
+      this.logger.error('VAD model file not found', { path: vadModelPath })
+      throw new Error(`VAD model file doesn't exist: ${vadModelPath}`)
     }
   }
 }
