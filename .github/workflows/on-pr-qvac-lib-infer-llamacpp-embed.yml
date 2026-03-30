@@ -13,6 +13,7 @@ on:
       - release-*
       - feature-*
       - tmp-*
+      - fix/resuable-workflows
     paths:
       - "packages/qvac-lib-infer-llamacpp-embed/**"
       - ".github/workflows/*embed*.yml"
