@@ -58,18 +58,6 @@ on:
           - fast
 
   workflow_call:
-    secrets:
-      AWS_ACCESS_KEY_ID:
-        required: true
-      AWS_SECRET_ACCESS_KEY:
-        required: true
-      MODEL_S3_BUCKET:
-        required: true
-      NPM_TOKEN:
-        required: true
-      PAT_TOKEN:
-        required: true
-
     inputs:
       pairs:
         description: 'Comma-separated language pairs (e.g., en-it,en-de,de-en)'
@@ -183,10 +171,13 @@ jobs:
   build:
     needs: setup
     if: needs.setup.outputs.qvac_needed == 'true'
-    runs-on: ubuntu-24.04
+    runs-on: ubuntu-22.04
     environment: release
     timeout-minutes: 60
     name: Build QVAC addon
+
+    env:
+      VCPKG_BINARY_SOURCES: "clear;files,${{ github.workspace }}/packages/qvac-lib-infer-nmtcpp/vcpkg/cache,readwrite"
 
     steps:
       - name: Update C++ tools
@@ -207,6 +198,26 @@ jobs:
 
       - name: Install global dependencies
         run: npm install -g bare-make bare-runtime
+
+      - name: Replace bare-make's CMake with compatible version
+        shell: bash
+        run: |
+          echo "Installing CMake 3.28.3..."
+          wget -O cmake.sh https://github.com/Kitware/CMake/releases/download/v3.28.3/cmake-3.28.3-linux-x86_64.sh
+          sudo sh cmake.sh --skip-license --prefix=/usr/local
+          rm cmake.sh
+
+          echo "Finding bare-make's cmake binary..."
+          BARE_MAKE_CMAKE=$(find /opt/hostedtoolcache/node -path "*/bare-make/node_modules/cmake-runtime-*/bin/cmake" 2>/dev/null | head -1)
+          echo "bare-make cmake location: $BARE_MAKE_CMAKE"
+
+          echo "Replacing bare-make's cmake with version 3.28.3..."
+          sudo cp "$BARE_MAKE_CMAKE" "${BARE_MAKE_CMAKE}.bak"
+          sudo rm "$BARE_MAKE_CMAKE"
+          sudo ln -s /usr/local/bin/cmake "$BARE_MAKE_CMAKE"
+
+          echo "Verifying cmake version used by bare-make:"
+          "$BARE_MAKE_CMAKE" --version
 
       - name: Configure scoped registry for @tetherto and @qvac packages
         working-directory: ${{ env.PKG_DIR }}
@@ -240,34 +251,56 @@ jobs:
       - name: Configure vcpkg
         run: echo "VCPKG_ROOT=$VCPKG_INSTALLATION_ROOT" >> $GITHUB_ENV
 
-      - name: Install Vulkan SDK
-        run: |
-          wget -qO- https://packages.lunarg.com/lunarg-signing-key-pub.asc | sudo tee /etc/apt/trusted.gpg.d/lunarg.asc
-          sudo wget -qO /etc/apt/sources.list.d/lunarg-vulkan-noble.list http://packages.lunarg.com/vulkan/lunarg-vulkan-noble.list
-          sudo apt update
-          sudo apt install -y vulkan-sdk
+      - name: Update apt sources
+        run: sudo apt-get update
 
-      - name: Install system dependencies
+      - name: Download Vulkan SDK
         run: |
-          sudo apt-get update
-          sudo apt-get install -y \
-            cmake wget build-essential \
-            libprotobuf-dev protobuf-compiler \
-            libboost-all-dev \
-            ccache \
-            libunwind-dev
+          sudo apt install -y xz-utils
+          wget -q -O /tmp/vulkansdk.tar.xz https://sdk.lunarg.com/sdk/download/latest/linux/vulkan_sdk.tar.xz
+          cd ~
+          mkdir -p vulkan
+          cd vulkan
+          tar xf /tmp/vulkansdk.tar.xz --strip-components=1
+
+      - name: Setup Vulkan SDK path
+        run: |
+          VULKAN_SDK=~/vulkan/x86_64
+          echo "VULKAN_SDK=$VULKAN_SDK" >> $GITHUB_ENV
 
       - name: Configure git
-        run: git config --global --add url."https://${{ secrets.PAT_TOKEN }}@github.com/".insteadOf "https://github.com/"
+        shell: bash
+        run: |
+          GIT_PAT="${{ secrets.PAT_TOKEN || secrets.GITHUB_TOKEN }}"
+          git config --global --add url."https://${GIT_PAT}:x-oauth-basic@github.com/".insteadOf "https://github.com/"
+          git config --global --add url."https://${GIT_PAT}:x-oauth-basic@github.com/".insteadOf "git@github.com:"
+          git config --global --add url."https://${GIT_PAT}:x-oauth-basic@github.com/".insteadOf "ssh://git@github.com/"
 
       - name: Install npm dependencies
         working-directory: ${{ env.PKG_DIR }}
         run: npm install
 
+      - name: Create vcpkg cache location
+        working-directory: ${{ env.PKG_DIR }}
+        run: mkdir -p vcpkg/cache
+
+      - name: Restore vcpkg cache
+        id: cache-vcpkg
+        uses: actions/cache/restore@668228422ae6a00e4ad889ee87cd7109ec5666a7 # 5.0.4
+        with:
+          path: ${{ env.PKG_DIR }}/vcpkg/cache
+          key: vcpkg-nmtcpp-v1-linux-x64-benchmark-${{ hashFiles('packages/qvac-lib-infer-nmtcpp/vcpkg.json', 'packages/qvac-lib-infer-nmtcpp/vcpkg-configuration.json', 'packages/qvac-lib-infer-nmtcpp/vcpkg-overlays/**') }}
+          restore-keys: |
+            vcpkg-nmtcpp-v1-linux-x64-benchmark-
+            vcpkg-nmtcpp-v1-linux-x64-
+
       - name: Create config.cmake for Bergamot backend
         working-directory: ${{ env.PKG_DIR }}
+        shell: bash
         run: |
-          echo "set(USE_BERGAMOT ON CACHE BOOL \"Enable Bergamot backend support\")" > config.cmake
+          echo "set(USE_BERGAMOT ON CACHE BOOL \"Enable Bergamot backend support\" FORCE)" > config.cmake
+          echo "set(USE_INTGEMM ON CACHE BOOL \"Use INTGEMM for int8 quantized models\" FORCE)" >> config.cmake
+          echo "set(BUILD_ARCH x86-64-v2 CACHE STRING \"Target CPU architecture\" FORCE)" >> config.cmake
           echo "Configuration created:"
           cat config.cmake
 
@@ -297,12 +330,69 @@ jobs:
             echo "sentencepiece CMakeLists.txt not found at $SENTENCEPIECE_CMAKE"
           fi
 
+      - name: Fix std::result_of for C++17/C++20 compatibility
+        working-directory: ${{ env.PKG_DIR }}
+        shell: bash
+        run: |
+          echo "Replacing std::result_of with std::invoke_result for C++17/C++20 compatibility..."
+
+          CLI_APP_HPP="third-party/bergamot-translator/3rd_party/marian-dev/src/3rd_party/CLI/App.hpp"
+          if [ -f "$CLI_APP_HPP" ]; then
+            echo "Fixing CLI/App.hpp..."
+            sed -i.bak 's/std::result_of<decltype (\&App::_parse_arg)(App, Args\.\.\.)>/std::invoke_result<decltype (\&App::_parse_arg), App, Args...>/g' "$CLI_APP_HPP"
+            sed -i.bak2 's/std::result_of<decltype (\&App::_parse_subcommand)(App, Args\.\.\.)>/std::invoke_result<decltype (\&App::_parse_subcommand), App, Args...>/g' "$CLI_APP_HPP"
+            echo "Verification:"
+            grep -n "invoke_result\|result_of" "$CLI_APP_HPP" | head -5 || echo "No result_of found (good)"
+          fi
+
+          THREADPOOL_H="third-party/bergamot-translator/3rd_party/marian-dev/src/3rd_party/threadpool.h"
+          if [ -f "$THREADPOOL_H" ]; then
+            echo "Fixing threadpool.h..."
+            sed -i.bak 's/std::result_of<F(Args\.\.\.)>/std::invoke_result<F, Args...>/g' "$THREADPOOL_H"
+            echo "Verification:"
+            grep -n "invoke_result\|result_of" "$THREADPOOL_H" | head -5 || echo "No result_of found (good)"
+          fi
+
+          echo "std::result_of fixes applied"
+
+      - name: Remove -march=native from cpuinfo and marian-dev
+        working-directory: ${{ env.PKG_DIR }}
+        shell: bash
+        run: |
+          echo "Removing -march=native from cpuinfo and marian-dev CMakeLists.txt..."
+
+          MARIAN_CMAKE="third-party/bergamot-translator/3rd_party/marian-dev/CMakeLists.txt"
+          if [ -f "$MARIAN_CMAKE" ]; then
+            echo "Fixing marian-dev CMakeLists.txt..."
+            sed -i.bak3 's/-msse2//g' "$MARIAN_CMAKE"
+            sed -i.bak4 's/-march=native//g' "$MARIAN_CMAKE"
+            grep -n "march\|msse" "$MARIAN_CMAKE" | head -5 || echo "No x86-specific flags in marian-dev (good)"
+          fi
+
+          CPUINFO_CMAKE="third-party/bergamot-translator/3rd_party/marian-dev/src/3rd_party/ruy/third_party/cpuinfo/CMakeLists.txt"
+          if [ -f "$CPUINFO_CMAKE" ]; then
+            echo "Fixing cpuinfo CMakeLists.txt..."
+            sed -i.bak5 's/-march=native//g' "$CPUINFO_CMAKE"
+            grep -n "march" "$CPUINFO_CMAKE" | head -5 || echo "No march flags in cpuinfo (good)"
+          else
+            echo "cpuinfo CMakeLists.txt not found (may not be needed)"
+          fi
+
+          echo "-march=native removal complete"
+
       - name: Build addon
         working-directory: ${{ env.PKG_DIR }}
         run: |
           bare-make generate --platform linux --arch x64
           bare-make build
           bare-make install
+
+      - if: ${{ steps.cache-vcpkg.outputs.cache-hit != 'true' }}
+        name: Save vcpkg cache
+        uses: actions/cache/save@668228422ae6a00e4ad889ee87cd7109ec5666a7 # 5.0.4
+        with:
+          path: ${{ env.PKG_DIR }}/vcpkg/cache
+          key: vcpkg-nmtcpp-v1-linux-x64-benchmark-${{ hashFiles('packages/qvac-lib-infer-nmtcpp/vcpkg.json', 'packages/qvac-lib-infer-nmtcpp/vcpkg-configuration.json', 'packages/qvac-lib-infer-nmtcpp/vcpkg-overlays/**') }}
 
       - name: Upload build artifact
         uses: actions/upload-artifact@bbbca2ddaa5d8feaa63e36b76fdaad77386f024f # 7.0.0

@@ -1,35 +1,49 @@
 ---
 title: "startQVACProvider( )"
 titleStyle: code
-description: "Starts a provider service that offers QVAC capabilities to remote peers.
-The provider's keypair can be controlled via the seed option or QVAC_HYPERSWARM_SEED environment variable."
+description: Starts a provider service that offers QVAC capabilities to remote peers.
 ---
 
-```typescript
-function startQVACProvider(params: { firewall?: { mode: "allow" | "deny"; publicKeys: string[] }; topic: string }): Promise
+```ts
+function startQVACProvider(params): Promise<object>;
 ```
+
+The provider's keypair can be controlled via the seed option or the `QVAC_HYPERSWARM_SEED` environment variable.
 
 ## Parameters
 
 | Name | Type | Required? | Description |
 | --- | --- | :---: | --- |
-| `params` | `\{ firewall?: \{ mode: "allow" | "deny"; publicKeys: string[] \}; topic: string \}` | ✓ | Provider configuration with the swarm topic to join and an optional firewall for access control |
+| params.topic | `string` | ✓ | Topic hex string for peer discovery |
+| params.firewall | [`FirewallConfig`](#firewallconfig) | ✗ | Optional firewall configuration |
 
-| Field | Type | Required? | Description |
-| --- | --- | :---: | --- |
-| `topic` | `string` | ✓ | The Hyperswarm topic to join. Remote peers connecting to this topic can access the provider's capabilities |
-| `firewall` | `\{ mode: "allow" \| "deny"; publicKeys: string[] \}` | ✗ | Access control firewall. In `"allow"` mode, only the listed public keys can connect. In `"deny"` mode, the listed keys are blocked and all others are allowed |
+### `FirewallConfig`
+
+| Field | Type | Required? | Default | Description |
+| --- | --- | :---: | --- | --- |
+| mode | `"allow" \| "deny"` | ✗ | `"allow"` | Firewall mode |
+| publicKeys | `string[]` | ✗ | `[]` | Public keys to allow or deny |
 
 ## Returns
 
-```typescript
-Promise
-```
-
-
+`Promise<object>` — The provide response containing `success`, `publicKey`, and optional `error`.
 
 ## Throws
 
 | Error | When |
 | --- | --- |
-| `When the response type is not "provide" or the request fails` |  |
+| `INVALID_RESPONSE_TYPE` | Response type does not match expected `"provide"` |
+| `PROVIDER_START_FAILED` | The server reports provider start failure |
+
+## Example
+
+```typescript
+const response = await startQVACProvider({
+  topic: "a1b2c3d4...",
+  firewall: {
+    mode: "allow",
+    publicKeys: ["peer-public-key-hex"],
+  },
+});
+console.log("Provider public key:", response.publicKey);
+```
