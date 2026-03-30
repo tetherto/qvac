@@ -146,11 +146,12 @@ jobs:
           const path = require('path');
           const os = require('os');
 
-          if (process.env.CA_CERT) {
+          const caCert = (process.env.CA_CERT || '').trim();
+          if (caCert) {
             const certsDir = path.join(os.tmpdir(), 'mqtt-certs');
             fs.mkdirSync(certsDir, { recursive: true });
             const caPath = path.join(certsDir, 'ca.crt');
-            fs.writeFileSync(caPath, process.env.CA_CERT, 'utf8');
+            fs.writeFileSync(caPath, caCert, 'utf8');
             fs.appendFileSync(process.env.GITHUB_ENV, `MQTT_CA_PATH=${caPath}\n`, 'utf8');
             console.log('CA certificate written');
           }
@@ -454,11 +455,12 @@ jobs:
           const path = require('path');
           const os = require('os');
 
-          if (process.env.CA_CERT) {
+          const caCert = (process.env.CA_CERT || '').trim();
+          if (caCert) {
             const certsDir = path.join(os.tmpdir(), 'mqtt-certs');
             fs.mkdirSync(certsDir, { recursive: true });
             const caPath = path.join(certsDir, 'ca.crt');
-            fs.writeFileSync(caPath, process.env.CA_CERT, 'utf8');
+            fs.writeFileSync(caPath, caCert, 'utf8');
             fs.appendFileSync(process.env.GITHUB_ENV, `MQTT_CA_PATH=${caPath}\n`, 'utf8');
             console.log('CA certificate written');
           }
