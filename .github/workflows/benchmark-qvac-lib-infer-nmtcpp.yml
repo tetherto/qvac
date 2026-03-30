@@ -110,7 +110,7 @@ on:
         type: string
 
 env:
-  PKG_DIR: packages/qvac-lib-infer-nmtcpp
+  PKG_DIR: packages/translation-nmtcpp
 
 permissions:
   contents: read

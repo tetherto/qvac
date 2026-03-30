@@ -17,7 +17,7 @@ on:
         type: string
 
 env:
-  PKG_DIR: packages/qvac-lib-infer-nmtcpp
+  PKG_DIR: packages/translation-nmtcpp
 
 permissions:
   contents: read
@@ -65,7 +65,7 @@ jobs:
 
   benchmark-opus:
     needs: prepare
-    uses: ./.github/workflows/benchmark-qvac-lib-infer-nmtcpp.yml
+    uses: ./.github/workflows/benchmark-translation-nmtcpp.yml
     secrets: inherit
     with:
       pairs: ${{ needs.prepare.outputs.opus_pairs }}
@@ -81,7 +81,7 @@ jobs:
 
   benchmark-bergamot:
     needs: prepare
-    uses: ./.github/workflows/benchmark-qvac-lib-infer-nmtcpp.yml
+    uses: ./.github/workflows/benchmark-translation-nmtcpp.yml
     secrets: inherit
     with:
       pairs: ${{ needs.prepare.outputs.bergamot_pairs }}

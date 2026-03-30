@@ -58,7 +58,7 @@ Create `release-notes/vX.Y.Z.md` with these guidelines:
    - `qvac-lib-decoder-audio`: `Audio Decoder`
    - `qvac-lib-infer-llamacpp-embed`: `Embeddings Addon`
    - `qvac-lib-infer-llamacpp-llm`: `LLM Addon`
-   - `qvac-lib-infer-nmtcpp`: `NMT Addon`
+   - `translation-nmtcpp`: `NMT Addon`
    - `qvac-lib-infer-onnx-tts`: `TTS ONNX Addon`
    - `qvac-lib-infer-whispercpp`: `Transcription Whisper Addon`
    - `ocr-onnx`: `OCR Addon`

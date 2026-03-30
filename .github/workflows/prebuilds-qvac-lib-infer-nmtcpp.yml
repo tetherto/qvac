@@ -36,7 +36,7 @@ on:
           - canary
 
 env:
-  PKG_DIR: packages/qvac-lib-infer-nmtcpp
+  PKG_DIR: packages/translation-nmtcpp
 
 permissions:
   contents: read
@@ -92,7 +92,7 @@ jobs:
     name: ${{ matrix.platform }}-${{ matrix.arch }}${{ matrix.tags }}
 
     env:
-      VCPKG_BINARY_SOURCES: "clear;files,${{ github.workspace }}/packages/qvac-lib-infer-nmtcpp/vcpkg/cache,readwrite"
+      VCPKG_BINARY_SOURCES: "clear;files,${{ github.workspace }}/packages/translation-nmtcpp/vcpkg/cache,readwrite"
 
     steps:
       - name: Echo workflow inputs
@@ -365,7 +365,7 @@ jobs:
         uses: actions/cache/restore@668228422ae6a00e4ad889ee87cd7109ec5666a7 # 5.0.4
         with:
           path: ${{ env.PKG_DIR }}/vcpkg/cache
-          key: vcpkg-nmtcpp-v1-${{ matrix.platform }}-${{ matrix.arch }}${{ matrix.tags }}-${{ hashFiles('packages/qvac-lib-infer-nmtcpp/vcpkg.json', 'packages/qvac-lib-infer-nmtcpp/vcpkg-configuration.json', 'packages/qvac-lib-infer-nmtcpp/vcpkg-overlays/**') }}
+          key: vcpkg-nmtcpp-v1-${{ matrix.platform }}-${{ matrix.arch }}${{ matrix.tags }}-${{ hashFiles('packages/translation-nmtcpp/vcpkg.json', 'packages/translation-nmtcpp/vcpkg-configuration.json', 'packages/translation-nmtcpp/vcpkg-overlays/**') }}
           restore-keys: |
             vcpkg-nmtcpp-v1-${{ matrix.platform }}-${{ matrix.arch }}${{ matrix.tags }}-
             vcpkg-nmtcpp-v1-${{ matrix.platform }}-${{ matrix.arch }}-
@@ -680,7 +680,7 @@ jobs:
         uses: actions/cache/save@668228422ae6a00e4ad889ee87cd7109ec5666a7 # 5.0.4
         with:
           path: ${{ env.PKG_DIR }}/vcpkg/cache
-          key: vcpkg-nmtcpp-v1-${{ matrix.platform }}-${{ matrix.arch }}${{ matrix.tags }}-${{ hashFiles('packages/qvac-lib-infer-nmtcpp/vcpkg.json', 'packages/qvac-lib-infer-nmtcpp/vcpkg-configuration.json', 'packages/qvac-lib-infer-nmtcpp/vcpkg-overlays/**') }}
+          key: vcpkg-nmtcpp-v1-${{ matrix.platform }}-${{ matrix.arch }}${{ matrix.tags }}-${{ hashFiles('packages/translation-nmtcpp/vcpkg.json', 'packages/translation-nmtcpp/vcpkg-configuration.json', 'packages/translation-nmtcpp/vcpkg-overlays/**') }}
 
       - uses: actions/upload-artifact@bbbca2ddaa5d8feaa63e36b76fdaad77386f024f # 7.0.0
         with:
@@ -848,7 +848,7 @@ jobs:
       release_name: "QVAC Infer NMTCPP Lib"
       published_version: ${{ needs.publish-npm.outputs.published_version }}
       prev_sha: ${{ github.event.before }}
-      workdir: "packages/qvac-lib-infer-nmtcpp"
+      workdir: "packages/translation-nmtcpp"
 
   run-automated-benchmarks:
     needs: [publish-npm]
@@ -856,7 +856,7 @@ jobs:
     permissions:
       contents: read
       packages: read
-    uses: ./.github/workflows/on-publish-benchmark-qvac-lib-infer-nmtcpp.yml
+    uses: ./.github/workflows/on-publish-benchmark-translation-nmtcpp.yml
     secrets: inherit
     with:
       version: ${{ needs.publish-npm.outputs.published_version }}

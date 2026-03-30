@@ -1033,7 +1033,7 @@ This project contains C++ native addons that must be built before running tests.
 ```bash
 # 1. Clone the monorepo
 git clone https://github.com/tetherto/qvac.git
-cd qvac/packages/qvac-lib-infer-nmtcpp
+cd qvac/packages/translation-nmtcpp
 
 # 2. Install dependencies
 npm install
@@ -1048,7 +1048,7 @@ npm run build
 
 1. **Fork** the monorepo
 2. **Clone** your fork: `git clone https://github.com/YOUR_USERNAME/qvac.git`
-3. **Navigate**: `cd qvac/packages/qvac-lib-infer-nmtcpp`
+3. **Navigate**: `cd qvac/packages/translation-nmtcpp`
 4. **Install and build**: `npm install && npm run build`
 5. **Create a branch**: `git checkout -b feature/your-feature-name`
 6. **Make changes** and ensure tests pass: `npm test`

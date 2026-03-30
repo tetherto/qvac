@@ -1,7 +1,7 @@
 #!/bin/bash
 
 # Guide:
-# https://github.com/tetherto/ai-runtime-docs/blob/main/Components/Inference/Packages/qvac-lib-infer-nmtcpp.md
+# https://github.com/tetherto/ai-runtime-docs/blob/main/Components/Inference/Packages/translation-nmtcpp.md
 
 # echo """Script assumes:
 # - you have setup access to Private NPM registry.
@@ -13,7 +13,7 @@ export REPO_DIR=$(mktemp -d -t marian_$(date +%Y.%m.%d)-XXXX)
 echo "Using temp directory: $REPO_DIR"
 
 # Clone the repository
-git clone https://github.com/tetherto/qvac-lib-infer-nmtcpp.git $REPO_DIR
+git clone https://github.com/tetherto/translation-nmtcpp.git $REPO_DIR
 
 # Navigate to the project directory:
 cd $REPO_DIR
