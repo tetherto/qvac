@@ -536,4 +536,69 @@ TEST_F(JobRunnerTest, StaleCancelDoesNotClearNewerAcceptedJob) {
   EXPECT_FALSE(sawWrongJob2Cancel);
 }
 
+TEST_F(JobRunnerTest, CancelWhileActivelyProcessing_ModelReceivesStop) {
+  model_ = std::make_unique<JobRunnerTestModel>(std::chrono::milliseconds{2000});
+  outputQueue_ = std::make_shared<OutputQueue>(*callback_, *model_);
+  jobRunner_ =
+      std::make_unique<JobRunner>(outputQueue_, model_.get(), model_.get());
+  jobRunner_->start();
+
+  EXPECT_TRUE(jobRunner_->runJob(std::string("long job")));
+
+  auto deadline = std::chrono::steady_clock::now() + std::chrono::seconds{2};
+  while (!model_->isProcessing() &&
+         std::chrono::steady_clock::now() < deadline) {
+    std::this_thread::sleep_for(std::chrono::milliseconds{1});
+  }
+  ASSERT_TRUE(model_->isProcessing());
+
+  auto cancel_future =
+      std::async(std::launch::async, [this]() { jobRunner_->cancel(); });
+
+  auto status = cancel_future.wait_for(std::chrono::seconds{3});
+  ASSERT_NE(status, std::future_status::timeout)
+      << "cancel() hung — model never received stop signal";
+
+  EXPECT_FALSE(model_->isProcessing());
+
+  EXPECT_TRUE(jobRunner_->runJob(std::string("follow-up")));
+  EXPECT_TRUE(
+      model_->waitForProcessingToComplete(std::chrono::milliseconds{3000}));
+}
+
+TEST_F(JobRunnerTest, StaleCancelDoesNotKillActiveJob) {
+  model_ =
+      std::make_unique<JobRunnerTestModel>(std::chrono::milliseconds{2000});
+  outputQueue_ = std::make_shared<OutputQueue>(*callback_, *model_);
+  jobRunner_ =
+      std::make_unique<JobRunner>(outputQueue_, model_.get(), model_.get());
+  jobRunner_->start();
+
+  EXPECT_TRUE(jobRunner_->runJob(std::string("job-1")));
+  std::this_thread::sleep_for(std::chrono::milliseconds{50});
+  jobRunner_->cancel();
+  std::this_thread::sleep_for(std::chrono::milliseconds{100});
+
+  EXPECT_TRUE(jobRunner_->runJob(std::string("job-2")));
+
+  auto deadline = std::chrono::steady_clock::now() + std::chrono::seconds{2};
+  while (!model_->isProcessing() &&
+         std::chrono::steady_clock::now() < deadline) {
+    std::this_thread::sleep_for(std::chrono::milliseconds{1});
+  }
+  ASSERT_TRUE(model_->isProcessing());
+
+  // cancel(1) targets job-1; job-2 (id=2) must not be affected
+  jobRunner_->cancel(1);
+
+  std::this_thread::sleep_for(std::chrono::milliseconds{50});
+  EXPECT_TRUE(model_->isProcessing())
+      << "Stale cancel(1) should not have killed active job-2";
+
+  jobRunner_->cancel();
+  EXPECT_TRUE(
+      model_->waitForProcessingToComplete(std::chrono::milliseconds{3000}));
+}
+
 } // namespace qvac_lib_inference_addon_cpp
+

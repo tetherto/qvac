@@ -54,6 +54,7 @@ class JobRunner {
   mutable std::timed_mutex mtx_;
   mutable std::condition_variable_any processCv_;
   std::optional<PendingJob> job_;
+  std::optional<JobId> activeJobId_;
   JobId nextJobId_{1};
   mutable std::thread processingThread_;
   mutable std::atomic_bool running_ = false;
@@ -65,7 +66,7 @@ class JobRunner {
     if (!lock.owns_lock()) {
       lock.lock();
     }
-    job_.reset();
+    activeJobId_.reset();
   }
 
   void process() {
@@ -87,6 +88,8 @@ class JobRunner {
         ready_ = false;
         processingSync_.setActive(true);
         currentJob = std::move(*job_);
+        job_.reset();
+        activeJobId_ = currentJob->jobId;
 
         // Unlock main lock to ensure cancel() can acquire without blocking
         lock.unlock();
@@ -164,23 +167,28 @@ public:
   }
 
   void cancel(std::optional<JobId> jobId = std::nullopt) {
-    std::scoped_lock lock{mtx_};
+    std::unique_lock lock{mtx_};
     if (modelCancel_ == nullptr) {
       QLOG(logger::Priority::WARNING, "Model does not support cancellation");
       return;
     }
-    if (job_.has_value() &&
-        (!jobId.has_value() || job_->jobId == jobId.value())) {
-      const auto activeJobId = job_->jobId;
-      modelCancel_->cancel();
-      processingSync_.waitInactive();
+
+    const bool matchAny = !jobId.has_value();
+
+    // Queued: remove directly. Skip modelCancel_ to avoid stale stop flags.
+    if (job_.has_value() && (matchAny || job_->jobId == jobId.value())) {
+      auto id = job_->jobId;
       job_.reset();
-      if (ready_.load()) {
-        // If the worker has not taken the job yet (ready_ == true, still in
-        // wait), it will never run queueJobEnded. Signal finished now.
-        outputQueue_->queueException(
-            activeJobId, std::runtime_error("Job cancelled"));
-      }
+      outputQueue_->queueException(id, std::runtime_error("Job cancelled"));
+      return;
+    }
+
+    // Active: signal model, unlock before wait (finalizeJob re-acquires mtx_).
+    if (activeJobId_.has_value() &&
+        (matchAny || activeJobId_.value() == jobId.value())) {
+      modelCancel_->cancel();
+      lock.unlock();
+      processingSync_.waitInactive();
     }
   }
 };
