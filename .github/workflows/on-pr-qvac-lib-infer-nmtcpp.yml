@@ -117,9 +117,7 @@ jobs:
        needs.authorize.outputs.allowed == 'true' &&
       (needs.changes.outputs.pkg == 'true' || github.event_name == 'workflow_dispatch')
     uses: tetherto/qvac-devops/.github/workflows/cpp-lint.yaml@v1.1.7
-    secrets:
-      NPM_TOKEN: ${{ secrets.NPM_TOKEN }}
-      PAT_TOKEN: ${{ secrets.PAT_TOKEN }}
+    secrets: inherit
     with:
       sha: ${{ github.event.pull_request.base.sha || github.event.before || 'HEAD~1' }}
       pr_head_sha: ${{ github.event.pull_request.head.sha || github.sha }}
@@ -132,12 +130,7 @@ jobs:
       needs.authorize.outputs.allowed == 'true' &&
       (needs.changes.outputs.pkg == 'true' || github.event_name == 'workflow_dispatch')
     uses: ./.github/workflows/reusable-cpp-tests-qvac-lib-infer-nmtcpp.yml
-    secrets:
-      AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
-      AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
-      MODEL_S3_BUCKET: ${{ secrets.MODEL_S3_BUCKET }}
-      NPM_TOKEN: ${{ secrets.NPM_TOKEN }}
-      PAT_TOKEN: ${{ secrets.PAT_TOKEN }}
+    secrets: inherit
     with:
       ref: ${{ github.event.pull_request.head.ref }}
       repository: ${{ github.event.pull_request.head.repo.full_name }}
@@ -153,12 +146,7 @@ jobs:
       needs.authorize.outputs.allowed == 'true' &&
       (needs.changes.outputs.pkg == 'true' || github.event_name == 'workflow_dispatch')
     uses: ./.github/workflows/prebuilds-qvac-lib-infer-nmtcpp.yml
-    secrets:
-      AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
-      AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
-      MODEL_S3_BUCKET: ${{ secrets.MODEL_S3_BUCKET }}
-      NPM_TOKEN: ${{ secrets.NPM_TOKEN }}
-      PAT_TOKEN: ${{ secrets.PAT_TOKEN }}
+    secrets: inherit
     with:
       repository: ${{ github.event.pull_request.head.repo.full_name }}
       ref: ${{ github.event.pull_request.head.ref }}
@@ -172,13 +160,7 @@ jobs:
       needs.authorize.outputs.allowed == 'true' &&
       (needs.changes.outputs.pkg == 'true' || github.event_name == 'workflow_dispatch')
     uses: ./.github/workflows/integration-test-qvac-lib-infer-nmtcpp.yml
-    secrets:
-      AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
-      AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
-      MODEL_S3_BUCKET: ${{ secrets.MODEL_S3_BUCKET }}
-      NPM_TOKEN: ${{ secrets.NPM_TOKEN }}
-      PAT_TOKEN: ${{ secrets.PAT_TOKEN }}
-      QASE_API_TOKEN: ${{ secrets.QASE_API_TOKEN }}
+    secrets: inherit
     with:
       repository: ${{ github.event.pull_request.head.repo.full_name }}
       ref: ${{ github.event.pull_request.head.ref }}
@@ -194,20 +176,7 @@ jobs:
       needs.authorize.outputs.allowed == 'true' &&
       (needs.changes.outputs.pkg == 'true' || github.event_name == 'workflow_dispatch')
     uses: ./.github/workflows/integration-mobile-test-qvac-lib-infer-nmtcpp.yml
-    secrets:
-      ANDROID_DEVICE_POOL_ARN_NMTCPP: ${{ secrets.ANDROID_DEVICE_POOL_ARN_NMTCPP }}
-      APPLE_KEYCHAIN_PASSWORD: ${{ secrets.APPLE_KEYCHAIN_PASSWORD }}
-      APPLE_P12_PASSWORD: ${{ secrets.APPLE_P12_PASSWORD }}
-      APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
-      AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
-      AWS_DEVICE_FARM_PROJECT_ARN_NMTCPP: ${{ secrets.AWS_DEVICE_FARM_PROJECT_ARN_NMTCPP }}
-      AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
-      IOS_DEVICE_POOL_ARN_NMTCPP: ${{ secrets.IOS_DEVICE_POOL_ARN_NMTCPP }}
-      MODEL_S3_BUCKET: ${{ secrets.MODEL_S3_BUCKET }}
-      NPM_TOKEN: ${{ secrets.NPM_TOKEN }}
-      PAT_TOKEN: ${{ secrets.PAT_TOKEN }}
-      TEST_APP_APPLE_DISTRIBUTION_CERTIFICATE: ${{ secrets.TEST_APP_APPLE_DISTRIBUTION_CERTIFICATE }}
-      TEST_APP_APPLE_PROVISIONING_PROFILE: ${{ secrets.TEST_APP_APPLE_PROVISIONING_PROFILE }}
+    secrets: inherit
     with:
       repository: ${{ github.event.pull_request.head.repo.full_name }}
       ref: ${{ github.event.pull_request.head.ref }}

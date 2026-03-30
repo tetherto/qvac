@@ -1,48 +1,58 @@
 ---
 title: "getLogger( )"
 titleStyle: code
-description: "Creates or retrieves a namespaced logger instance. Loggers with the same namespace are cached and reused when no options are provided."
+description: Creates or retrieves a cached logger instance for the given namespace.
 ---
 
-```typescript
-function getLogger(namespace: string, options?: LoggerOptions): Logger
+```ts
+function getLogger(namespace: string, options?: LoggerOptions): Logger;
 ```
 
 ## Parameters
 
 | Name | Type | Required? | Description |
 | --- | --- | :---: | --- |
-| `namespace` | `string` | ✓ | A unique namespace identifier for this logger, used to prefix and filter log messages |
-| `options` | [`LoggerOptions`](#loggeroptions) | ✗ | Configuration options for the logger instance. When provided, bypasses the logger cache and creates a new instance |
+| namespace | `string` | ✓ | Logger namespace (used for identification and filtering) |
+| options | [`LoggerOptions`](#loggeroptions) | ✗ | Optional logger configuration. When omitted, the logger is cached by namespace. When provided, a new logger is always created. |
 
 ### `LoggerOptions`
 
 | Field | Type | Required? | Description |
 | --- | --- | :---: | --- |
-| `enableConsole` | `boolean` | ✗ | Whether to output log messages to the console. Defaults to `true` |
-| `level` | `LogLevel` | ✗ | Minimum log level to emit. One of `"error"`, `"warn"`, `"info"`, `"debug"`, or `"off"` |
-| `namespace` | `string` | ✗ | Override the namespace passed to the constructor |
-| `transports` | `LogTransport[]` | ✗ | Custom transport functions that receive log events. Each transport is called with `(level, namespace, message)` |
+| level | `"error" \| "warn" \| "info" \| "debug" \| "trace"` | ✗ | Log level |
+| namespace | `string` | ✗ | Override namespace |
+| transports | [`LogTransport[]`](#logtransport) | ✗ | Custom log transports |
+| enableConsole | `boolean` | ✗ | Whether to output logs to console |
+
+### `LogTransport`
+
+```ts
+type LogTransport = (
+  level: LogLevel,
+  namespace: string,
+  message: string,
+) => void | Promise<void>;
+```
+
+A callback function invoked for each log entry. `LogLevel` is `"error" | "warn" | "info" | "debug" | "trace"`.
 
 ## Returns
 
-```typescript
-Logger
-```
+[`Logger`](#logger) — A logger instance.
 
-A logger instance with methods for emitting log messages at various severity levels.
+### `Logger`
 
-| Field | Type | Description |
+| Method | Signature | Description |
 | --- | --- | --- |
-| `addTransport` | `(transport: LogTransport) => void` | Registers an additional transport to receive log events |
-| `debug` | `(...args: unknown[]) => void` | Logs a debug-level message |
-| `error` | `(...args: unknown[]) => void` | Logs an error-level message |
-| `getLevel` | `() => LogLevel` | Returns the current minimum log level |
-| `info` | `(...args: unknown[]) => void` | Logs an info-level message |
-| `setConsoleOutput` | `(enabled: boolean) => void` | Enables or disables console output at runtime |
-| `setLevel` | `(level: LogLevel) => void` | Changes the minimum log level at runtime |
-| `trace` | `(...args: unknown[]) => void` | Logs a trace-level message (most verbose) |
-| `warn` | `(...args: unknown[]) => void` | Logs a warning-level message |
+| error | `(...args: unknown[]) => void` | Log at error level |
+| warn | `(...args: unknown[]) => void` | Log at warn level |
+| info | `(...args: unknown[]) => void` | Log at info level |
+| debug | `(...args: unknown[]) => void` | Log at debug level |
+| trace | `(...args: unknown[]) => void` | Log at trace level |
+| setLevel | `(level) => void` | Change the log level |
+| getLevel | `() => LogLevel` | Get the current log level |
+| addTransport | `(transport:` [`LogTransport`](#logtransport)`) => void` | Add a custom transport |
+| setConsoleOutput | `(enabled: boolean) => void` | Enable or disable console output |
 
 ## Example
 

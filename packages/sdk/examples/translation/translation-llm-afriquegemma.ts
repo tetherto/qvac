@@ -32,7 +32,7 @@ try {
     modelId,
     text: engText,
     from: "en",
-    to: "arz",
+    to: "swh_Latn",
     modelType: "llm",
     stream: false,
   });
@@ -40,22 +40,6 @@ try {
   const translatedTextExplicit = await resultExplicit.text;
 
   console.log(`Explicit source: ${engText} -> "${translatedTextExplicit}"`);
-
-
-  // With auto detection
-  const swahiliText = "Habari yako leo?";
-  const resultImplicit = translate({
-    modelId,
-    text: swahiliText,
-    to: "en",
-    modelType: "llm",
-    stream: false,
-  });
-
-  const translatedTextImplicit = await resultImplicit.text;
-
-  console.log(`Auto detect source: ${swahiliText} -> "${translatedTextImplicit}"`);
-
 
   await unloadModel({ modelId, clearStorage: false });
 } catch (error) {

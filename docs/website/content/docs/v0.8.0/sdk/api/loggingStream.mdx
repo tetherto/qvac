@@ -1,43 +1,53 @@
 ---
 title: "loggingStream( )"
 titleStyle: code
-description: "Opens a logging stream to receive real-time logs."
+description: Opens a logging stream to receive real-time logs.
 ---
 
-```typescript
-function loggingStream(params: { id: string }): AsyncGenerator
+```ts
+function loggingStream(params): AsyncGenerator<LoggingStreamResponse>;
 ```
 
 ## Parameters
 
 | Name | Type | Required? | Description |
 | --- | --- | :---: | --- |
-| `params` | `\{ id: string \}` | ✓ | The arguments for the logging stream |
+| params | `object` | ✓ | The logging stream parameters |
+| params.id | `string` | ✓ | The identifier to stream logs for. Pass a model ID for model logs, or the exported constant `SDK_LOG_ID` for SDK server logs. |
 
 ## Returns
 
-```typescript
-AsyncGenerator
-```
+`AsyncGenerator<`[`LoggingStreamResponse`](#loggingstreamresponse)`>` — Yields log messages in real time.
 
+### `LoggingStreamResponse`
 
+| Field | Type | Description |
+| --- | --- | --- |
+| type | `"loggingStream"` | Response type |
+| id | `string` | Identifier being streamed |
+| level | `"error" \| "warn" \| "info" \| "debug"` | Log level |
+| namespace | `string` | Logger namespace |
+| message | `string` | Log message |
+| timestamp | `number` | Unix timestamp |
 
 ## Throws
 
 | Error | When |
 | --- | --- |
-| `When the response type is invalid or when the stream fails` |  |
+| `INVALID_RESPONSE_TYPE` | A chunk's type does not match expected `"loggingStream"` |
 
 ## Example
 
 ```typescript
-// Open a logging stream for a model
-const logStream = loggingStream({ id: 'my-model-id' });
+import { loggingStream, SDK_LOG_ID } from "@qvac/sdk";
 
-// Or stream SDK server logs
-const sdkLogs = loggingStream({ id: SDK_LOG_ID });
+// Stream logs from a loaded model
+const logStream = loggingStream({ id: "my-model-id" });
 
 for await (const logMessage of logStream) {
   console.log(`[${logMessage.level}] ${logMessage.namespace}: ${logMessage.message}`);
 }
+
+// Or stream SDK server logs
+const sdkLogs = loggingStream({ id: SDK_LOG_ID });
 ```
