@@ -3,7 +3,7 @@
   "version": "1.1.3",
   "dependencies": [
     {
-      "name": "lint-cpp",
+      "name": "qvac-lint-cpp",
       "version>=": "1.4.1"
     },
     {
