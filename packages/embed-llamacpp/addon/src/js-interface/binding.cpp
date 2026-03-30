@@ -33,4 +33,4 @@ qvacLibInferLlamacppEmbedExports(js_env_t* env, js_value_t* exports) {
   return exports;
 }
 
-BARE_MODULE("qvac-lib-infer-llamacpp-embed", qvacLibInferLlamacppEmbedExports)
+BARE_MODULE("embed-llamacpp", qvacLibInferLlamacppEmbedExports)

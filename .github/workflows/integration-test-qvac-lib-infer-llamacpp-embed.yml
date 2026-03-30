@@ -30,7 +30,7 @@ jobs:
       packages: read
 
     env:
-      WORKDIR: packages/qvac-lib-infer-llamacpp-embed
+      WORKDIR: packages/embed-llamacpp
 
     strategy:
       fail-fast: false

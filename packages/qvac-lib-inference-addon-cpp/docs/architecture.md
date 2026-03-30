@@ -105,7 +105,7 @@ graph TB
         WHISPER[qvac-lib-infer-whispercpp]
         NMT[qvac-lib-infer-nmtcpp]
         TTS[qvac-lib-infer-onnx-tts]
-        EMBED[qvac-lib-infer-llamacpp-embed]
+        EMBED[embed-llamacpp]
         OCR[qvac-lib-inference-addon-onnx-ocr-fasttext]
     end
     
@@ -148,7 +148,7 @@ graph TB
 | Addons | qvac-lib-infer-whispercpp | Speech-to-text using Whisper |
 | Addons | qvac-lib-infer-nmtcpp | Neural machine translation |
 | Addons | qvac-lib-infer-onnx-tts | Text-to-speech using ONNX |
-| Addons | qvac-lib-infer-llamacpp-embed | Text embeddings using llama.cpp |
+| Addons | embed-llamacpp | Text embeddings using llama.cpp |
 | Addons | qvac-lib-inference-addon-onnx-ocr-fasttext | OCR using ONNX |
 | Backend | CPU/GPU Inference Backends | Native ML computation |
 
@@ -163,7 +163,7 @@ Production addons built on this library:
 - **qvac-lib-infer-whispercpp** - Speech-to-text using Whisper
 - **qvac-lib-infer-nmtcpp** - Neural machine translation
 - **qvac-lib-infer-onnx-tts** - Text-to-speech using ONNX
-- **qvac-lib-infer-llamacpp-embed** - Text embeddings using llama.cpp
+- **embed-llamacpp** - Text embeddings using llama.cpp
 - **qvac-lib-inference-addon-onnx-ocr-fasttext** - OCR using ONNX and FastText
 
 ---

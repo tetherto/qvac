@@ -14,7 +14,7 @@ on:
         description: "Working directory"
         type: string
         required: false
-        default: "packages/qvac-lib-infer-llamacpp-embed"
+        default: "packages/embed-llamacpp"
   workflow_dispatch:
     inputs:
       ref:
@@ -26,7 +26,7 @@ on:
         description: "Working directory"
         type: string
         required: false
-        default: "packages/qvac-lib-infer-llamacpp-embed"
+        default: "packages/embed-llamacpp"
 
 jobs:
   run-cpp-tests:

@@ -69,7 +69,7 @@ on:
       workdir:
         description: 'Working directory for the addon in the monorepo'
         required: false
-        default: "packages/qvac-lib-infer-llamacpp-embed"
+        default: "packages/embed-llamacpp"
         type: string
 
   workflow_call:
@@ -127,7 +127,7 @@ on:
       workdir:
         description: 'Working directory for the addon in the monorepo'
         required: false
-        default: "packages/qvac-lib-infer-llamacpp-embed"
+        default: "packages/embed-llamacpp"
         type: string
 
 permissions:
@@ -141,8 +141,8 @@ jobs:
     name: "Benchmark ${{ inputs.gguf_model }}"
 
     env:
-      WORKDIR: ${{ inputs.workdir || 'packages/qvac-lib-infer-llamacpp-embed' }}
-      VCPKG_BINARY_SOURCES: "clear;files,${{ github.workspace }}/${{ inputs.workdir || 'packages/qvac-lib-infer-llamacpp-embed' }}/vcpkg/cache,readwrite"
+      WORKDIR: ${{ inputs.workdir || 'packages/embed-llamacpp' }}
+      VCPKG_BINARY_SOURCES: "clear;files,${{ github.workspace }}/${{ inputs.workdir || 'packages/embed-llamacpp' }}/vcpkg/cache,readwrite"
 
     steps:
       - name: Echo workflow inputs
@@ -159,7 +159,7 @@ jobs:
           COMPARE: ${{ inputs.compare_with_transformers }}
           TRANSFORMERS_MODEL: ${{ inputs.transformers_model }}
           VERBOSE: ${{ inputs.verbose }}
-          WORKDIR: ${{ inputs.workdir || 'packages/qvac-lib-infer-llamacpp-embed' }}
+          WORKDIR: ${{ inputs.workdir || 'packages/embed-llamacpp' }}
         run: |
           echo "=== Benchmark Configuration ==="
           echo "GGUF Model: $GGUF_MODEL"

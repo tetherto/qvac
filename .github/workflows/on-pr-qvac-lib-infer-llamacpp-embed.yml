@@ -13,7 +13,7 @@ on:
       - feature-*
       - tmp-*
     paths:
-      - "packages/qvac-lib-infer-llamacpp-embed/**"
+      - "packages/embed-llamacpp/**"
       - ".github/workflows/*embed*.yml"
   workflow_dispatch:
 
@@ -56,7 +56,7 @@ jobs:
           npm-token: ${{ secrets.NPM_TOKEN }}
           pat-token: ${{ secrets.PAT_TOKEN }}
           run-integration: ${{ needs.authorize.outputs.allowed == 'true' }}
-          workdir: packages/qvac-lib-infer-llamacpp-embed
+          workdir: packages/embed-llamacpp
 
   cpp-lint:
     if: needs.authorize.outputs.allowed == 'true'
@@ -66,7 +66,7 @@ jobs:
     with:
       sha: ${{ github.event.pull_request.base.sha }}
       pr_head_sha: ${{ github.event.pull_request.head.sha }}
-      workdir: packages/qvac-lib-infer-llamacpp-embed
+      workdir: packages/embed-llamacpp
 
   cpp-tests:
     if: needs.authorize.outputs.allowed == 'true'
@@ -92,7 +92,7 @@ jobs:
           node-version: 20
 
       - name: Configure npm auth
-        working-directory: packages/qvac-lib-infer-llamacpp-embed
+        working-directory: packages/embed-llamacpp
         run: |
           cat > .npmrc <<NPMRC
           registry=https://registry.npmjs.org/
@@ -101,11 +101,11 @@ jobs:
           NPMRC
 
       - name: Install dependencies
-        working-directory: packages/qvac-lib-infer-llamacpp-embed
+        working-directory: packages/embed-llamacpp
         run: npm install
 
       - name: Type declaration check
-        working-directory: packages/qvac-lib-infer-llamacpp-embed
+        working-directory: packages/embed-llamacpp
         run: npm run test:dts
 
   prebuild:
@@ -115,7 +115,7 @@ jobs:
       pull-requests: write
     if: needs.authorize.outputs.allowed == 'true'
     needs: [authorize, sanity-checks]
-    uses: ./.github/workflows/prebuilds-qvac-lib-infer-llamacpp-embed.yml
+    uses: ./.github/workflows/prebuilds-embed-llamacpp.yml
     secrets: inherit
     with:
       repository: ${{ github.event.pull_request.head.repo.full_name }}
@@ -126,7 +126,7 @@ jobs:
   integration-tests:
     needs: [authorize, prebuild]
     if: needs.authorize.outputs.allowed == 'true'
-    uses: ./.github/workflows/integration-test-qvac-lib-infer-llamacpp-embed.yml
+    uses: ./.github/workflows/integration-test-embed-llamacpp.yml
     secrets: inherit
     with:
       repository: ${{ github.event.pull_request.head.repo.full_name }}
@@ -139,7 +139,7 @@ jobs:
       pull-requests: write # Allow commenting on PRs
     if: needs.authorize.outputs.allowed == 'true'
     needs: [authorize, prebuild]
-    uses: ./.github/workflows/integration-mobile-test-qvac-lib-infer-llamacpp-embed.yml
+    uses: ./.github/workflows/integration-mobile-test-embed-llamacpp.yml
     secrets: inherit
     with:
       repository: ${{ github.event.pull_request.head.repo.full_name }}

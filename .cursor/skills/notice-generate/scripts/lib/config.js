@@ -23,7 +23,7 @@ const MODELS_JSON_PATH = path.join(
 // Engine-to-package mapping (addon packages only)
 // ---------------------------------------------------------------------------
 const ENGINE_MAP = {
-  '@qvac/embed-llamacpp': 'qvac-lib-infer-llamacpp-embed',
+  '@qvac/embed-llamacpp': 'embed-llamacpp',
   '@qvac/llm-llamacpp': 'qvac-lib-infer-llamacpp-llm',
   '@qvac/translation-nmtcpp': 'qvac-lib-infer-nmtcpp',
   '@qvac/tts-onnx': 'qvac-lib-infer-onnx-tts',
@@ -66,7 +66,7 @@ const SKIP_VCPKG_PORTS = new Set([
 // Python dependency file locations (relative to package dir)
 // ---------------------------------------------------------------------------
 const PYTHON_DEP_PATHS = {
-  'qvac-lib-infer-llamacpp-embed': [
+  'embed-llamacpp': [
     'benchmarks/client/requirements.txt'
   ],
   'qvac-lib-infer-llamacpp-llm': [

@@ -52,12 +52,12 @@
   "repository": {
     "type": "git",
     "url": "git+https://github.com/tetherto/qvac.git",
-    "directory": "packages/qvac-lib-infer-llamacpp-embed"
+    "directory": "packages/embed-llamacpp"
   },
   "author": "Tether",
   "license": "Apache-2.0",
   "bugs": "https://github.com/tetherto/qvac/issues",
-  "homepage": "https://github.com/tetherto/qvac/tree/main/packages/qvac-lib-infer-llamacpp-embed#readme",
+  "homepage": "https://github.com/tetherto/qvac/tree/main/packages/embed-llamacpp#readme",
   "devDependencies": {
     "@qvac/dl-filesystem": "^0.1.2",
     "@types/node": "^24.2.1",

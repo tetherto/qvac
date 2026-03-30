@@ -18,7 +18,7 @@ on:
         description: "Working directory (optional)"
         required: false
         type: string
-        default: "packages/qvac-lib-infer-llamacpp-embed"
+        default: "packages/embed-llamacpp"
   workflow_call:
     inputs:
       ref:
@@ -42,7 +42,7 @@ on:
         description: "Working directory (optional)"
         required: false
         type: string
-        default: "packages/qvac-lib-infer-llamacpp-embed"
+        default: "packages/embed-llamacpp"
     outputs:
       published_version:
         description: "Version published to registry"
@@ -101,7 +101,7 @@ jobs:
     name: ${{ matrix.platform }}-${{ matrix.arch }}${{ matrix.tags }}
 
     env:
-      VCPKG_BINARY_SOURCES: clear;files,${{ github.workspace }}/${{ inputs.workdir || 'packages/qvac-lib-infer-llamacpp-embed' }}/vcpkg/cache,readwrite
+      VCPKG_BINARY_SOURCES: clear;files,${{ github.workspace }}/${{ inputs.workdir || 'packages/embed-llamacpp' }}/vcpkg/cache,readwrite
     steps:
       - if: ${{ matrix.platform == 'android' }}
         name: Select NDK
