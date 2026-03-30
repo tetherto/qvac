@@ -48,7 +48,7 @@ jobs:
           head-sha: ${{ github.sha }}
           package-slug: qvac-lib-dl-filesystem
           package-json-path: packages/qvac-lib-dl-filesystem/package.json
-          changelog-path: packages/qvac-lib-dl-filesystem/CHANGELOG
+          changelog-path: packages/qvac-lib-dl-filesystem/CHANGELOG.md
 
   publish-logic:
     runs-on: ubuntu-latest

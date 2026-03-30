@@ -1,10 +1,16 @@
-# 0.2.1 - 2026-03-30
+# Changelog
 
-- README: removed outdated npm Personal Access Token and `.npmrc` authentication instructions for installing `@qvac/dl-hyperdrive`.
+## [0.2.1] - 2026-03-30
 
-# 0.2.0
+### Changed
+
+- README: removed outdated npm Personal Access Token and `.npmrc` authentication instructions for installing `@qvac/dl-filesystem`.
+
+## [0.2.0]
+
 - fix[bc]: correct `getStream` return type from `Promise<ReadableStream>` to `Promise<AsyncIterable<Buffer>>` to match actual runtime behavior and align with `@qvac/infer-base` Loader interface
 - chore: update `@qvac/dl-base` to ^0.2.0
 
-# 1.0.0
+## [1.0.0]
+
 - feat: initial structure

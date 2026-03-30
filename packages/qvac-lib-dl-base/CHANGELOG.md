@@ -1,9 +1,15 @@
-# 0.2.1 - 2026-03-30
+# Changelog
+
+## [0.2.1] - 2026-03-30
+
+### Changed
 
 - README: removed outdated npm Personal Access Token and `.npmrc` authentication instructions for installing `@qvac/dl-base`.
 
-# 0.2.0
+## [0.2.0]
+
 - fix[bc]: correct `getStream` return type from `Promise<ReadableStream>` to `Promise<AsyncIterable<Buffer>>` to match actual runtime behavior and align with `@qvac/infer-base` Loader interface
 
-# 0.0.1
+## [0.0.1]
+
 - feat: initial structure
