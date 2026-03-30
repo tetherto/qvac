@@ -57,7 +57,7 @@ The consumer's `vcpkg.json` only needs its own addon-specific dependencies. ONNX
       "version>=": "1.0.0"
     },
     {
-      "name": "qvac-lint-cpp",
+      "name": "lint-cpp",
       "version>=": "1.4.1"
     }
   ],

@@ -70,7 +70,7 @@ Platform-specific details are handled by Bare runtime and libuv.
 - C++20 compiler (GCC 11+, Clang 14+, MSVC 2022+)
 - CMake 3.25+
 - vcpkg package manager
-- qvac-lint-cpp 1.4.1+ (code quality)
+- lint-cpp 1.4.1+ (code quality)
 
 **Runtime:**
 - Bare runtime (any version with native addon API support)

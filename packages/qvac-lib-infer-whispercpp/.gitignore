@@ -24,7 +24,7 @@ poetry.lock
 .idea/
 .vscode
 
-# Added by qvac-lint-cpp
+# Added by lint-cpp
 .clang-format
 .clang-tidy
 .valgrind.supp

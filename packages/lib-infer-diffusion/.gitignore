@@ -18,7 +18,7 @@ logs/
 *.ckpt
 *.log
 .clang-tidy
-# Added by qvac-lint-cpp
+# Added by lint-cpp
 .clang-format
 output/
 temp/

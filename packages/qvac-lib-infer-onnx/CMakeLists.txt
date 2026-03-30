@@ -26,7 +26,7 @@ string(JSON _pkg_version GET "${_pkg_json}" "version")
 
 project(qvac-onnx VERSION ${_pkg_version} LANGUAGES C CXX)
 
-find_path(VCPKG_INSTALLED_PATH share/qvac-lint-cpp/.clang-format REQUIRED)
+find_path(VCPKG_INSTALLED_PATH share/lint-cpp/.clang-format REQUIRED)
 
 include(CTest)
 
@@ -151,7 +151,7 @@ if(ANDROID OR (APPLE AND CMAKE_SYSTEM_NAME STREQUAL "iOS"))
 
   install(DIRECTORY ${VCPKG_INSTALLED_PATH}/share/ DESTINATION share
     PATTERN "gtest" EXCLUDE PATTERN "pybind11" EXCLUDE PATTERN "benchmark" EXCLUDE
-    PATTERN "cxxopts" EXCLUDE PATTERN "qvac-lint-cpp" EXCLUDE PATTERN "pkgconfig" EXCLUDE
+    PATTERN "cxxopts" EXCLUDE PATTERN "lint-cpp" EXCLUDE PATTERN "pkgconfig" EXCLUDE
     PATTERN "vcpkg-cmake" EXCLUDE PATTERN "vcpkg-cmake-config" EXCLUDE
     PATTERN "vcpkg-boost" EXCLUDE PATTERN "vcpkg.spdx.json" EXCLUDE
     PATTERN "vcpkg_abi_info.txt" EXCLUDE PATTERN "copyright" EXCLUDE)

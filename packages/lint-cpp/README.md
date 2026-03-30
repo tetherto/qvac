@@ -1,4 +1,4 @@
-# qvac-lint-cpp
+# lint-cpp
 
 This repository contains the configuration files that are used to format and
 lint the C++ source files in QVAC repositories. It also has pre-commit hooks for git.
@@ -12,8 +12,8 @@ follows.
    `portfile.cmake` is provided below.
 
 ```cmake
-# vcpkg/ports/qvac-lint-cpp/portfile.cmake
-set(QVAC_LINT_CPP "git@github.com:tetherto/qvac-lint-cpp.git")
+# vcpkg/ports/lint-cpp/portfile.cmake
+set(QVAC_LINT_CPP "git@github.com:tetherto/lint-cpp.git")
 
 find_package(Git REQUIRED)
 execute_process(
@@ -51,14 +51,14 @@ vcpkg_install_copyright(FILE_LIST "${SOURCE_PATH}/LICENSE")
 2. Copy the configuration files from this pseudo-package using CMake.
 
 ```cmake
-find_path(VCPKG_INSTALLED_PATH share/qvac-lint-cpp/.clang-format REQUIRED)
-configure_file(${VCPKG_INSTALLED_PATH}/share/qvac-lint-cpp/.clang-format
+find_path(VCPKG_INSTALLED_PATH share/lint-cpp/.clang-format REQUIRED)
+configure_file(${VCPKG_INSTALLED_PATH}/share/lint-cpp/.clang-format
                ${CMAKE_CURRENT_SOURCE_DIR}/.clang-format COPYONLY)
-configure_file(${VCPKG_INSTALLED_PATH}/share/qvac-lint-cpp/.clang-tidy
+configure_file(${VCPKG_INSTALLED_PATH}/share/lint-cpp/.clang-tidy
                ${CMAKE_CURRENT_SOURCE_DIR}/.clang-tidy COPYONLY)
-configure_file(${VCPKG_INSTALLED_PATH}/share/qvac-lint-cpp/.valgrind.supp
+configure_file(${VCPKG_INSTALLED_PATH}/share/lint-cpp/.valgrind.supp
                ${CMAKE_CURRENT_SOURCE_DIR}/.valgrind.supp COPYONLY)
-configure_file(${VCPKG_INSTALLED_PATH}/tools/qvac-lint-cpp/hooks/pre-commit
+configure_file(${VCPKG_INSTALLED_PATH}/tools/lint-cpp/hooks/pre-commit
                ${CMAKE_CURRENT_SOURCE_DIR}/.git/hooks/pre-commit COPYONLY)
 ```
 

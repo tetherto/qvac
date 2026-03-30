@@ -58,7 +58,7 @@ const SKIP_VCPKG_PORTS = new Set([
   'vcpkg-get-python-packages',
   'vcpkg-boost',
   'vcpkg-make',
-  'qvac-lint-cpp',
+  'lint-cpp',
   'qvac-lib-inference-addon-cpp'
 ])
 
@@ -119,7 +119,7 @@ const SKIP_PACKAGES = new Set(['docs'])
 // ---------------------------------------------------------------------------
 // Packages without their own package.json (skip JS scan)
 // ---------------------------------------------------------------------------
-const NO_JS_PACKAGES = new Set(['qvac-lint-cpp'])
+const NO_JS_PACKAGES = new Set(['lint-cpp'])
 
 // ---------------------------------------------------------------------------
 // qvac vcpkg registry

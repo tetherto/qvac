@@ -22,7 +22,7 @@
       "platform": "osx | ios"
     },
     {
-      "name": "qvac-lint-cpp",
+      "name": "lint-cpp",
       "version>=": "1.4.1"
     }
   ],
