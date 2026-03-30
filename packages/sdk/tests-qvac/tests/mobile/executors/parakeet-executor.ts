@@ -1,14 +1,14 @@
 import { transcribe } from "@qvac/sdk";
 import {
-  AssetExecutor,
   ValidationHelpers,
   type TestResult,
   type Expectation,
 } from "@tetherto/qvac-test-suite/mobile";
 import type { ResourceManager } from "../../shared/resource-manager.js";
+import { ModelAssetExecutor } from "./model-asset-executor.js";
 import { parakeetTests } from "../../parakeet-tests.js";
 
-export class MobileParakeetExecutor extends AssetExecutor<
+export class MobileParakeetExecutor extends ModelAssetExecutor<
   typeof parakeetTests
 > {
   pattern = /^parakeet-/;
@@ -23,22 +23,8 @@ export class MobileParakeetExecutor extends AssetExecutor<
 
   private audioAssets: Record<string, number> | null = null;
 
-  constructor(private resources: ResourceManager) {
-    super();
-  }
-
-  async setup(testId: string, context: unknown) {
-    const ctx = (context ?? {}) as Record<string, unknown>;
-    await this.resources.downloadAllOnce(console.log);
-    const dep = ctx.dependency as string | undefined;
-    if (dep && dep !== "none") {
-      await this.resources.evictAll();
-      await this.resources.ensureLoaded(dep);
-    }
-  }
-
-  async teardown(testId: string, context: unknown) {
-    await this.resources.evictAll();
+  constructor(resources: ResourceManager) {
+    super(resources);
   }
 
   private async loadAudioAssets() {
