@@ -148,7 +148,7 @@ Legend:
 | lib-infer-base | Base class for inference addon clients defining common lifecycle and generic methods for model interaction | Core |
 | logging | Logger wrapper that normalizes logging interface across QVAC libraries | Core |
 | cli | Command-line interface for the QVAC ecosystem with tooling for building, bundling, and managing QVAC-powered applications | Tool |
-| lib-diagnostics | Diagnostic report generation library for QVAC | Tool |
+| diagnostics | Diagnostic report generation library for QVAC | Tool |
 | lib-registry-server | Distributed model registry for downloading AI models for local inference and contributing new models | Tool |
 | lint-cpp | Configuration files for formatting and linting C++ source files with pre-commit hooks | Tool |
 

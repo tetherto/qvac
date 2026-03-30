@@ -22,10 +22,10 @@
   "repository": {
     "type": "git",
     "url": "git+https://github.com/tetherto/qvac.git",
-    "directory": "packages/lib-diagnostics"
+    "directory": "packages/diagnostics"
   },
   "bugs": "https://github.com/tetherto/qvac/issues",
-  "homepage": "https://github.com/tetherto/qvac/tree/main/packages/lib-diagnostics#readme",
+  "homepage": "https://github.com/tetherto/qvac/tree/main/packages/diagnostics#readme",
   "exports": {
     ".": {
       "types": "./index.d.ts",
