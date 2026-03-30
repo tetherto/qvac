@@ -68,14 +68,12 @@ class TranscriptionWhispercpp extends BaseInference {
   }
 
   /**
-   * Load model, weights, and activate addon.
-   * @param {boolean} [closeLoader=false] - Close loader when done.
-   * @param {Function} [reportProgressCallback] - Hook for progress updates.
+   * Load model and activate addon. Model files must already exist at `files.model` / optional `files.vadModel`.
+   * @param {boolean} [_closeLoader=false] - Unused; kept for `load(...args)` forwarding compatibility.
+   * @param {Function} [_reportProgressCallback] - Unused; kept for `load(...args)` forwarding compatibility.
    */
-  async _load (closeLoader = false, reportProgressCallback) {
+  async _load (_closeLoader = false, _reportProgressCallback) {
     this.logger.debug('TranscriptionWhispercpp _load (local model files)')
-
-    await this.downloadWeights(reportProgressCallback, { closeLoader })
 
     const whisperConfig = {
       ...this.params,
@@ -118,7 +116,6 @@ class TranscriptionWhispercpp extends BaseInference {
     _checkParamsExists(configurationParams)
     this.addon = this._createAddon(configurationParams)
 
-    // For whisper.cpp, the model file contains everything - no separate weight loading needed
     await this.addon.activate()
     this.logger.debug('Addon activated')
   }
@@ -309,13 +306,6 @@ class TranscriptionWhispercpp extends BaseInference {
       await this.addon.activate()
       this.logger.debug('Addon reloaded and activated successfully')
     })
-  }
-
-  async _downloadWeights (reportProgressCallback, opts) {
-    this.logger.debug(
-      'TranscriptionWhispercpp: skipping remote weight download (local files.model / files.vadModel)',
-      { closeLoader: opts?.closeLoader, hasProgressCallback: typeof reportProgressCallback === 'function' }
-    )
   }
 
   /**
