@@ -1,12 +1,13 @@
 name: On PR Trigger (Embed)
 
 on:
-  pull_request:
-    types:
-      - opened
-      - synchronize
-      - reopened
-      - labeled
+  # pull_request_target:
+  #   types:
+  #     - opened
+  #     - synchronize
+  #     - reopened
+  #     - labeled
+  push:
     branches:
       - main
       - release-*
