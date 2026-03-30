@@ -139,11 +139,9 @@ The package includes a CLI for querying and downloading models from the registry
 
 ### Install
 
-The package is hosted on npm. Configure npm to use the registry for the `@qvac` scope, then install globally:
+The package is hosted on npm. Install globally:
 
 ```bash
-echo "@qvac:registry=https://registry.npmjs.org" >> ~/.npmrc
-echo "//registry.npmjs.org/:_authToken=YOUR_NPM_TOKEN" >> ~/.npmrc
 npm install -g @qvac/registry-client
 ```
 
