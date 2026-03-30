@@ -29,10 +29,10 @@
   "repository": {
     "type": "git",
     "url": "git+https://github.com/tetherto/qvac.git",
-    "directory": "packages/qvac-lib-langdetect-text"
+    "directory": "packages/langdetect-text"
   },
   "bugs": "https://github.com/tetherto/qvac/issues",
-  "homepage": "https://github.com/tetherto/qvac/tree/main/packages/qvac-lib-langdetect-text#readme",
+  "homepage": "https://github.com/tetherto/qvac/tree/main/packages/langdetect-text#readme",
   "files": [
     "src",
     "index.d.ts",

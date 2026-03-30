@@ -1,4 +1,4 @@
-name: General CI/CD (Qvac-lib-langdetect-text-cld2)
+name: General CI/CD (langdetect-text-cld2)
 # This workflow is used to call the reusable workflows in the qvac-devops repository
 # https://github.com/tetherto/qvac-devops/blob/production-workflows-tag/.github/workflows/public-reusable.yml
 
@@ -10,13 +10,13 @@ on:
       - feature-*
       - tmp-*
     paths:
-      - "packages/qvac-lib-langdetect-text-cld2/**"
+      - "packages/langdetect-text-cld2/**"
   pull_request:
     branches:
       - main
       - release-*
     paths:
-      - "packages/qvac-lib-langdetect-text-cld2/**"
+      - "packages/langdetect-text-cld2/**"
   workflow_dispatch:
     inputs:
       custom_input_1:
@@ -47,14 +47,14 @@ jobs:
       - name: Run lint and unit tests
         uses: ./.github/actions/run-lint-and-unit-tests
         with:
-          workdir: packages/qvac-lib-langdetect-text-cld2
+          workdir: packages/langdetect-text-cld2
           npm-token: ${{ secrets.NPM_TOKEN }}
           gpr-token: ${{ secrets.GITHUB_TOKEN }}
           pat-token: ${{ secrets.PAT_TOKEN }}
           registry-type: gpr
 
       - name: Run test coverage
-        working-directory: packages/qvac-lib-langdetect-text-cld2
+        working-directory: packages/langdetect-text-cld2
         run: npm run coverage
         continue-on-error: true
 
@@ -68,7 +68,7 @@ jobs:
               issue_number: context.issue.number,
               owner: context.repo.owner,
               repo: context.repo.repo,
-              body: `${status} Tests completed for qvac-lib-langdetect-text-cld2`
+              body: `${status} Tests completed for langdetect-text-cld2`
             })
   release-merge-guard:
     name: Release Merge Guard
@@ -86,9 +86,9 @@ jobs:
           base-ref: ${{ github.ref_name }}
           base-sha: ${{ github.event.before }}
           head-sha: ${{ github.sha }}
-          package-slug: qvac-lib-langdetect-text-cld2
-          package-json-path: packages/qvac-lib-langdetect-text-cld2/package.json
-          changelog-path: packages/qvac-lib-langdetect-text-cld2/CHANGELOG.md
+          package-slug: langdetect-text-cld2
+          package-json-path: packages/langdetect-text-cld2/package.json
+          changelog-path: packages/langdetect-text-cld2/CHANGELOG.md
 
   publish-logic:
     runs-on: ubuntu-latest
@@ -158,7 +158,7 @@ jobs:
           pat-token: ${{ secrets.PAT_TOKEN }}
           npm-token: ${{ secrets.NPM_TOKEN }}
           tag: ${{ needs.publish-logic.outputs.gpr_tag }}
-          workdir: packages/qvac-lib-langdetect-text-cld2
+          workdir: packages/langdetect-text-cld2
           name-suffix: "-mono"
 
   publish-release-npm:
@@ -171,7 +171,7 @@ jobs:
     uses: tetherto/qvac-devops/.github/workflows/public-reusable-npm.yml@v1.1.7
     secrets: inherit
     with:
-      workdir: packages/qvac-lib-langdetect-text-cld2
+      workdir: packages/langdetect-text-cld2
       repo_name: langdetect-text-cld2
       caller_event_name: ${{ github.event_name }}
 
@@ -195,7 +195,7 @@ jobs:
           pat-token: ${{ secrets.PAT_TOKEN }}
           npm-token: ${{ secrets.NPM_TOKEN }}
           tag: ${{ needs.publish-logic.outputs.gpr_tag }}
-          workdir: packages/qvac-lib-langdetect-text-cld2
+          workdir: packages/langdetect-text-cld2
           name-suffix: "-mono"
 
   publish-tmp-gpr:
@@ -218,5 +218,5 @@ jobs:
           pat-token: ${{ secrets.PAT_TOKEN }}
           npm-token: ${{ secrets.NPM_TOKEN }}
           tag: ${{ needs.publish-logic.outputs.gpr_tag }}
-          workdir: packages/qvac-lib-langdetect-text-cld2
+          workdir: packages/langdetect-text-cld2
           name-suffix: "-mono"
