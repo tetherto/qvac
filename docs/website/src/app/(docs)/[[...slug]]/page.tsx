@@ -1,4 +1,4 @@
-import { source } from '@/lib/source';
+import { getPageImage, source } from '@/lib/source';
 import {
   DocsBody,
   DocsPage,
@@ -14,10 +14,9 @@ import { cloneElement, isValidElement } from "react";
 import { LLMCopyButton, ViewOptions, VersionSelector } from '@/components/page-actions';
 import {
   buildCanonicalDocsUrl,
-  DOCS_OG_IMAGE,
-  DOCS_OG_IMAGE_PATH,
   inferDiataxisOpenGraph,
 } from '@/lib/docs-open-graph';
+import { QVAC_DOC_OG_HEIGHT, QVAC_DOC_OG_WIDTH } from '@/lib/qvac-doc-og';
 
 function TitleText({
   title,
@@ -110,6 +109,7 @@ export async function generateMetadata(
   const { title, description } = page.data;
   const canonicalUrl = buildCanonicalDocsUrl(params.slug);
   const { section, tags } = inferDiataxisOpenGraph(page.path);
+  const ogImage = getPageImage(page);
 
   return {
     title: isHomePage ? { absolute: title } : title,
@@ -126,13 +126,20 @@ export async function generateMetadata(
       type: 'article',
       section,
       tags,
-      images: [{ ...DOCS_OG_IMAGE }],
+      images: [
+        {
+          url: ogImage.url,
+          width: QVAC_DOC_OG_WIDTH,
+          height: QVAC_DOC_OG_HEIGHT,
+          alt: 'QVAC documentation',
+        },
+      ],
     },
     twitter: {
       card: 'summary_large_image',
       title,
       description: description ?? undefined,
-      images: [DOCS_OG_IMAGE_PATH],
+      images: [ogImage.url],
     },
   };
 }

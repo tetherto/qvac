@@ -6,16 +6,6 @@
 
 export const DOCS_SITE_ORIGIN = 'https://docs.qvac.tether.io';
 
-/** Shared docs preview image in `public/` (Open Graph / Twitter). */
-export const DOCS_OG_IMAGE_PATH = '/QVAC-Doc-OG-1920x1080px.png';
-
-export const DOCS_OG_IMAGE = {
-  url: DOCS_OG_IMAGE_PATH,
-  width: 1920,
-  height: 1080,
-  alt: 'QVAC documentation',
-} as const;
-
 const VERSION_SLUG_RE = /^v\d+\.\d+\.\d+$/;
 
 /**
