@@ -1,36 +1,39 @@
 ---
 title: "ragSearch( )"
 titleStyle: code
-description: "Searches for similar documents in the RAG vector database.
-
-**Workspace lifecycle:** This operation requires an existing workspace. If the workspace
-doesn't exist, returns an empty array."
+description: Searches for similar documents in the RAG vector database.
 ---
 
-```typescript
-function ragSearch(params: { modelId: string; n?: number; query: string; topK?: number; workspace?: string }, options?: { forceNewConnection?: boolean; profiling?: { enabled?: boolean; includeServerBreakdown?: boolean; mode?: "summary" | "verbose" }; timeout?: number }): Promise
+```ts
+function ragSearch(params, options?): Promise<RagSearchResult[]>;
 ```
 
 ## Parameters
 
-| Name | Type | Required? | Description |
-| --- | --- | :---: | --- |
-| `params` | `\{ modelId: string; n?: number; query: string; topK?: number; workspace?: string \}` | ✓ | The parameters for searching |
-| `options` | `\{ forceNewConnection?: boolean; profiling?: \{ enabled?: boolean; includeServerBreakdown?: boolean; mode?: "summary" | "verbose" \}; timeout?: number \}` | ✗ | Optional RPC transport options including connection reuse, timeout, and per-call profiling configuration |
+| Name | Type | Required? | Default | Description |
+| --- | --- | :---: | --- | --- |
+| params.modelId | `string` | ✓ | — | The embedding model identifier |
+| params.query | `string` | ✓ | — | The search query text |
+| params.topK | `number` | ✗ | `5` | Number of top results to retrieve |
+| params.n | `number` | ✗ | `3` | Number of centroids for IVF index search |
+| params.workspace | `string` | ✗ | `"default"` | Workspace to search in |
+| options | [`RPCOptions`](../index#rpcoptions) | ✗ | — | Optional RPC transport options |
 
 ## Returns
 
-```typescript
-Promise
-```
+`Promise<RagSearchResult[]>` — Array of search results. Empty array if workspace doesn't exist.
 
-
+| Field | Type | Description |
+| --- | --- | --- |
+| id | `string` | Document identifier |
+| content | `string` | Document text content |
+| score | `number` | Similarity score |
 
 ## Throws
 
 | Error | When |
 | --- | --- |
-| `When the operation fails` |  |
+| `RAG_SEARCH_FAILED` | The search operation fails |
 
 ## Example
 

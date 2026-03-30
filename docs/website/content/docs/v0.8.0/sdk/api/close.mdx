@@ -1,17 +1,35 @@
 ---
 title: "close( )"
 titleStyle: code
-description: "No description available"
+description: Closes the SDK client connection and releases all associated resources.
 ---
 
-```typescript
-function close(): Promise
+```ts
+function close(): Promise<void>;
 ```
 
-
+Safe to call multiple times — subsequent calls are a no-op if already closed.
 
 ## Returns
 
+`Promise<void>` — Resolves when the connection is closed.
+
+## Example
+
 ```typescript
-Promise
+import { loadModel, completion, close } from "@qvac/sdk";
+
+const modelId = await loadModel({
+  modelSrc: "/path/to/model.gguf",
+  modelType: "llm",
+});
+
+const result = completion({
+  modelId,
+  history: [{ role: "user", content: "Hello" }],
+});
+
+console.log(await result.text);
+
+await close();
 ```

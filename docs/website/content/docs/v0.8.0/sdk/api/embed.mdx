@@ -1,30 +1,50 @@
 ---
 title: "embed( )"
 titleStyle: code
-description: "Generates embeddings for a single text using a specified model."
+description: Generates embeddings for a single text using a specified model.
 ---
 
-```typescript
-function embed(params: { modelId: string; text: string }, options?: { forceNewConnection?: boolean; profiling?: { enabled?: boolean; includeServerBreakdown?: boolean; mode?: "summary" | "verbose" }; timeout?: number }): Promise
+```ts
+function embed(params: { modelId: string; text: string }): Promise<number[]>;
+function embed(params: { modelId: string; text: string[] }): Promise<number[][]>;
 ```
 
 ## Parameters
 
 | Name | Type | Required? | Description |
 | --- | --- | :---: | --- |
-| `params` | `\{ modelId: string; text: string \}` | ✓ | The parameters for the embedding |
-| `options` | `\{ forceNewConnection?: boolean; profiling?: \{ enabled?: boolean; includeServerBreakdown?: boolean; mode?: "summary" | "verbose" \}; timeout?: number \}` | ✗ | Optional RPC options including per-call profiling |
+| params | [`EmbedParams`](#embedparams) | ✓ | The embedding parameters |
+| options | [`RPCOptions`](../index#rpcoptions) | ✗ | Optional RPC transport options |
+
+### `EmbedParams`
+
+| Field | Type | Required? | Description |
+| --- | --- | :---: | --- |
+| modelId | `string` | ✓ | The identifier of the embedding model to use |
+| text | `string \| string[]` | ✓ | The input text(s) to embed. A single string returns `number[]`; an array returns `number[][]`. |
 
 ## Returns
 
-```typescript
-Promise
-```
-
-
+- `Promise<number[]>` — When `text` is a single string, returns the embedding vector.
+- `Promise<number[][]>` — When `text` is an array, returns an array of embedding vectors.
 
 ## Throws
 
 | Error | When |
 | --- | --- |
-| `When the response type is invalid or when the embedding fails` |  |
+| `INVALID_RESPONSE_TYPE` | Response type does not match expected `"embed"` |
+
+## Examples
+
+```typescript
+// Single text
+const vector = await embed({ modelId: "embedding-model", text: "Hello world" });
+console.log(vector.length); // e.g. 384
+
+// Multiple texts (batch)
+const vectors = await embed({
+  modelId: "embedding-model",
+  text: ["Hello world", "How are you?"]
+});
+console.log(vectors.length); // 2
+```
