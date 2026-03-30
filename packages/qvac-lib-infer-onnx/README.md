@@ -28,7 +28,7 @@ Bare addon providing ONNX Runtime session management for QVAC inference addons. 
 │  ONNX Runtime 1.24.2  (via vcpkg)                   │
 │  Desktop: exported from qvac__onnx.bare (shared)    │
 │  Mobile:  static libs shipped in prebuilds/lib/     │
-│  + CoreML · NNAPI · DirectML                         │
+│  + XNNPack EP · CoreML · NNAPI · DirectML           │
 └─────────────────────────────────────────────────────┘
 ```
 
