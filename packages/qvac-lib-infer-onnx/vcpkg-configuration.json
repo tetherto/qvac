@@ -2,8 +2,8 @@
   "default-registry": {
     "kind": "git",
     "baseline": "9010debab20437c8620a56cfb5af2f72a76073ec",
-    "reference": "fix/onnxruntime-1.24.2-port-clean",
-    "repository": "https://github.com/ogad-tether/qvac-registry-vcpkg.git"
+    "reference": "refs/pull/109/head",
+    "repository": "https://github.com/tetherto/qvac-registry-vcpkg.git"
   },
   "registries": [
     {
