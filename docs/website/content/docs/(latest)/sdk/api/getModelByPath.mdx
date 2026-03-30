@@ -1,26 +1,22 @@
 ---
 title: "getModelByPath( )"
 titleStyle: code
-description: "Looks up a model in the built-in catalog by its registry path. Returns the matching registry item or undefined if not found."
+description: Looks up a model in the built-in catalog by its registry path.
 ---
 
-```typescript
-function getModelByPath(registryPath: string): RegistryItem | —
+```ts
+function getModelByPath(registryPath: string): RegistryItem | undefined;
 ```
 
 ## Parameters
 
 | Name | Type | Required? | Description |
 | --- | --- | :---: | --- |
-| `registryPath` | `string` | ✓ | The full registry path of the model (e.g. `"llama-3.2-1b-instruct-q4_0-gguf"`) |
+| registryPath | `string` | ✓ | The full registry path of the model (e.g., `"llama-3.2-1b-instruct-q4_0-gguf"`) |
 
 ## Returns
 
-```typescript
-RegistryItem | —
-```
-
-The matching `RegistryItem` if found, or `undefined` if no model with that registry path exists in the catalog.
+[`RegistryItem`](../getModelByName#registryitem) ` | undefined` — The matching model constant, or `undefined` if not found. See [`getModelByName()`](../getModelByName#registryitem) for the full `RegistryItem` shape.
 
 ## Example
 
@@ -29,6 +25,6 @@ import { getModelByPath } from "@qvac/sdk";
 
 const model = getModelByPath("llama-3.2-1b-instruct-q4_0-gguf");
 if (model) {
-  console.log(model.name, model.modelType);
+  console.log(model.name, model.expectedSize);
 }
 ```

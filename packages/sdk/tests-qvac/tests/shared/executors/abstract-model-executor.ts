@@ -3,6 +3,7 @@ import {
   type TestDefinitions,
 } from "@tetherto/qvac-test-suite";
 import type { ResourceManager } from "../resource-manager.js";
+import { modelSetup, modelTeardown } from "../resource-lifecycle.js";
 
 export abstract class AbstractModelExecutor<
   TDefs extends TestDefinitions,
@@ -12,23 +13,10 @@ export abstract class AbstractModelExecutor<
   }
 
   async setup(testId: string, context: unknown) {
-    const ctx = (context ?? {}) as Record<string, unknown>;
-
-    await this.resources.downloadAllOnce(console.log);
-    this.resources.incrementTestCount();
-
-    const dep = ctx.dependency as string | undefined;
-    if (!dep || dep === "none") return;
-
-    const deps = dep.includes("+") ? dep.split("+") : [dep];
-    await this.resources.evictExcept(deps);
-
-    for (const d of deps) {
-      await this.resources.ensureLoaded(d);
-    }
+    await modelSetup(this.resources, context);
   }
 
   async teardown(testId: string, context: unknown) {
-    await this.resources.evictStale(5);
+    await modelTeardown(this.resources);
   }
 }
