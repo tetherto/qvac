@@ -1,50 +1,77 @@
 ---
 title: "getModelInfo( )"
 titleStyle: code
-description: "Returns status information for a catalog model, including cache state, loaded instances, and metadata."
+description: Retrieves detailed information about a model, including cache status and loaded instances.
 ---
 
-```typescript
-function getModelInfo(params: { name: string }): Promise
+```ts
+function getModelInfo(params): Promise<ModelInfo>;
 ```
 
 ## Parameters
 
 | Name | Type | Required? | Description |
 | --- | --- | :---: | --- |
-| `params` | `\{ name: string \}` | ✓ | An object containing the model name to query |
-
-| Field | Type | Required? | Description |
-| --- | --- | :---: | --- |
-| `name` | `string` | ✓ | The catalog name of the model (e.g. `"WHISPER_TINY"`) |
+| params | `object` | ✓ | The query parameters |
+| params.name | `string` | ✓ | The model name to look up |
 
 ## Returns
 
-```typescript
-Promise
-```
+`Promise<`[`ModelInfo`](#modelinfo)`>` — Detailed information about the model.
 
-Resolves with a `ModelInfo` object containing the model's metadata, cache status, and any active loaded instances.
+### `ModelInfo`
+
+| Field | Type | Description |
+| --- | --- | --- |
+| name | `string` | Model name |
+| modelId | `string` | Unique model identifier |
+| addon | `"llm" \| "whisper" \| "embeddings" \| "nmt" \| "vad" \| "tts" \| "ocr" \| "other"` | Model addon type |
+| expectedSize | `number` | Expected total file size in bytes |
+| sha256Checksum | `string` | SHA-256 checksum |
+| isCached | `boolean` | Whether the model is fully cached locally |
+| isLoaded | `boolean` | Whether the model is currently loaded in memory |
+| cacheFiles | [`CacheFileInfo[]`](#cachefileinfo) | Individual cache file details |
+| registryPath | `string` | Registry path (optional) |
+| registrySource | `string` | Registry source (optional) |
+| engine | `string` | Inference engine (optional) |
+| quantization | `string` | Quantization level (optional) |
+| params | `string` | Model parameter count (optional) |
+| actualSize | `number` | Actual cached size in bytes (optional) |
+| cachedAt | `Date` | When the model was cached (optional) |
+| loadedInstances | [`LoadedInstance[]`](#loadedinstance) | Currently loaded instances (optional) |
+
+### `CacheFileInfo`
+
+| Field | Type | Description |
+| --- | --- | --- |
+| filename | `string` | File name |
+| path | `string` | Full file path |
+| expectedSize | `number` | Expected size in bytes |
+| sha256Checksum | `string` | SHA-256 checksum |
+| isCached | `boolean` | Whether this file is cached |
+| actualSize | `number` | Actual file size (optional) |
+| cachedAt | `Date` | When this file was cached (optional) |
+
+### `LoadedInstance`
+
+| Field | Type | Description |
+| --- | --- | --- |
+| registryId | `string` | Registry identifier for this loaded instance |
+| loadedAt | `Date` | When the model was loaded |
+| config | `unknown` | Model configuration used at load time (optional) |
 
 ## Throws
 
 | Error | When |
 | --- | --- |
-| `InvalidResponseError` | The server returns an unexpected response type |
+| `INVALID_RESPONSE_TYPE` | Response type does not match expected `"getModelInfo"` |
 
 ## Example
 
 ```typescript
 import { getModelInfo } from "@qvac/sdk";
 
-const info = await getModelInfo({ name: "LLAMA_3_2_1B_INST_Q4_0" });
-
-console.log("Cached:", info.isCached);
-console.log("Loaded:", info.isLoaded);
-
-if (info.loadedInstances) {
-  for (const instance of info.loadedInstances) {
-    console.log("Instance model ID:", instance.modelId);
-  }
-}
+const info = await getModelInfo({ name: "Llama 3.2 3B Q4" });
+console.log(`Cached: ${info.isCached}, Loaded: ${info.isLoaded}`);
+console.log(`Size: ${info.expectedSize} bytes`);
 ```

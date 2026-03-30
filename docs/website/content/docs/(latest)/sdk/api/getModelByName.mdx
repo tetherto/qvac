@@ -1,34 +1,49 @@
 ---
 title: "getModelByName( )"
 titleStyle: code
-description: "Looks up a model in the built-in catalog by its constant name (e.g. \"LLAMA_3_2_1B_INST_Q4_0\"). Returns the matching registry item or undefined if not found."
+description: Retrieves a model constant from the built-in registry by its human-readable name.
 ---
 
-```typescript
-function getModelByName(name: string): RegistryItem | —
+```ts
+function getModelByName(name: string): RegistryItem | undefined;
 ```
 
 ## Parameters
 
 | Name | Type | Required? | Description |
 | --- | --- | :---: | --- |
-| `name` | `string` | ✓ | The catalog constant name of the model (e.g. `"WHISPER_TINY"`, `"GTE_LARGE_FP16"`) |
+| name | `string` | ✓ | The human-readable model name (e.g., `"Llama 3.2 3B Q4"`) |
 
 ## Returns
 
-```typescript
-RegistryItem | —
-```
+[`RegistryItem`](#registryitem) ` | undefined` — The matching model constant, or `undefined` if not found.
 
-The matching `RegistryItem` if found, or `undefined` if no model with that name exists in the catalog.
+### `RegistryItem`
+
+| Field | Type | Description |
+| --- | --- | --- |
+| name | `string` | Human-readable model name |
+| registryPath | `string` | Registry path |
+| registrySource | `string` | Registry source |
+| blobCoreKey | `string` | Hyperdrive blob core key |
+| blobBlockOffset | `number` | Blob block offset |
+| blobBlockLength | `number` | Blob block length |
+| blobByteOffset | `number` | Blob byte offset |
+| modelId | `string` | Unique model identifier |
+| addon | `"llm" \| "whisper" \| "embeddings" \| "nmt" \| "vad" \| "tts" \| "ocr" \| "other"` | Model addon type |
+| expectedSize | `number` | Expected file size in bytes |
+| sha256Checksum | `string` | SHA-256 checksum |
+| engine | `string` | Inference engine |
+| quantization | `string` | Quantization level |
+| params | `string` | Model parameter count |
 
 ## Example
 
 ```typescript
 import { getModelByName } from "@qvac/sdk";
 
-const model = getModelByName("LLAMA_3_2_1B_INST_Q4_0");
+const model = getModelByName("Llama 3.2 3B Q4");
 if (model) {
-  console.log(model.registryPath, model.modelType);
+  console.log(model.modelId, model.expectedSize);
 }
 ```
