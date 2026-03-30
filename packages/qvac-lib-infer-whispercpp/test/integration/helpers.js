@@ -12,13 +12,6 @@ const isMobile = platform === 'ios' || platform === 'android'
 const HF_WHISPER_BASE = 'https://huggingface.co/ggerganov/whisper.cpp/resolve/main'
 const HF_VAD_BASE = 'https://huggingface.co/ggml-org/whisper-vad/resolve/main'
 
-let FakeDL = null
-if (!isMobile) {
-  try {
-    FakeDL = require('../mocks/loader.fake.js')
-  } catch (e) {}
-}
-
 function detectPlatform () {
   return `${platform}-${arch}`
 }
@@ -452,11 +445,7 @@ function getTestPaths (modelsDir = null) {
  * @param {string|Buffer|Uint8Array|Array|Readable} [params.audioInput] - Audio input (optional - if omitted, only tests config validation)
  * @param {string} [params.modelPath] - Path to whisper model file
  * @param {string} [params.vadModelPath] - Path to VAD model file
- * @param {string} [params.diskPath] - Directory for model files
  * @param {Object} [params.whisperConfig] - Whisper configuration object
- * @param {Object} [params.loader] - Model loader instance
- * @param {string} [params.modelName] - Model filename
- * @param {string} [params.vadModelName] - VAD model filename
  * @param {Object} [expectation={}] - Expectations for validation
  * @param {number} [expectation.minSegments] - Minimum number of segments
  * @param {number} [expectation.maxSegments] - Maximum number of segments
@@ -485,12 +474,6 @@ async function runTranscription (params, expectation = {}) {
   const modelPath = params.modelPath || defaultModelPath
   const vadModelPath = params.vadModelPath // VAD model is optional, no default
 
-  const modelDir = path.dirname(modelPath)
-  const modelName = params.modelName || path.basename(modelPath)
-  const diskPath = params.diskPath || modelDir
-
-  const vadModelName = params.vadModelName || (vadModelPath ? path.basename(vadModelPath) : undefined)
-  const loader = params.loader || new FakeDL({})
   const whisperConfig = params.whisperConfig || {}
 
   const config = {
@@ -508,10 +491,10 @@ async function runTranscription (params, expectation = {}) {
   }
 
   const constructorArgs = {
-    modelName,
-    vadModelName,
-    diskPath,
-    loader
+    files: {
+      model: modelPath,
+      ...(vadModelPath ? { vadModel: vadModelPath } : {})
+    }
   }
 
   if (typeof modelPath === 'string' && !fs.existsSync(modelPath)) {

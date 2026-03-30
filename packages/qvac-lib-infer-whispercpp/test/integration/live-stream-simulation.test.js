@@ -6,12 +6,7 @@ const test = require('brittle')
 const { Readable } = require('streamx')
 
 const TranscriptionWhispercpp = require('../../index.js')
-const FakeDL = require('../mocks/loader.fake.js')
 const { ensureWhisperModel, getTestPaths, createAudioStream, isMobile } = require('./helpers.js')
-
-function createLoader () {
-  return new FakeDL({})
-}
 
 // Create a pushable Readable to simulate a live input source.
 function createLiveReadable () {
@@ -57,12 +52,13 @@ test('Live stream simulation using pushable Readable with model.run()', { timeou
   }
 
   const constructorArgs = {
-    modelName: path.basename(modelPath),
-    loader: createLoader(),
-    diskPath: modelsDir
+    files: {
+      model: modelPath
+    }
   }
 
   const config = {
+    path: modelPath,
     whisperConfig: {
       language: 'en',
       audio_format: 's16le',
@@ -155,12 +151,13 @@ test('Live segmented loop: repeated model.run per 3s chunk (no model teardown un
   }
 
   const constructorArgs = {
-    modelName: path.basename(modelPath),
-    loader: createLoader(),
-    diskPath: modelsDir
+    files: {
+      model: modelPath
+    }
   }
 
   const config = {
+    path: modelPath,
     whisperConfig: {
       language: 'en',
       audio_format: 's16le',

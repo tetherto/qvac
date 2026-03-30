@@ -3,7 +3,6 @@
 const fs = require('bare-fs')
 const process = require('bare-process')
 const TranscriptionWhispercpp = require('../index.js')
-const FakeDL = require('../test/mocks/loader.fake.js')
 
 // Usage: node examples/example.reload.js [audioPath] [modelPath]
 // Demonstrates reloading the model with different configurations
@@ -34,14 +33,14 @@ async function main () {
 
   // Constructor arguments for TranscriptionWhispercpp
   const constructorArgs = {
-    modelName: modelPathArg || 'ggml-tiny.bin',
-    loader: new FakeDL({}),
-    diskPath: './examples/models'
+    files: {
+      model: modelPath
+    },
+    opts: { stats: true }
   }
 
   // Initial configuration with English language
   const config = {
-    opts: { stats: true },
     whisperConfig: {
       audio_format: 's16le',
       vad_model_path: './examples/models/ggml-silero-v5.1.2.bin',
