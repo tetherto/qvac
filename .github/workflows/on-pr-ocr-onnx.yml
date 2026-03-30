@@ -193,6 +193,8 @@ jobs:
 
   run-integration-tests:
     permissions:
+      contents: read
+      packages: read
       pull-requests: write
     needs: [authorize, changes, prebuild]
     if: |
