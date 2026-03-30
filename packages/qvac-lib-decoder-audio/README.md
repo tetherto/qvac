@@ -45,21 +45,6 @@ Ensure that the [`Bare`](#glossary) Runtime is installed globally on your system
 npm install -g bare@latest
 ```
 
-Before proceeding with the installation, please generate a **classic GitHub Personal Access Token (PAT)** with the `read:packages` scope. Once generated, add the token to your environment variables using the name `NPM_TOKEN`.
-
-```bash
-export NPM_TOKEN=your_personal_access_token
-```
-
-Next, create a `.npmrc` file in the root of your project with the following content:
-
-```ini
-@tetherto:registry=https://npm.pkg.github.com
-//npm.pkg.github.com/:_authToken=${NPM_TOKEN}
-```
-
-This configuration ensures secure access to GitHub Packages when installing scoped packages.
-
 ### Installing the Package
 
 Install the latest version of the decoder addon with the following command:
