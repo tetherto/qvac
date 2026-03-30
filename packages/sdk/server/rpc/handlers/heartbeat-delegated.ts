@@ -1,4 +1,4 @@
-import type { PingRequest, PingResponse } from "@/schemas";
+import type { HeartbeatRequest, HeartbeatResponse } from "@/schemas";
 import { getServerLogger } from "@/logging";
 import { getRPC } from "@/server/bare/delegate-rpc-client";
 import { send, type DelegateOptions } from "@/server/rpc/delegate-transport";
@@ -7,14 +7,14 @@ import type { DelegatedHandlerOptions } from "@/server/rpc/profiling";
 
 const logger = getServerLogger();
 
-export async function handlePingDelegated(
-  request: PingRequest,
+export async function handleHeartbeatDelegated(
+  request: HeartbeatRequest,
   options?: DelegatedHandlerOptions,
-): Promise<PingResponse> {
+): Promise<HeartbeatResponse> {
   const { delegate } = request;
   if (!delegate) {
     throw new DelegateConnectionFailedError(
-      "Delegated ping handler called without delegate info",
+      "Delegated heartbeat handler called without delegate info",
     );
   }
 
@@ -35,10 +35,10 @@ export async function handlePingDelegated(
 
     // eslint-disable-next-line @typescript-eslint/no-unused-vars
     const { delegate: _delegate, ...providerRequest } = request;
-    const response = await send(providerRequest as PingRequest, rpc, delegateOpts);
-    return response as PingResponse;
+    const response = await send(providerRequest as HeartbeatRequest, rpc, delegateOpts);
+    return response as HeartbeatResponse;
   } catch (error) {
-    logger.error("Error during delegated ping:", error);
+    logger.error("Error during delegated heartbeat:", error);
     throw error;
   }
 }

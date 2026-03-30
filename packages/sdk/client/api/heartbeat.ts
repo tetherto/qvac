@@ -1,15 +1,15 @@
-import { type PingRequest, type PingResponse } from "@/schemas";
+import { type HeartbeatRequest, type HeartbeatResponse } from "@/schemas";
 import type { DelegateBase } from "@/schemas/delegate";
 import { send } from "@/client/rpc/rpc-client";
 import { InvalidResponseError } from "@/utils/errors-client";
 
 /**
- * Checks if a delegated provider is online by sending a ping/pong round-trip.
+ * Checks if a delegated provider is online by sending a heartbeat round-trip.
  * Can also be used to check if the local SDK worker is responsive.
  *
  * @param params - Delegation target to check
- * @param params.delegate - The provider to ping (topic + publicKey + optional timeout)
- * @returns A promise that resolves to a pong response if the provider is reachable.
+ * @param params.delegate - The provider to check (topic + publicKey + optional timeout)
+ * @returns A promise that resolves to a heartbeat response if the provider is reachable.
  * @throws {QvacErrorBase} When the provider is unreachable or the response is invalid.
  *
  * @example
@@ -29,16 +29,17 @@ import { InvalidResponseError } from "@/utils/errors-client";
  */
 export async function heartbeat(params?: {
   delegate?: DelegateBase;
-}): Promise<PingResponse> {
-  const request: PingRequest = {
-    type: "ping",
+}): Promise<HeartbeatResponse> {
+  const request: HeartbeatRequest = {
+    type: "heartbeat",
     ...(params?.delegate && { delegate: params.delegate }),
   };
 
   const response = await send(request);
-  if (response.type !== "pong") {
-    throw new InvalidResponseError("pong");
+  if (response.type !== "heartbeat") {
+    throw new InvalidResponseError("heartbeat");
   }
 
   return response;
 }
+

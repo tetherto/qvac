@@ -19,8 +19,8 @@ import { handleDeleteCache } from "@/server/rpc/handlers/delete-cache";
 import { handleTextToSpeech } from "@/server/rpc/handlers/text-to-speech";
 import { handleGetModelInfo } from "@/server/rpc/handlers/get-model-info";
 import { handleOCRStream } from "@/server/rpc/handlers/ocr-stream";
-import { handlePing } from "@/server/rpc/handlers/ping";
-import { handlePingDelegated } from "@/server/rpc/handlers/ping-delegated";
+import { handleHeartbeat } from "@/server/rpc/handlers/heartbeat";
+import { handleHeartbeatDelegated } from "@/server/rpc/handlers/heartbeat-delegated";
 import { handleCancelDelegated } from "@/server/rpc/handlers/cancel-delegated";
 import {
   handlePluginInvoke,
@@ -60,11 +60,11 @@ function isCancelDelegated(request: Request): boolean {
 
 export const registry: Record<string, HandlerEntry> = {
   // Simple Reply handlers
-  ping: {
+  heartbeat: {
     type: "reply",
-    handler: handlePing,
-    delegatedHandler: handlePingDelegated,
-    isDelegated: (r) => r.type === "ping" && !!r.delegate,
+    handler: handleHeartbeat,
+    delegatedHandler: handleHeartbeatDelegated,
+    isDelegated: (r) => r.type === "heartbeat" && !!r.delegate,
   },
   unloadModel: {
     type: "reply",
