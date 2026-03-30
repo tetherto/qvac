@@ -76,10 +76,8 @@ declare class TranscriptionWhispercpp extends BaseInference {
   );
 
   /**
-   * Load model, weights, and activate addon.
-   * @param {boolean} [closeLoader=false] - Close loader when done.
-   * @param {ReportProgressCallback} [reportProgressCallback] - Hook for progress updates.
-   * @returns {Promise<void>} - A promise that resolves when the model is fully loaded.
+   * Load model and activate addon. Files must already exist at `files.model` / optional `files.vadModel`.
+   * Optional parameters are accepted for `load(...args)` compatibility but are ignored.
    */
   _load(
     closeLoader?: boolean,
