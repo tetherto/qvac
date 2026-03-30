@@ -537,7 +537,8 @@ TEST_F(JobRunnerTest, StaleCancelDoesNotClearNewerAcceptedJob) {
 }
 
 TEST_F(JobRunnerTest, CancelWhileActivelyProcessing_ModelReceivesStop) {
-  model_ = std::make_unique<JobRunnerTestModel>(std::chrono::milliseconds{2000});
+  model_ =
+      std::make_unique<JobRunnerTestModel>(std::chrono::milliseconds{2000});
   outputQueue_ = std::make_shared<OutputQueue>(*callback_, *model_);
   jobRunner_ =
       std::make_unique<JobRunner>(outputQueue_, model_.get(), model_.get());
@@ -601,4 +602,3 @@ TEST_F(JobRunnerTest, StaleCancelDoesNotKillActiveJob) {
 }
 
 } // namespace qvac_lib_inference_addon_cpp
-
