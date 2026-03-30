@@ -1,4 +1,4 @@
-# qvac-lib-infer-onnx-tts
+# onnx-tts
 
 This library simplifies running Text-to-Speech (TTS) models within QVAC runtime applications. It provides an easy interface to load, execute, and manage TTS instances, supporting multiple data sources (called data loaders) and leveraging ONNX Runtime for efficient inference.
 
@@ -128,8 +128,8 @@ Before building, ensure you have the following installed:
 
 1. **Clone the repository**:
    ```bash
-   git clone git@github.com:tetherto/qvac-lib-infer-onnx-tts.git
-   cd qvac-lib-infer-onnx-tts
+   git clone git@github.com:tetherto/onnx-tts.git
+   cd onnx-tts
    ```
 
 2. **Install dependencies**:
@@ -561,7 +561,7 @@ npm run coverage:cpp
 
 *   **QVAC Examples Repo:** [https://github.com/tetherto/qvac-examples](https://github.com/tetherto/qvac-examples)
 *   **ONNX Runtime:** [https://onnxruntime.ai/](https://onnxruntime.ai/)
-*   **Base ONNX Addon:** [https://github.com/tetherto/qvac/tree/main/packages/qvac-lib-infer-onnx-base](https://github.com/tetherto/qvac/tree/main/packages/qvac-lib-infer-onnx-base)
+*   **Base ONNX Addon:** [https://github.com/tetherto/qvac/tree/main/packages/onnx-base](https://github.com/tetherto/qvac/tree/main/packages/onnx-base)
 *   **Chatterbox TTS:** [https://github.com/ResembleAI/chatterbox](https://github.com/ResembleAI/chatterbox)
 *   **Supertonic TTS:** [https://huggingface.co/onnx-community/Supertonic-TTS-ONNX](https://huggingface.co/onnx-community/Supertonic-TTS-ONNX)
 

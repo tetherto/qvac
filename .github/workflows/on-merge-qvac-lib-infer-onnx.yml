@@ -8,8 +8,8 @@ on:
       - feature-*
       - tmp-*
     paths:
-      - "packages/qvac-lib-infer-onnx/**"
-      - ".github/workflows/*qvac-lib-infer-onnx*.yml"
+      - "packages/onnx/**"
+      - ".github/workflows/*onnx*.yml"
 
   workflow_dispatch:
     inputs:
@@ -101,9 +101,9 @@ jobs:
           base-ref: ${{ github.ref_name }}
           base-sha: ${{ github.event.before }}
           head-sha: ${{ github.sha }}
-          package-slug: qvac-lib-infer-onnx
-          package-json-path: packages/qvac-lib-infer-onnx/package.json
-          changelog-path: packages/qvac-lib-infer-onnx/CHANGELOG.md
+          package-slug: onnx
+          package-json-path: packages/onnx/package.json
+          changelog-path: packages/onnx/CHANGELOG.md
 
   publish-main-gpr:
     needs: publish-logic
@@ -112,7 +112,7 @@ jobs:
       contents: write
       packages: write
       pull-requests: write
-    uses: ./.github/workflows/prebuilds-qvac-lib-infer-onnx.yml
+    uses: ./.github/workflows/prebuilds-onnx.yml
     secrets: inherit
     with:
       tag: ${{ inputs.tag || needs.publish-logic.outputs.gpr_tag }}
@@ -125,7 +125,7 @@ jobs:
       contents: write
       packages: write
       pull-requests: write
-    uses: ./.github/workflows/prebuilds-qvac-lib-infer-onnx.yml
+    uses: ./.github/workflows/prebuilds-onnx.yml
     secrets: inherit
     with:
       tag: ${{ inputs.tag || needs.publish-logic.outputs.gpr_tag }}
@@ -138,7 +138,7 @@ jobs:
       contents: write
       packages: write
       pull-requests: write
-    uses: ./.github/workflows/prebuilds-qvac-lib-infer-onnx.yml
+    uses: ./.github/workflows/prebuilds-onnx.yml
     secrets: inherit
     with:
       tag: ${{ inputs.tag || needs.publish-logic.outputs.gpr_tag }}
@@ -153,7 +153,7 @@ jobs:
       contents: write
       packages: write
       pull-requests: write
-    uses: ./.github/workflows/prebuilds-qvac-lib-infer-onnx.yml
+    uses: ./.github/workflows/prebuilds-onnx.yml
     secrets: inherit
     with:
       tag: "latest"
@@ -164,11 +164,11 @@ jobs:
     if: needs.publish-release-npm.result == 'success' && needs.publish-release-npm.outputs.published_version != ''
     permissions:
       contents: write
-    uses: ./.github/workflows/create-github-release-qvac-lib-infer-onnx.yml
+    uses: ./.github/workflows/create-github-release-onnx.yml
     with:
       published_version: ${{ needs.publish-release-npm.outputs.published_version }}
       prev_sha: ${{ github.event.before }}
-      workdir: "packages/qvac-lib-infer-onnx"
+      workdir: "packages/onnx"
 
   prebuild:
     name: Prebuild Gate

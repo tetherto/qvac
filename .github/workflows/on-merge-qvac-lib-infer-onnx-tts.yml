@@ -8,7 +8,7 @@ on:
       - feature-*
       - tmp-*
     paths:
-      - "packages/qvac-lib-infer-onnx-tts/**"
+      - "packages/onnx-tts/**"
       - ".github/workflows/*onnx-tts*.yml"
 
   workflow_dispatch:
@@ -98,9 +98,9 @@ jobs:
           base-ref: ${{ github.ref_name }}
           base-sha: ${{ github.event.before }}
           head-sha: ${{ github.sha }}
-          package-slug: qvac-lib-infer-onnx-tts
-          package-json-path: packages/qvac-lib-infer-onnx-tts/package.json
-          changelog-path: packages/qvac-lib-infer-onnx-tts/CHANGELOG.md
+          package-slug: onnx-tts
+          package-json-path: packages/onnx-tts/package.json
+          changelog-path: packages/onnx-tts/CHANGELOG.md
 
   publish-main-gpr:
     needs: publish-logic
@@ -109,14 +109,14 @@ jobs:
       contents: write
       packages: write
       pull-requests: write
-    uses: ./.github/workflows/prebuilds-qvac-lib-infer-onnx-tts.yml
+    uses: ./.github/workflows/prebuilds-onnx-tts.yml
     secrets: inherit
     with:
       tag: ${{ inputs.tag || needs.publish-logic.outputs.gpr_tag }}
       publish_target: "gpr"
       repository: ${{ github.repository }}
       ref: ${{ github.ref }}
-      workdir: packages/qvac-lib-infer-onnx-tts
+      workdir: packages/onnx-tts
 
   publish-feature-gpr:
     needs: publish-logic
@@ -125,14 +125,14 @@ jobs:
       contents: write
       packages: write
       pull-requests: write
-    uses: ./.github/workflows/prebuilds-qvac-lib-infer-onnx-tts.yml
+    uses: ./.github/workflows/prebuilds-onnx-tts.yml
     secrets: inherit
     with:
       tag: ${{ inputs.tag || needs.publish-logic.outputs.gpr_tag }}
       publish_target: "gpr"
       repository: ${{ github.repository }}
       ref: ${{ github.ref }}
-      workdir: packages/qvac-lib-infer-onnx-tts
+      workdir: packages/onnx-tts
 
   publish-tmp-gpr:
     needs: publish-logic
@@ -141,14 +141,14 @@ jobs:
       contents: write
       packages: write
       pull-requests: write
-    uses: ./.github/workflows/prebuilds-qvac-lib-infer-onnx-tts.yml
+    uses: ./.github/workflows/prebuilds-onnx-tts.yml
     secrets: inherit
     with:
       tag: ${{ inputs.tag || needs.publish-logic.outputs.gpr_tag }}
       publish_target: "gpr"
       repository: ${{ github.repository }}
       ref: ${{ github.ref }}
-      workdir: packages/qvac-lib-infer-onnx-tts
+      workdir: packages/onnx-tts
 
   publish-release-npm:
     needs: [publish-logic, release-merge-guard]
@@ -159,14 +159,14 @@ jobs:
       contents: write
       packages: write
       pull-requests: write
-    uses: ./.github/workflows/prebuilds-qvac-lib-infer-onnx-tts.yml
+    uses: ./.github/workflows/prebuilds-onnx-tts.yml
     secrets: inherit
     with:
       tag: "latest"
       publish_target: "npm"
       repository: ${{ github.repository }}
       ref: ${{ github.ref }}
-      workdir: packages/qvac-lib-infer-onnx-tts
+      workdir: packages/onnx-tts
 
   publish-release:
     needs: [publish-release-npm]
@@ -179,7 +179,7 @@ jobs:
       release_name: "QVAC TTS ONNX Addon"
       published_version: ${{ needs.publish-release-npm.outputs.published_version }}
       prev_sha: ${{ github.event.before }}
-      workdir: packages/qvac-lib-infer-onnx-tts
+      workdir: packages/onnx-tts
 
   prebuild:
     name: Prebuild Gate
@@ -205,7 +205,7 @@ jobs:
           echo "should_run_tests=$should" >> "$GITHUB_OUTPUT"
 
   integration-tests:
-    uses: ./.github/workflows/integration-test-qvac-lib-infer-onnx-tts.yml
+    uses: ./.github/workflows/integration-test-onnx-tts.yml
     needs: prebuild
     if: needs.prebuild.outputs.should_run_tests == 'true'
     secrets: inherit
@@ -214,7 +214,7 @@ jobs:
       ref: ${{ github.sha }}
 
   mobile-integration-tests:
-    uses: ./.github/workflows/integration-mobile-test-qvac-lib-infer-onnx-tts.yml
+    uses: ./.github/workflows/integration-mobile-test-onnx-tts.yml
     needs: prebuild
     if: needs.prebuild.outputs.should_run_tests == 'true'
     permissions:

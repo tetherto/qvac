@@ -1,4 +1,4 @@
-name: Benchmark Chatterbox (qvac-lib-infer-onnx-tts)
+name: Benchmark Chatterbox (onnx-tts)
 
 on:
   workflow_dispatch:
@@ -112,8 +112,8 @@ jobs:
             git config --global url."https://${{ github.token }}:@github.com/".insteadOf "https://github.com/"
           fi
 
-          mkdir -p packages/qvac-lib-infer-onnx-tts/benchmarks/server
-          cp .npmrc packages/qvac-lib-infer-onnx-tts/benchmarks/server/.npmrc
+          mkdir -p packages/onnx-tts/benchmarks/server
+          cp .npmrc packages/onnx-tts/benchmarks/server/.npmrc
 
           echo "=== .npmrc contents ==="
           cat .npmrc
@@ -148,7 +148,7 @@ jobs:
           echo "Addon version to benchmark: $VERSION"
 
       - name: Update addon version in package.json
-        working-directory: packages/qvac-lib-infer-onnx-tts/benchmarks/server
+        working-directory: packages/onnx-tts/benchmarks/server
         run: |
           VERSION="${{ steps.version.outputs.version }}"
 
@@ -164,7 +164,7 @@ jobs:
           npm pkg get dependencies
 
       - name: Update benchmark configuration
-        working-directory: packages/qvac-lib-infer-onnx-tts
+        working-directory: packages/onnx-tts
         run: |
           VERSION="${{ steps.version.outputs.version }}"
 
@@ -198,31 +198,31 @@ jobs:
           cat benchmarks/client/config/config-chatterbox.yaml
 
       - name: Install benchmark server dependencies
-        working-directory: packages/qvac-lib-infer-onnx-tts/benchmarks/server
+        working-directory: packages/onnx-tts/benchmarks/server
         run: |
           npm install
 
       - name: Download Chatterbox models
-        working-directory: packages/qvac-lib-infer-onnx-tts/benchmarks/server
+        working-directory: packages/onnx-tts/benchmarks/server
         run: |
           npm run setup:chatterbox
 
       - name: Install Python server dependencies
         if: github.event.inputs.run_python == 'true'
-        working-directory: packages/qvac-lib-infer-onnx-tts/benchmarks/python-server
+        working-directory: packages/onnx-tts/benchmarks/python-server
         run: |
           pip install --upgrade pip setuptools wheel
           pip install -r requirements-chatterbox.txt
 
       - name: Install benchmark client dependencies
-        working-directory: packages/qvac-lib-infer-onnx-tts/benchmarks/client
+        working-directory: packages/onnx-tts/benchmarks/client
         run: |
           pip install --upgrade pip setuptools wheel
           pip install -r requirements.txt
 
       - name: Start Python Native server
         if: github.event.inputs.run_python == 'true'
-        working-directory: packages/qvac-lib-infer-onnx-tts/benchmarks/python-server
+        working-directory: packages/onnx-tts/benchmarks/python-server
         run: |
           nohup python main.py > server.log 2>&1 &
           echo $! > server.pid
@@ -235,7 +235,7 @@ jobs:
           echo "Python server started successfully on port 8081"
 
       - name: Start TTS Addon server
-        working-directory: packages/qvac-lib-infer-onnx-tts/benchmarks/server
+        working-directory: packages/onnx-tts/benchmarks/server
         run: |
           nohup npm start > server.log 2>&1 &
           echo $! > server.pid
@@ -248,13 +248,13 @@ jobs:
           echo "Addon server started successfully on port 8080"
 
       - name: Clean old benchmark results
-        working-directory: packages/qvac-lib-infer-onnx-tts
+        working-directory: packages/onnx-tts
         run: |
           rm -rf benchmarks/results/*.md || true
           echo "Cleaned old benchmark results"
 
       - name: Run benchmark
-        working-directory: packages/qvac-lib-infer-onnx-tts/benchmarks/client
+        working-directory: packages/onnx-tts/benchmarks/client
         env:
           PYTHONUNBUFFERED: "1"
           HF_DATASETS_CACHE: /tmp/hf_cache
@@ -264,7 +264,7 @@ jobs:
 
       - name: Stop servers
         if: always()
-        working-directory: packages/qvac-lib-infer-onnx-tts
+        working-directory: packages/onnx-tts
         run: |
           if [ -f benchmarks/python-server/server.pid ]; then
             kill $(cat benchmarks/python-server/server.pid) || true
@@ -278,7 +278,7 @@ jobs:
 
       - name: Display server logs
         if: always()
-        working-directory: packages/qvac-lib-infer-onnx-tts
+        working-directory: packages/onnx-tts
         run: |
           if [ -f benchmarks/server/server.log ]; then
             echo "=== Addon Server Logs ==="
@@ -292,7 +292,7 @@ jobs:
 
       - name: Display results summary
         if: always()
-        working-directory: packages/qvac-lib-infer-onnx-tts
+        working-directory: packages/onnx-tts
         run: |
           MODEL_NAME="chatterbox"
           VERSION="${{ steps.version.outputs.version }}"
@@ -325,7 +325,7 @@ jobs:
 
       - name: Add results to job summary
         if: always()
-        working-directory: packages/qvac-lib-infer-onnx-tts
+        working-directory: packages/onnx-tts
         run: |
           MODEL_NAME="chatterbox"
           VERSION="${{ steps.version.outputs.version }}"
@@ -368,12 +368,12 @@ jobs:
         uses: actions/upload-artifact@bbbca2ddaa5d8feaa63e36b76fdaad77386f024f # 7.0.0
         with:
           name: chatterbox-benchmark-results-v${{ steps.version.outputs.version }}
-          path: packages/qvac-lib-infer-onnx-tts/benchmarks/results/
+          path: packages/onnx-tts/benchmarks/results/
           retention-days: 30
 
       - name: Post results to Google Sheets
         if: success()
-        working-directory: packages/qvac-lib-infer-onnx-tts
+        working-directory: packages/onnx-tts
         env:
           GOOGLE_SHEETS_CREDENTIALS: ${{ secrets.GOOGLE_SHEETS_CREDENTIALS }}
           GOOGLE_SHEET_ID: ${{ secrets.GOOGLE_SHEET_ID }}

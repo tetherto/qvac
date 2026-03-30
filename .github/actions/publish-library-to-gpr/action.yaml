@@ -202,9 +202,9 @@ runs:
           qvac-lib-infer-llamacpp-llm
           qvac-lib-infer-nmtcpp
           qvac-lib-infer-whispercpp
-          qvac-lib-infer-onnx-vad
+          onnx-vad
           qvac-lib-infer-llamacpp-embed
-          qvac-lib-infer-onnx-tts
+          onnx-tts
           ocr-onnx
         )
 

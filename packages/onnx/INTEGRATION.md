@@ -1,6 +1,6 @@
 # Integrating @qvac/onnx into a Consumer Addon
 
-This guide covers all steps needed for an ONNX-based consumer addon (e.g. `ocr-onnx`, `qvac-lib-infer-onnx-tts`) to depend on and use `@qvac/onnx`.
+This guide covers all steps needed for an ONNX-based consumer addon (e.g. `ocr-onnx`, `onnx-tts`) to depend on and use `@qvac/onnx`.
 
 ## Overview
 

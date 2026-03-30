@@ -46,7 +46,7 @@ on:
         value: ${{ inputs.publish_target }}
 
 env:
-  PKG_DIR: packages/qvac-lib-infer-onnx
+  PKG_DIR: packages/onnx
 
 permissions:
   contents: read
@@ -101,8 +101,8 @@ jobs:
 
     env:
       # monorepo: keep cache under the package dir to avoid cross-package collisions
-      PKG_DIR: packages/qvac-lib-infer-onnx
-      VCPKG_BINARY_SOURCES: "clear;files,${{ github.workspace }}/packages/qvac-lib-infer-onnx/vcpkg/cache,readwrite"
+      PKG_DIR: packages/onnx
+      VCPKG_BINARY_SOURCES: "clear;files,${{ github.workspace }}/packages/onnx/vcpkg/cache,readwrite"
       VCPKG_BUILD_TYPE: release
 
     steps:
@@ -348,7 +348,7 @@ jobs:
         uses: actions/cache/restore@668228422ae6a00e4ad889ee87cd7109ec5666a7 # 5.0.4
         with:
           path: ${{ env.PKG_DIR }}/vcpkg/cache
-          key: vcpkg-v3-${{ matrix.platform }}-${{ matrix.arch }}${{ matrix.tags }}-${{ hashFiles('packages/qvac-lib-infer-onnx/vcpkg.json', 'packages/qvac-lib-infer-onnx/vcpkg-configuration.json', 'packages/qvac-lib-infer-onnx/vcpkg-override-triplets/**') }}
+          key: vcpkg-v3-${{ matrix.platform }}-${{ matrix.arch }}${{ matrix.tags }}-${{ hashFiles('packages/onnx/vcpkg.json', 'packages/onnx/vcpkg-configuration.json', 'packages/onnx/vcpkg-override-triplets/**') }}
           restore-keys: |
             vcpkg-v3-${{ matrix.platform }}-${{ matrix.arch }}${{ matrix.tags }}-
             vcpkg-v3-${{ matrix.platform }}-${{ matrix.arch }}-
@@ -362,7 +362,7 @@ jobs:
         uses: actions/cache/save@668228422ae6a00e4ad889ee87cd7109ec5666a7 # 5.0.4
         with:
           path: ${{ env.PKG_DIR }}/vcpkg/cache
-          key: vcpkg-v3-${{ matrix.platform }}-${{ matrix.arch }}${{ matrix.tags }}-${{ hashFiles('packages/qvac-lib-infer-onnx/vcpkg.json', 'packages/qvac-lib-infer-onnx/vcpkg-configuration.json', 'packages/qvac-lib-infer-onnx/vcpkg-override-triplets/**') }}
+          key: vcpkg-v3-${{ matrix.platform }}-${{ matrix.arch }}${{ matrix.tags }}-${{ hashFiles('packages/onnx/vcpkg.json', 'packages/onnx/vcpkg-configuration.json', 'packages/onnx/vcpkg-override-triplets/**') }}
 
       - name: Run bare-make build
         working-directory: ${{ env.PKG_DIR }}
@@ -576,8 +576,8 @@ jobs:
     if: needs.publish-npm.outputs.published_version != '' && startsWith(github.ref_name, 'release-')
     permissions:
       contents: write
-    uses: ./.github/workflows/create-github-release-qvac-lib-infer-onnx.yml
+    uses: ./.github/workflows/create-github-release-onnx.yml
     with:
       published_version: ${{ needs.publish-npm.outputs.published_version }}
       prev_sha: ${{ github.event.before }}
-      workdir: packages/qvac-lib-infer-onnx
+      workdir: packages/onnx

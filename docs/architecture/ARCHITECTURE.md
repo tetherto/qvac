@@ -225,7 +225,7 @@ The SDK includes a client for the QVAC Model Registry (`@qvac/registry-client`),
 - [Embeddings — llama.cpp](../packages/qvac-lib-infer-llamacpp-embed/docs/architecture.md)
 - [Transcription — whisper.cpp](../packages/qvac-lib-infer-whispercpp/docs/architecture.md)
 - [Translation — nmt.cpp](../packages/qvac-lib-infer-nmtcpp/docs/architecture.md)
-- [TTS — ONNX](../packages/qvac-lib-infer-onnx-tts/docs/architecture.md)
+- [TTS — ONNX](../packages/onnx-tts/docs/architecture.md)
 - [OCR — ONNX](../packages/ocr-onnx/docs/architecture.md)
 
 ---
@@ -261,7 +261,7 @@ All packages live in this monorepo under `packages/`:
 | `qvac-lib-infer-whispercpp` | `@qvac/transcription-whispercpp` | Speech-to-text (whisper.cpp) |
 | `qvac-lib-infer-parakeet` | `@qvac/transcription-parakeet` | Speech-to-text (Parakeet) |
 | `qvac-lib-infer-nmtcpp` | `@qvac/translation-nmtcpp` | Translation (nmt.cpp) |
-| `qvac-lib-infer-onnx-tts` | `@qvac/tts-onnx` | Text-to-speech (ONNX) |
+| `onnx-tts` | `@qvac/tts-onnx` | Text-to-speech (ONNX) |
 | `ocr-onnx` | `@qvac/ocr-onnx` | OCR (ONNX) |
 
 **Support Libraries**

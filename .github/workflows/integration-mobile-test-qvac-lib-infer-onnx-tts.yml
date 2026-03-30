@@ -15,7 +15,7 @@ on:
         description: "Relative path to package directory in monorepo"
         type: string
         required: false
-        default: "packages/qvac-lib-infer-onnx-tts"
+        default: "packages/onnx-tts"
   workflow_dispatch:
     inputs:
       ref:
@@ -32,7 +32,7 @@ on:
         description: "Relative path to package directory in monorepo"
         type: string
         required: false
-        default: "packages/qvac-lib-infer-onnx-tts"
+        default: "packages/onnx-tts"
 
 env:
   NODE_VERSION: "lts/*"
@@ -40,8 +40,8 @@ env:
   PREBUILD_ARTIFACT_PREFIX: "onnx-tts-" # Prefix for prebuild artifacts (must match prebuilds workflow upload names)
   TEST_FRAMEWORK_REF: "main" # Branch/tag of qvac-test-addon-mobile framework
   APP_BUNDLE_ID: "io.tether.test.qvac" # Bundle ID for the test app (same for all addons)
-  WORKDIR: ${{ inputs.workdir || github.event.inputs.workdir || 'packages/qvac-lib-infer-onnx-tts' }}
-  ADDON_DIR: addon/${{ inputs.workdir || github.event.inputs.workdir || 'packages/qvac-lib-infer-onnx-tts' }}
+  WORKDIR: ${{ inputs.workdir || github.event.inputs.workdir || 'packages/onnx-tts' }}
+  ADDON_DIR: addon/${{ inputs.workdir || github.event.inputs.workdir || 'packages/onnx-tts' }}
   TEST_FRAMEWORK_DIR: test-framework
 
 jobs:
@@ -192,7 +192,7 @@ jobs:
           if [ -d "package/prebuilds" ]; then
             PREBUILDS_SRC="package/prebuilds"
           else
-            # Search for prebuilds under package/ (e.g. mono: package/packages/qvac-lib-infer-onnx-tts/prebuilds)
+            # Search for prebuilds under package/ (e.g. mono: package/packages/onnx-tts/prebuilds)
             CANDIDATE=$(find package -type d -name prebuilds 2>/dev/null | head -1)
             if [ -n "$CANDIDATE" ] && [ -d "$CANDIDATE" ]; then
               PREBUILDS_SRC="$CANDIDATE"

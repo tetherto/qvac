@@ -13,8 +13,8 @@ on:
       - feature-*
       - tmp-*
     paths:
-      - "packages/qvac-lib-infer-onnx/**"
-      - ".github/workflows/*qvac-lib-infer-onnx*.yml"
+      - "packages/onnx/**"
+      - ".github/workflows/*onnx*.yml"
   workflow_dispatch:
   workflow_call:
 
@@ -61,8 +61,8 @@ jobs:
           token: ${{ secrets.GITHUB_TOKEN }}
           filters: |
             pkg:
-              - "packages/qvac-lib-infer-onnx/**"
-              - ".github/workflows/*qvac-lib-infer-onnx*.yml"
+              - "packages/onnx/**"
+              - ".github/workflows/*onnx*.yml"
 
   sanity-checks:
     needs: [authorize, changes]
@@ -75,8 +75,8 @@ jobs:
     permissions:
       contents: read
     env:
-      VCPKG_BINARY_SOURCES: "clear;files,${{ github.workspace }}/packages/qvac-lib-infer-onnx/vcpkg/cache,readwrite"
-      PKG_DIR: packages/qvac-lib-infer-onnx
+      VCPKG_BINARY_SOURCES: "clear;files,${{ github.workspace }}/packages/onnx/vcpkg/cache,readwrite"
+      PKG_DIR: packages/onnx
     steps:
       - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # 6.0.2
         with:
@@ -84,7 +84,7 @@ jobs:
           ref: ${{ github.event.pull_request.head.ref || github.ref }}
           token: ${{ secrets.PAT_TOKEN }}
           sparse-checkout: |
-            packages/qvac-lib-infer-onnx
+            packages/onnx
           fetch-depth: 0
 
       - name: Fetch PR head and target branch
@@ -168,7 +168,7 @@ jobs:
     with:
       sha: ${{ github.event.pull_request.base.sha || github.sha }}
       pr_head_sha: ${{ github.event.pull_request.head.sha }}
-      workdir: packages/qvac-lib-infer-onnx
+      workdir: packages/onnx
 
   prebuild:
     permissions:
@@ -182,7 +182,7 @@ jobs:
         github.event_name == 'workflow_dispatch' ||
         needs.authorize.outputs.allowed == 'true'
       )
-    uses: ./.github/workflows/prebuilds-qvac-lib-infer-onnx.yml
+    uses: ./.github/workflows/prebuilds-onnx.yml
     secrets: inherit
     with:
       repository: ${{ github.event.pull_request.head.repo.full_name || github.repository }}

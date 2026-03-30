@@ -5,7 +5,7 @@ on:
     types: [opened, synchronize, reopened, labeled]
     branches: [main, release-*, feature-*, tmp-*]
     paths:
-      - "packages/qvac-lib-infer-onnx-tts/**"
+      - "packages/onnx-tts/**"
       - ".github/workflows/*onnx-tts*.yml"
 
   workflow_dispatch:
@@ -27,7 +27,7 @@ on:
         description: "Package working directory in monorepo."
         required: false
         type: string
-        default: "packages/qvac-lib-infer-onnx-tts"
+        default: "packages/onnx-tts"
 
   workflow_call:
     inputs:
@@ -44,7 +44,7 @@ on:
       workdir:
         required: false
         type: string
-        default: "packages/qvac-lib-infer-onnx-tts"
+        default: "packages/onnx-tts"
 
 concurrency:
   group: ${{ github.workflow }}-pr-${{ github.event.pull_request.number || github.sha }}
@@ -104,7 +104,7 @@ jobs:
 
           # Resolve workdir from inputs when available; otherwise default package path.
           if [[ "$EVENT_NAME" == "workflow_dispatch" || "$EVENT_NAME" == "workflow_call" ]]; then
-            workdir="${INPUT_WORKDIR:-packages/qvac-lib-infer-onnx-tts}"
+            workdir="${INPUT_WORKDIR:-packages/onnx-tts}"
             repo="${INPUT_REPO:-$REPO}"
             ref="${INPUT_REF:-$REF_NAME}"
             run_verify="$INPUT_VERIFY"
@@ -112,7 +112,7 @@ jobs:
             head_sha="$SHA"
           else
             # pull_request_target
-            workdir="packages/qvac-lib-infer-onnx-tts"
+            workdir="packages/onnx-tts"
             repo="$REPO"
             ref="$HEAD_SHA"
             run_verify="true"
@@ -163,7 +163,7 @@ jobs:
   cpp-tests-coverage:
     needs: [authorize, context]
     if: needs.authorize.outputs.allowed == 'true'
-    uses: ./.github/workflows/cpp-test-coverage-qvac-lib-infer-onnx-tts.yml
+    uses: ./.github/workflows/cpp-test-coverage-onnx-tts.yml
     secrets: inherit
     with:
       repository: ${{ needs.context.outputs.repository }}
@@ -177,7 +177,7 @@ jobs:
       pull-requests: write
     needs: [authorize, context]
     if: needs.authorize.outputs.allowed == 'true'
-    uses: ./.github/workflows/prebuilds-qvac-lib-infer-onnx-tts.yml
+    uses: ./.github/workflows/prebuilds-onnx-tts.yml
     secrets: inherit
     with:
       repository: ${{ needs.context.outputs.repository }}
@@ -188,7 +188,7 @@ jobs:
   run-integration-tests:
     needs: [authorize, context, prebuild]
     if: needs.authorize.outputs.allowed == 'true'
-    uses: ./.github/workflows/integration-test-qvac-lib-infer-onnx-tts.yml
+    uses: ./.github/workflows/integration-test-onnx-tts.yml
     secrets: inherit
     with:
       repository: ${{ needs.context.outputs.repository }}
@@ -202,7 +202,7 @@ jobs:
       pull-requests: write # Allow commenting on PRs
     needs: [authorize, context, prebuild]
     if: needs.authorize.outputs.allowed == 'true'
-    uses: ./.github/workflows/integration-mobile-test-qvac-lib-infer-onnx-tts.yml
+    uses: ./.github/workflows/integration-mobile-test-onnx-tts.yml
     secrets: inherit
     with:
       repository: ${{ needs.context.outputs.repository }}

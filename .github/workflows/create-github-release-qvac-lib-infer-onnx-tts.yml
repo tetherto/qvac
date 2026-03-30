@@ -15,7 +15,7 @@ on:
         description: "Working directory (optional)"
         required: false
         type: string
-        default: "packages/qvac-lib-infer-onnx-tts"
+        default: "packages/onnx-tts"
 
 permissions:
   contents: write
