@@ -8,12 +8,7 @@ const inferBaseSrcDir = path.join(
   'src'
 )
 
-let QvacResponse
-try {
-  QvacResponse = require('@qvac/response')
-} catch {
-  QvacResponse = require(path.join(inferBaseSrcDir, 'QvacResponse'))
-}
+const QvacResponse = require(path.join(inferBaseSrcDir, 'QvacResponse'))
 
 const { QvacInferenceBaseError, ERR_CODES } = require(path.join(inferBaseSrcDir, 'error'))
 const { QvacErrorAddonTTS, ERR_CODES: TTS_ERR_CODES } = require('./error')
