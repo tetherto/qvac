@@ -6,7 +6,7 @@
 #include <whisper.h>
 
 #include "model-interface/whisper.cpp/WhisperConfig.hpp"
-#include "qvac-lib-inference-addon-cpp/JsUtils.hpp"
+#include "inference-addon-cpp/JsUtils.hpp"
 
 using namespace qvac_lib_inference_addon_cpp::js;
 

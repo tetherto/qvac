@@ -31,7 +31,7 @@ This decoder library leverages FFmpeg for efficient audio decoding. It simplifie
 | Windows | x64 | 10+ | ✅ Tier 1 | N/A (CPU only) |
 
 **Dependencies:**
-- qvac-lib-inference-addon-cpp: C++ addon framework
+- inference-addon-cpp: C++ addon framework
 - FFmpeg: Audio decoding engine
 - Bare Runtime (latest): JavaScript runtime
 

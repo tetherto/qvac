@@ -1,6 +1,6 @@
 # @qvac/onnx
 
-Bare addon providing ONNX Runtime session management for QVAC inference addons. Links ONNX Runtime 1.22.0 (via vcpkg) and exposes both a C++ header-only library and a JavaScript API. On desktop platforms, `@qvac/onnx.bare` is the single shared library containing ORT — consumer addons dynamically link against it so ORT is loaded exactly once per process. On mobile (Android/iOS), consumer addons statically link ORT via the bundled static libraries. Has no dependency on `qvac-lib-inference-addon-cpp`.
+Bare addon providing ONNX Runtime session management for QVAC inference addons. Links ONNX Runtime 1.22.0 (via vcpkg) and exposes both a C++ header-only library and a JavaScript API. On desktop platforms, `@qvac/onnx.bare` is the single shared library containing ORT — consumer addons dynamically link against it so ORT is loaded exactly once per process. On mobile (Android/iOS), consumer addons statically link ORT via the bundled static libraries. Has no dependency on `inference-addon-cpp`.
 
 ## Architecture
 

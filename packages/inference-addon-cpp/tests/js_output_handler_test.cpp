@@ -5,8 +5,8 @@
 #include <gtest/gtest.h>
 
 #include "helpers_header/js.h"
-#include "qvac-lib-inference-addon-cpp/ModelInterfaces.hpp"
-#include "qvac-lib-inference-addon-cpp/handlers/JsOutputHandlerImplementations.hpp"
+#include "inference-addon-cpp/ModelInterfaces.hpp"
+#include "inference-addon-cpp/handlers/JsOutputHandlerImplementations.hpp"
 
 namespace qvac_lib_inference_addon_cpp {
 

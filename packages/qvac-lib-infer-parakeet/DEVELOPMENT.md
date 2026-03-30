@@ -111,7 +111,7 @@ qvac-lib-infer-parakeet/
 │   ├── ParakeetModel.hpp         # Model interface declaration
 │   ├── ParakeetModel.cpp         # Model implementation with ONNX Runtime
 │   ├── binding.cpp               # Bare addon registration and JS bindings
-│   └── qvac-lib-inference-addon-cpp/  # Base framework (from dependency)
+│   └── inference-addon-cpp/  # Base framework (from dependency)
 ├── examples/
 │   ├── transcribe.js             # Basic transcription example
 │   └── README.md                 # Examples documentation
@@ -320,7 +320,7 @@ find src -name "*.cpp" -o -name "*.hpp" | xargs clang-format -i
 
 - **ONNX Runtime Documentation**: https://onnxruntime.ai/docs/
 - **Bare Runtime**: https://github.com/holepunchto/bare
-- **QVAC Framework**: https://github.com/tetherto/qvac-lib-inference-addon-cpp
+- **QVAC Framework**: https://github.com/tetherto/inference-addon-cpp
 - **Parakeet Models**: https://github.com/altunene/parakeet-rs
 
 ## License

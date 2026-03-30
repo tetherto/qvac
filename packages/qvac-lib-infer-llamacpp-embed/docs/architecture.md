@@ -71,7 +71,7 @@
 Tier 1: Platform targets for which prebuilds are provided as defined by the .github/workflows/prebuilds-qvac-lib-infer-llamacpp-embed.yml workflow. Compilation and test failures for these targets will cause workflow runs to go red.
 
 **Dependencies:**
-- qvac-lib-inference-addon-cpp (≥1.1.2): C++ addon framework
+- inference-addon-cpp (≥1.1.2): C++ addon framework
 - qvac-fabric-llm.cpp (≥7248.2.1): Inference engine
 - Bare Runtime (≥1.24.0): JavaScript runtime
 
@@ -129,7 +129,7 @@ graph TB
 |---------|------|---------|---------|
 | @qvac/infer-base | Framework | ^0.2.2 | Base classes, WeightsProvider, QvacResponse |
 | @qvac/dl-hyperdrive | Peer | ^0.1.0 | P2P model loading |
-| qvac-lib-inference-addon-cpp | Native | ≥1.1.1 | C++ addon framework |
+| inference-addon-cpp | Native | ≥1.1.1 | C++ addon framework |
 | llama.cpp | Native | ≥7248.1.0 | Inference engine |
 | Bare Runtime | Runtime | ≥1.24.0 | JavaScript execution |
 
@@ -510,7 +510,7 @@ Use llama.cpp (via vcpkg) as the core inference engine instead of MLC-LLM, ONNX 
 
 ## Decision 2: Bare Runtime over Node.js
 
-See [qvac-lib-inference-addon-cpp Decision 4: Why Bare Runtime](https://github.com/tetherto/qvac-lib-inference-addon-cpp/blob/main/docs/architecture.md#decision-4-why-bare-runtime) for rationale.
+See [inference-addon-cpp Decision 4: Why Bare Runtime](https://github.com/tetherto/inference-addon-cpp/blob/main/docs/architecture.md#decision-4-why-bare-runtime) for rationale.
 
 **Summary:** Mobile support (iOS/Android), lightweight, modern addon API. Core business logic remains runtime-agnostic.
 
@@ -589,7 +589,7 @@ Alternative approach would be: download from Hyperdrive → save to temp file �
 
 ### Decision
 
-Implement custom `std::streambuf` over JavaScript-owned ArrayBuffers with incremental shard-by-shard loading, as provided by `qvac-lib-inference-addon-cpp` framework. This allows feeding buffer chunks from any source (Hyperdrive, HTTP, local files) directly to llama.cpp without intermediate file storage.
+Implement custom `std::streambuf` over JavaScript-owned ArrayBuffers with incremental shard-by-shard loading, as provided by `inference-addon-cpp` framework. This allows feeding buffer chunks from any source (Hyperdrive, HTTP, local files) directly to llama.cpp without intermediate file storage.
 
 JavaScript sends model data as buffer chunks, C++ wraps them in a `std::streambuf`, enabling llama.cpp to load sharded models incrementally with zero-copy access to JavaScript memory.
 

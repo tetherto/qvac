@@ -4,8 +4,8 @@
 #include <memory>
 #include <stdexcept>
 
-#include "qvac-lib-inference-addon-cpp/Logger.hpp"
-#include "qvac-lib-inference-addon-cpp/ModelInterfaces.hpp"
+#include "inference-addon-cpp/Logger.hpp"
+#include "inference-addon-cpp/ModelInterfaces.hpp"
 #include "whisper.cpp/WhisperModel.hpp"
 
 namespace {

@@ -7,8 +7,8 @@
 #include <vector>
 
 #include <gtest/gtest.h>
-#include <qvac-lib-inference-addon-cpp/Errors.hpp>
-#include <qvac-lib-inference-addon-cpp/RuntimeStats.hpp>
+#include <inference-addon-cpp/Errors.hpp>
+#include <inference-addon-cpp/RuntimeStats.hpp>
 
 #include "common/chat.h"
 #include "model-interface/LlamaModel.hpp"

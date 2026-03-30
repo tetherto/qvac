@@ -18,7 +18,7 @@
 #include <llama-cpp.h>
 
 #include "addon/LlmErrors.hpp"
-#include "qvac-lib-inference-addon-cpp/GGUFShards.hpp"
+#include "inference-addon-cpp/GGUFShards.hpp"
 #include "utils/BorrowablePtr.hpp"
 
 /// @brief Access model metadata without loading weights into memory.

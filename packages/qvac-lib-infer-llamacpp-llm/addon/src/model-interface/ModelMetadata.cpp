@@ -5,7 +5,7 @@
 #include <common/common.h>
 #include <common/log.h>
 #include <llama-cpp.h>
-#include <qvac-lib-inference-addon-cpp/Errors.hpp>
+#include <inference-addon-cpp/Errors.hpp>
 
 #include "addon/LlmErrors.hpp"
 

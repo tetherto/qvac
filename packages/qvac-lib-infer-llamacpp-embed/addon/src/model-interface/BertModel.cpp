@@ -9,14 +9,14 @@
 #include <common/common.h>
 #include <llama.h>
 #include <llama/common/arg.h>
-#include <qvac-lib-inference-addon-cpp/Errors.hpp>
+#include <inference-addon-cpp/Errors.hpp>
 
 #include "BackendSelection.hpp"
 #include "LlamaLazyInitializeBackend.hpp"
 #include "addon/BertErrors.hpp"
 #include "logging.hpp"
-#include "qvac-lib-inference-addon-cpp/GGUFShards.hpp"
-#include "qvac-lib-inference-addon-cpp/LlamacppUtils.hpp"
+#include "inference-addon-cpp/GGUFShards.hpp"
+#include "inference-addon-cpp/LlamacppUtils.hpp"
 #include "utils.hpp"
 
 using namespace qvac_lib_infer_llamacpp_embed::errors;

@@ -4,7 +4,7 @@
 #include <array>
 #include <thread>
 
-#include "qvac-lib-inference-addon-cpp/Errors.hpp"
+#include "inference-addon-cpp/Errors.hpp"
 
 namespace qvac_lib_infer_parakeet {
 

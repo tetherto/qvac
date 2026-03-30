@@ -8,11 +8,11 @@
 
 #include <gtest/gtest.h>
 
-#include "qvac-lib-inference-addon-cpp/JobRunner.hpp"
-#include "qvac-lib-inference-addon-cpp/ModelInterfaces.hpp"
-#include "qvac-lib-inference-addon-cpp/RuntimeStats.hpp"
-#include "qvac-lib-inference-addon-cpp/queue/OutputCallbackInterface.hpp"
-#include "qvac-lib-inference-addon-cpp/queue/OutputQueue.hpp"
+#include "inference-addon-cpp/JobRunner.hpp"
+#include "inference-addon-cpp/ModelInterfaces.hpp"
+#include "inference-addon-cpp/RuntimeStats.hpp"
+#include "inference-addon-cpp/queue/OutputCallbackInterface.hpp"
+#include "inference-addon-cpp/queue/OutputQueue.hpp"
 
 namespace qvac_lib_inference_addon_cpp {
 

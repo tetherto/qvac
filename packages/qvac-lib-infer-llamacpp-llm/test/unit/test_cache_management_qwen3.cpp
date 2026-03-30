@@ -8,7 +8,7 @@
 #include <variant>
 
 #include <gtest/gtest.h>
-#include <qvac-lib-inference-addon-cpp/RuntimeStats.hpp>
+#include <inference-addon-cpp/RuntimeStats.hpp>
 
 #include "model-interface/LlamaModel.hpp"
 #include "test_common.hpp"

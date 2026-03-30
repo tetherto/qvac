@@ -7,7 +7,7 @@ on:
   pull_request_target:
     types: [opened, synchronize, reopened, labeled]
     paths:
-      - "packages/qvac-lib-inference-addon-cpp/**"
+      - "packages/inference-addon-cpp/**"
   workflow_dispatch:
 
 concurrency:
@@ -15,9 +15,9 @@ concurrency:
   cancel-in-progress: true
 
 env:
-  PKG_DIR: packages/qvac-lib-inference-addon-cpp
-  VCPKG_CACHE_DIR: ${{ github.workspace }}/packages/qvac-lib-inference-addon-cpp/vcpkg/cache
-  VCPKG_BINARY_SOURCES: "clear;files,${{ github.workspace }}/packages/qvac-lib-inference-addon-cpp/vcpkg/cache,readwrite"
+  PKG_DIR: packages/inference-addon-cpp
+  VCPKG_CACHE_DIR: ${{ github.workspace }}/packages/inference-addon-cpp/vcpkg/cache
+  VCPKG_BINARY_SOURCES: "clear;files,${{ github.workspace }}/packages/inference-addon-cpp/vcpkg/cache,readwrite"
 
 jobs:
   authorize:
@@ -177,7 +177,7 @@ jobs:
         id: cache-vcpkg
         uses: actions/cache@668228422ae6a00e4ad889ee87cd7109ec5666a7 # 5.0.4
         with:
-          key: ${{ matrix.platform }}-${{ matrix.arch }}-${{ hashFiles('packages/qvac-lib-inference-addon-cpp/vcpkg.json', 'packages/qvac-lib-inference-addon-cpp/vcpkg-configuration.json', 'packages/qvac-lib-inference-addon-cpp/vcpkg/ports/**') }}
+          key: ${{ matrix.platform }}-${{ matrix.arch }}-${{ hashFiles('packages/inference-addon-cpp/vcpkg.json', 'packages/inference-addon-cpp/vcpkg-configuration.json', 'packages/inference-addon-cpp/vcpkg/ports/**') }}
           path: ${{ env.PKG_DIR }}/vcpkg/cache
 
       - name: Generate buildsystem

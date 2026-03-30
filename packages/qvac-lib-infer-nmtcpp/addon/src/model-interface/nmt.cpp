@@ -31,7 +31,7 @@
 #include "nmt_state_backend.hpp"
 #include "nmt_tokenization.hpp"
 #include "nmt_utils.hpp"
-#include "qvac-lib-inference-addon-cpp/Logger.hpp"
+#include "inference-addon-cpp/Logger.hpp"
 
 #ifdef _WIN32
 #include <windows.h>

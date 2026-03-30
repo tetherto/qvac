@@ -14,7 +14,7 @@
 #include "addon/WhisperErrors.hpp"
 #include "model-interface/whisper.cpp/WhisperConfig.hpp"
 #include "model-interface/whisper.cpp/WhisperHandlers.hpp"
-#include "qvac-lib-inference-addon-cpp/Errors.hpp"
+#include "inference-addon-cpp/Errors.hpp"
 
 namespace qvac_lib_inference_addon_cpp::js {
 class Object;

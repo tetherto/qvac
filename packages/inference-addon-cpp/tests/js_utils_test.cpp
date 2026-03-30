@@ -1,4 +1,4 @@
-#include "qvac-lib-inference-addon-cpp/JsUtils.hpp"
+#include "inference-addon-cpp/JsUtils.hpp"
 #include "helpers_header/js.h"
 #include <gtest/gtest.h>
 #include <utility>

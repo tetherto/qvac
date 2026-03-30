@@ -19,7 +19,7 @@
 
 #include "addon/ParakeetErrors.hpp"
 #include "onnxruntime/onnxruntime_cxx_api.h"
-#include "qvac-lib-inference-addon-cpp/Logger.hpp"
+#include "inference-addon-cpp/Logger.hpp"
 
 #ifndef M_PI
 #define M_PI 3.14159265358979323846

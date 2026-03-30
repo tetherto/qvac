@@ -102,7 +102,7 @@ set(CMAKE_POSITION_INDEPENDENT_CODE ON)
 
 
 
-find_path(QVAC_LIB_INFERENCE_ADDON_CPP_INCLUDE_DIRS "qvac-lib-inference-addon-cpp/JsInterface.hpp")
+find_path(QVAC_LIB_INFERENCE_ADDON_CPP_INCLUDE_DIRS "inference-addon-cpp/JsInterface.hpp")
 find_package(OpenCV REQUIRED)
 set(qvac-onnx_DIR "${CMAKE_CURRENT_SOURCE_DIR}/node_modules/@qvac/onnx/prebuilds/share/qvac-onnx/cmake")
 find_package(qvac-onnx CONFIG REQUIRED)

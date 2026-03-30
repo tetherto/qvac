@@ -3,7 +3,7 @@
 #include <cstdint>
 #include <string>
 
-#include "qvac-lib-inference-addon-cpp/Errors.hpp"
+#include "inference-addon-cpp/Errors.hpp"
 
 namespace qvac_errors {
 

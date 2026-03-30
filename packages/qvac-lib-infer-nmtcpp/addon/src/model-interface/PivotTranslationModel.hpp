@@ -9,7 +9,7 @@
 #include <vector>
 
 #include "TranslationModel.hpp"
-#include "qvac-lib-inference-addon-cpp/ModelInterfaces.hpp"
+#include "inference-addon-cpp/ModelInterfaces.hpp"
 
 namespace qvac_lib_inference_addon_marian {
 

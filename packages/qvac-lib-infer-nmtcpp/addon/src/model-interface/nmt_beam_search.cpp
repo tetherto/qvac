@@ -12,7 +12,7 @@
 #include "nmt.hpp"
 #include "nmt_graph_decoder.hpp"
 #include "nmt_state_backend.hpp"
-#include "qvac-lib-inference-addon-cpp/Logger.hpp"
+#include "inference-addon-cpp/Logger.hpp"
 
 struct beam_candidate {
   std::vector<nmt_vocab::id> tokens;

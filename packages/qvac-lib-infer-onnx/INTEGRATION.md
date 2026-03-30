@@ -53,7 +53,7 @@ The consumer's `vcpkg.json` only needs its own addon-specific dependencies. ONNX
   "version": "1.0.0",
   "dependencies": [
     {
-      "name": "qvac-lib-inference-addon-cpp",
+      "name": "inference-addon-cpp",
       "version>=": "1.0.0"
     },
     {

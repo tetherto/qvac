@@ -220,7 +220,7 @@ The SDK includes a client for the QVAC Model Registry (`@qvac/registry-client`),
 
 # Native Addons Architecture
 
-- [C++ Addon Framework](../packages/qvac-lib-inference-addon-cpp/docs/architecture.md)
+- [C++ Addon Framework](../packages/inference-addon-cpp/docs/architecture.md)
 - [LLM Completion — llama.cpp](../packages/qvac-lib-infer-llamacpp-llm/docs/architecture.md)
 - [Embeddings — llama.cpp](../packages/qvac-lib-infer-llamacpp-embed/docs/architecture.md)
 - [Transcription — whisper.cpp](../packages/qvac-lib-infer-whispercpp/docs/architecture.md)

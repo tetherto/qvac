@@ -15,10 +15,10 @@
 #include <llama/common/log.h>
 
 #include "LlamaLazyInitializeBackend.hpp"
-#include "qvac-lib-inference-addon-cpp/GGUFShards.hpp"
-#include "qvac-lib-inference-addon-cpp/InitLoader.hpp"
-#include "qvac-lib-inference-addon-cpp/ModelInterfaces.hpp"
-#include "qvac-lib-inference-addon-cpp/RuntimeStats.hpp"
+#include "inference-addon-cpp/GGUFShards.hpp"
+#include "inference-addon-cpp/InitLoader.hpp"
+#include "inference-addon-cpp/ModelInterfaces.hpp"
+#include "inference-addon-cpp/RuntimeStats.hpp"
 #include "utils.hpp"
 
 #if defined(_MSC_VER)

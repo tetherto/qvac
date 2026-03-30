@@ -12,7 +12,7 @@
 
 #include "addon/ParakeetErrors.hpp"
 #include "model-interface/parakeet/ParakeetConfig.hpp"
-#include "qvac-lib-inference-addon-cpp/Errors.hpp"
+#include "inference-addon-cpp/Errors.hpp"
 
 namespace qvac_lib_inference_addon_cpp::js {
 class Object;

@@ -3,7 +3,7 @@
 #include "FileUtils.hpp"
 #include "Fp16Utils.hpp"
 #include "OnnxInferSession.hpp"
-#include "qvac-lib-inference-addon-cpp/Logger.hpp"
+#include "inference-addon-cpp/Logger.hpp"
 
 #include <algorithm>
 #include <cstdint>

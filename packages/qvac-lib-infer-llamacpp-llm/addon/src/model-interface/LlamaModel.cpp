@@ -30,12 +30,12 @@
 #include <llama.h>
 #include <llama/mtmd/mtmd.h>
 #include <picojson/picojson.h>
-#include <qvac-lib-inference-addon-cpp/Errors.hpp>
+#include <inference-addon-cpp/Errors.hpp>
 
 #include "MtmdLlmContext.hpp"
 #include "TextLlmContext.hpp"
 #include "addon/LlmErrors.hpp"
-#include "qvac-lib-inference-addon-cpp/LlamacppUtils.hpp"
+#include "inference-addon-cpp/LlamacppUtils.hpp"
 #include "utils/BackendSelection.hpp"
 #include "utils/LoggingMacros.hpp"
 #include "utils/ScopeGuard.hpp"

@@ -26,10 +26,10 @@ static constexpr std::string_view to_string(Priority priority) noexcept {
 }  // namespace onnx_addon::logger
 
 // When JS_LOGGER is defined, consumer addons provide JS logging via
-// qvac-lib-inference-addon-cpp. This requires qvac-lib-inference-addon-cpp
+// inference-addon-cpp. This requires inference-addon-cpp
 // in the include path and is an opt-in compile-time dependency for consumers.
 #ifdef JS_LOGGER
-#include <qvac-lib-inference-addon-cpp/JsLogger.hpp>
+#include <inference-addon-cpp/JsLogger.hpp>
 #ifndef QLOG
 // NOLINTBEGIN(cppcoreguidelines-macro-usage)
 #define QLOG(prio, msg)                                                        \

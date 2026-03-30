@@ -23,7 +23,7 @@
 ### Architecture Decisions
 - [Decision 1: whisper.cpp as Inference Backend](#decision-1-whispercpp-as-inference-backend)
 - [Decision 2: Bare Runtime over Node.js](#decision-2-bare-runtime-over-nodejs)
-- [Decision 3: Shared Addon Framework](#decision-3-shared-addon-framework-qvac-lib-inference-addon-cpp)
+- [Decision 3: Shared Addon Framework](#decision-3-shared-addon-framework-inference-addon-cpp)
 - [Decision 4: Variant-Based Configuration Pipeline](#decision-4-variant-based-configuration-pipeline)
 - [Decision 5: Silero VAD via whisper.cpp Built-in Support](#decision-5-silero-vad-via-whispercpp-built-in-support)
 
@@ -68,7 +68,7 @@
 
 **Dependencies:**
 - whisper.cpp (=1.7.5.1): Inference engine (GGML-based)
-- qvac-lib-inference-addon-cpp: C++ addon framework (templated `Addon<Model>`)
+- inference-addon-cpp: C++ addon framework (templated `Addon<Model>`)
 - @qvac/infer-base (^0.2.0): Base classes, WeightsProvider, QvacResponse
 - @qvac/decoder-audio (^0.3.3): Audio decoding and sample rate conversion
 - @qvac/error (^0.1.0): Shared error code infrastructure
@@ -130,7 +130,7 @@ graph TB
 | @qvac/infer-base | Framework | ^0.2.0 | Base classes, WeightsProvider, QvacResponse |
 | @qvac/decoder-audio | Runtime | ^0.3.3 | Audio decoding and resampling |
 | @qvac/dl-hyperdrive | Peer | ^0.1.0 | P2P model loading |
-| qvac-lib-inference-addon-cpp | Native | — | C++ addon framework |
+| inference-addon-cpp | Native | — | C++ addon framework |
 | whisper.cpp | Native | =1.7.5.1 | Inference engine |
 | Bare Runtime | Runtime | ≥1.19.0 | JavaScript execution |
 
@@ -510,13 +510,13 @@ Use whisper.cpp (via vcpkg, pinned to v1.7.5.1) as the sole inference backend.
 
 ## Decision 2: Bare Runtime over Node.js
 
-See [qvac-lib-inference-addon-cpp Decision 4: Why Bare Runtime](https://github.com/tetherto/qvac/blob/main/packages/qvac-lib-inference-addon-cpp/docs/architecture.md#decision-4-why-bare-runtime) for rationale.
+See [inference-addon-cpp Decision 4: Why Bare Runtime](https://github.com/tetherto/qvac/blob/main/packages/inference-addon-cpp/docs/architecture.md#decision-4-why-bare-runtime) for rationale.
 
 **Summary:** Mobile support (iOS/Android), lightweight, modern addon API via `js.h`. Core business logic remains runtime-agnostic.
 
 ---
 
-## Decision 3: Shared Addon Framework (`qvac-lib-inference-addon-cpp`)
+## Decision 3: Shared Addon Framework (`inference-addon-cpp`)
 
 <details>
 <summary>⚡ TL;DR</summary>
@@ -636,7 +636,7 @@ Use whisper.cpp's built-in Silero VAD integration rather than a separate externa
 
 ### 1. Addon Framework v1.0 → v1.1 Migration
 **Status:** Planned  
-**Issue:** Current dependency on `qvac-lib-inference-addon-cpp` v1.0; upcoming v1.1 will change internal APIs  
+**Issue:** Current dependency on `inference-addon-cpp` v1.0; upcoming v1.1 will change internal APIs  
 **Root Cause:** v1.1 framework is not yet finalized; migration requires coordinated changes across all inference packages  
 **Plan:** Refactor once v1.1 is stable; update `Addon.hpp/cpp`, `WhisperModelJobsHandler`, and `binding.cpp` specializations
 

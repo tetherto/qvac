@@ -12,9 +12,9 @@
 
 #include "ModelMetadata.hpp"
 #include "addon/LlmErrors.hpp"
-#include "qvac-lib-inference-addon-cpp/Errors.hpp"
-#include "qvac-lib-inference-addon-cpp/GGUFShards.hpp"
-#include "qvac-lib-inference-addon-cpp/InitLoader.hpp"
+#include "inference-addon-cpp/Errors.hpp"
+#include "inference-addon-cpp/GGUFShards.hpp"
+#include "inference-addon-cpp/InitLoader.hpp"
 #include "utils/BorrowablePtr.hpp"
 
 /// @brief Encapsulates async/streaming weights loading for sharded and

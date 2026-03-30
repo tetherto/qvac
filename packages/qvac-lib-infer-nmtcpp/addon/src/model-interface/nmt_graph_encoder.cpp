@@ -6,7 +6,7 @@
 
 #include "nmt.hpp"
 #include "nmt_utils.hpp"
-#include "qvac-lib-inference-addon-cpp/Logger.hpp"
+#include "inference-addon-cpp/Logger.hpp"
 
 struct ggml_cgraph*
 nmt_build_graph_encoder(nmt_context& ctx, nmt_state& state) {

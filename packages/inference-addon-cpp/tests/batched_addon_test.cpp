@@ -7,10 +7,10 @@
 
 #include <gtest/gtest.h>
 
-#include "qvac-lib-inference-addon-cpp/ModelInterfaces.hpp"
-#include "qvac-lib-inference-addon-cpp/addon/AddonCpp.hpp"
-#include "qvac-lib-inference-addon-cpp/handlers/CppOutputHandlerImplementations.hpp"
-#include "qvac-lib-inference-addon-cpp/queue/OutputCallbackCpp.hpp"
+#include "inference-addon-cpp/ModelInterfaces.hpp"
+#include "inference-addon-cpp/addon/AddonCpp.hpp"
+#include "inference-addon-cpp/handlers/CppOutputHandlerImplementations.hpp"
+#include "inference-addon-cpp/queue/OutputCallbackCpp.hpp"
 
 namespace qvac_lib_inference_addon_cpp {
 

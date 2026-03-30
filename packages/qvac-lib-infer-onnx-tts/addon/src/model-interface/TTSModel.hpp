@@ -9,8 +9,8 @@
 #include <string_view>
 #include <unordered_map>
 
-#include "qvac-lib-inference-addon-cpp/ModelInterfaces.hpp"
-#include "qvac-lib-inference-addon-cpp/RuntimeStats.hpp"
+#include "inference-addon-cpp/ModelInterfaces.hpp"
+#include "inference-addon-cpp/RuntimeStats.hpp"
 #include "src/model-interface/IChatterboxEngine.hpp"
 #include "src/model-interface/ISupertonicEngine.hpp"
 

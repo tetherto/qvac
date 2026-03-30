@@ -6,12 +6,12 @@
 #include <cstddef>
 
 #include <llama.h>
-#include <qvac-lib-inference-addon-cpp/Errors.hpp>
+#include <inference-addon-cpp/Errors.hpp>
 
 #include "addon/LlmErrors.hpp"
 #include "common/common.h"
 #include "common/log.h"
-#include "qvac-lib-inference-addon-cpp/Logger.hpp"
+#include "inference-addon-cpp/Logger.hpp"
 #include "utils/ChatTemplateUtils.hpp"
 #include "utils/LoggingMacros.hpp"
 #include "utils/Qwen3ReasoningUtils.hpp"

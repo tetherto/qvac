@@ -14,7 +14,7 @@
       ]
     },
     {
-      "name": "qvac-lib-inference-addon-cpp",
+      "name": "inference-addon-cpp",
       "version>=": "1.0.0"
     },
     {

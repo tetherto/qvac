@@ -10,8 +10,8 @@
 #ifdef HAVE_BERGAMOT
 #include "bergamot.hpp"
 #endif
-#include "qvac-lib-inference-addon-cpp/ModelInterfaces.hpp"
-#include "qvac-lib-inference-addon-cpp/RuntimeStats.hpp"
+#include "inference-addon-cpp/ModelInterfaces.hpp"
+#include "inference-addon-cpp/RuntimeStats.hpp"
 
 namespace qvac_lib_inference_addon_marian {
 

@@ -8,7 +8,7 @@
 #include <iostream>
 #include <vector>
 
-#include "qvac-lib-inference-addon-cpp/BlobsStream.hpp"
+#include "inference-addon-cpp/BlobsStream.hpp"
 
 
 #ifdef GGML_SHARED

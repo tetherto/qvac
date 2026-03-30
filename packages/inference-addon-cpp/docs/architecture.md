@@ -1,4 +1,4 @@
-# qvac-lib-inference-addon-cpp Architecture Documentation
+# inference-addon-cpp Architecture Documentation
 
 **Version:** 1.1.0  
 **Technology Stack:** C++20, CMake, vcpkg, Bare Runtime  
@@ -35,7 +35,7 @@
 
 ## 1. Overview
 
-`qvac-lib-inference-addon-cpp` is a header-only C++ library that provides common abstractions and infrastructure for building high-performance inference addons on the Bare runtime. This library serves as the foundational framework for QVAC inference addons, handling the complexity of JavaScript-C++ bridging, asynchronous job processing, model lifecycle management, and streaming model weight loading.
+`inference-addon-cpp` is a header-only C++ library that provides common abstractions and infrastructure for building high-performance inference addons on the Bare runtime. This library serves as the foundational framework for QVAC inference addons, handling the complexity of JavaScript-C++ bridging, asynchronous job processing, model lifecycle management, and streaming model weight loading.
 
 ### Purpose
 
@@ -97,7 +97,7 @@ graph TB
     end
     
     subgraph "Bridging Layer"
-        ADDON_CPP[qvac-lib-inference-addon-cpp]
+        ADDON_CPP[inference-addon-cpp]
     end
     
     subgraph "Inference Addons"
@@ -143,7 +143,7 @@ graph TB
 | Runtime | Bare Runtime | JavaScript engine + native addon host |
 | Runtime | libuv Event Loop | Async I/O and threading |
 | Runtime | V8 JavaScript Engine | JavaScript execution |
-| Bridging | qvac-lib-inference-addon-cpp | JavaScript bridging and addon orchestration framework (this library) |
+| Bridging | inference-addon-cpp | JavaScript bridging and addon orchestration framework (this library) |
 | Addons | qvac-lib-infer-llamacpp-llm | LLM inference using llama.cpp |
 | Addons | qvac-lib-infer-whispercpp | Speech-to-text using Whisper |
 | Addons | qvac-lib-infer-nmtcpp | Neural machine translation |

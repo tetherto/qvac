@@ -4,7 +4,7 @@
 #include <sstream>
 #include <stdexcept>
 
-#include "qvac-lib-inference-addon-cpp/Logger.hpp"
+#include "inference-addon-cpp/Logger.hpp"
 #include "src/addon/TTSErrors.hpp"
 #include "src/model-interface/ChatterboxEngine.hpp"
 #include "src/model-interface/SupertonicEngine.hpp"

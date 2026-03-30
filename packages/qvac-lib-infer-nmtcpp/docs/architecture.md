@@ -69,7 +69,7 @@ Offline neural machine translation for QVAC-powered applications (mobile and des
 | Windows | x64 | 10+ | ✅ Tier 1 | Vulkan |
 
 **Dependencies:**
-- qvac-lib-inference-addon-cpp (≥0.12.2): C++ addon framework
+- inference-addon-cpp (≥0.12.2): C++ addon framework
 - ggml (vcpkg): Tensor computation and GPU backends
 - sentencepiece (vcpkg): Subword tokenization
 - bergamot-translator (vcpkg, optional): Mozilla Bergamot translation engine
@@ -131,7 +131,7 @@ graph TB
 |---------|------|---------|---------|
 | @qvac/infer-base | Framework | ^0.2.0 | Base classes, WeightsProvider, QvacResponse |
 | @qvac/dl-hyperdrive | Framework | ^0.1.0 | P2P model distribution |
-| qvac-lib-inference-addon-cpp | Native | ≥0.12.2 | C++ addon framework (threading, job queue, JS interop) |
+| inference-addon-cpp | Native | ≥0.12.2 | C++ addon framework (threading, job queue, JS interop) |
 | ggml | Native | (vcpkg) | Tensor computation and GPU backends |
 | sentencepiece | Native | (vcpkg) | Subword tokenization |
 | protobuf | Native | (vcpkg) | SentencePiece model serialization |
@@ -545,7 +545,7 @@ Implemented a custom encoder-decoder inference engine on top of GGML tensors, wi
 
 ## Decision 2: Bare Runtime over Node.js
 
-See [qvac-lib-inference-addon-cpp Decision 4: Why Bare Runtime](https://github.com/tetherto/qvac-lib-inference-addon-cpp/blob/main/docs/architecture.md#decision-4-why-bare-runtime) for rationale.
+See [inference-addon-cpp Decision 4: Why Bare Runtime](https://github.com/tetherto/inference-addon-cpp/blob/main/docs/architecture.md#decision-4-why-bare-runtime) for rationale.
 
 **Summary:** Mobile support (iOS/Android), lightweight, modern addon API. Core business logic remains runtime-agnostic.
 
@@ -628,7 +628,7 @@ Use the SentencePiece library for tokenization and detokenization, loading vocab
 <details>
 <summary>⚡ TL;DR</summary>
 
-**Chose:** `qvac-lib-inference-addon-cpp`'s `Addon<T>` template  
+**Chose:** `inference-addon-cpp`'s `Addon<T>` template  
 **Why:** Proven pattern used by all QVAC inference addons, handles threading and lifecycle  
 **Cost:** Template complexity, indirect control over processing thread
 
@@ -640,7 +640,7 @@ Translation requests arrive from the JavaScript thread but inference must run on
 
 ### Decision
 
-Use `qvac-lib-inference-addon-cpp`'s `Addon<T>` template, which provides a job queue, worker thread, and callback mechanism for communicating results back to JavaScript.
+Use `inference-addon-cpp`'s `Addon<T>` template, which provides a job queue, worker thread, and callback mechanism for communicating results back to JavaScript.
 
 ### Rationale
 

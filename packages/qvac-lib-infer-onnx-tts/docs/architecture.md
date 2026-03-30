@@ -68,7 +68,7 @@
 | Windows | x64 | 10+ | ✅ Tier 1 | DirectML, CUDA |
 
 **Dependencies:**
-- qvac-lib-inference-addon-cpp (=0.12.2): C++ addon framework
+- inference-addon-cpp (=0.12.2): C++ addon framework
 - ONNX Runtime: Inference engine (platform-specific EP builds via vcpkg)
 - tokenizers-cpp (≥0.1.1#2): HuggingFace tokenizer C bindings
 - Bare Runtime (≥1.19.0): JavaScript runtime
@@ -129,7 +129,7 @@ graph TB
 | @qvac/infer-base | Framework | ^0.1.0 | Base classes, WeightsProvider, QvacResponse |
 | @qvac/dl-hyperdrive | Peer | ^0.1.0 | P2P model loading |
 | @qvac/error | Runtime | ^0.1.0 | Structured error handling |
-| qvac-lib-inference-addon-cpp | Native | =0.12.2 | C++ addon framework |
+| inference-addon-cpp | Native | =0.12.2 | C++ addon framework |
 | ONNX Runtime | Native | via vcpkg | Inference engine |
 | tokenizers-cpp | Native | ≥0.1.1#2 | HuggingFace tokenizer |
 | Bare Runtime | Runtime | ≥1.19.0 | JavaScript execution |
@@ -524,7 +524,7 @@ Use ONNX Runtime as the inference backend with platform-specific execution provi
 
 ## Decision 2: Bare Runtime over Node.js
 
-See [qvac-lib-inference-addon-cpp Decision 4: Why Bare Runtime](https://github.com/tetherto/qvac/blob/main/packages/qvac-lib-inference-addon-cpp/docs/architecture.md#decision-4-why-bare-runtime) for rationale.
+See [inference-addon-cpp Decision 4: Why Bare Runtime](https://github.com/tetherto/qvac/blob/main/packages/inference-addon-cpp/docs/architecture.md#decision-4-why-bare-runtime) for rationale.
 
 **Summary:** Mobile support (iOS/Android), lightweight, modern addon API. Core business logic remains runtime-agnostic.
 

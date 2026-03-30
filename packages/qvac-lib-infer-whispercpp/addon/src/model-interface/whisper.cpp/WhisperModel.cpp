@@ -15,8 +15,8 @@
 #include "WhisperHandlers.hpp"
 #include "addon/WhisperErrors.hpp"
 #include "model-interface/WhisperTypes.hpp"
-#include "qvac-lib-inference-addon-cpp/Errors.hpp"
-#include "qvac-lib-inference-addon-cpp/Logger.hpp"
+#include "inference-addon-cpp/Errors.hpp"
+#include "inference-addon-cpp/Logger.hpp"
 
 namespace qvac_lib_inference_addon_whisper {
 

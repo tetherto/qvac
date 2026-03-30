@@ -13,8 +13,8 @@
 #define STB_IMAGE_WRITE_IMPLEMENTATION
 #include <ggml-backend.h>
 #include <picojson/picojson.h>
-#include <qvac-lib-inference-addon-cpp/Errors.hpp>
-#include <qvac-lib-inference-addon-cpp/Logger.hpp>
+#include <inference-addon-cpp/Errors.hpp>
+#include <inference-addon-cpp/Logger.hpp>
 #include <stb_image_write.h>
 
 #include "utils/BackendSelection.hpp"

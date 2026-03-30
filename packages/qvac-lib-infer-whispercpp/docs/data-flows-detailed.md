@@ -262,7 +262,7 @@ sequenceDiagram
 
 ## 4. Addon State Machine
 
-The addon follows a state machine managed by the shared `qvac-lib-inference-addon-cpp` framework.
+The addon follows a state machine managed by the shared `inference-addon-cpp` framework.
 
 ```mermaid
 stateDiagram-v2

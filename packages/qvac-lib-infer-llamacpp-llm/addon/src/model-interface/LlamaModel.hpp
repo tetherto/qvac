@@ -23,12 +23,12 @@
 #include "LlmContext.hpp"
 #include "ModelMetadata.hpp"
 #include "common/chat.h"
-#include "qvac-lib-inference-addon-cpp/BlobsStream.hpp"
-#include "qvac-lib-inference-addon-cpp/GGUFShards.hpp"
-#include "qvac-lib-inference-addon-cpp/InitLoader.hpp"
-#include "qvac-lib-inference-addon-cpp/Logger.hpp"
-#include "qvac-lib-inference-addon-cpp/ModelInterfaces.hpp"
-#include "qvac-lib-inference-addon-cpp/RuntimeStats.hpp"
+#include "inference-addon-cpp/BlobsStream.hpp"
+#include "inference-addon-cpp/GGUFShards.hpp"
+#include "inference-addon-cpp/InitLoader.hpp"
+#include "inference-addon-cpp/Logger.hpp"
+#include "inference-addon-cpp/ModelInterfaces.hpp"
+#include "inference-addon-cpp/RuntimeStats.hpp"
 
 using namespace qvac_lib_inference_addon_cpp::model;
 

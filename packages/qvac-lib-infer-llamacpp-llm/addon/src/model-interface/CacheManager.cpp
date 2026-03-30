@@ -4,7 +4,7 @@
 #include <system_error>
 
 #include <llama.h>
-#include <qvac-lib-inference-addon-cpp/Errors.hpp>
+#include <inference-addon-cpp/Errors.hpp>
 
 #include "addon/LlmErrors.hpp"
 #include "utils/LoggingMacros.hpp"
