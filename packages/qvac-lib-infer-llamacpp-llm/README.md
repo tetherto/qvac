@@ -76,7 +76,7 @@ const LlmLlamacpp = require('@qvac/llm-llamacpp')
 
 ### 2. Create a Data Loader
 
-Data Loaders abstract the way model files are accessed. Use a [`FileSystemDataLoader`](../qvac-lib-dl-filesystem) to load model files from your local file system. Models can be downloaded directly from HuggingFace.
+Data Loaders abstract the way model files are accessed. Use a [`FileSystemDataLoader`](../dl-filesystem) to load model files from your local file system. Models can be downloaded directly from HuggingFace.
 
 ```js
 const FilesystemDL = require('@qvac/dl-filesystem')
