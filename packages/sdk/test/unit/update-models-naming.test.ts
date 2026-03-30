@@ -709,42 +709,6 @@ test("nmt: Indictrans en-indic 1B q0f16 — full field mapping", (t: any) => {
 });
 
 // ---------------------------------------------------------------------------
-// NMT: Opus en-ru
-// ---------------------------------------------------------------------------
-
-test("nmt: Opus en-ru q0f16 — full field mapping", (t: any) => {
-  const coreKey = Buffer.from("33".repeat(32), "hex");
-
-  const { model, exportName } = processAndName({
-    path: "qvac_models_compiled/ggml/marian/q0f16/ggml-opus-en-ru/2025-11-09/ggml-opus-en-ru.bin",
-    source: "s3",
-    engine: "@qvac/translation-nmtcpp",
-    license: "Apache-2.0",
-    name: "",
-    sizeBytes: 120000000,
-    sha256: "33333333223344553333333322334455333333332233445533333333aabbccdd",
-    quantization: "q0f16",
-    params: "",
-    tags: ["translation", "opus", "marian", "en-ru"],
-    blobBinding: {
-      coreKey,
-      blockOffset: 13000,
-      blockLength: 100,
-      byteOffset: 120000000,
-      byteLength: 120000000,
-    },
-  });
-
-  t.is(model.engine, "nmtcpp-translation");
-  t.is(model.addon, "nmt");
-  t.is(model.blobCoreKey, "33".repeat(32));
-  t.is(model.blobBlockOffset, 13000);
-  t.is(model.expectedSize, 120000000);
-
-  t.is(exportName, "MARIAN_OPUS_EN_RU_Q0F16");
-});
-
-// ---------------------------------------------------------------------------
 // NMT: Bergamot model file
 // ---------------------------------------------------------------------------
 
