@@ -30,11 +30,11 @@ let connectionHandlerRegistered = false;
 const HEALTH_CHECK_TIMEOUT_MS = 1500;
 import { getNextCommandId } from "@/server/rpc/delegate-utils";
 
-function isPongResponse(payload: unknown): payload is { type: "pong" } {
+function isHeartbeatResponse(payload: unknown): payload is { type: "heartbeat" } {
   return (
     typeof payload === "object" &&
     payload !== null &&
-    (payload as Record<string, unknown>)["type"] === "pong"
+    (payload as Record<string, unknown>)["type"] === "heartbeat"
   );
 }
 
@@ -44,10 +44,10 @@ async function isRPCConnectionHealthy(
 ): Promise<boolean> {
   try {
     const req = rpc.request(getNextCommandId());
-    req.send(JSON.stringify({ type: "ping" }), "utf-8");
+    req.send(JSON.stringify({ type: "heartbeat" }), "utf-8");
     const response = await withTimeout(req.reply("utf-8"), timeout);
     const payload: unknown = JSON.parse(response?.toString() || "{}");
-    return isPongResponse(payload);
+    return isHeartbeatResponse(payload);
   } catch (error: unknown) {
     logger.debug("RPC health check failed", { error });
     return false;
