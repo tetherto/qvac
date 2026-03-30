@@ -1,19 +1,17 @@
 name: On PR Trigger (Embed)
 
 on:
-  # pull_request_target:
-  #   types:
-  #     - opened
-  #     - synchronize
-  #     - reopened
-  #     - labeled
-  push:
+  pull_request_target:
+    types:
+      - opened
+      - synchronize
+      - reopened
+      - labeled
     branches:
       - main
       - release-*
       - feature-*
       - tmp-*
-      - fix/workflow-permissions
     paths:
       - "packages/qvac-lib-infer-llamacpp-embed/**"
       - ".github/workflows/*embed*.yml"
