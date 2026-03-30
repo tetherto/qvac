@@ -46,7 +46,7 @@
   "repository": {
     "type": "git",
     "url": "git+https://github.com/tetherto/qvac.git",
-    "directory": "packages/qvac-lib-infer-parakeet"
+    "directory": "packages/transcription-parakeet"
   },
   "author": "Tether",
   "keywords": [
@@ -64,7 +64,7 @@
   ],
   "license": "Apache-2.0",
   "bugs": "https://github.com/tetherto/qvac/issues",
-  "homepage": "https://github.com/tetherto/qvac/tree/main/packages/qvac-lib-infer-parakeet#readme",
+  "homepage": "https://github.com/tetherto/qvac/tree/main/packages/transcription-parakeet#readme",
   "devDependencies": {
     "@qvac/decoder-audio": "^0.3.3",
     "@qvac/dl-base": "^0.1.0",

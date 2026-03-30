@@ -15,7 +15,7 @@ on:
         description: "Working directory (optional)"
         required: false
         type: string
-        default: "packages/qvac-lib-infer-parakeet"
+        default: "packages/transcription-parakeet"
 
 permissions:
   contents: write

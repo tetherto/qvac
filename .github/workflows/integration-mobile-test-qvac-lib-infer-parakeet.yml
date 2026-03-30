@@ -15,7 +15,7 @@ on:
         description: "Relative path to package directory in monorepo"
         type: string
         required: false
-        default: "packages/qvac-lib-infer-parakeet"
+        default: "packages/transcription-parakeet"
   workflow_dispatch:
     inputs:
       ref:
@@ -32,7 +32,7 @@ on:
         description: "Relative path to package directory in monorepo"
         type: string
         required: false
-        default: "packages/qvac-lib-infer-parakeet"
+        default: "packages/transcription-parakeet"
 
 env:
   NODE_VERSION: "lts/*"
@@ -40,8 +40,8 @@ env:
   PREBUILD_ARTIFACT_PREFIX: "parakeet-"
   TEST_FRAMEWORK_REF: "main"
   APP_BUNDLE_ID: "io.tether.test.qvac"
-  WORKDIR: ${{ inputs.workdir || github.event.inputs.workdir || 'packages/qvac-lib-infer-parakeet' }}
-  ADDON_DIR: addon/${{ inputs.workdir || github.event.inputs.workdir || 'packages/qvac-lib-infer-parakeet' }}
+  WORKDIR: ${{ inputs.workdir || github.event.inputs.workdir || 'packages/transcription-parakeet' }}
+  ADDON_DIR: addon/${{ inputs.workdir || github.event.inputs.workdir || 'packages/transcription-parakeet' }}
   TEST_FRAMEWORK_DIR: test-framework
 
 jobs:

@@ -8,7 +8,7 @@ on:
       - feature-*
       - tmp-*
     paths:
-      - "packages/qvac-lib-infer-parakeet/**"
+      - "packages/transcription-parakeet/**"
       - ".github/workflows/*parakeet*.yml"
 
   workflow_dispatch:
@@ -98,9 +98,9 @@ jobs:
           base-ref: ${{ github.ref_name }}
           base-sha: ${{ github.event.before }}
           head-sha: ${{ github.sha }}
-          package-slug: qvac-lib-infer-parakeet
-          package-json-path: packages/qvac-lib-infer-parakeet/package.json
-          changelog-path: packages/qvac-lib-infer-parakeet/CHANGELOG.md
+          package-slug: transcription-parakeet
+          package-json-path: packages/transcription-parakeet/package.json
+          changelog-path: packages/transcription-parakeet/CHANGELOG.md
 
   publish-main-gpr:
     needs: publish-logic
@@ -109,14 +109,14 @@ jobs:
       contents: write
       packages: write
       pull-requests: write
-    uses: ./.github/workflows/prebuilds-qvac-lib-infer-parakeet.yml
+    uses: ./.github/workflows/prebuilds-transcription-parakeet.yml
     secrets: inherit
     with:
       tag: ${{ inputs.tag || needs.publish-logic.outputs.gpr_tag }}
       publish_target: "gpr"
       repository: ${{ github.repository }}
       ref: ${{ github.ref }}
-      workdir: "packages/qvac-lib-infer-parakeet"
+      workdir: "packages/transcription-parakeet"
 
   publish-feature-gpr:
     needs: publish-logic
@@ -125,14 +125,14 @@ jobs:
       contents: write
       packages: write
       pull-requests: write
-    uses: ./.github/workflows/prebuilds-qvac-lib-infer-parakeet.yml
+    uses: ./.github/workflows/prebuilds-transcription-parakeet.yml
     secrets: inherit
     with:
       tag: ${{ inputs.tag || needs.publish-logic.outputs.gpr_tag }}
       publish_target: "gpr"
       repository: ${{ github.repository }}
       ref: ${{ github.ref }}
-      workdir: "packages/qvac-lib-infer-parakeet"
+      workdir: "packages/transcription-parakeet"
 
   publish-tmp-gpr:
     needs: publish-logic
@@ -141,14 +141,14 @@ jobs:
       contents: write
       packages: write
       pull-requests: write
-    uses: ./.github/workflows/prebuilds-qvac-lib-infer-parakeet.yml
+    uses: ./.github/workflows/prebuilds-transcription-parakeet.yml
     secrets: inherit
     with:
       tag: ${{ inputs.tag || needs.publish-logic.outputs.gpr_tag }}
       publish_target: "gpr"
       repository: ${{ github.repository }}
       ref: ${{ github.ref }}
-      workdir: "packages/qvac-lib-infer-parakeet"
+      workdir: "packages/transcription-parakeet"
 
   publish-release-npm:
     needs: [publish-logic, release-merge-guard]
@@ -159,14 +159,14 @@ jobs:
       contents: write
       packages: write
       pull-requests: write
-    uses: ./.github/workflows/prebuilds-qvac-lib-infer-parakeet.yml
+    uses: ./.github/workflows/prebuilds-transcription-parakeet.yml
     secrets: inherit
     with:
       tag: "latest"
       publish_target: "npm"
       repository: ${{ github.repository }}
       ref: ${{ github.ref }}
-      workdir: "packages/qvac-lib-infer-parakeet"
+      workdir: "packages/transcription-parakeet"
 
   publish-release:
     needs: [publish-release-npm]
@@ -179,7 +179,7 @@ jobs:
       release_name: "QVAC Transcription Parakeet Addon"
       published_version: ${{ needs.publish-release-npm.outputs.published_version }}
       prev_sha: ${{ github.event.before }}
-      workdir: "packages/qvac-lib-infer-parakeet"
+      workdir: "packages/transcription-parakeet"
 
   prebuild:
     name: Prebuild Gate
@@ -205,17 +205,17 @@ jobs:
           echo "should_run_tests=$should" >> "$GITHUB_OUTPUT"
 
   integration-tests:
-    uses: ./.github/workflows/integration-test-qvac-lib-infer-parakeet.yml
+    uses: ./.github/workflows/integration-test-transcription-parakeet.yml
     needs: prebuild
     if: needs.prebuild.outputs.should_run_tests == 'true'
     secrets: inherit
     with:
       repository: ${{ github.repository }}
       ref: ${{ github.sha }}
-      workdir: "packages/qvac-lib-infer-parakeet"
+      workdir: "packages/transcription-parakeet"
 
   mobile-integration-tests:
-    uses: ./.github/workflows/integration-mobile-test-qvac-lib-infer-parakeet.yml
+    uses: ./.github/workflows/integration-mobile-test-transcription-parakeet.yml
     needs: prebuild
     if: needs.prebuild.outputs.should_run_tests == 'true'
     permissions:

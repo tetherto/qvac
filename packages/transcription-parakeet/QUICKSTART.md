@@ -1,13 +1,13 @@
 # Quick Start Guide
 
-Get started with qvac-lib-infer-parakeet in 5 minutes!
+Get started with transcription-parakeet in 5 minutes!
 
 ## 1. Build the Addon
 
 ```bash
 # Clone the repository
 git clone https://github.com/tetherto/qvac.git
-cd qvac/packages/qvac-lib-infer-parakeet
+cd qvac/packages/transcription-parakeet
 
 # Install dependencies and build
 npm install
@@ -28,7 +28,7 @@ Choose option 1 (TDT - Multilingual) for best results.
 Create `transcribe.js`:
 
 ```javascript
-const parakeet = require('qvac-lib-infer-parakeet')
+const parakeet = require('transcription-parakeet')
 
 // Create instance
 const handle = parakeet.createInstance(

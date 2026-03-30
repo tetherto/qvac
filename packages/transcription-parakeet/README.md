@@ -1,4 +1,4 @@
-# qvac-lib-infer-parakeet
+# transcription-parakeet
 
 **Technology Stack:** C++20, CMake, vcpkg, Bare Runtime, ONNX Runtime  
 **Package Type:** Native Bare addon
@@ -65,7 +65,7 @@ This addon is built on [qvac-lib-inference-addon-cpp](https://github.com/tethert
 1. **Clone the repository:**
    ```bash
    git clone https://github.com/tetherto/qvac.git
-   cd qvac/packages/qvac-lib-infer-parakeet
+   cd qvac/packages/transcription-parakeet
    ```
 
 2. **Install npm dependencies** (includes cmake-bare and cmake-vcpkg):
@@ -331,7 +331,7 @@ The output callback receives these events:
 1. **Clone the repository:**
    ```bash
    git clone https://github.com/tetherto/qvac.git
-   cd qvac/packages/qvac-lib-infer-parakeet
+   cd qvac/packages/transcription-parakeet
    ```
 
 2. **Configure with vcpkg:**
@@ -361,7 +361,7 @@ ctest --test-dir build --output-on-failure
 ### Project Structure
 
 ```
-qvac-lib-infer-parakeet/
+transcription-parakeet/
 ├── src/
 │   ├── ParakeetModel.hpp       # Main model implementation
 │   ├── ParakeetModel.cpp       # ONNX Runtime integration

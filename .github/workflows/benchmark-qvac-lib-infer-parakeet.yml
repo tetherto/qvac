@@ -21,7 +21,7 @@ on:
         default: 50
 
 env:
-  PKG_DIR: packages/qvac-lib-infer-parakeet
+  PKG_DIR: packages/transcription-parakeet
 
 permissions:
   contents: read
@@ -226,7 +226,7 @@ jobs:
           echo "Fetching prebuilds artifact from latest successful prebuilds run..."
 
           # Get the latest successful prebuilds run ID
-          RUN_ID=$(gh run list --workflow=prebuilds-qvac-lib-infer-parakeet.yml --status=success --limit 1 --json databaseId --jq '.[0].databaseId')
+          RUN_ID=$(gh run list --workflow=prebuilds-transcription-parakeet.yml --status=success --limit 1 --json databaseId --jq '.[0].databaseId')
 
           if [ -z "$RUN_ID" ]; then
             echo "::warning::No successful prebuilds run found — will fall back to published npm package"

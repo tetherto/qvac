@@ -13,7 +13,7 @@ on:
 env:
   BUILD_TYPE: Debug
   ENABLE_COVERAGE: ON
-  PKG_DIR: packages/qvac-lib-infer-parakeet
+  PKG_DIR: packages/transcription-parakeet
 
 permissions:
   contents: read

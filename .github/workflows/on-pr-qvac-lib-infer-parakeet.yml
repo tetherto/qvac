@@ -5,7 +5,7 @@ on:
     types: [opened, synchronize, reopened, labeled]
     branches: [main, release-*, feature-*, tmp-*]
     paths:
-      - "packages/qvac-lib-infer-parakeet/**"
+      - "packages/transcription-parakeet/**"
       - ".github/workflows/*parakeet*.yml"
 
   workflow_dispatch:
@@ -27,7 +27,7 @@ on:
         description: "Package working directory in monorepo."
         required: false
         type: string
-        default: "packages/qvac-lib-infer-parakeet"
+        default: "packages/transcription-parakeet"
 
   workflow_call:
     inputs:
@@ -44,7 +44,7 @@ on:
       workdir:
         required: false
         type: string
-        default: "packages/qvac-lib-infer-parakeet"
+        default: "packages/transcription-parakeet"
 
 concurrency:
   group: ${{ github.workflow }}-pr-${{ github.event.pull_request.number || github.sha }}
@@ -105,14 +105,14 @@ jobs:
           set -euo pipefail
 
           if [[ "$EVENT_NAME" == "workflow_dispatch" || "$EVENT_NAME" == "workflow_call" ]]; then
-            workdir="${INPUT_WORKDIR:-packages/qvac-lib-infer-parakeet}"
+            workdir="${INPUT_WORKDIR:-packages/transcription-parakeet}"
             repo="${INPUT_REPO:-$REPO}"
             ref="${INPUT_REF:-$REF_NAME}"
             run_verify="$INPUT_VERIFY"
             base_sha="$SHA"
             head_sha="$SHA"
           else
-            workdir="packages/qvac-lib-infer-parakeet"
+            workdir="packages/transcription-parakeet"
             repo="$HEAD_REPO"
             ref="$HEAD_REF"
             run_verify="true"
@@ -163,7 +163,7 @@ jobs:
   cpp-tests-coverage:
     needs: context
     if: needs.context.outputs.run_verify == 'true' || github.event_name == 'workflow_dispatch'
-    uses: ./.github/workflows/cpp-test-coverage-qvac-lib-infer-parakeet.yml
+    uses: ./.github/workflows/cpp-test-coverage-transcription-parakeet.yml
     secrets: inherit
     with:
       repository: ${{ needs.context.outputs.repository }}
@@ -176,7 +176,7 @@ jobs:
       pull-requests: write
     needs: context
     if: needs.context.outputs.run_verify == 'true' || github.event_name == 'workflow_dispatch'
-    uses: ./.github/workflows/prebuilds-qvac-lib-infer-parakeet.yml
+    uses: ./.github/workflows/prebuilds-transcription-parakeet.yml
     secrets: inherit
     with:
       repository: ${{ needs.context.outputs.repository }}
@@ -187,7 +187,7 @@ jobs:
   run-integration-tests:
     needs: [context, prebuild]
     if: needs.context.outputs.run_verify == 'true' || github.event_name == 'workflow_dispatch'
-    uses: ./.github/workflows/integration-test-qvac-lib-infer-parakeet.yml
+    uses: ./.github/workflows/integration-test-transcription-parakeet.yml
     secrets: inherit
     with:
       repository: ${{ needs.context.outputs.repository }}
@@ -201,7 +201,7 @@ jobs:
       pull-requests: write # Allow commenting on PRs
     needs: [context, prebuild]
     if: needs.context.outputs.run_verify == 'true' || github.event_name == 'workflow_dispatch'
-    uses: ./.github/workflows/integration-mobile-test-qvac-lib-infer-parakeet.yml
+    uses: ./.github/workflows/integration-mobile-test-transcription-parakeet.yml
     secrets: inherit
     with:
       repository: ${{ needs.context.outputs.repository }}
