@@ -1,6 +1,6 @@
 """
 AfriqueGemma LLM Translator wrapper for evaluation framework
-Uses qvac-lib-infer-llamacpp-llm via Bare runtime (bare_infer.js)
+Uses llm-llamacpp via Bare runtime (bare_infer.js)
 
 Translates by constructing completion-style prompts and invoking the LLM addon
 with greedy decoding + reverse-prompt stop at newline.
@@ -49,7 +49,7 @@ LANG_NAMES = {
 # Path to bare_infer.js in the LLM addon
 # Navigate: translators/ -> quality_eval/ -> benchmarks/ -> nmtcpp/ -> packages/ -> llamacpp-llm/
 LLM_ADDON_DIR = (
-    Path(__file__).parent.parent.parent.parent.parent / "qvac-lib-infer-llamacpp-llm"
+    Path(__file__).parent.parent.parent.parent.parent / "llm-llamacpp"
 )
 BARE_INFER_SCRIPT = LLM_ADDON_DIR / "benchmarks" / "server" / "bare_infer.js"
 BARE_INFER_CWD = LLM_ADDON_DIR / "benchmarks" / "server"

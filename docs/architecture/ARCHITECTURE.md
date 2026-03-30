@@ -221,7 +221,7 @@ The SDK includes a client for the QVAC Model Registry (`@qvac/registry-client`),
 # Native Addons Architecture
 
 - [C++ Addon Framework](../packages/qvac-lib-inference-addon-cpp/docs/architecture.md)
-- [LLM Completion — llama.cpp](../packages/qvac-lib-infer-llamacpp-llm/docs/architecture.md)
+- [LLM Completion — llama.cpp](../packages/llm-llamacpp/docs/architecture.md)
 - [Embeddings — llama.cpp](../packages/qvac-lib-infer-llamacpp-embed/docs/architecture.md)
 - [Transcription — whisper.cpp](../packages/qvac-lib-infer-whispercpp/docs/architecture.md)
 - [Translation — nmt.cpp](../packages/qvac-lib-infer-nmtcpp/docs/architecture.md)
@@ -256,7 +256,7 @@ All packages live in this monorepo under `packages/`:
 
 | Directory | Package | Purpose |
 |-----------|---------|---------|
-| `qvac-lib-infer-llamacpp-llm` | `@qvac/llm-llamacpp` | LLM completion (llama.cpp) |
+| `llm-llamacpp` | `@qvac/llm-llamacpp` | LLM completion (llama.cpp) |
 | `qvac-lib-infer-llamacpp-embed` | `@qvac/embed-llamacpp` | Text embeddings (llama.cpp) |
 | `qvac-lib-infer-whispercpp` | `@qvac/transcription-whispercpp` | Speech-to-text (whisper.cpp) |
 | `qvac-lib-infer-parakeet` | `@qvac/transcription-parakeet` | Speech-to-text (Parakeet) |

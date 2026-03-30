@@ -13,7 +13,7 @@ on:
       - feature-*
       - tmp-*
     paths:
-      - "packages/qvac-lib-infer-llamacpp-llm/**"
+      - "packages/llm-llamacpp/**"
       - ".github/workflows/*llamacpp-llm*.yml"
   workflow_dispatch:
   
@@ -29,7 +29,7 @@ concurrency:
   cancel-in-progress: true
 
 env:
-  PKG_DIR: packages/qvac-lib-infer-llamacpp-llm
+  PKG_DIR: packages/llm-llamacpp
 
 jobs:
   authorize:
@@ -61,7 +61,7 @@ jobs:
           npm-token: ${{ secrets.NPM_TOKEN }}
           pat-token: ${{ secrets.PAT_TOKEN }}
           run-integration: ${{ needs.authorize.outputs.allowed == 'true' }}
-          workdir: packages/qvac-lib-infer-llamacpp-llm
+          workdir: packages/llm-llamacpp
 
   cpp-tests:
     if: needs.authorize.outputs.allowed == 'true'
@@ -69,7 +69,7 @@ jobs:
     uses: ./.github/workflows/cpp-tests-llm.yml
     secrets: inherit
     with:
-      workdir: packages/qvac-lib-infer-llamacpp-llm
+      workdir: packages/llm-llamacpp
       repository: ${{ github.event.pull_request.head.repo.full_name }}
       ref: ${{ github.event.pull_request.head.ref }}
 
@@ -81,7 +81,7 @@ jobs:
     with:
       sha: ${{ github.event.pull_request.base.sha }}
       pr_head_sha: ${{ github.event.pull_request.head.sha }}
-      workdir: packages/qvac-lib-infer-llamacpp-llm
+      workdir: packages/llm-llamacpp
 
   ts-checks:
     if: needs.authorize.outputs.allowed == 'true'
@@ -98,7 +98,7 @@ jobs:
           node-version: 20
 
       - name: Configure npm auth
-        working-directory: packages/qvac-lib-infer-llamacpp-llm
+        working-directory: packages/llm-llamacpp
         run: |
           cat > .npmrc <<NPMRC
           registry=https://registry.npmjs.org/
@@ -107,11 +107,11 @@ jobs:
           NPMRC
 
       - name: Install dependencies
-        working-directory: packages/qvac-lib-infer-llamacpp-llm
+        working-directory: packages/llm-llamacpp
         run: npm install
 
       - name: Type declaration check
-        working-directory: packages/qvac-lib-infer-llamacpp-llm
+        working-directory: packages/llm-llamacpp
         run: npm run test:dts
 
   prebuild:
@@ -121,7 +121,7 @@ jobs:
       contents: write
       packages: write
       pull-requests: write
-    uses: ./.github/workflows/prebuilds-qvac-lib-infer-llamacpp-llm.yml
+    uses: ./.github/workflows/prebuilds-llm-llamacpp.yml
     secrets: inherit
     with:
       repository: ${{ github.event.pull_request.head.repo.full_name }}
@@ -132,7 +132,7 @@ jobs:
   run-integration-tests:
     if: needs.authorize.outputs.allowed == 'true'
     needs: [authorize, prebuild]
-    uses: ./.github/workflows/integration-test-qvac-lib-infer-llamacpp-llm.yml
+    uses: ./.github/workflows/integration-test-llm-llamacpp.yml
     secrets: inherit
     with:
       repository: ${{ github.event.pull_request.head.repo.full_name }}
@@ -145,7 +145,7 @@ jobs:
       pull-requests: write # Allow commenting on PRs
     if: needs.authorize.outputs.allowed == 'true'
     needs: [authorize, prebuild]
-    uses: ./.github/workflows/integration-mobile-test-qvac-lib-infer-llamacpp-llm.yml
+    uses: ./.github/workflows/integration-mobile-test-llm-llamacpp.yml
     secrets: inherit
     with:
       repository: ${{ github.event.pull_request.head.repo.full_name }}

@@ -1,4 +1,4 @@
-# qvac-lib-infer-llamacpp-llm
+# llm-llamacpp
 
 This native C++ addon, built using the `Bare` Runtime, simplifies running Large Language Models (LLMs) within QVAC runtime applications. It provides an easy interface to load, execute, and manage LLM instances.
 
@@ -281,7 +281,7 @@ bare examples/finetune/showcase/smart-home-finetuned-test.js
 
 Clone the repository and navigate to it:
 ```bash
-cd qvac-lib-infer-llamacpp-llm
+cd llm-llamacpp
 ```
 
 Install dependencies:

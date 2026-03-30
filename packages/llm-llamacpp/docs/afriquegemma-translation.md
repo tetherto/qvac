@@ -238,7 +238,7 @@ await loader.close()
 The `validate_gguf_oracle.py` script compares the addon output against HuggingFace Transformers:
 
 ```bash
-cd packages/qvac-lib-infer-llamacpp-llm/benchmarks/client
+cd packages/llm-llamacpp/benchmarks/client
 python -m venv venv && source venv/bin/activate
 pip install -r requirements.txt
 

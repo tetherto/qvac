@@ -18,7 +18,7 @@ on:
         description: "Working directory (optional)"
         required: false
         type: string
-        default: "packages/qvac-lib-infer-llamacpp-llm"
+        default: "packages/llm-llamacpp"
 
   workflow_call:
     inputs:
@@ -49,7 +49,7 @@ on:
         description: "Working directory (optional)"
         required: false
         type: string
-        default: "packages/qvac-lib-infer-llamacpp-llm"
+        default: "packages/llm-llamacpp"
     outputs:
       published_version:
         description: "The version that was published"
@@ -109,7 +109,7 @@ jobs:
 
     env:
       # Keep vcpkg cache inside the package folder (monorepo-friendly)
-      VCPKG_BINARY_SOURCES: clear;files,${{ github.workspace }}/${{ inputs.workdir || 'packages/qvac-lib-infer-llamacpp-llm' }}/vcpkg/cache,readwrite
+      VCPKG_BINARY_SOURCES: clear;files,${{ github.workspace }}/${{ inputs.workdir || 'packages/llm-llamacpp' }}/vcpkg/cache,readwrite
 
     steps:
       - if: ${{ matrix.platform == 'android' }}

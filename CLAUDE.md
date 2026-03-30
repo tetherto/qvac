@@ -32,7 +32,7 @@ QVAC (Quantum Versatile AI Compute) is a monorepo for building local-first, P2P 
 
 ## Build & Test — Quick Reference
 
-### Native Addons (C++ packages, e.g. qvac-lib-infer-llamacpp-llm)
+### Native Addons (C++ packages, e.g. llm-llamacpp)
 
 **Prerequisites:** clang-19, libc++-19-dev, libc++abi-19-dev, vcpkg, bare >=1.24, bare-make
 

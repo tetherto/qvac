@@ -232,7 +232,7 @@ Both use identical prompt format, greedy decoding config (`temp=0, top_k=1, seed
 
 ### Using npm Package Instead of Local Build
 
-The `afriquegemma_llm` translator uses `bare_infer.js` from the LLM addon's benchmark server. By default the server depends on a locally built addon (`"@qvac/llm-llamacpp": "file:../../"`). To use a published npm version instead, edit `packages/qvac-lib-infer-llamacpp-llm/benchmarks/server/package.json`:
+The `afriquegemma_llm` translator uses `bare_infer.js` from the LLM addon's benchmark server. By default the server depends on a locally built addon (`"@qvac/llm-llamacpp": "file:../../"`). To use a published npm version instead, edit `packages/llm-llamacpp/benchmarks/server/package.json`:
 
 ```json
 "@qvac/llm-llamacpp": "0.11.0"
@@ -260,12 +260,12 @@ Then run `npm install` in the `benchmarks/server/` directory. The published pack
 
 ### AfriqueGemma LLM addon not working
 - Verify Bare is installed: `which bare`
-- Check the addon is built or installed: `ls ../../qvac-lib-infer-llamacpp-llm/prebuilds/linux-x64/`
-- Verify `bare_infer.js` exists: `ls ../../qvac-lib-infer-llamacpp-llm/benchmarks/server/bare_infer.js`
+- Check the addon is built or installed: `ls ../../llm-llamacpp/prebuilds/linux-x64/`
+- Verify `bare_infer.js` exists: `ls ../../llm-llamacpp/benchmarks/server/bare_infer.js`
 - Check model is available: `ls ~/.qvac/models/AfriqueGemma-4B*`
 - After rebuilding the LLM addon, reinstall dependencies in the benchmark server so it picks up the new prebuilds:
   ```bash
-  cd packages/qvac-lib-infer-llamacpp-llm/benchmarks/server
+  cd packages/llm-llamacpp/benchmarks/server
   rm -rf node_modules
   npm install
   ```

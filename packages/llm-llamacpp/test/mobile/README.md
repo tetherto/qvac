@@ -46,7 +46,7 @@ From the mobile tester app root:
 
 ```bash
 # Build the test app with llm-llamacpp
-npm run build ../qvac-lib-infer-llamacpp-llm
+npm run build ../llm-llamacpp
 
 # Run on Android
 npm run android

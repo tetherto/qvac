@@ -24,11 +24,11 @@ const MODELS_JSON_PATH = path.join(
 // ---------------------------------------------------------------------------
 const ENGINE_MAP = {
   '@qvac/embed-llamacpp': 'qvac-lib-infer-llamacpp-embed',
-  '@qvac/llm-llamacpp': 'qvac-lib-infer-llamacpp-llm',
+  '@qvac/llm-llamacpp': 'llm-llamacpp',
   '@qvac/translation-nmtcpp': 'qvac-lib-infer-nmtcpp',
   '@qvac/tts-onnx': 'qvac-lib-infer-onnx-tts',
   '@qvac/transcription-whispercpp': 'qvac-lib-infer-whispercpp',
-  '@qvac/translation-llamacpp': 'qvac-lib-infer-llamacpp-llm',
+  '@qvac/translation-llamacpp': 'llm-llamacpp',
   '@qvac/ocr-onnx': 'ocr-onnx',
   '@qvac/diffusion-cpp': 'lib-infer-diffusion'
 }
@@ -69,7 +69,7 @@ const PYTHON_DEP_PATHS = {
   'qvac-lib-infer-llamacpp-embed': [
     'benchmarks/client/requirements.txt'
   ],
-  'qvac-lib-infer-llamacpp-llm': [
+  'llm-llamacpp': [
     'benchmarks/client/requirements.txt'
   ],
   'qvac-lib-infer-nmtcpp': [

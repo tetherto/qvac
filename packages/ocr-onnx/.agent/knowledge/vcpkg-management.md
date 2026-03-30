@@ -205,7 +205,7 @@ set(VCPKG_OVERLAY_TRIPLETS "${CMAKE_CURRENT_SOURCE_DIR}/vcpkg/triplets;${VCPKG_O
 
 #### LLM / Embed — Clang-19 Toolchain
 
-Location: `packages/qvac-lib-infer-llamacpp-llm/vcpkg/triplets/`
+Location: `packages/llm-llamacpp/vcpkg/triplets/`
 
 Custom `x64-linux.cmake` and `arm64-linux.cmake` that enforce:
 - clang-19 compiler via custom toolchain file
@@ -248,7 +248,7 @@ Overlay ports let a package override a registry port with a local version. They 
 
 ### qvac-fabric Local Dev Pattern (LLM / Embed)
 
-Location: `packages/qvac-lib-infer-llamacpp-llm/vcpkg/ports/qvac-fabric/`
+Location: `packages/llm-llamacpp/vcpkg/ports/qvac-fabric/`
 
 When developing against a local build of `qvac-fabric` (the llama.cpp fork):
 1. The overlay port's `portfile.cmake` points to a local source directory (e.g., `/home/olya/claude_folders/addons_folders/fabric/qvac-fabric-llm.cpp`)
@@ -513,7 +513,7 @@ If a package can't be resolved:
 
 | Addon Package | vcpkg Dependencies | Overlay Ports | Custom Triplets |
 |--------------|-------------------|---------------|-----------------|
-| `qvac-lib-infer-llamacpp-llm` | qvac-fabric, qvac-lib-inference-addon-cpp, qvac-lint-cpp, picojson, opencl (Android) | qvac-fabric (local dev) | Linux clang-19 |
+| `llm-llamacpp` | qvac-fabric, qvac-lib-inference-addon-cpp, qvac-lint-cpp, picojson, opencl (Android) | qvac-fabric (local dev) | Linux clang-19 |
 | `qvac-lib-infer-llamacpp-embed` | qvac-fabric, qvac-lib-inference-addon-cpp, qvac-lint-cpp, opencl (Android) | qvac-fabric (local dev) | Linux clang-19 |
 | `ocr-onnx` | onnxruntime (platform EPs), opencv4, qvac-lib-inference-addon-cpp, qvac-lint-cpp | None | Release-only |
 | `qvac-lib-infer-onnx-tts` | onnxruntime (platform EPs), fmt, spdlog, tokenizers-cpp, qvac-lib-inference-addon-cpp, qvac-lint-cpp | None | Release-only (macOS/iOS) |

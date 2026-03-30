@@ -7,7 +7,7 @@ on:
         description: "Working directory"
         type: string
         required: false
-        default: "packages/qvac-lib-infer-llamacpp-llm"
+        default: "packages/llm-llamacpp"
   workflow_call:
     inputs:
       ref:
@@ -22,7 +22,7 @@ on:
         description: "Working directory"
         type: string
         required: false
-        default: "packages/qvac-lib-infer-llamacpp-llm"
+        default: "packages/llm-llamacpp"
 
 permissions:
   contents: read
