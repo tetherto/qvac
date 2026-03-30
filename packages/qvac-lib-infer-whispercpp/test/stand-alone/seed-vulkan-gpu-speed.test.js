@@ -3,7 +3,6 @@ const fs = require('bare-fs')
 const path = require('bare-path')
 const test = require('brittle')
 const TranscriptionWhispercpp = require('../../index')
-const FakeDL = require('../mocks/loader.fake.js')
 const { spawnSync, spawn } = require('bare-subprocess')
 
 const modelsDir = path.resolve(__dirname, '../../models')
@@ -39,9 +38,9 @@ async function ensureModel () {
 async function checkVulkanAvailable () {
   try {
     const args = {
-      modelName: 'ggml-small.bin',
-      loader: new FakeDL({}),
-      diskPath: modelsDir
+      files: {
+        model: modelPath
+      }
     }
     const testConfig = {
       path: modelPath,
@@ -265,9 +264,9 @@ test('GPU performance test with Spanish audio (LastQuestion_long_ES.raw)', { tim
   await ensureModel()
 
   const args = {
-    modelName: 'ggml-small.bin',
-    loader: new FakeDL({}),
-    diskPath: modelsDir
+    files: {
+      model: modelPath
+    }
   }
 
   const baseConfig = {
@@ -378,9 +377,9 @@ test('Multiple GPU runs with seed for consistency check', { timeout: 120000 }, a
   await ensureModel()
 
   const args = {
-    modelName: 'ggml-small.bin',
-    loader: new FakeDL({}),
-    diskPath: modelsDir
+    files: {
+      model: modelPath
+    }
   }
 
   const seed = 9999
@@ -443,9 +442,9 @@ test('CPU vs GPU speed comparison with SHORT audio (30s sample)', { timeout: 300
   await ensureModel()
 
   const args = {
-    modelName: 'ggml-small.bin',
-    loader: new FakeDL({}),
-    diskPath: modelsDir
+    files: {
+      model: modelPath
+    }
   }
 
   const baseConfig = {

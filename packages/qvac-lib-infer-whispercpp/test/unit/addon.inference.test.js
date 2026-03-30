@@ -18,13 +18,9 @@ function createMockedModel ({ onOutput = () => { }, binding = undefined } = {}) 
   const validateStub = sinon.stub(TranscriptionWhispercpp.prototype, 'validateModelFiles').returns(undefined)
 
   const args = {
-    modelName: 'ggml-tiny.bin',
-    vadModelName: 'ggml-silero-v5.1.2.bin',
-    loader: new FakeDL({}),
-    params: {
-      language: 'en',
-      max_seconds: 29,
-      temperature: 0.0
+    files: {
+      model: 'ggml-tiny.bin',
+      vadModel: 'ggml-silero-v5.1.2.bin'
     }
   }
   const config = {

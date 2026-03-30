@@ -18,12 +18,7 @@ const path = require('bare-path')
 const os = require('bare-os')
 const process = require('bare-process')
 const TranscriptionWhispercpp = require('../../index.js')
-const FakeDL = require('../mocks/loader.fake.js')
 const { ensureWhisperModel, ensureVADModel, getAssetPath, isMobile } = require('./helpers.js')
-
-function createLoader () {
-  return new FakeDL({})
-}
 
 async function getModelPaths () {
   // Use writable directory for models
@@ -125,9 +120,6 @@ test('Cold start timing: measure first vs subsequent transcription times', { tim
     return
   }
 
-  const loader = createLoader()
-  const modelName = path.basename(paths.modelPath)
-
   const config = {
     path: paths.modelPath,
     vadModelPath: paths.vadModelPath,
@@ -154,10 +146,12 @@ test('Cold start timing: measure first vs subsequent transcription times', { tim
     console.log('📦 Creating model instance...')
     const loadStartTime = getTimeMs()
 
+    const ctorFiles = { model: paths.modelPath }
+    if (paths.vadModelPath) {
+      ctorFiles.vadModel = paths.vadModelPath
+    }
     model = new TranscriptionWhispercpp({
-      modelName,
-      loader,
-      diskPath: paths.modelsDir
+      files: ctorFiles
     }, config)
 
     // Load model (this should trigger warmup)
@@ -253,9 +247,6 @@ test('Cold start: fresh model instance per transcription', { timeout: 300000 }, 
   for (let i = 0; i < NUM_RUNS; i++) {
     console.log(`--- Instance ${i + 1}/${NUM_RUNS} ---`)
 
-    const loader = createLoader()
-    const modelName = path.basename(paths.modelPath)
-
     const config = {
       path: paths.modelPath,
       vadModelPath: paths.vadModelPath,
@@ -274,10 +265,12 @@ test('Cold start: fresh model instance per transcription', { timeout: 300000 }, 
       // Time includes model creation and loading
       const instanceStartTime = getTimeMs()
 
+      const ctorFiles = { model: paths.modelPath }
+      if (paths.vadModelPath) {
+        ctorFiles.vadModel = paths.vadModelPath
+      }
       model = new TranscriptionWhispercpp({
-        modelName,
-        loader,
-        diskPath: paths.modelsDir
+        files: ctorFiles
       }, config)
 
       await model._load()

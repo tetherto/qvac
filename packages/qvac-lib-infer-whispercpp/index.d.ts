@@ -1,4 +1,4 @@
-import BaseInference, { Loader, QvacResponse } from "@qvac/infer-base";
+import BaseInference, { QvacResponse } from "@qvac/infer-base";
 import type { LoggerInterface } from "@qvac/logging";
 import { Readable } from "stream";
 
@@ -19,12 +19,16 @@ declare interface WhisperConfig {
   [key: string]: unknown;
 }
 
+declare interface TranscriptionWhispercppFiles {
+  model: string;
+  vadModel?: string;
+}
+
 declare interface TranscriptionWhispercppArgs {
-  loader: Loader;
+  files: TranscriptionWhispercppFiles;
   logger?: LoggerInterface;
-  modelName: string;
-  vadModelName?: string;
-  diskPath?: string;
+  exclusiveRun?: boolean;
+  opts?: { stats?: boolean };
   [args: string]: unknown;
 }
 
@@ -137,6 +141,7 @@ declare namespace TranscriptionWhispercpp {
     VadParams,
     WhisperConfig,
     TranscriptionWhispercppArgs,
+    TranscriptionWhispercppFiles,
     TranscriptionWhispercppConfig,
     ProgressData,
     ReportProgressCallback,
