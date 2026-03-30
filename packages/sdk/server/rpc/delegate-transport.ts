@@ -29,6 +29,7 @@ import {
 import { withTimeout, withTimeoutStream } from "@/utils/withTimeout";
 import { getServerLogger } from "@/logging";
 import { DelegateProviderError } from "@/utils/errors-server";
+import { cleanupStaleConnection } from "@/server/bare/delegate-rpc-client";
 import {
   shouldProfileDelegation,
   createDelegationTimings,
@@ -54,12 +55,7 @@ export type ResponseWithDelegation = Response & {
 
 const logger = getServerLogger();
 
-let commandCounter = 0;
-
-function getNextCommandId() {
-  commandCounter = (commandCounter + 1) % Number.MAX_SAFE_INTEGER;
-  return commandCounter;
-}
+import { getNextCommandId } from "@/server/rpc/delegate-utils";
 
 function checkAndThrowError(response: Response): void {
   if (response.type === "error") {
@@ -68,6 +64,16 @@ function checkAndThrowError(response: Response): void {
       response.code,
     );
   }
+}
+
+function isConnectionError(error: unknown): boolean {
+  return !(error instanceof DelegateProviderError);
+}
+
+function cleanupDelegationPeer(options?: DelegateOptions, error?: unknown): void {
+  if (!options?.peerKey) return;
+  if (error !== undefined && !isConnectionError(error)) return;
+  cleanupStaleConnection(options.peerKey);
 }
 
 export async function send<T extends Request>(
@@ -90,29 +96,34 @@ async function sendBase<T extends Request>(
   options?: DelegateOptions,
   profilingMeta?: ProfilingRequestMeta,
 ): Promise<Response> {
-  const parsedRequest = requestSchema.parse(request);
-  const req = rpc.request(getNextCommandId());
+  try {
+    const parsedRequest = requestSchema.parse(request);
+    const req = rpc.request(getNextCommandId());
 
-  logger.debug("[delegate-transport] Sending:", { type: request.type });
+    logger.debug("[delegate-transport] Sending:", { type: request.type });
 
-  // Propagate per-call disable signal to delegated provider
-  const finalRequest =
-    profilingMeta?.enabled === false
-      ? { ...parsedRequest, [PROFILING_KEY]: { enabled: false } }
-      : parsedRequest;
-  const payload = JSON.stringify(finalRequest);
-  req.send(payload, "utf-8");
+    // Propagate per-call disable signal to delegated provider
+    const finalRequest =
+      profilingMeta?.enabled === false
+        ? { ...parsedRequest, [PROFILING_KEY]: { enabled: false } }
+        : parsedRequest;
+    const payload = JSON.stringify(finalRequest);
+    req.send(payload, "utf-8");
 
-  const response = await withTimeout(req.reply("utf-8"), options?.timeout);
+    const response = await withTimeout(req.reply("utf-8"), options?.timeout);
 
-  const resPayload = responseSchema.parse(
-    JSON.parse(response?.toString() || "{}"),
-  );
-  logger.debug("[delegate-transport] Response:", { type: resPayload.type });
+    const resPayload = responseSchema.parse(
+      JSON.parse(response?.toString() || "{}"),
+    );
+    logger.debug("[delegate-transport] Response:", { type: resPayload.type });
 
-  checkAndThrowError(resPayload);
+    checkAndThrowError(resPayload);
 
-  return resPayload;
+    return resPayload;
+  } catch (error) {
+    cleanupDelegationPeer(options, error);
+    throw error;
+  }
 }
 
 async function sendProfiled<T extends Request>(
@@ -188,6 +199,7 @@ async function sendProfiled<T extends Request>(
 
     return resPayload;
   } catch (error) {
+    cleanupDelegationPeer(options, error);
     const base = {
       ts: nowMs(),
       op: timings.requestType,
@@ -220,46 +232,51 @@ async function* streamBase<T extends Request>(
   options: DelegateOptions = {},
   profilingMeta?: ProfilingRequestMeta,
 ): AsyncGenerator<Response> {
-  const parsedRequest = requestSchema.parse(request);
-  const req = rpc.request(getNextCommandId());
+  try {
+    const parsedRequest = requestSchema.parse(request);
+    const req = rpc.request(getNextCommandId());
 
-  logger.debug("[delegate-transport] Streaming:", { type: request.type });
+    logger.debug("[delegate-transport] Streaming:", { type: request.type });
 
-  // Propagate per-call disable signal to delegated provider
-  const finalRequest =
-    profilingMeta?.enabled === false
-      ? { ...parsedRequest, [PROFILING_KEY]: { enabled: false } }
-      : parsedRequest;
-  req.send(JSON.stringify(finalRequest), "utf-8");
+    // Propagate per-call disable signal to delegated provider
+    const finalRequest =
+      profilingMeta?.enabled === false
+        ? { ...parsedRequest, [PROFILING_KEY]: { enabled: false } }
+        : parsedRequest;
+    req.send(JSON.stringify(finalRequest), "utf-8");
 
-  const responseStream = req.createResponseStream({ encoding: "utf-8" });
-  let buffer = "";
+    const responseStream = req.createResponseStream({ encoding: "utf-8" });
+    let buffer = "";
 
-  async function* processStream(): AsyncGenerator<Buffer> {
-    for await (const chunk of responseStream as AsyncIterable<Buffer>) {
-      yield chunk;
-    }
-  }
-
-  const streamWithTimeout = withTimeoutStream(
-    processStream(),
-    options?.timeout,
-  );
-
-  for await (const chunk of streamWithTimeout) {
-    buffer += chunk.toString();
-
-    // Process complete lines (newline-delimited JSON)
-    const lines = buffer.split("\n");
-    buffer = lines.pop() || ""; // Keep incomplete line in buffer
-
-    for (const line of lines) {
-      if (line.trim()) {
-        const response = responseSchema.parse(JSON.parse(line));
-        checkAndThrowError(response);
-        yield response;
+    async function* processStream(): AsyncGenerator<Buffer> {
+      for await (const chunk of responseStream as AsyncIterable<Buffer>) {
+        yield chunk;
       }
     }
+
+    const streamWithTimeout = withTimeoutStream(
+      processStream(),
+      options?.timeout,
+    );
+
+    for await (const chunk of streamWithTimeout) {
+      buffer += chunk.toString();
+
+      // Process complete lines (newline-delimited JSON)
+      const lines = buffer.split("\n");
+      buffer = lines.pop() || ""; // Keep incomplete line in buffer
+
+      for (const line of lines) {
+        if (line.trim()) {
+          const response = responseSchema.parse(JSON.parse(line));
+          checkAndThrowError(response);
+          yield response;
+        }
+      }
+    }
+  } catch (error) {
+    cleanupDelegationPeer(options, error);
+    throw error;
   }
 }
 
@@ -352,6 +369,7 @@ async function* streamProfiled<T extends Request>(
 
     recordDelegationStreamEvents(timings, lastServerMeta);
   } catch (error) {
+    cleanupDelegationPeer(options, error);
     const base = {
       ts: nowMs(),
       op: timings.requestType,
