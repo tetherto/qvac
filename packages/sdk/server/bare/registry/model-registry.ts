@@ -24,6 +24,7 @@ interface DelegateOptions {
   topic: string;
   providerPublicKey: string;
   timeout?: number | undefined;
+  healthCheckTimeout?: number | undefined;
 }
 
 interface LocalOptions {
@@ -57,7 +58,7 @@ export function registerModel(
         loader: FilesystemDL;
         name?: string | undefined;
       }
-    | { topic: string; providerPublicKey: string; timeout?: number },
+    | { topic: string; providerPublicKey: string; timeout?: number; healthCheckTimeout?: number },
 ): void {
   if (modelRegistry.has(id)) {
     throw new ModelAlreadyRegisteredError(id);
@@ -66,7 +67,7 @@ export function registerModel(
   const isDelegated = "topic" in options && "providerPublicKey" in options;
 
   if (isDelegated) {
-    const { topic, providerPublicKey, timeout } = options;
+    const { topic, providerPublicKey, timeout, healthCheckTimeout } = options;
     modelRegistry.set(id, {
       id,
       isDelegated: true,
@@ -74,6 +75,7 @@ export function registerModel(
         topic,
         providerPublicKey,
         timeout,
+        healthCheckTimeout,
       },
     });
 

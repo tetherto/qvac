@@ -1,14 +1,14 @@
 import { loadModel, transcribe } from "@qvac/sdk";
 import {
-  AssetExecutor,
   ValidationHelpers,
   type TestResult,
   type Expectation,
 } from "@tetherto/qvac-test-suite/mobile";
 import type { ResourceManager } from "../../shared/resource-manager.js";
+import { ModelAssetExecutor } from "./model-asset-executor.js";
 import { configReloadTests } from "../../config-reload-tests.js";
 
-export class MobileConfigReloadExecutor extends AssetExecutor<typeof configReloadTests> {
+export class MobileConfigReloadExecutor extends ModelAssetExecutor<typeof configReloadTests> {
   pattern = /^config-reload-/;
 
   protected handlers = {
@@ -23,22 +23,8 @@ export class MobileConfigReloadExecutor extends AssetExecutor<typeof configReloa
 
   private audioAssets: Record<string, number> | null = null;
 
-  constructor(private resources: ResourceManager) {
-    super();
-  }
-
-  async setup(testId: string, context: unknown) {
-    const ctx = (context ?? {}) as Record<string, unknown>;
-    await this.resources.downloadAllOnce(console.log);
-    const dep = ctx.dependency as string | undefined;
-    if (dep && dep !== "none") {
-      await this.resources.evictAll();
-      await this.resources.ensureLoaded(dep);
-    }
-  }
-
-  async teardown() {
-    await this.resources.evictAll();
+  constructor(resources: ResourceManager) {
+    super(resources);
   }
 
   private async loadAudioAssets() {
