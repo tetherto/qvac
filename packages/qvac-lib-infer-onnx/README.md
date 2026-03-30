@@ -1,6 +1,6 @@
 # @qvac/onnx
 
-Bare addon providing ONNX Runtime session management for QVAC inference addons. Links ONNX Runtime 1.22.0 (via vcpkg) and exposes both a C++ header-only library and a JavaScript API. On desktop platforms, `@qvac/onnx.bare` is the single shared library containing ORT — consumer addons dynamically link against it so ORT is loaded exactly once per process. On mobile (Android/iOS), consumer addons statically link ORT via the bundled static libraries. Has no dependency on `qvac-lib-inference-addon-cpp`.
+Bare addon providing ONNX Runtime session management for QVAC inference addons. Links ONNX Runtime 1.24.2 (via vcpkg) and exposes both a C++ header-only library and a JavaScript API. On desktop platforms, `@qvac/onnx.bare` is the single shared library containing ORT — consumer addons dynamically link against it so ORT is loaded exactly once per process. On mobile (Android/iOS), consumer addons statically link ORT via the bundled static libraries. Has no dependency on `qvac-lib-inference-addon-cpp`.
 
 ## Architecture
 
@@ -25,10 +25,10 @@ Bare addon providing ONNX Runtime session management for QVAC inference addons. 
 └──────────────────────┬──────────────────────────────┘
                        │
 ┌──────────────────────▼──────────────────────────────┐
-│  ONNX Runtime 1.22.0  (via vcpkg)                   │
+│  ONNX Runtime 1.24.2  (via vcpkg)                   │
 │  Desktop: exported from qvac__onnx.bare (shared)    │
 │  Mobile:  static libs shipped in prebuilds/lib/     │
-│  + XNNPack EP · CoreML · NNAPI · DirectML           │
+│  + CoreML · NNAPI · DirectML                         │
 └─────────────────────────────────────────────────────┘
 ```
 
@@ -53,7 +53,7 @@ Configures the process-wide ONNX Runtime environment. Must be called **before** 
 
 ### `getAvailableProviders() → string[]`
 
-Returns the list of execution providers compiled into this build (e.g. `["CPUExecutionProvider", "XnnpackExecutionProvider"]`).
+Returns the list of execution providers compiled into this build (for example `["CPUExecutionProvider"]` or `["CPUExecutionProvider", "XnnpackExecutionProvider"]`, depending on how the addon was built).
 
 ### `createSession(modelPath, config?) → handle`
 

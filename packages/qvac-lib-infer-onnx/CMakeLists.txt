@@ -1,7 +1,7 @@
 cmake_minimum_required(VERSION 3.25)
 
 option(BUILD_TESTING "Build tests" OFF)
-option(ENABLE_XNNPACK "Enable XNNPack execution provider" ON)
+option(ENABLE_XNNPACK "Enable XNNPack execution provider" OFF)
 option(QVAC_ONNX_ANDROID_LOG "Enable Android logcat debug logging" OFF)
 
 if(BUILD_TESTING)
