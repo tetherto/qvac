@@ -1,56 +1,79 @@
 ---
 title: "cancel( )"
 titleStyle: code
-description: "Cancels an ongoing operation."
+description: Cancels an ongoing operation.
 ---
 
-```typescript
-function cancel(params: { modelId: string; operation: "inference" } | { clearCache?: boolean; downloadKey: string; operation: "downloadAsset" } | { operation: "rag"; workspace?: string }): Promise
+```ts
+function cancel(params: CancelParams): Promise<void>;
 ```
 
 ## Parameters
 
 | Name | Type | Required? | Description |
 | --- | --- | :---: | --- |
-| `params` | `\{ modelId: string; operation: "inference" \} | \{ clearCache?: boolean; downloadKey: string; operation: "downloadAsset" \} | \{ operation: "rag"; workspace?: string \}` | ✓ | The parameters for the cancellation |
+| params | [`CancelParams`](#cancelparams) | ✓ | The parameters for the cancellation |
+
+### `CancelParams`
+
+Discriminated union on `operation`. One of:
+
+#### Cancel inference
+
+| Field | Type | Required? | Description |
+| --- | --- | :---: | --- |
+| operation | `"inference"` | ✓ | Operation type |
+| modelId | `string` | ✓ | The model ID to cancel inference for |
+
+#### Cancel download
+
+| Field | Type | Required? | Default | Description |
+| --- | --- | :---: | --- | --- |
+| operation | `"downloadAsset"` | ✓ | — | Operation type |
+| downloadKey | `string` | ✓ | — | The download key to cancel |
+| clearCache | `boolean` | ✗ | `false` | If true, deletes the partial download file |
+
+#### Cancel RAG
+
+| Field | Type | Required? | Default | Description |
+| --- | --- | :---: | --- | --- |
+| operation | `"rag"` | ✓ | — | Operation type |
+| workspace | `string` | ✗ | `"default"` | The RAG workspace to cancel |
 
 ## Returns
 
-```typescript
-Promise
-```
-
-
+`Promise<void>` — Resolves when the operation is cancelled.
 
 ## Throws
 
 | Error | When |
 | --- | --- |
-| `When the response type is invalid or when the cancellation fails` |  |
+| `INVALID_RESPONSE_TYPE` | Response type does not match expected `"cancel"` |
+| `CANCEL_FAILED` | The server reports cancellation failure |
 
-## Example
+## Examples
 
-```typescript
+```ts
 // Cancel inference
 await cancel({ operation: "inference", modelId: "model-123" });
 ```
 
-```typescript
+```ts
 // Pause download (preserves partial file for automatic resume)
 await cancel({ operation: "downloadAsset", downloadKey: "download-key" });
 ```
 
-```typescript
+```ts
 // Cancel download completely (deletes partial file)
 await cancel({ operation: "downloadAsset", downloadKey: "download-key", clearCache: true });
 ```
 
-```typescript
+```ts
 // Cancel RAG operation on default workspace
 await cancel({ operation: "rag" });
 ```
 
-```typescript
+```ts
 // Cancel RAG operation on specific workspace
 await cancel({ operation: "rag", workspace: "my-workspace" });
 ```

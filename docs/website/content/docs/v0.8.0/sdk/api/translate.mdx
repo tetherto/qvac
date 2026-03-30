@@ -1,63 +1,77 @@
 ---
 title: "translate( )"
 titleStyle: code
-description: "Translates text from one language to another using a specified translation model.
-Supports both NMT (Neural Machine Translation) and LLM models."
+description: Translates text from one language to another using a specified translation model.
 ---
 
-```typescript
-function translate(params: TranslateClientParams, options?: { forceNewConnection?: boolean; profiling?: { enabled?: boolean; includeServerBreakdown?: boolean; mode?: "summary" | "verbose" }; timeout?: number }): { stats: Promise<{ processedTokens: number; processingTime: number } | —>; text: Promise<string>; tokenStream: AsyncGenerator<string> }
+```ts
+function translate(params): {
+  tokenStream: AsyncGenerator<string>;
+  text: Promise<string>;
+  stats: Promise<TranslationStats | undefined>;
+};
 ```
+
+Supports both NMT (Neural Machine Translation) and LLM models.
 
 ## Parameters
 
-| Name | Type | Required? | Description |
-| --- | --- | :---: | --- |
-| `params` | `TranslateClientParams` | ✓ | Translation configuration object |
-| `options` | `\{ forceNewConnection?: boolean; profiling?: \{ enabled?: boolean; includeServerBreakdown?: boolean; mode?: "summary" | "verbose" \}; timeout?: number \}` | ✗ | No description |
+| Name | Type | Required? | Default | Description |
+| --- | --- | :---: | --- | --- |
+| params.modelId | `string` | ✓ | — | The identifier of the translation model |
+| params.text | `string \| string[]` | ✓ | — | The input text(s) to translate. NMT supports array; LLM only string. |
+| params.modelType | `"nmt" \| "llm"` | ✓ | — | The type of translation model |
+| params.stream | `boolean` | ✗ | `true` | Whether to stream tokens or return complete response |
+| params.from | `string` | ✗ | auto-detect | Source language code (LLM only) |
+| params.to | `string` | ✓ (LLM) | — | Target language code (LLM only) |
+| params.context | `string` | ✗ | — | Additional context for translation (LLM only) |
+| options | [`RPCOptions`](../index#rpcoptions) | ✗ | — | Optional RPC transport options |
 
 ## Returns
 
-```typescript
-{ stats: Promise<{ processedTokens: number; processingTime: number } | —>; text: Promise<string>; tokenStream: AsyncGenerator<string> }
-```
-
-
+`object` — Object with the following fields:
 
 | Field | Type | Description |
 | --- | --- | --- |
-| `stats` | `Promise` | — |
-| `text` | `Promise` | — |
-| `tokenStream` | `AsyncGenerator` | — |
+| tokenStream | `AsyncGenerator<string>` | Stream of translated tokens |
+| text | `Promise<string>` | Complete translated text |
+| stats | `Promise<`[`TranslationStats`](#translationstats) `\| undefined>` | Translation statistics |
+
+### `TranslationStats`
+
+| Field | Type | Description |
+| --- | --- | --- |
+| processedTokens | `number` | Number of tokens processed |
+| processingTime | `number` | Processing time in milliseconds |
 
 ## Throws
 
 | Error | When |
 | --- | --- |
-| `When translation fails with an error message or when language detection fails` |  |
+| `TRANSLATION_FAILED` | Translation fails |
 
 ## Example
 
 ```typescript
 // Streaming mode (default)
 const result = translate({
-  modelId: "modelId",
+  modelId: "nmt-model",
   text: "Hello world",
   from: "en",
-  to: "es"
+  to: "es",
   modelType: "llm",
 });
 
 for await (const token of result.tokenStream) {
-  console.log(token);
+  process.stdout.write(token);
 }
 
 // Non-streaming mode
 const response = translate({
-  modelId: "modelId",
+  modelId: "nmt-model",
   text: "Hello world",
   from: "en",
-  to: "es"
+  to: "es",
   modelType: "llm",
   stream: false,
 });
