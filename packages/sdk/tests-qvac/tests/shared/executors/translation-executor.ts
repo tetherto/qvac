@@ -5,7 +5,6 @@ import {
   type Expectation,
 } from "@tetherto/qvac-test-suite";
 import { AbstractModelExecutor } from "./abstract-model-executor.js";
-import { translationMarianTests } from "../../translation-marian-tests.js";
 import { translationIndicTransTests } from "../../translation-indictrans-tests.js";
 import { translationBergamotTests } from "../../translation-bergamot-tests.js";
 import { translationLlmTests } from "../../translation-llm-tests.js";
@@ -21,7 +20,6 @@ interface TranslateTestParams {
 }
 
 const allTests = [
-  ...translationMarianTests,
   ...translationIndicTransTests,
   ...translationBergamotTests,
   ...translationLlmTests,
@@ -30,7 +28,7 @@ const allTests = [
 ];
 
 export class TranslationExecutor extends AbstractModelExecutor<typeof allTests> {
-  pattern = /^translation-(marian|indictrans|bergamot|llm|salamandra|afriquegemma)-/;
+  pattern = /^translation-(indictrans|bergamot|llm|salamandra|afriquegemma)-/;
 
   protected handlers = Object.fromEntries(
     allTests.map((test) => {
