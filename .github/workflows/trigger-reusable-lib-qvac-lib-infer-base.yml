@@ -48,7 +48,7 @@ jobs:
           head-sha: ${{ github.sha }}
           package-slug: qvac-lib-infer-base
           package-json-path: packages/qvac-lib-infer-base/package.json
-          changelog-path: packages/qvac-lib-infer-base/CHANGELOG.md
+          changelog-path: packages/qvac-lib-infer-base/CHANGELOG
 
   publish-logic:
     runs-on: ubuntu-latest
