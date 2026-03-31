@@ -2,6 +2,7 @@
 
 const fs = require('bare-fs')
 const BaseInference = require('@qvac/infer-base/WeightsProvider/BaseInference')
+const createJobHandler = require('@qvac/infer-base/src/utils/createJobHandler')
 const { QvacInferenceBaseError, ERR_CODES: BASE_ERR_CODES } = require('@qvac/infer-base/src/error')
 
 const { WhisperInterface } = require('./whisper')
@@ -45,6 +46,14 @@ class TranscriptionWhispercpp extends BaseInference {
     this.params = config.whisperConfig
     /** Serializes inference runs; separate from {@link BaseInference#_runQueueWaiter} (reload/destroy). */
     this._inferenceQueueWaiter = Promise.resolve()
+    /** Batch append returns this id before `_activeJobId` is set; needed for `cancel(jobId)` during buffering. */
+    this._pendingWhisperJobId = null
+    this._job = createJobHandler({
+      cancel: () => {
+        const jobId = this._pendingWhisperJobId ?? this.addon?._activeJobId
+        return this.addon?.cancel?.(jobId)
+      }
+    })
 
     this.logger.debug('TranscriptionWhispercpp constructor called', {
       params: this.params,
@@ -175,19 +184,19 @@ class TranscriptionWhispercpp extends BaseInference {
       return this._runStreaming(normalizedAudioStream)
     }
 
-    const jobId = await this.addon.append({
+    this._pendingWhisperJobId = await this.addon.append({
       type: 'audio',
       input: new Uint8Array()
     })
 
-    const response = this._createResponse(jobId)
+    const response = this._job.start()
     const finalized = response.await()
     finalized.catch(() => {})
     response.await = () => finalized
 
     this._handleAudioStream(normalizedAudioStream).catch((error) => {
-      response.failed(error)
-      this._deleteJobMapping(jobId)
+      this._pendingWhisperJobId = null
+      this._job.fail(error)
     })
     return response
   }
@@ -212,8 +221,8 @@ class TranscriptionWhispercpp extends BaseInference {
       samplesOverlap: vadParams.samples_overlap || 0.1
     })
 
-    const jobId = this.addon._activeJobId
-    const response = this._createResponse(jobId)
+    this._pendingWhisperJobId = null
+    const response = this._job.start()
     const finalized = response.await().finally(() => {
       this.addon._activeJobId = null
       this.addon._setState('listening')
@@ -222,8 +231,8 @@ class TranscriptionWhispercpp extends BaseInference {
     response.await = () => finalized
 
     this._handleStreamingAudio(audioStream).catch((error) => {
-      response.failed(error)
-      this._deleteJobMapping(jobId)
+      this._pendingWhisperJobId = null
+      this._job.fail(error)
     })
     return response
   }
@@ -364,6 +373,36 @@ class TranscriptionWhispercpp extends BaseInference {
     )
   }
 
+  _outputCallback (addon, event, jobId, data, error) {
+    if (event === 'Error') {
+      this.logger.error(`Job failed with error: ${error}`)
+      this._pendingWhisperJobId = null
+      this._job.fail(error)
+      return
+    }
+    if (event === 'Output') {
+      try {
+        this.logger.debug(`Job produced output: ${dataAsStringWhisper(data)}`)
+      } catch (err) {
+        this.logger.error(`Failed to serialize output for logging: ${err.message}`)
+        this.logger.debug('Job produced output: [non-serializable data]')
+      }
+      this._job.output(data)
+      return
+    }
+    if (event === 'JobEnded') {
+      this.logger.info(`Job ${jobId} completed. Stats: ${JSON.stringify(data)}`)
+      this._pendingWhisperJobId = null
+      if (this.opts?.stats) {
+        this._job.end(data)
+      } else {
+        this._job.end()
+      }
+      return
+    }
+    this.logger.debug(`Received event for job ${jobId}: ${event}`)
+  }
+
   /**
    * Override unload to also call destroyInstance for proper cleanup
    * This ensures the process can exit cleanly by closing the uv_async handle
@@ -400,9 +439,9 @@ class TranscriptionWhispercpp extends BaseInference {
   }
 
   _failAndClearActiveResponse (reason) {
-    for (const [jobId, response] of this._jobToResponse.entries()) {
-      response.failed(new Error(reason))
-      this._deleteJobMapping(jobId)
+    this._pendingWhisperJobId = null
+    if (this._job.active) {
+      this._job.fail(new Error(reason))
     }
   }
 
@@ -423,6 +462,14 @@ class TranscriptionWhispercpp extends BaseInference {
       throw new Error(`VAD model file doesn't exist: ${vadModelPath}`)
     }
   }
+}
+
+function dataAsStringWhisper (data) {
+  if (!data) return ''
+  if (typeof data === 'object') {
+    return JSON.stringify(data)
+  }
+  return data.toString()
 }
 
 function _checkParamsExists (params) {
