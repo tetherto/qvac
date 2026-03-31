@@ -162,7 +162,7 @@ export const llmPlugin = definePlugin({
             token: request.stream ? "" : buffer,
             done: true,
             ...(stats && { stats }),
-            ...(toolCalls.length && { toolCalls }),
+            ...(toolCalls.length > 0 && { toolCalls }),
           }, modelExecutionMs);
         } finally {
           await stream.return?.(undefined as never);
