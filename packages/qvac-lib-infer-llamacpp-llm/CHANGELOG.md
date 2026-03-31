@@ -5,6 +5,9 @@
 ### Changed
 
 - Updated qvac-lib-inference-addon-cpp dependancy from 1.1.2 to 1.1.4
+- Reason for the version update:
+    - addon-cpp v1.1.2's cancelJob() unconditionally set the model's stop flag whenever a job existed, even if that job was only queued and never started processing. Since the queued job never entered process(), the flag was never consumed or reset. 
+    - In the llm addon, this meant that cancelling a request and then submitting a new one would cause the new request to abort instantly on entry — returning no results — because it inherited the stale stop flag from the previous cancel.
 
 ## [0.14.0] - 2026-03-19
 
