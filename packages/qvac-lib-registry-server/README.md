@@ -9,11 +9,11 @@ Distributed model registry for QVAC. Download AI models for local inference, or 
 Use the client library to query and download models:
 
 ```bash
-npm install @tetherto/qvac-lib-registry-client
+npm install @qvac/registry-client
 ```
 
 ```javascript
-const { QVACRegistryClient } = require('@tetherto/qvac-lib-registry-client')
+const { QVACRegistryClient } = require('@qvac/registry-client')
 
 const client = new QVACRegistryClient({
   registryCoreKey: process.env.QVAC_REGISTRY_CORE_KEY
