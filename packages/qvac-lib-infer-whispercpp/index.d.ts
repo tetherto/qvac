@@ -102,6 +102,10 @@ declare class TranscriptionWhispercpp extends BaseInference {
   run(
     audioStream: Readable
   ): Promise<QvacResponse<TranscriptionWhispercpp.WhisperRunOutput>>;
+
+  runStreaming(
+    audioStream: Readable
+  ): Promise<QvacResponse<TranscriptionWhispercpp.WhisperRunOutput>>;
 }
 
 declare namespace TranscriptionWhispercpp {
