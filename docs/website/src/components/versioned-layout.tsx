@@ -31,7 +31,7 @@ export function VersionedLayout({
   return (
     <DocsLayout
       {...props}
-      tree={{ name: 'docs', children: treeNodes }}
+      tree={{ name: 'docs', $id: version ?? 'latest', children: treeNodes }}
     >
       {children}
     </DocsLayout>

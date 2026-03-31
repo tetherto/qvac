@@ -125,6 +125,10 @@ jobs:
 
   cpp-tests:
     needs: [authorize, changes, sanity-checks]
+    permissions:
+      contents: read
+      packages: read
+      pull-requests: write
     if: |
       always() &&
       needs.authorize.outputs.allowed == 'true' &&
