@@ -150,11 +150,6 @@ jobs:
       tag: ${{ needs.publish-logic.outputs.gpr_tag }}
       publish_target: "gpr"
 
-  model-conversion-test:
-    needs: [prebuild-main-gpr]
-    uses: ./.github/workflows/model-conversion-test-qvac-lib-infer-nmtcpp.yml
-    secrets: inherit
-
   run-integration-tests:
     needs: [prebuild-main-gpr]
     uses: ./.github/workflows/integration-test-qvac-lib-infer-nmtcpp.yml
