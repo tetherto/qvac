@@ -1,5 +1,13 @@
 # Changelog
 
+## [0.3.1]
+
+Release Date: 2026-03-30
+
+### 📚 Documentation
+
+- README: removed outdated npm Personal Access Token / `.npmrc` setup instructions for installing `@qvac/registry-client`.
+
 ## [0.3.0]
 
 Release Date: 2026-03-24
