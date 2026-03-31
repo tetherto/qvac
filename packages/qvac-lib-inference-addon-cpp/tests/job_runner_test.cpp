@@ -493,4 +493,3 @@ TEST_F(JobRunnerTest, CancelWhileActivelyProcessing_ModelReceivesStop) {
 }
 
 } // namespace qvac_lib_inference_addon_cpp
-
