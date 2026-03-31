@@ -1,8 +1,8 @@
 name: On PR Trigger (Whispercpp)
 
 on:
-  push:
-    # types: [opened, synchronize, reopened, labeled]
+  pull_request_target:
+    types: [opened, synchronize, reopened, labeled]
     branches: [main, release-*, feature-*, tmp-*]
     paths:
       - "packages/qvac-lib-infer-whispercpp/**"
@@ -220,5 +220,3 @@ jobs:
       sanity-checks-status: ${{ needs.sanity-checks.result == 'success' && (needs.cpp-lint.result == 'success' || needs.cpp-lint.result == 'skipped') && (needs.cpp-tests-coverage.result == 'success' || needs.cpp-tests-coverage.result == 'skipped') }}
       build-status: ${{ needs.prebuild.result == 'success' || needs.prebuild.result == 'skipped' }}
       integration-tests-status: ${{ (needs.run-integration-tests.result == 'success' || needs.run-integration-tests.result == 'skipped') && (needs.run-mobile-integration-tests.result == 'success' || needs.run-mobile-integration-tests.result == 'skipped') }}
- 
-

@@ -234,4 +234,3 @@ jobs:
       sanity-checks-status: ${{ needs.sanity-checks.result == 'success' }}
       build-status: ${{ needs.prebuild.result == 'success' }}
       integration-tests-status: ${{ needs.run-integration-tests.result == 'success' }}
-
