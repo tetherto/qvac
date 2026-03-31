@@ -4,7 +4,7 @@
  * Usage: bun run examples/transcription/whispercpp-microphone-record.ts
  *
  * Speak into your mic; transcriptions appear automatically when you pause.
- * Press Enter or Ctrl+C to quit.
+ * Press Ctrl+C to quit.
  *
  * Requirements: FFmpeg installed, microphone access.
  */
@@ -87,39 +87,22 @@ const ffmpeg = spawn(
 );
 if (!ffmpeg.stdout) throw new Error("Failed to open microphone");
 
-try {
-  const session = await transcribeStream({ modelId });
+const session = await transcribeStream({ modelId });
 
-  ffmpeg.stdout.on("data", (chunk: Buffer) => session.write(chunk));
+ffmpeg.stdout.on("data", (chunk: Buffer) => session.write(chunk));
 
-  console.log("Listening... speak and pause to see transcriptions.");
-  console.log("Press Enter to stop.\n");
+console.log("Listening... speak and pause to see transcriptions.\n");
 
-  const done = (async () => {
-    for await (const text of session) {
-      console.log(`> ${text.trim()}`);
-    }
-  })();
-
-  process.stdin.resume();
-  process.stdin.setEncoding("utf8");
-  await new Promise<void>((resolve) => {
-    const onData = (data: string) => {
-      if (data.includes("\n") || data.includes("\r")) {
-        process.stdin.off("data", onData);
-        resolve();
-      }
-    };
-    process.stdin.on("data", onData);
-  });
-
-  ffmpeg.kill();
-  session.end();
-  await done;
-} finally {
-  console.log("\nUnloading model...");
-  await unloadModel({ modelId });
-  // Force exit — stdin/stream handles may keep the event loop alive
-  process.exit(0);
+for await (const text of session) {
+  console.log(`> ${text.trim()}`);
 }
 
+async function cleanup() {
+  console.log("\n\nStopping...");
+  ffmpeg.kill();
+  await unloadModel({ modelId });
+  console.log("Done.");
+}
+
+process.on("SIGINT", () => void cleanup());
+process.on("SIGTERM", () => void cleanup());

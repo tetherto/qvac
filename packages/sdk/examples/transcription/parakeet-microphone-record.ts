@@ -4,7 +4,7 @@
  * Usage: bun run examples/transcription/parakeet-microphone-record.ts
  *
  * Captures 3-second audio chunks from the microphone and sends each to the
- * batch `transcribe` API. Press Enter or Ctrl+C to quit.
+ * batch `transcribe` API. Press Ctrl+C to quit.
  *
  * Requirements: FFmpeg installed, microphone access.
  */
@@ -90,8 +90,7 @@ if (!ffmpeg.stdout) throw new Error("Failed to open microphone");
 let buffer = Buffer.alloc(0);
 let processing = false;
 
-console.log("Listening... speak and pause to see transcriptions.");
-console.log("Press Enter to stop.\n");
+console.log("Listening... speak and pause to see transcriptions.\n");
 
 ffmpeg.stdout.on("data", (chunk: Buffer) => {
   buffer = Buffer.concat([buffer, chunk]);
@@ -119,19 +118,12 @@ ffmpeg.stdout.on("data", (chunk: Buffer) => {
   }
 });
 
-process.stdin.resume();
-process.stdin.setEncoding("utf8");
-await new Promise<void>((resolve) => {
-  const onData = (data: string) => {
-    if (data.includes("\n") || data.includes("\r")) {
-      process.stdin.off("data", onData);
-      resolve();
-    }
-  };
-  process.stdin.on("data", onData);
-});
+async function cleanup() {
+  console.log("\n\nStopping...");
+  ffmpeg.kill();
+  await unloadModel({ modelId });
+  console.log("Done.");
+}
 
-ffmpeg.kill();
-console.log("\nUnloading model...");
-await unloadModel({ modelId });
-process.exit(0);
+process.on("SIGINT", () => void cleanup());
+process.on("SIGTERM", () => void cleanup());
