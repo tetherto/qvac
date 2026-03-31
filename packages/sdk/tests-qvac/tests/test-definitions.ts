@@ -23,6 +23,7 @@ import { shardedModelTests } from "./sharded-model-tests.js";
 import { httpEmbeddingTests } from "./http-embedding-tests.js";
 import { parakeetTests } from "./parakeet-tests.js";
 import { visionTests } from "./vision-tests.js";
+import { downloadTests } from "./download-tests.js";
 
 // Model loading tests
 export const modelLoadLlm: TestDefinition = {
@@ -212,6 +213,9 @@ export const tests = [
 
   // Vision tests
   ...visionTests,
+
+  // Download tests (cancel isolation)
+  ...downloadTests,
 
   // Additional model tests
   modelSwitchLlm,
