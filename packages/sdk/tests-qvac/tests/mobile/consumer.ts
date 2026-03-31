@@ -318,6 +318,8 @@ resources.define("vision", {
   },
 });
 
+await resources.downloadAllOnce(console.log);
+
 function skipTests(testIds: string[], reason: string) {
   return new SkipExecutor(new RegExp(`^(${testIds.join("|")})$`), reason);
 }

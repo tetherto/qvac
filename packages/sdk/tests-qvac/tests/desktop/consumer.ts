@@ -321,6 +321,8 @@ resources.define("vision", {
   },
 });
 
+await resources.downloadAllOnce(console.log);
+
 export const executor = createExecutor({
   handlers: [
     new ModelLoadingExecutor(resources),
