@@ -438,16 +438,13 @@ async function main () {
 
   const hyperdriveKey = MODEL_KEYS[pairKey] || null
 
-  // Read all input from stdin using event-based approach for reliable pipe handling
-  const inputText = await new Promise((resolve) => {
-    let data = ''
-    process.stdin.resume()
-    process.stdin.on('data', (chunk) => {
-      data += chunk.toString()
-    })
-    process.stdin.on('end', () => resolve(data))
-    process.stdin.on('close', () => resolve(data))
-  })
+  // Read all input from stdin
+  let inputText = ''
+
+  // Read stdin in chunks
+  for await (const chunk of process.stdin) {
+    inputText += chunk.toString()
+  }
 
   // Split into lines and filter empty
   const inputLines = inputText
