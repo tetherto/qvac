@@ -168,6 +168,10 @@ jobs:
       pull-requests: write
     needs: context
     if: needs.context.outputs.run_verify == 'true' || github.event_name == 'workflow_dispatch'
+    permissions:
+      contents: read
+      checks: write
+      pull-requests: write
     uses: ./.github/workflows/cpp-test-coverage-qvac-lib-infer-parakeet.yml
     secrets: inherit
     with:
