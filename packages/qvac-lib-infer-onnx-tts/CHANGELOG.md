@@ -5,6 +5,12 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.7.1]
+
+### Changed
+
+- README: removed outdated npm Personal Access Token / `.npmrc` setup instructions for installing `@qvac/tts-onnx`.
+
 ## [0.7.0]
 
 This release moves Supertonic onto the official Supertone ONNX graphs and multilingual Hugging Face weights, expands the JS surface and tooling for multilingual runs, and hardens benchmark and native build paths. Consumers using Supertonic should plan for updated models and configuration aligned with the new graphs.
