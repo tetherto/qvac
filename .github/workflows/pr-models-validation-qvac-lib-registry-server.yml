@@ -137,8 +137,6 @@ jobs:
         uses: actions/setup-node@53b83947a5a98c8d113130e565377fae1a50d02f # 6.3.0
         with:
           node-version: 20
-          cache: npm
-          cache-dependency-path: ${{ env.PKG_DIR }}/package-lock.json
 
       - name: Configure npm for private packages
         shell: bash
@@ -152,7 +150,7 @@ jobs:
       - name: Install dependencies
         working-directory: ${{ env.PKG_DIR }}
         shell: bash
-        run: npm ci
+        run: npm install
 
       - name: Validate models.prod.json
         working-directory: ${{ env.PKG_DIR }}
@@ -175,11 +173,7 @@ jobs:
         uses: actions/setup-node@53b83947a5a98c8d113130e565377fae1a50d02f # 6.3.0
         with:
           node-version: 20
-          cache: npm
-          cache-dependency-path: |
-            ${{ env.PKG_DIR }}/package-lock.json
-            ${{ env.PKG_DIR }}/client/package-lock.json
-      
+
       - name: Configure npm for private packages
         shell: bash
         working-directory: ${{ env.PKG_DIR }}
@@ -192,7 +186,7 @@ jobs:
       - name: Install dependencies
         working-directory: ${{ env.PKG_DIR }}
         shell: bash
-        run: npm ci
+        run: npm install
 
       - name: Lint
         working-directory: ${{ env.PKG_DIR }}
@@ -251,8 +245,6 @@ jobs:
         uses: actions/setup-node@53b83947a5a98c8d113130e565377fae1a50d02f # 6.3.0
         with:
           node-version: 20
-          cache: npm
-          cache-dependency-path: ${{ env.PKG_DIR }}/package-lock.json
 
       - name: Configure npm for private packages
         shell: bash
@@ -266,7 +258,7 @@ jobs:
       - name: Install dependencies
         working-directory: ${{ env.PKG_DIR }}
         shell: bash
-        run: npm ci
+        run: npm install
 
       - name: Install client dependencies
         working-directory: ${{ env.PKG_DIR }}/client
@@ -302,8 +294,6 @@ jobs:
         uses: actions/setup-node@53b83947a5a98c8d113130e565377fae1a50d02f # 6.3.0
         with:
           node-version: 20
-          cache: npm
-          cache-dependency-path: ${{ env.PKG_DIR }}/package-lock.json
 
       - name: Configure npm for private packages
         shell: bash
@@ -317,7 +307,7 @@ jobs:
       - name: Install server dependencies
         working-directory: ${{ env.PKG_DIR }}
         shell: bash
-        run: npm ci
+        run: npm install
 
       - name: Install client dependencies
         working-directory: ${{ env.PKG_DIR }}/client

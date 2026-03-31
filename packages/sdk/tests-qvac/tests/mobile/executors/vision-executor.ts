@@ -1,14 +1,14 @@
 import { completion } from "@qvac/sdk";
 import {
-  AssetExecutor,
   ValidationHelpers,
   type TestResult,
   type Expectation,
 } from "@tetherto/qvac-test-suite/mobile";
 import type { ResourceManager } from "../../shared/resource-manager.js";
+import { ModelAssetExecutor } from "./model-asset-executor.js";
 import { visionTests } from "../../vision-tests.js";
 
-export class MobileVisionExecutor extends AssetExecutor<typeof visionTests> {
+export class MobileVisionExecutor extends ModelAssetExecutor<typeof visionTests> {
   pattern = /^vision-/;
 
   protected handlers = Object.fromEntries(
@@ -18,22 +18,8 @@ export class MobileVisionExecutor extends AssetExecutor<typeof visionTests> {
 
   private imageAssets: Record<string, number> | null = null;
 
-  constructor(private resources: ResourceManager) {
-    super();
-  }
-
-  async setup(testId: string, context: unknown) {
-    const ctx = (context ?? {}) as Record<string, unknown>;
-    await this.resources.downloadAllOnce(console.log);
-    const dep = ctx.dependency as string | undefined;
-    if (dep && dep !== "none") {
-      await this.resources.evictAll();
-      await this.resources.ensureLoaded(dep);
-    }
-  }
-
-  async teardown() {
-    await this.resources.evictAll();
+  constructor(resources: ResourceManager) {
+    super(resources);
   }
 
   private async loadImageAssets() {

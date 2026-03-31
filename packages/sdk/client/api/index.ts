@@ -4,7 +4,7 @@ export { completion } from "./completion-stream";
 export { deleteCache } from "./delete-cache";
 export { unloadModel } from "./unload-model";
 export { loggingStream } from "./logging-stream";
-export { ping } from "./ping";
+export { heartbeat } from "./heartbeat";
 export { transcribe, transcribeStream } from "./transcribe";
 export { embed } from "./embed";
 export { translate } from "./translate";

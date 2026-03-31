@@ -1,34 +1,47 @@
 ---
 title: "ragChunk( )"
 titleStyle: code
-description: "Chunks documents into smaller pieces for embedding.
-Part of the segregated flow: ragChunk() → embed() → ragSaveEmbeddings()"
+description: Chunks documents into smaller pieces for embedding.
 ---
 
-```typescript
-function ragChunk(params: { chunkOpts?: { chunkOverlap?: number; chunkSize?: number; chunkStrategy?: "character" | "paragraph"; splitStrategy?: "character" | "word" | "token" | "sentence" | "line" }; documents: string | string[] }, options?: { forceNewConnection?: boolean; profiling?: { enabled?: boolean; includeServerBreakdown?: boolean; mode?: "summary" | "verbose" }; timeout?: number }): Promise
+```ts
+function ragChunk(params, options?): Promise<RagDoc[]>;
 ```
+
+Part of the segregated flow: `ragChunk()` → [`embed()`](../embed) → [`ragSaveEmbeddings()`](../ragSaveEmbeddings)
 
 ## Parameters
 
 | Name | Type | Required? | Description |
 | --- | --- | :---: | --- |
-| `params` | `\{ chunkOpts?: \{ chunkOverlap?: number; chunkSize?: number; chunkStrategy?: "character" | "paragraph"; splitStrategy?: "character" | "word" | "token" | "sentence" | "line" \}; documents: string | string[] \}` | ✓ | The parameters for chunking |
-| `options` | `\{ forceNewConnection?: boolean; profiling?: \{ enabled?: boolean; includeServerBreakdown?: boolean; mode?: "summary" | "verbose" \}; timeout?: number \}` | ✗ | Optional RPC transport options including connection reuse, timeout, and per-call profiling configuration |
+| params | `object` | ✓ | The chunking parameters |
+| params.documents | `string \| string[]` | ✓ | Documents to chunk |
+| params.chunkOpts | [`ChunkOptions`](#chunkoptions) | ✗ | Chunking options |
+| options | [`RPCOptions`](../index#rpcoptions) | ✗ | Optional RPC transport options |
+
+### `ChunkOptions`
+
+| Field | Type | Required? | Description |
+| --- | --- | :---: | --- |
+| chunkSize | `number` | ✗ | Maximum chunk size |
+| chunkOverlap | `number` | ✗ | Overlap between chunks |
+| chunkStrategy | `"character" \| "paragraph"` | ✗ | Chunking strategy |
+| splitStrategy | `"character" \| "word" \| "token" \| "sentence" \| "line"` | ✗ | Text splitting strategy |
 
 ## Returns
 
-```typescript
-Promise
-```
+`Promise<RagDoc[]>` — Array of chunk results.
 
-
+| Field | Type | Description |
+| --- | --- | --- |
+| id | `string` | Chunk identifier |
+| content | `string` | Chunk text content |
 
 ## Throws
 
 | Error | When |
 | --- | --- |
-| `When the operation fails` |  |
+| `RAG_CHUNK_FAILED` | The chunking operation fails |
 
 ## Example
 
