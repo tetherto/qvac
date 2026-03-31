@@ -1,4 +1,4 @@
-import BaseInference, { QvacResponse } from "@qvac/infer-base";
+import QvacResponse from "@qvac/infer-base/src/QvacResponse";
 import type { LoggerInterface } from "@qvac/logging";
 import { Readable } from "stream";
 
@@ -52,6 +52,12 @@ declare interface TranscriptionWhispercppConfig {
 
 declare type ReportProgressCallback = (progressData: ProgressData) => void;
 
+declare interface InferenceClientState {
+  configLoaded: boolean;
+  weightsLoaded: boolean;
+  destroyed: boolean;
+}
+
 /**
  * A single transcription segment emitted by the Whisper addon in an output update.
  */
@@ -63,7 +69,7 @@ declare interface WhisperTranscriptionSegment {
 /**
  * GGML client implementation for the Whisper transcription model
  */
-declare class TranscriptionWhispercpp extends BaseInference {
+declare class TranscriptionWhispercpp {
   /**
    * Creates an instance of WhisperClient.
    * @constructor
@@ -74,6 +80,24 @@ declare class TranscriptionWhispercpp extends BaseInference {
     args: TranscriptionWhispercppArgs,
     config: TranscriptionWhispercppConfig
   );
+
+  getState(): InferenceClientState;
+
+  load(...args: unknown[]): Promise<void>;
+
+  unload(): Promise<void>;
+
+  destroy(): Promise<void>;
+
+  pause(): Promise<void>;
+
+  unpause(): Promise<void>;
+
+  stop(): Promise<void>;
+
+  status(): Promise<string>;
+
+  cancel(): Promise<void>;
 
   /**
    * Load model and activate addon. Files must already exist at `files.model` / optional `files.vadModel`.
@@ -148,6 +172,7 @@ declare namespace TranscriptionWhispercpp {
     ProgressData,
     ReportProgressCallback,
     WhisperTranscriptionSegment,
+    InferenceClientState,
   };
 }
 
