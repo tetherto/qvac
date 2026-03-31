@@ -71,6 +71,12 @@ export const tree: Node[] = [
     index: { type: 'page', name: 'Getting started', url: '/sdk/getting-started' },
     children: [
       {
+        name: 'Overview',
+        url: '/sdk/getting-started',
+        type: 'page',
+        icon: resolveIcon('Map'),
+      },
+      {
         name: 'Quickstart',
         url: '/sdk/getting-started/quickstart',
         type: 'page',
