@@ -186,7 +186,7 @@ These are environment/configuration issues, not code bugs:
 | Disk space error | Runner out of space (common on Ubuntu) | Disk cleanup step may need updating |
 | Xcode version not found | iOS runner missing required Xcode | Update Xcode version selection in mobile workflow |
 | Android SDK / Gradle failure | Build tools version mismatch | Check `setup-android` and JDK version |
-| `merge-guard` failure | External `oss-actions` workflow issue | Check `tetherto/oss-actions@monorepo_update` ref |
+| `merge-guard` failure | External `oss-actions` workflow issue | Check `tetherto/oss-actions@main` ref |
 | Workflow syntax error | YAML issue in workflow file | Validate YAML; check `gh workflow list` for errors |
 
 ### Code logic failures (implementer must fix)
@@ -304,7 +304,7 @@ Replace `<pkg>` with the package directory name (e.g., `qvac-lib-infer-llamacpp-
 
 ### External dependencies
 
-- **Reusable workflows/actions**: `tetherto/oss-actions@monorepo_update`
+- **Reusable workflows/actions**: `tetherto/oss-actions@main`
 - **Mobile test framework**: `tetherto/qvac-test-addon-mobile`
 - **Merge guard**: `.github/actions/release-merge-guard` (local action)
 - **Release notes script**: `.github/scripts/release-notes-check.js`
