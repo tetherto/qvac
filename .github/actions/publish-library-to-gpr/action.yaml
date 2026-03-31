@@ -194,6 +194,7 @@ runs:
         # Check if repo is in always-publish list
         ALWAYS_PUBLISH_REPOS=(
           qvac-devops
+          oss-actions
           qvac-examples
           qvac-ext-lib-mlc
           qvac-ext-lib-tokenizers-cpp
