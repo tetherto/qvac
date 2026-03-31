@@ -217,7 +217,7 @@ test('Streaming error propagation surfaces to response', async (t) => {
   t.ok(errorEvents.length > 0, 'Error event should be emitted for failed processing')
 })
 
-test('Starting a second streaming session throws while one is active', async (t) => {
+test('Second streaming session waits on exclusive queue until first completes', async (t) => {
   const binding = new MockedBinding()
   const model = createMockedModel({ binding })
   await model.load()
@@ -230,18 +230,20 @@ test('Starting a second streaming session throws while one is active', async (t)
     }
   }
 
-  await model.runStreaming(slowStream)
-  await wait(10)
+  const r1 = await model.runStreaming(slowStream)
+  let secondEntered = false
+  const p2 = model.runStreaming([new Uint8Array([9, 9])]).then(async (r) => {
+    secondEntered = true
+    await r.await()
+    return r
+  })
 
-  try {
-    await model.runStreaming([new Uint8Array([9, 9])])
-    t.fail('Should not allow a second streaming session')
-  } catch (error) {
-    t.ok(
-      error.message.includes('already') || error.message.includes('running') || error.message.includes('active'),
-      'Second streaming session should be rejected'
-    )
-  }
+  await wait(20)
+  t.ok(!secondEntered, 'Second run should not start while first job is still active')
+
+  await r1.await()
+  await p2
+  t.ok(secondEntered, 'Second run should start after the first job completes')
 
   await model.cancel()
 })
