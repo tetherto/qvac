@@ -345,7 +345,10 @@ class TranscriptionWhispercpp extends BaseInference {
 
       _checkParamsExists(configurationParams)
       await this.cancel()
-      this._failAndClearActiveResponse('Model was reloaded')
+      this._pendingWhisperJobId = null
+      if (this._job.active) {
+        this._job.fail(new Error('Model was reloaded'))
+      }
       await this.addon.reload(configurationParams)
       await this.addon.activate()
       this.logger.debug('Addon reloaded and activated successfully')
@@ -410,7 +413,10 @@ class TranscriptionWhispercpp extends BaseInference {
   async unload () {
     return await this._withExclusiveRun(async () => {
       await this.cancel()
-      this._failAndClearActiveResponse('Model was unloaded')
+      this._pendingWhisperJobId = null
+      if (this._job.active) {
+        this._job.fail(new Error('Model was unloaded'))
+      }
       if (this.addon) {
         await this.addon.destroyInstance()
       }
@@ -428,7 +434,10 @@ class TranscriptionWhispercpp extends BaseInference {
   async destroy () {
     return await this._withExclusiveRun(async () => {
       await this.cancel()
-      this._failAndClearActiveResponse('Model was destroyed')
+      this._pendingWhisperJobId = null
+      if (this._job.active) {
+        this._job.fail(new Error('Model was destroyed'))
+      }
       if (this.addon) {
         await this.addon.destroyInstance()
       }
@@ -436,13 +445,6 @@ class TranscriptionWhispercpp extends BaseInference {
       this.state.weightsLoaded = false
       this.state.destroyed = true
     })
-  }
-
-  _failAndClearActiveResponse (reason) {
-    this._pendingWhisperJobId = null
-    if (this._job.active) {
-      this._job.fail(new Error(reason))
-    }
   }
 
   validateModelFiles () {
