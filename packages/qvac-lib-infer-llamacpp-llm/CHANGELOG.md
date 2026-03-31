@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.14.1] - 2026-03-31
+
+### Changed
+
+- Updated qvac-fabric dependency from 7248.2.1#1 to 7248.1.4#1
+- Updated qvac-lib-inference-addon-cpp dependancy from 1.1.2 to 1.1.4
+
 ## [0.14.0] - 2026-03-19
 
 ### Added
