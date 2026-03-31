@@ -147,7 +147,6 @@ jobs:
     uses: ./.github/workflows/create-github-release.yml
     with:
       repo_name: "dl-base"
-      caller_event_name: ${{ github.event_name }}
       release_name: "QVAC dl-base Lib"
       published_version: ${{ needs.publish-release-npm.outputs.published_version }}
       prev_sha: ${{ github.event.before }}
