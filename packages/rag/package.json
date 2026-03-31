@@ -31,7 +31,6 @@
     "@qvac/dl-hyperdrive": "^0.1.1",
     "@qvac/embed-llamacpp": "^0.7.6",
     "@qvac/llm-llamacpp": "^0.5.7",
-    "bare": "^1.24.0",
     "bare-crypto": "^1.13.4",
     "bare-fs": "^4.1.6",
     "bare-path": "^3.0.0",
