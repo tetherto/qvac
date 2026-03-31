@@ -49,7 +49,7 @@ npm install @qvac/llm-llamacpp
 # No additional dependencies. See example in `examples/direct-rag.js`
 
 # Option 2: Through runtime manager. See example in `examples/quickstart.js`
-npm install @tetherto/qvac-lib-rt @tetherto/qvac-lib-router-inference @tetherto/qvac-lib-manager-inference
+npm install @qvac/rt @qvac/router-inference @qvac/manager-inference
 ```
 
 **`HttpLlmAdapter`** - HTTP API integration (OpenAI, Anthropic, etc.)
@@ -75,7 +75,7 @@ npm install @qvac/embed-llamacpp
 # No additional dependencies. See example in `examples/direct-rag.js`
 
 # Option 2: Through runtime manager. See example in `examples/quickstart.js`
-npm install @tetherto/qvac-lib-rt @tetherto/qvac-lib-router-inference @tetherto/qvac-lib-manager-inference
+npm install @qvac/rt @qvac/router-inference @qvac/manager-inference
 ```
 
 **Custom Embedding Functions** - Any service you prefer
@@ -110,7 +110,7 @@ npm install @qvac/rag
 npm install corestore hyperdb hyperschema
 
 # LLM: QvacLlmAdapter
-npm install @tetherto/qvac-lib-rt @tetherto/qvac-lib-router-inference @tetherto/qvac-lib-manager-inference @qvac/llm-llamacpp
+npm install @qvac/rt @qvac/router-inference @qvac/manager-inference @qvac/llm-llamacpp
 
 # Embedding: QVAC Embedding Addon
 npm install @qvac/embed-llamacpp
