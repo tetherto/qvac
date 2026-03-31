@@ -47,7 +47,7 @@ static std::vector<nmt_vocab::id> common_sentencepiece_tokenize(
   return tokens;
 }
 
-nmt_vocab::id find_bos_token(const nmt_vocab& vocab, e_model model_type) {
+nmt_vocab::id find_bos_token(const nmt_vocab& vocab) {
   std::vector<std::string> bos_candidates = {"</s>"};
 
   for (const auto& candidate : bos_candidates) {
@@ -55,16 +55,6 @@ nmt_vocab::id find_bos_token(const nmt_vocab& vocab, e_model model_type) {
     if (it != vocab.src_token_to_id.end()) {
       return it->second;
     }
-  }
-
-  return 1;
-}
-
-nmt_vocab::id find_eos_token(const nmt_vocab& vocab, e_model model_type) {
-  auto candidate = "</s>";
-  auto it = vocab.src_token_to_id.find(candidate);
-  if (it != vocab.src_token_to_id.end()) {
-    return it->second;
   }
 
   return 1;

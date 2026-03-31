@@ -252,7 +252,6 @@ struct nmt_vocab {
 
     std::unique_ptr<sentencepiece::SentencePieceProcessor> src_processor;
     std::unique_ptr<sentencepiece::SentencePieceProcessor> tgt_processor;
-    id nmt_eos = 0;
     id bos_token_id = 1;
     bool has_sentencepiece_processors = false;
 };

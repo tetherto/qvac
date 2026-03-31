@@ -398,9 +398,7 @@ static bool nmt_model_load(struct nmt_model_loader* loader, nmt_context& ctx) {
       vocab.src_id_to_token[i] = word;
     }
 
-    vocab.bos_token_id = find_bos_token(vocab, model.type);
-
-    vocab.nmt_eos = find_eos_token(vocab, model.type);
+    vocab.bos_token_id = find_bos_token(vocab);
 
     vocab.bad_word_ids.clear();
 
