@@ -1,7 +1,7 @@
 'use strict'
 
 const fs = require('bare-fs')
-const BaseInference = require('@qvac/infer-base/WeightsProvider/BaseInference')
+const QvacLogger = require('@qvac/logging')
 const createJobHandler = require('@qvac/infer-base/src/utils/createJobHandler')
 const { QvacInferenceBaseError, ERR_CODES: BASE_ERR_CODES } = require('@qvac/infer-base/src/error')
 
@@ -14,7 +14,7 @@ const END_OF_INPUT = 'end of job'
 /**
  * GGML client implementation for the Whisper transcription model
  */
-class TranscriptionWhispercpp extends BaseInference {
+class TranscriptionWhispercpp {
   /**
    * Creates an instance of WhisperClient.
    * @constructor
@@ -32,8 +32,16 @@ class TranscriptionWhispercpp extends BaseInference {
       throw new Error('TranscriptionWhispercpp: files.model is required')
     }
 
-    // Forward extra args (notably `opts`) to BaseInference so features like stats can be enabled.
-    super({ logger, exclusiveRun, ...args })
+    const { opts = {}, ...passThrough } = { logger, exclusiveRun, ...args }
+    this.opts = opts
+    this.logger = new QvacLogger(passThrough.logger)
+    this.exclusiveRun = !!passThrough.exclusiveRun
+    this._runQueueWaiter = Promise.resolve()
+    this.state = {
+      configLoaded: false,
+      weightsLoaded: false,
+      destroyed: false
+    }
 
     const vadModel =
       typeof files.vadModel === 'string' && files.vadModel.length > 0
@@ -44,7 +52,7 @@ class TranscriptionWhispercpp extends BaseInference {
     this._config = config
 
     this.params = config.whisperConfig
-    /** Serializes inference runs; separate from {@link BaseInference#_runQueueWaiter} (reload/destroy). */
+    /** Serializes inference runs; separate from `_runQueueWaiter` (reload / destroy / unload). */
     this._inferenceQueueWaiter = Promise.resolve()
     /** Batch append returns this id before `_activeJobId` is set; needed for `cancel(jobId)` during buffering. */
     this._pendingWhisperJobId = null
@@ -63,6 +71,72 @@ class TranscriptionWhispercpp extends BaseInference {
     })
 
     this.validateModelFiles()
+  }
+
+  getState () {
+    return this.state
+  }
+
+  async load (...loadArgs) {
+    if (this.state.configLoaded || this.state.weightsLoaded) {
+      this.logger.info('Reload requested - unloading existing model first')
+      await this.unload()
+    }
+
+    await this._load(...loadArgs)
+    this.state.configLoaded = true
+  }
+
+  async _withExclusiveRun (fn) {
+    const prev = this._runQueueWaiter || Promise.resolve()
+    let release
+    this._runQueueWaiter = new Promise(resolve => { release = resolve })
+    await prev
+    try {
+      return await fn()
+    } finally {
+      release()
+    }
+  }
+
+  async pause () {
+    if (!this.addon?.pause) {
+      throw new QvacInferenceBaseError({
+        code: BASE_ERR_CODES.ADDON_METHOD_NOT_IMPLEMENTED,
+        adds: 'pause'
+      })
+    }
+    await this.addon.pause()
+  }
+
+  async unpause () {
+    if (!this.addon?.activate) {
+      throw new QvacInferenceBaseError({
+        code: BASE_ERR_CODES.ADDON_METHOD_NOT_IMPLEMENTED,
+        adds: 'activate'
+      })
+    }
+    await this.addon.activate()
+  }
+
+  async stop () {
+    if (!this.addon?.stop) {
+      throw new QvacInferenceBaseError({
+        code: BASE_ERR_CODES.ADDON_METHOD_NOT_IMPLEMENTED,
+        adds: 'stop'
+      })
+    }
+    await this.addon.stop()
+  }
+
+  async status () {
+    if (!this.addon?.status) {
+      throw new QvacInferenceBaseError({
+        code: BASE_ERR_CODES.ADDON_METHOD_NOT_IMPLEMENTED,
+        adds: 'status'
+      })
+    }
+    return await this.addon.status()
   }
 
   _resolveVadModelPath () {
