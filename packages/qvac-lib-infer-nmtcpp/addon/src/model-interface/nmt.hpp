@@ -33,14 +33,11 @@ enum { NMT_MAX_DECODERS = 8, NMT_MAX_NODES = 4096 };
 
 enum e_model : std::uint8_t {
   MODEL_UNKNOWN,
-  MODEL_MARIAN,
   MODEL_INDICTRANS,
-  MODEL_MARIAN_V2,
 };
 
 static const std::map<e_model, std::string> G_MODEL_NAME = {
     {MODEL_UNKNOWN, "unknown"},
-    {MODEL_MARIAN, "marian"},
     {MODEL_INDICTRANS, "indictrans2"},
 };
 
@@ -194,14 +191,14 @@ struct nmt_kv_cache {
 };
 
 struct nmt_config {
-  int64_t beam_size = 4;  // Match OPUS-MT default (Marian uses 4-6)
-  double length_penalty = 1.0;  // Match OPUS-MT default (neutral penalty)
-  int64_t max_length = 512;  // Match OPUS-MT default
-  float repetition_penalty = 1.0f;  // Match OPUS-MT (disabled)
-  int64_t no_repeat_ngram_size = 0;  // Match OPUS-MT (disabled)
-  double temperature = 1.0;  // Match OPUS-MT (disables sampling for beam search)
-  int64_t top_k = 0;  // Match OPUS-MT (disabled for beam search)
-  float top_p = 1.0;  // Match OPUS-MT (disabled for nucleus sampling)
+  int64_t beam_size = 4;  // Default beam size
+  double length_penalty = 1.0;  // Default (neutral penalty)
+  int64_t max_length = 512;  // Default max length
+  float repetition_penalty = 1.0f;  // Default (disabled)
+  int64_t no_repeat_ngram_size = 0;  // Default (disabled)
+  double temperature = 1.0;  // Default (disables sampling for beam search)
+  int64_t top_k = 0;  // Default (disabled for beam search)
+  float top_p = 1.0;  // Default (disabled for nucleus sampling)
 };
 
 struct nmt_model {
@@ -222,7 +219,7 @@ struct nmt_model {
     struct ggml_tensor *m_lm_head_w = nullptr;          // language model head weight (often shared with embeddings)
     struct ggml_tensor *m_final_logits_bias = nullptr;  // final logits bias (shape: 1 x vocab_size)
 
-    // IndicTrans2-specific additional tensors (not present in Marian)
+    // IndicTrans2-specific additional tensors
     struct ggml_tensor *m_enc_layer_norm_w = nullptr; // encoder layernorm_embedding weight
     struct ggml_tensor *m_enc_layer_norm_b = nullptr; // encoder layernorm_embedding bias
     struct ggml_tensor *m_dec_layer_norm_w = nullptr; // decoder layernorm_embedding weight

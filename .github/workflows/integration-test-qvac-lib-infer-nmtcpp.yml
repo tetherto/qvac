@@ -150,8 +150,6 @@ jobs:
           echo "npm version: $(npm -v)"
           echo "bare version: $(bare -v)"
           echo "bare-make version: $(bare-make --version)"
-          ls -la model/marian/vulkan/en-it/ || true
-          tree model/marian/vulkan/en-it/ || true
           ls -la prebuilds || true
           tree prebuilds || true
         continue-on-error: true
