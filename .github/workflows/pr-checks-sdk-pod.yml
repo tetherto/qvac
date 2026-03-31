@@ -255,6 +255,10 @@ jobs:
       - name: Install dependencies
         run: ${{ matrix.pkg_manager }} install
 
+      - name: Install Bare runtime
+        if: matrix.package == 'rag'
+        run: npm install -g bare
+
       # All script steps use npm run --if-present (bun lacks --if-present).
       # npm run just reads package.json scripts — works regardless of installer.
 
