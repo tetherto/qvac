@@ -16,7 +16,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [0.7.1]
 
-This release refactors the JavaScript client around a smaller public surface: one `files` map and explicit engines, no loader or download stubs, and composition-based job handling instead of inheriting infer-base. Callers should pass **absolute** artifact paths and use **`exclusiveRun: true`** when they need serialized `run()` / `reload()` / `unload()` with the native single-job model.
+This release refactors the JavaScript client around a smaller public surface: one `files` map and explicit engines, no loader or download stubs, and composition-based job handling via **`@qvac/infer-base`** (**`createJobHandler`**, **`exclusiveRunQueue`**, **`getApiDefinition`**) instead of subclassing **`BaseInference`**. Callers should pass **absolute** artifact paths and use **`exclusiveRun: true`** when they need serialized `run()` / `reload()` / `unload()` with the native single-job model.
 
 ## Breaking Changes
 
@@ -32,15 +32,15 @@ The stub **`downloadWeights()`** method is no longer on **`ONNXTTS`** or in **`i
 
 The client no longer resolves relative paths or applies Windows extended-path prefixes. Every path in **`files`** must be **absolute** or the native layer may fail in hard-to-debug ways. Update examples and tests accordingly (for example **`path.resolve(...)`** at the call site).
 
-### Single active job and overlap errors
+### Single active job and overlap behavior
 
-Job/response wiring uses **one** active **`QvacResponse`**. Starting a new **`run()`** while the previous response is still active throws **`JOB_ALREADY_RUNNING`** unless the prior job has ended or been cleared. Overlapping work should use **`exclusiveRun: true`** so **`createJobHandler`**’s queue serializes **`run`**, **`reload`**, and **`unload`**. The old **`_hasActiveResponse`** guard and synthetic **`OnlyOneJob`** id are gone; **`runJob`** no longer uses an **`accepted`** flag in **`index.js`** (the test mock throws when the addon would not accept a job).
+Job/response wiring uses **one** active **`QvacResponse`**, managed by **`createJobHandler()`** from **`@qvac/infer-base`**. If a new **`run()`** starts while a previous response is still active, the prior response is **failed** with **`Stale job replaced by new run`** (via **`start()`**), rather than the old **`JOB_ALREADY_RUNNING`** guard. Use **`exclusiveRun: true`** so **`exclusiveRunQueue()`** serializes **`run()`**, **`reload()`**, and **`unload()`** against the native single-job model and avoids racing the addon. The **`_hasActiveResponse`** guard and synthetic **`OnlyOneJob`** id are removed; **`index.js`** no longer uses an **`accepted`** flag around **`runJob`** (the native binding may still report non-acceptance; errors map to **`FAILED_TO_APPEND`** in **`tts.js`**).
 
 ## Other
 
 ### Internal structure
 
-**`BaseInference`** inheritance is replaced by **`lib/createJobHandler.js`** (response map reduced to a single active slot, **`outputCallback`** without per-job ids, **`failActive`** for unload/reload teardown). **`tts.js`** **`runJob`** only forwards to the binding and maps thrown errors to **`FAILED_TO_APPEND`**.
+**`BaseInference`** inheritance is removed. **`@qvac/infer-base`** supplies **`createJobHandler`**, **`exclusiveRunQueue`**, and standalone **`getApiDefinition()`** (used from **`index.js`** for API logging). The job handler owns the single active **`QvacResponse`** slot; **`_addonOutputCallback`** routes native events through **`_job.output`**, **`_job.end`**, **`_job.fail`**, and finetune stats via **`_job.active`**. Unload/reload call **`_job.fail(...)`** to tear down the active response. **`tts.js`** **`runJob`** only forwards to the binding and maps thrown errors to **`FAILED_TO_APPEND`**.
 
 ## [0.7.0]
 

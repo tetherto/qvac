@@ -3,16 +3,12 @@
 const { platform } = require('bare-os')
 const path = require('bare-path')
 const QvacLogger = require('@qvac/logging')
+const {
+  createJobHandler,
+  exclusiveRunQueue,
+  getApiDefinition: inferGetApiDefinition
+} = require('@qvac/infer-base')
 const { TTSInterface } = require('./tts')
-const { createJobHandler } = require('./lib/createJobHandler')
-
-const platformDefinitions = {
-  android: 'vulkan',
-  darwin: 'metal',
-  ios: 'metal',
-  win32: 'vulkan-32',
-  linux: 'vulkan'
-}
 
 // Engine types
 const ENGINE_CHATTERBOX = 'chatterbox'
@@ -70,6 +66,14 @@ function resolveEngineType (options, normalizedFiles) {
   }
 
   return ENGINE_CHATTERBOX
+}
+
+function ttsOutputDebugString (data) {
+  if (!data) return ''
+  if (typeof data === 'object') {
+    return JSON.stringify(data)
+  }
+  return data.toString()
 }
 
 function normalizeOnnxTtsFiles (files) {
@@ -132,12 +136,17 @@ class ONNXTTS {
       destroyed: false
     }
     this.addon = null
-    this._jobs = createJobHandler({
-      logger: this.logger,
-      opts: this.opts,
-      exclusiveRun: this.exclusiveRun,
-      getAddon: () => this.addon
+    this._job = createJobHandler({
+      cancel: () => {
+        const a = this.addon
+        return a ? a.cancel() : undefined
+      }
     })
+    this._runExclusive = this.exclusiveRun
+      ? exclusiveRunQueue()
+      : async function runNow (fn) {
+        return fn()
+      }
 
     const normalizedFiles = normalizeOnnxTtsFiles(filesInput)
 
@@ -248,8 +257,7 @@ class ONNXTTS {
   }
 
   getApiDefinition () {
-    const definition = platformDefinitions[platform()]
-    const api = definition ?? 'vulkan'
+    const api = inferGetApiDefinition()
     this.logger.debug(
       `Using API definition: ${api} for platform: ${platform()}`
     )
@@ -270,7 +278,7 @@ class ONNXTTS {
   }
 
   async run (input) {
-    return this._jobs.run(() => this._runInternal(input))
+    return this._runExclusive(() => this._runInternal(input))
   }
 
   async _load () {
@@ -341,14 +349,14 @@ class ONNXTTS {
   }
 
   async _runInternal (input) {
-    const response = this._jobs.createResponse()
+    const response = this._job.start()
     try {
       await this.addon.runJob({
         type: input.type || 'text',
         input: input.input
       })
     } catch (error) {
-      this._jobs.failActive(error)
+      this._job.fail(error)
       throw error
     }
 
@@ -357,11 +365,23 @@ class ONNXTTS {
 
   _addonOutputCallback (addon, event, data, error) {
     if (typeof error === 'string' && error.length > 0) {
-      return this._jobs.outputCallback(addon, 'Error', data, error)
+      this.logger.error(`TTS job failed with error: ${error}`)
+      this._job.fail(error)
+      return
     }
 
     if (data && typeof data === 'object' && data.outputArray) {
-      return this._jobs.outputCallback(addon, 'Output', data, null)
+      try {
+        this.logger.debug(`TTS job produced output: ${ttsOutputDebugString(data)}`)
+      } catch (err) {
+        if (err instanceof RangeError) {
+          this.logger.debug('TTS job produced output: [data too large]')
+        } else {
+          throw err
+        }
+      }
+      this._job.output(data)
+      return
     }
 
     if (
@@ -369,10 +389,30 @@ class ONNXTTS {
       typeof data === 'object' &&
       ('totalTime' in data || 'audioDurationMs' in data || 'totalSamples' in data)
     ) {
-      return this._jobs.outputCallback(addon, 'JobEnded', data, null)
+      this.logger.info(`TTS job completed. Stats: ${JSON.stringify(data)}`)
+      const isFinetuneTerminal =
+        data &&
+        typeof data === 'object' &&
+        data.op === 'finetune' &&
+        typeof data.status === 'string'
+      if (this.opts?.stats && !isFinetuneTerminal) {
+        this._job.end(data)
+      } else if (isFinetuneTerminal) {
+        this._job.end(null, data)
+      } else {
+        this._job.end()
+      }
+      return
     }
 
-    return this._jobs.outputCallback(addon, event, data, error)
+    if (event === 'FinetuneProgress') {
+      if (this.opts?.stats && this._job.active) {
+        this._job.active.updateStats(data.stats)
+      }
+      return
+    }
+
+    this.logger.debug(`Received TTS event: ${event}`)
   }
 
   async cancel () {
@@ -382,7 +422,7 @@ class ONNXTTS {
   }
 
   _failAndClearActiveResponse (reason) {
-    this._jobs.failActive(reason)
+    this._job.fail(reason)
   }
 
   /**
