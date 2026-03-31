@@ -59,7 +59,7 @@ Sample request body:
 ```json
 {
   "inputs": ["Hello", "World"], // array of input strings to translate
-  "lib": "@tetherto/qvac-lib-inference-addon-mlc-marian-opus-q4f16", // the library to use
+  "lib": "@qvac/translation-nmtcpp", // the library to use
   "version": "1.0.0", // the version of the library to use (optional)
   "link": "hyperdrive-link", // the hyperdrive link to the model files (optional)
   "params": {
