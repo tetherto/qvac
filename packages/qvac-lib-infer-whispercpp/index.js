@@ -2,6 +2,7 @@
 
 const fs = require('bare-fs')
 const BaseInference = require('@qvac/infer-base/WeightsProvider/BaseInference')
+const { QvacInferenceBaseError, ERR_CODES: BASE_ERR_CODES } = require('@qvac/infer-base/src/error')
 
 const { WhisperInterface } = require('./whisper')
 const { checkConfig } = require('./configChecker')
@@ -42,7 +43,8 @@ class TranscriptionWhispercpp extends BaseInference {
     this._config = config
 
     this.params = config.whisperConfig
-    this._hasActiveResponse = false
+    /** Serializes inference runs; separate from {@link BaseInference#_runQueueWaiter} (reload/destroy). */
+    this._inferenceQueueWaiter = Promise.resolve()
 
     this.logger.debug('TranscriptionWhispercpp constructor called', {
       params: this.params,
@@ -124,13 +126,49 @@ class TranscriptionWhispercpp extends BaseInference {
     return this._files.model
   }
 
-  async _runInternal (audioStream, opts = {}) {
-    if (this.exclusiveRun && this._hasActiveResponse) {
-      throw new QvacErrorAddonWhisper({
-        code: ERR_CODES.JOB_ALREADY_RUNNING
+  /**
+   * Serialize inference until the returned response settles (replaces `_hasActiveResponse`).
+   * Uses a dedicated waiter so `destroy` / `reload` (`_runQueueWaiter`) can still preempt.
+   */
+  async _enqueueExclusiveRunResponse (runFn) {
+    const prev = this._inferenceQueueWaiter || Promise.resolve()
+    let releaseSlot
+    this._inferenceQueueWaiter = new Promise(resolve => { releaseSlot = resolve })
+    await prev
+    let response
+    try {
+      response = await runFn()
+    } catch (err) {
+      releaseSlot()
+      throw err
+    }
+    response.await().finally(() => { releaseSlot() }).catch(() => {})
+    return response
+  }
+
+  async run (input) {
+    if (!this._runInternal) {
+      throw new QvacInferenceBaseError({
+        code: BASE_ERR_CODES.NOT_IMPLEMENTED,
+        adds: '_runInternal'
       })
     }
+    if (this.exclusiveRun) {
+      return await this._enqueueExclusiveRunResponse(() => this._runInternal(input))
+    }
+    return await this._runInternal(input)
+  }
 
+  async runStreaming (audioStream) {
+    if (this.exclusiveRun) {
+      return await this._enqueueExclusiveRunResponse(() =>
+        this._runInternal(audioStream, { streaming: true })
+      )
+    }
+    return await this._runInternal(audioStream, { streaming: true })
+  }
+
+  async _runInternal (audioStream, opts = {}) {
     const normalizedAudioStream = this._normalizeAudioStream(audioStream)
 
     if (opts.streaming) {
@@ -143,8 +181,7 @@ class TranscriptionWhispercpp extends BaseInference {
     })
 
     const response = this._createResponse(jobId)
-    this._hasActiveResponse = true
-    const finalized = response.await().finally(() => { this._hasActiveResponse = false })
+    const finalized = response.await()
     finalized.catch(() => {})
     response.await = () => finalized
 
@@ -177,9 +214,7 @@ class TranscriptionWhispercpp extends BaseInference {
 
     const jobId = this.addon._activeJobId
     const response = this._createResponse(jobId)
-    this._hasActiveResponse = true
     const finalized = response.await().finally(() => {
-      this._hasActiveResponse = false
       this.addon._activeJobId = null
       this.addon._setState('listening')
     })
@@ -345,15 +380,6 @@ class TranscriptionWhispercpp extends BaseInference {
     })
   }
 
-  async runStreaming (audioStream) {
-    if (this.exclusiveRun) {
-      return await this._withExclusiveRun(() =>
-        this._runInternal(audioStream, { streaming: true })
-      )
-    }
-    return await this._runInternal(audioStream, { streaming: true })
-  }
-
   async cancel () {
     if (this.addon?.cancel) {
       await this.addon.cancel()
@@ -378,7 +404,6 @@ class TranscriptionWhispercpp extends BaseInference {
       response.failed(new Error(reason))
       this._deleteJobMapping(jobId)
     }
-    this._hasActiveResponse = false
   }
 
   validateModelFiles () {
