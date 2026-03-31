@@ -184,6 +184,11 @@ class TranscriptionWhispercpp extends BaseInference {
       return this._runStreaming(normalizedAudioStream)
     }
 
+    return this._runBatchTranscription(normalizedAudioStream)
+  }
+
+  /** Batch runJob path: `_job` / response setup; audio via {@link #_handleAudioStream}. */
+  async _runBatchTranscription (normalizedAudioStream) {
     this._pendingWhisperJobId = await this.addon.append({
       type: 'audio',
       input: new Uint8Array()
@@ -237,8 +242,11 @@ class TranscriptionWhispercpp extends BaseInference {
     return response
   }
 
+  /** Append-only path to the native addon; job lifecycle lives in callers / `_outputCallback`. */
   async _handleAudioStream (audioStream) {
-    this.logger.debug('Start handling audio stream', { file: this.file })
+    this.logger.debug('Start handling audio stream', {
+      modelPath: this._getModelFilePath()
+    })
     for await (const chunk of audioStream) {
       this.logger.debug('Appending audio chunk', { chunkLength: chunk.length })
       await this.addon.append({
