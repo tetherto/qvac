@@ -28,21 +28,52 @@ export class ResourceManager {
     if (this.downloaded) return;
     this.downloaded = true;
 
-    const entries = Array.from(this.definitions.entries());
-    log?.(`📥 Downloading ${entries.length} models...`);
+    const entries = Array.from(this.definitions.entries()).filter(
+      ([, def]) => !def.skipPreDownload,
+    );
+    const skipped = this.definitions.size - entries.length;
+    if (skipped > 0) log?.(`⏭️  Skipping ${skipped} models marked skipPreDownload`);
 
-    // Sequential — SDK p2p downloads don't handle parallel well
-    for (const [dep, def] of entries) {
-      if (def.skipPreDownload) {
-        log?.(`⏭️  ${dep}: skipping pre-download`);
-        continue;
+    log?.(`📥 Downloading ${entries.length} models in parallel...`);
+
+    const active = new Set<string>();
+    let maxConcurrent = 0;
+    let parallelDetected = false;
+
+    const results = await Promise.allSettled(
+      entries.map(async ([dep, def]) => {
+        log?.(`📥 ${dep}: ${def.constant.name}...`);
+        await downloadAsset({
+          assetSrc: def.constant as never,
+          onProgress: () => {
+            active.add(dep);
+            if (active.size > maxConcurrent) {
+              maxConcurrent = active.size;
+            }
+            if (!parallelDetected && active.size >= 2) {
+              parallelDetected = true;
+              const names = Array.from(active).join(", ");
+              log?.(`🔀 Parallel downloads confirmed (active: ${names})`);
+            }
+          },
+        });
+        active.delete(dep);
+        log?.(`✅ ${dep} cached`);
+        return dep;
+      }),
+    );
+
+    const failed = results.filter((r) => r.status === "rejected");
+    if (failed.length > 0) {
+      for (const f of failed) {
+        log?.(`❌ download failed: ${(f as PromiseRejectedResult).reason}`);
       }
-      log?.(`📥 ${dep}: ${def.constant.name}...`);
-      await downloadAsset({ assetSrc: def.constant as never });
-      log?.(`✅ ${dep} cached`);
+      throw new Error(`${failed.length}/${entries.length} downloads failed`);
     }
 
-    log?.(`📦 All ${entries.length} models pre-cached`);
+    log?.(
+      `📦 All ${entries.length} models pre-cached (max concurrent: ${maxConcurrent})`,
+    );
   }
 
   setTestCount(n: number) {
