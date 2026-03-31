@@ -86,38 +86,24 @@ public:
   void stop() final { stopped_ = true; }
 
 private:
-  js_value_t* createEventName(const QueuedOutputEvent& outputEvent) {
-    switch (outputEvent.eventKind) {
-    case OutputEventKind::Output:
-      return js::String::create(env_, "Output");
-    case OutputEventKind::JobEnded:
-      return js::String::create(env_, "JobEnded");
-    case OutputEventKind::Error:
-      return js::String::create(env_, "Error");
-    }
-
-    return js::String::create(env_, "Output");
-  }
-
   /**
    * @brief Creates JavaScript parameters for output events using handlers
    * @returns Pair of JavaScript values for output data and error
    */
   std::pair<js_value_t*, js_value_t*>
-  createEventParams(const QueuedOutputEvent& outputEvent) {
-    if (!outputEvent.payload.has_value()) {
+  createEventParams(const std::any& output) {
+    if (!output.has_value()) {
       // e.g. JobStarted events don't have data
       return {js::Undefined::create(env_), js::Undefined::create(env_)};
     }
 
-    out_handl::JsOutputHandlerInterface& handler =
-        outputHandlers_.get(outputEvent.payload);
+    out_handl::JsOutputHandlerInterface& handler = outputHandlers_.get(output);
     handler.setEnv(env_);
-    js_value_t* handlerResult = handler.handleOutput(outputEvent.payload);
+    js_value_t* handlerResult = handler.handleOutput(output);
 
     // For Error events, put handler result in error parameter (second)
     // For other events, put handler result in output parameter (first)
-    if (outputEvent.eventKind == OutputEventKind::Error) {
+    if (output.type() == typeid(Output::Error)) {
       return {js::Undefined::create(env_), handlerResult};
     } else {
       return {handlerResult, js::Undefined::create(env_)};
@@ -130,18 +116,15 @@ private:
    *   outputCbParameters[1] = Event string
    *   outputCbParameters[2] = Output data
    *   outputCbParameters[3] = Error data
-   *   outputCbParameters[4] = Native job ID
    */
   void createOutputCbParams(
-      js_value_t* jsHandle, const QueuedOutputEvent& outputEvent,
+      js_value_t* jsHandle, const std::any& output,
       js_value_t** outputCbParameters) {
     outputCbParameters[0] = jsHandle;
-    outputCbParameters[1] = createEventName(outputEvent);
+    outputCbParameters[1] = js::String::create(env_, output.type().name());
 
     std::tie(outputCbParameters[2], outputCbParameters[3]) =
-        createEventParams(outputEvent);
-    outputCbParameters[4] =
-        js::Number::create(env_, static_cast<double>(outputEvent.jobId));
+        createEventParams(output);
   }
 
   /**
@@ -163,7 +146,7 @@ private:
     js_value_t* jsHandle;
     JS(js_get_reference_value(
         outputCallBackJs.env_, outputCallBackJs.jsHandle_, &jsHandle));
-    std::vector<QueuedOutputEvent> outputQueue;
+    std::vector<std::any> outputQueue;
     {
       std::scoped_lock lk{outputCallBackJs.mtx_};
       outputQueue = std::move(outputCallBackJs.outputQueue_->clear());
@@ -176,7 +159,7 @@ private:
           utils::onExit([env = outputCallBackJs.env_, innerScope]() {
             js_close_handle_scope(env, innerScope);
           });
-      static constexpr auto outputCbParametersCount = 5;
+      static constexpr auto outputCbParametersCount = 4;
       js_value_t* outputCbParameters[outputCbParametersCount];
       outputCallBackJs.createOutputCbParams(
           jsHandle, outputQueue[i], outputCbParameters);

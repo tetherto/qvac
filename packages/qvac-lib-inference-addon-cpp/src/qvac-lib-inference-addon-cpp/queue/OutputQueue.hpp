@@ -15,20 +15,6 @@
 
 namespace qvac_lib_inference_addon_cpp {
 
-using JobId = uint64_t;
-
-enum class OutputEventKind {
-  Output,
-  JobEnded,
-  Error
-};
-
-struct QueuedOutputEvent {
-  JobId jobId;
-  OutputEventKind eventKind;
-  std::any payload;
-};
-
 namespace Output {
 struct LogMsg : std::string {
   using std::string::string;
@@ -41,18 +27,14 @@ struct Error : std::string {
 
 class OutputQueue {
   std::mutex mtx_;
-  std::vector<QueuedOutputEvent> outputQueue_;
+  std::vector<std::any> outputQueue_;
 
   const model::IModel& model_;
   OutputCallBackInterface& outputCallback_;
 
-  void queueOutput(JobId jobId, OutputEventKind eventKind, std::any&& output) {
+  void queueOutput(std::any&& output) {
     std::scoped_lock lk{mtx_};
-    outputQueue_.emplace_back(QueuedOutputEvent{
-        jobId,
-        eventKind,
-        std::move(output),
-    });
+    outputQueue_.emplace_back(std::move(output));
     outputCallback_.notify();
   }
 
@@ -64,26 +46,24 @@ public:
   ~OutputQueue() = default;
 
   /// @brief Returns the current output queue and clears the internal queue.
-  std::vector<QueuedOutputEvent> clear() {
+  std::vector<std::any> clear() {
     std::scoped_lock lk{mtx_};
     auto result = std::move(outputQueue_);
-    outputQueue_ = std::vector<QueuedOutputEvent>();
+    outputQueue_ = std::vector<std::any>();
     return result;
   }
 
-  void queueJobEnded(JobId jobId) {
-    return queueOutput(jobId, OutputEventKind::JobEnded, model_.runtimeStats());
-  }
+  void queueJobEnded() { return queueOutput(model_.runtimeStats()); }
 
-  void queueResult(JobId jobId, std::any&& output) {
+  void queueResult(std::any&& output) {
     QLOG_DEBUG(
         std::string("[OutputQueue] queueResult called with type: ") +
         output.type().name());
-    queueOutput(jobId, OutputEventKind::Output, std::move(output));
+    queueOutput(std::move(output));
   }
 
-  void queueException(JobId jobId, const std::exception& exception) {
-    queueOutput(jobId, OutputEventKind::Error, Output::Error{exception});
+  void queueException(const std::exception& exception) {
+    queueOutput(Output::Error{exception});
   }
 };
 } // namespace qvac_lib_inference_addon_cpp
