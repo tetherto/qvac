@@ -12,7 +12,7 @@
 #
 # Examples:
 #   ./scripts/run_benchmark_android.sh --model-path ./model/bergamot/enit
-#   ./scripts/run_benchmark_android.sh --model-path ./qvac_models/en-it --model-type Opus
+#   ./scripts/run_benchmark_android.sh --model-path ./model/indictrans --model-type IndicTrans
 #
 
 set -e
@@ -67,7 +67,7 @@ while [[ $# -gt 0 ]]; do
       echo "  --model-path <path>   Path to model directory"
       echo ""
       echo "Options:"
-      echo "  --model-type, -t <type>   Bergamot or Opus (default: Bergamot)"
+      echo "  --model-type, -t <type>   Bergamot or IndicTrans (default: Bergamot)"
       echo "  --src-lang <lang>     Source language (default: en)"
       echo "  --tgt-lang <lang>     Target language (default: it)"
       echo "  --max <n>             Max sentences (default: 100)"
@@ -79,8 +79,8 @@ while [[ $# -gt 0 ]]; do
       echo "  # Bergamot model"
       echo "  ./scripts/run_benchmark_android.sh --model-path ./model/bergamot/enit/2025-11-26"
       echo ""
-      echo "  # GGML (Opus) model"
-      echo "  ./scripts/run_benchmark_android.sh --model-path ./qvac_models/en-it --model-type Opus"
+      echo "  # IndicTrans model"
+      echo "  ./scripts/run_benchmark_android.sh --model-path ./model/indictrans --model-type IndicTrans"
       echo ""
       echo "  # Full FLORES evaluation"
       echo "  ./scripts/run_benchmark_android.sh --model-path ./model/bergamot/enit/2025-11-26 --full"
@@ -91,8 +91,8 @@ while [[ $# -gt 0 ]]; do
       echo "├─────────────────────┼────────────────────────────────────────────────────────────────────────────┤"
       echo "│ Bergamot quick      │ ./scripts/run_benchmark_android.sh --model-path ./model/bergamot/enit/... │"
       echo "│ Bergamot full       │ ./scripts/run_benchmark_android.sh --model-path ./model/bergamot/... --full│"
-      echo "│ GGML quick          │ ./scripts/run_benchmark_android.sh --model-path ./qvac_models/en-it -t Opus│"
-      echo "│ GGML full           │ ./scripts/run_benchmark_android.sh --model-path ./qvac_models/... -t Opus --full│"
+      echo "│ IndicTrans quick     │ ./scripts/run_benchmark_android.sh --model-path ./model/indictrans -t IndicTrans│"
+      echo "│ IndicTrans full      │ ./scripts/run_benchmark_android.sh --model-path ./model/indictrans -t IndicTrans --full│"
       echo "└─────────────────────┴────────────────────────────────────────────────────────────────────────────┘"
       echo ""
       echo "Results saved to: benchmark_results_js/"
@@ -119,7 +119,7 @@ if [ -z "$MODEL_PATH" ]; then
   echo ""
   echo "Examples:"
   echo "  ./scripts/run_benchmark_android.sh --model-path ./model/bergamot/enit/2025-11-26"
-  echo "  ./scripts/run_benchmark_android.sh --model-path ./qvac_models/en-it --model-type Opus"
+  echo "  ./scripts/run_benchmark_android.sh --model-path ./model/indictrans --model-type IndicTrans"
   echo ""
   echo "Use --help for more options"
   exit 1
