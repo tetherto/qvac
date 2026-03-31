@@ -1,34 +1,31 @@
 ---
 title: "ragDeleteWorkspace( )"
 titleStyle: code
-description: "Deletes a RAG workspace and all its data.
-The workspace must not be currently loaded/in-use."
+description: Deletes a RAG workspace and all its data.
 ---
 
-```typescript
-function ragDeleteWorkspace(params: { workspace: string }, options?: { forceNewConnection?: boolean; profiling?: { enabled?: boolean; includeServerBreakdown?: boolean; mode?: "summary" | "verbose" }; timeout?: number }): Promise
+```ts
+function ragDeleteWorkspace(params, options?): Promise<void>;
 ```
+
+The workspace must not be currently loaded/in-use.
 
 ## Parameters
 
 | Name | Type | Required? | Description |
 | --- | --- | :---: | --- |
-| `params` | `\{ workspace: string \}` | ✓ | The parameters for deletion |
-| `options` | `\{ forceNewConnection?: boolean; profiling?: \{ enabled?: boolean; includeServerBreakdown?: boolean; mode?: "summary" | "verbose" \}; timeout?: number \}` | ✗ | No description |
+| params.workspace | `string` | ✓ | Name of the workspace to delete |
+| options | [`RPCOptions`](../index#rpcoptions) | ✗ | Optional RPC transport options |
 
 ## Returns
 
-```typescript
-Promise
-```
-
-
+`Promise<void>` — Resolves when the workspace is deleted.
 
 ## Throws
 
 | Error | When |
 | --- | --- |
-| `When the workspace doesn't exist or is currently loaded` |  |
+| `RAG_DELETE_FAILED` | The workspace doesn't exist or is currently loaded |
 
 ## Example
 

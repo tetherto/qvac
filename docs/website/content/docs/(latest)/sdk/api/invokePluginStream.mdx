@@ -1,22 +1,43 @@
 ---
 title: "invokePluginStream( )"
 titleStyle: code
-description: "Invoke a streaming plugin handler."
+description: Invoke a streaming plugin handler.
 ---
 
-```typescript
-function invokePluginStream(options: InvokePluginOptions, rpcOptions?: { forceNewConnection?: boolean; profiling?: { enabled?: boolean; includeServerBreakdown?: boolean; mode?: "summary" | "verbose" }; timeout?: number }): AsyncGenerator
+```ts
+function invokePluginStream<TResponse = unknown, TParams = unknown>(
+  options: InvokePluginOptions<TParams>,
+  rpcOptions?: RPCOptions
+): AsyncGenerator<TResponse>;
 ```
 
 ## Parameters
 
 | Name | Type | Required? | Description |
 | --- | --- | :---: | --- |
-| `options` | `InvokePluginOptions` | ✓ | Plugin invocation options containing `modelId` (the loaded plugin model), `handler` (the handler name to call), and `params` (the request payload) |
-| `rpcOptions` | `\{ forceNewConnection?: boolean; profiling?: \{ enabled?: boolean; includeServerBreakdown?: boolean; mode?: "summary" | "verbose" \}; timeout?: number \}` | ✗ | Optional RPC transport options including connection reuse, timeout, and per-call profiling configuration |
+| options | [`InvokePluginOptions`](../invokePlugin#invokepluginoptions) | ✓ | The invocation options (same as [`invokePlugin()`](../invokePlugin)) |
+| rpcOptions | [`RPCOptions`](../index#rpcoptions) | ✗ | Optional RPC transport options |
 
 ## Returns
 
+`AsyncGenerator<TResponse>` — Yields streamed chunks from the handler until `done` is received.
+
+## Throws
+
+| Error | When |
+| --- | --- |
+| `INVALID_RESPONSE_TYPE` | A chunk's type does not match expected `"pluginInvokeStream"` |
+
+## Example
+
 ```typescript
-AsyncGenerator
+const stream = invokePluginStream<{ token: string }>({
+  modelId: "my-custom-model",
+  handler: "generateStream",
+  params: { prompt: "Tell me a story" },
+});
+
+for await (const chunk of stream) {
+  process.stdout.write(chunk.token);
+}
 ```

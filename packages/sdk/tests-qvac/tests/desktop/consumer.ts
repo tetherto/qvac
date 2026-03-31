@@ -9,7 +9,14 @@ import {
   QWEN3_1_7B_INST_Q4,
   OCR_LATIN_RECOGNIZER_1,
   MARIAN_OPUS_DE_EN_Q4_0,
+  MARIAN_OPUS_EN_ES_Q4_0,
+  MARIAN_OPUS_ES_EN_Q4_0,
   BERGAMOT_EN_FR,
+  BERGAMOT_EN_ES,
+  BERGAMOT_ES_EN,
+  BERGAMOT_EN_IT,
+  MARIAN_EN_HI_INDIC_200M_Q4_0,
+  MARIAN_HI_EN_INDIC_200M_Q4_0,
   TTS_TOKENIZER_EN_CHATTERBOX,
   TTS_SPEECH_ENCODER_EN_CHATTERBOX_FP32,
   TTS_EMBED_TOKENS_EN_CHATTERBOX_FP32,
@@ -30,15 +37,15 @@ import {
   PARAKEET_SORTFORMER_FP32,
   SMOLVLM2_500M_MULTIMODAL_Q8_0,
   MMPROJ_SMOLVLM2_500M_MULTIMODAL_Q8_0,
+  SALAMANDRATA_2B_INST_Q4,
+  AFRICAN_4B_TRANSLATION_Q4_K_M,
 } from "@qvac/sdk";
 import * as path from "node:path";
 import { ResourceManager } from "../shared/resource-manager.js";
 import { ModelLoadingExecutor } from "../shared/executors/model-loading-executor.js";
 import { CompletionExecutor } from "../shared/executors/completion-executor.js";
-import { TranslationExecutor } from "../shared/executors/translation-executor.js";
 import { ToolsExecutor } from "../shared/executors/tools-executor.js";
-import { NmtExecutor } from "../shared/executors/nmt-executor.js";
-import { BergamotExecutor } from "../shared/executors/bergamot-executor.js";
+import { TranslationExecutor } from "../shared/executors/translation-executor.js";
 import { ShardedModelExecutor } from "../shared/executors/sharded-model-executor.js";
 import { HttpEmbeddingExecutor } from "../shared/executors/http-embedding-executor.js";
 import { KvCacheExecutor } from "../shared/executors/kv-cache-executor.js";
@@ -111,7 +118,7 @@ resources.define("sharded-embeddings", {
   skipPreDownload: true,
 });
 
-resources.define("nmt", {
+resources.define("marian-de-en", {
   constant: MARIAN_OPUS_DE_EN_Q4_0,
   type: "nmt",
   config: {
@@ -126,7 +133,57 @@ resources.define("nmt", {
   },
 });
 
-resources.define("bergamot", {
+resources.define("marian-en-es", {
+  constant: MARIAN_OPUS_EN_ES_Q4_0,
+  type: "nmt",
+  config: {
+    engine: "Opus",
+    from: "en",
+    to: "es",
+    beamsize: 4,
+    lengthpenalty: 1.0,
+    maxlength: 512,
+    temperature: 0.3,
+    norepeatngramsize: 3,
+  },
+});
+
+resources.define("marian-es-en", {
+  constant: MARIAN_OPUS_ES_EN_Q4_0,
+  type: "nmt",
+  config: {
+    engine: "Opus",
+    from: "es",
+    to: "en",
+    beamsize: 4,
+    lengthpenalty: 1.0,
+    maxlength: 512,
+    temperature: 0.3,
+    norepeatngramsize: 3,
+  },
+});
+
+resources.define("indictrans-en-hi", {
+  constant: MARIAN_EN_HI_INDIC_200M_Q4_0,
+  type: "nmt",
+  config: {
+    engine: "IndicTrans",
+    from: "eng_Latn",
+    to: "hin_Deva",
+  },
+});
+
+resources.define("indictrans-hi-en", {
+  constant: MARIAN_HI_EN_INDIC_200M_Q4_0,
+  type: "nmt",
+  config: {
+    engine: "IndicTrans",
+    from: "hin_Deva",
+    to: "eng_Latn",
+  },
+});
+
+resources.define("bergamot-en-fr", {
   constant: BERGAMOT_EN_FR,
   type: "nmt",
   config: {
@@ -135,6 +192,53 @@ resources.define("bergamot", {
     to: "fr",
   },
 });
+
+resources.define("bergamot-en-es", {
+  constant: BERGAMOT_EN_ES,
+  type: "nmt",
+  config: {
+    engine: "Bergamot",
+    from: "en",
+    to: "es",
+  },
+});
+
+resources.define("bergamot-es-it-pivot", {
+  constant: BERGAMOT_ES_EN,
+  type: "nmt",
+  config: {
+    engine: "Bergamot",
+    from: "es",
+    to: "it",
+    pivotModel: {
+      modelSrc: BERGAMOT_EN_IT,
+      beamsize: 4,
+      temperature: 0.3,
+    },
+  },
+});
+
+resources.define("salamandra", {
+  constant: SALAMANDRATA_2B_INST_Q4,
+  type: "llm",
+});
+
+resources.define("afriquegemma", {
+  constant: AFRICAN_4B_TRANSLATION_Q4_K_M,
+  type: "llm",
+  config: {
+    tools: true,
+    ctx_size: 2048,
+    top_k: 1,
+    top_p: 1,
+    temp: 0,
+    repeat_penalty: 1,
+    seed: 42,
+    predict: 256,
+    stop_sequences: ["\n"],
+  },
+});
+
 
 const referenceAudioPath = path.resolve(process.cwd(), "assets/audio/transcription-short.wav");
 
@@ -223,13 +327,11 @@ export const executor = createExecutor({
     new TranscriptionExecutor(resources),
     new EmbeddingExecutor(resources),
     new RagExecutor(resources),
-    new TranslationExecutor(resources),
     new ModelInfoExecutor(resources),
     new ErrorExecutor(resources),
     new ToolsExecutor(resources),
 
-    new NmtExecutor(resources),
-    new BergamotExecutor(resources),
+    new TranslationExecutor(resources),
     new ShardedModelExecutor(resources),
     new OcrExecutor(resources),
     new TtsExecutor(resources),
