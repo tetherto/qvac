@@ -1,6 +1,6 @@
 // @ts-expect-error brittle has no type declarations
 import test from "brittle";
-import { execSync } from "child_process";
+import { execFileSync } from "child_process";
 import fs from "fs";
 import path from "path";
 import os from "os";
@@ -42,8 +42,9 @@ function loadMock(filename: string) {
 }
 
 function runGenericScript(args: string): { exitCode: number; output: string } {
+  const argv = args ? args.split(/\s+/) : [];
   try {
-    const output = execSync(`node ${GENERIC_SCRIPT_PATH} ${args}`, {
+    const output = execFileSync("node", [GENERIC_SCRIPT_PATH, ...argv], {
       encoding: "utf-8",
       stdio: ["pipe", "pipe", "pipe"],
     });
@@ -383,7 +384,7 @@ test("generateChangelogEntry: generates correct format with PR link", (t) => {
   const entry = generateChangelogEntry(basePR);
   t.ok(entry.includes("Add new feature."));
   t.ok(entry.includes("[#123]"));
-  t.ok(entry.includes("https://github.com/test/pull/123"));
+  t.ok(entry.includes("[#123](https://github.com/test/pull/123)"));
 });
 
 test("generateChangelogEntry: adds breaking changes link when applicable", (t) => {

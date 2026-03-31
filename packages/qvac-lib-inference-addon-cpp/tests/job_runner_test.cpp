@@ -5,6 +5,7 @@
 #include <memory>
 #include <stdexcept>
 #include <thread>
+#include <vector>
 
 #include <gtest/gtest.h>
 
@@ -16,7 +17,6 @@
 
 namespace qvac_lib_inference_addon_cpp {
 
-// Mock output callback
 class MockOutputCallback : public OutputCallBackInterface {
   std::atomic_bool stopped_{false};
 
@@ -27,8 +27,6 @@ public:
   void stop() override { stopped_ = true; }
 };
 
-// Mock model for JobRunner tests with controllable processing time
-// Renamed to avoid ODR violation with MockModel in other test files
 class JobRunnerTestModel : public model::IModel, public model::IModelCancel {
   mutable std::atomic_bool cancel_requested_{false};
   mutable std::atomic_int access_count_{0};
@@ -48,30 +46,23 @@ public:
   std::any process(const std::any& input) override {
     is_processing_ = true;
 
-    // Option 1: Access input multiple times (for testing race conditions)
     if (access_input_multiple_times_) {
-      // Access the input data multiple times during processing
-      // Without proper synchronization, cancel() could reset job_
-      // while we're accessing input, causing a crash
       for (int i = 0; i < 20 && !cancel_requested_.load(); ++i) {
         try {
-          // Try to access the input - this could crash if job_ is reset
-          auto str = std::any_cast<std::string>(input);
+          (void)std::any_cast<std::string>(input);
           access_count_++;
           std::this_thread::sleep_for(std::chrono::milliseconds{10});
         } catch (...) {
-          // If we catch an exception, it means the input became invalid
           is_processing_ = false;
           throw std::runtime_error("Input was invalidated during processing");
         }
       }
     } else {
-      // Option 2: Standard processing with controllable delay
-      auto start = std::chrono::steady_clock::now();
-
-      // Simulate processing with ability to be cancelled
+      std::chrono::steady_clock::time_point start =
+          std::chrono::steady_clock::now();
       while (!cancel_requested_.load()) {
-        auto elapsed = std::chrono::steady_clock::now() - start;
+        std::chrono::steady_clock::duration elapsed =
+            std::chrono::steady_clock::now() - start;
         if (elapsed >= process_time_) {
           break;
         }
@@ -92,9 +83,9 @@ public:
 
   bool isProcessing() const { return is_processing_.load(); }
 
-  // Wait for processing to complete (or timeout)
   bool waitForProcessingToComplete(std::chrono::milliseconds timeout) const {
-    auto deadline = std::chrono::steady_clock::now() + timeout;
+    std::chrono::steady_clock::time_point deadline =
+        std::chrono::steady_clock::now() + timeout;
     while (is_processing_.load() &&
            std::chrono::steady_clock::now() < deadline) {
       std::this_thread::sleep_for(std::chrono::milliseconds{1});
@@ -103,7 +94,6 @@ public:
   }
 };
 
-// Test fixture
 class JobRunnerTest : public ::testing::Test {
 protected:
   std::unique_ptr<MockOutputCallback> callback_;
@@ -207,7 +197,7 @@ TEST_F(JobRunnerTest, CancelBeforeJobThenRunNormally) {
   // Verify we got a result (not an error)
   bool found_result = false;
   for (const auto& output : outputs) {
-    if (output.payload.type() == typeid(std::string)) {
+    if (output.type() == typeid(std::string)) {
       found_result = true;
     }
   }
@@ -418,10 +408,10 @@ TEST_F(
   std::this_thread::sleep_for(std::chrono::milliseconds{100});
 
   // Check output queue for bad_optional_access errors
-  auto outputs = outputQueue_->clear();
-  for (const auto& output : outputs) {
-    if (output.payload.type() == typeid(Output::Error)) {
-      auto error = std::any_cast<Output::Error>(output.payload);
+  std::vector<std::any> outputs = outputQueue_->clear();
+  for (const std::any& output : outputs) {
+    if (output.type() == typeid(Output::Error)) {
+      Output::Error error = std::any_cast<Output::Error>(output);
       if (error.find("bad_optional_access") != std::string::npos ||
           error.find("optional") != std::string::npos) {
         FAIL() << "BUG DETECTED: bad_optional_access in output after "
@@ -462,78 +452,44 @@ TEST_F(JobRunnerTest, MultipleCancelsInSequence) {
   SUCCEED();
 }
 
-TEST_F(JobRunnerTest, LateCancelEventsStayBoundToCancelledJob) {
-  model_ = std::make_unique<JobRunnerTestModel>(std::chrono::milliseconds{500});
+TEST_F(JobRunnerTest, CancelWhileActivelyProcessing_ModelReceivesStop) {
+  model_ =
+      std::make_unique<JobRunnerTestModel>(std::chrono::milliseconds{10000});
   outputQueue_ = std::make_shared<OutputQueue>(*callback_, *model_);
   jobRunner_ =
       std::make_unique<JobRunner>(outputQueue_, model_.get(), model_.get());
   jobRunner_->start();
 
-  EXPECT_TRUE(jobRunner_->runJob(std::string("job-1")));
-  jobRunner_->cancel(1);
+  EXPECT_TRUE(jobRunner_->runJob(std::string("long job")));
 
-  EXPECT_TRUE(jobRunner_->runJob(std::string("job-2")));
-  std::this_thread::sleep_for(std::chrono::milliseconds{700});
-
-  const auto outputs = outputQueue_->clear();
-  ASSERT_GE(outputs.size(), 3U);
-
-  bool sawJob1Cancel = false;
-  bool sawJob2Result = false;
-  bool sawJob2Ended = false;
-  for (const auto& output : outputs) {
-    if (output.jobId == 1 && output.payload.type() == typeid(Output::Error)) {
-      sawJob1Cancel =
-          std::any_cast<Output::Error>(output.payload) == "Job cancelled";
-    }
-    if (output.jobId == 2 && output.payload.type() == typeid(std::string)) {
-      sawJob2Result = std::any_cast<std::string>(output.payload) == "result";
-    }
-    if (output.jobId == 2 && output.payload.type() == typeid(RuntimeStats)) {
-      sawJob2Ended = true;
-    }
+  std::chrono::steady_clock::time_point wait_deadline =
+      std::chrono::steady_clock::now() + std::chrono::seconds{2};
+  while (!model_->isProcessing() &&
+         std::chrono::steady_clock::now() < wait_deadline) {
+    std::this_thread::sleep_for(std::chrono::milliseconds{1});
   }
+  ASSERT_TRUE(model_->isProcessing());
 
-  EXPECT_TRUE(sawJob1Cancel);
-  EXPECT_TRUE(sawJob2Result);
-  EXPECT_TRUE(sawJob2Ended);
-}
+  std::chrono::steady_clock::time_point before_cancel =
+      std::chrono::steady_clock::now();
 
-TEST_F(JobRunnerTest, StaleCancelDoesNotClearNewerAcceptedJob) {
-  model_ = std::make_unique<JobRunnerTestModel>(std::chrono::milliseconds{150});
-  outputQueue_ = std::make_shared<OutputQueue>(*callback_, *model_);
-  jobRunner_ =
-      std::make_unique<JobRunner>(outputQueue_, model_.get(), model_.get());
-  jobRunner_->start();
+  jobRunner_->cancel();
 
-  EXPECT_TRUE(jobRunner_->runJob(std::string("job-1")));
-  std::this_thread::sleep_for(std::chrono::milliseconds{250});
+  std::chrono::milliseconds cancel_elapsed =
+      std::chrono::duration_cast<std::chrono::milliseconds>(
+          std::chrono::steady_clock::now() - before_cancel);
 
-  EXPECT_TRUE(jobRunner_->runJob(std::string("job-2")));
-  jobRunner_->cancel(1);
-  std::this_thread::sleep_for(std::chrono::milliseconds{250});
+  EXPECT_FALSE(model_->isProcessing())
+      << "Model should have stopped after cancel()";
 
-  const auto outputs = outputQueue_->clear();
+  EXPECT_LT(cancel_elapsed.count(), 2000)
+      << "cancel() took " << cancel_elapsed.count()
+      << "ms — model did not receive stop signal (would have taken 10000ms "
+         "without cancellation)";
 
-  bool sawJob2Result = false;
-  bool sawJob2Ended = false;
-  bool sawWrongJob2Cancel = false;
-  for (const auto& output : outputs) {
-    if (output.jobId == 2 && output.payload.type() == typeid(std::string)) {
-      sawJob2Result = true;
-    }
-    if (output.jobId == 2 && output.payload.type() == typeid(RuntimeStats)) {
-      sawJob2Ended = true;
-    }
-    if (output.jobId == 2 && output.payload.type() == typeid(Output::Error)) {
-      sawWrongJob2Cancel =
-          std::any_cast<Output::Error>(output.payload) == "Job cancelled";
-    }
-  }
-
-  EXPECT_TRUE(sawJob2Result);
-  EXPECT_TRUE(sawJob2Ended);
-  EXPECT_FALSE(sawWrongJob2Cancel);
+  EXPECT_TRUE(jobRunner_->runJob(std::string("follow-up")))
+      << "Job slot should be free after cancel";
+  jobRunner_->cancel();
 }
 
 } // namespace qvac_lib_inference_addon_cpp

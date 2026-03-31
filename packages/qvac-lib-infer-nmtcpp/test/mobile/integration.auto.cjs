@@ -7,10 +7,6 @@ async function runBergamot (options = {}) { // eslint-disable-line no-unused-var
   return runIntegrationModule('../integration/bergamot.test.js', options)
 }
 
-async function runGgmlOpus (options = {}) { // eslint-disable-line no-unused-vars
-  return runIntegrationModule('../integration/ggml-opus.test.js', options)
-}
-
 async function runIndictrans (options = {}) { // eslint-disable-line no-unused-vars
   return runIntegrationModule('../integration/indictrans.test.js', options)
 }

@@ -81,7 +81,7 @@ export async function startServer (options: StartServerOptions): Promise<http.Se
     } catch (err) {
       const message = err instanceof Error ? err.message : String(err)
       logger.error(`Unhandled error: ${message}`)
-      sendError(res, 500, 'internal_error', message)
+      sendError(res, 500, 'internal_error', 'An internal error occurred.')
       logResponse(logger, method, path, 500, start)
     }
   })
