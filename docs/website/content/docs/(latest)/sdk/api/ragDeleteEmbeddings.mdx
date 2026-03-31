@@ -1,35 +1,31 @@
 ---
 title: "ragDeleteEmbeddings( )"
 titleStyle: code
-description: "Deletes document embeddings from the RAG vector database.
-
-**Workspace lifecycle:** This operation requires an existing workspace."
+description: Deletes document embeddings from the RAG vector database.
 ---
 
-```typescript
-function ragDeleteEmbeddings(params: { ids: string[]; modelId?: string; workspace?: string }, options?: { forceNewConnection?: boolean; profiling?: { enabled?: boolean; includeServerBreakdown?: boolean; mode?: "summary" | "verbose" }; timeout?: number }): Promise
+```ts
+function ragDeleteEmbeddings(params, options?): Promise<void>;
 ```
 
 ## Parameters
 
-| Name | Type | Required? | Description |
-| --- | --- | :---: | --- |
-| `params` | `\{ ids: string[]; modelId?: string; workspace?: string \}` | ✓ | The parameters for deleting embeddings |
-| `options` | `\{ forceNewConnection?: boolean; profiling?: \{ enabled?: boolean; includeServerBreakdown?: boolean; mode?: "summary" | "verbose" \}; timeout?: number \}` | ✗ | Optional RPC transport options including connection reuse, timeout, and per-call profiling configuration |
+| Name | Type | Required? | Default | Description |
+| --- | --- | :---: | --- | --- |
+| params.ids | `string[]` | ✓ | — | Array of document IDs to delete |
+| params.modelId | `string` | ✗ | — | Embedding model ID (required if no cached RAG instance) |
+| params.workspace | `string` | ✗ | `"default"` | Workspace to delete from |
+| options | [`RPCOptions`](../index#rpcoptions) | ✗ | — | Optional RPC transport options |
 
 ## Returns
 
-```typescript
-Promise
-```
-
-
+`Promise<void>` — Resolves when the embeddings are deleted.
 
 ## Throws
 
 | Error | When |
 | --- | --- |
-| `When the operation fails or workspace doesn't exist` |  |
+| `RAG_DELETE_FAILED` | The delete operation fails or workspace doesn't exist |
 
 ## Example
 

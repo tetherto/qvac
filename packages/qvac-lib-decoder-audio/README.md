@@ -45,27 +45,12 @@ Ensure that the [`Bare`](#glossary) Runtime is installed globally on your system
 npm install -g bare@latest
 ```
 
-Before proceeding with the installation, please generate a **classic GitHub Personal Access Token (PAT)** with the `read:packages` scope. Once generated, add the token to your environment variables using the name `NPM_TOKEN`.
-
-```bash
-export NPM_TOKEN=your_personal_access_token
-```
-
-Next, create a `.npmrc` file in the root of your project with the following content:
-
-```ini
-@tetherto:registry=https://npm.pkg.github.com
-//npm.pkg.github.com/:_authToken=${NPM_TOKEN}
-```
-
-This configuration ensures secure access to GitHub Packages when installing scoped packages.
-
 ### Installing the Package
 
 Install the latest version of the decoder addon with the following command:
 
 ```bash
-npm install @tetherto/qvac-lib-decoder-audio@latest
+npm install @qvac/decoder-audio@latest
 ```
 
 ## Usage
@@ -77,7 +62,7 @@ This library provides a simple workflow for decoding audio streams.
 To get started, import the decoder and create an instance:
 
 ```javascript
-const { FFmpegDecoder } = require('@tetherto/qvac-lib-decoder-audio')
+const { FFmpegDecoder } = require('@qvac/decoder-audio')
 
 const decoder = new FFmpegDecoder({
   config: {
@@ -165,7 +150,7 @@ npm init -y
 ### 2. Install the required dependencies:
    
 ```bash
-npm install bare-fs @tetherto/qvac-lib-decoder-audio
+npm install bare-fs @qvac/decoder-audio
 ```
 
 ### 3. Create a file named `example.js` and paste the following code:
@@ -174,7 +159,7 @@ npm install bare-fs @tetherto/qvac-lib-decoder-audio
 'use strict'
 
 const fs = require('bare-fs')
-const { FFmpegDecoder } = require('@tetherto/qvac-lib-decoder-audio')
+const { FFmpegDecoder } = require('@qvac/decoder-audio')
 
 const audioFilePath = './path/to/audio/file.ogg'
 const outputFilePath = './path/to/output/file.raw'

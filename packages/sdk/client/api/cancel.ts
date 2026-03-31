@@ -10,6 +10,7 @@ import { InvalidResponseError, CancelFailedError } from "@/utils/errors-client";
  * @param params.modelId - The model ID (required for inference cancellation)
  * @param params.downloadKey - The download key (required for download cancellation)
  * @param params.clearCache - If true, deletes the partial download file (default: false)
+ * @param params.delegate - Delegation target for remote download cancellation (optional)
  * @param params.workspace - The RAG workspace to cancel (optional, defaults to "default")
  * @throws {QvacErrorBase} When the response type is invalid or when the cancellation fails
  *
@@ -24,6 +25,14 @@ import { InvalidResponseError, CancelFailedError } from "@/utils/errors-client";
  * @example
  * // Cancel download completely (deletes partial file)
  * await cancel({ operation: "downloadAsset", downloadKey: "download-key", clearCache: true });
+ *
+ * @example
+ * // Cancel delegated remote download
+ * await cancel({
+ *   operation: "downloadAsset",
+ *   downloadKey: "download-key",
+ *   delegate: { topic: "topicHex", providerPublicKey: "peerHex" },
+ * });
  *
  * @example
  * // Cancel RAG operation on default workspace

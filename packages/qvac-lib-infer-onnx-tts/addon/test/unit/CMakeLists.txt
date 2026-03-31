@@ -1,5 +1,3 @@
-find_package(GTest REQUIRED)
-
 add_executable(qvac-lib-inference-tts-unit-test)
 
 # collect all sources from src and mocks directories
@@ -14,9 +12,19 @@ target_sources(
     ${CMAKE_SOURCE_DIR}/addon/src/model-interface/SupertonicEngine.cpp
     ${CMAKE_SOURCE_DIR}/addon/src/model-interface/OnnxInferSession.cpp
     ${CMAKE_SOURCE_DIR}/addon/src/model-interface/Fp16Utils.cpp
+    ${CMAKE_SOURCE_DIR}/addon/src/model-interface/TensorFloatHandler.cpp
     ${TEST_SOURCES}
     ${TEST_MOCKS}
 )
+
+find_package(tokenizers_cpp CONFIG REQUIRED)
+find_package(nlohmann_json CONFIG REQUIRED)
+
+if(TARGET onnxruntime::onnxruntime_static)
+  set(QVAC_TTS_UNITTEST_ONNXRUNTIME onnxruntime::onnxruntime_static)
+else()
+  set(QVAC_TTS_UNITTEST_ONNXRUNTIME onnxruntime::onnxruntime)
+endif()
 
 target_include_directories(
   qvac-lib-inference-tts-unit-test
@@ -25,17 +33,22 @@ target_include_directories(
     ${CMAKE_SOURCE_DIR}/addon/test/unit/
 )
 
-find_package(tokenizers_cpp CONFIG REQUIRED)
-
 target_link_libraries(
   qvac-lib-inference-tts-unit-test
   PRIVATE
-    onnxruntime::onnxruntime_static
+    ${QVAC_TTS_UNITTEST_ONNXRUNTIME}
     tokenizers::tokenizers_cpp
+    nlohmann_json::nlohmann_json
+    ${QVAC_UTF8PROC_TARGET}
     GTest::gtest
     GTest::gtest_main
     GTest::gmock
     GTest::gmock_main
+)
+
+gtest_discover_tests(
+  qvac-lib-inference-tts-unit-test
+  DISCOVERY_MODE PRE_TEST
 )
 
 if(WIN32)
@@ -57,3 +70,4 @@ if(ENABLE_COVERAGE)
     message(WARNING "ENABLE_COVERAGE is not supported.")
   endif()
 endif()
+

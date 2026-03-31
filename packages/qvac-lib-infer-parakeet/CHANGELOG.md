@@ -5,6 +5,15 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.2.5]
+
+### Changed
+- Switched desktop Parakeet prebuilds to static ONNX Runtime linking so packaged platform artifacts stay as a single `.bare` addon plus exports file
+- Aligned the secondary native build path and Linux linkage behavior with the desktop packaging update to keep runtime loading working after removing bundled shared libraries
+
+### Fixed
+- Apple prebuild compatibility by replacing the `std::ranges::find` sample-rate check with a `std::find` implementation that works on the current Xcode toolchains
+
 ## [0.2.4]
 
 Security hardening release from comprehensive security audit.

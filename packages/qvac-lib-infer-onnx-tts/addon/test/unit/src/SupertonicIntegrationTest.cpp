@@ -21,14 +21,11 @@ namespace fs = std::filesystem;
 
 namespace qvac::ttslib::addon_model::testing {
 
-// Expected layout under models/supertonic (or SUPERTONIC_MODEL_DIR):
-//   tokenizer.json
-//   onnx/text_encoder.onnx
-//   onnx/latent_denoiser.onnx
-//   onnx/voice_decoder.onnx
-//   voices/<voiceName>.bin  (e.g. M1.bin)
+// Expected layout (Supertone/supertonic English or multilingual HF supertonic-2 — same directory layout):
+//   onnx/{duration_predictor,text_encoder,vector_estimator,vocoder}.onnx
+//   onnx/{tts.json,unicode_indexer.json}
+//   voice_styles/{Voice}.json
 
-// Returns path to the running executable, or empty string if unavailable.
 static std::string getExecutablePath() {
 #if defined(__APPLE__)
   char buf[4096];
@@ -57,33 +54,27 @@ static std::string getExecutablePath() {
 #endif
 }
 
-// Package root when test binary lives at build/addon/test/unit/<binary>.
 static fs::path getPackageRootFromExe() {
   std::string exe = getExecutablePath();
   if (exe.empty()) {
     return {};
   }
   fs::path exeDir = fs::path(exe).parent_path();
-  // build/addon/test/unit -> go up 4 to package root
   fs::path root = exeDir / ".." / ".." / ".." / "..";
   std::error_code ec;
   return fs::canonical(root, ec);
 }
 
-// Returns the first candidate path that exists and passes supertonicModelDirExists.
-// Tries cwd-relative paths first, then paths relative to executable (package root).
 static std::string getSupertonicModelDir(const std::function<bool(const std::string &)> &exists) {
   std::vector<std::string> candidates;
   const char *env = std::getenv("SUPERTONIC_MODEL_DIR");
 
-  // cwd-relative
   if (env != nullptr && env[0] != '\0') {
     candidates.push_back(env);
   }
   candidates.push_back("models/supertonic");
   candidates.push_back("../../../../models/supertonic");
 
-  // executable-relative (package root) so tests find models/ when cwd differs
   fs::path packageRoot = getPackageRootFromExe();
   if (!packageRoot.empty()) {
     candidates.push_back((packageRoot / "models" / "supertonic").string());
@@ -108,41 +99,34 @@ static bool supertonicModelDirExists(const std::string &baseDir) {
   if (!fs::exists(base) || !fs::is_directory(base)) {
     return false;
   }
-  if (!fs::exists(base / "tokenizer.json")) {
+  const fs::path onnx = base / "onnx";
+  if (!fs::exists(onnx / "text_encoder.onnx") ||
+      !fs::exists(onnx / "duration_predictor.onnx") ||
+      !fs::exists(onnx / "vector_estimator.onnx") ||
+      !fs::exists(onnx / "vocoder.onnx") ||
+      !fs::exists(onnx / "tts.json") ||
+      !fs::exists(onnx / "unicode_indexer.json")) {
     return false;
   }
-  if (!fs::exists(base / "onnx" / "text_encoder.onnx")) {
+  fs::path vs = base / "voice_styles";
+  if (!fs::exists(vs) || !fs::is_directory(vs)) {
     return false;
   }
-  if (!fs::exists(base / "onnx" / "latent_denoiser.onnx")) {
-    return false;
-  }
-  if (!fs::exists(base / "onnx" / "voice_decoder.onnx")) {
-    return false;
-  }
-  fs::path voicesDir = base / "voices";
-  if (!fs::exists(voicesDir) || !fs::is_directory(voicesDir)) {
-    return false;
-  }
-  // At least one voice .bin (e.g. M1.bin)
-  bool hasVoice = false;
-  for (const auto &e : fs::directory_iterator(voicesDir)) {
-    if (e.path().extension() == ".bin") {
-      hasVoice = true;
-      break;
+  for (const auto &e : fs::directory_iterator(vs)) {
+    if (e.path().extension() == ".json") {
+      return true;
     }
   }
-  return hasVoice;
+  return false;
 }
 
-// Returns first voice name (stem of first .bin found) or empty string.
 static std::string getFirstVoiceName(const std::string &baseDir) {
-  fs::path voicesDir = fs::path(baseDir) / "voices";
-  if (!fs::exists(voicesDir) || !fs::is_directory(voicesDir)) {
+  fs::path vs = fs::path(baseDir) / "voice_styles";
+  if (!fs::exists(vs) || !fs::is_directory(vs)) {
     return "";
   }
-  for (const auto &e : fs::directory_iterator(voicesDir)) {
-    if (e.path().extension() == ".bin") {
+  for (const auto &e : fs::directory_iterator(vs)) {
+    if (e.path().extension() == ".json") {
       return e.path().stem().string();
     }
   }
@@ -157,13 +141,13 @@ protected:
   void SetUp() override {
     baseDir_ = getSupertonicModelDir(supertonicModelDirExists);
     if (!supertonicModelDirExists(baseDir_)) {
-      GTEST_SKIP() << "Supertonic model dir not found or incomplete: "
+      GTEST_SKIP() << "Supertone model dir not found or incomplete: "
                    << baseDir_
-                   << " (set SUPERTONIC_MODEL_DIR or run from package root with models/supertonic)";
+                   << " (set SUPERTONIC_MODEL_DIR; expected HF Supertone/supertonic layout)";
     }
     voiceName_ = getFirstVoiceName(baseDir_);
     if (voiceName_.empty()) {
-      GTEST_SKIP() << "No voice .bin found under " << baseDir_ << "/voices";
+      GTEST_SKIP() << "No voice_styles/*.json under " << baseDir_;
     }
   }
 };
@@ -171,11 +155,7 @@ protected:
 TEST_F(SupertonicIntegrationTest, loadAndSynthesize) {
   std::unordered_map<std::string, std::string> config;
   fs::path base(baseDir_);
-  config["textEncoderPath"] = (base / "onnx" / "text_encoder.onnx").string();
-  config["latentDenoiserPath"] = (base / "onnx" / "latent_denoiser.onnx").string();
-  config["voiceDecoderPath"] = (base / "onnx" / "voice_decoder.onnx").string();
-  config["tokenizerPath"] = (base / "tokenizer.json").string();
-  config["voicesDir"] = (base / "voices").string();
+  config["modelDir"] = base.string();
   config["voiceName"] = voiceName_;
   config["language"] = "en";
   config["speed"] = "1.0";
@@ -194,11 +174,7 @@ TEST_F(SupertonicIntegrationTest, loadAndSynthesize) {
 TEST_F(SupertonicIntegrationTest, unloadAfterSynthesize) {
   std::unordered_map<std::string, std::string> config;
   fs::path base(baseDir_);
-  config["textEncoderPath"] = (base / "onnx" / "text_encoder.onnx").string();
-  config["latentDenoiserPath"] = (base / "onnx" / "latent_denoiser.onnx").string();
-  config["voiceDecoderPath"] = (base / "onnx" / "voice_decoder.onnx").string();
-  config["tokenizerPath"] = (base / "tokenizer.json").string();
-  config["voicesDir"] = (base / "voices").string();
+  config["modelDir"] = base.string();
   config["voiceName"] = voiceName_;
   config["language"] = "en";
 

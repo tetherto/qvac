@@ -1,14 +1,14 @@
 import { textToSpeech } from "@qvac/sdk";
 import {
-  AssetExecutor,
   ValidationHelpers,
   type TestResult,
   type Expectation,
 } from "@tetherto/qvac-test-suite/mobile";
 import type { ResourceManager } from "../../shared/resource-manager.js";
+import { ModelAssetExecutor } from "./model-asset-executor.js";
 import { ttsTests } from "../../tts-tests.js";
 
-export class MobileTtsExecutor extends AssetExecutor<typeof ttsTests> {
+export class MobileTtsExecutor extends ModelAssetExecutor<typeof ttsTests> {
   pattern = /^tts-/;
 
   protected handlers = Object.fromEntries(
@@ -26,28 +26,16 @@ export class MobileTtsExecutor extends AssetExecutor<typeof ttsTests> {
   private audioAssets: Record<string, number> | null = null;
   private referenceAudioPatched = false;
 
-  constructor(private resources: ResourceManager) {
-    super();
+  constructor(resources: ResourceManager) {
+    super(resources);
   }
 
   async setup(testId: string, context: unknown) {
-    const ctx = (context ?? {}) as Record<string, unknown>;
-    await this.resources.downloadAllOnce(console.log);
-
     if (!this.referenceAudioPatched) {
       await this.patchChatterboxReferenceAudio();
       this.referenceAudioPatched = true;
     }
-
-    const dep = ctx.dependency as string | undefined;
-    if (dep && dep !== "none") {
-      await this.resources.evictAll();
-      await this.resources.ensureLoaded(dep);
-    }
-  }
-
-  async teardown() {
-    await this.resources.evictAll();
+    await super.setup(testId, context);
   }
 
   private async loadAudioAssets() {

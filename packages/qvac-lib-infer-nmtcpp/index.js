@@ -66,12 +66,10 @@ class TranslationNmtcpp extends BaseInference {
    * @static
    * @type {Object}
    * @property {string} IndicTrans - IndicTrans translation model
-   * @property {string} Opus - Opus translation model
    * @property {string} Bergamot - Bergamot translation model with vocabulary support
    */
   static ModelTypes = {
     IndicTrans: 'IndicTrans',
-    Opus: 'Opus',
     Bergamot: 'Bergamot'
   }
 
@@ -86,7 +84,7 @@ class TranslationNmtcpp extends BaseInference {
    * @param {Object} [args.logger=null] - Optional logger instance
    * @param {boolean} [args.exclusiveRun=true] - Whether to run exclusively
    * @param {Object} config - Environment specific configuration
-   * @param {string} config.modelType - Type of model (IndicTrans, Opus, or Bergamot)
+   * @param {string} config.modelType - Type of model (IndicTrans or Bergamot)
    * @param {string} [config.srcVocabPath] - Path to source vocabulary file (Bergamot only)
    * @param {string} [config.dstVocabPath] - Path to destination vocabulary file (Bergamot only)
    * @param {string} [config.srcVocabName] - Name of source vocab file to download (Bergamot only)
@@ -110,6 +108,14 @@ class TranslationNmtcpp extends BaseInference {
     const { modelType, srcVocabPath, dstVocabPath, srcVocabName, dstVocabName, bergamotPivotModel, ...additionalConfig } = config
 
     this._modelType = modelType
+
+    if (this._modelType === 'Opus') {
+      throw new Error(
+        'ModelTypes.Opus has been deprecated. Use ModelTypes.Bergamot instead. ' +
+        'Bergamot covers European language pairs and supports pivot translation for non-English pairs via PivotTranslationModel.'
+      )
+    }
+
     this._config = additionalConfig
     this._diskPath = diskPath
     this._modelName = modelName
@@ -413,7 +419,7 @@ class TranslationNmtcpp extends BaseInference {
   }
 
   /**
-   * Handles standard model translation (Opus, Bergamot)
+   * Handles standard model translation (Bergamot)
    * @private
    * @param {string} input - Input text to translate
    * @returns {Promise<QvacResponse>} Translation response

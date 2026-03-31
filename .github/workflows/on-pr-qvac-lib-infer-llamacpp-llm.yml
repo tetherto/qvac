@@ -20,30 +20,52 @@ on:
   workflow_call:
 
 permissions:
-  contents: write
-  pull-requests: write
-  packages: write
+  contents: read
+  pull-requests: read
+  packages: read
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.sha }}
+  cancel-in-progress: true
 
 env:
   PKG_DIR: packages/qvac-lib-infer-llamacpp-llm
 
 jobs:
-  sanity-checks:
-    if: contains( github.event.pull_request.labels.*.name, 'verify') || github.event_name == 'workflow_dispatch'
+  authorize:
     runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      pull-requests: write
+    outputs:
+      allowed: ${{ steps.auth.outputs.allowed }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # 6.0.2
+      - name: Authorize
+        id: auth
+        uses: ./.github/actions/authorize-pr
+        with:
+          github-token: ${{ github.token }}
+
+  sanity-checks:
+    if: needs.authorize.outputs.allowed == 'true'
+    needs: authorize
+    runs-on: ubuntu-latest
+    environment: release
     steps:
       - name: Run Sanity checks
-        uses: tetherto/qvac-devops/.github/actions/sanity-checks@monorepo_update
+        uses: tetherto/qvac-devops/.github/actions/sanity-checks@v1.1.7
         with:
           secret-token: ${{ secrets.GITHUB_TOKEN }}
           npm-token: ${{ secrets.NPM_TOKEN }}
           pat-token: ${{ secrets.PAT_TOKEN }}
-          run-integration: ${{ contains(github.event.pull_request.labels.*.name, 'verify') }}
+          run-integration: ${{ needs.authorize.outputs.allowed == 'true' }}
           workdir: packages/qvac-lib-infer-llamacpp-llm
 
   cpp-tests:
-    if: contains( github.event.pull_request.labels.*.name, 'verify') || github.event_name == 'workflow_dispatch'
-    needs: sanity-checks
+    if: needs.authorize.outputs.allowed == 'true'
+    needs: [authorize, sanity-checks]
     uses: ./.github/workflows/cpp-tests-llm.yml
     secrets: inherit
     with:
@@ -52,8 +74,9 @@ jobs:
       ref: ${{ github.event.pull_request.head.ref }}
 
   cpp-lint:
-    if: contains( github.event.pull_request.labels.*.name, 'verify') || github.event_name == 'workflow_dispatch'
-    uses: tetherto/qvac-devops/.github/workflows/cpp-lint.yaml@monorepo_update
+    if: needs.authorize.outputs.allowed == 'true'
+    uses: tetherto/qvac-devops/.github/workflows/cpp-lint.yaml@v1.1.7
+    needs: authorize
     secrets: inherit
     with:
       sha: ${{ github.event.pull_request.base.sha }}
@@ -61,14 +84,16 @@ jobs:
       workdir: packages/qvac-lib-infer-llamacpp-llm
 
   ts-checks:
-    if: contains( github.event.pull_request.labels.*.name, 'verify') || github.event_name == 'workflow_dispatch'
+    if: needs.authorize.outputs.allowed == 'true'
+    needs: authorize
     runs-on: ubuntu-latest
+    environment: release
     steps:
       - name: Checkout code
-        uses: actions/checkout@v6
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # 6.0.2
 
       - name: Set up Node.js
-        uses: actions/setup-node@v6
+        uses: actions/setup-node@53b83947a5a98c8d113130e565377fae1a50d02f # 6.3.0
         with:
           node-version: 20
 
@@ -90,8 +115,8 @@ jobs:
         run: npm run test:dts
 
   prebuild:
-    needs: sanity-checks
-    if: contains( github.event.pull_request.labels.*.name, 'verify') || github.event_name == 'workflow_dispatch'
+    needs: [authorize, sanity-checks]
+    if: needs.authorize.outputs.allowed == 'true'
     permissions:
       contents: write
       packages: write
@@ -105,8 +130,8 @@ jobs:
       tag: pr-${{ github.event.pull_request.number }}
 
   run-integration-tests:
-    if: contains( github.event.pull_request.labels.*.name, 'verify') || github.event_name == 'workflow_dispatch'
-    needs: prebuild
+    if: needs.authorize.outputs.allowed == 'true'
+    needs: [authorize, prebuild]
     uses: ./.github/workflows/integration-test-qvac-lib-infer-llamacpp-llm.yml
     secrets: inherit
     with:
@@ -114,8 +139,12 @@ jobs:
       ref: ${{ github.event.pull_request.head.ref }}
 
   run-mobile-integration-tests:
-    if: contains( github.event.pull_request.labels.*.name, 'verify') || github.event_name == 'workflow_dispatch'
-    needs: prebuild
+    permissions:
+      contents: read
+      packages: read
+      pull-requests: write # Allow commenting on PRs
+    if: needs.authorize.outputs.allowed == 'true'
+    needs: [authorize, prebuild]
     uses: ./.github/workflows/integration-mobile-test-qvac-lib-infer-llamacpp-llm.yml
     secrets: inherit
     with:
@@ -125,6 +154,7 @@ jobs:
   merge-guard:
     needs:
       [
+        authorize,
         run-integration-tests,
         run-mobile-integration-tests,
         sanity-checks,
@@ -134,8 +164,7 @@ jobs:
         ts-checks,
       ]
     if: always()
-    uses: tetherto/qvac-devops/.github/workflows/public-pr.yml@monorepo_update
+    uses: tetherto/qvac-devops/.github/workflows/public-pr.yml@v1.1.7
     with:
       sanity-checks-status: ${{ needs.sanity-checks.result == 'success' }}
       build-status: ${{ needs.prebuild.result == 'success'}}
-    secrets: inherit

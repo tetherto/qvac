@@ -58,7 +58,7 @@ class WhisperInterface {
     }
   }
 
-  _addonOutputCallback (addon, event, data, error) {
+  _addonOutputCallback (addon, event, data, error, nativeJobId) {
     const isError = typeof error === 'string' && error.length > 0
     const isStats = data && typeof data === 'object' && (
       'totalTime' in data ||
@@ -71,11 +71,11 @@ class WhisperInterface {
     )
 
     let mappedEvent = event
-    if (isError || String(event).includes('Error')) {
+    if (event === 'Error' || isError || String(event).includes('Error')) {
       mappedEvent = 'Error'
-    } else if (isStats || String(event).includes('RuntimeStats')) {
+    } else if (event === 'JobEnded' || isStats || String(event).includes('RuntimeStats')) {
       mappedEvent = 'JobEnded'
-    } else if (isTranscriptOutput) {
+    } else if (event === 'Output' || isTranscriptOutput) {
       mappedEvent = 'Output'
     } else if (Array.isArray(data) && data.length === 0) {
       // WhisperModel::process returns an empty vector to avoid duplicate
@@ -83,12 +83,12 @@ class WhisperInterface {
       return
     }
 
-    const jobId = this._activeJobId
-    if (jobId === null || jobId === undefined) {
+    const jobId = Number.isFinite(nativeJobId) ? nativeJobId : null
+    if (jobId === null) {
       return
     }
 
-    if (mappedEvent === 'Output') {
+    if (mappedEvent === 'Output' && this._activeJobId === jobId) {
       this._setState(state.PROCESSING)
     }
 
@@ -103,8 +103,10 @@ class WhisperInterface {
     }
 
     if (mappedEvent === 'Error' || mappedEvent === 'JobEnded') {
-      this._activeJobId = null
-      this._setState(state.LISTENING)
+      if (this._activeJobId === jobId) {
+        this._activeJobId = null
+        this._setState(state.LISTENING)
+      }
     }
   }
 
@@ -256,6 +258,8 @@ class WhisperInterface {
       if (data?.type === END_OF_INPUT) {
         const currentJobId = this._nextJobId
         const input = this._concatBufferedAudio()
+        const previousJobId = this._activeJobId
+        const previousState = this._state
 
         let accepted = false
         try {
@@ -265,11 +269,13 @@ class WhisperInterface {
             audio_format: this._audioFormat
           })
         } catch (err) {
-          this._setState(state.LISTENING)
+          this._activeJobId = previousJobId
+          this._setState(previousState)
           throw err
         }
         if (!accepted) {
-          this._setState(state.LISTENING)
+          this._activeJobId = previousJobId
+          this._setState(previousState)
           throw new Error('Cannot set new job: a job is already set or being processed')
         }
 
@@ -333,7 +339,7 @@ class WhisperInterface {
 
     try {
       try {
-        await this._binding.cancel(this._handle)
+        await this._binding.cancel(this._handle, this._activeJobId)
       } catch {}
       this._binding.destroyInstance(this._handle)
       this._handle = null
@@ -351,22 +357,26 @@ class WhisperInterface {
   }
 
   async runJob (data) {
+    const currentJobId = this._nextJobId
+    const previousJobId = this._activeJobId
+    const previousState = this._state
     try {
-      this._activeJobId = this._nextJobId
-      this._nextJobId = nextSafeId(this._nextJobId)
-      this._setState(state.PROCESSING)
       const accepted = this._binding.runJob(this._handle, {
         ...data,
         audio_format: data?.audio_format || this._audioFormat
       })
       if (!accepted) {
-        this._activeJobId = null
-        this._setState(state.LISTENING)
+        this._activeJobId = previousJobId
+        this._setState(previousState)
+        return false
       }
-      return accepted
+      this._activeJobId = currentJobId
+      this._nextJobId = nextSafeId(this._nextJobId)
+      this._setState(state.PROCESSING)
+      return true
     } catch (err) {
-      this._activeJobId = null
-      this._setState(state.LISTENING)
+      this._activeJobId = previousJobId
+      this._setState(previousState)
       throw new QvacErrorAddonWhisper({
         code: ERR_CODES.FAILED_TO_APPEND,
         adds: err.message,
@@ -380,7 +390,10 @@ class WhisperInterface {
       this._activeJobId = this._nextJobId
       this._nextJobId = nextSafeId(this._nextJobId)
       this._setState(state.PROCESSING)
-      this._binding.startStreaming(this._handle, config)
+      this._binding.startStreaming(this._handle, {
+        ...config,
+        jobId: this._activeJobId
+      })
     } catch (err) {
       this._activeJobId = null
       this._setState(state.LISTENING)

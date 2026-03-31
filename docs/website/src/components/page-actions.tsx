@@ -96,7 +96,7 @@ export function LLMCopyButton({
         )}
         onClick={() => window.open(markdownUrl, '_blank', 'noopener,noreferrer')}
       >
-        {fileLabel}
+        Export for LLMs
       </button>
 
       <Popover>
