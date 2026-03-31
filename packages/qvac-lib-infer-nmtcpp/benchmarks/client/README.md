@@ -31,7 +31,7 @@ Create a `config.yaml` file with the following structure:
 server:
   url: "http://localhost:8080/run"
   batch_size: 32
-  lib: "@qvac/translation-marian-opus-q4f16"
+  lib: "@qvac/translation-nmtcpp"
 
 huggingface:
   token: "your_huggingface_token"
