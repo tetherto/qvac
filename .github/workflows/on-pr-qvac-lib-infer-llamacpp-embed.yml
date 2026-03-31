@@ -69,6 +69,10 @@ jobs:
       workdir: packages/qvac-lib-infer-llamacpp-embed
 
   cpp-tests:
+    permissions:
+      contents: read
+      packages: read
+      pull-requests: write
     if: needs.authorize.outputs.allowed == 'true'
     needs: [authorize, sanity-checks]
     uses: ./.github/workflows/cpp-tests-embed.yml
