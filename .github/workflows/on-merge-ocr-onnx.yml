@@ -196,6 +196,9 @@ jobs:
           echo "should_run_tests=$should" >> "$GITHUB_OUTPUT"
 
   integration-tests:
+    permissions:
+      contents: read
+      packages: read
     uses: ./.github/workflows/integration-test-ocr-onnx.yml
     needs: prebuild
     if: needs.prebuild.outputs.should_run_tests == 'true'
