@@ -161,6 +161,11 @@ jobs:
       workdir: ${{ needs.context.outputs.workdir }}
 
   cpp-tests-coverage:
+    permissions:
+      contents: read
+      packages: read
+      checks: write
+      pull-requests: write
     needs: context
     if: needs.context.outputs.run_verify == 'true' || github.event_name == 'workflow_dispatch'
     uses: ./.github/workflows/cpp-test-coverage-qvac-lib-infer-parakeet.yml
