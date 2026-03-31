@@ -241,7 +241,7 @@ resources.define("afriquegemma", {
 });
 
 
-const referenceAudioPath = path.resolve(process.cwd(), "assets/audio/transcription-short.wav");
+const referenceAudioPath = path.resolve(process.cwd(), "assets/audio/transcription-short-wav.wav");
 
 resources.define("tts-chatterbox", {
   constant: TTS_TOKENIZER_EN_CHATTERBOX,

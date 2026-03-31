@@ -28,7 +28,7 @@ const createParakeetTest = (
 export const parakeetTdtWav = createParakeetTest(
   "parakeet-tdt-wav",
   "parakeet-tdt",
-  "transcription-short.wav",
+  "transcription-short-wav.wav",
   { validation: "contains-all", contains: ["test", "automation"] },
   300000, // download ~700 MB
 );
@@ -36,7 +36,7 @@ export const parakeetTdtWav = createParakeetTest(
 export const parakeetTdtMp3 = createParakeetTest(
   "parakeet-tdt-mp3",
   "parakeet-tdt",
-  "transcription-short.mp3",
+  "transcription-short-mp3.mp3",
   { validation: "contains-all", contains: ["test", "automation"] },
   120000,
 );
@@ -44,7 +44,7 @@ export const parakeetTdtMp3 = createParakeetTest(
 export const parakeetTdtM4a = createParakeetTest(
   "parakeet-tdt-m4a",
   "parakeet-tdt",
-  "transcription-short.m4a",
+  "transcription-short-m4a.m4a",
   { validation: "contains-all", contains: ["test"] },
   120000,
 );
@@ -76,10 +76,10 @@ export const parakeetTdtMusic = createParakeetTest(
 );
 
 // Corrupted WAV — decoder throws a codec-level error
-export const parakeetTdtCorrupted = createParakeetTest(
-  "parakeet-tdt-corrupted",
+export const parakeetTdtCorruptedWav = createParakeetTest(
+  "parakeet-tdt-corrupted-wav",
   "parakeet-tdt",
-  "corrupted.wav",
+  "corrupted-wav.wav",
   { validation: "throws-error", errorContains: "" },
   60000,
 );
@@ -90,7 +90,7 @@ export const parakeetTdtCorrupted = createParakeetTest(
 export const parakeetCtcWav = createParakeetTest(
   "parakeet-ctc-wav",
   "parakeet-ctc",
-  "transcription-short.wav",
+  "transcription-short-wav.wav",
   { validation: "type", expectedType: "string" },
   600000, // CTC model download
 );
@@ -98,7 +98,7 @@ export const parakeetCtcWav = createParakeetTest(
 export const parakeetCtcMp3 = createParakeetTest(
   "parakeet-ctc-mp3",
   "parakeet-ctc",
-  "transcription-short.mp3",
+  "transcription-short-mp3.mp3",
   { validation: "contains-all", contains: ["test", "automation"] },
   120000,
 );
@@ -112,10 +112,10 @@ export const parakeetCtcSilence = createParakeetTest(
 );
 
 // Corrupted WAV on CTC path
-export const parakeetCtcCorrupted = createParakeetTest(
-  "parakeet-ctc-corrupted",
+export const parakeetCtcCorruptedWav = createParakeetTest(
+  "parakeet-ctc-corrupted-wav",
   "parakeet-ctc",
-  "corrupted.wav",
+  "corrupted-wav.wav",
   { validation: "throws-error", errorContains: "" },
   60000,
 );
@@ -146,14 +146,14 @@ export const parakeetTdtTests = [
   parakeetTdtSilence,
   parakeetTdtMultiSegment,
   parakeetTdtMusic,
-  parakeetTdtCorrupted,
+  parakeetTdtCorruptedWav,
 ];
 
 export const parakeetCtcTests = [
   parakeetCtcWav,
   parakeetCtcMp3,
   parakeetCtcSilence,
-  parakeetCtcCorrupted,
+  parakeetCtcCorruptedWav,
 ];
 
 export const parakeetSortformerTests = [
