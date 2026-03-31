@@ -29,7 +29,7 @@ From the mobile tester app root:
 
 ```bash
 # Build the test app with diffusion-cpp
-npm run build ../lib-infer-diffusion
+npm run build ../diffusion-cpp
 
 # Run on Android
 npm run android
