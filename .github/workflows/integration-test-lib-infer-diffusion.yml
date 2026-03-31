@@ -23,9 +23,10 @@ on:
 
 jobs:
   run-integration-tests:
-    timeout-minutes: 360
+    timeout-minutes: ${{ matrix.timeout || 360 }}
     continue-on-error: true
     runs-on: ${{ matrix.runner }}
+    environment: release
     name: test-${{ matrix.platform }}-${{ matrix.arch }}
     env:
       GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
@@ -72,10 +73,11 @@ jobs:
             platform: win32
             arch: x64
             runner: ai-run-windows11-gpu
+            timeout: 600
 
     steps:
       - name: Setup Node.js
-        uses: actions/setup-node@v6
+        uses: actions/setup-node@53b83947a5a98c8d113130e565377fae1a50d02f # 6.3.0
         with:
           node-version: lts/*
 
@@ -88,7 +90,7 @@ jobs:
         shell: powershell
 
       - name: Checkout code
-        uses: actions/checkout@v6
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # 6.0.2
         with:
           repository: ${{ inputs.repository || github.repository }}
           ref: ${{ inputs.ref || github.ref }}
@@ -161,7 +163,7 @@ jobs:
 
       - name: Download prebuilds (from artifacts)
         if: ${{ !inputs.prebuild_package }}
-        uses: actions/download-artifact@v7
+        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # 8.0.1
         with:
           path: ${{ env.WORKDIR }}/prebuilds
           merge-multiple: true
@@ -238,6 +240,33 @@ jobs:
         shell: bash
         run: sudo apt-get update && sudo apt-get install -y mesa-vulkan-drivers
 
+      - name: macOS — Metal GPU diagnostic
+        if: matrix.platform == 'darwin'
+        shell: bash
+        run: |
+          echo "=== GPU Hardware ==="
+          system_profiler SPDisplaysDataType 2>/dev/null || echo "(system_profiler unavailable)"
+          echo ""
+          echo "=== Metal Device Check ==="
+          cat > /tmp/metal_check.m << 'OBJC'
+          #import <Metal/Metal.h>
+          #import <stdio.h>
+          int main() {
+            id<MTLDevice> dev = MTLCreateSystemDefaultDevice();
+            if (!dev) { printf("No Metal device available\n"); return 1; }
+            printf("Device    : %s\n", [[dev name] UTF8String]);
+            printf("Headless  : %s\n", dev.headless ? "yes" : "no");
+            printf("LowPower  : %s\n", dev.lowPower ? "yes" : "no");
+            printf("Apple4    : %d\n", [dev supportsFamily:MTLGPUFamilyApple4]);
+            printf("Apple7    : %d\n", [dev supportsFamily:MTLGPUFamilyApple7]);
+            printf("Metal3    : %d\n", [dev supportsFamily:MTLGPUFamilyMetal3]);
+            printf("simdgroup : %d\n", [dev supportsFamily:MTLGPUFamilyApple7]);
+            return 0;
+          }
+          OBJC
+          clang -x objective-c -framework Metal -framework Foundation \
+                -o /tmp/metal_check /tmp/metal_check.m 2>/dev/null && /tmp/metal_check || echo "(Metal check failed to compile/run)"
+
       - name: Run integration test (Linux/macOS)
         if: ${{ matrix.platform != 'win32' }}
         working-directory: ${{ env.WORKDIR }}
@@ -280,7 +309,7 @@ jobs:
 
       - name: Upload generated images
         if: always()
-        uses: actions/upload-artifact@v6
+        uses: actions/upload-artifact@bbbca2ddaa5d8feaa63e36b76fdaad77386f024f # 7.0.0
         with:
           name: sd-test-images-${{ matrix.os }}-${{ matrix.arch }}
           path: ${{ env.WORKDIR }}/test/model/*.png
