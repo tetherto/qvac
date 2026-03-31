@@ -167,11 +167,12 @@ jobs:
       contents: write
       packages: write
       id-token: write
-    if: needs.publish-logic.outputs.publish_release == 'true'
+    if: |
+      always() &&
+      needs.publish-logic.outputs.publish_release == 'true' &&
+      (needs.release-merge-guard.result == 'success' || needs.release-merge-guard.result == 'skipped')
     uses: tetherto/qvac-devops/.github/workflows/public-reusable-npm.yml@v1.1.7
-    secrets:
-      PAT_TOKEN: ${{ secrets.PAT_TOKEN }}
-      NPM_TOKEN: ${{ secrets.NPM_TOKEN }}
+    secrets: inherit
     with:
       workdir: packages/qvac-lib-langdetect-text-cld2
       repo_name: langdetect-text-cld2
@@ -221,4 +222,4 @@ jobs:
           npm-token: ${{ secrets.NPM_TOKEN }}
           tag: ${{ needs.publish-logic.outputs.gpr_tag }}
           workdir: packages/qvac-lib-langdetect-text-cld2
-          name-suffix: "-mono"
+          name-suffix: "-mono" 

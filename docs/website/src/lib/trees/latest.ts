@@ -35,16 +35,10 @@ export const tree: Node[] = [
         icon: resolveIcon('DoorOpen'),
       }, 
       {
-        name: 'Our Vision',
+        name: 'Our vision',
         url: '/about-qvac/vision',
         type: 'page',
         icon: resolveIcon('Telescope'),
-      },
-      {
-        name: 'Public launch',
-        url: '/about-qvac/public-launch',
-        type: 'page',
-        icon: resolveIcon('Globe'),
       },
       {
         name: 'How it works',
@@ -57,6 +51,12 @@ export const tree: Node[] = [
         url: '/about-qvac/flagship-apps',
         type: 'page',
         icon: resolveIcon('LayoutGrid'),
+      },
+      {
+        name: 'Public launch',
+        url: '/about-qvac/public-launch',
+        type: 'page',
+        icon: resolveIcon('Megaphone'),
       },
     ],
   },
@@ -140,6 +140,7 @@ export const tree: Node[] = [
             ],
           },
           { name: 'Logging', url: '/sdk/examples/utilities/logging', type: 'page', icon: resolveIcon('Activity') },
+          { name: 'Profiler', url: '/sdk/examples/utilities/profiler', type: 'page', icon: resolveIcon('Timer') },
           { name: 'Download lifecycle', url: '/sdk/examples/utilities/download-lifecycle', type: 'page', icon: resolveIcon('Download') },
           { name: 'Sharded models', url: '/sdk/examples/utilities/sharded-models', type: 'page', icon: resolveIcon('Merge') },
         ],

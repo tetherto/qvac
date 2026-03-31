@@ -10,49 +10,61 @@ description: API reference — v0.8.0
 
 ## Functions
 
-| Function | Summary | Signature |
-| --- | --- | --- |
-| [`cancel()`](./cancel) | Cancels an ongoing operation. | `cancel(params: { modelId: string; operation: "inference" } \| { clearCache?: boolean; downloadKey: string; operation: "downloadAsset" } \| { operation: "rag"; workspace?: string }): Promise` |
-| [`close()`](./close) | No description available | `close(): Promise` |
-| [`completion()`](./completion) | Generates completion from a language model based on conversation history. | `completion(params: CompletionParams): { stats: Promise<{ cacheTokens: number; timeToFirstToken: number; tokensPerSecond: number } \| undefined>; text: Promise<string>; tokenStream: AsyncGenerator<string>; toolCalls: Promise<ToolCallWithCall[]>; toolCallStream: AsyncGenerator<{ call: { arguments: Record<string, unknown>; id: string; name: string; raw?: string }; type: "toolCall" } \| { error: { code: "PARSE_ERROR" \| "VALIDATION_ERROR" \| "UNKNOWN_TOOL"; message: string; raw?: string }; type: "toolCallError" }> }` |
-| [`defineHandler()`](./defineHandler) | Helper function to define a handler with full type inference. | `defineHandler(definition: PluginHandlerDefinition): PluginHandlerDefinition` |
-| [`definePlugin()`](./definePlugin) | Helper function to define a plugin with full type inference. | `definePlugin(plugin: T): T` |
-| [`deleteCache()`](./deleteCache) | Deletes KV cache files. | `deleteCache(params: { all: true } \| { kvCacheKey: string; modelId?: string }): Promise` |
-| [`downloadAsset()`](./downloadAsset) | Downloads an asset (model file) without loading it into memory. | `downloadAsset(options: DownloadAssetOptions, rpcOptions?: { forceNewConnection?: boolean; profiling?: { enabled?: boolean; includeServerBreakdown?: boolean; mode?: "summary" \| "verbose" }; timeout?: number }): Promise` |
-| [`embed()`](./embed) | Generates embeddings for a single text using a specified model. | `embed(params: { modelId: string; text: string }, options?: { forceNewConnection?: boolean; profiling?: { enabled?: boolean; includeServerBreakdown?: boolean; mode?: "summary" \| "verbose" }; timeout?: number }): Promise` |
-| [`getLogger()`](./getLogger) | No description available | `getLogger(namespace: string, options?: LoggerOptions): Logger` |
-| [`getModelByName()`](./getModelByName) | No description available | `getModelByName(name: string): RegistryItem \| undefined` |
-| [`getModelByPath()`](./getModelByPath) | No description available | `getModelByPath(registryPath: string): RegistryItem \| undefined` |
-| [`getModelBySrc()`](./getModelBySrc) | No description available | `getModelBySrc(modelId: string, blobCoreKey: string): RegistryItem \| undefined` |
-| [`getModelInfo()`](./getModelInfo) | No description available | `getModelInfo(params: { name: string }): Promise` |
-| [`invokePlugin()`](./invokePlugin) | Invoke a non-streaming plugin handler. | `invokePlugin(options: InvokePluginOptions, rpcOptions?: { forceNewConnection?: boolean; profiling?: { enabled?: boolean; includeServerBreakdown?: boolean; mode?: "summary" \| "verbose" }; timeout?: number }): Promise` |
-| [`invokePluginStream()`](./invokePluginStream) | Invoke a streaming plugin handler. | `invokePluginStream(options: InvokePluginOptions, rpcOptions?: { forceNewConnection?: boolean; profiling?: { enabled?: boolean; includeServerBreakdown?: boolean; mode?: "summary" \| "verbose" }; timeout?: number }): AsyncGenerator` |
-| [`loadModel()`](./loadModel) | Loads a machine learning model from a local path, remote URL, or Hyperdrive key. | `loadModel(options: LoadModelOptions, rpcOptions?: { forceNewConnection?: boolean; profiling?: { enabled?: boolean; includeServerBreakdown?: boolean; mode?: "summary" \| "verbose" }; timeout?: number }): Promise` |
-| [`loggingStream()`](./loggingStream) | Opens a logging stream to receive real-time logs. | `loggingStream(params: { id: string }): AsyncGenerator` |
-| [`modelRegistryGetModel()`](./modelRegistryGetModel) | No description available | `modelRegistryGetModel(registryPath: string, registrySource: string): Promise` |
-| [`modelRegistryList()`](./modelRegistryList) | No description available | `modelRegistryList(): Promise` |
-| [`modelRegistrySearch()`](./modelRegistrySearch) | No description available | `modelRegistrySearch(params: ModelRegistrySearchParams): Promise` |
-| [`ocr()`](./ocr) | Performs Optical Character Recognition (OCR) on an image to extract text. | `ocr(params: OCRClientParams): { blocks: Promise<{ bbox?: [number, number, number, number]; confidence?: number; text: string }[]>; blockStream: AsyncGenerator<{ bbox?: [number, number, number, number]; confidence?: number; text: string }[]>; stats: Promise<{ detectionTime?: number; recognitionTime?: number; totalTime?: number } \| undefined> }` |
-| [`ping()`](./ping) | Sends a ping request to the server and returns the pong response. | `ping(): Promise` |
-| [`ragChunk()`](./ragChunk) | Chunks documents into smaller pieces for embedding. | `ragChunk(params: { chunkOpts?: { chunkOverlap?: number; chunkSize?: number; chunkStrategy?: "character" \| "paragraph"; splitStrategy?: "character" \| "word" \| "token" \| "sentence" \| "line" }; documents: string \| string[] }, options?: { forceNewConnection?: boolean; profiling?: { enabled?: boolean; includeServerBreakdown?: boolean; mode?: "summary" \| "verbose" }; timeout?: number }): Promise` |
-| [`ragCloseWorkspace()`](./ragCloseWorkspace) | Closes a RAG workspace, releasing in-memory resources (Corestore, HyperDB adapter, RAG instance). | `ragCloseWorkspace(params?: { deleteOnClose?: boolean; workspace?: string }, options?: { forceNewConnection?: boolean; profiling?: { enabled?: boolean; includeServerBreakdown?: boolean; mode?: "summary" \| "verbose" }; timeout?: number }): Promise` |
-| [`ragDeleteEmbeddings()`](./ragDeleteEmbeddings) | Deletes document embeddings from the RAG vector database. | `ragDeleteEmbeddings(params: { ids: string[]; modelId?: string; workspace?: string }, options?: { forceNewConnection?: boolean; profiling?: { enabled?: boolean; includeServerBreakdown?: boolean; mode?: "summary" \| "verbose" }; timeout?: number }): Promise` |
-| [`ragDeleteWorkspace()`](./ragDeleteWorkspace) | Deletes a RAG workspace and all its data. | `ragDeleteWorkspace(params: { workspace: string }, options?: { forceNewConnection?: boolean; profiling?: { enabled?: boolean; includeServerBreakdown?: boolean; mode?: "summary" \| "verbose" }; timeout?: number }): Promise` |
-| [`ragIngest()`](./ragIngest) | Ingests documents into the RAG vector database. | `ragIngest(params: RagIngestParams, options?: { forceNewConnection?: boolean; profiling?: { enabled?: boolean; includeServerBreakdown?: boolean; mode?: "summary" \| "verbose" }; timeout?: number }): Promise` |
-| [`ragListWorkspaces()`](./ragListWorkspaces) | Lists all RAG workspaces with their open status. | `ragListWorkspaces(options?: { forceNewConnection?: boolean; profiling?: { enabled?: boolean; includeServerBreakdown?: boolean; mode?: "summary" \| "verbose" }; timeout?: number }): Promise` |
-| [`ragReindex()`](./ragReindex) | Reindexes the RAG database to optimize search performance. | `ragReindex(params: RagReindexParams, options?: { forceNewConnection?: boolean; profiling?: { enabled?: boolean; includeServerBreakdown?: boolean; mode?: "summary" \| "verbose" }; timeout?: number }): Promise` |
-| [`ragSaveEmbeddings()`](./ragSaveEmbeddings) | Saves pre-embedded documents to the RAG vector database. | `ragSaveEmbeddings(params: RagSaveEmbeddingsParams, options?: { forceNewConnection?: boolean; profiling?: { enabled?: boolean; includeServerBreakdown?: boolean; mode?: "summary" \| "verbose" }; timeout?: number }): Promise` |
-| [`ragSearch()`](./ragSearch) | Searches for similar documents in the RAG vector database. | `ragSearch(params: { modelId: string; n?: number; query: string; topK?: number; workspace?: string }, options?: { forceNewConnection?: boolean; profiling?: { enabled?: boolean; includeServerBreakdown?: boolean; mode?: "summary" \| "verbose" }; timeout?: number }): Promise` |
-| [`startQVACProvider()`](./startQVACProvider) | Starts a provider service that offers QVAC capabilities to remote peers. | `startQVACProvider(params: { firewall?: { mode: "allow" \| "deny"; publicKeys: string[] }; topic: string }): Promise` |
-| [`stopQVACProvider()`](./stopQVACProvider) | Stops a running provider service and leaves the specified topic. | `stopQVACProvider(params: { topic: string }): Promise` |
-| [`textToSpeech()`](./textToSpeech) | No description available | `textToSpeech(params: { inputType: string; modelId: string; stream: boolean; text: string }, options?: { forceNewConnection?: boolean; profiling?: { enabled?: boolean; includeServerBreakdown?: boolean; mode?: "summary" \| "verbose" }; timeout?: number }): { buffer: Promise<number[]>; bufferStream: AsyncGenerator<number>; done: Promise<boolean> }` |
-| [`transcribe()`](./transcribe) | This function provides a simple interface for transcribing audio by
-collecting all streaming results into a single string response. | `transcribe(params: TranscribeClientParams, options?: { forceNewConnection?: boolean; profiling?: { enabled?: boolean; includeServerBreakdown?: boolean; mode?: "summary" \| "verbose" }; timeout?: number }): Promise` |
-| [`transcribeStream()`](./transcribeStream) | This function streams audio transcription results in real-time, yielding
-text chunks as they become available from the model. | `transcribeStream(params: TranscribeClientParams, options?: { forceNewConnection?: boolean; profiling?: { enabled?: boolean; includeServerBreakdown?: boolean; mode?: "summary" \| "verbose" }; timeout?: number }): AsyncGenerator` |
-| [`translate()`](./translate) | Translates text from one language to another using a specified translation model. | `translate(params: TranslateClientParams, options?: { forceNewConnection?: boolean; profiling?: { enabled?: boolean; includeServerBreakdown?: boolean; mode?: "summary" \| "verbose" }; timeout?: number }): { stats: Promise<{ processedTokens: number; processingTime: number } \| undefined>; text: Promise<string>; tokenStream: AsyncGenerator<string> }` |
-| [`unloadModel()`](./unloadModel) | Unloads a previously loaded model from the server. | `unloadModel(params: { clearStorage?: boolean; modelId: string }): Promise` |
+| Function | Summary |
+| --- | --- |
+| [`cancel()`](./cancel) | Cancels an ongoing operation. |
+| [`close()`](./close) | Closes the SDK client connection and releases all associated resources. |
+| [`completion()`](./completion) | Generates completion from a language model based on conversation history. |
+| [`defineHandler()`](./defineHandler) | Helper function to define a handler with full type inference. |
+| [`definePlugin()`](./definePlugin) | Helper function to define a plugin with full type inference. |
+| [`deleteCache()`](./deleteCache) | Deletes KV cache files. |
+| [`downloadAsset()`](./downloadAsset) | Downloads an asset (model file) without loading it into memory. |
+| [`embed()`](./embed) | Generates embeddings for a single text using a specified model. |
+| [`getLogger()`](./getLogger) | Creates or retrieves a namespaced logger instance. |
+| [`getModelByName()`](./getModelByName) | Looks up a model in the built-in catalog by its constant name. |
+| [`getModelByPath()`](./getModelByPath) | Looks up a model in the built-in catalog by its registry path. |
+| [`getModelBySrc()`](./getModelBySrc) | Looks up a model in the built-in catalog by model file ID and blob core key. |
+| [`getModelInfo()`](./getModelInfo) | Returns status information for a catalog model, including cache state and loaded instances. |
+| [`invokePlugin()`](./invokePlugin) | Invoke a non-streaming plugin handler. |
+| [`invokePluginStream()`](./invokePluginStream) | Invoke a streaming plugin handler. |
+| [`loadModel()`](./loadModel) | Loads a machine learning model from a local path, remote URL, or Hyperdrive key. |
+| [`loggingStream()`](./loggingStream) | Opens a logging stream to receive real-time logs. |
+| [`modelRegistryGetModel()`](./modelRegistryGetModel) | Fetches a single model entry from the registry by its path and source. |
+| [`modelRegistryList()`](./modelRegistryList) | Returns all available models from the QVAC distributed model registry. |
+| [`modelRegistrySearch()`](./modelRegistrySearch) | Searches the model registry with optional filters for model type, engine, and quantization. |
+| [`ocr()`](./ocr) | Performs Optical Character Recognition (OCR) on an image to extract text. |
+| [`ping()`](./ping) | Sends a ping request to the server and returns the pong response. |
+| [`ragChunk()`](./ragChunk) | Chunks documents into smaller pieces for embedding. |
+| [`ragCloseWorkspace()`](./ragCloseWorkspace) | Closes a RAG workspace, releasing in-memory resources (Corestore, HyperDB adapter, RAG instance). |
+| [`ragDeleteEmbeddings()`](./ragDeleteEmbeddings) | Deletes document embeddings from the RAG vector database. |
+| [`ragDeleteWorkspace()`](./ragDeleteWorkspace) | Deletes a RAG workspace and all its data. |
+| [`ragIngest()`](./ragIngest) | Ingests documents into the RAG vector database. |
+| [`ragListWorkspaces()`](./ragListWorkspaces) | Lists all RAG workspaces with their open status. |
+| [`ragReindex()`](./ragReindex) | Reindexes the RAG database to optimize search performance. |
+| [`ragSaveEmbeddings()`](./ragSaveEmbeddings) | Saves pre-embedded documents to the RAG vector database. |
+| [`ragSearch()`](./ragSearch) | Searches for similar documents in the RAG vector database. |
+| [`startQVACProvider()`](./startQVACProvider) | Starts a provider service that offers QVAC capabilities to remote peers. |
+| [`stopQVACProvider()`](./stopQVACProvider) | Stops a running provider service and leaves the specified topic. |
+| [`textToSpeech()`](./textToSpeech) | Converts text to speech audio using a loaded TTS model. |
+| [`transcribe()`](./transcribe) | Collects all streaming results into a single string response. |
+| [`transcribeStream()`](./transcribeStream) | Streams audio transcription results in real-time, yielding text chunks as they become available. |
+| [`translate()`](./translate) | Translates text from one language to another using a specified translation model. |
+| [`unloadModel()`](./unloadModel) | Unloads a previously loaded model from the server. |
+
+## Object
+
+| Object | Summary |
+| --- | --- |
+| [`profiler`](./profiler) | Singleton object that collects and exports profiling data for SDK operations. |
+
+## Shared types
+
+<Card href="./shared-types" title="Shared types">
+  Common type definitions used across SDK functions.
+</Card>
 
 ## Errors
 
-See [Errors](./errors) for the full list of SDK error codes.
+<Card href="./errors" title="Error codes">
+  All errors thrown by the SDK and how to handle them via `SDK_CLIENT_ERROR_CODES` and `SDK_SERVER_ERROR_CODES`.
+</Card>

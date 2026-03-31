@@ -5,23 +5,11 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-## [0.7.1] - 2026-03-16
+## [0.7.1]
 
-This release enables long-form speech synthesis by splitting text into sentence-level chunks and concatenating the resulting audio with crossfade, and expands Chatterbox language support to 30 languages with native CJK/Korean text preprocessing.
+### Changed
 
-## Features
-
-### Long Text Synthesis
-
-New `textSplitter` and `pcmConcatenator` JS modules allow generating arbitrarily long audio (10+ minutes) by splitting input text at sentence boundaries, synthesizing each chunk individually, and reassembling the PCM buffers with crossfade and silence gaps.
-
-### Expanded Language Support and Text Preprocessing
-
-The native Chatterbox engine now supports 30 languages. A new C++ `ChatterboxTextPreprocessor` applies script-specific transformations before tokenization: Korean Jamo decomposition, Japanese Katakana-to-Hiragana conversion, and Chinese Cangjie code mapping.
-
-## Other
-
-Removed `sanitizeTokenIds` and unified `MAX_NEW_TOKENS_SPEECH = 1024` across all languages, replacing the previous split English/multilingual token limits.
+- README: removed outdated npm Personal Access Token / `.npmrc` setup instructions for installing `@qvac/tts-onnx`.
 
 ## [0.7.0]
 
