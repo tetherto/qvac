@@ -1,8 +1,8 @@
 name: On PR Trigger (Whispercpp)
 
 on:
-  pull_request_target:
-    types: [opened, synchronize, reopened, labeled]
+  push:
+    # types: [opened, synchronize, reopened, labeled]
     branches: [main, release-*, feature-*, tmp-*]
     paths:
       - "packages/qvac-lib-infer-whispercpp/**"
@@ -163,6 +163,7 @@ jobs:
   cpp-tests-coverage:
     permissions:
       contents: read
+      packages: read
       checks: write
       pull-requests: write
     needs: [authorize, context]
