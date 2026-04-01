@@ -325,17 +325,16 @@ common_params setupParams(
 BertModel::BertModel(
     const std::string& modelGgufPath,
     const std::unordered_map<std::string, std::string>& config,
-    const std::string& backendsDir,
-    const std::string& openclCacheDir)
+    const std::string& backendsDir)
     : model_(nullptr), ctx_(nullptr), vocab_(nullptr), batch_{},
       pooling_type(LLAMA_POOLING_TYPE_NONE), n_embd(0), is_loaded_(false),
       loadingContext_(InitLoader::getLoadingContext("BertModel")),
       shards_(GGUFShards::expandGGUFIntoShards(modelGgufPath)) {
-  auto modelInit = [this, openclCacheDir](
+  auto modelInit = [this](
                        const std::string& path,
                        const std::unordered_map<std::string, std::string>& cfg,
                        const std::string& backendsDir) {
-    this->init(path, cfg, backendsDir, openclCacheDir);
+    this->init(path, cfg, backendsDir);
   };
   initLoader_.init(
       InitLoader::LOADER_TYPE::DELAYED,
@@ -360,14 +359,20 @@ BertModel::BertModel(common_params& params)
 void BertModel::init(
     const std::string& modelGgufPath,
     const std::unordered_map<std::string, std::string>& config,
-    const std::string& backendsDir,
-    const std::string& openclCacheDir) {
+    const std::string& backendsDir) {
   // Need to initialize backend before setupParams to properly
   // detect available backends and choose properly among them
 
   // Extract and set verbosity level from config (modifies configCopy)
   auto configCopy = config;
   setVerbosityLevel(configCopy);
+
+  std::string openclCacheDir;
+  if (auto it = configCopy.find("openclCacheDir"); it != configCopy.end()) {
+    openclCacheDir = it->second;
+    configCopy.erase(it);
+  }
+
   lazyCommonInit();
   initializeBackend(backendsDir, openclCacheDir);
 

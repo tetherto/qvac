@@ -20,16 +20,10 @@ inline js_value_t* createInstance(js_env_t* env, js_callback_info_t* info) try {
 
   JsArgsParser args(env, info);
 
-  auto configObj = js::Object{env, args.get(1, "configParams")};
-  std::string openclCacheDir =
-      configObj.getOptionalPropertyAs<js::String, std::string>(env, "openclCacheDir")
-          .value_or("");
-
   auto model = make_unique<BertModel>(
       args.getMapEntry(1, "path"),
       args.getSubmap(1, "config"),
-      args.getMapEntry(1, "backendsDir"),
-      openclCacheDir);
+      args.getMapEntry(1, "backendsDir"));
 
   out_handl::OutputHandlers<out_handl::JsOutputHandlerInterface> outHandlers;
   outHandlers.add(

@@ -108,8 +108,7 @@ public:
   BertModel(
       const std::string& modelGgufPath,
       const std::unordered_map<std::string, std::string>& config,
-      const std::string& backendsDir = "",
-      const std::string& openclCacheDir = "");
+      const std::string& backendsDir = "");
 
   /// @brief Construct with already parsed parameters.
   explicit BertModel(common_params& params);
@@ -121,8 +120,7 @@ public:
   void init(
       const std::string& modelGgufPath,
       const std::unordered_map<std::string, std::string>& config,
-      const std::string& backendsDir,
-      const std::string& openclCacheDir = "");
+      const std::string& backendsDir);
 
   /// @brief Deletes model implementation.
   ~BertModel() override;

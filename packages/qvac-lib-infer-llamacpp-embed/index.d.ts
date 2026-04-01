@@ -58,6 +58,8 @@ export interface GGMLConfig {
   flash_attn?: 'on' | 'off' | 'auto'
   'main-gpu'?: NumericLike | 'integrated' | 'dedicated'
   verbosity?: NumericLike
+  /** Writable directory for OpenCL kernel binary cache. Required on Android for fast GPU startup. */
+  openclCacheDir?: string
   [key: string]: string | number | boolean | string[] | undefined
 }
 
@@ -65,8 +67,6 @@ export interface AddonConfigurationParams {
   path: string
   config: GGMLConfig
   backendsDir?: string
-  /** Writable directory for OpenCL kernel binary cache. Required on Android for fast GPU startup. */
-  openclCacheDir?: string
 }
 
 export interface RuntimeStats {
