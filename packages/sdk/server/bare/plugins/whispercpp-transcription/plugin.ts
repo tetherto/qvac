@@ -19,6 +19,7 @@ import { createStreamLogger, registerAddonLogger } from "@/logging";
 import { parseModelPath } from "@/server/utils";
 import FilesystemDL from "@qvac/dl-filesystem";
 import { transcribe } from "@/server/bare/ops/transcribe";
+import { attachModelExecutionMs } from "@/profiling/model-execution";
 
 function createWhisperModel(
   modelId: string,
@@ -45,7 +46,7 @@ function createWhisperModel(
     diskPath: dirPath,
     vadModelName,
     opts: {
-      stats: false,
+      stats: true,
     },
   };
 
@@ -102,22 +103,32 @@ export const whisperPlugin = definePlugin({
       streaming: true,
 
       handler: async function* (request) {
-        for await (const text of transcribe({
+        const stream = transcribe({
           modelId: request.modelId,
           audioChunk: request.audioChunk,
           prompt: request.prompt,
-        })) {
-          yield {
-            type: "transcribeStream" as const,
-            text,
-          };
-        }
+        });
 
-        yield {
-          type: "transcribeStream" as const,
-          text: "",
-          done: true,
-        };
+        try {
+          let result = await stream.next();
+          while (!result.done) {
+            yield {
+              type: "transcribeStream" as const,
+              text: result.value,
+            };
+            result = await stream.next();
+          }
+
+          const { modelExecutionMs, stats } = result.value;
+          yield attachModelExecutionMs({
+            type: "transcribeStream" as const,
+            text: "",
+            done: true,
+            ...(stats && { stats }),
+          }, modelExecutionMs);
+        } finally {
+          await stream.return?.(undefined as never);
+        }
       },
     }),
   },
