@@ -175,7 +175,7 @@ jobs:
       contents: write
       packages: write
       pull-requests: write
-    needs: [authorize, sanity-checks, cpp-lint]
+    needs: [authorize, changes]
     if: |
       (needs.changes.outputs.pkg == 'true') &&
       (
