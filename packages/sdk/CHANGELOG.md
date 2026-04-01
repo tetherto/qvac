@@ -4,7 +4,7 @@
 
 📦 **NPM:** https://www.npmjs.com/package/@qvac/sdk/v/0.8.1
 
-This release introduces a heartbeat mechanism for proactive provider health monitoring in delegated inference, and adds RPC health probes with delegated cancellation support. Several stability fixes address RPC progress throttling, registry download progress accuracy, and security alerts.
+This release introduces a heartbeat mechanism for proactive provider health monitoring in delegated inference and adds RPC health probes with delegated cancellation support. Several stability fixes address RPC progress throttling, registry download progress accuracy, and security alerts.
 
 ---
 
