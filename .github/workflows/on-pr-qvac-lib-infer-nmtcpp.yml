@@ -17,10 +17,6 @@ on:
       - ".github/workflows/*nmtcpp*.yml"
   workflow_dispatch:
 
-concurrency:
-  group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.sha }}
-  cancel-in-progress: true
-
 permissions:
   contents: read
   pull-requests: read
