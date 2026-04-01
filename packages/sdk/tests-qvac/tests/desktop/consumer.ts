@@ -343,7 +343,7 @@ export const executor = createExecutor({
     new KvCacheExecutor(resources),
     new ParakeetExecutor(resources),
     new VisionExecutor(resources),
-    new DownloadExecutor(resources),
+    new DownloadExecutor(),
   ],
   profiling: {
     init: () => profiler.enable({ mode: "summary", includeServerBreakdown: true }),
