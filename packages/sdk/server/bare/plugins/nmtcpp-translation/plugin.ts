@@ -24,6 +24,7 @@ import FilesystemDL from "@qvac/dl-filesystem";
 import { ModelLoadFailedError } from "@/utils/errors-server";
 import { asLoader } from "@/server/bare/utils/loader-adapter";
 import { translate } from "@/server/bare/ops/translate";
+import { attachModelExecutionMs } from "@/profiling/model-execution";
 
 const BERGAMOT_CJK_LANG_PAIRS = ["enja", "enko", "enzh"];
 
@@ -96,6 +97,7 @@ function createNmtModel(
     logger,
     modelName: basePath,
     diskPath: dirPath,
+    opts: { stats: true },
     params: {
       mode,
       srcLang: from,
@@ -264,29 +266,27 @@ export const nmtPlugin = definePlugin({
 
       handler: async function* (request) {
         const stream = translate(request);
-        let done = false;
-        let stats;
+        try {
+          let result = await stream.next();
 
-        while (!done) {
-          const result = await stream.next();
-
-          if (result.done) {
-            stats = result.value;
-            done = true;
-          } else {
+          while (!result.done) {
             yield {
               type: "translate" as const,
               token: result.value,
             };
+            result = await stream.next();
           }
-        }
 
-        yield {
-          type: "translate" as const,
-          token: "",
-          done: true,
-          ...(stats && { stats }),
-        };
+          const { modelExecutionMs, stats } = result.value;
+          yield attachModelExecutionMs({
+            type: "translate" as const,
+            token: "",
+            done: true,
+            ...(stats && { stats }),
+          }, modelExecutionMs);
+        } finally {
+          await stream.return?.(undefined as never);
+        }
       },
     }),
   },
