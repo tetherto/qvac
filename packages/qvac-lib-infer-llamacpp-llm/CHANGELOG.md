@@ -4,7 +4,7 @@
 
 ### Added
 
-#### Quantized KV cache integration test
+#### Quantized KV cache test
 
 Added `test/integration/quantized-kvcache.test.js` — a benchmark that validates quantized KV cache types (`q8_0`, `q4_0`) against the `f16` baseline on GPU (Vulkan / Metal). The test loads Llama-3.2-1B with `flash-attn=on` and each cache-type pair, runs inference, and prints a comparison table with KV memory usage, prompt eval throughput, generation speed, per-token latency, and TTFT. Assertions verify:
 
