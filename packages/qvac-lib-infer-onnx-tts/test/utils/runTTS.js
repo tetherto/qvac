@@ -4,8 +4,8 @@ const path = require('bare-path')
 const fs = require('bare-fs')
 const os = require('bare-os')
 const { createWavBuffer } = require('./wav-helper')
-const { splitText } = require('../../lib/textSplitter')
-const { concatenatePcmChunks } = require('../../lib/pcmConcatenator')
+const { splitText } = require('@qvac/tts-onnx/lib/textSplitter')
+const { concatenatePcmChunks } = require('@qvac/tts-onnx/lib/pcmConcatenator')
 
 const platform = os.platform()
 const isMobile = platform === 'ios' || platform === 'android'

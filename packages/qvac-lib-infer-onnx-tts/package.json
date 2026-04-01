@@ -59,7 +59,9 @@
       "types": "./addonLogging.d.ts",
       "default": "./addonLogging.js"
     },
-    "./addonLogging.js": "./addonLogging.js"
+    "./addonLogging.js": "./addonLogging.js",
+    "./lib/textSplitter": "./lib/textSplitter.js",
+    "./lib/pcmConcatenator": "./lib/pcmConcatenator.js"
   },
   "license": "Apache-2.0",
   "repository": {
