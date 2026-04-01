@@ -1,6 +1,6 @@
 # QVAC docs
 
-QVAC ecosystem website:
+QVAC docs ecosystem website:
 - Source code and content of the docs website.
 - Automation scripts for the integration between the codebase and the documentation.
 
