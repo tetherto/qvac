@@ -68,6 +68,9 @@ std::vector<float> StftProcessor::hannPeriodic(int length) {
 std::vector<float> StftProcessor::padReflect(const std::vector<float> &x,
                                              int padLeft, int padRight) {
   const int N = static_cast<int>(x.size());
+  if (N <= 1) {
+    return std::vector<float>(N + padLeft + padRight, N == 1 ? x[0] : 0.0f);
+  }
   std::vector<float> y(N + padLeft + padRight);
   for (int i = -padLeft; i < N + padRight; i++) {
     int idx = i;
@@ -96,9 +99,10 @@ Spectrogram StftProcessor::stft(const std::vector<float> &signal) const {
   const int freqBins = nFft_ / 2 + 1;
 
   Spectrogram spec(numFrames, std::vector<std::complex<float>>(freqBins));
+  ComplexVec frame(nFft_);
 
   for (int t = 0; t < numFrames; t++) {
-    ComplexVec frame(nFft_, {0.0f, 0.0f});
+    std::fill(frame.begin(), frame.end(), std::complex<float>{0.0f, 0.0f});
     for (int i = 0; i < winLength_; i++) {
       frame[i] = {xpad[t * hopLength_ + i] * window_[i], 0.0f};
     }

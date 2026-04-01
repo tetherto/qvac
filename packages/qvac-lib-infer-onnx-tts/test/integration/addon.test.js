@@ -5,7 +5,7 @@ const os = require('bare-os')
 const path = require('bare-path')
 const { loadChatterboxTTS, runChatterboxTTS, runChatterboxTTSWithSplit } = require('../utils/runChatterboxTTS')
 const { loadSupertonicTTS, runSupertonicTTS, runSupertonicStream } = require('../utils/runSupertonicTTS')
-const { ensureChatterboxModels, ensureSupertonicModels, ensureSupertonicModelsMultilingual, ensureWhisperModel } = require('../utils/downloadModel')
+const { ensureChatterboxModels, ensureSupertonicModels, ensureSupertonicModelsMultilingual, ensureWhisperModel, ensureLavaSRModels } = require('../utils/downloadModel')
 const { loadWhisper, runWhisper } = require('../utils/runWhisper')
 
 const platform = os.platform()
@@ -311,50 +311,51 @@ test('Chatterbox Multilingual TTS: Synthesis across languages', { timeout: 36000
 // LavaSR outputSampleRate tests (no LavaSR models needed, tests resampling)
 // ---------------------------------------------------------------------------
 
-test('Chatterbox TTS: outputSampleRate resamples to 16kHz', { timeout: 1800000 }, async (t) => {
+test('Supertonic TTS: outputSampleRate resamples to 16kHz', { timeout: 1800000 }, async (t) => {
   const baseDir = getBaseDir()
-  const modelDir = path.join(baseDir, 'models', 'chatterbox')
+  const modelDir = path.join(baseDir, 'models', 'supertonic')
 
-  const downloadResult = await ensureChatterboxModels({ targetDir: modelDir, variant: CHATTERBOX_VARIANT })
+  const downloadResult = await ensureSupertonicModels({ targetDir: modelDir })
   if (!downloadResult.success) {
-    console.log('Failed to download Chatterbox models, skipping test')
+    console.log('Failed to download Supertonic models, skipping test')
     return
   }
 
   const ONNXTTS = require('../..')
-  const { readWavAsFloat32, resampleLinear } = require('../utils/wav-helper')
-  const refPath = path.join(__dirname, '..', 'reference-audio', 'jfk.wav')
-  const { samples, sampleRate: refRate } = readWavAsFloat32(refPath)
-  const referenceAudio = refRate !== 24000
-    ? resampleLinear(samples, refRate, 24000)
-    : samples
+  const targetRate = 16000
 
   const model = new ONNXTTS({
-    tokenizerPath: path.join(modelDir, 'tokenizer.json'),
-    speechEncoderPath: chatterboxPath(modelDir, 'speech_encoder'),
-    embedTokensPath: chatterboxPath(modelDir, 'embed_tokens'),
-    conditionalDecoderPath: chatterboxPath(modelDir, 'conditional_decoder'),
-    languageModelPath: chatterboxLmPath(modelDir),
-    referenceAudio,
-    outputSampleRate: 16000,
+    modelDir,
+    voiceName: 'F1',
+    outputSampleRate: targetRate,
     opts: { stats: true }
   }, { language: 'en' })
 
   await model.load()
 
   let outputArray = []
+  let reportedSampleRate = null
   const response = await model.run({ type: 'text', input: 'Hello world.' })
   await response
     .onUpdate(data => {
       if (data && data.outputArray) {
         outputArray = outputArray.concat(Array.from(data.outputArray))
+        if (data.sampleRate) {
+          reportedSampleRate = data.sampleRate
+        }
       }
     })
     .await()
 
   t.ok(outputArray.length > 0, 'Should produce non-empty output audio')
+  t.is(reportedSampleRate, targetRate, `Reported sample rate should be ${targetRate}Hz`)
 
-  console.log(`Output length: ${outputArray.length} samples (resampled from 24kHz to 16kHz)`)
+  const nativeRate = 44100
+  const expectedRatio = targetRate / nativeRate
+  const nativeSamples = outputArray.length / expectedRatio
+  t.ok(nativeSamples > 1000, 'Estimated native sample count should be plausible')
+
+  console.log(`Output: ${outputArray.length} samples @ ${reportedSampleRate}Hz (resampled from ${nativeRate}Hz)`)
 
   await model.unload()
 })
@@ -675,4 +676,271 @@ test('Supertonic TTS multilingual (Spanish): basic synthesis with HF Supertone/s
 
   await model.unload()
   console.log('\nSupertonic multilingual TTS model unloaded')
+})
+
+// ---------------------------------------------------------------------------
+// LavaSR enhancement integration tests
+// ---------------------------------------------------------------------------
+
+const ENHANCED_SAMPLE_RATE = 48000
+
+function lavasrPaths (lavasrDir) {
+  return {
+    enhancerBackbonePath: path.join(lavasrDir, 'enhancer_backbone.onnx'),
+    enhancerSpecHeadPath: path.join(lavasrDir, 'enhancer_spec_head.onnx'),
+    denoiserPath: path.join(lavasrDir, 'denoiser_core_legacy_fixed63.onnx')
+  }
+}
+
+function loadReferenceAudio () {
+  const { readWavAsFloat32, resampleLinear } = require('../utils/wav-helper')
+  const refPath = path.join(__dirname, '..', 'reference-audio', 'jfk.wav')
+  const { samples, sampleRate } = readWavAsFloat32(refPath)
+  if (sampleRate !== 24000) {
+    return resampleLinear(samples, sampleRate, 24000)
+  }
+  return samples
+}
+
+test('LavaSR: Chatterbox + enhance produces 48kHz output', { timeout: 1800000 }, async (t) => {
+  const baseDir = getBaseDir()
+  const chatterboxDir = path.join(baseDir, 'models', 'chatterbox')
+  const lavasrDir = path.join(baseDir, 'models', 'lavasr')
+
+  const cbResult = await ensureChatterboxModels({ targetDir: chatterboxDir, variant: CHATTERBOX_VARIANT })
+  const lsResult = await ensureLavaSRModels({ targetDir: lavasrDir })
+
+  t.ok(cbResult.success, 'Chatterbox models should be downloaded')
+  t.ok(lsResult.success, 'LavaSR models should be downloaded')
+  if (!cbResult.success || !lsResult.success) return
+
+  const referenceAudio = loadReferenceAudio()
+  const ONNXTTS = require('../..')
+
+  const model = new ONNXTTS({
+    tokenizerPath: path.join(chatterboxDir, 'tokenizer.json'),
+    speechEncoderPath: chatterboxPath(chatterboxDir, 'speech_encoder'),
+    embedTokensPath: chatterboxPath(chatterboxDir, 'embed_tokens'),
+    conditionalDecoderPath: chatterboxPath(chatterboxDir, 'conditional_decoder'),
+    languageModelPath: chatterboxLmPath(chatterboxDir),
+    referenceAudio,
+    enhance: true,
+    ...lavasrPaths(lavasrDir),
+    opts: { stats: true }
+  }, { language: 'en' })
+
+  await model.load()
+
+  let reportedSampleRate = null
+  const response = await model.run({ type: 'text', input: 'Hello world.' })
+  const result = await response
+    .onUpdate(data => {
+      if (data && data.sampleRate) reportedSampleRate = data.sampleRate
+    })
+    .await()
+
+  t.ok(result.data.outputArray, 'Should produce output audio')
+  t.ok(result.data.outputArray.length > 0, 'Output should be non-empty')
+  t.is(reportedSampleRate, ENHANCED_SAMPLE_RATE, `Sample rate should be ${ENHANCED_SAMPLE_RATE}Hz after enhancement`)
+
+  console.log(`Output: ${result.data.outputArray.length} samples @ ${reportedSampleRate}Hz`)
+
+  await model.unload()
+})
+
+test('LavaSR: Chatterbox + denoise + enhance', { timeout: 1800000 }, async (t) => {
+  const baseDir = getBaseDir()
+  const chatterboxDir = path.join(baseDir, 'models', 'chatterbox')
+  const lavasrDir = path.join(baseDir, 'models', 'lavasr')
+
+  const cbResult = await ensureChatterboxModels({ targetDir: chatterboxDir, variant: CHATTERBOX_VARIANT })
+  const lsResult = await ensureLavaSRModels({ targetDir: lavasrDir })
+  if (!cbResult.success || !lsResult.success) return
+
+  const referenceAudio = loadReferenceAudio()
+  const ONNXTTS = require('../..')
+
+  const model = new ONNXTTS({
+    tokenizerPath: path.join(chatterboxDir, 'tokenizer.json'),
+    speechEncoderPath: chatterboxPath(chatterboxDir, 'speech_encoder'),
+    embedTokensPath: chatterboxPath(chatterboxDir, 'embed_tokens'),
+    conditionalDecoderPath: chatterboxPath(chatterboxDir, 'conditional_decoder'),
+    languageModelPath: chatterboxLmPath(chatterboxDir),
+    referenceAudio,
+    enhance: true,
+    denoise: true,
+    ...lavasrPaths(lavasrDir),
+    opts: { stats: true }
+  }, { language: 'en' })
+
+  await model.load()
+
+  let reportedSampleRate = null
+  const response = await model.run({ type: 'text', input: 'Testing denoiser and enhancer.' })
+  const result = await response
+    .onUpdate(data => {
+      if (data && data.sampleRate) reportedSampleRate = data.sampleRate
+    })
+    .await()
+
+  t.ok(result.data.outputArray, 'Should produce output audio')
+  t.ok(result.data.outputArray.length > 0, 'Output should be non-empty')
+  t.is(reportedSampleRate, ENHANCED_SAMPLE_RATE, `Sample rate should be ${ENHANCED_SAMPLE_RATE}Hz after denoise+enhance`)
+
+  await model.unload()
+})
+
+test('LavaSR: outputSampleRate without enhance (conventional resample)', { timeout: 1800000 }, async (t) => {
+  const baseDir = getBaseDir()
+  const chatterboxDir = path.join(baseDir, 'models', 'chatterbox')
+
+  const cbResult = await ensureChatterboxModels({ targetDir: chatterboxDir, variant: CHATTERBOX_VARIANT })
+  if (!cbResult.success) return
+
+  const referenceAudio = loadReferenceAudio()
+  const ONNXTTS = require('../..')
+  const targetRate = 16000
+
+  const model = new ONNXTTS({
+    tokenizerPath: path.join(chatterboxDir, 'tokenizer.json'),
+    speechEncoderPath: chatterboxPath(chatterboxDir, 'speech_encoder'),
+    embedTokensPath: chatterboxPath(chatterboxDir, 'embed_tokens'),
+    conditionalDecoderPath: chatterboxPath(chatterboxDir, 'conditional_decoder'),
+    languageModelPath: chatterboxLmPath(chatterboxDir),
+    referenceAudio,
+    outputSampleRate: targetRate,
+    opts: { stats: true }
+  }, { language: 'en' })
+
+  await model.load()
+
+  let reportedSampleRate = null
+  const response = await model.run({ type: 'text', input: 'Testing conventional resampling.' })
+  const result = await response
+    .onUpdate(data => {
+      if (data && data.sampleRate) reportedSampleRate = data.sampleRate
+    })
+    .await()
+
+  t.ok(result.data.outputArray, 'Should produce output audio')
+  t.ok(result.data.outputArray.length > 0, 'Output should be non-empty')
+  t.is(reportedSampleRate, targetRate, `Sample rate should be ${targetRate}Hz after resampling`)
+
+  await model.unload()
+})
+
+test('LavaSR: enhance + custom outputSampleRate', { timeout: 1800000 }, async (t) => {
+  const baseDir = getBaseDir()
+  const chatterboxDir = path.join(baseDir, 'models', 'chatterbox')
+  const lavasrDir = path.join(baseDir, 'models', 'lavasr')
+
+  const cbResult = await ensureChatterboxModels({ targetDir: chatterboxDir, variant: CHATTERBOX_VARIANT })
+  const lsResult = await ensureLavaSRModels({ targetDir: lavasrDir })
+  if (!cbResult.success || !lsResult.success) return
+
+  const referenceAudio = loadReferenceAudio()
+  const ONNXTTS = require('../..')
+  const targetRate = 22050
+
+  const model = new ONNXTTS({
+    tokenizerPath: path.join(chatterboxDir, 'tokenizer.json'),
+    speechEncoderPath: chatterboxPath(chatterboxDir, 'speech_encoder'),
+    embedTokensPath: chatterboxPath(chatterboxDir, 'embed_tokens'),
+    conditionalDecoderPath: chatterboxPath(chatterboxDir, 'conditional_decoder'),
+    languageModelPath: chatterboxLmPath(chatterboxDir),
+    referenceAudio,
+    enhance: true,
+    outputSampleRate: targetRate,
+    ...lavasrPaths(lavasrDir),
+    opts: { stats: true }
+  }, { language: 'en' })
+
+  await model.load()
+
+  let reportedSampleRate = null
+  const response = await model.run({ type: 'text', input: 'Testing enhance then downsample.' })
+  const result = await response
+    .onUpdate(data => {
+      if (data && data.sampleRate) reportedSampleRate = data.sampleRate
+    })
+    .await()
+
+  t.ok(result.data.outputArray, 'Should produce output audio')
+  t.ok(result.data.outputArray.length > 0, 'Output should be non-empty')
+  t.is(reportedSampleRate, targetRate, `Sample rate should be ${targetRate}Hz after enhance+downsample`)
+
+  await model.unload()
+})
+
+test('LavaSR: Supertonic + enhance', { timeout: 1800000 }, async (t) => {
+  const baseDir = getBaseDir()
+  const supertonicDir = path.join(baseDir, 'models', 'supertonic')
+  const lavasrDir = path.join(baseDir, 'models', 'lavasr')
+
+  const stResult = await ensureSupertonicModels({ targetDir: supertonicDir })
+  const lsResult = await ensureLavaSRModels({ targetDir: lavasrDir })
+  if (!stResult.success || !lsResult.success) return
+
+  const ONNXTTS = require('../..')
+
+  const model = new ONNXTTS({
+    modelDir: supertonicDir,
+    voiceName: 'F1',
+    enhance: true,
+    ...lavasrPaths(lavasrDir),
+    opts: { stats: true }
+  }, { language: 'en' })
+
+  await model.load()
+
+  let reportedSampleRate = null
+  const response = await model.run({ type: 'text', input: 'Testing Supertonic enhancement.' })
+  const result = await response
+    .onUpdate(data => {
+      if (data && data.sampleRate) reportedSampleRate = data.sampleRate
+    })
+    .await()
+
+  t.ok(result.data.outputArray, 'Should produce output audio')
+  t.ok(result.data.outputArray.length > 0, 'Output should be non-empty')
+  t.is(reportedSampleRate, ENHANCED_SAMPLE_RATE, `Sample rate should be ${ENHANCED_SAMPLE_RATE}Hz after Supertonic enhancement`)
+
+  await model.unload()
+})
+
+test('LavaSR: No flags = backward compatible', { timeout: 1800000 }, async (t) => {
+  const baseDir = getBaseDir()
+  const chatterboxDir = path.join(baseDir, 'models', 'chatterbox')
+
+  const cbResult = await ensureChatterboxModels({ targetDir: chatterboxDir, variant: CHATTERBOX_VARIANT })
+  if (!cbResult.success) return
+
+  const referenceAudio = loadReferenceAudio()
+  const ONNXTTS = require('../..')
+
+  const model = new ONNXTTS({
+    tokenizerPath: path.join(chatterboxDir, 'tokenizer.json'),
+    speechEncoderPath: chatterboxPath(chatterboxDir, 'speech_encoder'),
+    embedTokensPath: chatterboxPath(chatterboxDir, 'embed_tokens'),
+    conditionalDecoderPath: chatterboxPath(chatterboxDir, 'conditional_decoder'),
+    languageModelPath: chatterboxLmPath(chatterboxDir),
+    referenceAudio,
+    opts: { stats: true }
+  }, { language: 'en' })
+
+  await model.load()
+
+  let reportedSampleRate = null
+  const response = await model.run({ type: 'text', input: 'No enhancement flags.' })
+  const result = await response
+    .onUpdate(data => {
+      if (data && data.sampleRate) reportedSampleRate = data.sampleRate
+    })
+    .await()
+
+  t.ok(result.data.outputArray, 'Should produce output audio')
+  t.ok(result.data.outputArray.length > 0, 'Output should be non-empty')
+  t.is(reportedSampleRate, 24000, 'Sample rate should remain native 24000Hz without enhancement')
+
+  await model.unload()
 })

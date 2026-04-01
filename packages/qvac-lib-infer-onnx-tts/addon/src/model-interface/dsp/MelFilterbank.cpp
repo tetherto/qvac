@@ -1,7 +1,5 @@
 #include "MelFilterbank.hpp"
 
-#include "StftProcessor.hpp"
-
 #include <algorithm>
 #include <cmath>
 
@@ -56,9 +54,11 @@ MelFilterbank::MelFilterbank(int sampleRate, int nFft, int nMels, float fMin,
 std::vector<std::vector<float>>
 MelFilterbank::melSpectrogram(const std::vector<float> &wav,
                               int hopLength) const {
-  // The enhancer uses center_pad=false (same padding)
-  StftProcessor stft(nFft_, hopLength, nFft_, false);
-  const Spectrogram spec = stft.stft(wav);
+  if (!cachedStft_ || cachedHopLength_ != hopLength) {
+    cachedStft_ = std::make_unique<StftProcessor>(nFft_, hopLength, nFft_, false);
+    cachedHopLength_ = hopLength;
+  }
+  const Spectrogram spec = cachedStft_->stft(wav);
 
   const int T = static_cast<int>(spec.size());
   const int nFreqs = nFft_ / 2 + 1;

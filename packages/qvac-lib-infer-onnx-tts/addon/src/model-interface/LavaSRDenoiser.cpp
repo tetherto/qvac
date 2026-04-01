@@ -127,9 +127,11 @@ std::vector<float> LavaSRDenoiser::denoise(const std::vector<float> &wav16k) {
 
     std::vector<float> acc(2 * T * FREQ_BINS, 0.0f);
     std::vector<float> wacc(T, 0.0f);
+    std::vector<float> chunk(2 * L * FREQ_BINS);
+    std::vector<int64_t> shape = {1, 2, L, FREQ_BINS};
 
     for (int start : starts) {
-      std::vector<float> chunk(2 * L * FREQ_BINS, 0.0f);
+      std::fill(chunk.begin(), chunk.end(), 0.0f);
       for (int c = 0; c < 2; c++) {
         for (int t = 0; t < L; t++) {
           for (int f = 0; f < FREQ_BINS; f++) {
@@ -138,8 +140,6 @@ std::vector<float> LavaSRDenoiser::denoise(const std::vector<float> &wav16k) {
           }
         }
       }
-
-      std::vector<int64_t> shape = {1, 2, L, FREQ_BINS};
       Ort::Value inTensor = Ort::Value::CreateTensor<float>(
           memInfo, chunk.data(), chunk.size(), shape.data(), shape.size());
       const char *inNames[] = {inputName_.c_str()};

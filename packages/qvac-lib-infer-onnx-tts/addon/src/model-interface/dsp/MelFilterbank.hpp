@@ -1,5 +1,8 @@
 #pragma once
 
+#include "StftProcessor.hpp"
+
+#include <memory>
 #include <vector>
 
 namespace qvac::ttslib::dsp {
@@ -27,6 +30,10 @@ private:
   float fMax_;
   // [nMels][nFreqs] filter matrix, precomputed at construction
   std::vector<std::vector<float>> filters_;
+
+  mutable std::unique_ptr<StftProcessor> cachedStft_;
+  mutable int cachedHopLength_ = 0;
 };
 
 } // namespace qvac::ttslib::dsp
+

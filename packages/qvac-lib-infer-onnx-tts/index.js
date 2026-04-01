@@ -537,13 +537,17 @@ class ONNXTTS {
         input: input.input
       }
 
-      if (input.enhance !== undefined || input.denoise !== undefined || input.outputSampleRate !== undefined) {
+      if (input.enhance !== undefined || input.denoise !== undefined || input.outputSampleRate !== undefined ||
+          input.enhancerBackbonePath !== undefined || input.enhancerSpecHeadPath !== undefined || input.denoiserPath !== undefined) {
         jobData.config = {}
         if (input.enhance !== undefined) jobData.config.enhance = input.enhance
         if (input.denoise !== undefined) jobData.config.denoise = input.denoise
         if (input.outputSampleRate !== undefined) {
           jobData.config.outputSampleRate = String(input.outputSampleRate)
         }
+        if (input.enhancerBackbonePath !== undefined) jobData.config.enhancerBackbonePath = input.enhancerBackbonePath
+        if (input.enhancerSpecHeadPath !== undefined) jobData.config.enhancerSpecHeadPath = input.enhancerSpecHeadPath
+        if (input.denoiserPath !== undefined) jobData.config.denoiserPath = input.denoiserPath
       }
 
       accepted = await this.addon.runJob(jobData)

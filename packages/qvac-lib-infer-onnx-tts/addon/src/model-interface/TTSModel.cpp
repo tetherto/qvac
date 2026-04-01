@@ -294,6 +294,10 @@ TTSModel::Output TTSModel::process(const Input &text) {
     result = supertonicEngine_->synthesize(text);
   }
 
+  if (cancelRequested_.exchange(false)) {
+    throw std::runtime_error("Job cancelled");
+  }
+
   if (lavaSRConfig_.denoise || lavaSRConfig_.enhance ||
       lavaSRConfig_.outputSampleRate > 0) {
     result = postProcess(std::move(result));
@@ -394,20 +398,33 @@ void TTSModel::setReferenceAudio(const std::vector<float> &referenceAudio) {
 
 void TTSModel::parseLavaSRConfig(
     const std::unordered_map<std::string, std::string> &configMap) {
+  auto hasBool = [&](const std::string &key) -> bool {
+    return configMap.find(key) != configMap.end();
+  };
   auto getBool = [&](const std::string &key) -> bool {
     auto it = configMap.find(key);
     return it != configMap.end() && it->second == "true";
   };
-  auto getString = [&](const std::string &key) -> std::string {
-    auto it = configMap.find(key);
-    return (it != configMap.end()) ? it->second : "";
-  };
 
-  lavaSRConfig_.enhance = getBool("enhance");
-  lavaSRConfig_.denoise = getBool("denoise");
-  lavaSRConfig_.backbonePath = getString("enhancerBackbonePath");
-  lavaSRConfig_.specHeadPath = getString("enhancerSpecHeadPath");
-  lavaSRConfig_.denoiserPath = getString("denoiserPath");
+  if (hasBool("enhance")) {
+    lavaSRConfig_.enhance = getBool("enhance");
+  }
+  if (hasBool("denoise")) {
+    lavaSRConfig_.denoise = getBool("denoise");
+  }
+
+  auto bbIt = configMap.find("enhancerBackbonePath");
+  if (bbIt != configMap.end() && !bbIt->second.empty()) {
+    lavaSRConfig_.backbonePath = bbIt->second;
+  }
+  auto shIt = configMap.find("enhancerSpecHeadPath");
+  if (shIt != configMap.end() && !shIt->second.empty()) {
+    lavaSRConfig_.specHeadPath = shIt->second;
+  }
+  auto dnIt = configMap.find("denoiserPath");
+  if (dnIt != configMap.end() && !dnIt->second.empty()) {
+    lavaSRConfig_.denoiserPath = dnIt->second;
+  }
 
   auto srIt = configMap.find("outputSampleRate");
   if (srIt != configMap.end() && !srIt->second.empty()) {
