@@ -20,10 +20,6 @@ on:
       - tmp-*
   workflow_dispatch:
 
-concurrency:
-  group: sdk-pod-pr-${{ github.event.pull_request.number || github.sha }}
-  cancel-in-progress: true
-
 permissions:
   contents: read
   pull-requests: read
