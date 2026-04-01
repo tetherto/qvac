@@ -356,19 +356,31 @@ async function ensureWhisperModel (targetPath = null) {
 
 const CANGJIE_TSV_MIN_BYTES = 400000
 
-function sanitizeJsonControlChars (raw) {
-  return raw.replace(/[\x00-\x08\x0b\x0c\x0e-\x1f]/g, '')
+function extractCangjieEntries (raw) {
+  const str = typeof raw === 'string' ? raw : Buffer.from(raw).toString('utf8')
+  const entries = []
+  const re = /"([^"\\]*(?:\\.[^"\\]*)*)"/g
+  let m
+  while ((m = re.exec(str)) !== null) {
+    const val = m[1]
+      .replace(/\\t/g, '\t')
+      .replace(/\\n/g, '\n')
+      .replace(/\\r/g, '\r')
+      .replace(/\\\\/g, '\\')
+      .replace(/\\"/g, '"')
+    entries.push(val)
+  }
+  return entries
 }
 
 function writeCangjieJsonArrayToTsv (jsonBody, tsvPath) {
-  const data = JSON.parse(sanitizeJsonControlChars(jsonBody))
-  if (!Array.isArray(data)) {
-    throw new Error('Cangjie JSON must be an array')
+  const data = extractCangjieEntries(jsonBody)
+  if (data.length === 0) {
+    throw new Error('Cangjie JSON: no entries extracted')
   }
   const lines = []
   const seenFirstCp = new Set()
   for (const entry of data) {
-    if (typeof entry !== 'string') continue
     const tabIdx = entry.indexOf('\t')
     if (tabIdx <= 0) continue
     const ch = entry.slice(0, tabIdx)
