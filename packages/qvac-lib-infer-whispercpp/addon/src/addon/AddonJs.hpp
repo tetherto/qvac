@@ -5,6 +5,7 @@
 #include <mutex>
 #include <span>
 #include <string>
+#include <unordered_map>
 #include <vector>
 
 #include <js.h>
@@ -25,8 +26,9 @@
 namespace qvac_lib_inference_addon_whisper {
 
 inline std::mutex g_streamingMtx;
-inline qvac_lib_inference_addon_cpp::AddonJs* g_streamingInstance = nullptr;
-inline std::unique_ptr<StreamingProcessor> g_streamingProcessor;
+inline std::unordered_map<
+    qvac_lib_inference_addon_cpp::AddonJs*,
+    std::unique_ptr<StreamingProcessor>> g_streamingSessions;
 
 namespace js = qvac_lib_inference_addon_cpp::js;
 using qvac_lib_inference_addon_cpp::OutputQueue;
@@ -198,6 +200,16 @@ startStreaming(js_env_t* env, js_callback_info_t* info) try {
     throw std::runtime_error("vadModelPath is required for streaming");
   }
 
+  auto maybeJobId = configObj.getOptionalProperty<js::Number>(env, "jobId");
+  if (!maybeJobId.has_value()) {
+    throw std::runtime_error("jobId is required for streaming");
+  }
+  const double jobIdDouble = maybeJobId.value().as<double>(env);
+  if (!(jobIdDouble >= 1.0)) {
+    throw std::runtime_error("jobId must be a positive integer");
+  }
+  config.jobId = static_cast<JobId>(jobIdDouble);
+
   auto maybeVadThreshold =
       configObj.getOptionalProperty<js::Number>(env, "vadThreshold");
   if (maybeVadThreshold.has_value()) {
@@ -245,15 +257,14 @@ startStreaming(js_env_t* env, js_callback_info_t* info) try {
   {
     std::lock_guard lock(g_streamingMtx);
 
-    if (g_streamingProcessor) {
+    if (g_streamingSessions.count(&instance) != 0) {
       throw std::runtime_error(
-          "Streaming session already active");
+          "Streaming session already active for this instance");
     }
 
     auto& whisperModel =
         dynamic_cast<WhisperModel&>(instance.addonCpp->model.get());
-    g_streamingInstance = &instance;
-    g_streamingProcessor = std::make_unique<StreamingProcessor>(
+    g_streamingSessions[&instance] = std::make_unique<StreamingProcessor>(
         whisperModel,
         instance.addonCpp->outputQueue,
         config);
@@ -296,10 +307,11 @@ appendStreamingAudio(js_env_t* env, js_callback_info_t* info) try {
   StreamingProcessor* processor = nullptr;
   {
     std::lock_guard lock(g_streamingMtx);
-    if (!g_streamingProcessor || g_streamingInstance != &instance) {
+    auto it = g_streamingSessions.find(&instance);
+    if (it == g_streamingSessions.end()) {
       throw std::runtime_error("No active streaming session for this instance");
     }
-    processor = g_streamingProcessor.get();
+    processor = it->second.get();
   }
 
   processor->appendAudio(std::move(samples));
@@ -316,11 +328,12 @@ cleanupStreamingSession(
   std::unique_ptr<StreamingProcessor> processor;
   {
     std::lock_guard lock(g_streamingMtx);
-    if (!g_streamingProcessor || g_streamingInstance != &instance) {
+    auto it = g_streamingSessions.find(&instance);
+    if (it == g_streamingSessions.end()) {
       return false;
     }
-    processor = std::move(g_streamingProcessor);
-    g_streamingInstance = nullptr;
+    processor = std::move(it->second);
+    g_streamingSessions.erase(it);
   }
   if (forceful) {
     processor->cancel();
@@ -340,10 +353,11 @@ cancelWithStreaming(js_env_t* env, js_callback_info_t* info) try {
   std::shared_ptr<StreamingProcessor> processor;
   {
     std::lock_guard lock(g_streamingMtx);
-    if (g_streamingProcessor && g_streamingInstance == &instance) {
+    auto it = g_streamingSessions.find(&instance);
+    if (it != g_streamingSessions.end()) {
       processor = std::shared_ptr<StreamingProcessor>(
-          std::move(g_streamingProcessor));
-      g_streamingInstance = nullptr;
+          std::move(it->second));
+      g_streamingSessions.erase(it);
     }
   }
 

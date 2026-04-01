@@ -58,6 +58,9 @@ on:
 env:
   PKG_DIR: packages/qvac-lib-infer-nmtcpp
 
+permissions:
+  contents: read
+
 jobs:
   setup:
     runs-on: macos-14
@@ -66,12 +69,12 @@ jobs:
       quants: ${{ steps.prepare_quants.outputs.quants }}
     steps:
       - name: Checkout repository
-        uses: actions/checkout@v6
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # 6.0.2
         with:
           lfs: true
 
       - name: Set up Python (with pip cache)
-        uses: actions/setup-python@v6
+        uses: actions/setup-python@a309ff8b426b58ec0e2a45f0f869d46889d02405 # 6.2.0
         with:
           python-version: '3.14'
           cache: pip
@@ -122,12 +125,13 @@ jobs:
   Build:
     needs: setup
     runs-on: macos-14
+    environment: release
     steps:
       - name: Checkout repository
-        uses: actions/checkout@v6
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # 6.0.2
 
       - name: Set up Node.js
-        uses: actions/setup-node@v6
+        uses: actions/setup-node@53b83947a5a98c8d113130e565377fae1a50d02f # 6.3.0
         with:
           node-version: 20
 
@@ -194,7 +198,7 @@ jobs:
           bare-make install
 
       - name: Upload build artifact
-        uses: actions/upload-artifact@v6
+        uses: actions/upload-artifact@bbbca2ddaa5d8feaa63e36b76fdaad77386f024f # 7.0.0
         with:
           name: qvac-addon-build
           path: |
@@ -212,10 +216,10 @@ jobs:
         quant: ${{ fromJson(needs.setup.outputs.quants) }}
     steps:
       - name: Checkout repository
-        uses: actions/checkout@v6
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # 6.0.2
 
       - name: Set up Python (with pip cache)
-        uses: actions/setup-python@v6
+        uses: actions/setup-python@a309ff8b426b58ec0e2a45f0f869d46889d02405 # 6.2.0
         with:
           python-version: '3.14'
           cache: pip
@@ -225,7 +229,7 @@ jobs:
         run: npm install -g bare-runtime
 
       - name: Download build artifact
-        uses: actions/download-artifact@v7
+        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # 8.0.1
         with:
           name: qvac-addon-build
           path: ${{ env.PKG_DIR }}
@@ -293,7 +297,7 @@ jobs:
           echo "Hello world" | bare nmt-cli --model "models/$TEST_QUANT/$out_prefix/$DATE/$out_prefix.bin" "$SRC" "$DST"
 
       - name: Upload models artifact
-        uses: actions/upload-artifact@v6
+        uses: actions/upload-artifact@bbbca2ddaa5d8feaa63e36b76fdaad77386f024f # 7.0.0
         if: ${{ inputs.upload_models || github.event.inputs.upload_models }}
         with:
           name: ggml-opus-${{ matrix.quant }}-${{ matrix.model }}
@@ -307,7 +311,7 @@ jobs:
     runs-on: macos-14
     steps:
       - name: Download all artifacts
-        uses: actions/download-artifact@v7
+        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # 8.0.1
         with:
           path: merged_raw
           pattern: ggml-opus-*
@@ -339,7 +343,7 @@ jobs:
           fi
 
       - name: Upload merged models artifact
-        uses: actions/upload-artifact@v6
+        uses: actions/upload-artifact@bbbca2ddaa5d8feaa63e36b76fdaad77386f024f # 7.0.0
         with:
           name: ggml-opus-merged-models
           path: bundle/models

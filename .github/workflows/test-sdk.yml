@@ -70,15 +70,7 @@ jobs:
       consumer-timeout: ${{ fromJSON(inputs.desktop-consumer-timeout || '60') }}
       filter: ${{ inputs.filter }}
       test-version: ${{ inputs.test-version || '' }}
-    secrets:
-      MQTT_PROTOCOL: ${{ secrets.MQTT_PROTOCOL }}
-      MQTT_HOST: ${{ secrets.MQTT_HOST }}
-      MQTT_PORT: ${{ secrets.MQTT_PORT }}
-      MQTT_USERNAME: ${{ secrets.MQTT_USERNAME }}
-      MQTT_PASSWORD: ${{ secrets.MQTT_PASSWORD }}
-      MQTT_CA_CERT: ${{ secrets.MQTT_CA_CERT }}
-      PAT_TOKEN: ${{ secrets.PAT_TOKEN }}
-      NPM_TOKEN: ${{ secrets.NPM_TOKEN }}
+    secrets: inherit
 
   android-tests:
     # Runs for: all, mobile, android, empty (future PR/push)
@@ -93,17 +85,7 @@ jobs:
       device-farm-project-arn: ${{ vars.SDK_DEVICE_FARM_PROJECT_ARN }}
       device-pools: ${{ vars.SDK_DEVICE_FARM_POOLS }}
       test-version: ${{ inputs.test-version || '' }}
-    secrets:
-      PAT_TOKEN: ${{ secrets.PAT_TOKEN }}
-      NPM_TOKEN: ${{ secrets.NPM_TOKEN }}
-      MQTT_PROTOCOL: ${{ secrets.MQTT_PROTOCOL }}
-      MQTT_HOST: ${{ secrets.MQTT_HOST }}
-      MQTT_PORT: ${{ secrets.MQTT_PORT }}
-      MQTT_USERNAME: ${{ secrets.MQTT_USERNAME }}
-      MQTT_PASSWORD: ${{ secrets.MQTT_PASSWORD }}
-      MQTT_CA_CERT: ${{ secrets.MQTT_CA_CERT }}
-      AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
-      AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+    secrets: inherit
 
   # ios-tests:
   #   # Runs for: all, mobile, ios, empty (future PR/push)

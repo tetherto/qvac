@@ -1,6 +1,6 @@
 # Detailed Data Flows
 
-This document contains detailed diagrams showing how data moves through the `@qvac/img-stable-diffusion-cpp` system.
+This document contains detailed diagrams showing how data moves through the `@qvac/diffusion-cpp` system.
 
 **Audience:** Developers debugging complex behavior, contributors understanding system interactions.
 

@@ -18,7 +18,7 @@ project(qvac_lib_infer_parakeet
 
 if(CMAKE_SYSTEM_NAME STREQUAL "Linux")
   add_compile_options(-stdlib=libc++)
-  add_link_options(-stdlib=libc++)
+  add_link_options(-stdlib=libc++ -static-libstdc++)
 endif()
 
 # Find dependencies
@@ -68,12 +68,8 @@ target_include_directories(${LIB_NAME} PUBLIC
         ${QVAC_LIB_INFERENCE_ADDON_CPP_INCLUDE_DIRS}
 )
 
-# Use static linking for mobile platforms (ONNX runtime must be bundled in the binary)
-if(ANDROID OR IOS)
-  target_link_libraries(${LIB_NAME} PRIVATE onnxruntime::onnxruntime_static nlohmann_json::nlohmann_json)
-else()
-  target_link_libraries(${LIB_NAME} PRIVATE onnxruntime::onnxruntime nlohmann_json::nlohmann_json)
-endif()
+# Use the static ONNX Runtime target so each prebuild ships as a single addon binary.
+target_link_libraries(${LIB_NAME} PRIVATE onnxruntime::onnxruntime_static nlohmann_json::nlohmann_json)
 
 # Create the Bare addon module using bare-make's helper
 add_bare_module(qvac_lib_infer_parakeet EXPORTS)
@@ -99,22 +95,12 @@ target_include_directories(
 
 target_compile_definitions(${qvac_lib_infer_parakeet} PUBLIC JS_LOGGER)
 
-# Use static linking for mobile platforms
-if(ANDROID OR IOS)
-  target_link_libraries(
-    ${qvac_lib_infer_parakeet}
-    PRIVATE
-      ${LIB_NAME}
-      onnxruntime::onnxruntime_static
-  )
-else()
-  target_link_libraries(
-    ${qvac_lib_infer_parakeet}
-    PRIVATE
-      ${LIB_NAME}
-      onnxruntime::onnxruntime
-  )
-endif()
+target_link_libraries(
+  ${qvac_lib_infer_parakeet}
+  PRIVATE
+    ${LIB_NAME}
+    onnxruntime::onnxruntime_static
+)
 
 # Platform-specific settings
 if(WIN32)
@@ -179,85 +165,8 @@ bare_platform(PREBUILD_PLATFORM)
 bare_arch(PREBUILD_ARCH)
 set(PREBUILD_DIR "${CMAKE_SOURCE_DIR}/prebuilds/${PREBUILD_PLATFORM}-${PREBUILD_ARCH}")
 
-# Install ONNX Runtime shared libraries alongside the addon
-get_target_property(ORT_LIB_LOCATION onnxruntime::onnxruntime IMPORTED_LOCATION_RELEASE)
-if(NOT ORT_LIB_LOCATION)
-  get_target_property(ORT_LIB_LOCATION onnxruntime::onnxruntime IMPORTED_LOCATION)
-endif()
-if(ORT_LIB_LOCATION)
-  get_filename_component(ORT_LIB_DIR "${ORT_LIB_LOCATION}" DIRECTORY)
-  
-  if(UNIX AND NOT APPLE)
-    # Linux: Install main shared library with symlinks
-    install(FILES
-      "${ORT_LIB_DIR}/libonnxruntime.so.1.21.0"
-      DESTINATION "${PREBUILD_DIR}"
-      OPTIONAL
-    )
-    install(CODE "
-      execute_process(COMMAND ${CMAKE_COMMAND} -E create_symlink libonnxruntime.so.1.21.0 ${PREBUILD_DIR}/libonnxruntime.so.1)
-      execute_process(COMMAND ${CMAKE_COMMAND} -E create_symlink libonnxruntime.so.1 ${PREBUILD_DIR}/libonnxruntime.so)
-    ")
-    # Install providers shared library
-    install(FILES
-      "${ORT_LIB_DIR}/libonnxruntime_providers_shared.so"
-      DESTINATION "${PREBUILD_DIR}"
-      OPTIONAL
-    )
-    # Bundle libc++ runtime libs required by onnxruntime's shared library
-    install(CODE "
-      foreach(_lib libc++.so.1 libc++abi.so.1 libunwind.so.1)
-        execute_process(
-          COMMAND ${CMAKE_CXX_COMPILER} -stdlib=libc++ -print-file-name=\${_lib}
-          OUTPUT_VARIABLE _lib_path OUTPUT_STRIP_TRAILING_WHITESPACE
-        )
-        if(EXISTS \"\${_lib_path}\")
-          get_filename_component(_real_path \"\${_lib_path}\" REALPATH)
-          file(INSTALL \"\${_real_path}\" DESTINATION \"${PREBUILD_DIR}\")
-          get_filename_component(_real_name \"\${_real_path}\" NAME)
-          if(NOT _real_name STREQUAL \"\${_lib}\")
-            file(CREATE_LINK \"\${_real_name}\" \"${PREBUILD_DIR}/\${_lib}\" SYMBOLIC)
-          endif()
-          message(STATUS \"Bundled \${_lib} -> \${_real_path}\")
-        endif()
-      endforeach()
-    ")
-  elseif(APPLE)
-    # macOS: Install dylib files
-    file(GLOB ORT_DYLIBS "${ORT_LIB_DIR}/libonnxruntime*.dylib")
-    install(FILES ${ORT_DYLIBS}
-      DESTINATION "${PREBUILD_DIR}"
-      OPTIONAL
-    )
-  elseif(WIN32)
-    # Windows: Install DLL files
-    # DLLs are usually in bin/ directory, not lib/
-    get_filename_component(ORT_ROOT_DIR "${ORT_LIB_DIR}" DIRECTORY)
-    file(GLOB ORT_DLLS "${ORT_ROOT_DIR}/bin/onnxruntime*.dll")
-    if(NOT ORT_DLLS)
-      file(GLOB ORT_DLLS "${ORT_LIB_DIR}/onnxruntime*.dll")
-    endif()
-    install(FILES ${ORT_DLLS}
-      DESTINATION "${PREBUILD_DIR}"
-      OPTIONAL
-    )
-  endif()
-endif()
-
-# Fix RPATH after install (cmake-bare sets a different RPATH that we need to override)
-if(UNIX AND NOT APPLE AND NOT ANDROID)
-  find_program(PATCHELF patchelf)
-  if(PATCHELF)
-    install(CODE "
-      execute_process(COMMAND ${PATCHELF} --set-rpath \"\$ORIGIN\" \"${PREBUILD_DIR}/qvac__transcription-parakeet.bare\")
-    ")
-  endif()
-elseif(APPLE)
-  # macOS: Add @loader_path to RPATH so the addon can find dylibs in the same directory
-  install(CODE "
-    execute_process(COMMAND install_name_tool -add_rpath @loader_path \"${PREBUILD_DIR}/qvac__transcription-parakeet.bare\")
-  ")
-elseif(ANDROID)
+# The desktop addon is fully static, so no companion runtime libraries are installed.
+if(ANDROID)
   # Android: Strip debug symbols from the final binary using NDK's llvm-strip
   # CMAKE_STRIP is set by the Android toolchain, or we find it in NDK
   if(CMAKE_STRIP)
@@ -306,7 +215,7 @@ if(BUILD_TESTING)
     target_link_libraries(parakeet_tests 
       PRIVATE 
         GTest::gmock_main
-        onnxruntime::onnxruntime
+        onnxruntime::onnxruntime_static
         nlohmann_json::nlohmann_json
     )
     

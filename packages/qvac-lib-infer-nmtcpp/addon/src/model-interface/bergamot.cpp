@@ -180,16 +180,15 @@ bergamot_context* bergamot_init(const char* model_path, const bergamot_params& p
                << "  - " << srcvocab_path_full << "\n"
                << "  - " << dstvocab_path_full << "\n";
 
-    config_str
-               << "beam-size: 1\n"
-               << "normalize: 1.0\n"
+    config_str << "beam-size: " << params.beam_size << "\n"
+               << "normalize: " << params.normalize << "\n"
                << "word-penalty: 0\n"
                << "max-length-break: 128\n"
                << "mini-batch-words: 1024\n"
                << "mini-batch: 64\n"
                << "workspace: 128\n"
                << "alignment: soft\n"
-               << "max-length-factor: 2.5\n"
+               << "max-length-factor: " << params.max_length_factor << "\n"
                << "gemm-precision: int8shiftAlphaAll\n"
                << "skip-cost: true\n"
                << "cpu-threads: " << params.num_workers << "\n"
@@ -391,25 +390,4 @@ void bergamot_reset_runtime_stats(bergamot_context* ctx) {
 }
 
 // Free bergamot context
-void bergamot_free(bergamot_context* ctx) {
-  delete ctx;
-}
-
-// Set configuration parameters
-void bergamot_set_beam_size(bergamot_context* ctx, int beam_size) {
-  if (ctx) {
-    ctx->beam_size = beam_size;
-  }
-}
-
-void bergamot_set_normalize(bergamot_context* ctx, bool normalize) {
-  if (ctx) {
-    ctx->normalize = normalize;
-  }
-}
-
-void bergamot_set_max_length_factor(bergamot_context* ctx, int factor) {
-  if (ctx) {
-    ctx->max_length_factor = factor;
-  }
-}
+void bergamot_free(bergamot_context* ctx) { delete ctx; }

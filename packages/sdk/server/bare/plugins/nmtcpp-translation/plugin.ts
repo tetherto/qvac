@@ -21,10 +21,7 @@ import {
 import { createStreamLogger, registerAddonLogger } from "@/logging";
 import { parseModelPath } from "@/server/utils";
 import FilesystemDL from "@qvac/dl-filesystem";
-import {
-  TranslationFailedError,
-  ModelLoadFailedError,
-} from "@/utils/errors-server";
+import { ModelLoadFailedError } from "@/utils/errors-server";
 import { asLoader } from "@/server/bare/utils/loader-adapter";
 import { translate } from "@/server/bare/ops/translate";
 import { attachModelExecutionMs } from "@/profiling/model-execution";
@@ -148,12 +145,6 @@ function createNmtModel(
       }),
     }),
   };
-
-  if (config.modelType === TranslationNmtcpp.ModelTypes.IndicTrans) {
-    throw new TranslationFailedError(
-      "IndicTrans models are not supported with current NMT addon version.",
-    );
-  }
 
   const model = new TranslationNmtcpp(args, config);
 

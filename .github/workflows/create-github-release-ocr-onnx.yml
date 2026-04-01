@@ -28,7 +28,7 @@ jobs:
       contents: write
     steps:
       - name: Checkout code
-        uses: actions/checkout@v6
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # 6.0.2
         with:
           fetch-depth: 0
 
@@ -53,7 +53,7 @@ jobs:
 
       - name: Create GitHub Release
         if: steps.version.outputs.bumped == 'true'
-        uses: softprops/action-gh-release@v2
+        uses: softprops/action-gh-release@153bb8e04406b158c6c84fc1615b65b24149a1fe # 2.6.1
         with:
           tag_name: ocr-onnx-v${{ steps.version.outputs.current }}
           name: QVAC OCR Addon v${{ steps.version.outputs.current }}
