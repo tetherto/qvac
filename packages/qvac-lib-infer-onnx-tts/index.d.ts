@@ -88,6 +88,7 @@ declare class ONNXTTS {
 
   load(...args: unknown[]): Promise<void>
   unload(): Promise<void>
+  destroy(): Promise<void>
   reload(newConfig?: Record<string, unknown>): Promise<void>
   cancel(): Promise<void>
   getApiDefinition(): string

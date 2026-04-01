@@ -349,6 +349,15 @@ class ONNXTTS {
     this.state.weightsLoaded = false
   }
 
+  /**
+   * Tear down the native addon and mark this instance destroyed (see {@link ONNXTTS#getState}).
+   * @returns {Promise<void>}
+   */
+  async destroy () {
+    await this.unload()
+    this.state.destroyed = true
+  }
+
   async _runInternal (input) {
     const response = this._job.start()
     try {
