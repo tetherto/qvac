@@ -88,6 +88,6 @@ export async function handleEmbeddings (req: IncomingMessage, res: ServerRespons
   } catch (err) {
     const message = err instanceof Error ? err.message : String(err)
     ctx.logger.error(`Embed error for "${modelAlias}": ${message}`)
-    sendError(res, 500, 'embed_error', message)
+    sendError(res, 500, 'embed_error', 'An internal error occurred during embedding.')
   }
 }

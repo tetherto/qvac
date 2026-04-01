@@ -1,6 +1,6 @@
 import { z } from "zod";
 import { perCallProfilingSchema } from "./profiling";
-import { pingRequestSchema, pingResponseSchema } from "./ping";
+import { heartbeatRequestSchema, heartbeatResponseSchema } from "./heartbeat";
 import {
   completionStreamRequestSchema,
   completionStreamResponseSchema,
@@ -66,7 +66,7 @@ import {
 } from "./registry";
 
 export const requestSchema = z.union([
-  pingRequestSchema,
+  heartbeatRequestSchema,
   loadModelRequestSchema,
   downloadAssetRequestSchema,
   completionStreamRequestSchema,
@@ -91,7 +91,7 @@ export const requestSchema = z.union([
 ]);
 
 export const responseSchema = z.discriminatedUnion("type", [
-  pingResponseSchema,
+  heartbeatResponseSchema,
   loadModelResponseSchema,
   downloadAssetResponseSchema,
   completionStreamResponseSchema,
@@ -120,6 +120,7 @@ export const responseSchema = z.discriminatedUnion("type", [
 
 export const rpcOptionsSchema = z.object({
   timeout: z.number().min(100).optional(),
+  healthCheckTimeout: z.number().min(100).optional(),
   forceNewConnection: z.boolean().optional(),
   profiling: perCallProfilingSchema.optional(),
 });
