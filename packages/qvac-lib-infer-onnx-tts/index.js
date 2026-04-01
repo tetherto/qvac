@@ -412,24 +412,10 @@ class ONNXTTS {
       ('totalTime' in data || 'audioDurationMs' in data || 'totalSamples' in data)
     ) {
       this.logger.info(`TTS job completed. Stats: ${JSON.stringify(data)}`)
-      const isFinetuneTerminal =
-        data &&
-        typeof data === 'object' &&
-        data.op === 'finetune' &&
-        typeof data.status === 'string'
-      if (this.opts?.stats && !isFinetuneTerminal) {
+      if (this.opts?.stats) {
         this._job.end(data)
-      } else if (isFinetuneTerminal) {
-        this._job.end(null, data)
       } else {
         this._job.end()
-      }
-      return
-    }
-
-    if (event === 'FinetuneProgress') {
-      if (this.opts?.stats && this._job.active) {
-        this._job.active.updateStats(data.stats)
       }
       return
     }
