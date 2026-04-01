@@ -65,6 +65,8 @@ export interface AddonConfigurationParams {
   path: string
   config: GGMLConfig
   backendsDir?: string
+  /** Writable directory for OpenCL kernel binary cache. Required on Android for fast GPU startup. */
+  openclCacheDir?: string
 }
 
 export interface RuntimeStats {

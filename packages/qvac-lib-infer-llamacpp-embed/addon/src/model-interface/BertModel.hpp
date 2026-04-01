@@ -108,7 +108,8 @@ public:
   BertModel(
       const std::string& modelGgufPath,
       const std::unordered_map<std::string, std::string>& config,
-      const std::string& backendsDir = "");
+      const std::string& backendsDir = "",
+      const std::string& openclCacheDir = "");
 
   /// @brief Construct with already parsed parameters.
   explicit BertModel(common_params& params);
@@ -120,7 +121,8 @@ public:
   void init(
       const std::string& modelGgufPath,
       const std::unordered_map<std::string, std::string>& config,
-      const std::string& backendsDir);
+      const std::string& backendsDir,
+      const std::string& openclCacheDir = "");
 
   /// @brief Deletes model implementation.
   ~BertModel() override;
@@ -190,7 +192,9 @@ public:
   enum llama_pooling_type pooling_type;
   int n_embd;
 
-  void initializeBackend(const std::string& backendsDir = "");
+  void initializeBackend(
+      const std::string& backendsDir = "",
+      const std::string& openclCacheDir = "");
 
   /// @brief Ensure model is initialized
   void waitForLoadInitialization() final {

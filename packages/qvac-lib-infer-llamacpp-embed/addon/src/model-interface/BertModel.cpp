@@ -325,16 +325,17 @@ common_params setupParams(
 BertModel::BertModel(
     const std::string& modelGgufPath,
     const std::unordered_map<std::string, std::string>& config,
-    const std::string& backendsDir)
+    const std::string& backendsDir,
+    const std::string& openclCacheDir)
     : model_(nullptr), ctx_(nullptr), vocab_(nullptr), batch_{},
       pooling_type(LLAMA_POOLING_TYPE_NONE), n_embd(0), is_loaded_(false),
       loadingContext_(InitLoader::getLoadingContext("BertModel")),
       shards_(GGUFShards::expandGGUFIntoShards(modelGgufPath)) {
-  auto modelInit = [this](
+  auto modelInit = [this, openclCacheDir](
                        const std::string& path,
                        const std::unordered_map<std::string, std::string>& cfg,
                        const std::string& backendsDir) {
-    this->init(path, cfg, backendsDir);
+    this->init(path, cfg, backendsDir, openclCacheDir);
   };
   initLoader_.init(
       InitLoader::LOADER_TYPE::DELAYED,
@@ -359,7 +360,8 @@ BertModel::BertModel(common_params& params)
 void BertModel::init(
     const std::string& modelGgufPath,
     const std::unordered_map<std::string, std::string>& config,
-    const std::string& backendsDir) {
+    const std::string& backendsDir,
+    const std::string& openclCacheDir) {
   // Need to initialize backend before setupParams to properly
   // detect available backends and choose properly among them
 
@@ -367,7 +369,7 @@ void BertModel::init(
   auto configCopy = config;
   setVerbosityLevel(configCopy);
   lazyCommonInit();
-  initializeBackend(backendsDir);
+  initializeBackend(backendsDir, openclCacheDir);
 
   common_params params = setupParams(modelGgufPath, configCopy);
   BertModel::init(params);
@@ -501,8 +503,10 @@ std::any BertModel::process(const std::any& input) {
       "BertModel::process: unsupported input type");
 }
 
-void BertModel::initializeBackend(const std::string& backendsDir) {
-  backendsHandle_ = LlamaBackendsHandle(backendsDir);
+void BertModel::initializeBackend(
+    const std::string& backendsDir,
+    const std::string& openclCacheDir) {
+  backendsHandle_ = LlamaBackendsHandle(backendsDir, openclCacheDir);
 }
 
 void BertModel::reset() {

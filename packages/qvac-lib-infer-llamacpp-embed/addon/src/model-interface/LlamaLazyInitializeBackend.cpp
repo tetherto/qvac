@@ -16,7 +16,9 @@ bool LlamaLazyInitializeBackend::g_initialized = false;
 std::string LlamaLazyInitializeBackend::g_recordedBackendsDir;
 int LlamaLazyInitializeBackend::g_refCount = 0;
 
-bool LlamaLazyInitializeBackend::initialize(const std::string& backendsDir) {
+bool LlamaLazyInitializeBackend::initialize(
+    const std::string& backendsDir,
+    const std::string& openclCacheDir) {
   std::lock_guard<std::mutex> lock(g_initMutex);
 
   if (g_initialized) {
@@ -36,6 +38,12 @@ bool LlamaLazyInitializeBackend::initialize(const std::string& backendsDir) {
   }
 
   llama_log_set(llamaLogCallback, nullptr);
+
+  if (!openclCacheDir.empty()) {
+    auto oclCachePath =
+        (std::filesystem::path(openclCacheDir) / "opencl-cache").string();
+    setenv("GGML_OPENCL_CACHE_DIR", oclCachePath.c_str(), /*overwrite=*/1);
+  }
 
   if (!backendsDir.empty()) {
     std::filesystem::path backendsDirPath(backendsDir);
@@ -77,9 +85,11 @@ void LlamaLazyInitializeBackend::decrementRefCount() {
   }
 }
 
-LlamaBackendsHandle::LlamaBackendsHandle(const std::string& backendsDir)
+LlamaBackendsHandle::LlamaBackendsHandle(
+    const std::string& backendsDir,
+    const std::string& openclCacheDir)
     : ownsHandle_(true) {
-  LlamaLazyInitializeBackend::initialize(backendsDir);
+  LlamaLazyInitializeBackend::initialize(backendsDir, openclCacheDir);
   LlamaLazyInitializeBackend::incrementRefCount();
 }
 
