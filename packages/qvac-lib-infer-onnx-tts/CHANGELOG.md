@@ -14,7 +14,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Switched ONNX Runtime linkage from direct vcpkg dependency to `@qvac/onnx` shared module, aligning with the OCR package pattern for consistent cross-addon runtime sharing
 - Changed integration tests to run faster, with better WER verification
 
-## [0.7.1]
+## [0.8.0]
 
 This release refactors the JavaScript client around a smaller public surface: one `files` map and explicit engines, no loader or download stubs, and composition-based job handling via **`@qvac/infer-base`** (**`createJobHandler`**, **`exclusiveRunQueue`**, **`getApiDefinition`**) instead of subclassing **`BaseInference`**. Callers should pass **absolute** artifact paths and use **`exclusiveRun: true`** when they need serialized `run()` / `reload()` / `unload()` with the native single-job model.
 
