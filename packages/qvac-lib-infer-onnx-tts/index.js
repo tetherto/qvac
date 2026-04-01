@@ -23,8 +23,9 @@ function firstNonEmpty (...candidates) {
 }
 
 /**
- * Normalize `files` map: short keys, legacy *Path keys, and SDK-style aliases.
- * @param {Record<string, unknown>} files
+ * Whether `n` has at least one non-empty explicit artifact path (tokenizer, encoders,
+ * vocoder, config, etc.). Used with `modelDir` to tell Chatterbox vs Supertonic layouts apart.
+ * @param {Record<string, unknown>} n Normalized files map (same shape as {@link normalizeOnnxTtsFiles} output).
  */
 function hasAnyExplicitArtifact (n) {
   const keys = [
