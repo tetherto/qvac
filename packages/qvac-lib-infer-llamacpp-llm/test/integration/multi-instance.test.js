@@ -56,6 +56,7 @@ async function createInstance (modelName, dirPath, overrides = {}) {
     opts: { stats: true }
   }, config)
 
+
   return { addon, loader }
 }
 
