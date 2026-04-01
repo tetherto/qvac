@@ -356,8 +356,12 @@ async function ensureWhisperModel (targetPath = null) {
 
 const CANGJIE_TSV_MIN_BYTES = 400000
 
+function sanitizeJsonControlChars (raw) {
+  return raw.replace(/[\x00-\x08\x0b\x0c\x0e-\x1f]/g, '')
+}
+
 function writeCangjieJsonArrayToTsv (jsonBody, tsvPath) {
-  const data = JSON.parse(jsonBody)
+  const data = JSON.parse(sanitizeJsonControlChars(jsonBody))
   if (!Array.isArray(data)) {
     throw new Error('Cangjie JSON must be an array')
   }
@@ -699,6 +703,88 @@ async function fetchUrlBody (url) {
  * @param {string[]} [options.voiceNames=['F1']] - Voice files to download (e.g. F1.bin, M1.bin)
  * @returns {Promise<Object>} { success, results, targetDir }
  */
+function downloadOnnxFile (url, targetPath, minSize, label) {
+  return new Promise((resolve) => {
+    if (fs.existsSync(targetPath)) {
+      const stats = fs.statSync(targetPath)
+      if (stats.size >= minSize) {
+        console.log(` ✓ Using cached: ${label} (${stats.size} bytes)`)
+        resolve({ success: true, path: targetPath, cached: true })
+        return
+      }
+      fs.unlinkSync(targetPath)
+    }
+
+    console.log(`\n Downloading ${label}...`)
+
+    let downloadSuccess = false
+    if (isMobile) {
+      downloadWithHttp(url, targetPath)
+        .then((result) => { downloadSuccess = result.success && fs.existsSync(targetPath) })
+        .catch((e) => { console.log(` HTTP download error: ${e.message}`) })
+        .finally(() => finalize())
+      return
+    }
+
+    try {
+      const { spawnSync } = require('bare-subprocess')
+      const downloadResult = spawnSync('curl', [
+        '-L', '-o', targetPath, url,
+        '--fail', '--show-error',
+        '--connect-timeout', '30',
+        '--max-time', '1800'
+      ], { stdio: ['inherit', 'inherit', 'pipe'] })
+      downloadSuccess = downloadResult.status === 0 && fs.existsSync(targetPath)
+    } catch (e) {
+      console.log(` Curl error: ${e.message}`)
+    }
+    finalize()
+
+    function finalize () {
+      if (downloadSuccess) {
+        const stats = fs.statSync(targetPath)
+        if (stats.size >= minSize) {
+          console.log(` ✓ Downloaded: ${label} (${stats.size} bytes)`)
+          resolve({ success: true, path: targetPath, cached: false })
+          return
+        }
+        fs.unlinkSync(targetPath)
+      }
+      resolve({ success: false, path: targetPath })
+    }
+  })
+}
+
+async function downloadJsonConfig (url, targetPath, label) {
+  if (fs.existsSync(targetPath) && isValidJsonCache(targetPath)) {
+    console.log(` ✓ Using cached: ${label}`)
+    return { success: true, path: targetPath, cached: true }
+  }
+
+  console.log(`\n Downloading ${label}...`)
+  if (fs.existsSync(targetPath)) fs.unlinkSync(targetPath)
+
+  const fetchResult = await fetchUrlBody(url)
+  if (!fetchResult.success || !fetchResult.body) {
+    console.log(` ${label} fetch failed: ${fetchResult.error || 'unknown'}`)
+    return { success: false, path: targetPath }
+  }
+
+  try {
+    const parsed = JSON.parse(fetchResult.body)
+    if (typeof parsed !== 'object' || parsed === null) {
+      console.log(` ${label} response was not a valid JSON object/array`)
+      return { success: false, path: targetPath }
+    }
+    fs.writeFileSync(targetPath, fetchResult.body, 'utf8')
+    console.log(` ✓ Downloaded: ${label} (${Buffer.byteLength(fetchResult.body, 'utf8')} bytes)`)
+    return { success: true, path: targetPath, cached: false }
+  } catch (e) {
+    console.log(` ${label} parse error: ${e.message}`)
+    return { success: false, path: targetPath }
+  }
+}
+
 async function ensureSupertonicModels (options = {}) {
   const targetDir = options.targetDir || path.join(getBaseDir(), 'models', 'supertonic')
   const voiceNames = options.voiceNames || ['F1']
@@ -709,20 +795,17 @@ async function ensureSupertonicModels (options = {}) {
     fs.mkdirSync(targetDir, { recursive: true })
   }
   const onnxDir = path.join(targetDir, 'onnx')
-  const voicesDir = path.join(targetDir, 'voices')
+  const voiceStylesDir = path.join(targetDir, 'voice_styles')
   if (!fs.existsSync(onnxDir)) fs.mkdirSync(onnxDir, { recursive: true })
-  if (!fs.existsSync(voicesDir)) fs.mkdirSync(voicesDir, { recursive: true })
+  if (!fs.existsSync(voiceStylesDir)) fs.mkdirSync(voiceStylesDir, { recursive: true })
 
-  const baseUrl = 'https://huggingface.co/onnx-community/Supertonic-TTS-ONNX/resolve/main'
+  const baseUrl = 'https://huggingface.co/Supertone/supertonic-2/resolve/main'
 
-  // ONNX files (each has .onnx and .onnx_data) - sizes from Hugging Face
   const onnxFiles = [
-    { name: 'text_encoder.onnx', minSize: 100000 },
-    { name: 'text_encoder.onnx_data', minSize: 25000000 },
-    { name: 'latent_denoiser.onnx', minSize: 100000 },
-    { name: 'latent_denoiser.onnx_data', minSize: 120000000 },
-    { name: 'voice_decoder.onnx', minSize: 10000 },
-    { name: 'voice_decoder.onnx_data', minSize: 95000000 }
+    { name: 'duration_predictor.onnx', minSize: 1000000 },
+    { name: 'text_encoder.onnx', minSize: 25000000 },
+    { name: 'vector_estimator.onnx', minSize: 120000000 },
+    { name: 'vocoder.onnx', minSize: 95000000 }
   ]
 
   const results = {}
@@ -731,143 +814,31 @@ async function ensureSupertonicModels (options = {}) {
   for (const file of onnxFiles) {
     const url = `${baseUrl}/onnx/${file.name}`
     const targetPath = path.join(onnxDir, file.name)
-
-    console.log(`\n Downloading onnx/${file.name}...`)
-
-    if (fs.existsSync(targetPath)) {
-      const stats = fs.statSync(targetPath)
-      if (stats.size >= file.minSize) {
-        console.log(` ✓ Using cached: onnx/${file.name} (${stats.size} bytes)`)
-        results['onnx/' + file.name] = { success: true, path: targetPath, cached: true }
-        continue
-      }
-      fs.unlinkSync(targetPath)
-    }
-
-    let downloadSuccess = false
-    if (isMobile) {
-      try {
-        const result = await downloadWithHttp(url, targetPath)
-        downloadSuccess = result.success && fs.existsSync(targetPath)
-      } catch (e) {
-        console.log(` HTTP download error: ${e.message}`)
-      }
-    } else {
-      try {
-        const { spawnSync } = require('bare-subprocess')
-        const downloadResult = spawnSync('curl', [
-          '-L', '-o', targetPath, url,
-          '--fail', '--show-error',
-          '--connect-timeout', '30',
-          '--max-time', '1800'
-        ], { stdio: ['inherit', 'inherit', 'pipe'] })
-        downloadSuccess = downloadResult.status === 0 && fs.existsSync(targetPath)
-      } catch (e) {
-        console.log(` Curl error: ${e.message}`)
-      }
-    }
-
-    if (downloadSuccess) {
-      const stats = fs.statSync(targetPath)
-      if (stats.size >= file.minSize) {
-        console.log(` ✓ Downloaded: onnx/${file.name} (${stats.size} bytes)`)
-        results['onnx/' + file.name] = { success: true, path: targetPath, cached: false }
-      } else {
-        fs.unlinkSync(targetPath)
-        results['onnx/' + file.name] = { success: false, path: targetPath }
-        allSuccess = false
-      }
-    } else {
-      results['onnx/' + file.name] = { success: false, path: targetPath }
-      allSuccess = false
-    }
+    const r = await downloadOnnxFile(url, targetPath, file.minSize, `onnx/${file.name}`)
+    results['onnx/' + file.name] = r
+    if (!r.success) allSuccess = false
   }
 
-  // Voice files
+  const onnxJsonConfigs = ['tts.json', 'unicode_indexer.json']
+  for (const name of onnxJsonConfigs) {
+    const r = await downloadJsonConfig(
+      `${baseUrl}/onnx/${name}`,
+      path.join(onnxDir, name),
+      `onnx/${name}`
+    )
+    results['onnx/' + name] = r
+    if (!r.success) allSuccess = false
+  }
+
   for (const voice of voiceNames) {
-    const name = voice.endsWith('.bin') ? voice : `${voice}.bin`
-    const url = `${baseUrl}/voices/${name}`
-    const targetPath = path.join(voicesDir, name)
-
-    console.log(`\n Downloading voices/${name}...`)
-
-    if (fs.existsSync(targetPath)) {
-      const stats = fs.statSync(targetPath)
-      if (stats.size > 40000) {
-        console.log(` ✓ Using cached: voices/${name} (${stats.size} bytes)`)
-        results['voices/' + name] = { success: true, path: targetPath, cached: true }
-        continue
-      }
-      fs.unlinkSync(targetPath)
-    }
-
-    let downloadSuccess = false
-    if (isMobile) {
-      try {
-        const result = await downloadWithHttp(url, targetPath)
-        downloadSuccess = result.success && fs.existsSync(targetPath)
-      } catch (e) {
-        console.log(` HTTP download error: ${e.message}`)
-      }
-    } else {
-      try {
-        const { spawnSync } = require('bare-subprocess')
-        const downloadResult = spawnSync('curl', [
-          '-L', '-o', targetPath, url,
-          '--fail', '--show-error',
-          '--connect-timeout', '30',
-          '--max-time', '300'
-        ], { stdio: ['inherit', 'inherit', 'pipe'] })
-        downloadSuccess = downloadResult.status === 0 && fs.existsSync(targetPath)
-      } catch (e) {
-        console.log(` Curl error: ${e.message}`)
-      }
-    }
-
-    if (downloadSuccess && fs.statSync(targetPath).size > 40000) {
-      console.log(` ✓ Downloaded: voices/${name}`)
-      results['voices/' + name] = { success: true, path: targetPath, cached: false }
-    } else {
-      if (fs.existsSync(targetPath)) fs.unlinkSync(targetPath)
-      results['voices/' + name] = { success: false, path: targetPath }
-      allSuccess = false
-    }
-  }
-
-  // tokenizer.json: URL returns the JSON content; we fetch content and write the file
-  const tokenizerUrl = `${baseUrl}/tokenizer.json`
-  const tokenizerPath = path.join(targetDir, 'tokenizer.json')
-
-  console.log('\n Downloading tokenizer.json (fetch content and write file)...')
-
-  if (fs.existsSync(tokenizerPath) && isValidJsonCache(tokenizerPath)) {
-    console.log(' ✓ Using cached: tokenizer.json')
-    results['tokenizer.json'] = { success: true, path: tokenizerPath, cached: true }
-  } else {
-    if (fs.existsSync(tokenizerPath)) fs.unlinkSync(tokenizerPath)
-    const fetchResult = await fetchUrlBody(tokenizerUrl)
-    if (fetchResult.success && fetchResult.body) {
-      try {
-        const parsed = JSON.parse(fetchResult.body)
-        if (typeof parsed === 'object' && parsed !== null) {
-          fs.writeFileSync(tokenizerPath, fetchResult.body, 'utf8')
-          console.log(` ✓ Downloaded: tokenizer.json (${Buffer.byteLength(fetchResult.body, 'utf8')} bytes)`)
-          results['tokenizer.json'] = { success: true, path: tokenizerPath, cached: false }
-        } else {
-          console.log(' tokenizer.json response was not valid JSON object')
-          results['tokenizer.json'] = { success: false, path: tokenizerPath }
-          allSuccess = false
-        }
-      } catch (e) {
-        console.log(` tokenizer.json parse error: ${e.message}`)
-        results['tokenizer.json'] = { success: false, path: tokenizerPath }
-        allSuccess = false
-      }
-    } else {
-      console.log(` tokenizer.json fetch failed: ${fetchResult.error || 'unknown'}`)
-      results['tokenizer.json'] = { success: false, path: tokenizerPath }
-      allSuccess = false
-    }
+    const name = voice.endsWith('.json') ? voice : `${voice}.json`
+    const r = await downloadJsonConfig(
+      `${baseUrl}/voice_styles/${name}`,
+      path.join(voiceStylesDir, name),
+      `voice_styles/${name}`
+    )
+    results['voice_styles/' + name] = r
+    if (!r.success) allSuccess = false
   }
 
   console.log('\n' + '='.repeat(50))
@@ -887,4 +858,6 @@ async function ensureSupertonicModels (options = {}) {
   }
 }
 
-module.exports = { ensureFileDownloaded, ensureWhisperModel, ensureChatterboxModels, ensureSupertonicModels }
+const ensureSupertonicModelsMultilingual = ensureSupertonicModels
+
+module.exports = { ensureFileDownloaded, ensureWhisperModel, ensureChatterboxModels, ensureSupertonicModels, ensureSupertonicModelsMultilingual }
