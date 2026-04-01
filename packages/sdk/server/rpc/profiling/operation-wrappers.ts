@@ -5,12 +5,17 @@
 
 import {
   PROFILING_KEY,
+  OPERATION_EVENT_KEY,
   type PerCallProfiling,
   type ProfilingRequestMeta,
+  type OperationEvent,
 } from "@/schemas";
 import { nowMs, generateProfileId } from "@/profiling/clock";
 import { record, shouldProfile } from "@/profiling/controller";
 import { buildOperationEvent } from "./operation-metrics";
+import { isTerminalChunk } from "../handler-utils";
+
+type ResponseWithOperationEvent<T> = T & { [OPERATION_EVENT_KEY]?: OperationEvent };
 
 export interface ProfiledReplyOptions<TRequest> {
   op: string;
@@ -73,9 +78,9 @@ function resolvePerCallProfiling<TRequest>(
   };
 }
 
-function recordOperationEvent<TRequest, TResponse>(
+function buildAndRecordOperationEvent<TRequest, TResponse>(
   params: RecordOperationEventParams<TRequest, TResponse>,
-): void {
+): OperationEvent | undefined {
   const event = buildOperationEvent(
     params.options.op,
     params.profileId,
@@ -86,7 +91,7 @@ function recordOperationEvent<TRequest, TResponse>(
     params.ttfb,
   );
 
-  if (!event) return;
+  if (!event) return undefined;
 
   if (params.errored) {
     event.tags = { ...event.tags, error: "true" };
@@ -97,6 +102,8 @@ function recordOperationEvent<TRequest, TResponse>(
   }
 
   record(event);
+
+  return event as OperationEvent;
 }
 
 export async function profileReplyHandler<TRequest, TResponse>(
@@ -114,7 +121,7 @@ export async function profileReplyHandler<TRequest, TResponse>(
   try {
     const result = await handler();
     const executionMs = nowMs() - startTs;
-    recordOperationEvent({
+    const event = buildAndRecordOperationEvent({
       options,
       profileId,
       startTs,
@@ -122,10 +129,14 @@ export async function profileReplyHandler<TRequest, TResponse>(
       finalResponse: result,
     });
 
+    if (event) {
+      (result as ResponseWithOperationEvent<TResponse>)[OPERATION_EVENT_KEY] = event;
+    }
+
     return result;
   } catch (error) {
     const executionMs = nowMs() - startTs;
-    recordOperationEvent({
+    buildAndRecordOperationEvent({
       options,
       profileId,
       startTs,
@@ -137,14 +148,13 @@ export async function profileReplyHandler<TRequest, TResponse>(
   }
 }
 
-export async function* profileStreamHandler<TRequest, TResponse>(
+export async function* profileStreamHandler<TRequest, TResponse, TReturn = unknown>(
   options: ProfiledStreamOptions<TRequest>,
-  handler: () => AsyncGenerator<TResponse>,
-): AsyncGenerator<TResponse> {
+  handler: () => AsyncGenerator<TResponse, TReturn>,
+): AsyncGenerator<TResponse, TReturn> {
   const perCall = resolvePerCallProfiling(options);
   if (!shouldProfile(options.op, perCall)) {
-    yield* handler();
-    return;
+    return yield* handler();
   }
 
   const profileId = generateProfileId();
@@ -152,30 +162,60 @@ export async function* profileStreamHandler<TRequest, TResponse>(
   let ttfb: number | undefined;
   let lastChunk: TResponse | undefined;
   let chunkCount = 0;
+  let eventAttached = false;
 
+  const iterator = handler();
   try {
-    for await (const chunk of handler()) {
+    while (true) {
+      const result = await iterator.next();
+      if (result.done) {
+        if (!eventAttached) {
+          const executionMs = nowMs() - startTs;
+          buildAndRecordOperationEvent({
+            options,
+            profileId,
+            startTs,
+            executionMs,
+            finalResponse: lastChunk,
+            ttfb,
+            count: chunkCount,
+          });
+        }
+
+        return result.value;
+      }
+
+      const chunk = result.value;
       if (ttfb === undefined) {
         ttfb = nowMs() - startTs;
       }
       chunkCount++;
       lastChunk = chunk;
+
+      if (!eventAttached && isTerminalChunk(chunk)) {
+        const executionMs = nowMs() - startTs;
+        const event = buildAndRecordOperationEvent({
+          options,
+          profileId,
+          startTs,
+          executionMs,
+          finalResponse: chunk,
+          ttfb,
+          count: chunkCount,
+        });
+
+        if (event) {
+          (chunk as ResponseWithOperationEvent<TResponse>)[OPERATION_EVENT_KEY] = event;
+        }
+
+        eventAttached = true;
+      }
+
       yield chunk;
     }
-
-    const executionMs = nowMs() - startTs;
-    recordOperationEvent({
-      options,
-      profileId,
-      startTs,
-      executionMs,
-      finalResponse: lastChunk,
-      ttfb,
-      count: chunkCount,
-    });
   } catch (error) {
     const executionMs = nowMs() - startTs;
-    recordOperationEvent({
+    buildAndRecordOperationEvent({
       options,
       profileId,
       startTs,
@@ -187,5 +227,7 @@ export async function* profileStreamHandler<TRequest, TResponse>(
     });
 
     throw error;
+  } finally {
+    await iterator.return?.(undefined as TReturn);
   }
 }
