@@ -39,11 +39,13 @@ bool LlamaLazyInitializeBackend::initialize(
 
   llama_log_set(LlamaModel::llamaLogCallback, nullptr);
 
+#ifdef __ANDROID__
   if (!openclCacheDir.empty()) {
     auto oclCachePath =
         (std::filesystem::path(openclCacheDir) / "opencl-cache").string();
     setenv("GGML_OPENCL_CACHE_DIR", oclCachePath.c_str(), /*overwrite=*/1);
   }
+#endif
 
   if (!backendsDir.empty()) {
     std::filesystem::path backendsDirPath(backendsDir);
