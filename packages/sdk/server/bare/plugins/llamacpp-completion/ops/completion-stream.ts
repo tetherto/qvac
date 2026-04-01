@@ -234,8 +234,12 @@ async function* processModelResponse(
     const sessionMsg = messagesToSend.find((m) => m.role === "session");
     if (sessionMsg?.content) {
       logCacheSave(sessionMsg.content);
+      const saveResp = await model.run([
+        { role: "session", content: sessionMsg.content },
+        { role: "session", content: "save" },
+      ]);
+      await saveResp.await().catch(() => {});
     }
-    await model.run([{ role: "session", content: "save" }]);
   }
 
   const responseWithStats = response as unknown as ResponseWithStats;
