@@ -17,37 +17,45 @@ JavaScript Dependencies
   @qvac/error@0.1.1
   adaptive-timeout@1.0.1
     https://github.com/holepunchto/adaptive-timeout
-  b4a@1.7.4
+  b4a@1.8.0
     https://github.com/holepunchto/b4a
   bare-addon-resolve@1.10.0
     https://github.com/holepunchto/bare-addon-resolve
+  bare-ansi-escapes@2.2.3
+    https://github.com/holepunchto/bare-ansi-escapes
+  bare-assert@1.2.0
+    https://github.com/holepunchto/bare-assert
   bare-events@2.4.2
     https://github.com/holepunchto/bare-events
   bare-events@2.8.2
     https://github.com/holepunchto/bare-events
-  bare-fs@4.5.4
+  bare-fs@4.5.6
     https://github.com/holepunchto/bare-fs
+  bare-inspect@3.1.4
+    https://github.com/holepunchto/bare-inspect
   bare-module-resolve@1.12.1
     https://github.com/holepunchto/bare-module-resolve
-  bare-os@3.6.2
+  bare-os@3.8.6
     https://github.com/holepunchto/bare-os
   bare-path@3.0.0
     https://github.com/holepunchto/bare-path
   bare-semver@1.0.2
     https://github.com/holepunchto/bare-semver
-  bare-stream@2.7.0
+  bare-stream@2.11.0
     https://github.com/holepunchto/bare-stream
-  bare-url@2.3.2
+  bare-type@1.1.0
+    https://github.com/holepunchto/bare-type
+  bare-url@2.4.0
     https://github.com/holepunchto/bare-url
   blind-relay@1.4.0
     https://github.com/holepunchto/blind-relay
-  compact-encoding@2.18.0
-    https://github.com/compact-encoding/compact-encoding
+  compact-encoding@2.19.2
+    https://github.com/holepunchto/compact-encoding
   events-universal@1.0.1
     https://github.com/holepunchto/events-universal
   hypercore-id-encoding@1.3.0
     https://github.com/holepunchto/hypercore-id-encoding
-  hyperschema@1.19.1
+  hyperschema@1.20.1
     https://github.com/holepunchto/hyperschema
   noise-handshake@4.2.0
     https://github.com/holepunchto/noise-handshake
@@ -79,7 +87,7 @@ JavaScript Dependencies
 
   bogon@1.2.0
     https://github.com/mafintosh/bogon
-  dht-rpc@6.26.1
+  dht-rpc@6.26.3
     https://github.com/mafintosh/dht-rpc
   fast-fifo@1.3.2
     https://github.com/mafintosh/fast-fifo
@@ -89,7 +97,7 @@ JavaScript Dependencies
     https://github.com/mafintosh/generate-string
   hypercore-crypto@3.6.1
     https://github.com/mafintosh/hypercore-crypto
-  hyperdht@6.29.0
+  hyperdht@6.29.6
     https://github.com/holepunchto/hyperdht
   is-property@1.0.2
     https://github.com/mikolalysenko/is-property
@@ -105,18 +113,20 @@ JavaScript Dependencies
     https://github.com/holepunchto/ready-resource
   record-cache@1.2.0
     https://github.com/mafintosh/record-cache
-  safety-catch@1.0.2
+  safety-catch@1.0.3
     https://github.com/mafintosh/safety-catch
   signal-promise@1.0.3
     https://github.com/mafintosh/signal-promise
-  sodium-native@5.0.10
+  sodium-native@5.1.0
     https://github.com/holepunchto/sodium-native
   sodium-secretstream@1.2.0
     https://github.com/mafintosh/sodium-secretstream
   sodium-universal@5.0.1
     https://github.com/holepunchto/sodium-universal
-  streamx@2.23.0
+  streamx@2.25.0
     https://github.com/mafintosh/streamx
+  teex@1.0.1
+    https://github.com/mafintosh/teex
   time-ordered-set@2.0.1
     https://github.com/mafintosh/time-ordered-set
   timeout-refresh@2.0.1
