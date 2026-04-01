@@ -33,6 +33,11 @@ declare interface ONNXTTSFiles {
   unicodeIndexer?: string
   ttsConfig?: string
   voiceStyle?: string
+  /**
+   * Supertonic: directory containing `{voiceName}.json` voice styles. When set with `modelDir`,
+   * overrides the default `modelDir/voice_styles`. When `modelDir` is omitted, used with `voiceName`
+   * if `voiceStyle` is not set.
+   */
   voicesDir?: string
   tokenizerPath?: string
   speechEncoderPath?: string

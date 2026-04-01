@@ -31,7 +31,7 @@ function hasAnyExplicitArtifact (n) {
   const keys = [
     'tokenizer', 'speechEncoder', 'embedTokens', 'conditionalDecoder', 'languageModel',
     'textEncoder', 'durationPredictor', 'vectorEstimator', 'vocoder',
-    'unicodeIndexer', 'ttsConfig', 'voiceStyle'
+    'unicodeIndexer', 'ttsConfig', 'voiceStyle', 'voicesDir'
   ]
   for (let i = 0; i < keys.length; i++) {
     const v = n[keys[i]]
@@ -234,11 +234,14 @@ class ONNXTTS {
           normalizedFiles.ttsConfig,
           path.join(onnx, 'tts.json')
         )
+        const voiceStylesRoot = firstNonEmpty(
+          normalizedFiles.voicesDir,
+          path.join(normalizedFiles.modelDir, 'voice_styles')
+        )
         this._voiceStyleJsonPath = firstNonEmpty(
           normalizedFiles.voiceStyle,
           path.join(
-            normalizedFiles.modelDir,
-            'voice_styles',
+            voiceStylesRoot,
             `${this._voiceName.replace(/\.json$/i, '')}.json`
           )
         )
@@ -252,7 +255,15 @@ class ONNXTTS {
           normalizedFiles.tokenizer
         )
         this._ttsConfigPath = normalizedFiles.ttsConfig
-        this._voiceStyleJsonPath = normalizedFiles.voiceStyle
+        this._voiceStyleJsonPath = firstNonEmpty(
+          normalizedFiles.voiceStyle,
+          normalizedFiles.voicesDir
+            ? path.join(
+              normalizedFiles.voicesDir,
+              `${this._voiceName.replace(/\.json$/i, '')}.json`
+            )
+            : undefined
+        )
       }
     }
   }
