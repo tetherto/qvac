@@ -275,6 +275,7 @@ class ONNXTTS {
     }
     await this._load(...args)
     this.state.configLoaded = true
+    this.state.weightsLoaded = true
   }
 
   async run (input) {
