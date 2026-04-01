@@ -6,11 +6,15 @@ import {
 import {
   ModelType,
   type TranscribeParams,
+  type TranscribeStats,
   type WhisperConfig,
   type AudioFormat,
 } from "@/schemas";
 import { createAudioStream } from "@/server/bare/utils/audio-input";
 import { getServerLogger } from "@/logging";
+import type { TranscribeResponse } from "@/server/bare/types/addon-responses";
+import { nowMs } from "@/profiling";
+import { buildStreamResult } from "@/profiling/model-execution";
 
 const logger = getServerLogger();
 
@@ -76,18 +80,22 @@ async function restorePrompt(
 
 export async function* transcribe(
   params: TranscribeParams,
-): AsyncGenerator<string, void, void> {
+): AsyncGenerator<string, { modelExecutionMs: number; stats?: TranscribeStats }, void> {
   const { modelId } = params;
   const engineType = getEngineModelType(modelId);
   const silenceMarker = SILENCE_MARKERS[engineType] ?? "";
   const audioFormat = getAudioFormat(modelId, engineType);
 
   const originalConfig = await applyPrompt(modelId, params.prompt, engineType);
+  let modelExecutionMs = 0;
+  let response: TranscribeResponse | undefined;
 
   try {
     const model = getModel(modelId);
     const audioStream = await createAudioStream(params.audioChunk, audioFormat);
-    const response = await model.run(audioStream);
+
+    const modelStart = nowMs();
+    response = (await model.run(audioStream)) as unknown as TranscribeResponse;
 
     for await (const output of response.iterate()) {
       logger.debug("Streaming Transcription Update:", output);
@@ -103,9 +111,25 @@ export async function* transcribe(
         yield text;
       }
     }
+    modelExecutionMs = nowMs() - modelStart;
   } finally {
     if (originalConfig) {
       await restorePrompt(modelId, originalConfig);
     }
   }
+
+  const stats: TranscribeStats = {
+    ...(response?.stats?.audioDurationMs !== undefined && { audioDuration: response.stats.audioDurationMs }),
+    ...(response?.stats?.realTimeFactor !== undefined && { realTimeFactor: response.stats.realTimeFactor }),
+    ...(response?.stats?.tokensPerSecond !== undefined && { tokensPerSecond: response.stats.tokensPerSecond }),
+    ...(response?.stats?.totalTokens !== undefined && { totalTokens: response.stats.totalTokens }),
+    ...(response?.stats?.totalSegments !== undefined && { totalSegments: response.stats.totalSegments }),
+    ...(response?.stats?.whisperEncodeMs !== undefined && { whisperEncodeTime: response.stats.whisperEncodeMs }),
+    ...(response?.stats?.whisperDecodeMs !== undefined && { whisperDecodeTime: response.stats.whisperDecodeMs }),
+    ...(response?.stats?.encoderMs !== undefined && { encoderTime: response.stats.encoderMs }),
+    ...(response?.stats?.decoderMs !== undefined && { decoderTime: response.stats.decoderMs }),
+    ...(response?.stats?.melSpecMs !== undefined && { melSpecTime: response.stats.melSpecMs }),
+  };
+
+  return buildStreamResult(modelExecutionMs, stats);
 }

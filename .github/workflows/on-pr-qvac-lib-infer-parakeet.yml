@@ -46,10 +46,6 @@ on:
         type: string
         default: "packages/qvac-lib-infer-parakeet"
 
-concurrency:
-  group: ${{ github.workflow }}-pr-${{ github.event.pull_request.number || github.sha }}
-  cancel-in-progress: true
-
 permissions:
   contents: read
   pull-requests: read
@@ -161,6 +157,11 @@ jobs:
       workdir: ${{ needs.context.outputs.workdir }}
 
   cpp-tests-coverage:
+    permissions:
+      contents: read
+      packages: read
+      checks: write
+      pull-requests: write
     needs: context
     if: needs.context.outputs.run_verify == 'true' || github.event_name == 'workflow_dispatch'
     uses: ./.github/workflows/cpp-test-coverage-qvac-lib-infer-parakeet.yml
