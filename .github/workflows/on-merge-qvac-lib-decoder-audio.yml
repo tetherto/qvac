@@ -26,10 +26,6 @@ permissions:
   pull-requests: read
   packages: read
 
-concurrency:
-  group: ${{ github.workflow }}-${{ github.ref }}
-  cancel-in-progress: false
-
 jobs:
   publish-logic:
     runs-on: ubuntu-latest
@@ -167,7 +163,8 @@ jobs:
 
   publish-release-npm:
     needs: [publish-logic, release-merge-guard, run-integration-tests, mobile-integration-tests]
-    if: >-
+    if: |
+      always() &&
       needs.publish-logic.outputs.publish_release == 'true' &&
       (needs.release-merge-guard.result == 'success' || needs.release-merge-guard.result == 'skipped')
     runs-on: ubuntu-latest
