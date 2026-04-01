@@ -87,15 +87,16 @@ function createJobHandler (opts) {
      */
     end (stats, result) {
       if (!active) return
+      const ref = active
+      active = null
       if (stats != null) {
-        active.updateStats(stats)
+        ref.updateStats(stats)
       }
       if (result !== undefined) {
-        active.ended(result)
+        ref.ended(result)
       } else {
-        active.ended()
+        ref.ended()
       }
-      active = null
     },
 
     /**
@@ -105,8 +106,9 @@ function createJobHandler (opts) {
      */
     fail (error) {
       if (!active) return
-      active.failed(error)
+      const ref = active
       active = null
+      ref.failed(error)
     },
 
     /**
