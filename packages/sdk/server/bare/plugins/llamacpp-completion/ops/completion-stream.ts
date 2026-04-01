@@ -36,14 +36,13 @@ import {
 } from "@/server/utils/tool-integration";
 import { parseToolCalls } from "@/server/utils/tool-parser";
 import { AttachmentNotFoundError } from "@/utils/errors-server";
+import { nowMs } from "@/profiling";
+import { buildStreamResult, hasDefinedValues } from "@/profiling/model-execution";
+import type { LlmStats } from "@/server/bare/types/addon-responses";
 import fs from "bare-fs";
 
 interface ResponseWithStats {
-  stats?: {
-    TTFT: number;
-    TPS: number;
-    CacheTokens: number;
-  };
+  stats?: LlmStats;
 }
 
 interface ChatHistory {
@@ -189,7 +188,7 @@ async function* processModelResponse(
   generationParams?: GenerationParams,
 ): AsyncGenerator<
   { token: string; toolCallEvent?: ToolCallEvent },
-  { stats: CompletionStats; toolCalls: ToolCall[] },
+  { modelExecutionMs: number; stats?: CompletionStats; toolCalls: ToolCall[] },
   unknown
 > {
   const runFn = model.run.bind(model) as (
@@ -197,6 +196,8 @@ async function* processModelResponse(
     opts?: unknown,
   ) => ReturnType<typeof model.run>;
   const runOptions = generationParams ? { generationParams } : undefined;
+
+  const modelStart = nowMs();
   const response = await runFn(messagesToSend, runOptions);
 
   let accumulatedText = "";
@@ -222,6 +223,7 @@ async function* processModelResponse(
       }
     }
   }
+  const modelExecutionMs = nowMs() - modelStart;
 
   if (tools && tools.length > 0) {
     const { toolCalls } = parseToolCalls(accumulatedText, tools);
@@ -237,20 +239,29 @@ async function* processModelResponse(
   }
 
   const responseWithStats = response as unknown as ResponseWithStats;
-  const stats = {
-    timeToFirstToken: responseWithStats.stats?.TTFT ?? 0,
-    tokensPerSecond: responseWithStats.stats?.TPS ?? 0,
-    cacheTokens: responseWithStats.stats?.CacheTokens ?? 0,
+  const stats: CompletionStats = {
+    ...(responseWithStats.stats?.TTFT !== undefined && {
+      timeToFirstToken: responseWithStats.stats.TTFT,
+    }),
+    ...(responseWithStats.stats?.TPS !== undefined && {
+      tokensPerSecond: responseWithStats.stats.TPS,
+    }),
+    ...(responseWithStats.stats?.CacheTokens !== undefined && {
+      cacheTokens: responseWithStats.stats.CacheTokens,
+    }),
   };
 
-  return { stats, toolCalls: toolCallsResult };
+  return {
+    ...buildStreamResult(modelExecutionMs, hasDefinedValues(stats) ? stats : undefined),
+    toolCalls: toolCallsResult,
+  };
 }
 
 export async function* completion(
   params: CompletionParams & { tools?: Tool[]; generationParams?: GenerationParams },
 ): AsyncGenerator<
   { token: string; toolCallEvent?: ToolCallEvent },
-  { stats: CompletionStats; toolCalls: ToolCall[] },
+  { modelExecutionMs: number; stats?: CompletionStats; toolCalls: ToolCall[] },
   unknown
 > {
   const { history, modelId, kvCache, tools, generationParams } = params;

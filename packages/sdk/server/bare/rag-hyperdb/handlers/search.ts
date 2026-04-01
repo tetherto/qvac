@@ -14,7 +14,8 @@ export async function search(params: RagSearchParams) {
   }
 
   async function embeddingFunction(text: string | string[]) {
-    return await embed({ modelId, text });
+    const result = await embed({ modelId, text });
+    return result.embedding;
   }
 
   const rag = await getRagInstance(modelId, embeddingFunction, workspace);

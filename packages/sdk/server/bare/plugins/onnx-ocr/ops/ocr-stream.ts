@@ -1,12 +1,14 @@
 import { getModel } from "@/server/bare/registry/model-registry";
 import fs from "bare-fs";
 import path from "bare-path";
-import type { OCRParams, OCRTextBlock } from "@/schemas/ocr";
+import { type OCRParams, type OCRTextBlock, type OCRStats } from "@/schemas";
+import { buildStreamResult, hasDefinedValues } from "@/profiling/model-execution";
 import { getCacheDir } from "@/server/utils";
 import {
   ImageFileNotFoundError,
   InvalidImageInputError,
 } from "@/utils/errors-server";
+import { nowMs } from "@/profiling";
 
 interface OCRResponse {
   onUpdate: (callback: (data: unknown) => unknown[]) => {
@@ -83,15 +85,8 @@ function normalizeBlock(block: unknown): OCRTextBlock | null {
 }
 
 export async function* ocr(params: OCRParams): AsyncGenerator<
-  {
-    blocks: OCRTextBlock[];
-    stats?: {
-      detectionTime?: number;
-      recognitionTime?: number;
-      totalTime?: number;
-    };
-  },
-  void,
+  { blocks: OCRTextBlock[] },
+  { modelExecutionMs: number; stats?: OCRStats },
   void
 > {
   const model = getModel(params.modelId);
@@ -123,6 +118,7 @@ export async function* ocr(params: OCRParams): AsyncGenerator<
   }
 
   try {
+    const modelStart = nowMs();
     const response = (await model.run({
       path: imagePath,
       ...(params.options && { options: params.options }),
@@ -135,6 +131,7 @@ export async function* ocr(params: OCRParams): AsyncGenerator<
         return [];
       })
       .await();
+    const modelExecutionMs = nowMs() - modelStart;
 
     const blocks = rawData
       .flat(1)
@@ -145,9 +142,13 @@ export async function* ocr(params: OCRParams): AsyncGenerator<
       yield { blocks };
     }
 
-    if (response.stats) {
-      yield { blocks: [], stats: response.stats };
-    }
+    const stats: OCRStats = {
+      ...(response.stats?.detectionTime !== undefined && { detectionTime: response.stats.detectionTime }),
+      ...(response.stats?.recognitionTime !== undefined && { recognitionTime: response.stats.recognitionTime }),
+      ...(response.stats?.totalTime !== undefined && { totalTime: response.stats.totalTime }),
+    };
+
+    return buildStreamResult(modelExecutionMs, hasDefinedValues(stats) ? stats : undefined);
   } finally {
     if (cleanupPath) {
       try {
