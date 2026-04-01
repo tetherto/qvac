@@ -24,7 +24,8 @@ export async function handleTranscriptions (req: IncomingMessage, res: ServerRes
     file = result.file
   } catch (err) {
     const message = err instanceof Error ? err.message : String(err)
-    sendError(res, 400, 'invalid_multipart', message)
+    ctx.logger.error(`Multipart parse error: ${message}`)
+    sendError(res, 400, 'invalid_multipart', 'Failed to parse multipart request.')
     return
   }
 
@@ -103,6 +104,6 @@ export async function handleTranscriptions (req: IncomingMessage, res: ServerRes
   } catch (err) {
     const message = err instanceof Error ? err.message : String(err)
     ctx.logger.error(`Transcription error for "${alias}": ${message}`)
-    sendError(res, 500, 'transcription_error', message)
+    sendError(res, 500, 'transcription_error', 'An internal error occurred during transcription.')
   }
 }
