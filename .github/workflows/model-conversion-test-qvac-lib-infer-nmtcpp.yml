@@ -66,15 +66,17 @@ jobs:
       quants: ${{ steps.prepare_quants.outputs.quants }}
     steps:
       - name: Checkout repository
-        uses: actions/checkout@v6
+        uses: actions/checkout@v4
         with:
+          token: ${{ secrets.GITHUB_TOKEN }}
           lfs: true
+          fetch-depth: 1
 
       - name: Set up Python (with pip cache)
-        uses: actions/setup-python@v6
+        uses: actions/setup-python@v5
         with:
-          python-version: '3.14'
-          cache: pip
+          python-version: "3.x"
+          cache: "pip"
           cache-dependency-path: ${{ env.PKG_DIR }}/scripts/conversion_scripts/requirements.txt
 
       - name: Prepare models output
@@ -124,12 +126,14 @@ jobs:
     runs-on: macos-14
     steps:
       - name: Checkout repository
-        uses: actions/checkout@v6
+        uses: actions/checkout@v4
+        with:
+          token: ${{ secrets.GITHUB_TOKEN }}
 
       - name: Set up Node.js
-        uses: actions/setup-node@v6
+        uses: actions/setup-node@v4
         with:
-          node-version: 20
+          node-version: "20"
 
       - name: Configure scoped registry for @tetherto and @qvac packages
         working-directory: ${{ env.PKG_DIR }}
@@ -194,7 +198,7 @@ jobs:
           bare-make install
 
       - name: Upload build artifact
-        uses: actions/upload-artifact@v6
+        uses: actions/upload-artifact@v4
         with:
           name: qvac-addon-build
           path: |
@@ -212,20 +216,23 @@ jobs:
         quant: ${{ fromJson(needs.setup.outputs.quants) }}
     steps:
       - name: Checkout repository
-        uses: actions/checkout@v6
+        uses: actions/checkout@v4
+        with:
+          token: ${{ secrets.GITHUB_TOKEN }}
+          fetch-depth: 1
 
       - name: Set up Python (with pip cache)
-        uses: actions/setup-python@v6
+        uses: actions/setup-python@v5
         with:
-          python-version: '3.14'
-          cache: pip
+          python-version: "3.x"
+          cache: "pip"
           cache-dependency-path: ${{ env.PKG_DIR }}/scripts/conversion_scripts/requirements.txt
 
       - name: Install bare-runtime
         run: npm install -g bare-runtime
 
       - name: Download build artifact
-        uses: actions/download-artifact@v7
+        uses: actions/download-artifact@v4
         with:
           name: qvac-addon-build
           path: ${{ env.PKG_DIR }}
@@ -293,7 +300,7 @@ jobs:
           echo "Hello world" | bare nmt-cli --model "models/$TEST_QUANT/$out_prefix/$DATE/$out_prefix.bin" "$SRC" "$DST"
 
       - name: Upload models artifact
-        uses: actions/upload-artifact@v6
+        uses: actions/upload-artifact@v4
         if: ${{ inputs.upload_models || github.event.inputs.upload_models }}
         with:
           name: ggml-opus-${{ matrix.quant }}-${{ matrix.model }}
@@ -307,10 +314,10 @@ jobs:
     runs-on: macos-14
     steps:
       - name: Download all artifacts
-        uses: actions/download-artifact@v7
+        uses: actions/download-artifact@v4
         with:
+          pattern: "ggml-opus-*"
           path: merged_raw
-          pattern: ggml-opus-*
           merge-multiple: true
 
       - name: Merge all model artifacts
@@ -339,7 +346,7 @@ jobs:
           fi
 
       - name: Upload merged models artifact
-        uses: actions/upload-artifact@v6
+        uses: actions/upload-artifact@v4
         with:
           name: ggml-opus-merged-models
           path: bundle/models

@@ -1,0 +1,287 @@
+name: CPP Tests(Whispercpp)
+
+on:
+  workflow_call:
+    inputs:
+      ref:
+        description: 'ref'
+        type: string
+      repository:
+        type: string
+      workdir:
+        description: 'Package working directory in monorepo (e.g., packages/qvac-lib-infer-whispercpp)'
+        required: false
+        default: 'packages/qvac-lib-infer-whispercpp'
+        type: string
+  workflow_dispatch:
+    inputs:
+      workdir:
+        description: 'Package working directory in monorepo (e.g., packages/qvac-lib-infer-whispercpp)'
+        required: false
+        default: 'packages/qvac-lib-infer-whispercpp'
+        type: string
+
+env:
+  BUILD_TYPE: Debug
+  ENABLE_COVERAGE: ON
+  WORKDIR: ${{ inputs.workdir || github.event.inputs.workdir }}
+
+jobs:
+  cpp-tests:
+    runs-on: ${{ matrix.os }}
+    name: ${{ matrix.platform }}-${{ matrix.arch }}-cpp-tests
+    permissions:
+      contents: read
+      packages: read
+      checks: write
+      pull-requests: write
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: ubuntu-22.04
+            platform: linux
+            arch: x64
+            coverage: true
+    env:
+      VCPKG_BINARY_SOURCES: "clear;files,${{ github.workspace }}/vcpkg/cache,readwrite"
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ inputs.ref || github.ref }}
+          repository: ${{ inputs.repository || github.repository }}
+          token: ${{ secrets.PAT_TOKEN }}
+          lfs: true
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: lts/*
+
+      - name: Install system dependencies (Linux)
+        if: matrix.platform == 'linux'
+        run: |
+          sudo add-apt-repository ppa:ubuntu-toolchain-r/test
+          sudo apt update
+          sudo apt install -y g++-13
+          wget https://apt.llvm.org/llvm.sh
+          chmod +x llvm.sh
+          sudo ./llvm.sh 19 all
+
+      - name: Verify llvm-profdata and llvm-cov installation
+        if: matrix.platform == 'linux'
+        run: |
+          ls -l /usr/bin/llvm-profdata* || echo "llvm-profdata not found"
+          ls -l /usr/bin/llvm-cov* || echo "llvm-cov not found"
+          which llvm-profdata || echo "llvm-profdata not in PATH"
+          which llvm-profdata-19 || echo "llvm-profdata-19 not in PATH"
+          dpkg -l | grep llvm || echo "No LLVM packages found"
+
+      - name: Configure scoped registry for @tetherto and @qvac packages
+        working-directory: ${{ env.WORKDIR }}
+        env:
+          GPR_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          NPM_TOKEN: ${{ secrets.NPM_TOKEN }}
+          GIT_PAT: ${{ secrets.PAT_TOKEN }}
+        shell: bash
+        run: |
+          echo "Configuring scoped registry for @tetherto and @qvac packages..."
+          set -eu
+          echo "Writing .npmrc for dual registry install…"
+          cat > .npmrc <<NPMRC
+          registry=https://registry.npmjs.org/
+          @qvac:registry=https://registry.npmjs.org/
+          @tetherto:registry=https://npm.pkg.github.com/
+          //registry.npmjs.org/:_authToken=${NPM_TOKEN}
+          //npm.pkg.github.com/:_authToken=${GIT_PAT}
+          NPMRC
+
+          # Optional: make private git deps work without prompting
+          if [ -n "${GIT_PAT:-}" ]; then
+            git config --global url."https://${GIT_PAT}:@github.com/".insteadOf "https://github.com/"
+            git config --global url."https://${GIT_PAT}:@github.com/".insteadOf "git@github.com:"
+          else
+            # Using the workflow's GITHUB_TOKEN for git clones when possible
+            git config --global url."https://${{ github.token }}:@github.com/".insteadOf "https://github.com/"
+            git config --global url."https://${{ github.token }}:@github.com/".insteadOf "git@github.com:"
+          fi
+
+      - name: Install NPM dependencies
+        working-directory: ${{ env.WORKDIR }}
+        run: |
+          npm install
+          npm install -g bare bare-make
+
+      - if: ${{ matrix.os == 'ubuntu-22.04' }}
+        name: Configure vcpkg in linux
+        run: echo "VCPKG_ROOT=$VCPKG_INSTALLATION_ROOT" >> $GITHUB_ENV
+
+      - name: Generate and build unit tests
+        working-directory: ${{ env.WORKDIR }}
+        run: |
+          npm run coverage:cpp:build
+
+      - name: Download test models
+        working-directory: ${{ env.WORKDIR }}
+        run: |
+          mkdir -p models examples/models
+          
+          echo "Downloading ggml-tiny.bin for C++ tests..."
+          curl -L -o examples/models/ggml-tiny.bin \
+            "https://huggingface.co/ggerganov/whisper.cpp/resolve/main/ggml-tiny.bin" \
+            --fail --silent --show-error --connect-timeout 30 --max-time 300
+          
+          echo "Downloading ggml-silero VAD model..."
+          curl -L -o examples/models/ggml-silero-v5.1.2.bin \
+            "https://huggingface.co/ggml-org/whisper-vad/resolve/main/ggml-silero-v5.1.2.bin" \
+            --fail --silent --show-error --connect-timeout 30 --max-time 300
+          
+          # Copy to models/ as well for compatibility
+          cp examples/models/*.bin models/
+          
+          echo "Downloaded models:"
+          ls -lha examples/models/
+
+      - name: Run C++ Unit Tests
+        id: cpp-tests
+        working-directory: ${{ env.WORKDIR }}
+        run: |
+          echo "=== Debug: Checking model files before running tests ==="
+          ls -la examples/models/ || echo "examples/models/ not found"
+          ls -la models/ || echo "models/ not found"
+          pwd
+          echo "=== Running tests from: $(pwd) ==="
+          npm run test:cpp:run
+        continue-on-error: true
+
+      - name: Debug - List test output files
+        if: always()
+        working-directory: ${{ env.WORKDIR }}
+        run: |
+          echo "Contents of build/addon/tests/:"
+          ls -la build/addon/tests/ || echo "Directory not found"
+
+      - name: Generate Coverage Report
+        if: matrix.coverage
+        working-directory: ${{ env.WORKDIR }}
+        run: |
+          npm run coverage:cpp:report
+          # Extract percentage
+          COVERAGE=$(grep 'TOTAL' build/addon/tests/coverage-summary.txt | awk '{print $10}')
+          echo "LINE_COVERAGE_PERCENTAGE=${COVERAGE}" >> $GITHUB_ENV
+          echo "Line Coverage: ${COVERAGE}" > coverage-badge.txt
+
+      - name: Archive Coverage Results
+        if: matrix.coverage
+        uses: actions/upload-artifact@v4
+        with:
+          name: coverage-report-${{ matrix.platform }}-${{ matrix.arch }}
+          path: |
+            ${{ env.WORKDIR }}/build/addon/tests/coverage-html/
+            ${{ env.WORKDIR }}/build/addon/tests/lcov.info
+            ${{ env.WORKDIR }}/build/addon/tests/coverage-summary.txt
+            ${{ env.WORKDIR }}/build/addon/tests/cpp-test-results.xml
+          retention-days: 30
+
+      - name: Comment Coverage on PR
+        if: matrix.coverage && (github.event_name == 'pull_request' || github.event_name == 'pull_request_target') && matrix.platform == 'linux'
+        env:
+          COVERAGE_PERCENTAGE: ${{ env.LINE_COVERAGE_PERCENTAGE }}
+          PLATFORM: ${{ matrix.platform }}
+          ARCH: ${{ matrix.arch }}
+          REPO: ${{ github.repository }}
+          RUN_ID: ${{ github.run_id }}
+          WORKDIR: ${{ env.WORKDIR }}
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const fs = require('fs');
+            const workdir = process.env.WORKDIR || '';
+            const summaryPath = (workdir ? `${workdir}/` : '') + 'build/addon/tests/coverage-summary.txt';
+            
+            if (fs.existsSync(summaryPath)) {
+              const summary = fs.readFileSync(summaryPath, 'utf8');
+              const platform = process.env.PLATFORM;
+              const arch = process.env.ARCH;
+              const coverage = process.env.COVERAGE_PERCENTAGE;
+              const repo = process.env.REPO;
+              const runId = process.env.RUN_ID;
+              
+              const body = '## 🧪 C++ Test Coverage Report\n\n' +
+                '**Platform:** ' + platform + '-' + arch + '\n' +
+                '**Overall Line Coverage:** ' + coverage + '\n\n' +
+                '```\n' + summary + '\n```\n\n' +
+                '---\n\n' +
+                '📥 **[Download Full HTML Report](https://github.com/' + repo + '/actions/runs/' + runId + ')** - Click "coverage-report" artifact';
+              
+              github.rest.issues.createComment({
+                issue_number: context.issue.number,
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                body: body
+              });
+            }
+
+      - name: Check if test results exist
+        id: check-test-results
+        working-directory: ${{ env.WORKDIR }}
+        run: |
+          if [ -f build/addon/tests/cpp-test-results.xml ]; then
+            echo "exists=true" >> $GITHUB_OUTPUT
+          else
+            echo "exists=false" >> $GITHUB_OUTPUT
+          fi
+        continue-on-error: true
+
+      - name: Publish Test Results
+        uses: EnricoMi/publish-unit-test-result-action@v2
+        if: always() && steps.check-test-results.outputs.exists == 'true'
+        with:
+          files: ${{ env.WORKDIR }}/build/addon/tests/cpp-test-results.xml
+          comment_mode: off
+          check_name: "C++ Comprehensive Test Results (${{ matrix.platform }}-${{ matrix.arch }})"
+
+      - name: Coverage Summary
+        if: matrix.coverage
+        working-directory: ${{ env.WORKDIR }}
+        run: |
+          echo "## 🎯 Coverage Summary (Comprehensive)" >> $GITHUB_STEP_SUMMARY
+          echo "**Platform:** ${{ matrix.platform }}-${{ matrix.arch }}" >> $GITHUB_STEP_SUMMARY
+          echo "**Coverage:** ${{ env.LINE_COVERAGE_PERCENTAGE }}" >> $GITHUB_STEP_SUMMARY
+          echo "**Foundation:** Professional clean test structure" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          if [ -f build/addon/tests/coverage-summary.txt ]; then
+            echo "\`\`\`" >> $GITHUB_STEP_SUMMARY
+            cat build/addon/tests/coverage-summary.txt >> $GITHUB_STEP_SUMMARY
+            echo "\`\`\`" >> $GITHUB_STEP_SUMMARY
+          fi
+
+  coverage-report:
+    needs: cpp-tests
+    runs-on: ubuntu-latest
+    if: always()
+    steps:
+      - name: Download all coverage reports
+        uses: actions/download-artifact@v4
+        with:
+          path: coverage-reports
+
+      - name: Combine Coverage Reports
+        run: |
+          echo "## 📊 C++ Comprehensive Code Coverage Summary" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "**Built on:** Professional test foundation" >> $GITHUB_STEP_SUMMARY
+          echo "**Test Suite:** WhisperModel comprehensive test cases" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          for report in coverage-reports/*/coverage-summary.txt; do
+            if [ -f "$report" ]; then
+              platform=$(basename $(dirname "$report"))
+              echo "### $platform" >> $GITHUB_STEP_SUMMARY
+              echo "\`\`\`" >> $GITHUB_STEP_SUMMARY
+              cat "$report" >> $GITHUB_STEP_SUMMARY
+              echo "\`\`\`" >> $GITHUB_STEP_SUMMARY
+              echo "" >> $GITHUB_STEP_SUMMARY
+            fi
+          done

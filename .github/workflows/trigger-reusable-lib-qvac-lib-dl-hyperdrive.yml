@@ -17,6 +17,11 @@ on:
       - tmp-*
     paths:
       - "packages/qvac-lib-dl-hyperdrive/**"
+  pull_request:
+    branches:
+      - release-*
+    paths:
+      - "packages/qvac-lib-dl-hyperdrive/**"
   workflow_dispatch:
     inputs:
       custom_input_1:
@@ -29,27 +34,16 @@ on:
         required: false
         type: string
 jobs:
-  release-merge-guard:
-    name: Release Merge Guard
-    continue-on-error: true
-    if: >-
-      github.event_name == 'push' &&
-      startsWith(github.ref_name, 'release-') &&
-      github.event.before != '0000000000000000000000000000000000000000'
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v6
-        with:
-          fetch-depth: 0
-      - uses: ./.github/actions/release-merge-guard
-        with:
-          github-token: ${{ secrets.GITHUB_TOKEN }}
-          base-ref: ${{ github.ref_name }}
-          base-sha: ${{ github.event.before }}
-          head-sha: ${{ github.sha }}
-          package-slug: qvac-lib-dl-hyperdrive
-          package-json-path: packages/qvac-lib-dl-hyperdrive/package.json
-          changelog-path: packages/qvac-lib-dl-hyperdrive/CHANGELOG.md
+  release-pr-guard:
+    name: Release PR Guard
+    if: github.event_name == 'pull_request' && startsWith(github.base_ref, 'release-')
+    uses: tetherto/qvac-devops/.github/workflows/release-pr-guard.yml@monorepo_update
+    secrets:
+      github-token: ${{ secrets.GITHUB_TOKEN }}
+    with:
+      package-slug: qvac-lib-dl-hyperdrive
+      package-json-path: packages/qvac-lib-dl-hyperdrive/package.json
+      changelog-path: packages/qvac-lib-dl-hyperdrive/CHANGELOG.md
 
   publish-logic:
     runs-on: ubuntu-latest
@@ -87,10 +81,8 @@ jobs:
           gpr_tag="dev"
           if [ "$ref_name" = "main" ]; then
             gpr_tag="dev"
-          elif [[ "$ref_name" == feature-* ]]; then
-            gpr_tag="feature"
-          elif [[ "$ref_name" == tmp-* ]]; then
-            gpr_tag="temp"
+          elif [[ "$ref_name" == feature-* ]] || [[ "$ref_name" == tmp-* ]]; then
+            gpr_tag="$ref_name"
           fi
 
           echo "publish_main=$publish_main" >> "$GITHUB_OUTPUT"
@@ -107,10 +99,9 @@ jobs:
       contents: read
       packages: write
     steps:
-      - uses: actions/checkout@v6
+      - uses: actions/checkout@v4
         with:
           fetch-depth: 0
-
       - name: Publish to GitHub Packages (dev)
         uses: tetherto/qvac-devops/.github/actions/publish-library-to-gpr@monorepo_update
         with:
@@ -122,32 +113,12 @@ jobs:
           name-suffix: "-mono"
 
   publish-release-npm:
-    needs: [publish-logic]
-    permissions:
-      contents: write
-      packages: write
-      id-token: write
+    needs: publish-logic
     if: needs.publish-logic.outputs.publish_release == 'true'
     uses: tetherto/qvac-devops/.github/workflows/public-reusable-npm.yml@monorepo_update
     secrets: inherit
     with:
       workdir: packages/qvac-lib-dl-hyperdrive
-      repo_name: dl-hyperdrive
-
-  # Create GitHub release only for actual releases (after NPM publish)
-  publish-release:
-    needs: [publish-release-npm]
-    if:  needs.publish-release-npm.result == 'success' && needs.publish-release-npm.outputs.published_version != ''
-    permissions:
-      contents: write
-    uses: ./.github/workflows/create-github-release.yml
-    secrets: inherit
-    with:
-      repo_name: "dl-hyperdrive"
-      release_name: "QVAC dl-hyperdrive Lib"
-      published_version: ${{ needs.publish-release-npm.outputs.published_version }}
-      prev_sha: ${{ github.event.before }}
-      workdir: "packages/qvac-lib-dl-hyperdrive"
 
   publish-feature-gpr:
     needs: publish-logic
@@ -157,10 +128,9 @@ jobs:
       contents: read
       packages: write
     steps:
-      - uses: actions/checkout@v6
+      - uses: actions/checkout@v4
         with:
           fetch-depth: 0
-
       - name: Publish to GitHub Packages (feature)
         uses: tetherto/qvac-devops/.github/actions/publish-library-to-gpr@monorepo_update
         with:
@@ -179,10 +149,9 @@ jobs:
       contents: read
       packages: write
     steps:
-      - uses: actions/checkout@v6
+      - uses: actions/checkout@v4
         with:
           fetch-depth: 0
-
       - name: Publish to GitHub Packages (tmp)
         uses: tetherto/qvac-devops/.github/actions/publish-library-to-gpr@monorepo_update
         with:

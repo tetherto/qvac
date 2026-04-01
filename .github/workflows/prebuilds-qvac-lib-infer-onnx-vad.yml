@@ -1,0 +1,421 @@
+name: "Prebuilds (VAD)"
+
+on:
+  workflow_call:
+    inputs:
+      ref:
+        type: string
+        required: false
+      repository:
+        type: string
+        required: false
+        default: "tetherto/qvac"
+      tag:
+        description: "Tag to publish with (default: dev; push to main becomes latest inside publish action logic)"
+        type: string
+        required: false
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: "Tag to publish with ('latest' by default)"
+        required: true
+        default: "latest"
+        type: choice
+        options:
+          - latest
+          - dev
+  push:
+    branches:
+      - main
+      - release-*
+      - feature-*
+      - tmp-*
+    paths:
+      - "packages/qvac-lib-infer-onnx-vad/**"
+
+env:
+  PKG_DIR: packages/qvac-lib-infer-onnx-vad
+  AWS_REGION: us-east-1
+  SILERO_VAD_S3_URI: s3://tether-ai-dev/qvac_models_compiled/silerovad/2025-04-29/silero_vad.onnx
+
+jobs:
+  prebuild:
+    continue-on-error: true
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - platform: linux
+            os: ubuntu-22.04
+            arch: x64
+          - platform: android
+            os: ubuntu-22.04
+            arch: arm64
+            flags: -D ANDROID_STL=c++_shared
+          - platform: darwin
+            os: macos-14
+            arch: arm64
+          - platform: darwin
+            os: macos-14
+            arch: x64
+          - platform: ios
+            os: macos-14
+            arch: arm64
+          - platform: ios
+            os: macos-14
+            arch: arm64
+            tags: -simulator
+            flags: --simulator
+          - platform: ios
+            os: macos-14
+            arch: x64
+            tags: -simulator
+            flags: --simulator
+          - platform: win32
+            os: windows-2022
+            arch: x64
+
+    runs-on: ${{ matrix.os }}
+    name: ${{ matrix.platform }}-${{ matrix.arch }}${{ matrix.tags }}
+
+    env:
+      VCPKG_BINARY_SOURCES: "clear;files,${{ github.workspace }}/packages/qvac-lib-infer-onnx-vad/vcpkg/cache,readwrite"
+
+    steps:
+      - if: ${{ matrix.os == 'ubuntu-22.04' }}
+        name: Update c++ tools
+        run: |
+          sudo add-apt-repository ppa:ubuntu-toolchain-r/test
+          sudo apt update
+          sudo apt install -y g++-13
+          wget https://apt.llvm.org/llvm.sh
+          chmod +x llvm.sh
+          sudo ./llvm.sh 19 all
+
+      - name: Setup node
+        uses: actions/setup-node@v4
+        with:
+          node-version: lts/*
+
+      - name: Export GitHub Actions cache environment variables
+        uses: actions/github-script@v7
+        with:
+          script: |
+            core.exportVariable('ACTIONS_CACHE_URL', process.env.ACTIONS_CACHE_URL || '');
+            core.exportVariable('ACTIONS_RUNTIME_TOKEN', process.env.ACTIONS_RUNTIME_TOKEN || '');
+
+      - if: ${{ matrix.os == 'windows-2022' }}
+        name: setup cmake windows
+        shell: pwsh
+        run: |
+          cd ..
+          Invoke-WebRequest https://github.com/Kitware/CMake/releases/download/v3.31.6/cmake-3.31.6-windows-x86_64.zip -OutFile cmake-3.31.6-windows-x86_64.zip
+          Expand-Archive cmake-3.31.6-windows-x86_64.zip -DestinationPath $pwd
+          $env:CMAKE_BIN = ("$(pwd)" -replace '\\', '/') + '/cmake-3.31.6-windows-x86_64/bin'
+          echo $env:CMAKE_BIN > temp
+          cat $env:GITHUB_PATH >> temp
+          mv temp $env:GITHUB_PATH -Force
+
+      - if: ${{ matrix.os == 'ubuntu-22.04' }}
+        name: Maximize build space
+        run: |
+          sudo docker image prune --all --force
+          sudo rm -rf /opt/hostedtoolcache/CodeQL
+          sudo rm -rf /opt/ghc
+          sudo rm -rf /usr/share/dotnet
+
+      - if: ${{ matrix.os == 'ubuntu-22.04' }}
+        name: setup cmake ubuntu
+        run: |
+          cd ..
+          wget https://github.com/Kitware/CMake/releases/download/v3.31.6/cmake-3.31.6-linux-x86_64.tar.gz
+          tar -xvzf cmake-3.31.6-linux-x86_64.tar.gz
+          echo "$(pwd)/cmake-3.31.6-linux-x86_64/bin" > temp
+          cat "$GITHUB_PATH" >> temp
+          mv temp "$GITHUB_PATH"
+
+      - if: ${{ matrix.os == 'macos-14' }}
+        name: setup cmake macos
+        run: |
+          cd ..
+          wget https://github.com/Kitware/CMake/releases/download/v3.31.6/cmake-3.31.6-macos-universal.tar.gz
+          tar -xvzf cmake-3.31.6-macos-universal.tar.gz
+          echo "$(pwd)/cmake-3.31.6-macos-universal/bin" > temp
+          cat "$GITHUB_PATH" >> temp
+          mv temp "$GITHUB_PATH"
+
+      - if: ${{ matrix.os == 'windows-2022' }}
+        name: Configure windows runner
+        shell: pwsh
+        run: |
+          git config --system core.longpaths true
+          choco upgrade llvm
+
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          lfs: true
+          token: ${{ secrets.PAT_TOKEN }}
+          ref: ${{ inputs.ref || github.ref }}
+          repository: ${{ inputs.repository || github.repository }}
+
+      - name: Configure git and npm
+        shell: bash
+        run: |
+          echo "@tetherto:registry=https://npm.pkg.github.com" > .npmrc
+          echo "//npm.pkg.github.com/:_authToken=${{ secrets.PAT_TOKEN }}" >> .npmrc
+          git config --global --add url."https://${{ secrets.PAT_TOKEN }}:x-oauth-basic@github.com/".insteadOf "https://github.com/"
+          git config --global --add url."https://${{ secrets.PAT_TOKEN }}:x-oauth-basic@github.com/".insteadOf "git@github.com:"
+
+      - name: Configure npm for scoped packages
+        shell: bash
+        env:
+          GPR_TOKEN: ${{ secrets.PAT_TOKEN }}
+          NPM_TOKEN: ${{ secrets.NPM_TOKEN }}
+        run: |
+          set -euo pipefail
+
+          cat > "$HOME/.npmrc" <<NPMRC
+
+          # GitHub Packages for @tetherto/*
+          @tetherto:registry=https://npm.pkg.github.com
+          //npm.pkg.github.com/:_authToken=${GPR_TOKEN}
+
+          # npmjs (optional; keep only if you need private npmjs deps)
+          registry=https://registry.npmjs.org/
+          //registry.npmjs.org/:_authToken=${NPM_TOKEN}
+          NPMRC
+
+          # sanity check (won't print tokens)
+          npm config get @tetherto:registry
+          npm config get registry
+
+      - if: ${{ matrix.os == 'macos-14' }}
+        name: Install vcpkg in macos
+        shell: bash
+        run: |
+          cd ..
+          git clone https://github.com/microsoft/vcpkg.git
+          cd vcpkg && ./bootstrap-vcpkg.sh -disableMetrics
+          VCPKG_ROOT="$(pwd)"
+          echo "VCPKG_ROOT=$VCPKG_ROOT" >> "$GITHUB_ENV"
+          echo "$VCPKG_ROOT" >> "$GITHUB_PATH"
+
+      - if: ${{ matrix.os == 'ubuntu-22.04' }}
+        name: Configure vcpkg in linux
+        shell: bash
+        run: echo "VCPKG_ROOT=$VCPKG_INSTALLATION_ROOT" >> "$GITHUB_ENV"
+
+      - if: ${{ matrix.os == 'windows-2022' }}
+        name: Configure vcpkg in windows
+        shell: pwsh
+        run: echo ("VCPKG_ROOT=$env:VCPKG_INSTALLATION_ROOT" -replace '\\', '/') >> $env:GITHUB_ENV
+
+      - if: ${{ matrix.os == 'windows-2022' }}
+        name: Configure cmake generator in windows
+        shell: pwsh
+        run: echo "CMAKE_GENERATOR=Visual Studio 17 2022" >> $env:GITHUB_ENV
+
+      - if: ${{ matrix.os == 'windows-2022' && matrix.arch == 'x64' }}
+        shell: pwsh
+        run: echo "CMAKE_GENERATOR_PLATFORM=x64" >> $env:GITHUB_ENV
+
+      - if: ${{ matrix.os == 'windows-2022' && matrix.arch == 'x86' }}
+        shell: pwsh
+        run: echo "CMAKE_GENERATOR_PLATFORM=Win32" >> $env:GITHUB_ENV
+
+      - if: ${{ matrix.os == 'windows-2022' && matrix.arch == 'arm64' }}
+        shell: pwsh
+        run: echo "CMAKE_GENERATOR_PLATFORM=ARM64" >> $env:GITHUB_ENV
+
+      - if: ${{ matrix.os == 'ubuntu-22.04' }}
+        name: Update apt sources
+        run: sudo apt-get update
+
+      - if: ${{ matrix.platform == 'linux' }}
+        name: Install required packages linux
+        run: sudo apt-get install -y libxi-dev libxtst-dev libxrandr-dev
+
+      - if: ${{ matrix.os == 'ubuntu-22.04' && matrix.arch == 'arm64' }}
+        name: Install tooling for cross compilation - ubuntu arm64
+        run: sudo apt-get install -y gcc-aarch64-linux-gnu g++-aarch64-linux-gnu libc6-dev-arm64-cross lld
+
+      - if: ${{ matrix.platform == 'android' }}
+        name: Configure runner for cross compilation - android
+        shell: bash
+        run: |
+          echo "ANDROID_TOOLCHAIN_ROOT=$(echo $ANDROID_NDK_HOME)/toolchains/llvm/prebuilt/linux-x86_64" >> "$GITHUB_ENV"
+          echo "ANDROID_NATIVE_API_LEVEL=34" >> "$GITHUB_ENV"
+
+      - name: Install prerequisites
+        shell: bash
+        run: npm install -g bare bare-make
+
+      - name: Install npm dependencies
+        working-directory: ${{ env.PKG_DIR }}
+        shell: bash
+        run: npm install
+
+      - name: Create vcpkg cache location
+        shell: bash
+        run: mkdir -p "${{ env.PKG_DIR }}/vcpkg/cache"
+
+      - name: Get vcpkg cache
+        id: cache-vcpkg
+        uses: actions/cache@v4
+        with:
+          path: ${{ env.PKG_DIR }}/vcpkg/cache
+          key: ${{ matrix.platform }}-${{ matrix.arch }}-${{ hashFiles('packages/qvac-lib-infer-onnx-vad/vcpkg.json', 'packages/qvac-lib-infer-onnx-vad/vcpkg-configuration.json', 'packages/qvac-lib-infer-onnx-vad/vcpkg/ports/**') }}
+          restore-keys: |
+            ${{ matrix.platform }}-${{ matrix.arch }}-
+
+      - name: Generate
+        working-directory: ${{ env.PKG_DIR }}
+        shell: bash
+        run: bare-make generate --platform ${{ matrix.platform }} --arch ${{ matrix.arch }} ${{ matrix.flags }}
+
+      - name: Build
+        working-directory: ${{ env.PKG_DIR }}
+        shell: bash
+        run: bare-make build
+
+      - name: Install
+        working-directory: ${{ env.PKG_DIR }}
+        shell: bash
+        run: bare-make install
+
+      - if: ${{ matrix.os == 'windows-2022' }}
+        name: Debug - List generated prebuilds (Windows)
+        shell: pwsh
+        run: |
+          echo "Contents of prebuilds directory after installation:"
+          dir "${{ env.PKG_DIR }}/prebuilds" || echo "prebuilds directory not found"
+
+      - if: ${{ matrix.os != 'windows-2022' }}
+        name: Debug - List generated prebuilds
+        shell: bash
+        run: |
+          echo "Contents of prebuilds directory after installation:"
+          ls -la "${{ env.PKG_DIR }}/prebuilds" || echo "prebuilds directory not found"
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: onnx-silerovad-${{ matrix.platform }}-${{ matrix.arch }}${{ matrix.tags }}
+          path: ${{ env.PKG_DIR }}/prebuilds
+
+  merge:
+    runs-on: ubuntu-latest
+    continue-on-error: true
+    needs: prebuild
+    steps:
+      - name: Download all build artifacts
+        uses: actions/download-artifact@v4
+        with:
+          path: prebuilds
+          merge-multiple: true
+
+      - name: Create Android architecture variants
+        shell: bash
+        run: |
+          set -euo pipefail
+          ls prebuilds
+          mkdir -p prebuilds/android-arm prebuilds/android-ia32 prebuilds/android-x64
+
+          ADDON_PREBUILD="$(ls prebuilds/android-arm64 | head -n 1)"
+          cp "prebuilds/android-arm64/$ADDON_PREBUILD" "prebuilds/android-arm/$ADDON_PREBUILD"
+          cp "prebuilds/android-arm64/$ADDON_PREBUILD" "prebuilds/android-x64/$ADDON_PREBUILD"
+          cp "prebuilds/android-arm64/$ADDON_PREBUILD" "prebuilds/android-ia32/$ADDON_PREBUILD"
+
+      - name: Upload merged artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: prebuilds
+          path: prebuilds
+
+  publish-logic:
+    runs-on: ubuntu-latest
+    outputs:
+      publish_gpr: ${{ steps.logic.outputs.publish_gpr }}
+      gpr_tag: ${{ steps.logic.outputs.gpr_tag }}
+    steps:
+      - id: logic
+        shell: bash
+        env:
+          INPUT_TAG: ${{ inputs.tag }}
+          EVENT_TAG: ${{ github.event.inputs.tag }}
+        run: |
+          set -euo pipefail
+          ref_name="${GITHUB_REF_NAME}"
+          event_name="${GITHUB_EVENT_NAME}"
+
+          publish_gpr="false"
+          if [ "$event_name" = "push" ] || [ "$event_name" = "workflow_dispatch" ]; then
+            if [ "$ref_name" = "main" ] || [[ "$ref_name" == feature-* ]] || [[ "$ref_name" == tmp-* ]]; then
+              publish_gpr="true"
+            fi
+          fi
+
+          gpr_tag="${INPUT_TAG:-${EVENT_TAG:-}}"
+          if [ -z "$gpr_tag" ]; then
+            if [ "$ref_name" = "main" ]; then
+              gpr_tag="dev"
+            elif [[ "$ref_name" == feature-* ]] || [[ "$ref_name" == tmp-* ]]; then
+              gpr_tag="$ref_name"
+            else
+              gpr_tag="dev"
+            fi
+          fi
+
+          echo "publish_gpr=$publish_gpr" >> "$GITHUB_OUTPUT"
+          echo "gpr_tag=$gpr_tag" >> "$GITHUB_OUTPUT"
+
+  publish-gpr:
+    needs: [prebuild, merge, publish-logic]
+    if: ${{ needs.publish-logic.outputs.publish_gpr == 'true' }}
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      packages: write
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Download prebuild artifacts
+        uses: actions/download-artifact@v4
+        with:
+          path: prebuilds
+          merge-multiple: true
+
+      - name: Place prebuilds into package directory
+        shell: bash
+        run: |
+          set -euo pipefail
+          rm -rf "${{ env.PKG_DIR }}/prebuilds"
+          mkdir -p "${{ env.PKG_DIR }}/prebuilds"
+          rsync -a prebuilds/ "${{ env.PKG_DIR }}/prebuilds/"
+          echo "Prebuilds staged under: ${{ env.PKG_DIR }}/prebuilds"
+          ls -la "${{ env.PKG_DIR }}/prebuilds" || true
+
+      - name: Configure AWS credentials
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          aws-region: ${{ env.AWS_REGION }}
+
+      - name: Download onnx silerovad model files
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p "${{ env.PKG_DIR }}/model"
+          aws s3 cp "${{ env.SILERO_VAD_S3_URI }}" "${{ env.PKG_DIR }}/model/silerovad.onnx"
+          ls -la "${{ env.PKG_DIR }}/model"
+
+      - name: Publish to GitHub Package Registry
+        uses: tetherto/qvac-devops/.github/actions/publish-library-to-gpr@monorepo_update
+        with:
+          secret-token: ${{ secrets.GITHUB_TOKEN }}
+          workdir: ${{ env.PKG_DIR }}
+          tag: ${{ needs.publish-logic.outputs.gpr_tag }}
+          name-suffix: "-mono"

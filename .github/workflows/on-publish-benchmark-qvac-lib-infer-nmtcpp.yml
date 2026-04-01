@@ -23,12 +23,11 @@ jobs:
   prepare:
     runs-on: ubuntu-latest
     outputs:
-      opus_pairs: ${{ steps.read-opus.outputs.pairs }}
-      bergamot_pairs: ${{ steps.read-bergamot.outputs.pairs }}
+      pairs: ${{ steps.read-models.outputs.pairs }}
       version: ${{ steps.get-version.outputs.version }}
     steps:
       - name: Checkout repository
-        uses: actions/checkout@v6
+        uses: actions/checkout@v4
 
       - name: Get addon version
         id: get-version
@@ -42,28 +41,21 @@ jobs:
           echo "version=$version" >> $GITHUB_OUTPUT
           echo "📦 Benchmarking addon version: $version"
 
-      - name: Read released OPUS models
-        id: read-opus
+      - name: Read released models from file
+        id: read-models
         working-directory: ${{ env.PKG_DIR }}
         run: |
-          pairs=$(grep -v '^#' .github/released-models-opus.txt | grep -v '^[[:space:]]*$' | tr -d '\r' | tr '\n' ',' | sed 's/,$//')
+          # Read .github/released-models.txt and filter out comments and empty lines
+          pairs=$(grep -v '^#' .github/released-models.txt | grep -v '^[[:space:]]*$' | tr '\n' ',' | sed 's/,$//')
           echo "pairs=$pairs" >> $GITHUB_OUTPUT
-          echo "🎯 Released OPUS model pairs: $pairs"
+          echo "🎯 Released model pairs: $pairs"
 
-      - name: Read released Bergamot models
-        id: read-bergamot
-        working-directory: ${{ env.PKG_DIR }}
-        run: |
-          pairs=$(grep -v '^#' .github/released-models-bergamot.txt | grep -v '^[[:space:]]*$' | tr -d '\r' | tr '\n' ',' | sed 's/,$//')
-          echo "pairs=$pairs" >> $GITHUB_OUTPUT
-          echo "🎯 Released Bergamot model pairs: $pairs"
-
-  benchmark-opus:
+  benchmark:
     needs: prepare
     uses: ./.github/workflows/benchmark-qvac-lib-infer-nmtcpp.yml
     secrets: inherit
     with:
-      pairs: ${{ needs.prepare.outputs.opus_pairs }}
+      pairs: ${{ needs.prepare.outputs.pairs }}
       translators: 'qvac'
       dataset_flores_devtest: true
       dataset_conversational_phrases: true
@@ -71,59 +63,28 @@ jobs:
       metric_comet: true
       use_pivot: false
       is_quantized_model: false
-      use_batch: false
-      hyperparams: 'fast'
-
-  benchmark-bergamot:
-    needs: prepare
-    uses: ./.github/workflows/benchmark-qvac-lib-infer-nmtcpp.yml
-    secrets: inherit
-    with:
-      pairs: ${{ needs.prepare.outputs.bergamot_pairs }}
-      translators: 'qvac_bergamot'
-      dataset_flores_devtest: true
-      dataset_conversational_phrases: true
-      metric_chrfpp: true
-      metric_comet: true
-      use_pivot: false
-      is_quantized_model: false
-      use_batch: false
       hyperparams: 'fast'
 
   summary:
-    needs: [prepare, benchmark-opus, benchmark-bergamot]
+    needs: [prepare, benchmark]
     runs-on: ubuntu-latest
     if: always()
     steps:
       - name: Display benchmark summary
         run: |
-          echo "✅ Automated benchmark completed for all supported models"
+          echo "✅ Automated benchmark completed"
           echo ""
           echo "📦 Addon Version: ${{ needs.prepare.outputs.version }}"
-          echo "📊 Datasets: flores-devtest, conversational-phrases"
-          echo "📈 Metrics: chrF++, COMET"
+          echo "🎯 Model Pairs: ${{ needs.prepare.outputs.pairs }}"
+          echo "📊 Dataset: flores-devtest"
+          echo "📈 Metrics: BLEU, chrF++"
           echo ""
-          echo "### 🔧 OPUS/GGML Models (qvac)"
-          echo "🎯 Pairs: ${{ needs.prepare.outputs.opus_pairs }}"
-          echo ""
-          echo "📍 S3 Model Paths:"
-          IFS=',' read -ra PAIRS <<< "${{ needs.prepare.outputs.opus_pairs }}"
+          echo "### 📍 S3 Model Paths"
+          IFS=',' read -ra PAIRS <<< "${{ needs.prepare.outputs.pairs }}"
           for pair in "${PAIRS[@]}"; do
             pair=$(echo "$pair" | xargs)
-            echo "- **$pair**: \`s3://\${MODEL_S3_BUCKET}/qvac_models_compiled/ggml/marian/q0f16/ggml-opus-$pair/\`"
-          done
-          echo ""
-          echo "### 🔧 Bergamot Models (qvac_bergamot)"
-          echo "🎯 Pairs: ${{ needs.prepare.outputs.bergamot_pairs }}"
-          echo ""
-          echo "📍 Model Source: Firefox Remote Settings CDN"
-          echo "   URL: https://firefox.settings.services.mozilla.com/v1/buckets/main/collections/translations-models/records"
-          IFS=',' read -ra PAIRS <<< "${{ needs.prepare.outputs.bergamot_pairs }}"
-          for pair in "${PAIRS[@]}"; do
-            pair=$(echo "$pair" | xargs)
-            src_lang="${pair%-*}"
-            trg_lang="${pair#*-}"
-            echo "- **$pair**: Firefox CDN (fromLang=${src_lang}, toLang=${trg_lang})"
+            echo "- **$pair**: \`s3://tether-ai-dev/qvac_models_compiled/ggml/marian/q0f16/ggml-opus-$pair/\`"
           done
           echo ""
           echo "🔗 View results in the benchmark workflow artifacts"
+

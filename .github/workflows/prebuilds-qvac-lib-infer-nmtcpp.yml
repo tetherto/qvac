@@ -1,6 +1,14 @@
 name: Prebuilds (NMTCPP)
 
 on:
+  push:
+    branches:
+      - main
+      - release-*
+      - feature-*
+      - tmp-*
+    paths:
+      - "packages/qvac-lib-infer-nmtcpp/**"
   workflow_call:
     inputs:
       ref:
@@ -48,14 +56,12 @@ jobs:
       fail-fast: false
       matrix:
         include:
-          # Linux builds on Ubuntu 22.04 for glibc compatibility
-          - os: ubuntu-22.04
+          - os: ubuntu-24.04
             platform: linux
             arch: x64
-          - os: ubuntu-22.04-arm
+          - os: ubuntu-24.04-arm64-private
             platform: linux
             arch: arm64
-          # Android build requires Ubuntu 24.04 for NDK tooling
           - os: ubuntu-24.04
             platform: android
             arch: arm64
@@ -103,7 +109,7 @@ jobs:
           echo "Matrix tags: ${{ matrix.tags }}"
           echo "PKG_DIR: ${{ env.PKG_DIR }}"
 
-      - if: ${{ matrix.os == 'ubuntu-22.04' || matrix.os == 'ubuntu-22.04-arm' || matrix.os == 'ubuntu-24.04' }}
+      - if: ${{ matrix.os == 'ubuntu-24.04' || matrix.os == 'ubuntu-24.04-arm64-private' }}
         name: Update c++ tools
         run: |
           wget https://apt.llvm.org/llvm.sh
@@ -115,12 +121,12 @@ jobs:
         run: |
           git config --system core.longpaths true
 
-      - uses: actions/checkout@v6
+      - uses: actions/checkout@v4
         with:
-          repository: ${{ inputs.repository || github.repository }}
-          ref: ${{ inputs.ref || github.ref }}
           token: ${{ secrets.PAT_TOKEN }}
           submodules: recursive
+          ref: ${{ inputs.ref || github.ref }}
+          repository: ${{ inputs.repository || github.repository }}
 
       - if: ${{ matrix.platform == 'android' }}
         name: Setup Android NDK
@@ -144,7 +150,7 @@ jobs:
           echo "  API Level: 24"
 
       - name: Setup node
-        uses: actions/setup-node@v6
+        uses: actions/setup-node@v4
         with:
           node-version: lts/*
 
@@ -223,7 +229,7 @@ jobs:
           echo "VCPKG_ROOT=$VCPKG_ROOT" >> $GITHUB_ENV
           echo "$VCPKG_ROOT" >> $GITHUB_PATH
 
-      - if: ${{ matrix.os == 'ubuntu-22.04' || matrix.os == 'ubuntu-22.04-arm' || matrix.os == 'ubuntu-24.04' }}
+      - if: ${{ matrix.os == 'ubuntu-24.04' || matrix.os == 'ubuntu-24.04-arm64-private' }}
         name: Configure vcpkg in linux
         run: echo "VCPKG_ROOT=$VCPKG_INSTALLATION_ROOT" >> $GITHUB_ENV
 
@@ -255,9 +261,14 @@ jobs:
           env | sort
         continue-on-error: true
 
-      - if: ${{ matrix.os == 'ubuntu-22.04' || matrix.os == 'ubuntu-22.04-arm' || matrix.os == 'ubuntu-24.04' }}
+      - if: ${{ matrix.os == 'ubuntu-24.04' || matrix.os == 'ubuntu-24.04-arm64-private' }}
         name: Update apt sources
         run: sudo apt-get update
+
+      - if: ${{ matrix.os == 'ubuntu-24.04' && matrix.arch == 'arm64' }}
+        name: Install tooling for cross compilation - ubuntu arm64
+        run: |
+          sudo apt-get install gcc-aarch64-linux-gnu g++-aarch64-linux-gnu libc6-dev-arm64-cross lld
 
       - if: ${{ matrix.os == 'windows-2022' }}
         name: Configure cmake generator in windows
@@ -272,8 +283,24 @@ jobs:
       - if: ${{ matrix.os == 'windows-2022' && matrix.arch == 'arm64' }}
         run: echo "CMAKE_GENERATOR_PLATFORM=ARM64" >> $env:GITHUB_ENV
 
-      - if: ${{ matrix.os == 'ubuntu-22.04' || matrix.os == 'ubuntu-22.04-arm' }}
-        name: Download Vulkan SDK for ubuntu-22.04
+      - if: ${{ matrix.os == 'ubuntu-24.04' }}
+        name: Install vulkan in linux x64
+        run: |
+          wget -qO- https://packages.lunarg.com/lunarg-signing-key-pub.asc | sudo tee /etc/apt/trusted.gpg.d/lunarg.asc
+          sudo wget -qO /etc/apt/sources.list.d/lunarg-vulkan-noble.list http://packages.lunarg.com/vulkan/lunarg-vulkan-noble.list
+          sudo apt update
+          sudo apt install -y vulkan-sdk
+
+      - if: ${{ matrix.os == 'ubuntu-24.04-arm64-private' }}
+        name: Cache Vulkan SDK for linux arm64
+        id: cache-vulkan-arm64
+        uses: actions/cache@v4
+        with:
+          path: ~/vulkan
+          key: vulkan-sdk-linux-arm64-v1
+
+      - if: ${{ matrix.os == 'ubuntu-24.04-arm64-private' && steps.cache-vulkan-arm64.outputs.cache-hit != 'true' }}
+        name: Build Vulkan SDK for linux arm64
         run: |
           sudo apt install -y xz-utils
           wget -q -O /tmp/vulkansdk.tar.xz https://sdk.lunarg.com/sdk/download/latest/linux/vulkan_sdk.tar.xz
@@ -281,51 +308,13 @@ jobs:
           mkdir -p vulkan
           cd vulkan
           tar xf /tmp/vulkansdk.tar.xz --strip-components=1
+          ./vulkansdk --maxjobs
 
-      - if: ${{ matrix.os == 'ubuntu-22.04' }}
-        name: Setup Vulkan SDK path for ubuntu-22.04 x64
-        run: |
-          VULKAN_SDK=~/vulkan/x86_64
-          echo "VULKAN_SDK=$VULKAN_SDK" >> $GITHUB_ENV
-
-      - if: ${{ matrix.os == 'ubuntu-22.04-arm' }}
-        name: Setup vulkan sdk path in linux arm64
-        env:
-          AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
-          AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
-          AWS_DEFAULT_REGION: us-east-1
+      - if: ${{ matrix.os == 'ubuntu-24.04-arm64-private' }}
+        name: Setup Vulkan SDK environment for linux arm64
         run: |
           VULKAN_SDK=~/vulkan/aarch64
           echo "VULKAN_SDK=$VULKAN_SDK" >> $GITHUB_ENV
-
-          cd ~/vulkan
-
-          # Extract SDK major.minor version from README.txt (e.g., "1.4" from "1.4.341.0")
-          SDK_VERSION=$(grep -o 'sdk/[0-9]*\.[0-9]*' README.txt | head -1 | sed 's|sdk/||')
-          S3_BUCKET="${{ secrets.MODEL_S3_BUCKET }}"
-          S3_KEY="vulkan-sdk-cache/linux-arm64-${SDK_VERSION}.tar.gz"
-
-          echo "Vulkan SDK version: ${SDK_VERSION}"
-
-          # Try to download cached build from S3
-          if aws s3 cp "s3://${S3_BUCKET}/${S3_KEY}" /tmp/vulkan-arm64-cache.tar.gz 2>/dev/null; then
-            echo "Found cached Vulkan SDK, extracting..."
-            tar xzf /tmp/vulkan-arm64-cache.tar.gz -C ~/vulkan
-            rm /tmp/vulkan-arm64-cache.tar.gz
-          else
-            echo "No cache found, building Vulkan SDK for ARM64..."
-            ./vulkansdk --maxjobs
-
-            # Upload the compiled SDK to S3 for future runs
-            echo "Uploading compiled SDK to S3..."
-            tar czf /tmp/vulkan-arm64-cache.tar.gz aarch64
-            aws s3 cp /tmp/vulkan-arm64-cache.tar.gz "s3://${S3_BUCKET}/${S3_KEY}"
-            rm /tmp/vulkan-arm64-cache.tar.gz
-          fi
-
-      - if: ${{ matrix.os == 'ubuntu-22.04-arm' }}
-        name: Export vulkan sdk variables in linux arm64
-        run: |
           echo "PATH=$VULKAN_SDK/bin:$PATH" >> $GITHUB_ENV
           echo "LD_LIBRARY_PATH=$VULKAN_SDK/lib${LD_LIBRARY_PATH:+:$LD_LIBRARY_PATH}" >> $GITHUB_ENV
           echo "VK_ADD_LAYER_PATH=$VULKAN_SDK/share/vulkan/explicit_layer.d" >> $GITHUB_ENV
@@ -343,20 +332,6 @@ jobs:
         working-directory: ${{ env.PKG_DIR }}
         shell: bash
         run: npm install
-
-      - name: Create vcpkg cache location
-        working-directory: ${{ env.PKG_DIR }}
-        run: mkdir -p vcpkg/cache
-
-      - name: Restore vcpkg cache
-        id: cache-vcpkg
-        uses: actions/cache/restore@v5
-        with:
-          path: ${{ env.PKG_DIR }}/vcpkg/cache
-          key: vcpkg-nmtcpp-v1-${{ matrix.platform }}-${{ matrix.arch }}${{ matrix.tags }}-${{ hashFiles('packages/qvac-lib-infer-nmtcpp/vcpkg.json', 'packages/qvac-lib-infer-nmtcpp/vcpkg-configuration.json', 'packages/qvac-lib-infer-nmtcpp/vcpkg-overlays/**') }}
-          restore-keys: |
-            vcpkg-nmtcpp-v1-${{ matrix.platform }}-${{ matrix.arch }}${{ matrix.tags }}-
-            vcpkg-nmtcpp-v1-${{ matrix.platform }}-${{ matrix.arch }}-
 
       - if: ${{ matrix.os == 'windows-2022' }}
         name: Apply clang-cl compatibility fixes for Windows
@@ -663,14 +638,7 @@ jobs:
         shell: bash
         run: bare-make install
 
-      - if: ${{ steps.cache-vcpkg.outputs.cache-hit != 'true' }}
-        name: Save vcpkg cache
-        uses: actions/cache/save@v5
-        with:
-          path: ${{ env.PKG_DIR }}/vcpkg/cache
-          key: vcpkg-nmtcpp-v1-${{ matrix.platform }}-${{ matrix.arch }}${{ matrix.tags }}-${{ hashFiles('packages/qvac-lib-infer-nmtcpp/vcpkg.json', 'packages/qvac-lib-infer-nmtcpp/vcpkg-configuration.json', 'packages/qvac-lib-infer-nmtcpp/vcpkg-overlays/**') }}
-
-      - uses: actions/upload-artifact@v6
+      - uses: actions/upload-artifact@v4
         with:
           name: ${{ matrix.platform }}-${{ matrix.arch }}${{ matrix.tags }}
           path: ${{ env.PKG_DIR }}/prebuilds/*
@@ -679,18 +647,17 @@ jobs:
     runs-on: ubuntu-24.04
     needs: prebuild
     steps:
-      - uses: actions/download-artifact@v7
+      - uses: actions/download-artifact@v4
         with:
           path: prebuilds
           merge-multiple: true
-
       - run: |
           tree prebuilds/android-*
           mkdir -p prebuilds/android-arm prebuilds/android-ia32 prebuilds/android-x64
           cp -rv prebuilds/android-arm64/* prebuilds/android-arm/
           cp -rv prebuilds/android-arm64/* prebuilds/android-x64/
           cp -rv prebuilds/android-arm64/* prebuilds/android-ia32/
-      - uses: actions/upload-artifact@v6
+      - uses: actions/upload-artifact@v4
         with:
           name: prebuilds
           path: prebuilds
@@ -754,10 +721,8 @@ jobs:
           if [ -z "$gpr_tag" ]; then
             if [ "$ref_name" = "main" ]; then
               gpr_tag="dev"
-            elif [[ "$ref_name" == feature-* ]]; then
-              gpr_tag="feature"
-            elif [[ "$ref_name" == tmp-* ]]; then
-              gpr_tag="temp"
+            elif [[ "$ref_name" == feature-* ]] || [[ "$ref_name" == tmp-* ]]; then
+              gpr_tag="$ref_name"
             else
               gpr_tag="dev"
             fi
@@ -778,10 +743,14 @@ jobs:
       packages: write
     steps:
       - name: Checkout repository
-        uses: actions/checkout@v6
+        uses: actions/checkout@v4
+        with:
+          token: ${{ secrets.GITHUB_TOKEN }}
+          lfs: false
+          fetch-depth: 1
 
       - name: Download prebuild artifacts
-        uses: actions/download-artifact@v7
+        uses: actions/download-artifact@v4
         with:
           name: prebuilds
           path: ${{ env.PKG_DIR }}/prebuilds
@@ -802,14 +771,18 @@ jobs:
       published_version: ${{ steps.publish.outputs.npm_published_version }}
     runs-on: ubuntu-24.04
     permissions:
-      contents: write
+      contents: read
       packages: write
     steps:
       - name: Checkout repository
-        uses: actions/checkout@v6
+        uses: actions/checkout@v4
+        with:
+          token: ${{ secrets.GITHUB_TOKEN }}
+          lfs: false
+          fetch-depth: 1
 
       - name: Download prebuild artifacts
-        uses: actions/download-artifact@v7
+        uses: actions/download-artifact@v4
         with:
           name: prebuilds
           path: ${{ env.PKG_DIR }}/prebuilds
@@ -821,27 +794,60 @@ jobs:
           secret-token: ${{ secrets.NPM_TOKEN }}
           tag: "latest"
           workdir: ${{ env.PKG_DIR }}
-          repo_name: "nmtcpp"
-          git-token: ${{ secrets.GITHUB_TOKEN }}
+          name-suffix: "-mono"
+
+  check-version-change:
+    needs: [publish-npm]
+    if: needs.publish-npm.result == 'success'
+    runs-on: ubuntu-24.04
+    outputs:
+      version_changed: ${{ steps.check.outputs.changed }}
+      new_version: ${{ steps.check.outputs.version }}
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 2
+
+      - name: Check if package.json version changed
+        id: check
+        working-directory: ${{ env.PKG_DIR }}
+        run: |
+          CURRENT_VERSION=$(node -p "require('./package.json').version")
+
+          git checkout HEAD~1 -- package.json 2>/dev/null || true
+          PREVIOUS_VERSION=$(node -p "require('./package.json').version" 2>/dev/null || echo "")
+          git checkout HEAD -- package.json
+
+          echo "Previous version: $PREVIOUS_VERSION"
+          echo "Current version: $CURRENT_VERSION"
+
+          if [ "$CURRENT_VERSION" != "$PREVIOUS_VERSION" ] && [ -n "$PREVIOUS_VERSION" ]; then
+            echo "✅ Version changed from $PREVIOUS_VERSION to $CURRENT_VERSION"
+            echo "changed=true" >> $GITHUB_OUTPUT
+            echo "version=$CURRENT_VERSION" >> $GITHUB_OUTPUT
+          else
+            echo "⏭️  Version unchanged"
+            echo "changed=false" >> $GITHUB_OUTPUT
+            echo "version=" >> $GITHUB_OUTPUT
+          fi
 
   create-github-release:
-    needs: [publish-npm]
-    if: needs.publish-npm.result == 'success' && needs.publish-npm.outputs.published_version != ''
+    needs: [check-version-change]
+    if: needs.check-version-change.outputs.version_changed == 'true' && startsWith(github.ref_name, 'release-')
     permissions:
       contents: write
-    uses: ./.github/workflows/create-github-release.yml
+    uses: ./.github/workflows/create-github-release-qvac-lib-infer-nmtcpp.yml
     secrets: inherit
     with:
-      repo_name: "nmtcpp"
-      release_name: "QVAC Infer NMTCPP Lib"
-      published_version: ${{ needs.publish-npm.outputs.published_version }}
+      published_version: ${{ needs.check-version-change.outputs.new_version }}
       prev_sha: ${{ github.event.before }}
-      workdir: "packages/qvac-lib-infer-nmtcpp"
+      workdir: packages/qvac-lib-infer-nmtcpp
 
   run-automated-benchmarks:
-    needs: [publish-npm]
-    if: needs.publish-npm.result == 'success' && needs.publish-npm.outputs.published_version != ''
+    needs: [check-version-change]
+    if: needs.check-version-change.outputs.version_changed == 'true'
     uses: ./.github/workflows/on-publish-benchmark-qvac-lib-infer-nmtcpp.yml
     secrets: inherit
     with:
-      version: ${{ needs.publish-npm.outputs.published_version }}
+      version: ${{ needs.check-version-change.outputs.new_version }}

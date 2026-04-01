@@ -17,17 +17,10 @@ jobs:
   release-notes-check:
     runs-on: ubuntu-latest
     steps:
-      - name: Checkout repository
-        uses: actions/checkout@v6
-
       - name: Validate release notes on version bump (monorepo-aware)
-        uses: actions/github-script@v8
+        uses: actions/github-script@v7
         with:
           script: |
-            const { decodeContent, validateReleaseNotesOnVersionBump, formatFailures } = require(
-              `${process.env.GITHUB_WORKSPACE}/.github/scripts/release-notes-check.js`
-            );
-
             const pullNumber = context.payload.pull_request.number;
             const owner = context.repo.owner;
             const repo = context.repo.repo;
@@ -41,6 +34,19 @@ jobs:
               { owner, repo, pull_number: pullNumber, per_page: 100 }
             );
 
+            // Helper: decode base64 content response from getContent
+            function decodeContent(resp) {
+              // getContent can return either a file object or an array (directory listing)
+              if (!resp || Array.isArray(resp.data)) return null;
+              const { content, encoding } = resp.data;
+              if (!content) return null;
+              if (encoding === 'base64') {
+                return Buffer.from(content, 'base64').toString('utf8');
+              }
+              // Fallback
+              return content;
+            }
+
             async function readJsonAtRef(path, ref) {
               try {
                 const resp = await github.rest.repos.getContent({ owner, repo, path, ref });
@@ -53,26 +59,81 @@ jobs:
               }
             }
 
-            async function readTextAtRef(path, ref) {
-              try {
-                const resp = await github.rest.repos.getContent({ owner, repo, path, ref });
-                return decodeContent(resp);
-              } catch (e) {
-                core.warning(`Could not read ${path} at ref ${ref}: ${e.message}`);
-                return null;
+            // Find any changed package.json files (root or nested)
+            const packageJsonFiles = files
+              .filter(f => f.filename === 'package.json' || f.filename.endsWith('/package.json'))
+              .map(f => f.filename);
+
+            if (packageJsonFiles.length === 0) {
+              core.info('No package.json files changed; no release notes required.');
+              return;
+            }
+
+            // Convenience set for quick existence checks
+            const changedFileSet = new Set(files.map(f => f.filename));
+
+            const failures = [];
+
+            for (const pkgPath of packageJsonFiles) {
+              const baseJson = await readJsonAtRef(pkgPath, baseSha);
+              const headJson = await readJsonAtRef(pkgPath, headSha);
+
+              if (!baseJson || !headJson) {
+                core.info(`Skipping ${pkgPath}: unable to read base/head contents.`);
+                continue;
+              }
+
+              const baseVer = baseJson.version;
+              const headVer = headJson.version;
+
+              if (!headVer) {
+                core.info(`Skipping ${pkgPath}: no "version" field found in head.`);
+                continue;
+              }
+
+              const bumped = baseVer !== headVer;
+
+              if (!bumped) {
+                core.info(`No version bump detected for ${pkgPath} (version stays ${headVer}).`);
+                continue;
+              }
+
+              // Derive package directory + a stable short name for notes folder checks
+              const pkgDir = pkgPath.includes('/') ? pkgPath.slice(0, pkgPath.lastIndexOf('/')) : '';
+              const pkgDirBase = pkgDir ? pkgDir.split('/').pop() : 'root';
+
+              // Accept multiple conventions (keeps this portable across repos):
+              // 1) Root convention: release-notes/vX.Y.Z.md
+              // 2) Per-package convention: <pkgDir>/release-notes/vX.Y.Z.md
+              // 3) Central per-package bucket: release-notes/<pkgDirBase>/vX.Y.Z.md
+              const expectedCandidates = [
+                `release-notes/v${headVer}.md`,
+                pkgDir ? `${pkgDir}/release-notes/v${headVer}.md` : null,
+                `release-notes/${pkgDirBase}/v${headVer}.md`,
+              ].filter(Boolean);
+
+              const found = expectedCandidates.some(p => changedFileSet.has(p));
+
+              core.info(
+                `Detected version bump in ${pkgPath}: ${baseVer ?? '<missing>'} -> ${headVer}. ` +
+                `Looking for release notes in: ${expectedCandidates.join(', ')}`
+              );
+
+              if (!found) {
+                failures.push(
+                  `- ${pkgPath} bumped ${baseVer ?? '<missing>'} -> ${headVer} but no release notes file found.\n` +
+                  `  Add one of:\n` +
+                  expectedCandidates.map(p => `    • ${p}`).join('\n')
+                );
               }
             }
-            const failures = await validateReleaseNotesOnVersionBump({
-              files,
-              baseSha,
-              headSha,
-              readJsonAtRef,
-              readTextAtRef,
-              log: (message) => core.info(message)
-            });
 
             if (failures.length > 0) {
-              core.setFailed(formatFailures(failures));
+              core.setFailed(
+                `Release notes check failed.\n\n` +
+                `One or more package.json version bumps were detected without corresponding release notes:\n\n` +
+                failures.join('\n\n')
+              );
             } else {
-              core.info('All detected version bumps have matching changelog sections.');
+              core.info('All detected version bumps have matching release notes.');
             }

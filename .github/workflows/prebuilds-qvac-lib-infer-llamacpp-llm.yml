@@ -53,7 +53,7 @@ on:
     outputs:
       published_version:
         description: "The version that was published"
-        value: ${{ jobs.publish-npm.outputs.published_version || jobs.publish-gpr.outputs.published_version }}
+        value: ${{ jobs.publish-npm.outputs.npm_published_version || jobs.publish-gpr.outputs.npm_published_version }}
 
 env:
   WORKDIR: ${{ inputs.workdir }}
@@ -145,6 +145,13 @@ jobs:
           chmod +x llvm.sh
           sudo ./llvm.sh 19 all
 
+      - if: ${{ startsWith(matrix.os, 'ubuntu-22') }}
+        name: Install g++-13 on Ubuntu 22.04
+        run: |
+          sudo add-apt-repository ppa:ubuntu-toolchain-r/test
+          sudo apt update
+          sudo apt install -y g++-13
+
       - if: ${{ matrix.os == 'windows-2022' }}
         name: Configure windows runner
         shell: powershell
@@ -153,14 +160,14 @@ jobs:
           choco upgrade llvm
 
       - name: Checkout repository
-        uses: actions/checkout@v6
+        uses: actions/checkout@v4
         with:
-          repository: ${{ inputs.repository || github.repository }}
-          ref: ${{ inputs.ref || github.ref }}
           token: ${{ secrets.PAT_TOKEN }}
+          ref: ${{ inputs.ref || github.ref }}
+          repository: ${{ inputs.repository || github.repository }}
 
       - name: Setup node
-        uses: actions/setup-node@v6
+        uses: actions/setup-node@v4
         with:
           node-version: lts/*
 
@@ -257,10 +264,10 @@ jobs:
 
       - if: ${{ matrix.os == 'ubuntu-22.04-arm' }}
         name: Get ccache cache
-        uses: actions/cache@v5
+        uses: actions/cache@v4
         with:
-          key: ccache-${{ matrix.platform }}-${{ matrix.arch }}
           path: ~/.cache/ccache-arm
+          key: ccache-${{ matrix.platform }}-${{ matrix.arch }}
 
       - if: ${{ matrix.platform == 'linux' }}
         name: Install required packages linux
@@ -296,7 +303,7 @@ jobs:
           
           # Extract SDK major.minor version from README.txt (e.g., "1.4" from "1.4.341.0")
           SDK_VERSION=$(grep -o 'sdk/[0-9]*\.[0-9]*' README.txt | head -1 | sed 's|sdk/||')
-          S3_BUCKET="${{ secrets.MODEL_S3_BUCKET }}"
+          S3_BUCKET="tether-ai-dev"
           S3_KEY="vulkan-sdk-cache/linux-arm64-${SDK_VERSION}.tar.gz"
           
           echo "Vulkan SDK version: ${SDK_VERSION}"
@@ -365,10 +372,10 @@ jobs:
 
       - name: Get vcpkg cache
         id: cache-vcpkg
-        uses: actions/cache@v5
+        uses: actions/cache@v4
         with:
-          key: ${{ matrix.platform }}-${{ matrix.arch }}-${{ hashFiles(format('{0}/vcpkg.json', env.WORKDIR), format('{0}/vcpkg-configuration.json', env.WORKDIR), format('{0}/vcpkg/ports/**', env.WORKDIR)) }}
           path: ${{ env.WORKDIR }}/vcpkg/cache
+          key: ${{ matrix.platform }}-${{ matrix.arch }}-${{ hashFiles(format('{0}/vcpkg.json', env.WORKDIR), format('{0}/vcpkg-configuration.json', env.WORKDIR), format('{0}/vcpkg/ports/**', env.WORKDIR)) }}
           restore-keys: ${{ matrix.platform }}-${{ matrix.arch }}-
 
       - if: ${{ inputs.vk-profiling }}
@@ -423,7 +430,7 @@ jobs:
             find prebuilds -name "*.bare" -exec strip --strip-debug {} \;
           fi
 
-      - uses: actions/upload-artifact@v6
+      - uses: actions/upload-artifact@v4
         with:
           name: llama-cpp-${{ matrix.platform }}-${{ matrix.arch }}${{ matrix.tags }}
           path: ${{ env.WORKDIR }}/prebuilds
@@ -435,13 +442,13 @@ jobs:
       contents: write
     steps:
       - name: Download all build artifacts
-        uses: actions/download-artifact@v7
+        uses: actions/download-artifact@v4
         with:
           path: prebuilds
           merge-multiple: true
 
       - name: Upload merged artifacts
-        uses: actions/upload-artifact@v6
+        uses: actions/upload-artifact@v4
         with:
           name: prebuilds
           path: prebuilds
@@ -466,29 +473,29 @@ jobs:
             ) }}
     continue-on-error: true
     outputs:
-      published_version: ${{ steps.publish.outputs.npm_published_version }}
+      npm_published_version: ${{ steps.publish.outputs.npm_published_version }}
     runs-on: ubuntu-latest
     permissions:
       contents: write
       packages: write
     steps:
       - name: Checkout repository
-        uses: actions/checkout@v6
+        uses: actions/checkout@v4
         with:
-          repository: ${{ inputs.repository || github.repository }}
-          ref: ${{ inputs.ref || github.ref }}
           token: ${{ secrets.PAT_TOKEN }}
+          ref: ${{ inputs.ref || github.ref }}
+          repository: ${{ inputs.repository || github.repository }}
 
       - name: Setup node
-        uses: actions/setup-node@v6
+        uses: actions/setup-node@v4
         with:
           node-version: lts/*
 
       - name: Download prebuild artifacts
-        uses: actions/download-artifact@v7
+        uses: actions/download-artifact@v4
         with:
           name: prebuilds
-          path: ${{ env.WORKDIR }}/prebuilds
+          path: prebuilds
 
       - name: Scope package as @tetherto for GPR
         shell: bash
@@ -520,33 +527,32 @@ jobs:
             ) }}
     continue-on-error: false
     outputs:
-      published_version: ${{ steps.publish.outputs.npm_published_version }}
+      npm_published_version: ${{ steps.publish.outputs.npm_published_version }}
     runs-on: ubuntu-latest
     permissions:
-      contents: write
+      contents: read
       packages: write
     steps:
       - name: Checkout repository
-        uses: actions/checkout@v6
+        uses: actions/checkout@v4
         with:
-          repository: ${{ inputs.repository || github.repository }}
-          ref: ${{ inputs.ref || github.ref }}
           token: ${{ secrets.PAT_TOKEN }}
+          ref: ${{ inputs.ref || github.ref }}
+          repository: ${{ inputs.repository || github.repository }}
 
       - name: Setup node
-        uses: actions/setup-node@v6
+        uses: actions/setup-node@v4
         with:
           node-version: lts/*
 
       - name: Download prebuild artifacts
-        uses: actions/download-artifact@v7
+        uses: actions/download-artifact@v4
         with:
           name: prebuilds
-          path: ${{ env.WORKDIR }}/prebuilds
+          path: prebuilds
 
       # Re-assert scope for public npm (fresh checkout)
       - name: Scope package as @qvac for npm
-        working-directory: ${{ env.WORKDIR }}
         shell: bash
         run: |
           set -euo pipefail
@@ -559,7 +565,3 @@ jobs:
         with:
           secret-token: ${{ secrets.NPM_TOKEN }}
           tag: 'latest'
-          workdir: ${{ env.WORKDIR }}
-          repo_name: "llamacpp-llm"
-          git-token: ${{ secrets.GITHUB_TOKEN }}
-          create-tag: "false"

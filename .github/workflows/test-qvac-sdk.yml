@@ -1,0 +1,42 @@
+# QVAC SDK Tests
+# Uses reusable workflow from qvac-devops
+# Originally from qvac-sdk/.github/workflows/qvac-tests.yml
+
+name: QVAC Tests (Qvac-sdk)
+
+on:
+  pull_request:
+    paths:
+      - "packages/qvac-sdk/**"
+    branches:
+      - main
+      - release-*
+  push:
+    branches:
+      - main
+      - release-*
+      - feature-*
+      - tmp-*
+    paths:
+      - "packages/qvac-sdk/**"
+
+permissions:
+  contents: read
+  pull-requests: write
+  packages: read
+
+jobs:
+  desktop-tests:
+    uses: ./.github/workflows/test-desktop-qvac-sdk.yml
+    with:
+      working-directory: "packages/qvac-sdk/tests-qvac"
+      platforms: '["ai-run-linux-gpu", "macos-latest-xlarge", "ai-run-windows-gpu"]'
+      consumer-timeout: 60
+    secrets:
+      MQTT_PROTOCOL: ${{ secrets.MQTT_PROTOCOL }}
+      MQTT_HOST: ${{ secrets.MQTT_HOST }}
+      MQTT_PORT: ${{ secrets.MQTT_PORT }}
+      MQTT_USERNAME: ${{ secrets.MQTT_USERNAME }}
+      MQTT_PASSWORD: ${{ secrets.MQTT_PASSWORD }}
+      MQTT_CA_CERT: ${{ secrets.MQTT_CA_CERT }}
+      PAT_TOKEN: ${{ secrets.PAT_TOKEN }}
