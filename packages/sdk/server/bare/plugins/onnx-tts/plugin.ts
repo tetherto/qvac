@@ -24,6 +24,7 @@ import {
   TtsReferenceAudioRequiredError,
 } from "@/utils/errors-server";
 import { textToSpeech } from "@/server/bare/plugins/onnx-tts/ops/text-to-speech";
+import { attachModelExecutionMs } from "@/profiling/model-execution";
 import { loadReferenceAudioAt24k } from "@/server/bare/plugins/onnx-tts/wav-helper";
 
 async function resolveChatterboxConfig(
@@ -265,8 +266,28 @@ export const ttsPlugin = definePlugin({
       streaming: true,
 
       handler: async function* (request) {
-        for await (const response of textToSpeech(request)) {
-          yield response;
+        const stream = textToSpeech(request);
+        try {
+          let result = await stream.next();
+
+          while (!result.done) {
+            yield {
+              type: "textToSpeech" as const,
+              buffer: result.value.buffer,
+              done: false,
+            };
+            result = await stream.next();
+          }
+
+          const { modelExecutionMs, stats } = result.value;
+          yield attachModelExecutionMs({
+            type: "textToSpeech" as const,
+            buffer: [],
+            done: true,
+            ...(stats && { stats }),
+          }, modelExecutionMs);
+        } finally {
+          await stream.return?.(undefined as never);
         }
       },
     }),
