@@ -43,9 +43,12 @@ getTTSConfigMap(js_env_t *env, js::Object configurationParams) {
 
   addString("modelDir");
   addString("textEncoderPath");
-  addString("latentDenoiserPath");
-  addString("voiceDecoderPath");
-  addString("voicesDir");
+  addString("unicodeIndexerPath");
+  addString("ttsConfigPath");
+  addString("durationPredictorPath");
+  addString("vectorEstimatorPath");
+  addString("vocoderPath");
+  addString("voiceStyleJsonPath");
   addString("voiceName");
   addString("speed");
   addString("numInferenceSteps");
@@ -58,6 +61,7 @@ getTTSConfigMap(js_env_t *env, js::Object configurationParams) {
   };
   addBool("useGPU");
   addBool("lazySessionLoading");
+  addBool("supertonicMultilingual");
 
   return configMap;
 }

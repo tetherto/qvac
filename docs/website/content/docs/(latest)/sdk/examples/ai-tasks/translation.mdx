@@ -28,7 +28,7 @@ For how to use each function, see [SDK — API reference](/sdk/api/).
 ## Models
 
 You should load a model compatible with your chosen inference engine:
-- `nmt.cpp` (default): OPUS-MT or IndicTrans2, converted to GGML. Model file format: `*.bin`.
+- `nmt.cpp` (default): Bergamot or IndicTrans2. Bergamot uses intgemm `*.bin` + `*.spm` vocab files; IndicTrans2 uses GGML `*.bin`.
 - Bergamot: Bergamot model bundle. Required files: model `*.bin` + `vocab*.spm`.
 
 For models available as constants, see [SDK — Models](/sdk/getting-started#models).
@@ -41,7 +41,7 @@ The following script shows an example of translation:
 <Tab value="js" label="JavaScript" default>
 <WrapCode>
 
-```js file=<rootDir>/packages/sdk/dist/examples/translation/translation-opus.js title="translation.js" lineNumbers
+```js file=<rootDir>/packages/sdk/dist/examples/translation/translation-stream.js title="translation.js" lineNumbers
 ```
 </WrapCode>
 </Tab>
@@ -49,7 +49,7 @@ The following script shows an example of translation:
 <Tab value="ts" label="TypeScript">
 <WrapCode>
 
-```ts file=<rootDir>/packages/sdk/examples/translation/translation-opus.ts title="translation.ts" lineNumbers
+```ts file=<rootDir>/packages/sdk/examples/translation/translation-stream.ts title="translation.ts" lineNumbers
 ```
 </WrapCode>
 </Tab>

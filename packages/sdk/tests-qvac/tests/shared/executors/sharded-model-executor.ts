@@ -36,6 +36,7 @@ export class ShardedModelExecutor extends AbstractModelExecutor<typeof shardedMo
         modelSrc: GTE_LARGE_FP16,
         modelType: "embeddings",
       });
+      await this.resources.register("embeddings", modelId);
       return ValidationHelpers.validate(modelId, expectation as Expectation);
     } catch (error) {
       const errorMsg = error instanceof Error ? error.message : String(error);

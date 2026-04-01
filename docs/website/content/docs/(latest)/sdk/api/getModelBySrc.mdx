@@ -1,35 +1,31 @@
 ---
 title: "getModelBySrc( )"
 titleStyle: code
-description: "Looks up a model in the built-in catalog by its model file ID and blob core key. Used for resolving models from Hyperdrive-based sources."
+description: Retrieves a model constant from the built-in registry by its model ID and blob core key.
 ---
 
-```typescript
-function getModelBySrc(modelId: string, blobCoreKey: string): RegistryItem | —
+```ts
+function getModelBySrc(modelId: string, blobCoreKey: string): RegistryItem | undefined;
 ```
 
 ## Parameters
 
 | Name | Type | Required? | Description |
 | --- | --- | :---: | --- |
-| `modelId` | `string` | ✓ | The model file identifier |
-| `blobCoreKey` | `string` | ✓ | The Hyperdrive blob core key associated with the model source |
+| modelId | `string` | ✓ | The unique model identifier |
+| blobCoreKey | `string` | ✓ | The Hyperdrive blob core key |
 
 ## Returns
 
-```typescript
-RegistryItem | —
-```
-
-The matching `RegistryItem` if found, or `undefined` if no model matches the given source identifiers.
+[`RegistryItem`](../getModelByName#registryitem) ` | undefined` — The matching model constant, or `undefined` if not found. See [`getModelByName()`](../getModelByName#registryitem) for the full `RegistryItem` shape.
 
 ## Example
 
 ```typescript
 import { getModelBySrc } from "@qvac/sdk";
 
-const model = getModelBySrc("llama-7b.gguf", "abc123...");
+const model = getModelBySrc("model-abc123", "blob-core-key-hex");
 if (model) {
-  console.log(model.name, model.registryPath);
+  console.log(model.name, model.expectedSize);
 }
 ```

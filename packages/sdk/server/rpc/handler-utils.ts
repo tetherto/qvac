@@ -14,6 +14,16 @@ import {
 import { setSDKConfig } from "@/server/bare/registry/config-registry";
 import { setRuntimeContext } from "@/server/bare/registry/runtime-context-registry";
 import { type ServerProfiler } from "./profiling";
+import { nowMs } from "@/profiling/clock";
+
+export function isTerminalChunk(value: unknown): value is { done: true } {
+  return (
+    typeof value === "object" &&
+    value !== null &&
+    "done" in value &&
+    (value as { done: unknown }).done === true
+  );
+}
 
 function getProfilingMetaFromRequest(
   request: Request,
@@ -79,6 +89,7 @@ async function executeStreamHandler(
 ) {
   const stream = req.createResponseStream();
   profiler.startHandler();
+  let sentFinalChunk = false;
 
   try {
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -92,13 +103,24 @@ async function executeStreamHandler(
     } else {
       generator = handler(request);
     }
+
     for await (const response of generator) {
-      stream.write(profiler.serialize(response, false) + "\n", "utf-8");
+      if (isTerminalChunk(response)) {
+        profiler.endHandler();
+        stream.write(profiler.serialize(response, true) + "\n", "utf-8");
+        sentFinalChunk = true;
+      } else {
+        stream.write(profiler.serialize(response, false) + "\n", "utf-8");
+      }
     }
-    profiler.endHandler();
-    const trailer = profiler.serialize();
-    if (trailer) {
-      stream.write(trailer + "\n", "utf-8");
+    
+    // Fallback
+    if (!sentFinalChunk) {
+      profiler.endHandler();
+      const trailer = profiler.serialize();
+      if (trailer) {
+        stream.write(trailer + "\n", "utf-8");
+      }
     }
 
     stream.end();
@@ -107,6 +129,8 @@ async function executeStreamHandler(
     sendStreamErrorResponse(stream, error, profiler);
   }
 }
+
+const PROGRESS_THROTTLE_MS = 150;
 
 async function executeProgressHandler(
   req: RPC.IncomingRequest,
@@ -118,8 +142,36 @@ async function executeProgressHandler(
   const stream = req.createResponseStream();
   profiler.startHandler();
 
-  const progressCallback = (update: Response) => {
+  let lastProgressWrite = 0;
+  let pendingUpdate: Response | null = null;
+  let flushTimer: ReturnType<typeof setTimeout> | null = null;
+
+  const writeProgress = (update: Response) => {
     stream.write(profiler.serialize(update, false) + "\n", "utf-8");
+  };
+
+  const progressCallback = (update: Response) => {
+    const now = nowMs();
+    if (now - lastProgressWrite >= PROGRESS_THROTTLE_MS) {
+      lastProgressWrite = now;
+      pendingUpdate = null;
+      writeProgress(update);
+    } else {
+      pendingUpdate = update;
+      if (!flushTimer) {
+        flushTimer = setTimeout(
+          () => {
+            flushTimer = null;
+            if (pendingUpdate) {
+              lastProgressWrite = nowMs();
+              writeProgress(pendingUpdate);
+              pendingUpdate = null;
+            }
+          },
+          PROGRESS_THROTTLE_MS - (now - lastProgressWrite),
+        );
+      }
+    }
   };
 
   try {
@@ -137,10 +189,26 @@ async function executeProgressHandler(
     } else {
       response = await handler(request, progressCallback);
     }
+    if (flushTimer) {
+      clearTimeout(flushTimer);
+      flushTimer = null;
+    }
+    if (pendingUpdate) {
+      writeProgress(pendingUpdate);
+      pendingUpdate = null;
+    }
     profiler.endHandler();
     stream.write(profiler.serialize(response, true) + "\n", "utf-8");
     stream.end();
   } catch (error) {
+    if (flushTimer) {
+      clearTimeout(flushTimer);
+      flushTimer = null;
+    }
+    if (pendingUpdate) {
+      writeProgress(pendingUpdate);
+      pendingUpdate = null;
+    }
     profiler.endHandler();
     sendStreamErrorResponse(stream, error, profiler);
   }
