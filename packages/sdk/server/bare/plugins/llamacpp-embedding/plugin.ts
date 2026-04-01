@@ -20,6 +20,7 @@ import { parseModelPath } from "@/server/utils";
 import FilesystemDL from "@qvac/dl-filesystem";
 import { asLoader } from "@/server/bare/utils/loader-adapter";
 import { embed } from "@/server/bare/ops/embed";
+import { forwardModelExecution } from "@/profiling/model-execution";
 
 function transformEmbedConfig(embedConfig: EmbedConfig): GGMLConfig {
   const config: GGMLConfig = {
@@ -109,16 +110,17 @@ export const embeddingsPlugin = definePlugin({
       streaming: false,
 
       handler: async function (request) {
-        const embedding = await embed({
+        const embedResult = await embed({
           modelId: request.modelId,
           text: request.text,
         });
 
-        return {
+        return forwardModelExecution({
           type: "embed" as const,
           success: true,
-          embedding,
-        };
+          embedding: embedResult.embedding,
+          ...(embedResult.stats && { stats: embedResult.stats }),
+        }, embedResult);
       },
     }),
   },

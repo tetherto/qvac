@@ -249,7 +249,13 @@ jobs:
           fi
 
       - name: Install dependencies
-        run: ${{ matrix.pkg_manager }} install
+        shell: bash
+        run: |
+          if [ "${{ matrix.package }}" = "sdk" ]; then
+            bun install --frozen-lockfile
+          else
+            ${{ matrix.pkg_manager }} install
+          fi
 
       - name: Install Bare runtime
         if: matrix.package == 'rag'

@@ -48,9 +48,9 @@ export const completionStreamRequestSchema =
   });
 
 export const completionStatsSchema = z.object({
-  timeToFirstToken: z.number(),
-  tokensPerSecond: z.number(),
-  cacheTokens: z.number(),
+  timeToFirstToken: z.number().optional(),
+  tokensPerSecond: z.number().optional(),
+  cacheTokens: z.number().optional(),
 });
 
 export const completionStreamResponseSchema = z.object({
