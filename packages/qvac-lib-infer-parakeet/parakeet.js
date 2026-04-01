@@ -107,9 +107,8 @@ class ParakeetInterface {
 
   _createNativeInstance (configurationParams) {
     this._config = configurationParams
-    // addon-cpp job ids restart from 1 for each new native instance.
-    // Keep wrapper-visible response ids aligned whenever we recreate one.
-    this._nextJobId = 1
+    // Wrapper job ids are owned in JS, so recreating the native instance only
+    // clears native state and buffered audio.
     this._activeJobId = null
     this._bufferedAudio = []
     this._bufferedBytes = 0
@@ -121,7 +120,7 @@ class ParakeetInterface {
     )
   }
 
-  _addonOutputCallback (addon, event, data, error, nativeJobId) {
+  _addonOutputCallback (addon, event, data, error) {
     const isError = typeof error === 'string' && error.length > 0
     const isStats = data && typeof data === 'object' && (
       'totalTime' in data ||
@@ -142,7 +141,7 @@ class ParakeetInterface {
       mappedEvent = 'Output'
     }
 
-    const jobId = Number.isFinite(nativeJobId) ? nativeJobId : null
+    const jobId = this._activeJobId
     if (jobId === null) {
       return
     }
@@ -156,11 +155,16 @@ class ParakeetInterface {
     }
 
     if (mappedEvent === 'Error' || mappedEvent === 'JobEnded') {
-      if (this._activeJobId === jobId) {
-        this._activeJobId = null
-        this._setState(state.LISTENING)
-      }
+      this._activeJobId = null
+      this._setState(state.LISTENING)
     }
+  }
+
+  _emitSyntheticError (jobId, error) {
+    if (!this._outputCallback) {
+      return
+    }
+    this._outputCallback(this, 'Error', jobId, undefined, error)
   }
 
   /**
@@ -279,7 +283,7 @@ class ParakeetInterface {
       this._bufferedAudio = []
       this._bufferedBytes = 0
       if (this._activeJobId !== null) {
-        await this._binding.cancel(this._handle, this._activeJobId)
+        await this._binding.cancel(this._handle)
         this._activeJobId = null
       }
       this._setState(state.STOPPED)
@@ -295,11 +299,31 @@ class ParakeetInterface {
    */
   async cancel (jobId) {
     try {
-      await this._binding.cancel(this._handle, jobId)
-      this._bufferedAudio = []
-      this._bufferedBytes = 0
-      this._activeJobId = null
-      this._setState(state.LISTENING)
+      const pendingJobId = this._bufferedAudio.length > 0 ? this._nextJobId : null
+      const targetJobId = jobId ?? this._activeJobId ?? pendingJobId
+
+      if (targetJobId === null) {
+        this._bufferedAudio = []
+        this._bufferedBytes = 0
+        this._setState(state.LISTENING)
+        return
+      }
+
+      if (this._activeJobId === targetJobId) {
+        await this._binding.cancel(this._handle)
+        this._bufferedAudio = []
+        this._bufferedBytes = 0
+        this._activeJobId = null
+        this._setState(state.LISTENING)
+        return
+      }
+
+      if (this._activeJobId === null && pendingJobId === targetJobId) {
+        this._bufferedAudio = []
+        this._bufferedBytes = 0
+        this._setState(state.LISTENING)
+        this._emitSyntheticError(targetJobId, 'Job cancelled')
+      }
     } catch (error) {
       throw createParakeetError(ERR_CODES.FAILED_TO_CANCEL, error.message, error)
     }
@@ -357,7 +381,7 @@ class ParakeetInterface {
       }
       if (this._activeJobId !== null) {
         try {
-          await this._binding.cancel(this._handle, this._activeJobId)
+          await this._binding.cancel(this._handle)
         } catch {}
       }
       this._binding.destroyInstance(this._handle)

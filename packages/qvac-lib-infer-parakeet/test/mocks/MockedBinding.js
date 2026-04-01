@@ -15,10 +15,7 @@ class MockedBinding {
     this._state = state.LOADING
     this._busy = false
     this._runToken = 0
-    this._baseInferenceCallback = null
     this._interfaceType = null
-    this._nextJobId = 1
-    this._currentJobId = null
   }
 
   createInstance (interfaceType, configurationParams, outputCb, transitionCb = null) {
@@ -30,18 +27,9 @@ class MockedBinding {
     return this._handle
   }
 
-  setBaseInferenceCallback (callback) {
-    this._baseInferenceCallback = callback
-  }
-
-  _callCallbacks (event, output, error = null, jobId = this._currentJobId) {
-    if (this._baseInferenceCallback) {
-      const baseEvent = event === 'RuntimeStats' ? 'JobEnded' : event
-      this._baseInferenceCallback(this, baseEvent, jobId, output, error)
-    }
-
+  _callCallbacks (event, output, error = null) {
     if (this.outputCb) {
-      this.outputCb(this, event, output, error, jobId)
+      this.outputCb(this, event, output, error)
     }
   }
 
@@ -79,12 +67,11 @@ class MockedBinding {
     }
   }
 
-  cancel (handle, jobId) {
+  cancel (handle) {
     if (handle !== this._handle) throw new Error('Invalid handle')
-    console.log(`Cancel job id: ${jobId}`)
+    console.log('Cancel job')
     this._runToken++
     this._busy = false
-    this._currentJobId = null
     this._state = state.LISTENING
     if (this.transitionCb) {
       this.transitionCb(this, this._state)
@@ -110,8 +97,6 @@ class MockedBinding {
     }
 
     this._busy = true
-    const jobId = this._nextJobId++
-    this._currentJobId = jobId
     this._state = state.PROCESSING
     if (this.transitionCb) this.transitionCb(this, this._state)
 
@@ -127,10 +112,9 @@ class MockedBinding {
         toAppend: true
       }
 
-      this._callCallbacks('Output', [mockTranscription], null, jobId)
-      this._callCallbacks('RuntimeStats', { totalTime: 0.001, audioDurationMs: Math.floor((audioLength / 16000) * 1000), totalSamples: audioLength }, null, jobId)
+      this._callCallbacks('Output', [mockTranscription], null)
+      this._callCallbacks('RuntimeStats', { totalTime: 0.001, audioDurationMs: Math.floor((audioLength / 16000) * 1000), totalSamples: audioLength }, null)
       this._busy = false
-      this._currentJobId = null
       this._state = state.LISTENING
       if (this.transitionCb) this.transitionCb(this, this._state)
     })
@@ -192,7 +176,6 @@ class MockedBinding {
     if (handle !== this._handle) throw new Error('Invalid handle')
     this._runToken++
     this._busy = false
-    this._currentJobId = null
     this._handle = null
     console.log('Destroyed the addon')
     this._state = state.IDLE

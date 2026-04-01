@@ -529,9 +529,9 @@ class TranscriptionParakeet extends BaseInference {
     })
   }
 
-  async cancel () {
+  async cancel (jobId) {
     if (this.addon?.cancel) {
-      await this.addon.cancel()
+      await this.addon.cancel(jobId)
     }
   }
 

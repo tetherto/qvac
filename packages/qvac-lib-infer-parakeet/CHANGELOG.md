@@ -5,6 +5,17 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.2.7]
+
+### Changed
+- Bumped `qvac-lib-inference-addon-cpp` to `1.1.4`.
+- Switched Parakeet back to JS-owned job IDs after `addon-cpp` reverted the accidental `1.1.3` native `jobId` callback and `cancel(jobId)` API break.
+- Kept job ownership, pending buffered cancellation, and overlap protection in the JS wrapper so the native addon only needs to represent a single running job.
+
+### Fixed
+- Prevented stale response handles from cancelling a newer active transcription by checking wrapper-owned job IDs before forwarding `cancel()` to the native addon.
+- Restored reload behavior so recreating the native instance clears native state without resetting JS-owned response numbering.
+
 ## [0.2.6]
 
 ### Changed
