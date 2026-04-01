@@ -269,12 +269,12 @@ class ONNXTTS {
     return this.state
   }
 
-  async load (...args) {
+  async load (..._args) {
     if (this.state.configLoaded || this.state.weightsLoaded) {
       this.logger.info('Reload requested - unloading existing model first')
       await this.unload()
     }
-    await this._load(...args)
+    await this._load()
     this.state.configLoaded = true
     this.state.weightsLoaded = true
   }
