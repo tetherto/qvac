@@ -123,9 +123,10 @@ std::vector<float> StftProcessor::istft(const Spectrogram &spec,
 
   std::vector<float> y(outputSize, 0.0f);
   std::vector<float> wenv(outputSize, 0.0f);
+  ComplexVec frame(nFft_);
 
   for (int t = 0; t < T; t++) {
-    ComplexVec frame(nFft_, {0.0f, 0.0f});
+    std::fill(frame.begin(), frame.end(), std::complex<float>{0.0f, 0.0f});
     for (int f = 0; f <= nFft_ / 2; f++) {
       frame[f] = spec[t][f];
       if (f > 0 && f < nFft_ / 2) {

@@ -68,6 +68,7 @@ MelFilterbank::melSpectrogram(const std::vector<float> &wav,
     for (int m = 0; m < nMels_; m++) {
       float sum = 0.0f;
       for (int f = 0; f < nFreqs; f++) {
+        // Magnitude spectrogram (not power) — matches Vocos/LavaSR training
         sum += filters_[m][f] * std::abs(spec[t][f]);
       }
       mel[m][t] = std::log(std::max(sum, 1e-5f));

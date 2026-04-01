@@ -430,7 +430,9 @@ void TTSModel::parseLavaSRConfig(
   if (srIt != configMap.end() && !srIt->second.empty()) {
     try {
       lavaSRConfig_.outputSampleRate = std::stoi(srIt->second);
-    } catch (...) {
+    } catch (const std::exception &e) {
+      QLOG(Priority::WARNING, "Invalid outputSampleRate value '" +
+                               srIt->second + "': " + e.what());
       lavaSRConfig_.outputSampleRate = 0;
     }
   }
@@ -459,10 +461,10 @@ void TTSModel::initLavaSR() {
 }
 
 AudioResult TTSModel::postProcess(AudioResult result) {
-  // Convert PCM16 -> float
+  // Convert PCM16 -> float (use 32768 to map full int16 range to [-1, 1])
   std::vector<float> audio(result.pcm16.size());
   for (size_t i = 0; i < result.pcm16.size(); i++) {
-    audio[i] = result.pcm16[i] / 32767.0f;
+    audio[i] = result.pcm16[i] / 32768.0f;
   }
   int currentRate = result.sampleRate;
 
@@ -490,6 +492,8 @@ AudioResult TTSModel::postProcess(AudioResult result) {
     }
     QLOG(Priority::INFO, "Running LavaSR enhancer...");
     auto wav48k = dsp::Resampler::resample(audio, currentRate, 48000);
+    // Crossover at the original engine's Nyquist: preserve engine content
+    // below this frequency and use enhanced content above it.
     const float cutoffHz = static_cast<float>(result.sampleRate) / 2.0f;
     audio = enhancer_->enhance(wav48k, cutoffHz);
     currentRate = 48000;
@@ -511,7 +515,7 @@ AudioResult TTSModel::postProcess(AudioResult result) {
   result.pcm16.resize(audio.size());
   for (size_t i = 0; i < audio.size(); i++) {
     const float clamped = std::clamp(audio[i], -1.0f, 1.0f);
-    result.pcm16[i] = static_cast<int16_t>(clamped * 32767.0f);
+    result.pcm16[i] = static_cast<int16_t>(clamped * 32768.0f);
   }
   result.sampleRate = currentRate;
   result.samples = audio.size();

@@ -12,9 +12,13 @@ std::vector<float> FastLRMerge::merge(const std::vector<float> &enhanced,
                                       int sampleRate, int cutoffHz,
                                       int transitionBins) {
   const int N = static_cast<int>(enhanced.size());
+  const int M = static_cast<int>(original.size());
+  if (N == 0) {
+    return {};
+  }
 
   int nPow2 = 1;
-  while (nPow2 < N) {
+  while (nPow2 < std::max(N, M)) {
     nPow2 <<= 1;
   }
 
@@ -22,6 +26,8 @@ std::vector<float> FastLRMerge::merge(const std::vector<float> &enhanced,
   ComplexVec spec2(nPow2, {0.0f, 0.0f});
   for (int i = 0; i < N; i++) {
     spec1[i] = {enhanced[i], 0.0f};
+  }
+  for (int i = 0; i < M; i++) {
     spec2[i] = {original[i], 0.0f};
   }
 
@@ -41,13 +47,15 @@ std::vector<float> FastLRMerge::merge(const std::vector<float> &enhanced,
   for (int i = 0; i < start; i++) {
     mask[i] = 0.0f;
   }
-  if (end > start) {
+  if (end - start > 1) {
     for (int i = start; i < end; i++) {
       const float x =
           -1.0f + 2.0f * (i - start) / static_cast<float>(end - start - 1);
       const float t = (x + 1.0f) / 2.0f;
       mask[i] = 3.0f * t * t - 2.0f * t * t * t;
     }
+  } else if (end == start + 1) {
+    mask[start] = 0.5f;
   }
 
   // Blend spectra: original low-freq + enhanced high-freq

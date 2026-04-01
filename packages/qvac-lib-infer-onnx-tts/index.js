@@ -469,20 +469,16 @@ class ONNXTTS {
 
   _getLavaSRParams () {
     const params = {}
-    if (this._enhance) {
-      params.enhance = true
-      if (this._enhancerBackbonePath) {
-        params.enhancerBackbonePath = this._resolvePath(this._enhancerBackbonePath)
-      }
-      if (this._enhancerSpecHeadPath) {
-        params.enhancerSpecHeadPath = this._resolvePath(this._enhancerSpecHeadPath)
-      }
+    if (this._enhance) params.enhance = true
+    if (this._denoise) params.denoise = true
+    if (this._enhancerBackbonePath) {
+      params.enhancerBackbonePath = this._resolvePath(this._enhancerBackbonePath)
     }
-    if (this._denoise) {
-      params.denoise = true
-      if (this._denoiserPath) {
-        params.denoiserPath = this._resolvePath(this._denoiserPath)
-      }
+    if (this._enhancerSpecHeadPath) {
+      params.enhancerSpecHeadPath = this._resolvePath(this._enhancerSpecHeadPath)
+    }
+    if (this._denoiserPath) {
+      params.denoiserPath = this._resolvePath(this._denoiserPath)
     }
     if (this._outputSampleRate != null) {
       params.outputSampleRate = String(this._outputSampleRate)
@@ -684,6 +680,9 @@ class ONNXTTS {
     if (newConfig.enhance !== undefined) this._enhance = newConfig.enhance
     if (newConfig.denoise !== undefined) this._denoise = newConfig.denoise
     if (newConfig.outputSampleRate !== undefined) this._outputSampleRate = newConfig.outputSampleRate
+    if (newConfig.enhancerBackbonePath !== undefined) this._enhancerBackbonePath = newConfig.enhancerBackbonePath
+    if (newConfig.enhancerSpecHeadPath !== undefined) this._enhancerSpecHeadPath = newConfig.enhancerSpecHeadPath
+    if (newConfig.denoiserPath !== undefined) this._denoiserPath = newConfig.denoiserPath
 
 
     let ttsParams

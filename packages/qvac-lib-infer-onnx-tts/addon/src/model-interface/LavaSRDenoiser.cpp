@@ -45,6 +45,8 @@ void LavaSRDenoiser::load() {
   Ort::SessionOptions options;
   options.SetIntraOpNumThreads(1);
   options.SetInterOpNumThreads(1);
+  // Denoiser model requires disabled ORT graph optimizations to avoid
+  // incorrect results from op fusion on the fixed-length chunk architecture.
   options.SetGraphOptimizationLevel(GraphOptimizationLevel::ORT_DISABLE_ALL);
 
   session_ = createOrtSession(modelPath_, options);
