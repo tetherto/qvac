@@ -1,11 +1,10 @@
 'use strict'
 
 /**
- * Quickstart Example
+ * Quickstart Example — Bergamot Backend
  *
- * This example demonstrates both translation backends:
- * 1. GGML backend - Downloads model via HyperdriveDL (English to Italian)
- * 2. Bergamot backend - Uses local model files (requires BERGAMOT_MODEL_PATH)
+ * This example demonstrates translation using the Bergamot backend
+ * with local model files or auto-download via Hyperdrive/Firefox CDN.
  *
  * Usage:
  *   bare examples/quickstart.js
@@ -16,7 +15,6 @@
  */
 
 const TranslationNmtcpp = require('..')
-const HyperdriveDL = require('@qvac/dl-hyperdrive')
 const fs = require('bare-fs')
 const path = require('bare-path')
 const process = require('bare-process')
@@ -37,50 +35,6 @@ const logger = VERBOSE
   : null // null = suppress all C++ logs
 
 const text = 'Machine translation has revolutionized how we communicate across language barriers in the modern digital world.'
-
-async function testGGML () {
-  console.log('\n=== Testing GGML Backend ===\n')
-
-  // Create `DataLoader`
-  const hdDL = new HyperdriveDL({
-    // The hyperdrive key for en-it translation model weights and config
-    key: 'hd://9ef58f31c20d5556722e0b58a5d262fd89801daf2e6cb28e3f21ac6e9228088f'
-  })
-
-  // Create the `args` object
-  const args = {
-    loader: hdDL,
-    params: { mode: 'full', dstLang: 'it', srcLang: 'en' },
-    diskPath: './models',
-    modelName: 'model.bin',
-    logger // Pass the logger
-  }
-
-  // Create Model Instance
-  const model = new TranslationNmtcpp(args, { })
-
-  // Load model
-  await model.load()
-
-  try {
-    // Run the Model
-    const response = await model.run(text)
-
-    await response
-      .onUpdate(data => {
-        console.log(data)
-      })
-      .await()
-
-    console.log('GGML translation finished!')
-  } finally {
-    // Unload the model
-    await model.unload()
-
-    // Close the DataLoader
-    await hdDL.close()
-  }
-}
 
 async function testBergamot () {
   console.log('\n=== Testing Bergamot Backend ===\n')
@@ -174,10 +128,6 @@ async function testBergamot () {
 
 async function main () {
   try {
-    // Test GGML backend
-    await testGGML()
-
-    // Test Bergamot backend
     await testBergamot()
 
     console.log('\n=== All Tests Completed Successfully! ===\n')
