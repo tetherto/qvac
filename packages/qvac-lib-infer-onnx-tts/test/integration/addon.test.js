@@ -194,6 +194,7 @@ test('Chatterbox TTS: Synthesis, multi-sentence WER, and reload', { timeout: 180
 
       console.log(`\n--- Whisper ${i + 1}/${multiResults.length}: "${text}" ---`)
       const whisperResult = await runWhisper(whisperModel, text, wavBuffer)
+      multiResults[i].wavBuffer = null
       console.log(`>>> [WHISPER] Word Error Rate: ${whisperResult.wer}`)
 
       t.ok(whisperResult.wer <= 0.4, `WER ${i + 1} should be <= 0.4 (got ${whisperResult.wer})`)
