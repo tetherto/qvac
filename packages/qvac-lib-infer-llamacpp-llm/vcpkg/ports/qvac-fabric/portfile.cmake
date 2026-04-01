@@ -1,14 +1,9 @@
-# vcpkg_from_github(
-#   OUT_SOURCE_PATH SOURCE_PATH
-#   REPO tetherto/qvac-fabric-llm.cpp
-#   REF v${VERSION}
-#   SHA512 5512aa779e40d70d7d8ef704b391b185bdf3c8bfef400c98f6ccb725e114d79f9168d6bd111cfab4afa9bf6142988a33797b5924ac91e0e3c6ae8a7bfcc80a51
-# )
-
-# LOCAL OVERLAY: use local qvac-fabric-llm.cpp checkout instead of GitHub download
-set(SOURCE_PATH "${CMAKE_CURRENT_LIST_DIR}/../../../../../../qvac-fabric-llm.cpp")
-get_filename_component(SOURCE_PATH "${SOURCE_PATH}" ABSOLUTE)
-message(STATUS "qvac-fabric: using LOCAL source at ${SOURCE_PATH}")
+vcpkg_from_github(
+  OUT_SOURCE_PATH SOURCE_PATH
+  REPO tetherto/qvac-fabric-llm.cpp
+  REF 7c7abbb4dacee951236d5ea4aed2c5e2253b250f
+  SHA512 5ac708a534b64faad552ee2114a75ad337d5566b6c094d05bc720e4b301673e0467479b6d22bae166052e8be2cb38935eaa5241c11252a44a66e2a2b59bfb255
+)
 
 vcpkg_check_features(
   OUT_FEATURE_OPTIONS FEATURE_OPTIONS
