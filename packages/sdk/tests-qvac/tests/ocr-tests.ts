@@ -16,25 +16,25 @@ const createOcrTest = (
 });
 
 export const ocrBasicPng = createOcrTest(
-  "ocr-basic-png", "ocr-simple-test.png",
+  "ocr-basic-png", "ocr-simple-test-png.png",
   { validation: "contains-any", contains: ["OCR", "text", "testing", "implementation", "recognize", "Type", "enter"] },
   undefined, 60000,
 );
 
 export const ocrBasicJpg = createOcrTest(
-  "ocr-basic-jpg", "ocr-simple-test.jpg",
+  "ocr-basic-jpg", "ocr-simple-test-jpg.jpg",
   { validation: "contains-any", contains: ["OCR", "text", "testing", "implementation", "recognize", "Type", "enter"] },
   undefined, 60000,
 );
 
 export const ocrStreaming = createOcrTest(
-  "ocr-streaming", "ocr-simple-test.png",
+  "ocr-streaming", "ocr-simple-test-png.png",
   { validation: "contains-any", contains: ["OCR", "text", "testing", "Type", "enter"] },
   { streaming: true }, 60000,
 );
 
 export const ocrParagraphMode = createOcrTest(
-  "ocr-paragraph-mode", "ocr-simple-test.png",
+  "ocr-paragraph-mode", "ocr-simple-test-png.png",
   { validation: "contains-any", contains: ["OCR", "text", "testing", "Type", "enter"] },
   { paragraph: true }, 60000,
 );
