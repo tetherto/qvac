@@ -61,6 +61,7 @@ import { MobileOcrExecutor } from "./executors/ocr-executor.js";
 import { MobileRagExecutor } from "./executors/rag-executor.js";
 import { MobileConfigReloadExecutor } from "./executors/config-reload-executor.js";
 import { MobileTtsExecutor } from "./executors/tts-executor.js";
+import { DownloadExecutor } from "../shared/executors/download-executor.js";
 
 const resources = new ResourceManager();
 
@@ -356,6 +357,7 @@ export const executor = createExecutor({
     new KvCacheExecutor(resources),
     new MobileParakeetExecutor(resources),
     new MobileVisionExecutor(resources),
+    new DownloadExecutor(),
   ],
   profiling: {
     init: () => profiler.enable({ mode: "summary", includeServerBreakdown: true }),

@@ -247,6 +247,39 @@ declare class BaseInference {
   status(): Promise<any>
 }
 
+/**
+ * Creates a serialized execution queue. Calls to the returned function
+ * run one at a time, in order, even when fired concurrently.
+ */
+declare function exclusiveRunQueue(): (fn: () => Promise<any>) => Promise<any>
+
+/**
+ * Returns the graphics API identifier for the current platform.
+ * Falls back to 'vulkan' on unknown platforms.
+ */
+declare function getApiDefinition(): string
+
+declare interface JobHandler {
+  /** Creates a new QvacResponse and stores it as active. Fails any stale active response. */
+  start(): QvacResponse
+  /** Registers a pre-built response (e.g. a custom subclass) as active. Fails any stale active response. */
+  startWith(response: QvacResponse): QvacResponse
+  /** Routes output data to the active response. No-op if idle. */
+  output(data: any): void
+  /** Ends the active response. Optionally forwards stats before ending. */
+  end(stats?: any, result?: any): void
+  /** Fails the active response with an error. */
+  fail(error: Error | string): void
+  /** The current active QvacResponse, or null if idle. */
+  readonly active: QvacResponse | null
+}
+
+/**
+ * Creates a single-job handler that manages the lifecycle of a QvacResponse.
+ * Replaces the _jobToResponse Map / _saveJobToResponseMapping / _deleteJobMapping boilerplate.
+ */
+declare function createJobHandler(opts: { cancel: () => void | Promise<void> }): JobHandler
+
 declare namespace BaseInference {
   export {
     BaseInference as default,
@@ -255,7 +288,11 @@ declare namespace BaseInference {
     InferenceClientState,
     Loader,
     ReportProgressCallback,
-    QvacResponse
+    QvacResponse,
+    exclusiveRunQueue,
+    getApiDefinition,
+    createJobHandler,
+    JobHandler
   }
 }
 

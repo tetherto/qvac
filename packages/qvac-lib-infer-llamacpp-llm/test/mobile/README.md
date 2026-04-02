@@ -1,6 +1,6 @@
 # Mobile Testing for LLM Llamacpp
 
-This directory contains the mobile test configuration for the `@tetherto/llm-llamacpp` addon.
+This directory contains the mobile test configuration for the `@qvac/llm-llamacpp` addon.
 
 > ⚠️ **Note**: This test directory is included in the published npm package to support the mobile testing framework. These test files are NOT part of the public API and should only be used by the internal mobile testing infrastructure.
 
