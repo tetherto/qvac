@@ -103,7 +103,7 @@ For Indic language translations (English ↔ Hindi, Bengali, Tamil, etc.):
 const HyperdriveDL = require('@qvac/dl-hyperdrive')
 
 const hdDL = new HyperdriveDL({
-  key: 'hd://8c0f50e7c75527213a090d2f1dcd9dbdb8262e5549c8cbbb74cb7cb12b156892' // en-hi 200M model (MARIAN_EN_HI_INDIC_200M_Q0F32)
+  key: 'hd://8c0f50e7c75527213a090d2f1dcd9dbdb8262e5549c8cbbb74cb7cb12b156892' // en-hi IndicTrans2 200M model
 })
 
 const args = {
