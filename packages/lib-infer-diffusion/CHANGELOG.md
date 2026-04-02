@@ -1,5 +1,20 @@
 # Changelog
 
+## [0.1.1] - 2026-04-02
+
+### Fixed
+
+- Handle absolute companion model paths in `_load()`. Absolute paths for `llmModel`, `vaeModel`, and other companion models were unconditionally joined with `diskPath`, producing doubled paths. Now uses `path.isAbsolute()` to pass absolute paths through unchanged (#1077)
+- Correct type declarations and doc misalignments in `index.d.ts` and `index.js` (#1091)
+- Fix race condition in integration test download utility (#1019)
+
+### Changed
+
+- Remove stale img2img references from docs (#1122)
+- Update package.json URLs to monorepo (#1088)
+- Remove overlay ports, build from vcpkg registry (#1066)
+- Update dependencies with android-arm64 fix (#1095)
+
 ## [0.1.0] - 2026-03-19
 
 ### Added
