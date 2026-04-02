@@ -9,6 +9,7 @@ const {
   getApiDefinition: inferGetApiDefinition
 } = require('@qvac/infer-base')
 const { TTSInterface } = require('./tts')
+const { QvacErrorAddonTTS, ERR_CODES } = require('./lib/error')
 
 // Engine types
 const ENGINE_CHATTERBOX = 'chatterbox'
@@ -281,6 +282,12 @@ class ONNXTTS {
   }
 
   async load (..._args) {
+    if (this.state.destroyed) {
+      throw new QvacErrorAddonTTS({
+        code: ERR_CODES.FAILED_TO_LOAD,
+        adds: 'instance was destroyed'
+      })
+    }
     if (this.state.configLoaded || this.state.weightsLoaded) {
       this.logger.info('Reload requested - unloading existing model first')
       await this.unload()

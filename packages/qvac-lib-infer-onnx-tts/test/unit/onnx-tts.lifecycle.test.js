@@ -5,6 +5,7 @@ const sinon = require('sinon')
 const ONNXTTS = require('../../index.js')
 const { TTSInterface } = require('../../tts.js')
 const MockedBinding = require('../mock/MockedBinding.js')
+const { QvacErrorAddonTTS, ERR_CODES } = require('../../lib/error.js')
 const process = require('process')
 
 global.process = process
@@ -53,4 +54,17 @@ test('destroy() without load still sets destroyed', async (t) => {
   t.not(s.configLoaded)
   t.not(s.weightsLoaded)
   t.ok(s.destroyed)
+})
+
+test('load() after destroy() rejects with FAILED_TO_LOAD', async (t) => {
+  const model = createStubbedModel()
+  await model.load()
+  await model.destroy()
+  try {
+    await model.load()
+    t.fail('load() should throw after destroy()')
+  } catch (err) {
+    t.ok(err instanceof QvacErrorAddonTTS, 'should throw QvacErrorAddonTTS')
+    t.is(err.code, ERR_CODES.FAILED_TO_LOAD, 'code should be FAILED_TO_LOAD')
+  }
 })
