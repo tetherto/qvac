@@ -11,6 +11,7 @@ import {
   cacheDelegationConnectionTime,
   clearPeerConnectionTracking,
 } from "@/server/rpc/profiling/delegation-profiler";
+import { getNextCommandId } from "@/server/rpc/rpc-utils";
 
 const logger = getServerLogger();
 
@@ -28,7 +29,6 @@ const activeConnections = new Map<ConnectionKey, Connection>();
 // Track whether the global connection handler has been registered
 let connectionHandlerRegistered = false;
 const HEALTH_CHECK_TIMEOUT_MS = 1500;
-import { getNextCommandId } from "@/server/rpc/delegate-utils";
 
 function isHeartbeatResponse(payload: unknown): payload is { type: "heartbeat" } {
   return (
