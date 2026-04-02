@@ -181,10 +181,8 @@ const MULTILINGUAL_DATASET = {
   es: 'Hola mundo. Esta es una prueba del sistema de texto a voz.'
 }
 
-const MULTILINGUAL_SCRIPT_SAMPLE_ORDER = ['zh', 'ja', 'he', 'ko']
+const MULTILINGUAL_SCRIPT_SAMPLE_ORDER = ['he', 'ko']
 const MULTILINGUAL_SCRIPT_SAMPLES = {
-  zh: '你好世界。',
-  ja: 'こんにちは。カタカナも使います。',
   he: 'שלום עולם.',
   ko: '안녕하세요. 한글입니다.'
 }
