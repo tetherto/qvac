@@ -82,6 +82,7 @@ function ensureConnectionHandler(): void {
 
     conn.on("close", () => {
       logger.debug(`Connection closed for peer: ${peerPubkey}`);
+      if (activeRPCs.get(peerPubKey) !== rpc) return;
       activeRPCs.delete(peerPubkey);
       activeConnections.delete(peerPubkey);
       clearPeerConnectionTracking(peerPubkey);
@@ -89,9 +90,6 @@ function ensureConnectionHandler(): void {
 
     conn.on("error", (err) => {
       logger.error(`Connection error for peer ${peerPubkey}:`, err);
-      activeRPCs.delete(peerPubkey);
-      activeConnections.delete(peerPubkey);
-      clearPeerConnectionTracking(peerPubkey);
     });
   });
 }
