@@ -318,6 +318,7 @@ resources.define("vision", {
   },
 });
 
+
 function skipTests(testIds: string[], reason: string) {
   return new SkipExecutor(new RegExp(`^(${testIds.join("|")})$`), reason);
 }
@@ -357,7 +358,7 @@ export const executor = createExecutor({
     new KvCacheExecutor(resources),
     new MobileParakeetExecutor(resources),
     new MobileVisionExecutor(resources),
-    new DownloadExecutor(resources),
+    new DownloadExecutor(),
   ],
   profiling: {
     init: () => profiler.enable({ mode: "summary", includeServerBreakdown: true }),
