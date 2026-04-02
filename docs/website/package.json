@@ -9,7 +9,7 @@
     "build:static": "npm run prebuild:examples && next build && npx @vahor/next-broken-links",
     "dev": "npm run prebuild:examples && next dev --turbo -p 3001",
     "start": "next start",
-    "serve": "npx http-server dist -p 8080 -c-1",
+    "serve": "npx http-server out -p 8080 -c-1",
     "postinstall": "fumadocs-mdx",
     "docs:generate": "bun run scripts/run-docs-generate.ts",
     "docs:generate-api": "bun run scripts/generate-api-docs.ts",
