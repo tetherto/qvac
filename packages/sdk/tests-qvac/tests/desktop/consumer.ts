@@ -241,7 +241,7 @@ resources.define("afriquegemma", {
 });
 
 
-const referenceAudioPath = path.resolve(process.cwd(), "assets/audio/transcription-short.wav");
+const referenceAudioPath = path.resolve(process.cwd(), "assets/audio/transcription-short-wav.wav");
 
 resources.define("tts-chatterbox", {
   constant: TTS_TOKENIZER_EN_CHATTERBOX,
@@ -320,6 +320,8 @@ resources.define("vision", {
     projectionModelSrc: MMPROJ_SMOLVLM2_500M_MULTIMODAL_Q8_0,
   },
 });
+
+await resources.downloadAllOnce(console.log);
 
 export const executor = createExecutor({
   handlers: [

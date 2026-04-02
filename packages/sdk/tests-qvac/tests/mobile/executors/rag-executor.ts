@@ -52,8 +52,9 @@ export class MobileRagExecutor extends ModelAssetExecutor<typeof ragTests> {
           return { passed: false, output: `Document file not found: ${p.documentFile}` };
         }
         const docUri = await this.resolveAsset(assetModule);
-        const response = await fetch(docUri);
-        content = await response.text();
+        // @ts-ignore - expo-file-system is a peer dependency available in mobile context
+        const { File } = await import("expo-file-system");
+        content = await new File(`file://${docUri}`).text();
       } else {
         content = p.documentContent || "";
       }
