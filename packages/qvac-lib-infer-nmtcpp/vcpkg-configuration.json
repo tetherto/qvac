@@ -5,7 +5,6 @@
     "repository": "git@github.com:tetherto/qvac-registry-vcpkg.git"
   },
   "overlay-ports": [
-    "./vcpkg-overlays/whisper-cpp",
     "./vcpkg-overlays/ruy",
     "./vcpkg-overlays/intgemm/",
     "./vcpkg-overlays/simd-utils/",
