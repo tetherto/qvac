@@ -81,4 +81,4 @@ function mergeInt16Arrays (arrays) {
   return result
 }
 
-module.exports = { concatenatePcmChunks, applyCrossfade, createSilenceGap }
+module.exports = { concatenatePcmChunks }
