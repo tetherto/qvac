@@ -127,13 +127,13 @@ export class TranslationExecutor extends AbstractModelExecutor<typeof allTests> 
       if (!stats) {
         return { passed: false, output: `Translation OK but stats were undefined. Text: "${translatedText}"` };
       }
-      if (typeof stats.processedTokens !== "number" || typeof stats.processingTime !== "number") {
+      if (typeof stats.totalTokens !== "number" || typeof stats.totalTime !== "number") {
         return { passed: false, output: `Stats missing fields. Got: ${JSON.stringify(stats)}` };
       }
 
       return {
         passed: true,
-        output: `Text: "${translatedText}", tokens: ${stats.processedTokens}, time: ${stats.processingTime}ms`,
+        output: `Text: "${translatedText}", tokens: ${stats.totalTokens}, time: ${stats.totalTime}ms`,
       };
     } catch (error) {
       const errorMsg = error instanceof Error ? error.message : String(error);

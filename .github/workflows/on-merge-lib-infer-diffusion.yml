@@ -34,10 +34,6 @@ permissions:
   pull-requests: read
   packages: read
 
-concurrency:
-  group: ${{ github.workflow }}-${{ github.ref }}
-  cancel-in-progress: false
-
 jobs:
   publish-logic:
     runs-on: ubuntu-latest

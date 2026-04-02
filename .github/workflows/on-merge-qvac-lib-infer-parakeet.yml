@@ -27,10 +27,6 @@ permissions:
   pull-requests: read
   packages: read
 
-concurrency:
-  group: ${{ github.workflow }}-${{ github.ref }}
-  cancel-in-progress: false
-
 jobs:
   publish-logic:
     runs-on: ubuntu-latest
@@ -116,7 +112,6 @@ jobs:
       publish_target: "gpr"
       repository: ${{ github.repository }}
       ref: ${{ github.ref }}
-      workdir: "packages/qvac-lib-infer-parakeet"
 
   publish-feature-gpr:
     needs: publish-logic
@@ -132,7 +127,7 @@ jobs:
       publish_target: "gpr"
       repository: ${{ github.repository }}
       ref: ${{ github.ref }}
-      workdir: "packages/qvac-lib-infer-parakeet"
+      workdir: "${{ github.workspace }}/packages/qvac-lib-infer-parakeet"
 
   publish-tmp-gpr:
     needs: publish-logic
@@ -148,7 +143,7 @@ jobs:
       publish_target: "gpr"
       repository: ${{ github.repository }}
       ref: ${{ github.ref }}
-      workdir: "packages/qvac-lib-infer-parakeet"
+      workdir: "${{ github.workspace }}/packages/qvac-lib-infer-parakeet"
 
   publish-release-npm:
     needs: [publish-logic, release-merge-guard]
@@ -166,7 +161,7 @@ jobs:
       publish_target: "npm"
       repository: ${{ github.repository }}
       ref: ${{ github.ref }}
-      workdir: "packages/qvac-lib-infer-parakeet"
+      workdir: "${{ github.workspace }}/packages/qvac-lib-infer-parakeet"
 
   publish-release:
     needs: [publish-release-npm]
@@ -179,7 +174,7 @@ jobs:
       release_name: "QVAC Transcription Parakeet Addon"
       published_version: ${{ needs.publish-release-npm.outputs.published_version }}
       prev_sha: ${{ github.event.before }}
-      workdir: "packages/qvac-lib-infer-parakeet"
+      workdir: "${{ github.workspace }}/packages/qvac-lib-infer-parakeet"
 
   prebuild:
     name: Prebuild Gate
@@ -212,7 +207,7 @@ jobs:
     with:
       repository: ${{ github.repository }}
       ref: ${{ github.sha }}
-      workdir: "packages/qvac-lib-infer-parakeet"
+      workdir: "${{ github.workspace }}/packages/qvac-lib-infer-parakeet"
 
   mobile-integration-tests:
     uses: ./.github/workflows/integration-mobile-test-qvac-lib-infer-parakeet.yml
