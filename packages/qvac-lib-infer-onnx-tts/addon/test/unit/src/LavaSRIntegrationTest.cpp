@@ -1,14 +1,15 @@
 #include <gtest/gtest.h>
 
+#include "DspTestHelpers.hpp"
 #include "src/model-interface/LavaSRDenoiser.hpp"
 #include "src/model-interface/LavaSREnhancer.hpp"
 #include "src/model-interface/TTSModel.hpp"
 #include "src/model-interface/dsp/Resampler.hpp"
 
-#include <cmath>
 #include <filesystem>
 
 using namespace qvac::ttslib;
+using qvac::ttslib::test::generateSine;
 
 namespace fs = std::filesystem;
 
@@ -33,14 +34,6 @@ bool chatterboxModelsExist() {
          fs::exists(CHATTERBOX_DIR + "/language_model.onnx");
 }
 
-std::vector<float> generateSine(float freq, int sr, int samples) {
-  std::vector<float> out(samples);
-  for (int i = 0; i < samples; i++) {
-    out[i] = 0.3f * std::sin(2.0f * 3.14159265f * freq * i / sr);
-  }
-  return out;
-}
-
 } // namespace
 
 TEST(LavaSRIntegrationTest, enhancerLoadsAndRunsWithRealModels) {
@@ -53,7 +46,7 @@ TEST(LavaSRIntegrationTest, enhancerLoadsAndRunsWithRealModels) {
   enhancer.load();
   ASSERT_TRUE(enhancer.isLoaded());
 
-  auto input48k = generateSine(440.0f, 48000, 48000);
+  auto input48k = generateSine(440.0f, 48000, 48000, 0.3f);
   auto enhanced = enhancer.enhance(input48k, 4000.0f);
 
   EXPECT_EQ(enhanced.size(), input48k.size());
@@ -77,7 +70,7 @@ TEST(LavaSRIntegrationTest, denoiserLoadsAndRunsWithRealModels) {
   denoiser.load();
   ASSERT_TRUE(denoiser.isLoaded());
 
-  auto input16k = generateSine(440.0f, 16000, 16000);
+  auto input16k = generateSine(440.0f, 16000, 16000, 0.3f);
   auto denoised = denoiser.denoise(input16k);
 
   EXPECT_EQ(denoised.size(), input16k.size());

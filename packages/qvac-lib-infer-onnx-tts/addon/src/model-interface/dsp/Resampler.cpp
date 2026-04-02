@@ -1,5 +1,7 @@
 #include "Resampler.hpp"
 
+#include "DspConstants.hpp"
+
 #include <algorithm>
 #include <cmath>
 
@@ -7,7 +9,6 @@ namespace qvac::ttslib::dsp {
 
 namespace {
 
-const double PI = 3.14159265358979323846;
 const int LANCZOS_A = 5;
 
 } // namespace

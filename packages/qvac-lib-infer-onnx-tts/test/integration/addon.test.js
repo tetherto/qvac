@@ -710,9 +710,10 @@ test('LavaSR: Chatterbox + enhance produces 48kHz output', { timeout: 1800000 },
   const cbResult = await ensureChatterboxModels({ targetDir: chatterboxDir, variant: CHATTERBOX_VARIANT })
   const lsResult = await ensureLavaSRModels({ targetDir: lavasrDir })
 
-  t.ok(cbResult.success, 'Chatterbox models should be downloaded')
-  t.ok(lsResult.success, 'LavaSR models should be downloaded')
-  if (!cbResult.success || !lsResult.success) return
+  if (!cbResult.success || !lsResult.success) {
+    t.fail('Required models not available (Chatterbox: ' + cbResult.success + ', LavaSR: ' + lsResult.success + ')')
+    return
+  }
 
   const referenceAudio = loadReferenceAudio()
   const ONNXTTS = require('../..')
@@ -755,7 +756,10 @@ test('LavaSR: Chatterbox + denoise + enhance', { timeout: 1800000 }, async (t) =
 
   const cbResult = await ensureChatterboxModels({ targetDir: chatterboxDir, variant: CHATTERBOX_VARIANT })
   const lsResult = await ensureLavaSRModels({ targetDir: lavasrDir })
-  if (!cbResult.success || !lsResult.success) return
+  if (!cbResult.success || !lsResult.success) {
+    t.fail('Required models not available (Chatterbox: ' + cbResult.success + ', LavaSR: ' + lsResult.success + ')')
+    return
+  }
 
   const referenceAudio = loadReferenceAudio()
   const ONNXTTS = require('../..')
@@ -795,7 +799,10 @@ test('LavaSR: outputSampleRate without enhance (conventional resample)', { timeo
   const chatterboxDir = path.join(baseDir, 'models', 'chatterbox')
 
   const cbResult = await ensureChatterboxModels({ targetDir: chatterboxDir, variant: CHATTERBOX_VARIANT })
-  if (!cbResult.success) return
+  if (!cbResult.success) {
+    t.fail('Chatterbox models not available')
+    return
+  }
 
   const referenceAudio = loadReferenceAudio()
   const ONNXTTS = require('../..')
@@ -836,7 +843,10 @@ test('LavaSR: enhance + custom outputSampleRate', { timeout: 1800000 }, async (t
 
   const cbResult = await ensureChatterboxModels({ targetDir: chatterboxDir, variant: CHATTERBOX_VARIANT })
   const lsResult = await ensureLavaSRModels({ targetDir: lavasrDir })
-  if (!cbResult.success || !lsResult.success) return
+  if (!cbResult.success || !lsResult.success) {
+    t.fail('Required models not available (Chatterbox: ' + cbResult.success + ', LavaSR: ' + lsResult.success + ')')
+    return
+  }
 
   const referenceAudio = loadReferenceAudio()
   const ONNXTTS = require('../..')
@@ -879,7 +889,10 @@ test('LavaSR: Supertonic + enhance', { timeout: 1800000 }, async (t) => {
 
   const stResult = await ensureSupertonicModels({ targetDir: supertonicDir })
   const lsResult = await ensureLavaSRModels({ targetDir: lavasrDir })
-  if (!stResult.success || !lsResult.success) return
+  if (!stResult.success || !lsResult.success) {
+    t.fail('Required models not available (Supertonic: ' + stResult.success + ', LavaSR: ' + lsResult.success + ')')
+    return
+  }
 
   const ONNXTTS = require('../..')
 
@@ -913,7 +926,10 @@ test('LavaSR: No flags = backward compatible', { timeout: 1800000 }, async (t) =
   const chatterboxDir = path.join(baseDir, 'models', 'chatterbox')
 
   const cbResult = await ensureChatterboxModels({ targetDir: chatterboxDir, variant: CHATTERBOX_VARIANT })
-  if (!cbResult.success) return
+  if (!cbResult.success) {
+    t.fail('Chatterbox models not available')
+    return
+  }
 
   const referenceAudio = loadReferenceAudio()
   const ONNXTTS = require('../..')

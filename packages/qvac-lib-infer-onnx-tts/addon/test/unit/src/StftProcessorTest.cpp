@@ -1,42 +1,12 @@
 #include <gtest/gtest.h>
 
+#include "DspTestHelpers.hpp"
 #include "src/model-interface/dsp/StftProcessor.hpp"
 
-#include <cmath>
-#include <numeric>
-
 using namespace qvac::ttslib::dsp;
-
-namespace {
-
-const double PI = 3.14159265358979323846;
-
-std::vector<float> generateSine(float freq, int sampleRate, int numSamples) {
-  std::vector<float> signal(numSamples);
-  for (int i = 0; i < numSamples; i++) {
-    signal[i] = std::sin(2.0f * static_cast<float>(PI) * freq * i / sampleRate);
-  }
-  return signal;
-}
-
-float rms(const std::vector<float> &x) {
-  float sum = 0.0f;
-  for (float v : x) {
-    sum += v * v;
-  }
-  return std::sqrt(sum / x.size());
-}
-
-float maxAbsDiff(const std::vector<float> &a, const std::vector<float> &b) {
-  float maxDiff = 0.0f;
-  size_t len = std::min(a.size(), b.size());
-  for (size_t i = 0; i < len; i++) {
-    maxDiff = std::max(maxDiff, std::abs(a[i] - b[i]));
-  }
-  return maxDiff;
-}
-
-} // namespace
+using qvac::ttslib::test::generateSine;
+using qvac::ttslib::test::maxAbsDiff;
+using qvac::ttslib::test::rms;
 
 TEST(StftProcessorTest, FFTRoundTrip) {
   const int N = 256;

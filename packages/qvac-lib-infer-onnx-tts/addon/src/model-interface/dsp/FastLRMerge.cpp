@@ -4,6 +4,7 @@
 
 #include <algorithm>
 #include <cmath>
+#include <stdexcept>
 
 namespace qvac::ttslib::dsp {
 
@@ -15,6 +16,14 @@ std::vector<float> FastLRMerge::merge(const std::vector<float> &enhanced,
   const int M = static_cast<int>(original.size());
   if (N == 0) {
     return {};
+  }
+  if (M == 0) {
+    return enhanced;
+  }
+  if (N != M) {
+    throw std::invalid_argument(
+        "FastLRMerge: enhanced (" + std::to_string(N) + ") and original (" +
+        std::to_string(M) + ") must have equal length");
   }
 
   int nPow2 = 1;

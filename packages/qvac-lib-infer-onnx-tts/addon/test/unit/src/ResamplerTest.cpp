@@ -1,32 +1,11 @@
 #include <gtest/gtest.h>
 
+#include "DspTestHelpers.hpp"
 #include "src/model-interface/dsp/Resampler.hpp"
 
-#include <cmath>
-
 using namespace qvac::ttslib::dsp;
-
-namespace {
-
-const double PI = 3.14159265358979323846;
-
-std::vector<float> generateSine(float freq, int sampleRate, int numSamples) {
-  std::vector<float> signal(numSamples);
-  for (int i = 0; i < numSamples; i++) {
-    signal[i] = std::sin(2.0f * static_cast<float>(PI) * freq * i / sampleRate);
-  }
-  return signal;
-}
-
-float rms(const std::vector<float> &x) {
-  float sum = 0.0f;
-  for (float v : x) {
-    sum += v * v;
-  }
-  return std::sqrt(sum / x.size());
-}
-
-} // namespace
+using qvac::ttslib::test::generateSine;
+using qvac::ttslib::test::rms;
 
 TEST(ResamplerTest, Identity) {
   auto signal = generateSine(440.0f, 16000, 16000);

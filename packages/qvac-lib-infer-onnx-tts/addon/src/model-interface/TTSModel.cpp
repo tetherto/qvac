@@ -429,7 +429,15 @@ void TTSModel::parseLavaSRConfig(
   auto srIt = configMap.find("outputSampleRate");
   if (srIt != configMap.end() && !srIt->second.empty()) {
     try {
-      lavaSRConfig_.outputSampleRate = std::stoi(srIt->second);
+      int rate = std::stoi(srIt->second);
+      if (rate > 0 && (rate < 8000 || rate > 192000)) {
+        QLOG(Priority::WARNING,
+             "outputSampleRate " + std::to_string(rate) +
+                 " is outside the supported range [8000, 192000]");
+        lavaSRConfig_.outputSampleRate = 0;
+      } else {
+        lavaSRConfig_.outputSampleRate = rate;
+      }
     } catch (const std::exception &e) {
       QLOG(Priority::WARNING, "Invalid outputSampleRate value '" +
                                srIt->second + "': " + e.what());
@@ -514,8 +522,9 @@ AudioResult TTSModel::postProcess(AudioResult result) {
   // Convert float -> PCM16 and update result
   result.pcm16.resize(audio.size());
   for (size_t i = 0; i < audio.size(); i++) {
-    const float clamped = std::clamp(audio[i], -1.0f, 1.0f);
-    result.pcm16[i] = static_cast<int16_t>(clamped * 32768.0f);
+    const float scaled =
+        std::clamp(audio[i] * 32768.0f, -32768.0f, 32767.0f);
+    result.pcm16[i] = static_cast<int16_t>(scaled);
   }
   result.sampleRate = currentRate;
   result.samples = audio.size();

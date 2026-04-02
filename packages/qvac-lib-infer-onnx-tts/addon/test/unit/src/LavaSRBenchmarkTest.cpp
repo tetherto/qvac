@@ -1,16 +1,17 @@
 #include <gtest/gtest.h>
 
+#include "DspTestHelpers.hpp"
 #include "src/model-interface/LavaSRDenoiser.hpp"
 #include "src/model-interface/LavaSREnhancer.hpp"
 #include "src/model-interface/dsp/Resampler.hpp"
 
 #include <chrono>
-#include <cmath>
 #include <filesystem>
 #include <iomanip>
 #include <iostream>
 
 using namespace qvac::ttslib;
+using qvac::ttslib::test::generateSine;
 
 namespace fs = std::filesystem;
 
@@ -25,21 +26,6 @@ bool lavaSRModelsExist() {
          fs::exists(LAVASR_DIR + "/enhancer_spec_head.onnx.data") &&
          fs::exists(LAVASR_DIR + "/denoiser_core_legacy_fixed63.onnx");
 }
-
-std::vector<float> generateSine(float freq, int sr, int samples) {
-  std::vector<float> out(samples);
-  for (int i = 0; i < samples; i++) {
-    out[i] = 0.3f * std::sin(2.0f * 3.14159265f * freq * i / sr);
-  }
-  return out;
-}
-
-struct BenchResult {
-  double loadMs;
-  double processMs;
-  double audioDurationMs;
-  double realtimeFactor;
-};
 
 } // namespace
 
@@ -67,7 +53,7 @@ TEST(LavaSRBenchmarkTest, enhancerLatencyByDuration) {
 
   for (double durSec : durations) {
     int samples48k = static_cast<int>(durSec * 48000);
-    auto wav48k = generateSine(440.0f, 48000, samples48k);
+    auto wav48k = generateSine(440.0f, 48000, samples48k, 0.3f);
 
     auto start = std::chrono::high_resolution_clock::now();
     auto enhanced = enhancer.enhance(wav48k, 4000.0f);
@@ -109,7 +95,7 @@ TEST(LavaSRBenchmarkTest, denoiserLatencyByDuration) {
 
   for (double durSec : durations) {
     int samples16k = static_cast<int>(durSec * 16000);
-    auto wav16k = generateSine(440.0f, 16000, samples16k);
+    auto wav16k = generateSine(440.0f, 16000, samples16k, 0.3f);
 
     auto start = std::chrono::high_resolution_clock::now();
     auto denoised = denoiser.denoise(wav16k);
@@ -139,7 +125,7 @@ TEST(LavaSRBenchmarkTest, resamplerLatency) {
 
   for (auto [srIn, srOut] : ratePairs) {
     int samples = srIn * 5;
-    auto input = generateSine(440.0f, srIn, samples);
+    auto input = generateSine(440.0f, srIn, samples, 0.3f);
 
     auto start = std::chrono::high_resolution_clock::now();
     auto output = dsp::Resampler::resample(input, srIn, srOut);

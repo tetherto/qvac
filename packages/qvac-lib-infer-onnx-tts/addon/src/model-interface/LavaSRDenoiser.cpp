@@ -1,6 +1,7 @@
 #include "LavaSRDenoiser.hpp"
 
 #include "OrtSessionFactory.hpp"
+#include "dsp/DspConstants.hpp"
 #include "qvac-lib-inference-addon-cpp/Logger.hpp"
 
 #include <algorithm>
@@ -13,7 +14,6 @@ namespace qvac::ttslib::lavasr {
 
 namespace {
 
-const double PI = 3.14159265358979323846;
 const int N_FFT = 512;
 const int HOP_LEN = 256;
 const int WIN_LEN = 512;
@@ -31,7 +31,7 @@ LavaSRDenoiser::~LavaSRDenoiser() { unload(); }
 void LavaSRDenoiser::buildChunkWeights() {
   chunkWeight_.resize(CHUNK_FRAMES);
   for (int i = 0; i < CHUNK_FRAMES; i++) {
-    float w = 0.5f * (1.0f - std::cos(2.0f * static_cast<float>(PI) * i /
+    float w = 0.5f * (1.0f - std::cos(2.0f * static_cast<float>(dsp::PI) * i /
                                       (CHUNK_FRAMES - 1)));
     chunkWeight_[i] = std::max(w * w, 1e-4f);
   }

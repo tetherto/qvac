@@ -1,16 +1,12 @@
 #include "StftProcessor.hpp"
 
+#include "DspConstants.hpp"
+
 #include <algorithm>
 #include <cmath>
 #include <stdexcept>
 
 namespace qvac::ttslib::dsp {
-
-namespace {
-
-const double PI = 3.14159265358979323846;
-
-} // namespace
 
 StftProcessor::StftProcessor(int nFft, int hopLength, int winLength,
                              bool centerPad)

@@ -43,8 +43,10 @@ private:
   std::string shOutputName1_;
   std::string shOutputName2_;
 
-  // Vocos config: sample_rate=44100 in the exported model config
-  // despite processing 48 kHz audio (matches reference)
+  // Vocos mel-spectrogram config uses sample_rate=44100 from the original
+  // training config even though inference runs on 48 kHz audio. This matches
+  // the upstream LavaSRcpp reference implementation:
+  // https://github.com/Topping1/LavaSRcpp/blob/main/src/LavaSR.cpp
   static constexpr int CONFIG_SAMPLE_RATE = 44100;
   static constexpr int N_FFT = 2048;
   static constexpr int HOP_LENGTH = 512;

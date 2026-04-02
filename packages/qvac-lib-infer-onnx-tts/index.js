@@ -181,7 +181,11 @@ class ONNXTTS {
 
     this._enhance = this._config.enhance || false
     this._denoise = this._config.denoise || false
-    this._outputSampleRate = this._config.outputSampleRate || null
+    const outputSampleRate = this._config.outputSampleRate
+    if (outputSampleRate != null && outputSampleRate > 0 && (outputSampleRate < 8000 || outputSampleRate > 192000)) {
+      throw new Error('outputSampleRate must be between 8000 and 192000, got ' + outputSampleRate)
+    }
+    this._outputSampleRate = outputSampleRate || null
     this._enhancerBackbonePath = normalizedFiles.enhancerBackbone || null
     this._enhancerSpecHeadPath = normalizedFiles.enhancerSpecHead || null
     this._denoiserPath = normalizedFiles.denoiser || null

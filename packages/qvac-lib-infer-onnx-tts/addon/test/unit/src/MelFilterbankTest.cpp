@@ -1,25 +1,10 @@
 #include <gtest/gtest.h>
 
+#include "DspTestHelpers.hpp"
 #include "src/model-interface/dsp/MelFilterbank.hpp"
 
-#include <cmath>
-#include <numeric>
-
 using namespace qvac::ttslib::dsp;
-
-namespace {
-
-const double PI = 3.14159265358979323846;
-
-std::vector<float> generateSine(float freq, int sampleRate, int numSamples) {
-  std::vector<float> signal(numSamples);
-  for (int i = 0; i < numSamples; i++) {
-    signal[i] = std::sin(2.0f * static_cast<float>(PI) * freq * i / sampleRate);
-  }
-  return signal;
-}
-
-} // namespace
+using qvac::ttslib::test::generateSine;
 
 TEST(MelFilterbankTest, DefaultBinCount) {
   MelFilterbank mel;
