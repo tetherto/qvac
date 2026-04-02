@@ -32,16 +32,6 @@ declare interface TranscriptionWhispercppArgs {
   [args: string]: unknown;
 }
 
-declare interface ProgressData {
-  action: string;
-  totalSize: number;
-  totalFiles: number;
-  filesProcessed: number;
-  currentFile: string;
-  currentFileProgress: string;
-  overallProgress: string;
-}
-
 declare interface TranscriptionWhispercppConfig {
   path?: string;
   enableStats?: boolean;
@@ -49,8 +39,6 @@ declare interface TranscriptionWhispercppConfig {
   whisperConfig: WhisperConfig;
   [args: string]: unknown;
 }
-
-declare type ReportProgressCallback = (progressData: ProgressData) => void;
 
 declare interface InferenceClientState {
   configLoaded: boolean;
@@ -103,10 +91,7 @@ declare class TranscriptionWhispercpp {
    * Load model and activate addon. Files must already exist at `files.model` / optional `files.vadModel`.
    * Optional parameters are accepted for `load(...args)` compatibility but are ignored.
    */
-  _load(
-    closeLoader?: boolean,
-    reportProgressCallback?: ReportProgressCallback
-  ): Promise<void>;
+  _load(closeLoader?: boolean): Promise<void>;
 
   /**
    * Reload the model with new configuration parameters.
@@ -169,8 +154,6 @@ declare namespace TranscriptionWhispercpp {
     TranscriptionWhispercppArgs,
     TranscriptionWhispercppFiles,
     TranscriptionWhispercppConfig,
-    ProgressData,
-    ReportProgressCallback,
     WhisperTranscriptionSegment,
     InferenceClientState,
   };
