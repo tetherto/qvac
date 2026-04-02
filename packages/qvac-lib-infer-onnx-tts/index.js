@@ -31,7 +31,7 @@ function hasAnyExplicitArtifact (n) {
   const keys = [
     'tokenizer', 'speechEncoder', 'embedTokens', 'conditionalDecoder', 'languageModel',
     'textEncoder', 'durationPredictor', 'vectorEstimator', 'vocoder',
-    'unicodeIndexer', 'ttsConfig', 'voiceStyle', 'voicesDir'
+    'unicodeIndexer', 'ttsConfig', 'voiceStyle'
   ]
   for (let i = 0; i < keys.length; i++) {
     const v = n[keys[i]]

@@ -81,6 +81,18 @@ test('Supertonic: Engine type is detected correctly', async (t) => {
   )
   t.is(modelFromDirOnly._voiceName, 'F1', 'Default voice when voiceName omitted')
 
+  const modelDirWithVoicesDir = new ONNXTTS({
+    files: {
+      modelDir: './models/supertonic',
+      voicesDir: '/custom/voice_styles'
+    }
+  })
+  t.is(
+    modelDirWithVoicesDir._engineType,
+    'supertonic',
+    'modelDir + voicesDir should resolve to Supertonic (voicesDir overrides path only, not engine detection)'
+  )
+
   const modelFromPaths = new ONNXTTS({
     files: {
       textEncoder: './onnx/text_encoder.onnx',
