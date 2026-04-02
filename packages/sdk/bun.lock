@@ -12,7 +12,7 @@
         "@qvac/llm-llamacpp": "^0.12.1",
         "@qvac/logging": "^0.1.0",
         "@qvac/ocr-onnx": "^0.2.0",
-        "@qvac/rag": "^0.4.2",
+        "@qvac/rag": "^0.4.4",
         "@qvac/registry-client": "^0.2.1",
         "@qvac/transcription-parakeet": "^0.2.0",
         "@qvac/transcription-whispercpp": "^0.5.0",
@@ -61,7 +61,7 @@
         "@qvac/cli": "^0.2.2",
         "bare-abort-controller": "^1.0.0",
         "bare-buffer": "^3.4.2",
-        "bare-crypto": "^1.11.2",
+        "bare-crypto": "^1.13.4",
         "bare-dns": "^2.1.4",
         "bare-fetch": "^2.5.1",
         "bare-fs": "^4.5.2",
@@ -525,7 +525,7 @@
 
     "@qvac/ocr-onnx": ["@qvac/ocr-onnx@0.2.0", "", { "dependencies": { "@qvac/dl-hyperdrive": "^0.1.0", "@qvac/error": "^0.1.0", "@qvac/infer-base": "^0.1.0", "@qvac/response": "^0.1.2", "bare-fetch": "^2.5.1", "bare-fs": "^4.5.1", "bare-path": "^3.0.0", "bare-process": "^4.2.1" } }, "sha512-byHaI6+4VnC/OlvdSE2YpFhNVtNK19Tu5CSEJLAG6jF5JIMvDgHGNDQgAckO0EJhAmpPCno0TTtGgB/R4tWshA=="],
 
-    "@qvac/rag": ["@qvac/rag@0.4.2", "", { "dependencies": { "@qvac/error": "^0.1.0", "bare-crypto": "^1.11.2", "hyperdht": "^6.23.0", "ready-resource": "^1.1.2", "uuid-random": "^1.3.2", "zod": "^4.1.13" }, "peerDependencies": { "bare-fetch": "^2.5.0", "hyperdb": "^4.19.0", "hyperschema": "^1.13.0", "llm-splitter": "^0.2.0" }, "optionalPeers": ["bare-fetch", "hyperdb", "hyperschema", "llm-splitter"] }, "sha512-vjDhgv5AG/n3d8dI0K9iS5xGhxHfnX+mzaefBnuaIDatf/z1PNm6c4d91j8jDNGprrBAz23pj4po0wUlFZe+ig=="],
+    "@qvac/rag": ["@qvac/rag@0.4.4", "", { "dependencies": { "@qvac/error": "^0.1.0", "hyperdht": "^6.23.0", "ready-resource": "^1.1.2", "uuid-random": "^1.3.2", "zod": "^4.1.13" }, "peerDependencies": { "bare-crypto": "^1.13.4", "bare-fetch": "^2.5.0", "hyperdb": "^4.19.0", "hyperschema": "^1.13.0", "llm-splitter": "^0.2.0" }, "optionalPeers": ["bare-crypto", "bare-fetch", "hyperdb", "hyperschema", "llm-splitter"] }, "sha512-3LRLNPzmRwHn7S76QPM/01sX8JDLPFCdTRycL5YgJ8Vm0FfAXhLCqYX7t/7hFgY7SZxqSgZie/ZhOfg5+xL1gA=="],
 
     "@qvac/registry-client": ["@qvac/registry-client@0.2.1", "", { "dependencies": { "@qvac/error": "^0.1.0", "@qvac/registry-schema": "^0.1.1", "b4a": "^1.6.7", "bare-fs": "^4.5.2", "bare-os": "^3.6.2", "bare-path": "^3.0.0", "bare-process": "^4.2.2", "corestore": "^7.4.5", "hyperblobs": "^2.8.0", "hypercore-id-encoding": "^1.3.0", "hyperdb": "^4.16.1", "hyperswarm": "^4.14.0", "paparam": "^1.10.0", "ready-resource": "^1.0.1" }, "bin": { "qvac-registry": "bin/cli.js" } }, "sha512-ekT7MvFbX1MjTusS+Z/kbw1rLI5k9mpw41gNZv3rvL1ZDTfjuJ++iRYDUDZO9wT5ehyqChVwsPjoDuBiZpcC3A=="],
 
