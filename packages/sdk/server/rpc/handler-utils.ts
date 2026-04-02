@@ -15,15 +15,7 @@ import { setSDKConfig } from "@/server/bare/registry/config-registry";
 import { setRuntimeContext } from "@/server/bare/registry/runtime-context-registry";
 import { type ServerProfiler } from "./profiling";
 import { nowMs } from "@/profiling/clock";
-
-export function isTerminalChunk(value: unknown): value is { done: true } {
-  return (
-    typeof value === "object" &&
-    value !== null &&
-    "done" in value &&
-    (value as { done: unknown }).done === true
-  );
-}
+import { isTerminalChunk } from "./rpc-utils";
 
 function getProfilingMetaFromRequest(
   request: Request,
