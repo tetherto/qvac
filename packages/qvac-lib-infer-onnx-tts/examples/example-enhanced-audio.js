@@ -95,9 +95,12 @@ async function main () {
   const enhanced = await synthesize(
     '2. Enhanced with LavaSR (48kHz)',
     {
-      enhance: true,
-      enhancerBackbonePath: ENHANCER_BACKBONE_PATH,
-      enhancerSpecHeadPath: ENHANCER_SPEC_HEAD_PATH
+      enhancer: {
+        type: 'lavasr',
+        enhance: true,
+        backbonePath: ENHANCER_BACKBONE_PATH,
+        specHeadPath: ENHANCER_SPEC_HEAD_PATH
+      }
     },
     'output-2-enhanced-48k.wav',
     48000
@@ -107,11 +110,14 @@ async function main () {
   const denoiseEnhanced = await synthesize(
     '3. Denoised + Enhanced (48kHz)',
     {
-      denoise: true,
-      enhance: true,
-      enhancerBackbonePath: ENHANCER_BACKBONE_PATH,
-      enhancerSpecHeadPath: ENHANCER_SPEC_HEAD_PATH,
-      denoiserPath: DENOISER_PATH
+      enhancer: {
+        type: 'lavasr',
+        enhance: true,
+        denoise: true,
+        backbonePath: ENHANCER_BACKBONE_PATH,
+        specHeadPath: ENHANCER_SPEC_HEAD_PATH,
+        denoiserPath: DENOISER_PATH
+      }
     },
     'output-3-denoised-enhanced-48k.wav',
     48000
