@@ -2,8 +2,7 @@
 
 const fs = require('bare-fs')
 const QvacLogger = require('@qvac/logging')
-const createJobHandler = require('@qvac/infer-base/src/utils/createJobHandler')
-const { QvacInferenceBaseError, ERR_CODES: BASE_ERR_CODES } = require('@qvac/infer-base/src/error')
+const { createJobHandler } = require('@qvac/infer-base')
 
 const { WhisperInterface } = require('./whisper')
 const { checkConfig } = require('./configChecker')
@@ -101,40 +100,28 @@ class TranscriptionWhispercpp {
 
   async pause () {
     if (!this.addon?.pause) {
-      throw new QvacInferenceBaseError({
-        code: BASE_ERR_CODES.ADDON_METHOD_NOT_IMPLEMENTED,
-        adds: 'pause'
-      })
+      throw new QvacErrorAddonWhisper({ code: ERR_CODES.FAILED_TO_PAUSE, adds: 'pause not supported' })
     }
     await this.addon.pause()
   }
 
   async unpause () {
     if (!this.addon?.activate) {
-      throw new QvacInferenceBaseError({
-        code: BASE_ERR_CODES.ADDON_METHOD_NOT_IMPLEMENTED,
-        adds: 'activate'
-      })
+      throw new QvacErrorAddonWhisper({ code: ERR_CODES.FAILED_TO_ACTIVATE, adds: 'activate not supported' })
     }
     await this.addon.activate()
   }
 
   async stop () {
     if (!this.addon?.stop) {
-      throw new QvacInferenceBaseError({
-        code: BASE_ERR_CODES.ADDON_METHOD_NOT_IMPLEMENTED,
-        adds: 'stop'
-      })
+      throw new Error('stop is not supported by this addon')
     }
     await this.addon.stop()
   }
 
   async status () {
     if (!this.addon?.status) {
-      throw new QvacInferenceBaseError({
-        code: BASE_ERR_CODES.ADDON_METHOD_NOT_IMPLEMENTED,
-        adds: 'status'
-      })
+      throw new QvacErrorAddonWhisper({ code: ERR_CODES.FAILED_TO_GET_STATUS, adds: 'status not supported' })
     }
     return await this.addon.status()
   }
@@ -230,12 +217,6 @@ class TranscriptionWhispercpp {
   }
 
   async run (input) {
-    if (!this._runInternal) {
-      throw new QvacInferenceBaseError({
-        code: BASE_ERR_CODES.NOT_IMPLEMENTED,
-        adds: '_runInternal'
-      })
-    }
     if (this.exclusiveRun) {
       return await this._enqueueExclusiveRunResponse(() => this._runInternal(input))
     }
