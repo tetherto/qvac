@@ -88,7 +88,7 @@ jobs:
           - os: macos-15
             platform: darwin
             arch: x64
-          - os: windows-2022
+          - os: ai-run-windows11-gpu
             platform: win32
             arch: x64
 
@@ -137,7 +137,7 @@ jobs:
           echo "Matrix arch: $MATRIX_ARCH"
           echo "Matrix tags: $MATRIX_TAGS"
 
-      - if: ${{ matrix.os == 'windows-2022' }}
+      - if: ${{ matrix.os == 'ai-run-windows11-gpu' }}
         name: Configure windows runner
         run: |
           git config --system core.longpaths true
@@ -151,7 +151,7 @@ jobs:
           $ccachePath = $ccacheBin.DirectoryName
           echo "$ccachePath" | Out-File -FilePath $env:GITHUB_PATH -Encoding utf8 -Append
 
-      - if: ${{ matrix.os == 'windows-2022' }}
+      - if: ${{ matrix.os == 'ai-run-windows11-gpu' }}
         name: Configure ccache on Windows
         shell: bash
         run: |
@@ -161,7 +161,7 @@ jobs:
           echo "CMAKE_C_COMPILER_LAUNCHER=ccache" >> $GITHUB_ENV
           echo "CMAKE_CXX_COMPILER_LAUNCHER=ccache" >> $GITHUB_ENV
 
-      - if: ${{ matrix.os == 'windows-2022' }}
+      - if: ${{ matrix.os == 'ai-run-windows11-gpu' }}
         name: Get ccache cache (Windows)
         uses: actions/cache@668228422ae6a00e4ad889ee87cd7109ec5666a7 # 5.0.4
         with:
@@ -218,7 +218,7 @@ jobs:
         run: |
           npm install -g bare bare-make
 
-      - if: ${{ matrix.os == 'windows-2022' && matrix.arch == 'arm64' }}
+      - if: ${{ matrix.os == 'ai-run-windows11-gpu' && matrix.arch == 'arm64' }}
         name: Rename win sdk folder to disable it
         run: |
           Rename-Item -Path "C:\Program Files (x86)\Windows Kits\10\Include\10.0.26100.0" -NewName "C:\Program Files (x86)\Windows Kits\10\Include\old-10.0.26100.0"
@@ -239,24 +239,36 @@ jobs:
         name: Configure vcpkg in linux (standard runner)
         run: echo "VCPKG_ROOT=$VCPKG_INSTALLATION_ROOT" >> $GITHUB_ENV
 
-      - if: ${{ matrix.os == 'windows-2022' }}
-        name: Configure vcpkg in windows
-        run: echo ("VCPKG_ROOT=$env:VCPKG_INSTALLATION_ROOT" -replace '\\', '/') >> $env:GITHUB_ENV
+      - if: ${{ matrix.os == 'ai-run-windows11-gpu' }}
+        name: Install vcpkg in windows
+        shell: powershell
+        run: |
+          if ($env:VCPKG_INSTALLATION_ROOT -and (Test-Path $env:VCPKG_INSTALLATION_ROOT)) {
+            $vcpkgRoot = $env:VCPKG_INSTALLATION_ROOT -replace '\\', '/'
+          } else {
+            cd ..
+            git clone --branch 2025.12.12 --single-branch https://github.com/microsoft/vcpkg.git
+            cd vcpkg
+            .\bootstrap-vcpkg.bat -disableMetrics
+            $vcpkgRoot = (Get-Location).Path -replace '\\', '/'
+          }
+          echo "VCPKG_ROOT=$vcpkgRoot" >> $env:GITHUB_ENV
+          echo $vcpkgRoot >> $env:GITHUB_PATH
 
-      - if: ${{ matrix.os == 'windows-2022' }}
+      - if: ${{ matrix.os == 'ai-run-windows11-gpu' }}
         name: Configure cmake generator in windows
         run: echo "CMAKE_GENERATOR=Visual Studio 17 2022" >> $env:GITHUB_ENV
 
-      - if: ${{ matrix.os == 'windows-2022' && matrix.arch == 'x64' }}
+      - if: ${{ matrix.os == 'ai-run-windows11-gpu' && matrix.arch == 'x64' }}
         run: echo "CMAKE_GENERATOR_PLATFORM=x64" >> $env:GITHUB_ENV
 
-      - if: ${{ matrix.os == 'windows-2022' && matrix.arch == 'x86' }}
+      - if: ${{ matrix.os == 'ai-run-windows11-gpu' && matrix.arch == 'x86' }}
         run: echo "CMAKE_GENERATOR_PLATFORM=Win32" >> $env:GITHUB_ENV
 
-      - if: ${{ matrix.os == 'windows-2022' && matrix.arch == 'arm64' }}
+      - if: ${{ matrix.os == 'ai-run-windows11-gpu' && matrix.arch == 'arm64' }}
         run: echo "CMAKE_GENERATOR_PLATFORM=ARM64" >> $env:GITHUB_ENV
 
-      - if: ${{ matrix.os == 'windows-2022' }}
+      - if: ${{ matrix.os == 'ai-run-windows11-gpu' }}
         name: Disable parallel configuration for Visual Studio generator
         run: echo "VCPKG_CMAKE_CONFIGURE_OPTIONS=--no-parallel-configure" >> $env:GITHUB_ENV
 
@@ -281,7 +293,7 @@ jobs:
         name: Install ccache on macOS
         run: brew install ccache
 
-      - if: ${{ matrix.os != 'windows-2022' }}
+      - if: ${{ matrix.os != 'ai-run-windows11-gpu' }}
         name: Configure ccache
         run: |
           ccache --set-config=max_size=2G
@@ -290,7 +302,7 @@ jobs:
           echo "CMAKE_C_COMPILER_LAUNCHER=ccache" >> $GITHUB_ENV
           echo "CMAKE_CXX_COMPILER_LAUNCHER=ccache" >> $GITHUB_ENV
 
-      - if: ${{ matrix.os != 'windows-2022' }}
+      - if: ${{ matrix.os != 'ai-run-windows11-gpu' }}
         name: Get ccache cache
         uses: actions/cache@668228422ae6a00e4ad889ee87cd7109ec5666a7 # 5.0.4
         with:
