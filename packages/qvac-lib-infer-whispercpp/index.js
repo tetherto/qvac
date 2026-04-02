@@ -426,11 +426,11 @@ class TranscriptionWhispercpp {
       }
 
       _checkParamsExists(configurationParams)
-      await this.cancel()
       this._pendingWhisperJobId = null
       if (this._job.active) {
         this._job.fail(new Error('Model was reloaded'))
       }
+      await this.cancel()
       await this.addon.reload(configurationParams)
       await this.addon.activate()
       this.logger.debug('Addon reloaded and activated successfully')
@@ -494,11 +494,11 @@ class TranscriptionWhispercpp {
    */
   async unload () {
     return await this._withExclusiveRun(async () => {
-      await this.cancel()
       this._pendingWhisperJobId = null
       if (this._job.active) {
         this._job.fail(new Error('Model was unloaded'))
       }
+      await this.cancel()
       if (this.addon) {
         await this.addon.destroyInstance()
       }
@@ -511,15 +511,19 @@ class TranscriptionWhispercpp {
     if (this.addon?.cancel) {
       await this.addon.cancel()
     }
+    this._pendingWhisperJobId = null
+    if (this._job.active) {
+      this._job.fail(new Error('Job cancelled'))
+    }
   }
 
   async destroy () {
     return await this._withExclusiveRun(async () => {
-      await this.cancel()
       this._pendingWhisperJobId = null
       if (this._job.active) {
         this._job.fail(new Error('Model was destroyed'))
       }
+      await this.cancel()
       if (this.addon) {
         await this.addon.destroyInstance()
       }
