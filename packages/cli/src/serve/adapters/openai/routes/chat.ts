@@ -79,7 +79,7 @@ export async function handleChatCompletions (req: IncomingMessage, res: ServerRe
   } catch (err) {
     const message = err instanceof Error ? err.message : String(err)
     ctx.logger.error(`Completion error for "${modelAlias}": ${message}`)
-    sendError(res, 500, 'completion_error', message)
+    sendError(res, 500, 'completion_error', 'An internal error occurred during completion.')
   }
 }
 

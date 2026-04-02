@@ -13,7 +13,7 @@ export * from "./logging-stream";
 export * from "./provide";
 export * from "./stop-provide";
 export * from "./unload-model";
-export * from "./ping";
+export * from "./heartbeat";
 export * from "./common";
 export * from "./transcription";
 export * from "./translate";
@@ -43,6 +43,7 @@ export {
   PROFILING_TRAILER_KEY,
   DELEGATION_BREAKDOWN_KEY,
   OPERATION_EVENT_KEY,
+  MODEL_EXECUTION_KEY,
   profilerModeSchema,
   serverBreakdownSchema,
   delegationBreakdownSchema,

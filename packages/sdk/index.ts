@@ -4,7 +4,7 @@ export {
   deleteCache,
   loadModel,
   downloadAsset,
-  ping,
+  heartbeat,
   startQVACProvider,
   stopQVACProvider,
   unloadModel,

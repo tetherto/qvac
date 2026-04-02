@@ -30,10 +30,6 @@ permissions:
   pull-requests: read
   packages: read
 
-concurrency:
-  group: ${{ github.workflow }}-${{ github.ref }}
-  cancel-in-progress: false
-
 jobs:
   publish-logic:
     runs-on: ubuntu-latest
@@ -196,6 +192,9 @@ jobs:
           echo "should_run_tests=$should" >> "$GITHUB_OUTPUT"
 
   integration-tests:
+    permissions:
+      contents: read
+      packages: read
     uses: ./.github/workflows/integration-test-ocr-onnx.yml
     needs: prebuild
     if: needs.prebuild.outputs.should_run_tests == 'true'

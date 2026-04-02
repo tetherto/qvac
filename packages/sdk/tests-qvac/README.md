@@ -1,6 +1,6 @@
 # SDK Tests
 
-SDK dogfooding tests built on top of `@tetherto/qvac-test-suite`.
+SDK dogfooding tests built on top of `@qvac/test-suite`.
 
 ## Layout
 
