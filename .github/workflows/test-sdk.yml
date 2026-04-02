@@ -81,7 +81,7 @@ jobs:
       working-directory: "packages/sdk/tests-qvac"
       consumer-timeout: ${{ fromJSON(inputs.mobile-consumer-timeout || '600') }}
       filter: ${{ inputs.filter }}
-      device-farm-timeout: ${{ fromJSON(inputs.device-farm-timeout || '30') }}
+      device-farm-timeout: ${{ fromJSON(inputs.device-farm-timeout || '90') }}
       device-farm-project-arn: ${{ vars.SDK_DEVICE_FARM_PROJECT_ARN }}
       device-pools: ${{ vars.SDK_DEVICE_FARM_POOLS }}
       test-version: ${{ inputs.test-version || '' }}
