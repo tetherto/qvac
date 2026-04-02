@@ -1,20 +1,5 @@
 # Changelog
 
-## [0.13.1] - 2026-04-02
-
-### Changed
-
-- Updated qvac-lib-inference-addon-cpp dependancy from 1.1.2 to 1.1.5
-- Reason for the version update:
-    - addon-cpp v1.1.2's cancelJob() unconditionally set the model's stop flag whenever a job existed, even if that job was only queued and never started processing. Since the queued job never entered process(), the flag was never consumed or reset. 
-    - In the embed addon, this meant that cancelling a request and then submitting a new one would cause the new request to abort instantly on entry — returning no results — because it inherited the stale stop flag from the previous cancel.
-
-## [0.13.0] - 2026-03-20
-
-### Fixed
-
-- Updated qvac-fabric dependency to 7248.2.1#1, which disables BLAS and Accelerate for iOS builds. Fixes CMake configure failures and linker errors on CI where macOS SDK frameworks were resolved instead of the iOS sysroot.
-
 ## [0.12.1] - 2026-03-18
 
 ### Added
