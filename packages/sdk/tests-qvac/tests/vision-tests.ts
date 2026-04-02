@@ -58,7 +58,7 @@ export const visionFormatPng = createVisionTest(
 export const visionFormatWebp = createVisionTest(
   "vision-format-webp",
   "Describe this image.",
-  "photo.webp",
+  "photo-webp.webp",
   { validation: "type", expectedType: "string" },
 );
 
