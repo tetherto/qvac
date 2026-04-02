@@ -37,8 +37,16 @@ const translateParamsSchema = z.union([
 ]);
 
 export const translationStatsSchema = z.object({
-  processedTokens: z.number(),
-  processingTime: z.number(),
+  // Common stats
+  totalTime: z.number().optional(),
+  totalTokens: z.number().optional(),
+  tokensPerSecond: z.number().optional(),
+  timeToFirstToken: z.number().optional(),
+  // NMT-specific
+  decodeTime: z.number().optional(),
+  encodeTime: z.number().optional(),
+  // LLM-specific
+  cacheTokens: z.number().optional(),
 });
 
 export const translateRequestSchema = z.union([

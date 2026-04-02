@@ -25,9 +25,6 @@ on:
 
 permissions:
   contents: read
-concurrency:
-  group: ${{ github.workflow }}-${{ github.ref }}
-  cancel-in-progress: false
 
 jobs:
   release-merge-guard:
@@ -127,12 +124,16 @@ jobs:
       contents: write
       packages: write
       id-token: write
-    if: needs.publish-logic.outputs.publish_release == 'true'
+    if: |
+      always() &&
+      needs.publish-logic.outputs.publish_release == 'true' &&
+      (needs.release-merge-guard.result == 'success' || needs.release-merge-guard.result == 'skipped')
     uses: tetherto/qvac-devops/.github/workflows/public-reusable-npm.yml@v1.1.7
     secrets: inherit
     with:
       workdir: packages/qvac-lib-dl-hyperdrive
       repo_name: dl-hyperdrive
+      caller_event_name: ${{ github.event_name }}
 
   # Create GitHub release only for actual releases (after NPM publish)
   publish-release:
