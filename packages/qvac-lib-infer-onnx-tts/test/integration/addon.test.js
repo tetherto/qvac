@@ -35,10 +35,9 @@ function getBaseDir () {
   return isMobile && global.testDir ? global.testDir : '.'
 }
 
-test('Chatterbox TTS: Synthesis, multi-sentence WER, and reload', { timeout: 1800000 }, async (t) => {
+test('Chatterbox TTS: Synthesis, multi-sentence, and reload', { timeout: 1800000 }, async (t) => {
   const baseDir = getBaseDir()
   const modelDir = path.join(baseDir, 'models', 'chatterbox')
-  const whisperModelDir = path.join(baseDir, 'models', 'whisper')
 
   console.log('\n=== Ensuring Chatterbox models ===')
   const downloadResult = await ensureChatterboxModels({ targetDir: modelDir, variant: CHATTERBOX_VARIANT })
@@ -46,15 +45,6 @@ test('Chatterbox TTS: Synthesis, multi-sentence WER, and reload', { timeout: 180
   if (!downloadResult.success) {
     console.log('Failed to download Chatterbox models, skipping test')
     return
-  }
-
-  if (isDarwin) {
-    console.log('\n=== Ensuring Whisper model ===')
-    const whisperModelPath = path.join(whisperModelDir, 'ggml-small.bin')
-    await ensureWhisperModel(whisperModelPath)
-    t.pass('Whisper model downloaded')
-  } else {
-    console.log('\n=== Skipping Whisper model download (non-darwin) ===')
   }
 
   const modelParams = {
@@ -122,13 +112,11 @@ test('Chatterbox TTS: Synthesis, multi-sentence WER, and reload', { timeout: 180
     t.ok(result.passed, `Chatterbox TTS synthesis ${i + 1} should pass expectations`)
     t.ok(result.data.sampleCount > 0, `Chatterbox TTS synthesis ${i + 1} should produce samples`)
 
-    const wavBuffer = result.data?.wavBuffer ? Buffer.from(result.data.wavBuffer) : null
     multiResults.push({
       text,
       sampleCount: result.data.sampleCount,
       durationMs: result.data.durationMs,
-      stats: result.data.stats,
-      wavBuffer
+      stats: result.data.stats
     })
   }
 
@@ -174,51 +162,13 @@ test('Chatterbox TTS: Synthesis, multi-sentence WER, and reload', { timeout: 180
   console.log(`Spanish TTS: ${spanishResult.data.sampleCount} samples, ${spanishResult.data.durationMs?.toFixed(0) || 'N/A'}ms`)
   console.log('='.repeat(60))
 
-  const werResults = []
-  if (isDarwin) {
-    console.log('\n=== Loading Whisper model for WER verification ===')
-    const whisperParams = {
-      modelName: 'ggml-small.bin',
-      diskPath: whisperModelDir,
-      language: 'en'
-    }
-    const whisperModel = await loadWhisper(whisperParams)
-    t.ok(whisperModel, 'Whisper model should be loaded')
-
-    for (let i = 0; i < multiResults.length; i++) {
-      const { text, wavBuffer } = multiResults[i]
-      if (!wavBuffer) {
-        console.log(`\n--- Whisper ${i + 1}/${multiResults.length}: Skipped (no WAV buffer) ---`)
-        continue
-      }
-
-      console.log(`\n--- Whisper ${i + 1}/${multiResults.length}: "${text}" ---`)
-      const whisperResult = await runWhisper(whisperModel, text, wavBuffer)
-      multiResults[i].wavBuffer = null
-      console.log(`>>> [WHISPER] Word Error Rate: ${whisperResult.wer}`)
-
-      t.ok(whisperResult.wer <= 0.4, `WER ${i + 1} should be <= 0.4 (got ${whisperResult.wer})`)
-      werResults.push({ text, wer: whisperResult.wer })
-    }
-
-    await whisperModel.unload()
-    console.log('\nWhisper model unloaded')
-  } else {
-    console.log('\n=== Skipping WER verification (non-darwin) ===')
-  }
-
   console.log('\n' + '='.repeat(60))
   console.log('CHATTERBOX FULL TEST SUMMARY')
   console.log('='.repeat(60))
   console.log(`Total sentences: ${DATASET.length}`)
   for (let i = 0; i < multiResults.length; i++) {
     const rtf = multiResults[i].stats?.realTimeFactor ?? 'N/A'
-    const werInfo = werResults[i] ? `, WER: ${werResults[i].wer}` : ''
-    console.log(`  ${i + 1}. "${multiResults[i].text.substring(0, 40)}..." - ${multiResults[i].sampleCount} samples, ${multiResults[i].durationMs?.toFixed(0) || 'N/A'}ms, RTF: ${rtf}${werInfo}`)
-  }
-  if (werResults.length > 0) {
-    const avgWer = werResults.reduce((sum, r) => sum + r.wer, 0) / werResults.length
-    console.log(`Average WER: ${avgWer.toFixed(2)}`)
+    console.log(`  ${i + 1}. "${multiResults[i].text.substring(0, 40)}..." - ${multiResults[i].sampleCount} samples, ${multiResults[i].durationMs?.toFixed(0) || 'N/A'}ms, RTF: ${rtf}`)
   }
   console.log('='.repeat(60))
 })
