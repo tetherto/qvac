@@ -11,7 +11,10 @@
     },
     "sentencepiece",
     "ssplit",
-    "whisper-cpp"
+    {
+      "name" : "qvac-fabric",
+      "default-features" : false
+    }
   ],
   "features": {
     "tests": {
