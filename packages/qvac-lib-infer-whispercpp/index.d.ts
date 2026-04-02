@@ -88,12 +88,6 @@ declare class TranscriptionWhispercpp {
   cancel(): Promise<void>;
 
   /**
-   * Load model and activate addon. Files must already exist at `files.model` / optional `files.vadModel`.
-   * Optional parameters are accepted for `load(...args)` compatibility but are ignored.
-   */
-  _load(closeLoader?: boolean): Promise<void>;
-
-  /**
    * Reload the model with new configuration parameters.
    * Useful for changing settings like language without destroying the instance.
    * @param {Object} newConfig - New configuration parameters
