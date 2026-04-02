@@ -55,7 +55,7 @@ export class MobileTtsExecutor extends ModelAssetExecutor<typeof ttsTests> {
   private async patchChatterboxReferenceAudio() {
     try {
       const audio = await this.loadAudioAssets();
-      const assetModule = audio["transcription-short.wav"];
+      const assetModule = audio["transcription-short-wav.wav"];
       if (!assetModule) return;
 
       const audioUri = await this.resolveAsset(assetModule);

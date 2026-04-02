@@ -25,7 +25,7 @@ const createTranscriptionTest = (
 
 export const transcriptionShortWav = createTranscriptionTest(
   "transcription-short-wav",
-  "transcription-short.wav",
+  "transcription-short-wav.wav",
   {
     validation: "contains-all",
     contains: ["test", "automation"],
@@ -34,34 +34,34 @@ export const transcriptionShortWav = createTranscriptionTest(
 
 export const transcriptionShortMp3 = createTranscriptionTest(
   "transcription-short-mp3",
-  "transcription-short.mp3",
+  "transcription-short-mp3.mp3",
   {
     validation: "contains-all",
     contains: ["test", "automation"],
   },
 );
 
-export const transcriptionAac = createTranscriptionTest(
-  "transcription-aac",
-  "transcription-short.aac",
+export const transcriptionShortAac = createTranscriptionTest(
+  "transcription-short-aac",
+  "transcription-short-aac.aac",
   {
     validation: "contains-all",
     contains: ["test", "automation"],
   },
 );
 
-export const transcriptionM4a = createTranscriptionTest(
-  "transcription-m4a",
-  "transcription-short.m4a",
+export const transcriptionShortM4a = createTranscriptionTest(
+  "transcription-short-m4a",
+  "transcription-short-m4a.m4a",
   {
     validation: "contains-all",
     contains: ["test"],
   },
 );
 
-export const transcriptionOgg = createTranscriptionTest(
-  "transcription-ogg",
-  "transcription-short.ogg",
+export const transcriptionShortOgg = createTranscriptionTest(
+  "transcription-short-ogg",
+  "transcription-short-ogg.ogg",
   { validation: "type", expectedType: "string" }, // Just verify it transcribes something
 );
 
@@ -76,28 +76,28 @@ export const transcriptionSilence = createTranscriptionTest(
 
 export const transcriptionStreaming = createTranscriptionTest(
   "transcription-streaming",
-  "transcription-short.wav",
+  "transcription-short-wav.wav",
   { validation: "type", expectedType: "string" },
   10000,
 );
 
 export const transcriptionVeryShort = createTranscriptionTest(
   "transcription-very-short",
-  "transcription-short.m4a",
+  "transcription-short-m4a.m4a",
   { validation: "contains-all", contains: ["test"] },
   5000,
 );
 
-export const transcriptionCorrupted: TestDefinition = {
-  testId: "transcription-corrupted",
-  params: { audioFileName: "corrupted.mp3" },
+export const transcriptionCorruptedMp3: TestDefinition = {
+  testId: "transcription-corrupted-mp3",
+  params: { audioFileName: "corrupted-mp3.mp3" },
   expectation: { validation: "throws-error", errorContains: "" },
   metadata: { category: "transcription", dependency: "whisper", estimatedDurationMs: 30000 },
 };
 
 export const transcriptionCorruptedWav: TestDefinition = {
   testId: "transcription-corrupted-wav",
-  params: { audioFileName: "corrupted.wav" },
+  params: { audioFileName: "corrupted-wav.wav" },
   expectation: { validation: "throws-error", errorContains: "" },
   metadata: { category: "transcription", dependency: "whisper", estimatedDurationMs: 30000 },
 };
@@ -105,7 +105,7 @@ export const transcriptionCorruptedWav: TestDefinition = {
 export const transcriptionWithPrompt: TestDefinition = {
   testId: "transcription-with-prompt",
   params: {
-    audioFileName: "transcription-short.wav",
+    audioFileName: "transcription-short-wav.wav",
     prompt: "This is a test recording about QVAC SDK automation testing.",
   },
   expectation: { validation: "contains-any", contains: ["test", "QVAC"] },
@@ -115,7 +115,7 @@ export const transcriptionWithPrompt: TestDefinition = {
 export const transcriptionPromptTechnical: TestDefinition = {
   testId: "transcription-prompt-technical",
   params: {
-    audioFileName: "transcription-short.wav",
+    audioFileName: "transcription-short-wav.wav",
     prompt: "Technical terms: SDK, API, TypeScript, JavaScript, QVAC, Whisper, transcription.",
   },
   expectation: { validation: "contains-any", contains: ["test"] },
@@ -125,7 +125,7 @@ export const transcriptionPromptTechnical: TestDefinition = {
 export const transcriptionPromptPunctuation: TestDefinition = {
   testId: "transcription-prompt-punctuation",
   params: {
-    audioFileName: "transcription-short.wav",
+    audioFileName: "transcription-short-wav.wav",
     prompt: "Use proper punctuation. Include periods, commas, and question marks.",
   },
   expectation: { validation: "type", expectedType: "string" },
@@ -135,7 +135,7 @@ export const transcriptionPromptPunctuation: TestDefinition = {
 export const transcriptionWithoutPrompt: TestDefinition = {
   testId: "transcription-without-prompt",
   params: {
-    audioFileName: "transcription-short.wav",
+    audioFileName: "transcription-short-wav.wav",
     prompt: null,
   },
   expectation: { validation: "contains-any", contains: ["test"] },
@@ -145,7 +145,7 @@ export const transcriptionWithoutPrompt: TestDefinition = {
 export const transcriptionPromptEmpty: TestDefinition = {
   testId: "transcription-prompt-empty",
   params: {
-    audioFileName: "transcription-short.wav",
+    audioFileName: "transcription-short-wav.wav",
     prompt: "",
   },
   expectation: { validation: "contains-any", contains: ["test"] },
@@ -155,13 +155,13 @@ export const transcriptionPromptEmpty: TestDefinition = {
 export const transcriptionTests = [
   transcriptionShortWav,
   transcriptionShortMp3,
-  transcriptionAac,
-  transcriptionOgg,
+  transcriptionShortAac,
+  transcriptionShortOgg,
   transcriptionSilence,
   transcriptionStreaming,
   transcriptionVeryShort,
-  transcriptionM4a,
-  transcriptionCorrupted,
+  transcriptionShortM4a,
+  transcriptionCorruptedMp3,
   transcriptionCorruptedWav,
   transcriptionWithPrompt,
   transcriptionPromptTechnical,
