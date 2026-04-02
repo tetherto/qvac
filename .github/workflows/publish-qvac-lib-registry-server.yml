@@ -28,10 +28,6 @@ env:
   PKG_DIR: packages/qvac-lib-registry-server
   NAME_SUFFIX: "-mono"
 
-concurrency:
-  group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
-  cancel-in-progress: ${{ github.event_name == 'pull_request_target' }}
-
 jobs:
   authorize:
     runs-on: ubuntu-latest
@@ -244,6 +240,7 @@ jobs:
   publish-schema-npm:
     needs: [authorize, detect-changes, publish-logic, release-merge-guard-schema]
     if: |
+      always() &&
       needs.authorize.outputs.allowed == 'true' &&
       needs.detect-changes.outputs.schema_changed == 'true' &&
       needs.publish-logic.outputs.publish_release == 'true' &&
@@ -416,6 +413,7 @@ jobs:
   publish-client-npm:
     needs: [authorize, detect-changes, publish-logic, lint-and-test, release-merge-guard-client]
     if: |
+      always() &&
       needs.authorize.outputs.allowed == 'true' &&
       needs.detect-changes.outputs.client_changed == 'true' &&
       needs.publish-logic.outputs.publish_release == 'true' &&

@@ -22,10 +22,27 @@ export const transcribeStreamRequestSchema = transcribeParamsSchema.extend({
   type: z.literal("transcribeStream"),
 });
 
+export const transcribeStatsSchema = z.object({
+  // Common stats
+  audioDuration: z.number().optional(),
+  realTimeFactor: z.number().optional(),
+  tokensPerSecond: z.number().optional(),
+  totalTokens: z.number().optional(),
+  totalSegments: z.number().optional(),
+  // whisper-specific timings
+  whisperEncodeTime: z.number().optional(),
+  whisperDecodeTime: z.number().optional(),
+  // parakeet-specific timings
+  encoderTime: z.number().optional(),
+  decoderTime: z.number().optional(),
+  melSpecTime: z.number().optional(),
+});
+
 export const transcribeStreamResponseSchema = z.object({
   type: z.literal("transcribeStream"),
   text: z.string().optional(),
   done: z.boolean().optional(),
+  stats: transcribeStatsSchema.optional(),
   error: z.string().optional(),
 });
 
@@ -42,3 +59,4 @@ export type TranscribeStreamRequest = z.infer<
 export type TranscribeStreamResponse = z.infer<
   typeof transcribeStreamResponseSchema
 >;
+export type TranscribeStats = z.infer<typeof transcribeStatsSchema>;
