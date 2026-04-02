@@ -400,16 +400,14 @@ async function ensureCangjieTsvForMultilingual (targetDir) {
   if (fs.existsSync(tsvPath)) {
     const stats = fs.statSync(tsvPath)
     if (stats.size >= CANGJIE_TSV_MIN_BYTES) {
-      console.log(` ✓ Using cached: Cangjie5_TC.tsv (${stats.size} bytes)`)
       return { success: true, path: tsvPath, cached: true }
     }
-    console.log(` Cached Cangjie5_TC.tsv too small (${stats.size} bytes), re-downloading...`)
     fs.unlinkSync(tsvPath)
   }
 
   const cangjieJsonUrl =
     'https://huggingface.co/onnx-community/chatterbox-multilingual-ONNX/resolve/main/Cangjie5_TC.json'
-  console.log('\n Downloading Cangjie5_TC.json (Chinese text preprocessor)...')
+  console.log(' Downloading Cangjie5_TC.json...')
   const fetchResult = await fetchUrlBody(cangjieJsonUrl)
   if (!fetchResult.success || !fetchResult.body) {
     console.log(` Cangjie download failed: ${fetchResult.error || 'unknown'}`)
@@ -420,7 +418,7 @@ async function ensureCangjieTsvForMultilingual (targetDir) {
     writeCangjieJsonArrayToTsv(fetchResult.body, tsvPath)
     const stats = fs.statSync(tsvPath)
     if (stats.size >= CANGJIE_TSV_MIN_BYTES) {
-      console.log(` ✓ Wrote Cangjie5_TC.tsv (${stats.size} bytes)`)
+      console.log(` Downloaded: Cangjie5_TC.tsv (${stats.size} bytes)`)
       return { success: true, path: tsvPath, cached: false }
     }
     console.log(` Cangjie TSV too small: ${stats.size} bytes`)
@@ -452,7 +450,7 @@ async function ensureChatterboxModels (options = {}) {
   const language = options.language || 'en'
   const targetDir = options.targetDir || path.join(getBaseDir(), 'models', language === 'en' ? 'chatterbox' : 'chatterbox-multilingual')
 
-  console.log(`\nEnsuring Chatterbox models (variant: ${variant}, language: ${language})...`)
+  console.log(`Ensuring Chatterbox models (variant: ${variant}, language: ${language})...`)
 
   if (!fs.existsSync(targetDir)) {
     fs.mkdirSync(targetDir, { recursive: true })
@@ -509,23 +507,24 @@ async function ensureChatterboxModels (options = {}) {
   const results = {}
   let allSuccess = true
 
-  for (const file of modelFiles) {
-    const url = `${baseUrl}/${file.name}`
-    const targetPath = path.join(targetDir, file.name)
+  const allFiles = modelFiles.concat([{ name: 'tokenizer.json', minSize: 1000, isTokenizer: true }])
 
-    console.log(`\n Downloading ${file.name}...`)
+  for (const file of allFiles) {
+    const url = file.isTokenizer
+      ? `https://huggingface.co/${repositoryName}/resolve/main/tokenizer.json`
+      : `${baseUrl}/${file.name}`
+    const targetPath = path.join(targetDir, file.name)
 
     if (fs.existsSync(targetPath)) {
       const stats = fs.statSync(targetPath)
       if (stats.size >= file.minSize) {
-        console.log(` ✓ Using cached: ${file.name} (${stats.size} bytes)`)
         results[file.name] = { success: true, path: targetPath, cached: true }
         continue
-      } else {
-        console.log(` Cached file too small (${stats.size} bytes), re-downloading...`)
-        fs.unlinkSync(targetPath)
       }
+      fs.unlinkSync(targetPath)
     }
+
+    console.log(` Downloading ${file.name}...`)
 
     let downloadSuccess = false
 
@@ -557,7 +556,7 @@ async function ensureChatterboxModels (options = {}) {
     if (downloadSuccess) {
       const stats = fs.statSync(targetPath)
       if (stats.size >= file.minSize) {
-        console.log(` ✓ Downloaded: ${file.name} (${stats.size} bytes)`)
+        console.log(` Downloaded: ${file.name} (${stats.size} bytes)`)
         results[file.name] = { success: true, path: targetPath, cached: false }
       } else {
         console.log(` Downloaded file too small: ${stats.size} bytes (expected >${file.minSize})`)
@@ -571,57 +570,6 @@ async function ensureChatterboxModels (options = {}) {
     }
   }
 
-  // Download tokenizer.json separately (it's in a different location)
-  const tokenizerUrl = `https://huggingface.co/${repositoryName}/resolve/main/tokenizer.json`
-  const tokenizerPath = path.join(targetDir, 'tokenizer.json')
-
-  console.log('\n Downloading tokenizer.json...')
-
-  if (fs.existsSync(tokenizerPath)) {
-    const stats = fs.statSync(tokenizerPath)
-    if (stats.size > 1000) {
-      console.log(` ✓ Using cached: tokenizer.json (${stats.size} bytes)`)
-      results['tokenizer.json'] = { success: true, path: tokenizerPath, cached: true }
-    } else {
-      fs.unlinkSync(tokenizerPath)
-    }
-  }
-
-  if (!results['tokenizer.json']?.success) {
-    let downloadSuccess = false
-
-    if (isMobile) {
-      try {
-        const result = await downloadWithHttp(tokenizerUrl, tokenizerPath)
-        downloadSuccess = result.success && fs.existsSync(tokenizerPath)
-      } catch (e) {
-        console.log(` HTTP download error: ${e.message}`)
-      }
-    } else {
-      try {
-        const { spawnSync } = require('bare-subprocess')
-        const downloadResult = spawnSync('curl', [
-          '-L', '-o', tokenizerPath, tokenizerUrl,
-          '--fail', '--show-error',
-          '--connect-timeout', '30',
-          '--max-time', '300'
-        ], { stdio: ['inherit', 'inherit', 'pipe'] })
-        downloadSuccess = downloadResult.status === 0 && fs.existsSync(tokenizerPath)
-      } catch (e) {
-        console.log(` Curl error: ${e.message}`)
-      }
-    }
-
-    if (downloadSuccess) {
-      const stats = fs.statSync(tokenizerPath)
-      console.log(` ✓ Downloaded: tokenizer.json (${stats.size} bytes)`)
-      results['tokenizer.json'] = { success: true, path: tokenizerPath, cached: false }
-    } else {
-      results['tokenizer.json'] = { success: false, path: tokenizerPath }
-      allSuccess = false
-    }
-  }
-
   if (isMultilingual && allSuccess) {
     const cangjieResult = await ensureCangjieTsvForMultilingual(targetDir)
     results['Cangjie5_TC.tsv'] = cangjieResult
@@ -630,15 +578,20 @@ async function ensureChatterboxModels (options = {}) {
     }
   }
 
-  console.log('\n' + '='.repeat(50))
-  console.log('CHATTERBOX MODEL DOWNLOAD SUMMARY')
-  console.log('='.repeat(50))
-  for (const [name, result] of Object.entries(results)) {
-    const status = result.success ? '✓' : '✗'
-    const cached = result.cached ? ' (cached)' : ''
-    console.log(` ${status} ${name}${cached}`)
+  const cachedCount = Object.values(results).filter(r => r.cached).length
+  const downloadedCount = Object.values(results).filter(r => r.success && !r.cached).length
+  const failedCount = Object.values(results).filter(r => !r.success).length
+
+  if (failedCount > 0) {
+    console.log(`Chatterbox models: ${failedCount} failed, ${downloadedCount} downloaded, ${cachedCount} cached`)
+    for (const [name, result] of Object.entries(results)) {
+      if (!result.success) console.log(` FAILED: ${name}`)
+    }
+  } else if (downloadedCount > 0) {
+    console.log(`Chatterbox models: ${downloadedCount} downloaded, ${cachedCount} cached`)
+  } else {
+    console.log(`Chatterbox models: all ${cachedCount} cached`)
   }
-  console.log('='.repeat(50))
 
   return {
     success: allSuccess,
@@ -720,14 +673,13 @@ function downloadOnnxFile (url, targetPath, minSize, label) {
     if (fs.existsSync(targetPath)) {
       const stats = fs.statSync(targetPath)
       if (stats.size >= minSize) {
-        console.log(` ✓ Using cached: ${label} (${stats.size} bytes)`)
         resolve({ success: true, path: targetPath, cached: true })
         return
       }
       fs.unlinkSync(targetPath)
     }
 
-    console.log(`\n Downloading ${label}...`)
+    console.log(` Downloading ${label}...`)
 
     let downloadSuccess = false
     if (isMobile) {
@@ -769,11 +721,10 @@ function downloadOnnxFile (url, targetPath, minSize, label) {
 
 async function downloadJsonConfig (url, targetPath, label) {
   if (fs.existsSync(targetPath) && isValidJsonCache(targetPath)) {
-    console.log(` ✓ Using cached: ${label}`)
     return { success: true, path: targetPath, cached: true }
   }
 
-  console.log(`\n Downloading ${label}...`)
+  console.log(` Downloading ${label}...`)
   if (fs.existsSync(targetPath)) fs.unlinkSync(targetPath)
 
   const fetchResult = await fetchUrlBody(url)
@@ -801,7 +752,7 @@ async function ensureSupertonicModels (options = {}) {
   const targetDir = options.targetDir || path.join(getBaseDir(), 'models', 'supertonic')
   const voiceNames = options.voiceNames || ['F1']
 
-  console.log('\nEnsuring Supertonic TTS models...')
+  console.log('Ensuring Supertonic TTS models...')
 
   if (!fs.existsSync(targetDir)) {
     fs.mkdirSync(targetDir, { recursive: true })
@@ -853,15 +804,20 @@ async function ensureSupertonicModels (options = {}) {
     if (!r.success) allSuccess = false
   }
 
-  console.log('\n' + '='.repeat(50))
-  console.log('SUPERTONIC MODEL DOWNLOAD SUMMARY')
-  console.log('='.repeat(50))
-  for (const [name, result] of Object.entries(results)) {
-    const status = result.success ? '✓' : '✗'
-    const cached = result.cached ? ' (cached)' : ''
-    console.log(` ${status} ${name}${cached}`)
+  const cachedCount = Object.values(results).filter(r => r.cached).length
+  const downloadedCount = Object.values(results).filter(r => r.success && !r.cached).length
+  const failedCount = Object.values(results).filter(r => !r.success).length
+
+  if (failedCount > 0) {
+    console.log(`Supertonic models: ${failedCount} failed, ${downloadedCount} downloaded, ${cachedCount} cached`)
+    for (const [name, result] of Object.entries(results)) {
+      if (!result.success) console.log(` FAILED: ${name}`)
+    }
+  } else if (downloadedCount > 0) {
+    console.log(`Supertonic models: ${downloadedCount} downloaded, ${cachedCount} cached`)
+  } else {
+    console.log(`Supertonic models: all ${cachedCount} cached`)
   }
-  console.log('='.repeat(50))
 
   return {
     success: allSuccess,
