@@ -8,8 +8,10 @@ import {
   AFRICAN_LANGUAGES_MAP,
 } from "@/schemas";
 import type TranslationNmtcpp from "@qvac/translation-nmtcpp";
-
 import { getLangName } from "@qvac/langdetect-text";
+import { nowMs } from "@/profiling";
+import { buildStreamResult } from "@/profiling/model-execution";
+import type { NmtResponse, LlmResponse } from "@/server/bare/types/addon-responses";
 
 export function getLanguage(code: string | undefined): string {
   if (!code) return "";
@@ -24,7 +26,7 @@ export function isAfrican(code: string | undefined) {
 
 export async function* translate(
   params: TranslateParams,
-): AsyncGenerator<string, TranslationStats | undefined, unknown> {
+): AsyncGenerator<string, { modelExecutionMs: number; stats?: TranslationStats }, unknown> {
   const { modelId, text, modelType: inputModelType } = params;
   const canonicalModelType = normalizeModelType(inputModelType);
   const isLlm = canonicalModelType === ModelType.llamacppCompletion;
@@ -39,34 +41,28 @@ export async function* translate(
   const fromLanguage = getLanguage(from);
   const toLanguage = getLanguage(to);
 
-  const startTime = Date.now();
-  let processedTokens = 0;
-
   // Check if input is an array and model type is NMT
   if (
     Array.isArray(text) &&
     canonicalModelType === ModelType.nmtcppTranslation
   ) {
     // Use runBatch for batch processing
+    const modelStart = nowMs();
     const translations = await (model as unknown as TranslationNmtcpp).runBatch(
       text,
     );
+    const modelExecutionMs = nowMs() - modelStart;
 
     // Yield each translation with a newline separator
     for (let i = 0; i < translations.length; i++) {
       const translation = translations[i]!;
-      processedTokens++;
       yield translation;
       if (i < translations.length - 1) {
         yield "\n";
       }
     }
 
-    const endTime = Date.now();
-    return {
-      processedTokens,
-      processingTime: endTime - startTime,
-    };
+    return { modelExecutionMs };
   }
 
   // Single text processing (for NMT or LLM)
@@ -85,6 +81,7 @@ export async function* translate(
           },
         ];
 
+  const modelStart = nowMs();
   const response = await model.run(input);
 
   // Check if the response has an iterate method (like LLM models)
@@ -92,72 +89,36 @@ export async function* translate(
     canonicalModelType === ModelType.llamacppCompletion &&
     typeof response.iterate === "function"
   ) {
-    for await (const token of response.iterate()) {
-      processedTokens++;
-      yield token as string;
-    }
-  } else {
-    // For models that don't support iterate, create an async iterator using onUpdate
-    const tokenQueue: string[] = [];
-    let isComplete = false;
-    let resolveNext: ((value: IteratorResult<string>) => void) | null = null;
-
-    // Start the response processing
-    const responsePromise = response
-      .onUpdate((data: string) => {
-        processedTokens++;
-
-        if (resolveNext) {
-          // If there's a pending read, resolve it immediately
-          resolveNext({ value: data, done: false });
-          resolveNext = null;
-        } else {
-          // Otherwise, queue the token
-          tokenQueue.push(data);
-        }
-      })
-      .await()
-      .then(() => {
-        isComplete = true;
-        if (resolveNext) {
-          resolveNext({ value: undefined, done: true });
-          resolveNext = null;
-        }
-      });
-
-    // Create an async iterator
-    const asyncIterator = {
-      async next(): Promise<IteratorResult<string>> {
-        if (tokenQueue.length > 0) {
-          return { value: tokenQueue.shift()!, done: false };
-        }
-
-        if (isComplete) {
-          return { value: undefined, done: true };
-        }
-
-        // Wait for the next token
-        return new Promise<IteratorResult<string>>((resolve) => {
-          resolveNext = resolve;
-        });
-      },
-      [Symbol.asyncIterator]() {
-        return this;
-      },
-    };
-
-    // Yield tokens as they come
-    for await (const token of asyncIterator) {
+    const llmResponse = response as unknown as LlmResponse;
+    for await (const token of llmResponse.iterate()) {
       yield token;
     }
+    const modelExecutionMs = nowMs() - modelStart;
 
-    // Ensure the response is fully processed
-    await responsePromise;
+    const stats: TranslationStats = {
+      ...(llmResponse.stats?.TPS !== undefined && { tokensPerSecond: llmResponse.stats.TPS }),
+      ...(llmResponse.stats?.TTFT !== undefined && { timeToFirstToken: llmResponse.stats.TTFT }),
+      ...(llmResponse.stats?.CacheTokens !== undefined && { cacheTokens: llmResponse.stats.CacheTokens }),
+      ...(llmResponse.stats?.generatedTokens !== undefined && { totalTokens: llmResponse.stats.generatedTokens }),
+    };
+
+    return buildStreamResult(modelExecutionMs, stats);
   }
 
-  const endTime = Date.now();
-  return {
-    processedTokens,
-    processingTime: endTime - startTime,
+  const nmtResponse = response as unknown as NmtResponse;
+  for await (const token of nmtResponse.iterate()) {
+    yield token;
+  }
+  const modelExecutionMs = nowMs() - modelStart;
+
+  const stats: TranslationStats = {
+    ...(nmtResponse.stats?.totalTime !== undefined && { totalTime: nmtResponse.stats.totalTime }),
+    ...(nmtResponse.stats?.totalTokens !== undefined && { totalTokens: nmtResponse.stats.totalTokens }),
+    ...(nmtResponse.stats?.decodeTime !== undefined && { decodeTime: nmtResponse.stats.decodeTime }),
+    ...(nmtResponse.stats?.encodeTime !== undefined && { encodeTime: nmtResponse.stats.encodeTime }),
+    ...(nmtResponse.stats?.TPS !== undefined && { tokensPerSecond: nmtResponse.stats.TPS }),
+    ...(nmtResponse.stats?.TTFT !== undefined && { timeToFirstToken: nmtResponse.stats.TTFT }),
   };
+
+  return buildStreamResult(modelExecutionMs, stats);
 }

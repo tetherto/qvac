@@ -438,3 +438,6 @@ function dataAsString (data) {
 
 module.exports = BaseInference
 module.exports.QvacResponse = QvacResponse
+module.exports.exclusiveRunQueue = require('./src/utils/exclusiveRunQueue')
+module.exports.getApiDefinition = require('./src/utils/getApiDefinition')
+module.exports.createJobHandler = require('./src/utils/createJobHandler')
