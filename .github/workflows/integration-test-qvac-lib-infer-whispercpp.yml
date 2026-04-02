@@ -59,7 +59,7 @@ jobs:
           - os: macos-15-large
             platform: darwin
             arch: x64
-          - os: ai-run-windows-gpu
+          - os: ai-run-windows11-gpu
             platform: win32
             arch: x64
 
