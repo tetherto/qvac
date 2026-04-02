@@ -11,6 +11,7 @@ export {
   transcribe,
   transcribeStream,
   embed,
+  finetune,
   translate,
   cancel,
   ragChunk,
@@ -34,6 +35,7 @@ export {
   modelRegistrySearch,
   modelRegistryGetModel,
   type ModelRegistrySearchParams,
+  type FinetuneHandle,
 } from "./client/api";
 export { close } from "./client";
 export {
@@ -95,6 +97,16 @@ export {
   SDK_DEFAULT_PLUGINS,
   type BuiltinPlugin,
   type ProfilerMode,
+  type FinetuneValidation,
+  type FinetuneStartParams,
+  type FinetuneResumeParams,
+  type FinetunePauseParams,
+  type FinetuneCancelParams,
+  type FinetuneParams,
+  type FinetuneStatus,
+  type FinetuneProgress,
+  type FinetuneStats,
+  type FinetuneResult,
 } from "./schemas";
 
 export { type ToolInput, type ToolHandler } from "./utils/tool-helpers";

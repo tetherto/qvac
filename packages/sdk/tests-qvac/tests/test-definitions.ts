@@ -25,6 +25,7 @@ import { parakeetTests } from "./parakeet-tests.js";
 import { visionTests } from "./vision-tests.js";
 import { downloadTests } from "./download-tests.js";
 import { diffusionTests } from "./diffusion-tests.js";
+import { finetuneTests } from "./finetune-tests.js";
 
 // Model loading tests
 export const modelLoadLlm: TestDefinition = {
@@ -220,6 +221,9 @@ export const tests = [
 
   // Diffusion tests
   ...diffusionTests,
+
+  // Finetuning tests
+  ...finetuneTests,
 
   // Additional model tests
   modelSwitchLlm,
