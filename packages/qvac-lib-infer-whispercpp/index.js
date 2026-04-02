@@ -77,6 +77,12 @@ class TranscriptionWhispercpp {
   }
 
   async load (...loadArgs) {
+    if (this.state.destroyed) {
+      throw new QvacErrorAddonWhisper({
+        code: ERR_CODES.FAILED_TO_LOAD_WEIGHTS,
+        adds: 'instance was destroyed'
+      })
+    }
     if (this.state.configLoaded || this.state.weightsLoaded) {
       this.logger.info('Reload requested - unloading existing model first')
       await this.unload()
@@ -84,6 +90,7 @@ class TranscriptionWhispercpp {
 
     await this._load(...loadArgs)
     this.state.configLoaded = true
+    this.state.weightsLoaded = true
   }
 
   async _withExclusiveRun (fn) {
