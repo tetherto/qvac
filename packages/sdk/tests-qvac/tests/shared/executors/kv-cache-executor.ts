@@ -16,6 +16,7 @@ export class KvCacheExecutor extends AbstractModelExecutor<typeof kvCacheTests> 
       if (test.testId === "kv-cache-session-switch") return [test.testId, this.sessionSwitch.bind(this)];
       if (test.testId === "kv-cache-different-system-prompts") return [test.testId, this.differentSystemPrompts.bind(this)];
       if (test.testId === "kv-cache-stats-verification") return [test.testId, this.statsVerification.bind(this)];
+      if (test.testId === "kv-cache-tools-sequential-save") return [test.testId, this.toolsSequentialSave.bind(this)];
       if (test.testId.startsWith("kv-cache-delete-") || test.testId === "kv-cache-hypercore-deletion") {
         return [test.testId, this.deleteCacheOp.bind(this)];
       }
@@ -232,6 +233,78 @@ export class KvCacheExecutor extends AbstractModelExecutor<typeof kvCacheTests> 
     } catch (error) {
       const errorMsg = error instanceof Error ? error.message : String(error);
       return { passed: false, output: `Stats verification failed: ${errorMsg}` };
+    }
+  }
+
+  async toolsSequentialSave(params: unknown, expectation: unknown): Promise<TestResult> {
+    const p = params as {
+      cacheKey: string;
+      tools: unknown[];
+      messages: string[];
+      stream: boolean;
+    };
+    let toolsModelId = await this.resources.ensureLoaded("tools");
+
+    try {
+      // Clean slate: remove any leftover cache from previous runs
+      try { await deleteCache({ kvCacheKey: p.cacheKey }); } catch { /* ignore ENOENT */ }
+
+      const history: Array<{ role: string; content: string }> = [
+        { role: "system", content: "You are a helpful assistant with access to tools. Be brief." },
+      ];
+
+      let firstCacheTokens = 0;
+      let secondCacheTokens = 0;
+
+      for (let i = 0; i < p.messages.length; i++) {
+        history.push({ role: "user", content: p.messages[i]! });
+
+        // Streaming is required to obtain cacheTokens from stats
+        const result = completion({
+          modelId: toolsModelId,
+          history: [...history],
+          stream: true,
+          kvCache: p.cacheKey,
+          tools: p.tools as never,
+        });
+
+        let response = "";
+        for await (const token of result.tokenStream) {
+          response += token;
+        }
+
+        const stats = await result.stats;
+        const cacheTokens = (stats as Record<string, unknown>)?.cacheTokens as number ?? 0;
+
+        if (i === 0) {
+          firstCacheTokens = cacheTokens;
+          history.push({ role: "assistant", content: response });
+
+          // Evict and reload the model to clear the in-memory KV cache.
+          // Without this, the addon keeps the session in RAM and the second
+          // call would see increased cacheTokens even if the disk save failed.
+          await this.resources.evict("tools");
+          toolsModelId = await this.resources.ensureLoaded("tools");
+        } else {
+          secondCacheTokens = cacheTokens;
+          history.push({ role: "assistant", content: response });
+        }
+      }
+
+      // After model reload, the only source of cached tokens is the on-disk
+      // file. If the save was silently rejected (missing path) or not awaited,
+      // secondCacheTokens will be ≤ firstCacheTokens (system-prompt-only).
+      if (secondCacheTokens <= firstCacheTokens) {
+        return {
+          passed: false,
+          output: `KV-cache not persisted to disk between tool-calling completions: second call cache tokens (${secondCacheTokens}) must exceed first call (${firstCacheTokens}). The cache save was likely silently rejected by the addon (missing cache path or unawaited response).`,
+        };
+      }
+      const result = `Tools sequential save: first=${firstCacheTokens}, second=${secondCacheTokens}, cache persisted to disk: true`;
+      return ValidationHelpers.validate(result, expectation as Expectation);
+    } catch (error) {
+      const errorMsg = error instanceof Error ? error.message : String(error);
+      return { passed: false, output: `Tools sequential save failed: ${errorMsg}` };
     }
   }
 }
