@@ -569,8 +569,8 @@ struct ggml_cgraph* nmt_build_graph_decoder(
       {
         cur = ggml_norm(ctx0, cur, hparams.eps);
 
-        cur = ggml_add(
-            ctx0, ggml_mul(ctx0, cur, layer.mlp_ln_w), layer.mlp_ln_b);
+        cur =
+            ggml_add(ctx0, ggml_mul(ctx0, cur, layer.mlp_ln_w), layer.mlp_ln_b);
       }
 
       // fully connected

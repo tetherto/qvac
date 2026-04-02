@@ -36,8 +36,10 @@ using TestModel = TranslationModel;
 std::string getValidModelPath() {
   namespace fs = std::filesystem;
   // Try different possible paths for models
-  if (fs::exists(fs::path{"../../../models/unit-test/ggml-indictrans2-en-indic-dist-200M-q4_0.bin"})) {
-    return "../../../models/unit-test/ggml-indictrans2-en-indic-dist-200M-q4_0.bin";
+  if (fs::exists(fs::path{"../../../models/unit-test/"
+                          "ggml-indictrans2-en-indic-dist-200M-q4_0.bin"})) {
+    return "../../../models/unit-test/"
+           "ggml-indictrans2-en-indic-dist-200M-q4_0.bin";
   }
   return "models/unit-test/ggml-indictrans2-en-indic-dist-200M-q4_0.bin";
 }
@@ -46,9 +48,7 @@ std::string getInvalidModelPath() {
   return "definitely/invalid/path/model.bin";
 }
 
-TestModel make_valid_model() {
-  return TranslationModel(getValidModelPath());
-}
+TestModel make_valid_model() { return TranslationModel(getValidModelPath()); }
 
 TestModel make_invalid_model() { return TestModel(); }
 
@@ -216,21 +216,23 @@ TEST_P(NmtCppModelWrapperTest, RuntimeStatsDisabled) {
 
 TEST_P(NmtCppModelWrapperTest, GetNmtConfig) {
   TranslationModel wrapper(getValidModelPath());
-  const std::unordered_map<std::string, std::variant<double, int64_t, std::string>>
-      generationConfig = {
-          {"beamsize", 4},
-          {"lengthpenalty", 1},
-          {"maxlength", 500},
-          {"norepeatngramsize", 1.2f},
-          {"norepeatngramsize", 10},
-          {"temperature", 1.2f},
-          {"topk", 50},
-          {"topp", 0.8}};
+  const std::
+      unordered_map<std::string, std::variant<double, int64_t, std::string>>
+          generationConfig = {
+              {"beamsize", 4},
+              {"lengthpenalty", 1},
+              {"maxlength", 500},
+              {"norepeatngramsize", 1.2f},
+              {"norepeatngramsize", 10},
+              {"temperature", 1.2f},
+              {"topk", 50},
+              {"topp", 0.8}};
   wrapper.setConfig(generationConfig);
   auto modelGenerationConfig = wrapper.getConfig();
   for (auto&& el : generationConfig) {
     const auto& configName = el.first;
-    EXPECT_TRUE(modelGenerationConfig.find(configName) != modelGenerationConfig.end());
+    EXPECT_TRUE(
+        modelGenerationConfig.find(configName) != modelGenerationConfig.end());
     auto modelConfigValue = modelGenerationConfig.at(configName);
     auto configValue = generationConfig.at(configName);
     EXPECT_EQ(modelConfigValue, configValue);
@@ -239,10 +241,12 @@ TEST_P(NmtCppModelWrapperTest, GetNmtConfig) {
 
 TEST_P(NmtCppModelWrapperTest, SetConfigStoredBeforeLoad_NoLoad) {
   TranslationModel wrapper;
-  const std::unordered_map<std::string, std::variant<double, int64_t, std::string>> cfg = {
-      {"beamsize", static_cast<int64_t>(5)},
-      {"temperature", 0.7},
-      {"unknown_key_xyz", static_cast<int64_t>(123)}};
+  const std::
+      unordered_map<std::string, std::variant<double, int64_t, std::string>>
+          cfg = {
+              {"beamsize", static_cast<int64_t>(5)},
+              {"temperature", 0.7},
+              {"unknown_key_xyz", static_cast<int64_t>(123)}};
   EXPECT_NO_THROW(wrapper.setConfig(cfg));
   const auto stored = wrapper.getConfig();
   for (const auto& kv : cfg) {

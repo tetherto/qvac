@@ -265,8 +265,9 @@ static bool load_sentencepiece_model(
   int32_t sp_model_size = 0;
   read_safe(loader, sp_model_size);
 
-  QLOG(qvac_lib_inference_addon_cpp::logger::Priority::DEBUG,
-       "SentencePiece model size: " + std::to_string(sp_model_size));
+  QLOG(
+      qvac_lib_inference_addon_cpp::logger::Priority::DEBUG,
+      "SentencePiece model size: " + std::to_string(sp_model_size));
 
   if (sp_model_size > 0) {
     std::vector<char> sp_model_data(sp_model_size);
@@ -275,17 +276,20 @@ static bool load_sentencepiece_model(
 
     auto status = processor->LoadFromSerializedProto(serialized_model);
     if (status.ok()) {
-      QLOG(qvac_lib_inference_addon_cpp::logger::Priority::DEBUG,
-           "SentencePiece model loaded successfully");
+      QLOG(
+          qvac_lib_inference_addon_cpp::logger::Priority::DEBUG,
+          "SentencePiece model loaded successfully");
       return true;
     } else {
-      QLOG(qvac_lib_inference_addon_cpp::logger::Priority::ERROR,
-           "SentencePiece model load failed: " + status.ToString());
+      QLOG(
+          qvac_lib_inference_addon_cpp::logger::Priority::ERROR,
+          "SentencePiece model load failed: " + status.ToString());
       return false;
     }
   }
-  QLOG(qvac_lib_inference_addon_cpp::logger::Priority::DEBUG,
-       "SentencePiece model size is 0 or negative, skipping");
+  QLOG(
+      qvac_lib_inference_addon_cpp::logger::Priority::DEBUG,
+      "SentencePiece model size is 0 or negative, skipping");
   return false;
 }
 
@@ -334,7 +338,8 @@ static bool nmt_model_load(struct nmt_model_loader* loader, nmt_context& ctx) {
     } else if (model_type == 0 || model_type == 2) {
       throw std::runtime_error(
           "Opus/Marian models (model_type=" + std::to_string(model_type) +
-          ") are no longer supported. Only IndicTrans (model_type=1) is supported.");
+          ") are no longer supported. Only IndicTrans (model_type=1) is "
+          "supported.");
     } else {
       throw std::runtime_error(
           "Unsupported model type: " + std::to_string(model_type));
