@@ -20,7 +20,19 @@ export const transcribeParamsSchema = transcribeBaseSchema.extend({
   audioChunk: audioInputSchema,
 });
 
-// Batch Transcribe Schema (send audio, get text back)
+export const transcribeStatsSchema = z.object({
+  audioDuration: z.number().optional(),
+  realTimeFactor: z.number().optional(),
+  tokensPerSecond: z.number().optional(),
+  totalTokens: z.number().optional(),
+  totalSegments: z.number().optional(),
+  whisperEncodeTime: z.number().optional(),
+  whisperDecodeTime: z.number().optional(),
+  encoderTime: z.number().optional(),
+  decoderTime: z.number().optional(),
+  melSpecTime: z.number().optional(),
+});
+
 export const transcribeRequestSchema = transcribeParamsSchema.extend({
   type: z.literal("transcribe"),
 });
@@ -28,6 +40,7 @@ export const transcribeRequestSchema = transcribeParamsSchema.extend({
 const transcriptionResultBase = z.object({
   text: z.string().optional(),
   done: z.boolean().optional(),
+  stats: transcribeStatsSchema.optional(),
   error: z.string().optional(),
 });
 
@@ -45,7 +58,6 @@ export type TranscribeClientParams = {
 export type TranscribeRequest = z.infer<typeof transcribeRequestSchema>;
 export type TranscribeResponse = z.infer<typeof transcribeResponseSchema>;
 
-// Streaming Transcription Schema (bidirectional: audio stream in, text stream out)
 export const transcribeStreamRequestSchema = transcribeBaseSchema.extend({
   type: z.literal("transcribeStream"),
 });
@@ -73,3 +85,4 @@ export interface TranscribeStreamSession {
   [Symbol.asyncIterator](): AsyncIterator<string>;
 }
 
+export type TranscribeStats = z.infer<typeof transcribeStatsSchema>;

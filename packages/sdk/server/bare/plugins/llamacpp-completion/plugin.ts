@@ -15,9 +15,6 @@ import {
   type ResolveContext,
   type LlmConfig,
   type LlmConfigInput,
-  type CompletionStats,
-  type ToolCall,
-  type TranslationStats,
 } from "@/schemas";
 import { createStreamLogger, registerAddonLogger } from "@/logging";
 import { parseModelPath } from "@/server/utils";
@@ -25,6 +22,7 @@ import FilesystemDL from "@qvac/dl-filesystem";
 import { asLoader } from "@/server/bare/utils/loader-adapter";
 import { completion } from "@/server/bare/plugins/llamacpp-completion/ops/completion-stream";
 import { translate } from "@/server/bare/ops/translate";
+import { attachModelExecutionMs } from "@/profiling/model-execution";
 
 function transformLlmConfig(llmConfig: LlmConfig) {
   const transformed = JSON.parse(
@@ -139,19 +137,11 @@ export const llmPlugin = definePlugin({
           ...(request.generationParams && { generationParams: request.generationParams }),
         });
 
-        let stats: CompletionStats | undefined;
-        let toolCalls: ToolCall[] = [];
-        let done = false;
-        let buffer = "";
+        try {
+          let buffer = "";
+          let result = await stream.next();
 
-        while (!done) {
-          const result = await stream.next();
-
-          if (result.done) {
-            stats = result.value.stats;
-            toolCalls = result.value.toolCalls;
-            done = true;
-          } else {
+          while (!result.done) {
             if (request.stream) {
               yield {
                 type: "completionStream" as const,
@@ -163,16 +153,20 @@ export const llmPlugin = definePlugin({
             } else {
               buffer += result.value.token;
             }
+            result = await stream.next();
           }
-        }
 
-        yield {
-          type: "completionStream" as const,
-          token: request.stream ? "" : buffer,
-          done: true,
-          ...(stats && { stats }),
-          ...(toolCalls.length > 0 && { toolCalls }),
-        };
+          const { modelExecutionMs, stats, toolCalls } = result.value;
+          yield attachModelExecutionMs({
+            type: "completionStream" as const,
+            token: request.stream ? "" : buffer,
+            done: true,
+            ...(stats && { stats }),
+            ...(toolCalls.length > 0 && { toolCalls }),
+          }, modelExecutionMs);
+        } finally {
+          await stream.return?.(undefined as never);
+        }
       },
     }),
 
@@ -183,29 +177,27 @@ export const llmPlugin = definePlugin({
 
       handler: async function* (request) {
         const stream = translate(request);
-        let done = false;
-        let stats: TranslationStats | undefined;
+        try {
+          let result = await stream.next();
 
-        while (!done) {
-          const result = await stream.next();
-
-          if (result.done) {
-            stats = result.value;
-            done = true;
-          } else {
+          while (!result.done) {
             yield {
               type: "translate" as const,
               token: result.value,
             };
+            result = await stream.next();
           }
-        }
 
-        yield {
-          type: "translate" as const,
-          token: "",
-          done: true,
-          ...(stats && { stats }),
-        };
+          const { modelExecutionMs, stats } = result.value;
+          yield attachModelExecutionMs({
+            type: "translate" as const,
+            token: "",
+            done: true,
+            ...(stats && { stats }),
+          }, modelExecutionMs);
+        } finally {
+          await stream.return?.(undefined as never);
+        }
       },
     }),
   },
