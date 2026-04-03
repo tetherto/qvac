@@ -66,6 +66,13 @@ if(WIN32)
   )
 endif()
 
+bare_platform(_TTS_TEST_PLATFORM)
+bare_arch(_TTS_TEST_ARCH)
+set(_tts_onnx_prebuilds "${CMAKE_SOURCE_DIR}/node_modules/@qvac/onnx/prebuilds/${_TTS_TEST_PLATFORM}-${_TTS_TEST_ARCH}")
+if(EXISTS "${_tts_onnx_prebuilds}/qvac__onnx.bare" AND NOT EXISTS "${_tts_onnx_prebuilds}/qvac__onnx@0.bare")
+  file(CREATE_LINK "${_tts_onnx_prebuilds}/qvac__onnx.bare" "${_tts_onnx_prebuilds}/qvac__onnx@0.bare" COPY_ON_ERROR)
+endif()
+
 if(ENABLE_COVERAGE)
   if(CMAKE_CXX_COMPILER_ID MATCHES "Clang|GNU")
     message("Enabling coverage instrumentation")

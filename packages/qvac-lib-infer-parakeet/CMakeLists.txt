@@ -267,5 +267,10 @@ if(BUILD_TESTING)
         message(STATUS "LLVM Coverage enabled for parakeet tests")
     endif()
 
+    set(_onnx_prebuilds "${CMAKE_CURRENT_SOURCE_DIR}/node_modules/@qvac/onnx/prebuilds/${PREBUILD_PLATFORM}-${PREBUILD_ARCH}")
+    if(EXISTS "${_onnx_prebuilds}/qvac__onnx.bare" AND NOT EXISTS "${_onnx_prebuilds}/qvac__onnx@0.bare")
+      file(CREATE_LINK "${_onnx_prebuilds}/qvac__onnx.bare" "${_onnx_prebuilds}/qvac__onnx@0.bare" COPY_ON_ERROR)
+    endif()
+
     gtest_discover_tests(parakeet_tests)
 endif()
