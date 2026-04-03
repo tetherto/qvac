@@ -104,14 +104,13 @@ async function closeConnection(publicKey: string): Promise<void> {
     // Wait for the close event before returning so Hyperswarm's internal
     // _allConnections is cleaned up before we attempt to rejoin/flush.
     await new Promise<void>((resolve) => {
-      const timeout = setTimeout(resolve, 5000);
       existingConnection.on("close", () => {
-        clearTimeout(timeout);
         resolve();
       });
       existingConnection.destroy();
     });
 
+    if (activeConnections.get(publicKey) !== existingConnection) return;
     activeConnections.delete(publicKey);
     activeRPCs.delete(publicKey);
     clearPeerConnectionTracking(publicKey);
