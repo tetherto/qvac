@@ -2,13 +2,10 @@
   "name": "qvac-lib-infer-parakeet",
   "version": "0.1.0",
   "dependencies": [
+    "eigen3",
     {
       "name": "qvac-lib-inference-addon-cpp",
       "version>=": "1.1.2"
-    },
-    {
-      "name": "onnxruntime",
-      "default-features": false
     },
     "nlohmann-json",
     {
@@ -26,21 +23,6 @@
       "dependencies": [
         "gtest"
       ]
-    },
-    "gpu": {
-      "description": "Enable GPU acceleration",
-      "dependencies": [
-        {
-          "name": "onnxruntime",
-          "features": ["cuda"]
-        }
-      ]
     }
-  },
-  "overrides": [
-    {
-      "name": "flatbuffers",
-      "version": "23.5.26"
-    }
-  ]
+  }
 }
