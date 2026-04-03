@@ -1,7 +1,6 @@
 /// <reference types="node" />
 
 import BaseInference from '@qvac/infer-base/WeightsProvider/BaseInference';
-import WeightsProvider from '@qvac/infer-base/WeightsProvider/WeightsProvider';
 import type { QvacResponse } from '@qvac/infer-base';
 import type { LoggerInterface } from '@qvac/logging';
 
@@ -33,17 +32,43 @@ export interface ParakeetConfig {
 }
 
 /**
- * Arguments required to construct an instance of TranscriptionParakeet
+ * Map of model file paths supplied to TranscriptionParakeet
+ */
+export interface TranscriptionParakeetFiles {
+  /** Absolute path to TDT encoder-model.onnx */
+  encoder?: string;
+  /** Absolute path to TDT encoder-model.onnx.data */
+  encoderData?: string;
+  /** Absolute path to TDT decoder_joint-model.onnx */
+  decoder?: string;
+  /** Absolute path to TDT vocab.txt */
+  vocab?: string;
+  /** Absolute path to TDT preprocessor.onnx */
+  preprocessor?: string;
+  /** Absolute path to CTC model.onnx */
+  model?: string;
+  /** Absolute path to CTC model.onnx_data */
+  modelData?: string;
+  /** Absolute path to CTC/EOU tokenizer.json */
+  tokenizer?: string;
+  /** Absolute path to EOU encoder.onnx */
+  eouEncoder?: string;
+  /** Absolute path to EOU decoder_joint.onnx */
+  eouDecoder?: string;
+  /** Absolute path to sortformer.onnx */
+  sortformer?: string;
+}
+
+/**
+ * Options accepted by the TranscriptionParakeet constructor
  */
 export interface TranscriptionParakeetArgs {
-  /** External loader instance (e.g. FilesystemDL, HyperdriveDL) */
-  loader: unknown;
+  /** Map of model file paths */
+  files?: TranscriptionParakeetFiles;
+  /** Parakeet inference configuration */
+  config?: TranscriptionParakeetConfig;
   /** Optional structured logger */
   logger?: LoggerInterface;
-  /** Name of the model directory */
-  modelName: string;
-  /** Disk directory where model files are stored */
-  diskPath?: string;
   /** Whether to run exclusively (default: true) */
   exclusiveRun?: boolean;
   /** Additional arguments */
@@ -51,25 +76,13 @@ export interface TranscriptionParakeetArgs {
 }
 
 /**
- * Configuration for TranscriptionParakeet
+ * Configuration for TranscriptionParakeet (non-path settings only)
  */
 export interface TranscriptionParakeetConfig {
-  /** Direct path to model directory (alternative to diskPath + modelName) */
-  path?: string;
-  /** Absolute path to encoder ONNX graph file (encoder-model.onnx) */
-  encoderPath?: string;
-  /** Absolute path to encoder ONNX weights file (encoder-model.onnx.data) */
-  encoderDataPath?: string;
-  /** Absolute path to decoder-joint ONNX file (decoder_joint-model.onnx) */
-  decoderPath?: string;
-  /** Absolute path to vocabulary file (vocab.txt) */
-  vocabPath?: string;
-  /** Absolute path to preprocessor ONNX file (preprocessor.onnx / nemo128.onnx) */
-  preprocessorPath?: string;
   /** Enable statistics collection */
   enableStats?: boolean;
   /** Parakeet-specific configuration */
-  parakeetConfig: ParakeetConfig;
+  parakeetConfig?: ParakeetConfig;
   /** Additional configuration */
   [key: string]: unknown;
 }
@@ -141,21 +154,14 @@ export interface Addon {
  */
 declare class TranscriptionParakeet extends BaseInference {
   protected readonly _config: TranscriptionParakeetConfig;
-  protected readonly _diskPath: string;
-  protected readonly _modelName: string;
   protected addon!: Addon;
-  protected weightsProvider: WeightsProvider;
   protected params: ParakeetConfig;
 
   /**
    * Creates an instance of TranscriptionParakeet.
-   * @param args - arguments for inference setup
-   * @param config - environment-specific inference setup configuration
+   * @param opts - constructor options
    */
-  constructor(
-    args: TranscriptionParakeetArgs,
-    config: TranscriptionParakeetConfig
-  );
+  constructor(opts: TranscriptionParakeetArgs);
 
   /**
    * Validate that required model files exist
@@ -163,24 +169,14 @@ declare class TranscriptionParakeet extends BaseInference {
   validateModelFiles(): void;
 
   /**
-   * Load model, weights, and activate addon.
-   * @param closeLoader - Close loader when done.
-   * @param reportProgressCallback - Hook for progress updates.
+   * Load model and activate addon.
    */
-  protected _load(
-    closeLoader?: boolean,
-    reportProgressCallback?: ReportProgressCallback
-  ): Promise<void>;
+  protected _load(): Promise<void>;
 
   /**
-   * Load model, weights, and activate addon (public API).
-   * @param closeLoader - Close loader when done.
-   * @param reportProgressCallback - Hook for progress updates.
+   * Load model and activate addon.
    */
-  load(
-    closeLoader?: boolean,
-    reportProgressCallback?: ReportProgressCallback
-  ): Promise<void>;
+  load(): Promise<void>;
 
   /**
    * Run transcription on an audio stream.
@@ -199,16 +195,6 @@ declare class TranscriptionParakeet extends BaseInference {
   reload(newConfig?: {
     parakeetConfig?: Partial<ParakeetConfig>;
   }): Promise<void>;
-
-  /**
-   * Download model weights from loader.
-   * @param reportProgressCallback - Progress callback
-   * @param opts - Options
-   */
-  downloadWeights(
-    reportProgressCallback?: ReportProgressCallback,
-    opts?: { closeLoader?: boolean }
-  ): Promise<void>;
 
   /**
    * Unload the model and free resources.
@@ -250,6 +236,7 @@ declare namespace TranscriptionParakeet {
     TranscriptionParakeet,
     ModelType,
     ParakeetConfig,
+    TranscriptionParakeetFiles,
     TranscriptionParakeetArgs,
     TranscriptionParakeetConfig,
     ProgressData,
