@@ -11,6 +11,7 @@ import {
   transcribeStreamResponseSchema,
   type TranscribeStreamResponse,
   type TranscribeStreamSession,
+  type TranscribeStreamClientParams,
 } from "@/schemas/transcription";
 import { createErrorResponse } from "@/schemas/error";
 
@@ -457,6 +458,18 @@ test("duplex integration: line-delimited parser handles chunked delivery across 
   t.is(texts.length, 2, "both segments received despite mid-line split");
   t.is(texts[0], "first", "first segment intact");
   t.is(texts[1], "second", "second segment intact after reassembly");
+});
+
+// =============================================================================
+// Backwards-compatible overload — type discriminates on audioChunk
+// =============================================================================
+
+test("overload discrimination: audioChunk presence distinguishes batch from duplex params", (t: BrittleT) => {
+  const withAudio = { modelId: "m", audioChunk: "file.wav" };
+  const duplexParams: TranscribeStreamClientParams = { modelId: "m" };
+
+  t.ok("audioChunk" in withAudio, "batch params have audioChunk");
+  t.ok(!("audioChunk" in duplexParams), "duplex params have no audioChunk");
 });
 
 test("duplex integration: empty/done-only handler produces no text segments", async (t: BrittleT) => {

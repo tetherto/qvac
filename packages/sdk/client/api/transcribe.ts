@@ -15,6 +15,18 @@ import { TranscriptionFailedError } from "@/utils/errors-client";
 
 const logger = getClientLogger();
 
+function buildTranscribeRequest(params: TranscribeClientParams): TranscribeRequest {
+  return {
+    type: "transcribe",
+    modelId: params.modelId,
+    audioChunk:
+      typeof params.audioChunk === "string"
+        ? { type: "filePath", value: params.audioChunk }
+        : { type: "base64", value: params.audioChunk.toString("base64") },
+    ...(params.prompt && { prompt: params.prompt }),
+  };
+}
+
 /**
  * Transcribe audio and return the complete text. Accepts either a file
  * path or an audio buffer.
@@ -29,15 +41,7 @@ export async function transcribe(
   params: TranscribeClientParams,
   options?: RPCOptions,
 ): Promise<string> {
-  const request: TranscribeRequest = {
-    type: "transcribe",
-    modelId: params.modelId,
-    audioChunk:
-      typeof params.audioChunk === "string"
-        ? { type: "filePath", value: params.audioChunk }
-        : { type: "base64", value: params.audioChunk.toString("base64") },
-    ...(params.prompt && { prompt: params.prompt }),
-  };
+  const request = buildTranscribeRequest(params);
 
   let fullText = "";
   for await (const response of stream(request, options)) {
@@ -57,6 +61,18 @@ export async function transcribe(
 }
 
 /**
+ * @deprecated Pass audio via `transcribe()` instead. This overload will be
+ * removed in the next major version.
+ *
+ * Streaming transcription with upfront audio: sends full audio, yields text
+ * chunks as they arrive.
+ */
+export function transcribeStream(
+  params: TranscribeClientParams,
+  options?: RPCOptions,
+): AsyncGenerator<string>;
+
+/**
  * Opens a bidirectional streaming transcription session. Audio is streamed
  * in via `write()`, and transcription text is yielded as the model's VAD
  * detects complete speech segments.
@@ -70,7 +86,40 @@ export async function transcribe(
  *          iterate with `for await (const text of session)` to receive
  *          transcription, and `end()` to signal end of audio.
  */
-export async function transcribeStream(
+export function transcribeStream(
+  params: TranscribeStreamClientParams,
+  options?: RPCOptions,
+): Promise<TranscribeStreamSession>;
+
+export function transcribeStream(
+  params: TranscribeClientParams | TranscribeStreamClientParams,
+  options?: RPCOptions,
+): AsyncGenerator<string> | Promise<TranscribeStreamSession> {
+  if ("audioChunk" in params && params.audioChunk !== undefined) {
+    logger.warn(
+      "transcribeStream() with audioChunk is deprecated — use transcribe() instead.",
+    );
+    return transcribeStreamWithAudio(params, options);
+  }
+  return transcribeStreamDuplex(params as TranscribeStreamClientParams, options);
+}
+
+async function* transcribeStreamWithAudio(
+  params: TranscribeClientParams,
+  options?: RPCOptions,
+): AsyncGenerator<string> {
+  const request = buildTranscribeRequest(params);
+
+  for await (const response of stream(request, options)) {
+    if (response.type === "transcribe") {
+      const parsed = transcribeResponseSchema.parse(response);
+      if (parsed.text) yield parsed.text;
+      if (parsed.done) break;
+    }
+  }
+}
+
+async function transcribeStreamDuplex(
   params: TranscribeStreamClientParams,
   options?: RPCOptions,
 ): Promise<TranscribeStreamSession> {
