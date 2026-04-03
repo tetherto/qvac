@@ -1,15 +1,11 @@
 name: Delete NPM Versions (Stable Diffusion)
 
 on:
-  # pull_request:
-  #   types:
-  #     - closed
-  #   paths:
-  #     - "packages/lib-infer-diffusion/**"
-  push:
-    branches:
-      - chore/migrate-oss-actions-workflows-v1.1.0
-
+  pull_request:
+    types:
+      - closed
+    paths:
+      - "packages/lib-infer-diffusion/**"
   workflow_dispatch:
     inputs:
       version:
