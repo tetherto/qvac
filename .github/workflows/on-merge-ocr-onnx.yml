@@ -160,6 +160,7 @@ jobs:
   publish-npm:
     needs: [build, publish-logic, release-merge-guard]
     if: >-
+      !cancelled() &&
       needs.build.result == 'success' &&
       needs.publish-logic.outputs.publish_release == 'true' &&
       (needs.release-merge-guard.result == 'success' || needs.release-merge-guard.result == 'skipped')
