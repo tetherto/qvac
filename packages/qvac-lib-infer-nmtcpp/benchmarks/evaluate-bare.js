@@ -8,7 +8,7 @@
  *
  * Usage:
  *   bare benchmarks/evaluate-bare.js --model-path ./model/bergamot/enit/2025-11-26 --src-lang en --tgt-lang it
- *   bare benchmarks/evaluate-bare.js --model-path ./qvac_models/en-it --src-lang en --tgt-lang it --model-type Opus
+ *   bare benchmarks/evaluate-bare.js --model-path ./model/indictrans --src-lang en --tgt-lang hi --model-type IndicTrans
  */
 
 const TranslationNmtcpp = require('..')
@@ -211,7 +211,7 @@ Required:
   --model-path <path>   Path to model directory
 
 Options:
-  --model-type <type>   Model type: Bergamot or Opus (default: Bergamot)
+  --model-type <type>   Model type: Bergamot or IndicTrans (default: Bergamot)
   --src-lang <lang>     Source language code (default: en)
   --tgt-lang <lang>     Target language code (default: it)
   --dataset <path>      Path to FLORES dataset (default: ./flores200_dataset)
@@ -221,7 +221,7 @@ Options:
 
 Examples:
   bare benchmarks/evaluate-bare.js --model-path ./model/bergamot/enit/2025-11-26
-  bare benchmarks/evaluate-bare.js --model-path ./qvac_models/en-it --model-type Opus
+  bare benchmarks/evaluate-bare.js --model-path ./model/indictrans --model-type IndicTrans
   bare benchmarks/evaluate-bare.js --model-path ./model/bergamot/enit/2025-11-26 --max 50
         `)
         return
@@ -236,7 +236,7 @@ Examples:
     console.log('')
     console.log('Examples:')
     console.log('  bare benchmarks/evaluate-bare.js --model-path ./model/bergamot/enit/2025-11-26')
-    console.log('  bare benchmarks/evaluate-bare.js --model-path ./qvac_models/en-it --model-type Opus')
+    console.log('  bare benchmarks/evaluate-bare.js --model-path ./model/indictrans --model-type IndicTrans')
     console.log('')
     console.log('Use --help for more options')
     process.exit(1)

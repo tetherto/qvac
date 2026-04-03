@@ -46,10 +46,6 @@ on:
         type: string
         default: "packages/qvac-lib-infer-whispercpp"
 
-concurrency:
-  group: ${{ github.workflow }}-pr-${{ github.event.pull_request.number || github.sha }}
-  cancel-in-progress: true
-
 permissions:
   contents: read
   pull-requests: read
@@ -161,6 +157,11 @@ jobs:
       workdir: ${{ needs.context.outputs.workdir }}
 
   cpp-tests-coverage:
+    permissions:
+      contents: read
+      packages: read
+      checks: write
+      pull-requests: write
     needs: [authorize, context]
     if: needs.authorize.outputs.allowed == 'true'
     uses: ./.github/workflows/cpp-test-coverage-qvac-lib-infer-whispercpp.yml
@@ -215,4 +216,3 @@ jobs:
       sanity-checks-status: ${{ needs.sanity-checks.result == 'success' && (needs.cpp-lint.result == 'success' || needs.cpp-lint.result == 'skipped') && (needs.cpp-tests-coverage.result == 'success' || needs.cpp-tests-coverage.result == 'skipped') }}
       build-status: ${{ needs.prebuild.result == 'success' || needs.prebuild.result == 'skipped' }}
       integration-tests-status: ${{ (needs.run-integration-tests.result == 'success' || needs.run-integration-tests.result == 'skipped') && (needs.run-mobile-integration-tests.result == 'success' || needs.run-mobile-integration-tests.result == 'skipped') }}
- 

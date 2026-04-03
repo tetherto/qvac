@@ -16,6 +16,11 @@ export const DELEGATION_BREAKDOWN_KEY = Symbol.for("@qvac/sdk:delegation-breakdo
  */
 export const OPERATION_EVENT_KEY = Symbol.for("@qvac/sdk:operation-event");
 
+/**
+ * Symbol key for attaching model execution timing.
+ */
+export const MODEL_EXECUTION_KEY = Symbol.for("@qvac/sdk:model-execution");
+
 export const profilerModeSchema = z.enum(["summary", "verbose"]);
 
 /**

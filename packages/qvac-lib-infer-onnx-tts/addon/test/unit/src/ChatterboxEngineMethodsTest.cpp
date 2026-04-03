@@ -15,13 +15,7 @@ public:
   using ChatterboxEngine::assembleSpeechTokenSequence;
   using ChatterboxEngine::buildInitialPositionIds;
   using ChatterboxEngine::convertToAudioResult;
-  using ChatterboxEngine::sanitizeTokenIds;
   using ChatterboxEngine::selectNextToken;
-};
-
-class SanitizeTokenIdsTest : public ::testing::Test {
-protected:
-  TestableChatterboxEngine engine_;
 };
 
 class BuildInitialPositionIdsTest : public ::testing::Test {
@@ -48,43 +42,6 @@ class SelectNextTokenTest : public ::testing::Test {
 protected:
   TestableChatterboxEngine engine_;
 };
-
-TEST_F(SanitizeTokenIdsTest, replacesUnsupportedTokens) {
-  std::vector<int64_t> ids = {100, 2400, 200, 2453, 300};
-  engine_.sanitizeTokenIds(ids);
-
-  EXPECT_EQ(ids[0], 100);
-  EXPECT_EQ(ids[1], 605);
-  EXPECT_EQ(ids[2], 200);
-  EXPECT_EQ(ids[3], 605);
-  EXPECT_EQ(ids[4], 300);
-}
-
-TEST_F(SanitizeTokenIdsTest, preservesSupportedTokens) {
-  std::vector<int64_t> ids = {1, 50, 100, 2351, 2454};
-  engine_.sanitizeTokenIds(ids);
-
-  EXPECT_EQ(ids[0], 1);
-  EXPECT_EQ(ids[1], 50);
-  EXPECT_EQ(ids[2], 100);
-  EXPECT_EQ(ids[3], 2351);
-  EXPECT_EQ(ids[4], 2454);
-}
-
-TEST_F(SanitizeTokenIdsTest, handlesEmptyVector) {
-  std::vector<int64_t> ids = {};
-  engine_.sanitizeTokenIds(ids);
-  EXPECT_TRUE(ids.empty());
-}
-
-TEST_F(SanitizeTokenIdsTest, replacesAllUnsupported) {
-  std::vector<int64_t> ids = {2352, 2400, 2453};
-  engine_.sanitizeTokenIds(ids);
-
-  for (auto id : ids) {
-    EXPECT_EQ(id, 605);
-  }
-}
 
 TEST_F(BuildInitialPositionIdsTest, buildsSpeechTokenPositions) {
   std::vector<int64_t> ids = {100, 200, 6561, 6562};

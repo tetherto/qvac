@@ -154,6 +154,7 @@ target_sources(
     ${PROJECT_SOURCE_DIR}/addon/src/js-interface/binding.cpp
     ${PROJECT_SOURCE_DIR}/addon/src/model-interface/TTSModel.cpp
     ${PROJECT_SOURCE_DIR}/addon/src/model-interface/ChatterboxEngine.cpp
+    ${PROJECT_SOURCE_DIR}/addon/src/model-interface/ChatterboxTextPreprocessor.cpp
     ${PROJECT_SOURCE_DIR}/addon/src/model-interface/OnnxInferSession.cpp
     ${PROJECT_SOURCE_DIR}/addon/src/model-interface/SupertonicEngine.cpp
     ${PROJECT_SOURCE_DIR}/addon/src/model-interface/Fp16Utils.cpp
@@ -218,6 +219,7 @@ if(BUILD_CLI)
     ${PROJECT_SOURCE_DIR}/addon/src/cli/qvac_tts_cli.cpp
     ${PROJECT_SOURCE_DIR}/addon/src/model-interface/TTSModel.cpp
     ${PROJECT_SOURCE_DIR}/addon/src/model-interface/ChatterboxEngine.cpp
+    ${PROJECT_SOURCE_DIR}/addon/src/model-interface/ChatterboxTextPreprocessor.cpp
     ${PROJECT_SOURCE_DIR}/addon/src/model-interface/OnnxInferSession.cpp
     ${PROJECT_SOURCE_DIR}/addon/src/model-interface/SupertonicEngine.cpp
   )
