@@ -1,0 +1,8 @@
+# Test A: placeholder (matches exactly one path segment)
+# Covers: /v0.7.0/sdk/api/cancel/, /v0.7.0/sdk/api/ping/, etc.
+/v0.7.0/sdk/api/:page/ /v0.7.0/sdk/api/:page/index.html 200
+/v0.7.0/sdk/api/ /v0.7.0/sdk/api/index.html 200
+
+# Test B: splat (matches everything after prefix)
+# Risk: if splat captures trailing slash, target gets // and may break
+/v0.8.0/* /v0.8.0/:splat/index.html 200
