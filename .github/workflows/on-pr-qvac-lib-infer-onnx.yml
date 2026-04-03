@@ -1,23 +1,20 @@
 name: On PR Trigger (ONNX)
 
 on:
-  push:
+  pull_request_target:
+    types:
+      - opened
+      - synchronize
+      - reopened
+      - labeled
     branches:
-      - chore/migrate-oss-actions-workflows-v1.1.0
-  # pull_request_target:
-  #   types:
-  #     - opened
-  #     - synchronize
-  #     - reopened
-  #     - labeled
-  #   branches:
-  #     - main
-  #     - release-*
-  #     - feature-*
-  #     - tmp-*
-  #   paths:
-  #     - "packages/qvac-lib-infer-onnx/**"
-  #     - ".github/workflows/*qvac-lib-infer-onnx*.yml"
+      - main
+      - release-*
+      - feature-*
+      - tmp-*
+    paths:
+      - "packages/qvac-lib-infer-onnx/**"
+      - ".github/workflows/*qvac-lib-infer-onnx*.yml"
   workflow_dispatch:
   workflow_call:
 
