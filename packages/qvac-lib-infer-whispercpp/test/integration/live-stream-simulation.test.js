@@ -38,7 +38,7 @@ async function feedStreamLive ({ readable, filePath, chunkBytes, bytesPerSecond 
 // Skip on mobile - requires 10min audio file (~19MB) which is too large to bundle
 test('Live stream simulation using pushable Readable with model.run()', { timeout: 180000, skip: isMobile }, async (t) => {
   // Use standardized test paths from helpers
-  const { modelsDir, modelPath } = getTestPaths()
+  const { modelPath } = getTestPaths()
   // Use the 10-minute s16le sample from examples (provided by repo)
   const audioPath = path.resolve(__dirname, '../../examples/samples/10min-16k-s16le.raw')
 
@@ -139,7 +139,7 @@ test('Live stream simulation using pushable Readable with model.run()', { timeou
 // Skip on mobile - requires 10min audio file (~19MB) which is too large to bundle
 test('Live segmented loop: repeated model.run per 3s chunk (no model teardown until end)', { timeout: 180000, skip: isMobile }, async (t) => {
   // Use standardized test paths from helpers
-  const { modelsDir, modelPath } = getTestPaths()
+  const { modelPath } = getTestPaths()
   const audioPath = path.resolve(__dirname, '../../examples/samples/10min-16k-s16le.raw')
 
   const whisperResult = await ensureWhisperModel(modelPath)
