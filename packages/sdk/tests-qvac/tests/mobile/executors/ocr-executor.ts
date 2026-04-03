@@ -84,13 +84,12 @@ export class MobileOcrExecutor extends ModelAssetExecutor<typeof ocrTests> {
     return { blocks: resultBlocks, stats };
   }
 
-  private validateExpectation(blocks: OCRTextBlock[], expectation: unknown): TestResult {
+  private validateExpectation(blocks: OCRTextBlock[], expectation: Expectation): TestResult {
     const allText = blocks.map((b) => b.text).join(" ");
-    const exp = expectation as Expectation;
-    if (exp.validation === "contains-all" || exp.validation === "contains-any") {
-      return ValidationHelpers.validate(allText, exp);
+    if (expectation.validation === "contains-all" || expectation.validation === "contains-any") {
+      return ValidationHelpers.validate(allText, expectation);
     }
-    return ValidationHelpers.validate(blocks, exp);
+    return ValidationHelpers.validate(blocks, expectation);
   }
 
   private checkStats(stats: { detectionTime?: number; recognitionTime?: number; totalTime?: number } | undefined): TestResult | null {
@@ -102,18 +101,16 @@ export class MobileOcrExecutor extends ModelAssetExecutor<typeof ocrTests> {
   }
 
   private checkBlockStructure(blocks: OCRTextBlock[]): TestResult | null {
-    for (let i = 0; i < blocks.length; i++) {
-      const block = blocks[i];
+    for (const [i, block] of blocks.entries()) {
       if (typeof block.text !== "string") {
         return { passed: false, output: `Block[${i}].text is not a string: ${JSON.stringify(block)}` };
       }
       if (!block.bbox || !Array.isArray(block.bbox) || block.bbox.length !== 4) {
         return { passed: false, output: `Block[${i}].bbox is not a 4-element array: ${JSON.stringify(block)}` };
       }
-      for (let j = 0; j < 4; j++) {
-        if (typeof block.bbox[j] !== "number") {
-          return { passed: false, output: `Block[${i}].bbox[${j}] is not a number: ${block.bbox[j]}` };
-        }
+      const badCoord = block.bbox.findIndex((x) => typeof x !== "number");
+      if (badCoord !== -1) {
+        return { passed: false, output: `Block[${i}].bbox[${badCoord}] is not a number: ${block.bbox[badCoord]}` };
       }
       if (typeof block.confidence !== "number") {
         return { passed: false, output: `Block[${i}].confidence is not a number: ${JSON.stringify(block)}` };
@@ -125,18 +122,18 @@ export class MobileOcrExecutor extends ModelAssetExecutor<typeof ocrTests> {
     return null;
   }
 
-  async generic(params: unknown, expectation: unknown): Promise<TestResult> {
+  async generic(params: OcrParams, expectation: Expectation): Promise<TestResult> {
     try {
-      const { blocks } = await this.runOcr(params as OcrParams);
+      const { blocks } = await this.runOcr(params);
       return this.validateExpectation(blocks, expectation);
     } catch (error) {
       return { passed: false, output: `OCR failed: ${error instanceof Error ? error.message : String(error)}` };
     }
   }
 
-  async withStats(params: unknown, expectation: unknown): Promise<TestResult> {
+  async withStats(params: OcrParams, expectation: Expectation): Promise<TestResult> {
     try {
-      const { blocks, stats } = await this.runOcr(params as OcrParams);
+      const { blocks, stats } = await this.runOcr(params);
       const err = this.checkStats(await stats);
       if (err) return err;
       return this.validateExpectation(blocks, expectation);
@@ -145,9 +142,9 @@ export class MobileOcrExecutor extends ModelAssetExecutor<typeof ocrTests> {
     }
   }
 
-  async blockStructure(params: unknown, expectation: unknown): Promise<TestResult> {
+  async blockStructure(params: OcrParams, expectation: Expectation): Promise<TestResult> {
     try {
-      const { blocks } = await this.runOcr(params as OcrParams);
+      const { blocks } = await this.runOcr(params);
       const err = this.checkBlockStructure(blocks);
       if (err) return err;
       return this.validateExpectation(blocks, expectation);
