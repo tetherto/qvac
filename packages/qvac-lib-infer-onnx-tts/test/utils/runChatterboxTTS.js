@@ -3,7 +3,7 @@
 const path = require('bare-path')
 const ONNXTTS = require('../..')
 const { readWavAsFloat32, resampleLinear } = require('./wav-helper')
-const { getBaseDir, isMobile, runTTS } = require('./runTTS')
+const { getBaseDir, isMobile, runTTS, runTTSWithSplit } = require('./runTTS')
 
 const CHATTERBOX_SAMPLE_RATE = 24000
 
@@ -88,4 +88,11 @@ async function runChatterboxTTS (model, params, expectation = {}) {
   })
 }
 
-module.exports = { loadChatterboxTTS, runChatterboxTTS }
+async function runChatterboxTTSWithSplit (model, params, expectation = {}) {
+  return runTTSWithSplit(model, params, expectation, {
+    sampleRate: CHATTERBOX_SAMPLE_RATE,
+    engineTag: 'Chatterbox'
+  })
+}
+
+module.exports = { loadChatterboxTTS, runChatterboxTTS, runChatterboxTTSWithSplit }

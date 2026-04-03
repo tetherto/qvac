@@ -161,16 +161,22 @@ jobs:
           npm install
           npm install -g bare bare-make bare-runtime bare-https brittle
 
+      - run: mkdir -p ${{ runner.temp }}/qvac-lib-infer-diffusion
+      - run: mkdir -p ${{ env.WORKDIR }}/prebuilds
+
       - name: Download prebuilds (from artifacts)
         if: ${{ !inputs.prebuild_package }}
         uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # 8.0.1
         with:
-          path: ${{ env.WORKDIR }}/prebuilds
+          path: ${{ runner.temp }}/qvac-lib-infer-diffusion
           merge-multiple: true
+
+      - if: ${{ !inputs.prebuild_package }}
+        run: cp -r ${{ runner.temp }}/qvac-lib-infer-diffusion/* ${{ env.WORKDIR }}/prebuilds
 
       - name: Download prebuilds from package (Linux/macOS)
         if: ${{ inputs.prebuild_package && matrix.platform != 'win32' }}
-        working-directory: ${{ env.WORKDIR }}
+        working-directory: ${{ runner.temp }}/qvac-lib-infer-diffusion
         shell: bash
         run: |
           PACKAGE="${{ inputs.prebuild_package }}"
@@ -190,15 +196,14 @@ jobs:
             exit 1
           fi
 
-          mv package/prebuilds ./prebuilds
-          rm -rf package *.tgz
+          cp -r ./package/prebuilds/* ${{ env.WORKDIR }}/prebuilds
 
           echo "Prebuilds downloaded from npm successfully"
-          ls -la prebuilds/
+          ls -la ${{ env.WORKDIR }}/prebuilds/
 
       - name: Download prebuilds from package (Windows)
         if: ${{ inputs.prebuild_package && matrix.platform == 'win32' }}
-        working-directory: ${{ env.WORKDIR }}
+        working-directory: ${{ runner.temp }}/qvac-lib-infer-diffusion
         shell: powershell
         run: |
           $PACKAGE = "${{ inputs.prebuild_package }}"
@@ -227,13 +232,10 @@ jobs:
             exit 1
           }
 
-          Move-Item package/prebuilds ./prebuilds
-
-          Remove-Item -Recurse -Force package
-          Remove-Item $TARBALL
+          Copy-Item -Recurse ./package/prebuilds/* ${{ env.WORKDIR }}/prebuilds
 
           echo "Prebuilds downloaded from npm successfully"
-          Get-ChildItem prebuilds/
+          Get-ChildItem ${{ env.WORKDIR }}/prebuilds
 
       - name: Linux - install dependencies
         if: matrix.platform == 'linux' || matrix.platform == 'android'
