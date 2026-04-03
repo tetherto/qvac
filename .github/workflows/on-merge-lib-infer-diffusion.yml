@@ -149,7 +149,8 @@ jobs:
 
   publish-release-npm:
     needs: [publish-logic, release-merge-guard]
-    if: >-
+    if: |
+      !cancelled() &&
       needs.publish-logic.outputs.publish_release == 'true' &&
       (needs.release-merge-guard.result == 'success' || needs.release-merge-guard.result == 'skipped')
     permissions:

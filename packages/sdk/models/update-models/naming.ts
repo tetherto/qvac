@@ -153,6 +153,8 @@ function generateBaseName(input: BaseNameInput): string {
       return generateOcrName(input);
     case "parakeet":
       return generateParakeetName(input);
+    case "diffusion":
+      return generateDiffusionName(input);
     default:
       return cleanPart(input.filename.replace(/\.\w+$/, ""));
   }
@@ -442,6 +444,40 @@ function generateOcrName({
   }
   const nameParts = [name, language, fileType].filter((p) => p && p !== "");
   return `OCR_${nameParts.map(cleanPart).join("_")}`;
+}
+
+function generateDiffusionName({
+  filename,
+  modelName,
+  quantization,
+  params,
+  tags,
+}: BaseNameInput): string {
+  // VAE / auxiliary models (tagged "vae" instead of "generation")
+  if (tags.includes("vae")) {
+    const name = modelName || "SD";
+    return `${cleanPart(name)}_VAE`;
+  }
+
+  // Extract family name from filename
+  let family = filename
+    .replace(/\.\w+$/, "")
+    .replace(/^stable-diffusion-xl/i, "SDXL")
+    .replace(/^stable-diffusion/i, "SD");
+
+  // Strip trailing params (e.g. "-4b") and quant (e.g. "-Q8_0") from family
+  // to avoid duplication since they're appended separately
+  if (params) {
+    const paramsEsc = params.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+    family = family.replace(new RegExp(`[-_]${paramsEsc}[-_].*$`, "i"), "");
+  }
+  if (quantization) {
+    const quantEsc = quantization.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+    family = family.replace(new RegExp(`[-_]${quantEsc}$`, "i"), "");
+  }
+
+  const nameParts = [family, params, quantization].filter((p) => p && p !== "");
+  return nameParts.map(cleanPart).join("_");
 }
 
 function generateParakeetName({
