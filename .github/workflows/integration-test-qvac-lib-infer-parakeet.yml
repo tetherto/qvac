@@ -158,6 +158,7 @@ jobs:
         run: npm run test:integration
         env:
           GITHUB_TOKEN: ${{ secrets.PAT_TOKEN }}
+          INTEGRATION_TEST_TIMEOUT: ${{ matrix.platform == 'win32' && '1800' || '600' }}
           LD_LIBRARY_PATH: ${{ github.workspace }}/packages/qvac-lib-infer-parakeet/prebuilds/${{ matrix.platform }}-${{ matrix.arch }}
           DYLD_LIBRARY_PATH: ${{ github.workspace }}/packages/qvac-lib-infer-parakeet/prebuilds/${{ matrix.platform }}-${{ matrix.arch }}
 
