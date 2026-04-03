@@ -7,6 +7,7 @@ import {
   parakeetConfigSchema,
 } from "./transcription-config";
 import { ocrConfigSchema } from "./ocr";
+import { sdcppConfigSchema } from "./sdcpp-config";
 import { runtimeContextSchema } from "./runtime-context";
 
 // Alias keys for user convenience (maps to canonical types)
@@ -18,6 +19,7 @@ const AliasKeys = {
   parakeet: "parakeet",
   tts: "tts",
   ocr: "ocr",
+  diffusion: "diffusion",
 } as const;
 
 /**
@@ -56,6 +58,7 @@ export const deviceConfigDefaultsSchema = z
     [ModelType.nmtcppTranslation]: z.record(z.string(), z.unknown()).optional(),
     [ModelType.onnxTts]: z.record(z.string(), z.unknown()).optional(),
     [ModelType.onnxOcr]: ocrConfigSchema.partial().optional(),
+    [ModelType.sdcppGeneration]: sdcppConfigSchema.partial().optional(),
     // Alias keys (user-friendly)
     [AliasKeys.llm]: llmConfigBaseSchema.optional(),
     [AliasKeys.embeddings]: embedConfigBaseSchema.optional(),
@@ -64,6 +67,7 @@ export const deviceConfigDefaultsSchema = z
     [AliasKeys.nmt]: z.record(z.string(), z.unknown()).optional(),
     [AliasKeys.tts]: z.record(z.string(), z.unknown()).optional(),
     [AliasKeys.ocr]: ocrConfigSchema.partial().optional(),
+    [AliasKeys.diffusion]: sdcppConfigSchema.partial().optional(),
   })
   .partial();
 
