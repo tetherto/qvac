@@ -17,7 +17,7 @@ binding.setLogger((priority, message) => {
 
 async function main () {
   const args = process.argv.slice(2)
-  const [, modelPathArg, vadModelPathArg, audioPathArg] = args
+  const [,, vadModelPathArg, audioPathArg] = args
 
   // Default to repo sample for tests
   const audioFilePath = audioPathArg || './examples/samples/sample.raw'
