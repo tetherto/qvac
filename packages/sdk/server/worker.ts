@@ -13,6 +13,7 @@ import {
   nmtPlugin,
   ttsPlugin,
   ocrPlugin,
+  diffusionPlugin,
 } from "@/server/bare/plugins";
 
 const { hasRPCConfig } = initializeWorkerCore();
@@ -29,6 +30,7 @@ registerPlugin(parakeetPlugin);
 registerPlugin(nmtPlugin);
 registerPlugin(ttsPlugin);
 registerPlugin(ocrPlugin);
+registerPlugin(diffusionPlugin);
 
 logger.info(
   hasRPCConfig
