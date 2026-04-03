@@ -1,6 +1,6 @@
 name: General CI/CD (Qvac-lib-dl-base)
 # This workflow is used to call the reusable workflows in the oss-actions repository
-# https://github.com/tetherto/oss-actions/blob/production-workflows-tag/.github/workflows/public-reusable.yml
+# https://github.com/tetherto/oss-actions/blob/main/.github/workflows/public-reusable.yml
 
 on:
   push:
