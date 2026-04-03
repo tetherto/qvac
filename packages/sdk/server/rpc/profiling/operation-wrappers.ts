@@ -13,7 +13,7 @@ import {
 import { nowMs, generateProfileId } from "@/profiling/clock";
 import { record, shouldProfile } from "@/profiling/controller";
 import { buildOperationEvent } from "./operation-metrics";
-import { isTerminalChunk } from "../handler-utils";
+import { isTerminalChunk } from "../rpc-utils";
 
 type ResponseWithOperationEvent<T> = T & { [OPERATION_EVENT_KEY]?: OperationEvent };
 

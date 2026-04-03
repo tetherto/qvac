@@ -89,7 +89,7 @@ jobs:
   release-merge-guard:
     name: Release Merge Guard
     if: >-
-      github.event_name == 'push' &&
+      (github.event_name == 'push' || github.event_name == 'workflow_dispatch') &&
       startsWith(github.ref_name, 'release-')
     runs-on: ubuntu-latest
     environment: release
@@ -160,12 +160,15 @@ jobs:
       ref: ${{ github.ref }}
 
   prebuild-release-npm:
-    needs: [publish-logic]
+    needs: [publish-logic, release-merge-guard]
     permissions:
       contents: write
       packages: write
       pull-requests: write
-    if: needs.publish-logic.outputs.publish_release == 'true'
+    if: |
+      !cancelled() &&
+      needs.publish-logic.outputs.publish_release == 'true' &&
+      needs.release-merge-guard.result == 'success'
     uses: ./.github/workflows/prebuilds-qvac-lib-infer-nmtcpp.yml
     secrets: inherit
     with:

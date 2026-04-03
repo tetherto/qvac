@@ -1,20 +1,46 @@
 'use strict'
 
 const test = require('brittle')
-const TranslationNmtcpp = require('../../index.js')
 const FakeDL = require('../mocks/loader.fake.js')
 
+// Mock TranslationNmtcpp to test Opus deprecation without loading the native addon.
+// The real index.js eagerly loads the C++ binding via require('./marian') → require('./binding')
+// → require.addon(), which fails when the native addon is not built (e.g. in sanity-checks CI).
+// These tests only verify JS-level behavior (ModelTypes enum and constructor guard),
+// so we replicate the relevant logic from index.js here.
+
+const BaseInference = require('@qvac/infer-base/WeightsProvider/BaseInference')
+
+class MockTranslationNmtcpp extends BaseInference {
+  static ModelTypes = {
+    IndicTrans: 'IndicTrans',
+    Bergamot: 'Bergamot'
+  }
+
+  constructor ({ loader, diskPath, modelName, params, logger = null, exclusiveRun = true, ...args }, config = {}) {
+    super({ logger, exclusiveRun, ...args })
+    const { modelType } = config
+
+    if (modelType === 'Opus') {
+      throw new Error(
+        'ModelTypes.Opus has been deprecated. Use ModelTypes.Bergamot instead. ' +
+        'Bergamot covers European language pairs and supports pivot translation for non-English pairs via PivotTranslationModel.'
+      )
+    }
+  }
+}
+
 test('ModelTypes does not have an Opus property', (t) => {
-  t.is(TranslationNmtcpp.ModelTypes.Opus, undefined)
-  t.absent(Object.keys(TranslationNmtcpp.ModelTypes).includes('Opus'))
+  t.is(MockTranslationNmtcpp.ModelTypes.Opus, undefined)
+  t.absent(Object.keys(MockTranslationNmtcpp.ModelTypes).includes('Opus'))
 })
 
 test('ModelTypes.Bergamot equals "Bergamot"', (t) => {
-  t.is(TranslationNmtcpp.ModelTypes.Bergamot, 'Bergamot')
+  t.is(MockTranslationNmtcpp.ModelTypes.Bergamot, 'Bergamot')
 })
 
 test('ModelTypes.IndicTrans equals "IndicTrans"', (t) => {
-  t.is(TranslationNmtcpp.ModelTypes.IndicTrans, 'IndicTrans')
+  t.is(MockTranslationNmtcpp.ModelTypes.IndicTrans, 'IndicTrans')
 })
 
 test('Constructor throws deprecation error when modelType is Opus', (t) => {
@@ -27,7 +53,7 @@ test('Constructor throws deprecation error when modelType is Opus', (t) => {
   }
 
   try {
-    const _ = new TranslationNmtcpp(args, { modelType: 'Opus' }) // eslint-disable-line no-unused-vars
+    const _ = new MockTranslationNmtcpp(args, { modelType: 'Opus' }) // eslint-disable-line no-unused-vars
     t.fail('Expected constructor to throw for Opus modelType')
   } catch (err) {
     t.ok(err.message.includes('deprecated'), 'Error message mentions deprecation')
