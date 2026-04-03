@@ -24,6 +24,7 @@ export * from "./text-to-speech";
 export * from "./error";
 export * from "./rag";
 export * from "./ocr";
+export * from "./sdcpp-config";
 export * from "./shard";
 export { SDK_CLIENT_ERROR_CODES } from "./sdk-errors-client";
 export { SDK_SERVER_ERROR_CODES } from "./sdk-errors-server";

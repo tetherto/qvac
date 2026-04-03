@@ -164,7 +164,7 @@ jobs:
   publish-release-npm:
     needs: [publish-logic, release-merge-guard, run-integration-tests, mobile-integration-tests]
     if: |
-      always() &&
+      !cancelled() &&
       needs.publish-logic.outputs.publish_release == 'true' &&
       (needs.release-merge-guard.result == 'success' || needs.release-merge-guard.result == 'skipped')
     runs-on: ubuntu-latest

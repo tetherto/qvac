@@ -14,6 +14,7 @@ export const ModelType = {
   onnxTts: "onnx-tts",
   parakeetTranscription: "parakeet-transcription",
   onnxOcr: "onnx-ocr",
+  sdcppGeneration: "sdcpp-generation",
 } as const;
 
 // === INTERNAL: Alias keys (backward compat names) ===
@@ -25,6 +26,7 @@ const AliasKeys = {
   parakeet: "parakeet",
   tts: "tts",
   ocr: "ocr",
+  diffusion: "diffusion",
 } as const;
 
 // === INTERNAL: Aliases (backward compat mapping) ===
@@ -40,6 +42,7 @@ export const ModelTypeAliases = {
   [AliasKeys.parakeet]: ModelType.parakeetTranscription,
   [AliasKeys.tts]: ModelType.onnxTts,
   [AliasKeys.ocr]: ModelType.onnxOcr,
+  [AliasKeys.diffusion]: ModelType.sdcppGeneration,
 } as const;
 
 // === TYPES ===
@@ -213,3 +216,17 @@ export const ocrModelTypeSchema = modelTypeInputSchema
   .extract([AliasKeys.ocr, ModelType.onnxOcr])
   .describe('OCR model type: "ocr" (alias) or "onnx-ocr" (canonical)');
 export type OcrModelTypeInput = z.infer<typeof ocrModelTypeSchema>;
+
+/**
+ * Diffusion/Image Generation model type schema.
+ * - Alias: `"diffusion"` → resolves to `"sdcpp-generation"`
+ * - Canonical: `"sdcpp-generation"`
+ */
+export const diffusionModelTypeSchema = modelTypeInputSchema
+  .extract([AliasKeys.diffusion, ModelType.sdcppGeneration])
+  .describe(
+    'Diffusion model type: "diffusion" (alias) or "sdcpp-generation" (canonical)',
+  );
+export type DiffusionModelTypeInput = z.infer<
+  typeof diffusionModelTypeSchema
+>;
