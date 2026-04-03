@@ -1,5 +1,6 @@
 #include "ChatterboxEngine.hpp"
 #include "ChatterboxLanguageMode.hpp"
+#include "ChatterboxTextPreprocessor.hpp"
 #include "FileUtils.hpp"
 #include "Fp16Utils.hpp"
 #include "OnnxInferSession.hpp"
@@ -22,16 +23,15 @@ using qvac::ttslib::fp16::writeFloatDataToTensor;
 namespace {
 
 const float REPETITION_PENALTY = 1.2;
-const int MAX_NEW_TOKENS_ENGLISH = 1024;
-const int MAX_NEW_TOKENS_MULTILINGUAL = 256;
+const int MAX_NEW_TOKENS_SPEECH = 1024;
 const float EXAGGERATION = 0.5;
 
 const std::vector<std::string> SUPPORTED_LANGUAGES = {
-    "en", "es", "fr", "de", "it", "pt", "ru",
+    "ar", "bg", "cs", "da", "de", "el", "en", "es", "fi", "fr",
+    "he", "hi", "hu", "it", "ja", "ko", "ms", "nl", "no", "pl",
+    "pt", "ro", "ru", "sk", "sv", "sw", "ta", "tr", "vi", "zh",
 };
 
-const std::pair<int, int> UNSUPPORTED_TOKEN_RANGE = {2351, 2453};
-const int UNKNOWN_TOKEN_ID = 605;
 const int64_t NUM_HIDDEN_LAYERS = 30;
 const int64_t NUM_KV_HEADS = 16;
 const int64_t HEAD_DIM = 64;
@@ -59,7 +59,6 @@ void penalizeRepetitionLogits(std::vector<float> &logits,
     }
   }
 }
-
 
 template <typename T>
 void insertFromOrtTensorToVector(
@@ -121,11 +120,15 @@ void ChatterboxEngine::load(const ChatterboxConfig &cfg) {
     languageModelSession_ = sessionFactory_(cfg.languageModelPath);
   }
 
+  loadCangjieTableIfNeeded(cfg.tokenizerPath);
+
   isEnglish_ = language_ == "en";
   if (!isEnglish_ && embedTokensSession_ != nullptr &&
-      lang_mode::shouldUseEnglishMode(language_, embedTokensSession_->getInputNames())) {
-    QLOG(Priority::INFO, "Requested language '" + language_ +
-                             "' but model appears monolingual. Falling back to English mode.");
+      lang_mode::shouldUseEnglishMode(language_,
+                                      embedTokensSession_->getInputNames())) {
+    QLOG(Priority::INFO,
+         "Requested language '" + language_ +
+             "' but model appears monolingual. Falling back to English mode.");
     isEnglish_ = true;
   }
   loaded_ = true;
@@ -164,16 +167,6 @@ void ChatterboxEngine::unload() {
 }
 
 bool ChatterboxEngine::isLoaded() const { return loaded_; }
-
-void ChatterboxEngine::sanitizeTokenIds(std::vector<int64_t> &inputIds) {
-  std::replace_if(
-      inputIds.begin(), inputIds.end(),
-      [](int64_t id) {
-        return id > UNSUPPORTED_TOKEN_RANGE.first &&
-               id <= UNSUPPORTED_TOKEN_RANGE.second;
-      },
-      UNKNOWN_TOKEN_ID);
-}
 
 TensorData<int64_t> ChatterboxEngine::buildInitialPositionIds(
     const std::vector<int64_t> &inputIds) {
@@ -301,8 +294,7 @@ std::vector<int64_t> ChatterboxEngine::generateSpeechTokens(
   std::unordered_map<std::string, TensorData<float>> pastKeyValues;
   std::vector<int64_t> generatedTokens{START_SPEECH_TOKEN};
 
-  const size_t maxNewTokens =
-      isEnglish_ ? MAX_NEW_TOKENS_ENGLISH : MAX_NEW_TOKENS_MULTILINGUAL;
+  const size_t maxNewTokens = static_cast<size_t>(MAX_NEW_TOKENS_SPEECH);
 
   for (size_t i = 0; i < maxNewTokens; i++) {
     TensorData<float> inputsEmbs =
@@ -401,8 +393,8 @@ AudioResult ChatterboxEngine::synthesize(const std::string &text) {
   ensureSession(speechEncoderSession_, config_.speechEncoderPath);
   ensureSession(languageModelSession_, config_.languageModelPath);
 
-  if (!isEnglish_ &&
-      lang_mode::shouldUseEnglishMode(language_, embedTokensSession_->getInputNames())) {
+  if (!isEnglish_ && lang_mode::shouldUseEnglishMode(
+                         language_, embedTokensSession_->getInputNames())) {
     QLOG(Priority::INFO, "Model is monolingual, falling back to English mode");
     isEnglish_ = true;
     keyValueOffset_ = OFFSET;
@@ -414,7 +406,6 @@ AudioResult ChatterboxEngine::synthesize(const std::string &text) {
   TensorData<float> speakerFeatures;
 
   if (!isEnglish_) {
-    sanitizeTokenIds(inputIds);
     positionIds = buildInitialPositionIds(inputIds);
   }
 
@@ -430,8 +421,10 @@ AudioResult ChatterboxEngine::synthesize(const std::string &text) {
 }
 
 std::vector<int64_t> ChatterboxEngine::tokenize(const std::string &text) {
-  const std::string preparedText =
-      lang_mode::prepareTextForTokenization(text, language_, isEnglish_);
+  const std::string preprocessed =
+      text_preprocess::preprocessText(text, language_, cangjieTable_);
+  const std::string preparedText = lang_mode::prepareTextForTokenization(
+      preprocessed, language_, isEnglish_);
   QLOG(Priority::INFO, "tokenizing text: " + preparedText);
 
   TokenizerEncodeResult result;
@@ -443,6 +436,26 @@ std::vector<int64_t> ChatterboxEngine::tokenize(const std::string &text) {
   tokenizers_free_encode_results(&result, 1);
 
   return tokens;
+}
+
+void ChatterboxEngine::loadCangjieTableIfNeeded(
+    const std::string &tokenizerPath) {
+  if (language_ != "zh") {
+    cangjieTable_.clear();
+    return;
+  }
+
+  std::string dir = tokenizerPath;
+  size_t lastSlash = dir.find_last_of("/\\");
+  if (lastSlash != std::string::npos) {
+    dir = dir.substr(0, lastSlash);
+  }
+  std::string cangjieTablePath = dir + "/Cangjie5_TC.tsv";
+
+  QLOG(Priority::INFO, "Loading Cangjie table from: " + cangjieTablePath);
+  cangjieTable_ = text_preprocess::loadCangjieTable(cangjieTablePath);
+  QLOG(Priority::INFO, "Cangjie table loaded: " +
+                           std::to_string(cangjieTable_.size()) + " entries");
 }
 
 void ChatterboxEngine::runEmbedTokensInfer(

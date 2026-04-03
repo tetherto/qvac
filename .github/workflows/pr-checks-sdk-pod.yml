@@ -198,7 +198,7 @@ jobs:
         continue-on-error: true
         run: |
           deps=$(jq -r '([.dependencies, .devDependencies] | map(select(type=="object")) | add // {}) | to_entries[] | .value' package.json)
-          if echo "$deps" | grep -Eq '^(git\+https:\/\/github.com|[0-9]+\.[0-9]+\.[0-9]+-(dev|tmp)[^"]*'; then
+          if echo "$deps" | grep -Eq '^(git\+https:\/\/github.com|[0-9]+\.[0-9]+\.[0-9]+-(dev|tmp)[^"]*)$'; then
             echo "::error title=Disallowed dependency detected::Do not use git URLs or dev/tmp versions in dependencies"
             exit 1
           fi
