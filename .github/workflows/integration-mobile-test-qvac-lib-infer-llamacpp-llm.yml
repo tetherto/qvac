@@ -1101,142 +1101,209 @@ jobs:
       - name: Schedule Device Farm Test Run
         id: schedule_run
         run: |
-          if [ "${{ matrix.platform }}" == "Android" ]; then
-            POOL_ARN="${{ secrets.LLM_ANDROID_DEVICE_POOL_ARN }}"
-          else
-            POOL_ARN="${{ secrets.LLM_IOS_DEVICE_POOL_ARN }}"
-          fi
-          
-          # Set run name based on trigger
           if [ "${{ github.event_name }}" == "workflow_dispatch" ]; then
             RUN_NAME="Manual-${{ github.run_number }}-${{ matrix.platform }}"
           else
             RUN_NAME="PR-${{ github.event.pull_request.number || github.run_number }}-${{ matrix.platform }}"
           fi
-          
-          echo "🚀 Scheduling Device Farm test run..."
-          echo "Platform: ${{ matrix.platform }}"
-          echo "Device Pool ARN: $POOL_ARN"
-          echo "Run Name: $RUN_NAME"
-          
-          RUN_ARN=$(aws devicefarm schedule-run \
-            --project-arn "${{ secrets.LLM_AWS_DEVICE_FARM_PROJECT_ARN }}" \
-            --device-pool-arn "$POOL_ARN" \
-            --app-arn "${{ steps.upload_app.outputs.app_upload_arn }}" \
-            --name "$RUN_NAME" \
-            --test type=APPIUM_NODE,testPackageArn="${{ steps.upload_test_package.outputs.test_package_upload_arn }}",testSpecArn="${{ steps.upload_test_spec.outputs.test_spec_arn }}" \
-            --execution-configuration jobTimeoutMinutes=60 \
-            --query 'run.arn' --output text)
-          
-          echo "run_arn=$RUN_ARN" >> $GITHUB_OUTPUT
-          echo "✅ Test run scheduled: $RUN_ARN"
+
+          PROJECT_ARN="${{ secrets.LLM_AWS_DEVICE_FARM_PROJECT_ARN }}"
+          APP_ARN="${{ steps.upload_app.outputs.app_upload_arn }}"
+          TEST_PACKAGE_ARN="${{ steps.upload_test_package.outputs.test_package_upload_arn }}"
+          TEST_SPEC_ARN="${{ steps.upload_test_spec.outputs.test_spec_arn }}"
+
+          schedule_run_with_pool() {
+            local pool_arn="$1"
+            local name="$2"
+            local spec_arn="$3"
+            aws devicefarm schedule-run \
+              --project-arn "$PROJECT_ARN" \
+              --device-pool-arn "$pool_arn" \
+              --app-arn "$APP_ARN" \
+              --name "$name" \
+              --test "type=APPIUM_NODE,testPackageArn=$TEST_PACKAGE_ARN,testSpecArn=$spec_arn" \
+              --execution-configuration jobTimeoutMinutes=60 \
+              --query 'run.arn' --output text
+          }
+
+          schedule_run_with_filter() {
+            local name="$1"
+            local filter="$2"
+            local spec_arn="$3"
+            aws devicefarm schedule-run \
+              --project-arn "$PROJECT_ARN" \
+              --device-selection-configuration "$filter" \
+              --app-arn "$APP_ARN" \
+              --name "$name" \
+              --test "type=APPIUM_NODE,testPackageArn=$TEST_PACKAGE_ARN,testSpecArn=$spec_arn" \
+              --execution-configuration jobTimeoutMinutes=60 \
+              --query 'run.arn' --output text
+          }
+
+          if [ "${{ matrix.platform }}" == "Android" ]; then
+            echo "🚀 Scheduling 2 Android runs in parallel (Samsung S25 Ultra + Pixel 9)..."
+
+            echo "Available Samsung S25 Ultra devices:"
+            aws devicefarm list-devices --region us-west-2 --no-paginate \
+              --filters '[{"attribute":"MANUFACTURER","operator":"EQUALS","values":["Samsung"]},{"attribute":"MODEL","operator":"CONTAINS","values":["S25 Ultra"]},{"attribute":"PLATFORM","operator":"EQUALS","values":["ANDROID"]}]' \
+              --query 'devices[].{name:name,model:model,os:os,availability:availability}' --output table || true
+
+            echo ""
+            echo "Available Pixel 9 devices:"
+            aws devicefarm list-devices --region us-west-2 --no-paginate \
+              --filters '[{"attribute":"MANUFACTURER","operator":"EQUALS","values":["Google"]},{"attribute":"MODEL","operator":"CONTAINS","values":["Pixel 9"]},{"attribute":"PLATFORM","operator":"EQUALS","values":["ANDROID"]}]' \
+              --query 'devices[].{name:name,model:model,os:os,availability:availability}' --output table || true
+
+            SAMSUNG_FILTER='{"filters":[{"attribute":"MANUFACTURER","operator":"EQUALS","values":["Samsung"]},{"attribute":"MODEL","operator":"CONTAINS","values":["S25 Ultra"]},{"attribute":"PLATFORM","operator":"EQUALS","values":["ANDROID"]}],"maxDevices":1}'
+            PIXEL_FILTER='{"filters":[{"attribute":"MANUFACTURER","operator":"EQUALS","values":["Google"]},{"attribute":"MODEL","operator":"CONTAINS","values":["Pixel 9"]},{"attribute":"PLATFORM","operator":"EQUALS","values":["ANDROID"]}],"maxDevices":1}'
+
+            RUN_ARN_1=$(schedule_run_with_filter "$RUN_NAME-Samsung" "$SAMSUNG_FILTER" "$TEST_SPEC_ARN")
+            echo "✅ Samsung S25 Ultra run scheduled: $RUN_ARN_1"
+
+            RUN_ARN_2=$(schedule_run_with_filter "$RUN_NAME-Pixel" "$PIXEL_FILTER" "$TEST_SPEC_ARN")
+            echo "✅ Pixel 9 run scheduled: $RUN_ARN_2"
+
+            echo "run_arn_1=$RUN_ARN_1" >> $GITHUB_OUTPUT
+            echo "run_arn_2=$RUN_ARN_2" >> $GITHUB_OUTPUT
+            echo "run_count=2" >> $GITHUB_OUTPUT
+          else
+            echo "🚀 Scheduling iOS run..."
+            POOL_ARN="${{ secrets.LLM_IOS_DEVICE_POOL_ARN }}"
+            RUN_ARN_1=$(schedule_run_with_pool "$POOL_ARN" "$RUN_NAME" "$TEST_SPEC_ARN")
+            echo "✅ iOS run scheduled: $RUN_ARN_1"
+
+            echo "run_arn_1=$RUN_ARN_1" >> $GITHUB_OUTPUT
+            echo "run_count=1" >> $GITHUB_OUTPUT
+          fi
+
+          echo "All runs scheduled."
 
       - name: Monitor Test Run
         id: monitor_run
         run: |
-          RUN_ARN="${{ steps.schedule_run.outputs.run_arn }}"
-          echo "📊 Monitoring test run: $RUN_ARN"
+          RUN_ARN_1="${{ steps.schedule_run.outputs.run_arn_1 }}"
+          RUN_ARN_2="${{ steps.schedule_run.outputs.run_arn_2 }}"
+          RUN_COUNT="${{ steps.schedule_run.outputs.run_count }}"
+
+          echo "📊 Monitoring $RUN_COUNT Device Farm run(s)..."
+          for i in $(seq 1 "$RUN_COUNT"); do
+            eval "echo \"  Run $i: \$RUN_ARN_$i\""
+          done
           echo ""
-          
-          MAX_WAIT_TIME=7200  # 120 minutes
+
+          MAX_WAIT_TIME=7200
           ELAPSED=0
-          
+          for i in $(seq 1 "$RUN_COUNT"); do eval "DONE_$i=false"; done
+
           while true; do
-            STATUS=$(aws devicefarm get-run --arn "$RUN_ARN" --query 'run.status' --output text)
-            RESULT=$(aws devicefarm get-run --arn "$RUN_ARN" --query 'run.result' --output text)
-            
-            echo "⏳ Run status: $STATUS (Result: $RESULT) - Elapsed: ${ELAPSED}s"
-            
-            if [[ "$STATUS" == "COMPLETED" ]]; then
+            STATUS_LINE="⏳"
+            for i in $(seq 1 "$RUN_COUNT"); do
+              eval "done_val=\$DONE_$i"
+              if [[ "$done_val" != "true" ]]; then
+                eval "arn=\$RUN_ARN_$i"
+                eval "STATUS_$i=\$(aws devicefarm get-run --arn \"\$arn\" --query 'run.status' --output text)"
+                eval "RESULT_$i=\$(aws devicefarm get-run --arn \"\$arn\" --query 'run.result' --output text)"
+                eval "status_val=\$STATUS_$i"
+                if [[ "$status_val" == "COMPLETED" ]]; then eval "DONE_$i=true"; fi
+              fi
+              eval "STATUS_LINE=\"\$STATUS_LINE Run $i: \$STATUS_$i (\$RESULT_$i) |\""
+            done
+            echo "$STATUS_LINE ${ELAPSED}s"
+
+            ALL_DONE=true
+            for i in $(seq 1 "$RUN_COUNT"); do
+              eval "done_val=\$DONE_$i"
+              if [[ "$done_val" != "true" ]]; then ALL_DONE=false; fi
+            done
+            if [[ "$ALL_DONE" == "true" ]]; then
               echo ""
-              echo "✅ Test run completed!"
+              echo "✅ All runs completed!"
               break
             fi
-            
+
             if [ $ELAPSED -ge $MAX_WAIT_TIME ]; then
               echo ""
-              echo "❌ Timeout: Test run exceeded $MAX_WAIT_TIME seconds"
+              echo "❌ Timeout: exceeded ${MAX_WAIT_TIME}s"
               exit 1
             fi
-            
+
             sleep 30
             ELAPSED=$((ELAPSED + 30))
           done
-          
-          # Get detailed results
-          RUN_DETAILS=$(aws devicefarm get-run --arn "$RUN_ARN" --output json)
-          RESULT=$(echo $RUN_DETAILS | jq -r '.run.result')
-          COUNTERS=$(echo $RUN_DETAILS | jq -r '.run.counters')
-          
-          echo ""
-          echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
-          echo "📊 FINAL TEST RESULTS"
-          echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
-          echo "Result: $RESULT"
-          echo ""
-          
-          # Get jobs (devices) and extract actual test names
-          echo "📱 Fetching detailed test results..."
-          JOBS=$(aws devicefarm list-jobs --arn "$RUN_ARN" --output json)
-          
-          echo ""
-          echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
-          echo "📋 YOUR TESTS (excluding Setup/Teardown)"
-          echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
-          echo ""
-          
+
+          # Collect all run ARNs
+          RUN_ARNS=("$RUN_ARN_1")
+          if [ "$RUN_COUNT" -ge 2 ] && [ -n "$RUN_ARN_2" ]; then
+            RUN_ARNS+=("$RUN_ARN_2")
+          fi
+
+          # Aggregate results across all runs
           DEVICE_COUNT=0
           USER_TEST_COUNT=0
           USER_PASSED=0
           USER_FAILED=0
           FAILED_TEST_DETAILS=()
-          
-          # Extract project ID and run ID from RUN_ARN for console links
-          # RUN_ARN format: arn:aws:devicefarm:us-west-2:ACCOUNT:run:PROJECT_ID/RUN_ID
-          PROJECT_ID=$(echo "$RUN_ARN" | sed -n 's/.*:run:\([^/]*\)\/.*/\1/p')
-          RUN_ID=$(echo "$RUN_ARN" | sed -n 's/.*:run:[^/]*\/\(.*\)/\1/p')
-          
-          # Process each device/job
-          for JOB_ARN in $(echo "$JOBS" | jq -r '.jobs[].arn'); do
-            DEVICE_COUNT=$((DEVICE_COUNT + 1))
-            JOB_DETAILS=$(aws devicefarm get-job --arn "$JOB_ARN" --output json)
-            DEVICE_NAME=$(echo "$JOB_DETAILS" | jq -r '.job.device.name // "Unknown Device"')
-            JOB_RESULT=$(echo "$JOB_DETAILS" | jq -r '.job.result // "UNKNOWN"')
-            JOB_ID=$(echo "$JOB_ARN" | sed -n 's/.*:job:[^/]*\/[^/]*\/\(.*\)/\1/p')
-            
-            # Build console link (no region param needed when region is in subdomain)
-            CONSOLE_LINK="https://us-west-2.console.aws.amazon.com/devicefarm/home#/mobile/projects/${PROJECT_ID}/runs/${RUN_ID}/jobs/${JOB_ID}"
-            
-            if [ "$JOB_RESULT" = "PASSED" ]; then
-              echo "   ✅ $DEVICE_NAME: PASSED"
-              USER_PASSED=$((USER_PASSED + 1))
+          ALL_RESULTS_PASSED=true
+          TOTAL_TOTAL=0
+          TOTAL_PASSED=0
+          TOTAL_FAILED=0
+          TOTAL_SKIPPED=0
+
+          echo ""
+          echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+          echo "📊 FINAL TEST RESULTS"
+          echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+          echo ""
+
+          RUN_INDEX=0
+          for RUN_ARN in "${RUN_ARNS[@]}"; do
+            RUN_INDEX=$((RUN_INDEX + 1))
+            RUN_DETAILS=$(aws devicefarm get-run --arn "$RUN_ARN" --output json)
+            RESULT=$(echo $RUN_DETAILS | jq -r '.run.result')
+            RUN_NAME_LABEL=$(echo $RUN_DETAILS | jq -r '.run.name')
+            COUNTERS=$(echo $RUN_DETAILS | jq -r '.run.counters')
+
+            if [[ "$RESULT" != "PASSED" && "$RESULT" != "SKIPPED" ]]; then ALL_RESULTS_PASSED=false; fi
+
+            TOTAL_TOTAL=$((TOTAL_TOTAL + $(echo $COUNTERS | jq -r '.total // 0')))
+            TOTAL_PASSED=$((TOTAL_PASSED + $(echo $COUNTERS | jq -r '.passed // 0')))
+            TOTAL_FAILED=$((TOTAL_FAILED + $(echo $COUNTERS | jq -r '.failed // 0')))
+            TOTAL_SKIPPED=$((TOTAL_SKIPPED + $(echo $COUNTERS | jq -r '.skipped // 0')))
+
+            PROJECT_ID=$(echo "$RUN_ARN" | sed -n 's/.*:run:\([^/]*\)\/.*/\1/p')
+            RUN_ID=$(echo "$RUN_ARN" | sed -n 's/.*:run:[^/]*\/\(.*\)/\1/p')
+
+            if [ "$RUN_COUNT" -ge 2 ]; then
+              echo "--- Run $RUN_INDEX: $RUN_NAME_LABEL (Result: $RESULT) ---"
             else
-              echo "   ❌ $DEVICE_NAME: $JOB_RESULT"
-              USER_FAILED=$((USER_FAILED + 1))
-              FAILED_TEST_DETAILS+=("❌ $DEVICE_NAME: $JOB_RESULT")
-              FAILED_TEST_DETAILS+=("   📎 View logs: $CONSOLE_LINK")
+              echo "Result: $RESULT"
             fi
-            
-            USER_TEST_COUNT=$((USER_TEST_COUNT + 1))
+
+            JOBS=$(aws devicefarm list-jobs --arn "$RUN_ARN" --output json)
+            for JOB_ARN in $(echo "$JOBS" | jq -r '.jobs[].arn'); do
+              DEVICE_COUNT=$((DEVICE_COUNT + 1))
+              JOB_DETAILS=$(aws devicefarm get-job --arn "$JOB_ARN" --output json)
+              DEVICE_NAME=$(echo "$JOB_DETAILS" | jq -r '.job.device.name // "Unknown Device"')
+              JOB_RESULT=$(echo "$JOB_DETAILS" | jq -r '.job.result // "UNKNOWN"')
+              JOB_ID=$(echo "$JOB_ARN" | sed -n 's/.*:job:[^/]*\/[^/]*\/\(.*\)/\1/p')
+              CONSOLE_LINK="https://us-west-2.console.aws.amazon.com/devicefarm/home#/mobile/projects/${PROJECT_ID}/runs/${RUN_ID}/jobs/${JOB_ID}"
+
+              if [ "$JOB_RESULT" = "PASSED" ]; then
+                echo "   ✅ $DEVICE_NAME: PASSED"
+                USER_PASSED=$((USER_PASSED + 1))
+              else
+                echo "   ❌ $DEVICE_NAME: $JOB_RESULT"
+                USER_FAILED=$((USER_FAILED + 1))
+                FAILED_TEST_DETAILS+=("❌ $DEVICE_NAME: $JOB_RESULT")
+                FAILED_TEST_DETAILS+=("   📎 View logs: $CONSOLE_LINK")
+              fi
+              USER_TEST_COUNT=$((USER_TEST_COUNT + 1))
+            done
+
+            echo "   🔗 Run link: https://us-west-2.console.aws.amazon.com/devicefarm/home#/mobile/projects/${PROJECT_ID}/runs/${RUN_ID}"
             echo ""
           done
-          
-          # Show AWS Device Farm console link for the entire run
-          echo ""
-          echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
-          echo "🔗 AWS DEVICE FARM LINKS"
-          echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
-          echo ""
-          echo "📊 Full Run Details:"
-          echo "   https://us-west-2.console.aws.amazon.com/devicefarm/home#/mobile/projects/${PROJECT_ID}/runs/${RUN_ID}"
-          echo ""
-          echo "💡 Tip: Click the link above, then select a device to view:"
-          echo "   • Video recording of the test"
-          echo "   • Screenshots"  
-          echo "   • Device logs"
-          echo "   • Test spec output (shows individual test results)"
-          echo ""
-          
+
           # Summary
           echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
           echo "📊 SUMMARY"
@@ -1246,20 +1313,7 @@ jobs:
           echo "  ✅ Passed: $USER_PASSED"
           echo "  ❌ Failed: $USER_FAILED"
           echo ""
-          echo "📋 What these tests verify:"
-          echo "   The E2E tests run on Device Farm check that your app:"
-          echo "   1. Shows 'INITIALIZED' after startup"
-          echo "   2. Runs all test functions from test/mobile/*.cjs"
-          echo "   3. Reports PASS/FAIL for each test function"
-          echo ""
-          echo "💡 If a test times out but the video shows PASS:"
-          echo "   → The app test passed, but E2E gave up waiting too early"
-          echo "   → Check timeout settings in qvac-test-addon-mobile"
-          echo ""
-          echo "Device Farm Counters (includes Setup/Teardown):"
-          echo "$COUNTERS" | jq '.'
-          echo ""
-          
+
           if [ ${#FAILED_TEST_DETAILS[@]} -gt 0 ]; then
             echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
             echo "❌ FAILED TESTS"
@@ -1269,47 +1323,162 @@ jobs:
             done
             echo ""
           fi
-          
-          # Save for PR comment
-          echo "test_result=$RESULT" >> $GITHUB_OUTPUT
-          echo "test_counters<<EOF" >> $GITHUB_OUTPUT
-          echo "$COUNTERS" >> $GITHUB_OUTPUT
-          echo "EOF" >> $GITHUB_OUTPUT
-          
-          # Extract test counts
-          TOTAL=$(echo $COUNTERS | jq -r '.total // 0')
-          PASSED=$(echo $COUNTERS | jq -r '.passed // 0')
-          FAILED=$(echo $COUNTERS | jq -r '.failed // 0')
-          SKIPPED=$(echo $COUNTERS | jq -r '.skipped // 0')
-          
-          echo "test_total=$TOTAL" >> $GITHUB_OUTPUT
-          echo "test_passed=$PASSED" >> $GITHUB_OUTPUT
-          echo "test_failed=$FAILED" >> $GITHUB_OUTPUT
-          echo "test_skipped=$SKIPPED" >> $GITHUB_OUTPUT
-          
-          # Also save user test counts
+
+          echo "Device Farm totals: $TOTAL_TOTAL | Passed: $TOTAL_PASSED | Failed: $TOTAL_FAILED | Skipped: $TOTAL_SKIPPED"
+          echo ""
+
+          # Save outputs
+          if [ $USER_FAILED -gt 0 ]; then
+            echo "test_result=FAILED" >> $GITHUB_OUTPUT
+          elif [ $USER_PASSED -gt 0 ]; then
+            echo "test_result=PASSED" >> $GITHUB_OUTPUT
+          else
+            echo "test_result=FAILED" >> $GITHUB_OUTPUT
+          fi
+          echo "test_total=$TOTAL_TOTAL" >> $GITHUB_OUTPUT
+          echo "test_passed=$TOTAL_PASSED" >> $GITHUB_OUTPUT
+          echo "test_failed=$TOTAL_FAILED" >> $GITHUB_OUTPUT
+          echo "test_skipped=$TOTAL_SKIPPED" >> $GITHUB_OUTPUT
           echo "user_test_count=$USER_TEST_COUNT" >> $GITHUB_OUTPUT
           echo "user_test_passed=$USER_PASSED" >> $GITHUB_OUTPUT
           echo "user_test_failed=$USER_FAILED" >> $GITHUB_OUTPUT
-          
-          # Determine if tests passed or failed
-          # Red status (exit 1) if:
-          #   1. Device Farm overall result is not PASSED, OR
-          #   2. Any of your tests failed
-          # Green status (exit 0) only if all tests passed
-          
-          if [[ "$RESULT" != "PASSED" ]] || [ $USER_FAILED -gt 0 ]; then
+
+          if [ $USER_FAILED -gt 0 ]; then
             echo ""
             echo "❌ Device Farm tests failed"
-            if [[ "$RESULT" != "PASSED" ]]; then
-              echo "   Device Farm result: $RESULT"
-            fi
-            echo "   Your tests: $USER_PASSED passed, $USER_FAILED failed (out of $USER_TEST_COUNT total)"
-            echo "   Device Farm total: $TOTAL | Passed: $PASSED | Failed: $FAILED | Skipped: $SKIPPED"
+            echo "   Devices: $USER_PASSED passed, $USER_FAILED failed (out of $USER_TEST_COUNT)"
+            echo "   Totals: $TOTAL_TOTAL | Passed: $TOTAL_PASSED | Failed: $TOTAL_FAILED | Skipped: $TOTAL_SKIPPED"
+            exit 1
+          elif [ $USER_PASSED -eq 0 ] && [[ "$ALL_RESULTS_PASSED" != "true" ]]; then
+            echo ""
+            echo "❌ No devices ran tests (all runs skipped or errored)"
             exit 1
           fi
-          
+
           echo ""
-          echo "✅ All Device Farm tests passed!"
-          echo "   Your tests: $USER_PASSED passed (out of $USER_TEST_COUNT total)"
-          echo "   Device Farm total: $TOTAL | Passed: $PASSED | Failed: $FAILED | Skipped: $SKIPPED"
+          echo "✅ Device Farm tests passed!"
+          echo "   Devices: $USER_PASSED passed (out of $USER_TEST_COUNT)"
+          if [ "$TOTAL_SKIPPED" -gt 0 ]; then
+            echo "   ⚠️  $TOTAL_SKIPPED test(s) skipped (device unavailable)"
+          fi
+          echo "   Totals: $TOTAL_TOTAL | Passed: $TOTAL_PASSED | Failed: $TOTAL_FAILED | Skipped: $TOTAL_SKIPPED"
+
+      - name: Download Device Farm Logs
+        if: always() && steps.schedule_run.outputs.run_arn_1
+        run: |
+          RUN_ARN_1="${{ steps.schedule_run.outputs.run_arn_1 }}"
+          RUN_ARN_2="${{ steps.schedule_run.outputs.run_arn_2 }}"
+          RUN_COUNT="${{ steps.schedule_run.outputs.run_count }}"
+          LOG_DIR="devicefarm-logs/${{ matrix.platform }}"
+          mkdir -p "$LOG_DIR"
+
+          echo ""
+          echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+          echo "📥 DOWNLOADING DEVICE FARM LOGS"
+          echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+          echo ""
+
+          RUN_ARNS=("$RUN_ARN_1")
+          if [ "$RUN_COUNT" -ge 2 ] && [ -n "$RUN_ARN_2" ]; then
+            RUN_ARNS+=("$RUN_ARN_2")
+          fi
+
+          for RUN_ARN in "${RUN_ARNS[@]}"; do
+            RUN_DETAILS=$(aws devicefarm get-run --arn "$RUN_ARN" --output json 2>/dev/null || echo '{}')
+            RUN_LABEL=$(echo "$RUN_DETAILS" | jq -r '.run.name // "unknown"')
+            echo ""
+            echo "========================================"
+            echo "📦 Run: $RUN_LABEL"
+            echo "========================================"
+
+            SAFE_RUN=$(echo "$RUN_LABEL" | tr ' /' '__' | tr -cd '[:alnum:]_-')
+            JOBS=$(aws devicefarm list-jobs --arn "$RUN_ARN" --output json 2>/dev/null || echo '{"jobs":[]}')
+
+            for JOB_ARN in $(echo "$JOBS" | jq -r '.jobs[].arn'); do
+              DEVICE_NAME=$(echo "$JOBS" | jq -r --arg arn "$JOB_ARN" '.jobs[] | select(.arn == $arn) | .device.name // "unknown"')
+              JOB_RESULT=$(echo "$JOBS" | jq -r --arg arn "$JOB_ARN" '.jobs[] | select(.arn == $arn) | .result // "UNKNOWN"')
+              SAFE_NAME=$(echo "$DEVICE_NAME" | tr ' /' '__' | tr -cd '[:alnum:]_-')
+
+              echo ""
+              echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+              echo "📱 $DEVICE_NAME ($JOB_RESULT)"
+              echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+
+              SUITES=$(aws devicefarm list-suites --arn "$JOB_ARN" --output json 2>/dev/null || echo '{"suites":[]}')
+
+              for SUITE_ARN in $(echo "$SUITES" | jq -r '.suites[].arn'); do
+                SUITE_NAME=$(echo "$SUITES" | jq -r --arg arn "$SUITE_ARN" '.suites[] | select(.arn == $arn) | .name // "unknown"')
+                SAFE_SUITE=$(echo "$SUITE_NAME" | tr ' /' '__' | tr -cd '[:alnum:]_-')
+
+                ARTIFACTS=$(aws devicefarm list-artifacts --arn "$SUITE_ARN" --type FILE --output json 2>/dev/null || echo '{"artifacts":[]}')
+
+                echo "$ARTIFACTS" | jq -c '.artifacts[]' 2>/dev/null | while read -r ARTIFACT; do
+                  ART_NAME=$(echo "$ARTIFACT" | jq -r '.name // "unknown"')
+                  ART_URL=$(echo "$ARTIFACT" | jq -r '.url // empty')
+                  ART_EXT=$(echo "$ARTIFACT" | jq -r '.extension // "txt"')
+                  [ -z "$ART_URL" ] && continue
+
+                  SAFE_ART=$(echo "$ART_NAME" | tr ' /' '__' | tr -cd '[:alnum:]_-')
+                  DEST="$LOG_DIR/${SAFE_RUN}_${SAFE_NAME}_${SAFE_SUITE}_${SAFE_ART}.${ART_EXT}"
+
+                  if curl -fsSL -o "$DEST" "$ART_URL" 2>/dev/null; then
+                    echo "  Downloaded: $SUITE_NAME / $ART_NAME"
+
+                    if echo "$ART_NAME" | grep -qiE "test.spec|testspec"; then
+                      echo ""
+                      echo "::group::📋 [$DEVICE_NAME] $SUITE_NAME -- $ART_NAME"
+                      cat "$DEST" 2>/dev/null || true
+                      echo "::endgroup::"
+                    fi
+                  fi
+                done
+
+                LOG_ARTIFACTS=$(aws devicefarm list-artifacts --arn "$SUITE_ARN" --type LOG --output json 2>/dev/null || echo '{"artifacts":[]}')
+
+                echo "$LOG_ARTIFACTS" | jq -c '.artifacts[]' 2>/dev/null | while read -r ARTIFACT; do
+                  ART_NAME=$(echo "$ARTIFACT" | jq -r '.name // "unknown"')
+                  ART_URL=$(echo "$ARTIFACT" | jq -r '.url // empty')
+                  ART_EXT=$(echo "$ARTIFACT" | jq -r '.extension // "txt"')
+                  [ -z "$ART_URL" ] && continue
+
+                  SAFE_ART=$(echo "$ART_NAME" | tr ' /' '__' | tr -cd '[:alnum:]_-')
+                  DEST="$LOG_DIR/${SAFE_RUN}_${SAFE_NAME}_${SAFE_SUITE}_${SAFE_ART}.${ART_EXT}"
+
+                  if curl -fsSL -o "$DEST" "$ART_URL" 2>/dev/null; then
+                    echo "  Downloaded: $SUITE_NAME / $ART_NAME (LOG)"
+                  fi
+                done
+              done
+
+              JOB_ARTIFACTS=$(aws devicefarm list-artifacts --arn "$JOB_ARN" --type FILE --output json 2>/dev/null || echo '{"artifacts":[]}')
+              echo "$JOB_ARTIFACTS" | jq -c '.artifacts[]' 2>/dev/null | while read -r ARTIFACT; do
+                ART_NAME=$(echo "$ARTIFACT" | jq -r '.name // "unknown"')
+                ART_URL=$(echo "$ARTIFACT" | jq -r '.url // empty')
+                ART_EXT=$(echo "$ARTIFACT" | jq -r '.extension // "txt"')
+                [ -z "$ART_URL" ] && continue
+
+                SAFE_ART=$(echo "$ART_NAME" | tr ' /' '__' | tr -cd '[:alnum:]_-')
+                DEST="$LOG_DIR/${SAFE_RUN}_${SAFE_NAME}_job_${SAFE_ART}.${ART_EXT}"
+
+                if curl -fsSL -o "$DEST" "$ART_URL" 2>/dev/null; then
+                  echo "  Downloaded (job-level): $ART_NAME"
+                fi
+              done
+            done
+          done
+
+          echo ""
+          echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+          echo "📦 All downloaded logs:"
+          echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+          find "$LOG_DIR" -type f -exec ls -lh {} \; 2>/dev/null || echo "  (no logs downloaded)"
+
+      - name: Upload Device Farm Logs
+        if: always() && steps.schedule_run.outputs.run_arn_1
+        uses: actions/upload-artifact@v4
+        with:
+          name: devicefarm-logs-${{ matrix.platform }}
+          path: devicefarm-logs/
+          retention-days: 30
+          if-no-files-found: ignore
+
