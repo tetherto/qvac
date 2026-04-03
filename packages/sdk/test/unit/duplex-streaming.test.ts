@@ -7,11 +7,11 @@ import {
   pluginHandlerDefinitionRuntimeSchema,
 } from "@/schemas/plugin";
 import {
+  transcribeRequestSchema,
   transcribeStreamRequestSchema,
   transcribeStreamResponseSchema,
   type TranscribeStreamResponse,
   type TranscribeStreamSession,
-  type TranscribeStreamClientParams,
 } from "@/schemas/transcription";
 import { createErrorResponse } from "@/schemas/error";
 
@@ -461,15 +461,38 @@ test("duplex integration: line-delimited parser handles chunked delivery across 
 });
 
 // =============================================================================
-// Backwards-compatible overload — type discriminates on audioChunk
+// Backwards-compatible overload — schema validation for both paths
 // =============================================================================
 
-test("overload discrimination: audioChunk presence distinguishes batch from duplex params", (t: BrittleT) => {
-  const withAudio = { modelId: "m", audioChunk: "file.wav" };
-  const duplexParams: TranscribeStreamClientParams = { modelId: "m" };
+test("transcribeRequestSchema requires audioChunk (batch overload path)", (t: BrittleT) => {
+  const valid = transcribeRequestSchema.safeParse({
+    type: "transcribe",
+    modelId: "test-model",
+    audioChunk: { type: "filePath", value: "/tmp/audio.wav" },
+  });
+  t.ok(valid.success, "batch request with audioChunk is valid");
 
-  t.ok("audioChunk" in withAudio, "batch params have audioChunk");
-  t.ok(!("audioChunk" in duplexParams), "duplex params have no audioChunk");
+  const missing = transcribeRequestSchema.safeParse({
+    type: "transcribe",
+    modelId: "test-model",
+  });
+  t.ok(!missing.success, "batch request without audioChunk is rejected");
+});
+
+test("transcribeStreamRequestSchema does not include audioChunk (duplex overload path)", (t: BrittleT) => {
+  const valid = transcribeStreamRequestSchema.safeParse({
+    type: "transcribeStream",
+    modelId: "test-model",
+  });
+  t.ok(valid.success, "duplex request without audioChunk is valid");
+
+  const withExtra = transcribeStreamRequestSchema.safeParse({
+    type: "transcribeStream",
+    modelId: "test-model",
+    audioChunk: { type: "filePath", value: "/tmp/audio.wav" },
+  });
+  t.ok(withExtra.success, "extra fields are stripped by zod");
+  t.ok(!("audioChunk" in (withExtra.data ?? {})), "audioChunk absent from parsed output");
 });
 
 test("duplex integration: empty/done-only handler produces no text segments", async (t: BrittleT) => {
