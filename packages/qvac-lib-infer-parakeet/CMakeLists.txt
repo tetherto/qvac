@@ -235,11 +235,21 @@ if(BUILD_TESTING)
         ${QVAC_LIB_INFERENCE_ADDON_CPP_INCLUDE_DIRS}
     )
 
+    if(TARGET qvac-onnx::qvac-onnx-static)
+      set(QVAC_TEST_ORT_TARGET qvac-onnx::qvac-onnx-static)
+    elseif(DEFINED qvac_onnx_target)
+      set(QVAC_TEST_ORT_TARGET ${qvac_onnx_target}_module)
+    else()
+      set(QVAC_TEST_ORT_TARGET qvac-onnx::headers)
+    endif()
+
     target_link_libraries(parakeet_tests
       PRIVATE
         GTest::gmock_main
         qvac-onnx::headers
+        ${QVAC_TEST_ORT_TARGET}
         nlohmann_json::nlohmann_json
+        Eigen3::Eigen
     )
 
     if(ENABLE_COVERAGE)
