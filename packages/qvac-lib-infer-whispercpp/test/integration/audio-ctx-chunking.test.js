@@ -29,7 +29,7 @@ async function transcribeChunk (model, audioStream, offsetMs, durationMs, audioC
   return results
 }
 
-const { modelsDir, modelPath } = getTestPaths()
+const { modelPath } = getTestPaths()
 
 // Skip on mobile - requires 10min audio file (~19MB) which is too large to bundle
 test('Audio context chunking - 10 minute audio file with 30s chunks', { skip: isMobile }, async (t) => {

@@ -18,7 +18,7 @@ binding.setLogger((priority, message) => {
 
 async function main () {
   const args = process.argv.slice(2)
-  const [, modelPathArg, vadModelPathArg, audioPathArg] = args
+  const [,, vadModelPathArg, audioPathArg] = args
 
   const modelsDir = path.join(__dirname, '..', 'models')
   const audioFilePath = audioPathArg || path.join(__dirname, 'samples', 'sample.raw')
