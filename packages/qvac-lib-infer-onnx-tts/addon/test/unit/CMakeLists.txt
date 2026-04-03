@@ -40,7 +40,7 @@ endif()
 target_link_libraries(
   qvac-lib-inference-tts-unit-test
   PRIVATE
-    onnxruntime::onnxruntime
+    qvac-onnx::headers
     tokenizers::tokenizers_cpp
     ${QVAC_UTF8PROC_TARGET}
     GTest::gtest
