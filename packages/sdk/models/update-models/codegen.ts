@@ -85,7 +85,7 @@ export type RegistryItem = {
   blobBlockLength: number;
   blobByteOffset: number;
   modelId: string;
-  addon: "llm" | "whisper" | "embeddings" | "nmt" | "vad" | "tts" | "ocr" | "parakeet" | "other";
+  addon: "llm" | "whisper" | "embeddings" | "nmt" | "vad" | "tts" | "ocr" | "parakeet" | "diffusion" | "other";
   expectedSize: number;
   sha256Checksum: string;
   engine: string;
@@ -114,7 +114,7 @@ export type ModelConstant = {
   modelId: string;
   expectedSize: number;
   sha256Checksum: string;
-  addon: "llm" | "whisper" | "embeddings" | "nmt" | "vad" | "tts" | "ocr" | "parakeet" | "other";
+  addon: "llm" | "whisper" | "embeddings" | "nmt" | "vad" | "tts" | "ocr" | "parakeet" | "diffusion" | "other";
   engine: string;
   quantization: string;
   params: string;
