@@ -160,7 +160,7 @@ jobs:
         uses: tetherto/qvac-devops/.github/actions/publish-library-to-gpr@v1.1.7
         with:
           secret-token: ${{ secrets.GITHUB_TOKEN }}
-          tag: ${{ needs.publish-logic.outputs.gpr_tag }}
+          tag: ${{ inputs.tag || needs.publish-logic.outputs.gpr_tag }}
           workdir: packages/qvac-lib-infer-parakeet
           name-suffix: "-mono"
 
