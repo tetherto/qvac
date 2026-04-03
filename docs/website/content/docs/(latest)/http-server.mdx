@@ -109,9 +109,13 @@ Models are declared in `qvac.config.*` under the `serve.models` key. The server 
 ```
 
 - **`model`**: SDK model constant name (e.g., `QWEN3_600M_INST_Q4`). The server resolves it to a download source and addon type automatically.
-- **`default`**: when `true`, this model is used when a request doesn't specify a `model` field, or when a tool picks the default for an endpoint category.
-- **`preload`**: when `true`, the model is loaded into memory on server startup. When `false`, it is loaded on first request (cold start).
+- **`default`**: when `true`, marks this model as the default for its endpoint category. This does not make the server auto-select the model for requests that omit `model`.
+- **`preload`**: when `true`, the model is loaded into memory on server startup. When `false`, it is loaded on first request (cold start). Defaults to `true` for constant model entries.
 - **`config`**: model config overrides passed to the underlying addon. Same options as [`modelConfig` in `loadModel()`](/sdk/api/loadModel/#modelconfig-varies-by-model-type).
+
+<Callout type="warn">
+`default` field **does not** act as a fallback when an API request omits `model`. Requests must still include a `model` field; otherwise, the server returns `400`.
+</Callout>
 
 ## CLI
 
