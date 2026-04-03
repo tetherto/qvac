@@ -37,10 +37,19 @@ else()
   message(FATAL_ERROR "utf8proc CMake target missing (expected from unofficial-utf8proc)")
 endif()
 
+if(TARGET qvac-onnx::qvac-onnx-static)
+  set(QVAC_TTS_TEST_ORT_TARGET qvac-onnx::qvac-onnx-static)
+elseif(DEFINED qvac_onnx_target)
+  set(QVAC_TTS_TEST_ORT_TARGET ${qvac_onnx_target}_module)
+else()
+  set(QVAC_TTS_TEST_ORT_TARGET qvac-onnx::headers)
+endif()
+
 target_link_libraries(
   qvac-lib-inference-tts-unit-test
   PRIVATE
     qvac-onnx::headers
+    ${QVAC_TTS_TEST_ORT_TARGET}
     tokenizers::tokenizers_cpp
     ${QVAC_UTF8PROC_TARGET}
     GTest::gtest
