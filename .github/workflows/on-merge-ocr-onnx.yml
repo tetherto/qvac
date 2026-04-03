@@ -142,7 +142,8 @@ jobs:
 
   publish-release-npm:
     needs: [publish-logic, release-merge-guard]
-    if: >-
+    if: |
+      !cancelled() &&
       needs.publish-logic.outputs.publish_release == 'true' &&
       (needs.release-merge-guard.result == 'success' || needs.release-merge-guard.result == 'skipped')
     permissions:
@@ -172,7 +173,7 @@ jobs:
     name: Prebuild Gate
     runs-on: ubuntu-latest
     needs: [publish-release-npm, publish-main-gpr, publish-tmp-gpr, publish-feature-gpr]
-    if: always()
+    if: "!cancelled()"
     outputs:
       should_run_tests: ${{ steps.gate.outputs.should_run_tests }}
     steps:
