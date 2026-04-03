@@ -1,5 +1,16 @@
 # Changelog
 
+## [0.14.0] - 2026-04-03
+
+### Changed
+
+- Updated qvac-fabric dependency from 7248.2.1 to 7248.2.3, which fixes OpenCL kernel cache support on Android.
+- Removed qvac-fabric overlay port; now resolved from the vcpkg registry.
+
+### Added
+
+- `openclCacheDir` option in `GGMLConfig` (`index.d.ts`): writable directory for OpenCL kernel binary cache, required on Android for fast GPU startup.
+
 ## [0.13.1] - 2026-04-02
 
 ### Changed
