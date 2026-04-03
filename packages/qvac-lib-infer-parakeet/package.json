@@ -85,7 +85,7 @@
     "@qvac/error": "^0.1.0",
     "@qvac/infer-base": "^0.2.0",
     "@qvac/logging": "^0.1.0",
-    "@qvac/onnx": "npm:@tetherto/onnx-mono@0.14.0-tmp.runid-23940733443",
+    "@qvac/onnx": "^0.14.0",
     "bare-fs": "^4.5.1",
     "bare-path": "^3.0.0",
     "path": "npm:bare-path",
