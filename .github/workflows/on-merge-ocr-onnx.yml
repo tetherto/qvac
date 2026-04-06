@@ -191,6 +191,7 @@ jobs:
         id: publish
         uses: tetherto/qvac-devops/.github/actions/publish-library-to-npm-oidc@v1.1.8
         with:
+          secret-token: ${{ secrets.NPM_TOKEN }}
           tag: "latest"
           workdir: ${{ env.PKG_DIR }}
           repo_name: "onnx-ocr"
