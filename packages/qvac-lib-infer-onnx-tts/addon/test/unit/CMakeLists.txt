@@ -37,10 +37,19 @@ else()
   message(FATAL_ERROR "utf8proc CMake target missing (expected from unofficial-utf8proc)")
 endif()
 
+if(TARGET qvac-onnx::qvac-onnx-static)
+  set(QVAC_TTS_TEST_ORT_TARGET qvac-onnx::qvac-onnx-static)
+elseif(DEFINED qvac_onnx_target)
+  set(QVAC_TTS_TEST_ORT_TARGET ${qvac_onnx_target}_module)
+else()
+  set(QVAC_TTS_TEST_ORT_TARGET qvac-onnx::headers)
+endif()
+
 target_link_libraries(
   qvac-lib-inference-tts-unit-test
   PRIVATE
-    onnxruntime::onnxruntime
+    qvac-onnx::headers
+    ${QVAC_TTS_TEST_ORT_TARGET}
     tokenizers::tokenizers_cpp
     ${QVAC_UTF8PROC_TARGET}
     GTest::gtest
@@ -55,6 +64,13 @@ if(WIN32)
     PRIVATE
       msvcrt.lib
   )
+endif()
+
+bare_platform(_TTS_TEST_PLATFORM)
+bare_arch(_TTS_TEST_ARCH)
+set(_tts_onnx_prebuilds "${CMAKE_SOURCE_DIR}/node_modules/@qvac/onnx/prebuilds/${_TTS_TEST_PLATFORM}-${_TTS_TEST_ARCH}")
+if(EXISTS "${_tts_onnx_prebuilds}/qvac__onnx.bare" AND NOT EXISTS "${_tts_onnx_prebuilds}/qvac__onnx@0.bare")
+  file(CREATE_LINK "${_tts_onnx_prebuilds}/qvac__onnx.bare" "${_tts_onnx_prebuilds}/qvac__onnx@0.bare" COPY_ON_ERROR)
 endif()
 
 if(ENABLE_COVERAGE)
