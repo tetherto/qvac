@@ -5,16 +5,13 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-## [0.2.6]
+## [0.2.7]
 
 ### Changed
-- Switched ONNX Runtime linkage from direct vcpkg dependency to `@qvac/onnx` shared module, aligning with the OCR package pattern for consistent cross-addon runtime sharing
-- Bumped `qvac-lib-inference-addon-cpp` to `1.1.3`.
+- Bumped `qvac-lib-inference-addon-cpp` to `1.1.5`.
 - Removed the stale-cancel suppression workaround from `parakeet.js` now that addon-cpp delivers native job IDs through the shared callback path.
 - Simplified the cancel/reuse integration flow to expect the shared runtime fix directly instead of retrying around late cancel delivery.
 - Realigned wrapper-side job numbering whenever `load()` or `reload()` recreates the native instance so JS response completion stays aligned with addon-cpp's per-instance native job IDs.
-- Aligned addon linking with the current ONNX Runtime exported target set so Android and iOS prebuilds use `onnxruntime::onnxruntime` instead of the missing `onnxruntime::onnxruntime_static` target.
-- Bumped `qvac-lib-inference-addon-cpp` to `1.1.5`.
 - Updated the Parakeet private vcpkg registry baseline to the published `1.1.5` port.
 
 ### Added
@@ -26,6 +23,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Picked up the `addon-cpp` `1.1.5` `JobRunner::finalizeJob()` ordering fix so cancel/finalize paths cannot leave processing sync active under lock contention.
 - Prevented stale response handles from cancelling a newer active transcription by checking wrapper-owned job IDs before forwarding `cancel()` to the native addon.
 - Restored reload behavior so recreating the native instance clears native state without resetting JS-owned response numbering.
+
+## [0.2.6]
+
+### Changed
+- Switched ONNX Runtime linkage from direct vcpkg dependency to `@qvac/onnx` shared module, aligning with the OCR package pattern for consistent cross-addon runtime sharing
+
 ## [0.2.5]
 
 ### Changed
