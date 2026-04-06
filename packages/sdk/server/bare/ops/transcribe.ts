@@ -1,4 +1,5 @@
 import {
+  type AnyModel,
   getModel,
   getModelConfig,
   getModelEntry,
@@ -12,11 +13,25 @@ import {
 } from "@/schemas";
 import { createAudioStream } from "@/server/bare/utils/audio-input";
 import { getServerLogger } from "@/logging";
+import { TranscriptionFailedError } from "@/utils/errors-server";
 import type { TranscribeResponse } from "@/server/bare/types/addon-responses";
 import { nowMs } from "@/profiling";
 import { buildStreamResult } from "@/profiling/model-execution";
 
 const logger = getServerLogger();
+
+interface StreamingModelResponse {
+  iterate(): AsyncIterable<{ text: string }[]>;
+  await(): Promise<{ text: string }[]>;
+}
+
+interface StreamableModel {
+  runStreaming(audioStream: AsyncIterable<Buffer>): Promise<StreamingModelResponse>;
+}
+
+function hasRunStreaming(model: AnyModel): model is AnyModel & StreamableModel {
+  return "runStreaming" in model && typeof model.runStreaming === "function";
+}
 
 const SILENCE_MARKERS: Record<string, string> = {
   [ModelType.whispercppTranscription]: "[BLANK_AUDIO]",
@@ -133,3 +148,43 @@ export async function* transcribe(
 
   return buildStreamResult(modelExecutionMs, stats);
 }
+
+export async function* transcribeStream(
+  modelId: string,
+  audioInputStream: AsyncIterable<Buffer>,
+  prompt?: string,
+): AsyncGenerator<string, void, void> {
+  const engineType = getEngineModelType(modelId);
+  const silenceMarker = SILENCE_MARKERS[engineType] ?? "";
+
+  const originalConfig = await applyPrompt(modelId, prompt, engineType);
+
+  try {
+    const model = getModel(modelId);
+
+    if (!hasRunStreaming(model)) {
+      throw new TranscriptionFailedError(
+        `Model ${modelId} does not support streaming transcription`,
+      );
+    }
+
+    const response = await model.runStreaming(audioInputStream);
+
+    for await (const segments of response.iterate()) {
+      logger.debug("Live Transcription Update:", segments);
+
+      for (const segment of segments) {
+        if (!segment.text) continue;
+        if (silenceMarker && segment.text.includes(silenceMarker)) continue;
+        if (segment.text.trim()) {
+          yield segment.text;
+        }
+      }
+    }
+  } finally {
+    if (originalConfig) {
+      await restorePrompt(modelId, originalConfig);
+    }
+  }
+}
+
