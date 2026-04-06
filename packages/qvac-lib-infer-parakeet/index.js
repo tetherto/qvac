@@ -2,6 +2,7 @@
 
 const fs = require('bare-fs')
 const BaseInference = require('@qvac/infer-base/WeightsProvider/BaseInference')
+const { createJobHandler } = require('@qvac/infer-base')
 
 const { ParakeetInterface } = require('./parakeet')
 const { QvacErrorAddonParakeet, ERR_CODES, END_OF_INPUT } = require('./lib/error')
@@ -112,7 +113,7 @@ class TranscriptionParakeet extends BaseInference {
     }
 
     this.params = config.parakeetConfig || {}
-    this._hasActiveResponse = false
+    this._job = createJobHandler({ cancel: () => this.addon?.cancel() })
 
     this.logger.debug('TranscriptionParakeet constructor called', {
       params: this.params,
@@ -219,28 +220,18 @@ class TranscriptionParakeet extends BaseInference {
    * @returns {Promise<QvacResponse>} - Response object for tracking the transcription job
    */
   async _runInternal (audioStream) {
-    if (this.exclusiveRun && this._hasActiveResponse) {
+    if (this.exclusiveRun && this._job.active !== null) {
       throw new QvacErrorAddonParakeet({
         code: ERR_CODES.JOB_ALREADY_RUNNING
       })
     }
 
-    const jobId = await this.addon.append({
-      type: 'audio',
-      data: new Float32Array(0).buffer
+    const response = this._job.start()
+
+    this._handleAudioStream(this._normalizeAudioStream(audioStream)).catch((error) => {
+      this._job.fail(error)
     })
 
-    const response = this._createResponse(jobId)
-    this._hasActiveResponse = true
-    const finalized = response.await().finally(() => { this._hasActiveResponse = false })
-    finalized.catch(() => {})
-    response.await = () => finalized
-
-    const normalizedAudioStream = this._normalizeAudioStream(audioStream)
-    this._handleAudioStream(normalizedAudioStream).catch((error) => {
-      response.failed(error)
-      this._deleteJobMapping(jobId)
-    })
     return response
   }
 
@@ -300,6 +291,16 @@ class TranscriptionParakeet extends BaseInference {
     throw new Error('Unsupported audio input. Expected stream, TypedArray, or chunk array.')
   }
 
+  _outputCallback (addon, event, jobId, data, error) {
+    if (event === 'Error') {
+      this._job.fail(error instanceof Error ? error : new Error(String(error)))
+    } else if (event === 'Output') {
+      this._job.output(data)
+    } else if (event === 'JobEnded') {
+      this._job.end(data)
+    }
+  }
+
   /**
    * Reload the model with new configuration parameters.
    * Useful for changing settings without destroying the instance.
@@ -317,7 +318,7 @@ class TranscriptionParakeet extends BaseInference {
       const configurationParams = this._buildConfigurationParams()
 
       await this.cancel()
-      this._failAndClearActiveResponse('Model was reloaded')
+      this._job.fail(new Error('Model was reloaded'))
       await this.addon.reload(configurationParams)
       await this.addon.activate()
 
@@ -352,7 +353,7 @@ class TranscriptionParakeet extends BaseInference {
   async unload () {
     return await this._withExclusiveRun(async () => {
       await this.cancel()
-      this._failAndClearActiveResponse('Model was unloaded')
+      this._job.fail(new Error('Model was unloaded'))
       if (this.addon) {
         await this.addon.destroyInstance()
       }
@@ -370,7 +371,7 @@ class TranscriptionParakeet extends BaseInference {
   async destroy () {
     return await this._withExclusiveRun(async () => {
       await this.cancel()
-      this._failAndClearActiveResponse('Model was destroyed')
+      this._job.fail(new Error('Model was destroyed'))
       if (this.addon) {
         await this.addon.destroyInstance()
       }
@@ -378,14 +379,6 @@ class TranscriptionParakeet extends BaseInference {
       this.state.weightsLoaded = false
       this.state.destroyed = true
     })
-  }
-
-  _failAndClearActiveResponse (reason) {
-    for (const [jobId, response] of this._jobToResponse.entries()) {
-      response.failed(new Error(reason))
-      this._deleteJobMapping(jobId)
-    }
-    this._hasActiveResponse = false
   }
 }
 
