@@ -1,5 +1,17 @@
 # Changelog
 
+## [1.1.4] - 2026-03-30
+
+### Breaking
+- Reverted native job IDs from 1.1.3 — `cancel(jobId)` overload and `jobId` field on queued events removed.
+
+### Fixed
+- Cancel race condition: `cancel()` was a no-op once the worker dequeued the job, so the model kept running and the next request appeared stuck.
+- `cancel()` now correctly handles both queued and actively-processing jobs without deadlock or stale stop flags.
+
+### Added
+- Regression test for cancel during active processing.
+
 ## [1.1.3] - 2026-03-18
 - Add native job IDs to queued addon events so JS callbacks can distinguish late cancel/error delivery from newer accepted jobs.
 - Extend JS callback delivery with a trailing native `jobId` argument while keeping existing 4-argument handlers compatible.

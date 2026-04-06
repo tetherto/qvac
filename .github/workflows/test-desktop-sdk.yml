@@ -43,7 +43,7 @@ on:
       MQTT_PASSWORD:
         required: true
       MQTT_CA_CERT:
-        required: true
+        required: false
       MQTT_CLIENT_CERT:
         required: false
       MQTT_CLIENT_KEY:
@@ -122,23 +122,27 @@ jobs:
           const certsDir = path.join(os.tmpdir(), 'mqtt-certs');
           fs.mkdirSync(certsDir, { recursive: true });
 
-          if (process.env.CA_CERT) {
+          const caCert = (process.env.CA_CERT || '').trim();
+          const clientCert = (process.env.CLIENT_CERT || '').trim();
+          const clientKey = (process.env.CLIENT_KEY || '').trim();
+
+          if (caCert) {
             const caPath = path.join(certsDir, 'ca.crt');
-            fs.writeFileSync(caPath, process.env.CA_CERT, 'utf8');
+            fs.writeFileSync(caPath, caCert, 'utf8');
             fs.appendFileSync(process.env.GITHUB_ENV, `MQTT_CA_PATH=${caPath}\n`, 'utf8');
             console.log('✅ CA certificate written');
           }
 
-          if (process.env.CLIENT_CERT) {
+          if (clientCert) {
             const certPath = path.join(certsDir, 'client.crt');
-            fs.writeFileSync(certPath, process.env.CLIENT_CERT, 'utf8');
+            fs.writeFileSync(certPath, clientCert, 'utf8');
             fs.appendFileSync(process.env.GITHUB_ENV, `MQTT_CERT_PATH=${certPath}\n`, 'utf8');
             console.log('✅ Client certificate written');
           }
 
-          if (process.env.CLIENT_KEY) {
+          if (clientKey) {
             const keyPath = path.join(certsDir, 'client.key');
-            fs.writeFileSync(keyPath, process.env.CLIENT_KEY, 'utf8');
+            fs.writeFileSync(keyPath, clientKey, 'utf8');
             fs.appendFileSync(process.env.GITHUB_ENV, `MQTT_KEY_PATH=${keyPath}\n`, 'utf8');
             console.log('✅ Client key written');
           }

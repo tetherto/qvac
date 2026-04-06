@@ -1,30 +1,45 @@
 import { getModel } from "@/server/bare/registry/model-registry";
-import { type EmbedParams, embedParamsSchema } from "@/schemas";
+import { type EmbedParams, type EmbedStats, embedParamsSchema } from "@/schemas";
+import { buildUnaryResult } from "@/profiling/model-execution";
 import {
   EmbedNoEmbeddingsError,
   EmbedFailedError,
 } from "@/utils/errors-server";
+import { nowMs } from "@/profiling";
+import type { EmbedResponse } from "@/server/bare/types/addon-responses";
+
+export interface EmbedResult {
+  embedding: number[] | number[][];
+  stats?: EmbedStats;
+}
+
 
 // Overloaded functions for embedding
 export async function embed(params: {
   modelId: string;
   text: string;
-}): Promise<number[]>;
+}): Promise<EmbedResult>;
 export async function embed(params: {
   modelId: string;
   text: string[];
-}): Promise<number[][]>;
-export async function embed(
-  params: EmbedParams,
-): Promise<number[] | number[][]>;
+}): Promise<EmbedResult>;
+export async function embed(params: EmbedParams): Promise<EmbedResult>;
 
-export async function embed(
-  params: EmbedParams,
-): Promise<number[] | number[][]> {
+export async function embed(params: EmbedParams): Promise<EmbedResult> {
   const { modelId, text } = embedParamsSchema.parse(params);
   const model = getModel(modelId);
-  const response = await model.run(text);
-  const rawEmbeddings = (await response.await()) as unknown as Float32Array[][];
+
+  const modelStart = nowMs();
+  const response = (await model.run(text)) as unknown as EmbedResponse;
+  const rawEmbeddings = await response.await();
+  const modelExecutionMs = nowMs() - modelStart;
+
+  const stats: EmbedStats = {
+    ...(response.stats?.total_time_ms !== undefined && { totalTime: response.stats.total_time_ms }),
+    ...(response.stats?.tokens_per_second !== undefined && { tokensPerSecond: response.stats.tokens_per_second }),
+    ...(response.stats?.total_tokens !== undefined && { totalTokens: response.stats.total_tokens }),
+  };
+
   const embeddingsArray = rawEmbeddings[0];
 
   if (Array.isArray(text)) {
@@ -32,19 +47,20 @@ export async function embed(
       throw new EmbedNoEmbeddingsError();
     }
 
-    return embeddingsArray.map((embeddingVector) => {
+    const embedding = embeddingsArray.map((embeddingVector) => {
       if (!embeddingVector || embeddingVector.length === 0) {
         throw new EmbedNoEmbeddingsError();
       }
       return normalizeVector(embeddingVector);
     });
+    return buildUnaryResult({ embedding }, modelExecutionMs, stats) as EmbedResult;
   } else {
     const embeddingVector = embeddingsArray?.[0];
     if (!embeddingVector || embeddingVector.length === 0) {
       throw new EmbedNoEmbeddingsError();
     }
 
-    return normalizeVector(embeddingVector);
+    return buildUnaryResult({ embedding: normalizeVector(embeddingVector) }, modelExecutionMs, stats) as EmbedResult;
   }
 }
 

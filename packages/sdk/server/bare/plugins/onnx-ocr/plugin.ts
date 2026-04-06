@@ -19,6 +19,7 @@ import { parseModelPath } from "@/server/utils";
 import FilesystemDL from "@qvac/dl-filesystem";
 import { ONNXOcr } from "@qvac/ocr-onnx";
 import { ocr } from "@/server/bare/plugins/onnx-ocr/ops/ocr-stream";
+import { attachModelExecutionMs } from "@/profiling/model-execution";
 import { OCR_CRAFT_DETECTOR } from "@/models/registry";
 
 const OCR_DETECTOR_FILENAME = "detector_craft.onnx";
@@ -141,23 +142,32 @@ export const ocrPlugin = definePlugin({
       streaming: true,
 
       handler: async function* (request) {
-        for await (const result of ocr({
+        const stream = ocr({
           modelId: request.modelId,
           image: request.image,
           options: request.options,
-        })) {
-          yield {
-            type: "ocrStream" as const,
-            blocks: result.blocks,
-            ...(result.stats && { stats: result.stats }),
-          };
-        }
+        });
+        try {
+          let result = await stream.next();
 
-        yield {
-          type: "ocrStream" as const,
-          blocks: [],
-          done: true,
-        };
+          while (!result.done) {
+            yield {
+              type: "ocrStream" as const,
+              blocks: result.value.blocks,
+            };
+            result = await stream.next();
+          }
+
+          const { modelExecutionMs, stats } = result.value;
+          yield attachModelExecutionMs({
+            type: "ocrStream" as const,
+            blocks: [],
+            done: true,
+            ...(stats && { stats }),
+          }, modelExecutionMs);
+        } finally {
+          await stream.return?.(undefined as never);
+        }
       },
     }),
   },

@@ -10,6 +10,13 @@ const statuses = Object.freeze({
   PAUSED: 'paused'
 })
 
+const _deprecationWarned = {}
+function _warnDeprecated (method) {
+  if (_deprecationWarned[method]) return
+  _deprecationWarned[method] = true
+  console.warn(`@qvac/infer-base: QvacResponse.${method}() is deprecated and will be removed in a future version.`)
+}
+
 /**
  * QvacResponse provides an interface for handling asynchronous responses
  * with update notifications, error handling, pause/resume functionality, and more.
@@ -22,12 +29,12 @@ class QvacResponse extends EventEmitter {
    * Creates a new QvacResponse instance.
    * @param {Object} handlers - An object containing handler functions.
    * @param {Function} handlers.cancelHandler - A function that returns a Promise, called to cancel the response.
-   * @param {Function} handlers.pauseHandler - A function that returns a Promise, called to pause the response.
-   * @param {Function} handlers.continueHandler - A function that returns a Promise, called to continue the response.
+   * @param {Function} [handlers.pauseHandler] - @deprecated A function that returns a Promise, called to pause the response.
+   * @param {Function} [handlers.continueHandler] - @deprecated A function that returns a Promise, called to continue the response.
    * @param {number} [pollInterval=100] - Polling interval in milliseconds for the async iterator.
    */
   constructor (
-    { cancelHandler, pauseHandler, continueHandler },
+    { cancelHandler, pauseHandler, continueHandler } = {},
     pollInterval = 100
   ) {
     super()
@@ -98,21 +105,25 @@ class QvacResponse extends EventEmitter {
   }
 
   /**
+   * @deprecated Will be removed in a future version.
    * Registers a callback to be invoked when the response is paused.
    * @param {Function} callback - Function invoked when a pause event occurs.
    * @returns {QvacResponse} The current instance for chaining.
    */
   onPause (callback) {
+    _warnDeprecated('onPause')
     this.on('pause', callback)
     return this
   }
 
   /**
+   * @deprecated Will be removed in a future version.
    * Registers a callback to be invoked when the response continues from a paused state.
    * @param {Function} callback - Function invoked when a continue event occurs.
    * @returns {QvacResponse} The current instance for chaining.
    */
   onContinue (callback) {
+    _warnDeprecated('onContinue')
     this.on('continue', callback)
     return this
   }
@@ -209,11 +220,13 @@ class QvacResponse extends EventEmitter {
   }
 
   /**
+   * @deprecated Will be removed in a future version. The single-job addon model has no pause semantics.
    * Pauses the response by invoking the pause handler and emitting a 'pause' event.
    * @returns {Promise<void>}
    * @throws {Error} If the response is not in a running state.
    */
   async pause () {
+    _warnDeprecated('pause')
     if (this._status !== statuses.RUNNING) {
       throw new Error('ERR_NOT_RUNNING')
     }
@@ -224,11 +237,13 @@ class QvacResponse extends EventEmitter {
   }
 
   /**
+   * @deprecated Will be removed in a future version. The single-job addon model has no pause semantics.
    * Continues a paused response by invoking the continue handler and emitting a 'continue' event.
    * @returns {Promise<void>}
    * @throws {Error} If the response is not in a paused state.
    */
   async continue () {
+    _warnDeprecated('continue')
     if (this._status !== statuses.PAUSED) {
       throw new Error('ERR_NOT_PAUSED')
     }
@@ -239,10 +254,12 @@ class QvacResponse extends EventEmitter {
   }
 
   /**
+   * @deprecated Will be removed in a future version. Use response event listeners instead.
    * Returns the current status of the response.
    * @returns {string} The current status.
    */
   getStatus () {
+    _warnDeprecated('getStatus')
     return this._status
   }
 }

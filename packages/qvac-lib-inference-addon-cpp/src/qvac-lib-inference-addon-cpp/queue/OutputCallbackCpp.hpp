@@ -64,16 +64,16 @@ private:
   /**
    * @brief Process output events using handlers
    */
-  void processEvent(const QueuedOutputEvent& outputEvent) {
-    if (!outputEvent.payload.has_value()) {
+  void processEvent(const std::any& output) {
+    if (!output.has_value()) {
       // e.g. JobStarted events don't have data
       return;
     }
 
     try {
       out_handl::OutputHandlerInterface<void>& handler =
-          outputHandlers_.get(outputEvent.payload);
-      handler.handleOutput(outputEvent.payload);
+          outputHandlers_.get(output);
+      handler.handleOutput(output);
     } catch (const std::exception& e) {
       QLOG(
           logger::Priority::ERROR,
@@ -97,8 +97,7 @@ private:
       }
 
       while (outputQueue_ != nullptr && !shouldStop_.load()) {
-        std::vector<QueuedOutputEvent> outputQueue =
-            std::move(outputQueue_->clear());
+        std::vector<std::any> outputQueue = std::move(outputQueue_->clear());
         lock.unlock();
 
         for (size_t i = 0; !shouldStop_.load() && i < outputQueue.size(); i++) {
