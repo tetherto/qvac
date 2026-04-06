@@ -1,7 +1,7 @@
 'use strict'
 
 const fs = require('bare-fs')
-const BaseInference = require('@qvac/infer-base/WeightsProvider/BaseInference')
+const QvacLogger = require('@qvac/logging')
 const { createJobHandler } = require('@qvac/infer-base')
 
 const { ParakeetInterface } = require('./parakeet')
@@ -66,7 +66,7 @@ function getRequiredModelFiles (modelType) {
  * ONNX Runtime client implementation for the Parakeet speech-to-text model.
  * Supports NVIDIA Parakeet ASR models in ONNX format.
  */
-class TranscriptionParakeet extends BaseInference {
+class TranscriptionParakeet {
   /**
    * Creates an instance of TranscriptionParakeet.
    * @constructor
@@ -94,8 +94,11 @@ class TranscriptionParakeet extends BaseInference {
    * @param {Object} [opts.logger=null] - Optional structured logger
    * @param {boolean} [opts.exclusiveRun=true] - Whether to run exclusively
    */
-  constructor ({ files = {}, config = {}, logger = null, exclusiveRun = true, ...args }) {
-    super({ logger, exclusiveRun, ...args })
+  constructor ({ files = {}, config = {}, logger = null, exclusiveRun = true }) {
+    this.logger = new QvacLogger(logger)
+    this.exclusiveRun = !!exclusiveRun
+    this._runQueueWaiter = Promise.resolve()
+    this.state = { configLoaded: false, weightsLoaded: false, destroyed: false }
 
     this._config = {
       ...config,
@@ -199,6 +202,34 @@ class TranscriptionParakeet extends BaseInference {
     if (this._config.sortformerPath) configurationParams.sortformerPath = this._config.sortformerPath
 
     return configurationParams
+  }
+
+  async load () {
+    if (this.state.configLoaded || this.state.weightsLoaded) {
+      this.logger.info('Reload requested - unloading existing model first')
+      await this.unload()
+    }
+    await this._load()
+    this.state.configLoaded = true
+  }
+
+  async run (input) {
+    if (this.exclusiveRun) {
+      return await this._withExclusiveRun(() => this._runInternal(input))
+    }
+    return await this._runInternal(input)
+  }
+
+  async _withExclusiveRun (fn) {
+    const prev = this._runQueueWaiter || Promise.resolve()
+    let release
+    this._runQueueWaiter = new Promise(resolve => { release = resolve })
+    await prev
+    try {
+      return await fn()
+    } finally {
+      release()
+    }
   }
 
   /**
@@ -320,10 +351,6 @@ class TranscriptionParakeet extends BaseInference {
     })
   }
 
-  async _downloadWeights () {
-    return {}
-  }
-
   /**
    * Instantiate the native addon with the given parameters.
    * @param {Object} configurationParams - Configuration parameters for the addon
@@ -360,6 +387,18 @@ class TranscriptionParakeet extends BaseInference {
     if (this.addon?.cancel) {
       await this.addon.cancel()
     }
+  }
+
+  async status () {
+    return this.addon?.status()
+  }
+
+  async pause () {
+    await this.addon?.pause()
+  }
+
+  async unpause () {
+    await this.addon?.activate()
   }
 
   async destroy () {
