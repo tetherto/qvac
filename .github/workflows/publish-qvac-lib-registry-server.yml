@@ -270,7 +270,7 @@ jobs:
 
       - name: Publish to NPM Package Registry
         id: publish
-        uses: tetherto/qvac-devops/.github/actions/publish-library-to-npm@v1.1.7
+        uses: tetherto/qvac-devops/.github/actions/publish-library-to-npm-oidc@v1.1.8
         with:
           secret-token: ${{ secrets.NPM_TOKEN }}
           tag: "latest"
@@ -445,7 +445,7 @@ jobs:
 
       - name: Publish to NPM Package Registry
         id: publish
-        uses: tetherto/qvac-devops/.github/actions/publish-library-to-npm@v1.1.7
+        uses: tetherto/qvac-devops/.github/actions/publish-library-to-npm-oidc@v1.1.8
         with:
           secret-token: ${{ secrets.NPM_TOKEN }}
           tag: "latest"
