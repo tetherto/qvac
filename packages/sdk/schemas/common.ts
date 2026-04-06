@@ -19,6 +19,8 @@ import {
   unloadModelResponseSchema,
 } from "./unload-model";
 import {
+  transcribeRequestSchema,
+  transcribeResponseSchema,
   transcribeStreamRequestSchema,
   transcribeStreamResponseSchema,
 } from "./transcription";
@@ -75,6 +77,7 @@ export const requestSchema = z.union([
   downloadAssetRequestSchema,
   completionStreamRequestSchema,
   unloadModelRequestSchema,
+  transcribeRequestSchema,
   transcribeStreamRequestSchema,
   loggingStreamRequestSchema,
   embedRequestSchema,
@@ -102,6 +105,7 @@ export const responseSchema = z.discriminatedUnion("type", [
   completionStreamResponseSchema,
   unloadModelResponseSchema,
   modelProgressUpdateSchema,
+  transcribeResponseSchema,
   transcribeStreamResponseSchema,
   loggingStreamResponseSchema,
   embedResponseSchema,

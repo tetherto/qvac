@@ -29,6 +29,7 @@ class MockedBinding {
   }
 
   _callCallbacks (event, data, error) {
+    // addon-cpp 1.1.5 emits event, data, error only; job ownership stays in JS.
     if (this.outputCb) {
       this.outputCb(this, event, data, error)
     }

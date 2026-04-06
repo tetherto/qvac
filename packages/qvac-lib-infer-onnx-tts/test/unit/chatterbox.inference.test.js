@@ -51,8 +51,10 @@ async function waitWithTimeout (promise, timeoutMs, message) {
 
 test('Chatterbox: run returns audio output and stats', async (t) => {
   const events = []
+  const callbackArity = []
   const model = createMockedChatterboxModel({
-    onOutput: (addon, event, data, error) => {
+    onOutput: function (addon, event, data, error) {
+      callbackArity.push(arguments.length)
       events.push({ event, data, error })
     }
   })
@@ -66,6 +68,7 @@ test('Chatterbox: run returns audio output and stats', async (t) => {
   t.ok(outputs.some(d => d.outputArray), 'Response should contain outputArray payload')
   t.ok(response.stats.totalSamples > 0, 'Response stats should include total samples')
   t.ok(events.length > 0, 'Raw addon callback should have been called')
+  t.ok(callbackArity.every(length => length === 4), 'Native callbacks should not include a native jobId argument')
   await model.unload()
 })
 
