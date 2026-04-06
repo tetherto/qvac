@@ -1,5 +1,5 @@
-import { createExecutor, SkipExecutor } from "@tetherto/qvac-test-suite/mobile";
 import { Platform } from "react-native";
+import { createExecutor, SkipExecutor } from "@tetherto/qvac-test-suite/mobile";
 import {
   profiler,
   LLAMA_3_2_1B_INST_Q4_0,
@@ -40,6 +40,7 @@ import {
   MMPROJ_SMOLVLM2_500M_MULTIMODAL_Q8_0,
   SALAMANDRATA_2B_INST_Q4,
   AFRICAN_4B_TRANSLATION_Q4_K_M,
+  SD_V2_1_1B_Q8_0,
 } from "@qvac/sdk";
 import { ResourceManager } from "../shared/resource-manager.js";
 import { ModelLoadingExecutor } from "../shared/executors/model-loading-executor.js";
@@ -62,6 +63,7 @@ import { MobileRagExecutor } from "./executors/rag-executor.js";
 import { MobileConfigReloadExecutor } from "./executors/config-reload-executor.js";
 import { MobileTtsExecutor } from "./executors/tts-executor.js";
 import { DownloadExecutor } from "../shared/executors/download-executor.js";
+import { DiffusionExecutor } from "../shared/executors/diffusion-executor.js";
 
 const resources = new ResourceManager();
 
@@ -318,6 +320,17 @@ resources.define("vision", {
   },
 });
 
+resources.define("diffusion", {
+  constant: SD_V2_1_1B_Q8_0,
+  type: "diffusion",
+  config: {
+    device: "gpu",
+    threads: 4,
+    prediction: "v",
+    vae_on_cpu: true,
+  },
+});
+
 function skipTests(testIds: string[], reason: string) {
   return new SkipExecutor(new RegExp(`^(${testIds.join("|")})$`), reason);
 }
@@ -334,7 +347,21 @@ export const executor = createExecutor({
     ], "HTTP test disabled on mobile (OOM)"),
     new SkipExecutor(/^tools-(?!simple-function$|no-function-match$)/, "Tools test disabled on mobile"),
     ...(Platform.OS === "ios" ? [
-      new SkipExecutor(/^ocr-/, "OCR test disabled on iOS (OOM)"),
+      skipTests([
+        "ocr-sign-image",
+        "ocr-chart-image",
+        "ocr-no-text-image",
+        "ocr-large-image",
+        "ocr-low-quality",
+        "ocr-mixed-language",
+        "ocr-single-language",
+        "ocr-blurry-text",
+        "ocr-horizontally-inverted",
+        "ocr-vertically-inverted",
+        "ocr-misaligned-text",
+        "ocr-multi-sized-text",
+        "ocr-multiple-fonts",
+      ], "OCR disabled on iOS (ONNX/CoreML OOM)"),
     ] : []),
 
     // Real executors
@@ -358,6 +385,7 @@ export const executor = createExecutor({
     new MobileParakeetExecutor(resources),
     new MobileVisionExecutor(resources),
     new DownloadExecutor(),
+    new DiffusionExecutor(resources),
   ],
   profiling: {
     init: () => profiler.enable({ mode: "summary", includeServerBreakdown: true }),

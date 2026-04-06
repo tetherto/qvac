@@ -1,3 +1,5 @@
+find_package(GTest REQUIRED)
+
 add_executable(qvac-lib-inference-tts-unit-test)
 
 # collect all sources from src and mocks directories
@@ -9,6 +11,7 @@ target_sources(
   PRIVATE
     ${CMAKE_SOURCE_DIR}/addon/src/model-interface/TTSModel.cpp
     ${CMAKE_SOURCE_DIR}/addon/src/model-interface/ChatterboxEngine.cpp
+    ${CMAKE_SOURCE_DIR}/addon/src/model-interface/ChatterboxTextPreprocessor.cpp
     ${CMAKE_SOURCE_DIR}/addon/src/model-interface/SupertonicEngine.cpp
     ${CMAKE_SOURCE_DIR}/addon/src/model-interface/OnnxInferSession.cpp
     ${CMAKE_SOURCE_DIR}/addon/src/model-interface/Fp16Utils.cpp
@@ -17,15 +20,6 @@ target_sources(
     ${TEST_MOCKS}
 )
 
-find_package(tokenizers_cpp CONFIG REQUIRED)
-find_package(nlohmann_json CONFIG REQUIRED)
-
-if(TARGET onnxruntime::onnxruntime_static)
-  set(QVAC_TTS_UNITTEST_ONNXRUNTIME onnxruntime::onnxruntime_static)
-else()
-  set(QVAC_TTS_UNITTEST_ONNXRUNTIME onnxruntime::onnxruntime)
-endif()
-
 target_include_directories(
   qvac-lib-inference-tts-unit-test
   PRIVATE
@@ -33,22 +27,35 @@ target_include_directories(
     ${CMAKE_SOURCE_DIR}/addon/test/unit/
 )
 
+find_package(tokenizers_cpp CONFIG REQUIRED)
+find_package(unofficial-utf8proc CONFIG REQUIRED)
+if(TARGET utf8proc::utf8proc)
+  set(QVAC_UTF8PROC_TARGET utf8proc::utf8proc)
+elseif(TARGET utf8proc)
+  set(QVAC_UTF8PROC_TARGET utf8proc)
+else()
+  message(FATAL_ERROR "utf8proc CMake target missing (expected from unofficial-utf8proc)")
+endif()
+
+if(TARGET qvac-onnx::qvac-onnx-static)
+  set(QVAC_TTS_TEST_ORT_TARGET qvac-onnx::qvac-onnx-static)
+elseif(DEFINED qvac_onnx_target)
+  set(QVAC_TTS_TEST_ORT_TARGET ${qvac_onnx_target}_module)
+else()
+  set(QVAC_TTS_TEST_ORT_TARGET qvac-onnx::headers)
+endif()
+
 target_link_libraries(
   qvac-lib-inference-tts-unit-test
   PRIVATE
-    ${QVAC_TTS_UNITTEST_ONNXRUNTIME}
+    qvac-onnx::headers
+    ${QVAC_TTS_TEST_ORT_TARGET}
     tokenizers::tokenizers_cpp
-    nlohmann_json::nlohmann_json
     ${QVAC_UTF8PROC_TARGET}
     GTest::gtest
     GTest::gtest_main
     GTest::gmock
     GTest::gmock_main
-)
-
-gtest_discover_tests(
-  qvac-lib-inference-tts-unit-test
-  DISCOVERY_MODE PRE_TEST
 )
 
 if(WIN32)
@@ -57,6 +64,13 @@ if(WIN32)
     PRIVATE
       msvcrt.lib
   )
+endif()
+
+bare_platform(_TTS_TEST_PLATFORM)
+bare_arch(_TTS_TEST_ARCH)
+set(_tts_onnx_prebuilds "${CMAKE_SOURCE_DIR}/node_modules/@qvac/onnx/prebuilds/${_TTS_TEST_PLATFORM}-${_TTS_TEST_ARCH}")
+if(EXISTS "${_tts_onnx_prebuilds}/qvac__onnx.bare" AND NOT EXISTS "${_tts_onnx_prebuilds}/qvac__onnx@0.bare")
+  file(CREATE_LINK "${_tts_onnx_prebuilds}/qvac__onnx.bare" "${_tts_onnx_prebuilds}/qvac__onnx@0.bare" COPY_ON_ERROR)
 endif()
 
 if(ENABLE_COVERAGE)
@@ -70,4 +84,3 @@ if(ENABLE_COVERAGE)
     message(WARNING "ENABLE_COVERAGE is not supported.")
   endif()
 endif()
-

@@ -54,6 +54,7 @@ const BUILTIN_PLUGINS = [
   "@qvac/sdk/nmtcpp-translation/plugin",
   "@qvac/sdk/onnx-tts/plugin",
   "@qvac/sdk/onnx-ocr/plugin",
+  "@qvac/sdk/sdcpp-generation/plugin",
 ];
 
 const BUILTIN_PLUGIN_EXPORTS: Record<string, string> = {
@@ -63,6 +64,7 @@ const BUILTIN_PLUGIN_EXPORTS: Record<string, string> = {
   "nmtcpp-translation": "nmtPlugin",
   "onnx-tts": "ttsPlugin",
   "onnx-ocr": "ocrPlugin",
+  "sdcpp-generation": "diffusionPlugin",
 };
 
 const SDK_NAME = "@qvac/sdk";

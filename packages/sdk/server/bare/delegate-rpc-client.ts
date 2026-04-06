@@ -11,6 +11,7 @@ import {
   cacheDelegationConnectionTime,
   clearPeerConnectionTracking,
 } from "@/server/rpc/profiling/delegation-profiler";
+import { getNextCommandId } from "@/server/rpc/rpc-utils";
 
 const logger = getServerLogger();
 
@@ -28,7 +29,6 @@ const activeConnections = new Map<ConnectionKey, Connection>();
 // Track whether the global connection handler has been registered
 let connectionHandlerRegistered = false;
 const HEALTH_CHECK_TIMEOUT_MS = 1500;
-import { getNextCommandId } from "@/server/rpc/delegate-utils";
 
 function isHeartbeatResponse(payload: unknown): payload is { type: "heartbeat" } {
   return (
@@ -104,14 +104,13 @@ async function closeConnection(publicKey: string): Promise<void> {
     // Wait for the close event before returning so Hyperswarm's internal
     // _allConnections is cleaned up before we attempt to rejoin/flush.
     await new Promise<void>((resolve) => {
-      const timeout = setTimeout(resolve, 5000);
       existingConnection.on("close", () => {
-        clearTimeout(timeout);
         resolve();
       });
       existingConnection.destroy();
     });
 
+    if (activeConnections.get(publicKey) !== existingConnection) return;
     activeConnections.delete(publicKey);
     activeRPCs.delete(publicKey);
     clearPeerConnectionTracking(publicKey);

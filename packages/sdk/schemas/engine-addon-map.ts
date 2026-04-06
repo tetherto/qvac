@@ -1,5 +1,6 @@
 import { ModelType } from "./model-types";
 import {
+  ADDON_DIFFUSION,
   ADDON_EMBEDDING,
   ADDON_LLM,
   ADDON_NMT,
@@ -27,6 +28,7 @@ export const ENGINE_TO_ADDON: Record<
   [ModelType.onnxTts]: "tts",
   [ModelType.onnxOcr]: "ocr",
   [ModelType.parakeetTranscription]: "parakeet",
+  [ModelType.sdcppGeneration]: "diffusion",
   "onnx-vad": "vad",
 };
 
@@ -51,6 +53,8 @@ const LEGACY_ENGINE_TO_CANONICAL: Record<string, ModelRegistryEngine> = {
   vad: "onnx-vad",
   tts: ModelType.onnxTts,
   ocr: ModelType.onnxOcr,
+  [ADDON_DIFFUSION]: ModelType.sdcppGeneration,
+  diffusion: ModelType.sdcppGeneration,
 };
 
 // Resolves any engine string (legacy or canonical) to a validated canonical engine.
