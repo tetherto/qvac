@@ -586,10 +586,6 @@ struct nmt_state* nmt_init_state(nmt_context* ctx) {
     // NMT_LOG_INFO("%s: compute buffer (cross)  = %7.2f MB\n", __func__,
     // nmt_sched_size(state->sched_cross) / 1e6);
   }
-  // } else {
-  //     //NMT_LOG_INFO("%s: skipping cross allocator for Marian model\n",
-  //     __func__);
-  // }
 
   bool ok = nmt_sched_graph_init(state->sched_decode, state->backends, [&]() {
     const auto& hparams = ctx->model.hparams;
