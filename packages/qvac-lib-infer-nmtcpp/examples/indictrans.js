@@ -17,6 +17,7 @@
 
 const HyperdriveDL = require('@qvac/dl-hyperdrive')
 const TranslationNmtcpp = require('../index')
+const path = require('bare-path')
 const process = require('bare-process')
 
 // ============================================================
@@ -36,21 +37,32 @@ const logger = VERBOSE
 
 const text = 'How are you'
 
+const DISK_PATH = './models'
+const MODEL_NAME = 'ggml-indictrans2-en-indic-dist-200M.bin'
+
+async function downloadFile (loader, fileName, diskPath) {
+  const dl = await loader.download(fileName, { diskPath })
+  if (dl) await dl.await()
+  return path.join(diskPath, fileName)
+}
+
 async function main () {
   const hdDL = new HyperdriveDL({
-    // The hyperdrive key for en-hi translation model weights and config
     key: 'hd://268c2e9b2a3420632e4b6649e32822f42d5dfbda4c7e96daec5b629ed20f99f7'
   })
 
-  const args = {
-    loader: hdDL,
-    params: { mode: 'full', srcLang: 'eng_Latn', dstLang: 'hin_Deva' },
-    diskPath: './models',
-    modelName: 'ggml-indictrans2-en-indic-dist-200M.bin',
-    logger // Pass logger to enable/disable C++ logs
-  }
+  await hdDL.ready()
 
-  const model = new TranslationNmtcpp(args, { modelType: TranslationNmtcpp.ModelTypes.IndicTrans })
+  // Download model to disk first
+  console.log('Downloading model...')
+  const modelPath = await downloadFile(hdDL, MODEL_NAME, DISK_PATH)
+
+  const model = new TranslationNmtcpp({
+    files: { model: modelPath },
+    params: { mode: 'full', srcLang: 'eng_Latn', dstLang: 'hin_Deva' },
+    config: { modelType: TranslationNmtcpp.ModelTypes.IndicTrans },
+    logger
+  })
 
   await model.load()
 
@@ -66,6 +78,7 @@ async function main () {
     console.log('translation finished!')
   } finally {
     await model.unload()
+    await hdDL.close()
   }
 }
 

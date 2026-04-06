@@ -5,6 +5,31 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.0.0] - 2026-04-05
+
+### Changed
+
+- **Breaking**: Constructor now accepts `{ files, params, config }` instead of `{ loader, diskPath, modelName, params }, config`. Addons receive resolved file paths directly — no loader abstraction.
+- **Breaking**: No longer extends `BaseInference`. `TranslationNmtcpp` is now a standalone class owning its own lifecycle, logger, and run serialization via `exclusiveRunQueue()` from `@qvac/infer-base`.
+- Replaced internal `_jobToResponse` Map boilerplate with `createJobHandler()` from `@qvac/infer-base@0.4.0`
+- Switched `QvacResponse` import from `@qvac/response` to `@qvac/infer-base`
+- Removed `pauseHandler`/`continueHandler` from response construction (deprecated in single-job model)
+- Added `@qvac/logging` as direct dependency (previously transitive via BaseInference)
+
+### Removed
+
+- `BaseInference` inheritance — addon owns its own `load()`, `run()`, `unload()`, `destroy()`, `getState()`
+- `WeightsProvider` dependency — addon no longer downloads weights; SDK resolves all file paths before creating the addon
+- `@qvac/dl-hyperdrive` and `bare-path` dependencies
+- `_downloadWeights()`, `_downloadPivotWeights()`, `_getFilesToDownload()`, `_getPivotFilesToDownload()`, `_getVocabularyPaths()` methods
+- `loader`, `diskPath`, `modelName` constructor parameters
+- Bergamot pivot model `bergamotPivotModel.loader` / `bergamotPivotModel.weightsProvider` — pivot file paths now passed via `files.pivotModel`, `files.pivotSrcVocab`, `files.pivotDstVocab`
+
+### Updated
+
+- Examples updated for new constructor — each example downloads its own models on first run
+- SDK NMT plugin passes resolved file paths via `files` shape instead of creating `FilesystemDL` loader
+
 ## [0.6.1] - 2026-03-11
 
 This release fixes a critical issue where pivot translation would hang indefinitely after completing the translation. The fix ensures proper job completion signaling for pivot translation workflows in Bergamot models.

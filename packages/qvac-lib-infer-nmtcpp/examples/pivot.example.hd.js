@@ -4,9 +4,9 @@
  * Pivot Translation Example with Bergamot Models
  *
  * This example demonstrates pivot translation through English using two Bergamot models:
- * - First model: Spanish → English (es-en)
- * - Second model: English → Italian (en-it)
- * - Result: Spanish → Italian translation via English pivot
+ * - First model: Spanish -> English (es-en)
+ * - Second model: English -> Italian (en-it)
+ * - Result: Spanish -> Italian translation via English pivot
  *
  * The models are downloaded via HyperdriveDL from the distributed network.
  *
@@ -19,6 +19,7 @@
 
 const HyperdriveDL = require('@qvac/dl-hyperdrive')
 const TranslationNmtcpp = require('../index')
+const path = require('bare-path')
 const process = require('bare-process')
 
 // ============================================================
@@ -38,68 +39,77 @@ const logger = VERBOSE
 
 // Spanish text to translate to Italian via English pivot
 const spanishText = `
-  Era una mañana soleada cuando María decidió visitar el mercado local.
-  Compró frutas frescas, verduras y flores para su casa.
-  El vendedor le recomendó las mejores manzanas de la temporada.
-  María también encontró un hermoso libro antiguo en una tienda cercana.
-  Fue un día perfecto para explorar la ciudad.
+  Era una manana soleada cuando Maria decidio visitar el mercado local.
+  Compro frutas frescas, verduras y flores para su casa.
+  El vendedor le recomendo las mejores manzanas de la temporada.
+  Maria tambien encontro un hermoso libro antiguo en una tienda cercana.
+  Fue un dia perfecto para explorar la ciudad.
 `
 
+const PRIMARY_DISK_PATH = './models/es-en'
+const PIVOT_DISK_PATH = './models/en-it'
+
+async function downloadFile (loader, fileName, diskPath) {
+  const dl = await loader.download(fileName, { diskPath })
+  if (dl) await dl.await()
+  return path.join(diskPath, fileName)
+}
+
 async function main () {
-  console.log('Setting up pivot translation: Spanish → English → Italian')
+  console.log('Setting up pivot translation: Spanish -> English -> Italian')
   console.log('-----------------------------------------------------------')
   console.log('Original Spanish text:')
   console.log(spanishText)
   console.log('-----------------------------------------------------------\n')
 
-  // Primary model loader: Spanish → English
+  // Primary model loader: Spanish -> English
   const primaryLoader = new HyperdriveDL({
-    key: 'hd://c3e983c8db3f64faeef8eaf1da9ea4aeb8d5c020529f83957d63c19ed7710651' // es-en model
+    key: 'hd://c3e983c8db3f64faeef8eaf1da9ea4aeb8d5c020529f83957d63c19ed7710651'
   })
 
-  // Pivot model loader: English → Italian
+  // Pivot model loader: English -> Italian
   const pivotLoader = new HyperdriveDL({
-    key: 'hd://a8811fb494e4aee45ca06a011703a25df5275e5dfa59d6217f2d430c677f9fa6' // en-it model
+    key: 'hd://a8811fb494e4aee45ca06a011703a25df5275e5dfa59d6217f2d430c677f9fa6'
   })
 
-  const args = {
-    loader: primaryLoader,
+  await primaryLoader.ready()
+  await pivotLoader.ready()
+
+  // Download all model files to disk first
+  console.log('Downloading primary model (es-en)...')
+  const modelPath = await downloadFile(primaryLoader, 'model.esen.intgemm.alphas.bin', PRIMARY_DISK_PATH)
+  const srcVocabPath = await downloadFile(primaryLoader, 'vocab.esen.spm', PRIMARY_DISK_PATH)
+  const dstVocabPath = srcVocabPath // Bergamot models often use shared vocab
+
+  console.log('Downloading pivot model (en-it)...')
+  const pivotModelPath = await downloadFile(pivotLoader, 'model.enit.intgemm.alphas.bin', PIVOT_DISK_PATH)
+  const pivotSrcVocabPath = await downloadFile(pivotLoader, 'vocab.enit.spm', PIVOT_DISK_PATH)
+  const pivotDstVocabPath = pivotSrcVocabPath // Shared vocab for en-it
+
+  const model = new TranslationNmtcpp({
+    files: {
+      model: modelPath,
+      srcVocab: srcVocabPath,
+      dstVocab: dstVocabPath,
+      pivotModel: pivotModelPath,
+      pivotSrcVocab: pivotSrcVocabPath,
+      pivotDstVocab: pivotDstVocabPath
+    },
     params: {
       srcLang: 'es',
-      dstLang: 'it' // Final target language
+      dstLang: 'it'
     },
-    diskPath: './models/es-en',
-    modelName: 'model.esen.intgemm.alphas.bin',
-    logger // Pass logger to enable/disable C++ logs
-  }
-
-  const config = {
-    modelType: TranslationNmtcpp.ModelTypes.Bergamot,
-
-    // Primary model vocabulary files (Spanish → English)
-    srcVocabName: 'vocab.esen.spm',
-    dstVocabName: 'vocab.esen.spm', // Bergamot models often use shared vocab
-
-    // Pivot model configuration (English → Italian)
-    bergamotPivotModel: {
-      loader: pivotLoader,
-      modelName: 'model.enit.intgemm.alphas.bin',
-      diskPath: './models/en-it',
-      config: {
-        srcVocabName: 'vocab.enit.spm',
-        dstVocabName: 'vocab.enit.spm', // Shared vocab for en-it
-        // Any pivot model specific configuration
+    config: {
+      modelType: TranslationNmtcpp.ModelTypes.Bergamot,
+      beamsize: 4,
+      topk: 100,
+      pivotConfig: {
         beamsize: 4,
         topk: 100
       }
     },
-
-    // Primary model configuration
-    beamsize: 4,
-    topk: 100
-  }
-
-  const model = new TranslationNmtcpp(args, config)
+    logger
+  })
 
   console.log('Loading models...')
   await model.load()
@@ -118,6 +128,8 @@ async function main () {
   } finally {
     console.log('\n\nUnloading models...')
     await model.unload()
+    await primaryLoader.close()
+    await pivotLoader.close()
   }
 }
 

@@ -16,6 +16,7 @@
 
 const TranslationNmtcpp = require('../index')
 const HyperdriveDL = require('@qvac/dl-hyperdrive')
+const path = require('bare-path')
 const process = require('bare-process')
 
 // ============================================================
@@ -40,21 +41,32 @@ const text = `
   Alice was not a bit hurt, and she jumped up on to her feet in a moment: she looked up, but it was all dark overhead; before her was another long passage, and the White Rabbit was still in sight, hurrying down it. There was not a moment to be lost: away went Alice like the wind, and was just in time to hear it say, as it turned a corner, "Oh my ears and whiskers, how late it's getting!" She was close behind it when she turned the corner, but the Rabbit was no longer to be seen: she found herself in a long, low hall, which was lit up by a row of lamps hanging from the roof.
   `
 
+const DISK_PATH = './models'
+const MODEL_NAME = 'model.bin'
+
+async function downloadFile (loader, fileName, diskPath) {
+  const dl = await loader.download(fileName, { diskPath })
+  if (dl) await dl.await()
+  return path.join(diskPath, fileName)
+}
+
 async function main () {
   const hdDL = new HyperdriveDL({
-    // The hyperdrive key for en-it translation model weights and config
     key: 'hd://9ef58f31c20d5556722e0b58a5d262fd89801daf2e6cb28e3f21ac6e9228088f'
   })
 
-  // Create the `args` object
-  const args = {
-    loader: hdDL,
+  await hdDL.ready()
+
+  // Download model to disk first
+  console.log('Downloading model...')
+  const modelPath = await downloadFile(hdDL, MODEL_NAME, DISK_PATH)
+
+  const model = new TranslationNmtcpp({
+    files: { model: modelPath },
     params: { mode: 'full', dstLang: 'it', srcLang: 'en' },
-    diskPath: './models',
-    modelName: 'model.bin',
-    logger // Pass logger to enable/disable C++ logs
-  }
-  const model = new TranslationNmtcpp(args, { })
+    logger
+  })
+
   await model.load()
   try {
     const response = await model.run(text)
@@ -68,6 +80,7 @@ async function main () {
     console.log('translation finished!')
   } finally {
     await model.unload()
+    await hdDL.close()
   }
 }
 
