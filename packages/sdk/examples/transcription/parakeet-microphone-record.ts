@@ -1,7 +1,17 @@
+/**
+ * Microphone → Parakeet transcription using chunked `transcribe` calls.
+ *
+ * Usage: bun run examples/transcription/parakeet-microphone-record.ts
+ *
+ * Captures 3-second audio chunks from the microphone and sends each to the
+ * batch `transcribe` API. Press Ctrl+C to quit.
+ *
+ * Requirements: FFmpeg installed, microphone access.
+ */
 import {
   loadModel,
   unloadModel,
-  transcribeStream,
+  transcribe,
   PARAKEET_TDT_ENCODER_FP32,
   PARAKEET_TDT_ENCODER_DATA_FP32,
   PARAKEET_TDT_DECODER_FP32,
@@ -11,41 +21,38 @@ import {
 import { spawn, spawnSync } from "child_process";
 import { platform } from "os";
 
-function checkFFmpeg() {
-  const result = spawnSync("ffmpeg", ["-version"], { stdio: "ignore" });
-  if (result.error || result.status !== 0) {
-    throw new Error("FFmpeg is required but not found in PATH.");
-  }
-}
-
-function getAudioDevice(): string {
-  switch (platform()) {
-    case "darwin":
-      return ":0";
-    case "linux":
-      return "default";
-    case "win32":
-      // Change as per your system
-      return "audio=@device_cm_{33D9A762-90C8-11D0-BD43-00A0C911CE86}\\wave_{58C07110-A4FD-4FF8-BA10-5A3C14389F71}";
-    default:
-      throw new Error(`Unsupported platform: ${platform()}`);
-  }
-}
+const SAMPLE_RATE = 16000;
+const BYTES_PER_SAMPLE = 2; // s16le
+const CHUNK_DURATION_S = 3;
+const CHUNK_SIZE = SAMPLE_RATE * BYTES_PER_SAMPLE * CHUNK_DURATION_S;
 
 function getAudioInputArgs(): string[] {
   switch (platform()) {
     case "darwin":
-      return ["-f", "avfoundation", "-i", getAudioDevice()];
-    case "linux":
-      return ["-f", "pulse", "-i", getAudioDevice()];
+      return ["-f", "avfoundation", "-i", ":0"];
     case "win32":
-      return ["-f", "dshow", "-i", getAudioDevice()];
+      return [
+        "-f",
+        "dshow",
+        "-i",
+        "audio=@device_cm_{33D9A762-90C8-11D0-BD43-00A0C911CE86}\\wave_{58C07110-A4FD-4FF8-BA10-5A3C14389F71}",
+      ];
+    case "linux":
+      return ["-f", "pulse", "-i", "default"];
     default:
       throw new Error(`Unsupported platform: ${platform()}`);
   }
 }
 
-checkFFmpeg();
+// ── Main ──
+
+try {
+  const r = spawnSync("ffmpeg", ["-version"], { stdio: "ignore" });
+  if (r.error || r.status !== 0) throw new Error("FFmpeg not found");
+} catch {
+  console.error("FFmpeg is required. Install it and try again.");
+  process.exit(1);
+}
 
 console.log("Loading Parakeet model...");
 const modelId = await loadModel({
@@ -60,14 +67,14 @@ const modelId = await loadModel({
   },
   onProgress: (p) => console.log(`Download: ${p.percentage.toFixed(1)}%`),
 });
-console.log("Model loaded. Speak into your microphone (Ctrl+C to stop):\n");
+console.log("Model loaded.\n");
 
 const ffmpeg = spawn(
   "ffmpeg",
   [
     ...getAudioInputArgs(),
     "-ar",
-    "16000",
+    String(SAMPLE_RATE),
     "-ac",
     "1",
     "-sample_fmt",
@@ -78,10 +85,12 @@ const ffmpeg = spawn(
   ],
   { stdio: ["ignore", "pipe", "ignore"] },
 );
+if (!ffmpeg.stdout) throw new Error("Failed to open microphone");
 
-const CHUNK_SIZE = 96000; // ~3s of 16kHz 16-bit mono
 let buffer = Buffer.alloc(0);
 let processing = false;
+
+console.log("Listening... speak and pause to see transcriptions.\n");
 
 ffmpeg.stdout.on("data", (chunk: Buffer) => {
   buffer = Buffer.concat([buffer, chunk]);
@@ -93,10 +102,9 @@ ffmpeg.stdout.on("data", (chunk: Buffer) => {
 
     void (async () => {
       try {
-        for await (const text of transcribeStream({ modelId, audioChunk })) {
-          if (text.trim() && !text.includes("[No speech detected]")) {
-            process.stdout.write(text);
-          }
+        const text = await transcribe({ modelId, audioChunk });
+        if (text.trim() && !text.includes("[No speech detected]")) {
+          console.log(`> ${text.trim()}`);
         }
       } catch (err) {
         console.error(
