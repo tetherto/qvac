@@ -5,24 +5,6 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-## [0.2.7]
-
-### Changed
-- Bumped `qvac-lib-inference-addon-cpp` to `1.1.5`.
-- Removed the stale-cancel suppression workaround from `parakeet.js` now that addon-cpp delivers native job IDs through the shared callback path.
-- Simplified the cancel/reuse integration flow to expect the shared runtime fix directly instead of retrying around late cancel delivery.
-- Realigned wrapper-side job numbering whenever `load()` or `reload()` recreates the native instance so JS response completion stays aligned with addon-cpp's per-instance native job IDs.
-
-### Added
-- Unit coverage that asserts stale cancel events remain attached to the cancelled job.
-- Re-enabled JS and C++ cancel/reuse coverage now that the shared addon-cpp fix is published.
-- Integration and unit coverage for the named-paths reload path so the second transcription after reload completes normally.
-
-### Fixed
-- Picked up the `addon-cpp` `1.1.5` `JobRunner::finalizeJob()` ordering fix so cancel/finalize paths cannot leave processing sync active under lock contention.
-- Prevented stale response handles from cancelling a newer active transcription by checking wrapper-owned job IDs before forwarding `cancel()` to the native addon.
-- Restored reload behavior so recreating the native instance clears native state without resetting JS-owned response numbering.
-
 ## [0.2.6]
 
 ### Changed
@@ -54,6 +36,7 @@ Security hardening release from comprehensive security audit.
 - RTF benchmark integration test (`rtf-benchmark.test.js`) that captures Real-Time Factor and 12 other timing metrics from the C++ addon's `runtimeStats` callback
 - `test:benchmark:rtf` npm script for on-demand RTF benchmark runs
 - RTF benchmark step in integration test CI workflow (non-blocking, all 6 runners) with JSON artifact upload
+
 ## [0.2.2]
 
 This release documents Parakeet runtime statistics and transcription output in TypeScript so consumers can type `response.stats` and `run()` results against the native addon.
