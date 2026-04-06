@@ -98,9 +98,13 @@ jobs:
           package-json-path: packages/qvac-lib-infer-onnx-tts/package.json
           changelog-path: packages/qvac-lib-infer-onnx-tts/CHANGELOG.md
 
-  publish-main-gpr:
+  build:
     needs: publish-logic
-    if: needs.publish-logic.outputs.publish_main == 'true'
+    if: >-
+      needs.publish-logic.outputs.publish_main == 'true' ||
+      needs.publish-logic.outputs.publish_release == 'true' ||
+      needs.publish-logic.outputs.publish_feature == 'true' ||
+      needs.publish-logic.outputs.publish_tmp == 'true'
     permissions:
       contents: write
       packages: write
@@ -108,83 +112,114 @@ jobs:
     uses: ./.github/workflows/prebuilds-qvac-lib-infer-onnx-tts.yml
     secrets: inherit
     with:
-      tag: ${{ inputs.tag || needs.publish-logic.outputs.gpr_tag }}
-      publish_target: "gpr"
       repository: ${{ github.repository }}
       ref: ${{ github.ref }}
       workdir: packages/qvac-lib-infer-onnx-tts
 
-  publish-feature-gpr:
-    needs: publish-logic
-    if: needs.publish-logic.outputs.publish_feature == 'true'
+  publish-gpr:
+    needs: [build, publish-logic]
+    if: >-
+      needs.publish-logic.outputs.publish_main == 'true' ||
+      needs.publish-logic.outputs.publish_feature == 'true' ||
+      needs.publish-logic.outputs.publish_tmp == 'true'
+    outputs:
+      published_version: ${{ steps.publish.outputs.npm_published_version }}
+    runs-on: ubuntu-latest
     permissions:
-      contents: write
+      contents: read
       packages: write
-      pull-requests: write
-    uses: ./.github/workflows/prebuilds-qvac-lib-infer-onnx-tts.yml
-    secrets: inherit
-    with:
-      tag: ${{ inputs.tag || needs.publish-logic.outputs.gpr_tag }}
-      publish_target: "gpr"
-      repository: ${{ github.repository }}
-      ref: ${{ github.ref }}
-      workdir: packages/qvac-lib-infer-onnx-tts
+    env:
+      WORKDIR: packages/qvac-lib-infer-onnx-tts
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # 6.0.2
 
-  publish-tmp-gpr:
-    needs: publish-logic
-    if: needs.publish-logic.outputs.publish_tmp == 'true'
-    permissions:
-      contents: write
-      packages: write
-      pull-requests: write
-    uses: ./.github/workflows/prebuilds-qvac-lib-infer-onnx-tts.yml
-    secrets: inherit
-    with:
-      tag: ${{ inputs.tag || needs.publish-logic.outputs.gpr_tag }}
-      publish_target: "gpr"
-      repository: ${{ github.repository }}
-      ref: ${{ github.ref }}
-      workdir: packages/qvac-lib-infer-onnx-tts
+      - name: Download prebuild artifacts
+        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # 8.0.1
+        with:
+          name: prebuilds
+          path: ${{ env.WORKDIR }}/prebuilds
 
-  publish-release-npm:
-    needs: [publish-logic, release-merge-guard]
-    if: |
+      - name: Publish to GitHub Package Registry
+        id: publish
+        uses: tetherto/qvac-devops/.github/actions/publish-library-to-gpr@v1.1.7
+        with:
+          secret-token: ${{ secrets.GITHUB_TOKEN }}
+          tag: ${{ inputs.tag || needs.publish-logic.outputs.gpr_tag }}
+          workdir: ${{ env.WORKDIR }}
+          path: ${{ env.WORKDIR }}
+          name-suffix: "-mono"
+
+  publish-npm:
+    needs: [build, publish-logic, release-merge-guard]
+    if: >-
       !cancelled() &&
+      needs.build.result == 'success' &&
       needs.publish-logic.outputs.publish_release == 'true' &&
-      needs.release-merge-guard.result == 'success'
+      (needs.release-merge-guard.result == 'success' || needs.release-merge-guard.result == 'skipped')
+    outputs:
+      published_version: ${{ steps.capture_version.outputs.published_version }}
+    runs-on: ubuntu-latest
+    environment: release
     permissions:
       contents: write
       packages: write
-      pull-requests: write
-    uses: ./.github/workflows/prebuilds-qvac-lib-infer-onnx-tts.yml
-    secrets: inherit
-    with:
-      tag: "latest"
-      publish_target: "npm"
-      repository: ${{ github.repository }}
-      ref: ${{ github.ref }}
-      workdir: packages/qvac-lib-infer-onnx-tts
+    env:
+      WORKDIR: packages/qvac-lib-infer-onnx-tts
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # 6.0.2
+
+      - name: Download prebuild artifacts
+        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # 8.0.1
+        with:
+          name: prebuilds
+          path: ${{ env.WORKDIR }}/prebuilds
+
+      - name: Publish to NPM Package Registry
+        id: publish
+        uses: tetherto/qvac-devops/.github/actions/publish-library-to-npm@v1.1.7
+        with:
+          secret-token: ${{ secrets.NPM_TOKEN }}
+          tag: "latest"
+          path: ${{ env.WORKDIR }}
+          repo_name: "onnx-tts"
+          git-token: ${{ secrets.PAT_TOKEN }}
+          create-tag: "false"
+
+      - name: Capture published version
+        id: capture_version
+        if: success()
+        working-directory: ${{ env.WORKDIR }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          VERSION=$(node -p "require('./package.json').version")
+          PACKAGE_NAME=$(node -p "require('./package.json').name")
+          if npm view "${PACKAGE_NAME}@${VERSION}" version >/dev/null 2>&1; then
+            echo "published_version=${VERSION}" >> "$GITHUB_OUTPUT"
+          fi
 
   publish-release:
-    needs: [publish-release-npm]
-    if: |
+    needs: [publish-npm]
+    if: >-
       !cancelled() &&
-      needs.publish-release-npm.result == 'success' &&
-      needs.publish-release-npm.outputs.published_version != ''
+      needs.publish-npm.result == 'success' &&
+      needs.publish-npm.outputs.published_version != ''
     permissions:
       contents: write
     uses: ./.github/workflows/create-github-release.yml
     with:
       repo_name: "onnx-tts"
       release_name: "QVAC TTS ONNX Addon"
-      published_version: ${{ needs.publish-release-npm.outputs.published_version }}
+      published_version: ${{ needs.publish-npm.outputs.published_version }}
       prev_sha: ${{ github.event.before }}
       workdir: packages/qvac-lib-infer-onnx-tts
 
-  prebuild:
-    name: Prebuild Gate
+  post-build-gate:
+    name: Post-Build Gate
     runs-on: ubuntu-latest
-    needs: [publish-release-npm, publish-main-gpr, publish-tmp-gpr, publish-feature-gpr]
+    needs: [publish-gpr, publish-npm]
     if: "!cancelled()"
     outputs:
       should_run_tests: ${{ steps.gate.outputs.should_run_tests }}
@@ -195,10 +230,8 @@ jobs:
           set -euo pipefail
           should="false"
 
-          if [ "${{ needs.publish-release-npm.result }}" = "success" ] || \
-             [ "${{ needs.publish-main-gpr.result }}" = "success" ] || \
-             [ "${{ needs.publish-tmp-gpr.result }}" = "success" ] || \
-             [ "${{ needs.publish-feature-gpr.result }}" = "success" ]; then
+          if [ "${{ needs.publish-gpr.result }}" = "success" ] || \
+             [ "${{ needs.publish-npm.result }}" = "success" ]; then
             should="true"
           fi
 
@@ -206,8 +239,8 @@ jobs:
 
   integration-tests:
     uses: ./.github/workflows/integration-test-qvac-lib-infer-onnx-tts.yml
-    needs: prebuild
-    if: needs.prebuild.outputs.should_run_tests == 'true'
+    needs: post-build-gate
+    if: needs.post-build-gate.outputs.should_run_tests == 'true'
     secrets: inherit
     with:
       repository: ${{ github.repository }}
@@ -215,8 +248,8 @@ jobs:
 
   mobile-integration-tests:
     uses: ./.github/workflows/integration-mobile-test-qvac-lib-infer-onnx-tts.yml
-    needs: prebuild
-    if: needs.prebuild.outputs.should_run_tests == 'true'
+    needs: post-build-gate
+    if: needs.post-build-gate.outputs.should_run_tests == 'true'
     permissions:
       contents: read
       packages: read
