@@ -10,6 +10,7 @@ import {
   type TranscribeStats,
   type EmbedStats,
   type TtsStats,
+  type DiffusionStats,
 } from "@/schemas";
 import { readModelExecutionMs } from "@/profiling/model-execution";
 import type { ProfilingEvent, ProfilingEventKind } from "@/profiling/types";
@@ -246,6 +247,25 @@ registerOperationMetrics<{ modelId?: string }, { stats?: OCRStats }>({
       gauges["totalTime"] = res.stats.totalTime;
     const modelExecMs = readModelExecutionMs(res);
     if (modelExecMs !== undefined) gauges["modelExecutionTime"] = modelExecMs;
+    return Object.keys(gauges).length > 0 ? gauges : undefined;
+  },
+});
+
+registerOperationMetrics<{ modelId?: string }, { stats?: DiffusionStats }>({
+  op: "diffusionStream",
+  kind: "handler",
+  getTags: (req) => (req.modelId ? { modelId: req.modelId } : {}),
+  fromFinalChunk: (res) => {
+    if (!res.stats) return undefined;
+    const gauges: Record<string, number> = {};
+    if (res.stats.generationMs !== undefined)
+      gauges["generationMs"] = res.stats.generationMs;
+    if (res.stats.totalSteps !== undefined)
+      gauges["totalSteps"] = res.stats.totalSteps;
+    if (res.stats.totalImages !== undefined)
+      gauges["totalImages"] = res.stats.totalImages;
+    if (res.stats.totalPixels !== undefined)
+      gauges["totalPixels"] = res.stats.totalPixels;
     return Object.keys(gauges).length > 0 ? gauges : undefined;
   },
 });

@@ -10,6 +10,7 @@ import {
   logCacheDisabled,
   logCacheInit,
   logCacheSave,
+  logCacheSaveError,
   logCacheStatus,
   logMessagesToAddon,
 } from "@/server/bare/plugins/llamacpp-completion/ops/cache-logger";
@@ -234,8 +235,17 @@ async function* processModelResponse(
     const sessionMsg = messagesToSend.find((m) => m.role === "session");
     if (sessionMsg?.content) {
       logCacheSave(sessionMsg.content);
+      const cachePath = sessionMsg.content;
+      const saveResp = await model.run([
+        { role: "session", content: cachePath },
+        { role: "session", content: "save" },
+      ]);
+      try {
+        await saveResp.await();
+      } catch (err: unknown) {
+        logCacheSaveError(cachePath, err);
+      }
     }
-    await model.run([{ role: "session", content: "save" }]);
   }
 
   const responseWithStats = response as unknown as ResponseWithStats;

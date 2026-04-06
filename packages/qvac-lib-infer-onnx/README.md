@@ -56,7 +56,7 @@ Configures the process-wide ONNX Runtime environment. Must be called **before** 
 
 ### `getAvailableProviders() → string[]`
 
-Returns the list of execution providers compiled into this build (e.g. `["CPUExecutionProvider", "XnnpackExecutionProvider"]`).
+Returns the list of execution providers compiled into this build (for example `["CPUExecutionProvider"]` or `["CPUExecutionProvider", "XnnpackExecutionProvider"]`, depending on how the addon was built).
 
 ### `createSession(modelPath, config?) → handle`
 
