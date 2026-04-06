@@ -36,13 +36,10 @@ jobs:
     environment: release
     name: test-${{ matrix.platform }}-${{ matrix.arch }}
 
-    env:
-      AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
-      AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
-
     permissions:
       contents: read
       packages: read
+      id-token: write
 
     strategy:
       fail-fast: false
@@ -150,6 +147,12 @@ jobs:
 
       # Required for all OCR integration tests (param-validation, lifecycle, image-formats,
       # full-ocr-suite, etc.). Provides detector + all recognizers under rec_dyn.
+      - name: Configure AWS credentials via OIDC
+        uses: aws-actions/configure-aws-credentials@e3dd6a429d7300a6a4c196c26e071d42e0343502 # v6.0.0
+        with:
+          role-to-assume: arn:aws:iam::833707431398:role/GitHub-OIDC-connector
+          aws-region: eu-central-1
+
       - name: Download onnx model files
         working-directory: ${{ inputs.workdir || env.PKG_DIR }}
         shell: bash
