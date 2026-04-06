@@ -230,6 +230,7 @@ jobs:
     permissions:
       contents: read
       packages: read
+      id-token: write
 
     strategy:
       fail-fast: false
@@ -385,13 +386,16 @@ jobs:
           echo "Custom model converted and saved to: examples/$CUSTOM_MODEL_NAME"
           ls -lh "examples/$CUSTOM_MODEL_NAME"
 
+      - name: Configure AWS credentials via OIDC
+        if: github.event.inputs.language == 'arabic'
+        uses: aws-actions/configure-aws-credentials@8df5847569e6427dd6c4fb1cf565c83acfa8afa7 # 6.0.0
+        with:
+          role-to-assume: ${{ secrets.AWS_OIDC_ROLE_ARN }}
+          aws-region: eu-central-1
+
       - name: Download Arabic Common Voice dataset from S3
         if: github.event.inputs.language == 'arabic'
         working-directory: ${{ env.WORKDIR }}
-        env:
-          AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
-          AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
-          AWS_DEFAULT_REGION: us-east-1
         run: |
           ARABIC_DATASET="${{ github.event.inputs.arabic_dataset }}"
 
