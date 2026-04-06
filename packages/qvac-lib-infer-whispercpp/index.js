@@ -28,7 +28,7 @@ class TranscriptionWhispercpp {
     config
   ) {
     if (!files || typeof files.model !== 'string' || files.model.length === 0) {
-      throw new Error('TranscriptionWhispercpp: files.model is required')
+      throw new QvacErrorAddonWhisper({ code: ERR_CODES.MODEL_REQUIRED, adds: 'files.model is required' })
     }
 
     const { opts = {}, ...passThrough } = { logger, exclusiveRun, ...args }
@@ -535,7 +535,7 @@ class TranscriptionWhispercpp {
     const vadModelPath = this._resolveVadModelPath()
     if (vadModelPath && !fs.existsSync(vadModelPath)) {
       this.logger.error('VAD model file not found', { path: vadModelPath })
-      throw new Error(`VAD model file doesn't exist: ${vadModelPath}`)
+      throw new QvacErrorAddonWhisper({ code: ERR_CODES.VAD_MODEL_NOT_FOUND, adds: vadModelPath })
     }
   }
 }
