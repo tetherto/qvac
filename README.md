@@ -145,7 +145,7 @@ Legend:
 | lib-dl-filesystem | Data loading library for loading model weights and resources from local filesystem | Core |
 | lib-dl-hyperdrive | Data loading library for loading model weights and resources from Hyperdrive distributed file system | Core |
 | error | Standardized error handling capabilities for all QVAC libraries | Core |
-| lib-infer-base | Base class for inference addon clients defining common lifecycle and generic methods for model interaction | Core |
+| infer-base | Base class for inference addon clients defining common lifecycle and generic methods for model interaction | Core |
 | logging | Logger wrapper that normalizes logging interface across QVAC libraries | Core |
 | cli | Command-line interface for the QVAC ecosystem with tooling for building, bundling, and managing QVAC-powered applications | Tool |
 | lib-diagnostics | Diagnostic report generation library for QVAC | Tool |
