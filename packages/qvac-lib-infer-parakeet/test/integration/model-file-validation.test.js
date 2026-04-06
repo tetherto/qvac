@@ -6,353 +6,196 @@ const fs = require('bare-fs')
 const os = require('bare-os')
 const {
   TranscriptionParakeet,
-  FakeDL,
   ensureModel,
   getTestPaths,
   isMobile
 } = require('./helpers.js')
 
-function createLoader () {
-  if (!FakeDL) return null
-  return new FakeDL({})
-}
-
 /**
- * Test 1: If the model path is empty or not provided, an exception should be thrown
+ * Test 1: Empty files map is accepted (validation only warns for missing files)
  */
-test('Should throw error when model path is not provided', { timeout: 60000 }, async (t) => {
+test('Should accept empty files map without throwing', { timeout: 60000 }, async (t) => {
   if (isMobile) { t.pass('Skipped on mobile'); return }
-  // Restore any stubs from other tests
   TranscriptionParakeet.prototype.validateModelFiles?.restore?.()
 
-  const args = {
-    modelName: '', // Empty model name
-    loader: createLoader()
-  }
-  const config = {
-    parakeetConfig: {
-      modelType: 'tdt'
-    }
-  }
-
-  // With empty modelName and no diskPath, model path will be empty
-  // The validation should skip since there's no path to validate
-  // Let's test with a non-existent path instead
   try {
-    // eslint-disable-next-line no-unused-vars
-    const _model = new TranscriptionParakeet(args, config)
-    // If we get here, validation was skipped (which is acceptable for empty paths)
-    t.pass('Empty model path is accepted (validation skipped)')
-    // No cleanup needed since model wasn't fully loaded
+    const model = new TranscriptionParakeet({
+      files: {},
+      config: { parakeetConfig: { modelType: 'tdt' } }
+    })
+    t.ok(model, 'Model instance created with empty files map')
+    t.pass('Empty files map is accepted (validation skipped for unset paths)')
   } catch (error) {
-    // If an error is thrown, that's also acceptable
-    t.ok(error, 'Error thrown for empty model path')
+    t.fail('Should not throw for empty files map: ' + error.message)
   }
 })
 
 /**
- * Test 2: If the model path is provided but the directory doesn't exist, an exception should be thrown
+ * Test 2: Non-existent file paths produce warnings but do not throw
  */
-test('Should throw error when model directory does not exist', { timeout: 60000 }, async (t) => {
+test('Non-existent file paths produce warnings but do not throw', { timeout: 60000 }, async (t) => {
   if (isMobile) { t.pass('Skipped on mobile'); return }
-  // Restore any stubs from other tests
   TranscriptionParakeet.prototype.validateModelFiles?.restore?.()
 
-  const nonExistentPath = path.join(os.tmpdir(), 'non-existent-model-directory-12345')
-
-  const args = {
-    modelName: 'non-existent-model',
-    diskPath: nonExistentPath,
-    loader: createLoader()
-  }
-  const config = {
-    parakeetConfig: {
-      modelType: 'tdt'
-    }
-  }
-
   try {
-    new TranscriptionParakeet(args, config) // eslint-disable-line no-new
-    t.fail('Should have thrown an error for non-existent model directory')
+    const model = new TranscriptionParakeet({
+      files: {
+        encoder: '/this/path/definitely/does/not/exist/encoder.onnx',
+        decoder: '/this/path/definitely/does/not/exist/decoder.onnx',
+        vocab: '/this/path/definitely/does/not/exist/vocab.txt',
+        preprocessor: '/this/path/definitely/does/not/exist/preprocessor.onnx'
+      },
+      config: { parakeetConfig: { modelType: 'tdt' } }
+    })
+    t.ok(model, 'Model instance created despite non-existent file paths')
+    t.pass('Non-existent file paths produce warnings, not errors')
   } catch (error) {
-    t.ok(error, 'Error thrown for non-existent model path')
-    t.ok(error.message.includes('Model not found') || error.message.includes('non-existent'),
-      'Error message should mention model not found')
-    t.ok(error.code === 7009 || error.constructor.name === 'QvacErrorAddonParakeet',
-      'Should be a QvacErrorAddonParakeet with correct error code')
+    t.fail('Should not throw for non-existent file paths: ' + error.message)
   }
 })
 
 /**
- * Test 3: If the model path is provided via config.path but doesn't exist, an exception should be thrown
+ * Test 3: Valid file paths do not produce warnings or errors
  */
-test('Should throw error when config.path does not exist', { timeout: 60000 }, async (t) => {
+test('Should not warn when model files exist at provided paths', { timeout: 180000 }, async (t) => {
   if (isMobile) { t.pass('Skipped on mobile'); return }
-  // Restore any stubs from other tests
   TranscriptionParakeet.prototype.validateModelFiles?.restore?.()
 
-  const nonExistentPath = '/this/path/definitely/does/not/exist/model'
-
-  const args = {
-    modelName: 'test-model',
-    loader: createLoader()
-  }
-  const config = {
-    path: nonExistentPath, // Direct path that doesn't exist
-    parakeetConfig: {
-      modelType: 'tdt'
-    }
-  }
-
-  try {
-    new TranscriptionParakeet(args, config) // eslint-disable-line no-new
-    t.fail('Should have thrown an error for non-existent config.path')
-  } catch (error) {
-    t.ok(error, 'Error thrown for non-existent config.path')
-    t.ok(error.message.includes('Model not found') || error.message.includes('does/not/exist'),
-      'Error message should mention the path')
-  }
-})
-
-/**
- * Test 4: If model path is valid and model exists, no exception should be thrown
- */
-test('Should not throw error when model directory exists with valid files', { timeout: 180000 }, async (t) => {
-  if (isMobile) { t.pass('Skipped on mobile'); return }
-  // Restore any stubs from other tests
-  TranscriptionParakeet.prototype.validateModelFiles?.restore?.()
-
-  // Ensure model is downloaded
   const { modelPath: testModelPath } = getTestPaths()
   await ensureModel(testModelPath)
 
-  const args = {
-    modelName: path.basename(testModelPath),
-    diskPath: path.dirname(testModelPath),
-    loader: createLoader()
-  }
-  const config = {
-    parakeetConfig: {
-      modelType: 'tdt'
-    }
-  }
-
   try {
-    const model = new TranscriptionParakeet(args, config)
-    t.ok(model, 'Model should be created successfully')
-    t.pass('No exception thrown when model directory exists with valid files')
+    const model = new TranscriptionParakeet({
+      files: {
+        encoder: path.join(testModelPath, 'encoder-model.onnx'),
+        encoderData: path.join(testModelPath, 'encoder-model.onnx.data'),
+        decoder: path.join(testModelPath, 'decoder_joint-model.onnx'),
+        vocab: path.join(testModelPath, 'vocab.txt'),
+        preprocessor: path.join(testModelPath, 'preprocessor.onnx')
+      },
+      config: { parakeetConfig: { modelType: 'tdt' } }
+    })
+    t.ok(model, 'Model should be created successfully with valid file paths')
+    t.pass('No exception thrown when all file paths are valid')
   } catch (error) {
     t.fail('Should not have thrown an error: ' + error.message)
   }
 })
 
 /**
- * Test 5: Verify that model path validation happens during construction
+ * Test 4: Validation happens in constructor
  */
 test('Model validation happens in constructor', { timeout: 60000 }, async (t) => {
   if (isMobile) { t.pass('Skipped on mobile'); return }
-  // Restore any stubs from other tests
   TranscriptionParakeet.prototype.validateModelFiles?.restore?.()
 
-  const invalidPath = path.join(os.tmpdir(), 'invalid-parakeet-model-path-xyz')
-
-  // Ensure the path doesn't exist
-  if (fs.existsSync(invalidPath)) {
-    fs.rmSync(invalidPath, { recursive: true })
-  }
-
-  const args = {
-    modelName: 'invalid-model',
-    diskPath: invalidPath,
-    loader: createLoader()
-  }
-  const config = {
-    parakeetConfig: {
-      modelType: 'tdt'
-    }
-  }
-
-  let errorThrown = false
-  let errorInstance = null
-
   try {
-    new TranscriptionParakeet(args, config) // eslint-disable-line no-new
+    const model = new TranscriptionParakeet({
+      files: {},
+      config: { parakeetConfig: { modelType: 'tdt' } }
+    })
+    t.ok(model, 'Constructor completes — validation ran without throw for empty files')
   } catch (error) {
-    errorThrown = true
-    errorInstance = error
-  }
-
-  t.ok(errorThrown, 'Error should be thrown during construction for invalid path')
-  t.ok(errorInstance, 'Error instance should be captured')
-  if (errorInstance) {
-    console.log(`   Error type: ${errorInstance.constructor.name}`)
-    console.log(`   Error code: ${errorInstance.code}`)
-    console.log(`   Error message: ${errorInstance.message}`)
+    t.fail('Constructor threw unexpectedly: ' + error.message)
   }
 })
 
 /**
- * Test 6: Test that config.path takes precedence over diskPath + modelName
+ * Test 5: CTC model type resolves correct files from the files map
  */
-test('config.path takes precedence over diskPath + modelName', { timeout: 180000 }, async (t) => {
+test('Should resolve CTC model file paths correctly', { timeout: 60000 }, async (t) => {
   if (isMobile) { t.pass('Skipped on mobile'); return }
-  // Restore any stubs from other tests
   TranscriptionParakeet.prototype.validateModelFiles?.restore?.()
 
-  // Ensure model is downloaded to standard location
-  const { modelPath: validModelPath } = getTestPaths()
-  await ensureModel(validModelPath)
-
-  // Use invalid diskPath + modelName but valid config.path
-  const args = {
-    modelName: 'this-model-does-not-exist',
-    diskPath: '/invalid/path',
-    loader: createLoader()
-  }
-  const config = {
-    path: validModelPath, // Valid path should take precedence
-    parakeetConfig: {
-      modelType: 'tdt'
-    }
-  }
-
-  try {
-    const model = new TranscriptionParakeet(args, config)
-    t.ok(model, 'Model should be created successfully when config.path is valid')
-    t.pass('config.path takes precedence over diskPath + modelName')
-  } catch (error) {
-    t.fail('Should not throw when config.path is valid: ' + error.message)
-  }
-})
-
-/**
- * Test 7: Test CTC model type file requirements (different from TDT)
- */
-test('Should validate CTC model file requirements differently from TDT', { timeout: 60000 }, async (t) => {
-  if (isMobile) { t.pass('Skipped on mobile'); return }
-  // Restore any stubs from other tests
-  TranscriptionParakeet.prototype.validateModelFiles?.restore?.()
-
-  const testDir = isMobile ? path.join(global.testDir || os.tmpdir(), '.test-models') : path.join(os.tmpdir(), '.parakeet-test-models')
+  const testDir = path.join(os.tmpdir(), '.parakeet-test-models')
   const ctcModelPath = path.join(testDir, 'test-ctc-model')
 
-  // Create a minimal CTC model directory (just directory, no files)
   if (!fs.existsSync(ctcModelPath)) {
     fs.mkdirSync(ctcModelPath, { recursive: true })
   }
 
-  const args = {
-    modelName: 'test-ctc-model',
-    diskPath: testDir,
-    loader: createLoader()
-  }
-  const config = {
-    parakeetConfig: {
-      modelType: 'ctc' // CTC model type
-    }
-  }
+  const modelOnnx = path.join(ctcModelPath, 'model.onnx')
+  const tokenizer = path.join(ctcModelPath, 'tokenizer.json')
 
   try {
-    // CTC model type should look for different files (model.onnx, tokenizer.json, etc.)
-    // Since directory exists, it should pass initial validation but warn about missing files
-    const model = new TranscriptionParakeet(args, config)
-    t.ok(model, 'Model instance created for CTC type')
-    t.pass('CTC model type accepts directory without TDT-specific files')
+    const model = new TranscriptionParakeet({
+      files: { model: modelOnnx, tokenizer },
+      config: { parakeetConfig: { modelType: 'ctc' } }
+    })
+    t.ok(model, 'CTC model instance created')
+    t.is(model._resolveFilePath('model.onnx'), modelOnnx, 'model.onnx resolves to files.model')
+    t.is(model._resolveFilePath('tokenizer.json'), tokenizer, 'tokenizer.json resolves to files.tokenizer')
   } catch (error) {
-    // If it throws, that's also acceptable depending on implementation
-    t.ok(error, 'CTC validation may also throw for missing files')
+    t.fail('Should not throw: ' + error.message)
   }
 
-  // Cleanup
   if (fs.existsSync(ctcModelPath)) {
-    try {
-      fs.rmSync(ctcModelPath, { recursive: true })
-    } catch (e) {
-      // Ignore cleanup errors
-    }
+    try { fs.rmSync(ctcModelPath, { recursive: true }) } catch (e) {}
   }
 })
 
 /**
- * Test 8: Test EOU model type file requirements (encoder.onnx, decoder_joint.onnx, tokenizer.json)
+ * Test 6: EOU model type resolves correct files from the files map
  */
-test('Should validate EOU model file requirements differently from TDT', { timeout: 60000 }, async (t) => {
+test('Should resolve EOU model file paths correctly', { timeout: 60000 }, async (t) => {
   if (isMobile) { t.pass('Skipped on mobile'); return }
   TranscriptionParakeet.prototype.validateModelFiles?.restore?.()
 
-  const testDir = isMobile ? path.join(global.testDir || os.tmpdir(), '.test-models') : path.join(os.tmpdir(), '.parakeet-test-models')
+  const testDir = path.join(os.tmpdir(), '.parakeet-test-models')
   const eouModelPath = path.join(testDir, 'test-eou-model')
 
   if (!fs.existsSync(eouModelPath)) {
     fs.mkdirSync(eouModelPath, { recursive: true })
   }
 
-  const args = {
-    modelName: 'test-eou-model',
-    diskPath: testDir,
-    loader: createLoader()
-  }
-  const config = {
-    parakeetConfig: {
-      modelType: 'eou'
-    }
-  }
+  const eouEncoder = path.join(eouModelPath, 'encoder.onnx')
+  const eouDecoder = path.join(eouModelPath, 'decoder_joint.onnx')
 
   try {
-    const model = new TranscriptionParakeet(args, config)
-    t.ok(model, 'Model instance created for EOU type')
-    t.pass('EOU model type accepts directory without TDT-specific files')
+    const model = new TranscriptionParakeet({
+      files: { eouEncoder, eouDecoder },
+      config: { parakeetConfig: { modelType: 'eou' } }
+    })
+    t.ok(model, 'EOU model instance created')
+    t.is(model._resolveFilePath('encoder.onnx'), eouEncoder, 'encoder.onnx resolves to files.eouEncoder')
+    t.is(model._resolveFilePath('decoder_joint.onnx'), eouDecoder, 'decoder_joint.onnx resolves to files.eouDecoder')
   } catch (error) {
-    t.ok(error, 'EOU validation may also throw for missing files')
+    t.fail('Should not throw: ' + error.message)
   }
 
   if (fs.existsSync(eouModelPath)) {
-    try {
-      fs.rmSync(eouModelPath, { recursive: true })
-    } catch (e) {
-      // Ignore cleanup errors
-    }
+    try { fs.rmSync(eouModelPath, { recursive: true }) } catch (e) {}
   }
 })
 
 /**
- * Test 9: Test Sortformer model type file requirements (single sortformer.onnx)
+ * Test 7: Sortformer model type resolves correct files from the files map
  */
-test('Should validate Sortformer model file requirements differently from TDT', { timeout: 60000 }, async (t) => {
+test('Should resolve Sortformer model file paths correctly', { timeout: 60000 }, async (t) => {
   if (isMobile) { t.pass('Skipped on mobile'); return }
   TranscriptionParakeet.prototype.validateModelFiles?.restore?.()
 
-  const testDir = isMobile ? path.join(global.testDir || os.tmpdir(), '.test-models') : path.join(os.tmpdir(), '.parakeet-test-models')
+  const testDir = path.join(os.tmpdir(), '.parakeet-test-models')
   const sfModelPath = path.join(testDir, 'test-sortformer-model')
 
   if (!fs.existsSync(sfModelPath)) {
     fs.mkdirSync(sfModelPath, { recursive: true })
   }
 
-  const args = {
-    modelName: 'test-sortformer-model',
-    diskPath: testDir,
-    loader: createLoader()
-  }
-  const config = {
-    parakeetConfig: {
-      modelType: 'sortformer'
-    }
-  }
+  const sortformerFile = path.join(sfModelPath, 'sortformer.onnx')
 
   try {
-    const model = new TranscriptionParakeet(args, config)
-    t.ok(model, 'Model instance created for Sortformer type')
-    t.pass('Sortformer model type accepts directory without TDT-specific files')
+    const model = new TranscriptionParakeet({
+      files: { sortformer: sortformerFile },
+      config: { parakeetConfig: { modelType: 'sortformer' } }
+    })
+    t.ok(model, 'Sortformer model instance created')
+    t.is(model._resolveFilePath('sortformer.onnx'), sortformerFile, 'sortformer.onnx resolves to files.sortformer')
   } catch (error) {
-    t.ok(error, 'Sortformer validation may also throw for missing files')
+    t.fail('Should not throw: ' + error.message)
   }
 
   if (fs.existsSync(sfModelPath)) {
-    try {
-      fs.rmSync(sfModelPath, { recursive: true })
-    } catch (e) {
-      // Ignore cleanup errors
-    }
+    try { fs.rmSync(sfModelPath, { recursive: true }) } catch (e) {}
   }
 })

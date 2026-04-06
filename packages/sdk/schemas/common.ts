@@ -19,6 +19,8 @@ import {
   unloadModelResponseSchema,
 } from "./unload-model";
 import {
+  transcribeRequestSchema,
+  transcribeResponseSchema,
   transcribeStreamRequestSchema,
   transcribeStreamResponseSchema,
 } from "./transcription";
@@ -51,6 +53,10 @@ import {
 } from "./get-model-info";
 import { ocrStreamRequestSchema, ocrStreamResponseSchema } from "./ocr";
 import {
+  diffusionStreamRequestSchema,
+  diffusionStreamResponseSchema,
+} from "./sdcpp-config";
+import {
   pluginInvokeRequestSchema,
   pluginInvokeResponseSchema,
   pluginInvokeStreamRequestSchema,
@@ -71,6 +77,7 @@ export const requestSchema = z.union([
   downloadAssetRequestSchema,
   completionStreamRequestSchema,
   unloadModelRequestSchema,
+  transcribeRequestSchema,
   transcribeStreamRequestSchema,
   loggingStreamRequestSchema,
   embedRequestSchema,
@@ -83,6 +90,7 @@ export const requestSchema = z.union([
   deleteCacheRequestSchema,
   getModelInfoRequestSchema,
   ocrStreamRequestSchema,
+  diffusionStreamRequestSchema,
   pluginInvokeRequestSchema,
   pluginInvokeStreamRequestSchema,
   modelRegistryListRequestSchema,
@@ -97,6 +105,7 @@ export const responseSchema = z.discriminatedUnion("type", [
   completionStreamResponseSchema,
   unloadModelResponseSchema,
   modelProgressUpdateSchema,
+  transcribeResponseSchema,
   transcribeStreamResponseSchema,
   loggingStreamResponseSchema,
   embedResponseSchema,
@@ -111,6 +120,7 @@ export const responseSchema = z.discriminatedUnion("type", [
   deleteCacheResponseSchema,
   getModelInfoResponseSchema,
   ocrStreamResponseSchema,
+  diffusionStreamResponseSchema,
   pluginInvokeResponseSchema,
   pluginInvokeStreamResponseSchema,
   modelRegistryListResponseSchema,

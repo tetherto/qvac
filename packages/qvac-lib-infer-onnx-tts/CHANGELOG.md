@@ -5,6 +5,43 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.8.0]
+
+This release refactors the JavaScript client around a smaller public surface: one `files` map and explicit engines, no loader or download stubs, and composition-based job handling via **`@qvac/infer-base`** (**`createJobHandler`**, **`exclusiveRunQueue`**, **`getApiDefinition`**) instead of subclassing **`BaseInference`**. Callers should pass **absolute** artifact paths and use **`exclusiveRun: true`** when they need serialized `run()` / `reload()` / `unload()` with the native single-job model.
+
+## Breaking Changes
+
+### Constructor and weight loading
+
+**`ONNXTTS`** now takes model locations through **`options.files`** (with **`modelDir`** for bundle layouts and optional **`engine`** to disambiguate). The previous loader, cache, and **`downloadWeights`** / weights-provider-style flow on this client are removed. Integrations that streamed weights through infer-base helpers must supply resolved paths (or perform download elsewhere) before calling **`load()`**.
+
+### `downloadWeights` removed
+
+The stub **`downloadWeights()`** method is no longer on **`ONNXTTS`** or in **`index.d.ts`**. There is no replacement on this class; use your own download or registry flow, then pass paths in **`files`**.
+
+### Paths are not normalized in JS
+
+The client no longer resolves relative paths or applies Windows extended-path prefixes. Every path in **`files`** must be **absolute** or the native layer may fail in hard-to-debug ways. Update examples and tests accordingly (for example **`path.resolve(...)`** at the call site).
+
+### Single active job and overlap behavior
+
+Job/response wiring uses **one** active **`QvacResponse`**, managed by **`createJobHandler()`** from **`@qvac/infer-base`**. If a new **`run()`** starts while a previous response is still active, the prior response is **failed** with **`Stale job replaced by new run`** (via **`start()`**), rather than the old **`JOB_ALREADY_RUNNING`** guard. Use **`exclusiveRun: true`** so **`exclusiveRunQueue()`** serializes **`run()`**, **`reload()`**, and **`unload()`** against the native single-job model and avoids racing the addon. The **`_hasActiveResponse`** guard and synthetic **`OnlyOneJob`** id are removed; **`index.js`** no longer uses an **`accepted`** flag around **`runJob`** (the native binding may still report non-acceptance; errors map to **`FAILED_TO_APPEND`** in **`tts.js`**).
+
+## Other
+
+### Internal structure
+
+**`BaseInference`** inheritance is removed. **`@qvac/infer-base`** supplies **`createJobHandler`**, **`exclusiveRunQueue`**, and standalone **`getApiDefinition()`** (used from **`index.js`** for API logging). The job handler owns the single active **`QvacResponse`** slot; **`_addonOutputCallback`** routes native events through **`_job.output`**, **`_job.end`**, **`_job.fail`**, and finetune stats via **`_job.active`**. Unload/reload call **`_job.fail(...)`** to tear down the active response. **`tts.js`** **`runJob`** only forwards to the binding and maps thrown errors to **`FAILED_TO_APPEND`**.
+
+## [0.7.2]
+
+### Added
+- Added support for korean and hebrew
+
+### Changed
+- Switched ONNX Runtime linkage from direct vcpkg dependency to `@qvac/onnx` shared module, aligning with the OCR package pattern for consistent cross-addon runtime sharing
+- Changed integration tests to run faster, with better WER verification
+
 ## [0.7.1]
 
 ### Changed

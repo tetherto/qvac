@@ -49,6 +49,7 @@ jobs:
       contents: read
       packages: read
       pull-requests: write # Allow commenting on PRs
+      id-token: write
     strategy:
       fail-fast: false
       matrix:
@@ -361,10 +362,9 @@ jobs:
           echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
 
       - name: Configure AWS credentials
-        uses: aws-actions/configure-aws-credentials@8df5847569e6427dd6c4fb1cf565c83acfa8afa7 # 6.0.0
+        uses: aws-actions/configure-aws-credentials@v6
         with:
-          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
-          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          role-to-assume: ${{ secrets.AWS_OIDC_ROLE_ARN }}
           aws-region: us-west-2
 
       - name: Generate IndicTrans Model URLs
@@ -548,7 +548,7 @@ jobs:
 
       - name: Setup Android SDK
         if: matrix.platform == 'Android'
-        uses: android-actions/setup-android@9fc6c4e9069bf8d3d10b2204b1fb8f6ef7065407 # 3.2.2
+        uses: android-actions/setup-android@v3
 
       - name: Generate Android project
         if: matrix.platform == 'Android'
@@ -1059,7 +1059,7 @@ jobs:
             BUNDLE_ID="${{ env.APP_BUNDLE_ID }}"
             # Android wdio config with crash detection (bail:0 = continue on test failures, crash = process.exit)
             # Increased timeout to 30 minutes (1800000ms) for long-running translation tests
-            WDIO_CONFIG='exports.config={runner:"local",hostname:"127.0.0.1",port:4723,path:"/wd/hub",specs:["*.spec.js","*.test.js"],maxInstances:1,bail:0,capabilities:[{platformName:"Android","appium:automationName":"UiAutomator2","appium:appPackage":"'${{ env.APP_BUNDLE_ID }}'","appium:appActivity":"'${{ env.APP_BUNDLE_ID }}'.MainActivity","appium:newCommandTimeout":300,"appium:autoGrantPermissions":true,"appium:autoAcceptAlerts":true,"appium:noReset":true,"appium:dontStopAppOnReset":true,"appium:forceAppLaunch":false}],logLevel:"debug",waitforTimeout:120000,connectionRetryTimeout:30000,connectionRetryCount:3,services:[],framework:"mocha",reporters:["spec"],mochaOpts:{ui:"bdd",timeout:1800000},before:async function(capabilities,specs,browser){const BUNDLE_ID="'${{ env.APP_BUNDLE_ID }}'";global.appCrashed=false;global.checkAppCrash=async(stage)=>{try{const state=await browser.queryAppState(BUNDLE_ID);console.log("["+stage+"] App state: "+state+" (4=foreground,3=background,1=not running)");if(state<3){console.error("\\n🛑 APP CRASHED at "+stage+"! State="+state);console.error("Check device logs for BareKit/native errors.\\n");global.appCrashed=true;process.exit(1);}return state;}catch(e){console.log("["+stage+"] queryAppState error: "+e.message);return-1;}};console.log("Checking initial app state...");await global.checkAppCrash("startup");console.log("Waiting for app to initialize...");await browser.pause(5000);await global.checkAppCrash("after-pause");const initText=await browser.$("android=new UiSelector().textContains(\"INITIALIZED\")");await initText.waitForDisplayed({timeout:60000});await global.checkAppCrash("after-init");console.log("App initialized, clicking Run Automated Tests...");const button=await browser.$("android=new UiSelector().textContains(\"Run Automated Tests\")");await button.waitForDisplayed({timeout:15000});await button.click();console.log("Button clicked!");await browser.pause(5000);await global.checkAppCrash("after-click");},afterTest:async function(test,context,{error}){if(global.appCrashed)return;await global.checkAppCrash("after-test:"+test.title);}};'
+            WDIO_CONFIG='exports.config={runner:"local",hostname:"127.0.0.1",port:4723,path:"/wd/hub",specs:["*.spec.js","*.test.js"],maxInstances:1,bail:0,capabilities:[{platformName:"Android","appium:automationName":"UiAutomator2","appium:appPackage":"'${{ env.APP_BUNDLE_ID }}'","appium:appActivity":"'${{ env.APP_BUNDLE_ID }}'.MainActivity","appium:newCommandTimeout":300,"appium:autoGrantPermissions":true,"appium:autoAcceptAlerts":true,"appium:noReset":true,"appium:dontStopAppOnReset":true,"appium:forceAppLaunch":false}],logLevel:"debug",waitforTimeout:120000,connectionRetryTimeout:30000,connectionRetryCount:3,services:[],framework:"mocha",reporters:["spec"],mochaOpts:{ui:"bdd",timeout:1800000},before:async function(capabilities,specs,browser){const BUNDLE_ID="'${{ env.APP_BUNDLE_ID }}'";global.appCrashed=false;global._crashCheckFails=0;global._crashCheckDisabled=false;global.checkAppCrash=async(stage)=>{if(global._crashCheckDisabled)return-1;try{const state=await browser.queryAppState(BUNDLE_ID);global._crashCheckFails=0;console.log("["+stage+"] App state: "+state+" (4=foreground,3=background,1=not running)");if(state<3){console.error("\\n🛑 APP CRASHED at "+stage+"! State="+state);console.error("Check device logs for BareKit/native errors.\\n");global.appCrashed=true;if(global._healthInterval)clearInterval(global._healthInterval);process.exit(1);}return state;}catch(e){global._crashCheckFails++;if(global._crashCheckFails>=3){console.log("["+stage+"] queryAppState not supported, disabling crash detection");global._crashCheckDisabled=true;if(global._healthInterval)clearInterval(global._healthInterval);}return-1;}};console.log("Checking initial app state...");await global.checkAppCrash("startup");console.log("Waiting for app to initialize...");await browser.pause(5000);await global.checkAppCrash("after-pause");const initText=await browser.$("android=new UiSelector().textContains(\"INITIALIZED\")");await initText.waitForDisplayed({timeout:60000});await global.checkAppCrash("after-init");console.log("App initialized, clicking Run Automated Tests...");const button=await browser.$("android=new UiSelector().textContains(\"Run Automated Tests\")");await button.waitForDisplayed({timeout:15000});await button.click();console.log("Button clicked!");await browser.pause(5000);await global.checkAppCrash("after-click");global._healthInterval=setInterval(async()=>{if(global.appCrashed)return;try{await global.checkAppCrash("health-monitor");}catch(e){}},15000);console.log("Health monitor started (15s interval)");},after:async function(){if(global._healthInterval)clearInterval(global._healthInterval);console.log("Health monitor stopped");},afterTest:async function(test,context,{error}){if(global.appCrashed)return;await global.checkAppCrash("after-test:"+test.title);}};'
           else
             PLATFORM="iOS"
             AUTOMATION="XCUITest"
@@ -1069,7 +1069,7 @@ jobs:
             # iOS wdio config with crash detection (bail:0 = continue on test failures, crash = process.exit)
             # usePrebuiltWDA uses Device Farm's pre-built WebDriverAgent
             # Increased timeout to 30 minutes (1800000ms) for long-running translation tests
-            WDIO_CONFIG='exports.config={runner:"local",hostname:"127.0.0.1",port:4723,path:"/wd/hub",specs:["*.spec.js","*.test.js"],maxInstances:1,bail:0,capabilities:[{platformName:"iOS","appium:automationName":"XCUITest","appium:bundleId":"'${{ env.APP_BUNDLE_ID }}'","appium:newCommandTimeout":300,"appium:noReset":true,"appium:forceAppLaunch":false,"appium:usePrebuiltWDA":true,"appium:wdaLocalPort":8100,"appium:showIOSLog":true,"appium:realDeviceLogger":"/usr/local/lib/node_modules/appium/node_modules/deviceconsole/deviceconsole"}],logLevel:"debug",waitforTimeout:120000,connectionRetryTimeout:30000,connectionRetryCount:3,services:[],framework:"mocha",reporters:["spec"],mochaOpts:{ui:"bdd",timeout:1800000},before:async function(capabilities,specs,browser){const BUNDLE_ID="'${{ env.APP_BUNDLE_ID }}'";global.appCrashed=false;global.checkAppCrash=async(stage)=>{try{const state=await browser.queryAppState(BUNDLE_ID);console.log("["+stage+"] App state: "+state+" (4=foreground,3=background,1=not running)");if(state<3){console.error("\\n🛑 APP CRASHED at "+stage+"! State="+state);console.error("Check device logs for BareKit/native errors.\\n");global.appCrashed=true;process.exit(1);}return state;}catch(e){console.log("["+stage+"] queryAppState error: "+e.message);return-1;}};console.log("Checking initial app state...");await global.checkAppCrash("startup");console.log("Waiting for app to initialize...");await browser.pause(5000);await global.checkAppCrash("after-pause");const initText=await browser.$("-ios predicate string:label CONTAINS \"INITIALIZED\"");await initText.waitForDisplayed({timeout:60000});await global.checkAppCrash("after-init");console.log("App initialized, clicking Run Automated Tests...");const button=await browser.$("-ios predicate string:label CONTAINS \"Run Automated Tests\"");await button.waitForDisplayed({timeout:15000});await button.click();console.log("Button clicked!");await browser.pause(5000);await global.checkAppCrash("after-click");},afterTest:async function(test,context,{error}){if(global.appCrashed)return;await global.checkAppCrash("after-test:"+test.title);}};'
+            WDIO_CONFIG='exports.config={runner:"local",hostname:"127.0.0.1",port:4723,path:"/wd/hub",specs:["*.spec.js","*.test.js"],maxInstances:1,bail:0,capabilities:[{platformName:"iOS","appium:automationName":"XCUITest","appium:bundleId":"'${{ env.APP_BUNDLE_ID }}'","appium:newCommandTimeout":300,"appium:noReset":true,"appium:forceAppLaunch":false,"appium:usePrebuiltWDA":true,"appium:wdaLocalPort":8100,"appium:showIOSLog":true,"appium:realDeviceLogger":"/usr/local/lib/node_modules/appium/node_modules/deviceconsole/deviceconsole"}],logLevel:"debug",waitforTimeout:120000,connectionRetryTimeout:30000,connectionRetryCount:3,services:[],framework:"mocha",reporters:["spec"],mochaOpts:{ui:"bdd",timeout:1800000},before:async function(capabilities,specs,browser){const BUNDLE_ID="'${{ env.APP_BUNDLE_ID }}'";global.appCrashed=false;global._crashCheckFails=0;global._crashCheckDisabled=false;global.checkAppCrash=async(stage)=>{if(global._crashCheckDisabled)return-1;try{const state=await browser.execute("mobile: queryAppState",{bundleId:BUNDLE_ID});global._crashCheckFails=0;console.log("["+stage+"] App state: "+state+" (4=foreground,3=background,1=not running)");if(state<3){console.error("\\n🛑 APP CRASHED at "+stage+"! State="+state);console.error("Check device logs for BareKit/native errors.\\n");global.appCrashed=true;if(global._healthInterval)clearInterval(global._healthInterval);process.exit(1);}return state;}catch(e){global._crashCheckFails++;if(global._crashCheckFails>=3){console.log("["+stage+"] queryAppState not supported, disabling crash detection");global._crashCheckDisabled=true;if(global._healthInterval)clearInterval(global._healthInterval);}return-1;}};console.log("Checking initial app state...");await global.checkAppCrash("startup");console.log("Waiting for app to initialize...");await browser.pause(5000);await global.checkAppCrash("after-pause");const initText=await browser.$("-ios predicate string:label CONTAINS \"INITIALIZED\"");await initText.waitForDisplayed({timeout:60000});await global.checkAppCrash("after-init");console.log("App initialized, clicking Run Automated Tests...");const button=await browser.$("-ios predicate string:label CONTAINS \"Run Automated Tests\"");await button.waitForDisplayed({timeout:15000});await button.click();console.log("Button clicked!");await browser.pause(5000);await global.checkAppCrash("after-click");global._healthInterval=setInterval(async()=>{if(global.appCrashed)return;try{await global.checkAppCrash("health-monitor");}catch(e){}},15000);console.log("Health monitor started (15s interval)");},after:async function(){if(global._healthInterval)clearInterval(global._healthInterval);console.log("Health monitor stopped");},afterTest:async function(test,context,{error}){if(global.appCrashed)return;await global.checkAppCrash("after-test:"+test.title);}};'
           fi
 
           # Base64 encode the wdio config to safely embed in YAML
@@ -1228,12 +1228,6 @@ jobs:
       - name: Schedule Device Farm Test Run
         id: schedule_run
         run: |
-          if [ "${{ matrix.platform }}" == "Android" ]; then
-            POOL_ARN="${{ secrets.ANDROID_DEVICE_POOL_ARN_NMTCPP }}"
-          else
-            POOL_ARN="${{ secrets.IOS_DEVICE_POOL_ARN_NMTCPP }}"
-          fi
-
           # Set run name based on trigger
           if [ "${{ github.event_name }}" == "workflow_dispatch" ]; then
             RUN_NAME="Manual-${{ github.run_number }}-${{ matrix.platform }}"
@@ -1241,47 +1235,121 @@ jobs:
             RUN_NAME="PR-${{ github.event.pull_request.number || github.run_number }}-${{ matrix.platform }}"
           fi
 
-          echo "🚀 Scheduling Device Farm test run..."
-          echo "Platform: ${{ matrix.platform }}"
-          echo "Device Pool ARN: $POOL_ARN"
-          echo "Run Name: $RUN_NAME"
+          PROJECT_ARN="${{ secrets.AWS_DEVICE_FARM_PROJECT_ARN_NMTCPP }}"
+          APP_ARN="${{ steps.upload_app.outputs.app_upload_arn }}"
+          TEST_CONFIG="type=APPIUM_NODE,testPackageArn=${{ steps.upload_test_package.outputs.test_package_upload_arn }},testSpecArn=${{ steps.upload_test_spec.outputs.test_spec_arn }}"
 
-          RUN_ARN=$(aws devicefarm schedule-run \
-            --project-arn "${{ secrets.AWS_DEVICE_FARM_PROJECT_ARN_NMTCPP }}" \
-            --device-pool-arn "$POOL_ARN" \
-            --app-arn "${{ steps.upload_app.outputs.app_upload_arn }}" \
-            --name "$RUN_NAME" \
-            --test type=APPIUM_NODE,testPackageArn="${{ steps.upload_test_package.outputs.test_package_upload_arn }}",testSpecArn="${{ steps.upload_test_spec.outputs.test_spec_arn }}" \
-            --query 'run.arn' --output text)
+          schedule_run_with_pool() {
+            local pool_arn="$1"
+            local name="$2"
+            aws devicefarm schedule-run \
+              --project-arn "$PROJECT_ARN" \
+              --device-pool-arn "$pool_arn" \
+              --app-arn "$APP_ARN" \
+              --name "$name" \
+              --test "$TEST_CONFIG" \
+              --execution-configuration jobTimeoutMinutes=120 \
+              --query 'run.arn' --output text
+          }
 
-          echo "run_arn=$RUN_ARN" >> $GITHUB_OUTPUT
-          echo "✅ Test run scheduled: $RUN_ARN"
+          schedule_run_with_filter() {
+            local name="$1"
+            local filter="$2"
+            aws devicefarm schedule-run \
+              --project-arn "$PROJECT_ARN" \
+              --device-selection-configuration "$filter" \
+              --app-arn "$APP_ARN" \
+              --name "$name" \
+              --test "$TEST_CONFIG" \
+              --execution-configuration jobTimeoutMinutes=120 \
+              --query 'run.arn' --output text
+          }
+
+          if [ "${{ matrix.platform }}" == "Android" ]; then
+            echo "🚀 Scheduling parallel Android runs (Samsung Galaxy S25 Ultra + Google Pixel 9)..."
+
+            echo "Querying available Samsung S25 Ultra devices..."
+            aws devicefarm list-devices --region us-west-2 \
+              --filters '[{"attribute":"MANUFACTURER","operator":"EQUALS","values":["Samsung"]},{"attribute":"MODEL","operator":"CONTAINS","values":["S25 Ultra"]},{"attribute":"PLATFORM","operator":"EQUALS","values":["ANDROID"]}]' \
+              --query 'devices[].{name:name,model:model,os:os,availability:availability}' --output table || true
+
+            echo "Querying available Pixel 9 devices..."
+            aws devicefarm list-devices --region us-west-2 \
+              --filters '[{"attribute":"MANUFACTURER","operator":"EQUALS","values":["Google"]},{"attribute":"MODEL","operator":"CONTAINS","values":["Pixel 9"]},{"attribute":"PLATFORM","operator":"EQUALS","values":["ANDROID"]}]' \
+              --query 'devices[].{name:name,model:model,os:os,availability:availability}' --output table || true
+
+            SAMSUNG_FILTER='{"filters":[{"attribute":"MANUFACTURER","operator":"EQUALS","values":["Samsung"]},{"attribute":"MODEL","operator":"CONTAINS","values":["S25 Ultra"]},{"attribute":"PLATFORM","operator":"EQUALS","values":["ANDROID"]}],"maxDevices":1}'
+            RUN_ARN_1=$(schedule_run_with_filter "$RUN_NAME-Samsung" "$SAMSUNG_FILTER")
+            echo "✅ Samsung run scheduled: $RUN_ARN_1"
+
+            PIXEL_FILTER='{"filters":[{"attribute":"MANUFACTURER","operator":"EQUALS","values":["Google"]},{"attribute":"MODEL","operator":"CONTAINS","values":["Pixel 9"]},{"attribute":"PLATFORM","operator":"EQUALS","values":["ANDROID"]}],"maxDevices":1}'
+            RUN_ARN_2=$(schedule_run_with_filter "$RUN_NAME-Pixel" "$PIXEL_FILTER")
+            echo "✅ Pixel run scheduled: $RUN_ARN_2"
+
+            echo "run_arn_1=$RUN_ARN_1" >> $GITHUB_OUTPUT
+            echo "run_arn_2=$RUN_ARN_2" >> $GITHUB_OUTPUT
+            echo "run_count=2" >> $GITHUB_OUTPUT
+          else
+            POOL_ARN="${{ secrets.IOS_DEVICE_POOL_ARN_NMTCPP }}"
+            echo "🚀 Scheduling iOS run..."
+            RUN_ARN_1=$(schedule_run_with_pool "$POOL_ARN" "$RUN_NAME")
+            echo "✅ iOS run scheduled: $RUN_ARN_1"
+            echo "run_arn_1=$RUN_ARN_1" >> $GITHUB_OUTPUT
+            echo "run_count=1" >> $GITHUB_OUTPUT
+          fi
+
+          echo "All runs scheduled."
 
       - name: Monitor Test Run
         id: monitor_run
         run: |
-          RUN_ARN="${{ steps.schedule_run.outputs.run_arn }}"
-          echo "📊 Monitoring test run: $RUN_ARN"
+          RUN_ARN_1="${{ steps.schedule_run.outputs.run_arn_1 }}"
+          RUN_ARN_2="${{ steps.schedule_run.outputs.run_arn_2 }}"
+          RUN_COUNT="${{ steps.schedule_run.outputs.run_count }}"
+
+          echo "📊 Monitoring $RUN_COUNT Device Farm run(s)..."
+          echo "  Run 1: $RUN_ARN_1"
+          if [ "$RUN_COUNT" = "2" ]; then
+            echo "  Run 2: $RUN_ARN_2"
+          fi
           echo ""
 
           MAX_WAIT_TIME=7200  # 120 minutes
           ELAPSED=0
+          DONE_1=false
+          DONE_2=false
 
           while true; do
-            STATUS=$(aws devicefarm get-run --arn "$RUN_ARN" --query 'run.status' --output text)
-            RESULT=$(aws devicefarm get-run --arn "$RUN_ARN" --query 'run.result' --output text)
+            if [[ "$DONE_1" != "true" ]]; then
+              STATUS_1=$(aws devicefarm get-run --arn "$RUN_ARN_1" --query 'run.status' --output text)
+              RESULT_1=$(aws devicefarm get-run --arn "$RUN_ARN_1" --query 'run.result' --output text)
+              if [[ "$STATUS_1" == "COMPLETED" ]]; then DONE_1=true; fi
+            fi
 
-            echo "⏳ Run status: $STATUS (Result: $RESULT) - Elapsed: ${ELAPSED}s"
+            if [[ "$RUN_COUNT" == "2" && "$DONE_2" != "true" ]]; then
+              STATUS_2=$(aws devicefarm get-run --arn "$RUN_ARN_2" --query 'run.status' --output text)
+              RESULT_2=$(aws devicefarm get-run --arn "$RUN_ARN_2" --query 'run.result' --output text)
+              if [[ "$STATUS_2" == "COMPLETED" ]]; then DONE_2=true; fi
+            fi
 
-            if [[ "$STATUS" == "COMPLETED" ]]; then
+            if [ "$RUN_COUNT" = "2" ]; then
+              echo "⏳ Run 1: $STATUS_1 ($RESULT_1) | Run 2: $STATUS_2 ($RESULT_2) - ${ELAPSED}s"
+            else
+              echo "⏳ Run status: $STATUS_1 ($RESULT_1) - ${ELAPSED}s"
+            fi
+
+            ALL_DONE=true
+            if [[ "$DONE_1" != "true" ]]; then ALL_DONE=false; fi
+            if [[ "$RUN_COUNT" == "2" && "$DONE_2" != "true" ]]; then ALL_DONE=false; fi
+            if [[ "$ALL_DONE" == "true" ]]; then
               echo ""
-              echo "✅ Test run completed!"
+              echo "✅ All runs completed!"
               break
             fi
 
             if [ $ELAPSED -ge $MAX_WAIT_TIME ]; then
               echo ""
-              echo "❌ Timeout: Test run exceeded $MAX_WAIT_TIME seconds"
+              echo "❌ Timeout: exceeded ${MAX_WAIT_TIME}s"
               exit 1
             fi
 
@@ -1289,78 +1357,78 @@ jobs:
             ELAPSED=$((ELAPSED + 30))
           done
 
-          # Get detailed results
-          RUN_DETAILS=$(aws devicefarm get-run --arn "$RUN_ARN" --output json)
-          RESULT=$(echo $RUN_DETAILS | jq -r '.run.result')
-          COUNTERS=$(echo $RUN_DETAILS | jq -r '.run.counters')
+          # Collect all run ARNs
+          RUN_ARNS=("$RUN_ARN_1")
+          if [ "$RUN_COUNT" = "2" ]; then
+            RUN_ARNS+=("$RUN_ARN_2")
+          fi
 
-          echo ""
-          echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
-          echo "📊 FINAL TEST RESULTS"
-          echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
-          echo "Result: $RESULT"
-          echo ""
-
-          # Get jobs (devices) and extract actual test names
-          echo "📱 Fetching detailed test results..."
-          JOBS=$(aws devicefarm list-jobs --arn "$RUN_ARN" --output json)
-
-          echo ""
-          echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
-          echo "📋 YOUR TESTS (excluding Setup/Teardown)"
-          echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
-          echo ""
-
+          # Aggregate results across all runs
           DEVICE_COUNT=0
           USER_TEST_COUNT=0
           USER_PASSED=0
           USER_FAILED=0
           FAILED_TEST_DETAILS=()
+          ALL_RESULTS_PASSED=true
+          TOTAL_TOTAL=0
+          TOTAL_PASSED=0
+          TOTAL_FAILED=0
+          TOTAL_SKIPPED=0
 
-          # Extract project ID and run ID from RUN_ARN for console links
-          # RUN_ARN format: arn:aws:devicefarm:us-west-2:ACCOUNT:run:PROJECT_ID/RUN_ID
-          PROJECT_ID=$(echo "$RUN_ARN" | sed -n 's/.*:run:\([^/]*\)\/.*/\1/p')
-          RUN_ID=$(echo "$RUN_ARN" | sed -n 's/.*:run:[^/]*\/\(.*\)/\1/p')
+          echo ""
+          echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+          echo "📊 FINAL TEST RESULTS"
+          echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+          echo ""
 
-          # Process each device/job
-          for JOB_ARN in $(echo "$JOBS" | jq -r '.jobs[].arn'); do
-            DEVICE_COUNT=$((DEVICE_COUNT + 1))
-            JOB_DETAILS=$(aws devicefarm get-job --arn "$JOB_ARN" --output json)
-            DEVICE_NAME=$(echo "$JOB_DETAILS" | jq -r '.job.device.name // "Unknown Device"')
-            JOB_RESULT=$(echo "$JOB_DETAILS" | jq -r '.job.result // "UNKNOWN"')
-            JOB_ID=$(echo "$JOB_ARN" | sed -n 's/.*:job:[^/]*\/[^/]*\/\(.*\)/\1/p')
-            # Build console link (no region param needed when region is in subdomain)
-            CONSOLE_LINK="https://us-west-2.console.aws.amazon.com/devicefarm/home#/mobile/projects/${PROJECT_ID}/runs/${RUN_ID}/jobs/${JOB_ID}"
-            
-            if [ "$JOB_RESULT" = "PASSED" ]; then
-              echo "   ✅ $DEVICE_NAME: PASSED"
-              USER_PASSED=$((USER_PASSED + 1))
+          RUN_INDEX=0
+          for RUN_ARN in "${RUN_ARNS[@]}"; do
+            RUN_INDEX=$((RUN_INDEX + 1))
+            RUN_DETAILS=$(aws devicefarm get-run --arn "$RUN_ARN" --output json)
+            RESULT=$(echo $RUN_DETAILS | jq -r '.run.result')
+            RUN_NAME_LABEL=$(echo $RUN_DETAILS | jq -r '.run.name')
+            COUNTERS=$(echo $RUN_DETAILS | jq -r '.run.counters')
+
+            if [[ "$RESULT" != "PASSED" && "$RESULT" != "SKIPPED" ]]; then ALL_RESULTS_PASSED=false; fi
+
+            TOTAL_TOTAL=$((TOTAL_TOTAL + $(echo $COUNTERS | jq -r '.total // 0')))
+            TOTAL_PASSED=$((TOTAL_PASSED + $(echo $COUNTERS | jq -r '.passed // 0')))
+            TOTAL_FAILED=$((TOTAL_FAILED + $(echo $COUNTERS | jq -r '.failed // 0')))
+            TOTAL_SKIPPED=$((TOTAL_SKIPPED + $(echo $COUNTERS | jq -r '.skipped // 0')))
+
+            PROJECT_ID=$(echo "$RUN_ARN" | sed -n 's/.*:run:\([^/]*\)\/.*/\1/p')
+            RUN_ID=$(echo "$RUN_ARN" | sed -n 's/.*:run:[^/]*\/\(.*\)/\1/p')
+
+            if [ "$RUN_COUNT" = "2" ]; then
+              echo "--- Run $RUN_INDEX: $RUN_NAME_LABEL (Result: $RESULT) ---"
             else
-              echo "   ❌ $DEVICE_NAME: $JOB_RESULT"
-              USER_FAILED=$((USER_FAILED + 1))
-              FAILED_TEST_DETAILS+=("❌ $DEVICE_NAME: $JOB_RESULT")
-              FAILED_TEST_DETAILS+=("   📎 View logs: $CONSOLE_LINK")
+              echo "Result: $RESULT"
             fi
 
-            USER_TEST_COUNT=$((USER_TEST_COUNT + 1))
+            JOBS=$(aws devicefarm list-jobs --arn "$RUN_ARN" --output json)
+            for JOB_ARN in $(echo "$JOBS" | jq -r '.jobs[].arn'); do
+              DEVICE_COUNT=$((DEVICE_COUNT + 1))
+              JOB_DETAILS=$(aws devicefarm get-job --arn "$JOB_ARN" --output json)
+              DEVICE_NAME=$(echo "$JOB_DETAILS" | jq -r '.job.device.name // "Unknown Device"')
+              JOB_RESULT=$(echo "$JOB_DETAILS" | jq -r '.job.result // "UNKNOWN"')
+              JOB_ID=$(echo "$JOB_ARN" | sed -n 's/.*:job:[^/]*\/[^/]*\/\(.*\)/\1/p')
+              CONSOLE_LINK="https://us-west-2.console.aws.amazon.com/devicefarm/home#/mobile/projects/${PROJECT_ID}/runs/${RUN_ID}/jobs/${JOB_ID}"
+
+              if [ "$JOB_RESULT" = "PASSED" ]; then
+                echo "   ✅ $DEVICE_NAME: PASSED"
+                USER_PASSED=$((USER_PASSED + 1))
+              else
+                echo "   ❌ $DEVICE_NAME: $JOB_RESULT"
+                USER_FAILED=$((USER_FAILED + 1))
+                FAILED_TEST_DETAILS+=("❌ $DEVICE_NAME: $JOB_RESULT")
+                FAILED_TEST_DETAILS+=("   📎 View logs: $CONSOLE_LINK")
+              fi
+              USER_TEST_COUNT=$((USER_TEST_COUNT + 1))
+            done
+
+            echo "   🔗 Run link: https://us-west-2.console.aws.amazon.com/devicefarm/home#/mobile/projects/${PROJECT_ID}/runs/${RUN_ID}"
             echo ""
           done
-
-          # Show AWS Device Farm console link for the entire run
-          echo ""
-          echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
-          echo "🔗 AWS DEVICE FARM LINKS"
-          echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
-          echo ""
-          echo "📊 Full Run Details:"
-          echo "   https://us-west-2.console.aws.amazon.com/devicefarm/home#/mobile/projects/${PROJECT_ID}/runs/${RUN_ID}"
-          echo ""
-          echo "💡 Tip: Click the link above, then select a device to view:"
-          echo "   • Video recording of the test"
-          echo "   • Screenshots"  
-          echo "   • Device logs"
-          echo "   • Test spec output (shows individual test results)"
-          echo ""
 
           # Summary
           echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
@@ -1370,19 +1438,6 @@ jobs:
           echo "Devices tested: $DEVICE_COUNT"
           echo "  ✅ Passed: $USER_PASSED"
           echo "  ❌ Failed: $USER_FAILED"
-          echo ""
-          echo "📋 What these tests verify:"
-          echo "   The E2E tests run on Device Farm check that your app:"
-          echo "   1. Shows 'INITIALIZED' after startup"
-          echo "   2. Runs all test functions from test/mobile/*.cjs"
-          echo "   3. Reports PASS/FAIL for each test function"
-          echo ""
-          echo "💡 If a test times out but the video shows PASS:"
-          echo "   → The app test passed, but E2E gave up waiting too early"
-          echo "   → Check timeout settings in qvac-test-addon-mobile"
-          echo ""
-          echo "Device Farm Counters (includes Setup/Teardown):"
-          echo "$COUNTERS" | jq '.'
           echo ""
 
           if [ ${#FAILED_TEST_DETAILS[@]} -gt 0 ]; then
@@ -1395,49 +1450,165 @@ jobs:
             echo ""
           fi
 
-          # Save for PR comment
-          echo "test_result=$RESULT" >> $GITHUB_OUTPUT
-          echo "test_counters<<EOF" >> $GITHUB_OUTPUT
-          echo "$COUNTERS" >> $GITHUB_OUTPUT
-          echo "EOF" >> $GITHUB_OUTPUT
+          echo "Device Farm totals: $TOTAL_TOTAL | Passed: $TOTAL_PASSED | Failed: $TOTAL_FAILED | Skipped: $TOTAL_SKIPPED"
+          echo ""
 
-          # Extract test counts
-          TOTAL=$(echo $COUNTERS | jq -r '.total // 0')
-          PASSED=$(echo $COUNTERS | jq -r '.passed // 0')
-          FAILED=$(echo $COUNTERS | jq -r '.failed // 0')
-          SKIPPED=$(echo $COUNTERS | jq -r '.skipped // 0')
-
-          echo "test_total=$TOTAL" >> $GITHUB_OUTPUT
-          echo "test_passed=$PASSED" >> $GITHUB_OUTPUT
-          echo "test_failed=$FAILED" >> $GITHUB_OUTPUT
-          echo "test_skipped=$SKIPPED" >> $GITHUB_OUTPUT
-
-          # Also save user test counts
+          # Save outputs — pass if at least one device passed and none failed
+          if [ $USER_FAILED -gt 0 ]; then
+            echo "test_result=FAILED" >> $GITHUB_OUTPUT
+          elif [ $USER_PASSED -gt 0 ]; then
+            echo "test_result=PASSED" >> $GITHUB_OUTPUT
+          else
+            echo "test_result=FAILED" >> $GITHUB_OUTPUT
+          fi
+          echo "test_total=$TOTAL_TOTAL" >> $GITHUB_OUTPUT
+          echo "test_passed=$TOTAL_PASSED" >> $GITHUB_OUTPUT
+          echo "test_failed=$TOTAL_FAILED" >> $GITHUB_OUTPUT
+          echo "test_skipped=$TOTAL_SKIPPED" >> $GITHUB_OUTPUT
           echo "user_test_count=$USER_TEST_COUNT" >> $GITHUB_OUTPUT
           echo "user_test_passed=$USER_PASSED" >> $GITHUB_OUTPUT
           echo "user_test_failed=$USER_FAILED" >> $GITHUB_OUTPUT
 
-          # Determine if tests passed or failed
-          # Red status (exit 1) if:
-          #   1. Device Farm overall result is not PASSED, OR
-          #   2. Any of your tests failed
-          # Green status (exit 0) only if all tests passed
-
-          if [[ "$RESULT" != "PASSED" ]] || [ $USER_FAILED -gt 0 ]; then
+          if [ $USER_FAILED -gt 0 ]; then
             echo ""
             echo "❌ Device Farm tests failed"
-            if [[ "$RESULT" != "PASSED" ]]; then
-              echo "   Device Farm result: $RESULT"
-            fi
-            echo "   Your tests: $USER_PASSED passed, $USER_FAILED failed (out of $USER_TEST_COUNT total)"
-            echo "   Device Farm total: $TOTAL | Passed: $PASSED | Failed: $FAILED | Skipped: $SKIPPED"
+            echo "   Devices: $USER_PASSED passed, $USER_FAILED failed (out of $USER_TEST_COUNT)"
+            echo "   Totals: $TOTAL_TOTAL | Passed: $TOTAL_PASSED | Failed: $TOTAL_FAILED | Skipped: $TOTAL_SKIPPED"
+            exit 1
+          elif [ $USER_PASSED -eq 0 ] && [[ "$ALL_RESULTS_PASSED" != "true" ]]; then
+            echo ""
+            echo "❌ No devices ran tests (all runs skipped or errored)"
             exit 1
           fi
 
           echo ""
-          echo "✅ All Device Farm tests passed!"
-          echo "   Your tests: $USER_PASSED passed (out of $USER_TEST_COUNT total)"
-          echo "   Device Farm total: $TOTAL | Passed: $PASSED | Failed: $FAILED | Skipped: $SKIPPED"
+          echo "✅ Device Farm tests passed!"
+          echo "   Devices: $USER_PASSED passed (out of $USER_TEST_COUNT)"
+          if [ "$TOTAL_SKIPPED" -gt 0 ]; then
+            echo "   ⚠️  $TOTAL_SKIPPED test(s) skipped (device unavailable)"
+          fi
+          echo "   Totals: $TOTAL_TOTAL | Passed: $TOTAL_PASSED | Failed: $TOTAL_FAILED | Skipped: $TOTAL_SKIPPED"
+
+      - name: Download Device Farm Logs
+        if: always() && steps.schedule_run.outputs.run_arn_1
+        run: |
+          RUN_ARN_1="${{ steps.schedule_run.outputs.run_arn_1 }}"
+          RUN_ARN_2="${{ steps.schedule_run.outputs.run_arn_2 }}"
+          RUN_COUNT="${{ steps.schedule_run.outputs.run_count }}"
+          LOG_DIR="devicefarm-logs/${{ matrix.platform }}"
+          mkdir -p "$LOG_DIR"
+
+          echo ""
+          echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+          echo "📥 DOWNLOADING DEVICE FARM LOGS"
+          echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+          echo ""
+          echo "Logs are downloaded so anyone with repo access can view them"
+          echo "without needing AWS Device Farm credentials."
+          echo ""
+
+          RUN_ARNS=("$RUN_ARN_1")
+          if [ "$RUN_COUNT" = "2" ] && [ -n "$RUN_ARN_2" ]; then
+            RUN_ARNS+=("$RUN_ARN_2")
+          fi
+
+          for RUN_ARN in "${RUN_ARNS[@]}"; do
+            RUN_DETAILS=$(aws devicefarm get-run --arn "$RUN_ARN" --output json 2>/dev/null || echo '{}')
+            RUN_LABEL=$(echo "$RUN_DETAILS" | jq -r '.run.name // "unknown"')
+            echo ""
+            echo "========================================"
+            echo "📦 Run: $RUN_LABEL"
+            echo "========================================"
+
+            JOBS=$(aws devicefarm list-jobs --arn "$RUN_ARN" --output json 2>/dev/null || echo '{"jobs":[]}')
+
+            for JOB_ARN in $(echo "$JOBS" | jq -r '.jobs[].arn'); do
+              DEVICE_NAME=$(echo "$JOBS" | jq -r --arg arn "$JOB_ARN" '.jobs[] | select(.arn == $arn) | .device.name // "unknown"')
+              JOB_RESULT=$(echo "$JOBS" | jq -r --arg arn "$JOB_ARN" '.jobs[] | select(.arn == $arn) | .result // "UNKNOWN"')
+              SAFE_NAME=$(echo "$DEVICE_NAME" | tr ' /' '__' | tr -cd '[:alnum:]_-')
+
+              echo ""
+              echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+              echo "📱 $DEVICE_NAME ($JOB_RESULT)"
+              echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+
+              SUITES=$(aws devicefarm list-suites --arn "$JOB_ARN" --output json 2>/dev/null || echo '{"suites":[]}')
+
+              for SUITE_ARN in $(echo "$SUITES" | jq -r '.suites[].arn'); do
+                SUITE_NAME=$(echo "$SUITES" | jq -r --arg arn "$SUITE_ARN" '.suites[] | select(.arn == $arn) | .name // "unknown"')
+                SAFE_SUITE=$(echo "$SUITE_NAME" | tr ' /' '__' | tr -cd '[:alnum:]_-')
+
+                ARTIFACTS=$(aws devicefarm list-artifacts --arn "$SUITE_ARN" --type FILE --output json 2>/dev/null || echo '{"artifacts":[]}')
+
+                echo "$ARTIFACTS" | jq -c '.artifacts[]' 2>/dev/null | while read -r ARTIFACT; do
+                  ART_NAME=$(echo "$ARTIFACT" | jq -r '.name // "unknown"')
+                  ART_URL=$(echo "$ARTIFACT" | jq -r '.url // empty')
+                  ART_EXT=$(echo "$ARTIFACT" | jq -r '.extension // "txt"')
+                  [ -z "$ART_URL" ] && continue
+
+                  SAFE_ART=$(echo "$ART_NAME" | tr ' /' '__' | tr -cd '[:alnum:]_-')
+                  DEST="$LOG_DIR/${SAFE_NAME}_${SAFE_SUITE}_${SAFE_ART}.${ART_EXT}"
+
+                  if curl -fsSL -o "$DEST" "$ART_URL" 2>/dev/null; then
+                    echo "  Downloaded: $SUITE_NAME / $ART_NAME"
+
+                    if echo "$ART_NAME" | grep -qiE "test.spec|testspec"; then
+                      echo ""
+                      echo "::group::📋 [$DEVICE_NAME] $SUITE_NAME — $ART_NAME"
+                      cat "$DEST" 2>/dev/null || true
+                      echo "::endgroup::"
+                    fi
+                  fi
+                done
+
+                LOG_ARTIFACTS=$(aws devicefarm list-artifacts --arn "$SUITE_ARN" --type LOG --output json 2>/dev/null || echo '{"artifacts":[]}')
+
+                echo "$LOG_ARTIFACTS" | jq -c '.artifacts[]' 2>/dev/null | while read -r ARTIFACT; do
+                  ART_NAME=$(echo "$ARTIFACT" | jq -r '.name // "unknown"')
+                  ART_URL=$(echo "$ARTIFACT" | jq -r '.url // empty')
+                  ART_EXT=$(echo "$ARTIFACT" | jq -r '.extension // "txt"')
+                  [ -z "$ART_URL" ] && continue
+
+                  SAFE_ART=$(echo "$ART_NAME" | tr ' /' '__' | tr -cd '[:alnum:]_-')
+                  DEST="$LOG_DIR/${SAFE_NAME}_${SAFE_SUITE}_${SAFE_ART}.${ART_EXT}"
+
+                  if curl -fsSL -o "$DEST" "$ART_URL" 2>/dev/null; then
+                    echo "  Downloaded: $SUITE_NAME / $ART_NAME (LOG)"
+                  fi
+                done
+              done
+
+              JOB_ARTIFACTS=$(aws devicefarm list-artifacts --arn "$JOB_ARN" --type FILE --output json 2>/dev/null || echo '{"artifacts":[]}')
+              echo "$JOB_ARTIFACTS" | jq -c '.artifacts[]' 2>/dev/null | while read -r ARTIFACT; do
+                ART_NAME=$(echo "$ARTIFACT" | jq -r '.name // "unknown"')
+                ART_URL=$(echo "$ARTIFACT" | jq -r '.url // empty')
+                ART_EXT=$(echo "$ARTIFACT" | jq -r '.extension // "txt"')
+                [ -z "$ART_URL" ] && continue
+
+                SAFE_ART=$(echo "$ART_NAME" | tr ' /' '__' | tr -cd '[:alnum:]_-')
+                DEST="$LOG_DIR/${SAFE_NAME}_job_${SAFE_ART}.${ART_EXT}"
+
+                if curl -fsSL -o "$DEST" "$ART_URL" 2>/dev/null; then
+                  echo "  Downloaded (job-level): $ART_NAME"
+                fi
+              done
+            done
+          done
+
+          echo ""
+          echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+          echo "📦 All downloaded logs:"
+          echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+          find "$LOG_DIR" -type f -exec ls -lh {} \; 2>/dev/null || echo "  (no logs downloaded)"
+
+      - name: Upload Device Farm Logs
+        if: always() && steps.schedule_run.outputs.run_arn_1
+        uses: actions/upload-artifact@bbbca2ddaa5d8feaa63e36b76fdaad77386f024f # 7.0.0
+        with:
+          name: devicefarm-logs-${{ matrix.platform }}
+          path: devicefarm-logs/
+          retention-days: 30
+          if-no-files-found: ignore
 
       - name: Comment PR with results
         if: always() && github.event.pull_request.number
@@ -1445,7 +1616,7 @@ jobs:
         with:
           github-token: ${{ secrets.GITHUB_TOKEN }}
           script: |
-            const runArn = '${{ steps.schedule_run.outputs.run_arn }}' || 'N/A';
+            const runArn = '${{ steps.schedule_run.outputs.run_arn_1 }}' || 'N/A';
             const jobStatus = '${{ job.status }}';
             const testResult = '${{ steps.monitor_run.outputs.test_result }}' || 'UNKNOWN';
             const platform = '${{ matrix.platform }}';

@@ -42,57 +42,32 @@ const getPackageVersion = (lib) => {
   }
 }
 
-class FakeLoader {
-  async start () {}
-  async stop () {}
-  async ready () {
-    return true
-  }
-
-  async getStream () {
-    throw new Error('FakeLoader.getStream should not be called when using diskPath')
-  }
-
-  async download (filepath, destPath) {
-    return {
-      await: async () => ({
-        success: false,
-        message: 'FakeLoader does not support downloading. Model files must exist on disk at the specified path.'
-      })
-    }
-  }
-
-  async list () {
-    return []
-  }
-}
-
-const getNamedPaths = (modelType, modelDir) => {
+const getFilesMap = (modelType, modelDir) => {
   switch (modelType) {
     case 'ctc':
       return {
-        ctcModelPath: path.join(modelDir, 'model.onnx'),
-        ctcModelDataPath: path.join(modelDir, 'model.onnx_data'),
-        tokenizerPath: path.join(modelDir, 'tokenizer.json')
+        model: path.join(modelDir, 'model.onnx'),
+        modelData: path.join(modelDir, 'model.onnx_data'),
+        tokenizer: path.join(modelDir, 'tokenizer.json')
       }
     case 'eou':
       return {
-        eouEncoderPath: path.join(modelDir, 'encoder.onnx'),
-        eouDecoderPath: path.join(modelDir, 'decoder_joint.onnx'),
-        tokenizerPath: path.join(modelDir, 'tokenizer.json')
+        eouEncoder: path.join(modelDir, 'encoder.onnx'),
+        eouDecoder: path.join(modelDir, 'decoder_joint.onnx'),
+        tokenizer: path.join(modelDir, 'tokenizer.json')
       }
     case 'sortformer':
       return {
-        sortformerPath: path.join(modelDir, 'sortformer.onnx')
+        sortformer: path.join(modelDir, 'sortformer.onnx')
       }
     case 'tdt':
     default:
       return {
-        encoderPath: path.join(modelDir, 'encoder-model.onnx'),
-        encoderDataPath: path.join(modelDir, 'encoder-model.onnx.data'),
-        decoderPath: path.join(modelDir, 'decoder_joint-model.onnx'),
-        vocabPath: path.join(modelDir, 'vocab.txt'),
-        preprocessorPath: path.join(modelDir, 'preprocessor.onnx')
+        encoder: path.join(modelDir, 'encoder-model.onnx'),
+        encoderData: path.join(modelDir, 'encoder-model.onnx.data'),
+        decoder: path.join(modelDir, 'decoder_joint-model.onnx'),
+        vocab: path.join(modelDir, 'vocab.txt'),
+        preprocessor: path.join(modelDir, 'preprocessor.onnx')
       }
   }
 }
@@ -134,38 +109,30 @@ const runAddon = async (payload) => {
       }
       validateFilePath(config.path)
 
-      const constructorArgs = {
-        loader: new FakeLoader(),
-        modelName: path.basename(config.path),
-        diskPath: path.dirname(config.path)
-      }
-
       const parakeetConfig = config.parakeetConfig || {}
-
-      const namedPaths = getNamedPaths(modelType, config.path)
-
-      const modelConfig = {
-        path: config.path,
-        ...namedPaths,
-        parakeetConfig: {
-          modelType: parakeetConfig.modelType || 'tdt',
-          maxThreads: parakeetConfig.maxThreads || 4,
-          useGPU: parakeetConfig.useGPU || false,
-          sampleRate: config.sampleRate || 16000,
-          channels: 1,
-          captionEnabled: parakeetConfig.captionEnabled || false,
-          timestampsEnabled: parakeetConfig.timestampsEnabled !== false,
-          seed: parakeetConfig.seed ?? -1
-        }
-      }
+      const files = getFilesMap(modelType, config.path)
 
       logger.info('Creating model instance:', {
-        constructorArgs,
-        parakeetConfig: modelConfig.parakeetConfig,
+        files,
+        parakeetConfig,
         streaming
       })
 
-      modelInstance = new TranscriptionParakeet(constructorArgs, modelConfig)
+      modelInstance = new TranscriptionParakeet({
+        files,
+        config: {
+          parakeetConfig: {
+            modelType: parakeetConfig.modelType || 'tdt',
+            maxThreads: parakeetConfig.maxThreads || 4,
+            useGPU: parakeetConfig.useGPU || false,
+            sampleRate: config.sampleRate || 16000,
+            channels: 1,
+            captionEnabled: parakeetConfig.captionEnabled || false,
+            timestampsEnabled: parakeetConfig.timestampsEnabled !== false,
+            seed: parakeetConfig.seed ?? -1
+          }
+        }
+      })
       await modelInstance._load()
 
       const [loadSec, loadNano] = process.hrtime(loadStart)
