@@ -148,7 +148,7 @@ jobs:
       # Required for all OCR integration tests (param-validation, lifecycle, image-formats,
       # full-ocr-suite, etc.). Provides detector + all recognizers under rec_dyn.
       - name: Configure AWS credentials via OIDC
-        uses: aws-actions/configure-aws-credentials@e3dd6a429d7300a6a4c196c26e071d42e0343502 # v6.0.0
+        uses: aws-actions/configure-aws-credentials@8df5847569e6427dd6c4fb1cf565c83acfa8afa7 # 6.0.0
         with:
           role-to-assume: arn:aws:iam::833707431398:role/GitHub-OIDC-connector
           aws-region: eu-central-1
