@@ -11,6 +11,7 @@ endif()
 add_executable(
   addon-test
   test_backend_selection.cpp
+  test_sd_ctx_handlers.cpp
   test_sd_model.cpp
   test_model_loading.cpp
   test_single_step_inference.cpp
