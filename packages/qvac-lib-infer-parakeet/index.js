@@ -5,7 +5,7 @@ const QvacLogger = require('@qvac/logging')
 const { createJobHandler } = require('@qvac/infer-base')
 
 const { ParakeetInterface } = require('./parakeet')
-const { END_OF_INPUT } = require('./lib/error')
+const { END_OF_INPUT, ERR_CODES, QvacErrorAddonParakeet } = require('./lib/error')
 
 /**
  * Required model files for TDT model
@@ -204,6 +204,9 @@ class TranscriptionParakeet {
   }
 
   async load () {
+    if (this.state.destroyed) {
+      throw new QvacErrorAddonParakeet(ERR_CODES.INSTANCE_DESTROYED)
+    }
     if (this.state.configLoaded) {
       this.logger.info('Reload requested - unloading existing model first')
       await this.unload()
