@@ -26,10 +26,6 @@ permissions:
   pull-requests: read
   packages: read
 
-concurrency:
-  group: ${{ github.workflow }}-${{ github.ref }}
-  cancel-in-progress: false
-
 jobs:
   publish-logic:
     runs-on: ubuntu-latest
@@ -89,7 +85,7 @@ jobs:
   release-merge-guard:
     name: Release Merge Guard
     if: >-
-      github.event_name == 'push' &&
+      (github.event_name == 'push' || github.event_name == 'workflow_dispatch') &&
       startsWith(github.ref_name, 'release-')
     runs-on: ubuntu-latest
     steps:
@@ -167,9 +163,10 @@ jobs:
 
   publish-release-npm:
     needs: [publish-logic, release-merge-guard, run-integration-tests, mobile-integration-tests]
-    if: >-
+    if: |
+      !cancelled() &&
       needs.publish-logic.outputs.publish_release == 'true' &&
-      (needs.release-merge-guard.result == 'success' || needs.release-merge-guard.result == 'skipped')
+      needs.release-merge-guard.result == 'success'
     runs-on: ubuntu-latest
     environment: release
     outputs:
@@ -193,7 +190,10 @@ jobs:
 
   publish-release:
     needs: [publish-release-npm]
-    if: needs.publish-release-npm.result == 'success' && needs.publish-release-npm.outputs.published_version != ''
+    if: |
+      !cancelled() &&
+      needs.publish-release-npm.result == 'success' &&
+      needs.publish-release-npm.outputs.published_version != ''
     permissions:
       contents: write
     uses: ./.github/workflows/create-github-release.yml

@@ -4,7 +4,7 @@ export { completion } from "./completion-stream";
 export { deleteCache } from "./delete-cache";
 export { unloadModel } from "./unload-model";
 export { loggingStream } from "./logging-stream";
-export { ping } from "./ping";
+export { heartbeat } from "./heartbeat";
 export { transcribe, transcribeStream } from "./transcribe";
 export { embed } from "./embed";
 export { translate } from "./translate";
@@ -26,6 +26,7 @@ export { textToSpeech } from "./text-to-speech";
 export { getModelInfo } from "./get-model-info";
 export { ocr } from "./ocr";
 export { invokePlugin, invokePluginStream } from "./invoke-plugin";
+export { diffusion, type DiffusionProgressTick } from "./diffusion";
 export {
   modelRegistryList,
   modelRegistrySearch,

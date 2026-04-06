@@ -22,6 +22,11 @@ export class HttpEmbeddingExecutor extends AbstractModelExecutor<typeof httpEmbe
     }),
   ) as never;
 
+  async setup(testId: string, context: unknown) {
+    await super.setup(testId, context);
+    await this.resources.evictAll();
+  }
+
   async load(params: unknown, expectation: unknown): Promise<TestResult> {
     const p = params as { modelUrl: string; modelType: string };
 
@@ -30,6 +35,7 @@ export class HttpEmbeddingExecutor extends AbstractModelExecutor<typeof httpEmbe
         modelSrc: p.modelUrl,
         modelType: p.modelType as "embeddings",
       });
+      this.resources.register("embeddings", modelId);
       return ValidationHelpers.validate(modelId, expectation as Expectation);
     } catch (error) {
       const errorMsg = error instanceof Error ? error.message : String(error);
@@ -49,6 +55,7 @@ export class HttpEmbeddingExecutor extends AbstractModelExecutor<typeof httpEmbe
           progressEvents.push(progress);
         },
       });
+      this.resources.register("embeddings", modelId);
       return ValidationHelpers.validate(modelId, expectation as Expectation);
     } catch (error) {
       const errorMsg = error instanceof Error ? error.message : String(error);
@@ -64,7 +71,7 @@ export class HttpEmbeddingExecutor extends AbstractModelExecutor<typeof httpEmbe
         modelSrc: p.modelUrl,
         modelType: p.modelType as "embeddings",
       });
-
+      this.resources.register("embeddings", modelId);
       const embeddings = await embed({ modelId, text: p.text });
       return ValidationHelpers.validate(embeddings, expectation as Expectation);
     } catch (error) {

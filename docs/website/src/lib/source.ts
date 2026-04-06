@@ -1,5 +1,5 @@
 import { docs } from 'fumadocs-mdx:collections/server';
-import { loader } from 'fumadocs-core/source';
+import { loader, type InferPageType } from 'fumadocs-core/source';
 import { icons } from 'lucide-react';
 import { createElement } from 'react';
 
@@ -16,3 +16,16 @@ export const source = loader({
     if (icon in icons) return createElement(icons[icon as keyof typeof icons]);
   },
 });
+
+/**
+ * Open Graph image path for a page (`next/og` route). Append `image.png` for Fumadocs-style URLs.
+ * @see https://www.fumadocs.dev/docs/integrations/og/next
+ */
+export function getPageImage(page: InferPageType<typeof source>) {
+  const segments = [...page.slugs, 'image.png'];
+  return {
+    segments,
+    url: `/og/docs/${segments.join('/')}`,
+  };
+}
+

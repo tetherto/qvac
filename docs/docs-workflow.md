@@ -44,7 +44,6 @@ The docs site lives in `docs/website/`. It is a fully static site (Next.js `outp
 | API docs | Auto-generated via TypeDoc (`docs/website/scripts/generate-api-docs.ts`) |
 | Build output | `docs/website/dist/` (static HTML/CSS/JS) |
 | Hosting | Static site CDN (hosting provider runs the build and serves the output) |
-| Config | `next.config.mjs` (`output: 'export'`, `distDir: 'dist'`, `trailingSlash: true`) |
 
 Content falls into two categories:
 

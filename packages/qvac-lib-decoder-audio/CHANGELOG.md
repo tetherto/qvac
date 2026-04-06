@@ -5,6 +5,12 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.3.6]
+
+### Changed
+
+- README: removed outdated GitHub Packages token / `.npmrc` setup instructions for installing `@qvac/decoder-audio`.
+
 ## [0.3.5]
 
 Security hardening release from comprehensive security audit.

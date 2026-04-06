@@ -19,8 +19,10 @@ import { handleDeleteCache } from "@/server/rpc/handlers/delete-cache";
 import { handleTextToSpeech } from "@/server/rpc/handlers/text-to-speech";
 import { handleGetModelInfo } from "@/server/rpc/handlers/get-model-info";
 import { handleOCRStream } from "@/server/rpc/handlers/ocr-stream";
-import { handlePing } from "@/server/rpc/handlers/ping";
+import { handleHeartbeat } from "@/server/rpc/handlers/heartbeat";
+import { handleHeartbeatDelegated } from "@/server/rpc/handlers/heartbeat-delegated";
 import { handleCancelDelegated } from "@/server/rpc/handlers/cancel-delegated";
+import { handleDiffusionStream } from "@/server/rpc/handlers/diffusion-stream";
 import {
   handlePluginInvoke,
   handlePluginInvokeStream,
@@ -59,7 +61,12 @@ function isCancelDelegated(request: Request): boolean {
 
 export const registry: Record<string, HandlerEntry> = {
   // Simple Reply handlers
-  ping: { type: "reply", handler: handlePing },
+  heartbeat: {
+    type: "reply",
+    handler: handleHeartbeat,
+    delegatedHandler: handleHeartbeatDelegated,
+    isDelegated: (r) => r.type === "heartbeat" && !!r.delegate,
+  },
   unloadModel: {
     type: "reply",
     handler: handleUnloadModel,
@@ -91,6 +98,7 @@ export const registry: Record<string, HandlerEntry> = {
   translate: { type: "stream", handler: handleTranslate },
   textToSpeech: { type: "stream", handler: handleTextToSpeech },
   ocrStream: { type: "stream", handler: handleOCRStream },
+  diffusionStream: { type: "stream", handler: handleDiffusionStream },
   pluginInvokeStream: { type: "stream", handler: handlePluginInvokeStream },
 
   // Handlers with delegation support

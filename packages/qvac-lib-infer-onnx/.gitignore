@@ -4,6 +4,7 @@ build/
 prebuilds/
 node_modules/
 dist/
+package-lock.json
 
 # Added by qvac-lint-cpp
 .clang-format

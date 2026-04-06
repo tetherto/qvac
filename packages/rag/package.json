@@ -1,6 +1,6 @@
 {
   "name": "@qvac/rag",
-  "version": "0.4.3",
+  "version": "0.4.4",
   "main": "index.js",
   "scripts": {
     "lint": "standard",
@@ -31,7 +31,7 @@
     "@qvac/dl-hyperdrive": "^0.1.1",
     "@qvac/embed-llamacpp": "^0.7.6",
     "@qvac/llm-llamacpp": "^0.5.7",
-    "bare-crypto": "^1.11.2",
+    "bare-crypto": "^1.13.4",
     "bare-fs": "^4.1.6",
     "bare-path": "^3.0.0",
     "brittle": "^3.14.0",
@@ -43,14 +43,13 @@
   },
   "dependencies": {
     "@qvac/error": "^0.1.0",
-    "bare-crypto": "^1.11.2",
     "hyperdht": "^6.23.0",
     "ready-resource": "^1.1.2",
     "uuid-random": "^1.3.2",
     "zod": "^4.1.13"
   },
   "peerDependencies": {
-    "bare-crypto": "^1.11.2",
+    "bare-crypto": "^1.13.4",
     "bare-fetch": "^2.5.0",
     "hyperdb": "^4.19.0",
     "hyperschema": "^1.13.0",
