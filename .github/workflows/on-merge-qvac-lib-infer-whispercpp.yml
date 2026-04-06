@@ -107,6 +107,7 @@ jobs:
       contents: write
       packages: write
       pull-requests: write
+      id-token: write
     uses: ./.github/workflows/prebuilds-qvac-lib-infer-whispercpp.yml
     secrets: inherit
     with:
@@ -280,6 +281,10 @@ jobs:
     uses: ./.github/workflows/integration-test-qvac-lib-infer-whispercpp.yml
     needs: post-build-gate
     if: needs.post-build-gate.outputs.should_run_tests == 'true'
+    permissions:
+      contents: read
+      packages: read
+      id-token: write
     secrets: inherit
     with:
       repository: ${{ github.repository }}
@@ -294,6 +299,7 @@ jobs:
       contents: read
       packages: read
       pull-requests: write
+      id-token: write
     secrets: inherit
     with:
       repository: ${{ github.repository }}
