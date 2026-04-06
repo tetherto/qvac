@@ -35,6 +35,7 @@ jobs:
     permissions:
       contents: write
       pull-requests: write
+      id-token: write
       packages: write
     strategy:
       fail-fast: false
@@ -82,12 +83,17 @@ jobs:
       # Use AWS S3 as vcpkg binary cache (platform-prefixed for easy cleanup)
       VCPKG_BINARY_SOURCES: "clear;x-aws,s3://${{ secrets.MODEL_S3_BUCKET }}/vcpkg-cache/onnx-tts/${{ matrix.platform }}-${{ matrix.arch }}/,readwrite"
       VCPKG_BUILD_TYPE: release
-      AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
-      AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
       S3_CACHE_PREFIX: "s3://${{ secrets.MODEL_S3_BUCKET }}/vcpkg-cache/onnx-tts/${{ matrix.platform }}-${{ matrix.arch }}/"
       WORKDIR: ${{ inputs.workdir || github.event.inputs.workdir || 'packages/qvac-lib-infer-onnx-tts' }}
 
     steps:
+      - name: Configure AWS credentials via OIDC
+        uses: aws-actions/configure-aws-credentials@8df5847569e6427dd6c4fb1cf565c83acfa8afa7 # 6.0.0
+        with:
+          role-to-assume: ${{ secrets.AWS_OIDC_ROLE_ARN }}
+          aws-region: eu-central-1
+
+
       - if: ${{ matrix.platform == 'win32' }}
         name: Install AWS CLI on self-hosted Windows runner
         shell: powershell
@@ -489,10 +495,15 @@ jobs:
     needs: prebuild
     permissions:
       contents: write
-    env:
-      AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
-      AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+      id-token: write
     steps:
+      - name: Configure AWS credentials via OIDC
+        uses: aws-actions/configure-aws-credentials@8df5847569e6427dd6c4fb1cf565c83acfa8afa7 # 6.0.0
+        with:
+          role-to-assume: ${{ secrets.AWS_OIDC_ROLE_ARN }}
+          aws-region: eu-central-1
+
+
       - name: Download all build artifacts
         uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # 8.0.1
         with:

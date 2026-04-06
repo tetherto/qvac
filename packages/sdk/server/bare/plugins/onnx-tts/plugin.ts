@@ -172,18 +172,19 @@ function createChatterboxModel(
   const logger = createStreamLogger(modelId, ModelType.onnxTts);
   registerAddonLogger(modelId, ModelType.onnxTts, logger);
   const referenceAudio = loadReferenceAudioAt24k(referenceAudioPath);
-  const args = {
-    tokenizerPath,
-    speechEncoderPath,
-    embedTokensPath,
-    conditionalDecoderPath,
-    languageModelPath,
+  const model = new ONNXTTS({
+    files: {
+      tokenizer: tokenizerPath,
+      speechEncoder: speechEncoderPath,
+      embedTokens: embedTokensPath,
+      conditionalDecoder: conditionalDecoderPath,
+      languageModel: languageModelPath,
+    },
     referenceAudio,
+    config: { language: config.language ?? "en", useGPU: false },
     logger,
     opts: { stats: true },
-  };
-  const modelConfig = { language: config.language ?? "en", useGPU: false };
-  const model = new ONNXTTS(args as never, modelConfig);
+  });
   return { model, loader: undefined };
 }
 
@@ -210,22 +211,21 @@ function createSupertonicModel(
 
   const logger = createStreamLogger(modelId, ModelType.onnxTts);
   registerAddonLogger(modelId, ModelType.onnxTts, logger);
-  const voicesDir = path.dirname(voicePath);
   const voiceName = path.basename(voicePath).replace(/\.bin$/i, "") || "voice";
-  const args = {
-    tokenizerPath,
-    textEncoderPath,
-    latentDenoiserPath,
-    voiceDecoderPath,
-    voicesDir,
+  const model = new ONNXTTS({
+    files: {
+      unicodeIndexer: tokenizerPath,
+      textEncoder: textEncoderPath,
+      durationPredictor: latentDenoiserPath,
+      vocoder: voiceDecoderPath,
+    },
     voiceName,
     speed: config.ttsSpeed ?? 1,
     numInferenceSteps: config.ttsNumInferenceSteps ?? 5,
+    config: { language: config.language ?? "en" },
     logger,
     opts: { stats: true },
-  };
-  const modelConfig = { language: config.language ?? "en" };
-  const model = new ONNXTTS(args as never, modelConfig);
+  });
   return { model, loader: undefined };
 }
 
