@@ -12,7 +12,6 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Removed the stale-cancel suppression workaround from `parakeet.js` now that addon-cpp delivers native job IDs through the shared callback path.
 - Simplified the cancel/reuse integration flow to expect the shared runtime fix directly instead of retrying around late cancel delivery.
 - Realigned wrapper-side job numbering whenever `load()` or `reload()` recreates the native instance so JS response completion stays aligned with addon-cpp's per-instance native job IDs.
-- Updated the Parakeet private vcpkg registry baseline to the published `1.1.5` port.
 
 ### Added
 - Unit coverage that asserts stale cancel events remain attached to the cancelled job.

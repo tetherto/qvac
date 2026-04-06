@@ -146,7 +146,7 @@ class ParakeetInterface {
       return
     }
 
-    if (mappedEvent === 'Output' && this._activeJobId === jobId) {
+    if (mappedEvent === 'Output') {
       this._setState(state.PROCESSING)
     }
 
