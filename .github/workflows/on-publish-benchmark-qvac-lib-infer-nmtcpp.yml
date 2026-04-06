@@ -19,16 +19,21 @@ on:
 env:
   PKG_DIR: packages/qvac-lib-infer-nmtcpp
 
+permissions:
+  contents: read
+  packages: read
+
 jobs:
   prepare:
     runs-on: ubuntu-latest
+    environment: release
     outputs:
       opus_pairs: ${{ steps.read-opus.outputs.pairs }}
       bergamot_pairs: ${{ steps.read-bergamot.outputs.pairs }}
       version: ${{ steps.get-version.outputs.version }}
     steps:
       - name: Checkout repository
-        uses: actions/checkout@v6
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # 6.0.2
 
       - name: Get addon version
         id: get-version

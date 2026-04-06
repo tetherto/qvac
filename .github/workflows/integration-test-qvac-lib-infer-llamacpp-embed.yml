@@ -23,6 +23,7 @@ on:
 jobs:
   run-integration-tests:
     runs-on: ${{ matrix.runner || matrix.os }}
+    environment: release
     name: ${{ matrix.platform }}-${{ matrix.arch }}-integration-tests
     permissions:
       contents: read
@@ -64,7 +65,7 @@ jobs:
 
     steps:
       - name: Setup Node.js
-        uses: actions/setup-node@v6
+        uses: actions/setup-node@53b83947a5a98c8d113130e565377fae1a50d02f # 6.3.0
         with:
           node-version: lts/*
 
@@ -74,7 +75,7 @@ jobs:
         run: git config --system core.longpaths true
 
       - name: Checkout code
-        uses: actions/checkout@v6
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # 6.0.2
         with:
           repository: ${{ inputs.repository || github.repository }}
           ref: ${{ inputs.ref || github.ref }}
@@ -142,7 +143,7 @@ jobs:
 
       - name: Download prebuilds (from artifacts)
         if: ${{ !inputs.prebuild_package }}
-        uses: actions/download-artifact@v7
+        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # 8.0.1
         with:
           path: ${{ env.WORKDIR }}/prebuilds
           merge-multiple: true

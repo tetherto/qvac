@@ -43,6 +43,7 @@ jobs:
   run-integration-tests:
     continue-on-error: true
     runs-on: ${{ matrix.os }}
+    environment: release
     name: test-${{ matrix.platform }}-${{ matrix.arch }}${{ matrix.os_version && format('-{0}', matrix.os_version) || '' }}-${{ matrix.variant }}
     env:
       AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
@@ -61,13 +62,6 @@ jobs:
           - macos-14-xlarge
           - macos-15-large
           - windows-2022
-        exclude:
-          - os: ubuntu-24.04-arm
-            variant: fp16
-          - os: ubuntu-24.04-arm
-            variant: q4
-          - os: ubuntu-24.04-arm
-            variant: q4f16
         include:
           - os: ubuntu-22.04
             platform: linux
@@ -84,11 +78,11 @@ jobs:
           - os: macos-14-xlarge
             platform: darwin
             arch: arm64
-            os_version: u14
+            os_version: m14
           - os: macos-15-large
             platform: darwin
             arch: x64
-            os_version: u15
+            os_version: m15
           - os: windows-2022
             platform: win32
             arch: x64
@@ -96,7 +90,7 @@ jobs:
 
     steps:
       - name: Setup Node.js
-        uses: actions/setup-node@v6
+        uses: actions/setup-node@53b83947a5a98c8d113130e565377fae1a50d02f # 6.3.0
         with:
           node-version: lts/*
 
@@ -106,7 +100,7 @@ jobs:
         run: git config --system core.longpaths true
 
       - name: Checkout code
-        uses: actions/checkout@v6
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # 6.0.2
         with:
           repository: ${{ inputs.repository || github.repository }}
           ref: ${{ inputs.ref || github.ref }}
@@ -150,7 +144,7 @@ jobs:
 
       - name: Download prebuilds from artifact
         if: ${{ !inputs.prebuild_package }}
-        uses: actions/download-artifact@v7
+        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # 8.0.1
         with:
           path: ${{ inputs.workdir }}/prebuilds
           merge-multiple: true

@@ -51,13 +51,31 @@ concurrency:
   cancel-in-progress: true
 
 permissions:
-  contents: write
-  pull-requests: write
-  packages: write
-  checks: write
+  contents: read
+  pull-requests: read
+  packages: read
+  checks: read
 
 jobs:
+  authorize:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      pull-requests: write
+    outputs:
+      allowed: ${{ steps.auth.outputs.allowed }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # 6.0.2
+      - name: Authorize
+        id: auth
+        uses: ./.github/actions/authorize-pr
+        with:
+          github-token: ${{ github.token }}
+
   context:
+    needs: authorize
+    if: needs.authorize.outputs.allowed == 'true'
     name: Resolve Context
     runs-on: ubuntu-latest
     outputs:
@@ -70,25 +88,36 @@ jobs:
     steps:
       - id: ctx
         shell: bash
+        env:
+          EVENT_NAME: ${{ github.event_name }}
+          INPUT_WORKDIR: ${{ inputs.workdir }}
+          INPUT_REPO: ${{ inputs.repository }}
+          INPUT_REF: ${{ inputs.ref }}
+          INPUT_VERIFY: ${{ inputs.run_verify }}
+          REPO: ${{ github.repository }}
+          REF_NAME: ${{ github.ref_name }}
+          SHA: ${{ github.sha }}
+          HEAD_SHA: ${{ github.event.pull_request.head.sha }}
+          BASE_SHA: ${{ github.event.pull_request.base.sha }}
         run: |
           set -euo pipefail
 
           # Resolve workdir from inputs when available; otherwise default package path.
-          if [[ "${{ github.event_name }}" == "workflow_dispatch" || "${{ github.event_name }}" == "workflow_call" ]]; then
-            workdir="${{ inputs.workdir || 'packages/qvac-lib-infer-onnx-tts' }}"
-            repo="${{ inputs.repository || github.repository }}"
-            ref="${{ inputs.ref || github.ref_name }}"
-            run_verify="${{ inputs.run_verify }}"
-            base_sha="${{ github.sha }}"
-            head_sha="${{ github.sha }}"
+          if [[ "$EVENT_NAME" == "workflow_dispatch" || "$EVENT_NAME" == "workflow_call" ]]; then
+            workdir="${INPUT_WORKDIR:-packages/qvac-lib-infer-onnx-tts}"
+            repo="${INPUT_REPO:-$REPO}"
+            ref="${INPUT_REF:-$REF_NAME}"
+            run_verify="$INPUT_VERIFY"
+            base_sha="$SHA"
+            head_sha="$SHA"
           else
             # pull_request_target
             workdir="packages/qvac-lib-infer-onnx-tts"
-            repo="${{ github.repository }}"
-            ref="${{ github.event.pull_request.head.sha }}"
-            run_verify="${{ contains(github.event.pull_request.labels.*.name, 'verify') }}"
-            base_sha="${{ github.event.pull_request.base.sha }}"
-            head_sha="${{ github.event.pull_request.head.sha }}"
+            repo="$REPO"
+            ref="$HEAD_SHA"
+            run_verify="true"
+            base_sha="$BASE_SHA"
+            head_sha="$HEAD_SHA"
           fi
 
           echo "repository=$repo" >> "$GITHUB_OUTPUT"
@@ -106,35 +135,25 @@ jobs:
           echo "  run_verify=$run_verify"
           echo "  workdir=$workdir"
 
-  release-notes-check:
-    needs: context
-    permissions:
-      contents: read
-      pull-requests: read
-    uses: ./.github/workflows/release-notes-check-qvac-lib-infer-onnx-tts.yml
-    secrets: inherit
-    with:
-      repository: ${{ needs.context.outputs.repository }}
-      ref: ${{ needs.context.outputs.ref }}
-      workdir: ${{ needs.context.outputs.workdir }}
-
   sanity-checks:
-    needs: context
+    if: needs.authorize.outputs.allowed == 'true'
+    needs: [authorize, context]
     runs-on: ubuntu-latest
+    environment: release
     steps:
       - name: Run Sanity checks
-        uses: tetherto/qvac-devops/.github/actions/sanity-checks@monorepo_update
+        uses: tetherto/qvac-devops/.github/actions/sanity-checks@v1.1.7
         with:
           secret-token: ${{ secrets.GITHUB_TOKEN }}
           npm-token: ${{ secrets.NPM_TOKEN }}
           pat-token: ${{ secrets.PAT_TOKEN }}
-          run-integration: ${{ needs.context.outputs.run_verify == 'true' }}
+          run-integration: ${{ needs.authorize.outputs.allowed == 'true' }}
           workdir: ${{ needs.context.outputs.workdir }}
 
   cpp-lint:
-    needs: context
-    if: needs.context.outputs.run_verify == 'true' || github.event_name == 'workflow_dispatch'
-    uses: tetherto/qvac-devops/.github/workflows/cpp-lint.yaml@monorepo_update
+    needs: [authorize, context]
+    if: needs.authorize.outputs.allowed == 'true'
+    uses: tetherto/qvac-devops/.github/workflows/cpp-lint.yaml@v1.1.7
     secrets: inherit
     with:
       sha: ${{ needs.context.outputs.base_sha }}
@@ -142,8 +161,13 @@ jobs:
       workdir: ${{ needs.context.outputs.workdir }}
 
   cpp-tests-coverage:
-    needs: context
-    if: needs.context.outputs.run_verify == 'true' || github.event_name == 'workflow_dispatch'
+    permissions:
+      contents: read
+      packages: read
+      checks: write
+      pull-requests: write
+    needs: [authorize, context]
+    if: needs.authorize.outputs.allowed == 'true'
     uses: ./.github/workflows/cpp-test-coverage-qvac-lib-infer-onnx-tts.yml
     secrets: inherit
     with:
@@ -152,8 +176,12 @@ jobs:
       workdir: ${{ needs.context.outputs.workdir }}
 
   prebuild:
-    needs: context
-    if: needs.context.outputs.run_verify == 'true' || github.event_name == 'workflow_dispatch'
+    permissions:
+      contents: write
+      packages: write
+      pull-requests: write
+    needs: [authorize, context]
+    if: needs.authorize.outputs.allowed == 'true'
     uses: ./.github/workflows/prebuilds-qvac-lib-infer-onnx-tts.yml
     secrets: inherit
     with:
@@ -163,8 +191,8 @@ jobs:
       workdir: ${{ needs.context.outputs.workdir }}
 
   run-integration-tests:
-    needs: [context, prebuild]
-    if: needs.context.outputs.run_verify == 'true' || github.event_name == 'workflow_dispatch'
+    needs: [authorize, context, prebuild]
+    if: needs.authorize.outputs.allowed == 'true'
     uses: ./.github/workflows/integration-test-qvac-lib-infer-onnx-tts.yml
     secrets: inherit
     with:
@@ -173,8 +201,12 @@ jobs:
       workdir: ${{ needs.context.outputs.workdir }}
 
   run-mobile-integration-tests:
-    needs: [context, prebuild]
-    if: needs.context.outputs.run_verify == 'true' || github.event_name == 'workflow_dispatch'
+    permissions:
+      contents: read
+      packages: read
+      pull-requests: write # Allow commenting on PRs
+    needs: [authorize, context, prebuild]
+    if: needs.authorize.outputs.allowed == 'true'
     uses: ./.github/workflows/integration-mobile-test-qvac-lib-infer-onnx-tts.yml
     secrets: inherit
     with:
@@ -185,7 +217,7 @@ jobs:
   merge-guard:
     needs:
       [
-        release-notes-check,
+        authorize,
         sanity-checks,
         cpp-lint,
         cpp-tests-coverage,
@@ -194,9 +226,8 @@ jobs:
         run-mobile-integration-tests,
       ]
     if: always()
-    uses: tetherto/qvac-devops/.github/workflows/public-pr.yml@monorepo_update
+    uses: tetherto/qvac-devops/.github/workflows/public-pr.yml@v1.1.7
     with:
-      sanity-checks-status: ${{ needs.sanity-checks.result == 'success' && needs.release-notes-check.result == 'success' && (needs.cpp-lint.result == 'success' || needs.cpp-lint.result == 'skipped') && (needs.cpp-tests-coverage.result == 'success' || needs.cpp-tests-coverage.result == 'skipped') }}
+      sanity-checks-status: ${{ needs.sanity-checks.result == 'success' && (needs.cpp-lint.result == 'success' || needs.cpp-lint.result == 'skipped') && (needs.cpp-tests-coverage.result == 'success' || needs.cpp-tests-coverage.result == 'skipped') }}
       build-status: ${{ needs.prebuild.result == 'success' || needs.prebuild.result == 'skipped' }}
       integration-tests-status: ${{ (needs.run-integration-tests.result == 'success' || needs.run-integration-tests.result == 'skipped') && (needs.run-mobile-integration-tests.result == 'success' || needs.run-mobile-integration-tests.result == 'skipped') }}
-    secrets: inherit
