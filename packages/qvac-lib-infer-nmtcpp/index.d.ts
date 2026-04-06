@@ -32,7 +32,6 @@ export interface TranslationNmtcppArgs {
 
 export interface TranslationNmtcppModelTypes {
   readonly IndicTrans: "IndicTrans"
-  readonly Opus: "Opus"
   readonly Bergamot: "Bergamot"
 }
 

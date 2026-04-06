@@ -17,6 +17,7 @@ add_executable(
   test_text_llm_context.cpp
   test_text_llm_context_qwen3.cpp
   test_addon_cpp.cpp
+  test_cancel_stale_flag.cpp
   test_backend_selection.cpp
   test_tune_config_map.cpp
   # Placeholder tests (to be implemented)

@@ -12,6 +12,7 @@ import {
   parakeetRuntimeConfigSchema,
 } from "@/schemas/transcription-config";
 import { ocrConfigSchema } from "@/schemas/ocr";
+import { sdcppConfigSchema } from "@/schemas/sdcpp-config";
 
 export const CANONICAL_TO_ALIAS: Record<CanonicalModelType, string> = {
   [ModelType.llamacppCompletion]: "llm",
@@ -21,6 +22,7 @@ export const CANONICAL_TO_ALIAS: Record<CanonicalModelType, string> = {
   [ModelType.nmtcppTranslation]: "nmt",
   [ModelType.onnxTts]: "tts",
   [ModelType.onnxOcr]: "ocr",
+  [ModelType.sdcppGeneration]: "diffusion",
 };
 
 export const MODEL_CONFIG_SCHEMAS: Partial<
@@ -31,6 +33,7 @@ export const MODEL_CONFIG_SCHEMAS: Partial<
   [ModelType.whispercppTranscription]: whisperConfigSchema,
   [ModelType.parakeetTranscription]: parakeetRuntimeConfigSchema.passthrough(),
   [ModelType.onnxOcr]: ocrConfigSchema,
+  [ModelType.sdcppGeneration]: sdcppConfigSchema,
 };
 
 // Ordered general → specific (later patterns override earlier)

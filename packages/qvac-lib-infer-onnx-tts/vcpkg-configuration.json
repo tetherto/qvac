@@ -11,32 +11,13 @@
       "repository": "https://github.com/microsoft/vcpkg",
       "packages": [
         "utf8proc",
-        "flatbuffers",
         "gtest",
         "vcpkg-tool-meson",
-        "benchmark",
-        "boost-config",
-        "boost-mp11",
-        "cxxopts",
-        "date",
-        "directx-headers",
-        "dlpack",
-        "ms-gsl",
         "nlohmann-json",
-        "optional-lite",
-        "re2",
-        "safeint",
-        "boost-cmake",
-        "boost-headers",
-        "boost-uninstall",
-        "vcpkg-boost",
-        "utf8-range",
         "fmt",
         "spdlog",
-        "mimalloc",
-        "wil",
         "zlib"
       ]
     }
   ]
-} 
+}

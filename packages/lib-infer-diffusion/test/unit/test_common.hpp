@@ -45,7 +45,6 @@ inline std::string getModelPath() {
     if (std::filesystem::exists(path))
       return path;
   }
-
   return {};
 }
 
