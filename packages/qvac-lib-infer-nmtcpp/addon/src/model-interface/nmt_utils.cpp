@@ -29,10 +29,6 @@ int get_optimal_thread_count() {
   }
 }
 
-bool modelIsMarian(e_model modelType) {
-  return modelType == e_model::MODEL_MARIAN || modelType == MODEL_MARIAN_V2;
-}
-
 int64_t get_time_us() {
 #ifdef _WIN32
   static LARGE_INTEGER frequency = []() {
