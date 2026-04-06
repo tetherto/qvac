@@ -30,7 +30,7 @@ env:
   PREBUILD_ARTIFACT_PREFIX: "llama-cpp-" # Prefix for prebuild artifacts (empty string for generic patterns)
   TEST_FRAMEWORK_REF: "main" # Branch/tag of qvac-test-addon-mobile framework
   APP_BUNDLE_ID: "io.tether.test.qvac" # Bundle ID for the test app (same for all addons)
-  ADDON_WORKDIR: "${{ repo.temp }}/addon/packages/qvac-lib-infer-llamacpp-llm"
+  ADDON_WORKDIR: "${{ github.workspace }}/addon/packages/qvac-lib-infer-llamacpp-llm"
 
 jobs:
   build-and-test:
@@ -55,6 +55,15 @@ jobs:
             runner: macos-14
 
     steps:
+      # Validate input data to prevent "Artifact Poisoning"
+      - name: Validate Dispatch Inputs
+        if: github.event_name == 'workflow_dispatch'
+        run: |
+          if [[ ! "${{ github.event.inputs.package }}" =~ ^@qvac/ ]]; then
+            echo "::error::Invalid package scope. Only @qvac/* is allowed."
+            exit 1
+          fi
+
       # Free up disk space on Ubuntu runner to prevent "No space left on device" errors
       - name: Free up disk space
         if: matrix.platform == 'Android'
@@ -83,7 +92,7 @@ jobs:
           repository: ${{ inputs.repository || github.repository }}
           ref: ${{ inputs.ref || github.ref }}
           token: ${{ secrets.PAT_TOKEN }}
-          path: ${{ repo.temp }}/addon
+          path: ${{ github.workspace }}/addon
           fetch-depth: 0
 
       - name: Checkout mobile test framework
@@ -92,7 +101,7 @@ jobs:
           repository: tetherto/qvac-test-addon-mobile
           ref: ${{ env.TEST_FRAMEWORK_REF }}
           token: ${{ secrets.PAT_TOKEN }}
-          path: ${{ repo.temp }}/test-framework
+          path: ${{ github.workspace }}/test-framework
           fetch-depth: 0
 
       - name: Setup Node.js
@@ -120,7 +129,7 @@ jobs:
           NPMRC
 
           # Configure test-framework registry
-          cd "${{ repo.temp }}/test-framework"
+          cd "${{ github.workspace }}/test-framework"
           cat > .npmrc <<NPMRC
           always-auth=true
           registry=https://registry.npmjs.org/
@@ -138,11 +147,13 @@ jobs:
           echo "Installing global dependencies..."
           npm install -g @expo/cli@latest
 
+      - run: mkdir -p ${{ runner.temp }}/qvac-lib-infer-llamacpp-llm
+
       - name: Download Android prebuilds (from artifacts)
         if: matrix.platform == 'Android' && !inputs.package
         uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # 8.0.1
         with:
-          path: ${{ env.ADDON_WORKDIR }}/prebuilds
+          path: ${{ runner.temp }}/qvac-lib-infer-llamacpp-llm
           pattern: ${{ env.PREBUILD_ARTIFACT_PREFIX }}android-*
           merge-multiple: true
         continue-on-error: true
@@ -151,7 +162,7 @@ jobs:
         if: matrix.platform == 'iOS' && !inputs.package
         uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # 8.0.1
         with:
-          path: ${{ env.ADDON_WORKDIR }}/prebuilds
+          path: ${{ runner.temp }}/qvac-lib-infer-llamacpp-llm
           pattern: ${{ env.PREBUILD_ARTIFACT_PREFIX }}ios-*
           merge-multiple: true
         continue-on-error: true
@@ -165,7 +176,7 @@ jobs:
 
           PACKAGE_NAME="${PACKAGE_SPEC%@*}"
 
-          if ! npm pack "$PACKAGE_SPEC"; then
+          if ! npm pack "$PACKAGE_SPEC" --ignore-scripts; then
             echo "ERROR: Failed to download $PACKAGE_SPEC from npm"
             echo "Please check that the package exists at https://www.npmjs.com/package/$PACKAGE_NAME"
             exit 1
@@ -193,6 +204,10 @@ jobs:
       - name: Verify and prepare prebuilds
         working-directory: ${{ env.ADDON_WORKDIR }}
         run: |
+          if [ -d "${{ runner.temp }}/prebuilds-download" ]; then
+            mkdir -p prebuilds
+            cp -r ${{ runner.temp }}/prebuilds-download/* ./prebuilds/
+          fi
           echo "Checking for prebuilds..."
           if [ -d "prebuilds" ] && [ "$(ls -A prebuilds)" ]; then
             echo "✅ Prebuilds found from artifacts:"
@@ -281,7 +296,7 @@ jobs:
         working-directory: ${{ env.ADDON_WORKDIR }}
         run: |
           echo "Installing addon dependencies..."
-          npm install
+          npm install --ignore-scripts
 
       - name: Validate mobile tests are up-to-date
         working-directory: ${{ env.ADDON_WORKDIR }}
@@ -296,7 +311,7 @@ jobs:
           else
             echo "📦 Using npm pack directly..."
             mkdir -p dist
-            npm pack --pack-destination dist
+            npm pack --pack-destination dist --ignore-scripts
           fi
 
           # Verify pack file exists
@@ -310,14 +325,14 @@ jobs:
           fi
 
       - name: Setup test framework dependencies
-        working-directory: ${{ repo.temp }}/test-framework
+        working-directory: ${{ github.workspace }}/test-framework
         run: |
           echo "Setting up mobile test framework..."
-          npm install
+          npm install --ignore-scripts
           echo "✅ Test framework dependencies installed"
 
       - name: Build test app with addon
-        working-directory: ${{ repo.temp }}/test-framework
+        working-directory: ${{ github.workspace }}/test-framework
         run: |
           echo "Building test app with addon..."
           echo "This will:"
@@ -366,7 +381,7 @@ jobs:
 
       - name: Display build summary
         if: always()
-        working-directory: ${{ repo.temp }}/test-framework
+        working-directory: ${{ github.workspace }}/test-framework
         run: |
           echo ""
           echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
@@ -411,7 +426,7 @@ jobs:
 
       - name: Generate Android project
         if: matrix.platform == 'Android'
-        working-directory: ${{ repo.temp }}/test-framework
+        working-directory: ${{ github.workspace }}/test-framework
         run: |
           echo "Generating Android project with Expo..."
           npx expo prebuild --platform android --clean
@@ -419,7 +434,7 @@ jobs:
       - name: Build Android APK
         if: matrix.platform == 'Android'
         id: build_apk
-        working-directory: ${{ repo.temp }}/test-framework
+        working-directory: ${{ github.workspace }}/test-framework
         run: |
           echo "Building Android APK for Device Farm..."
           export JAVA_HOME=$JAVA_HOME_17_X64
@@ -452,7 +467,7 @@ jobs:
 
           if [ -f "$APK_PATH" ]; then
             # Convert to absolute path
-            APK_ABSOLUTE_PATH="${{ repo.temp }}/test-framework/$APK_PATH"
+            APK_ABSOLUTE_PATH="${{ github.workspace }}/test-framework/$APK_PATH"
             SIZE=$(du -h "$APK_PATH" | cut -f1)
             echo "✅ APK built successfully: $APK_PATH (Size: $SIZE)"
             echo "apk_path=$APK_ABSOLUTE_PATH" >> $GITHUB_OUTPUT
@@ -617,14 +632,14 @@ jobs:
 
       - name: Generate iOS project
         if: matrix.platform == 'iOS'
-        working-directory: ${{ repo.temp }}/test-framework
+        working-directory: ${{ github.workspace }}/test-framework
         run: |
           echo "Generating iOS project with Expo..."
           npx expo prebuild --platform ios --clean
 
       - name: Install iOS dependencies
         if: matrix.platform == 'iOS'
-        working-directory: ${{ repo.temp }}/test-framework/ios
+        working-directory: ${{ github.workspace }}/test-framework/ios
         run: |
           echo "Installing CocoaPods dependencies..."
           pod install --repo-update
@@ -632,7 +647,7 @@ jobs:
       - name: Build and Archive iOS App
         if: matrix.platform == 'iOS'
         id: build_ios
-        working-directory: ${{ repo.temp }}/test-framework
+        working-directory: ${{ github.workspace }}/test-framework
         run: |
           echo "Building iOS app for Device Farm..."
 
@@ -683,7 +698,7 @@ jobs:
       - name: Export IPA
         if: matrix.platform == 'iOS'
         id: export_ipa
-        working-directory: ${{ repo.temp }}/test-framework/ios
+        working-directory: ${{ github.workspace }}/test-framework/ios
         run: |
           SCHEME_NAME=$(xcodebuild -list | grep -A 1 "Schemes:" | grep -v "Schemes:" | head -1 | xargs)
 
@@ -801,7 +816,7 @@ jobs:
           done
 
       - name: Verify test package generation
-        working-directory: ${{ repo.temp }}/test-framework/e2e
+        working-directory: ${{ github.workspace }}/test-framework/e2e
         run: |
           echo "Verifying e2e test package..."
 
@@ -825,16 +840,16 @@ jobs:
 
       - name: Package and Upload Test Package
         id: upload_test_package
-        working-directory: ${{ repo.temp }}/test-framework
+        working-directory: ${{ github.workspace }}/test-framework
         run: |
           echo "📦 Packaging e2e tests..."
           cd e2e
 
           # Install dependencies before packing
-          npm install
+          npm install --ignore-scripts
 
           # Create tarball
-          npm pack
+          npm pack --ignore-scripts
 
           # Create zip with test files only (no node_modules - will be installed on Device Farm)
           ZIP_NAME="e2e-tests-${{ matrix.platform }}.zip"
