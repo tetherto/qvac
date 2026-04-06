@@ -24,7 +24,8 @@ const ERR_CODES = Object.freeze({
   DECODER_NOT_FOUND: 24014,
   INVALID_CONFIG: 24015,
   JOB_ALREADY_RUNNING: 24016,
-  BUFFER_LIMIT_EXCEEDED: 24017
+  BUFFER_LIMIT_EXCEEDED: 24017,
+  INSTANCE_DESTROYED: 24018
 })
 
 addCodes({
@@ -95,6 +96,10 @@ addCodes({
   [ERR_CODES.BUFFER_LIMIT_EXCEEDED]: {
     name: 'BUFFER_LIMIT_EXCEEDED',
     message: (message) => `Audio buffer size limit exceeded: ${message}`
+  },
+  [ERR_CODES.INSTANCE_DESTROYED]: {
+    name: 'INSTANCE_DESTROYED',
+    message: () => 'Cannot load: instance has been destroyed'
   }
 }, {
   name,

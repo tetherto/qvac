@@ -98,7 +98,7 @@ class TranscriptionParakeet {
     this.logger = new QvacLogger(logger)
     this.exclusiveRun = !!exclusiveRun
     this._runQueueWaiter = Promise.resolve()
-    this.state = { configLoaded: false, destroyed: false }
+    this.state = { configLoaded: false, weightsLoaded: false, destroyed: false }
 
     this._config = {
       ...config,
@@ -207,12 +207,13 @@ class TranscriptionParakeet {
     if (this.state.destroyed) {
       throw new QvacErrorAddonParakeet(ERR_CODES.INSTANCE_DESTROYED)
     }
-    if (this.state.configLoaded) {
+    if (this.state.configLoaded || this.state.weightsLoaded) {
       this.logger.info('Reload requested - unloading existing model first')
       await this.unload()
     }
     await this._load()
     this.state.configLoaded = true
+    this.state.weightsLoaded = true
   }
 
   async run (input) {
@@ -381,6 +382,7 @@ class TranscriptionParakeet {
         await this.addon.destroyInstance()
       }
       this.state.configLoaded = false
+      this.state.weightsLoaded = false
     })
   }
 
