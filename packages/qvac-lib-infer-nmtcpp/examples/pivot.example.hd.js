@@ -8,17 +8,18 @@
  * - Second model: English -> Italian (en-it)
  * - Result: Spanish -> Italian translation via English pivot
  *
- * The models are downloaded via HyperdriveDL from the distributed network.
+ * Requires local Bergamot model files for both language pairs.
  *
  * Usage:
  *   bare examples/pivot.example.hd.js
+ *   BERGAMOT_ESEN_PATH=./models/es-en BERGAMOT_ENIT_PATH=./models/en-it bare examples/pivot.example.hd.js
  *
  * Enable verbose C++ logging:
  *   VERBOSE=1 bare examples/pivot.example.hd.js
  */
 
-const HyperdriveDL = require('@qvac/dl-hyperdrive')
 const TranslationNmtcpp = require('../index')
+const fs = require('bare-fs')
 const path = require('bare-path')
 const process = require('bare-process')
 
@@ -46,15 +47,6 @@ const spanishText = `
   Fue un dia perfecto para explorar la ciudad.
 `
 
-const PRIMARY_DISK_PATH = './models/es-en'
-const PIVOT_DISK_PATH = './models/en-it'
-
-async function downloadFile (loader, fileName, diskPath) {
-  const dl = await loader.download(fileName, { diskPath })
-  if (dl) await dl.await()
-  return path.join(diskPath, fileName)
-}
-
 async function main () {
   console.log('Setting up pivot translation: Spanish -> English -> Italian')
   console.log('-----------------------------------------------------------')
@@ -62,38 +54,30 @@ async function main () {
   console.log(spanishText)
   console.log('-----------------------------------------------------------\n')
 
-  // Primary model loader: Spanish -> English
-  const primaryLoader = new HyperdriveDL({
-    key: 'hd://c3e983c8db3f64faeef8eaf1da9ea4aeb8d5c020529f83957d63c19ed7710651'
-  })
+  const esenPath = process.env.BERGAMOT_ESEN_PATH || './models/es-en'
+  const enitPath = process.env.BERGAMOT_ENIT_PATH || './models/en-it'
 
-  // Pivot model loader: English -> Italian
-  const pivotLoader = new HyperdriveDL({
-    key: 'hd://a8811fb494e4aee45ca06a011703a25df5275e5dfa59d6217f2d430c677f9fa6'
-  })
+  const primaryModel = path.join(esenPath, 'model.esen.intgemm.alphas.bin')
+  const primaryVocab = path.join(esenPath, 'vocab.esen.spm')
+  const pivotModel = path.join(enitPath, 'model.enit.intgemm.alphas.bin')
+  const pivotVocab = path.join(enitPath, 'vocab.enit.spm')
 
-  await primaryLoader.ready()
-  await pivotLoader.ready()
-
-  // Download all model files to disk first
-  console.log('Downloading primary model (es-en)...')
-  const modelPath = await downloadFile(primaryLoader, 'model.esen.intgemm.alphas.bin', PRIMARY_DISK_PATH)
-  const srcVocabPath = await downloadFile(primaryLoader, 'vocab.esen.spm', PRIMARY_DISK_PATH)
-  const dstVocabPath = srcVocabPath // Bergamot models often use shared vocab
-
-  console.log('Downloading pivot model (en-it)...')
-  const pivotModelPath = await downloadFile(pivotLoader, 'model.enit.intgemm.alphas.bin', PIVOT_DISK_PATH)
-  const pivotSrcVocabPath = await downloadFile(pivotLoader, 'vocab.enit.spm', PIVOT_DISK_PATH)
-  const pivotDstVocabPath = pivotSrcVocabPath // Shared vocab for en-it
+  for (const f of [primaryModel, primaryVocab, pivotModel, pivotVocab]) {
+    if (!fs.existsSync(f)) {
+      console.log('Missing model file:', f)
+      console.log('\nSet BERGAMOT_ESEN_PATH and BERGAMOT_ENIT_PATH env vars or place models in ./models/es-en and ./models/en-it')
+      return
+    }
+  }
 
   const model = new TranslationNmtcpp({
     files: {
-      model: modelPath,
-      srcVocab: srcVocabPath,
-      dstVocab: dstVocabPath,
-      pivotModel: pivotModelPath,
-      pivotSrcVocab: pivotSrcVocabPath,
-      pivotDstVocab: pivotDstVocabPath
+      model: primaryModel,
+      srcVocab: primaryVocab,
+      dstVocab: primaryVocab,
+      pivotModel,
+      pivotSrcVocab: pivotVocab,
+      pivotDstVocab: pivotVocab
     },
     params: {
       srcLang: 'es',
@@ -128,11 +112,8 @@ async function main () {
   } finally {
     console.log('\n\nUnloading models...')
     await model.unload()
-    await primaryLoader.close()
-    await pivotLoader.close()
   }
 }
 
-// Run the main example
 main()
   .catch(console.error)

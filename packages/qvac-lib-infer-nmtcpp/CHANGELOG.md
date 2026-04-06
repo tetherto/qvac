@@ -27,7 +27,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Updated
 
-- Examples updated for new constructor — each example downloads its own models on first run
+- Examples updated for new constructor — use local file paths or `bergamot-model-fetcher` for auto-download
+- Removed `example.hd.js` and `pause.example.js` (redundant — `quickstart.js` covers basic translation, NMT has no pause support)
+- Removed HyperdriveDL from all examples — `indictrans.js` and `pivot.example.hd.js` now accept local paths via env vars
 - SDK NMT plugin passes resolved file paths via `files` shape instead of creating `FilesystemDL` loader
 
 ## [0.6.1] - 2026-03-11

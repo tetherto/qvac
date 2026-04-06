@@ -4,20 +4,20 @@
  * IndicTrans Example
  *
  * This example demonstrates translation using the IndicTrans2 model
- * for English to Hindi translation (eng_Latn → hin_Deva).
+ * for English to Hindi translation (eng_Latn -> hin_Deva).
  *
- * The model is downloaded via HyperdriveDL from the distributed network.
+ * Requires a local IndicTrans model file.
  *
  * Usage:
  *   bare examples/indictrans.js
+ *   INDICTRANS_MODEL_PATH=/path/to/model.bin bare examples/indictrans.js
  *
  * Enable verbose C++ logging:
  *   VERBOSE=1 bare examples/indictrans.js
  */
 
-const HyperdriveDL = require('@qvac/dl-hyperdrive')
 const TranslationNmtcpp = require('../index')
-const path = require('bare-path')
+const fs = require('bare-fs')
 const process = require('bare-process')
 
 // ============================================================
@@ -37,25 +37,14 @@ const logger = VERBOSE
 
 const text = 'How are you'
 
-const DISK_PATH = './models'
-const MODEL_NAME = 'ggml-indictrans2-en-indic-dist-200M.bin'
-
-async function downloadFile (loader, fileName, diskPath) {
-  const dl = await loader.download(fileName, { diskPath })
-  if (dl) await dl.await()
-  return path.join(diskPath, fileName)
-}
-
 async function main () {
-  const hdDL = new HyperdriveDL({
-    key: 'hd://268c2e9b2a3420632e4b6649e32822f42d5dfbda4c7e96daec5b629ed20f99f7'
-  })
+  const modelPath = process.env.INDICTRANS_MODEL_PATH || './models/ggml-indictrans2-en-indic-dist-200M.bin'
 
-  await hdDL.ready()
-
-  // Download model to disk first
-  console.log('Downloading model...')
-  const modelPath = await downloadFile(hdDL, MODEL_NAME, DISK_PATH)
+  if (!fs.existsSync(modelPath)) {
+    console.log('IndicTrans model not found at:', modelPath)
+    console.log('Set INDICTRANS_MODEL_PATH env var or place model at ./models/ggml-indictrans2-en-indic-dist-200M.bin')
+    return
+  }
 
   const model = new TranslationNmtcpp({
     files: { model: modelPath },
@@ -78,7 +67,6 @@ async function main () {
     console.log('translation finished!')
   } finally {
     await model.unload()
-    await hdDL.close()
   }
 }
 
