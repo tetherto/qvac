@@ -55,7 +55,7 @@ export type ResponseWithDelegation = Response & {
 
 const logger = getServerLogger();
 
-import { getNextCommandId } from "@/server/rpc/delegate-utils";
+import { getNextCommandId } from "@/server/rpc/rpc-utils";
 
 function checkAndThrowError(response: Response): void {
   if (response.type === "error") {

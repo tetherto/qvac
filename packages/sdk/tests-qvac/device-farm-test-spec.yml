@@ -26,7 +26,7 @@ phases:
     commands:
       # Stream logcat, track test progress in real-time, detect completion
       - |-
-        TIMEOUT=${DEVICEFARM_TIMEOUT:-1800}
+        TIMEOUT=${DEVICEFARM_TIMEOUT:-5400}
         START=$(date +%s)
         PASSED=0
         FAILED=0

@@ -24,10 +24,10 @@ on:
         required: false
         type: string
       device-farm-timeout:
-        description: "Maximum time in minutes to keep Device Farm session alive"
+        description: "Maximum time in minutes to keep Device Farm session alive."
         required: false
         type: number
-        default: 30
+        default: 60
       device-farm-project-arn:
         description: "AWS Device Farm project ARN"
         required: true
@@ -343,6 +343,8 @@ jobs:
 
           echo "spec-arn=$SPEC_ARN" >> $GITHUB_OUTPUT
 
+          TIMEOUT_SECONDS=$(( ${{ inputs.device-farm-timeout || 90 }} * 60 ))
+          sed -i "s/DEVICEFARM_TIMEOUT:-5400/DEVICEFARM_TIMEOUT:-${TIMEOUT_SECONDS}/" "${{ inputs.working-directory }}/device-farm-test-spec.yml"
           curl -T "${{ inputs.working-directory }}/device-farm-test-spec.yml" "$SPEC_URL"
 
           echo "Waiting for test spec to be processed..."
@@ -405,7 +407,7 @@ jobs:
     needs: build
     runs-on: ubuntu-latest
     environment: release
-    timeout-minutes: 45
+    timeout-minutes: 90
     env:
       NPM_TOKEN: ${{ secrets.NPM_TOKEN }}
       PAT_TOKEN: ${{ secrets.PAT_TOKEN }}

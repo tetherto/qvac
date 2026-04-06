@@ -40,6 +40,7 @@ import {
   MMPROJ_SMOLVLM2_500M_MULTIMODAL_Q8_0,
   SALAMANDRATA_2B_INST_Q4,
   AFRICAN_4B_TRANSLATION_Q4_K_M,
+  SD_V2_1_1B_Q8_0,
 } from "@qvac/sdk";
 import { ResourceManager } from "../shared/resource-manager.js";
 import { ModelLoadingExecutor } from "../shared/executors/model-loading-executor.js";
@@ -62,6 +63,7 @@ import { MobileRagExecutor } from "./executors/rag-executor.js";
 import { MobileConfigReloadExecutor } from "./executors/config-reload-executor.js";
 import { MobileTtsExecutor } from "./executors/tts-executor.js";
 import { DownloadExecutor } from "../shared/executors/download-executor.js";
+import { DiffusionExecutor } from "../shared/executors/diffusion-executor.js";
 
 const resources = new ResourceManager();
 
@@ -318,6 +320,17 @@ resources.define("vision", {
   },
 });
 
+resources.define("diffusion", {
+  constant: SD_V2_1_1B_Q8_0,
+  type: "diffusion",
+  config: {
+    device: "gpu",
+    threads: 4,
+    prediction: "v",
+    vae_on_cpu: true,
+  },
+});
+
 function skipTests(testIds: string[], reason: string) {
   return new SkipExecutor(new RegExp(`^(${testIds.join("|")})$`), reason);
 }
@@ -357,7 +370,8 @@ export const executor = createExecutor({
     new KvCacheExecutor(resources),
     new MobileParakeetExecutor(resources),
     new MobileVisionExecutor(resources),
-    new DownloadExecutor(resources),
+    new DownloadExecutor(),
+    new DiffusionExecutor(resources),
   ],
   profiling: {
     init: () => profiler.enable({ mode: "summary", includeServerBreakdown: true }),

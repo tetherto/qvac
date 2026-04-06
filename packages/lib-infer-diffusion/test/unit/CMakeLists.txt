@@ -11,11 +11,13 @@ endif()
 add_executable(
   addon-test
   test_backend_selection.cpp
+  test_sd_ctx_handlers.cpp
   test_sd_model.cpp
   test_model_loading.cpp
   test_single_step_inference.cpp
   test_full_generation.cpp
   test_cancel_context.cpp
+  test_cancel_stale_flag.cpp
   test_sd_gen_handlers.cpp
   ${CMAKE_SOURCE_DIR}/addon/src/utils/BackendSelection.cpp
   ${CMAKE_SOURCE_DIR}/addon/src/utils/LoggingMacros.cpp

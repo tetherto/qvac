@@ -48,6 +48,7 @@ export const modelInfoSchema = z.object({
     "vad",
     "tts",
     "ocr",
+    "diffusion",
     "other",
   ]),
 
