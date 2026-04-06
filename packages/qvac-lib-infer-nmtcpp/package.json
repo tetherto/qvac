@@ -101,5 +101,8 @@
       "build/**",
       "prebuilds/**"
     ]
+  },
+  "overrides": {
+    "@qvac/dl-hyperdrive": "^0.2.0"
   }
 }
