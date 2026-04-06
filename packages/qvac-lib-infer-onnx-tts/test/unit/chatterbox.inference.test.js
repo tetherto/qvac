@@ -1,5 +1,6 @@
 'use strict'
 
+const path = require('bare-path')
 const test = require('brittle')
 const ONNXTTS = require('../../index.js')
 const { TTSInterface } = require('../../tts.js')
@@ -10,21 +11,18 @@ global.process = process
 const sinon = require('sinon')
 
 function createMockedChatterboxModel ({ onOutput = () => { }, binding = undefined, exclusiveRun = false } = {}) {
-  const args = {
+  const model = new ONNXTTS({
+    files: {
+      modelDir: './models/chatterbox'
+    },
+    engine: 'chatterbox',
+    config: {
+      language: 'en',
+      useGPU: false
+    },
     opts: { stats: true },
-    exclusiveRun,
-    tokenizerPath: './models/chatterbox/tokenizer.json',
-    speechEncoderPath: './models/chatterbox/speech_encoder.onnx',
-    embedTokensPath: './models/chatterbox/embed_tokens.onnx',
-    conditionalDecoderPath: './models/chatterbox/conditional_decoder.onnx',
-    languageModelPath: './models/chatterbox/language_model.onnx'
-    // No loader - _downloadWeights will skip
-  }
-  const config = {
-    language: 'en',
-    useGPU: false
-  }
-  const model = new ONNXTTS(args, config)
+    exclusiveRun
+  })
 
   sinon.stub(model, '_createAddon').callsFake((configurationParams, outputCb) => {
     const _binding = binding || new MockedBinding()
@@ -53,8 +51,10 @@ async function waitWithTimeout (promise, timeoutMs, message) {
 
 test('Chatterbox: run returns audio output and stats', async (t) => {
   const events = []
+  const callbackArity = []
   const model = createMockedChatterboxModel({
-    onOutput: (addon, event, data, error) => {
+    onOutput: function (addon, event, data, error) {
+      callbackArity.push(arguments.length)
       events.push({ event, data, error })
     }
   })
@@ -68,6 +68,7 @@ test('Chatterbox: run returns audio output and stats', async (t) => {
   t.ok(outputs.some(d => d.outputArray), 'Response should contain outputArray payload')
   t.ok(response.stats.totalSamples > 0, 'Response stats should include total samples')
   t.ok(events.length > 0, 'Raw addon callback should have been called')
+  t.ok(callbackArity.every(length => length === 4), 'Native callbacks should not include a native jobId argument')
   await model.unload()
 })
 
@@ -151,7 +152,6 @@ test('Chatterbox: reload during in-flight job does not stay busy', async (t) => 
     t.ok(String(error.message).includes('reloaded'), 'In-flight job should fail on reload')
   }
   t.ok(rejected, 'Reload should reject the in-flight response')
-  t.is(model._hasActiveResponse, false, 'Reload should clear active response busy flag')
 
   // Let stale callbacks from the destroyed addon drain before submitting a new job.
   await new Promise(resolve => setTimeout(resolve, 150))
@@ -171,15 +171,34 @@ test('Chatterbox: Static methods return expected values', async (t) => {
 })
 
 test('Chatterbox: Engine type is detected correctly', async (t) => {
-  const chatterboxArgs = {
-    tokenizerPath: './tokenizer.json',
-    speechEncoderPath: './speech_encoder.onnx',
-    embedTokensPath: './embed_tokens.onnx',
-    conditionalDecoderPath: './conditional_decoder.onnx',
-    languageModelPath: './language_model.onnx'
-  }
-  const chatterboxModel = new ONNXTTS(chatterboxArgs, {})
+  const chatterboxModel = new ONNXTTS({
+    files: {
+      tokenizer: './tokenizer.json',
+      speechEncoder: './speech_encoder.onnx',
+      embedTokens: './embed_tokens.onnx',
+      conditionalDecoder: './conditional_decoder.onnx',
+      languageModel: './language_model.onnx'
+    }
+  })
   t.is(chatterboxModel._engineType, 'chatterbox', 'Should detect Chatterbox engine when Chatterbox paths are provided')
+
+  const fromBundle = new ONNXTTS({
+    files: { modelDir: './models/chatterbox' },
+    engine: 'chatterbox'
+  })
+  t.is(fromBundle._engineType, 'chatterbox', 'engine chatterbox + modelDir uses Chatterbox layout')
+  t.is(
+    fromBundle._tokenizerPath,
+    path.join('./models/chatterbox', 'tokenizer.json'),
+    'modelDir derives tokenizer path'
+  )
+})
+
+test('Chatterbox: invalid engine throws', async (t) => {
+  t.exception(
+    () => new ONNXTTS({ files: { modelDir: './x' }, engine: 'other' }),
+    /invalid engine/
+  )
 })
 
 test('Chatterbox: cancel propagates as job failure', async (t) => {
