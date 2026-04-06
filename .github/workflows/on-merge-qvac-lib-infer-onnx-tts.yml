@@ -164,6 +164,7 @@ jobs:
     permissions:
       contents: write
       packages: write
+      id-token: write
     env:
       WORKDIR: packages/qvac-lib-infer-onnx-tts
     steps:
