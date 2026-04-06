@@ -2,7 +2,6 @@
 
 const test = require('brittle')
 const TranscriptionParakeet = require('../../index.js')
-const FakeDL = require('../mocks/loader.fake.js')
 const MockedBinding = require('../mocks/MockedBinding.js')
 const { transitionCb, wait } = require('../mocks/utils.js')
 const { ParakeetInterface } = require('../../parakeet')
@@ -17,19 +16,16 @@ function createMockedModel ({ onOutput = () => { }, binding = undefined } = {}) 
   // Mock validateModelFiles on the prototype BEFORE creating instance
   const validateStub = sinon.stub(TranscriptionParakeet.prototype, 'validateModelFiles').returns(undefined)
 
-  const args = {
-    modelName: 'parakeet-tdt-0.6b-v3-onnx',
-    loader: new FakeDL({}),
-    diskPath: './models'
-  }
-  const config = {
-    parakeetConfig: {
-      modelType: 'tdt',
-      maxThreads: 4,
-      useGPU: false
+  const model = new TranscriptionParakeet({
+    files: {},
+    config: {
+      parakeetConfig: {
+        modelType: 'tdt',
+        maxThreads: 4,
+        useGPU: false
+      }
     }
-  }
-  const model = new TranscriptionParakeet(args, config)
+  })
 
   sinon.stub(model, '_createAddon').callsFake(configurationParams => {
     const _binding = binding || new MockedBinding()
@@ -139,28 +135,6 @@ test('Model emits error events when an error occurs during processing', async (t
     // The error should be a QvacErrorAddonParakeet
     t.ok(error.constructor.name === 'QvacErrorAddonParakeet', 'Error should be a QvacErrorAddonParakeet')
     t.ok(error.message.includes('Forced error') || typeof error.code === 'number', 'Error should contain forced error message or have error code')
-  }
-})
-
-/**
- * Test that the FakeDL loader returns the correct file list and data streams.
- */
-test('FakeDL returns correct file list and data streams', async (t) => {
-  const fakeDL = new FakeDL({})
-
-  const fileList = await fakeDL.list('/')
-  t.ok(
-    ['encoder-model.onnx', 'decoder_joint-model.onnx', 'vocab.txt', 'preprocessor.onnx'].every(f => fileList.includes(f)),
-    'File list should match expected Parakeet model files'
-  )
-
-  for (const file of fileList) {
-    const stream = await fakeDL.getStream(file)
-    let data = ''
-    for await (const chunk of stream) {
-      data += chunk.toString()
-    }
-    t.ok(data.length > 0, `Stream for ${file} should contain data`)
   }
 })
 
