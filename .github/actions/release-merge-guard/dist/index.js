@@ -25704,7 +25704,8 @@ try {
         const branchPkg = match[1];
         branchVersion = match[2];
         if (branchPkg !== pkgSlug) {
-            errors.push(`Package mismatch — branch targets '${branchPkg}', workflow expects '${pkgSlug}'`);
+            core.warning(`Package slug mismatch — branch targets '${branchPkg}', workflow expects '${pkgSlug}'. ` +
+                `This is expected for short-name release branches (e.g. release-diffusion-x.y.z).`);
         }
     }
     // ── package.json version must match the branch version (always runs)

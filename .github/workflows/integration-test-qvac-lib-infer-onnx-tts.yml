@@ -61,7 +61,7 @@ jobs:
           - ubuntu-24.04-arm
           - macos-14-xlarge
           - macos-15-large
-          - ai-run-windows11-gpu
+          - windows-2022
         include:
           - os: ubuntu-22.04
             platform: linux
@@ -83,10 +83,10 @@ jobs:
             platform: darwin
             arch: x64
             os_version: m15
-          - os: ai-run-windows11-gpu
+          - os: windows-2022
             platform: win32
             arch: x64
-            os_version: w11
+            os_version: w22
 
     steps:
       - name: Setup Node.js

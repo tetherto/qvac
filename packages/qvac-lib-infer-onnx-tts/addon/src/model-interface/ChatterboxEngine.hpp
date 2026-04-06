@@ -1,5 +1,6 @@
 #pragma once
 
+#include "ChatterboxTextPreprocessor.hpp"
 #include "IChatterboxEngine.hpp"
 #include "IOnnxInferSession.hpp"
 #include "OrtTypes.hpp"
@@ -33,7 +34,6 @@ public:
   AudioResult synthesize(const std::string &text) override;
 
 protected:
-  void sanitizeTokenIds(std::vector<int64_t> &inputIds);
   TensorData<int64_t>
   buildInitialPositionIds(const std::vector<int64_t> &inputIds);
 
@@ -90,6 +90,7 @@ private:
   void ensureSession(std::unique_ptr<IOnnxInferSession> &session,
                      const std::string &modelPath);
   void releaseSession(std::unique_ptr<IOnnxInferSession> &session);
+  void loadCangjieTableIfNeeded(const std::string &tokenizerPath);
 
   TokenizerHandle tokenizerHandle_;
   SessionFactory sessionFactory_;
@@ -103,6 +104,7 @@ private:
   bool lazySessionLoading_ = false;
   std::string language_;
   int keyValueOffset_ = 0;
+  text_preprocess::CangjieTable cangjieTable_;
 };
 
 } // namespace qvac::ttslib::chatterbox
