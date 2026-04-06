@@ -35,7 +35,7 @@ async function main () {
     voiceName: 'F1',
     speed: 1.05,
     numInferenceSteps: 5,
-    supertonicMultilingual: false,
+    supertonicMultilingual: true,
     config: {
       language: 'en'
     },
