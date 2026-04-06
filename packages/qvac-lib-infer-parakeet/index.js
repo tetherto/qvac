@@ -98,7 +98,7 @@ class TranscriptionParakeet {
     this.logger = new QvacLogger(logger)
     this.exclusiveRun = !!exclusiveRun
     this._runQueueWaiter = Promise.resolve()
-    this.state = { configLoaded: false, weightsLoaded: false, destroyed: false }
+    this.state = { configLoaded: false, destroyed: false }
 
     this._config = {
       ...config,
@@ -133,7 +133,7 @@ class TranscriptionParakeet {
     const modelType = this.params.modelType || 'tdt'
     const requiredFiles = getRequiredModelFiles(modelType)
     for (const file of requiredFiles) {
-      const filePath = this._resolveFilePath('', file)
+      const filePath = this._resolveFilePath(file)
       if (filePath && !fs.existsSync(filePath)) {
         this.logger.warn('Model file not found', { file, path: filePath })
       }
@@ -142,12 +142,11 @@ class TranscriptionParakeet {
 
   /**
    * Resolve the absolute path for a model file from the files map.
-   * @param {string} _modelPath - unused, kept for internal call compatibility
    * @param {string} filename - model file name (e.g. 'encoder-model.onnx')
    * @returns {string} - absolute path to the file, or empty string if not set
    * @private
    */
-  _resolveFilePath (_modelPath, filename) {
+  _resolveFilePath (filename) {
     const namedPaths = {
       // TDT
       'encoder-model.onnx': this._config.encoderPath,
@@ -205,7 +204,7 @@ class TranscriptionParakeet {
   }
 
   async load () {
-    if (this.state.configLoaded || this.state.weightsLoaded) {
+    if (this.state.configLoaded) {
       this.logger.info('Reload requested - unloading existing model first')
       await this.unload()
     }
@@ -379,7 +378,6 @@ class TranscriptionParakeet {
         await this.addon.destroyInstance()
       }
       this.state.configLoaded = false
-      this.state.weightsLoaded = false
     })
   }
 
@@ -409,7 +407,6 @@ class TranscriptionParakeet {
         await this.addon.destroyInstance()
       }
       this.state.configLoaded = false
-      this.state.weightsLoaded = false
       this.state.destroyed = true
     })
   }

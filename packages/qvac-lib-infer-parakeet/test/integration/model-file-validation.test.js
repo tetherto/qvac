@@ -123,8 +123,8 @@ test('Should resolve CTC model file paths correctly', { timeout: 60000 }, async 
       config: { parakeetConfig: { modelType: 'ctc' } }
     })
     t.ok(model, 'CTC model instance created')
-    t.is(model._resolveFilePath('', 'model.onnx'), modelOnnx, 'model.onnx resolves to files.model')
-    t.is(model._resolveFilePath('', 'tokenizer.json'), tokenizer, 'tokenizer.json resolves to files.tokenizer')
+    t.is(model._resolveFilePath('model.onnx'), modelOnnx, 'model.onnx resolves to files.model')
+    t.is(model._resolveFilePath('tokenizer.json'), tokenizer, 'tokenizer.json resolves to files.tokenizer')
   } catch (error) {
     t.fail('Should not throw: ' + error.message)
   }
@@ -157,8 +157,8 @@ test('Should resolve EOU model file paths correctly', { timeout: 60000 }, async 
       config: { parakeetConfig: { modelType: 'eou' } }
     })
     t.ok(model, 'EOU model instance created')
-    t.is(model._resolveFilePath('', 'encoder.onnx'), eouEncoder, 'encoder.onnx resolves to files.eouEncoder')
-    t.is(model._resolveFilePath('', 'decoder_joint.onnx'), eouDecoder, 'decoder_joint.onnx resolves to files.eouDecoder')
+    t.is(model._resolveFilePath('encoder.onnx'), eouEncoder, 'encoder.onnx resolves to files.eouEncoder')
+    t.is(model._resolveFilePath('decoder_joint.onnx'), eouDecoder, 'decoder_joint.onnx resolves to files.eouDecoder')
   } catch (error) {
     t.fail('Should not throw: ' + error.message)
   }
@@ -190,7 +190,7 @@ test('Should resolve Sortformer model file paths correctly', { timeout: 60000 },
       config: { parakeetConfig: { modelType: 'sortformer' } }
     })
     t.ok(model, 'Sortformer model instance created')
-    t.is(model._resolveFilePath('', 'sortformer.onnx'), sortformerFile, 'sortformer.onnx resolves to files.sortformer')
+    t.is(model._resolveFilePath('sortformer.onnx'), sortformerFile, 'sortformer.onnx resolves to files.sortformer')
   } catch (error) {
     t.fail('Should not throw: ' + error.message)
   }

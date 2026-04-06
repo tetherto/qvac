@@ -46,10 +46,10 @@ test('CTC with named file paths — constructor accepts and validates', { timeou
   })
   t.ok(model, 'CTC model created with named paths (no directory throw)')
 
-  const resolved = model._resolveFilePath('', 'model.onnx')
+  const resolved = model._resolveFilePath('model.onnx')
   t.is(resolved, ctcModelPath, '_resolveFilePath maps model.onnx to ctcModelPath')
 
-  const resolvedTok = model._resolveFilePath('', 'tokenizer.json')
+  const resolvedTok = model._resolveFilePath('tokenizer.json')
   t.is(resolvedTok, tokenizerPath, '_resolveFilePath maps tokenizer.json to tokenizerPath')
 })
 
@@ -128,10 +128,10 @@ test('EOU with named file paths — constructor accepts and validates', { timeou
   })
   t.ok(model, 'EOU model created with named paths (no directory throw)')
 
-  const resolved = model._resolveFilePath('', 'encoder.onnx')
+  const resolved = model._resolveFilePath('encoder.onnx')
   t.is(resolved, eouEncoderPath, '_resolveFilePath maps encoder.onnx to eouEncoderPath')
 
-  const resolvedDec = model._resolveFilePath('', 'decoder_joint.onnx')
+  const resolvedDec = model._resolveFilePath('decoder_joint.onnx')
   t.is(resolvedDec, eouDecoderPath, '_resolveFilePath maps decoder_joint.onnx to eouDecoderPath')
 })
 
@@ -208,7 +208,7 @@ test('Sortformer with named file paths — constructor accepts and validates', {
   })
   t.ok(model, 'Sortformer model created with named paths (no directory throw)')
 
-  const resolved = model._resolveFilePath('', 'sortformer.onnx')
+  const resolved = model._resolveFilePath('sortformer.onnx')
   t.is(resolved, sortformerPath, '_resolveFilePath maps sortformer.onnx to sortformerPath')
 })
 
@@ -291,6 +291,6 @@ test('TDT with named file paths — verify existing flow still works', { timeout
   })
   t.ok(model, 'TDT model created with named paths')
 
-  const resolved = model._resolveFilePath('', 'encoder-model.onnx')
+  const resolved = model._resolveFilePath('encoder-model.onnx')
   t.is(resolved, path.join(modelPath, 'encoder-model.onnx'), '_resolveFilePath maps correctly')
 })
