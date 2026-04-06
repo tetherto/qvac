@@ -152,7 +152,7 @@ export interface Addon {
  * ONNX Runtime client implementation for the Parakeet speech-to-text model.
  * Supports NVIDIA Parakeet ASR models in ONNX format.
  */
-declare class TranscriptionParakeet extends BaseInference {
+declare class TranscriptionParakeet {
   protected readonly _config: TranscriptionParakeetConfig;
   protected addon!: Addon;
   protected params: ParakeetConfig;
