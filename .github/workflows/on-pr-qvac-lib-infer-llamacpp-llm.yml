@@ -122,8 +122,6 @@ jobs:
     with:
       repository: ${{ github.event.pull_request.head.repo.full_name }}
       ref: ${{ github.event.pull_request.head.ref }}
-      publish_target: "gpr"
-      tag: pr-${{ github.event.pull_request.number }}
 
   run-integration-tests:
     if: needs.authorize.outputs.allowed == 'true'

@@ -174,7 +174,7 @@ test('Chatterbox TTS: English + Spanish synthesis and WER verification', { timeo
       }
 
       if (entry.lang !== 'en') {
-        await whisperModel.reload({ language: entry.lang })
+        await whisperModel.reload({ whisperConfig: { language: entry.lang, translate: false } })
       }
 
       console.log(`\n--- Whisper ${i + 1}/${werEntries.length} [${entry.lang}]: "${entry.text.substring(0, 50)}..." ---`)

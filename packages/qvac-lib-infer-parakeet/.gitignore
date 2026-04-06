@@ -34,3 +34,5 @@ vcpkg_installed/
 package-lock.json
 data/
 benchmarks/results/
+test/integration/all.js
+test/integration/.exit-code

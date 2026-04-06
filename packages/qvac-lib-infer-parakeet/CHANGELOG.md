@@ -81,6 +81,10 @@ Three new public methods expose addon lifecycle control: `status()` queries the 
 ## Other
 
 Job management is now handled by `createJobHandler()` from `@qvac/infer-base ^0.4.0`, replacing the manual `_hasActiveResponse` flag and `_failAndClearActiveResponse()` helper. `_resolveFilePath()` now takes only a `filename` argument. Dead helpers `_hasNamedPaths()` and `_getModelFilePath()` have been removed.
+## [0.2.6]
+
+### Changed
+- Switched ONNX Runtime linkage from direct vcpkg dependency to `@qvac/onnx` shared module, aligning with the OCR package pattern for consistent cross-addon runtime sharing
 
 ## [0.2.5]
 
