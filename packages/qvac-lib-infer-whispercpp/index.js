@@ -121,7 +121,7 @@ class TranscriptionWhispercpp {
 
   async stop () {
     if (!this.addon?.stop) {
-      throw new Error('stop is not supported by this addon')
+      throw new QvacErrorAddonWhisper({ code: ERR_CODES.FAILED_TO_STOP, adds: 'stop not supported' })
     }
     await this.addon.stop()
   }
