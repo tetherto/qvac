@@ -9,9 +9,9 @@ on:
         default: 'en-it'
         type: string
       translators:
-        description: 'Comma-separated translators (qvac,qvac_bergamot,opusmt,google,nllb,bergamot)'
+        description: 'Comma-separated translators (qvac_bergamot,opusmt,google,nllb,bergamot)'
         required: false
-        default: 'qvac'
+        default: 'qvac_bergamot'
         type: string
       dataset_flores_devtest:
         description: 'Evaluate on Flores-devtest dataset'
@@ -38,11 +38,6 @@ on:
         required: false
         default: false
         type: boolean
-      is_quantized_model:
-        description: 'Use Quantized q4_0 gguf format model supported with QVAC backend only'
-        required: false
-        default: false
-        type: boolean
       use_batch:
         description: 'Use batch translation only with qvac_bergamot (faster) option'
         required: false
@@ -64,9 +59,9 @@ on:
         required: true
         type: string
       translators:
-        description: 'Comma-separated translators (qvac,qvac_bergamot,opusmt,google,nllb,bergamot)'
+        description: 'Comma-separated translators (qvac_bergamot,opusmt,google,nllb,bergamot)'
         required: false
-        default: 'qvac'
+        default: 'qvac_bergamot'
         type: string
       dataset_flores_devtest:
         description: 'Evaluate on Flores-devtest dataset'
@@ -90,11 +85,6 @@ on:
         type: boolean
       use_pivot:
         description: 'Use English as pivot for non-English pairs'
-        required: false
-        default: false
-        type: boolean
-      is_quantized_model:
-        description: 'Use Quantized q4_0 gguf format model'
         required: false
         default: false
         type: boolean
@@ -123,17 +113,7 @@ jobs:
       matrix: ${{ steps.set-matrix.outputs.matrix }}
       datasets: ${{ steps.set-matrix.outputs.datasets }}
       datasets_cache_key: ${{ steps.set-matrix.outputs.datasets_cache_key }}
-      qvac_needed: ${{ steps.check-qvac.outputs.needed }}
     steps:
-      - name: Check if QVAC is needed
-        id: check-qvac
-        run: |
-          if [[ "${{ inputs.translators }}" == *"qvac"* ]]; then
-            echo "needed=true" >> $GITHUB_OUTPUT
-          else
-            echo "needed=false" >> $GITHUB_OUTPUT
-          fi
-
       - name: Parse language pairs and datasets
         id: set-matrix
         run: |
@@ -170,7 +150,6 @@ jobs:
 
   build:
     needs: setup
-    if: needs.setup.outputs.qvac_needed == 'true'
     runs-on: ubuntu-22.04
     environment: release
     timeout-minutes: 60
@@ -206,16 +185,13 @@ jobs:
           wget -O cmake.sh https://github.com/Kitware/CMake/releases/download/v3.28.3/cmake-3.28.3-linux-x86_64.sh
           sudo sh cmake.sh --skip-license --prefix=/usr/local
           rm cmake.sh
-
           echo "Finding bare-make's cmake binary..."
           BARE_MAKE_CMAKE=$(find /opt/hostedtoolcache/node -path "*/bare-make/node_modules/cmake-runtime-*/bin/cmake" 2>/dev/null | head -1)
           echo "bare-make cmake location: $BARE_MAKE_CMAKE"
-
           echo "Replacing bare-make's cmake with version 3.28.3..."
           sudo cp "$BARE_MAKE_CMAKE" "${BARE_MAKE_CMAKE}.bak"
           sudo rm "$BARE_MAKE_CMAKE"
           sudo ln -s /usr/local/bin/cmake "$BARE_MAKE_CMAKE"
-
           echo "Verifying cmake version used by bare-make:"
           "$BARE_MAKE_CMAKE" --version
 
@@ -227,9 +203,7 @@ jobs:
           GIT_PAT: ${{ secrets.PAT_TOKEN }}
         shell: bash
         run: |
-          echo "Configuring scoped registry for @tetherto and @qvac packages..."
           set -eu
-          echo "Writing .npmrc for dual registry install…"
           cat > .npmrc <<NPMRC
           registry=https://registry.npmjs.org/
           @qvac:registry=https://registry.npmjs.org/
@@ -237,13 +211,10 @@ jobs:
           //registry.npmjs.org/:_authToken=${NPM_TOKEN}
           //npm.pkg.github.com/:_authToken=${GIT_PAT}
           NPMRC
-
-          # Optional: make private git deps work without prompting
           if [ -n "${GIT_PAT:-}" ]; then
             git config --global url."https://${GIT_PAT}:@github.com/".insteadOf "https://github.com/"
             git config --global url."https://${GIT_PAT}:@github.com/".insteadOf "git@github.com:"
           else
-            # Using the workflow's GITHUB_TOKEN for git clones when possible
             git config --global url."https://${{ github.token }}:@github.com/".insteadOf "https://github.com/"
             git config --global url."https://${{ github.token }}:@github.com/".insteadOf "git@github.com:"
           fi
@@ -301,7 +272,6 @@ jobs:
           echo "set(USE_BERGAMOT ON CACHE BOOL \"Enable Bergamot backend support\" FORCE)" > config.cmake
           echo "set(USE_INTGEMM ON CACHE BOOL \"Use INTGEMM for int8 quantized models\" FORCE)" >> config.cmake
           echo "set(BUILD_ARCH x86-64-v2 CACHE STRING \"Target CPU architecture\" FORCE)" >> config.cmake
-          echo "Configuration created:"
           cat config.cmake
 
       - name: Apply clog CMake version fix
@@ -309,12 +279,7 @@ jobs:
         run: |
           CLOG_CMAKE="third-party/bergamot-translator/3rd_party/marian-dev/src/3rd_party/ruy/third_party/cpuinfo/deps/clog/CMakeLists.txt"
           if [ -f "$CLOG_CMAKE" ]; then
-            echo "Found clog CMakeLists.txt, applying fix..."
             sed -i.bak 's/CMAKE_MINIMUM_REQUIRED(VERSION 3\.1/CMAKE_MINIMUM_REQUIRED(VERSION 3.5/' "$CLOG_CMAKE"
-            echo "Verification:"
-            head -n 3 "$CLOG_CMAKE"
-          else
-            echo "Clog CMakeLists.txt not found at $CLOG_CMAKE"
           fi
 
       - name: Apply sentencepiece CMake version fix
@@ -322,63 +287,36 @@ jobs:
         run: |
           SENTENCEPIECE_CMAKE="third-party/bergamot-translator/3rd_party/marian-dev/src/3rd_party/sentencepiece/CMakeLists.txt"
           if [ -f "$SENTENCEPIECE_CMAKE" ]; then
-            echo "Found sentencepiece CMakeLists.txt, applying CMake version fix..."
             sed -i.bak 's/cmake_minimum_required(VERSION 3\.1/cmake_minimum_required(VERSION 3.5/' "$SENTENCEPIECE_CMAKE"
-            echo "Verification:"
-            head -n 3 "$SENTENCEPIECE_CMAKE"
-          else
-            echo "sentencepiece CMakeLists.txt not found at $SENTENCEPIECE_CMAKE"
           fi
 
       - name: Fix std::result_of for C++17/C++20 compatibility
         working-directory: ${{ env.PKG_DIR }}
         shell: bash
         run: |
-          echo "Replacing std::result_of with std::invoke_result for C++17/C++20 compatibility..."
-
           CLI_APP_HPP="third-party/bergamot-translator/3rd_party/marian-dev/src/3rd_party/CLI/App.hpp"
           if [ -f "$CLI_APP_HPP" ]; then
-            echo "Fixing CLI/App.hpp..."
             sed -i.bak 's/std::result_of<decltype (\&App::_parse_arg)(App, Args\.\.\.)>/std::invoke_result<decltype (\&App::_parse_arg), App, Args...>/g' "$CLI_APP_HPP"
             sed -i.bak2 's/std::result_of<decltype (\&App::_parse_subcommand)(App, Args\.\.\.)>/std::invoke_result<decltype (\&App::_parse_subcommand), App, Args...>/g' "$CLI_APP_HPP"
-            echo "Verification:"
-            grep -n "invoke_result\|result_of" "$CLI_APP_HPP" | head -5 || echo "No result_of found (good)"
           fi
-
           THREADPOOL_H="third-party/bergamot-translator/3rd_party/marian-dev/src/3rd_party/threadpool.h"
           if [ -f "$THREADPOOL_H" ]; then
-            echo "Fixing threadpool.h..."
             sed -i.bak 's/std::result_of<F(Args\.\.\.)>/std::invoke_result<F, Args...>/g' "$THREADPOOL_H"
-            echo "Verification:"
-            grep -n "invoke_result\|result_of" "$THREADPOOL_H" | head -5 || echo "No result_of found (good)"
           fi
-
-          echo "std::result_of fixes applied"
 
       - name: Remove -march=native from cpuinfo and marian-dev
         working-directory: ${{ env.PKG_DIR }}
         shell: bash
         run: |
-          echo "Removing -march=native from cpuinfo and marian-dev CMakeLists.txt..."
-
           MARIAN_CMAKE="third-party/bergamot-translator/3rd_party/marian-dev/CMakeLists.txt"
           if [ -f "$MARIAN_CMAKE" ]; then
-            echo "Fixing marian-dev CMakeLists.txt..."
             sed -i.bak3 's/-msse2//g' "$MARIAN_CMAKE"
             sed -i.bak4 's/-march=native//g' "$MARIAN_CMAKE"
-            grep -n "march\|msse" "$MARIAN_CMAKE" | head -5 || echo "No x86-specific flags in marian-dev (good)"
           fi
-
           CPUINFO_CMAKE="third-party/bergamot-translator/3rd_party/marian-dev/src/3rd_party/ruy/third_party/cpuinfo/CMakeLists.txt"
           if [ -f "$CPUINFO_CMAKE" ]; then
-            echo "Fixing cpuinfo CMakeLists.txt..."
             sed -i.bak5 's/-march=native//g' "$CPUINFO_CMAKE"
-            grep -n "march" "$CPUINFO_CMAKE" | head -5 || echo "No march flags in cpuinfo (good)"
-          else
-            echo "cpuinfo CMakeLists.txt not found (may not be needed)"
           fi
-
-          echo "-march=native removal complete"
 
       - name: Build addon
         working-directory: ${{ env.PKG_DIR }}
@@ -405,8 +343,6 @@ jobs:
 
   evaluate:
     needs: [setup, build]
-    # Run if: setup succeeded AND (build succeeded OR build was skipped because QVAC not needed)
-    # Do NOT run if build failed
     if: |
       always() &&
       needs.setup.result == 'success' &&
@@ -428,27 +364,25 @@ jobs:
           submodules: recursive
 
       - name: Set up Node.js
-        if: needs.setup.outputs.qvac_needed == 'true'
         uses: actions/setup-node@53b83947a5a98c8d113130e565377fae1a50d02f # 6.3.0
         with:
           node-version: 20
 
       - name: Install bare-runtime
-        if: needs.setup.outputs.qvac_needed == 'true'
         run: npm install -g bare-runtime
+
+      - name: Download build artifact
+        if: needs.build.result == 'success'
+        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # 8.0.1
+        with:
+          name: qvac-addon-build-${{ inputs.translators }}
+          path: ${{ env.PKG_DIR }}
 
       - name: Set up Python
         uses: actions/setup-python@a309ff8b426b58ec0e2a45f0f869d46889d02405 # 6.2.0
         with:
           python-version: '3.10'
           cache: pip
-
-      - name: Download build artifact
-        if: needs.setup.outputs.qvac_needed == 'true' && needs.build.result == 'success'
-        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # 8.0.1
-        with:
-          name: qvac-addon-build-${{ inputs.translators }}
-          path: ${{ env.PKG_DIR }}
 
       - name: Install system dependencies
         run: |
@@ -459,123 +393,6 @@ jobs:
             libboost-all-dev \
             ccache \
             libunwind-dev
-
-      - name: Configure AWS credentials
-        if: needs.setup.outputs.qvac_needed == 'true'
-        uses: aws-actions/configure-aws-credentials@8df5847569e6427dd6c4fb1cf565c83acfa8afa7 # 6.0.0
-        with:
-          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
-          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
-          aws-region: us-east-1
-
-      - name: Download QVAC models (GGML format)
-        # Only download GGML models for 'qvac' translator (not qvac_bergamot which uses Bergamot models)
-        if: contains(format(',{0},', inputs.translators), ',qvac,')
-        working-directory: ${{ env.PKG_DIR }}
-        run: |
-          mkdir -p qvac_models
-          # Download model for this specific language pair
-          pair="${{ matrix.pair }}"
-          echo "Downloading model for $pair..."
-
-          # Function to download a model
-          download_model() {
-            local model_pair=$1
-            local temp_dir="qvac_models/temp_$model_pair"
-            mkdir -p "$temp_dir"
-
-            # Map pt (Portuguese) to roa (Romance languages) for S3 path
-            local s3_pair="$model_pair"
-            if [[ "$model_pair" == "en-pt" ]]; then
-              s3_pair="en-roa"
-              echo "Mapping en-pt to en-roa for S3 download"
-            elif [[ "$model_pair" == "pt-en" ]]; then
-              s3_pair="roa-en"
-              echo "Mapping pt-en to roa-en for S3 download"
-            fi
-
-            # Download f16 or q4 model from S3
-            if [ "${{ inputs.is_quantized_model }}" = "true" ]; then
-              echo "Downloading quantized (q4_0) model for $model_pair (S3 pair: $s3_pair)..."
-              aws_path="s3://${{ secrets.MODEL_S3_BUCKET }}/qvac_models_compiled/ggml/marian/q4_0/ggml-opus-$s3_pair"
-            else
-              echo "Downloading f16 model for $model_pair (S3 pair: $s3_pair)..."
-              aws_path="s3://${{ secrets.MODEL_S3_BUCKET }}/qvac_models_compiled/ggml/marian/q0f16/ggml-opus-$s3_pair"
-            fi
-            echo "AWS PATH: $aws_path"
-            if aws s3 cp "$aws_path/" "$temp_dir/" --recursive; then
-              echo "Successfully downloaded model for $model_pair from S3 (using $s3_pair)"
-              
-              # Find the latest date directory and move files up
-              date_dir=$(find "$temp_dir" -mindepth 1 -maxdepth 1 -type d | sort -r | head -1)
-              if [ -n "$date_dir" ]; then
-                echo "Found date directory: $date_dir"
-                mkdir -p "qvac_models/$model_pair"
-                mv "$date_dir"/* "qvac_models/$model_pair/"
-                rm -rf "$temp_dir"
-
-                # Rename ggml-opus-{s3_pair}.bin to model_f16.bin or model_q4_0.bin
-                # Note: The downloaded file uses the S3 pair name (e.g., roa-en), not the model_pair (e.g., pt-en)
-                if [ -f "qvac_models/$model_pair/ggml-opus-$s3_pair.bin" ]; then
-                  if [ "${{ inputs.is_quantized_model }}" = "true" ]; then
-                    mv "qvac_models/$model_pair/ggml-opus-$s3_pair.bin" "qvac_models/$model_pair/model_q4_0.bin"
-                    echo "Renamed ggml-opus-$s3_pair.bin to model_q4_0.bin"
-                  else
-                    mv "qvac_models/$model_pair/ggml-opus-$s3_pair.bin" "qvac_models/$model_pair/model_f16.bin"
-                    echo "Renamed ggml-opus-$s3_pair.bin to model_f16.bin"
-                  fi
-                elif [ -f "qvac_models/$model_pair/ggml-opus-$model_pair.bin" ]; then
-                  if [ "${{ inputs.is_quantized_model }}" = "true" ]; then
-                    mv "qvac_models/$model_pair/ggml-opus-$model_pair.bin" "qvac_models/$model_pair/model_q4_0.bin"
-                    echo "Renamed ggml-opus-$model_pair.bin to model_q4_0.bin"
-                  else
-                    mv "qvac_models/$model_pair/ggml-opus-$model_pair.bin" "qvac_models/$model_pair/model_f16.bin"
-                    echo "Renamed ggml-opus-$model_pair.bin to model_f16.bin"
-                  fi
-                fi
-                
-                # Verify the model file exists
-                if [ -f "qvac_models/$model_pair/model_f16.bin" ]; then
-                  echo "Model verified: $(ls -lh qvac_models/$model_pair/model_f16.bin)"
-                elif [ -f "qvac_models/$model_pair/model_q4_0.bin" ]; then
-                  echo "Model verified: $(ls -lh qvac_models/$model_pair/model_q4_0.bin)"
-                else
-                  echo "Warning: neither model_f16.bin nor model_q4_0.bin found after flattening"
-                  ls -la "qvac_models/$model_pair/"
-                fi
-              else
-                echo "No date directory found, moving files directly"
-                mkdir -p "qvac_models/$model_pair"
-                mv "$temp_dir"/* "qvac_models/$model_pair/" 2>/dev/null || true
-                rm -rf "$temp_dir"
-              fi
-            else
-              echo "S3 download failed for $model_pair, evaluation will attempt to use Hyperdrive"
-              rm -rf "$temp_dir"
-            fi
-          }
-
-          # Download the main model
-          download_model "$pair"
-
-          # If using pivot translation and this is a non-English pair, download pivot models
-          if [ "${{ inputs.use_pivot }}" = "true" ]; then
-            src_lang="${pair%-*}"
-            trg_lang="${pair#*-}"
-            
-            # Check if this is a non-English pair
-            if [ "$src_lang" != "en" ] && [ "$trg_lang" != "en" ]; then
-              echo "Pivot translation enabled for non-English pair $pair"
-              echo "Downloading pivot models: ${src_lang}-en and en-${trg_lang}"
-              
-              # Download source-to-English model
-              download_model "${src_lang}-en"
-              
-              # Download English-to-target model
-              download_model "en-${trg_lang}"
-            fi
-          fi
-        continue-on-error: true
 
       - name: Cache datasets
         uses: actions/cache@668228422ae6a00e4ad889ee87cd7109ec5666a7 # 5.0.4
@@ -751,11 +568,6 @@ jobs:
             pivot_flag="--use-pivot"
           fi
 
-          quantized_flag=""
-          if [ "${{ inputs.is_quantized_model }}" = "true" ]; then
-            quantized_flag="--is-quantized-model"
-          fi
-
           batch_flag=""
           if [ "${{ inputs.use_batch }}" = "true" ]; then
             batch_flag="--batch"
@@ -785,7 +597,6 @@ jobs:
               --topp "$TOPP" \
               --maxlength "$MAXLENGTH" \
               $pivot_flag \
-              $quantized_flag \
               $batch_flag
           done
         env:
@@ -920,7 +731,6 @@ jobs:
           echo "**Configuration:**" >> $GITHUB_STEP_SUMMARY
           echo "- Hyperparameters: \`${{ inputs.hyperparams }}\`" >> $GITHUB_STEP_SUMMARY
           echo "- Pivot translation: \`${{ inputs.use_pivot }}\`" >> $GITHUB_STEP_SUMMARY
-          echo "- Quantized model: \`${{ inputs.is_quantized_model }}\`" >> $GITHUB_STEP_SUMMARY
           echo "- Batch mode: \`${{ inputs.use_batch }}\`" >> $GITHUB_STEP_SUMMARY
           echo "- Translators: \`${{ inputs.translators }}\`" >> $GITHUB_STEP_SUMMARY
           echo "- Metrics: chrF++=\`${{ inputs.metric_chrfpp }}\`, COMET=\`${{ inputs.metric_comet }}\`" >> $GITHUB_STEP_SUMMARY
