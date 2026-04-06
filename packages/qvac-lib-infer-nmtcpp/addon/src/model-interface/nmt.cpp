@@ -70,8 +70,6 @@ struct nmt_context_params nmt_context_default_params() {
 const char* nmt_model_type_readable(struct nmt_context* ctx) {
   // clang-format off
     switch (ctx->model.type) {
-        case e_model::MODEL_MARIAN: return "marian";
-        case e_model::MODEL_MARIAN_V2: return "marian";
         case e_model::MODEL_INDICTRANS: return "indictrans2";
         default: return "unknown";
     }
@@ -117,14 +115,8 @@ static int nmt_decode_sample(struct nmt_context* ctx, int max_tokens) {
 
     nmt_vocab::id next_token = ctx->state->decoder_inputs.back();
 
-    if (ctx->model.type == MODEL_INDICTRANS) {
-      if (next_token == 2) {
-        should_stop = true;
-      }
-    } else {
-      if (next_token == ctx->vocab.nmt_eos) {
-        should_stop = true;
-      }
+    if (next_token == 2) {
+      should_stop = true;
     }
   }
 
@@ -151,8 +143,7 @@ static int nmt_process_chunk(struct nmt_context* ctx) {
   ctx->state->batch = nmt_batch_init(ctx->model.hparams.n_decoder_ctx, 1);
 
   const int beam_size = ctx->model.config.beam_size;
-  // Figure out max tokens
-  int max_tokens = (ctx->model.type == MODEL_INDICTRANS) ? 50 : 512;
+  int max_tokens = 50;
   max_tokens = ctx->model.config.max_length > 0 ? ctx->model.config.max_length
                                                 : max_tokens;
 
@@ -208,17 +199,6 @@ int nmt_full(struct nmt_context* ctx, const char* input_text) {
     state->tokens_to_process = static_cast<int32_t>(std::min(
         remaining_tokens,
         static_cast<size_t>(ctx->model.hparams.n_encoder_ctx)));
-
-    if (ctx->model.type != MODEL_INDICTRANS &&
-        state->text_tokens
-                [state->text_tokens_begin + state->tokens_to_process - 1] !=
-            0) {
-      state->text_tokens.insert(
-          std::next(
-              state->text_tokens.begin(),
-              state->text_tokens_begin + state->tokens_to_process),
-          ctx->vocab.nmt_eos);
-    }
 
     int result = nmt_process_chunk(ctx);
     if (result != 0) {
