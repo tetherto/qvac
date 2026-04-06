@@ -53,6 +53,10 @@ import {
 } from "./get-model-info";
 import { ocrStreamRequestSchema, ocrStreamResponseSchema } from "./ocr";
 import {
+  diffusionStreamRequestSchema,
+  diffusionStreamResponseSchema,
+} from "./sdcpp-config";
+import {
   pluginInvokeRequestSchema,
   pluginInvokeResponseSchema,
   pluginInvokeStreamRequestSchema,
@@ -86,6 +90,7 @@ export const requestSchema = z.union([
   deleteCacheRequestSchema,
   getModelInfoRequestSchema,
   ocrStreamRequestSchema,
+  diffusionStreamRequestSchema,
   pluginInvokeRequestSchema,
   pluginInvokeStreamRequestSchema,
   modelRegistryListRequestSchema,
@@ -115,6 +120,7 @@ export const responseSchema = z.discriminatedUnion("type", [
   deleteCacheResponseSchema,
   getModelInfoResponseSchema,
   ocrStreamResponseSchema,
+  diffusionStreamResponseSchema,
   pluginInvokeResponseSchema,
   pluginInvokeStreamResponseSchema,
   modelRegistryListResponseSchema,

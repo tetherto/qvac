@@ -16,6 +16,7 @@ import { handleTextToSpeech } from "./text-to-speech";
 import { handleGetModelInfo } from "./get-model-info";
 import { handleOCRStream } from "./ocr-stream";
 import { handleHeartbeat } from "./heartbeat";
+import { handleDiffusionStream } from "./diffusion-stream";
 import { handlePluginInvoke, handlePluginInvokeStream } from "./plugin-invoke";
 import {
   handleModelRegistryList,
@@ -42,6 +43,7 @@ export const handlers = {
   textToSpeech: handleTextToSpeech,
   getModelInfo: handleGetModelInfo,
   ocrStream: handleOCRStream,
+  diffusionStream: handleDiffusionStream,
   pluginInvoke: handlePluginInvoke,
   pluginInvokeStream: handlePluginInvokeStream,
   modelRegistryList: handleModelRegistryList,
