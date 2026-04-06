@@ -3,10 +3,9 @@ name: On PR Trigger (TTS)
 on:
   pull_request_target:
     types: [opened, synchronize, reopened, labeled]
-    branches: [main, release-*, feature-*, tmp-*]
+    branches: [main, release-*]
     paths:
       - "packages/qvac-lib-infer-onnx-tts/**"
-      - ".github/workflows/*onnx-tts*.yml"
 
   workflow_dispatch:
     inputs:
@@ -46,17 +45,27 @@ on:
         type: string
         default: "packages/qvac-lib-infer-onnx-tts"
 
-concurrency:
-  group: ${{ github.workflow }}-pr-${{ github.event.pull_request.number || github.sha }}
-  cancel-in-progress: true
-
 permissions:
   contents: write
   pull-requests: write
   packages: write
-  checks: write
+
+env:
+  # Keep for step-level convenience; do NOT reference env.* inside job-level `uses:`
+  PKG_DIR: packages/qvac-lib-infer-onnx-tts
 
 jobs:
+  release-pr-guard:
+    name: Release PR Guard
+    if: github.event_name == 'pull_request_target' && startsWith(github.event.pull_request.base.ref, 'release-')
+    uses: tetherto/qvac-devops/.github/workflows/release-pr-guard.yml@monorepo_update
+    secrets:
+      github-token: ${{ secrets.GITHUB_TOKEN }}
+    with:
+      package-slug: qvac-lib-infer-onnx-tts
+      package-json-path: packages/qvac-lib-infer-onnx-tts/package.json
+      changelog-path: packages/qvac-lib-infer-onnx-tts/CHANGELOG.md
+
   context:
     name: Resolve Context
     runs-on: ubuntu-latest
@@ -84,8 +93,8 @@ jobs:
           else
             # pull_request_target
             workdir="packages/qvac-lib-infer-onnx-tts"
-            repo="${{ github.repository }}"
-            ref="${{ github.event.pull_request.head.sha }}"
+            repo="${{ github.event.pull_request.head.repo.full_name }}"
+            ref="${{ github.event.pull_request.head.ref }}"
             run_verify="${{ contains(github.event.pull_request.labels.*.name, 'verify') }}"
             base_sha="${{ github.event.pull_request.base.sha }}"
             head_sha="${{ github.event.pull_request.head.sha }}"
@@ -106,18 +115,6 @@ jobs:
           echo "  run_verify=$run_verify"
           echo "  workdir=$workdir"
 
-  release-notes-check:
-    needs: context
-    permissions:
-      contents: read
-      pull-requests: read
-    uses: ./.github/workflows/release-notes-check-qvac-lib-infer-onnx-tts.yml
-    secrets: inherit
-    with:
-      repository: ${{ needs.context.outputs.repository }}
-      ref: ${{ needs.context.outputs.ref }}
-      workdir: ${{ needs.context.outputs.workdir }}
-
   sanity-checks:
     needs: context
     runs-on: ubuntu-latest
@@ -133,7 +130,6 @@ jobs:
 
   cpp-lint:
     needs: context
-    if: needs.context.outputs.run_verify == 'true' || github.event_name == 'workflow_dispatch'
     uses: tetherto/qvac-devops/.github/workflows/cpp-lint.yaml@monorepo_update
     secrets: inherit
     with:
@@ -141,18 +137,8 @@ jobs:
       pr_head_sha: ${{ needs.context.outputs.head_sha }}
       workdir: ${{ needs.context.outputs.workdir }}
 
-  cpp-tests-coverage:
-    needs: context
-    if: needs.context.outputs.run_verify == 'true' || github.event_name == 'workflow_dispatch'
-    uses: ./.github/workflows/cpp-test-coverage-qvac-lib-infer-onnx-tts.yml
-    secrets: inherit
-    with:
-      repository: ${{ needs.context.outputs.repository }}
-      ref: ${{ needs.context.outputs.ref }}
-      workdir: ${{ needs.context.outputs.workdir }}
-
   prebuild:
-    needs: context
+    needs: [context, cpp-lint]
     if: needs.context.outputs.run_verify == 'true' || github.event_name == 'workflow_dispatch'
     uses: ./.github/workflows/prebuilds-qvac-lib-infer-onnx-tts.yml
     secrets: inherit
@@ -185,18 +171,15 @@ jobs:
   merge-guard:
     needs:
       [
-        release-notes-check,
-        sanity-checks,
-        cpp-lint,
-        cpp-tests-coverage,
-        prebuild,
         run-integration-tests,
         run-mobile-integration-tests,
+        sanity-checks,
+        prebuild,
       ]
     if: always()
     uses: tetherto/qvac-devops/.github/workflows/public-pr.yml@monorepo_update
     with:
-      sanity-checks-status: ${{ needs.sanity-checks.result == 'success' && needs.release-notes-check.result == 'success' && (needs.cpp-lint.result == 'success' || needs.cpp-lint.result == 'skipped') && (needs.cpp-tests-coverage.result == 'success' || needs.cpp-tests-coverage.result == 'skipped') }}
-      build-status: ${{ needs.prebuild.result == 'success' || needs.prebuild.result == 'skipped' }}
-      integration-tests-status: ${{ (needs.run-integration-tests.result == 'success' || needs.run-integration-tests.result == 'skipped') && (needs.run-mobile-integration-tests.result == 'success' || needs.run-mobile-integration-tests.result == 'skipped') }}
+      sanity-checks-status: ${{ needs.sanity-checks.result == 'success' }}
+      build-status: ${{ needs.prebuild.result == 'success' }}
+      integration-tests-status: ${{ needs.run-integration-tests.result == 'success' }}
     secrets: inherit

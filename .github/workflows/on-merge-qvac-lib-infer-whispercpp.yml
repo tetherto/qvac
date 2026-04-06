@@ -9,18 +9,22 @@ on:
       - tmp-*
     paths:
       - "packages/qvac-lib-infer-whispercpp/**"
-      - ".github/workflows/*whispercpp*.yml"
 
   workflow_dispatch:
     inputs:
       tag:
         description: "Tag to publish with"
-        required: false
+        required: true
         default: "dev"
         type: choice
         options:
           - latest
           - dev
+      tar-run-id:
+        description: "Tar run id https://github.com/tetherto/qvac-ext-lib-mlc/actions/runs/14774672942 "
+        required: false
+        default: "14774672942"
+        type: string
 
 permissions:
   contents: write
@@ -64,10 +68,8 @@ jobs:
           gpr_tag="dev"
           if [ "$ref_name" = "main" ]; then
             gpr_tag="dev"
-          elif [[ "$ref_name" == feature-* ]]; then
-            gpr_tag="feature"
-          elif [[ "$ref_name" == tmp-* ]]; then
-            gpr_tag="temp"
+          elif [[ "$ref_name" == feature-* ]] || [[ "$ref_name" == tmp-* ]]; then
+            gpr_tag="$ref_name"
           fi
 
           echo "publish_main=$publish_main" >> "$GITHUB_OUTPUT"
@@ -75,28 +77,6 @@ jobs:
           echo "publish_feature=$publish_feature" >> "$GITHUB_OUTPUT"
           echo "publish_tmp=$publish_tmp" >> "$GITHUB_OUTPUT"
           echo "gpr_tag=$gpr_tag" >> "$GITHUB_OUTPUT"
-
-  release-merge-guard:
-    name: Release Merge Guard
-    continue-on-error: true
-    if: >-
-      github.event_name == 'push' &&
-      startsWith(github.ref_name, 'release-') &&
-      github.event.before != '0000000000000000000000000000000000000000'
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v6
-        with:
-          fetch-depth: 0
-      - uses: ./.github/actions/release-merge-guard
-        with:
-          github-token: ${{ secrets.GITHUB_TOKEN }}
-          base-ref: ${{ github.ref_name }}
-          base-sha: ${{ github.event.before }}
-          head-sha: ${{ github.sha }}
-          package-slug: qvac-lib-infer-whispercpp
-          package-json-path: packages/qvac-lib-infer-whispercpp/package.json
-          changelog-path: packages/qvac-lib-infer-whispercpp/CHANGELOG.md
 
   publish-main-gpr:
     needs: publish-logic
@@ -108,11 +88,9 @@ jobs:
     uses: ./.github/workflows/prebuilds-qvac-lib-infer-whispercpp.yml
     secrets: inherit
     with:
+      # workflow_dispatch -> github.event.inputs.tag is set; push -> fallback to computed gpr_tag
       tag: ${{ (github.event_name == 'workflow_dispatch' && github.event.inputs.tag) || needs.publish-logic.outputs.gpr_tag }}
       publish_target: "gpr"
-      repository: ${{ github.repository }}
-      ref: ${{ github.ref }}
-      workdir: "packages/qvac-lib-infer-whispercpp"
 
   publish-feature-gpr:
     needs: publish-logic
@@ -126,9 +104,6 @@ jobs:
     with:
       tag: ${{ (github.event_name == 'workflow_dispatch' && github.event.inputs.tag) || needs.publish-logic.outputs.gpr_tag }}
       publish_target: "gpr"
-      repository: ${{ github.repository }}
-      ref: ${{ github.ref }}
-      workdir: "packages/qvac-lib-infer-whispercpp"
 
   publish-tmp-gpr:
     needs: publish-logic
@@ -142,12 +117,9 @@ jobs:
     with:
       tag: ${{ (github.event_name == 'workflow_dispatch' && github.event.inputs.tag) || needs.publish-logic.outputs.gpr_tag }}
       publish_target: "gpr"
-      repository: ${{ github.repository }}
-      ref: ${{ github.ref }}
-      workdir: "packages/qvac-lib-infer-whispercpp"
 
   publish-release-npm:
-    needs: [publish-logic]
+    needs: publish-logic
     if: needs.publish-logic.outputs.publish_release == 'true'
     permissions:
       contents: write
@@ -158,20 +130,15 @@ jobs:
     with:
       tag: "latest"
       publish_target: "npm"
-      repository: ${{ github.repository }}
-      ref: ${{ github.ref }}
-      workdir: "packages/qvac-lib-infer-whispercpp"
 
   publish-release:
     needs: [publish-release-npm]
-    if:  needs.publish-release-npm.result == 'success' && needs.publish-release-npm.outputs.published_version != ''
+    if: needs.publish-release-npm.result == 'success' && needs.publish-release-npm.outputs.published_version != ''
     permissions:
       contents: write
-    uses: ./.github/workflows/create-github-release.yml
+    uses: ./.github/workflows/create-github-release-qvac-lib-infer-whispercpp.yml
     secrets: inherit
     with:
-      repo_name: "whispercpp"
-      release_name: "QVAC Transcription Whisper Addon"
       published_version: ${{ needs.publish-release-npm.outputs.published_version }}
       prev_sha: ${{ github.event.before }}
       workdir: "packages/qvac-lib-infer-whispercpp"
@@ -207,7 +174,6 @@ jobs:
     with:
       repository: ${{ github.repository }}
       ref: ${{ github.sha }}
-      workdir: "packages/qvac-lib-infer-whispercpp"
 
   mobile-integration-tests:
     uses: ./.github/workflows/integration-mobile-test-qvac-lib-infer-whispercpp.yml
@@ -217,22 +183,3 @@ jobs:
     with:
       repository: ${{ github.repository }}
       ref: ${{ github.sha }}
-
-  benchmark:
-    name: Trigger Benchmark (Whispercpp)
-    runs-on: ubuntu-latest
-    needs: prebuild
-    if: always() && needs.prebuild.outputs.should_run_tests == 'true'
-    steps:
-      - name: Trigger benchmark workflow
-        env:
-          GH_TOKEN: ${{ secrets.PAT_TOKEN }}
-        run: |
-          gh workflow run benchmark-qvac-lib-infer-whispercpp.yml \
-            --repo ${{ github.repository }} \
-            --ref ${{ github.ref_name }} \
-            -f dataset_type=librispeech \
-            -f language=english \
-            -f model_size=tiny \
-            -f streaming_mode=false \
-            -f workdir=packages/qvac-lib-infer-whispercpp

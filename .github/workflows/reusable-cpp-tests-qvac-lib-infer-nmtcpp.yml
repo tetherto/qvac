@@ -27,15 +27,15 @@ jobs:
       packages: read
       pull-requests: write
     steps:
-      - uses: actions/checkout@v6
+      - uses: actions/checkout@v4
         with:
-          repository: ${{ inputs.repository || github.event.pull_request.head.repo.full_name }}
           ref: ${{ inputs.ref || github.event.pull_request.head.ref }}
+          repository: ${{ inputs.repository || github.event.pull_request.head.repo.full_name }}
           token: ${{ secrets.PAT_TOKEN }}
           submodules: recursive
 
       - name: Setup Node.js
-        uses: actions/setup-node@v6
+        uses: actions/setup-node@v4
         with:
           node-version: lts/*
 
@@ -76,7 +76,7 @@ jobs:
         run: echo "VCPKG_ROOT=$VCPKG_INSTALLATION_ROOT" >> $GITHUB_ENV
 
       - name: Configure AWS credentials
-        uses: aws-actions/configure-aws-credentials@v6
+        uses: aws-actions/configure-aws-credentials@v4
         with:
           aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
           aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
@@ -87,9 +87,9 @@ jobs:
           echo "Creating models directory..."
           mkdir -p models/unit-test
           echo "Downloading models from S3..."
-          aws s3 cp s3://${{ secrets.MODEL_S3_BUCKET }}/qvac_models_compiled/ggml/indictrans2/q4_0/ggml-indictrans2-en-indic-dist-200M/2026-01-01/ggml-indictrans2-en-indic-dist-200M-q4_0.bin models/unit-test/
-          aws s3 cp s3://${{ secrets.MODEL_S3_BUCKET }}/qvac/tests/nmt/ggml-opus-en-it_q4_0.bin models/unit-test/
-          aws s3 cp s3://${{ secrets.MODEL_S3_BUCKET }}/qvac/tests/nmt/ggml-opus-it-en_q4_0.bin models/unit-test/
+          aws s3 cp s3://tether-ai-dev/qvac_models_compiled/ggml/indictrans2/q4_0/ggml-indictrans2-en-indic-dist-200M/2026-01-01/ggml-indictrans2-en-indic-dist-200M-q4_0.bin models/unit-test/
+          aws s3 cp s3://tether-ai-dev/qvac/tests/nmt/ggml-opus-en-it_q4_0.bin models/unit-test/
+          aws s3 cp s3://tether-ai-dev/qvac/tests/nmt/ggml-opus-it-en_q4_0.bin models/unit-test/
           echo "Verifying downloaded models..."
           ls -lh models/unit-test/
           du -sh models/unit-test/*
@@ -137,7 +137,7 @@ jobs:
 
       - name: Archive Coverage Results
         if: always()
-        uses: actions/upload-artifact@v6
+        uses: actions/upload-artifact@v4
         with:
           name: coverage-report
           path: |
@@ -149,7 +149,7 @@ jobs:
 
       - name: Comment Coverage on PR
         if: github.event_name == 'pull_request_target' && always()
-        uses: actions/github-script@v8
+        uses: actions/github-script@v7
         with:
           script: |
             const fs = require('fs');

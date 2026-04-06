@@ -38,17 +38,10 @@ jobs:
       fail-fast: false
       matrix:
         include:
-          # Run Linux x64 tests on both Ubuntu 22.04 and 24.04 to ensure compatibility
-          - os: ubuntu-22.04
-            platform: linux
-            arch: x64
           - os: ubuntu-24.04
             platform: linux
             arch: x64
-          - os: ubuntu-24.04-arm
-            platform: linux
-            arch: arm64
-          - os: ubuntu-22.04-arm
+          - os: ubuntu-24.04-arm64-private
             platform: linux
             arch: arm64
           - os: macos-14
@@ -60,7 +53,7 @@ jobs:
 
     steps:
       - name: Setup Node.js
-        uses: actions/setup-node@v6
+        uses: actions/setup-node@v4
         with:
           node-version: lts/*
 
@@ -70,10 +63,10 @@ jobs:
         run: git config --system core.longpaths true
 
       - name: Checkout code
-        uses: actions/checkout@v6
+        uses: actions/checkout@v4
         with:
-          repository: ${{ inputs.repository || github.repository }}
           ref: ${{ inputs.ref || github.ref }}
+          repository: ${{ inputs.repository || github.repository }}
           token: ${{ secrets.PAT_TOKEN }}
 
       - name: Configure scoped registry for @tetherto and @qvac packages
@@ -114,7 +107,7 @@ jobs:
 
       - name: Download prebuilds from artifact
         if: ${{ !inputs.prebuild_package }}
-        uses: actions/download-artifact@v7
+        uses: actions/download-artifact@v4
         with:
           path: ${{ inputs.workdir || env.PKG_DIR }}/prebuilds
           merge-multiple: true
@@ -159,58 +152,26 @@ jobs:
         if: matrix.platform == 'linux' || matrix.platform == 'android'
         shell: bash
         run: |
+          sudo add-apt-repository ppa:ubuntu-toolchain-r/test -y
           sudo apt-get update
-          sudo apt-get install -y mesa-vulkan-drivers
+          sudo apt-get install -y mesa-vulkan-drivers gcc-13 g++-13 libstdc++-13-dev
 
       - name: Configure AWS credentials
-        uses: aws-actions/configure-aws-credentials@v6
+        uses: aws-actions/configure-aws-credentials@v4
         with:
           aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
           aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
           aws-region: us-east-1
 
-      - name: Download Bergamot model from Firefox CDN
+      - name: Download Bergamot model from S3
         working-directory: ${{ inputs.workdir || env.PKG_DIR }}
         shell: bash
         run: |
-          echo "Downloading Bergamot en-it model from Firefox Remote Settings CDN..."
-          PAIR_CODE="enit"
-          SRC_LANG="en"
-          DST_LANG="it"
-          DEST_DIR="model/bergamot/${PAIR_CODE}"
-          mkdir -p "$DEST_DIR"
-
-          RECORDS_URL="https://firefox.settings.services.mozilla.com/v1/buckets/main/collections/translations-models/records"
-          ATTACHMENT_BASE="https://firefox-settings-attachments.cdn.mozilla.net"
-
-          echo "Fetching model index from Mozilla..."
-          RECORDS=$(curl -sS "$RECORDS_URL")
-
-          URLS=$(echo "$RECORDS" | python3 -c "
-          import sys, json
-          data = json.load(sys.stdin)
-          for r in data.get('data', []):
-              if r.get('fromLang') == '${SRC_LANG}' and r.get('toLang') == '${DST_LANG}':
-                  att = r.get('attachment', {})
-                  loc = att.get('location', '')
-                  name = r.get('name', '') or att.get('filename', '')
-                  if loc and name:
-                      print(f'{name}|{loc}')
-          ")
-
-          if [ -z "$URLS" ]; then
-              echo "❌ No Firefox model found for ${SRC_LANG}-${DST_LANG}"
-              exit 1
-          fi
-
-          while IFS='|' read -r FILENAME LOCATION; do
-              URL="${ATTACHMENT_BASE}/${LOCATION}"
-              echo "  Downloading ${FILENAME}..."
-              curl -sS -L -o "${DEST_DIR}/${FILENAME}" "$URL"
-          done <<< "$URLS"
-
-          echo "✅ Bergamot model files downloaded from Firefox CDN:"
-          ls -la "$DEST_DIR"
+          echo "Downloading Bergamot en-it model from S3..."
+          mkdir -p model/bergamot/enit
+          aws s3 cp "s3://tether-ai-dev/qvac_models_compiled/bergamot/memory-base/bergamot-enit/2025-11-26/" model/bergamot/enit/ --recursive
+          echo "Bergamot model files:"
+          ls -la model/bergamot/enit/
 
       - name: Download IndicTrans model from S3
         working-directory: ${{ inputs.workdir || env.PKG_DIR }}
@@ -218,7 +179,7 @@ jobs:
         run: |
           echo "Downloading IndicTrans en-indic model from S3..."
           mkdir -p model/indictrans
-          aws s3 cp "s3://${{ secrets.MODEL_S3_BUCKET }}/qvac_models_compiled/ggml/indictrans2/q4_0/ggml-indictrans2-en-indic-dist-200M/2026-01-01/ggml-indictrans2-en-indic-dist-200M-q4_0.bin" model/indictrans/
+          aws s3 cp "s3://tether-ai-dev/qvac_models_compiled/ggml/indictrans2/q4_0/ggml-indictrans2-en-indic-dist-200M/2026-01-01/ggml-indictrans2-en-indic-dist-200M-q4_0.bin" model/indictrans/
           echo "IndicTrans model files:"
           ls -la model/indictrans/
 

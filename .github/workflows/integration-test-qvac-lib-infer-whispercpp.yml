@@ -7,22 +7,12 @@ on:
         description: "NPM package containing prebuilds (e.g. @qvac/transcription-whispercpp@1.0.0)"
         required: true
         type: string
-      workdir:
-        description: "Relative path to package directory in monorepo"
-        type: string
-        required: false
-        default: "packages/qvac-lib-infer-whispercpp"
   workflow_call:
     inputs:
       ref:
         description: "ref"
         type: string
       repository:
-        type: string
-      workdir:
-        description: "Relative path to package directory in monorepo"
-        required: false
-        default: "packages/qvac-lib-infer-whispercpp"
         type: string
 
 jobs:
@@ -34,6 +24,7 @@ jobs:
 
     env:
       GITHUB_TOKEN: ${{ secrets.PAT_TOKEN }}
+      WORKDIR: packages/qvac-lib-infer-whispercpp
 
     permissions:
       contents: read
@@ -55,16 +46,13 @@ jobs:
           - os: macos-14-xlarge
             platform: darwin
             arch: arm64
-          - os: macos-15-large
-            platform: darwin
-            arch: x64
-          - os: ai-run-windows-gpu
+          - os: windows-2022
             platform: win32
             arch: x64
 
     steps:
       - name: Setup Node.js
-        uses: actions/setup-node@v6
+        uses: actions/setup-node@v4
         with:
           node-version: lts/*
 
@@ -74,15 +62,14 @@ jobs:
         run: git config --system core.longpaths true
 
       - name: Checkout code
-        uses: actions/checkout@v6
+        uses: actions/checkout@v4
         with:
-          repository: ${{ inputs.repository || github.repository }}
           ref: ${{ inputs.ref || github.ref }}
+          repository: ${{ inputs.repository || github.repository }}
           token: ${{ secrets.PAT_TOKEN }}
 
-      - name: Configure scoped registry for @tetherto and @qvac packages (Unix)
-        if: ${{ matrix.platform != 'win32' }}
-        working-directory: ${{ inputs.workdir }}
+      - name: Configure scoped registry for @tetherto and @qvac packages
+        working-directory: ${{ env.WORKDIR }}
         env:
           GPR_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           NPM_TOKEN: ${{ secrets.NPM_TOKEN }}
@@ -93,7 +80,6 @@ jobs:
           set -eu
           echo "Writing .npmrc for dual registry install…"
           cat > .npmrc <<NPMRC
-          always-auth=true
           registry=https://registry.npmjs.org/
           @qvac:registry=https://registry.npmjs.org/
           @tetherto:registry=https://npm.pkg.github.com/
@@ -109,71 +95,29 @@ jobs:
             git config --global url."https://${{ github.token }}:@github.com/".insteadOf "https://github.com/"
           fi
 
-      - name: Configure scoped registry for @tetherto and @qvac packages (Windows)
-        if: ${{ matrix.platform == 'win32' }}
-        working-directory: ${{ inputs.workdir }}
-        env:
-          GPR_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-          NPM_TOKEN: ${{ secrets.NPM_TOKEN }}
-          GIT_PAT: ${{ secrets.PAT_TOKEN }}
-        shell: powershell
-        run: |
-          Write-Host "Configuring scoped registry for @tetherto and @qvac packages..."
-          $npmrc = @"
-          always-auth=true
-          registry=https://registry.npmjs.org/
-          @qvac:registry=https://registry.npmjs.org/
-          @tetherto:registry=https://npm.pkg.github.com/
-          //registry.npmjs.org/:_authToken=$env:NPM_TOKEN
-          //npm.pkg.github.com/:_authToken=$env:GPR_TOKEN
-          "@
-          $npmrc | Out-File -FilePath .npmrc -Encoding utf8
-          if ($env:GIT_PAT) {
-            git config --global url."https://$($env:GIT_PAT):@github.com/".insteadOf "https://github.com/"
-          } else {
-            git config --global url."https://${{ github.token }}:@github.com/".insteadOf "https://github.com/"
-          }
-
       - name: Install NPM dependencies
-        working-directory: ${{ inputs.workdir }}
+        working-directory: ${{ env.WORKDIR }}
+        shell: bash
         run: |
           npm install
-          npm install -g bare@1.26.0 bare-make
+          npm install -g bare bare-make
 
       - name: Download prebuilds from artifact
         if: ${{ !inputs.prebuild_package }}
-        uses: actions/download-artifact@v7
+        uses: actions/download-artifact@v4
         with:
-          path: ${{ inputs.workdir }}/prebuilds
+          path: ${{ env.WORKDIR }}/prebuilds
           merge-multiple: true
 
-      - name: Download prebuilds from package (Unix)
-        if: ${{ inputs.prebuild_package && matrix.platform != 'win32' }}
-        working-directory: ${{ inputs.workdir }}
+      - name: Download prebuilds from package
+        if: ${{ inputs.prebuild_package }}
+        working-directory: ${{ env.WORKDIR }}
         shell: bash
         run: |
           mkdir -p prebuilds
-          npm pack ${{ inputs.prebuild_package }} --pack-destination /tmp
+          npm pack "${{ inputs.prebuild_package }}" --pack-destination /tmp
           tar -xzf /tmp/*.tgz -C /tmp
           cp -r /tmp/package/prebuilds/* prebuilds/
-          find prebuilds -type f -name 'tetherto__*' | while read f; do
-            mv "$f" "${f/tetherto__/qvac__}"
-          done
-
-      - name: Download prebuilds from package (Windows)
-        if: ${{ inputs.prebuild_package && matrix.platform == 'win32' }}
-        working-directory: ${{ inputs.workdir }}
-        shell: powershell
-        run: |
-          New-Item -ItemType Directory -Force -Path prebuilds | Out-Null
-          npm pack ${{ inputs.prebuild_package }} --pack-destination $env:TEMP
-          $tgz = Get-ChildItem "$env:TEMP\*.tgz" | Select-Object -First 1
-          tar -xzf $tgz.FullName -C $env:TEMP
-          Copy-Item -Path "$env:TEMP\package\prebuilds\*" -Destination prebuilds -Recurse -Force
-          Get-ChildItem -Path prebuilds -Recurse -File -Filter 'tetherto__*' | ForEach-Object {
-            $newName = $_.Name -replace 'tetherto__', 'qvac__'
-            Rename-Item -Path $_.FullName -NewName $newName
-          }
 
       - name: Install gh cli for ai-run-linux-gpu
         if: matrix.os == 'ai-run-linux-gpu'
@@ -198,42 +142,31 @@ jobs:
           # Add whisper.cpp dependencies for integration tests
           sudo apt-get install -y libopenblas-dev liblapack-dev libfftw3-dev
 
+      - name: Linux - install glibcxx
+        if: matrix.os == 'ubuntu-22.04'
+        run: |
+          sudo add-apt-repository ppa:ubuntu-toolchain-r/test
+          sudo apt update
+          sudo apt install -y g++-13
+
       - name: macOS - install whisper dependencies
         if: matrix.platform == 'darwin'
         shell: bash
         run: |
           brew install --quiet openblas lapack fftw
 
-      - name: Run integration test (Unix)
-        if: ${{ matrix.platform != 'win32' }}
-        working-directory: ${{ inputs.workdir }}
+      - name: Run integration test
+        working-directory: ${{ env.WORKDIR }}
         shell: bash
-        run: npm run test:integration
+        run: |
+          npm run test:integration
         env:
           GITHUB_TOKEN: ${{ secrets.PAT_TOKEN }}
 
-      - name: Run integration test (Windows)
-        if: ${{ matrix.platform == 'win32' }}
-        working-directory: ${{ inputs.workdir }}
-        shell: powershell
-        run: npm run test:integration
-        env:
-          GITHUB_TOKEN: ${{ secrets.PAT_TOKEN }}
-
-      - name: Print run state (Unix)
-        if: ${{ matrix.platform != 'win32' }}
-        working-directory: ${{ inputs.workdir }}
+      - name: Print run state
+        working-directory: ${{ env.WORKDIR }}
         shell: bash
         run: |
           ls -la prebuilds || true
           tree prebuilds || true
-        continue-on-error: true
-
-      - name: Print run state (Windows)
-        if: ${{ matrix.platform == 'win32' }}
-        working-directory: ${{ inputs.workdir }}
-        shell: powershell
-        run: |
-          Get-ChildItem prebuilds -ErrorAction SilentlyContinue
-          tree prebuilds /F 2>$null
         continue-on-error: true

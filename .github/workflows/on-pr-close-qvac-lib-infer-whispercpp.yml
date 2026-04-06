@@ -1,4 +1,4 @@
-name: On PR Close (Whispercpp)
+name: Delete NPM Versions (Whispercpp)
 
 on:
   pull_request:
@@ -6,7 +6,6 @@ on:
       - closed
     paths:
       - "packages/qvac-lib-infer-whispercpp/**"
-      - ".github/workflows/*whispercpp*.yml"
   workflow_dispatch:
     inputs:
       version:
@@ -31,18 +30,14 @@ on:
         type: boolean
         default: true
 
-run-name: >-
-  Delete NPM Versions (whispercpp)
-  v=${{ inputs.version }}
-  pr=${{ github.event_name == 'pull_request' && github.event.pull_request.number || inputs.pr-number }}
-  dry=${{ github.event_name == 'pull_request' && true || inputs.dry-run }}
+run-name: Delete NPM Versions (whispercpp) ${{ inputs.version }} ${{ inputs.pr-number }} ${{ inputs.dry-run }}
 
 permissions:
   contents: read
   packages: write
-
+  
 jobs:
-  print-context:
+  print-context-trigger:
     runs-on: ubuntu-latest
     continue-on-error: true
     steps:
@@ -59,8 +54,8 @@ jobs:
     uses: tetherto/qvac-devops/.github/workflows/public-delete-npm-versions.yml@monorepo_update
     with:
       version: ${{ inputs.version }}
-      pr-number: ${{ github.event_name == 'pull_request' && github.event.pull_request.number || inputs.pr-number }}
+      pr-number: ${{ inputs.pr-number }}
       pattern: ${{ inputs.pattern }}
-      packages: ${{ inputs.packages || 'qvac-lib-infer-whispercpp' }}
-      dry-run: ${{ github.event_name == 'pull_request' && true || inputs.dry-run }}
+      packages: ${{ inputs.packages }}
+      dry-run: ${{ inputs.dry-run || true }}
     secrets: inherit

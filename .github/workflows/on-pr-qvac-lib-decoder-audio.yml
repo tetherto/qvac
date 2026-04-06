@@ -2,159 +2,141 @@ name: On PR Trigger (Decoder-audio)
 
 on:
   pull_request_target:
-    types: [opened, synchronize, reopened, labeled]
-    branches: [main, release-*, feature-*, tmp-*]
+    types:
+      - opened
+      - synchronize
+      - reopened
+      - labeled
+    branches:
+      - main
+      - release-*
     paths:
       - "packages/qvac-lib-decoder-audio/**"
-      - ".github/workflows/*decoder-audio*.yml"
-
   workflow_dispatch:
-    inputs:
-      repository:
-        description: "Repo to build (owner/name). Defaults to this repo."
-        required: false
-        type: string
-      ref:
-        description: "Git ref (branch/tag/SHA). Defaults to current ref."
-        required: false
-        type: string
-      run_verify:
-        description: "Treat this run like a 'verify' run (integration tests)."
-        required: false
-        type: boolean
-        default: true
-      workdir:
-        description: "Package working directory in monorepo."
-        required: false
-        type: string
-        default: "packages/qvac-lib-decoder-audio"
-
   workflow_call:
-    inputs:
-      repository:
-        required: false
-        type: string
-      ref:
-        required: false
-        type: string
-      run_verify:
-        required: false
-        type: boolean
-        default: true
-      workdir:
-        required: false
-        type: string
-        default: "packages/qvac-lib-decoder-audio"
-
-concurrency:
-  group: ${{ github.workflow }}-pr-${{ github.event.pull_request.number || github.sha }}
-  cancel-in-progress: true
-
-permissions:
-  contents: write
-  pull-requests: write
-  packages: write
-  checks: write
 
 jobs:
-  context:
-    name: Resolve Context
-    runs-on: ubuntu-latest
-    outputs:
-      repository: ${{ steps.ctx.outputs.repository }}
-      ref: ${{ steps.ctx.outputs.ref }}
-      base_sha: ${{ steps.ctx.outputs.base_sha }}
-      head_sha: ${{ steps.ctx.outputs.head_sha }}
-      run_verify: ${{ steps.ctx.outputs.run_verify }}
-      workdir: ${{ steps.ctx.outputs.workdir }}
-    steps:
-      - id: ctx
-        shell: bash
-        run: |
-          set -euo pipefail
-
-          if [[ "${{ github.event_name }}" == "workflow_dispatch" || "${{ github.event_name }}" == "workflow_call" ]]; then
-            workdir="${{ inputs.workdir || 'packages/qvac-lib-decoder-audio' }}"
-            repo="${{ inputs.repository || github.repository }}"
-            ref="${{ inputs.ref || github.ref_name }}"
-            run_verify="${{ inputs.run_verify }}"
-            base_sha="${{ github.sha }}"
-            head_sha="${{ github.sha }}"
-          else
-            workdir="packages/qvac-lib-decoder-audio"
-            repo="${{ github.event.pull_request.head.repo.full_name }}"
-            ref="${{ github.event.pull_request.head.ref }}"
-            run_verify="${{ contains(github.event.pull_request.labels.*.name, 'verify') }}"
-            base_sha="${{ github.event.pull_request.base.sha }}"
-            head_sha="${{ github.event.pull_request.head.sha }}"
-          fi
-
-          echo "repository=$repo" >> "$GITHUB_OUTPUT"
-          echo "ref=$ref" >> "$GITHUB_OUTPUT"
-          echo "base_sha=$base_sha" >> "$GITHUB_OUTPUT"
-          echo "head_sha=$head_sha" >> "$GITHUB_OUTPUT"
-          echo "run_verify=$run_verify" >> "$GITHUB_OUTPUT"
-          echo "workdir=$workdir" >> "$GITHUB_OUTPUT"
-
-          echo "Resolved:"
-          echo "  repo=$repo"
-          echo "  ref=$ref"
-          echo "  base_sha=$base_sha"
-          echo "  head_sha=$head_sha"
-          echo "  run_verify=$run_verify"
-          echo "  workdir=$workdir"
+  release-pr-guard:
+    name: Release PR Guard
+    if: github.event_name == 'pull_request_target' && startsWith(github.event.pull_request.base.ref, 'release-')
+    uses: tetherto/qvac-devops/.github/workflows/release-pr-guard.yml@monorepo_update
+    secrets:
+      github-token: ${{ secrets.GITHUB_TOKEN }}
+    with:
+      package-slug: qvac-lib-decoder-audio
+      package-json-path: packages/qvac-lib-decoder-audio/package.json
+      changelog-path: packages/qvac-lib-decoder-audio/CHANGELOG.md
 
   release-notes-check:
-    needs: context
     permissions:
       contents: read
       pull-requests: read
     uses: ./.github/workflows/release-notes-check-qvac-lib-decoder-audio.yml
     secrets: inherit
-    with:
-      repository: ${{ needs.context.outputs.repository }}
-      ref: ${{ needs.context.outputs.ref }}
-      workdir: ${{ needs.context.outputs.workdir }}
 
   sanity-checks:
-    needs: context
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
+    permissions:
+      contents: read
     steps:
-      - name: Run Sanity checks
-        uses: tetherto/qvac-devops/.github/actions/sanity-checks@monorepo_update
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          token: ${{ secrets.PAT_TOKEN }}
+          repository: ${{ github.event.pull_request.head.repo.full_name }}
+          ref: ${{ github.event.pull_request.head.ref }}
+
+      - name: Fetch PR head and target branch
+        id: fetch_pr
+        if: github.event_name == 'pull_request_target' || github.event_name == 'pull_request'
+        continue-on-error: true
+        run: |
+          git fetch origin ${{ github.event.pull_request.base.ref }}:refs/remotes/origin/${{ github.event.pull_request.base.ref }}
+          git fetch origin ${{ github.event.pull_request.head.sha }}:refs/pr/head
+
+      - name: Check PR Status with Target Branch
+        continue-on-error: true
+        id: target_branch_checks
+        if: github.event_name == 'pull_request_target' || github.event_name == 'pull_request'
+        run: |
+          TARGET_SHA=${{ github.event.pull_request.base.sha }}
+          PR_HEAD_SHA=${{ github.event.pull_request.head.sha }}
+          if ! git merge-base --is-ancestor "$TARGET_SHA" "$PR_HEAD_SHA"; then
+            echo "::error title=PR is not up to date::This PR is not up to date with target branch"
+          fi
+
+      - name: Check for disallowed dependencies
+        id: check_dependencies
+        continue-on-error: true
+        working-directory: packages/qvac-lib-decoder-audio
+        run: |
+          deps=$(jq -r '.dependencies, .devDependencies // {} | to_entries[] | .value' package.json)
+          if echo "$deps" | grep -Eq '^(git\+https:\/\/github.com|[0-9]+\.[0-9]+\.[0-9]+-(dev|tmp)[^"]*)$'; then
+            echo "::error title=Disallowed dependency detected::Do not use git URLs or dev/tmp versions in dependencies"
+          fi
+
+      - name: Run JavaScript tests
+        id: run_js_tests
+        continue-on-error: true
+        uses: tetherto/qvac-devops/.github/actions/run-lint-and-unit-tests@monorepo_update
         with:
           secret-token: ${{ secrets.GITHUB_TOKEN }}
           npm-token: ${{ secrets.NPM_TOKEN }}
           pat-token: ${{ secrets.PAT_TOKEN }}
-          run-integration: ${{ needs.context.outputs.run_verify == 'true' }}
-          workdir: ${{ needs.context.outputs.workdir }}
+          workdir: "packages/qvac-lib-decoder-audio"
+
+      - name: Check for errors
+        run: |
+          count=0
+          if [ "${{ steps.run_js_tests.outcome }}" = "failure" ]; then
+            echo "::error::Step - Lint or unit tests failed"
+            count=$((count + 1))
+          fi
+          if [ "${{ steps.check_dependencies.outcome }}" = "failure" ]; then
+            echo "::error::Step - Check for disallowed dependencies failed"
+            count=$((count + 1))
+          fi
+          if [ "${{ steps.target_branch_checks.outcome }}" = "failure" ]; then
+            echo "::error::Step - Check PR Status with Target Branch failed"
+            count=$((count + 1))
+          fi
+          if [ "${{ steps.fetch_pr.outcome }}" = "failure" ]; then
+            echo "::error::Step - Fetch PR head and target branch failed"
+            count=$((count + 1))
+          fi
+          if [ $count -gt 0 ]; then
+            echo "::error::There were $count failed checks"
+            exit 1
+          fi
 
   run-integration-tests:
-    needs: context
-    if: needs.context.outputs.run_verify == 'true' || github.event_name == 'workflow_dispatch'
+    if: contains( github.event.pull_request.labels.*.name, 'verify') || github.event_name == 'workflow_dispatch'
     uses: ./.github/workflows/integration-test-qvac-lib-decoder-audio.yml
     secrets: inherit
     with:
-      repository: ${{ needs.context.outputs.repository }}
-      ref: ${{ needs.context.outputs.ref }}
-      workdir: ${{ needs.context.outputs.workdir }}
+      repository: ${{ github.event.pull_request.head.repo.full_name }}
+      ref: ${{ github.event.pull_request.head.ref }}
+      workdir: "packages/qvac-lib-decoder-audio"
 
   run-mobile-integration-tests:
-    needs: context
-    if: needs.context.outputs.run_verify == 'true' || github.event_name == 'workflow_dispatch'
+    if: contains( github.event.pull_request.labels.*.name, 'verify') || github.event_name == 'workflow_dispatch'
+    permissions:
+      contents: read
+      packages: read
+      pull-requests: write
     uses: ./.github/workflows/integration-mobile-test-qvac-lib-decoder-audio.yml
     secrets: inherit
     with:
-      repository: ${{ needs.context.outputs.repository }}
-      ref: ${{ needs.context.outputs.ref }}
-      workdir: ${{ needs.context.outputs.workdir }}
+      repository: ${{ github.event.pull_request.head.repo.full_name }}
+      ref: ${{ github.event.pull_request.head.ref }}
+      workdir: "packages/qvac-lib-decoder-audio"
 
   merge-guard:
     needs: [release-notes-check, sanity-checks, run-integration-tests, run-mobile-integration-tests]
     if: always()
     uses: tetherto/qvac-devops/.github/workflows/public-pr.yml@monorepo_update
     with:
-      sanity-checks-status: ${{ needs.sanity-checks.result == 'success' && needs.release-notes-check.result == 'success' }}
+      sanity-checks-status: ${{ needs.sanity-checks.result == 'success' }}
       build-status: ${{ needs.run-integration-tests.result == 'success' || needs.run-integration-tests.result == 'skipped' }}
       integration-tests-status: ${{ (needs.run-integration-tests.result == 'success' || needs.run-integration-tests.result == 'skipped') && (needs.run-mobile-integration-tests.result == 'success' || needs.run-mobile-integration-tests.result == 'skipped') }}
     secrets: inherit

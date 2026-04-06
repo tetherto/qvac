@@ -1,6 +1,14 @@
 name: Prebuilds (TTS)
 
 on:
+  push:
+    branches:
+      - main
+      - release-*
+      - feature-*
+      - tmp-*
+    paths:
+      - "packages/qvac-lib-infer-onnx-tts/**"
   workflow_dispatch:
     inputs:
       tag:
@@ -37,6 +45,10 @@ on:
         type: string
         required: false
         default: "tetherto/qvac"
+      tar-run-id:
+        type: string
+        required: false
+        default: "on-onnx-tts"
       tag:
         description: "Tag to publish"
         type: string
@@ -71,10 +83,10 @@ jobs:
       fail-fast: false
       matrix:
         include:
-          - os: ubuntu-22.04
+          - os: ubuntu-24.04
             platform: linux
             arch: x64
-          - os: ubuntu-24.04-arm64-private
+          - os: ubuntu-24.04-arm
             platform: linux
             arch: arm64
           - os: ubuntu-24.04
@@ -98,9 +110,6 @@ jobs:
           - os: macos-15
             platform: darwin
             arch: arm64
-          - os: macos-15-large
-            platform: darwin
-            arch: x64
           - os: windows-2022
             platform: win32
             arch: x64
@@ -109,12 +118,8 @@ jobs:
     name: ${{ matrix.platform }}-${{ matrix.arch }}${{ matrix.tags }}
 
     env:
-      # Use AWS S3 as vcpkg binary cache (platform-prefixed for easy cleanup)
-      VCPKG_BINARY_SOURCES: "clear;x-aws,s3://${{ secrets.MODEL_S3_BUCKET }}/vcpkg-cache/onnx-tts/${{ matrix.platform }}-${{ matrix.arch }}/,readwrite"
+      VCPKG_BINARY_SOURCES: "clear;files,${{ github.workspace }}/vcpkg/cache,readwrite"
       VCPKG_BUILD_TYPE: release
-      AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
-      AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
-      S3_CACHE_PREFIX: "s3://${{ secrets.MODEL_S3_BUCKET }}/vcpkg-cache/onnx-tts/${{ matrix.platform }}-${{ matrix.arch }}/"
       WORKDIR: ${{ inputs.workdir || github.event.inputs.workdir || 'packages/qvac-lib-infer-onnx-tts' }}
 
     steps:
@@ -128,20 +133,10 @@ jobs:
       - if: ${{ startsWith(matrix.os, 'ubuntu') }}
         name: Maximize build space
         run: |
-          echo "=== Disk space before cleanup ==="
-          df -h /
           sudo docker image prune --all --force
           sudo rm -rf /opt/hostedtoolcache/CodeQL
           sudo rm -rf /opt/ghc
           sudo rm -rf /usr/share/dotnet
-          sudo rm -rf /usr/share/swift
-          sudo rm -rf /opt/hostedtoolcache/go
-          # Remove Android SDK only for non-android builds (saves ~8GB)
-          if [[ "${{ matrix.platform }}" != "android" ]]; then
-            sudo rm -rf /usr/local/lib/android
-          fi
-          echo "=== Disk space after cleanup ==="
-          df -h /
 
       - name: Echo workflow inputs
         shell: bash
@@ -166,13 +161,9 @@ jobs:
         name: Install ccache on Linux
         run: sudo apt-get install -y ccache
 
-      - if: ${{ startsWith(matrix.os, 'macos') }}
+      - if: ${{ matrix.os == 'macos-15' }}
         name: Install ccache on macOS
-        run: |
-          brew install ccache
-          # Unlink Homebrew fmt to prevent header conflicts with vcpkg's fmt
-          # (Homebrew fmt 12.x headers conflict with vcpkg fmt 11.x on Intel Macs)
-          brew unlink fmt || true
+        run: brew install ccache
 
       - if: ${{ matrix.os != 'windows-2022' }}
         name: Configure ccache
@@ -185,10 +176,10 @@ jobs:
 
       - if: ${{ matrix.os != 'windows-2022' }}
         name: Get ccache cache
-        uses: actions/cache@v5
+        uses: actions/cache@v4
         with:
-          key: ccache-${{ matrix.platform }}-${{ matrix.arch }}${{ matrix.tags }}-${{ hashFiles('packages/qvac-lib-infer-onnx-tts/vcpkg.json') }}
           path: ~/.cache/ccache
+          key: ccache-${{ matrix.platform }}-${{ matrix.arch }}${{ matrix.tags }}-${{ hashFiles('vcpkg.json') }}
           restore-keys: |
             ccache-${{ matrix.platform }}-${{ matrix.arch }}${{ matrix.tags }}-
             ccache-${{ matrix.platform }}-${{ matrix.arch }}-
@@ -197,15 +188,8 @@ jobs:
         name: Configure windows runner
         run: |
           git config --system core.longpaths true
-          $ccacheVersion = "4.10.2"
-          $ccacheUrl = "https://github.com/ccache/ccache/releases/download/v$ccacheVersion/ccache-$ccacheVersion-windows-x86_64.zip"
-          $ccacheZip = "$env:TEMP\ccache.zip"
-          $ccacheDir = "C:\ccache"
-          Invoke-WebRequest -Uri $ccacheUrl -OutFile $ccacheZip
-          Expand-Archive -Path $ccacheZip -DestinationPath $ccacheDir -Force
-          $ccacheBin = Get-ChildItem -Path $ccacheDir -Recurse -Filter "ccache.exe" | Select-Object -First 1
-          $ccachePath = $ccacheBin.DirectoryName
-          echo "$ccachePath" | Out-File -FilePath $env:GITHUB_PATH -Encoding utf8 -Append
+          choco upgrade llvm
+          choco install ccache -y
 
       - if: ${{ matrix.os == 'windows-2022' }}
         name: Configure ccache on Windows
@@ -219,26 +203,26 @@ jobs:
 
       - if: ${{ matrix.os == 'windows-2022' }}
         name: Get ccache cache (Windows)
-        uses: actions/cache@v5
+        uses: actions/cache@v4
         with:
-          key: ccache-${{ matrix.platform }}-${{ matrix.arch }}-${{ hashFiles('packages/qvac-lib-infer-onnx-tts/vcpkg.json') }}
           path: ~\AppData\Local\ccache
+          key: ccache-${{ matrix.platform }}-${{ matrix.arch }}-${{ hashFiles('vcpkg.json') }}
           restore-keys: |
             ccache-${{ matrix.platform }}-${{ matrix.arch }}-
 
       - name: Checkout repository
-        uses: actions/checkout@v6
+        uses: actions/checkout@v4
         with:
-          repository: ${{ inputs.repository || github.repository }}
-          ref: ${{ inputs.ref || github.ref }}
           token: ${{ secrets.PAT_TOKEN }}
+          ref: ${{ inputs.ref || github.ref }}
+          repository: ${{ inputs.repository || github.repository }}
 
       - name: Initialize and update submodules
         run: |
           git submodule update --init --recursive
 
       - name: Setup node
-        uses: actions/setup-node@v6
+        uses: actions/setup-node@v4
         with:
           node-version: lts/*
 
@@ -254,7 +238,6 @@ jobs:
           set -eu
           echo "Writing .npmrc for dual registry install…"
           cat > .npmrc <<NPMRC
-          always-auth=true
           registry=https://registry.npmjs.org/
           @qvac:registry=https://registry.npmjs.org/
           @tetherto:registry=https://npm.pkg.github.com/
@@ -282,13 +265,13 @@ jobs:
           Rename-Item -Path "C:\Program Files (x86)\Windows Kits\10\bin\10.0.26100.0" -NewName "C:\Program Files (x86)\Windows Kits\10\bin\old-10.0.26100.0"
           Rename-Item -Path "C:\Program Files (x86)\Windows Kits\10\Lib\10.0.26100.0" -NewName "C:\Program Files (x86)\Windows Kits\10\Lib\old-10.0.26100.0"
 
-      - if: ${{ startsWith(matrix.os, 'macos') }}
+      - if: ${{ matrix.os == 'macos-15' }}
         name: Remove Homebrew LLVM
         working-directory: ${{ env.WORKDIR }}
         run: bash ./ci/remove-brew-llvm.sh
         shell: bash
 
-      - if: ${{ startsWith(matrix.os, 'macos') }}
+      - if: ${{ matrix.os == 'macos-15' }}
         name: Install vcpkg in macos
         run: |
           cd ..
@@ -298,11 +281,11 @@ jobs:
           echo "VCPKG_ROOT=$VCPKG_ROOT" >> $GITHUB_ENV
           echo "$VCPKG_ROOT" >> $GITHUB_PATH
 
-      - if: ${{ startsWith(matrix.os, 'macos') }}
+      - if: ${{ matrix.os == 'macos-15' }}
         name: Select Xcode 16.4
         run: sudo xcode-select -s /Applications/Xcode_16.4.app/Contents/Developer
 
-      - if: ${{ startsWith(matrix.os, 'macos') && matrix.platform == 'ios' }}
+      - if: ${{ matrix.os == 'macos-15' }}
         name: Verify UIKit Frameworks
         run: |
           SDK_OS=$(xcrun --sdk iphoneos --show-sdk-path)
@@ -357,61 +340,18 @@ jobs:
         working-directory: ${{ env.WORKDIR }}
         run: npm install
 
-      - if: ${{ matrix.platform == 'ios' && matrix.arch == 'arm64'}}
-        name: Install Rust target for iOS arm64 device
-        shell: bash
-        run: |
-          echo "Installing Rust target for iOS arm64 device..."
-          rustup default stable
-          rustup target add aarch64-apple-ios
-          rustup target add aarch64-apple-ios-sim
-          echo "✅ iOS arm64 device Rust target installed"
-          rustup target list --installed
+      - name: Create vcpkg cache location
+        run: mkdir -p vcpkg/cache
 
-      - if: ${{ matrix.platform == 'ios' && matrix.arch == 'x64' }}
-        name: Install Rust target for iOS x64 simulator
-        shell: bash
-        run: |
-          echo "Installing Rust target for iOS x64 simulator..."
-          rustup default stable
-          rustup target add x86_64-apple-ios
-          echo "✅ iOS x64 simulator Rust target installed"
-          rustup target list --installed
-
-      - if: ${{ matrix.platform == 'android' }}
-        name: Install Rust targets for Android
-        shell: bash
-        run: |
-          echo "Installing Rust targets for Android..."
-          rustup default stable
-          # Install all Android targets
-          rustup target add aarch64-linux-android
-          rustup target add armv7-linux-androideabi
-          echo "✅ Android Rust targets installed"
-          rustup target list --installed
-
-      - name: Check if vcpkg cache needs rebuild
-        working-directory: ${{ env.WORKDIR }}
-        shell: bash
-        run: |
-          echo "Checking if vcpkg packages need to be rebuilt..."
-          
-          VCPKG_HASH=$(cat vcpkg.json vcpkg-configuration.json | sha256sum | cut -d' ' -f1)
-          echo "Current vcpkg config hash: $VCPKG_HASH"
-          
-          CACHED_HASH_FILE="/tmp/vcpkg-hash-cached.txt"
-          aws s3 cp ${S3_CACHE_PREFIX}vcpkg-hash.txt $CACHED_HASH_FILE 2>/dev/null || echo "no-cache" > $CACHED_HASH_FILE
-          CACHED_HASH=$(cat $CACHED_HASH_FILE)
-          echo "Cached vcpkg config hash: $CACHED_HASH"
-          
-          if [ "$VCPKG_HASH" != "$CACHED_HASH" ]; then
-            echo ""
-            echo "vcpkg config has changed - cache will be replaced after successful build"
-            echo "$VCPKG_HASH" > /tmp/vcpkg-hash-new.txt
-          else
-            echo ""
-            echo "vcpkg config unchanged, using cached packages"
-          fi
+      - name: Get vcpkg cache
+        id: cache-vcpkg
+        uses: actions/cache@v4
+        with:
+          path: vcpkg/cache
+          key: vcpkg-v2-${{ matrix.platform }}-${{ matrix.arch }}${{ matrix.tags }}-${{ hashFiles( 'vcpkg.json', 'vcpkg-configuration.json', 'vcpkg/ports/**' ) }}
+          restore-keys: |
+            vcpkg-v2-${{ matrix.platform }}-${{ matrix.arch }}${{ matrix.tags }}-
+            vcpkg-v2-${{ matrix.platform }}-${{ matrix.arch }}-
 
       - name: Generate
         working-directory: ${{ env.WORKDIR }}
@@ -419,39 +359,18 @@ jobs:
 
       - name: Run bare-make build
         working-directory: ${{ env.WORKDIR }}
-        run: bare-make build
+        run: |
+          bare-make build
 
       - name: Run bare-make install
         working-directory: ${{ env.WORKDIR }}
-        run: bare-make install
-
-      - name: Update vcpkg S3 cache hash
-        working-directory: ${{ env.WORKDIR }}
-        shell: bash
         run: |
-          if [ -f /tmp/vcpkg-hash-new.txt ]; then
-            echo "Uploading new vcpkg config hash to S3 cache..."
-            aws s3 cp /tmp/vcpkg-hash-new.txt ${S3_CACHE_PREFIX}vcpkg-hash.txt
-            echo "vcpkg hash uploaded"
-          else
-            echo "No new hash to upload (cache was already valid)"
-          fi
-
-      - name: Strip debug symbols (skip windows and android)
-        if: ${{ matrix.platform != 'win32' && matrix.platform != 'android' }}
-        shell: bash
-        working-directory: ${{ env.WORKDIR }}
-        run: find prebuilds -name "*.bare" -exec strip {} \;
-
-      - name: Strip debug symbols (skip windows and android)
-        if: ${{ matrix.platform != 'win32' && matrix.platform != 'android' }}
-        shell: bash
-        run: find ${{ env.WORKDIR }}/prebuilds -name "*.bare" -exec strip {} \;
+          bare-make install
 
       - name: Show ccache stats
         run: ccache -s
 
-      - uses: actions/upload-artifact@v6
+      - uses: actions/upload-artifact@v4
         with:
           name: onnx-tts-${{ matrix.platform }}-${{ matrix.arch }}${{ matrix.tags }}
           path: ${{ env.WORKDIR }}/prebuilds
@@ -466,13 +385,20 @@ jobs:
       AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
     steps:
       - name: Download all build artifacts
-        uses: actions/download-artifact@v7
+        uses: actions/download-artifact@v4
         with:
           path: prebuilds
           merge-multiple: true
 
+      - name: Replicate android artifacts
+        run: |
+          mkdir -p prebuilds/android-arm prebuilds/android-ia32 prebuilds/android-x64
+          cp -rv prebuilds/android-arm64/* prebuilds/android-arm/
+          cp -rv prebuilds/android-arm64/* prebuilds/android-x64/
+          cp -rv prebuilds/android-arm64/* prebuilds/android-ia32/
+
       - name: Upload merged artifacts
-        uses: actions/upload-artifact@v6
+        uses: actions/upload-artifact@v4
         with:
           name: prebuilds
           path: prebuilds
@@ -536,10 +462,8 @@ jobs:
           if [ -z "$gpr_tag" ]; then
             if [ "$ref_name" = "main" ]; then
               gpr_tag="dev"
-            elif [[ "$ref_name" == feature-* ]]; then
-              gpr_tag="feature"
-            elif [[ "$ref_name" == tmp-* ]]; then
-              gpr_tag="temp"
+            elif [[ "$ref_name" == feature-* ]] || [[ "$ref_name" == tmp-* ]]; then
+              gpr_tag="$ref_name"
             else
               gpr_tag="dev"
             fi
@@ -558,17 +482,17 @@ jobs:
     permissions:
       contents: read
       packages: write
-    env:
-      WORKDIR: ${{ inputs.workdir || github.event.inputs.workdir || 'packages/qvac-lib-infer-onnx-tts' }}
     steps:
       - name: Checkout repository
-        uses: actions/checkout@v6
+        uses: actions/checkout@v4
+        with:
+          token: ${{ secrets.PAT_TOKEN }}
 
       - name: Download prebuild artifacts
-        uses: actions/download-artifact@v7
+        uses: actions/download-artifact@v4
         with:
           name: prebuilds
-          path: ${{ env.WORKDIR }}/prebuilds
+          path: prebuilds
 
       - name: Publish to GitHub Package Registry
         id: publish
@@ -576,30 +500,30 @@ jobs:
         with:
           secret-token: ${{ secrets.GITHUB_TOKEN }}
           tag: ${{ needs.publish-logic.outputs.gpr_tag }}
-          workdir: ${{ env.WORKDIR }}
-          path: ${{ env.WORKDIR }}
+          workdir: ${{ inputs.workdir }}
+          path: ${{ inputs.workdir || github.event.inputs.workdir || 'packages/qvac-lib-infer-onnx-tts' }}
           name-suffix: "-mono"
 
   publish-npm:
     needs: [prebuild, merge, publish-logic]
     if: ${{ needs.publish-logic.outputs.publish_npm == 'true' }}
     outputs:
-      published_version: ${{ steps.capture_version.outputs.published_version }}
+      published_version: ${{ steps.publish.outputs.npm_published_version }}
     runs-on: ubuntu-latest
     permissions:
       contents: write
       packages: write
-    env:
-      WORKDIR: ${{ inputs.workdir || github.event.inputs.workdir || 'packages/qvac-lib-infer-onnx-tts' }}
     steps:
       - name: Checkout repository
-        uses: actions/checkout@v6
+        uses: actions/checkout@v4
+        with:
+          token: ${{ secrets.PAT_TOKEN }}
 
       - name: Download prebuild artifacts
-        uses: actions/download-artifact@v7
+        uses: actions/download-artifact@v4
         with:
           name: prebuilds
-          path: ${{ env.WORKDIR }}/prebuilds
+          path: prebuilds
 
       - name: Publish to NPM Package Registry
         id: publish
@@ -607,21 +531,18 @@ jobs:
         with:
           secret-token: ${{ secrets.NPM_TOKEN }}
           tag: "latest"
-          path: ${{ env.WORKDIR }}
-          repo_name: "onnx-tts"
           git-token: ${{ secrets.PAT_TOKEN }}
-          create-tag: "false"
+          create-tag: "true"
+          path: ${{ inputs.workdir || github.event.inputs.workdir || 'packages/qvac-lib-infer-onnx-tts' }}
 
-      - name: Capture published version
-        id: capture_version
-        if: success()
-        working-directory: ${{ env.WORKDIR }}
-        shell: bash
-        run: |
-          set -euo pipefail
-          VERSION=$(node -p "require('./package.json').version")
-          PACKAGE_NAME=$(node -p "require('./package.json').name")
-          if npm view "${PACKAGE_NAME}@${VERSION}" version >/dev/null 2>&1; then
-            echo "published_version=${VERSION}" >> "$GITHUB_OUTPUT"
-          fi
-
+  create-github-release:
+    needs: [publish-npm]
+    if: needs.publish-npm.outputs.published_version != '' && startsWith(github.ref_name, 'release-')
+    permissions:
+      contents: write
+    uses: ./.github/workflows/create-github-release-qvac-lib-infer-onnx-tts.yml
+    secrets: inherit
+    with:
+      published_version: ${{ needs.publish-npm.outputs.published_version }}
+      prev_sha: ${{ github.event.before }}
+      workdir: ${{ inputs.workdir || github.event.inputs.workdir || 'packages/qvac-lib-infer-onnx-tts' }}

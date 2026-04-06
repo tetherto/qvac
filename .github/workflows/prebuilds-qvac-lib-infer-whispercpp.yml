@@ -26,6 +26,10 @@ on:
         type: string
         required: false
         default: "tetherto/qvac"
+      tar-run-id:
+        type: string
+        required: false
+        default: "on-mlc-whisper"
       tag:
         description: "Tag to publish"
         type: string
@@ -151,24 +155,24 @@ jobs:
 
       - if: ${{ matrix.os == 'windows-2022' }}
         name: Get ccache cache (Windows)
-        uses: actions/cache@v5
+        uses: actions/cache@v4
         with:
-          key: ccache-${{ matrix.platform }}-${{ matrix.arch }}-${{ matrix.tags }}-${{ hashFiles(format('{0}/vcpkg.json', inputs.workdir)) }}
           path: ~\AppData\Local\ccache
+          key: ccache-${{ matrix.platform }}-${{ matrix.arch }}-${{ matrix.tags }}-${{ hashFiles(format('{0}/vcpkg.json', inputs.workdir)) }}
           restore-keys: |
             ccache-${{ matrix.platform }}-${{ matrix.arch }}-${{ matrix.tags }}-
             ccache-${{ matrix.platform }}-${{ matrix.arch }}-
 
       - name: Checkout repository
-        uses: actions/checkout@v6
+        uses: actions/checkout@v4
         with:
-          repository: ${{ inputs.repository || github.repository }}
-          ref: ${{ inputs.ref || github.ref }}
           token: ${{ secrets.PAT_TOKEN }}
+          ref: ${{ inputs.ref || github.ref }}
+          repository: ${{ inputs.repository || github.repository }}
           fetch-depth: 0
 
       - name: Setup node
-        uses: actions/setup-node@v6
+        uses: actions/setup-node@v4
         with:
           node-version: lts/*
 
@@ -261,6 +265,13 @@ jobs:
           chmod +x llvm.sh
           sudo ./llvm.sh 19 all
 
+      - if: ${{ matrix.os == 'ubuntu-22.04' }}
+        name: Install g++-13 on Ubuntu 22.04
+        run: |
+          sudo add-apt-repository ppa:ubuntu-toolchain-r/test
+          sudo apt update
+          sudo apt install -y g++-13
+
       - if: ${{ startsWith(matrix.os, 'ubuntu') }}
         name: Install ccache on Linux
         run: sudo apt-get install -y ccache
@@ -280,10 +291,10 @@ jobs:
 
       - if: ${{ matrix.os != 'windows-2022' }}
         name: Get ccache cache
-        uses: actions/cache@v5
+        uses: actions/cache@v4
         with:
-          key: ccache-${{ matrix.platform }}-${{ matrix.arch }}${{ matrix.tags }}-${{ hashFiles(format('{0}/vcpkg.json', inputs.workdir)) }}
           path: ~/.cache/ccache
+          key: ccache-${{ matrix.platform }}-${{ matrix.arch }}${{ matrix.tags }}-${{ hashFiles(format('{0}/vcpkg.json', inputs.workdir)) }}
           restore-keys: |
             ccache-${{ matrix.platform }}-${{ matrix.arch }}${{ matrix.tags }}-
             ccache-${{ matrix.platform }}-${{ matrix.arch }}-
@@ -312,38 +323,11 @@ jobs:
 
       - if: ${{ matrix.platform == 'linux' && matrix.arch == 'arm64' }}
         name: Setup vulkan sdk path in linux arm64
-        env:
-          AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
-          AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
-          AWS_DEFAULT_REGION: us-east-1
         run: |
           VULKAN_SDK=~/vulkan/aarch64
           echo "VULKAN_SDK=$VULKAN_SDK" >> $GITHUB_ENV
-
           cd ~/vulkan
-
-          # Extract SDK major.minor version from README.txt (e.g., "1.4" from "1.4.341.0")
-          SDK_VERSION=$(grep -o 'sdk/[0-9]*\.[0-9]*' README.txt | head -1 | sed 's|sdk/||')
-          S3_BUCKET="${{ secrets.MODEL_S3_BUCKET }}"
-          S3_KEY="vulkan-sdk-cache/linux-arm64-${SDK_VERSION}.tar.gz"
-
-          echo "Vulkan SDK version: ${SDK_VERSION}"
-
-          # Try to download cached build from S3
-          if aws s3 cp "s3://${S3_BUCKET}/${S3_KEY}" /tmp/vulkan-arm64-cache.tar.gz 2>/dev/null; then
-            echo "Found cached Vulkan SDK, extracting..."
-            tar xzf /tmp/vulkan-arm64-cache.tar.gz -C ~/vulkan
-            rm /tmp/vulkan-arm64-cache.tar.gz
-          else
-            echo "No cache found, building Vulkan SDK for ARM64..."
-            ./vulkansdk --maxjobs
-
-            # Upload the compiled SDK to S3 for future runs
-            echo "Uploading compiled SDK to S3..."
-            tar czf /tmp/vulkan-arm64-cache.tar.gz aarch64
-            aws s3 cp /tmp/vulkan-arm64-cache.tar.gz "s3://${S3_BUCKET}/${S3_KEY}"
-            rm /tmp/vulkan-arm64-cache.tar.gz
-          fi
+          ./vulkansdk --maxjobs
 
       - if: ${{ matrix.platform == 'linux' }}
         name: Export rest of vulkan sdk variables in linux
@@ -378,14 +362,14 @@ jobs:
 
       - name: Get vcpkg cache
         id: cache-vcpkg
-        uses: actions/cache@v5
+        uses: actions/cache@v4
         with:
+          path: ${{ inputs.workdir }}/vcpkg/cache
           key: vcpkg-v2-${{ matrix.platform }}-${{ matrix.arch }}${{ matrix.tags }}-${{ hashFiles(
             format('{0}/vcpkg.json', inputs.workdir),
             format('{0}/vcpkg-configuration.json', inputs.workdir),
             format('{0}/vcpkg/ports/**', inputs.workdir)
            ) }}
-          path: ${{ inputs.workdir }}/vcpkg/cache
           restore-keys: |
             vcpkg-v2-${{ matrix.platform }}-${{ matrix.arch }}${{ matrix.tags }}-
             vcpkg-v2-${{ matrix.platform }}-${{ matrix.arch }}-
@@ -419,7 +403,7 @@ jobs:
       - name: Show ccache stats
         run: ccache -s
 
-      - uses: actions/upload-artifact@v6
+      - uses: actions/upload-artifact@v4
         with:
           name: whisper-cpp-${{ matrix.platform }}-${{ matrix.arch }}${{ matrix.tags }}
           path: ${{ inputs.workdir }}/prebuilds
@@ -429,13 +413,13 @@ jobs:
     needs: prebuild
     steps:
       - name: Download all build artifacts
-        uses: actions/download-artifact@v7
+        uses: actions/download-artifact@v4
         with:
           path: prebuilds
           merge-multiple: true
 
       - name: Upload merged artifacts
-        uses: actions/upload-artifact@v6
+        uses: actions/upload-artifact@v4
         with:
           name: prebuilds
           path: prebuilds
@@ -469,15 +453,24 @@ jobs:
       WORKDIR: ${{ inputs.workdir || 'packages/qvac-lib-infer-whispercpp' }}
     steps:
       - name: Checkout repository
-        uses: actions/checkout@v6
+        uses: actions/checkout@v4
         with:
+          token: ${{ secrets.PAT_TOKEN }}
           fetch-depth: 0
 
       - name: Download prebuild artifacts
-        uses: actions/download-artifact@v7
+        uses: actions/download-artifact@v4
         with:
           name: prebuilds
-          path: ${{ env.WORKDIR }}/prebuilds
+          path: /tmp/prebuilds
+
+      - name: Place merged prebuilds into package workdir
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p "${WORKDIR}/prebuilds"
+          rm -rf "${WORKDIR}/prebuilds"/*
+          cp -R /tmp/prebuilds/* "${WORKDIR}/prebuilds/"
 
       - name: Rename prebuild files from qvac_ to tetherto_ prefix
         shell: bash
@@ -502,7 +495,7 @@ jobs:
         with:
           secret-token: ${{ secrets.GITHUB_TOKEN }}
           tag: ${{ inputs.tag || github.event.inputs.tag || 'dev' }}
-          workdir: ${{ env.WORKDIR }}
+          workdir: ${{ inputs.workdir }}
           name-suffix: "-mono"
 
       - name: Capture published version
@@ -536,26 +529,21 @@ jobs:
               || (inputs.ref != '' && startsWith(inputs.ref, 'refs/heads/release-'))
             )
           ) }} 
-    continue-on-error: false
+    continue-on-error: true
     outputs:
-      published_version: ${{ steps.publish.outputs.npm_published_version }}
+      published_version: ${{ steps.capture_version.outputs.published_version }}
     runs-on: ubuntu-latest
     permissions:
-      contents: write
+      contents: read
       packages: write
     env:
       WORKDIR: ${{ inputs.workdir || 'packages/qvac-lib-infer-whispercpp' }}
     steps:
       - name: Checkout repository
-        uses: actions/checkout@v6
+        uses: actions/checkout@v4
         with:
+          token: ${{ secrets.PAT_TOKEN }}
           fetch-depth: 0
-
-      - name: Download prebuild artifacts
-        uses: actions/download-artifact@v7
-        with:
-          name: prebuilds
-          path: ${{ env.WORKDIR }}/prebuilds
 
       - name: Publish to NPM Package Registry
         id: publish
@@ -563,9 +551,6 @@ jobs:
         with:
           secret-token: ${{ secrets.NPM_TOKEN }}
           tag: "latest"
-          workdir: ${{ env.WORKDIR }}
-          repo_name: "whispercpp"
-          git-token: ${{ secrets.GITHUB_TOKEN }}
 
       - name: Capture published version
         id: capture_version
@@ -574,6 +559,7 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
+          cd "${WORKDIR}"
 
           VERSION=$(node -p "require('./package.json').version")
           PACKAGE_NAME=$(node -p "require('./package.json').name")

@@ -1,0 +1,68 @@
+name: Dispatch on README (Qvac-sdk)
+
+on:
+  pull_request:
+    types: [closed]
+    paths:
+      - "packages/qvac-sdk/**"
+
+env:
+  WORKDIR: packages/qvac-sdk
+
+jobs:
+  dispatch:
+    if: github.event.pull_request.merged == true && github.event.pull_request.base.ref == 'main'
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout merge commit
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          ref: ${{ github.event.pull_request.merge_commit_sha }}
+
+      - name: Detect README change
+        id: changed
+        shell: bash
+        env:
+          MERGE_SHA: ${{ github.event.pull_request.merge_commit_sha }}
+          BASE_SHA: ${{ github.event.pull_request.base.sha }} 
+          WORKDIR: ${{ env.WORKDIR }}
+        run: |
+          set -euo pipefail
+
+          # Ensure the merge commit exists locally (in case of shallow clone)
+          git fetch --no-tags origin "${MERGE_SHA}" --depth=2 || true
+
+          README_ROOT="README.md"
+          README_WORKDIR="${WORKDIR%/}/README.md"
+
+          echo "Checking README changes in:"
+          echo " - ${README_ROOT}"
+          echo " - ${README_WORKDIR}"
+
+          # Compare base -> merge commit (more reliable than MERGE_SHA^1)  # <-- CHANGED
+          CHANGED_FILES="$(git diff --name-only "${BASE_SHA}" "${MERGE_SHA}" || true)"
+          echo "Changed files:"
+          echo "${CHANGED_FILES}"
+
+          if echo "${CHANGED_FILES}" | grep -xq "${README_ROOT}"; then
+            echo "readme_changed=true" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+
+          if echo "${CHANGED_FILES}" | grep -xq "${README_WORKDIR}"; then
+            echo "readme_changed=true" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+
+          echo "readme_changed=false" >> "$GITHUB_OUTPUT"
+
+      - name: Repository Dispatch
+        if: steps.changed.outputs.readme_changed == 'true'
+        uses: peter-evans/repository-dispatch@v3
+        with:
+          token: ${{ secrets.pat_token }}
+          repository: tetherto/qvac-docs
+          event-type: readme-changed
+          client-payload: >
+            {"repo_url":"https://github.com/${{ github.repository }}","workdir":"${{ env.WORKDIR }}"}

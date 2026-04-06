@@ -1,0 +1,343 @@
+name: QVAC Desktop Tests
+# Reusable workflow for running desktop tests across platforms
+# Originally from qvac-test-suite
+
+on:
+  workflow_call:
+    inputs:
+      working-directory:
+        description: "Working directory for tests"
+        required: false
+        type: string
+        default: "."
+      platforms:
+        description: 'JSON array of runner labels (e.g., ["ubuntu-latest"] or ["ai-run-linux-gpu", "macos-latest-xlarge"])'
+        required: true
+        type: string
+      consumer-timeout:
+        description: "Timeout in seconds for consumer connection"
+        required: false
+        type: number
+        default: 30
+    secrets:
+      MQTT_PROTOCOL:
+        required: true
+      MQTT_HOST:
+        required: true
+      MQTT_PORT:
+        required: true
+      MQTT_USERNAME:
+        required: true
+      MQTT_PASSWORD:
+        required: true
+      MQTT_CA_CERT:
+        required: false
+      MQTT_CLIENT_CERT:
+        required: false
+      MQTT_CLIENT_KEY:
+        required: false
+      NPM_TOKEN:
+        required: false
+      PAT_TOKEN:
+        required: false
+
+jobs:
+  test-desktop:
+    strategy:
+      matrix:
+        os: ${{ fromJSON(inputs.platforms) }}
+      fail-fast: false
+    runs-on: ${{ matrix.os }}
+    env:
+      MQTT_PROTOCOL: ${{ secrets.MQTT_PROTOCOL }}
+      MQTT_HOST: ${{ secrets.MQTT_HOST }}
+      MQTT_PORT: ${{ secrets.MQTT_PORT }}
+      MQTT_USERNAME: ${{ secrets.MQTT_USERNAME }}
+      MQTT_PASSWORD: ${{ secrets.MQTT_PASSWORD }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          repository: ${{ github.repository }}
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+
+      - name: Configure npm registries
+        env:
+          NPM_TOKEN: ${{ secrets.NPM_TOKEN }}
+          PAT_TOKEN: ${{ secrets.PAT_TOKEN }}
+        shell: bash
+        run: |
+          : > .npmrc
+          echo "registry=https://registry.npmjs.org/" >> .npmrc
+          echo "@qvac:registry=https://registry.npmjs.org/" >> .npmrc
+          echo "@tetherto:registry=https://npm.pkg.github.com/" >> .npmrc
+          echo "//registry.npmjs.org/:_authToken=${NPM_TOKEN}" >> .npmrc
+          echo "//npm.pkg.github.com/:_authToken=${PAT_TOKEN}" >> .npmrc
+
+      - name: Setup MQTT certificates
+        shell: bash
+        env:
+          CA_CERT: ${{ secrets.MQTT_CA_CERT }}
+          CLIENT_CERT: ${{ secrets.MQTT_CLIENT_CERT }}
+          CLIENT_KEY: ${{ secrets.MQTT_CLIENT_KEY }}
+        run: |
+          mkdir -p /tmp/mqtt-certs
+
+          if [ -n "$CA_CERT" ]; then
+            echo "$CA_CERT" > /tmp/mqtt-certs/ca.crt
+            echo "MQTT_CA_PATH=/tmp/mqtt-certs/ca.crt" >> $GITHUB_ENV
+          fi
+
+          if [ -n "$CLIENT_CERT" ]; then
+            echo "$CLIENT_CERT" > /tmp/mqtt-certs/client.crt
+            echo "MQTT_CERT_PATH=/tmp/mqtt-certs/client.crt" >> $GITHUB_ENV
+          fi
+
+          if [ -n "$CLIENT_KEY" ]; then
+            echo "$CLIENT_KEY" > /tmp/mqtt-certs/client.key
+            echo "MQTT_KEY_PATH=/tmp/mqtt-certs/client.key" >> $GITHUB_ENV
+          fi
+
+      - name: Install dependencies
+        working-directory: ${{ inputs.working-directory }}
+        run: npm install
+
+      - name: Build project
+        working-directory: ${{ inputs.working-directory }}
+        run: npm run build
+
+      - name: Generate runId
+        id: runid
+        shell: bash
+        run: |
+          PLATFORM="${{ matrix.os }}"
+          PLATFORM_SHORT=$(echo "$PLATFORM" | sed -E 's/.*(mac).*/macos/; t; s/.*(win).*/windows/; t; s/.*(linux|ubuntu).*/linux/')
+          RUN_ID="${GITHUB_REPOSITORY##*/}-${GITHUB_REF_NAME//\//-}-${GITHUB_SHA:0:7}-$(date +%s)-${PLATFORM_SHORT}"
+          echo "runId=$RUN_ID" >> $GITHUB_OUTPUT
+          echo "platform=$PLATFORM_SHORT" >> $GITHUB_OUTPUT
+
+      - name: Run tests (consumer + producer)
+        working-directory: ${{ inputs.working-directory }}
+        shell: bash
+        run: |
+          # Start consumer in background
+          npx qvac-test run:consumer:desktop \
+            --runId=${{ steps.runid.outputs.runId }} \
+            --config=. \
+            > consumer.log 2>&1 &
+          CONSUMER_PID=$!
+          echo $CONSUMER_PID > consumer.pid
+
+          # Brief pause to let consumer initialize
+          sleep 2
+
+          # Check if consumer is running
+          if ps -p $CONSUMER_PID > /dev/null 2>&1; then
+            echo "✅ Consumer running (PID: $CONSUMER_PID)"
+          else
+            echo "❌ Consumer died immediately"
+            cat consumer.log || true
+            exit 1
+          fi
+
+          # Run producer in foreground
+          npx qvac-test run:producer \
+            --runId=${{ steps.runid.outputs.runId }} \
+            --consumer-timeout=${{ inputs.consumer-timeout }} \
+            --config=.
+
+          PRODUCER_EXIT=$?
+
+          # Clean up consumer
+          kill $CONSUMER_PID 2>/dev/null || true
+
+          exit $PRODUCER_EXIT
+
+      - name: Stop consumer (safety)
+        if: always()
+        shell: bash
+        working-directory: ${{ inputs.working-directory }}
+        run: |
+          if [ -f consumer.pid ]; then
+            kill $(cat consumer.pid) 2>/dev/null || true
+          fi
+
+      - name: Upload consumer logs
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: consumer-log-${{ steps.runid.outputs.platform }}
+          path: ${{ inputs.working-directory }}/consumer.log
+          retention-days: 7
+
+      - name: Upload results
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: results-${{ steps.runid.outputs.platform }}-${{ github.run_number }}
+          path: ${{ inputs.working-directory }}/reports/results-*.json
+          retention-days: 30
+
+      - name: Upload baseline (main/develop only)
+        if: always() && (github.ref == 'refs/heads/main' || github.ref == 'refs/heads/develop')
+        uses: actions/upload-artifact@v4
+        with:
+          name: baseline-${{ steps.runid.outputs.platform }}
+          path: ${{ inputs.working-directory }}/reports/results-*.json
+          retention-days: 90
+          overwrite: true
+
+      - name: Show consumer log on failure
+        if: failure()
+        working-directory: ${{ inputs.working-directory }}
+        run: cat consumer.log || true
+
+  compare-results:
+    needs: test-desktop
+    if: github.event_name == 'pull_request'
+    runs-on: ubuntu-latest
+    permissions:
+      pull-requests: write
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+
+      - name: Configure npm registries
+        env:
+          NPM_TOKEN: ${{ secrets.NPM_TOKEN }}
+          PAT_TOKEN: ${{ secrets.PAT_TOKEN }}
+        shell: bash
+        run: |
+          : > .npmrc
+          echo "registry=https://registry.npmjs.org/" >> .npmrc
+          echo "@qvac:registry=https://registry.npmjs.org/" >> .npmrc
+          echo "@tetherto:registry=https://npm.pkg.github.com/" >> .npmrc
+          echo "//registry.npmjs.org/:_authToken=${NPM_TOKEN}" >> .npmrc
+          echo "//npm.pkg.github.com/:_authToken=${PAT_TOKEN}" >> .npmrc
+
+      - name: Install dependencies
+        working-directory: ${{ inputs.working-directory }}
+        run: npm install --ignore-scripts
+
+      - name: Download current results
+        uses: actions/download-artifact@v4
+        with:
+          pattern: results-*
+          path: ${{ inputs.working-directory }}/current-results/
+          merge-multiple: true
+
+      - name: Download baseline results
+        id: download-baseline
+        uses: dawidd6/action-download-artifact@v6
+        continue-on-error: true
+        with:
+          workflow: test-desktop.yml
+          branch: ${{ github.event.pull_request.base.ref }}
+          name: baseline-*
+          path: ${{ inputs.working-directory }}/baseline-results/
+          if_no_artifact_found: warn
+
+      - name: Check baseline availability
+        id: check-baseline
+        shell: bash
+        run: |
+          if [ -d "${{ inputs.working-directory }}/baseline-results" ] && [ "$(ls -A ${{ inputs.working-directory }}/baseline-results/*.json 2>/dev/null | wc -l)" -gt 0 ]; then
+            echo "has_baseline=true" >> $GITHUB_OUTPUT
+          else
+            echo "has_baseline=false" >> $GITHUB_OUTPUT
+          fi
+
+      - name: Compare results
+        if: steps.check-baseline.outputs.has_baseline == 'true'
+        working-directory: ${{ inputs.working-directory }}
+        shell: bash
+        run: |
+          for platform in linux macos windows; do
+            current=$(ls current-results/*${platform}*.json 2>/dev/null | head -n1)
+            baseline=$(ls baseline-results/*${platform}*.json 2>/dev/null | head -n1)
+            
+            if [ -n "$current" ] && [ -n "$baseline" ]; then
+              npx qvac-test report:compare \
+                --baseline "$baseline" \
+                --current "$current" \
+                --output "comparison-${platform}.json"
+            fi
+          done
+
+      - name: Format comparison
+        working-directory: ${{ inputs.working-directory }}
+        shell: bash
+        run: |
+          echo "# 🧪 QVAC Test Results" > comment.md
+          echo "" >> comment.md
+          echo "**Branch**: \`${{ github.head_ref }}\` | **Commit**: \`${GITHUB_SHA:0:7}\` | **Base**: \`${{ github.event.pull_request.base.ref }}\`" >> comment.md
+          echo "" >> comment.md
+
+          if [ "${{ steps.check-baseline.outputs.has_baseline }}" = "false" ]; then
+            echo "⚠️ **No baseline found** - showing current results only" >> comment.md
+            echo "" >> comment.md
+            echo "| Platform | Passed | Failed | Total | Rate | Duration |" >> comment.md
+            echo "|----------|--------|--------|-------|------|----------|" >> comment.md
+            
+            for result in current-results/*.json; do
+              if [ -f "$result" ]; then
+                platform=$(basename "$result" | sed 's/results-//' | sed 's/-.*//')
+                passed=$(jq -r '.summary.passed' "$result")
+                failed=$(jq -r '.summary.failed' "$result")
+                total=$(jq -r '.summary.total' "$result")
+                rate=$(jq -r '.summary.successRate' "$result")
+                duration=$(jq -r '.summary.duration' "$result")
+                echo "| $platform | $passed | $failed | $total | ${rate}% | ${duration}s |" >> comment.md
+              fi
+            done
+            
+            echo "" >> comment.md
+            echo "### 📦 Artifacts" >> comment.md
+            echo "" >> comment.md
+            echo "[View all artifacts](https://github.com/${{ github.repository }}/actions/runs/${{ github.run_id }}/artifacts)" >> comment.md
+          else
+            for comparison in comparison-*.json; do
+              if [ -f "$comparison" ]; then
+                platform=$(basename "$comparison" | sed 's/comparison-//' | sed 's/.json//')
+                npx qvac-test report:format \
+                  --input "$comparison" \
+                  --format markdown \
+                  --output "platform-${platform}.md"
+                
+                echo "## ${platform}" >> comment.md
+                cat "platform-${platform}.md" >> comment.md
+                echo "" >> comment.md
+              fi
+            done
+            
+            echo "### 📦 Artifacts" >> comment.md
+            echo "" >> comment.md
+            echo "[View all artifacts](https://github.com/${{ github.repository }}/actions/runs/${{ github.run_id }}/artifacts)" >> comment.md
+          fi
+
+      - name: Comment on PR
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const fs = require('fs');
+            const commentPath = '${{ inputs.working-directory }}/comment.md';
+
+            if (!fs.existsSync(commentPath)) {
+              console.log('No comment file generated');
+              return;
+            }
+
+            const body = fs.readFileSync(commentPath, 'utf8');
+
+            await github.rest.issues.createComment({
+              issue_number: context.issue.number,
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              body: body
+            });
