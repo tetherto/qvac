@@ -56,7 +56,7 @@ echo "Model suffix: $MODEL_SUFFIX"
 echo ""
 
 # S3 path
-S3_PATH="s3://${BUCKET}/${BASE_PATH}/ggml-opus-${PAIR}/"
+S3_PATH="s3://${BUCKET}/${BASE_PATH}/ggml-${PAIR}/"
 
 echo "S3 Source: $S3_PATH"
 echo ""
@@ -123,7 +123,7 @@ if [ $? -eq 0 ]; then
     echo "   python3 evaluate.py --pairs $PAIR --translators qvac"
     echo ""
     echo "2. Or test with multiple translators:"
-    echo "   python3 evaluate.py --pairs $PAIR --translators qvac,opusmt"
+    echo "   python3 evaluate.py --pairs $PAIR --translators qvac"
     echo ""
     echo "Note: The translator will use this model automatically."
     echo ""

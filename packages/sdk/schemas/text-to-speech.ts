@@ -61,10 +61,16 @@ export const ttsRequestSchema = ttsClientParamsSchema.extend({
   type: z.literal("textToSpeech"),
 });
 
+export const ttsStatsSchema = z.object({
+  audioDuration: z.number().optional(),
+  totalSamples: z.number().optional(),
+});
+
 export const ttsResponseSchema = z.object({
   type: z.literal("textToSpeech"),
   buffer: z.array(z.number()),
   done: z.boolean().default(false),
+  stats: ttsStatsSchema.optional(),
 });
 
 export type TtsLanguage = (typeof TTS_LANGUAGES)[number];
@@ -81,3 +87,4 @@ export type TtsRuntimeConfig = z.infer<typeof ttsRuntimeConfigSchema>;
 export type TtsClientParams = z.infer<typeof ttsClientParamsSchema>;
 export type TtsRequest = z.infer<typeof ttsRequestSchema>;
 export type TtsResponse = z.infer<typeof ttsResponseSchema>;
+export type TtsStats = z.infer<typeof ttsStatsSchema>;

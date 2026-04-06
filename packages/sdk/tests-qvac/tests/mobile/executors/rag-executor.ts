@@ -1,14 +1,14 @@
 import { ragIngest } from "@qvac/sdk";
 import {
-  AssetExecutor,
   ValidationHelpers,
   type TestResult,
   type Expectation,
 } from "@tetherto/qvac-test-suite/mobile";
 import type { ResourceManager } from "../../shared/resource-manager.js";
+import { ModelAssetExecutor } from "./model-asset-executor.js";
 import { ragTests } from "../../rag-tests.js";
 
-export class MobileRagExecutor extends AssetExecutor<typeof ragTests> {
+export class MobileRagExecutor extends ModelAssetExecutor<typeof ragTests> {
   pattern = /^rag-/;
 
   protected handlers = Object.fromEntries(
@@ -18,22 +18,8 @@ export class MobileRagExecutor extends AssetExecutor<typeof ragTests> {
 
   private documentAssets: Record<string, number> | null = null;
 
-  constructor(private resources: ResourceManager) {
-    super();
-  }
-
-  async setup(testId: string, context: unknown) {
-    const ctx = (context ?? {}) as Record<string, unknown>;
-    await this.resources.downloadAllOnce(console.log);
-    const dep = ctx.dependency as string | undefined;
-    if (dep && dep !== "none") {
-      await this.resources.evictAll();
-      await this.resources.ensureLoaded(dep);
-    }
-  }
-
-  async teardown() {
-    await this.resources.evictAll();
+  constructor(resources: ResourceManager) {
+    super(resources);
   }
 
   private async loadDocumentAssets() {
@@ -66,8 +52,9 @@ export class MobileRagExecutor extends AssetExecutor<typeof ragTests> {
           return { passed: false, output: `Document file not found: ${p.documentFile}` };
         }
         const docUri = await this.resolveAsset(assetModule);
-        const response = await fetch(docUri);
-        content = await response.text();
+        // @ts-ignore - expo-file-system is a peer dependency available in mobile context
+        const { File } = await import("expo-file-system");
+        content = await new File(`file://${docUri}`).text();
       } else {
         content = p.documentContent || "";
       }

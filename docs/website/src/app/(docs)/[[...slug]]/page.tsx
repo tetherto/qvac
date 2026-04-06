@@ -1,4 +1,4 @@
-import { source } from '@/lib/source';
+import { getPageImage, source } from '@/lib/source';
 import {
   DocsBody,
   DocsPage,
@@ -12,6 +12,11 @@ import { getMDXComponents } from '@/mdx-components';
 import { resolveIcon } from "@/lib/resolveIcon";
 import { cloneElement, isValidElement } from "react";
 import { LLMCopyButton, ViewOptions, VersionSelector } from '@/components/page-actions';
+import {
+  buildCanonicalDocsUrl,
+  inferDiataxisOpenGraph,
+} from '@/lib/docs-open-graph';
+import { QVAC_DOC_OG_HEIGHT, QVAC_DOC_OG_WIDTH } from '@/lib/qvac-doc-og';
 
 function TitleText({
   title,
@@ -101,8 +106,40 @@ export async function generateMetadata(
   if (!page) notFound();
   const isHomePage = !params.slug || params.slug.length === 0;
 
+  const { title, description } = page.data;
+  const canonicalUrl = buildCanonicalDocsUrl(params.slug);
+  const { section, tags } = inferDiataxisOpenGraph(page.path);
+  const ogImage = getPageImage(page);
+
   return {
-    title: isHomePage ? { absolute: page.data.title } : page.data.title,
-    description: page.data.description,
+    title: isHomePage ? { absolute: title } : title,
+    description,
+    alternates: {
+      canonical: canonicalUrl,
+    },
+    openGraph: {
+      title,
+      description: description ?? undefined,
+      url: canonicalUrl,
+      siteName: 'QVAC',
+      locale: 'en_US',
+      type: 'article',
+      section,
+      tags,
+      images: [
+        {
+          url: ogImage.url,
+          width: QVAC_DOC_OG_WIDTH,
+          height: QVAC_DOC_OG_HEIGHT,
+          alt: 'QVAC documentation',
+        },
+      ],
+    },
+    twitter: {
+      card: 'summary_large_image',
+      title,
+      description: description ?? undefined,
+      images: [ogImage.url],
+    },
   };
 }

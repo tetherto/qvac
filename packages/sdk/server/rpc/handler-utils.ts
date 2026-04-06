@@ -15,6 +15,7 @@ import { setSDKConfig } from "@/server/bare/registry/config-registry";
 import { setRuntimeContext } from "@/server/bare/registry/runtime-context-registry";
 import { type ServerProfiler } from "./profiling";
 import { nowMs } from "@/profiling/clock";
+import { isTerminalChunk } from "./rpc-utils";
 
 function getProfilingMetaFromRequest(
   request: Request,
@@ -80,6 +81,7 @@ async function executeStreamHandler(
 ) {
   const stream = req.createResponseStream();
   profiler.startHandler();
+  let sentFinalChunk = false;
 
   try {
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -93,13 +95,24 @@ async function executeStreamHandler(
     } else {
       generator = handler(request);
     }
+
     for await (const response of generator) {
-      stream.write(profiler.serialize(response, false) + "\n", "utf-8");
+      if (isTerminalChunk(response)) {
+        profiler.endHandler();
+        stream.write(profiler.serialize(response, true) + "\n", "utf-8");
+        sentFinalChunk = true;
+      } else {
+        stream.write(profiler.serialize(response, false) + "\n", "utf-8");
+      }
     }
-    profiler.endHandler();
-    const trailer = profiler.serialize();
-    if (trailer) {
-      stream.write(trailer + "\n", "utf-8");
+    
+    // Fallback
+    if (!sentFinalChunk) {
+      profiler.endHandler();
+      const trailer = profiler.serialize();
+      if (trailer) {
+        stream.write(trailer + "\n", "utf-8");
+      }
     }
 
     stream.end();
