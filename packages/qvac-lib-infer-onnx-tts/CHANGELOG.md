@@ -5,15 +5,6 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-## [0.7.2]
-
-### Added
-- Added support for korean and hebrew
-
-### Changed
-- Switched ONNX Runtime linkage from direct vcpkg dependency to `@qvac/onnx` shared module, aligning with the OCR package pattern for consistent cross-addon runtime sharing
-- Changed integration tests to run faster, with better WER verification
-
 ## [0.8.0]
 
 This release refactors the JavaScript client around a smaller public surface: one `files` map and explicit engines, no loader or download stubs, and composition-based job handling via **`@qvac/infer-base`** (**`createJobHandler`**, **`exclusiveRunQueue`**, **`getApiDefinition`**) instead of subclassing **`BaseInference`**. Callers should pass **absolute** artifact paths and use **`exclusiveRun: true`** when they need serialized `run()` / `reload()` / `unload()` with the native single-job model.
@@ -41,6 +32,21 @@ Job/response wiring uses **one** active **`QvacResponse`**, managed by **`create
 ### Internal structure
 
 **`BaseInference`** inheritance is removed. **`@qvac/infer-base`** supplies **`createJobHandler`**, **`exclusiveRunQueue`**, and standalone **`getApiDefinition()`** (used from **`index.js`** for API logging). The job handler owns the single active **`QvacResponse`** slot; **`_addonOutputCallback`** routes native events through **`_job.output`**, **`_job.end`**, **`_job.fail`**, and finetune stats via **`_job.active`**. Unload/reload call **`_job.fail(...)`** to tear down the active response. **`tts.js`** **`runJob`** only forwards to the binding and maps thrown errors to **`FAILED_TO_APPEND`**.
+
+## [0.7.2]
+
+### Added
+- Added support for korean and hebrew
+
+### Changed
+- Switched ONNX Runtime linkage from direct vcpkg dependency to `@qvac/onnx` shared module, aligning with the OCR package pattern for consistent cross-addon runtime sharing
+- Changed integration tests to run faster, with better WER verification
+
+## [0.7.1]
+
+### Changed
+
+- README: removed outdated npm Personal Access Token / `.npmrc` setup instructions for installing `@qvac/tts-onnx`.
 
 ## [0.7.0]
 
