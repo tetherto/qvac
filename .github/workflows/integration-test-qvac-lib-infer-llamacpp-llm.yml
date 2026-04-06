@@ -25,9 +25,10 @@ on:
 
 jobs:
   run-integration-tests:
-    timeout-minutes: 480
+    timeout-minutes: ${{ matrix.timeout_minutes || 360 }}
     continue-on-error: true
     runs-on: ${{ matrix.runner }}
+    environment: release
     name: test-${{ matrix.platform }}-${{ matrix.arch }}
     env:
       GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
@@ -51,10 +52,12 @@ jobs:
             platform: linux
             arch: x64
             runner: ai-run-linux-gpu
+            timeout_minutes: 480
           - os: ubuntu-24.04-arm
             platform: linux
             arch: arm64
             runner: ubuntu-24.04-arm
+            no_gpu: 'true'
           - os: ubuntu-22.04-arm
             platform: linux
             arch: arm64
@@ -75,7 +78,7 @@ jobs:
 
     steps:
       - name: Setup Node.js
-        uses: actions/setup-node@v6
+        uses: actions/setup-node@53b83947a5a98c8d113130e565377fae1a50d02f # 6.3.0
         with:
           node-version: lts/*
 
@@ -88,7 +91,7 @@ jobs:
         shell: powershell
 
       - name: Checkout code
-        uses: actions/checkout@v6
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # 6.0.2
         with:
           repository: ${{ inputs.repository || github.repository }}
           ref: ${{ inputs.ref || github.ref }}
@@ -164,7 +167,7 @@ jobs:
 
       - name: Download prebuilds (from artifacts)
         if: ${{ !inputs.prebuild_package }}
-        uses: actions/download-artifact@v7
+        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # 8.0.1
         with:
           path: ${{ env.WORKDIR }}/prebuilds
           merge-multiple: true

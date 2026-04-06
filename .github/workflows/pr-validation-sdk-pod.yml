@@ -1,5 +1,8 @@
 name: PR Validation (SDK Pod)
 
+permissions:
+  contents: read
+
 on:
   pull_request_target:
     types:
@@ -19,12 +22,16 @@ on:
       - feature-*
       - tmp-*
 
+concurrency:
+  group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.sha }}
+  cancel-in-progress: true
+
 jobs:
   validate-pr:
     runs-on: ubuntu-latest
     steps:
       - name: Checkout code
-        uses: actions/checkout@v6
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # 6.0.2
         with:
           fetch-depth: 1
 
