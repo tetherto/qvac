@@ -1,5 +1,13 @@
 # Changelog
 
+## [0.2.3]
+
+Release Date: 2026-04-06
+
+## 🐞 Fixes
+
+- Add `sdcpp-generation` (diffusion) and `parakeet-transcription` to `BUILTIN_PLUGINS` for mobile worker bundle. Without these, mobile apps using `qvac bundle sdk` would get "Plugin not found" errors for diffusion and parakeet model types. (see PR [#1338](https://github.com/tetherto/qvac/pull/1338))
+
 ## [0.2.2]
 
 Release Date: 2026-03-19
