@@ -203,6 +203,10 @@ class TranscriptionParakeet {
     return configurationParams
   }
 
+  getState () {
+    return this.state
+  }
+
   async load () {
     if (this.state.destroyed) {
       throw new QvacErrorAddonParakeet(ERR_CODES.INSTANCE_DESTROYED)

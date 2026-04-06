@@ -1,6 +1,5 @@
 /// <reference types="node" />
 
-import BaseInference from '@qvac/infer-base/WeightsProvider/BaseInference';
 import type { QvacResponse } from '@qvac/infer-base';
 import type { LoggerInterface } from '@qvac/logging';
 
@@ -88,19 +87,6 @@ export interface TranscriptionParakeetConfig {
 }
 
 /**
- * Progress data reported during weight download
- */
-export interface ProgressData {
-  action: string;
-  totalSize: number;
-  totalFiles: number;
-  filesProcessed: number;
-  currentFile: string;
-  currentFileProgress: string;
-  overallProgress: string;
-}
-
-/**
  * Transcription segment returned by the model
  */
 export interface TranscriptionSegment {
@@ -120,11 +106,6 @@ export interface TranscriptionSegment {
  * Output callback events
  */
 export type OutputEvent = 'JobStarted' | 'Output' | 'JobEnded' | 'Error';
-
-/**
- * Callback invoked with progress data during downloads
- */
-export type ReportProgressCallback = (progressData: ProgressData) => void;
 
 /**
  * Input types accepted by the Parakeet addon
@@ -200,6 +181,36 @@ declare class TranscriptionParakeet {
    * Unload the model and free resources.
    */
   unload(): Promise<void>;
+
+  /**
+   * Returns the current state of the instance.
+   */
+  getState(): { configLoaded: boolean; weightsLoaded: boolean; destroyed: boolean };
+
+  /**
+   * Cancel the current job.
+   */
+  cancel(): Promise<void>;
+
+  /**
+   * Get the current status of the addon.
+   */
+  status(): Promise<string | undefined>;
+
+  /**
+   * Pause inference.
+   */
+  pause(): Promise<void>;
+
+  /**
+   * Resume inference.
+   */
+  unpause(): Promise<void>;
+
+  /**
+   * Destroy the instance and free all resources.
+   */
+  destroy(): Promise<void>;
 }
 
 declare namespace TranscriptionParakeet {
@@ -239,10 +250,8 @@ declare namespace TranscriptionParakeet {
     TranscriptionParakeetFiles,
     TranscriptionParakeetArgs,
     TranscriptionParakeetConfig,
-    ProgressData,
     TranscriptionSegment,
     OutputEvent,
-    ReportProgressCallback,
     AppendInput,
     Addon
   };
