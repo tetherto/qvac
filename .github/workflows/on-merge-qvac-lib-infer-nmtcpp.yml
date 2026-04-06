@@ -32,7 +32,6 @@ permissions:
 jobs:
   publish-logic:
     runs-on: ubuntu-latest
-    environment: release
     outputs:
       publish_main: ${{ steps.logic.outputs.publish_main }}
       publish_release: ${{ steps.logic.outputs.publish_release }}
@@ -107,70 +106,125 @@ jobs:
           package-json-path: packages/qvac-lib-infer-nmtcpp/package.json
           changelog-path: packages/qvac-lib-infer-nmtcpp/CHANGELOG.md
 
-  prebuild-main-gpr:
+  build:
     needs: publish-logic
     permissions:
       contents: write
       packages: write
       pull-requests: write
-    if: needs.publish-logic.outputs.publish_main == 'true'
+    if: >-
+      needs.publish-logic.outputs.publish_main == 'true' ||
+      needs.publish-logic.outputs.publish_release == 'true' ||
+      needs.publish-logic.outputs.publish_feature == 'true' ||
+      needs.publish-logic.outputs.publish_tmp == 'true'
     uses: ./.github/workflows/prebuilds-qvac-lib-infer-nmtcpp.yml
     secrets: inherit
-    with:
-      tag: ${{ needs.publish-logic.outputs.gpr_tag }}
-      publish_target: "gpr"
 
-  prebuild-feature-gpr:
-    needs: publish-logic
+  publish-gpr:
+    needs: [build, publish-logic]
+    if: >-
+      needs.publish-logic.outputs.publish_main == 'true' ||
+      needs.publish-logic.outputs.publish_feature == 'true' ||
+      needs.publish-logic.outputs.publish_tmp == 'true'
+    outputs:
+      published_version: ${{ steps.publish.outputs.npm_published_version }}
+    runs-on: ubuntu-24.04
+    continue-on-error: true
     permissions:
-      contents: write
+      contents: read
       packages: write
-      pull-requests: write
-    if: needs.publish-logic.outputs.publish_feature == 'true'
-    uses: ./.github/workflows/prebuilds-qvac-lib-infer-nmtcpp.yml
-    secrets: inherit
-    with:
-      tag: ${{ needs.publish-logic.outputs.gpr_tag }}
-      publish_target: "gpr"
+    env:
+      PKG_DIR: packages/qvac-lib-infer-nmtcpp
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # 6.0.2
 
-  prebuild-tmp-gpr:
-    needs: publish-logic
+      - name: Download prebuild artifacts
+        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # 8.0.1
+        with:
+          name: prebuilds
+          path: ${{ env.PKG_DIR }}/prebuilds
+
+      - name: Publish to GitHub Package Registry
+        id: publish
+        uses: tetherto/qvac-devops/.github/actions/publish-library-to-gpr@v1.1.7
+        with:
+          secret-token: ${{ secrets.GITHUB_TOKEN }}
+          tag: ${{ needs.publish-logic.outputs.gpr_tag }}
+          workdir: ${{ env.PKG_DIR }}
+          name-suffix: "-mono"
+
+  publish-npm:
+    needs: [build, publish-logic, release-merge-guard]
+    if: >-
+      !cancelled() &&
+      needs.build.result == 'success' &&
+      needs.publish-logic.outputs.publish_release == 'true' &&
+      (needs.release-merge-guard.result == 'success' || needs.release-merge-guard.result == 'skipped')
+    outputs:
+      published_version: ${{ steps.publish.outputs.npm_published_version }}
+    runs-on: ubuntu-24.04
+    environment: release
     permissions:
       contents: write
       packages: write
-      pull-requests: write
-    if: needs.publish-logic.outputs.publish_tmp == 'true'
-    uses: ./.github/workflows/prebuilds-qvac-lib-infer-nmtcpp.yml
+    env:
+      PKG_DIR: packages/qvac-lib-infer-nmtcpp
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # 6.0.2
+
+      - name: Download prebuild artifacts
+        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # 8.0.1
+        with:
+          name: prebuilds
+          path: ${{ env.PKG_DIR }}/prebuilds
+
+      - name: Publish to NPM Package Registry
+        id: publish
+        uses: tetherto/qvac-devops/.github/actions/publish-library-to-npm@v1.1.7
+        with:
+          secret-token: ${{ secrets.NPM_TOKEN }}
+          tag: "latest"
+          workdir: ${{ env.PKG_DIR }}
+          repo_name: "nmtcpp"
+          git-token: ${{ secrets.GITHUB_TOKEN }}
+
+  create-github-release:
+    needs: [publish-npm]
+    if: needs.publish-npm.result == 'success' && needs.publish-npm.outputs.published_version != ''
+    permissions:
+      contents: write
+    uses: ./.github/workflows/create-github-release.yml
+    with:
+      repo_name: "nmtcpp"
+      release_name: "QVAC Infer NMTCPP Lib"
+      published_version: ${{ needs.publish-npm.outputs.published_version }}
+      prev_sha: ${{ github.event.before }}
+      workdir: "packages/qvac-lib-infer-nmtcpp"
+
+  run-automated-benchmarks:
+    needs: [publish-npm]
+    if: needs.publish-npm.outputs.published_version != ''
+    permissions:
+      contents: read
+      packages: read
+    uses: ./.github/workflows/on-publish-benchmark-qvac-lib-infer-nmtcpp.yml
     secrets: inherit
     with:
-      tag: ${{ needs.publish-logic.outputs.gpr_tag }}
-      publish_target: "gpr"
+      version: ${{ needs.publish-npm.outputs.published_version }}
 
   model-conversion-test:
-    needs: [prebuild-main-gpr]
+    needs: [publish-gpr]
+    if: needs.publish-gpr.result == 'success'
     uses: ./.github/workflows/model-conversion-test-qvac-lib-infer-nmtcpp.yml
     secrets: inherit
 
   run-integration-tests:
-    needs: [prebuild-main-gpr]
+    needs: [publish-gpr]
+    if: needs.publish-gpr.result == 'success'
     uses: ./.github/workflows/integration-test-qvac-lib-infer-nmtcpp.yml
     secrets: inherit
     with:
       repository: ${{ github.repository }}
       ref: ${{ github.ref }}
-
-  prebuild-release-npm:
-    needs: [publish-logic, release-merge-guard]
-    permissions:
-      contents: write
-      packages: write
-      pull-requests: write
-    if: |
-      !cancelled() &&
-      needs.publish-logic.outputs.publish_release == 'true' &&
-      needs.release-merge-guard.result == 'success'
-    uses: ./.github/workflows/prebuilds-qvac-lib-infer-nmtcpp.yml
-    secrets: inherit
-    with:
-      tag: "latest"
-      publish_target: "npm"
