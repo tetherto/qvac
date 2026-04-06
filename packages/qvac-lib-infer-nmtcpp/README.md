@@ -1012,7 +1012,7 @@ npm run test:all           # Run both JavaScript and C++ tests
 - **QVACResponse** –  The response object used by the QVAC API. [GitHub](https://github.com/tetherto/qvac-lib-response)
 - **DataLoader** – Abstraction for fetching model weights and resources. 
   Implementations include:
-  - **`HyperdriveDL`** – Loads from a Hyperdrive instance [GitHub](https://github.com/tetherto/dl-hyperdrive)
+  - **`HyperdriveDL`** – Loads from a Hyperdrive instance [GitHub](https://github.com/tetherto/qvac/tree/main/packages/dl-hyperdrive)
   - **`fsDL`** – Loads from the local filesystem [GitHub](https://github.com/tetherto/qvac-lib-dl-filesystem)
 
 ## Resources
