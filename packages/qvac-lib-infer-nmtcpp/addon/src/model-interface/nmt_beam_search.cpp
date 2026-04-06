@@ -94,9 +94,7 @@ void nmt_set_beam_size(struct nmt_context* ctx, int beam_size) {
 
 int nmt_decode_beam_search(
     struct nmt_context* ctx, int beam_size, int max_tokens) {
-  const int vocab_size = (ctx->model.type == MODEL_INDICTRANS)
-                             ? ctx->model.hparams.n_tgt_vocab
-                             : ctx->model.hparams.n_vocab;
+  const int vocab_size = ctx->model.hparams.n_tgt_vocab;
 
   beam_kv_pool kv_pool;
   if (!kv_pool.init(*ctx, beam_size * 2)) {
@@ -289,12 +287,7 @@ int nmt_decode_beam_search(
         new_beam.score = normalized_score;
         new_beam.cumulative_score = cumulative_score;
 
-        bool is_eos = false;
-        if (ctx->model.type == MODEL_INDICTRANS) {
-          is_eos = (token_id == 2);
-        } else {
-          is_eos = (token_id == ctx->vocab.nmt_eos);
-        }
+        bool is_eos = (token_id == 2);
         new_beam.finished = is_eos;
 
         if (!is_eos) {
