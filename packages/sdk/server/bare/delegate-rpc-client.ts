@@ -82,7 +82,7 @@ function ensureConnectionHandler(): void {
 
     conn.on("close", () => {
       logger.debug(`Connection closed for peer: ${peerPubkey}`);
-      if (activeRPCs.get(peerPubKey) !== rpc) return;
+      if (activeRPCs.get(peerPubkey) !== rpc) return;
       activeRPCs.delete(peerPubkey);
       activeConnections.delete(peerPubkey);
       clearPeerConnectionTracking(peerPubkey);
