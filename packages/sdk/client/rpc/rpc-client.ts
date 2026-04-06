@@ -10,7 +10,7 @@ import {
 import { RPCError } from "./rpc-error";
 import { withTimeout, withTimeoutStream } from "@/utils/withTimeout";
 import { getClientLogger, summarizeRequest } from "@/logging";
-import { getRPC, close as closeRPC } from "#rpc";
+import { getRPC, close as closeRPC, createDuplexSession } from "#rpc";
 import {
   nowMs,
   shouldProfile,
@@ -365,6 +365,186 @@ async function* streamProfiled<T extends Request>(
       recordClientStreamEvents(timings, profilingMeta);
     }
   }
+}
+
+export interface DuplexWritable {
+  write(chunk: Buffer): void;
+  end(): void;
+  destroy(): void;
+}
+
+export interface DuplexReadable extends AsyncIterable<Buffer> {
+  destroy(): void;
+}
+
+export interface DuplexSession {
+  requestStream: DuplexWritable;
+  responseStream: DuplexReadable;
+}
+
+export async function duplex<T extends Request>(
+  request: T,
+  options?: RPCOptions,
+): Promise<DuplexSession> {
+  const ctx = await prepareRPCContext(request.type, options?.profiling);
+
+  if (!ctx.profilingEnabled) {
+    return duplexBase(request, ctx.signalDisable, options?.timeout);
+  }
+  return duplexProfiled(request, options);
+}
+
+async function duplexBase<T extends Request>(
+  request: T,
+  signalDisable: boolean,
+  timeout?: number,
+): Promise<DuplexSession> {
+  const parsedRequest = requestSchema.parse(request);
+  logger.debug("RPC Client duplex:", summarizeRequest(request));
+
+  const payloadObj = signalDisable
+    ? injectProfilingMetaIntoObject(
+        parsedRequest as Record<string, unknown>,
+        createProfilingDisabledMeta(),
+      )
+    : parsedRequest;
+  const payload = JSON.stringify(payloadObj);
+  const sessionPromise = createDuplexSession(payload, getNextCommandId());
+  const session = await withTimeout(sessionPromise, timeout);
+  return {
+    requestStream: session.requestStream as DuplexWritable,
+    responseStream: session.responseStream as DuplexReadable,
+  };
+}
+
+async function duplexProfiled<T extends Request>(
+  request: T,
+  options: RPCOptions = {},
+): Promise<DuplexSession> {
+  const requestType = request.type;
+  const profileId = createProfileId();
+  const includeServer = shouldIncludeServerBreakdown(options?.profiling);
+  const timings = createClientStreamTimings(profileId, requestType);
+
+  let session: Awaited<ReturnType<typeof createDuplexSession>>;
+
+  try {
+    const zodStart = nowMs();
+    const parsedRequest = requestSchema.parse(request);
+    timings.requestZodValidationMs = nowMs() - zodStart;
+
+    logger.debug("RPC Client duplex:", summarizeRequest(request));
+
+    const requestMeta = createProfilingMeta(profileId, includeServer);
+    const requestWithMeta = injectProfilingMetaIntoObject(
+      parsedRequest as Record<string, unknown>,
+      requestMeta,
+    );
+
+    const stringifyStart = nowMs();
+    const payload = JSON.stringify(requestWithMeta);
+    timings.requestStringifyMs = nowMs() - stringifyStart;
+
+    timings.sendStart = nowMs();
+    const sessionPromise = createDuplexSession(payload, getNextCommandId());
+    session = await withTimeout(sessionPromise, options?.timeout);
+  } catch (error) {
+    const base = {
+      ts: nowMs(),
+      op: timings.requestType,
+      kind: "rpc" as const,
+      profileId: timings.profileId,
+    };
+    recordFailure(base, timings.requestStart, error);
+    throw error;
+  }
+
+  let profilingMeta: ReturnType<typeof extractProfilingMeta> = undefined;
+
+  const rawReadable = session.responseStream as DuplexReadable;
+
+  async function* profiledResponseStream(): AsyncGenerator<Buffer> {
+    let lineBuffer = "";
+    try {
+      for await (const chunk of rawReadable) {
+        const chunkTime = nowMs();
+        if (timings.firstChunkAt === undefined) {
+          timings.firstChunkAt = chunkTime;
+        }
+        timings.lastChunkAt = chunkTime;
+
+        lineBuffer += chunk.toString();
+        const lines = lineBuffer.split("\n");
+        lineBuffer = lines.pop() || "";
+
+        const outputParts: string[] = [];
+
+        for (const line of lines) {
+          if (!line.trim()) continue;
+          let parsed: Record<string, unknown>;
+          try {
+            parsed = JSON.parse(line) as Record<string, unknown>;
+          } catch {
+            outputParts.push(line);
+            continue;
+          }
+
+          const chunkMeta = extractProfilingMeta(parsed);
+          if (chunkMeta) {
+            profilingMeta = chunkMeta;
+          }
+
+          if (parsed[PROFILING_TRAILER_KEY] === true) {
+            continue;
+          }
+
+          // Yield original line — consumer's Zod .parse() strips profiling keys
+          outputParts.push(line);
+        }
+
+        if (outputParts.length > 0) {
+          timings.chunkCount += outputParts.length;
+          yield Buffer.from(outputParts.join("\n") + "\n");
+        }
+      }
+
+      if (lineBuffer.trim()) {
+        timings.chunkCount++;
+        yield Buffer.from(lineBuffer + "\n");
+      }
+    } catch (error) {
+      if (timings.requestEnd === undefined) {
+        const base = {
+          ts: nowMs(),
+          op: timings.requestType,
+          kind: "rpc" as const,
+          profileId: timings.profileId,
+        };
+        recordFailure(base, timings.requestStart, error);
+      }
+      throw error;
+    } finally {
+      if (timings.chunkCount > 0) {
+        timings.requestEnd = nowMs();
+        recordClientStreamEvents(timings, profilingMeta);
+      }
+    }
+  }
+
+  const generator = profiledResponseStream();
+  const wrappedResponseStream: DuplexReadable = {
+    [Symbol.asyncIterator]() {
+      return generator[Symbol.asyncIterator]();
+    },
+    destroy() {
+      rawReadable.destroy();
+    },
+  };
+
+  return {
+    requestStream: session.requestStream as DuplexWritable,
+    responseStream: wrappedResponseStream,
+  };
 }
 
 export async function close() {
