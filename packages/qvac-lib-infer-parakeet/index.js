@@ -5,7 +5,7 @@ const BaseInference = require('@qvac/infer-base/WeightsProvider/BaseInference')
 const { createJobHandler } = require('@qvac/infer-base')
 
 const { ParakeetInterface } = require('./parakeet')
-const { QvacErrorAddonParakeet, ERR_CODES, END_OF_INPUT } = require('./lib/error')
+const { END_OF_INPUT } = require('./lib/error')
 
 /**
  * Required model files for TDT model
@@ -220,12 +220,6 @@ class TranscriptionParakeet extends BaseInference {
    * @returns {Promise<QvacResponse>} - Response object for tracking the transcription job
    */
   async _runInternal (audioStream) {
-    if (this.exclusiveRun && this._job.active !== null) {
-      throw new QvacErrorAddonParakeet({
-        code: ERR_CODES.JOB_ALREADY_RUNNING
-      })
-    }
-
     const response = this._job.start()
 
     this._handleAudioStream(this._normalizeAudioStream(audioStream)).catch((error) => {
