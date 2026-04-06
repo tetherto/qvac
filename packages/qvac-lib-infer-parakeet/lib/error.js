@@ -25,7 +25,8 @@ const ERR_CODES = Object.freeze({
   INVALID_CONFIG: 24015,
   JOB_ALREADY_RUNNING: 24016,
   BUFFER_LIMIT_EXCEEDED: 24017,
-  INSTANCE_DESTROYED: 24018
+  INSTANCE_DESTROYED: 24018,
+  JOB_CANCELLED: 24019
 })
 
 addCodes({
@@ -100,6 +101,10 @@ addCodes({
   [ERR_CODES.INSTANCE_DESTROYED]: {
     name: 'INSTANCE_DESTROYED',
     message: () => 'Cannot load: instance has been destroyed'
+  },
+  [ERR_CODES.JOB_CANCELLED]: {
+    name: 'JOB_CANCELLED',
+    message: () => 'Job cancelled'
   }
 }, {
   name,

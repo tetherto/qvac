@@ -390,6 +390,9 @@ class TranscriptionParakeet {
     if (this.addon?.cancel) {
       await this.addon.cancel()
     }
+    if (this._job.active) {
+      this._job.fail(new QvacErrorAddonParakeet(ERR_CODES.JOB_CANCELLED))
+    }
   }
 
   async status () {
