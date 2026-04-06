@@ -145,7 +145,7 @@ jobs:
         uses: ./.github/actions/cli-rewrite-sdk-scope-for-gpr
 
       - name: Publish to GitHub Packages (dev)
-        uses: tetherto/qvac-devops/.github/actions/publish-library-to-gpr@v1.1.7
+        uses: tetherto/qvac-devops/.github/actions/publish-library-to-gpr@v1.1.8
         with:
           secret-token: ${{ secrets.GITHUB_TOKEN }}
           pat-token: ${{ secrets.PAT_TOKEN }}
@@ -222,7 +222,7 @@ jobs:
         uses: ./.github/actions/cli-rewrite-sdk-scope-for-gpr
 
       - name: Publish to GitHub Packages (feature)
-        uses: tetherto/qvac-devops/.github/actions/publish-library-to-gpr@v1.1.7
+        uses: tetherto/qvac-devops/.github/actions/publish-library-to-gpr@v1.1.8
         with:
           secret-token: ${{ secrets.GITHUB_TOKEN }}
           pat-token: ${{ secrets.PAT_TOKEN }}
@@ -254,7 +254,7 @@ jobs:
         uses: ./.github/actions/cli-rewrite-sdk-scope-for-gpr
 
       - name: Publish to GitHub Packages (tmp)
-        uses: tetherto/qvac-devops/.github/actions/publish-library-to-gpr@v1.1.7
+        uses: tetherto/qvac-devops/.github/actions/publish-library-to-gpr@v1.1.8
         with:
           secret-token: ${{ secrets.GITHUB_TOKEN }}
           pat-token: ${{ secrets.PAT_TOKEN }}

@@ -152,7 +152,7 @@ jobs:
           fetch-depth: 0
 
       - name: Publish to GitHub Packages
-        uses: tetherto/qvac-devops/.github/actions/publish-library-to-gpr@v1.1.7
+        uses: tetherto/qvac-devops/.github/actions/publish-library-to-gpr@v1.1.8
         with:
           secret-token: ${{ secrets.GITHUB_TOKEN }}
           pat-token: ${{ secrets.PAT_TOKEN }}
