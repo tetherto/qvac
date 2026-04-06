@@ -1,6 +1,6 @@
 {
   "name": "@qvac/tts-onnx",
-  "version": "0.7.2",
+  "version": "0.8.0",
   "description": "Text to Speech (TTS) addon for qvac",
   "addon": true,
   "engines": {
@@ -92,8 +92,8 @@
   },
   "dependencies": {
     "@qvac/error": "^0.1.0",
-    "@qvac/infer-base": "^0.1.0",
     "@qvac/onnx": "^0.14.0",
+    "@qvac/infer-base": "^0.4.0",
     "bare-fs": "^4.5.1",
     "bare-path": "^3.0.0"
   },
