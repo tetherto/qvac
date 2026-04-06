@@ -9,7 +9,7 @@
     },
     {
       "name": "qvac-lint-cpp",
-      "version>=": "1.4.1"
+      "version>=": "1.3.0"
     },
     "spdlog",
     {
