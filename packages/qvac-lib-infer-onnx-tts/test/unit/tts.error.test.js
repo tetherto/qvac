@@ -77,13 +77,28 @@ test('cancel() throws QvacErrorAddonTTS with FAILED_TO_CANCEL code', async (t) =
   const tts = new TTSInterface(binding, {})
 
   try {
-    await tts.cancel(1)
+    await tts.cancel()
     t.fail('Should have thrown an error')
   } catch (error) {
     t.ok(error instanceof QvacErrorAddonTTS, 'Error should be instance of QvacErrorAddonTTS')
     t.is(error.code, ERR_CODES.FAILED_TO_CANCEL, 'Error code should be FAILED_TO_CANCEL')
     t.ok(error.message.includes(errorMessage), 'Error message should contain original error')
   }
+})
+
+test('cancel() calls native binding with the addon handle only', async (t) => {
+  const calls = []
+  const binding = createErrorBinding()
+  binding.cancel = function () {
+    calls.push(Array.from(arguments))
+  }
+  const tts = new TTSInterface(binding, {})
+
+  await tts.cancel()
+
+  t.is(calls.length, 1, 'cancel should call the native binding once')
+  t.is(calls[0].length, 1, 'cancel should not forward a jobId argument')
+  t.alike(calls[0][0], tts._handle, 'cancel should forward the addon handle')
 })
 
 test('destroyInstance() throws QvacErrorAddonTTS with FAILED_TO_DESTROY code', async (t) => {
