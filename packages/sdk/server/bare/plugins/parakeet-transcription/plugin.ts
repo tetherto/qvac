@@ -7,8 +7,8 @@ import TranscriptionParakeet, {
 import {
   definePlugin,
   defineHandler,
-  transcribeStreamRequestSchema,
-  transcribeStreamResponseSchema,
+  transcribeRequestSchema,
+  transcribeResponseSchema,
   ModelType,
   parakeetConfigSchema,
   ADDON_PARAKEET,
@@ -231,9 +231,9 @@ export const parakeetPlugin = definePlugin({
   },
 
   handlers: {
-    transcribeStream: defineHandler({
-      requestSchema: transcribeStreamRequestSchema,
-      responseSchema: transcribeStreamResponseSchema,
+    transcribe: defineHandler({
+      requestSchema: transcribeRequestSchema,
+      responseSchema: transcribeResponseSchema,
       streaming: true,
 
       handler: async function* (request) {
@@ -247,7 +247,7 @@ export const parakeetPlugin = definePlugin({
           let result = await stream.next();
           while (!result.done) {
             yield {
-              type: "transcribeStream" as const,
+              type: "transcribe" as const,
               text: result.value,
             };
             result = await stream.next();
@@ -255,7 +255,7 @@ export const parakeetPlugin = definePlugin({
 
           const { modelExecutionMs, stats } = result.value;
           yield attachModelExecutionMs({
-            type: "transcribeStream" as const,
+            type: "transcribe" as const,
             text: "",
             done: true,
             ...(stats && { stats }),

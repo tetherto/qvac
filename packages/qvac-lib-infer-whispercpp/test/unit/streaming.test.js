@@ -41,11 +41,10 @@ function createMockedModel ({ onOutput = () => { }, binding = undefined } = {}) 
 
   sinon.stub(model, '_createAddon').callsFake(configurationParams => {
     const _binding = binding || new MockedBinding()
-    const addon = new WhisperInterface(_binding, configurationParams, onOutput, transitionCb)
-
-    if (_binding.setBaseInferenceCallback) {
-      _binding.setBaseInferenceCallback(model._outputCallback.bind(model))
-    }
+    const addon = new WhisperInterface(_binding, configurationParams, (addon, event, jobId, output, error) => {
+      onOutput(addon, event, jobId, output, error)
+      model._outputCallback(addon, event, jobId, output, error)
+    }, transitionCb)
 
     return addon
   })
