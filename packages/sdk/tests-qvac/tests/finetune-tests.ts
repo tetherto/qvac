@@ -11,7 +11,7 @@ function createFinetuneTest(
     expectation: { validation: "type", expectedType: "string" },
     metadata: {
       category: "finetune",
-      dependency: "llm",
+      dependency: "finetune-llm",
       estimatedDurationMs,
     },
   };

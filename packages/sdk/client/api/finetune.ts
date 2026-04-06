@@ -1,18 +1,19 @@
 import { send, stream as streamRpc } from "@/client/rpc/rpc-client";
 import {
+  finetuneRunParamsSchema,
+  finetuneRunRequestSchema,
+  finetuneStopRequestSchema,
+  finetuneGetStateParamsSchema,
+  finetuneGetStateRequestSchema,
   finetuneProgressResponseSchema,
   finetuneResponseSchema,
-  finetuneResumeParamsSchema,
-  finetuneStartParamsSchema,
-  type FinetuneCancelParams,
+  type FinetuneGetStateParams,
   type FinetuneParams,
   type FinetuneProgress,
-  type FinetuneRequest,
   type FinetuneResult,
-  type FinetunePauseParams,
-  type FinetuneResumeParams,
+  type FinetuneRunParams,
+  type FinetuneStopParams,
   type RPCOptions,
-  type FinetuneStartParams,
 } from "@/schemas";
 import {
   InvalidResponseError,
@@ -24,21 +25,44 @@ export interface FinetuneHandle {
   result: Promise<FinetuneResult>;
 }
 
-type FinetuneRunParams = FinetuneStartParams | FinetuneResumeParams;
-type FinetuneControlParams = FinetunePauseParams | FinetuneCancelParams;
-type FinetuneRunRequest = Extract<FinetuneRequest, { operation: "start" | "resume" }>;
-type FinetuneControlRequest = Extract<
-  FinetuneRequest,
-  { operation: "pause" | "cancel" }
->;
+type FinetuneReplyParams =
+  | FinetuneStopParams
+  | FinetuneGetStateParams;
+
+function isFinetuneReplyParams(
+  params: FinetuneParams,
+): params is FinetuneReplyParams {
+  return (
+    params.operation === "pause" ||
+    params.operation === "cancel" ||
+    params.operation === "getState"
+  );
+}
+
+function createFinetuneReplyRequest(params: FinetuneReplyParams) {
+  if (params.operation === "getState") {
+    const getStateParams = finetuneGetStateParamsSchema.parse(params);
+    return finetuneGetStateRequestSchema.parse({
+      type: "finetune",
+      ...getStateParams,
+    });
+  }
+
+  return finetuneStopRequestSchema.parse({
+    type: "finetune",
+    modelId: params.modelId,
+    operation: params.operation,
+  });
+}
 
 /**
- * Starts, resumes, pauses, or cancels a finetuning job for a loaded model.
+ * Starts, resumes, inspects, pauses, or cancels a finetuning job for a loaded model.
  *
  * @param params - The finetuning parameters
  * @param params.modelId - The identifier of the loaded model to finetune
- * @param params.operation - The finetuning operation. Defaults to `"start"` when omitted
- * @param params.options - Finetuning options for start and resume operations
+ * @param params.operation - The finetuning operation. Omit it to let the add-on
+ *   choose whether to start fresh or resume automatically
+ * @param params.options - Finetuning options for run and `getState` operations
  * @param params.options.trainDatasetDir - Directory containing the training dataset
  * @param params.options.validation - Validation configuration for the finetuning run
  * @param params.options.outputParametersDir - Directory where output adapter parameters are written
@@ -51,7 +75,7 @@ type FinetuneControlRequest = Extract<
  * @param params.options.loraRank - Optional LoRA rank override
  * @param params.options.loraAlpha - Optional LoRA alpha override
  * @param params.options.loraInitStd - Optional LoRA initialization standard deviation
- * @param params.options.loraDropout - Optional LoRA dropout override
+ * @param params.options.loraSeed - Optional LoRA initialization seed
  * @param params.options.loraModules - Optional comma-separated LoRA module selection
  * @param params.options.checkpointSaveDir - Optional directory for checkpoint snapshots
  * @param params.options.checkpointSaveSteps - Optional checkpoint save interval
@@ -59,12 +83,15 @@ type FinetuneControlRequest = Extract<
  * @param params.options.lrScheduler - Optional learning rate scheduler
  * @param params.options.lrMin - Optional minimum learning rate
  * @param params.options.warmupRatio - Optional warmup ratio
+ * @param params.options.warmupRatioSet - Optional flag to enable warmup ratio
  * @param params.options.warmupSteps - Optional warmup step count
+ * @param params.options.warmupStepsSet - Optional flag to enable explicit warmup steps
  * @param params.options.weightDecay - Optional weight decay override
  * @param rpcOptions - Optional RPC transport options
- * @returns For `start` and `resume`, returns a handle with a `progressStream`
- *   generator and a terminal `result` promise. For `pause` and `cancel`,
- *   returns a promise that resolves to the terminal finetune result.
+ * @returns For omitted-operation runs, `start`, and `resume`, returns a handle
+ *   with a `progressStream` generator and a terminal `result` promise. For
+ *   `getState`, `pause`, and `cancel`, returns a promise that resolves to the
+ *   terminal finetune result.
  * @example
  * ```typescript
  * const handle = finetune({
@@ -93,7 +120,7 @@ export function finetune(
 ): FinetuneHandle;
 
 export function finetune(
-  params: FinetuneControlParams,
+  params: FinetuneReplyParams,
   rpcOptions?: RPCOptions,
 ): Promise<FinetuneResult>;
 
@@ -101,12 +128,8 @@ export function finetune(
   params: FinetuneParams,
   rpcOptions?: RPCOptions,
 ): FinetuneHandle | Promise<FinetuneResult> {
-  if (params.operation === "pause" || params.operation === "cancel") {
-    const request: FinetuneControlRequest = {
-      type: "finetune",
-      modelId: params.modelId,
-      operation: params.operation,
-    };
+  if (isFinetuneReplyParams(params)) {
+    const request = createFinetuneReplyRequest(params);
 
     const resultPromise = (async () => {
       const response = await send(request, rpcOptions);
@@ -128,10 +151,7 @@ export function finetune(
     return resultPromise;
   }
 
-  const runParams =
-    params.operation === "resume"
-      ? finetuneResumeParamsSchema.parse(params)
-      : finetuneStartParamsSchema.parse(params);
+  const runParams = finetuneRunParamsSchema.parse(params);
 
   let resultResolver: (value: FinetuneResult) => void = () => { };
   let resultRejecter: (error: unknown) => void = () => { };
@@ -150,12 +170,11 @@ export function finetune(
   const processResponses = async () => {
     try {
       let sawTerminalResponse = false;
-      const request: FinetuneRunRequest = {
+      const request = finetuneRunRequestSchema.parse({
         type: "finetune",
         ...runParams,
-        operation: runParams.operation ?? "start",
         withProgress: true,
-      };
+      });
       const responses: AsyncGenerator<unknown> = streamRpc(
         request,
         rpcOptions,

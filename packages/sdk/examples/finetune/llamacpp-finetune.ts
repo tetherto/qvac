@@ -5,7 +5,7 @@ import {
   unloadModel,
   type FinetuneHandle,
   type FinetuneResult,
-  type FinetuneStartParams,
+  type FinetuneRunParams,
 } from "@qvac/sdk";
 
 const pauseResumeEnabled = process.argv.includes("--pause-resume");
@@ -40,7 +40,7 @@ try {
   console.log(`✅ Model loaded with ID: ${modelId}`);
   const loadedModelId = modelId;
 
-  const finetuneParams: FinetuneStartParams = {
+  const finetuneParams: FinetuneRunParams = {
     modelId: loadedModelId,
     options: {
       trainDatasetDir: "./examples/finetune/input/small_train_HF.jsonl",

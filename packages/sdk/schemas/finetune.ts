@@ -1,7 +1,7 @@
 import { z } from "zod";
 
 const lrSchedulerValues = ["constant", "cosine", "linear"] as const;
-const finetuneStatusValues = ["COMPLETED", "PAUSED", "CANCELLED"] as const;
+const finetuneStatusValues = ["IDLE", "PAUSED", "COMPLETED"] as const;
 
 export const finetuneValidationSchema = z
   .discriminatedUnion("type", [
@@ -46,7 +46,7 @@ const finetuneOptionsPayloadSchema = z
     loraRank: z.number().int().positive().optional(),
     loraAlpha: z.number().positive().optional(),
     loraInitStd: z.number().positive().optional(),
-    loraDropout: z.number().min(0).max(1).optional(),
+    loraSeed: z.number().int().optional(),
     loraModules: z.string().min(1).optional(),
     checkpointSaveDir: z.string().min(1).optional(),
     checkpointSaveSteps: z.number().int().min(0).optional(),
@@ -54,7 +54,9 @@ const finetuneOptionsPayloadSchema = z
     lrScheduler: z.enum(lrSchedulerValues).optional(),
     lrMin: z.number().min(0).optional(),
     warmupRatio: z.number().min(0).max(1).optional(),
+    warmupRatioSet: z.boolean().optional(),
     warmupSteps: z.number().int().min(0).optional(),
+    warmupStepsSet: z.boolean().optional(),
     weightDecay: z.number().min(0).optional(),
   })
   .strict();
@@ -71,49 +73,56 @@ const finetuneRunParamsSchemaBase = finetuneModelParamsSchema
   })
   .strict();
 
-export const finetuneStartParamsSchema = finetuneRunParamsSchemaBase
+export const finetuneRunParamsSchema = finetuneRunParamsSchemaBase
   .extend({
-    operation: z.literal("start").optional(),
+    operation: z.enum(["start", "resume"]).optional(),
   })
   .strict();
 
-export const finetuneResumeParamsSchema = finetuneRunParamsSchemaBase
+export const finetuneGetStateParamsSchema = finetuneRunParamsSchemaBase
   .extend({
-    operation: z.literal("resume"),
+    operation: z.literal("getState"),
   })
   .strict();
 
-export const finetunePauseParamsSchema = finetuneModelParamsSchema
+export const finetuneStopParamsSchema = finetuneModelParamsSchema
   .extend({
-    operation: z.literal("pause"),
-  })
-  .strict();
-
-export const finetuneCancelParamsSchema = finetuneModelParamsSchema
-  .extend({
-    operation: z.literal("cancel"),
+    operation: z.enum(["pause", "cancel"]),
   })
   .strict();
 
 export const finetuneParamsSchema = z.union([
-  finetuneStartParamsSchema,
-  finetuneResumeParamsSchema,
-  finetunePauseParamsSchema,
-  finetuneCancelParamsSchema,
+  finetuneRunParamsSchema,
+  finetuneGetStateParamsSchema,
+  finetuneStopParamsSchema,
 ]);
 
-export const finetuneRequestSchema = z.discriminatedUnion("operation", [
-  finetuneRunParamsSchemaBase.extend({
+export const finetuneRunRequestSchema = finetuneRunParamsSchemaBase
+  .extend({
     type: z.literal("finetune"),
-    operation: z.enum(["start", "resume"]),
+    operation: z.enum(["start", "resume"]).optional(),
     withProgress: z.boolean().optional(),
-  }),
-  finetuneModelParamsSchema
-    .extend({
-      type: z.literal("finetune"),
-      operation: z.enum(["pause", "cancel"]),
-    })
-    .strict(),
+  })
+  .strict();
+
+export const finetuneGetStateRequestSchema = finetuneRunParamsSchemaBase
+  .extend({
+    type: z.literal("finetune"),
+    operation: z.literal("getState"),
+  })
+  .strict();
+
+export const finetuneStopRequestSchema = finetuneModelParamsSchema
+  .extend({
+    type: z.literal("finetune"),
+    operation: z.enum(["pause", "cancel"]),
+  })
+  .strict();
+
+export const finetuneRequestSchema = z.union([
+  finetuneRunRequestSchema,
+  finetuneGetStateRequestSchema,
+  finetuneStopRequestSchema,
 ]);
 
 export const finetuneStatusSchema = z.enum(finetuneStatusValues);
@@ -166,11 +175,13 @@ export const finetuneProgressResponseSchema = finetuneProgressSchema
   .strict();
 
 export type FinetuneValidation = z.input<typeof finetuneValidationSchema>;
-export type FinetuneStartParams = z.input<typeof finetuneStartParamsSchema>;
-export type FinetuneResumeParams = z.input<typeof finetuneResumeParamsSchema>;
-export type FinetunePauseParams = z.infer<typeof finetunePauseParamsSchema>;
-export type FinetuneCancelParams = z.infer<typeof finetuneCancelParamsSchema>;
+export type FinetuneRunParams = z.input<typeof finetuneRunParamsSchema>;
+export type FinetuneGetStateParams = z.input<typeof finetuneGetStateParamsSchema>;
+export type FinetuneStopParams = z.infer<typeof finetuneStopParamsSchema>;
 export type FinetuneParams = z.input<typeof finetuneParamsSchema>;
+export type FinetuneRunRequest = z.infer<typeof finetuneRunRequestSchema>;
+export type FinetuneGetStateRequest = z.infer<typeof finetuneGetStateRequestSchema>;
+export type FinetuneStopRequest = z.infer<typeof finetuneStopRequestSchema>;
 export type FinetuneRequest = z.infer<typeof finetuneRequestSchema>;
 export type FinetuneStatus = z.infer<typeof finetuneStatusSchema>;
 export type FinetuneProgress = z.infer<typeof finetuneProgressSchema>;

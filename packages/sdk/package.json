@@ -124,7 +124,7 @@
     "@qvac/decoder-audio": "^0.3.3",
     "@qvac/diffusion-cpp": "0.1.1",
     "@qvac/dl-filesystem": "^0.2.0",
-    "@qvac/embed-llamacpp": "^0.12.0",
+    "@qvac/embed-llamacpp": "^0.13.1",
     "@qvac/error": "^0.1.1",
     "@qvac/langdetect-text": "^0.1.0",
     "@qvac/llm-llamacpp": "^0.14.0",

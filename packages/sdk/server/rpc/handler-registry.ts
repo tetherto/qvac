@@ -43,7 +43,7 @@ function ragSupportsProgress(request: Request): boolean {
 
 function finetuneSupportsProgress(request: Request): boolean {
   if (request.type !== "finetune") return false;
-  return ["start", "resume"].includes(request.operation);
+  return ["start", "resume", undefined].includes(request.operation);
 }
 
 function isModelDelegated(request: Request): boolean {

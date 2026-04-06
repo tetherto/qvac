@@ -1,5 +1,8 @@
 // @ts-ignore brittle has no type declarations
 import test from "brittle";
+import fs from "fs";
+import os from "os";
+import path from "path";
 import { z } from "zod";
 import {
   clearRegistry,
@@ -29,7 +32,7 @@ function registerFinetunePlugin() {
     loadConfigSchema: z.object({}),
     createModel: function () {
       return {
-        model: { load: async function () {} },
+        model: { load: async function () { } },
         loader: {},
       };
     },
@@ -52,6 +55,14 @@ function registerFinetuneModel(modelId: string, model: AnyModel) {
     modelType: ModelType.llamacppCompletion,
     loader: {} as never,
   });
+}
+
+function createTempCheckpointDir() {
+  return fs.mkdtempSync(path.join(os.tmpdir(), "finetune-handler-test-"));
+}
+
+function cleanupCheckpointDir(baseDir: string) {
+  fs.rmSync(baseDir, { recursive: true, force: true });
 }
 
 test("handleFinetune: wraps progress callbacks for start requests", async (t) => {
@@ -106,8 +117,8 @@ test("handleFinetune: wraps progress callbacks for start requests", async (t) =>
     finetune: async function () {
       return handle;
     },
-    pause: async function () {},
-    cancel: async function () {},
+    pause: async function () { },
+    cancel: async function () { },
   } as unknown as AnyModel);
 
   try {
@@ -134,6 +145,83 @@ test("handleFinetune: wraps progress callbacks for start requests", async (t) =>
     t.is(result.status, "COMPLETED");
     t.is(result.stats?.global_steps, stats.global_steps);
     t.is(removeListenerCalls, 1);
+  } finally {
+    unregisterModel(modelId);
+    clearRegistry();
+  }
+});
+
+test("handleFinetune: wraps progress callbacks for omitted-operation requests", async (t) => {
+  clearRegistry();
+  const modelId = "finetune-auto-progress-model";
+  const updates: Array<ReturnType<typeof finetuneProgressResponseSchema.parse>> = [];
+  const progress: FinetuneProgress = {
+    is_train: true,
+    loss: 0.8,
+    loss_uncertainty: null,
+    accuracy: 0.7,
+    accuracy_uncertainty: null,
+    global_steps: 2,
+    current_epoch: 0,
+    current_batch: 2,
+    total_batches: 5,
+    elapsed_ms: 500,
+    eta_ms: 1500,
+  };
+
+  let registeredListener: ((value: FinetuneProgress) => void) | null = null;
+  const handle = {
+    on(event: "stats", cb: (value: FinetuneProgress) => void) {
+      t.is(event, "stats");
+      registeredListener = cb;
+      return handle;
+    },
+    removeListener(event: "stats", cb: (value: FinetuneProgress) => void) {
+      t.is(event, "stats");
+      t.is(cb, registeredListener);
+      return handle;
+    },
+    async await() {
+      registeredListener?.(progress);
+      return {
+        op: "finetune" as const,
+        status: "COMPLETED" as const,
+        stats: {
+          global_steps: 2,
+          epochs_completed: 1,
+        },
+      };
+    },
+  };
+
+  registerFinetuneModel(modelId, {
+    finetune: async function () {
+      return handle;
+    },
+    pause: async function () { },
+    cancel: async function () { },
+  } as unknown as AnyModel);
+
+  try {
+    const request: FinetuneRequest = {
+      type: "finetune",
+      modelId,
+      withProgress: true,
+      options: {
+        trainDatasetDir: "/tmp/train.jsonl",
+        validation: { type: "none" },
+        outputParametersDir: "/tmp/out",
+      },
+    };
+
+    const result = await handleFinetune(request, (update) => {
+      updates.push(finetuneProgressResponseSchema.parse(update));
+    });
+
+    t.is(updates.length, 1);
+    t.is(updates[0]?.modelId, modelId);
+    t.is(updates[0]?.global_steps, progress.global_steps);
+    t.is(result.status, "COMPLETED");
   } finally {
     unregisterModel(modelId);
     clearRegistry();
@@ -167,8 +255,8 @@ test("handleFinetune: dispatches start requests without progress callbacks", asy
         },
       };
     },
-    pause: async function () {},
-    cancel: async function () {},
+    pause: async function () { },
+    cancel: async function () { },
   } as unknown as AnyModel);
 
   try {
@@ -193,6 +281,44 @@ test("handleFinetune: dispatches start requests without progress callbacks", asy
   }
 });
 
+test("handleFinetune: dispatches getState requests through plugin reply handler", async (t) => {
+  clearRegistry();
+  clearPlugins();
+  const modelId = "finetune-get-state-model";
+  const checkpointDir = createTempCheckpointDir();
+
+  registerFinetunePlugin();
+  registerFinetuneModel(modelId, {
+    finetune: async function () {
+      throw new Error("finetune should not be called for getState");
+    },
+    pause: async function () { },
+    cancel: async function () { },
+  } as unknown as AnyModel);
+
+  try {
+    const result: FinetuneResult = await handleFinetune({
+      type: "finetune",
+      modelId,
+      operation: "getState",
+      options: {
+        trainDatasetDir: "/tmp/train.jsonl",
+        validation: { type: "none" },
+        outputParametersDir: "/tmp/out",
+        checkpointSaveDir: checkpointDir,
+      },
+    });
+
+    t.is(result.type, "finetune");
+    t.is(result.status, "IDLE");
+  } finally {
+    unregisterModel(modelId);
+    clearPlugins();
+    clearRegistry();
+    cleanupCheckpointDir(checkpointDir);
+  }
+});
+
 test("handleFinetune: dispatches pause requests through plugin reply handler", async (t) => {
   clearRegistry();
   clearPlugins();
@@ -207,7 +333,7 @@ test("handleFinetune: dispatches pause requests through plugin reply handler", a
     pause: async function () {
       pauseCalls++;
     },
-    cancel: async function () {},
+    cancel: async function () { },
   } as unknown as AnyModel);
 
   try {

@@ -16,6 +16,8 @@ import * as os from "node:os";
 import { AbstractModelExecutor } from "../../shared/executors/abstract-model-executor.js";
 import { finetuneTests } from "../../finetune-tests.js";
 
+const FINETUNE_DEPENDENCY = "finetune-llm";
+
 interface DatasetPaths {
   tempRoot: string;
   trainPath: string;
@@ -67,7 +69,7 @@ export class FinetuneExecutor extends AbstractModelExecutor<typeof finetuneTests
 
   async startComplete(params: unknown, expectation: unknown): Promise<TestResult> {
     const p = params as BaseParams;
-    const modelId = await this.resources.ensureLoaded("llm");
+    const modelId = await this.resources.ensureLoaded(FINETUNE_DEPENDENCY);
     const paths = await this.createDatasets();
 
     try {
@@ -104,7 +106,7 @@ export class FinetuneExecutor extends AbstractModelExecutor<typeof finetuneTests
 
   async pauseResume(params: unknown, expectation: unknown): Promise<TestResult> {
     const p = params as PauseResumeParams;
-    const modelId = await this.resources.ensureLoaded("llm");
+    const modelId = await this.resources.ensureLoaded(FINETUNE_DEPENDENCY);
     const paths = await this.createDatasets();
     const pauseAfterGlobalSteps = p.pauseAfterGlobalSteps ?? 2;
     const pauseOperation = finetune as (params: {
@@ -199,7 +201,7 @@ export class FinetuneExecutor extends AbstractModelExecutor<typeof finetuneTests
 
   async progressStreaming(params: unknown, expectation: unknown): Promise<TestResult> {
     const p = params as ProgressParams;
-    const modelId = await this.resources.ensureLoaded("llm");
+    const modelId = await this.resources.ensureLoaded(FINETUNE_DEPENDENCY);
     const paths = await this.createDatasets();
 
     try {
@@ -250,7 +252,7 @@ export class FinetuneExecutor extends AbstractModelExecutor<typeof finetuneTests
 
   async errorCases(params: unknown, expectation: unknown): Promise<TestResult> {
     const p = params as { invalidModelId: string };
-    const modelId = await this.resources.ensureLoaded("llm");
+    const modelId = await this.resources.ensureLoaded(FINETUNE_DEPENDENCY);
     const paths = await this.createDatasets();
     const invalidTrainPath = path.join(paths.tempRoot, "missing-train.jsonl");
 
@@ -375,7 +377,7 @@ export class FinetuneExecutor extends AbstractModelExecutor<typeof finetuneTests
   }
 
   private async cancelActiveFinetune() {
-    const modelId = this.resources.getModelId("llm");
+    const modelId = this.resources.getModelId(FINETUNE_DEPENDENCY);
 
     if (!modelId) {
       return;

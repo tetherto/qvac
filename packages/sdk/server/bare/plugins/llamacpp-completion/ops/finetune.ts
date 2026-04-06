@@ -1,24 +1,25 @@
+import fs from "bare-fs";
 import {
   getModel,
   type AnyModel,
 } from "@/server/bare/registry/model-registry";
 import type {
+  FinetuneRunParams,
+  FinetuneRunRequest,
   FinetuneProgress,
   FinetuneRequest,
   FinetuneResult,
   FinetuneStats,
+  FinetuneStatus,
+  FinetuneGetStateRequest,
 } from "@/schemas";
 import {
-  CancelFailedError,
   CompletionFailedError,
 } from "@/utils/errors-server";
 
-type FinetuneRunRequest = Extract<
-  FinetuneRequest,
-  { operation: "start" | "resume" }
->;
+const PAUSE_CHECKPOINT_PREFIX = "pause_checkpoint_step_";
 
-type FinetuneOptions = FinetuneRunRequest["options"];
+type FinetuneOptions = FinetuneRunParams["options"];
 
 interface AddonFinetuneResult {
   op: "finetune"
@@ -38,29 +39,65 @@ interface FinetuneCapableModel extends AnyModel {
   cancel(): Promise<void>;
 }
 
-function getFinetuneModel(modelId: string) {
-  const model = getModel(modelId) as FinetuneCapableModel;
+export function getFinetuneStateFromCheckpoints(
+  options: FinetuneOptions,
+): FinetuneStatus {
+  const checkpointDirectory = options.checkpointSaveDir ?? "./checkpoints";
 
-  if (typeof model.finetune !== "function") {
+  if (!fs.existsSync(checkpointDirectory)) {
+    return "IDLE";
+  }
+
+  try {
+    const entries = fs.readdirSync(checkpointDirectory);
+
+    for (const entry of entries) {
+      if (typeof entry !== "string") {
+        continue;
+      }
+
+      if (
+        entry.startsWith(PAUSE_CHECKPOINT_PREFIX)
+      ) {
+        return "PAUSED";
+      }
+    }
+  } catch (error) {
     throw new CompletionFailedError(
-      `Model "${modelId}" does not support finetuning`,
+      `Failed to inspect finetune checkpoints in "${checkpointDirectory}"`,
+      error,
     );
   }
 
-  if (typeof model.pause !== "function" || typeof model.cancel !== "function") {
-    throw new CancelFailedError(
-      `Model "${modelId}" does not support finetune controls`,
+  return "IDLE";
+}
+
+function validateExplicitFinetuneOperation(request: FinetuneRunRequest) {
+  if (!request.operation) {
+    return;
+  }
+
+  const state = getFinetuneStateFromCheckpoints(request.options);
+
+  if (request.operation === "start" && state === "PAUSED") {
+    throw new CompletionFailedError(
+      `Model "${request.modelId}" has a paused finetune checkpoint; resume it or cancel it before starting from scratch`,
     );
   }
 
-  return model;
+  if (request.operation === "resume" && state === "IDLE") {
+    throw new CompletionFailedError(
+      `Model "${request.modelId}" has no paused finetune checkpoint to resume`,
+    );
+  }
 }
 
 export async function startFinetune(
-  request: Extract<FinetuneRequest, { operation: "start" | "resume" }>,
+  request: FinetuneRunRequest,
   onProgress?: (progress: FinetuneProgress) => void,
 ): Promise<FinetuneResult> {
-  const model = getFinetuneModel(request.modelId);
+  const model = getModel(request.modelId) as FinetuneCapableModel;
+  validateExplicitFinetuneOperation(request);
   const handle = await model.finetune(request.options);
 
   if (onProgress) {
@@ -83,7 +120,7 @@ export async function startFinetune(
 }
 
 export async function pauseFinetune(modelId: string): Promise<FinetuneResult> {
-  const model = getFinetuneModel(modelId);
+  const model = getModel(modelId)
   await model.pause();
 
   return {
@@ -93,12 +130,19 @@ export async function pauseFinetune(modelId: string): Promise<FinetuneResult> {
 }
 
 export async function cancelFinetune(modelId: string): Promise<FinetuneResult> {
-  const model = getFinetuneModel(modelId);
+  const model = getModel(modelId) as FinetuneCapableModel;
   await model.cancel();
 
   return {
     type: "finetune",
-    status: "CANCELLED",
+    status: "COMPLETED",
+  };
+}
+
+export function getFinetuneState(params: FinetuneGetStateRequest): FinetuneResult {
+  return {
+    type: "finetune",
+    status: getFinetuneStateFromCheckpoints(params.options),
   };
 }
 
@@ -106,10 +150,17 @@ export async function finetune(
   request: FinetuneRequest,
   onProgress?: (progress: FinetuneProgress) => void,
 ): Promise<FinetuneResult> {
+  if (
+    request.operation === undefined ||
+    request.operation === "start" ||
+    request.operation === "resume"
+  ) {
+    return startFinetune(request, onProgress);
+  }
+
   switch (request.operation) {
-    case "start":
-    case "resume":
-      return startFinetune(request, onProgress);
+    case "getState":
+      return getFinetuneState(request);
     case "pause":
       return pauseFinetune(request.modelId);
     case "cancel":

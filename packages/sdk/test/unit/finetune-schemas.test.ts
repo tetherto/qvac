@@ -16,13 +16,19 @@ test("finetuneValidationSchema: defaults split validation fraction", (t) => {
   t.is(result.type === "split" ? result.fraction : undefined, 0.05);
 });
 
-test("finetuneRequestSchema: accepts start, resume, pause, and cancel", (t) => {
+test("finetuneRequestSchema: accepts run, state, and control operations", (t) => {
   const baseOptions = {
     trainDatasetDir: "/tmp/train.jsonl",
     validation: { type: "none" as const },
     outputParametersDir: "/tmp/out",
   };
 
+  const autoRequest = finetuneRequestSchema.parse({
+    type: "finetune",
+    modelId: "model-auto",
+    options: baseOptions,
+    withProgress: true,
+  });
   const startRequest = finetuneRequestSchema.parse({
     type: "finetune",
     modelId: "model-start",
@@ -36,6 +42,12 @@ test("finetuneRequestSchema: accepts start, resume, pause, and cancel", (t) => {
     operation: "resume",
     options: baseOptions,
   });
+  const getStateRequest = finetuneRequestSchema.parse({
+    type: "finetune",
+    modelId: "model-state",
+    operation: "getState",
+    options: baseOptions,
+  });
   const pauseRequest = finetuneRequestSchema.parse({
     type: "finetune",
     modelId: "model-pause",
@@ -47,8 +59,10 @@ test("finetuneRequestSchema: accepts start, resume, pause, and cancel", (t) => {
     operation: "cancel",
   });
 
+  t.is(autoRequest.operation, undefined);
   t.is(startRequest.operation, "start");
   t.is(resumeRequest.operation, "resume");
+  t.is(getStateRequest.operation, "getState");
   t.is(pauseRequest.operation, "pause");
   t.is(cancelRequest.operation, "cancel");
 });
@@ -109,6 +123,16 @@ test("finetuneResponseSchema: parses terminal stats payload", (t) => {
   t.is(response.status, "COMPLETED");
   t.is(response.stats?.global_steps, 12);
   t.is(response.stats?.epochs_completed, 2);
+});
+
+test("finetuneResponseSchema: parses idle terminal status", (t) => {
+  const response = finetuneResponseSchema.parse({
+    type: "finetune",
+    status: "IDLE",
+  });
+
+  t.is(response.type, "finetune");
+  t.is(response.status, "IDLE");
 });
 
 test("finetuneResponseSchema: accepts NaN terminal uncertainties", (t) => {

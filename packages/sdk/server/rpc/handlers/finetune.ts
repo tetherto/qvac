@@ -12,7 +12,7 @@ export async function handleFinetune(
 ): Promise<FinetuneResult> {
   if (
     progressCallback &&
-    (request.operation === "start" || request.operation === "resume")
+    (request.operation === "start" || request.operation === "resume" || request.operation === undefined)
   ) {
     return startFinetune(request, (progress) => {
       const update: FinetuneProgressResponse = {
