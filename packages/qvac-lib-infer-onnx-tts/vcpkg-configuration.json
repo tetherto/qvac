@@ -1,13 +1,13 @@
 {
   "default-registry": {
     "kind": "git",
-    "baseline": "4e4c52f549cb5912f66d202f360282cdcf992047",
+    "baseline": "fe9331462edb0b8f3aca7f2441c98b4d691b3ed8",
     "repository": "git@github.com:tetherto/qvac-registry-vcpkg.git"
   },
   "registries": [
     {
       "kind": "git",
-      "baseline": "8c901fe2b0e69a542d02810d4089505fd0c480d8",
+      "baseline": "16c71a39e5a0fc0bdb3fad03beef8f38ee00ee3b",
       "repository": "https://github.com/microsoft/vcpkg",
       "packages": [
         "utf8proc",
