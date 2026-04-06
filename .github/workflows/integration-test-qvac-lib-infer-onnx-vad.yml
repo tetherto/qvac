@@ -1,0 +1,136 @@
+name: Integration Tests (VAD)
+
+on:
+  workflow_call:
+    inputs:
+      ref:
+        description: "Git ref (branch/tag/SHA)"
+        type: string
+        required: false
+      repository:
+        description: "owner/repo to checkout"
+        type: string
+        required: false
+      model:
+        description: "Model name (optional)"
+        type: string
+        required: false
+      workdir:
+        description: "Relative path to package directory in monorepo"
+        type: string
+        required: false
+        default: "packages/qvac-lib-infer-onnx-vad"
+  workflow_dispatch:
+    inputs:
+      ref:
+        description: "Git ref (optional)"
+        required: false
+        default: ""
+        type: string
+      repository:
+        description: "owner/repo (optional)"
+        required: false
+        default: ""
+        type: string
+      workdir:
+        description: "Relative path to package directory in monorepo"
+        required: false
+        default: "packages/qvac-lib-infer-onnx-vad"
+        type: string
+
+jobs:
+  run-integration-tests:
+    continue-on-error: true
+    runs-on: ${{ matrix.os }}
+    name: test-${{ matrix.platform }}-${{ matrix.arch }}
+
+    env:
+      AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
+      AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+      WORKDIR: ${{ inputs.workdir || github.event.inputs.workdir || '.' }}
+
+    permissions:
+      contents: read
+      packages: read
+
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: ubuntu-22.04
+            platform: linux
+            arch: x64
+          - os: macos-14
+            platform: darwin
+            arch: arm64
+          - os: windows-2022
+            platform: win32
+            arch: x64
+
+    steps:
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: lts/*
+
+      - name: Windows - enable git long paths
+        if: ${{ matrix.platform == 'win32' }}
+        shell: bash
+        run: git config --system core.longpaths true
+
+      - name: Checkout code
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ inputs.ref || github.event.inputs.ref || github.ref }}
+          repository: ${{ inputs.repository || github.event.inputs.repository || github.repository }}
+          token: ${{ secrets.PAT_TOKEN }}
+
+      - name: Configure git + npm and install deps (in workdir)
+        shell: bash
+        working-directory: ${{ env.WORKDIR }}
+        env:
+          GH_PAT: ${{ secrets.PAT_TOKEN }}
+          NPM_TOKEN: ${{ secrets.NPM_TOKEN }}
+        run: |
+          set -euo pipefail
+
+          # Ensure private @tetherto packages resolve to GitHub Packages (not npmjs)
+          cat > .npmrc <<NPMRC
+          registry=https://registry.npmjs.org/
+          @qvac:registry=https://registry.npmjs.org/
+          @tetherto:registry=https://npm.pkg.github.com/
+          //registry.npmjs.org/:_authToken=${NPM_TOKEN}
+          //npm.pkg.github.com/:_authToken=${GH_PAT}
+          NPMRC
+
+          git config --global url."https://${GH_PAT}:@github.com/".insteadOf "https://github.com/"
+          git config --global url."https://${GH_PAT}:@github.com/".insteadOf "git@github.com:"
+
+          npm install
+          npm install -g bare bare-make
+
+      - name: Download merged prebuilds artifact into workdir
+        uses: actions/download-artifact@v4
+        with:
+          name: prebuilds
+          path: ${{ env.WORKDIR }}/prebuilds
+
+      - name: Linux - install runtime deps
+        if: matrix.platform == 'linux' || matrix.platform == 'android'
+        shell: bash
+        run: sudo apt-get update && sudo apt-get install -y mesa-vulkan-drivers
+
+      - name: Download onnx model files
+        shell: bash
+        working-directory: ${{ env.WORKDIR }}
+        run: |
+          set -euo pipefail
+          mkdir -p model
+          aws s3 cp s3://tether-ai-dev/qvac_models_compiled/silerovad/2025-04-29/silero_vad.onnx model/silerovad.onnx
+
+      - name: Run integration test
+        shell: bash
+        working-directory: ${{ env.WORKDIR }}
+        env:
+          QASE_API_TOKEN: ${{ secrets.QASE_API_TOKEN }}
+        run: npm run test:integration

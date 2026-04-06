@@ -8,8 +8,7 @@ on:
       - feature-*
       - tmp-*
     paths:
-      - "packages/qvac-lib-infer-llamacpp-embed/**"
-      - ".github/workflows/*embed*.yml"
+      - "packages/qvac-lib-infer-llamacpp-embed/**"    
 
   workflow_dispatch:
     inputs:
@@ -63,10 +62,8 @@ jobs:
           gpr_tag="dev"
           if [ "$ref_name" = "main" ]; then
             gpr_tag="dev"
-          elif [[ "$ref_name" == feature-* ]]; then
-            gpr_tag="feature"
-          elif [[ "$ref_name" == tmp-* ]]; then
-            gpr_tag="temp"
+          elif [[ "$ref_name" == feature-* ]] || [[ "$ref_name" == tmp-* ]]; then
+            gpr_tag="$ref_name"
           fi
 
           echo "publish_main=$publish_main" >> "$GITHUB_OUTPUT"
@@ -74,28 +71,6 @@ jobs:
           echo "publish_feature=$publish_feature" >> "$GITHUB_OUTPUT"
           echo "publish_tmp=$publish_tmp" >> "$GITHUB_OUTPUT"
           echo "gpr_tag=$gpr_tag" >> "$GITHUB_OUTPUT"
-
-  release-merge-guard:
-    name: Release Merge Guard
-    continue-on-error: true
-    if: >-
-      github.event_name == 'push' &&
-      startsWith(github.ref_name, 'release-') &&
-      github.event.before != '0000000000000000000000000000000000000000'
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v6
-        with:
-          fetch-depth: 0
-      - uses: ./.github/actions/release-merge-guard
-        with:
-          github-token: ${{ secrets.GITHUB_TOKEN }}
-          base-ref: ${{ github.ref_name }}
-          base-sha: ${{ github.event.before }}
-          head-sha: ${{ github.sha }}
-          package-slug: qvac-lib-infer-llamacpp-embed
-          package-json-path: packages/qvac-lib-infer-llamacpp-embed/package.json
-          changelog-path: packages/qvac-lib-infer-llamacpp-embed/CHANGELOG.md
 
   publish-main-gpr:
     needs: publish-logic
@@ -109,7 +84,6 @@ jobs:
     with:
       tag: ${{ inputs.tag || needs.publish-logic.outputs.gpr_tag }}
       publish_target: "gpr"
-      workdir: "packages/qvac-lib-infer-llamacpp-embed"
 
   publish-feature-gpr:
     needs: publish-logic
@@ -123,7 +97,6 @@ jobs:
     with:
       tag: ${{ inputs.tag || needs.publish-logic.outputs.gpr_tag }}
       publish_target: "gpr"
-      workdir: "packages/qvac-lib-infer-llamacpp-embed"
 
   publish-tmp-gpr:
     needs: publish-logic
@@ -137,10 +110,9 @@ jobs:
     with:
       tag: ${{ inputs.tag || needs.publish-logic.outputs.gpr_tag }}
       publish_target: "gpr"
-      workdir: "packages/qvac-lib-infer-llamacpp-embed"
 
   publish-release-npm:
-    needs: [publish-logic]
+    needs: publish-logic
     if: needs.publish-logic.outputs.publish_release == 'true'
     permissions:
       contents: write
@@ -151,19 +123,16 @@ jobs:
     with:
       tag: "latest"
       publish_target: "npm"
-      workdir: "packages/qvac-lib-infer-llamacpp-embed"
 
   # Create GitHub release only for actual releases (after NPM publish)
   publish-release:
     needs: [publish-release-npm]
-    if:  needs.publish-release-npm.result == 'success' && needs.publish-release-npm.outputs.published_version != ''
+    if: needs.publish-release-npm.result == 'success' && needs.publish-release-npm.outputs.published_version != ''
     permissions:
       contents: write
-    uses: ./.github/workflows/create-github-release.yml
+    uses: ./.github/workflows/create-github-release-qvac-lib-infer-llamacpp-embed.yml
     secrets: inherit
     with:
-      repo_name: "llamacpp-embed"
-      release_name: "QVAC Embed Addon"
       published_version: ${{ needs.publish-release-npm.outputs.published_version }}
       prev_sha: ${{ github.event.before }}
       workdir: "packages/qvac-lib-infer-llamacpp-embed"

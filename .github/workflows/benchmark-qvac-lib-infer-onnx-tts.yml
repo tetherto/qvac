@@ -1,0 +1,403 @@
+name: Benchmark (TTS)
+
+on:
+  workflow_dispatch:
+    inputs:
+      workdir:
+        description: 'Package working directory in monorepo (e.g., packages/qvac-lib-infer-onnx-tts)'
+        required: false
+        type: string
+        default: 'packages/qvac-lib-infer-onnx-tts'
+      addon_version:
+        description: 'Version of @qvac/tts-onnx to benchmark (e.g., 0.1.0, latest, ^0.2.0)'
+        required: false
+        type: string
+        default: 'latest'
+      dataset:
+        description: 'Dataset for benchmarking'
+        required: true
+        type: choice
+        default: harvard
+        options:
+          - harvard
+          - ag_news
+          - librispeech
+      max_samples:
+        description: 'Maximum number of samples to test (0 = unlimited)'
+        required: false
+        type: number
+        default: 0
+      run_addon:
+        description: 'Run TTS Addon benchmark'
+        required: true
+        type: boolean
+        default: true
+      run_python:
+        description: 'Run Python Native benchmark'
+        required: true
+        type: boolean
+        default: true
+      round_trip_test:
+        description: 'Enable round-trip quality test (TTS → Whisper → Text)'
+        required: true
+        type: boolean
+        default: true
+      whisper_model:
+        description: 'Whisper model for round-trip test'
+        required: false
+        type: choice
+        default: base
+        options:
+          - tiny
+          - base
+          - small
+          - medium
+      num_runs:
+        description: 'Number of runs per sample (for determinism testing)'
+        required: false
+        type: number
+        default: 3
+      use_gpu:
+        description: 'Enable GPU acceleration'
+        required: true
+        type: boolean
+        default: true
+      language:
+        description: 'Language code (e.g., en-us, es, de, it, fr)'
+        required: false
+        type: string
+        default: 'en-us'
+
+  release:
+    types: [published]
+
+jobs:
+  benchmark-tts:
+    runs-on: macos-14-xlarge
+    timeout-minutes: 120
+
+    permissions:
+      contents: read
+      packages: read
+
+    env:
+      GITHUB_TOKEN: ${{ secrets.PAT_TOKEN }}
+
+      # Monorepo package root (all benchmark paths are relative to this)
+      WORKDIR: ${{ github.event.inputs.workdir || 'packages/qvac-lib-infer-onnx-tts' }}
+
+      # Normalize inputs so non-workflow_dispatch triggers still behave consistently
+      DATASET: ${{ github.event.inputs.dataset || 'harvard' }}
+      MAX_SAMPLES: ${{ github.event.inputs.max_samples || 0 }}
+      RUN_ADDON: ${{ github.event.inputs.run_addon || 'true' }}
+      RUN_PYTHON: ${{ github.event.inputs.run_python || 'true' }}
+      ROUND_TRIP_TEST: ${{ github.event.inputs.round_trip_test || 'true' }}
+      WHISPER_MODEL: ${{ github.event.inputs.whisper_model || 'base' }}
+      NUM_RUNS: ${{ github.event.inputs.num_runs || 3 }}
+      USE_GPU: ${{ github.event.inputs.use_gpu || 'true' }}
+      LANGUAGE: ${{ github.event.inputs.language || 'en-us' }}
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        with:
+          token: ${{ secrets.PAT_TOKEN }}
+          submodules: recursive
+
+      - name: Configure scoped registry for @tetherto and @qvac packages
+        env:
+          GPR_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          NPM_TOKEN: ${{ secrets.NPM_TOKEN }}
+          GIT_PAT: ${{ secrets.PAT_TOKEN }}
+        shell: bash
+        run: |
+          echo "Configuring scoped registry for @tetherto and @qvac packages..."
+          set -eu
+
+          echo "Writing .npmrc for dual registry install…"
+          cat > .npmrc <<NPMRC
+          registry=https://registry.npmjs.org/
+          @qvac:registry=https://registry.npmjs.org/
+          @tetherto:registry=https://npm.pkg.github.com/
+          //registry.npmjs.org/:_authToken=${NPM_TOKEN}
+          //npm.pkg.github.com/:_authToken=${GPR_TOKEN}
+          NPMRC
+
+          if [ -n "${GIT_PAT:-}" ]; then
+            git config --global url."https://${GIT_PAT}:@github.com/".insteadOf "https://github.com/"
+          else
+            git config --global url."https://${{ github.token }}:@github.com/".insteadOf "https://github.com/"
+          fi
+
+          cp .npmrc "${WORKDIR}/benchmarks/server/.npmrc"
+
+          echo "=== .npmrc contents ==="
+          cat .npmrc
+
+      - name: Install system dependencies
+        run: |
+          brew install ffmpeg cmake
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+
+      - name: Install Bare runtime
+        run: |
+          npm install -g bare-dev
+          npm install -g bare bare-make
+
+      - name: Determine addon version
+        id: version
+        run: |
+          # Determine version based on trigger type
+          if [ "${{ github.event_name }}" = "release" ]; then
+            # Extract version from release tag (e.g., v0.1.0 -> 0.1.0)
+            VERSION="${{ github.event.release.tag_name }}"
+            VERSION="${VERSION#v}"  # Remove 'v' prefix if present
+            echo "Using version from release: $VERSION"
+          else
+            # Use workflow input or default to latest
+            VERSION="${{ github.event.inputs.addon_version || 'latest' }}"
+            echo "Using version from input: $VERSION"
+          fi
+
+          echo "version=$VERSION" >> $GITHUB_OUTPUT
+          echo "Addon version to benchmark: $VERSION"
+
+      - name: Update addon version in package.json
+        if: env.RUN_ADDON == 'true' || github.event_name == 'release'
+        working-directory: ${{ env.WORKDIR }}/benchmarks/server
+        run: |
+          VERSION="${{ steps.version.outputs.version }}"
+
+          # Update package.json with the specified version
+          if [ "$VERSION" = "latest" ]; then
+            npm pkg set dependencies.@qvac/tts-onnx="latest"
+            echo "Set @qvac/tts-onnx to latest version"
+          else
+            npm pkg set dependencies.@qvac/tts-onnx="$VERSION"
+            echo "Set @qvac/tts-onnx to version $VERSION"
+          fi
+
+          echo "=== Updated package.json dependencies ==="
+          npm pkg get dependencies
+
+      - name: Update benchmark configuration
+        run: |
+          VERSION="${{ steps.version.outputs.version }}"
+          DATASET="${DATASET}"
+          MAX_SAMPLES="${MAX_SAMPLES}"
+          RUN_ADDON="${RUN_ADDON}"
+          RUN_PYTHON="${RUN_PYTHON}"
+          ROUND_TRIP_TEST="${ROUND_TRIP_TEST}"
+          WHISPER_MODEL="${WHISPER_MODEL}"
+          NUM_RUNS="${NUM_RUNS}"
+          USE_GPU="${USE_GPU}"
+          LANGUAGE="${LANGUAGE}"
+
+          # Set timeout based on dataset size and round-trip test
+          if [ "$ROUND_TRIP_TEST" = "true" ]; then
+            TIMEOUT=120
+          else
+            TIMEOUT=60
+          fi
+
+          CFG="${WORKDIR}/benchmarks/client/config/config.yaml"
+
+          # Update config.yaml with workflow inputs (using BSD sed syntax for macOS)
+          sed -i '' "s|addon_version:.*|addon_version: \"${VERSION}\"|" "$CFG"
+          sed -i '' "s|timeout:.*|timeout: ${TIMEOUT}|" "$CFG"
+          sed -i '' "/^dataset:/,/^[^ ]/ s|  name:.*|  name: \"${DATASET}\"|" "$CFG"
+          sed -i '' "/^dataset:/,/^[^ ]/ s|  max_samples:.*|  max_samples: ${MAX_SAMPLES}|" "$CFG"
+          sed -i '' "/^comparison:/,/^[^ ]/ s|  run_addon:.*|  run_addon: ${RUN_ADDON}|" "$CFG"
+          sed -i '' "/^comparison:/,/^[^ ]/ s|  run_python:.*|  run_python: ${RUN_PYTHON}|" "$CFG"
+          sed -i '' "/^comparison:/,/^[^ ]/ s|  round_trip_test:.*|  round_trip_test: ${ROUND_TRIP_TEST}|" "$CFG"
+          sed -i '' "/^comparison:/,/^[^ ]/ s|  whisper_model:.*|  whisper_model: \"${WHISPER_MODEL}\"|" "$CFG"
+          sed -i '' "/^comparison:/,/^[^ ]/ s|  num_runs:.*|  num_runs: ${NUM_RUNS}|" "$CFG"
+          sed -i '' "/^model:/,/^[^ ]/ s|  useGPU:.*|  useGPU: ${USE_GPU}|" "$CFG"
+          sed -i '' "/^model:/,/^[^ ]/ s|  language:.*|  language: \"${LANGUAGE}\"|" "$CFG"
+
+          echo "=== Updated config.yaml ==="
+          cat "$CFG"
+
+      - name: Install benchmark server dependencies
+        working-directory: ${{ env.WORKDIR }}/benchmarks/server
+        run: |
+          npm install
+          npm run setup
+
+      - name: Install Python server dependencies
+        if: env.RUN_PYTHON == 'true'
+        working-directory: ${{ env.WORKDIR }}/benchmarks/python-server
+        run: pip install -r requirements.txt
+
+      - name: Install benchmark client dependencies
+        working-directory: ${{ env.WORKDIR }}/benchmarks/client
+        run: pip install -r requirements.txt
+
+      - name: Start TTS Addon server
+        if: env.RUN_ADDON == 'true'
+        working-directory: ${{ env.WORKDIR }}/benchmarks/server
+        run: |
+          nohup npm start > server.log 2>&1 &
+          echo $! > server.pid
+          sleep 5
+          if ! kill -0 $(cat server.pid) 2>/dev/null; then
+            echo "Addon server failed to start"
+            cat server.log
+            exit 1
+          fi
+          echo "Addon server started successfully on port 8080"
+
+      - name: Start Python Native server
+        if: env.RUN_PYTHON == 'true'
+        working-directory: ${{ env.WORKDIR }}/benchmarks/python-server
+        run: |
+          nohup python main.py > server.log 2>&1 &
+          echo $! > server.pid
+          sleep 5
+          if ! kill -0 $(cat server.pid) 2>/dev/null; then
+            echo "Python server failed to start"
+            cat server.log
+            exit 1
+          fi
+          echo "Python server started successfully on port 8081"
+
+      - name: Run benchmark
+        working-directory: ${{ env.WORKDIR }}/benchmarks/client
+        env:
+          PYTHONUNBUFFERED: "1"
+          HF_DATASETS_CACHE: /tmp/hf_cache
+        run: |
+          python -u -m src.tts.main --config config/config.yaml
+          rm -rf /tmp/hf_cache || true
+
+      - name: Stop servers
+        if: always()
+        run: |
+          # Stop addon server
+          if [ -f "${WORKDIR}/benchmarks/server/server.pid" ]; then
+            kill $(cat "${WORKDIR}/benchmarks/server/server.pid") || true
+            rm "${WORKDIR}/benchmarks/server/server.pid"
+          fi
+
+          # Stop python server
+          if [ -f "${WORKDIR}/benchmarks/python-server/server.pid" ]; then
+            kill $(cat "${WORKDIR}/benchmarks/python-server/server.pid") || true
+            rm "${WORKDIR}/benchmarks/python-server/server.pid"
+          fi
+
+      - name: Display server logs
+        if: always()
+        run: |
+          if [ -f "${WORKDIR}/benchmarks/server/server.log" ]; then
+            echo "=== Addon Server Logs ==="
+            cat "${WORKDIR}/benchmarks/server/server.log"
+          fi
+
+          if [ -f "${WORKDIR}/benchmarks/python-server/server.log" ]; then
+            echo "=== Python Server Logs ==="
+            cat "${WORKDIR}/benchmarks/python-server/server.log"
+          fi
+
+      - name: Display results summary
+        if: always()
+        run: |
+          DATASET="${DATASET}"
+          MODEL_NAME="model"  # Default model name
+          VERSION="${{ steps.version.outputs.version }}"
+          RESULTS_DIR="${WORKDIR}/benchmarks/results"
+
+          echo "=== Benchmark Configuration ==="
+          echo "Addon Version: $VERSION"
+          echo "Dataset: $DATASET"
+          echo "Max Samples: ${MAX_SAMPLES}"
+          echo "Run Addon: ${RUN_ADDON}"
+          echo "Run Python: ${RUN_PYTHON}"
+          echo "Round-Trip Test: ${ROUND_TRIP_TEST}"
+          echo "Whisper Model: ${WHISPER_MODEL}"
+          echo "Number of Runs: ${NUM_RUNS}"
+          echo "Use GPU: ${USE_GPU}"
+          echo "Language: ${LANGUAGE}"
+          echo ""
+          echo "Note: Model selection is automatic based on language (handled by setup.js)"
+          echo ""
+
+          # Display addon results if available
+          if [ -f "${RESULTS_DIR}/${MODEL_NAME}_addon.md" ]; then
+            echo "=== Addon Results ==="
+            cat "${RESULTS_DIR}/${MODEL_NAME}_addon.md"
+            echo ""
+          fi
+
+          # Display python results if available
+          if [ -f "${RESULTS_DIR}/${MODEL_NAME}_python-native.md" ]; then
+            echo "=== Python Native Results ==="
+            cat "${RESULTS_DIR}/${MODEL_NAME}_python-native.md"
+            echo ""
+          fi
+
+          # Display comparison if available
+          if [ -f "${RESULTS_DIR}/${MODEL_NAME}_comparison.md" ]; then
+            echo "=== Comparison Results ==="
+            cat "${RESULTS_DIR}/${MODEL_NAME}_comparison.md"
+          fi
+
+      - name: Add results to job summary
+        if: always()
+        run: |
+          MODEL_NAME="model"
+          VERSION="${{ steps.version.outputs.version }}"
+          RESULTS_DIR="${WORKDIR}/benchmarks/results"
+
+          echo "## TTS Benchmark Results" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+
+          echo "### Configuration" >> $GITHUB_STEP_SUMMARY
+          echo "| Parameter | Value |" >> $GITHUB_STEP_SUMMARY
+          echo "|-----------|-------|" >> $GITHUB_STEP_SUMMARY
+          echo "| Addon Version | ${VERSION} |" >> $GITHUB_STEP_SUMMARY
+          echo "| Dataset | ${DATASET} |" >> $GITHUB_STEP_SUMMARY
+          echo "| Max Samples | ${MAX_SAMPLES} |" >> $GITHUB_STEP_SUMMARY
+          echo "| Run Addon | ${RUN_ADDON} |" >> $GITHUB_STEP_SUMMARY
+          echo "| Run Python | ${RUN_PYTHON} |" >> $GITHUB_STEP_SUMMARY
+          echo "| Round-Trip Test | ${ROUND_TRIP_TEST} |" >> $GITHUB_STEP_SUMMARY
+          echo "| Whisper Model | ${WHISPER_MODEL} |" >> $GITHUB_STEP_SUMMARY
+          echo "| Number of Runs | ${NUM_RUNS} |" >> $GITHUB_STEP_SUMMARY
+          echo "| Use GPU | ${USE_GPU} |" >> $GITHUB_STEP_SUMMARY
+          echo "| Language | ${LANGUAGE} |" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "> **Note:** Model selection is automatic based on language (handled by setup.js)" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+
+          # Check if comparison results exist
+          if [ -f "${RESULTS_DIR}/${MODEL_NAME}_comparison.md" ]; then
+            echo "### Results" >> $GITHUB_STEP_SUMMARY
+            echo "" >> $GITHUB_STEP_SUMMARY
+            cat "${RESULTS_DIR}/${MODEL_NAME}_comparison.md" >> $GITHUB_STEP_SUMMARY
+          else
+            # Show individual results if comparison not available
+            if [ -f "${RESULTS_DIR}/${MODEL_NAME}_addon.md" ]; then
+              echo "### Addon Results" >> $GITHUB_STEP_SUMMARY
+              echo "" >> $GITHUB_STEP_SUMMARY
+              cat "${RESULTS_DIR}/${MODEL_NAME}_addon.md" >> $GITHUB_STEP_SUMMARY
+            fi
+
+            if [ -f "${RESULTS_DIR}/${MODEL_NAME}_python-native.md" ]; then
+              echo "### Python Native Results" >> $GITHUB_STEP_SUMMARY
+              echo "" >> $GITHUB_STEP_SUMMARY
+              cat "${RESULTS_DIR}/${MODEL_NAME}_python-native.md" >> $GITHUB_STEP_SUMMARY
+            fi
+          fi
+
+          echo "" >> $GITHUB_STEP_SUMMARY
+
+      - name: Upload benchmark results
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: benchmark-results-v${{ steps.version.outputs.version }}
+          path: ${{ env.WORKDIR }}/benchmarks/results/
+          retention-days: 30

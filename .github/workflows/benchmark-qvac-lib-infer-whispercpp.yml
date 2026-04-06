@@ -285,8 +285,9 @@ jobs:
           df -h
 
       - name: Checkout repository
-        uses: actions/checkout@v6
+        uses: actions/checkout@v4
         with:
+          token: ${{ secrets.PAT_TOKEN }}
           submodules: recursive
 
       - name: Configure scoped registry for @tetherto and @qvac packages
@@ -325,9 +326,9 @@ jobs:
           sudo apt-get install -y ffmpeg build-essential cmake unzip curl
 
       - name: Set up Python
-        uses: actions/setup-python@v6
+        uses: actions/setup-python@v5
         with:
-          python-version: '3.14'
+          python-version: '3.12'
 
       - name: Install Poetry
         run: |
@@ -403,7 +404,7 @@ jobs:
           mkdir -p "benchmarks/data/samples/${ARABIC_DATASET}"
 
           # Download from S3
-          S3_PATH="s3://${{ secrets.MODEL_S3_BUCKET }}/qvac_datasets/transcription/arabic/${ARABIC_DATASET}/"
+          S3_PATH="s3://tether-ai-dev/qvac_datasets/transcription/arabic/${ARABIC_DATASET}/"
           echo "Downloading from ${S3_PATH}"
           aws s3 sync \
             "${S3_PATH}" \
@@ -765,14 +766,4 @@ jobs:
 
             # Add AraDiaWER metrics for Arabic
             if [ "${{ github.event.inputs.language }}" = "arabic" ]; then
-              ARADIAWER=$(grep "AraDiaWER:" "$RESULT_FILE" | head -1 | sed 's/.*AraDiaWER: //' | sed 's/\*\*//' || echo "N/A")
-              if [ "$ARADIAWER" != "N/A" ]; then
-                echo "| AraDiaWER | ${ARADIAWER} |" >> $GITHUB_STEP_SUMMARY
-              fi
-            fi
-
-            echo "| Load Time | ${LOAD_TIME} |" >> $GITHUB_STEP_SUMMARY
-            echo "| Run Time | ${RUN_TIME} |" >> $GITHUB_STEP_SUMMARY
-          else
-            echo "❌ Results file not found: $RESULT_FILE" >> $GITHUB_STEP_SUMMARY
-          fi
+              ARADIAWER=$(grep "Ara

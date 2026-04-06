@@ -1,9 +1,9 @@
-name: GPR Publish
-description: "Publish a package to GitHub Packages (GPR) via npm"
+name: NPM Publish
+description: "Publish a package to NPM"
 
 inputs:
   secret-token:
-    description: "GitHub Packages token (NODE_AUTH_TOKEN) used for publishing"
+    description: "Secret token"
     required: true
   pat-token:
     description: "PAT token"
@@ -15,10 +15,9 @@ inputs:
     description: "Release Stream (npm tag)"
     required: false
   path:
-    description: "Path to artifact/package directory to publish (optional; falls back to workdir)"
+    description: "Path to artifact to publish"
     required: false
-  workdir:
-    description: "Directory containing package.json (default '.')"
+  workdir: 
     default: "."
     type: string
   name-suffix:
@@ -27,9 +26,9 @@ inputs:
     default: ""
 
 outputs:
-  gpr_published_version:
-    description: "The version that was published to GitHub Packages"
-    value: ${{ steps.gpr_publish.outputs.gpr_published_version }}
+  npm_published_version:
+    description: "The version that was published to npm"
+    value: ${{ steps.npm_publish.outputs.npm_published_version }}
 
 runs:
   using: composite
@@ -44,12 +43,12 @@ runs:
         ls -l ${{ inputs.path }}
         tree ${{ inputs.path }}
 
-    - uses: actions/setup-node@v6
+    - uses: actions/setup-node@v4
       with:
         node-version: lts/*
-        registry-url: https://npm.pkg.github.com/
+        registry-url: "https://npm.pkg.github.com/"
         scope: "@tetherto"
-
+    
     - name: Resolve publish directory
       id: resolve_dir
       shell: bash
@@ -76,7 +75,7 @@ runs:
 
         echo "dir=$dir" >> "$GITHUB_OUTPUT"
 
-    - name: Determine dist-tag
+    - name: Determine Tag
       id: determine_tag
       working-directory: ${{ steps.resolve_dir.outputs.dir }}
       shell: bash
@@ -94,15 +93,14 @@ runs:
         echo "Base branch: ${{ github.ref }}"
         echo "Event name: ${{ github.event_name }}"
 
-        if [[ "${{ github.event_name }}" == "push" || "${{ github.event_name }}" == "workflow_dispatch" ]]; then
-          if [[ "${{ github.ref_name }}" == release-* ]]; then
-            TAG="latest"
-          fi
+        if [ "${{ github.event_name }}" = "push" ] && [ "${{ github.ref }}" = "refs/heads/main" ]; then
+          echo "PR was merged to main, setting tag to latest"
+          TAG="latest"
         fi
 
         echo "tag=$TAG" >> $GITHUB_OUTPUT
 
-    - name: Determine version
+    - name: Determine Version
       id: determine_version
       working-directory: ${{ steps.resolve_dir.outputs.dir }}
       shell: bash
@@ -126,7 +124,7 @@ runs:
         echo "version=$VERSION" >> $GITHUB_OUTPUT
         echo "package_version=$PACKAGE_VERSION" >> $GITHUB_OUTPUT
 
-    - name: Maybe update package version
+    - name: Maybe Update Package Version
       shell: bash
       working-directory: ${{ steps.resolve_dir.outputs.dir }}
       if: steps.determine_version.outputs.version != steps.determine_version.outputs.package_version
@@ -134,7 +132,7 @@ runs:
         echo "Updating version to ${{ steps.determine_version.outputs.version }}"
         npm version ${{ steps.determine_version.outputs.version }} --no-git-tag-version --allow-same-version
 
-    - name: Check version exists in GitHub Packages
+    - name: Check Version Exists in Registry
       continue-on-error: true
       shell: bash
       working-directory: ${{ steps.resolve_dir.outputs.dir }}
@@ -145,10 +143,10 @@ runs:
         VERSION="${{ steps.determine_version.outputs.version }}"
 
         if npm view "${PACKAGE_NAME}@${VERSION}" version > /dev/null 2>&1; then
-          echo "::error::Version ${VERSION} of ${PACKAGE_NAME} already exists in GitHub Packages registry"
+          echo "::error::Version ${VERSION} of ${PACKAGE_NAME} already exists in the registry"
         fi
 
-    - name: Check publish conditions
+    - name: Check Publish Conditions
       id: check_publish
       shell: bash
       working-directory: ${{ steps.resolve_dir.outputs.dir }}
@@ -194,6 +192,7 @@ runs:
         # Check if repo is in always-publish list
         ALWAYS_PUBLISH_REPOS=(
           qvac-devops
+          qvac-util-transcription
           qvac-examples
           qvac-ext-lib-mlc
           qvac-ext-lib-tokenizers-cpp
@@ -205,12 +204,22 @@ runs:
           qvac-lib-infer-onnx-vad
           qvac-lib-infer-llamacpp-embed
           qvac-lib-infer-onnx-tts
-          ocr-onnx
+          qvac-lib-inference-addon-onnx-ocr-fasttext
         )
 
         if printf '%s\n' "${ALWAYS_PUBLISH_REPOS[@]}" | grep -qx "$REPO_SHORT_NAME"; then
           echo "✅ Publishing: repo is in always-publish list"
           SHOULD_PUBLISH=true
+        fi
+
+        # check if repo is qvac-sdk and branch is dev, fix-* or feature-*
+        if [[ "$REPO_SHORT_NAME" == "qvac-sdk" ]]; then
+          case "$BRANCH_NAME" in
+            dev|fix-*|feature-*)
+              echo "✅ Publishing: qvac-sdk + allowed branch ($BRANCH_NAME)"
+              SHOULD_PUBLISH=true
+              ;;
+          esac
         fi
 
         if [[ "$SHOULD_PUBLISH" == "false" ]]; then
@@ -219,8 +228,8 @@ runs:
 
         echo "should_publish=$SHOULD_PUBLISH" >> "$GITHUB_OUTPUT"
 
-    - name: Normalize package name for GitHub Packages publishing
-      id: normalize_name
+
+    - name: Normalize package name for publishing
       shell: bash
       working-directory: ${{ steps.resolve_dir.outputs.dir }}
       run: |
@@ -250,40 +259,69 @@ runs:
         echo "✅ Final publish name: $(node -p "require('./package.json').name")"
         echo "published_name=$PACKAGE_NAME" >> "$GITHUB_OUTPUT"
 
-    - name: Publish to GitHub Packages (GPR)
-      id: gpr_publish
+
+    - name: Publish to NPM
+      id: npm_publish
       if: steps.check_publish.outputs.should_publish == 'true'
       working-directory: ${{ steps.resolve_dir.outputs.dir }}
       shell: bash
       env:
         NODE_AUTH_TOKEN: ${{ inputs.secret-token }}
       run: |
-        echo "Publishing to GitHub Packages (GPR) with dist-tag: ${{ steps.determine_tag.outputs.tag }}"
+        echo "Publishing with tag: ${{ steps.determine_tag.outputs.tag }}"
         echo "Publishing version: ${{ steps.determine_version.outputs.version }}"
 
         if npm publish --tag ${{ steps.determine_tag.outputs.tag }}; then
           PUBLISH_STATUS=0
-          echo "✅ gpr publish successful"
-          echo "Published version: ${{ steps.gpr_publish.outputs.gpr_published_version }}"
-          echo "GPR: published version: ${{ steps.gpr_publish.outputs.gpr_published_version }}" >> $GITHUB_STEP_SUMMARY
-          echo "::notice title=GPR Published::v${{ steps.determine_version.outputs.version }}"
+          echo "✅ npm publish successful"
+          echo "Published version: ${{ steps.npm_publish.outputs.npm_published_version }}"
+          echo "NPM: published version: ${{ steps.npm_publish.outputs.npm_published_version }}" >> $GITHUB_STEP_SUMMARY
+          echo "::notice title=NPM Published::v${{ steps.determine_version.outputs.version }}"
         else
           PUBLISH_STATUS=1
-          echo "❌ gpr publish failed"
-          echo "GPR: publish failed" >> $GITHUB_STEP_SUMMARY
-          echo "::error title=GPR Publish Failed::v${{ steps.determine_version.outputs.version }}"
+          echo "❌ npm publish failed"
+          echo "NPM: publish failed" >> $GITHUB_STEP_SUMMARY
+          echo "::error title=NPM Publish Failed::v${{ steps.determine_version.outputs.version }}"
         fi
 
         echo "publish_status=$PUBLISH_STATUS" >> $GITHUB_OUTPUT
-        echo "gpr_published_version=${{ steps.determine_version.outputs.version }}" >> $GITHUB_OUTPUT
+        echo "npm_published_version=${{ steps.determine_version.outputs.version }}" >> $GITHUB_OUTPUT
+        
 
-    - name: Publish status
+
+    - name: Create Git Tag
+      shell: bash
+      working-directory: ${{ steps.resolve_dir.outputs.dir }}
+      if: steps.check_publish.outputs.should_publish == 'true' && steps.npm_publish.outputs.publish_status == '0' && steps.determine_tag.outputs.tag == 'latest'
+      env:
+        PAT_TOKEN: ${{ inputs.pat-token }}
+      run: |
+        set -euo pipefail
+
+        VERSION="${{ steps.determine_version.outputs.version }}"
+        TAG="v${VERSION}"
+
+        git config user.name "github-actions[bot]"
+        git config user.email "github-actions[bot]@users.noreply.github.com"
+
+        git tag "$TAG"
+
+        if [[ -n "${PAT_TOKEN:-}" ]]; then
+          echo "Using PAT token to push tag"
+          git push "https://x-access-token:${PAT_TOKEN}@github.com/${GITHUB_REPOSITORY}.git" "$TAG" || true
+        else
+          echo "Using origin to push tag (backwards-compatible default)"
+          git push origin "$TAG" || true
+        fi
+
+
+    - name: Publish Status
       shell: bash
       working-directory: ${{ steps.resolve_dir.outputs.dir }}
       if: steps.check_publish.outputs.should_publish == 'true'
       run: |
-        if [ "${{ steps.gpr_publish.outputs.publish_status }}" -eq 0 ]; then
-          echo "✅ gpr publish successful"
+        if [ "${{ steps.npm_publish.outputs.publish_status }}" -eq 0 ]; then
+          echo "✅ npm publish successful"
 
           # Prefer the known published name from the normalize step; fallback to package.json
           PACKAGE_NAME="${{ steps.normalize_name.outputs.published_name }}"
@@ -291,7 +329,7 @@ runs:
             PACKAGE_NAME=$(node -p "require('./package.json').name")
           fi
 
-          VERSION="${{ steps.gpr_publish.outputs.gpr_published_version }}"
+          VERSION="${{ steps.npm_publish.outputs.npm_published_version }}"
 
           echo "## Installation" >> "$GITHUB_STEP_SUMMARY"
           echo "" >> "$GITHUB_STEP_SUMMARY"
@@ -305,6 +343,6 @@ runs:
           echo "\"${PACKAGE_NAME}\": \"${VERSION}\"" >> "$GITHUB_STEP_SUMMARY"
           echo "\`\`\`" >> "$GITHUB_STEP_SUMMARY"
         else
-          echo "❌ gpr publish failed"
-          exit ${{ steps.gpr_publish.outputs.publish_status }}
+          echo "❌ npm publish failed"
+          exit ${{ steps.npm_publish.outputs.publish_status }}
         fi

@@ -4,9 +4,9 @@ on:
   workflow_dispatch:
     inputs:
       gguf_model:
-        description: 'GGUF Model to benchmark (HuggingFace format: "owner/repo:quantization")'
+        description: 'GGUF Model to benchmark (HuggingFace format: "owner/repo:quantization" or Hyperdrive: "hd://key/model.gguf")'
         required: true
-        default: "unsloth/Qwen3-1.7B-GGUF:Q4_0"
+        default: "bartowski/Llama-3.2-1B-Instruct-GGUF:Q4_0"
         type: string
       num_samples:
         description: 'Number of samples per dataset (default: 10)'
@@ -66,7 +66,7 @@ on:
       transformers_model:
         description: 'HuggingFace transformers model for comparison (should match GGUF model architecture)'
         required: false
-        default: "Qwen/Qwen3-1.7B"
+        default: "meta-llama/Llama-3.2-1B-Instruct"
         type: string
       device:
         description: 'Device type for inference'
@@ -148,7 +148,7 @@ on:
         type: boolean
       transformers_model:
         required: false
-        default: "Qwen/Qwen3-1.7B"
+        default: "meta-llama/Llama-3.2-1B-Instruct"
         type: string
       device:
         required: false
@@ -252,19 +252,21 @@ jobs:
           free -h
 
       - name: Checkout repository
-        uses: actions/checkout@v6
+        uses: actions/checkout@v4
+        with:
+          token: ${{ secrets.PAT_TOKEN }}
 
       - name: Setup Node.js
-        uses: actions/setup-node@v6
+        uses: actions/setup-node@v4
         with:
           node-version: lts/*
 
       - name: Setup Python
-        uses: actions/setup-python@v6
+        uses: actions/setup-python@v5
         with:
-          python-version: '3.14'
-          cache: pip
-          cache-dependency-path: ${{ inputs.workdir }}/benchmarks/client/requirements.txt
+          python-version: '3.10'
+          cache: 'pip'
+          cache-dependency-path: '${{ inputs.workdir }}/benchmarks/client/requirements.txt'
 
       - name: Configure scoped registry for @tetherto and @qvac packages
         env:
@@ -298,10 +300,10 @@ jobs:
       - name: Get vcpkg cache
         if: inputs.addon_version == ''
         id: cache-vcpkg
-        uses: actions/cache@v5
+        uses: actions/cache@v4
         with:
-          key: linux-x64-${{ hashFiles( format('{0}/vcpkg.json', inputs.workdir), format('{0}/vcpkg-configuration.json', inputs.workdir), format('{0}/vcpkg/ports/**', inputs.workdir) ) }}
           path: ${{ inputs.workdir }}/vcpkg/cache
+          key: linux-x64-${{ hashFiles( format('{0}/vcpkg.json', inputs.workdir), format('{0}/vcpkg-configuration.json', inputs.workdir), format('{0}/vcpkg/ports/**', inputs.workdir) ) }}
           restore-keys: linux-x64-
 
       - name: Build addon from source
@@ -454,16 +456,72 @@ jobs:
         if: always()
         shell: bash
         working-directory: ${{ inputs.workdir }}
+        env:
+          GGUF_MODEL: ${{ inputs.gguf_model }}
+          NUM_SAMPLES: ${{ inputs.num_samples }}
+          DATASETS: ${{ inputs.datasets }}
+          DEVICE: ${{ inputs.device }}
+          TEMPERATURE: ${{ inputs.temperature }}
+          CTX_SIZE: ${{ inputs.ctx_size }}
+          GPU_LAYERS: ${{ inputs.gpu_layers }}
+          TOP_P: ${{ inputs.top_p }}
+          TOP_K: ${{ inputs.top_k }}
+          N_PREDICT: ${{ inputs.n_predict }}
+          REPEAT_PENALTY: ${{ inputs.repeat_penalty }}
+          SEED: ${{ inputs.seed }}
+          ADDON_VERSION: ${{ inputs.addon_version }}
+          COMPARE: ${{ inputs.compare_with_transformers }}
+          TRANSFORMERS_MODEL: ${{ inputs.transformers_model }}
+          VERBOSE: ${{ inputs.verbose }}
         run: |
+          echo "=== Benchmark Results Summary ===" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "**Model:** \`$GGUF_MODEL\`" >> $GITHUB_STEP_SUMMARY
+          echo "**Samples:** $NUM_SAMPLES" >> $GITHUB_STEP_SUMMARY
+          echo "**Datasets:** $DATASETS" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "### Configuration" >> $GITHUB_STEP_SUMMARY
+          echo "| Parameter | Value |" >> $GITHUB_STEP_SUMMARY
+          echo "|-----------|-------|" >> $GITHUB_STEP_SUMMARY
+          echo "| Temperature | $TEMPERATURE |" >> $GITHUB_STEP_SUMMARY
+          echo "| Context Size | $CTX_SIZE |" >> $GITHUB_STEP_SUMMARY
+          echo "| GPU Layers | $GPU_LAYERS |" >> $GITHUB_STEP_SUMMARY
+          echo "| Top-P | $TOP_P |" >> $GITHUB_STEP_SUMMARY
+          echo "| Top-K | $TOP_K |" >> $GITHUB_STEP_SUMMARY
+          echo "| N-Predict | $N_PREDICT |" >> $GITHUB_STEP_SUMMARY
+          echo "| Repeat Penalty | $REPEAT_PENALTY |" >> $GITHUB_STEP_SUMMARY
+          echo "| Seed | $SEED |" >> $GITHUB_STEP_SUMMARY
+          echo "| Device | $DEVICE |" >> $GITHUB_STEP_SUMMARY
+          echo "| Verbose Logging | $VERBOSE |" >> $GITHUB_STEP_SUMMARY
+          if [[ -n "$ADDON_VERSION" ]]; then
+            echo "| Addon Version | @qvac/llm-llamacpp@$ADDON_VERSION |" >> $GITHUB_STEP_SUMMARY
+          else
+            echo "| Addon Version | Built from source |" >> $GITHUB_STEP_SUMMARY
+          fi
+          echo "" >> $GITHUB_STEP_SUMMARY
+
+          if [[ "$COMPARE" == "true" ]]; then
+            echo "### Comparison Mode" >> $GITHUB_STEP_SUMMARY
+            echo "Compared against: \`$TRANSFORMERS_MODEL\`" >> $GITHUB_STEP_SUMMARY
+            echo "" >> $GITHUB_STEP_SUMMARY
+          fi
+
           if [ -d "benchmarks/results" ]; then
-            LATEST_MD=$(find benchmarks/results -type f -name "*.md" -exec ls -t {} + 2>/dev/null | head -n 1)
+            echo "### Results Files" >> $GITHUB_STEP_SUMMARY
+            echo "\`\`\`" >> $GITHUB_STEP_SUMMARY
+            find benchmarks/results -type f -name "*.md" -mtime -1 2>/dev/null >> $GITHUB_STEP_SUMMARY || echo "No result files found" >> $GITHUB_STEP_SUMMARY
+            echo "\`\`\`" >> $GITHUB_STEP_SUMMARY
+
+            LATEST_MD=$(find benchmarks/results -type f -name "*.md" -mtime -1 2>/dev/null | head -1)
             if [[ -n "$LATEST_MD" ]]; then
-              cat "$LATEST_MD" >> "$GITHUB_STEP_SUMMARY"
+              echo "" >> $GITHUB_STEP_SUMMARY
+              echo "### Latest Result" >> $GITHUB_STEP_SUMMARY
+              cat "$LATEST_MD" >> $GITHUB_STEP_SUMMARY
             fi
           fi
 
       - name: Upload benchmark results
-        uses: actions/upload-artifact@v6
+        uses: actions/upload-artifact@v4
         if: always()
         with:
           name: benchmark-results-${{ github.run_number }}
@@ -473,7 +531,7 @@ jobs:
           retention-days: 90
 
       - name: Upload server logs
-        uses: actions/upload-artifact@v6
+        uses: actions/upload-artifact@v4
         if: failure()
         with:
           name: server-logs-${{ github.run_number }}

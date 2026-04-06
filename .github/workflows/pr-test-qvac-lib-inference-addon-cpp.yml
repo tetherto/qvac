@@ -17,7 +17,6 @@ env:
 
 jobs:
   run-unit-tests:
-    if: contains(github.event.pull_request.labels.*.name, 'verify') || github.event_name == 'workflow_dispatch'
     strategy:
       fail-fast: false
       matrix:
@@ -49,19 +48,17 @@ jobs:
 
     steps:
       - name: Checkout PR head
-        uses: actions/checkout@v6
+        uses: actions/checkout@v4
         with:
+          token: ${{ secrets.PAT_TOKEN }}
           repository: ${{ github.event.pull_request.head.repo.full_name }}
           ref: ${{ github.event.pull_request.head.ref }}
-          token: ${{ secrets.PAT_TOKEN }}
 
       - name: yamlfmt
         uses: tetherto/qvac-devops/.github/actions/yamlfmt@monorepo_update
-        with:
-          workdir: ${{ env.PKG_DIR }}
-        
+
       - name: Export GitHub Actions cache environment variables
-        uses: actions/github-script@v8
+        uses: actions/github-script@v7
         with:
           script: |
             core.exportVariable('ACTIONS_CACHE_URL', process.env.ACTIONS_CACHE_URL || '');
@@ -153,10 +150,10 @@ jobs:
 
       - name: Get vcpkg cache
         id: cache-vcpkg
-        uses: actions/cache@v5
+        uses: actions/cache@v4
         with:
-          key: ${{ matrix.platform }}-${{ matrix.arch }}-${{ hashFiles('packages/qvac-lib-inference-addon-cpp/vcpkg.json', 'packages/qvac-lib-inference-addon-cpp/vcpkg-configuration.json', 'packages/qvac-lib-inference-addon-cpp/vcpkg/ports/**') }}
           path: ${{ env.PKG_DIR }}/vcpkg/cache
+          key: ${{ matrix.platform }}-${{ matrix.arch }}-${{ hashFiles('packages/qvac-lib-inference-addon-cpp/vcpkg.json', 'packages/qvac-lib-inference-addon-cpp/vcpkg-configuration.json', 'packages/qvac-lib-inference-addon-cpp/vcpkg/ports/**') }}
 
       - name: Generate buildsystem
         working-directory: ${{ env.PKG_DIR }}

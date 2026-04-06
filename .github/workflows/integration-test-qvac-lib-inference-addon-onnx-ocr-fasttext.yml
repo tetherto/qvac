@@ -1,0 +1,136 @@
+name: Integration Tests (OCR)
+
+on:
+  workflow_call:
+    inputs:
+      ref:
+        description: "ref"
+        type: string
+        required: false
+      repository:
+        type: string
+        required: false
+        default: "tetherto/qvac"
+      model:
+        type: string
+        required: false
+      workdir:
+        description: "Working directory inside the repo (monorepo package path)"
+        type: string
+        required: false
+        default: "packages/qvac-lib-inference-addon-onnx-ocr-fasttext"
+
+jobs:
+  run-integration-tests:
+    continue-on-error: true
+    runs-on: ${{ matrix.os }}
+    name: test-${{ matrix.platform }}-${{ matrix.arch }}
+
+    env:
+      AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
+      AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+
+    permissions:
+      contents: read
+      packages: read
+
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: ubuntu-24.04
+            platform: linux
+            arch: x64
+          - os: macos-15-xlarge
+            platform: darwin
+            arch: arm64
+          - os: windows-2022
+            platform: win32
+            arch: x64
+
+    steps:
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: lts/*
+
+      - name: Windows - enable git long paths
+        if: ${{ matrix.platform == 'win32' }}
+        shell: bash
+        run: git config --system core.longpaths true
+
+      - name: Checkout code
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ inputs.ref || github.ref }}
+          repository: ${{ inputs.repository || github.repository }}
+          token: ${{ secrets.PAT_TOKEN }}
+
+      - name: Configure scoped registry for @tetherto and @qvac packages
+        working-directory: ${{ inputs.workdir }}
+        env:
+          GPR_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          NPM_TOKEN: ${{ secrets.NPM_TOKEN }}
+          GIT_PAT: ${{ secrets.PAT_TOKEN }}
+        shell: bash
+        run: |
+          echo "Configuring scoped registry for @tetherto and @qvac packages..."
+          set -eu
+          cat > .npmrc <<NPMRC
+          registry=https://registry.npmjs.org/
+          @qvac:registry=https://registry.npmjs.org/
+          @tetherto:registry=https://npm.pkg.github.com/
+          //registry.npmjs.org/:_authToken=${NPM_TOKEN}
+          //npm.pkg.github.com/:_authToken=${GPR_TOKEN}
+          NPMRC
+
+          git config --global url."https://${GIT_PAT}:@github.com/".insteadOf "https://github.com/"
+          git config --global url."https://${GIT_PAT}:@github.com/".insteadOf "git@github.com:"
+
+      - name: Install NPM dependencies
+        working-directory: ${{ inputs.workdir }}
+        shell: bash
+        run: |
+          npm install
+          npm install -g bare bare-make
+
+      - name: Download prebuilds
+        uses: actions/download-artifact@v4
+        with:
+          path: ${{ inputs.workdir }}/prebuilds
+          merge-multiple: true
+
+      - name: Linux - install dependencies
+        if: matrix.platform == 'linux' || matrix.platform == 'android'
+        shell: bash
+        run: sudo apt-get update && sudo apt-get install -y mesa-vulkan-drivers
+
+      - name: Update c++ tools to install GLIBC++
+        if: ${{ matrix.os == 'ubuntu-24.04' }}
+        shell: bash
+        run: |
+          sudo apt update
+          sudo apt install -y g++-13
+
+      - name: Download onnx model files
+        working-directory: ${{ inputs.workdir }}
+        shell: bash
+        run: |
+          mkdir -p models/ocr/rec_512
+          aws s3 cp s3://tether-ai-dev/qvac_models_compiled/ocr/2025-12-16/recognizer_japanese.onnx models/ocr/recognizer_japanese.onnx
+          aws s3 cp s3://tether-ai-dev/qvac_models_compiled/ocr/2025-12-16/recognizer_korean.onnx models/ocr/recognizer_korean.onnx
+          aws s3 cp s3://tether-ai-dev/qvac_models_compiled/ocr/2025-12-16/recognizer_latin.onnx models/ocr/recognizer_latin.onnx
+          aws s3 cp s3://tether-ai-dev/qvac_models_compiled/ocr/2025-12-16/recognizer_thai.onnx models/ocr/recognizer_thai.onnx
+          aws s3 cp s3://tether-ai-dev/qvac_models_compiled/ocr/2025-12-16/recognizer_zh_sim.onnx models/ocr/recognizer_zh_sim.onnx
+          aws s3 cp s3://tether-ai-dev/qvac_models_compiled/ocr/2025-04-25/detector_craft.onnx models/ocr/detector_craft.onnx
+          cp models/ocr/detector_craft.onnx models/ocr/rec_512/detector_craft.onnx
+          for model in models/ocr/recognizer_*.onnx; do
+            cp "$model" models/ocr/rec_512/
+          done
+
+      - name: Run integration test
+        working-directory: ${{ inputs.workdir }}
+        shell: bash
+        run: npm run test:integration
+        env:
+          QASE_API_TOKEN: ${{ secrets.QASE_API_TOKEN }}

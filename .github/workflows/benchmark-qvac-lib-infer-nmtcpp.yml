@@ -175,17 +175,21 @@ jobs:
     steps:
       - name: Update C++ tools
         run: |
+          sudo add-apt-repository ppa:ubuntu-toolchain-r/test
+          sudo apt update
+          sudo apt install -y g++-13
           wget https://apt.llvm.org/llvm.sh
           chmod +x llvm.sh
           sudo ./llvm.sh 19 all
 
       - name: Checkout repository
-        uses: actions/checkout@v6
+        uses: actions/checkout@v4
         with:
+          token: ${{ secrets.PAT_TOKEN }}
           submodules: recursive
 
       - name: Set up Node.js
-        uses: actions/setup-node@v6
+        uses: actions/setup-node@v4
         with:
           node-version: lts/*
 
@@ -289,9 +293,9 @@ jobs:
           bare-make install
 
       - name: Upload build artifact
-        uses: actions/upload-artifact@v6
+        uses: actions/upload-artifact@v4
         with:
-          name: qvac-addon-build-${{ inputs.translators }}
+          name: qvac-addon-build
           path: |
             ${{ env.PKG_DIR }}/prebuilds/
             ${{ env.PKG_DIR }}/node_modules/
@@ -316,31 +320,32 @@ jobs:
 
     steps:
       - name: Checkout repository
-        uses: actions/checkout@v6
+        uses: actions/checkout@v4
         with:
+          token: ${{ secrets.GITHUB_TOKEN }}
           submodules: recursive
 
       - name: Set up Node.js
         if: needs.setup.outputs.qvac_needed == 'true'
-        uses: actions/setup-node@v6
+        uses: actions/setup-node@v4
         with:
-          node-version: 20
+          node-version: '20'
 
       - name: Install bare-runtime
         if: needs.setup.outputs.qvac_needed == 'true'
         run: npm install -g bare-runtime
 
       - name: Set up Python
-        uses: actions/setup-python@v6
+        uses: actions/setup-python@v5
         with:
           python-version: '3.10'
-          cache: pip
+          cache: 'pip'
 
       - name: Download build artifact
         if: needs.setup.outputs.qvac_needed == 'true' && needs.build.result == 'success'
-        uses: actions/download-artifact@v7
+        uses: actions/download-artifact@v4
         with:
-          name: qvac-addon-build-${{ inputs.translators }}
+          name: qvac-addon-build
           path: ${{ env.PKG_DIR }}
 
       - name: Install system dependencies
@@ -355,7 +360,7 @@ jobs:
 
       - name: Configure AWS credentials
         if: needs.setup.outputs.qvac_needed == 'true'
-        uses: aws-actions/configure-aws-credentials@v6
+        uses: aws-actions/configure-aws-credentials@v4
         with:
           aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
           aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
@@ -390,10 +395,10 @@ jobs:
             # Download f16 or q4 model from S3
             if [ "${{ inputs.is_quantized_model }}" = "true" ]; then
               echo "Downloading quantized (q4_0) model for $model_pair (S3 pair: $s3_pair)..."
-              aws_path="s3://${{ secrets.MODEL_S3_BUCKET }}/qvac_models_compiled/ggml/marian/q4_0/ggml-opus-$s3_pair"
+              aws_path="s3://tether-ai-dev/qvac_models_compiled/ggml/marian/q4_0/ggml-opus-$s3_pair"
             else
               echo "Downloading f16 model for $model_pair (S3 pair: $s3_pair)..."
-              aws_path="s3://${{ secrets.MODEL_S3_BUCKET }}/qvac_models_compiled/ggml/marian/q0f16/ggml-opus-$s3_pair"
+              aws_path="s3://tether-ai-dev/qvac_models_compiled/ggml/marian/q0f16/ggml-opus-$s3_pair"
             fi
             echo "AWS PATH: $aws_path"
             if aws s3 cp "$aws_path/" "$temp_dir/" --recursive; then
@@ -471,11 +476,12 @@ jobs:
         continue-on-error: true
 
       - name: Cache datasets
-        uses: actions/cache@v5
+        uses: actions/cache@v4
         with:
-          key: datasets-${{ needs.setup.outputs.datasets_cache_key }}
           path: ${{ env.PKG_DIR }}/benchmarks/quality_eval/data
-          restore-keys: datasets-
+          key: datasets-${{ needs.setup.outputs.datasets_cache_key }}
+          restore-keys: |
+            datasets-
 
       - name: Free up disk space
         run: |
@@ -496,7 +502,7 @@ jobs:
           df -h
 
       - name: Download Firefox translations models for Bergamot (from GitHub)
-        # Only for 'bergamot' translator (not qvac_bergamot which downloads from Firefox CDN)
+        # Only for 'bergamot' translator (not qvac_bergamot which downloads from S3)
         if: contains(format(',{0},', inputs.translators), ',bergamot,')
         run: |
           # Install git-lfs on Linux
@@ -528,54 +534,44 @@ jobs:
           echo "Firefox models installed to ~/.local/share/bergamot/models/firefox/"
         continue-on-error: true
 
-      - name: Download Bergamot models for qvac_bergamot (from Firefox CDN)
+      - name: Download Bergamot models for qvac_bergamot (from S3)
         if: contains(inputs.translators, 'qvac_bergamot')
+        env:
+          AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          AWS_DEFAULT_REGION: us-east-1
         run: |
-          # Download specific language pair models from Firefox Remote Settings CDN
+          # Download specific language pair models from S3
           pair="${{ matrix.pair }}"
           src_lang="${pair%-*}"
           trg_lang="${pair#*-}"
           pair_code="${src_lang}${trg_lang}"
 
-          echo "Downloading Bergamot model for $pair_code from Firefox CDN..."
+          echo "Downloading Bergamot model for $pair_code from S3..."
 
-          RECORDS_URL="https://firefox.settings.services.mozilla.com/v1/buckets/main/collections/translations-models/records"
-          ATTACHMENT_BASE="https://firefox-settings-attachments.cdn.mozilla.net"
+          S3_BASE="s3://tether-ai-dev/qvac_models_compiled/bergamot/bergamot-${pair_code}"
 
-          # Set up Firefox models directory
-          DEST_DIR="$HOME/.local/share/bergamot/models/firefox/base-memory/$pair_code"
-          mkdir -p "$DEST_DIR"
+          # Find the latest date folder (sorted alphabetically, last one is latest)
+          latest_date=$(aws s3 ls "${S3_BASE}/" | grep PRE | awk '{print $2}' | tr -d '/' | sort | tail -1)
 
-          # Fetch model records from Firefox Remote Settings
-          echo "Fetching model index from Mozilla..."
-          RECORDS=$(curl -sS "$RECORDS_URL")
-
-          URLS=$(echo "$RECORDS" | python3 -c "
-          import sys, json
-          data = json.load(sys.stdin)
-          for r in data.get('data', []):
-              if r.get('fromLang') == '${src_lang}' and r.get('toLang') == '${trg_lang}':
-                  att = r.get('attachment', {})
-                  loc = att.get('location', '')
-                  name = r.get('name', '') or att.get('filename', '')
-                  if loc and name:
-                      print(f'{name}|{loc}')
-          ")
-
-          if [ -z "$URLS" ]; then
-            echo "WARNING: No Firefox model found for ${src_lang}-${trg_lang}"
-            echo "Check https://github.com/mozilla/firefox-translations-models for supported pairs"
+          if [ -z "$latest_date" ]; then
+            echo "ERROR: No date folders found for $pair_code"
             exit 1
           fi
 
-          while IFS='|' read -r FILENAME LOCATION; do
-              URL="${ATTACHMENT_BASE}/${LOCATION}"
-              echo "  Downloading ${FILENAME}..."
-              curl -sS -L -o "${DEST_DIR}/${FILENAME}" "$URL"
-          done <<< "$URLS"
+          echo "Found latest model date: $latest_date"
 
-          echo "✅ Model files downloaded from Firefox CDN:"
-          ls -la "$DEST_DIR"
+          # Set up Firefox models directory
+          mkdir -p ~/.local/share/bergamot/models/firefox/base-memory/$pair_code
+
+          # Download only the latest date folder from S3
+          aws s3 sync "${S3_BASE}/${latest_date}/" \
+            ~/.local/share/bergamot/models/firefox/base-memory/$pair_code/ \
+            --exclude "metadata.json" \
+            --exclude "config.bergamot.yml"
+
+          echo "Model files:"
+          ls -la ~/.local/share/bergamot/models/firefox/base-memory/$pair_code/
 
           echo "Bergamot models installed to ~/.local/share/bergamot/models/firefox/"
         continue-on-error: true
@@ -685,7 +681,7 @@ jobs:
           PYTHONUNBUFFERED: 1
 
       - name: Upload evaluation results
-        uses: actions/upload-artifact@v6
+        uses: actions/upload-artifact@v4
         if: always()
         with:
           name: results-${{ matrix.pair }}-${{ inputs.translators }}-${{ steps.metrics.outputs.metrics }}-${{ inputs.hyperparams }}${{ inputs.use_pivot && '-pivot' || '' }}
@@ -693,7 +689,7 @@ jobs:
           retention-days: 30
 
       - name: Upload evaluation logs
-        uses: actions/upload-artifact@v6
+        uses: actions/upload-artifact@v4
         if: failure()
         with:
           name: logs-${{ matrix.pair }}-${{ inputs.translators }}-${{ steps.metrics.outputs.metrics }}-${{ inputs.hyperparams }}
@@ -709,7 +705,7 @@ jobs:
 
     steps:
       - name: Download all artifacts
-        uses: actions/download-artifact@v7
+        uses: actions/download-artifact@v4
         with:
           path: all-results
           pattern: results-*
@@ -819,8 +815,8 @@ jobs:
           echo "- Metrics: chrF++=\`${{ inputs.metric_chrfpp }}\`, COMET=\`${{ inputs.metric_comet }}\`" >> $GITHUB_STEP_SUMMARY
 
       - name: Upload consolidated results
-        uses: actions/upload-artifact@v6
+        uses: actions/upload-artifact@v4
         with:
-          name: consolidated-results-${{ inputs.translators }}
+          name: consolidated-results
           path: all-results
           retention-days: 90

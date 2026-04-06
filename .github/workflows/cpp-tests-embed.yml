@@ -30,7 +30,7 @@ on:
 
 jobs:
   run-cpp-tests:
-    runs-on: ${{ matrix.runner || matrix.os }}
+    runs-on: ${{ matrix.os }}
     name: ${{ matrix.platform }}-${{ matrix.arch || 'x64' }}-cpp-tests
     permissions:
       contents: read
@@ -49,10 +49,9 @@ jobs:
           - os: macos-15-intel
             platform: darwin
             arch: x64
-          - os: windows-11
+          - os: windows-2022
             platform: windows
             arch: x64
-            runner: ai-run-windows11-gpu
 
     env:
       WORKDIR: ${{ inputs.workdir }}
@@ -69,21 +68,22 @@ jobs:
           echo "workdir=${{ env.WORKDIR }}"
 
       - name: Setup Node.js
-        uses: actions/setup-node@v6
+        uses: actions/setup-node@v4
         with:
           node-version: lts/*
 
-      - if: ${{ matrix.os == 'windows-11' }}
+      - if: ${{ matrix.os == 'windows-2022' }}
         name: Configure Windows runner
+        shell: pwsh
         run: |
           git config --system core.longpaths true
           choco upgrade llvm -y
 
       - name: Checkout code
-        uses: actions/checkout@v6
+        uses: actions/checkout@v4
         with:
-          repository: ${{ inputs.repository || github.repository }}
           ref: ${{ inputs.ref || github.ref }}
+          repository: ${{ inputs.repository || github.repository }}
           token: ${{ secrets.PAT_TOKEN }}
 
       - name: Configure scoped registry for @tetherto and @qvac packages
@@ -136,9 +136,10 @@ jobs:
           sudo apt update
           sudo apt install -y vulkan-sdk
 
-      - if: ${{ matrix.os == 'windows-11' }}
+      - if: ${{ matrix.os == 'windows-2022' }}
         name: Install Vulkan SDK on Windows
-        working-directory: ${{ env.WORKDIR }}
+        shell: powershell
+        working-directory:  ${{ env.WORKDIR }}
         run: |
           $ProgressPreference = 'SilentlyContinue'
           Invoke-WebRequest -Uri https://sdk.lunarg.com/sdk/download/latest/windows/vulkan-sdk.exe -OutFile vulkan-sdk.exe
@@ -161,16 +162,14 @@ jobs:
         shell: bash
         run: echo "VCPKG_ROOT=$VCPKG_INSTALLATION_ROOT" >> $GITHUB_ENV
 
-      - if: ${{ matrix.os == 'windows-11' }}
-        name: Clone and bootstrap vcpkg (Windows)
-        run: |
-          git clone https://github.com/microsoft/vcpkg.git
-          ./vcpkg/bootstrap-vcpkg.bat -disableMetrics
-          echo ("VCPKG_ROOT=$env:GITHUB_WORKSPACE/vcpkg" -replace '\\', '/') >> $env:GITHUB_ENV
+      - if: ${{ matrix.os == 'windows-2022' }}
+        name: Configure vcpkg in windows
+        shell: pwsh
+        run: echo ("VCPKG_ROOT=$env:VCPKG_INSTALLATION_ROOT" -replace '\\', '/') >> $env:GITHUB_ENV
 
-      - if: ${{ matrix.os == 'windows-11' }}
+      - if: ${{ matrix.os == 'windows-2022' }}
         name: Configure CMake generator on Windows
-        shell: powershell
+        shell: pwsh
         run: |
           echo "CMAKE_GENERATOR=Visual Studio 17 2022" >> $env:GITHUB_ENV
           echo "CMAKE_GENERATOR_PLATFORM=x64" >> $env:GITHUB_ENV
@@ -180,8 +179,10 @@ jobs:
         run: mkdir -p "${{ env.WORKDIR }}/vcpkg/cache"
 
       - name: Get vcpkg cache (package-local)
-        uses: actions/cache@v5
+        uses: actions/cache@v4
         with:
+          path: |
+            ${{ github.workspace }}/${{ env.WORKDIR }}/vcpkg/cache
           key: >-
             cpp-tests-v4-${{ matrix.platform }}-${{ matrix.arch || 'x64' }}-${{
               hashFiles(
@@ -193,20 +194,27 @@ jobs:
                 'vcpkg/ports/**'
               )
             }}
-          path: ${{ github.workspace }}/${{ env.WORKDIR }}/vcpkg/cache
-          restore-keys: cpp-tests-v4-${{ matrix.platform }}-${{ matrix.arch || 'x64' }}-
+          restore-keys: |
+            cpp-tests-v4-${{ matrix.platform }}-${{ matrix.arch || 'x64' }}-
+
+      - name: Configure AWS credentials
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          aws-region: us-east-1
 
       - name: Download test models (into package dir)
         shell: bash
         run: |
           set -euo pipefail
           mkdir -p "${{ env.WORKDIR }}/models/unit-test"
-          echo "Downloading model from Hugging Face..."
-          curl -L --fail --retry 3 --retry-all-errors --retry-delay 2 \
-            -o "${{ env.WORKDIR }}/models/unit-test/test-model.gguf" \
-            "https://huggingface.co/unsloth/embeddinggemma-300m-GGUF/resolve/main/embeddinggemma-300M-Q8_0.gguf"
+          echo "Downloading model from S3..."
+          aws s3 cp \
+            s3://tether-ai-dev/qvac_models_compiled/embed/embeddinggemma-300m-GGUF/2025-12-12/embeddinggemma-300M-Q8_0.gguf \
+            "${{ env.WORKDIR }}/models/unit-test/gte-small.gguf"
           ls -lh "${{ env.WORKDIR }}/models/unit-test/"
-          du -sh "${{ env.WORKDIR }}/models/unit-test/test-model.gguf"
+          du -sh "${{ env.WORKDIR }}/models/unit-test/gte-small.gguf"
 
       - name: Build C++ tests with coverage
         if: ${{ matrix.os == 'ubuntu-24.04' }}
@@ -260,7 +268,7 @@ jobs:
 
       - name: Archive Coverage Results
         if: ${{ matrix.os == 'ubuntu-24.04' && always() }}
-        uses: actions/upload-artifact@v6
+        uses: actions/upload-artifact@v4
         with:
           name: cpp-coverage-report-${{ matrix.platform }}-${{ matrix.arch || 'x64' }}
           path: |
@@ -270,6 +278,52 @@ jobs:
             ${{ env.WORKDIR }}/build/test/unit/cpp-test-results.xml
           retention-days: 30
 
+      - name: Comment Coverage on PR
+        if: ${{ matrix.os == 'ubuntu-24.04' && github.event.pull_request && always() }}
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const fs = require('fs');
+
+            const workdir = process.env.WORKDIR || '${{ inputs.workdir }}';
+            const path = `${workdir}/build/test/unit/coverage-summary.txt`;
+            if (!fs.existsSync(path)) {
+              console.log('Coverage summary not found, skipping PR comment');
+              return;
+            }
+
+            const prNumber = context.payload.pull_request?.number ||
+                             context.payload.number ||
+                             context.issue?.number ||
+                             (context.eventName === 'workflow_call' && context.payload.workflow_call?.inputs?.pr_number);
+
+            if (!prNumber) {
+              console.log('No PR number found in context. This workflow may have been triggered manually or not from a PR.');
+              return;
+            }
+
+            const coverage = fs.readFileSync(path, 'utf8');
+            const coveragePct = process.env.LINE_COVERAGE_PERCENTAGE || '0.0';
+
+            const body = `## 🧪 C++ Test Coverage Report
+
+            **Coverage:** ${coveragePct}%
+
+            <details>
+            <summary>📊 Detailed Coverage</summary>
+
+            \`\`\`
+            ${coverage}
+            \`\`\`
+
+            </details>`;
+
+            github.rest.issues.createComment({
+              issue_number: prNumber,
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              body
+            });
 
       - name: Coverage Summary
         if: ${{ matrix.os == 'ubuntu-24.04' && always() }}

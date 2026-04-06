@@ -35,11 +35,10 @@ jobs:
           - os: macos-14
             platform: darwin
             arch: arm64
-          - os: windows-11
+          - os: windows-2022
             platform: windows
-            runner: ai-run-windows11-gpu
 
-    runs-on: ${{ matrix.runner || matrix.os }}
+    runs-on: ${{ matrix.os }}
     name: cpp-tests-${{ matrix.platform }}-${{ matrix.arch || 'x64' }}
 
     env:
@@ -50,11 +49,11 @@ jobs:
 
     steps:
       - name: Checkout repository
-        uses: actions/checkout@v6
+        uses: actions/checkout@v4
         with:
-          repository: ${{ inputs.repository || github.repository }}
-          ref: ${{ inputs.ref || github.ref }}
           token: ${{ secrets.PAT_TOKEN }}
+          ref: ${{ inputs.ref || github.ref }}
+          repository: ${{ inputs.repository || github.repository }}
 
       - if: ${{ matrix.os == 'ubuntu-24.04' }}
         name: Install llvm-19 on Linux
@@ -73,14 +72,14 @@ jobs:
           sudo apt update
           sudo apt install vulkan-sdk
 
-      - if: ${{ matrix.os == 'windows-11' }}
+      - if: ${{ matrix.os == 'windows-2022' }}
         name: Configure Windows runner
         working-directory: ${{ env.WORKDIR }}
         run: |
           git config --system core.longpaths true
-          choco upgrade llvm -y
+          choco upgrade llvm
 
-      - if: ${{ matrix.os == 'windows-11' }}
+      - if: ${{ matrix.os == 'windows-2022' }}
         name: Install Vulkan SDK on Windows
         working-directory: ${{ env.WORKDIR }}
         run: |
@@ -89,12 +88,10 @@ jobs:
           ./vulkan-sdk.exe --root C:\VulkanSDK --accept-licenses --default-answer --confirm-command install
           echo "VULKAN_SDK=C:\VulkanSDK" >> $Env:GITHUB_ENV
 
-      - if: ${{ matrix.os == 'windows-11' }}
-        name: Clone and bootstrap vcpkg (Windows)
-        run: |
-          git clone https://github.com/microsoft/vcpkg.git
-          ./vcpkg/bootstrap-vcpkg.bat -disableMetrics
-          echo ("VCPKG_ROOT=$env:GITHUB_WORKSPACE/vcpkg" -replace '\\', '/') >> $env:GITHUB_ENV
+      - if: ${{ matrix.os == 'windows-2022' }}
+        name: Configure vcpkg in windows
+        working-directory: ${{ env.WORKDIR }}
+        run: echo ("VCPKG_ROOT=$env:VCPKG_INSTALLATION_ROOT" -replace '\\', '/') >> $env:GITHUB_ENV
 
       - if: ${{ matrix.os == 'macos-14' }}
         name: Install vcpkg on macOS
@@ -113,9 +110,9 @@ jobs:
         working-directory: ${{ env.WORKDIR }}
         run: echo "VCPKG_ROOT=$VCPKG_INSTALLATION_ROOT" >> $GITHUB_ENV
 
-      - if: ${{ matrix.os == 'windows-11' }}
+      - if: ${{ matrix.os == 'windows-2022' }}
         name: Configure CMake generator on Windows
-        shell: powershell
+        shell: pwsh
         working-directory: ${{ env.WORKDIR }}
         run: |
           echo "CMAKE_GENERATOR=Visual Studio 17 2022" >> $env:GITHUB_ENV
@@ -123,26 +120,26 @@ jobs:
 
       # mkdir -p is not portable to pwsh; do per-OS
       - name: Create vcpkg cache location (non-Windows)
-        if: ${{ matrix.os != 'windows-11' }}
+        if: ${{ matrix.os != 'windows-2022' }}
         working-directory: ${{ env.WORKDIR }}
         run: mkdir -p vcpkg/cache
 
       - name: Create vcpkg cache location (Windows)
-        if: ${{ matrix.os == 'windows-11' }}
-        shell: powershell
+        if: ${{ matrix.os == 'windows-2022' }}
+        shell: pwsh
         working-directory: ${{ env.WORKDIR }}
         run: |
           New-Item -ItemType Directory -Force -Path "vcpkg/cache" | Out-Null
 
       - name: Get vcpkg cache
-        uses: actions/cache@v5
+        uses: actions/cache@v4
         with:
-          key: cpp-tests-v4-${{ matrix.platform }}-${{ matrix.arch || 'x64' }}-${{ hashFiles(format('{0}/vcpkg.json', inputs.workdir), format('{0}/vcpkg-configuration.json', inputs.workdir)) }}
           path: ${{ env.WORKDIR }}/vcpkg/cache
+          key: cpp-tests-v4-${{ matrix.platform }}-${{ matrix.arch || 'x64' }}-${{ hashFiles(format('{0}/vcpkg.json', inputs.workdir), format('{0}/vcpkg-configuration.json', inputs.workdir)) }}
           restore-keys: cpp-tests-v4-${{ matrix.platform }}-${{ matrix.arch || 'x64' }}-
 
       - name: Setup Node.js
-        uses: actions/setup-node@v6
+        uses: actions/setup-node@v4
         with:
           node-version: lts/*
 
@@ -166,50 +163,25 @@ jobs:
           npm install
           npm install -g bare bare-make
 
+      - name: Configure AWS credentials
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          aws-region: us-east-1
+
       - name: Download test models
         shell: bash
         working-directory: ${{ env.WORKDIR }}
         run: |
+          echo "Creating models directory..."
           mkdir -p models/unit-test
-
-          HF="https://huggingface.co"
-          ODIR="models/unit-test"
-
-          hf_download() {
-            local repo="$1"               # owner/repo
-            local file="$2"               # filename on HF main branch
-            local dest_dir="${3:-$ODIR}"  # destination directory
-            local out_file="${4:-$file}"  # optional output filename (defaults to file)
-            echo "Downloading ${file} from ${HF}/${repo}..."
-            curl -L --fail --retry 3 --retry-all-errors --retry-delay 2 "${HF}/${repo}/resolve/main/${file}" -o "${dest_dir}/${out_file}"
-          }
-
-          hf_download_shards() {
-            local repo="$1"               # owner/repo
-            local pattern="$2"            # printf pattern, e.g. "MyModel-%05d-of-%05d.gguf"
-            local total="$3"              # total number of shards
-            local dest_dir="${4:-$ODIR}"  # destination directory
-            echo "Downloading $(printf "$pattern" 1 "$total") shards (${total} of ${total}) from ${HF}/${repo}..."
-            for i in $(seq 1 "$total"); do
-              local shard
-              shard=$(printf "$pattern" "$i" "$total")
-              curl -L --fail --retry 3 --retry-all-errors --retry-delay 2 "${HF}/${repo}/resolve/main/${shard}" -o "${dest_dir}/${shard}"
-            done
-          }
-
-          hf_download "bartowski/Llama-3.2-1B-Instruct-GGUF" "Llama-3.2-1B-Instruct-Q4_0.gguf"
-          hf_download "ggml-org/SmolVLM2-500M-Video-Instruct-GGUF" "SmolVLM2-500M-Video-Instruct-Q8_0.gguf" "$ODIR" "SmolVLM-500M-Instruct-Q8_0.gguf"
-          hf_download "ggml-org/SmolVLM2-500M-Video-Instruct-GGUF" "mmproj-SmolVLM2-500M-Video-Instruct-Q8_0.gguf" "$ODIR" "mmproj-SmolVLM-500M-Instruct-Q8_0.gguf"
-          hf_download "Qwen/Qwen3-0.6B-GGUF" "Qwen3-0.6B-Q8_0.gguf"
-
-          hf_download_shards "jmb95/Qwen3-0.6B-UD-IQ1_S-sharded" "Qwen3-0.6B-UD-IQ1_S-%05d-of-%05d.gguf" 3
-          hf_download "jmb95/Qwen3-0.6B-UD-IQ1_S-sharded" "Qwen3-0.6B-UD-IQ1_S.tensors.txt"
-
-          hf_download "gianni-cor/bitnet_b1_58-large-TQ2_0" "bitnet_b1_58-large-TQ2_0.gguf"
-
-          hf_download_shards "jmb95/bitnet_b1_58-large-TQ2_0-sharded" "bitnet_b1_58-large-TQ2_0-%05d-of-%05d.gguf" 8
-          hf_download "jmb95/bitnet_b1_58-large-TQ2_0-sharded" "bitnet_b1_58-large-TQ2_0.tensors.txt"
-
+          echo "Downloading Llama-3.2-1B-Instruct-Q4_0.gguf from S3..."
+          aws s3 cp s3://tether-ai-dev/qvac_models_compiled/ggml/Llama-3.2-1B/2025-07-02/Llama-3.2-1B-Instruct-Q4_0.gguf models/unit-test/Llama-3.2-1B-Instruct-Q4_0.gguf
+          echo "Downloading SmolVLM-500M-Instruct-Q8_0.gguf from S3..."
+          aws s3 cp s3://tether-ai-dev/qvac_models_compiled/SmolVLM-500M-Instruct/2025-12-8/SmolVLM-500M-Instruct-Q8_0.gguf models/unit-test/SmolVLM-500M-Instruct-Q8_0.gguf
+          echo "Downloading mmproj-SmolVLM-500M-Instruct-Q8_0.gguf from S3..."
+          aws s3 cp s3://tether-ai-dev/qvac_models_compiled/SmolVLM-500M-Instruct/2025-12-8/mmproj-SmolVLM-500M-Instruct-Q8_0.gguf models/unit-test/mmproj-SmolVLM-500M-Instruct-Q8_0.gguf
           echo "Verify downloaded models..."
           ls -lh models/unit-test/
           du -sh models/unit-test/*
@@ -268,7 +240,7 @@ jobs:
 
       - name: Archive Coverage Results
         if: ${{ matrix.os == 'ubuntu-24.04' && always() }}
-        uses: actions/upload-artifact@v6
+        uses: actions/upload-artifact@v4
         with:
           name: cpp-coverage-report-${{ matrix.platform }}-${{ matrix.arch || 'x64' }}
           path: |
@@ -278,6 +250,40 @@ jobs:
             ${{ env.WORKDIR }}/build/test/unit/cpp-test-results.xml
           retention-days: 30
 
+      - name: Comment Coverage on PR
+        if: ${{ matrix.os == 'ubuntu-24.04' && github.event.pull_request && always() }}
+        uses: actions/github-script@v7
+        env:
+          WORKDIR: ${{ env.WORKDIR }}
+          LINE_COVERAGE_PERCENTAGE: ${{ env.LINE_COVERAGE_PERCENTAGE }}
+        with:
+          script: |
+            const fs = require('fs');
+            const wd = process.env.WORKDIR || '.';
+            const path = `${wd}/build/test/unit/coverage-summary.txt`;
+            if (fs.existsSync(path)) {
+              const coverage = fs.readFileSync(path, 'utf8');
+              const body = `## 🧪 C++ Test Coverage Report
+
+              **Coverage:** ${process.env.LINE_COVERAGE_PERCENTAGE}%
+
+
+              <details>
+              <summary>📊 Detailed Coverage</summary>
+
+              \`\`\`
+              ${coverage}
+              \`\`\`
+
+              </details>`;
+
+              github.rest.issues.createComment({
+                issue_number: context.issue.number,
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                body: body
+              });
+            }
 
       - name: Coverage Summary
         if: ${{ matrix.os == 'ubuntu-24.04' && always() }}

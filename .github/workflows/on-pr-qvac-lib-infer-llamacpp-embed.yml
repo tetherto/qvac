@@ -10,11 +10,8 @@ on:
     branches:
       - main
       - release-*
-      - feature-*
-      - tmp-*
     paths:
       - "packages/qvac-lib-infer-llamacpp-embed/**"
-      - ".github/workflows/*embed*.yml"
   workflow_dispatch:
 
 permissions:
@@ -27,6 +24,17 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
+  release-pr-guard:
+    name: Release PR Guard
+    if: github.event_name == 'pull_request' && startsWith(github.base_ref, 'release-')
+    uses: tetherto/qvac-devops/.github/workflows/release-pr-guard.yml@monorepo_update
+    secrets:
+      github-token: ${{ secrets.GITHUB_TOKEN }}
+    with:
+      package-slug: qvac-lib-infer-llamacpp-embed
+      package-json-path: packages/qvac-lib-infer-llamacpp-embed/package.json
+      changelog-path: packages/qvac-lib-infer-llamacpp-embed/CHANGELOG.md
+      
   sanity-checks:
     if: contains( github.event.pull_request.labels.*.name, 'verify') || github.event_name == 'workflow_dispatch'
     runs-on: ubuntu-latest
@@ -59,14 +67,13 @@ jobs:
       ref: ${{ github.event.pull_request.head.ref }}
 
   ts-checks:
-    if: contains( github.event.pull_request.labels.*.name, 'verify') || github.event_name == 'workflow_dispatch'
     runs-on: ubuntu-latest
     steps:
       - name: Checkout code
-        uses: actions/checkout@v6
+        uses: actions/checkout@v4
 
       - name: Set up Node.js
-        uses: actions/setup-node@v6
+        uses: actions/setup-node@v4
         with:
           node-version: 20
 
@@ -100,7 +107,6 @@ jobs:
 
   integration-tests:
     needs: prebuild
-    if:  contains( github.event.pull_request.labels.*.name, 'verify') || github.event_name == 'workflow_dispatch'
     uses: ./.github/workflows/integration-test-qvac-lib-infer-llamacpp-embed.yml
     secrets: inherit
     with:
@@ -108,7 +114,7 @@ jobs:
       ref: ${{ github.event.pull_request.head.ref }}
 
   run-mobile-integration-tests:
-    if:  contains( github.event.pull_request.labels.*.name, 'verify') || github.event_name == 'workflow_dispatch'
+    if: contains( github.event.pull_request.labels.*.name, 'verify') || github.event_name == 'workflow_dispatch'
     needs: prebuild
     uses: ./.github/workflows/integration-mobile-test-qvac-lib-infer-llamacpp-embed.yml
     secrets: inherit

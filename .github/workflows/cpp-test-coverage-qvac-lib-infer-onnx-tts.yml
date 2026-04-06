@@ -1,6 +1,11 @@
-name: CPP Tests (TTS)
+name: C++ Tests & Coverage (TTS)
 
 on:
+  pull_request:
+    branches: [main, "release-*"]
+    types: [opened, synchronize, reopened]
+    paths:
+      - "packages/qvac-lib-infer-onnx-tts/**"
   push:
     branches: [main, "release-*"]
     paths:
@@ -74,22 +79,25 @@ jobs:
           sudo rm -rf /usr/share/dotnet
 
       - name: Checkout code
-        uses: actions/checkout@v6
+        uses: actions/checkout@v4
         with:
-          repository: ${{ inputs.repository || github.repository }}
           ref: ${{ inputs.ref || github.event.inputs.ref || github.event.pull_request.head.sha || github.sha }}
-          token: ${{ secrets.PAT_TOKEN }}
+          repository: ${{ inputs.repository || github.repository }}
+          token: ${{ secrets.GITHUB_TOKEN }}
           lfs: true
           fetch-depth: 0
 
       - name: Setup Node.js
-        uses: actions/setup-node@v6
+        uses: actions/setup-node@v4
         with:
           node-version: lts/*
 
       - name: Install system dependencies (Linux)
         if: matrix.platform == 'linux'
         run: |
+          sudo add-apt-repository ppa:ubuntu-toolchain-r/test
+          sudo apt update
+          sudo apt install -y g++-13
           wget https://apt.llvm.org/llvm.sh
           chmod +x llvm.sh
           sudo ./llvm.sh 19 all
@@ -102,14 +110,6 @@ jobs:
           which llvm-profdata || echo "llvm-profdata not in PATH"
           which llvm-profdata-19 || echo "llvm-profdata-19 not in PATH"
           dpkg -l | grep llvm || echo "No LLVM packages found"
-
-      - name: Setup LLVM coverage tools symlinks
-        if: matrix.platform == 'linux'
-        run: |
-          sudo ln -sf /usr/bin/llvm-profdata-19 /usr/local/bin/llvm-profdata
-          sudo ln -sf /usr/bin/llvm-cov-19 /usr/local/bin/llvm-cov
-          which llvm-cov
-          llvm-profdata --version
 
       - name: Configure scoped registry for @tetherto and @qvac packages
         working-directory: ${{ env.WORKDIR }}
@@ -154,48 +154,33 @@ jobs:
         run: |
           npm run coverage:cpp:build
 
-      - name: Ensure TTS models for integration tests
+      - name: Download test models
         working-directory: ${{ env.WORKDIR }}
-        run: npm run models:ensure
+        run: |
+          mkdir -p models/tts
+          aws s3 cp s3://tether-ai-dev/qvac_models_compiled/tts/2025-09-04/ models/tts --recursive
 
       - name: Run C++ Unit Tests
         id: cpp_tests
         working-directory: ${{ env.WORKDIR }}
         run: |
-          npm run coverage:cpp:run
+          npm run test:cpp:run
         continue-on-error: true
-
-      - name: Check if test results exist
-        id: check-test-results
-        working-directory: ${{ env.WORKDIR }}
-        run: |
-          if [ -f build/addon/test/unit/cpp-test-results.xml ]; then
-            echo "exists=true" >> $GITHUB_OUTPUT
-          else
-            echo "exists=false" >> $GITHUB_OUTPUT
-          fi
-        continue-on-error: true
-
-      - name: Publish Test Results
-        uses: EnricoMi/publish-unit-test-result-action@v2
-        if: always() && steps.check-test-results.outputs.exists == 'true'
-        with:
-          files: ${{ env.WORKDIR }}/build/addon/test/unit/cpp-test-results.xml
-          comment_mode: off
-          check_name: "C++ Test Results (${{ matrix.platform }}-${{ matrix.arch }})"
 
       - name: Generate Coverage Report
         if: ${{ matrix.coverage }}
         working-directory: ${{ env.WORKDIR }}
         run: |
           npm run coverage:cpp:report
-          COVERAGE=$(grep 'TOTAL' build/addon/test/unit/coverage-summary.txt | awk '{print $10}')
+
+          # 4. Extract percentage
+          COVERAGE=$(grep 'TOTAL' coverage-summary.txt | awk '{print $10}')
           echo "LINE_COVERAGE_PERCENTAGE=${COVERAGE}" >> $GITHUB_ENV
           echo "Line Coverage: ${COVERAGE}" > coverage-badge.txt
 
       - name: Archive Coverage Results
         if: ${{ matrix.coverage }}
-        uses: actions/upload-artifact@v6
+        uses: actions/upload-artifact@v4
         with:
           name: coverage-report-${{ matrix.platform }}-${{ matrix.arch }}
           path: |
@@ -205,13 +190,67 @@ jobs:
             ${{ env.WORKDIR }}/build/addon/test/unit/cpp-test-results.xml
           retention-days: 30
 
+      - name: Comment Coverage on PR
+        if: ${{ always() && matrix.coverage && github.event_name == 'pull_request' && matrix.platform == 'linux' }}
+        uses: actions/github-script@v7
+        env:
+          TEST_OUTCOME: ${{ steps.cpp_tests.outcome }}
+          COVERAGE_PERCENTAGE: ${{ env.COVERAGE_PERCENTAGE }}
+          WORKDIR: ${{ env.WORKDIR }}
+        with:
+          script: |
+            const fs = require('fs');
+
+            const workdir = process.env.WORKDIR || '.';
+            const coveragePath = `${workdir}/build/addon/test/unit/coverage-summary.txt`;
+
+            const testOutcome = process.env.TEST_OUTCOME || 'unknown';
+            const lineCoverage = process.env.COVERAGE_PERCENTAGE || 'N/A';
+            const testsPassed = testOutcome === 'success';
+            const statusEmoji = testsPassed ? '✅' : '❌';
+            const statusText = testsPassed ? 'Passed' : 'Failed';
+
+            let coverageDetails = '_Coverage report not available_';
+            if (fs.existsSync(coveragePath)) {
+              coverageDetails = fs.readFileSync(coveragePath, 'utf8');
+            }
+
+            const timestamp = new Date().toISOString().replace('T', ' ').substring(0, 19);
+
+            const body = `## 🧪 C++ Test & Coverage Report
+
+            | Metric | Value |
+            |--------|-------|
+            | **Test Status** | ${statusEmoji} ${statusText} |
+            | **Line Coverage** | ${lineCoverage} |
+            | **Platform** | linux-x64 |
+
+            <details>
+            <summary>📊 Detailed Coverage Report</summary>
+
+            \`\`\`
+            ${coverageDetails}
+            \`\`\`
+
+            </details>
+
+            ---
+            *Report generated on ${timestamp} UTC*`;
+
+            await github.rest.issues.createComment({
+              issue_number: context.issue.number,
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              body
+            });
+
       - name: Coverage Summary
         if: ${{ matrix.coverage }}
         working-directory: ${{ env.WORKDIR }}
         run: |
           echo "## 🎯 Coverage Summary" >> $GITHUB_STEP_SUMMARY
           echo "**Platform:** ${{ matrix.platform }}-${{ matrix.arch }}" >> $GITHUB_STEP_SUMMARY
-          echo "**Coverage:** ${{ env.LINE_COVERAGE_PERCENTAGE }}" >> $GITHUB_STEP_SUMMARY
+          echo "**Coverage:** ${{ env.COVERAGE_PERCENTAGE }}" >> $GITHUB_STEP_SUMMARY
           echo "" >> $GITHUB_STEP_SUMMARY
           if [ -f build/addon/test/unit/coverage-summary.txt ]; then
             echo "\`\`\`" >> $GITHUB_STEP_SUMMARY
@@ -225,7 +264,7 @@ jobs:
     if: ${{ always() }}
     steps:
       - name: Download all coverage reports
-        uses: actions/download-artifact@v7
+        uses: actions/download-artifact@v4
         with:
           path: coverage-reports
 

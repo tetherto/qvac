@@ -10,11 +10,8 @@ on:
     branches:
       - main
       - release-*
-      - feature-*
-      - tmp-*
     paths:
       - "packages/qvac-lib-infer-llamacpp-llm/**"
-      - ".github/workflows/*llamacpp-llm*.yml"
   workflow_dispatch:
   
   workflow_call:
@@ -28,8 +25,18 @@ env:
   PKG_DIR: packages/qvac-lib-infer-llamacpp-llm
 
 jobs:
+  release-pr-guard:
+    name: Release PR Guard
+    if: github.event_name == 'pull_request' && startsWith(github.base_ref, 'release-')
+    uses: tetherto/qvac-devops/.github/workflows/release-pr-guard.yml@monorepo_update
+    secrets:
+      github-token: ${{ secrets.GITHUB_TOKEN }}
+    with:
+      package-slug: qvac-lib-infer-llamacpp-llm
+      package-json-path: packages/qvac-lib-infer-llamacpp-llm/package.json
+      changelog-path: packages/qvac-lib-infer-llamacpp-llm/CHANGELOG.md
+
   sanity-checks:
-    if: contains( github.event.pull_request.labels.*.name, 'verify') || github.event_name == 'workflow_dispatch'
     runs-on: ubuntu-latest
     steps:
       - name: Run Sanity checks
@@ -42,17 +49,12 @@ jobs:
           workdir: packages/qvac-lib-infer-llamacpp-llm
 
   cpp-tests:
-    if: contains( github.event.pull_request.labels.*.name, 'verify') || github.event_name == 'workflow_dispatch'
-    needs: sanity-checks
     uses: ./.github/workflows/cpp-tests-llm.yml
     secrets: inherit
     with:
       workdir: packages/qvac-lib-infer-llamacpp-llm
-      repository: ${{ github.event.pull_request.head.repo.full_name }}
-      ref: ${{ github.event.pull_request.head.ref }}
 
   cpp-lint:
-    if: contains( github.event.pull_request.labels.*.name, 'verify') || github.event_name == 'workflow_dispatch'
     uses: tetherto/qvac-devops/.github/workflows/cpp-lint.yaml@monorepo_update
     secrets: inherit
     with:
@@ -61,19 +63,18 @@ jobs:
       workdir: packages/qvac-lib-infer-llamacpp-llm
 
   ts-checks:
-    if: contains( github.event.pull_request.labels.*.name, 'verify') || github.event_name == 'workflow_dispatch'
     runs-on: ubuntu-latest
     steps:
       - name: Checkout code
-        uses: actions/checkout@v6
+        uses: actions/checkout@v4
 
       - name: Set up Node.js
-        uses: actions/setup-node@v6
+        uses: actions/setup-node@v4
         with:
           node-version: 20
 
       - name: Configure npm auth
-        working-directory: packages/qvac-lib-infer-llamacpp-llm
+        working-directory: packages/qvac-lib-infer-llamacpp-embed
         run: |
           cat > .npmrc <<NPMRC
           registry=https://registry.npmjs.org/
@@ -82,11 +83,11 @@ jobs:
           NPMRC
 
       - name: Install dependencies
-        working-directory: packages/qvac-lib-infer-llamacpp-llm
+        working-directory: packages/qvac-lib-infer-llamacpp-embed
         run: npm install
 
       - name: Type declaration check
-        working-directory: packages/qvac-lib-infer-llamacpp-llm
+        working-directory: packages/qvac-lib-infer-llamacpp-embed
         run: npm run test:dts
 
   prebuild:
@@ -105,7 +106,7 @@ jobs:
       tag: pr-${{ github.event.pull_request.number }}
 
   run-integration-tests:
-    if: contains( github.event.pull_request.labels.*.name, 'verify') || github.event_name == 'workflow_dispatch'
+    if: needs.prebuild.result == 'success'
     needs: prebuild
     uses: ./.github/workflows/integration-test-qvac-lib-infer-llamacpp-llm.yml
     secrets: inherit
@@ -114,7 +115,7 @@ jobs:
       ref: ${{ github.event.pull_request.head.ref }}
 
   run-mobile-integration-tests:
-    if: contains( github.event.pull_request.labels.*.name, 'verify') || github.event_name == 'workflow_dispatch'
+    if: needs.prebuild.result == 'success'
     needs: prebuild
     uses: ./.github/workflows/integration-mobile-test-qvac-lib-infer-llamacpp-llm.yml
     secrets: inherit
@@ -132,6 +133,7 @@ jobs:
         cpp-tests,
         cpp-lint,
         ts-checks,
+        release-pr-guard
       ]
     if: always()
     uses: tetherto/qvac-devops/.github/workflows/public-pr.yml@monorepo_update
