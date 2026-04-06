@@ -87,8 +87,10 @@ try {
       ...finetuneParams,
       operation: "resume",
     });
+    const resumedProgressTask = readProgress(resumedHandle, function () { });
 
     const resumedResult = await resumedHandle.result;
+    await resumedProgressTask;
 
     console.log("✅ Resumed finetune result:", resumedResult);
   }
