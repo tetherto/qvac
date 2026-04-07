@@ -28,10 +28,10 @@
   "repository": {
     "type": "git",
     "url": "git+https://github.com/tetherto/qvac.git",
-    "directory": "packages/qvac-lib-dl-base"
+    "directory": "packages/dl-base"
   },
   "bugs": "https://github.com/tetherto/qvac/issues",
-  "homepage": "https://github.com/tetherto/qvac/tree/main/packages/qvac-lib-dl-base#readme",
+  "homepage": "https://github.com/tetherto/qvac/tree/main/packages/dl-base#readme",
   "files": [
     "src",
     "index.d.ts",
