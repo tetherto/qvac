@@ -63,7 +63,7 @@ bare -v
 Install the main translation package via npm: 
 
 ```bash
-# Main package - supports OPUS, Bergamot, and IndicTrans backends (all languages)
+# Main package - supports Bergamot and IndicTrans backends (all languages)
 npm i @qvac/translation-nmtcpp
 ```
 
@@ -95,38 +95,6 @@ The structure varies slightly depending on which backend you're using:
 
 ---
 
-#### OPUS/Marian Model (Default)
-
-For European language translations using OPUS models from Hyperdrive:
-
-```javascript
-const HyperdriveDL = require('@qvac/dl-hyperdrive')
-
-const hdDL = new HyperdriveDL({
-  key: 'hd://528eb43b34c57b0fb7116e532cd596a9661b001870bdabf696243e8d079a74ca' // en-it model (MARIAN_OPUS_EN_IT)
-})
-
-const args = {
-  loader: hdDL,
-  params: {
-    mode: 'full',      // Model loading mode (full is recommended)
-    srcLang: 'en',     // Source language (ISO 639-1 code)
-    dstLang: 'it'      // Target language (ISO 639-1 code)
-  },
-  diskPath: './models/opus-en-it',  // Unique directory per model
-  modelName: 'model.bin'            // Always 'model.bin' for OPUS models
-}
-```
-
-**Key Parameters:**
-| Parameter | Description | Example |
-|-----------|-------------|---------|
-| `srcLang` | Source language (ISO 639-1) | `'en'`, `'de'`, `'it'`, `'es'`, `'fr'` |
-| `dstLang` | Target language (ISO 639-1) | `'en'`, `'de'`, `'it'`, `'es'`, `'fr'` |
-| `modelName` | Always `'model.bin'` | `'model.bin'` |
-
----
-
 #### IndicTrans2 Model
 
 For Indic language translations (English ↔ Hindi, Bengali, Tamil, etc.):
@@ -135,7 +103,7 @@ For Indic language translations (English ↔ Hindi, Bengali, Tamil, etc.):
 const HyperdriveDL = require('@qvac/dl-hyperdrive')
 
 const hdDL = new HyperdriveDL({
-  key: 'hd://8c0f50e7c75527213a090d2f1dcd9dbdb8262e5549c8cbbb74cb7cb12b156892' // en-hi 200M model (MARIAN_EN_HI_INDIC_200M_Q0F32)
+  key: 'hd://8c0f50e7c75527213a090d2f1dcd9dbdb8262e5549c8cbbb74cb7cb12b156892' // en-hi IndicTrans2 200M model
 })
 
 const args = {
@@ -265,7 +233,6 @@ const args = {
 > **Important: diskPath Configuration**
 >
 > Use a **unique directory per model** to avoid file conflicts when using multiple models:
-> - `./models/opus-en-it` for OPUS English→Italian
 > - `./models/indic-en-hi-200M` for IndicTrans English→Hindi
 > - `./models/bergamot-en-it` for Bergamot English→Italian
 
@@ -280,18 +247,18 @@ The `config` object contains two types of parameters:
 
 #### Model-Specific Parameters
 
-| Parameter | OPUS/Marian | IndicTrans2 | Bergamot |
-|-----------|-------------|-------------|----------|
-| `modelType` | Not needed (default) | **Required** | **Required** |
-| `srcVocabName` | Not needed | Not needed | **Required** |
-| `dstVocabName` | Not needed | Not needed | **Required** |
+| Parameter | IndicTrans2 | Bergamot |
+|-----------|-------------|----------|
+| `modelType` | **Required** | **Required** |
+| `srcVocabName` | Not needed | **Required** |
+| `dstVocabName` | Not needed | **Required** |
 
-#### Generation/Decoding Parameters (OPUS/IndicTrans Only)
+#### Generation/Decoding Parameters (IndicTrans Only)
 
-These parameters control how the model generates output. **Note:** Full parameter support is only available for OPUS/Marian and IndicTrans2 models. Bergamot has limited parameter support.
+These parameters control how the model generates output. **Note:** Full parameter support is only available for IndicTrans2 models. Bergamot has limited parameter support.
 
 ```javascript
-// Generation parameters for OPUS/Marian and IndicTrans2
+// Generation parameters for IndicTrans2
 const generationParams = {
   beamsize: 4,            // Beam search width (>=1). 1 disables beam search
   lengthpenalty: 0.6,     // Length normalization strength (>=0)
@@ -310,19 +277,6 @@ Import `TranslationNmtcpp` and create an instance by combining `args` (from Step
 
 ```javascript
 const TranslationNmtcpp = require('@qvac/translation-nmtcpp')
-```
-
-#### OPUS/Marian (Default)
-
-```javascript
-// OPUS - combine generation parameters (modelType defaults to Opus)
-const config = {
-  ...generationParams,  // Spread generation params from Step 3
-  beamsize: 4,          // Or override specific values
-  maxlength: 128
-}
-
-const model = new TranslationNmtcpp(args, config)
 ```
 
 #### IndicTrans2
@@ -356,9 +310,8 @@ const model = new TranslationNmtcpp(args, config)
 
 ```javascript
 TranslationNmtcpp.ModelTypes = {
-  Opus: 'Opus',           // Default - Marian OPUS models
-  IndicTrans: 'IndicTrans', // Indic language models  
-  Bergamot: 'Bergamot'    // Firefox Translations models
+  IndicTrans: 'IndicTrans',
+  Bergamot: 'Bergamot'
 }
 ```
 
@@ -403,7 +356,7 @@ try {
 
 For translating multiple texts efficiently, use the `runBatch()` method instead of calling `run()` multiple times.
 
-> **Important:** `runBatch()` is only available with the **Bergamot backend**. OPUS/Marian and IndicTrans2 models should use sequential `run()` calls.
+> **Important:** `runBatch()` is only available with the **Bergamot backend**. IndicTrans2 models should use sequential `run()` calls.
 
 ```javascript
 // Array of texts to translate (English)
@@ -431,7 +384,7 @@ try {
 
 | Method | Input | Output | Backend Support |
 |--------|-------|--------|-----------------|
-| `run(text)` | Single string | `QVACResponse` with streaming | All (OPUS, IndicTrans, Bergamot) |
+| `run(text)` | Single string | `QVACResponse` with streaming | All (IndicTrans, Bergamot) |
 | `runBatch(texts)` | Array of strings | Array of strings | **Bergamot only** |
 
 > **Note:** `runBatch()` is significantly faster when translating multiple texts as it processes them in a single batch operation. See [`examples/batch.example.js`](examples/batch.example.js) for a complete example with Bergamot.
@@ -457,9 +410,9 @@ For a complete working example that brings all these steps together, see the [Qu
 
 ## Quickstart Example
 
-This quickstart demonstrates **OPUS/Marian model** inference (Italian → English translation).
+This quickstart demonstrates **Bergamot model** inference (English → Italian translation).
 
-> **Other Model Types:** For IndicTrans2 or Bergamot models, refer to [Section 2: Create the args object](#2-create-the-args-object) for model-specific configuration.
+> **Other Model Types:** For IndicTrans2 models, refer to [Section 2: Create the args object](#2-create-the-args-object) for model-specific configuration.
 
 Follow these steps to run the Quickstart Example:
 
@@ -479,41 +432,43 @@ npm init -y
 npm i @qvac/translation-nmtcpp @qvac/dl-hyperdrive
 ```
 
-### 3. Create `example.js` and paste the following code into it
+### 3. Create `quickstart.js` and paste the following code into it
 
 ```bash
-touch example.js
+touch quickstart.js
 ```
 
 ```javascript
-// example.js
+// quickstart.js
 
 'use strict'
 
-// Note: This import will depend on the addon package installed
 const TranslationNmtcpp = require('@qvac/translation-nmtcpp')
 const HyperdriveDL = require('@qvac/dl-hyperdrive')
 
-const text = 'La traduzione automatica ha rivoluzionato il modo in cui comunichiamo attraverso le barriere linguistiche nel mondo digitale moderno.'
+const text = 'Machine translation has revolutionized the way we communicate across language barriers in the modern digital world.'
 
 async function main () {
-  // 1. Create `DataLoader`
+  // 1. Create DataLoader
   const hdDL = new HyperdriveDL({
-    // The hyperdrive key for it-en translation model weights and config
-    // From qvac-sdk models.ts: MARIAN_OPUS_IT_EN_Q0F32
-    key: 'hd://ee90217a3b0039b48865ec23af102e8a8afafb964ebb45f56f1bed63ac4a0633'
+    key: 'hd://a8811fb494e4aee45ca06a011703a25df5275e5dfa59d6217f2d430c677f9fa6'
   })
 
-  // 2. Create the `args` object
+  // 2. Create the args object
   const args = {
     loader: hdDL,
-    params: { mode: 'full', dstLang: 'en', srcLang: 'it' },
-    diskPath: './models/opus-it-en', // Unique path for this model
-    modelName: 'model.bin',
+    params: { mode: 'full', srcLang: 'en', dstLang: 'it' },
+    diskPath: './models/bergamot-en-it',
+    modelName: 'model.enit.intgemm.alphas.bin'
   }
 
-  // 3. Optional : Create config object
-  const config = {beamsize : 4}
+  // 3. Create config object
+  const config = {
+    modelType: TranslationNmtcpp.ModelTypes.Bergamot,
+    srcVocabName: 'vocab.enit.spm',
+    dstVocabName: 'vocab.enit.spm',
+    beamsize: 4
+  }
 
   // 4. Create Model Instance
   const model = new TranslationNmtcpp(args, config)
@@ -541,30 +496,25 @@ async function main () {
   }
 }
 
-
 main().catch(console.error)
 ```
 
 ### 4. Run the Example
 
 ```bash
-bare example.js
+bare quickstart.js
 ```
 
 You should see this output on successful execution
 
 ```bash
-params_shard_0.bin has these many parameter records: 1
-params_shard_1.bin has these many parameter records: 19
-params_shard_2.bin has these many parameter records: 1
-params_shard_3.bin has these many parameter records: 336
-Machine translation has revolutionized the way we communicate across language barriers in the modern digital world.
+La traduzione automatica ha rivoluzionato il modo in cui comunichiamo attraverso le barriere linguistiche nel mondo digitale moderno.
 translation finished!
 ```
 
 ### Adapting for Other Model Types
 
-To use **IndicTrans2** or **Bergamot** models instead, modify the `args` and `config` objects as shown in [Section 2: Create the args object](#2-create-the-args-object) and [Section 4: Create Model Instance](#4-create-model-instance).
+To use **IndicTrans2** models instead, modify the `args` and `config` objects as shown in [Section 2: Create the args object](#2-create-the-args-object) and [Section 4: Create Model Instance](#4-create-model-instance).
 
 **Quick Reference:**
 
@@ -579,12 +529,12 @@ For more detailed examples covering different use cases, refer to the `examples/
 
 | Example | Description | Model Type |
 |---------|-------------|------------|
-| [example.hd.js](examples/example.hd.js) | Hyperdrive Data Loader for Marian model inference | OPUS/Marian |
+| [example.hd.js](examples/example.hd.js) | Hyperdrive Data Loader with GGML backend | IndicTrans |
 | [indictrans.js](examples/indictrans.js) | English-to-Hindi translation with IndicTrans2 | IndicTrans2 |
 | [batch.example.js](examples/batch.example.js) | Batch translation with `runBatch()` method | Bergamot |
 | [pause.example.js](examples/pause.example.js) | Long-text translation with cancel support | Any |
 | [pivot.example.hd.js](examples/pivot.example.hd.js) | Pivot translation (e.g., es→en→it) via Bergamot | Bergamot |
-| [quickstart.js](examples/quickstart.js) | Both GGML and Bergamot backends | Multiple |
+| [quickstart.js](examples/quickstart.js) | Bergamot backend quickstart | Bergamot |
 
 ## Model Registry
 
@@ -620,76 +570,6 @@ Below is the section of the registry dedicated to **translation tasks**. Each en
 "translation:bergamot:nmt::::1.0.0:pten": "a5da4ee5f5817033dee6ed4489d1d3cadcf3d61e99fd246da7e0143c4b7439a4"
 "translation:bergamot:nmt::::1.0.0:ruen": "dad7f99c8d8c17233bcfa005f789a0df29bb4ae3116381bdb2a63ffc32c97dfe"
 "translation:bergamot:nmt::::1.0.0:zhen": "17eb4c3fcd23ac3c93cbe62f08ecb81d70f561f563870ea42494214d6886dd66"
-```
-
-### OPUS/Marian Models
-
-```javascript
-// OPUS models - q0f32 (32-bit float)
-"translation:marian:opus-ggml:::q0f32:1.0.0:en-it": "528eb43b34c57b0fb7116e532cd596a9661b001870bdabf696243e8d079a74ca"
-"translation:marian:opus-ggml:::q0f32:1.0.0:de-en": "f60e55fb7859536ea4e2361c5168ce175cb34b251e0ae00b7c8f68ecc0571d0c"
-"translation:marian:opus-ggml:::q0f32:1.0.0:de-es": "cd8e6a6b0c306c2594fb2ec80d27d40a749dc9cf49102f0aa9b4f2496568ac53"
-"translation:marian:opus-ggml:::q0f32:1.0.0:de-fr": "390d1b4164b46d332a82220d83867e1aa19058fb0ccff6d841de792066f992e5"
-"translation:marian:opus-ggml:::q0f32:1.0.0:de-it": "0d534e862018e00a472ba80b5a0a931e5cccc0637578bbe36ce97682fe6a5412"
-"translation:marian:opus-ggml:::q0f32:1.0.0:en-de": "7f23b4736a1428b60ae665f558ef48d6c70dc2642a4901d3336e02438ea5e752"
-"translation:marian:opus-ggml:::q0f32:1.0.0:en-es": "53760abc441457efbb27047798683723962c9cdb825d645649d50351be326f55"
-"translation:marian:opus-ggml:::q0f32:1.0.0:en-fr": "2957a3e18426d09335d0068efac0726f9945fe72ebbf4161dbc65111c85f6631"
-"translation:marian:opus-ggml:::q0f32:1.0.0:en-pt": "9eb7a478a6e14aef61f618e531061900a2d9a2d55e693dc464560db92861cba4"
-"translation:marian:opus-ggml:::q0f32:1.0.0:es-de": "b1029d997c3dc4df757fa7093780e26742297ec093e0fa0c951d49d06f7b7037"
-"translation:marian:opus-ggml:::q0f32:1.0.0:es-en": "73fb3a48ecf2f113710765ba28dd5d5723622f43955d88acbe7f0ec7c7b4d5e2"
-"translation:marian:opus-ggml:::q0f32:1.0.0:es-fr": "f43966d16f04b108641de97050563515f699c7426c6aa08f54ee28cbea07a1dd"
-"translation:marian:opus-ggml:::q0f32:1.0.0:es-it": "d41c61697c19a2b771439101569935129eb39c324e259a6865f825242e60c212"
-"translation:marian:opus-ggml:::q0f32:1.0.0:fr-de": "d4defd18e51d55eb20957169b2fdfef18627ce01e06d56d40735c429c980a149"
-"translation:marian:opus-ggml:::q0f32:1.0.0:fr-en": "c1226000901bf7e25507b414ffb60e0c8f5cf198de115559dc6bd68826033f20"
-"translation:marian:opus-ggml:::q0f32:1.0.0:fr-es": "6ecc35234eafa3578323591a0872d812479b3937c1a10e303475c9d4614f4ac0"
-"translation:marian:opus-ggml:::q0f32:1.0.0:it-de": "6827f57d0aab9dd0194d06bc94cf12ccafe2a5d4d18e72b4bbaa2c3eb30aeea7"
-"translation:marian:opus-ggml:::q0f32:1.0.0:it-en": "ee90217a3b0039b48865ec23af102e8a8afafb964ebb45f56f1bed63ac4a0633"
-"translation:marian:opus-ggml:::q0f32:1.0.0:it-es": "d6c7482d24e0e24af399151e22f233e86ca3ced411d5fb892772567b4f625ff5"
-
-// OPUS models - q0f16 (16-bit float)
-"translation:marian:opus-ggml:::q0f16:1.0.0:de-fr": "55fe6cf0f6f57e4e5b7ca2b1c544e95f91eb8429d7f056c455e9a8c2677a08fb"
-"translation:marian:opus-ggml:::q0f16:1.0.0:en-fr": "5b9b65bd8735f91d45103c0b44530823274534230623957db5839c748ba30bf0"
-"translation:marian:opus-ggml:::q0f16:1.0.0:en-pt": "098cc786de52e61b8b543f0e0c2e16e054ff19b9f9aef41ec931191c939f8e12"
-"translation:marian:opus-ggml:::q0f16:1.0.0:es-fr": "2313996f5c2a6265c202c90d07fcbd7f324d166428109abdb16ca11f66305510"
-"translation:marian:opus-ggml:::q0f16:1.0.0:fr-de": "14dbccb2c678d45dbd3bd3d0676be9d869b2b6f2ac3fca870f0dcd5a75a0d0d0"
-"translation:marian:opus-ggml:::q0f16:1.0.0:fr-en": "bd1fe00d165a2da2bfb5ea67485602ede700986e40ddd7698b7c37412af01065"
-"translation:marian:opus-ggml:::q0f16:1.0.0:fr-es": "710aeacb0e1a0c938478b1e065b06c58be210a8ddb0bc25edb98a809997d2d14"
-"translation:marian:opus-ggml:::q0f16:1.0.0:pt-en": "821af2699a40bbec2f2fce6276f59c714285f13780cacae3f023cb44c6c6cad1"
-"translation:marian:opus:::q0f16:1.0.0:en-ru": "65f1ae4ae53764d7f9ae2d1581819b4b3dd6011d30079f4445c5db74c40dd533"
-"translation:marian:opus:::q0f16:1.0.0:ru-en": "e42148ee7181f908ac2e6ba979d02de96faf330e4f7bad3bf766415657931d48"
-
-// OPUS models - q4_0 (4-bit quantized)
-"translation:marian:opus-ggml:::q4_0:1.0.0:de-fr": "3782fc852215514aee043e095c041933bf915f618057035a467f461d844476d3"
-"translation:marian:opus-ggml:::q4_0:1.0.0:en-fr": "9cf4a27c1ba14f73d1287dc161b7fd9594253b8e8758bddc961984c1e93d6f5e"
-"translation:marian:opus-ggml:::q4_0:1.0.0:en-pt": "a58825b2dcde4c4701889c20050e025df4d69f1161c9d2d2e6106712d70b2ace"
-"translation:marian:opus-ggml:::q4_0:1.0.0:es-fr": "446daa51a5f037795fce6b0f9b245f53f3f5e601d4dd942b707073bed3586ac4"
-"translation:marian:opus-ggml:::q4_0:1.0.0:fr-de": "a85185a5747e16cff9db0b2c8ab92b63fbe3c4abc5201c6afa4fd426fabd1cb5"
-"translation:marian:opus-ggml:::q4_0:1.0.0:fr-en": "688b8d7e82d33c8dd18e156282a1b11e97247d04327e0f7549694f4433861262"
-"translation:marian:opus-ggml:::q4_0:1.0.0:fr-es": "07c3d283e1d22b7a44cb16ed3c733d958885502e293ca75a0b4d87d1aecfc653"
-"translation:marian:opus:::q4_0:1.0.0:ar-en": "b92b8b3c369a18d3b7b787848b75a0bec6ec76e585b38dc6d7b0d443cd38a25c"
-"translation:marian:opus:::q4_0:1.0.0:de-en": "b7f74bad18de10f86237b2bf523daad7e8274b5ae4a56c072a416311032fe5ba"
-"translation:marian:opus:::q4_0:1.0.0:en-ar": "b407eed23bce20b10f84697ba4582e46bf6ea382afb93f7d6fe00c93d7d4d4a0"
-"translation:marian:opus:::q4_0:1.0.0:en-de": "396f08beaec748cc5ff167ee5d568beda32cef09f6b20658a05e1472185c71c0"
-"translation:marian:opus:::q4_0:1.0.0:en-es": "3e7ccb4270032fea10a4697fa68ebaf6771ce8f05488dcc679e462276794b53c"
-"translation:marian:opus:::q4_0:1.0.0:en-it": "4aa1a3960f33d6bda61be4810c5e337729daef9f18e0a5e18de135e5be838d7c"
-"translation:marian:opus:::q4_0:1.0.0:en-ja": "12fd8ee6fd0b69797f21909aeaf27d8dc68ee0ea8894658a3efca9a43291dbc2"
-"translation:marian:opus:::q4_0:1.0.0:en-roa": "ed894bfc0e3ceb90f35c417283fcdcb191eca5973334cc6691344ecc813f444f"
-"translation:marian:opus:::q4_0:1.0.0:en-ru": "1a09d02d589f030b0f63e545c1f20bc6b7f2f7bfda25fdb9dc9370a7f576d09d"
-"translation:marian:opus:::q4_0:1.0.0:en-zh": "b4d1198162fdc96f303e41046076543ae181a7c87d7ecc05fe98eae2f00481fe"
-"translation:marian:opus:::q4_0:1.0.0:es-en": "9442ba70fea93cb85f55c44e2859b10c5cc621686ed8a414fb4591bc9634fe47"
-"translation:marian:opus:::q4_0:1.0.0:it-en": "925c7e041fc536f4bcd0047e5aca594d49650c6e855b3dfb567e20f08db78262"
-"translation:marian:opus:::q4_0:1.0.0:ja-en": "abe44f20b5acd6c7b6f581109c6d2e23fe1888ef16494c609e86f44e23055035"
-"translation:marian:opus:::q4_0:1.0.0:roa-en": "fca28b2c128f20292b8c978be88515d9880c35914bae9df2511f4dcb07ad9b6e"
-"translation:marian:opus:::q4_0:1.0.0:ru-en": "47b2ec9c205a8624bb7460d9a7def7806cb368401d556454992c73d8fbffc423"
-"translation:marian:opus:::q4_0:1.0.0:zh-en": "4773c185a8fe1f2a63c686996d1817b0c052e17a8aa6488a39d85c81bb726ef4"
-
-// OPUS models - q4f16_1 (mixed precision)
-"translation:marian:opus:::q4f16_1:1.0.0:en-ja": "2e6e274e9bb86774a64880ccd89660d3d5d5901f0bf39116d460350b06adb3a3"
-"translation:marian:opus:::q4f16_1:1.0.0:ja-en": "0e795244ad5cf38dac6fe28deec8f97b37c95907d734a50f620670dc9d0a8e5b"
-
-// OPUS models - q0f32 for Russian
-"translation:marian:opus:::q0f32:1.0.0:en-ru": "c009326acc2c3eeb5d557489370cf7b6de07d35335cb47e9a3e90909f9ac6c44"
-"translation:marian:opus:::q0f32:1.0.0:ru-en": "12d0af03637c3902beff9bf6e2d854f103ef4745694587c9a67044ff6accb493"
 ```
 
 ### IndicTrans2 Models
@@ -734,41 +614,14 @@ Each key in this list follows the general pattern:
 <task>:<model_family>:<type>:<variant>:<size>:<quantization>:<version>:<source-lang>-<target-lang>
 ```
 
-For example, `translation:marian:opus-ggml:::q0f32:1.0.0:en-it` means:
+For example, `translation:bergamot:nmt::::1.0.0:enit` means:
 - **task**: translation
-- **model_family**: marian
-- **type**: opus-ggml
-- **quantization**: q0f32 (32-bit float)
+- **model_family**: bergamot
+- **type**: nmt
 - **version**: 1.0.0
-- **languages**: en-it (English to Italian)
+- **languages**: enit (English to Italian)
 
 ## Supported Languages
-
-### Marian/OPUS Models (Hyperdrive)
-
-The following language pairs are available via Hyperdrive. See [Model Registry](#model-registry) for hyperdrive keys.
-
-**Core European Languages (with cross-language support):**
-| Language | Code | Supported Pairs | Hyperdrive |
-|----------|------|-----------------|------------|
-| English | en | ↔ de, es, it, fr, pt, ru, ar, ja, zh | Yes |
-| German | de | ↔ en, es, it, fr | Yes |
-| Spanish | es | ↔ en, de, it, fr | Yes |
-| Italian | it | ↔ en, de, es | Yes |
-| French | fr | ↔ en, de, es | Yes |
-
-**Other Languages (English ↔ X):**
-| Language | Code | Hyperdrive |
-|----------|------|------------|
-| Portuguese | pt | Yes |
-| Russian | ru | Yes |
-| Arabic | ar | Yes |
-| Japanese | ja | Yes |
-| Chinese | zh | Yes |
-
-> **Legend:** `↔` = bidirectional support available in Hyperdrive
-
-> **Note:** The OPUS project supports many more language pairs. Only the pairs listed above are currently available via Hyperdrive. Additional models may be added in future updates.
 
 ### IndicTrans2 Models (Hyperdrive)
 
@@ -861,9 +714,8 @@ const TranslationNmtcpp = require('@qvac/translation-nmtcpp')
 
 // Available model types
 TranslationNmtcpp.ModelTypes = {
-  IndicTrans: 'IndicTrans',  // For Indic language translations
-  Opus: 'Opus',              // For Marian OPUS models
-  Bergamot: 'Bergamot'       // For Bergamot/Firefox translations
+  IndicTrans: 'IndicTrans',
+  Bergamot: 'Bergamot'
 }
 ```
 
@@ -873,13 +725,13 @@ TranslationNmtcpp.ModelTypes = {
 
 | Package | Description | Backends | Languages |
 |---------|-------------|----------|-----------|
-| `@qvac/translation-nmtcpp` | Main translation package | OPUS, Bergamot, IndicTrans | See [Supported Languages](#supported-languages) |
+| `@qvac/translation-nmtcpp` | Main translation package | Bergamot, IndicTrans | See [Supported Languages](#supported-languages) |
 
-The main package supports all three backends and all their respective languages. See [Supported Languages](#supported-languages) for the complete list.
+The main package supports both backends and all their respective languages. See [Supported Languages](#supported-languages) for the complete list.
 
 ## Backends
 
-This project supports multiple backends (e.g., Marian/OPUS, Bergamot/Firefox, IndicTrans2).
+This project supports multiple backends (Bergamot/Firefox and IndicTrans2).
 
 The Bergamot backend is included in the build by default. To build without Bergamot support (reduces build time and dependencies):
 
@@ -893,7 +745,7 @@ We conduct comprehensive benchmarking of our translation models to evaluate thei
 
 ### Benchmark Results
 
-For detailed benchmark results across all supported language pairs and model configurations, see our [Benchmark Results Summary](benchmarks/results/marian/results_summary.md).
+Benchmarks are run via CI for all supported language pairs and model configurations.
 
 The benchmarking covers:
 
@@ -924,9 +776,9 @@ const logger = {
 const args = {
   loader: hdDL,
   params: { mode: 'full', srcLang: 'en', dstLang: 'it' },
-  diskPath: './models/opus-en-it',
-  modelName: 'model.bin',
-  logger  // Pass logger to enable C++ logs
+  diskPath: './models/bergamot-en-it',
+  modelName: 'model.enit.intgemm.alphas.bin',
+  logger
 }
 ```
 
@@ -938,9 +790,8 @@ To suppress all C++ logs, either omit the `logger` parameter or set it to `null`
 const args = {
   loader: hdDL,
   params: { mode: 'full', srcLang: 'en', dstLang: 'it' },
-  diskPath: './models/opus-en-it',
-  modelName: 'model.bin'
-  // No logger = suppress C++ logs
+  diskPath: './models/bergamot-en-it',
+  modelName: 'model.enit.intgemm.alphas.bin'
 }
 ```
 
