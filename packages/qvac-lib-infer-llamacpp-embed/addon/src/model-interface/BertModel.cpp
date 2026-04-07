@@ -288,7 +288,11 @@ common_params setupParams(
           "preferredDeviceFromString: wrong deduced device, must be 'gpu' or "
           "'cpu'.\n");
     }
-    resolvedBackendDevice = chosenBackend.first == BackendType::GPU ? 1 : 0;
+    if (chosenBackend.first == BackendType::GPU) {
+      resolvedBackendDevice = 1;
+    } else {
+      resolvedBackendDevice = 0;
+    }
     configVector.emplace_back("--device");
     configVector.emplace_back(chosenBackend.second);
     configFilemap.erase(deviceIt);
