@@ -29,8 +29,12 @@ double getStatValue(
                               std::decay_t<decltype(value)>,
                               double>) {
               return value;
-            } else {
+            } else if constexpr (std::is_same_v<
+                                     std::decay_t<decltype(value)>,
+                                     int64_t>) {
               return static_cast<double>(value);
+            } else {
+              return 0.0;
             }
           },
           stat.second);
