@@ -6029,7 +6029,7 @@
     "source": "s3:///qvac_models_compiled/onnx/lavasr/2026-04-03/enhancer_backbone.onnx",
     "engine": "@qvac/tts",
     "description": "LavaSR speech enhancer backbone (graph)",
-    "quantization": "",
+    "quantization": "fp32",
     "params": "",
     "license": "MIT",
     "tags": [
@@ -6044,7 +6044,7 @@
     "source": "s3:///qvac_models_compiled/onnx/lavasr/2026-04-03/enhancer_backbone.onnx.data",
     "engine": "@qvac/tts",
     "description": "LavaSR speech enhancer backbone (weights)",
-    "quantization": "",
+    "quantization": "fp32",
     "params": "",
     "license": "MIT",
     "tags": [
@@ -6059,7 +6059,7 @@
     "source": "s3:///qvac_models_compiled/onnx/lavasr/2026-04-03/enhancer_spec_head.onnx",
     "engine": "@qvac/tts",
     "description": "LavaSR speech enhancer spectrogram head (graph)",
-    "quantization": "",
+    "quantization": "fp32",
     "params": "",
     "license": "MIT",
     "tags": [
@@ -6074,7 +6074,7 @@
     "source": "s3:///qvac_models_compiled/onnx/lavasr/2026-04-03/enhancer_spec_head.onnx.data",
     "engine": "@qvac/tts",
     "description": "LavaSR speech enhancer spectrogram head (weights)",
-    "quantization": "",
+    "quantization": "fp32",
     "params": "",
     "license": "MIT",
     "tags": [
@@ -6089,7 +6089,7 @@
     "source": "s3:///qvac_models_compiled/onnx/lavasr/2026-04-03/denoiser_core_legacy_fixed63.onnx",
     "engine": "@qvac/tts",
     "description": "LavaSR speech denoiser",
-    "quantization": "",
+    "quantization": "fp32",
     "params": "",
     "license": "MIT",
     "tags": [
