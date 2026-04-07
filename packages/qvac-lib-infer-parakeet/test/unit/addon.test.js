@@ -29,12 +29,10 @@ function createMockedModel ({ onOutput = () => { }, binding = undefined } = {}) 
 
   sinon.stub(model, '_createAddon').callsFake(configurationParams => {
     const _binding = binding || new MockedBinding()
-    const addon = new ParakeetInterface(_binding, configurationParams, onOutput, transitionCb)
-
-    // Set the BaseInference callback on the mocked binding so _finishPromise gets resolved
-    if (_binding.setBaseInferenceCallback) {
-      _binding.setBaseInferenceCallback(model._outputCallback.bind(model))
-    }
+    const addon = new ParakeetInterface(_binding, configurationParams, (addon, event, jobId, output, error) => {
+      model._outputCallback(addon, event, jobId, output, error)
+      onOutput(addon, event, jobId, output, error)
+    }, transitionCb)
 
     return addon
   })
@@ -239,9 +237,8 @@ test('ParakeetInterface cancel clears active job only after cancel resolves', as
   addon._setState('processing')
   let sawActiveJobDuringCancel = false
 
-  binding.cancel = async (handle, jobId) => {
+  binding.cancel = async (handle) => {
     t.is(handle, addon._handle, 'cancel should be called with current handle')
-    t.is(jobId, 7, 'cancel should target the provided job ID')
     sawActiveJobDuringCancel = addon._activeJobId === 7
     await wait(5)
   }
@@ -253,7 +250,7 @@ test('ParakeetInterface cancel clears active job only after cancel resolves', as
   t.is(await addon.status(), 'listening', 'State should return to listening after cancel resolves')
 })
 
-test('ParakeetInterface ignores stale cancel error after next job starts', async (t) => {
+test('ParakeetInterface cancels buffered job before native run starts', async (t) => {
   const events = []
   const binding = new MockedBinding()
   const addon = new ParakeetInterface(binding, {
@@ -263,30 +260,43 @@ test('ParakeetInterface ignores stale cancel error after next job starts', async
     events.push({ event, jobId, output, error })
   })
 
-  addon._activeJobId = 1
-  addon._nextJobId = 2
-  addon._setState('processing')
+  const pendingJobId = await addon.append({
+    type: 'audio',
+    data: new Float32Array([0.1, 0.2, 0.3]).buffer
+  })
 
-  binding.cancel = async () => {}
-  await addon.cancel(1)
+  await addon.cancel(pendingJobId)
 
-  t.is(addon._ignoreNextCancelledError, true, 'cancel should arm stale cancel error suppression')
+  t.is(addon._activeJobId, null, 'Buffered cancel should not leave an active native job')
+  t.is(addon._bufferedAudio.length, 0, 'Buffered cancel should clear queued audio')
+  t.is(await addon.status(), 'listening', 'Buffered cancel should return to listening state')
+  t.ok(
+    events.find(e => e.event === 'Error' && e.jobId === pendingJobId && e.error === 'Job cancelled'),
+    'Buffered cancel should fail the pending JS-owned job'
+  )
+})
+
+test('ParakeetInterface ignores stale wrapper job ids when cancelling', async (t) => {
+  const binding = new MockedBinding()
+  const addon = new ParakeetInterface(binding, {
+    modelPath: './models/parakeet-tdt-0.6b-v3-onnx',
+    modelType: 'tdt'
+  }, () => {})
 
   addon._activeJobId = 2
+  addon._nextJobId = 3
   addon._setState('processing')
 
-  addon._addonOutputCallback(addon, 'Error', undefined, 'Job cancelled')
+  let cancelCalls = 0
+  binding.cancel = async () => {
+    cancelCalls += 1
+  }
 
-  t.is(addon._ignoreNextCancelledError, false, 'stale cancel error should be consumed once')
-  t.is(addon._activeJobId, 2, 'stale cancel error should not clear the new active job')
+  await addon.cancel(1)
 
-  addon._addonOutputCallback(addon, 'Output', [{ text: 'second job', toAppend: true }], null)
-  addon._addonOutputCallback(addon, 'RuntimeStats', { totalTime: 1, audioDurationMs: 1, totalSamples: 1 }, null)
-
-  t.ok(events.find(e => e.event === 'Output' && e.jobId === 2), 'new job output should still be delivered')
-  t.ok(events.find(e => e.event === 'JobEnded' && e.jobId === 2), 'new job completion should still be delivered')
-  t.absent(events.find(e => e.event === 'Error' && e.error === 'Job cancelled'), 'stale cancel error should not be forwarded')
-  t.is(addon._activeJobId, null, 'job completion should clear the new active job normally')
+  t.is(cancelCalls, 0, 'Stale response ids should not cancel the current native job')
+  t.is(addon._activeJobId, 2, 'Stale response ids should leave the active job unchanged')
+  t.is(await addon.status(), 'processing', 'Stale response ids should not change state')
 })
 
 test('ParakeetInterface unloadWeights throws unsupported operation error', async (t) => {
@@ -320,9 +330,8 @@ test('ParakeetInterface destroyInstance awaits active cancel before teardown', a
   let destroySawResolvedCancel = false
 
   const originalDestroy = binding.destroyInstance.bind(binding)
-  binding.cancel = async (handle, jobId) => {
+  binding.cancel = async (handle) => {
     t.is(handle, addon._handle, 'cancel should receive current handle')
-    t.is(jobId, 9, 'cancel should target the active job')
     await wait(5)
     cancelResolved = true
   }
@@ -354,4 +363,27 @@ test('ParakeetInterface destroyInstance skips cancel with no active job', async 
   await addon.destroyInstance()
 
   t.is(cancelCalls, 0, 'destroy should not call cancel when there is no active job')
+})
+
+test('ParakeetInterface reload preserves wrapper job numbering across native recreation', async (t) => {
+  const binding = new MockedBinding()
+  const addon = new ParakeetInterface(binding, {
+    modelPath: './models/parakeet-tdt-0.6b-v3-onnx',
+    modelType: 'tdt'
+  }, () => {})
+
+  addon._nextJobId = 7
+  addon._activeJobId = 6
+  addon._bufferedAudio = [new Float32Array([0.1, 0.2])]
+
+  binding.cancel = async () => {}
+  await addon.reload({
+    modelPath: './models/parakeet-tdt-0.6b-v3-onnx',
+    modelType: 'tdt'
+  })
+
+  t.is(addon._nextJobId, 7, 'reload should preserve JS-owned job numbering')
+  t.is(addon._activeJobId, null, 'reload should clear the previous active job')
+  t.is(addon._bufferedAudio.length, 0, 'reload should discard buffered audio from the old instance')
+  t.is(await addon.status(), 'loading', 'reload should leave the addon in loading state until activation')
 })
