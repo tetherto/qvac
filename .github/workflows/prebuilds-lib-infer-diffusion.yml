@@ -37,6 +37,7 @@ jobs:
     permissions:
       contents: write
       pull-requests: write
+      id-token: write
     strategy:
       fail-fast: false
       matrix:
@@ -263,11 +264,14 @@ jobs:
           echo "VULKAN_SDK=$VULKAN_SDK" >> $GITHUB_ENV
 
       - if: ${{ matrix.platform == 'linux' && matrix.arch == 'arm64' }}
+        name: Configure AWS credentials via OIDC
+        uses: aws-actions/configure-aws-credentials@8df5847569e6427dd6c4fb1cf565c83acfa8afa7 # 6.0.0
+        with:
+          role-to-assume: ${{ secrets.AWS_OIDC_ROLE_ARN }}
+          aws-region: eu-central-1
+
+      - if: ${{ matrix.platform == 'linux' && matrix.arch == 'arm64' }}
         name: Setup vulkan sdk path in linux arm64
-        env:
-          AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
-          AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
-          AWS_DEFAULT_REGION: us-east-1
         run: |
           VULKAN_SDK=~/vulkan/aarch64
           echo "VULKAN_SDK=$VULKAN_SDK" >> $GITHUB_ENV
