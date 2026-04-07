@@ -128,6 +128,7 @@ export interface RuntimeStats {
   generatedTokens: number
   promptTokens: number
   contextSlides: number
+  backendDevice: 'cpu' | 'gpu'
 }
 
 export interface DownloadResult {

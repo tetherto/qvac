@@ -202,7 +202,7 @@ async function createEmbeddingsTestInstance (t, modelName, device = 'gpu', gpuLa
 
   config.openclCacheDir = diskPath
 
-  const inference = new GGMLBert({ modelName, loader, logger, diskPath }, config)
+  const inference = new GGMLBert({ modelName, loader, logger, diskPath, opts: { stats: true } }, config)
 
   const t0 = Date.now()
   await inference.load()

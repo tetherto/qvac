@@ -93,7 +93,7 @@ jobs:
           repository: ${{ inputs.repository || github.repository }}
           ref: ${{ inputs.ref || github.ref }}
           token: ${{ secrets.PAT_TOKEN }}
-          path: ${{ github.workspace }}/addon
+          path: addon
           fetch-depth: 0
 
       - name: Checkout mobile test framework
@@ -102,7 +102,7 @@ jobs:
           repository: tetherto/qvac-test-addon-mobile
           ref: ${{ env.TEST_FRAMEWORK_REF }}
           token: ${{ secrets.PAT_TOKEN }}
-          path: ${{ github.workspace }}/test-framework
+          path: test-framework
           fetch-depth: 0
 
       - name: Setup Node.js
@@ -152,7 +152,7 @@ jobs:
         if: matrix.platform == 'Android' && !inputs.package
         uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # 8.0.1
         with:
-          path: ${{ github.workspace }}/${{ env.ADDON_WORKDIR }}/prebuilds
+          path: ${{ env.ADDON_WORKDIR }}/prebuilds
           pattern: ${{ env.PREBUILD_ARTIFACT_PREFIX }}android-*
           merge-multiple: true
         continue-on-error: true
@@ -161,7 +161,7 @@ jobs:
         if: matrix.platform == 'iOS' && !inputs.package
         uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # 8.0.1
         with:
-          path: ${{ github.workspace }}/${{ env.ADDON_WORKDIR }}/prebuilds
+          path: ${{ env.ADDON_WORKDIR }}/prebuilds
           pattern: ${{ env.PREBUILD_ARTIFACT_PREFIX }}ios-*
           merge-multiple: true
         continue-on-error: true
@@ -203,27 +203,18 @@ jobs:
       - name: Verify and prepare prebuilds
         working-directory: ${{ env.ADDON_WORKDIR }}
         run: |
-          if [ -d "${{ runner.temp }}/prebuilds-download" ]; then
-            mkdir -p prebuilds
-            cp -r ${{ runner.temp }}/prebuilds-download/* ./prebuilds/
-          fi
           echo "Checking for prebuilds..."
+          echo "Current directory: $(pwd)"
           if [ -d "prebuilds" ] && [ "$(ls -A prebuilds)" ]; then
             echo "✅ Prebuilds found from artifacts:"
             ls -la prebuilds/
           else
-            echo "⚠️  No prebuilds from artifacts, checking source..."
-            if [ -d "prebuilds" ] && [ "$(ls -A prebuilds)" ]; then
-              echo "✅ Prebuilds found in source:"
-              ls -la prebuilds/
-            else
-              echo "❌ ERROR: No prebuilds found!"
-              echo "   This workflow requires prebuilds to be available."
-              echo "   Either:"
-              echo "   1. Run this workflow after prebuild job completes"
-              echo "   2. Or commit prebuilds to the repository"
-              exit 1
-            fi
+            echo "❌ ERROR: No prebuilds found!"
+            echo "   This workflow requires prebuilds to be available."
+            echo "   Either:"
+            echo "   1. Run this workflow after prebuild job completes"
+            echo "   2. Or commit prebuilds to the repository"
+            exit 1
           fi
 
           # Copy mobile prebuilds if needed
@@ -324,14 +315,14 @@ jobs:
           fi
 
       - name: Setup test framework dependencies
-        working-directory: ${{ github.workspace }}/test-framework
+        working-directory: test-framework
         run: |
           echo "Setting up mobile test framework..."
           npm install --ignore-scripts
           echo "✅ Test framework dependencies installed"
 
       - name: Build test app with addon
-        working-directory: ${{ github.workspace }}/test-framework
+        working-directory: test-framework
         run: |
           echo "Building test app with addon..."
           echo "This will:"
@@ -380,7 +371,7 @@ jobs:
 
       - name: Display build summary
         if: always()
-        working-directory: ${{ github.workspace }}/test-framework
+        working-directory: test-framework
         run: |
           echo ""
           echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
@@ -425,7 +416,7 @@ jobs:
 
       - name: Generate Android project
         if: matrix.platform == 'Android'
-        working-directory: ${{ github.workspace }}/test-framework
+        working-directory: test-framework
         run: |
           echo "Generating Android project with Expo..."
           npx expo prebuild --platform android --clean
@@ -433,7 +424,7 @@ jobs:
       - name: Build Android APK
         if: matrix.platform == 'Android'
         id: build_apk
-        working-directory: ${{ github.workspace }}/test-framework
+        working-directory: test-framework
         run: |
           echo "Building Android APK for Device Farm..."
           export JAVA_HOME=$JAVA_HOME_17_X64
@@ -631,14 +622,14 @@ jobs:
 
       - name: Generate iOS project
         if: matrix.platform == 'iOS'
-        working-directory: ${{ github.workspace }}/test-framework
+        working-directory: test-framework
         run: |
           echo "Generating iOS project with Expo..."
           npx expo prebuild --platform ios --clean
 
       - name: Install iOS dependencies
         if: matrix.platform == 'iOS'
-        working-directory: ${{ github.workspace }}/test-framework/ios
+        working-directory: test-framework/ios
         run: |
           echo "Installing CocoaPods dependencies..."
           pod install --repo-update
@@ -646,7 +637,7 @@ jobs:
       - name: Build and Archive iOS App
         if: matrix.platform == 'iOS'
         id: build_ios
-        working-directory: ${{ github.workspace }}/test-framework
+        working-directory: test-framework
         run: |
           echo "Building iOS app for Device Farm..."
 
@@ -697,7 +688,7 @@ jobs:
       - name: Export IPA
         if: matrix.platform == 'iOS'
         id: export_ipa
-        working-directory: ${{ github.workspace }}/test-framework/ios
+        working-directory: test-framework/ios
         run: |
           SCHEME_NAME=$(xcodebuild -list | grep -A 1 "Schemes:" | grep -v "Schemes:" | head -1 | xargs)
 
@@ -814,7 +805,7 @@ jobs:
           done
 
       - name: Verify test package generation
-        working-directory: ${{ github.workspace }}/test-framework/e2e
+        working-directory: test-framework/e2e
         run: |
           echo "Verifying e2e test package..."
 
@@ -838,7 +829,7 @@ jobs:
 
       - name: Package and Upload Test Package
         id: upload_test_package
-        working-directory: ${{ github.workspace }}/test-framework
+        working-directory: test-framework
         run: |
           echo "📦 Packaging e2e tests..."
           cd e2e

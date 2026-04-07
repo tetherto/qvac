@@ -91,6 +91,7 @@ private:
       singleGgufStreamedFiles_;
   std::optional<LlamaBackendsHandle> backendsHandle_;
   mutable std::atomic<bool> stopCancelled_{false};
+  int64_t runtimeBackendDevice_ = 0;
 
 public:
   // These using definitions are accessed by the Addon<BertModel> template.
