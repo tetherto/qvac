@@ -6,12 +6,12 @@ description: Text-to-text neural machine translation (NMT).
 
 ## Overview
 
-[Bare module](https://bare.pears.com) that adds support for translation in QVAC using either [`nmt.cpp`](https://github.com/tetherto/qvac/tree/main/packages/qvac-lib-infer-nmtcpp) or [Bergamot](https://browser.mt) as the inference engine.
+[Bare module](https://bare.pears.com) that adds support for translation in QVAC using either [`qvac-fabric-llm.cpp`](https://github.com/tetherto/qvac-fabric-llm.cpp) or [Bergamot](https://browser.mt) as the inference engine.
 
 ## Models
 
 You should load a model compatible with your chosen inference engine:
-- `nmt.cpp` (default): OPUS-MT or IndicTrans2, converted to GGML. Model file format: `*.bin`.
+- `qvac-fabric-llm.cpp` (default): OPUS-MT or IndicTrans2, converted to GGML. Model file format: `*.bin`.
 - Bergamot: Bergamot model bundle. Required files: model `*.bin` + `vocab*.spm`.
 
 ## Requirement
