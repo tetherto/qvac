@@ -242,6 +242,15 @@ export async function getRPC() {
   return ensureRPC();
 }
 
+export async function createDuplexSession(payload: string, commandId: number) {
+  const rpc = await ensureRPC();
+  const req = rpc.request(commandId);
+  const requestStream = req.createRequestStream();
+  const responseStream = req.createResponseStream({ encoding: "utf-8" });
+  requestStream.write(payload, "utf-8");
+  return { requestStream, responseStream };
+}
+
 export async function close() {
   if (closePromise) {
     await closePromise;
