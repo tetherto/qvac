@@ -3,6 +3,19 @@
 import { use, useEffect, useId, useState } from 'react';
 import { useTheme } from 'next-themes';
 
+function MermaidSkeleton() {
+  return (
+    <div
+      className="flex items-center justify-center rounded-lg border bg-fd-muted/50 my-4"
+      style={{ minHeight: 200 }}
+    >
+      <span className="text-sm text-fd-muted-foreground animate-pulse">
+        Loading diagram…
+      </span>
+    </div>
+  );
+}
+
 export function Mermaid({ chart }: { chart: string }) {
   const [mounted, setMounted] = useState(false);
 
@@ -10,7 +23,7 @@ export function Mermaid({ chart }: { chart: string }) {
     setMounted(true);
   }, []);
 
-  if (!mounted) return;
+  if (!mounted) return <MermaidSkeleton />;
   return <MermaidContent chart={chart} />;
 }
 

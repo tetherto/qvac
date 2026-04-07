@@ -1,7 +1,6 @@
 import { docs } from 'fumadocs-mdx:collections/server';
 import { loader, type InferPageType } from 'fumadocs-core/source';
-import { icons } from 'lucide-react';
-import { createElement } from 'react';
+import { resolveIcon } from '@/lib/resolveIcon';
 
 // See https://fumadocs.vercel.app/docs/headless/source-api for more info
 export const source = loader({
@@ -13,7 +12,7 @@ export const source = loader({
       // You may set a default icon
       return;
     }
-    if (icon in icons) return createElement(icons[icon as keyof typeof icons]);
+    return resolveIcon(icon);
   },
 });
 
