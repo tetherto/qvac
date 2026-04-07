@@ -3,7 +3,7 @@
 #include <stdexcept>
 #include <utility>
 
-namespace qvac_lib_inference_addon_marian {
+namespace qvac_lib_inference_addon_nmt {
 
 PivotTranslationModel::PivotTranslationModel(
     const std::string& firstModelPath,
@@ -158,4 +158,4 @@ PivotTranslationModel::translateBatch(const std::vector<std::string>& inputs) {
   return secondModel_->processBatch(firstBatch);
 }
 
-} // namespace qvac_lib_inference_addon_marian
+} // namespace qvac_lib_inference_addon_nmt
