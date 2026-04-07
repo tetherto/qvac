@@ -375,7 +375,8 @@ void BertModel::init(
   lazyCommonInit();
   initializeBackend(backendsDir);
 
-  common_params params = setupParams(modelGgufPath, configCopy, runtimeBackendDevice_);
+  common_params params =
+      setupParams(modelGgufPath, configCopy, runtimeBackendDevice_);
   BertModel::init(params);
 }
 
