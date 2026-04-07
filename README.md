@@ -90,6 +90,7 @@ node quickstart.js
 * **Transcription:** automatic speech recognition (ASR) for speech-to-text via [`qvac-ext-lib-whisper.cpp`](https://github.com/tetherto/qvac-ext-lib-whisper.cpp).
 * **Text-to-Speech:** speech synthesis for text-to-speech (TTS) via [ONNX Runtime](https://onnxruntime.ai).
 * **OCR:** optical character recognition (OCR) for extracting text from images via ONNX runtime.
+* **Image generation:** text-to-image generation via [`qvac-ext-stable-diffusion.cpp`](https://github.com/tetherto/qvac-lib-infer-diffusion).
 * **Multimodal:** LLM inference over text, images, and other media within a single conversation context.
 * **RAG:** out-of-the-box retrieval-augmented generation workflow.
 
@@ -128,14 +129,14 @@ Legend:
 | :--- | :--- | :--- |
 | sdk | Main entry point to develop AI applications with QVAC | SDK |
 | lib-decoder-audio | Audio decoder library leveraging FFmpeg for efficient audio decoding as preprocessing step for other addons | Addon |
-| lib-infer-llamacpp-embed | Native C++ addon for running text embedding models to generate high-quality contextual embeddings | Addon |
-| lib-infer-llamacpp-llm | Native C++ addon for running Large Language Models (LLMs) within QVAC runtime applications | Addon |
-| lib-infer-diffusion | Native C++ addon for text-to-image generation using stable-diffusion.cpp | Addon |
-| lib-infer-nmtcpp | Library for running various translation models supporting OPUS, Bergamot, and IndicTrans backends | Addon |
+| lib-infer-llamacpp-embed | Native C++ addon for running text embedding models to generate high-quality contextual embeddings via `qvac-fabric-llm.cpp` | Addon |
+| lib-infer-llamacpp-llm | Native C++ addon for running Large Language Models (LLMs) via `qvac-fabric-llm.cpp` | Addon |
+| lib-infer-diffusion | Native C++ addon for text-to-image generation via `qvac-ext-stable-diffusion.cpp` | Addon |
+| lib-infer-nmtcpp | Native C++ addon for translation using either `qvac-fabric-llm.cpp` or [Bergamot](https://browser.mt) | Addon |
 | lib-infer-onnx | Bare addon for ONNX Runtime session management | Addon |
 | lib-infer-onnx-tts | Text-to-Speech (TTS) library using Chatterbox and Supertonic neural TTS model via ONNX Runtime | Addon |
 | lib-infer-parakeet | High-performance speech-to-text inference addon using NVIDIA Parakeet models via ONNX Runtime | Addon |
-| lib-infer-whispercpp | Library for running Whisper transcription model for audio transcription via whisper.cpp | Addon |
+| lib-infer-whispercpp | Library for running Whisper transcription model for audio transcription via `qvac-ext-lib-whisper.cpp` | Addon |
 | lib-inference-addon-cpp | Header-only C++ library providing common abstractions and infrastructure for building high-performance inference addons | Addon |
 | lib-langdetect-text | Language detection library providing interface for detecting language of given text | Addon |
 | lib-langdetect-text-cld2 | Language detection using CLD2 with same API as @qvac/langdetect-text | Addon |
