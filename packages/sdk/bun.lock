@@ -28,7 +28,7 @@
         "@expo/config-plugins": "^54.0.1",
         "@lancedb/lancedb": "^0.21.3",
         "@modelcontextprotocol/sdk": "^1.12.1",
-        "@qvac/cli": "^0.2.2",
+        "@qvac/cli": "^0.2.3",
         "@sqliteai/sqlite-wasm": "3.50.4-sync.0.8.30-vector.0.9.23",
         "@types/node": "^24.2.1",
         "@types/tar-stream": "^3.1.4",
@@ -59,7 +59,7 @@
       },
       "peerDependencies": {
         "@modelcontextprotocol/sdk": "^1.0.0",
-        "@qvac/cli": "^0.2.2",
+        "@qvac/cli": "^0.2.3",
         "bare-abort-controller": "^1.0.0",
         "bare-buffer": "^3.4.2",
         "bare-crypto": "^1.13.4",
@@ -502,7 +502,7 @@
 
     "@pkgjs/parseargs": ["@pkgjs/parseargs@0.11.0", "", {}, "sha512-+1VkjdD0QBLPodGrJUeqarH8VAIvQODIbwh9XpP5Syisf7YoQgsJKPNFoqqLQlu+VQ/tVSshMR6loPMn8U+dPg=="],
 
-    "@qvac/cli": ["@qvac/cli@0.2.2", "", { "dependencies": { "bare-pack": "^2.0.0", "commander": "^14.0.3", "tsx": "^4.21.0" }, "bin": { "qvac": "dist/index.js" } }, "sha512-d9T2F78S5XuI0GR5hOKarJEGQKJv15o5CQ/Svo5rjXreqs8d4aFZu8xw5q74xgD5dwSV4acwWZouIupjzAp0Jg=="],
+    "@qvac/cli": ["@qvac/cli@0.2.3", "", { "dependencies": { "bare-pack": "^2.0.0", "commander": "^14.0.3", "tsx": "^4.21.0" }, "bin": { "qvac": "dist/index.js" } }, "sha512-/LXzxB3lv9ccm/EKs6q52+Kw1pfgEYIPZMM4rRdmpNyV86dbNLBtwkPyU3Zmt3KWJqbJ8WR5/edykXE+ovLxGA=="],
 
     "@qvac/decoder-audio": ["@qvac/decoder-audio@0.3.6", "", { "dependencies": { "@qvac/error": "^0.1.0", "@qvac/infer-base": "^0.1.0", "@qvac/logging": "^0.1.0", "@qvac/response": "^0.1.0", "bare-assert": "^1.1.0", "bare-channel": "^5.2.2", "bare-ffmpeg": "^1.0.0-32", "bare-fs": "^4.5.1", "bare-path": "^3.0.0", "bare-process": "^4.2.2", "process": "npm:bare-process@^4.2.2" } }, "sha512-k0ePtP1HSLX5H0Og9cER8QHVSPcWwkiSHb58IpbhqSF41qYwUVhKtFI16hHjA2da+chqyu68c6I1tTWqnFWMDA=="],
 

@@ -199,6 +199,36 @@ export const kvCacheNoSystemPrompt: TestDefinition = {
   metadata: { category: "kv-cache", dependency: "llm", estimatedDurationMs: 20000 },
 };
 
+export const kvCacheToolsSequentialSave: TestDefinition = {
+  testId: "kv-cache-tools-sequential-save",
+  params: {
+    cacheKey: "tools-sequential-save-session",
+    tools: [
+      {
+        type: "function",
+        name: "calculator",
+        description: "Performs basic math operations",
+        parameters: {
+          type: "object",
+          properties: {
+            operation: { type: "string", enum: ["add", "subtract", "multiply", "divide"] },
+            a: { type: "number" },
+            b: { type: "number" },
+          },
+          required: ["operation", "a", "b"],
+        },
+      },
+    ],
+    messages: [
+      "What is 10 + 20?",
+      "Now what is 5 + 5?",
+    ],
+    stream: true,
+  },
+  expectation: { validation: "type", expectedType: "string" },
+  metadata: { category: "kv-cache", dependency: "tools", estimatedDurationMs: 90000 },
+};
+
 export const kvCacheTests = [
   kvCacheDeleteAll,
   kvCacheDeleteByKey,
@@ -215,4 +245,5 @@ export const kvCacheTests = [
   kvCacheDeleteAndReuse,
   kvCacheStatsVerification,
   kvCacheNoSystemPrompt,
+  kvCacheToolsSequentialSave,
 ];

@@ -118,6 +118,7 @@ jobs:
       contents: write
       packages: write
       pull-requests: write
+      id-token: write
     uses: ./.github/workflows/prebuilds-lib-infer-diffusion.yml
     secrets: inherit
     with:
