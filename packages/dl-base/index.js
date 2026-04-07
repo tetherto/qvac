@@ -1,5 +1,5 @@
 'use strict'
-
+console.log('no-op')
 const QvacLogger = require('@qvac/logging')
 const ReadyResource = require('ready-resource')
 
