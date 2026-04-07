@@ -356,6 +356,9 @@ jobs:
       matrix: ${{ fromJson(needs.setup.outputs.matrix) }}
 
     name: Evaluate ${{ matrix.pair }} with ${{ inputs.translators }}
+    permissions:
+      contents: read
+      id-token: write
 
     steps:
       - name: Checkout repository
@@ -393,6 +396,122 @@ jobs:
             libboost-all-dev \
             ccache \
             libunwind-dev
+
+      - name: Configure AWS credentials via OIDC
+        if: needs.setup.outputs.qvac_needed == 'true'
+        uses: aws-actions/configure-aws-credentials@8df5847569e6427dd6c4fb1cf565c83acfa8afa7 # 6.0.0
+        with:
+          role-to-assume: ${{ secrets.AWS_OIDC_ROLE_ARN }}
+          aws-region: eu-central-1
+
+      - name: Download QVAC models (GGML format)
+        # Only download GGML models for 'qvac' translator (not qvac_bergamot which uses Bergamot models)
+        if: contains(format(',{0},', inputs.translators), ',qvac,')
+        working-directory: ${{ env.PKG_DIR }}
+        run: |
+          mkdir -p qvac_models
+          # Download model for this specific language pair
+          pair="${{ matrix.pair }}"
+          echo "Downloading model for $pair..."
+
+          # Function to download a model
+          download_model() {
+            local model_pair=$1
+            local temp_dir="qvac_models/temp_$model_pair"
+            mkdir -p "$temp_dir"
+
+            # Map pt (Portuguese) to roa (Romance languages) for S3 path
+            local s3_pair="$model_pair"
+            if [[ "$model_pair" == "en-pt" ]]; then
+              s3_pair="en-roa"
+              echo "Mapping en-pt to en-roa for S3 download"
+            elif [[ "$model_pair" == "pt-en" ]]; then
+              s3_pair="roa-en"
+              echo "Mapping pt-en to roa-en for S3 download"
+            fi
+
+            # Download f16 or q4 model from S3
+            if [ "${{ inputs.is_quantized_model }}" = "true" ]; then
+              echo "Downloading quantized (q4_0) model for $model_pair (S3 pair: $s3_pair)..."
+              aws_path="s3://${{ secrets.MODEL_S3_BUCKET }}/qvac_models_compiled/ggml/marian/q4_0/ggml-opus-$s3_pair"
+            else
+              echo "Downloading f16 model for $model_pair (S3 pair: $s3_pair)..."
+              aws_path="s3://${{ secrets.MODEL_S3_BUCKET }}/qvac_models_compiled/ggml/marian/q0f16/ggml-opus-$s3_pair"
+            fi
+            echo "AWS PATH: $aws_path"
+            if aws s3 cp "$aws_path/" "$temp_dir/" --recursive; then
+              echo "Successfully downloaded model for $model_pair from S3 (using $s3_pair)"
+              
+              # Find the latest date directory and move files up
+              date_dir=$(find "$temp_dir" -mindepth 1 -maxdepth 1 -type d | sort -r | head -1)
+              if [ -n "$date_dir" ]; then
+                echo "Found date directory: $date_dir"
+                mkdir -p "qvac_models/$model_pair"
+                mv "$date_dir"/* "qvac_models/$model_pair/"
+                rm -rf "$temp_dir"
+
+                # Rename ggml-opus-{s3_pair}.bin to model_f16.bin or model_q4_0.bin
+                # Note: The downloaded file uses the S3 pair name (e.g., roa-en), not the model_pair (e.g., pt-en)
+                if [ -f "qvac_models/$model_pair/ggml-opus-$s3_pair.bin" ]; then
+                  if [ "${{ inputs.is_quantized_model }}" = "true" ]; then
+                    mv "qvac_models/$model_pair/ggml-opus-$s3_pair.bin" "qvac_models/$model_pair/model_q4_0.bin"
+                    echo "Renamed ggml-opus-$s3_pair.bin to model_q4_0.bin"
+                  else
+                    mv "qvac_models/$model_pair/ggml-opus-$s3_pair.bin" "qvac_models/$model_pair/model_f16.bin"
+                    echo "Renamed ggml-opus-$s3_pair.bin to model_f16.bin"
+                  fi
+                elif [ -f "qvac_models/$model_pair/ggml-opus-$model_pair.bin" ]; then
+                  if [ "${{ inputs.is_quantized_model }}" = "true" ]; then
+                    mv "qvac_models/$model_pair/ggml-opus-$model_pair.bin" "qvac_models/$model_pair/model_q4_0.bin"
+                    echo "Renamed ggml-opus-$model_pair.bin to model_q4_0.bin"
+                  else
+                    mv "qvac_models/$model_pair/ggml-opus-$model_pair.bin" "qvac_models/$model_pair/model_f16.bin"
+                    echo "Renamed ggml-opus-$model_pair.bin to model_f16.bin"
+                  fi
+                fi
+                
+                # Verify the model file exists
+                if [ -f "qvac_models/$model_pair/model_f16.bin" ]; then
+                  echo "Model verified: $(ls -lh qvac_models/$model_pair/model_f16.bin)"
+                elif [ -f "qvac_models/$model_pair/model_q4_0.bin" ]; then
+                  echo "Model verified: $(ls -lh qvac_models/$model_pair/model_q4_0.bin)"
+                else
+                  echo "Warning: neither model_f16.bin nor model_q4_0.bin found after flattening"
+                  ls -la "qvac_models/$model_pair/"
+                fi
+              else
+                echo "No date directory found, moving files directly"
+                mkdir -p "qvac_models/$model_pair"
+                mv "$temp_dir"/* "qvac_models/$model_pair/" 2>/dev/null || true
+                rm -rf "$temp_dir"
+              fi
+            else
+              echo "S3 download failed for $model_pair, evaluation will attempt to use Hyperdrive"
+              rm -rf "$temp_dir"
+            fi
+          }
+
+          # Download the main model
+          download_model "$pair"
+
+          # If using pivot translation and this is a non-English pair, download pivot models
+          if [ "${{ inputs.use_pivot }}" = "true" ]; then
+            src_lang="${pair%-*}"
+            trg_lang="${pair#*-}"
+            
+            # Check if this is a non-English pair
+            if [ "$src_lang" != "en" ] && [ "$trg_lang" != "en" ]; then
+              echo "Pivot translation enabled for non-English pair $pair"
+              echo "Downloading pivot models: ${src_lang}-en and en-${trg_lang}"
+              
+              # Download source-to-English model
+              download_model "${src_lang}-en"
+              
+              # Download English-to-target model
+              download_model "en-${trg_lang}"
+            fi
+          fi
+        continue-on-error: true
 
       - name: Cache datasets
         uses: actions/cache@668228422ae6a00e4ad889ee87cd7109ec5666a7 # 5.0.4
