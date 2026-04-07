@@ -1,5 +1,14 @@
 # Changelog
 
+## [0.13.3] - 2026-04-07
+
+### Added
+
+#### `backendDevice` runtime stat
+- `runtimeStats()` now includes `backendDevice` (`"cpu"` or `"gpu"`) reporting the actual resolved device used for inference.
+- Reflects the device after backend selection and fallback logic, not the user-configured preference.
+- Captured as numeric `int64_t` (0/1) at the C++ level, mapped to a string in the JS layer.
+
 ## [0.13.1] - 2026-04-02
 
 ### Changed
