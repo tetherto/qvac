@@ -7,12 +7,38 @@
 #include <gtest/gtest.h>
 #include <llama.h>
 #include <qvac-lib-inference-addon-cpp/Errors.hpp>
+#include <qvac-lib-inference-addon-cpp/RuntimeStats.hpp>
 
 #include "addon/AddonCpp.hpp"
 #include "addon/BertErrors.hpp"
 #include "model-interface/BertModel.hpp"
 
 namespace fs = std::filesystem;
+
+namespace {
+double getStatValue(
+    const qvac_lib_inference_addon_cpp::RuntimeStats& stats,
+    const std::string& key) {
+  for (const auto& stat : stats) {
+    if (stat.first == key) {
+      return std::visit(
+          [](const auto& value) -> double {
+            if constexpr (std::is_same_v<
+                              std::decay_t<decltype(value)>, double>) {
+              return value;
+            } else if constexpr (std::is_same_v<
+                                     std::decay_t<decltype(value)>, int64_t>) {
+              return static_cast<double>(value);
+            } else {
+              return 0.0;
+            }
+          },
+          stat.second);
+    }
+  }
+  return 0.0;
+}
+} // namespace
 
 inline BertModel*
 getModelFromAddon(qvac_lib_inference_addon_cpp::AddonCpp* addon) {
@@ -226,7 +252,6 @@ TEST_F(BertModelTest, RuntimeStatsBeforeProcessing) {
   // is loaded
   bool hasBatchSize = false;
   bool hasContextSize = false;
-  bool hasBackendDevice = false;
   for (const auto& stat : stats) {
     if (stat.first == "batch_size") {
       hasBatchSize = true;
@@ -234,16 +259,12 @@ TEST_F(BertModelTest, RuntimeStatsBeforeProcessing) {
     if (stat.first == "context_size") {
       hasContextSize = true;
     }
-    if (stat.first == "backendDevice") {
-      hasBackendDevice = true;
-      auto val = std::get<int64_t>(stat.second);
-      EXPECT_TRUE(val == 0 || val == 1);
-    }
   }
   // These should be present if model is loaded
   EXPECT_TRUE(hasBatchSize);
   EXPECT_TRUE(hasContextSize);
-  EXPECT_TRUE(hasBackendDevice);
+  double backendDevice = getStatValue(stats, "backendDevice");
+  EXPECT_TRUE(backendDevice == 0.0 || backendDevice == 1.0);
 }
 
 TEST_F(BertModelTest, RuntimeStatsAfterProcessing) {
@@ -270,7 +291,6 @@ TEST_F(BertModelTest, RuntimeStatsAfterProcessing) {
   // After processing, should have performance stats
   bool hasTotalTokens = false;
   bool hasTotalTime = false;
-  bool hasBackendDevice = false;
   for (const auto& stat : stats) {
     if (stat.first == "total_tokens") {
       hasTotalTokens = true;
@@ -278,15 +298,11 @@ TEST_F(BertModelTest, RuntimeStatsAfterProcessing) {
     if (stat.first == "total_time_ms") {
       hasTotalTime = true;
     }
-    if (stat.first == "backendDevice") {
-      hasBackendDevice = true;
-      auto val = std::get<int64_t>(stat.second);
-      EXPECT_TRUE(val == 0 || val == 1);
-    }
   }
   EXPECT_TRUE(hasTotalTokens);
   EXPECT_TRUE(hasTotalTime);
-  EXPECT_TRUE(hasBackendDevice);
+  double backendDevice = getStatValue(stats, "backendDevice");
+  EXPECT_TRUE(backendDevice == 0.0 || backendDevice == 1.0);
 }
 
 TEST_F(BertModelTest, ConstructorWithInvalidPath) {
