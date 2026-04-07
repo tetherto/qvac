@@ -22,7 +22,7 @@ auto makeConfig(bool useGpu = false)
     -> qvac_lib_inference_addon_whisper::WhisperConfig {
   qvac_lib_inference_addon_whisper::WhisperConfig config;
   config.whisperContextCfg["model"] =
-      std::string("../../../examples/models/ggml-tiny.bin");
+      std::string("../../../models/ggml-tiny.bin");
   config.whisperContextCfg["use_gpu"] = useGpu;
   config.whisperMainCfg["language"] = std::string("en");
   config.whisperMainCfg["temperature"] = 0.0F;
@@ -31,7 +31,7 @@ auto makeConfig(bool useGpu = false)
 }
 
 auto hasModelFile() -> bool {
-  return std::filesystem::exists("../../../examples/models/ggml-tiny.bin");
+  return std::filesystem::exists("../../../models/ggml-tiny.bin");
 }
 
 auto makeInputSamples(size_t seconds) -> std::vector<float> {
