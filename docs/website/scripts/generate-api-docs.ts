@@ -4,12 +4,16 @@
  * Production implementation per API-DOCS-AUTOMATION-COMPLETE-GUIDE Appendix E.
  *
  * Usage:
- *   bun run scripts/generate-api-docs.ts <version> [--no-update-latest]
- *   bun run scripts/generate-api-docs.ts --dev
+ *   bun run scripts/generate-api-docs.ts <version> [--no-update-latest] [--force-extract]
+ *   bun run scripts/generate-api-docs.ts --dev [--force-extract]
  *   bun run scripts/generate-api-docs.ts --rollback
  *
  * --dev writes to content/docs/dev/sdk/api/ without creating a versioned folder
  * or updating (latest). Use during day-to-day development of the next version.
+ *
+ * --force-extract bypasses the mtime-based extraction cache and always re-runs
+ * TypeDoc. Without it, extraction is skipped when api-data.json is newer than
+ * all .ts files under the SDK source tree.
  *
  * Path format: content/docs/v{X.Y.Z}/sdk/api/ and content/docs/(latest)/sdk/api/
  * SDK path: Set SDK_PATH env to point to sdk package (default: ../../packages/sdk from cwd).
@@ -43,7 +47,9 @@ async function generateApiDocs(
   }
   console.log(`   SDK path: ${SDK_PATH}`);
 
-  const apiData = await extractApiData(SDK_PATH, version);
+  const apiData = await extractApiData(SDK_PATH, version, {
+    forceExtract: options.forceExtract,
+  });
 
   const outputFolder = options.devMode ? "dev" : `v${version}`;
   const outputDir = path.join(
@@ -409,6 +415,7 @@ const versionArg = args.find((arg) => !arg.startsWith("--"));
 const updateLatest = !args.includes("--no-update-latest");
 const rollback = args.includes("--rollback");
 const devMode = args.includes("--dev");
+const forceExtract = args.includes("--force-extract");
 
 if (rollback) {
   rollbackLatest()
@@ -418,7 +425,7 @@ if (rollback) {
       process.exit(1);
     });
 } else if (devMode) {
-  generateApiDocs("dev", { updateLatest: false, devMode: true }).catch((error) => {
+  generateApiDocs("dev", { updateLatest: false, devMode: true, forceExtract }).catch((error) => {
     console.error("❌ Error generating dev API docs:", error.message);
     if (error.stack) console.error("\nStack trace:", error.stack);
     process.exit(1);
@@ -435,7 +442,10 @@ if (rollback) {
   console.error(
     "  --no-update-latest    Skip updating latest/ (use for backfills)"
   );
-  console.error("  --rollback            Restore previous version of latest/\n");
+  console.error("  --rollback            Restore previous version of latest/");
+  console.error(
+    "  --force-extract       Bypass mtime cache and re-run TypeDoc extraction\n"
+  );
   console.error("Examples:");
   console.error("  bun run scripts/generate-api-docs.ts --dev");
   console.error("  bun run scripts/generate-api-docs.ts 0.6.1");
@@ -445,7 +455,7 @@ if (rollback) {
   console.error("  bun run scripts/generate-api-docs.ts --rollback");
   process.exit(1);
 } else {
-  generateApiDocs(versionArg, { updateLatest }).catch((error) => {
+  generateApiDocs(versionArg, { updateLatest, forceExtract }).catch((error) => {
     console.error("❌ Error generating API docs:", error.message);
     if (error.stack) console.error("\nStack trace:", error.stack);
     if (updateLatest) {
