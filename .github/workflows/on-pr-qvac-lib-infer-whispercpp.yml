@@ -176,6 +176,7 @@ jobs:
       contents: write
       packages: write
       pull-requests: write
+      id-token: write
     needs: [authorize, context]
     if: needs.authorize.outputs.allowed == 'true'
     uses: ./.github/workflows/prebuilds-qvac-lib-infer-whispercpp.yml
@@ -185,6 +186,10 @@ jobs:
       ref: ${{ needs.context.outputs.ref }}
 
   run-integration-tests:
+    permissions:
+      contents: read
+      packages: read
+      id-token: write
     needs: [authorize, context, prebuild]
     if: needs.authorize.outputs.allowed == 'true'
     uses: ./.github/workflows/integration-test-qvac-lib-infer-whispercpp.yml
@@ -199,6 +204,7 @@ jobs:
       contents: read
       packages: read
       pull-requests: write # Allow commenting on PRs
+      id-token: write
     needs: [authorize, context, prebuild]
     if: needs.authorize.outputs.allowed == 'true'
     uses: ./.github/workflows/integration-mobile-test-qvac-lib-infer-whispercpp.yml
