@@ -84,10 +84,10 @@ node quickstart.js
 
 #### AI capabilities
 
-* **Completion:** LLM inference for text generation and chat via [`llama.cpp`](https://github.com/ggml-org/llama.cpp).
-* **Text embeddings:** vector embedding generation for semantic search, clustering, and retrieval, via `llama.cpp`.
-* **Translation:** text-to-text neural machine translation (NMT), using either `nmt.cpp` or [Bergamot](https://browser.mt).
-* **Transcription:** automatic speech recognition (ASR) for speech-to-text via [`whisper.cpp`](https://github.com/ggml-org/whisper.cpp).
+* **Completion:** LLM inference for text generation and chat via [`qvac-fabric-llm.cpp`](https://github.com/tetherto/qvac-fabric-llm.cpp).
+* **Text embeddings:** vector embedding generation for semantic search, clustering, and retrieval, via `qvac-fabric-llm.cpp`.
+* **Translation:** text-to-text neural machine translation (NMT), using either `qvac-fabric-llm.cpp` or [Bergamot](https://browser.mt).
+* **Transcription:** automatic speech recognition (ASR) for speech-to-text via [`qvac-ext-lib-whisper.cpp`](https://github.com/tetherto/qvac-ext-lib-whisper.cpp).
 * **Text-to-Speech:** speech synthesis for text-to-speech (TTS) via [ONNX Runtime](https://onnxruntime.ai).
 * **OCR:** optical character recognition (OCR) for extracting text from images via ONNX runtime.
 * **Multimodal:** LLM inference over text, images, and other media within a single conversation context.
