@@ -21,6 +21,7 @@ permissions:
   contents: read
   pull-requests: read
   packages: read
+  id-token: write
 
 env:
   PKG_DIR: packages/qvac-lib-infer-nmtcpp
