@@ -136,22 +136,25 @@ async function runChatterboxTTS (payload) {
       logger.warn(`[Chatterbox] Reference audio not found, using synthetic audio (${referenceAudio.length} samples)`)
     }
 
-    const args = {
-      tokenizerPath,
-      speechEncoderPath,
-      embedTokensPath,
-      conditionalDecoderPath,
-      languageModelPath,
-      referenceAudio,
-      opts: { stats: true }
-    }
-
     const modelConfig = {
       language: 'en', // Chatterbox only supports English
       useGPU: config.useGPU !== undefined ? config.useGPU : false
     }
 
-    cachedModel = new ONNXTTS(args, modelConfig)
+    cachedModel = new ONNXTTS({
+      files: {
+        modelDir,
+        tokenizer: tokenizerPath,
+        speechEncoder: speechEncoderPath,
+        embedTokens: embedTokensPath,
+        conditionalDecoder: conditionalDecoderPath,
+        languageModel: languageModelPath
+      },
+      engine: 'chatterbox',
+      referenceAudio,
+      config: modelConfig,
+      opts: { stats: true }
+    })
     await cachedModel.load()
 
     const [loadSec, loadNano] = process.hrtime(loadStart)
