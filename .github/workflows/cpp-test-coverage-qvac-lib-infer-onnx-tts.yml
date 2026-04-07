@@ -38,20 +38,14 @@ env:
   BUILD_TYPE: Debug
   ENABLE_COVERAGE: ON
 
-permissions:
-  contents: read
-
 jobs:
   cpp-tests:
     runs-on: ${{ matrix.os }}
     environment: release
     name: ${{ matrix.platform }}-${{ matrix.arch }}-cpp-tests
-
     permissions:
       contents: read
-      packages: read
-      checks: write
-      pull-requests: write
+      id-token: write
 
     strategy:
       fail-fast: false
@@ -64,8 +58,6 @@ jobs:
 
     env:
       VCPKG_BINARY_SOURCES: "clear;files,${{ github.workspace }}/vcpkg/cache,readwrite"
-      AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
-      AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
       WORKDIR: ${{ inputs.workdir || github.event.inputs.workdir || 'packages/qvac-lib-infer-onnx-tts' }}
 
     steps:
@@ -157,6 +149,12 @@ jobs:
         working-directory: ${{ env.WORKDIR }}
         run: |
           npm run coverage:cpp:build
+
+      - name: Configure AWS credentials via OIDC
+        uses: aws-actions/configure-aws-credentials@8df5847569e6427dd6c4fb1cf565c83acfa8afa7 # 6.0.0
+        with:
+          role-to-assume: ${{ secrets.AWS_OIDC_ROLE_ARN }}
+          aws-region: eu-central-1
 
       - name: Ensure TTS models for integration tests
         working-directory: ${{ env.WORKDIR }}

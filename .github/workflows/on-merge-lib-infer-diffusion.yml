@@ -33,10 +33,7 @@ permissions:
   contents: read
   pull-requests: read
   packages: read
-
-concurrency:
-  group: ${{ github.workflow }}-${{ github.ref }}
-  cancel-in-progress: false
+  id-token: write
 
 jobs:
   publish-logic:
@@ -91,7 +88,7 @@ jobs:
   release-merge-guard:
     name: Release Merge Guard
     if: >-
-      github.event_name == 'push' &&
+      (github.event_name == 'push' || github.event_name == 'workflow_dispatch') &&
       startsWith(github.ref_name, 'release-')
     runs-on: ubuntu-latest
     environment: release
@@ -109,73 +106,135 @@ jobs:
           package-json-path: packages/lib-infer-diffusion/package.json
           changelog-path: packages/lib-infer-diffusion/CHANGELOG.md
 
-  publish-main-gpr:
+  # Build prebuilds (build + merge only, no publishing)
+  build:
     needs: publish-logic
-    if: needs.publish-logic.outputs.publish_main == 'true'
-    permissions:
-      contents: write
-      packages: write
-      pull-requests: write
-    uses: ./.github/workflows/prebuilds-lib-infer-diffusion.yml
-    secrets: inherit
-    with:
-      tag: ${{ inputs.tag || needs.publish-logic.outputs.gpr_tag }}
-      publish_target: "gpr"
-      workdir: "packages/lib-infer-diffusion"
-
-  publish-feature-gpr:
-    needs: publish-logic
-    if: needs.publish-logic.outputs.publish_feature == 'true'
-    permissions:
-      contents: write
-      packages: write
-      pull-requests: write
-    uses: ./.github/workflows/prebuilds-lib-infer-diffusion.yml
-    secrets: inherit
-    with:
-      tag: ${{ inputs.tag || needs.publish-logic.outputs.gpr_tag }}
-      publish_target: "gpr"
-      workdir: "packages/lib-infer-diffusion"
-
-  publish-tmp-gpr:
-    needs: publish-logic
-    if: needs.publish-logic.outputs.publish_tmp == 'true'
-    permissions:
-      contents: write
-      packages: write
-      pull-requests: write
-    uses: ./.github/workflows/prebuilds-lib-infer-diffusion.yml
-    secrets: inherit
-    with:
-      tag: ${{ inputs.tag || needs.publish-logic.outputs.gpr_tag }}
-      publish_target: "gpr"
-      workdir: "packages/lib-infer-diffusion"
-
-  publish-release-npm:
-    needs: [publish-logic, release-merge-guard]
     if: >-
+      needs.publish-logic.outputs.publish_main == 'true' ||
+      needs.publish-logic.outputs.publish_release == 'true' ||
+      needs.publish-logic.outputs.publish_feature == 'true' ||
+      needs.publish-logic.outputs.publish_tmp == 'true'
+    permissions:
+      contents: write
+      packages: write
+      pull-requests: write
+      id-token: write
+    uses: ./.github/workflows/prebuilds-lib-infer-diffusion.yml
+    secrets: inherit
+    with:
+      workdir: "packages/lib-infer-diffusion"
+
+  # Publish to GitHub Package Registry (GPR) for non-release branches
+  publish-gpr:
+    needs: [build, publish-logic]
+    if: >-
+      needs.publish-logic.outputs.publish_main == 'true' ||
+      needs.publish-logic.outputs.publish_feature == 'true' ||
+      needs.publish-logic.outputs.publish_tmp == 'true'
+    continue-on-error: true
+    runs-on: ubuntu-latest
+    environment: release
+    outputs:
+      published_version: ${{ steps.publish.outputs.npm_published_version }}
+    permissions:
+      contents: write
+      packages: write
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # 6.0.2
+        with:
+          token: ${{ secrets.PAT_TOKEN }}
+
+      - name: Setup node
+        uses: actions/setup-node@53b83947a5a98c8d113130e565377fae1a50d02f # 6.3.0
+        with:
+          node-version: lts/*
+
+      - name: Download prebuild artifacts
+        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # 8.0.1
+        with:
+          name: prebuilds
+          path: packages/lib-infer-diffusion/prebuilds
+
+      - name: Scope package as @tetherto for GPR
+        shell: bash
+        run: |
+          set -euo pipefail
+          node -e "const fs=require('fs');const f='packages/lib-infer-diffusion/package.json';const p=JSON.parse(fs.readFileSync(f,'utf8'));const want='@tetherto/diffusion-cpp';if(p.name!==want){p.name=want;fs.writeFileSync(f,JSON.stringify(p,null,2));console.log('Set name to',p.name);}else{console.log('Already',p.name);} "
+          node -e "console.log('Effective package name (publish-gpr):', JSON.parse(require('fs').readFileSync('packages/lib-infer-diffusion/package.json','utf8')).name)"
+
+      - name: Publish to GitHub Package Registry
+        id: publish
+        uses: tetherto/qvac-devops/.github/actions/publish-library-to-gpr@v1.1.7
+        with:
+          secret-token: ${{ secrets.GITHUB_TOKEN }}
+          tag: ${{ inputs.tag || needs.publish-logic.outputs.gpr_tag }}
+          workdir: packages/lib-infer-diffusion
+          name-suffix: "-mono"
+
+  # Publish to NPM for release branches
+  publish-npm:
+    needs: [build, publish-logic, release-merge-guard]
+    if: >-
+      !cancelled() &&
+      needs.build.result == 'success' &&
       needs.publish-logic.outputs.publish_release == 'true' &&
       (needs.release-merge-guard.result == 'success' || needs.release-merge-guard.result == 'skipped')
+    runs-on: ubuntu-latest
+    environment: release
+    outputs:
+      published_version: ${{ steps.publish.outputs.npm_published_version }}
     permissions:
       contents: write
       packages: write
-      pull-requests: write
-    uses: ./.github/workflows/prebuilds-lib-infer-diffusion.yml
-    secrets: inherit
-    with:
-      tag: "latest"
-      publish_target: "npm"
-      workdir: "packages/lib-infer-diffusion"
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # 6.0.2
+        with:
+          token: ${{ secrets.PAT_TOKEN }}
 
+      - name: Setup node
+        uses: actions/setup-node@53b83947a5a98c8d113130e565377fae1a50d02f # 6.3.0
+        with:
+          node-version: lts/*
+
+      - name: Download prebuild artifacts
+        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # 8.0.1
+        with:
+          name: prebuilds
+          path: packages/lib-infer-diffusion/prebuilds
+
+      - name: Scope package as @qvac for npm
+        working-directory: packages/lib-infer-diffusion
+        shell: bash
+        run: |
+          set -euo pipefail
+          node -e "const fs=require('fs');const p=JSON.parse(fs.readFileSync('package.json','utf8'));const want='@qvac/diffusion-cpp';if(p.name!==want){p.name=want;fs.writeFileSync('package.json',JSON.stringify(p,null,2));console.log('Set name to',p.name);}else{console.log('Already',p.name);}"
+          node -e "console.log('Effective package name (publish-npm):', JSON.parse(require('fs').readFileSync('package.json','utf8')).name)"
+
+      - name: Publish to NPM Package Registry
+        id: publish
+        uses: tetherto/qvac-devops/.github/actions/publish-library-to-npm@v1.1.7
+        with:
+          secret-token: ${{ secrets.NPM_TOKEN }}
+          tag: "latest"
+          workdir: packages/lib-infer-diffusion
+          repo_name: "diffusion-cpp"
+          git-token: ${{ secrets.GITHUB_TOKEN }}
+
+  # Create GitHub release only for actual releases (after NPM publish)
   publish-release:
-    needs: [publish-release-npm]
-    if:  needs.publish-release-npm.result == 'success' && needs.publish-release-npm.outputs.published_version != ''
+    needs: [publish-npm]
+    if: >-
+      !cancelled() &&
+      needs.publish-npm.result == 'success' &&
+      needs.publish-npm.outputs.published_version != ''
     permissions:
       contents: write
     uses: ./.github/workflows/create-github-release.yml
     with:
-      repo_name: "diffusion"
+      repo_name: "diffusion-cpp"
       release_name: "QVAC Stable Diffusion Addon"
-      published_version: ${{ needs.publish-release-npm.outputs.published_version }}
+      published_version: ${{ needs.publish-npm.outputs.published_version }}
       prev_sha: ${{ github.event.before }}
       workdir: "packages/lib-infer-diffusion"

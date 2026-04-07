@@ -5,153 +5,210 @@ inputs:
   secret-token:
     description: "NPM auth token"
     required: true
+
   release:
     description: "Use tag. Release stream, temporary here for compatibility with old workflows"
     required: false
+
   tag:
     description: "Release Stream (npm dist-tag)"
     required: false
+
   path:
-    description: "Path to artifact to publish"
+    description: "[DEPRECATED] Directory containing package.json (legacy); use workdir"
     required: false
+
+  workdir:
+    description: "Directory containing package.json (preferred for monorepo)"
+    required: false
+
   git-token:
     description: "PAT with contents:write to create and push git tags"
     required: false
+
   create-tag:
-    description: "Set to 'true' to create a git tag v<version> after successful npm release"
+    description: "Set to 'true' to create a git tag after successful npm release"
     required: false
     default: "false"
-  workdir: 
-    default: "."
-    type: string
+
+  repo_name:
+    description: "repo suffix name appended to created git tag"
+    required: false
+
+outputs:
+  npm_published_version:
+    description: "The version that was actually published to npm (empty if skipped)."
+    value: ${{ steps.publish.outputs.npm_published_version }}
+  npm_publish_skipped:
+    description: "true if publish was skipped (dev/tmp or version already exists), else false."
+    value: ${{ steps.publish.outputs.npm_publish_skipped }}
 
 runs:
   using: composite
   steps:
-    - uses: actions/setup-node@v4
+    - uses: actions/setup-node@53b83947a5a98c8d113130e565377fae1a50d02f # 6.3.0
       with:
-        node-version: "18.x"
-        registry-url: "https://registry.npmjs.org/"
+        node-version: 18
+        registry-url: https://registry.npmjs.org/
         scope: "@qvac"
 
-    - run: |
-        echo registry=https://registry.npmjs.org/ >> .npmrc
-        echo @qvac:registry=https://registry.npmjs.org/ >> .npmrc
-        echo //registry.npmjs.org/:_authToken=${NODE_AUTH_TOKEN} >> .npmrc
-      shell: bash
-      env:
-        NODE_AUTH_TOKEN: ${{ inputs.secret-token }}
-
     - name: Publish to NPM and optionally tag repo
+      id: publish
       shell: bash
       env:
         NODE_AUTH_TOKEN: ${{ inputs.secret-token }}
-        INPUTS_CONTEXT: ${{ toJSON(inputs) }}
         GIT_PUSH_TOKEN: ${{ inputs.git-token }}
         CREATE_TAG: ${{ inputs.create-tag }}
+        INPUT_PATH: ${{ inputs.path }}
+        INPUT_WORKDIR: ${{ inputs.workdir }}
+        INPUT_TAG: ${{ inputs.tag }}
+        INPUT_RELEASE: ${{ inputs.release }}
+        EVENT_NAME: ${{ github.event_name }}
+        GIT_REF: ${{ github.ref }}
+        GIT_REPO: ${{ github.repository }}
+        REPO_NAME: ${{ inputs.repo_name }}
       run: |
-          echo "publishing to npm"
-      # run: |
-      #   set -x
+        set -euo pipefail
 
-      #   if [ -n "${{ inputs.path }}"  ]; then
-      #     echo "Changing directory to ${{ inputs.path }}"
-      #     cd "${{ inputs.path }}"
-      #   fi
+        ROOT="${GITHUB_WORKSPACE:-$(pwd)}"
 
-      #   ### Get tag for NPM, support release for compatibility with old workflows
-      #   echo "Input context: $INPUTS_CONTEXT"
+        ####################################################################
+        # Resolve target directory (workdir preferred; path supported legacy)
+        ####################################################################
+        TARGET_DIR=""
 
-      #   TAG="${{ inputs.tag }}"
-      #   RELEASE="${{ inputs.release }}"
+        if [ -n "${INPUT_PATH}" ]; then
+          TARGET_DIR="${INPUT_PATH}"
+          echo "::warning title=Deprecated input::inputs.path is deprecated; use inputs.workdir instead."
+        elif [ -n "${INPUT_WORKDIR}" ]; then
+          TARGET_DIR="${INPUT_WORKDIR}"
+        else
+          echo "ERROR: You must set inputs.workdir (preferred) or inputs.path (deprecated legacy)." >&2
+          exit 1
+        fi
 
-      #   if [ -z "$RELEASE" ]; then
-      #     RELEASE="tmp"
-      #   fi
-      #   if [ -z "$TAG" ]; then
-      #     TAG=$RELEASE
-      #   fi
+        echo "Target directory: ${TARGET_DIR}"
 
-      #   ### Set tag to latest if PR was merged to main
-      #   echo "Base branch: ${{ github.ref }}"
-      #   echo "Event name: ${{ github.event_name }}"
+        if [ ! -d "${TARGET_DIR}" ]; then
+          echo "ERROR: Target directory does not exist: ${TARGET_DIR}" >&2
+          exit 1
+        fi
 
-      #   if [ "${{ github.event_name }}" = "push" ] && [ "${{ github.ref }}" = "refs/heads/main" ]; then
-      #     echo "PR was merged to main, setting tag to latest"
-      #     TAG="latest"
-      #   fi
+        cd "${TARGET_DIR}"
 
-      #   ### Do NOT publish dev/tmp builds to NPM
-      #   if [ "$TAG" = "dev" ] || [ "$TAG" = "tmp" ]; then
-      #     echo "Skipping publish to NPM for non-release tag: $TAG"
-      #     exit 0
-      #   fi
+        if [ ! -f "package.json" ]; then
+          echo "ERROR: package.json not found in target directory: ${TARGET_DIR}" >&2
+          exit 1
+        fi
 
-      #   ### Use the package's existing version for release publishes
-      #   SHORT_SHA=$(git rev-parse --short HEAD || echo "unknown")
-      #   PACKAGE_VERSION=$(node -p "require('./package.json').version")
-      #   PACKAGE_NAME=$(node -p "require('./package.json').name")
-      #   VERSION="${PACKAGE_VERSION}"
+        ####################################################################
+        # Write .npmrc
+        ####################################################################
+        echo "Writing .npmrc in $(pwd)"
+        {
+          echo "registry=https://registry.npmjs.org/"
+          echo "@qvac:registry=https://registry.npmjs.org/"
+          echo "//registry.npmjs.org/:_authToken=${NODE_AUTH_TOKEN}"
+        } > .npmrc
 
-      #   echo "Publishing package: $PACKAGE_NAME"
-      #   echo "Publishing with tag: $TAG"
-      #   echo "Publishing version: $VERSION"
+        ####################################################################
+        # Core logic preserved below
+        ####################################################################
 
-      #   ### Set access level - private by default until release
-      #   ACCESS="restricted"
+        TAG="${INPUT_TAG}"
+        RELEASE="${INPUT_RELEASE}"
 
-      #   ### Check if version already exists on npm
-      #   if npm view "$PACKAGE_NAME@$VERSION" version >/dev/null 2>&1; then
-      #     echo "Version $VERSION already exists for $PACKAGE_NAME on npm, skipping publish"
-      #     exit 0
-      #   fi
+        if [ -z "$RELEASE" ]; then
+          RELEASE="tmp"
+        fi
+        if [ -z "$TAG" ]; then
+          TAG=$RELEASE
+        fi
 
-      #   ### Publish with provenance if supported and access is public
-      #   if ([ "${{ github.event_name }}" = "push" ] || [ "${{ github.event_name }}" = "workflow_dispatch" ]) && [ "$ACCESS" = "public" ]; then
-      #     echo "Publishing with provenance statements"
-      #     npm publish --tag "$TAG" --access "$ACCESS" --provenance
-      #   else
-      #     npm publish --tag "$TAG" --access "$ACCESS"
-      #   fi
+        echo "Base branch: ${GIT_REF}"
+        echo "Event name: ${EVENT_NAME}"
 
-      #   echo "npm publish completed successfully"
+        if [[ "${EVENT_NAME}" == "push" || "${EVENT_NAME}" == "workflow_dispatch" ]]; then
+          if [[ "${GIT_REF}" == refs/heads/release-* ]]; then
+            TAG="latest"
+          fi
+        fi
 
-      #   ####################################################################
-      #   # Optional: create and push git tag v<VERSION> 
-      #   ####################################################################
+        if [ "$TAG" = "dev" ] || [ "$TAG" = "tmp" ]; then
+          echo "Skipping publish to NPM for non-release tag: $TAG"
+          # NEW: explicitly mark skipped and leave published_version empty
+          echo "npm_publish_skipped=true" >> "$GITHUB_OUTPUT"
+          echo "npm_published_version=" >> "$GITHUB_OUTPUT"
+          exit 0
+        fi
 
-      #   if [ "${CREATE_TAG}" != "true" ]; then
-      #     echo "Tag creation disabled (create-tag != 'true'), skipping git tag step"
-      #     exit 0
-      #   fi
+        SHORT_SHA=$(git -C "$ROOT" rev-parse --short HEAD || echo "unknown")
+        PACKAGE_VERSION=$(node -p "require('./package.json').version")
+        PACKAGE_NAME=$(node -p "require('./package.json').name")
+        VERSION="${PACKAGE_VERSION}"
 
-      #   if [ -z "${GIT_PUSH_TOKEN:-}" ]; then
-      #     echo "create-tag is 'true' but no git-token provided, skipping git tag step"
-      #     exit 0
-      #   fi
+        echo "Publishing package: $PACKAGE_NAME"
+        echo "Publishing with tag: $TAG"
+        echo "Publishing version: $VERSION"
+        echo "Commit: $SHORT_SHA"
 
-      #   TAG_NAME="v${VERSION}"
+        ACCESS="restricted"
 
-      #   echo "Preparing to create git tag: ${TAG_NAME}"
+        if npm view "$PACKAGE_NAME@$VERSION" version >/dev/null 2>&1; then
+          echo "Version $VERSION already exists for $PACKAGE_NAME on npm, skipping publish"
+          # NEW: explicitly mark skipped and leave published_version empty
+          echo "npm_publish_skipped=true" >> "$GITHUB_OUTPUT"
+          echo "npm_published_version=" >> "$GITHUB_OUTPUT"
+          exit 0
+        fi
 
-      #   # Configure git identity if not already set
-      #   git config user.name  >/dev/null 2>&1 || git config user.name "github-actions[bot]"
-      #   git config user.email >/dev/null 2>&1 || git config user.email "github-actions[bot]@users.noreply.github.com"
+        if ([ "${EVENT_NAME}" = "push" ] || [ "${EVENT_NAME}" = "workflow_dispatch" ]) && [ "$ACCESS" = "public" ]; then
+          echo "Publishing with provenance statements"
+          npm publish --tag "$TAG" --access "$ACCESS" --provenance
+        else
+          npm publish --tag "$TAG" --access "$ACCESS"
+        fi
 
-      #   # Check if tag already exists locally
-      #   if git rev-parse "${TAG_NAME}" >/dev/null 2>&1; then
-      #     echo "Tag ${TAG_NAME} already exists locally"
-      #   else
-      #     git tag -a "${TAG_NAME}" -m "Release ${PACKAGE_NAME} ${TAG_NAME}"
-      #     echo "Created local tag ${TAG_NAME}"
-      #   fi
+        echo "npm publish completed successfully"
 
-      #   # Check if tag already exists on remote
-      #   if git ls-remote --tags origin "${TAG_NAME}" | grep -q "${TAG_NAME}"; then
-      #     echo "Tag ${TAG_NAME} already exists on remote origin, skipping push"
-      #     exit 0
-      #   fi
+        # NEW: publish succeeded — set outputs for downstream workflow/release creation
+        echo "npm_publish_skipped=false" >> "$GITHUB_OUTPUT"
+        echo "npm_published_version=${VERSION}" >> "$GITHUB_OUTPUT"
 
-      #   echo "Pushing tag ${TAG_NAME} to origin"
-      #   git push "https://x-access-token:${GIT_PUSH_TOKEN}@github.com/${{ github.repository }}.git" "${TAG_NAME}"
-      #   echo "Tag ${TAG_NAME} pushed successfully"
+        ####################################################################
+        # Optional: create and push git tag v<VERSION>
+        ####################################################################
+
+        if [ "${CREATE_TAG}" != "true" ]; then
+          echo "Tag creation disabled (create-tag != 'true'), skipping git tag step"
+          exit 0
+        fi
+
+        if [ -z "${GIT_PUSH_TOKEN:-}" ]; then
+          echo "create-tag is 'true' but no git-token provided, skipping git tag step"
+          exit 0
+        fi
+
+        TAG_NAME="${REPO_NAME}-v${VERSION}"
+
+        echo "Preparing to create git tag: ${TAG_NAME}"
+
+        git -C "$ROOT" config user.name  >/dev/null 2>&1 || git -C "$ROOT" config user.name "github-actions[bot]"
+        git -C "$ROOT" config user.email >/dev/null 2>&1 || git -C "$ROOT" config user.email "github-actions[bot]@users.noreply.github.com"
+
+        if git -C "$ROOT" rev-parse "${TAG_NAME}" >/dev/null 2>&1; then
+          echo "Tag ${TAG_NAME} already exists locally"
+        else
+          FULL_SHA="$(git -C "$ROOT" rev-parse HEAD)"
+          git -C "$ROOT" tag "${TAG_NAME}" "${FULL_SHA}"
+          echo "Created lightweight tag ${TAG_NAME} -> ${FULL_SHA}"
+        fi
+
+        if git -C "$ROOT" ls-remote --tags origin "${TAG_NAME}" | grep -q "${TAG_NAME}"; then
+          echo "Tag ${TAG_NAME} already exists on remote origin, skipping push"
+          exit 0
+        fi
+
+        echo "Pushing tag ${TAG_NAME} to origin"
+        git -C "$ROOT" push "https://x-access-token:${GIT_PUSH_TOKEN}@github.com/${GIT_REPO}.git" "refs/tags/${TAG_NAME}"
+        echo "Tag ${TAG_NAME} pushed successfully"

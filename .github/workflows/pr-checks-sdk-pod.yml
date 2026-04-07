@@ -20,10 +20,6 @@ on:
       - tmp-*
   workflow_dispatch:
 
-concurrency:
-  group: sdk-pod-pr-${{ github.event.pull_request.number || github.sha }}
-  cancel-in-progress: true
-
 permissions:
   contents: read
   pull-requests: read
@@ -202,7 +198,7 @@ jobs:
         continue-on-error: true
         run: |
           deps=$(jq -r '([.dependencies, .devDependencies] | map(select(type=="object")) | add // {}) | to_entries[] | .value' package.json)
-          if echo "$deps" | grep -Eq '^(git\+https:\/\/github.com|[0-9]+\.[0-9]+\.[0-9]+-(dev|tmp)[^"]*'; then
+          if echo "$deps" | grep -Eq '^(git\+https:\/\/github.com|[0-9]+\.[0-9]+\.[0-9]+-(dev|tmp)[^"]*)$'; then
             echo "::error title=Disallowed dependency detected::Do not use git URLs or dev/tmp versions in dependencies"
             exit 1
           fi
@@ -253,7 +249,13 @@ jobs:
           fi
 
       - name: Install dependencies
-        run: ${{ matrix.pkg_manager }} install
+        shell: bash
+        run: |
+          if [ "${{ matrix.package }}" = "sdk" ]; then
+            bun install --frozen-lockfile
+          else
+            ${{ matrix.pkg_manager }} install
+          fi
 
       - name: Install Bare runtime
         if: matrix.package == 'rag'

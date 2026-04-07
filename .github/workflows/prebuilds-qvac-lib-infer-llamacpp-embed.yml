@@ -1,16 +1,9 @@
+# Build-only workflow. Publishing is handled by on-merge-qvac-lib-infer-llamacpp-embed.yml
 name: Prebuilds (Embed)
 
 on:
   workflow_dispatch:
     inputs:
-      tag:
-        description: "Tag to publish with ('latest' by default)"
-        required: true
-        default: "latest"
-        type: choice
-        options:
-          - latest
-          - dev
       vk-profiling:
         type: boolean
         default: false
@@ -19,34 +12,28 @@ on:
         required: false
         type: string
         default: "packages/qvac-lib-infer-llamacpp-embed"
+
   workflow_call:
     inputs:
       ref:
         description: "ref"
         type: string
+        required: false
       repository:
         type: string
         required: false
         default: "tetherto/qvac"
-      tag:
-        description: "Tag to publish"
-        type: string
+      vk-profiling:
+        description: "Enable Vulkan profiling"
+        type: boolean
         required: false
-        default: "dev"
-      publish_target:
-        description: "Target registry for publishing (npm, gpr, or both)"
-        type: string
-        required: false
-        default: ""
+        default: false
       workdir:
         description: "Working directory (optional)"
         required: false
         type: string
         default: "packages/qvac-lib-infer-llamacpp-embed"
-    outputs:
-      published_version:
-        description: "Version published to registry"
-        value: ${{ jobs.publish-npm.outputs.published_version || jobs.publish-gpr.outputs.published_version }}
+
 env:
   WORKDIR: ${{ inputs.workdir }}
 
@@ -58,6 +45,7 @@ jobs:
     permissions:
       contents: write
       pull-requests: write
+      id-token: write
     strategy:
       fail-fast: false
       matrix:
@@ -125,7 +113,6 @@ jobs:
       - name: Echo workflow inputs
         shell: bash
         env:
-          INPUT_TAG: ${{ inputs.tag || github.event.inputs.tag }}
           INPUT_REF: ${{ inputs.ref || github.ref }}
           INPUT_REPO: ${{ inputs.repository || github.repository }}
           INPUT_WORKDIR: ${{ inputs.workdir }}
@@ -134,7 +121,6 @@ jobs:
           MATRIX_TAGS: ${{ matrix.tags }}
         run: |
           echo "Workflow inputs:"
-          echo "Tag: $INPUT_TAG"
           echo "Ref: $INPUT_REF"
           echo "Repository: $INPUT_REPO"
           echo "Workdir: $INPUT_WORKDIR"
@@ -281,11 +267,14 @@ jobs:
           echo "VULKAN_SDK=$VULKAN_SDK" >> $GITHUB_ENV
 
       - if: ${{ matrix.os == 'ubuntu-22.04-arm' }}
+        name: Configure AWS credentials via OIDC
+        uses: aws-actions/configure-aws-credentials@8df5847569e6427dd6c4fb1cf565c83acfa8afa7 # 6.0.0
+        with:
+          role-to-assume: ${{ secrets.AWS_OIDC_ROLE_ARN }}
+          aws-region: eu-central-1
+
+      - if: ${{ matrix.os == 'ubuntu-22.04-arm' }}
         name: Setup vulkan sdk path in linux arm64
-        env:
-          AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
-          AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
-          AWS_DEFAULT_REGION: us-east-1
         run: |
           VULKAN_SDK=~/vulkan/aarch64
           echo "VULKAN_SDK=$VULKAN_SDK" >> $GITHUB_ENV
@@ -443,97 +432,3 @@ jobs:
           name: prebuilds
           path: prebuilds
 
-  publish-gpr:
-    needs: [prebuild, merge]
-    if: ${{ inputs.publish_target == 'gpr'
-      || inputs.publish_target == 'both'
-      || (
-          (github.event_name == 'workflow_dispatch' || github.event_name == 'workflow_call' || github.event_name == 'push')
-          && (inputs.publish_target == '' || inputs.publish_target == null)
-          && (
-            github.ref_name == 'main'
-            || startsWith(github.ref_name, 'feature-')
-            || startsWith(github.ref_name, 'tmp-')
-            || (inputs.ref != '' && (
-                  inputs.ref == 'refs/heads/main'
-                  || startsWith(inputs.ref, 'refs/heads/feature-')
-                  || startsWith(inputs.ref, 'refs/heads/tmp-')
-                ))
-          )
-        ) }}
-    continue-on-error: true
-    outputs:
-      published_version: ${{ steps.publish.outputs.npm_published_version }}
-    runs-on: ubuntu-latest
-    environment: release
-    permissions:
-      contents: write
-      packages: write
-    steps:
-      - name: Checkout repository
-        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # 6.0.2
-        with:
-          repository: ${{ inputs.repository || github.repository }}
-          ref: ${{ inputs.ref || github.ref }}
-          token: ${{ secrets.PAT_TOKEN }}
-
-      - name: Download prebuild artifacts
-        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # 8.0.1
-        with:
-          name: prebuilds
-          path: ${{ env.WORKDIR }}/prebuilds
-
-      - name: Publish to GitHub Package Registry
-        id: publish
-        uses: tetherto/qvac-devops/.github/actions/publish-library-to-gpr@v1.1.7
-        with:
-          secret-token: ${{ secrets.GITHUB_TOKEN }}
-          tag: ${{ inputs.tag || github.event.inputs.tag || 'dev' }}
-          name-suffix: "-mono"
-          workdir:  ${{ env.WORKDIR }}
-
-  publish-npm:
-    needs: [prebuild, merge]
-    if: ${{ inputs.publish_target == 'npm'
-        || inputs.publish_target == 'both'
-        || (
-            (github.event_name == 'workflow_dispatch' || github.event_name == 'workflow_call' || github.event_name == 'push')
-            && (inputs.publish_target == '' || inputs.publish_target == null)
-            && (
-              startsWith(github.ref_name, 'release-')
-              || (inputs.ref != '' && startsWith(inputs.ref, 'refs/heads/release-'))
-            )
-          ) }}
-    continue-on-error: false
-    outputs:
-      published_version: ${{ steps.publish.outputs.npm_published_version }}
-    runs-on: ubuntu-latest
-    environment: release
-    permissions:
-      contents: write
-      packages: write
-    steps:
-      - name: Checkout repository
-        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # 6.0.2
-        with:
-          repository: ${{ inputs.repository || github.repository }}
-          ref: ${{ inputs.ref || github.ref }}
-          token: ${{ secrets.PAT_TOKEN }}
-
-      - name: Download prebuild artifacts
-        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # 8.0.1
-        with:
-          name: prebuilds
-          path: ${{ env.WORKDIR }}/prebuilds
-
-      - name: Publish to NPM Package Registry
-        id: publish
-        uses: tetherto/qvac-devops/.github/actions/publish-library-to-npm@v1.1.7
-        with:
-          secret-token: ${{ secrets.NPM_TOKEN }}
-          tag: "latest"
-          workdir: ${{ env.WORKDIR }}
-          repo_name: "llamacpp-embed"
-          git-token: ${{ secrets.GITHUB_TOKEN }}
-          create-tag: "false"
-          

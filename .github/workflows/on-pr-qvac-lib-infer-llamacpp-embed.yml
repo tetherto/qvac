@@ -21,10 +21,7 @@ permissions:
   contents: read
   pull-requests: read
   packages: read
-
-concurrency:
-  group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.sha }}
-  cancel-in-progress: true
+  id-token: write
 
 jobs:
   authorize:
@@ -45,7 +42,7 @@ jobs:
 
   sanity-checks:
     if: needs.authorize.outputs.allowed == 'true'
-    needs: authorize
+    needs: [authorize]
     runs-on: ubuntu-latest
     environment: release
     steps:
@@ -117,6 +114,7 @@ jobs:
       contents: write
       packages: write
       pull-requests: write
+      id-token: write
     if: needs.authorize.outputs.allowed == 'true'
     needs: [authorize, sanity-checks]
     uses: ./.github/workflows/prebuilds-qvac-lib-infer-llamacpp-embed.yml
@@ -124,12 +122,14 @@ jobs:
     with:
       repository: ${{ github.event.pull_request.head.repo.full_name }}
       ref: ${{ github.event.pull_request.head.ref }}
-      tag: "dev"
-      publish_target: 'gpr'
 
   integration-tests:
     needs: [authorize, prebuild]
     if: needs.authorize.outputs.allowed == 'true'
+    permissions:
+      contents: read
+      packages: read
+      id-token: write
     uses: ./.github/workflows/integration-test-qvac-lib-infer-llamacpp-embed.yml
     secrets: inherit
     with:
@@ -141,6 +141,7 @@ jobs:
       contents: read
       packages: read
       pull-requests: write # Allow commenting on PRs
+      id-token: write
     if: needs.authorize.outputs.allowed == 'true'
     needs: [authorize, prebuild]
     uses: ./.github/workflows/integration-mobile-test-qvac-lib-infer-llamacpp-embed.yml
