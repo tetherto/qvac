@@ -204,6 +204,38 @@ size_t countWords(const std::string& text) {
   return count;
 }
 
+void registerExternalDataInMemory(
+    Ort::SessionOptions& opts,
+    const std::string& modelPath,
+    const std::string& dataPath,
+    std::vector<char>& outBuffer) {
+  auto dataSize = std::filesystem::file_size(dataPath);
+  outBuffer.resize(dataSize);
+  std::ifstream stream(dataPath, std::ios::binary);
+  stream.read(outBuffer.data(), static_cast<std::streamsize>(dataSize));
+
+  std::string modelName =
+      std::filesystem::path(modelPath).filename().string();
+  std::string nameUnderscore = modelName + "_data";
+  std::string nameDot = modelName + ".data";
+
+#ifdef _WIN32
+  std::basic_string<ORTCHAR_T> wNameUnderscore(
+      nameUnderscore.begin(), nameUnderscore.end());
+  std::basic_string<ORTCHAR_T> wNameDot(nameDot.begin(), nameDot.end());
+  std::vector<std::basic_string<ORTCHAR_T>> fileNames = {
+      wNameUnderscore, wNameDot};
+#else
+  std::vector<std::basic_string<ORTCHAR_T>> fileNames = {
+      nameUnderscore, nameDot};
+#endif
+
+  std::vector<char*> buffers = {outBuffer.data(), outBuffer.data()};
+  std::vector<size_t> lengths = {dataSize, dataSize};
+
+  opts.AddExternalInitializersFromFilesInMemory(fileNames, buffers, lengths);
+}
+
 } // namespace
 
 // ═════════════════════════════════════════════════════════════════════════════
@@ -568,27 +600,51 @@ void ParakeetModel::loadCTCSessions(Ort::SessionOptions& session_options) {
                          std::filesystem::exists(cfg_.ctcModelDataPath);
 
   if (hasExternalData) {
-    auto stagingDir =
-        std::filesystem::temp_directory_path() /
-        ("parakeet_ctc_" + std::to_string(reinterpret_cast<uintptr_t>(this)));
-    std::filesystem::create_directories(stagingDir);
+    auto modelDir =
+        std::filesystem::path(cfg_.ctcModelPath).parent_path();
+    auto dataDir =
+        std::filesystem::path(cfg_.ctcModelDataPath).parent_path();
+    bool colocated = (modelDir == dataDir);
 
-    auto modelLink = stagingDir / "model.onnx";
-    std::filesystem::create_symlink(cfg_.ctcModelPath, modelLink);
-    // ONNX exports use either model.onnx_data or model.onnx.data — create both
-    std::filesystem::create_symlink(
-        cfg_.ctcModelDataPath, stagingDir / "model.onnx_data");
-    std::filesystem::create_symlink(
-        cfg_.ctcModelDataPath, stagingDir / "model.onnx.data");
-
-    try {
-      ctc_session_ = std::make_unique<Ort::Session>(
-          *ort_env_, modelLink.c_str(), session_options);
-    } catch (...) {
-      std::filesystem::remove_all(stagingDir);
-      throw;
+    if (!colocated) {
+      // Bundle download may have placed the companion next to the model file
+      std::string modelName =
+          std::filesystem::path(cfg_.ctcModelPath).filename().string();
+      colocated =
+          std::filesystem::exists(modelDir / (modelName + "_data")) ||
+          std::filesystem::exists(modelDir / (modelName + ".data"));
     }
-    std::filesystem::remove_all(stagingDir);
+
+    if (colocated) {
+      QLOG(
+          qvac_lib_inference_addon_cpp::logger::Priority::DEBUG,
+          "CTC external data co-located — loading directly");
+#ifdef _WIN32
+      std::wstring wPath(cfg_.ctcModelPath.begin(), cfg_.ctcModelPath.end());
+      ctc_session_ = std::make_unique<Ort::Session>(
+          *ort_env_, wPath.c_str(), session_options);
+#else
+      ctc_session_ = std::make_unique<Ort::Session>(
+          *ort_env_, cfg_.ctcModelPath.c_str(), session_options);
+#endif
+    } else {
+      QLOG(
+          qvac_lib_inference_addon_cpp::logger::Priority::DEBUG,
+          "CTC external data in different directory — loading via in-memory "
+          "buffer");
+      std::vector<char> dataBuffer;
+      registerExternalDataInMemory(
+          session_options, cfg_.ctcModelPath, cfg_.ctcModelDataPath,
+          dataBuffer);
+#ifdef _WIN32
+      std::wstring wPath(cfg_.ctcModelPath.begin(), cfg_.ctcModelPath.end());
+      ctc_session_ = std::make_unique<Ort::Session>(
+          *ort_env_, wPath.c_str(), session_options);
+#else
+      ctc_session_ = std::make_unique<Ort::Session>(
+          *ort_env_, cfg_.ctcModelPath.c_str(), session_options);
+#endif
+    }
   } else {
 #ifdef _WIN32
     std::wstring wPath(cfg_.ctcModelPath.begin(), cfg_.ctcModelPath.end());
@@ -694,24 +750,49 @@ void ParakeetModel::loadTDTSessions(Ort::SessionOptions& session_options) {
                          std::filesystem::exists(cfg_.encoderDataPath);
 
   if (hasExternalData) {
-    auto stagingDir =
-        std::filesystem::temp_directory_path() /
-        ("parakeet_enc_" + std::to_string(reinterpret_cast<uintptr_t>(this)));
-    std::filesystem::create_directories(stagingDir);
+    auto modelDir =
+        std::filesystem::path(cfg_.encoderPath).parent_path();
+    auto dataDir =
+        std::filesystem::path(cfg_.encoderDataPath).parent_path();
+    bool colocated = (modelDir == dataDir);
 
-    auto encLink = stagingDir / "encoder-model.onnx";
-    auto dataLink = stagingDir / "encoder-model.onnx.data";
-    std::filesystem::create_symlink(cfg_.encoderPath, encLink);
-    std::filesystem::create_symlink(cfg_.encoderDataPath, dataLink);
-
-    try {
-      encoder_session_ = std::make_unique<Ort::Session>(
-          *ort_env_, encLink.c_str(), session_options);
-    } catch (...) {
-      std::filesystem::remove_all(stagingDir);
-      throw;
+    if (!colocated) {
+      std::string modelName =
+          std::filesystem::path(cfg_.encoderPath).filename().string();
+      colocated =
+          std::filesystem::exists(modelDir / (modelName + "_data")) ||
+          std::filesystem::exists(modelDir / (modelName + ".data"));
     }
-    std::filesystem::remove_all(stagingDir);
+
+    if (colocated) {
+      QLOG(
+          qvac_lib_inference_addon_cpp::logger::Priority::DEBUG,
+          "Encoder external data co-located — loading directly");
+#ifdef _WIN32
+      std::wstring wPath(cfg_.encoderPath.begin(), cfg_.encoderPath.end());
+      encoder_session_ = std::make_unique<Ort::Session>(
+          *ort_env_, wPath.c_str(), session_options);
+#else
+      encoder_session_ = std::make_unique<Ort::Session>(
+          *ort_env_, cfg_.encoderPath.c_str(), session_options);
+#endif
+    } else {
+      QLOG(
+          qvac_lib_inference_addon_cpp::logger::Priority::DEBUG,
+          "Encoder external data in different directory — loading via "
+          "in-memory buffer");
+      std::vector<char> dataBuffer;
+      registerExternalDataInMemory(
+          session_options, cfg_.encoderPath, cfg_.encoderDataPath, dataBuffer);
+#ifdef _WIN32
+      std::wstring wPath(cfg_.encoderPath.begin(), cfg_.encoderPath.end());
+      encoder_session_ = std::make_unique<Ort::Session>(
+          *ort_env_, wPath.c_str(), session_options);
+#else
+      encoder_session_ = std::make_unique<Ort::Session>(
+          *ort_env_, cfg_.encoderPath.c_str(), session_options);
+#endif
+    }
   } else {
 #ifdef _WIN32
     std::wstring wPath(cfg_.encoderPath.begin(), cfg_.encoderPath.end());
