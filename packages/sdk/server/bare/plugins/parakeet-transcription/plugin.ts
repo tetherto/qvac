@@ -1,7 +1,7 @@
 import parakeetAddonLogging from "@qvac/transcription-parakeet/addonLogging";
 import TranscriptionParakeet, {
   type ParakeetConfig,
-  type TranscriptionParakeetArgs,
+  type TranscriptionParakeetFiles,
   type TranscriptionParakeetConfig,
 } from "@qvac/transcription-parakeet";
 import {
@@ -18,6 +18,8 @@ import {
   type ResolveContext,
   type ResolveResult,
 } from "@/schemas";
+import fs from "bare-fs";
+import path from "bare-path";
 import { createStreamLogger, registerAddonLogger } from "@/logging";
 import { parseModelPath } from "@/server/utils";
 import {
@@ -47,6 +49,40 @@ type ParakeetModelConfig = {
   // Sortformer
   parakeetSortformerSrc?: ModelSrcInput;
 };
+
+// ONNX external data files must be co-located with their companion .onnx file.
+// The SDK cache may store them at separate hash-prefixed paths, so we symlink
+// the data file into the .onnx file's directory before the addon opens the session.
+const ONNX_DATA_COMPANIONS = [
+  { onnxKey: "encoder", dataKey: "encoderData", dataFilename: "encoder-model.onnx.data" },
+  { onnxKey: "model", dataKey: "modelData", dataFilename: "model.onnx_data" },
+] as const;
+
+function ensureOnnxDataColocated(
+  artifacts: Record<string, string | undefined>,
+) {
+  for (const { onnxKey, dataKey, dataFilename } of ONNX_DATA_COMPANIONS) {
+    const onnxPath = artifacts[onnxKey];
+    const dataPath = artifacts[dataKey];
+    if (!onnxPath || !dataPath) continue;
+
+    const onnxDir = path.dirname(onnxPath);
+    const colocatedPath = path.join(onnxDir, dataFilename);
+
+    if (dataPath === colocatedPath) continue;
+    if (fs.existsSync(colocatedPath)) {
+      artifacts[dataKey] = colocatedPath;
+      continue;
+    }
+
+    try {
+      fs.symlinkSync(dataPath, colocatedPath);
+      artifacts[dataKey] = colocatedPath;
+    } catch {
+      // Keep original path if symlink creation fails
+    }
+  }
+}
 
 async function resolveTdtConfig(
   cfg: ParakeetModelConfig,
@@ -86,10 +122,11 @@ async function resolveTdtConfig(
   return {
     config: cfg,
     artifacts: {
-      encoderPath,
-      ...(decoderPath !== undefined && { decoderPath }),
-      ...(vocabPath !== undefined && { vocabPath }),
-      ...(preprocessorPath !== undefined && { preprocessorPath }),
+      encoder: encoderPath,
+      ...(encoderDataPath !== undefined && { encoderData: encoderDataPath }),
+      ...(decoderPath !== undefined && { decoder: decoderPath }),
+      ...(vocabPath !== undefined && { vocab: vocabPath }),
+      ...(preprocessorPath !== undefined && { preprocessor: preprocessorPath }),
     },
   };
 }
@@ -115,8 +152,9 @@ async function resolveCtcConfig(
   return {
     config: cfg,
     artifacts: {
-      ctcModelPath,
-      ...(tokenizerPath !== undefined && { tokenizerPath }),
+      model: ctcModelPath,
+      ...(ctcModelDataPath !== undefined && { modelData: ctcModelDataPath }),
+      ...(tokenizerPath !== undefined && { tokenizer: tokenizerPath }),
     },
   };
 }
@@ -139,19 +177,19 @@ async function resolveSortformerConfig(
   return {
     config: cfg,
     artifacts: {
-      ...(sortformerPath !== undefined && { sortformerPath }),
+      ...(sortformerPath !== undefined && { sortformer: sortformerPath }),
     },
   };
 }
 
 function createParakeetModel(
   params: CreateModelParams,
-  addonPathKey: string,
+  primaryFileKey: keyof TranscriptionParakeetFiles,
 ): PluginModelResult {
   const config = (params.modelConfig ?? {}) as ParakeetModelConfig;
-  const artifacts = params.artifacts ?? {};
+  const artifacts = { ...(params.artifacts ?? {}) };
   const modelType = config.modelType ?? "tdt";
-  const primaryPath = artifacts[addonPathKey] ?? params.modelPath;
+  const primaryPath = artifacts[primaryFileKey] ?? params.modelPath;
 
   if (!primaryPath) {
     throw new ModelLoadFailedError(
@@ -159,15 +197,20 @@ function createParakeetModel(
     );
   }
 
+  ensureOnnxDataColocated(artifacts);
+
   const { dirPath } = parseModelPath(primaryPath);
   const loader = new FilesystemDL({ dirPath });
   const logger = createStreamLogger(params.modelId, ModelType.parakeetTranscription);
   registerAddonLogger(params.modelId, ModelType.parakeetTranscription, logger);
 
-  const addonConfig: TranscriptionParakeetConfig = {
-    path: dirPath,
-    [addonPathKey]: primaryPath,
+  const files: TranscriptionParakeetFiles = {
+    [primaryFileKey]: primaryPath,
     ...artifacts,
+  };
+
+  const addonConfig: TranscriptionParakeetConfig = {
+    enableStats: true,
     parakeetConfig: {
       modelType,
       maxThreads: config.maxThreads,
@@ -179,16 +222,11 @@ function createParakeetModel(
     } as ParakeetConfig,
   };
 
-  const model = new TranscriptionParakeet(
-    {
-      loader,
-      logger,
-      modelName: parseModelPath(dirPath).basePath,
-      diskPath: dirPath,
-      opts: { stats: true },
-    } as TranscriptionParakeetArgs,
-    addonConfig,
-  );
+  const model = new TranscriptionParakeet({
+    files,
+    config: addonConfig,
+    logger,
+  });
 
   return { model, loader };
 }
@@ -215,10 +253,10 @@ export const parakeetPlugin = definePlugin({
     const modelType =
       ((params.modelConfig ?? {}) as ParakeetModelConfig).modelType ?? "tdt";
 
-    if (modelType === "ctc") return createParakeetModel(params, "ctcModelPath");
+    if (modelType === "ctc") return createParakeetModel(params, "model");
     if (modelType === "sortformer")
-      return createParakeetModel(params, "sortformerPath");
-    return createParakeetModel(params, "encoderPath");
+      return createParakeetModel(params, "sortformer");
+    return createParakeetModel(params, "encoder");
   },
 
   handlers: {
