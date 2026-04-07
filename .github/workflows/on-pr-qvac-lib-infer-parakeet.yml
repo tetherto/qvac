@@ -161,6 +161,7 @@ jobs:
       contents: write
       packages: write
       pull-requests: write
+      id-token: write
     needs: context
     if: needs.context.outputs.run_verify == 'true' || github.event_name == 'workflow_dispatch'
     uses: ./.github/workflows/prebuilds-qvac-lib-infer-parakeet.yml
@@ -170,6 +171,10 @@ jobs:
       ref: ${{ needs.context.outputs.ref }}
 
   run-integration-tests:
+    permissions:
+      contents: read
+      packages: read
+      id-token: write
     needs: [context, prebuild]
     if: needs.context.outputs.run_verify == 'true' || github.event_name == 'workflow_dispatch'
     uses: ./.github/workflows/integration-test-qvac-lib-infer-parakeet.yml
@@ -182,7 +187,8 @@ jobs:
     permissions:
       contents: read
       packages: read
-      pull-requests: write # Allow commenting on PRs
+      pull-requests: write
+      id-token: write
     needs: [context, prebuild]
     if: needs.context.outputs.run_verify == 'true' || github.event_name == 'workflow_dispatch'
     uses: ./.github/workflows/integration-mobile-test-qvac-lib-infer-parakeet.yml
