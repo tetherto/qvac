@@ -10,40 +10,13 @@
 #include <gtest/gtest.h>
 #include <llama.h>
 #include <qvac-lib-inference-addon-cpp/Errors.hpp>
-#include <qvac-lib-inference-addon-cpp/RuntimeStats.hpp>
 
 #include "model-interface/LlamaModel.hpp"
 #include "test_common.hpp"
 
 namespace fs = std::filesystem;
 
-namespace {
-double getStatValue(
-    const qvac_lib_inference_addon_cpp::RuntimeStats& stats,
-    const std::string& key) {
-  for (const auto& stat : stats) {
-    if (stat.first == key) {
-      return std::visit(
-          [](const auto& value) -> double {
-            if constexpr (std::is_same_v<
-                              std::decay_t<decltype(value)>,
-                              double>) {
-              return value;
-            } else if constexpr (std::is_same_v<
-                                     std::decay_t<decltype(value)>,
-                                     int64_t>) {
-              return static_cast<double>(value);
-            } else {
-              return 0.0;
-            }
-          },
-          stat.second);
-    }
-  }
-  return 0.0;
-}
-
-} // namespace
+using test_common::getStatValue;
 
 class LlamaModelTest : public ::testing::Test {
 protected:
