@@ -21,10 +21,6 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - `loader` constructor parameter (was never used by OCR — `noAdditionalDownload: true`)
 - `static JOB_ID`, `_saveJobToResponseMapping`, `_deleteJobMapping`, `_createResponse` boilerplate
 
-### Updated
-
-- SDK OCR plugin no longer creates `FilesystemDL` loader — passes params directly
-
 ## [0.3.3]
 2026-03-18
 
