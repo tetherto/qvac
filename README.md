@@ -84,15 +84,14 @@ node quickstart.js
 
 #### AI capabilities
 
-* **Completion:** LLM inference for text generation and chat via [`qvac-fabric-llm.cpp`](https://github.com/tetherto/qvac-fabric-llm.cpp).
-* **Text embeddings:** vector embedding generation for semantic search, clustering, and retrieval, via `qvac-fabric-llm.cpp`.
-* **Translation:** text-to-text neural machine translation (NMT), using either `qvac-fabric-llm.cpp` or [Bergamot](https://browser.mt).
-* **Transcription:** automatic speech recognition (ASR) for speech-to-text via [`qvac-ext-lib-whisper.cpp`](https://github.com/tetherto/qvac-ext-lib-whisper.cpp).
-* **Text-to-Speech:** speech synthesis for text-to-speech (TTS) via [ONNX Runtime](https://onnxruntime.ai).
-* **OCR:** optical character recognition (OCR) for extracting text from images via ONNX runtime.
-* **Image generation:** text-to-image generation via [`qvac-ext-stable-diffusion.cpp`](https://github.com/tetherto/qvac-lib-infer-diffusion).
-* **Multimodal:** LLM inference over text, images, and other media within a single conversation context.
-* **RAG:** out-of-the-box retrieval-augmented generation workflow.
+* [**Completion:**](/sdk/examples/ai-tasks/completion) LLM inference for text generation and chat via [`qvac-fabric-llm.cpp`](https://github.com/tetherto/qvac-fabric-llm.cpp).
+* [**Text embeddings:**](/sdk/examples/ai-tasks/text-embeddings) vector embedding generation for semantic search, clustering, and retrieval, via `qvac-fabric-llm.cpp`.
+* [**Translation:**](/sdk/examples/ai-tasks/translation) text-to-text neural machine translation (NMT), via `qvac-fabric-llm.cpp` and [Bergamot](https://browser.mt).
+* [**Transcription:**](/sdk/examples/ai-tasks/transcription) automatic speech recognition (ASR) for speech-to-text via [`qvac-ext-lib-whisper.cpp`](https://github.com/tetherto/qvac-ext-lib-whisper.cpp) or [NVIDIA Parakeet](https://huggingface.co/nvidia/parakeet-tdt-0.6b-v2).
+* [**Text-to-Speech:**](/sdk/examples/ai-tasks/text-to-speech) speech synthesis for text-to-speech (TTS) via [ONNX Runtime](https://onnxruntime.ai).
+* [**OCR:**](/sdk/examples/ai-tasks/ocr) optical character recognition (OCR) for extracting text from images via ONNX runtime.
+* [**Multimodal:**](/sdk/examples/ai-tasks/multimodal) LLM inference over text, images, and other media within a single conversation context.
+* [**RAG:**](/sdk/examples/ai-tasks/rag) out-of-the-box retrieval-augmented generation workflow.
 
 #### P2P capabilities
 
@@ -135,7 +134,7 @@ Legend:
 | lib-infer-nmtcpp | Native C++ addon for translation using either `qvac-fabric-llm.cpp` or [Bergamot](https://browser.mt) | Addon |
 | lib-infer-onnx | Bare addon for ONNX Runtime session management | Addon |
 | lib-infer-onnx-tts | Text-to-Speech (TTS) library using Chatterbox and Supertonic neural TTS model via ONNX Runtime | Addon |
-| lib-infer-parakeet | High-performance speech-to-text inference addon using NVIDIA Parakeet models via ONNX Runtime | Addon |
+| lib-infer-parakeet | High-performance speech-to-text inference addon using via NVIDIA/Parakeet | Addon |
 | lib-infer-whispercpp | Library for running Whisper transcription model for audio transcription via `qvac-ext-lib-whisper.cpp` | Addon |
 | lib-inference-addon-cpp | Header-only C++ library providing common abstractions and infrastructure for building high-performance inference addons | Addon |
 | lib-langdetect-text | Language detection library providing interface for detecting language of given text | Addon |
