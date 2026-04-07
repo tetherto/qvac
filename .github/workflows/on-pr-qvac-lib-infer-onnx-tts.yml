@@ -51,6 +51,7 @@ permissions:
   pull-requests: read
   packages: read
   checks: read
+  id-token: write
 
 jobs:
   authorize:
@@ -183,7 +184,6 @@ jobs:
     with:
       repository: ${{ needs.context.outputs.repository }}
       ref: ${{ needs.context.outputs.ref }}
-      publish_target: "gpr"
       workdir: ${{ needs.context.outputs.workdir }}
 
   run-integration-tests:
