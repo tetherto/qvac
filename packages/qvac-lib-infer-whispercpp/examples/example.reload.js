@@ -1,6 +1,7 @@
 'use strict'
 
 const fs = require('bare-fs')
+const path = require('bare-path')
 const process = require('bare-process')
 const TranscriptionWhispercpp = require('../index.js')
 
@@ -12,9 +13,9 @@ async function main () {
   const args = process.argv.slice(2)
   const [audioPathArg, modelPathArg] = args
 
-  // Default to repo sample for tests
-  const audioFilePath = audioPathArg || './examples/samples/sample.raw'
-  const modelPath = modelPathArg || './examples/models/ggml-tiny.bin'
+  const modelsDir = path.join(__dirname, '..', 'models')
+  const audioFilePath = audioPathArg || path.join(__dirname, 'samples', 'sample.raw')
+  const modelPath = modelPathArg || path.join(modelsDir, 'ggml-tiny.bin')
 
   if (!fs.existsSync(modelPath)) {
     console.error(`Model file not found at ${modelPath}. Download or provide a path as the second argument.`)
@@ -43,7 +44,7 @@ async function main () {
   const config = {
     whisperConfig: {
       audio_format: 's16le',
-      vad_model_path: './examples/models/ggml-silero-v5.1.2.bin',
+      vad_model_path: path.join(modelsDir, 'ggml-silero-v5.1.2.bin'),
       vad_params: {
         threshold: 0.35,
         min_speech_duration_ms: 200,
