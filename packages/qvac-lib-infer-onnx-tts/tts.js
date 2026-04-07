@@ -36,11 +36,10 @@ class TTSInterface {
    * @param {Object} data
    * @param {String} data.type
    * @param {String} data.input
-   * @returns {Boolean} true if accepted, false when busy
    */
   async runJob (data) {
     try {
-      return this._binding.runJob(this._handle, data)
+      this._binding.runJob(this._handle, data)
     } catch (err) {
       throw new QvacErrorAddonTTS({
         code: ERR_CODES.FAILED_TO_APPEND,

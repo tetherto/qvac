@@ -4,8 +4,6 @@
 
 int get_optimal_thread_count();
 
-bool modelIsMarian(e_model modelType);
-
 int64_t get_time_us();
 
 bool ggml_graph_compute_helper(

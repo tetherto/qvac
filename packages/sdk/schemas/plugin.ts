@@ -12,10 +12,35 @@ export interface PluginHandlerDefinition<
   requestSchema: TRequest;
   responseSchema: TResponse;
   streaming: boolean;
-  /** The handler function - receives validated request, returns validated response */
+  duplex?: boolean;
   handler: TRequest extends z.ZodType<infer I>
     ? TResponse extends z.ZodType<infer O>
-      ? (request: I) => Promise<O> | AsyncGenerator<O>
+      ? (
+          request: I,
+          inputStream?: AsyncIterable<Buffer>,
+        ) => Promise<O> | AsyncGenerator<O>
+      : never
+    : never;
+}
+
+/**
+ * Variant of `PluginHandlerDefinition` for duplex handlers where
+ * `inputStream` is guaranteed to be present. Use with `defineDuplexHandler`.
+ */
+export interface DuplexPluginHandlerDefinition<
+  TRequest extends z.ZodType = z.ZodType,
+  TResponse extends z.ZodType = z.ZodType,
+> {
+  requestSchema: TRequest;
+  responseSchema: TResponse;
+  streaming: true;
+  duplex: true;
+  handler: TRequest extends z.ZodType<infer I>
+    ? TResponse extends z.ZodType<infer O>
+      ? (
+          request: I,
+          inputStream: AsyncIterable<Buffer>,
+        ) => AsyncGenerator<O>
       : never
     : never;
 }
@@ -180,6 +205,17 @@ export function defineHandler<
   return definition;
 }
 
+export function defineDuplexHandler<
+  TRequest extends z.ZodType,
+  TResponse extends z.ZodType,
+>(
+  definition: DuplexPluginHandlerDefinition<TRequest, TResponse>,
+): PluginHandlerDefinition<TRequest, TResponse> {
+  // The duplex flag guarantees inputStream is always
+  // provided at call time; the cast bridges TS function-param contravariance.
+  return definition as unknown as PluginHandlerDefinition<TRequest, TResponse>;
+}
+
 // ============================================
 // Worker runtime validation
 // ============================================
@@ -199,6 +235,7 @@ export const pluginHandlerDefinitionRuntimeSchema = z
     requestSchema: zodSchemaLikeRuntimeSchema,
     responseSchema: zodSchemaLikeRuntimeSchema,
     streaming: z.boolean({ error: "streaming must be a boolean" }),
+    duplex: z.boolean().optional(),
     handler: functionRuntimeSchema,
   })
   .catchall(z.unknown());
