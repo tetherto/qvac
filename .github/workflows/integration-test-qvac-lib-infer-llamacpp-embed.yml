@@ -23,6 +23,7 @@ on:
 jobs:
   run-integration-tests:
     runs-on: ${{ matrix.runner || matrix.os }}
+    environment: release
     name: ${{ matrix.platform }}-${{ matrix.arch }}-integration-tests
     permissions:
       contents: read
@@ -57,23 +58,16 @@ jobs:
           - os: macos-15-large
             platform: darwin
             arch: x64
-          - os: windows-2022
+          - os: windows-11
             platform: win32
             arch: x64
-            runner: ai-run-windows-gpu
+            runner: ai-run-windows11-gpu
 
     steps:
       - name: Setup Node.js
-        uses: actions/setup-node@v4
+        uses: actions/setup-node@53b83947a5a98c8d113130e565377fae1a50d02f # 6.3.0
         with:
           node-version: lts/*
-
-      - name: Linux glibcxx
-        if: ${{ startsWith(matrix.os, 'ubuntu-22') }}
-        run: |
-          sudo add-apt-repository ppa:ubuntu-toolchain-r/test
-          sudo apt update
-          sudo apt install -y g++-13
 
       - name: Windows - enable git long paths
         if: ${{ matrix.platform == 'win32' }}
@@ -81,10 +75,10 @@ jobs:
         run: git config --system core.longpaths true
 
       - name: Checkout code
-        uses: actions/checkout@v4
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # 6.0.2
         with:
-          ref: ${{ inputs.ref || github.ref }}
           repository: ${{ inputs.repository || github.repository }}
+          ref: ${{ inputs.ref || github.ref }}
           token: ${{ secrets.PAT_TOKEN }}
 
       - name: Configure scoped registry for @tetherto and @qvac packages (Linux/macOS)
@@ -149,7 +143,7 @@ jobs:
 
       - name: Download prebuilds (from artifacts)
         if: ${{ !inputs.prebuild_package }}
-        uses: actions/download-artifact@v4
+        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # 8.0.1
         with:
           path: ${{ env.WORKDIR }}/prebuilds
           merge-multiple: true
@@ -267,8 +261,6 @@ jobs:
           echo "npm version: $(npm -v)"
           echo "bare version: $(bare -v)"
           echo "bare-make version: $(bare-make --version)"
-          ls -la model/marian/vulkan/en-it/ || true
-          tree model/marian/vulkan/en-it/ || true
           ls -la prebuilds || true
           tree prebuilds || true
         continue-on-error: true
@@ -277,16 +269,6 @@ jobs:
         if: matrix.platform == 'linux' || matrix.platform == 'android'
         shell: bash
         run: sudo apt-get update && sudo apt-get install -y mesa-vulkan-drivers
-
-      - name: Windows - Install Vulkan
-        if: ${{ matrix.platform == 'win32' }}
-        run: |
-          $ProgressPreference = 'SilentlyContinue'
-          Invoke-WebRequest https://sdk.lunarg.com/sdk/download/latest/windows/vulkan-sdk.exe -OutFile vulkan-sdk.exe -PassThru -UseBasicParsing
-          ./vulkan-sdk.exe --root C:\VulkanSDK --accept-licenses --default-answer --confirm-command install
-          echo "VULKAN_SDK=C:\VulkanSDK" >> $Env:GITHUB_ENV
-        shell: powershell
-        timeout-minutes: 40
 
       - name: Run integration test
         working-directory: ${{ env.WORKDIR }}

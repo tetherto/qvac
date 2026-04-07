@@ -27,6 +27,9 @@ on:
 env:
   PKG_DIR: packages/ocr-onnx
 
+permissions:
+  contents: read
+
 jobs:
   setup:
     runs-on: ubuntu-latest
@@ -59,17 +62,18 @@ jobs:
     needs: setup
     if: needs.setup.outputs.qvac_needed == 'true'
     runs-on: ubuntu-24.04
+    environment: release
     timeout-minutes: 120
     name: Build QVAC addon
 
     steps:
       - name: Checkout repository
-        uses: actions/checkout@v6
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # 6.0.2
         with:
           submodules: recursive
 
       - name: Set up Node.js
-        uses: actions/setup-node@v6
+        uses: actions/setup-node@53b83947a5a98c8d113130e565377fae1a50d02f # 6.3.0
         with:
           node-version: lts/*
 
@@ -101,7 +105,7 @@ jobs:
         run: echo "VCPKG_ROOT=$VCPKG_INSTALLATION_ROOT" >> $GITHUB_ENV
 
       - name: Cache vcpkg packages
-        uses: actions/cache@v5
+        uses: actions/cache@668228422ae6a00e4ad889ee87cd7109ec5666a7 # 5.0.4
         with:
           key: vcpkg-linux-x64-${{ hashFiles('packages/ocr-onnx/**/vcpkg.json', 'packages/ocr-onnx/**/CMakeLists.txt') }}
           path: |
@@ -111,7 +115,7 @@ jobs:
           restore-keys: vcpkg-linux-x64-
 
       - name: Cache ccache
-        uses: actions/cache@v5
+        uses: actions/cache@668228422ae6a00e4ad889ee87cd7109ec5666a7 # 5.0.4
         with:
           key: ccache-linux-x64-${{ github.sha }}
           path: ~/.ccache
@@ -132,7 +136,7 @@ jobs:
           ccache -z
 
       - name: Cache npm dependencies
-        uses: actions/cache@v5
+        uses: actions/cache@668228422ae6a00e4ad889ee87cd7109ec5666a7 # 5.0.4
         with:
           key: npm-${{ hashFiles('packages/ocr-onnx/package-lock.json') }}
           path: ~/.npm
@@ -156,7 +160,7 @@ jobs:
         run: ccache -s
 
       - name: Upload build artifact
-        uses: actions/upload-artifact@v6
+        uses: actions/upload-artifact@bbbca2ddaa5d8feaa63e36b76fdaad77386f024f # 7.0.0
         with:
           name: qvac-addon-build
           path: |
@@ -171,18 +175,22 @@ jobs:
       needs.setup.result == 'success' &&
       (needs.build.result == 'success' || needs.build.result == 'skipped')
     runs-on: ubuntu-24.04
+    environment: release
     timeout-minutes: 180
     name: Text Spotting Benchmark
+    permissions:
+      contents: read
+      id-token: write
 
     steps:
       - name: Checkout repository
-        uses: actions/checkout@v6
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # 6.0.2
         with:
           submodules: recursive
 
       - name: Set up Node.js
         if: needs.setup.outputs.qvac_needed == 'true'
-        uses: actions/setup-node@v6
+        uses: actions/setup-node@53b83947a5a98c8d113130e565377fae1a50d02f # 6.3.0
         with:
           node-version: 20
 
@@ -191,14 +199,14 @@ jobs:
         run: npm install -g bare-runtime
 
       - name: Set up Python
-        uses: actions/setup-python@v6
+        uses: actions/setup-python@a309ff8b426b58ec0e2a45f0f869d46889d02405 # 6.2.0
         with:
           python-version: '3.14'
           cache: pip
 
       - name: Download build artifact
         if: needs.setup.outputs.qvac_needed == 'true' && needs.build.result == 'success'
-        uses: actions/download-artifact@v7
+        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # 8.0.1
         with:
           name: qvac-addon-build
           path: ${{ env.PKG_DIR }}
@@ -233,12 +241,11 @@ jobs:
           sudo apt-get update
           sudo apt-get install -y mesa-vulkan-drivers
 
-      - name: Configure AWS credentials
-        uses: aws-actions/configure-aws-credentials@v6
+      - name: Configure AWS credentials via OIDC
+        uses: aws-actions/configure-aws-credentials@8df5847569e6427dd6c4fb1cf565c83acfa8afa7 # 6.0.0
         with:
-          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
-          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
-          aws-region: us-east-1
+          role-to-assume: ${{ secrets.AWS_OIDC_ROLE_ARN }}
+          aws-region: eu-central-1
 
       - name: Download QVAC OCR models
         if: needs.setup.outputs.qvac_needed == 'true'
@@ -340,7 +347,7 @@ jobs:
           PYTHONUNBUFFERED: 1
 
       - name: Upload evaluation results
-        uses: actions/upload-artifact@v6
+        uses: actions/upload-artifact@bbbca2ddaa5d8feaa63e36b76fdaad77386f024f # 7.0.0
         if: always()
         with:
           name: ocr-benchmark-results
@@ -349,7 +356,7 @@ jobs:
           retention-days: 30
 
       - name: Upload evaluation logs
-        uses: actions/upload-artifact@v6
+        uses: actions/upload-artifact@bbbca2ddaa5d8feaa63e36b76fdaad77386f024f # 7.0.0
         if: failure()
         with:
           name: ocr-benchmark-logs
@@ -365,7 +372,7 @@ jobs:
 
     steps:
       - name: Download results
-        uses: actions/download-artifact@v7
+        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # 8.0.1
         continue-on-error: true
         with:
           name: ocr-benchmark-results
@@ -480,7 +487,7 @@ jobs:
           PYTHON_SCRIPT
 
       - name: Upload consolidated results
-        uses: actions/upload-artifact@v6
+        uses: actions/upload-artifact@bbbca2ddaa5d8feaa63e36b76fdaad77386f024f # 7.0.0
         with:
           name: ocr-benchmark-consolidated
           path: results

@@ -1,4 +1,6 @@
-name: General CI/CD (cli)
+name: General CI/CD (dl-base)
+# This workflow is used to call the reusable workflows in the qvac-devops repository
+# https://github.com/tetherto/qvac-devops/blob/production-workflows-tag/.github/workflows/public-reusable.yml
 
 on:
   push:
@@ -8,7 +10,7 @@ on:
       - feature-*
       - tmp-*
     paths:
-      - "packages/cli/**"
+      - "packages/dl-base/**"
   workflow_dispatch:
     inputs:
       custom_input_1:
@@ -20,9 +22,6 @@ on:
       custom_input_3:
         required: false
         type: string
-
-env:
-  WORKDIR: packages/cli
 
 permissions:
   contents: read
@@ -44,35 +43,9 @@ jobs:
           base-ref: ${{ github.ref_name }}
           base-sha: ${{ github.event.before }}
           head-sha: ${{ github.sha }}
-          package-slug: cli
-          package-json-path: packages/cli/package.json
-          changelog-path: packages/cli/CHANGELOG.md
-
-  build:
-    runs-on: ubuntu-latest
-    steps:
-      - name: Checkout repository
-        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # 6.0.2
-
-      - name: Setup Node
-        uses: actions/setup-node@53b83947a5a98c8d113130e565377fae1a50d02f # 6.3.0
-        with:
-          node-version: 22
-
-      - name: Install dependencies
-        run: npm install
-        working-directory: ${{ env.WORKDIR }}
-
-      - name: Build
-        run: npm run build
-        working-directory: ${{ env.WORKDIR }}
-
-      - name: Upload build artifacts
-        uses: actions/upload-artifact@bbbca2ddaa5d8feaa63e36b76fdaad77386f024f # 7.0.0
-        with:
-          name: cli-dist
-          path: ${{ env.WORKDIR }}/dist/
-          retention-days: 1
+          package-slug: dl-base
+          package-json-path: packages/dl-base/package.json
+          changelog-path: packages/dl-base/CHANGELOG.md
 
   publish-logic:
     runs-on: ubuntu-latest
@@ -123,7 +96,7 @@ jobs:
           echo "gpr_tag=$gpr_tag" >> "$GITHUB_OUTPUT"
 
   publish-main-gpr-dev:
-    needs: [build, publish-logic]
+    needs: publish-logic
     if: needs.publish-logic.outputs.publish_main == 'true'
     runs-on: ubuntu-latest
     environment: release
@@ -135,15 +108,6 @@ jobs:
         with:
           fetch-depth: 0
 
-      - name: Download build artifacts
-        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # 8.0.1
-        with:
-          name: cli-dist
-          path: ${{ env.WORKDIR }}/dist/
-
-      - name: Rewrite SDK scope for GPR
-        uses: ./.github/actions/cli-rewrite-sdk-scope-for-gpr
-
       - name: Publish to GitHub Packages (dev)
         uses: tetherto/qvac-devops/.github/actions/publish-library-to-gpr@v1.1.7
         with:
@@ -151,57 +115,42 @@ jobs:
           pat-token: ${{ secrets.PAT_TOKEN }}
           npm-token: ${{ secrets.NPM_TOKEN }}
           tag: ${{ needs.publish-logic.outputs.gpr_tag }}
-          workdir: packages/cli
+          workdir: packages/dl-base
           name-suffix: "-mono"
 
   publish-release-npm:
-    needs: [build, publish-logic, release-merge-guard]
-    if: >-
-      needs.publish-logic.outputs.publish_release == 'true' &&
-      (needs.release-merge-guard.result == 'success' || needs.release-merge-guard.result == 'skipped')
-    runs-on: ubuntu-latest
-    environment: release
-    outputs:
-      published_version: ${{ steps.publish.outputs.npm_published_version }}
+    needs: [publish-logic, release-merge-guard]
     permissions:
       contents: write
       packages: write
       id-token: write
-    steps:
-      - name: Checkout repository
-        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # 6.0.2
+    if: |
+      always() &&
+      needs.publish-logic.outputs.publish_release == 'true' &&
+      (needs.release-merge-guard.result == 'success' || needs.release-merge-guard.result == 'skipped')
+    uses: tetherto/qvac-devops/.github/workflows/public-reusable-npm.yml@v1.1.7
+    secrets: inherit
+    with:
+      workdir: packages/dl-base
+      repo_name: "dl-base"
+      caller_event_name: ${{ github.event_name }}
 
-      - name: Download build artifacts
-        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # 8.0.1
-        with:
-          name: cli-dist
-          path: ${{ env.WORKDIR }}/dist/
-
-      - name: Publish to NPM
-        id: publish
-        uses: ./.github/actions/publish-library-to-npm
-        with:
-          secret-token: ${{ secrets.NPM_TOKEN }}
-          tag: "latest"
-          git-token: ${{ secrets.GITHUB_TOKEN }}
-          repo_name: cli
-          workdir: ${{ env.WORKDIR }}
-
+  # Create GitHub release only for actual releases (after NPM publish)
   publish-release:
     needs: [publish-release-npm]
-    if: needs.publish-release-npm.result == 'success' && needs.publish-release-npm.outputs.published_version != ''
+    if:  needs.publish-release-npm.result == 'success' && needs.publish-release-npm.outputs.published_version != ''
     permissions:
       contents: write
     uses: ./.github/workflows/create-github-release.yml
     with:
-      repo_name: "cli"
-      release_name: "QVAC cli Lib"
+      repo_name: "dl-base"
+      release_name: "QVAC dl-base Lib"
       published_version: ${{ needs.publish-release-npm.outputs.published_version }}
       prev_sha: ${{ github.event.before }}
-      workdir: "packages/cli"
+      workdir: "packages/dl-base"
 
   publish-feature-gpr:
-    needs: [build, publish-logic]
+    needs: publish-logic
     if: needs.publish-logic.outputs.publish_feature == 'true'
     runs-on: ubuntu-latest
     environment: release
@@ -213,15 +162,6 @@ jobs:
         with:
           fetch-depth: 0
 
-      - name: Download build artifacts
-        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # 8.0.1
-        with:
-          name: cli-dist
-          path: ${{ env.WORKDIR }}/dist/
-
-      - name: Rewrite SDK scope for GPR
-        uses: ./.github/actions/cli-rewrite-sdk-scope-for-gpr
-
       - name: Publish to GitHub Packages (feature)
         uses: tetherto/qvac-devops/.github/actions/publish-library-to-gpr@v1.1.7
         with:
@@ -229,11 +169,11 @@ jobs:
           pat-token: ${{ secrets.PAT_TOKEN }}
           npm-token: ${{ secrets.NPM_TOKEN }}
           tag: ${{ needs.publish-logic.outputs.gpr_tag }}
-          workdir: packages/cli
+          workdir: packages/dl-base
           name-suffix: "-mono"
 
   publish-tmp-gpr:
-    needs: [build, publish-logic]
+    needs: publish-logic
     if: needs.publish-logic.outputs.publish_tmp == 'true'
     runs-on: ubuntu-latest
     environment: release
@@ -245,15 +185,6 @@ jobs:
         with:
           fetch-depth: 0
 
-      - name: Download build artifacts
-        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # 8.0.1
-        with:
-          name: cli-dist
-          path: ${{ env.WORKDIR }}/dist/
-
-      - name: Rewrite SDK scope for GPR
-        uses: ./.github/actions/cli-rewrite-sdk-scope-for-gpr
-
       - name: Publish to GitHub Packages (tmp)
         uses: tetherto/qvac-devops/.github/actions/publish-library-to-gpr@v1.1.7
         with:
@@ -261,5 +192,5 @@ jobs:
           pat-token: ${{ secrets.PAT_TOKEN }}
           npm-token: ${{ secrets.NPM_TOKEN }}
           tag: ${{ needs.publish-logic.outputs.gpr_tag }}
-          workdir: packages/cli
+          workdir: packages/dl-base
           name-suffix: "-mono"

@@ -36,12 +36,14 @@ jobs:
   build-and-test:
     name: Build ${{ matrix.platform }} and Run E2E Tests
     runs-on: ${{ matrix.runner }}
+    environment: release
     timeout-minutes: 120
     continue-on-error: true # Don't block PR merges if tests fail
     permissions:
       contents: read
       packages: read
       pull-requests: write # Allow commenting on PRs
+      id-token: write
     strategy:
       fail-fast: false
       matrix:
@@ -77,7 +79,7 @@ jobs:
           df -h
 
       - name: Checkout addon repository
-        uses: actions/checkout@v6
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # 6.0.2
         with:
           repository: ${{ inputs.repository || github.repository }}
           ref: ${{ inputs.ref || github.ref }}
@@ -86,7 +88,7 @@ jobs:
           fetch-depth: 0
 
       - name: Checkout mobile test framework
-        uses: actions/checkout@v6
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # 6.0.2
         with:
           repository: tetherto/qvac-test-addon-mobile
           ref: ${{ env.TEST_FRAMEWORK_REF }}
@@ -95,7 +97,7 @@ jobs:
           fetch-depth: 0
 
       - name: Setup Node.js
-        uses: actions/setup-node@v6
+        uses: actions/setup-node@53b83947a5a98c8d113130e565377fae1a50d02f # 6.3.0
         with:
           node-version: ${{ env.NODE_VERSION }}
 
@@ -139,7 +141,7 @@ jobs:
 
       - name: Download Android prebuilds (from artifacts)
         if: matrix.platform == 'Android' && !inputs.package
-        uses: actions/download-artifact@v7
+        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # 8.0.1
         with:
           path: ${{ env.ADDON_WORKDIR }}/prebuilds
           pattern: ${{ env.PREBUILD_ARTIFACT_PREFIX }}android-*
@@ -148,7 +150,7 @@ jobs:
 
       - name: Download iOS prebuilds (from artifacts)
         if: matrix.platform == 'iOS' && !inputs.package
-        uses: actions/download-artifact@v7
+        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # 8.0.1
         with:
           path: ${{ env.ADDON_WORKDIR }}/prebuilds
           pattern: ${{ env.PREBUILD_ARTIFACT_PREFIX }}ios-*
@@ -399,14 +401,14 @@ jobs:
       # Android-specific steps
       - name: Set up JDK 17
         if: matrix.platform == 'Android'
-        uses: actions/setup-java@v5
+        uses: actions/setup-java@be666c2fcd27ec809703dec50e508c2fdc7f6654 # 5.2.0
         with:
           java-version: 17
           distribution: temurin
 
       - name: Setup Android SDK
         if: matrix.platform == 'Android'
-        uses: android-actions/setup-android@v3
+        uses: android-actions/setup-android@9fc6c4e9069bf8d3d10b2204b1fb8f6ef7065407 # 3.2.2
 
       - name: Generate Android project
         if: matrix.platform == 'Android'
@@ -730,11 +732,10 @@ jobs:
             exit 1
           fi
 
-      - name: Configure AWS credentials
-        uses: aws-actions/configure-aws-credentials@v6
+      - name: Configure AWS credentials via OIDC
+        uses: aws-actions/configure-aws-credentials@8df5847569e6427dd6c4fb1cf565c83acfa8afa7 # 6.0.0
         with:
-          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
-          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          role-to-assume: ${{ secrets.AWS_OIDC_ROLE_ARN }}
           aws-region: us-west-2
 
       - name: Upload App to Device Farm

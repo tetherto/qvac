@@ -25,18 +25,19 @@ on:
 
 jobs:
   run-integration-tests:
-    timeout-minutes: 360
+    timeout-minutes: ${{ matrix.timeout_minutes || 360 }}
     continue-on-error: true
     runs-on: ${{ matrix.runner }}
+    environment: release
     name: test-${{ matrix.platform }}-${{ matrix.arch }}
     env:
       GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-      AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
-      AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
       WORKDIR: packages/qvac-lib-infer-llamacpp-llm
+      NO_GPU: ${{ matrix.no_gpu || 'false' }}
     permissions:
       contents: read
       packages: read
+      id-token: write
     strategy:
       fail-fast: false
       matrix:
@@ -45,18 +46,22 @@ jobs:
             platform: linux
             arch: x64
             runner: ubuntu-22.04
+            no_gpu: 'true'
           - os: ubuntu-24.04
             platform: linux
             arch: x64
             runner: ai-run-linux-gpu
+            timeout_minutes: 480
           - os: ubuntu-24.04-arm
             platform: linux
             arch: arm64
             runner: ubuntu-24.04-arm
+            no_gpu: 'true'
           - os: ubuntu-22.04-arm
             platform: linux
             arch: arm64
             runner: ubuntu-22.04-arm
+            no_gpu: 'true'
           - os: macos-15-xlarge
             platform: darwin
             arch: arm64
@@ -65,14 +70,14 @@ jobs:
             platform: darwin
             arch: x64
             runner: macos-15-large
-          - os: windows-2022
+          - os: windows-11
             platform: win32
             arch: x64
-            runner: ai-run-windows-gpu
+            runner: ai-run-windows11-gpu
 
     steps:
       - name: Setup Node.js
-        uses: actions/setup-node@v4
+        uses: actions/setup-node@53b83947a5a98c8d113130e565377fae1a50d02f # 6.3.0
         with:
           node-version: lts/*
 
@@ -85,11 +90,17 @@ jobs:
         shell: powershell
 
       - name: Checkout code
-        uses: actions/checkout@v4
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # 6.0.2
         with:
-          ref: ${{ inputs.ref || github.ref }}
           repository: ${{ inputs.repository || github.repository }}
+          ref: ${{ inputs.ref || github.ref }}
           token: ${{ secrets.PAT_TOKEN }}
+
+      - name: Configure AWS credentials via OIDC
+        uses: aws-actions/configure-aws-credentials@8df5847569e6427dd6c4fb1cf565c83acfa8afa7 # 6.0.0
+        with:
+          role-to-assume: ${{ secrets.AWS_OIDC_ROLE_ARN }}
+          aws-region: eu-central-1
 
       - name: Configure scoped registry for @tetherto and @qvac packages (Linux/macOS)
         if: ${{ matrix.platform != 'win32' }}
@@ -161,7 +172,7 @@ jobs:
 
       - name: Download prebuilds (from artifacts)
         if: ${{ !inputs.prebuild_package }}
-        uses: actions/download-artifact@v4
+        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # 8.0.1
         with:
           path: ${{ env.WORKDIR }}/prebuilds
           merge-multiple: true
@@ -237,23 +248,6 @@ jobs:
         if: matrix.platform == 'linux' || matrix.platform == 'android'
         shell: bash
         run: sudo apt-get update && sudo apt-get install -y mesa-vulkan-drivers
-
-      - name: Linux - install glibcxx
-        if: ${{ startsWith(matrix.os, 'ubuntu-22') }}
-        run: |
-          sudo add-apt-repository ppa:ubuntu-toolchain-r/test
-          sudo apt update
-          sudo apt install -y g++-13
-
-      - name: Windows - Install Vulkan
-        if: ${{ matrix.platform == 'win32' }}
-        run: |
-          $ProgressPreference = 'SilentlyContinue'
-          Invoke-WebRequest https://sdk.lunarg.com/sdk/download/latest/windows/vulkan-sdk.exe -OutFile vulkan-sdk.exe -PassThru -UseBasicParsing
-          ./vulkan-sdk.exe --root C:\VulkanSDK --accept-licenses --default-answer --confirm-command install
-          echo "VULKAN_SDK=C:\VulkanSDK" >> $Env:GITHUB_ENV
-        shell: powershell
-        timeout-minutes: 40
 
       - name: Run integration test (Linux/macOS)
         if: ${{ matrix.platform != 'win32' }}
