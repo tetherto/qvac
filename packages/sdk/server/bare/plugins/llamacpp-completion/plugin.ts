@@ -178,7 +178,9 @@ export const llmPlugin = definePlugin({
       responseSchema: finetuneResponseSchema,
       streaming: false,
 
-      handler: finetune,
+      handler: function (request) {
+        return finetune(request);
+      },
     }),
 
     translate: defineHandler({
