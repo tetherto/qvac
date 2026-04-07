@@ -21,6 +21,7 @@ permissions:
   contents: read
   pull-requests: read
   packages: read
+  id-token: write
 
 jobs:
   authorize:
@@ -133,6 +134,7 @@ jobs:
       contents: write
       packages: write
       pull-requests: write
+      id-token: write
     if: needs.authorize.outputs.allowed == 'true'
     needs: [authorize, sanity-checks]
     uses: ./.github/workflows/prebuilds-qvac-lib-infer-llamacpp-embed.yml
@@ -144,6 +146,10 @@ jobs:
   integration-tests:
     needs: [authorize, prebuild]
     if: needs.authorize.outputs.allowed == 'true'
+    permissions:
+      contents: read
+      packages: read
+      id-token: write
     uses: ./.github/workflows/integration-test-qvac-lib-infer-llamacpp-embed.yml
     secrets: inherit
     with:
@@ -155,6 +161,7 @@ jobs:
       contents: read
       packages: read
       pull-requests: write # Allow commenting on PRs
+      id-token: write
     if: needs.authorize.outputs.allowed == 'true'
     needs: [authorize, prebuild]
     uses: ./.github/workflows/integration-mobile-test-qvac-lib-infer-llamacpp-embed.yml
