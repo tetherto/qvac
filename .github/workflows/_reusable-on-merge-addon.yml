@@ -1,26 +1,94 @@
-name: On Merge Trigger (Parakeet)
+name: Reusable On-Merge Addon
 
 on:
-  push:
-    branches:
-      - main
-      - release-*
-      - feature-*
-      - tmp-*
-    paths:
-      - "packages/qvac-lib-infer-parakeet/**"
-      - ".github/workflows/*parakeet*.yml"
-
-  workflow_dispatch:
+  workflow_call:
     inputs:
-      tag:
-        description: "Tag to publish with"
+      package_slug:
+        description: Package identifier for release-merge-guard and prebuilds
+        required: true
+        type: string
+      workdir:
+        description: Package working directory
+        required: true
+        type: string
+      artifact_prefix:
+        description: Artifact prefix for prebuild uploads
         required: false
-        default: "dev"
-        type: choice
-        options:
-          - latest
-          - dev
+        type: string
+        default: addon
+      gpr_package_name:
+        description: Package name for GPR publish (e.g. @tetherto/llm-llamacpp)
+        required: false
+        type: string
+        default: ""
+      npm_package_name:
+        description: Package name for npm publish (e.g. @qvac/llm-llamacpp)
+        required: false
+        type: string
+        default: ""
+      repo_name:
+        description: Short repo name for npm publish and GitHub release (e.g. llamacpp-llm)
+        required: true
+        type: string
+      release_name:
+        description: Human-readable release name (e.g. QVAC LLM Addon)
+        required: true
+        type: string
+      package_json_path:
+        description: Path to package.json for release-merge-guard
+        required: true
+        type: string
+      changelog_path:
+        description: Path to CHANGELOG.md for release-merge-guard
+        required: true
+        type: string
+      pre_gpr_publish_script:
+        description: Optional bash script to run before GPR publish (e.g. rename prebuild files)
+        required: false
+        type: string
+        default: ""
+      tag:
+        description: Tag override for publishing
+        required: false
+        type: string
+        default: ""
+      extra_generate_flags:
+        description: Extra bare-make generate flags forwarded to prebuilds
+        required: false
+        type: string
+        default: ""
+      needs_vulkan:
+        required: false
+        type: boolean
+        default: true
+      needs_rust_targets:
+        required: false
+        type: boolean
+        default: false
+      needs_submodules:
+        required: false
+        type: boolean
+        default: false
+      extra_linux_packages:
+        required: false
+        type: string
+        default: ""
+      extra_brew_packages:
+        required: false
+        type: string
+        default: ""
+      ccache_scope:
+        required: false
+        type: string
+        default: arm64-only
+      linux_arm64_runner:
+        required: false
+        type: string
+        default: ubuntu-22.04-arm
+      macos_x64_runner:
+        required: false
+        type: string
+        default: macos-15-intel
 
 permissions:
   contents: read
@@ -95,11 +163,10 @@ jobs:
           base-ref: ${{ github.ref_name }}
           base-sha: ${{ github.event.before }}
           head-sha: ${{ github.sha }}
-          package-slug: qvac-lib-infer-parakeet
-          package-json-path: packages/qvac-lib-infer-parakeet/package.json
-          changelog-path: packages/qvac-lib-infer-parakeet/CHANGELOG.md
+          package-slug: ${{ inputs.package_slug }}
+          package-json-path: ${{ inputs.package_json_path }}
+          changelog-path: ${{ inputs.changelog_path }}
 
-  # Build prebuilds (build + merge only, no publishing)
   build:
     needs: publish-logic
     if: >-
@@ -112,14 +179,22 @@ jobs:
       packages: write
       pull-requests: write
       id-token: write
-    uses: ./.github/workflows/prebuilds-qvac-lib-infer-parakeet.yml
+    uses: ./.github/workflows/_reusable-prebuilds-addon.yml
     secrets: inherit
     with:
-      repository: ${{ github.repository }}
-      ref: ${{ github.ref }}
-      workdir: "packages/qvac-lib-infer-parakeet"
+      package_slug: ${{ inputs.package_slug }}
+      workdir: ${{ inputs.workdir }}
+      artifact_prefix: ${{ inputs.artifact_prefix }}
+      extra_generate_flags: ${{ inputs.extra_generate_flags }}
+      needs_vulkan: ${{ inputs.needs_vulkan }}
+      needs_rust_targets: ${{ inputs.needs_rust_targets }}
+      needs_submodules: ${{ inputs.needs_submodules }}
+      extra_linux_packages: ${{ inputs.extra_linux_packages }}
+      extra_brew_packages: ${{ inputs.extra_brew_packages }}
+      ccache_scope: ${{ inputs.ccache_scope }}
+      linux_arm64_runner: ${{ inputs.linux_arm64_runner }}
+      macos_x64_runner: ${{ inputs.macos_x64_runner }}
 
-  # Publish to GitHub Package Registry (GPR) for non-release branches
   publish-gpr:
     needs: [build, publish-logic]
     if: >-
@@ -128,60 +203,71 @@ jobs:
       needs.publish-logic.outputs.publish_tmp == 'true'
     continue-on-error: true
     runs-on: ubuntu-latest
+    environment: release
     outputs:
       published_version: ${{ steps.capture_version.outputs.published_version }}
     permissions:
       contents: read
       packages: write
+    env:
+      WORKDIR: ${{ inputs.workdir }}
     steps:
       - name: Checkout repository
         uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # 6.0.2
+        with:
+          fetch-depth: 0
+
+      - name: Setup node
+        uses: actions/setup-node@53b83947a5a98c8d113130e565377fae1a50d02f # 6.3.0
+        with:
+          node-version: lts/*
 
       - name: Download prebuild artifacts
         uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # 8.0.1
         with:
           name: prebuilds
-          path: packages/qvac-lib-infer-parakeet/prebuilds
+          path: ${{ inputs.workdir }}/prebuilds
 
-      - name: Rename prebuild files from qvac_ to tetherto_ prefix
-        working-directory: packages/qvac-lib-infer-parakeet
+      - name: Set GPR package name
+        if: ${{ inputs.gpr_package_name != '' }}
+        shell: bash
         run: |
-          find prebuilds -depth -name 'qvac_*' | while read -r file; do
-            dir=$(dirname "$file")
-            base=$(basename "$file")
-            newbase=$(echo "$base" | sed 's/^qvac_/tetherto_/')
-            mv "$file" "$dir/$newbase"
-          done
+          set -euo pipefail
+          node -e "const fs=require('fs');const f='${{ inputs.workdir }}/package.json';const p=JSON.parse(fs.readFileSync(f,'utf8'));const want='${{ inputs.gpr_package_name }}';if(p.name!==want){p.name=want;fs.writeFileSync(f,JSON.stringify(p,null,2));console.log('Set name to',p.name);}else{console.log('Already',p.name);}"
 
-          if [ -f binding.js ]; then
-            sed -i 's/qvac_/tetherto_/g' binding.js
-          fi
+      - name: Run pre-GPR publish script
+        if: ${{ inputs.pre_gpr_publish_script != '' }}
+        shell: bash
+        working-directory: ${{ inputs.workdir }}
+        run: ${{ inputs.pre_gpr_publish_script }}
 
       - name: Publish to GitHub Package Registry
         id: publish
         uses: tetherto/oss-actions/.github/actions/publish-library-to-gpr@v1.1.0
         with:
           secret-token: ${{ secrets.GITHUB_TOKEN }}
-          tag: ${{ inputs.tag || needs.publish-logic.outputs.gpr_tag }}
-          workdir: packages/qvac-lib-infer-parakeet
+          tag: ${{ inputs.tag != '' && inputs.tag || needs.publish-logic.outputs.gpr_tag }}
+          workdir: ${{ inputs.workdir }}
           name-suffix: "-mono"
 
       - name: Capture published version
         id: capture_version
         if: success()
-        working-directory: packages/qvac-lib-infer-parakeet
         env:
           NODE_AUTH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        shell: bash
         run: |
+          set -euo pipefail
+          cd "${{ inputs.workdir }}"
           echo "//npm.pkg.github.com/:_authToken=${NODE_AUTH_TOKEN}" >> .npmrc
+
           VERSION=$(node -p "require('./package.json').version")
           PACKAGE_NAME=$(node -p "require('./package.json').name")
-          PACKAGE_NAME_GPR=$(echo "$PACKAGE_NAME" | sed 's/@qvac/@tetherto/')
-          if npm view "${PACKAGE_NAME_GPR}@${VERSION}" version --registry=https://npm.pkg.github.com/ >/dev/null 2>&1; then
+
+          if npm view "${PACKAGE_NAME}@${VERSION}" version --registry=https://npm.pkg.github.com/ >/dev/null 2>&1; then
             echo "published_version=${VERSION}" >> "$GITHUB_OUTPUT"
           fi
 
-  # Publish to NPM for release branches
   publish-npm:
     needs: [build, publish-logic, release-merge-guard]
     if: >-
@@ -194,18 +280,33 @@ jobs:
     outputs:
       published_version: ${{ steps.capture_version.outputs.published_version }}
     permissions:
-      contents: read
+      contents: write
       packages: write
-      id-token: write
+    env:
+      WORKDIR: ${{ inputs.workdir }}
     steps:
       - name: Checkout repository
         uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # 6.0.2
+        with:
+          fetch-depth: 0
+
+      - name: Setup node
+        uses: actions/setup-node@53b83947a5a98c8d113130e565377fae1a50d02f # 6.3.0
+        with:
+          node-version: lts/*
 
       - name: Download prebuild artifacts
         uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # 8.0.1
         with:
           name: prebuilds
-          path: packages/qvac-lib-infer-parakeet/prebuilds
+          path: ${{ inputs.workdir }}/prebuilds
+
+      - name: Set npm package name
+        if: ${{ inputs.npm_package_name != '' }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          node -e "const fs=require('fs');const f='${{ inputs.workdir }}/package.json';const p=JSON.parse(fs.readFileSync(f,'utf8'));const want='${{ inputs.npm_package_name }}';if(p.name!==want){p.name=want;fs.writeFileSync(f,JSON.stringify(p,null,2));console.log('Set name to',p.name);}else{console.log('Already',p.name);}"
 
       - name: Publish to NPM Package Registry
         id: publish
@@ -213,22 +314,26 @@ jobs:
         with:
           secret-token: ${{ secrets.NPM_TOKEN }}
           tag: "latest"
-          workdir: packages/qvac-lib-infer-parakeet
-          repo_name: "parakeet"
+          workdir: ${{ inputs.workdir }}
+          repo_name: ${{ inputs.repo_name }}
           git-token: ${{ secrets.GITHUB_TOKEN }}
+          create-tag: "false"
 
       - name: Capture published version
         id: capture_version
+        working-directory: ${{ inputs.workdir }}
         if: success()
-        working-directory: packages/qvac-lib-infer-parakeet
+        shell: bash
         run: |
+          set -euo pipefail
+
           VERSION=$(node -p "require('./package.json').version")
           PACKAGE_NAME=$(node -p "require('./package.json').name")
+
           if npm view "${PACKAGE_NAME}@${VERSION}" version >/dev/null 2>&1; then
             echo "published_version=${VERSION}" >> "$GITHUB_OUTPUT"
           fi
 
-  # Create GitHub release only for actual releases (after NPM publish)
   publish-release:
     needs: [publish-npm]
     if: >-
@@ -239,52 +344,8 @@ jobs:
       contents: write
     uses: ./.github/workflows/create-github-release.yml
     with:
-      repo_name: "parakeet"
-      release_name: "QVAC Transcription Parakeet Addon"
+      repo_name: ${{ inputs.repo_name }}
+      release_name: ${{ inputs.release_name }}
       published_version: ${{ needs.publish-npm.outputs.published_version }}
       prev_sha: ${{ github.event.before }}
-      workdir: "packages/qvac-lib-infer-parakeet"
-
-  post-build-gate:
-    name: Post-Build Gate
-    runs-on: ubuntu-latest
-    needs: [publish-gpr, publish-npm]
-    if: "!cancelled()"
-    outputs:
-      should_run_tests: ${{ steps.gate.outputs.should_run_tests }}
-    steps:
-      - id: gate
-        shell: bash
-        run: |
-          set -euo pipefail
-          should="false"
-
-          if [ "${{ needs.publish-npm.result }}" = "success" ] || \
-             [ "${{ needs.publish-gpr.result }}" = "success" ]; then
-            should="true"
-          fi
-
-          echo "should_run_tests=$should" >> "$GITHUB_OUTPUT"
-
-  integration-tests:
-    uses: ./.github/workflows/integration-test-qvac-lib-infer-parakeet.yml
-    needs: post-build-gate
-    if: needs.post-build-gate.outputs.should_run_tests == 'true'
-    secrets: inherit
-    with:
-      repository: ${{ github.repository }}
-      ref: ${{ github.sha }}
-
-  mobile-integration-tests:
-    uses: ./.github/workflows/integration-mobile-test-qvac-lib-infer-parakeet.yml
-    needs: post-build-gate
-    if: needs.post-build-gate.outputs.should_run_tests == 'true'
-    permissions:
-      contents: read
-      packages: read
-      pull-requests: write
-      id-token: write
-    secrets: inherit
-    with:
-      repository: ${{ github.repository }}
-      ref: ${{ github.sha }}
+      workdir: ${{ inputs.workdir }}

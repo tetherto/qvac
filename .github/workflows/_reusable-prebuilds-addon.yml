@@ -1,0 +1,373 @@
+# Build-only workflow. Publishing is handled by _reusable-on-merge-addon.yml
+name: Reusable Prebuilds Addon
+
+on:
+  workflow_dispatch:
+    inputs:
+      package_slug:
+        description: Package slug identifier
+        required: true
+        type: choice
+        options:
+          - qvac-lib-infer-llamacpp-llm
+          - qvac-lib-infer-llamacpp-embed
+          - qvac-lib-infer-whispercpp
+          - qvac-lib-infer-onnx-tts
+          - qvac-lib-infer-parakeet
+          - qvac-lib-infer-nmtcpp
+          - qvac-lib-infer-onnx
+          - lib-infer-diffusion
+          - ocr-onnx
+      workdir:
+        description: Package working directory
+        required: true
+        type: string
+      artifact_prefix:
+        description: Artifact prefix for upload
+        required: false
+        default: addon
+        type: string
+      vcpkg_cache_backend:
+        description: filesystem or s3
+        required: false
+        default: filesystem
+        type: choice
+        options:
+          - filesystem
+          - s3
+      vcpkg_s3_path:
+        description: Optional S3 key prefix for vcpkg cache
+        required: false
+        default: ""
+        type: string
+      extra_generate_flags:
+        description: Extra bare-make generate flags
+        required: false
+        default: ""
+        type: string
+      needs_vulkan:
+        description: Install Vulkan SDK/tooling
+        required: false
+        default: true
+        type: boolean
+      needs_rust_targets:
+        description: Install Rust targets
+        required: false
+        default: false
+        type: boolean
+      needs_submodules:
+        description: Initialize submodules
+        required: false
+        default: false
+        type: boolean
+      extra_linux_packages:
+        description: Extra apt packages
+        required: false
+        default: ""
+        type: string
+      extra_brew_packages:
+        description: Extra Homebrew packages (macOS only)
+        required: false
+        default: ""
+        type: string
+      ccache_scope:
+        description: none, arm64-only, all-ubuntu
+        required: false
+        default: arm64-only
+        type: choice
+        options:
+          - none
+          - arm64-only
+          - all-ubuntu
+      repository:
+        description: Repository to checkout
+        required: false
+        default: tetherto/qvac
+        type: string
+      ref:
+        description: Git ref to checkout
+        required: false
+        default: ""
+        type: string
+
+  workflow_call:
+    inputs:
+      package_slug:
+        required: false
+        type: string
+        default: addon
+      workdir:
+        required: true
+        type: string
+      artifact_prefix:
+        required: false
+        type: string
+        default: addon
+      vcpkg_cache_backend:
+        required: false
+        type: string
+        default: filesystem
+      vcpkg_s3_path:
+        required: false
+        type: string
+        default: ""
+      extra_generate_flags:
+        required: false
+        type: string
+        default: ""
+      needs_vulkan:
+        required: false
+        type: boolean
+        default: true
+      needs_rust_targets:
+        required: false
+        type: boolean
+        default: false
+      needs_submodules:
+        required: false
+        type: boolean
+        default: false
+      extra_linux_packages:
+        required: false
+        type: string
+        default: ""
+      extra_brew_packages:
+        required: false
+        type: string
+        default: ""
+      ccache_scope:
+        required: false
+        type: string
+        default: arm64-only
+      repository:
+        required: false
+        type: string
+        default: tetherto/qvac
+      ref:
+        required: false
+        type: string
+        default: ""
+      linux_arm64_runner:
+        required: false
+        type: string
+        default: ubuntu-22.04-arm
+      macos_x64_runner:
+        required: false
+        type: string
+        default: macos-15-intel
+
+permissions:
+  contents: read
+
+env:
+  WORKDIR: ${{ inputs.workdir || github.event.inputs.workdir }}
+
+jobs:
+  prebuild:
+    permissions:
+      contents: write
+      pull-requests: write
+      id-token: write
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: ubuntu-22.04
+            platform: linux
+            arch: x64
+          - os: ${{ inputs.linux_arm64_runner || 'ubuntu-22.04-arm' }}
+            platform: linux
+            arch: arm64
+          - os: ubuntu-24.04
+            platform: android
+            arch: arm64
+            flags: -D ANDROID_STL=c++_shared
+          - os: macos-14
+            platform: ios
+            arch: arm64
+          - os: macos-14
+            platform: ios
+            arch: arm64
+            tags: -simulator
+            flags: --simulator
+          - os: macos-14
+            platform: ios
+            arch: x64
+            tags: -simulator
+            flags: --simulator
+          - os: macos-14
+            platform: darwin
+            arch: arm64
+          - os: ${{ inputs.macos_x64_runner || 'macos-15-intel' }}
+            platform: darwin
+            arch: x64
+          - os: windows-2022
+            platform: win32
+            arch: x64
+    runs-on: ${{ matrix.os }}
+    environment: release
+    name: ${{ inputs.package_slug }}-${{ matrix.platform }}-${{ matrix.arch }}${{ matrix.tags }}
+    steps:
+      - name: Maximize build space
+        if: ${{ startsWith(matrix.os, 'ubuntu-') }}
+        shell: bash
+        run: |
+          sudo docker image prune --all --force
+          sudo rm -rf /opt/hostedtoolcache/CodeQL
+          sudo rm -rf /opt/ghc
+          sudo rm -rf /usr/share/dotnet
+
+      - name: Checkout repository
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # 6.0.2
+        with:
+          repository: ${{ inputs.repository || github.repository }}
+          ref: ${{ inputs.ref || github.ref }}
+          token: ${{ secrets.PAT_TOKEN }}
+
+      - name: Setup node
+        uses: actions/setup-node@53b83947a5a98c8d113130e565377fae1a50d02f # 6.3.0
+        with:
+          node-version: lts/*
+
+      - name: Configure npm auth
+        shell: bash
+        working-directory: ${{ env.WORKDIR }}
+        run: |
+          cat > .npmrc <<NPMRC
+          registry=https://registry.npmjs.org/
+          @qvac:registry=https://registry.npmjs.org/
+          @tetherto:registry=https://npm.pkg.github.com/
+          //registry.npmjs.org/:_authToken=${{ secrets.NPM_TOKEN }}
+          //npm.pkg.github.com/:_authToken=${{ secrets.PAT_TOKEN }}
+          NPMRC
+
+      - name: Configure git auth for private GitHub deps
+        shell: bash
+        env:
+          GIT_PAT: ${{ secrets.PAT_TOKEN }}
+        run: |
+          if [ -n "${GIT_PAT:-}" ]; then
+            git config --global url."https://${GIT_PAT}:@github.com/".insteadOf "https://github.com/"
+            git config --global url."https://${GIT_PAT}:@github.com/".insteadOf "git@github.com:"
+          else
+            git config --global url."https://${{ github.token }}:@github.com/".insteadOf "https://github.com/"
+            git config --global url."https://${{ github.token }}:@github.com/".insteadOf "git@github.com:"
+          fi
+
+      - name: Install global dependencies
+        shell: bash
+        run: npm install -g bare bare-make bare-runtime
+
+      - name: Configure AWS credentials via OIDC
+        if: ${{ matrix.platform == 'linux' && matrix.arch == 'arm64' }}
+        uses: aws-actions/configure-aws-credentials@8df5847569e6427dd6c4fb1cf565c83acfa8afa7 # 6.0.0
+        with:
+          role-to-assume: ${{ secrets.AWS_OIDC_ROLE_ARN }}
+          aws-region: eu-central-1
+
+      - name: Setup addon toolchain
+        uses: ./.github/actions/setup-addon-toolchain
+        env:
+          MODEL_S3_BUCKET: ${{ secrets.MODEL_S3_BUCKET }}
+        with:
+          platform: ${{ matrix.platform }}
+          arch: ${{ matrix.arch }}
+          ccache-scope: ${{ inputs.ccache_scope }}
+          needs-vulkan: ${{ inputs.needs_vulkan && 'true' || 'false' }}
+          needs-rust-targets: ${{ inputs.needs_rust_targets && 'true' || 'false' }}
+          needs-submodules: ${{ inputs.needs_submodules && 'true' || 'false' }}
+          extra-linux-packages: ${{ inputs.extra_linux_packages }}
+
+      - name: Install extra Homebrew packages
+        if: ${{ runner.os == 'macOS' && inputs.extra_brew_packages != '' }}
+        shell: bash
+        run: brew install --quiet ${{ inputs.extra_brew_packages }}
+
+      - name: Install npm dependencies
+        shell: bash
+        working-directory: ${{ env.WORKDIR }}
+        run: npm install
+
+      - name: Setup vcpkg cache
+        uses: ./.github/actions/setup-vcpkg-cache
+        env:
+          MODEL_S3_BUCKET: ${{ secrets.MODEL_S3_BUCKET }}
+        with:
+          workdir: ${{ env.WORKDIR }}
+          platform: ${{ matrix.platform }}
+          arch: ${{ matrix.arch }}
+          backend: ${{ inputs.vcpkg_cache_backend }}
+          s3-bucket-path: ${{ inputs.vcpkg_s3_path != '' && inputs.vcpkg_s3_path || 'vcpkg-cache' }}
+          cache-key-prefix: ${{ inputs.package_slug }}
+
+      - name: Verify Vulkan toolchain (Linux)
+        if: ${{ runner.os == 'Linux' && inputs.needs_vulkan }}
+        shell: bash
+        run: |
+          echo "VULKAN_SDK=${VULKAN_SDK:-<unset>}"
+          if [ -z "${VULKAN_SDK:-}" ]; then
+            echo "::error::VULKAN_SDK is not set"
+            exit 1
+          fi
+          if [ ! -d "${VULKAN_SDK}/include" ]; then
+            echo "::error::Vulkan include directory missing at ${VULKAN_SDK}/include"
+            exit 1
+          fi
+          if ! command -v glslc; then
+            echo "::error::glslc was not found on PATH"
+            exit 1
+          fi
+          glslc --version
+
+      - name: Run bare-make generate
+        shell: bash
+        working-directory: ${{ env.WORKDIR }}
+        run: bare-make generate --platform ${{ matrix.platform }} --arch ${{ matrix.arch }} ${{ matrix.flags }} ${{ inputs.extra_generate_flags }}
+
+      - name: Run bare-make build
+        shell: bash
+        working-directory: ${{ env.WORKDIR }}
+        run: bare-make build
+
+      - name: Run bare-make install
+        shell: bash
+        working-directory: ${{ env.WORKDIR }}
+        run: bare-make install
+
+      - name: Remove static libraries from packaged prebuilds
+        shell: bash
+        working-directory: ${{ env.WORKDIR }}
+        run: |
+          find prebuilds -type f -name "*.a" -delete
+
+      - name: Strip and verify outputs
+        uses: ./.github/actions/strip-and-verify
+        with:
+          workdir: ${{ env.WORKDIR }}
+          platform: ${{ matrix.platform }}
+          verify: "true"
+
+      - name: Upload platform artifact
+        uses: actions/upload-artifact@bbbca2ddaa5d8feaa63e36b76fdaad77386f024f # 7.0.0
+        with:
+          name: ${{ inputs.artifact_prefix }}-${{ matrix.platform }}-${{ matrix.arch }}${{ matrix.tags }}
+          path: ${{ env.WORKDIR }}/prebuilds
+
+  merge:
+    runs-on: ubuntu-latest
+    needs: prebuild
+    permissions:
+      contents: write
+    steps:
+      - name: Download all build artifacts
+        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # 8.0.1
+        with:
+          pattern: ${{ inputs.artifact_prefix }}-*
+          path: prebuilds
+          merge-multiple: true
+
+      - name: Upload merged artifacts
+        uses: actions/upload-artifact@bbbca2ddaa5d8feaa63e36b76fdaad77386f024f # 7.0.0
+        with:
+          name: prebuilds
+          path: prebuilds

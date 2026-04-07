@@ -16,7 +16,7 @@ on:
       - "packages/qvac-lib-infer-llamacpp-llm/**"
       - ".github/workflows/*llamacpp-llm*.yml"
   workflow_dispatch:
-  
+
   workflow_call:
 
 permissions:
@@ -25,109 +25,34 @@ permissions:
   packages: read
   id-token: write
 
-env:
-  PKG_DIR: packages/qvac-lib-infer-llamacpp-llm
-
 jobs:
-  authorize:
-    runs-on: ubuntu-latest
-    permissions:
-      contents: read
-      pull-requests: write
-    outputs:
-      allowed: ${{ steps.auth.outputs.allowed }}
-    steps:
-      - name: Checkout
-        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # 6.0.2
-      - name: Authorize
-        id: auth
-        uses: ./.github/actions/authorize-pr
-        with:
-          github-token: ${{ github.token }}
-
-  sanity-checks:
-    if: needs.authorize.outputs.allowed == 'true'
-    needs: [authorize]
-    runs-on: ubuntu-latest
-    environment: release
-    steps:
-      - name: Run Sanity checks
-        uses: tetherto/oss-actions/.github/actions/sanity-checks@v1.1.0
-        with:
-          secret-token: ${{ secrets.GITHUB_TOKEN }}
-          npm-token: ${{ secrets.NPM_TOKEN }}
-          pat-token: ${{ secrets.PAT_TOKEN }}
-          run-integration: ${{ needs.authorize.outputs.allowed == 'true' }}
-          workdir: packages/qvac-lib-infer-llamacpp-llm
-
-  cpp-tests:
-    if: needs.authorize.outputs.allowed == 'true'
-    needs: [authorize, sanity-checks]
-    uses: ./.github/workflows/cpp-tests-llm.yml
-    secrets: inherit
-    with:
-      workdir: packages/qvac-lib-infer-llamacpp-llm
-      repository: ${{ github.event.pull_request.head.repo.full_name }}
-      ref: ${{ github.event.pull_request.head.ref }}
-
-  cpp-lint:
-    if: needs.authorize.outputs.allowed == 'true'
-    uses: tetherto/oss-actions/.github/workflows/cpp-lint.yaml@v1.1.0
-    needs: authorize
-    secrets: inherit
-    with:
-      sha: ${{ github.event.pull_request.base.sha }}
-      pr_head_sha: ${{ github.event.pull_request.head.sha }}
-      workdir: packages/qvac-lib-infer-llamacpp-llm
-
-  ts-checks:
-    if: needs.authorize.outputs.allowed == 'true'
-    needs: authorize
-    runs-on: ubuntu-latest
-    environment: release
-    steps:
-      - name: Checkout code
-        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # 6.0.2
-
-      - name: Set up Node.js
-        uses: actions/setup-node@53b83947a5a98c8d113130e565377fae1a50d02f # 6.3.0
-        with:
-          node-version: 20
-
-      - name: Configure npm auth
-        working-directory: packages/qvac-lib-infer-llamacpp-llm
-        run: |
-          cat > .npmrc <<NPMRC
-          registry=https://registry.npmjs.org/
-          @qvac:registry=https://registry.npmjs.org/
-          //registry.npmjs.org/:_authToken=${{ secrets.NPM_TOKEN }}
-          NPMRC
-
-      - name: Install dependencies
-        working-directory: packages/qvac-lib-infer-llamacpp-llm
-        run: npm install
-
-      - name: Type declaration check
-        working-directory: packages/qvac-lib-infer-llamacpp-llm
-        run: npm run test:dts
-
-  prebuild:
-    needs: [authorize, sanity-checks]
-    if: needs.authorize.outputs.allowed == 'true'
+  on-pr:
     permissions:
       contents: write
-      packages: write
       pull-requests: write
+      packages: write
       id-token: write
-    uses: ./.github/workflows/prebuilds-qvac-lib-infer-llamacpp-llm.yml
+    uses: ./.github/workflows/_reusable-on-pr-addon.yml
     secrets: inherit
     with:
-      repository: ${{ github.event.pull_request.head.repo.full_name }}
-      ref: ${{ github.event.pull_request.head.ref }}
+      package_slug: qvac-lib-infer-llamacpp-llm
+      workdir: packages/qvac-lib-infer-llamacpp-llm
+      artifact_prefix: llama-cpp
+      test_models: >-
+        [
+          "bartowski/Llama-3.2-1B-Instruct-GGUF/Llama-3.2-1B-Instruct-Q4_0.gguf",
+          "ggml-org/SmolVLM2-500M-Video-Instruct-GGUF/SmolVLM2-500M-Video-Instruct-Q8_0.gguf=SmolVLM-500M-Instruct-Q8_0.gguf",
+          "ggml-org/SmolVLM2-500M-Video-Instruct-GGUF/mmproj-SmolVLM2-500M-Video-Instruct-Q8_0.gguf=mmproj-SmolVLM-500M-Instruct-Q8_0.gguf",
+          "Qwen/Qwen3-0.6B-GGUF/Qwen3-0.6B-Q8_0.gguf",
+          "jmb95/Qwen3-0.6B-UD-IQ1_S-sharded/Qwen3-0.6B-UD-IQ1_S-%05d-of-%05d.gguf*3",
+          "jmb95/Qwen3-0.6B-UD-IQ1_S-sharded/Qwen3-0.6B-UD-IQ1_S.tensors.txt",
+          "gianni-cor/bitnet_b1_58-large-TQ2_0/bitnet_b1_58-large-TQ2_0.gguf",
+          "jmb95/bitnet_b1_58-large-TQ2_0-sharded/bitnet_b1_58-large-TQ2_0-%05d-of-%05d.gguf*8",
+          "jmb95/bitnet_b1_58-large-TQ2_0-sharded/bitnet_b1_58-large-TQ2_0.tensors.txt"
+        ]
 
   run-integration-tests:
-    if: needs.authorize.outputs.allowed == 'true'
-    needs: [authorize, prebuild]
+    needs: on-pr
     permissions:
       contents: read
       packages: read
@@ -139,13 +64,12 @@ jobs:
       ref: ${{ github.event.pull_request.head.ref }}
 
   run-mobile-integration-tests:
+    needs: on-pr
     permissions:
       contents: read
       packages: read
-      pull-requests: write # Allow commenting on PRs
+      pull-requests: write
       id-token: write
-    if: needs.authorize.outputs.allowed == 'true'
-    needs: [authorize, prebuild]
     uses: ./.github/workflows/integration-mobile-test-qvac-lib-infer-llamacpp-llm.yml
     secrets: inherit
     with:
@@ -153,19 +77,9 @@ jobs:
       ref: ${{ github.event.pull_request.head.ref }}
 
   merge-guard:
-    needs:
-      [
-        authorize,
-        run-integration-tests,
-        run-mobile-integration-tests,
-        sanity-checks,
-        prebuild,
-        cpp-tests,
-        cpp-lint,
-        ts-checks,
-      ]
+    needs: [on-pr, run-integration-tests, run-mobile-integration-tests]
     if: always()
     uses: tetherto/oss-actions/.github/workflows/public-pr.yml@v1.1.0
     with:
-      sanity-checks-status: ${{ needs.sanity-checks.result == 'success' }}
-      build-status: ${{ needs.prebuild.result == 'success'}}
+      sanity-checks-status: ${{ needs.on-pr.result == 'success' }}
+      build-status: ${{ needs.on-pr.result == 'success' }}

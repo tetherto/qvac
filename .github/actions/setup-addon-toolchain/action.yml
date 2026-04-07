@@ -1,0 +1,238 @@
+name: Setup Addon Toolchain
+description: Setup cross-platform toolchain for addon prebuild workflows.
+
+inputs:
+  platform:
+    description: Target platform (linux, android, darwin, ios, win32)
+    required: true
+  arch:
+    description: Target architecture
+    required: true
+  ccache-scope:
+    description: none | arm64-only | all-ubuntu
+    required: false
+    default: "arm64-only"
+  windows-toolchain-mode:
+    description: none | choco-llvm
+    required: false
+    default: "choco-llvm"
+  needs-vulkan:
+    description: Install Vulkan SDK dependencies for Linux/Windows
+    required: false
+    default: "false"
+  needs-rust-targets:
+    description: Install Rust targets for cross compilation
+    required: false
+    default: "false"
+  needs-submodules:
+    description: Initialize git submodules recursively
+    required: false
+    default: "false"
+  extra-linux-packages:
+    description: Additional apt packages to install on Ubuntu runners
+    required: false
+    default: ""
+  xcode-version:
+    description: Optional Xcode version to select on macOS
+    required: false
+    default: ""
+  vulkan-s3-key-prefix:
+    description: S3 key prefix for Vulkan ARM64 cache (bucket from MODEL_S3_BUCKET env)
+    required: false
+    default: "vulkan-sdk-cache"
+
+runs:
+  using: composite
+  steps:
+    - name: Print toolchain inputs
+      shell: bash
+      run: |
+        echo "platform=${{ inputs.platform }}"
+        echo "arch=${{ inputs.arch }}"
+        echo "ccache-scope=${{ inputs.ccache-scope }}"
+        echo "windows-toolchain-mode=${{ inputs.windows-toolchain-mode }}"
+        echo "needs-vulkan=${{ inputs.needs-vulkan }}"
+        echo "needs-rust-targets=${{ inputs.needs-rust-targets }}"
+        echo "needs-submodules=${{ inputs.needs-submodules }}"
+
+    - name: Initialize submodules
+      if: ${{ inputs.needs-submodules == 'true' }}
+      shell: bash
+      run: git submodule update --init --recursive
+
+    - name: Install LLVM 19 (Ubuntu)
+      if: ${{ runner.os == 'Linux' }}
+      shell: bash
+      run: |
+        sudo apt-get update
+        wget -q https://apt.llvm.org/llvm.sh
+        chmod +x llvm.sh
+        sudo ./llvm.sh 19 all
+
+    - name: Install Linux base dependencies
+      if: ${{ runner.os == 'Linux' }}
+      shell: bash
+      run: |
+        sudo apt-get update
+        sudo apt-get install -y ccache xz-utils libxi-dev libxtst-dev libxrandr-dev
+        if [ -n "${{ inputs.extra-linux-packages }}" ]; then
+          sudo apt-get install -y ${{ inputs.extra-linux-packages }}
+        fi
+
+    - name: Configure ccache
+      if: ${{ runner.os == 'Linux' && (inputs.ccache-scope == 'all-ubuntu' || (inputs.ccache-scope == 'arm64-only' && inputs.arch == 'arm64')) }}
+      shell: bash
+      run: |
+        ccache --set-config=max_size=2G
+        ccache --set-config=compression=true
+        ccache -z
+        echo "CMAKE_C_COMPILER_LAUNCHER=ccache" >> "$GITHUB_ENV"
+        echo "CMAKE_CXX_COMPILER_LAUNCHER=ccache" >> "$GITHUB_ENV"
+
+    - name: Configure Android NDK variables
+      if: ${{ inputs.platform == 'android' }}
+      shell: bash
+      run: |
+        echo "ANDROID_NDK=$ANDROID_NDK_LATEST_HOME" >> "$GITHUB_ENV"
+        echo "ANDROID_NDK_HOME=$ANDROID_NDK_LATEST_HOME" >> "$GITHUB_ENV"
+        echo "ANDROID_NDK_ROOT=$ANDROID_NDK_LATEST_HOME" >> "$GITHUB_ENV"
+        echo "ANDROID_TOOLCHAIN_ROOT=$ANDROID_NDK_LATEST_HOME/toolchains/llvm/prebuilt/linux-x86_64" >> "$GITHUB_ENV"
+        echo "ANDROID_NATIVE_API_LEVEL=34" >> "$GITHUB_ENV"
+
+    - name: Install Vulkan SDK (Linux)
+      if: ${{ runner.os == 'Linux' && inputs.needs-vulkan == 'true' }}
+      shell: bash
+      run: |
+        wget -q -O /tmp/vulkansdk.tar.xz https://sdk.lunarg.com/sdk/download/latest/linux/vulkan_sdk.tar.xz
+        mkdir -p "$HOME/vulkan"
+        tar xf /tmp/vulkansdk.tar.xz --strip-components=1 -C "$HOME/vulkan"
+        host_arch="$(uname -m)"
+        if [ "$host_arch" = "aarch64" ] || [ "$host_arch" = "arm64" ]; then
+          sdk_version="$(grep -o 'sdk/[0-9]*\.[0-9]*' "$HOME/vulkan/README.txt" | head -1 | sed 's|sdk/||')"
+          if [ -z "${sdk_version}" ]; then
+            sdk_version="latest"
+          fi
+          cache_key_prefix="${{ inputs.vulkan-s3-key-prefix }}"
+          cache_key="${cache_key_prefix}/linux-arm64-${sdk_version}.tar.gz"
+          cache_archive="/tmp/vulkan-arm64-cache.tar.gz"
+          restored_from_s3="false"
+
+          if [ -n "${MODEL_S3_BUCKET:-}" ]; then
+            if aws s3 cp "s3://${MODEL_S3_BUCKET}/${cache_key}" "$cache_archive"; then
+              echo "Restoring ARM64 Vulkan SDK cache from s3://${MODEL_S3_BUCKET}/${cache_key}"
+              tar xzf "$cache_archive" -C "$HOME/vulkan"
+              rm -f "$cache_archive"
+              restored_from_s3="true"
+            else
+              echo "No ARM64 Vulkan SDK cache found at s3://${MODEL_S3_BUCKET}/${cache_key}"
+            fi
+          else
+            echo "MODEL_S3_BUCKET not set; skipping ARM64 Vulkan SDK cache restore"
+          fi
+
+          if [ "$restored_from_s3" != "true" ] || [ ! -d "$HOME/vulkan/aarch64/include" ]; then
+            echo "Bootstrapping Vulkan SDK for ARM64 host..."
+            "$HOME/vulkan/vulkansdk" --maxjobs
+
+            if [ -n "${MODEL_S3_BUCKET:-}" ] && [ -d "$HOME/vulkan/aarch64" ]; then
+              echo "Saving ARM64 Vulkan SDK cache to s3://${MODEL_S3_BUCKET}/${cache_key}"
+              tar czf "$cache_archive" -C "$HOME/vulkan" aarch64
+              aws s3 cp "$cache_archive" "s3://${MODEL_S3_BUCKET}/${cache_key}"
+              rm -f "$cache_archive"
+            fi
+          fi
+          vulkan_sdk_dir="$HOME/vulkan/aarch64"
+        else
+          vulkan_sdk_dir="$HOME/vulkan/x86_64"
+        fi
+        echo "VULKAN_SDK=$vulkan_sdk_dir" >> "$GITHUB_ENV"
+        echo "PATH=$vulkan_sdk_dir/bin:$PATH" >> "$GITHUB_ENV"
+        echo "LD_LIBRARY_PATH=$vulkan_sdk_dir/lib${LD_LIBRARY_PATH:+:$LD_LIBRARY_PATH}" >> "$GITHUB_ENV"
+        echo "VK_ADD_LAYER_PATH=$vulkan_sdk_dir/share/vulkan/explicit_layer.d" >> "$GITHUB_ENV"
+        echo "PKG_CONFIG_PATH=$vulkan_sdk_dir/share/pkgconfig:$vulkan_sdk_dir/lib/pkgconfig${PKG_CONFIG_PATH:+:$PKG_CONFIG_PATH}" >> "$GITHUB_ENV"
+
+    - name: Install Vulkan SDK (Windows)
+      if: ${{ runner.os == 'Windows' && inputs.needs-vulkan == 'true' }}
+      shell: powershell
+      run: |
+        $ErrorActionPreference = "Stop"
+        $url = "https://sdk.lunarg.com/sdk/download/latest/windows/vulkan-sdk.exe"
+        $out = "$env:RUNNER_TEMP\vulkan-sdk.exe"
+        Start-BitsTransfer -Source $url -Destination $out
+        & $out --root "C:\VulkanSDK" --accept-licenses --default-answer --confirm-command install
+        "VULKAN_SDK=C:\VulkanSDK" | Out-File -FilePath $Env:GITHUB_ENV -Encoding utf8 -Append
+        "PATH=C:\VulkanSDK\Bin;$Env:PATH" | Out-File -FilePath $Env:GITHUB_ENV -Encoding utf8 -Append
+
+    - name: Configure Windows toolchain
+      if: ${{ runner.os == 'Windows' && inputs.windows-toolchain-mode == 'choco-llvm' }}
+      shell: powershell
+      run: |
+        git config --system core.longpaths true
+        $clangCmd = Get-Command clang -ErrorAction SilentlyContinue
+        if (-not $clangCmd) {
+          choco upgrade llvm --version=19.1.7 -y
+        } else {
+          Write-Host "LLVM already installed at $($clangCmd.Source), skipping choco"
+        }
+        "CMAKE_GENERATOR=Visual Studio 17 2022" | Out-File -FilePath $Env:GITHUB_ENV -Encoding utf8 -Append
+        if ("${{ inputs.arch }}" -eq "x64") {
+          "CMAKE_GENERATOR_PLATFORM=x64" | Out-File -FilePath $Env:GITHUB_ENV -Encoding utf8 -Append
+        } elseif ("${{ inputs.arch }}" -eq "arm64") {
+          "CMAKE_GENERATOR_PLATFORM=ARM64" | Out-File -FilePath $Env:GITHUB_ENV -Encoding utf8 -Append
+        } elseif ("${{ inputs.arch }}" -eq "x86") {
+          "CMAKE_GENERATOR_PLATFORM=Win32" | Out-File -FilePath $Env:GITHUB_ENV -Encoding utf8 -Append
+        }
+
+    - name: Install vcpkg on macOS
+      if: ${{ runner.os == 'macOS' }}
+      shell: bash
+      run: |
+        cd ..
+        git clone https://github.com/microsoft/vcpkg.git
+        cd vcpkg
+        ./bootstrap-vcpkg.sh -disableMetrics
+        VCPKG_ROOT="$(pwd)"
+        echo "VCPKG_ROOT=$VCPKG_ROOT" >> "$GITHUB_ENV"
+        echo "$VCPKG_ROOT" >> "$GITHUB_PATH"
+
+    - name: Prefer Apple clang on macOS
+      if: ${{ runner.os == 'macOS' && (inputs.platform == 'ios' || inputs.platform == 'darwin') }}
+      shell: bash
+      run: |
+        sudo mv /opt/homebrew/opt/llvm@18 /opt/homebrew/opt/llvm@18.bak 2>/dev/null || true
+        sudo mv /opt/homebrew/opt/llvm /opt/homebrew/opt/llvm.bak 2>/dev/null || true
+        sudo rm -f /opt/homebrew/bin/clang /opt/homebrew/bin/clang++ 2>/dev/null || true
+
+    - name: Configure vcpkg on Linux
+      if: ${{ runner.os == 'Linux' }}
+      shell: bash
+      run: echo "VCPKG_ROOT=$VCPKG_INSTALLATION_ROOT" >> "$GITHUB_ENV"
+
+    - name: Configure vcpkg on Windows
+      if: ${{ runner.os == 'Windows' }}
+      shell: powershell
+      run: |
+        if ($env:VCPKG_INSTALLATION_ROOT -and (Test-Path $env:VCPKG_INSTALLATION_ROOT)) {
+          $root = $env:VCPKG_INSTALLATION_ROOT -replace '\\', '/'
+          echo "VCPKG_ROOT=$root" >> $env:GITHUB_ENV
+        } else {
+          Push-Location ..
+          git clone https://github.com/microsoft/vcpkg.git
+          Set-Location vcpkg
+          .\bootstrap-vcpkg.bat -disableMetrics
+          $root = (Get-Location).Path -replace '\\', '/'
+          echo "VCPKG_ROOT=$root" >> $env:GITHUB_ENV
+          echo "$root" >> $env:GITHUB_PATH
+          Pop-Location
+        }
+
+    - name: Select Xcode version
+      if: ${{ runner.os == 'macOS' && inputs.xcode-version != '' }}
+      shell: bash
+      run: sudo xcode-select -s "/Applications/Xcode_${{ inputs.xcode-version }}.app/Contents/Developer"
+
+    - name: Install Rust targets
+      if: ${{ inputs.needs-rust-targets == 'true' }}
+      shell: bash
+      run: |
+        rustup target add aarch64-apple-ios aarch64-linux-android

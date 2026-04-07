@@ -1,0 +1,235 @@
+name: Reusable On-PR Addon
+
+on:
+  workflow_call:
+    inputs:
+      package_slug:
+        required: true
+        type: string
+      workdir:
+        required: true
+        type: string
+      artifact_prefix:
+        required: false
+        type: string
+        default: addon
+      test_models:
+        description: >
+          JSON array of HuggingFace model specs to download before cpp tests.
+          Format: "owner/repo/filename", rename: "...=output", shards: "...*count"
+        required: false
+        type: string
+        default: "[]"
+      model_dest:
+        description: Destination directory for downloaded models (relative to workdir)
+        required: false
+        type: string
+        default: "models/unit-test"
+      repository:
+        required: false
+        type: string
+        default: ""
+      ref:
+        required: false
+        type: string
+        default: ""
+      run_ts_checks:
+        required: false
+        type: boolean
+        default: true
+      extra_generate_flags:
+        description: Extra bare-make generate flags for prebuilds
+        required: false
+        type: string
+        default: ""
+      needs_vulkan:
+        required: false
+        type: boolean
+        default: true
+      needs_rust_targets:
+        required: false
+        type: boolean
+        default: false
+      needs_submodules:
+        required: false
+        type: boolean
+        default: false
+      extra_linux_packages:
+        required: false
+        type: string
+        default: ""
+      extra_brew_packages:
+        required: false
+        type: string
+        default: ""
+      ccache_scope:
+        required: false
+        type: string
+        default: arm64-only
+      linux_arm64_runner:
+        required: false
+        type: string
+        default: ubuntu-22.04-arm
+      macos_x64_runner:
+        required: false
+        type: string
+        default: macos-15-intel
+
+permissions:
+  contents: read
+  pull-requests: read
+  packages: read
+  id-token: write
+
+jobs:
+  authorize:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      pull-requests: write
+    outputs:
+      allowed: ${{ steps.auth.outputs.allowed }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # 6.0.2
+      - name: Authorize
+        id: auth
+        uses: ./.github/actions/authorize-pr
+        with:
+          github-token: ${{ github.token }}
+
+  context:
+    needs: authorize
+    if: needs.authorize.outputs.allowed == 'true'
+    name: Resolve Context
+    runs-on: ubuntu-latest
+    outputs:
+      base_sha: ${{ steps.ctx.outputs.base_sha }}
+      head_sha: ${{ steps.ctx.outputs.head_sha }}
+    steps:
+      - name: Checkout
+        if: github.event_name == 'workflow_dispatch' || github.event_name == 'workflow_call'
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # 6.0.2
+        with:
+          fetch-depth: 0
+      - name: Resolve SHAs
+        id: ctx
+        shell: bash
+        env:
+          EVENT_NAME: ${{ github.event_name }}
+          BASE_SHA: ${{ github.event.pull_request.base.sha }}
+          HEAD_SHA: ${{ github.event.pull_request.head.sha }}
+          SHA: ${{ github.sha }}
+        run: |
+          set -euo pipefail
+
+          if [[ "$EVENT_NAME" == "workflow_dispatch" || "$EVENT_NAME" == "workflow_call" ]]; then
+            base_sha=$(git merge-base origin/main HEAD)
+            head_sha="$SHA"
+          else
+            base_sha="$BASE_SHA"
+            head_sha="$HEAD_SHA"
+          fi
+
+          echo "base_sha=$base_sha" >> "$GITHUB_OUTPUT"
+          echo "head_sha=$head_sha" >> "$GITHUB_OUTPUT"
+
+          echo "Resolved:"
+          echo "  event=$EVENT_NAME"
+          echo "  base_sha=$base_sha"
+          echo "  head_sha=$head_sha"
+
+  sanity-checks:
+    if: needs.authorize.outputs.allowed == 'true'
+    needs:
+      - authorize
+    runs-on: ubuntu-latest
+    environment: release
+    steps:
+      - name: Run sanity checks
+        uses: tetherto/oss-actions/.github/actions/sanity-checks@v1.1.0
+        with:
+          secret-token: ${{ secrets.GITHUB_TOKEN }}
+          npm-token: ${{ secrets.NPM_TOKEN }}
+          pat-token: ${{ secrets.PAT_TOKEN }}
+          run-integration: ${{ needs.authorize.outputs.allowed == 'true' }}
+          workdir: ${{ inputs.workdir }}
+
+  cpp-lint:
+    if: needs.authorize.outputs.allowed == 'true'
+    needs: [authorize, context]
+    uses: tetherto/oss-actions/.github/workflows/cpp-lint.yaml@v1.1.0
+    secrets: inherit
+    with:
+      sha: ${{ needs.context.outputs.base_sha }}
+      pr_head_sha: ${{ needs.context.outputs.head_sha }}
+      workdir: ${{ inputs.workdir }}
+
+  cpp-tests:
+    if: needs.authorize.outputs.allowed == 'true'
+    needs: [authorize, sanity-checks]
+    uses: ./.github/workflows/_reusable-cpp-tests-addon.yml
+    secrets: inherit
+    with:
+      workdir: ${{ inputs.workdir }}
+      repository: ${{ inputs.repository || github.event.pull_request.head.repo.full_name }}
+      ref: ${{ inputs.ref || github.event.pull_request.head.ref }}
+      test_models: ${{ inputs.test_models }}
+      model_dest: ${{ inputs.model_dest }}
+
+  ts-checks:
+    if: needs.authorize.outputs.allowed == 'true' && inputs.run_ts_checks
+    needs: authorize
+    runs-on: ubuntu-latest
+    environment: release
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # 6.0.2
+
+      - name: Set up Node.js
+        uses: actions/setup-node@53b83947a5a98c8d113130e565377fae1a50d02f # 6.3.0
+        with:
+          node-version: lts/*
+
+      - name: Configure npm auth
+        working-directory: ${{ inputs.workdir }}
+        run: |
+          cat > .npmrc <<NPMRC
+          registry=https://registry.npmjs.org/
+          @qvac:registry=https://registry.npmjs.org/
+          //registry.npmjs.org/:_authToken=${{ secrets.NPM_TOKEN }}
+          NPMRC
+
+      - name: Install dependencies
+        working-directory: ${{ inputs.workdir }}
+        run: npm install
+
+      - name: Type declaration check
+        working-directory: ${{ inputs.workdir }}
+        run: npm run test:dts
+
+  prebuild:
+    needs: [authorize, sanity-checks]
+    if: needs.authorize.outputs.allowed == 'true'
+    permissions:
+      contents: write
+      packages: write
+      pull-requests: write
+      id-token: write
+    uses: ./.github/workflows/_reusable-prebuilds-addon.yml
+    secrets: inherit
+    with:
+      package_slug: ${{ inputs.package_slug }}
+      workdir: ${{ inputs.workdir }}
+      artifact_prefix: ${{ inputs.artifact_prefix }}
+      repository: ${{ inputs.repository || github.event.pull_request.head.repo.full_name }}
+      ref: ${{ inputs.ref || github.event.pull_request.head.ref }}
+      extra_generate_flags: ${{ inputs.extra_generate_flags }}
+      needs_vulkan: ${{ inputs.needs_vulkan }}
+      needs_rust_targets: ${{ inputs.needs_rust_targets }}
+      needs_submodules: ${{ inputs.needs_submodules }}
+      extra_linux_packages: ${{ inputs.extra_linux_packages }}
+      extra_brew_packages: ${{ inputs.extra_brew_packages }}
+      ccache_scope: ${{ inputs.ccache_scope }}
+      linux_arm64_runner: ${{ inputs.linux_arm64_runner }}
+      macos_x64_runner: ${{ inputs.macos_x64_runner }}

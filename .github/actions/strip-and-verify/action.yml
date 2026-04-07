@@ -1,0 +1,53 @@
+name: Strip and verify
+description: Strip debug symbols from prebuilds and optionally verify outputs.
+
+inputs:
+  workdir:
+    description: Package working directory
+    required: true
+  platform:
+    description: Target platform
+    required: true
+  verify:
+    description: Verify resulting artifact files
+    required: false
+    default: "false"
+  android-llvm-strip-path:
+    description: Optional llvm-strip path for Android
+    required: false
+    default: ""
+
+runs:
+  using: composite
+  steps:
+    - name: Strip debug symbols
+      shell: bash
+      working-directory: ${{ inputs.workdir }}
+      run: |
+        set -e
+        if [ "${{ inputs.platform }}" = "android" ]; then
+          if [ -n "${{ inputs.android-llvm-strip-path }}" ]; then
+            find prebuilds -name "*.bare" -exec "${{ inputs.android-llvm-strip-path }}" {} \;
+          else
+            find prebuilds -name "*.bare" -exec "$ANDROID_NDK/toolchains/llvm/prebuilt/linux-x86_64/bin/llvm-strip" {} \;
+          fi
+        elif [ "${{ inputs.platform }}" = "darwin" ] || [ "${{ inputs.platform }}" = "ios" ]; then
+          find prebuilds -name "*.bare" -exec strip -S {} \;
+        elif [ "${{ inputs.platform }}" = "win32" ]; then
+          echo "Skipping strip on win32"
+        else
+          find prebuilds -name "*.bare" -exec strip --strip-debug {} \;
+        fi
+
+    - name: Verify artifacts
+      if: ${{ inputs.verify == 'true' }}
+      shell: bash
+      working-directory: ${{ inputs.workdir }}
+      run: |
+        set -e
+        COUNT=$(find prebuilds -name "*.bare" | wc -l)
+        if [ "$COUNT" -eq 0 ]; then
+          echo "No .bare artifacts found in prebuilds/"
+          exit 1
+        fi
+        echo "Verified $COUNT artifact(s)."

@@ -1,0 +1,324 @@
+name: Reusable CPP Tests Addon
+
+on:
+  workflow_call:
+    inputs:
+      repository:
+        description: Repository to checkout
+        required: false
+        type: string
+      ref:
+        description: Git ref to checkout
+        required: false
+        type: string
+      workdir:
+        description: Package working directory
+        required: true
+        type: string
+      test_models:
+        description: >
+          JSON array of HuggingFace model specs to download before tests.
+          Format per entry: "owner/repo/filename"
+          Rename: "owner/repo/filename=output_name"
+          Shards: "owner/repo/printf_pattern*count"
+        required: false
+        type: string
+        default: "[]"
+      model_dest:
+        description: Destination directory for downloaded models (relative to workdir)
+        required: false
+        type: string
+        default: "models/unit-test"
+
+permissions:
+  contents: read
+
+jobs:
+  cpp-tests:
+    permissions:
+      id-token: write
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: ubuntu-24.04
+            platform: linux
+            arch: x64
+          - os: macos-14
+            platform: darwin
+            arch: arm64
+          - os: windows-11
+            platform: windows
+            arch: x64
+            runner: ai-run-windows11-gpu
+    runs-on: ${{ matrix.runner || matrix.os }}
+    environment: release
+    name: cpp-tests-${{ matrix.platform }}-${{ matrix.arch }}
+    env:
+      WORKDIR: ${{ inputs.workdir }}
+      npm_config_script_shell: bash
+    steps:
+      - name: Maximize build space
+        if: runner.os == 'Linux'
+        shell: bash
+        run: |
+          sudo docker image prune --all --force
+          sudo rm -rf /opt/hostedtoolcache/CodeQL
+          sudo rm -rf /opt/ghc
+          sudo rm -rf /usr/share/dotnet
+
+      - name: Checkout repository
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # 6.0.2
+        with:
+          repository: ${{ inputs.repository || github.repository }}
+          ref: ${{ inputs.ref || github.ref }}
+          token: ${{ secrets.PAT_TOKEN }}
+
+      - name: Setup node
+        uses: actions/setup-node@53b83947a5a98c8d113130e565377fae1a50d02f # 6.3.0
+        with:
+          node-version: lts/*
+
+      - name: Configure npm auth
+        shell: bash
+        working-directory: ${{ env.WORKDIR }}
+        run: |
+          cat > .npmrc <<NPMRC
+          registry=https://registry.npmjs.org/
+          @qvac:registry=https://registry.npmjs.org/
+          @tetherto:registry=https://npm.pkg.github.com/
+          //registry.npmjs.org/:_authToken=${{ secrets.NPM_TOKEN }}
+          //npm.pkg.github.com/:_authToken=${{ secrets.PAT_TOKEN }}
+          NPMRC
+
+      - name: Configure git auth for private GitHub deps
+        shell: bash
+        env:
+          GIT_PAT: ${{ secrets.PAT_TOKEN }}
+        run: |
+          if [ -n "${GIT_PAT:-}" ]; then
+            git config --global url."https://${GIT_PAT}:@github.com/".insteadOf "https://github.com/"
+            git config --global url."https://${GIT_PAT}:@github.com/".insteadOf "git@github.com:"
+          else
+            git config --global url."https://${{ github.token }}:@github.com/".insteadOf "https://github.com/"
+            git config --global url."https://${{ github.token }}:@github.com/".insteadOf "git@github.com:"
+          fi
+
+      - name: Install global dependencies
+        shell: bash
+        run: npm install -g bare bare-make bare-runtime
+
+      - name: Configure AWS credentials via OIDC
+        if: ${{ matrix.platform == 'linux' }}
+        uses: aws-actions/configure-aws-credentials@8df5847569e6427dd6c4fb1cf565c83acfa8afa7 # 6.0.0
+        with:
+          role-to-assume: ${{ secrets.AWS_OIDC_ROLE_ARN }}
+          aws-region: eu-central-1
+
+      - name: Setup addon toolchain
+        uses: ./.github/actions/setup-addon-toolchain
+        env:
+          MODEL_S3_BUCKET: ${{ secrets.MODEL_S3_BUCKET }}
+        with:
+          platform: ${{ matrix.platform == 'windows' && 'win32' || matrix.platform }}
+          arch: ${{ matrix.arch }}
+          ccache-scope: all-ubuntu
+          needs-vulkan: "true"
+          needs-rust-targets: "false"
+          needs-submodules: "false"
+
+      - name: Setup LLVM coverage tool symlinks
+        if: runner.os == 'Linux'
+        shell: bash
+        run: |
+          sudo ln -sf /usr/bin/llvm-profdata-19 /usr/local/bin/llvm-profdata
+          sudo ln -sf /usr/bin/llvm-cov-19 /usr/local/bin/llvm-cov
+          llvm-profdata --version
+          llvm-cov --version
+
+      - name: Install AWS CLI (Windows)
+        if: runner.os == 'Windows'
+        shell: powershell
+        run: |
+          if (-not (Get-Command aws -ErrorAction SilentlyContinue)) {
+            Write-Host "Installing AWS CLI..."
+            $msi = "$env:RUNNER_TEMP\AWSCLIV2.msi"
+            Invoke-WebRequest -Uri "https://awscli.amazonaws.com/AWSCLIV2.msi" -OutFile $msi
+            Start-Process msiexec -ArgumentList "/i $msi /qn" -Wait
+            $awsPath = "C:\Program Files\Amazon\AWSCLIV2"
+            echo "$awsPath" >> $env:GITHUB_PATH
+          } else {
+            Write-Host "AWS CLI already installed"
+          }
+
+      - name: Setup vcpkg cache
+        uses: ./.github/actions/setup-vcpkg-cache
+        env:
+          MODEL_S3_BUCKET: ${{ secrets.MODEL_S3_BUCKET }}
+        with:
+          workdir: ${{ env.WORKDIR }}
+          platform: ${{ matrix.platform }}
+          arch: ${{ matrix.arch }}
+          backend: filesystem
+          cache-key-prefix: cpp-tests
+
+      - name: Install package dependencies
+        shell: bash
+        working-directory: ${{ env.WORKDIR }}
+        run: npm install
+
+      - name: Verify Vulkan toolchain (Linux)
+        if: runner.os == 'Linux'
+        shell: bash
+        run: |
+          echo "VULKAN_SDK=${VULKAN_SDK:-<unset>}"
+          if [ -z "${VULKAN_SDK:-}" ]; then
+            echo "::error::VULKAN_SDK is not set"
+            exit 1
+          fi
+          if [ ! -d "${VULKAN_SDK}/include" ]; then
+            echo "::error::Vulkan include directory missing at ${VULKAN_SDK}/include"
+            exit 1
+          fi
+          if ! command -v glslc; then
+            echo "::error::glslc was not found on PATH"
+            exit 1
+          fi
+          glslc --version
+
+      - name: Download test models
+        if: inputs.test_models != '[]'
+        shell: bash
+        working-directory: ${{ env.WORKDIR }}
+        env:
+          MODEL_SPECS: ${{ inputs.test_models }}
+          MODEL_DEST: ${{ inputs.model_dest }}
+        run: |
+          set -euo pipefail
+          HF="https://huggingface.co"
+          DEST="$MODEL_DEST"
+          mkdir -p "$DEST"
+
+          echo "$MODEL_SPECS" | tr -d '[]"' | tr ',' '\n' | sed 's/^[[:space:]]*//' | sed '/^$/d' | while IFS= read -r spec; do
+            if [[ "$spec" == *'*'* ]]; then
+              count="${spec##*\*}"
+              rest="${spec%%\**}"
+              repo="${rest%/*}"
+              pattern="${rest##*/}"
+              echo "Downloading $count shards ($pattern) from $repo..."
+              for i in $(seq 1 "$count"); do
+                shard=$(printf "$pattern" "$i" "$count")
+                curl -L --fail --retry 3 --retry-all-errors --retry-delay 2 \
+                  "${HF}/${repo}/resolve/main/${shard}" -o "${DEST}/${shard}"
+              done
+              continue
+            fi
+
+            if [[ "$spec" == *'='* ]]; then
+              output="${spec##*=}"
+              src="${spec%%=*}"
+            else
+              src="$spec"
+              output=""
+            fi
+
+            repo="${src%/*}"
+            file="${src##*/}"
+            [ -z "$output" ] && output="$file"
+
+            echo "Downloading $file from $repo..."
+            curl -L --fail --retry 3 --retry-all-errors --retry-delay 2 \
+              "${HF}/${repo}/resolve/main/${file}" -o "${DEST}/${output}"
+          done
+
+          echo "Downloaded models:"
+          ls -lh "$DEST/"
+
+      - name: Generate C++ build
+        if: runner.os != 'Linux'
+        shell: bash
+        working-directory: ${{ env.WORKDIR }}
+        run: bare-make generate --platform ${{ matrix.platform == 'windows' && 'win32' || matrix.platform }} --arch ${{ matrix.arch }} -D BUILD_TESTING=ON
+
+      - name: Build C++ targets
+        if: runner.os != 'Linux'
+        shell: bash
+        working-directory: ${{ env.WORKDIR }}
+        run: bare-make build
+
+      - name: Build C++ targets (coverage)
+        if: runner.os == 'Linux'
+        shell: bash
+        working-directory: ${{ env.WORKDIR }}
+        run: npm run coverage:cpp:build
+
+      - name: Run C++ tests
+        id: cpp_tests
+        shell: bash
+        working-directory: ${{ env.WORKDIR }}
+        run: npm run test:cpp:run
+        continue-on-error: ${{ runner.os == 'Linux' }}
+
+      - name: Generate coverage report
+        if: runner.os == 'Linux'
+        shell: bash
+        working-directory: ${{ env.WORKDIR }}
+        run: npm run coverage:cpp:report
+        continue-on-error: true
+
+      - name: Archive coverage results
+        if: runner.os == 'Linux'
+        uses: actions/upload-artifact@bbbca2ddaa5d8feaa63e36b76fdaad77386f024f # 7.0.0
+        with:
+          name: coverage-report-${{ matrix.platform }}-${{ matrix.arch }}
+          path: |
+            ${{ inputs.workdir }}/build/**/coverage-html/
+            ${{ inputs.workdir }}/build/**/lcov.info
+            ${{ inputs.workdir }}/build/**/coverage-summary.txt
+            ${{ inputs.workdir }}/build/**/cpp-test-results.xml
+          retention-days: 30
+
+      - name: Coverage summary
+        if: runner.os == 'Linux'
+        shell: bash
+        working-directory: ${{ env.WORKDIR }}
+        run: |
+          echo "## Coverage Summary" >> $GITHUB_STEP_SUMMARY
+          echo "**Platform:** ${{ matrix.platform }}-${{ matrix.arch }}" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          SUMMARY=$(find build -name 'coverage-summary.txt' -print -quit 2>/dev/null)
+          if [ -n "$SUMMARY" ] && [ -f "$SUMMARY" ]; then
+            COVERAGE=$(grep 'TOTAL' "$SUMMARY" | awk '{print $10}')
+            echo "**Coverage:** $COVERAGE" >> $GITHUB_STEP_SUMMARY
+            echo '```' >> $GITHUB_STEP_SUMMARY
+            cat "$SUMMARY" >> $GITHUB_STEP_SUMMARY
+            echo '```' >> $GITHUB_STEP_SUMMARY
+          else
+            echo "No coverage summary found" >> $GITHUB_STEP_SUMMARY
+          fi
+
+  coverage-report:
+    if: always()
+    needs: cpp-tests
+    runs-on: ubuntu-latest
+    steps:
+      - name: Download all coverage reports
+        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # 8.0.1
+        with:
+          path: coverage-reports
+
+      - name: Combine coverage reports
+        shell: bash
+        run: |
+          echo "## C++ Code Coverage Summary" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          for report in $(find coverage-reports -name 'coverage-summary.txt' 2>/dev/null); do
+            if [ -f "$report" ]; then
+              dir=$(dirname "$report")
+              echo "### $(basename "$dir")" >> $GITHUB_STEP_SUMMARY
+              echo '```' >> $GITHUB_STEP_SUMMARY
+              cat "$report" >> $GITHUB_STEP_SUMMARY
+              echo '```' >> $GITHUB_STEP_SUMMARY
+              echo "" >> $GITHUB_STEP_SUMMARY
+            fi
+          done

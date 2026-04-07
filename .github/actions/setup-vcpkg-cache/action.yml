@@ -1,0 +1,78 @@
+name: Setup vcpkg cache
+description: Normalize vcpkg cache setup for addon workflows.
+
+inputs:
+  workdir:
+    description: Package working directory
+    required: true
+  platform:
+    description: Build platform
+    required: true
+  arch:
+    description: Build architecture
+    required: true
+  backend:
+    description: filesystem | s3
+    required: false
+    default: filesystem
+  s3-bucket-path:
+    description: S3 key prefix (without bucket name) when backend=s3
+    required: false
+    default: ""
+  cache-key-prefix:
+    description: Prefix to isolate cache keys
+    required: false
+    default: addon-vcpkg
+  aws-region:
+    description: AWS region for S3 cache
+    required: false
+    default: us-east-1
+
+outputs:
+  cache-dir:
+    description: Effective vcpkg cache directory
+    value: ${{ steps.vars.outputs.cache_dir }}
+
+runs:
+  using: composite
+  steps:
+    - name: Resolve cache directory
+      id: vars
+      shell: bash
+      run: echo "cache_dir=${{ inputs.workdir }}/vcpkg/cache" >> "$GITHUB_OUTPUT"
+
+    - name: Create cache directory
+      shell: bash
+      run: mkdir -p "${{ steps.vars.outputs.cache_dir }}"
+
+    - name: Configure vcpkg binary sources (filesystem)
+      if: ${{ inputs.backend == 'filesystem' }}
+      shell: bash
+      run: echo "VCPKG_BINARY_SOURCES=clear;files,${{ github.workspace }}/${{ steps.vars.outputs.cache_dir }},readwrite" >> "$GITHUB_ENV"
+
+    - name: Validate S3 cache settings
+      if: ${{ inputs.backend == 's3' }}
+      shell: bash
+      run: |
+        if [ -z "${MODEL_S3_BUCKET:-}" ]; then
+          echo "::error::MODEL_S3_BUCKET is required when backend=s3"
+          exit 1
+        fi
+
+    - name: Configure vcpkg binary sources (S3)
+      if: ${{ inputs.backend == 's3' }}
+      shell: bash
+      run: |
+        PREFIX="${{ inputs.s3-bucket-path }}"
+        if [ -z "${PREFIX}" ]; then
+          PREFIX="vcpkg-cache"
+        fi
+        echo "VCPKG_BINARY_SOURCES=clear;x-aws,s3://${MODEL_S3_BUCKET}/${PREFIX}/${{ inputs.platform }}-${{ inputs.arch }}/,readwrite" >> "$GITHUB_ENV"
+
+    - name: Restore filesystem cache
+      if: ${{ inputs.backend == 'filesystem' }}
+      uses: actions/cache@668228422ae6a00e4ad889ee87cd7109ec5666a7 # 5.0.4
+      with:
+        key: ${{ inputs.cache-key-prefix }}-${{ inputs.platform }}-${{ inputs.arch }}-${{ hashFiles(format('{0}/vcpkg.json', inputs.workdir), format('{0}/vcpkg-configuration.json', inputs.workdir), format('{0}/vcpkg/ports/**', inputs.workdir)) }}
+        path: ${{ steps.vars.outputs.cache_dir }}
+        restore-keys: ${{ inputs.cache-key-prefix }}-${{ inputs.platform }}-${{ inputs.arch }}-
