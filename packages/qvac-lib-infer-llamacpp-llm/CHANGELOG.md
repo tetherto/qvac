@@ -1,5 +1,19 @@
 # Changelog
 
+## [0.14.2] - 2026-04-07
+
+This patch release updates the qvac-fabric native dependency.
+
+## Changed
+
+### qvac-fabric dependency bump
+
+Updated qvac-fabric from 7248.2.1#1 to 7248.2.2, aligning all llamacpp-based addons on the same fabric version.
+
+## Pull Requests
+
+- [#1358](https://github.com/tetherto/qvac/pull/1358) - Qvac 16779 qvac fabric lockstep
+
 ## [0.14.1] - 2026-04-02
 
 ### Changed
