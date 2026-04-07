@@ -250,7 +250,8 @@ std::size_t BertEmbeddings::embeddingSize() const { return embeddingSize_; }
 namespace {
 common_params setupParams(
     const std::string& modelGgufPath,
-    std::unordered_map<std::string, std::string> configFilemap) {
+    std::unordered_map<std::string, std::string> configFilemap,
+    int64_t& resolvedBackendDevice) {
   // Default params
   common_params params;
 
@@ -287,6 +288,7 @@ common_params setupParams(
           "preferredDeviceFromString: wrong deduced device, must be 'gpu' or "
           "'cpu'.\n");
     }
+    resolvedBackendDevice = chosenBackend.first == BackendType::GPU ? 1 : 0;
     configVector.emplace_back("--device");
     configVector.emplace_back(chosenBackend.second);
     configFilemap.erase(deviceIt);
@@ -369,7 +371,7 @@ void BertModel::init(
   lazyCommonInit();
   initializeBackend(backendsDir);
 
-  common_params params = setupParams(modelGgufPath, configCopy);
+  common_params params = setupParams(modelGgufPath, configCopy, runtimeBackendDevice_);
   BertModel::init(params);
 }
 
@@ -749,6 +751,7 @@ qvac_lib_inference_addon_cpp::RuntimeStats BertModel::runtimeStats() const {
     stats.emplace_back(
         "context_size",
         static_cast<long long>(llama_model_n_ctx_train(model_)));
+    stats.emplace_back("backendDevice", runtimeBackendDevice_);
   }
 
   return stats;

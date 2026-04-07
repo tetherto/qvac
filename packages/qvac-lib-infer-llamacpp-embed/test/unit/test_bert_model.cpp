@@ -226,6 +226,7 @@ TEST_F(BertModelTest, RuntimeStatsBeforeProcessing) {
   // is loaded
   bool hasBatchSize = false;
   bool hasContextSize = false;
+  bool hasBackendDevice = false;
   for (const auto& stat : stats) {
     if (stat.first == "batch_size") {
       hasBatchSize = true;
@@ -233,10 +234,16 @@ TEST_F(BertModelTest, RuntimeStatsBeforeProcessing) {
     if (stat.first == "context_size") {
       hasContextSize = true;
     }
+    if (stat.first == "backendDevice") {
+      hasBackendDevice = true;
+      auto val = std::get<int64_t>(stat.second);
+      EXPECT_TRUE(val == 0 || val == 1);
+    }
   }
   // These should be present if model is loaded
   EXPECT_TRUE(hasBatchSize);
   EXPECT_TRUE(hasContextSize);
+  EXPECT_TRUE(hasBackendDevice);
 }
 
 TEST_F(BertModelTest, RuntimeStatsAfterProcessing) {
@@ -263,6 +270,7 @@ TEST_F(BertModelTest, RuntimeStatsAfterProcessing) {
   // After processing, should have performance stats
   bool hasTotalTokens = false;
   bool hasTotalTime = false;
+  bool hasBackendDevice = false;
   for (const auto& stat : stats) {
     if (stat.first == "total_tokens") {
       hasTotalTokens = true;
@@ -270,9 +278,15 @@ TEST_F(BertModelTest, RuntimeStatsAfterProcessing) {
     if (stat.first == "total_time_ms") {
       hasTotalTime = true;
     }
+    if (stat.first == "backendDevice") {
+      hasBackendDevice = true;
+      auto val = std::get<int64_t>(stat.second);
+      EXPECT_TRUE(val == 0 || val == 1);
+    }
   }
   EXPECT_TRUE(hasTotalTokens);
   EXPECT_TRUE(hasTotalTime);
+  EXPECT_TRUE(hasBackendDevice);
 }
 
 TEST_F(BertModelTest, ConstructorWithInvalidPath) {
