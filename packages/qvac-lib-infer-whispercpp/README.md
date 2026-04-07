@@ -349,12 +349,6 @@ curl -L -o models/ggml-tiny.bin https://huggingface.co/ggerganov/whisper.cpp/res
 curl -L -o models/ggml-silero-v5.1.2.bin https://huggingface.co/ggml-org/whisper-vad/resolve/main/ggml-silero-v5.1.2.bin
 ```
 
-For fine-tuned models maintained by the team, use the S3 download script:
-
-```bash
-MODEL_S3_BUCKET=<bucket> ./scripts/download-models-s3.sh --access-key <KEY> --secret-key <SECRET> --model <name>
-```
-
 ### 4. Create Model Instance
 
 Import the specific Whisper model class based on the installed package and instantiate it:
