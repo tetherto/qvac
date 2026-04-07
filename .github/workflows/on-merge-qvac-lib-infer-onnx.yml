@@ -113,6 +113,7 @@ jobs:
       contents: write
       packages: write
       pull-requests: write
+      id-token: write
     uses: ./.github/workflows/prebuilds-qvac-lib-infer-onnx.yml
     secrets: inherit
 
