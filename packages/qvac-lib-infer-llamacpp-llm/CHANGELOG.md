@@ -5,12 +5,24 @@
 ### Changed
 
 - Updated qvac-fabric dependency from 7248.2.1 to 7248.2.3, which fixes OpenCL kernel cache support on Android.
-- Removed qvac-fabric overlay port; now resolved from the vcpkg registry.
 
 ### Added
 
 - `openclCacheDir` option in `LlamaConfig` (`index.d.ts`): writable directory for OpenCL kernel binary cache, required on Android for fast GPU startup.
 - `cache-type-k` and `cache-type-v` options in `LlamaConfig` (`index.d.ts`): configure KV cache quantization types.
+## [0.14.2] - 2026-04-07
+
+This patch release updates the qvac-fabric native dependency.
+
+## Changed
+
+### qvac-fabric dependency bump
+
+Updated qvac-fabric from 7248.2.1#1 to 7248.2.2, aligning all llamacpp-based addons on the same fabric version.
+
+## Pull Requests
+
+- [#1358](https://github.com/tetherto/qvac/pull/1358) - Qvac 16779 qvac fabric lockstep
 
 ## [0.14.1] - 2026-04-02
 

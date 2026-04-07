@@ -177,6 +177,7 @@ jobs:
       contents: write
       packages: write
       pull-requests: write
+      id-token: write
     needs: [authorize, context]
     if: needs.authorize.outputs.allowed == 'true'
     uses: ./.github/workflows/prebuilds-qvac-lib-infer-onnx-tts.yml
@@ -187,6 +188,10 @@ jobs:
       workdir: ${{ needs.context.outputs.workdir }}
 
   run-integration-tests:
+    permissions:
+      contents: read
+      packages: read
+      id-token: write
     needs: [authorize, context, prebuild]
     if: needs.authorize.outputs.allowed == 'true'
     uses: ./.github/workflows/integration-test-qvac-lib-infer-onnx-tts.yml
@@ -200,7 +205,8 @@ jobs:
     permissions:
       contents: read
       packages: read
-      pull-requests: write # Allow commenting on PRs
+      pull-requests: write
+      id-token: write
     needs: [authorize, context, prebuild]
     if: needs.authorize.outputs.allowed == 'true'
     uses: ./.github/workflows/integration-mobile-test-qvac-lib-infer-onnx-tts.yml

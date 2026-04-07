@@ -1,5 +1,6 @@
 # Changelog
 
+<<<<<<< fix_opencl_load-time
 ## [0.14.0] - 2026-04-03
 
 ### Changed
@@ -10,6 +11,21 @@
 ### Added
 
 - `openclCacheDir` option in `GGMLConfig` (`index.d.ts`): writable directory for OpenCL kernel binary cache, required on Android for fast GPU startup.
+=======
+## [0.13.2] - 2026-04-07
+
+This patch release updates the qvac-fabric native dependency.
+
+## Changed
+
+### qvac-fabric dependency bump
+
+Updated qvac-fabric from 7248.2.1#1 to 7248.2.2, aligning all llamacpp-based addons on the same fabric version.
+
+## Pull Requests
+
+- [#1358](https://github.com/tetherto/qvac/pull/1358) - Qvac 16779 qvac fabric lockstep
+>>>>>>> main
 
 ## [0.13.1] - 2026-04-02
 
