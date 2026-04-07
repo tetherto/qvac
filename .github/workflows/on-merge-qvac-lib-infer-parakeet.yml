@@ -111,6 +111,7 @@ jobs:
       contents: write
       packages: write
       pull-requests: write
+      id-token: write
     uses: ./.github/workflows/prebuilds-qvac-lib-infer-parakeet.yml
     secrets: inherit
     with:
@@ -265,6 +266,10 @@ jobs:
           echo "should_run_tests=$should" >> "$GITHUB_OUTPUT"
 
   integration-tests:
+    permissions:
+      contents: read
+      packages: read
+      id-token: write
     uses: ./.github/workflows/integration-test-qvac-lib-infer-parakeet.yml
     needs: post-build-gate
     if: needs.post-build-gate.outputs.should_run_tests == 'true'
@@ -282,6 +287,7 @@ jobs:
       contents: read
       packages: read
       pull-requests: write
+      id-token: write
     secrets: inherit
     with:
       repository: ${{ github.repository }}

@@ -56,6 +56,10 @@ jobs:
           echo "🎯 Released Bergamot model pairs: $pairs"
 
   benchmark-bergamot:
+    permissions:
+      contents: read
+      packages: read
+      id-token: write
     needs: prepare
     uses: ./.github/workflows/benchmark-qvac-lib-infer-nmtcpp.yml
     secrets: inherit
