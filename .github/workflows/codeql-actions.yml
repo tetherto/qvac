@@ -1,0 +1,47 @@
+name: "CodeQL: GitHub Actions"
+
+# Scans GitHub Actions workflow files using CodeQL with a custom config
+# that excludes false-positive artifact-poisoning alerts.
+#
+# This replaces the "actions" language from the default CodeQL setup.
+# After merging, remove "actions" from the default setup in:
+#   Settings > Code security > Code scanning > CodeQL analysis > Default setup
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - ".github/workflows/**"
+      - ".github/actions/**"
+      - ".github/codeql/**"
+  pull_request:
+    branches: [main]
+    paths:
+      - ".github/workflows/**"
+      - ".github/actions/**"
+      - ".github/codeql/**"
+  schedule:
+    - cron: "25 14 * * 1"
+
+jobs:
+  analyze:
+    name: Analyze GitHub Actions
+    runs-on: ubuntu-latest
+    permissions:
+      security-events: write
+      contents: read
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # 6.0.2
+
+      - name: Initialize CodeQL
+        uses: github/codeql-action/init@5c8a8a642e79153f5d047b10ec1cba1d1cc65699 # 3.35.1
+        with:
+          languages: actions
+          config-file: ./.github/codeql/codeql-config.yml
+
+      - name: Perform CodeQL Analysis
+        uses: github/codeql-action/analyze@5c8a8a642e79153f5d047b10ec1cba1d1cc65699 # 3.35.1
+        with:
+          category: "/language:actions"
