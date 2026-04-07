@@ -92,39 +92,48 @@ async function resolveSupertonicConfig(
   ctx: ResolveContext,
 ) {
   const {
-    ttsTokenizerSrc,
     ttsTextEncoderSrc,
-    ttsLatentDenoiserSrc,
-    ttsVoiceDecoderSrc,
-    ttsVoiceSrc,
+    ttsDurationPredictorSrc,
+    ttsVectorEstimatorSrc,
+    ttsVocoderSrc,
+    ttsUnicodeIndexerSrc,
+    ttsTtsConfigSrc,
+    ttsVoiceStyleSrc,
     ttsSpeed,
     ttsNumInferenceSteps,
+    ttsSupertonicMultilingual,
     language,
   } = config;
 
   if (
-    !ttsTokenizerSrc ||
     !ttsTextEncoderSrc ||
-    !ttsLatentDenoiserSrc ||
-    !ttsVoiceDecoderSrc ||
-    !ttsVoiceSrc
+    !ttsDurationPredictorSrc ||
+    !ttsVectorEstimatorSrc ||
+    !ttsVocoderSrc ||
+    !ttsUnicodeIndexerSrc ||
+    !ttsTtsConfigSrc ||
+    !ttsVoiceStyleSrc
   ) {
     throw new TtsArtifactsRequiredError();
   }
 
   const resolve = ctx.resolveModelPath;
   const [
-    tokenizerPath,
     textEncoderPath,
-    latentDenoiserPath,
-    voiceDecoderPath,
-    voicePath,
+    durationPredictorPath,
+    vectorEstimatorPath,
+    vocoderPath,
+    unicodeIndexerPath,
+    ttsConfigPath,
+    voiceStylePath,
   ] = await Promise.all([
-    resolve(ttsTokenizerSrc),
     resolve(ttsTextEncoderSrc),
-    resolve(ttsLatentDenoiserSrc),
-    resolve(ttsVoiceDecoderSrc),
-    resolve(ttsVoiceSrc),
+    resolve(ttsDurationPredictorSrc),
+    resolve(ttsVectorEstimatorSrc),
+    resolve(ttsVocoderSrc),
+    resolve(ttsUnicodeIndexerSrc),
+    resolve(ttsTtsConfigSrc),
+    resolve(ttsVoiceStyleSrc),
   ]);
 
   return {
@@ -133,13 +142,16 @@ async function resolveSupertonicConfig(
       language,
       ttsSpeed,
       ttsNumInferenceSteps,
+      ttsSupertonicMultilingual,
     } as TtsSupertonicRuntimeConfig,
     artifacts: {
-      tokenizerPath,
       textEncoderPath,
-      latentDenoiserPath,
-      voiceDecoderPath,
-      voicePath,
+      durationPredictorPath,
+      vectorEstimatorPath,
+      vocoderPath,
+      unicodeIndexerPath,
+      ttsConfigPath,
+      voiceStylePath,
     },
   };
 }
@@ -172,18 +184,21 @@ function createChatterboxModel(
   const logger = createStreamLogger(modelId, ModelType.onnxTts);
   registerAddonLogger(modelId, ModelType.onnxTts, logger);
   const referenceAudio = loadReferenceAudioAt24k(referenceAudioPath);
-  const args = {
-    tokenizerPath,
-    speechEncoderPath,
-    embedTokensPath,
-    conditionalDecoderPath,
-    languageModelPath,
+  const model = new ONNXTTS({
+    files: {
+      tokenizerPath,
+      speechEncoderPath,
+      embedTokensPath,
+      conditionalDecoderPath,
+      languageModelPath,
+    },
+    engine: "chatterbox",
+    config: { language: config.language ?? "en", useGPU: false },
     referenceAudio,
     logger,
     opts: { stats: true },
-  };
-  const modelConfig = { language: config.language ?? "en", useGPU: false };
-  const model = new ONNXTTS(args as never, modelConfig);
+    exclusiveRun: true,
+  } as never);
   return { model, loader: undefined };
 }
 
@@ -192,40 +207,49 @@ function createSupertonicModel(
   config: TtsSupertonicRuntimeConfig,
   artifacts: Record<string, string | undefined>,
 ): PluginModelResult {
-  const tokenizerPath = artifacts["tokenizerPath"];
   const textEncoderPath = artifacts["textEncoderPath"];
-  const latentDenoiserPath = artifacts["latentDenoiserPath"];
-  const voiceDecoderPath = artifacts["voiceDecoderPath"];
-  const voicePath = artifacts["voicePath"];
+  const durationPredictorPath = artifacts["durationPredictorPath"];
+  const vectorEstimatorPath = artifacts["vectorEstimatorPath"];
+  const vocoderPath = artifacts["vocoderPath"];
+  const unicodeIndexerPath = artifacts["unicodeIndexerPath"];
+  const ttsConfigPath = artifacts["ttsConfigPath"];
+  const voiceStylePath = artifacts["voiceStylePath"];
 
   if (
-    !tokenizerPath ||
     !textEncoderPath ||
-    !latentDenoiserPath ||
-    !voiceDecoderPath ||
-    !voicePath
+    !durationPredictorPath ||
+    !vectorEstimatorPath ||
+    !vocoderPath ||
+    !unicodeIndexerPath ||
+    !ttsConfigPath ||
+    !voiceStylePath
   ) {
     throw new TtsArtifactsRequiredError();
   }
 
   const logger = createStreamLogger(modelId, ModelType.onnxTts);
   registerAddonLogger(modelId, ModelType.onnxTts, logger);
-  const voicesDir = path.dirname(voicePath);
-  const voiceName = path.basename(voicePath).replace(/\.bin$/i, "") || "voice";
-  const args = {
-    tokenizerPath,
-    textEncoderPath,
-    latentDenoiserPath,
-    voiceDecoderPath,
-    voicesDir,
+  const voiceName = path.basename(voiceStylePath).replace(/\.json$/i, "") || "F1";
+  const model = new ONNXTTS({
+    files: {
+      textEncoderPath,
+      durationPredictorPath,
+      vectorEstimatorPath,
+      vocoderPath,
+      unicodeIndexerPath,
+      ttsConfigPath,
+      voiceStyleJsonPath: voiceStylePath,
+    },
+    engine: "supertonic",
     voiceName,
     speed: config.ttsSpeed ?? 1,
     numInferenceSteps: config.ttsNumInferenceSteps ?? 5,
+    supertonicMultilingual: config.ttsSupertonicMultilingual !== false,
+    config: { language: config.language ?? "en" },
     logger,
     opts: { stats: true },
-  };
-  const modelConfig = { language: config.language ?? "en" };
-  const model = new ONNXTTS(args as never, modelConfig);
+    exclusiveRun: true,
+  } as never);
   return { model, loader: undefined };
 }
 
