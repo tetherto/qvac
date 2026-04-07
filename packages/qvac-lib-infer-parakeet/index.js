@@ -1,12 +1,11 @@
 'use strict'
 
-const path = require('bare-path')
 const fs = require('bare-fs')
-const BaseInference = require('@qvac/infer-base/WeightsProvider/BaseInference')
-const WeightsProvider = require('@qvac/infer-base/WeightsProvider/WeightsProvider')
+const QvacLogger = require('@qvac/logging')
+const { createJobHandler } = require('@qvac/infer-base')
 
 const { ParakeetInterface } = require('./parakeet')
-const { QvacErrorAddonParakeet, ERR_CODES, END_OF_INPUT } = require('./lib/error')
+const { END_OF_INPUT, ERR_CODES, QvacErrorAddonParakeet } = require('./lib/error')
 
 /**
  * Required model files for TDT model
@@ -67,55 +66,61 @@ function getRequiredModelFiles (modelType) {
  * ONNX Runtime client implementation for the Parakeet speech-to-text model.
  * Supports NVIDIA Parakeet ASR models in ONNX format.
  */
-class TranscriptionParakeet extends BaseInference {
+class TranscriptionParakeet {
   /**
    * Creates an instance of TranscriptionParakeet.
    * @constructor
-   * @param {Object} args - arguments for inference setup
-   * @param {Object} args.loader - External loader instance for weight streaming
-   * @param {Object} [args.logger=null] - Optional structured logger
-   * @param {string} args.modelName - Name of the model directory
-   * @param {string} [args.diskPath=''] - Disk directory where model files are stored
-   * @param {boolean} [args.exclusiveRun=true] - Whether to run exclusively
-   * @param {Object} config - environment-specific inference setup configuration
-   * @param {string} [config.path] - Direct path to model (alternative to diskPath + modelName)
-   * @param {string} [config.encoderPath] - Absolute path to encoder ONNX graph file
-   * @param {string} [config.encoderDataPath] - Absolute path to encoder ONNX weights file
-   * @param {string} [config.decoderPath] - Absolute path to decoder-joint ONNX file
-   * @param {string} [config.vocabPath] - Absolute path to vocabulary file
-   * @param {string} [config.preprocessorPath] - Absolute path to preprocessor ONNX file
-   * @param {string} [config.ctcModelPath] - Absolute path to CTC model.onnx file
-   * @param {string} [config.ctcModelDataPath] - Absolute path to CTC model.onnx_data file
-   * @param {string} [config.tokenizerPath] - Absolute path to tokenizer.json file (CTC/EOU)
-   * @param {string} [config.eouEncoderPath] - Absolute path to EOU encoder.onnx file
-   * @param {string} [config.eouDecoderPath] - Absolute path to EOU decoder_joint.onnx file
-   * @param {string} [config.sortformerPath] - Absolute path to sortformer.onnx file
-   * @param {Object} config.parakeetConfig - Parakeet-specific configuration
-   * @param {string} [config.parakeetConfig.modelType='tdt'] - Model type: 'tdt', 'ctc', 'eou', or 'sortformer'
-   * @param {number} [config.parakeetConfig.maxThreads=4] - Max CPU threads for inference
-   * @param {boolean} [config.parakeetConfig.useGPU=false] - Enable GPU acceleration
-   * @param {boolean} [config.parakeetConfig.captionEnabled=false] - Enable caption/subtitle mode
-   * @param {boolean} [config.parakeetConfig.timestampsEnabled=true] - Include timestamps in output
-   * @param {number} [config.parakeetConfig.seed=-1] - Random seed (-1 for random)
+   * @param {Object} opts
+   * @param {Object} [opts.files={}] - Map of model file paths
+   * @param {string} [opts.files.encoder] - Absolute path to TDT encoder-model.onnx
+   * @param {string} [opts.files.encoderData] - Absolute path to TDT encoder-model.onnx.data
+   * @param {string} [opts.files.decoder] - Absolute path to TDT decoder_joint-model.onnx
+   * @param {string} [opts.files.vocab] - Absolute path to TDT vocab.txt
+   * @param {string} [opts.files.preprocessor] - Absolute path to TDT preprocessor.onnx
+   * @param {string} [opts.files.model] - Absolute path to CTC model.onnx
+   * @param {string} [opts.files.modelData] - Absolute path to CTC model.onnx_data
+   * @param {string} [opts.files.tokenizer] - Absolute path to CTC/EOU tokenizer.json
+   * @param {string} [opts.files.eouEncoder] - Absolute path to EOU encoder.onnx
+   * @param {string} [opts.files.eouDecoder] - Absolute path to EOU decoder_joint.onnx
+   * @param {string} [opts.files.sortformer] - Absolute path to sortformer.onnx
+   * @param {Object} [opts.config={}] - Parakeet inference configuration
+   * @param {Object} [opts.config.parakeetConfig] - Parakeet-specific configuration
+   * @param {string} [opts.config.parakeetConfig.modelType='tdt'] - Model type: 'tdt', 'ctc', 'eou', or 'sortformer'
+   * @param {number} [opts.config.parakeetConfig.maxThreads=4] - Max CPU threads for inference
+   * @param {boolean} [opts.config.parakeetConfig.useGPU=false] - Enable GPU acceleration
+   * @param {boolean} [opts.config.parakeetConfig.captionEnabled=false] - Enable caption/subtitle mode
+   * @param {boolean} [opts.config.parakeetConfig.timestampsEnabled=true] - Include timestamps in output
+   * @param {number} [opts.config.parakeetConfig.seed=-1] - Random seed (-1 for random)
+   * @param {Object} [opts.logger=null] - Optional structured logger
+   * @param {boolean} [opts.exclusiveRun=true] - Whether to run exclusively
    */
-  constructor (
-    { loader, logger = null, modelName, diskPath = '', exclusiveRun = true, ...args },
-    config
-  ) {
-    super({ logger, loader, exclusiveRun, ...args })
+  constructor ({ files = {}, config = {}, logger = null, exclusiveRun = true }) {
+    this.logger = new QvacLogger(logger)
+    this.exclusiveRun = !!exclusiveRun
+    this._runQueueWaiter = Promise.resolve()
+    this.state = { configLoaded: false, weightsLoaded: false, destroyed: false }
 
-    this._diskPath = diskPath
-    this._modelName = modelName
-    this._config = config
-    this.weightsProvider = new WeightsProvider(loader, this.logger)
+    this._config = {
+      ...config,
+      encoderPath: files.encoder,
+      encoderDataPath: files.encoderData,
+      decoderPath: files.decoder,
+      vocabPath: files.vocab,
+      preprocessorPath: files.preprocessor,
+      ctcModelPath: files.model,
+      ctcModelDataPath: files.modelData,
+      tokenizerPath: files.tokenizer,
+      eouEncoderPath: files.eouEncoder,
+      eouDecoderPath: files.eouDecoder,
+      sortformerPath: files.sortformer
+    }
 
     this.params = config.parakeetConfig || {}
-    this._hasActiveResponse = false
+    this._job = createJobHandler({ cancel: () => this.addon?.cancel() })
 
     this.logger.debug('TranscriptionParakeet constructor called', {
       params: this.params,
-      config: this._config,
-      diskPath: this._diskPath
+      config: this._config
     })
 
     this.validateModelFiles()
@@ -123,68 +128,25 @@ class TranscriptionParakeet extends BaseInference {
 
   /**
    * Validate that required model files exist
-   * @throws {QvacErrorAddonParakeet} if required files are missing
    */
   validateModelFiles () {
-    const modelPath = this._config.path || this._getModelFilePath()
-
-    if (this._hasNamedPaths()) {
-      const modelType = this.params.modelType || 'tdt'
-      const requiredFiles = getRequiredModelFiles(modelType)
-      for (const file of requiredFiles) {
-        const filePath = this._resolveFilePath(modelPath, file)
-        if (!fs.existsSync(filePath)) {
-          this.logger.warn('Model file not found', { file, path: filePath })
-        }
-      }
-      return
-    }
-
-    if (!modelPath) {
-      return
-    }
-
-    if (!fs.existsSync(modelPath)) {
-      this.logger.error('Model directory not found', { path: modelPath })
-      throw new QvacErrorAddonParakeet({
-        code: ERR_CODES.MODEL_NOT_FOUND,
-        adds: 'Model not found at the configured path'
-      })
-    }
-
     const modelType = this.params.modelType || 'tdt'
     const requiredFiles = getRequiredModelFiles(modelType)
-
     for (const file of requiredFiles) {
-      const filePath = path.join(modelPath, file)
-      if (!fs.existsSync(filePath)) {
-        this.logger.warn('Required model file missing', { file })
+      const filePath = this._resolveFilePath(file)
+      if (filePath && !fs.existsSync(filePath)) {
+        this.logger.warn('Model file not found', { file, path: filePath })
       }
     }
   }
 
   /**
-   * Get the model file path
-   * @returns {string} - path to the model directory
-   * @private
-   */
-  _getModelFilePath () {
-    if (!this._modelName) {
-      return ''
-    }
-    return path.join(this._diskPath, this._modelName)
-  }
-
-  /**
-   * Resolve the absolute path for a model file.
-   * Uses named config path if available, otherwise falls back to
-   * path.join(modelPath, filename).
-   * @param {string} modelPath - base model directory path
+   * Resolve the absolute path for a model file from the files map.
    * @param {string} filename - model file name (e.g. 'encoder-model.onnx')
-   * @returns {string} - absolute path to the file
+   * @returns {string} - absolute path to the file, or empty string if not set
    * @private
    */
-  _resolveFilePath (modelPath, filename) {
+  _resolveFilePath (filename) {
     const namedPaths = {
       // TDT
       'encoder-model.onnx': this._config.encoderPath,
@@ -203,26 +165,7 @@ class TranscriptionParakeet extends BaseInference {
       // Sortformer
       'sortformer.onnx': this._config.sortformerPath
     }
-    if (namedPaths[filename]) {
-      return namedPaths[filename]
-    }
-    return path.join(modelPath, filename)
-  }
-
-  /**
-   * Whether individual file paths have been provided for any model type.
-   * When true, C++ loads directly from these paths (skip JS weight loading).
-   * @returns {boolean}
-   * @private
-   */
-  _hasNamedPaths () {
-    return !!(
-      this._config.encoderPath || this._config.encoderDataPath ||
-      this._config.decoderPath || this._config.vocabPath || this._config.preprocessorPath ||
-      this._config.ctcModelPath || this._config.ctcModelDataPath || this._config.tokenizerPath ||
-      this._config.eouEncoderPath || this._config.eouDecoderPath ||
-      this._config.sortformerPath
-    )
+    return namedPaths[filename] || ''
   }
 
   /**
@@ -231,118 +174,82 @@ class TranscriptionParakeet extends BaseInference {
    * @private
    */
   _buildConfigurationParams () {
-    const modelPath = this._config.path || this._getModelFilePath()
     const modelType = this.params.modelType || 'tdt'
 
     const configurationParams = {
-      modelPath,
+      modelPath: '',
       modelType,
       maxThreads: this.params.maxThreads || 4,
       useGPU: this.params.useGPU || false,
       sampleRate: this.params.sampleRate || 16000,
       channels: this.params.channels || 1,
       captionEnabled: this.params.captionEnabled || false,
-      timestampsEnabled: this.params.timestampsEnabled !== false, // default true
+      timestampsEnabled: this.params.timestampsEnabled !== false,
       seed: this.params.seed ?? -1
     }
 
-    if (this._hasNamedPaths()) {
-      if (this._config.encoderPath) configurationParams.encoderPath = this._config.encoderPath
-      if (this._config.encoderDataPath) configurationParams.encoderDataPath = this._config.encoderDataPath
-      if (this._config.decoderPath) configurationParams.decoderPath = this._config.decoderPath
-      if (this._config.vocabPath) configurationParams.vocabPath = this._config.vocabPath
-      if (this._config.preprocessorPath) configurationParams.preprocessorPath = this._config.preprocessorPath
-      if (this._config.ctcModelPath) configurationParams.ctcModelPath = this._config.ctcModelPath
-      if (this._config.ctcModelDataPath) configurationParams.ctcModelDataPath = this._config.ctcModelDataPath
-      if (this._config.tokenizerPath) configurationParams.tokenizerPath = this._config.tokenizerPath
-      if (this._config.eouEncoderPath) configurationParams.eouEncoderPath = this._config.eouEncoderPath
-      if (this._config.eouDecoderPath) configurationParams.eouDecoderPath = this._config.eouDecoderPath
-      if (this._config.sortformerPath) configurationParams.sortformerPath = this._config.sortformerPath
-    }
+    if (this._config.encoderPath) configurationParams.encoderPath = this._config.encoderPath
+    if (this._config.encoderDataPath) configurationParams.encoderDataPath = this._config.encoderDataPath
+    if (this._config.decoderPath) configurationParams.decoderPath = this._config.decoderPath
+    if (this._config.vocabPath) configurationParams.vocabPath = this._config.vocabPath
+    if (this._config.preprocessorPath) configurationParams.preprocessorPath = this._config.preprocessorPath
+    if (this._config.ctcModelPath) configurationParams.ctcModelPath = this._config.ctcModelPath
+    if (this._config.ctcModelDataPath) configurationParams.ctcModelDataPath = this._config.ctcModelDataPath
+    if (this._config.tokenizerPath) configurationParams.tokenizerPath = this._config.tokenizerPath
+    if (this._config.eouEncoderPath) configurationParams.eouEncoderPath = this._config.eouEncoderPath
+    if (this._config.eouDecoderPath) configurationParams.eouDecoderPath = this._config.eouDecoderPath
+    if (this._config.sortformerPath) configurationParams.sortformerPath = this._config.sortformerPath
 
     return configurationParams
   }
 
+  getState () {
+    return this.state
+  }
+
+  async load () {
+    if (this.state.destroyed) {
+      throw new QvacErrorAddonParakeet(ERR_CODES.INSTANCE_DESTROYED)
+    }
+    if (this.state.configLoaded || this.state.weightsLoaded) {
+      this.logger.info('Reload requested - unloading existing model first')
+      await this.unload()
+    }
+    await this._load()
+    this.state.configLoaded = true
+    this.state.weightsLoaded = true
+  }
+
+  async run (input) {
+    if (this.exclusiveRun) {
+      return await this._withExclusiveRun(() => this._runInternal(input))
+    }
+    return await this._runInternal(input)
+  }
+
+  async _withExclusiveRun (fn) {
+    const prev = this._runQueueWaiter || Promise.resolve()
+    let release
+    this._runQueueWaiter = new Promise(resolve => { release = resolve })
+    await prev
+    try {
+      return await fn()
+    } finally {
+      release()
+    }
+  }
+
   /**
-   * Load model, weights, and activate addon.
-   * @param {boolean} [closeLoader=false] - Close loader when done.
-   * @param {Function} [reportProgressCallback] - Hook for progress updates.
+   * Load model and activate addon.
    */
-  async _load (closeLoader = false, reportProgressCallback) {
-    this.logger.debug('Loader ready')
-
-    await this.downloadWeights(reportProgressCallback, { closeLoader })
-
+  async _load () {
     const configurationParams = this._buildConfigurationParams()
 
     this.logger.info('Creating Parakeet addon with configuration:', configurationParams)
     this.addon = this._createAddon(configurationParams)
 
-    // Activate the model
     await this.addon.activate()
     this.logger.debug('Addon activated')
-  }
-
-  /**
-   * Load model weight files into the addon using streams
-   * Uses streaming to handle large files (>2GB) that exceed bare-fs readFileSync limits
-   * @param {string} modelPath - path to model directory
-   * @param {string} modelType - model type
-   * @private
-   */
-  async _loadModelWeights (modelPath, modelType) {
-    const requiredFiles = getRequiredModelFiles(modelType)
-
-    for (const file of requiredFiles) {
-      const filePath = this._resolveFilePath(modelPath, file)
-      if (fs.existsSync(filePath)) {
-        this.logger.debug(`Loading ${file}...`)
-
-        try {
-          const buffer = await this._readFileAsStream(filePath)
-          const chunk = new Uint8Array(buffer.buffer, buffer.byteOffset, buffer.byteLength)
-
-          await this.addon.loadWeights({
-            filename: file,
-            chunk,
-            completed: true
-          })
-          this.logger.debug(`Loaded ${file} (${(buffer.length / 1024 / 1024).toFixed(2)} MB)`)
-        } catch (err) {
-          this.logger.error(`Failed to load ${file}: ${err.message}`)
-          throw err
-        }
-      } else {
-        this.logger.warn(`Skipping ${file} - not found`)
-      }
-    }
-  }
-
-  /**
-   * Read a file using streams to handle large files (>2GB)
-   * bare-fs readFileSync has a 2GB limit, so we use streams instead
-   * @param {string} filePath - path to the file
-   * @returns {Promise<Buffer>} - file contents as a Buffer
-   * @private
-   */
-  async _readFileAsStream (filePath) {
-    return new Promise((resolve, reject) => {
-      const chunks = []
-      const stream = fs.createReadStream(filePath)
-
-      stream.on('data', (chunk) => {
-        chunks.push(chunk)
-      })
-
-      stream.on('end', () => {
-        const buffer = Buffer.concat(chunks)
-        resolve(buffer)
-      })
-
-      stream.on('error', (err) => {
-        reject(err)
-      })
-    })
   }
 
   /**
@@ -351,28 +258,12 @@ class TranscriptionParakeet extends BaseInference {
    * @returns {Promise<QvacResponse>} - Response object for tracking the transcription job
    */
   async _runInternal (audioStream) {
-    if (this.exclusiveRun && this._hasActiveResponse) {
-      throw new QvacErrorAddonParakeet({
-        code: ERR_CODES.JOB_ALREADY_RUNNING
-      })
-    }
+    const response = this._job.start()
 
-    const jobId = await this.addon.append({
-      type: 'audio',
-      data: new Float32Array(0).buffer
+    this._handleAudioStream(this._normalizeAudioStream(audioStream)).catch((error) => {
+      this._job.fail(error)
     })
 
-    const response = this._createResponse(jobId)
-    this._hasActiveResponse = true
-    const finalized = response.await().finally(() => { this._hasActiveResponse = false })
-    finalized.catch(() => {})
-    response.await = () => finalized
-
-    const normalizedAudioStream = this._normalizeAudioStream(audioStream)
-    this._handleAudioStream(normalizedAudioStream).catch((error) => {
-      response.failed(error)
-      this._deleteJobMapping(jobId)
-    })
     return response
   }
 
@@ -432,6 +323,16 @@ class TranscriptionParakeet extends BaseInference {
     throw new Error('Unsupported audio input. Expected stream, TypedArray, or chunk array.')
   }
 
+  _outputCallback (addon, event, jobId, data, error) {
+    if (event === 'Error') {
+      this._job.fail(error instanceof Error ? error : new Error(String(error)))
+    } else if (event === 'Output') {
+      this._job.output(data)
+    } else if (event === 'JobEnded') {
+      this._job.end(data)
+    }
+  }
+
   /**
    * Reload the model with new configuration parameters.
    * Useful for changing settings without destroying the instance.
@@ -442,7 +343,6 @@ class TranscriptionParakeet extends BaseInference {
     return await this._withExclusiveRun(async () => {
       this.logger.debug('Reloading addon with new configuration', newConfig)
 
-      // Merge new config with existing params
       if (newConfig.parakeetConfig) {
         this.params = { ...this.params, ...newConfig.parakeetConfig }
       }
@@ -450,51 +350,12 @@ class TranscriptionParakeet extends BaseInference {
       const configurationParams = this._buildConfigurationParams()
 
       await this.cancel()
-      this._failAndClearActiveResponse('Model was reloaded')
+      this._job.fail(new Error('Model was reloaded'))
       await this.addon.reload(configurationParams)
-      if (!this._hasNamedPaths()) {
-        await this._loadModelWeights(
-          configurationParams.modelPath,
-          configurationParams.modelType
-        )
-      }
       await this.addon.activate()
 
       this.logger.debug('Addon reloaded and activated successfully')
     })
-  }
-
-  /**
-   * Download model weights from loader
-   * @param {Function} [reportProgressCallback] - Progress callback
-   * @param {Object} opts - Options
-   * @param {boolean} [opts.closeLoader=false] - Close loader when done
-   * @private
-   */
-  async _downloadWeights (reportProgressCallback, opts) {
-    if (this._hasNamedPaths()) {
-      this.logger.info('File paths provided via config, skipping WeightsProvider download')
-      if (opts.closeLoader) {
-        await this.weightsProvider.loader.close()
-      }
-      return {}
-    }
-
-    const modelType = this.params.modelType || 'tdt'
-    const models = getRequiredModelFiles(modelType)
-
-    this.logger.info('Loading weight files:', models)
-
-    const result = await this.weightsProvider.downloadFiles(
-      models,
-      this._diskPath,
-      {
-        closeLoader: opts.closeLoader,
-        onDownloadProgress: reportProgressCallback
-      }
-    )
-    this.logger.info('Weight files downloaded successfully', { models })
-    return result
   }
 
   /**
@@ -520,7 +381,7 @@ class TranscriptionParakeet extends BaseInference {
   async unload () {
     return await this._withExclusiveRun(async () => {
       await this.cancel()
-      this._failAndClearActiveResponse('Model was unloaded')
+      this._job.fail(new Error('Model was unloaded'))
       if (this.addon) {
         await this.addon.destroyInstance()
       }
@@ -533,27 +394,33 @@ class TranscriptionParakeet extends BaseInference {
     if (this.addon?.cancel) {
       await this.addon.cancel()
     }
+    if (this._job.active) {
+      this._job.fail(new QvacErrorAddonParakeet(ERR_CODES.JOB_CANCELLED))
+    }
+  }
+
+  async status () {
+    return this.addon?.status()
+  }
+
+  async pause () {
+    await this.addon?.pause()
+  }
+
+  async unpause () {
+    await this.addon?.activate()
   }
 
   async destroy () {
     return await this._withExclusiveRun(async () => {
       await this.cancel()
-      this._failAndClearActiveResponse('Model was destroyed')
+      this._job.fail(new Error('Model was destroyed'))
       if (this.addon) {
         await this.addon.destroyInstance()
       }
       this.state.configLoaded = false
-      this.state.weightsLoaded = false
       this.state.destroyed = true
     })
-  }
-
-  _failAndClearActiveResponse (reason) {
-    for (const [jobId, response] of this._jobToResponse.entries()) {
-      response.failed(new Error(reason))
-      this._deleteJobMapping(jobId)
-    }
-    this._hasActiveResponse = false
   }
 }
 

@@ -9,14 +9,18 @@ import {
 import { nowMs } from "@/profiling";
 import { resolveModelConfig } from "@/server/bare/registry/model-config-registry";
 import type RPC from "bare-rpc";
-import { sendErrorResponse } from "@/server/error-handlers";
 import {
-  RPCNoDataReceivedError,
+  sendErrorResponse,
+  sendStreamErrorResponse,
+} from "@/server/error-handlers";
+import {
   RPCUnknownRequestTypeError,
+  PluginHandlerTypeMismatchError,
 } from "@/utils/errors-server";
 import { registry } from "./handler-registry";
 import {
   executeHandler,
+  executeDuplexHandler,
   handleInitConfig,
   isInitConfigMessage,
 } from "./handler-utils";
@@ -28,8 +32,12 @@ export async function handleRequest(req: RPC.IncomingRequest): Promise<void> {
 
   try {
     const rawData = req.data?.toString();
+
+    // Duplex stream request: metadata arrives as the first chunk on the
+    // request stream (client used createRequestStream instead of send).
     if (!rawData) {
-      throw new RPCNoDataReceivedError();
+      await handleDuplexRequest(req);
+      return;
     }
 
     // Timing runs unconditionally since we can't know if client
@@ -99,6 +107,68 @@ function extractProfilingMeta(data: unknown): {
     data: rest,
     profilingMeta: meta as ProfilingRequestMeta | undefined,
   };
+}
+
+async function handleDuplexRequest(req: RPC.IncomingRequest): Promise<void> {
+  const inputStream = req.createRequestStream();
+  const outputStream = req.createResponseStream();
+  let profiler: ServerProfiler | undefined;
+
+  try {
+    const firstChunk = await new Promise<Buffer>((resolve, reject) => {
+      const onData = (data: unknown) => {
+        inputStream.off("error", onError);
+        inputStream.pause();
+        resolve(data as Buffer);
+      };
+      const onError = (err: unknown) => {
+        inputStream.off("data", onData);
+        reject(err instanceof Error ? err : new Error(String(err)));
+      };
+      inputStream.once("data", onData);
+      inputStream.once("error", onError);
+    });
+
+    const parseStart = nowMs();
+    const jsonData: unknown = JSON.parse(firstChunk.toString());
+    const jsonParseMs = nowMs() - parseStart;
+
+    const { data: cleanData, profilingMeta } = extractProfilingMeta(jsonData);
+    profiler = createServerProfiler(profilingMeta);
+    profiler.markRequestParsed(jsonParseMs);
+
+    const validationStart = nowMs();
+    const processedData = applyDeviceDefaultsToRequest(cleanData);
+    const request: Request = requestSchema.parse(processedData);
+    attachProfilingMetaToRequest(request, profilingMeta);
+    profiler.markRequestValidated(nowMs() - validationStart);
+
+    const entry = registry[request.type];
+
+    if (!entry) {
+      throw new RPCUnknownRequestTypeError(request.type);
+    }
+
+    if (entry.type !== "duplex") {
+      throw new PluginHandlerTypeMismatchError(
+        request.type,
+        "duplex",
+        entry.type,
+      );
+    }
+
+    await executeDuplexHandler(
+      req,
+      request,
+      entry,
+      inputStream,
+      outputStream,
+      profiler,
+    );
+  } catch (error) {
+    inputStream.destroy();
+    sendStreamErrorResponse(outputStream, error, profiler);
+  }
 }
 
 /**

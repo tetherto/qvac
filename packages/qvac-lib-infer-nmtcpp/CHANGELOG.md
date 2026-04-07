@@ -5,6 +5,51 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.0.0] - 2026-03-31
+
+### Breaking Changes
+
+- **Removed Opus/Marian GGML model support** — Loading a GGML model file with `model_type` 0 (`MODEL_MARIAN`) or 2 (`MODEL_MARIAN_V2`) now throws a clear runtime error: `"Opus/Marian models are no longer supported. Only IndicTrans (model_type=1) is supported."` Only `MODEL_INDICTRANS` (type 1) is supported for GGML inference. The Bergamot backend is unaffected.
+
+### Removed
+
+- `MODEL_MARIAN` and `MODEL_MARIAN_V2` enum values and all associated C++ code paths from the GGML backend (encoder, decoder, loader, tokenization, beam search)
+- `modelIsMarian()` utility function and all call sites
+- Marian-specific: `bad_word_ids` loading, learned positional embeddings, `final_logits_bias`, SiLU FFN branches, V2 header parsing, `marian_tokenize()` function
+- `convert_opus_to_ggml.py` conversion script
+- Marian C++ unit tests (`nmt_model_wrapper_test_marian.cpp`)
+- Opus benchmark results, released-models list, and model-conversion-test CI workflow
+- `qvac` (GGML/Opus) translator option and `is_quantized_model` input from benchmark workflow
+
+### Fixed
+
+- Restored `TEST_P` parameterized test definitions for `NmtCppModelWrapperTest` (were lost when Marian test file was deleted)
+- Pinned `bare-process` to `>=4.2.2 <4.4.0` to work around upstream stdin regression in v4.4.0
+
+### Changed
+
+- Renamed internal `marian_ctx` variable to `nmt_ctx` in loader
+- Benchmark workflow default translator changed from `qvac` to `qvac_bergamot`
+- CI cpp-tests workflow only downloads IndicTrans model (Opus model downloads removed)
+
+## [0.7.0] - 2026-03-27
+
+### Breaking Changes
+
+- **Deprecated `ModelTypes.Opus`** — Removed `Opus` from `TranslationNmtcpp.ModelTypes`. Passing `modelType: 'Opus'` to the constructor now throws a deprecation error recommending `ModelTypes.Bergamot` instead.
+
+### Removed
+
+- `Opus` property from `static ModelTypes` object
+- `readonly Opus: "Opus"` from TypeScript declarations
+- Opus GGML integration test (`ggml-opus.test.js`)
+- `runGgmlOpus` function from mobile test runner
+
+### Added
+
+- Deprecation guard in constructor for `modelType === 'Opus'`
+- Unit tests for Opus deprecation behavior (`opus-deprecation.test.js`)
+
 ## [0.6.1] - 2026-03-11
 
 This release fixes a critical issue where pivot translation would hang indefinitely after completing the translation. The fix ensures proper job completion signaling for pivot translation workflows in Bergamot models.

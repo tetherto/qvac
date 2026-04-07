@@ -22,6 +22,7 @@ permissions:
   contents: read
   pull-requests: read
   packages: read
+  id-token: write
 
 jobs:
   authorize:
@@ -185,7 +186,6 @@ jobs:
     with:
       repository: ${{ github.event.pull_request.head.repo.full_name || github.repository }}
       ref: ${{ github.event.pull_request.head.ref || github.ref }}
-      publish_target: "gpr"
 
   run-integration-tests:
     permissions:

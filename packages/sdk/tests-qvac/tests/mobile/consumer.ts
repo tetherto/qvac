@@ -1,5 +1,5 @@
-import { createExecutor, SkipExecutor } from "@tetherto/qvac-test-suite/mobile";
 import { Platform } from "react-native";
+import { createExecutor, SkipExecutor } from "@tetherto/qvac-test-suite/mobile";
 import {
   profiler,
   LLAMA_3_2_1B_INST_Q4_0,
@@ -347,7 +347,21 @@ export const executor = createExecutor({
     ], "HTTP test disabled on mobile (OOM)"),
     new SkipExecutor(/^tools-(?!simple-function$|no-function-match$)/, "Tools test disabled on mobile"),
     ...(Platform.OS === "ios" ? [
-      new SkipExecutor(/^ocr-/, "OCR test disabled on iOS (OOM)"),
+      skipTests([
+        "ocr-sign-image",
+        "ocr-chart-image",
+        "ocr-no-text-image",
+        "ocr-large-image",
+        "ocr-low-quality",
+        "ocr-mixed-language",
+        "ocr-single-language",
+        "ocr-blurry-text",
+        "ocr-horizontally-inverted",
+        "ocr-vertically-inverted",
+        "ocr-misaligned-text",
+        "ocr-multi-sized-text",
+        "ocr-multiple-fonts",
+      ], "OCR disabled on iOS (ONNX/CoreML OOM)"),
     ] : []),
 
     // Real executors

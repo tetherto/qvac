@@ -42,6 +42,7 @@ permissions:
   pull-requests: read
   packages: read
   checks: read
+  id-token: write
 
 jobs:
   authorize:
@@ -167,8 +168,6 @@ jobs:
     with:
       repository: ${{ needs.context.outputs.repository }}
       ref: ${{ needs.context.outputs.ref }}
-      tag: "dev"
-      publish_target: 'gpr'
 
   run-integration-tests:
     needs: [context, prebuild]
