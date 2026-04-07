@@ -10,33 +10,38 @@ on:
     branches:
       - main
       - release-*
+      - feature-*
+      - tmp-*
     paths:
       - "packages/qvac-lib-infer-nmtcpp/**"
+      - ".github/workflows/*nmtcpp*.yml"
   workflow_dispatch:
 
-concurrency:
-  group: pr-${{ github.event.pull_request.number || github.sha }}
-  cancel-in-progress: true
-
 permissions:
-  contents: write
-  pull-requests: write
-  packages: write
+  contents: read
+  pull-requests: read
+  packages: read
+  id-token: write
 
 env:
   PKG_DIR: packages/qvac-lib-infer-nmtcpp
 
 jobs:
-  release-pr-guard:
-    name: Release PR Guard
-    if: github.event_name == 'pull_request_target' && startsWith(github.event.pull_request.base.ref, 'release-')
-    uses: tetherto/qvac-devops/.github/workflows/release-pr-guard.yml@monorepo_update
-    secrets:
-      github-token: ${{ secrets.GITHUB_TOKEN }}
-    with:
-      package-slug: qvac-lib-infer-nmtcpp
-      package-json-path: packages/qvac-lib-infer-nmtcpp/package.json
-      changelog-path: packages/qvac-lib-infer-nmtcpp/CHANGELOG.md
+  authorize:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      pull-requests: write
+    outputs:
+      allowed: ${{ steps.auth.outputs.allowed }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # 6.0.2
+      - name: Authorize
+        id: auth
+        uses: ./.github/actions/authorize-pr
+        with:
+          github-token: ${{ github.token }}
 
   changes:
     if: github.event_name != 'workflow_dispatch'
@@ -44,104 +49,44 @@ jobs:
     outputs:
       pkg: ${{ steps.filter.outputs.pkg }}
     steps:
-      - uses: dorny/paths-filter@v3
+      - uses: dorny/paths-filter@fbd0ab8f3e69293af611ebaee6363fc25e6d187d # 4.0.1
         id: filter
         with:
           token: ${{ secrets.GITHUB_TOKEN }}
           filters: |
             pkg:
               - "packages/qvac-lib-infer-nmtcpp/**"
+              - ".github/workflows/*nmtcpp*.yml"
 
   sanity-checks:
-    needs: changes
-    if: always() && (needs.changes.outputs.pkg == 'true' || github.event_name == 'workflow_dispatch')
+    needs: [authorize, changes]
+    if: always() && ((needs.changes.outputs.pkg == 'true' && needs.authorize.outputs.allowed == 'true') || github.event_name == 'workflow_dispatch')
     runs-on: ubuntu-latest
-    permissions:
-      contents: read
+    environment: release
     steps:
-      - uses: actions/checkout@v4
+      - name: Run Sanity checks
+        uses: tetherto/qvac-devops/.github/actions/sanity-checks@v1.1.7
         with:
-          fetch-depth: 0
-          token: ${{ secrets.GITHUB_TOKEN }}
-          repository: ${{ github.event.pull_request.head.repo.full_name }}
-          ref: ${{ github.event.pull_request.head.ref }}
-
-      - name: Fetch PR head and target branch
-        id: fetch_pr
-        if: github.event_name == 'pull_request_target' || github.event_name == 'pull_request'
-        continue-on-error: true
-        run: |
-          git fetch origin ${{ github.event.pull_request.base.ref }}:refs/remotes/origin/${{ github.event.pull_request.base.ref }}
-          git fetch origin ${{ github.event.pull_request.head.sha }}:refs/pr/head
-
-      - name: Check PR Status with Target Branch
-        continue-on-error: true
-        id: target_branch_checks
-        if: github.event_name == 'pull_request_target' || github.event_name == 'pull_request'
-        run: |
-          TARGET_SHA=${{ github.event.pull_request.base.sha }}
-          PR_HEAD_SHA=${{ github.event.pull_request.head.sha }}
-          if ! git merge-base --is-ancestor "$TARGET_SHA" "$PR_HEAD_SHA"; then
-            echo "::error title=PR is not up to date::This PR is not up to date with target branch"
-          fi
-
-      - name: Check for disallowed dependencies
-        id: check_dependencies
-        continue-on-error: true
-        working-directory: ${{ env.PKG_DIR }}
-        run: |
-          deps=$(jq -r '.dependencies, .devDependencies // {} | to_entries[] | .value' package.json)
-          if echo "$deps" | grep -Eq '^(git\+https:\/\/github.com|[0-9]+\.[0-9]+\.[0-9]+-(dev|tmp)[^"]*)$'; then
-            echo "::error title=Disallowed dependency detected::Do not use git URLs or dev/tmp versions in dependencies"
-          fi
-
-      - name: Run tests
-        id: run_tests
-        continue-on-error: true
-        uses: tetherto/qvac-devops/.github/actions/run-lint-and-unit-tests@monorepo_update
-        with:
+          secret-token: ${{ secrets.GITHUB_TOKEN }}
           npm-token: ${{ secrets.NPM_TOKEN }}
-          gpr-token: ${{ secrets.GITHUB_TOKEN }}
-          pat-token: ${{ secrets.PAT_TOKEN || secrets.GITHUB_TOKEN }}
-          workdir: ${{ env.PKG_DIR }}
-
-      - name: Check for errors
-        run: |
-          count=0
-          if [ "${{ steps.run_tests.outcome }}" = "failure" ]; then
-            echo "::error::Step - Lint or unit tests failed"
-            count=$((count + 1))
-          fi
-          if [ "${{ steps.check_dependencies.outcome }}" = "failure" ]; then
-            echo "::error::Step - Check for disallowed dependencies failed"
-            count=$((count + 1))
-          fi
-          if [ "${{ steps.target_branch_checks.outcome }}" = "failure" ]; then
-            echo "::error::Step - Check PR Status with Target Branch failed"
-            count=$((count + 1))
-          fi
-          if [ "${{ steps.fetch_pr.outcome }}" = "failure" ]; then
-            echo "::error::Step - Fetch PR head and target branch failed"
-            count=$((count + 1))
-          fi
-          if [ $count -gt 0 ]; then
-            echo "::error::There were $count failed checks"
-            exit 1
-          fi
+          pat-token: ${{ secrets.PAT_TOKEN }}
+          run-integration: ${{ needs.authorize.outputs.allowed == 'true' }}
+          workdir: packages/qvac-lib-infer-nmtcpp
 
   ts-checks:
-    needs: [changes, sanity-checks]
-    if: always() && (needs.changes.outputs.pkg == 'true' || github.event_name == 'workflow_dispatch')
+    needs: [authorize, changes, sanity-checks]
+    if: always() && needs.authorize.outputs.allowed == 'true' && (needs.changes.outputs.pkg == 'true' || github.event_name == 'workflow_dispatch')
     runs-on: ubuntu-latest
+    environment: release
     defaults:
       run:
         working-directory: ${{ env.PKG_DIR }}
     steps:
       - name: Checkout code
-        uses: actions/checkout@v4
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # 6.0.2
 
       - name: Set up Node.js
-        uses: actions/setup-node@v4
+        uses: actions/setup-node@53b83947a5a98c8d113130e565377fae1a50d02f # 6.3.0
         with:
           node-version: 20
 
@@ -163,9 +108,12 @@ jobs:
         run: npm run test:dts
 
   cpp-lint:
-    needs: [changes, sanity-checks]
-    if: always() && (needs.changes.outputs.pkg == 'true' || github.event_name == 'workflow_dispatch')
-    uses: tetherto/qvac-devops/.github/workflows/cpp-lint.yaml@monorepo_update
+    needs: [authorize, changes, sanity-checks]
+    if: |
+      always() &&
+       needs.authorize.outputs.allowed == 'true' &&
+      (needs.changes.outputs.pkg == 'true' || github.event_name == 'workflow_dispatch')
+    uses: tetherto/qvac-devops/.github/workflows/cpp-lint.yaml@v1.1.7
     secrets: inherit
     with:
       sha: ${{ github.event.pull_request.base.sha || github.event.before || 'HEAD~1' }}
@@ -173,8 +121,16 @@ jobs:
       workdir: packages/qvac-lib-infer-nmtcpp
 
   cpp-tests:
-    needs: [changes, sanity-checks]
-    if: always() && (needs.changes.outputs.pkg == 'true' || github.event_name == 'workflow_dispatch')
+    needs: [authorize, changes, sanity-checks]
+    permissions:
+      contents: read
+      packages: read
+      pull-requests: write
+      id-token: write
+    if: |
+      always() &&
+      needs.authorize.outputs.allowed == 'true' &&
+      (needs.changes.outputs.pkg == 'true' || github.event_name == 'workflow_dispatch')
     uses: ./.github/workflows/reusable-cpp-tests-qvac-lib-infer-nmtcpp.yml
     secrets: inherit
     with:
@@ -182,31 +138,32 @@ jobs:
       repository: ${{ github.event.pull_request.head.repo.full_name }}
 
   prebuild:
-    needs: [changes, sanity-checks]
+    permissions:
+      contents: write
+      packages: write
+      pull-requests: write
+      id-token: write
+    needs: [authorize, changes, sanity-checks]
     if: |
       always() &&
-      (needs.changes.outputs.pkg == 'true' || github.event_name == 'workflow_dispatch') &&
-      (
-        github.event_name == 'workflow_dispatch' ||
-        contains(github.event.pull_request.labels.*.name, 'verify')
-      )
+      needs.authorize.outputs.allowed == 'true' &&
+      (needs.changes.outputs.pkg == 'true' || github.event_name == 'workflow_dispatch')
     uses: ./.github/workflows/prebuilds-qvac-lib-infer-nmtcpp.yml
     secrets: inherit
     with:
       repository: ${{ github.event.pull_request.head.repo.full_name }}
       ref: ${{ github.event.pull_request.head.ref }}
-      tag: "dev"
-      publish_target: "gpr"
 
   run-integration-tests:
-    needs: [changes, sanity-checks, prebuild]
+    needs: [authorize, changes, sanity-checks, prebuild]
     if: |
       always() &&
-      (needs.changes.outputs.pkg == 'true' || github.event_name == 'workflow_dispatch') &&
-      (
-        github.event_name == 'workflow_dispatch' ||
-        contains(github.event.pull_request.labels.*.name, 'verify')
-      )
+      needs.authorize.outputs.allowed == 'true' &&
+      (needs.changes.outputs.pkg == 'true' || github.event_name == 'workflow_dispatch')
+    permissions:
+      contents: read
+      packages: read
+      id-token: write
     uses: ./.github/workflows/integration-test-qvac-lib-infer-nmtcpp.yml
     secrets: inherit
     with:
@@ -214,14 +171,16 @@ jobs:
       ref: ${{ github.event.pull_request.head.ref }}
 
   run-mobile-integration-tests:
-    needs: [changes, sanity-checks, prebuild]
+    permissions:
+      contents: read
+      packages: read
+      pull-requests: write # Allow commenting on PRs
+      id-token: write
+    needs: [authorize, changes, sanity-checks, prebuild]
     if: |
       always() &&
-      (needs.changes.outputs.pkg == 'true' || github.event_name == 'workflow_dispatch') &&
-      (
-        github.event_name == 'workflow_dispatch' ||
-        contains(github.event.pull_request.labels.*.name, 'verify')
-      )
+      needs.authorize.outputs.allowed == 'true' &&
+      (needs.changes.outputs.pkg == 'true' || github.event_name == 'workflow_dispatch')
     uses: ./.github/workflows/integration-mobile-test-qvac-lib-infer-nmtcpp.yml
     secrets: inherit
     with:
@@ -231,6 +190,7 @@ jobs:
   merge-guard:
     needs:
       [
+        authorize,
         changes,
         sanity-checks,
         ts-checks,
@@ -241,9 +201,8 @@ jobs:
         run-mobile-integration-tests,
       ]
     if: always() && (needs.changes.outputs.pkg == 'true' || github.event_name == 'workflow_dispatch')
-    uses: tetherto/qvac-devops/.github/workflows/public-pr.yml@monorepo_update
+    uses: tetherto/qvac-devops/.github/workflows/public-pr.yml@v1.1.7
     with:
       sanity-checks-status: ${{ needs.sanity-checks.result == 'success' && needs.cpp-tests.result == 'success' && needs.ts-checks.result == 'success' }}
       build-status: ${{ needs.prebuild.result == 'success' }}
       integration-tests-status: ${{ needs.run-integration-tests.result == 'success' }}
-    secrets: inherit

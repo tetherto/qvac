@@ -1,16 +1,9 @@
+# Build-only workflow. Publishing is handled by on-merge-qvac-lib-infer-whispercpp.yml
 name: "Prebuilds (Whispercpp)"
 
 on:
   workflow_dispatch:
     inputs:
-      tag:
-        description: "Tag to publish with ('latest' by default)"
-        required: true
-        default: "latest"
-        type: choice
-        options:
-          - latest
-          - dev
       workdir:
         description: "Working directory"
         required: false
@@ -26,35 +19,21 @@ on:
         type: string
         required: false
         default: "tetherto/qvac"
-      tar-run-id:
-        type: string
-        required: false
-        default: "on-mlc-whisper"
-      tag:
-        description: "Tag to publish"
-        type: string
-        required: false
-        default: "dev"
-      publish_target:
-        description: "Where to publish (npm or gpr)"
-        type: string
-        required: false
-        default: ""
       workdir:
         description: "Working directory"
         type: string
         required: false
         default: "packages/qvac-lib-infer-whispercpp"
-    outputs:
-      published_version:
-        description: "The version that was published"
-        value: ${{ jobs.publish-gpr.outputs.published_version || jobs.publish-npm.outputs.published_version }}
+
+permissions:
+  contents: read
 
 jobs:
   prebuild:
     permissions:
       contents: write
       pull-requests: write
+      id-token: write
       packages: write
     strategy:
       fail-fast: false
@@ -94,6 +73,7 @@ jobs:
             arch: x64
 
     runs-on: ${{ matrix.os }}
+    environment: release
     name: ${{ matrix.platform }}-${{ matrix.arch }}${{ matrix.tags }}
 
     env:
@@ -119,17 +99,23 @@ jobs:
 
       - name: Echo workflow inputs
         shell: bash
+        env:
+          INPUT_WORKDIR: ${{ env.WORKDIR }}
+          INPUT_REF: ${{ inputs.ref || github.ref }}
+          INPUT_REPO: ${{ inputs.repository || github.repository }}
+          MATRIX_PLATFORM: ${{ matrix.platform }}
+          MATRIX_ARCH: ${{ matrix.arch }}
+          MATRIX_TAGS: ${{ matrix.tags }}
         run: |
           echo "Workflow inputs:"
-          echo "Workdir: ${{ env.WORKDIR }}"
-          echo "Tag: ${{ inputs.tag || github.event.inputs.tag }}"
-          echo "Ref: ${{ inputs.ref || github.ref }}"
-          echo "Repository: ${{ inputs.repository || github.repository }}"
-          echo "Matrix platform: ${{ matrix.platform }}"
-          echo "Matrix arch: ${{ matrix.arch }}"
-          echo "Matrix tags: ${{ matrix.tags }}"
+          echo "Workdir: $INPUT_WORKDIR"
+          echo "Ref: $INPUT_REF"
+          echo "Repository: $INPUT_REPO"
+          echo "Matrix platform: $MATRIX_PLATFORM"
+          echo "Matrix arch: $MATRIX_ARCH"
+          echo "Matrix tags: $MATRIX_TAGS"
 
-      - if: ${{ matrix.os == 'windows-2022' }}
+      - if: ${{ matrix.platform == 'win32' }}
         name: Configure windows runner
         run: |
           git config --system core.longpaths true
@@ -143,7 +129,7 @@ jobs:
           $ccachePath = $ccacheBin.DirectoryName
           echo "$ccachePath" | Out-File -FilePath $env:GITHUB_PATH -Encoding utf8 -Append
 
-      - if: ${{ matrix.os == 'windows-2022' }}
+      - if: ${{ matrix.platform == 'win32' }}
         name: Configure ccache on Windows
         shell: bash
         run: |
@@ -153,26 +139,26 @@ jobs:
           echo "CMAKE_C_COMPILER_LAUNCHER=ccache" >> $GITHUB_ENV
           echo "CMAKE_CXX_COMPILER_LAUNCHER=ccache" >> $GITHUB_ENV
 
-      - if: ${{ matrix.os == 'windows-2022' }}
+      - if: ${{ matrix.platform == 'win32' }}
         name: Get ccache cache (Windows)
-        uses: actions/cache@v4
+        uses: actions/cache@668228422ae6a00e4ad889ee87cd7109ec5666a7 # 5.0.4
         with:
-          path: ~\AppData\Local\ccache
           key: ccache-${{ matrix.platform }}-${{ matrix.arch }}-${{ matrix.tags }}-${{ hashFiles(format('{0}/vcpkg.json', inputs.workdir)) }}
+          path: ~\AppData\Local\ccache
           restore-keys: |
             ccache-${{ matrix.platform }}-${{ matrix.arch }}-${{ matrix.tags }}-
             ccache-${{ matrix.platform }}-${{ matrix.arch }}-
 
       - name: Checkout repository
-        uses: actions/checkout@v4
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # 6.0.2
         with:
-          token: ${{ secrets.PAT_TOKEN }}
-          ref: ${{ inputs.ref || github.ref }}
           repository: ${{ inputs.repository || github.repository }}
+          ref: ${{ inputs.ref || github.ref }}
+          token: ${{ secrets.PAT_TOKEN }}
           fetch-depth: 0
 
       - name: Setup node
-        uses: actions/setup-node@v4
+        uses: actions/setup-node@53b83947a5a98c8d113130e565377fae1a50d02f # 6.3.0
         with:
           node-version: lts/*
 
@@ -210,7 +196,7 @@ jobs:
         run: |
           npm install -g bare bare-make
 
-      - if: ${{ matrix.os == 'windows-2022' && matrix.arch == 'arm64' }}
+      - if: ${{ matrix.platform == 'win32' && matrix.arch == 'arm64' }}
         name: Rename win sdk folder to disable it
         run: |
           Rename-Item -Path "C:\Program Files (x86)\Windows Kits\10\Include\10.0.26100.0" -NewName "C:\Program Files (x86)\Windows Kits\10\Include\old-10.0.26100.0"
@@ -231,24 +217,36 @@ jobs:
         name: Configure vcpkg in linux (standard runner)
         run: echo "VCPKG_ROOT=$VCPKG_INSTALLATION_ROOT" >> $GITHUB_ENV
 
-      - if: ${{ matrix.os == 'windows-2022' }}
-        name: Configure vcpkg in windows
-        run: echo ("VCPKG_ROOT=$env:VCPKG_INSTALLATION_ROOT" -replace '\\', '/') >> $env:GITHUB_ENV
+      - if: ${{ matrix.platform == 'win32' }}
+        name: Install vcpkg in windows
+        shell: powershell
+        run: |
+          if ($env:VCPKG_INSTALLATION_ROOT -and (Test-Path $env:VCPKG_INSTALLATION_ROOT)) {
+            $vcpkgRoot = $env:VCPKG_INSTALLATION_ROOT -replace '\\', '/'
+          } else {
+            cd ..
+            git clone --branch 2025.12.12 --single-branch https://github.com/microsoft/vcpkg.git
+            cd vcpkg
+            .\bootstrap-vcpkg.bat -disableMetrics
+            $vcpkgRoot = (Get-Location).Path -replace '\\', '/'
+          }
+          echo "VCPKG_ROOT=$vcpkgRoot" >> $env:GITHUB_ENV
+          echo $vcpkgRoot >> $env:GITHUB_PATH
 
-      - if: ${{ matrix.os == 'windows-2022' }}
+      - if: ${{ matrix.platform == 'win32' }}
         name: Configure cmake generator in windows
         run: echo "CMAKE_GENERATOR=Visual Studio 17 2022" >> $env:GITHUB_ENV
 
-      - if: ${{ matrix.os == 'windows-2022' && matrix.arch == 'x64' }}
+      - if: ${{ matrix.platform == 'win32' && matrix.arch == 'x64' }}
         run: echo "CMAKE_GENERATOR_PLATFORM=x64" >> $env:GITHUB_ENV
 
-      - if: ${{ matrix.os == 'windows-2022' && matrix.arch == 'x86' }}
+      - if: ${{ matrix.platform == 'win32' && matrix.arch == 'x86' }}
         run: echo "CMAKE_GENERATOR_PLATFORM=Win32" >> $env:GITHUB_ENV
 
-      - if: ${{ matrix.os == 'windows-2022' && matrix.arch == 'arm64' }}
+      - if: ${{ matrix.platform == 'win32' && matrix.arch == 'arm64' }}
         run: echo "CMAKE_GENERATOR_PLATFORM=ARM64" >> $env:GITHUB_ENV
 
-      - if: ${{ matrix.os == 'windows-2022' }}
+      - if: ${{ matrix.platform == 'win32' }}
         name: Disable parallel configuration for Visual Studio generator
         run: echo "VCPKG_CMAKE_CONFIGURE_OPTIONS=--no-parallel-configure" >> $env:GITHUB_ENV
 
@@ -265,13 +263,6 @@ jobs:
           chmod +x llvm.sh
           sudo ./llvm.sh 19 all
 
-      - if: ${{ matrix.os == 'ubuntu-22.04' }}
-        name: Install g++-13 on Ubuntu 22.04
-        run: |
-          sudo add-apt-repository ppa:ubuntu-toolchain-r/test
-          sudo apt update
-          sudo apt install -y g++-13
-
       - if: ${{ startsWith(matrix.os, 'ubuntu') }}
         name: Install ccache on Linux
         run: sudo apt-get install -y ccache
@@ -280,7 +271,7 @@ jobs:
         name: Install ccache on macOS
         run: brew install ccache
 
-      - if: ${{ matrix.os != 'windows-2022' }}
+      - if: ${{ matrix.platform != 'win32' }}
         name: Configure ccache
         run: |
           ccache --set-config=max_size=2G
@@ -289,12 +280,12 @@ jobs:
           echo "CMAKE_C_COMPILER_LAUNCHER=ccache" >> $GITHUB_ENV
           echo "CMAKE_CXX_COMPILER_LAUNCHER=ccache" >> $GITHUB_ENV
 
-      - if: ${{ matrix.os != 'windows-2022' }}
+      - if: ${{ matrix.platform != 'win32' }}
         name: Get ccache cache
-        uses: actions/cache@v4
+        uses: actions/cache@668228422ae6a00e4ad889ee87cd7109ec5666a7 # 5.0.4
         with:
-          path: ~/.cache/ccache
           key: ccache-${{ matrix.platform }}-${{ matrix.arch }}${{ matrix.tags }}-${{ hashFiles(format('{0}/vcpkg.json', inputs.workdir)) }}
+          path: ~/.cache/ccache
           restore-keys: |
             ccache-${{ matrix.platform }}-${{ matrix.arch }}${{ matrix.tags }}-
             ccache-${{ matrix.platform }}-${{ matrix.arch }}-
@@ -322,12 +313,42 @@ jobs:
           echo "VULKAN_SDK=$VULKAN_SDK" >> $GITHUB_ENV
 
       - if: ${{ matrix.platform == 'linux' && matrix.arch == 'arm64' }}
+        name: Configure AWS credentials via OIDC
+        uses: aws-actions/configure-aws-credentials@8df5847569e6427dd6c4fb1cf565c83acfa8afa7 # 6.0.0
+        with:
+          role-to-assume: ${{ secrets.AWS_OIDC_ROLE_ARN }}
+          aws-region: eu-central-1
+
+      - if: ${{ matrix.platform == 'linux' && matrix.arch == 'arm64' }}
         name: Setup vulkan sdk path in linux arm64
         run: |
           VULKAN_SDK=~/vulkan/aarch64
           echo "VULKAN_SDK=$VULKAN_SDK" >> $GITHUB_ENV
+
           cd ~/vulkan
-          ./vulkansdk --maxjobs
+
+          # Extract SDK major.minor version from README.txt (e.g., "1.4" from "1.4.341.0")
+          SDK_VERSION=$(grep -o 'sdk/[0-9]*\.[0-9]*' README.txt | head -1 | sed 's|sdk/||')
+          S3_BUCKET="${{ secrets.MODEL_S3_BUCKET }}"
+          S3_KEY="vulkan-sdk-cache/linux-arm64-${SDK_VERSION}.tar.gz"
+
+          echo "Vulkan SDK version: ${SDK_VERSION}"
+
+          # Try to download cached build from S3
+          if aws s3 cp "s3://${S3_BUCKET}/${S3_KEY}" /tmp/vulkan-arm64-cache.tar.gz 2>/dev/null; then
+            echo "Found cached Vulkan SDK, extracting..."
+            tar xzf /tmp/vulkan-arm64-cache.tar.gz -C ~/vulkan
+            rm /tmp/vulkan-arm64-cache.tar.gz
+          else
+            echo "No cache found, building Vulkan SDK for ARM64..."
+            ./vulkansdk --maxjobs
+
+            # Upload the compiled SDK to S3 for future runs
+            echo "Uploading compiled SDK to S3..."
+            tar czf /tmp/vulkan-arm64-cache.tar.gz aarch64
+            aws s3 cp /tmp/vulkan-arm64-cache.tar.gz "s3://${S3_BUCKET}/${S3_KEY}"
+            rm /tmp/vulkan-arm64-cache.tar.gz
+          fi
 
       - if: ${{ matrix.platform == 'linux' }}
         name: Export rest of vulkan sdk variables in linux
@@ -362,14 +383,14 @@ jobs:
 
       - name: Get vcpkg cache
         id: cache-vcpkg
-        uses: actions/cache@v4
+        uses: actions/cache@668228422ae6a00e4ad889ee87cd7109ec5666a7 # 5.0.4
         with:
-          path: ${{ inputs.workdir }}/vcpkg/cache
           key: vcpkg-v2-${{ matrix.platform }}-${{ matrix.arch }}${{ matrix.tags }}-${{ hashFiles(
             format('{0}/vcpkg.json', inputs.workdir),
             format('{0}/vcpkg-configuration.json', inputs.workdir),
             format('{0}/vcpkg/ports/**', inputs.workdir)
            ) }}
+          path: ${{ inputs.workdir }}/vcpkg/cache
           restore-keys: |
             vcpkg-v2-${{ matrix.platform }}-${{ matrix.arch }}${{ matrix.tags }}-
             vcpkg-v2-${{ matrix.platform }}-${{ matrix.arch }}-
@@ -403,7 +424,7 @@ jobs:
       - name: Show ccache stats
         run: ccache -s
 
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@bbbca2ddaa5d8feaa63e36b76fdaad77386f024f # 7.0.0
         with:
           name: whisper-cpp-${{ matrix.platform }}-${{ matrix.arch }}${{ matrix.tags }}
           path: ${{ inputs.workdir }}/prebuilds
@@ -413,157 +434,14 @@ jobs:
     needs: prebuild
     steps:
       - name: Download all build artifacts
-        uses: actions/download-artifact@v4
+        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # 8.0.1
         with:
           path: prebuilds
           merge-multiple: true
 
       - name: Upload merged artifacts
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@bbbca2ddaa5d8feaa63e36b76fdaad77386f024f # 7.0.0
         with:
           name: prebuilds
           path: prebuilds
 
-  publish-gpr:
-    needs: [ prebuild, merge ]
-    if: ${{ inputs.publish_target == 'gpr'
-      || inputs.publish_target == 'both'
-      || (
-          (github.event_name == 'workflow_dispatch' || github.event_name == 'workflow_call' || github.event_name == 'push')
-          && (inputs.publish_target == '' || inputs.publish_target == null)
-          && (
-            github.ref_name == 'main'
-            || startsWith(github.ref_name, 'feature-')
-            || startsWith(github.ref_name, 'tmp-')
-            || (inputs.ref != '' && (
-                  inputs.ref == 'refs/heads/main'
-                  || startsWith(inputs.ref, 'refs/heads/feature-')
-                  || startsWith(inputs.ref, 'refs/heads/tmp-')
-                ))
-          )
-        ) }}
-    continue-on-error: true
-    outputs:
-      published_version: ${{ steps.capture_version.outputs.published_version }}
-    runs-on: ubuntu-latest
-    permissions:
-      contents: read
-      packages: write
-    env:
-      WORKDIR: ${{ inputs.workdir || 'packages/qvac-lib-infer-whispercpp' }}
-    steps:
-      - name: Checkout repository
-        uses: actions/checkout@v4
-        with:
-          token: ${{ secrets.PAT_TOKEN }}
-          fetch-depth: 0
-
-      - name: Download prebuild artifacts
-        uses: actions/download-artifact@v4
-        with:
-          name: prebuilds
-          path: /tmp/prebuilds
-
-      - name: Place merged prebuilds into package workdir
-        shell: bash
-        run: |
-          set -euo pipefail
-          mkdir -p "${WORKDIR}/prebuilds"
-          rm -rf "${WORKDIR}/prebuilds"/*
-          cp -R /tmp/prebuilds/* "${WORKDIR}/prebuilds/"
-
-      - name: Rename prebuild files from qvac_ to tetherto_ prefix
-        shell: bash
-        run: |
-          set -euo pipefail
-          cd "${WORKDIR}"
-
-          find prebuilds -depth -name 'qvac_*' | while read -r file; do
-            dir=$(dirname "$file")
-            base=$(basename "$file")
-            newbase=$(echo "$base" | sed 's/^qvac_/tetherto_/')
-            mv "$file" "$dir/$newbase"
-          done
-
-          if [ -f binding.js ]; then
-            sed -i 's/qvac_/tetherto_/g' binding.js
-          fi
-
-      - name: Publish to GitHub Package Registry
-        id: publish
-        uses: tetherto/qvac-devops/.github/actions/publish-library-to-gpr@monorepo_update
-        with:
-          secret-token: ${{ secrets.GITHUB_TOKEN }}
-          tag: ${{ inputs.tag || github.event.inputs.tag || 'dev' }}
-          workdir: ${{ inputs.workdir }}
-          name-suffix: "-mono"
-
-      - name: Capture published version
-        id: capture_version
-        if: success()
-        env:
-          NODE_AUTH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        shell: bash
-        run: |
-          set -euo pipefail
-          cd "${WORKDIR}"
-          echo "//npm.pkg.github.com/:_authToken=${NODE_AUTH_TOKEN}" >> .npmrc
-
-          VERSION=$(node -p "require('./package.json').version")
-          PACKAGE_NAME=$(node -p "require('./package.json').name")
-          PACKAGE_NAME_GPR=$(echo "$PACKAGE_NAME" | sed 's/@qvac/@tetherto/')
-
-          if npm view "${PACKAGE_NAME_GPR}@${VERSION}" version --registry=https://npm.pkg.github.com/ >/dev/null 2>&1; then
-            echo "published_version=${VERSION}" >> "$GITHUB_OUTPUT"
-          fi
-
-  publish-npm:
-    needs: [ prebuild, merge ]
-    if: ${{ inputs.publish_target == 'npm'
-        || inputs.publish_target == 'both'
-        || (
-            (github.event_name == 'workflow_dispatch' || github.event_name == 'workflow_call' || github.event_name == 'push')
-            && (inputs.publish_target == '' || inputs.publish_target == null)
-            && (
-              startsWith(github.ref_name, 'release-')
-              || (inputs.ref != '' && startsWith(inputs.ref, 'refs/heads/release-'))
-            )
-          ) }} 
-    continue-on-error: true
-    outputs:
-      published_version: ${{ steps.capture_version.outputs.published_version }}
-    runs-on: ubuntu-latest
-    permissions:
-      contents: read
-      packages: write
-    env:
-      WORKDIR: ${{ inputs.workdir || 'packages/qvac-lib-infer-whispercpp' }}
-    steps:
-      - name: Checkout repository
-        uses: actions/checkout@v4
-        with:
-          token: ${{ secrets.PAT_TOKEN }}
-          fetch-depth: 0
-
-      - name: Publish to NPM Package Registry
-        id: publish
-        uses: tetherto/qvac-devops/.github/actions/publish-library-to-npm@monorepo_update
-        with:
-          secret-token: ${{ secrets.NPM_TOKEN }}
-          tag: "latest"
-
-      - name: Capture published version
-        id: capture_version
-        working-directory: ${{ env.WORKDIR }}
-        if: success()
-        shell: bash
-        run: |
-          set -euo pipefail
-          cd "${WORKDIR}"
-
-          VERSION=$(node -p "require('./package.json').version")
-          PACKAGE_NAME=$(node -p "require('./package.json').name")
-
-          if npm view "${PACKAGE_NAME}@${VERSION}" version >/dev/null 2>&1; then
-            echo "published_version=${VERSION}" >> "$GITHUB_OUTPUT"
-          fi

@@ -2,114 +2,222 @@ name: On PR Trigger (Whispercpp)
 
 on:
   pull_request_target:
-    types:
-      - opened
-      - synchronize
-      - reopened
-      - labeled
-    branches:
-      - main
-      - release-*
+    types: [opened, synchronize, reopened, labeled]
+    branches: [main, release-*, feature-*, tmp-*]
     paths:
       - "packages/qvac-lib-infer-whispercpp/**"
-  workflow_dispatch:
-  workflow_call:
+      - ".github/workflows/*whispercpp*.yml"
 
-concurrency:
-  group: pr-${{ github.event.pull_request.number || github.sha }}
-  cancel-in-progress: true
+  workflow_dispatch:
+    inputs:
+      repository:
+        description: "Repo to build (owner/name). Defaults to this repo."
+        required: false
+        type: string
+      ref:
+        description: "Git ref (branch/tag/SHA). Defaults to current ref."
+        required: false
+        type: string
+      run_verify:
+        description: "Treat this run like a 'verify' run (prebuild + integration)."
+        required: false
+        type: boolean
+        default: true
+      workdir:
+        description: "Package working directory in monorepo."
+        required: false
+        type: string
+        default: "packages/qvac-lib-infer-whispercpp"
+
+  workflow_call:
+    inputs:
+      repository:
+        required: false
+        type: string
+      ref:
+        required: false
+        type: string
+      run_verify:
+        required: false
+        type: boolean
+        default: true
+      workdir:
+        required: false
+        type: string
+        default: "packages/qvac-lib-infer-whispercpp"
 
 permissions:
-  contents: write
-  pull-requests: write
-  packages: write
-  checks: write
-
-env:
-  PKG_DIR: packages/qvac-lib-infer-whispercpp
+  contents: read
+  pull-requests: read
+  packages: read
+  checks: read
+  id-token: write
 
 jobs:
-  release-pr-guard:
-    name: Release PR Guard
-    if: github.event_name == 'pull_request' && startsWith(github.base_ref, 'release-')
-    uses: tetherto/qvac-devops/.github/workflows/release-pr-guard.yml@monorepo_update
-    secrets:
-      github-token: ${{ secrets.GITHUB_TOKEN }}
-    with:
-      package-slug: qvac-lib-infer-whispercpp
-      package-json-path: packages/packages/qvac-lib-infer-whispercpp/package.json
-      changelog-path: packages/qvac-lib-infer-whispercpp/CHANGELOG.md
+  authorize:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      pull-requests: write
+    outputs:
+      allowed: ${{ steps.auth.outputs.allowed }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # 6.0.2
+      - name: Authorize
+        id: auth
+        uses: ./.github/actions/authorize-pr
+        with:
+          github-token: ${{ github.token }}
+
+  context:
+    needs: authorize
+    if: needs.authorize.outputs.allowed == 'true'
+    name: Resolve Context
+    runs-on: ubuntu-latest
+    outputs:
+      repository: ${{ steps.ctx.outputs.repository }}
+      ref: ${{ steps.ctx.outputs.ref }}
+      base_sha: ${{ steps.ctx.outputs.base_sha }}
+      head_sha: ${{ steps.ctx.outputs.head_sha }}
+      run_verify: ${{ steps.ctx.outputs.run_verify }}
+      workdir: ${{ steps.ctx.outputs.workdir }}
+    steps:
+      - id: ctx
+        shell: bash
+        env:
+          EVENT_NAME: ${{ github.event_name }}
+          HEAD_REPO: ${{ github.event.pull_request.head.repo.full_name }}
+          HEAD_REF: ${{ github.event.pull_request.head.ref }}
+          HEAD_SHA: ${{ github.event.pull_request.head.sha }}
+          BASE_SHA: ${{ github.event.pull_request.base.sha }}
+          INPUT_WORKDIR: ${{ inputs.workdir }}
+          INPUT_REPO: ${{ inputs.repository }}
+          INPUT_REF: ${{ inputs.ref }}
+          INPUT_VERIFY: ${{ inputs.run_verify }}
+          REPO: ${{ github.repository }}
+          REF_NAME: ${{ github.ref_name }}
+          SHA: ${{ github.sha }}
+        run: |
+          set -euo pipefail
+
+          if [[ "$EVENT_NAME" == "workflow_dispatch" || "$EVENT_NAME" == "workflow_call" ]]; then
+            workdir="${INPUT_WORKDIR:-packages/qvac-lib-infer-whispercpp}"
+            repo="${INPUT_REPO:-$REPO}"
+            ref="${INPUT_REF:-$REF_NAME}"
+            run_verify="$INPUT_VERIFY"
+            base_sha="$SHA"
+            head_sha="$SHA"
+          else
+            workdir="packages/qvac-lib-infer-whispercpp"
+            repo="$HEAD_REPO"
+            ref="$HEAD_REF"
+            run_verify="true"
+            base_sha="$BASE_SHA"
+            head_sha="$HEAD_SHA"
+          fi
+
+          echo "repository=$repo" >> "$GITHUB_OUTPUT"
+          echo "ref=$ref" >> "$GITHUB_OUTPUT"
+          echo "base_sha=$base_sha" >> "$GITHUB_OUTPUT"
+          echo "head_sha=$head_sha" >> "$GITHUB_OUTPUT"
+          echo "run_verify=$run_verify" >> "$GITHUB_OUTPUT"
+          echo "workdir=$workdir" >> "$GITHUB_OUTPUT"
+
+          echo "Resolved:"
+          echo "  repo=$repo"
+          echo "  ref=$ref"
+          echo "  base_sha=$base_sha"
+          echo "  head_sha=$head_sha"
+          echo "  run_verify=$run_verify"
+          echo "  workdir=$workdir"
 
   sanity-checks:
+    if: needs.authorize.outputs.allowed == 'true'
+    needs: [authorize, context]
     runs-on: ubuntu-latest
+    environment: release
     steps:
       - name: Run Sanity checks
-        uses: tetherto/qvac-devops/.github/actions/sanity-checks@monorepo_update
+        uses: tetherto/qvac-devops/.github/actions/sanity-checks@v1.1.7
         with:
           secret-token: ${{ secrets.GITHUB_TOKEN }}
           npm-token: ${{ secrets.NPM_TOKEN }}
           pat-token: ${{ secrets.PAT_TOKEN }}
-          run-integration: ${{ contains( github.event.pull_request.labels.*.name, 'verify') }}
-          workdir: packages/qvac-lib-infer-whispercpp
-
-  release-notes-check:
-    uses: ./.github/workflows/release-notes-check-qvac-lib-infer-whispercpp.yml
-    secrets: inherit
-    with:
-      repository: ${{ github.event.pull_request.head.repo.full_name }}
-      ref: ${{ github.event.pull_request.head.ref }}
+          run-integration: ${{ needs.authorize.outputs.allowed == 'true' }}
+          workdir: ${{ needs.context.outputs.workdir }}
 
   cpp-lint:
-    if: contains( github.event.pull_request.labels.*.name, 'verify') || github.event_name == 'workflow_dispatch'
-    uses: tetherto/qvac-devops/.github/workflows/cpp-lint.yaml@monorepo_update
+    needs: [authorize, context]
+    if: needs.authorize.outputs.allowed == 'true'
+    uses: tetherto/qvac-devops/.github/workflows/cpp-lint.yaml@v1.1.7
     secrets: inherit
     with:
-      sha: ${{ github.event.pull_request.base.sha }}
-      pr_head_sha: ${{ github.event.pull_request.head.sha }}
+      sha: ${{ needs.context.outputs.base_sha }}
+      pr_head_sha: ${{ needs.context.outputs.head_sha }}
+      workdir: ${{ needs.context.outputs.workdir }}
 
   cpp-tests-coverage:
-    if: contains( github.event.pull_request.labels.*.name, 'verify') || github.event_name == 'workflow_dispatch'
-    uses: ./.github/workflows/cpp-tests-whisper.cpp.yml
+    permissions:
+      contents: read
+      packages: read
+      checks: write
+      pull-requests: write
+    needs: [authorize, context]
+    if: needs.authorize.outputs.allowed == 'true'
+    uses: ./.github/workflows/cpp-test-coverage-qvac-lib-infer-whispercpp.yml
     secrets: inherit
     with:
-      repository: ${{ github.event.pull_request.head.repo.full_name }}
-      ref: ${{ github.event.pull_request.head.ref }}
+      repository: ${{ needs.context.outputs.repository }}
+      ref: ${{ needs.context.outputs.ref }}
 
   prebuild:
-    if: contains( github.event.pull_request.labels.*.name, 'verify') || github.event_name == 'workflow_dispatch'
+    permissions:
+      contents: write
+      packages: write
+      pull-requests: write
+      id-token: write
+    needs: [authorize, context]
+    if: needs.authorize.outputs.allowed == 'true'
     uses: ./.github/workflows/prebuilds-qvac-lib-infer-whispercpp.yml
     secrets: inherit
     with:
-      repository: ${{ github.event.pull_request.head.repo.full_name }}
-      ref: ${{ github.event.pull_request.head.ref }}
-      tag: "dev"
-      publish_target: 'gpr'
+      repository: ${{ needs.context.outputs.repository }}
+      ref: ${{ needs.context.outputs.ref }}
 
   run-integration-tests:
-    if: contains( github.event.pull_request.labels.*.name, 'verify') || github.event_name == 'workflow_dispatch'
-    needs: [sanity-checks, prebuild]
+    permissions:
+      contents: read
+      packages: read
+      id-token: write
+    needs: [authorize, context, prebuild]
+    if: needs.authorize.outputs.allowed == 'true'
     uses: ./.github/workflows/integration-test-qvac-lib-infer-whispercpp.yml
     secrets: inherit
     with:
-      repository: ${{ github.event.pull_request.head.repo.full_name }}
-      ref: ${{ github.event.pull_request.head.ref }}
+      repository: ${{ needs.context.outputs.repository }}
+      ref: ${{ needs.context.outputs.ref }}
+      workdir: ${{ needs.context.outputs.workdir }}
 
   run-mobile-integration-tests:
-    if: contains( github.event.pull_request.labels.*.name, 'verify') || github.event_name == 'workflow_dispatch'
-    needs: [sanity-checks, prebuild]
+    permissions:
+      contents: read
+      packages: read
+      pull-requests: write # Allow commenting on PRs
+      id-token: write
+    needs: [authorize, context, prebuild]
+    if: needs.authorize.outputs.allowed == 'true'
     uses: ./.github/workflows/integration-mobile-test-qvac-lib-infer-whispercpp.yml
     secrets: inherit
     with:
-      repository: ${{ github.event.pull_request.head.repo.full_name }}
-      ref: ${{ github.event.pull_request.head.ref }}
+      repository: ${{ needs.context.outputs.repository }}
+      ref: ${{ needs.context.outputs.ref }}
 
   merge-guard:
-    needs: [sanity-checks, release-notes-check, cpp-lint, cpp-tests-coverage, prebuild, run-integration-tests, run-mobile-integration-tests]
+    needs: [authorize, sanity-checks, cpp-lint, cpp-tests-coverage, prebuild, run-integration-tests, run-mobile-integration-tests]
     if: always()
-    uses: tetherto/qvac-devops/.github/workflows/public-pr.yml@monorepo_update
+    uses: tetherto/qvac-devops/.github/workflows/public-pr.yml@v1.1.7
     with:
-      sanity-checks-status: ${{ needs.sanity-checks.result == 'success' && needs.release-notes-check.result == 'success' && (needs.cpp-lint.result == 'success' || needs.cpp-lint.result == 'skipped') && (needs.cpp-tests-coverage.result == 'success' || needs.cpp-tests-coverage.result == 'skipped') }}
+      sanity-checks-status: ${{ needs.sanity-checks.result == 'success' && (needs.cpp-lint.result == 'success' || needs.cpp-lint.result == 'skipped') && (needs.cpp-tests-coverage.result == 'success' || needs.cpp-tests-coverage.result == 'skipped') }}
       build-status: ${{ needs.prebuild.result == 'success' || needs.prebuild.result == 'skipped' }}
       integration-tests-status: ${{ (needs.run-integration-tests.result == 'success' || needs.run-integration-tests.result == 'skipped') && (needs.run-mobile-integration-tests.result == 'success' || needs.run-mobile-integration-tests.result == 'skipped') }}
-    secrets: inherit
- 

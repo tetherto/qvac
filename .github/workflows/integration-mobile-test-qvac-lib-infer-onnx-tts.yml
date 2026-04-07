@@ -23,11 +23,11 @@ on:
         type: string
         required: false
         default: main
-      version:
-        description: "NPM package version to test (default: latest)"
+      package_spec:
+        description: "Package to test (name@version). Use @qvac/tts-onnx@... for npm, @tetherto/tts-onnx@... for GPR"
         type: string
         required: false
-        default: latest
+        default: "@qvac/tts-onnx@latest"
       workdir:
         description: "Relative path to package directory in monorepo"
         type: string
@@ -37,7 +37,7 @@ on:
 env:
   NODE_VERSION: "lts/*"
   ADDON_NAME: "@qvac/tts-onnx"
-  PREBUILD_ARTIFACT_PREFIX: "tts-onnx-" # Prefix for prebuild artifacts (empty string for generic patterns)
+  PREBUILD_ARTIFACT_PREFIX: "onnx-tts-" # Prefix for prebuild artifacts (must match prebuilds workflow upload names)
   TEST_FRAMEWORK_REF: "main" # Branch/tag of qvac-test-addon-mobile framework
   APP_BUNDLE_ID: "io.tether.test.qvac" # Bundle ID for the test app (same for all addons)
   WORKDIR: ${{ inputs.workdir || github.event.inputs.workdir || 'packages/qvac-lib-infer-onnx-tts' }}
@@ -46,17 +46,21 @@ env:
 
 jobs:
   build-and-test:
-    name: Build ${{ matrix.platform }} and Run E2E Tests
+    name: Build ${{ matrix.platform }} and Run E2E Tests (${{ matrix.variant }})
     runs-on: ${{ matrix.runner }}
-    timeout-minutes: 120
+    environment: release
+    timeout-minutes: 210
     continue-on-error: true # Don't block PR merges if tests fail
     permissions:
       contents: read
       packages: read
       pull-requests: write # Allow commenting on PRs
+      id-token: write
     strategy:
       fail-fast: false
       matrix:
+        variant: [q4, q4f16]
+        platform: [Android, iOS]
         include:
           - platform: Android
             os: ubuntu-24.04
@@ -89,25 +93,25 @@ jobs:
           df -h
 
       - name: Checkout addon repository
-        uses: actions/checkout@v4
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # 6.0.2
         with:
-          path: addon
-          ref: ${{ inputs.ref || github.ref }}
           repository: ${{ inputs.repository || github.repository }}
+          ref: ${{ inputs.ref || github.ref }}
           token: ${{ secrets.PAT_TOKEN }}
+          path: addon
           fetch-depth: 0
 
       - name: Checkout mobile test framework
-        uses: actions/checkout@v4
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # 6.0.2
         with:
           repository: tetherto/qvac-test-addon-mobile
+          ref: ${{ env.TEST_FRAMEWORK_REF }}
           token: ${{ secrets.PAT_TOKEN }}
           path: test-framework
-          ref: ${{ env.TEST_FRAMEWORK_REF }}
           fetch-depth: 0
 
       - name: Setup Node.js
-        uses: actions/setup-node@v4
+        uses: actions/setup-node@53b83947a5a98c8d113130e565377fae1a50d02f # 6.3.0
         with:
           node-version: ${{ env.NODE_VERSION }}
 
@@ -151,19 +155,19 @@ jobs:
 
       - name: Download Android prebuilds (from artifacts)
         if: matrix.platform == 'Android' && github.event_name != 'workflow_dispatch'
-        uses: actions/download-artifact@v4
+        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # 8.0.1
         with:
-          pattern: ${{ env.PREBUILD_ARTIFACT_PREFIX }}android-*
           path: ${{ env.ADDON_DIR }}/prebuilds
+          pattern: ${{ env.PREBUILD_ARTIFACT_PREFIX }}android-*
           merge-multiple: true
         continue-on-error: true
 
       - name: Download iOS prebuilds (from artifacts)
         if: matrix.platform == 'iOS' && github.event_name != 'workflow_dispatch'
-        uses: actions/download-artifact@v4
+        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # 8.0.1
         with:
-          pattern: ${{ env.PREBUILD_ARTIFACT_PREFIX }}ios-*
           path: ${{ env.ADDON_DIR }}/prebuilds
+          pattern: ${{ env.PREBUILD_ARTIFACT_PREFIX }}ios-*
           merge-multiple: true
         continue-on-error: true
 
@@ -171,28 +175,45 @@ jobs:
         if: github.event_name == 'workflow_dispatch'
         working-directory: ${{ env.ADDON_DIR }}
         run: |
-          VERSION="${{ inputs.version || 'latest' }}"
-          echo "📦 Downloading ${{ env.ADDON_NAME }}@$VERSION from npm for manual trigger..."
+          PACKAGE_SPEC="${{ inputs.package_spec || '@qvac/tts-onnx@latest' }}"
+          echo "📦 Downloading $PACKAGE_SPEC for manual trigger..."
 
-          # Download package from npm
-          if ! npm pack ${{ env.ADDON_NAME }}@$VERSION; then
-            echo "ERROR: Failed to download version $VERSION from npm"
-            echo "Please check that the version exists at https://www.npmjs.com/package/${{ env.ADDON_NAME }}"
+          # Download package (npm or GPR depending on scope in package_spec)
+          if ! npm pack "$PACKAGE_SPEC"; then
+            echo "ERROR: Failed to download $PACKAGE_SPEC"
+            echo "For npm use @qvac/tts-onnx@<version>, for GPR use @tetherto/tts-onnx@<version>"
             exit 1
           fi
 
           # Extract the tarball (pattern matches any addon name)
           tar -xzf *.tgz
 
-          # Validate prebuilds directory exists
-          if [ ! -d "package/prebuilds" ]; then
+          # Find prebuilds: addon layout has package/prebuilds; mono layout may nest under package/packages/.../prebuilds
+          PREBUILDS_SRC=""
+          if [ -d "package/prebuilds" ]; then
+            PREBUILDS_SRC="package/prebuilds"
+          else
+            # Search for prebuilds under package/ (e.g. mono: package/packages/qvac-lib-infer-onnx-tts/prebuilds)
+            CANDIDATE=$(find package -type d -name prebuilds 2>/dev/null | head -1)
+            if [ -n "$CANDIDATE" ] && [ -d "$CANDIDATE" ]; then
+              PREBUILDS_SRC="$CANDIDATE"
+              echo "Using prebuilds from mono/nested layout: $PREBUILDS_SRC"
+            fi
+          fi
+
+          if [ -z "$PREBUILDS_SRC" ] || [ ! -d "$PREBUILDS_SRC" ]; then
             echo "ERROR: No prebuilds directory found in package"
-            echo "The downloaded package may not contain prebuilt binaries"
+            echo "Contents of downloaded package:"
+            ls -la package/ 2>/dev/null || true
+            find package -type d -name prebuilds 2>/dev/null || true
+            echo ""
+            echo "Use a package that includes prebuilt binaries (e.g. @qvac/tts-onnx, @tetherto/tts-onnx, or @tetherto/tts-onnx-mono with prebuilds)."
             exit 1
           fi
 
           # Move prebuilds to expected location
-          mv package/prebuilds ./prebuilds
+          rm -rf ./prebuilds
+          cp -r "$PREBUILDS_SRC" ./prebuilds
 
           # Cleanup
           rm -rf package *.tgz
@@ -325,8 +346,26 @@ jobs:
         run: |
           echo "Setting up mobile test framework..."
           npm install
-          npm install @qvac/transcription-whispercpp@npm:@tetherto/transcription-whispercpp
           echo "✅ Test framework dependencies installed"
+
+      - name: Inject Variant for Mobile Tests
+        working-directory: ${{ env.ADDON_DIR }}
+        run: |
+          echo "Injecting CHATTERBOX_VARIANT=${{ matrix.variant }} into mobile runtime"
+          
+          # Create a patch to mock os.getEnv for our specific variable
+          echo "
+          const os = require('bare-os');
+          const originalGetEnv = os.getEnv;
+          os.getEnv = function(key) {
+            if (key === 'CHATTERBOX_VARIANT') return '${{ matrix.variant }}';
+            return originalGetEnv ? originalGetEnv.call(this, key) : undefined;
+          };
+          " > test/mobile/inject-env.cjs
+          
+          # Prepend this patch to the integration runtime wrapper
+          cat test/mobile/integration-runtime.cjs >> test/mobile/inject-env.cjs
+          mv test/mobile/inject-env.cjs test/mobile/integration-runtime.cjs
 
       - name: Build test app with addon
         working-directory: ./test-framework
@@ -408,14 +447,14 @@ jobs:
       # Android-specific steps
       - name: Set up JDK 17
         if: matrix.platform == 'Android'
-        uses: actions/setup-java@v4
+        uses: actions/setup-java@be666c2fcd27ec809703dec50e508c2fdc7f6654 # 5.2.0
         with:
-          java-version: "17"
-          distribution: "temurin"
+          java-version: 17
+          distribution: temurin
 
       - name: Setup Android SDK
         if: matrix.platform == 'Android'
-        uses: android-actions/setup-android@v3
+        uses: android-actions/setup-android@9fc6c4e9069bf8d3d10b2204b1fb8f6ef7065407 # 3.2.2
 
       - name: Generate Android project
         if: matrix.platform == 'Android'
@@ -743,10 +782,9 @@ jobs:
           fi
 
       - name: Configure AWS credentials
-        uses: aws-actions/configure-aws-credentials@v3
+        uses: aws-actions/configure-aws-credentials@8df5847569e6427dd6c4fb1cf565c83acfa8afa7 # 6.0.0
         with:
-          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
-          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          role-to-assume: ${{ secrets.AWS_OIDC_ROLE_ARN }}
           aws-region: us-west-2
 
       - name: Upload App to Device Farm
@@ -1116,9 +1154,9 @@ jobs:
 
           # Set run name based on trigger
           if [ "${{ github.event_name }}" == "workflow_dispatch" ]; then
-            RUN_NAME="Manual-${{ github.run_number }}-${{ matrix.platform }}"
+            RUN_NAME="Manual-${{ github.run_number }}-${{ matrix.platform }}-${{ matrix.variant }}"
           else
-            RUN_NAME="PR-${{ github.event.pull_request.number || github.run_number }}-${{ matrix.platform }}"
+            RUN_NAME="PR-${{ github.event.pull_request.number || github.run_number }}-${{ matrix.platform }}-${{ matrix.variant }}"
           fi
 
           echo "🚀 Scheduling Device Farm test run..."
@@ -1144,7 +1182,7 @@ jobs:
           echo "📊 Monitoring test run: $RUN_ARN"
           echo ""
 
-          MAX_WAIT_TIME=7200  # 120 minutes
+          MAX_WAIT_TIME=10800  # 180 minutes (SCHEDULING + RUNNING can exceed on-device duration)
           ELAPSED=0
 
           while true; do
@@ -1320,72 +1358,3 @@ jobs:
           echo "   Your tests: $USER_PASSED passed (out of $USER_TEST_COUNT total)"
           echo "   Device Farm total: $TOTAL | Passed: $PASSED | Failed: $FAILED | Skipped: $SKIPPED"
 
-      - name: Comment PR with results
-        if: always() && github.event.pull_request.number
-        uses: actions/github-script@v7
-        with:
-          github-token: ${{ secrets.GITHUB_TOKEN }}
-          script: |
-            const runArn = '${{ steps.schedule_run.outputs.run_arn }}' || 'N/A';
-            const jobStatus = '${{ job.status }}';
-            const testResult = '${{ steps.monitor_run.outputs.test_result }}' || 'UNKNOWN';
-            const platform = '${{ matrix.platform }}';
-            const prNumber = context.payload.pull_request.number;
-
-            const total = '${{ steps.monitor_run.outputs.test_total }}' || '0';
-            const passed = '${{ steps.monitor_run.outputs.test_passed }}' || '0';
-            const failed = '${{ steps.monitor_run.outputs.test_failed }}' || '0';
-            const skipped = '${{ steps.monitor_run.outputs.test_skipped }}' || '0';
-
-            let emoji = jobStatus === 'success' ? '✅' : '❌';
-            let statusText = jobStatus === 'success' ? 'PASSED' : 'FAILED';
-
-            // Extract PROJECT_ID and RUN_ID from ARN
-            // ARN format: arn:aws:devicefarm:us-west-2:ACCOUNT:run:PROJECT_ID/RUN_ID
-            let deviceFarmLink = 'https://us-west-2.console.aws.amazon.com/devicefarm/home#/mobile/projects';
-            const arnMatch = runArn.match(/:run:([^/]+)\/(.+)$/);
-            if (arnMatch) {
-              const projectId = arnMatch[1];
-              const runId = arnMatch[2];
-              deviceFarmLink = `https://us-west-2.console.aws.amazon.com/devicefarm/home#/mobile/projects/${projectId}/runs/${runId}`;
-            }
-
-            // Build test summary table
-            const testSummary = `
-            | Metric | Count |
-            |--------|-------|
-            | Total Tests | ${total} |
-            | ✅ Passed | ${passed} |
-            | ❌ Failed | ${failed} |
-            | ⏭️ Skipped | ${skipped} |
-            `;
-
-            const comment = `
-            ## ${emoji} E2E Mobile Test Results - ${platform}
-
-            **Overall Status**: ${statusText}
-            **Device Farm Result**: ${testResult}
-            **Platform**: ${platform}
-            **Addon**: ${{ env.ADDON_NAME }}
-            **PR**: #${prNumber}
-            **Commit**: ${context.sha.substring(0, 7)}
-
-            ### Test Summary
-            ${testSummary}
-
-            ### Links
-            - 🔗 **Device Farm Run**: [View on AWS Device Farm](${deviceFarmLink})
-            - 🔗 **Workflow**: [View Details](${context.payload.repository.html_url}/actions/runs/${context.runId})
-            - 📋 **Run ARN**: \`${runArn}\`
-
-            ---
-            *Automated E2E mobile testing powered by AWS Device Farm*
-            *Tests located in: \`test/mobile/\`*
-            `;
-
-            await github.rest.issues.createComment({
-              owner: context.repo.owner,
-              repo: context.repo.repo,
-              issue_number: prNumber,
-              body: comment
-            });

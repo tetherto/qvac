@@ -1,33 +1,9 @@
+# Build-only workflow. Publishing is handled by on-merge-qvac-lib-infer-onnx-tts.yml
 name: Prebuilds (TTS)
 
 on:
-  push:
-    branches:
-      - main
-      - release-*
-      - feature-*
-      - tmp-*
-    paths:
-      - "packages/qvac-lib-infer-onnx-tts/**"
   workflow_dispatch:
     inputs:
-      tag:
-        description: "Tag to publish with ('latest' by default)"
-        required: true
-        default: "latest"
-        type: choice
-        options:
-          - latest
-          - dev
-      publish_target:
-        description: "Target registry to publish to"
-        required: false
-        default: ""
-        type: choice
-        options:
-          - ""
-          - npm
-          - gpr
       workdir:
         description: "Working directory inside the repo (monorepo package path)"
         required: false
@@ -45,48 +21,30 @@ on:
         type: string
         required: false
         default: "tetherto/qvac"
-      tar-run-id:
-        type: string
-        required: false
-        default: "on-onnx-tts"
-      tag:
-        description: "Tag to publish"
-        type: string
-        required: false
-        default: "dev"
-      publish_target:
-        description: "Target registry to publish to (npm or gpr)"
-        type: string
-        required: false
-        default: ""
       workdir:
         description: "Working directory inside the repo (monorepo package path)"
         type: string
         required: false
         default: "packages/qvac-lib-infer-onnx-tts"
 
-    outputs:
-      published_version:
-        description: "Version that was published"
-        value: ${{ jobs.publish-gpr.outputs.published_version || jobs.publish-npm.outputs.published_version }}
-      publish_target:
-        description: "Target registry to publish to (npm or gpr)"
-        value: ${{ inputs.publish_target }}
+permissions:
+  contents: read
 
 jobs:
   prebuild:
     permissions:
       contents: write
       pull-requests: write
+      id-token: write
       packages: write
     strategy:
       fail-fast: false
       matrix:
         include:
-          - os: ubuntu-24.04
+          - os: ubuntu-22.04
             platform: linux
             arch: x64
-          - os: ubuntu-24.04-arm
+          - os: ubuntu-24.04-arm64-private
             platform: linux
             arch: arm64
           - os: ubuntu-24.04
@@ -110,19 +68,48 @@ jobs:
           - os: macos-15
             platform: darwin
             arch: arm64
+          - os: macos-15-large
+            platform: darwin
+            arch: x64
           - os: windows-2022
             platform: win32
             arch: x64
 
     runs-on: ${{ matrix.os }}
+    environment: release
     name: ${{ matrix.platform }}-${{ matrix.arch }}${{ matrix.tags }}
 
     env:
-      VCPKG_BINARY_SOURCES: "clear;files,${{ github.workspace }}/vcpkg/cache,readwrite"
+      # Use AWS S3 as vcpkg binary cache (platform-prefixed for easy cleanup)
+      VCPKG_BINARY_SOURCES: "clear;x-aws,s3://${{ secrets.MODEL_S3_BUCKET }}/vcpkg-cache/onnx-tts/${{ matrix.platform }}-${{ matrix.arch }}/,readwrite"
       VCPKG_BUILD_TYPE: release
+      S3_CACHE_PREFIX: "s3://${{ secrets.MODEL_S3_BUCKET }}/vcpkg-cache/onnx-tts/${{ matrix.platform }}-${{ matrix.arch }}/"
       WORKDIR: ${{ inputs.workdir || github.event.inputs.workdir || 'packages/qvac-lib-infer-onnx-tts' }}
 
     steps:
+      - name: Configure AWS credentials via OIDC
+        uses: aws-actions/configure-aws-credentials@8df5847569e6427dd6c4fb1cf565c83acfa8afa7 # 6.0.0
+        with:
+          role-to-assume: ${{ secrets.AWS_OIDC_ROLE_ARN }}
+          aws-region: eu-central-1
+
+
+      - if: ${{ matrix.platform == 'win32' }}
+        name: Install AWS CLI on self-hosted Windows runner
+        shell: powershell
+        run: |
+          if (Get-Command aws -ErrorAction SilentlyContinue) {
+            Write-Host "AWS CLI already installed"
+            aws --version
+          } else {
+            Write-Host "Installing AWS CLI v2..."
+            Invoke-WebRequest -Uri https://awscli.amazonaws.com/AWSCLIV2.msi -OutFile $env:TEMP\AWSCLIV2.msi
+            Start-Process msiexec.exe -Wait -ArgumentList '/I', "$env:TEMP\AWSCLIV2.msi", '/qn'
+            $env:PATH = "C:\Program Files\Amazon\AWSCLIV2;$env:PATH"
+            echo "C:\Program Files\Amazon\AWSCLIV2" >> $env:GITHUB_PATH
+            aws --version
+          }
+
       - if: ${{ matrix.platform == 'android' }}
         name: Select NDK
         run: |
@@ -133,22 +120,38 @@ jobs:
       - if: ${{ startsWith(matrix.os, 'ubuntu') }}
         name: Maximize build space
         run: |
+          echo "=== Disk space before cleanup ==="
+          df -h /
           sudo docker image prune --all --force
           sudo rm -rf /opt/hostedtoolcache/CodeQL
           sudo rm -rf /opt/ghc
           sudo rm -rf /usr/share/dotnet
+          sudo rm -rf /usr/share/swift
+          sudo rm -rf /opt/hostedtoolcache/go
+          # Remove Android SDK only for non-android builds (saves ~8GB)
+          if [[ "${{ matrix.platform }}" != "android" ]]; then
+            sudo rm -rf /usr/local/lib/android
+          fi
+          echo "=== Disk space after cleanup ==="
+          df -h /
 
       - name: Echo workflow inputs
         shell: bash
+        env:
+          INPUT_REF: ${{ inputs.ref || github.ref }}
+          INPUT_REPO: ${{ inputs.repository || github.repository }}
+          INPUT_WORKDIR: ${{ inputs.workdir || github.event.inputs.workdir || 'packages/qvac-lib-infer-onnx-tts' }}
+          MATRIX_PLATFORM: ${{ matrix.platform }}
+          MATRIX_ARCH: ${{ matrix.arch }}
+          MATRIX_TAGS: ${{ matrix.tags }}
         run: |
           echo "Workflow inputs:"
-          echo "Tag: ${{ inputs.tag || github.event.inputs.tag }}"
-          echo "Ref: ${{ inputs.ref || github.ref }}"
-          echo "Repository: ${{ inputs.repository || github.repository }}"
-          echo "Workdir: ${{ inputs.workdir || github.event.inputs.workdir || 'packages/qvac-lib-infer-onnx-tts' }}"
-          echo "Matrix platform: ${{ matrix.platform }}"
-          echo "Matrix arch: ${{ matrix.arch }}"
-          echo "Matrix tags: ${{ matrix.tags }}"
+          echo "Ref: $INPUT_REF"
+          echo "Repository: $INPUT_REPO"
+          echo "Workdir: $INPUT_WORKDIR"
+          echo "Matrix platform: $MATRIX_PLATFORM"
+          echo "Matrix arch: $MATRIX_ARCH"
+          echo "Matrix tags: $MATRIX_TAGS"
 
       - if: ${{ startsWith(matrix.os, 'ubuntu') }}
         name: Update c++ tools
@@ -161,11 +164,15 @@ jobs:
         name: Install ccache on Linux
         run: sudo apt-get install -y ccache
 
-      - if: ${{ matrix.os == 'macos-15' }}
+      - if: ${{ startsWith(matrix.os, 'macos') }}
         name: Install ccache on macOS
-        run: brew install ccache
+        run: |
+          brew install ccache
+          # Unlink Homebrew fmt to prevent header conflicts with vcpkg's fmt
+          # (Homebrew fmt 12.x headers conflict with vcpkg fmt 11.x on Intel Macs)
+          brew unlink fmt || true
 
-      - if: ${{ matrix.os != 'windows-2022' }}
+      - if: ${{ matrix.platform != 'win32' }}
         name: Configure ccache
         run: |
           ccache --set-config=max_size=2G
@@ -174,24 +181,31 @@ jobs:
           echo "CMAKE_C_COMPILER_LAUNCHER=ccache" >> $GITHUB_ENV
           echo "CMAKE_CXX_COMPILER_LAUNCHER=ccache" >> $GITHUB_ENV
 
-      - if: ${{ matrix.os != 'windows-2022' }}
+      - if: ${{ matrix.platform != 'win32' }}
         name: Get ccache cache
-        uses: actions/cache@v4
+        uses: actions/cache@668228422ae6a00e4ad889ee87cd7109ec5666a7 # 5.0.4
         with:
+          key: ccache-${{ matrix.platform }}-${{ matrix.arch }}${{ matrix.tags }}-${{ hashFiles('packages/qvac-lib-infer-onnx-tts/vcpkg.json') }}
           path: ~/.cache/ccache
-          key: ccache-${{ matrix.platform }}-${{ matrix.arch }}${{ matrix.tags }}-${{ hashFiles('vcpkg.json') }}
           restore-keys: |
             ccache-${{ matrix.platform }}-${{ matrix.arch }}${{ matrix.tags }}-
             ccache-${{ matrix.platform }}-${{ matrix.arch }}-
 
-      - if: ${{ matrix.os == 'windows-2022' }}
+      - if: ${{ matrix.platform == 'win32' }}
         name: Configure windows runner
         run: |
           git config --system core.longpaths true
-          choco upgrade llvm
-          choco install ccache -y
+          $ccacheVersion = "4.10.2"
+          $ccacheUrl = "https://github.com/ccache/ccache/releases/download/v$ccacheVersion/ccache-$ccacheVersion-windows-x86_64.zip"
+          $ccacheZip = "$env:TEMP\ccache.zip"
+          $ccacheDir = "C:\ccache"
+          Invoke-WebRequest -Uri $ccacheUrl -OutFile $ccacheZip
+          Expand-Archive -Path $ccacheZip -DestinationPath $ccacheDir -Force
+          $ccacheBin = Get-ChildItem -Path $ccacheDir -Recurse -Filter "ccache.exe" | Select-Object -First 1
+          $ccachePath = $ccacheBin.DirectoryName
+          echo "$ccachePath" | Out-File -FilePath $env:GITHUB_PATH -Encoding utf8 -Append
 
-      - if: ${{ matrix.os == 'windows-2022' }}
+      - if: ${{ matrix.platform == 'win32' }}
         name: Configure ccache on Windows
         shell: bash
         run: |
@@ -201,30 +215,36 @@ jobs:
           echo "CMAKE_C_COMPILER_LAUNCHER=ccache" >> $GITHUB_ENV
           echo "CMAKE_CXX_COMPILER_LAUNCHER=ccache" >> $GITHUB_ENV
 
-      - if: ${{ matrix.os == 'windows-2022' }}
+      - if: ${{ matrix.platform == 'win32' }}
         name: Get ccache cache (Windows)
-        uses: actions/cache@v4
+        uses: actions/cache@668228422ae6a00e4ad889ee87cd7109ec5666a7 # 5.0.4
         with:
+          key: ccache-${{ matrix.platform }}-${{ matrix.arch }}-${{ hashFiles('packages/qvac-lib-infer-onnx-tts/vcpkg.json') }}
           path: ~\AppData\Local\ccache
-          key: ccache-${{ matrix.platform }}-${{ matrix.arch }}-${{ hashFiles('vcpkg.json') }}
           restore-keys: |
             ccache-${{ matrix.platform }}-${{ matrix.arch }}-
 
       - name: Checkout repository
-        uses: actions/checkout@v4
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # 6.0.2
         with:
-          token: ${{ secrets.PAT_TOKEN }}
-          ref: ${{ inputs.ref || github.ref }}
           repository: ${{ inputs.repository || github.repository }}
+          ref: ${{ inputs.ref || github.ref }}
+          token: ${{ secrets.PAT_TOKEN }}
 
       - name: Initialize and update submodules
         run: |
           git submodule update --init --recursive
 
       - name: Setup node
-        uses: actions/setup-node@v4
+        uses: actions/setup-node@53b83947a5a98c8d113130e565377fae1a50d02f # 6.3.0
         with:
           node-version: lts/*
+
+      - if: ${{ matrix.platform == 'win32' }}
+        name: Setup Python on self-hosted Windows runner
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
 
       - name: Configure scoped registry for @tetherto and @qvac packages
         working-directory: ${{ env.WORKDIR }}
@@ -238,6 +258,7 @@ jobs:
           set -eu
           echo "Writing .npmrc for dual registry install…"
           cat > .npmrc <<NPMRC
+          always-auth=true
           registry=https://registry.npmjs.org/
           @qvac:registry=https://registry.npmjs.org/
           @tetherto:registry=https://npm.pkg.github.com/
@@ -258,20 +279,20 @@ jobs:
       - name: Install global dependencies
         run: npm install -g bare-runtime bare-make
 
-      - if: ${{ matrix.os == 'windows-2022' && matrix.arch == 'arm64' }}
+      - if: ${{ matrix.platform == 'win32' && matrix.arch == 'arm64' }}
         name: Rename win sdk folder to disable it
         run: |
           Rename-Item -Path "C:\Program Files (x86)\Windows Kits\10\Include\10.0.26100.0" -NewName "C:\Program Files (x86)\Windows Kits\10\Include\old-10.0.26100.0"
           Rename-Item -Path "C:\Program Files (x86)\Windows Kits\10\bin\10.0.26100.0" -NewName "C:\Program Files (x86)\Windows Kits\10\bin\old-10.0.26100.0"
           Rename-Item -Path "C:\Program Files (x86)\Windows Kits\10\Lib\10.0.26100.0" -NewName "C:\Program Files (x86)\Windows Kits\10\Lib\old-10.0.26100.0"
 
-      - if: ${{ matrix.os == 'macos-15' }}
+      - if: ${{ startsWith(matrix.os, 'macos') }}
         name: Remove Homebrew LLVM
         working-directory: ${{ env.WORKDIR }}
         run: bash ./ci/remove-brew-llvm.sh
         shell: bash
 
-      - if: ${{ matrix.os == 'macos-15' }}
+      - if: ${{ startsWith(matrix.os, 'macos') }}
         name: Install vcpkg in macos
         run: |
           cd ..
@@ -281,11 +302,11 @@ jobs:
           echo "VCPKG_ROOT=$VCPKG_ROOT" >> $GITHUB_ENV
           echo "$VCPKG_ROOT" >> $GITHUB_PATH
 
-      - if: ${{ matrix.os == 'macos-15' }}
+      - if: ${{ startsWith(matrix.os, 'macos') }}
         name: Select Xcode 16.4
         run: sudo xcode-select -s /Applications/Xcode_16.4.app/Contents/Developer
 
-      - if: ${{ matrix.os == 'macos-15' }}
+      - if: ${{ startsWith(matrix.os, 'macos') && matrix.platform == 'ios' }}
         name: Verify UIKit Frameworks
         run: |
           SDK_OS=$(xcrun --sdk iphoneos --show-sdk-path)
@@ -301,21 +322,33 @@ jobs:
         name: Configure vcpkg in linux
         run: echo "VCPKG_ROOT=$VCPKG_INSTALLATION_ROOT" >> $GITHUB_ENV
 
-      - if: ${{ matrix.os == 'windows-2022' }}
-        name: Configure vcpkg in windows
-        run: echo ("VCPKG_ROOT=$env:VCPKG_INSTALLATION_ROOT" -replace '\\', '/') >> $env:GITHUB_ENV
+      - if: ${{ matrix.platform == 'win32' }}
+        name: Install vcpkg in windows
+        shell: powershell
+        run: |
+          if ($env:VCPKG_INSTALLATION_ROOT -and (Test-Path $env:VCPKG_INSTALLATION_ROOT)) {
+            $vcpkgRoot = $env:VCPKG_INSTALLATION_ROOT -replace '\\', '/'
+          } else {
+            cd ..
+            git clone --branch 2025.12.12 --single-branch https://github.com/microsoft/vcpkg.git
+            cd vcpkg
+            .\bootstrap-vcpkg.bat -disableMetrics
+            $vcpkgRoot = (Get-Location).Path -replace '\\', '/'
+          }
+          echo "VCPKG_ROOT=$vcpkgRoot" >> $env:GITHUB_ENV
+          echo $vcpkgRoot >> $env:GITHUB_PATH
 
-      - if: ${{ matrix.os == 'windows-2022' }}
+      - if: ${{ matrix.platform == 'win32' }}
         name: Configure cmake generator in windows
         run: echo "CMAKE_GENERATOR=Visual Studio 17 2022" >> $env:GITHUB_ENV
 
-      - if: ${{ matrix.os == 'windows-2022' && matrix.arch == 'x64' }}
+      - if: ${{ matrix.platform == 'win32' && matrix.arch == 'x64' }}
         run: echo "CMAKE_GENERATOR_PLATFORM=x64" >> $env:GITHUB_ENV
 
-      - if: ${{ matrix.os == 'windows-2022' && matrix.arch == 'x86' }}
+      - if: ${{ matrix.platform == 'win32' && matrix.arch == 'x86' }}
         run: echo "CMAKE_GENERATOR_PLATFORM=Win32" >> $env:GITHUB_ENV
 
-      - if: ${{ matrix.os == 'windows-2022' && matrix.arch == 'arm64' }}
+      - if: ${{ matrix.platform == 'win32' && matrix.arch == 'arm64' }}
         run: echo "CMAKE_GENERATOR_PLATFORM=ARM64" >> $env:GITHUB_ENV
 
       - if: ${{ startsWith(matrix.os, 'ubuntu') }}
@@ -340,18 +373,78 @@ jobs:
         working-directory: ${{ env.WORKDIR }}
         run: npm install
 
-      - name: Create vcpkg cache location
-        run: mkdir -p vcpkg/cache
+      - if: ${{ matrix.platform == 'win32' }}
+        name: Install Rust toolchain on Windows
+        shell: powershell
+        run: |
+          if (Get-Command rustup -ErrorAction SilentlyContinue) {
+            Write-Host "Rust already installed"
+            rustup default stable
+          } else {
+            Write-Host "Installing Rust via rustup..."
+            Invoke-WebRequest -Uri https://win.rustup.rs/x86_64 -OutFile $env:TEMP\rustup-init.exe
+            & $env:TEMP\rustup-init.exe -y --default-toolchain stable
+            $env:PATH = "$env:USERPROFILE\.cargo\bin;$env:PATH"
+            echo "$env:USERPROFILE\.cargo\bin" >> $env:GITHUB_PATH
+          }
+          rustc --version
+          cargo --version
 
-      - name: Get vcpkg cache
-        id: cache-vcpkg
-        uses: actions/cache@v4
-        with:
-          path: vcpkg/cache
-          key: vcpkg-v2-${{ matrix.platform }}-${{ matrix.arch }}${{ matrix.tags }}-${{ hashFiles( 'vcpkg.json', 'vcpkg-configuration.json', 'vcpkg/ports/**' ) }}
-          restore-keys: |
-            vcpkg-v2-${{ matrix.platform }}-${{ matrix.arch }}${{ matrix.tags }}-
-            vcpkg-v2-${{ matrix.platform }}-${{ matrix.arch }}-
+      - if: ${{ matrix.platform == 'ios' && matrix.arch == 'arm64'}}
+        name: Install Rust target for iOS arm64 device
+        shell: bash
+        run: |
+          echo "Installing Rust target for iOS arm64 device..."
+          rustup default stable
+          rustup target add aarch64-apple-ios
+          rustup target add aarch64-apple-ios-sim
+          echo "✅ iOS arm64 device Rust target installed"
+          rustup target list --installed
+
+      - if: ${{ matrix.platform == 'ios' && matrix.arch == 'x64' }}
+        name: Install Rust target for iOS x64 simulator
+        shell: bash
+        run: |
+          echo "Installing Rust target for iOS x64 simulator..."
+          rustup default stable
+          rustup target add x86_64-apple-ios
+          echo "✅ iOS x64 simulator Rust target installed"
+          rustup target list --installed
+
+      - if: ${{ matrix.platform == 'android' }}
+        name: Install Rust targets for Android
+        shell: bash
+        run: |
+          echo "Installing Rust targets for Android..."
+          rustup default stable
+          # Install all Android targets
+          rustup target add aarch64-linux-android
+          rustup target add armv7-linux-androideabi
+          echo "✅ Android Rust targets installed"
+          rustup target list --installed
+
+      - name: Check if vcpkg cache needs rebuild
+        working-directory: ${{ env.WORKDIR }}
+        shell: bash
+        run: |
+          echo "Checking if vcpkg packages need to be rebuilt..."
+          
+          VCPKG_HASH=$(cat vcpkg.json vcpkg-configuration.json | sha256sum | cut -d' ' -f1)
+          echo "Current vcpkg config hash: $VCPKG_HASH"
+          
+          CACHED_HASH_FILE="/tmp/vcpkg-hash-cached.txt"
+          aws s3 cp ${S3_CACHE_PREFIX}vcpkg-hash.txt $CACHED_HASH_FILE 2>/dev/null || echo "no-cache" > $CACHED_HASH_FILE
+          CACHED_HASH=$(cat $CACHED_HASH_FILE)
+          echo "Cached vcpkg config hash: $CACHED_HASH"
+          
+          if [ "$VCPKG_HASH" != "$CACHED_HASH" ]; then
+            echo ""
+            echo "vcpkg config has changed - cache will be replaced after successful build"
+            echo "$VCPKG_HASH" > /tmp/vcpkg-hash-new.txt
+          else
+            echo ""
+            echo "vcpkg config unchanged, using cached packages"
+          fi
 
       - name: Generate
         working-directory: ${{ env.WORKDIR }}
@@ -359,190 +452,68 @@ jobs:
 
       - name: Run bare-make build
         working-directory: ${{ env.WORKDIR }}
-        run: |
-          bare-make build
+        run: bare-make build
 
       - name: Run bare-make install
         working-directory: ${{ env.WORKDIR }}
+        run: bare-make install
+
+      - name: Update vcpkg S3 cache hash
+        working-directory: ${{ env.WORKDIR }}
+        shell: bash
         run: |
-          bare-make install
+          if [ -f /tmp/vcpkg-hash-new.txt ]; then
+            echo "Uploading new vcpkg config hash to S3 cache..."
+            aws s3 cp /tmp/vcpkg-hash-new.txt ${S3_CACHE_PREFIX}vcpkg-hash.txt
+            echo "vcpkg hash uploaded"
+          else
+            echo "No new hash to upload (cache was already valid)"
+          fi
+
+      - name: Strip debug symbols (skip windows and android)
+        if: ${{ matrix.platform != 'win32' && matrix.platform != 'android' }}
+        shell: bash
+        working-directory: ${{ env.WORKDIR }}
+        run: find prebuilds -name "*.bare" -exec strip {} \;
+
+      - name: Strip debug symbols (skip windows and android)
+        if: ${{ matrix.platform != 'win32' && matrix.platform != 'android' }}
+        shell: bash
+        run: find ${{ env.WORKDIR }}/prebuilds -name "*.bare" -exec strip {} \;
 
       - name: Show ccache stats
         run: ccache -s
 
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@bbbca2ddaa5d8feaa63e36b76fdaad77386f024f # 7.0.0
         with:
           name: onnx-tts-${{ matrix.platform }}-${{ matrix.arch }}${{ matrix.tags }}
           path: ${{ env.WORKDIR }}/prebuilds
 
   merge:
     runs-on: ubuntu-latest
+    environment: release
     needs: prebuild
     permissions:
       contents: write
-    env:
-      AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
-      AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+      id-token: write
     steps:
+      - name: Configure AWS credentials via OIDC
+        uses: aws-actions/configure-aws-credentials@8df5847569e6427dd6c4fb1cf565c83acfa8afa7 # 6.0.0
+        with:
+          role-to-assume: ${{ secrets.AWS_OIDC_ROLE_ARN }}
+          aws-region: eu-central-1
+
+
       - name: Download all build artifacts
-        uses: actions/download-artifact@v4
+        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # 8.0.1
         with:
           path: prebuilds
           merge-multiple: true
 
-      - name: Replicate android artifacts
-        run: |
-          mkdir -p prebuilds/android-arm prebuilds/android-ia32 prebuilds/android-x64
-          cp -rv prebuilds/android-arm64/* prebuilds/android-arm/
-          cp -rv prebuilds/android-arm64/* prebuilds/android-x64/
-          cp -rv prebuilds/android-arm64/* prebuilds/android-ia32/
-
       - name: Upload merged artifacts
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@bbbca2ddaa5d8feaa63e36b76fdaad77386f024f # 7.0.0
         with:
           name: prebuilds
           path: prebuilds
 
-  publish-logic:
-    runs-on: ubuntu-latest
-    outputs:
-      publish_gpr: ${{ steps.logic.outputs.publish_gpr }}
-      publish_npm: ${{ steps.logic.outputs.publish_npm }}
-      gpr_tag: ${{ steps.logic.outputs.gpr_tag }}
-    steps:
-      - id: logic
-        shell: bash
-        env:
-          INPUT_PUBLISH_TARGET: ${{ inputs.publish_target }}
-          EVENT_PUBLISH_TARGET: ${{ github.event.inputs.publish_target }}
-          INPUT_TAG: ${{ inputs.tag }}
-          EVENT_TAG: ${{ github.event.inputs.tag }}
-        run: |
-          set -euo pipefail
-          ref_name="${GITHUB_REF_NAME}"
-          event_name="${GITHUB_EVENT_NAME}"
-          publish_target="${INPUT_PUBLISH_TARGET}"
-          event_publish_target="${EVENT_PUBLISH_TARGET}"
 
-          publish_gpr="false"
-          publish_npm="false"
-
-          if [ "$publish_target" = "gpr" ] || [ "$event_publish_target" = "gpr" ]; then
-            publish_gpr="true"
-          fi
-
-          if [ "$publish_target" = "npm" ] || [ "$event_publish_target" = "npm" ]; then
-            publish_npm="true"
-          fi
-
-          if [ "$publish_gpr" = "false" ] && [ "$publish_npm" = "false" ]; then
-            if [ "$event_name" = "push" ] || [ "$event_name" = "workflow_dispatch" ]; then
-              if [ "$ref_name" = "main" ] || [[ "$ref_name" == feature-* ]] || [[ "$ref_name" == tmp-* ]]; then
-                publish_gpr="true"
-              elif [[ "$ref_name" == release-* ]]; then
-                publish_npm="true"
-              fi
-            fi
-          fi
-
-          if [[ "$ref_name" == release-* ]]; then
-            publish_gpr="false"
-          fi
-
-          if [ "$publish_npm" = "true" ] && { [ "$event_name" = "pull_request" ] || [ "$event_name" = "pull_request_target" ]; }; then
-            publish_npm="false"
-          fi
-
-          if [ "$publish_gpr" = "true" ] && [ "$publish_npm" = "true" ]; then
-            echo "ERROR: Both GPR and NPM publishing enabled — invalid GitFlow state"
-            exit 1
-          fi
-
-          gpr_tag="${INPUT_TAG:-${EVENT_TAG:-}}"
-          if [ -z "$gpr_tag" ]; then
-            if [ "$ref_name" = "main" ]; then
-              gpr_tag="dev"
-            elif [[ "$ref_name" == feature-* ]] || [[ "$ref_name" == tmp-* ]]; then
-              gpr_tag="$ref_name"
-            else
-              gpr_tag="dev"
-            fi
-          fi
-
-          echo "publish_gpr=$publish_gpr" >> "$GITHUB_OUTPUT"
-          echo "publish_npm=$publish_npm" >> "$GITHUB_OUTPUT"
-          echo "gpr_tag=$gpr_tag" >> "$GITHUB_OUTPUT"
-
-  publish-gpr:
-    needs: [prebuild, merge, publish-logic]
-    if: ${{ needs.publish-logic.outputs.publish_gpr == 'true' }}
-    outputs:
-      published_version: ${{ steps.publish.outputs.npm_published_version }}
-    runs-on: ubuntu-latest
-    permissions:
-      contents: read
-      packages: write
-    steps:
-      - name: Checkout repository
-        uses: actions/checkout@v4
-        with:
-          token: ${{ secrets.PAT_TOKEN }}
-
-      - name: Download prebuild artifacts
-        uses: actions/download-artifact@v4
-        with:
-          name: prebuilds
-          path: prebuilds
-
-      - name: Publish to GitHub Package Registry
-        id: publish
-        uses: tetherto/qvac-devops/.github/actions/publish-library-to-gpr@monorepo_update
-        with:
-          secret-token: ${{ secrets.GITHUB_TOKEN }}
-          tag: ${{ needs.publish-logic.outputs.gpr_tag }}
-          workdir: ${{ inputs.workdir }}
-          path: ${{ inputs.workdir || github.event.inputs.workdir || 'packages/qvac-lib-infer-onnx-tts' }}
-          name-suffix: "-mono"
-
-  publish-npm:
-    needs: [prebuild, merge, publish-logic]
-    if: ${{ needs.publish-logic.outputs.publish_npm == 'true' }}
-    outputs:
-      published_version: ${{ steps.publish.outputs.npm_published_version }}
-    runs-on: ubuntu-latest
-    permissions:
-      contents: write
-      packages: write
-    steps:
-      - name: Checkout repository
-        uses: actions/checkout@v4
-        with:
-          token: ${{ secrets.PAT_TOKEN }}
-
-      - name: Download prebuild artifacts
-        uses: actions/download-artifact@v4
-        with:
-          name: prebuilds
-          path: prebuilds
-
-      - name: Publish to NPM Package Registry
-        id: publish
-        uses: tetherto/qvac-devops/.github/actions/publish-library-to-npm@monorepo_update
-        with:
-          secret-token: ${{ secrets.NPM_TOKEN }}
-          tag: "latest"
-          git-token: ${{ secrets.PAT_TOKEN }}
-          create-tag: "true"
-          path: ${{ inputs.workdir || github.event.inputs.workdir || 'packages/qvac-lib-infer-onnx-tts' }}
-
-  create-github-release:
-    needs: [publish-npm]
-    if: needs.publish-npm.outputs.published_version != '' && startsWith(github.ref_name, 'release-')
-    permissions:
-      contents: write
-    uses: ./.github/workflows/create-github-release-qvac-lib-infer-onnx-tts.yml
-    secrets: inherit
-    with:
-      published_version: ${{ needs.publish-npm.outputs.published_version }}
-      prev_sha: ${{ github.event.before }}
-      workdir: ${{ inputs.workdir || github.event.inputs.workdir || 'packages/qvac-lib-infer-onnx-tts' }}

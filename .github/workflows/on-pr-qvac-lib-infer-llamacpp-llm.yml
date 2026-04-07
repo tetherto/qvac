@@ -10,52 +10,70 @@ on:
     branches:
       - main
       - release-*
+      - feature-*
+      - tmp-*
     paths:
       - "packages/qvac-lib-infer-llamacpp-llm/**"
+      - ".github/workflows/*llamacpp-llm*.yml"
   workflow_dispatch:
   
   workflow_call:
 
 permissions:
-  contents: write
-  pull-requests: write
-  packages: write
+  contents: read
+  pull-requests: read
+  packages: read
+  id-token: write
 
 env:
   PKG_DIR: packages/qvac-lib-infer-llamacpp-llm
 
 jobs:
-  release-pr-guard:
-    name: Release PR Guard
-    if: github.event_name == 'pull_request' && startsWith(github.base_ref, 'release-')
-    uses: tetherto/qvac-devops/.github/workflows/release-pr-guard.yml@monorepo_update
-    secrets:
-      github-token: ${{ secrets.GITHUB_TOKEN }}
-    with:
-      package-slug: qvac-lib-infer-llamacpp-llm
-      package-json-path: packages/qvac-lib-infer-llamacpp-llm/package.json
-      changelog-path: packages/qvac-lib-infer-llamacpp-llm/CHANGELOG.md
+  authorize:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      pull-requests: write
+    outputs:
+      allowed: ${{ steps.auth.outputs.allowed }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # 6.0.2
+      - name: Authorize
+        id: auth
+        uses: ./.github/actions/authorize-pr
+        with:
+          github-token: ${{ github.token }}
 
   sanity-checks:
+    if: needs.authorize.outputs.allowed == 'true'
+    needs: [authorize]
     runs-on: ubuntu-latest
+    environment: release
     steps:
       - name: Run Sanity checks
-        uses: tetherto/qvac-devops/.github/actions/sanity-checks@monorepo_update
+        uses: tetherto/qvac-devops/.github/actions/sanity-checks@v1.1.7
         with:
           secret-token: ${{ secrets.GITHUB_TOKEN }}
           npm-token: ${{ secrets.NPM_TOKEN }}
           pat-token: ${{ secrets.PAT_TOKEN }}
-          run-integration: ${{ contains(github.event.pull_request.labels.*.name, 'verify') }}
+          run-integration: ${{ needs.authorize.outputs.allowed == 'true' }}
           workdir: packages/qvac-lib-infer-llamacpp-llm
 
   cpp-tests:
+    if: needs.authorize.outputs.allowed == 'true'
+    needs: [authorize, sanity-checks]
     uses: ./.github/workflows/cpp-tests-llm.yml
     secrets: inherit
     with:
       workdir: packages/qvac-lib-infer-llamacpp-llm
+      repository: ${{ github.event.pull_request.head.repo.full_name }}
+      ref: ${{ github.event.pull_request.head.ref }}
 
   cpp-lint:
-    uses: tetherto/qvac-devops/.github/workflows/cpp-lint.yaml@monorepo_update
+    if: needs.authorize.outputs.allowed == 'true'
+    uses: tetherto/qvac-devops/.github/workflows/cpp-lint.yaml@v1.1.7
+    needs: authorize
     secrets: inherit
     with:
       sha: ${{ github.event.pull_request.base.sha }}
@@ -63,18 +81,21 @@ jobs:
       workdir: packages/qvac-lib-infer-llamacpp-llm
 
   ts-checks:
+    if: needs.authorize.outputs.allowed == 'true'
+    needs: authorize
     runs-on: ubuntu-latest
+    environment: release
     steps:
       - name: Checkout code
-        uses: actions/checkout@v4
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # 6.0.2
 
       - name: Set up Node.js
-        uses: actions/setup-node@v4
+        uses: actions/setup-node@53b83947a5a98c8d113130e565377fae1a50d02f # 6.3.0
         with:
           node-version: 20
 
       - name: Configure npm auth
-        working-directory: packages/qvac-lib-infer-llamacpp-embed
+        working-directory: packages/qvac-lib-infer-llamacpp-llm
         run: |
           cat > .npmrc <<NPMRC
           registry=https://registry.npmjs.org/
@@ -83,31 +104,34 @@ jobs:
           NPMRC
 
       - name: Install dependencies
-        working-directory: packages/qvac-lib-infer-llamacpp-embed
+        working-directory: packages/qvac-lib-infer-llamacpp-llm
         run: npm install
 
       - name: Type declaration check
-        working-directory: packages/qvac-lib-infer-llamacpp-embed
+        working-directory: packages/qvac-lib-infer-llamacpp-llm
         run: npm run test:dts
 
   prebuild:
-    needs: sanity-checks
-    if: contains( github.event.pull_request.labels.*.name, 'verify') || github.event_name == 'workflow_dispatch'
+    needs: [authorize, sanity-checks]
+    if: needs.authorize.outputs.allowed == 'true'
     permissions:
       contents: write
       packages: write
       pull-requests: write
+      id-token: write
     uses: ./.github/workflows/prebuilds-qvac-lib-infer-llamacpp-llm.yml
     secrets: inherit
     with:
       repository: ${{ github.event.pull_request.head.repo.full_name }}
       ref: ${{ github.event.pull_request.head.ref }}
-      publish_target: "gpr"
-      tag: pr-${{ github.event.pull_request.number }}
 
   run-integration-tests:
-    if: needs.prebuild.result == 'success'
-    needs: prebuild
+    if: needs.authorize.outputs.allowed == 'true'
+    needs: [authorize, prebuild]
+    permissions:
+      contents: read
+      packages: read
+      id-token: write
     uses: ./.github/workflows/integration-test-qvac-lib-infer-llamacpp-llm.yml
     secrets: inherit
     with:
@@ -115,8 +139,13 @@ jobs:
       ref: ${{ github.event.pull_request.head.ref }}
 
   run-mobile-integration-tests:
-    if: needs.prebuild.result == 'success'
-    needs: prebuild
+    permissions:
+      contents: read
+      packages: read
+      pull-requests: write # Allow commenting on PRs
+      id-token: write
+    if: needs.authorize.outputs.allowed == 'true'
+    needs: [authorize, prebuild]
     uses: ./.github/workflows/integration-mobile-test-qvac-lib-infer-llamacpp-llm.yml
     secrets: inherit
     with:
@@ -126,6 +155,7 @@ jobs:
   merge-guard:
     needs:
       [
+        authorize,
         run-integration-tests,
         run-mobile-integration-tests,
         sanity-checks,
@@ -133,11 +163,9 @@ jobs:
         cpp-tests,
         cpp-lint,
         ts-checks,
-        release-pr-guard
       ]
     if: always()
-    uses: tetherto/qvac-devops/.github/workflows/public-pr.yml@monorepo_update
+    uses: tetherto/qvac-devops/.github/workflows/public-pr.yml@v1.1.7
     with:
       sanity-checks-status: ${{ needs.sanity-checks.result == 'success' }}
       build-status: ${{ needs.prebuild.result == 'success'}}
-    secrets: inherit
