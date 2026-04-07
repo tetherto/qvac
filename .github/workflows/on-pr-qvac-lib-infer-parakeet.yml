@@ -23,11 +23,6 @@ on:
         required: false
         type: boolean
         default: true
-      workdir:
-        description: "Package working directory in monorepo."
-        required: false
-        type: string
-        default: "packages/qvac-lib-infer-parakeet"
 
   workflow_call:
     inputs:
@@ -41,20 +36,13 @@ on:
         required: false
         type: boolean
         default: true
-      workdir:
-        required: false
-        type: string
-        default: "packages/qvac-lib-infer-parakeet"
-
-concurrency:
-  group: ${{ github.workflow }}-pr-${{ github.event.pull_request.number || github.sha }}
-  cancel-in-progress: true
 
 permissions:
   contents: read
   pull-requests: read
   packages: read
   checks: read
+  id-token: write
 
 jobs:
   authorize:
@@ -84,7 +72,6 @@ jobs:
       base_sha: ${{ steps.ctx.outputs.base_sha }}
       head_sha: ${{ steps.ctx.outputs.head_sha }}
       run_verify: ${{ steps.ctx.outputs.run_verify }}
-      workdir: ${{ steps.ctx.outputs.workdir }}
     steps:
       - id: ctx
         shell: bash
@@ -94,7 +81,6 @@ jobs:
           HEAD_REF: ${{ github.event.pull_request.head.ref }}
           HEAD_SHA: ${{ github.event.pull_request.head.sha }}
           BASE_SHA: ${{ github.event.pull_request.base.sha }}
-          INPUT_WORKDIR: ${{ inputs.workdir }}
           INPUT_REPO: ${{ inputs.repository }}
           INPUT_REF: ${{ inputs.ref }}
           INPUT_VERIFY: ${{ inputs.run_verify }}
@@ -105,14 +91,12 @@ jobs:
           set -euo pipefail
 
           if [[ "$EVENT_NAME" == "workflow_dispatch" || "$EVENT_NAME" == "workflow_call" ]]; then
-            workdir="${INPUT_WORKDIR:-packages/qvac-lib-infer-parakeet}"
             repo="${INPUT_REPO:-$REPO}"
             ref="${INPUT_REF:-$REF_NAME}"
             run_verify="$INPUT_VERIFY"
             base_sha="$SHA"
             head_sha="$SHA"
           else
-            workdir="packages/qvac-lib-infer-parakeet"
             repo="$HEAD_REPO"
             ref="$HEAD_REF"
             run_verify="true"
@@ -125,7 +109,6 @@ jobs:
           echo "base_sha=$base_sha" >> "$GITHUB_OUTPUT"
           echo "head_sha=$head_sha" >> "$GITHUB_OUTPUT"
           echo "run_verify=$run_verify" >> "$GITHUB_OUTPUT"
-          echo "workdir=$workdir" >> "$GITHUB_OUTPUT"
 
           echo "Resolved:"
           echo "  repo=$repo"
@@ -133,7 +116,6 @@ jobs:
           echo "  base_sha=$base_sha"
           echo "  head_sha=$head_sha"
           echo "  run_verify=$run_verify"
-          echo "  workdir=$workdir"
 
   sanity-checks:
     if: needs.authorize.outputs.allowed == 'true'
@@ -148,7 +130,7 @@ jobs:
           npm-token: ${{ secrets.NPM_TOKEN }}
           pat-token: ${{ secrets.PAT_TOKEN }}
           run-integration: ${{ needs.context.outputs.run_verify == 'true' }}
-          workdir: ${{ needs.context.outputs.workdir }}
+          workdir: ${{ github.workspace }}/packages/qvac-lib-infer-parakeet
 
   cpp-lint:
     needs: context
@@ -158,7 +140,7 @@ jobs:
     with:
       sha: ${{ needs.context.outputs.base_sha }}
       pr_head_sha: ${{ needs.context.outputs.head_sha }}
-      workdir: ${{ needs.context.outputs.workdir }}
+      workdir: ${{ github.workspace }}/packages/qvac-lib-infer-parakeet
 
   cpp-tests-coverage:
     permissions:
@@ -179,6 +161,7 @@ jobs:
       contents: write
       packages: write
       pull-requests: write
+      id-token: write
     needs: context
     if: needs.context.outputs.run_verify == 'true' || github.event_name == 'workflow_dispatch'
     uses: ./.github/workflows/prebuilds-qvac-lib-infer-parakeet.yml
@@ -186,10 +169,12 @@ jobs:
     with:
       repository: ${{ needs.context.outputs.repository }}
       ref: ${{ needs.context.outputs.ref }}
-      tag: "dev"
-      publish_target: 'gpr'
 
   run-integration-tests:
+    permissions:
+      contents: read
+      packages: read
+      id-token: write
     needs: [context, prebuild]
     if: needs.context.outputs.run_verify == 'true' || github.event_name == 'workflow_dispatch'
     uses: ./.github/workflows/integration-test-qvac-lib-infer-parakeet.yml
@@ -197,13 +182,13 @@ jobs:
     with:
       repository: ${{ needs.context.outputs.repository }}
       ref: ${{ needs.context.outputs.ref }}
-      workdir: ${{ needs.context.outputs.workdir }}
 
   run-mobile-integration-tests:
     permissions:
       contents: read
       packages: read
-      pull-requests: write # Allow commenting on PRs
+      pull-requests: write
+      id-token: write
     needs: [context, prebuild]
     if: needs.context.outputs.run_verify == 'true' || github.event_name == 'workflow_dispatch'
     uses: ./.github/workflows/integration-mobile-test-qvac-lib-infer-parakeet.yml

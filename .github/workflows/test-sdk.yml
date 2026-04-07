@@ -73,6 +73,11 @@ jobs:
     secrets: inherit
 
   android-tests:
+    permissions:
+      id-token: write
+      contents: read
+      pull-requests: write
+      packages: read
     # Runs for: all, mobile, android, empty (future PR/push)
     if: inputs.targets != 'desktop' && inputs.targets != 'ios'
     uses: ./.github/workflows/test-android-sdk.yml
@@ -81,7 +86,7 @@ jobs:
       working-directory: "packages/sdk/tests-qvac"
       consumer-timeout: ${{ fromJSON(inputs.mobile-consumer-timeout || '600') }}
       filter: ${{ inputs.filter }}
-      device-farm-timeout: ${{ fromJSON(inputs.device-farm-timeout || '30') }}
+      device-farm-timeout: ${{ fromJSON(inputs.device-farm-timeout || '90') }}
       device-farm-project-arn: ${{ vars.SDK_DEVICE_FARM_PROJECT_ARN }}
       device-pools: ${{ vars.SDK_DEVICE_FARM_POOLS }}
       test-version: ${{ inputs.test-version || '' }}
