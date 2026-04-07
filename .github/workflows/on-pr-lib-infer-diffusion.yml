@@ -118,6 +118,7 @@ jobs:
       contents: write
       packages: write
       pull-requests: write
+      id-token: write
     uses: ./.github/workflows/prebuilds-lib-infer-diffusion.yml
     secrets: inherit
     with:
@@ -127,6 +128,10 @@ jobs:
   run-integration-tests:
     if: needs.authorize.outputs.allowed == 'true'
     needs: [authorize, prebuild]
+    permissions:
+      contents: read
+      packages: read
+      id-token: write
     uses: ./.github/workflows/integration-test-lib-infer-diffusion.yml
     secrets: inherit
     with:
@@ -138,6 +143,7 @@ jobs:
       contents: read
       packages: read
       pull-requests: write # Allow commenting on PRs
+      id-token: write
     if: needs.authorize.outputs.allowed == 'true'
     needs: [authorize, prebuild]
     uses: ./.github/workflows/integration-mobile-test-lib-infer-diffusion.yml
