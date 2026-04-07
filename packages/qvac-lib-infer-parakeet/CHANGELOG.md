@@ -5,6 +5,12 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.3.1]
+
+### Fixed
+
+- Fix CTC and TDT model loading failure when `model.onnx` and `model.onnx_data` are in different directories. ORT's external data path validation rejected non-colocated files, causing consistent failures on CI across all platforms. The previous workaround copied both files (~1.2 GB) to a temp staging directory. The new approach uses ORT's `AddExternalInitializersFromFilesInMemory` API to provide external data from memory, bypassing path validation entirely with zero disk overhead. Co-located files (the common case) still load directly.
+
 ## [0.3.0]
 
 This release replaces the two-argument `TranscriptionParakeet` constructor with a clean single-options interface, removes the external loader dependency, and simplifies the internal job-management pipeline.
