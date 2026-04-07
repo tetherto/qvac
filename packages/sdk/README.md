@@ -13,7 +13,7 @@
 > <sup>
 > <a href="https://qvac.tether.dev" >Home</a> &nbsp;•&nbsp;
 > <a href="https://qvac.tether.dev/docs" >Docs</a> &nbsp;•&nbsp;
-> <a href="https://qvacbytether.featurebase.app" >Support</a> &nbsp;•&nbsp;
+> <a href="https://discord.com/channels/1425125849346216029/1445400675189264516" >Support</a> &nbsp;•&nbsp;
 > <a href="https://discord.com/invite/tetherdev" >Discord</a>
 > </sup>
 

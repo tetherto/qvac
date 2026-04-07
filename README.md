@@ -4,7 +4,7 @@
 
 > <a href="https://qvac.tether.io" >Website</a> &nbsp;•&nbsp;
 > <a href="https://docs.qvac.tether.io" >Docs</a> &nbsp;•&nbsp;
-> <a href="https://qvacbytether.featurebase.app" >Support</a> &nbsp;•&nbsp;
+> <a href="https://discord.com/channels/1425125849346216029/1445400675189264516" >Support</a> &nbsp;•&nbsp;
 > <a href="https://discord.com/invite/tetherdev" >Discord</a>
 
 **QVAC** is an open-source, cross-platform ecosystem for building local-first, peer-to-peer **AI** applications and systems. With QVAC, you can run AI tasks like LLMs, speech, RAG, and more locally across Linux, macOS, Windows, Android, and iOS — or delegate inference to peers using its built-in P2P capabilities.
