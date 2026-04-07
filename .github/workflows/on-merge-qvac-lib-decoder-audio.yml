@@ -123,6 +123,7 @@ jobs:
       contents: read
       packages: read
       pull-requests: write
+      id-token: write
     if: |
       needs.publish-logic.outputs.publish_main == 'true' ||
       needs.publish-logic.outputs.publish_release == 'true' ||
