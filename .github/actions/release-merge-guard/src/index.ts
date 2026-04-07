@@ -5,7 +5,7 @@ const ZERO_SHA = '0000000000000000000000000000000000000000'
 
 try {
   const baseRef = core.getInput('base-ref', { required: true })
-  const baseSha = core.getInput('base-sha', { required: true })
+  const baseSha = core.getInput('base-sha', { required: false })
   const headSha = core.getInput('head-sha', { required: true })
   const pkgSlug = core.getInput('package-slug', { required: true })
   const pkgJsonPath = core.getInput('package-json-path', { required: true })

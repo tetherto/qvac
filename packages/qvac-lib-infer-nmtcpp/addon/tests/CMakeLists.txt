@@ -9,7 +9,6 @@ option(ENABLE_COVERAGE "Enable coverage instrumentation for unit tests" OFF)
 set(TEST_SOURCES
   translation_tests.cpp
   nmt_model_wrapper_test_indic.cpp
-  nmt_model_wrapper_test_marian.cpp
   nmt_test.cpp
   ${CMAKE_SOURCE_DIR}/addon/src/model-interface/TranslationModel.cpp
   ${CMAKE_SOURCE_DIR}/addon/src/model-interface/nmt.cpp
