@@ -46,15 +46,12 @@ on:
         type: string
         default: "packages/qvac-lib-infer-onnx-tts"
 
-concurrency:
-  group: ${{ github.workflow }}-pr-${{ github.event.pull_request.number || github.sha }}
-  cancel-in-progress: true
-
 permissions:
   contents: read
   pull-requests: read
   packages: read
   checks: read
+  id-token: write
 
 jobs:
   authorize:
@@ -161,6 +158,11 @@ jobs:
       workdir: ${{ needs.context.outputs.workdir }}
 
   cpp-tests-coverage:
+    permissions:
+      contents: read
+      packages: read
+      checks: write
+      pull-requests: write
     needs: [authorize, context]
     if: needs.authorize.outputs.allowed == 'true'
     uses: ./.github/workflows/cpp-test-coverage-qvac-lib-infer-onnx-tts.yml
@@ -182,7 +184,6 @@ jobs:
     with:
       repository: ${{ needs.context.outputs.repository }}
       ref: ${{ needs.context.outputs.ref }}
-      publish_target: "gpr"
       workdir: ${{ needs.context.outputs.workdir }}
 
   run-integration-tests:

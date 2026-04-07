@@ -5,7 +5,7 @@ const ZERO_SHA = '0000000000000000000000000000000000000000'
 
 try {
   const baseRef = core.getInput('base-ref', { required: true })
-  const baseSha = core.getInput('base-sha', { required: true })
+  const baseSha = core.getInput('base-sha', { required: false })
   const headSha = core.getInput('head-sha', { required: true })
   const pkgSlug = core.getInput('package-slug', { required: true })
   const pkgJsonPath = core.getInput('package-json-path', { required: true })
@@ -30,8 +30,9 @@ try {
     branchVersion = match[2]
 
     if (branchPkg !== pkgSlug) {
-      errors.push(
-        `Package mismatch — branch targets '${branchPkg}', workflow expects '${pkgSlug}'`
+      core.warning(
+        `Package slug mismatch — branch targets '${branchPkg}', workflow expects '${pkgSlug}'. ` +
+        `This is expected for short-name release branches (e.g. release-diffusion-x.y.z).`
       )
     }
   }

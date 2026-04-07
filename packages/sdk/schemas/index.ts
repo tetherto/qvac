@@ -13,7 +13,7 @@ export * from "./logging-stream";
 export * from "./provide";
 export * from "./stop-provide";
 export * from "./unload-model";
-export * from "./ping";
+export * from "./heartbeat";
 export * from "./common";
 export * from "./transcription";
 export * from "./translate";
@@ -24,6 +24,7 @@ export * from "./text-to-speech";
 export * from "./error";
 export * from "./rag";
 export * from "./ocr";
+export * from "./sdcpp-config";
 export * from "./shard";
 export { SDK_CLIENT_ERROR_CODES } from "./sdk-errors-client";
 export { SDK_SERVER_ERROR_CODES } from "./sdk-errors-server";
@@ -43,6 +44,7 @@ export {
   PROFILING_TRAILER_KEY,
   DELEGATION_BREAKDOWN_KEY,
   OPERATION_EVENT_KEY,
+  MODEL_EXECUTION_KEY,
   profilerModeSchema,
   serverBreakdownSchema,
   delegationBreakdownSchema,

@@ -7,6 +7,7 @@ import { handleCompletionStreamDelegated } from "@/server/rpc/handlers/completio
 import { getModelEntry } from "@/server/bare/registry/model-registry";
 import { handleUnloadModel } from "@/server/rpc/handlers/unload-model";
 import { handleUnloadModelDelegated } from "@/server/rpc/handlers/unload-model-delegated";
+import { handleTranscribe } from "@/server/rpc/handlers/transcribe";
 import { handleTranscribeStream } from "@/server/rpc/handlers/transcribe-stream";
 import { handleEmbed } from "@/server/rpc/handlers/embed";
 import { handleTranslate } from "@/server/rpc/handlers/translate";
@@ -19,8 +20,10 @@ import { handleDeleteCache } from "@/server/rpc/handlers/delete-cache";
 import { handleTextToSpeech } from "@/server/rpc/handlers/text-to-speech";
 import { handleGetModelInfo } from "@/server/rpc/handlers/get-model-info";
 import { handleOCRStream } from "@/server/rpc/handlers/ocr-stream";
-import { handlePing } from "@/server/rpc/handlers/ping";
+import { handleHeartbeat } from "@/server/rpc/handlers/heartbeat";
+import { handleHeartbeatDelegated } from "@/server/rpc/handlers/heartbeat-delegated";
 import { handleCancelDelegated } from "@/server/rpc/handlers/cancel-delegated";
+import { handleDiffusionStream } from "@/server/rpc/handlers/diffusion-stream";
 import {
   handlePluginInvoke,
   handlePluginInvokeStream,
@@ -59,7 +62,12 @@ function isCancelDelegated(request: Request): boolean {
 
 export const registry: Record<string, HandlerEntry> = {
   // Simple Reply handlers
-  ping: { type: "reply", handler: handlePing },
+  heartbeat: {
+    type: "reply",
+    handler: handleHeartbeat,
+    delegatedHandler: handleHeartbeatDelegated,
+    isDelegated: (r) => r.type === "heartbeat" && !!r.delegate,
+  },
   unloadModel: {
     type: "reply",
     handler: handleUnloadModel,
@@ -86,11 +94,13 @@ export const registry: Record<string, HandlerEntry> = {
   },
 
   // Simple Stream handlers
-  transcribeStream: { type: "stream", handler: handleTranscribeStream },
+  transcribe: { type: "stream", handler: handleTranscribe },
+  transcribeStream: { type: "duplex", handler: handleTranscribeStream },
   loggingStream: { type: "stream", handler: handleLoggingStream },
   translate: { type: "stream", handler: handleTranslate },
   textToSpeech: { type: "stream", handler: handleTextToSpeech },
   ocrStream: { type: "stream", handler: handleOCRStream },
+  diffusionStream: { type: "stream", handler: handleDiffusionStream },
   pluginInvokeStream: { type: "stream", handler: handlePluginInvokeStream },
 
   // Handlers with delegation support

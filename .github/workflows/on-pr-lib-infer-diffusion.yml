@@ -23,10 +23,7 @@ permissions:
   contents: read
   pull-requests: read
   packages: read
-
-concurrency:
-  group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.sha }}
-  cancel-in-progress: true
+  id-token: write
 
 env:
   PKG_DIR: packages/lib-infer-diffusion
@@ -126,8 +123,6 @@ jobs:
     with:
       repository: ${{ github.event.pull_request.head.repo.full_name }}
       ref: ${{ github.event.pull_request.head.ref }}
-      publish_target: "gpr"
-      tag: pr-${{ github.event.pull_request.number }}
 
   run-integration-tests:
     if: needs.authorize.outputs.allowed == 'true'

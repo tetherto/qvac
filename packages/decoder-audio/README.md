@@ -4,21 +4,29 @@ This decoder library leverages FFmpeg for efficient audio decoding. It simplifie
 
 ## Table of Contents
 
-- [Supported Platforms](#supported-platforms)
-- [Installation](#installation)  
-- [Usage](#usage)  
-  - [1. Creating the Decoder Instance](#1-creating-the-decoder-instance)  
-  - [2. Loading the Decoder](#2-loading-the-decoder)  
-  - [3. Decoding Audio](#3-decoding-audio)  
-  - [4. Handling Response Updates](#4-handling-response-updates)  
-  - [5. Unloading the Decoder](#5-unloading-the-decoder)
-- [Quickstart Example](#quickstart-example)  
-- [Testing](#testing)  
-  - [Running Unit Tests](#running-unit-tests)  
-  - [Test Coverage](#test-coverage)  
-- [Glossary](#glossary)  
-- [Resources](#resources)  
-- [License](#license)  
+- [decoder-audio](#decoder-audio)
+  - [Table of Contents](#table-of-contents)
+  - [Supported Platforms](#supported-platforms)
+  - [Installation](#installation)
+    - [Prerequisites](#prerequisites)
+    - [Installing the Package](#installing-the-package)
+  - [Usage](#usage)
+    - [1. Creating the Decoder Instance](#1-creating-the-decoder-instance)
+    - [2. Loading the Decoder](#2-loading-the-decoder)
+    - [3. Decoding Audio](#3-decoding-audio)
+    - [4. Handling Response Updates](#4-handling-response-updates)
+    - [5. Unloading the decoder](#5-unloading-the-decoder)
+  - [Quickstart Example](#quickstart-example)
+    - [1. Create a new project:](#1-create-a-new-project)
+    - [2. Install the required dependencies:](#2-install-the-required-dependencies)
+    - [3. Create a file named `example.js` and paste the following code:](#3-create-a-file-named-examplejs-and-paste-the-following-code)
+    - [4. Run the example:](#4-run-the-example)
+  - [Testing](#testing)
+    - [Running Unit Tests](#running-unit-tests)
+    - [Test Coverage](#test-coverage)
+  - [Glossary](#glossary)
+  - [Resources](#resources)
+  - [License](#license)
 
 ## Supported Platforms
 
@@ -50,7 +58,7 @@ npm install -g bare@latest
 Install the latest version of the decoder addon with the following command:
 
 ```bash
-npm install @tetherto/decoder-audio@latest
+npm install @qvac/decoder-audio@latest
 ```
 
 ## Usage
@@ -62,7 +70,7 @@ This library provides a simple workflow for decoding audio streams.
 To get started, import the decoder and create an instance:
 
 ```javascript
-const { FFmpegDecoder } = require('@tetherto/decoder-audio')
+const { FFmpegDecoder } = require('@qvac/decoder-audio')
 
 const decoder = new FFmpegDecoder({
   config: {
@@ -150,7 +158,7 @@ npm init -y
 ### 2. Install the required dependencies:
    
 ```bash
-npm install bare-fs @tetherto/decoder-audio
+npm install bare-fs @qvac/decoder-audio
 ```
 
 ### 3. Create a file named `example.js` and paste the following code:
@@ -159,7 +167,7 @@ npm install bare-fs @tetherto/decoder-audio
 'use strict'
 
 const fs = require('bare-fs')
-const { FFmpegDecoder } = require('@tetherto/decoder-audio')
+const { FFmpegDecoder } = require('@qvac/decoder-audio')
 
 const audioFilePath = './path/to/audio/file.ogg'
 const outputFilePath = './path/to/output/file.raw'

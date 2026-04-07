@@ -5,6 +5,9 @@ import TranscriptionWhispercpp, {
 import {
   definePlugin,
   defineHandler,
+  defineDuplexHandler,
+  transcribeRequestSchema,
+  transcribeResponseSchema,
   transcribeStreamRequestSchema,
   transcribeStreamResponseSchema,
   ModelType,
@@ -18,7 +21,8 @@ import {
 import { createStreamLogger, registerAddonLogger } from "@/logging";
 import { parseModelPath } from "@/server/utils";
 import FilesystemDL from "@qvac/dl-filesystem";
-import { transcribe } from "@/server/bare/ops/transcribe";
+import { transcribe, transcribeStream } from "@/server/bare/ops/transcribe";
+import { attachModelExecutionMs } from "@/profiling/model-execution";
 
 function createWhisperModel(
   modelId: string,
@@ -45,7 +49,7 @@ function createWhisperModel(
     diskPath: dirPath,
     vadModelName,
     opts: {
-      stats: false,
+      stats: true,
     },
   };
 
@@ -96,17 +100,53 @@ export const whisperPlugin = definePlugin({
   },
 
   handlers: {
-    transcribeStream: defineHandler({
-      requestSchema: transcribeStreamRequestSchema,
-      responseSchema: transcribeStreamResponseSchema,
+    transcribe: defineHandler({
+      requestSchema: transcribeRequestSchema,
+      responseSchema: transcribeResponseSchema,
       streaming: true,
 
       handler: async function* (request) {
-        for await (const text of transcribe({
+        const stream = transcribe({
           modelId: request.modelId,
           audioChunk: request.audioChunk,
           prompt: request.prompt,
-        })) {
+        });
+
+        try {
+          let result = await stream.next();
+          while (!result.done) {
+            yield {
+              type: "transcribe" as const,
+              text: result.value,
+            };
+            result = await stream.next();
+          }
+
+          const { modelExecutionMs, stats } = result.value;
+          yield attachModelExecutionMs({
+            type: "transcribe" as const,
+            text: "",
+            done: true,
+            ...(stats && { stats }),
+          }, modelExecutionMs);
+        } finally {
+          await stream.return?.(undefined as never);
+        }
+      },
+    }),
+
+    transcribeStream: defineDuplexHandler({
+      requestSchema: transcribeStreamRequestSchema,
+      responseSchema: transcribeStreamResponseSchema,
+      streaming: true,
+      duplex: true,
+
+      handler: async function* (request, inputStream) {
+        for await (const text of transcribeStream(
+          request.modelId,
+          inputStream,
+          request.prompt,
+        )) {
           yield {
             type: "transcribeStream" as const,
             text,

@@ -22,10 +22,7 @@ permissions:
   contents: read
   pull-requests: read
   packages: read
-
-concurrency:
-  group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.sha }}
-  cancel-in-progress: true
+  id-token: write
 
 jobs:
   authorize:
@@ -189,11 +186,11 @@ jobs:
     with:
       repository: ${{ github.event.pull_request.head.repo.full_name || github.repository }}
       ref: ${{ github.event.pull_request.head.ref || github.ref }}
-      publish_target: "gpr"
 
   run-integration-tests:
     permissions:
-      pull-requests: write
+      contents: read
+      packages: read
     needs: [authorize, changes, prebuild]
     if: |
       (needs.changes.outputs.pkg == 'true' || github.event_name == 'workflow_dispatch') &&

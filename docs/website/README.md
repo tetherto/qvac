@@ -1,6 +1,6 @@
 # QVAC docs
 
-Official documentation and single source of truth for QVAC:
+QVAC docs ecosystem website:
 - Source code and content of the docs website.
 - Automation scripts for the integration between the codebase and the documentation.
 
@@ -19,13 +19,6 @@ npm install
 
 ## Development
 
-Check broken links in dev env:
-```bash
-npm run check-links
-```
-
-Run dev env server:
-
 ```bash
 npm run dev
 ```
@@ -37,28 +30,23 @@ Create a `.env.*` following `env.example`.
 Generate static website:
 
 ```
-npm run build:static
+npm run build
 ```
 
-It generates static content into the `dist` directory and can be served using any static content hosting service.
+It generates static content into the `out` directory and can be served using any static content hosting service.
 
 Check in your local machine the static website:
 ```
 npm run serve
 ```
 
-## Deployment
+## Environments
 
-TBD with DevOps team.
-
-Planned address for release: [http://docs.qvac.tether.dev](http://docs.qvac.tether.io)
+- Production: [http://docs.qvac.tether.io](http://docs.qvac.tether.io)
+- Staging (protected with company auth): [http://docs.qvac.tether.su](http://docs.qvac.tether.su)
 
 ## Repository layout
 
 - `src`: source code of docs website.
 - `content/docs`: docs website content.
-- `examples`: runnable QVAC code samples to be used as code snippets on content via code injection tools.
 - `scripts`: integration and automation between the codebase and automatic documentation generation.
-
->[!NOTE]
-> Temporary structure: it will be improved soon with the maturation of automation and better organization of the source code and the docs website content.

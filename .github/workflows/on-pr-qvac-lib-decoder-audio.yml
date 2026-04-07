@@ -46,15 +46,12 @@ on:
         type: string
         default: "packages/decoder-audio"
 
-concurrency:
-  group: ${{ github.workflow }}-pr-${{ github.event.pull_request.number || github.sha }}
-  cancel-in-progress: true
-
 permissions:
   contents: read
   pull-requests: read
   packages: read
   checks: read
+  id-token: write
 
 jobs:
   authorize:

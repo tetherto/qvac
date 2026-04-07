@@ -35,6 +35,7 @@ jobs:
     permissions:
       contents: read
       packages: read
+      id-token: write
     strategy:
       fail-fast: false
       matrix:
@@ -163,31 +164,32 @@ jobs:
           sudo apt-get update
           sudo apt-get install -y mesa-vulkan-drivers
 
-      - name: Configure AWS credentials
+      - name: Configure AWS credentials via OIDC
         uses: aws-actions/configure-aws-credentials@8df5847569e6427dd6c4fb1cf565c83acfa8afa7 # 6.0.0
         with:
-          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
-          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
-          aws-region: us-east-1
+          role-to-assume: ${{ secrets.AWS_OIDC_ROLE_ARN }}
+          aws-region: eu-central-1
 
-      - name: Download Bergamot model from Firefox CDN
+      - name: Download Bergamot models from Firefox CDN
         working-directory: ${{ inputs.workdir || env.PKG_DIR }}
         shell: bash
         run: |
-          echo "Downloading Bergamot en-it model from Firefox Remote Settings CDN..."
-          PAIR_CODE="enit"
-          SRC_LANG="en"
-          DST_LANG="it"
-          DEST_DIR="model/bergamot/${PAIR_CODE}"
-          mkdir -p "$DEST_DIR"
-
           RECORDS_URL="https://firefox.settings.services.mozilla.com/v1/buckets/main/collections/translations-models/records"
           ATTACHMENT_BASE="https://firefox-settings-attachments.cdn.mozilla.net"
 
           echo "Fetching model index from Mozilla..."
           RECORDS=$(curl -sS "$RECORDS_URL")
 
-          URLS=$(echo "$RECORDS" | python3 -c "
+          download_bergamot_pair() {
+            local SRC_LANG="$1"
+            local DST_LANG="$2"
+            local PAIR_CODE="${SRC_LANG}${DST_LANG}"
+            local DEST_DIR="model/bergamot/${PAIR_CODE}"
+            mkdir -p "$DEST_DIR"
+
+            echo "Downloading Bergamot ${SRC_LANG}-${DST_LANG} model..."
+
+            URLS=$(echo "$RECORDS" | python3 -c "
           import sys, json
           data = json.load(sys.stdin)
           for r in data.get('data', []):
@@ -199,19 +201,30 @@ jobs:
                       print(f'{name}|{loc}')
           " | tr -d '\r')
 
-          if [ -z "$URLS" ]; then
-              echo "❌ No Firefox model found for ${SRC_LANG}-${DST_LANG}"
-              exit 1
-          fi
+            if [ -z "$URLS" ]; then
+                echo "  ⚠ No Firefox model found for ${SRC_LANG}-${DST_LANG} (skipping)"
+                return 1
+            fi
 
-          while IFS='|' read -r FILENAME LOCATION; do
-              URL="${ATTACHMENT_BASE}/${LOCATION}"
-              echo "  Downloading ${FILENAME}..."
-              curl -sS -L -o "${DEST_DIR}/${FILENAME}" "$URL"
-          done <<< "$URLS"
+            while IFS='|' read -r FILENAME LOCATION; do
+                FILENAME=$(echo "$FILENAME" | tr -d '\r')
+                LOCATION=$(echo "$LOCATION" | tr -d '\r')
+                URL="${ATTACHMENT_BASE}/${LOCATION}"
+                echo "  Downloading ${FILENAME}..."
+                curl -sS -L -o "${DEST_DIR}/${FILENAME}" "$URL"
+            done <<< "$URLS"
 
-          echo "✅ Bergamot model files downloaded from Firefox CDN:"
-          ls -la "$DEST_DIR"
+            echo "  ✅ ${SRC_LANG}-${DST_LANG} ready"
+          }
+
+          download_bergamot_pair "en" "it"
+          download_bergamot_pair "es" "en"
+          download_bergamot_pair "fr" "en"
+          download_bergamot_pair "en" "es"
+
+          echo ""
+          echo "Bergamot model directories:"
+          ls -la model/bergamot/
 
       - name: Download IndicTrans model from S3
         working-directory: ${{ inputs.workdir || env.PKG_DIR }}
@@ -223,11 +236,200 @@ jobs:
           echo "IndicTrans model files:"
           ls -la model/indictrans/
 
-      - name: Run integration test
+      - name: Run integration test (Linux/macOS)
+        if: ${{ matrix.platform != 'win32' }}
         working-directory: ${{ inputs.workdir || env.PKG_DIR }}
-        run: npm run test:integration ${{ matrix.platform }}-${{ matrix.arch }}
+        run: |
+          npm run test:integration ${{ matrix.platform }}-${{ matrix.arch }} 2>&1 | tee test-output.log
+          exit ${PIPESTATUS[0]}
+        shell: bash
         env:
           QASE_API_TOKEN: ${{ secrets.QASE_API_TOKEN }}
+
+      - name: Run integration test (Windows)
+        if: ${{ matrix.platform == 'win32' }}
+        working-directory: ${{ inputs.workdir || env.PKG_DIR }}
+        run: |
+          npm run test:integration ${{ matrix.platform }}-${{ matrix.arch }} | Tee-Object test-output.log
+        shell: powershell
+        env:
+          QASE_API_TOKEN: ${{ secrets.QASE_API_TOKEN }}
+
+      - name: Generate test report (Linux/macOS)
+        if: ${{ always() && matrix.platform != 'win32' }}
+        working-directory: ${{ inputs.workdir || env.PKG_DIR }}
+        shell: bash
+        run: |
+          REPORT="test-report.txt"
+          PLATFORM="${{ matrix.platform }}-${{ matrix.arch }}"
+
+          echo "========================================" > "$REPORT"
+          echo "  Integration Test Report -- ${PLATFORM}" >> "$REPORT"
+          echo "  $(date -u '+%Y-%m-%d %H:%M:%S UTC')" >> "$REPORT"
+          echo "========================================" >> "$REPORT"
+          echo "" >> "$REPORT"
+
+          if [ ! -f test-output.log ]; then
+            echo "NO TEST OUTPUT -- tests may not have started." >> "$REPORT"
+            cat "$REPORT"
+            exit 0
+          fi
+
+          awk '
+          /^ok [0-9]+ - / {
+            name = $0; sub(/^ok [0-9]+ - /, "", name)
+            passed++
+            results[++total] = "PASS: " name
+            next
+          }
+          /^not ok [0-9]+ - / {
+            name = $0; sub(/^not ok [0-9]+ - /, "", name)
+            failed++
+            results[++total] = "FAIL: " name
+            capturing = 1
+            fail_detail[total] = ""
+            next
+          }
+          /^# skip/ {
+            split($0, a, " "); skipped = a[3]
+            next
+          }
+          capturing && /^[^ \t#]/ { capturing = 0; next }
+          capturing {
+            fail_detail[total] = fail_detail[total] $0 "\n"
+          }
+          END {
+            printf "TOTAL: %d  |  PASSED: %d  |  FAILED: %d  |  SKIPPED: %s\n\n", total, passed, failed, (skipped ? skipped : "0")
+
+            if (failed > 0) {
+              print "======== ALL TESTS ========"
+              print ""
+            }
+            for (i = 1; i <= total; i++) {
+              print results[i]
+            }
+
+            has_failures = 0
+            for (i = 1; i <= total; i++) {
+              if (fail_detail[i] != "") has_failures = 1
+            }
+            if (has_failures) {
+              print ""
+              print "======== FAILURE DETAILS ========"
+              for (i = 1; i <= total; i++) {
+                if (fail_detail[i] != "") {
+                  print ""
+                  print results[i]
+                  print "--------"
+                  printf "%s", fail_detail[i]
+                }
+              }
+            }
+          }
+          ' test-output.log >> "$REPORT"
+
+          echo "" >> "$REPORT"
+          echo "Full log: test-output.log (uploaded as artifact)" >> "$REPORT"
+
+          echo "--- Test Report ---"
+          cat "$REPORT"
+
+          echo ""
+          echo "::group::📄 Full Raw Test Output (test-output.log)"
+          cat test-output.log 2>/dev/null || echo "(no test output captured)"
+          echo "::endgroup::"
+
+      - name: Generate test report (Windows)
+        if: ${{ always() && matrix.platform == 'win32' }}
+        working-directory: ${{ inputs.workdir || env.PKG_DIR }}
+        shell: powershell
+        run: |
+          $report = "test-report.txt"
+          $platform = "${{ matrix.platform }}-${{ matrix.arch }}"
+          $ts = Get-Date -Format 'yyyy-MM-dd HH:mm:ss'
+          $header = "========================================`n"
+          $header += "  Integration Test Report - $platform`n"
+          $header += "  $ts UTC`n"
+          $header += "========================================`n"
+          $header | Out-File -FilePath $report -Encoding utf8
+
+          if (-not (Test-Path test-output.log)) {
+            "NO TEST OUTPUT -- tests may not have started." | Out-File -Append -FilePath $report
+            Get-Content $report
+            exit 0
+          }
+
+          $lines = Get-Content test-output.log
+          $passed = @()
+          $failed = @()
+          $failDetails = @{}
+          $currentFail = $null
+
+          foreach ($line in $lines) {
+            if ($line -match '^ok \d+ - (.+)') {
+              $passed += "PASS: $($Matches[1])"
+              $currentFail = $null
+            }
+            elseif ($line -match '^not ok \d+ - (.+)') {
+              $testName = $Matches[1]
+              $failed += "FAIL: $testName"
+              $currentFail = $testName
+              $failDetails[$testName] = @()
+            }
+            elseif ($null -ne $currentFail) {
+              if ($line -match '^[^ \t#]') {
+                $currentFail = $null
+              } else {
+                $failDetails[$currentFail] += $line
+              }
+            }
+          }
+
+          $total = $passed.Count + $failed.Count
+          "TOTAL: $total  |  PASSED: $($passed.Count)  |  FAILED: $($failed.Count)" | Out-File -Append -FilePath $report
+          "" | Out-File -Append -FilePath $report
+
+          if ($failed.Count -gt 0) {
+            "======== ALL TESTS ========" | Out-File -Append -FilePath $report
+            "" | Out-File -Append -FilePath $report
+          }
+          foreach ($p in $passed) { $p | Out-File -Append -FilePath $report }
+          foreach ($f in $failed) { $f | Out-File -Append -FilePath $report }
+
+          if ($failed.Count -gt 0) {
+            "" | Out-File -Append -FilePath $report
+            "======== FAILURE DETAILS ========" | Out-File -Append -FilePath $report
+            foreach ($f in $failed) {
+              $testName = $f -replace '^FAIL: ', ''
+              "" | Out-File -Append -FilePath $report
+              $f | Out-File -Append -FilePath $report
+              "--------" | Out-File -Append -FilePath $report
+              if ($failDetails.ContainsKey($testName)) {
+                $failDetails[$testName] | Out-File -Append -FilePath $report
+              }
+            }
+          }
+
+          "" | Out-File -Append -FilePath $report
+          "Full log: test-output.log (uploaded as artifact)" | Out-File -Append -FilePath $report
+
+          Write-Host "--- Test Report ---"
+          Get-Content $report
+
+          Write-Host ""
+          Write-Host "::group::Full Raw Test Output (test-output.log)"
+          if (Test-Path test-output.log) { Get-Content test-output.log } else { Write-Host "(no test output captured)" }
+          Write-Host "::endgroup::"
+
+      - name: Upload test logs
+        if: ${{ always() }}
+        uses: actions/upload-artifact@bbbca2ddaa5d8feaa63e36b76fdaad77386f024f # 7.0.0
+        with:
+          name: test-logs-${{ matrix.os }}-${{ matrix.arch }}
+          path: |
+            ${{ inputs.workdir || env.PKG_DIR }}/test-report.txt
+            ${{ inputs.workdir || env.PKG_DIR }}/test-output.log
+          retention-days: 14
 
       - name: Run quickstart example with deps installed
         working-directory: ${{ inputs.workdir || env.PKG_DIR }}
@@ -235,4 +437,442 @@ jobs:
         run: |
           npm install "@qvac/translation-nmtcpp"
           npx bare examples/quickstart.js
-        continue-on-error: true # unreliable to block the PR, we want to see how it performs
+        continue-on-error: true
+name: Integration Tests (NMTCPP)
+
+on:
+  workflow_dispatch:
+    inputs:
+      prebuild_package:
+        description: "NPM package containing prebuilds (e.g. @qvac/translation-nmtcpp@1.0.0)"
+        required: true
+        type: string
+  workflow_call:
+    inputs:
+      ref:
+        description: "ref"
+        type: string
+        required: false
+      repository:
+        type: string
+        required: false
+        default: "tetherto/qvac"
+      workdir:
+        description: "Working directory inside the repo (monorepo package path)"
+        type: string
+        required: false
+        default: "packages/qvac-lib-infer-nmtcpp"
+
+env:
+  PKG_DIR: packages/qvac-lib-infer-nmtcpp
+
+jobs:
+  run-integration-tests:
+    timeout-minutes: 60
+    runs-on: ${{ matrix.os }}
+    environment: release
+    name: ${{ matrix.platform }}-${{ matrix.arch }}-integration-tests
+    permissions:
+      contents: read
+      packages: read
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          # Run Linux x64 tests on both Ubuntu 22.04 and 24.04 to ensure compatibility
+          - os: ubuntu-22.04
+            platform: linux
+            arch: x64
+          - os: ubuntu-24.04
+            platform: linux
+            arch: x64
+          - os: ubuntu-24.04-arm
+            platform: linux
+            arch: arm64
+          - os: ubuntu-22.04-arm
+            platform: linux
+            arch: arm64
+          - os: macos-14
+            platform: darwin
+            arch: arm64
+          - os: windows-2022
+            platform: win32
+            arch: x64
+
+    steps:
+      - name: Setup Node.js
+        uses: actions/setup-node@53b83947a5a98c8d113130e565377fae1a50d02f # 6.3.0
+        with:
+          node-version: lts/*
+
+      - name: Windows - enable git long paths
+        if: ${{ matrix.platform == 'win32' }}
+        shell: bash
+        run: git config --system core.longpaths true
+
+      - name: Checkout code
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # 6.0.2
+        with:
+          repository: ${{ inputs.repository || github.repository }}
+          ref: ${{ inputs.ref || github.ref }}
+          token: ${{ secrets.PAT_TOKEN }}
+
+      - name: Configure scoped registry for @tetherto and @qvac packages
+        working-directory: ${{ inputs.workdir || env.PKG_DIR }}
+        env:
+          GPR_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          NPM_TOKEN: ${{ secrets.NPM_TOKEN }}
+          GIT_PAT: ${{ secrets.PAT_TOKEN }}
+        shell: bash
+        run: |
+          echo "Configuring scoped registry for @tetherto and @qvac packages..."
+          set -eu
+          echo "Writing .npmrc for dual registry install…"
+          cat > .npmrc <<NPMRC
+          registry=https://registry.npmjs.org/
+          @qvac:registry=https://registry.npmjs.org/
+          @tetherto:registry=https://npm.pkg.github.com/
+          //registry.npmjs.org/:_authToken=${NPM_TOKEN}
+          //npm.pkg.github.com/:_authToken=${GPR_TOKEN}
+          NPMRC
+
+          # Optional: make private git deps work without prompting
+          if [ -n "${GIT_PAT:-}" ]; then
+            git config --global url."https://${GIT_PAT}:@github.com/".insteadOf "https://github.com/"
+            git config --global url."https://${GIT_PAT}:@github.com/".insteadOf "git@github.com:"
+          else
+            # Using the workflow's GITHUB_TOKEN for git clones when possible
+            git config --global url."https://${{ github.token }}:@github.com/".insteadOf "https://github.com/"
+            git config --global url."https://${{ github.token }}:@github.com/".insteadOf "git@github.com:"
+            git config --global url."https://${{ github.token }}:@github.com/".insteadOf "ssh://git@github.com/"
+          fi
+
+      - name: Install NPM dependencies
+        working-directory: ${{ inputs.workdir || env.PKG_DIR }}
+        run: |
+          npm install
+          npm install -g bare bare-make
+
+      - name: Download prebuilds from artifact
+        if: ${{ !inputs.prebuild_package }}
+        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # 8.0.1
+        with:
+          path: ${{ inputs.workdir || env.PKG_DIR }}/prebuilds
+          merge-multiple: true
+
+      - name: Download prebuilds from package
+        if: ${{ inputs.prebuild_package }}
+        working-directory: ${{ inputs.workdir || env.PKG_DIR }}
+        shell: bash
+        run: |
+          mkdir -p prebuilds
+          npm pack ${{ inputs.prebuild_package }} --pack-destination /tmp
+          tar -xzf /tmp/*.tgz -C /tmp
+          cp -r /tmp/package/prebuilds/* prebuilds/
+
+      - name: Print run state
+        working-directory: ${{ inputs.workdir || env.PKG_DIR }}
+        shell: bash
+        run: |
+          echo "node version: $(node -v)"
+          echo "npm version: $(npm -v)"
+          echo "bare version: $(bare -v)"
+          echo "bare-make version: $(bare-make --version)"
+          npm list
+          npm config list
+        continue-on-error: true
+
+      - name: Print run state (model and prebuilds)
+        working-directory: ${{ inputs.workdir || env.PKG_DIR }}
+        shell: bash
+        run: |
+          echo "node version: $(node -v)"
+          echo "npm version: $(npm -v)"
+          echo "bare version: $(bare -v)"
+          echo "bare-make version: $(bare-make --version)"
+          ls -la prebuilds || true
+          tree prebuilds || true
+        continue-on-error: true
+
+      - name: Linux - install dependencies
+        if: matrix.platform == 'linux' || matrix.platform == 'android'
+        shell: bash
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y mesa-vulkan-drivers
+
+      - name: Configure AWS credentials
+        uses: aws-actions/configure-aws-credentials@8df5847569e6427dd6c4fb1cf565c83acfa8afa7 # 6.0.0
+        with:
+          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          aws-region: us-east-1
+
+      - name: Download Bergamot models from Firefox CDN
+        working-directory: ${{ inputs.workdir || env.PKG_DIR }}
+        shell: bash
+        run: |
+          RECORDS_URL="https://firefox.settings.services.mozilla.com/v1/buckets/main/collections/translations-models/records"
+          ATTACHMENT_BASE="https://firefox-settings-attachments.cdn.mozilla.net"
+
+          echo "Fetching model index from Mozilla..."
+          RECORDS=$(curl -sS "$RECORDS_URL")
+
+          download_bergamot_pair() {
+            local SRC_LANG="$1"
+            local DST_LANG="$2"
+            local PAIR_CODE="${SRC_LANG}${DST_LANG}"
+            local DEST_DIR="model/bergamot/${PAIR_CODE}"
+            mkdir -p "$DEST_DIR"
+
+            echo "Downloading Bergamot ${SRC_LANG}-${DST_LANG} model..."
+
+            URLS=$(echo "$RECORDS" | python3 -c "
+          import sys, json
+          data = json.load(sys.stdin)
+          for r in data.get('data', []):
+              if r.get('fromLang') == '${SRC_LANG}' and r.get('toLang') == '${DST_LANG}':
+                  att = r.get('attachment', {})
+                  loc = att.get('location', '')
+                  name = r.get('name', '') or att.get('filename', '')
+                  if loc and name:
+                      print(f'{name}|{loc}')
+          " | tr -d '\r')
+
+            if [ -z "$URLS" ]; then
+                echo "  ⚠ No Firefox model found for ${SRC_LANG}-${DST_LANG} (skipping)"
+                return 1
+            fi
+
+            while IFS='|' read -r FILENAME LOCATION; do
+                FILENAME=$(echo "$FILENAME" | tr -d '\r')
+                LOCATION=$(echo "$LOCATION" | tr -d '\r')
+                URL="${ATTACHMENT_BASE}/${LOCATION}"
+                echo "  Downloading ${FILENAME}..."
+                curl -sS -L -o "${DEST_DIR}/${FILENAME}" "$URL"
+            done <<< "$URLS"
+
+            echo "  ✅ ${SRC_LANG}-${DST_LANG} ready"
+          }
+
+          download_bergamot_pair "en" "it"
+          download_bergamot_pair "es" "en"
+          download_bergamot_pair "fr" "en"
+          download_bergamot_pair "en" "es"
+
+          echo ""
+          echo "Bergamot model directories:"
+          ls -la model/bergamot/
+
+      - name: Download IndicTrans model from S3
+        working-directory: ${{ inputs.workdir || env.PKG_DIR }}
+        shell: bash
+        run: |
+          echo "Downloading IndicTrans en-indic model from S3..."
+          mkdir -p model/indictrans
+          aws s3 cp "s3://${{ secrets.MODEL_S3_BUCKET }}/qvac_models_compiled/ggml/indictrans2/q4_0/ggml-indictrans2-en-indic-dist-200M/2026-01-01/ggml-indictrans2-en-indic-dist-200M-q4_0.bin" model/indictrans/
+          echo "IndicTrans model files:"
+          ls -la model/indictrans/
+
+      - name: Run integration test (Linux/macOS)
+        if: ${{ matrix.platform != 'win32' }}
+        working-directory: ${{ inputs.workdir || env.PKG_DIR }}
+        run: |
+          npm run test:integration ${{ matrix.platform }}-${{ matrix.arch }} 2>&1 | tee test-output.log
+          exit ${PIPESTATUS[0]}
+        shell: bash
+        env:
+          QASE_API_TOKEN: ${{ secrets.QASE_API_TOKEN }}
+
+      - name: Run integration test (Windows)
+        if: ${{ matrix.platform == 'win32' }}
+        working-directory: ${{ inputs.workdir || env.PKG_DIR }}
+        run: |
+          npm run test:integration ${{ matrix.platform }}-${{ matrix.arch }} | Tee-Object test-output.log
+        shell: powershell
+        env:
+          QASE_API_TOKEN: ${{ secrets.QASE_API_TOKEN }}
+
+      - name: Generate test report (Linux/macOS)
+        if: ${{ always() && matrix.platform != 'win32' }}
+        working-directory: ${{ inputs.workdir || env.PKG_DIR }}
+        shell: bash
+        run: |
+          REPORT="test-report.txt"
+          PLATFORM="${{ matrix.platform }}-${{ matrix.arch }}"
+
+          echo "========================================" > "$REPORT"
+          echo "  Integration Test Report -- ${PLATFORM}" >> "$REPORT"
+          echo "  $(date -u '+%Y-%m-%d %H:%M:%S UTC')" >> "$REPORT"
+          echo "========================================" >> "$REPORT"
+          echo "" >> "$REPORT"
+
+          if [ ! -f test-output.log ]; then
+            echo "NO TEST OUTPUT -- tests may not have started." >> "$REPORT"
+            cat "$REPORT"
+            exit 0
+          fi
+
+          awk '
+          /^ok [0-9]+ - / {
+            name = $0; sub(/^ok [0-9]+ - /, "", name)
+            passed++
+            results[++total] = "PASS: " name
+            next
+          }
+          /^not ok [0-9]+ - / {
+            name = $0; sub(/^not ok [0-9]+ - /, "", name)
+            failed++
+            results[++total] = "FAIL: " name
+            capturing = 1
+            fail_detail[total] = ""
+            next
+          }
+          /^# skip/ {
+            split($0, a, " "); skipped = a[3]
+            next
+          }
+          capturing && /^[^ \t#]/ { capturing = 0; next }
+          capturing {
+            fail_detail[total] = fail_detail[total] $0 "\n"
+          }
+          END {
+            printf "TOTAL: %d  |  PASSED: %d  |  FAILED: %d  |  SKIPPED: %s\n\n", total, passed, failed, (skipped ? skipped : "0")
+
+            if (failed > 0) {
+              print "======== ALL TESTS ========"
+              print ""
+            }
+            for (i = 1; i <= total; i++) {
+              print results[i]
+            }
+
+            has_failures = 0
+            for (i = 1; i <= total; i++) {
+              if (fail_detail[i] != "") has_failures = 1
+            }
+            if (has_failures) {
+              print ""
+              print "======== FAILURE DETAILS ========"
+              for (i = 1; i <= total; i++) {
+                if (fail_detail[i] != "") {
+                  print ""
+                  print results[i]
+                  print "--------"
+                  printf "%s", fail_detail[i]
+                }
+              }
+            }
+          }
+          ' test-output.log >> "$REPORT"
+
+          echo "" >> "$REPORT"
+          echo "Full log: test-output.log (uploaded as artifact)" >> "$REPORT"
+
+          echo "--- Test Report ---"
+          cat "$REPORT"
+
+          echo ""
+          echo "::group::📄 Full Raw Test Output (test-output.log)"
+          cat test-output.log 2>/dev/null || echo "(no test output captured)"
+          echo "::endgroup::"
+
+      - name: Generate test report (Windows)
+        if: ${{ always() && matrix.platform == 'win32' }}
+        working-directory: ${{ inputs.workdir || env.PKG_DIR }}
+        shell: powershell
+        run: |
+          $report = "test-report.txt"
+          $platform = "${{ matrix.platform }}-${{ matrix.arch }}"
+          $ts = Get-Date -Format 'yyyy-MM-dd HH:mm:ss'
+          $header = "========================================`n"
+          $header += "  Integration Test Report - $platform`n"
+          $header += "  $ts UTC`n"
+          $header += "========================================`n"
+          $header | Out-File -FilePath $report -Encoding utf8
+
+          if (-not (Test-Path test-output.log)) {
+            "NO TEST OUTPUT -- tests may not have started." | Out-File -Append -FilePath $report
+            Get-Content $report
+            exit 0
+          }
+
+          $lines = Get-Content test-output.log
+          $passed = @()
+          $failed = @()
+          $failDetails = @{}
+          $currentFail = $null
+
+          foreach ($line in $lines) {
+            if ($line -match '^ok \d+ - (.+)') {
+              $passed += "PASS: $($Matches[1])"
+              $currentFail = $null
+            }
+            elseif ($line -match '^not ok \d+ - (.+)') {
+              $testName = $Matches[1]
+              $failed += "FAIL: $testName"
+              $currentFail = $testName
+              $failDetails[$testName] = @()
+            }
+            elseif ($null -ne $currentFail) {
+              if ($line -match '^[^ \t#]') {
+                $currentFail = $null
+              } else {
+                $failDetails[$currentFail] += $line
+              }
+            }
+          }
+
+          $total = $passed.Count + $failed.Count
+          "TOTAL: $total  |  PASSED: $($passed.Count)  |  FAILED: $($failed.Count)" | Out-File -Append -FilePath $report
+          "" | Out-File -Append -FilePath $report
+
+          if ($failed.Count -gt 0) {
+            "======== ALL TESTS ========" | Out-File -Append -FilePath $report
+            "" | Out-File -Append -FilePath $report
+          }
+          foreach ($p in $passed) { $p | Out-File -Append -FilePath $report }
+          foreach ($f in $failed) { $f | Out-File -Append -FilePath $report }
+
+          if ($failed.Count -gt 0) {
+            "" | Out-File -Append -FilePath $report
+            "======== FAILURE DETAILS ========" | Out-File -Append -FilePath $report
+            foreach ($f in $failed) {
+              $testName = $f -replace '^FAIL: ', ''
+              "" | Out-File -Append -FilePath $report
+              $f | Out-File -Append -FilePath $report
+              "--------" | Out-File -Append -FilePath $report
+              if ($failDetails.ContainsKey($testName)) {
+                $failDetails[$testName] | Out-File -Append -FilePath $report
+              }
+            }
+          }
+
+          "" | Out-File -Append -FilePath $report
+          "Full log: test-output.log (uploaded as artifact)" | Out-File -Append -FilePath $report
+
+          Write-Host "--- Test Report ---"
+          Get-Content $report
+
+          Write-Host ""
+          Write-Host "::group::Full Raw Test Output (test-output.log)"
+          if (Test-Path test-output.log) { Get-Content test-output.log } else { Write-Host "(no test output captured)" }
+          Write-Host "::endgroup::"
+
+      - name: Upload test logs
+        if: ${{ always() }}
+        uses: actions/upload-artifact@bbbca2ddaa5d8feaa63e36b76fdaad77386f024f # 7.0.0
+        with:
+          name: test-logs-${{ matrix.os }}-${{ matrix.arch }}
+          path: |
+            ${{ inputs.workdir || env.PKG_DIR }}/test-report.txt
+            ${{ inputs.workdir || env.PKG_DIR }}/test-output.log
+          retention-days: 14
+
+      - name: Run quickstart example with deps installed
+        working-directory: ${{ inputs.workdir || env.PKG_DIR }}
+        shell: bash
+        run: |
+          npm install "@qvac/translation-nmtcpp"
+          npx bare examples/quickstart.js
+        continue-on-error: true
