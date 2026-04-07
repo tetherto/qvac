@@ -53,21 +53,23 @@ async function runSupertonicTTS (payload) {
       `[Supertonic] Loading Supertone ONNX from: ${modelDir} (voice: ${voiceName}, multilingual: ${supertonicMultilingual})`
     )
 
-    const args = {
-      modelDir,
-      voiceName,
-      speed,
-      numInferenceSteps,
-      supertonicMultilingual,
-      opts: { stats: true }
-    }
-
     const modelConfig = {
       language: config.language || 'en',
       useGPU: config.useGPU === true
     }
 
-    cachedModel = new ONNXTTS(args, modelConfig)
+    cachedModel = new ONNXTTS({
+      files: {
+        modelDir
+      },
+      engine: 'supertonic',
+      voiceName,
+      speed,
+      numInferenceSteps,
+      supertonicMultilingual,
+      config: modelConfig,
+      opts: { stats: true }
+    })
     await cachedModel.load()
 
     const [loadSec, loadNano] = process.hrtime(loadStart)
