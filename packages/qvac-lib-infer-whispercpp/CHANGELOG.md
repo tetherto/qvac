@@ -5,6 +5,15 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [Unreleased]
+
+### Changed
+- Bumped `qvac-lib-inference-addon-cpp` to `1.1.5`.
+- Restored JS-owned job ID routing after addon-cpp reverted the accidental `1.1.3` native callback `jobId` contract and `cancel(jobId)` API break.
+
+### Added
+- Regression coverage for JS-owned cancel handling of active, buffered, and stale wrapper job IDs.
+
 ## [0.5.4]
 
 ### Changed
