@@ -208,7 +208,7 @@ startStreaming(js_env_t* env, js_callback_info_t* info) try {
   if (!(jobIdDouble >= 1.0)) {
     throw std::runtime_error("jobId must be a positive integer");
   }
-  config.jobId = static_cast<JobId>(jobIdDouble);
+  config.jobId = static_cast<decltype(config.jobId)>(jobIdDouble);
 
   auto maybeVadThreshold =
       configObj.getOptionalProperty<js::Number>(env, "vadThreshold");

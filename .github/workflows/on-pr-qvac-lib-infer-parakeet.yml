@@ -42,6 +42,7 @@ permissions:
   pull-requests: read
   packages: read
   checks: read
+  id-token: write
 
 jobs:
   authorize:
