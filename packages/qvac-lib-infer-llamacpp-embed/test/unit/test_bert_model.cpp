@@ -7,12 +7,40 @@
 #include <gtest/gtest.h>
 #include <llama.h>
 #include <qvac-lib-inference-addon-cpp/Errors.hpp>
+#include <qvac-lib-inference-addon-cpp/RuntimeStats.hpp>
 
 #include "addon/AddonCpp.hpp"
 #include "addon/BertErrors.hpp"
 #include "model-interface/BertModel.hpp"
 
 namespace fs = std::filesystem;
+
+namespace {
+double getStatValue(
+    const qvac_lib_inference_addon_cpp::RuntimeStats& stats,
+    const std::string& key) {
+  for (const auto& stat : stats) {
+    if (stat.first == key) {
+      return std::visit(
+          [](const auto& value) -> double {
+            if constexpr (std::is_same_v<
+                              std::decay_t<decltype(value)>,
+                              double>) {
+              return value;
+            } else if constexpr (std::is_same_v<
+                                     std::decay_t<decltype(value)>,
+                                     int64_t>) {
+              return static_cast<double>(value);
+            } else {
+              return 0.0;
+            }
+          },
+          stat.second);
+    }
+  }
+  return 0.0;
+}
+} // namespace
 
 inline BertModel*
 getModelFromAddon(qvac_lib_inference_addon_cpp::AddonCpp* addon) {
@@ -237,6 +265,8 @@ TEST_F(BertModelTest, RuntimeStatsBeforeProcessing) {
   // These should be present if model is loaded
   EXPECT_TRUE(hasBatchSize);
   EXPECT_TRUE(hasContextSize);
+  double backendDevice = getStatValue(stats, "backendDevice");
+  EXPECT_TRUE(backendDevice == 0.0 || backendDevice == 1.0);
 }
 
 TEST_F(BertModelTest, RuntimeStatsAfterProcessing) {
@@ -273,6 +303,8 @@ TEST_F(BertModelTest, RuntimeStatsAfterProcessing) {
   }
   EXPECT_TRUE(hasTotalTokens);
   EXPECT_TRUE(hasTotalTime);
+  double backendDevice = getStatValue(stats, "backendDevice");
+  EXPECT_TRUE(backendDevice == 0.0 || backendDevice == 1.0);
 }
 
 TEST_F(BertModelTest, ConstructorWithInvalidPath) {
