@@ -1068,6 +1068,7 @@ std::string ParakeetModel::greedyDecode(
   std::vector<float> encoderSlice(ENCODER_DIM);
 
   for (int64_t t = 0; t < encodedLength; t += skip) {
+    throwIfCancelled();
     for (int i = 0; i < ENCODER_DIM; ++i) {
       encoderSlice[i] = encoderOutput[i * encodedLength + t];
     }
@@ -1467,6 +1468,7 @@ std::string ParakeetModel::eouDecodeChunk(
   std::vector<float> encoderFrame(EOU_ENCODER_DIM);
 
   for (int64_t t = 0; t < encodedFrames; ++t) {
+    throwIfCancelled();
     std::copy(
         encoderOutput.begin() + t * EOU_ENCODER_DIM,
         encoderOutput.begin() + (t + 1) * EOU_ENCODER_DIM,
@@ -1482,6 +1484,7 @@ std::string ParakeetModel::eouDecodeChunk(
 
     int symsThisFrame = 0;
     while (symsThisFrame < EOU_MAX_SYMBOLS_PER_STEP) {
+      throwIfCancelled();
       std::vector<int32_t> targetData = {eouState_.lastToken};
       std::vector<int64_t> targetShape = {1, 1};
       Ort::Value targetTensor = Ort::Value::CreateTensor<int32_t>(
@@ -1936,6 +1939,7 @@ std::string ParakeetModel::processTDT(const Input& input) {
         runEncoder(melFeatures, numFrames, encodedLength, alreadyTransposed);
     totalEncodedFrames_ += encodedLength;
   });
+  throwIfCancelled();
 
   QLOG(
       qvac_lib_inference_addon_cpp::logger::Priority::DEBUG,
@@ -1944,6 +1948,7 @@ std::string ParakeetModel::processTDT(const Input& input) {
   std::string text;
   measureTime(
       decoderMs_, [&]() { text = greedyDecode(encoderOutput, encodedLength); });
+  throwIfCancelled();
 
   if (!isSentinel(text)) {
     totalTokens_ += static_cast<int64_t>(countWords(text));
@@ -1980,9 +1985,11 @@ std::string ParakeetModel::processCTC(const Input& input) {
   std::vector<float> logits;
   measureTime(
       encoderMs_, [&]() { logits = runCTCModel(melFeatures, numFrames); });
+  throwIfCancelled();
 
   std::string text;
   measureTime(decoderMs_, [&]() { text = ctcGreedyDecode(logits, numFrames); });
+  throwIfCancelled();
 
   if (!isSentinel(text)) {
     totalTokens_ += static_cast<int64_t>(countWords(text));
@@ -2016,6 +2023,7 @@ std::string ParakeetModel::processEOU(const Input& input) {
 
   for (int64_t start = 0; start < numFrames;
        start += EOU_ENCODER_CHUNK_FRAMES) {
+    throwIfCancelled();
     int64_t end = std::min(
         start + static_cast<int64_t>(EOU_ENCODER_CHUNK_FRAMES), numFrames);
     int64_t chunkLen = end - start;
@@ -2032,6 +2040,7 @@ std::string ParakeetModel::processEOU(const Input& input) {
     measureTime(encoderMs_, [&]() {
       encoderOutput = eouEncodeChunk(melChunk, chunkLen, outFrames);
     });
+    throwIfCancelled();
     totalEncoded += outFrames;
     totalEncodedFrames_ += outFrames;
 
@@ -2043,6 +2052,7 @@ std::string ParakeetModel::processEOU(const Input& input) {
     measureTime(decoderMs_, [&]() {
       chunkText = eouDecodeChunk(encoderOutput, outFrames, chunkEou);
     });
+    throwIfCancelled();
     eouCount += chunkEou;
 
     if (!chunkText.empty()) {
@@ -2095,6 +2105,7 @@ std::string ParakeetModel::processSortformer(const Input& input) {
   measureTime(encoderMs_, [&]() {
     text = runSortformerFromMel(melFeatures, numFrames);
   });
+  throwIfCancelled();
 
   QLOG(
       qvac_lib_inference_addon_cpp::logger::Priority::DEBUG,
@@ -2105,9 +2116,7 @@ std::string ParakeetModel::processSortformer(const Input& input) {
 }
 
 void ParakeetModel::process(const Input& input) {
-  if (cancelRequested_.exchange(false)) {
-    throw std::runtime_error("Job cancelled");
-  }
+  throwIfCancelled();
 
   if (input.empty()) {
     QLOG(
@@ -2141,8 +2150,13 @@ void ParakeetModel::process(const Input& input) {
 
   if (modelReady) {
     try {
+      throwIfCancelled();
       text = runInferencePipeline(input);
+      throwIfCancelled();
     } catch (const std::exception& e) {
+      if (isCancellationError(e)) {
+        throw;
+      }
       QLOG(
           qvac_lib_inference_addon_cpp::logger::Priority::ERROR,
           std::string("Inference error: ") + e.what());
@@ -2204,8 +2218,16 @@ std::any ParakeetModel::process(const std::any& input) {
         input.type().name());
   }
 
+  const auto generation = nextGeneration_.fetch_add(1, std::memory_order_relaxed);
   reset();
-  process(modelInput.input);
+  activeGeneration_.store(generation, std::memory_order_relaxed);
+  try {
+    process(modelInput.input);
+  } catch (...) {
+    activeGeneration_.store(0, std::memory_order_relaxed);
+    throw;
+  }
+  activeGeneration_.store(0, std::memory_order_relaxed);
   return output_;
 }
 
@@ -2275,7 +2297,24 @@ qvac_lib_inference_addon_cpp::RuntimeStats ParakeetModel::runtimeStats() const {
 }
 
 void ParakeetModel::cancel() const {
-  cancelRequested_.store(true, std::memory_order_relaxed);
+  const auto activeGeneration = activeGeneration_.load(std::memory_order_relaxed);
+  if (activeGeneration != 0) {
+    cancelGeneration_.store(activeGeneration, std::memory_order_relaxed);
+  }
+}
+
+void ParakeetModel::throwIfCancelled() const {
+  const auto activeGeneration = activeGeneration_.load(std::memory_order_relaxed);
+  if (
+      activeGeneration != 0 &&
+      cancelGeneration_.load(std::memory_order_relaxed) == activeGeneration) {
+    cancelGeneration_.store(0, std::memory_order_relaxed);
+    throw std::runtime_error(ERR_JOB_CANCELLED);
+  }
+}
+
+bool ParakeetModel::isCancellationError(const std::exception& e) {
+  return std::string_view(e.what()) == ERR_JOB_CANCELLED;
 }
 
 } // namespace qvac_lib_infer_parakeet
