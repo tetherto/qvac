@@ -21,6 +21,7 @@ permissions:
   contents: read
   pull-requests: read
   packages: read
+  id-token: write
 
 env:
   PKG_DIR: packages/qvac-lib-infer-nmtcpp
@@ -125,6 +126,7 @@ jobs:
       contents: read
       packages: read
       pull-requests: write
+      id-token: write
     if: |
       always() &&
       needs.authorize.outputs.allowed == 'true' &&
@@ -140,6 +142,7 @@ jobs:
       contents: write
       packages: write
       pull-requests: write
+      id-token: write
     needs: [authorize, changes, sanity-checks]
     if: |
       always() &&
@@ -157,6 +160,10 @@ jobs:
       always() &&
       needs.authorize.outputs.allowed == 'true' &&
       (needs.changes.outputs.pkg == 'true' || github.event_name == 'workflow_dispatch')
+    permissions:
+      contents: read
+      packages: read
+      id-token: write
     uses: ./.github/workflows/integration-test-qvac-lib-infer-nmtcpp.yml
     secrets: inherit
     with:
@@ -168,6 +175,7 @@ jobs:
       contents: read
       packages: read
       pull-requests: write # Allow commenting on PRs
+      id-token: write
     needs: [authorize, changes, sanity-checks, prebuild]
     if: |
       always() &&

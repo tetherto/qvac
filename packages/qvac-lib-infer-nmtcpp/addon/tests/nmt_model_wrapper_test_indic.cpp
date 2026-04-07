@@ -14,7 +14,7 @@
 #include "../src/model-interface/TranslationModel.hpp"
 #include "NmtSharedTests.hpp"
 
-using qvac_lib_inference_addon_marian::TranslationModel;
+using qvac_lib_inference_addon_nmt::TranslationModel;
 
 namespace qvac_lib_inference_addon_nmt::test_indic {
 
