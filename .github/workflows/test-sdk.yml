@@ -73,6 +73,11 @@ jobs:
     secrets: inherit
 
   android-tests:
+    permissions:
+      id-token: write
+      contents: read
+      pull-requests: write
+      packages: read
     # Runs for: all, mobile, android, empty (future PR/push)
     if: inputs.targets != 'desktop' && inputs.targets != 'ios'
     uses: ./.github/workflows/test-android-sdk.yml
