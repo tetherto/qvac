@@ -11,7 +11,7 @@
 #include "TranslationModel.hpp"
 #include "qvac-lib-inference-addon-cpp/ModelInterfaces.hpp"
 
-namespace qvac_lib_inference_addon_marian {
+namespace qvac_lib_inference_addon_nmt {
 
 class PivotTranslationModel
     : public qvac_lib_inference_addon_cpp::model::IModel,
@@ -73,4 +73,4 @@ private:
   mutable std::atomic<bool> stopTranslation_ = false;
 };
 
-} // namespace qvac_lib_inference_addon_marian
+} // namespace qvac_lib_inference_addon_nmt
