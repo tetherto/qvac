@@ -30,7 +30,7 @@ env:
   PREBUILD_ARTIFACT_PREFIX: "llama-cpp-" # Prefix for prebuild artifacts (empty string for generic patterns)
   TEST_FRAMEWORK_REF: "main" # Branch/tag of qvac-test-addon-mobile framework
   APP_BUNDLE_ID: "io.tether.test.qvac" # Bundle ID for the test app (same for all addons)
-  ADDON_WORKDIR: "${{ github.workspace }}/addon/packages/qvac-lib-infer-llamacpp-llm"
+  ADDON_WORKDIR: "addon/packages/qvac-lib-infer-llamacpp-llm"
 
 jobs:
   build-and-test:
@@ -58,7 +58,7 @@ jobs:
     steps:
       # Validate input data to prevent "Artifact Poisoning"
       - name: Validate Dispatch Inputs
-        if: github.event_name == 'workflow_dispatch'
+        if: github.event_name == 'workflow_dispatch' && github.event.inputs.package
         run: |
           if [[ ! "${{ github.event.inputs.package }}" =~ ^@qvac/ ]]; then
             echo "::error::Invalid package scope. Only @qvac/* is allowed."
@@ -119,7 +119,7 @@ jobs:
           echo "Configuring scoped registry for @tetherto and @qvac packages..."
 
           # Configure addon registry (monorepo package dir)
-          cd "${{ env.ADDON_WORKDIR }}"
+          cd "${{ github.workspace }}/${{ env.ADDON_WORKDIR }}"
           cat > .npmrc <<NPMRC
           always-auth=true
           registry=https://registry.npmjs.org/
@@ -148,13 +148,11 @@ jobs:
           echo "Installing global dependencies..."
           npm install -g @expo/cli@latest
 
-      - run: mkdir -p ${{ runner.temp }}/qvac-lib-infer-llamacpp-llm
-
       - name: Download Android prebuilds (from artifacts)
         if: matrix.platform == 'Android' && !inputs.package
         uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # 8.0.1
         with:
-          path: ${{ runner.temp }}/qvac-lib-infer-llamacpp-llm
+          path: ${{ github.workspace }}/${{ env.ADDON_WORKDIR }}/prebuilds
           pattern: ${{ env.PREBUILD_ARTIFACT_PREFIX }}android-*
           merge-multiple: true
         continue-on-error: true
@@ -163,7 +161,7 @@ jobs:
         if: matrix.platform == 'iOS' && !inputs.package
         uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # 8.0.1
         with:
-          path: ${{ runner.temp }}/qvac-lib-infer-llamacpp-llm
+          path: ${{ github.workspace }}/${{ env.ADDON_WORKDIR }}/prebuilds
           pattern: ${{ env.PREBUILD_ARTIFACT_PREFIX }}ios-*
           merge-multiple: true
         continue-on-error: true
@@ -346,7 +344,7 @@ jobs:
           echo "  7. Bundle the app"
           echo ""
 
-          ADDON_PATH="${{ env.ADDON_WORKDIR }}"
+          ADDON_PATH="${{ github.workspace }}/${{ env.ADDON_WORKDIR }}"
           npm run build "$ADDON_PATH" "$ADDON_PATH/test/mobile"
 
           echo ""
