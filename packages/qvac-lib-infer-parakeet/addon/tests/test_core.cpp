@@ -298,20 +298,27 @@ TEST_F(ParakeetModelTest, ProcessAnyRejectsUnsupportedInputType) {
   EXPECT_THROW({ model.process(std::any(42)); }, std::exception);
 }
 
-TEST_F(ParakeetModelTest, CancelCausesProcessToThrow) {
+TEST_F(ParakeetModelTest, CancelBeforeProcessDoesNotPoisonFutureRun) {
   ParakeetModel model(config);
   std::vector<float> dummyAudio(16000, 0.1f);
   model.cancel();
 
-  EXPECT_THROW({ model.process(dummyAudio); }, std::runtime_error);
+  EXPECT_NO_THROW({
+    model.process(dummyAudio);
+    auto output = model.process(dummyAudio, nullptr);
+    EXPECT_FALSE(output.empty());
+  });
 }
 
-TEST_F(ParakeetModelTest, CancelCausesProcessAnyToThrow) {
+TEST_F(ParakeetModelTest, CancelBeforeProcessAnyDoesNotPoisonFutureRun) {
   ParakeetModel model(config);
   std::vector<float> dummyAudio(16000, 0.1f);
   model.cancel();
 
-  EXPECT_THROW({ model.process(std::any(dummyAudio)); }, std::runtime_error);
+  EXPECT_NO_THROW({
+    auto output = model.process(std::any(dummyAudio));
+    EXPECT_TRUE(output.has_value());
+  });
 }
 
 TEST_F(ParakeetModelTest, ProcessWithCallbackReturnsOutput) {
