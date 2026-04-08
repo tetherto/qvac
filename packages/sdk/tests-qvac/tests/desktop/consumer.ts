@@ -32,7 +32,6 @@ import {
   PARAKEET_TDT_PREPROCESSOR_INT8,
   PARAKEET_TDT_VOCAB,
   PARAKEET_CTC_FP32,
-  PARAKEET_CTC_DATA_FP32,
   PARAKEET_CTC_TOKENIZER,
   PARAKEET_SORTFORMER_FP32,
   SMOLVLM2_500M_MULTIMODAL_Q8_0,
@@ -303,7 +302,6 @@ resources.define("parakeet-ctc", {
   config: {
     modelType: "ctc",
     parakeetCtcModelSrc: PARAKEET_CTC_FP32,
-    parakeetCtcModelDataSrc: PARAKEET_CTC_DATA_FP32,
     parakeetTokenizerSrc: PARAKEET_CTC_TOKENIZER,
   },
 });
