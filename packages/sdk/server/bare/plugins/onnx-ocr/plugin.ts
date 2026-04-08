@@ -15,8 +15,6 @@ import {
 import { ModelLoadFailedError } from "@/utils/errors-server";
 import { hyperdriveUrlSchema } from "@/schemas/load-model";
 import { createStreamLogger, registerAddonLogger } from "@/logging";
-import { parseModelPath } from "@/server/utils";
-import FilesystemDL from "@qvac/dl-filesystem";
 import { ONNXOcr } from "@qvac/ocr-onnx";
 import { ocr } from "@/server/bare/plugins/onnx-ocr/ops/ocr-stream";
 import { attachModelExecutionMs } from "@/profiling/model-execution";
@@ -41,8 +39,6 @@ function createOCRModel(
   recognizerPath: string,
   ocrConfig: OCRConfig,
 ) {
-  const { dirPath } = parseModelPath(detectorPath);
-  const loader = new FilesystemDL({ dirPath });
   const logger = createStreamLogger(modelId, ModelType.onnxOcr);
   registerAddonLogger(modelId, ModelType.onnxOcr, logger);
 
@@ -76,17 +72,10 @@ function createOCRModel(
     }),
   };
 
-  const args = {
-    loader: loader,
-    logger,
-    params,
-    opts: { stats: true },
-  };
-
   // eslint-disable-next-line @typescript-eslint/no-explicit-any, @typescript-eslint/no-unsafe-argument
-  const model = new ONNXOcr(args as any);
+  const model = new ONNXOcr({ params, logger, opts: { stats: true } } as any);
 
-  return { model, loader };
+  return model;
 }
 
 export const ocrPlugin = definePlugin({
@@ -125,14 +114,14 @@ export const ocrPlugin = definePlugin({
       );
     }
 
-    const { model, loader } = createOCRModel(
+    const model = createOCRModel(
       params.modelId,
       detectorModelPath,
       params.modelPath, // recognizerPath
       ocrConfig,
     );
 
-    return { model, loader };
+    return { model, loader: null };
   },
 
   handlers: {
