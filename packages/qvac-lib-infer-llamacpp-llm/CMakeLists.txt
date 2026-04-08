@@ -32,6 +32,7 @@ configure_file(${VCPKG_INSTALLED_PATH}/share/qvac-lint-cpp/.clang-tidy
 
 find_path(PICOJSON_INCLUDE_DIRS "picojson/picojson.h")
 find_path(QVAC_LIB_INFERENCE_ADDON_CPP_INCLUDE_DIRS "qvac-lib-inference-addon-cpp/JsInterface.hpp")
+find_package(OpenSSL)
 find_package(llama CONFIG REQUIRED)
 
 if(WIN32)

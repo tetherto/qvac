@@ -24,14 +24,14 @@ using namespace qvac_lib_inference_addon_llama::utils;
 
 // NOLINTNEXTLINE(readability-function-cognitive-complexity)
 TextLlmContext::TextLlmContext(
-    common_params& commonParams, common_init_result&& llamaInit,
+    common_params& commonParams, common_init_result_ptr llamaInit,
     bool toolsAtEnd)
     : llamaInit_(std::move(llamaInit)), params_(commonParams) {
   dynamicToolsState().setToolsAtEnd(toolsAtEnd);
   {
 
-    model_ = llamaInit_.model.get();
-    lctx_ = llamaInit_.context.get();
+    model_ = llamaInit_->model();
+    lctx_ = llamaInit_->context();
     if (model_ == nullptr) {
       throw qvac_errors::StatusError(
           ADDON_ID, toString(UnableToLoadModel), "Failed to initialize model");

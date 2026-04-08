@@ -318,7 +318,7 @@ void LlamaModel::init(bool acquireLock) {
 
   snap.demoteToRead();
 
-  common_init_result llamaInit = initFromConfig(
+  common_init_result_ptr llamaInit = initFromConfig(
       params,
       modelPath,
       streamedFiles,
@@ -752,7 +752,7 @@ void LlamaModel::commonParamsParse(
   }
 
   auto ctxArg =
-      common_params_parser_init(params, LLAMA_EXAMPLE_MAIN, [](int, char**) {});
+      common_params_parser_init(params, LLAMA_EXAMPLE_COMMON, [](int, char**) {});
 
   // disable warmup run
   params.warmup = false;
@@ -1017,7 +1017,7 @@ void LlamaModel::resetState(bool resetStats) {
 
 std::unique_ptr<LlmContext> LlamaModel::createContext(
     std::string&& projectionPath, common_params& params,
-    common_init_result&& llamaInit, bool toolsAtEnd) {
+    common_init_result_ptr llamaInit, bool toolsAtEnd) {
   if (!projectionPath.empty()) {
     params.mmproj.path = std::move(projectionPath);
     return std::make_unique<MtmdLlmContext>(
@@ -1289,8 +1289,9 @@ std::string LlamaModel::finetune(
         throw std::runtime_error(
             "Failed to load LoRA adapter from checkpoint: " + adapterPath);
       }
-      llama_clear_adapter_lora(ctx);
-      if (llama_set_adapter_lora(ctx, adapter, 1.0f) < 0) {
+      struct llama_adapter_lora* adapters[] = { adapter };
+      float scales[] = { 1.0f };
+      if (llama_set_adapters_lora(ctx, adapters, 1, scales) < 0) {
         llama_adapter_lora_free(adapter);
         throw std::runtime_error(
             "Failed to attach resumed LoRA adapter to context");

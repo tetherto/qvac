@@ -19,7 +19,7 @@ public:
   TextLlmContext& operator=(TextLlmContext&&) = delete;
   // Constructor
   TextLlmContext(
-      common_params& commonParams, common_init_result&& llamaInit,
+      common_params& commonParams, common_init_result_ptr llamaInit,
       bool toolsAtEnd = false);
 
   // Destructor
@@ -170,7 +170,7 @@ private:
   void applyContextDiscard();
   void handleStopRequestAndAddEot(LlamaBatch& batch);
 
-  common_init_result llamaInit_;
+  common_init_result_ptr llamaInit_;
   llama_model* model_;
   llama_context* lctx_;
   const llama_vocab* vocab_;

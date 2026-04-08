@@ -255,7 +255,7 @@ private:
   void resetState(bool resetStats = true);
   std::unique_ptr<LlmContext> createContext(
       std::string&& projectionPath, common_params& params,
-      common_init_result&& llamaInit, bool toolsAtEnd);
+      common_init_result_ptr llamaInit, bool toolsAtEnd);
 
   bool loadMedia(const std::vector<uint8_t>& input);
 

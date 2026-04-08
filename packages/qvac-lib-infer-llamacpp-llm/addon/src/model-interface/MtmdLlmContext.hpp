@@ -19,7 +19,7 @@ public:
    * .gguf file(s)
    */
   MtmdLlmContext(
-      common_params& commonParams, common_init_result&& llamaInit,
+      common_params& commonParams, common_init_result_ptr llamaInit,
       bool toolsAtEnd = false);
 
   /**
@@ -198,7 +198,7 @@ private:
   void applyContextDiscard();
   void handleStopRequestAndAddEot(LlamaBatch& batchPtr);
 
-  common_init_result llamaInit_;
+  common_init_result_ptr llamaInit_;
   mtmd::context_ptr ctxVision_;
   llama_model* model_;
   llama_context* lctx_;

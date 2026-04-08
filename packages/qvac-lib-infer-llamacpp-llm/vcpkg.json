@@ -4,10 +4,11 @@
       "name": "opencl",
       "platform": "android"
     },
+    "nlohmann-json",
     "picojson",
     {
       "name": "qvac-fabric",
-      "version>=": "7248.2.2"
+      "version>=": "7248.2.1"
     },
     {
       "name": "qvac-lib-inference-addon-cpp",
