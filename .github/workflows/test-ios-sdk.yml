@@ -1,7 +1,5 @@
 name: QVAC iOS Tests (Device Farm)
 # Reusable workflow for running iOS tests via AWS Device Farm
-# Phase 1: SDK-side only -- lets qvac-test build:consumer:ios fail at xcodebuild,
-# then patches bundle ID and builds/signs the IPA in the workflow itself.
 
 on:
   workflow_call:
@@ -306,148 +304,31 @@ jobs:
         working-directory: ${{ inputs.working-directory }}
         run: bun run build
 
-      - name: Generate iOS project (qvac-test prebuild)
+      - name: Build iOS consumer IPA
         working-directory: ${{ inputs.working-directory }}
         env:
           NPM_CONFIG_USERCONFIG: ${{ github.workspace }}/${{ inputs.working-directory }}/.npmrc
+          QVAC_IOS_BUNDLE_ID: ${{ env.APP_BUNDLE_ID }}
+          QVAC_IOS_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
+          QVAC_IOS_CODE_SIGN_IDENTITY: "Apple Distribution"
+          QVAC_IOS_PROVISIONING_PROFILE: ${{ env.PP_UUID }}
+          QVAC_IOS_EXPORT_METHOD: ${{ env.EXPORT_METHOD }}
         run: |
-          echo "Running qvac-test build:consumer:ios..."
+          echo "Building iOS consumer IPA..."
           echo "   Run ID: ${{ steps.runid.outputs.runId }}"
+          echo "   Bundle ID: $QVAC_IOS_BUNDLE_ID"
           echo "   MQTT Host: $MQTT_HOST"
-          echo ""
-          echo "NOTE: This will fail at the xcodebuild step (no signing configured in CLI)."
-          echo "The workflow takes over after expo prebuild generates the Xcode project."
 
           npx qvac-test build:consumer:ios \
             --runId "${{ steps.runid.outputs.runId }}" \
-            --config . || true
+            --config .
 
-          IOS_PROJECT_DIR="build/consumers/ios/ios"
-          if [ ! -d "$IOS_PROJECT_DIR" ]; then
-            echo "iOS project directory not found at $IOS_PROJECT_DIR"
-            echo "Listing build directory:"
-            find build -type d -maxdepth 4 2>/dev/null || echo "No build directory"
-            exit 1
-          fi
-
-          echo "iOS project generated at $IOS_PROJECT_DIR"
-          ls -la "$IOS_PROJECT_DIR"
-
-      - name: Patch bundle identifier
-        working-directory: ${{ inputs.working-directory }}
-        run: |
-          IOS_DIR="build/consumers/ios/ios"
-          GENERATED_BUNDLE_ID="io.tether.qvac-test-consumer-mobile"
-
-          echo "Patching bundle ID: $GENERATED_BUNDLE_ID -> $APP_BUNDLE_ID"
-
-          PBXPROJ=$(find "$IOS_DIR" -name "project.pbxproj" -type f | head -1)
-          if [ -z "$PBXPROJ" ]; then
-            echo "project.pbxproj not found"
-            exit 1
-          fi
-
-          echo "Patching $PBXPROJ"
-          sed -i '' "s/$GENERATED_BUNDLE_ID/$APP_BUNDLE_ID/g" "$PBXPROJ"
-
-          # Patch the app's own Info.plist (skip Pods/frameworks which may be binary plists)
-          APP_PLIST="$IOS_DIR/QVACTestConsumer/Info.plist"
-          if [ -f "$APP_PLIST" ]; then
-            echo "Patching $APP_PLIST"
-            sed -i '' "s/$GENERATED_BUNDLE_ID/$APP_BUNDLE_ID/g" "$APP_PLIST"
-          fi
-
-          # Patch Expo-generated app.json in the build dir
-          APP_JSON="build/consumers/ios/app.json"
-          if [ -f "$APP_JSON" ]; then
-            echo "Patching $APP_JSON"
-            sed -i '' "s/$GENERATED_BUNDLE_ID/$APP_BUNDLE_ID/g" "$APP_JSON"
-          fi
-
-          echo "Bundle ID patched to $APP_BUNDLE_ID"
-
-      - name: Install CocoaPods dependencies
-        working-directory: ${{ inputs.working-directory }}/build/consumers/ios/ios
-        run: |
-          pod install --repo-update
-
-      - name: Build and Archive iOS App
-        id: build_ios
-        working-directory: ${{ inputs.working-directory }}/build/consumers/ios
-        run: |
-          cd ios
-
-          SCHEME_NAME=$(xcodebuild -list | grep -A 1 "Schemes:" | grep -v "Schemes:" | head -1 | xargs)
-          echo "Detected scheme: $SCHEME_NAME"
-
-          BUNDLE_ID=$(xcodebuild -showBuildSettings \
-            -workspace "$SCHEME_NAME.xcworkspace" \
-            -scheme "$SCHEME_NAME" \
-            -configuration Release \
-            -destination "generic/platform=iOS" 2>/dev/null \
-            | grep PRODUCT_BUNDLE_IDENTIFIER | head -1 | awk '{print $3}')
-          echo "Bundle Identifier in project: $BUNDLE_ID"
-
-          if [[ "$BUNDLE_ID" != "$APP_BUNDLE_ID" ]]; then
-            echo "WARNING: Bundle ID mismatch after patching!"
-            echo "   Expected: $APP_BUNDLE_ID"
-            echo "   Found: $BUNDLE_ID"
-          fi
-
-          xcodebuild -workspace "$SCHEME_NAME.xcworkspace" \
-            -scheme "$SCHEME_NAME" \
-            -sdk iphoneos \
-            -configuration Release \
-            -destination "generic/platform=iOS" \
-            -archivePath $RUNNER_TEMP/$SCHEME_NAME.xcarchive \
-            CODE_SIGN_STYLE=Manual \
-            PROVISIONING_PROFILE_SPECIFIER="$PP_UUID" \
-            CODE_SIGN_IDENTITY="Apple Distribution" \
-            DEVELOPMENT_TEAM="${{ secrets.APPLE_TEAM_ID }}" \
-            clean archive
-
-      - name: Export IPA
-        id: export_ipa
-        working-directory: ${{ inputs.working-directory }}/build/consumers/ios/ios
-        run: |
-          SCHEME_NAME=$(xcodebuild -list | grep -A 1 "Schemes:" | grep -v "Schemes:" | head -1 | xargs)
-          echo "Using export method: $EXPORT_METHOD"
-
-          EXPORT_OPTS_PATH=$RUNNER_TEMP/ExportOptions.plist
-          cat > $EXPORT_OPTS_PATH << EOF
-          <?xml version="1.0" encoding="UTF-8"?>
-          <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
-          <plist version="1.0">
-          <dict>
-            <key>method</key>
-            <string>$EXPORT_METHOD</string>
-            <key>teamID</key>
-            <string>${{ secrets.APPLE_TEAM_ID }}</string>
-            <key>signingStyle</key>
-            <string>manual</string>
-            <key>provisioningProfiles</key>
-            <dict>
-              <key>${{ env.APP_BUNDLE_ID }}</key>
-              <string>$PP_UUID</string>
-            </dict>
-          </dict>
-          </plist>
-          EOF
-
-          cat $EXPORT_OPTS_PATH
-
-          xcodebuild -exportArchive \
-            -archivePath $RUNNER_TEMP/$SCHEME_NAME.xcarchive \
-            -exportOptionsPlist $EXPORT_OPTS_PATH \
-            -exportPath $RUNNER_TEMP/build
-
-          IPA_FILE=$(find $RUNNER_TEMP/build -name "*.ipa" | head -1)
-          if [ -f "$IPA_FILE" ]; then
-            echo "IPA exported: $IPA_FILE"
-            echo "ipa_path=$IPA_FILE" >> $GITHUB_OUTPUT
+          IPA_PATH="build/consumers/ios/consumer.ipa"
+          if [ -f "$IPA_PATH" ]; then
+            echo "IPA built successfully"
+            ls -lh "$IPA_PATH"
           else
-            echo "IPA file not found"
-            find $RUNNER_TEMP/build -type f 2>/dev/null
+            echo "IPA not found at $IPA_PATH"
             exit 1
           fi
 
@@ -455,7 +336,7 @@ jobs:
         uses: actions/upload-artifact@bbbca2ddaa5d8feaa63e36b76fdaad77386f024f # 7.0.0
         with:
           name: mobile-consumer-ipa
-          path: ${{ steps.export_ipa.outputs.ipa_path }}
+          path: ${{ inputs.working-directory }}/build/consumers/ios/consumer.ipa
           retention-days: 7
 
   device-farm:
