@@ -18,16 +18,7 @@ const __dirname = dirname(fileURLToPath(import.meta.url));
 const args = process.argv.slice(2);
 const sortformerSrc = args[0] ?? PARAKEET_SORTFORMER_FP32;
 
-const defaultAudioPath = join(
-  __dirname,
-  "..",
-  "..",
-  "..",
-  "examples",
-  "transcription",
-  "audio",
-  "diarization-sample-16k.wav",
-);
+const defaultAudioPath = join(__dirname, "audio", "diarization-sample-16k.wav");
 const audioFilePath = args[1] ?? defaultAudioPath;
 
 // ── Step 1: Diarize with Sortformer ──
