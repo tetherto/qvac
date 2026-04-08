@@ -281,7 +281,9 @@ jobs:
       - name: Install extra Homebrew packages
         if: ${{ runner.os == 'macOS' && inputs.extra_brew_packages != '' }}
         shell: bash
-        run: brew install --quiet ${{ inputs.extra_brew_packages }}
+        env:
+          BREW_PACKAGES: ${{ inputs.extra_brew_packages }}
+        run: brew install --quiet $BREW_PACKAGES
 
       - name: Install npm dependencies
         shell: bash
@@ -322,7 +324,9 @@ jobs:
       - name: Run bare-make generate
         shell: bash
         working-directory: ${{ env.WORKDIR }}
-        run: bare-make generate --platform ${{ matrix.platform }} --arch ${{ matrix.arch }} ${{ matrix.flags }} ${{ inputs.extra_generate_flags }}
+        env:
+          EXTRA_FLAGS: ${{ inputs.extra_generate_flags }}
+        run: bare-make generate --platform ${{ matrix.platform }} --arch ${{ matrix.arch }} ${{ matrix.flags }} $EXTRA_FLAGS
 
       - name: Run bare-make build
         shell: bash

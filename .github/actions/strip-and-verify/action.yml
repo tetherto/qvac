@@ -23,17 +23,20 @@ runs:
     - name: Strip debug symbols
       shell: bash
       working-directory: ${{ inputs.workdir }}
+      env:
+        INPUT_PLATFORM: ${{ inputs.platform }}
+        LLVM_STRIP_PATH: ${{ inputs.android-llvm-strip-path }}
       run: |
         set -e
-        if [ "${{ inputs.platform }}" = "android" ]; then
-          if [ -n "${{ inputs.android-llvm-strip-path }}" ]; then
-            find prebuilds -name "*.bare" -exec "${{ inputs.android-llvm-strip-path }}" {} \;
+        if [ "$INPUT_PLATFORM" = "android" ]; then
+          if [ -n "$LLVM_STRIP_PATH" ]; then
+            find prebuilds -name "*.bare" -exec "$LLVM_STRIP_PATH" {} \;
           else
             find prebuilds -name "*.bare" -exec "$ANDROID_NDK/toolchains/llvm/prebuilt/linux-x86_64/bin/llvm-strip" {} \;
           fi
-        elif [ "${{ inputs.platform }}" = "darwin" ] || [ "${{ inputs.platform }}" = "ios" ]; then
+        elif [ "$INPUT_PLATFORM" = "darwin" ] || [ "$INPUT_PLATFORM" = "ios" ]; then
           find prebuilds -name "*.bare" -exec strip -S {} \;
-        elif [ "${{ inputs.platform }}" = "win32" ]; then
+        elif [ "$INPUT_PLATFORM" = "win32" ]; then
           echo "Skipping strip on win32"
         else
           find prebuilds -name "*.bare" -exec strip --strip-debug {} \;

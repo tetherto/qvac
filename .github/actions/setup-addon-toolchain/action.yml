@@ -46,14 +46,22 @@ runs:
   steps:
     - name: Print toolchain inputs
       shell: bash
+      env:
+        INPUT_PLATFORM: ${{ inputs.platform }}
+        INPUT_ARCH: ${{ inputs.arch }}
+        INPUT_CCACHE_SCOPE: ${{ inputs.ccache-scope }}
+        INPUT_WINDOWS_MODE: ${{ inputs.windows-toolchain-mode }}
+        INPUT_NEEDS_VULKAN: ${{ inputs.needs-vulkan }}
+        INPUT_NEEDS_RUST: ${{ inputs.needs-rust-targets }}
+        INPUT_NEEDS_SUBMODULES: ${{ inputs.needs-submodules }}
       run: |
-        echo "platform=${{ inputs.platform }}"
-        echo "arch=${{ inputs.arch }}"
-        echo "ccache-scope=${{ inputs.ccache-scope }}"
-        echo "windows-toolchain-mode=${{ inputs.windows-toolchain-mode }}"
-        echo "needs-vulkan=${{ inputs.needs-vulkan }}"
-        echo "needs-rust-targets=${{ inputs.needs-rust-targets }}"
-        echo "needs-submodules=${{ inputs.needs-submodules }}"
+        echo "platform=$INPUT_PLATFORM"
+        echo "arch=$INPUT_ARCH"
+        echo "ccache-scope=$INPUT_CCACHE_SCOPE"
+        echo "windows-toolchain-mode=$INPUT_WINDOWS_MODE"
+        echo "needs-vulkan=$INPUT_NEEDS_VULKAN"
+        echo "needs-rust-targets=$INPUT_NEEDS_RUST"
+        echo "needs-submodules=$INPUT_NEEDS_SUBMODULES"
 
     - name: Initialize submodules
       if: ${{ inputs.needs-submodules == 'true' }}
@@ -72,11 +80,13 @@ runs:
     - name: Install Linux base dependencies
       if: ${{ runner.os == 'Linux' }}
       shell: bash
+      env:
+        EXTRA_PACKAGES: ${{ inputs.extra-linux-packages }}
       run: |
         sudo apt-get update
         sudo apt-get install -y ccache xz-utils libxi-dev libxtst-dev libxrandr-dev
-        if [ -n "${{ inputs.extra-linux-packages }}" ]; then
-          sudo apt-get install -y ${{ inputs.extra-linux-packages }}
+        if [ -n "$EXTRA_PACKAGES" ]; then
+          sudo apt-get install -y $EXTRA_PACKAGES
         fi
 
     - name: Configure ccache
@@ -102,6 +112,8 @@ runs:
     - name: Install Vulkan SDK (Linux)
       if: ${{ runner.os == 'Linux' && inputs.needs-vulkan == 'true' }}
       shell: bash
+      env:
+        VULKAN_S3_KEY_PREFIX: ${{ inputs.vulkan-s3-key-prefix }}
       run: |
         wget -q -O /tmp/vulkansdk.tar.xz https://sdk.lunarg.com/sdk/download/latest/linux/vulkan_sdk.tar.xz
         mkdir -p "$HOME/vulkan"
@@ -112,7 +124,7 @@ runs:
           if [ -z "${sdk_version}" ]; then
             sdk_version="latest"
           fi
-          cache_key_prefix="${{ inputs.vulkan-s3-key-prefix }}"
+          cache_key_prefix="${VULKAN_S3_KEY_PREFIX}"
           cache_key="${cache_key_prefix}/linux-arm64-${sdk_version}.tar.gz"
           cache_archive="/tmp/vulkan-arm64-cache.tar.gz"
           restored_from_s3="false"
@@ -166,6 +178,8 @@ runs:
     - name: Configure Windows toolchain
       if: ${{ runner.os == 'Windows' && inputs.windows-toolchain-mode == 'choco-llvm' }}
       shell: powershell
+      env:
+        INPUT_ARCH: ${{ inputs.arch }}
       run: |
         git config --system core.longpaths true
         $clangCmd = Get-Command clang -ErrorAction SilentlyContinue
@@ -175,11 +189,11 @@ runs:
           Write-Host "LLVM already installed at $($clangCmd.Source), skipping choco"
         }
         "CMAKE_GENERATOR=Visual Studio 17 2022" | Out-File -FilePath $Env:GITHUB_ENV -Encoding utf8 -Append
-        if ("${{ inputs.arch }}" -eq "x64") {
+        if ($Env:INPUT_ARCH -eq "x64") {
           "CMAKE_GENERATOR_PLATFORM=x64" | Out-File -FilePath $Env:GITHUB_ENV -Encoding utf8 -Append
-        } elseif ("${{ inputs.arch }}" -eq "arm64") {
+        } elseif ($Env:INPUT_ARCH -eq "arm64") {
           "CMAKE_GENERATOR_PLATFORM=ARM64" | Out-File -FilePath $Env:GITHUB_ENV -Encoding utf8 -Append
-        } elseif ("${{ inputs.arch }}" -eq "x86") {
+        } elseif ($Env:INPUT_ARCH -eq "x86") {
           "CMAKE_GENERATOR_PLATFORM=Win32" | Out-File -FilePath $Env:GITHUB_ENV -Encoding utf8 -Append
         }
 
@@ -229,7 +243,9 @@ runs:
     - name: Select Xcode version
       if: ${{ runner.os == 'macOS' && inputs.xcode-version != '' }}
       shell: bash
-      run: sudo xcode-select -s "/Applications/Xcode_${{ inputs.xcode-version }}.app/Contents/Developer"
+      env:
+        XCODE_VER: ${{ inputs.xcode-version }}
+      run: sudo xcode-select -s "/Applications/Xcode_${XCODE_VER}.app/Contents/Developer"
 
     - name: Install Rust targets
       if: ${{ inputs.needs-rust-targets == 'true' }}

@@ -231,9 +231,12 @@ jobs:
       - name: Set GPR package name
         if: ${{ inputs.gpr_package_name != '' }}
         shell: bash
+        env:
+          PKG_JSON_PATH: ${{ inputs.workdir }}/package.json
+          WANT_NAME: ${{ inputs.gpr_package_name }}
         run: |
           set -euo pipefail
-          node -e "const fs=require('fs');const f='${{ inputs.workdir }}/package.json';const p=JSON.parse(fs.readFileSync(f,'utf8'));const want='${{ inputs.gpr_package_name }}';if(p.name!==want){p.name=want;fs.writeFileSync(f,JSON.stringify(p,null,2));console.log('Set name to',p.name);}else{console.log('Already',p.name);}"
+          node -e "const fs=require('fs');const f=process.env.PKG_JSON_PATH;const p=JSON.parse(fs.readFileSync(f,'utf8'));const want=process.env.WANT_NAME;if(p.name!==want){p.name=want;fs.writeFileSync(f,JSON.stringify(p,null,2));console.log('Set name to',p.name);}else{console.log('Already',p.name);}"
 
       - name: Run pre-GPR publish script
         if: ${{ inputs.pre_gpr_publish_script != '' }}
@@ -256,9 +259,9 @@ jobs:
         env:
           NODE_AUTH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         shell: bash
+        working-directory: ${{ inputs.workdir }}
         run: |
           set -euo pipefail
-          cd "${{ inputs.workdir }}"
           echo "//npm.pkg.github.com/:_authToken=${NODE_AUTH_TOKEN}" >> .npmrc
 
           VERSION=$(node -p "require('./package.json').version")
@@ -304,9 +307,12 @@ jobs:
       - name: Set npm package name
         if: ${{ inputs.npm_package_name != '' }}
         shell: bash
+        env:
+          PKG_JSON_PATH: ${{ inputs.workdir }}/package.json
+          WANT_NAME: ${{ inputs.npm_package_name }}
         run: |
           set -euo pipefail
-          node -e "const fs=require('fs');const f='${{ inputs.workdir }}/package.json';const p=JSON.parse(fs.readFileSync(f,'utf8'));const want='${{ inputs.npm_package_name }}';if(p.name!==want){p.name=want;fs.writeFileSync(f,JSON.stringify(p,null,2));console.log('Set name to',p.name);}else{console.log('Already',p.name);}"
+          node -e "const fs=require('fs');const f=process.env.PKG_JSON_PATH;const p=JSON.parse(fs.readFileSync(f,'utf8'));const want=process.env.WANT_NAME;if(p.name!==want){p.name=want;fs.writeFileSync(f,JSON.stringify(p,null,2));console.log('Set name to',p.name);}else{console.log('Already',p.name);}"
 
       - name: Publish to NPM Package Registry
         id: publish
