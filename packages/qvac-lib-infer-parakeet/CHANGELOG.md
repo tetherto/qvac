@@ -81,6 +81,16 @@ Three new public methods expose addon lifecycle control: `status()` queries the 
 ## Other
 
 Job management is now handled by `createJobHandler()` from `@qvac/infer-base ^0.4.0`, replacing the manual `_hasActiveResponse` flag and `_failAndClearActiveResponse()` helper. `_resolveFilePath()` now takes only a `filename` argument. Dead helpers `_hasNamedPaths()` and `_getModelFilePath()` have been removed.
+
+## [0.2.7]
+
+### Changed
+- Bumped `qvac-lib-inference-addon-cpp` to `1.1.5`.
+- Restored JS-owned job ID routing after addon-cpp reverted the accidental `1.1.3` native callback `jobId` contract and `cancel(jobId)` API break.
+
+### Added
+- Regression coverage for JS-owned cancel handling of active, buffered, and stale wrapper job IDs.
+
 ## [0.2.6]
 
 ### Changed

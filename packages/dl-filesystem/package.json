@@ -31,10 +31,10 @@
   "repository": {
     "type": "git",
     "url": "git+https://github.com/tetherto/qvac.git",
-    "directory": "packages/qvac-lib-dl-filesystem"
+    "directory": "packages/dl-filesystem"
   },
   "bugs": "https://github.com/tetherto/qvac/issues",
-  "homepage": "https://github.com/tetherto/qvac/tree/main/packages/qvac-lib-dl-filesystem#readme",
+  "homepage": "https://github.com/tetherto/qvac/tree/main/packages/dl-filesystem#readme",
   "files": [
     "src",
     "index.d.ts",
