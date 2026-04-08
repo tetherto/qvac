@@ -10,18 +10,20 @@ global.process = process
 const sinon = require('sinon')
 
 function createMockedSupertonicModel ({ onOutput = () => { }, binding = undefined } = {}) {
-  const args = {
-    opts: { stats: true },
-    modelDir: './models/supertonic',
+  const model = new ONNXTTS({
+    files: {
+      modelDir: './models/supertonic'
+    },
+    engine: 'supertonic',
     voiceName: 'F1',
     speed: 1,
-    numInferenceSteps: 5
-  }
-  const config = {
-    language: 'en',
-    useGPU: false
-  }
-  const model = new ONNXTTS(args, config)
+    numInferenceSteps: 5,
+    config: {
+      language: 'en',
+      useGPU: false
+    },
+    opts: { stats: true }
+  })
 
   sinon.stub(model, '_createAddon').callsFake((configurationParams, outputCb) => {
     const _binding = binding || new MockedBinding()
@@ -63,21 +65,43 @@ test('Supertonic: Static methods return expected values', async (t) => {
 })
 
 test('Supertonic: Engine type is detected correctly', async (t) => {
-  const supertonicModelDirArgs = {
-    modelDir: './models/supertonic',
+  const modelFromDir = new ONNXTTS({
+    files: { modelDir: './models/supertonic' },
     voiceName: 'F1'
-  }
-  const modelFromDir = new ONNXTTS(supertonicModelDirArgs, {})
+  })
   t.is(modelFromDir._engineType, 'supertonic', 'Should detect Supertonic engine when modelDir + voiceName are provided')
 
-  const supertonicExplicitArgs = {
-    textEncoderPath: './onnx/text_encoder.onnx',
-    durationPredictorPath: './onnx/duration_predictor.onnx',
-    vectorEstimatorPath: './onnx/vector_estimator.onnx',
-    vocoderPath: './onnx/vocoder.onnx'
-  }
-  const modelFromPaths = new ONNXTTS(supertonicExplicitArgs, {})
-  t.is(modelFromPaths._engineType, 'supertonic', 'Should detect Supertonic engine when textEncoderPath is provided')
+  const modelFromDirOnly = new ONNXTTS({
+    files: { modelDir: './models/supertonic' }
+  })
+  t.is(
+    modelFromDirOnly._engineType,
+    'supertonic',
+    'Should detect Supertonic when only modelDir is set (voiceName defaults to F1)'
+  )
+  t.is(modelFromDirOnly._voiceName, 'F1', 'Default voice when voiceName omitted')
+
+  const modelDirWithVoicesDir = new ONNXTTS({
+    files: {
+      modelDir: './models/supertonic',
+      voicesDir: '/custom/voice_styles'
+    }
+  })
+  t.is(
+    modelDirWithVoicesDir._engineType,
+    'supertonic',
+    'modelDir + voicesDir should resolve to Supertonic (voicesDir overrides path only, not engine detection)'
+  )
+
+  const modelFromPaths = new ONNXTTS({
+    files: {
+      textEncoder: './onnx/text_encoder.onnx',
+      durationPredictor: './onnx/duration_predictor.onnx',
+      vectorEstimator: './onnx/vector_estimator.onnx',
+      vocoder: './onnx/vocoder.onnx'
+    }
+  })
+  t.is(modelFromPaths._engineType, 'supertonic', 'Should detect Supertonic engine when textEncoder path is provided')
 })
 
 test('Supertonic: cancel propagates as job failure', async (t) => {

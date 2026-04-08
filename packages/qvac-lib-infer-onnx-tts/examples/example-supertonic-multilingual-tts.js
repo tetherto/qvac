@@ -8,7 +8,7 @@ const { setLogger, releaseLogger } = require('../addonLogging')
 const SUPERTONIC_SAMPLE_RATE = 44100
 
 // Supertone multilingual weights (HF supertonic-2); run `node scripts/ensure-models.js` or ensureSupertonicModelsMultilingual
-const modelDir = path.join(__dirname, '..', 'models', 'supertonic-multilingual')
+const modelDir = path.resolve(path.join(__dirname, '..', 'models', 'supertonic-multilingual'))
 
 async function main () {
   setLogger((priority, message) => {
@@ -24,21 +24,21 @@ async function main () {
     console.log(`[${timestamp}] [C++ log] [${priorityName}]: ${message}`)
   })
 
-  const supertonicArgs = {
-    modelDir,
+  const model = new ONNXTTS({
+    files: {
+      modelDir
+    },
+    engine: 'supertonic',
     voiceName: 'F1',
     speed: 1.05,
     numInferenceSteps: 5,
     supertonicMultilingual: true,
-    opts: { stats: true },
-    logger: console
-  }
-
-  const config = {
-    language: 'es'
-  }
-
-  const model = new ONNXTTS(supertonicArgs, config)
+    config: {
+      language: 'es'
+    },
+    logger: console,
+    opts: { stats: true }
+  })
 
   try {
     console.log('Loading Supertonic multilingual (Spanish) TTS model...')

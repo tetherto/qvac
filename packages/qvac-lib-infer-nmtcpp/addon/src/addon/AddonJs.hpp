@@ -77,7 +77,7 @@ getConfigMap(
 }
 
 } // namespace
-namespace qvac_lib_inference_addon_marian {
+namespace qvac_lib_inference_addon_nmt {
 
 inline js_value_t* createInstance(js_env_t* env, js_callback_info_t* info) try {
   using namespace qvac_lib_inference_addon_cpp;
@@ -114,7 +114,7 @@ inline js_value_t* createInstance(js_env_t* env, js_callback_info_t* info) try {
     model = std::move(pivotTranslationModel);
   } else {
     auto translationModel =
-        std::make_unique<qvac_lib_inference_addon_marian::TranslationModel>(
+        std::make_unique<qvac_lib_inference_addon_nmt::TranslationModel>(
             modelPath);
 
     translationModel->setConfig(modelConfig);
@@ -177,4 +177,4 @@ inline js_value_t* runJob(js_env_t* env, js_callback_info_t* info) try {
 }
 JSCATCH
 
-} // namespace qvac_lib_inference_addon_marian
+} // namespace qvac_lib_inference_addon_nmt

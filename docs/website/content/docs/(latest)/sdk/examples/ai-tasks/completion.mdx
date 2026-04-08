@@ -5,7 +5,7 @@ description: LLM inference for text generation and chat — i.e., use a large la
 
 ## Overview
 
-Completion uses [`llama.cpp`](https://github.com/ggml-org/llama.cpp) as inference engine. Load any supported model using `modelType: "llm"`. Then, provide array `history` as input where each element is an object with properties: 
+Completion uses [`qvac-fabric-llm.cpp`](https://github.com/tetherto/qvac-fabric-llm.cpp) as inference engine. Load any supported model using `modelType: "llm"`. Then, provide array `history` as input where each element is an object with properties: 
 - `role: string`; can be either `"user"` or `"assistant"` 
 - `content: string`
 
@@ -24,7 +24,7 @@ For how to use each function, see [SDK — API reference](/sdk/api/).
 
 ## Models
 
-You can load any `llama.cpp`-compatible text-generation/chat model. Model file format: `*.gguf`.
+You can load any [`llama.cpp`](https://github.com/ggml-org/llama.cpp)-compatible text-generation/chat model. Model file format: `*.gguf`.
 
 - If the model is sharded across multiple files (a multi-file bundle), see [Sharded models](/sdk/examples/utilities/sharded-models).
 - For multimodal prompts (images + text), see [Multimodal](/sdk/examples/ai-tasks/multimodal).
