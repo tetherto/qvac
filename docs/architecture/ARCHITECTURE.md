@@ -271,7 +271,7 @@ All packages live in this monorepo under `packages/`:
 | `qvac-lib-rag` | `@qvac/rag` | RAG with HyperDB |
 | `dl-base` | `@qvac/dl-base` | Base data loader |
 | `qvac-lib-dl-hyperdrive` | `@qvac/dl-hyperdrive` | Hyperdrive data loader |
-| `qvac-lib-dl-filesystem` | `@qvac/dl-filesystem` | Filesystem data loader |
+| `dl-filesystem` | `@qvac/dl-filesystem` | Filesystem data loader |
 | `qvac-lib-infer-base` | `@qvac/infer-base` | Base inference client |
 | `qvac-lib-decoder-audio` | `@qvac/decoder-audio` | Audio decoding |
 | `qvac-lib-logging` | `@qvac/logging` | Logging utilities |

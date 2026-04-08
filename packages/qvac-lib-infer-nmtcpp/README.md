@@ -864,7 +864,7 @@ npm run test:all           # Run both JavaScript and C++ tests
 - **DataLoader** – Abstraction for fetching model weights and resources. 
   Implementations include:
   - **`HyperdriveDL`** – Loads from a Hyperdrive instance [GitHub](https://github.com/tetherto/qvac-lib-dl-hyperdrive)
-  - **`fsDL`** – Loads from the local filesystem [GitHub](https://github.com/tetherto/qvac-lib-dl-filesystem)
+  - **`fsDL`** – Loads from the local filesystem [GitHub](https://github.com/tetherto/dl-filesystem)
 
 ## Resources
 
