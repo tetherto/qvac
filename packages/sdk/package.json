@@ -138,7 +138,7 @@
     "@qvac/ocr-onnx": "^0.2.0",
     "@qvac/rag": "^0.4.4",
     "@qvac/registry-client": "^0.2.1",
-    "@qvac/transcription-parakeet": "^0.2.4",
+    "@qvac/transcription-parakeet": "^0.2.7",
     "@qvac/transcription-whispercpp": "^0.5.2",
     "@qvac/translation-nmtcpp": "^0.6.1",
     "@qvac/tts-onnx": "^0.6.1",
