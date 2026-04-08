@@ -152,7 +152,7 @@ jobs:
 
       - name: Publish to GitHub Package Registry
         id: publish
-        uses: tetherto/qvac-devops/.github/actions/publish-library-to-gpr@v1.1.7
+        uses: tetherto/qvac-devops/.github/actions/publish-library-to-gpr@v1.1.8
         with:
           secret-token: ${{ secrets.GITHUB_TOKEN }}
           tag: ${{ inputs.tag || needs.publish-logic.outputs.gpr_tag }}
@@ -174,6 +174,7 @@ jobs:
     permissions:
       contents: write
       packages: write
+      id-token: write
     env:
       PKG_DIR: packages/ocr-onnx
     steps:
@@ -190,7 +191,7 @@ jobs:
 
       - name: Publish to NPM Package Registry
         id: publish
-        uses: tetherto/qvac-devops/.github/actions/publish-library-to-npm@v1.1.7
+        uses: tetherto/qvac-devops/.github/actions/publish-library-to-npm-oidc@v1.1.8
         with:
           secret-token: ${{ secrets.NPM_TOKEN }}
           tag: "latest"
