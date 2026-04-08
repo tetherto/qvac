@@ -7,7 +7,7 @@
 #   1. Hyperdrive (if available for the pair)
 #   2. Firefox Remote Settings CDN (fallback)
 #
-# This script replaces the previous S3 presigned URL approach.
+# Downloads models from Hyperdrive or Firefox Remote Settings CDN.
 # For programmatic use, see lib/bergamot-model-fetcher.js
 #
 # Usage:

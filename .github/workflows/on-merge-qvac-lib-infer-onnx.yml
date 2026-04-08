@@ -29,6 +29,7 @@ permissions:
   contents: read
   pull-requests: read
   packages: read
+  id-token: write
 
 jobs:
   publish-logic:
@@ -112,6 +113,7 @@ jobs:
       contents: write
       packages: write
       pull-requests: write
+      id-token: write
     uses: ./.github/workflows/prebuilds-qvac-lib-infer-onnx.yml
     secrets: inherit
 
@@ -144,7 +146,7 @@ jobs:
 
       - name: Publish to GitHub Package Registry
         id: publish
-        uses: tetherto/qvac-devops/.github/actions/publish-library-to-gpr@v1.1.7
+        uses: tetherto/qvac-devops/.github/actions/publish-library-to-gpr@v1.1.8
         with:
           secret-token: ${{ secrets.GITHUB_TOKEN }}
           tag: ${{ inputs.tag || needs.publish-logic.outputs.gpr_tag }}
@@ -165,6 +167,7 @@ jobs:
     permissions:
       contents: write
       packages: write
+      id-token: write
     env:
       PKG_DIR: packages/qvac-lib-infer-onnx
     steps:
@@ -181,7 +184,7 @@ jobs:
 
       - name: Publish to NPM Package Registry
         id: publish
-        uses: tetherto/qvac-devops/.github/actions/publish-library-to-npm@v1.1.7
+        uses: tetherto/qvac-devops/.github/actions/publish-library-to-npm-oidc@v1.1.8
         with:
           secret-token: ${{ secrets.NPM_TOKEN }}
           tag: "latest"

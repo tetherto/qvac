@@ -21,6 +21,7 @@ permissions:
   contents: read
   pull-requests: read
   packages: read
+  id-token: write
 
 env:
   PKG_DIR: packages/qvac-lib-infer-nmtcpp
@@ -64,7 +65,7 @@ jobs:
     environment: release
     steps:
       - name: Run Sanity checks
-        uses: tetherto/qvac-devops/.github/actions/sanity-checks@v1.1.7
+        uses: tetherto/qvac-devops/.github/actions/sanity-checks@v1.1.8
         with:
           secret-token: ${{ secrets.GITHUB_TOKEN }}
           npm-token: ${{ secrets.NPM_TOKEN }}
@@ -112,7 +113,7 @@ jobs:
       always() &&
        needs.authorize.outputs.allowed == 'true' &&
       (needs.changes.outputs.pkg == 'true' || github.event_name == 'workflow_dispatch')
-    uses: tetherto/qvac-devops/.github/workflows/cpp-lint.yaml@v1.1.7
+    uses: tetherto/qvac-devops/.github/workflows/cpp-lint.yaml@v1.1.8
     secrets: inherit
     with:
       sha: ${{ github.event.pull_request.base.sha || github.event.before || 'HEAD~1' }}
@@ -125,6 +126,7 @@ jobs:
       contents: read
       packages: read
       pull-requests: write
+      id-token: write
     if: |
       always() &&
       needs.authorize.outputs.allowed == 'true' &&
@@ -140,6 +142,7 @@ jobs:
       contents: write
       packages: write
       pull-requests: write
+      id-token: write
     needs: [authorize, changes, sanity-checks]
     if: |
       always() &&
@@ -157,6 +160,10 @@ jobs:
       always() &&
       needs.authorize.outputs.allowed == 'true' &&
       (needs.changes.outputs.pkg == 'true' || github.event_name == 'workflow_dispatch')
+    permissions:
+      contents: read
+      packages: read
+      id-token: write
     uses: ./.github/workflows/integration-test-qvac-lib-infer-nmtcpp.yml
     secrets: inherit
     with:
@@ -168,6 +175,7 @@ jobs:
       contents: read
       packages: read
       pull-requests: write # Allow commenting on PRs
+      id-token: write
     needs: [authorize, changes, sanity-checks, prebuild]
     if: |
       always() &&
@@ -193,7 +201,7 @@ jobs:
         run-mobile-integration-tests,
       ]
     if: always() && (needs.changes.outputs.pkg == 'true' || github.event_name == 'workflow_dispatch')
-    uses: tetherto/qvac-devops/.github/workflows/public-pr.yml@v1.1.7
+    uses: tetherto/qvac-devops/.github/workflows/public-pr.yml@v1.1.8
     with:
       sanity-checks-status: ${{ needs.sanity-checks.result == 'success' && needs.cpp-tests.result == 'success' && needs.ts-checks.result == 'success' }}
       build-status: ${{ needs.prebuild.result == 'success' }}

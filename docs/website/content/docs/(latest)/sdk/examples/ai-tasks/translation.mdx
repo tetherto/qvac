@@ -5,7 +5,7 @@ description: Text-to-text neural machine translation (NMT) — i.e., translate t
 
 ## Overview
 
-Translation uses your choice of either [`nmt.cpp`](https://github.com/tetherto/qvac-lib-infer-nmtcpp) or [Bergamot](https://browser.mt) as inference engine. Load any supported model using `modelType: "nmt"`, and `modelConfig.engine: "Bergamot"` for Bergamot.
+Translation uses your choice of either [`qvac-fabric-llm.cpp`](https://github.com/tetherto/qvac-fabric-llm.cpp) or [Bergamot](https://browser.mt) as inference engine. Load any supported model using `modelType: "nmt"`, and `modelConfig.engine: "Bergamot"` for Bergamot.
 
 Translation input is defined by:
 - `from: string`: source language id (e.g., "en")
@@ -28,7 +28,7 @@ For how to use each function, see [SDK — API reference](/sdk/api/).
 ## Models
 
 You should load a model compatible with your chosen inference engine:
-- `nmt.cpp` (default): Bergamot or IndicTrans2. Bergamot uses intgemm `*.bin` + `*.spm` vocab files; IndicTrans2 uses GGML `*.bin`.
+- `qvac-fabric-llm.cpp` (default): Bergamot or IndicTrans2. Bergamot uses intgemm `*.bin` + `*.spm` vocab files; IndicTrans2 uses GGML `*.bin`.
 - Bergamot: Bergamot model bundle. Required files: model `*.bin` + `vocab*.spm`.
 
 For models available as constants, see [SDK — Models](/sdk/getting-started#models).

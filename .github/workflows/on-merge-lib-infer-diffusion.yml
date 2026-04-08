@@ -33,6 +33,7 @@ permissions:
   contents: read
   pull-requests: read
   packages: read
+  id-token: write
 
 jobs:
   publish-logic:
@@ -117,6 +118,7 @@ jobs:
       contents: write
       packages: write
       pull-requests: write
+      id-token: write
     uses: ./.github/workflows/prebuilds-lib-infer-diffusion.yml
     secrets: inherit
     with:
@@ -163,7 +165,7 @@ jobs:
 
       - name: Publish to GitHub Package Registry
         id: publish
-        uses: tetherto/qvac-devops/.github/actions/publish-library-to-gpr@v1.1.7
+        uses: tetherto/qvac-devops/.github/actions/publish-library-to-gpr@v1.1.8
         with:
           secret-token: ${{ secrets.GITHUB_TOKEN }}
           tag: ${{ inputs.tag || needs.publish-logic.outputs.gpr_tag }}
@@ -185,6 +187,7 @@ jobs:
     permissions:
       contents: write
       packages: write
+      id-token: write
     steps:
       - name: Checkout repository
         uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # 6.0.2
@@ -212,7 +215,7 @@ jobs:
 
       - name: Publish to NPM Package Registry
         id: publish
-        uses: tetherto/qvac-devops/.github/actions/publish-library-to-npm@v1.1.7
+        uses: tetherto/qvac-devops/.github/actions/publish-library-to-npm-oidc@v1.1.8
         with:
           secret-token: ${{ secrets.NPM_TOKEN }}
           tag: "latest"

@@ -10,7 +10,7 @@ const platform = detectPlatform()
 // Works on both mobile and desktop - skips gracefully if audio not available
 test('Spanish audio transcription - LastQuestion_long_ES.raw with real-time output', { timeout: 300000 }, async (t) => {
   // Get model path - use writable directory for models
-  const modelsDir = isMobile ? path.join(global.testDir || os.tmpdir(), 'models') : path.resolve(__dirname, '../../examples/models')
+  const modelsDir = isMobile ? path.join(global.testDir || os.tmpdir(), 'models') : path.resolve(__dirname, '../../models')
   const modelPath = path.join(modelsDir, 'ggml-tiny.bin')
 
   // Get audio path - try getAssetPath first (for mobile testAssets)

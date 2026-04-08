@@ -21,6 +21,7 @@ permissions:
   contents: read
   pull-requests: read
   packages: read
+  id-token: write
 
 jobs:
   authorize:
@@ -41,12 +42,12 @@ jobs:
 
   sanity-checks:
     if: needs.authorize.outputs.allowed == 'true'
-    needs: authorize
+    needs: [authorize]
     runs-on: ubuntu-latest
     environment: release
     steps:
       - name: Run Sanity checks
-        uses: tetherto/qvac-devops/.github/actions/sanity-checks@v1.1.7
+        uses: tetherto/qvac-devops/.github/actions/sanity-checks@v1.1.8
         with:
           secret-token: ${{ secrets.GITHUB_TOKEN }}
           npm-token: ${{ secrets.NPM_TOKEN }}
@@ -57,7 +58,7 @@ jobs:
   cpp-lint:
     if: needs.authorize.outputs.allowed == 'true'
     needs: authorize
-    uses: tetherto/qvac-devops/.github/workflows/cpp-lint.yaml@v1.1.7
+    uses: tetherto/qvac-devops/.github/workflows/cpp-lint.yaml@v1.1.8
     secrets: inherit
     with:
       sha: ${{ github.event.pull_request.base.sha }}
@@ -113,6 +114,7 @@ jobs:
       contents: write
       packages: write
       pull-requests: write
+      id-token: write
     if: needs.authorize.outputs.allowed == 'true'
     needs: [authorize, sanity-checks]
     uses: ./.github/workflows/prebuilds-qvac-lib-infer-llamacpp-embed.yml
@@ -124,6 +126,10 @@ jobs:
   integration-tests:
     needs: [authorize, prebuild]
     if: needs.authorize.outputs.allowed == 'true'
+    permissions:
+      contents: read
+      packages: read
+      id-token: write
     uses: ./.github/workflows/integration-test-qvac-lib-infer-llamacpp-embed.yml
     secrets: inherit
     with:
@@ -135,6 +141,7 @@ jobs:
       contents: read
       packages: read
       pull-requests: write # Allow commenting on PRs
+      id-token: write
     if: needs.authorize.outputs.allowed == 'true'
     needs: [authorize, prebuild]
     uses: ./.github/workflows/integration-mobile-test-qvac-lib-infer-llamacpp-embed.yml
@@ -146,7 +153,7 @@ jobs:
   merge-guard:
     needs: [authorize, sanity-checks, cpp-lint, cpp-tests, prebuild, integration-tests, run-mobile-integration-tests, ts-checks]
     if: always()
-    uses: tetherto/qvac-devops/.github/workflows/public-pr.yml@v1.1.7
+    uses: tetherto/qvac-devops/.github/workflows/public-pr.yml@v1.1.8
     with:
       sanity-checks-status: ${{ needs.sanity-checks.result == 'success' }}
       build-status: ${{ needs.prebuild.result == 'success' }}

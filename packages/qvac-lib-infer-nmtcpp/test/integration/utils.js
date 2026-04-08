@@ -137,10 +137,8 @@ function loadConfigFromAssets (filename) {
 
 /**
  * Ensures IndicTrans model is available
- * Uses INDICTRANS_MODEL_PATH env var or downloads from S3 on mobile
- *
  * Desktop: Expects model at ../../model/indictrans/ggml-indictrans2-en-indic-dist-200M-q4_0.bin
- * Mobile: Downloads from presigned S3 URL configured in indictrans-model-urls.json
+ * Mobile: Downloads from presigned URL configured in indictrans-model-urls.json
  *
  * @returns {Promise<string>} Path to IndicTrans model file
  * @throws {Error} If model not found/available or corrupted (< 100MB)
@@ -165,7 +163,7 @@ async function ensureIndicTransModel () {
     throw new Error(`IndicTrans model not found at ${modelPath}. Please download it first.`)
   }
 
-  // Mobile: Download from presigned S3 URL
+  // Mobile: Download from presigned URL
   const configFilename = 'indictrans-model-urls.json'
   const urlConfig = loadConfigFromAssets(configFilename)
 
