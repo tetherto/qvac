@@ -31,6 +31,11 @@ on:
         description: "Git ref to checkout (branch, tag, or SHA). Defaults to trigger ref."
         required: false
         type: string
+      cache-models:
+        description: "Cache downloaded models between runs"
+        required: false
+        type: boolean
+        default: true
     secrets:
       MQTT_PROTOCOL:
         required: true
@@ -187,6 +192,42 @@ jobs:
       - name: Build project (consumer)
         working-directory: ${{ inputs.working-directory }}
         run: bun run build
+
+      - name: Configure SDK cache directory
+        shell: node {0}
+        run: |
+          const fs = require('fs');
+          const path = require('path');
+          const cacheDir = path.resolve('${{ inputs.working-directory }}', '.qvac-cache');
+          fs.mkdirSync(cacheDir, { recursive: true });
+          const config = { cacheDirectory: cacheDir };
+          const configPath = path.resolve('${{ inputs.working-directory }}', 'qvac.config.json');
+          fs.writeFileSync(configPath, JSON.stringify(config, null, 2));
+          fs.appendFileSync(process.env.GITHUB_ENV, `QVAC_CONFIG_PATH=${configPath}\n`);
+          console.log(`SDK cache dir: ${cacheDir}`);
+          console.log(`Config written to: ${configPath}`);
+
+      - name: Restore models cache
+        id: models-cache
+        if: inputs.cache-models != false
+        uses: actions/cache/restore@v4
+        with:
+          path: ${{ inputs.working-directory }}/.qvac-cache
+          key: qvac-models-${{ hashFiles('packages/sdk/models/registry/models.ts') }}
+
+      - name: Bootstrap (download models)
+        if: steps.models-cache.outputs.cache-hit != 'true'
+        working-directory: ${{ inputs.working-directory }}
+        run: npx qvac-test run:bootstrap:desktop --config=.
+
+      # Save right after bootstrap. On parallel runners, first to finish reserves the key;
+      # others get a non-fatal "unable to reserve" warning which is expected.
+      - name: Save models cache
+        if: steps.models-cache.outputs.cache-hit != 'true' && inputs.cache-models != false
+        uses: actions/cache/save@v4
+        with:
+          path: ${{ inputs.working-directory }}/.qvac-cache
+          key: qvac-models-${{ hashFiles('packages/sdk/models/registry/models.ts') }}
 
       - name: Generate runId
         id: runid
