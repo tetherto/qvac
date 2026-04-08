@@ -33,6 +33,11 @@ Job/response wiring uses **one** active **`QvacResponse`**, managed by **`create
 
 **`BaseInference`** inheritance is removed. **`@qvac/infer-base`** supplies **`createJobHandler`**, **`exclusiveRunQueue`**, and standalone **`getApiDefinition()`** (used from **`index.js`** for API logging). The job handler owns the single active **`QvacResponse`** slot; **`_addonOutputCallback`** routes native events through **`_job.output`**, **`_job.end`**, **`_job.fail`**, and finetune stats via **`_job.active`**. Unload/reload call **`_job.fail(...)`** to tear down the active response. **`tts.js`** **`runJob`** only forwards to the binding and maps thrown errors to **`FAILED_TO_APPEND`**.
 
+## [0.7.3]
+
+### Changed
+- Bumped `qvac-lib-inference-addon-cpp` to `1.1.5` (again).
+
 ## [0.7.2]
 
 ### Added
@@ -67,6 +72,14 @@ The native Supertonic path gains multilingual support and related stabilization 
 ### Examples and TypeScript
 
 A dedicated multilingual example script documents the new flow, and `index.d.ts` is expanded so Supertonic options and multilingual parameters are described accurately for TypeScript consumers.
+
+### Other
+- Reverted `qvac-lib-inference-addon-cpp` to `1.1.2`.
+
+## [0.6.7]
+
+### Changed
+- Bumped `qvac-lib-inference-addon-cpp` to `1.1.5`.
 
 ## [0.6.6]
 
