@@ -14,7 +14,7 @@ phases:
     commands:
       - echo "Configuring WebDriverAgent for iOS..."
       - export DEVICEFARM_APPIUM_WDA_DERIVED_DATA_PATH=$DEVICEFARM_APPIUM_WDA_DERIVED_DATA_PATH_V9
-      - echo "WDA Path: $DEVICEFARM_APPIUM_WDA_DERIVED_DATA_PATH"
+      - 'echo "WDA Path: $DEVICEFARM_APPIUM_WDA_DERIVED_DATA_PATH"'
 
       - echo "Starting Appium server..."
       - export APPIUM_BASE_PATH=/wd/hub
@@ -74,10 +74,11 @@ phases:
         if [ -z "$SESSION_ID" ]; then
           echo "Failed to create Appium session"
           echo "Response: $SESSION_RESPONSE"
-          cat $DEVICEFARM_LOG_DIR/appium.log | tail -50
+          tail -50 $DEVICEFARM_LOG_DIR/appium.log
           exit 1
         fi
         echo "SESSION_ID=$SESSION_ID" >> $DEVICEFARM_LOG_DIR/session.env
+        echo "APPIUM_URL=http://127.0.0.1:4723/wd/hub" >> $DEVICEFARM_LOG_DIR/session.env
         echo "App launched via Appium (session: $SESSION_ID)"
 
       - sleep 10
@@ -96,8 +97,10 @@ phases:
         TIMEOUT=${DEVICEFARM_TIMEOUT:-5400}
         START=$(date +%s)
         SESSION_ID=$(grep SESSION_ID $DEVICEFARM_LOG_DIR/session.env | cut -d= -f2)
+        APPIUM_URL=$(grep APPIUM_URL $DEVICEFARM_LOG_DIR/session.env | cut -d= -f2-)
         CHECK_INTERVAL=30
         SYSLOG_FILE="$DEVICEFARM_LOG_DIR/device-syslog.log"
+        DRAIN_SCRIPT="$DEVICEFARM_TEST_PACKAGE_PATH/drain-syslog.py"
 
         echo "App is running. Monitoring health for up to ${TIMEOUT}s..."
         echo "Test results are captured by the MQTT producer (separate CI job)."
@@ -114,37 +117,12 @@ phases:
             break
           fi
 
-          # Check if app is still running
-          APP_STATE=$(curl -s "http://127.0.0.1:4723/wd/hub/session/$SESSION_ID/appium/device/app_state" \
-            -X POST -H "Content-Type: application/json" \
-            -d "{\"bundleId\": \"$DEVICEFARM_APP_BUNDLE_ID\"}" 2>/dev/null \
-            | python3 -c "import sys,json; print(json.load(sys.stdin).get('value','unknown'))" 2>/dev/null || echo "unknown")
-
-          if [ "$APP_STATE" = "1" ] || [ "$APP_STATE" = "0" ]; then
-            echo "App has stopped (state=$APP_STATE) after ${ELAPSED}s"
-            echo "This may indicate a crash or the consumer finished and shut down."
-            break
-          fi
-
-          # Drain syslog buffer via Appium (React Native console.log -> NSLog -> syslog)
-          curl -s "http://127.0.0.1:4723/wd/hub/session/$SESSION_ID/log" \
-            -X POST -H "Content-Type: application/json" \
-            -d '{"type":"syslog"}' 2>/dev/null \
-            | python3 -c "
-import sys, json
-try:
-    data = json.load(sys.stdin)
-    for entry in data.get('value', []):
-        msg = entry.get('message', '')
-        if msg:
-            print(msg)
-except:
-    pass
-" >> "$SYSLOG_FILE" 2>/dev/null || true
+          # Drain syslog buffer via Appium
+          DRAINED=$(python3 "$DRAIN_SCRIPT" "$APPIUM_URL" "$SESSION_ID" "$SYSLOG_FILE" 2>/dev/null || echo "0")
 
           REMAINING=$((TIMEOUT - ELAPSED))
           SYSLOG_LINES=$(wc -l < "$SYSLOG_FILE" 2>/dev/null || echo 0)
-          echo "[${ELAPSED}s/${TIMEOUT}s] App alive (state=$APP_STATE), ${REMAINING}s remaining, ${SYSLOG_LINES} syslog lines captured"
+          echo "[${ELAPSED}s/${TIMEOUT}s] ${REMAINING}s remaining, ${SYSLOG_LINES} syslog lines (+${DRAINED})"
           sleep $CHECK_INTERVAL
         done
 
@@ -155,20 +133,8 @@ except:
       # Drain any remaining syslog entries
       - |-
         SESSION_ID=$(grep SESSION_ID $DEVICEFARM_LOG_DIR/session.env | cut -d= -f2)
-        curl -s "http://127.0.0.1:4723/wd/hub/session/$SESSION_ID/log" \
-          -X POST -H "Content-Type: application/json" \
-          -d '{"type":"syslog"}' 2>/dev/null \
-          | python3 -c "
-import sys, json
-try:
-    data = json.load(sys.stdin)
-    for entry in data.get('value', []):
-        msg = entry.get('message', '')
-        if msg:
-            print(msg)
-except:
-    pass
-" >> "$DEVICEFARM_LOG_DIR/device-syslog.log" 2>/dev/null || true
+        APPIUM_URL=$(grep APPIUM_URL $DEVICEFARM_LOG_DIR/session.env | cut -d= -f2-)
+        python3 "$DEVICEFARM_TEST_PACKAGE_PATH/drain-syslog.py" "$APPIUM_URL" "$SESSION_ID" "$DEVICEFARM_LOG_DIR/device-syslog.log" 2>/dev/null || true
 
       - cp $DEVICEFARM_LOG_DIR/appium.log $DEVICEFARM_LOG_DIR/app-console.log 2>/dev/null || true
 
@@ -186,7 +152,7 @@ except:
         if [ ! -f "$RESULTS_FILE" ] || [ ! -s "$RESULTS_FILE" ]; then
           echo "PASS|App launched and ran successfully on Device Farm" > "$RESULTS_FILE"
         fi
-      - python3 $DEVICEFARM_TEST_PACKAGE_PATH/device-farm-gen-junit.py
+      - python3 $DEVICEFARM_TEST_PACKAGE_PATH/gen-junit.py
 
 artifacts:
   - $DEVICEFARM_LOG_DIR
