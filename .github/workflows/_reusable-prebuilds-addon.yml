@@ -165,8 +165,7 @@ env:
 jobs:
   prebuild:
     permissions:
-      contents: write
-      pull-requests: write
+      contents: read
       id-token: write
     strategy:
       fail-fast: false
@@ -360,8 +359,6 @@ jobs:
   merge:
     runs-on: ubuntu-latest
     needs: prebuild
-    permissions:
-      contents: write
     steps:
       - name: Download all build artifacts
         uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # 8.0.1

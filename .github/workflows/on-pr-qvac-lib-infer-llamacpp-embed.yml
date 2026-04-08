@@ -21,14 +21,12 @@ permissions:
   contents: read
   pull-requests: read
   packages: read
-  id-token: write
 
 jobs:
   on-pr:
     permissions:
-      contents: write
+      contents: read
       pull-requests: write
-      packages: write
       id-token: write
     uses: ./.github/workflows/_reusable-on-pr-addon.yml
     secrets: inherit

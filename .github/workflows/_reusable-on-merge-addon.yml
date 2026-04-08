@@ -92,9 +92,6 @@ on:
 
 permissions:
   contents: read
-  pull-requests: read
-  packages: read
-  id-token: write
 
 jobs:
   publish-logic:
@@ -175,9 +172,7 @@ jobs:
       needs.publish-logic.outputs.publish_feature == 'true' ||
       needs.publish-logic.outputs.publish_tmp == 'true'
     permissions:
-      contents: write
-      packages: write
-      pull-requests: write
+      contents: read
       id-token: write
     uses: ./.github/workflows/_reusable-prebuilds-addon.yml
     secrets: inherit
