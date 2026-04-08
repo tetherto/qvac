@@ -38,13 +38,11 @@ type ParakeetModelConfig = {
   timestampsEnabled?: boolean;
   // TDT
   parakeetEncoderSrc?: ModelSrcInput;
-  parakeetEncoderDataSrc?: ModelSrcInput;
   parakeetDecoderSrc?: ModelSrcInput;
   parakeetVocabSrc?: ModelSrcInput;
   parakeetPreprocessorSrc?: ModelSrcInput;
   // CTC
   parakeetCtcModelSrc?: ModelSrcInput;
-  parakeetCtcModelDataSrc?: ModelSrcInput;
   parakeetTokenizerSrc?: ModelSrcInput;
   // Sortformer
   parakeetSortformerSrc?: ModelSrcInput;
@@ -56,7 +54,6 @@ async function resolveTdtConfig(
 ): Promise<ResolveResult<ParakeetModelConfig>> {
   const {
     parakeetEncoderSrc,
-    parakeetEncoderDataSrc,
     parakeetDecoderSrc,
     parakeetVocabSrc,
     parakeetPreprocessorSrc,
@@ -76,13 +73,11 @@ async function resolveTdtConfig(
   const resolve = ctx.resolveModelPath;
   const [
     encoderPath,
-    encoderDataPath,
     decoderPath,
     vocabPath,
     preprocessorPath,
   ] = await Promise.all([
     resolve(parakeetEncoderSrc),
-    parakeetEncoderDataSrc ? resolve(parakeetEncoderDataSrc) : undefined,
     resolve(parakeetDecoderSrc),
     resolve(parakeetVocabSrc),
     resolve(parakeetPreprocessorSrc),
@@ -92,7 +87,6 @@ async function resolveTdtConfig(
     config: cfg,
     artifacts: {
       encoderPath,
-      ...(encoderDataPath !== undefined && { encoderDataPath }),
       ...(decoderPath !== undefined && { decoderPath }),
       ...(vocabPath !== undefined && { vocabPath }),
       ...(preprocessorPath !== undefined && { preprocessorPath }),
@@ -104,8 +98,7 @@ async function resolveCtcConfig(
   cfg: ParakeetModelConfig,
   ctx: ResolveContext,
 ): Promise<ResolveResult<ParakeetModelConfig>> {
-  const { parakeetCtcModelSrc, parakeetCtcModelDataSrc, parakeetTokenizerSrc } =
-    cfg;
+  const { parakeetCtcModelSrc, parakeetTokenizerSrc } = cfg;
 
   if (!parakeetCtcModelSrc || !parakeetTokenizerSrc) {
     throw new ParakeetArtifactsRequiredError(
@@ -114,9 +107,8 @@ async function resolveCtcConfig(
   }
 
   const resolve = ctx.resolveModelPath;
-  const [ctcModelPath, ctcModelDataPath, tokenizerPath] = await Promise.all([
+  const [ctcModelPath, tokenizerPath] = await Promise.all([
     resolve(parakeetCtcModelSrc),
-    parakeetCtcModelDataSrc ? resolve(parakeetCtcModelDataSrc) : undefined,
     resolve(parakeetTokenizerSrc),
   ]);
 
@@ -124,7 +116,6 @@ async function resolveCtcConfig(
     config: cfg,
     artifacts: {
       ctcModelPath,
-      ...(ctcModelDataPath !== undefined && { ctcModelDataPath }),
       ...(tokenizerPath !== undefined && { tokenizerPath }),
     },
   };

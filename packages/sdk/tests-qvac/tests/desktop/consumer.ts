@@ -32,7 +32,6 @@ import {
   PARAKEET_TDT_PREPROCESSOR_INT8,
   PARAKEET_TDT_VOCAB,
   PARAKEET_CTC_FP32,
-  PARAKEET_CTC_DATA_FP32,
   PARAKEET_CTC_TOKENIZER,
   PARAKEET_SORTFORMER_FP32,
   SMOLVLM2_500M_MULTIMODAL_Q8_0,
@@ -251,6 +250,7 @@ resources.define("tts-chatterbox", {
   constant: TTS_TOKENIZER_EN_CHATTERBOX,
   type: "tts",
   skipPreDownload: true,
+  preLoadUnload: true,
   config: {
     ttsEngine: "chatterbox",
     language: "en",
@@ -267,6 +267,7 @@ resources.define("tts-supertonic", {
   constant: TTS_TOKENIZER_SUPERTONIC,
   type: "tts",
   skipPreDownload: true,
+  preLoadUnload: true,
   config: {
     ttsEngine: "supertonic",
     language: "en",
@@ -283,6 +284,7 @@ resources.define("parakeet-tdt", {
   constant: PARAKEET_TDT_ENCODER_INT8,
   type: "parakeet",
   skipPreDownload: true,
+  preLoadUnload: true,
   config: {
     parakeetEncoderSrc: PARAKEET_TDT_ENCODER_INT8,
     parakeetDecoderSrc: PARAKEET_TDT_DECODER_INT8,
@@ -296,10 +298,10 @@ resources.define("parakeet-ctc", {
   constant: PARAKEET_CTC_FP32,
   type: "parakeet",
   skipPreDownload: true,
+  preLoadUnload: true,
   config: {
     modelType: "ctc",
     parakeetCtcModelSrc: PARAKEET_CTC_FP32,
-    parakeetCtcModelDataSrc: PARAKEET_CTC_DATA_FP32,
     parakeetTokenizerSrc: PARAKEET_CTC_TOKENIZER,
   },
 });
@@ -309,6 +311,7 @@ resources.define("parakeet-sortformer", {
   constant: PARAKEET_SORTFORMER_FP32,
   type: "parakeet",
   skipPreDownload: true,
+  preLoadUnload: true,
   config: {
     modelType: "sortformer",
     parakeetSortformerSrc: PARAKEET_SORTFORMER_FP32,
@@ -319,6 +322,7 @@ resources.define("vision", {
   constant: SMOLVLM2_500M_MULTIMODAL_Q8_0,
   type: "llm",
   skipPreDownload: true,
+  preLoadUnload: true,
   config: {
     ctx_size: 1024,
     projectionModelSrc: MMPROJ_SMOLVLM2_500M_MULTIMODAL_Q8_0,
@@ -329,6 +333,7 @@ resources.define("diffusion", {
   constant: FLUX_2_KLEIN_4B_Q4_0,
   type: "diffusion",
   skipPreDownload: true,
+  preLoadUnload: true,
   config: {
     device: "gpu",
     threads: 4,
@@ -337,7 +342,9 @@ resources.define("diffusion", {
   },
 });
 
-await resources.downloadAllOnce(console.log);
+export async function bootstrap() {
+  await resources.downloadAllOnce(console.log);
+};
 
 export const executor = createExecutor({
   handlers: [
