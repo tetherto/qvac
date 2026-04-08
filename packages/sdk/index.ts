@@ -1,3 +1,5 @@
+import "#polyfill-bare-globals";
+
 // Public API exports only
 export {
   completion,
