@@ -16,7 +16,7 @@
         "@qvac/rag": "^0.4.4",
         "@qvac/registry-client": "^0.2.1",
         "@qvac/transcription-parakeet": "^0.2.4",
-        "@qvac/transcription-whispercpp": "^0.5.2",
+        "@qvac/transcription-whispercpp": "^0.5.5",
         "@qvac/translation-nmtcpp": "^0.6.1",
         "@qvac/tts-onnx": "^0.6.1",
         "fast-safe-stringify": "2.1.1",
@@ -538,7 +538,7 @@
 
     "@qvac/transcription-parakeet": ["@qvac/transcription-parakeet@0.2.5", "", { "dependencies": { "@qvac/error": "^0.1.0", "@qvac/infer-base": "^0.2.0", "@qvac/logging": "^0.1.0", "bare-fs": "^4.5.1", "bare-path": "^3.0.0", "path": "npm:bare-path", "process": "npm:bare-process@^4.2.2" } }, "sha512-a6pwYXjULJveczesRWellJf+iOa7xANbNTO1+fdjKc0VNjh3SK9jSly1bJXNuBpQn+1uPScbPz2lTDE4AbLAfg=="],
 
-    "@qvac/transcription-whispercpp": ["@qvac/transcription-whispercpp@0.5.4", "", { "dependencies": { "@qvac/decoder-audio": "^0.3.3", "@qvac/error": "^0.1.0", "@qvac/infer-base": "^0.2.0", "@qvac/logging": "^0.1.0", "bare-channel": "^5.2.2", "bare-ffmpeg": "^1.0.0-32", "bare-node-worker-threads": "^1.0.0", "bare-path": "^3.0.0", "bare-stream": "^2.7.0", "bare-worker": "^4.1.0", "path": "npm:bare-path", "process": "npm:bare-process@^4.2.2", "stream": "npm:bare-node-stream", "worker_threads": "npm:bare-node-worker-threads@^1.0.0" } }, "sha512-/U+5DCgD93SuSmhalCaXPDTOQl2jw1Z9dHA8sqOFv/QPG+TRyMV+ZjOBO5quQxhQozbif8oo0okIZUQEeeLJWA=="],
+    "@qvac/transcription-whispercpp": ["@qvac/transcription-whispercpp@0.5.5", "", { "dependencies": { "@qvac/decoder-audio": "^0.3.3", "@qvac/error": "^0.1.0", "@qvac/infer-base": "^0.2.0", "@qvac/logging": "^0.1.0", "bare-channel": "^5.2.2", "bare-ffmpeg": "^1.0.0-32", "bare-node-worker-threads": "^1.0.0", "bare-path": "^3.0.0", "bare-stream": "^2.7.0", "bare-worker": "^4.1.0", "path": "npm:bare-path", "process": "npm:bare-process@^4.2.2", "stream": "npm:bare-node-stream", "worker_threads": "npm:bare-node-worker-threads@^1.0.0" } }, "sha512-hYMcG8uANwKSiAQJUs6ZSLmclguBqWRZ8LV3vFlYQf5kBm7GOadoc1RVEKGAFFXR12sy1BTBb7EMh5B/7HrQbA=="],
 
     "@qvac/translation-nmtcpp": ["@qvac/translation-nmtcpp@0.6.2", "", { "dependencies": { "@qvac/dl-hyperdrive": "^0.1.0", "@qvac/error": "^0.1.0", "@qvac/infer-base": "^0.2.0", "bare-path": "^3.0.0" } }, "sha512-D6xKqSJBf2yW1lq4cihgz+6QMQdOqsk0QAb5n9ireKpWatFoWssO2jDt1ux6x6qOSrw4Mgwh7GMzsG/RE1I0Ew=="],
 
