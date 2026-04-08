@@ -5,7 +5,7 @@ description: Automatic speech recognition (ASR) for speech-to-text — i.e., gen
 
 ## Overview
 
-Transcription uses your choice of either [`whisper.cpp`](https://github.com/ggml-org/whisper.cpp) or [NVIDIA Parakeet](https://huggingface.co/nvidia/parakeet-tdt-0.6b-v2) (via [ONNX Runtime](https://onnxruntime.ai)) as inference engine. Load a model using `modelType: "whisper"` for whisper.cpp, or `modelType: "parakeet"` for Parakeet. Parakeet supports multilingual transcription (TDT), english-only transcription (CTC), and speaker diarization (Sortformer).
+Transcription uses your choice of either [`qvac-ext-lib-whisper.cpp`](https://github.com/tetherto/qvac-ext-lib-whisper.cpp) or [NVIDIA Parakeet](https://huggingface.co/nvidia/parakeet-tdt-0.6b-v2) (via [ONNX Runtime](https://onnxruntime.ai)) as inference engine. Load a model using `modelType: "whisper"` for `qvac-ext-lib-whisper.cpp`, or `modelType: "parakeet"` for Parakeet. Parakeet supports multilingual transcription (TDT), english-only transcription (CTC), and speaker diarization (Sortformer).
 
 Provide audio input as `audioChunk`, either as a file path (string) or an in-memory audio buffer.
 
@@ -22,10 +22,10 @@ For how to use each function, see [SDK — API reference](/sdk/api/).
 
 ## Models
 
-### `whisper.cpp`
+### `qvac-ext-lib-whisper.cpp`
 
 You should load two models:
-- a `whisper.cpp`-compatible model for transcription. Model file format: `*.bin`; and
+- a [`whisper.cpp`](https://github.com/ggml-org/whisper.cpp)-compatible model for transcription. Model file format: `*.bin`; and
 - a VAD model (e.g., Silero) converted to GGML. Model file format: `*.bin` _(optional, recommended)_.
 
 ### Parakeet
@@ -44,13 +44,13 @@ For model artifacts available as constants, see [SDK — Models](/sdk/getting-st
 </Callout>
 
 <Callout type="info">
-**On VAD:** when using `whisper.cpp`, you can optionally provide a separate model for voice activity detection (VAD); this is recommended. In turn, Parakeet handles VAD internally, so no additional model or configuration is required.
+**On VAD:** when using `qvac-ext-lib-whisper.cpp`, you can optionally provide a separate model for voice activity detection (VAD); this is recommended. In turn, Parakeet handles VAD internally, so no additional model or configuration is required.
 </Callout>
 ## Examples
 
-### `whisper.cpp`
+### `qvac-ext-lib-whisper.cpp`
 
-The following script shows an example of `whisper.cpp` transcription with prompt-guided decoding, VAD, and GPU acceleration:
+The following script shows an example of `qvac-ext-lib-whisper.cpp` transcription with prompt-guided decoding, VAD, and GPU acceleration:
 
 <Tabs>
 <Tab value="js" label="JavaScript" default>
