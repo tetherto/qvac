@@ -77,57 +77,18 @@ async function downloadFile (url, destPath) {
 }
 
 /**
- * Loads the DocTR model URL config from testAssets on mobile.
- * Returns null if not available (falls back to direct GitHub downloads).
- * @returns {Object|null}
- */
-function loadDoctrUrlConfig () {
-  if (global.assetPaths) {
-    const configPath = global.assetPaths['../../testAssets/doctr-model-urls.json']
-    if (configPath) {
-      try {
-        const configData = fs.readFileSync(configPath.replace('file://', ''), 'utf8')
-        return JSON.parse(configData)
-      } catch (e) {
-        console.log(`   Failed to load doctr config from assetPaths: ${e.message}`)
-      }
-    }
-  }
-
-  const fallbackPaths = [
-    '../../testAssets/doctr-model-urls.json',
-    '../testAssets/doctr-model-urls.json',
-    'testAssets/doctr-model-urls.json'
-  ]
-  for (const fallbackPath of fallbackPaths) {
-    if (fs.existsSync(fallbackPath)) {
-      try {
-        return JSON.parse(fs.readFileSync(fallbackPath, 'utf8'))
-      } catch (e) {
-        console.log(`   Failed to parse ${fallbackPath}: ${e.message}`)
-      }
-    }
-  }
-  return null
-}
-
-/**
  * Downloads a single DocTR model if not already cached.
- * On mobile uses presigned S3 URLs from doctr-model-urls.json; falls back to GitHub releases.
- * Retries up to 3 times on transient errors (e.g. GitHub Releases HTTP 500).
+ * Downloads from OnnxTR GitHub releases with retry on transient errors.
  * @param {string} filename - Model filename (e.g., 'db_resnet50.onnx')
- * @param {Object|null} urlConfig - Presigned URL config loaded from testAssets (mobile only)
  */
-async function downloadDoctrModel (filename, urlConfig = null) {
+async function downloadDoctrModel (filename) {
   const destPath = path.join(DOCTR_MODELS_DIR, filename)
   if (fs.existsSync(destPath)) return
 
-  // Prefer presigned S3 URL on mobile; fall back to public GitHub release URL
-  const url = (urlConfig && urlConfig[filename]) || DOCTR_MODEL_URLS[filename]
+  const url = DOCTR_MODEL_URLS[filename]
   if (!url) throw new Error(`No download URL for DocTR model: ${filename}`)
 
-  const source = (urlConfig && urlConfig[filename]) ? 'S3 presigned URL' : 'GitHub releases'
-  console.log(`Downloading ${filename} from ${source}...`)
+  console.log(`Downloading ${filename} from GitHub releases...`)
 
   const fetch = require('bare-fetch')
   const maxAttempts = 3
@@ -154,8 +115,7 @@ async function downloadDoctrModel (filename, urlConfig = null) {
 
 /**
  * Ensures all requested DocTR models are available.
- * On mobile downloads from presigned S3 URLs (doctr-model-urls.json in testAssets);
- * on desktop downloads from OnnxTR GitHub releases if not already present.
+ * Downloads from OnnxTR GitHub releases if not already present.
  * @param {string[]} [models] - Model filenames to ensure. Defaults to all 4 models.
  * @returns {Promise<Object>} Map of model name (without extension) to full path
  */
@@ -163,13 +123,8 @@ async function ensureDoctrModels (models) {
   if (!models) models = Object.keys(DOCTR_MODEL_URLS)
   fs.mkdirSync(DOCTR_MODELS_DIR, { recursive: true })
 
-  const urlConfig = isMobile ? loadDoctrUrlConfig() : null
-  if (isMobile && !urlConfig) {
-    console.log('Warning: doctr-model-urls.json not found on mobile; falling back to GitHub downloads')
-  }
-
   for (const filename of models) {
-    await downloadDoctrModel(filename, urlConfig)
+    await downloadDoctrModel(filename)
   }
   const paths = {}
   for (const filename of models) {
