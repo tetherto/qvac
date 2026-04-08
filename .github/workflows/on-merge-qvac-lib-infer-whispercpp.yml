@@ -26,6 +26,7 @@ permissions:
   contents: read
   pull-requests: read
   packages: read
+  id-token: write
 
 jobs:
   publish-logic:
@@ -107,6 +108,7 @@ jobs:
       contents: write
       packages: write
       pull-requests: write
+      id-token: write
     uses: ./.github/workflows/prebuilds-qvac-lib-infer-whispercpp.yml
     secrets: inherit
     with:
@@ -160,7 +162,7 @@ jobs:
 
       - name: Publish to GitHub Package Registry
         id: publish
-        uses: tetherto/qvac-devops/.github/actions/publish-library-to-gpr@v1.1.7
+        uses: tetherto/qvac-devops/.github/actions/publish-library-to-gpr@v1.1.8
         with:
           secret-token: ${{ secrets.GITHUB_TOKEN }}
           tag: ${{ (github.event_name == 'workflow_dispatch' && github.event.inputs.tag) || needs.publish-logic.outputs.gpr_tag }}
@@ -200,6 +202,7 @@ jobs:
     permissions:
       contents: write
       packages: write
+      id-token: write
     env:
       WORKDIR: packages/qvac-lib-infer-whispercpp
     steps:
@@ -216,7 +219,7 @@ jobs:
 
       - name: Publish to NPM Package Registry
         id: publish
-        uses: tetherto/qvac-devops/.github/actions/publish-library-to-npm@v1.1.7
+        uses: tetherto/qvac-devops/.github/actions/publish-library-to-npm-oidc@v1.1.8
         with:
           secret-token: ${{ secrets.NPM_TOKEN }}
           tag: "latest"
@@ -277,9 +280,17 @@ jobs:
           echo "should_run_tests=$should" >> "$GITHUB_OUTPUT"
 
   integration-tests:
+    permissions:
+      contents: read
+      packages: read
+      id-token: write
     uses: ./.github/workflows/integration-test-qvac-lib-infer-whispercpp.yml
     needs: post-build-gate
     if: needs.post-build-gate.outputs.should_run_tests == 'true'
+    permissions:
+      contents: read
+      packages: read
+      id-token: write
     secrets: inherit
     with:
       repository: ${{ github.repository }}
@@ -294,6 +305,7 @@ jobs:
       contents: read
       packages: read
       pull-requests: write
+      id-token: write
     secrets: inherit
     with:
       repository: ${{ github.repository }}

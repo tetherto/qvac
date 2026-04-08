@@ -42,6 +42,7 @@ permissions:
   pull-requests: read
   packages: read
   checks: read
+  id-token: write
 
 jobs:
   authorize:
@@ -123,7 +124,7 @@ jobs:
     environment: release
     steps:
       - name: Run Sanity checks
-        uses: tetherto/qvac-devops/.github/actions/sanity-checks@v1.1.7
+        uses: tetherto/qvac-devops/.github/actions/sanity-checks@v1.1.8
         with:
           secret-token: ${{ secrets.GITHUB_TOKEN }}
           npm-token: ${{ secrets.NPM_TOKEN }}
@@ -134,7 +135,7 @@ jobs:
   cpp-lint:
     needs: context
     if: needs.context.outputs.run_verify == 'true' || github.event_name == 'workflow_dispatch'
-    uses: tetherto/qvac-devops/.github/workflows/cpp-lint.yaml@v1.1.7
+    uses: tetherto/qvac-devops/.github/workflows/cpp-lint.yaml@v1.1.8
     secrets: inherit
     with:
       sha: ${{ needs.context.outputs.base_sha }}
@@ -160,6 +161,7 @@ jobs:
       contents: write
       packages: write
       pull-requests: write
+      id-token: write
     needs: context
     if: needs.context.outputs.run_verify == 'true' || github.event_name == 'workflow_dispatch'
     uses: ./.github/workflows/prebuilds-qvac-lib-infer-parakeet.yml
@@ -169,6 +171,10 @@ jobs:
       ref: ${{ needs.context.outputs.ref }}
 
   run-integration-tests:
+    permissions:
+      contents: read
+      packages: read
+      id-token: write
     needs: [context, prebuild]
     if: needs.context.outputs.run_verify == 'true' || github.event_name == 'workflow_dispatch'
     uses: ./.github/workflows/integration-test-qvac-lib-infer-parakeet.yml
@@ -181,7 +187,8 @@ jobs:
     permissions:
       contents: read
       packages: read
-      pull-requests: write # Allow commenting on PRs
+      pull-requests: write
+      id-token: write
     needs: [context, prebuild]
     if: needs.context.outputs.run_verify == 'true' || github.event_name == 'workflow_dispatch'
     uses: ./.github/workflows/integration-mobile-test-qvac-lib-infer-parakeet.yml
@@ -193,7 +200,7 @@ jobs:
   merge-guard:
     needs: [authorize, sanity-checks, cpp-lint, cpp-tests-coverage, prebuild, run-integration-tests, run-mobile-integration-tests]
     if: always()
-    uses: tetherto/qvac-devops/.github/workflows/public-pr.yml@v1.1.7
+    uses: tetherto/qvac-devops/.github/workflows/public-pr.yml@v1.1.8
     with:
       sanity-checks-status: ${{ needs.sanity-checks.result == 'success' && (needs.cpp-lint.result == 'success' || needs.cpp-lint.result == 'skipped') && (needs.cpp-tests-coverage.result == 'success' || needs.cpp-tests-coverage.result == 'skipped') }}
       build-status: ${{ needs.prebuild.result == 'success' || needs.prebuild.result == 'skipped' }}

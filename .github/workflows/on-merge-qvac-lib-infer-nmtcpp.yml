@@ -28,6 +28,7 @@ permissions:
   contents: read
   pull-requests: read
   packages: read
+  id-token: write
 
 jobs:
   publish-logic:
@@ -113,6 +114,7 @@ jobs:
       contents: write
       packages: write
       pull-requests: write
+      id-token: write
     if: needs.publish-logic.outputs.publish_main == 'true'
     uses: ./.github/workflows/prebuilds-qvac-lib-infer-nmtcpp.yml
     secrets: inherit
@@ -126,6 +128,7 @@ jobs:
       contents: write
       packages: write
       pull-requests: write
+      id-token: write
     if: needs.publish-logic.outputs.publish_feature == 'true'
     uses: ./.github/workflows/prebuilds-qvac-lib-infer-nmtcpp.yml
     secrets: inherit
@@ -139,6 +142,7 @@ jobs:
       contents: write
       packages: write
       pull-requests: write
+      id-token: write
     if: needs.publish-logic.outputs.publish_tmp == 'true'
     uses: ./.github/workflows/prebuilds-qvac-lib-infer-nmtcpp.yml
     secrets: inherit
@@ -148,6 +152,10 @@ jobs:
 
   run-integration-tests:
     needs: [prebuild-main-gpr]
+    permissions:
+      contents: read
+      packages: read
+      id-token: write
     uses: ./.github/workflows/integration-test-qvac-lib-infer-nmtcpp.yml
     secrets: inherit
     with:
@@ -160,6 +168,7 @@ jobs:
       contents: write
       packages: write
       pull-requests: write
+      id-token: write
     if: |
       !cancelled() &&
       needs.publish-logic.outputs.publish_release == 'true' &&
