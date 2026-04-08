@@ -287,10 +287,6 @@ jobs:
     uses: ./.github/workflows/integration-test-qvac-lib-infer-whispercpp.yml
     needs: post-build-gate
     if: needs.post-build-gate.outputs.should_run_tests == 'true'
-    permissions:
-      contents: read
-      packages: read
-      id-token: write
     secrets: inherit
     with:
       repository: ${{ github.repository }}

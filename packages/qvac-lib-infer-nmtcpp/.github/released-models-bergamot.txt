@@ -2,7 +2,7 @@
 # One pair per line in format: src-trg (e.g., en-it)
 # Lines starting with # are comments and are ignored
 #
-# S3 path: s3://${MODEL_S3_BUCKET}/qvac_models_compiled/bergamot/bergamot-{pair_code}/
+# Model path pattern: bergamot-{pair_code}/
 
 # Bergamot pairs (from model registry)
 en-ar

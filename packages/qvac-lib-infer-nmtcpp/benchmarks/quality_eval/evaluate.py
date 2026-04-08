@@ -29,7 +29,7 @@ DATASETS = {
     "conversational-phrases": {
         "type": "json",
         "folder": "conversational_phrases",
-        "s3_path": f"s3://{os.environ.get('MODEL_S3_BUCKET', 'MODEL_S3_BUCKET')}/qvac_datasets/nmt/short/conversational_phrases_dataset.json"
+        "remote_path": os.environ.get('CONVERSATIONAL_PHRASES_PATH', '')
     }
 }
 
@@ -196,9 +196,14 @@ def download_dataset(data_dir, dataset_name="flores-devtest"):
         tarball.unlink()  # Remove tarball after extraction
     elif config["type"] == "json":
         # Download JSON dataset from S3
+        remote_path = config["remote_path"]
+        if not remote_path:
+            raise ValueError(f"Set CONVERSATIONAL_PHRASES_PATH env var to download {dataset_name}")
+        if not remote_path.startswith("s3://"):
+            raise ValueError(f"CONVERSATIONAL_PHRASES_PATH must be an s3:// URL, got: {remote_path}")
         dataset_path.mkdir(parents=True, exist_ok=True)
         json_file = dataset_path / "dataset.json"
-        subprocess.run(["aws", "s3", "cp", config["s3_path"], str(json_file)], check=True)
+        subprocess.run(["aws", "s3", "cp", remote_path, str(json_file)], check=True)
 
     print(f"Downloaded and extracted {dataset_name}")
 
