@@ -44,10 +44,10 @@ The JS SDK is cross-platform, type-safe, and pluggable, exposing all QVAC capabi
 {/* <Task name>: <what computation is performed> for <what the developer achieves> via <engine> */}
 {/* <task>: <tech process> for <use case>, via <engine> */}
 
-* [**Completion:**](/sdk/examples/ai-tasks/completion) LLM inference for text generation and chat via [`llama.cpp`](https://github.com/ggml-org/llama.cpp).
-* [**Text embeddings:**](/sdk/examples/ai-tasks/text-embeddings) vector embedding generation for semantic search, clustering, and retrieval, via `llama.cpp`.
-* [**Translation:**](/sdk/examples/ai-tasks/translation) text-to-text neural machine translation (NMT), via [Marian](https://marian-nmt.github.io) and [Bergamot](https://browser.mt).
-* [**Transcription:**](/sdk/examples/ai-tasks/transcription) automatic speech recognition (ASR) for speech-to-text via [`whisper.cpp`](https://github.com/ggml-org/whisper.cpp) or [NVIDIA Parakeet](https://huggingface.co/nvidia/parakeet-tdt-0.6b-v2).
+* [**Completion:**](/sdk/examples/ai-tasks/completion) LLM inference for text generation and chat via [`qvac-fabric-llm.cpp`](https://github.com/tetherto/qvac-fabric-llm.cpp).
+* [**Text embeddings:**](/sdk/examples/ai-tasks/text-embeddings) vector embedding generation for semantic search, clustering, and retrieval, via `qvac-fabric-llm.cpp`.
+* [**Translation:**](/sdk/examples/ai-tasks/translation) text-to-text neural machine translation (NMT), via `qvac-fabric-llm.cpp` and [Bergamot](https://browser.mt).
+* [**Transcription:**](/sdk/examples/ai-tasks/transcription) automatic speech recognition (ASR) for speech-to-text via [`qvac-ext-lib-whisper.cpp`](https://github.com/tetherto/qvac-ext-lib-whisper.cpp) or [NVIDIA Parakeet](https://huggingface.co/nvidia/parakeet-tdt-0.6b-v2).
 * [**Text-to-Speech:**](/sdk/examples/ai-tasks/text-to-speech) speech synthesis for text-to-speech (TTS) via [ONNX Runtime](https://onnxruntime.ai).
 * [**OCR:**](/sdk/examples/ai-tasks/ocr) optical character recognition (OCR) for extracting text from images via ONNX runtime.
 * [**Multimodal:**](/sdk/examples/ai-tasks/multimodal) LLM inference over text, images, and other media within a single conversation context.

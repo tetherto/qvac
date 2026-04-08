@@ -27,10 +27,10 @@ The following table lists all available addons for QVAC ecosystem:
 
 | Package | AI Tasks | Description | inference engine | Stability |
 | --- | --- | --- | --- | --- |
-| [`@qvac/llm-llamacpp`](/addons/llm-llamacpp) | Completion, multimodal | LLM inference for text generation and chat with support to images, and other media within a single conversation context. | [`llama.cpp`](https://github.com/ggml-org/llama.cpp) | stable |
-| [`@qvac/embed-llamacpp`](/addons/embed-llamacpp) | Text embeddings, RAG | Vector embedding generation for semantic search, clustering, and retrieval that seamlessly suppports retrieval-augmented generation workflow. | `llama.cpp` | stable |
-| [`@qvac/translation-nmtcpp`](/addons/translation-nmtcpp) | Translation | Text-to-text neural machine translation (NMT). | [Marian](https://marian-nmt.github.io) and [Bergamot](https://browser.mt) | stable |
-| [`@qvac/transcription-whispercpp`](/addons/transcription-whispercpp) | Transcription | Automatic speech recognition (ASR) for speech-to-text. | [`whisper.cpp`](https://github.com/ggml-org/whisper.cpp) | stable |
+| [`@qvac/llm-llamacpp`](/addons/llm-llamacpp) | Completion, multimodal | LLM inference for text generation and chat with support to images, and other media within a single conversation context. | [`qvac-fabric-llm.cpp`](https://github.com/tetherto/qvac-fabric-llm.cpp) | stable |
+| [`@qvac/embed-llamacpp`](/addons/embed-llamacpp) | Text embeddings, RAG | Vector embedding generation for semantic search, clustering, and retrieval that seamlessly suppports retrieval-augmented generation workflow. | `qvac-fabric-llm.cpp` | stable |
+| [`@qvac/translation-nmtcpp`](/addons/translation-nmtcpp) | Translation | Text-to-text neural machine translation (NMT). | `qvac-fabric-llm.cpp` and [Bergamot](https://browser.mt) | stable |
+| [`@qvac/transcription-whispercpp`](/addons/transcription-whispercpp) | Transcription | Automatic speech recognition (ASR) for speech-to-text. | [`qvac-ext-lib-whisper.cpp`](https://github.com/tetherto/qvac-ext-lib-whisper.cpp) | stable |
 | [`@qvac/transcription-parakeet`](/addons/transcription-parakeet) | Transcription | Automatic speech recognition (ASR) for speech-to-text with speaker diarization. | [NVIDIA Parakeet](https://huggingface.co/nvidia/parakeet-tdt-0.6b-v2) via [ONNX Runtime](https://onnxruntime.ai) | stable |
 | [`@qvac/tts-onnx`](/addons/tts-onnx) | Text-to-speech | Speech synthesis for text-to-speech (TTS). | ONNX Runtime | stable |
 | [`@qvac/ocr-onnx`](/addons/ocr-onnx) | OCR | Optical character recognition (OCR) for extracting text from images. | ONNX runtime | stable |
