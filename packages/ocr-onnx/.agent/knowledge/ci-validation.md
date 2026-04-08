@@ -54,7 +54,7 @@ These have unit tests (`npm run test:unit`) but use simple publish workflows for
 
 ### Simple Libraries (pure JS, no native code)
 
-Packages: `qvac-lib-dl-filesystem`, `qvac-lib-dl-hyperdrive`, `qvac-lib-dl-base`, `qvac-lib-infer-base`, `qvac-lib-langdetect-text`, `qvac-cli`
+Packages: `qvac-lib-dl-filesystem`, `qvac-lib-dl-hyperdrive`, `dl-base`, `qvac-lib-infer-base`, `qvac-lib-langdetect-text`, `qvac-cli`
 
 | Workflow | File pattern | Purpose |
 |----------|-------------|---------|

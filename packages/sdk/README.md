@@ -1,7 +1,13 @@
 # QVAC SDK
 
-> <a href="https://qvac.tether.io" >Website</a> &nbsp;•&nbsp;
-> <a href="https://docs.qvac.tether.io" >Docs</a> &nbsp;•&nbsp;
+**QVAC SDK** is the canonical entry point to develop AI applications with QVAC.
+
+> _Part of **QVAC** ecosystem_
+> <br>
+> <sup>
+> <a href="https://qvac.tether.dev" >Home</a> &nbsp;•&nbsp;
+> <a href="https://qvac.tether.dev/docs" >Docs</a> &nbsp;•&nbsp;
+> <a href="https://discord.com/channels/1425125849346216029/1445400675189264516" >Support</a> &nbsp;•&nbsp;
 > <a href="https://discord.com/invite/tetherdev" >Discord</a>
 
 **QVAC SDK** is the main entry point for developing applications with QVAC. It is type-safe and exposes all QVAC capabilities through a unified interface. It runs on Node.js, [Bare runtime](https://bare.pears.com), and [Expo](https://expo.dev).

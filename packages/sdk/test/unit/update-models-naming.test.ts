@@ -1481,3 +1481,126 @@ test("shard grouping → codegen: generated output includes shardMetadata array"
   // expectedSize is the sum: 500 + 300 = 800
   t.ok(output.includes("expectedSize: 800"), "expectedSize is sum of shards");
 });
+
+// ---------------------------------------------------------------------------
+// Diffusion: Stable Diffusion 2.1 Q8_0
+// ---------------------------------------------------------------------------
+
+test("diffusion: SD 2.1 Q8_0 — shortens stable-diffusion prefix", (t: any) => {
+  const coreKey = Buffer.from("aa".repeat(32), "hex");
+
+  const { model, exportName } = processAndName({
+    path: "gpustack/stable-diffusion-v2-1-GGUF/resolve/12ddc22724f6da35f0b6006e459fae66eaf56931/stable-diffusion-v2-1-Q8_0.gguf",
+    source: "hf",
+    engine: "@qvac/diffusion-cpp",
+    license: "openrail++",
+    name: "",
+    sizeBytes: 1300000000,
+    sha256: "aa".repeat(32),
+    quantization: "Q8_0",
+    params: "1B",
+    tags: ["generation", "diffusion"],
+    blobBinding: {
+      coreKey,
+      blockOffset: 100,
+      blockLength: 50,
+      byteOffset: 1000000,
+      byteLength: 1300000000,
+    },
+  });
+
+  t.is(model.addon, "diffusion");
+  t.is(model.engine, "sdcpp-generation");
+  t.is(exportName, "SD_V2_1_1B_Q8_0");
+});
+
+// ---------------------------------------------------------------------------
+// Diffusion: Stable Diffusion XL Q4_0
+// ---------------------------------------------------------------------------
+
+test("diffusion: SDXL Q4_0 — shortens stable-diffusion-xl prefix", (t: any) => {
+  const coreKey = Buffer.from("bb".repeat(32), "hex");
+
+  const { model, exportName } = processAndName({
+    path: "gpustack/stable-diffusion-xl-base-1.0-GGUF/resolve/5f58340891db3ef66a79758c2dcddad92b1de169/stable-diffusion-xl-base-1.0-Q4_0.gguf",
+    source: "hf",
+    engine: "@qvac/diffusion-cpp",
+    license: "openrail++",
+    name: "",
+    sizeBytes: 3500000000,
+    sha256: "bb".repeat(32),
+    quantization: "Q4_0",
+    params: "3B",
+    tags: ["generation", "diffusion"],
+    blobBinding: {
+      coreKey,
+      blockOffset: 200,
+      blockLength: 100,
+      byteOffset: 2000000,
+      byteLength: 3500000000,
+    },
+  });
+
+  t.is(model.addon, "diffusion");
+  t.is(exportName, "SDXL_BASE_1_0_3B_Q4_0");
+});
+
+// ---------------------------------------------------------------------------
+// Diffusion: FLUX.2 Klein 4B Q4_0
+// ---------------------------------------------------------------------------
+
+test("diffusion: FLUX.2 Klein 4B Q4_0 — strips params+quant from family", (t: any) => {
+  const coreKey = Buffer.from("cc".repeat(32), "hex");
+
+  const { model, exportName } = processAndName({
+    path: "unsloth/FLUX.2-klein-4B-GGUF/resolve/8342a6a97b2d18acae5d62124735c39ba23060e2/flux-2-klein-4b-Q4_0.gguf",
+    source: "hf",
+    engine: "@qvac/diffusion-cpp",
+    license: "Apache-2.0",
+    name: "",
+    sizeBytes: 2500000000,
+    sha256: "cc".repeat(32),
+    quantization: "Q4_0",
+    params: "4B",
+    tags: ["generation", "diffusion"],
+    blobBinding: {
+      coreKey,
+      blockOffset: 300,
+      blockLength: 150,
+      byteOffset: 3000000,
+      byteLength: 2500000000,
+    },
+  });
+
+  t.is(model.addon, "diffusion");
+  t.is(exportName, "FLUX_2_KLEIN_4B_Q4_0");
+});
+
+// ---------------------------------------------------------------------------
+// Diffusion: FLUX.2 VAE (tagged "vae")
+// ---------------------------------------------------------------------------
+
+test("diffusion: FLUX.2 VAE — vae tag produces _VAE suffix", (t: any) => {
+  const coreKey = Buffer.from("dd".repeat(32), "hex");
+
+  const { model, exportName } = processAndName({
+    path: "black-forest-labs/FLUX.2-klein-4B/resolve/5e67da950fce4a097bc150c22958a05716994cea/vae/diffusion_pytorch_model.safetensors",
+    source: "hf",
+    engine: "@qvac/diffusion-cpp",
+    license: "Apache-2.0",
+    name: "",
+    sizeBytes: 167000000,
+    sha256: "dd".repeat(32),
+    tags: ["vae"],
+    blobBinding: {
+      coreKey,
+      blockOffset: 400,
+      blockLength: 75,
+      byteOffset: 4000000,
+      byteLength: 167000000,
+    },
+  });
+
+  t.is(model.addon, "diffusion");
+  t.is(exportName, "FLUX_2_KLEIN_4B_VAE");
+});

@@ -2,6 +2,7 @@
 #include <unordered_map>
 
 #include <gtest/gtest.h>
+#include <qvac-lib-inference-addon-cpp/Errors.hpp>
 
 #include "utils/BackendSelection.hpp"
 
@@ -28,6 +29,11 @@ TEST_F(SdBackendSelectionTest, MissingDeviceDefaultsToGPU) {
   EXPECT_EQ(preferredDeviceFromMap(configMap), BackendDevice::GPU);
 }
 
+TEST_F(SdBackendSelectionTest, InvalidDeviceThrows) {
+  configMap["device"] = "bogus";
+  EXPECT_THROW(preferredDeviceFromMap(configMap), qvac_errors::StatusError);
+}
+
 TEST_F(SdBackendSelectionTest, ThreadsFromMapReturnsValue) {
   configMap["threads"] = "8";
   EXPECT_EQ(threadsFromMap(configMap), 8);
@@ -35,4 +41,12 @@ TEST_F(SdBackendSelectionTest, ThreadsFromMapReturnsValue) {
 
 TEST_F(SdBackendSelectionTest, ThreadsFromMapDefaultsToAuto) {
   EXPECT_EQ(threadsFromMap(configMap), -1);
+}
+
+TEST_F(SdBackendSelectionTest, ResolveBackendCpuPreferenceReturnsCPU) {
+  EXPECT_EQ(resolveBackendForDevice(BackendDevice::CPU), BackendDevice::CPU);
+}
+
+TEST_F(SdBackendSelectionTest, CpuPreferenceDoesNotPreferOpenCl) {
+  EXPECT_FALSE(shouldPreferOpenClForAdreno(BackendDevice::CPU));
 }
