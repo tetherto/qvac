@@ -27,14 +27,6 @@ export default function Layout({ children }: LayoutProps<'/'>) {
     },
     {
       type: 'icon',
-      url: 'https://qvacbytether.featurebase.app/?b=68d07d333a52713329b11fa6',
-      label: 'FeatureBase',
-      text: 'FeatureBase',
-      icon: <FeaturebaseIcon />,
-      external: true,
-    },
-    {
-      type: 'icon',
       url: 'https://huggingface.co/qvac',
       label: 'Hugging Face',
       text: 'Hugging Face',

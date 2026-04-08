@@ -7,7 +7,6 @@ const {
   binding,
   ParakeetInterface,
   TranscriptionParakeet,
-  FakeDL,
   setupJsLogger,
   getTestPaths,
   ensureModel,
@@ -15,11 +14,6 @@ const {
   getNamedPathsConfig,
   isMobile
 } = require('./helpers.js')
-
-function createLoader () {
-  if (!FakeDL) return null
-  return new FakeDL({})
-}
 
 const { samplesDir } = getTestPaths()
 
@@ -46,26 +40,16 @@ test('CTC with named file paths — constructor accepts and validates', { timeou
   const ctcModelDataPath = path.join(modelDir, 'model.onnx_data')
   const tokenizerPath = path.join(modelDir, 'tokenizer.json')
 
-  const args = {
-    modelName: 'ctc-named-test',
-    diskPath: '/nonexistent',
-    loader: createLoader()
-  }
-  const config = {
-    ctcModelPath,
-    ctcModelDataPath,
-    tokenizerPath,
-    parakeetConfig: { modelType: 'ctc' }
-  }
-
-  const model = new TranscriptionParakeet(args, config)
+  const model = new TranscriptionParakeet({
+    files: { model: ctcModelPath, modelData: ctcModelDataPath, tokenizer: tokenizerPath },
+    config: { parakeetConfig: { modelType: 'ctc' } }
+  })
   t.ok(model, 'CTC model created with named paths (no directory throw)')
-  t.ok(model._hasNamedPaths(), '_hasNamedPaths returns true for CTC paths')
 
-  const resolved = model._resolveFilePath('', 'model.onnx')
+  const resolved = model._resolveFilePath('model.onnx')
   t.is(resolved, ctcModelPath, '_resolveFilePath maps model.onnx to ctcModelPath')
 
-  const resolvedTok = model._resolveFilePath('', 'tokenizer.json')
+  const resolvedTok = model._resolveFilePath('tokenizer.json')
   t.is(resolvedTok, tokenizerPath, '_resolveFilePath maps tokenizer.json to tokenizerPath')
 })
 
@@ -138,26 +122,16 @@ test('EOU with named file paths — constructor accepts and validates', { timeou
   const eouDecoderPath = path.join(modelDir, 'decoder_joint.onnx')
   const tokenizerPath = path.join(modelDir, 'tokenizer.json')
 
-  const args = {
-    modelName: 'eou-named-test',
-    diskPath: '/nonexistent',
-    loader: createLoader()
-  }
-  const config = {
-    eouEncoderPath,
-    eouDecoderPath,
-    tokenizerPath,
-    parakeetConfig: { modelType: 'eou' }
-  }
-
-  const model = new TranscriptionParakeet(args, config)
+  const model = new TranscriptionParakeet({
+    files: { eouEncoder: eouEncoderPath, eouDecoder: eouDecoderPath, tokenizer: tokenizerPath },
+    config: { parakeetConfig: { modelType: 'eou' } }
+  })
   t.ok(model, 'EOU model created with named paths (no directory throw)')
-  t.ok(model._hasNamedPaths(), '_hasNamedPaths returns true for EOU paths')
 
-  const resolved = model._resolveFilePath('', 'encoder.onnx')
+  const resolved = model._resolveFilePath('encoder.onnx')
   t.is(resolved, eouEncoderPath, '_resolveFilePath maps encoder.onnx to eouEncoderPath')
 
-  const resolvedDec = model._resolveFilePath('', 'decoder_joint.onnx')
+  const resolvedDec = model._resolveFilePath('decoder_joint.onnx')
   t.is(resolvedDec, eouDecoderPath, '_resolveFilePath maps decoder_joint.onnx to eouDecoderPath')
 })
 
@@ -228,21 +202,13 @@ test('Sortformer with named file paths — constructor accepts and validates', {
 
   const sortformerPath = path.join(modelDir, 'sortformer.onnx')
 
-  const args = {
-    modelName: 'sf-named-test',
-    diskPath: '/nonexistent',
-    loader: createLoader()
-  }
-  const config = {
-    sortformerPath,
-    parakeetConfig: { modelType: 'sortformer' }
-  }
-
-  const model = new TranscriptionParakeet(args, config)
+  const model = new TranscriptionParakeet({
+    files: { sortformer: sortformerPath },
+    config: { parakeetConfig: { modelType: 'sortformer' } }
+  })
   t.ok(model, 'Sortformer model created with named paths (no directory throw)')
-  t.ok(model._hasNamedPaths(), '_hasNamedPaths returns true for Sortformer paths')
 
-  const resolved = model._resolveFilePath('', 'sortformer.onnx')
+  const resolved = model._resolveFilePath('sortformer.onnx')
   t.is(resolved, sortformerPath, '_resolveFilePath maps sortformer.onnx to sortformerPath')
 })
 
@@ -313,24 +279,18 @@ test('TDT with named file paths — verify existing flow still works', { timeout
   const { modelPath } = getTestPaths()
   await ensureModel(modelPath)
 
-  const args = {
-    modelName: 'tdt-named-test',
-    diskPath: '/nonexistent',
-    loader: createLoader()
-  }
-  const config = {
-    encoderPath: path.join(modelPath, 'encoder-model.onnx'),
-    encoderDataPath: path.join(modelPath, 'encoder-model.onnx.data'),
-    decoderPath: path.join(modelPath, 'decoder_joint-model.onnx'),
-    vocabPath: path.join(modelPath, 'vocab.txt'),
-    preprocessorPath: path.join(modelPath, 'preprocessor.onnx'),
-    parakeetConfig: { modelType: 'tdt' }
-  }
-
-  const model = new TranscriptionParakeet(args, config)
+  const model = new TranscriptionParakeet({
+    files: {
+      encoder: path.join(modelPath, 'encoder-model.onnx'),
+      encoderData: path.join(modelPath, 'encoder-model.onnx.data'),
+      decoder: path.join(modelPath, 'decoder_joint-model.onnx'),
+      vocab: path.join(modelPath, 'vocab.txt'),
+      preprocessor: path.join(modelPath, 'preprocessor.onnx')
+    },
+    config: { parakeetConfig: { modelType: 'tdt' } }
+  })
   t.ok(model, 'TDT model created with named paths')
-  t.ok(model._hasNamedPaths(), '_hasNamedPaths returns true for TDT paths')
 
-  const resolved = model._resolveFilePath('', 'encoder-model.onnx')
+  const resolved = model._resolveFilePath('encoder-model.onnx')
   t.is(resolved, path.join(modelPath, 'encoder-model.onnx'), '_resolveFilePath maps correctly')
 })

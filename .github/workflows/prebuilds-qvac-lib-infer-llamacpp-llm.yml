@@ -1,16 +1,9 @@
+# Build-only workflow. Publishing is handled by on-merge-qvac-lib-infer-llamacpp-llm.yml
 name: Prebuilds (LLM)
 
 on:
   workflow_dispatch:
     inputs:
-      tag:
-        description: "Tag to publish with ('latest' by default)"
-        required: true
-        default: "latest"
-        type: choice
-        options:
-          - latest
-          - dev
       vk-profiling:
         type: boolean
         default: false
@@ -30,16 +23,6 @@ on:
         type: string
         required: false
         default: "tetherto/qvac"
-      tag:
-        description: "Tag to publish"
-        type: string
-        required: false
-        default: "dev"
-      publish_target:
-        description: "Where to publish: 'npm', 'gpr' or 'both'"
-        type: string
-        required: false
-        default: ""
       vk-profiling:
         description: "Enable Vulkan profiling"
         type: boolean
@@ -50,10 +33,6 @@ on:
         required: false
         type: string
         default: "packages/qvac-lib-infer-llamacpp-llm"
-    outputs:
-      published_version:
-        description: "The version that was published"
-        value: ${{ jobs.publish-npm.outputs.published_version || jobs.publish-gpr.outputs.published_version }}
 
 env:
   WORKDIR: ${{ inputs.workdir }}
@@ -66,6 +45,7 @@ jobs:
     permissions:
       contents: write
       pull-requests: write
+      id-token: write
     strategy:
       fail-fast: false
       matrix:
@@ -133,7 +113,6 @@ jobs:
       - name: Echo workflow inputs
         shell: bash
         env:
-          INPUT_TAG: ${{ inputs.tag || github.event.inputs.tag }}
           INPUT_REF: ${{ inputs.ref || github.ref }}
           INPUT_REPO: ${{ inputs.repository || github.repository }}
           INPUT_WORKDIR: ${{ env.WORKDIR }}
@@ -142,7 +121,6 @@ jobs:
           MATRIX_TAGS: ${{ matrix.tags }}
         run: |
           echo "Workflow inputs:"
-          echo "Tag: $INPUT_TAG"
           echo "Ref: $INPUT_REF"
           echo "Repository: $INPUT_REPO"
           echo "Workdir: $INPUT_WORKDIR"
@@ -295,11 +273,14 @@ jobs:
           echo "VULKAN_SDK=$VULKAN_SDK" >> $GITHUB_ENV
 
       - if: ${{ matrix.platform == 'linux' && matrix.arch == 'arm64' }}
+        name: Configure AWS credentials via OIDC
+        uses: aws-actions/configure-aws-credentials@8df5847569e6427dd6c4fb1cf565c83acfa8afa7 # 6.0.0
+        with:
+          role-to-assume: ${{ secrets.AWS_OIDC_ROLE_ARN }}
+          aws-region: eu-central-1
+
+      - if: ${{ matrix.platform == 'linux' && matrix.arch == 'arm64' }}
         name: Setup vulkan sdk path in linux arm64
-        env:
-          AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
-          AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
-          AWS_DEFAULT_REGION: us-east-1
         run: |
           VULKAN_SDK=~/vulkan/aarch64
           echo "VULKAN_SDK=$VULKAN_SDK" >> $GITHUB_ENV
@@ -465,122 +446,3 @@ jobs:
           name: prebuilds
           path: prebuilds
 
-  publish-gpr:
-    needs: [prebuild, merge]
-    if: ${{ inputs.publish_target == 'gpr'
-          || inputs.publish_target == 'both'
-          || (
-              (github.event_name == 'workflow_dispatch' || github.event_name == 'workflow_call' || github.event_name == 'push')
-              && (inputs.publish_target == '' || inputs.publish_target == null)
-              && (
-                github.ref_name == 'main'
-                || startsWith(github.ref_name, 'feature-')
-                || startsWith(github.ref_name, 'tmp-')
-                || (inputs.ref != '' && (
-                      inputs.ref == 'refs/heads/main'
-                      || startsWith(inputs.ref, 'refs/heads/feature-')
-                      || startsWith(inputs.ref, 'refs/heads/tmp-')
-                   ))
-              )
-            ) }}
-    continue-on-error: true
-    outputs:
-      published_version: ${{ steps.publish.outputs.npm_published_version }}
-    runs-on: ubuntu-latest
-    environment: release
-    permissions:
-      contents: write
-      packages: write
-    steps:
-      - name: Checkout repository
-        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # 6.0.2
-        with:
-          repository: ${{ inputs.repository || github.repository }}
-          ref: ${{ inputs.ref || github.ref }}
-          token: ${{ secrets.PAT_TOKEN }}
-
-      - name: Setup node
-        uses: actions/setup-node@53b83947a5a98c8d113130e565377fae1a50d02f # 6.3.0
-        with:
-          node-version: lts/*
-
-      - name: Download prebuild artifacts
-        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # 8.0.1
-        with:
-          name: prebuilds
-          path: ${{ env.WORKDIR }}/prebuilds
-
-      - name: Scope package as @tetherto for GPR
-        shell: bash
-        run: |
-          set -euo pipefail
-          node -e "const fs=require('fs');const f='${{ env.WORKDIR }}/package.json';const p=JSON.parse(fs.readFileSync(f,'utf8'));const want='@tetherto/llm-llamacpp';if(p.name!==want){p.name=want;fs.writeFileSync(f,JSON.stringify(p,null,2));console.log('Set name to',p.name);}else{console.log('Already',p.name);} "
-          node -e "console.log('Effective package name (publish-gpr):', JSON.parse(require('fs').readFileSync('${{ env.WORKDIR }}/package.json','utf8')).name)"
-
-      - name: Publish to GitHub Package Registry
-        id: publish
-        uses: tetherto/qvac-devops/.github/actions/publish-library-to-gpr@v1.1.7
-        with:
-          secret-token: ${{ secrets.GITHUB_TOKEN }}
-          tag: ${{ inputs.tag || github.event.inputs.tag || 'dev' }}
-          workdir:  ${{ env.WORKDIR }}
-          name-suffix: "-mono"
-
-  publish-npm:
-    needs: [prebuild, merge]
-    if: ${{ inputs.publish_target == 'npm'
-          || inputs.publish_target == 'both'
-          || (
-              (github.event_name == 'workflow_dispatch' || github.event_name == 'workflow_call' || github.event_name == 'push')
-              && (inputs.publish_target == '' || inputs.publish_target == null)
-              && (
-                startsWith(github.ref_name, 'release-')
-                || (inputs.ref != '' && startsWith(inputs.ref, 'refs/heads/release-'))
-              )
-            ) }}
-    continue-on-error: false
-    outputs:
-      published_version: ${{ steps.publish.outputs.npm_published_version }}
-    runs-on: ubuntu-latest
-    environment: release
-    permissions:
-      contents: write
-      packages: write
-    steps:
-      - name: Checkout repository
-        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # 6.0.2
-        with:
-          repository: ${{ inputs.repository || github.repository }}
-          ref: ${{ inputs.ref || github.ref }}
-          token: ${{ secrets.PAT_TOKEN }}
-
-      - name: Setup node
-        uses: actions/setup-node@53b83947a5a98c8d113130e565377fae1a50d02f # 6.3.0
-        with:
-          node-version: lts/*
-
-      - name: Download prebuild artifacts
-        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # 8.0.1
-        with:
-          name: prebuilds
-          path: ${{ env.WORKDIR }}/prebuilds
-
-      # Re-assert scope for public npm (fresh checkout)
-      - name: Scope package as @qvac for npm
-        working-directory: ${{ env.WORKDIR }}
-        shell: bash
-        run: |
-          set -euo pipefail
-          node -e "const fs=require('fs');const p=JSON.parse(fs.readFileSync('package.json','utf8'));const want='@qvac/llm-llamacpp';if(p.name!==want){p.name=want;fs.writeFileSync('package.json',JSON.stringify(p,null,2));console.log('Set name to',p.name);}else{console.log('Already',p.name);}"
-          node -e "console.log('Effective package name (publish-npm):', JSON.parse(require('fs').readFileSync('package.json','utf8')).name)"
-
-      - name: Publish to NPM Package Registry
-        id: publish
-        uses: tetherto/qvac-devops/.github/actions/publish-library-to-npm@v1.1.7
-        with:
-          secret-token: ${{ secrets.NPM_TOKEN }}
-          tag: 'latest'
-          workdir: ${{ env.WORKDIR }}
-          repo_name: "llamacpp-llm"
-          git-token: ${{ secrets.GITHUB_TOKEN }}
-          create-tag: "false"
