@@ -170,7 +170,7 @@ const { ONNXTTS } = require('@qvac/tts-onnx')
 
 ### 2. Create a Data Loader
 
-Data Loaders abstract the way model files are accessed. You can use a [`FileSystemDataLoader`](https://github.com/tetherto/qvac/tree/main/packages/qvac-lib-dl-filesystem) to stream the model file(s) from your local file system.
+Data Loaders abstract the way model files are accessed. You can use a [`FileSystemDataLoader`](https://github.com/tetherto/qvac/tree/main/packages/dl-filesystem) to stream the model file(s) from your local file system.
 
 ```js
 const FilesystemDL = require('@qvac/dl-filesystem')
