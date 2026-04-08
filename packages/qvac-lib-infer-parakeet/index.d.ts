@@ -119,7 +119,9 @@ export type AppendInput =
  */
 export interface Addon {
   activate(): Promise<void>;
+  /** Returns the JS-owned job ID for the buffered or running transcription. */
   append(input: AppendInput): Promise<number>;
+  /** Cancels the matching JS-owned job when one is active or buffered. */
   cancel(jobId?: number): Promise<void>;
   loadWeights(weightsData: { filename: string; chunk: Uint8Array; completed: boolean }): Promise<void>;
   status(): Promise<string>;
