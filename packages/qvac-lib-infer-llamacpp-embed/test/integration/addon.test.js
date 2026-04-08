@@ -600,6 +600,10 @@ test('idle | run: allowed, returns QvacResponse', { timeout: TEST_TIMEOUT }, asy
   t.ok(typeof response.await === 'function' || response._finishPromise != null, 'response has await or _finishPromise')
   const embeddings = await waitForCompletion(response)
   t.ok(embeddings != null && embeddings[0]?.length > 0, 'inference produces embeddings')
+  t.ok(
+    response?.stats?.backendDevice === 'cpu' || response?.stats?.backendDevice === 'gpu',
+    'runtime stats report resolved backendDevice as cpu or gpu'
+  )
 })
 
 test('idle | cancel: allowed, no-op', { timeout: TEST_TIMEOUT }, async t => {

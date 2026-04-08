@@ -17,7 +17,9 @@ let validatedEnv: WorkerEnv | null = null;
  */
 export function initEnv(): { hasRPCConfig: boolean } {
   const defaultHomeDir =
-    process.env["HOME"] || process.env["USERPROFILE"] || "/tmp";
+    process.env["HOME"] ??
+    process.env["USERPROFILE"] ??
+    "/tmp";
   let envConfig: Record<string, string | undefined> = {
     HOME_DIR: defaultHomeDir,
   };
@@ -30,7 +32,10 @@ export function initEnv(): { hasRPCConfig: boolean } {
   // Try to parse any argument as JSON config (fail gracefully)
   if (process.argv[2]) {
     try {
-      const rpcArgs = JSON.parse(process.argv[2]) as Record<string, string>;
+      const rpcArgs = JSON.parse(process.argv[2]) as Record<
+        string,
+        string
+      >;
       envConfig = { ...envConfig, ...rpcArgs };
       hasRPCConfig = true;
     } catch {
