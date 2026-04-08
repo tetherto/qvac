@@ -29,6 +29,9 @@ try {
     modelConfig: {
       ttsEngine: "supertonic",
       language: "en",
+      speed: 1.05,
+      numInferenceSteps: 5,
+      supertonicMultilingual: false, //false for English quality.
       ttsTextEncoderSrc: TTS_SUPERTONIC_OFFICIAL_TEXT_ENCODER_SUPERTONE_FP32.src,
       ttsDurationPredictorSrc: TTS_SUPERTONIC_OFFICIAL_DURATION_PREDICTOR_SUPERTONE_FP32.src,
       ttsVectorEstimatorSrc: TTS_SUPERTONIC_OFFICIAL_VECTOR_ESTIMATOR_SUPERTONE_FP32.src,
