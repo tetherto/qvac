@@ -1,3 +1,5 @@
+import "#polyfill-bare-globals";
+
 // Public API exports only
 export {
   completion,
@@ -48,6 +50,7 @@ export {
   type CompletionStats,
   VERBOSITY,
   type Attachment,
+  type TranscribeStreamSession,
   type CompletionParams,
   type RagSearchResult,
   type RagSaveEmbeddingsResult,
@@ -78,6 +81,7 @@ export {
   type DiffusionStats,
   definePlugin,
   defineHandler,
+  defineDuplexHandler,
   type QvacPlugin,
   type CreateModelParams,
   type PluginModelResult,

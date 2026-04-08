@@ -7,6 +7,7 @@ import { handleCompletionStreamDelegated } from "@/server/rpc/handlers/completio
 import { getModelEntry } from "@/server/bare/registry/model-registry";
 import { handleUnloadModel } from "@/server/rpc/handlers/unload-model";
 import { handleUnloadModelDelegated } from "@/server/rpc/handlers/unload-model-delegated";
+import { handleTranscribe } from "@/server/rpc/handlers/transcribe";
 import { handleTranscribeStream } from "@/server/rpc/handlers/transcribe-stream";
 import { handleEmbed } from "@/server/rpc/handlers/embed";
 import { handleTranslate } from "@/server/rpc/handlers/translate";
@@ -93,7 +94,8 @@ export const registry: Record<string, HandlerEntry> = {
   },
 
   // Simple Stream handlers
-  transcribeStream: { type: "stream", handler: handleTranscribeStream },
+  transcribe: { type: "stream", handler: handleTranscribe },
+  transcribeStream: { type: "duplex", handler: handleTranscribeStream },
   loggingStream: { type: "stream", handler: handleLoggingStream },
   translate: { type: "stream", handler: handleTranslate },
   textToSpeech: { type: "stream", handler: handleTextToSpeech },

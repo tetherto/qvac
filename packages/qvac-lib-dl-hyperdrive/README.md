@@ -6,7 +6,7 @@
 
 ### HyperDriveDL Class
 
-[HyperDriveDL](index.d.ts) extends [BaseDL](https://github.com/tetherto/qvac-lib-dl-base/blob/dev/index.d.ts) to provide a unified interface for loading files from a Hyperdrive instance. It integrates seamlessly with other QVAC AI Runtime libraries and classes.
+[HyperDriveDL](index.d.ts) extends [BaseDL](https://github.com/tetherto/dl-base/blob/dev/index.d.ts) to provide a unified interface for loading files from a Hyperdrive instance. It integrates seamlessly with other QVAC AI Runtime libraries and classes.
 
 #### Constructor:
 

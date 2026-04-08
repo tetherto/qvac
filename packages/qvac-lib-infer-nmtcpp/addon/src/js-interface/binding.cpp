@@ -18,8 +18,8 @@ js_value_t* qvac_lib_infer_nmtcpp_exports(
     }                                                                          \
   }
 
-  V("createInstance", qvac_lib_inference_addon_marian::createInstance)
-  V("runJob", qvac_lib_inference_addon_marian::runJob)
+  V("createInstance", qvac_lib_inference_addon_nmt::createInstance)
+  V("runJob", qvac_lib_inference_addon_nmt::runJob)
 
   V("loadWeights", qvac_lib_inference_addon_cpp::JsInterface::loadWeights)
   V("activate", qvac_lib_inference_addon_cpp::JsInterface::activate)

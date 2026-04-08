@@ -5,12 +5,10 @@ const path = require('bare-path')
 const fs = require('bare-fs')
 const binding = require('../../binding')
 const TranscriptionParakeet = require('../../index.js')
-const FakeDL = require('../mocks/loader.fake.js')
 const {
   setupJsLogger,
   getTestPaths,
   ensureModel,
-  getNamedPathsConfig,
   createAudioStream,
   validateAccuracy
 } = require('./helpers.js')
@@ -32,28 +30,23 @@ test('Named paths: reload preserves file paths and transcription still works', {
       return
     }
 
-    const modelName = path.basename(modelPath)
-    const diskPath = path.dirname(modelPath)
-
-    const config = {
-      path: modelPath,
-      ...getNamedPathsConfig('tdt', modelPath),
-      parakeetConfig: {
-        modelType: 'tdt',
-        maxThreads: 4,
-        useGPU: false
-      }
-    }
-
-    model = new TranscriptionParakeet(
-      {
-        modelName,
-        diskPath,
-        loader: new FakeDL({}),
-        exclusiveRun: true
+    model = new TranscriptionParakeet({
+      files: {
+        encoder: path.join(modelPath, 'encoder-model.onnx'),
+        encoderData: path.join(modelPath, 'encoder-model.onnx.data'),
+        decoder: path.join(modelPath, 'decoder_joint-model.onnx'),
+        vocab: path.join(modelPath, 'vocab.txt'),
+        preprocessor: path.join(modelPath, 'preprocessor.onnx')
       },
-      config
-    )
+      config: {
+        parakeetConfig: {
+          modelType: 'tdt',
+          maxThreads: 4,
+          useGPU: false
+        }
+      },
+      exclusiveRun: true
+    })
 
     await model.load()
 

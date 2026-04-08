@@ -10,9 +10,13 @@ function close(): Promise<void>;
 
 Safe to call multiple times — subsequent calls are a no-op if already closed.
 
+## Bare direct runtime
+
+When the SDK runs in-process on Bare (not under Node.js with a separate worker process), calling `close()` runs the same teardown as a signal-driven shutdown and then **ends the process with exit code 0**. The returned promise may not settle in that case because the process exits immediately afterward. This matches the behavior users expect after the last model is unloaded (the SDK calls `close()` automatically when nothing remains loaded).
+
 ## Returns
 
-`Promise<void>` — Resolves when the connection is closed.
+`Promise<void>` — Resolves when the connection is closed (Node.js and Expo). On Bare direct mode, the process usually exits before the promise resolves.
 
 ## Example
 
