@@ -23,7 +23,10 @@ import { resolveModelConfig } from "@/server/bare/registry/model-config-registry
 import { resolveConfig } from "@/client/config-loader/resolve-config.bare";
 import { getClientLogger } from "@/logging";
 import { getAllPlugins } from "@/server/plugins";
-import { initializeWorkerCore } from "@/server/worker-core";
+import {
+  initializeWorkerCore,
+  shutdownBareDirectWorker,
+} from "@/server/worker-core";
 
 const logger = getClientLogger();
 
@@ -280,8 +283,8 @@ export async function getRPC() {
   return mockRPC;
 }
 
-export function close() {
-  // noop
+export async function close() {
+  await shutdownBareDirectWorker("rpc-close");
 }
 
 // eslint-disable-next-line @typescript-eslint/no-unused-vars
