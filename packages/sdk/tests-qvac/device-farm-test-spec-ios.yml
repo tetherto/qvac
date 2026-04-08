@@ -1,0 +1,167 @@
+version: 0.1
+ios_test_host: macos_sequoia
+
+phases:
+  install:
+    commands:
+      - echo "Setting up test environment..."
+      - devicefarm-cli use node 18
+      - devicefarm-cli use appium 2
+      - node --version
+      - appium --version
+
+  pre_test:
+    commands:
+      - echo "Configuring WebDriverAgent for iOS..."
+      - export DEVICEFARM_APPIUM_WDA_DERIVED_DATA_PATH=$DEVICEFARM_APPIUM_WDA_DERIVED_DATA_PATH_V9
+      - echo "WDA Path: $DEVICEFARM_APPIUM_WDA_DERIVED_DATA_PATH"
+
+      # Start Appium server to handle app installation and launch
+      - echo "Starting Appium server..."
+      - export APPIUM_BASE_PATH=/wd/hub
+      - |-
+        appium --base-path=$APPIUM_BASE_PATH --log-timestamp \
+          --log-no-colors --relaxed-security --default-capabilities \
+          "{\"appium:deviceName\": \"$DEVICEFARM_DEVICE_NAME\", \
+          \"platformName\": \"$DEVICEFARM_DEVICE_PLATFORM_NAME\", \
+          \"appium:app\": \"$DEVICEFARM_APP_PATH\", \
+          \"appium:udid\":\"$DEVICEFARM_DEVICE_UDID\", \
+          \"appium:platformVersion\": \"$DEVICEFARM_DEVICE_OS_VERSION\", \
+          \"appium:wdaLocalPort\": 8100, \
+          \"appium:derivedDataPath\": \"$DEVICEFARM_APPIUM_WDA_DERIVED_DATA_PATH\", \
+          \"appium:usePrebuiltWDA\": true, \
+          \"appium:automationName\": \"XCUITest\"}" \
+          >> $DEVICEFARM_LOG_DIR/appium.log 2>&1 &
+
+      - echo "Waiting for Appium to be ready (max 30 seconds)..."
+      - |-
+        appium_initialization_time=0
+        until curl --silent --fail "http://0.0.0.0:4723${APPIUM_BASE_PATH}/status"; do
+          if [[ $appium_initialization_time -gt 30 ]]; then
+            echo "Appium did not start within 30 seconds"
+            cat $DEVICEFARM_LOG_DIR/appium.log
+            exit 1
+          fi
+          appium_initialization_time=$((appium_initialization_time + 1))
+          echo "Waiting for Appium (${appium_initialization_time}s/30s)..."
+          sleep 1
+        done
+      - echo "Appium server is ready"
+
+      # Create an Appium session to install and launch the app
+      - echo "Creating Appium session to launch app..."
+      - |-
+        SESSION_RESPONSE=$(curl -s -X POST http://127.0.0.1:4723/wd/hub/session \
+          -H "Content-Type: application/json" \
+          -d "{
+            \"capabilities\": {
+              \"alwaysMatch\": {
+                \"platformName\": \"iOS\",
+                \"appium:automationName\": \"XCUITest\",
+                \"appium:bundleId\": \"$DEVICEFARM_APP_BUNDLE_ID\",
+                \"appium:udid\": \"$DEVICEFARM_DEVICE_UDID\",
+                \"appium:usePrebuiltWDA\": true,
+                \"appium:wdaLocalPort\": 8100,
+                \"appium:derivedDataPath\": \"$DEVICEFARM_APPIUM_WDA_DERIVED_DATA_PATH\",
+                \"appium:newCommandTimeout\": 600,
+                \"appium:noReset\": true,
+                \"appium:showIOSLog\": true
+              }
+            }
+          }")
+
+        SESSION_ID=$(echo "$SESSION_RESPONSE" | python3 -c "import sys,json; print(json.load(sys.stdin).get('value',{}).get('sessionId',''))" 2>/dev/null || echo "")
+        if [ -z "$SESSION_ID" ]; then
+          echo "Failed to create Appium session"
+          echo "Response: $SESSION_RESPONSE"
+          cat $DEVICEFARM_LOG_DIR/appium.log | tail -50
+          exit 1
+        fi
+        echo "SESSION_ID=$SESSION_ID"
+        echo "App launched via Appium"
+
+      # Give the app time to initialize and connect to MQTT
+      - sleep 10
+
+      # Start background log capture from Appium
+      - |-
+        echo "Starting log capture from Appium..."
+        (while true; do
+          curl -s "http://127.0.0.1:4723/wd/hub/session/$SESSION_ID/log" \
+            -X POST -H "Content-Type: application/json" \
+            -d '{"type":"syslog"}' \
+            >> $DEVICEFARM_LOG_DIR/raw-syslog.json 2>/dev/null
+          sleep 2
+        done) &
+        echo "Background log capture started"
+
+  test:
+    commands:
+      # Monitor Appium logs for test results
+      - |-
+        TIMEOUT=${DEVICEFARM_TIMEOUT:-5400}
+        START=$(date +%s)
+        PASSED=0
+        FAILED=0
+        COMPLETED=0
+        EXPECTED="?"
+        RESULTS_FILE="$DEVICEFARM_LOG_DIR/test-results.txt"
+        touch "$RESULTS_FILE"
+
+        echo "Monitoring Appium logs for test results (timeout: ${TIMEOUT}s)..."
+        echo "Tailing appium.log for ReactNativeJS output..."
+
+        # Appium with showIOSLog:true writes device console to its log file
+        tail -f $DEVICEFARM_LOG_DIR/appium.log | while IFS= read -r line; do
+          case "$line" in
+            *"Registration ack"*"tests in queue"*)
+              EXPECTED=$(echo "$line" | grep -oE '[0-9]+( tests in queue)' | grep -oE '[0-9]+')
+              echo "Registered: $EXPECTED tests expected"
+              ;;
+            *"✅"*"ms)"*)
+              PASSED=$((PASSED+1))
+              COMPLETED=$((COMPLETED+1))
+              echo "[PASS $COMPLETED/$EXPECTED] $line"
+              echo "PASS|$line" >> "$RESULTS_FILE"
+              ;;
+            *"❌"*"ms)"*)
+              FAILED=$((FAILED+1))
+              COMPLETED=$((COMPLETED+1))
+              echo "[FAIL $COMPLETED/$EXPECTED] $line"
+              echo "FAIL|$line" >> "$RESULTS_FILE"
+              ;;
+            *"❌"*"failed:"*)
+              FAILED=$((FAILED+1))
+              COMPLETED=$((COMPLETED+1))
+              echo "[ERROR $COMPLETED/$EXPECTED] $line"
+              echo "ERROR|$line" >> "$RESULTS_FILE"
+              ;;
+            *"Consumer shutting down"*)
+              echo ""
+              echo "========================================="
+              echo "COMPLETE: $PASSED passed, $FAILED failed ($COMPLETED/$EXPECTED)"
+              echo "========================================="
+              break
+              ;;
+          esac
+
+          NOW=$(date +%s)
+          if [ $((NOW - START)) -ge $TIMEOUT ]; then
+            echo "TIMEOUT after ${TIMEOUT}s ($PASSED passed, $FAILED failed, $COMPLETED/$EXPECTED completed)"
+            exit 1
+          fi
+        done
+
+  post_test:
+    commands:
+      - echo "Capturing final logs..."
+      - cp $DEVICEFARM_LOG_DIR/appium.log $DEVICEFARM_LOG_DIR/app-console.log 2>/dev/null || true
+
+      # Generate JUnit XML from captured test results
+      - python3 $DEVICEFARM_TEST_PACKAGE_PATH/device-farm-gen-junit.py
+
+      - echo "Available log files:"
+      - ls -lh $DEVICEFARM_LOG_DIR/ || true
+
+artifacts:
+  - $DEVICEFARM_LOG_DIR
