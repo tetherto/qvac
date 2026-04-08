@@ -61,7 +61,7 @@ export function summarizeRequest(request: Request): Record<string, unknown> {
   if ("modelId" in request) summary["modelId"] = request["modelId"];
 
   // Only summarize requests with large payloads
-  if (request.type === "transcribeStream") {
+  if (request.type === "transcribe") {
     const chunk = request["audioChunk"];
     summary["audioChunk"] = `[${chunk.type}: ${chunk.value.length} bytes]`;
     return summary;

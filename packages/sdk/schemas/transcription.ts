@@ -11,39 +11,41 @@ export const audioInputSchema = z.discriminatedUnion("type", [
   }),
 ]);
 
-export const transcribeParamsSchema = z.object({
+const transcribeBaseSchema = z.object({
   modelId: z.string(),
-  audioChunk: audioInputSchema,
   prompt: z.string().optional(),
 });
 
-// Streaming Transcribe Schema (for real-time audio streaming)
-export const transcribeStreamRequestSchema = transcribeParamsSchema.extend({
-  type: z.literal("transcribeStream"),
+export const transcribeParamsSchema = transcribeBaseSchema.extend({
+  audioChunk: audioInputSchema,
 });
 
 export const transcribeStatsSchema = z.object({
-  // Common stats
   audioDuration: z.number().optional(),
   realTimeFactor: z.number().optional(),
   tokensPerSecond: z.number().optional(),
   totalTokens: z.number().optional(),
   totalSegments: z.number().optional(),
-  // whisper-specific timings
   whisperEncodeTime: z.number().optional(),
   whisperDecodeTime: z.number().optional(),
-  // parakeet-specific timings
   encoderTime: z.number().optional(),
   decoderTime: z.number().optional(),
   melSpecTime: z.number().optional(),
 });
 
-export const transcribeStreamResponseSchema = z.object({
-  type: z.literal("transcribeStream"),
+export const transcribeRequestSchema = transcribeParamsSchema.extend({
+  type: z.literal("transcribe"),
+});
+
+const transcriptionResultBase = z.object({
   text: z.string().optional(),
   done: z.boolean().optional(),
   stats: transcribeStatsSchema.optional(),
   error: z.string().optional(),
+});
+
+export const transcribeResponseSchema = transcriptionResultBase.extend({
+  type: z.literal("transcribe"),
 });
 
 export type AudioInput = z.infer<typeof audioInputSchema>;
@@ -53,10 +55,34 @@ export type TranscribeClientParams = {
   audioChunk: string | Buffer;
   prompt?: string;
 };
+export type TranscribeRequest = z.infer<typeof transcribeRequestSchema>;
+export type TranscribeResponse = z.infer<typeof transcribeResponseSchema>;
+
+export const transcribeStreamRequestSchema = transcribeBaseSchema.extend({
+  type: z.literal("transcribeStream"),
+});
+
+export const transcribeStreamResponseSchema = transcriptionResultBase.extend({
+  type: z.literal("transcribeStream"),
+});
+
 export type TranscribeStreamRequest = z.infer<
   typeof transcribeStreamRequestSchema
 >;
 export type TranscribeStreamResponse = z.infer<
   typeof transcribeStreamResponseSchema
 >;
+
+export type TranscribeStreamClientParams = {
+  modelId: string;
+  prompt?: string;
+};
+
+export interface TranscribeStreamSession {
+  write(audioChunk: Buffer): void;
+  end(): void;
+  destroy(): void;
+  [Symbol.asyncIterator](): AsyncIterator<string>;
+}
+
 export type TranscribeStats = z.infer<typeof transcribeStatsSchema>;

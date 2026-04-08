@@ -17,7 +17,7 @@ aradiawer:
   enabled: true  # Auto-applied when language is Arabic
   min_score_threshold: 0.5  # Minimum threshold for semantic/syntactic scores
 model:
-  path: "../../examples/models/ggml-tiny.bin"
+  path: "../../models/ggml-tiny.bin"
   sample_rate: 16000
   audio_format: "f32le"
   vad: false

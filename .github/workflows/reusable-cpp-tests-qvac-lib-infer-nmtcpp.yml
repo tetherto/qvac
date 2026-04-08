@@ -26,6 +26,7 @@ jobs:
     permissions:
       contents: read
       packages: read
+      id-token: write
       pull-requests: write
     steps:
       - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # 6.0.2
@@ -79,8 +80,7 @@ jobs:
       - name: Configure AWS credentials
         uses: aws-actions/configure-aws-credentials@8df5847569e6427dd6c4fb1cf565c83acfa8afa7 # 6.0.0
         with:
-          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
-          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          role-to-assume: ${{ secrets.AWS_OIDC_ROLE_ARN }}
           aws-region: us-east-1
 
       - name: Download models from S3
@@ -89,8 +89,6 @@ jobs:
           mkdir -p models/unit-test
           echo "Downloading models from S3..."
           aws s3 cp s3://${{ secrets.MODEL_S3_BUCKET }}/qvac_models_compiled/ggml/indictrans2/q4_0/ggml-indictrans2-en-indic-dist-200M/2026-01-01/ggml-indictrans2-en-indic-dist-200M-q4_0.bin models/unit-test/
-          aws s3 cp s3://${{ secrets.MODEL_S3_BUCKET }}/qvac/tests/nmt/ggml-opus-en-it_q4_0.bin models/unit-test/
-          aws s3 cp s3://${{ secrets.MODEL_S3_BUCKET }}/qvac/tests/nmt/ggml-opus-it-en_q4_0.bin models/unit-test/
           echo "Verifying downloaded models..."
           ls -lh models/unit-test/
           du -sh models/unit-test/*
