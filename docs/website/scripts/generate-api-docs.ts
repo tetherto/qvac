@@ -273,7 +273,7 @@ async function writeErrorsPage(
   function renderTable(entries: ErrorEntry[]): string {
     return `| Error | Code | Summary |
 | --- | --- | --- |
-${entries.map((e) => `| \`${e.name}\` | ${e.code} | ${e.summary.replace(/\|/g, "\\|").replace(/[{}]/g, "\\$&")} |`).join("\n")}`;
+${entries.map((e) => `| \`${e.name}\` | ${e.code} | ${e.summary.replace(/\\/g, "\\\\").replace(/\|/g, "\\|").replace(/[{}]/g, "\\$&")} |`).join("\n")}`;
   }
 
   const sections: string[] = [];
