@@ -15,13 +15,30 @@ const windowsOrtParams = isWindows
   ? { graphOptimization: 'basic', enableXnnpack: true, enableCpuMemArena: false, intraOpThreads: 1 }
   : {}
 
-// DocTR model download URLs from OnnxTR GitHub releases
-const DOCTR_MODEL_URLS = {
-  'db_resnet50.onnx': 'https://github.com/felixdittrich92/OnnxTR/releases/download/v0.0.1/db_resnet50-69ba0015.onnx',
-  'parseq.onnx': 'https://github.com/felixdittrich92/OnnxTR/releases/download/v0.0.1/parseq-00b40714.onnx',
-  'db_mobilenet_v3_large.onnx': 'https://github.com/felixdittrich92/OnnxTR/releases/download/v0.2.0/db_mobilenet_v3_large-4987e7bd.onnx',
-  'crnn_mobilenet_v3_small.onnx': 'https://github.com/felixdittrich92/OnnxTR/releases/download/v0.0.1/crnn_mobilenet_v3_small-bded4d49.onnx'
+// DocTR model download URLs and SHA-256 checksums from OnnxTR GitHub releases
+const DOCTR_MODELS = {
+  'db_resnet50.onnx': {
+    url: 'https://github.com/felixdittrich92/OnnxTR/releases/download/v0.0.1/db_resnet50-69ba0015.onnx',
+    sha256: '69ba00155c16b198d062f5a7b9cdb446c82aed81812d7ff5a74e01ab41421d55'
+  },
+  'parseq.onnx': {
+    url: 'https://github.com/felixdittrich92/OnnxTR/releases/download/v0.0.1/parseq-00b40714.onnx',
+    sha256: '00b40714e00039c8c04891e5fd98ad5cb46c34fa7133ba09e2a55d4b28d42a68'
+  },
+  'db_mobilenet_v3_large.onnx': {
+    url: 'https://github.com/felixdittrich92/OnnxTR/releases/download/v0.2.0/db_mobilenet_v3_large-4987e7bd.onnx',
+    sha256: '4987e7bdea372559808bd5add85fda10e179dc639696fb489e59a197a25b4c64'
+  },
+  'crnn_mobilenet_v3_small.onnx': {
+    url: 'https://github.com/felixdittrich92/OnnxTR/releases/download/v0.0.1/crnn_mobilenet_v3_small-bded4d49.onnx',
+    sha256: 'bded4d49b3e91dac24591ed4f0af3de4c3baab1f9cc07e8e7dc07c9ba66b3b33'
+  }
 }
+
+// Backwards-compatible URL lookup
+const DOCTR_MODEL_URLS = Object.fromEntries(
+  Object.entries(DOCTR_MODELS).map(([k, v]) => [k, v.url])
+)
 
 const DOCTR_MODELS_DIR = isMobile
   ? path.join(global.testDir || '/tmp', 'doctr-models')
@@ -77,16 +94,29 @@ async function downloadFile (url, destPath) {
 }
 
 /**
+ * Computes SHA-256 hash of a buffer
+ * @param {Buffer} buffer
+ * @returns {string} hex digest
+ */
+function sha256 (buffer) {
+  const crypto = require('bare-crypto')
+  const hash = crypto.createHash('sha256')
+  hash.update(buffer)
+  return hash.digest('hex')
+}
+
+/**
  * Downloads a single DocTR model if not already cached.
  * Downloads from OnnxTR GitHub releases with retry on transient errors.
+ * Verifies SHA-256 checksum after download.
  * @param {string} filename - Model filename (e.g., 'db_resnet50.onnx')
  */
 async function downloadDoctrModel (filename) {
   const destPath = path.join(DOCTR_MODELS_DIR, filename)
   if (fs.existsSync(destPath)) return
 
-  const url = DOCTR_MODEL_URLS[filename]
-  if (!url) throw new Error(`No download URL for DocTR model: ${filename}`)
+  const model = DOCTR_MODELS[filename]
+  if (!model) throw new Error(`No download URL for DocTR model: ${filename}`)
 
   console.log(`Downloading ${filename} from GitHub releases...`)
 
@@ -95,10 +125,17 @@ async function downloadDoctrModel (filename) {
   let lastError
   for (let attempt = 1; attempt <= maxAttempts; attempt++) {
     try {
-      const response = await fetch(url)
+      const response = await fetch(model.url)
       if (!response.ok) throw new Error(`HTTP ${response.status} downloading ${filename}`)
-      const buffer = await response.arrayBuffer()
-      fs.writeFileSync(destPath, Buffer.from(buffer))
+      const buffer = Buffer.from(await response.arrayBuffer())
+      if (model.sha256) {
+        const actual = sha256(buffer)
+        if (actual !== model.sha256) {
+          throw new Error(`Checksum mismatch for ${filename}: expected ${model.sha256}, got ${actual}`)
+        }
+        console.log(`   Checksum verified: ${filename}`)
+      }
+      fs.writeFileSync(destPath, buffer)
       console.log(`Downloaded ${filename} (${Math.round(buffer.byteLength / 1024 / 1024)}MB)`)
       return
     } catch (e) {
