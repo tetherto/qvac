@@ -18,7 +18,7 @@
         "@qvac/transcription-parakeet": "^0.2.4",
         "@qvac/transcription-whispercpp": "^0.5.2",
         "@qvac/translation-nmtcpp": "^0.6.1",
-        "@qvac/tts-onnx": "^0.6.1",
+        "@qvac/tts-onnx": "^0.6.7",
         "fast-safe-stringify": "2.1.1",
         "which-runtime": "^1.3.2",
         "zod": "^4.0.17",
@@ -542,7 +542,7 @@
 
     "@qvac/translation-nmtcpp": ["@qvac/translation-nmtcpp@0.6.2", "", { "dependencies": { "@qvac/dl-hyperdrive": "^0.1.0", "@qvac/error": "^0.1.0", "@qvac/infer-base": "^0.2.0", "bare-path": "^3.0.0" } }, "sha512-D6xKqSJBf2yW1lq4cihgz+6QMQdOqsk0QAb5n9ireKpWatFoWssO2jDt1ux6x6qOSrw4Mgwh7GMzsG/RE1I0Ew=="],
 
-    "@qvac/tts-onnx": ["@qvac/tts-onnx@0.6.6", "", { "dependencies": { "@qvac/error": "^0.1.0", "@qvac/infer-base": "^0.1.0", "bare-fs": "^4.5.1", "bare-path": "^3.0.0" } }, "sha512-g4k4KQ9ceJQuiK4S/EVvbC/bu9AkKA5EVMj8atiU8easU3W3apVOqc9RxTpPqYoS7wcrAAdIq86eWuz7HcP+KA=="],
+    "@qvac/tts-onnx": ["@qvac/tts-onnx@0.6.7", "", { "dependencies": { "@qvac/error": "^0.1.0", "@qvac/infer-base": "^0.1.0", "bare-fs": "^4.5.1", "bare-path": "^3.0.0" } }, "sha512-aGfhVxdOh7vdx3I/sNFRkzJhC1fps4FFcsSW1m3AYRpF6X8HMBkCsCekHMBoh36zLtbNtf/KO888GtnAO4g6aA=="],
 
     "@react-native/assets-registry": ["@react-native/assets-registry@0.84.1", "", {}, "sha512-lAJ6PDZv95FdT9s9uhc9ivhikW1Zwh4j9XdXM7J2l4oUA3t37qfoBmTSDLuPyE3Bi+Xtwa11hJm0BUTT2sc/gg=="],
 
