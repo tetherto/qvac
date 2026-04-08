@@ -340,20 +340,6 @@ jobs:
           echo "✅ Presigned URLs generated and saved to testAssets"
           cat "$OUTPUT_DIR/ocr-model-urls.json"
 
-      - name: Generate presigned URLs for DocTR models
-        working-directory: ./addon/${{ inputs.workdir || env.PKG_DIR }}
-        shell: bash
-        env:
-          MODEL_S3_BUCKET: ${{ secrets.MODEL_S3_BUCKET }}
-        run: |
-          echo "🔑 Generating presigned URLs for DocTR models..."
-          chmod +x scripts/generate-doctr-presigned-urls.sh
-          OUTPUT_DIR="${GITHUB_WORKSPACE}/addon/${{ inputs.workdir || env.PKG_DIR }}/test/mobile/testAssets"
-          mkdir -p "$OUTPUT_DIR"
-          OUTPUT_DIR="$OUTPUT_DIR" ./scripts/generate-doctr-presigned-urls.sh
-          echo "✅ DocTR presigned URLs generated and saved to testAssets"
-          cat "$OUTPUT_DIR/doctr-model-urls.json"
-
       - name: Copy test assets to testAssets
         working-directory: ./addon/${{ inputs.workdir || env.PKG_DIR }}
         shell: bash

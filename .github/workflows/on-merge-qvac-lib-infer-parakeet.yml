@@ -274,15 +274,10 @@ jobs:
     uses: ./.github/workflows/integration-test-qvac-lib-infer-parakeet.yml
     needs: post-build-gate
     if: needs.post-build-gate.outputs.should_run_tests == 'true'
-    permissions:
-      contents: read
-      packages: read
-      id-token: write
     secrets: inherit
     with:
       repository: ${{ github.repository }}
       ref: ${{ github.sha }}
-      workdir: "packages/qvac-lib-infer-parakeet"
 
   mobile-integration-tests:
     uses: ./.github/workflows/integration-mobile-test-qvac-lib-infer-parakeet.yml
