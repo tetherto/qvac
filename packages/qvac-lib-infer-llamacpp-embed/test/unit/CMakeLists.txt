@@ -37,9 +37,11 @@ endif()
 
 target_include_directories(
   addon-test
+  BEFORE PRIVATE
+    ${CMAKE_SOURCE_DIR}/addon/src/patches
   PRIVATE
-  ${CMAKE_SOURCE_DIR}/addon/src
-  ${QVAC_LIB_INFERENCE_ADDON_CPP_INCLUDE_DIRS}
+    ${CMAKE_SOURCE_DIR}/addon/src
+    ${QVAC_LIB_INFERENCE_ADDON_CPP_INCLUDE_DIRS}
 )
 
 target_compile_features(addon-test PRIVATE cxx_std_20)

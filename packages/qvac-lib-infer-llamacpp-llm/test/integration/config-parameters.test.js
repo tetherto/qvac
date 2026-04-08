@@ -254,8 +254,8 @@ const scenarios = [
     ],
     expectSuccess: true,
     assertOutput: (t, output, stats) => {
-      t.ok(output.includes('pizza'), 'reverse prompt output contains keyword')
-      t.ok(output.split('').slice(-5).join('') === 'pizza', 'reverse prompt output ends with keyword')
+      t.ok(output.toLowerCase().includes('pizza'), 'reverse prompt output contains keyword')
+      t.ok(output.toLowerCase().split('').slice(-5).join('') === 'pizza', 'reverse prompt output ends with keyword')
     }
   }
 ]

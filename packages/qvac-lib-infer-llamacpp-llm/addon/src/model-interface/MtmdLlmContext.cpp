@@ -130,7 +130,11 @@ bool MtmdLlmContext::checkAntiprompt() {
     // can decode to many characters, and a short antiprompt like "\n" may
     // appear at the start of such a token, far from the string's tail.
     for (const std::string& antiprompt : params_.antiprompt) {
-      if (lastOutput.find(antiprompt) != std::string::npos) {
+      std::string lowerOutput = lastOutput;
+      std::string lowerAntiprompt = antiprompt;
+      std::transform(lowerOutput.begin(), lowerOutput.end(), lowerOutput.begin(), ::tolower);
+      std::transform(lowerAntiprompt.begin(), lowerAntiprompt.end(), lowerAntiprompt.begin(), ::tolower);
+      if (lowerOutput.find(lowerAntiprompt) != std::string::npos) {
         return true;
       }
     }

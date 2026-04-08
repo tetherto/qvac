@@ -131,12 +131,14 @@ void LlamaModel::tuneConfigMap(
         (finetuneOverrides.flashAttn
              ? "[LlamaModel] Finetuning: enabling flash attention\n"
              : "[LlamaModel] Finetuning: disabling flash attention\n"));
-  } else if (isBitnet && notUserSet("flash-attn", "flash_attn")) {
+  } else if (notUserSet("flash-attn", "flash_attn")) {
     configFilemap.erase("flash_attn");
     configFilemap["flash-attn"] = "off";
     QLOG_IF(
         Priority::INFO,
-        "[LlamaModel] BitNet model detected: disabling flash attention\n");
+        (isBitnet
+             ? "[LlamaModel] BitNet model detected: disabling flash attention\n"
+             : "[LlamaModel] Disabling flash attention (not supported on Vulkan/Metal)\n"));
   }
 
   constexpr int kAdrenoUbatchThreshold = 800;
@@ -737,7 +739,12 @@ void LlamaModel::commonParamsParse(
       auto listString = iter->second;
       std::vector<std::string> list = split(listString, ',');
       for (const auto& item : list) {
-        params.antiprompt.push_back(item);
+        std::string trimmed = item;
+        trimmed.erase(0, trimmed.find_first_not_of(" \t"));
+        trimmed.erase(trimmed.find_last_not_of(" \t") + 1);
+        if (!trimmed.empty()) {
+          params.antiprompt.push_back(trimmed);
+        }
       }
       if (list.empty() && !listString.empty()) {
         params.antiprompt.push_back(listString);
