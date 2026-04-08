@@ -1,6 +1,7 @@
 'use strict'
 
 const fs = require('bare-fs')
+const path = require('bare-path')
 const process = require('bare-process')
 const TranscriptionWhispercpp = require('../index.js')
 const FakeDL = require('../test/mocks/loader.fake.js')
@@ -89,8 +90,9 @@ function createFullAudioStream (audioBuffer) {
 }
 
 async function main () {
-  const modelPath = './examples/models/ggml-tiny.bin'
-  const audioPath = './examples/samples/10min-16k-s16le.raw'
+  const modelsDir = path.join(__dirname, '..', 'models')
+  const modelPath = path.join(modelsDir, 'ggml-tiny.bin')
+  const audioPath = path.join(__dirname, 'samples', '10min-16k-s16le.raw')
 
   console.log('=== Audio_ctx Chunking Example ===\n')
 
@@ -113,7 +115,7 @@ async function main () {
   const constructorArgs = {
     modelName: 'ggml-tiny.bin',
     loader: new FakeDL({}),
-    diskPath: './examples/models'
+    diskPath: modelsDir
   }
 
   const config = {

@@ -81,6 +81,10 @@ test('idle | run: allowed, returns QvacResponse', { timeout: 600_000 }, async t 
   t.ok(typeof response.await === 'function', 'response has await')
   const output = await collectResponse(response)
   t.ok(output.length > 0, 'inference produces output')
+  t.ok(
+    response?.stats?.backendDevice === 'cpu' || response?.stats?.backendDevice === 'gpu',
+    'runtime stats report resolved backendDevice as cpu or gpu'
+  )
 })
 
 test('idle | run with prefill: evaluates prompt without token generation', { timeout: 600_000 }, async t => {
