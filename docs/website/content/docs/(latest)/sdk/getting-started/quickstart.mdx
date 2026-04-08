@@ -38,11 +38,19 @@ Create the quickstart script:
 </Step>
 
 <Step>
-Run the quickstart script:
+Run the quickstart script with Node.js:
 
 ```bash
 node quickstart.js
-```    
+```
+
+Or with the [Bare](https://bare.pears.com) runtime (same script; the SDK installs a Node-compatible `process` global on Bare so `process.stdout` and `process.exit` work without importing `bare-process` in your own file):
+
+```bash
+bare quickstart.js
+```
+
+You still need Bare and the SDK’s **Bare peer dependencies** (including `bare-process` and the other `bare-*` packages listed for `@qvac/sdk`) installed in the project. Recent npm versions resolve peers when you run `npm i @qvac/sdk`; if resolution fails, install the peers your package manager reports as missing.
 </Step>
 
 </Steps>
@@ -51,7 +59,7 @@ node quickstart.js
 
 Follow these instructions to run any example in this documentation:
 - All examples are self-contained, runnable JavaScript scripts. Use the `qvac-examples` workspace created in this quickstart to store and run them as you explore this documentation.
-- Run each example with the indicated compatible JavaScript environment. QVAC supports multiple environments (Node.js, Bare, and Expo), _but some **examples** might use Node-specific APIs (e.g., `process` or `fs`) and won't run on Bare or Expo. Each example notes its compatible environment._
+- Run each example with the indicated compatible JavaScript environment. QVAC supports multiple environments (Node.js, Bare, and Expo). After you `import` from `@qvac/sdk`, Bare has a `process` global (via `bare-process`) for typical CLI patterns; some examples still use other Node-specific APIs (e.g. `fs` without Bare shims) and note their compatible environment.
 - Some examples also provide a TypeScript version. If you want to run TS directly, install the required dev dependencies:
   ```bash
   npm i -D tsx typescript
