@@ -34,7 +34,11 @@ permissions:
   contents: read
 
 jobs:
-  cpp-tests:
+  # ---------------------------------------------------------------------------
+  # Build phase — has secrets and toolchain access.
+  # Checks out fork code, builds the test binary, uploads it as an artifact.
+  # ---------------------------------------------------------------------------
+  build-cpp-tests:
     permissions:
       id-token: write
     strategy:
@@ -53,7 +57,7 @@ jobs:
             runner: ai-run-windows11-gpu
     runs-on: ${{ matrix.runner || matrix.os }}
     environment: release
-    name: cpp-tests-${{ matrix.platform }}-${{ matrix.arch }}
+    name: build-cpp-tests-${{ matrix.platform }}-${{ matrix.arch }}
     env:
       WORKDIR: ${{ inputs.workdir }}
       npm_config_script_shell: bash
@@ -127,15 +131,6 @@ jobs:
           needs-rust-targets: "false"
           needs-submodules: "false"
 
-      - name: Setup LLVM coverage tool symlinks
-        if: runner.os == 'Linux'
-        shell: bash
-        run: |
-          sudo ln -sf /usr/bin/llvm-profdata-19 /usr/local/bin/llvm-profdata
-          sudo ln -sf /usr/bin/llvm-cov-19 /usr/local/bin/llvm-cov
-          llvm-profdata --version
-          llvm-cov --version
-
       - name: Install AWS CLI (Windows)
         if: runner.os == 'Windows'
         shell: powershell
@@ -165,7 +160,7 @@ jobs:
       - name: Install package dependencies
         shell: bash
         working-directory: ${{ env.WORKDIR }}
-        run: npm install
+        run: npm install --ignore-scripts
 
       - name: Verify Vulkan toolchain (Linux)
         if: runner.os == 'Linux'
@@ -185,6 +180,105 @@ jobs:
             exit 1
           fi
           glslc --version
+
+      - name: Generate and build C++ (coverage)
+        if: runner.os == 'Linux'
+        shell: bash
+        working-directory: ${{ env.WORKDIR }}
+        run: |
+          bare-make generate -D BUILD_TESTING=ON -D ENABLE_COVERAGE=ON
+          bare-make build --target addon-test
+
+      - name: Generate C++ build
+        if: runner.os != 'Linux'
+        shell: bash
+        working-directory: ${{ env.WORKDIR }}
+        run: bare-make generate --platform ${{ matrix.platform == 'windows' && 'win32' || matrix.platform }} --arch ${{ matrix.arch }} -D BUILD_TESTING=ON
+
+      - name: Build C++ targets
+        if: runner.os != 'Linux'
+        shell: bash
+        working-directory: ${{ env.WORKDIR }}
+        run: bare-make build
+
+      - name: Clean build tree for upload
+        shell: bash
+        working-directory: ${{ env.WORKDIR }}
+        run: |
+          find build -name '*.o' -delete 2>/dev/null || true
+          find build -name '*.obj' -delete 2>/dev/null || true
+          find build -type d -name 'CMakeFiles' -exec rm -rf {} + 2>/dev/null || true
+
+      - name: Upload test build artifact
+        uses: actions/upload-artifact@bbbca2ddaa5d8feaa63e36b76fdaad77386f024f # 7.0.0
+        with:
+          name: cpp-test-build-${{ matrix.platform }}-${{ matrix.arch }}
+          path: ${{ env.WORKDIR }}/build/
+          retention-days: 1
+
+  # ---------------------------------------------------------------------------
+  # Run phase — NO secrets, NO environment.
+  # Downloads the build artifact and test models, executes the test binary,
+  # and processes coverage (Linux only).
+  # ---------------------------------------------------------------------------
+  run-cpp-tests:
+    needs: build-cpp-tests
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: ubuntu-24.04
+            platform: linux
+            arch: x64
+          - os: macos-14
+            platform: darwin
+            arch: arm64
+          - os: windows-11
+            platform: windows
+            arch: x64
+            runner: ai-run-windows11-gpu
+    runs-on: ${{ matrix.runner || matrix.os }}
+    name: run-cpp-tests-${{ matrix.platform }}-${{ matrix.arch }}
+    env:
+      WORKDIR: ${{ inputs.workdir }}
+    steps:
+      - name: Maximize build space
+        if: runner.os == 'Linux'
+        shell: bash
+        run: |
+          sudo docker image prune --all --force
+          sudo rm -rf /opt/hostedtoolcache/CodeQL
+          sudo rm -rf /opt/ghc
+          sudo rm -rf /usr/share/dotnet
+
+      - name: Create workspace
+        shell: bash
+        run: mkdir -p "$WORKDIR"
+
+      - name: Download build artifact
+        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # 8.0.1
+        with:
+          name: cpp-test-build-${{ matrix.platform }}-${{ matrix.arch }}
+          path: ${{ env.WORKDIR }}/build
+
+      - name: Make binaries executable
+        if: runner.os != 'Windows'
+        shell: bash
+        working-directory: ${{ env.WORKDIR }}
+        run: |
+          chmod +x build/test/unit/addon-test
+          find build -name '*.so' -exec chmod +x {} + 2>/dev/null || true
+          find build -name '*.dylib' -exec chmod +x {} + 2>/dev/null || true
+
+      - name: Install LLVM coverage tools (Linux)
+        if: runner.os == 'Linux'
+        shell: bash
+        run: |
+          wget -q https://apt.llvm.org/llvm.sh
+          chmod +x llvm.sh
+          sudo ./llvm.sh 19 all
+          sudo ln -sf /usr/bin/llvm-profdata-19 /usr/local/bin/llvm-profdata
+          sudo ln -sf /usr/bin/llvm-cov-19 /usr/local/bin/llvm-cov
 
       - name: Download test models
         if: inputs.test_models != '[]'
@@ -234,36 +328,32 @@ jobs:
           echo "Downloaded models:"
           ls -lh "$DEST/"
 
-      - name: Generate C++ build
-        if: runner.os != 'Linux'
-        shell: bash
-        working-directory: ${{ env.WORKDIR }}
-        run: bare-make generate --platform ${{ matrix.platform == 'windows' && 'win32' || matrix.platform }} --arch ${{ matrix.arch }} -D BUILD_TESTING=ON
-
-      - name: Build C++ targets
-        if: runner.os != 'Linux'
-        shell: bash
-        working-directory: ${{ env.WORKDIR }}
-        run: bare-make build
-
-      - name: Build C++ targets (coverage)
-        if: runner.os == 'Linux'
-        shell: bash
-        working-directory: ${{ env.WORKDIR }}
-        run: npm run coverage:cpp:build
-
       - name: Run C++ tests
         id: cpp_tests
         shell: bash
-        working-directory: ${{ env.WORKDIR }}
-        run: npm run test:cpp:run
+        working-directory: ${{ env.WORKDIR }}/build/test/unit
+        run: |
+          if [ "$RUNNER_OS" = "Linux" ]; then
+            LLVM_PROFILE_FILE=default.profraw ./addon-test --gtest_output=xml:cpp-test-results.xml
+          elif [ "$RUNNER_OS" = "Windows" ]; then
+            ./addon-test.exe --gtest_output=xml:cpp-test-results.xml
+          else
+            ./addon-test --gtest_output=xml:cpp-test-results.xml
+          fi
         continue-on-error: ${{ runner.os == 'Linux' }}
 
       - name: Generate coverage report
         if: runner.os == 'Linux'
         shell: bash
-        working-directory: ${{ env.WORKDIR }}
-        run: npm run coverage:cpp:report
+        working-directory: ${{ env.WORKDIR }}/build/test/unit
+        run: |
+          llvm-profdata-19 merge -sparse default.profraw -o coverage.profdata
+          llvm-cov-19 show ./addon-test -instr-profile=coverage.profdata -format=html -output-dir=coverage-html \
+            -ignore-filename-regex='(tests|build|node_modules|gtest|gmock|\.vcpkg|/usr)/'
+          llvm-cov-19 export ./addon-test -instr-profile=coverage.profdata -format=lcov \
+            -ignore-filename-regex='(tests|build|node_modules|gtest|gmock|\.vcpkg|/usr)/' > lcov.info
+          llvm-cov-19 report ./addon-test --instr-profile=coverage.profdata \
+            -ignore-filename-regex='(tests|build|node_modules|gtest|gmock|\.vcpkg|/usr)/' > coverage-summary.txt
         continue-on-error: true
 
       - name: Archive coverage results
@@ -272,10 +362,10 @@ jobs:
         with:
           name: coverage-report-${{ matrix.platform }}-${{ matrix.arch }}
           path: |
-            ${{ inputs.workdir }}/build/**/coverage-html/
-            ${{ inputs.workdir }}/build/**/lcov.info
-            ${{ inputs.workdir }}/build/**/coverage-summary.txt
-            ${{ inputs.workdir }}/build/**/cpp-test-results.xml
+            ${{ env.WORKDIR }}/build/**/coverage-html/
+            ${{ env.WORKDIR }}/build/**/lcov.info
+            ${{ env.WORKDIR }}/build/**/coverage-summary.txt
+            ${{ env.WORKDIR }}/build/**/cpp-test-results.xml
           retention-days: 30
 
       - name: Coverage summary
@@ -299,7 +389,7 @@ jobs:
 
   coverage-report:
     if: always()
-    needs: cpp-tests
+    needs: run-cpp-tests
     runs-on: ubuntu-latest
     steps:
       - name: Download all coverage reports
