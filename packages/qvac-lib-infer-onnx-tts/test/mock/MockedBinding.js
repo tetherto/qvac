@@ -29,6 +29,7 @@ class MockedBinding {
   }
 
   _callCallbacks (event, data, error) {
+    // addon-cpp 1.1.5 emits event, data, error only; job ownership stays in JS.
     if (this.outputCb) {
       this.outputCb(this, event, data, error)
     }
@@ -52,7 +53,7 @@ class MockedBinding {
     if (handle !== this._handle) throw new Error('Invalid handle')
 
     if (this._state !== state.LISTENING) {
-      return false
+      throw new Error('TTS addon is not accepting jobs (not in listening state)')
     }
 
     if (!data || data.type !== 'text' || typeof data.input !== 'string') {

@@ -6,11 +6,17 @@ import {
   checkPathWithinBase,
 } from "@/utils/path-sanitize";
 
+// Bun may expose `globalThis.Bare` for compatibility, but bare-* packages (e.g.
+// bare-path) expect a real Bare global binding — only run these under the Bare
+// test runner (`brittle-bare` / test:security:bare), not `bun run` unit tests.
+const isBunUnitTestRunner =
+  typeof (globalThis as { Bun?: unknown }).Bun !== "undefined";
 // @ts-ignore Bare global only exists in Bare runtime
-const isBare = typeof globalThis.Bare !== "undefined";
+const isBareRuntime =
+  !isBunUnitTestRunner && typeof globalThis.Bare !== "undefined";
 
 function bareTest(name: string, fn: (t: unknown) => void) {
-  if (isBare) {
+  if (isBareRuntime) {
     test(name, fn);
   } else {
     test.skip(`[bare-only] ${name}`, () => {});

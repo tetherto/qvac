@@ -265,8 +265,9 @@ static bool load_sentencepiece_model(
   int32_t sp_model_size = 0;
   read_safe(loader, sp_model_size);
 
-  QLOG(qvac_lib_inference_addon_cpp::logger::Priority::DEBUG,
-       "SentencePiece model size: " + std::to_string(sp_model_size));
+  QLOG(
+      qvac_lib_inference_addon_cpp::logger::Priority::DEBUG,
+      "SentencePiece model size: " + std::to_string(sp_model_size));
 
   if (sp_model_size > 0) {
     std::vector<char> sp_model_data(sp_model_size);
@@ -275,17 +276,20 @@ static bool load_sentencepiece_model(
 
     auto status = processor->LoadFromSerializedProto(serialized_model);
     if (status.ok()) {
-      QLOG(qvac_lib_inference_addon_cpp::logger::Priority::DEBUG,
-           "SentencePiece model loaded successfully");
+      QLOG(
+          qvac_lib_inference_addon_cpp::logger::Priority::DEBUG,
+          "SentencePiece model loaded successfully");
       return true;
     } else {
-      QLOG(qvac_lib_inference_addon_cpp::logger::Priority::ERROR,
-           "SentencePiece model load failed: " + status.ToString());
+      QLOG(
+          qvac_lib_inference_addon_cpp::logger::Priority::ERROR,
+          "SentencePiece model load failed: " + status.ToString());
       return false;
     }
   }
-  QLOG(qvac_lib_inference_addon_cpp::logger::Priority::DEBUG,
-       "SentencePiece model size is 0 or negative, skipping");
+  QLOG(
+      qvac_lib_inference_addon_cpp::logger::Priority::DEBUG,
+      "SentencePiece model size is 0 or negative, skipping");
   return false;
 }
 
@@ -329,14 +333,13 @@ static bool nmt_model_load(struct nmt_model_loader* loader, nmt_context& ctx) {
 
     int32_t model_type;
     read_safe(loader, model_type);
-    if (model_type == 0) {
-      model.type = e_model::MODEL_MARIAN;
-      hparams.n_tgt_vocab = hparams.n_vocab;
-    } else if (model_type == 1) {
+    if (model_type == 1) {
       model.type = e_model::MODEL_INDICTRANS;
-    } else if (model_type == 2) {
-      model.type = e_model::MODEL_MARIAN_V2;
-      hparams.n_tgt_vocab = hparams.n_vocab;
+    } else if (model_type == 0 || model_type == 2) {
+      throw std::runtime_error(
+          "Opus/Marian models (model_type=" + std::to_string(model_type) +
+          ") are no longer supported. Only IndicTrans (model_type=1) is "
+          "supported.");
     } else {
       throw std::runtime_error(
           "Unsupported model type: " + std::to_string(model_type));
@@ -344,10 +347,6 @@ static bool nmt_model_load(struct nmt_model_loader* loader, nmt_context& ctx) {
     QLOG(
         qvac_lib_inference_addon_cpp::logger::Priority::INFO,
         std::string("Detected model type: ") + nmt_model_type_readable(&ctx));
-
-    if (model.type == e_model::MODEL_MARIAN_V2) {
-      read_safe(loader, hparams.activation_func);
-    }
 
     read_safe(loader, hparams.ftype);
     const int32_t qntvr = hparams.ftype / GGML_QNT_VERSION_FACTOR;
@@ -360,10 +359,6 @@ static bool nmt_model_load(struct nmt_model_loader* loader, nmt_context& ctx) {
       read_safe(loader, hparams.layernorm_embedding);
       read_safe(loader, hparams.scale_embedding);
       read_safe(loader, hparams.has_lm_head);
-      read_safe(loader, hparams.encoder_ffn_dim);
-      read_safe(loader, hparams.decoder_ffn_dim);
-    }
-    if (model.type == e_model::MODEL_MARIAN_V2) {
       read_safe(loader, hparams.encoder_ffn_dim);
       read_safe(loader, hparams.decoder_ffn_dim);
     }
@@ -408,21 +403,9 @@ static bool nmt_model_load(struct nmt_model_loader* loader, nmt_context& ctx) {
       vocab.src_id_to_token[i] = word;
     }
 
-    vocab.bos_token_id = find_bos_token(vocab, model.type);
+    vocab.bos_token_id = find_bos_token(vocab);
 
-    vocab.nmt_eos = find_eos_token(vocab, model.type);
-
-    // ------------ Load bad_word_ids -------------
-    if (modelIsMarian(model.type)) {
-      int32_t n_bad_words = 0;
-      read_safe(loader, n_bad_words);
-      vocab.bad_word_ids.resize(n_bad_words);
-      for (int32_t j = 0; j < n_bad_words; ++j) {
-        read_safe(loader, vocab.bad_word_ids[j]);
-      }
-    } else {
-      vocab.bad_word_ids.clear();
-    }
+    vocab.bad_word_ids.clear();
 
     vocab.src_processor =
         std::make_unique<sentencepiece::SentencePieceProcessor>();
@@ -468,8 +451,7 @@ static bool nmt_model_load(struct nmt_model_loader* loader, nmt_context& ctx) {
 
   const auto& hparams = model.hparams;
 
-  const size_t n_tensors_input =
-      model.type == e_model::MODEL_INDICTRANS ? 24 : 20;
+  const size_t n_tensors_input = 24;
   const size_t n_tensors_encoder = hparams.n_encoder_layers * 18;
   const size_t n_tensors_decoder = hparams.n_decoder_layers * 28;
   const size_t n_tensors =
@@ -750,18 +732,7 @@ static bool nmt_model_load(struct nmt_model_loader* loader, nmt_context& ctx) {
 
     ggml_tensor* meta_enc_pos_emb = nullptr;
     ggml_tensor* meta_dec_pos_emb = nullptr;
-    if (modelIsMarian(model.type)) {
-      meta_enc_pos_emb = ggml_new_tensor_2d(
-          ctx,
-          GGML_TYPE_F32,
-          n_text_state,
-          n_decoder_ctx); // Shape: (512, 512)
-      meta_dec_pos_emb = ggml_new_tensor_2d(
-          ctx,
-          GGML_TYPE_F32,
-          n_text_state,
-          n_decoder_ctx); // Shape: (512, 512)
-    } else if (model.type == MODEL_INDICTRANS) {
+    {
       const int max_pos = 1024; // IndicTrans2 typical max length
       meta_enc_pos_emb = ggml_new_tensor_2d(
           ctx, GGML_TYPE_F32, n_text_state, max_pos); // Shape: (512, 1024)
@@ -779,15 +750,6 @@ static bool nmt_model_load(struct nmt_model_loader* loader, nmt_context& ctx) {
         ggml_new_tensor_1d(ctx, GGML_TYPE_F32, n_text_state);
     ggml_tensor* meta_lm_head =
         ggml_new_tensor_2d(ctx, wtype, n_text_state, decoder_vocab_size);
-    ggml_tensor* meta_final_logits_bias = nullptr;
-    if (modelIsMarian(model.type)) {
-      meta_final_logits_bias = ggml_new_tensor_2d(
-          ctx,
-          GGML_TYPE_F32,
-          decoder_vocab_size,
-          1); // Shape: (decoder_vocab_size, 1)
-    }
-
     ggml_tensor* meta_enc_layer_norm_w = nullptr;
     ggml_tensor* meta_enc_layer_norm_b = nullptr;
     ggml_tensor* meta_dec_layer_norm_w = nullptr;
@@ -806,44 +768,31 @@ static bool nmt_model_load(struct nmt_model_loader* loader, nmt_context& ctx) {
     // Allocate tensors using backend system
     ggml_backend_buffer_type_t buft =
         select_weight_buft(hparams, meta_encoder_emb, GGML_OP_NONE, buft_list);
-    ggml_context* marian_ctx = get_ctx(buft);
+    ggml_context* nmt_ctx = get_ctx(buft);
 
-    model.m_encoder_embeddings = ggml_dup_tensor(marian_ctx, meta_encoder_emb);
-    model.m_decoder_embeddings = ggml_dup_tensor(marian_ctx, meta_decoder_emb);
+    model.m_encoder_embeddings = ggml_dup_tensor(nmt_ctx, meta_encoder_emb);
+    model.m_decoder_embeddings = ggml_dup_tensor(nmt_ctx, meta_decoder_emb);
 
-    if (modelIsMarian(model.type)) {
-      model.m_encoder_pos_emb = ggml_dup_tensor(marian_ctx, meta_enc_pos_emb);
-      model.m_decoder_pos_emb = ggml_dup_tensor(marian_ctx, meta_dec_pos_emb);
-    } else if (model.type == MODEL_INDICTRANS) {
-      model.m_encoder_pos_emb = ggml_dup_tensor(marian_ctx, meta_enc_pos_emb);
-      model.m_decoder_pos_emb = ggml_dup_tensor(marian_ctx, meta_dec_pos_emb);
-    } else {
-      model.m_encoder_pos_emb = nullptr;
-      model.m_decoder_pos_emb = nullptr;
-    }
+    model.m_encoder_pos_emb = ggml_dup_tensor(nmt_ctx, meta_enc_pos_emb);
+    model.m_decoder_pos_emb = ggml_dup_tensor(nmt_ctx, meta_dec_pos_emb);
 
-    model.m_encoder_norm_w = ggml_dup_tensor(marian_ctx, meta_enc_norm_w);
-    model.m_encoder_norm_b = ggml_dup_tensor(marian_ctx, meta_enc_norm_b);
-    model.m_decoder_norm_w = ggml_dup_tensor(marian_ctx, meta_dec_norm_w);
-    model.m_decoder_norm_b = ggml_dup_tensor(marian_ctx, meta_dec_norm_b);
+    model.m_encoder_norm_w = ggml_dup_tensor(nmt_ctx, meta_enc_norm_w);
+    model.m_encoder_norm_b = ggml_dup_tensor(nmt_ctx, meta_enc_norm_b);
+    model.m_decoder_norm_w = ggml_dup_tensor(nmt_ctx, meta_dec_norm_w);
+    model.m_decoder_norm_b = ggml_dup_tensor(nmt_ctx, meta_dec_norm_b);
 
-    model.m_lm_head_w = ggml_dup_tensor(marian_ctx, meta_lm_head);
-    if (modelIsMarian(model.type)) {
-      model.m_final_logits_bias =
-          ggml_dup_tensor(marian_ctx, meta_final_logits_bias);
-    } else {
-      model.m_final_logits_bias = nullptr;
-    }
+    model.m_lm_head_w = ggml_dup_tensor(nmt_ctx, meta_lm_head);
+    model.m_final_logits_bias = nullptr;
 
     if (model.type == MODEL_INDICTRANS && hparams.layernorm_embedding) {
       model.m_enc_layer_norm_w =
-          ggml_dup_tensor(marian_ctx, meta_enc_layer_norm_w);
+          ggml_dup_tensor(nmt_ctx, meta_enc_layer_norm_w);
       model.m_enc_layer_norm_b =
-          ggml_dup_tensor(marian_ctx, meta_enc_layer_norm_b);
+          ggml_dup_tensor(nmt_ctx, meta_enc_layer_norm_b);
       model.m_dec_layer_norm_w =
-          ggml_dup_tensor(marian_ctx, meta_dec_layer_norm_w);
+          ggml_dup_tensor(nmt_ctx, meta_dec_layer_norm_w);
       model.m_dec_layer_norm_b =
-          ggml_dup_tensor(marian_ctx, meta_dec_layer_norm_b);
+          ggml_dup_tensor(nmt_ctx, meta_dec_layer_norm_b);
     } else if (model.type == MODEL_INDICTRANS) {
       model.m_enc_layer_norm_w = nullptr;
       model.m_enc_layer_norm_b = nullptr;
@@ -853,11 +802,6 @@ static bool nmt_model_load(struct nmt_model_loader* loader, nmt_context& ctx) {
 
     model.tensors["encoder.embeddings.weight"] = model.m_encoder_embeddings;
     model.tensors["decoder.embeddings.weight"] = model.m_decoder_embeddings;
-
-    if (modelIsMarian(model.type)) {
-      model.tensors["encoder.embed_positions.weight"] = model.m_encoder_pos_emb;
-      model.tensors["decoder.embed_positions.weight"] = model.m_decoder_pos_emb;
-    }
 
     if (model.type == e_model::MODEL_INDICTRANS) {
       if (hparams.layernorm_embedding) {
@@ -874,9 +818,6 @@ static bool nmt_model_load(struct nmt_model_loader* loader, nmt_context& ctx) {
     }
 
     model.tensors["lm_head.weight"] = model.m_lm_head_w;
-    if (modelIsMarian(model.type)) {
-      model.tensors["final_logits_bias"] = model.m_final_logits_bias;
-    }
 
     ggml_free(ctx);
   }
@@ -898,8 +839,6 @@ static bool nmt_model_load(struct nmt_model_loader* loader, nmt_context& ctx) {
   {
     size_t total_size = 0;
     model.n_loaded = 0;
-
-    bool hasPositionalEmbeddings = false;
 
     std::vector<char> read_buf;
 
@@ -932,11 +871,6 @@ static bool nmt_model_load(struct nmt_model_loader* loader, nmt_context& ctx) {
         return false;
       }
 
-      if (!hasPositionalEmbeddings &&
-          ("encoder.embed_positions.weight" == name ||
-           "decoder.embed_positions.weight" == name)) {
-        hasPositionalEmbeddings = true;
-      }
       auto tensor = model.tensors[name.data()];
 
       if (ggml_nelements(tensor) != nelements) {
@@ -983,8 +917,6 @@ static bool nmt_model_load(struct nmt_model_loader* loader, nmt_context& ctx) {
       size_t expected = model.tensors.size();
       if (model.type == MODEL_INDICTRANS && !hparams.has_lm_head) {
         expected -= 1;
-      } else if (model.type == MODEL_MARIAN_V2 && !hasPositionalEmbeddings) {
-        expected -= 2;
       }
       if ((size_t)model.n_loaded != expected) {
         return false;
@@ -992,7 +924,7 @@ static bool nmt_model_load(struct nmt_model_loader* loader, nmt_context& ctx) {
     }
   }
 
-  if (model.type == MODEL_INDICTRANS || model.type == MODEL_MARIAN_V2) {
+  if (model.type == MODEL_INDICTRANS) {
     if (model.m_encoder_pos_emb && model.m_decoder_pos_emb) {
       const int d_model = hparams.n_text_state;           // 512
       const int max_pos = model.m_encoder_pos_emb->ne[1]; // 1024
