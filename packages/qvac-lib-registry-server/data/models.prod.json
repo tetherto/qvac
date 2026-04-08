@@ -5444,6 +5444,251 @@
     "notes": ""
   },
   {
+    "source": "https://huggingface.co/Supertone/supertonic-2/resolve/75e6727618a02f323c720cba9478152d4bc16ca4/onnx/tts.json",
+    "engine": "@qvac/tts",
+    "description": "Supertone Supertonic 2 tts.json (model layout / sample rate)",
+    "quantization": "",
+    "params": "",
+    "license": "openrail",
+    "tags": [
+      "tts",
+      "supertone",
+      "supertonic2-official",
+      "tts-config"
+    ],
+    "notes": ""
+  },
+  {
+    "source": "https://huggingface.co/Supertone/supertonic-2/resolve/75e6727618a02f323c720cba9478152d4bc16ca4/onnx/duration_predictor.onnx",
+    "engine": "@qvac/tts",
+    "description": "Supertone Supertonic 2 duration predictor (fp32)",
+    "quantization": "fp32",
+    "params": "",
+    "license": "openrail",
+    "tags": [
+      "tts",
+      "supertone",
+      "supertonic2-official",
+      "duration-predictor",
+      "fp32"
+    ],
+    "notes": ""
+  },
+  {
+    "source": "https://huggingface.co/Supertone/supertonic-2/resolve/75e6727618a02f323c720cba9478152d4bc16ca4/onnx/text_encoder.onnx",
+    "engine": "@qvac/tts",
+    "description": "Supertone Supertonic 2 text encoder (fp32)",
+    "quantization": "fp32",
+    "params": "",
+    "license": "openrail",
+    "tags": [
+      "tts",
+      "supertone",
+      "supertonic2-official",
+      "text-encoder",
+      "fp32"
+    ],
+    "notes": ""
+  },
+  {
+    "source": "https://huggingface.co/Supertone/supertonic-2/resolve/75e6727618a02f323c720cba9478152d4bc16ca4/onnx/vector_estimator.onnx",
+    "engine": "@qvac/tts",
+    "description": "Supertone Supertonic 2 vector estimator (fp32)",
+    "quantization": "fp32",
+    "params": "",
+    "license": "openrail",
+    "tags": [
+      "tts",
+      "supertone",
+      "supertonic2-official",
+      "vector-estimator",
+      "fp32"
+    ],
+    "notes": ""
+  },
+  {
+    "source": "https://huggingface.co/Supertone/supertonic-2/resolve/75e6727618a02f323c720cba9478152d4bc16ca4/onnx/vocoder.onnx",
+    "engine": "@qvac/tts",
+    "description": "Supertone Supertonic 2 vocoder (fp32)",
+    "quantization": "fp32",
+    "params": "",
+    "license": "openrail",
+    "tags": [
+      "tts",
+      "supertone",
+      "supertonic2-official",
+      "vocoder",
+      "fp32"
+    ],
+    "notes": ""
+  },
+  {
+   "source": "https://huggingface.co/Supertone/supertonic-2/resolve/75e6727618a02f323c720cba9478152d4bc16ca4/onnx/unicode_indexer.onnx",
+    "engine": "@qvac/tts",
+    "description": "Supertone Supertonic 2 unicode indexer (fp32)",
+    "quantization": "fp32",
+    "params": "",
+    "license": "openrail",
+    "tags": [
+      "tts",
+      "supertone",
+      "supertonic2-official",
+      "unicode-indexer",
+      "fp32"
+    ],
+    "notes": "" 
+  },
+  {
+    "source": "https://huggingface.co/Supertone/supertonic-2/resolve/75e6727618a02f323c720cba9478152d4bc16ca4/voice_styles/F1.json",
+    "engine": "@qvac/tts",
+    "description": "Supertone Supertonic 2 voice style F1 (female)",
+    "quantization": "",
+    "params": "",
+    "license": "openrail",
+    "tags": [
+      "tts",
+      "supertone",
+      "supertonic2-official",
+      "voice-style"
+    ],
+    "notes": ""
+  },
+  {
+    "source": "https://huggingface.co/Supertone/supertonic-2/resolve/75e6727618a02f323c720cba9478152d4bc16ca4/voice_styles/F2.json",
+    "engine": "@qvac/tts",
+    "description": "Supertone Supertonic 2 voice style F2 (female)",
+    "quantization": "",
+    "params": "",
+    "license": "openrail",
+    "tags": [
+      "tts",
+      "supertone",
+      "supertonic2-official",
+      "voice-style"
+    ],
+    "notes": ""
+  },
+  {
+    "source": "https://huggingface.co/Supertone/supertonic-2/resolve/75e6727618a02f323c720cba9478152d4bc16ca4/voice_styles/F3.json",
+    "engine": "@qvac/tts",
+    "description": "Supertone Supertonic 2 voice style F3 (female)",
+    "quantization": "",
+    "params": "",
+    "license": "openrail",
+    "tags": [
+      "tts",
+      "supertone",
+      "supertonic2-official",
+      "voice-style"
+    ],
+    "notes": ""
+  },
+  {
+    "source": "https://huggingface.co/Supertone/supertonic-2/resolve/75e6727618a02f323c720cba9478152d4bc16ca4/voice_styles/F4.json",
+    "engine": "@qvac/tts",
+    "description": "Supertone Supertonic 2 voice style F4 (female)",
+    "quantization": "",
+    "params": "",
+    "license": "openrail",
+    "tags": [
+      "tts",
+      "supertone",
+      "supertonic2-official",
+      "voice-style"
+    ],
+    "notes": ""
+  },
+  {
+    "source": "https://huggingface.co/Supertone/supertonic-2/resolve/75e6727618a02f323c720cba9478152d4bc16ca4/voice_styles/F5.json",
+    "engine": "@qvac/tts",
+    "description": "Supertone Supertonic 2 voice style F5 (female)",
+    "quantization": "",
+    "params": "",
+    "license": "openrail",
+    "tags": [
+      "tts",
+      "supertone",
+      "supertonic2-official",
+      "voice-style"
+    ],
+    "notes": ""
+  },
+  {
+    "source": "https://huggingface.co/Supertone/supertonic-2/resolve/75e6727618a02f323c720cba9478152d4bc16ca4/voice_styles/M1.json",
+    "engine": "@qvac/tts",
+    "description": "Supertone Supertonic 2 voice style M1 (male)",
+    "quantization": "",
+    "params": "",
+    "license": "openrail",
+    "tags": [
+      "tts",
+      "supertone",
+      "supertonic2-official",
+      "voice-style"
+    ],
+    "notes": ""
+  },
+  {
+    "source": "https://huggingface.co/Supertone/supertonic-2/resolve/75e6727618a02f323c720cba9478152d4bc16ca4/voice_styles/M2.json",
+    "engine": "@qvac/tts",
+    "description": "Supertone Supertonic 2 voice style M2 (male)",
+    "quantization": "",
+    "params": "",
+    "license": "openrail",
+    "tags": [
+      "tts",
+      "supertone",
+      "supertonic2-official",
+      "voice-style"
+    ],
+    "notes": ""
+  },
+  {
+    "source": "https://huggingface.co/Supertone/supertonic-2/resolve/75e6727618a02f323c720cba9478152d4bc16ca4/voice_styles/M3.json",
+    "engine": "@qvac/tts",
+    "description": "Supertone Supertonic 2 voice style M3 (male)",
+    "quantization": "",
+    "params": "",
+    "license": "openrail",
+    "tags": [
+      "tts",
+      "supertone",
+      "supertonic2-official",
+      "voice-style"
+    ],
+    "notes": ""
+  },
+  {
+    "source": "https://huggingface.co/Supertone/supertonic-2/resolve/75e6727618a02f323c720cba9478152d4bc16ca4/voice_styles/M4.json",
+    "engine": "@qvac/tts",
+    "description": "Supertone Supertonic 2 voice style M4 (male)",
+    "quantization": "",
+    "params": "",
+    "license": "openrail",
+    "tags": [
+      "tts",
+      "supertone",
+      "supertonic2-official",
+      "voice-style"
+    ],
+    "notes": ""
+  },
+  {
+    "source": "https://huggingface.co/Supertone/supertonic-2/resolve/75e6727618a02f323c720cba9478152d4bc16ca4/voice_styles/M5.json",
+    "engine": "@qvac/tts",
+    "description": "Supertone Supertonic 2 voice style M5 (male)",
+    "quantization": "",
+    "params": "",
+    "license": "openrail",
+    "tags": [
+      "tts",
+      "supertone",
+      "supertonic2-official",
+      "voice-style"
+    ],
+    "notes": ""
+  },
+  {
     "source": "https://huggingface.co/istupakov/parakeet-tdt-0.6b-v3-onnx/resolve/abd2878d52a678ce380088ef9d9b1d9664404565/encoder-model.onnx",
     "engine": "@qvac/transcription-parakeet",
     "description": "Parakeet TDT 0.6B v3 encoder (graph)",
