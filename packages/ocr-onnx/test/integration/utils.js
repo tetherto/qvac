@@ -9,10 +9,11 @@ const isMobile = platform === 'ios' || platform === 'android'
 const isWindows = platform === 'win32'
 
 // Windows CI runners have limited memory (~7GB): use BASIC optimization,
-// XNNPACK for efficient Conv/Relu ops, disable BFC arena pre-allocation,
-// and limit to 1 thread to reduce per-thread scratch buffer memory.
+// disable BFC arena pre-allocation, and limit to 1 thread to reduce
+// per-thread scratch buffer memory. XNNPACK is left disabled (default)
+// to be consistent with all other platforms.
 const windowsOrtParams = isWindows
-  ? { graphOptimization: 'basic', enableXnnpack: true, enableCpuMemArena: false, intraOpThreads: 1 }
+  ? { graphOptimization: 'basic', enableCpuMemArena: false, intraOpThreads: 1 }
   : {}
 
 // DocTR model download URLs from OnnxTR GitHub releases
