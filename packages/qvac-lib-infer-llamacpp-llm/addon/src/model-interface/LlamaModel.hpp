@@ -274,6 +274,7 @@ private:
   /// only in reload()
   mutable std::shared_mutex stateMtx_;
   std::shared_ptr<ReloadableState> state_;
+  int64_t runtimeBackendDevice_ = 0;
 
   bool isBitnetModel() const;
   void validateBitnetQuantization();
