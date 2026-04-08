@@ -13,7 +13,7 @@
 #include "qvac-lib-inference-addon-cpp/ModelInterfaces.hpp"
 #include "qvac-lib-inference-addon-cpp/RuntimeStats.hpp"
 
-namespace qvac_lib_inference_addon_marian {
+namespace qvac_lib_inference_addon_nmt {
 
 enum class BackendType {
   GGML,
@@ -101,4 +101,4 @@ private:
       config_;
 };
 
-} // namespace qvac_lib_inference_addon_marian
+} // namespace qvac_lib_inference_addon_nmt

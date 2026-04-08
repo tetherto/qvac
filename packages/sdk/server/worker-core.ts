@@ -82,30 +82,40 @@ function clearRegistries() {
   clearPlugins();
 }
 
+export type BareDirectShutdownReason = "signal" | "rpc-close";
+
+export async function shutdownBareDirectWorker(
+  reason: BareDirectShutdownReason,
+): Promise<void> {
+  if (isShuttingDown) return;
+  isShuttingDown = true;
+
+  const message =
+    reason === "signal"
+      ? "🐻 Bare worker shutdown signal received, cleaning up..."
+      : "🧹 Bare direct mode RPC closed, cleaning up...";
+  logger.info(message);
+
+  try {
+    clearRegistries();
+    await Promise.allSettled([
+      destroySwarm(),
+      closeAllRagInstances(),
+      cleanupDownloads(),
+      unloadAllModels(),
+      closeRegistryClient(),
+    ]);
+    logger.info("✅ Cleanup completed successfully");
+  } catch (error) {
+    logger.error("❌ Error during shutdown cleanup:", error);
+  }
+
+  process.exit(0);
+}
+
 function setupShutdownHandlers() {
-  const shutdownHandler = async () => {
-    if (isShuttingDown) return;
-    isShuttingDown = true;
-
-    logger.info("🐻 Bare worker shutdown signal received, cleaning up...");
-
-    try {
-      clearRegistries();
-      await Promise.allSettled([
-        destroySwarm(),
-        closeAllRagInstances(),
-        cleanupDownloads(),
-        unloadAllModels(),
-        closeRegistryClient(),
-      ]);
-      logger.info("✅ Cleanup completed successfully");
-    } catch (error) {
-      logger.error("❌ Error during shutdown cleanup:", error);
-    }
-
-    process.exit(0);
-  };
-
-  process.once("SIGTERM", () => void shutdownHandler());
-  process.once("SIGINT", () => void shutdownHandler());
+  process.once("SIGTERM", () =>
+    void shutdownBareDirectWorker("signal"),
+  );
+  process.once("SIGINT", () => void shutdownBareDirectWorker("signal"));
 }

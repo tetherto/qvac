@@ -762,7 +762,7 @@ async function ensureSupertonicModels (options = {}) {
   if (!fs.existsSync(onnxDir)) fs.mkdirSync(onnxDir, { recursive: true })
   if (!fs.existsSync(voiceStylesDir)) fs.mkdirSync(voiceStylesDir, { recursive: true })
 
-  const baseUrl = 'https://huggingface.co/Supertone/supertonic-2/resolve/main'
+  const baseUrl = 'https://huggingface.co/Supertone/supertonic/resolve/main'
 
   const onnxFiles = [
     { name: 'duration_predictor.onnx', minSize: 1000000 },

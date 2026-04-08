@@ -165,7 +165,7 @@ test('English transcription and WER verification', { timeout: 300000 }, async (t
   }
 })
 
-test('Cancel active job keeps model usable for next job', { timeout: 600000, skip: !platform.startsWith('darwin') }, async (t) => {
+test('Cancel active job keeps model usable for next job', { timeout: 600000 }, async (t) => {
   const loggerBinding = setupJsLogger(binding)
 
   await ensureModel(modelPath)
@@ -189,13 +189,9 @@ test('Cancel active job keeps model usable for next job', { timeout: 600000, ski
 
   const outputsByJob = new Map()
   const resolvers = new Map()
-  const waitForJob = (jobId, timeoutMs = 180000, errorGraceMs = 5000) => new Promise((resolve) => {
-    let pendingError = null
-    let errorGraceTimeout = null
-
+  const waitForJob = (jobId, timeoutMs = 180000) => new Promise((resolve) => {
     const finish = (event, error) => {
       clearTimeout(timeout)
-      if (errorGraceTimeout) clearTimeout(errorGraceTimeout)
       resolvers.delete(jobId)
       resolve({ event, error: error || null })
     }
@@ -205,55 +201,9 @@ test('Cancel active job keeps model usable for next job', { timeout: 600000, ski
     }, timeoutMs)
 
     resolvers.set(jobId, (event, error) => {
-      // Cancellation is cooperative, and the shared addon-cpp queue can emit a
-      // late terminal Error for the cancelled job shortly after the next job is
-      // accepted. Give that transient Error a short grace window before
-      // treating it as terminal so a subsequent JobEnded can win.
-      if (event === 'Error') {
-        pendingError = error || null
-        if (!errorGraceTimeout) {
-          errorGraceTimeout = setTimeout(() => {
-            finish('Error', pendingError)
-          }, errorGraceMs)
-        }
-        return
-      }
-
       finish(event, error)
     })
   })
-
-  async function submitJobWhenReady (audioBuffer, timeoutMs = 180000, retryDelayMs = 1000) {
-    const deadline = Date.now() + timeoutMs
-    let buffered = false
-    let lastBusyError = null
-
-    while (Date.now() < deadline) {
-      if (!buffered) {
-        await parakeet.append({ type: 'audio', data: audioBuffer })
-        buffered = true
-      }
-
-      try {
-        return await parakeet.append({ type: 'end of job' })
-      } catch (error) {
-        const message = error?.message || ''
-        const causeMessage = error?.cause?.message || ''
-        const isBusy =
-          message.includes('Cannot set new job: a job is already set or being processed') ||
-          causeMessage.includes('Cannot set new job: a job is already set or being processed')
-
-        if (!isBusy) {
-          throw error
-        }
-
-        lastBusyError = error
-        await new Promise(resolve => setTimeout(resolve, retryDelayMs))
-      }
-    }
-
-    throw lastBusyError || new Error('Timed out waiting for the model to accept the next job')
-  }
 
   function toFloat32Audio (rawBuffer) {
     const pcmData = new Int16Array(rawBuffer.buffer, rawBuffer.byteOffset, rawBuffer.length / 2)
@@ -288,7 +238,6 @@ test('Cancel active job keeps model usable for next job', { timeout: 600000, ski
 
     const shortAudio = toFloat32Audio(fs.readFileSync(samplePath))
 
-    // Start a job and cancel it immediately.
     await parakeet.append({ type: 'audio', data: shortAudio.buffer })
     const firstJobId = await parakeet.append({ type: 'end of job' })
     await parakeet.cancel(firstJobId)
@@ -297,9 +246,8 @@ test('Cancel active job keeps model usable for next job', { timeout: 600000, ski
     t.ok(statusAfterCancel === 'listening', `Status should return to listening after cancel (got ${statusAfterCancel})`)
 
     // Ensure model still accepts and completes the next job.
-    // Cancellation is cooperative, and some slower runners can briefly keep the
-    // native worker busy even after JS-side state returns to listening.
-    const secondJobId = await submitJobWhenReady(shortAudio.buffer)
+    await parakeet.append({ type: 'audio', data: shortAudio.buffer })
+    const secondJobId = await parakeet.append({ type: 'end of job' })
 
     const secondJobResult = await waitForJob(secondJobId)
 

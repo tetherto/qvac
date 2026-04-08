@@ -40,7 +40,7 @@
   ],
   "license": "Apache-2.0",
   "devDependencies": {
-    "@tetherto/qvac-lib-dl-base": "1.0.2",
+    "@qvac/dl-base": "0.2.1",
     "bare-fs": "^3.0.2",
     "bare-path": "^3.0.0",
     "bare-stream": "^2.3.0",
