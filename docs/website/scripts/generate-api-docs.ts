@@ -20,44 +20,7 @@ import * as path from "path";
 import { Application } from "typedoc";
 import { ReflectionKind } from "typedoc";
 import type { DeclarationReflection, SignatureReflection } from "typedoc";
-
-interface TypeField {
-  name: string;
-  type: string;
-  required: boolean;
-  defaultValue?: string;
-  description: string;
-}
-
-interface ExpandedType {
-  typeName: string;
-  fields: TypeField[];
-  children: ExpandedType[];
-}
-
-interface ApiFunction {
-  name: string;
-  signature: string;
-  description: string;
-  parameters: Array<{
-    name: string;
-    type: string;
-    required: boolean;
-    description: string;
-  }>;
-  expandedParams: ExpandedType[];
-  returns: { type: string; description: string };
-  returnFields: TypeField[];
-  expandedReturns: ExpandedType[];
-  throws?: Array<{ error: string; description: string }>;
-  examples?: string[];
-  deprecated?: string;
-}
-
-interface GenerateOptions {
-  updateLatest: boolean;
-  devMode?: boolean;
-}
+import type { ApiFunction, ExpandedType, TypeField, ErrorEntry, GenerateOptions } from "./api-docs/types.js";
 
 const SDK_PATH =
   process.env.SDK_PATH ||
@@ -571,12 +534,6 @@ ${functions
 
 See [Errors](./errors) for the full list of SDK error codes.
 `;
-}
-
-interface ErrorEntry {
-  name: string;
-  code: number;
-  summary: string;
 }
 
 function parseErrorCodes(source: string, constantName: string): ErrorEntry[] {
