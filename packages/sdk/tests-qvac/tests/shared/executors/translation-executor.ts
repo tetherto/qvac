@@ -127,13 +127,22 @@ export class TranslationExecutor extends AbstractModelExecutor<typeof allTests> 
       if (!stats) {
         return { passed: false, output: `Translation OK but stats were undefined. Text: "${translatedText}"` };
       }
-      if (typeof stats.totalTokens !== "number" || typeof stats.totalTime !== "number") {
-        return { passed: false, output: `Stats missing fields. Got: ${JSON.stringify(stats)}` };
+      if (typeof stats.totalTokens !== "number") {
+        return { passed: false, output: `Stats missing totalTokens. Got: ${JSON.stringify(stats)}` };
+      }
+      const hasTimingInfo = typeof stats.totalTime === "number"
+        || typeof stats.timeToFirstToken === "number"
+        || typeof stats.tokensPerSecond === "number";
+      if (!hasTimingInfo) {
+        return { passed: false, output: `Stats missing timing info. Got: ${JSON.stringify(stats)}` };
       }
 
+      const timeLabel = stats.totalTime != null
+        ? `totalTime: ${stats.totalTime}ms`
+        : `ttft: ${stats.timeToFirstToken}ms, tps: ${stats.tokensPerSecond?.toFixed(1)}`;
       return {
         passed: true,
-        output: `Text: "${translatedText}", tokens: ${stats.totalTokens}, time: ${stats.totalTime}ms`,
+        output: `Text: "${translatedText}", tokens: ${stats.totalTokens}, ${timeLabel}`,
       };
     } catch (error) {
       const errorMsg = error instanceof Error ? error.message : String(error);

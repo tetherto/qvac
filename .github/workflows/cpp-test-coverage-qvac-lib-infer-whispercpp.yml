@@ -119,30 +119,26 @@ jobs:
       - name: Download test models
         working-directory: ${{ env.WORKDIR }}
         run: |
-          mkdir -p models examples/models
+          mkdir -p models
           
-          echo "Downloading ggml-tiny.bin for C++ tests..."
-          curl -L -o examples/models/ggml-tiny.bin \
+          echo "Downloading ggml-tiny.bin..."
+          curl -L -o models/ggml-tiny.bin \
             "https://huggingface.co/ggerganov/whisper.cpp/resolve/main/ggml-tiny.bin" \
             --fail --silent --show-error --connect-timeout 30 --max-time 300
           
           echo "Downloading ggml-silero VAD model..."
-          curl -L -o examples/models/ggml-silero-v5.1.2.bin \
+          curl -L -o models/ggml-silero-v5.1.2.bin \
             "https://huggingface.co/ggml-org/whisper-vad/resolve/main/ggml-silero-v5.1.2.bin" \
             --fail --silent --show-error --connect-timeout 30 --max-time 300
           
-          # Copy to models/ as well for compatibility
-          cp examples/models/*.bin models/
-          
           echo "Downloaded models:"
-          ls -lha examples/models/
+          ls -lha models/
 
       - name: Run C++ Unit Tests
         id: cpp-tests
         working-directory: ${{ env.WORKDIR }}
         run: |
           echo "=== Debug: Checking model files before running tests ==="
-          ls -la examples/models/ || echo "examples/models/ not found"
           ls -la models/ || echo "models/ not found"
           pwd
           echo "=== Running tests from: $(pwd) ==="

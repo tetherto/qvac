@@ -22,13 +22,13 @@ env:
 permissions:
   contents: read
   packages: read
+  id-token: write
 
 jobs:
   prepare:
     runs-on: ubuntu-latest
     environment: release
     outputs:
-      opus_pairs: ${{ steps.read-opus.outputs.pairs }}
       bergamot_pairs: ${{ steps.read-bergamot.outputs.pairs }}
       version: ${{ steps.get-version.outputs.version }}
     steps:
@@ -47,14 +47,6 @@ jobs:
           echo "version=$version" >> $GITHUB_OUTPUT
           echo "📦 Benchmarking addon version: $version"
 
-      - name: Read released OPUS models
-        id: read-opus
-        working-directory: ${{ env.PKG_DIR }}
-        run: |
-          pairs=$(grep -v '^#' .github/released-models-opus.txt | grep -v '^[[:space:]]*$' | tr -d '\r' | tr '\n' ',' | sed 's/,$//')
-          echo "pairs=$pairs" >> $GITHUB_OUTPUT
-          echo "🎯 Released OPUS model pairs: $pairs"
-
       - name: Read released Bergamot models
         id: read-bergamot
         working-directory: ${{ env.PKG_DIR }}
@@ -63,23 +55,11 @@ jobs:
           echo "pairs=$pairs" >> $GITHUB_OUTPUT
           echo "🎯 Released Bergamot model pairs: $pairs"
 
-  benchmark-opus:
-    needs: prepare
-    uses: ./.github/workflows/benchmark-qvac-lib-infer-nmtcpp.yml
-    secrets: inherit
-    with:
-      pairs: ${{ needs.prepare.outputs.opus_pairs }}
-      translators: 'qvac'
-      dataset_flores_devtest: true
-      dataset_conversational_phrases: true
-      metric_chrfpp: true
-      metric_comet: true
-      use_pivot: false
-      is_quantized_model: false
-      use_batch: false
-      hyperparams: 'fast'
-
   benchmark-bergamot:
+    permissions:
+      contents: read
+      packages: read
+      id-token: write
     needs: prepare
     uses: ./.github/workflows/benchmark-qvac-lib-infer-nmtcpp.yml
     secrets: inherit
@@ -96,7 +76,7 @@ jobs:
       hyperparams: 'fast'
 
   summary:
-    needs: [prepare, benchmark-opus, benchmark-bergamot]
+    needs: [prepare, benchmark-bergamot]
     runs-on: ubuntu-latest
     if: always()
     steps:
@@ -107,16 +87,6 @@ jobs:
           echo "📦 Addon Version: ${{ needs.prepare.outputs.version }}"
           echo "📊 Datasets: flores-devtest, conversational-phrases"
           echo "📈 Metrics: chrF++, COMET"
-          echo ""
-          echo "### 🔧 OPUS/GGML Models (qvac)"
-          echo "🎯 Pairs: ${{ needs.prepare.outputs.opus_pairs }}"
-          echo ""
-          echo "📍 S3 Model Paths:"
-          IFS=',' read -ra PAIRS <<< "${{ needs.prepare.outputs.opus_pairs }}"
-          for pair in "${PAIRS[@]}"; do
-            pair=$(echo "$pair" | xargs)
-            echo "- **$pair**: \`s3://\${MODEL_S3_BUCKET}/qvac_models_compiled/ggml/marian/q0f16/ggml-opus-$pair/\`"
-          done
           echo ""
           echo "### 🔧 Bergamot Models (qvac_bergamot)"
           echo "🎯 Pairs: ${{ needs.prepare.outputs.bergamot_pairs }}"

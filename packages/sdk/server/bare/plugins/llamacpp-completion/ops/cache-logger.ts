@@ -57,3 +57,9 @@ export function logCacheDisabled(): void {
 export function logCacheSave(sessionPath: string): void {
   logger.debug(`[kv-cache] Saving session: ...${sessionPath.slice(-20)}`);
 }
+
+export function logCacheSaveError(sessionPath: string, err: unknown): void {
+  logger.warn(
+    `[kv-cache] Failed to save session: ...${sessionPath.slice(-20)} — ${err instanceof Error ? err.message : String(err)}`,
+  );
+}

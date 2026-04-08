@@ -7,7 +7,9 @@ inputs:
   base-ref:
     required: true
   base-sha:
-    required: true
+    required: false
+    default: ""
+    description: "Base SHA for diff. Empty on workflow_dispatch — changelog check is skipped."
   head-sha:
     required: true
   package-slug:

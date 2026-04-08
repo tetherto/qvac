@@ -55,7 +55,7 @@ export const ocrChartImage = createOcrTest(
 );
 
 export const ocrNoTextImage = createOcrTest(
-  "ocr-no-text-image", "cat.jpg",
+  "ocr-no-text-image", "elephant.jpg",
   { validation: "type", expectedType: "array" },
 );
 
@@ -115,6 +115,53 @@ export const ocrMultipleFonts = createOcrTest(
   { validation: "contains-all", contains: ["SANS", "SERIF", "BOLD"] },
 );
 
+export const ocrStats = createOcrTest(
+  "ocr-stats", "ocr-simple-test-png.png",
+  { validation: "type", expectedType: "array" },
+  undefined, 60000,
+);
+
+export const ocrStreamingStats = createOcrTest(
+  "ocr-streaming-stats", "ocr-simple-test-png.png",
+  { validation: "type", expectedType: "array" },
+  { streaming: true }, 60000,
+);
+
+export const ocrBlockStructure = createOcrTest(
+  "ocr-block-structure", "ocr-simple-test-png.png",
+  { validation: "type", expectedType: "array" },
+  undefined, 60000,
+);
+
+export const ocrStreamingBlockStructure = createOcrTest(
+  "ocr-streaming-block-structure", "ocr-simple-test-png.png",
+  { validation: "type", expectedType: "array" },
+  { streaming: true }, 60000,
+);
+
+export const ocrLogoBlockStructure = createOcrTest(
+  "ocr-logo-block-structure", "logo.png",
+  { validation: "type", expectedType: "array" },
+);
+
+export const ocrParagraphStats = createOcrTest(
+  "ocr-paragraph-stats", "ocr-simple-test-png.png",
+  { validation: "type", expectedType: "array" },
+  { paragraph: true }, 60000,
+);
+
+export const ocrParagraphBlockStructure = createOcrTest(
+  "ocr-paragraph-block-structure", "ocr-simple-test-png.png",
+  { validation: "type", expectedType: "array" },
+  { paragraph: true }, 60000,
+);
+
+export const ocrParagraphStreaming = createOcrTest(
+  "ocr-paragraph-streaming", "ocr-simple-test-png.png",
+  { validation: "contains-any", contains: ["OCR", "text", "testing", "Type", "enter"] },
+  { streaming: true, paragraph: true }, 60000,
+);
+
 export const ocrTests = [
   ocrBasicPng,
   ocrBasicJpg,
@@ -135,4 +182,12 @@ export const ocrTests = [
   ocrMisalignedText,
   ocrMultiSizedText,
   ocrMultipleFonts,
+  ocrStats,
+  ocrStreamingStats,
+  ocrParagraphStats,
+  ocrBlockStructure,
+  ocrStreamingBlockStructure,
+  ocrLogoBlockStructure,
+  ocrParagraphBlockStructure,
+  ocrParagraphStreaming,
 ];
