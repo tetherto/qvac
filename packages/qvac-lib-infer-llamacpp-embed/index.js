@@ -178,7 +178,13 @@ class GGMLBert extends BaseInference {
       ('total_tokens' in data || 'total_time_ms' in data || 'batch_size' in data || 'context_size' in data)
     )
     if (isStatsData) {
-      return this._outputCallback(addon, 'JobEnded', 'OnlyOneJob', data, null)
+      const runtimeStats = { ...data }
+      if (runtimeStats.backendDevice === 0) {
+        runtimeStats.backendDevice = 'cpu'
+      } else if (runtimeStats.backendDevice === 1) {
+        runtimeStats.backendDevice = 'gpu'
+      }
+      return this._outputCallback(addon, 'JobEnded', 'OnlyOneJob', runtimeStats, null)
     }
 
     let mappedEvent = event
