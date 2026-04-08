@@ -5,6 +5,23 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.4.0] - 2026-04-08
+
+### Changed
+
+- **Breaking**: No longer extends `BaseInference`. `ONNXOcr` is now a standalone class owning its own lifecycle, logger, and job management.
+- Replaced internal job management boilerplate with `createJobHandler()` from `@qvac/infer-base@0.4.0`
+- Switched from `@qvac/response` to `@qvac/infer-base` for `QvacResponse`
+- Added `@qvac/logging` as direct dependency
+
+### Removed
+
+- `BaseInference` inheritance — addon owns its own `load()`, `run()`, `unload()`, `destroy()`, `getState()`
+- `@qvac/dl-hyperdrive`, `@qvac/response`, `bare-path`, `bare-process`, `bare-fetch` dependencies
+- `loader` constructor parameter (was never used by OCR — `noAdditionalDownload: true`)
+- `static JOB_ID`, `_saveJobToResponseMapping`, `_deleteJobMapping`, `_createResponse` boilerplate
+
+
 ## [0.3.5]
 2026-04-08
 

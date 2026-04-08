@@ -82,6 +82,12 @@ vulkaninfo --summary
 </Tab>
 </Tabs>
 
+Ensure QVAC can detect the GPU Vulkan driver by adding your user to the `render` and `video` groups:
+
+```bash
+sudo usermod -aG render,video $USER
+```
+
 ### Expo
 
 <Steps>
