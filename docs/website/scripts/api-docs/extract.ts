@@ -13,6 +13,7 @@ import type { ApiFunction, ExpandedType, ErrorEntry, ApiData } from "./types.js"
 
 const SCRIPT_DIR = path.dirname(fileURLToPath(import.meta.url));
 const API_DATA_PATH = path.join(SCRIPT_DIR, "api-data.json");
+const EXTRACT_SCRIPT_PATH = fileURLToPath(import.meta.url);
 
 // ---------------------------------------------------------------------------
 // Mtime-based extraction cache
@@ -38,7 +39,11 @@ async function tryLoadCache(sdkPath: string): Promise<ApiData | null> {
   }
 
   const newestSourceMtime = await getNewestMtime(sdkPath, ".ts");
-  if (cacheStat.mtimeMs > newestSourceMtime) {
+
+  const extractScriptStat = await fs.stat(EXTRACT_SCRIPT_PATH);
+  const sentinelMtime = Math.max(newestSourceMtime, extractScriptStat.mtimeMs);
+
+  if (cacheStat.mtimeMs > sentinelMtime) {
     const raw = await fs.readFile(API_DATA_PATH, "utf-8");
     console.log("⚡ Skipping TypeDoc extraction (api-data.json is up to date)");
     return JSON.parse(raw) as ApiData;
