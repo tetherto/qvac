@@ -13,7 +13,6 @@ import {
   unloadModel,
   transcribe,
   PARAKEET_TDT_ENCODER_FP32,
-  PARAKEET_TDT_ENCODER_DATA_FP32,
   PARAKEET_TDT_DECODER_FP32,
   PARAKEET_TDT_VOCAB,
   PARAKEET_TDT_PREPROCESSOR_FP32,
@@ -60,7 +59,6 @@ const modelId = await loadModel({
   modelType: "parakeet",
   modelConfig: {
     parakeetEncoderSrc: PARAKEET_TDT_ENCODER_FP32,
-    parakeetEncoderDataSrc: PARAKEET_TDT_ENCODER_DATA_FP32,
     parakeetDecoderSrc: PARAKEET_TDT_DECODER_FP32,
     parakeetVocabSrc: PARAKEET_TDT_VOCAB,
     parakeetPreprocessorSrc: PARAKEET_TDT_PREPROCESSOR_FP32,

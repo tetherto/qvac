@@ -1,1 +1,3 @@
 build/
+.qvac-cache/
+qvac.config.json

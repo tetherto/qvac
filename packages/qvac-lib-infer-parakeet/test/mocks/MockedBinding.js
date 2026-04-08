@@ -15,7 +15,6 @@ class MockedBinding {
     this._state = state.LOADING
     this._busy = false
     this._runToken = 0
-    this._baseInferenceCallback = null
     this._interfaceType = null
   }
 
@@ -28,17 +27,7 @@ class MockedBinding {
     return this._handle
   }
 
-  setBaseInferenceCallback (callback) {
-    this._baseInferenceCallback = callback
-  }
-
   _callCallbacks (event, output, error = null) {
-    if (this._baseInferenceCallback) {
-      const jobId = this._interfaceType?._activeJobId
-      const baseEvent = event === 'RuntimeStats' ? 'JobEnded' : event
-      this._baseInferenceCallback(this, baseEvent, jobId, output, error)
-    }
-
     if (this.outputCb) {
       this.outputCb(this, event, output, error)
     }
@@ -78,9 +67,9 @@ class MockedBinding {
     }
   }
 
-  cancel (handle, jobId) {
+  cancel (handle) {
     if (handle !== this._handle) throw new Error('Invalid handle')
-    console.log(`Cancel job id: ${jobId}`)
+    console.log('Cancel job')
     this._runToken++
     this._busy = false
     this._state = state.LISTENING

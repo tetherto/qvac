@@ -33,12 +33,12 @@ protected:
         "many miles I've fallen by this time?\" she said aloud.";
   }
 
-  std::unique_ptr<qvac_lib_inference_addon_marian::TranslationModel>
+  std::unique_ptr<qvac_lib_inference_addon_nmt::TranslationModel>
   createModel(std::string_view ggmlFileName, bool useGpu = false) {
     auto modelPath = basePath / ggmlFileName;
 
     auto model =
-        std::make_unique<qvac_lib_inference_addon_marian::TranslationModel>(
+        std::make_unique<qvac_lib_inference_addon_nmt::TranslationModel>(
             modelPath.string());
     model->setUseGpu(useGpu);
     model->load();

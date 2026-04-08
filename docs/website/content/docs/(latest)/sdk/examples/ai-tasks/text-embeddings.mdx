@@ -5,7 +5,7 @@ description: Vector embedding generation for semantic search, clustering, and re
 
 ## Overview
 
-Text embeddings uses [`llama.cpp`](https://github.com/ggml-org/llama.cpp) as inference engine. Load any supported model using `modelType: "embeddings"`. Then, provide text input as `text` where the value is either a single `string` or an array of strings.
+Text embeddings uses [`qvac-fabric-llm.cpp`](https://github.com/tetherto/qvac-fabric-llm.cpp) as inference engine. Load any supported model using `modelType: "embeddings"`. Then, provide text input as `text` where the value is either a single `string` or an array of strings.
 
 `embed()` returns a single embedding vector (`number[]`) for single text input, or an array of embedding vectors (`number[][]`) for batch input.
 
@@ -20,7 +20,7 @@ For how to use each function, see [SDK — API reference](/sdk/api/).
 
 ## Models
 
-You can load any `llama.cpp`-compatible embeddings model. Model file format: `*.gguf`.
+You can load any [`llama.cpp`](https://github.com/ggml-org/llama.cpp)-compatible embeddings model. Model file format: `*.gguf`.
 
 - If the model is sharded across multiple files (a multi-file bundle), see [Sharded models](/sdk/examples/utilities/sharded-models).
 - For models available as constants, see [SDK — Models](/sdk/getting-started#models).
