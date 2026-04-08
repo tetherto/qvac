@@ -200,7 +200,7 @@ async function createEmbeddingsTestInstance (t, modelName, device = 'gpu', gpuLa
     console.log('Platform detected: Android, setting flash_attn to off')
   }
 
-  const inference = new GGMLBert({ modelName, loader, logger, diskPath }, config)
+  const inference = new GGMLBert({ modelName, loader, logger, diskPath, opts: { stats: true } }, config)
 
   await inference.load()
 

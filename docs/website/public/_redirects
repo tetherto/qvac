@@ -1,0 +1,11 @@
+# Workaround: Sevalla CDN pathMap does not resolve directory-to-index.html
+# for path segments containing dots (e.g. v0.7.0). Placeholder rewrites
+# force the CDN to serve the correct index.html for versioned pages.
+
+/v0.7.0/sdk/api/:page/ /v0.7.0/sdk/api/:page/index.html 200
+/v0.7.0/sdk/api/:page /v0.7.0/sdk/api/:page/index.html 200
+/v0.7.0/sdk/api/ /v0.7.0/sdk/api/index.html 200
+
+/v0.8.0/sdk/api/:page/ /v0.8.0/sdk/api/:page/index.html 200
+/v0.8.0/sdk/api/:page /v0.8.0/sdk/api/:page/index.html 200
+/v0.8.0/sdk/api/ /v0.8.0/sdk/api/index.html 200

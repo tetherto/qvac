@@ -73,6 +73,7 @@ export interface RuntimeStats {
   tokens_per_second?: number
   batch_size: number
   context_size: number
+  backendDevice: 'cpu' | 'gpu'
 }
 
 export default class GGMLBert extends BaseInference {
