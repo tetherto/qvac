@@ -11,7 +11,7 @@
 #include "nmt_utils.hpp"
 #include "qvac-lib-inference-addon-cpp/Logger.hpp"
 
-namespace qvac_lib_inference_addon_marian {
+namespace qvac_lib_inference_addon_nmt {
 
 std::string TranslationModel::getName() const {
   switch (backendType_) {
@@ -609,4 +609,4 @@ void TranslationModel::updateConfig() {
   }
 }
 
-} // namespace qvac_lib_inference_addon_marian
+} // namespace qvac_lib_inference_addon_nmt

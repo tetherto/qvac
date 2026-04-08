@@ -10,35 +10,13 @@
 #include <gtest/gtest.h>
 #include <llama.h>
 #include <qvac-lib-inference-addon-cpp/Errors.hpp>
-#include <qvac-lib-inference-addon-cpp/RuntimeStats.hpp>
 
 #include "model-interface/LlamaModel.hpp"
 #include "test_common.hpp"
 
 namespace fs = std::filesystem;
 
-namespace {
-double getStatValue(
-    const qvac_lib_inference_addon_cpp::RuntimeStats& stats,
-    const std::string& key) {
-  for (const auto& stat : stats) {
-    if (stat.first == key) {
-      return std::visit(
-          [](const auto& value) -> double {
-            if constexpr (std::is_same_v<
-                              std::decay_t<decltype(value)>,
-                              double>) {
-              return value;
-            } else {
-              return static_cast<double>(value);
-            }
-          },
-          stat.second);
-    }
-  }
-  return 0.0;
-}
-} // namespace
+using test_common::getStatValue;
 
 class LlamaModelTest : public ::testing::Test {
 protected:
@@ -407,6 +385,8 @@ TEST_F(LlamaModelTest, RuntimeStatsAfterProcessing) {
 
     auto stats = model.runtimeStats();
     EXPECT_GE(stats.size(), 0);
+    double backendDevice = getStatValue(stats, "backendDevice");
+    EXPECT_TRUE(backendDevice == 0.0 || backendDevice == 1.0);
   });
 }
 

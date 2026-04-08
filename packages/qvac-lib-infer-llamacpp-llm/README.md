@@ -225,6 +225,8 @@ try {
 }
 ```
 
+When `opts.stats` is enabled, `response.stats` includes runtime metrics such as `TTFT`, `TPS`, token counters, and `backendDevice` (`"cpu"` or `"gpu"`). `backendDevice` reflects the resolved device used at runtime after backend selection/fallback logic, not only the requested config.
+
 ### 8. Release Resources
 
 Unload the model when finished:

@@ -283,7 +283,13 @@ class LlmLlamacpp extends BaseInference {
         this._skipNextRuntimeStats = false
         return
       }
-      return this._outputCallback(addon, 'JobEnded', 'OnlyOneJob', data, null)
+      const runtimeStats = { ...data }
+      if (runtimeStats.backendDevice === 0) {
+        runtimeStats.backendDevice = 'cpu'
+      } else if (runtimeStats.backendDevice === 1) {
+        runtimeStats.backendDevice = 'gpu'
+      }
+      return this._outputCallback(addon, 'JobEnded', 'OnlyOneJob', runtimeStats, null)
     }
     if (
       typeof data === 'object' &&

@@ -2,6 +2,7 @@
 
 #include <any>
 #include <atomic>
+#include <cstdint>
 #include <functional>
 #include <map>
 #include <memory>
@@ -114,6 +115,9 @@ public:
       const std::string& audioFormat = "s16le");
 
 private:
+  void throwIfCancelled() const;
+  static bool isCancellationError(const std::exception& e);
+
   // ── Session loading helpers ─────────────────────────────────────────────
   void loadCTCSessions(Ort::SessionOptions& options);
   void loadEOUSessions(Ort::SessionOptions& options);
@@ -216,6 +220,7 @@ private:
   static constexpr const char* ERR_MODEL_NOT_LOADED = "[Model not loaded]";
   static constexpr const char* ERR_INFERENCE = "[Inference error]";
   static constexpr const char* ERR_NO_SPEAKERS = "[No speakers detected]";
+  static constexpr const char* ERR_JOB_CANCELLED = "Job cancelled";
 
   static bool isSentinel(const std::string& text) {
     return text == ERR_NO_SPEECH || text == ERR_AUDIO_SHORT ||
@@ -295,7 +300,9 @@ private:
   int64_t decoderMs_ = 0;
   int64_t totalMelFrames_ = 0;
   int64_t totalEncodedFrames_ = 0;
-  mutable std::atomic_bool cancelRequested_ = false;
+  mutable std::atomic_uint64_t nextGeneration_ = 1;
+  mutable std::atomic_uint64_t activeGeneration_ = 0;
+  mutable std::atomic_uint64_t cancelGeneration_ = 0;
 };
 
 } // namespace qvac_lib_infer_parakeet

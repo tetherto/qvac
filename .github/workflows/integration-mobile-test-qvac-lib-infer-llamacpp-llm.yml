@@ -30,7 +30,7 @@ env:
   PREBUILD_ARTIFACT_PREFIX: "llama-cpp-" # Prefix for prebuild artifacts (empty string for generic patterns)
   TEST_FRAMEWORK_REF: "main" # Branch/tag of qvac-test-addon-mobile framework
   APP_BUNDLE_ID: "io.tether.test.qvac" # Bundle ID for the test app (same for all addons)
-  ADDON_WORKDIR: "${{ github.workspace }}/addon/packages/qvac-lib-infer-llamacpp-llm"
+  ADDON_WORKDIR: "addon/packages/qvac-lib-infer-llamacpp-llm"
 
 jobs:
   build-and-test:
@@ -58,7 +58,7 @@ jobs:
     steps:
       # Validate input data to prevent "Artifact Poisoning"
       - name: Validate Dispatch Inputs
-        if: github.event_name == 'workflow_dispatch'
+        if: github.event_name == 'workflow_dispatch' && github.event.inputs.package
         run: |
           if [[ ! "${{ github.event.inputs.package }}" =~ ^@qvac/ ]]; then
             echo "::error::Invalid package scope. Only @qvac/* is allowed."
@@ -93,7 +93,7 @@ jobs:
           repository: ${{ inputs.repository || github.repository }}
           ref: ${{ inputs.ref || github.ref }}
           token: ${{ secrets.PAT_TOKEN }}
-          path: ${{ github.workspace }}/addon
+          path: addon
           fetch-depth: 0
 
       - name: Checkout mobile test framework
@@ -102,7 +102,7 @@ jobs:
           repository: tetherto/qvac-test-addon-mobile
           ref: ${{ env.TEST_FRAMEWORK_REF }}
           token: ${{ secrets.PAT_TOKEN }}
-          path: ${{ github.workspace }}/test-framework
+          path: test-framework
           fetch-depth: 0
 
       - name: Setup Node.js
@@ -119,7 +119,7 @@ jobs:
           echo "Configuring scoped registry for @tetherto and @qvac packages..."
 
           # Configure addon registry (monorepo package dir)
-          cd "${{ env.ADDON_WORKDIR }}"
+          cd "${{ github.workspace }}/${{ env.ADDON_WORKDIR }}"
           cat > .npmrc <<NPMRC
           always-auth=true
           registry=https://registry.npmjs.org/
@@ -148,13 +148,11 @@ jobs:
           echo "Installing global dependencies..."
           npm install -g @expo/cli@latest
 
-      - run: mkdir -p ${{ runner.temp }}/qvac-lib-infer-llamacpp-llm
-
       - name: Download Android prebuilds (from artifacts)
         if: matrix.platform == 'Android' && !inputs.package
         uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # 8.0.1
         with:
-          path: ${{ runner.temp }}/qvac-lib-infer-llamacpp-llm
+          path: ${{ env.ADDON_WORKDIR }}/prebuilds
           pattern: ${{ env.PREBUILD_ARTIFACT_PREFIX }}android-*
           merge-multiple: true
         continue-on-error: true
@@ -163,7 +161,7 @@ jobs:
         if: matrix.platform == 'iOS' && !inputs.package
         uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # 8.0.1
         with:
-          path: ${{ runner.temp }}/qvac-lib-infer-llamacpp-llm
+          path: ${{ env.ADDON_WORKDIR }}/prebuilds
           pattern: ${{ env.PREBUILD_ARTIFACT_PREFIX }}ios-*
           merge-multiple: true
         continue-on-error: true
@@ -205,27 +203,18 @@ jobs:
       - name: Verify and prepare prebuilds
         working-directory: ${{ env.ADDON_WORKDIR }}
         run: |
-          if [ -d "${{ runner.temp }}/prebuilds-download" ]; then
-            mkdir -p prebuilds
-            cp -r ${{ runner.temp }}/prebuilds-download/* ./prebuilds/
-          fi
           echo "Checking for prebuilds..."
+          echo "Current directory: $(pwd)"
           if [ -d "prebuilds" ] && [ "$(ls -A prebuilds)" ]; then
             echo "✅ Prebuilds found from artifacts:"
             ls -la prebuilds/
           else
-            echo "⚠️  No prebuilds from artifacts, checking source..."
-            if [ -d "prebuilds" ] && [ "$(ls -A prebuilds)" ]; then
-              echo "✅ Prebuilds found in source:"
-              ls -la prebuilds/
-            else
-              echo "❌ ERROR: No prebuilds found!"
-              echo "   This workflow requires prebuilds to be available."
-              echo "   Either:"
-              echo "   1. Run this workflow after prebuild job completes"
-              echo "   2. Or commit prebuilds to the repository"
-              exit 1
-            fi
+            echo "❌ ERROR: No prebuilds found!"
+            echo "   This workflow requires prebuilds to be available."
+            echo "   Either:"
+            echo "   1. Run this workflow after prebuild job completes"
+            echo "   2. Or commit prebuilds to the repository"
+            exit 1
           fi
 
           # Copy mobile prebuilds if needed
@@ -326,14 +315,14 @@ jobs:
           fi
 
       - name: Setup test framework dependencies
-        working-directory: ${{ github.workspace }}/test-framework
+        working-directory: test-framework
         run: |
           echo "Setting up mobile test framework..."
           npm install --ignore-scripts
           echo "✅ Test framework dependencies installed"
 
       - name: Build test app with addon
-        working-directory: ${{ github.workspace }}/test-framework
+        working-directory: test-framework
         run: |
           echo "Building test app with addon..."
           echo "This will:"
@@ -346,7 +335,7 @@ jobs:
           echo "  7. Bundle the app"
           echo ""
 
-          ADDON_PATH="${{ env.ADDON_WORKDIR }}"
+          ADDON_PATH="${{ github.workspace }}/${{ env.ADDON_WORKDIR }}"
           npm run build "$ADDON_PATH" "$ADDON_PATH/test/mobile"
 
           echo ""
@@ -382,7 +371,7 @@ jobs:
 
       - name: Display build summary
         if: always()
-        working-directory: ${{ github.workspace }}/test-framework
+        working-directory: test-framework
         run: |
           echo ""
           echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
@@ -427,7 +416,7 @@ jobs:
 
       - name: Generate Android project
         if: matrix.platform == 'Android'
-        working-directory: ${{ github.workspace }}/test-framework
+        working-directory: test-framework
         run: |
           echo "Generating Android project with Expo..."
           npx expo prebuild --platform android --clean
@@ -435,7 +424,7 @@ jobs:
       - name: Build Android APK
         if: matrix.platform == 'Android'
         id: build_apk
-        working-directory: ${{ github.workspace }}/test-framework
+        working-directory: test-framework
         run: |
           echo "Building Android APK for Device Farm..."
           export JAVA_HOME=$JAVA_HOME_17_X64
@@ -633,14 +622,14 @@ jobs:
 
       - name: Generate iOS project
         if: matrix.platform == 'iOS'
-        working-directory: ${{ github.workspace }}/test-framework
+        working-directory: test-framework
         run: |
           echo "Generating iOS project with Expo..."
           npx expo prebuild --platform ios --clean
 
       - name: Install iOS dependencies
         if: matrix.platform == 'iOS'
-        working-directory: ${{ github.workspace }}/test-framework/ios
+        working-directory: test-framework/ios
         run: |
           echo "Installing CocoaPods dependencies..."
           pod install --repo-update
@@ -648,7 +637,7 @@ jobs:
       - name: Build and Archive iOS App
         if: matrix.platform == 'iOS'
         id: build_ios
-        working-directory: ${{ github.workspace }}/test-framework
+        working-directory: test-framework
         run: |
           echo "Building iOS app for Device Farm..."
 
@@ -699,7 +688,7 @@ jobs:
       - name: Export IPA
         if: matrix.platform == 'iOS'
         id: export_ipa
-        working-directory: ${{ github.workspace }}/test-framework/ios
+        working-directory: test-framework/ios
         run: |
           SCHEME_NAME=$(xcodebuild -list | grep -A 1 "Schemes:" | grep -v "Schemes:" | head -1 | xargs)
 
@@ -816,7 +805,7 @@ jobs:
           done
 
       - name: Verify test package generation
-        working-directory: ${{ github.workspace }}/test-framework/e2e
+        working-directory: test-framework/e2e
         run: |
           echo "Verifying e2e test package..."
 
@@ -840,7 +829,7 @@ jobs:
 
       - name: Package and Upload Test Package
         id: upload_test_package
-        working-directory: ${{ github.workspace }}/test-framework
+        working-directory: test-framework
         run: |
           echo "📦 Packaging e2e tests..."
           cd e2e

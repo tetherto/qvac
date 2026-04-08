@@ -11,8 +11,34 @@
 
 #include "model-interface/ModelMetadata.hpp"
 #include "qvac-lib-inference-addon-cpp/GGUFShards.hpp"
+#include "qvac-lib-inference-addon-cpp/RuntimeStats.hpp"
 
 namespace test_common {
+
+inline double getStatValue(
+    const qvac_lib_inference_addon_cpp::RuntimeStats& stats,
+    const std::string& key) {
+  for (const auto& stat : stats) {
+    if (stat.first == key) {
+      return std::visit(
+          [](const auto& value) -> double {
+            if constexpr (std::is_same_v<
+                              std::decay_t<decltype(value)>,
+                              double>) {
+              return value;
+            } else if constexpr (std::is_same_v<
+                                     std::decay_t<decltype(value)>,
+                                     int64_t>) {
+              return static_cast<double>(value);
+            } else {
+              return 0.0;
+            }
+          },
+          stat.second);
+    }
+  }
+  return 0.0;
+}
 
 /**
  * Get the appropriate device string for the current platform.
