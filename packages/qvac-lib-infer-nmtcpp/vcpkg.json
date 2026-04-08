@@ -3,7 +3,7 @@
     "bergamot-translator",
     {
       "name": "qvac-lib-inference-addon-cpp",
-      "version>=": "1.1.2"
+      "version>=": "1.1.5"
     },
     {
       "name": "qvac-lint-cpp",
