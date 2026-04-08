@@ -86,6 +86,8 @@ endif()
   )
   target_include_directories(
     ${qvac-lib-inference-addon-llama}
+    BEFORE PRIVATE
+      ${PROJECT_SOURCE_DIR}/addon/src/patches
     PRIVATE
       ${PICOJSON_INCLUDE_DIRS}
       ${QVAC_LIB_INFERENCE_ADDON_CPP_INCLUDE_DIRS}

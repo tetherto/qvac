@@ -73,6 +73,8 @@ target_sources(
 )
 target_include_directories(
   ${qvac-lib-infer-llamacpp-embed}
+  BEFORE PRIVATE
+    ${PROJECT_SOURCE_DIR}/addon/src/patches
   PRIVATE
     ${QVAC_LIB_INFERENCE_ADDON_CPP_INCLUDE_DIRS}
     ${PROJECT_SOURCE_DIR}/addon/src
