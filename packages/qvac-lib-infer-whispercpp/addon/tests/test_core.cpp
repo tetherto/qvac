@@ -16,8 +16,7 @@ using namespace qvac_lib_inference_addon_whisper;
 
 // Helper function used across multiple test classes
 std::string getValidModelPath() {
-  // Models are always available in examples/models/
-  return "../../../examples/models/ggml-tiny.bin";
+  return "../../../models/ggml-tiny.bin";
 }
 
 bool hasValidModelPath() {

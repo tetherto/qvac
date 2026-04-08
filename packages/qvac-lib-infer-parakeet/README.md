@@ -154,20 +154,13 @@ bare examples/quickstart-diarized.js
 
 ### Downloading Models
 
-Download the TDT model from S3 using the provided script:
+Download models from HuggingFace using the provided script:
 
 ```bash
-# Download INT8 full model (default, recommended - ~650 MB)
-./scripts/download-models-s3.sh \
-  --access-key YOUR_AWS_ACCESS_KEY_ID \
-  --secret-key YOUR_AWS_SECRET_ACCESS_KEY
-
-# Or download FP32 full precision model (~2.4 GB)
-./scripts/download-models-s3.sh \
-  --access-key YOUR_AWS_ACCESS_KEY_ID \
-  --secret-key YOUR_AWS_SECRET_ACCESS_KEY \
-  --model fp32
+./scripts/download-models.sh
 ```
+
+The interactive script lets you choose which model variant to download (TDT, CTC, EOU, Sortformer, or all).
 
 **Model Variants:**
 | Variant | Size | Path | Notes |
@@ -310,7 +303,7 @@ The output callback receives these events:
   - **INT8 full (recommended):** ~650 MB - Conv+MatMul quantized, 73% smaller
   - **INT8 partial:** ~890 MB - MatMul-only quantized, 63% smaller
   - **FP32:** ~2.4 GB - Full precision weights
-- **Download:** Use `./scripts/download-models-s3.sh` or [Hugging Face](https://huggingface.co/istupakov/parakeet-tdt-0.6b-v3-onnx)
+- **Download:** Use `./scripts/download-models.sh` or [Hugging Face](https://huggingface.co/istupakov/parakeet-tdt-0.6b-v3-onnx)
 
 ### EOU Model
 - **Use case:** Real-time streaming with end-of-utterance detection
