@@ -41,7 +41,13 @@ runs:
       shell: bash
       env:
         INPUT_WORKDIR: ${{ inputs.workdir }}
-      run: echo "cache_dir=${INPUT_WORKDIR}/vcpkg/cache" >> "$GITHUB_OUTPUT"
+      run: |
+        sanitized=$(printf '%s' "$INPUT_WORKDIR" | tr -cd 'a-zA-Z0-9/_.-')
+        if [[ "$sanitized" != "$INPUT_WORKDIR" ]]; then
+          echo "::error::workdir contains invalid characters: ${INPUT_WORKDIR}"
+          exit 1
+        fi
+        echo "cache_dir=${sanitized}/vcpkg/cache" >> "$GITHUB_OUTPUT"
 
     - name: Create cache directory
       shell: bash
@@ -54,7 +60,7 @@ runs:
       shell: bash
       env:
         CACHE_DIR: ${{ steps.vars.outputs.cache_dir }}
-      run: echo "VCPKG_BINARY_SOURCES=clear;files,${{ github.workspace }}/${CACHE_DIR},readwrite" >> "$GITHUB_ENV"
+      run: echo "VCPKG_BINARY_SOURCES=clear;files,${GITHUB_WORKSPACE}/${CACHE_DIR},readwrite" >> "$GITHUB_ENV"
 
     - name: Validate S3 cache settings
       if: ${{ inputs.backend == 's3' }}
@@ -73,6 +79,14 @@ runs:
         INPUT_PLATFORM: ${{ inputs.platform }}
         INPUT_ARCH: ${{ inputs.arch }}
       run: |
+        for var in S3_PATH INPUT_PLATFORM INPUT_ARCH; do
+          val="${!var}"
+          clean=$(printf '%s' "$val" | tr -cd 'a-zA-Z0-9/_.-')
+          if [[ "$clean" != "$val" ]]; then
+            echo "::error::${var} contains invalid characters"
+            exit 1
+          fi
+        done
         PREFIX="${S3_PATH}"
         if [ -z "${PREFIX}" ]; then
           PREFIX="vcpkg-cache"
