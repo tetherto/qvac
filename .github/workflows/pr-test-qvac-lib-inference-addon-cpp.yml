@@ -74,7 +74,7 @@ jobs:
           token: ${{ secrets.PAT_TOKEN }}
 
       - name: yamlfmt
-        uses: tetherto/qvac-devops/.github/actions/yamlfmt@v1.1.8
+        uses: tetherto/oss-actions/.github/actions/yamlfmt@v1.1.0
         with:
           workdir: ${{ env.PKG_DIR }}
         

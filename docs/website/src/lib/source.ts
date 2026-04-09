@@ -22,6 +22,14 @@ export const source = loader({
  * @see https://www.fumadocs.dev/docs/integrations/og/next
  */
 export function getPageImage(page: InferPageType<typeof source>) {
+  const isHomePage = page.slugs.length === 0;
+  if (isHomePage) {
+    return {
+      segments: ['home-og.jpg'],
+      url: '/home-og.jpg',
+    };
+  }
+
   const segments = [...page.slugs, 'image.png'];
   return {
     segments,

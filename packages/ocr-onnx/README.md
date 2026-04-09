@@ -109,14 +109,14 @@ This command will:
 
 ### Verifying the Build
 
-After building, verify everything works by running the Hyperdrive example:
+After building, verify everything works by running the registry example:
 
 ```bash
-bare examples/example.hd.js
+bare examples/example.registry.js
 ```
 
 This example will:
-- Download the detector and recognizer models from Hyperdrive (cached locally in `models/hd/`)
+- Download the detector and recognizer models from the registry (cached locally)
 - Load the OCR model
 - Run text recognition on a test image
 - Display the detected text with confidence scores
@@ -127,7 +127,7 @@ The `examples/` folder contains several examples to help you get started:
 
 | Example | Description |
 |---------|-------------|
-| `example.hd.js` | Downloads models from Hyperdrive and runs OCR |
+| `example.registry.js` | Downloads models from registry and runs OCR |
 | `example.fs.js` | Basic OCR using local model files |
 | `exampleGPU.fs.js` | OCR with GPU acceleration enabled |
 | `example.logger.js` | OCR with custom logging |

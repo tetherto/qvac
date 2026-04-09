@@ -85,17 +85,31 @@ function findModelFiles (modelDir) {
 }
 
 /**
- * Creates a local filesystem loader for a Bergamot model directory.
- *
- * @param {string} modelDir - path to directory with model files
- * @returns {Object} loader compatible with TranslationNmtcpp
+ * Creates pivot translation constructor args from model directories.
  */
-function createLocalLoader (modelDir) {
+function createPivotArgs (primaryDir, primaryFiles, pivotDir, pivotFiles, opts = {}) {
   return {
-    ready: async () => {},
-    close: async () => {},
-    download: async (filename) => fs.readFileSync(path.join(modelDir, filename)),
-    getFileSize: async (filename) => fs.statSync(path.join(modelDir, filename)).size
+    files: {
+      model: path.join(primaryDir, primaryFiles.modelFile),
+      srcVocab: path.join(primaryDir, primaryFiles.vocabFile),
+      dstVocab: path.join(primaryDir, primaryFiles.vocabFile),
+      pivotModel: path.join(pivotDir, pivotFiles.modelFile),
+      pivotSrcVocab: path.join(pivotDir, pivotFiles.vocabFile),
+      pivotDstVocab: path.join(pivotDir, pivotFiles.vocabFile)
+    },
+    params: opts.params || { srcLang: 'es', dstLang: 'it' },
+    config: {
+      modelType: TranslationNmtcpp.ModelTypes.Bergamot,
+      beamsize: 1,
+      ...(opts.normalize !== undefined && { normalize: opts.normalize }),
+      ...(opts.use_gpu !== undefined && { use_gpu: opts.use_gpu }),
+      pivotConfig: {
+        beamsize: 1,
+        ...(opts.pivotNormalize !== undefined && { normalize: opts.pivotNormalize })
+      }
+    },
+    logger: opts.logger || createLogger(),
+    opts: { stats: true }
   }
 }
 
@@ -131,32 +145,12 @@ for (const deviceConfig of DEVICE_CONFIGS) {
     let model
 
     try {
-      model = new TranslationNmtcpp({
-        loader: createLocalLoader(esEnDir),
-        params: { srcLang: 'es', dstLang: 'it' },
-        diskPath: esEnDir,
-        modelName: esEn.modelFile,
+      model = new TranslationNmtcpp(createPivotArgs(esEnDir, esEn, enItDir, enIt, {
         logger,
-        opts: { stats: true }
-      }, {
-        modelType: TranslationNmtcpp.ModelTypes.Bergamot,
-        srcVocabPath: path.join(esEnDir, esEn.vocabFile),
-        dstVocabPath: path.join(esEnDir, esEn.vocabFile),
-        beamsize: 1,
         normalize: 1,
         use_gpu: deviceConfig.useGpu,
-        bergamotPivotModel: {
-          loader: createLocalLoader(enItDir),
-          modelName: enIt.modelFile,
-          diskPath: enItDir,
-          config: {
-            srcVocabPath: path.join(enItDir, enIt.vocabFile),
-            dstVocabPath: path.join(enItDir, enIt.vocabFile),
-            beamsize: 1,
-            normalize: 1
-          }
-        }
-      })
+        pivotNormalize: 1
+      }))
 
       await model.load()
       t.pass(`${label} Pivot model loaded (es→en→it)`)
@@ -200,28 +194,7 @@ test('Pivot translation - stats object is populated (no hang)', { timeout: PIVOT
 
   let model
   try {
-    model = new TranslationNmtcpp({
-      loader: createLocalLoader(esEnDir),
-      params: { srcLang: 'es', dstLang: 'it' },
-      diskPath: esEnDir,
-      modelName: esEn.modelFile,
-      logger: createLogger(),
-      opts: { stats: true }
-    }, {
-      modelType: TranslationNmtcpp.ModelTypes.Bergamot,
-      srcVocabPath: path.join(esEnDir, esEn.vocabFile),
-      dstVocabPath: path.join(esEnDir, esEn.vocabFile),
-      beamsize: 1,
-      bergamotPivotModel: {
-        loader: createLocalLoader(enItDir),
-        modelName: enIt.modelFile,
-        diskPath: enItDir,
-        config: {
-          srcVocabPath: path.join(enItDir, enIt.vocabFile),
-          dstVocabPath: path.join(enItDir, enIt.vocabFile)
-        }
-      }
-    })
+    model = new TranslationNmtcpp(createPivotArgs(esEnDir, esEn, enItDir, enIt))
 
     await model.load()
 
@@ -256,28 +229,7 @@ test('Pivot translation - batch translation via runBatch()', { timeout: PIVOT_TI
 
   let model
   try {
-    model = new TranslationNmtcpp({
-      loader: createLocalLoader(esEnDir),
-      params: { srcLang: 'es', dstLang: 'it' },
-      diskPath: esEnDir,
-      modelName: esEn.modelFile,
-      logger: createLogger(),
-      opts: { stats: true }
-    }, {
-      modelType: TranslationNmtcpp.ModelTypes.Bergamot,
-      srcVocabPath: path.join(esEnDir, esEn.vocabFile),
-      dstVocabPath: path.join(esEnDir, esEn.vocabFile),
-      beamsize: 1,
-      bergamotPivotModel: {
-        loader: createLocalLoader(enItDir),
-        modelName: enIt.modelFile,
-        diskPath: enItDir,
-        config: {
-          srcVocabPath: path.join(enItDir, enIt.vocabFile),
-          dstVocabPath: path.join(enItDir, enIt.vocabFile)
-        }
-      }
-    })
+    model = new TranslationNmtcpp(createPivotArgs(esEnDir, esEn, enItDir, enIt))
 
     await model.load()
 
@@ -319,28 +271,7 @@ test('Pivot translation - cancel does not crash', { timeout: PIVOT_TIMEOUT }, as
 
   let model
   try {
-    model = new TranslationNmtcpp({
-      loader: createLocalLoader(esEnDir),
-      params: { srcLang: 'es', dstLang: 'it' },
-      diskPath: esEnDir,
-      modelName: esEn.modelFile,
-      logger: createLogger(),
-      opts: { stats: true }
-    }, {
-      modelType: TranslationNmtcpp.ModelTypes.Bergamot,
-      srcVocabPath: path.join(esEnDir, esEn.vocabFile),
-      dstVocabPath: path.join(esEnDir, esEn.vocabFile),
-      beamsize: 1,
-      bergamotPivotModel: {
-        loader: createLocalLoader(enItDir),
-        modelName: enIt.modelFile,
-        diskPath: enItDir,
-        config: {
-          srcVocabPath: path.join(enItDir, enIt.vocabFile),
-          dstVocabPath: path.join(enItDir, enIt.vocabFile)
-        }
-      }
-    })
+    model = new TranslationNmtcpp(createPivotArgs(esEnDir, esEn, enItDir, enIt))
 
     await model.load()
 
@@ -378,28 +309,7 @@ test('Pivot translation - multiple sequential runs', { timeout: PIVOT_TIMEOUT },
 
   let model
   try {
-    model = new TranslationNmtcpp({
-      loader: createLocalLoader(esEnDir),
-      params: { srcLang: 'es', dstLang: 'it' },
-      diskPath: esEnDir,
-      modelName: esEn.modelFile,
-      logger: createLogger(),
-      opts: { stats: true }
-    }, {
-      modelType: TranslationNmtcpp.ModelTypes.Bergamot,
-      srcVocabPath: path.join(esEnDir, esEn.vocabFile),
-      dstVocabPath: path.join(esEnDir, esEn.vocabFile),
-      beamsize: 1,
-      bergamotPivotModel: {
-        loader: createLocalLoader(enItDir),
-        modelName: enIt.modelFile,
-        diskPath: enItDir,
-        config: {
-          srcVocabPath: path.join(enItDir, enIt.vocabFile),
-          dstVocabPath: path.join(enItDir, enIt.vocabFile)
-        }
-      }
-    })
+    model = new TranslationNmtcpp(createPivotArgs(esEnDir, esEn, enItDir, enIt))
 
     await model.load()
 
@@ -426,184 +336,6 @@ test('Pivot translation - multiple sequential runs', { timeout: PIVOT_TIMEOUT },
 })
 
 // ---------------------------------------------------------------------------
-// Test: Pivot diskPath falls back to primary diskPath
-// ---------------------------------------------------------------------------
-
-test('Pivot translation - pivot diskPath defaults to primary', { timeout: PIVOT_TIMEOUT }, async function (t) {
-  const enItDir = await ensureModelPair('en', 'it')
-  const enIt = findModelFiles(enItDir)
-
-  const model = new TranslationNmtcpp({
-    loader: createLocalLoader(enItDir),
-    params: { srcLang: 'en', dstLang: 'it' },
-    diskPath: enItDir,
-    modelName: enIt.modelFile,
-    logger: createLogger()
-  }, {
-    modelType: TranslationNmtcpp.ModelTypes.Bergamot,
-    srcVocabPath: path.join(enItDir, enIt.vocabFile),
-    dstVocabPath: path.join(enItDir, enIt.vocabFile),
-    bergamotPivotModel: {
-      loader: createLocalLoader(enItDir),
-      modelName: enIt.modelFile,
-      config: {
-        srcVocabPath: path.join(enItDir, enIt.vocabFile),
-        dstVocabPath: path.join(enItDir, enIt.vocabFile)
-      }
-    }
-  })
-
-  t.ok(model._bergamotPivotModel, 'pivot model config should be set')
-  t.is(model._bergamotPivotModel.diskPath, enItDir, 'pivot diskPath should fall back to primary diskPath')
-  t.pass('Pivot diskPath fallback works')
-})
-
-// ---------------------------------------------------------------------------
-// Test: bergamotPivotModel ignored for non-Bergamot model types
-// ---------------------------------------------------------------------------
-
-test('Pivot config ignored for non-Bergamot model types', { timeout: 30_000 }, async function (t) {
-  const enItDir = await ensureModelPair('en', 'it')
-  const enIt = findModelFiles(enItDir)
-
-  const model = new TranslationNmtcpp({
-    loader: createLocalLoader(enItDir),
-    params: { srcLang: 'en', dstLang: 'it' },
-    diskPath: enItDir,
-    modelName: enIt.modelFile,
-    logger: createLogger()
-  }, {
-    modelType: TranslationNmtcpp.ModelTypes.Opus,
-    bergamotPivotModel: {
-      loader: createLocalLoader(enItDir),
-      modelName: enIt.modelFile,
-      config: {
-        srcVocabPath: path.join(enItDir, enIt.vocabFile),
-        dstVocabPath: path.join(enItDir, enIt.vocabFile)
-      }
-    }
-  })
-
-  t.is(model._bergamotPivotModel, null, 'pivot model should be null for Opus model type')
-
-  const modelIndicTrans = new TranslationNmtcpp({
-    loader: createLocalLoader(enItDir),
-    params: { srcLang: 'en', dstLang: 'it' },
-    diskPath: enItDir,
-    modelName: enIt.modelFile,
-    logger: createLogger()
-  }, {
-    modelType: TranslationNmtcpp.ModelTypes.IndicTrans,
-    bergamotPivotModel: {
-      loader: createLocalLoader(enItDir),
-      modelName: enIt.modelFile,
-      config: {
-        srcVocabPath: path.join(enItDir, enIt.vocabFile),
-        dstVocabPath: path.join(enItDir, enIt.vocabFile)
-      }
-    }
-  })
-
-  t.is(modelIndicTrans._bergamotPivotModel, null, 'pivot model should be null for IndicTrans model type')
-  t.pass('Pivot config correctly ignored for non-Bergamot types')
-})
-
-// ---------------------------------------------------------------------------
-// Test: _getPivotFilesToDownload returns correct files
-// ---------------------------------------------------------------------------
-
-test('_getPivotFilesToDownload - returns model and vocab names', { timeout: 30_000 }, async function (t) {
-  const enItDir = await ensureModelPair('en', 'it')
-  const enIt = findModelFiles(enItDir)
-
-  const model = new TranslationNmtcpp({
-    loader: createLocalLoader(enItDir),
-    params: { srcLang: 'es', dstLang: 'it' },
-    diskPath: enItDir,
-    modelName: enIt.modelFile,
-    logger: createLogger()
-  }, {
-    modelType: TranslationNmtcpp.ModelTypes.Bergamot,
-    srcVocabPath: path.join(enItDir, enIt.vocabFile),
-    dstVocabPath: path.join(enItDir, enIt.vocabFile),
-    bergamotPivotModel: {
-      loader: createLocalLoader(enItDir),
-      modelName: 'pivot-model.bin',
-      diskPath: '/tmp/pivot',
-      config: {
-        srcVocabName: 'pivot-src.spm',
-        dstVocabName: 'pivot-dst.spm'
-      }
-    }
-  })
-
-  const files = model._getPivotFilesToDownload()
-  t.ok(files.includes('pivot-model.bin'), 'should include pivot model file')
-  t.ok(files.includes('pivot-src.spm'), 'should include pivot src vocab')
-  t.ok(files.includes('pivot-dst.spm'), 'should include pivot dst vocab')
-  t.is(files.length, 3, 'should have exactly 3 files')
-  t.pass('Pivot file list is correct')
-})
-
-test('_getPivotFilesToDownload - returns empty when no pivot', { timeout: 30_000 }, async function (t) {
-  const enItDir = await ensureModelPair('en', 'it')
-  const enIt = findModelFiles(enItDir)
-
-  const model = new TranslationNmtcpp({
-    loader: createLocalLoader(enItDir),
-    params: { srcLang: 'en', dstLang: 'it' },
-    diskPath: enItDir,
-    modelName: enIt.modelFile,
-    logger: createLogger()
-  }, {
-    modelType: TranslationNmtcpp.ModelTypes.Bergamot,
-    srcVocabPath: path.join(enItDir, enIt.vocabFile),
-    dstVocabPath: path.join(enItDir, enIt.vocabFile)
-  })
-
-  const files = model._getPivotFilesToDownload()
-  t.is(files.length, 0, 'should return empty array when no pivot configured')
-  t.pass('No pivot files when unconfigured')
-})
-
-// ---------------------------------------------------------------------------
-// Test: Vocab resolution via names (not paths) for pivot model
-// ---------------------------------------------------------------------------
-
-test('_getPivotFilesToDownload - skips vocabs when paths provided', { timeout: 30_000 }, async function (t) {
-  const enItDir = await ensureModelPair('en', 'it')
-  const enIt = findModelFiles(enItDir)
-
-  const model = new TranslationNmtcpp({
-    loader: createLocalLoader(enItDir),
-    params: { srcLang: 'es', dstLang: 'it' },
-    diskPath: enItDir,
-    modelName: enIt.modelFile,
-    logger: createLogger()
-  }, {
-    modelType: TranslationNmtcpp.ModelTypes.Bergamot,
-    srcVocabPath: path.join(enItDir, enIt.vocabFile),
-    dstVocabPath: path.join(enItDir, enIt.vocabFile),
-    bergamotPivotModel: {
-      loader: createLocalLoader(enItDir),
-      modelName: 'pivot-model.bin',
-      diskPath: '/tmp/pivot',
-      config: {
-        srcVocabPath: '/absolute/path/src.spm',
-        dstVocabPath: '/absolute/path/dst.spm',
-        srcVocabName: 'should-be-ignored.spm',
-        dstVocabName: 'should-be-ignored.spm'
-      }
-    }
-  })
-
-  const files = model._getPivotFilesToDownload()
-  t.is(files.length, 1, 'should only include model file when vocab paths are absolute')
-  t.ok(files.includes('pivot-model.bin'), 'should include the model file')
-  t.pass('Vocab names skipped when paths provided')
-})
-
-// ---------------------------------------------------------------------------
 // Test: Empty string input
 // ---------------------------------------------------------------------------
 
@@ -615,28 +347,7 @@ test('Pivot translation - empty string input', { timeout: PIVOT_TIMEOUT }, async
 
   let model
   try {
-    model = new TranslationNmtcpp({
-      loader: createLocalLoader(esEnDir),
-      params: { srcLang: 'es', dstLang: 'it' },
-      diskPath: esEnDir,
-      modelName: esEn.modelFile,
-      logger: createLogger(),
-      opts: { stats: true }
-    }, {
-      modelType: TranslationNmtcpp.ModelTypes.Bergamot,
-      srcVocabPath: path.join(esEnDir, esEn.vocabFile),
-      dstVocabPath: path.join(esEnDir, esEn.vocabFile),
-      beamsize: 1,
-      bergamotPivotModel: {
-        loader: createLocalLoader(enItDir),
-        modelName: enIt.modelFile,
-        diskPath: enItDir,
-        config: {
-          srcVocabPath: path.join(enItDir, enIt.vocabFile),
-          dstVocabPath: path.join(enItDir, enIt.vocabFile)
-        }
-      }
-    })
+    model = new TranslationNmtcpp(createPivotArgs(esEnDir, esEn, enItDir, enIt))
 
     await model.load()
 
@@ -670,28 +381,7 @@ test('Pivot translation - run after unload throws', { timeout: PIVOT_TIMEOUT }, 
 
   let model
   try {
-    model = new TranslationNmtcpp({
-      loader: createLocalLoader(esEnDir),
-      params: { srcLang: 'es', dstLang: 'it' },
-      diskPath: esEnDir,
-      modelName: esEn.modelFile,
-      logger: createLogger(),
-      opts: { stats: true }
-    }, {
-      modelType: TranslationNmtcpp.ModelTypes.Bergamot,
-      srcVocabPath: path.join(esEnDir, esEn.vocabFile),
-      dstVocabPath: path.join(esEnDir, esEn.vocabFile),
-      beamsize: 1,
-      bergamotPivotModel: {
-        loader: createLocalLoader(enItDir),
-        modelName: enIt.modelFile,
-        diskPath: enItDir,
-        config: {
-          srcVocabPath: path.join(enItDir, enIt.vocabFile),
-          dstVocabPath: path.join(enItDir, enIt.vocabFile)
-        }
-      }
-    })
+    model = new TranslationNmtcpp(createPivotArgs(esEnDir, esEn, enItDir, enIt))
 
     await model.load()
     await model.unload()
@@ -723,28 +413,7 @@ test('Pivot translation - load, unload, reload cycle', { timeout: PIVOT_TIMEOUT 
 
   let model
   try {
-    model = new TranslationNmtcpp({
-      loader: createLocalLoader(esEnDir),
-      params: { srcLang: 'es', dstLang: 'it' },
-      diskPath: esEnDir,
-      modelName: esEn.modelFile,
-      logger: createLogger(),
-      opts: { stats: true }
-    }, {
-      modelType: TranslationNmtcpp.ModelTypes.Bergamot,
-      srcVocabPath: path.join(esEnDir, esEn.vocabFile),
-      dstVocabPath: path.join(esEnDir, esEn.vocabFile),
-      beamsize: 1,
-      bergamotPivotModel: {
-        loader: createLocalLoader(enItDir),
-        modelName: enIt.modelFile,
-        diskPath: enItDir,
-        config: {
-          srcVocabPath: path.join(enItDir, enIt.vocabFile),
-          dstVocabPath: path.join(enItDir, enIt.vocabFile)
-        }
-      }
-    })
+    model = new TranslationNmtcpp(createPivotArgs(esEnDir, esEn, enItDir, enIt))
 
     // First load and translate
     await model.load()
@@ -815,32 +484,13 @@ for (const deviceConfig of DEVICE_CONFIGS) {
     let model
 
     try {
-      model = new TranslationNmtcpp({
-        loader: createLocalLoader(frEnDir),
+      model = new TranslationNmtcpp(createPivotArgs(frEnDir, frEn, enEsDir, enEs, {
         params: { srcLang: 'fr', dstLang: 'es' },
-        diskPath: frEnDir,
-        modelName: frEn.modelFile,
         logger,
-        opts: { stats: true }
-      }, {
-        modelType: TranslationNmtcpp.ModelTypes.Bergamot,
-        srcVocabPath: path.join(frEnDir, frEn.vocabFile),
-        dstVocabPath: path.join(frEnDir, frEn.vocabFile),
-        beamsize: 1,
         normalize: 1,
         use_gpu: deviceConfig.useGpu,
-        bergamotPivotModel: {
-          loader: createLocalLoader(enEsDir),
-          modelName: enEs.modelFile,
-          diskPath: enEsDir,
-          config: {
-            srcVocabPath: path.join(enEsDir, enEs.vocabFile),
-            dstVocabPath: path.join(enEsDir, enEs.vocabFile),
-            beamsize: 1,
-            normalize: 1
-          }
-        }
-      })
+        pivotNormalize: 1
+      }))
 
       await model.load()
       t.pass(`${label} Pivot model loaded (fr→en→es)`)
@@ -889,28 +539,7 @@ test('Pivot translation - long multi-paragraph text', { timeout: PIVOT_TIMEOUT }
 
   let model
   try {
-    model = new TranslationNmtcpp({
-      loader: createLocalLoader(esEnDir),
-      params: { srcLang: 'es', dstLang: 'it' },
-      diskPath: esEnDir,
-      modelName: esEn.modelFile,
-      logger: createLogger(),
-      opts: { stats: true }
-    }, {
-      modelType: TranslationNmtcpp.ModelTypes.Bergamot,
-      srcVocabPath: path.join(esEnDir, esEn.vocabFile),
-      dstVocabPath: path.join(esEnDir, esEn.vocabFile),
-      beamsize: 1,
-      bergamotPivotModel: {
-        loader: createLocalLoader(enItDir),
-        modelName: enIt.modelFile,
-        diskPath: enItDir,
-        config: {
-          srcVocabPath: path.join(enItDir, enIt.vocabFile),
-          dstVocabPath: path.join(enItDir, enIt.vocabFile)
-        }
-      }
-    })
+    model = new TranslationNmtcpp(createPivotArgs(esEnDir, esEn, enItDir, enIt))
 
     await model.load()
 
@@ -963,28 +592,7 @@ test('Pivot translation - numbers and special characters preserved', { timeout: 
 
   let model
   try {
-    model = new TranslationNmtcpp({
-      loader: createLocalLoader(esEnDir),
-      params: { srcLang: 'es', dstLang: 'it' },
-      diskPath: esEnDir,
-      modelName: esEn.modelFile,
-      logger: createLogger(),
-      opts: { stats: true }
-    }, {
-      modelType: TranslationNmtcpp.ModelTypes.Bergamot,
-      srcVocabPath: path.join(esEnDir, esEn.vocabFile),
-      dstVocabPath: path.join(esEnDir, esEn.vocabFile),
-      beamsize: 1,
-      bergamotPivotModel: {
-        loader: createLocalLoader(enItDir),
-        modelName: enIt.modelFile,
-        diskPath: enItDir,
-        config: {
-          srcVocabPath: path.join(enItDir, enIt.vocabFile),
-          dstVocabPath: path.join(enItDir, enIt.vocabFile)
-        }
-      }
-    })
+    model = new TranslationNmtcpp(createPivotArgs(esEnDir, esEn, enItDir, enIt))
 
     await model.load()
 
@@ -1028,28 +636,7 @@ test('Pivot translation - batch with single item', { timeout: PIVOT_TIMEOUT }, a
 
   let model
   try {
-    model = new TranslationNmtcpp({
-      loader: createLocalLoader(esEnDir),
-      params: { srcLang: 'es', dstLang: 'it' },
-      diskPath: esEnDir,
-      modelName: esEn.modelFile,
-      logger: createLogger(),
-      opts: { stats: true }
-    }, {
-      modelType: TranslationNmtcpp.ModelTypes.Bergamot,
-      srcVocabPath: path.join(esEnDir, esEn.vocabFile),
-      dstVocabPath: path.join(esEnDir, esEn.vocabFile),
-      beamsize: 1,
-      bergamotPivotModel: {
-        loader: createLocalLoader(enItDir),
-        modelName: enIt.modelFile,
-        diskPath: enItDir,
-        config: {
-          srcVocabPath: path.join(enItDir, enIt.vocabFile),
-          dstVocabPath: path.join(enItDir, enIt.vocabFile)
-        }
-      }
-    })
+    model = new TranslationNmtcpp(createPivotArgs(esEnDir, esEn, enItDir, enIt))
 
     await model.load()
 

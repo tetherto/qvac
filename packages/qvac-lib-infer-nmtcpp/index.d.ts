@@ -1,18 +1,12 @@
-import BaseInference, {
-  ReportProgressCallback
-} from '@qvac/infer-base/WeightsProvider/BaseInference'
 import type { QvacResponse } from '@qvac/infer-base'
-import type QvacLogger from '@qvac/logging'
 
-export interface Loader {
-  ready(): Promise<void>
-  close(): Promise<void>
-  getStream(path: string): Promise<AsyncIterable<Uint8Array>>
-  download(
-      path: string,
-      opts: { diskPath: string; progressReporter?: unknown }
-  ): Promise<{ await(): Promise<void> }>
-  getFileSize?(path: string): Promise<number>
+export interface TranslationNmtcppFiles {
+  model: string
+  srcVocab?: string
+  dstVocab?: string
+  pivotModel?: string
+  pivotSrcVocab?: string
+  pivotDstVocab?: string
 }
 
 export interface TranslationNmtcppParams {
@@ -22,11 +16,11 @@ export interface TranslationNmtcppParams {
 }
 
 export interface TranslationNmtcppArgs {
-  loader: Loader
+  files: TranslationNmtcppFiles
   params: TranslationNmtcppParams
-  diskPath: string
-  modelName: string
-  logger?: QvacLogger
+  config?: TranslationNmtcppConfig
+  logger?: any
+  opts?: { stats?: boolean }
   [key: string]: unknown
 }
 
@@ -35,24 +29,25 @@ export interface TranslationNmtcppModelTypes {
   readonly Bergamot: "Bergamot"
 }
 
-export type BergamotPivotModel = Omit<TranslationNmtcppConfig, 'modelType' | 'bergamotPivotModel'> & { loader: Loader,  modelName: string, diskPath: string }
-
 export interface TranslationNmtcppConfig {
   modelType: TranslationNmtcppModelTypes[keyof TranslationNmtcppModelTypes]
-  srcVocabPath?: string
-  dstVocabPath?: string
-  bergamotPivotModel?: BergamotPivotModel
+  pivotConfig?: Record<string, unknown>
   [key: string]: unknown
 }
 
-export default class TranslationNmtcpp extends BaseInference {
+export interface InferenceClientState {
+  configLoaded: boolean
+  weightsLoaded: boolean
+  destroyed: boolean
+}
+
+export default class TranslationNmtcpp {
   static readonly ModelTypes: TranslationNmtcppModelTypes
-  constructor(args: TranslationNmtcppArgs, config: TranslationNmtcppConfig)
-  load(
-      close?: boolean,
-      reportProgressCallback?: ReportProgressCallback
-  ): Promise<void>
+  constructor(args: TranslationNmtcppArgs)
+  getState(): InferenceClientState
+  load(): Promise<void>
   run(input: string): Promise<QvacResponse<string>>
   runBatch(texts: string[]): Promise<string[]>
-  unload(): Promise<void>;
+  unload(): Promise<void>
+  destroy(): Promise<void>
 }

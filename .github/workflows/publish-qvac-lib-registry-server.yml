@@ -230,7 +230,7 @@ jobs:
           echo "//npm.pkg.github.com/:_authToken=${{ secrets.GITHUB_TOKEN }}" >> ~/.npmrc
 
       - name: Publish to GitHub Package Registry
-        uses: tetherto/qvac-devops/.github/actions/publish-library-to-gpr@v1.1.8
+        uses: tetherto/oss-actions/.github/actions/publish-library-to-gpr@v1.1.0
         with:
           secret-token: ${{ secrets.GITHUB_TOKEN }}
           workdir: ${{ env.PKG_DIR }}/shared
@@ -271,7 +271,7 @@ jobs:
 
       - name: Publish to NPM Package Registry
         id: publish
-        uses: tetherto/qvac-devops/.github/actions/publish-library-to-npm-oidc@v1.1.8
+        uses: tetherto/oss-actions/.github/actions/publish-library-to-npm@v1.1.0
         with:
           secret-token: ${{ secrets.NPM_TOKEN }}
           tag: "latest"
@@ -404,7 +404,7 @@ jobs:
           echo "//registry.npmjs.org/:_authToken=${{ secrets.NPM_TOKEN }}" >> ~/.npmrc
 
       - name: Publish to GitHub Package Registry
-        uses: tetherto/qvac-devops/.github/actions/publish-library-to-gpr@v1.1.8
+        uses: tetherto/oss-actions/.github/actions/publish-library-to-gpr@v1.1.0
         with:
           secret-token: ${{ secrets.GITHUB_TOKEN }}
           workdir: ${{ env.PKG_DIR }}/client
@@ -447,7 +447,7 @@ jobs:
 
       - name: Publish to NPM Package Registry
         id: publish
-        uses: tetherto/qvac-devops/.github/actions/publish-library-to-npm-oidc@v1.1.8
+        uses: tetherto/oss-actions/.github/actions/publish-library-to-npm@v1.1.0
         with:
           secret-token: ${{ secrets.NPM_TOKEN }}
           tag: "latest"
