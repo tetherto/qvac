@@ -80,11 +80,27 @@ export interface FindByParams {
   includeDeprecated?: boolean
 }
 
+export interface LifecycleSwarmHandle {
+  readonly suspended: boolean
+  suspend (): Promise<void>
+  resume (): Promise<void>
+}
+
+export interface LifecycleStoreHandle {
+  suspend (): Promise<void>
+  resume (): Promise<void>
+}
+
 export class QVACRegistryClient {
   constructor (opts?: QVACRegistryClientOptions)
 
+  readonly corestore: LifecycleStoreHandle | null
+  readonly hyperswarm: LifecycleSwarmHandle | null
+
   ready (): Promise<void>
   close (): Promise<void>
+  suspend (): Promise<void>
+  resume (): Promise<void>
 
   getModel (path: string, source: string): Promise<QVACModelEntry | null>
   downloadModel (path: string, source: string, options?: QVACDownloadOptions): Promise<QVACDownloadResult>
