@@ -68,7 +68,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Benchmark workflow default translator changed from `qvac` to `qvac_bergamot`
 - CI cpp-tests workflow only downloads IndicTrans model (Opus model downloads removed)
 
-## [0.7.0] - 2026-03-27
+## [0.8.0] - 2026-03-27
 
 ### Breaking Changes
 
@@ -85,6 +85,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - Deprecation guard in constructor for `modelType === 'Opus'`
 - Unit tests for Opus deprecation behavior (`opus-deprecation.test.js`)
+
+## [0.7.1] - 2026-04-08
+
+### Changed
+
+- Migrated Bergamot vcpkg dependencies (bergamot-translator, intgemm, ruy, simd-utils, ssplit) from local overlay ports to the shared qvac-registry-vcpkg registry
+- Removed local marian-dev vcpkg port (unused legacy port)
+- Updated `vcpkg-configuration.json` to reference registry for Bergamot ports
 
 ## [0.6.1] - 2026-03-11
 
