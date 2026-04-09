@@ -668,6 +668,26 @@ export async function downloadModelFromRegistry(
   // Look up model metadata from our generated models.ts
   const modelMetadata = getModelByPath(registryPath);
 
+  // ONNX external data: check if already present in paired ONNX cache directory.
+  // Avoids redundant single-file downloads when the companion .onnx download already placed it.
+  if (filename.endsWith('.onnx_data')) {
+    const onnxRegistryPath = registryPath.slice(0, -'_data'.length);
+    const onnxCacheKey = generateShortHash(onnxRegistryPath);
+    const pairedPath = getOnnxModelPath(onnxCacheKey, filename);
+    const validated = await validateCachedFile(
+      pairedPath,
+      filename,
+      modelMetadata?.expectedSize || 0,
+      modelMetadata?.sha256Checksum,
+      hooks,
+    );
+    if (validated) {
+      logger.info(`✅ ONNX data file found in paired cache: ${validated}`);
+      hooks?.markCacheHit();
+      return validated;
+    }
+  }
+
   if (shardInfo.isSharded) {
     const cacheKey = generateShortHash(registryPath);
     const localShardMeta = modelMetadata?.shardMetadata;

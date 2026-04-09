@@ -45,10 +45,10 @@
   "repository": {
     "type": "git",
     "url": "git+https://github.com/tetherto/qvac.git",
-    "directory": "packages/qvac-lib-dl-hyperdrive"
+    "directory": "packages/dl-hyperdrive"
   },
   "bugs": "https://github.com/tetherto/qvac/issues",
-  "homepage": "https://github.com/tetherto/qvac/tree/main/packages/qvac-lib-dl-hyperdrive#readme",
+  "homepage": "https://github.com/tetherto/qvac/tree/main/packages/dl-hyperdrive#readme",
   "files": [
     "src",
     "index.d.ts",
