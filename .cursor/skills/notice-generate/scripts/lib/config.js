@@ -16,7 +16,7 @@ const REPO_ROOT = path.resolve(__dirname, '..', '..', '..', '..', '..')
 const PACKAGES_DIR = path.join(REPO_ROOT, 'packages')
 
 const MODELS_JSON_PATH = path.join(
-  PACKAGES_DIR, 'qvac-lib-registry-server', 'data', 'models.prod.json'
+  PACKAGES_DIR, 'registry-server', 'data', 'models.prod.json'
 )
 
 // ---------------------------------------------------------------------------
@@ -45,7 +45,7 @@ for (const [engine, pkgDir] of Object.entries(ENGINE_MAP)) {
 // ---------------------------------------------------------------------------
 const FULL_MODEL_LIST_PACKAGES = [
   'sdk',
-  'qvac-lib-registry-server/client'
+  'registry-server/client'
 ]
 
 // ---------------------------------------------------------------------------
@@ -187,7 +187,7 @@ function getPackageList () {
     const pkgJsonPath = path.join(PACKAGES_DIR, dir, 'package.json')
     if (!fs.existsSync(pkgJsonPath) && NO_JS_PACKAGES.has(dir)) continue
 
-    if (dir === 'qvac-lib-registry-server') {
+    if (dir === 'registry-server') {
       for (const sub of ['client', 'shared']) {
         const subDir = `${dir}/${sub}`
         const subPkgPath = path.join(PACKAGES_DIR, subDir, 'package.json')

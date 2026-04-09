@@ -277,6 +277,6 @@ All packages live in this monorepo under `packages/`:
 | `qvac-lib-logging` | `@qvac/logging` | Logging utilities |
 | `qvac-lib-error-base` | `@qvac/error` | Base error types |
 | `qvac-lib-langdetect-text` | `@qvac/langdetect-text` | Language detection |
-| `qvac-lib-registry-server` | `@qvac/registry-server` | Model registry server |
+| `registry-server` | `@qvac/registry-server` | Model registry server |
 
 

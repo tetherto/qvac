@@ -149,7 +149,7 @@ Legend:
 | logging | Logger wrapper that normalizes logging interface across QVAC libraries | Core |
 | cli | Command-line interface for the QVAC ecosystem with tooling for building, bundling, and managing QVAC-powered applications | Tool |
 | diagnostics | Diagnostic report generation library for QVAC | Tool |
-| lib-registry-server | Distributed model registry for downloading AI models for local inference and contributing new models | Tool |
+| registry-server | Distributed model registry for downloading AI models for local inference and contributing new models | Tool |
 | lint-cpp | Configuration files for formatting and linting C++ source files with pre-commit hooks | Tool |
 
 ### Development

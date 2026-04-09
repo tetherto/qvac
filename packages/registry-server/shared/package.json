@@ -6,10 +6,10 @@
   "repository": {
     "type": "git",
     "url": "git+https://github.com/tetherto/qvac.git",
-    "directory": "packages/qvac-lib-registry-server/shared"
+    "directory": "packages/registry-server/shared"
   },
   "bugs": "https://github.com/tetherto/qvac/issues",
-  "homepage": "https://github.com/tetherto/qvac/tree/main/packages/qvac-lib-registry-server/shared#readme",
+  "homepage": "https://github.com/tetherto/qvac/tree/main/packages/registry-server/shared#readme",
   "type": "commonjs",
   "main": "index.js",
   "files": [
