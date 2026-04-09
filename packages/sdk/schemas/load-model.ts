@@ -50,6 +50,7 @@ const loadModelCommonFields = {
 const loadModelRequestCommonFields = {
   ...loadModelCommonFields,
   onProgress: z.unknown().optional(),
+  logger: z.unknown().optional(),
   withProgress: z.boolean().optional(),
 };
 

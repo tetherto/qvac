@@ -40,6 +40,7 @@ export interface ErrorEntry {
 export interface GenerateOptions {
   updateLatest: boolean;
   devMode?: boolean;
+  forceExtract?: boolean;
 }
 
 export interface ApiData {

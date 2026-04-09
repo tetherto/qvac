@@ -5,6 +5,15 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.8.1]
+
+### Added
+- Registered ONNX Runtime execution providers for GPU acceleration when `useGPU: true` is set. Both Chatterbox and Supertonic engines now activate platform-specific EPs: CoreML (macOS/iOS), DirectML (Windows), NNAPI (Android). Falls back to CPU automatically if the GPU provider fails.
+
+### Changed
+- Added `useGPU` field to `ChatterboxConfig` and `SupertonicConfig` C++ structs, threaded from the JS config map through to session creation.
+- Chatterbox sessions (`OnnxInferSession`) and Supertonic sessions now use `onnx_addon::buildSessionOptions()` from `@qvac/onnx` instead of manual `Ort::SessionOptions` construction, aligning with the OCR package EP logic.
+
 ## [0.8.0]
 
 This release refactors the JavaScript client around a smaller public surface: one `files` map and explicit engines, no loader or download stubs, and composition-based job handling via **`@qvac/infer-base`** (**`createJobHandler`**, **`exclusiveRunQueue`**, **`getApiDefinition`**) instead of subclassing **`BaseInference`**. Callers should pass **absolute** artifact paths and use **`exclusiveRun: true`** when they need serialized `run()` / `reload()` / `unload()` with the native single-job model.
