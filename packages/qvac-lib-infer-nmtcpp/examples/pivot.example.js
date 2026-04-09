@@ -11,11 +11,11 @@
  * Requires local Bergamot model files for both language pairs.
  *
  * Usage:
- *   bare examples/pivot.example.hd.js
- *   BERGAMOT_ESEN_PATH=./models/es-en BERGAMOT_ENIT_PATH=./models/en-it bare examples/pivot.example.hd.js
+ *   bare examples/pivot.example.js
+ *   BERGAMOT_ESEN_PATH=./models/es-en BERGAMOT_ENIT_PATH=./models/en-it bare examples/pivot.example.js
  *
  * Enable verbose C++ logging:
- *   VERBOSE=1 bare examples/pivot.example.hd.js
+ *   VERBOSE=1 bare examples/pivot.example.js
  */
 
 const TranslationNmtcpp = require('../index')
