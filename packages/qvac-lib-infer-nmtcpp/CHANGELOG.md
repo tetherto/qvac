@@ -5,6 +5,94 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [2.0.0] - 2026-04-08
+
+### Changed
+
+- **Breaking**: Constructor now accepts `{ files, params, config }` instead of `{ loader, diskPath, modelName, params }, config`. Addons receive resolved file paths directly — no loader abstraction.
+- **Breaking**: No longer extends `BaseInference`. `TranslationNmtcpp` is now a standalone class owning its own lifecycle, logger, and run serialization via `exclusiveRunQueue()` from `@qvac/infer-base`.
+- Replaced internal `_jobToResponse` Map boilerplate with `createJobHandler()` from `@qvac/infer-base@0.4.0`
+- Switched `QvacResponse` import from `@qvac/response` to `@qvac/infer-base`
+- Removed `pauseHandler`/`continueHandler` from response construction (deprecated in single-job model)
+- Added `@qvac/logging` as direct dependency (previously transitive via BaseInference)
+
+### Removed
+
+- `BaseInference` inheritance — addon owns its own `load()`, `run()`, `unload()`, `destroy()`, `getState()`
+- `WeightsProvider` dependency — addon no longer downloads weights; SDK resolves all file paths before creating the addon
+- `@qvac/dl-hyperdrive` and `bare-path` dependencies
+- `_downloadWeights()`, `_downloadPivotWeights()`, `_getFilesToDownload()`, `_getPivotFilesToDownload()`, `_getVocabularyPaths()` methods
+- `loader`, `diskPath`, `modelName` constructor parameters
+- Bergamot pivot model `bergamotPivotModel.loader` / `bergamotPivotModel.weightsProvider` — pivot file paths now passed via `files.pivotModel`, `files.pivotSrcVocab`, `files.pivotDstVocab`
+
+### Updated
+
+- Examples updated for new constructor — use local file paths or `bergamot-model-fetcher` for auto-download
+- Removed `example.hd.js` and `pause.example.js` (redundant — `quickstart.js` covers basic translation, NMT has no pause support)
+- Removed HyperdriveDL from all examples — `indictrans.js` and `pivot.example.js` now accept local paths via env vars
+- SDK NMT plugin passes resolved file paths via `files` shape instead of creating `FilesystemDL` loader
+
+## [1.0.1] - 2026-04-08
+
+### Changed
+
+- Bumped `qvac-lib-inference-addon-cpp` vcpkg dependency to >=1.1.5
+- Removed legacy model download script (`scripts/download_model_from_s3.sh`)
+- Cleaned up documentation and comments
+
+## [1.0.0] - 2026-03-31
+
+### Breaking Changes
+
+- **Removed Opus/Marian GGML model support** — Loading a GGML model file with `model_type` 0 (`MODEL_MARIAN`) or 2 (`MODEL_MARIAN_V2`) now throws a clear runtime error: `"Opus/Marian models are no longer supported. Only IndicTrans (model_type=1) is supported."` Only `MODEL_INDICTRANS` (type 1) is supported for GGML inference. The Bergamot backend is unaffected.
+
+### Removed
+
+- `MODEL_MARIAN` and `MODEL_MARIAN_V2` enum values and all associated C++ code paths from the GGML backend (encoder, decoder, loader, tokenization, beam search)
+- `modelIsMarian()` utility function and all call sites
+- Marian-specific: `bad_word_ids` loading, learned positional embeddings, `final_logits_bias`, SiLU FFN branches, V2 header parsing, `marian_tokenize()` function
+- `convert_opus_to_ggml.py` conversion script
+- Marian C++ unit tests (`nmt_model_wrapper_test_marian.cpp`)
+- Opus benchmark results, released-models list, and model-conversion-test CI workflow
+- `qvac` (GGML/Opus) translator option and `is_quantized_model` input from benchmark workflow
+
+### Fixed
+
+- Restored `TEST_P` parameterized test definitions for `NmtCppModelWrapperTest` (were lost when Marian test file was deleted)
+- Pinned `bare-process` to `>=4.2.2 <4.4.0` to work around upstream stdin regression in v4.4.0
+
+### Changed
+
+- Renamed internal `marian_ctx` variable to `nmt_ctx` in loader
+- Benchmark workflow default translator changed from `qvac` to `qvac_bergamot`
+- CI cpp-tests workflow only downloads IndicTrans model (Opus model downloads removed)
+
+## [0.8.0] - 2026-03-27
+
+### Breaking Changes
+
+- **Deprecated `ModelTypes.Opus`** — Removed `Opus` from `TranslationNmtcpp.ModelTypes`. Passing `modelType: 'Opus'` to the constructor now throws a deprecation error recommending `ModelTypes.Bergamot` instead.
+
+### Removed
+
+- `Opus` property from `static ModelTypes` object
+- `readonly Opus: "Opus"` from TypeScript declarations
+- Opus GGML integration test (`ggml-opus.test.js`)
+- `runGgmlOpus` function from mobile test runner
+
+### Added
+
+- Deprecation guard in constructor for `modelType === 'Opus'`
+- Unit tests for Opus deprecation behavior (`opus-deprecation.test.js`)
+
+## [0.7.1] - 2026-04-08
+
+### Changed
+
+- Migrated Bergamot vcpkg dependencies (bergamot-translator, intgemm, ruy, simd-utils, ssplit) from local overlay ports to the shared qvac-registry-vcpkg registry
+- Removed local marian-dev vcpkg port (unused legacy port)
+- Updated `vcpkg-configuration.json` to reference registry for Bergamot ports
+
 ## [0.6.1] - 2026-03-11
 
 This release fixes a critical issue where pivot translation would hang indefinitely after completing the translation. The fix ensures proper job completion signaling for pivot translation workflows in Bergamot models.

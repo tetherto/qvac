@@ -2,6 +2,7 @@ cmake_minimum_required(VERSION 3.25)
 
 option(BUILD_TESTING "Build unit tests" OFF)
 option(ENABLE_COVERAGE "Enable coverage" OFF)
+option(MOBILE_DYNAMIC_LINK "Use dynamic linking for ONNX Runtime on mobile" ON)
 
 # Force Apple Clang instead of Homebrew LLVM
 if(APPLE)
@@ -122,14 +123,12 @@ set(CMAKE_CXX_STANDARD 20)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 set(CMAKE_CXX_EXTENSIONS OFF)
 set(CMAKE_POSITION_INDEPENDENT_CODE ON)
-set(CMAKE_INCLUDE_DIRECTORIES_BEFORE ON)
-set(CMAKE_CXX_FLAGS "-I${CMAKE_BINARY_DIR}/_deps/flatbuffers-src/include ${CMAKE_CXX_FLAGS}")
-
 if(WIN32)
   add_definitions( -DWIN32_LEAN_AND_MEAN -DNOMINMAX -DNOGDI )
 endif()
 
-find_package(onnxruntime CONFIG REQUIRED)
+set(qvac-onnx_DIR "${CMAKE_CURRENT_SOURCE_DIR}/node_modules/@qvac/onnx/prebuilds/share/qvac-onnx/cmake")
+find_package(qvac-onnx CONFIG REQUIRED)
 find_package(nlohmann_json CONFIG REQUIRED)
 find_package(unofficial-utf8proc CONFIG REQUIRED)
 if(TARGET utf8proc::utf8proc)
@@ -139,8 +138,6 @@ elseif(TARGET utf8proc)
 else()
   message(FATAL_ERROR "utf8proc CMake target missing (expected from unofficial-utf8proc)")
 endif()
-
-include_directories(BEFORE ${CMAKE_BINARY_DIR}/_deps/flatbuffers-src/include)
 
 add_bare_module(qvac-lib-inference-tts EXPORTS)
 
@@ -154,6 +151,7 @@ target_sources(
     ${PROJECT_SOURCE_DIR}/addon/src/js-interface/binding.cpp
     ${PROJECT_SOURCE_DIR}/addon/src/model-interface/TTSModel.cpp
     ${PROJECT_SOURCE_DIR}/addon/src/model-interface/ChatterboxEngine.cpp
+    ${PROJECT_SOURCE_DIR}/addon/src/model-interface/ChatterboxTextPreprocessor.cpp
     ${PROJECT_SOURCE_DIR}/addon/src/model-interface/OnnxInferSession.cpp
     ${PROJECT_SOURCE_DIR}/addon/src/model-interface/SupertonicEngine.cpp
     ${PROJECT_SOURCE_DIR}/addon/src/model-interface/Fp16Utils.cpp
@@ -202,52 +200,39 @@ if(ANDROID)
   endif()
 endif()
 
-target_link_libraries(
-  ${qvac-lib-inference-tts}
-  PRIVATE
-    onnxruntime::onnxruntime
-    tokenizers::tokenizers_cpp
-    nlohmann_json::nlohmann_json
-    ${QVAC_UTF8PROC_TARGET}
-)
-
-option(BUILD_CLI "Build CLI tool example" FALSE)
-if(BUILD_CLI)
-  add_executable(
-    qvac_tts_cli
-    ${PROJECT_SOURCE_DIR}/addon/src/cli/qvac_tts_cli.cpp
-    ${PROJECT_SOURCE_DIR}/addon/src/model-interface/TTSModel.cpp
-    ${PROJECT_SOURCE_DIR}/addon/src/model-interface/ChatterboxEngine.cpp
-    ${PROJECT_SOURCE_DIR}/addon/src/model-interface/OnnxInferSession.cpp
-    ${PROJECT_SOURCE_DIR}/addon/src/model-interface/SupertonicEngine.cpp
-  )
-
-  target_include_directories(
-    qvac_tts_cli
-    PRIVATE
-      ${PROJECT_SOURCE_DIR}/addon
-      ${QVAC_LIB_INFERENCE_ADDON_CPP_INCLUDE_DIRS}
-  )
-
+if((ANDROID OR (APPLE AND CMAKE_SYSTEM_NAME STREQUAL "iOS")) AND NOT MOBILE_DYNAMIC_LINK)
   target_link_libraries(
-    qvac_tts_cli
+    ${qvac-lib-inference-tts}
     PRIVATE
-      onnxruntime::onnxruntime_static
+      qvac-onnx::qvac-onnx-static
       tokenizers::tokenizers_cpp
       nlohmann_json::nlohmann_json
       ${QVAC_UTF8PROC_TARGET}
   )
+else()
+  include_bare_module("@qvac/onnx" qvac_onnx_target PREBUILD)
 
-  if(WIN32)
-    target_link_libraries(
-      qvac_tts_cli
-      PRIVATE
-        msvcrt.lib
-    )
-  endif()
+  target_link_libraries(
+    ${qvac-lib-inference-tts}
+    PRIVATE
+      qvac-onnx::headers
+      tokenizers::tokenizers_cpp
+      nlohmann_json::nlohmann_json
+      ${QVAC_UTF8PROC_TARGET}
+  )
+  target_link_libraries(
+    ${qvac-lib-inference-tts}_module
+    PRIVATE
+      ${qvac_onnx_target}_module
+  )
+
+  bare_target(host)
+  bare_module_target("." _unused NAME addon_name)
+  install(FILES $<TARGET_FILE:${qvac_onnx_target}_module>
+    DESTINATION ${host}/${addon_name}
+    RENAME qvac__onnx@0.bare)
 endif()
 
-# Ensure runtime libraries resolve relative to the addon location on macOS
 if(APPLE)
   set_target_properties(
     ${qvac-lib-inference-tts}
@@ -256,7 +241,6 @@ if(APPLE)
       INSTALL_RPATH "@loader_path"
       MACOSX_RPATH ON
   )
-  # Also pass explicit rpath to the linker to ensure LC_RPATH is emitted
   target_link_options(
     ${qvac-lib-inference-tts}
     PRIVATE "-Wl,-rpath,@loader_path"

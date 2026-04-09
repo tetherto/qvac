@@ -36,9 +36,11 @@ jobs:
           - os: macos-14
             platform: darwin
             arch: arm64
+            runner: mac-mini-m4-gpu
           - os: ubuntu-24.04
             platform: linux
             arch: x64
+            runner: ai-run-linux-gpu
           - os: windows-11
             platform: windows
             runner: ai-run-windows11-gpu
@@ -64,18 +66,25 @@ jobs:
         name: Install llvm-19 on Linux
         working-directory: ${{ env.WORKDIR }}
         run: |
-          wget https://apt.llvm.org/llvm.sh
-          chmod +x llvm.sh
-          sudo ./llvm.sh 19 all
+          curl -fsSL https://apt.llvm.org/llvm-snapshot.gpg.key | gpg --dearmor | sudo tee /usr/share/keyrings/llvm-archive-keyring.gpg > /dev/null
+          sudo chmod 644 /usr/share/keyrings/llvm-archive-keyring.gpg
+          echo "deb [signed-by=/usr/share/keyrings/llvm-archive-keyring.gpg] http://apt.llvm.org/noble/ llvm-toolchain-noble-19 main" | sudo tee /etc/apt/sources.list.d/llvm-toolchain-noble-19.list > /dev/null
+          sudo apt-get update
+          sudo apt-get install -y llvm-19 llvm-19-tools llvm-19-dev clang-19 clang-tidy-19 clang-format-19 lld-19 llvm-19-runtime libc++-19-dev libc++abi-19-dev pkg-config
 
       - if: ${{ matrix.os == 'ubuntu-24.04' }}
         name: Install Vulkan SDK on Linux
         working-directory: ${{ env.WORKDIR }}
         run: |
-          wget -qO- https://packages.lunarg.com/lunarg-signing-key-pub.asc | sudo tee /etc/apt/trusted.gpg.d/lunarg.asc
-          sudo wget -qO /etc/apt/sources.list.d/lunarg-vulkan-noble.list http://packages.lunarg.com/vulkan/lunarg-vulkan-noble.list
-          sudo apt update
-          sudo apt install vulkan-sdk
+          sudo rm -f /etc/apt/sources.list.d/lunarg-vulkan-noble.list
+          sudo rm -f /etc/apt/sources.list.d/archive_uri-https_packages_lunarg_com_vulkan-*.list
+          sudo rm -f /etc/apt/trusted.gpg.d/lunarg.asc
+
+          curl -fsSL https://packages.lunarg.com/lunarg-signing-key-pub.asc | gpg --dearmor | sudo tee /usr/share/keyrings/lunarg-archive-keyring.gpg > /dev/null
+          sudo chmod 644 /usr/share/keyrings/lunarg-archive-keyring.gpg
+          echo "deb [signed-by=/usr/share/keyrings/lunarg-archive-keyring.gpg] https://packages.lunarg.com/vulkan/ noble main" | sudo tee /etc/apt/sources.list.d/lunarg-vulkan-noble.list > /dev/null
+          sudo apt-get update
+          sudo apt-get install -y vulkan-sdk
 
       - if: ${{ matrix.os == 'windows-11' }}
         name: Configure Windows runner
@@ -113,8 +122,18 @@ jobs:
 
       - if: ${{ matrix.os == 'ubuntu-24.04' }}
         name: Configure vcpkg in linux
-        working-directory: ${{ env.WORKDIR }}
-        run: echo "VCPKG_ROOT=$VCPKG_INSTALLATION_ROOT" >> $GITHUB_ENV
+        shell: bash
+        run: |
+          if [ -n "${VCPKG_INSTALLATION_ROOT:-}" ] && [ -d "$VCPKG_INSTALLATION_ROOT" ]; then
+            echo "Using pre-installed vcpkg at $VCPKG_INSTALLATION_ROOT"
+            echo "VCPKG_ROOT=$VCPKG_INSTALLATION_ROOT" >> "$GITHUB_ENV"
+          else
+            sudo apt-get update
+            sudo apt-get install -y zip unzip tar curl
+            git clone --branch 2025.12.12 --single-branch https://github.com/microsoft/vcpkg.git /tmp/vcpkg
+            /tmp/vcpkg/bootstrap-vcpkg.sh -disableMetrics
+            echo "VCPKG_ROOT=/tmp/vcpkg" >> "$GITHUB_ENV"
+          fi
 
       - if: ${{ matrix.os == 'windows-11' }}
         name: Configure CMake generator on Windows
@@ -168,6 +187,18 @@ jobs:
           npm install
           npm install -g bare bare-make
 
+      - if: ${{ matrix.os == 'ubuntu-24.04' || matrix.os == 'macos-14' }}
+        name: Download SD2 model for C++ tests
+        working-directory: ${{ env.WORKDIR }}
+        run: |
+          ./scripts/download-model-sd2.sh
+          find . -name "stable-diffusion-v2-1-Q8_0.gguf"
+          MODEL_PATH=$(find . -name "stable-diffusion-v2-1-Q8_0.gguf" | head -n 1)
+          test -f "$MODEL_PATH"
+          mkdir -p ./test/model
+          cp "$MODEL_PATH" ./test/model/stable-diffusion-v2-1-Q8_0.gguf
+          test -f ./test/model/stable-diffusion-v2-1-Q8_0.gguf
+
       - if: ${{ matrix.platform == 'darwin' }}
         name: Use Apple clang for Apple platform builds
         run: |
@@ -178,7 +209,12 @@ jobs:
       - name: Build C++ tests with coverage
         if: ${{ matrix.os == 'ubuntu-24.04' }}
         working-directory: ${{ env.WORKDIR }}
-        run: npm run coverage:cpp:build
+        env:
+          CC: clang-19
+          CXX: clang++-19
+        run: |
+          bare-make generate --platform ${{ matrix.platform }} --arch ${{ matrix.arch }} -D BUILD_TESTING=ON -D ENABLE_COVERAGE=ON
+          bare-make build --target addon-test
 
       - name: Build C++ tests
         if: ${{ matrix.os != 'ubuntu-24.04' }}
@@ -190,8 +226,16 @@ jobs:
         shell: bash
         working-directory: ${{ env.WORKDIR }}
         env:
-          LSAN_OPTIONS: suppressions=${{ github.workspace }}/.lsan-suppressions.txt
+          SD_TEST_MODEL_PATH: ${{ github.workspace }}/${{ env.WORKDIR }}/test/model/stable-diffusion-v2-1-Q8_0.gguf
         run: |
+          if [ -f "${{ github.workspace }}/.lsan-suppressions.txt" ]; then
+            export LSAN_OPTIONS="suppressions=${{ github.workspace }}/.lsan-suppressions.txt"
+          fi
+          echo "SD_TEST_MODEL_PATH=$SD_TEST_MODEL_PATH"
+          ls -lh "$SD_TEST_MODEL_PATH"
+          test -f "$SD_TEST_MODEL_PATH"
+          export SD_TEST_MODEL_PATH="$SD_TEST_MODEL_PATH"
+
           EXE="build/test/unit/addon-test"
           if [ -f "build/test/unit/addon-test.exe" ]; then
             EXE="build/test/unit/addon-test.exe"

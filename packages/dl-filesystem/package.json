@@ -1,0 +1,44 @@
+{
+  "name": "@qvac/dl-filesystem",
+  "version": "0.2.1",
+  "description": "",
+  "main": "index.js",
+  "types": "index.d.ts",
+  "scripts": {
+    "test": "npm run test:unit && npm run test:integration",
+    "lint": "standard",
+    "lint:fix": "standard --fix",
+    "test:dts": "tsc index.d.ts --noEmit",
+    "test:unit:generate": "brittle -r test/unit/all.js test/unit/*.test.js",
+    "test:unit": "npm run test:unit:generate && bare test/unit/all.js",
+    "test:integration:generate": "brittle -r test/integration/all.js test/integration/*.test.js",
+    "test:integration": "npm run test:integration:generate && bare test/integration/all.js"
+  },
+  "author": "Tether",
+  "license": "Apache-2.0",
+  "dependencies": {
+    "bare-fs": "^4.5.2",
+    "bare-path": "^3.0.0",
+    "@qvac/error": "^0.1.0",
+    "@qvac/dl-base": "^0.2.0"
+  },
+  "devDependencies": {
+    "@types/node": "^22.0.0",
+    "brittle": "3.7.0",
+    "standard": "17.1.0",
+    "typescript": "^5.0.0"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/tetherto/qvac.git",
+    "directory": "packages/dl-filesystem"
+  },
+  "bugs": "https://github.com/tetherto/qvac/issues",
+  "homepage": "https://github.com/tetherto/qvac/tree/main/packages/dl-filesystem#readme",
+  "files": [
+    "src",
+    "index.d.ts",
+    "LICENSE",
+    "NOTICE"
+  ]
+}

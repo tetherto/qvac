@@ -12,7 +12,7 @@ if(EXISTS "${PACKAGE_PREFIX_DIR}/share/onnxruntime")
   if(NOT TARGET qvac-onnx::qvac-onnx-static)
     add_library(qvac-onnx::qvac-onnx-static INTERFACE IMPORTED)
     set_target_properties(qvac-onnx::qvac-onnx-static PROPERTIES
-      INTERFACE_LINK_LIBRARIES "qvac-onnx::headers;onnxruntime::onnxruntime_static")
+      INTERFACE_LINK_LIBRARIES "qvac-onnx::headers;onnxruntime::onnxruntime")
   endif()
 endif()
 

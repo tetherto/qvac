@@ -10,7 +10,6 @@ const config = {
   images: {
     unoptimized: true,
   },
-  distDir: 'dist',
 };
 
 export default withMDX(config);

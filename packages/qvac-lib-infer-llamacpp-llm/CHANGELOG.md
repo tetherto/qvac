@@ -1,5 +1,37 @@
 # Changelog
 
+## [0.14.3] - 2026-04-07
+
+### Added
+
+#### `backendDevice` runtime stat
+- `runtimeStats()` now includes `backendDevice` (`"cpu"` or `"gpu"`) reporting the actual resolved device used for inference.
+- Reflects the device after backend selection and fallback logic, not the user-configured preference.
+- Captured as numeric `int64_t` (0/1) at the C++ level, mapped to a string in the JS layer.
+
+## [0.14.2] - 2026-04-07
+
+This patch release updates the qvac-fabric native dependency.
+
+### Changed
+
+#### qvac-fabric dependency bump
+
+Updated qvac-fabric from 7248.2.1#1 to 7248.2.2, aligning all llamacpp-based addons on the same fabric version.
+
+### Pull Requests
+
+- [#1358](https://github.com/tetherto/qvac/pull/1358) - Qvac 16779 qvac fabric lockstep
+
+## [0.14.1] - 2026-04-02
+
+### Changed
+
+- Updated qvac-lib-inference-addon-cpp dependancy from 1.1.2 to 1.1.5
+- Reason for the version update:
+    - addon-cpp v1.1.2's cancelJob() unconditionally set the model's stop flag whenever a job existed, even if that job was only queued and never started processing. Since the queued job never entered process(), the flag was never consumed or reset.
+    - In the llm addon, this meant that cancelling a request and then submitting a new one would cause the new request to abort instantly on entry — returning no results — because it inherited the stale stop flag from the previous cancel.
+
 ## [0.14.0] - 2026-03-19
 
 ### Added

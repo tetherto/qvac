@@ -1,9 +1,10 @@
-import ONNXBase, { Loader } from "@qvac/infer-base";
+import type { QvacResponse } from "@qvac/infer-base";
 
 declare interface ONNXOcrParams {
   pathDetector: string;
-  pathRecognizer: string;
-  langList: string[];
+  pathRecognizer?: string;
+  pathRecognizerPrefix?: string;
+  langList?: string[];
   useGPU?: boolean;
   timeout?: number;
   pipelineMode?: 'easyocr' | 'doctr';
@@ -14,18 +15,15 @@ declare interface ONNXOcrParams {
   recognizerBatchSize?: number;
   decodingMethod?: 'ctc' | 'attention';
   straightenPages?: boolean;
-}
-
-declare interface ONNXOcrArgs {
-  opts: Object;
-  loader: Loader;
-  params: ONNXOcrParams;
+  graphOptimization?: boolean;
+  enableXnnpack?: boolean;
+  enableCpuMemArena?: boolean;
+  intraOpThreads?: number;
 }
 
 export interface OCRArgs {
-  loader: unknown;
-  logger?: unknown;
   params: ONNXOcrParams;
+  logger?: unknown;
   opts?: {
     stats?: boolean;
   };
@@ -44,19 +42,23 @@ export interface OCRStats {
   totalTime?: number;
 }
 
-export interface OCRResponse {
-  onUpdate: (callback: (data: unknown) => unknown[]) => {
-    await: () => Promise<unknown>;
-  };
-  stats?: OCRStats;
+export interface InferenceClientState {
+  configLoaded: boolean;
+  weightsLoaded: boolean;
+  destroyed: boolean;
 }
 
-export class ONNXOcr extends ONNXBase {
+export class ONNXOcr {
   constructor(args: OCRArgs);
 
-  load(verbose?: boolean): Promise<void>;
-  run(params: OCRRunParams): Promise<OCRResponse>;
+  getState(): InferenceClientState;
+  load(): Promise<void>;
+  run(params: OCRRunParams): Promise<QvacResponse>;
   unload(): Promise<void>;
+  destroy(): Promise<void>;
+
+  static inferenceManagerConfig: { noAdditionalDownload: boolean };
+  static getModelKey(params: ONNXOcrParams): string;
 }
 
 export const modelClass: typeof ONNXOcr;

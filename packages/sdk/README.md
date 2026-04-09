@@ -252,3 +252,5 @@ This will:
 4. Generate `changelog/<version>/CHANGELOG.md`
 5. Generate `changelog/<version>/breaking.md` for BC changes (with code examples)
 6. Generate `changelog/<version>/api.md` for API changes (with code examples)
+
+**Note:** Requires a GitHub token (`GITHUB_TOKEN` or `GH_TOKEN` environment variable) to fetch PR metadata.

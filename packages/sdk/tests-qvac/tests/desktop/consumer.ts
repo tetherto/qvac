@@ -32,13 +32,15 @@ import {
   PARAKEET_TDT_PREPROCESSOR_INT8,
   PARAKEET_TDT_VOCAB,
   PARAKEET_CTC_FP32,
-  PARAKEET_CTC_DATA_FP32,
   PARAKEET_CTC_TOKENIZER,
   PARAKEET_SORTFORMER_FP32,
   SMOLVLM2_500M_MULTIMODAL_Q8_0,
   MMPROJ_SMOLVLM2_500M_MULTIMODAL_Q8_0,
   SALAMANDRATA_2B_INST_Q4,
   AFRICAN_4B_TRANSLATION_Q4_K_M,
+  FLUX_2_KLEIN_4B_Q4_0,
+  FLUX_2_KLEIN_4B_VAE,
+  QWEN3_4B_Q4_K_M,
 } from "@qvac/sdk";
 import * as path from "node:path";
 import { ResourceManager } from "../shared/resource-manager.js";
@@ -62,6 +64,7 @@ import { TtsExecutor } from "../shared/executors/tts-executor.js";
 import { ParakeetExecutor } from "./executors/parakeet-executor.js";
 import { VisionExecutor } from "./executors/vision-executor.js";
 import { DownloadExecutor } from "../shared/executors/download-executor.js";
+import { DiffusionExecutor } from "../shared/executors/diffusion-executor.js";
 
 const resources = new ResourceManager();
 
@@ -241,12 +244,13 @@ resources.define("afriquegemma", {
 });
 
 
-const referenceAudioPath = path.resolve(process.cwd(), "assets/audio/transcription-short.wav");
+const referenceAudioPath = path.resolve(process.cwd(), "assets/audio/transcription-short-wav.wav");
 
 resources.define("tts-chatterbox", {
   constant: TTS_TOKENIZER_EN_CHATTERBOX,
   type: "tts",
   skipPreDownload: true,
+  preLoadUnload: true,
   config: {
     ttsEngine: "chatterbox",
     language: "en",
@@ -263,6 +267,7 @@ resources.define("tts-supertonic", {
   constant: TTS_TOKENIZER_SUPERTONIC,
   type: "tts",
   skipPreDownload: true,
+  preLoadUnload: true,
   config: {
     ttsEngine: "supertonic",
     language: "en",
@@ -279,6 +284,7 @@ resources.define("parakeet-tdt", {
   constant: PARAKEET_TDT_ENCODER_INT8,
   type: "parakeet",
   skipPreDownload: true,
+  preLoadUnload: true,
   config: {
     parakeetEncoderSrc: PARAKEET_TDT_ENCODER_INT8,
     parakeetDecoderSrc: PARAKEET_TDT_DECODER_INT8,
@@ -292,10 +298,10 @@ resources.define("parakeet-ctc", {
   constant: PARAKEET_CTC_FP32,
   type: "parakeet",
   skipPreDownload: true,
+  preLoadUnload: true,
   config: {
     modelType: "ctc",
     parakeetCtcModelSrc: PARAKEET_CTC_FP32,
-    parakeetCtcModelDataSrc: PARAKEET_CTC_DATA_FP32,
     parakeetTokenizerSrc: PARAKEET_CTC_TOKENIZER,
   },
 });
@@ -305,6 +311,7 @@ resources.define("parakeet-sortformer", {
   constant: PARAKEET_SORTFORMER_FP32,
   type: "parakeet",
   skipPreDownload: true,
+  preLoadUnload: true,
   config: {
     modelType: "sortformer",
     parakeetSortformerSrc: PARAKEET_SORTFORMER_FP32,
@@ -315,11 +322,29 @@ resources.define("vision", {
   constant: SMOLVLM2_500M_MULTIMODAL_Q8_0,
   type: "llm",
   skipPreDownload: true,
+  preLoadUnload: true,
   config: {
     ctx_size: 1024,
     projectionModelSrc: MMPROJ_SMOLVLM2_500M_MULTIMODAL_Q8_0,
   },
 });
+
+resources.define("diffusion", {
+  constant: FLUX_2_KLEIN_4B_Q4_0,
+  type: "diffusion",
+  skipPreDownload: true,
+  preLoadUnload: true,
+  config: {
+    device: "gpu",
+    threads: 4,
+    llmModelSrc: QWEN3_4B_Q4_K_M,
+    vaeModelSrc: FLUX_2_KLEIN_4B_VAE,
+  },
+});
+
+export async function bootstrap() {
+  await resources.downloadAllOnce(console.log);
+};
 
 export const executor = createExecutor({
   handlers: [
@@ -343,7 +368,8 @@ export const executor = createExecutor({
     new KvCacheExecutor(resources),
     new ParakeetExecutor(resources),
     new VisionExecutor(resources),
-    new DownloadExecutor(resources),
+    new DownloadExecutor(),
+    new DiffusionExecutor(resources),
   ],
   profiling: {
     init: () => profiler.enable({ mode: "summary", includeServerBreakdown: true }),

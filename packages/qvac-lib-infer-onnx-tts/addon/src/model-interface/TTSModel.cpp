@@ -105,6 +105,11 @@ qvac::ttslib::chatterbox::ChatterboxConfig TTSModel::createChatterboxConfig(
     config.lazySessionLoading = lazyIt->second == "true";
   }
 
+  auto gpuIt = configMap.find("useGPU");
+  if (gpuIt != configMap.end()) {
+    config.useGPU = gpuIt->second == "true";
+  }
+
   std::stringstream ss;
   ss << "Chatterbox config values: language='" << config.language << "'"
      << "' referenceAudio.size()=" << config.referenceAudio.size()
@@ -151,6 +156,11 @@ qvac::ttslib::supertonic::SupertonicConfig TTSModel::createSupertonicConfig(
   auto mulIt = configMap.find("supertonicMultilingual");
   if (mulIt != configMap.end()) {
     config.supertonicMultilingual = (mulIt->second == "true");
+  }
+
+  auto gpuIt = configMap.find("useGPU");
+  if (gpuIt != configMap.end()) {
+    config.useGPU = gpuIt->second == "true";
   }
 
   auto it = configMap.find("speed");
