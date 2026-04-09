@@ -206,40 +206,6 @@ if(ANDROID)
   endif()
 endif()
 
-option(BUILD_CLI "Build CLI tool example" FALSE)
-if(BUILD_CLI)
-  add_executable(
-    qvac_tts_cli
-    ${PROJECT_SOURCE_DIR}/addon/src/cli/qvac_tts_cli.cpp
-    ${PROJECT_SOURCE_DIR}/addon/src/model-interface/TTSModel.cpp
-    ${PROJECT_SOURCE_DIR}/addon/src/model-interface/ChatterboxEngine.cpp
-    ${PROJECT_SOURCE_DIR}/addon/src/model-interface/OnnxInferSession.cpp
-    ${PROJECT_SOURCE_DIR}/addon/src/model-interface/SupertonicEngine.cpp
-    ${PROJECT_SOURCE_DIR}/addon/src/model-interface/LavaSRDenoiser.cpp
-    ${PROJECT_SOURCE_DIR}/addon/src/model-interface/LavaSREnhancer.cpp
-    ${PROJECT_SOURCE_DIR}/addon/src/model-interface/dsp/Resampler.cpp
-    ${PROJECT_SOURCE_DIR}/addon/src/model-interface/dsp/StftProcessor.cpp
-    ${PROJECT_SOURCE_DIR}/addon/src/model-interface/dsp/MelFilterbank.cpp
-    ${PROJECT_SOURCE_DIR}/addon/src/model-interface/dsp/FastLRMerge.cpp
-  )
-
-  target_include_directories(
-    qvac_tts_cli
-    PRIVATE
-      ${PROJECT_SOURCE_DIR}/addon
-      ${QVAC_LIB_INFERENCE_ADDON_CPP_INCLUDE_DIRS}
-  )
-
-  target_link_libraries(
-    qvac_tts_cli
-    PRIVATE
-      onnxruntime::onnxruntime
-      tokenizers::tokenizers_cpp
-      nlohmann_json::nlohmann_json
-      ${QVAC_UTF8PROC_TARGET}
-  )
-endif()
-
 if((ANDROID OR (APPLE AND CMAKE_SYSTEM_NAME STREQUAL "iOS")) AND NOT MOBILE_DYNAMIC_LINK)
   target_link_libraries(
     ${qvac-lib-inference-tts}

@@ -298,6 +298,10 @@ TTSModel::Output TTSModel::process(const Input &text) {
     throw std::runtime_error("Job cancelled");
   }
 
+  if (cancelRequested_.exchange(false)) {
+    throw std::runtime_error("Job cancelled");
+  }
+
   if (lavaSRConfig_.denoise || lavaSRConfig_.enhance ||
       lavaSRConfig_.outputSampleRate > 0) {
     result = postProcess(std::move(result));
@@ -349,7 +353,11 @@ std::any TTSModel::process(const std::any &input) {
   if (input.type() == typeid(AnyInput)) {
     const auto &jobInput = std::any_cast<const AnyInput &>(input);
     if (!jobInput.config.empty()) {
+      auto savedLavaSR = lavaSRConfig_;
       saveLoadParams(jobInput.config);
+      auto result = std::any{process(jobInput.text)};
+      lavaSRConfig_ = savedLavaSR;
+      return result;
     }
     return std::any{process(jobInput.text)};
   }
@@ -430,7 +438,9 @@ void TTSModel::parseLavaSRConfig(
   if (srIt != configMap.end() && !srIt->second.empty()) {
     try {
       int rate = std::stoi(srIt->second);
-      if (rate > 0 && (rate < 8000 || rate > 192000)) {
+      if (rate <= 0) {
+        lavaSRConfig_.outputSampleRate = 0;
+      } else if (rate < 8000 || rate > 192000) {
         QLOG(Priority::WARNING,
              "outputSampleRate " + std::to_string(rate) +
                  " is outside the supported range [8000, 192000]");

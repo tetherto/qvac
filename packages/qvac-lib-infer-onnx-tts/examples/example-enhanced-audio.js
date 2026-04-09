@@ -27,17 +27,20 @@ async function synthesize (label, extraArgs, outputFile, sampleRate) {
     : samples
 
   const args = {
-    tokenizerPath: `${modelsDir}/tokenizer.json`,
-    speechEncoderPath: `${modelsDir}/speech_encoder.onnx`,
-    embedTokensPath: `${modelsDir}/embed_tokens.onnx`,
-    conditionalDecoderPath: `${modelsDir}/conditional_decoder.onnx`,
-    languageModelPath: `${modelsDir}/language_model.onnx`,
+    files: {
+      tokenizerPath: `${modelsDir}/tokenizer.json`,
+      speechEncoderPath: `${modelsDir}/speech_encoder.onnx`,
+      embedTokensPath: `${modelsDir}/embed_tokens.onnx`,
+      conditionalDecoderPath: `${modelsDir}/conditional_decoder.onnx`,
+      languageModelPath: `${modelsDir}/language_model.onnx`
+    },
     referenceAudio,
+    config: { language: 'en' },
     opts: { stats: true },
     ...extraArgs
   }
 
-  const model = new ONNXTTS(args, { language: 'en' })
+  const model = new ONNXTTS(args)
   await model.load()
 
   console.log(`Synthesizing: "${TEXT}"`)
