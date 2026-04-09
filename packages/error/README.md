@@ -122,3 +122,4 @@ After cloning, run `npm install`. If npm lifecycle scripts are disabled, also ru
 4. Use descriptive error names and clear messages
 5. Avoid relying on error messages for logic (use codes instead)
 6. Consider generating documentation from your error codes
+
