@@ -298,10 +298,6 @@ TTSModel::Output TTSModel::process(const Input &text) {
     throw std::runtime_error("Job cancelled");
   }
 
-  if (cancelRequested_.exchange(false)) {
-    throw std::runtime_error("Job cancelled");
-  }
-
   if (lavaSRConfig_.denoise || lavaSRConfig_.enhance ||
       lavaSRConfig_.outputSampleRate > 0) {
     result = postProcess(std::move(result));
