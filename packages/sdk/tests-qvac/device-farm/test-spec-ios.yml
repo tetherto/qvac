@@ -7,8 +7,11 @@ phases:
       - echo "Setting up test environment..."
       - devicefarm-cli use node 18
       - devicefarm-cli use appium 2
+      - devicefarm-cli use python 3.11
       - node --version
       - appium --version
+      - pip3 install pymobiledevice3
+      - pymobiledevice3 version || echo "pymobiledevice3 installed"
 
   pre_test:
     commands:
@@ -48,7 +51,6 @@ phases:
         done
 
       # Create Appium session -- installs and launches the app on the device
-      # showIOSLog:true enables syslog relay so we can retrieve device logs via the /log endpoint
       - echo "Creating Appium session to launch app..."
       - |-
         SESSION_RESPONSE=$(curl -s -X POST http://127.0.0.1:4723/wd/hub/session \
@@ -77,71 +79,86 @@ phases:
           tail -50 $DEVICEFARM_LOG_DIR/appium.log
           exit 1
         fi
-        echo "SESSION_ID=$SESSION_ID" >> $DEVICEFARM_LOG_DIR/session.env
-        echo "APPIUM_URL=http://127.0.0.1:4723/wd/hub" >> $DEVICEFARM_LOG_DIR/session.env
         echo "App launched via Appium (session: $SESSION_ID)"
 
       - sleep 10
 
-      # Discover what log types are available on this host
+      # Start pymobiledevice3 syslog capture in background (filtered to app process)
+      # Captures ALL log levels including DEBUG (where React Native console.log goes via os_log)
+      # Appium's syslog_relay only captures ERROR level, which is why we need this
+      - echo "Starting pymobiledevice3 syslog capture..."
       - |-
-        SESSION_ID=$(grep SESSION_ID $DEVICEFARM_LOG_DIR/session.env | cut -d= -f2)
-        echo "Available Appium log types:"
-        curl -s "http://127.0.0.1:4723/wd/hub/session/$SESSION_ID/log/types" 2>/dev/null || echo "(query failed)"
+        mkdir -p "$HOME/.pymobiledevice3"
+        unset SUDO_UID SUDO_GID SUDO_USER
+        touch "$DEVICEFARM_LOG_DIR/testconsumer.log"
+        pymobiledevice3 syslog live \
+          --udid "$DEVICEFARM_DEVICE_UDID" \
+          --process-name QVACTestConsumer \
+          >> "$DEVICEFARM_LOG_DIR/testconsumer.log" 2>&1 &
+        echo $! > "$DEVICEFARM_LOG_DIR/syslog-pid.txt"
+        echo "pymobiledevice3 syslog started (pid: $(cat $DEVICEFARM_LOG_DIR/syslog-pid.txt))"
+        sleep 3
+        LINES=$(wc -l < "$DEVICEFARM_LOG_DIR/testconsumer.log" 2>/dev/null || echo 0)
+        echo "Initial syslog lines captured: $LINES"
 
   test:
     commands:
       # The SDK consumer auto-runs tests and reports results via MQTT to the producer.
-      # Device Farm keeps the app alive. We poll health + drain syslog for debugging.
+      # Device Farm keeps the app alive while pymobiledevice3 captures device logs.
+      # tail -f streams app logs live to the Device Farm console.
       - |-
         TIMEOUT=${DEVICEFARM_TIMEOUT:-5400}
-        START=$(date +%s)
-        SESSION_ID=$(grep SESSION_ID $DEVICEFARM_LOG_DIR/session.env | cut -d= -f2)
-        APPIUM_URL=$(grep APPIUM_URL $DEVICEFARM_LOG_DIR/session.env | cut -d= -f2-)
-        CHECK_INTERVAL=30
-        SYSLOG_FILE="$DEVICEFARM_LOG_DIR/device-syslog.log"
-        DRAIN_SCRIPT="$DEVICEFARM_TEST_PACKAGE_PATH/drain-syslog.py"
+        SYSLOG_FILE="$DEVICEFARM_LOG_DIR/testconsumer.log"
 
-        echo "App is running. Monitoring health for up to ${TIMEOUT}s..."
+        echo "App is running. Streaming logs for up to ${TIMEOUT}s..."
         echo "Test results are captured by the MQTT producer (separate CI job)."
-        echo "Draining device syslog to $SYSLOG_FILE"
 
         touch "$SYSLOG_FILE"
+        tail -f "$SYSLOG_FILE" &
+        TAIL_PID=$!
 
-        while true; do
-          NOW=$(date +%s)
-          ELAPSED=$((NOW - START))
+        sleep "$TIMEOUT"
 
-          if [ $ELAPSED -ge $TIMEOUT ]; then
-            echo "Timeout reached (${TIMEOUT}s). Producer should have results by now."
-            break
-          fi
-
-          # Drain syslog buffer via Appium
-          DRAINED=$(python3 "$DRAIN_SCRIPT" "$APPIUM_URL" "$SESSION_ID" "$SYSLOG_FILE" 2>/dev/null || echo "0")
-
-          REMAINING=$((TIMEOUT - ELAPSED))
-          SYSLOG_LINES=$(wc -l < "$SYSLOG_FILE" 2>/dev/null || echo 0)
-          echo "[${ELAPSED}s/${TIMEOUT}s] ${REMAINING}s remaining, ${SYSLOG_LINES} syslog lines (+${DRAINED})"
-          sleep $CHECK_INTERVAL
-        done
+        kill $TAIL_PID 2>/dev/null || true
+        echo ""
+        echo "Timeout reached (${TIMEOUT}s). Producer should have results by now."
 
   post_test:
     commands:
-      - echo "Capturing final logs..."
-
-      # Drain any remaining syslog entries
+      # Stop pymobiledevice3 syslog capture
       - |-
-        SESSION_ID=$(grep SESSION_ID $DEVICEFARM_LOG_DIR/session.env | cut -d= -f2)
-        APPIUM_URL=$(grep APPIUM_URL $DEVICEFARM_LOG_DIR/session.env | cut -d= -f2-)
-        python3 "$DEVICEFARM_TEST_PACKAGE_PATH/drain-syslog.py" "$APPIUM_URL" "$SESSION_ID" "$DEVICEFARM_LOG_DIR/device-syslog.log" 2>/dev/null || true
+        if [ -f "$DEVICEFARM_LOG_DIR/syslog-pid.txt" ]; then
+          kill $(cat "$DEVICEFARM_LOG_DIR/syslog-pid.txt") 2>/dev/null || true
+          echo "pymobiledevice3 syslog stopped"
+        fi
 
-      - cp $DEVICEFARM_LOG_DIR/appium.log $DEVICEFARM_LOG_DIR/app-console.log 2>/dev/null || true
+      # Extract React Native JS logs into a separate file
+      - |-
+        grep -i "react\|javascript\|com.facebook.react" "$DEVICEFARM_LOG_DIR/testconsumer.log" \
+          > "$DEVICEFARM_LOG_DIR/react-native-logs.log" 2>/dev/null || true
+        RN_LINES=$(wc -l < "$DEVICEFARM_LOG_DIR/react-native-logs.log" 2>/dev/null || echo 0)
+        echo "=== React Native logs: ${RN_LINES} lines ==="
+        tail -50 "$DEVICEFARM_LOG_DIR/react-native-logs.log" 2>/dev/null || echo "(none)"
 
-      - echo "=== Device syslog summary ==="
-      - wc -l $DEVICEFARM_LOG_DIR/device-syslog.log 2>/dev/null || echo "No syslog captured"
-      - echo "=== Last 50 syslog lines ==="
-      - tail -50 $DEVICEFARM_LOG_DIR/device-syslog.log 2>/dev/null || echo "(empty)"
+      # Fallback: Apple log collect + log show to extract app logs from unified logging
+      - |-
+        echo "Collecting device log archive (fallback)..."
+        log collect --device-udid "$DEVICEFARM_DEVICE_UDID" \
+          --output "$DEVICEFARM_LOG_DIR/device.logarchive" 2>/dev/null || echo "log collect not available"
+        if [ -d "$DEVICEFARM_LOG_DIR/device.logarchive" ]; then
+          echo "Extracting React Native logs from archive..."
+          log show "$DEVICEFARM_LOG_DIR/device.logarchive" \
+            --predicate 'subsystem == "com.facebook.react.log"' \
+            --level debug \
+            --style compact \
+            > "$DEVICEFARM_LOG_DIR/testconsumer-logarchive.log" 2>/dev/null || true
+          ARCHIVE_LINES=$(wc -l < "$DEVICEFARM_LOG_DIR/testconsumer-logarchive.log" 2>/dev/null || echo 0)
+          echo "=== log collect/show: ${ARCHIVE_LINES} lines ==="
+          tail -50 "$DEVICEFARM_LOG_DIR/testconsumer-logarchive.log" 2>/dev/null || echo "(none)"
+        fi
+
+      - echo "=== Full syslog summary ==="
+      - wc -l "$DEVICEFARM_LOG_DIR/testconsumer.log" 2>/dev/null || echo "No syslog captured"
 
       - echo "Available log files:"
       - ls -lh $DEVICEFARM_LOG_DIR/ || true
