@@ -17,6 +17,7 @@ struct ChatterboxConfig {
   std::string conditionalDecoderPath;
   std::string languageModelPath;
   bool lazySessionLoading = false;
+  bool useGPU = false;
 };
 
 class IChatterboxEngine {

@@ -1,4 +1,4 @@
-name: General CI/CD (Qvac-lib-dl-hyperdrive)
+name: General CI/CD (dl-hyperdrive)
 # This workflow is used to call the reusable workflows in the qvac-devops repository
 # (ported into the monorepo)
 
@@ -10,7 +10,7 @@ on:
       - feature-*
       - tmp-*
     paths:
-      - "packages/qvac-lib-dl-hyperdrive/**"
+      - "packages/dl-hyperdrive/**"
   workflow_dispatch:
     inputs:
       custom_input_1:
@@ -43,9 +43,9 @@ jobs:
           base-ref: ${{ github.ref_name }}
           base-sha: ${{ github.event.before }}
           head-sha: ${{ github.sha }}
-          package-slug: qvac-lib-dl-hyperdrive
-          package-json-path: packages/qvac-lib-dl-hyperdrive/package.json
-          changelog-path: packages/qvac-lib-dl-hyperdrive/CHANGELOG.md
+          package-slug: dl-hyperdrive
+          package-json-path: packages/dl-hyperdrive/package.json
+          changelog-path: packages/dl-hyperdrive/CHANGELOG.md
 
   publish-logic:
     runs-on: ubuntu-latest
@@ -109,13 +109,13 @@ jobs:
           fetch-depth: 0
 
       - name: Publish to GitHub Packages (dev)
-        uses: tetherto/qvac-devops/.github/actions/publish-library-to-gpr@v1.1.7
+        uses: tetherto/qvac-devops/.github/actions/publish-library-to-gpr@v1.1.8
         with:
           secret-token: ${{ secrets.GITHUB_TOKEN }}
           pat-token: ${{ secrets.PAT_TOKEN }}
           npm-token: ${{ secrets.NPM_TOKEN }}
           tag: ${{ needs.publish-logic.outputs.gpr_tag }}
-          workdir: packages/qvac-lib-dl-hyperdrive
+          workdir: packages/dl-hyperdrive
           name-suffix: "-mono"
 
   publish-release-npm:
@@ -128,10 +128,10 @@ jobs:
       always() &&
       needs.publish-logic.outputs.publish_release == 'true' &&
       (needs.release-merge-guard.result == 'success' || needs.release-merge-guard.result == 'skipped')
-    uses: tetherto/qvac-devops/.github/workflows/public-reusable-npm.yml@v1.1.7
+    uses: tetherto/qvac-devops/.github/workflows/public-reusable-npm.yml@v1.1.8
     secrets: inherit
     with:
-      workdir: packages/qvac-lib-dl-hyperdrive
+      workdir: packages/dl-hyperdrive
       repo_name: dl-hyperdrive
       caller_event_name: ${{ github.event_name }}
 
@@ -147,7 +147,7 @@ jobs:
       release_name: "QVAC dl-hyperdrive Lib"
       published_version: ${{ needs.publish-release-npm.outputs.published_version }}
       prev_sha: ${{ github.event.before }}
-      workdir: "packages/qvac-lib-dl-hyperdrive"
+      workdir: "packages/dl-hyperdrive"
 
   publish-feature-gpr:
     needs: publish-logic
@@ -163,13 +163,13 @@ jobs:
           fetch-depth: 0
 
       - name: Publish to GitHub Packages (feature)
-        uses: tetherto/qvac-devops/.github/actions/publish-library-to-gpr@v1.1.7
+        uses: tetherto/qvac-devops/.github/actions/publish-library-to-gpr@v1.1.8
         with:
           secret-token: ${{ secrets.GITHUB_TOKEN }}
           pat-token: ${{ secrets.PAT_TOKEN }}
           npm-token: ${{ secrets.NPM_TOKEN }}
           tag: ${{ needs.publish-logic.outputs.gpr_tag }}
-          workdir: packages/qvac-lib-dl-hyperdrive
+          workdir: packages/dl-hyperdrive
           name-suffix: "-mono"
 
   publish-tmp-gpr:
@@ -186,11 +186,11 @@ jobs:
           fetch-depth: 0
 
       - name: Publish to GitHub Packages (tmp)
-        uses: tetherto/qvac-devops/.github/actions/publish-library-to-gpr@v1.1.7
+        uses: tetherto/qvac-devops/.github/actions/publish-library-to-gpr@v1.1.8
         with:
           secret-token: ${{ secrets.GITHUB_TOKEN }}
           pat-token: ${{ secrets.PAT_TOKEN }}
           npm-token: ${{ secrets.NPM_TOKEN }}
           tag: ${{ needs.publish-logic.outputs.gpr_tag }}
-          workdir: packages/qvac-lib-dl-hyperdrive
+          workdir: packages/dl-hyperdrive
           name-suffix: "-mono"

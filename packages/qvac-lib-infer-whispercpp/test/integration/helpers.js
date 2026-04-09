@@ -410,7 +410,7 @@ function getAssetPath (filename, options = {}) {
 /**
  * Gets standard test paths for models and audio files
  * Handles mobile vs desktop paths automatically
- * @param {string} [modelsDir] - Optional models directory (defaults to '../../examples/models')
+ * @param {string} [modelsDir] - Optional models directory (defaults to '../../models')
  * @returns {Object} Object with modelsDir, samplesDir, modelPath, vadModelPath, and audioPath
  */
 function getTestPaths (modelsDir = null) {
@@ -424,8 +424,8 @@ function getTestPaths (modelsDir = null) {
     actualModelsDir = modelsDir || path.join(writableRoot, 'models')
     samplesDir = path.join(writableRoot, 'samples')
   } else {
-    // Desktop: use relative paths
-    actualModelsDir = modelsDir || path.resolve(__dirname, '../../examples/models')
+    // Desktop: use package-root models/ and examples/samples/
+    actualModelsDir = modelsDir || path.resolve(__dirname, '../../models')
     samplesDir = path.resolve(__dirname, '../../examples/samples')
   }
 
@@ -479,8 +479,8 @@ async function runTranscription (params, expectation = {}) {
     }
   }
 
-  const modelsDir = path.resolve(__dirname, '../../examples/models')
-  const defaultModelPath = path.join(modelsDir, 'ggml-tiny.bin')
+  const defaultModelsDir = path.resolve(__dirname, '../../models')
+  const defaultModelPath = path.join(defaultModelsDir, 'ggml-tiny.bin')
 
   const modelPath = params.modelPath || defaultModelPath
   const vadModelPath = params.vadModelPath // VAD model is optional, no default

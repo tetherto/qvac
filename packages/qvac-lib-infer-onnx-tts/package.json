@@ -1,6 +1,6 @@
 {
   "name": "@qvac/tts-onnx",
-  "version": "0.8.0",
+  "version": "0.8.1",
   "description": "Text to Speech (TTS) addon for qvac",
   "addon": true,
   "engines": {
