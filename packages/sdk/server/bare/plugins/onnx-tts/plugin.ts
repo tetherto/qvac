@@ -17,6 +17,7 @@ import {
   type TtsChatterboxRuntimeConfig,
   type TtsSupertonicRuntimeConfig,
   type TtsRuntimeConfig,
+  type TtsEnhancerConfig,
 } from "@/schemas";
 import { createStreamLogger, registerAddonLogger } from "@/logging";
 import {
@@ -26,6 +27,63 @@ import {
 import { textToSpeech } from "@/server/bare/plugins/onnx-tts/ops/text-to-speech";
 import { attachModelExecutionMs } from "@/profiling/model-execution";
 import { loadReferenceAudioAt24k } from "@/server/bare/plugins/onnx-tts/wav-helper";
+
+async function resolveEnhancerArtifacts(
+  enhancer: TtsEnhancerConfig | undefined,
+  resolve: ResolveContext["resolveModelPath"],
+) {
+  if (!enhancer) return {};
+
+  switch (enhancer.type) {
+    case "lavasr": {
+      const [enhancerBackbonePath, enhancerSpecHeadPath, denoiserPath] = await Promise.all([
+        resolve(enhancer.backboneSrc),
+        resolve(enhancer.specHeadSrc),
+        enhancer.denoiserSrc ? resolve(enhancer.denoiserSrc) : undefined,
+      ]);
+      return {
+        enhancerBackbonePath,
+        enhancerSpecHeadPath,
+        ...(denoiserPath && { denoiserPath }),
+      };
+    }
+  }
+}
+
+function buildRuntimeEnhancer(enhancer: TtsEnhancerConfig | undefined) {
+  if (!enhancer) return undefined;
+  switch (enhancer.type) {
+    case "lavasr":
+      return {
+        type: "lavasr" as const,
+        enhance: enhancer.enhance ?? false,
+        denoise: enhancer.denoise ?? false,
+      };
+  }
+}
+
+function buildEnhancerArg(
+  enhancer: { type: "lavasr"; enhance?: boolean | undefined; denoise?: boolean | undefined } | undefined,
+  artifacts: Record<string, string | undefined>,
+) {
+  if (!enhancer) return undefined;
+
+  switch (enhancer.type) {
+    case "lavasr": {
+      const backbonePath = artifacts["enhancerBackbonePath"];
+      const specHeadPath = artifacts["enhancerSpecHeadPath"];
+      if (!backbonePath || !specHeadPath) return undefined;
+      return {
+        type: "lavasr" as const,
+        ...(enhancer.enhance !== undefined && { enhance: enhancer.enhance }),
+        ...(enhancer.denoise !== undefined && { denoise: enhancer.denoise }),
+        backbonePath,
+        specHeadPath,
+        ...(artifacts["denoiserPath"] && { denoiserPath: artifacts["denoiserPath"] }),
+      };
+    }
+  }
+}
 
 async function resolveChatterboxConfig(
   config: TtsChatterboxConfig,
@@ -39,6 +97,7 @@ async function resolveChatterboxConfig(
     ttsLanguageModelSrc,
     referenceAudioSrc,
     language,
+    enhancer,
   } = config;
 
   if (
@@ -71,10 +130,14 @@ async function resolveChatterboxConfig(
     resolve(referenceAudioSrc),
   ]);
 
+  const enhancerArtifacts = await resolveEnhancerArtifacts(enhancer, resolve);
+  const runtimeEnhancer = buildRuntimeEnhancer(enhancer);
+
   return {
     config: {
       ttsEngine: "chatterbox",
       language,
+      ...(runtimeEnhancer && { enhancer: runtimeEnhancer }),
     } as TtsChatterboxRuntimeConfig,
     artifacts: {
       tokenizerPath,
@@ -83,6 +146,7 @@ async function resolveChatterboxConfig(
       conditionalDecoderPath,
       languageModelPath,
       referenceAudioPath,
+      ...enhancerArtifacts,
     },
   };
 }
@@ -103,6 +167,7 @@ async function resolveSupertonicConfig(
     ttsNumInferenceSteps,
     ttsSupertonicMultilingual,
     language,
+    enhancer,
   } = config;
 
   if (
@@ -136,6 +201,9 @@ async function resolveSupertonicConfig(
     resolve(ttsVoiceStyleSrc),
   ]);
 
+  const enhancerArtifacts = await resolveEnhancerArtifacts(enhancer, resolve);
+  const runtimeEnhancer = buildRuntimeEnhancer(enhancer);
+
   return {
     config: {
       ttsEngine: "supertonic",
@@ -143,6 +211,7 @@ async function resolveSupertonicConfig(
       ttsSpeed,
       ttsNumInferenceSteps,
       ttsSupertonicMultilingual,
+      ...(runtimeEnhancer && { enhancer: runtimeEnhancer }),
     } as TtsSupertonicRuntimeConfig,
     artifacts: {
       textEncoderPath,
@@ -152,6 +221,7 @@ async function resolveSupertonicConfig(
       unicodeIndexerPath,
       ttsConfigPath,
       voiceStylePath,
+      ...enhancerArtifacts,
     },
   };
 }
@@ -184,6 +254,7 @@ function createChatterboxModel(
   const logger = createStreamLogger(modelId, ModelType.onnxTts);
   registerAddonLogger(modelId, ModelType.onnxTts, logger);
   const referenceAudio = loadReferenceAudioAt24k(referenceAudioPath);
+  const enhancerArg = buildEnhancerArg(config.enhancer, artifacts);
   const model = new ONNXTTS({
     files: {
       tokenizerPath,
@@ -198,6 +269,7 @@ function createChatterboxModel(
     logger,
     opts: { stats: true },
     exclusiveRun: true,
+    ...(enhancerArg && { enhancer: enhancerArg }),
   } as never);
   return { model, loader: undefined };
 }
@@ -230,6 +302,7 @@ function createSupertonicModel(
   const logger = createStreamLogger(modelId, ModelType.onnxTts);
   registerAddonLogger(modelId, ModelType.onnxTts, logger);
   const voiceName = path.basename(voiceStylePath).replace(/\.json$/i, "") || "F1";
+  const enhancerArg = buildEnhancerArg(config.enhancer, artifacts);
   const model = new ONNXTTS({
     files: {
       textEncoderPath,
@@ -249,6 +322,7 @@ function createSupertonicModel(
     logger,
     opts: { stats: true },
     exclusiveRun: true,
+    ...(enhancerArg && { enhancer: enhancerArg }),
   } as never);
   return { model, loader: undefined };
 }

@@ -11,9 +11,33 @@ export const TTS_LANGUAGES = [
 
 const ttsLanguageSchema = z.enum(TTS_LANGUAGES);
 
+const lavaSREnhancerRuntimeSchema = z.object({
+  type: z.literal("lavasr"),
+  enhance: z.boolean().optional(),
+  denoise: z.boolean().optional(),
+});
+
+const ttsEnhancerRuntimeConfigSchema = z.discriminatedUnion("type", [
+  lavaSREnhancerRuntimeSchema,
+]);
+
+export const lavaSREnhancerConfigSchema = lavaSREnhancerRuntimeSchema.extend({
+  backboneSrc: modelSrcInputSchema,
+  specHeadSrc: modelSrcInputSchema,
+  denoiserSrc: modelSrcInputSchema.optional(),
+});
+
+export const ttsEnhancerConfigSchema = z
+  .discriminatedUnion("type", [lavaSREnhancerConfigSchema])
+  .refine(
+    (data) => data.type !== "lavasr" || !data.denoise || data.denoiserSrc !== undefined,
+    { message: "denoiserSrc is required when denoise is true", path: ["denoiserSrc"] },
+  );
+
 export const ttsChatterboxRuntimeConfigSchema = z.object({
   ttsEngine: z.literal("chatterbox"),
   language: ttsLanguageSchema,
+  enhancer: ttsEnhancerRuntimeConfigSchema.optional(),
 });
 
 export const ttsSupertonicRuntimeConfigSchema = z.object({
@@ -22,6 +46,7 @@ export const ttsSupertonicRuntimeConfigSchema = z.object({
   ttsSpeed: z.number().optional(),
   ttsNumInferenceSteps: z.number().optional(),
   ttsSupertonicMultilingual: z.boolean().optional(),
+  enhancer: ttsEnhancerRuntimeConfigSchema.optional(),
 });
 
 export const ttsRuntimeConfigSchema = z.union([
@@ -36,6 +61,7 @@ export const ttsChatterboxConfigSchema = ttsChatterboxRuntimeConfigSchema.extend
   ttsConditionalDecoderSrc: modelSrcInputSchema,
   ttsLanguageModelSrc: modelSrcInputSchema,
   referenceAudioSrc: modelSrcInputSchema,
+  enhancer: ttsEnhancerConfigSchema.optional(),
 });
 
 export const ttsSupertonicConfigSchema = ttsSupertonicRuntimeConfigSchema.extend({
@@ -46,6 +72,7 @@ export const ttsSupertonicConfigSchema = ttsSupertonicRuntimeConfigSchema.extend
   ttsUnicodeIndexerSrc: modelSrcInputSchema,
   ttsTtsConfigSrc: modelSrcInputSchema,
   ttsVoiceStyleSrc: modelSrcInputSchema,
+  enhancer: ttsEnhancerConfigSchema.optional(),
 });
 
 export const ttsConfigSchema = z.union([
@@ -87,6 +114,9 @@ export type TtsSupertonicRuntimeConfig = z.infer<
   typeof ttsSupertonicRuntimeConfigSchema
 >;
 export type TtsRuntimeConfig = z.infer<typeof ttsRuntimeConfigSchema>;
+export type TtsEnhancerRuntimeConfig = z.infer<typeof ttsEnhancerRuntimeConfigSchema>;
+export type TtsEnhancerConfig = z.infer<typeof ttsEnhancerConfigSchema>;
+export type LavaSREnhancerConfig = z.infer<typeof lavaSREnhancerConfigSchema>;
 export type TtsClientParams = z.infer<typeof ttsClientParamsSchema>;
 export type TtsRequest = z.infer<typeof ttsRequestSchema>;
 export type TtsResponse = z.infer<typeof ttsResponseSchema>;

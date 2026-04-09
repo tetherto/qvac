@@ -13109,6 +13109,61 @@ export const WHISPER_Q8_0_1 = {
   params: models[337].params,
 } as const;
 
+// LavaSR speech enhancement models (manually added pending registry ingestion)
+export const TTS_LAVASR_ENHANCER_BACKBONE_FP32 = {
+  name: "TTS_LAVASR_ENHANCER_BACKBONE_FP32",
+  src: "s3:///qvac_models_compiled/onnx/lavasr/2026-04-03/enhancer_backbone.onnx",
+  registryPath: "onnx/lavasr/2026-04-03/enhancer_backbone.onnx",
+  registrySource: "s3",
+  blobCoreKey: "",
+  blobBlockOffset: 0,
+  blobBlockLength: 0,
+  blobByteOffset: 0,
+  modelId: "enhancer_backbone.onnx",
+  expectedSize: 0,
+  sha256Checksum: "",
+  addon: "tts" as const,
+  engine: "onnx-tts",
+  quantization: "fp32",
+  params: "",
+} as const;
+
+export const TTS_LAVASR_ENHANCER_SPEC_HEAD_FP32 = {
+  name: "TTS_LAVASR_ENHANCER_SPEC_HEAD_FP32",
+  src: "s3:///qvac_models_compiled/onnx/lavasr/2026-04-03/enhancer_spec_head.onnx",
+  registryPath: "onnx/lavasr/2026-04-03/enhancer_spec_head.onnx",
+  registrySource: "s3",
+  blobCoreKey: "",
+  blobBlockOffset: 0,
+  blobBlockLength: 0,
+  blobByteOffset: 0,
+  modelId: "enhancer_spec_head.onnx",
+  expectedSize: 0,
+  sha256Checksum: "",
+  addon: "tts" as const,
+  engine: "onnx-tts",
+  quantization: "fp32",
+  params: "",
+} as const;
+
+export const TTS_LAVASR_DENOISER = {
+  name: "TTS_LAVASR_DENOISER",
+  src: "s3:///qvac_models_compiled/onnx/lavasr/2026-04-03/denoiser_core_legacy_fixed63.onnx",
+  registryPath: "onnx/lavasr/2026-04-03/denoiser_core_legacy_fixed63.onnx",
+  registrySource: "s3",
+  blobCoreKey: "",
+  blobBlockOffset: 0,
+  blobBlockLength: 0,
+  blobByteOffset: 0,
+  modelId: "denoiser_core_legacy_fixed63.onnx",
+  expectedSize: 0,
+  sha256Checksum: "",
+  addon: "tts" as const,
+  engine: "onnx-tts",
+  quantization: "fp32",
+  params: "",
+} as const;
+
 // Helper function to get model by name
 export function getModelByName(name: string): RegistryItem | undefined {
   return models.find((model) => model.name === name);
