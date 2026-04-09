@@ -38,6 +38,10 @@ on:
       test-version:
         description: "Git ref to checkout for the tested project (branch, tag, or SHA). Defaults to current branch HEAD."
         type: string
+      cache-models:
+        description: "Cache downloaded models between runs"
+        type: boolean
+        default: true
   # pull_request:
   #   paths:
   #     - "packages/sdk/**"
@@ -70,6 +74,7 @@ jobs:
       consumer-timeout: ${{ fromJSON(inputs.desktop-consumer-timeout || '60') }}
       filter: ${{ inputs.filter }}
       test-version: ${{ inputs.test-version || '' }}
+      cache-models: ${{ inputs.cache-models }}
     secrets: inherit
 
   android-tests:

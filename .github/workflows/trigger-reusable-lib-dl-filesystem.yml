@@ -1,4 +1,4 @@
-name: General CI/CD (Qvac-lib-dl-filesystem)
+name: General CI/CD (dl-filesystem)
 # This workflow is used to call the reusable workflows in the qvac-devops repository
 # https://github.com/tetherto/qvac-devops/blob/production-workflows-tag/.github/workflows/public-reusable.yml
 
@@ -10,7 +10,7 @@ on:
       - feature-*
       - tmp-*
     paths:
-      - "packages/qvac-lib-dl-filesystem/**"
+      - "packages/dl-filesystem/**"
   workflow_dispatch:
     inputs:
       custom_input_1:
@@ -43,9 +43,9 @@ jobs:
           base-ref: ${{ github.ref_name }}
           base-sha: ${{ github.event.before }}
           head-sha: ${{ github.sha }}
-          package-slug: qvac-lib-dl-filesystem
-          package-json-path: packages/qvac-lib-dl-filesystem/package.json
-          changelog-path: packages/qvac-lib-dl-filesystem/CHANGELOG.md
+          package-slug: dl-filesystem
+          package-json-path: packages/dl-filesystem/package.json
+          changelog-path: packages/dl-filesystem/CHANGELOG.md
 
   publish-logic:
     runs-on: ubuntu-latest
@@ -115,7 +115,7 @@ jobs:
           pat-token: ${{ secrets.PAT_TOKEN }}
           npm-token: ${{ secrets.NPM_TOKEN }}
           tag: ${{ needs.publish-logic.outputs.gpr_tag }}
-          workdir: packages/qvac-lib-dl-filesystem
+          workdir: packages/dl-filesystem
           name-suffix: "-mono"
 
   publish-release-npm:
@@ -131,7 +131,7 @@ jobs:
     uses: tetherto/qvac-devops/.github/workflows/public-reusable-npm.yml@v1.1.8
     secrets: inherit
     with:
-      workdir: packages/qvac-lib-dl-filesystem
+      workdir: packages/dl-filesystem
       repo_name: dl-filesystem
       caller_event_name: ${{ github.event_name }}
 
@@ -147,7 +147,7 @@ jobs:
       release_name: "QVAC dl-filesystem Lib"
       published_version: ${{ needs.publish-release-npm.outputs.published_version }}
       prev_sha: ${{ github.event.before }}
-      workdir: "packages/qvac-lib-dl-filesystem"
+      workdir: "packages/dl-filesystem"
 
   publish-feature-gpr:
     needs: publish-logic
@@ -169,7 +169,7 @@ jobs:
           pat-token: ${{ secrets.PAT_TOKEN }}
           npm-token: ${{ secrets.NPM_TOKEN }}
           tag: ${{ needs.publish-logic.outputs.gpr_tag }}
-          workdir: packages/qvac-lib-dl-filesystem
+          workdir: packages/dl-filesystem
           name-suffix: "-mono"
 
   publish-tmp-gpr:
@@ -192,5 +192,5 @@ jobs:
           pat-token: ${{ secrets.PAT_TOKEN }}
           npm-token: ${{ secrets.NPM_TOKEN }}
           tag: ${{ needs.publish-logic.outputs.gpr_tag }}
-          workdir: packages/qvac-lib-dl-filesystem
+          workdir: packages/dl-filesystem
           name-suffix: "-mono"

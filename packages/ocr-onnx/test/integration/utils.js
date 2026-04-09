@@ -16,13 +16,30 @@ const windowsOrtParams = isWindows
   ? { graphOptimization: 'basic', enableCpuMemArena: false, intraOpThreads: 1 }
   : {}
 
-// DocTR model download URLs from OnnxTR GitHub releases
-const DOCTR_MODEL_URLS = {
-  'db_resnet50.onnx': 'https://github.com/felixdittrich92/OnnxTR/releases/download/v0.0.1/db_resnet50-69ba0015.onnx',
-  'parseq.onnx': 'https://github.com/felixdittrich92/OnnxTR/releases/download/v0.0.1/parseq-00b40714.onnx',
-  'db_mobilenet_v3_large.onnx': 'https://github.com/felixdittrich92/OnnxTR/releases/download/v0.2.0/db_mobilenet_v3_large-4987e7bd.onnx',
-  'crnn_mobilenet_v3_small.onnx': 'https://github.com/felixdittrich92/OnnxTR/releases/download/v0.0.1/crnn_mobilenet_v3_small-bded4d49.onnx'
+// DocTR model download URLs and SHA-256 checksums from OnnxTR GitHub releases
+const DOCTR_MODELS = {
+  'db_resnet50.onnx': {
+    url: 'https://github.com/felixdittrich92/OnnxTR/releases/download/v0.0.1/db_resnet50-69ba0015.onnx',
+    sha256: '69ba00155c16b198d062f5a7b9cdb446c82aed81812d7ff5a74e01ab41421d55'
+  },
+  'parseq.onnx': {
+    url: 'https://github.com/felixdittrich92/OnnxTR/releases/download/v0.0.1/parseq-00b40714.onnx',
+    sha256: '00b40714e00039c8c04891e5fd98ad5cb46c34fa7133ba09e2a55d4b28d42a68'
+  },
+  'db_mobilenet_v3_large.onnx': {
+    url: 'https://github.com/felixdittrich92/OnnxTR/releases/download/v0.2.0/db_mobilenet_v3_large-4987e7bd.onnx',
+    sha256: '4987e7bdea372559808bd5add85fda10e179dc639696fb489e59a197a25b4c64'
+  },
+  'crnn_mobilenet_v3_small.onnx': {
+    url: 'https://github.com/felixdittrich92/OnnxTR/releases/download/v0.0.1/crnn_mobilenet_v3_small-bded4d49.onnx',
+    sha256: 'bded4d49b3e91dac24591ed4f0af3de4c3baab1f9cc07e8e7dc07c9ba66b3b33'
+  }
 }
+
+// Backwards-compatible URL lookup
+const DOCTR_MODEL_URLS = Object.fromEntries(
+  Object.entries(DOCTR_MODELS).map(([k, v]) => [k, v.url])
+)
 
 const DOCTR_MODELS_DIR = isMobile
   ? path.join(global.testDir || '/tmp', 'doctr-models')
@@ -78,67 +95,48 @@ async function downloadFile (url, destPath) {
 }
 
 /**
- * Loads the DocTR model URL config from testAssets on mobile.
- * Returns null if not available (falls back to direct GitHub downloads).
- * @returns {Object|null}
+ * Computes SHA-256 hash of a buffer
+ * @param {Buffer} buffer
+ * @returns {string} hex digest
  */
-function loadDoctrUrlConfig () {
-  if (global.assetPaths) {
-    const configPath = global.assetPaths['../../testAssets/doctr-model-urls.json']
-    if (configPath) {
-      try {
-        const configData = fs.readFileSync(configPath.replace('file://', ''), 'utf8')
-        return JSON.parse(configData)
-      } catch (e) {
-        console.log(`   Failed to load doctr config from assetPaths: ${e.message}`)
-      }
-    }
-  }
-
-  const fallbackPaths = [
-    '../../testAssets/doctr-model-urls.json',
-    '../testAssets/doctr-model-urls.json',
-    'testAssets/doctr-model-urls.json'
-  ]
-  for (const fallbackPath of fallbackPaths) {
-    if (fs.existsSync(fallbackPath)) {
-      try {
-        return JSON.parse(fs.readFileSync(fallbackPath, 'utf8'))
-      } catch (e) {
-        console.log(`   Failed to parse ${fallbackPath}: ${e.message}`)
-      }
-    }
-  }
-  return null
+function sha256 (buffer) {
+  const crypto = require('bare-crypto')
+  const hash = crypto.createHash('sha256')
+  hash.update(buffer)
+  return hash.digest('hex')
 }
 
 /**
  * Downloads a single DocTR model if not already cached.
- * On mobile uses presigned S3 URLs from doctr-model-urls.json; falls back to GitHub releases.
- * Retries up to 3 times on transient errors (e.g. GitHub Releases HTTP 500).
+ * Downloads from OnnxTR GitHub releases with retry on transient errors.
+ * Verifies SHA-256 checksum after download.
  * @param {string} filename - Model filename (e.g., 'db_resnet50.onnx')
- * @param {Object|null} urlConfig - Presigned URL config loaded from testAssets (mobile only)
  */
-async function downloadDoctrModel (filename, urlConfig = null) {
+async function downloadDoctrModel (filename) {
   const destPath = path.join(DOCTR_MODELS_DIR, filename)
   if (fs.existsSync(destPath)) return
 
-  // Prefer presigned S3 URL on mobile; fall back to public GitHub release URL
-  const url = (urlConfig && urlConfig[filename]) || DOCTR_MODEL_URLS[filename]
-  if (!url) throw new Error(`No download URL for DocTR model: ${filename}`)
+  const model = DOCTR_MODELS[filename]
+  if (!model) throw new Error(`No download URL for DocTR model: ${filename}`)
 
-  const source = (urlConfig && urlConfig[filename]) ? 'S3 presigned URL' : 'GitHub releases'
-  console.log(`Downloading ${filename} from ${source}...`)
+  console.log(`Downloading ${filename} from GitHub releases...`)
 
   const fetch = require('bare-fetch')
   const maxAttempts = 3
   let lastError
   for (let attempt = 1; attempt <= maxAttempts; attempt++) {
     try {
-      const response = await fetch(url)
+      const response = await fetch(model.url)
       if (!response.ok) throw new Error(`HTTP ${response.status} downloading ${filename}`)
-      const buffer = await response.arrayBuffer()
-      fs.writeFileSync(destPath, Buffer.from(buffer))
+      const buffer = Buffer.from(await response.arrayBuffer())
+      if (model.sha256) {
+        const actual = sha256(buffer)
+        if (actual !== model.sha256) {
+          throw new Error(`Checksum mismatch for ${filename}: expected ${model.sha256}, got ${actual}`)
+        }
+        console.log(`   Checksum verified: ${filename}`)
+      }
+      fs.writeFileSync(destPath, buffer)
       console.log(`Downloaded ${filename} (${Math.round(buffer.byteLength / 1024 / 1024)}MB)`)
       return
     } catch (e) {
@@ -155,8 +153,7 @@ async function downloadDoctrModel (filename, urlConfig = null) {
 
 /**
  * Ensures all requested DocTR models are available.
- * On mobile downloads from presigned S3 URLs (doctr-model-urls.json in testAssets);
- * on desktop downloads from OnnxTR GitHub releases if not already present.
+ * Downloads from OnnxTR GitHub releases if not already present.
  * @param {string[]} [models] - Model filenames to ensure. Defaults to all 4 models.
  * @returns {Promise<Object>} Map of model name (without extension) to full path
  */
@@ -164,13 +161,8 @@ async function ensureDoctrModels (models) {
   if (!models) models = Object.keys(DOCTR_MODEL_URLS)
   fs.mkdirSync(DOCTR_MODELS_DIR, { recursive: true })
 
-  const urlConfig = isMobile ? loadDoctrUrlConfig() : null
-  if (isMobile && !urlConfig) {
-    console.log('Warning: doctr-model-urls.json not found on mobile; falling back to GitHub downloads')
-  }
-
   for (const filename of models) {
-    await downloadDoctrModel(filename, urlConfig)
+    await downloadDoctrModel(filename)
   }
   const paths = {}
   for (const filename of models) {

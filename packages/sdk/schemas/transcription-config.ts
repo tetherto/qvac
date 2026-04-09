@@ -97,13 +97,11 @@ export const parakeetRuntimeConfigSchema = z.object({
 export const parakeetConfigSchema = parakeetRuntimeConfigSchema.extend({
   // TDT sources
   parakeetEncoderSrc: modelSrcInputSchema.optional(),
-  parakeetEncoderDataSrc: modelSrcInputSchema.optional(),
   parakeetDecoderSrc: modelSrcInputSchema.optional(),
   parakeetVocabSrc: modelSrcInputSchema.optional(),
   parakeetPreprocessorSrc: modelSrcInputSchema.optional(),
   // CTC sources
   parakeetCtcModelSrc: modelSrcInputSchema.optional(),
-  parakeetCtcModelDataSrc: modelSrcInputSchema.optional(),
   parakeetTokenizerSrc: modelSrcInputSchema.optional(),
   // Sortformer source
   parakeetSortformerSrc: modelSrcInputSchema.optional(),
