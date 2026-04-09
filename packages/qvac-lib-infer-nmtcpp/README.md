@@ -7,30 +7,66 @@ This library simplifies the process of running various translation models within
 
 ## Table of Contents
 
-- [Supported Platforms](#supported-platforms)
-- [Installation](#installation)
-- [Usage](#usage)
-  - [1. Create DataLoader](#1-create-dataloader)
-  - [2. Create the `args` object](#2-create-the-args-object)
-  - [3. Create the `config` object](#3-create-the-config-object)
-  - [4. Create Model Instance](#4-create-model-instance)
-  - [5. Load Model](#5-load-model)
-  - [6. Run the Model](#6-run-the-model)
-  - [7. Batch Translation (Bergamot Only)](#7-batch-translation-bergamot-only)
-  - [8. Unload the Model](#8-unload-the-model)
-- [Quickstart Example](#quickstart-example)
-- [Other Examples](#other-examples)
-- [Model Registry](#model-registry)
-- [Supported Languages](#supported-languages)
-- [ModelClasses and Packages](#modelclasses-and-packages)
-- [Backends](#backends)
-- [Benchmarking](#benchmarking)
-- [Logging](#logging)
-- [Testing](#testing)
-- [Glossary](#glossary)
-- [Resources](#resources)
-- [Contributing](#contributing)
-- [License](#license)
+- [Translation Addons](#translation-addons)
+  - [Table of Contents](#table-of-contents)
+  - [Supported Platforms](#supported-platforms)
+  - [Installation](#installation)
+    - [Prerequisites](#prerequisites)
+    - [Installing the Package](#installing-the-package)
+  - [Usage](#usage)
+    - [1. Create `DataLoader`](#1-create-dataloader)
+    - [2. Create the `args` object](#2-create-the-args-object)
+      - [IndicTrans2 Model](#indictrans2-model)
+      - [Bergamot Model](#bergamot-model)
+    - [3. Create the `config` object](#3-create-the-config-object)
+      - [Model-Specific Parameters](#model-specific-parameters)
+      - [Generation/Decoding Parameters (IndicTrans Only)](#generationdecoding-parameters-indictrans-only)
+    - [4. Create Model Instance](#4-create-model-instance)
+      - [IndicTrans2](#indictrans2)
+      - [Bergamot](#bergamot)
+    - [5. Load Model](#5-load-model)
+    - [6. Run the Model](#6-run-the-model)
+    - [7. Batch Translation (Bergamot Only)](#7-batch-translation-bergamot-only)
+    - [8. Unload the Model](#8-unload-the-model)
+    - [Additional Features](#additional-features)
+  - [Quickstart Example](#quickstart-example)
+    - [1. Create a New Project](#1-create-a-new-project)
+    - [2. Install Required Dependencies](#2-install-required-dependencies)
+    - [3. Create `quickstart.js` and paste the following code into it](#3-create-quickstartjs-and-paste-the-following-code-into-it)
+    - [4. Run the Example](#4-run-the-example)
+    - [Adapting for Other Model Types](#adapting-for-other-model-types)
+  - [Other Examples](#other-examples)
+  - [Model Registry](#model-registry)
+    - [Bergamot Models (Firefox Translations)](#bergamot-models-firefox-translations)
+    - [IndicTrans2 Models](#indictrans2-models)
+    - [Key Pattern](#key-pattern)
+  - [Supported Languages](#supported-languages)
+    - [IndicTrans2 Models (Hyperdrive)](#indictrans2-models-hyperdrive)
+    - [Bergamot Models (Firefox Translations)](#bergamot-models-firefox-translations-1)
+  - [ModelClasses and Packages](#modelclasses-and-packages)
+    - [ModelClass](#modelclass)
+    - [Available Packages](#available-packages)
+      - [Main Package](#main-package)
+  - [Backends](#backends)
+  - [Benchmarking](#benchmarking)
+    - [Benchmark Results](#benchmark-results)
+  - [Logging](#logging)
+    - [Enabling C++ Logs](#enabling-c-logs)
+    - [Disabling C++ Logs](#disabling-c-logs)
+    - [Using Environment Variables (Recommended for Examples)](#using-environment-variables-recommended-for-examples)
+    - [Log Levels](#log-levels)
+  - [Testing](#testing)
+    - [JavaScript Tests](#javascript-tests)
+    - [C++ Tests](#c-tests)
+      - [npm Commands (Recommended - Cross-Platform)](#npm-commands-recommended---cross-platform)
+  - [Glossary](#glossary)
+  - [Resources](#resources)
+  - [Contributing](#contributing)
+    - [Building from Source](#building-from-source)
+    - [Development Workflow](#development-workflow)
+    - [Code Style](#code-style)
+    - [Running Tests](#running-tests)
+  - [License](#license)
 
 ## Supported Platforms
 
@@ -533,7 +569,7 @@ For more detailed examples covering different use cases, refer to the `examples/
 | [indictrans.js](examples/indictrans.js) | English-to-Hindi translation with IndicTrans2 | IndicTrans2 |
 | [batch.example.js](examples/batch.example.js) | Batch translation with `runBatch()` method | Bergamot |
 | [pause.example.js](examples/pause.example.js) | Long-text translation with cancel support | Any |
-| [pivot.example.hd.js](examples/pivot.example.hd.js) | Pivot translation (e.g., es→en→it) via Bergamot | Bergamot |
+| [pivot.example.js](examples/pivot.example.js) | Pivot translation (e.g., es→en→it) via Bergamot | Bergamot |
 | [quickstart.js](examples/quickstart.js) | Bergamot backend quickstart | Bergamot |
 
 ## Model Registry
@@ -863,8 +899,8 @@ npm run test:all           # Run both JavaScript and C++ tests
 - **QVACResponse** –  The response object used by the QVAC API. [GitHub](https://github.com/tetherto/qvac-lib-response)
 - **DataLoader** – Abstraction for fetching model weights and resources. 
   Implementations include:
-  - **`HyperdriveDL`** – Loads from a Hyperdrive instance [GitHub](https://github.com/tetherto/qvac-lib-dl-hyperdrive)
-  - **`fsDL`** – Loads from the local filesystem [GitHub](https://github.com/tetherto/qvac-lib-dl-filesystem)
+  - **`HyperdriveDL`** – Loads from a Hyperdrive instance [GitHub](https://github.com/tetherto/qvac/tree/main/packagesdl-hyperdrive)
+  - **`fsDL`** – Loads from the local filesystem [GitHub](https://github.com/tetherto/qvac/tree/main/packages/dl-filesystem)
 
 ## Resources
 

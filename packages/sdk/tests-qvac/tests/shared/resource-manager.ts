@@ -6,6 +6,7 @@ interface ModelDefinition {
   type: string;
   config?: Record<string, unknown>;
   skipPreDownload?: boolean;
+  preLoadUnload?: true;
 }
 
 interface TrackedModel {
@@ -31,12 +32,14 @@ export class ResourceManager {
     const entries = Array.from(this.definitions.entries()).filter(
       ([, def]) => !def.skipPreDownload,
     );
+    const preLoadUnload = Array.from(this.definitions.entries()).filter(([, def]) => def.preLoadUnload);
     const skipped = this.definitions.size - entries.length;
     if (skipped > 0) log?.(`⏭️  Skipping ${skipped} models marked skipPreDownload`);
 
     log?.(`📥 Downloading ${entries.length} models in parallel...`);
 
     const active = new Set<string>();
+    let leftToCheck = entries.length + preLoadUnload.length;
     let maxConcurrent = 0;
     let parallelDetected = false;
 
@@ -58,7 +61,8 @@ export class ResourceManager {
           },
         });
         active.delete(dep);
-        log?.(`✅ ${dep} cached`);
+        leftToCheck--;
+        log?.(`✅ ${dep} cached - still processing: ${leftToCheck}`);
         return dep;
       }),
     );
@@ -69,6 +73,20 @@ export class ResourceManager {
         log?.(`❌ download failed: ${(f as PromiseRejectedResult).reason}`);
       }
       throw new Error(`${failed.length}/${entries.length} downloads failed`);
+    }
+
+    log?.(`🔄 pre-loading ${preLoadUnload.length} models (models with companion models)...`);
+    for (const [dep, def] of preLoadUnload) {
+      log?.(`🔄 pre-loading ${dep}: ${def.constant.name}...`);
+      const modelId = await loadModel({
+        modelSrc: def.constant as never,
+        modelType: def.type,
+        modelConfig: def.config,
+      });
+      log?.(`✅ pre-loaded ${dep}: ${def.constant.name} - unloading...`);
+      await unloadModel({ modelId });
+      leftToCheck--;
+      log?.(`✅ unloaded ${dep}: ${def.constant.name} - still processing: ${leftToCheck}`);
     }
 
     log?.(

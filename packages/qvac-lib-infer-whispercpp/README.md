@@ -237,7 +237,7 @@ The library provides a straightforward workflow for audio transcription:
 
 Data loaders abstract the way model files are accessed, whether from the filesystem, a network drive, or any other storage mechanism. More info about model registry and model builds in [resources](#resources).
 
-- [Filesystem Data Loader](https://github.com/tetherto/qvac/tree/main/packages/qvac-lib-dl-filesystem)
+- [Filesystem Data Loader](https://github.com/tetherto/qvac/tree/main/packages/dl-filesystem)
 
 First, select and instantiate a data loader that provides access to model files:
 
