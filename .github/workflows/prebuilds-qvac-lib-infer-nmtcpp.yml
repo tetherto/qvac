@@ -47,16 +47,16 @@ jobs:
           - os: macos-14
             platform: darwin
             arch: arm64
-          - os: macos-26
+          - os: macos-14
             platform: ios
             arch: arm64
             flags: -D BUILD_TESTING=OFF
-          - os: macos-26
+          - os: macos-14
             platform: ios
             arch: arm64
             tags: -simulator
             flags: --simulator -D BUILD_TESTING=OFF
-          - os: macos-26
+          - os: macos-14
             platform: ios
             arch: x64
             tags: -simulator

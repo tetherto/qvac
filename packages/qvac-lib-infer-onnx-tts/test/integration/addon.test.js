@@ -317,7 +317,7 @@ test('Supertonic TTS: Basic synthesis test', { timeout: 1800000 }, async (t) => 
     modelDir,
     voiceName: 'F1',
     language: 'en',
-    supertonicMultilingual: true
+    supertonicMultilingual: false
   }
 
   console.log('\n=== Loading Supertonic TTS model ===')
@@ -383,7 +383,7 @@ test('Supertonic TTS: Multiple sentences synthesis', { timeout: 1800000 }, async
     modelDir,
     voiceName: 'F1',
     language: 'en',
-    supertonicMultilingual: true
+    supertonicMultilingual: false
   }
 
   const expectation = {
@@ -458,7 +458,7 @@ test('Supertonic TTS: WER test (TTS + Whisper)', { timeout: 1800000 }, async (t)
   }
 
   const text = 'The quick brown fox jumps over the lazy dog.'
-  const modelParams = { modelDir, voiceName: 'F1', language: 'en', supertonicMultilingual: true }
+  const modelParams = { modelDir, voiceName: 'F1', language: 'en', supertonicMultilingual: false }
 
   console.log('\n=== Loading Supertonic TTS and running synthesis ===')
   const ttsModel = await loadSupertonicTTS(modelParams)

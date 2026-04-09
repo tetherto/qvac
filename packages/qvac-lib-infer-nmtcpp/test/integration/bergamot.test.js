@@ -61,24 +61,6 @@ for (const deviceConfig of DEVICE_CONFIGS) {
 
     const fullVocabPath = path.join(modelDir, vocabFile)
 
-    /**
-     * Local file loader for Bergamot model
-     * Provides synchronous file access for model loading
-     */
-    const localLoader = {
-      ready: async () => {},
-      close: async () => {},
-      download: async (filename) => {
-        const filePath = path.join(modelDir, filename)
-        return fs.readFileSync(filePath)
-      },
-      getFileSize: async (filename) => {
-        const filePath = path.join(modelDir, filename)
-        const stats = fs.statSync(filePath)
-        return stats.size
-      }
-    }
-
     const logger = createLogger()
     const perfCollector = createPerformanceCollector()
     let model
@@ -87,22 +69,23 @@ for (const deviceConfig of DEVICE_CONFIGS) {
 
     try {
       model = new TranslationNmtcpp({
-        loader: localLoader,
+        files: {
+          model: path.join(modelDir, modelFile),
+          srcVocab: fullVocabPath,
+          dstVocab: fullVocabPath
+        },
         params: {
           srcLang: 'en',
           dstLang: 'it'
         },
-        diskPath: modelDir,
-        modelName: modelFile,
+        config: {
+          modelType: TranslationNmtcpp.ModelTypes.Bergamot,
+          beamsize: 1,
+          normalize: 1,
+          use_gpu: deviceConfig.useGpu
+        },
         logger,
         opts: { stats: true }
-      }, {
-        modelType: TranslationNmtcpp.ModelTypes.Bergamot,
-        srcVocabPath: fullVocabPath,
-        dstVocabPath: fullVocabPath,
-        beamsize: 1,
-        normalize: 1,
-        use_gpu: deviceConfig.useGpu
       })
       model.logger.setLevel('debug')
       await model.load()
