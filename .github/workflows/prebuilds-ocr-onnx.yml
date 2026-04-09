@@ -63,10 +63,10 @@ jobs:
             arch: x64
             tags: -simulator
             flags: --simulator -D BUILD_TESTING=OFF
-          - os: macos-15
+          - os: macos-14
             platform: darwin
             arch: arm64
-          - os: macos-15-large
+          - os: macos-14
             platform: darwin
             arch: x64
           - os: windows-2022
