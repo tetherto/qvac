@@ -216,6 +216,7 @@ class ImgStableDiffusion {
    * @param {number} [params.batch_count=1]         - Images per call
    * @param {boolean} [params.vae_tiling=false]     - Enable VAE tiling (for large images)
    * @param {string}  [params.cache_preset]         - Cache preset: slow/medium/fast/ultra
+   * @param {string}  [params.lora]                 - Absolute path to a LoRA adapter (.safetensors, etc.)
    * @param {Uint8Array} [params.init_image]        - Source image bytes for img2img (PNG/JPEG).
    *                                                   FLUX2: in-context conditioning (ref_images).
    *                                                   Others: SDEdit (init_image + strength).

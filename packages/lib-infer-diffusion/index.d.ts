@@ -151,6 +151,7 @@ export interface ImgStableDiffusionArgs {
 export interface GenerationParams {
   prompt: string
   negative_prompt?: string
+  lora?: string
   width?: number
   height?: number
   steps?: number

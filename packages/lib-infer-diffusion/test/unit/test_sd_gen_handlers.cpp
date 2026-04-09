@@ -145,6 +145,11 @@ TEST(SdGenHandlers_Scheduler, UnknownSchedulerThrows) {
       StatusError);
 }
 
+TEST(SdGenHandlers_Prompt, LoraPathMapsCorrectly) {
+  auto cfg = applyOne("lora", str("/tmp/test-lora.safetensors"));
+  EXPECT_EQ(cfg.loraPath, "/tmp/test-lora.safetensors");
+}
+
 // ─────────────────────────────────────────────────────────────────────────────
 // 3. parseCacheMode
 // ─────────────────────────────────────────────────────────────────────────────
