@@ -1,11 +1,10 @@
 'use strict'
 
 /**
- * Quickstart Example
+ * Quickstart Example — Bergamot Backend
  *
- * This example demonstrates both translation backends:
- * 1. GGML backend - Downloads model via HyperdriveDL (English to Italian)
- * 2. Bergamot backend - Uses local model files (requires BERGAMOT_MODEL_PATH)
+ * This example demonstrates translation using the Bergamot backend
+ * with local model files or auto-download via Firefox CDN.
  *
  * Usage:
  *   bare examples/quickstart.js
@@ -16,8 +15,6 @@
  */
 
 const TranslationNmtcpp = require('..')
-const HyperdriveDL = require('@qvac/dl-hyperdrive')
-const fs = require('bare-fs')
 const path = require('bare-path')
 const process = require('bare-process')
 
@@ -38,57 +35,12 @@ const logger = VERBOSE
 
 const text = 'Machine translation has revolutionized how we communicate across language barriers in the modern digital world.'
 
-async function testGGML () {
-  console.log('\n=== Testing GGML Backend ===\n')
-
-  // Create `DataLoader`
-  const hdDL = new HyperdriveDL({
-    // The hyperdrive key for en-it translation model weights and config
-    key: 'hd://9ef58f31c20d5556722e0b58a5d262fd89801daf2e6cb28e3f21ac6e9228088f'
-  })
-
-  // Create the `args` object
-  const args = {
-    loader: hdDL,
-    params: { mode: 'full', dstLang: 'it', srcLang: 'en' },
-    diskPath: './models',
-    modelName: 'model.bin',
-    logger // Pass the logger
-  }
-
-  // Create Model Instance
-  const model = new TranslationNmtcpp(args, { })
-
-  // Load model
-  await model.load()
-
-  try {
-    // Run the Model
-    const response = await model.run(text)
-
-    await response
-      .onUpdate(data => {
-        console.log(data)
-      })
-      .await()
-
-    console.log('GGML translation finished!')
-  } finally {
-    // Unload the model
-    await model.unload()
-
-    // Close the DataLoader
-    await hdDL.close()
-  }
-}
-
 async function testBergamot () {
   console.log('\n=== Testing Bergamot Backend ===\n')
 
   const {
     ensureBergamotModelFiles,
-    getBergamotFileNames,
-    getBergamotHyperdriveKey
+    getBergamotFileNames
   } = require('../lib/bergamot-model-fetcher')
 
   const srcLang = 'en'
@@ -97,52 +49,27 @@ async function testBergamot () {
   // Use local model path if provided, otherwise auto-download
   const bergamotPath = process.env.BERGAMOT_MODEL_PATH || './model/bergamot/enit'
 
-  // Ensure model files are present (Hyperdrive first, Firefox CDN fallback)
+  // Ensure model files are present (downloads from Firefox CDN if not)
   const modelDir = await ensureBergamotModelFiles(srcLang, dstLang, bergamotPath)
   console.log('Model directory:', modelDir)
 
   const fileNames = getBergamotFileNames(srcLang, dstLang)
 
-  // Decide loader: Hyperdrive key available → use HyperdriveDL, else local files
-  const hdKey = getBergamotHyperdriveKey(srcLang, dstLang)
-  let loader
-
-  if (hdKey) {
-    // Primary: use HyperdriveDL for streaming model data
-    const HyperdriveDL = require('@qvac/dl-hyperdrive')
-    loader = new HyperdriveDL({ key: `hd://${hdKey}` })
-    console.log('Using HyperdriveDL loader')
-  } else {
-    // Fallback: local file loader (files already downloaded from Firefox CDN)
-    loader = {
-      ready: async () => {},
-      close: async () => {},
-      download: async (filename) => fs.readFileSync(path.join(modelDir, filename)),
-      getFileSize: async (filename) => fs.statSync(path.join(modelDir, filename)).size
-    }
-    console.log('Using local file loader (Firefox CDN download)')
-  }
-
   console.log('Loading model...')
 
-  // Create the `args` object for Bergamot
-  const args = {
-    loader,
+  // Create model with resolved file paths
+  const model = new TranslationNmtcpp({
+    files: {
+      model: path.join(modelDir, fileNames.modelName),
+      srcVocab: path.join(modelDir, fileNames.srcVocabName),
+      dstVocab: path.join(modelDir, fileNames.dstVocabName)
+    },
     params: { mode: 'full', dstLang, srcLang },
-    diskPath: modelDir,
-    modelName: fileNames.modelName,
+    config: {
+      modelType: TranslationNmtcpp.ModelTypes.Bergamot
+    },
     logger
-  }
-
-  // Config with vocab paths
-  const config = {
-    srcVocabName: fileNames.srcVocabName,
-    dstVocabName: fileNames.dstVocabName,
-    modelType: TranslationNmtcpp.ModelTypes.Bergamot
-  }
-
-  // Create Model Instance
-  const model = new TranslationNmtcpp(args, config)
+  })
 
   // Load model
   await model.load()
@@ -165,19 +92,12 @@ async function testBergamot () {
   } finally {
     console.log('Unloading model...')
     await model.unload()
-
-    // Close the loader
-    await loader.close()
     console.log('Done!')
   }
 }
 
 async function main () {
   try {
-    // Test GGML backend
-    await testGGML()
-
-    // Test Bergamot backend
     await testBergamot()
 
     console.log('\n=== All Tests Completed Successfully! ===\n')
