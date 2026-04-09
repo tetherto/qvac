@@ -59,9 +59,7 @@
   "bugs": "https://github.com/tetherto/qvac/issues",
   "homepage": "https://github.com/tetherto/qvac/tree/main/packages/qvac-lib-infer-llamacpp-embed#readme",
   "devDependencies": {
-    "@qvac/dl-filesystem": "^0.1.2",
     "@types/node": "^24.2.1",
-    "bare-fs": "^4.5.1",
     "brittle": "^3.4.0",
     "cmake-bare": "^1.7.1",
     "cmake-vcpkg": "^1.1.0",
@@ -69,12 +67,10 @@
     "typescript": "^5.9.2"
   },
   "dependencies": {
-    "@qvac/infer-base": "^0.2.2",
+    "@qvac/infer-base": "^0.4.0",
     "@qvac/logging": "^0.1.0",
+    "bare-fs": "^4.5.1",
     "bare-path": "^3.0.0"
-  },
-  "peerDependencies": {
-    "@qvac/dl-hyperdrive": "^0.1.0"
   },
   "exports": {
     "./package": "./package.json",
