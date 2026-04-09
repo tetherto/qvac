@@ -1,7 +1,7 @@
 'use strict'
 
 const test = require('brittle')
-const FilesystemDL = require('@qvac/dl-filesystem')
+const path = require('bare-path')
 const LlmLlamacpp = require('../../index.js')
 const { ensureModel } = require('./utils')
 const os = require('bare-os')
@@ -38,7 +38,7 @@ function createLogger () {
 }
 
 async function createInstance (modelName, dirPath, overrides = {}) {
-  const loader = new FilesystemDL({ dirPath })
+  const modelPath = path.join(dirPath, modelName)
   const config = {
     device: useCpu ? 'cpu' : 'gpu',
     gpu_layers: '999',
@@ -49,14 +49,13 @@ async function createInstance (modelName, dirPath, overrides = {}) {
   }
 
   const addon = new LlmLlamacpp({
-    loader,
-    modelName,
-    diskPath: dirPath,
+    files: { model: [modelPath] },
+    config,
     logger: createLogger(),
     opts: { stats: true }
-  }, config)
+  })
 
-  return { addon, loader }
+  return { addon }
 }
 
 async function collectResponse (response) {
@@ -74,14 +73,12 @@ test('Two instances can run inference simultaneously', {
     downloadUrl: DEFAULT_MODEL.url
   })
 
-  const { addon: addon1, loader: loader1 } = await createInstance(modelName, dirPath)
-  const { addon: addon2, loader: loader2 } = await createInstance(modelName, dirPath)
+  const { addon: addon1 } = await createInstance(modelName, dirPath)
+  const { addon: addon2 } = await createInstance(modelName, dirPath)
 
   t.teardown(async () => {
     await addon1.unload().catch(() => {})
     await addon2.unload().catch(() => {})
-    await loader1.close().catch(() => {})
-    await loader2.close().catch(() => {})
   })
 
   await addon1.load()
@@ -111,7 +108,7 @@ test('Repeated load/unload cycles should remain stable', {
   const NUM_CYCLES = 6
 
   for (let i = 0; i < NUM_CYCLES; i++) {
-    const { addon, loader } = await createInstance(modelName, dirPath)
+    const { addon } = await createInstance(modelName, dirPath)
 
     await addon.load()
     const response = await addon.run(BASE_PROMPT)
@@ -120,7 +117,6 @@ test('Repeated load/unload cycles should remain stable', {
     t.ok(output.length > 0, `cycle ${i + 1}: produced output`)
 
     await addon.unload()
-    await loader.close()
 
     t.pass(`cycle ${i + 1}: load/unload completed`)
   }
@@ -137,16 +133,14 @@ test('Unloading one instance does not affect another generating instance', {
     downloadUrl: DEFAULT_MODEL.url
   })
 
-  const { addon: addon1, loader: loader1 } = await createInstance(modelName, dirPath, {
+  const { addon: addon1 } = await createInstance(modelName, dirPath, {
     n_predict: '256'
   })
-  const { addon: addon2, loader: loader2 } = await createInstance(modelName, dirPath)
+  const { addon: addon2 } = await createInstance(modelName, dirPath)
 
   t.teardown(async () => {
     await addon1.unload().catch(() => {})
     await addon2.unload().catch(() => {})
-    await loader1.close().catch(() => {})
-    await loader2.close().catch(() => {})
   })
 
   await addon1.load()
@@ -181,7 +175,6 @@ test('Unloading one instance does not affect another generating instance', {
   if (!unloadedInstance2) {
     unloadedInstance2 = true
     await addon2.unload()
-    await loader2.close()
     t.pass('unloaded instance 2 while instance 1 is generating')
   }
 
@@ -201,13 +194,12 @@ test('Multiple load/unload cycles on one instance while another generates', {
     downloadUrl: DEFAULT_MODEL.url
   })
 
-  const { addon: addon1, loader: loader1 } = await createInstance(modelName, dirPath, {
+  const { addon: addon1 } = await createInstance(modelName, dirPath, {
     n_predict: '512'
   })
 
   t.teardown(async () => {
     await addon1.unload().catch(() => {})
-    await loader1.close().catch(() => {})
   })
 
   await addon1.load()
@@ -254,10 +246,9 @@ test('Multiple load/unload cycles on one instance while another generates', {
     }
     cyclesCompleted++
     const cycleNum = cyclesCompleted
-    const { addon: addon2, loader: loader2 } = await createInstance(modelName, dirPath)
+    const { addon: addon2 } = await createInstance(modelName, dirPath)
     await addon2.load()
     await addon2.unload()
-    await loader2.close()
     t.pass(`load/unload cycle ${cycleNum} completed while instance 1 generates`)
   }
 

@@ -1,7 +1,6 @@
 'use strict'
 
 const test = require('brittle')
-const FilesystemDL = require('@qvac/dl-filesystem')
 const LlmLlamacpp = require('../../index.js')
 const { ensureModel } = require('./utils')
 const os = require('bare-os')
@@ -108,15 +107,14 @@ const skipReason = isMobile
 // ---------------------------------------------------------------------------
 test('AfriqueGemma: end-to-end African language translation', { timeout: 1_800_000, skip: skipReason }, async t => {
   const [modelName, dirPath] = await resolveModel()
-  const loader = new FilesystemDL({ dirPath })
+  const modelPath = path.join(dirPath, modelName)
 
   const addon = new LlmLlamacpp({
-    loader,
-    modelName,
-    diskPath: dirPath,
+    files: { model: [modelPath] },
+    config: AFRIQUEGEMMA_CONFIG,
     logger: console,
     opts: { stats: true }
-  }, AFRIQUEGEMMA_CONFIG)
+  })
 
   try {
     // --- Model loading ---
@@ -161,7 +159,6 @@ test('AfriqueGemma: end-to-end African language translation', { timeout: 1_800_0
     t.is(out1, out2, `deterministic: "${out1}"`)
   } finally {
     await addon.unload().catch(() => {})
-    await loader.close().catch(() => {})
   }
 })
 

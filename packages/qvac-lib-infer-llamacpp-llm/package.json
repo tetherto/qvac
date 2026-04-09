@@ -57,8 +57,6 @@
   "bugs": "https://github.com/tetherto/qvac/issues",
   "homepage": "https://github.com/tetherto/qvac/tree/main/packages/qvac-lib-infer-llamacpp-llm#readme",
   "devDependencies": {
-    "@qvac/dl-base": "^0.1.0",
-    "@qvac/dl-filesystem": "^0.1.2",
     "@qvac/logging": "^0.1.0",
     "@types/node": "^24.2.1",
     "bare-url": "^2.1.6",
@@ -73,7 +71,7 @@
     "util": "npm:bare-utils@^1.5.1"
   },
   "dependencies": {
-    "@qvac/infer-base": "^0.3.0",
+    "@qvac/infer-base": "^0.4.0",
     "bare-fs": "^4.5.1",
     "bare-path": "^3.0.0",
     "bare-process": "^4.2.2"

@@ -4,7 +4,6 @@ const test = require('brittle')
 const fs = require('bare-fs')
 const path = require('bare-path')
 const { ensureModel, getMediaPath } = require('./utils')
-const FilesystemDL = require('@qvac/dl-filesystem')
 const LlmLlamacpp = require('../../index.js')
 const os = require('bare-os')
 
@@ -55,23 +54,20 @@ async function setupLightOnInference (t, device = 'gpu') {
   const [projModelName] = await ensureModel(LIGHTON_OCR_CONFIG.projModel)
   t.ok(fs.existsSync(path.join(dirPath, projModelName)), 'Projection model file should exist')
 
-  const loader = new FilesystemDL({ dirPath })
+  const modelPath = path.join(dirPath, modelName)
   const inference = new LlmLlamacpp({
-    modelName,
-    loader,
-    logger: console,
-    diskPath: dirPath,
-    projectionModel: projModelName
-  }, getConfig(device))
+    files: { model: [modelPath], projectionModel: path.join(dirPath, projModelName) },
+    config: getConfig(device),
+    logger: console
+  })
 
   t.teardown(async () => {
-    await loader.close()
     await inference.unload()
   })
 
   await inference.load()
 
-  return { inference, loader }
+  return { inference }
 }
 
 async function runOcr (inference, imageFilePath) {

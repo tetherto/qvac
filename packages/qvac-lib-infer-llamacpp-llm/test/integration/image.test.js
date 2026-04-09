@@ -4,7 +4,6 @@ const test = require('brittle')
 const fs = require('bare-fs')
 const path = require('bare-path')
 const { ensureModel, getMediaPath } = require('./utils')
-const FilesystemDL = require('@qvac/dl-filesystem')
 const LlmLlamacpp = require('../../index.js')
 const os = require('bare-os')
 
@@ -84,7 +83,7 @@ function getConfig (device, modelConfig) {
  * Sets up a multimodal LlmLlamacpp instance with LLM and projection models
  * @param {Object} t - Test instance
  * @param {string} device - Device to use ('cpu' or 'gpu')
- * @returns {Promise<{inference: LlmLlamacpp, loader: FilesystemDL}>}
+ * @returns {Promise<{inference: LlmLlamacpp}>}
  */
 async function setupMultimodalInference (t, device = 'gpu', modelConfig = MULTIMODAL_MODEL_CONFIG) {
   const [modelName, dirPath] = await ensureModel(modelConfig.llmModel)
@@ -93,23 +92,20 @@ async function setupMultimodalInference (t, device = 'gpu', modelConfig = MULTIM
   const [projModelName] = await ensureModel(modelConfig.projModel)
   t.ok(fs.existsSync(path.join(dirPath, projModelName)), 'Projection model file should exist')
 
-  const loader = new FilesystemDL({ dirPath })
+  const modelPath = path.join(dirPath, modelName)
   const inference = new LlmLlamacpp({
-    modelName,
-    loader,
-    logger: console,
-    diskPath: dirPath,
-    projectionModel: projModelName
-  }, getConfig(device, modelConfig))
+    files: { model: [modelPath], projectionModel: path.join(dirPath, projModelName) },
+    config: getConfig(device, modelConfig),
+    logger: console
+  })
 
   t.teardown(async () => {
-    await loader.close()
     await inference.unload()
   })
 
   await inference.load()
 
-  return { inference, loader }
+  return { inference }
 }
 
 /**

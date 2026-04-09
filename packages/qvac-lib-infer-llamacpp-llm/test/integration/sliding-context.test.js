@@ -2,7 +2,6 @@
 
 const test = require('brittle')
 const path = require('bare-path')
-const FilesystemDL = require('@qvac/dl-filesystem')
 const LlmLlamacpp = require('../../index.js')
 const { ensureModel } = require('./utils')
 const os = require('bare-os')
@@ -55,7 +54,7 @@ async function setupModel (t, overrides = {}) {
     downloadUrl: DEFAULT_MODEL.url
   })
 
-  const loader = new FilesystemDL({ dirPath })
+  const modelPath = path.join(dirPath, modelName)
 
   const baseConfig = {
     device: useCpu ? 'cpu' : 'gpu',
@@ -69,19 +68,13 @@ async function setupModel (t, overrides = {}) {
   }
 
   const model = new LlmLlamacpp({
-    loader,
-    modelName,
-    diskPath: dirPath,
+    files: { model: [modelPath] },
+    config: { ...baseConfig, ...overrides },
     logger: createTestLogger(),
     opts: { stats: true }
-  }, { ...baseConfig, ...overrides })
+  })
 
-  try {
-    await model.load()
-  } catch (err) {
-    await loader.close().catch(() => {})
-    throw err
-  }
+  await model.load()
 
   t.teardown(async () => {
     // Guard against model.unload() hanging after context overflow (seen on darwin-arm64 CI).
@@ -89,7 +82,6 @@ async function setupModel (t, overrides = {}) {
     const unloadDone = model.unload().catch(() => {})
     const unloadTimeout = new Promise(resolve => setTimeout(resolve, 30_000))
     await Promise.race([unloadDone, unloadTimeout])
-    await loader.close().catch(() => {})
   })
 
   return { model, dirPath }
