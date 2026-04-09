@@ -1,0 +1,67 @@
+name: General CI/CD (Qvac)
+# This workflow publishes the `qvac` package to NPM only (no GPR)
+# The shim forwards all commands to @qvac/qvac-cli
+
+permissions:
+  contents: write
+  packages: write
+  pull-requests: write
+  id-token: write
+
+on:
+  push:
+    branches:
+      - main
+      - release-*
+    paths:
+      - "packages/qvac/**"
+  pull_request:
+    branches:
+      - release-*
+    paths:
+      - "packages/qvac/**"
+  workflow_dispatch:
+
+jobs:
+  release-pr-guard:
+    name: Release PR Guard
+    if: github.event_name == 'pull_request' && startsWith(github.base_ref, 'release-')
+    uses: tetherto/qvac-devops/.github/workflows/release-pr-guard.yml@monorepo_update
+    secrets:
+      github-token: ${{ secrets.GITHUB_TOKEN }}
+    with:
+      package-slug: qvac
+      package-json-path: packages/qvac/package.json
+      changelog-path: packages/qvac/CHANGELOG.md
+
+  publish-logic:
+    runs-on: ubuntu-latest
+    outputs:
+      publish_release: ${{ steps.logic.outputs.publish_release }}
+    steps:
+      - id: logic
+        shell: bash
+        run: |
+          set -euo pipefail
+          ref_name="${GITHUB_REF_NAME}"
+          event_name="${GITHUB_EVENT_NAME}"
+
+          publish_release="false"
+
+          # Only publishes on release branches (NPM only)
+          if [ "$event_name" = "push" ] || [ "$event_name" = "workflow_dispatch" ]; then
+            if [[ "$ref_name" == release-* ]]; then
+              publish_release="true"
+            fi
+          fi
+
+          echo "publish_release=$publish_release" >> "$GITHUB_OUTPUT"
+
+  # NPM-only publish
+  publish-release-npm:
+    needs: publish-logic
+    if: needs.publish-logic.outputs.publish_release == 'true'
+    uses: tetherto/qvac-devops/.github/workflows/public-reusable-npm.yml@monorepo_update
+    secrets: inherit
+    with:
+      workdir: packages/qvac
