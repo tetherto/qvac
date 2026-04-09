@@ -33,3 +33,5 @@ export {
   modelRegistryGetModel,
   type ModelRegistrySearchParams,
 } from "./registry";
+export { suspend } from "./suspend";
+export { resume } from "./resume";
