@@ -1,0 +1,12 @@
+# CodeQL configuration for GitHub Actions workflow scanning.
+#
+# Excludes the artifact-poisoning query which produces false positives
+# on workflow_dispatch workflows that only run npm commands.
+# These workflows require write access to trigger and already have:
+#   - Input validation (only @qvac/* packages allowed)
+#   - --ignore-scripts on npm install/pack commands
+#   - No untrusted data flowing into shell commands
+
+query-filters:
+  - exclude:
+      id: actions/artifact-poisoning
