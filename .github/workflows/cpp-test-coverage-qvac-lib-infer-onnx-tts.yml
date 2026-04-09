@@ -46,6 +46,7 @@ jobs:
     permissions:
       contents: read
       id-token: write
+      checks: write
 
     strategy:
       fail-fast: false

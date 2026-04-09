@@ -49,16 +49,16 @@ jobs:
             arch: arm64
             variant: ubuntu
             flags: -D ANDROID_STL=c++_shared -D BUILD_TESTING=OFF
-          - os: macos-15
+          - os: macos-14
             platform: ios
             arch: arm64
             flags: -D BUILD_TESTING=OFF
-          - os: macos-15
+          - os: macos-14
             platform: ios
             arch: arm64
             tags: -simulator
             flags: --simulator -D BUILD_TESTING=OFF
-          - os: macos-15
+          - os: macos-14
             platform: ios
             arch: x64
             tags: -simulator
@@ -66,6 +66,9 @@ jobs:
           - os: macos-15
             platform: darwin
             arch: arm64
+          - os: macos-15-large
+            platform: darwin
+            arch: x64
           - os: windows-2022
             platform: win32
             arch: x64
@@ -123,7 +126,7 @@ jobs:
         name: Install ccache on Linux
         run: sudo apt-get install -y ccache
 
-      - if: ${{ matrix.os == 'macos-15' }}
+      - if: ${{ startsWith(matrix.os, 'macos') }}
         name: Install ccache on macOS
         run: brew install ccache
 
@@ -236,7 +239,7 @@ jobs:
           Rename-Item -Path "C:\Program Files (x86)\Windows Kits\10\bin\10.0.26100.0" -NewName "C:\Program Files (x86)\Windows Kits\10\bin\old-10.0.26100.0"
           Rename-Item -Path "C:\Program Files (x86)\Windows Kits\10\Lib\10.0.26100.0" -NewName "C:\Program Files (x86)\Windows Kits\10\Lib\old-10.0.26100.0"
 
-      - if: ${{ matrix.os == 'macos-15' }}
+      - if: ${{ startsWith(matrix.os, 'macos') }}
         name: Remove Homebrew LLVM
         working-directory: ${{ env.PKG_DIR }}
         shell: bash
@@ -244,7 +247,7 @@ jobs:
            chmod +x ./ci/remove-brew-llvm.sh
            ./ci/remove-brew-llvm.sh
 
-      - if: ${{ matrix.os == 'macos-15' }}
+      - if: ${{ startsWith(matrix.os, 'macos') }}
         name: Install vcpkg in macos
         run: |
           cd ..
@@ -254,11 +257,11 @@ jobs:
           echo "VCPKG_ROOT=$VCPKG_ROOT" >> $GITHUB_ENV
           echo "$VCPKG_ROOT" >> $GITHUB_PATH
 
-      - if: ${{ matrix.os == 'macos-15' }}
+      - if: ${{ startsWith(matrix.os, 'macos') }}
         name: Select Xcode 16.4
         run: sudo xcode-select -s /Applications/Xcode_16.4.app/Contents/Developer
 
-      - if: ${{ matrix.os == 'macos-15' }}
+      - if: ${{ startsWith(matrix.os, 'macos') && matrix.platform == 'ios' }}
         name: Verify UIKit Frameworks
         run: |
           SDK_OS=$(xcrun --sdk iphoneos --show-sdk-path)

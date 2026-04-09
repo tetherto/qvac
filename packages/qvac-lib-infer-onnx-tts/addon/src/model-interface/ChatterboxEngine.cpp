@@ -87,9 +87,9 @@ namespace qvac::ttslib::chatterbox {
 
 namespace {
 
-ChatterboxEngine::SessionFactory makeDefaultSessionFactory() {
-  return [](const std::string &path) {
-    return std::make_unique<OnnxInferSession>(path);
+ChatterboxEngine::SessionFactory makeDefaultSessionFactory(bool useGPU) {
+  return [useGPU](const std::string &path) {
+    return std::make_unique<OnnxInferSession>(path, useGPU);
   };
 }
 
@@ -97,7 +97,8 @@ ChatterboxEngine::SessionFactory makeDefaultSessionFactory() {
 
 ChatterboxEngine::ChatterboxEngine(const ChatterboxConfig &cfg,
                                    SessionFactory factory) {
-  sessionFactory_ = factory ? std::move(factory) : makeDefaultSessionFactory();
+  sessionFactory_ = factory ? std::move(factory)
+                            : makeDefaultSessionFactory(cfg.useGPU);
   load(cfg);
 }
 

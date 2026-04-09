@@ -47,16 +47,16 @@ jobs:
           - os: macos-14
             platform: darwin
             arch: arm64
-          - os: macos-26
+          - os: macos-14
             platform: ios
             arch: arm64
             flags: -D BUILD_TESTING=OFF
-          - os: macos-26
+          - os: macos-14
             platform: ios
             arch: arm64
             tags: -simulator
             flags: --simulator -D BUILD_TESTING=OFF
-          - os: macos-26
+          - os: macos-14
             platform: ios
             arch: x64
             tags: -simulator
@@ -706,12 +706,6 @@ jobs:
           path: prebuilds
           merge-multiple: true
 
-      - run: |
-          tree prebuilds/android-*
-          mkdir -p prebuilds/android-arm prebuilds/android-ia32 prebuilds/android-x64
-          cp -rv prebuilds/android-arm64/* prebuilds/android-arm/
-          cp -rv prebuilds/android-arm64/* prebuilds/android-x64/
-          cp -rv prebuilds/android-arm64/* prebuilds/android-ia32/
       - uses: actions/upload-artifact@bbbca2ddaa5d8feaa63e36b76fdaad77386f024f # 7.0.0
         with:
           name: prebuilds
