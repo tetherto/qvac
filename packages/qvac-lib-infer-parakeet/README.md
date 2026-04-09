@@ -375,9 +375,9 @@ qvac-lib-infer-parakeet/
 |----------|-------------|-------------|--------|-------------|
 | macOS | arm64, x64 | 14.0+ | ✅ Tier 1 | CoreML |
 | iOS | arm64 | 17.0+ | ✅ Tier 1 | CoreML |
-| Linux | arm64, x64 | Ubuntu-22+ | ✅ Tier 1 | CUDA, ROCm |
+| Linux | arm64, x64 | Ubuntu-22+ | ✅ Tier 1 | CPU only |
 | Android | arm64 | 12+ | ✅ Tier 1 | NNAPI |
-| Windows | x64 | 10+ | ✅ Tier 1 | DirectML, CUDA |
+| Windows | x64 | 10+ | ✅ Tier 1 | DirectML |
 
 **Dependencies:**
 - qvac-lib-inference-addon-cpp: C++ addon framework
@@ -387,13 +387,13 @@ qvac-lib-infer-parakeet/
 
 ### Hardware Acceleration
 
-ONNX Runtime provides automatic hardware acceleration:
+ONNX Runtime provides automatic hardware acceleration when `useGPU: true` is set:
 - **macOS/iOS**: CoreML
-- **Windows**: DirectML or CUDA
-- **Linux**: CUDA, ROCm, or CPU
+- **Windows**: DirectML
+- **Linux**: CPU only (no GPU EP in current prebuilds)
 - **Android**: NNAPI
 
-Enable with `useGPU: true` in the config.
+If the selected GPU provider fails at session creation, inference falls back to CPU automatically.
 
 ## Resources
 

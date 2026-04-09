@@ -21,6 +21,12 @@
 #include "onnxruntime/onnxruntime_cxx_api.h"
 #include "qvac-lib-inference-addon-cpp/Logger.hpp"
 
+#pragma push_macro("QLOG")
+#undef QLOG
+#include <qvac-onnx/OnnxConfig.hpp>
+#include <qvac-onnx/OnnxSessionOptionsBuilder.hpp>
+#pragma pop_macro("QLOG")
+
 #ifndef M_PI
 #define M_PI 3.14159265358979323846
 #endif
@@ -420,10 +426,14 @@ void ParakeetModel::load() {
     memory_info_ = std::make_unique<Ort::MemoryInfo>(
         Ort::MemoryInfo::CreateCpu(OrtArenaAllocator, OrtMemTypeDefault));
 
-    Ort::SessionOptions session_options;
-    session_options.SetIntraOpNumThreads(cfg_.maxThreads);
-    session_options.SetGraphOptimizationLevel(
-        GraphOptimizationLevel::ORT_ENABLE_ALL);
+    onnx_addon::SessionConfig sessionCfg;
+    sessionCfg.provider = cfg_.useGPU ? onnx_addon::ExecutionProvider::AUTO_GPU
+                                      : onnx_addon::ExecutionProvider::CPU;
+    sessionCfg.optimization = onnx_addon::GraphOptimizationLevel::ALL;
+    sessionCfg.intraOpThreads = cfg_.maxThreads;
+
+    Ort::SessionOptions session_options =
+        onnx_addon::buildSessionOptions(sessionCfg);
 
     if (cfg_.seed >= 0) {
       session_options.SetDeterministicCompute(true);
@@ -433,19 +443,41 @@ void ParakeetModel::load() {
               ")");
     }
 
-    switch (cfg_.modelType) {
-    case ModelType::CTC:
-      loadCTCSessions(session_options);
-      break;
-    case ModelType::EOU:
-      loadEOUSessions(session_options);
-      break;
-    case ModelType::SORTFORMER:
-      loadSortformerSessions(session_options);
-      break;
-    default:
-      loadTDTSessions(session_options);
-      break;
+    auto loadSessions = [&](Ort::SessionOptions& opts) {
+      switch (cfg_.modelType) {
+      case ModelType::CTC:
+        loadCTCSessions(opts);
+        break;
+      case ModelType::EOU:
+        loadEOUSessions(opts);
+        break;
+      case ModelType::SORTFORMER:
+        loadSortformerSessions(opts);
+        break;
+      default:
+        loadTDTSessions(opts);
+        break;
+      }
+    };
+
+    try {
+      loadSessions(session_options);
+    } catch (const std::exception& e) {
+      if (sessionCfg.provider != onnx_addon::ExecutionProvider::CPU) {
+        QLOG(qvac_lib_inference_addon_cpp::logger::Priority::WARNING,
+             std::string("GPU session creation failed, retrying CPU-only: ") +
+                 e.what());
+        onnx_addon::SessionConfig cpuCfg = sessionCfg;
+        cpuCfg.provider = onnx_addon::ExecutionProvider::CPU;
+        Ort::SessionOptions cpuOptions =
+            onnx_addon::buildSessionOptions(cpuCfg);
+        if (cfg_.seed >= 0) {
+          cpuOptions.SetDeterministicCompute(true);
+        }
+        loadSessions(cpuOptions);
+      } else {
+        throw;
+      }
     }
 
     is_loaded_ = true;
