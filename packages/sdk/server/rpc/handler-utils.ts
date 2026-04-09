@@ -11,10 +11,12 @@ import {
   sendErrorResponse,
   sendStreamErrorResponse,
 } from "@/server/error-handlers";
+import { PluginHandlerTypeMismatchError } from "@/utils/errors-server";
 import { setSDKConfig } from "@/server/bare/registry/config-registry";
 import { setRuntimeContext } from "@/server/bare/registry/runtime-context-registry";
 import { type ServerProfiler } from "./profiling";
 import { nowMs } from "@/profiling/clock";
+import { isTerminalChunk } from "./rpc-utils";
 
 function getProfilingMetaFromRequest(
   request: Request,
@@ -34,12 +36,13 @@ type ReplyHandler = (
 ) => Promise<Response> | Response;
 type StreamHandler = (request: any, ...args: any[]) => AsyncGenerator<Response>;
 type ProgressHandler = (request: any, ...args: any[]) => Promise<Response>;
+type DuplexStreamHandler = (request: any, inputStream: any) => AsyncGenerator<Response>;
 /* eslint-enable @typescript-eslint/no-explicit-any */
 
 export type HandlerEntry = {
-  type: "reply" | "stream";
-  handler: ReplyHandler | StreamHandler | ProgressHandler;
-  delegatedHandler?: ReplyHandler | StreamHandler | ProgressHandler;
+  type: "reply" | "stream" | "duplex";
+  handler: ReplyHandler | StreamHandler | ProgressHandler | DuplexStreamHandler;
+  delegatedHandler?: ReplyHandler | StreamHandler | ProgressHandler | DuplexStreamHandler;
   isDelegated?: (request: Request) => boolean;
   supportsProgress?: boolean | ((request: Request) => boolean);
 };
@@ -80,6 +83,7 @@ async function executeStreamHandler(
 ) {
   const stream = req.createResponseStream();
   profiler.startHandler();
+  let sentFinalChunk = false;
 
   try {
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -93,13 +97,24 @@ async function executeStreamHandler(
     } else {
       generator = handler(request);
     }
+
     for await (const response of generator) {
-      stream.write(profiler.serialize(response, false) + "\n", "utf-8");
+      if (isTerminalChunk(response)) {
+        profiler.endHandler();
+        stream.write(profiler.serialize(response, true) + "\n", "utf-8");
+        sentFinalChunk = true;
+      } else {
+        stream.write(profiler.serialize(response, false) + "\n", "utf-8");
+      }
     }
-    profiler.endHandler();
-    const trailer = profiler.serialize();
-    if (trailer) {
-      stream.write(trailer + "\n", "utf-8");
+    
+    // Fallback
+    if (!sentFinalChunk) {
+      profiler.endHandler();
+      const trailer = profiler.serialize();
+      if (trailer) {
+        stream.write(trailer + "\n", "utf-8");
+      }
     }
 
     stream.end();
@@ -193,6 +208,43 @@ async function executeProgressHandler(
   }
 }
 
+export async function executeDuplexHandler(
+  _req: RPC.IncomingRequest,
+  request: Request,
+  entry: HandlerEntry,
+  inputStream: ReturnType<RPC.IncomingRequest["createRequestStream"]>,
+  outputStream: ReturnType<RPC.IncomingRequest["createResponseStream"]>,
+  profiler: ServerProfiler,
+) {
+  const handler =
+    entry.delegatedHandler && entry.isDelegated?.(request)
+      ? entry.delegatedHandler
+      : entry.handler;
+
+  profiler.startHandler();
+
+  try {
+    for await (const response of (handler as DuplexStreamHandler)(
+      request,
+      inputStream,
+    )) {
+      outputStream.write(
+        profiler.serialize(response, false) + "\n",
+        "utf-8",
+      );
+    }
+    profiler.endHandler();
+    const trailer = profiler.serialize();
+    if (trailer) {
+      outputStream.write(trailer + "\n", "utf-8");
+    }
+    outputStream.end();
+  } catch (error) {
+    profiler.endHandler();
+    sendStreamErrorResponse(outputStream, error, profiler);
+  }
+}
+
 // Unified handler executor with delegation and progress support
 export async function executeHandler(
   req: RPC.IncomingRequest,
@@ -211,6 +263,14 @@ export async function executeHandler(
     (typeof entry.supportsProgress === "function"
       ? entry.supportsProgress(request)
       : entry.supportsProgress);
+
+  if (entry.type === "duplex") {
+    throw new PluginHandlerTypeMismatchError(
+      request.type,
+      "reply or stream",
+      "duplex",
+    );
+  }
 
   if (entry.type === "stream") {
     await executeStreamHandler(

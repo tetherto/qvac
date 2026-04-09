@@ -118,7 +118,7 @@ test('Corrupted VAD model file should throw exception to JavaScript', { timeout:
   const corruptedVadPath = path.join(testDir, 'corrupted-vad-model.bin')
 
   // Ensure we have a valid whisper model
-  const modelsDir = isMobile ? path.join(global.testDir || os.tmpdir(), 'models') : path.resolve(__dirname, '../../examples/models')
+  const modelsDir = isMobile ? path.join(global.testDir || os.tmpdir(), 'models') : path.resolve(__dirname, '../../models')
   const validModelPath = path.join(modelsDir, 'ggml-tiny.bin')
 
   // Download the model if needed

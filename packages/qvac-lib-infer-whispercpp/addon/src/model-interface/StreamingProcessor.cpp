@@ -130,8 +130,7 @@ void StreamingProcessor::processAudioRange(int startSample, int endSample) {
     model_.process(segment);
     auto transcripts = model_.takeOutput();
     if (!transcripts.empty()) {
-      outputQueue_->queueResult(
-          config_.jobId, std::any(std::move(transcripts)));
+      outputQueue_->queueResult(std::any(std::move(transcripts)));
     }
   } catch (const std::exception& e) {
     hasError_ = true;
@@ -288,8 +287,7 @@ void StreamingProcessor::processLoop() {
       QLOG(
           qvac_lib_inference_addon_cpp::logger::Priority::DEBUG,
           "StreamingProcessor: cancelled, queueing cancellation");
-      outputQueue_->queueException(
-          config_.jobId, std::runtime_error("Job cancelled"));
+      outputQueue_->queueException(std::runtime_error("Job cancelled"));
       return;
     }
   }
@@ -308,16 +306,13 @@ void StreamingProcessor::processLoop() {
     QLOG(
         qvac_lib_inference_addon_cpp::logger::Priority::DEBUG,
         "StreamingProcessor: stream ended with errors");
-    outputQueue_->queueException(
-        config_.jobId,
-        std::runtime_error(
-            "StreamingProcessor: one or more segments failed during "
-            "processing"));
+    outputQueue_->queueException(std::runtime_error(
+        "StreamingProcessor: one or more segments failed during processing"));
   } else {
     QLOG(
         qvac_lib_inference_addon_cpp::logger::Priority::DEBUG,
         "StreamingProcessor: stream ended, queueing job completion");
-    outputQueue_->queueJobEnded(config_.jobId);
+    outputQueue_->queueJobEnded();
   }
 }
 

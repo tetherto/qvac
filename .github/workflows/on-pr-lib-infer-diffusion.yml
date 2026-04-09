@@ -23,10 +23,7 @@ permissions:
   contents: read
   pull-requests: read
   packages: read
-
-concurrency:
-  group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.sha }}
-  cancel-in-progress: true
+  id-token: write
 
 env:
   PKG_DIR: packages/lib-infer-diffusion
@@ -121,17 +118,20 @@ jobs:
       contents: write
       packages: write
       pull-requests: write
+      id-token: write
     uses: ./.github/workflows/prebuilds-lib-infer-diffusion.yml
     secrets: inherit
     with:
       repository: ${{ github.event.pull_request.head.repo.full_name }}
       ref: ${{ github.event.pull_request.head.ref }}
-      publish_target: "gpr"
-      tag: pr-${{ github.event.pull_request.number }}
 
   run-integration-tests:
     if: needs.authorize.outputs.allowed == 'true'
     needs: [authorize, prebuild]
+    permissions:
+      contents: read
+      packages: read
+      id-token: write
     uses: ./.github/workflows/integration-test-lib-infer-diffusion.yml
     secrets: inherit
     with:
@@ -143,6 +143,7 @@ jobs:
       contents: read
       packages: read
       pull-requests: write # Allow commenting on PRs
+      id-token: write
     if: needs.authorize.outputs.allowed == 'true'
     needs: [authorize, prebuild]
     uses: ./.github/workflows/integration-mobile-test-lib-infer-diffusion.yml

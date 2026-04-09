@@ -28,10 +28,6 @@ env:
   PKG_DIR: packages/qvac-lib-registry-server
   NAME_SUFFIX: "-mono"
 
-concurrency:
-  group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
-  cancel-in-progress: ${{ github.event_name == 'pull_request_target' }}
-
 jobs:
   authorize:
     runs-on: ubuntu-latest
@@ -244,6 +240,7 @@ jobs:
   publish-schema-npm:
     needs: [authorize, detect-changes, publish-logic, release-merge-guard-schema]
     if: |
+      always() &&
       needs.authorize.outputs.allowed == 'true' &&
       needs.detect-changes.outputs.schema_changed == 'true' &&
       needs.publish-logic.outputs.publish_release == 'true' &&
@@ -255,6 +252,7 @@ jobs:
     permissions:
       contents: write
       packages: write
+      id-token: write
     steps:
       - name: Checkout repository
         uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # 6.0.2
@@ -273,7 +271,7 @@ jobs:
 
       - name: Publish to NPM Package Registry
         id: publish
-        uses: tetherto/oss-actions/.github/actions/publish-library-to-npm@v1.2.0
+        uses: tetherto/oss-actions/.github/actions/publish-library-to-npm-oidc@v1.2.0
         with:
           secret-token: ${{ secrets.NPM_TOKEN }}
           tag: "latest"
@@ -416,6 +414,7 @@ jobs:
   publish-client-npm:
     needs: [authorize, detect-changes, publish-logic, lint-and-test, release-merge-guard-client]
     if: |
+      always() &&
       needs.authorize.outputs.allowed == 'true' &&
       needs.detect-changes.outputs.client_changed == 'true' &&
       needs.publish-logic.outputs.publish_release == 'true' &&
@@ -427,6 +426,7 @@ jobs:
     permissions:
       contents: write
       packages: write
+      id-token: write
     steps:
       - name: Checkout repository
         uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # 6.0.2
@@ -447,7 +447,7 @@ jobs:
 
       - name: Publish to NPM Package Registry
         id: publish
-        uses: tetherto/oss-actions/.github/actions/publish-library-to-npm@v1.2.0
+        uses: tetherto/oss-actions/.github/actions/publish-library-to-npm-oidc@v1.2.0
         with:
           secret-token: ${{ secrets.NPM_TOKEN }}
           tag: "latest"

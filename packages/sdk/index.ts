@@ -1,3 +1,5 @@
+import "#polyfill-bare-globals";
+
 // Public API exports only
 export {
   completion,
@@ -28,6 +30,8 @@ export {
   ocr,
   invokePlugin,
   invokePluginStream,
+  diffusion,
+  type DiffusionProgressTick,
   modelRegistryList,
   modelRegistrySearch,
   modelRegistryGetModel,
@@ -46,6 +50,7 @@ export {
   type CompletionStats,
   VERBOSITY,
   type Attachment,
+  type TranscribeStreamSession,
   type CompletionParams,
   type RagSearchResult,
   type RagSaveEmbeddingsResult,
@@ -71,8 +76,12 @@ export {
   type OCRClientParams,
   type OCRTextBlock,
   type OCROptions,
+  type DiffusionClientParams,
+  type DiffusionStreamResponse,
+  type DiffusionStats,
   definePlugin,
   defineHandler,
+  defineDuplexHandler,
   type QvacPlugin,
   type CreateModelParams,
   type PluginModelResult,
@@ -84,6 +93,7 @@ export {
   PLUGIN_NMT,
   PLUGIN_TTS,
   PLUGIN_OCR,
+  PLUGIN_DIFFUSION,
   SDK_DEFAULT_PLUGINS,
   type BuiltinPlugin,
   type ProfilerMode,

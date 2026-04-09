@@ -31,9 +31,6 @@ on:
 
 permissions:
   contents: read
-concurrency:
-  group: ${{ github.workflow }}-${{ github.ref }}
-  cancel-in-progress: false
 
 jobs:
   test:
@@ -219,4 +216,4 @@ jobs:
           npm-token: ${{ secrets.NPM_TOKEN }}
           tag: ${{ needs.publish-logic.outputs.gpr_tag }}
           workdir: packages/qvac-lib-langdetect-text-cld2
-          name-suffix: "-mono"
+          name-suffix: "-mono" 

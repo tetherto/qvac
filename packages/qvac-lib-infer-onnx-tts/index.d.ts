@@ -1,100 +1,121 @@
-import { Loader } from '@qvac/infer-base'
-import InferBase from '@qvac/infer-base/WeightsProvider/BaseInference'
 import type QvacResponse from '@qvac/infer-base/src/QvacResponse'
 
 /**
- * Arguments for Chatterbox TTS engine
+ * Weight / config paths for ONNX TTS. Use short keys; legacy `*Path` names and
+ * SDK aliases (`supertonicModel`, `latentDenoiser`, `voiceDecoder`, `supertonicVocoder`) are accepted.
+ * All file paths must be absolute (passed through to the native layer as-is).
  */
-declare interface ChatterboxTTSArgs {
-  opts?: Object
-  loader?: Loader
-  /** Path to tokenizer JSON file */
-  tokenizerPath: string
-  /** Path to speech encoder ONNX model */
-  speechEncoderPath: string
-  /** Path to embed tokens ONNX model */
-  embedTokensPath: string
-  /** Path to conditional decoder ONNX model */
-  conditionalDecoderPath: string
-  /** Path to language model ONNX model */
-  languageModelPath: string
-  /** Reference audio (Float32Array) for voice cloning */
-  referenceAudio?: Float32Array | number[]
-  /** Defer ONNX session creation until first use. Defaults to true on iOS, false otherwise. */
-  lazySessionLoading?: boolean
-  cache?: string
-  logger?: Object
-}
-
-/**
- * Arguments for Supertone / Supertonic TTS (official 4-ONNX + unicode_indexer + voice_styles JSON).
- * Either pass modelDir + voiceName, or explicit ONNX/JSON paths.
- */
-declare interface SupertonicTTSArgs {
-  opts?: Object
-  loader?: Loader
-  /** Base model directory (HF Supertone/supertonic English layout: onnx/, voice_styles/) */
+declare interface ONNXTTSFiles {
+  /**
+   * Bundle root for either engine (same top-level option; layout differs).
+   * Chatterbox: `tokenizer.json`, `speech_encoder.onnx`, … at root.
+   * Supertonic: `onnx/`, `voice_styles/` (see README).
+   * Per-file entries override these defaults when both are set.
+   */
   modelDir?: string
+  /** Chatterbox: tokenizer JSON. Supertonic explicit: may serve as unicode indexer if `unicodeIndexer` omitted. */
+  tokenizer?: string
+  speechEncoder?: string
+  embedTokens?: string
+  conditionalDecoder?: string
+  languageModel?: string
+  /** Alias: `supertonicModel` */
+  textEncoder?: string
+  supertonicModel?: string
+  /** Aliases: `latentDenoiser`, `*Path` variants */
+  durationPredictor?: string
+  latentDenoiser?: string
+  vectorEstimator?: string
+  /** Aliases: `voiceDecoder`, `supertonicVocoder`, `*Path` variants */
+  vocoder?: string
+  voiceDecoder?: string
+  supertonicVocoder?: string
+  unicodeIndexer?: string
+  ttsConfig?: string
+  voiceStyle?: string
+  /**
+   * Supertonic: directory containing `{voiceName}.json` voice styles. When set with `modelDir`,
+   * overrides the default `modelDir/voice_styles`. When `modelDir` is omitted, used with `voiceName`
+   * if `voiceStyle` is not set.
+   */
+  voicesDir?: string
+  tokenizerPath?: string
+  speechEncoderPath?: string
+  embedTokensPath?: string
+  conditionalDecoderPath?: string
+  languageModelPath?: string
   textEncoderPath?: string
   durationPredictorPath?: string
+  latentDenoiserPath?: string
   vectorEstimatorPath?: string
   vocoderPath?: string
+  voiceDecoderPath?: string
   unicodeIndexerPath?: string
   ttsConfigPath?: string
   voiceStyleJsonPath?: string
-  /** Voice id matching voice_styles/{voiceName}.json — default: "F1" */
-  voiceName?: string
-  /** Speech speed — default: 1 */
-  speed?: number
-  /** Diffusion steps — default: 5 */
-  numInferenceSteps?: number
-  /** Set false for English-only models (no &lt;lang&gt; tags). Default: true */
-  supertonicMultilingual?: boolean
-  cache?: string
-  logger?: Object
 }
 
-/**
- * Unified TTS arguments - Chatterbox or Supertonic (auto-detected by presence of textEncoderPath or modelDir+voiceName)
- */
-declare type ONNXTTSArgs = ChatterboxTTSArgs | SupertonicTTSArgs
-
-declare interface ONNXTTSConfig {
-  /** Language code (e.g., "en", "es", "fr") - default: "en" */
+declare interface ONNXTTSRuntimeConfig {
+  /** Language code (e.g. "en", "es") — default "en" */
   language?: string
-  /** Whether to use GPU acceleration (Chatterbox) */
+  /** Chatterbox: GPU — default false */
   useGPU?: boolean
 }
 
-/**
- * ONNX client implementation for TTS model.
- * Supports Chatterbox and Supertonic engines.
- * Engine is auto-detected: Supertone if textEncoderPath, durationPredictorPath, or (modelDir + voiceName) is provided.
- */
-declare class ONNXTTS extends InferBase {
+declare interface ONNXTTSOptions {
+  files?: ONNXTTSFiles
   /**
-   * Creates an instance of ONNXTTS.
-   * @param args - Chatterbox args (tokenizerPath, speechEncoderPath, ...) or Supertonic args (modelDir, voiceName, ...)
-   * @param config - Language and options
+   * Force engine when ambiguous (e.g. `files.modelDir` with no per-file paths: default is Supertonic).
+   * Use `"chatterbox"` for Chatterbox-only bundle layout under `modelDir`.
    */
-  constructor(args: ONNXTTSArgs, config?: ONNXTTSConfig)
+  engine?: 'chatterbox' | 'supertonic'
+  config?: ONNXTTSRuntimeConfig
+  logger?: object
+  lazySessionLoading?: boolean
+  /** Chatterbox voice cloning input */
+  referenceAudio?: Float32Array | number[]
+  /** Supertonic voice id for `voice_styles/{voiceName}.json` — default `"F1"`. Optional when using `files.modelDir`. */
+  voiceName?: string
+  speed?: number
+  numInferenceSteps?: number
+  supertonicMultilingual?: boolean
+  opts?: object
+  exclusiveRun?: boolean
+}
+
+/**
+ * ONNX client for TTS (Chatterbox or Supertonic). Prefer `files: { modelDir }` for both engines;
+ * set `engine` when `modelDir` is the only file field (defaults to Supertonic for back-compat).
+ * `files` paths must be absolute.
+ */
+declare class ONNXTTS {
+  constructor(options?: ONNXTTSOptions)
+
+  load(...args: unknown[]): Promise<void>
+  unload(): Promise<void>
+  destroy(): Promise<void>
+  reload(newConfig?: Record<string, unknown>): Promise<void>
+  cancel(): Promise<void>
+  getApiDefinition(): string
+  getState(): { configLoaded: boolean; weightsLoaded: boolean; destroyed: boolean }
+
+  opts: object
+  exclusiveRun: boolean
+  logger: object
+  state: { configLoaded: boolean; weightsLoaded: boolean; destroyed: boolean }
+  addon: unknown
 
   /**
-   * Run text-to-speech inference. When `opts.stats` was set on construction, `response.stats` matches {@link ONNXTTS.RuntimeStats}.
+   * Run text-to-speech. When `opts.stats` was set, `response.stats` matches {@link ONNXTTS.RuntimeStats}.
    */
   run(input: ONNXTTS.TTSRunInput): Promise<QvacResponse<ONNXTTS.TTSOutputChunk>>
 }
 
 declare namespace ONNXTTS {
-  /**
-   * Keys returned by the native addon `TTSModel::runtimeStats()` when stats are enabled.
-   */
   export interface RuntimeStats {
-    /** Wall-clock inference time in seconds */
     totalTime: number
     tokensPerSecond: number
     realTimeFactor: number
-    /** Duration of synthesized audio in milliseconds */
     audioDurationMs: number
     totalSamples: number
   }
@@ -110,10 +131,9 @@ declare namespace ONNXTTS {
 
   export {
     ONNXTTS as default,
-    ONNXTTSArgs,
-    ChatterboxTTSArgs,
-    SupertonicTTSArgs,
-    ONNXTTSConfig,
+    ONNXTTSFiles,
+    ONNXTTSOptions,
+    ONNXTTSRuntimeConfig,
     RuntimeStats,
     TTSOutputChunk,
     TTSRunInput

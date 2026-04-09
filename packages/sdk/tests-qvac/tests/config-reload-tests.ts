@@ -37,7 +37,7 @@ export const configReloadWrongModelType: TestDefinition = {
 
 export const configReloadThenTranscribe: TestDefinition = {
   testId: "config-reload-then-transcribe",
-  params: { audioFileName: "transcription-short.wav", newLanguage: "en" },
+  params: { audioFileName: "transcription-short-wav.wav", newLanguage: "en" },
   expectation: { validation: "type", expectedType: "string" },
   metadata: { category: "config-reload", dependency: "whisper", estimatedDurationMs: 30000 },
 };

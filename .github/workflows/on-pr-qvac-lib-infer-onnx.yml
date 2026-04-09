@@ -22,10 +22,7 @@ permissions:
   contents: read
   pull-requests: read
   packages: read
-
-concurrency:
-  group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.sha }}
-  cancel-in-progress: true
+  id-token: write
 
 jobs:
   authorize:
@@ -175,7 +172,7 @@ jobs:
       contents: write
       packages: write
       pull-requests: write
-    needs: [authorize, sanity-checks, cpp-lint]
+    needs: [authorize, changes]
     if: |
       (needs.changes.outputs.pkg == 'true') &&
       (
@@ -187,7 +184,6 @@ jobs:
     with:
       repository: ${{ github.event.pull_request.head.repo.full_name || github.repository }}
       ref: ${{ github.event.pull_request.head.ref || github.ref }}
-      publish_target: "gpr"
 
   merge-guard:
     needs: [authorize, changes, sanity-checks, prebuild]

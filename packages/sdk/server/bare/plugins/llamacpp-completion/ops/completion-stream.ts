@@ -10,6 +10,7 @@ import {
   logCacheDisabled,
   logCacheInit,
   logCacheSave,
+  logCacheSaveError,
   logCacheStatus,
   logMessagesToAddon,
 } from "@/server/bare/plugins/llamacpp-completion/ops/cache-logger";
@@ -36,14 +37,16 @@ import {
 } from "@/server/utils/tool-integration";
 import { parseToolCalls } from "@/server/utils/tool-parser";
 import { AttachmentNotFoundError } from "@/utils/errors-server";
+import { nowMs } from "@/profiling";
+import {
+  buildStreamResult,
+  hasDefinedValues,
+} from "@/profiling/model-execution";
+import type { LlmStats } from "@/server/bare/types/addon-responses";
 import fs from "bare-fs";
 
 interface ResponseWithStats {
-  stats?: {
-    TTFT: number;
-    TPS: number;
-    CacheTokens: number;
-  };
+  stats?: LlmStats;
 }
 
 interface ChatHistory {
@@ -53,6 +56,16 @@ interface ChatHistory {
   name?: string;
   description?: string;
   parameters?: unknown;
+}
+
+const cachedMessageCounts = new Map<string, number>();
+
+export function clearCachedMessageCounts(cachePath?: string): void {
+  if (cachePath) {
+    cachedMessageCounts.delete(cachePath);
+  } else {
+    cachedMessageCounts.clear();
+  }
 }
 
 function transformMessage(
@@ -163,11 +176,20 @@ function prepareMessagesForCache(
   }[],
 ): ChatHistory[] {
   if (cacheExists && history.length > 0) {
-    const lastMessage = history[history.length - 1];
-    const lastTransformedMessages = transformMessage(lastMessage!);
+    const savedCount = cachedMessageCounts.get(cachePathToUse) ?? 0;
+    const canSlice = savedCount > 0 && savedCount <= history.length;
+    const newMessages = canSlice
+      ? history.slice(savedCount)
+      : history.filter((msg) => msg.role !== "system");
+
+    if (!canSlice && savedCount > 0) {
+      cachedMessageCounts.delete(cachePathToUse);
+    }
+
+    const transformedNewMessages = transformMessages(newMessages);
     return [
       { role: "session", content: cachePathToUse },
-      ...lastTransformedMessages,
+      ...transformedNewMessages,
     ];
   }
 
@@ -189,7 +211,7 @@ async function* processModelResponse(
   generationParams?: GenerationParams,
 ): AsyncGenerator<
   { token: string; toolCallEvent?: ToolCallEvent },
-  { stats: CompletionStats; toolCalls: ToolCall[] },
+  { modelExecutionMs: number; stats?: CompletionStats; toolCalls: ToolCall[] },
   unknown
 > {
   const runFn = model.run.bind(model) as (
@@ -197,6 +219,8 @@ async function* processModelResponse(
     opts?: unknown,
   ) => ReturnType<typeof model.run>;
   const runOptions = generationParams ? { generationParams } : undefined;
+
+  const modelStart = nowMs();
   const response = await runFn(messagesToSend, runOptions);
 
   let accumulatedText = "";
@@ -222,6 +246,7 @@ async function* processModelResponse(
       }
     }
   }
+  const modelExecutionMs = nowMs() - modelStart;
 
   if (tools && tools.length > 0) {
     const { toolCalls } = parseToolCalls(accumulatedText, tools);
@@ -232,25 +257,49 @@ async function* processModelResponse(
     const sessionMsg = messagesToSend.find((m) => m.role === "session");
     if (sessionMsg?.content) {
       logCacheSave(sessionMsg.content);
+      const cachePath = sessionMsg.content;
+      const saveResp = await model.run([
+        { role: "session", content: cachePath },
+        { role: "session", content: "save" },
+      ]);
+      try {
+        await saveResp.await();
+      } catch (err: unknown) {
+        logCacheSaveError(cachePath, err);
+      }
     }
-    await model.run([{ role: "session", content: "save" }]);
   }
 
   const responseWithStats = response as unknown as ResponseWithStats;
-  const stats = {
-    timeToFirstToken: responseWithStats.stats?.TTFT ?? 0,
-    tokensPerSecond: responseWithStats.stats?.TPS ?? 0,
-    cacheTokens: responseWithStats.stats?.CacheTokens ?? 0,
+  const stats: CompletionStats = {
+    ...(responseWithStats.stats?.TTFT !== undefined && {
+      timeToFirstToken: responseWithStats.stats.TTFT,
+    }),
+    ...(responseWithStats.stats?.TPS !== undefined && {
+      tokensPerSecond: responseWithStats.stats.TPS,
+    }),
+    ...(responseWithStats.stats?.CacheTokens !== undefined && {
+      cacheTokens: responseWithStats.stats.CacheTokens,
+    }),
   };
 
-  return { stats, toolCalls: toolCallsResult };
+  return {
+    ...buildStreamResult(
+      modelExecutionMs,
+      hasDefinedValues(stats) ? stats : undefined,
+    ),
+    toolCalls: toolCallsResult,
+  };
 }
 
 export async function* completion(
-  params: CompletionParams & { tools?: Tool[]; generationParams?: GenerationParams },
+  params: CompletionParams & {
+    tools?: Tool[];
+    generationParams?: GenerationParams;
+  },
 ): AsyncGenerator<
   { token: string; toolCallEvent?: ToolCallEvent },
-  { stats: CompletionStats; toolCalls: ToolCall[] },
+  { modelExecutionMs: number; stats?: CompletionStats; toolCalls: ToolCall[] },
   unknown
 > {
   const { history, modelId, kvCache, tools, generationParams } = params;
@@ -311,7 +360,15 @@ export async function* completion(
       );
       logMessagesToAddon(messagesToSend, "PROMPT_SEND");
 
-      return yield* processModelResponse(model, messagesToSend, true, tools, generationParams);
+      const result = yield* processModelResponse(
+        model,
+        messagesToSend,
+        true,
+        tools,
+        generationParams,
+      );
+      cachedMessageCounts.set(cachePathToUse, history.length + 1);
+      return result;
     } else {
       // Auto-generate cache key based on conversation history
       const cacheMessages: CacheMessage[] = history.map((msg) => ({
@@ -365,12 +422,14 @@ export async function* completion(
         tools,
         generationParams,
       );
+      cachedMessageCounts.set(cachePathToUse, history.length + 1);
 
-      //If there was an existing cache, we rename it with new hash that includes the current message
       if (
         existingCache !== null &&
         existingCache.cachePath !== currentCacheInfo.cachePath
       ) {
+        cachedMessageCounts.delete(existingCache.cachePath);
+        cachedMessageCounts.set(currentCacheInfo.cachePath, history.length + 1);
         await renameCacheFile(
           existingCache.cachePath,
           currentCacheInfo.cachePath,
@@ -382,6 +441,12 @@ export async function* completion(
   } else {
     logCacheDisabled();
     logMessagesToAddon(transformedHistory, "NO_CACHE");
-    return yield* processModelResponse(model, transformedHistory, false, tools, generationParams);
+    return yield* processModelResponse(
+      model,
+      transformedHistory,
+      false,
+      tools,
+      generationParams,
+    );
   }
 }

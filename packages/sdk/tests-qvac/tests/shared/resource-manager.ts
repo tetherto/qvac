@@ -6,6 +6,7 @@ interface ModelDefinition {
   type: string;
   config?: Record<string, unknown>;
   skipPreDownload?: boolean;
+  preLoadUnload?: true;
 }
 
 interface TrackedModel {
@@ -28,21 +29,69 @@ export class ResourceManager {
     if (this.downloaded) return;
     this.downloaded = true;
 
-    const entries = Array.from(this.definitions.entries());
-    log?.(`📥 Downloading ${entries.length} models...`);
+    const entries = Array.from(this.definitions.entries()).filter(
+      ([, def]) => !def.skipPreDownload,
+    );
+    const preLoadUnload = Array.from(this.definitions.entries()).filter(([, def]) => def.preLoadUnload);
+    const skipped = this.definitions.size - entries.length;
+    if (skipped > 0) log?.(`⏭️  Skipping ${skipped} models marked skipPreDownload`);
 
-    // Sequential — SDK p2p downloads don't handle parallel well
-    for (const [dep, def] of entries) {
-      if (def.skipPreDownload) {
-        log?.(`⏭️  ${dep}: skipping pre-download`);
-        continue;
+    log?.(`📥 Downloading ${entries.length} models in parallel...`);
+
+    const active = new Set<string>();
+    let leftToCheck = entries.length + preLoadUnload.length;
+    let maxConcurrent = 0;
+    let parallelDetected = false;
+
+    const results = await Promise.allSettled(
+      entries.map(async ([dep, def]) => {
+        log?.(`📥 ${dep}: ${def.constant.name}...`);
+        await downloadAsset({
+          assetSrc: def.constant as never,
+          onProgress: () => {
+            active.add(dep);
+            if (active.size > maxConcurrent) {
+              maxConcurrent = active.size;
+            }
+            if (!parallelDetected && active.size >= 2) {
+              parallelDetected = true;
+              const names = Array.from(active).join(", ");
+              log?.(`🔀 Parallel downloads confirmed (active: ${names})`);
+            }
+          },
+        });
+        active.delete(dep);
+        leftToCheck--;
+        log?.(`✅ ${dep} cached - still processing: ${leftToCheck}`);
+        return dep;
+      }),
+    );
+
+    const failed = results.filter((r) => r.status === "rejected");
+    if (failed.length > 0) {
+      for (const f of failed) {
+        log?.(`❌ download failed: ${(f as PromiseRejectedResult).reason}`);
       }
-      log?.(`📥 ${dep}: ${def.constant.name}...`);
-      await downloadAsset({ assetSrc: def.constant as never });
-      log?.(`✅ ${dep} cached`);
+      throw new Error(`${failed.length}/${entries.length} downloads failed`);
     }
 
-    log?.(`📦 All ${entries.length} models pre-cached`);
+    log?.(`🔄 pre-loading ${preLoadUnload.length} models (models with companion models)...`);
+    for (const [dep, def] of preLoadUnload) {
+      log?.(`🔄 pre-loading ${dep}: ${def.constant.name}...`);
+      const modelId = await loadModel({
+        modelSrc: def.constant as never,
+        modelType: def.type,
+        modelConfig: def.config,
+      });
+      log?.(`✅ pre-loaded ${dep}: ${def.constant.name} - unloading...`);
+      await unloadModel({ modelId });
+      leftToCheck--;
+      log?.(`✅ unloaded ${dep}: ${def.constant.name} - still processing: ${leftToCheck}`);
+    }
+
+    log?.(
+      `📦 All ${entries.length} models pre-cached (max concurrent: ${maxConcurrent})`,
+    );
   }
 
   setTestCount(n: number) {

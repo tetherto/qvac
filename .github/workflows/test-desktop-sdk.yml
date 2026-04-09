@@ -31,6 +31,11 @@ on:
         description: "Git ref to checkout (branch, tag, or SHA). Defaults to trigger ref."
         required: false
         type: string
+      cache-models:
+        description: "Cache downloaded models between runs"
+        required: false
+        type: boolean
+        default: true
     secrets:
       MQTT_PROTOCOL:
         required: true
@@ -43,7 +48,7 @@ on:
       MQTT_PASSWORD:
         required: true
       MQTT_CA_CERT:
-        required: true
+        required: false
       MQTT_CLIENT_CERT:
         required: false
       MQTT_CLIENT_KEY:
@@ -122,23 +127,27 @@ jobs:
           const certsDir = path.join(os.tmpdir(), 'mqtt-certs');
           fs.mkdirSync(certsDir, { recursive: true });
 
-          if (process.env.CA_CERT) {
+          const caCert = (process.env.CA_CERT || '').trim();
+          const clientCert = (process.env.CLIENT_CERT || '').trim();
+          const clientKey = (process.env.CLIENT_KEY || '').trim();
+
+          if (caCert) {
             const caPath = path.join(certsDir, 'ca.crt');
-            fs.writeFileSync(caPath, process.env.CA_CERT, 'utf8');
+            fs.writeFileSync(caPath, caCert, 'utf8');
             fs.appendFileSync(process.env.GITHUB_ENV, `MQTT_CA_PATH=${caPath}\n`, 'utf8');
             console.log('✅ CA certificate written');
           }
 
-          if (process.env.CLIENT_CERT) {
+          if (clientCert) {
             const certPath = path.join(certsDir, 'client.crt');
-            fs.writeFileSync(certPath, process.env.CLIENT_CERT, 'utf8');
+            fs.writeFileSync(certPath, clientCert, 'utf8');
             fs.appendFileSync(process.env.GITHUB_ENV, `MQTT_CERT_PATH=${certPath}\n`, 'utf8');
             console.log('✅ Client certificate written');
           }
 
-          if (process.env.CLIENT_KEY) {
+          if (clientKey) {
             const keyPath = path.join(certsDir, 'client.key');
-            fs.writeFileSync(keyPath, process.env.CLIENT_KEY, 'utf8');
+            fs.writeFileSync(keyPath, clientKey, 'utf8');
             fs.appendFileSync(process.env.GITHUB_ENV, `MQTT_KEY_PATH=${keyPath}\n`, 'utf8');
             console.log('✅ Client key written');
           }
@@ -183,6 +192,42 @@ jobs:
       - name: Build project (consumer)
         working-directory: ${{ inputs.working-directory }}
         run: bun run build
+
+      - name: Configure SDK cache directory
+        shell: node {0}
+        run: |
+          const fs = require('fs');
+          const path = require('path');
+          const cacheDir = path.resolve('${{ inputs.working-directory }}', '.qvac-cache');
+          fs.mkdirSync(cacheDir, { recursive: true });
+          const config = { cacheDirectory: cacheDir };
+          const configPath = path.resolve('${{ inputs.working-directory }}', 'qvac.config.json');
+          fs.writeFileSync(configPath, JSON.stringify(config, null, 2));
+          fs.appendFileSync(process.env.GITHUB_ENV, `QVAC_CONFIG_PATH=${configPath}\n`);
+          console.log(`SDK cache dir: ${cacheDir}`);
+          console.log(`Config written to: ${configPath}`);
+
+      - name: Restore models cache
+        id: models-cache
+        if: inputs.cache-models != false
+        uses: actions/cache/restore@v4
+        with:
+          path: ${{ inputs.working-directory }}/.qvac-cache
+          key: qvac-models-${{ hashFiles('packages/sdk/models/registry/models.ts') }}
+
+      - name: Bootstrap (download models)
+        if: steps.models-cache.outputs.cache-hit != 'true'
+        working-directory: ${{ inputs.working-directory }}
+        run: npx qvac-test run:bootstrap:desktop --config=.
+
+      # Save right after bootstrap. On parallel runners, first to finish reserves the key;
+      # others get a non-fatal "unable to reserve" warning which is expected.
+      - name: Save models cache
+        if: steps.models-cache.outputs.cache-hit != 'true' && inputs.cache-models != false
+        uses: actions/cache/save@v4
+        with:
+          path: ${{ inputs.working-directory }}/.qvac-cache
+          key: qvac-models-${{ hashFiles('packages/sdk/models/registry/models.ts') }}
 
       - name: Generate runId
         id: runid
