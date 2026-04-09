@@ -49,16 +49,16 @@ jobs:
             arch: arm64
             variant: ubuntu
             flags: -D ANDROID_STL=c++_shared -D BUILD_TESTING=OFF
-          - os: macos-15
+          - os: macos-14
             platform: ios
             arch: arm64
             flags: -D BUILD_TESTING=OFF
-          - os: macos-15
+          - os: macos-14
             platform: ios
             arch: arm64
             tags: -simulator
             flags: --simulator -D BUILD_TESTING=OFF
-          - os: macos-15
+          - os: macos-14
             platform: ios
             arch: x64
             tags: -simulator

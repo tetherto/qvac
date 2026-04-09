@@ -4,7 +4,7 @@
  * Quickstart Example — Bergamot Backend
  *
  * This example demonstrates translation using the Bergamot backend
- * with local model files or auto-download via Hyperdrive/Firefox CDN.
+ * with local model files or auto-download via Firefox CDN.
  *
  * Usage:
  *   bare examples/quickstart.js
@@ -15,7 +15,6 @@
  */
 
 const TranslationNmtcpp = require('..')
-const fs = require('bare-fs')
 const path = require('bare-path')
 const process = require('bare-process')
 
@@ -41,8 +40,7 @@ async function testBergamot () {
 
   const {
     ensureBergamotModelFiles,
-    getBergamotFileNames,
-    getBergamotHyperdriveKey
+    getBergamotFileNames
   } = require('../lib/bergamot-model-fetcher')
 
   const srcLang = 'en'
@@ -51,52 +49,27 @@ async function testBergamot () {
   // Use local model path if provided, otherwise auto-download
   const bergamotPath = process.env.BERGAMOT_MODEL_PATH || './model/bergamot/enit'
 
-  // Ensure model files are present (Hyperdrive first, Firefox CDN fallback)
+  // Ensure model files are present (downloads from Firefox CDN if not)
   const modelDir = await ensureBergamotModelFiles(srcLang, dstLang, bergamotPath)
   console.log('Model directory:', modelDir)
 
   const fileNames = getBergamotFileNames(srcLang, dstLang)
 
-  // Decide loader: Hyperdrive key available → use HyperdriveDL, else local files
-  const hdKey = getBergamotHyperdriveKey(srcLang, dstLang)
-  let loader
-
-  if (hdKey) {
-    // Primary: use HyperdriveDL for streaming model data
-    const HyperdriveDL = require('@qvac/dl-hyperdrive')
-    loader = new HyperdriveDL({ key: `hd://${hdKey}` })
-    console.log('Using HyperdriveDL loader')
-  } else {
-    // Fallback: local file loader (files already downloaded from Firefox CDN)
-    loader = {
-      ready: async () => {},
-      close: async () => {},
-      download: async (filename) => fs.readFileSync(path.join(modelDir, filename)),
-      getFileSize: async (filename) => fs.statSync(path.join(modelDir, filename)).size
-    }
-    console.log('Using local file loader (Firefox CDN download)')
-  }
-
   console.log('Loading model...')
 
-  // Create the `args` object for Bergamot
-  const args = {
-    loader,
+  // Create model with resolved file paths
+  const model = new TranslationNmtcpp({
+    files: {
+      model: path.join(modelDir, fileNames.modelName),
+      srcVocab: path.join(modelDir, fileNames.srcVocabName),
+      dstVocab: path.join(modelDir, fileNames.dstVocabName)
+    },
     params: { mode: 'full', dstLang, srcLang },
-    diskPath: modelDir,
-    modelName: fileNames.modelName,
+    config: {
+      modelType: TranslationNmtcpp.ModelTypes.Bergamot
+    },
     logger
-  }
-
-  // Config with vocab paths
-  const config = {
-    srcVocabName: fileNames.srcVocabName,
-    dstVocabName: fileNames.dstVocabName,
-    modelType: TranslationNmtcpp.ModelTypes.Bergamot
-  }
-
-  // Create Model Instance
-  const model = new TranslationNmtcpp(args, config)
+  })
 
   // Load model
   await model.load()
@@ -119,9 +92,6 @@ async function testBergamot () {
   } finally {
     console.log('Unloading model...')
     await model.unload()
-
-    // Close the loader
-    await loader.close()
     console.log('Done!')
   }
 }
