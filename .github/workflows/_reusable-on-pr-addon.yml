@@ -194,11 +194,13 @@ jobs:
 
       - name: Configure npm auth
         working-directory: ${{ inputs.workdir }}
+        env:
+          NPM_TOKEN: ${{ secrets.NPM_TOKEN }}
         run: |
           cat > .npmrc <<NPMRC
           registry=https://registry.npmjs.org/
           @qvac:registry=https://registry.npmjs.org/
-          //registry.npmjs.org/:_authToken=${{ secrets.NPM_TOKEN }}
+          //registry.npmjs.org/:_authToken=${NPM_TOKEN}
           NPMRC
 
       - name: Install dependencies

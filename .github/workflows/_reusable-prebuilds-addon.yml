@@ -231,26 +231,30 @@ jobs:
       - name: Configure npm auth
         shell: bash
         working-directory: ${{ env.WORKDIR }}
+        env:
+          NPM_TOKEN: ${{ secrets.NPM_TOKEN }}
+          PAT_TOKEN: ${{ secrets.PAT_TOKEN }}
         run: |
           cat > .npmrc <<NPMRC
           registry=https://registry.npmjs.org/
           @qvac:registry=https://registry.npmjs.org/
           @tetherto:registry=https://npm.pkg.github.com/
-          //registry.npmjs.org/:_authToken=${{ secrets.NPM_TOKEN }}
-          //npm.pkg.github.com/:_authToken=${{ secrets.PAT_TOKEN }}
+          //registry.npmjs.org/:_authToken=${NPM_TOKEN}
+          //npm.pkg.github.com/:_authToken=${PAT_TOKEN}
           NPMRC
 
       - name: Configure git auth for private GitHub deps
         shell: bash
         env:
           GIT_PAT: ${{ secrets.PAT_TOKEN }}
+          GH_TOKEN: ${{ github.token }}
         run: |
           if [ -n "${GIT_PAT:-}" ]; then
             git config --global url."https://${GIT_PAT}:@github.com/".insteadOf "https://github.com/"
             git config --global url."https://${GIT_PAT}:@github.com/".insteadOf "git@github.com:"
           else
-            git config --global url."https://${{ github.token }}:@github.com/".insteadOf "https://github.com/"
-            git config --global url."https://${{ github.token }}:@github.com/".insteadOf "git@github.com:"
+            git config --global url."https://${GH_TOKEN}:@github.com/".insteadOf "https://github.com/"
+            git config --global url."https://${GH_TOKEN}:@github.com/".insteadOf "git@github.com:"
           fi
 
       - name: Install global dependencies
@@ -325,7 +329,10 @@ jobs:
         working-directory: ${{ env.WORKDIR }}
         env:
           EXTRA_FLAGS: ${{ inputs.extra_generate_flags }}
-        run: bare-make generate --platform ${{ matrix.platform }} --arch ${{ matrix.arch }} ${{ matrix.flags }} $EXTRA_FLAGS
+          BUILD_PLATFORM: ${{ matrix.platform }}
+          BUILD_ARCH: ${{ matrix.arch }}
+          BUILD_FLAGS: ${{ matrix.flags }}
+        run: bare-make generate --platform "$BUILD_PLATFORM" --arch "$BUILD_ARCH" $BUILD_FLAGS $EXTRA_FLAGS
 
       - name: Run bare-make build
         shell: bash

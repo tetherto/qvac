@@ -86,6 +86,11 @@ runs:
         sudo apt-get update
         sudo apt-get install -y ccache xz-utils libxi-dev libxtst-dev libxrandr-dev
         if [ -n "$EXTRA_PACKAGES" ]; then
+          sanitized=$(printf '%s' "$EXTRA_PACKAGES" | tr -cd 'a-zA-Z0-9 _.+-')
+          if [ "$sanitized" != "$EXTRA_PACKAGES" ]; then
+            echo "::error::extra-linux-packages contains invalid characters"
+            exit 1
+          fi
           sudo apt-get install -y $EXTRA_PACKAGES
         fi
 
