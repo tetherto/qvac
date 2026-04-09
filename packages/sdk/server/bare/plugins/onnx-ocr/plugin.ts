@@ -72,8 +72,14 @@ function createOCRModel(
     }),
   };
 
+  const args = {
+    logger,
+    params,
+    opts: { stats: true },
+  };
+
   // eslint-disable-next-line @typescript-eslint/no-explicit-any, @typescript-eslint/no-unsafe-argument
-  const model = new ONNXOcr({ params, logger, opts: { stats: true } } as any);
+  const model = new ONNXOcr(args as any);
 
   return model;
 }
