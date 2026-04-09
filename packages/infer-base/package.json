@@ -37,10 +37,10 @@
   "repository": {
     "type": "git",
     "url": "git+https://github.com/tetherto/qvac.git",
-    "directory": "packages/qvac-lib-infer-base"
+    "directory": "packages/infer-base"
   },
   "bugs": "https://github.com/tetherto/qvac/issues",
-  "homepage": "https://github.com/tetherto/qvac/tree/main/packages/qvac-lib-infer-base#readme",
+  "homepage": "https://github.com/tetherto/qvac/tree/main/packages/infer-base#readme",
   "files": [
     "src",
     "index.d.ts",
