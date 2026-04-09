@@ -610,7 +610,8 @@ qvac_lib_inference_addon_cpp::RuntimeStats LlamaModel::runtimeStats() const {
       {"CacheTokens", state_->llmContext_->getNPast()},
       {"generatedTokens", generatedTokens},
       {"promptTokens", promptTokens},
-      {"contextSlides", static_cast<int64_t>(contextSlides)}};
+      {"contextSlides", static_cast<int64_t>(contextSlides)},
+      {"backendDevice", runtimeBackendDevice_}};
 }
 
 // NOLINTNEXTLINE(readability-convert-member-functions-to-static,readability-function-cognitive-complexity)
@@ -712,8 +713,10 @@ void LlamaModel::commonParamsParse(
       params.mmproj_use_gpu = true;
 #endif
       params.split_mode = LLAMA_SPLIT_MODE_NONE;
+      runtimeBackendDevice_ = 1;
     } else if (chosenBackend.first == BackendType::CPU) {
       params.mmproj_use_gpu = false;
+      runtimeBackendDevice_ = 0;
     } else {
       throw qvac_errors::StatusError(
           qvac_errors::general_error::InternalError,

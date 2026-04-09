@@ -3,40 +3,18 @@
 #include <iostream>
 #include <memory>
 #include <string>
-#include <type_traits>
 #include <unordered_map>
-#include <variant>
 
 #include <gtest/gtest.h>
-#include <qvac-lib-inference-addon-cpp/RuntimeStats.hpp>
 
 #include "model-interface/LlamaModel.hpp"
 #include "test_common.hpp"
 
 namespace fs = std::filesystem;
 
-namespace {
-double getStatValue(
-    const qvac_lib_inference_addon_cpp::RuntimeStats& stats,
-    const std::string& key) {
-  for (const auto& stat : stats) {
-    if (stat.first == key) {
-      return std::visit(
-          [](const auto& value) -> double {
-            if constexpr (std::is_same_v<
-                              std::decay_t<decltype(value)>,
-                              double>) {
-              return value;
-            } else {
-              return static_cast<double>(value);
-            }
-          },
-          stat.second);
-    }
-  }
-  return 0.0;
-}
+using test_common::getStatValue;
 
+namespace {
 std::string processPromptString(
     const std::unique_ptr<LlamaModel>& model, const std::string& input) {
   LlamaModel::Prompt prompt;
