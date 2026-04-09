@@ -21,9 +21,9 @@ std::vector<float> FastLRMerge::merge(const std::vector<float> &enhanced,
     return enhanced;
   }
   if (N != M) {
-    throw std::invalid_argument(
-        "FastLRMerge: enhanced (" + std::to_string(N) + ") and original (" +
-        std::to_string(M) + ") must have equal length");
+    throw std::invalid_argument("FastLRMerge: enhanced (" + std::to_string(N) +
+                                ") and original (" + std::to_string(M) +
+                                ") must have equal length");
   }
 
   int nPow2 = 1;

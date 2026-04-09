@@ -184,15 +184,17 @@ qvac::ttslib::supertonic::SupertonicConfig TTSModel::createSupertonicConfig(
 
   std::stringstream ss;
   ss << "Supertone ONNX config: modelDir='" << config.modelDir
-     << "' textEncoderPath='" << config.textEncoderPath << "' durationPredictorPath='"
-     << config.durationPredictorPath << "' vectorEstimatorPath='"
-     << config.vectorEstimatorPath << "' vocoderPath='" << config.vocoderPath
-     << "' unicodeIndexerPath='" << config.unicodeIndexerPath << "' ttsConfigPath='"
-     << config.ttsConfigPath << "' voiceStyleJsonPath='" << config.voiceStyleJsonPath
-     << "' voiceName='" << config.voiceName << "' language='" << config.language
+     << "' textEncoderPath='" << config.textEncoderPath
+     << "' durationPredictorPath='" << config.durationPredictorPath
+     << "' vectorEstimatorPath='" << config.vectorEstimatorPath
+     << "' vocoderPath='" << config.vocoderPath << "' unicodeIndexerPath='"
+     << config.unicodeIndexerPath << "' ttsConfigPath='" << config.ttsConfigPath
+     << "' voiceStyleJsonPath='" << config.voiceStyleJsonPath << "' voiceName='"
+     << config.voiceName << "' language='" << config.language
      << "' speed=" << config.speed
      << " numInferenceSteps=" << config.numInferenceSteps
-     << " supertonicMultilingual=" << (config.supertonicMultilingual ? "true" : "false");
+     << " supertonicMultilingual="
+     << (config.supertonicMultilingual ? "true" : "false");
   QLOG(Priority::INFO, ss.str());
 
   return config;
@@ -446,7 +448,7 @@ void TTSModel::parseLavaSRConfig(
       }
     } catch (const std::exception &e) {
       QLOG(Priority::WARNING, "Invalid outputSampleRate value '" +
-                               srIt->second + "': " + e.what());
+                                  srIt->second + "': " + e.what());
       lavaSRConfig_.outputSampleRate = 0;
     }
   }
@@ -528,8 +530,7 @@ AudioResult TTSModel::postProcess(AudioResult result) {
   // Convert float -> PCM16 and update result
   result.pcm16.resize(audio.size());
   for (size_t i = 0; i < audio.size(); i++) {
-    const float scaled =
-        std::clamp(audio[i] * 32768.0f, -32768.0f, 32767.0f);
+    const float scaled = std::clamp(audio[i] * 32768.0f, -32768.0f, 32767.0f);
     result.pcm16[i] = static_cast<int16_t>(scaled);
   }
   result.sampleRate = currentRate;

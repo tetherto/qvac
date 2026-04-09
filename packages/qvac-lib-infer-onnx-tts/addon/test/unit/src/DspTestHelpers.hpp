@@ -8,12 +8,11 @@
 namespace qvac::ttslib::test {
 
 inline std::vector<float> generateSine(float freq, int sampleRate,
-                                       int numSamples,
-                                       float amplitude = 1.0f) {
+                                       int numSamples, float amplitude = 1.0f) {
   std::vector<float> signal(numSamples);
   for (int i = 0; i < numSamples; i++) {
-    signal[i] = amplitude * std::sin(2.0f * static_cast<float>(dsp::PI) *
-                                     freq * i / sampleRate);
+    signal[i] = amplitude * std::sin(2.0f * static_cast<float>(dsp::PI) * freq *
+                                     i / sampleRate);
   }
   return signal;
 }

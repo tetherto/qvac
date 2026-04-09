@@ -7,6 +7,7 @@ const { loadChatterboxTTS, runChatterboxTTS, runChatterboxTTSWithSplit } = requi
 const { loadSupertonicTTS, runSupertonicTTS, runSupertonicStream } = require('../utils/runSupertonicTTS')
 const { ensureChatterboxModels, ensureSupertonicModels, ensureSupertonicModelsMultilingual, ensureWhisperModel, ensureLavaSRModels } = require('../utils/downloadModel')
 const { loadWhisper, runWhisper } = require('../utils/runWhisper')
+const { lavasrEnhancerConfig, loadReferenceAudio } = require('../utils/lavasr-helpers')
 
 const platform = os.platform()
 const isMobile = platform === 'ios' || platform === 'android'
@@ -137,6 +138,7 @@ test('Chatterbox TTS: English + Spanish synthesis and WER verification', { timeo
 
     t.ok(result.passed, `English TTS ${i + 1} should pass expectations`)
     t.ok(result.data.sampleCount > 0, `English TTS ${i + 1} should produce audio samples`)
+    t.is(result.data.reportedSampleRate, 24000, 'Sample rate should be native 24kHz without enhancement')
 
     const wavBuffer = result.data?.wavBuffer ? Buffer.from(result.data.wavBuffer) : null
     werEntries.push({ text, lang: 'en', wavBuffer, sampleCount: result.data.sampleCount, durationMs: result.data.durationMs })
@@ -269,7 +271,12 @@ test('Chatterbox Multilingual TTS: Synthesis across languages', { timeout: 36000
 
     if (i > 0) {
       console.log(`\n=== Reloading model for language: ${lang} ===`)
-      await model.reload({ language: lang })
+      try {
+        await model.reload({ language: lang })
+      } catch (err) {
+        t.fail(`Failed to reload for language ${lang}: ${err.message}`)
+        continue
+      }
     }
 
     console.log(`\n--- [${lang}] "${text.substring(0, 60)}${text.length > 60 ? '...' : ''}" ---`)
@@ -293,8 +300,12 @@ test('Chatterbox Multilingual TTS: Synthesis across languages', { timeout: 36000
   }
 
   console.log('\n=== Unloading multilingual model ===')
-  await model.unload()
-  t.pass('Model unloaded successfully')
+  try {
+    await model.unload()
+    t.pass('Model unloaded successfully')
+  } catch (err) {
+    t.fail(`Model unload failed: ${err.message}`)
+  }
 
   console.log('\n' + '='.repeat(60))
   console.log(`CHATTERBOX MULTILINGUAL TEST SUMMARY (tier: ${INPUT_SENTENCES})`)
@@ -308,7 +319,7 @@ test('Chatterbox Multilingual TTS: Synthesis across languages', { timeout: 36000
 })
 
 // ---------------------------------------------------------------------------
-// LavaSR outputSampleRate tests (no LavaSR models needed, tests resampling)
+// outputSampleRate tests (no LavaSR models needed, tests resampling)
 // ---------------------------------------------------------------------------
 
 test('Supertonic TTS: outputSampleRate resamples to 16kHz', { timeout: 1800000 }, async (t) => {
@@ -416,6 +427,7 @@ test('Supertonic TTS: Basic synthesis test', { timeout: 1800000 }, async (t) => 
   t.ok(result.passed, 'Supertonic TTS synthesis should pass expectations')
   t.ok(result.data.sampleCount > 0, 'Supertonic TTS should produce audio samples')
   t.is(SUPERTONIC_SAMPLE_RATE, 44100, 'Supertonic output sample rate is 44.1kHz')
+  t.is(result.data.reportedSampleRate, 44100, 'Sample rate should be native 44.1kHz without enhancement')
 
   if (result.data?.stats) {
     console.log(`Inference stats: ${JSON.stringify(result.data.stats)}`)
@@ -684,27 +696,6 @@ test('Supertonic TTS multilingual (Spanish): basic synthesis with HF Supertone/s
 
 const ENHANCED_SAMPLE_RATE = 48000
 
-function lavasrEnhancerConfig (lavasrDir, opts = {}) {
-  return {
-    type: 'lavasr',
-    enhance: opts.enhance !== false,
-    denoise: opts.denoise || false,
-    backbonePath: path.join(lavasrDir, 'enhancer_backbone.onnx'),
-    specHeadPath: path.join(lavasrDir, 'enhancer_spec_head.onnx'),
-    denoiserPath: path.join(lavasrDir, 'denoiser_core_legacy_fixed63.onnx')
-  }
-}
-
-function loadReferenceAudio () {
-  const { readWavAsFloat32, resampleLinear } = require('../utils/wav-helper')
-  const refPath = path.join(__dirname, '..', 'reference-audio', 'jfk.wav')
-  const { samples, sampleRate } = readWavAsFloat32(refPath)
-  if (sampleRate !== 24000) {
-    return resampleLinear(samples, sampleRate, 24000)
-  }
-  return samples
-}
-
 test('LavaSR: Chatterbox + enhance produces 48kHz output', { timeout: 1800000 }, async (t) => {
   const baseDir = getBaseDir()
   const chatterboxDir = path.join(baseDir, 'models', 'chatterbox')
@@ -737,47 +728,43 @@ test('LavaSR: Chatterbox + enhance produces 48kHz output', { timeout: 1800000 },
 
   await model.load()
 
+  let outputArray = []
   let reportedSampleRate = null
   const response = await model.run({ type: 'text', input: 'Hello world.' })
-  const result = await response
+  await response
     .onUpdate(data => {
+      if (data && data.outputArray) {
+        outputArray = outputArray.concat(Array.from(data.outputArray))
+      }
       if (data && data.sampleRate) reportedSampleRate = data.sampleRate
     })
     .await()
 
-  t.ok(result.data.outputArray, 'Should produce output audio')
-  t.ok(result.data.outputArray.length > 0, 'Output should be non-empty')
+  t.ok(outputArray.length > 0, 'Should produce non-empty output audio')
   t.is(reportedSampleRate, ENHANCED_SAMPLE_RATE, `Sample rate should be ${ENHANCED_SAMPLE_RATE}Hz after enhancement`)
 
-  console.log(`Output: ${result.data.outputArray.length} samples @ ${reportedSampleRate}Hz`)
+  console.log(`Output: ${outputArray.length} samples @ ${reportedSampleRate}Hz`)
 
   await model.unload()
 })
 
-test('LavaSR: Chatterbox + denoise + enhance', { timeout: 1800000 }, async (t) => {
+test('LavaSR: Supertonic + denoise + enhance', { timeout: 1800000 }, async (t) => {
   const baseDir = getBaseDir()
-  const chatterboxDir = path.join(baseDir, 'models', 'chatterbox')
+  const supertonicDir = path.join(baseDir, 'models', 'supertonic')
   const lavasrDir = path.join(baseDir, 'models', 'lavasr')
 
-  const cbResult = await ensureChatterboxModels({ targetDir: chatterboxDir, variant: CHATTERBOX_VARIANT })
+  const stResult = await ensureSupertonicModels({ targetDir: supertonicDir })
   const lsResult = await ensureLavaSRModels({ targetDir: lavasrDir })
-  if (!cbResult.success || !lsResult.success) {
-    t.fail('Required models not available (Chatterbox: ' + cbResult.success + ', LavaSR: ' + lsResult.success + ')')
+  if (!stResult.success || !lsResult.success) {
+    t.fail('Required models not available (Supertonic: ' + stResult.success + ', LavaSR: ' + lsResult.success + ')')
     return
   }
 
-  const referenceAudio = loadReferenceAudio()
   const ONNXTTS = require('../..')
 
   const model = new ONNXTTS({
-    files: {
-      tokenizerPath: path.join(chatterboxDir, 'tokenizer.json'),
-      speechEncoderPath: chatterboxPath(chatterboxDir, 'speech_encoder'),
-      embedTokensPath: chatterboxPath(chatterboxDir, 'embed_tokens'),
-      conditionalDecoderPath: chatterboxPath(chatterboxDir, 'conditional_decoder'),
-      languageModelPath: chatterboxLmPath(chatterboxDir)
-    },
-    referenceAudio,
+    files: { modelDir: supertonicDir },
+    voiceName: 'F1',
     config: { language: 'en' },
     enhancer: lavasrEnhancerConfig(lavasrDir, { denoise: true }),
     opts: { stats: true }
@@ -785,90 +772,82 @@ test('LavaSR: Chatterbox + denoise + enhance', { timeout: 1800000 }, async (t) =
 
   await model.load()
 
+  let outputArray = []
   let reportedSampleRate = null
   const response = await model.run({ type: 'text', input: 'Testing denoiser and enhancer.' })
-  const result = await response
+  await response
     .onUpdate(data => {
+      if (data && data.outputArray) {
+        outputArray = outputArray.concat(Array.from(data.outputArray))
+      }
       if (data && data.sampleRate) reportedSampleRate = data.sampleRate
     })
     .await()
 
-  t.ok(result.data.outputArray, 'Should produce output audio')
-  t.ok(result.data.outputArray.length > 0, 'Output should be non-empty')
+  t.ok(outputArray.length > 0, 'Should produce non-empty output audio')
   t.is(reportedSampleRate, ENHANCED_SAMPLE_RATE, `Sample rate should be ${ENHANCED_SAMPLE_RATE}Hz after denoise+enhance`)
 
   await model.unload()
 })
 
-test('LavaSR: outputSampleRate without enhance (conventional resample)', { timeout: 1800000 }, async (t) => {
+test('LavaSR: Supertonic + outputSampleRate without enhance (conventional resample)', { timeout: 1800000 }, async (t) => {
   const baseDir = getBaseDir()
-  const chatterboxDir = path.join(baseDir, 'models', 'chatterbox')
+  const supertonicDir = path.join(baseDir, 'models', 'supertonic')
 
-  const cbResult = await ensureChatterboxModels({ targetDir: chatterboxDir, variant: CHATTERBOX_VARIANT })
-  if (!cbResult.success) {
-    t.fail('Chatterbox models not available')
+  const stResult = await ensureSupertonicModels({ targetDir: supertonicDir })
+  if (!stResult.success) {
+    t.fail('Supertonic models not available')
     return
   }
 
-  const referenceAudio = loadReferenceAudio()
   const ONNXTTS = require('../..')
   const targetRate = 16000
 
   const model = new ONNXTTS({
-    files: {
-      tokenizerPath: path.join(chatterboxDir, 'tokenizer.json'),
-      speechEncoderPath: chatterboxPath(chatterboxDir, 'speech_encoder'),
-      embedTokensPath: chatterboxPath(chatterboxDir, 'embed_tokens'),
-      conditionalDecoderPath: chatterboxPath(chatterboxDir, 'conditional_decoder'),
-      languageModelPath: chatterboxLmPath(chatterboxDir)
-    },
-    referenceAudio,
+    files: { modelDir: supertonicDir },
+    voiceName: 'F1',
     config: { language: 'en', outputSampleRate: targetRate },
     opts: { stats: true }
   })
 
   await model.load()
 
+  let outputArray = []
   let reportedSampleRate = null
   const response = await model.run({ type: 'text', input: 'Testing conventional resampling.' })
-  const result = await response
+  await response
     .onUpdate(data => {
+      if (data && data.outputArray) {
+        outputArray = outputArray.concat(Array.from(data.outputArray))
+      }
       if (data && data.sampleRate) reportedSampleRate = data.sampleRate
     })
     .await()
 
-  t.ok(result.data.outputArray, 'Should produce output audio')
-  t.ok(result.data.outputArray.length > 0, 'Output should be non-empty')
+  t.ok(outputArray.length > 0, 'Should produce non-empty output audio')
   t.is(reportedSampleRate, targetRate, `Sample rate should be ${targetRate}Hz after resampling`)
 
   await model.unload()
 })
 
-test('LavaSR: enhance + custom outputSampleRate', { timeout: 1800000 }, async (t) => {
+test('LavaSR: Supertonic + enhance + custom outputSampleRate', { timeout: 1800000 }, async (t) => {
   const baseDir = getBaseDir()
-  const chatterboxDir = path.join(baseDir, 'models', 'chatterbox')
+  const supertonicDir = path.join(baseDir, 'models', 'supertonic')
   const lavasrDir = path.join(baseDir, 'models', 'lavasr')
 
-  const cbResult = await ensureChatterboxModels({ targetDir: chatterboxDir, variant: CHATTERBOX_VARIANT })
+  const stResult = await ensureSupertonicModels({ targetDir: supertonicDir })
   const lsResult = await ensureLavaSRModels({ targetDir: lavasrDir })
-  if (!cbResult.success || !lsResult.success) {
-    t.fail('Required models not available (Chatterbox: ' + cbResult.success + ', LavaSR: ' + lsResult.success + ')')
+  if (!stResult.success || !lsResult.success) {
+    t.fail('Required models not available (Supertonic: ' + stResult.success + ', LavaSR: ' + lsResult.success + ')')
     return
   }
 
-  const referenceAudio = loadReferenceAudio()
   const ONNXTTS = require('../..')
   const targetRate = 22050
 
   const model = new ONNXTTS({
-    files: {
-      tokenizerPath: path.join(chatterboxDir, 'tokenizer.json'),
-      speechEncoderPath: chatterboxPath(chatterboxDir, 'speech_encoder'),
-      embedTokensPath: chatterboxPath(chatterboxDir, 'embed_tokens'),
-      conditionalDecoderPath: chatterboxPath(chatterboxDir, 'conditional_decoder'),
-      languageModelPath: chatterboxLmPath(chatterboxDir)
-    },
-    referenceAudio,
+    files: { modelDir: supertonicDir },
+    voiceName: 'F1',
     config: { language: 'en', outputSampleRate: targetRate },
     enhancer: lavasrEnhancerConfig(lavasrDir),
     opts: { stats: true }
@@ -876,16 +855,19 @@ test('LavaSR: enhance + custom outputSampleRate', { timeout: 1800000 }, async (t
 
   await model.load()
 
+  let outputArray = []
   let reportedSampleRate = null
   const response = await model.run({ type: 'text', input: 'Testing enhance then downsample.' })
-  const result = await response
+  await response
     .onUpdate(data => {
+      if (data && data.outputArray) {
+        outputArray = outputArray.concat(Array.from(data.outputArray))
+      }
       if (data && data.sampleRate) reportedSampleRate = data.sampleRate
     })
     .await()
 
-  t.ok(result.data.outputArray, 'Should produce output audio')
-  t.ok(result.data.outputArray.length > 0, 'Output should be non-empty')
+  t.ok(outputArray.length > 0, 'Should produce non-empty output audio')
   t.is(reportedSampleRate, targetRate, `Sample rate should be ${targetRate}Hz after enhance+downsample`)
 
   await model.unload()
@@ -915,60 +897,20 @@ test('LavaSR: Supertonic + enhance', { timeout: 1800000 }, async (t) => {
 
   await model.load()
 
+  let outputArray = []
   let reportedSampleRate = null
   const response = await model.run({ type: 'text', input: 'Testing Supertonic enhancement.' })
-  const result = await response
+  await response
     .onUpdate(data => {
+      if (data && data.outputArray) {
+        outputArray = outputArray.concat(Array.from(data.outputArray))
+      }
       if (data && data.sampleRate) reportedSampleRate = data.sampleRate
     })
     .await()
 
-  t.ok(result.data.outputArray, 'Should produce output audio')
-  t.ok(result.data.outputArray.length > 0, 'Output should be non-empty')
+  t.ok(outputArray.length > 0, 'Should produce non-empty output audio')
   t.is(reportedSampleRate, ENHANCED_SAMPLE_RATE, `Sample rate should be ${ENHANCED_SAMPLE_RATE}Hz after Supertonic enhancement`)
-
-  await model.unload()
-})
-
-test('LavaSR: No flags = backward compatible', { timeout: 1800000 }, async (t) => {
-  const baseDir = getBaseDir()
-  const chatterboxDir = path.join(baseDir, 'models', 'chatterbox')
-
-  const cbResult = await ensureChatterboxModels({ targetDir: chatterboxDir, variant: CHATTERBOX_VARIANT })
-  if (!cbResult.success) {
-    t.fail('Chatterbox models not available')
-    return
-  }
-
-  const referenceAudio = loadReferenceAudio()
-  const ONNXTTS = require('../..')
-
-  const model = new ONNXTTS({
-    files: {
-      tokenizerPath: path.join(chatterboxDir, 'tokenizer.json'),
-      speechEncoderPath: chatterboxPath(chatterboxDir, 'speech_encoder'),
-      embedTokensPath: chatterboxPath(chatterboxDir, 'embed_tokens'),
-      conditionalDecoderPath: chatterboxPath(chatterboxDir, 'conditional_decoder'),
-      languageModelPath: chatterboxLmPath(chatterboxDir)
-    },
-    referenceAudio,
-    config: { language: 'en' },
-    opts: { stats: true }
-  })
-
-  await model.load()
-
-  let reportedSampleRate = null
-  const response = await model.run({ type: 'text', input: 'No enhancement flags.' })
-  const result = await response
-    .onUpdate(data => {
-      if (data && data.sampleRate) reportedSampleRate = data.sampleRate
-    })
-    .await()
-
-  t.ok(result.data.outputArray, 'Should produce output audio')
-  t.ok(result.data.outputArray.length > 0, 'Output should be non-empty')
-  t.is(reportedSampleRate, 24000, 'Sample rate should remain native 24000Hz without enhancement')
 
   await model.unload()
 })

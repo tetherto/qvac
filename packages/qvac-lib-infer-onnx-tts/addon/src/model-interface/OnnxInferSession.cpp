@@ -92,8 +92,7 @@ OnnxInferSession::OnnxInferSession(const std::string &modelPath, bool useGPU) {
     if (sessionCfg.provider != onnx_addon::ExecutionProvider::CPU) {
       onnx_addon::SessionConfig cpuCfg = sessionCfg;
       cpuCfg.provider = onnx_addon::ExecutionProvider::CPU;
-      Ort::SessionOptions cpuOptions =
-          onnx_addon::buildSessionOptions(cpuCfg);
+      Ort::SessionOptions cpuOptions = onnx_addon::buildSessionOptions(cpuCfg);
       session_ = qvac::ttslib::createOrtSession(modelPath, cpuOptions);
     } else {
       throw;

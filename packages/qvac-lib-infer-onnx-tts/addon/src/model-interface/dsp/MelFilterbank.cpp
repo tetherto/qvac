@@ -55,7 +55,8 @@ std::vector<std::vector<float>>
 MelFilterbank::melSpectrogram(const std::vector<float> &wav,
                               int hopLength) const {
   if (!cachedStft_ || cachedHopLength_ != hopLength) {
-    cachedStft_ = std::make_unique<StftProcessor>(nFft_, hopLength, nFft_, false);
+    cachedStft_ =
+        std::make_unique<StftProcessor>(nFft_, hopLength, nFft_, false);
     cachedHopLength_ = hopLength;
   }
   const Spectrogram spec = cachedStft_->stft(wav);
