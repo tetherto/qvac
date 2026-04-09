@@ -57,9 +57,23 @@ jobs:
             pkg:
               - "packages/qvac-lib-infer-nmtcpp/**"
               - ".github/workflows/*nmtcpp*.yml"
+  verify-fabric-lockstep:
+    needs: [authorize, changes]
+    if: always() && needs.authorize.outputs.allowed == 'true' && (needs.changes.outputs.pkg == 'true' || github.event_name == 'workflow_dispatch')
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # 6.0.2
+
+      - name: Verify qvac-fabric versions are lockstep
+        id: lockstep
+        uses: ./.github/actions/verify-qvac-fabric-lockstep
+
+      - name: Report verified version
+        run: echo "Verified qvac-fabric version: ${{ steps.lockstep.outputs.version }}"
 
   sanity-checks:
-    needs: [authorize, changes]
+    needs: [authorize, changes, verify-fabric-lockstep]
     if: always() && ((needs.changes.outputs.pkg == 'true' && needs.authorize.outputs.allowed == 'true') || github.event_name == 'workflow_dispatch')
     runs-on: ubuntu-latest
     environment: release
@@ -192,6 +206,7 @@ jobs:
       [
         authorize,
         changes,
+        verify-fabric-lockstep,
         sanity-checks,
         ts-checks,
         cpp-lint,
@@ -203,6 +218,6 @@ jobs:
     if: always() && (needs.changes.outputs.pkg == 'true' || github.event_name == 'workflow_dispatch')
     uses: tetherto/oss-actions/.github/workflows/public-pr.yml@v1.1.0
     with:
-      sanity-checks-status: ${{ needs.sanity-checks.result == 'success' && needs.cpp-tests.result == 'success' && needs.ts-checks.result == 'success' }}
+      sanity-checks-status: ${{ needs.verify-fabric-lockstep.result == 'success' && needs.sanity-checks.result == 'success' && needs.cpp-tests.result == 'success' && needs.ts-checks.result == 'success' }}
       build-status: ${{ needs.prebuild.result == 'success' }}
       integration-tests-status: ${{ needs.run-integration-tests.result == 'success' }}
