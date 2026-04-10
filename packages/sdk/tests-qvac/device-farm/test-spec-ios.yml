@@ -105,10 +105,12 @@ phases:
     commands:
       # The SDK consumer auto-runs tests and reports results via MQTT to the producer.
       # Device Farm keeps the app alive while pymobiledevice3 captures device logs.
-      # tail -f streams app logs live to the Device Farm console.
+      # tail -f streams app logs live; we poll for "Consumer shutting down" to exit early.
       - |-
         TIMEOUT=${DEVICEFARM_TIMEOUT:-5400}
+        START=$(date +%s)
         SYSLOG_FILE="$DEVICEFARM_LOG_DIR/testconsumer.log"
+        CHECK_INTERVAL=5
 
         echo "App is running. Streaming logs for up to ${TIMEOUT}s..."
         echo "Test results are captured by the MQTT producer (separate CI job)."
@@ -117,11 +119,28 @@ phases:
         tail -f "$SYSLOG_FILE" &
         TAIL_PID=$!
 
-        sleep "$TIMEOUT"
+        while true; do
+          sleep $CHECK_INTERVAL
+
+          NOW=$(date +%s)
+          ELAPSED=$((NOW - START))
+
+          if grep -q "Consumer shutting down" "$SYSLOG_FILE" 2>/dev/null; then
+            echo ""
+            echo "========================================="
+            echo "Consumer finished after ${ELAPSED}s"
+            echo "========================================="
+            break
+          fi
+
+          if [ $ELAPSED -ge $TIMEOUT ]; then
+            echo ""
+            echo "Timeout reached (${TIMEOUT}s). Producer should have results by now."
+            break
+          fi
+        done
 
         kill $TAIL_PID 2>/dev/null || true
-        echo ""
-        echo "Timeout reached (${TIMEOUT}s). Producer should have results by now."
 
   post_test:
     commands:
