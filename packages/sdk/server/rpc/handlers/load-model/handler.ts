@@ -155,6 +155,11 @@ export async function handleLoadModel(
 
       if (modelFileSize > 0) {
         const platform = getPlatformInfo();
+        logger.debug(
+          `Memory validation: model=${Math.round(modelFileSize / (1024 * 1024))} MB, ` +
+            `totalMem=${Math.round(platform.totalMemory / (1024 * 1024))} MB, ` +
+            `availableMem=${Math.round(platform.availableMemory / (1024 * 1024))} MB (${platform.os}/${platform.arch})`,
+        );
         plugin.validateBeforeLoad({
           modelConfig: resolvedModelConfig,
           modelFileSize,
