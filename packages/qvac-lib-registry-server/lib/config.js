@@ -257,6 +257,21 @@ class RegistryConfig {
   }
 
   /**
+   * Get known indexer public keys for authenticated RPC connections.
+   * CI clients use these to connect directly via Noise handshake
+   * instead of topic-based discovery.
+   */
+  getIndexerKeys () {
+    const rawKeys = getEnv('QVAC_INDEXER_KEYS', '')
+    if (!rawKeys) return []
+
+    return rawKeys
+      .split(',')
+      .map(key => key.trim())
+      .filter(Boolean)
+  }
+
+  /**
    * Optionally load writer keypair from env (CI use-case)
    */
   getWriterKeyPair () {

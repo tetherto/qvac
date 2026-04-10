@@ -135,7 +135,7 @@
     "@qvac/langdetect-text": "^0.1.0",
     "@qvac/llm-llamacpp": "^0.12.1",
     "@qvac/logging": "^0.1.0",
-    "@qvac/ocr-onnx": "^0.2.0",
+    "@qvac/ocr-onnx": "^0.4.0",
     "@qvac/rag": "^0.4.4",
     "@qvac/registry-client": "^0.2.1",
     "@qvac/transcription-parakeet": "^0.2.7",

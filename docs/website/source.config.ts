@@ -20,6 +20,7 @@ export const docs = defineDocs({
     schema: frontmatterSchema.extend({
       titleStyle: z.enum(["code", "text"]).optional(),
       version: z.string().optional(),
+      ogImage: z.string().optional(),
     }),
     postprocess: {
       includeProcessedMarkdown: true,
