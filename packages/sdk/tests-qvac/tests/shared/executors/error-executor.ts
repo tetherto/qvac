@@ -1,10 +1,12 @@
 import {
   embed,
   loadModel,
+  unloadModel,
   deleteCache,
   completion,
   ragIngest,
   transcribe,
+  LLAMA_3_2_1B_INST_Q4_0,
   SDK_CLIENT_ERROR_CODES,
   SDK_SERVER_ERROR_CODES,
 } from "@qvac/sdk";
@@ -33,6 +35,7 @@ export class ErrorExecutor extends AbstractModelExecutor<typeof errorTests> {
         "error-use-unloaded-model": this.useUnloadedModel.bind(this),
         "error-rag-unloaded-model": this.ragUnloadedModel.bind(this),
         "error-embedding-empty-input": this.embeddingEmptyInput.bind(this),
+        "error-memory-exceeded": this.memoryExceeded.bind(this),
       };
       return [test.testId, map[test.testId] ?? this.completionError.bind(this)];
     }),
@@ -182,6 +185,38 @@ export class ErrorExecutor extends AbstractModelExecutor<typeof errorTests> {
       return { passed: false, output: "Expected error for unloaded embedding model" };
     } catch (error) {
       return { passed: true, output: `Correctly threw: ${error}` };
+    }
+  }
+
+  async memoryExceeded(params: unknown, expectation: unknown): Promise<TestResult> {
+    const p = params as { ctx_size: number };
+    try {
+      const modelId = await loadModel({
+        modelSrc: LLAMA_3_2_1B_INST_Q4_0,
+        modelType: "llm",
+        modelConfig: { verbosity: 0, ctx_size: p.ctx_size },
+      });
+      await unloadModel({ modelId });
+      return {
+        passed: false,
+        output: `Expected MODEL_MEMORY_EXCEEDED error but model loaded successfully with ctx_size=${p.ctx_size}`,
+      };
+    } catch (error) {
+      const e = error as Error & { code?: number };
+      const errorMsg = e.message ?? String(error);
+      const isMemoryError =
+        e.code === SDK_SERVER_ERROR_CODES.MODEL_MEMORY_EXCEEDED ||
+        errorMsg.includes("MODEL_MEMORY_EXCEEDED");
+      if (isMemoryError) {
+        return {
+          passed: true,
+          output: `MODEL_MEMORY_EXCEEDED correctly thrown: ${errorMsg}`,
+        };
+      }
+      return {
+        passed: false,
+        output: `Wrong error type (expected MODEL_MEMORY_EXCEEDED): ${errorMsg}`,
+      };
     }
   }
 }

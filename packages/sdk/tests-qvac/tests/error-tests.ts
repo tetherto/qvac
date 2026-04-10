@@ -105,6 +105,13 @@ export const errorRagUnloadedModel: TestDefinition = {
   metadata: { category: "error", dependency: "embeddings", estimatedDurationMs: 3000 },
 };
 
+export const errorMemoryExceeded: TestDefinition = {
+  testId: "error-memory-exceeded",
+  params: { ctx_size: 3276000 },
+  expectation: { validation: "throws-error", errorContains: "MODEL_MEMORY_EXCEEDED" },
+  metadata: { category: "error", dependency: "none", estimatedDurationMs: 30000 },
+};
+
 export const errorTests = [
   errorInvalidModelId,
   errorInvalidResponseType,
@@ -121,4 +128,5 @@ export const errorTests = [
   errorEmbeddingEmptyInput,
   errorUseUnloadedModel,
   errorRagUnloadedModel,
+  errorMemoryExceeded,
 ];
