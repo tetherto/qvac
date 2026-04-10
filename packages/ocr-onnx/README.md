@@ -88,7 +88,7 @@ Before building, ensure you have the following installed:
 
 1. **Clone the repository**:
    ```bash
-   git clone git@github.com:tetherto/qvac-lib-inference-addon-onnx-ocr-fasttext.git
+   git clone https://github.com/tetherto/qvac-lib-inference-addon-onnx-ocr-fasttext.git
    cd qvac-lib-inference-addon-onnx-ocr-fasttext
    ```
 
