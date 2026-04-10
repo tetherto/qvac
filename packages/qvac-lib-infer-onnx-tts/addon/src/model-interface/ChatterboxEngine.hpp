@@ -8,6 +8,7 @@
 
 #include <functional>
 #include <memory>
+#include <random>
 
 namespace qvac::ttslib::chatterbox {
 
@@ -91,6 +92,15 @@ private:
                      const std::string &modelPath);
   void releaseSession(std::unique_ptr<IOnnxInferSession> &session);
   void loadCangjieTableIfNeeded(const std::string &tokenizerPath);
+  void loadTextEmbWeight(const std::string &embedTokensPath);
+
+  TensorData<float>
+  createUnconditionalEmbeddings(const TensorData<float> &condEmbs,
+                                const std::vector<int64_t> &inputIds);
+
+  std::vector<int64_t> generateSpeechTokensWithCfg(
+      std::vector<int64_t> &inputIds, TensorData<int64_t> &positionIds,
+      TensorData<float> &speakerEmbeddings, TensorData<float> &speakerFeatures);
 
   TokenizerHandle tokenizerHandle_;
   SessionFactory sessionFactory_;
@@ -105,6 +115,11 @@ private:
   std::string language_;
   int keyValueOffset_ = 0;
   text_preprocess::CangjieTable cangjieTable_;
+
+  std::vector<float> textEmbWeight_;
+  int64_t textEmbRows_ = 0;
+  int64_t textEmbDim_ = 0;
+  std::mt19937 rng_{std::random_device{}()};
 };
 
 } // namespace qvac::ttslib::chatterbox
