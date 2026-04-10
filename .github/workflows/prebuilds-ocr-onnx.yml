@@ -49,16 +49,16 @@ jobs:
             arch: arm64
             variant: ubuntu
             flags: -D ANDROID_STL=c++_shared -D BUILD_TESTING=OFF
-          - os: macos-14
+          - os: macos-15
             platform: ios
             arch: arm64
             flags: -D BUILD_TESTING=OFF
-          - os: macos-14
+          - os: macos-15
             platform: ios
             arch: arm64
             tags: -simulator
             flags: --simulator -D BUILD_TESTING=OFF
-          - os: macos-14
+          - os: macos-15
             platform: ios
             arch: x64
             tags: -simulator
@@ -256,10 +256,6 @@ jobs:
           VCPKG_ROOT=$(pwd)
           echo "VCPKG_ROOT=$VCPKG_ROOT" >> $GITHUB_ENV
           echo "$VCPKG_ROOT" >> $GITHUB_PATH
-
-      - if: ${{ startsWith(matrix.os, 'macos') }}
-        name: Select Xcode 16.4
-        run: sudo xcode-select -s /Applications/Xcode_16.4.app/Contents/Developer
 
       - if: ${{ startsWith(matrix.os, 'macos') && matrix.platform == 'ios' }}
         name: Verify UIKit Frameworks
