@@ -1,9 +1,19 @@
 import { LLM_CONFIG_DEFAULTS } from "@/schemas/llamacpp-config";
 
 const BYTES_PER_MB = 1024 * 1024;
+const BYTES_PER_GB = 1024 * BYTES_PER_MB;
 const OVERHEAD_BYTES = 512 * BYTES_PER_MB;
 const MEMORY_USAGE_THRESHOLD = 0.80;
 const MAX_CTX_SIZE = 131072;
+
+// llama.cpp KV cache formula: 2 (K+V) * n_layer * n_kv_heads * head_dim * dtype_size
+// Since we can't read GGUF metadata from JS, we estimate based on model file size.
+// These brackets are calibrated from actual model architectures with f16 KV cache:
+//   Llama-3.2-1B  (737MB Q4):  32,768 bytes/token
+//   Llama-3.2-3B  (~2GB Q4):  114,688 bytes/token
+//   Llama-3.1-8B  (~4.5GB Q4): 131,072 bytes/token
+//   Phi-3-mini-3.8B (~2.2GB):  393,216 bytes/token (MHA, not GQA)
+// We use conservative (high) estimates to avoid false negatives.
 
 interface KvBytesPerTokenBracket {
   maxFileSize: number;
@@ -11,10 +21,11 @@ interface KvBytesPerTokenBracket {
 }
 
 const KV_BRACKETS: KvBytesPerTokenBracket[] = [
-  { maxFileSize: 2 * 1024 * BYTES_PER_MB, bytesPerToken: 256 },
-  { maxFileSize: 5 * 1024 * BYTES_PER_MB, bytesPerToken: 512 },
-  { maxFileSize: 15 * 1024 * BYTES_PER_MB, bytesPerToken: 1024 },
-  { maxFileSize: Infinity, bytesPerToken: 2048 },
+  { maxFileSize: 1 * BYTES_PER_GB, bytesPerToken: 48_000 },
+  { maxFileSize: 3 * BYTES_PER_GB, bytesPerToken: 128_000 },
+  { maxFileSize: 6 * BYTES_PER_GB, bytesPerToken: 200_000 },
+  { maxFileSize: 15 * BYTES_PER_GB, bytesPerToken: 350_000 },
+  { maxFileSize: Infinity, bytesPerToken: 500_000 },
 ];
 
 export function estimateKvBytesPerToken(modelFileSize: number): number {

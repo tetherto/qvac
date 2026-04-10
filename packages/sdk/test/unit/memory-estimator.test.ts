@@ -13,24 +13,29 @@ const GB = 1024 * MB;
 
 // --- estimateKvBytesPerToken ---
 
-test("estimateKvBytesPerToken: small model (<2GB) returns 256 bytes/token", (t: { is: Function }) => {
-  t.is(estimateKvBytesPerToken(1 * GB), 256);
-  t.is(estimateKvBytesPerToken(500 * MB), 256);
+test("estimateKvBytesPerToken: small model (<1GB) returns 48000 bytes/token", (t: { is: Function }) => {
+  t.is(estimateKvBytesPerToken(500 * MB), 48_000);
+  t.is(estimateKvBytesPerToken(737 * MB), 48_000);
 });
 
-test("estimateKvBytesPerToken: medium model (2-5GB) returns 512 bytes/token", (t: { is: Function }) => {
-  t.is(estimateKvBytesPerToken(3 * GB), 512);
-  t.is(estimateKvBytesPerToken(4.9 * GB), 512);
+test("estimateKvBytesPerToken: 1-3GB model returns 128000 bytes/token", (t: { is: Function }) => {
+  t.is(estimateKvBytesPerToken(1 * GB), 128_000);
+  t.is(estimateKvBytesPerToken(2 * GB), 128_000);
 });
 
-test("estimateKvBytesPerToken: large model (5-15GB) returns 1024 bytes/token", (t: { is: Function }) => {
-  t.is(estimateKvBytesPerToken(7 * GB), 1024);
-  t.is(estimateKvBytesPerToken(14 * GB), 1024);
+test("estimateKvBytesPerToken: 3-6GB model returns 200000 bytes/token", (t: { is: Function }) => {
+  t.is(estimateKvBytesPerToken(4 * GB), 200_000);
+  t.is(estimateKvBytesPerToken(5 * GB), 200_000);
 });
 
-test("estimateKvBytesPerToken: very large model (>15GB) returns 2048 bytes/token", (t: { is: Function }) => {
-  t.is(estimateKvBytesPerToken(20 * GB), 2048);
-  t.is(estimateKvBytesPerToken(40 * GB), 2048);
+test("estimateKvBytesPerToken: 6-15GB model returns 350000 bytes/token", (t: { is: Function }) => {
+  t.is(estimateKvBytesPerToken(7 * GB), 350_000);
+  t.is(estimateKvBytesPerToken(14 * GB), 350_000);
+});
+
+test("estimateKvBytesPerToken: very large model (>15GB) returns 500000 bytes/token", (t: { is: Function }) => {
+  t.is(estimateKvBytesPerToken(20 * GB), 500_000);
+  t.is(estimateKvBytesPerToken(40 * GB), 500_000);
 });
 
 // --- estimateMemoryRequired ---
@@ -91,6 +96,17 @@ test("validateMemoryForModel: suggested ctx is less than requested when unsafe",
   } else {
     t.ok(true, "safe — no suggestion needed");
   }
+});
+
+test("validateMemoryForModel: 1B model with extreme ctx_size is unsafe on 24GB machine", (t: { is: Function; ok: Function }) => {
+  const result = validateMemoryForModel(737 * MB, 3276000, 17 * GB);
+  t.is(result.safe, false);
+  t.ok(result.suggestedCtxSize < 3276000, "suggested ctx should be much smaller");
+});
+
+test("validateMemoryForModel: 1B model with normal ctx_size is safe on 24GB machine", (t: { is: Function }) => {
+  const result = validateMemoryForModel(737 * MB, 2048, 17 * GB);
+  t.is(result.safe, true);
 });
 
 // --- llmConfigBaseSchema ctx_size validation ---
