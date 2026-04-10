@@ -551,7 +551,8 @@ std::any SdModel::process(const std::any& input) {
     if (!initImg.data)
       throw StatusError(
           general_error::InvalidArgument,
-          "img2img: failed to decode init_image (corrupt or unsupported format)");
+          "img2img: failed to decode init_image (corrupt or unsupported "
+          "format)");
 
     const int imgW = static_cast<int>(initImg.width);
     const int imgH = static_cast<int>(initImg.height);
@@ -593,8 +594,8 @@ std::any SdModel::process(const std::any& input) {
         QLOG_IF(
             qvac_lib_inference_addon_cpp::logger::Priority::INFO,
             "img2img: resizing " + std::to_string(imgW) + "x" +
-                std::to_string(imgH) + " → " + std::to_string(alignedW) +
-                "x" + std::to_string(alignedH) + " (align to " +
+                std::to_string(imgH) + " → " + std::to_string(alignedW) + "x" +
+                std::to_string(alignedH) + " (align to " +
                 std::to_string(kAlign) + ")");
 
         sd_image_t resized =
@@ -602,9 +603,9 @@ std::any SdModel::process(const std::any& input) {
         if (!resized.data)
           throw StatusError(
               general_error::InternalError,
-              "Failed to resize init_image from " + std::to_string(imgW) +
-                  "x" + std::to_string(imgH) + " to " +
-                  std::to_string(alignedW) + "x" + std::to_string(alignedH));
+              "Failed to resize init_image from " + std::to_string(imgW) + "x" +
+                  std::to_string(imgH) + " to " + std::to_string(alignedW) +
+                  "x" + std::to_string(alignedH));
         free(initImg.data);
         initImg = resized;
       }
@@ -629,8 +630,8 @@ std::any SdModel::process(const std::any& input) {
           throw StatusError(
               general_error::InternalError,
               "Failed to allocate " + std::to_string(maskSize) +
-                  " bytes for SDEdit mask (" + std::to_string(alignedW) +
-                  "x" + std::to_string(alignedH) + ")");
+                  " bytes for SDEdit mask (" + std::to_string(alignedW) + "x" +
+                  std::to_string(alignedH) + ")");
         memset(maskData, 255, maskSize);
         genParams.mask_image = {
             static_cast<uint32_t>(alignedW),
