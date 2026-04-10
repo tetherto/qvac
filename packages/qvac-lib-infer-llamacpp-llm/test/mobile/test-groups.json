@@ -6,6 +6,7 @@
     "heavy4": ["runOcrLightonTest"],
     "heavy5": ["runReasoningTest"],
     "lightA": [
+      "runAfriquegemmaEdgeCasesTest",
       "runAfriquegemmaTranslationTest",
       "runApiBehaviorTest",
       "runBitnetTest",
@@ -24,6 +25,7 @@
   },
   "android": {
     "groupA": [
+      "runAfriquegemmaEdgeCasesTest",
       "runAfriquegemmaTranslationTest",
       "runApiBehaviorTest",
       "runBitnetTest",

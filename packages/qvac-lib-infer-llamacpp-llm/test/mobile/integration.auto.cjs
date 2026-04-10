@@ -11,6 +11,7 @@ require('./integration-runtime.cjs')
 const __FILTERED = { modulePath: 'filtered', summary: { total: 0, passed: 0, failed: 0 } }
 
 async function runAfriquegemmaEdgeCasesTest (options = {}) { // eslint-disable-line no-unused-vars
+  if (typeof __shouldRunTest === 'function' && !__shouldRunTest('runAfriquegemmaEdgeCasesTest')) return __FILTERED
   return runIntegrationModule('../integration/afriquegemma-edge-cases.test.js', options)
 }
 
