@@ -516,8 +516,7 @@ std::any BertModel::process(const std::any& input) {
 }
 
 void BertModel::initializeBackend(
-    const std::string& backendsDir,
-    const std::string& openclCacheDir) {
+    const std::string& backendsDir, const std::string& openclCacheDir) {
   backendsHandle_ = LlamaBackendsHandle(backendsDir, openclCacheDir);
 }
 
