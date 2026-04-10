@@ -1367,6 +1367,70 @@ jobs:
           echo "   Your tests: $USER_PASSED passed (out of $USER_TEST_COUNT total)"
           echo "   Device Farm total: $TOTAL | Passed: $PASSED | Failed: $FAILED | Skipped: $SKIPPED"
 
+      - name: Download Device Farm artifacts (logs)
+        if: always() && steps.schedule_run.outputs.run_arn
+        id: download_df_logs
+        run: |
+          RUN_ARN="${{ steps.schedule_run.outputs.run_arn }}"
+          echo "Downloading Device Farm artifacts for run: $RUN_ARN"
+
+          JOBS=$(aws devicefarm list-jobs --arn "$RUN_ARN" --output json)
+          ARTIFACT_DIR="${GITHUB_WORKSPACE}/df-artifacts/${{ matrix.platform }}"
+          mkdir -p "$ARTIFACT_DIR"
+
+          for JOB_ARN in $(echo "$JOBS" | jq -r '.jobs[].arn'); do
+            DEVICE_NAME=$(aws devicefarm get-job --arn "$JOB_ARN" --query 'job.device.name' --output text | tr ' ' '_')
+            DEVICE_DIR="${ARTIFACT_DIR}/${DEVICE_NAME}"
+            mkdir -p "$DEVICE_DIR"
+
+            SUITES=$(aws devicefarm list-suites --arn "$JOB_ARN" --output json)
+            for SUITE_ARN in $(echo "$SUITES" | jq -r '.suites[].arn'); do
+              ARTIFACTS=$(aws devicefarm list-artifacts --arn "$SUITE_ARN" --type FILE --output json)
+              echo "$ARTIFACTS" | jq -r '.artifacts[] | select(.type == "TESTSPEC_OUTPUT" or .type == "CUSTOMER_ARTIFACT_LOG" or .type == "DEVICE_LOG") | "\(.type) \(.url)"' | while read -r TYPE URL; do
+                if [ -n "$URL" ] && [ "$URL" != "null" ]; then
+                  FILENAME="${TYPE}.txt"
+                  echo "  Downloading ${DEVICE_NAME}/${FILENAME}..."
+                  curl -sL "$URL" -o "${DEVICE_DIR}/${FILENAME}" || true
+                fi
+              done
+            done
+          done
+
+          echo "artifact_dir=$ARTIFACT_DIR" >> $GITHUB_OUTPUT
+          echo "Downloaded artifacts:"
+          find "$ARTIFACT_DIR" -type f -ls 2>/dev/null || echo "  (none)"
+
+      - name: Extract performance report from logs
+        if: always() && steps.download_df_logs.outputs.artifact_dir
+        run: |
+          ARTIFACT_DIR="${{ steps.download_df_logs.outputs.artifact_dir }}"
+          OUTPUT_DIR="${GITHUB_WORKSPACE}/perf-results/${{ matrix.platform }}"
+          mkdir -p "$OUTPUT_DIR"
+
+          node "${GITHUB_WORKSPACE}/addon/scripts/perf-report/extract-from-log.js" \
+            "$ARTIFACT_DIR" \
+            "$OUTPUT_DIR/performance-report.json"
+
+          if [ -f "$OUTPUT_DIR/performance-report.json" ]; then
+            echo "Generating HTML report..."
+            node "${GITHUB_WORKSPACE}/addon/scripts/perf-report/aggregate.js" \
+              --dir "$OUTPUT_DIR" \
+              --output-html "$OUTPUT_DIR/performance-report.html" \
+              --output-json "$OUTPUT_DIR/performance-summary.json"
+          fi
+
+      - name: Upload mobile performance report
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: perf-report-ocr-${{ matrix.platform }}-${{ github.run_number }}
+          path: |
+            perf-results/${{ matrix.platform }}/performance-report.json
+            perf-results/${{ matrix.platform }}/performance-report.html
+            perf-results/${{ matrix.platform }}/performance-summary.json
+          retention-days: 90
+          if-no-files-found: ignore
+
       - name: Comment PR with results
         if: always() && github.event.pull_request.number
         uses: actions/github-script@v8

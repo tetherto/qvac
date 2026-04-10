@@ -11,21 +11,37 @@
  */
 
 // ---------------------------------------------------------------------------
-// Runtime-adaptive imports (Bare vs Node.js)
+// Runtime modules — set via configure() for Bare, auto-detected for Node.js
 // ---------------------------------------------------------------------------
 
 let fs, pathMod, processMod, osMod
+let _configured = false
 
-try {
-  fs = require('bare-fs')
-  pathMod = require('bare-path')
-  processMod = require('bare-process')
-  osMod = require('bare-os')
-} catch (_) {
+function _ensureNodeDefaults () {
+  if (_configured) return
   fs = require('fs')
   pathMod = require('path')
   processMod = process
   osMod = require('os')
+}
+
+/**
+ * Inject runtime modules for Bare compatibility.
+ * Must be called before createPerformanceReporter() when running under Bare,
+ * because Bare cannot resolve bare-fs/bare-path from this file's location.
+ *
+ * @param {Object} mods
+ * @param {Object} mods.fs       - bare-fs or Node fs
+ * @param {Object} mods.path     - bare-path or Node path
+ * @param {Object} mods.process  - bare-process or Node process
+ * @param {Object} mods.os       - bare-os or Node os
+ */
+function configure (mods) {
+  fs = mods.fs
+  pathMod = mods.path
+  processMod = mods.process
+  osMod = mods.os
+  _configured = true
 }
 
 // ---------------------------------------------------------------------------
@@ -135,6 +151,7 @@ const METRIC_COLUMNS = {
  * @param {Object} [opts.device]    - Override auto-detected device info
  */
 function createPerformanceReporter (opts) {
+  _ensureNodeDefaults()
   const addon = opts.addon
   const addonType = opts.addonType || 'generic'
   const device = opts.device || detectDevice()
@@ -283,6 +300,20 @@ function createPerformanceReporter (opts) {
       }
     },
 
+    /**
+     * Write the full JSON report to stdout using delimiters so it can be
+     * extracted from Device Farm console logs.  Harmless on desktop — just
+     * extra console output.
+     */
+    writeToConsole () {
+      try {
+        const json = JSON.stringify(this.toJSON())
+        console.log('[PERF_REPORT_START]' + json + '[PERF_REPORT_END]')
+      } catch (err) {
+        console.log(`[perf-reporter] failed to write console report: ${err.message}`)
+      }
+    },
+
     /** Number of results recorded so far. */
     get length () { return results.length }
   }
@@ -293,9 +324,11 @@ function createPerformanceReporter (opts) {
 // ---------------------------------------------------------------------------
 
 module.exports = {
+  configure,
   createPerformanceReporter,
   detectDevice,
   detectCIMetadata,
   METRIC_COLUMNS,
   QUALITY_COLUMNS
 }
+

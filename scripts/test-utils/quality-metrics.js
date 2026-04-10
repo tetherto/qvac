@@ -10,13 +10,26 @@
  */
 
 let fs, pathMod
+let _configured = false
 
-try {
-  fs = require('bare-fs')
-  pathMod = require('bare-path')
-} catch (_) {
+function _ensureNodeDefaults () {
+  if (_configured) return
   fs = require('fs')
   pathMod = require('path')
+}
+
+/**
+ * Inject runtime modules for Bare compatibility.
+ * Must be called before any function that accesses the filesystem.
+ *
+ * @param {Object} mods
+ * @param {Object} mods.fs   - bare-fs or Node fs
+ * @param {Object} mods.path - bare-path or Node path
+ */
+function configure (mods) {
+  fs = mods.fs
+  pathMod = mods.path
+  _configured = true
 }
 
 // ---------------------------------------------------------------------------
@@ -168,6 +181,7 @@ function keyValueAccuracy (ocrTexts, expectedPairs) {
  * @returns {Object|null} Parsed ground truth or null on failure
  */
 function loadGroundTruth (gtPath) {
+  _ensureNodeDefaults()
   try {
     const raw = fs.readFileSync(gtPath, 'utf-8')
     return JSON.parse(raw)
@@ -186,6 +200,7 @@ function loadGroundTruth (gtPath) {
  * @returns {Object|null} Ground truth data or null if not found
  */
 function findGroundTruth (imagePath) {
+  _ensureNodeDefaults()
   const dir = pathMod.dirname(imagePath)
   const base = pathMod.basename(imagePath).replace(/\.[^.]+$/, '')
   const filename = base + '.quality.json'
@@ -261,6 +276,7 @@ function round4 (v) {
 // ---------------------------------------------------------------------------
 
 module.exports = {
+  configure,
   normalize,
   tokenize,
   levenshtein,
@@ -272,3 +288,4 @@ module.exports = {
   findGroundTruth,
   evaluateQuality
 }
+

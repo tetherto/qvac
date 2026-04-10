@@ -4,8 +4,14 @@ const fs = require('bare-fs')
 const path = require('bare-path')
 const os = require('bare-os')
 const process = require('bare-process')
-const { createPerformanceReporter } = require('../../../../scripts/test-utils/performance-reporter')
-const { evaluateQuality, findGroundTruth } = require('../../../../scripts/test-utils/quality-metrics')
+const perfReporterMod = require('../../../../scripts/test-utils/performance-reporter')
+const qualityMetricsMod = require('../../../../scripts/test-utils/quality-metrics')
+
+perfReporterMod.configure({ fs, path, process, os })
+qualityMetricsMod.configure({ fs, path })
+
+const { createPerformanceReporter } = perfReporterMod
+const { evaluateQuality, findGroundTruth } = qualityMetricsMod
 
 const platform = os.platform()
 const isMobile = platform === 'ios' || platform === 'android'
@@ -27,6 +33,7 @@ function _scheduleReportWrite () {
     if (_perfReporter.length > 0) {
       _perfReporter.writeReport(_reportPath)
       _perfReporter.writeStepSummary()
+      _perfReporter.writeToConsole()
     }
   })
 }
