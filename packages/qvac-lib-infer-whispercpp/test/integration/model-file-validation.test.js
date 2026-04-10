@@ -117,7 +117,7 @@ test('Should throw error when VAD model file does not exist', { timeout: 180000 
     new TranscriptionWhispercpp(args, config) // eslint-disable-line no-new
     t.fail('Should have thrown an error for non-existent VAD model file')
   } catch (error) {
-    t.ok(error.message.includes("VAD model file not found"), 'Error message should mention VAD model file doesn\'t exist')
+    t.ok(error.message.includes('VAD model file not found'), 'Error message should mention VAD model file doesn\'t exist')
     t.ok(error.message.includes('non-existent-vad-model.bin'), 'Error message should include the VAD model filename')
   }
 })
