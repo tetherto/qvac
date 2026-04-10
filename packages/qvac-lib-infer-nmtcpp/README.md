@@ -569,7 +569,7 @@ For more detailed examples covering different use cases, refer to the `examples/
 | [indictrans.js](examples/indictrans.js) | English-to-Hindi translation with IndicTrans2 | IndicTrans2 |
 | [batch.example.js](examples/batch.example.js) | Batch translation with `runBatch()` method | Bergamot |
 | [pause.example.js](examples/pause.example.js) | Long-text translation with cancel support | Any |
-| [pivot.example.hd.js](examples/pivot.example.hd.js) | Pivot translation (e.g., es→en→it) via Bergamot | Bergamot |
+| [pivot.example.js](examples/pivot.example.js) | Pivot translation (e.g., es→en→it) via Bergamot | Bergamot |
 | [quickstart.js](examples/quickstart.js) | Bergamot backend quickstart | Bergamot |
 
 ## Model Registry

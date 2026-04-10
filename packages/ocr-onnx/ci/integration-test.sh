@@ -31,7 +31,7 @@ export VCPKG_ROOT="$PWD"
 cd ..
 
 # Setup OCR addon
-git clone git@github.com:tetherto/qvac-lib-inference-addon-onnx-ocr-fasttext.git
+git clone https://github.com/tetherto/qvac-lib-inference-addon-onnx-ocr-fasttext.git
 cd qvac-lib-inference-addon-onnx-ocr-fasttext/
 npm install -g bare bare-make
 npm install

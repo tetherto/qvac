@@ -298,12 +298,18 @@ void LlamaModel::init(bool acquireLock) {
 
   {
     std::string backendsDir;
-    if (auto backendsDirIt = configFilemap.find("backendsDir");
-        backendsDirIt != configFilemap.end()) {
-      backendsDir = backendsDirIt->second;
-      configFilemap.erase(backendsDirIt);
+    if (auto it = configFilemap.find("backendsDir");
+        it != configFilemap.end()) {
+      backendsDir = it->second;
+      configFilemap.erase(it);
     }
-    snap->backendsHandle_ = LlamaBackendsHandle(backendsDir);
+    std::string openclCacheDir;
+    if (auto it = configFilemap.find("openclCacheDir");
+        it != configFilemap.end()) {
+      openclCacheDir = it->second;
+      configFilemap.erase(it);
+    }
+    snap->backendsHandle_ = LlamaBackendsHandle(backendsDir, openclCacheDir);
   }
 
   common_params params;

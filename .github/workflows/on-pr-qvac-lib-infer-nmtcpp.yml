@@ -65,7 +65,7 @@ jobs:
     environment: release
     steps:
       - name: Run Sanity checks
-        uses: tetherto/qvac-devops/.github/actions/sanity-checks@v1.1.8
+        uses: tetherto/oss-actions/.github/actions/sanity-checks@v1.1.0
         with:
           secret-token: ${{ secrets.GITHUB_TOKEN }}
           npm-token: ${{ secrets.NPM_TOKEN }}
@@ -113,7 +113,7 @@ jobs:
       always() &&
        needs.authorize.outputs.allowed == 'true' &&
       (needs.changes.outputs.pkg == 'true' || github.event_name == 'workflow_dispatch')
-    uses: tetherto/qvac-devops/.github/workflows/cpp-lint.yaml@v1.1.8
+    uses: tetherto/oss-actions/.github/workflows/cpp-lint.yaml@v1.1.0
     secrets: inherit
     with:
       sha: ${{ github.event.pull_request.base.sha || github.event.before || 'HEAD~1' }}
@@ -201,7 +201,7 @@ jobs:
         run-mobile-integration-tests,
       ]
     if: always() && (needs.changes.outputs.pkg == 'true' || github.event_name == 'workflow_dispatch')
-    uses: tetherto/qvac-devops/.github/workflows/public-pr.yml@v1.1.8
+    uses: tetherto/oss-actions/.github/workflows/public-pr.yml@v1.1.0
     with:
       sanity-checks-status: ${{ needs.sanity-checks.result == 'success' && needs.cpp-tests.result == 'success' && needs.ts-checks.result == 'success' }}
       build-status: ${{ needs.prebuild.result == 'success' }}

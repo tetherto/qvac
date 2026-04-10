@@ -372,8 +372,15 @@ void BertModel::init(
   // Extract and set verbosity level from config (modifies configCopy)
   auto configCopy = config;
   setVerbosityLevel(configCopy);
+
+  std::string openclCacheDir;
+  if (auto it = configCopy.find("openclCacheDir"); it != configCopy.end()) {
+    openclCacheDir = it->second;
+    configCopy.erase(it);
+  }
+
   lazyCommonInit();
-  initializeBackend(backendsDir);
+  initializeBackend(backendsDir, openclCacheDir);
 
   common_params params =
       setupParams(modelGgufPath, configCopy, runtimeBackendDevice_);
@@ -508,8 +515,9 @@ std::any BertModel::process(const std::any& input) {
       "BertModel::process: unsupported input type");
 }
 
-void BertModel::initializeBackend(const std::string& backendsDir) {
-  backendsHandle_ = LlamaBackendsHandle(backendsDir);
+void BertModel::initializeBackend(
+    const std::string& backendsDir, const std::string& openclCacheDir) {
+  backendsHandle_ = LlamaBackendsHandle(backendsDir, openclCacheDir);
 }
 
 void BertModel::reset() {

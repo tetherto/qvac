@@ -40,6 +40,7 @@ export interface ErrorEntry {
 export interface GenerateOptions {
   updateLatest: boolean;
   devMode?: boolean;
+  forceExtract?: boolean;
 }
 
 export interface ApiData {
@@ -50,4 +51,24 @@ export interface ApiData {
     client: ErrorEntry[];
     server: ErrorEntry[];
   };
+}
+
+export interface AuditDiagnostic {
+  functionName: string;
+  missingParams: string[];
+  missingReturns: boolean;
+  missingThrows: boolean;
+  bodyHasThrow: boolean;
+}
+
+export interface AuditOptions {
+  strict?: boolean;
+  quiet?: boolean;
+}
+
+export interface AuditResult {
+  diagnostics: AuditDiagnostic[];
+  total: number;
+  complete: number;
+  completenessPercent: number;
 }

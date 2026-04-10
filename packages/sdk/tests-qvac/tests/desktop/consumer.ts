@@ -64,6 +64,7 @@ import { TtsExecutor } from "../shared/executors/tts-executor.js";
 import { ParakeetExecutor } from "./executors/parakeet-executor.js";
 import { VisionExecutor } from "./executors/vision-executor.js";
 import { DownloadExecutor } from "../shared/executors/download-executor.js";
+import { DelegatedInferenceExecutor } from "./executors/delegated-inference-executor.js";
 import { DiffusionExecutor } from "../shared/executors/diffusion-executor.js";
 
 const resources = new ResourceManager();
@@ -369,6 +370,7 @@ export const executor = createExecutor({
     new ParakeetExecutor(resources),
     new VisionExecutor(resources),
     new DownloadExecutor(),
+    new DelegatedInferenceExecutor(),
     new DiffusionExecutor(resources),
   ],
   profiling: {

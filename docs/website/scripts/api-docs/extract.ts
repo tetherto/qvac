@@ -10,9 +10,48 @@ import { fileURLToPath } from "node:url";
 import { Application, ReflectionKind } from "typedoc";
 import type { DeclarationReflection, SignatureReflection } from "typedoc";
 import type { ApiFunction, ExpandedType, ErrorEntry, ApiData } from "./types.js";
+import { auditTsDoc } from "./audit-tsdoc.js";
 
 const SCRIPT_DIR = path.dirname(fileURLToPath(import.meta.url));
 const API_DATA_PATH = path.join(SCRIPT_DIR, "api-data.json");
+const EXTRACT_SCRIPT_PATH = fileURLToPath(import.meta.url);
+
+// ---------------------------------------------------------------------------
+// Mtime-based extraction cache
+// ---------------------------------------------------------------------------
+
+async function getNewestMtime(dir: string, ext: string): Promise<number> {
+  const entries = await fs.readdir(dir, { recursive: true });
+  let newest = 0;
+  for (const entry of entries) {
+    if (!entry.endsWith(ext)) continue;
+    const stat = await fs.stat(path.join(dir, entry));
+    if (stat.mtimeMs > newest) newest = stat.mtimeMs;
+  }
+  return newest;
+}
+
+async function tryLoadCache(sdkPath: string): Promise<ApiData | null> {
+  let cacheStat;
+  try {
+    cacheStat = await fs.stat(API_DATA_PATH);
+  } catch {
+    return null;
+  }
+
+  const newestSourceMtime = await getNewestMtime(sdkPath, ".ts");
+
+  const extractScriptStat = await fs.stat(EXTRACT_SCRIPT_PATH);
+  const sentinelMtime = Math.max(newestSourceMtime, extractScriptStat.mtimeMs);
+
+  if (cacheStat.mtimeMs > sentinelMtime) {
+    const raw = await fs.readFile(API_DATA_PATH, "utf-8");
+    console.log("⚡ Skipping TypeDoc extraction (api-data.json is up to date)");
+    return JSON.parse(raw) as ApiData;
+  }
+
+  return null;
+}
 
 // ---------------------------------------------------------------------------
 // Public API
@@ -21,6 +60,7 @@ const API_DATA_PATH = path.join(SCRIPT_DIR, "api-data.json");
 export async function extractApiData(
   sdkPath: string,
   version: string,
+  options?: { forceExtract?: boolean },
 ): Promise<ApiData> {
   const entryPoint = path.join(sdkPath, "index.ts").replace(/\\/g, "/");
   const tsconfigPath = path.join(sdkPath, "tsconfig.json").replace(/\\/g, "/");
@@ -39,6 +79,11 @@ export async function extractApiData(
     );
   }
 
+  if (!options?.forceExtract) {
+    const cached = await tryLoadCache(sdkPath);
+    if (cached) return cached;
+  }
+
   const app = await Application.bootstrapWithPlugins({
     entryPoints: [entryPoint],
     tsconfig: tsconfigPath,
@@ -54,6 +99,9 @@ export async function extractApiData(
   }
 
   console.log(`✓ TypeDoc analysis complete`);
+
+  console.log(`🔍 Auditing TSDoc completeness...`);
+  await auditTsDoc(project, sdkPath);
 
   const apiFunctions = extractApiFunctions(project);
   console.log(`✓ Extracted ${apiFunctions.length} API functions`);
