@@ -1,7 +1,6 @@
 'use strict'
 
 const fs = require('bare-fs')
-const path = require('bare-path')
 
 const { BCIInterface } = require('./bci')
 const { checkConfig } = require('./configChecker')
@@ -82,60 +81,11 @@ class BCIWhispercpp {
    * Transcribe a neural signal from a binary file.
    * Binary format: [uint32 numTimesteps, uint32 numChannels, float32[] data]
    * @param {string} filePath - path to .bin neural signal file
-   * @param {Object} [opts] - { mode: 'onnx'|'native' }
    * @returns {Promise<Object>} - { text, segments, stats }
    */
-  async transcribeFile (filePath, opts = {}) {
-    if (opts.mode === 'onnx' && this._onnxConfig) {
-      return this._transcribeOnnx(filePath, opts)
-    }
+  async transcribeFile (filePath) {
     const data = fs.readFileSync(filePath)
     return this.transcribe(new Uint8Array(data))
-  }
-
-  /**
-   * Configure ONNX inference mode for Python-matching output.
-   * @param {Object} onnxConfig
-   * @param {string} onnxConfig.modelsDir - path to directory with bci_encoder.onnx, bci_decoder.onnx, vocab.json
-   * @param {string} onnxConfig.checkpoint - path to .ckpt file
-   * @param {string} onnxConfig.argsPath - path to rnn_args.yaml
-   * @param {string} onnxConfig.modelDir - path to brainwhisperer source dir (with pl_wrapper.py)
-   * @param {string} [onnxConfig.pythonBin='python3'] - python binary
-   */
-  configureOnnx (onnxConfig) {
-    this._onnxConfig = {
-      pythonBin: 'python3',
-      ...onnxConfig
-    }
-  }
-
-  async _transcribeOnnx (signalPath, opts = {}) {
-    const { execSync } = require('bare-subprocess') || require('child_process')
-    const cfg = this._onnxConfig
-    const dayIdx = (this._config.bciConfig && this._config.bciConfig.day_idx) || opts.dayIdx || 1
-    const scriptPath = path.join(__dirname, 'scripts', 'onnx-infer.py')
-
-    const cmd = [
-      cfg.pythonBin, scriptPath,
-      '--signal', signalPath,
-      '--models-dir', cfg.modelsDir,
-      '--checkpoint', cfg.checkpoint,
-      '--args', cfg.argsPath,
-      '--model-dir', cfg.modelDir,
-      '--day-idx', String(dayIdx)
-    ].join(' ')
-
-    try {
-      const stdout = execSync(cmd, { encoding: 'utf8', timeout: 120000 })
-      const result = JSON.parse(stdout.trim())
-      return {
-        text: result.text,
-        segments: [{ text: result.text, start: 0, end: 0, id: 0, toAppend: false }],
-        stats: { mode: 'onnx', tokens: result.tokens ? result.tokens.length : 0 }
-      }
-    } catch (err) {
-      throw new Error('ONNX inference failed: ' + (err.stderr || err.message))
-    }
   }
 
   /**
@@ -152,10 +102,8 @@ class BCIWhispercpp {
       const segments = []
       let stats = null
 
-      const jobId = Date.now()
       this._hasActiveResponse = true
 
-      const origCb = this._outputCallback.bind(this)
       const tempCb = (addon, event, jid, data, error) => {
         if (event === 'Output') {
           if (Array.isArray(data)) {

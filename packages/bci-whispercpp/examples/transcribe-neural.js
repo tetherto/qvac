@@ -2,114 +2,104 @@
 
 /**
  * Transcribe neural signal files using the BCI BrainWhisperer model.
- * Uses the Python inference backend for exact notebook-matching output.
+ * Uses the native whisper.cpp GGML backend.
  *
  * Usage:
- *   node examples/transcribe-neural.js <signal.bin> [checkpoint] [rnn_args.yaml] [model_dir]
+ *   node examples/transcribe-neural.js <signal.bin> [model_path]
  *
- * Or batch mode (matches notebook exactly):
- *   node examples/transcribe-neural.js --batch [data.pkl] [checkpoint] [rnn_args.yaml] [model_dir]
+ * Or batch mode (all test fixtures):
+ *   node examples/transcribe-neural.js --batch [model_path]
  */
 
-const { execSync } = require('child_process')
-const fs = require('fs')
-const path = require('path')
+const fs = require('bare-fs')
+const path = require('bare-path')
+const os = require('bare-os')
+const BCIWhispercpp = require('../index')
 
-const BRAINWHISPERER_DIR = path.join(
-  process.env.HOME || '', 'Downloads', 'brainwhisperer-qvac'
-)
-const DEFAULT_CHECKPOINT = path.join(BRAINWHISPERER_DIR, 'epoch=93-val_wer=0.0910.ckpt')
-const DEFAULT_ARGS = path.join(BRAINWHISPERER_DIR, 'rnn_args.yaml')
-const DEFAULT_DATA = path.join(BRAINWHISPERER_DIR, 'cleaned_val_data.pkl')
+const DEFAULT_MODEL = (os.hasEnv('WHISPER_MODEL_PATH') ? os.getEnv('WHISPER_MODEL_PATH') : null) ||
+  path.join(__dirname, '..', 'models', 'ggml-bci-windowed.bin')
 
-function main () {
-  const args = process.argv.slice(2)
+async function main () {
+  const args = global.Bare ? global.Bare.argv.slice(2) : process.argv.slice(2)
   const isBatch = args[0] === '--batch'
 
   if (args.length < 1) {
     console.log('Usage:')
-    console.log('  Single: node examples/transcribe-neural.js <signal.bin>')
-    console.log('  Batch:  node examples/transcribe-neural.js --batch')
+    console.log('  Single: bare examples/transcribe-neural.js <signal.bin> [model_path]')
+    console.log('  Batch:  bare examples/transcribe-neural.js --batch [model_path]')
     return
   }
 
-  const inferScript = path.join(__dirname, '..', 'scripts', 'infer.py')
-  const checkpoint = (isBatch ? args[2] : args[1]) || DEFAULT_CHECKPOINT
-  const rnnArgs = (isBatch ? args[3] : args[2]) || DEFAULT_ARGS
-  const modelDir = (isBatch ? args[4] : args[3]) || BRAINWHISPERER_DIR
+  const modelPath = (isBatch ? args[1] : args[1]) || DEFAULT_MODEL
+  if (!fs.existsSync(modelPath)) {
+    console.error(`Error: Model file not found: ${modelPath}`)
+    console.error('Set WHISPER_MODEL_PATH or pass as second argument.')
+    return
+  }
+
+  const bci = new BCIWhispercpp({ modelPath }, {
+    whisperConfig: { language: 'en', temperature: 0.0 },
+    miscConfig: { caption_enabled: false }
+  })
+
+  await bci.load()
+  console.log('Model loaded.\n')
 
   if (isBatch) {
-    const dataPath = args[1] || DEFAULT_DATA
-    console.log('=== BCI Neural Signal Transcription (Batch Mode) ===')
-    console.log(`Data:       ${dataPath}`)
-    console.log(`Checkpoint: ${checkpoint}`)
-    console.log('')
+    const manifestPath = path.join(__dirname, '..', 'test', 'fixtures', 'manifest.json')
+    const manifest = JSON.parse(fs.readFileSync(manifestPath, 'utf8'))
+
+    console.log(`=== BCI Neural Signal Transcription (Batch: ${manifest.samples.length} samples) ===\n`)
 
     const startTime = Date.now()
-    const stdout = execSync(
-      `python3 "${inferScript}" --batch ` +
-      `--data "${dataPath}" ` +
-      `--checkpoint "${checkpoint}" ` +
-      `--args "${rnnArgs}" ` +
-      `--model-dir "${modelDir}" ` +
-      '--samples 0,1,2,3,4',
-      { encoding: 'utf8', timeout: 120000, stdio: ['pipe', 'pipe', 'pipe'] }
-    )
 
-    const elapsed = ((Date.now() - startTime) / 1000).toFixed(2)
-    const results = stdout.trim().split('\n').filter(l => l.startsWith('{')).map(l => JSON.parse(l))
-
-    let totalWer = 0
-    for (const r of results) {
-      console.log(`Sample ${r.index}:`)
-      console.log(`  Got:      "${r.text}"`)
-      if (r.expected) {
-        console.log(`  Expected: "${r.expected}"`)
-        console.log(`  WER:      ${(r.wer * 100).toFixed(1)}%`)
-        totalWer += r.wer
+    for (const sample of manifest.samples) {
+      const samplePath = path.join(__dirname, '..', 'test', 'fixtures', sample.file)
+      if (!fs.existsSync(samplePath)) {
+        console.log(`  [SKIP] ${sample.file} (not found)`)
+        continue
       }
-      console.log('')
+
+      const result = await bci.transcribeFile(samplePath)
+      const wer = BCIWhispercpp.computeWER(result.text, sample.expected_text)
+
+      console.log(`  [${sample.file}]`)
+      console.log(`    Got:      "${result.text}"`)
+      console.log(`    Expected: "${sample.expected_text}"`)
+      console.log(`    WER:      ${(wer * 100).toFixed(1)}%\n`)
     }
 
-    const avgWer = totalWer / results.length
-    console.log(`Average WER: ${(avgWer * 100).toFixed(2)}%`)
+    const elapsed = ((Date.now() - startTime) / 1000).toFixed(2)
     console.log(`Time: ${elapsed}s`)
   } else {
     const signalPath = args[0]
     if (!fs.existsSync(signalPath)) {
       console.error(`Error: Signal file not found: ${signalPath}`)
-      process.exit(1)
+      return
     }
 
     const buf = fs.readFileSync(signalPath)
-    const T = buf.readUInt32LE(0)
-    const C = buf.readUInt32LE(4)
+    const view = new DataView(buf.buffer, buf.byteOffset, buf.byteLength)
+    const T = view.getUint32(0, true)
+    const C = view.getUint32(4, true)
 
     console.log('=== BCI Neural Signal Transcription ===')
     console.log(`Signal:     ${signalPath}`)
     console.log(`Timesteps:  ${T}, Channels: ${C}`)
-    console.log(`Duration:   ~${(T * 20 / 1000).toFixed(1)}s`)
-    console.log('')
+    console.log(`Duration:   ~${(T * 20 / 1000).toFixed(1)}s\n`)
 
     const startTime = Date.now()
-    const stdout = execSync(
-      `python3 "${inferScript}" ` +
-      `--signal "${signalPath}" ` +
-      `--checkpoint "${checkpoint}" ` +
-      `--args "${rnnArgs}" ` +
-      `--model-dir "${modelDir}"`,
-      { encoding: 'utf8', timeout: 120000, stdio: ['pipe', 'pipe', 'pipe'] }
-    )
-
+    const result = await bci.transcribeFile(signalPath)
     const elapsed = ((Date.now() - startTime) / 1000).toFixed(2)
-    const line = stdout.trim().split('\n').find(l => l.startsWith('{'))
-    const result = JSON.parse(line)
 
     console.log(`Text: "${result.text}"`)
     console.log(`Time: ${elapsed}s`)
   }
 
+  await bci.destroy()
   console.log('\nDone.')
 }
 
-main()
+main().catch((err) => {
+  console.error('Error:', err.message || err)
+})

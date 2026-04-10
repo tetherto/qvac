@@ -18,11 +18,9 @@ Usage:
 """
 
 import argparse
-import json
 import math
 import os
 import struct
-import sys
 
 import numpy as np
 import torch

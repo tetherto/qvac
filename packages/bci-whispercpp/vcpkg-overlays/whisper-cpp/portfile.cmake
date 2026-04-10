@@ -10,6 +10,7 @@ vcpkg_from_github(
     0001-fix-vcpkg-build.patch
     0002-fix-apple-silicon-cross-compile.patch
     0003-bci-variable-conv1-kernel.patch
+    0004-bci-windowed-attention.patch
 )
 
 set(PLATFORM_OPTIONS)

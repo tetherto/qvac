@@ -3,53 +3,29 @@
 const fs = require('bare-fs')
 const path = require('bare-path')
 const test = require('brittle')
-const { BCIInterface } = require('../../bci')
-const binding = require('../../binding')
+const os = require('bare-os')
+const BCIWhispercpp = require('../../index')
 const { getTestPaths, computeWER, detectPlatform } = require('./helpers')
 
 const platform = detectPlatform()
-const { fixturesDir, manifest, getSamplePath } = getTestPaths()
+const { manifest, getSamplePath } = getTestPaths()
 
-// Model path: whisper tiny.en model must be present for integration tests
-const os = require('bare-os')
 const MODEL_PATH = (os.hasEnv('WHISPER_MODEL_PATH') ? os.getEnv('WHISPER_MODEL_PATH') : null) ||
   path.join(__dirname, '..', '..', 'models', 'ggml-tiny.en.bin')
 
 const hasModel = fs.existsSync(MODEL_PATH)
 
-test('[BCI] addon creates instance and activates', { skip: !hasModel }, async (t) => {
-  let resolveJobEnded
-  const jobEndedPromise = new Promise((resolve) => {
-    resolveJobEnded = resolve
-  })
-
-  const onOutput = (addon, event, jobId, output, error) => {
-    console.log(`Event: ${event}, JobId: ${jobId}`)
-    if (event === 'JobEnded') {
-      resolveJobEnded(output)
-    }
-  }
-
-  const config = {
-    contextParams: { model: MODEL_PATH },
+test('[BCI] load and destroy via package interface', { skip: !hasModel }, async (t) => {
+  const bci = new BCIWhispercpp({ modelPath: MODEL_PATH }, {
     whisperConfig: { language: 'en', temperature: 0.0 },
     miscConfig: { caption_enabled: false }
-  }
+  })
 
-  let model
-  try {
-    model = new BCIInterface(binding, config, onOutput)
-    t.ok(model, 'BCIInterface should be created')
+  await bci.load()
+  t.ok(bci, 'BCIWhispercpp should be created and loaded')
 
-    const status = await model.status()
-    t.ok(status, 'Status should be returned')
-
-    await model.activate()
-    const statusAfter = await model.status()
-    t.is(statusAfter, 'listening', 'Status after activate should be listening')
-  } finally {
-    if (model) await model.destroyInstance()
-  }
+  await bci.destroy()
+  t.pass('BCIWhispercpp destroyed successfully')
 })
 
 test('[BCI] batch transcription from neural signal file', { skip: !hasModel }, async (t) => {
@@ -65,64 +41,30 @@ test('[BCI] batch transcription from neural signal file', { skip: !hasModel }, a
     return
   }
 
-  const segments = []
-  let stats = null
-
-  const onOutput = (addon, event, jobId, data, error) => {
-    if (event === 'Output') {
-      if (Array.isArray(data)) {
-        segments.push(...data)
-      } else if (data && data.text) {
-        segments.push(data)
-      }
-    } else if (event === 'JobEnded') {
-      stats = data
-    } else if (event === 'Error') {
-      console.error('Transcription error:', error)
-    }
-  }
-
-  const config = {
-    contextParams: { model: MODEL_PATH },
+  const bci = new BCIWhispercpp({ modelPath: MODEL_PATH }, {
     whisperConfig: { language: 'en', temperature: 0.0 },
     miscConfig: { caption_enabled: false }
-  }
+  })
 
-  const model = new BCIInterface(binding, config, onOutput)
   try {
-    await model.activate()
+    await bci.load()
 
-    const neuralData = fs.readFileSync(samplePath)
-    const inputData = new Uint8Array(neuralData)
+    const result = await bci.transcribeFile(samplePath)
 
-    const accepted = await model.runJob({ input: inputData })
-    t.ok(accepted, 'Job should be accepted')
-
-    // Wait for completion
-    await new Promise((resolve) => {
-      const interval = setInterval(() => {
-        if (stats !== null || segments.length > 0) {
-          clearInterval(interval)
-          resolve()
-        }
-      }, 100)
-      setTimeout(() => { clearInterval(interval); resolve() }, 30000)
-    })
-
-    const transcription = segments.map(s => s.text).join('').trim()
     console.log(`\n=== Batch Transcription Result ===`)
     console.log(`Expected:  "${sample.expected_text}"`)
-    console.log(`Got:       "${transcription}"`)
+    console.log(`Got:       "${result.text}"`)
 
-    const wer = computeWER(transcription, sample.expected_text)
+    const wer = computeWER(result.text, sample.expected_text)
     console.log(`WER:       ${(wer * 100).toFixed(1)}%`)
 
-    t.ok(typeof transcription === 'string', 'Should produce a transcription string')
+    t.ok(typeof result.text === 'string', 'Should produce a transcription string')
+    t.ok(result.segments, 'Should have segments')
     t.ok(typeof wer === 'number' && wer >= 0, 'WER should be a non-negative number')
     console.log(`\nNote: High WER expected - standard whisper model is not BCI-trained.`)
     console.log(`A BCI-trained GGML model is needed for meaningful neural-to-text results.`)
   } finally {
-    await model.destroyInstance()
+    await bci.destroy()
   }
 })
 
@@ -139,64 +81,37 @@ test('[BCI] streaming transcription from neural signal chunks', { skip: !hasMode
     return
   }
 
-  const segments = []
-  let stats = null
-  let jobEnded = false
-
-  const onOutput = (addon, event, jobId, data, error) => {
-    if (event === 'Output') {
-      if (Array.isArray(data)) segments.push(...data)
-      else if (data && data.text) segments.push(data)
-    } else if (event === 'JobEnded') {
-      stats = data
-      jobEnded = true
-    }
-  }
-
-  const config = {
-    contextParams: { model: MODEL_PATH },
+  const bci = new BCIWhispercpp({ modelPath: MODEL_PATH }, {
     whisperConfig: { language: 'en', temperature: 0.0 },
     miscConfig: { caption_enabled: false }
-  }
+  })
 
-  const model = new BCIInterface(binding, config, onOutput)
   try {
-    await model.activate()
+    await bci.load()
 
     const fullData = fs.readFileSync(samplePath)
-
-    // Simulate streaming: split into 3 chunks
     const chunkSize = Math.ceil(fullData.length / 3)
 
-    await model.append({ type: 'neural', input: new Uint8Array(0) })
-
-    for (let i = 0; i < fullData.length; i += chunkSize) {
-      const end = Math.min(i + chunkSize, fullData.length)
-      const chunk = new Uint8Array(fullData.buffer, fullData.byteOffset + i, end - i)
-      await model.append({ type: 'neural', input: chunk })
+    async function * generateChunks () {
+      for (let i = 0; i < fullData.length; i += chunkSize) {
+        const end = Math.min(i + chunkSize, fullData.length)
+        yield new Uint8Array(fullData.buffer, fullData.byteOffset + i, end - i)
+      }
     }
 
-    await model.append({ type: 'end of job' })
+    const result = await bci.transcribeStream(generateChunks())
 
-    await new Promise((resolve) => {
-      const interval = setInterval(() => {
-        if (jobEnded) { clearInterval(interval); resolve() }
-      }, 100)
-      setTimeout(() => { clearInterval(interval); resolve() }, 30000)
-    })
-
-    const transcription = segments.map(s => s.text).join('').trim()
     console.log(`\n=== Streaming Transcription Result ===`)
     console.log(`Expected:  "${sample.expected_text}"`)
-    console.log(`Got:       "${transcription}"`)
+    console.log(`Got:       "${result.text}"`)
 
-    const wer = computeWER(transcription, sample.expected_text)
+    const wer = computeWER(result.text, sample.expected_text)
     console.log(`WER:       ${(wer * 100).toFixed(1)}%`)
 
-    t.ok(typeof transcription === 'string', 'Streaming should produce transcription')
+    t.ok(typeof result.text === 'string', 'Streaming should produce transcription')
     t.ok(typeof wer === 'number', 'WER should be computable')
   } finally {
-    await model.destroyInstance()
+    await bci.destroy()
   }
 })
 
@@ -216,48 +131,23 @@ test('[BCI] WER measurement across all test samples', { skip: !hasModel }, async
     const samplePath = getSamplePath(sample.file)
     if (!fs.existsSync(samplePath)) continue
 
-    const segments = []
-    let jobEnded = false
-
-    const onOutput = (addon, event, jobId, data, error) => {
-      if (event === 'Output') {
-        if (Array.isArray(data)) segments.push(...data)
-        else if (data && data.text) segments.push(data)
-      } else if (event === 'JobEnded') {
-        jobEnded = true
-      }
-    }
-
-    const config = {
-      contextParams: { model: MODEL_PATH },
+    const bci = new BCIWhispercpp({ modelPath: MODEL_PATH }, {
       whisperConfig: { language: 'en', temperature: 0.0 },
       miscConfig: { caption_enabled: false }
-    }
+    })
 
-    const model = new BCIInterface(binding, config, onOutput)
     try {
-      await model.activate()
-
-      const neuralData = new Uint8Array(fs.readFileSync(samplePath))
-      await model.runJob({ input: neuralData })
-
-      await new Promise((resolve) => {
-        const interval = setInterval(() => {
-          if (jobEnded) { clearInterval(interval); resolve() }
-        }, 100)
-        setTimeout(() => { clearInterval(interval); resolve() }, 30000)
-      })
-
-      const transcription = segments.map(s => s.text).join('').trim()
-      const wer = computeWER(transcription, sample.expected_text)
-      results.push({ expected: sample.expected_text, got: transcription, wer })
+      await bci.load()
+      const result = await bci.transcribeFile(samplePath)
+      const wer = computeWER(result.text, sample.expected_text)
+      results.push({ expected: sample.expected_text, got: result.text, wer })
 
       console.log(`  [${sample.file}]`)
       console.log(`    Expected: "${sample.expected_text}"`)
-      console.log(`    Got:      "${transcription}"`)
+      console.log(`    Got:      "${result.text}"`)
       console.log(`    WER:      ${(wer * 100).toFixed(1)}%\n`)
     } finally {
-      await model.destroyInstance()
+      await bci.destroy()
     }
   }
 

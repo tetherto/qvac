@@ -2,6 +2,7 @@ declare interface BCIConfig {
   smooth_kernel_std?: number;
   smooth_kernel_size?: number;
   sample_rate?: number;
+  day_idx?: number;
 }
 
 declare interface WhisperConfig {
