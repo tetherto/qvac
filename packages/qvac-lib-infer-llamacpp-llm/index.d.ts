@@ -58,6 +58,10 @@ export interface LlamaConfig {
   verbosity?: NumericLike
   n_discarded?: NumericLike
   'main-gpu'?: NumericLike | string
+  'cache-type-k'?: string
+  'cache-type-v'?: string
+  /** Writable directory for OpenCL kernel binary cache. Required on Android for fast GPU startup. */
+  openclCacheDir?: string
   [key: string]: string | number | boolean | string[] | undefined
 }
 

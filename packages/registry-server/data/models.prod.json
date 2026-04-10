@@ -5523,7 +5523,7 @@
     "notes": ""
   },
   {
-   "source": "https://huggingface.co/Supertone/supertonic-2/resolve/75e6727618a02f323c720cba9478152d4bc16ca4/onnx/unicode_indexer.onnx",
+   "source": "https://huggingface.co/Supertone/supertonic-2/resolve/75e6727618a02f323c720cba9478152d4bc16ca4/onnx/unicode_indexer.json",
     "engine": "@qvac/tts",
     "description": "Supertone Supertonic 2 unicode indexer (fp32)",
     "quantization": "fp32",
