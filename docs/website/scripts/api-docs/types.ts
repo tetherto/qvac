@@ -52,3 +52,23 @@ export interface ApiData {
     server: ErrorEntry[];
   };
 }
+
+export interface AuditDiagnostic {
+  functionName: string;
+  missingParams: string[];
+  missingReturns: boolean;
+  missingThrows: boolean;
+  bodyHasThrow: boolean;
+}
+
+export interface AuditOptions {
+  strict?: boolean;
+  quiet?: boolean;
+}
+
+export interface AuditResult {
+  diagnostics: AuditDiagnostic[];
+  total: number;
+  complete: number;
+  completenessPercent: number;
+}

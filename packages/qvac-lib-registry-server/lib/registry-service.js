@@ -35,6 +35,8 @@ const { QVAC_MAIN_REGISTRY } = schema
 const { getFileMetadata } = require('../utils/file-metadata')
 const { parseCanonicalSource, resolveS3Bucket } = require('./source-helpers')
 const { isGGUFSource, isFirstShard, extractGGUFMetadata } = require('./gguf-helpers')
+const { addModelRequestSchema } = require('./model-schema')
+const { ZodError } = require('zod')
 
 const DISPATCH_PUT_MODEL = `@${QVAC_MAIN_REGISTRY}/put-model`
 const DISPATCH_PUT_LICENSE = `@${QVAC_MAIN_REGISTRY}/put-license`
@@ -153,17 +155,7 @@ class RegistryService extends ReadyResource {
 
       this._setupRpc(conn)
 
-      // Create a single replication stream for the store
-      const replicationStream = this.store.replicate(conn)
-
-      // Attach Autobase to the replication stream (writer cores, system core)
-      this.base.replicate(replicationStream)
-
-      // Also attach the view core to ensure read-only clients can sync
-      // Without this, the view core is not included in replication
-      if (this.view?.core) {
-        this.view.core.replicate(replicationStream)
-      }
+      this.store.replicate(conn)
     })
 
     // Log if there's a significant contiguous gap for troubleshooting
@@ -189,12 +181,11 @@ class RegistryService extends ReadyResource {
     this._rpcDiscoveryKey = deriveRpcDiscoveryKey(this.base.key)
     this.swarm.join(this._rpcDiscoveryKey, { server: true, client: false })
 
-    await this.swarm.flush()
     this.logger.info({
       autobaseKey: IdEnc.normalize(this.base.discoveryKey),
       viewKey: IdEnc.normalize(this.view.discoveryKey),
       rpcKey: IdEnc.normalize(this._rpcDiscoveryKey)
-    }, 'Swarm joined')
+    }, 'Swarm topics joined')
 
     if (this.base.isIndexer) {
       const linearizerIndexers = (this.base.linearizer?.indexers || [])
@@ -615,39 +606,15 @@ class RegistryService extends ReadyResource {
   }
 
   _validateAddModelRequest (entry) {
-    if (!entry || typeof entry !== 'object') {
-      throw new TypeError('model entry must be an object')
-    }
-
-    for (const field of ['source', 'engine', 'licenseId']) {
-      if (typeof entry[field] !== 'string' || entry[field].trim().length === 0) {
-        throw new TypeError(`${field} is required`)
+    try {
+      addModelRequestSchema.parse(entry)
+    } catch (err) {
+      if (err instanceof ZodError) {
+        const issues = err.issues.map(i => `${i.path.join('.')}: ${i.message}`)
+        this.logger.warn({ issues }, 'RPC: add-model payload rejected by schema')
+        throw new TypeError(issues.join('; '))
       }
-    }
-
-    const MAX_FIELD_LENGTH = 512
-    const MAX_TAG_LENGTH = 128
-    const MAX_TAGS = 50
-
-    for (const field of ['description', 'quantization', 'params', 'notes', 'deprecationReason']) {
-      if (entry[field] !== undefined && typeof entry[field] === 'string' && entry[field].length > MAX_FIELD_LENGTH) {
-        throw new TypeError(`${field} exceeds maximum length of ${MAX_FIELD_LENGTH}`)
-      }
-    }
-
-    if (entry.tags) {
-      if (!Array.isArray(entry.tags)) {
-        throw new TypeError('tags must be an array of strings')
-      }
-      if (entry.tags.length > MAX_TAGS) {
-        throw new TypeError(`tags array exceeds maximum of ${MAX_TAGS} items`)
-      }
-      if (entry.tags.some(tag => typeof tag !== 'string')) {
-        throw new TypeError('tags must be an array of strings')
-      }
-      if (entry.tags.some(tag => tag.length > MAX_TAG_LENGTH)) {
-        throw new TypeError(`each tag must be at most ${MAX_TAG_LENGTH} characters`)
-      }
+      throw err
     }
   }
 

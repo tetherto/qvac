@@ -52,8 +52,10 @@ test('inferenceManagerConfig.noAdditionalDownload is true', function (t) {
   t.is(ONNXOcr.inferenceManagerConfig.noAdditionalDownload, true)
 })
 
-test('JOB_ID is job', function (t) {
-  t.is(ONNXOcr.JOB_ID, 'job')
+test('createJobHandler is initialized', function (t) {
+  const onnxOcr = createMinimalOcr()
+  t.ok(onnxOcr._job, 'should have _job handler')
+  t.is(onnxOcr._job.active, null, 'no active response initially')
 })
 
 // =============================================
@@ -87,57 +89,63 @@ test('_normalizePath handles various path formats', function (t) {
 // _addonOutputCallback event mapping (index.js:101-118)
 // =============================================
 
-test('_addonOutputCallback maps stats object (with totalTime) to JobEnded', function (t) {
+test('_addonOutputCallback routes stats object (with totalTime) to _job.end', function (t) {
   const onnxOcr = createMinimalOcr()
-  let captured = {}
-  onnxOcr._outputCallback = function (addon, event, jobId, data, error) {
-    captured = { event, jobId, data, error }
-  }
+  onnxOcr.opts = { stats: true }
+
+  // Start a job so there's an active response
+  const response = onnxOcr._job.start()
+  let ended = false
+  let receivedStats = null
+  response.on('stats', s => { receivedStats = s })
+  response.on('end', () => { ended = true })
 
   const statsData = { totalTime: 1.5, detectionTime: 0.5, recognitionTime: 1.0 }
   onnxOcr._addonOutputCallback(null, 'SomeMangledType', statsData, null)
 
-  t.is(captured.event, 'JobEnded')
-  t.is(captured.jobId, 'job')
-  t.is(captured.data.totalTime, 1.5)
-  t.is(captured.error, null)
+  t.ok(ended, 'response should be ended')
+  t.alike(receivedStats, statsData, 'stats should be forwarded')
+  t.is(onnxOcr._job.active, null, 'active response should be cleared')
 })
 
-test('_addonOutputCallback maps event containing Error to Error', function (t) {
+test('_addonOutputCallback routes Error event to _job.fail', function (t) {
   const onnxOcr = createMinimalOcr()
-  let captured = {}
-  onnxOcr._outputCallback = function (addon, event, jobId, data, error) {
-    captured = { event, data }
-  }
+
+  const response = onnxOcr._job.start()
+  let receivedError = null
+  response.onError(err => { receivedError = err })
 
   onnxOcr._addonOutputCallback(null, 'SomethingError', 'error payload', 'the error')
-  t.is(captured.event, 'Error')
-  t.is(captured.data, 'error payload')
+
+  t.ok(receivedError, 'error should be received')
+  t.is(onnxOcr._job.active, null, 'active response should be cleared')
 })
 
-test('_addonOutputCallback maps array data to Output', function (t) {
+test('_addonOutputCallback routes array data to _job.output', function (t) {
   const onnxOcr = createMinimalOcr()
-  let captured = {}
-  onnxOcr._outputCallback = function (addon, event, jobId, data, error) {
-    captured = { event, data }
-  }
+
+  const response = onnxOcr._job.start()
+  let receivedData = null
+  response.onUpdate(d => { receivedData = d })
 
   const outputData = [['box1', 'text1'], ['box2', 'text2']]
   onnxOcr._addonOutputCallback(null, 'PipelineResult', outputData, null)
-  t.is(captured.event, 'Output')
-  t.alike(captured.data, outputData)
+
+  t.alike(receivedData, outputData, 'output data should be routed')
+  t.ok(onnxOcr._job.active, 'active response should still exist (not ended)')
 })
 
-test('_addonOutputCallback passes through unmapped events as-is', function (t) {
+test('_addonOutputCallback ignores unmapped non-array non-stats events', function (t) {
   const onnxOcr = createMinimalOcr()
-  let captured = {}
-  onnxOcr._outputCallback = function (addon, event, jobId, data, error) {
-    captured = { event, data }
-  }
+
+  const response = onnxOcr._job.start()
+  let outputCalled = false
+  response.onUpdate(() => { outputCalled = true })
 
   onnxOcr._addonOutputCallback(null, 'CustomEvent', 'string data', null)
-  t.is(captured.event, 'CustomEvent')
-  t.is(captured.data, 'string data')
+
+  t.not(outputCalled, 'output should not be called for unmapped string data')
+  t.ok(onnxOcr._job.active, 'active response should still exist')
 })
 
 // =============================================
@@ -190,13 +198,13 @@ test('load() accepts defaultRotationAngles and contrastRetry', { timeout: TEST_T
     })
 
     await response
-      .onUpdate(function (output) {
-        t.ok(Array.isArray(output), 'Output should be an array')
-      })
-      .onError(function (error) {
-        t.fail('Unexpected error: ' + JSON.stringify(error))
-      })
-      .await()
+        .onUpdate(function (output) {
+          t.ok(Array.isArray(output), 'Output should be an array')
+        })
+        .onError(function (error) {
+          t.fail('Unexpected error: ' + JSON.stringify(error))
+        })
+        .await()
 
     t.pass('Inference completed with extra params')
   } finally {

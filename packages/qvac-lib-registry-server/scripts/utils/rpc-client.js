@@ -19,7 +19,7 @@ function deriveRpcDiscoveryKey (autobaseKey) {
     .digest()
 }
 
-async function connectToRegistry ({ config, logger = console, storage = './temp-client-storage', timeout = 30000, primaryKey = null, targetPeer = null }) {
+async function connectToRegistry ({ config, logger = console, storage = './temp-client-storage', timeout = 30000, primaryKey = null, targetPeer = null, indexerKeys = null }) {
   const autobaseKeyEncoded = config.getAutobaseBootstrapKey()
   if (!autobaseKeyEncoded) {
     throw new Error('QVAC_AUTOBASE_KEY not set. Run "node scripts/bin.js run" once to initialize keys.')
@@ -43,13 +43,26 @@ async function connectToRegistry ({ config, logger = console, storage = './temp-
 
   const autobaseKey = IdEnc.decode(autobaseKeyEncoded)
 
-  // Use dedicated RPC topic - only the server joins this topic, not blind peers
-  const rpcDiscoveryKey = deriveRpcDiscoveryKey(autobaseKey)
+  // Resolve indexer keys: parameter > config > empty
+  const resolvedIndexerKeys = indexerKeys || config.getIndexerKeys()
+  const useDirectConnect = resolvedIndexerKeys.length > 0
 
-  logger.info('RPC Client: Connecting via dedicated RPC topic', {
-    autobaseKey: IdEnc.normalize(autobaseKey),
-    rpcDiscoveryKey: IdEnc.normalize(rpcDiscoveryKey)
-  })
+  // Build a set of allowed peer keys for connection filtering
+  const allowedPeerKeys = useDirectConnect
+    ? new Set(resolvedIndexerKeys.map(k => IdEnc.normalize(IdEnc.decode(k))))
+    : null
+
+  if (useDirectConnect) {
+    logger.info('RPC Client: Connecting via direct indexer keys (Noise-authenticated)', {
+      indexerCount: resolvedIndexerKeys.length
+    })
+  } else {
+    const rpcDiscoveryKey = deriveRpcDiscoveryKey(autobaseKey)
+    logger.info('RPC Client: Connecting via RPC topic (legacy)', {
+      autobaseKey: IdEnc.normalize(autobaseKey),
+      rpcDiscoveryKey: IdEnc.normalize(rpcDiscoveryKey)
+    })
+  }
 
   // Normalize targetPeer if provided
   const targetPeerNormalized = targetPeer ? IdEnc.normalize(IdEnc.decode(targetPeer)) : null
@@ -70,6 +83,12 @@ async function connectToRegistry ({ config, logger = console, storage = './temp-
       // If targeting a specific peer, skip others
       if (targetPeerNormalized && peerKey !== targetPeerNormalized) {
         logger.info('RPC Client: Skipping peer (waiting for target)', { peer: peerKey, target: targetPeerNormalized })
+        return
+      }
+
+      // When using direct connect, only accept known indexer keys
+      if (allowedPeerKeys && !allowedPeerKeys.has(peerKey)) {
+        logger.info('RPC Client: Ignoring unknown peer', { peer: peerKey })
         return
       }
 
@@ -117,7 +136,14 @@ async function connectToRegistry ({ config, logger = console, storage = './temp-
 
     ;(async () => {
       try {
-        swarm.join(rpcDiscoveryKey, { client: true, server: false })
+        if (useDirectConnect) {
+          const picked = resolvedIndexerKeys[Math.floor(Math.random() * resolvedIndexerKeys.length)]
+          logger.info('RPC Client: Connecting to indexer', { peer: picked })
+          swarm.joinPeer(IdEnc.decode(picked))
+        } else {
+          const rpcDiscoveryKey = deriveRpcDiscoveryKey(autobaseKey)
+          swarm.join(rpcDiscoveryKey, { client: true, server: false })
+        }
         await swarm.flush()
         logger.debug('RPC Client: Swarm joined and flushed, waiting for connection...')
       } catch (err) {
