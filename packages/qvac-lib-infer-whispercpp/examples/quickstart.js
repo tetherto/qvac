@@ -38,7 +38,7 @@ async function main () {
   const constructorArgs = {
     modelName: modelPathArg || 'ggml-tiny.bin',
     loader: new FakeDL({}),
-    diskPath: modelsDir
+    diskPath: modelsDir,
     files: {
       model: modelPath
     },
