@@ -530,11 +530,15 @@ std::any SdModel::process(const std::any& input) {
   std::vector<uint8_t> initPng;
 
   if (gen.mode == "img2img") {
-    // Decode image bytes from JSON (serialised by the JS layer as
-    // init_image_bytes).
-    if (auto it = v.get<picojson::object>().find("init_image_bytes");
-        it != v.get<picojson::object>().end() &&
-        it->second.is<picojson::array>()) {
+    // Prefer the binary buffer passed directly from the JS layer (Uint8Array,
+    // no JSON overhead).  Fall back to the JSON "init_image_bytes" array for
+    // backwards compatibility (e.g. C++ unit tests that build paramsJson by
+    // hand).
+    if (!job.initImageBytes.empty()) {
+      initPng = job.initImageBytes;
+    } else if (auto it = v.get<picojson::object>().find("init_image_bytes");
+               it != v.get<picojson::object>().end() &&
+               it->second.is<picojson::array>()) {
       const auto& arr = it->second.get<picojson::array>();
       initPng.reserve(arr.size());
       for (const auto& el : arr)
