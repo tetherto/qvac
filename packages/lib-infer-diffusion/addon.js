@@ -118,8 +118,8 @@ class SdInterface {
       if (!serializable.width || !serializable.height) {
         const dims = readImageDimensions(imgBuf)
         if (dims) {
-          serializable.width = Math.round(dims.width / 8) * 8
-          serializable.height = Math.round(dims.height / 8) * 8
+          serializable.width = Math.ceil(dims.width / 8) * 8
+          serializable.height = Math.ceil(dims.height / 8) * 8
         }
       }
 

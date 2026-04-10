@@ -18,6 +18,7 @@
 #include <stb_image_write.h>
 
 #include "utils/BackendSelection.hpp"
+#include "utils/ImageUtils.hpp"
 #include "utils/LoggingMacros.hpp"
 
 using namespace qvac_lib_inference_addon_cpp;
@@ -547,96 +548,95 @@ std::any SdModel::process(const std::any& input) {
     if (!initPng.empty())
       initImg = decodePng(initPng);
 
-    if (initImg.data) {
-      const int imgW = static_cast<int>(initImg.width);
-      const int imgH = static_cast<int>(initImg.height);
+    if (!initImg.data)
+      throw StatusError(
+          general_error::InvalidArgument,
+          "img2img: failed to decode init_image (corrupt or unsupported format)");
 
-      const bool useRefImages = config_.prediction == FLUX2_FLOW_PRED ||
-                                config_.prediction == FLUX_FLOW_PRED;
+    const int imgW = static_cast<int>(initImg.width);
+    const int imgH = static_cast<int>(initImg.height);
 
-      if (useRefImages) {
-        // FLUX in-context conditioning: ref_images handles its own resizing
-        // via auto_resize_ref_image, so only override genParams dimensions
-        // when they are still at the 512×512 default.
-        if (gen.width == 512 && gen.height == 512) {
-          genParams.width = imgW;
-          genParams.height = imgH;
-        }
+    const bool useRefImages = config_.prediction == FLUX2_FLOW_PRED ||
+                              config_.prediction == FLUX_FLOW_PRED;
 
+    if (useRefImages) {
+      // FLUX in-context conditioning: ref_images handles its own resizing
+      // via auto_resize_ref_image, so only override genParams dimensions
+      // when they are still at the 512×512 default.
+      if (gen.width == 512 && gen.height == 512) {
+        genParams.width = imgW;
+        genParams.height = imgH;
+      }
+
+      QLOG_IF(
+          qvac_lib_inference_addon_cpp::logger::Priority::INFO,
+          "img2img: " + std::to_string(imgW) + "x" + std::to_string(imgH) +
+              " — FLUX in-context conditioning (ref_images)");
+
+      genParams.ref_images = &initImg;
+      genParams.ref_images_count = 1;
+      genParams.auto_resize_ref_image = true;
+    } else {
+      // SDEdit path — the vcpkg version of generate_image() rounds
+      // width/height UP to a spatial multiple (typically 8) before
+      // creating tensors, then asserts init_image matches those aligned
+      // dimensions.  We must align here too and resize the decoded image
+      // if its pixel dimensions aren't already a multiple of 8.
+      constexpr int kAlign = 8;
+      const int alignedW = (imgW + kAlign - 1) / kAlign * kAlign;
+      const int alignedH = (imgH + kAlign - 1) / kAlign * kAlign;
+
+      genParams.width = alignedW;
+      genParams.height = alignedH;
+
+      if (imgW != alignedW || imgH != alignedH) {
         QLOG_IF(
             qvac_lib_inference_addon_cpp::logger::Priority::INFO,
-            "img2img: " + std::to_string(imgW) + "x" + std::to_string(imgH) +
-                " — FLUX in-context conditioning (ref_images)");
+            "img2img: resizing " + std::to_string(imgW) + "x" +
+                std::to_string(imgH) + " → " + std::to_string(alignedW) +
+                "x" + std::to_string(alignedH) + " (align to " +
+                std::to_string(kAlign) + ")");
 
-        genParams.ref_images = &initImg;
-        genParams.ref_images_count = 1;
-        genParams.auto_resize_ref_image = true;
-      } else {
-        // SDEdit path — the vcpkg version of generate_image() rounds
-        // width/height UP to a spatial multiple (typically 8) before
-        // creating tensors, then asserts init_image matches those aligned
-        // dimensions.  We must align here too and resize the decoded image
-        // if its pixel dimensions aren't already a multiple of 8.
-        constexpr int kAlign = 8;
-        const int alignedW = (imgW + kAlign - 1) / kAlign * kAlign;
-        const int alignedH = (imgH + kAlign - 1) / kAlign * kAlign;
+        sd_image_t resized =
+            image_utils::resizeSdImage(initImg, alignedW, alignedH);
+        if (!resized.data)
+          throw StatusError(
+              general_error::InternalError,
+              "Failed to resize init_image from " + std::to_string(imgW) +
+                  "x" + std::to_string(imgH) + " to " +
+                  std::to_string(alignedW) + "x" + std::to_string(alignedH));
+        free(initImg.data);
+        initImg = resized;
+      }
 
-        genParams.width = alignedW;
-        genParams.height = alignedH;
+      QLOG_IF(
+          qvac_lib_inference_addon_cpp::logger::Priority::INFO,
+          "img2img: " + std::to_string(alignedW) + "x" +
+              std::to_string(alignedH) + " — SDEdit (init_image, strength=" +
+              std::to_string(gen.strength) + ")");
 
-        // Resize init_image to aligned dimensions if they differ.
-        if (imgW != alignedW || imgH != alignedH) {
-          QLOG_IF(
-              qvac_lib_inference_addon_cpp::logger::Priority::INFO,
-              "img2img: resizing " + std::to_string(imgW) + "x" +
-                  std::to_string(imgH) + " → " + std::to_string(alignedW) +
-                  "x" + std::to_string(alignedH) + " (align to " +
-                  std::to_string(kAlign) + ")");
+      genParams.init_image = initImg;
 
-          const uint32_t ch = initImg.channel;
-          auto* resized = static_cast<uint8_t*>(
-              malloc(static_cast<size_t>(alignedW) * alignedH * ch));
-          for (int y = 0; y < alignedH; ++y) {
-            const int srcY = y * imgH / alignedH;
-            for (int x = 0; x < alignedW; ++x) {
-              const int srcX = x * imgW / alignedW;
-              for (uint32_t c = 0; c < ch; ++c) {
-                resized[(y * alignedW + x) * ch + c] =
-                    initImg.data[(srcY * imgW + srcX) * ch + c];
-              }
-            }
-          }
-          free(initImg.data);
-          initImg = {
-              static_cast<uint32_t>(alignedW),
-              static_cast<uint32_t>(alignedH),
-              ch,
-              resized};
-        }
-
-        QLOG_IF(
-            qvac_lib_inference_addon_cpp::logger::Priority::INFO,
-            "img2img: " + std::to_string(alignedW) + "x" +
-                std::to_string(alignedH) + " — SDEdit (init_image, strength=" +
-                std::to_string(gen.strength) + ")");
-
-        genParams.init_image = initImg;
-
-        // The vcpkg version of generate_image() unconditionally calls
-        // sd_image_to_ggml_tensor() on mask_image (even when no mask was
-        // provided), which asserts mask_image dimensions match the tensor.
-        // Provide an all-white mask (= denoise everywhere) to satisfy it.
-        if (!genParams.mask_image.data) {
-          const size_t maskSize =
-              static_cast<size_t>(alignedW) * static_cast<size_t>(alignedH);
-          auto* maskData = static_cast<uint8_t*>(malloc(maskSize));
-          memset(maskData, 255, maskSize);
-          genParams.mask_image = {
-              static_cast<uint32_t>(alignedW),
-              static_cast<uint32_t>(alignedH),
-              1,
-              maskData};
-        }
+      // The vcpkg version of generate_image() unconditionally calls
+      // sd_image_to_ggml_tensor() on mask_image (even when no mask was
+      // provided), which asserts mask_image dimensions match the tensor.
+      // Provide an all-white mask (= denoise everywhere) to satisfy it.
+      if (!genParams.mask_image.data) {
+        const size_t maskSize =
+            static_cast<size_t>(alignedW) * static_cast<size_t>(alignedH);
+        auto* maskData = static_cast<uint8_t*>(malloc(maskSize));
+        if (!maskData)
+          throw StatusError(
+              general_error::InternalError,
+              "Failed to allocate " + std::to_string(maskSize) +
+                  " bytes for SDEdit mask (" + std::to_string(alignedW) +
+                  "x" + std::to_string(alignedH) + ")");
+        memset(maskData, 255, maskSize);
+        genParams.mask_image = {
+            static_cast<uint32_t>(alignedW),
+            static_cast<uint32_t>(alignedH),
+            1,
+            maskData};
       }
     }
   }
