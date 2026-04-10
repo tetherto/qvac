@@ -10,3 +10,7 @@ async function runBergamot (options = {}) { // eslint-disable-line no-unused-var
 async function runIndictrans (options = {}) { // eslint-disable-line no-unused-vars
   return runIntegrationModule('../integration/indictrans.test.js', options)
 }
+
+async function runPivotBergamot (options = {}) { // eslint-disable-line no-unused-vars
+  return runIntegrationModule('../integration/pivot-bergamot.test.js', options)
+}

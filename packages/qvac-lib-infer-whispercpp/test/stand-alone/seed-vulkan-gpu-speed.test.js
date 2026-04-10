@@ -6,7 +6,7 @@ const TranscriptionWhispercpp = require('../../index')
 const FakeDL = require('../mocks/loader.fake.js')
 const { spawnSync, spawn } = require('bare-subprocess')
 
-const modelsDir = path.resolve(__dirname, '../../examples/models')
+const modelsDir = path.resolve(__dirname, '../../models')
 const samplesDir = path.resolve(__dirname, '../../examples/samples')
 if (!fs.existsSync(modelsDir)) fs.mkdirSync(modelsDir, { recursive: true })
 const modelPath = path.join(modelsDir, 'ggml-small.bin')

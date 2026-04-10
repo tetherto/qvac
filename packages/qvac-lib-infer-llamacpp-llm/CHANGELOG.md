@@ -1,16 +1,25 @@
 # Changelog
 
+## [0.14.3] - 2026-04-07
+
+### Added
+
+#### `backendDevice` runtime stat
+- `runtimeStats()` now includes `backendDevice` (`"cpu"` or `"gpu"`) reporting the actual resolved device used for inference.
+- Reflects the device after backend selection and fallback logic, not the user-configured preference.
+- Captured as numeric `int64_t` (0/1) at the C++ level, mapped to a string in the JS layer.
+
 ## [0.14.2] - 2026-04-07
 
 This patch release updates the qvac-fabric native dependency.
 
-## Changed
+### Changed
 
-### qvac-fabric dependency bump
+#### qvac-fabric dependency bump
 
 Updated qvac-fabric from 7248.2.1#1 to 7248.2.2, aligning all llamacpp-based addons on the same fabric version.
 
-## Pull Requests
+### Pull Requests
 
 - [#1358](https://github.com/tetherto/qvac/pull/1358) - Qvac 16779 qvac fabric lockstep
 

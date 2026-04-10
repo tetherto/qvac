@@ -71,7 +71,7 @@ const GGMLBert = require('@qvac/embed-llamacpp')
 
 ### 2. Create a Data Loader
 
-Data Loaders abstract the way model files are accessed. Use a [`FileSystemDataLoader`](../qvac-lib-dl-filesystem) to load model files from your local file system. Models can be downloaded directly from HuggingFace.
+Data Loaders abstract the way model files are accessed. Use a [`FileSystemDataLoader`](../dl-filesystem) to load model files from your local file system. Models can be downloaded directly from HuggingFace.
 
 ```js
 const FilesystemDL = require('@qvac/dl-filesystem')
@@ -186,6 +186,8 @@ const query = 'Hello, can you suggest a game I can play with my 1 year old daugh
 const response = await model.run(query)
 const embeddings = await response.await()
 ```
+
+When `opts.stats` is enabled, `response.stats` includes runtime metrics such as `total_tokens`, `total_time_ms`, `tokens_per_second`, and `backendDevice` (`"cpu"` or `"gpu"`). `backendDevice` reflects the resolved device used at runtime after backend selection/fallback logic, not only the requested config.
 
 ### 8. Release Resources
 

@@ -14,8 +14,7 @@ test('Multiple consecutive transcriptions should work without errors', { timeout
 
   t.plan(3)
 
-  // Get model path - mobile uses tmpdir, desktop uses examples/models
-  const modelsDir = isMobile ? path.join(global.testDir || os.tmpdir(), 'models') : path.resolve(__dirname, '../../examples/models')
+  const modelsDir = isMobile ? path.join(global.testDir || os.tmpdir(), 'models') : path.resolve(__dirname, '../../models')
   const modelPath = path.join(modelsDir, 'ggml-tiny.bin')
 
   // Create models directory if needed

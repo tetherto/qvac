@@ -1,6 +1,6 @@
 {
   "name": "@qvac/translation-nmtcpp",
-  "version": "1.0.0",
+  "version": "2.0.0",
   "description": "translation addon for qvac",
   "addon": true,
   "engines": {
@@ -66,7 +66,6 @@
   "homepage": "https://github.com/tetherto/qvac/tree/main/packages/qvac-lib-infer-nmtcpp#readme",
   "devDependencies": {
     "@qvac/dl-base": "^0.1.0",
-    "@qvac/dl-filesystem": "^0.1.0",
     "bare-fetch": "^2.5.1",
     "bare-fs": "^4.5.1",
     "bare-process": "^4.2.2",
@@ -80,10 +79,9 @@
     "@types/node": "^24.2.1"
   },
   "dependencies": {
-    "@qvac/dl-hyperdrive": "^0.1.0",
     "@qvac/error": "^0.1.0",
-    "@qvac/infer-base": "^0.2.0",
-    "bare-path": "^3.0.0"
+    "@qvac/infer-base": "^0.4.0",
+    "@qvac/logging": "^0.1.0"
   },
   "exports": {
     "./package": "./package.json",
