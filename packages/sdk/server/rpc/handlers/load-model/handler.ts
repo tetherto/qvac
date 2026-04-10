@@ -149,23 +149,23 @@ export async function handleLoadModel(
       try {
         const stat = await fsPromises.stat(resolvedModelPath);
         modelFileSize = stat.size;
-      } catch {
-        logger.debug("Could not stat model file for memory validation");
+      } catch (statErr) {
+        logger.warn(
+          `Could not stat model file for memory validation: ${statErr instanceof Error ? statErr.message : String(statErr)}`,
+        );
       }
 
-      if (modelFileSize > 0) {
-        const platform = getPlatformInfo();
-        logger.debug(
-          `Memory validation: model=${Math.round(modelFileSize / (1024 * 1024))} MB, ` +
-            `totalMem=${Math.round(platform.totalMemory / (1024 * 1024))} MB, ` +
-            `availableMem=${Math.round(platform.availableMemory / (1024 * 1024))} MB (${platform.os}/${platform.arch})`,
-        );
-        plugin.validateBeforeLoad({
-          modelConfig: resolvedModelConfig,
-          modelFileSize,
-          availableMemory: platform.availableMemory,
-        });
-      }
+      const platform = getPlatformInfo();
+      logger.info(
+        `Memory validation: fileSize=${Math.round(modelFileSize / (1024 * 1024))} MB, ` +
+          `totalMem=${Math.round(platform.totalMemory / (1024 * 1024))} MB, ` +
+          `availableMem=${Math.round(platform.availableMemory / (1024 * 1024))} MB (${platform.os}/${platform.arch})`,
+      );
+      plugin.validateBeforeLoad({
+        modelConfig: resolvedModelConfig,
+        modelFileSize,
+        availableMemory: platform.availableMemory,
+      });
     }
 
     const loadResult = await loadModel(
