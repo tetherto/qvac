@@ -25,14 +25,14 @@ const CUT_PREDICT_LIMIT = '32'
  * since the logic parses tool response blocks or ensure tool multi-turn usage
  * limited model output is tested with CUT_PREDICT_LIMIT
  */
-const FULL_PREDICT_LIMIT = '1024'
+const FULL_PREDICT_LIMIT = '2048'
 
 const BASE_CONFIG = {
   device: useCpu ? 'cpu' : 'gpu',
   gpu_layers: '999',
   ctx_size: '4096',
   n_predict: FULL_PREDICT_LIMIT,
-  temp: '0.1',
+  temp: '0',
   seed: '1',
   verbosity: '2',
   tools: 'true',
@@ -263,8 +263,8 @@ test('[dynamic-tools] multi-turn session with same tools works correctly', { tim
 
   const toolResponse2 = [
     { role: 'session', content: sessionName },
-    { role: 'assistant', content: r1.output },
-    { role: 'tool', content: 'sunny in Paris' },
+    { role: 'assistant', content: r2.output },
+    { role: 'tool', content: 'rainy in London' },
     TOOL_A
   ]
   const rTool2 = await runAndCollect(model, toolResponse2)
