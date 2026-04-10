@@ -416,7 +416,6 @@ jobs:
           mkdir -p /tmp/dummy-test-pkg
           echo '{"name":"qvac-test-stub","version":"1.0.0"}' > /tmp/dummy-test-pkg/package.json
           cp "${{ inputs.working-directory }}/device-farm/gen-junit.py" /tmp/dummy-test-pkg/
-          cp "${{ inputs.working-directory }}/device-farm/drain-syslog.py" /tmp/dummy-test-pkg/
           (cd /tmp/dummy-test-pkg && zip -r /tmp/dummy-test-pkg.zip .)
 
           PKG_RESPONSE=$(aws devicefarm create-upload \
