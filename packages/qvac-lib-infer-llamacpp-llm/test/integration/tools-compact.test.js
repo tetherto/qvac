@@ -146,9 +146,9 @@ async function runAndCollect (model, prompt) {
   }
 }
 
-test('[dynamic-tools] multi-turn session with wrong tools provided', { timeout: 600_000 }, async t => {
+test('[tools-compact] multi-turn session with wrong tools provided', { timeout: 600_000 }, async t => {
   const { model, dirPath } = await setupModel(t)
-  const sessionName = path.join(dirPath, 'dynamic-tools-changing.bin')
+  const sessionName = path.join(dirPath, 'tools-compact-changing.bin')
 
   const prompt1 = [
     { role: 'session', content: sessionName },
@@ -194,9 +194,9 @@ test('[dynamic-tools] multi-turn session with wrong tools provided', { timeout: 
   )
 })
 
-test('[dynamic-tools] multi-turn session with same tools and cut LLM output', { timeout: 600_000 }, async t => {
+test('[tools-compact] multi-turn session with same tools and cut LLM output', { timeout: 600_000 }, async t => {
   const { model, dirPath } = await setupModel(t, { n_predict: CUT_PREDICT_LIMIT })
-  const sessionName = path.join(dirPath, 'dynamic-tools-cut-output.bin')
+  const sessionName = path.join(dirPath, 'tools-compact-cut-output.bin')
 
   const prompt1 = [
     { role: 'session', content: sessionName },
@@ -221,9 +221,9 @@ test('[dynamic-tools] multi-turn session with same tools and cut LLM output', { 
   t.end()
 })
 
-test('[dynamic-tools] multi-turn session with same tools works correctly', { timeout: 600_000 }, async t => {
+test('[tools-compact] multi-turn session with same tools works correctly', { timeout: 600_000 }, async t => {
   const { model, dirPath } = await setupModel(t)
-  const sessionName = path.join(dirPath, 'dynamic-tools-same.bin')
+  const sessionName = path.join(dirPath, 'tools-compact-same.bin')
 
   const prompt1 = [
     { role: 'session', content: sessionName },
@@ -277,7 +277,7 @@ test('[dynamic-tools] multi-turn session with same tools works correctly', { tim
   )
 })
 
-test('[dynamic-tools] single-shot with tools works without session', { timeout: 600_000 }, async t => {
+test('[tools-compact] single-shot with tools works without session', { timeout: 600_000 }, async t => {
   const { model } = await setupModel(t)
 
   const prompt = [
