@@ -1,6 +1,6 @@
 # Changelog
 
-## [0.15.0] - 2026-04-08
+## [0.15.0] - 2026-04-10
 
 ### Changed
 
@@ -47,6 +47,17 @@ Messages with role `"tool"` (tool call results) were not triggering `add_generat
 - `runtimeDebugStats()` internal method on `LlamaModel` exposing `nPastBeforeTools`, `firstMsgTokens`, and `toolsTrimmed`
 - Comprehensive C++ unit tests for Qwen3 tools-dynamic template and cache management with tools_compact
 - Regression tests for context sliding with anchored tools: clamped discard, `adjustAfterSlide`, unclamped sliding with long conversations, and sliding during generation
+
+## [0.14.4] - 2026-04-03
+
+### Changed
+
+- Updated qvac-fabric dependency from 7248.2.1 to 7248.2.3, which fixes OpenCL kernel cache support on Android.
+
+### Added
+
+- `openclCacheDir` option in `LlamaConfig` (`index.d.ts`): writable directory for OpenCL kernel binary cache, required on Android for fast GPU startup.
+- `cache-type-k` and `cache-type-v` options in `LlamaConfig` (`index.d.ts`): configure KV cache quantization types.
 
 ## [0.14.3] - 2026-04-07
 

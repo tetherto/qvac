@@ -164,6 +164,7 @@ jobs:
       checks: write
       pull-requests: write
       id-token: write
+      actions: read
     needs: [authorize, context]
     if: needs.authorize.outputs.allowed == 'true'
     uses: ./.github/workflows/cpp-test-coverage-qvac-lib-infer-onnx-tts.yml

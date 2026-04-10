@@ -148,6 +148,8 @@ jobs:
       packages: read
       checks: write
       pull-requests: write
+      id-token: write
+      actions: read
     needs: context
     if: needs.context.outputs.run_verify == 'true' || github.event_name == 'workflow_dispatch'
     uses: ./.github/workflows/cpp-test-coverage-qvac-lib-infer-parakeet.yml
