@@ -36,9 +36,6 @@ async function main () {
 
   // Constructor arguments for TranscriptionWhispercpp
   const constructorArgs = {
-    modelName: modelPathArg || 'ggml-tiny.bin',
-    loader: new FakeDL({}),
-    diskPath: modelsDir,
     files: {
       model: modelPath
     },
