@@ -387,7 +387,11 @@ jobs:
 
           PROJECT_ID=$(echo "${{ inputs.device-farm-project-arn }}" | sed -n 's/.*:project:\(.*\)/\1/p')
           RUN_ID=$(echo "$RUN_ARN" | sed -n 's/.*:run:[^/]*\/\(.*\)/\1/p')
-          echo "Device Farm Console (${{ matrix.device.name }}): https://us-west-2.console.aws.amazon.com/devicefarm/home#/mobile/projects/${PROJECT_ID}/runs/${RUN_ID}"
+          DF_URL="https://us-west-2.console.aws.amazon.com/devicefarm/home#/mobile/projects/${PROJECT_ID}/runs/${RUN_ID}"
+          echo "Device Farm Console (${{ matrix.device.name }}): $DF_URL"
+
+          echo "### Device Farm: ${{ matrix.device.name }}" >> $GITHUB_STEP_SUMMARY
+          echo "[Open Device Farm Console]($DF_URL)" >> $GITHUB_STEP_SUMMARY
 
       - name: Save run ARN
         id: save-arn
