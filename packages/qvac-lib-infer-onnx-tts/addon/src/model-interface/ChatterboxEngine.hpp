@@ -98,6 +98,32 @@ private:
   createUnconditionalEmbeddings(const TensorData<float> &condEmbs,
                                 const std::vector<int64_t> &inputIds);
 
+  void prepareCfgEmbeddings(const std::vector<int64_t> &inputIds,
+                            const std::vector<int64_t> &positionIds,
+                            TensorData<float> &condEmbs,
+                            TensorData<float> &uncondEmbs,
+                            TensorData<int64_t> &promptToken,
+                            TensorData<float> &speakerEmbeddings,
+                            TensorData<float> &speakerFeatures);
+
+  int64_t runInitialCfgStep(
+      const TensorData<float> &condEmbs, const TensorData<float> &uncondEmbs,
+      TensorData<int64_t> &positionIds, TensorData<int64_t> &attentionMask,
+      std::unordered_map<std::string, TensorData<float>> &condKv,
+      std::unordered_map<std::string, TensorData<float>> &uncondKv,
+      std::vector<int64_t> &generatedTokens);
+
+  std::unordered_map<std::string, TensorData<float>> initEmptyKvCache();
+
+  bool shouldStopGeneration(const std::vector<int64_t> &tokens, int step);
+
+  void runCfgGenerationLoop(
+      std::vector<int64_t> &generatedTokens, TensorData<int64_t> &positionIds,
+      TensorData<int64_t> &attentionMask,
+      std::unordered_map<std::string, TensorData<float>> &condKv,
+      std::unordered_map<std::string, TensorData<float>> &uncondKv,
+      int maxSpeechTokens);
+
   std::vector<int64_t> generateSpeechTokensWithCfg(
       std::vector<int64_t> &inputIds, TensorData<int64_t> &positionIds,
       TensorData<float> &speakerEmbeddings, TensorData<float> &speakerFeatures);

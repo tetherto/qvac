@@ -5,6 +5,21 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.8.2] - 2026-03-16
+
+### Added
+- Classifier-Free Guidance (CFG) pipeline for multilingual inference, using conditional/unconditional KV caches and text embedding weights to improve non-English speech quality
+- Temperature sampling with min-P filtering and repetition penalty (2.0) for the multilingual path
+- Token generation stopping heuristics: text-length-based max tokens, consecutive and pattern repetition detection, silence token run detection
+- Trailing silence trimming with dynamic energy-based endpoint detection, tail padding, and fade-out
+- Peak normalization for consistent multilingual audio volume
+- Integration test sentences for 12 additional languages (ar, da, el, fi, hi, ms, nl, no, pl, sv, sw, tr), enabled via `TEST_ALL_LANGUAGES=true`
+
+### Changed
+- Refactored `generateSpeechTokensWithCfg` into smaller functions: `prepareCfgEmbeddings`, `runInitialCfgStep`, `shouldStopGeneration`, `runCfgGenerationLoop`
+- Extracted magic numbers into named constants
+- Decomposed `sampleWithTemperature`, `trimTrailingSilence`, `detectPatternRepetition` into single-responsibility helpers
+
 ## [0.8.1]
 
 ### Added
