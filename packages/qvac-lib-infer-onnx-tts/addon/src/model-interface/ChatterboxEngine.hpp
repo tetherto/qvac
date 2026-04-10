@@ -115,6 +115,21 @@ private:
 
   std::unordered_map<std::string, TensorData<float>> initEmptyKvCache();
 
+  void collectKvShapes(
+      std::vector<std::vector<int64_t>> &inputShapes,
+      const std::unordered_map<std::string, TensorData<float>> &pastKeyValues);
+
+  void writeKvToTensors(
+      const std::unordered_map<std::string, TensorData<float>> &pastKeyValues);
+
+  void runGenerationLoop(
+      std::vector<int64_t> &inputIds, TensorData<int64_t> &positionIds,
+      TensorData<int64_t> &attentionMask,
+      std::unordered_map<std::string, TensorData<float>> &pastKeyValues,
+      TensorData<int64_t> &promptToken, TensorData<float> &speakerEmbeddings,
+      TensorData<float> &speakerFeatures,
+      std::vector<int64_t> &generatedTokens);
+
   bool shouldStopGeneration(const std::vector<int64_t> &tokens, int step);
 
   void runCfgGenerationLoop(
