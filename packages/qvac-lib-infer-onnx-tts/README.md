@@ -44,9 +44,9 @@ The engine is auto-detected based on the arguments you provide.
 |----------|-------------|-------------|--------|-------------|
 | macOS | arm64, x64 | 14.0+ | ✅ Tier 1 | CoreML |
 | iOS | arm64 | 17.0+ | ✅ Tier 1 | CoreML |
-| Linux | arm64, x64 | Ubuntu-22+ | ✅ Tier 1 | CUDA, ROCm |
+| Linux | arm64, x64 | Ubuntu-22+ | ✅ Tier 1 | CPU only |
 | Android | arm64 | 12+ | ✅ Tier 1 | NNAPI |
-| Windows | x64 | 10+ | ✅ Tier 1 | DirectML, CUDA |
+| Windows | x64 | 10+ | ✅ Tier 1 | DirectML |
 
 **Dependencies:**
 - qvac-lib-inference-addon-cpp: C++ addon framework
@@ -74,6 +74,8 @@ This package supports two TTS engines. The engine is auto-detected based on the 
 | Inference Steps | Single-pass | Configurable via `numInferenceSteps` (default: 5) |
 | Use Case | Voice cloning from a reference audio sample | General-purpose TTS with selectable voice presets |
 | Real Time Factor | Usually >1.0 | <1.0 |
+
+Note: though Chatterbox models support up to 23 languages, this implementation still only support 7 due to onnx models limitations. We are actively working to provide new onnx models that support all 23 langauges from the original implementation. 
 
 ## Installation
 
@@ -128,7 +130,7 @@ Before building, ensure you have the following installed:
 
 1. **Clone the repository**:
    ```bash
-   git clone git@github.com:tetherto/qvac-lib-infer-onnx-tts.git
+   git clone https://github.com/tetherto/qvac-lib-infer-onnx-tts.git
    cd qvac-lib-infer-onnx-tts
    ```
 
@@ -170,7 +172,7 @@ const { ONNXTTS } = require('@qvac/tts-onnx')
 
 ### 2. Create a Data Loader
 
-Data Loaders abstract the way model files are accessed. You can use a [`FileSystemDataLoader`](https://github.com/tetherto/qvac/tree/main/packages/qvac-lib-dl-filesystem) to stream the model file(s) from your local file system.
+Data Loaders abstract the way model files are accessed. You can use a [`FileSystemDataLoader`](https://github.com/tetherto/qvac/tree/main/packages/dl-filesystem) to stream the model file(s) from your local file system.
 
 ```js
 const FilesystemDL = require('@qvac/dl-filesystem')

@@ -22,6 +22,7 @@ struct SupertonicConfig {
   std::string vocoderPath;
   std::string voiceStyleJsonPath;
   bool supertonicMultilingual = true;
+  bool useGPU = false;
 };
 
 class ISupertonicEngine {

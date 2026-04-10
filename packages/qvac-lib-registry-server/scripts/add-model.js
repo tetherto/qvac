@@ -83,7 +83,7 @@ async function addModel () {
   const modelRequest = {
     source: modelEntry.source,
     engine: modelEntry.engine,
-    licenseId: modelEntry.license,
+    licenseId: modelEntry.licenseId,
     description: modelEntry.description || '',
     quantization: modelEntry.quantization || '',
     params: modelEntry.params || '',

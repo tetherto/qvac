@@ -1,6 +1,7 @@
 'use strict'
 
-const ONNXBase = require('@qvac/infer-base')
+const QvacLogger = require('@qvac/logging')
+const { createJobHandler } = require('@qvac/infer-base')
 const fs = require('bare-fs')
 const { platform } = require('bare-os')
 const { OcrFasttextInterface } = require('./ocr-fasttext')
@@ -13,20 +14,55 @@ const addon = require.addon.resolve('.')
 /**
  * ONNX client implementation for OCR model
  */
-class ONNXOcr extends ONNXBase {
-  // Only one job is supported at the moment, with a single job ID
-  static JOB_ID = 'job'
-
+class ONNXOcr {
   /**
-   * Creates an instance of ONNXBase.
+   * Creates an instance of ONNXOcr.
    * @constructor
    * @param {ONNXOcrArgs} args arguments for inference setup
    */
-  constructor ({ params, ...args }) {
-    super(args)
+  constructor ({ params, opts = {}, logger = null }) {
+    this.opts = opts
+    this.logger = new QvacLogger(logger)
+    this.addon = null
     this.params = params
     this._packageName = '@qvac/ocr-onnx'
     this._packageVersion = require('./package.json').version
+    this._job = createJobHandler({ cancel: () => this.addon.cancel() })
+
+    this.state = {
+      configLoaded: false,
+      weightsLoaded: false,
+      destroyed: false
+    }
+  }
+
+  /**
+   * Returns the current state of the inference client.
+   * @returns {{configLoaded: boolean, weightsLoaded: boolean, destroyed: boolean}}
+   */
+  getState () {
+    return this.state
+  }
+
+  /**
+   * Loads the model. If already loaded, unloads first.
+   */
+  async load () {
+    if (this.state.configLoaded || this.state.weightsLoaded) {
+      this.logger.info('Reload requested - unloading existing model first')
+      await this.unload()
+    }
+
+    await this._load()
+  }
+
+  /**
+   * Runs inference on the given input.
+   * @param {{ path: string, options?: Object }} input - Image input
+   * @returns {Promise<QvacResponse>}
+   */
+  async run (input) {
+    return this._runInternal(input)
   }
 
   _getDiagnosticsJSON () {
@@ -115,27 +151,24 @@ class ONNXOcr extends ONNXBase {
       }
     }
 
-    this.addon = this._createAddon(OcrFasttextInterface, onnxOcrParams, this._addonOutputCallback.bind(this), console.log)
+    this.addon = new OcrFasttextInterface(onnxOcrParams, this._addonOutputCallback.bind(this), console.log)
     await this.addon.activate()
+    this.state.configLoaded = true
   }
 
   _addonOutputCallback (addon, event, data, error) {
-    // Map C++ mangled type names to expected event names
     // Check stats FIRST (before other checks, since stats event name may contain other type names)
     if (typeof data === 'object' && data !== null && 'totalTime' in data) {
-      // Stats object received - this signals job completion
-      // Pass stats with JobEnded event (base class expects stats in JobEnded data)
-      return this._outputCallback(addon, 'JobEnded', ONNXOcr.JOB_ID, data, null)
+      return this._job.end(this.opts?.stats ? data : null)
     }
 
-    let mappedEvent = event
     if (event.includes('Error')) {
-      mappedEvent = 'Error'
-    } else if (Array.isArray(data)) {
-      // Pipeline output is an array of InferredText
-      mappedEvent = 'Output'
+      return this._job.fail(error)
     }
-    return this._outputCallback(addon, mappedEvent, ONNXOcr.JOB_ID, data, error)
+
+    if (Array.isArray(data)) {
+      return this._job.output(data)
+    }
   }
 
   async unload () {
@@ -143,6 +176,13 @@ class ONNXOcr extends ONNXBase {
       await this.addon.destroy()
       this.addon = null
     }
+    this.state.configLoaded = false
+    this.state.weightsLoaded = false
+  }
+
+  async destroy () {
+    await this.unload()
+    this.state.destroyed = true
   }
 
   async _runInternal (input) {
@@ -153,10 +193,7 @@ class ONNXOcr extends ONNXBase {
       options: input.options
     })
 
-    // Only one job is supported at the moment, with a single job ID
-    const response = this._createResponse(ONNXOcr.JOB_ID)
-
-    this._saveJobToResponseMapping(ONNXOcr.JOB_ID, response)
+    const response = this._job.start()
     return response
   }
 

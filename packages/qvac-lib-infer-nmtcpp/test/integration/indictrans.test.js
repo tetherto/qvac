@@ -19,8 +19,6 @@
  */
 
 const test = require('brittle')
-const path = require('bare-path')
-const fs = require('bare-fs')
 const TranslationNmtcpp = require('@qvac/translation-nmtcpp')
 const {
   ensureIndicTransModel,
@@ -55,23 +53,6 @@ for (const deviceConfig of DEVICE_CONFIGS) {
     t.comment(`${label} Model path: ` + modelPath)
     t.comment('Platform: ' + platform + ', isMobile: ' + isMobile)
 
-    const modelDir = path.dirname(modelPath)
-    const modelName = path.basename(modelPath)
-
-    const localLoader = {
-      ready: async () => {},
-      close: async () => {},
-      download: async (filename) => {
-        const filePath = path.join(modelDir, filename)
-        return fs.readFileSync(filePath)
-      },
-      getFileSize: async (filename) => {
-        const filePath = path.join(modelDir, filename)
-        const stats = fs.statSync(filePath)
-        return stats.size
-      }
-    }
-
     const logger = createLogger()
     const perfCollector = createPerformanceCollector()
     let model
@@ -80,19 +61,20 @@ for (const deviceConfig of DEVICE_CONFIGS) {
 
     try {
       model = new TranslationNmtcpp({
-        loader: localLoader,
+        files: {
+          model: modelPath
+        },
         params: {
           mode: 'full',
           srcLang: 'eng_Latn',
           dstLang: 'hin_Deva'
         },
-        diskPath: modelDir,
-        modelName,
+        config: {
+          modelType: TranslationNmtcpp.ModelTypes.IndicTrans,
+          use_gpu: deviceConfig.useGpu
+        },
         logger,
         opts: { stats: true }
-      }, {
-        modelType: TranslationNmtcpp.ModelTypes.IndicTrans,
-        use_gpu: deviceConfig.useGpu
       })
       model.logger.setLevel('debug')
       await model.load()

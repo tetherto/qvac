@@ -54,13 +54,13 @@ These have unit tests (`npm run test:unit`) but use simple publish workflows for
 
 ### Simple Libraries (pure JS, no native code)
 
-Packages: `qvac-lib-dl-filesystem`, `qvac-lib-dl-hyperdrive`, `qvac-lib-dl-base`, `qvac-lib-infer-base`, `qvac-lib-langdetect-text`, `qvac-cli`
+Packages: `dl-filesystem`, `dl-hyperdrive`, `dl-base`, `qvac-lib-infer-base`, `qvac-lib-langdetect-text`, `qvac-cli`
 
 | Workflow | File pattern | Purpose |
 |----------|-------------|---------|
 | Publish | `trigger-reusable-lib-<pkg>.yml` | Publish to GPR/npm on merge (no tests, no builds) |
 
-These delegate to `tetherto/qvac-devops` reusable workflows for publishing.
+These delegate to `tetherto/oss-actions` reusable workflows for publishing.
 
 ## Trigger Mechanisms
 
@@ -186,7 +186,7 @@ These are environment/configuration issues, not code bugs:
 | Disk space error | Runner out of space (common on Ubuntu) | Disk cleanup step may need updating |
 | Xcode version not found | iOS runner missing required Xcode | Update Xcode version selection in mobile workflow |
 | Android SDK / Gradle failure | Build tools version mismatch | Check `setup-android` and JDK version |
-| `merge-guard` failure | External `qvac-devops` workflow issue | Check `tetherto/qvac-devops@monorepo_update` ref |
+| `merge-guard` failure | External `oss-actions` workflow issue | Check `tetherto/oss-actions@monorepo_update` ref |
 | Workflow syntax error | YAML issue in workflow file | Validate YAML; check `gh workflow list` for errors |
 
 ### Code logic failures (implementer must fix)
@@ -304,7 +304,7 @@ Replace `<pkg>` with the package directory name (e.g., `qvac-lib-infer-llamacpp-
 
 ### External dependencies
 
-- **Reusable workflows/actions**: `tetherto/qvac-devops@monorepo_update`
+- **Reusable workflows/actions**: `tetherto/oss-actions@monorepo_update`
 - **Mobile test framework**: `tetherto/qvac-test-addon-mobile`
 - **Merge guard**: `.github/actions/release-merge-guard` (local action)
 - **Release notes script**: `.github/scripts/release-notes-check.js`

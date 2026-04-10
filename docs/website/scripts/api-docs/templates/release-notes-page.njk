@@ -1,0 +1,29 @@
+---
+title: "Release Notes — v{{ version }}"
+description: "What's new in QVAC SDK v{{ version }}"
+---
+
+{% for p in preambles %}
+{{ p.content }}
+
+{% endfor %}
+{% for section in overrides %}
+## {{ section.heading }}
+
+{{ section.content }}
+
+{% endfor %}
+{% if overrides.length > 0 %}
+---
+
+{% endif %}
+{% for category in categories %}
+## {{ category.name }}
+
+{% for entry in category.packages %}
+### @qvac/{{ entry.pkg }}
+
+{{ entry.content }}
+
+{% endfor %}
+{% endfor %}

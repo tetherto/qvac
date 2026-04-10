@@ -258,7 +258,7 @@ jobs:
           fi
 
       - name: Install Bare runtime
-        if: matrix.package == 'rag'
+        if: matrix.package == 'rag' || matrix.package == 'error'
         run: npm install -g bare
 
       # All script steps use npm run --if-present (bun lacks --if-present).
