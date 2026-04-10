@@ -32,7 +32,7 @@ jobs:
           - os: ubuntu-24.04
             platform: linux
             arch: x64
-          - os: ubuntu-24.04-arm64-private
+          - os: ubuntu-24.04-arm
             platform: linux
             arch: arm64
           - os: macos-15-large

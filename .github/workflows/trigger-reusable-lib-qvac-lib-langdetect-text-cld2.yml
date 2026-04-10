@@ -1,6 +1,6 @@
 name: General CI/CD (Qvac-lib-langdetect-text-cld2)
-# This workflow is used to call the reusable workflows in the qvac-devops repository
-# https://github.com/tetherto/qvac-devops/blob/production-workflows-tag/.github/workflows/public-reusable.yml
+# This workflow is used to call the reusable workflows in the oss-actions repository
+# https://github.com/tetherto/oss-actions/blob/production-workflows-tag/.github/workflows/public-reusable.yml
 
 on:
   push:
@@ -149,7 +149,7 @@ jobs:
           fetch-depth: 0
 
       - name: Publish to GitHub Packages (dev)
-        uses: tetherto/qvac-devops/.github/actions/publish-library-to-gpr@v1.1.8
+        uses: tetherto/oss-actions/.github/actions/publish-library-to-gpr@v1.1.0
         with:
           secret-token: ${{ secrets.GITHUB_TOKEN }}
           pat-token: ${{ secrets.PAT_TOKEN }}
@@ -168,7 +168,7 @@ jobs:
       always() &&
       needs.publish-logic.outputs.publish_release == 'true' &&
       (needs.release-merge-guard.result == 'success' || needs.release-merge-guard.result == 'skipped')
-    uses: tetherto/qvac-devops/.github/workflows/public-reusable-npm.yml@v1.1.8
+    uses: tetherto/oss-actions/.github/workflows/public-reusable-npm.yml@v1.1.0
     secrets: inherit
     with:
       workdir: packages/qvac-lib-langdetect-text-cld2
@@ -189,7 +189,7 @@ jobs:
           fetch-depth: 0
 
       - name: Publish to GitHub Packages (feature)
-        uses: tetherto/qvac-devops/.github/actions/publish-library-to-gpr@v1.1.8
+        uses: tetherto/oss-actions/.github/actions/publish-library-to-gpr@v1.1.0
         with:
           secret-token: ${{ secrets.GITHUB_TOKEN }}
           pat-token: ${{ secrets.PAT_TOKEN }}
@@ -212,7 +212,7 @@ jobs:
           fetch-depth: 0
 
       - name: Publish to GitHub Packages (tmp)
-        uses: tetherto/qvac-devops/.github/actions/publish-library-to-gpr@v1.1.8
+        uses: tetherto/oss-actions/.github/actions/publish-library-to-gpr@v1.1.0
         with:
           secret-token: ${{ secrets.GITHUB_TOKEN }}
           pat-token: ${{ secrets.PAT_TOKEN }}

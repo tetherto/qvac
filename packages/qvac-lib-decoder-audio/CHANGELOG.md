@@ -59,7 +59,7 @@ Security hardening release from comprehensive security audit.
 - Windows x64 integration tests (#92)
 
 ### Changed
-- Updated qvac-devops to v1.1.3 and enabled automatic git tag creation on npm publish (#89)
+- Updated oss-actions to v1.1.3 and enabled automatic git tag creation on npm publish (#89)
 
 ### Removed
 - GstDecoder - library now uses FFmpegDecoder only (#94)

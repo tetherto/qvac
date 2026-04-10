@@ -87,7 +87,7 @@ Ensure the consumer's `vcpkg-configuration.json` includes the Tether registry as
   "default-registry": {
     "kind": "git",
     "baseline": "<current-baseline>",
-    "repository": "git@github.com:tetherto/qvac-registry-vcpkg.git"
+    "repository": "https://github.com/tetherto/qvac-registry-vcpkg.git"
   },
   "registries": [
     {
