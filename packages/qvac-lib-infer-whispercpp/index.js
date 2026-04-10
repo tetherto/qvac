@@ -2,7 +2,7 @@
 
 const fs = require('bare-fs')
 const QvacLogger = require('@qvac/logging')
-const { createJobHandler } = require('@qvac/infer-base')
+const { createJobHandler, exclusiveRunQueue } = require('@qvac/infer-base')
 
 const { WhisperInterface } = require('./whisper')
 const { checkConfig } = require('./configChecker')
@@ -35,7 +35,7 @@ class TranscriptionWhispercpp {
     this.opts = opts
     this.logger = new QvacLogger(passThrough.logger)
     this.exclusiveRun = !!passThrough.exclusiveRun
-    this._runQueueWaiter = Promise.resolve()
+    this._withExclusiveRun = exclusiveRunQueue()
     this.state = {
       configLoaded: false,
       weightsLoaded: false,
@@ -51,7 +51,7 @@ class TranscriptionWhispercpp {
     this._config = config
 
     this.params = config.whisperConfig
-    /** Serializes inference runs; separate from `_runQueueWaiter` (reload / destroy / unload). */
+    /** Serializes inference runs; separate from `_withExclusiveRun` queue (reload / destroy / unload). */
     this._inferenceQueueWaiter = Promise.resolve()
     /** Batch append returns this id before `_activeJobId` is set; needed for `cancel(jobId)` during buffering. */
     this._pendingWhisperJobId = null
@@ -91,18 +91,6 @@ class TranscriptionWhispercpp {
     await this._load(...loadArgs)
     this.state.configLoaded = true
     this.state.weightsLoaded = true
-  }
-
-  async _withExclusiveRun (fn) {
-    const prev = this._runQueueWaiter || Promise.resolve()
-    let release
-    this._runQueueWaiter = new Promise(resolve => { release = resolve })
-    await prev
-    try {
-      return await fn()
-    } finally {
-      release()
-    }
   }
 
   async pause () {
