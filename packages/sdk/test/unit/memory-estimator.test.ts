@@ -110,14 +110,9 @@ test("schema: ctx_size rejects negative", (t: { is: Function }) => {
   t.is(result.success, false);
 });
 
-test("schema: ctx_size rejects values above 131072", (t: { is: Function }) => {
-  const result = llmConfigBaseSchema.safeParse({ ctx_size: 200000 });
-  t.is(result.success, false);
-});
-
-test("schema: ctx_size accepts 131072", (t: { is: Function }) => {
-  const result = llmConfigBaseSchema.safeParse({ ctx_size: 131072 });
-  t.is(result.success, true);
+test("schema: ctx_size accepts large values (validated by memory estimator instead)", (t: { is: Function }) => {
+  t.is(llmConfigBaseSchema.safeParse({ ctx_size: 131072 }).success, true);
+  t.is(llmConfigBaseSchema.safeParse({ ctx_size: 500000 }).success, true);
 });
 
 test("schema: ctx_size accepts 1", (t: { is: Function }) => {

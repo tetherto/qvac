@@ -17,7 +17,7 @@ const verbositySchema = z.union([
 
 // Base schema - validates types, all fields optional (for client-side validation)
 export const llmConfigBaseSchema = z.object({
-  ctx_size: z.number().int().min(1).max(131072).optional(),
+  ctx_size: z.number().int().min(1).optional(),
   temp: z.number().min(0).max(2).optional(),
   top_p: z.number().min(0).max(1).optional(),
   top_k: z.number().int().min(0).max(128).optional(),
