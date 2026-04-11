@@ -1358,6 +1358,13 @@ jobs:
           echo "   Your tests: $USER_PASSED passed (out of $USER_TEST_COUNT total)"
           echo "   Device Farm total: $TOTAL | Passed: $PASSED | Failed: $FAILED | Skipped: $SKIPPED"
 
+      - name: Re-authenticate AWS for post-run artifact download
+        if: always() && steps.schedule_run.outputs.run_arn
+        uses: aws-actions/configure-aws-credentials@8df5847569e6427dd6c4fb1cf565c83acfa8afa7 # 6.0.0
+        with:
+          role-to-assume: ${{ secrets.AWS_OIDC_ROLE_ARN }}
+          aws-region: us-west-2
+
       - name: Download Device Farm artifacts (logs)
         if: always() && steps.schedule_run.outputs.run_arn
         id: download_df_logs
