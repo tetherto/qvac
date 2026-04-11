@@ -188,7 +188,7 @@ jobs:
         if: always()
         uses: actions/upload-artifact@v4
         with:
-          name: perf-report-ocr-${{ matrix.platform }}-${{ matrix.arch }}-${{ github.run_number }}
+          name: perf-report-ocr-${{ matrix.os }}-${{ matrix.arch }}-${{ github.run_number }}
           path: |
             ${{ inputs.workdir || env.PKG_DIR }}/test/results/performance-report.json
             ${{ inputs.workdir || env.PKG_DIR }}/test/results/performance-report.html
