@@ -4,14 +4,34 @@ const fs = require('bare-fs')
 const path = require('bare-path')
 const os = require('bare-os')
 const process = require('bare-process')
-const perfReporterMod = require('../../../../scripts/test-utils/performance-reporter')
-const qualityMetricsMod = require('../../../../scripts/test-utils/quality-metrics')
 
-perfReporterMod.configure({ fs, path, process, os })
-qualityMetricsMod.configure({ fs, path })
-
-const { createPerformanceReporter } = perfReporterMod
-const { evaluateQuality, findGroundTruth } = qualityMetricsMod
+// Dynamic require via path.join prevents bare-pack from statically resolving
+// these paths during mobile bundling (they live outside the addon package).
+let createPerformanceReporter, evaluateQuality, findGroundTruth
+const _scriptBase = path.join('..', '..', '..', '..', 'scripts', 'test-utils')
+try {
+  const perfReporterMod = require(path.join(_scriptBase, 'performance-reporter'))
+  const qualityMetricsMod = require(path.join(_scriptBase, 'quality-metrics'))
+  perfReporterMod.configure({ fs, path, process, os })
+  qualityMetricsMod.configure({ fs, path })
+  createPerformanceReporter = perfReporterMod.createPerformanceReporter
+  evaluateQuality = qualityMetricsMod.evaluateQuality
+  findGroundTruth = qualityMetricsMod.findGroundTruth
+} catch (_) {
+  // Mobile bundle — provide no-ops
+  createPerformanceReporter = function () {
+    return {
+      record () {},
+      toJSON () { return { results: [] } },
+      writeReport () {},
+      writeStepSummary () {},
+      writeToConsole () {},
+      get length () { return 0 }
+    }
+  }
+  evaluateQuality = function () { return null }
+  findGroundTruth = function () { return null }
+}
 
 const platform = os.platform()
 const isMobile = platform === 'ios' || platform === 'android'
@@ -26,16 +46,18 @@ const _perfReporter = createPerformanceReporter({
 const _reportPath = path.resolve('.', 'test/results/performance-report.json')
 let _reportScheduled = false
 
+function _flushPerfReport () {
+  if (_perfReporter.length > 0) {
+    _perfReporter.writeReport(_reportPath)
+    _perfReporter.writeStepSummary()
+    _perfReporter.writeToConsole()
+  }
+}
+
 function _scheduleReportWrite () {
   if (_reportScheduled) return
   _reportScheduled = true
-  process.on('exit', () => {
-    if (_perfReporter.length > 0) {
-      _perfReporter.writeReport(_reportPath)
-      _perfReporter.writeStepSummary()
-      _perfReporter.writeToConsole()
-    }
-  })
+  process.on('exit', _flushPerfReport)
 }
 
 // Windows CI runners have limited memory (~7GB): use BASIC optimization,
@@ -460,5 +482,6 @@ module.exports = {
   DOCTR_MODELS_DIR,
   formatOCRPerformanceMetrics,
   safeUnload,
-  runDoctrOCR
+  runDoctrOCR,
+  flushPerfReport: _flushPerfReport
 }
