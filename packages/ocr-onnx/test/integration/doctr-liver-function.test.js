@@ -18,7 +18,9 @@ test('DocTR liver function - download models', { timeout: DOCTR_TEST_TIMEOUT }, 
 
 const EXPECTED_WORDS = [
   'bilirubin', 'sgot', 'sgpt', 'alkaline', 'phosphatase',
-  'albumin', 'globulin', 'protein', 'serum', 'pathology'
+  'albumin', 'globulin', 'protein', 'serum', 'pathology',
+  'biochemistry', 'hospital', 'conjugated', 'unconjugated',
+  'ratio', 'specimen', 'investigation', 'total'
 ]
 
 function runLiverFunctionTest (ep) {

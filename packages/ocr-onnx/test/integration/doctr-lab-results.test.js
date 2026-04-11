@@ -17,7 +17,10 @@ test('DocTR lab results - download models', { timeout: DOCTR_TEST_TIMEOUT }, asy
 })
 
 const EXPECTED_WORDS = [
-  'parameter', 'results', 'calculated', 'direct', 'values', 'clinical', 'blood', 'patient'
+  'parameter', 'results', 'calculated', 'direct', 'values',
+  'clinical', 'blood', 'patient', 'medivista', 'hospital',
+  'biochemistry', 'department', 'arterial', 'gases',
+  'oxygen', 'electrolyte', 'metabolite', 'oximetry'
 ]
 
 function runLabResultsTest (ep) {

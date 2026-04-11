@@ -19,7 +19,9 @@ test('DocTR CT scan - download models', { timeout: DOCTR_TEST_TIMEOUT }, async f
 const EXPECTED_WORDS = [
   'diagnostic', 'imaging', 'computed', 'tomography',
   'chest', 'abdomen', 'lung', 'liver', 'pancreas',
-  'gallbladder', 'spleen', 'radiologist'
+  'gallbladder', 'spleen', 'radiologist', 'allied',
+  'medical', 'center', 'patient', 'heart', 'trachea',
+  'vascular', 'normal'
 ]
 
 function runCtScanTest (ep) {
