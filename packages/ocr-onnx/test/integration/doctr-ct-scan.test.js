@@ -16,39 +16,48 @@ test('DocTR CT scan - download models', { timeout: DOCTR_TEST_TIMEOUT }, async f
   t.ok(CRNN_MOBILENET, 'crnn_mobilenet model available')
 })
 
-test('DocTR CT scan - db_mobilenet + crnn_mobilenet with straightenPages', { timeout: DOCTR_TEST_TIMEOUT }, async function (t) {
-  const imagePath = getImagePath('/test/images/ct_scan_report.png')
+const EXPECTED_WORDS = [
+  'diagnostic', 'imaging', 'computed', 'tomography',
+  'chest', 'abdomen', 'lung', 'liver', 'pancreas',
+  'gallbladder', 'spleen', 'radiologist'
+]
 
-  t.comment('Testing DocTR on CT scan diagnostic report image')
-  t.comment('Detector: db_mobilenet_v3_large, Recognizer: crnn_mobilenet_v3_small (CTC)')
-  t.comment('straightenPages: true')
+function runCtScanTest (ep) {
+  const useGPU = ep === 'gpu'
+  const tag = ep.toUpperCase()
 
-  const { results, stats } = await runDoctrOCR(t, {
-    pathDetector: DB_MOBILENET,
-    pathRecognizer: CRNN_MOBILENET,
-    decodingMethod: 'ctc',
-    straightenPages: true
-  }, imagePath)
+  test(`DocTR CT scan [${tag}] - db_mobilenet + crnn_mobilenet`, { timeout: DOCTR_TEST_TIMEOUT }, async function (t) {
+    const imagePath = getImagePath('/test/images/ct_scan_report.png')
 
-  const texts = results.map(r => r.text)
-  t.comment('Detected texts: ' + JSON.stringify(texts))
-  t.comment(formatOCRPerformanceMetrics('[DocTR ct_scan_report]', stats, texts, { imagePath }))
+    t.comment(`Testing DocTR on CT scan diagnostic report image [${tag}]`)
+    t.comment('Detector: db_mobilenet_v3_large, Recognizer: crnn_mobilenet_v3_small (CTC)')
+    t.comment('straightenPages: true, useGPU: ' + useGPU)
 
-  t.ok(results.length > 0, `should detect text regions, got ${results.length}`)
+    const { results, stats } = await runDoctrOCR(t, {
+      pathDetector: DB_MOBILENET,
+      pathRecognizer: CRNN_MOBILENET,
+      decodingMethod: 'ctc',
+      straightenPages: true,
+      useGPU
+    }, imagePath)
 
-  const lowerTexts = texts.map(w => w.toLowerCase())
+    const texts = results.map(r => r.text)
+    t.comment('Detected texts: ' + JSON.stringify(texts))
+    t.comment(formatOCRPerformanceMetrics(`[DocTR ct_scan_report] [${tag}]`, stats, texts, { imagePath }))
 
-  const expectedWords = [
-    'diagnostic', 'imaging', 'computed', 'tomography',
-    'chest', 'abdomen', 'lung', 'liver', 'pancreas',
-    'gallbladder', 'spleen', 'radiologist'
-  ]
-  for (const word of expectedWords) {
-    t.ok(
-      lowerTexts.some(w => w.includes(word)),
-      `should detect "${word}" in CT scan report`
-    )
-  }
+    t.ok(results.length > 0, `should detect text regions, got ${results.length}`)
 
-  t.pass('DocTR CT scan report test completed successfully')
-})
+    const lowerTexts = texts.map(w => w.toLowerCase())
+    for (const word of EXPECTED_WORDS) {
+      t.ok(
+        lowerTexts.some(w => w.includes(word)),
+        `should detect "${word}" in CT scan report`
+      )
+    }
+
+    t.pass(`DocTR CT scan report [${tag}] completed successfully`)
+  })
+}
+
+runCtScanTest('cpu')
+runCtScanTest('gpu')

@@ -16,43 +16,46 @@ test('DocTR lab results - download models', { timeout: DOCTR_TEST_TIMEOUT }, asy
   t.ok(CRNN_MOBILENET, 'crnn_mobilenet model available')
 })
 
-test('DocTR lab results - db_mobilenet + crnn_mobilenet with straightenPages', { timeout: DOCTR_TEST_TIMEOUT }, async function (t) {
-  const imagePath = getImagePath('/test/images/lab_results.png')
+const EXPECTED_WORDS = [
+  'parameter', 'results', 'calculated', 'direct', 'values', 'clinical', 'blood', 'patient'
+]
 
-  t.comment('Testing DocTR on medical lab results image')
-  t.comment('Detector: db_mobilenet_v3_large, Recognizer: crnn_mobilenet_v3_small (CTC)')
-  t.comment('straightenPages: true')
+function runLabResultsTest (ep) {
+  const useGPU = ep === 'gpu'
+  const tag = ep.toUpperCase()
 
-  const { results, stats } = await runDoctrOCR(t, {
-    pathDetector: DB_MOBILENET,
-    pathRecognizer: CRNN_MOBILENET,
-    decodingMethod: 'ctc',
-    straightenPages: true
-  }, imagePath)
+  test(`DocTR lab results [${tag}] - db_mobilenet + crnn_mobilenet`, { timeout: DOCTR_TEST_TIMEOUT }, async function (t) {
+    const imagePath = getImagePath('/test/images/lab_results.png')
 
-  const texts = results.map(r => r.text)
-  t.comment('Detected texts: ' + JSON.stringify(texts))
-  t.comment('Full output: ' + JSON.stringify(results.map(r => ({
-    text: r.text,
-    confidence: r.confidence.toFixed(3)
-  })), null, 2))
-  t.comment(formatOCRPerformanceMetrics('[DocTR lab_results]', stats, texts, { imagePath }))
+    t.comment(`Testing DocTR on medical lab results image [${tag}]`)
+    t.comment('Detector: db_mobilenet_v3_large, Recognizer: crnn_mobilenet_v3_small (CTC)')
+    t.comment('straightenPages: true, useGPU: ' + useGPU)
 
-  t.ok(results.length > 0, `should detect text regions, got ${results.length}`)
+    const { results, stats } = await runDoctrOCR(t, {
+      pathDetector: DB_MOBILENET,
+      pathRecognizer: CRNN_MOBILENET,
+      decodingMethod: 'ctc',
+      straightenPages: true,
+      useGPU
+    }, imagePath)
 
-  // Verify some expected words from the lab results document
-  const lowerTexts = texts.map(w => w.toLowerCase())
-  t.comment('Lowercase texts: ' + JSON.stringify(lowerTexts))
+    const texts = results.map(r => r.text)
+    t.comment('Detected texts: ' + JSON.stringify(texts))
+    t.comment(formatOCRPerformanceMetrics(`[DocTR lab_results] [${tag}]`, stats, texts, { imagePath }))
 
-  const expectedWords = [
-    'parameter', 'results', 'calculated', 'direct', 'values', 'clinical', 'blood', 'patient'
-  ]
-  for (const word of expectedWords) {
-    t.ok(
-      lowerTexts.some(w => w.includes(word)),
-      `should detect "${word}" in lab results`
-    )
-  }
+    t.ok(results.length > 0, `should detect text regions, got ${results.length}`)
 
-  t.pass('DocTR lab results test completed successfully')
-})
+    const lowerTexts = texts.map(w => w.toLowerCase())
+    for (const word of EXPECTED_WORDS) {
+      t.ok(
+        lowerTexts.some(w => w.includes(word)),
+        `should detect "${word}" in lab results`
+      )
+    }
+
+    t.pass(`DocTR lab results [${tag}] completed successfully`)
+  })
+}
+
+runLabResultsTest('cpu')
+runLabResultsTest('gpu')
