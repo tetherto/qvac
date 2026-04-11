@@ -359,6 +359,9 @@ jobs:
           cp test/images/english.bmp "$ASSETS_DIR/english.bmp"
           cp test/images/french.bmp "$ASSETS_DIR/french.bmp"
           cp test/images/lab_results.png "$ASSETS_DIR/lab_results.png"
+          cp test/images/liver_function_test.png "$ASSETS_DIR/liver_function_test.png"
+          cp test/images/clinical_chemistry.png "$ASSETS_DIR/clinical_chemistry.png"
+          cp test/images/ct_scan_report.png "$ASSETS_DIR/ct_scan_report.png"
           echo "✅ Test assets copied"
           ls -la "$ASSETS_DIR/"
 
