@@ -348,7 +348,7 @@ function formatOCRPerformanceMetrics (label, stats, outputTexts = [], opts) {
     - Detected texts: ${JSON.stringify(outputTexts)}`
 
   if (quality) {
-    out += `\n    --- Quality ---`
+    out += '\n    --- Quality ---'
     if (quality.cer !== undefined) out += `\n    - CER: ${(quality.cer * 100).toFixed(1)}%`
     if (quality.wer !== undefined) out += `\n    - WER: ${(quality.wer * 100).toFixed(1)}%`
     if (quality.keyword_detection_rate !== undefined) {
