@@ -23,7 +23,10 @@ const ERR_CODES = Object.freeze({
   ENCODER_NOT_FOUND: 24013,
   DECODER_NOT_FOUND: 24014,
   INVALID_CONFIG: 24015,
-  JOB_ALREADY_RUNNING: 24016
+  JOB_ALREADY_RUNNING: 24016,
+  BUFFER_LIMIT_EXCEEDED: 24017,
+  INSTANCE_DESTROYED: 24018,
+  JOB_CANCELLED: 24019
 })
 
 addCodes({
@@ -90,6 +93,18 @@ addCodes({
   [ERR_CODES.JOB_ALREADY_RUNNING]: {
     name: 'JOB_ALREADY_RUNNING',
     message: () => 'Cannot set new job: a job is already set or being processed'
+  },
+  [ERR_CODES.BUFFER_LIMIT_EXCEEDED]: {
+    name: 'BUFFER_LIMIT_EXCEEDED',
+    message: (message) => `Audio buffer size limit exceeded: ${message}`
+  },
+  [ERR_CODES.INSTANCE_DESTROYED]: {
+    name: 'INSTANCE_DESTROYED',
+    message: () => 'Cannot load: instance has been destroyed'
+  },
+  [ERR_CODES.JOB_CANCELLED]: {
+    name: 'JOB_CANCELLED',
+    message: () => 'Job cancelled'
   }
 }, {
   name,

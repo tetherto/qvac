@@ -18,7 +18,14 @@ const ERR_CODES = Object.freeze({
   FAILED_TO_PAUSE: 6008,
   VAD_MODEL_REQUIRED: 6009,
   JOB_ALREADY_RUNNING: 6010,
-  INVALID_AUDIO_INPUT: 6011
+  INVALID_AUDIO_INPUT: 6011,
+  FAILED_TO_START_STREAMING: 6012,
+  FAILED_TO_APPEND_STREAMING: 6013,
+  FAILED_TO_END_STREAMING: 6014,
+  BUFFER_LIMIT_EXCEEDED: 6015,
+  FAILED_TO_STOP: 6016,
+  MODEL_REQUIRED: 6017,
+  VAD_MODEL_NOT_FOUND: 6018
 })
 
 addCodes({
@@ -65,6 +72,34 @@ addCodes({
   [ERR_CODES.INVALID_AUDIO_INPUT]: {
     name: 'INVALID_AUDIO_INPUT',
     message: (message) => `Invalid audio input: ${message}`
+  },
+  [ERR_CODES.FAILED_TO_START_STREAMING]: {
+    name: 'FAILED_TO_START_STREAMING',
+    message: (message) => `Failed to start streaming session: ${message}`
+  },
+  [ERR_CODES.FAILED_TO_APPEND_STREAMING]: {
+    name: 'FAILED_TO_APPEND_STREAMING',
+    message: (message) => `Failed to append streaming audio: ${message}`
+  },
+  [ERR_CODES.FAILED_TO_END_STREAMING]: {
+    name: 'FAILED_TO_END_STREAMING',
+    message: (message) => `Failed to end streaming session: ${message}`
+  },
+  [ERR_CODES.BUFFER_LIMIT_EXCEEDED]: {
+    name: 'BUFFER_LIMIT_EXCEEDED',
+    message: (message) => `Audio buffer size limit exceeded: ${message}`
+  },
+  [ERR_CODES.FAILED_TO_STOP]: {
+    name: 'FAILED_TO_STOP',
+    message: (message) => `Failed to stop addon, error: ${message}`
+  },
+  [ERR_CODES.MODEL_REQUIRED]: {
+    name: 'MODEL_REQUIRED',
+    message: (message) => `Model is required: ${message}`
+  },
+  [ERR_CODES.VAD_MODEL_NOT_FOUND]: {
+    name: 'VAD_MODEL_NOT_FOUND',
+    message: (message) => `VAD model file not found: ${message}`
   }
 }, {
   name,

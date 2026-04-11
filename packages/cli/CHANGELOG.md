@@ -1,4 +1,37 @@
-# Changelog 
+# Changelog
+
+## [0.2.3]
+
+Release Date: 2026-04-06
+
+## 🐞 Fixes
+
+- Add `sdcpp-generation` (diffusion) to `BUILTIN_PLUGINS` for mobile worker bundle. Without this, mobile apps using `qvac bundle sdk` would get "Plugin not found" errors for the diffusion model type. (see PR [#1338](https://github.com/tetherto/qvac/pull/1338))
+- Update README built-in plugins list to include `parakeet-transcription` and `sdcpp-generation`.
+
+## [0.2.2]
+
+Release Date: 2026-03-19
+
+## 🔌 API
+
+- Add OpenAI-compatible REST API server (qvac serve) - Part I. (see PR [#753](https://github.com/tetherto/qvac/pull/753)) - See [API changes](./changelog/0.2.2/api.md)
+- Bump LLM/embed addons and wire per-request generation params. (see PR [#895](https://github.com/tetherto/qvac/pull/895))
+- Add POST /v1/audio/transcriptions to qvac serve OpenAI adapter. (see PR [#915](https://github.com/tetherto/qvac/pull/915)) - See [API changes](./changelog/0.2.2/api.md)
+
+## 🐞 Fixes
+
+- Resolve Windows EFTYPE error when spawning bare-pack. (see PR [#949](https://github.com/tetherto/qvac/pull/949))
+- Normalize composite JSON Schema types in tool parameter validation. (see PR [#964](https://github.com/tetherto/qvac/pull/964))
+
+## 🧹 Chores
+
+- Rename qvac-cli package to cli. (see PR [#644](https://github.com/tetherto/qvac/pull/644))
+- Migrate CLI package from JavaScript to TypeScript. (see PR [#722](https://github.com/tetherto/qvac/pull/722))
+
+## ⚙️ Infrastructure
+
+- Add explicit build step to CLI publish workflow. (see PR [#1010](https://github.com/tetherto/qvac/pull/1010))
 
 ## [0.1.3]
 
@@ -37,4 +70,3 @@ Release Date: 2026-02-11
 ### ⚙️ Infrastructure
 
 - Add GPR scope rewrite action and rename CLI to @qvac/cli. (see PR [#230](https://github.com/tetherto/qvac/pull/230))
-

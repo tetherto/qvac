@@ -53,14 +53,14 @@ Every addon package uses two registries configured in `vcpkg-configuration.json`
   "default-registry": {
     "kind": "git",
     "baseline": "<commit-sha>",
-    "repository": "git@github.com:tetherto/qvac-registry-vcpkg.git"
+    "repository": "https://github.com/tetherto/qvac-registry-vcpkg.git"
   }
 }
 ```
 
 Hosts QVAC-specific packages: `qvac-fabric`, `qvac-lib-inference-addon-cpp`, `qvac-lint-cpp`, `onnxruntime`, `whisper-cpp`, `tokenizers-cpp`, `bergamot-translator`, `sentencepiece`, `ssplit`, and others.
 
-**Authentication**: Requires `GH_TOKEN` (GitHub PAT) with read access to `tetherto/qvac-registry-vcpkg`. In CI, git credentials are configured automatically. Locally, SSH key access to the repo is needed (note the `git@github.com:` URL).
+**Authentication**: Requires `GH_TOKEN` (GitHub PAT) with read access to `tetherto/qvac-registry-vcpkg`. In CI, git credentials are configured automatically. Locally, HTTPS access works with token-based auth or credential helpers.
 
 ### 2. Microsoft Upstream Registry
 
@@ -345,7 +345,7 @@ env:
 This stores compiled vcpkg packages as files in a local directory, which is then cached using `actions/cache`:
 
 ```yaml
-- uses: actions/cache@v4
+- uses: actions/cache@668228422ae6a00e4ad889ee87cd7109ec5666a7 # 5.0.4
   with:
     path: ${{ env.WORKDIR }}/vcpkg/cache
     key: vcpkg-<platform>-<arch>-${{ hashFiles('vcpkg.json', 'vcpkg-configuration.json') }}
@@ -497,7 +497,7 @@ If ONNX Runtime symbols conflict at runtime:
 
 If `bare-make generate` fails with git authentication errors:
 - Verify `GH_TOKEN` is set and has read access to `tetherto/qvac-registry-vcpkg`
-- For local dev with SSH: verify `git@github.com:tetherto/qvac-registry-vcpkg.git` is accessible
+- For local dev with SSH: verify `https://github.com/tetherto/qvac-registry-vcpkg.git` is accessible
 - In CI: check that the `.npmrc` setup step and git credential configuration ran successfully
 - Set `GIT_TERMINAL_PROMPT=0` to prevent hanging on auth prompts
 

@@ -72,6 +72,9 @@ on:
         type: string
         default: 'packages/qvac-lib-infer-whispercpp'
 
+permissions:
+  contents: read
+
 jobs:
   generate-matrix:
     runs-on: ubuntu-latest
@@ -219,6 +222,7 @@ jobs:
   benchmark-whispercpp:
     needs: generate-matrix
     runs-on: ubuntu-latest
+    environment: release
     timeout-minutes: 1440
     env:
       GITHUB_TOKEN: ${{ secrets.PAT_TOKEN }}
@@ -226,6 +230,7 @@ jobs:
     permissions:
       contents: read
       packages: read
+      id-token: write
 
     strategy:
       fail-fast: false
@@ -285,7 +290,7 @@ jobs:
           df -h
 
       - name: Checkout repository
-        uses: actions/checkout@v6
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # 6.0.2
         with:
           submodules: recursive
 
@@ -325,7 +330,7 @@ jobs:
           sudo apt-get install -y ffmpeg build-essential cmake unzip curl
 
       - name: Set up Python
-        uses: actions/setup-python@v6
+        uses: actions/setup-python@a309ff8b426b58ec0e2a45f0f869d46889d02405 # 6.2.0
         with:
           python-version: '3.14'
 
@@ -381,13 +386,16 @@ jobs:
           echo "Custom model converted and saved to: examples/$CUSTOM_MODEL_NAME"
           ls -lh "examples/$CUSTOM_MODEL_NAME"
 
+      - name: Configure AWS credentials via OIDC
+        if: github.event.inputs.language == 'arabic'
+        uses: aws-actions/configure-aws-credentials@8df5847569e6427dd6c4fb1cf565c83acfa8afa7 # 6.0.0
+        with:
+          role-to-assume: ${{ secrets.AWS_OIDC_ROLE_ARN }}
+          aws-region: eu-central-1
+
       - name: Download Arabic Common Voice dataset from S3
         if: github.event.inputs.language == 'arabic'
         working-directory: ${{ env.WORKDIR }}
-        env:
-          AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
-          AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
-          AWS_DEFAULT_REGION: us-east-1
         run: |
           ARABIC_DATASET="${{ github.event.inputs.arabic_dataset }}"
 

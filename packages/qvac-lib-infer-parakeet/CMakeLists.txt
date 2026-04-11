@@ -1,6 +1,9 @@
 cmake_minimum_required(VERSION 3.25)
 
 option(BUILD_TESTING "Build tests" OFF)
+option(ENABLE_COVERAGE "Enable coverage" OFF)
+option(MOBILE_DYNAMIC_LINK "Use dynamic linking for ONNX Runtime on mobile" ON)
+
 if(BUILD_TESTING)
   list(APPEND VCPKG_MANIFEST_FEATURES "tests")
 endif()
@@ -18,20 +21,19 @@ project(qvac_lib_infer_parakeet
 
 if(CMAKE_SYSTEM_NAME STREQUAL "Linux")
   add_compile_options(-stdlib=libc++)
-  add_link_options(-stdlib=libc++)
+  add_link_options(-stdlib=libc++ -static-libstdc++)
 endif()
 
-# Find dependencies
 find_path(
   QVAC_LIB_INFERENCE_ADDON_CPP_INCLUDE_DIRS
   "qvac-lib-inference-addon-cpp/ModelInterfaces.hpp"
   REQUIRED
 )
 
-# Find ONNX Runtime
-find_package(onnxruntime CONFIG REQUIRED)
+set(qvac-onnx_DIR "${CMAKE_CURRENT_SOURCE_DIR}/node_modules/@qvac/onnx/prebuilds/share/qvac-onnx/cmake")
+find_package(qvac-onnx CONFIG REQUIRED)
 
-# Find nlohmann_json (for tokenizer.json parsing in CTC models)
+find_package(Eigen3 CONFIG REQUIRED)
 find_package(nlohmann_json CONFIG REQUIRED)
 
 set(CMAKE_CXX_STANDARD 20)
@@ -43,7 +45,6 @@ if(WIN32)
   add_definitions( -DNOMINMAX -DWIN32_LEAN_AND_MEAN -DNOGDI )
 endif()
 
-# Build parakeet core lib
 set(LIB_NAME parakeet_model_core)
 set(LIB_SRCS_PATH ${PROJECT_SOURCE_DIR}/addon/src/model-interface)
 
@@ -68,14 +69,6 @@ target_include_directories(${LIB_NAME} PUBLIC
         ${QVAC_LIB_INFERENCE_ADDON_CPP_INCLUDE_DIRS}
 )
 
-# Use static linking for mobile platforms (ONNX runtime must be bundled in the binary)
-if(ANDROID OR IOS)
-  target_link_libraries(${LIB_NAME} PRIVATE onnxruntime::onnxruntime_static nlohmann_json::nlohmann_json)
-else()
-  target_link_libraries(${LIB_NAME} PRIVATE onnxruntime::onnxruntime nlohmann_json::nlohmann_json)
-endif()
-
-# Create the Bare addon module using bare-make's helper
 add_bare_module(qvac_lib_infer_parakeet EXPORTS)
 
 if(CMAKE_SYSTEM_NAME STREQUAL "Linux")
@@ -99,27 +92,42 @@ target_include_directories(
 
 target_compile_definitions(${qvac_lib_infer_parakeet} PUBLIC JS_LOGGER)
 
-# Use static linking for mobile platforms
-if(ANDROID OR IOS)
+if((ANDROID OR (APPLE AND CMAKE_SYSTEM_NAME STREQUAL "iOS")) AND NOT MOBILE_DYNAMIC_LINK)
+  target_link_libraries(${LIB_NAME} PRIVATE qvac-onnx::qvac-onnx-static nlohmann_json::nlohmann_json Eigen3::Eigen)
+
   target_link_libraries(
     ${qvac_lib_infer_parakeet}
     PRIVATE
       ${LIB_NAME}
-      onnxruntime::onnxruntime_static
+      qvac-onnx::qvac-onnx-static
   )
 else()
+  target_link_libraries(${LIB_NAME} PRIVATE qvac-onnx::headers nlohmann_json::nlohmann_json Eigen3::Eigen)
+
+  include_bare_module("@qvac/onnx" qvac_onnx_target PREBUILD)
+
   target_link_libraries(
     ${qvac_lib_infer_parakeet}
     PRIVATE
       ${LIB_NAME}
-      onnxruntime::onnxruntime
+      qvac-onnx::headers
   )
+  target_link_libraries(
+    ${qvac_lib_infer_parakeet}_module
+    PRIVATE
+      ${qvac_onnx_target}_module
+  )
+
+  bare_target(host)
+  bare_module_target("." _unused NAME addon_name)
+  install(FILES $<TARGET_FILE:${qvac_onnx_target}_module>
+    DESTINATION ${host}/${addon_name}
+    RENAME qvac__onnx@0.bare)
 endif()
 
-# Platform-specific settings
 if(WIN32)
   target_compile_options(${qvac_lib_infer_parakeet} PRIVATE "/utf-8")
-  
+
   target_link_libraries(
     ${qvac_lib_infer_parakeet}
     PRIVATE
@@ -127,12 +135,10 @@ if(WIN32)
   )
 endif()
 
-# Android-specific settings
 if(ANDROID)
   find_package(Vulkan REQUIRED)
   target_link_libraries(${qvac_lib_infer_parakeet} PRIVATE ${Vulkan_LIBRARY})
-  
-  # Strip vcpkg installed binaries for Android builds to reduce size
+
   find_program(LLVM_STRIP llvm-strip)
 
   if(NOT LLVM_STRIP)
@@ -144,7 +150,6 @@ if(ANDROID)
     set(VCPKG_INSTALLED_DIR "${CMAKE_BINARY_DIR}/_vcpkg/${VCPKG_TARGET_TRIPLET}")
     set(LIBS_DIR_PATH "${VCPKG_INSTALLED_DIR}/lib")
 
-    # Strip each library if it exists
     foreach(LIB ${LIBRARIES_TO_STRIP})
       set(LIB_PATH "${LIBS_DIR_PATH}/${LIB}")
       if(EXISTS "${LIB_PATH}")
@@ -155,7 +160,20 @@ if(ANDROID)
   endif()
 endif()
 
-# Note: We target the _module shared library, not the object library
+if(APPLE)
+  set_target_properties(
+    ${qvac_lib_infer_parakeet}
+    PROPERTIES
+      BUILD_RPATH "@loader_path"
+      INSTALL_RPATH "@loader_path"
+      MACOSX_RPATH ON
+  )
+  target_link_options(
+    ${qvac_lib_infer_parakeet}
+    PRIVATE "-Wl,-rpath,@loader_path"
+  )
+endif()
+
 if(UNIX AND NOT APPLE)
   target_link_options(
     ${qvac_lib_infer_parakeet}_module
@@ -163,7 +181,6 @@ if(UNIX AND NOT APPLE)
       -Wl,--version-script=${CMAKE_CURRENT_SOURCE_DIR}/symbols.map
   )
 elseif(APPLE)
-  # macOS uses -exported_symbols_list instead of version script
   target_link_options(
     ${qvac_lib_infer_parakeet}_module
     PRIVATE
@@ -172,101 +189,17 @@ elseif(APPLE)
   )
 endif()
 
-# Note: RPATH is fixed post-install below since cmake-bare overrides target properties
-
-# Compute prebuild architecture directory (matches bare-make conventions)
 bare_platform(PREBUILD_PLATFORM)
 bare_arch(PREBUILD_ARCH)
 set(PREBUILD_DIR "${CMAKE_SOURCE_DIR}/prebuilds/${PREBUILD_PLATFORM}-${PREBUILD_ARCH}")
 
-# Install ONNX Runtime shared libraries alongside the addon
-get_target_property(ORT_LIB_LOCATION onnxruntime::onnxruntime IMPORTED_LOCATION_RELEASE)
-if(NOT ORT_LIB_LOCATION)
-  get_target_property(ORT_LIB_LOCATION onnxruntime::onnxruntime IMPORTED_LOCATION)
-endif()
-if(ORT_LIB_LOCATION)
-  get_filename_component(ORT_LIB_DIR "${ORT_LIB_LOCATION}" DIRECTORY)
-  
-  if(UNIX AND NOT APPLE)
-    # Linux: Install main shared library with symlinks
-    install(FILES
-      "${ORT_LIB_DIR}/libonnxruntime.so.1.21.0"
-      DESTINATION "${PREBUILD_DIR}"
-      OPTIONAL
-    )
-    install(CODE "
-      execute_process(COMMAND ${CMAKE_COMMAND} -E create_symlink libonnxruntime.so.1.21.0 ${PREBUILD_DIR}/libonnxruntime.so.1)
-      execute_process(COMMAND ${CMAKE_COMMAND} -E create_symlink libonnxruntime.so.1 ${PREBUILD_DIR}/libonnxruntime.so)
-    ")
-    # Install providers shared library
-    install(FILES
-      "${ORT_LIB_DIR}/libonnxruntime_providers_shared.so"
-      DESTINATION "${PREBUILD_DIR}"
-      OPTIONAL
-    )
-    # Bundle libc++ runtime libs required by onnxruntime's shared library
-    install(CODE "
-      foreach(_lib libc++.so.1 libc++abi.so.1 libunwind.so.1)
-        execute_process(
-          COMMAND ${CMAKE_CXX_COMPILER} -stdlib=libc++ -print-file-name=\${_lib}
-          OUTPUT_VARIABLE _lib_path OUTPUT_STRIP_TRAILING_WHITESPACE
-        )
-        if(EXISTS \"\${_lib_path}\")
-          get_filename_component(_real_path \"\${_lib_path}\" REALPATH)
-          file(INSTALL \"\${_real_path}\" DESTINATION \"${PREBUILD_DIR}\")
-          get_filename_component(_real_name \"\${_real_path}\" NAME)
-          if(NOT _real_name STREQUAL \"\${_lib}\")
-            file(CREATE_LINK \"\${_real_name}\" \"${PREBUILD_DIR}/\${_lib}\" SYMBOLIC)
-          endif()
-          message(STATUS \"Bundled \${_lib} -> \${_real_path}\")
-        endif()
-      endforeach()
-    ")
-  elseif(APPLE)
-    # macOS: Install dylib files
-    file(GLOB ORT_DYLIBS "${ORT_LIB_DIR}/libonnxruntime*.dylib")
-    install(FILES ${ORT_DYLIBS}
-      DESTINATION "${PREBUILD_DIR}"
-      OPTIONAL
-    )
-  elseif(WIN32)
-    # Windows: Install DLL files
-    # DLLs are usually in bin/ directory, not lib/
-    get_filename_component(ORT_ROOT_DIR "${ORT_LIB_DIR}" DIRECTORY)
-    file(GLOB ORT_DLLS "${ORT_ROOT_DIR}/bin/onnxruntime*.dll")
-    if(NOT ORT_DLLS)
-      file(GLOB ORT_DLLS "${ORT_LIB_DIR}/onnxruntime*.dll")
-    endif()
-    install(FILES ${ORT_DLLS}
-      DESTINATION "${PREBUILD_DIR}"
-      OPTIONAL
-    )
-  endif()
-endif()
-
-# Fix RPATH after install (cmake-bare sets a different RPATH that we need to override)
-if(UNIX AND NOT APPLE AND NOT ANDROID)
-  find_program(PATCHELF patchelf)
-  if(PATCHELF)
-    install(CODE "
-      execute_process(COMMAND ${PATCHELF} --set-rpath \"\$ORIGIN\" \"${PREBUILD_DIR}/qvac__transcription-parakeet.bare\")
-    ")
-  endif()
-elseif(APPLE)
-  # macOS: Add @loader_path to RPATH so the addon can find dylibs in the same directory
-  install(CODE "
-    execute_process(COMMAND install_name_tool -add_rpath @loader_path \"${PREBUILD_DIR}/qvac__transcription-parakeet.bare\")
-  ")
-elseif(ANDROID)
-  # Android: Strip debug symbols from the final binary using NDK's llvm-strip
-  # CMAKE_STRIP is set by the Android toolchain, or we find it in NDK
+if(ANDROID)
   if(CMAKE_STRIP)
     set(ANDROID_STRIP_TOOL "${CMAKE_STRIP}")
   else()
-    # Fallback: construct path from ANDROID_NDK
     set(ANDROID_STRIP_TOOL "$ENV{ANDROID_NDK}/toolchains/llvm/prebuilt/linux-x86_64/bin/llvm-strip")
   endif()
-  
+
   install(CODE "
     set(STRIP_TOOL \"${ANDROID_STRIP_TOOL}\")
     set(BINARY_PATH \"${PREBUILD_DIR}/qvac__transcription-parakeet.bare\")
@@ -283,7 +216,6 @@ elseif(ANDROID)
   ")
 endif()
 
-# Build tests if enabled
 if(BUILD_TESTING)
     enable_testing()
     find_package(GTest CONFIG REQUIRED)
@@ -296,35 +228,50 @@ if(BUILD_TESTING)
         addon/src/model-interface/parakeet/ParakeetModel.cpp
         addon/src/model-interface/parakeet/ParakeetConfig.cpp
     )
-    
-    target_include_directories(parakeet_tests 
-      PRIVATE 
+
+    target_include_directories(parakeet_tests
+      PRIVATE
         addon/src
         ${QVAC_LIB_INFERENCE_ADDON_CPP_INCLUDE_DIRS}
     )
-    
-    target_link_libraries(parakeet_tests 
-      PRIVATE 
+
+    if(TARGET qvac-onnx::qvac-onnx-static)
+      set(QVAC_TEST_ORT_TARGET qvac-onnx::qvac-onnx-static)
+    elseif(DEFINED qvac_onnx_target)
+      set(QVAC_TEST_ORT_TARGET ${qvac_onnx_target}_module)
+    else()
+      set(QVAC_TEST_ORT_TARGET qvac-onnx::headers)
+    endif()
+
+    target_link_libraries(parakeet_tests
+      PRIVATE
         GTest::gmock_main
-        onnxruntime::onnxruntime
+        qvac-onnx::headers
+        ${QVAC_TEST_ORT_TARGET}
         nlohmann_json::nlohmann_json
+        Eigen3::Eigen
     )
-    
-    # Coverage configuration
+
     if(ENABLE_COVERAGE)
-        target_compile_options(parakeet_tests PRIVATE 
-            -fprofile-instr-generate 
+        target_compile_options(parakeet_tests PRIVATE
+            -fprofile-instr-generate
             -fcoverage-mapping
         )
-        target_compile_options(parakeet_model_core PRIVATE 
-            -fprofile-instr-generate 
+        target_compile_options(parakeet_model_core PRIVATE
+            -fprofile-instr-generate
             -fcoverage-mapping
         )
-        target_link_options(parakeet_tests PRIVATE 
+        target_link_options(parakeet_tests PRIVATE
             -fprofile-instr-generate
         )
         message(STATUS "LLVM Coverage enabled for parakeet tests")
     endif()
-    
-    gtest_discover_tests(parakeet_tests)
+    set(_onnx_prebuilds "${CMAKE_CURRENT_SOURCE_DIR}/node_modules/@qvac/onnx/prebuilds/${PREBUILD_PLATFORM}-${PREBUILD_ARCH}")
+    if(EXISTS "${_onnx_prebuilds}/qvac__onnx.bare" AND NOT EXISTS "${_onnx_prebuilds}/qvac__onnx@0.bare")
+      file(CREATE_LINK "${_onnx_prebuilds}/qvac__onnx.bare" "${_onnx_prebuilds}/qvac__onnx@0.bare" COPY_ON_ERROR)
+    endif()
+    # CI invokes the test binary directly via npm scripts, so avoid running it
+    # during build-time discovery where libc++/coverage combinations have been
+    # aborting before the actual test step starts.
+    add_test(NAME parakeet_tests COMMAND parakeet_tests)
 endif()

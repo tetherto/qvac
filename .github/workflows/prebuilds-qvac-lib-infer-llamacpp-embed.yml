@@ -1,16 +1,9 @@
+# Build-only workflow. Publishing is handled by on-merge-qvac-lib-infer-llamacpp-embed.yml
 name: Prebuilds (Embed)
 
 on:
   workflow_dispatch:
     inputs:
-      tag:
-        description: "Tag to publish with ('latest' by default)"
-        required: true
-        default: "latest"
-        type: choice
-        options:
-          - latest
-          - dev
       vk-profiling:
         type: boolean
         default: false
@@ -19,42 +12,40 @@ on:
         required: false
         type: string
         default: "packages/qvac-lib-infer-llamacpp-embed"
+
   workflow_call:
     inputs:
       ref:
         description: "ref"
         type: string
+        required: false
       repository:
         type: string
         required: false
         default: "tetherto/qvac"
-      tag:
-        description: "Tag to publish"
-        type: string
+      vk-profiling:
+        description: "Enable Vulkan profiling"
+        type: boolean
         required: false
-        default: "dev"
-      publish_target:
-        description: "Target registry for publishing (npm, gpr, or both)"
-        type: string
-        required: false
-        default: ""
+        default: false
       workdir:
         description: "Working directory (optional)"
         required: false
         type: string
         default: "packages/qvac-lib-infer-llamacpp-embed"
-    outputs:
-      published_version:
-        description: "Version published to registry"
-        value: ${{ jobs.publish-npm.outputs.published_version || jobs.publish-gpr.outputs.published_version }}
+
 env:
   WORKDIR: ${{ inputs.workdir }}
+
+permissions:
+  contents: read
 
 jobs:
   prebuild:
     permissions:
       contents: write
       pull-requests: write
+      id-token: write
     strategy:
       fail-fast: false
       matrix:
@@ -94,6 +85,7 @@ jobs:
             arch: x64
 
     runs-on: ${{ matrix.os }}
+    environment: release
     name: ${{ matrix.platform }}-${{ matrix.arch }}${{ matrix.tags }}
 
     env:
@@ -120,15 +112,21 @@ jobs:
 
       - name: Echo workflow inputs
         shell: bash
+        env:
+          INPUT_REF: ${{ inputs.ref || github.ref }}
+          INPUT_REPO: ${{ inputs.repository || github.repository }}
+          INPUT_WORKDIR: ${{ inputs.workdir }}
+          MATRIX_PLATFORM: ${{ matrix.platform }}
+          MATRIX_ARCH: ${{ matrix.arch }}
+          MATRIX_TAGS: ${{ matrix.tags }}
         run: |
           echo "Workflow inputs:"
-          echo "Tag: ${{ inputs.tag || github.event.inputs.tag }}"
-          echo "Ref: ${{ inputs.ref || github.ref }}"
-          echo "Repository: ${{ inputs.repository || github.repository }}"
-          echo "Workdir: ${{ inputs.workdir }}"
-          echo "Matrix platform: ${{ matrix.platform }}"
-          echo "Matrix arch: ${{ matrix.arch }}"
-          echo "Matrix tags: ${{ matrix.tags }}"
+          echo "Ref: $INPUT_REF"
+          echo "Repository: $INPUT_REPO"
+          echo "Workdir: $INPUT_WORKDIR"
+          echo "Matrix platform: $MATRIX_PLATFORM"
+          echo "Matrix arch: $MATRIX_ARCH"
+          echo "Matrix tags: $MATRIX_TAGS"
 
       - if: ${{ startsWith(matrix.os, 'ubuntu-') }}
         name: Update c++ tools
@@ -144,14 +142,14 @@ jobs:
           choco upgrade llvm
 
       - name: Checkout repository
-        uses: actions/checkout@v6
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # 6.0.2
         with:
           repository: ${{ inputs.repository || github.repository }}
           ref: ${{ inputs.ref || github.ref }}
           token: ${{ secrets.PAT_TOKEN }}
 
       - name: Setup node
-        uses: actions/setup-node@v6
+        uses: actions/setup-node@53b83947a5a98c8d113130e565377fae1a50d02f # 6.3.0
         with:
           node-version: lts/*
 
@@ -191,7 +189,7 @@ jobs:
           Rename-Item -Path "C:\Program Files (x86)\Windows Kits\10\bin\10.0.26100.0" -NewName "C:\Program Files (x86)\Windows Kits\10\bin\old-10.0.26100.0"
           Rename-Item -Path "C:\Program Files (x86)\Windows Kits\10\Lib\10.0.26100.0" -NewName "C:\Program Files (x86)\Windows Kits\10\Lib\old-10.0.26100.0"
 
-      - if: ${{ matrix.os == 'macos-14' || matrix.os == 'macos-15-intel' }}
+      - if: ${{ startsWith(matrix.os, 'macos-') }}
         name: Install vcpkg in macos
         run: |
           cd ..
@@ -242,7 +240,7 @@ jobs:
 
       - if: ${{ matrix.os == 'ubuntu-22.04-arm' }}
         name: Get ccache cache
-        uses: actions/cache@v5
+        uses: actions/cache@668228422ae6a00e4ad889ee87cd7109ec5666a7 # 5.0.4
         with:
           key: ccache-${{ matrix.platform }}-${{ matrix.arch }}
           path: ~/.cache/ccache-arm
@@ -269,11 +267,14 @@ jobs:
           echo "VULKAN_SDK=$VULKAN_SDK" >> $GITHUB_ENV
 
       - if: ${{ matrix.os == 'ubuntu-22.04-arm' }}
+        name: Configure AWS credentials via OIDC
+        uses: aws-actions/configure-aws-credentials@8df5847569e6427dd6c4fb1cf565c83acfa8afa7 # 6.0.0
+        with:
+          role-to-assume: ${{ secrets.AWS_OIDC_ROLE_ARN }}
+          aws-region: eu-central-1
+
+      - if: ${{ matrix.os == 'ubuntu-22.04-arm' }}
         name: Setup vulkan sdk path in linux arm64
-        env:
-          AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
-          AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
-          AWS_DEFAULT_REGION: us-east-1
         run: |
           VULKAN_SDK=~/vulkan/aarch64
           echo "VULKAN_SDK=$VULKAN_SDK" >> $GITHUB_ENV
@@ -349,7 +350,7 @@ jobs:
 
       - name: Get vcpkg cache
         id: cache-vcpkg
-        uses: actions/cache@v5
+        uses: actions/cache@668228422ae6a00e4ad889ee87cd7109ec5666a7 # 5.0.4
         with:
           key: ${{ matrix.platform }}-${{ matrix.arch }}-${{ hashFiles(format('{0}/vcpkg.json', inputs.workdir), format('{0}/vcpkg-configuration.json', inputs.workdir), format('{0}/vcpkg/ports/**', inputs.workdir)) }}
           path: vcpkg/cache
@@ -359,6 +360,13 @@ jobs:
         name: Enable vulkan profiling
         run: |
           echo "CFG_OPTS=-D VK_PROFILING=ON $CFG_OPTS" >> $GITHUB_ENV
+      
+      - if: ${{ matrix.platform == 'ios' || matrix.platform == 'darwin' }}
+        name: Use Apple clang for Apple platform builds
+        run: |
+          sudo mv /opt/homebrew/opt/llvm@18 /opt/homebrew/opt/llvm@18.bak 2>/dev/null || true
+          sudo mv /opt/homebrew/opt/llvm /opt/homebrew/opt/llvm.bak 2>/dev/null || true
+          sudo rm -f /opt/homebrew/bin/clang /opt/homebrew/bin/clang++ 2>/dev/null || true
 
       - name: Run bare-make generate
         working-directory: ${{ inputs.workdir }}
@@ -400,7 +408,7 @@ jobs:
             find prebuilds -name "*.bare" -exec strip --strip-debug {} \;
           fi
 
-      - uses: actions/upload-artifact@v6
+      - uses: actions/upload-artifact@bbbca2ddaa5d8feaa63e36b76fdaad77386f024f # 7.0.0
         with:
           name: llama-cpp-${{ matrix.platform }}-${{ matrix.arch }}${{ matrix.tags }}
           path: ${{ inputs.workdir }}/prebuilds
@@ -413,106 +421,14 @@ jobs:
 
     steps:
       - name: Download all build artifacts
-        uses: actions/download-artifact@v7
+        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # 8.0.1
         with:
           path: prebuilds
           merge-multiple: true
 
       - name: Upload merged artifacts
-        uses: actions/upload-artifact@v6
+        uses: actions/upload-artifact@bbbca2ddaa5d8feaa63e36b76fdaad77386f024f # 7.0.0
         with:
           name: prebuilds
           path: prebuilds
 
-  publish-gpr:
-    needs: [prebuild, merge]
-    if: ${{ inputs.publish_target == 'gpr'
-      || inputs.publish_target == 'both'
-      || (
-          (github.event_name == 'workflow_dispatch' || github.event_name == 'workflow_call' || github.event_name == 'push')
-          && (inputs.publish_target == '' || inputs.publish_target == null)
-          && (
-            github.ref_name == 'main'
-            || startsWith(github.ref_name, 'feature-')
-            || startsWith(github.ref_name, 'tmp-')
-            || (inputs.ref != '' && (
-                  inputs.ref == 'refs/heads/main'
-                  || startsWith(inputs.ref, 'refs/heads/feature-')
-                  || startsWith(inputs.ref, 'refs/heads/tmp-')
-                ))
-          )
-        ) }}
-    continue-on-error: true
-    outputs:
-      published_version: ${{ steps.publish.outputs.npm_published_version }}
-    runs-on: ubuntu-latest
-    permissions:
-      contents: write
-      packages: write
-    steps:
-      - name: Checkout repository
-        uses: actions/checkout@v6
-        with:
-          repository: ${{ inputs.repository || github.repository }}
-          ref: ${{ inputs.ref || github.ref }}
-          token: ${{ secrets.PAT_TOKEN }}
-
-      - name: Download prebuild artifacts
-        uses: actions/download-artifact@v7
-        with:
-          name: prebuilds
-          path: ${{ env.WORKDIR }}/prebuilds
-
-      - name: Publish to GitHub Package Registry
-        id: publish
-        uses: tetherto/qvac-devops/.github/actions/publish-library-to-gpr@monorepo_update
-        with:
-          secret-token: ${{ secrets.GITHUB_TOKEN }}
-          tag: ${{ inputs.tag || github.event.inputs.tag || 'dev' }}
-          name-suffix: "-mono"
-          workdir:  ${{ env.WORKDIR }}
-
-  publish-npm:
-    needs: [prebuild, merge]
-    if: ${{ inputs.publish_target == 'npm'
-        || inputs.publish_target == 'both'
-        || (
-            (github.event_name == 'workflow_dispatch' || github.event_name == 'workflow_call' || github.event_name == 'push')
-            && (inputs.publish_target == '' || inputs.publish_target == null)
-            && (
-              startsWith(github.ref_name, 'release-')
-              || (inputs.ref != '' && startsWith(inputs.ref, 'refs/heads/release-'))
-            )
-          ) }}
-    continue-on-error: false
-    outputs:
-      published_version: ${{ steps.publish.outputs.npm_published_version }}
-    runs-on: ubuntu-latest
-    permissions:
-      contents: write
-      packages: write
-    steps:
-      - name: Checkout repository
-        uses: actions/checkout@v6
-        with:
-          repository: ${{ inputs.repository || github.repository }}
-          ref: ${{ inputs.ref || github.ref }}
-          token: ${{ secrets.PAT_TOKEN }}
-
-      - name: Download prebuild artifacts
-        uses: actions/download-artifact@v7
-        with:
-          name: prebuilds
-          path: ${{ env.WORKDIR }}/prebuilds
-
-      - name: Publish to NPM Package Registry
-        id: publish
-        uses: tetherto/qvac-devops/.github/actions/publish-library-to-npm@monorepo_update
-        with:
-          secret-token: ${{ secrets.NPM_TOKEN }}
-          tag: "latest"
-          workdir: ${{ env.WORKDIR }}
-          repo_name: "llamacpp-embed"
-          git-token: ${{ secrets.GITHUB_TOKEN }}
-          create-tag: "false"
-          

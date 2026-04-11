@@ -23,12 +23,12 @@ Where:
 
 ### Step 1: Validate prerequisites
 
-1. Read `packages/$ARGUMENTS/package.json` to get the current version.
-2. Compare version against the base branch (provided argument or `main`):
+1. Read `packages/$ARGUMENTS/package.json` to get the current version and npm package name.
+2. Compare version against the latest version published on npm:
    ```bash
-   git show <base-branch>:packages/<package>/package.json
+   npm view <npm-package-name> version
    ```
-3. If version is **not bumped** compared to the base branch, stop and ask the user to bump the version first.
+3. If the local version is **not higher** than the npm version, stop and ask the user to bump the version first.
 4. Check that `packages/<package>/CHANGELOG.md` has a section matching the current version (`## [X.Y.Z]`). If missing, generate it first then continue:
    - For addon packages (native C++): run `/addon-changelog`
    - For SDK pod packages (TypeScript): run `/sdk-changelog`

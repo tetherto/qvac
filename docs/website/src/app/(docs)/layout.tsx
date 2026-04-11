@@ -4,6 +4,7 @@ import type { LinkItemType } from 'fumadocs-ui/layouts/shared';
 import { FaGithub, FaDiscord } from 'react-icons/fa6';
 import { SiHuggingface } from '@icons-pack/react-simple-icons';
 import { FeaturebaseIcon } from '@/components/featurebase-icon';
+import { KeetIcon } from '@/components/keet-icon';
 import { VersionedLayout } from '@/components/versioned-layout';
 import { getAllTrees } from '@/lib/trees';
 
@@ -26,14 +27,6 @@ export default function Layout({ children }: LayoutProps<'/'>) {
     },
     {
       type: 'icon',
-      url: 'https://qvacbytether.featurebase.app/?b=68d07d333a52713329b11fa6',
-      label: 'FeatureBase',
-      text: 'FeatureBase',
-      icon: <FeaturebaseIcon />,
-      external: true,
-    },
-    {
-      type: 'icon',
       url: 'https://huggingface.co/qvac',
       label: 'Hugging Face',
       text: 'Hugging Face',
@@ -45,13 +38,7 @@ export default function Layout({ children }: LayoutProps<'/'>) {
       url: '/#community',
       label: 'Keet',
       text: 'Keet',
-      icon: <img
-        src="/keet.svg"
-        alt="Keet"
-        width={24}
-        height={24}
-        className="h-4 w-4 object-contain"
-      />,
+      icon: <KeetIcon />,
     },
   ];
 

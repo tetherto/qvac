@@ -1,0 +1,31 @@
+---
+title: "transcribeStream( )"
+titleStyle: code
+description: "This function streams audio transcription results in real-time, yielding
+text chunks as they become available from the model."
+---
+
+```typescript
+function transcribeStream(params: TranscribeClientParams, options?: { forceNewConnection?: boolean; profiling?: { enabled?: boolean; includeServerBreakdown?: boolean; mode?: "summary" | "verbose" }; timeout?: number }): AsyncGenerator
+```
+
+## Parameters
+
+| Name | Type | Required? | Description |
+| --- | --- | :---: | --- |
+| `params` | `TranscribeClientParams` | ✓ | The arguments for the transcription |
+| `options` | `\{ forceNewConnection?: boolean; profiling?: \{ enabled?: boolean; includeServerBreakdown?: boolean; mode?: "summary" | "verbose" \}; timeout?: number \}` | ✗ | Optional RPC options including per-call profiling |
+
+## Returns
+
+```typescript
+AsyncGenerator
+```
+
+
+
+## Throws
+
+| Error | When |
+| --- | --- |
+| `When transcription fails with an error message` |  |

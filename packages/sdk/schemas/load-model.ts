@@ -27,9 +27,11 @@ import {
   nmtModelTypeSchema,
   ttsModelTypeSchema,
   ocrModelTypeSchema,
+  diffusionModelTypeSchema,
   ModelType,
   ModelTypeAliases,
 } from "./model-types";
+import { sdcppConfigSchema } from "./sdcpp-config";
 
 // Set of all built-in model types (canonical + aliases) for catch-all exclusion
 const builtInModelTypes = new Set([
@@ -48,6 +50,7 @@ const loadModelCommonFields = {
 const loadModelRequestCommonFields = {
   ...loadModelCommonFields,
   onProgress: z.unknown().optional(),
+  logger: z.unknown().optional(),
   withProgress: z.boolean().optional(),
 };
 
@@ -99,6 +102,13 @@ export const loadModelOptionsBaseSchema = z.union([
       ...loadModelCommonFields,
       modelType: ocrModelTypeSchema,
       modelConfig: ocrConfigSchema.partial().strict().optional(),
+    })
+    .strict(),
+  z
+    .object({
+      ...loadModelCommonFields,
+      modelType: diffusionModelTypeSchema,
+      modelConfig: sdcppConfigSchema.strict().optional(),
     })
     .strict(),
   // Custom plugin catch-all: accepts any modelType string EXCEPT built-ins
@@ -247,6 +257,23 @@ const loadModelOptionsToRequestBaseSchema = z.union([
   z
     .object({
       ...loadModelRequestCommonFields,
+      modelType: diffusionModelTypeSchema,
+      modelConfig: sdcppConfigSchema.strict().optional(),
+    })
+    .strict()
+    .transform((data) => ({
+      type: "loadModel" as const,
+      modelType: ModelType.sdcppGeneration,
+      modelSrc: modelInputToSrcSchema.parse(data.modelSrc),
+      modelName: modelInputToNameSchema.parse(data.modelSrc),
+      modelConfig: data.modelConfig ?? {},
+      seed: data.seed ?? false,
+      withProgress: data.withProgress ?? !!data.onProgress,
+      delegate: data.delegate,
+    })),
+  z
+    .object({
+      ...loadModelRequestCommonFields,
       modelType: z.string().refine((val) => !builtInModelTypes.has(val), {
         message: "Built-in model types must use their specific schema",
       }),
@@ -328,6 +355,13 @@ export const loadOcrModelRequestSchema = commonModelConfigSchema
   })
   .strict();
 
+export const loadDiffusionModelRequestSchema = commonModelConfigSchema
+  .extend({
+    modelType: z.literal(ModelType.sdcppGeneration),
+    modelConfig: sdcppConfigSchema.optional(),
+  })
+  .strict();
+
 // Custom plugin catch-all: accepts any modelType string EXCEPT built-ins
 export const loadCustomPluginModelRequestSchema =
   commonModelConfigSchema.extend({
@@ -347,6 +381,7 @@ export const loadModelSrcRequestSchema = z
     loadNmtModelRequestSchema,
     loadTtsModelRequestSchema,
     loadOcrModelRequestSchema,
+    loadDiffusionModelRequestSchema,
     loadCustomPluginModelRequestSchema,
   ])
   .transform((data) => ({

@@ -6,16 +6,13 @@ import type {
 import { DELEGATION_BREAKDOWN_KEY, OPERATION_EVENT_KEY, modelInputToSrcSchema } from "@/schemas";
 import type { DelegatedHandlerOptions } from "@/server/rpc/profiling";
 import type { ResponseWithDelegation } from "@/server/rpc/delegate-transport";
-import { registerModel } from "@/server/bare/registry/model-registry";
+import { registerModel, isModelLoaded, unregisterModel } from "@/server/bare/registry/model-registry";
 import {
   send,
   stream,
   type DelegateOptions,
 } from "@/server/rpc/delegate-transport";
-import {
-  getRPC,
-  cleanupStaleConnection,
-} from "@/server/bare/delegate-rpc-client";
+import { getRPC } from "@/server/bare/delegate-rpc-client";
 import { handleLoadModel } from "./load-model";
 import {
   ModelLoadFailedError,
@@ -45,6 +42,7 @@ export async function handleLoadModelDelegated(
     topic,
     providerPublicKey,
     timeout,
+    healthCheckTimeout,
     fallbackToLocal,
     forceNewConnection,
   } = delegate;
@@ -57,6 +55,7 @@ export async function handleLoadModelDelegated(
     // Create RPC instance for this HyperSwarm peer
     const rpc = await getRPC(topic, providerPublicKey, {
       timeout,
+      healthCheckTimeout,
       forceNewConnection,
     });
 
@@ -126,6 +125,7 @@ export async function handleLoadModelDelegated(
       topic: string;
       providerPublicKey: string;
       timeout?: number;
+      healthCheckTimeout?: number;
     } = {
       topic,
       providerPublicKey,
@@ -133,9 +133,18 @@ export async function handleLoadModelDelegated(
     if (timeout !== undefined) {
       delegateOptions.timeout = timeout;
     }
+    if (healthCheckTimeout !== undefined) {
+      delegateOptions.healthCheckTimeout = healthCheckTimeout;
+    }
+
+    if (isModelLoaded(modelId)) {
+      logger.info(
+        `Delegated model ${modelId} is already registered, replacing with new provider: ${providerPublicKey}`,
+      );
+      unregisterModel(modelId);
+    }
 
     registerModel(modelId, delegateOptions);
-
     logger.info(
       `✅ Delegated model registered: ${modelId} -> provider: ${providerPublicKey}`,
     );
@@ -157,9 +166,6 @@ export async function handleLoadModelDelegated(
     return result;
   } catch (error) {
     logger.error("Error in delegated load model:", error);
-
-    // Clean up stale RPC so next attempt creates a fresh connection
-    cleanupStaleConnection(providerPublicKey);
 
     if (fallbackToLocal) {
       logger.info(

@@ -12,6 +12,13 @@ const state = Object.freeze({
 
 const END_OF_INPUT = 'end of job'
 
+function nextSafeId (current) {
+  return current >= Number.MAX_SAFE_INTEGER ? 1 : current + 1
+}
+
+// 500 MB — ~2.7 hours of 16 kHz s16le mono audio
+const MAX_BUFFERED_BYTES = 500 * 1024 * 1024
+
 /**
  * An interface between Bare addon in C++ and JS runtime.
  */
@@ -30,6 +37,7 @@ class WhisperInterface {
     this._nextJobId = 1
     this._activeJobId = null
     this._bufferedAudio = []
+    this._bufferedBytes = 0
     this._state = state.LOADING
     this._audioFormat = configurationParams?.audio_format || 's16le'
 
@@ -63,11 +71,11 @@ class WhisperInterface {
     )
 
     let mappedEvent = event
-    if (isError || String(event).includes('Error')) {
+    if (event === 'Error' || isError || String(event).includes('Error')) {
       mappedEvent = 'Error'
-    } else if (isStats || String(event).includes('RuntimeStats')) {
+    } else if (event === 'JobEnded' || isStats || String(event).includes('RuntimeStats')) {
       mappedEvent = 'JobEnded'
-    } else if (isTranscriptOutput) {
+    } else if (event === 'Output' || isTranscriptOutput) {
       mappedEvent = 'Output'
     } else if (Array.isArray(data) && data.length === 0) {
       // WhisperModel::process returns an empty vector to avoid duplicate
@@ -76,7 +84,7 @@ class WhisperInterface {
     }
 
     const jobId = this._activeJobId
-    if (jobId === null || jobId === undefined) {
+    if (jobId === null) {
       return
     }
 
@@ -98,6 +106,13 @@ class WhisperInterface {
       this._activeJobId = null
       this._setState(state.LISTENING)
     }
+  }
+
+  _emitSyntheticError (jobId, error) {
+    if (this._outputCb == null) {
+      return
+    }
+    this._outputCb(this, 'Error', jobId, undefined, error)
   }
 
   /**
@@ -222,10 +237,31 @@ class WhisperInterface {
    */
   async cancel (jobId) {
     try {
-      await this._binding.cancel(this._handle, jobId)
-      this._bufferedAudio = []
-      this._activeJobId = null
-      this._setState(state.LISTENING)
+      const pendingJobId = this._bufferedAudio.length > 0 ? this._nextJobId : null
+      const targetJobId = jobId ?? this._activeJobId ?? pendingJobId
+
+      if (targetJobId === null) {
+        this._bufferedAudio = []
+        this._bufferedBytes = 0
+        this._setState(state.LISTENING)
+        return
+      }
+
+      if (this._activeJobId === targetJobId) {
+        await this._binding.cancel(this._handle)
+        this._bufferedAudio = []
+        this._bufferedBytes = 0
+        this._activeJobId = null
+        this._setState(state.LISTENING)
+        return
+      }
+
+      if (this._activeJobId === null && pendingJobId === targetJobId) {
+        this._bufferedAudio = []
+        this._bufferedBytes = 0
+        this._setState(state.LISTENING)
+        this._emitSyntheticError(targetJobId, 'Job cancelled')
+      }
     } catch (err) {
       throw new QvacErrorAddonWhisper({
         code: ERR_CODES.FAILED_TO_CANCEL,
@@ -247,6 +283,8 @@ class WhisperInterface {
       if (data?.type === END_OF_INPUT) {
         const currentJobId = this._nextJobId
         const input = this._concatBufferedAudio()
+        const previousJobId = this._activeJobId
+        const previousState = this._state
 
         let accepted = false
         try {
@@ -256,17 +294,20 @@ class WhisperInterface {
             audio_format: this._audioFormat
           })
         } catch (err) {
-          this._setState(state.LISTENING)
+          this._activeJobId = previousJobId
+          this._setState(previousState)
           throw err
         }
         if (!accepted) {
-          this._setState(state.LISTENING)
+          this._activeJobId = previousJobId
+          this._setState(previousState)
           throw new Error('Cannot set new job: a job is already set or being processed')
         }
 
         this._activeJobId = currentJobId
-        this._nextJobId += 1
+        this._nextJobId = nextSafeId(this._nextJobId)
         this._bufferedAudio = []
+        this._bufferedBytes = 0
         this._setState(state.PROCESSING)
         return currentJobId
       }
@@ -275,7 +316,14 @@ class WhisperInterface {
         if (!(data.input instanceof Uint8Array)) {
           throw new Error('Audio input must be Uint8Array')
         }
+        if (this._bufferedBytes + data.input.byteLength > MAX_BUFFERED_BYTES) {
+          throw new QvacErrorAddonWhisper({
+            code: ERR_CODES.BUFFER_LIMIT_EXCEEDED,
+            adds: MAX_BUFFERED_BYTES + ' bytes'
+          })
+        }
         this._bufferedAudio.push(data.input)
+        this._bufferedBytes += data.input.byteLength
         return this._nextJobId
       }
 
@@ -316,11 +364,14 @@ class WhisperInterface {
 
     try {
       try {
-        await this._binding.cancel(this._handle)
+        if (this._activeJobId !== null) {
+          await this._binding.cancel(this._handle)
+        }
       } catch {}
       this._binding.destroyInstance(this._handle)
       this._handle = null
       this._bufferedAudio = []
+      this._bufferedBytes = 0
       this._activeJobId = null
       this._setState(state.IDLE)
     } catch (err) {
@@ -333,24 +384,79 @@ class WhisperInterface {
   }
 
   async runJob (data) {
+    const currentJobId = this._nextJobId
+    const previousJobId = this._activeJobId
+    const previousState = this._state
     try {
-      this._activeJobId = this._nextJobId
-      this._nextJobId += 1
-      this._setState(state.PROCESSING)
       const accepted = this._binding.runJob(this._handle, {
         ...data,
         audio_format: data?.audio_format || this._audioFormat
       })
       if (!accepted) {
-        this._activeJobId = null
-        this._setState(state.LISTENING)
+        this._activeJobId = previousJobId
+        this._setState(previousState)
+        return false
       }
-      return accepted
+      this._activeJobId = currentJobId
+      this._nextJobId = nextSafeId(this._nextJobId)
+      this._setState(state.PROCESSING)
+      return true
+    } catch (err) {
+      this._activeJobId = previousJobId
+      this._setState(previousState)
+      throw new QvacErrorAddonWhisper({
+        code: ERR_CODES.FAILED_TO_APPEND,
+        adds: err.message,
+        cause: err
+      })
+    }
+  }
+
+  startStreaming (config = {}) {
+    try {
+      this._activeJobId = this._nextJobId
+      this._nextJobId = nextSafeId(this._nextJobId)
+      this._setState(state.PROCESSING)
+      this._binding.startStreaming(this._handle, {
+        ...config,
+        jobId: this._activeJobId
+      })
     } catch (err) {
       this._activeJobId = null
       this._setState(state.LISTENING)
       throw new QvacErrorAddonWhisper({
-        code: ERR_CODES.FAILED_TO_APPEND,
+        code: ERR_CODES.FAILED_TO_START_STREAMING,
+        adds: err.message,
+        cause: err
+      })
+    }
+  }
+
+  appendStreamingAudio (data) {
+    try {
+      if (!(data.input instanceof Uint8Array)) {
+        throw new Error('Audio input must be Uint8Array')
+      }
+      this._binding.appendStreamingAudio(this._handle, {
+        type: 'audio',
+        input: data.input,
+        audio_format: data.audio_format || this._audioFormat
+      })
+    } catch (err) {
+      throw new QvacErrorAddonWhisper({
+        code: ERR_CODES.FAILED_TO_APPEND_STREAMING,
+        adds: err.message,
+        cause: err
+      })
+    }
+  }
+
+  endStreaming () {
+    try {
+      this._binding.endStreaming(this._handle)
+    } catch (err) {
+      throw new QvacErrorAddonWhisper({
+        code: ERR_CODES.FAILED_TO_END_STREAMING,
         adds: err.message,
         cause: err
       })

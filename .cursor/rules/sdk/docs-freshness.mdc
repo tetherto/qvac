@@ -1,0 +1,48 @@
+---
+description: Reminder to check if knowledge-base rules need updating when SDK or registry-server source changes
+globs:
+  - packages/sdk/**
+  - packages/qvac-lib-registry-server/**
+alwaysApply: false
+---
+
+# Documentation Freshness
+
+When modifying files matched by this rule, check whether the corresponding knowledge-base documentation needs updating.
+
+## Scope
+
+This rule monitors two packages that have dedicated knowledge-base documentation maintained for Cursor agent context:
+
+| Package | Why monitored |
+|---|---|
+| `packages/sdk/` | 5 knowledge rules document SDK internals: schemas, config, cache management, model constants, delegated inference |
+| `packages/qvac-lib-registry-server/` | 1 skill documents Autobase/HyperDB patterns, schema build pipeline, and implementation gotchas |
+
+**Not monitored:** Individual addon packages (`qvac-lib-infer-whispercpp`, etc.). Their corresponding docs (`qvac-whispercpp-example.mdc`) describe external library APIs as static reference material — they drift when upstream libraries change, not when our source changes. Glob-based monitoring can't catch that; those docs are better maintained through periodic review.
+
+## Source → Documentation Map
+
+### packages/sdk/
+
+| Source area | Documentation |
+|---|---|
+| `schemas/get-model-info.ts`, `schemas/download-asset.ts`, `schemas/load-model.ts`, `schemas/unload-model.ts`, `client/api/`, `server/rpc/handlers/get-model-info.ts` | `.cursor/rules/sdk/docs/cache-management-api.mdc` |
+| `schemas/sdk-config.ts`, `server/bare/registry/config-registry.ts`, `client/init-hooks.ts` | `.cursor/rules/sdk/docs/config-system.mdc` |
+| `server/bare/plugins/llamacpp-completion/ops/completion-stream.ts`, `server/bare/ops/kv-cache-utils.ts` | `.cursor/rules/sdk/docs/kv-cache-system.mdc` |
+| `schemas/model-src-utils.ts`, `models/registry/models.ts`, `models/update-models/` | `.cursor/rules/sdk/docs/model-constants-and-sources.mdc` |
+| `schemas/delegate.ts`, `server/bare/hyperswarm.ts`, `server/bare/registry/model-registry.ts` | `.cursor/rules/sdk/docs/delegated-inference.mdc` |
+
+### packages/qvac-lib-registry-server/
+
+| Source area | Documentation |
+|---|---|
+| `lib/registry-service.js`, `scripts/build-db-spec.js`, `shared/spec/` | `.cursor/skills/registry-autobase-patterns/` |
+
+## What to do
+
+When a change touches APIs, schemas, signatures, file paths, or behavior documented in the map above:
+
+1. Read the corresponding documentation file
+2. Check if the change invalidates any documented information
+3. If it does, suggest updating the doc — or update it directly if the scope is small

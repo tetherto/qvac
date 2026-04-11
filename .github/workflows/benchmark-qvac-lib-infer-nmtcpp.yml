@@ -9,9 +9,9 @@ on:
         default: 'en-it'
         type: string
       translators:
-        description: 'Comma-separated translators (qvac,qvac_bergamot,opusmt,google,nllb,bergamot)'
+        description: 'Comma-separated translators (qvac_bergamot,opusmt,google,nllb,bergamot)'
         required: false
-        default: 'qvac'
+        default: 'qvac_bergamot'
         type: string
       dataset_flores_devtest:
         description: 'Evaluate on Flores-devtest dataset'
@@ -38,11 +38,6 @@ on:
         required: false
         default: false
         type: boolean
-      is_quantized_model:
-        description: 'Use Quantized q4_0 gguf format model supported with QVAC backend only'
-        required: false
-        default: false
-        type: boolean
       use_batch:
         description: 'Use batch translation only with qvac_bergamot (faster) option'
         required: false
@@ -64,9 +59,9 @@ on:
         required: true
         type: string
       translators:
-        description: 'Comma-separated translators (qvac,qvac_bergamot,opusmt,google,nllb,bergamot)'
+        description: 'Comma-separated translators (qvac_bergamot,opusmt,google,nllb,bergamot)'
         required: false
-        default: 'qvac'
+        default: 'qvac_bergamot'
         type: string
       dataset_flores_devtest:
         description: 'Evaluate on Flores-devtest dataset'
@@ -93,11 +88,6 @@ on:
         required: false
         default: false
         type: boolean
-      is_quantized_model:
-        description: 'Use Quantized q4_0 gguf format model'
-        required: false
-        default: false
-        type: boolean
       use_batch:
         description: 'Use batch translation only with qvac_bergamot (faster) option'
         required: false
@@ -112,6 +102,9 @@ on:
 env:
   PKG_DIR: packages/qvac-lib-infer-nmtcpp
 
+permissions:
+  contents: read
+
 jobs:
   setup:
     runs-on: ubuntu-latest
@@ -120,17 +113,7 @@ jobs:
       matrix: ${{ steps.set-matrix.outputs.matrix }}
       datasets: ${{ steps.set-matrix.outputs.datasets }}
       datasets_cache_key: ${{ steps.set-matrix.outputs.datasets_cache_key }}
-      qvac_needed: ${{ steps.check-qvac.outputs.needed }}
     steps:
-      - name: Check if QVAC is needed
-        id: check-qvac
-        run: |
-          if [[ "${{ inputs.translators }}" == *"qvac"* ]]; then
-            echo "needed=true" >> $GITHUB_OUTPUT
-          else
-            echo "needed=false" >> $GITHUB_OUTPUT
-          fi
-
       - name: Parse language pairs and datasets
         id: set-matrix
         run: |
@@ -167,10 +150,13 @@ jobs:
 
   build:
     needs: setup
-    if: needs.setup.outputs.qvac_needed == 'true'
-    runs-on: ubuntu-24.04
+    runs-on: ubuntu-22.04
+    environment: release
     timeout-minutes: 60
     name: Build QVAC addon
+
+    env:
+      VCPKG_BINARY_SOURCES: "clear;files,${{ github.workspace }}/packages/qvac-lib-infer-nmtcpp/vcpkg/cache,readwrite"
 
     steps:
       - name: Update C++ tools
@@ -180,17 +166,34 @@ jobs:
           sudo ./llvm.sh 19 all
 
       - name: Checkout repository
-        uses: actions/checkout@v6
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # 6.0.2
         with:
           submodules: recursive
 
       - name: Set up Node.js
-        uses: actions/setup-node@v6
+        uses: actions/setup-node@53b83947a5a98c8d113130e565377fae1a50d02f # 6.3.0
         with:
           node-version: lts/*
 
       - name: Install global dependencies
         run: npm install -g bare-make bare-runtime
+
+      - name: Replace bare-make's CMake with compatible version
+        shell: bash
+        run: |
+          echo "Installing CMake 3.28.3..."
+          wget -O cmake.sh https://github.com/Kitware/CMake/releases/download/v3.28.3/cmake-3.28.3-linux-x86_64.sh
+          sudo sh cmake.sh --skip-license --prefix=/usr/local
+          rm cmake.sh
+          echo "Finding bare-make's cmake binary..."
+          BARE_MAKE_CMAKE=$(find /opt/hostedtoolcache/node -path "*/bare-make/node_modules/cmake-runtime-*/bin/cmake" 2>/dev/null | head -1)
+          echo "bare-make cmake location: $BARE_MAKE_CMAKE"
+          echo "Replacing bare-make's cmake with version 3.28.3..."
+          sudo cp "$BARE_MAKE_CMAKE" "${BARE_MAKE_CMAKE}.bak"
+          sudo rm "$BARE_MAKE_CMAKE"
+          sudo ln -s /usr/local/bin/cmake "$BARE_MAKE_CMAKE"
+          echo "Verifying cmake version used by bare-make:"
+          "$BARE_MAKE_CMAKE" --version
 
       - name: Configure scoped registry for @tetherto and @qvac packages
         working-directory: ${{ env.PKG_DIR }}
@@ -200,9 +203,7 @@ jobs:
           GIT_PAT: ${{ secrets.PAT_TOKEN }}
         shell: bash
         run: |
-          echo "Configuring scoped registry for @tetherto and @qvac packages..."
           set -eu
-          echo "Writing .npmrc for dual registry install…"
           cat > .npmrc <<NPMRC
           registry=https://registry.npmjs.org/
           @qvac:registry=https://registry.npmjs.org/
@@ -210,13 +211,10 @@ jobs:
           //registry.npmjs.org/:_authToken=${NPM_TOKEN}
           //npm.pkg.github.com/:_authToken=${GIT_PAT}
           NPMRC
-
-          # Optional: make private git deps work without prompting
           if [ -n "${GIT_PAT:-}" ]; then
             git config --global url."https://${GIT_PAT}:@github.com/".insteadOf "https://github.com/"
             git config --global url."https://${GIT_PAT}:@github.com/".insteadOf "git@github.com:"
           else
-            # Using the workflow's GITHUB_TOKEN for git clones when possible
             git config --global url."https://${{ github.token }}:@github.com/".insteadOf "https://github.com/"
             git config --global url."https://${{ github.token }}:@github.com/".insteadOf "git@github.com:"
           fi
@@ -224,35 +222,56 @@ jobs:
       - name: Configure vcpkg
         run: echo "VCPKG_ROOT=$VCPKG_INSTALLATION_ROOT" >> $GITHUB_ENV
 
-      - name: Install Vulkan SDK
-        run: |
-          wget -qO- https://packages.lunarg.com/lunarg-signing-key-pub.asc | sudo tee /etc/apt/trusted.gpg.d/lunarg.asc
-          sudo wget -qO /etc/apt/sources.list.d/lunarg-vulkan-noble.list http://packages.lunarg.com/vulkan/lunarg-vulkan-noble.list
-          sudo apt update
-          sudo apt install -y vulkan-sdk
+      - name: Update apt sources
+        run: sudo apt-get update
 
-      - name: Install system dependencies
+      - name: Download Vulkan SDK
         run: |
-          sudo apt-get update
-          sudo apt-get install -y \
-            cmake wget build-essential \
-            libprotobuf-dev protobuf-compiler \
-            libboost-all-dev \
-            ccache \
-            libunwind-dev
+          sudo apt install -y xz-utils
+          wget -q -O /tmp/vulkansdk.tar.xz https://sdk.lunarg.com/sdk/download/latest/linux/vulkan_sdk.tar.xz
+          cd ~
+          mkdir -p vulkan
+          cd vulkan
+          tar xf /tmp/vulkansdk.tar.xz --strip-components=1
+
+      - name: Setup Vulkan SDK path
+        run: |
+          VULKAN_SDK=~/vulkan/x86_64
+          echo "VULKAN_SDK=$VULKAN_SDK" >> $GITHUB_ENV
 
       - name: Configure git
-        run: git config --global --add url."https://${{ secrets.PAT_TOKEN }}@github.com/".insteadOf "https://github.com/"
+        shell: bash
+        run: |
+          GIT_PAT="${{ secrets.PAT_TOKEN || secrets.GITHUB_TOKEN }}"
+          git config --global --add url."https://${GIT_PAT}:x-oauth-basic@github.com/".insteadOf "https://github.com/"
+          git config --global --add url."https://${GIT_PAT}:x-oauth-basic@github.com/".insteadOf "git@github.com:"
+          git config --global --add url."https://${GIT_PAT}:x-oauth-basic@github.com/".insteadOf "ssh://git@github.com/"
 
       - name: Install npm dependencies
         working-directory: ${{ env.PKG_DIR }}
         run: npm install
 
+      - name: Create vcpkg cache location
+        working-directory: ${{ env.PKG_DIR }}
+        run: mkdir -p vcpkg/cache
+
+      - name: Restore vcpkg cache
+        id: cache-vcpkg
+        uses: actions/cache/restore@668228422ae6a00e4ad889ee87cd7109ec5666a7 # 5.0.4
+        with:
+          path: ${{ env.PKG_DIR }}/vcpkg/cache
+          key: vcpkg-nmtcpp-v1-linux-x64-benchmark-${{ hashFiles('packages/qvac-lib-infer-nmtcpp/vcpkg.json', 'packages/qvac-lib-infer-nmtcpp/vcpkg-configuration.json', 'packages/qvac-lib-infer-nmtcpp/vcpkg-overlays/**') }}
+          restore-keys: |
+            vcpkg-nmtcpp-v1-linux-x64-benchmark-
+            vcpkg-nmtcpp-v1-linux-x64-
+
       - name: Create config.cmake for Bergamot backend
         working-directory: ${{ env.PKG_DIR }}
+        shell: bash
         run: |
-          echo "set(USE_BERGAMOT ON CACHE BOOL \"Enable Bergamot backend support\")" > config.cmake
-          echo "Configuration created:"
+          echo "set(USE_BERGAMOT ON CACHE BOOL \"Enable Bergamot backend support\" FORCE)" > config.cmake
+          echo "set(USE_INTGEMM ON CACHE BOOL \"Use INTGEMM for int8 quantized models\" FORCE)" >> config.cmake
+          echo "set(BUILD_ARCH x86-64-v2 CACHE STRING \"Target CPU architecture\" FORCE)" >> config.cmake
           cat config.cmake
 
       - name: Apply clog CMake version fix
@@ -260,12 +279,7 @@ jobs:
         run: |
           CLOG_CMAKE="third-party/bergamot-translator/3rd_party/marian-dev/src/3rd_party/ruy/third_party/cpuinfo/deps/clog/CMakeLists.txt"
           if [ -f "$CLOG_CMAKE" ]; then
-            echo "Found clog CMakeLists.txt, applying fix..."
             sed -i.bak 's/CMAKE_MINIMUM_REQUIRED(VERSION 3\.1/CMAKE_MINIMUM_REQUIRED(VERSION 3.5/' "$CLOG_CMAKE"
-            echo "Verification:"
-            head -n 3 "$CLOG_CMAKE"
-          else
-            echo "Clog CMakeLists.txt not found at $CLOG_CMAKE"
           fi
 
       - name: Apply sentencepiece CMake version fix
@@ -273,12 +287,35 @@ jobs:
         run: |
           SENTENCEPIECE_CMAKE="third-party/bergamot-translator/3rd_party/marian-dev/src/3rd_party/sentencepiece/CMakeLists.txt"
           if [ -f "$SENTENCEPIECE_CMAKE" ]; then
-            echo "Found sentencepiece CMakeLists.txt, applying CMake version fix..."
             sed -i.bak 's/cmake_minimum_required(VERSION 3\.1/cmake_minimum_required(VERSION 3.5/' "$SENTENCEPIECE_CMAKE"
-            echo "Verification:"
-            head -n 3 "$SENTENCEPIECE_CMAKE"
-          else
-            echo "sentencepiece CMakeLists.txt not found at $SENTENCEPIECE_CMAKE"
+          fi
+
+      - name: Fix std::result_of for C++17/C++20 compatibility
+        working-directory: ${{ env.PKG_DIR }}
+        shell: bash
+        run: |
+          CLI_APP_HPP="third-party/bergamot-translator/3rd_party/marian-dev/src/3rd_party/CLI/App.hpp"
+          if [ -f "$CLI_APP_HPP" ]; then
+            sed -i.bak 's/std::result_of<decltype (\&App::_parse_arg)(App, Args\.\.\.)>/std::invoke_result<decltype (\&App::_parse_arg), App, Args...>/g' "$CLI_APP_HPP"
+            sed -i.bak2 's/std::result_of<decltype (\&App::_parse_subcommand)(App, Args\.\.\.)>/std::invoke_result<decltype (\&App::_parse_subcommand), App, Args...>/g' "$CLI_APP_HPP"
+          fi
+          THREADPOOL_H="third-party/bergamot-translator/3rd_party/marian-dev/src/3rd_party/threadpool.h"
+          if [ -f "$THREADPOOL_H" ]; then
+            sed -i.bak 's/std::result_of<F(Args\.\.\.)>/std::invoke_result<F, Args...>/g' "$THREADPOOL_H"
+          fi
+
+      - name: Remove -march=native from cpuinfo and marian-dev
+        working-directory: ${{ env.PKG_DIR }}
+        shell: bash
+        run: |
+          MARIAN_CMAKE="third-party/bergamot-translator/3rd_party/marian-dev/CMakeLists.txt"
+          if [ -f "$MARIAN_CMAKE" ]; then
+            sed -i.bak3 's/-msse2//g' "$MARIAN_CMAKE"
+            sed -i.bak4 's/-march=native//g' "$MARIAN_CMAKE"
+          fi
+          CPUINFO_CMAKE="third-party/bergamot-translator/3rd_party/marian-dev/src/3rd_party/ruy/third_party/cpuinfo/CMakeLists.txt"
+          if [ -f "$CPUINFO_CMAKE" ]; then
+            sed -i.bak5 's/-march=native//g' "$CPUINFO_CMAKE"
           fi
 
       - name: Build addon
@@ -288,8 +325,15 @@ jobs:
           bare-make build
           bare-make install
 
+      - if: ${{ steps.cache-vcpkg.outputs.cache-hit != 'true' }}
+        name: Save vcpkg cache
+        uses: actions/cache/save@668228422ae6a00e4ad889ee87cd7109ec5666a7 # 5.0.4
+        with:
+          path: ${{ env.PKG_DIR }}/vcpkg/cache
+          key: vcpkg-nmtcpp-v1-linux-x64-benchmark-${{ hashFiles('packages/qvac-lib-infer-nmtcpp/vcpkg.json', 'packages/qvac-lib-infer-nmtcpp/vcpkg-configuration.json', 'packages/qvac-lib-infer-nmtcpp/vcpkg-overlays/**') }}
+
       - name: Upload build artifact
-        uses: actions/upload-artifact@v6
+        uses: actions/upload-artifact@bbbca2ddaa5d8feaa63e36b76fdaad77386f024f # 7.0.0
         with:
           name: qvac-addon-build-${{ inputs.translators }}
           path: |
@@ -299,13 +343,12 @@ jobs:
 
   evaluate:
     needs: [setup, build]
-    # Run if: setup succeeded AND (build succeeded OR build was skipped because QVAC not needed)
-    # Do NOT run if build failed
     if: |
       always() &&
       needs.setup.result == 'success' &&
       (needs.build.result == 'success' || needs.build.result == 'skipped')
     runs-on: ubuntu-24.04
+    environment: release
     timeout-minutes: 120
     strategy:
       fail-fast: false
@@ -313,35 +356,36 @@ jobs:
       matrix: ${{ fromJson(needs.setup.outputs.matrix) }}
 
     name: Evaluate ${{ matrix.pair }} with ${{ inputs.translators }}
+    permissions:
+      contents: read
+      id-token: write
 
     steps:
       - name: Checkout repository
-        uses: actions/checkout@v6
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # 6.0.2
         with:
           submodules: recursive
 
       - name: Set up Node.js
-        if: needs.setup.outputs.qvac_needed == 'true'
-        uses: actions/setup-node@v6
+        uses: actions/setup-node@53b83947a5a98c8d113130e565377fae1a50d02f # 6.3.0
         with:
           node-version: 20
 
       - name: Install bare-runtime
-        if: needs.setup.outputs.qvac_needed == 'true'
         run: npm install -g bare-runtime
 
-      - name: Set up Python
-        uses: actions/setup-python@v6
-        with:
-          python-version: '3.10'
-          cache: pip
-
       - name: Download build artifact
-        if: needs.setup.outputs.qvac_needed == 'true' && needs.build.result == 'success'
-        uses: actions/download-artifact@v7
+        if: needs.build.result == 'success'
+        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # 8.0.1
         with:
           name: qvac-addon-build-${{ inputs.translators }}
           path: ${{ env.PKG_DIR }}
+
+      - name: Set up Python
+        uses: actions/setup-python@a309ff8b426b58ec0e2a45f0f869d46889d02405 # 6.2.0
+        with:
+          python-version: '3.10'
+          cache: pip
 
       - name: Install system dependencies
         run: |
@@ -353,13 +397,12 @@ jobs:
             ccache \
             libunwind-dev
 
-      - name: Configure AWS credentials
+      - name: Configure AWS credentials via OIDC
         if: needs.setup.outputs.qvac_needed == 'true'
-        uses: aws-actions/configure-aws-credentials@v6
+        uses: aws-actions/configure-aws-credentials@8df5847569e6427dd6c4fb1cf565c83acfa8afa7 # 6.0.0
         with:
-          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
-          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
-          aws-region: us-east-1
+          role-to-assume: ${{ secrets.AWS_OIDC_ROLE_ARN }}
+          aws-region: eu-central-1
 
       - name: Download QVAC models (GGML format)
         # Only download GGML models for 'qvac' translator (not qvac_bergamot which uses Bergamot models)
@@ -471,7 +514,7 @@ jobs:
         continue-on-error: true
 
       - name: Cache datasets
-        uses: actions/cache@v5
+        uses: actions/cache@668228422ae6a00e4ad889ee87cd7109ec5666a7 # 5.0.4
         with:
           key: datasets-${{ needs.setup.outputs.datasets_cache_key }}
           path: ${{ env.PKG_DIR }}/benchmarks/quality_eval/data
@@ -644,11 +687,6 @@ jobs:
             pivot_flag="--use-pivot"
           fi
 
-          quantized_flag=""
-          if [ "${{ inputs.is_quantized_model }}" = "true" ]; then
-            quantized_flag="--is-quantized-model"
-          fi
-
           batch_flag=""
           if [ "${{ inputs.use_batch }}" = "true" ]; then
             batch_flag="--batch"
@@ -678,14 +716,13 @@ jobs:
               --topp "$TOPP" \
               --maxlength "$MAXLENGTH" \
               $pivot_flag \
-              $quantized_flag \
               $batch_flag
           done
         env:
           PYTHONUNBUFFERED: 1
 
       - name: Upload evaluation results
-        uses: actions/upload-artifact@v6
+        uses: actions/upload-artifact@bbbca2ddaa5d8feaa63e36b76fdaad77386f024f # 7.0.0
         if: always()
         with:
           name: results-${{ matrix.pair }}-${{ inputs.translators }}-${{ steps.metrics.outputs.metrics }}-${{ inputs.hyperparams }}${{ inputs.use_pivot && '-pivot' || '' }}
@@ -693,7 +730,7 @@ jobs:
           retention-days: 30
 
       - name: Upload evaluation logs
-        uses: actions/upload-artifact@v6
+        uses: actions/upload-artifact@bbbca2ddaa5d8feaa63e36b76fdaad77386f024f # 7.0.0
         if: failure()
         with:
           name: logs-${{ matrix.pair }}-${{ inputs.translators }}-${{ steps.metrics.outputs.metrics }}-${{ inputs.hyperparams }}
@@ -709,7 +746,7 @@ jobs:
 
     steps:
       - name: Download all artifacts
-        uses: actions/download-artifact@v7
+        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # 8.0.1
         with:
           path: all-results
           pattern: results-*
@@ -813,13 +850,12 @@ jobs:
           echo "**Configuration:**" >> $GITHUB_STEP_SUMMARY
           echo "- Hyperparameters: \`${{ inputs.hyperparams }}\`" >> $GITHUB_STEP_SUMMARY
           echo "- Pivot translation: \`${{ inputs.use_pivot }}\`" >> $GITHUB_STEP_SUMMARY
-          echo "- Quantized model: \`${{ inputs.is_quantized_model }}\`" >> $GITHUB_STEP_SUMMARY
           echo "- Batch mode: \`${{ inputs.use_batch }}\`" >> $GITHUB_STEP_SUMMARY
           echo "- Translators: \`${{ inputs.translators }}\`" >> $GITHUB_STEP_SUMMARY
           echo "- Metrics: chrF++=\`${{ inputs.metric_chrfpp }}\`, COMET=\`${{ inputs.metric_comet }}\`" >> $GITHUB_STEP_SUMMARY
 
       - name: Upload consolidated results
-        uses: actions/upload-artifact@v6
+        uses: actions/upload-artifact@bbbca2ddaa5d8feaa63e36b76fdaad77386f024f # 7.0.0
         with:
           name: consolidated-results-${{ inputs.translators }}
           path: all-results

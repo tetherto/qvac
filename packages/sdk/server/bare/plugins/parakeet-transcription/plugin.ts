@@ -7,8 +7,8 @@ import TranscriptionParakeet, {
 import {
   definePlugin,
   defineHandler,
-  transcribeStreamRequestSchema,
-  transcribeStreamResponseSchema,
+  transcribeRequestSchema,
+  transcribeResponseSchema,
   ModelType,
   parakeetConfigSchema,
   ADDON_PARAKEET,
@@ -26,6 +26,7 @@ import {
 } from "@/utils/errors-server";
 import FilesystemDL from "@qvac/dl-filesystem";
 import { transcribe } from "@/server/bare/ops/transcribe";
+import { attachModelExecutionMs } from "@/profiling/model-execution";
 
 type ParakeetModelConfig = {
   modelType?: string;
@@ -37,13 +38,11 @@ type ParakeetModelConfig = {
   timestampsEnabled?: boolean;
   // TDT
   parakeetEncoderSrc?: ModelSrcInput;
-  parakeetEncoderDataSrc?: ModelSrcInput;
   parakeetDecoderSrc?: ModelSrcInput;
   parakeetVocabSrc?: ModelSrcInput;
   parakeetPreprocessorSrc?: ModelSrcInput;
   // CTC
   parakeetCtcModelSrc?: ModelSrcInput;
-  parakeetCtcModelDataSrc?: ModelSrcInput;
   parakeetTokenizerSrc?: ModelSrcInput;
   // Sortformer
   parakeetSortformerSrc?: ModelSrcInput;
@@ -55,7 +54,6 @@ async function resolveTdtConfig(
 ): Promise<ResolveResult<ParakeetModelConfig>> {
   const {
     parakeetEncoderSrc,
-    parakeetEncoderDataSrc,
     parakeetDecoderSrc,
     parakeetVocabSrc,
     parakeetPreprocessorSrc,
@@ -75,13 +73,11 @@ async function resolveTdtConfig(
   const resolve = ctx.resolveModelPath;
   const [
     encoderPath,
-    encoderDataPath,
     decoderPath,
     vocabPath,
     preprocessorPath,
   ] = await Promise.all([
     resolve(parakeetEncoderSrc),
-    parakeetEncoderDataSrc ? resolve(parakeetEncoderDataSrc) : undefined,
     resolve(parakeetDecoderSrc),
     resolve(parakeetVocabSrc),
     resolve(parakeetPreprocessorSrc),
@@ -91,7 +87,6 @@ async function resolveTdtConfig(
     config: cfg,
     artifacts: {
       encoderPath,
-      ...(encoderDataPath !== undefined && { encoderDataPath }),
       ...(decoderPath !== undefined && { decoderPath }),
       ...(vocabPath !== undefined && { vocabPath }),
       ...(preprocessorPath !== undefined && { preprocessorPath }),
@@ -103,8 +98,7 @@ async function resolveCtcConfig(
   cfg: ParakeetModelConfig,
   ctx: ResolveContext,
 ): Promise<ResolveResult<ParakeetModelConfig>> {
-  const { parakeetCtcModelSrc, parakeetCtcModelDataSrc, parakeetTokenizerSrc } =
-    cfg;
+  const { parakeetCtcModelSrc, parakeetTokenizerSrc } = cfg;
 
   if (!parakeetCtcModelSrc || !parakeetTokenizerSrc) {
     throw new ParakeetArtifactsRequiredError(
@@ -113,9 +107,8 @@ async function resolveCtcConfig(
   }
 
   const resolve = ctx.resolveModelPath;
-  const [ctcModelPath, ctcModelDataPath, tokenizerPath] = await Promise.all([
+  const [ctcModelPath, tokenizerPath] = await Promise.all([
     resolve(parakeetCtcModelSrc),
-    parakeetCtcModelDataSrc ? resolve(parakeetCtcModelDataSrc) : undefined,
     resolve(parakeetTokenizerSrc),
   ]);
 
@@ -123,7 +116,6 @@ async function resolveCtcConfig(
     config: cfg,
     artifacts: {
       ctcModelPath,
-      ...(ctcModelDataPath !== undefined && { ctcModelDataPath }),
       ...(tokenizerPath !== undefined && { tokenizerPath }),
     },
   };
@@ -193,6 +185,7 @@ function createParakeetModel(
       logger,
       modelName: parseModelPath(dirPath).basePath,
       diskPath: dirPath,
+      opts: { stats: true },
     } as TranscriptionParakeetArgs,
     addonConfig,
   );
@@ -229,28 +222,38 @@ export const parakeetPlugin = definePlugin({
   },
 
   handlers: {
-    transcribeStream: defineHandler({
-      requestSchema: transcribeStreamRequestSchema,
-      responseSchema: transcribeStreamResponseSchema,
+    transcribe: defineHandler({
+      requestSchema: transcribeRequestSchema,
+      responseSchema: transcribeResponseSchema,
       streaming: true,
 
       handler: async function* (request) {
-        for await (const text of transcribe({
+        const stream = transcribe({
           modelId: request.modelId,
           audioChunk: request.audioChunk,
           prompt: request.prompt,
-        })) {
-          yield {
-            type: "transcribeStream" as const,
-            text,
-          };
-        }
+        });
 
-        yield {
-          type: "transcribeStream" as const,
-          text: "",
-          done: true,
-        };
+        try {
+          let result = await stream.next();
+          while (!result.done) {
+            yield {
+              type: "transcribe" as const,
+              text: result.value,
+            };
+            result = await stream.next();
+          }
+
+          const { modelExecutionMs, stats } = result.value;
+          yield attachModelExecutionMs({
+            type: "transcribe" as const,
+            text: "",
+            done: true,
+            ...(stats && { stats }),
+          }, modelExecutionMs);
+        } finally {
+          await stream.return?.(undefined as never);
+        }
       },
     }),
   },

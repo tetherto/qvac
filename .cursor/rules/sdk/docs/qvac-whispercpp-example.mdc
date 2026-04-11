@@ -1,87 +1,126 @@
 ---
-description:
-globs:
-  - packages/sdk/**
+description: Whisper speech-to-text transcription usage example with qvac SDK
 alwaysApply: false
 ---
-import FilesystemDL from "@qvac/dl-filesystem";
-// This dependency is not installed by default. Please make sure to install it before running the example
-import TranscriptionWhispercpp from "@qvac/transcription-whispercpp";
-import fs from "bare-fs";
-import { Readable } from "bare-stream";
-// const wavFilePath = "/Users/marco/Downloads/decodedFile.raw";
-const dl = new FilesystemDL({
-    dirPath: "/Users/marco/Downloads/",
-});
-const args = {
-    loader: dl,
-    opts: {},
-};
-// Define model configuration with whisperConfig
-const hdConfig = {
-    modelFileName: "ggml-small.bin",
-    diskPath: "./models",
+# @qvac/transcription-whispercpp — Usage Example
+
+Package: `@qvac/transcription-whispercpp` (`packages/qvac-lib-infer-whispercpp`)
+
+Based on the official quickstart at `examples/quickstart.js`.
+
+## Constructor Signature
+
+```js
+const TranscriptionWhispercpp = require('@qvac/transcription-whispercpp')
+
+const model = new TranscriptionWhispercpp(
+  // First arg: inference setup
+  {
+    loader,                   // Required — data loader instance (e.g. FakeDL, FilesystemDL, HyperDriveDL)
+    modelName,                // Required — model filename (e.g. 'ggml-tiny.bin')
+    diskPath,                 // Optional — local directory containing model files
+    vadModelName,             // Optional — VAD model filename (falls back to config.vad_model_path)
+    logger,                   // Optional — logger instance (default: null)
+    exclusiveRun,             // Optional — only one run at a time (default: true)
+    // ...args               — extra args forwarded to BaseInference (e.g. opts: { stats: true })
+  },
+  // Second arg: configuration
+  {
     whisperConfig: {
-        mode: "caption",
-        output_format: "plaintext",
-        min_seconds: 2,
-        max_seconds: 120,
-        audio_format: "f32le", // decodedFile.raw contains 32-bit float samples
+      audio_format: 's16le',  // Audio format: 's16le' or 'f32le'
+      language: 'en',         // Language code ('' for auto-detect)
+      vad_model_path: './path/to/silero-vad.bin',
+      vad_params: {
+        threshold: 0.35,
+        min_speech_duration_ms: 200,
+        min_silence_duration_ms: 150,
+        max_speech_duration_s: 30,
+        speech_pad_ms: 600,
+        samples_overlap: 0.3,
+      },
+      // Optional whisper params: max_seconds, temperature, suppress_nst, n_threads
     },
-};
-// Instantiate the specific Whisper model class
-const model = new TranscriptionWhispercpp(args, hdConfig);
-// Load the model weights and initialize
-await model.load();
-export async function transcribe(b64WavData) {
-    // Instantiate Hyperdrive Loader with the specific model key
-    // Decode base64 to buffer
-    const audioBuffer = Buffer.from(b64WavData, "base64");
-    // Write audio to file for testing
-    const timestamp = new Date().toISOString().replace(/[:.]/g, "-");
-    const filename = `audio-${timestamp}.wav`;
-    const filepath = `/Users/marco/Downloads/${filename}`;
-    await fs.promises.writeFile(filepath, audioBuffer);
-    console.log(`Audio saved to: ${filepath}`);
-    // Extract raw PCM data from WAV file
-    // WAV header is typically 44 bytes, skip it to get raw PCM data
-    const wavHeaderSize = 44;
-    const pcmData = audioBuffer.subarray(wavHeaderSize);
-    console.log(`Audio buffer size: ${audioBuffer.length}, PCM data size: ${pcmData.length}`);
-    // Convert 16-bit PCM to 32-bit float (f32le format expected by Whisper)
-    const float32Array = new Float32Array(pcmData.length / 2);
-    for (let i = 0; i < float32Array.length; i++) {
-        // Read 16-bit signed integer and convert to float32 (-1.0 to 1.0 range)
-        const int16Value = pcmData.readInt16LE(i * 2);
-        float32Array[i] = int16Value / 32768.0; // Normalize to -1.0 to 1.0
-    }
-    // Convert Float32Array to Buffer
-    const float32Buffer = Buffer.from(float32Array.buffer);
-    console.log(`Converted to ${float32Array.length} float32 samples (${float32Buffer.length} bytes)`);
-    // Create a readable stream from the float32 buffer
-    // Sample rate is 16kHz, 32-bit float = 4 bytes per sample
-    const sampleRate = 16000;
-    const bytesPerSample = 4; // 32-bit float
-    const bytesPerSecond = sampleRate * bytesPerSample;
-    const audioStream = new Readable({
-        highWaterMark: bytesPerSecond, // 1 second of audio per chunk
-        read() {
-            // Push the entire buffer at once
-            this.push(float32Buffer);
-            this.push(null); // Signal end of stream
-        },
-    });
-    // Run transcription on the audio stream
-    const response = await model.run(audioStream);
-    // Process the transcription results as they arrive
-    let transcriptionText = "";
-    await response
-        .onUpdate((output) => {
-        console.log("Partial Transcription Response:", output);
-        transcriptionText += output.map((chunk) => chunk.text).join("");
-    })
-        .await();
-    console.log("Transcription completed.");
-    console.log(transcriptionText);
-    return transcriptionText;
+    // Optional overrides:
+    // path           — explicit model file path (overrides diskPath + modelName)
+    // vadModelPath   — explicit VAD model path (overrides vad_model_path in whisperConfig)
+    // contextParams  — extra context params passed to C++ addon
+    // miscConfig     — e.g. { caption_enabled: false }
+    // audio_format   — top-level override for audio format
+  }
+)
+```
+
+## Quickstart Example
+
+```js
+const fs = require('bare-fs')
+const TranscriptionWhispercpp = require('@qvac/transcription-whispercpp')
+const FakeDL = require('./test/mocks/loader.fake.js')
+
+const model = new TranscriptionWhispercpp(
+  {
+    modelName: 'ggml-tiny.bin',
+    loader: new FakeDL({}),
+    diskPath: './examples/models',
+  },
+  {
+    whisperConfig: {
+      audio_format: 's16le',
+      vad_model_path: './examples/models/ggml-silero-v5.1.2.bin',
+      vad_params: {
+        threshold: 0.35,
+        min_speech_duration_ms: 200,
+        min_silence_duration_ms: 150,
+        max_speech_duration_s: 30,
+        speech_pad_ms: 600,
+        samples_overlap: 0.3,
+      },
+      language: '',
+    },
+  }
+)
+
+await model._load()
+
+const audioStream = fs.createReadStream('./examples/samples/sample.raw', {
+  highWaterMark: 128000 / 8,
+})
+
+const response = await model.run(audioStream)
+
+// Streaming via onUpdate — each update is an array of segment objects
+response.onUpdate((segments) => {
+  const items = Array.isArray(segments) ? segments : [segments]
+  const last = items[items.length - 1]
+  if (last?.text) console.log(last.start, '→', last.end, last.text)
+})
+
+// Collect all segments via async iteration
+const full = []
+for await (const output of response.iterate()) {
+  const items = Array.isArray(output) ? output : [output]
+  full.push(...items)
 }
+
+const text = full.map(s => s.text).join(' ').trim()
+console.log(text)
+
+await model.destroy()
+```
+
+## Response Shape
+
+`model.run(audioStream)` returns a response object with:
+
+- `response.onUpdate(callback)` — called with arrays of segment objects: `{ start, end, text }`
+- `response.iterate()` — async iterable yielding segment arrays
+- `response.await()` — promise that resolves when transcription completes
+
+## Key Notes
+
+- VAD model is required for transcription; specify via `whisperConfig.vad_model_path` or `vadModelName` constructor arg
+- `_load()` downloads weights (if loader supports it) and activates the C++ addon
+- `exclusiveRun: true` (default) prevents concurrent transcriptions — throws `JOB_ALREADY_RUNNING`
+- Streaming mode available via `model.runStreaming(audioStream)` — requires VAD model
+- `model.reload(newConfig)` hot-swaps settings (e.g. language) without destroying the instance
+- `model.destroy()` cleans up the native addon; call it to allow clean process exit

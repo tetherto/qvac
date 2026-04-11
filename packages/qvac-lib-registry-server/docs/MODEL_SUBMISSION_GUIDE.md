@@ -7,7 +7,7 @@
    {
      "source": "https://huggingface.co/<org>/<repo>/resolve/<commit>/<file>",
      "engine": "@qvac/<engine-name>",
-     "license": "MIT",
+     "licenseId": "MIT",
      "quantization": "q4_0",
      "params": "1B",
      "tags": ["generation", "instruct"],
@@ -26,7 +26,15 @@
 - HuggingFace: `https://huggingface.co/<org>/<repo>/resolve/<commit>/<path>`
 - S3: `s3:///<key>` (bucket name is resolved from `QVAC_S3_BUCKET` environment variable)
 
-Pin to specific commit/version. Avoid `main` or `latest`.
+**HuggingFace URLs must use a full 40-character commit SHA** — branch names like `main` or `master` are rejected by the validation script. To get the commit SHA, open the repo on HuggingFace, copy the latest commit hash from the commit history, and use it in place of `main`:
+
+```
+# Wrong — points to a branch, will break if the repo is updated
+https://huggingface.co/org/repo/resolve/main/model.gguf
+
+# Correct — pinned to an immutable commit
+https://huggingface.co/org/repo/resolve/a1b2c3d4e5f6a1b2c3d4e5f6a1b2c3d4e5f6a1b2/model.gguf
+```
 
 The S3 bucket name is **not** stored in `models.prod.json`. Set `QVAC_S3_BUCKET` in your `.env` file.
 The server resolves the bucket at runtime when downloading artifacts.
@@ -101,7 +109,7 @@ If you remove an entry from `models.prod.json`, the sync script will auto-deprec
 |-------|----------|-------------|
 | `source` | Yes | URL to model file (`https://huggingface.co/...` or `s3:///key`) |
 | `engine` | Yes | Engine identifier (e.g., `@qvac/llm-llamacpp`) |
-| `license` | Yes | License identifier matching an entry in `data/licenses.json` |
+| `licenseId` | Yes | License identifier matching an entry in `data/licenses.json` |
 | `quantization` | No | Quantization format (e.g., `q4_0`, `q8_0`) |
 | `params` | No | Model parameter count (e.g., `1B`, `4B`) |
 | `description` | No | Human-readable description |

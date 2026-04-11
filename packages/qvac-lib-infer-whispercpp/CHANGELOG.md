@@ -5,6 +5,103 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.6.0]
+
+This release is a significant interface modernisation. The constructor switches to a local-files map, model download is removed from the load path, concurrent inference runs are serialised instead of rejected, and the class no longer extends `BaseInference`.
+
+## Breaking Changes
+
+### Constructor now takes a `files` map instead of loader + model name
+
+The old API accepted a `loader`, `modelName`, `vadModelName`, and `diskPath`. Those are all removed. Pass local file paths directly:
+
+```typescript
+// Before
+new TranscriptionWhispercpp({ loader, modelName: 'ggml-tiny.bin', diskPath: '/models' }, config)
+
+// After
+new TranscriptionWhispercpp({ files: { model: '/models/ggml-tiny.bin', vadModel: '/models/silero-vad.bin' } }, config)
+```
+
+`files.model` is required; `files.vadModel` is optional. No download step occurs — files must already exist on disk before calling `load()`.
+
+### `TranscriptionWhispercpp` no longer extends `BaseInference`
+
+The class is now standalone. `instanceof BaseInference` checks and any BaseInference-only APIs (`getApiDefinition`, `downloadWeights`, loader helpers) are no longer available on this class.
+
+### Weight download removed from `_load`
+
+`_load` previously triggered a `WeightsProvider` download when a loader was supplied. That path is gone. Load preparation is now the caller's responsibility.
+
+## New APIs
+
+### `runStreaming(audioStream)` is now part of the public API
+
+The VAD-based live streaming path was previously internal. It is now a documented public method with its own TypeScript declaration, accepting the same audio stream types as `run()`.
+
+```typescript
+const response = await model.runStreaming(audioStream)
+for await (const segment of response) { /* ... */ }
+```
+
+### Concurrent runs serialise instead of throwing
+
+When `exclusiveRun` is enabled (the default), a second call to `run()` or `runStreaming()` while a transcription is in progress will **wait** for the first to complete rather than throwing a `JOB_ALREADY_RUNNING` error. This makes it safe to call `run()` from concurrent contexts.
+
+### New typed exports
+
+`TranscriptionWhispercppFiles` and `InferenceClientState` are now exported from the `TranscriptionWhispercpp` namespace. Lifecycle methods (`load`, `unload`, `destroy`, `cancel`, `pause`, `unpause`, `stop`, `status`, `getState`) are now explicitly declared in `index.d.ts`.
+
+## [0.5.5]
+
+### Changed
+- Bumped `qvac-lib-inference-addon-cpp` to `1.1.5`.
+- Restored JS-owned job ID routing after addon-cpp reverted the accidental `1.1.3` native callback `jobId` contract and `cancel(jobId)` API break.
+
+### Added
+- Regression coverage for JS-owned cancel handling of active, buffered, and stale wrapper job IDs.
+
+### Removed
+- References of s3 bucket throughout documentation and helper scripts
+
+## [0.5.4]
+
+### Changed
+
+- README: removed outdated npm Personal Access Token / `.npmrc` setup instructions for installing `@qvac/transcription-whispercpp`.
+
+## [0.5.3]
+
+### Changed
+- Bumped `qvac-lib-inference-addon-cpp` to `1.1.3`.
+- Updated the JS wrapper to consume the shared addon-cpp native job-id callback contract so late cancel/error events remain attached to the cancelled job instead of a newer accepted run.
+
+### Added
+- Regression coverage for rejected runs and stale cancel callbacks in the addon inference tests.
+
+## [0.5.2]
+
+Security hardening release from comprehensive security audit.
+
+### Fixed
+- Replace global streaming state with per-instance map to eliminate race condition and dangling pointer risk (#1079)
+- Add 500 MB buffer limit to audio accumulation to prevent OOM from unbounded buffering (#1080)
+- Add SHA-256 integrity verification to model download scripts using HuggingFace LFS checksums (#1081)
+- Validate `suppress_regex` parameter — ban grouping constructs (parentheses) and enforce 512-char length limit to prevent ReDoS (#1083)
+- Sanitize error messages to remove filesystem paths from thrown errors (#1084)
+- Wrap job ID counter at `Number.MAX_SAFE_INTEGER` to prevent precision loss (#1085)
+- Harden benchmark server: add library allowlist, restrict file paths to allowed directories, remove dynamic `npm install`, add body size limit, restrict CORS to localhost (#1086)
+
+## [0.5.1]
+
+This release documents runtime statistics and transcription output shapes in TypeScript so consumers can type `response.stats` and `run()` results against the native addon.
+
+## New APIs
+
+### `RuntimeStats` and related types in `index.d.ts`
+
+The `TranscriptionWhispercpp` namespace now exports **`RuntimeStats`**, aligned with `WhisperModel::runtimeStats()` (`totalTime`, `realTimeFactor`, `tokensPerSecond`, `audioDurationMs`, `totalSamples`, `totalTokens`, `totalSegments`, `processCalls`, and Whisper-internal timing fields through `totalWallMs`). **`WhisperTranscriptionSegment`** and **`WhisperRunOutput`** describe transcription payloads passed to `onUpdate`. **`run()`** is typed to return **`Promise<QvacResponse<WhisperRunOutput>>`**, with a note that **`response.stats`** matches **`RuntimeStats`** when stats collection is enabled via `opts.stats`.
+
 ## [0.5.0]
 
 ### Changed

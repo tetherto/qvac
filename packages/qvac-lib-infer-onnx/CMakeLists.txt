@@ -4,6 +4,10 @@ option(BUILD_TESTING "Build tests" OFF)
 option(ENABLE_XNNPACK "Enable XNNPack execution provider" ON)
 option(QVAC_ONNX_ANDROID_LOG "Enable Android logcat debug logging" OFF)
 
+if(BUILD_TESTING)
+  list(APPEND VCPKG_MANIFEST_FEATURES "tests")
+endif()
+
 if(ENABLE_XNNPACK)
   list(APPEND VCPKG_MANIFEST_FEATURES "xnnpack")
 endif()
@@ -53,11 +57,13 @@ endforeach()
 find_package(unofficial-pthreadpool CONFIG QUIET)
 find_package(onnxruntime CONFIG REQUIRED)
 
+set(QVAC_ONNX_ORT_TARGET onnxruntime::onnxruntime)
+
 add_bare_module(qvac-onnx EXPORTS)
 
 target_sources(${qvac-onnx} PRIVATE addon/binding.cpp)
 target_include_directories(${qvac-onnx} PRIVATE src)
-target_link_libraries(${qvac-onnx} PRIVATE onnxruntime::onnxruntime_static)
+target_link_libraries(${qvac-onnx} PRIVATE ${QVAC_ONNX_ORT_TARGET})
 
 if(QVAC_ONNX_ANDROID_LOG)
   target_compile_definitions(${qvac-onnx} PRIVATE QVAC_ONNX_ENABLE_ANDROID_LOG)
@@ -313,6 +319,6 @@ if(BUILD_TESTING)
   target_include_directories(ort_tests PRIVATE src)
   target_compile_definitions(ort_tests PRIVATE
     TEST_FIXTURES_DIR="${CMAKE_CURRENT_SOURCE_DIR}/tests/fixtures")
-  target_link_libraries(ort_tests PRIVATE GTest::gmock_main onnxruntime::onnxruntime_static)
+  target_link_libraries(ort_tests PRIVATE GTest::gmock_main ${QVAC_ONNX_ORT_TARGET})
   gtest_discover_tests(ort_tests)
 endif()

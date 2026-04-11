@@ -10,9 +10,9 @@ To run the server, you need the `@qvac/sdk` and `@qvac/cli` npm packages install
 ### AI capabilities
 
 At present, the HTTP server supports the following QVAC AI capabilities:
-* [Completion](/sdk/ai-tasks/completion)
-* [Text embeddings](/sdk/ai-tasks/text-embeddings)
-* [Transcription](/sdk/ai-tasks/transcription)
+* [Completion](/sdk/examples/ai-tasks/completion)
+* [Text embeddings](/sdk/examples/ai-tasks/text-embeddings)
+* [Transcription](/sdk/examples/ai-tasks/transcription)
 
 ### Compatible tools
 
@@ -34,7 +34,7 @@ Install the SDK and CLI in your project:
 npm install @qvac/sdk @qvac/cli
 ```
 
-See [Installation](/sdk/installation) for environment-specific instructions of the SDK.
+See [Installation](/sdk/getting-started/installation) for environment-specific instructions of the SDK.
 </Step>
 
 <Step>
@@ -79,7 +79,7 @@ curl http://localhost:11434/v1/chat/completions \
 
 ## Configuration
 
-Models are declared in `qvac.config.*` under the `serve.models` key. The server can only load models listed under this key — requests for unlisted models return 404. Each key in `serve.models` is a **model alias** — the name that HTTP clients use in the `model` field of their requests. For the full schema of `serve.models`, see [Configuration — `ServeConfig`](/sdk/configuration#serveconfig).
+Models are declared in `qvac.config.*` under the `serve.models` key. The server can only load models listed under this key — requests for unlisted models return 404. Each key in `serve.models` is a **model alias** — the name that HTTP clients use in the `model` field of their requests. For the full schema of `serve.models`, see [Configuration — `ServeConfig`](/sdk/getting-started/configuration#serveconfig).
 
 ### Example
 
@@ -109,9 +109,13 @@ Models are declared in `qvac.config.*` under the `serve.models` key. The server 
 ```
 
 - **`model`**: SDK model constant name (e.g., `QWEN3_600M_INST_Q4`). The server resolves it to a download source and addon type automatically.
-- **`default`**: when `true`, this model is used when a request doesn't specify a `model` field, or when a tool picks the default for an endpoint category.
-- **`preload`**: when `true`, the model is loaded into memory on server startup. When `false`, it is loaded on first request (cold start).
+- **`default`**: when `true`, marks this model as the default for its endpoint category. This does not make the server auto-select the model for requests that omit `model`.
+- **`preload`**: when `true`, the model is loaded into memory on server startup. When `false`, it is loaded on first request (cold start). Defaults to `true` for constant model entries.
 - **`config`**: model config overrides passed to the underlying addon. Same options as [`modelConfig` in `loadModel()`](/sdk/api/loadModel/#modelconfig-varies-by-model-type).
+
+<Callout type="warn">
+`default` field **does not** act as a fallback when an API request omits `model`. Requests must still include a `model` field; otherwise, the server returns `400`.
+</Callout>
 
 ## CLI
 

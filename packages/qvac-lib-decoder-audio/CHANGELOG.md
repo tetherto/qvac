@@ -5,6 +5,22 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.3.6]
+
+### Changed
+
+- README: removed outdated GitHub Packages token / `.npmrc` setup instructions for installing `@qvac/decoder-audio`.
+
+## [0.3.5]
+
+Security hardening release from comprehensive security audit.
+
+### Changed
+- Replace deprecated `istanbul` with `nyc` for code coverage (#1082)
+
+### Fixed
+- Fix coverage script to use `.nyc_output` directory for correct HTML report generation (#1082)
+
 ## [0.3.4]
 
 ### Added
@@ -43,7 +59,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Windows x64 integration tests (#92)
 
 ### Changed
-- Updated qvac-devops to v1.1.3 and enabled automatic git tag creation on npm publish (#89)
+- Updated oss-actions to v1.1.3 and enabled automatic git tag creation on npm publish (#89)
 
 ### Removed
 - GstDecoder - library now uses FFmpegDecoder only (#94)

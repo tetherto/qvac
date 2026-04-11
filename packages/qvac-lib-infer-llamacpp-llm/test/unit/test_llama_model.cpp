@@ -10,35 +10,13 @@
 #include <gtest/gtest.h>
 #include <llama.h>
 #include <qvac-lib-inference-addon-cpp/Errors.hpp>
-#include <qvac-lib-inference-addon-cpp/RuntimeStats.hpp>
 
 #include "model-interface/LlamaModel.hpp"
 #include "test_common.hpp"
 
 namespace fs = std::filesystem;
 
-namespace {
-double getStatValue(
-    const qvac_lib_inference_addon_cpp::RuntimeStats& stats,
-    const std::string& key) {
-  for (const auto& stat : stats) {
-    if (stat.first == key) {
-      return std::visit(
-          [](const auto& value) -> double {
-            if constexpr (std::is_same_v<
-                              std::decay_t<decltype(value)>,
-                              double>) {
-              return value;
-            } else {
-              return static_cast<double>(value);
-            }
-          },
-          stat.second);
-    }
-  }
-  return 0.0;
-}
-} // namespace
+using test_common::getStatValue;
 
 class LlamaModelTest : public ::testing::Test {
 protected:
@@ -407,6 +385,8 @@ TEST_F(LlamaModelTest, RuntimeStatsAfterProcessing) {
 
     auto stats = model.runtimeStats();
     EXPECT_GE(stats.size(), 0);
+    double backendDevice = getStatValue(stats, "backendDevice");
+    EXPECT_TRUE(backendDevice == 0.0 || backendDevice == 1.0);
   });
 }
 
@@ -915,12 +895,12 @@ TEST_F(LlamaModelTest, ProcessEmptyMessagesAfterSessionCommands) {
     FAIL() << "Model failed to load";
   }
 
-  LlamaModel::Prompt session_only_prompt;
-  session_only_prompt.input =
-      R"([{"role": "session", "content": "test_session.bin"}, {"role": "session", "content": "reset"}])";
+  LlamaModel::Prompt cache_prompt;
+  cache_prompt.input = R"([{"role": "user", "content": "Hello"}])";
+  cache_prompt.cacheKey = "test_session.bin";
   EXPECT_NO_THROW({
-    std::string output = model.processPrompt(session_only_prompt);
-    EXPECT_EQ(output.length(), 0);
+    std::string output = model.processPrompt(cache_prompt);
+    EXPECT_GE(output.length(), 0);
     auto stats = model.runtimeStats();
     EXPECT_GE(stats.size(), 0);
   });
@@ -1050,5 +1030,92 @@ TEST_F(LlamaModelTest, ReloadDuringProcessingWaitsAndDoesNotCrash) {
   EXPECT_NO_THROW({
     std::string output = model.processPrompt(postReload);
     EXPECT_GE(output.length(), 0);
+  });
+}
+
+TEST_F(LlamaModelTest, CommonParamsParseToolsAtEndTrue) {
+  if (!fs::exists(getValidModelPath())) {
+    FAIL() << "Test model not found at: " << getValidModelPath();
+  }
+
+  std::unordered_map<std::string, std::string> config;
+  config["device"] = test_common::getTestDevice();
+  config["ctx_size"] = "2048";
+  config["gpu_layers"] = test_common::getTestGpuLayers();
+  config["n_predict"] = "10";
+  config["tools_at_end"] = "true";
+
+  fs::path backendDir;
+#ifdef TEST_BINARY_DIR
+  backendDir = fs::path(TEST_BINARY_DIR);
+#else
+  backendDir = fs::current_path() / "build" / "test" / "unit";
+#endif
+  config["backendsDir"] = backendDir.string();
+
+  EXPECT_NO_THROW({
+    LlamaModel model(
+        getValidModelPath(),
+        std::string(test_projection_path),
+        std::unordered_map<std::string, std::string>(config));
+    model.waitForLoadInitialization();
+  });
+}
+
+TEST_F(LlamaModelTest, CommonParamsParseToolsAtEndFalse) {
+  if (!fs::exists(getValidModelPath())) {
+    FAIL() << "Test model not found at: " << getValidModelPath();
+  }
+
+  std::unordered_map<std::string, std::string> config;
+  config["device"] = test_common::getTestDevice();
+  config["ctx_size"] = "2048";
+  config["gpu_layers"] = test_common::getTestGpuLayers();
+  config["n_predict"] = "10";
+  config["tools_at_end"] = "false";
+
+  fs::path backendDir;
+#ifdef TEST_BINARY_DIR
+  backendDir = fs::path(TEST_BINARY_DIR);
+#else
+  backendDir = fs::current_path() / "build" / "test" / "unit";
+#endif
+  config["backendsDir"] = backendDir.string();
+
+  EXPECT_NO_THROW({
+    LlamaModel model(
+        getValidModelPath(),
+        std::string(test_projection_path),
+        std::unordered_map<std::string, std::string>(config));
+    model.waitForLoadInitialization();
+  });
+}
+
+TEST_F(LlamaModelTest, CommonParamsParseToolsAtEndUppercase) {
+  if (!fs::exists(getValidModelPath())) {
+    FAIL() << "Test model not found at: " << getValidModelPath();
+  }
+
+  std::unordered_map<std::string, std::string> config;
+  config["device"] = test_common::getTestDevice();
+  config["ctx_size"] = "2048";
+  config["gpu_layers"] = test_common::getTestGpuLayers();
+  config["n_predict"] = "10";
+  config["tools_at_end"] = "TRUE";
+
+  fs::path backendDir;
+#ifdef TEST_BINARY_DIR
+  backendDir = fs::path(TEST_BINARY_DIR);
+#else
+  backendDir = fs::current_path() / "build" / "test" / "unit";
+#endif
+  config["backendsDir"] = backendDir.string();
+
+  EXPECT_NO_THROW({
+    LlamaModel model(
+        getValidModelPath(),
+        std::string(test_projection_path),
+        std::unordered_map<std::string, std::string>(config));
+    model.waitForLoadInitialization();
   });
 }

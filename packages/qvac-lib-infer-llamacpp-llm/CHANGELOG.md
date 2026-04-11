@@ -1,5 +1,96 @@
 # Changelog
 
+## [0.15.0] - 2026-04-09
+
+### Breaking Changes
+
+#### KV cache API simplified — `{ role: "session" }` replaced with `runOptions`
+
+Cache control moved from `{ role: "session" }` chat messages to explicit `runOptions` fields: `cacheKey` and `saveCacheToDisk`. The `getTokens`, `save`, and `reset` session commands are removed — use `response.stats.CacheTokens`, `saveCacheToDisk: true`, and a different `cacheKey` (or omit it) instead.
+
+### Added
+
+- `cacheKey`, `saveCacheToDisk` options on `runOptions` and `RunOptions` TypeScript interface.
+- `docs/cache-api.md` — KV cache API usage guide.
+
+### Removed
+
+- `{ role: "session" }` message protocol, `getTokens` command, `save` command.
+
+## [0.14.4] - 2026-04-03
+
+### Changed
+
+- Updated qvac-fabric dependency from 7248.2.1 to 7248.2.3, which fixes OpenCL kernel cache support on Android.
+
+### Added
+
+- `openclCacheDir` option in `LlamaConfig` (`index.d.ts`): writable directory for OpenCL kernel binary cache, required on Android for fast GPU startup.
+- `cache-type-k` and `cache-type-v` options in `LlamaConfig` (`index.d.ts`): configure KV cache quantization types.
+
+## [0.14.3] - 2026-04-07
+
+### Added
+
+#### `backendDevice` runtime stat
+- `runtimeStats()` now includes `backendDevice` (`"cpu"` or `"gpu"`) reporting the actual resolved device used for inference.
+- Reflects the device after backend selection and fallback logic, not the user-configured preference.
+- Captured as numeric `int64_t` (0/1) at the C++ level, mapped to a string in the JS layer.
+
+## [0.14.2] - 2026-04-07
+
+This patch release updates the qvac-fabric native dependency.
+
+### Changed
+
+#### qvac-fabric dependency bump
+
+Updated qvac-fabric from 7248.2.1#1 to 7248.2.2, aligning all llamacpp-based addons on the same fabric version.
+
+### Pull Requests
+
+- [#1358](https://github.com/tetherto/qvac/pull/1358) - Qvac 16779 qvac fabric lockstep
+
+## [0.14.1] - 2026-04-02
+
+### Changed
+
+- Updated qvac-lib-inference-addon-cpp dependancy from 1.1.2 to 1.1.5
+- Reason for the version update:
+    - addon-cpp v1.1.2's cancelJob() unconditionally set the model's stop flag whenever a job existed, even if that job was only queued and never started processing. Since the queued job never entered process(), the flag was never consumed or reset.
+    - In the llm addon, this meant that cancelling a request and then submitting a new one would cause the new request to abort instantly on entry — returning no results — because it inherited the stale stop flag from the previous cancel.
+
+## [0.14.0] - 2026-03-19
+
+### Added
+
+#### `tools_at_end` configuration for dynamic tool management in multi-turn conversations
+
+New `tools_at_end` configuration option (`"true"` or `"false"`, default: `"false"`) places tool definitions at the end of the prompt (after conversation history) instead of in the system prompt. This enables KV cache optimization for multi-turn conversations with dynamic tool sets, where tools change between turns. Currently supports Qwen3 models only.
+
+- **KV cache trimming**: After each turn, tools are automatically removed from the KV cache, preventing stale tool definitions from accumulating
+- **Conversation history reuse**: History tokens are preserved in cache, saving recomputation on long conversations
+- **Dynamic tool replacement**: Different tool sets can be used per turn without cache bloat from unused tools
+
+## [0.13.0] - 2026-03-18
+
+### Added
+
+#### LoRA finetuning support
+
+`model.finetune(options)` trains a LoRA adapter on top of a loaded GGUF base model. The adapter is saved as a `.gguf` file and can be loaded at inference time via the `lora` config option. Supports SFT (chat) and causal (next-token) training modes, configurable LoRA parameters (rank, alpha, target modules), validation (none / split / separate dataset), learning rate schedulers with warmup, pause/resume from checkpoints, and inference while paused. The returned `FinetuneHandle` emits `'stats'` progress events during training.
+
+#### New public methods
+
+- `model.finetune(options)` — starts LoRA finetuning, returns a `FinetuneHandle` with `on('stats', cb)` and `await()`.
+- `model.pause()` — pauses finetuning and saves a checkpoint so training can resume later. Also cancels an in-flight inference job.
+- Added typed `FinetuneOptions`, `FinetuneValidation`, `FinetuneProgressStats`, `FinetuneStats`, `FinetuneResult`, and `FinetuneHandle` interfaces to `index.d.ts`
+- Added finetuning guide at `docs/finetuning.md`
+
+### Changed
+
+- `model.cancel()` now also clears pause checkpoints (`pause_checkpoint_step_*`) from the checkpoint directory, so the next `finetune()` call starts fresh instead of resuming.
+
 ## [0.12.3] - 2026-03-17
 
 ### Added

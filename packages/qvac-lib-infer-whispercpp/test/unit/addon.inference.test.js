@@ -18,13 +18,9 @@ function createMockedModel ({ onOutput = () => { }, binding = undefined } = {}) 
   const validateStub = sinon.stub(TranscriptionWhispercpp.prototype, 'validateModelFiles').returns(undefined)
 
   const args = {
-    modelName: 'ggml-tiny.bin',
-    vadModelName: 'ggml-silero-v5.1.2.bin',
-    loader: new FakeDL({}),
-    params: {
-      language: 'en',
-      max_seconds: 29,
-      temperature: 0.0
+    files: {
+      model: 'ggml-tiny.bin',
+      vadModel: 'ggml-silero-v5.1.2.bin'
     }
   }
   const config = {
@@ -48,12 +44,10 @@ function createMockedModel ({ onOutput = () => { }, binding = undefined } = {}) 
 
   sinon.stub(model, '_createAddon').callsFake(configurationParams => {
     const _binding = binding || new MockedBinding()
-    const addon = new WhisperInterface(_binding, configurationParams, onOutput, transitionCb)
-
-    // Set the BaseInference callback on the mocked binding so _finishPromise gets resolved
-    if (_binding.setBaseInferenceCallback) {
-      _binding.setBaseInferenceCallback(model._outputCallback.bind(model))
-    }
+    const addon = new WhisperInterface(_binding, configurationParams, (addon, event, jobId, output, error) => {
+      onOutput(addon, event, jobId, output, error)
+      model._outputCallback(addon, event, jobId, output, error)
+    }, transitionCb)
 
     return addon
   })
@@ -167,6 +161,138 @@ test('Cancel clears in-flight job and allows a new run', async (t) => {
   )
 })
 
+test('WhisperInterface runJob preserves active job when native rejects new job', async (t) => {
+  const binding = new MockedBinding()
+  const addon = new WhisperInterface(binding, {
+    contextParams: {
+      model: 'ggml-tiny.bin'
+    },
+    whisperConfig: {
+      language: 'en',
+      duration_ms: 0,
+      temperature: 0.0
+    },
+    miscConfig: {
+      caption_enabled: false
+    }
+  }, () => {})
+
+  addon._activeJobId = 42
+  addon._nextJobId = 43
+  addon._setState('processing')
+  binding.runJob = () => false
+
+  const accepted = await addon.runJob({
+    type: 'audio',
+    input: new Uint8Array([1, 2, 3])
+  })
+
+  t.is(accepted, false, 'runJob should report rejected when native side is busy')
+  t.is(addon._activeJobId, 42, 'Current active job ID should remain unchanged')
+  t.is(addon._nextJobId, 43, 'Next job counter should not advance on rejection')
+  t.is(await addon.status(), 'processing', 'State should remain unchanged for the current active job')
+})
+
+test('WhisperInterface cancel clears active job only after cancel resolves', async (t) => {
+  const binding = new MockedBinding()
+  const addon = new WhisperInterface(binding, {
+    contextParams: {
+      model: 'ggml-tiny.bin'
+    },
+    whisperConfig: {
+      language: 'en',
+      duration_ms: 0,
+      temperature: 0.0
+    },
+    miscConfig: {
+      caption_enabled: false
+    }
+  }, () => {})
+
+  addon._activeJobId = 7
+  addon._setState('processing')
+  let sawActiveJobDuringCancel = false
+
+  binding.cancel = async (handle) => {
+    t.is(handle, addon._handle, 'cancel should be called with current handle')
+    sawActiveJobDuringCancel = addon._activeJobId === 7
+    await wait(5)
+  }
+
+  await addon.cancel(7)
+
+  t.ok(sawActiveJobDuringCancel, 'Active job should still be set while cancel is in-flight')
+  t.is(addon._activeJobId, null, 'Active job should be cleared after cancel resolves')
+  t.is(await addon.status(), 'listening', 'State should return to listening after cancel resolves')
+})
+
+test('WhisperInterface cancels buffered job before native run starts', async (t) => {
+  const events = []
+  const binding = new MockedBinding()
+  const addon = new WhisperInterface(binding, {
+    contextParams: {
+      model: 'ggml-tiny.bin'
+    },
+    whisperConfig: {
+      language: 'en',
+      duration_ms: 0,
+      temperature: 0.0
+    },
+    miscConfig: {
+      caption_enabled: false
+    }
+  }, (handle, event, jobId, output, error) => {
+    events.push({ event, jobId, output, error })
+  })
+
+  const pendingJobId = await addon.append({
+    type: 'audio',
+    input: new Uint8Array([1, 2, 3, 4])
+  })
+
+  await addon.cancel(pendingJobId)
+
+  t.is(addon._activeJobId, null, 'Buffered cancel should not leave an active native job')
+  t.is(addon._bufferedAudio.length, 0, 'Buffered cancel should clear queued audio')
+  t.is(await addon.status(), 'listening', 'Buffered cancel should return to listening state')
+  t.ok(
+    events.find(e => e.event === 'Error' && e.jobId === pendingJobId && e.error === 'Job cancelled'),
+    'Buffered cancel should fail the pending JS-owned job'
+  )
+})
+
+test('WhisperInterface ignores stale wrapper job ids when cancelling', async (t) => {
+  const binding = new MockedBinding()
+  const addon = new WhisperInterface(binding, {
+    contextParams: {
+      model: 'ggml-tiny.bin'
+    },
+    whisperConfig: {
+      language: 'en',
+      duration_ms: 0,
+      temperature: 0.0
+    },
+    miscConfig: {
+      caption_enabled: false
+    }
+  }, () => {})
+
+  addon._activeJobId = 2
+  addon._nextJobId = 3
+  addon._setState('processing')
+
+  let cancelCalls = 0
+  binding.cancel = async () => {
+    cancelCalls += 1
+  }
+
+  await addon.cancel(1)
+
+  t.is(cancelCalls, 0, 'Stale response ids should not cancel the current native job')
+  t.is(addon._activeJobId, 2, 'Stale response ids should leave the active job unchanged')
+  t.is(await addon.status(), 'processing', 'Stale response ids should not change state')
+})
+
 test('Destroy fails active response and clears job mapping', async (t) => {
   const binding = new MockedBinding()
   binding.setJobDelayMs(100)
@@ -182,12 +308,12 @@ test('Destroy fails active response and clears job mapping', async (t) => {
     t.fail('Active response should fail when model is destroyed')
   } catch (error) {
     t.ok(
-      error.message.includes('Model was destroyed'),
-      'Destroy should reject active response with destroy reason'
+      error.message.includes('destroyed') || error.message.includes('cancel'),
+      'Destroy should reject active response with a teardown-related reason'
     )
   }
 
-  t.is(model._jobToResponse.size, 0, 'Destroy should clear job-to-response mapping')
+  t.is(model._job.active, null, 'Destroy should clear the single active job handler')
 })
 
 test('Orphan native callbacks are ignored when no active job exists', async (t) => {

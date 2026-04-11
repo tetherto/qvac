@@ -16,6 +16,7 @@ This native C++ addon, built using the `Bare` Runtime, simplifies running Large 
   - [7. Run Inference](#7-run-inference)
   - [8. Release Resources](#8-release-resources)
 - [API behavior by state](#api-behavior-by-state)
+- [Fine-tuning](#fine-tuning)
 - [Quickstart Example](#quickstart-example)
 - [Other Examples](#other-examples)
 - [Architecture](#architecture)
@@ -43,10 +44,9 @@ BitNet models require special backend handling on Adreno GPUs. When a BitNet mod
 
 **Dependencies:**
 - qvac-lib-inference-addon-cpp (≥1.1.2): C++ addon framework (single-job runner)
-- qvac-fabric-llm.cpp (≥7248.1.4): Inference engine
+- qvac-fabric-llm.cpp (≥7248.2.3): Inference engine
 - Bare Runtime (≥1.24.0): JavaScript runtime
 - Linux requires Clang/LLVM 19 with libc++
-
 ## Installation
 
 ### Prerequisites
@@ -56,21 +56,6 @@ Ensure that the Bare Runtime is installed globally on your system. If it's not a
 ```bash
 npm install -g bare@latest
 ```
-Before proceeding with the installation, please generate a **granular Personal Access Token (PAT)** with the `read-only` scope. Once generated, add the token to your environment variables using the name `NPM_TOKEN`.
-
-```bash
-export NPM_TOKEN=your_personal_access_token
-```
-
-Next, create a `.npmrc` file in the root of your project with the following content:
-
-```ini
-@qvac:registry=https://registry.npmjs.org/
-//registry.npmjs.org/:_authToken={NPM_TOKEN}
-```
-
-This configuration ensures secure access to NPM Packages when installing scoped packages.
-
 ### Installing the Package
 
 ```bash
@@ -91,7 +76,7 @@ const LlmLlamacpp = require('@qvac/llm-llamacpp')
 
 ### 2. Create a Data Loader
 
-Data Loaders abstract the way model files are accessed. Use a [`FileSystemDataLoader`](../qvac-lib-dl-filesystem) to load model files from your local file system. Models can be downloaded directly from HuggingFace.
+Data Loaders abstract the way model files are accessed. Use a [`FileSystemDataLoader`](../dl-filesystem) to load model files from your local file system. Models can be downloaded directly from HuggingFace.
 
 ```js
 const FilesystemDL = require('@qvac/dl-filesystem')
@@ -158,6 +143,7 @@ const config = {
 | presence_penalty  | float                                       | 0                            | Presence penalty for sampling                         |
 | frequency_penalty | float                                       | 0                            | Frequency penalty for sampling                        |
 | tools             | `"true"` or `"false"`                       | `"false"`                    | Enable tool calling with jinja templating             |
+| tools_at_end      | `"true"` or `"false"`                       | `"false"`                    | Place tools at end of prompt ([details](./docs/tools-at-end.md)) |
 | verbosity         | 0 – 3 (0=ERROR, 1=WARNING, 2=INFO, 3=DEBUG) | 0                            | Logging verbosity level                               |
 | n_discarded       | integer                                     | 0                            | Tokens to discard in sliding window context           |
 | main-gpu          | integer, `"integrated"`, or `"dedicated"`   | —                            | GPU selection for multi-GPU systems                   |
@@ -239,6 +225,8 @@ try {
 }
 ```
 
+When `opts.stats` is enabled, `response.stats` includes runtime metrics such as `TTFT`, `TPS`, token counters, and `backendDevice` (`"cpu"` or `"gpu"`). `backendDevice` reflects the resolved device used at runtime after backend selection/fallback logic, not only the requested config.
+
 ### 8. Release Resources
 
 Unload the model when finished:
@@ -266,6 +254,31 @@ The following table describes the expected behavior of `run` and `cancel` depend
 When `run()` is called while another job is active, the implementation first waits briefly for the previous job to settle. This preserves single-job behavior while still failing fast when the instance is busy. If the second run cannot be accepted (timeout or addon busy rejection), it throws:
 - `"Cannot set new job: a job is already set or being processed"`
 
+
+## Fine-tuning
+
+The library supports **LoRA finetuning** of GGUF models: train small adapter weights on top of a base model, then save the adapter and load it at inference time via the `lora` config option. You can pause and resume training from checkpoints.
+
+For the full API, dataset format, parameters, and examples, see the **[Finetuning guide](docs/finetuning.md)**.
+
+### Smart Home Showcase
+
+A hands-on example that finetunes Qwen3-0.6B to act as a smart home tool-calling specialist. The base model tends to drift into conversational text or exhaust its token budget on reasoning — the finetuned adapter fixes both problems.
+
+1. **Train** — [`smart-home-finetune.js`](./examples/finetune/showcase/smart-home-finetune.js) runs a 1-epoch causal LoRA finetune on a [215-sample dataset](./examples/input/smart_home_specialist_train.jsonl) of user requests paired with `<tool_call>` responses.
+2. **Evaluate** — [`smart-home-finetuned-test.js`](./examples/finetune/showcase/smart-home-finetuned-test.js) runs the same prompts against the base model and the finetuned model, then prints a side-by-side comparison report (strictness, accuracy, thinking token usage, multi-turn stability).
+
+> **Note on dataset diversity:** The training dataset intentionally includes tool-calling samples from many domains (medical, irrigation, quantum, etc.), not just the 4 smart-home tools used in evaluation. The goal is to teach the model the general *behavioral pattern* — produce structured `<tool_call>` output instead of conversational text — rather than memorize specific tool names. The evaluation then tests whether that pattern transfers to smart-home prompts the model wasn't explicitly drilled on.
+
+```bash
+# Train the adapter
+bare examples/finetune/showcase/smart-home-finetune.js
+
+# Compare baseline vs finetuned
+bare examples/finetune/showcase/smart-home-finetuned-test.js
+```
+
+
 ## Quickstart Example
 
 Clone the repository and navigate to it:
@@ -291,6 +304,12 @@ npm run quickstart
 -   [Multi-Cache](./examples/multiCache.js) – Demonstrates session handling and caching capabilities.
 -   [Native Logging](./examples/nativelog.js) – Demonstrates C++ addon logging integration.
 -   [Tool Calling](./examples/toolCalling.js) – Demonstrates tool calling capabilities.
+-   [LoRA Finetuning](./examples/finetune/simple-lora-finetune.js) – Basic LoRA finetuning.
+-   [LoRA Finetuning Pause/Resume](./examples/finetune/simple-lora-finetune-pause-resume.js) – Pause and resume finetuning.
+-   [LoRA Inference](./examples/simple-lora-inference.js) – Inference with a finetuned LoRA adapter.
+-   [Smart Home Finetune Showcase](./examples/finetune/showcase/smart-home-finetune.js) – Train a smart home tool-calling specialist, then [evaluate](./examples/finetune/showcase/smart-home-finetuned-test.js) baseline vs finetuned.
+-   [Bench Tools Placement](./examples/benchToolsPlacement.js) – Benchmarks standard vs `tools_at_end` placement across multi-turn conversations.
+-   [Test Tool Removal](./examples/testToolRemoval.js) – Demonstrates dynamic tool addition and removal between turns.
 
 ## OCR with Vision-Language Models
 

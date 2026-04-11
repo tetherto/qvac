@@ -1,8 +1,7 @@
 import type { ModelProgressUpdate, RegistryDownloadEntry } from "@/schemas";
 import type { QVACModelEntry, QVACBlobBinding } from "@qvac/registry-client";
-import fs, { promises as fsPromises } from "bare-fs";
+import { promises as fsPromises } from "bare-fs";
 import path from "bare-path";
-import { type Readable, type Writable } from "bare-stream";
 import { AbortController, type AbortSignal } from "bare-abort-controller";
 import {
   getModelsCacheDir,
@@ -126,69 +125,40 @@ async function downloadSingleFileFromRegistry(
 
   const client = await getRegistryClient();
 
-  let readStream: Readable;
-
-  if (blobBinding) {
-    logger.info(`📥 Downloading blob directly: ${modelFileName}`);
-    const result = await client.downloadBlob(blobBinding, {
-      timeout: REGISTRY_STREAM_TIMEOUT_MS,
-    });
-    if (!("stream" in result.artifact)) {
-      throw new RegistryDownloadFailedError(
-        `No stream returned for blob ${modelFileName}`,
-      );
-    }
-    readStream = result.artifact.stream as unknown as Readable;
-  } else {
-    logger.info(`📥 Downloading from registry: ${registryPath}`);
-    const result = await client.downloadModel(registryPath, registrySource, {
-      timeout: REGISTRY_STREAM_TIMEOUT_MS,
-    });
-    if (!("stream" in result.artifact)) {
-      throw new RegistryDownloadFailedError(
-        `No stream returned for ${registryPath}`,
-      );
-    }
-    readStream = result.artifact.stream as unknown as Readable;
-  }
-
   const dir = path.dirname(modelPath);
   await fsPromises.mkdir(dir, { recursive: true });
 
-  const writeStream = fs.createWriteStream(modelPath) as unknown as Writable;
+  // Adapt registry client's core.on("download") progress to SDK ModelProgressUpdate.
+  // This reports network-layer bytes, decoupled from disk I/O backpressure.
+  const onProgress = progressCallback
+    ? (progress: { downloaded: number; total: number }) => {
+        const total = progress.total || expectedSize || progress.downloaded;
+        progressCallback({
+          type: "modelProgress",
+          downloaded: progress.downloaded,
+          total,
+          percentage: total > 0
+            ? calculatePercentage(progress.downloaded, total)
+            : 0,
+          downloadKey,
+        });
+      }
+    : undefined;
 
-  let downloadedBytes = 0;
+  const clientOptions = {
+    timeout: REGISTRY_STREAM_TIMEOUT_MS,
+    outputFile: modelPath,
+    ...(onProgress && { onProgress }),
+    ...(signal && { signal: signal as unknown as globalThis.AbortSignal }),
+  };
 
-  readStream.on("data", (chunk: unknown) => {
-    const buffer = chunk as Buffer;
-    downloadedBytes += buffer.length;
-
-    if (progressCallback) {
-      progressCallback({
-        type: "modelProgress",
-        downloaded: downloadedBytes,
-        total: expectedSize || downloadedBytes,
-        percentage: expectedSize
-          ? calculatePercentage(downloadedBytes, expectedSize)
-          : 0,
-        downloadKey,
-      });
-    }
-  });
-
-  readStream.pipe(writeStream);
-
-  await new Promise<void>((resolve, reject) => {
-    writeStream.on("finish", resolve);
-    writeStream.on("error", reject);
-    readStream.on("error", reject);
-
-    signal?.addEventListener(
-      "abort",
-      () => reject(new Error("Download cancelled")),
-      { once: true },
-    );
-  });
+  if (blobBinding) {
+    logger.info(`📥 Downloading blob directly: ${modelFileName}`);
+    await client.downloadBlob(blobBinding, clientOptions);
+  } else {
+    logger.info(`📥 Downloading from registry: ${registryPath}`);
+    await client.downloadModel(registryPath, registrySource, clientOptions);
+  }
 
   logger.info(`✅ Downloaded to ${modelPath}`);
 
@@ -457,14 +427,35 @@ async function downloadShardedFilesFromRegistry(
 
 /**
  * Find companion ONNX data file in registry.
- * ONNX models with external data have a .onnx file and a .onnx_data file.
+ * ONNX models with external data may use either .onnx_data or .onnx.data.
  */
-function findOnnxCompanionDataFile(
+export function findOnnxCompanionDataFile(
   registryPath: string,
 ): RegistryItem | undefined {
   if (!registryPath.endsWith(".onnx")) return undefined;
-  const dataPath = registryPath + "_data";
-  return getModelByPath(dataPath);
+
+  return (
+    getModelByPath(`${registryPath}_data`) ??
+    getModelByPath(`${registryPath}.data`)
+  );
+}
+
+/**
+ * Resolve the main ONNX registry path from a companion data registry path.
+ * Supports both .onnx_data and .onnx.data naming conventions.
+ */
+export function getPairedOnnxRegistryPath(
+  registryPath: string,
+): string | undefined {
+  if (registryPath.endsWith(".onnx_data")) {
+    return registryPath.slice(0, -"_data".length);
+  }
+
+  if (registryPath.endsWith(".onnx.data")) {
+    return registryPath.slice(0, -".data".length);
+  }
+
+  return undefined;
 }
 
 /**
@@ -697,6 +688,27 @@ export async function downloadModelFromRegistry(
 
   // Look up model metadata from our generated models.ts
   const modelMetadata = getModelByPath(registryPath);
+
+  // ONNX external data: check if already present in paired ONNX cache directory.
+  // Avoids redundant single-file downloads when the companion .onnx download already placed it.
+  const pairedOnnxRegistryPath = getPairedOnnxRegistryPath(registryPath);
+  if (pairedOnnxRegistryPath) {
+    const onnxRegistryPath = pairedOnnxRegistryPath;
+    const onnxCacheKey = generateShortHash(onnxRegistryPath);
+    const pairedPath = getOnnxModelPath(onnxCacheKey, filename);
+    const validated = await validateCachedFile(
+      pairedPath,
+      filename,
+      modelMetadata?.expectedSize || 0,
+      modelMetadata?.sha256Checksum,
+      hooks,
+    );
+    if (validated) {
+      logger.info(`✅ ONNX data file found in paired cache: ${validated}`);
+      hooks?.markCacheHit();
+      return validated;
+    }
+  }
 
   if (shardInfo.isSharded) {
     const cacheKey = generateShortHash(registryPath);

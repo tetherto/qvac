@@ -1,14 +1,35 @@
 'use strict'
 
 const { InferenceArgsSchema } = require('../validation')
-const { spawn } = require('bare-subprocess')
 const logger = require('../utils/logger')
 const fs = require('bare-fs')
 const { Readable } = require('bare-stream')
 const process = require('bare-process')
 const path = require('bare-path')
 
+const ALLOWED_LIBS = [
+  '@qvac/transcription-parakeet'
+]
+
 const loadedModels = new Map()
+
+const ALLOWED_AUDIO_DIRS = [
+  path.resolve('.'),
+  path.resolve('./models'),
+  path.resolve('./examples')
+]
+
+const validateFilePath = (filePath) => {
+  const resolved = path.resolve(filePath)
+  if (!fs.existsSync(resolved)) {
+    throw new Error('File not found')
+  }
+  const isAllowed = ALLOWED_AUDIO_DIRS.some(dir => resolved.startsWith(dir + path.sep) || resolved === dir)
+  if (!isAllowed) {
+    throw new Error('File path is outside allowed directories')
+  }
+  return resolved
+}
 
 const getPackageVersion = (lib) => {
   try {
@@ -21,65 +42,33 @@ const getPackageVersion = (lib) => {
   }
 }
 
-const ensurePackage = async (lib, requestedVersion) => {
-  const installed = getPackageVersion(lib)
-
-  // If package is already installed, use it (skip version check for local installs)
-  if (installed) {
-    if (!requestedVersion || installed === requestedVersion) {
-      logger.info(`Using installed ${lib}@${installed}`)
-      return installed
-    }
-    // Version mismatch but package is installed - use installed version with warning
-    logger.warn(`Requested ${lib}@${requestedVersion} but ${installed} is installed. Using installed version.`)
-    return installed
-  }
-
-  // Package not installed - try to install from npm
-  const versionSpec = requestedVersion ? `@${requestedVersion}` : ''
-  logger.info(`Installing ${lib}${versionSpec}...`)
-  await new Promise((resolve, reject) => {
-    const npm = spawn('npm', ['install', `${lib}${versionSpec}`], { stdio: 'inherit' })
-    npm
-      .on('exit', code => code === 0 ? resolve() : reject(new Error(`npm install ${lib}${versionSpec} failed (${code})`)))
-      .on('error', reject)
-  })
-
-  // Try to get version after install, but don't fail if we can't verify
-  // (Bare runtime has different module resolution than Node.js)
-  const newVersion = getPackageVersion(lib)
-  if (newVersion) {
-    logger.info(`Installed ${lib}@${newVersion}`)
-    return newVersion
-  }
-
-  // Package installed but version couldn't be verified - return 'unknown'
-  logger.warn(`Installed ${lib} but couldn't verify version (Bare runtime). Proceeding anyway.`)
-  return 'unknown'
-}
-
-class FakeLoader {
-  async start () {}
-  async stop () {}
-  async ready () {
-    return true
-  }
-
-  async getStream () {
-    throw new Error('FakeLoader.getStream should not be called when using diskPath')
-  }
-
-  async download (filepath, destPath) {
-    return {
-      await: async () => ({
-        success: false,
-        message: 'FakeLoader does not support downloading. Model files must exist on disk at the specified path.'
-      })
-    }
-  }
-
-  async list () {
-    return []
+const getFilesMap = (modelType, modelDir) => {
+  switch (modelType) {
+    case 'ctc':
+      return {
+        model: path.join(modelDir, 'model.onnx'),
+        modelData: path.join(modelDir, 'model.onnx_data'),
+        tokenizer: path.join(modelDir, 'tokenizer.json')
+      }
+    case 'eou':
+      return {
+        eouEncoder: path.join(modelDir, 'encoder.onnx'),
+        eouDecoder: path.join(modelDir, 'decoder_joint.onnx'),
+        tokenizer: path.join(modelDir, 'tokenizer.json')
+      }
+    case 'sortformer':
+      return {
+        sortformer: path.join(modelDir, 'sortformer.onnx')
+      }
+    case 'tdt':
+    default:
+      return {
+        encoder: path.join(modelDir, 'encoder-model.onnx'),
+        encoderData: path.join(modelDir, 'encoder-model.onnx.data'),
+        decoder: path.join(modelDir, 'decoder_joint-model.onnx'),
+        vocab: path.join(modelDir, 'vocab.txt'),
+        preprocessor: path.join(modelDir, 'preprocessor.onnx')
+      }
   }
 }
 
@@ -88,9 +77,13 @@ const runAddon = async (payload) => {
     const { inputs, parakeet, config } =
       InferenceArgsSchema.parse(payload)
 
-    const { lib: parakeetLib, version: parakeetVerReq } = parakeet
+    const { lib: parakeetLib } = parakeet
 
-    const parakeetVersion = await ensurePackage(parakeetLib, parakeetVerReq)
+    if (!ALLOWED_LIBS.includes(parakeetLib)) {
+      throw new Error('Unsupported library: ' + parakeetLib + '. Allowed: ' + ALLOWED_LIBS.join(', '))
+    }
+
+    const parakeetVersion = getPackageVersion(parakeetLib) || 'unknown'
     logger.info(`Loading addon: ${parakeetLib}`)
     const TranscriptionParakeet = require(parakeetLib)
     logger.info('Addon loaded successfully')
@@ -114,36 +107,32 @@ const runAddon = async (payload) => {
       if (!config.path) {
         throw new Error('Model path is required in config')
       }
-
-      const constructorArgs = {
-        loader: new FakeLoader(),
-        modelName: path.basename(config.path),
-        diskPath: path.dirname(config.path)
-      }
+      validateFilePath(config.path)
 
       const parakeetConfig = config.parakeetConfig || {}
-
-      const modelConfig = {
-        path: config.path,
-        parakeetConfig: {
-          modelType: parakeetConfig.modelType || 'tdt',
-          maxThreads: parakeetConfig.maxThreads || 4,
-          useGPU: parakeetConfig.useGPU || false,
-          sampleRate: config.sampleRate || 16000,
-          channels: 1,
-          captionEnabled: parakeetConfig.captionEnabled || false,
-          timestampsEnabled: parakeetConfig.timestampsEnabled !== false,
-          seed: parakeetConfig.seed ?? -1
-        }
-      }
+      const files = getFilesMap(modelType, config.path)
 
       logger.info('Creating model instance:', {
-        constructorArgs,
-        parakeetConfig: modelConfig.parakeetConfig,
+        files,
+        parakeetConfig,
         streaming
       })
 
-      modelInstance = new TranscriptionParakeet(constructorArgs, modelConfig)
+      modelInstance = new TranscriptionParakeet({
+        files,
+        config: {
+          parakeetConfig: {
+            modelType: parakeetConfig.modelType || 'tdt',
+            maxThreads: parakeetConfig.maxThreads || 4,
+            useGPU: parakeetConfig.useGPU || false,
+            sampleRate: config.sampleRate || 16000,
+            channels: 1,
+            captionEnabled: parakeetConfig.captionEnabled || false,
+            timestampsEnabled: parakeetConfig.timestampsEnabled !== false,
+            seed: parakeetConfig.seed ?? -1
+          }
+        }
+      })
       await modelInstance._load()
 
       const [loadSec, loadNano] = process.hrtime(loadStart)
@@ -158,7 +147,8 @@ const runAddon = async (payload) => {
     const runStart = process.hrtime()
 
     for (const audioFilePath of inputs) {
-      const audioBuffer = fs.readFileSync(audioFilePath)
+      const resolvedAudioPath = validateFilePath(audioFilePath)
+      const audioBuffer = fs.readFileSync(resolvedAudioPath)
       const segments = []
 
       let audioStream

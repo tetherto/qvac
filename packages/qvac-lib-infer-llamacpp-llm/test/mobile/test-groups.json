@@ -1,0 +1,48 @@
+{
+  "ios": {
+    "heavy1": ["runFinetuningPauseResumeTest"],
+    "heavy2": ["runToolCallingTest"],
+    "heavy3": ["runImageTest"],
+    "heavy4": ["runOcrLightonTest"],
+    "heavy5": ["runReasoningTest"],
+    "heavy6": ["runSlidingContextTest"],
+    "lightA": [
+      "runAfriquegemmaTranslationTest",
+      "runApiBehaviorTest",
+      "runBitnetTest",
+      "runCacheStateMachineTest",
+      "runConfigParametersTest",
+      "runDynamicToolsTest"
+    ],
+    "lightB": [
+      "runGenerationParamsTest",
+      "runModelLoadingTest",
+      "runMoeTest",
+      "runMultiInstanceTest",
+      "runUtf8OutputTest"
+    ]
+  },
+  "android": {
+    "groupA": [
+      "runAfriquegemmaTranslationTest",
+      "runApiBehaviorTest",
+      "runBitnetTest",
+      "runCacheStateMachineTest",
+      "runConfigParametersTest",
+      "runDynamicToolsTest",
+      "runFinetuningPauseResumeTest",
+      "runGenerationParamsTest",
+      "runImageTest"
+    ],
+    "groupB": [
+      "runModelLoadingTest",
+      "runMoeTest",
+      "runMultiInstanceTest",
+      "runOcrLightonTest",
+      "runReasoningTest",
+      "runSlidingContextTest",
+      "runToolCallingTest",
+      "runUtf8OutputTest"
+    ]
+  }
+}

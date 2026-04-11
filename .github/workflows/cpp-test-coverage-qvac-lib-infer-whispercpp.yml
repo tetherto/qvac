@@ -28,13 +28,13 @@ env:
 
 jobs:
   cpp-tests:
-    runs-on: ${{ matrix.os }}
-    name: ${{ matrix.platform }}-${{ matrix.arch }}-cpp-tests
     permissions:
       contents: read
-      packages: read
+      id-token: write
       checks: write
-      pull-requests: write
+    runs-on: ${{ matrix.os }}
+    environment: release
+    name: ${{ matrix.platform }}-${{ matrix.arch }}-cpp-tests
     strategy:
       fail-fast: false
       matrix:
@@ -48,7 +48,7 @@ jobs:
 
     steps:
       - name: Checkout code
-        uses: actions/checkout@v6
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # 6.0.2
         with:
           repository: ${{ inputs.repository || github.repository }}
           ref: ${{ inputs.ref || github.ref }}
@@ -56,7 +56,7 @@ jobs:
           lfs: true
 
       - name: Setup Node.js
-        uses: actions/setup-node@v6
+        uses: actions/setup-node@53b83947a5a98c8d113130e565377fae1a50d02f # 6.3.0
         with:
           node-version: lts/*
 
@@ -123,30 +123,26 @@ jobs:
       - name: Download test models
         working-directory: ${{ env.WORKDIR }}
         run: |
-          mkdir -p models examples/models
+          mkdir -p models
           
-          echo "Downloading ggml-tiny.bin for C++ tests..."
-          curl -L -o examples/models/ggml-tiny.bin \
+          echo "Downloading ggml-tiny.bin..."
+          curl -L -o models/ggml-tiny.bin \
             "https://huggingface.co/ggerganov/whisper.cpp/resolve/main/ggml-tiny.bin" \
             --fail --silent --show-error --connect-timeout 30 --max-time 300
           
           echo "Downloading ggml-silero VAD model..."
-          curl -L -o examples/models/ggml-silero-v5.1.2.bin \
+          curl -L -o models/ggml-silero-v5.1.2.bin \
             "https://huggingface.co/ggml-org/whisper-vad/resolve/main/ggml-silero-v5.1.2.bin" \
             --fail --silent --show-error --connect-timeout 30 --max-time 300
           
-          # Copy to models/ as well for compatibility
-          cp examples/models/*.bin models/
-          
           echo "Downloaded models:"
-          ls -lha examples/models/
+          ls -lha models/
 
       - name: Run C++ Unit Tests
         id: cpp-tests
         working-directory: ${{ env.WORKDIR }}
         run: |
           echo "=== Debug: Checking model files before running tests ==="
-          ls -la examples/models/ || echo "examples/models/ not found"
           ls -la models/ || echo "models/ not found"
           pwd
           echo "=== Running tests from: $(pwd) ==="
@@ -172,7 +168,7 @@ jobs:
 
       - name: Archive Coverage Results
         if: matrix.coverage
-        uses: actions/upload-artifact@v6
+        uses: actions/upload-artifact@bbbca2ddaa5d8feaa63e36b76fdaad77386f024f # 7.0.0
         with:
           name: coverage-report-${{ matrix.platform }}-${{ matrix.arch }}
           path: |
@@ -194,7 +190,7 @@ jobs:
         continue-on-error: true
 
       - name: Publish Test Results
-        uses: EnricoMi/publish-unit-test-result-action@v2
+        uses: EnricoMi/publish-unit-test-result-action@c950f6fb443cb5af20a377fd0dfaa78838901040 # 2.23.0
         if: always() && steps.check-test-results.outputs.exists == 'true'
         with:
           files: ${{ env.WORKDIR }}/build/addon/tests/cpp-test-results.xml
@@ -217,12 +213,15 @@ jobs:
           fi
 
   coverage-report:
+    permissions:
+      contents: read
+      actions: read
     needs: cpp-tests
     runs-on: ubuntu-latest
     if: always()
     steps:
       - name: Download all coverage reports
-        uses: actions/download-artifact@v7
+        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # 8.0.1
         with:
           path: coverage-reports
 

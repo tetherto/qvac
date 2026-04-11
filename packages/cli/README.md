@@ -2,6 +2,8 @@
 
 A command-line interface for the QVAC ecosystem. QVAC CLI provides tooling for building, bundling, and managing QVAC-powered applications.
 
+This package is published to npm as **`@qvac/cli`** and lives in the QVAC monorepo at **`packages/cli`**. Older instructions may refer to the deprecated **`qvac-cli`** package name—use **`@qvac/cli`** instead.
+
 ## Table of Contents
 
 - [Installation](#installation)
@@ -107,9 +109,11 @@ This file is primarily the SDK runtime config, but `qvac bundle sdk` also reads 
 @qvac/sdk/llamacpp-completion/plugin
 @qvac/sdk/llamacpp-embedding/plugin
 @qvac/sdk/whispercpp-transcription/plugin
+@qvac/sdk/parakeet-transcription/plugin
 @qvac/sdk/nmtcpp-translation/plugin
 @qvac/sdk/onnx-tts/plugin
 @qvac/sdk/onnx-ocr/plugin
+@qvac/sdk/sdcpp-generation/plugin
 ```
 
 **Example configurations:**
@@ -144,8 +148,9 @@ This file is primarily the SDK runtime config, but `qvac bundle sdk` also reads 
 **Run locally:**
 
 ```bash
-# From the cli package directory
-node ./src/index.js bundle sdk
+# From packages/cli after a build
+bun run build
+node ./dist/index.js bundle sdk
 
 # Or link globally for testing
 npm link

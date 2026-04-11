@@ -4,9 +4,13 @@ const test = require('brittle')
 const path = require('bare-path')
 const fs = require('bare-fs')
 const os = require('bare-os')
-const binding = require('../../binding')
-const { ParakeetInterface } = require('../../parakeet')
-const { setupJsLogger, getNamedPathsConfig, isMobile } = require('./helpers.js')
+const {
+  binding,
+  ParakeetInterface,
+  setupJsLogger,
+  getNamedPathsConfig,
+  isMobile
+} = require('./helpers.js')
 
 /**
  * Helper function to create a test directory with corrupted model files

@@ -91,6 +91,7 @@ private:
       singleGgufStreamedFiles_;
   std::optional<LlamaBackendsHandle> backendsHandle_;
   mutable std::atomic<bool> stopCancelled_{false};
+  int64_t runtimeBackendDevice_ = 0;
 
 public:
   // These using definitions are accessed by the Addon<BertModel> template.
@@ -190,7 +191,9 @@ public:
   enum llama_pooling_type pooling_type;
   int n_embd;
 
-  void initializeBackend(const std::string& backendsDir = "");
+  void initializeBackend(
+      const std::string& backendsDir = "",
+      const std::string& openclCacheDir = "");
 
   /// @brief Ensure model is initialized
   void waitForLoadInitialization() final {

@@ -1,4 +1,4 @@
-import BaseInference, { Loader, QvacResponse } from "@qvac/infer-base";
+import QvacResponse from "@qvac/infer-base/src/QvacResponse";
 import type { LoggerInterface } from "@qvac/logging";
 import { Readable } from "stream";
 
@@ -19,23 +19,17 @@ declare interface WhisperConfig {
   [key: string]: unknown;
 }
 
-declare interface TranscriptionWhispercppArgs {
-  loader: Loader;
-  logger?: LoggerInterface;
-  modelName: string;
-  vadModelName?: string;
-  diskPath?: string;
-  [args: string]: unknown;
+declare interface TranscriptionWhispercppFiles {
+  model: string;
+  vadModel?: string;
 }
 
-declare interface ProgressData {
-  action: string;
-  totalSize: number;
-  totalFiles: number;
-  filesProcessed: number;
-  currentFile: string;
-  currentFileProgress: string;
-  overallProgress: string;
+declare interface TranscriptionWhispercppArgs {
+  files: TranscriptionWhispercppFiles;
+  logger?: LoggerInterface;
+  exclusiveRun?: boolean;
+  opts?: { stats?: boolean };
+  [args: string]: unknown;
 }
 
 declare interface TranscriptionWhispercppConfig {
@@ -46,12 +40,24 @@ declare interface TranscriptionWhispercppConfig {
   [args: string]: unknown;
 }
 
-declare type ReportProgressCallback = (progressData: ProgressData) => void;
+declare interface InferenceClientState {
+  configLoaded: boolean;
+  weightsLoaded: boolean;
+  destroyed: boolean;
+}
+
+/**
+ * A single transcription segment emitted by the Whisper addon in an output update.
+ */
+declare interface WhisperTranscriptionSegment {
+  text: string
+  [key: string]: unknown
+}
 
 /**
  * GGML client implementation for the Whisper transcription model
  */
-declare class TranscriptionWhispercpp extends BaseInference {
+declare class TranscriptionWhispercpp {
   /**
    * Creates an instance of WhisperClient.
    * @constructor
@@ -63,16 +69,23 @@ declare class TranscriptionWhispercpp extends BaseInference {
     config: TranscriptionWhispercppConfig
   );
 
-  /**
-   * Load model, weights, and activate addon.
-   * @param {boolean} [closeLoader=false] - Close loader when done.
-   * @param {ReportProgressCallback} [reportProgressCallback] - Hook for progress updates.
-   * @returns {Promise<void>} - A promise that resolves when the model is fully loaded.
-   */
-  _load(
-    closeLoader?: boolean,
-    reportProgressCallback?: ReportProgressCallback
-  ): Promise<void>;
+  getState(): InferenceClientState;
+
+  load(...args: unknown[]): Promise<void>;
+
+  unload(): Promise<void>;
+
+  destroy(): Promise<void>;
+
+  pause(): Promise<void>;
+
+  unpause(): Promise<void>;
+
+  stop(): Promise<void>;
+
+  status(): Promise<string>;
+
+  cancel(): Promise<void>;
 
   /**
    * Reload the model with new configuration parameters.
@@ -86,19 +99,57 @@ declare class TranscriptionWhispercpp extends BaseInference {
     audio_format?: string;
   }): Promise<void>;
 
-  run(audioStream: Readable): Promise<QvacResponse>;
+  /**
+   * Run transcription on an audio stream. When `opts.stats` was set on construction, `response.stats` matches {@link TranscriptionWhispercpp.RuntimeStats}.
+   */
+  run(
+    audioStream: Readable
+  ): Promise<QvacResponse<TranscriptionWhispercpp.WhisperRunOutput>>;
+
+  runStreaming(
+    audioStream: Readable
+  ): Promise<QvacResponse<TranscriptionWhispercpp.WhisperRunOutput>>;
 }
 
 declare namespace TranscriptionWhispercpp {
+  /**
+   * Keys returned by the native addon `WhisperModel::runtimeStats()` when stats are enabled.
+   * `totalTime` is wall time in seconds; `audioDurationMs` and whisper-prefixed fields are milliseconds where applicable.
+   */
+  export interface RuntimeStats {
+    totalTime: number
+    realTimeFactor: number
+    tokensPerSecond: number
+    audioDurationMs: number
+    totalSamples: number
+    totalTokens: number
+    totalSegments: number
+    processCalls: number
+    whisperSampleMs: number
+    whisperEncodeMs: number
+    whisperDecodeMs: number
+    whisperBatchdMs: number
+    whisperPromptMs: number
+    totalWallMs: number
+  }
+
+  /**
+   * Payload passed to `onUpdate` for transcription output (array of segments or a single segment object).
+   */
+  export type WhisperRunOutput =
+    | WhisperTranscriptionSegment[]
+    | WhisperTranscriptionSegment
+
   export {
     TranscriptionWhispercpp as default,
     TranscriptionWhispercpp,
     VadParams,
     WhisperConfig,
     TranscriptionWhispercppArgs,
+    TranscriptionWhispercppFiles,
     TranscriptionWhispercppConfig,
-    ProgressData,
-    ReportProgressCallback,
+    WhisperTranscriptionSegment,
+    InferenceClientState,
   };
 }
 
