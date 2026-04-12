@@ -3,13 +3,13 @@
 const path = require('bare-path')
 const ONNXTTS = require('../..')
 const { readWavAsFloat32, resampleLinear } = require('./wav-helper')
-const { getBaseDir, isMobile, runTTS } = require('./runTTS')
+const { getBaseDir, isMobile, runTTS, runTTSWithSplit } = require('./runTTS')
 
 const CHATTERBOX_SAMPLE_RATE = 24000
 
 async function loadChatterboxTTS (params = {}) {
   const baseDir = getBaseDir()
-  const defaultModelDir = path.join(baseDir, 'models', 'chatterbox')
+  const defaultModelDir = path.resolve(path.join(baseDir, 'models', 'chatterbox'))
 
   const tokenizerPath = params.tokenizerPath || path.join(defaultModelDir, 'tokenizer.json')
   const speechEncoderPath = params.speechEncoderPath || path.join(defaultModelDir, 'speech_encoder.onnx')
@@ -60,22 +60,23 @@ async function loadChatterboxTTS (params = {}) {
     console.log(`[Chatterbox] Using reference audio: ${defaultRefPath} (${referenceAudio.length} samples @ ${CHATTERBOX_SAMPLE_RATE / 1000}kHz)`)
   }
 
-  const args = {
-    tokenizerPath,
-    speechEncoderPath,
-    embedTokensPath,
-    conditionalDecoderPath,
-    languageModelPath,
+  const model = new ONNXTTS({
+    files: {
+      modelDir: params.modelDir || defaultModelDir,
+      tokenizer: tokenizerPath,
+      speechEncoder: speechEncoderPath,
+      embedTokens: embedTokensPath,
+      conditionalDecoder: conditionalDecoderPath,
+      languageModel: languageModelPath
+    },
+    engine: 'chatterbox',
     referenceAudio,
+    config: {
+      language: params.language || 'en',
+      useGPU: params.useGPU || false
+    },
     opts: { stats: true }
-  }
-
-  const config = {
-    language: params.language || 'en',
-    useGPU: params.useGPU || false
-  }
-
-  const model = new ONNXTTS(args, config)
+  })
   await model.load()
 
   return model
@@ -88,4 +89,11 @@ async function runChatterboxTTS (model, params, expectation = {}) {
   })
 }
 
-module.exports = { loadChatterboxTTS, runChatterboxTTS }
+async function runChatterboxTTSWithSplit (model, params, expectation = {}) {
+  return runTTSWithSplit(model, params, expectation, {
+    sampleRate: CHATTERBOX_SAMPLE_RATE,
+    engineTag: 'Chatterbox'
+  })
+}
+
+module.exports = { loadChatterboxTTS, runChatterboxTTS, runChatterboxTTSWithSplit }

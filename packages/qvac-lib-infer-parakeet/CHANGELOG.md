@@ -5,6 +5,105 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.3.1]
+
+### Added
+- Registered ONNX Runtime execution providers for GPU acceleration when `useGPU: true` is set. The `useGPU` config flag was previously accepted but never applied to session creation. Platform EPs are now active: CoreML (macOS/iOS), DirectML (Windows), NNAPI (Android). Falls back to CPU automatically if the GPU provider fails.
+
+### Changed
+- Session options are now built via `onnx_addon::buildSessionOptions()` from `@qvac/onnx`, replacing manual `Ort::SessionOptions` construction. This aligns Parakeet with the same EP registration logic used by the OCR package.
+
+## [0.3.0]
+
+This release replaces the two-argument `TranscriptionParakeet` constructor with a clean single-options interface, removes the external loader dependency, and simplifies the internal job-management pipeline.
+
+## Breaking Changes
+
+### Unified constructor interface — `new TranscriptionParakeet({ files, config })`
+
+The constructor signature has changed from the legacy two-argument form `(args, config)` to a single `opts` object. The old `args` accepted `loader`, `modelName`, and `diskPath`; the old `config` held all named file paths at the top level. The new interface groups model file paths under a `files` map and non-path settings under `config`.
+
+**BEFORE:**
+```javascript
+const model = new TranscriptionParakeet(
+  { loader, modelName, diskPath },
+  {
+    encoderPath: '/path/to/encoder-model.onnx',
+    decoderPath: '/path/to/decoder_joint-model.onnx',
+    vocabPath: '/path/to/vocab.txt',
+    preprocessorPath: '/path/to/preprocessor.onnx',
+    parakeetConfig: { modelType: 'tdt', maxThreads: 4, useGPU: false }
+  }
+)
+```
+
+**AFTER:**
+```javascript
+const model = new TranscriptionParakeet({
+  files: {
+    encoder: '/path/to/encoder-model.onnx',
+    decoder: '/path/to/decoder_joint-model.onnx',
+    vocab: '/path/to/vocab.txt',
+    preprocessor: '/path/to/preprocessor.onnx'
+  },
+  config: {
+    parakeetConfig: { modelType: 'tdt', maxThreads: 4, useGPU: false }
+  }
+})
+```
+
+### `downloadWeights()` removed
+
+The public `downloadWeights()` method has been removed. External weight downloading is no longer part of this package's responsibility. Use the `files` map to supply pre-downloaded model paths directly.
+
+### `BaseInference` inheritance removed
+
+`TranscriptionParakeet` no longer extends `BaseInference` and no longer depends on `WeightsProvider`. It is now a self-contained class that manages its own logger, run queue, and job lifecycle.
+
+## New APIs
+
+### `TranscriptionParakeetFiles`
+
+A new exported `TranscriptionParakeetFiles` interface captures all model file paths accepted by the constructor:
+
+```typescript
+interface TranscriptionParakeetFiles {
+  encoder?: string;      // TDT encoder-model.onnx
+  encoderData?: string;  // TDT encoder-model.onnx.data
+  decoder?: string;      // TDT decoder_joint-model.onnx
+  vocab?: string;        // TDT vocab.txt
+  preprocessor?: string; // TDT preprocessor.onnx
+  model?: string;        // CTC model.onnx
+  modelData?: string;    // CTC model.onnx_data
+  tokenizer?: string;    // CTC/EOU tokenizer.json
+  eouEncoder?: string;   // EOU encoder.onnx
+  eouDecoder?: string;   // EOU decoder_joint.onnx
+  sortformer?: string;   // sortformer.onnx
+}
+```
+
+### `status()`, `pause()`, `unpause()`
+
+Three new public methods expose addon lifecycle control: `status()` queries the native addon status, `pause()` suspends inference, and `unpause()` resumes it.
+
+## Other
+
+Job management is now handled by `createJobHandler()` from `@qvac/infer-base ^0.4.0`, replacing the manual `_hasActiveResponse` flag and `_failAndClearActiveResponse()` helper. `_resolveFilePath()` now takes only a `filename` argument. Dead helpers `_hasNamedPaths()` and `_getModelFilePath()` have been removed.
+
+## [0.2.7]
+
+### Changed
+- Bumped `qvac-lib-inference-addon-cpp` to `1.1.5`.
+- Restored JS-owned job ID routing after addon-cpp reverted the accidental `1.1.3` native callback `jobId` contract and `cancel(jobId)` API break.
+
+### Added
+- Regression coverage for JS-owned cancel handling of active, buffered, and stale wrapper job IDs.
+
+## [0.2.6]
+
+### Changed
+- Switched ONNX Runtime linkage from direct vcpkg dependency to `@qvac/onnx` shared module, aligning with the OCR package pattern for consistent cross-addon runtime sharing
+
 ## [0.2.5]
 
 ### Changed

@@ -1,6 +1,6 @@
 {
   "name": "@qvac/tts-onnx",
-  "version": "0.7.1",
+  "version": "0.8.1",
   "description": "Text to Speech (TTS) addon for qvac",
   "addon": true,
   "engines": {
@@ -11,11 +11,13 @@
     "build:pack": "mkdir -p dist && npm pack --pack-destination dist",
     "mobile:copy-prebuilds": "cp -r prebuilds/android-arm64 prebuilds/android-ia32 || echo 'Warning: Failed to copy prebuilds to android-ia32'; cp -r prebuilds/android-arm64 prebuilds/android-arm || echo 'Warning: Failed to copy prebuilds to android-arm'; cp -r prebuilds/android-arm64 prebuilds/android-x64 || echo 'Warning: Failed to copy prebuilds to android-x64'; cp -r prebuilds/ios-arm64 prebuilds/ios-arm64-simulator 2>/dev/null || echo 'iOS prebuilds already present'; cp -r prebuilds/ios-arm64 prebuilds/ios-x64-simulator 2>/dev/null || echo 'iOS prebuilds already present'",
     "example": "bare examples/example-chatterbox-tts.js",
-    "lint": "standard \"test/**/*.js\" \"*.js\"",
-    "lint:fix": "standard --fix \"test/**/*.js\" \"*.js\"",
+    "lint": "standard \"test/**/*.js\" \"*.js\" \"lib/*.js\"",
+    "lint:fix": "standard --fix \"test/**/*.js\" \"*.js\" \"lib/*.js\"",
     "test:unit": "brittle-bare test/unit/**/*.test.js",
     "test": "npm run test:unit && npm run test:integration",
     "test:integration": "brittle-bare test/integration/addon.test.js",
+    "test:integration:medium": "INPUT_SENTENCES=medium brittle-bare test/integration/addon.test.js",
+    "test:integration:long": "INPUT_SENTENCES=long brittle-bare test/integration/addon.test.js",
     "test:mobile:generate": "node scripts/generate-mobile-integration-tests.js",
     "test:mobile:validate": "node scripts/validate-mobile-tests.js",
     "test:cpp:build": "bare-make generate -D BUILD_TESTING=ON && bare-make build",
@@ -68,7 +70,7 @@
   "bugs": "https://github.com/tetherto/qvac/issues",
   "homepage": "https://github.com/tetherto/qvac/tree/main/packages/qvac-lib-infer-onnx-tts#readme",
   "devDependencies": {
-    "@qvac/transcription-whispercpp": "^0.3.1",
+    "@qvac/transcription-whispercpp": "^0.5.5",
     "bare-buffer": "^3.4.2",
     "bare-node-stream": "^1.0.0",
     "bare-process": "^4.2.2",
@@ -90,7 +92,8 @@
   },
   "dependencies": {
     "@qvac/error": "^0.1.0",
-    "@qvac/infer-base": "^0.1.0",
+    "@qvac/onnx": "^0.14.0",
+    "@qvac/infer-base": "^0.4.0",
     "bare-fs": "^4.5.1",
     "bare-path": "^3.0.0"
   },

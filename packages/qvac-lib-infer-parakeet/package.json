@@ -1,6 +1,6 @@
 {
   "name": "@qvac/transcription-parakeet",
-  "version": "0.2.5",
+  "version": "0.3.1",
   "description": "High-performance speech-to-text inference addon using NVIDIA Parakeet models for Bare runtime",
   "addon": true,
   "engines": {
@@ -14,7 +14,8 @@
     "clean": "rm -rf build/ prebuilds/",
     "test": "npm run test:unit && npm run test:integration",
     "test:unit": "brittle-bare test/unit/**/*.test.js",
-    "test:integration": "brittle-bare test/integration/**/*.test.js",
+    "test:integration": "npm run test:integration:generate && bash test/integration/run-tests.sh",
+    "test:integration:generate": "brittle -r test/integration/all.js test/integration/*.test.js",
     "test:benchmark:rtf": "brittle-bare test/benchmark/rtf-benchmark.test.js",
     "test:cpp:build": "bare-make generate -D BUILD_TESTING=ON && bare-make build --target parakeet_tests && bare-make install",
     "test:cpp:run": "cd build && LLVM_PROFILE_FILE=default.profraw ./parakeet_tests --gtest_output=xml:cpp-test-results.xml",
@@ -83,8 +84,9 @@
   },
   "dependencies": {
     "@qvac/error": "^0.1.0",
-    "@qvac/infer-base": "^0.2.0",
+    "@qvac/infer-base": "^0.4.0",
     "@qvac/logging": "^0.1.0",
+    "@qvac/onnx": "^0.14.0",
     "bare-fs": "^4.5.1",
     "bare-path": "^3.0.0",
     "path": "npm:bare-path",

@@ -1,9 +1,8 @@
 'use strict'
 
-const path = require('bare-path')
 const fs = require('bare-fs')
-const BaseInference = require('@qvac/infer-base/WeightsProvider/BaseInference')
-const WeightsProvider = require('@qvac/infer-base/WeightsProvider/WeightsProvider')
+const QvacLogger = require('@qvac/logging')
+const { createJobHandler, exclusiveRunQueue } = require('@qvac/infer-base')
 
 const { WhisperInterface } = require('./whisper')
 const { checkConfig } = require('./configChecker')
@@ -14,47 +13,134 @@ const END_OF_INPUT = 'end of job'
 /**
  * GGML client implementation for the Whisper transcription model
  */
-class TranscriptionWhispercpp extends BaseInference {
+class TranscriptionWhispercpp {
   /**
    * Creates an instance of WhisperClient.
    * @constructor
-   * @param {Object} args - arguments for inference setup
+   * @param {Object} args - arguments for inference setup (`files`, `logger`, `exclusiveRun`, `opts`, …)
+   * @param {Object} args.files - local model file paths
+   * @param {string} args.files.model - path to the Whisper GGML model file
+   * @param {string} [args.files.vadModel] - optional path to the Silero VAD model
    * @param {Object} config - environment-specific inference setup configuration
    */
   constructor (
-    { loader, logger = null, modelName, vadModelName, diskPath, exclusiveRun = true, ...args },
+    { files, logger = null, exclusiveRun = true, ...args },
     config
   ) {
-    // Forward extra args (notably `opts`) to BaseInference so features like stats can be enabled.
-    super({ logger, loader, exclusiveRun, ...args })
+    if (!files || typeof files.model !== 'string' || files.model.length === 0) {
+      throw new QvacErrorAddonWhisper({ code: ERR_CODES.MODEL_REQUIRED, adds: 'files.model is required' })
+    }
 
-    this._diskPath = diskPath || ''
-    this._modelName = modelName
-    this._vadModelName = vadModelName || config.vad_model_path
+    const { opts = {}, ...passThrough } = { logger, exclusiveRun, ...args }
+    this.opts = opts
+    this.logger = new QvacLogger(passThrough.logger)
+    this.exclusiveRun = !!passThrough.exclusiveRun
+    this._withExclusiveRun = exclusiveRunQueue()
+    this.state = {
+      configLoaded: false,
+      weightsLoaded: false,
+      destroyed: false
+    }
+
+    const vadModel =
+      typeof files.vadModel === 'string' && files.vadModel.length > 0
+        ? files.vadModel
+        : null
+
+    this._files = { model: files.model, vadModel }
     this._config = config
-    this.weightsProvider = new WeightsProvider(loader, this.logger)
 
     this.params = config.whisperConfig
-    this._hasActiveResponse = false
+    /** Serializes inference runs; separate from `_withExclusiveRun` queue (reload / destroy / unload). */
+    this._inferenceQueueWaiter = Promise.resolve()
+    /** Batch append returns this id before `_activeJobId` is set; needed for `cancel(jobId)` during buffering. */
+    this._pendingWhisperJobId = null
+    this._job = createJobHandler({
+      cancel: () => {
+        const jobId = this._pendingWhisperJobId ?? this.addon?._activeJobId
+        return this.addon?.cancel?.(jobId)
+      }
+    })
 
     this.logger.debug('TranscriptionWhispercpp constructor called', {
       params: this.params,
       config: this._config,
-      diskPath: this._diskPath
+      modelPath: this._files.model,
+      vadModelPath: this._files.vadModel
     })
 
     this.validateModelFiles()
   }
 
-  /**
-   * Load model, weights, and activate addon.
-   * @param {boolean} [closeLoader=false] - Close loader when done.
-   * @param {Function} [reportProgressCallback] - Hook for progress updates.
-   */
-  async _load (closeLoader = false, reportProgressCallback) {
-    this.logger.debug('Loader ready')
+  getState () {
+    return this.state
+  }
 
-    await this.downloadWeights(reportProgressCallback, { closeLoader })
+  async load (...loadArgs) {
+    if (this.state.destroyed) {
+      throw new QvacErrorAddonWhisper({
+        code: ERR_CODES.FAILED_TO_LOAD_WEIGHTS,
+        adds: 'instance was destroyed'
+      })
+    }
+    if (this.state.configLoaded || this.state.weightsLoaded) {
+      this.logger.info('Reload requested - unloading existing model first')
+      await this.unload()
+    }
+
+    await this._load(...loadArgs)
+    this.state.configLoaded = true
+    this.state.weightsLoaded = true
+  }
+
+  async pause () {
+    if (!this.addon?.pause) {
+      throw new QvacErrorAddonWhisper({ code: ERR_CODES.FAILED_TO_PAUSE, adds: 'pause not supported' })
+    }
+    await this.addon.pause()
+  }
+
+  async unpause () {
+    if (!this.addon?.activate) {
+      throw new QvacErrorAddonWhisper({ code: ERR_CODES.FAILED_TO_ACTIVATE, adds: 'activate not supported' })
+    }
+    await this.addon.activate()
+  }
+
+  async stop () {
+    if (!this.addon?.stop) {
+      throw new QvacErrorAddonWhisper({ code: ERR_CODES.FAILED_TO_STOP, adds: 'stop not supported' })
+    }
+    await this.addon.stop()
+  }
+
+  async status () {
+    if (!this.addon?.status) {
+      throw new QvacErrorAddonWhisper({ code: ERR_CODES.FAILED_TO_GET_STATUS, adds: 'status not supported' })
+    }
+    return await this.addon.status()
+  }
+
+  _resolveVadModelPath () {
+    if (this._config.vadModelPath) {
+      return this._config.vadModelPath
+    }
+    if (this._files.vadModel) {
+      return this._files.vadModel
+    }
+    if (this.params?.vad_model_path) {
+      return this.params.vad_model_path
+    }
+    return null
+  }
+
+  /**
+   * Load model and activate addon. Model files must already exist at `files.model` / optional `files.vadModel`.
+   * @param {boolean} [_closeLoader=false] - Unused; kept for `load(...args)` forwarding compatibility.
+   * @param {Function} [_reportProgressCallback] - Unused; kept for `load(...args)` forwarding compatibility.
+   */
+  async _load (_closeLoader = false, _reportProgressCallback) {
+    this.logger.debug('TranscriptionWhispercpp _load (local model files)')
 
     const whisperConfig = {
       ...this.params,
@@ -73,7 +159,7 @@ class TranscriptionWhispercpp extends BaseInference {
     delete whisperConfig.vad_params
 
     // VAD model is required for whisper transcription
-    const vadModelPath = this._config.vadModelPath || this._getVadModelFilePath()
+    const vadModelPath = this._resolveVadModelPath()
     if (vadModelPath) {
       whisperConfig.vad_model_path = vadModelPath
       whisperConfig.vadParams = this.params.vad_params || { threshold: 0.6 }
@@ -97,55 +183,81 @@ class TranscriptionWhispercpp extends BaseInference {
     _checkParamsExists(configurationParams)
     this.addon = this._createAddon(configurationParams)
 
-    // For whisper.cpp, the model file contains everything - no separate weight loading needed
     await this.addon.activate()
     this.logger.debug('Addon activated')
   }
 
   _getModelFilePath () {
-    if (!this._modelName) {
-      return ''
-    }
-    return path.join(this._diskPath, this._modelName)
+    return this._files.model
   }
 
-  _getVadModelFilePath () {
-    return this._vadModelName ? path.join(this._diskPath, this._vadModelName) : null
+  /**
+   * Serialize inference until the returned response settles (replaces `_hasActiveResponse`).
+   * Uses a dedicated waiter so `destroy` / `reload` (`_runQueueWaiter`) can still preempt.
+   */
+  async _enqueueExclusiveRunResponse (runFn) {
+    const prev = this._inferenceQueueWaiter || Promise.resolve()
+    let releaseSlot
+    this._inferenceQueueWaiter = new Promise(resolve => { releaseSlot = resolve })
+    await prev
+    let response
+    try {
+      response = await runFn()
+    } catch (err) {
+      releaseSlot()
+      throw err
+    }
+    response.await().finally(() => { releaseSlot() }).catch(() => {})
+    return response
+  }
+
+  async run (input) {
+    if (this.exclusiveRun) {
+      return await this._enqueueExclusiveRunResponse(() => this._runInternal(input))
+    }
+    return await this._runInternal(input)
+  }
+
+  async runStreaming (audioStream) {
+    if (this.exclusiveRun) {
+      return await this._enqueueExclusiveRunResponse(() =>
+        this._runInternal(audioStream, { streaming: true })
+      )
+    }
+    return await this._runInternal(audioStream, { streaming: true })
   }
 
   async _runInternal (audioStream, opts = {}) {
-    if (this.exclusiveRun && this._hasActiveResponse) {
-      throw new QvacErrorAddonWhisper({
-        code: ERR_CODES.JOB_ALREADY_RUNNING
-      })
-    }
-
     const normalizedAudioStream = this._normalizeAudioStream(audioStream)
 
     if (opts.streaming) {
       return this._runStreaming(normalizedAudioStream)
     }
 
-    const jobId = await this.addon.append({
+    return this._runBatchTranscription(normalizedAudioStream)
+  }
+
+  /** Batch runJob path: `_job` / response setup; audio via {@link #_handleAudioStream}. */
+  async _runBatchTranscription (normalizedAudioStream) {
+    this._pendingWhisperJobId = await this.addon.append({
       type: 'audio',
       input: new Uint8Array()
     })
 
-    const response = this._createResponse(jobId)
-    this._hasActiveResponse = true
-    const finalized = response.await().finally(() => { this._hasActiveResponse = false })
+    const response = this._job.start()
+    const finalized = response.await()
     finalized.catch(() => {})
     response.await = () => finalized
 
     this._handleAudioStream(normalizedAudioStream).catch((error) => {
-      response.failed(error)
-      this._deleteJobMapping(jobId)
+      this._pendingWhisperJobId = null
+      this._job.fail(error)
     })
     return response
   }
 
   async _runStreaming (audioStream) {
-    const vadModelPath = this._config.vadModelPath || this._getVadModelFilePath()
+    const vadModelPath = this._resolveVadModelPath()
     if (!vadModelPath) {
       throw new QvacErrorAddonWhisper({
         code: ERR_CODES.VAD_MODEL_REQUIRED
@@ -164,11 +276,9 @@ class TranscriptionWhispercpp extends BaseInference {
       samplesOverlap: vadParams.samples_overlap || 0.1
     })
 
-    const jobId = this.addon._activeJobId
-    const response = this._createResponse(jobId)
-    this._hasActiveResponse = true
+    this._pendingWhisperJobId = null
+    const response = this._job.start()
     const finalized = response.await().finally(() => {
-      this._hasActiveResponse = false
       this.addon._activeJobId = null
       this.addon._setState('listening')
     })
@@ -176,14 +286,17 @@ class TranscriptionWhispercpp extends BaseInference {
     response.await = () => finalized
 
     this._handleStreamingAudio(audioStream).catch((error) => {
-      response.failed(error)
-      this._deleteJobMapping(jobId)
+      this._pendingWhisperJobId = null
+      this._job.fail(error)
     })
     return response
   }
 
+  /** Append-only path to the native addon; job lifecycle lives in callers / `_outputCallback`. */
   async _handleAudioStream (audioStream) {
-    this.logger.debug('Start handling audio stream', { file: this.file })
+    this.logger.debug('Start handling audio stream', {
+      modelPath: this._getModelFilePath()
+    })
     for await (const chunk of audioStream) {
       this.logger.debug('Appending audio chunk', { chunkLength: chunk.length })
       await this.addon.append({
@@ -271,7 +384,7 @@ class TranscriptionWhispercpp extends BaseInference {
       delete whisperConfig.vad_params
 
       // VAD model configuration
-      const vadModelPath = this._config.vadModelPath || this._getVadModelFilePath()
+      const vadModelPath = this._resolveVadModelPath()
       if (vadModelPath) {
         whisperConfig.vad_model_path = vadModelPath
         whisperConfig.vadParams = newConfig.whisperConfig?.vad_params || this.params.vad_params || { threshold: 0.6 }
@@ -289,32 +402,15 @@ class TranscriptionWhispercpp extends BaseInference {
       }
 
       _checkParamsExists(configurationParams)
+      this._pendingWhisperJobId = null
+      if (this._job.active) {
+        this._job.fail(new Error('Model was reloaded'))
+      }
       await this.cancel()
-      this._failAndClearActiveResponse('Model was reloaded')
       await this.addon.reload(configurationParams)
       await this.addon.activate()
       this.logger.debug('Addon reloaded and activated successfully')
     })
-  }
-
-  async _downloadWeights (reportProgressCallback, opts) {
-    const models = [this._modelName]
-    if (this._vadModelName) {
-      models.push(this._vadModelName)
-    }
-
-    this.logger.info('Loading weight files:', models)
-
-    const result = await this.weightsProvider.downloadFiles(
-      models,
-      this._diskPath,
-      {
-        closeLoader: opts.closeLoader,
-        onDownloadProgress: reportProgressCallback
-      }
-    )
-    this.logger.info('Weight files downloaded successfully', { models })
-    return result
   }
 
   /**
@@ -338,14 +434,47 @@ class TranscriptionWhispercpp extends BaseInference {
     )
   }
 
+  _outputCallback (addon, event, jobId, data, error) {
+    if (event === 'Error') {
+      this.logger.error(`Job failed with error: ${error}`)
+      this._pendingWhisperJobId = null
+      this._job.fail(error)
+      return
+    }
+    if (event === 'Output') {
+      try {
+        this.logger.debug(`Job produced output: ${dataAsStringWhisper(data)}`)
+      } catch (err) {
+        this.logger.error(`Failed to serialize output for logging: ${err.message}`)
+        this.logger.debug('Job produced output: [non-serializable data]')
+      }
+      this._job.output(data)
+      return
+    }
+    if (event === 'JobEnded') {
+      this.logger.info(`Job ${jobId} completed. Stats: ${JSON.stringify(data)}`)
+      this._pendingWhisperJobId = null
+      if (this.opts?.stats) {
+        this._job.end(data)
+      } else {
+        this._job.end()
+      }
+      return
+    }
+    this.logger.debug(`Received event for job ${jobId}: ${event}`)
+  }
+
   /**
    * Override unload to also call destroyInstance for proper cleanup
    * This ensures the process can exit cleanly by closing the uv_async handle
    */
   async unload () {
     return await this._withExclusiveRun(async () => {
+      this._pendingWhisperJobId = null
+      if (this._job.active) {
+        this._job.fail(new Error('Model was unloaded'))
+      }
       await this.cancel()
-      this._failAndClearActiveResponse('Model was unloaded')
       if (this.addon) {
         await this.addon.destroyInstance()
       }
@@ -354,25 +483,23 @@ class TranscriptionWhispercpp extends BaseInference {
     })
   }
 
-  async runStreaming (audioStream) {
-    if (this.exclusiveRun) {
-      return await this._withExclusiveRun(() =>
-        this._runInternal(audioStream, { streaming: true })
-      )
-    }
-    return await this._runInternal(audioStream, { streaming: true })
-  }
-
   async cancel () {
     if (this.addon?.cancel) {
       await this.addon.cancel()
+    }
+    this._pendingWhisperJobId = null
+    if (this._job.active) {
+      this._job.fail(new Error('Job cancelled'))
     }
   }
 
   async destroy () {
     return await this._withExclusiveRun(async () => {
+      this._pendingWhisperJobId = null
+      if (this._job.active) {
+        this._job.fail(new Error('Model was destroyed'))
+      }
       await this.cancel()
-      this._failAndClearActiveResponse('Model was destroyed')
       if (this.addon) {
         await this.addon.destroyInstance()
       }
@@ -380,14 +507,6 @@ class TranscriptionWhispercpp extends BaseInference {
       this.state.weightsLoaded = false
       this.state.destroyed = true
     })
-  }
-
-  _failAndClearActiveResponse (reason) {
-    for (const [jobId, response] of this._jobToResponse.entries()) {
-      response.failed(new Error(reason))
-      this._deleteJobMapping(jobId)
-    }
-    this._hasActiveResponse = false
   }
 
   validateModelFiles () {
@@ -401,18 +520,20 @@ class TranscriptionWhispercpp extends BaseInference {
       )
     }
 
-    if (this._config.whisperConfig && this._config.whisperConfig.vad_model_path) {
-      const vadModelPath = this._config.whisperConfig.vad_model_path
-      if (!vadModelPath || !fs.existsSync(vadModelPath)) {
-        this.logger.error('VAD model file not found', { path: vadModelPath })
-        throw new Error(
-          vadModelPath
-            ? `VAD model file doesn't exist: ${vadModelPath}`
-            : "VAD model file doesn't exist"
-        )
-      }
+    const vadModelPath = this._resolveVadModelPath()
+    if (vadModelPath && !fs.existsSync(vadModelPath)) {
+      this.logger.error('VAD model file not found', { path: vadModelPath })
+      throw new QvacErrorAddonWhisper({ code: ERR_CODES.VAD_MODEL_NOT_FOUND, adds: vadModelPath })
     }
   }
+}
+
+function dataAsStringWhisper (data) {
+  if (!data) return ''
+  if (typeof data === 'object') {
+    return JSON.stringify(data)
+  }
+  return data.toString()
 }
 
 function _checkParamsExists (params) {

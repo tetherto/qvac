@@ -1,18 +1,9 @@
 {
   "default-registry": {
     "kind": "git",
-    "baseline": "16b0f8b5ad704ae9e19564802c0030a68bd3c123",
-    "repository": "git@github.com:tetherto/qvac-registry-vcpkg.git"
+    "baseline": "c5955445a221df255d2204be964647c08c82c28f",
+    "repository": "https://github.com/tetherto/qvac-registry-vcpkg.git"
   },
-  "overlay-ports": [
-    "./vcpkg-overlays/whisper-cpp",
-    "./vcpkg-overlays/ruy",
-    "./vcpkg-overlays/intgemm/",
-    "./vcpkg-overlays/simd-utils/",
-    "./vcpkg/ports/marian-dev/",
-    "./vcpkg-overlays/ssplit",
-    "./vcpkg-overlays/bergamot-translator/"
-  ],
   "registries": [
     {
       "kind": "git",

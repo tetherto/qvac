@@ -2,6 +2,8 @@
 #include "OrtSessionFactory.hpp"
 
 #include <iostream>
+#include <qvac-onnx/OnnxConfig.hpp>
+#include <qvac-onnx/OnnxSessionOptionsBuilder.hpp>
 
 namespace qvac::ttslib::chatterbox {
 
@@ -75,12 +77,28 @@ OrtElementType onnxTypeToOurType(ONNXTensorElementDataType onnxType) {
 
 } // namespace
 
-OnnxInferSession::OnnxInferSession(const std::string &modelPath) {
-  Ort::SessionOptions options;
-  options.SetIntraOpNumThreads(1);
-  options.SetGraphOptimizationLevel(GraphOptimizationLevel::ORT_ENABLE_EXTENDED);
+OnnxInferSession::OnnxInferSession(const std::string &modelPath, bool useGPU) {
+  onnx_addon::SessionConfig sessionCfg;
+  sessionCfg.provider = useGPU ? onnx_addon::ExecutionProvider::AUTO_GPU
+                               : onnx_addon::ExecutionProvider::CPU;
+  sessionCfg.optimization = onnx_addon::GraphOptimizationLevel::EXTENDED;
+  sessionCfg.intraOpThreads = 1;
 
-  session_ = qvac::ttslib::createOrtSession(modelPath, options);
+  Ort::SessionOptions options = onnx_addon::buildSessionOptions(sessionCfg);
+
+  try {
+    session_ = qvac::ttslib::createOrtSession(modelPath, options);
+  } catch (const std::exception &e) {
+    if (sessionCfg.provider != onnx_addon::ExecutionProvider::CPU) {
+      onnx_addon::SessionConfig cpuCfg = sessionCfg;
+      cpuCfg.provider = onnx_addon::ExecutionProvider::CPU;
+      Ort::SessionOptions cpuOptions =
+          onnx_addon::buildSessionOptions(cpuCfg);
+      session_ = qvac::ttslib::createOrtSession(modelPath, cpuOptions);
+    } else {
+      throw;
+    }
+  }
 
   // collect input names
   for (size_t i = 0; i < session_->GetInputCount(); i++) {
