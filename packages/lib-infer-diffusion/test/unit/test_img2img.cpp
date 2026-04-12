@@ -78,10 +78,9 @@ std::vector<uint8_t> readFile(const std::string& path) {
 // Returns {0, 0} on failure.
 std::pair<int, int> decodeDimensions(const std::vector<uint8_t>& bytes) {
   int w = 0, h = 0, c = 0;
-  uint8_t* px = stbi_load_from_memory(
-      bytes.data(), static_cast<int>(bytes.size()), &w, &h, &c, 0);
-  if (px)
-    stbi_image_free(px);
+  int success = stbi_info_from_memory(bytes.data(), static_cast<int>(bytes.size()), &w, &h, &c);
+  if (!success)
+    return {0, 0};
   return {w, h};
 }
 
