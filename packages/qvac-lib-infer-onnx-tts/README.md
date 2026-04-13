@@ -179,11 +179,17 @@ npm run models:ensure:supertonic
 TTS_LANGUAGE=multilingual npm run models:ensure:chatterbox
 TTS_LANGUAGE=multilingual npm run models:ensure:supertonic
 
+# Both English and multilingual for a single engine
+TTS_LANGUAGE=all npm run models:ensure:chatterbox
+
 # Both Chatterbox + Supertonic (English by default)
 npm run models:ensure
 
 # Both Chatterbox + Supertonic multilingual
 TTS_LANGUAGE=multilingual npm run models:ensure
+
+# Everything (both engines, both languages)
+TTS_LANGUAGE=all npm run models:ensure
 ```
 
 ### Environment Variables
@@ -191,7 +197,7 @@ TTS_LANGUAGE=multilingual npm run models:ensure
 | Variable | Default | Values | Description |
 |----------|---------|--------|-------------|
 | `CHATTERBOX_VARIANT` | `q4` | `fp32`, `fp16`, `q4`, `q4f16` | Chatterbox model quantization variant |
-| `TTS_LANGUAGE` | `en` | `en`, `multilingual` | Language set for model downloads |
+| `TTS_LANGUAGE` | `en` | `en`, `multilingual`, `all` | Language set for model downloads (`all` downloads both) |
 
 Models are saved to `models/chatterbox/` (English), `models/chatterbox-multilingual/`, `models/supertonic/`, and `models/supertonic-multilingual/`.
 

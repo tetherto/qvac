@@ -16,19 +16,24 @@ const language = os.getEnv('TTS_LANGUAGE') || 'en'
 
 async function run () {
   const errors = []
+  const languages = language === 'all' ? ['en', 'multilingual'] : [language]
 
-  const chatterboxDir = path.join(modelsDir, language === 'en' ? 'chatterbox' : 'chatterbox-multilingual')
-  const rChatter = await ensureChatterboxModels({ targetDir: chatterboxDir, variant, language })
-  if (!rChatter.success) errors.push(`Chatterbox ${language} ${variant}`)
+  for (const lang of languages) {
+    const chatterboxDir = path.join(modelsDir, lang === 'en' ? 'chatterbox' : 'chatterbox-multilingual')
+    const rChatter = await ensureChatterboxModels({ targetDir: chatterboxDir, variant, language: lang })
+    if (!rChatter.success) errors.push(`Chatterbox ${lang} ${variant}`)
+  }
 
-  if (language === 'en') {
-    const supertonicDir = path.join(modelsDir, 'supertonic')
-    const rSuper = await ensureSupertonicModels({ targetDir: supertonicDir })
-    if (!rSuper.success) errors.push('Supertonic English')
-  } else {
-    const supertonicMultilingualDir = path.join(modelsDir, 'supertonic-multilingual')
-    const rSuperML = await ensureSupertonicModelsMultilingual({ targetDir: supertonicMultilingualDir })
-    if (!rSuperML.success) errors.push('Supertonic multilingual')
+  for (const lang of languages) {
+    if (lang === 'en') {
+      const supertonicDir = path.join(modelsDir, 'supertonic')
+      const rSuper = await ensureSupertonicModels({ targetDir: supertonicDir })
+      if (!rSuper.success) errors.push('Supertonic English')
+    } else {
+      const supertonicMultilingualDir = path.join(modelsDir, 'supertonic-multilingual')
+      const rSuperML = await ensureSupertonicModelsMultilingual({ targetDir: supertonicMultilingualDir })
+      if (!rSuperML.success) errors.push('Supertonic multilingual')
+    }
   }
 
   if (errors.length) {
