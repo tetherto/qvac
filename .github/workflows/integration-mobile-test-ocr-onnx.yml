@@ -1376,11 +1376,22 @@ jobs:
 
             SUITES=$(aws devicefarm list-suites --arn "$JOB_ARN" --output json)
             for SUITE_ARN in $(echo "$SUITES" | jq -r '.suites[].arn'); do
+              # FILE artifacts: test spec output, customer logs
               ARTIFACTS=$(aws devicefarm list-artifacts --arn "$SUITE_ARN" --type FILE --output json)
-              echo "$ARTIFACTS" | jq -r '.artifacts[] | select(.type == "TESTSPEC_OUTPUT" or .type == "CUSTOMER_ARTIFACT_LOG" or .type == "DEVICE_LOG") | "\(.type) \(.url)"' | while read -r TYPE URL; do
+              echo "$ARTIFACTS" | jq -r '.artifacts[] | select(.type == "TESTSPEC_OUTPUT" or .type == "CUSTOMER_ARTIFACT_LOG") | "\(.type) \(.url)"' | while read -r TYPE URL; do
                 if [ -n "$URL" ] && [ "$URL" != "null" ]; then
                   FILENAME="${TYPE}.txt"
                   echo "  Downloading ${DEVICE_NAME}/${FILENAME}..."
+                  curl -sL "$URL" -o "${DEVICE_DIR}/${FILENAME}" || true
+                fi
+              done
+
+              # LOG artifacts: device logcat/syslog (contains app console.log output with perf markers)
+              LOG_ARTIFACTS=$(aws devicefarm list-artifacts --arn "$SUITE_ARN" --type LOG --output json)
+              echo "$LOG_ARTIFACTS" | jq -r '.artifacts[] | select(.type == "DEVICE_LOG" or .type == "LOGCAT") | "\(.type) \(.url)"' | while read -r TYPE URL; do
+                if [ -n "$URL" ] && [ "$URL" != "null" ]; then
+                  FILENAME="${TYPE}.txt"
+                  echo "  Downloading ${DEVICE_NAME}/${FILENAME} (device log)..."
                   curl -sL "$URL" -o "${DEVICE_DIR}/${FILENAME}" || true
                 fi
               done

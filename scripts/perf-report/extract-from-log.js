@@ -19,6 +19,55 @@ const path = require('path')
 const START_MARKER = '[PERF_REPORT_START]'
 const END_MARKER = '[PERF_REPORT_END]'
 
+/**
+ * Extracts markers from plain text content.
+ * Returns the last valid report found.
+ */
+function extractFromText (text) {
+  let lastReport = null
+  let searchFrom = 0
+  while (true) {
+    const startIdx = text.indexOf(START_MARKER, searchFrom)
+    if (startIdx === -1) break
+
+    const jsonStart = startIdx + START_MARKER.length
+    const endIdx = text.indexOf(END_MARKER, jsonStart)
+    if (endIdx === -1) break
+
+    const jsonStr = text.substring(jsonStart, endIdx)
+    try {
+      lastReport = JSON.parse(jsonStr)
+    } catch (err) {
+      console.error(`  Found markers but JSON parse failed: ${err.message}`)
+    }
+    searchFrom = endIdx + END_MARKER.length
+  }
+  return lastReport
+}
+
+/**
+ * Device Farm logcat files are JSON arrays where each entry has a `message`
+ * field containing the app's console.log output. We extract all messages
+ * and search them as plain text.
+ */
+function extractFromJsonLogcat (content) {
+  let entries
+  try {
+    entries = JSON.parse(content)
+  } catch (_) {
+    return null
+  }
+  if (!Array.isArray(entries)) return null
+
+  const messages = entries
+    .map(e => (e && e.message) || '')
+    .filter(m => m.includes(START_MARKER))
+  if (messages.length === 0) return null
+
+  console.log(`  Found ${messages.length} log entries with perf markers`)
+  return extractFromText(messages.join('\n'))
+}
+
 function extractFromFile (filePath) {
   let content
   try {
@@ -27,28 +76,15 @@ function extractFromFile (filePath) {
     return null
   }
 
-  // Find the LAST marker pair — on mobile the reporter writes after every
-  // test, so the final marker contains the most complete accumulated report.
-  let lastReport = null
-  let searchFrom = 0
-  while (true) {
-    const startIdx = content.indexOf(START_MARKER, searchFrom)
-    if (startIdx === -1) break
+  // Try plain text first (test spec output, plain logcat)
+  let report = extractFromText(content)
+  if (report) return report
 
-    const jsonStart = startIdx + START_MARKER.length
-    const endIdx = content.indexOf(END_MARKER, jsonStart)
-    if (endIdx === -1) break
+  // Try JSON logcat format (Device Farm DEVICE_LOG / LOGCAT artifacts)
+  report = extractFromJsonLogcat(content)
+  if (report) return report
 
-    const jsonStr = content.substring(jsonStart, endIdx)
-    try {
-      lastReport = JSON.parse(jsonStr)
-    } catch (err) {
-      console.error(`Found markers in ${filePath} but JSON parse failed: ${err.message}`)
-    }
-    searchFrom = endIdx + END_MARKER.length
-  }
-
-  return lastReport
+  return null
 }
 
 function walkDir (dir) {
