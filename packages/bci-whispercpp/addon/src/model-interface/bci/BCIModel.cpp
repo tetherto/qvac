@@ -87,9 +87,10 @@ void BCIModel::loadEmbedderIfNeeded() {
     QLOG(qvac_lib_inference_addon_cpp::logger::Priority::INFO,
          "Loaded BCI embedder weights from: " + embedderPath);
   } else {
-    QLOG(qvac_lib_inference_addon_cpp::logger::Priority::WARNING,
-         "BCI embedder weights not found at: " + embedderPath +
-             " — using fallback channel projection");
+    throw std::runtime_error(
+        "BCI embedder weights not found at: " + embedderPath +
+        ". This file is required for neural signal preprocessing. "
+        "Generate it with: python3 scripts/convert-model.py --checkpoint <ckpt>");
   }
 }
 

@@ -71,18 +71,30 @@ VCPKG_ROOT=/path/to/vcpkg npm run build
 
 ### Model Conversion
 
-Convert a trained BrainWhisperer checkpoint to GGML format:
+Convert a trained BrainWhisperer checkpoint. This produces **two files**, both required for inference:
+
+| File | Size | Description |
+|------|------|-------------|
+| `ggml-bci-windowed.bin` | ~84 MB | GGML model: whisper encoder/decoder (LoRA-merged), tokenizer, positional embedding, windowed attention header |
+| `bci-embedder.bin` | ~24 MB | Day projection weights: low-rank A·B matrices per recording day, month projections, session-to-day mapping |
 
 ```bash
 python3 scripts/convert-model.py \
-  --checkpoint /path/to/epoch=93-val_wer=0.0910.ckpt \
-  --output models/ggml-bci.bin \
-  --day-idx 1 \
-  --window-size 57 \
-  --last-window-layer 3
+  --checkpoint /path/to/epoch=93-val_wer=0.0910.ckpt
 ```
 
-The converter merges LoRA weights, extracts the BCI encoder (conv1 k=7, 6 transformer layers), and writes the GGML model with BCI-specific header fields (`n_audio_conv1_kernel`, `n_audio_window_size`, `n_audio_last_window_layer`).
+Both files are written to `models/` by default. All flags are optional:
+
+| Flag | Default | Description |
+|------|---------|-------------|
+| `--output` | `models/ggml-bci-windowed.bin` | GGML model output path |
+| `--embedder-output` | `models/bci-embedder.bin` | Embedder weights output path |
+| `--day-idx` | `1` | Day index for baked positional embedding |
+| `--window-size` | `57` | Windowed attention size (0 to disable) |
+| `--last-window-layer` | `3` | Last encoder layer with windowed attention |
+| `--f32` | off | Use f32 for all tensors (avoids f16 precision loss, ~2x larger) |
+
+**Important:** Both files must be in the same directory at runtime. The C++ addon looks for `bci-embedder.bin` next to the GGML model file and will fail if it is missing.
 
 ## Usage
 
@@ -125,7 +137,7 @@ await model.destroyInstance()
 ### Integration Tests
 
 ```bash
-WHISPER_MODEL_PATH=./models/ggml-bci.bin npm run test:integration
+WHISPER_MODEL_PATH=./models/ggml-bci-windowed.bin npm run test:integration
 ```
 
 ### C++ Unit Tests

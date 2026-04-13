@@ -1,20 +1,21 @@
 #!/usr/bin/env python3
 """
-Convert BrainWhisperer checkpoint to a proper GGML model for whisper.cpp.
+Convert BrainWhisperer checkpoint to GGML model + embedder weights for whisper.cpp.
 
-Architecture in the GGML model:
-  - n_mels=512 (neural signal channels, replaces mel bins)
-  - encoder_layers=6 (BCI-trained transformer)
-  - conv1: (384, 512, 7) from embedder (not standard whisper conv1)
-  - conv2: (384, 384, 3) from embedder
-  - positional_embedding: (1500, 384) baked day-0 encoding
-  - decoder: 4 layers with LoRA merged
-  - All other weights from BCI checkpoint
+Produces two files required for BCI inference:
+  1. GGML model (--output):     whisper encoder/decoder weights, tokenizer, positional
+                                embedding, windowed attention params in header
+  2. Embedder file (--embedder-output): day projection weights (low-rank A·B per day),
+                                        month projections, session-to-day mapping
+
+Both files must be in the same directory at runtime. The C++ addon loads the embedder
+from the same directory as the GGML model (looks for "bci-embedder.bin").
 
 Usage:
     python3 scripts/convert-model.py \\
         --checkpoint /path/to/epoch=93-val_wer=0.0910.ckpt \\
-        --output models/ggml-bci.bin
+        --output models/ggml-bci-windowed.bin \\
+        --embedder-output models/bci-embedder.bin
 """
 
 import argparse
@@ -169,18 +170,106 @@ def rename_key(hf_key):
         return f"{section}.{rest_str}"
 
 
+def export_embedder(state_dict, output_path):
+    """Export day projection / embedder weights to a binary file.
+
+    The C++ NeuralProcessor loads this file to apply day-specific
+    projection (low-rank A·B + month + softsign) before whisper inference.
+    Without it, raw smoothed signals are passed directly — producing garbage.
+    """
+    conv1_w = state_dict['model.embedders.0.conv1.weight'].numpy().flatten()
+    conv1_b = state_dict['model.embedders.0.conv1.bias'].numpy().flatten()
+    conv2_w = state_dict['model.embedders.0.conv2.weight'].numpy().flatten()
+    conv2_b = state_dict['model.embedders.0.conv2.bias'].numpy().flatten()
+
+    embed_dim = int(state_dict['model.embedders.0.conv1.weight'].shape[0])
+    num_features = int(state_dict['model.embedders.0.conv1.weight'].shape[1])
+    kernel_size1 = int(state_dict['model.embedders.0.conv1.weight'].shape[2])
+    kernel_size2 = int(state_dict['model.embedders.0.conv2.weight'].shape[2])
+
+    day_a_keys = sorted(
+        [k for k in state_dict if k.startswith('model.embedders.0.day_As.')],
+        key=lambda k: int(k.split('.')[-1]))
+    day_b_keys = sorted(
+        [k for k in state_dict if k.startswith('model.embedders.0.day_Bs.')],
+        key=lambda k: int(k.split('.')[-1]))
+    day_bias_keys = sorted(
+        [k for k in state_dict if k.startswith('model.embedders.0.day_biases.')],
+        key=lambda k: int(k.split('.')[-1]))
+    month_w_keys = sorted(
+        [k for k in state_dict if k.startswith('model.embedders.0.month_weights.')],
+        key=lambda k: int(k.split('.')[-1]))
+    month_b_keys = sorted(
+        [k for k in state_dict if k.startswith('model.embedders.0.month_biases.')],
+        key=lambda k: int(k.split('.')[-1]))
+
+    num_days = len(day_a_keys)
+    num_months = len(month_w_keys)
+    r = int(state_dict[day_a_keys[0]].shape[1]) if day_a_keys else 0
+
+    s2d = state_dict.get('model.embedders.0.sessions_to_days.session_to_idx_map')
+
+    EMBEDDER_MAGIC = 0x42434945
+    os.makedirs(os.path.dirname(output_path) or ".", exist_ok=True)
+
+    with open(output_path, "wb") as f:
+        f.write(struct.pack('I', EMBEDDER_MAGIC))
+        f.write(struct.pack('I', 1))              # version
+        f.write(struct.pack('I', num_features))
+        f.write(struct.pack('I', embed_dim))
+        f.write(struct.pack('I', kernel_size1))
+        f.write(struct.pack('I', kernel_size2))
+        f.write(struct.pack('I', 2))              # stride2
+        f.write(struct.pack('I', num_days))
+        f.write(struct.pack('I', num_months))
+        f.write(struct.pack('I', r))
+
+        for arr in [conv1_w, conv1_b, conv2_w, conv2_b]:
+            f.write(struct.pack('I', len(arr)))
+            f.write(arr.astype(np.float32).tobytes())
+
+        if s2d is not None:
+            s2d_np = s2d.numpy().astype(np.int32).flatten()
+            f.write(struct.pack('I', len(s2d_np)))
+            f.write(s2d_np.tobytes())
+        else:
+            f.write(struct.pack('I', 0))
+
+        for i in range(num_days):
+            for keys in [day_a_keys, day_b_keys, day_bias_keys]:
+                data = state_dict[keys[i]].numpy().flatten().astype(np.float32)
+                f.write(struct.pack('I', len(data)))
+                f.write(data.tobytes())
+
+        for i in range(num_months):
+            for keys in [month_w_keys, month_b_keys]:
+                data = state_dict[keys[i]].numpy().flatten().astype(np.float32)
+                f.write(struct.pack('I', len(data)))
+                f.write(data.tobytes())
+
+    size_mb = os.path.getsize(output_path) / (1024 * 1024)
+    print(f"  Embedder: {output_path} ({size_mb:.1f} MB)")
+    print(f"  {num_days} days, {num_months} months, rank={r}, "
+          f"features={num_features}")
+
+
 def main():
-    parser = argparse.ArgumentParser()
-    parser.add_argument("--checkpoint", required=True)
-    parser.add_argument("--output", default="models/ggml-bci.bin")
-    parser.add_argument("--f32", action="store_true", help="Use f32 for all tensors (avoids f16 precision loss)")
-    parser.add_argument("--day-idx", type=int, default=0, help="Day index for baked positional embedding")
-    parser.add_argument("--whisper-assets", default=None,
-                        help="Path to whisper python package assets dir (for mel_filters)")
+    parser = argparse.ArgumentParser(
+        description="Convert BrainWhisperer checkpoint to GGML model + embedder")
+    parser.add_argument("--checkpoint", required=True,
+                        help="Path to BrainWhisperer .ckpt file")
+    parser.add_argument("--output", default="models/ggml-bci-windowed.bin",
+                        help="Output path for GGML model (default: models/ggml-bci-windowed.bin)")
+    parser.add_argument("--embedder-output", default="models/bci-embedder.bin",
+                        help="Output path for embedder weights (default: models/bci-embedder.bin)")
+    parser.add_argument("--f32", action="store_true",
+                        help="Use f32 for all tensors (avoids f16 precision loss)")
+    parser.add_argument("--day-idx", type=int, default=1,
+                        help="Day index for baked positional embedding (default: 1)")
     parser.add_argument("--window-size", type=int, default=57,
-                        help="Windowed attention size (0 to disable)")
+                        help="Windowed attention size, 0 to disable (default: 57)")
     parser.add_argument("--last-window-layer", type=int, default=3,
-                        help="Last encoder layer with windowed attention")
+                        help="Last encoder layer with windowed attention (default: 3)")
     args = parser.parse_args()
 
     os.makedirs(os.path.dirname(args.output) or ".", exist_ok=True)
@@ -355,7 +444,15 @@ def main():
             print(f"  {name}: {data.shape} ({'f16' if ftype == 1 else 'f32'})")
 
     size_mb = os.path.getsize(args.output) / (1024 * 1024)
-    print(f"\nDone. Output: {args.output} ({size_mb:.1f} MB)")
+    print(f"  GGML model: {args.output} ({size_mb:.1f} MB)")
+
+    # --- Export embedder weights ---
+    print(f"\nWriting embedder weights to: {args.embedder_output}")
+    export_embedder(state_dict, args.embedder_output)
+
+    print(f"\nDone. Both files are required for inference:")
+    print(f"  {args.output}")
+    print(f"  {args.embedder_output}")
 
 
 if __name__ == "__main__":
