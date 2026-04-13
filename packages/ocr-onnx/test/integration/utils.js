@@ -60,7 +60,16 @@ try {
           results: _results
         }
       },
-      writeReport () {},
+      writeReport () {
+        try {
+          var dir = (global.testDir || '/tmp')
+          var p = path.join(dir, 'perf-report.json')
+          fs.writeFileSync(p, JSON.stringify(this.toJSON()))
+          console.log('[PERF_REPORT_PATH]' + p)
+        } catch (e) {
+          console.log('[perf-reporter] file write failed: ' + e.message)
+        }
+      },
       writeStepSummary () {},
       writeToConsole () {
         try {
