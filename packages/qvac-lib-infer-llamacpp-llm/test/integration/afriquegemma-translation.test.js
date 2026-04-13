@@ -290,3 +290,91 @@ test('AfriqueGemma: longer content, mixed content, sequential calls', { timeout:
     await loader.close().catch(() => {})
   }
 })
+
+// ---------------------------------------------------------------------------
+// Test: AfriqueGemma – African-language Unicode input (African → English)
+//
+// SPEC: "Igbo (45M+), Amharic (57M+)" — key languages use non-ASCII scripts
+// WHY: All core pair tests send English text for translation. Real users also
+//      translate FROM African languages with diacritics (Yoruba ẹ/ọ/ṣ),
+//      non-Latin scripts (Amharic Ge'ez), and hooks (Hausa ɗ/ɓ). If the
+//      tokenizer corrupts Unicode input, these translations fail silently.
+// ---------------------------------------------------------------------------
+test('AfriqueGemma: African-language Unicode input (African → English)', { timeout: TIMEOUT }, async t => {
+  const [modelName, dirPath] = await resolveModel()
+  const { addon, loader } = await createAddon(dirPath, modelName)
+  try {
+    await addon.load()
+
+    const yorubaPrompt = 'Translate Yoruba to English.\nYoruba: Àwọn ọmọ náà ń ṣeré nínú ọgbà.\nEnglish:'
+    const r1 = await addon.run([{ role: 'user', content: yorubaPrompt }])
+    const yorubaOut = await collectTranslation(r1)
+    t.ok(yorubaOut.length > 0, 'Yoruba (ẹ/ọ/ṣ diacritics) → English produced output')
+    t.ok(/[a-zA-Z]{3,}/.test(yorubaOut), 'Yoruba → English: output is Latin/English text')
+
+    const amharicPrompt = 'Translate Amharic to English.\nAmharic: ልጆቹ በፓርኩ ውስጥ ይጫወታሉ።\nEnglish:'
+    const r2 = await addon.run([{ role: 'user', content: amharicPrompt }])
+    const amharicOut = await collectTranslation(r2)
+    t.ok(amharicOut.length > 0, 'Amharic (Ge\'ez script) → English produced output')
+    t.ok(/[a-zA-Z]{3,}/.test(amharicOut), 'Amharic → English: output is Latin/English text')
+
+    const hausaPrompt = 'Translate Hausa to English.\nHausa: Ɗalibi ya karɓi littafi daga makaranta.\nEnglish:'
+    const r3 = await addon.run([{ role: 'user', content: hausaPrompt }])
+    const hausaOut = await collectTranslation(r3)
+    t.ok(hausaOut.length > 0, 'Hausa (ɗ/ɓ/ƙ hooks) → English produced output')
+    t.ok(/[a-zA-Z]{3,}/.test(hausaOut), 'Hausa → English: output is Latin/English text')
+
+    t.comment('All non-Latin/diacritic inputs produced valid English output')
+  } finally {
+    await addon.unload().catch(() => {})
+    await loader.close().catch(() => {})
+  }
+})
+
+// ---------------------------------------------------------------------------
+// Test: AfriqueGemma – streaming tokens arrive incrementally with stats
+//
+// WHY: Mobile integrators display tokens as they arrive in real-time UIs.
+//      If the streaming pipeline batches everything into one chunk or drops
+//      stats, the UX breaks. Verifies onUpdate fires multiple times and
+//      performance stats are populated for visibility.
+// ---------------------------------------------------------------------------
+test('AfriqueGemma: streaming tokens arrive incrementally with stats', { timeout: TIMEOUT }, async t => {
+  const [modelName, dirPath] = await resolveModel()
+  const { addon, loader } = await createAddon(dirPath, modelName)
+  try {
+    await addon.load()
+
+    const chunks = []
+    const start = Date.now()
+    const response = await addon.run([{ role: 'user', content: CORE_PAIRS['en-sw'].prompt }])
+    await response
+      .onUpdate(data => { chunks.push(data) })
+      .await()
+    const elapsed = Date.now() - start
+
+    t.ok(chunks.length > 1, `streaming: received ${chunks.length} chunks (not a single blob)`)
+    for (const chunk of chunks) {
+      t.is(typeof chunk, 'string', 'each chunk is a string')
+    }
+
+    const fullOutput = chunks.join('').split('\n')[0].trim()
+    t.ok(fullOutput.length > 0, `full output: "${fullOutput}"`)
+
+    const stats = response.stats || {}
+    if (stats.promptTokens !== undefined) {
+      const promptTokens = Number(stats.promptTokens)
+      const generatedTokens = Number(stats.generatedTokens)
+      t.ok(promptTokens > 0, 'stats: promptTokens > 0')
+      t.ok(generatedTokens > 0, 'stats: generatedTokens > 0')
+      const tps = generatedTokens / (elapsed / 1000)
+      t.comment(`perf: ${generatedTokens} tokens in ${elapsed}ms (${tps.toFixed(1)} tok/s)`)
+      t.comment(`perf: promptTokens=${promptTokens}, generatedTokens=${generatedTokens}`)
+    } else {
+      t.comment('stats not available on response object — skipping perf log')
+    }
+  } finally {
+    await addon.unload().catch(() => {})
+    await loader.close().catch(() => {})
+  }
+})

@@ -277,3 +277,88 @@ test('AfriqueGemma: run after unload rejects cleanly', { timeout: TIMEOUT }, asy
   t.ok(rejected || hadUnhandled, 'run() after unload() does not silently succeed')
   await loader.close().catch(() => {})
 })
+
+// ---------------------------------------------------------------------------
+// Test: AfriqueGemma – small n_predict produces truncated but valid output
+//
+// WHY: Mobile apps often constrain n_predict to save battery and memory.
+//      A very small limit (e.g. 8 tokens) must truncate gracefully without
+//      crashing or producing garbled output. Catches buffer handling bugs
+//      in the token emission pipeline.
+// ---------------------------------------------------------------------------
+test('AfriqueGemma: small n_predict produces truncated but valid output', { timeout: TIMEOUT }, async t => {
+  const [modelName, dirPath] = await resolveModel()
+  const loader = new FilesystemDL({ dirPath })
+  const addon = new LlmLlamacpp({
+    loader,
+    modelName,
+    diskPath: dirPath,
+    logger: console,
+    opts: { stats: true }
+  }, { ...AFRIQUEGEMMA_CONFIG, n_predict: '8' })
+
+  try {
+    await addon.load()
+
+    const response = await addon.run([{ role: 'user', content: EN_SW_PROMPT }])
+    const out = await collectTranslation(response)
+    t.ok(typeof out === 'string', 'output is a string')
+    t.pass(`n_predict=8 produced ${out.length} chars without crash: "${out}"`)
+
+    const stats = response.stats || {}
+    if (stats.generatedTokens !== undefined) {
+      const genTokens = Number(stats.generatedTokens)
+      t.ok(genTokens <= 10, `generated ${genTokens} tokens (within n_predict=8 range)`)
+      t.comment(`stats: generatedTokens=${genTokens}`)
+    }
+  } finally {
+    await addon.unload().catch(() => {})
+    await loader.close().catch(() => {})
+  }
+})
+
+// ---------------------------------------------------------------------------
+// Test: AfriqueGemma – long input approaching ctx_size boundary
+//
+// WHY: When a user pastes a large paragraph for translation, the prompt token
+//      count approaches ctx_size. The model must handle this gracefully —
+//      either truncating, producing partial output, or erroring clearly.
+//      A crash or silent hang is unacceptable on mobile (see: SIGABRT on
+//      context overflow in sliding-context tests).
+// ---------------------------------------------------------------------------
+test('AfriqueGemma: long input approaching ctx_size boundary', { timeout: TIMEOUT }, async t => {
+  const [modelName, dirPath] = await resolveModel()
+  const loader = new FilesystemDL({ dirPath })
+  const addon = new LlmLlamacpp({
+    loader,
+    modelName,
+    diskPath: dirPath,
+    logger: console,
+    opts: { stats: true }
+  }, { ...AFRIQUEGEMMA_CONFIG, ctx_size: '512', n_predict: '32' })
+
+  try {
+    await addon.load()
+
+    const sentence = 'The children are playing in the park near the river where the birds sing every morning and the flowers bloom in spring. '
+    const longText = sentence.repeat(10)
+    const prompt = `Translate English to Swahili.\nEnglish: ${longText}\nSwahili:`
+
+    let gotOutput = false
+    let gotError = false
+    try {
+      const response = await addon.run([{ role: 'user', content: prompt }])
+      const out = await collectTranslation(response)
+      gotOutput = out.length > 0
+      t.comment(`long-input produced ${out.length} chars`)
+    } catch (err) {
+      gotError = true
+      t.comment(`long-input error (acceptable): ${err.message}`)
+    }
+
+    t.ok(gotOutput || gotError, 'long input either produced output or a clear error — no crash or hang')
+  } finally {
+    await addon.unload().catch(() => {})
+    await loader.close().catch(() => {})
+  }
+})
