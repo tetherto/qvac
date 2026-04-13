@@ -38,6 +38,10 @@ import {
 } from "@/utils/errors-server";
 import { getServerLogger } from "@/logging";
 import { getPlugin } from "@/server/plugins";
+import { isMemoryValidationEnabled } from "@/server/bare/registry/config-registry";
+import { getPlatformInfo } from "@/server/bare/utils/platform";
+import { readGGUFModelParams, computeExactKvBytesPerToken } from "@/server/utils/gguf-metadata";
+import { promises as fsPromises } from "bare-fs";
 
 const logger = getServerLogger();
 
@@ -140,6 +144,49 @@ export async function handleLoadModel(
 
     if (!resolvedModelPath) {
       throw new ModelLoadFailedError("modelPath resolution failed");
+    }
+
+    if (plugin.validateBeforeLoad && isMemoryValidationEnabled()) {
+      let modelFileSize = 0;
+      try {
+        const stat = await fsPromises.stat(resolvedModelPath);
+        modelFileSize = stat.size;
+      } catch (statErr) {
+        logger.warn(
+          `Could not stat model file for memory validation: ${statErr instanceof Error ? statErr.message : String(statErr)}`,
+        );
+      }
+
+      let kvBytesPerToken: number | undefined;
+      try {
+        const ggufParams = await readGGUFModelParams(resolvedModelPath);
+        if (ggufParams) {
+          kvBytesPerToken = computeExactKvBytesPerToken(ggufParams);
+          logger.info(
+            `GGUF metadata: arch=${ggufParams.architecture}, layers=${ggufParams.blockCount}, ` +
+              `kv_heads=${ggufParams.headCountKv}, embd=${ggufParams.embeddingLength} → ` +
+              `KV=${kvBytesPerToken} bytes/token (exact)`,
+          );
+        }
+      } catch (ggufErr) {
+        logger.warn(
+          `Could not read GGUF metadata, using heuristic: ${ggufErr instanceof Error ? ggufErr.message : String(ggufErr)}`,
+        );
+      }
+
+      const platform = getPlatformInfo();
+      logger.info(
+        `Memory validation: fileSize=${Math.round(modelFileSize / (1024 * 1024))} MB, ` +
+          `totalMem=${Math.round(platform.totalMemory / (1024 * 1024))} MB, ` +
+          `availableMem=${Math.round(platform.availableMemory / (1024 * 1024))} MB (${platform.os}/${platform.arch})` +
+          `${kvBytesPerToken ? " [exact]" : " [heuristic]"}`,
+      );
+      plugin.validateBeforeLoad({
+        modelConfig: resolvedModelConfig,
+        modelFileSize,
+        availableMemory: platform.availableMemory,
+        ...(kvBytesPerToken !== undefined && { kvBytesPerToken }),
+      });
     }
 
     const loadResult = await loadModel(

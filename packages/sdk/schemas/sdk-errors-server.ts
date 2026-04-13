@@ -16,6 +16,7 @@ export const SDK_SERVER_ERROR_CODES = {
   MODEL_FILE_LOCATE_FAILED: 52203,
   PROJECTION_MODEL_REQUIRED: 52204,
   VAD_MODEL_REQUIRED: 52205,
+  MODEL_MEMORY_EXCEEDED: 52211,
   TTS_ARTIFACTS_REQUIRED: 52208,
   TTS_REFERENCE_AUDIO_REQUIRED: 52209,
   PARAKEET_ARTIFACTS_REQUIRED: 52210,
@@ -156,6 +157,16 @@ const serverErrorDefinitions: ErrorCodesMap = {
     name: "MODEL_FILE_LOCATE_FAILED",
     message: (modelType: string, modelPath: string) =>
       `Failed to locate ${modelType} model file: ${modelPath}`,
+  },
+  [SDK_SERVER_ERROR_CODES.MODEL_MEMORY_EXCEEDED]: {
+    name: "MODEL_MEMORY_EXCEEDED",
+    message: (
+      estimatedMB: string,
+      availableMB: string,
+      requestedCtx: string,
+      suggestedCtx: string,
+    ) =>
+      `Model requires approximately ${estimatedMB} MB but only ${availableMB} MB is available. Try reducing ctx_size from ${requestedCtx} to ${suggestedCtx} or lower.`,
   },
   [SDK_SERVER_ERROR_CODES.PROJECTION_MODEL_REQUIRED]: {
     name: "PROJECTION_MODEL_REQUIRED",

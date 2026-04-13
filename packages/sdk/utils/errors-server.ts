@@ -107,6 +107,39 @@ export class ModelFileLocateFailedError extends QvacErrorBase {
   }
 }
 
+export class ModelMemoryExceededError extends QvacErrorBase {
+  readonly estimatedBytes: number;
+  readonly availableBytes: number;
+  readonly requestedCtxSize: number;
+  readonly suggestedCtxSize: number;
+
+  constructor(
+    estimatedBytes: number,
+    availableBytes: number,
+    requestedCtxSize: number,
+    suggestedCtxSize: number,
+    cause?: unknown,
+  ) {
+    const toMB = (b: number) => String(Math.round(b / (1024 * 1024)));
+    super(
+      createErrorOptions(
+        SDK_SERVER_ERROR_CODES.MODEL_MEMORY_EXCEEDED,
+        [
+          toMB(estimatedBytes),
+          toMB(availableBytes),
+          String(requestedCtxSize),
+          String(suggestedCtxSize),
+        ],
+        cause,
+      ),
+    );
+    this.estimatedBytes = estimatedBytes;
+    this.availableBytes = availableBytes;
+    this.requestedCtxSize = requestedCtxSize;
+    this.suggestedCtxSize = suggestedCtxSize;
+  }
+}
+
 export class ProjectionModelRequiredError extends QvacErrorBase {
   constructor(cause?: unknown) {
     super(
