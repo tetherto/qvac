@@ -30,15 +30,17 @@ const EXPECTED_WORDS = [
   'vascular', 'normal'
 ]
 
-function runCtScanTest (ep) {
+const PERF_RUNS = 3
+
+function runCtScanTest (ep, run) {
   const useGPU = ep === 'gpu'
   const tag = ep.toUpperCase()
 
-  test(`DocTR CT scan [${tag}] - db_mobilenet + crnn_mobilenet`, { timeout: DOCTR_TEST_TIMEOUT }, async function (t) {
+  test(`DocTR CT scan [${tag}] run ${run} - db_mobilenet + crnn_mobilenet`, { timeout: DOCTR_TEST_TIMEOUT }, async function (t) {
     if (!modelsAvailable) { t.comment('Skipped — models unavailable'); return }
     const imagePath = getImagePath('/test/images/ct_scan_report.png')
 
-    t.comment(`Testing DocTR on CT scan diagnostic report image [${tag}]`)
+    t.comment(`Testing DocTR on CT scan diagnostic report image [${tag}] (run ${run}/${PERF_RUNS})`)
     t.comment('Detector: db_mobilenet_v3_large, Recognizer: crnn_mobilenet_v3_small (CTC)')
     t.comment('straightenPages: true, useGPU: ' + useGPU)
 
@@ -64,9 +66,9 @@ function runCtScanTest (ep) {
       )
     }
 
-    t.pass(`DocTR CT scan report [${tag}] completed successfully`)
+    t.pass(`DocTR CT scan report [${tag}] run ${run} completed successfully`)
   })
 }
 
-runCtScanTest('cpu')
-runCtScanTest('gpu')
+for (let i = 1; i <= PERF_RUNS; i++) runCtScanTest('cpu', i)
+for (let i = 1; i <= PERF_RUNS; i++) runCtScanTest('gpu', i)

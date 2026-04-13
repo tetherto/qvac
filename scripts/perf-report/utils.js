@@ -177,7 +177,7 @@ function aggregateReports (reports) {
   if (!reports.length) return { addon: 'unknown', devices: {}, run_numbers: [], quality: {} }
 
   const addon = reports[0].addon
-  const runNumbers = reports.map(r => r.run_number).filter(Boolean)
+  const runNumbers = [...new Set(reports.map(r => r.run_number).filter(Boolean))]
 
   const deviceMap = {}
   const qualityMap = {}

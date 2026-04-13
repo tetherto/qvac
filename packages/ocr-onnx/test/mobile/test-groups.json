@@ -1,0 +1,24 @@
+{
+  "perf": [
+    "runDoctrClinicalChemistryTest",
+    "runDoctrCtScanTest",
+    "runDoctrLabResultsTest",
+    "runDoctrLiverFunctionTest"
+  ],
+  "regular": [
+    "runDoctrBasicTest",
+    "runDoctrFrenchTest",
+    "runDoctrModelsTest",
+    "runDoctrParamValidationTest",
+    "runCancelTest",
+    "runErrorHandlingTest",
+    "runFullCoverageTest",
+    "runFullOcrSuiteTest",
+    "runImageFormatsTest",
+    "runLargeImagesTest",
+    "runLifecycleTest",
+    "runOcrBasicTest",
+    "runParamValidationTest",
+    "runPipelineTest"
+  ]
+}

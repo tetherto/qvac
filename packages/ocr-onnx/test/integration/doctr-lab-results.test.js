@@ -29,15 +29,17 @@ const EXPECTED_WORDS = [
   'oxygen', 'electrolyte', 'metabolite', 'oximetry'
 ]
 
-function runLabResultsTest (ep) {
+const PERF_RUNS = 3
+
+function runLabResultsTest (ep, run) {
   const useGPU = ep === 'gpu'
   const tag = ep.toUpperCase()
 
-  test(`DocTR lab results [${tag}] - db_mobilenet + crnn_mobilenet`, { timeout: DOCTR_TEST_TIMEOUT }, async function (t) {
+  test(`DocTR lab results [${tag}] run ${run} - db_mobilenet + crnn_mobilenet`, { timeout: DOCTR_TEST_TIMEOUT }, async function (t) {
     if (!modelsAvailable) { t.comment('Skipped — models unavailable'); return }
     const imagePath = getImagePath('/test/images/lab_results.png')
 
-    t.comment(`Testing DocTR on medical lab results image [${tag}]`)
+    t.comment(`Testing DocTR on medical lab results image [${tag}] (run ${run}/${PERF_RUNS})`)
     t.comment('Detector: db_mobilenet_v3_large, Recognizer: crnn_mobilenet_v3_small (CTC)')
     t.comment('straightenPages: true, useGPU: ' + useGPU)
 
@@ -63,9 +65,9 @@ function runLabResultsTest (ep) {
       )
     }
 
-    t.pass(`DocTR lab results [${tag}] completed successfully`)
+    t.pass(`DocTR lab results [${tag}] run ${run} completed successfully`)
   })
 }
 
-runLabResultsTest('cpu')
-runLabResultsTest('gpu')
+for (let i = 1; i <= PERF_RUNS; i++) runLabResultsTest('cpu', i)
+for (let i = 1; i <= PERF_RUNS; i++) runLabResultsTest('gpu', i)

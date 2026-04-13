@@ -22,40 +22,46 @@ test('DocTR clinical chemistry - download models', { timeout: DOCTR_TEST_TIMEOUT
   t.ok(CRNN_MOBILENET, 'crnn_mobilenet model available')
 })
 
-test('DocTR clinical chemistry - db_mobilenet + crnn_mobilenet with straightenPages', { timeout: DOCTR_TEST_TIMEOUT }, async function (t) {
-  if (!modelsAvailable) { t.comment('Skipped — models unavailable'); return }
-  const imagePath = getImagePath('/test/images/clinical_chemistry.png')
+const PERF_RUNS = 3
 
-  t.comment('Testing DocTR on clinical chemistry lab result image')
-  t.comment('Detector: db_mobilenet_v3_large, Recognizer: crnn_mobilenet_v3_small (CTC)')
-  t.comment('straightenPages: true')
+const EXPECTED_WORDS = [
+  'clinical', 'chemistry', 'alkaline', 'phosphatase',
+  'hemoglobin', 'creatinine', 'cholesterol', 'triglycerides',
+  'bilirubin', 'albumin', 'protein', 'lipid'
+]
 
-  const { results, stats } = await runDoctrOCR(t, {
-    pathDetector: DB_MOBILENET,
-    pathRecognizer: CRNN_MOBILENET,
-    decodingMethod: 'ctc',
-    straightenPages: true
-  }, imagePath)
+function runClinicalChemistryTest (run) {
+  test(`DocTR clinical chemistry run ${run} - db_mobilenet + crnn_mobilenet`, { timeout: DOCTR_TEST_TIMEOUT }, async function (t) {
+    if (!modelsAvailable) { t.comment('Skipped — models unavailable'); return }
+    const imagePath = getImagePath('/test/images/clinical_chemistry.png')
 
-  const texts = results.map(r => r.text)
-  t.comment('Detected texts: ' + JSON.stringify(texts))
-  t.comment(formatOCRPerformanceMetrics('[DocTR clinical_chemistry]', stats, texts, { imagePath }))
+    t.comment(`Testing DocTR on clinical chemistry lab result image (run ${run}/${PERF_RUNS})`)
+    t.comment('Detector: db_mobilenet_v3_large, Recognizer: crnn_mobilenet_v3_small (CTC)')
+    t.comment('straightenPages: true')
 
-  t.ok(results.length > 0, `should detect text regions, got ${results.length}`)
+    const { results, stats } = await runDoctrOCR(t, {
+      pathDetector: DB_MOBILENET,
+      pathRecognizer: CRNN_MOBILENET,
+      decodingMethod: 'ctc',
+      straightenPages: true
+    }, imagePath)
 
-  const lowerTexts = texts.map(w => w.toLowerCase())
+    const texts = results.map(r => r.text)
+    t.comment('Detected texts: ' + JSON.stringify(texts))
+    t.comment(formatOCRPerformanceMetrics('[DocTR clinical_chemistry]', stats, texts, { imagePath }))
 
-  const expectedWords = [
-    'clinical', 'chemistry', 'alkaline', 'phosphatase',
-    'hemoglobin', 'creatinine', 'cholesterol', 'triglycerides',
-    'bilirubin', 'albumin', 'protein', 'lipid'
-  ]
-  for (const word of expectedWords) {
-    t.ok(
-      lowerTexts.some(w => w.includes(word)),
-      `should detect "${word}" in clinical chemistry report`
-    )
-  }
+    t.ok(results.length > 0, `should detect text regions, got ${results.length}`)
 
-  t.pass('DocTR clinical chemistry test completed successfully')
-})
+    const lowerTexts = texts.map(w => w.toLowerCase())
+    for (const word of EXPECTED_WORDS) {
+      t.ok(
+        lowerTexts.some(w => w.includes(word)),
+        `should detect "${word}" in clinical chemistry report`
+      )
+    }
+
+    t.pass(`DocTR clinical chemistry run ${run} completed successfully`)
+  })
+}
+
+for (let i = 1; i <= PERF_RUNS; i++) runClinicalChemistryTest(i)

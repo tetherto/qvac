@@ -29,15 +29,17 @@ const EXPECTED_WORDS = [
   'ratio', 'specimen', 'investigation', 'total'
 ]
 
-function runLiverFunctionTest (ep) {
+const PERF_RUNS = 3
+
+function runLiverFunctionTest (ep, run) {
   const useGPU = ep === 'gpu'
   const tag = ep.toUpperCase()
 
-  test(`DocTR liver function [${tag}] - db_mobilenet + crnn_mobilenet`, { timeout: DOCTR_TEST_TIMEOUT }, async function (t) {
+  test(`DocTR liver function [${tag}] run ${run} - db_mobilenet + crnn_mobilenet`, { timeout: DOCTR_TEST_TIMEOUT }, async function (t) {
     if (!modelsAvailable) { t.comment('Skipped — models unavailable'); return }
     const imagePath = getImagePath('/test/images/liver_function_test.png')
 
-    t.comment(`Testing DocTR on liver function test (LFT) image [${tag}]`)
+    t.comment(`Testing DocTR on liver function test (LFT) image [${tag}] (run ${run}/${PERF_RUNS})`)
     t.comment('Detector: db_mobilenet_v3_large, Recognizer: crnn_mobilenet_v3_small (CTC)')
     t.comment('straightenPages: true, useGPU: ' + useGPU)
 
@@ -63,9 +65,9 @@ function runLiverFunctionTest (ep) {
       )
     }
 
-    t.pass(`DocTR liver function test [${tag}] completed successfully`)
+    t.pass(`DocTR liver function test [${tag}] run ${run} completed successfully`)
   })
 }
 
-runLiverFunctionTest('cpu')
-runLiverFunctionTest('gpu')
+for (let i = 1; i <= PERF_RUNS; i++) runLiverFunctionTest('cpu', i)
+for (let i = 1; i <= PERF_RUNS; i++) runLiverFunctionTest('gpu', i)
