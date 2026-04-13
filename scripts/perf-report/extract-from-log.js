@@ -39,7 +39,8 @@ function extractFromText (text) {
     const endIdx = text.indexOf(END_MARKER, jsonStart)
     if (endIdx === -1) break
 
-    const jsonStr = text.substring(jsonStart, endIdx)
+    const jsonRaw = text.substring(jsonStart, endIdx)
+    const jsonStr = jsonRaw.replace(/[\x00-\x08\x0b\x0c\x0e-\x1f]/g, '')
     try {
       const parsed = JSON.parse(jsonStr)
       if (isValidReport(parsed)) {
