@@ -1,7 +1,7 @@
 'use strict'
 require('./integration-runtime.cjs')
 
-const BCIWhispercpp = require('../../index')
+const BCIWhispercpp = require('@qvac/bci-whispercpp')
 
 function getAssetPath (filename) {
   if (global.assetPaths) {
