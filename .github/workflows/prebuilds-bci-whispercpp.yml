@@ -7,6 +7,7 @@ on:
     paths:
       - ".github/workflows/prebuilds-bci-whispercpp.yml"
       - ".github/workflows/integration-test-bci-whispercpp.yml"
+      - ".github/workflows/integration-mobile-test-bci-whispercpp.yml"
       - "packages/bci-whispercpp/**"
   workflow_dispatch:
     inputs:
