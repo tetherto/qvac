@@ -60,6 +60,7 @@ phases:
               \"alwaysMatch\": {
                 \"platformName\": \"iOS\",
                 \"appium:automationName\": \"XCUITest\",
+                \"appium:app\": \"$DEVICEFARM_APP_PATH\",
                 \"appium:bundleId\": \"$DEVICEFARM_APP_BUNDLE_ID\",
                 \"appium:udid\": \"$DEVICEFARM_DEVICE_UDID\",
                 \"appium:usePrebuiltWDA\": true,
@@ -81,15 +82,48 @@ phases:
         fi
         echo "App launched via Appium (session: $SESSION_ID)"
 
-        # Push models manifest to the app's Documents directory via Appium pushFile.
+        # Push models manifest to the app's Documents directory.
         # The consumer's bootstrap() polls for this file and downloads models from S3.
         MANIFEST="$DEVICEFARM_TEST_PACKAGE_PATH/models-manifest.json"
         if [ -f "$MANIFEST" ]; then
+          BUNDLE_ID="${DEVICEFARM_APP_BUNDLE_ID:-io.tether.test.qvac}"
+          MANIFEST_SIZE=$(wc -c < "$MANIFEST")
+          echo "Pushing manifest to app sandbox (bundle: $BUNDLE_ID, size: ${MANIFEST_SIZE}B)..."
+
+          sleep 3
+
           MANIFEST_B64=$(base64 -i "$MANIFEST")
           PUSH_RESP=$(curl -s -X POST "http://127.0.0.1:4723/wd/hub/session/$SESSION_ID/appium/device/push_file" \
             -H "Content-Type: application/json" \
-            -d "{\"path\":\"@io.tether.test.qvac:documents/models-manifest.json\",\"data\":\"$MANIFEST_B64\"}")
-          echo "Manifest pushed to app sandbox: $PUSH_RESP"
+            -d "{\"path\":\"@${BUNDLE_ID}:documents/models-manifest.json\",\"data\":\"$MANIFEST_B64\"}")
+
+          if echo "$PUSH_RESP" | python3 -c "import sys,json; d=json.load(sys.stdin); exit(0 if 'error' not in d.get('value',{}) else 1)" 2>/dev/null; then
+            echo "Manifest pushed via Appium pushFile OK"
+          else
+            echo "Appium pushFile failed: $PUSH_RESP"
+            echo "Trying pymobiledevice3 house_arrest (afc --container)..."
+            if pymobiledevice3 afc --udid "$DEVICEFARM_DEVICE_UDID" --container "$BUNDLE_ID" \
+                 push "$MANIFEST" Documents/models-manifest.json 2>&1; then
+              echo "Manifest pushed via pymobiledevice3 afc OK"
+            else
+              echo "pymobiledevice3 afc push failed. Diagnostics:"
+              echo "--- pymobiledevice3 afc --help ---"
+              pymobiledevice3 afc --help 2>&1 | head -30 || true
+              echo "--- pymobiledevice3 apps --help ---"
+              pymobiledevice3 apps --help 2>&1 | head -30 || true
+              echo "--- installed apps ---"
+              pymobiledevice3 apps list --udid "$DEVICEFARM_DEVICE_UDID" --no-color 2>&1 | python3 -c "
+          import sys,json
+          try:
+            apps = json.load(sys.stdin)
+            for bid, info in apps.items():
+              if 'qvac' in bid.lower() or 'tether' in bid.lower():
+                print(f'{bid}: Container={info.get(\"Container\",\"?\")}')
+          except: print('Could not parse apps list')
+          " || true
+              echo "Cache manifest push failed — app will download models from registry directly"
+            fi
+          fi
         else
           echo "No models manifest (cache-models not enabled)"
         fi
