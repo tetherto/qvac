@@ -1,6 +1,6 @@
 # @qvac/bci-whispercpp
 
-Brain-Computer Interface (BCI) neural signal transcription addon for qvac, powered by [whisper.cpp](https://github.com/ggml-org/whisper.cpp).
+Brain-Computer Interface (BCI) neural signal transcription addon for qvac, powered by [whisper.cpp](https://github.com/tetherto/whisper.cpp).
 
 Transcribes multi-channel neural signals (e.g., 512-channel microelectrode array recordings) into text using a BCI-trained whisper model running natively via GGML. Output matches the Python BrainWhisperer reference model exactly.
 

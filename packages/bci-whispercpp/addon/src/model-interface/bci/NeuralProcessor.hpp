@@ -44,7 +44,7 @@ public:
   static std::vector<float> gaussianSmooth(
       const std::vector<float>& data,
       uint32_t numTimesteps, uint32_t numChannels,
-      float kernelStd = 2.0F, int kernelSize = 20);
+      float kernelStd = 2.0F, int kernelSize = 100);
 
   std::vector<float> applyDayProjection(
       const std::vector<float>& features,

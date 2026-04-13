@@ -30,12 +30,9 @@ std::string convertVariantToString(const JSValueVariant& value) {
 const HandlersMap<whisper_full_params>& getWhisperMainHandlers() {
   static const HandlersMap<whisper_full_params> handlers = {
       {"language",
-       [](whisper_full_params& p, const JSValueVariant& v) {
-         if (auto* s = std::get_if<std::string>(&v)) {
-           static std::string lang;
-           lang = *s;
-           p.language = lang.c_str();
-         }
+       [](whisper_full_params& /*p*/, const JSValueVariant& /*v*/) {
+         // Language is handled separately in toWhisperFullParams via
+         // BCIConfig::lang_ to avoid static-local lifetime issues.
        }},
       {"n_threads",
        [](whisper_full_params& p, const JSValueVariant& v) {
@@ -101,7 +98,7 @@ const HandlersMap<whisper_context_params>& getWhisperContextHandlers() {
   return handlers;
 }
 
-whisper_full_params toWhisperFullParams(const BCIConfig& bciConfig) {
+whisper_full_params toWhisperFullParams(BCIConfig& bciConfig) {
   whisper_full_params params = whisper_full_default_params(
       WHISPER_SAMPLING_BEAM_SEARCH);
 
@@ -121,6 +118,15 @@ whisper_full_params toWhisperFullParams(const BCIConfig& bciConfig) {
     auto it = handlers.find(key);
     if (it != handlers.end()) {
       it->second(params, value);
+    }
+  }
+
+  // Set language from config-owned storage so the pointer outlives params
+  auto langIt = bciConfig.whisperMainCfg.find("language");
+  if (langIt != bciConfig.whisperMainCfg.end()) {
+    if (auto* s = std::get_if<std::string>(&langIt->second)) {
+      bciConfig.lang_ = *s;
+      params.language = bciConfig.lang_.c_str();
     }
   }
 

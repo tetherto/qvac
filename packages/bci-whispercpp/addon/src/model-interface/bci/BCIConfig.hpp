@@ -26,9 +26,13 @@ struct BCIConfig {
   std::map<std::string, JSValueVariant> whisperMainCfg;
   std::map<std::string, JSValueVariant> whisperContextCfg;
   std::map<std::string, JSValueVariant> bciConfig;
+
+  // Owned storage for string values that whisper_full_params references by
+  // pointer (e.g. p.language = lang_.c_str()). Must outlive the params struct.
+  mutable std::string lang_;
 };
 
-whisper_full_params toWhisperFullParams(const BCIConfig& bciConfig);
+whisper_full_params toWhisperFullParams(BCIConfig& bciConfig);
 whisper_context_params toWhisperContextParams(const BCIConfig& bciConfig);
 
 std::string convertVariantToString(const JSValueVariant& value);

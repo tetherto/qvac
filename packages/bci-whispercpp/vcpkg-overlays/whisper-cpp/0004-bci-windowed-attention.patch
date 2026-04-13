@@ -55,7 +55,7 @@ diff --git a/src/whisper.cpp b/src/whisper.cpp
  
                  struct ggml_tensor * V =
                      ggml_cast(ctx0,
-@@ -2442,6 +2457,24 @@
+@@ -2442,6 +2457,25 @@
              return false;
          }
  
@@ -81,7 +81,7 @@ diff --git a/src/whisper.cpp b/src/whisper.cpp
          if (!ggml_graph_compute_helper(sched, gf, n_threads)) {
              return false;
          }
-@@ -6949,7 +6982,12 @@
+@@ -6949,7 +6983,12 @@
          } else {
              prompt_init.push_back(whisper_token_transcribe(ctx));
          }

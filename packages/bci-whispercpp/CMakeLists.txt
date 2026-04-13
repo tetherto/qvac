@@ -58,7 +58,7 @@ target_include_directories(
     ${QVAC_LIB_INFERENCE_ADDON_CPP_INCLUDE_DIRS}
 )
 
-  target_link_libraries(
+target_link_libraries(
   ${bci-whispercpp}
   PRIVATE
     whisper::whisper

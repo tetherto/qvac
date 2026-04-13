@@ -5,6 +5,7 @@ const fs = require('bare-fs')
 const { BCIInterface } = require('./bci')
 const { checkConfig } = require('./configChecker')
 const { QvacErrorAddonBCI, ERR_CODES } = require('./lib/error')
+const { computeWER } = require('./lib/wer')
 
 const END_OF_INPUT = 'end of job'
 
@@ -28,7 +29,10 @@ class BCIWhispercpp {
     this._config = config
     this._addon = null
     this._hasActiveResponse = false
-    this._jobToResponse = new Map()
+    this._pendingResolve = null
+    this._pendingReject = null
+    this._segments = []
+    this._stats = null
 
     if (!this._modelPath || !fs.existsSync(this._modelPath)) {
       throw new Error(`Model file doesn't exist: ${this._modelPath}`)
@@ -99,34 +103,10 @@ class BCIWhispercpp {
     }
 
     return new Promise((resolve, reject) => {
-      const segments = []
-      let stats = null
-
-      this._hasActiveResponse = true
-
-      const tempCb = (addon, event, jid, data, error) => {
-        if (event === 'Output') {
-          if (Array.isArray(data)) {
-            segments.push(...data)
-          } else if (data && data.text) {
-            segments.push(data)
-          }
-        } else if (event === 'JobEnded') {
-          stats = data
-          this._hasActiveResponse = false
-          const text = segments.map(s => s.text).join('').trim()
-          resolve({ text, segments, stats })
-        } else if (event === 'Error') {
-          this._hasActiveResponse = false
-          reject(new Error(error || 'Transcription failed'))
-        }
-      }
-
-      // Override addon output callback temporarily
-      this._addon._outputCb = tempCb
+      this._beginJob(resolve, reject)
 
       this._addon.runJob({ input: neuralData }).catch((err) => {
-        this._hasActiveResponse = false
+        this._clearJob()
         reject(err)
       })
     })
@@ -143,59 +123,74 @@ class BCIWhispercpp {
       throw new QvacErrorAddonBCI({ code: ERR_CODES.JOB_ALREADY_RUNNING })
     }
 
-    return new Promise(async (resolve, reject) => {
-      const segments = []
-      let stats = null
-
-      this._hasActiveResponse = true
-      this._addon._outputCb = (addon, event, jid, data, error) => {
-        if (event === 'Output') {
-          if (Array.isArray(data)) {
-            segments.push(...data)
-          } else if (data && data.text) {
-            segments.push(data)
-          }
-        } else if (event === 'JobEnded') {
-          stats = data
-          this._hasActiveResponse = false
-          const text = segments.map(s => s.text).join('').trim()
-          resolve({ text, segments, stats })
-        } else if (event === 'Error') {
-          this._hasActiveResponse = false
-          reject(new Error(error || 'Transcription failed'))
-        }
-      }
-
-      try {
-        // Start a job
-        await this._addon.append({ type: 'neural', input: new Uint8Array() })
-
-        // Feed chunks
-        for await (const chunk of signalStream) {
-          await this._addon.append({
-            type: 'neural',
-            input: new Uint8Array(chunk.buffer, chunk.byteOffset, chunk.byteLength)
-          })
-        }
-
-        // Signal end
-        await this._addon.append({ type: END_OF_INPUT })
-      } catch (err) {
-        this._hasActiveResponse = false
-        reject(err)
-      }
+    const promise = new Promise((resolve, reject) => {
+      this._beginJob(resolve, reject)
     })
+
+    try {
+      await this._addon.append({ type: 'neural', input: new Uint8Array() })
+
+      for await (const chunk of signalStream) {
+        await this._addon.append({
+          type: 'neural',
+          input: new Uint8Array(chunk.buffer, chunk.byteOffset, chunk.byteLength)
+        })
+      }
+
+      await this._addon.append({ type: END_OF_INPUT })
+    } catch (err) {
+      this._clearJob()
+      throw err
+    }
+
+    return promise
+  }
+
+  _beginJob (resolve, reject) {
+    this._segments = []
+    this._stats = null
+    this._hasActiveResponse = true
+    this._pendingResolve = resolve
+    this._pendingReject = reject
+  }
+
+  _clearJob () {
+    this._hasActiveResponse = false
+    this._pendingResolve = null
+    this._pendingReject = null
   }
 
   _outputCallback (addon, event, jobId, data, error) {
-    // Base callback - overridden per-call in transcribe/transcribeStream
+    if (event === 'Output') {
+      if (Array.isArray(data)) {
+        this._segments.push(...data)
+      } else if (data && data.text) {
+        this._segments.push(data)
+      }
+    } else if (event === 'JobEnded') {
+      this._stats = data
+      const segments = this._segments
+      const stats = this._stats
+      const resolve = this._pendingResolve
+      this._clearJob()
+      if (resolve) {
+        const text = segments.map(s => s.text).join('').trim()
+        resolve({ text, segments, stats })
+      }
+    } else if (event === 'Error') {
+      const reject = this._pendingReject
+      this._clearJob()
+      if (reject) {
+        reject(new Error(error || 'Transcription failed'))
+      }
+    }
   }
 
   async cancel () {
     if (this._addon?.cancel) {
       await this._addon.cancel()
     }
-    this._hasActiveResponse = false
+    this._clearJob()
   }
 
   async destroy () {
@@ -204,42 +199,6 @@ class BCIWhispercpp {
       await this._addon.destroyInstance()
     }
   }
-}
-
-/**
- * Compute Word Error Rate between hypothesis and reference.
- * @param {string} hypothesis
- * @param {string} reference
- * @returns {number} WER as a ratio (0.0 = perfect, 1.0 = 100% errors)
- */
-function computeWER (hypothesis, reference) {
-  const hyp = hypothesis.toLowerCase().trim().split(/\s+/).filter(Boolean)
-  const ref = reference.toLowerCase().trim().split(/\s+/).filter(Boolean)
-
-  if (ref.length === 0) return hyp.length === 0 ? 0 : 1
-
-  const n = ref.length
-  const m = hyp.length
-  const dp = Array.from({ length: n + 1 }, () => Array(m + 1).fill(0))
-
-  for (let i = 0; i <= n; i++) dp[i][0] = i
-  for (let j = 0; j <= m; j++) dp[0][j] = j
-
-  for (let i = 1; i <= n; i++) {
-    for (let j = 1; j <= m; j++) {
-      if (ref[i - 1] === hyp[j - 1]) {
-        dp[i][j] = dp[i - 1][j - 1]
-      } else {
-        dp[i][j] = 1 + Math.min(
-          dp[i - 1][j],     // deletion
-          dp[i][j - 1],     // insertion
-          dp[i - 1][j - 1]  // substitution
-        )
-      }
-    }
-  }
-
-  return dp[n][m] / n
 }
 
 module.exports = BCIWhispercpp

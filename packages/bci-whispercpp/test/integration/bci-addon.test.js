@@ -51,7 +51,7 @@ test('[BCI] batch transcription from neural signal file', { skip: !hasModel }, a
 
     const result = await bci.transcribeFile(samplePath)
 
-    console.log(`\n=== Batch Transcription Result ===`)
+    console.log('\n=== Batch Transcription Result ===')
     console.log(`Expected:  "${sample.expected_text}"`)
     console.log(`Got:       "${result.text}"`)
 
@@ -61,8 +61,8 @@ test('[BCI] batch transcription from neural signal file', { skip: !hasModel }, a
     t.ok(typeof result.text === 'string', 'Should produce a transcription string')
     t.ok(result.segments, 'Should have segments')
     t.ok(typeof wer === 'number' && wer >= 0, 'WER should be a non-negative number')
-    console.log(`\nNote: High WER expected - standard whisper model is not BCI-trained.`)
-    console.log(`A BCI-trained GGML model is needed for meaningful neural-to-text results.`)
+    console.log('\nNote: High WER expected - standard whisper model is not BCI-trained.')
+    console.log('A BCI-trained GGML model is needed for meaningful neural-to-text results.')
   } finally {
     await bci.destroy()
   }
@@ -101,7 +101,7 @@ test('[BCI] streaming transcription from neural signal chunks', { skip: !hasMode
 
     const result = await bci.transcribeStream(generateChunks())
 
-    console.log(`\n=== Streaming Transcription Result ===`)
+    console.log('\n=== Streaming Transcription Result ===')
     console.log(`Expected:  "${sample.expected_text}"`)
     console.log(`Got:       "${result.text}"`)
 
@@ -125,19 +125,20 @@ test('[BCI] WER measurement across all test samples', { skip: !hasModel }, async
   console.log(`Platform: ${platform.label}`)
   console.log(`Model:    ${MODEL_PATH}\n`)
 
+  const bci = new BCIWhispercpp({ modelPath: MODEL_PATH }, {
+    whisperConfig: { language: 'en', temperature: 0.0 },
+    miscConfig: { caption_enabled: false }
+  })
+
   const results = []
 
-  for (const sample of manifest.samples) {
-    const samplePath = getSamplePath(sample.file)
-    if (!fs.existsSync(samplePath)) continue
+  try {
+    await bci.load()
 
-    const bci = new BCIWhispercpp({ modelPath: MODEL_PATH }, {
-      whisperConfig: { language: 'en', temperature: 0.0 },
-      miscConfig: { caption_enabled: false }
-    })
+    for (const sample of manifest.samples) {
+      const samplePath = getSamplePath(sample.file)
+      if (!fs.existsSync(samplePath)) continue
 
-    try {
-      await bci.load()
       const result = await bci.transcribeFile(samplePath)
       const wer = computeWER(result.text, sample.expected_text)
       results.push({ expected: sample.expected_text, got: result.text, wer })
@@ -146,9 +147,9 @@ test('[BCI] WER measurement across all test samples', { skip: !hasModel }, async
       console.log(`    Expected: "${sample.expected_text}"`)
       console.log(`    Got:      "${result.text}"`)
       console.log(`    WER:      ${(wer * 100).toFixed(1)}%\n`)
-    } finally {
-      await bci.destroy()
     }
+  } finally {
+    await bci.destroy()
   }
 
   const avgWER = results.reduce((sum, r) => sum + r.wer, 0) / results.length
