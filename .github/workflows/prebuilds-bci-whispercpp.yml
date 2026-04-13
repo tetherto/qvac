@@ -43,9 +43,6 @@ jobs:
           - os: ubuntu-22.04
             platform: linux
             arch: x64
-          - os: ubuntu-24.04-arm64-private
-            platform: linux
-            arch: arm64
           - os: macos-14
             platform: darwin
             arch: arm64
@@ -119,9 +116,17 @@ jobs:
         env:
           GIT_PAT: ${{ secrets.PAT_TOKEN }}
         run: |
+          GITCFG="${RUNNER_TEMP}/git-global.cfg"
+          cat > "$GITCFG" <<EOF
+          [url "https://x-access-token:${GIT_PAT}@github.com/"]
+            insteadOf = https://github.com/
+            insteadOf = ssh://git@github.com/
+            insteadOf = git@github.com:
+          EOF
           git config --global url."https://x-access-token:${GIT_PAT}@github.com/".insteadOf "https://github.com/"
           git config --global url."https://x-access-token:${GIT_PAT}@github.com/".insteadOf "ssh://git@github.com/"
           git config --global url."https://x-access-token:${GIT_PAT}@github.com/".insteadOf "git@github.com:"
+          echo "GIT_CONFIG_GLOBAL=$GITCFG" >> $GITHUB_ENV
 
       - name: Setup node
         uses: actions/setup-node@v6
