@@ -20,6 +20,7 @@ on:
   workflow_call:
 
 permissions:
+  actions: read
   contents: read
   pull-requests: read
   packages: read
@@ -27,6 +28,7 @@ permissions:
 jobs:
   on-pr:
     permissions:
+      actions: read
       contents: read
       pull-requests: write
       id-token: write
