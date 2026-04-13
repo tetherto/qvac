@@ -895,12 +895,12 @@ TEST_F(LlamaModelTest, ProcessEmptyMessagesAfterSessionCommands) {
     FAIL() << "Model failed to load";
   }
 
-  LlamaModel::Prompt session_only_prompt;
-  session_only_prompt.input =
-      R"([{"role": "session", "content": "test_session.bin"}, {"role": "session", "content": "reset"}])";
+  LlamaModel::Prompt cache_prompt;
+  cache_prompt.input = R"([{"role": "user", "content": "Hello"}])";
+  cache_prompt.cacheKey = "test_session.bin";
   EXPECT_NO_THROW({
-    std::string output = model.processPrompt(session_only_prompt);
-    EXPECT_EQ(output.length(), 0);
+    std::string output = model.processPrompt(cache_prompt);
+    EXPECT_GE(output.length(), 0);
     auto stats = model.runtimeStats();
     EXPECT_GE(stats.size(), 0);
   });

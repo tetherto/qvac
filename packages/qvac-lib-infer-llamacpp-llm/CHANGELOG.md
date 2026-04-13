@@ -1,6 +1,6 @@
 # Changelog
 
-## [0.15.0] - 2026-04-10
+## [0.16.0] - 2026-04-12
 
 ### Changed
 
@@ -47,6 +47,23 @@ Messages with role `"tool"` (tool call results) were not triggering `add_generat
 - `runtimeDebugStats()` internal method on `LlamaModel` exposing `nPastBeforeTools`, `firstMsgTokens`, and `toolsTrimmed`
 - Comprehensive C++ unit tests for Qwen3 tools-dynamic template and cache management with tools_compact
 - Regression tests for context sliding with anchored tools: clamped discard, `adjustAfterSlide`, unclamped sliding with long conversations, and sliding during generation
+
+## [0.15.0] - 2026-04-09
+
+### Breaking Changes
+
+#### KV cache API simplified — `{ role: "session" }` replaced with `runOptions`
+
+Cache control moved from `{ role: "session" }` chat messages to explicit `runOptions` fields: `cacheKey` and `saveCacheToDisk`. The `getTokens`, `save`, and `reset` session commands are removed — use `response.stats.CacheTokens`, `saveCacheToDisk: true`, and a different `cacheKey` (or omit it) instead.
+
+### Added
+
+- `cacheKey`, `saveCacheToDisk` options on `runOptions` and `RunOptions` TypeScript interface.
+- `docs/cache-api.md` — KV cache API usage guide.
+
+### Removed
+
+- `{ role: "session" }` message protocol, `getTokens` command, `save` command.
 
 ## [0.14.4] - 2026-04-03
 

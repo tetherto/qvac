@@ -9,19 +9,14 @@
 
 #include "model-interface/LlamaModel.hpp"
 #include "test_common.hpp"
+#include "test_prompt_helpers.hpp"
 
 namespace fs = std::filesystem;
 
 using test_common::getStatValue;
+using test_common::processPromptWithCacheOptions;
 
 namespace {
-std::string processPromptString(
-    const std::unique_ptr<LlamaModel>& model, const std::string& input) {
-  LlamaModel::Prompt prompt;
-  prompt.input = input;
-  return model->processPrompt(prompt);
-}
-
 bool isQwen3ModelPath(const std::string& path) {
   std::string lowerPath = path;
   std::transform(
@@ -106,11 +101,12 @@ TEST_F(CacheManagementQwen3Test, CacheWithToolsCompactTrueTrimsToolTokens) {
     FAIL() << "Model failed to load";
   }
 
-  std::string inputWithTools =
-      R"([{"role": "session", "content": "test_session1_qwen3.bin"}, {"role": "user", "content": "What is the weather in Tokyo?"}, {"type": "function", "name": "getWeather", "description": "Get weather forecast", "parameters": {"type": "object", "properties": {"city": {"type": "string"}}, "required": ["city"]}}])";
-
   EXPECT_NO_THROW({
-    std::string output = processPromptString(model, inputWithTools);
+    std::string output = processPromptWithCacheOptions(
+        model,
+        R"([{"role": "user", "content": "What is the weather in Tokyo?"}, {"type": "function", "name": "getWeather", "description": "Get weather forecast", "parameters": {"type": "object", "properties": {"city": {"type": "string"}}, "required": ["city"]}}])",
+        session1_path,
+        true);
     EXPECT_FALSE(output.empty());
   });
 
@@ -120,13 +116,6 @@ TEST_F(CacheManagementQwen3Test, CacheWithToolsCompactTrueTrimsToolTokens) {
 
   llama_pos nPastBeforeTools = model->getNPastBeforeTools();
   EXPECT_EQ(nPastBeforeTools, -1);
-
-  std::string saveInput =
-      R"([{"role": "session", "content": "test_session1_qwen3.bin"}, {"role": "session", "content": "save"}])";
-  EXPECT_NO_THROW({
-    std::string saveOutput = processPromptString(model, saveInput);
-    EXPECT_EQ(saveOutput.length(), 0);
-  });
 
   EXPECT_TRUE(fs::exists(session1_path));
 }
@@ -146,23 +135,17 @@ TEST_F(CacheManagementQwen3Test, CacheReloadWithToolsCompactTrue) {
     FAIL() << "Model failed to load";
   }
 
-  std::string inputWithTools =
-      R"([{"role": "session", "content": "test_session1_qwen3.bin"}, {"role": "user", "content": "What is the weather in Tokyo?"}, {"type": "function", "name": "getWeather", "description": "Get weather forecast", "parameters": {"type": "object", "properties": {"city": {"type": "string"}}, "required": ["city"]}}])";
-
   EXPECT_NO_THROW({
-    std::string output = processPromptString(model1, inputWithTools);
+    std::string output = processPromptWithCacheOptions(
+        model1,
+        R"([{"role": "user", "content": "What is the weather in Tokyo?"}, {"type": "function", "name": "getWeather", "description": "Get weather forecast", "parameters": {"type": "object", "properties": {"city": {"type": "string"}}, "required": ["city"]}}])",
+        session1_path,
+        true);
     EXPECT_FALSE(output.empty());
   });
 
   llama_pos nPastBeforeTools1 = model1->getNPastBeforeTools();
   EXPECT_EQ(nPastBeforeTools1, -1);
-
-  std::string saveInput =
-      R"([{"role": "session", "content": "test_session1_qwen3.bin"}, {"role": "session", "content": "save"}])";
-  EXPECT_NO_THROW({
-    std::string saveOutput = processPromptString(model1, saveInput);
-    EXPECT_EQ(saveOutput.length(), 0);
-  });
 
   EXPECT_TRUE(fs::exists(session1_path));
 
@@ -174,9 +157,10 @@ TEST_F(CacheManagementQwen3Test, CacheReloadWithToolsCompactTrue) {
   }
 
   EXPECT_NO_THROW({
-    std::string output = processPromptString(
+    std::string output = processPromptWithCacheOptions(
         model2,
-        R"([{"role": "session", "content": "test_session1_qwen3.bin"}, {"role": "user", "content": "What is the weather in London?"}])");
+        R"([{"role": "user", "content": "What is the weather in London?"}])",
+        session1_path);
     EXPECT_FALSE(output.empty());
   });
 
@@ -203,11 +187,12 @@ TEST_F(CacheManagementQwen3Test, CacheWithoutToolsWithToolsCompactTrue) {
     FAIL() << "Model failed to load";
   }
 
-  std::string inputNoTools =
-      R"([{"role": "session", "content": "test_session1_qwen3.bin"}, {"role": "user", "content": "What is bitcoin? Answer shortly."}])";
-
   EXPECT_NO_THROW({
-    std::string output = processPromptString(model, inputNoTools);
+    std::string output = processPromptWithCacheOptions(
+        model,
+        R"([{"role": "user", "content": "What is bitcoin? Answer shortly."}])",
+        session1_path,
+        true);
     EXPECT_FALSE(output.empty());
   });
 
@@ -217,13 +202,6 @@ TEST_F(CacheManagementQwen3Test, CacheWithoutToolsWithToolsCompactTrue) {
 
   llama_pos nPastBeforeTools = model->getNPastBeforeTools();
   EXPECT_EQ(nPastBeforeTools, -1);
-
-  std::string saveInput =
-      R"([{"role": "session", "content": "test_session1_qwen3.bin"}, {"role": "session", "content": "save"}])";
-  EXPECT_NO_THROW({
-    std::string saveOutput = processPromptString(model, saveInput);
-    EXPECT_EQ(saveOutput.length(), 0);
-  });
 
   EXPECT_TRUE(fs::exists(session1_path));
 }
@@ -243,11 +221,11 @@ TEST_F(CacheManagementQwen3Test, CacheToolsCompactModeWithMultiplePrompts) {
     FAIL() << "Model failed to load";
   }
 
-  std::string input1 =
-      R"([{"role": "session", "content": "test_session1_qwen3.bin"}, {"role": "user", "content": "Hi"}, {"type": "function", "name": "get_weather", "description": "Get detailed weather forecast data with temperature humidity wind speed precipitation UV visibility pressure sunrise sunset alerts", "parameters": {"type": "object", "properties": {"city": {"type": "string", "description": "The name of the city to get weather for"}, "country": {"type": "string", "description": "Country code or name"}, "lat": {"type": "number", "description": "Latitude coordinate"}, "lon": {"type": "number", "description": "Longitude coordinate"}, "zip": {"type": "string", "description": "ZIP postal code"}, "units": {"type": "string", "description": "Temperature units metric imperial or kelvin"}, "lang": {"type": "string", "description": "Language code for localized descriptions"}, "forecast_days": {"type": "integer", "description": "Number of days to forecast from 1 to 7"}, "hourly": {"type": "boolean", "description": "Include hourly forecast data"}, "alerts": {"type": "boolean", "description": "Include weather alerts and warnings"}, "aqi": {"type": "boolean", "description": "Include air quality index data"}, "tides": {"type": "boolean", "description": "Include tide information"}, "solar": {"type": "boolean", "description": "Include solar data like sunrise sunset"}, "tz": {"type": "string", "description": "Timezone identifier"}, "start_dt": {"type": "string", "description": "Start datetime for historical data"}, "end_dt": {"type": "string", "description": "End datetime for historical data"}, "cnt": {"type": "integer", "description": "Number of data points to return"}, "mode": {"type": "string", "description": "Response mode json xml or html"}, "appid": {"type": "string", "description": "API key for authentication"}}, "required": ["city"]}}])";
-
   EXPECT_NO_THROW({
-    std::string output = processPromptString(model, input1);
+    std::string output = processPromptWithCacheOptions(
+        model,
+        R"([{"role": "user", "content": "Hi"}, {"type": "function", "name": "get_weather", "description": "Get detailed weather forecast data with temperature humidity wind speed precipitation UV visibility pressure sunrise sunset alerts", "parameters": {"type": "object", "properties": {"city": {"type": "string", "description": "The name of the city to get weather for"}, "country": {"type": "string", "description": "Country code or name"}, "lat": {"type": "number", "description": "Latitude coordinate"}, "lon": {"type": "number", "description": "Longitude coordinate"}, "zip": {"type": "string", "description": "ZIP postal code"}, "units": {"type": "string", "description": "Temperature units metric imperial or kelvin"}, "lang": {"type": "string", "description": "Language code for localized descriptions"}, "forecast_days": {"type": "integer", "description": "Number of days to forecast from 1 to 7"}, "hourly": {"type": "boolean", "description": "Include hourly forecast data"}, "alerts": {"type": "boolean", "description": "Include weather alerts and warnings"}, "aqi": {"type": "boolean", "description": "Include air quality index data"}, "tides": {"type": "boolean", "description": "Include tide information"}, "solar": {"type": "boolean", "description": "Include solar data like sunrise sunset"}, "tz": {"type": "string", "description": "Timezone identifier"}, "start_dt": {"type": "string", "description": "Start datetime for historical data"}, "end_dt": {"type": "string", "description": "End datetime for historical data"}, "cnt": {"type": "integer", "description": "Number of data points to return"}, "mode": {"type": "string", "description": "Response mode json xml or html"}, "appid": {"type": "string", "description": "API key for authentication"}}, "required": ["city"]}}])",
+        session1_path);
     EXPECT_FALSE(output.empty());
   });
 
@@ -263,11 +241,11 @@ TEST_F(CacheManagementQwen3Test, CacheToolsCompactModeWithMultiplePrompts) {
       << "Cache tokens (" << cacheTokens1 << ") should not exceed "
       << maxExpectedCacheTokens << " - function tokens should be trimmed";
 
-  std::string input2 =
-      R"([{"role": "session", "content": "test_session1_qwen3.bin"}, {"role": "user", "content": "What about London?"}])";
-
   EXPECT_NO_THROW({
-    std::string output = processPromptString(model, input2);
+    std::string output = processPromptWithCacheOptions(
+        model,
+        R"([{"role": "user", "content": "What about London?"}])",
+        session1_path);
     EXPECT_FALSE(output.empty());
   });
 
@@ -280,11 +258,12 @@ TEST_F(CacheManagementQwen3Test, CacheToolsCompactModeWithMultiplePrompts) {
       << "Cache tokens (" << cacheTokens1 << ") should not exceed "
       << maxExpectedCacheTokens << " - function tokens should be trimmed";
 
-  std::string saveInput =
-      R"([{"role": "session", "content": "test_session1_qwen3.bin"}, {"role": "session", "content": "save"}])";
   EXPECT_NO_THROW({
-    std::string saveOutput = processPromptString(model, saveInput);
-    EXPECT_EQ(saveOutput.length(), 0);
+    processPromptWithCacheOptions(
+        model,
+        R"([{"role": "user", "content": "Save checkpoint."}])",
+        session1_path,
+        true);
   });
 
   EXPECT_TRUE(fs::exists(session1_path));
@@ -296,11 +275,11 @@ TEST_F(CacheManagementQwen3Test, CacheToolsCompactModeWithMultiplePrompts) {
     FAIL() << "Model2 failed to load";
   }
 
-  std::string input3 =
-      R"([{"role": "session", "content": "test_session1_qwen3.bin"}, {"role": "user", "content": "What about Paris?"}])";
-
   EXPECT_NO_THROW({
-    std::string output = processPromptString(model2, input3);
+    std::string output = processPromptWithCacheOptions(
+        model2,
+        R"([{"role": "user", "content": "What about Paris?"}])",
+        session1_path);
     EXPECT_FALSE(output.empty());
   });
 
@@ -310,22 +289,6 @@ TEST_F(CacheManagementQwen3Test, CacheToolsCompactModeWithMultiplePrompts) {
 
   EXPECT_GT(cacheTokens3, cacheTokens2);
   EXPECT_LT(promptTokens3, 100.0);
-
-  auto model3 = createModel();
-  if (!model3) {
-    FAIL() << "Model3 failed to load";
-  }
-
-  std::string getTokensInput =
-      R"([{"role": "session", "content": "test_session1_qwen3.bin"}, {"role": "session", "content": "getTokens"}])";
-  EXPECT_NO_THROW({
-    std::string output = processPromptString(model3, getTokensInput);
-    EXPECT_EQ(output.length(), 0);
-  });
-
-  auto stats4 = model3->runtimeStats();
-  double cacheTokens4 = getStatValue(stats4, "CacheTokens");
-  EXPECT_EQ(cacheTokens4, cacheTokens2);
 }
 
 TEST_F(
@@ -345,31 +308,23 @@ TEST_F(
     FAIL() << "Model failed to load";
   }
 
-  std::string inputNoTools =
-      R"([{"role": "session", "content": "test_session1_qwen3.bin"}, {"role": "user", "content": "Hello"}])";
-
   EXPECT_NO_THROW({
-    std::string output = processPromptString(model, inputNoTools);
+    std::string output = processPromptWithCacheOptions(
+        model,
+        R"([{"role": "user", "content": "Hello"}])",
+        session1_path,
+        true);
     EXPECT_FALSE(output.empty());
   });
 
   llama_pos nPastBeforeTools = model->getNPastBeforeTools();
   EXPECT_EQ(nPastBeforeTools, -1);
 
-  auto statsBeforeSave = model->runtimeStats();
-  double cacheTokensBeforeSave = getStatValue(statsBeforeSave, "CacheTokens");
-  EXPECT_GT(cacheTokensBeforeSave, 0.0);
-
-  std::string saveInput =
-      R"([{"role": "session", "content": "test_session1_qwen3.bin"}, {"role": "session", "content": "save"}])";
-  EXPECT_NO_THROW({
-    std::string saveOutput = processPromptString(model, saveInput);
-    EXPECT_EQ(saveOutput.length(), 0);
-  });
-
   auto statsAfterSave = model->runtimeStats();
   double cacheTokensAfterSave = getStatValue(statsAfterSave, "CacheTokens");
-  EXPECT_EQ(cacheTokensAfterSave, cacheTokensBeforeSave);
+  EXPECT_GT(cacheTokensAfterSave, 0.0);
+
+  EXPECT_TRUE(fs::exists(session1_path));
 }
 
 TEST_F(CacheManagementQwen3Test, CacheToolsCompactModeRestoresNPastBeforeTools) {
@@ -387,23 +342,17 @@ TEST_F(CacheManagementQwen3Test, CacheToolsCompactModeRestoresNPastBeforeTools) 
     FAIL() << "Model failed to load";
   }
 
-  std::string input1 =
-      R"([{"role": "session", "content": "test_session1_qwen3.bin"}, {"role": "user", "content": "Hi"}, {"type": "function", "name": "get_weather", "description": "Get weather", "parameters": {"type": "object", "properties": {"city": {"type": "string"}}, "required": ["city"]}}])";
-
   EXPECT_NO_THROW({
-    std::string output = processPromptString(model, input1);
+    std::string output = processPromptWithCacheOptions(
+        model,
+        R"([{"role": "user", "content": "Hi"}, {"type": "function", "name": "get_weather", "description": "Get weather", "parameters": {"type": "object", "properties": {"city": {"type": "string"}}, "required": ["city"]}}])",
+        session1_path,
+        true);
     EXPECT_FALSE(output.empty());
   });
 
   llama_pos nPastBeforeTools1 = model->getNPastBeforeTools();
   EXPECT_EQ(nPastBeforeTools1, -1);
-
-  std::string saveInput =
-      R"([{"role": "session", "content": "test_session1_qwen3.bin"}, {"role": "session", "content": "save"}])";
-  EXPECT_NO_THROW({
-    std::string saveOutput = processPromptString(model, saveInput);
-    EXPECT_EQ(saveOutput.length(), 0);
-  });
 
   EXPECT_TRUE(fs::exists(session1_path));
 
@@ -412,11 +361,11 @@ TEST_F(CacheManagementQwen3Test, CacheToolsCompactModeRestoresNPastBeforeTools) 
     FAIL() << "Model2 failed to load";
   }
 
-  std::string input2 =
-      R"([{"role": "session", "content": "test_session1_qwen3.bin"}, {"role": "user", "content": "What about London?"}])";
-
   EXPECT_NO_THROW({
-    std::string output = processPromptString(model2, input2);
+    std::string output = processPromptWithCacheOptions(
+        model2,
+        R"([{"role": "user", "content": "What about London?"}])",
+        session1_path);
     EXPECT_FALSE(output.empty());
   });
 
@@ -479,16 +428,11 @@ TEST_F(
     FAIL() << "Init model failed to load";
   }
 
-  std::string initInput =
-      R"([{"role": "session", "content": ")" + sessionPath + R"("},)"
-      R"( {"role": "system", "content": "You are a helpful assistant."}])";
-  processPromptString(initModel, initInput);
-
-  // Save session
-  std::string saveCmd =
-      R"([{"role": "session", "content": ")" + sessionPath
-      + R"("}, {"role": "session", "content": "save"}])";
-  processPromptString(initModel, saveCmd);
+  processPromptWithCacheOptions(
+      initModel,
+      R"( {"role": "system", "content": "You are a helpful assistant."}])",
+      sessionPath,
+      true);
 
   // ── Phase 2 (baseline): load session, send user+tools, n_predict=0 ──
   // No generation, no sliding. Records the original nPastBeforeTools.
@@ -499,10 +443,11 @@ TEST_F(
     FAIL() << "Baseline model failed to load";
   }
 
-  std::string turn2Input =
-      R"([{"role": "session", "content": ")" + sessionPath + R"("},)"
-      R"( {"role": "user", "content": ")" + userMsg + R"("}, )" + toolJson + R"(])";
-  processPromptString(baselineModel, turn2Input);
+  processPromptWithCacheOptions(
+      baselineModel,
+      R"( {"role": "user", "content": ")" + userMsg + R"("}, )" + toolJson + R"(])",
+      sessionPath,
+      true);
   auto baselineStats = baselineModel->runtimeStats();
   auto baselineDebug = baselineModel->runtimeDebugStats();
   double baselineNPBT = getStatValue(baselineDebug, "nPastBeforeTools");
@@ -525,11 +470,12 @@ TEST_F(
     FAIL() << "Sliding model failed to load";
   }
 
-  std::string slideInput =
-      R"([{"role": "session", "content": ")" + sessionPath + R"("},)"
-      R"( {"role": "user", "content": ")" + userMsg + R"("}, )" + toolJson + R"(])";
   EXPECT_NO_THROW({
-    std::string output = processPromptString(slideModel, slideInput);
+    std::string output = processPromptWithCacheOptions(
+        slideModel,
+        R"( {"role": "user", "content": ")" + userMsg + R"("}, )" + toolJson + R"(])",
+        sessionPath,
+        true);
     EXPECT_FALSE(output.empty());
   });
 
@@ -640,14 +586,11 @@ TEST_F(
     FAIL() << "Init model failed to load";
   }
 
-  std::string initInput =
-      R"([{"role": "session", "content": ")" + sessionPath + R"("},)"
-      R"( {"role": "system", "content": "You are a helpful assistant."}])";
-  processPromptString(initModel, initInput);
-  std::string saveCmd =
-      R"([{"role": "session", "content": ")" + sessionPath
-      + R"("}, {"role": "session", "content": "save"}])";
-  processPromptString(initModel, saveCmd);
+  processPromptWithCacheOptions(
+      initModel,
+      R"( {"role": "system", "content": "You are a helpful assistant."}])",
+      sessionPath,
+      true);
 
   // ── Phase 2: baseline (no sliding) ──
   config_files["ctx_size"] = "2048";
@@ -657,10 +600,10 @@ TEST_F(
     FAIL() << "Baseline model failed to load";
   }
 
-  std::string input =
-      R"([{"role": "session", "content": ")" + sessionPath + R"("},)"
-      R"( {"role": "user", "content": ")" + userMsg + R"("}, )" + toolJson + R"(])";
-  processPromptString(baselineModel, input);
+  processPromptWithCacheOptions(
+      baselineModel,
+      R"( {"role": "user", "content": ")" + userMsg + R"("}, )" + toolJson + R"(])",
+      sessionPath);
   auto baselineStats = baselineModel->runtimeStats();
   auto baselineDebug = baselineModel->runtimeDebugStats();
   double baselineNPBT = getStatValue(baselineDebug, "nPastBeforeTools");
@@ -694,7 +637,10 @@ TEST_F(
   }
 
   EXPECT_NO_THROW({
-    std::string output = processPromptString(slideModel, input);
+    std::string output = processPromptWithCacheOptions(
+        slideModel,
+        R"( {"role": "user", "content": ")" + userMsg + R"("}, )" + toolJson + R"(])",
+        sessionPath);
     EXPECT_FALSE(output.empty());
   });
 

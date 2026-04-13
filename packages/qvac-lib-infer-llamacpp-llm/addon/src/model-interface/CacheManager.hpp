@@ -22,7 +22,8 @@ public:
       std::function<std::pair<
           std::vector<common_chat_msg>, std::vector<common_chat_tool>>(
           const std::string&)>
-          formatPrompt);
+          formatPrompt,
+      const std::string& cacheKey = "");
 
   bool loadCache();
   void saveCache();
@@ -32,6 +33,7 @@ public:
   bool wasCacheUsedInLastPrompt() const;
 
 private:
+  void writeCacheFile(const std::string& path);
   static bool isFileInitialized(const std::filesystem::path& path);
 
   LlmContext* llmContext_;
