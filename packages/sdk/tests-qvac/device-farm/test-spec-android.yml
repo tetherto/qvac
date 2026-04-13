@@ -4,7 +4,71 @@ android_test_host: amazon_linux_2
 phases:
   pre_test:
     commands:
-      # Install and launch the app (custom test spec doesn't do this automatically)
+      # Download models from S3 (fast, server-to-server) and push to device via adb.
+      # The app then copies from /data/local/tmp/ to its own cache dir at bootstrap,
+      # bypassing SELinux write restrictions on /data/local/tmp/.
+      - |-
+        MANIFEST="$DEVICEFARM_TEST_PACKAGE_PATH/models-manifest.json"
+        if [ -f "$MANIFEST" ]; then
+          FILE_COUNT=$(python3 -c "import json; print(len(json.load(open('$MANIFEST'))))" 2>/dev/null || echo "?")
+          echo "Models manifest found: ${FILE_COUNT} files"
+
+          adb push "$MANIFEST" /data/local/tmp/models-manifest.json
+          adb shell "mkdir -p /data/local/tmp/qvac-models"
+
+          echo "Downloading models from S3 and pushing to device..."
+          python3 << 'PYEOF'
+        import json, subprocess, os, time
+
+        manifest_path = os.path.join(
+            os.environ.get("DEVICEFARM_TEST_PACKAGE_PATH", "."),
+            "models-manifest.json",
+        )
+        manifest = json.load(open(manifest_path))
+        total = len(manifest)
+        downloaded = 0
+        failed = 0
+        start = time.time()
+
+        for i, (filename, url) in enumerate(manifest.items(), 1):
+            tmp_path = f"/tmp/qvac-dl-{filename}"
+            print(f"[{i}/{total}] {filename}", flush=True)
+
+            ret = subprocess.run(
+                ["curl", "-fSL", "--connect-timeout", "30", "--max-time", "900",
+                 "-o", tmp_path, url],
+                capture_output=True, text=True,
+            )
+            if ret.returncode != 0:
+                print(f"  curl failed: {ret.stderr[:200]}", flush=True)
+                failed += 1
+                continue
+
+            size_mb = round(os.path.getsize(tmp_path) / 1048576, 1)
+
+            ret = subprocess.run(
+                ["adb", "push", tmp_path,
+                 f"/data/local/tmp/qvac-models/{filename}"],
+                capture_output=True, text=True,
+            )
+            os.remove(tmp_path)
+
+            if ret.returncode != 0:
+                print(f"  push failed: {ret.stderr[:200]}", flush=True)
+                failed += 1
+            else:
+                downloaded += 1
+                elapsed = int(time.time() - start)
+                print(f"  OK {size_mb}MB [{elapsed}s elapsed]", flush=True)
+
+        elapsed = int(time.time() - start)
+        print(f"Models ready: {downloaded}/{total} pushed, {failed} failed, {elapsed}s total")
+        PYEOF
+        else
+          echo "No models manifest (cache-models not enabled)"
+        fi
+
+      # Install and launch the app
       - |-
         echo "Installing app..."
         adb install -r "$DEVICEFARM_APP_PATH"
@@ -41,6 +105,12 @@ phases:
 
         adb logcat ReactNativeJS:I *:S | while IFS= read -r line; do
           case "$line" in
+            *"📦"*)
+              echo "[CACHE] $line"
+              ;;
+            *"📥"*|*"🔧 Bootstrap"*|*"🔧 Running bootstrap"*)
+              echo "[BOOT] $line"
+              ;;
             *"Registration ack"*"tests in queue"*)
               EXPECTED=$(echo "$line" | grep -oP '\d+(?= tests in queue)')
               echo "Registered: $EXPECTED tests expected"

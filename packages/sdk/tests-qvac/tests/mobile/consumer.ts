@@ -1,4 +1,5 @@
 import { Platform } from "react-native";
+import { File, Directory, Paths } from "expo-file-system";
 import { createExecutor, SkipExecutor } from "@tetherto/qvac-test-suite/mobile";
 import {
   profiler,
@@ -333,9 +334,101 @@ function skipTests(testIds: string[], reason: string) {
   return new SkipExecutor(new RegExp(`^(${testIds.join("|")})$`), reason);
 }
 
+const MODELS_MANIFEST_PATH =
+  Platform.OS === "android"
+    ? "file:///data/local/tmp/models-manifest.json"
+    : null;
+
+/**
+ * Copy pre-cached models from /data/local/tmp/qvac-models/ (adb-pushed by
+ * Device Farm test spec) into the app's own cache directory. This bypasses
+ * SELinux restrictions that prevent the app from writing directly to
+ * /data/local/tmp/. On local runs or when cache-models is disabled, the
+ * manifest won't exist and we fall through to normal SDK downloads.
+ */
+async function copyModelsFromCache(): Promise<boolean> {
+  if (!MODELS_MANIFEST_PATH) return false;
+
+  try {
+    const manifestFile = new File(MODELS_MANIFEST_PATH);
+    if (!manifestFile.exists) return false;
+
+    const manifest = JSON.parse(await manifestFile.text()) as Record<
+      string,
+      string
+    >;
+    const filenames = Object.keys(manifest);
+    if (filenames.length === 0) return false;
+
+    console.log(`📦 Pre-cached models: ${filenames.length} files`);
+
+    const cacheDir = new Directory(Paths.cache, "qvac-models");
+    cacheDir.create();
+
+    const start = Date.now();
+    let copied = 0;
+    let skipped = 0;
+    let failed = 0;
+
+    for (const filename of filenames) {
+      const dest = new File(cacheDir, filename);
+      if (dest.exists) {
+        skipped++;
+        continue;
+      }
+
+      const src = new File("file:///data/local/tmp/qvac-models/" + filename);
+      if (!src.exists) {
+        failed++;
+        console.log(`📦 Not on device: ${filename}`);
+        continue;
+      }
+
+      try {
+        src.copy(cacheDir);
+        copied++;
+      } catch (err) {
+        failed++;
+        console.log(`📦 Copy failed: ${filename}: ${err}`);
+      }
+
+      const done = copied + skipped + failed;
+      if (done % 4 === 0 || done === filenames.length) {
+        console.log(
+          `📦 Progress: ${done}/${filenames.length} (${copied} copied, ${skipped} cached, ${failed} failed)`,
+        );
+      }
+    }
+
+    const elapsed = Math.round((Date.now() - start) / 1000);
+    console.log(
+      `📦 Done in ${elapsed}s (${copied} copied, ${skipped} cached, ${failed} failed)`,
+    );
+
+    if (copied + skipped === 0) {
+      console.log("📦 No models available — skipping cache config");
+      return false;
+    }
+
+    const configFile = new File(Paths.document, "qvac.config.json");
+    configFile.create({ overwrite: true });
+    configFile.write(
+      JSON.stringify({
+        cacheDirectory: cacheDir.uri.replace("file://", ""),
+      }),
+    );
+    console.log(`📦 Cache dir: ${cacheDir.uri}`);
+    return true;
+  } catch (error) {
+    console.log(`📦 Cache init failed: ${error}`);
+    return false;
+  }
+}
+
 export async function bootstrap() {
+  await copyModelsFromCache();
   await resources.downloadAllOnce(console.log);
-};
+}
 
 export const executor = createExecutor({
   handlers: [

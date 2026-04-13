@@ -95,6 +95,7 @@ jobs:
       device-farm-project-arn: ${{ vars.SDK_DEVICE_FARM_PROJECT_ARN }}
       device-pools: ${{ vars.SDK_DEVICE_FARM_POOLS }}
       test-version: ${{ inputs.test-version || '' }}
+      cache-models: ${{ inputs.cache-models }}
     secrets: inherit
 
   ios-tests:

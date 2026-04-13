@@ -40,6 +40,11 @@ on:
         description: "Git ref to checkout (branch, tag, or SHA). Defaults to trigger ref."
         required: false
         type: string
+      cache-models:
+        description: "Pre-cache models between runs (S3-backed, host downloads + adb push to device)"
+        required: false
+        type: boolean
+        default: false
     secrets:
       PAT_TOKEN:
         required: true
@@ -70,9 +75,11 @@ jobs:
   build:
     runs-on: ai-run-linux
     environment: release
-    timeout-minutes: 30
+    timeout-minutes: 60
     outputs:
       runId: ${{ steps.runid.outputs.runId }}
+      s3-models-key: ${{ steps.s3-upload.outputs.s3-key }}
+      cache-models: ${{ inputs.cache-models }}
     env:
       NPM_TOKEN: ${{ secrets.NPM_TOKEN }}
       PAT_TOKEN: ${{ secrets.PAT_TOKEN }}
@@ -200,6 +207,75 @@ jobs:
         working-directory: ${{ inputs.working-directory }}
         run: bun run build
 
+      # --- Model pre-caching (only when cache-models is enabled) ---
+
+      - name: Configure SDK cache directory
+        if: inputs.cache-models
+        shell: node {0}
+        run: |
+          const fs = require('fs');
+          const path = require('path');
+          const cacheDir = path.resolve('${{ inputs.working-directory }}', '.qvac-cache');
+          fs.mkdirSync(cacheDir, { recursive: true });
+          const config = { cacheDirectory: cacheDir };
+          const configPath = path.resolve('${{ inputs.working-directory }}', 'qvac.config.json');
+          fs.writeFileSync(configPath, JSON.stringify(config, null, 2));
+          fs.appendFileSync(process.env.GITHUB_ENV, `QVAC_CONFIG_PATH=${configPath}\n`);
+          console.log(`SDK cache dir: ${cacheDir}`);
+          console.log(`Config written to: ${configPath}`);
+
+      - name: Restore models cache
+        id: models-cache
+        if: inputs.cache-models
+        uses: actions/cache/restore@v4
+        with:
+          path: ${{ inputs.working-directory }}/.qvac-cache
+          key: qvac-mobile-models-${{ hashFiles('packages/sdk/models/registry/models.ts') }}
+
+      - name: Download models for cache
+        if: inputs.cache-models && steps.models-cache.outputs.cache-hit != 'true'
+        working-directory: ${{ inputs.working-directory }}
+        run: bun run scripts/download-mobile-models.ts
+
+      - name: Save models cache
+        if: inputs.cache-models && steps.models-cache.outputs.cache-hit != 'true'
+        uses: actions/cache/save@v4
+        with:
+          path: ${{ inputs.working-directory }}/.qvac-cache
+          key: qvac-mobile-models-${{ hashFiles('packages/sdk/models/registry/models.ts') }}
+
+      - name: Configure AWS credentials (for S3 model cache)
+        if: inputs.cache-models
+        uses: aws-actions/configure-aws-credentials@8df5847569e6427dd6c4fb1cf565c83acfa8afa7 # 6.0.0
+        with:
+          role-to-assume: ${{ secrets.AWS_OIDC_ROLE_ARN }}
+          aws-region: us-west-2
+
+      - name: Upload models to S3
+        id: s3-upload
+        if: inputs.cache-models
+        shell: bash
+        run: |
+          MODELS_HASH=$(sha256sum packages/sdk/models/registry/models.ts | cut -c1-16)
+          S3_KEY="qvac-models/mobile-${MODELS_HASH}"
+          BUCKET="${{ secrets.MODEL_S3_BUCKET }}"
+          CACHE_DIR="${{ inputs.working-directory }}/.qvac-cache"
+
+          echo "s3-key=${S3_KEY}" >> $GITHUB_OUTPUT
+
+          EXISTING=$(aws s3 ls "s3://${BUCKET}/${S3_KEY}/files/" 2>/dev/null | head -1 || true)
+          if [ -n "$EXISTING" ]; then
+            echo "Models already in S3 (key: ${S3_KEY}), skipping upload"
+          else
+            FILE_COUNT=$(ls -1 "$CACHE_DIR" | wc -l)
+            TOTAL_SIZE=$(du -sh "$CACHE_DIR" | cut -f1)
+            echo "Uploading ${FILE_COUNT} model files (${TOTAL_SIZE}) to s3://${BUCKET}/${S3_KEY}/files/..."
+            aws s3 sync "$CACHE_DIR" "s3://${BUCKET}/${S3_KEY}/files/" --size-only
+            echo "S3 upload complete"
+          fi
+
+      # --- End model pre-caching ---
+
       - name: Build mobile consumer APK
         working-directory: ${{ inputs.working-directory }}
         env:
@@ -294,12 +370,43 @@ jobs:
             sleep 10
           done
 
+      - name: Generate models cache manifest
+        id: models-manifest
+        if: needs.build.outputs.cache-models == 'true'
+        run: |
+          S3_KEY="${{ needs.build.outputs.s3-models-key }}"
+          BUCKET="${{ secrets.MODEL_S3_BUCKET }}"
+          BUCKET_REGION=$(curl -sI "https://${BUCKET}.s3.amazonaws.com/" | grep -i 'x-amz-bucket-region' | awk '{print $2}' | tr -d '\r\n')
+          echo "Bucket region: ${BUCKET_REGION}"
+
+          MANIFEST="{}"
+          FILE_COUNT=0
+          while IFS= read -r line; do
+            KEY=$(echo "$line" | awk '{print $4}')
+            [ -z "$KEY" ] && continue
+            BASENAME=$(basename "$KEY")
+            URL=$(aws s3 presign "s3://${BUCKET}/${KEY}" --expires-in 21600 --region "${BUCKET_REGION}")
+            MANIFEST=$(echo "$MANIFEST" | jq --arg key "$BASENAME" --arg url "$URL" '. + {($key): $url}')
+            FILE_COUNT=$((FILE_COUNT + 1))
+          done <<< "$(aws s3 ls "s3://${BUCKET}/${S3_KEY}/files/" --recursive --region "${BUCKET_REGION}")"
+
+          echo "$MANIFEST" | jq . > /tmp/models-manifest.json
+          MANIFEST_SIZE=$(wc -c < /tmp/models-manifest.json)
+          echo "Manifest: ${FILE_COUNT} files, ${MANIFEST_SIZE} bytes"
+          echo "has-manifest=true" >> $GITHUB_OUTPUT
+
       - name: Create and upload dummy test package
         id: upload-test-pkg
         run: |
           mkdir -p /tmp/dummy-test-pkg
           echo '{"name":"qvac-test-stub","version":"1.0.0"}' > /tmp/dummy-test-pkg/package.json
           cp "${{ inputs.working-directory }}/device-farm/gen-junit.py" /tmp/dummy-test-pkg/
+
+          if [ -f "/tmp/models-manifest.json" ]; then
+            cp /tmp/models-manifest.json /tmp/dummy-test-pkg/
+            echo "models-manifest.json included in test package"
+          fi
+
           (cd /tmp/dummy-test-pkg && zip -r /tmp/dummy-test-pkg.zip .)
 
           PKG_RESPONSE=$(aws devicefarm create-upload \

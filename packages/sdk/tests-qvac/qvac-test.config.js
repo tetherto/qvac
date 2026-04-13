@@ -41,6 +41,7 @@ export default {
       entry: "./dist/tests/mobile/consumer.js",
       include: ["./dist/tests/**"],
       dependencies: "auto",
+      mobileInit: "./mobile-cache-init.ts",
       metroConfig: "./metro.config.js",
       expoPlugins: [
         "@qvac/sdk/expo-plugin",
