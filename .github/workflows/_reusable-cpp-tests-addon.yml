@@ -394,6 +394,40 @@ jobs:
             echo "No coverage summary found" >> $GITHUB_STEP_SUMMARY
           fi
 
+      - name: Validate C++ test results
+        if: always()
+        shell: bash
+        working-directory: ${{ env.WORKDIR }}
+        env:
+          TEST_OUTCOME: ${{ steps.cpp_tests.outcome }}
+        run: |
+          set -euo pipefail
+
+          results_file="build/test/unit/cpp-test-results.xml"
+          fail=0
+
+          if [ "$TEST_OUTCOME" != "success" ]; then
+            echo "::error::C++ tests step finished with outcome: $TEST_OUTCOME"
+            fail=1
+          fi
+
+          if [ ! -f "$results_file" ]; then
+            echo "::error::Test results file not generated at $results_file"
+            fail=1
+          else
+            test_count=$(grep -c '<testcase' "$results_file" || true)
+            if [ "${test_count:-0}" -eq 0 ]; then
+              echo "::error::No tests were executed. Test count: ${test_count:-0}"
+              fail=1
+            else
+              echo "Executed $test_count test(s)"
+            fi
+          fi
+
+          if [ "$fail" -ne 0 ]; then
+            exit 1
+          fi
+
   coverage-report:
     if: always()
     needs: run-cpp-tests
