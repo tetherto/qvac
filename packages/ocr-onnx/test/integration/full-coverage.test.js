@@ -198,13 +198,13 @@ test('load() accepts defaultRotationAngles and contrastRetry', { timeout: TEST_T
     })
 
     await response
-        .onUpdate(function (output) {
-          t.ok(Array.isArray(output), 'Output should be an array')
-        })
-        .onError(function (error) {
-          t.fail('Unexpected error: ' + JSON.stringify(error))
-        })
-        .await()
+      .onUpdate(function (output) {
+        t.ok(Array.isArray(output), 'Output should be an array')
+      })
+      .onError(function (error) {
+        t.fail('Unexpected error: ' + JSON.stringify(error))
+      })
+      .await()
 
     t.pass('Inference completed with extra params')
   } finally {
