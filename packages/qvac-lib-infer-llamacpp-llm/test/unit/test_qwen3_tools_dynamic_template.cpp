@@ -19,7 +19,8 @@ const std::string TIME_TOOL_JSON =
 const std::string TOOLS_PREAMBLE =
     "# Tools\n\n"
     "You may call one or more functions to assist with the user query.\n\n"
-    "You are provided with function signatures within <tools></tools> XML tags:\n"
+    "You are provided with function signatures within <tools></tools> XML "
+    "tags:\n"
     "<tools>";
 
 const std::string TOOLS_POSTAMBLE =
@@ -57,8 +58,8 @@ protected:
     return common_chat_templates_apply(tmpls_.get(), inputs).prompt;
   }
 
-  static common_chat_msg msg(
-      const std::string& role, const std::string& content) {
+  static common_chat_msg
+  msg(const std::string& role, const std::string& content) {
     common_chat_msg m;
     m.role = role;
     m.content = content;
@@ -66,8 +67,7 @@ protected:
   }
 
   static common_chat_tool tool(
-      const std::string& name,
-      const std::string& description,
+      const std::string& name, const std::string& description,
       const std::string& parameters) {
     common_chat_tool t;
     t.name = name;
@@ -95,13 +95,13 @@ TEST_F(Qwen3ToolsDynamicTemplateRenderTest, UserWithSingleTool) {
   auto inputs = makeInputs(
       {msg("user", "What is the weather in Tokyo?")}, {weatherTool()});
 
-  std::string expected =
-      "<|im_start|>user\n"
-      "What is the weather in Tokyo?<|im_end|>\n"
-      "<|im_start|>system\n" +
-      TOOLS_PREAMBLE + "\n" + WEATHER_TOOL_JSON + TOOLS_POSTAMBLE +
-      "<|im_end|>\n"
-      "<|im_start|>assistant\n";
+  std::string expected = "<|im_start|>user\n"
+                         "What is the weather in Tokyo?<|im_end|>\n"
+                         "<|im_start|>system\n" +
+                         TOOLS_PREAMBLE + "\n" + WEATHER_TOOL_JSON +
+                         TOOLS_POSTAMBLE +
+                         "<|im_end|>\n"
+                         "<|im_start|>assistant\n";
 
   EXPECT_EQ(render(inputs), expected);
 }
@@ -111,14 +111,13 @@ TEST_F(Qwen3ToolsDynamicTemplateRenderTest, UserWithMultipleTools) {
       {msg("user", "What is the weather in Tokyo?")},
       {weatherTool(), timeTool()});
 
-  std::string expected =
-      "<|im_start|>user\n"
-      "What is the weather in Tokyo?<|im_end|>\n"
-      "<|im_start|>system\n" +
-      TOOLS_PREAMBLE + "\n" + WEATHER_TOOL_JSON + "\n" + TIME_TOOL_JSON +
-      TOOLS_POSTAMBLE +
-      "<|im_end|>\n"
-      "<|im_start|>assistant\n";
+  std::string expected = "<|im_start|>user\n"
+                         "What is the weather in Tokyo?<|im_end|>\n"
+                         "<|im_start|>system\n" +
+                         TOOLS_PREAMBLE + "\n" + WEATHER_TOOL_JSON + "\n" +
+                         TIME_TOOL_JSON + TOOLS_POSTAMBLE +
+                         "<|im_end|>\n"
+                         "<|im_start|>assistant\n";
 
   EXPECT_EQ(render(inputs), expected);
 }
@@ -129,15 +128,15 @@ TEST_F(Qwen3ToolsDynamicTemplateRenderTest, SystemAndUserWithTool) {
        msg("user", "What is the weather in Tokyo?")},
       {weatherTool()});
 
-  std::string expected =
-      "<|im_start|>system\n"
-      "You are a helpful assistant.<|im_end|>\n"
-      "<|im_start|>user\n"
-      "What is the weather in Tokyo?<|im_end|>\n"
-      "<|im_start|>system\n" +
-      TOOLS_PREAMBLE + "\n" + WEATHER_TOOL_JSON + TOOLS_POSTAMBLE +
-      "<|im_end|>\n"
-      "<|im_start|>assistant\n";
+  std::string expected = "<|im_start|>system\n"
+                         "You are a helpful assistant.<|im_end|>\n"
+                         "<|im_start|>user\n"
+                         "What is the weather in Tokyo?<|im_end|>\n"
+                         "<|im_start|>system\n" +
+                         TOOLS_PREAMBLE + "\n" + WEATHER_TOOL_JSON +
+                         TOOLS_POSTAMBLE +
+                         "<|im_end|>\n"
+                         "<|im_start|>assistant\n";
 
   EXPECT_EQ(render(inputs), expected);
 }
@@ -153,8 +152,8 @@ TEST_F(Qwen3ToolsDynamicTemplateRenderTest, ToolsAfterLastUserMessage) {
 
   auto firstUserPos = prompt.find("<|im_start|>user\nHi<|im_end|>");
   auto assistantPos = prompt.find("<|im_start|>assistant\nHello!<|im_end|>");
-  auto secondUserPos = prompt.find(
-      "<|im_start|>user\nWhat is the weather in Tokyo?<|im_end|>");
+  auto secondUserPos =
+      prompt.find("<|im_start|>user\nWhat is the weather in Tokyo?<|im_end|>");
   auto toolsPos = prompt.find("<|im_start|>system\n# Tools");
 
   ASSERT_NE(firstUserPos, std::string::npos);
@@ -167,7 +166,8 @@ TEST_F(Qwen3ToolsDynamicTemplateRenderTest, ToolsAfterLastUserMessage) {
   EXPECT_LT(secondUserPos, toolsPos)
       << "tools block must follow the last user message";
 
-  auto toolsBetweenFirst = prompt.substr(firstUserPos, assistantPos - firstUserPos);
+  auto toolsBetweenFirst =
+      prompt.substr(firstUserPos, assistantPos - firstUserPos);
   EXPECT_EQ(toolsBetweenFirst.find("# Tools"), std::string::npos)
       << "tools block must NOT appear after the first user message";
 }
@@ -205,22 +205,22 @@ TEST_F(Qwen3ToolsDynamicTemplateRenderTest, MultipleToolResponses) {
        msg("tool", R"({"city":"London","temperature":8})")},
       {weatherTool()});
 
-  std::string expected =
-      "<|im_start|>user\n"
-      "Weather in Paris and London?<|im_end|>\n"
-      "<|im_start|>system\n" +
-      TOOLS_PREAMBLE + "\n" + WEATHER_TOOL_JSON + TOOLS_POSTAMBLE +
-      "<|im_end|>\n"
-      "<|im_start|>assistant\n"
-      "Checking.<|im_end|>\n"
-      "<|im_start|>user\n"
-      "<tool_response>\n"
-      R"({"city":"Paris","temperature":18})"
-      "\n</tool_response>\n"
-      "<tool_response>\n"
-      R"({"city":"London","temperature":8})"
-      "\n</tool_response><|im_end|>\n"
-      "<|im_start|>assistant\n";
+  std::string expected = "<|im_start|>user\n"
+                         "Weather in Paris and London?<|im_end|>\n"
+                         "<|im_start|>system\n" +
+                         TOOLS_PREAMBLE + "\n" + WEATHER_TOOL_JSON +
+                         TOOLS_POSTAMBLE +
+                         "<|im_end|>\n"
+                         "<|im_start|>assistant\n"
+                         "Checking.<|im_end|>\n"
+                         "<|im_start|>user\n"
+                         "<tool_response>\n"
+                         R"({"city":"Paris","temperature":18})"
+                         "\n</tool_response>\n"
+                         "<tool_response>\n"
+                         R"({"city":"London","temperature":8})"
+                         "\n</tool_response><|im_end|>\n"
+                         "<|im_start|>assistant\n";
 
   EXPECT_EQ(render(inputs), expected);
 }
@@ -232,13 +232,13 @@ TEST_F(Qwen3ToolsDynamicTemplateRenderTest, NoUserMessagesToolsCompact) {
   auto inputs = makeInputs(
       {msg("system", "You are a helpful assistant.")}, {weatherTool()});
 
-  std::string expected =
-      "<|im_start|>system\n"
-      "You are a helpful assistant.<|im_end|>\n"
-      "<|im_start|>system\n" +
-      TOOLS_PREAMBLE + "\n" + WEATHER_TOOL_JSON + TOOLS_POSTAMBLE +
-      "<|im_end|>\n"
-      "<|im_start|>assistant\n";
+  std::string expected = "<|im_start|>system\n"
+                         "You are a helpful assistant.<|im_end|>\n"
+                         "<|im_start|>system\n" +
+                         TOOLS_PREAMBLE + "\n" + WEATHER_TOOL_JSON +
+                         TOOLS_POSTAMBLE +
+                         "<|im_end|>\n"
+                         "<|im_start|>assistant\n";
 
   EXPECT_EQ(render(inputs), expected);
 }
@@ -246,9 +246,8 @@ TEST_F(Qwen3ToolsDynamicTemplateRenderTest, NoUserMessagesToolsCompact) {
 TEST_F(Qwen3ToolsDynamicTemplateRenderTest, AddGenerationPromptFalse) {
   auto inputs = makeInputs({msg("user", "Hello")}, {}, false);
 
-  std::string expected =
-      "<|im_start|>user\n"
-      "Hello<|im_end|>\n";
+  std::string expected = "<|im_start|>user\n"
+                         "Hello<|im_end|>\n";
 
   EXPECT_EQ(render(inputs), expected);
 }
@@ -257,11 +256,10 @@ TEST_F(Qwen3ToolsDynamicTemplateRenderTest, EnableThinkingFalse) {
   auto inputs = makeInputs({msg("user", "Hello")});
   inputs.enable_thinking = false;
 
-  std::string expected =
-      "<|im_start|>user\n"
-      "Hello<|im_end|>\n"
-      "<|im_start|>assistant\n"
-      "<think>\n\n</think>\n\n";
+  std::string expected = "<|im_start|>user\n"
+                         "Hello<|im_end|>\n"
+                         "<|im_start|>assistant\n"
+                         "<think>\n\n</think>\n\n";
 
   EXPECT_EQ(render(inputs), expected);
 }
@@ -270,10 +268,9 @@ TEST_F(Qwen3ToolsDynamicTemplateRenderTest, EnableThinkingTrue) {
   auto inputs = makeInputs({msg("user", "Hello")});
   inputs.enable_thinking = true;
 
-  std::string expected =
-      "<|im_start|>user\n"
-      "Hello<|im_end|>\n"
-      "<|im_start|>assistant\n";
+  std::string expected = "<|im_start|>user\n"
+                         "Hello<|im_end|>\n"
+                         "<|im_start|>assistant\n";
 
   EXPECT_EQ(render(inputs), expected);
 }

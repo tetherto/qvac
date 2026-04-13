@@ -135,8 +135,8 @@ public:
 
   // Clamp a discard amount so it never eats into the tool region.
   // Returns the original value unchanged when tools_compact is off.
-  [[nodiscard]] llama_pos clampDiscard(
-      llama_pos nDiscarded, llama_pos firstMsgTokens) const {
+  [[nodiscard]] llama_pos
+  clampDiscard(llama_pos nDiscarded, llama_pos firstMsgTokens) const {
     if (toolsCompact_ && nPastBeforeTools_ > firstMsgTokens) {
       llama_pos safeLimit = nPastBeforeTools_ - firstMsgTokens;
       return std::min(nDiscarded, safeLimit);

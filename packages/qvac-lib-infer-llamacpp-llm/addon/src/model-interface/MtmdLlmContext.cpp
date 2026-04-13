@@ -162,8 +162,8 @@ void MtmdLlmContext::tokenizeChat(
     isLastMessageFromUser = lastRole == "user" || lastRole == "tool";
     addSpecial = true;
   } else if (nPast_ > 0) {
-    isLastMessageFromUser = chatMsgs.back().role == "user" ||
-                            chatMsgs.back().role == "tool";
+    isLastMessageFromUser =
+        chatMsgs.back().role == "user" || chatMsgs.back().role == "tool";
     common_sampler_reset(smpl_.get());
     addSpecial = false;
   }
@@ -279,10 +279,8 @@ bool MtmdLlmContext::evalMessageWithTools(
     if (leftTokens >= 0 && discard > 0 &&
         nPast_ + nTokens - discard < llama_n_ctx(lctx_)) {
       auto* mem = llama_get_memory(lctx_);
-      llama_memory_seq_rm(
-          mem, 0, firstMsgTokens_, firstMsgTokens_ + discard);
-      llama_memory_seq_add(
-          mem, 0, firstMsgTokens_ + discard, nPast_, -discard);
+      llama_memory_seq_rm(mem, 0, firstMsgTokens_, firstMsgTokens_ + discard);
+      llama_memory_seq_add(mem, 0, firstMsgTokens_ + discard, nPast_, -discard);
       nPast_ -= discard;
       dts.adjustAfterSlide(discard, firstMsgTokens_);
       ++nSlides_;
@@ -395,16 +393,14 @@ void MtmdLlmContext::applyContextDiscard() {
   }
   auto* mem = llama_get_memory(lctx_);
   llama_memory_seq_rm(mem, 0, firstMsgTokens_, firstMsgTokens_ + discard);
-  llama_memory_seq_add(
-      mem, 0, firstMsgTokens_ + discard, nPast_, -discard);
+  llama_memory_seq_add(mem, 0, firstMsgTokens_ + discard, nPast_, -discard);
   nPast_ -= discard;
   dts.adjustAfterSlide(discard, firstMsgTokens_);
   ++nSlides_;
   QLOG_IF(
       Priority::DEBUG,
       string_format(
-          "[MtmdLlm] discarded %d tokens after the first message\n",
-          discard));
+          "[MtmdLlm] discarded %d tokens after the first message\n", discard));
 }
 
 void MtmdLlmContext::handleStopRequestAndAddEot(LlamaBatch& batch) {

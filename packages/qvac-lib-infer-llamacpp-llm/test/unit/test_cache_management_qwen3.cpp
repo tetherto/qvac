@@ -326,7 +326,8 @@ TEST_F(
   EXPECT_TRUE(fs::exists(session1_path));
 }
 
-TEST_F(CacheManagementQwen3Test, CacheToolsCompactModeRestoresNPastBeforeTools) {
+TEST_F(
+    CacheManagementQwen3Test, CacheToolsCompactModeRestoresNPastBeforeTools) {
   if (!isQwen3ModelPath(test_model_path)) {
     GTEST_SKIP() << "Test requires Qwen3 model for tools_compact feature";
   }
@@ -385,10 +386,9 @@ TEST_F(
     FAIL() << "Test model not found";
   }
 
-  auto runPrefillWithCache = [](
-                                 const std::unique_ptr<LlamaModel>& model,
-                                 const std::string& input,
-                                 const std::string& cacheKey) {
+  auto runPrefillWithCache = [](const std::unique_ptr<LlamaModel>& model,
+                                const std::string& input,
+                                const std::string& cacheKey) {
     LlamaModel::Prompt p;
     p.input = input;
     p.prefill = true;
@@ -429,13 +429,17 @@ TEST_F(
   auto baselineModel = createModel();
   ASSERT_TRUE(baselineModel);
   EXPECT_NO_THROW(runPrefillWithCache(baselineModel, stepA, sessionPath));
-  const double anchorBefore = static_cast<double>(baselineModel->getNPastBeforeTools());
-  const double firstMsg = getStatValue(baselineModel->runtimeDebugStats(), "firstMsgTokens");
-  const double nPastAfterA = getStatValue(baselineModel->runtimeStats(), "CacheTokens");
+  const double anchorBefore =
+      static_cast<double>(baselineModel->getNPastBeforeTools());
+  const double firstMsg =
+      getStatValue(baselineModel->runtimeDebugStats(), "firstMsgTokens");
+  const double nPastAfterA =
+      getStatValue(baselineModel->runtimeStats(), "CacheTokens");
   EXPECT_GT(anchorBefore, firstMsg);
 
   EXPECT_NO_THROW(runPrefillWithCache(baselineModel, stepB, sessionPath));
-  const double nPastAfterB = getStatValue(baselineModel->runtimeStats(), "CacheTokens");
+  const double nPastAfterB =
+      getStatValue(baselineModel->runtimeStats(), "CacheTokens");
   const double stepBTokens = nPastAfterB - nPastAfterA;
   ASSERT_GT(stepBTokens, 0);
 
@@ -455,10 +459,10 @@ TEST_F(
 
   const auto slideStats = slideModel->runtimeStats();
   const double slides = getStatValue(slideStats, "contextSlides");
-  const double anchorAfter = static_cast<double>(slideModel->getNPastBeforeTools());
+  const double anchorAfter =
+      static_cast<double>(slideModel->getNPastBeforeTools());
 
-  EXPECT_LE(anchorAfter, anchorBefore)
-      << "Anchor should never move right";
+  EXPECT_LE(anchorAfter, anchorBefore) << "Anchor should never move right";
   EXPECT_GE(anchorAfter, firstMsg)
       << "Anchor should never cross first message boundary";
 
@@ -474,9 +478,7 @@ TEST_F(
 // Same deterministic setup but enforce unclamped discard:
 // safeLimit > n_discarded, so the single slide must shift anchor exactly by
 // n_discarded.
-TEST_F(
-    CacheManagementQwen3Test,
-    CacheToolsCompactSlidingUnclampedFullDiscard) {
+TEST_F(CacheManagementQwen3Test, CacheToolsCompactSlidingUnclampedFullDiscard) {
   DynamicToolsState dts;
   dts.setToolsCompact(true);
 

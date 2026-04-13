@@ -558,7 +558,8 @@ std::string LlamaModel::processPromptImpl(const Prompt& prompt) {
   }
 
   std::ostringstream oss;
-  bool needsOutputCapture = state_->llmContext_->dynamicToolsState().toolsCompact();
+  bool needsOutputCapture =
+      state_->llmContext_->dynamicToolsState().toolsCompact();
   auto callback = prompt.outputCallback;
   if (!prompt.outputCallback) {
     callback = [&](const std::string& token) { oss << token; };
@@ -598,8 +599,7 @@ std::string LlamaModel::processPromptImpl(const Prompt& prompt) {
       dts.reset();
       if (state_->llmContext_->getFirstMsgTokens() >
           state_->llmContext_->getNPast()) {
-        state_->llmContext_->setFirstMsgTokens(
-            state_->llmContext_->getNPast());
+        state_->llmContext_->setFirstMsgTokens(state_->llmContext_->getNPast());
       }
     }
   }
@@ -642,12 +642,11 @@ qvac_lib_inference_addon_cpp::RuntimeStats LlamaModel::runtimeStats() const {
       {"backendDevice", runtimeBackendDevice_}};
 }
 
-qvac_lib_inference_addon_cpp::RuntimeStats LlamaModel::runtimeDebugStats()
-    const {
+qvac_lib_inference_addon_cpp::RuntimeStats
+LlamaModel::runtimeDebugStats() const {
   std::shared_lock lock(stateMtx_);
   return {
-      {"nPastBeforeTools",
-       static_cast<int64_t>(state_->lastNPastBeforeTools_)},
+      {"nPastBeforeTools", static_cast<int64_t>(state_->lastNPastBeforeTools_)},
       {"firstMsgTokens",
        static_cast<int64_t>(state_->llmContext_->getFirstMsgTokens())},
       {"toolsTrimmed", state_->lastToolsTrimmed_ ? 1LL : 0LL}};

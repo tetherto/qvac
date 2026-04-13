@@ -587,9 +587,10 @@ TEST_F(TextLlmContextTest, DoubleTokenizationTimeOverheadLargePrompt) {
     auto stats = model->runtimeStats();
     int promptTokens = static_cast<int>(getStatValue(stats, "promptTokens"));
 
-    GTEST_LOG_(INFO) << "Large prompt - Single tokenization (no tools_compact): "
-                     << durationSingle / numIterations << " us per iteration ("
-                     << promptTokens << " prompt tokens)";
+    GTEST_LOG_(INFO)
+        << "Large prompt - Single tokenization (no tools_compact): "
+        << durationSingle / numIterations << " us per iteration ("
+        << promptTokens << " prompt tokens)";
   }
 
   {

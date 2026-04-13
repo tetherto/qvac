@@ -121,8 +121,9 @@ TEST_F(ModelToolsQwen3Test, CacheEnabledWithToolMessage) {
 
   // Step 1: System prompt with tools + user "hi" to establish cache
   {
-    std::string input1 = R"([{"role": "session", "content": ")" + session_file + R"("},)"
-      R"( {"role": "user", "content": "hi"}])";
+    std::string input1 = R"([{"role": "session", "content": ")" + session_file +
+                         R"("},)"
+                         R"( {"role": "user", "content": "hi"}])";
 
     EXPECT_NO_THROW({
       std::string output1 = processPrompt(model, input1);
@@ -132,30 +133,32 @@ TEST_F(ModelToolsQwen3Test, CacheEnabledWithToolMessage) {
 
   // Step 2: User prompt asking for tool invocation
   {
-    std::string input2 = R"([{"role": "session", "content": ")" + session_file + R"("},)"
-      R"( {"role": "user", "content": "What is the weather in Tokyo?"},)"
-      R"( {"type": "function", "name": "getWeather", "description": "Get weather forecast for a city", "parameters": {"type": "object", "properties": {"city": {"type": "string"}, "date": {"type": "string"}}, "required": ["city", "date"]}}])";
+    std::string input2 =
+        R"([{"role": "session", "content": ")" + session_file +
+        R"("},)"
+        R"( {"role": "user", "content": "What is the weather in Tokyo?"},)"
+        R"( {"type": "function", "name": "getWeather", "description": "Get weather forecast for a city", "parameters": {"type": "object", "properties": {"city": {"type": "string"}, "date": {"type": "string"}}, "required": ["city", "date"]}}])";
 
     std::string output2;
-    EXPECT_NO_THROW({
-      output2 = processPrompt(model, input2);
-    });
+    EXPECT_NO_THROW({ output2 = processPrompt(model, input2); });
 
-    EXPECT_GT(output2.length(), 0) << "Expected non-empty output after prompt with tools";
+    EXPECT_GT(output2.length(), 0)
+        << "Expected non-empty output after prompt with tools";
     EXPECT_TRUE(output2.starts_with(THINK_START));
   }
 
   // Step 3: Tool result message (role: 'tool')
   {
-    std::string input3 = R"([{"role": "session", "content": ")" + session_file + R"("},)"
-      R"( {"role": "tool", "content": "{\"city\":\"Tokyo\",\"date\":\"2025-04-02\",\"temperature\":2,\"conditions\":\"rainy\"}"}])";
+    std::string input3 =
+        R"([{"role": "session", "content": ")" + session_file +
+        R"("},)"
+        R"( {"role": "tool", "content": "{\"city\":\"Tokyo\",\"date\":\"2025-04-02\",\"temperature\":2,\"conditions\":\"rainy\"}"}])";
 
     std::string output3;
-    EXPECT_NO_THROW({
-      output3 = processPrompt(model, input3);
-    });
+    EXPECT_NO_THROW({ output3 = processPrompt(model, input3); });
 
-    EXPECT_GT(output3.length(), 0) << "Model should produce non-empty output after tool result";
+    EXPECT_GT(output3.length(), 0)
+        << "Model should produce non-empty output after tool result";
     EXPECT_TRUE(output3.starts_with(THINK_START));
   }
 
@@ -184,7 +187,8 @@ TEST_F(ModelToolsQwen3Test, CacheEnabledWithToolMessageToolsCompactFalse) {
 
   // Step 1: Establish cache
   {
-    std::string input1 = R"([{"role": "session", "content": ")" + session_file + R"("}, {"role": "user", "content": "hi"}])";
+    std::string input1 = R"([{"role": "session", "content": ")" + session_file +
+                         R"("}, {"role": "user", "content": "hi"}])";
 
     EXPECT_NO_THROW({
       std::string output1 = processPrompt(model, input1);
@@ -194,27 +198,29 @@ TEST_F(ModelToolsQwen3Test, CacheEnabledWithToolMessageToolsCompactFalse) {
 
   // Step 2: Prompt with tools (should trigger tool call)
   {
-    std::string input2 = R"([{"role": "session", "content": ")" + session_file + R"("}, {"role": "user", "content": "What is the weather in Tokyo?"}, {"type": "function", "name": "getWeather", "description": "Get weather forecast", "parameters": {"type": "object", "properties": {"city": {"type": "string"}}, "required": ["city"]}}])";
+    std::string input2 =
+        R"([{"role": "session", "content": ")" + session_file +
+        R"("}, {"role": "user", "content": "What is the weather in Tokyo?"}, {"type": "function", "name": "getWeather", "description": "Get weather forecast", "parameters": {"type": "object", "properties": {"city": {"type": "string"}}, "required": ["city"]}}])";
 
     std::string output2;
-    EXPECT_NO_THROW({
-      output2 = processPrompt(model, input2);
-    });
+    EXPECT_NO_THROW({ output2 = processPrompt(model, input2); });
 
-    EXPECT_GT(output2.length(), 5) << "Expected non-empty output after prompt with tools";
+    EXPECT_GT(output2.length(), 5)
+        << "Expected non-empty output after prompt with tools";
     EXPECT_TRUE(output2.starts_with(THINK_START));
   }
 
   // Step 3: Tool result message - this is the critical step
   {
-    std::string input3 = R"([{"role": "session", "content": ")" + session_file + R"("}, {"role": "tool", "content": "{\"city\":\"Tokyo\",\"temperature\":2,\"conditions\":\"rainy\"}"}])";
+    std::string input3 =
+        R"([{"role": "session", "content": ")" + session_file +
+        R"("}, {"role": "tool", "content": "{\"city\":\"Tokyo\",\"temperature\":2,\"conditions\":\"rainy\"}"}])";
 
     std::string output3;
-    EXPECT_NO_THROW({
-      output3 = processPrompt(model, input3);
-    });
+    EXPECT_NO_THROW({ output3 = processPrompt(model, input3); });
 
-    EXPECT_GT(output3.length(), 5) << "Model should produce non-empty output after tool result";
+    EXPECT_GT(output3.length(), 5)
+        << "Model should produce non-empty output after tool result";
     EXPECT_TRUE(output3.starts_with(THINK_START));
   }
 
@@ -243,9 +249,11 @@ TEST_F(ModelToolsQwen3Test, MultiTurnWithToolsAndCache) {
 
   // Turn 1: User asks about weather (triggers tool call)
   {
-    std::string input = R"([{"role": "session", "content": ")" + session_file + R"("},)"
-      R"( {"role": "user", "content": "What is the weather in Paris and London?"},)"
-      R"( {"type": "function", "name": "getWeather", "description": "Get weather", "parameters": {"type": "object", "properties": {"city": {"type": "string"}}, "required": ["city"]}}])";
+    std::string input =
+        R"([{"role": "session", "content": ")" + session_file +
+        R"("},)"
+        R"( {"role": "user", "content": "What is the weather in Paris and London?"},)"
+        R"( {"type": "function", "name": "getWeather", "description": "Get weather", "parameters": {"type": "object", "properties": {"city": {"type": "string"}}, "required": ["city"]}}])";
 
     std::string output;
     EXPECT_NO_THROW({ output = processPrompt(model, input); });
@@ -256,9 +264,11 @@ TEST_F(ModelToolsQwen3Test, MultiTurnWithToolsAndCache) {
 
   // Turn 2: Tool results for both Paris and London
   {
-    std::string input = R"([{"role": "session", "content": ")" + session_file + R"("},)"
-      R"( {"role": "tool", "content": "{\"city\":\"Paris\",\"temperature\":18,\"conditions\":\"cloudy\"}"},)"
-      R"( {"role": "tool", "content": "{\"city\":\"London\",\"temperature\":8,\"conditions\":\"sunny\"}"}])";
+    std::string input =
+        R"([{"role": "session", "content": ")" + session_file +
+        R"("},)"
+        R"( {"role": "tool", "content": "{\"city\":\"Paris\",\"temperature\":18,\"conditions\":\"cloudy\"}"},)"
+        R"( {"role": "tool", "content": "{\"city\":\"London\",\"temperature\":8,\"conditions\":\"sunny\"}"}])";
 
     std::string output;
     EXPECT_NO_THROW({ output = processPrompt(model, input); });
@@ -269,24 +279,29 @@ TEST_F(ModelToolsQwen3Test, MultiTurnWithToolsAndCache) {
 
   // Turn 3: Tool result for Tokyo, then final answer expected
   {
-    std::string input = R"([{"role": "session", "content": ")" + session_file + R"("},)"
-      R"( {"role": "user", "content": "What about Tokyo?"}])";
+    std::string input = R"([{"role": "session", "content": ")" + session_file +
+                        R"("},)"
+                        R"( {"role": "user", "content": "What about Tokyo?"}])";
 
     std::string output;
     EXPECT_NO_THROW({ output = processPrompt(model, input); });
 
-    EXPECT_GT(output.length(), 5) << "Expected non-empty final answer after tool result";
+    EXPECT_GT(output.length(), 5)
+        << "Expected non-empty final answer after tool result";
     EXPECT_TRUE(output.starts_with(THINK_START));
   }
 
   // Turn 4: Tool results for Tokyo
   {
-    std::string input = R"([{"role": "session", "content": ")" + session_file + R"("},)"
-      R"( {"role": "tool", "content": "{\"city\":\"Tokyo\",\"temperature\":25,\"conditions\":\"rainy\"}"}])";
+    std::string input =
+        R"([{"role": "session", "content": ")" + session_file +
+        R"("},)"
+        R"( {"role": "tool", "content": "{\"city\":\"Tokyo\",\"temperature\":25,\"conditions\":\"rainy\"}"}])";
     std::string output;
     EXPECT_NO_THROW({ output = processPrompt(model, input); });
 
-    EXPECT_GT(output.length(), 5) << "Expected non-empty final answer after tool result";
+    EXPECT_GT(output.length(), 5)
+        << "Expected non-empty final answer after tool result";
     EXPECT_TRUE(output.starts_with(THINK_START));
   }
 

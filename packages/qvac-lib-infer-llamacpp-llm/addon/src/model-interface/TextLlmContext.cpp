@@ -198,8 +198,8 @@ void TextLlmContext::tokenizeChat(
     isLastMessageFromUser = lastRole == "user" || lastRole == "tool";
     addSpecial = true;
   } else if (nPast_ > 0) {
-    isLastMessageFromUser = chatMsgs.back().role == "user" ||
-                            chatMsgs.back().role == "tool";
+    isLastMessageFromUser =
+        chatMsgs.back().role == "user" || chatMsgs.back().role == "tool";
     common_sampler_reset(smpl_.get());
     addSpecial = false;
   }
@@ -215,13 +215,14 @@ void TextLlmContext::tokenizeChat(
 
   QLOG_IF(
       Priority::DEBUG,
-      string_format("[TextLlm] tokenizeChat: nPast=%d lastRole=%s "
-                     "nMsgs=%zu nTools=%zu addGenPrompt=%d\n",
-                     nPast_,
-                     chatMsgs.empty() ? "empty"
-                                      : chatMsgs.back().role.c_str(),
-                     chatMsgs.size(), tools.size(),
-                     inputs.add_generation_prompt));
+      string_format(
+          "[TextLlm] tokenizeChat: nPast=%d lastRole=%s "
+          "nMsgs=%zu nTools=%zu addGenPrompt=%d\n",
+          nPast_,
+          chatMsgs.empty() ? "empty" : chatMsgs.back().role.c_str(),
+          chatMsgs.size(),
+          tools.size(),
+          inputs.add_generation_prompt));
   QLOG_IF(
       Priority::DEBUG,
       string_format("[TextLlm] formatted prompt: %s\n", prompt.c_str()));
@@ -314,10 +315,8 @@ bool TextLlmContext::evalMessageWithTools(
     if (leftTokens >= 0 && discard > 0 &&
         nPast_ + nTokens - discard < llama_n_ctx(lctx_)) {
       auto* mem = llama_get_memory(lctx_);
-      llama_memory_seq_rm(
-          mem, 0, firstMsgTokens_, firstMsgTokens_ + discard);
-      llama_memory_seq_add(
-          mem, 0, firstMsgTokens_ + discard, nPast_, -discard);
+      llama_memory_seq_rm(mem, 0, firstMsgTokens_, firstMsgTokens_ + discard);
+      llama_memory_seq_add(mem, 0, firstMsgTokens_ + discard, nPast_, -discard);
       nPast_ -= discard;
       dts.adjustAfterSlide(discard, firstMsgTokens_);
       ++nSlides_;
@@ -436,16 +435,14 @@ void TextLlmContext::applyContextDiscard() {
   }
   auto* mem = llama_get_memory(lctx_);
   llama_memory_seq_rm(mem, 0, firstMsgTokens_, firstMsgTokens_ + discard);
-  llama_memory_seq_add(
-      mem, 0, firstMsgTokens_ + discard, nPast_, -discard);
+  llama_memory_seq_add(mem, 0, firstMsgTokens_ + discard, nPast_, -discard);
   nPast_ -= discard;
   dts.adjustAfterSlide(discard, firstMsgTokens_);
   ++nSlides_;
   QLOG_IF(
       Priority::DEBUG,
       string_format(
-          "[TextLlm] discarded %d tokens after the first message\n",
-          discard));
+          "[TextLlm] discarded %d tokens after the first message\n", discard));
 }
 
 void TextLlmContext::handleStopRequestAndAddEot(LlamaBatch& batch) {
