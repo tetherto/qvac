@@ -203,8 +203,41 @@ function sha256 (buffer) {
 }
 
 /**
+ * Resolves the download URL for a DocTR model.
+ * On mobile, checks ocr-model-urls.json first (supports S3 presigned URLs),
+ * then falls back to the hardcoded GitHub release URL.
+ */
+function _resolveDoctrUrl (filename) {
+  const model = DOCTR_MODELS[filename]
+  if (!model) return null
+
+  if (!isMobile) return model.url
+
+  const jsonKey = 'doctr_' + filename.replace('.onnx', '') + '_url'
+  let urlConfig = null
+  if (global.assetPaths) {
+    const configPath = global.assetPaths['../../testAssets/ocr-model-urls.json']
+    if (configPath) {
+      try {
+        urlConfig = JSON.parse(fs.readFileSync(configPath.replace('file://', ''), 'utf8'))
+      } catch (_) {}
+    }
+  }
+  if (!urlConfig) {
+    for (const p of ['../../testAssets/ocr-model-urls.json', '../testAssets/ocr-model-urls.json']) {
+      if (fs.existsSync(p)) {
+        try { urlConfig = JSON.parse(fs.readFileSync(p, 'utf8')); break } catch (_) {}
+      }
+    }
+  }
+  if (urlConfig && urlConfig[jsonKey]) return urlConfig[jsonKey]
+  return model.url
+}
+
+/**
  * Downloads a single DocTR model if not already cached.
  * Downloads from OnnxTR GitHub releases with retry on transient errors.
+ * On mobile, checks ocr-model-urls.json first for presigned/alternative URLs.
  * Verifies SHA-256 checksum after download.
  * @param {string} filename - Model filename (e.g., 'db_resnet50.onnx')
  */
@@ -215,14 +248,16 @@ async function downloadDoctrModel (filename) {
   const model = DOCTR_MODELS[filename]
   if (!model) throw new Error(`No download URL for DocTR model: ${filename}`)
 
-  console.log(`Downloading ${filename} from GitHub releases...`)
+  const downloadUrl = _resolveDoctrUrl(filename)
+  console.log(`Downloading ${filename}...`)
+  console.log(`   URL: ${downloadUrl.substring(0, 80)}...`)
 
   const fetch = require('bare-fetch')
-  const maxAttempts = 3
+  const maxAttempts = isMobile ? 5 : 3
   let lastError
   for (let attempt = 1; attempt <= maxAttempts; attempt++) {
     try {
-      const response = await fetch(model.url)
+      const response = await fetch(downloadUrl)
       if (!response.ok) throw new Error(`HTTP ${response.status} downloading ${filename}`)
       const buffer = Buffer.from(await response.arrayBuffer())
       if (model.sha256) {
@@ -238,8 +273,8 @@ async function downloadDoctrModel (filename) {
     } catch (e) {
       lastError = e
       if (attempt < maxAttempts) {
-        const delayMs = attempt * 5000
-        console.log(`   Attempt ${attempt} failed: ${e.message}. Retrying in ${delayMs / 1000}s...`)
+        const delayMs = isMobile ? attempt * 10000 : attempt * 5000
+        console.log(`   Attempt ${attempt}/${maxAttempts} failed: ${e.message}. Retrying in ${delayMs / 1000}s...`)
         await new Promise(resolve => setTimeout(resolve, delayMs))
       }
     }
@@ -250,15 +285,26 @@ async function downloadDoctrModel (filename) {
 /**
  * Ensures all requested DocTR models are available.
  * Downloads from OnnxTR GitHub releases if not already present.
+ * On mobile, returns null instead of crashing if downloads fail
+ * (Device Farm has intermittent connectivity to GitHub releases).
  * @param {string[]} [models] - Model filenames to ensure. Defaults to all 4 models.
- * @returns {Promise<Object>} Map of model name (without extension) to full path
+ * @returns {Promise<Object|null>} Map of model name (without extension) to full path, or null on mobile failure
  */
 async function ensureDoctrModels (models) {
   if (!models) models = Object.keys(DOCTR_MODEL_URLS)
   fs.mkdirSync(DOCTR_MODELS_DIR, { recursive: true })
 
   for (const filename of models) {
-    await downloadDoctrModel(filename)
+    try {
+      await downloadDoctrModel(filename)
+    } catch (e) {
+      if (isMobile) {
+        console.log(`[ensureDoctrModels] Failed to download ${filename}: ${e.message}`)
+        console.log('[ensureDoctrModels] Returning null — DocTR tests will be skipped on this device')
+        return null
+      }
+      throw e
+    }
   }
   const paths = {}
   for (const filename of models) {
