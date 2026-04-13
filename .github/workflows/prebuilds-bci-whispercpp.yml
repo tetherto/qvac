@@ -1,4 +1,4 @@
-name: "Prebuilds (BCI Whispercpp)"
+name: Prebuilds (BCI Whispercpp)
 
 on:
   push:
