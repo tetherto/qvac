@@ -54,6 +54,7 @@ class BCIInterface {
     const isError = typeof error === 'string' && error.length > 0
     const isStats = data && typeof data === 'object' && (
       'totalTime' in data ||
+      'audioDurationMs' in data ||
       'totalSamples' in data
     )
     const isTranscriptOutput = (
@@ -69,6 +70,8 @@ class BCIInterface {
     } else if (isTranscriptOutput) {
       mappedEvent = 'Output'
     } else if (Array.isArray(data) && data.length === 0) {
+      // BCIModel::process returns an empty vector to avoid duplicate
+      // segment emissions; skip forwarding this noop event.
       return
     }
 

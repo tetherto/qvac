@@ -1,0 +1,23 @@
+@qvac/bci-whispercpp
+Copyright 2026 Tether Data, S.A. de C.V.
+
+This product includes third-party components under their
+respective licenses. @qvac/bci-whispercpp itself is licensed under
+Apache-2.0; bundled dependencies are governed by the licenses
+listed below.
+
+=========================================================================
+Third-Party Software Licenses
+=========================================================================
+
+--- MIT ---
+
+  whisper.cpp
+    https://github.com/ggerganov/whisper.cpp
+    Copyright (c) 2023-2024 Georgi Gerganov
+
+--- MIT ---
+
+  ggml
+    https://github.com/ggerganov/ggml
+    Copyright (c) 2023-2024 Georgi Gerganov
