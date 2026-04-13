@@ -23,6 +23,11 @@ const END_MARKER = '[PERF_REPORT_END]'
  * Extracts markers from plain text content.
  * Returns the last valid report found.
  */
+function isValidReport (obj) {
+  return obj !== null && typeof obj === 'object' && !Array.isArray(obj) &&
+    typeof obj.schema_version === 'string' && Array.isArray(obj.results)
+}
+
 function extractFromText (text) {
   let lastReport = null
   let searchFrom = 0
@@ -36,7 +41,12 @@ function extractFromText (text) {
 
     const jsonStr = text.substring(jsonStart, endIdx)
     try {
-      lastReport = JSON.parse(jsonStr)
+      const parsed = JSON.parse(jsonStr)
+      if (isValidReport(parsed)) {
+        lastReport = parsed
+      } else {
+        console.error('  Found markers but payload is not a valid report object (missing schema_version/results)')
+      }
     } catch (err) {
       console.error(`  Found markers but JSON parse failed: ${err.message}`)
     }

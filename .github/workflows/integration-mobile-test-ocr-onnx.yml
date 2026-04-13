@@ -1027,7 +1027,7 @@ jobs:
             printf '      - node node_modules/@wdio/cli/bin/wdio.js --version || echo "wdio version check failed"\n'
             printf '      - echo "Creating wdio config for Device Farm..."\n'
             printf '      - echo "%s" | base64 -d > tests/wdio.config.devicefarm.js\n' "$WDIO_CONFIG_B64"
-            printf '      - cat tests/wdio.config.devicefarm.js\n'
+            printf '      - echo "wdio config written (not cat-ing to avoid false positive marker extraction)"\n'
 
           # iOS-specific WebDriverAgent configuration (only for iOS platform)
           if [ "${{ matrix.platform }}" == "iOS" ]; then
