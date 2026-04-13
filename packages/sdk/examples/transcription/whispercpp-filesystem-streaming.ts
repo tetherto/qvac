@@ -6,6 +6,11 @@
  *
  * Uses FFmpeg to convert the WAV to raw f32le and streams chunks
  * through the duplex RPC session to the whisper addon.
+ *
+ * This example requires a test audio file (default: examples/audio/diarization-sample-16k.wav).
+ * Sample audio files are available in the QVAC source repository, but not included in the published npm package.
+ * Set SAMPLE_FILE to a custom WAV, or download the default audio into examples/audio/:
+ *   https://github.com/tetherto/qvac/blob/main/packages/sdk/examples/audio/diarization-sample-16k.wav
  */
 import {
   loadModel,

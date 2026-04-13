@@ -14,6 +14,8 @@
 
 See [https://docs.qvac.tether.io/sdk/getting-started](https://docs.qvac.tether.io/sdk/getting-started) for the comprehensive QVAC documentation.
 
+For AI/LLM tools, use [https://docs.qvac.tether.io/llms-full.txt](https://docs.qvac.tether.io/llms-full.txt) as the consolidated plaintext documentation export.
+
 ## Supported environments and installation
 
 See https://docs.qvac.tether.io/sdk/getting-started/installation

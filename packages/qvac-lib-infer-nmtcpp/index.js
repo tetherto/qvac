@@ -373,11 +373,7 @@ class TranslationNmtcpp {
 
   _addonOutputCallback (addon, event, data, error) {
     const isStatsObject = typeof data === 'object' && data !== null && !Array.isArray(data) &&
-                         (('TPS' in data) ||
-                          ('BERGAMOT : ->TPS' in data) ||
-                          ('firstModel_TPS' in data) ||
-                          ('totalTime' in data) ||
-                          ('decodeTime' in data))
+                         Object.keys(data).some(k => k.endsWith('TPS'))
 
     if (isStatsObject) {
       return this._job.end(this.opts?.stats ? data : null)
