@@ -2,7 +2,6 @@
 
 const test = require('brittle')
 const TranscriptionWhispercpp = require('../../index.js')
-const FakeDL = require('../mocks/loader.fake.js')
 const MockedBinding = require('../mocks/MockedBinding.js')
 const { wait, transitionCb } = require('../mocks/utils.js')
 const { WhisperInterface } = require('../../whisper')
@@ -21,10 +20,10 @@ function createTestModel ({ onOutput = () => { }, vadModelPath = 'ggml-silero-v5
   sinon.stub(TranscriptionWhispercpp.prototype, 'validateModelFiles').returns(undefined)
 
   const args = {
-    modelName: 'ggml-tiny.bin',
-    vadModelName: vadModelPath,
-    loader: new FakeDL({}),
-    params: {}
+    files: {
+      model: 'ggml-tiny.bin',
+      vadModel: vadModelPath
+    }
   }
   const config = {
     vadModelPath,

@@ -165,6 +165,7 @@ runs:
         if ([ "${EVENT_NAME}" = "push" ] || [ "${EVENT_NAME}" = "workflow_dispatch" ]) && [ "$ACCESS" = "public" ]; then
           echo "Publishing with provenance statements"
           npm publish --tag "$TAG" --access "$ACCESS" --provenance
+          npm access public "$PACKAGE_NAME" || echo "npm access public skipped"
         else
           npm publish --tag "$TAG" --access "$ACCESS"
         fi

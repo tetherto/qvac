@@ -76,16 +76,12 @@ async function main () {
     // 6. Switching to a new session with cache1.bin file
     const messages2 = [
       {
-        role: 'session',
-        content: 'cache1.bin'
-      },
-      {
         role: 'user',
         content: 'what is bitcoin?'
       }
     ]
 
-    const response2 = await model.run(messages2)
+    const response2 = await model.run(messages2, { cacheKey: 'cache1.bin' })
     let fullResponse2 = ''
 
     await response2
@@ -103,16 +99,12 @@ async function main () {
     // 7. Continuing conversation with cache1.bin
     const messages3 = [
       {
-        role: 'session',
-        content: 'cache1.bin'
-      },
-      {
         role: 'user',
         content: 'can you elaborate on the previous topic?'
       }
     ]
 
-    const response3 = await model.run(messages3)
+    const response3 = await model.run(messages3, { cacheKey: 'cache1.bin' })
     let fullResponse3 = ''
 
     await response3

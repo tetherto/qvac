@@ -526,6 +526,42 @@ class QVACRegistryClient extends ReadyResource {
     }
   }
 
+  async suspend (opts = {}) {
+    this.logger.debug('suspend called')
+
+    if (!this.opened || this.closing) {
+      this.logger.debug('Skipping suspend while client is not open or is closing')
+      return
+    }
+
+    if (this.hyperswarm && !this.hyperswarm.suspended) {
+      await this.hyperswarm.suspend(opts)
+    }
+    if (this.corestore) {
+      await this.corestore.suspend(opts)
+    }
+
+    this.logger.debug('QVACRegistryClient suspended')
+  }
+
+  async resume (opts = {}) {
+    this.logger.debug('resume called')
+
+    if (!this.opened || this.closing) {
+      this.logger.debug('Skipping resume while client is not open or is closing')
+      return
+    }
+
+    if (this.corestore) {
+      await this.corestore.resume()
+    }
+    if (this.hyperswarm && this.hyperswarm.suspended) {
+      await this.hyperswarm.resume(opts)
+    }
+
+    this.logger.debug('QVACRegistryClient resumed')
+  }
+
   async _close () {
     this.logger.debug('_close called')
 

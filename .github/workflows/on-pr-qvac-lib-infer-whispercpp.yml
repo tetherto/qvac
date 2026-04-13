@@ -163,6 +163,8 @@ jobs:
       packages: read
       checks: write
       pull-requests: write
+      actions: read
+      id-token: write
     needs: [authorize, context]
     if: needs.authorize.outputs.allowed == 'true'
     uses: ./.github/workflows/cpp-test-coverage-qvac-lib-infer-whispercpp.yml

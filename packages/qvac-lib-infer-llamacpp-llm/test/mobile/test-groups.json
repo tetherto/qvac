@@ -5,6 +5,7 @@
     "heavy3": ["runImageTest"],
     "heavy4": ["runOcrLightonTest"],
     "heavy5": ["runReasoningTest"],
+    "heavy6": ["runSlidingContextTest"],
     "lightA": [
       "runAfriquegemmaTranslationTest",
       "runApiBehaviorTest",
@@ -18,7 +19,6 @@
       "runModelLoadingTest",
       "runMoeTest",
       "runMultiInstanceTest",
-      "runSlidingContextTest",
       "runUtf8OutputTest"
     ]
   },

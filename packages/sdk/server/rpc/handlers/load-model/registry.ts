@@ -427,14 +427,35 @@ async function downloadShardedFilesFromRegistry(
 
 /**
  * Find companion ONNX data file in registry.
- * ONNX models with external data have a .onnx file and a .onnx_data file.
+ * ONNX models with external data may use either .onnx_data or .onnx.data.
  */
-function findOnnxCompanionDataFile(
+export function findOnnxCompanionDataFile(
   registryPath: string,
 ): RegistryItem | undefined {
   if (!registryPath.endsWith(".onnx")) return undefined;
-  const dataPath = registryPath + "_data";
-  return getModelByPath(dataPath);
+
+  return (
+    getModelByPath(`${registryPath}_data`) ??
+    getModelByPath(`${registryPath}.data`)
+  );
+}
+
+/**
+ * Resolve the main ONNX registry path from a companion data registry path.
+ * Supports both .onnx_data and .onnx.data naming conventions.
+ */
+export function getPairedOnnxRegistryPath(
+  registryPath: string,
+): string | undefined {
+  if (registryPath.endsWith(".onnx_data")) {
+    return registryPath.slice(0, -"_data".length);
+  }
+
+  if (registryPath.endsWith(".onnx.data")) {
+    return registryPath.slice(0, -".data".length);
+  }
+
+  return undefined;
 }
 
 /**
@@ -670,8 +691,9 @@ export async function downloadModelFromRegistry(
 
   // ONNX external data: check if already present in paired ONNX cache directory.
   // Avoids redundant single-file downloads when the companion .onnx download already placed it.
-  if (filename.endsWith('.onnx_data')) {
-    const onnxRegistryPath = registryPath.slice(0, -'_data'.length);
+  const pairedOnnxRegistryPath = getPairedOnnxRegistryPath(registryPath);
+  if (pairedOnnxRegistryPath) {
+    const onnxRegistryPath = pairedOnnxRegistryPath;
     const onnxCacheKey = generateShortHash(onnxRegistryPath);
     const pairedPath = getOnnxModelPath(onnxCacheKey, filename);
     const validated = await validateCachedFile(
