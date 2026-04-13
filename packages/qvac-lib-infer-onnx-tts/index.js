@@ -140,6 +140,8 @@ class ONNXTTS {
     }
     this.addon = null
     this._sentenceStreamCtx = null
+    /** Serializes `runSentenceStream` until each response settles (Whisper-style). */
+    this._ttsInferenceQueueWaiter = Promise.resolve()
     this._job = createJobHandler({
       cancel: () => {
         const a = this.addon
@@ -300,12 +302,112 @@ class ONNXTTS {
   }
 
   async run (input) {
-    return this._runExclusive(async () => {
-      if (input && input.sentenceStream) {
-        return this._runSentenceStreamInternal(input)
-      }
-      return this._runInternal(input)
+    return this._runExclusive(() => this._runInternal(input))
+  }
+
+  /**
+   * Serialize sentence-stream runs until the returned {@link QvacResponse} settles,
+   * matching {@link TranscriptionWhispercpp#runStreaming} + `_enqueueExclusiveRunResponse`.
+   */
+  async _enqueueExclusiveTtsResponse (runFn) {
+    const prev = this._ttsInferenceQueueWaiter || Promise.resolve()
+    let releaseSlot
+    this._ttsInferenceQueueWaiter = new Promise(resolve => {
+      releaseSlot = resolve
     })
+    await prev
+    let response
+    try {
+      response = await runFn()
+    } catch (err) {
+      releaseSlot()
+      throw err
+    }
+    response.await().finally(() => { releaseSlot() }).catch(() => {})
+    return response
+  }
+
+  /**
+   * Chunk long text by sentence (see {@link splitTtsText}), synthesize each chunk in order,
+   * and emit PCM on `response.onUpdate` as each chunk completes — same usage as Whisper
+   * `runStreaming`: `const response = await model.runSentenceStream(text); response.onUpdate(...); await response.await()`.
+   *
+   * @param {string} text
+   * @param {{ locale?: string, maxChunkScalars?: number }} [options]
+   */
+  async runSentenceStream (text, options = {}) {
+    const opts = options == null || typeof options !== 'object' ? {} : options
+    if (typeof text !== 'string' || text.trim().length === 0) {
+      throw new QvacErrorAddonTTS({
+        code: ERR_CODES.FAILED_TO_APPEND,
+        adds: 'runSentenceStream: non-empty string required'
+      })
+    }
+    if (this.exclusiveRun) {
+      return await this._enqueueExclusiveTtsResponse(() =>
+        this._runSentenceStreamOrchestrator(text, opts)
+      )
+    }
+    return this._runSentenceStreamOrchestrator(text, opts)
+  }
+
+  /**
+   * Starts a {@link QvacResponse} and schedules chunk synthesis without awaiting completion
+   * (so callers can attach `onUpdate` before audio callbacks run).
+   */
+  _runSentenceStreamOrchestrator (text, options) {
+    const chunks = splitTtsText(String(text), {
+      language: this._config?.language,
+      locale: options.locale,
+      maxScalars: options.maxChunkScalars
+    })
+    if (chunks.length === 0) {
+      throw new QvacErrorAddonTTS({
+        code: ERR_CODES.FAILED_TO_APPEND,
+        adds: 'runSentenceStream: text produced no chunks after split'
+      })
+    }
+
+    const response = this._job.start()
+    this._sentenceStreamCtx = {
+      chunks,
+      chunkIdx: 0,
+      acc: {
+        totalTime: 0,
+        audioDurationMs: 0,
+        totalSamples: 0
+      },
+      chunkResolver: null
+    }
+
+    this._sentenceStreamDriveBody().catch((err) => {
+      if (this._sentenceStreamCtx && this._sentenceStreamCtx.chunkResolver) {
+        const rej = this._sentenceStreamCtx.chunkResolver.reject
+        this._sentenceStreamCtx.chunkResolver = null
+        rej(err)
+      }
+      this._sentenceStreamCtx = null
+      this._job.fail(err)
+    })
+
+    return response
+  }
+
+  async _sentenceStreamDriveBody () {
+    const ctx = this._sentenceStreamCtx
+    if (!ctx) return
+    for (let i = 0; i < ctx.chunks.length; i++) {
+      ctx.chunkIdx = i
+      const donePromise = new Promise((resolve, reject) => {
+        ctx.chunkResolver = { resolve, reject }
+      })
+      await this.addon.runJob({
+        type: 'text',
+        input: ctx.chunks[i]
+      })
+      await donePromise
+    }
+    this._sentenceStreamCtx = null
   }
 
   async _load () {
@@ -396,64 +498,6 @@ class ONNXTTS {
       throw error
     }
 
-    return response
-  }
-
-  /**
-   * One logical response; multiple native jobs (one per text chunk).
-   * Expects `input.sentenceStream`; other fields match {@link ONNXTTS#run}.
-   */
-  async _runSentenceStreamInternal (input) {
-    const text = input.input != null ? String(input.input) : ''
-    const chunks = splitTtsText(text, {
-      language: this._config?.language,
-      locale: input.locale,
-      maxScalars: input.maxChunkScalars
-    })
-    if (chunks.length === 0) {
-      throw new QvacErrorAddonTTS({
-        code: ERR_CODES.FAILED_TO_APPEND,
-        adds: 'sentenceStream: text produced no chunks after split'
-      })
-    }
-
-    const response = this._job.start()
-    const acc = {
-      totalTime: 0,
-      audioDurationMs: 0,
-      totalSamples: 0
-    }
-
-    this._sentenceStreamCtx = {
-      chunks,
-      chunkIdx: 0,
-      acc,
-      chunkResolver: null
-    }
-
-    try {
-      for (let i = 0; i < chunks.length; i++) {
-        this._sentenceStreamCtx.chunkIdx = i
-        const donePromise = new Promise((resolve, reject) => {
-          this._sentenceStreamCtx.chunkResolver = { resolve, reject }
-        })
-        await this.addon.runJob({
-          type: input.type || 'text',
-          input: chunks[i]
-        })
-        await donePromise
-      }
-    } catch (err) {
-      if (this._sentenceStreamCtx && this._sentenceStreamCtx.chunkResolver) {
-        this._sentenceStreamCtx.chunkResolver.reject(err)
-        this._sentenceStreamCtx.chunkResolver = null
-      }
-      this._sentenceStreamCtx = null
-      this._job.fail(err)
-      throw err
-    }
-
-    this._sentenceStreamCtx = null
     return response
   }
 

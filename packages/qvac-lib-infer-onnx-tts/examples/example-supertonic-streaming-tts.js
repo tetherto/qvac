@@ -4,19 +4,18 @@ const path = require('bare-path')
 const ONNXTTS = require('../')
 const { createWav } = require('./wav-helper')
 const { setLogger, releaseLogger } = require('../addonLogging')
-const { ensureSupertonicModels } = require('../test/utils/downloadModel')
 
 const SUPERTONIC_SAMPLE_RATE = 44100
 
 // Supertone supertonic-2 (HF Supertone/supertonic-2) — use npm run models:ensure or ensureSupertonicModels
 const modelDir = path.join(__dirname, '..', 'models', 'supertonic')
 
+/**
+ * Same usage shape as Whisper `runStreaming()` (see examples/example.streaming-vad.js):
+ * await `runSentenceStream`, attach `response.onUpdate`, then `await response.await()`.
+ */
+
 async function main () {
-  const downloadResult = await ensureSupertonicModels({ targetDir: modelDir })
-  if (!downloadResult.success) {
-    console.error('Failed to download Supertonic models')
-    return
-  }
   setLogger((priority, message) => {
     const priorityNames = {
       0: 'ERROR',
@@ -52,42 +51,28 @@ async function main () {
     console.log('Model loaded.')
 
     const textToSynthesize = `The rolling hills of the willowed valley glimmered brilliantly under the mellowing autumn sun.
-    The sun was setting in the west, casting a golden glow over the landscape.
-    The sky was a canvas of hues, from deep reds to warm oranges and golden yellows.
-    The leaves on the trees were a vibrant red, orange, and yellow.
-    The air was crisp and cool, with a slight chill in the breeze.
-    The sound of the leaves rustling in the wind was a soothing melody.
-    The birds were singing a beautiful song, as if they were happy to be alive.
-    The bees were buzzing around the flowers, collecting nectar.
-    The butterflies were fluttering around the flowers, collecting nectar.`
+     The sun was setting in the west, casting a golden glow over the landscape.
+     The sky was a canvas of hues, from deep reds to warm oranges and golden yellows.
+     The leaves on the trees were a vibrant red, orange, and yellow.
+     The air was crisp and cool, with a slight chill in the breeze.
+     The sound of the leaves rustling in the wind was a soothing melody.
+     The birds were singing a beautiful song, as if they were happy to be alive.
+     The bees were buzzing around the flowers, collecting nectar.
+     The butterflies were fluttering around the flowers, collecting nectar.`
 
-    console.log('Running TTS with sentenceStream (one native job per text chunk)...')
-    const runStarted = Date.now()
-    let firstChunkAt = null
+    console.log('Starting runSentenceStream (chunked synthesis, onUpdate per chunk)...')
 
-    const response = await model.run({
-      input: textToSynthesize,
-      type: 'text',
-      sentenceStream: true
-    })
+    const response = await model.runSentenceStream(textToSynthesize)
 
     let buffer = []
     let chunkCount = 0
 
-    // sentenceStream finishes all chunks inside model.run(), so every `output`
-    // is already in response.output before we return. EventEmitter does not
-    // replay past events — use iterate() to drain the buffered updates.
-    for await (const data of response.iterate()) {
+    response.onUpdate(data => {
       if (data && data.outputArray) {
         const samples = Array.from(data.outputArray)
         buffer = buffer.concat(samples)
         chunkCount += 1
-        if (firstChunkAt === null) {
-          firstChunkAt = Date.now()
-          console.log(
-            `First audio chunk after ${firstChunkAt - runStarted} ms (${samples.length} samples)`
-          )
-        }
+
         const idx = data.chunkIndex
         const preview =
           typeof data.sentenceChunk === 'string'
@@ -101,7 +86,9 @@ async function main () {
           console.log(`Audio update: ${samples.length} samples (no chunk metadata)`)
         }
       }
-    }
+    })
+
+    await response.await()
 
     console.log(`TTS finished (${chunkCount} audio update(s)).`)
     if (response.stats) {
@@ -123,4 +110,3 @@ async function main () {
 }
 
 main().catch(console.error)
-

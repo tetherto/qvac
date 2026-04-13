@@ -109,6 +109,15 @@ declare class ONNXTTS {
    * Run text-to-speech. When `opts.stats` was set, `response.stats` matches {@link ONNXTTS.RuntimeStats}.
    */
   run(input: ONNXTTS.TTSRunInput): Promise<QvacResponse<ONNXTTS.TTSOutputChunk>>
+
+  /**
+   * Sentence-chunked synthesis: split long text, emit PCM per chunk on `response.onUpdate`,
+   * then `await response.await()` — same shape as Whisper `runStreaming()`.
+   */
+  runSentenceStream(
+    text: string,
+    options?: ONNXTTS.SentenceStreamOptions,
+  ): Promise<QvacResponse<ONNXTTS.TTSOutputChunk & ONNXTTS.SentenceStreamChunkMeta>>
 }
 
 declare namespace ONNXTTS {
@@ -124,15 +133,21 @@ declare namespace ONNXTTS {
     outputArray: ArrayBuffer
   }
 
-  export type TTSRunInput = {
-    type?: string
-    input: string
-    /** When true, split text into chunks and run one native job per chunk; lower time-to-first-audio. */
-    sentenceStream?: boolean
-    /** Optional BCP-47 locale for Intl.Segmenter (when available). */
+  export interface SentenceStreamChunkMeta {
+    chunkIndex?: number
+    sentenceChunk?: string
+  }
+
+  export interface SentenceStreamOptions {
+    /** BCP-47 locale for Intl.Segmenter when available. */
     locale?: string
     /** Max graphemes per chunk (defaults: 300, or 120 when language is ko). */
     maxChunkScalars?: number
+  }
+
+  export type TTSRunInput = {
+    type?: string
+    input: string
   }
 
   export {
@@ -141,6 +156,8 @@ declare namespace ONNXTTS {
     ONNXTTSOptions,
     ONNXTTSRuntimeConfig,
     RuntimeStats,
+    SentenceStreamChunkMeta,
+    SentenceStreamOptions,
     TTSOutputChunk,
     TTSRunInput
   }

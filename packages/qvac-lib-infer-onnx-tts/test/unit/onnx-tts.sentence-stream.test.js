@@ -23,21 +23,17 @@ function createStubbedModel (opts = {}) {
   return model
 }
 
-test('sentenceStream runs multiple native jobs and enriches output', async (t) => {
+test('runSentenceStream runs multiple native jobs and enriches output (onUpdate + await)', async (t) => {
   const runJobSpy = sinon.spy(MockedBinding.prototype, 'runJob')
   const model = createStubbedModel()
   await model.load()
   const text =
     'This is long text one. This is long text two. This is long text three.'
-  const response = await model.run({
-    input: text,
-    sentenceStream: true,
-    maxChunkScalars: 18
-  })
+  const response = await model.runSentenceStream(text, { maxChunkScalars: 18 })
   const updates = []
-  for await (const d of response.iterate()) {
+  response.onUpdate(d => {
     updates.push(d)
-  }
+  })
   await response.await()
   t.ok(runJobSpy.callCount >= 2, 'expected multiple runJob calls')
   const withChunk = updates.filter(u => u.chunkIndex !== undefined)
@@ -48,7 +44,7 @@ test('sentenceStream runs multiple native jobs and enriches output', async (t) =
   runJobSpy.restore()
 })
 
-test('plain run without sentenceStream uses single job', async (t) => {
+test('plain run() uses single job', async (t) => {
   const runJobSpy = sinon.spy(MockedBinding.prototype, 'runJob')
   const model = createStubbedModel()
   await model.load()

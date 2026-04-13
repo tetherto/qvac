@@ -234,4 +234,11 @@ async function runTTS (model, params, expectation = {}, options = {}) {
   }
 }
 
-module.exports = { getBaseDir, isMobile, runTTS, runTTSWithSplit }
+module.exports = {
+  getBaseDir,
+  isMobile,
+  runTTS,
+  runTTSWithSplit,
+  checkExpectations,
+  saveWavIfNeeded
+}
