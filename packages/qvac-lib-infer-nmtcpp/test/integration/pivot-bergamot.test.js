@@ -47,8 +47,7 @@ const DEVICE_CONFIGS = isMobile
 
 /**
  * Ensures a Bergamot model pair is available on disk.
- * Downloads directly from Firefox CDN (skips Hyperdrive to avoid
- * dangling connections that hang the process after tests complete).
+ * Downloads directly from Firefox CDN.
  *
  * @param {string} src - source language code (e.g. 'es')
  * @param {string} dst - destination language code (e.g. 'en')

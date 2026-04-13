@@ -3,11 +3,9 @@
 # ===========================================================================
 # Download Bergamot (Firefox Translations) model for a language pair
 #
-# Models are fetched from:
-#   1. Hyperdrive (if available for the pair)
-#   2. Firefox Remote Settings CDN (fallback)
+# Models are fetched from the Firefox Remote Settings CDN — the same
+# source Firefox itself uses for translation models.
 #
-# Downloads models from Hyperdrive or Firefox Remote Settings CDN.
 # For programmatic use, see lib/bergamot-model-fetcher.js
 #
 # Usage:
@@ -63,47 +61,7 @@ mkdir -p "$DEST_DIR"
 echo "Destination: $DEST_DIR"
 echo ""
 
-# ---- Hyperdrive keys (from README.md Model Registry) ----
-# Uses a function instead of associative array for bash 3.2 (macOS) compatibility
-get_hd_key() {
-    case "$1" in
-        aren) echo "152125b9e579de7897bffddc2756a712f1c8e6fcbda162d1a821aab135c8ad7e" ;;
-        csen) echo "41df2dadab7db9a8258d1520ae5815601f5690e0d96ab1e61f931427a679d32d" ;;
-        enar) echo "c9ae647365e18d8c51eb21c47721544ee3daaaec375913e5ccb7a8d11d493a0c" ;;
-        encs) echo "c7ccfc55618925351f32b00265375c66309240af9e90f0baf7f460ebc5ba34de" ;;
-        enes) echo "bf46f9b51d04f5619eea1988499d81cd65268d9b0a60bea0fb647859ffe98a3c" ;;
-        enfr) echo "0a4f388c0449b7774043e5ba8a1a2f735dc22a0a8e01d8bcd593e28db2909abf" ;;
-        enit) echo "a8811fb494e4aee45ca06a011703a25df5275e5dfa59d6217f2d430c677f9fa6" ;;
-        enja) echo "ac0b883d176ea3b1d304790efe2d4e4e640a474b7796244c92496fb9d660f29d" ;;
-        enpt) echo "21f12262b8b0440b814f2e57e8224d0921c6cf09e1da0238a4e83789b57ab34f" ;;
-        enru) echo "404279d9716f31913cdb385bef81e940019134b577ed64ae3333b80da75a80bf" ;;
-        enzh) echo "15d484200acea8b19b7eeffd5a96b218c3c437afbed61bfef39dafbae6edfec0" ;;
-        esen) echo "c3e983c8db3f64faeef8eaf1da9ea4aeb8d5c020529f83957d63c19ed7710651" ;;
-        fren) echo "7a9b38b0c4637b2eab9c11387b8c3f254db64da47cc5a7eecda66513176f7757" ;;
-        iten) echo "3b4be93d19dd9e9e6ee38b528684028ac03c7776563bc0e5ca668b76b0964480" ;;
-        jaen) echo "85012ed3c3ff5c2bfe49faa60ebafb86306e6f2a97f49796374d3069f505bfd3" ;;
-        pten) echo "a5da4ee5f5817033dee6ed4489d1d3cadcf3d61e99fd246da7e0143c4b7439a4" ;;
-        ruen) echo "dad7f99c8d8c17233bcfa005f789a0df29bb4ae3116381bdb2a63ffc32c97dfe" ;;
-        zhen) echo "17eb4c3fcd23ac3c93cbe62f08ecb81d70f561f563870ea42494214d6886dd66" ;;
-        *) echo "" ;;
-    esac
-}
-
-HD_KEY="$(get_hd_key "$LANG_PAIR")"
-
-if [ -n "$HD_KEY" ]; then
-    echo "✓ Hyperdrive key found: ${HD_KEY:0:16}..."
-    echo ""
-    echo "To download via Bare / HyperdriveDL:"
-    echo "  bare -e \"const HD = require('@qvac/dl-hyperdrive'); const d = new HD({ key: 'hd://$HD_KEY' }); ...\""
-    echo ""
-    echo "Or use the JS helper from the repo:"
-    echo "  const { ensureBergamotModelFiles } = require('./lib/bergamot-model-fetcher')"
-    echo "  await ensureBergamotModelFiles('$SRC_LANG', '$DST_LANG', '$DEST_DIR')"
-    echo ""
-fi
-
-# ---- Fallback: download from Firefox Remote Settings CDN ----
+# ---- Download from Firefox Remote Settings CDN ----
 
 echo "📥 Downloading from Firefox Remote Settings CDN..."
 echo ""
@@ -170,8 +128,6 @@ if [ -n "$GITHUB_ENV" ]; then
     echo "BERGAMOT_MODEL_PATH=${DEST_DIR}" >> "$GITHUB_ENV"
     echo "✅ BERGAMOT_MODEL_PATH exported to GITHUB_ENV"
 
-    # Also export individual file URLs for mobile test workflows
-    # (backward compat with workflows expecting BERGAMOT_MODEL_URL / BERGAMOT_VOCAB_URL)
     MODEL_URL=""
     VOCAB_URL=""
     while IFS='|' read -r FILENAME LOCATION; do
