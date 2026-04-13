@@ -12,6 +12,7 @@
     "serve": "npx http-server out -p 8080 -c-1",
     "postinstall": "fumadocs-mdx",
     "docs:generate": "bun run scripts/run-docs-generate.ts",
+    "docs:audit-tsdoc": "bun run scripts/api-docs/audit-tsdoc.ts",
     "docs:generate-api": "bun run scripts/generate-api-docs.ts",
     "docs:gen-api-dev": "bun run scripts/generate-api-docs.ts --dev",
     "docs:update-versions": "bun run scripts/update-versions-list.ts",

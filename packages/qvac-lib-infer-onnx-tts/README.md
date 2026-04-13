@@ -75,6 +75,8 @@ This package supports two TTS engines. The engine is auto-detected based on the 
 | Use Case | Voice cloning from a reference audio sample | General-purpose TTS with selectable voice presets |
 | Real Time Factor | Usually >1.0 | <1.0 |
 
+Note: though Chatterbox models support up to 23 languages, this implementation still only support 7 due to onnx models limitations. We are actively working to provide new onnx models that support all 23 langauges from the original implementation. 
+
 ## Installation
 
 ### Prerequisites
@@ -128,7 +130,7 @@ Before building, ensure you have the following installed:
 
 1. **Clone the repository**:
    ```bash
-   git clone git@github.com:tetherto/qvac-lib-infer-onnx-tts.git
+   git clone https://github.com/tetherto/qvac-lib-infer-onnx-tts.git
    cd qvac-lib-infer-onnx-tts
    ```
 

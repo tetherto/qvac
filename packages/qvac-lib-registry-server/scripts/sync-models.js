@@ -73,7 +73,7 @@ async function syncModels () {
             const modelRequest = {
               source: entry.source,
               engine: entry.engine,
-              licenseId: entry.license,
+              licenseId: entry.licenseId,
               description: entry.description || '',
               quantization: entry.quantization || '',
               params: entry.params || '',
@@ -108,7 +108,7 @@ async function syncModels () {
               path: sourceInfo.path,
               source: sourceInfo.protocol,
               engine: entry.engine,
-              licenseId: entry.license,
+              licenseId: entry.licenseId,
               description: entry.description || '',
               quantization: entry.quantization || '',
               params: entry.params || '',
@@ -188,7 +188,7 @@ async function syncModels () {
 function needsMetadataUpdate (config, existing, sourceInfo) {
   return (
     config.engine !== existing.engine ||
-    config.license !== existing.licenseId ||
+    config.licenseId !== existing.licenseId ||
     (config.description || '') !== (existing.description || '') ||
     (config.quantization || '') !== (existing.quantization || '') ||
     (config.params || '') !== (existing.params || '') ||
@@ -205,8 +205,8 @@ function needsMetadataUpdate (config, existing, sourceInfo) {
 function getChanges (config, existing) {
   const changes = {}
   if (config.engine !== existing.engine) changes.engine = { from: existing.engine, to: config.engine }
-  if (config.license !== existing.licenseId) {
-    changes.licenseId = { from: existing.licenseId, to: config.license }
+  if (config.licenseId !== existing.licenseId) {
+    changes.licenseId = { from: existing.licenseId, to: config.licenseId }
   }
   if ((config.description || '') !== (existing.description || '')) {
     changes.description = { from: existing.description || '', to: config.description || '' }

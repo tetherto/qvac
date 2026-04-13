@@ -223,6 +223,9 @@ jobs:
           fi
 
   coverage-report:
+    permissions:
+      contents: read
+      actions: read
     needs: cpp-tests
     runs-on: ubuntu-latest
     if: ${{ always() }}

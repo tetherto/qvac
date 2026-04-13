@@ -62,6 +62,7 @@ import { MobileRagExecutor } from "./executors/rag-executor.js";
 import { MobileConfigReloadExecutor } from "./executors/config-reload-executor.js";
 import { MobileTtsExecutor } from "./executors/tts-executor.js";
 import { DownloadExecutor } from "../shared/executors/download-executor.js";
+import { DelegatedInferenceExecutor } from "../shared/executors/delegated-inference-executor.js";
 import { DiffusionExecutor } from "../shared/executors/diffusion-executor.js";
 
 const resources = new ResourceManager();
@@ -387,6 +388,7 @@ export const executor = createExecutor({
     new MobileParakeetExecutor(resources),
     new MobileVisionExecutor(resources),
     new DownloadExecutor(),
+    new DelegatedInferenceExecutor(),
     new DiffusionExecutor(resources),
   ],
   profiling: {

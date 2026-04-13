@@ -1,6 +1,17 @@
 #include <bare.h>
 
+#include <opencv2/core.hpp>
 #include "../addon/AddonJs.hpp"
+
+// Force OpenCV to use single-threaded mode at load time.
+// OpenCV's default multi-threaded parallel backend creates a ThreadPool
+// with static globals whose destructors conflict with bare's libuv
+// event loop teardown, causing SIGABRT on process exit.
+namespace {
+struct OpenCVSingleThread {
+  OpenCVSingleThread() { cv::setNumThreads(1); }
+} g_opencvInit; // NOLINT(cert-err58-cpp)
+} // namespace
 
 js_value_t* qvacLibInferenceAddonOnnxOcrFasttextExports(
     js_env_t* env, js_value_t* exports) {
