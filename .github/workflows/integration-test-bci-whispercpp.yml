@@ -1,6 +1,12 @@
 name: Integration Tests (BCI Whispercpp)
 
 on:
+  push:
+    branches:
+      - feat/bci-whispercpp
+    paths:
+      - ".github/workflows/integration-test-bci-whispercpp.yml"
+      - "packages/bci-whispercpp/**"
   workflow_dispatch:
     inputs:
       prebuild_package:
