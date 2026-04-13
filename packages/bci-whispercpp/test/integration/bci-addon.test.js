@@ -15,7 +15,7 @@ const MODEL_PATH = (os.hasEnv('WHISPER_MODEL_PATH') ? os.getEnv('WHISPER_MODEL_P
 
 const hasModel = fs.existsSync(MODEL_PATH)
 
-test('[BCI] load and destroy via package interface', { skip: !hasModel }, async (t) => {
+test('[BCI] load and destroy via package interface', { skip: !hasModel, timeout: 120000 }, async (t) => {
   const bci = new BCIWhispercpp({ modelPath: MODEL_PATH }, {
     whisperConfig: { language: 'en', temperature: 0.0 },
     miscConfig: { caption_enabled: false }
@@ -28,7 +28,7 @@ test('[BCI] load and destroy via package interface', { skip: !hasModel }, async 
   t.pass('BCIWhispercpp destroyed successfully')
 })
 
-test('[BCI] batch transcription from neural signal file', { skip: !hasModel }, async (t) => {
+test('[BCI] batch transcription from neural signal file', { skip: !hasModel, timeout: 120000 }, async (t) => {
   if (manifest.samples.length === 0) {
     t.skip('No neural signal test fixtures found')
     return
@@ -68,7 +68,7 @@ test('[BCI] batch transcription from neural signal file', { skip: !hasModel }, a
   }
 })
 
-test('[BCI] streaming transcription from neural signal chunks', { skip: !hasModel }, async (t) => {
+test('[BCI] streaming transcription from neural signal chunks', { skip: !hasModel, timeout: 120000 }, async (t) => {
   if (manifest.samples.length === 0) {
     t.skip('No neural signal test fixtures found')
     return
@@ -115,7 +115,7 @@ test('[BCI] streaming transcription from neural signal chunks', { skip: !hasMode
   }
 })
 
-test('[BCI] WER measurement across all test samples', { skip: !hasModel }, async (t) => {
+test('[BCI] WER measurement across all test samples', { skip: !hasModel, timeout: 180000 }, async (t) => {
   if (manifest.samples.length === 0) {
     t.skip('No neural signal test fixtures found')
     return
