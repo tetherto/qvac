@@ -158,7 +158,7 @@ phases:
 
             size_mb = round(os.path.getsize(tmp_path) / 1048576, 1)
 
-            remote_path = f"Documents/qvac-models/{filename}"
+            remote_path = f"Documents/{filename}"
             ret = pmd3_push(tmp_path, remote_path)
             os.remove(tmp_path)
 

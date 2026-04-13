@@ -342,7 +342,7 @@ const MODELS_MANIFEST_PATH =
 const MODELS_SOURCE_DIR =
   Platform.OS === "android"
     ? "file:///data/local/tmp/qvac-models/"
-    : `${Paths.document.uri}qvac-models/`;
+    : `${Paths.document.uri}`;
 
 /**
  * Copy pre-cached models into the app's own cache directory.
