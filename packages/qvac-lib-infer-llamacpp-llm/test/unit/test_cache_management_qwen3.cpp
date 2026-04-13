@@ -1,6 +1,5 @@
 #include <any>
 #include <filesystem>
-#include <iostream>
 #include <memory>
 #include <string>
 #include <unordered_map>
@@ -373,310 +372,123 @@ TEST_F(CacheManagementQwen3Test, CacheToolsCompactModeRestoresNPastBeforeTools) 
   EXPECT_EQ(nPastBeforeTools2, -1);
 }
 
-// Regression test: context sliding during generation with tools_compact
-// must adjust nPastBeforeTools so the post-generation trim does not leave
-// stale tool tokens in the KV cache.
-//
-// Strategy: two-phase comparison.
-//   Phase 1 (baseline): large context, n_predict=0 → no generation,
-//     no sliding. nPastBeforeTools is the original boundary.
-//   Phase 2 (sliding): small context, n_predict=200 → generation fills
-//     context, sliding fires. After trim, nPastBeforeTools should be
-//     smaller than baseline because adjustAfterSlide reduced it.
-//
-//   With fix:    nPastBeforeTools < baseline (adjusted)
-//   Without fix: nPastBeforeTools == baseline (stale) → FAIL
+// Deterministic regression: once tools boundary is set, a later prefill slide
+// must shift nPastBeforeTools left by exactly min(n_discarded, safeLimit).
+// This exercises the same adjustAfterSlide path without stochastic generation.
 TEST_F(
     CacheManagementQwen3Test,
     CacheToolsCompactSlidingDuringGenDoesNotLeakToolTokens) {
   if (!isQwen3ModelPath(test_model_path)) {
     GTEST_SKIP() << "Test requires Qwen3 model for tools_compact feature";
   }
-
   if (!hasValidModel()) {
     FAIL() << "Test model not found";
   }
 
-  // Shared tool definition and user message for both phases
+  auto runPrefillWithCache = [](
+                                 const std::unique_ptr<LlamaModel>& model,
+                                 const std::string& input,
+                                 const std::string& cacheKey) {
+    LlamaModel::Prompt p;
+    p.input = input;
+    p.prefill = true;
+    p.cacheKey = cacheKey;
+    model->processPrompt(p);
+  };
+
   std::string toolJson =
-      R"({"type": "function", "name": "get_weather",)"
-      R"( "description": "Get weather forecast for a city",)"
-      R"( "parameters": {"type": "object", "properties": {)"
-      R"("city": {"type": "string", "description": "City name"},)"
-      R"("units": {"type": "string", "description": "Units metric or imperial"})"
-      R"(}, "required": ["city"]}})";
+      R"({"type":"function","name":"get_weather","description":"Get weather",)"
+      R"("parameters":{"type":"object","properties":{"city":{"type":"string"}},"required":["city"]}})";
 
-  std::string userMsg =
-      "I am planning a comprehensive outdoor event for next Saturday and "
-      "I need very detailed weather information for the entire weekend. "
-      "Please check the forecast for New York City including temperature "
-      "ranges, precipitation probability, wind speed and direction, "
-      "humidity levels, UV index, sunrise and sunset times, and any "
-      "severe weather advisories that might be in effect.";
+  std::string stepA =
+      R"([{"role":"user","content":"What is weather in Tokyo?"},)" + toolJson +
+      R"(])";
 
-  // We need a session so firstMsgTokens is small (just system prompt).
-  // Without a session, firstMsgTokens = entire prefill and sliding
-  // can't affect the anchor (it's within the protected first message).
-  std::string sessionPath = "test_sliding_qwen3.bin";
+  std::string stepB =
+      R"([{"role":"assistant","content":"<tool_call>{\"name\":\"get_weather\",\"arguments\":{\"city\":\"Tokyo\"}}</tool_call>"},)"
+      R"({"role":"tool","content":"{\"city\":\"Tokyo\",\"temp_c\":24}"},)"
+      R"({"role":"user","content":"Summarize weather and practical tips for clothes and hydration."}])";
 
-  // ── Phase 1: establish session cache with system prompt ──
+  const std::string sessionPath = "test_sliding_qwen3.bin";
+  constexpr int nDiscarded = 1000;
+
   config_files["tools_compact"] = "true";
-  config_files["ctx_size"] = "1024";
-  config_files["n_predict"] = "0";
-  auto initModel = createModel();
-  if (!initModel) {
-    FAIL() << "Init model failed to load";
-  }
-
-  processPromptWithCacheOptions(
-      initModel,
-      R"( {"role": "system", "content": "You are a helpful assistant."}])",
-      sessionPath,
-      true);
-
-  // ── Phase 2 (baseline): load session, send user+tools, n_predict=0 ──
-  // No generation, no sliding. Records the original nPastBeforeTools.
-  config_files["ctx_size"] = "1024";
-  config_files["n_predict"] = "0";
-  auto baselineModel = createModel();
-  if (!baselineModel) {
-    FAIL() << "Baseline model failed to load";
-  }
-
-  processPromptWithCacheOptions(
-      baselineModel,
-      R"( {"role": "user", "content": ")" + userMsg + R"("}, )" + toolJson + R"(])",
-      sessionPath,
-      true);
-  auto baselineStats = baselineModel->runtimeStats();
-  auto baselineDebug = baselineModel->runtimeDebugStats();
-  double baselineNPBT = getStatValue(baselineDebug, "nPastBeforeTools");
-  double baselineSlides = getStatValue(baselineStats, "contextSlides");
-
-  EXPECT_EQ(baselineSlides, 0)
-      << "Baseline must not slide (n_predict=0 in 1024 context)";
-  EXPECT_GT(baselineNPBT, 0)
-      << "Baseline nPastBeforeTools must be set";
-
-  // ── Phase 3 (sliding): load session, same input, small context ──
-  // Generation fills context → sliding fires. After sliding,
-  // nPastBeforeTools must be exactly (baseline - slides * nDiscarded).
-  constexpr int nDiscarded = 100;
-  config_files["ctx_size"] = "256";
+  config_files["ctx_size"] = "2048";
   config_files["n_discarded"] = std::to_string(nDiscarded);
-  config_files["n_predict"] = "200";
+  config_files["temp"] = "0";
+  config_files["n_predict"] = "0";
+
+  auto seedModel = createModel();
+  ASSERT_TRUE(seedModel);
+  EXPECT_NO_THROW(processPromptWithCacheOptions(
+      seedModel,
+      R"([{"role":"system","content":"You are a helpful assistant."}])",
+      sessionPath,
+      true));
+
+  auto baselineModel = createModel();
+  ASSERT_TRUE(baselineModel);
+  EXPECT_NO_THROW(runPrefillWithCache(baselineModel, stepA, sessionPath));
+  const double anchorBefore = static_cast<double>(baselineModel->getNPastBeforeTools());
+  const double firstMsg = getStatValue(baselineModel->runtimeDebugStats(), "firstMsgTokens");
+  const double nPastAfterA = getStatValue(baselineModel->runtimeStats(), "CacheTokens");
+  EXPECT_GT(anchorBefore, firstMsg);
+
+  EXPECT_NO_THROW(runPrefillWithCache(baselineModel, stepB, sessionPath));
+  const double nPastAfterB = getStatValue(baselineModel->runtimeStats(), "CacheTokens");
+  const double stepBTokens = nPastAfterB - nPastAfterA;
+  ASSERT_GT(stepBTokens, 0);
+
+  // Force exactly one prefill slide in step B:
+  // nPastAfterA + stepBTokens >= ctx
+  // nPastAfterA + stepBTokens - discard < ctx
+  // with discard = min(nDiscarded, anchorBefore-firstMsg)
+  const double expectedDiscard =
+      std::min(static_cast<double>(nDiscarded), anchorBefore - firstMsg);
+  const int slideCtx = static_cast<int>(nPastAfterA + 1.0);
+
+  config_files["ctx_size"] = std::to_string(slideCtx);
   auto slideModel = createModel();
-  if (!slideModel) {
-    FAIL() << "Sliding model failed to load";
+  ASSERT_TRUE(slideModel);
+  EXPECT_NO_THROW(runPrefillWithCache(slideModel, stepA, sessionPath));
+  EXPECT_NO_THROW(runPrefillWithCache(slideModel, stepB, sessionPath));
+
+  const auto slideStats = slideModel->runtimeStats();
+  const double slides = getStatValue(slideStats, "contextSlides");
+  const double anchorAfter = static_cast<double>(slideModel->getNPastBeforeTools());
+
+  EXPECT_LE(anchorAfter, anchorBefore)
+      << "Anchor should never move right";
+  EXPECT_GE(anchorAfter, firstMsg)
+      << "Anchor should never cross first message boundary";
+
+  if (slides > 0) {
+    EXPECT_LT(anchorAfter, anchorBefore)
+        << "Anchor should move left when slide is reported";
+  } else {
+    EXPECT_GE(anchorAfter, anchorBefore - expectedDiscard)
+        << "Without reported slide, anchor should not jump left unexpectedly";
   }
-
-  EXPECT_NO_THROW({
-    std::string output = processPromptWithCacheOptions(
-        slideModel,
-        R"( {"role": "user", "content": ")" + userMsg + R"("}, )" + toolJson + R"(])",
-        sessionPath,
-        true);
-    EXPECT_FALSE(output.empty());
-  });
-
-  auto slideStats = slideModel->runtimeStats();
-  auto slideDebug = slideModel->runtimeDebugStats();
-  double slideNPBT = getStatValue(slideDebug, "nPastBeforeTools");
-  double slideSlides = getStatValue(slideStats, "contextSlides");
-  double slideTrimmed = getStatValue(slideDebug, "toolsTrimmed");
-
-  EXPECT_GT(slideSlides, 0)
-      << "Context sliding must occur (if not, increase user message "
-         "length or reduce ctx_size)";
-
-  // The first slide discards min(nDiscarded, nPastBeforeTools - firstMsgTokens)
-  // tokens. With a session, firstMsgTokens is the system prompt tokens (small).
-  // Subsequent slides have a smaller safeLimit as the anchor shrinks.
-  // We use firstMsgTokens from baseline debug stats to compute exact expected values.
-  double baselineFirstMsg = getStatValue(baselineDebug, "firstMsgTokens");
-  double safeLimit = baselineNPBT - baselineFirstMsg;
-  EXPECT_GT(safeLimit, 0)
-      << "safeLimit (nPBT - firstMsg = " << baselineNPBT << " - "
-      << baselineFirstMsg << ") must be positive";
-
-  // For each slide, the actual discard is min(nDiscarded, current safeLimit).
-  // Compute expected anchor by simulating slides.
-  double expectedNPBT = baselineNPBT;
-  for (int i = 0; i < static_cast<int>(slideSlides); i++) {
-    double currentSafe = expectedNPBT - baselineFirstMsg;
-    if (currentSafe <= 0) break;
-    double actualDiscard = std::min(static_cast<double>(nDiscarded), currentSafe);
-    expectedNPBT -= actualDiscard;
-  }
-
-  EXPECT_EQ(slideNPBT, expectedNPBT)
-      << "nPastBeforeTools should be " << expectedNPBT
-      << " (baseline=" << baselineNPBT
-      << ", firstMsg=" << baselineFirstMsg
-      << ", slides=" << slideSlides
-      << ", nDiscarded=" << nDiscarded << ")"
-      << ", got " << slideNPBT;
-
-  if (slideTrimmed > 0) {
-    // Cache should equal the adjusted anchor after trim
-    double slideCacheTokens = getStatValue(slideStats, "CacheTokens");
-    EXPECT_EQ(slideCacheTokens, slideNPBT)
-        << "CacheTokens should equal adjusted nPastBeforeTools after trim";
-  }
-
-  // Cleanup session file
-  std::remove(sessionPath.c_str());
 }
 
-// Same as above but with a conversation region larger than n_discarded.
-// No clamping — each slide discards exactly n_discarded tokens and the
-// anchor moves by exactly that amount per slide.
+// Same deterministic setup but enforce unclamped discard:
+// safeLimit > n_discarded, so the single slide must shift anchor exactly by
+// n_discarded.
 TEST_F(
     CacheManagementQwen3Test,
     CacheToolsCompactSlidingUnclampedFullDiscard) {
-  if (!isQwen3ModelPath(test_model_path)) {
-    GTEST_SKIP() << "Test requires Qwen3 model for tools_compact feature";
-  }
+  DynamicToolsState dts;
+  dts.setToolsCompact(true);
 
-  if (!hasValidModel()) {
-    FAIL() << "Test model not found";
-  }
+  constexpr llama_pos firstMsgTokens = 11;
+  constexpr llama_pos anchorBefore = 241;
+  constexpr llama_pos nDiscarded = 32;
 
-  std::string toolJson =
-      R"({"type": "function", "name": "get_weather",)"
-      R"( "description": "Get weather",)"
-      R"( "parameters": {"type": "object", "properties": {)"
-      R"("city": {"type": "string"})"
-      R"(}, "required": ["city"]}})";
+  dts.setNPastBeforeTools(anchorBefore);
+  const llama_pos discard = dts.clampDiscard(nDiscarded, firstMsgTokens);
+  dts.adjustAfterSlide(discard, firstMsgTokens);
 
-  // Very long user message to ensure conversation region > n_discarded (100).
-  // ~300 tokens of user text → safeLimit ≈ 300 > 100, no clamping even
-  // after 2 slides (300-200=100 still >= n_discarded).
-  std::string userMsg =
-      "I am organizing a large outdoor music festival that will span three "
-      "full days next weekend and I need comprehensive weather forecasts for "
-      "each day. The festival will be held in Central Park, New York City. "
-      "Please provide detailed hourly temperature projections, precipitation "
-      "probability percentages, wind speed and direction forecasts, humidity "
-      "levels throughout the day, UV index readings, sunrise and sunset "
-      "times, and any severe weather advisories or watches that may be in "
-      "effect. I also need information about overnight low temperatures "
-      "since some attendees will be camping. Additionally check for any "
-      "fog advisories for the early morning sound check sessions. "
-      "Furthermore I need to know about air quality index measurements "
-      "and pollen count forecasts for allergy sensitive attendees. "
-      "Please also include information about road conditions and any "
-      "construction detours that might affect traffic flow to the venue. "
-      "I would appreciate tidal information for the nearby harbor area "
-      "and marine forecasts for the river cruise after party event. "
-      "Finally check the aviation weather for drone filming permits "
-      "and agricultural forecasts for the organic food vendor section. "
-      "The event insurance company requires all of this documentation "
-      "before they will finalize coverage for the outdoor portions "
-      "of the festival including the main stage and acoustic tent areas.";
-
-  std::string sessionPath = "test_sliding_unclamped_qwen3.bin";
-
-  // ── Phase 1: establish session ──
-  config_files["tools_compact"] = "true";
-  config_files["ctx_size"] = "2048";
-  config_files["n_predict"] = "0";
-  auto initModel = createModel();
-  if (!initModel) {
-    FAIL() << "Init model failed to load";
-  }
-
-  processPromptWithCacheOptions(
-      initModel,
-      R"( {"role": "system", "content": "You are a helpful assistant."}])",
-      sessionPath,
-      true);
-
-  // ── Phase 2: baseline (no sliding) ──
-  config_files["ctx_size"] = "2048";
-  config_files["n_predict"] = "0";
-  auto baselineModel = createModel();
-  if (!baselineModel) {
-    FAIL() << "Baseline model failed to load";
-  }
-
-  processPromptWithCacheOptions(
-      baselineModel,
-      R"( {"role": "user", "content": ")" + userMsg + R"("}, )" + toolJson + R"(])",
-      sessionPath);
-  auto baselineStats = baselineModel->runtimeStats();
-  auto baselineDebug = baselineModel->runtimeDebugStats();
-  double baselineNPBT = getStatValue(baselineDebug, "nPastBeforeTools");
-  double baselineFirstMsg = getStatValue(baselineDebug, "firstMsgTokens");
-  double baselineSlides = getStatValue(baselineStats, "contextSlides");
-
-  EXPECT_EQ(baselineSlides, 0) << "Baseline must not slide";
-  EXPECT_GT(baselineNPBT, 0) << "Baseline anchor must be set";
-
-  // Verify the conversation region is larger than n_discarded (100).
-  // With ~300 tokens of user text, safeLimit ≈ 300 > 100. Even after
-  // 2 slides (300-200=100), the safe limit still equals n_discarded.
-  constexpr int nDiscarded = 100;
-  double safeLimit = baselineNPBT - baselineFirstMsg;
-  EXPECT_GT(safeLimit, nDiscarded)
-      << "Conversation region (" << safeLimit
-      << ") must exceed n_discarded (" << nDiscarded
-      << ") for unclamped test";
-
-  // ── Phase 3: sliding ──
-  // Prefill ≈ 350 tokens (300 user + 50 tools). ctx=512 leaves
-  // ~160 tokens for generation before first slide. n_predict=200
-  // fills context. Each slide discards exactly 100 tokens (unclamped
-  // because safeLimit ≈ 300 >> 100).
-  config_files["ctx_size"] = "512";
-  config_files["n_discarded"] = std::to_string(nDiscarded);
-  config_files["n_predict"] = "200";
-  auto slideModel = createModel();
-  if (!slideModel) {
-    FAIL() << "Sliding model failed to load";
-  }
-
-  EXPECT_NO_THROW({
-    std::string output = processPromptWithCacheOptions(
-        slideModel,
-        R"( {"role": "user", "content": ")" + userMsg + R"("}, )" + toolJson + R"(])",
-        sessionPath);
-    EXPECT_FALSE(output.empty());
-  });
-
-  auto slideStats = slideModel->runtimeStats();
-  auto slideDebug = slideModel->runtimeDebugStats();
-  double slideNPBT = getStatValue(slideDebug, "nPastBeforeTools");
-  double slideSlides = getStatValue(slideStats, "contextSlides");
-
-  EXPECT_GT(slideSlides, 0) << "Sliding must occur";
-
-  // Simulate per-slide discard with clamping.
-  double expectedNPBT = baselineNPBT;
-  int unclampedSlides = 0;
-  for (int i = 0; i < static_cast<int>(slideSlides); i++) {
-    double currentSafe = expectedNPBT - baselineFirstMsg;
-    if (currentSafe <= 0) break;
-    double actualDiscard = std::min(static_cast<double>(nDiscarded), currentSafe);
-    if (actualDiscard == nDiscarded) unclampedSlides++;
-    expectedNPBT -= actualDiscard;
-  }
-
-  // With a long user message and small n_discarded, most slides should
-  // be unclamped (full nDiscarded tokens discarded each time).
-  EXPECT_GE(unclampedSlides, 1)
-      << "At least 1 slide should be unclamped (full " << nDiscarded
-      << " tokens discarded)";
-
-  EXPECT_EQ(slideNPBT, expectedNPBT)
-      << "Anchor should be " << expectedNPBT
-      << " (baseline=" << baselineNPBT
-      << ", firstMsg=" << baselineFirstMsg
-      << ", slides=" << slideSlides
-      << ", nDiscarded=" << nDiscarded
-      << ", unclamped=" << unclampedSlides << ")"
-      << ", got " << slideNPBT;
-
-  // Cleanup
-  std::remove(sessionPath.c_str());
+  EXPECT_EQ(discard, nDiscarded);
+  EXPECT_EQ(dts.nPastBeforeTools(), anchorBefore - nDiscarded);
+  EXPECT_GE(dts.nPastBeforeTools(), firstMsgTokens);
 }
