@@ -586,6 +586,31 @@ void ParakeetModel::warmup() {
 //  Session loading helpers (called from load())
 // ═════════════════════════════════════════════════════════════════════════════
 
+static void stageFile(
+    const std::filesystem::path& target,
+    const std::filesystem::path& link) {
+  std::error_code ec;
+  std::filesystem::create_symlink(target, link, ec);
+  if (!ec) return;
+
+  QLOG(
+      qvac_lib_inference_addon_cpp::logger::Priority::DEBUG,
+      "Symlink failed (" + ec.message() + "), trying hardlink: " +
+          link.string());
+
+  ec.clear();
+  std::filesystem::create_hard_link(target, link, ec);
+  if (!ec) return;
+
+  QLOG(
+      qvac_lib_inference_addon_cpp::logger::Priority::DEBUG,
+      "Hardlink failed (" + ec.message() + "), falling back to copy: " +
+          link.string());
+
+  std::filesystem::copy_file(
+      target, link, std::filesystem::copy_options::overwrite_existing);
+}
+
 void ParakeetModel::loadCTCSessions(Ort::SessionOptions& session_options) {
   if (cfg_.ctcModelPath.empty()) {
     throw errors::makeStatus(
@@ -600,18 +625,17 @@ void ParakeetModel::loadCTCSessions(Ort::SessionOptions& session_options) {
                          std::filesystem::exists(cfg_.ctcModelDataPath);
 
   if (hasExternalData) {
+    auto basePath = std::filesystem::path(cfg_.ctcModelPath).parent_path();
     auto stagingDir =
-        std::filesystem::temp_directory_path() /
-        ("parakeet_ctc_" + std::to_string(reinterpret_cast<uintptr_t>(this)));
+        basePath /
+        (".parakeet_ctc_" + std::to_string(reinterpret_cast<uintptr_t>(this)));
     std::filesystem::create_directories(stagingDir);
 
     auto modelLink = stagingDir / "model.onnx";
-    std::filesystem::create_symlink(cfg_.ctcModelPath, modelLink);
+    stageFile(cfg_.ctcModelPath, modelLink);
     // ONNX exports use either model.onnx_data or model.onnx.data — create both
-    std::filesystem::create_symlink(
-        cfg_.ctcModelDataPath, stagingDir / "model.onnx_data");
-    std::filesystem::create_symlink(
-        cfg_.ctcModelDataPath, stagingDir / "model.onnx.data");
+    stageFile(cfg_.ctcModelDataPath, stagingDir / "model.onnx_data");
+    stageFile(cfg_.ctcModelDataPath, stagingDir / "model.onnx.data");
 
     try {
       ctc_session_ = std::make_unique<Ort::Session>(
@@ -726,15 +750,16 @@ void ParakeetModel::loadTDTSessions(Ort::SessionOptions& session_options) {
                          std::filesystem::exists(cfg_.encoderDataPath);
 
   if (hasExternalData) {
+    auto basePath = std::filesystem::path(cfg_.encoderPath).parent_path();
     auto stagingDir =
-        std::filesystem::temp_directory_path() /
-        ("parakeet_enc_" + std::to_string(reinterpret_cast<uintptr_t>(this)));
+        basePath /
+        (".parakeet_enc_" + std::to_string(reinterpret_cast<uintptr_t>(this)));
     std::filesystem::create_directories(stagingDir);
 
     auto encLink = stagingDir / "encoder-model.onnx";
     auto dataLink = stagingDir / "encoder-model.onnx.data";
-    std::filesystem::create_symlink(cfg_.encoderPath, encLink);
-    std::filesystem::create_symlink(cfg_.encoderDataPath, dataLink);
+    stageFile(cfg_.encoderPath, encLink);
+    stageFile(cfg_.encoderDataPath, dataLink);
 
     try {
       encoder_session_ = std::make_unique<Ort::Session>(
