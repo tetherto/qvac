@@ -6350,7 +6350,7 @@
     "engine": "@qvac/translation-nmtcpp",
     "quantization": "",
     "params": "",
-    "license": "MPL-2.0",
+    "licenseId": "MPL-2.0",
     "tags": [
       "translation",
       "nmt",
@@ -6366,7 +6366,7 @@
     "engine": "@qvac/translation-nmtcpp",
     "quantization": "",
     "params": "",
-    "license": "MPL-2.0",
+    "licenseId": "MPL-2.0",
     "tags": [
       "translation",
       "nmt",
@@ -6382,7 +6382,7 @@
     "engine": "@qvac/translation-nmtcpp",
     "quantization": "",
     "params": "",
-    "license": "MPL-2.0",
+    "licenseId": "MPL-2.0",
     "tags": [
       "translation",
       "nmt",
@@ -6398,7 +6398,7 @@
     "engine": "@qvac/translation-nmtcpp",
     "quantization": "",
     "params": "",
-    "license": "MPL-2.0",
+    "licenseId": "MPL-2.0",
     "tags": [
       "translation",
       "nmt",
@@ -6414,7 +6414,7 @@
     "engine": "@qvac/translation-nmtcpp",
     "quantization": "",
     "params": "",
-    "license": "MPL-2.0",
+    "licenseId": "MPL-2.0",
     "tags": [
       "translation",
       "nmt",
@@ -6430,7 +6430,7 @@
     "engine": "@qvac/translation-nmtcpp",
     "quantization": "",
     "params": "",
-    "license": "MPL-2.0",
+    "licenseId": "MPL-2.0",
     "tags": [
       "translation",
       "nmt",
@@ -6446,7 +6446,7 @@
     "engine": "@qvac/translation-nmtcpp",
     "quantization": "",
     "params": "",
-    "license": "MPL-2.0",
+    "licenseId": "MPL-2.0",
     "tags": [
       "translation",
       "nmt",
@@ -6462,7 +6462,7 @@
     "engine": "@qvac/translation-nmtcpp",
     "quantization": "",
     "params": "",
-    "license": "MPL-2.0",
+    "licenseId": "MPL-2.0",
     "tags": [
       "translation",
       "nmt",
@@ -6478,7 +6478,7 @@
     "engine": "@qvac/translation-nmtcpp",
     "quantization": "",
     "params": "",
-    "license": "MPL-2.0",
+    "licenseId": "MPL-2.0",
     "tags": [
       "translation",
       "nmt",
@@ -6494,7 +6494,7 @@
     "engine": "@qvac/translation-nmtcpp",
     "quantization": "",
     "params": "",
-    "license": "MPL-2.0",
+    "licenseId": "MPL-2.0",
     "tags": [
       "translation",
       "nmt",
@@ -6510,7 +6510,7 @@
     "engine": "@qvac/translation-nmtcpp",
     "quantization": "",
     "params": "",
-    "license": "MPL-2.0",
+    "licenseId": "MPL-2.0",
     "tags": [
       "translation",
       "nmt",
@@ -6526,7 +6526,7 @@
     "engine": "@qvac/translation-nmtcpp",
     "quantization": "",
     "params": "",
-    "license": "MPL-2.0",
+    "licenseId": "MPL-2.0",
     "tags": [
       "translation",
       "nmt",
@@ -6542,7 +6542,7 @@
     "engine": "@qvac/translation-nmtcpp",
     "quantization": "",
     "params": "",
-    "license": "MPL-2.0",
+    "licenseId": "MPL-2.0",
     "tags": [
       "translation",
       "nmt",
@@ -6558,7 +6558,7 @@
     "engine": "@qvac/translation-nmtcpp",
     "quantization": "",
     "params": "",
-    "license": "MPL-2.0",
+    "licenseId": "MPL-2.0",
     "tags": [
       "translation",
       "nmt",
@@ -6574,7 +6574,7 @@
     "engine": "@qvac/translation-nmtcpp",
     "quantization": "",
     "params": "",
-    "license": "MPL-2.0",
+    "licenseId": "MPL-2.0",
     "tags": [
       "translation",
       "nmt",
@@ -6590,7 +6590,7 @@
     "engine": "@qvac/translation-nmtcpp",
     "quantization": "",
     "params": "",
-    "license": "MPL-2.0",
+    "licenseId": "MPL-2.0",
     "tags": [
       "translation",
       "nmt",
@@ -6606,7 +6606,7 @@
     "engine": "@qvac/translation-nmtcpp",
     "quantization": "",
     "params": "",
-    "license": "MPL-2.0",
+    "licenseId": "MPL-2.0",
     "tags": [
       "translation",
       "nmt",
@@ -6622,7 +6622,7 @@
     "engine": "@qvac/translation-nmtcpp",
     "quantization": "",
     "params": "",
-    "license": "MPL-2.0",
+    "licenseId": "MPL-2.0",
     "tags": [
       "translation",
       "nmt",
@@ -6638,7 +6638,7 @@
     "engine": "@qvac/translation-nmtcpp",
     "quantization": "",
     "params": "",
-    "license": "MPL-2.0",
+    "licenseId": "MPL-2.0",
     "tags": [
       "translation",
       "nmt",
@@ -6654,7 +6654,7 @@
     "engine": "@qvac/translation-nmtcpp",
     "quantization": "",
     "params": "",
-    "license": "MPL-2.0",
+    "licenseId": "MPL-2.0",
     "tags": [
       "translation",
       "nmt",
@@ -6670,7 +6670,7 @@
     "engine": "@qvac/translation-nmtcpp",
     "quantization": "",
     "params": "",
-    "license": "MPL-2.0",
+    "licenseId": "MPL-2.0",
     "tags": [
       "translation",
       "nmt",
@@ -6686,7 +6686,7 @@
     "engine": "@qvac/translation-nmtcpp",
     "quantization": "",
     "params": "",
-    "license": "MPL-2.0",
+    "licenseId": "MPL-2.0",
     "tags": [
       "translation",
       "nmt",
@@ -6702,7 +6702,7 @@
     "engine": "@qvac/translation-nmtcpp",
     "quantization": "",
     "params": "",
-    "license": "MPL-2.0",
+    "licenseId": "MPL-2.0",
     "tags": [
       "translation",
       "nmt",
@@ -6718,7 +6718,7 @@
     "engine": "@qvac/translation-nmtcpp",
     "quantization": "",
     "params": "",
-    "license": "MPL-2.0",
+    "licenseId": "MPL-2.0",
     "tags": [
       "translation",
       "nmt",
@@ -6734,7 +6734,7 @@
     "engine": "@qvac/translation-nmtcpp",
     "quantization": "",
     "params": "",
-    "license": "MPL-2.0",
+    "licenseId": "MPL-2.0",
     "tags": [
       "translation",
       "nmt",
@@ -6750,7 +6750,7 @@
     "engine": "@qvac/translation-nmtcpp",
     "quantization": "",
     "params": "",
-    "license": "MPL-2.0",
+    "licenseId": "MPL-2.0",
     "tags": [
       "translation",
       "nmt",
@@ -6766,7 +6766,7 @@
     "engine": "@qvac/translation-nmtcpp",
     "quantization": "",
     "params": "",
-    "license": "MPL-2.0",
+    "licenseId": "MPL-2.0",
     "tags": [
       "translation",
       "nmt",
@@ -6782,7 +6782,7 @@
     "engine": "@qvac/translation-nmtcpp",
     "quantization": "",
     "params": "",
-    "license": "MPL-2.0",
+    "licenseId": "MPL-2.0",
     "tags": [
       "translation",
       "nmt",
@@ -6798,7 +6798,7 @@
     "engine": "@qvac/translation-nmtcpp",
     "quantization": "",
     "params": "",
-    "license": "MPL-2.0",
+    "licenseId": "MPL-2.0",
     "tags": [
       "translation",
       "nmt",
@@ -6814,7 +6814,7 @@
     "engine": "@qvac/translation-nmtcpp",
     "quantization": "",
     "params": "",
-    "license": "MPL-2.0",
+    "licenseId": "MPL-2.0",
     "tags": [
       "translation",
       "nmt",
@@ -6830,7 +6830,7 @@
     "engine": "@qvac/translation-nmtcpp",
     "quantization": "",
     "params": "",
-    "license": "MPL-2.0",
+    "licenseId": "MPL-2.0",
     "tags": [
       "translation",
       "nmt",
@@ -6846,7 +6846,7 @@
     "engine": "@qvac/translation-nmtcpp",
     "quantization": "",
     "params": "",
-    "license": "MPL-2.0",
+    "licenseId": "MPL-2.0",
     "tags": [
       "translation",
       "nmt",
@@ -6862,7 +6862,7 @@
     "engine": "@qvac/translation-nmtcpp",
     "quantization": "",
     "params": "",
-    "license": "MPL-2.0",
+    "licenseId": "MPL-2.0",
     "tags": [
       "translation",
       "nmt",
@@ -6878,7 +6878,7 @@
     "engine": "@qvac/translation-nmtcpp",
     "quantization": "",
     "params": "",
-    "license": "MPL-2.0",
+    "licenseId": "MPL-2.0",
     "tags": [
       "translation",
       "nmt",
@@ -6894,7 +6894,7 @@
     "engine": "@qvac/translation-nmtcpp",
     "quantization": "",
     "params": "",
-    "license": "MPL-2.0",
+    "licenseId": "MPL-2.0",
     "tags": [
       "translation",
       "nmt",
@@ -6910,7 +6910,7 @@
     "engine": "@qvac/translation-nmtcpp",
     "quantization": "",
     "params": "",
-    "license": "MPL-2.0",
+    "licenseId": "MPL-2.0",
     "tags": [
       "translation",
       "nmt",
@@ -6926,7 +6926,7 @@
     "engine": "@qvac/translation-nmtcpp",
     "quantization": "",
     "params": "",
-    "license": "MPL-2.0",
+    "licenseId": "MPL-2.0",
     "tags": [
       "translation",
       "nmt",
@@ -6942,7 +6942,7 @@
     "engine": "@qvac/translation-nmtcpp",
     "quantization": "",
     "params": "",
-    "license": "MPL-2.0",
+    "licenseId": "MPL-2.0",
     "tags": [
       "translation",
       "nmt",
@@ -6958,7 +6958,7 @@
     "engine": "@qvac/translation-nmtcpp",
     "quantization": "",
     "params": "",
-    "license": "MPL-2.0",
+    "licenseId": "MPL-2.0",
     "tags": [
       "translation",
       "nmt",
@@ -6974,7 +6974,7 @@
     "engine": "@qvac/translation-nmtcpp",
     "quantization": "",
     "params": "",
-    "license": "MPL-2.0",
+    "licenseId": "MPL-2.0",
     "tags": [
       "translation",
       "nmt",
@@ -6990,7 +6990,7 @@
     "engine": "@qvac/translation-nmtcpp",
     "quantization": "",
     "params": "",
-    "license": "MPL-2.0",
+    "licenseId": "MPL-2.0",
     "tags": [
       "translation",
       "nmt",
@@ -7006,7 +7006,7 @@
     "engine": "@qvac/translation-nmtcpp",
     "quantization": "",
     "params": "",
-    "license": "MPL-2.0",
+    "licenseId": "MPL-2.0",
     "tags": [
       "translation",
       "nmt",
@@ -7022,7 +7022,7 @@
     "engine": "@qvac/translation-nmtcpp",
     "quantization": "",
     "params": "",
-    "license": "MPL-2.0",
+    "licenseId": "MPL-2.0",
     "tags": [
       "translation",
       "nmt",
@@ -7038,7 +7038,7 @@
     "engine": "@qvac/translation-nmtcpp",
     "quantization": "",
     "params": "",
-    "license": "MPL-2.0",
+    "licenseId": "MPL-2.0",
     "tags": [
       "translation",
       "nmt",
@@ -7054,7 +7054,7 @@
     "engine": "@qvac/translation-nmtcpp",
     "quantization": "",
     "params": "",
-    "license": "MPL-2.0",
+    "licenseId": "MPL-2.0",
     "tags": [
       "translation",
       "nmt",
@@ -7070,7 +7070,7 @@
     "engine": "@qvac/translation-nmtcpp",
     "quantization": "",
     "params": "",
-    "license": "MPL-2.0",
+    "licenseId": "MPL-2.0",
     "tags": [
       "translation",
       "nmt",
@@ -7086,7 +7086,7 @@
     "engine": "@qvac/translation-nmtcpp",
     "quantization": "",
     "params": "",
-    "license": "MPL-2.0",
+    "licenseId": "MPL-2.0",
     "tags": [
       "translation",
       "nmt",
@@ -7102,7 +7102,7 @@
     "engine": "@qvac/translation-nmtcpp",
     "quantization": "",
     "params": "",
-    "license": "MPL-2.0",
+    "licenseId": "MPL-2.0",
     "tags": [
       "translation",
       "nmt",
@@ -7118,7 +7118,7 @@
     "engine": "@qvac/translation-nmtcpp",
     "quantization": "",
     "params": "",
-    "license": "MPL-2.0",
+    "licenseId": "MPL-2.0",
     "tags": [
       "translation",
       "nmt",
@@ -7134,7 +7134,7 @@
     "engine": "@qvac/translation-nmtcpp",
     "quantization": "",
     "params": "",
-    "license": "MPL-2.0",
+    "licenseId": "MPL-2.0",
     "tags": [
       "translation",
       "nmt",
@@ -7150,7 +7150,7 @@
     "engine": "@qvac/translation-nmtcpp",
     "quantization": "",
     "params": "",
-    "license": "MPL-2.0",
+    "licenseId": "MPL-2.0",
     "tags": [
       "translation",
       "nmt",
@@ -7166,7 +7166,7 @@
     "engine": "@qvac/translation-nmtcpp",
     "quantization": "",
     "params": "",
-    "license": "MPL-2.0",
+    "licenseId": "MPL-2.0",
     "tags": [
       "translation",
       "nmt",
@@ -7182,7 +7182,7 @@
     "engine": "@qvac/translation-nmtcpp",
     "quantization": "",
     "params": "",
-    "license": "MPL-2.0",
+    "licenseId": "MPL-2.0",
     "tags": [
       "translation",
       "nmt",
@@ -7198,7 +7198,7 @@
     "engine": "@qvac/translation-nmtcpp",
     "quantization": "",
     "params": "",
-    "license": "MPL-2.0",
+    "licenseId": "MPL-2.0",
     "tags": [
       "translation",
       "nmt",
@@ -7214,7 +7214,7 @@
     "engine": "@qvac/translation-nmtcpp",
     "quantization": "",
     "params": "",
-    "license": "MPL-2.0",
+    "licenseId": "MPL-2.0",
     "tags": [
       "translation",
       "nmt",
@@ -7230,7 +7230,7 @@
     "engine": "@qvac/translation-nmtcpp",
     "quantization": "",
     "params": "",
-    "license": "MPL-2.0",
+    "licenseId": "MPL-2.0",
     "tags": [
       "translation",
       "nmt",
@@ -7246,7 +7246,7 @@
     "engine": "@qvac/translation-nmtcpp",
     "quantization": "",
     "params": "",
-    "license": "MPL-2.0",
+    "licenseId": "MPL-2.0",
     "tags": [
       "translation",
       "nmt",
@@ -7262,7 +7262,7 @@
     "engine": "@qvac/translation-nmtcpp",
     "quantization": "",
     "params": "",
-    "license": "MPL-2.0",
+    "licenseId": "MPL-2.0",
     "tags": [
       "translation",
       "nmt",
@@ -7278,7 +7278,7 @@
     "engine": "@qvac/translation-nmtcpp",
     "quantization": "",
     "params": "",
-    "license": "MPL-2.0",
+    "licenseId": "MPL-2.0",
     "tags": [
       "translation",
       "nmt",
@@ -7294,7 +7294,7 @@
     "engine": "@qvac/translation-nmtcpp",
     "quantization": "",
     "params": "",
-    "license": "MPL-2.0",
+    "licenseId": "MPL-2.0",
     "tags": [
       "translation",
       "nmt",
@@ -7310,7 +7310,7 @@
     "engine": "@qvac/translation-nmtcpp",
     "quantization": "",
     "params": "",
-    "license": "MPL-2.0",
+    "licenseId": "MPL-2.0",
     "tags": [
       "translation",
       "nmt",
@@ -7326,7 +7326,7 @@
     "engine": "@qvac/translation-nmtcpp",
     "quantization": "",
     "params": "",
-    "license": "MPL-2.0",
+    "licenseId": "MPL-2.0",
     "tags": [
       "translation",
       "nmt",
@@ -7342,7 +7342,7 @@
     "engine": "@qvac/translation-nmtcpp",
     "quantization": "",
     "params": "",
-    "license": "MPL-2.0",
+    "licenseId": "MPL-2.0",
     "tags": [
       "translation",
       "nmt",
@@ -7358,7 +7358,7 @@
     "engine": "@qvac/translation-nmtcpp",
     "quantization": "",
     "params": "",
-    "license": "MPL-2.0",
+    "licenseId": "MPL-2.0",
     "tags": [
       "translation",
       "nmt",
@@ -7374,7 +7374,7 @@
     "engine": "@qvac/translation-nmtcpp",
     "quantization": "",
     "params": "",
-    "license": "MPL-2.0",
+    "licenseId": "MPL-2.0",
     "tags": [
       "translation",
       "nmt",
@@ -7390,7 +7390,7 @@
     "engine": "@qvac/translation-nmtcpp",
     "quantization": "",
     "params": "",
-    "license": "MPL-2.0",
+    "licenseId": "MPL-2.0",
     "tags": [
       "translation",
       "nmt",
@@ -7406,7 +7406,7 @@
     "engine": "@qvac/translation-nmtcpp",
     "quantization": "",
     "params": "",
-    "license": "MPL-2.0",
+    "licenseId": "MPL-2.0",
     "tags": [
       "translation",
       "nmt",
@@ -7422,7 +7422,7 @@
     "engine": "@qvac/translation-nmtcpp",
     "quantization": "",
     "params": "",
-    "license": "MPL-2.0",
+    "licenseId": "MPL-2.0",
     "tags": [
       "translation",
       "nmt",
@@ -7438,7 +7438,7 @@
     "engine": "@qvac/translation-nmtcpp",
     "quantization": "",
     "params": "",
-    "license": "MPL-2.0",
+    "licenseId": "MPL-2.0",
     "tags": [
       "translation",
       "nmt",
@@ -7454,7 +7454,7 @@
     "engine": "@qvac/translation-nmtcpp",
     "quantization": "",
     "params": "",
-    "license": "MPL-2.0",
+    "licenseId": "MPL-2.0",
     "tags": [
       "translation",
       "nmt",
@@ -7470,7 +7470,7 @@
     "engine": "@qvac/translation-nmtcpp",
     "quantization": "",
     "params": "",
-    "license": "MPL-2.0",
+    "licenseId": "MPL-2.0",
     "tags": [
       "translation",
       "nmt",
@@ -7486,7 +7486,7 @@
     "engine": "@qvac/translation-nmtcpp",
     "quantization": "",
     "params": "",
-    "license": "MPL-2.0",
+    "licenseId": "MPL-2.0",
     "tags": [
       "translation",
       "nmt",
@@ -7502,7 +7502,7 @@
     "engine": "@qvac/translation-nmtcpp",
     "quantization": "",
     "params": "",
-    "license": "MPL-2.0",
+    "licenseId": "MPL-2.0",
     "tags": [
       "translation",
       "nmt",
@@ -7518,7 +7518,7 @@
     "engine": "@qvac/translation-nmtcpp",
     "quantization": "",
     "params": "",
-    "license": "MPL-2.0",
+    "licenseId": "MPL-2.0",
     "tags": [
       "translation",
       "nmt",
@@ -7534,7 +7534,7 @@
     "engine": "@qvac/translation-nmtcpp",
     "quantization": "",
     "params": "",
-    "license": "MPL-2.0",
+    "licenseId": "MPL-2.0",
     "tags": [
       "translation",
       "nmt",
@@ -7550,7 +7550,7 @@
     "engine": "@qvac/translation-nmtcpp",
     "quantization": "",
     "params": "",
-    "license": "MPL-2.0",
+    "licenseId": "MPL-2.0",
     "tags": [
       "translation",
       "nmt",
@@ -7566,7 +7566,7 @@
     "engine": "@qvac/translation-nmtcpp",
     "quantization": "",
     "params": "",
-    "license": "MPL-2.0",
+    "licenseId": "MPL-2.0",
     "tags": [
       "translation",
       "nmt",
@@ -7582,7 +7582,7 @@
     "engine": "@qvac/translation-nmtcpp",
     "quantization": "",
     "params": "",
-    "license": "MPL-2.0",
+    "licenseId": "MPL-2.0",
     "tags": [
       "translation",
       "nmt",
@@ -7598,7 +7598,7 @@
     "engine": "@qvac/translation-nmtcpp",
     "quantization": "",
     "params": "",
-    "license": "MPL-2.0",
+    "licenseId": "MPL-2.0",
     "tags": [
       "translation",
       "nmt",
@@ -7614,7 +7614,7 @@
     "engine": "@qvac/translation-nmtcpp",
     "quantization": "",
     "params": "",
-    "license": "MPL-2.0",
+    "licenseId": "MPL-2.0",
     "tags": [
       "translation",
       "nmt",
@@ -7630,7 +7630,7 @@
     "engine": "@qvac/translation-nmtcpp",
     "quantization": "",
     "params": "",
-    "license": "MPL-2.0",
+    "licenseId": "MPL-2.0",
     "tags": [
       "translation",
       "nmt",
@@ -7646,7 +7646,7 @@
     "engine": "@qvac/translation-nmtcpp",
     "quantization": "",
     "params": "",
-    "license": "MPL-2.0",
+    "licenseId": "MPL-2.0",
     "tags": [
       "translation",
       "nmt",
@@ -7662,7 +7662,7 @@
     "engine": "@qvac/translation-nmtcpp",
     "quantization": "",
     "params": "",
-    "license": "MPL-2.0",
+    "licenseId": "MPL-2.0",
     "tags": [
       "translation",
       "nmt",
@@ -7678,7 +7678,7 @@
     "engine": "@qvac/translation-nmtcpp",
     "quantization": "",
     "params": "",
-    "license": "MPL-2.0",
+    "licenseId": "MPL-2.0",
     "tags": [
       "translation",
       "nmt",
@@ -7694,7 +7694,7 @@
     "engine": "@qvac/translation-nmtcpp",
     "quantization": "",
     "params": "",
-    "license": "MPL-2.0",
+    "licenseId": "MPL-2.0",
     "tags": [
       "translation",
       "nmt",
@@ -7710,7 +7710,7 @@
     "engine": "@qvac/translation-nmtcpp",
     "quantization": "",
     "params": "",
-    "license": "MPL-2.0",
+    "licenseId": "MPL-2.0",
     "tags": [
       "translation",
       "nmt",
@@ -7726,7 +7726,7 @@
     "engine": "@qvac/translation-nmtcpp",
     "quantization": "",
     "params": "",
-    "license": "MPL-2.0",
+    "licenseId": "MPL-2.0",
     "tags": [
       "translation",
       "nmt",
@@ -7742,7 +7742,7 @@
     "engine": "@qvac/translation-nmtcpp",
     "quantization": "",
     "params": "",
-    "license": "MPL-2.0",
+    "licenseId": "MPL-2.0",
     "tags": [
       "translation",
       "nmt",
@@ -7758,7 +7758,7 @@
     "engine": "@qvac/translation-nmtcpp",
     "quantization": "",
     "params": "",
-    "license": "MPL-2.0",
+    "licenseId": "MPL-2.0",
     "tags": [
       "translation",
       "nmt",
@@ -7774,7 +7774,7 @@
     "engine": "@qvac/translation-nmtcpp",
     "quantization": "",
     "params": "",
-    "license": "MPL-2.0",
+    "licenseId": "MPL-2.0",
     "tags": [
       "translation",
       "nmt",
@@ -7790,7 +7790,7 @@
     "engine": "@qvac/translation-nmtcpp",
     "quantization": "",
     "params": "",
-    "license": "MPL-2.0",
+    "licenseId": "MPL-2.0",
     "tags": [
       "translation",
       "nmt",
@@ -7806,7 +7806,7 @@
     "engine": "@qvac/translation-nmtcpp",
     "quantization": "",
     "params": "",
-    "license": "MPL-2.0",
+    "licenseId": "MPL-2.0",
     "tags": [
       "translation",
       "nmt",
@@ -7822,7 +7822,7 @@
     "engine": "@qvac/translation-nmtcpp",
     "quantization": "",
     "params": "",
-    "license": "MPL-2.0",
+    "licenseId": "MPL-2.0",
     "tags": [
       "translation",
       "nmt",
@@ -7838,7 +7838,7 @@
     "engine": "@qvac/translation-nmtcpp",
     "quantization": "",
     "params": "",
-    "license": "MPL-2.0",
+    "licenseId": "MPL-2.0",
     "tags": [
       "translation",
       "nmt",
@@ -7854,7 +7854,7 @@
     "engine": "@qvac/translation-nmtcpp",
     "quantization": "",
     "params": "",
-    "license": "MPL-2.0",
+    "licenseId": "MPL-2.0",
     "tags": [
       "translation",
       "nmt",
@@ -7870,7 +7870,7 @@
     "engine": "@qvac/translation-nmtcpp",
     "quantization": "",
     "params": "",
-    "license": "MPL-2.0",
+    "licenseId": "MPL-2.0",
     "tags": [
       "translation",
       "nmt",
@@ -7886,7 +7886,7 @@
     "engine": "@qvac/translation-nmtcpp",
     "quantization": "",
     "params": "",
-    "license": "MPL-2.0",
+    "licenseId": "MPL-2.0",
     "tags": [
       "translation",
       "nmt",
@@ -7902,7 +7902,7 @@
     "engine": "@qvac/translation-nmtcpp",
     "quantization": "",
     "params": "",
-    "license": "MPL-2.0",
+    "licenseId": "MPL-2.0",
     "tags": [
       "translation",
       "nmt",
@@ -7918,7 +7918,7 @@
     "engine": "@qvac/translation-nmtcpp",
     "quantization": "",
     "params": "",
-    "license": "MPL-2.0",
+    "licenseId": "MPL-2.0",
     "tags": [
       "translation",
       "nmt",
@@ -7934,7 +7934,7 @@
     "engine": "@qvac/translation-nmtcpp",
     "quantization": "",
     "params": "",
-    "license": "MPL-2.0",
+    "licenseId": "MPL-2.0",
     "tags": [
       "translation",
       "nmt",
@@ -7950,7 +7950,7 @@
     "engine": "@qvac/translation-nmtcpp",
     "quantization": "",
     "params": "",
-    "license": "MPL-2.0",
+    "licenseId": "MPL-2.0",
     "tags": [
       "translation",
       "nmt",
@@ -7966,7 +7966,7 @@
     "engine": "@qvac/translation-nmtcpp",
     "quantization": "",
     "params": "",
-    "license": "MPL-2.0",
+    "licenseId": "MPL-2.0",
     "tags": [
       "translation",
       "nmt",
@@ -7982,7 +7982,7 @@
     "engine": "@qvac/translation-nmtcpp",
     "quantization": "",
     "params": "",
-    "license": "MPL-2.0",
+    "licenseId": "MPL-2.0",
     "tags": [
       "translation",
       "nmt",
@@ -7998,7 +7998,7 @@
     "engine": "@qvac/translation-nmtcpp",
     "quantization": "",
     "params": "",
-    "license": "MPL-2.0",
+    "licenseId": "MPL-2.0",
     "tags": [
       "translation",
       "nmt",
@@ -8014,7 +8014,7 @@
     "engine": "@qvac/translation-nmtcpp",
     "quantization": "",
     "params": "",
-    "license": "MPL-2.0",
+    "licenseId": "MPL-2.0",
     "tags": [
       "translation",
       "nmt",
@@ -8030,7 +8030,7 @@
     "engine": "@qvac/translation-nmtcpp",
     "quantization": "",
     "params": "",
-    "license": "MPL-2.0",
+    "licenseId": "MPL-2.0",
     "tags": [
       "translation",
       "nmt",
@@ -8046,7 +8046,7 @@
     "engine": "@qvac/translation-nmtcpp",
     "quantization": "",
     "params": "",
-    "license": "MPL-2.0",
+    "licenseId": "MPL-2.0",
     "tags": [
       "translation",
       "nmt",
@@ -8062,7 +8062,7 @@
     "engine": "@qvac/translation-nmtcpp",
     "quantization": "",
     "params": "",
-    "license": "MPL-2.0",
+    "licenseId": "MPL-2.0",
     "tags": [
       "translation",
       "nmt",
@@ -8078,7 +8078,7 @@
     "engine": "@qvac/translation-nmtcpp",
     "quantization": "",
     "params": "",
-    "license": "MPL-2.0",
+    "licenseId": "MPL-2.0",
     "tags": [
       "translation",
       "nmt",
@@ -8094,7 +8094,7 @@
     "engine": "@qvac/translation-nmtcpp",
     "quantization": "",
     "params": "",
-    "license": "MPL-2.0",
+    "licenseId": "MPL-2.0",
     "tags": [
       "translation",
       "nmt",
@@ -8110,7 +8110,7 @@
     "engine": "@qvac/translation-nmtcpp",
     "quantization": "",
     "params": "",
-    "license": "MPL-2.0",
+    "licenseId": "MPL-2.0",
     "tags": [
       "translation",
       "nmt",
@@ -8126,7 +8126,7 @@
     "engine": "@qvac/translation-nmtcpp",
     "quantization": "",
     "params": "",
-    "license": "MPL-2.0",
+    "licenseId": "MPL-2.0",
     "tags": [
       "translation",
       "nmt",
@@ -8142,7 +8142,7 @@
     "engine": "@qvac/translation-nmtcpp",
     "quantization": "",
     "params": "",
-    "license": "MPL-2.0",
+    "licenseId": "MPL-2.0",
     "tags": [
       "translation",
       "nmt",
@@ -8158,7 +8158,7 @@
     "engine": "@qvac/translation-nmtcpp",
     "quantization": "",
     "params": "",
-    "license": "MPL-2.0",
+    "licenseId": "MPL-2.0",
     "tags": [
       "translation",
       "nmt",
@@ -8174,7 +8174,7 @@
     "engine": "@qvac/translation-nmtcpp",
     "quantization": "",
     "params": "",
-    "license": "MPL-2.0",
+    "licenseId": "MPL-2.0",
     "tags": [
       "translation",
       "nmt",
@@ -8190,7 +8190,7 @@
     "engine": "@qvac/translation-nmtcpp",
     "quantization": "",
     "params": "",
-    "license": "MPL-2.0",
+    "licenseId": "MPL-2.0",
     "tags": [
       "translation",
       "nmt",
@@ -8206,7 +8206,7 @@
     "engine": "@qvac/translation-nmtcpp",
     "quantization": "",
     "params": "",
-    "license": "MPL-2.0",
+    "licenseId": "MPL-2.0",
     "tags": [
       "translation",
       "nmt",
@@ -8222,7 +8222,7 @@
     "engine": "@qvac/translation-nmtcpp",
     "quantization": "",
     "params": "",
-    "license": "MPL-2.0",
+    "licenseId": "MPL-2.0",
     "tags": [
       "translation",
       "nmt",
@@ -8238,7 +8238,7 @@
     "engine": "@qvac/translation-nmtcpp",
     "quantization": "",
     "params": "",
-    "license": "MPL-2.0",
+    "licenseId": "MPL-2.0",
     "tags": [
       "translation",
       "nmt",
@@ -8254,7 +8254,7 @@
     "engine": "@qvac/translation-nmtcpp",
     "quantization": "",
     "params": "",
-    "license": "MPL-2.0",
+    "licenseId": "MPL-2.0",
     "tags": [
       "translation",
       "nmt",
@@ -8270,7 +8270,7 @@
     "engine": "@qvac/translation-nmtcpp",
     "quantization": "",
     "params": "",
-    "license": "MPL-2.0",
+    "licenseId": "MPL-2.0",
     "tags": [
       "translation",
       "nmt",
@@ -8286,7 +8286,7 @@
     "engine": "@qvac/translation-nmtcpp",
     "quantization": "",
     "params": "",
-    "license": "MPL-2.0",
+    "licenseId": "MPL-2.0",
     "tags": [
       "translation",
       "nmt",
@@ -8302,7 +8302,7 @@
     "engine": "@qvac/translation-nmtcpp",
     "quantization": "",
     "params": "",
-    "license": "MPL-2.0",
+    "licenseId": "MPL-2.0",
     "tags": [
       "translation",
       "nmt",
@@ -8318,7 +8318,7 @@
     "engine": "@qvac/translation-nmtcpp",
     "quantization": "",
     "params": "",
-    "license": "MPL-2.0",
+    "licenseId": "MPL-2.0",
     "tags": [
       "translation",
       "nmt",
@@ -8334,7 +8334,7 @@
     "engine": "@qvac/translation-nmtcpp",
     "quantization": "",
     "params": "",
-    "license": "MPL-2.0",
+    "licenseId": "MPL-2.0",
     "tags": [
       "translation",
       "nmt",
@@ -8350,7 +8350,7 @@
     "engine": "@qvac/translation-nmtcpp",
     "quantization": "",
     "params": "",
-    "license": "MPL-2.0",
+    "licenseId": "MPL-2.0",
     "tags": [
       "translation",
       "nmt",
@@ -8366,7 +8366,7 @@
     "engine": "@qvac/translation-nmtcpp",
     "quantization": "",
     "params": "",
-    "license": "MPL-2.0",
+    "licenseId": "MPL-2.0",
     "tags": [
       "translation",
       "nmt",
@@ -8382,7 +8382,7 @@
     "engine": "@qvac/translation-nmtcpp",
     "quantization": "",
     "params": "",
-    "license": "MPL-2.0",
+    "licenseId": "MPL-2.0",
     "tags": [
       "translation",
       "nmt",
@@ -8398,7 +8398,7 @@
     "engine": "@qvac/translation-nmtcpp",
     "quantization": "",
     "params": "",
-    "license": "MPL-2.0",
+    "licenseId": "MPL-2.0",
     "tags": [
       "translation",
       "nmt",
@@ -8414,7 +8414,7 @@
     "engine": "@qvac/translation-nmtcpp",
     "quantization": "",
     "params": "",
-    "license": "MPL-2.0",
+    "licenseId": "MPL-2.0",
     "tags": [
       "translation",
       "nmt",
@@ -8430,7 +8430,7 @@
     "engine": "@qvac/translation-nmtcpp",
     "quantization": "",
     "params": "",
-    "license": "MPL-2.0",
+    "licenseId": "MPL-2.0",
     "tags": [
       "translation",
       "nmt",
@@ -8446,7 +8446,7 @@
     "engine": "@qvac/translation-nmtcpp",
     "quantization": "",
     "params": "",
-    "license": "MPL-2.0",
+    "licenseId": "MPL-2.0",
     "tags": [
       "translation",
       "nmt",
@@ -8462,7 +8462,7 @@
     "engine": "@qvac/translation-nmtcpp",
     "quantization": "",
     "params": "",
-    "license": "MPL-2.0",
+    "licenseId": "MPL-2.0",
     "tags": [
       "translation",
       "nmt",
@@ -8478,7 +8478,7 @@
     "engine": "@qvac/translation-nmtcpp",
     "quantization": "",
     "params": "",
-    "license": "MPL-2.0",
+    "licenseId": "MPL-2.0",
     "tags": [
       "translation",
       "nmt",
@@ -8494,7 +8494,7 @@
     "engine": "@qvac/translation-nmtcpp",
     "quantization": "",
     "params": "",
-    "license": "MPL-2.0",
+    "licenseId": "MPL-2.0",
     "tags": [
       "translation",
       "nmt",
@@ -8510,7 +8510,7 @@
     "engine": "@qvac/translation-nmtcpp",
     "quantization": "",
     "params": "",
-    "license": "MPL-2.0",
+    "licenseId": "MPL-2.0",
     "tags": [
       "translation",
       "nmt",
@@ -8526,7 +8526,7 @@
     "engine": "@qvac/translation-nmtcpp",
     "quantization": "",
     "params": "",
-    "license": "MPL-2.0",
+    "licenseId": "MPL-2.0",
     "tags": [
       "translation",
       "nmt",
@@ -8542,7 +8542,7 @@
     "engine": "@qvac/translation-nmtcpp",
     "quantization": "",
     "params": "",
-    "license": "MPL-2.0",
+    "licenseId": "MPL-2.0",
     "tags": [
       "translation",
       "nmt",
@@ -8558,7 +8558,7 @@
     "engine": "@qvac/translation-nmtcpp",
     "quantization": "",
     "params": "",
-    "license": "MPL-2.0",
+    "licenseId": "MPL-2.0",
     "tags": [
       "translation",
       "nmt",
@@ -8574,7 +8574,7 @@
     "engine": "@qvac/translation-nmtcpp",
     "quantization": "",
     "params": "",
-    "license": "MPL-2.0",
+    "licenseId": "MPL-2.0",
     "tags": [
       "translation",
       "nmt",
@@ -8590,7 +8590,7 @@
     "engine": "@qvac/translation-nmtcpp",
     "quantization": "",
     "params": "",
-    "license": "MPL-2.0",
+    "licenseId": "MPL-2.0",
     "tags": [
       "translation",
       "nmt",
@@ -8606,7 +8606,7 @@
     "engine": "@qvac/translation-nmtcpp",
     "quantization": "",
     "params": "",
-    "license": "MPL-2.0",
+    "licenseId": "MPL-2.0",
     "tags": [
       "translation",
       "nmt",
@@ -8622,7 +8622,7 @@
     "engine": "@qvac/translation-nmtcpp",
     "quantization": "",
     "params": "",
-    "license": "MPL-2.0",
+    "licenseId": "MPL-2.0",
     "tags": [
       "translation",
       "nmt",
@@ -8638,7 +8638,7 @@
     "engine": "@qvac/translation-nmtcpp",
     "quantization": "",
     "params": "",
-    "license": "MPL-2.0",
+    "licenseId": "MPL-2.0",
     "tags": [
       "translation",
       "nmt",
@@ -8654,7 +8654,7 @@
     "engine": "@qvac/translation-nmtcpp",
     "quantization": "",
     "params": "",
-    "license": "MPL-2.0",
+    "licenseId": "MPL-2.0",
     "tags": [
       "translation",
       "nmt",
@@ -8670,7 +8670,7 @@
     "engine": "@qvac/translation-nmtcpp",
     "quantization": "",
     "params": "",
-    "license": "MPL-2.0",
+    "licenseId": "MPL-2.0",
     "tags": [
       "translation",
       "nmt",
@@ -8686,7 +8686,7 @@
     "engine": "@qvac/translation-nmtcpp",
     "quantization": "",
     "params": "",
-    "license": "MPL-2.0",
+    "licenseId": "MPL-2.0",
     "tags": [
       "translation",
       "nmt",
@@ -8702,7 +8702,7 @@
     "engine": "@qvac/translation-nmtcpp",
     "quantization": "",
     "params": "",
-    "license": "MPL-2.0",
+    "licenseId": "MPL-2.0",
     "tags": [
       "translation",
       "nmt",
@@ -8718,7 +8718,7 @@
     "engine": "@qvac/translation-nmtcpp",
     "quantization": "",
     "params": "",
-    "license": "MPL-2.0",
+    "licenseId": "MPL-2.0",
     "tags": [
       "translation",
       "nmt",
@@ -8734,7 +8734,7 @@
     "engine": "@qvac/translation-nmtcpp",
     "quantization": "",
     "params": "",
-    "license": "MPL-2.0",
+    "licenseId": "MPL-2.0",
     "tags": [
       "translation",
       "nmt",
@@ -8750,7 +8750,7 @@
     "engine": "@qvac/translation-nmtcpp",
     "quantization": "",
     "params": "",
-    "license": "MPL-2.0",
+    "licenseId": "MPL-2.0",
     "tags": [
       "translation",
       "nmt",
@@ -8766,7 +8766,7 @@
     "engine": "@qvac/translation-nmtcpp",
     "quantization": "",
     "params": "",
-    "license": "MPL-2.0",
+    "licenseId": "MPL-2.0",
     "tags": [
       "translation",
       "nmt",
@@ -8782,7 +8782,7 @@
     "engine": "@qvac/translation-nmtcpp",
     "quantization": "",
     "params": "",
-    "license": "MPL-2.0",
+    "licenseId": "MPL-2.0",
     "tags": [
       "translation",
       "nmt",
@@ -8798,7 +8798,7 @@
     "engine": "@qvac/translation-nmtcpp",
     "quantization": "",
     "params": "",
-    "license": "MPL-2.0",
+    "licenseId": "MPL-2.0",
     "tags": [
       "translation",
       "nmt",
@@ -8814,7 +8814,7 @@
     "engine": "@qvac/translation-nmtcpp",
     "quantization": "",
     "params": "",
-    "license": "MPL-2.0",
+    "licenseId": "MPL-2.0",
     "tags": [
       "translation",
       "nmt",
@@ -8830,7 +8830,7 @@
     "engine": "@qvac/translation-nmtcpp",
     "quantization": "",
     "params": "",
-    "license": "MPL-2.0",
+    "licenseId": "MPL-2.0",
     "tags": [
       "translation",
       "nmt",
@@ -8846,7 +8846,7 @@
     "engine": "@qvac/translation-nmtcpp",
     "quantization": "",
     "params": "",
-    "license": "MPL-2.0",
+    "licenseId": "MPL-2.0",
     "tags": [
       "translation",
       "nmt",
@@ -8862,7 +8862,7 @@
     "engine": "@qvac/translation-nmtcpp",
     "quantization": "",
     "params": "",
-    "license": "MPL-2.0",
+    "licenseId": "MPL-2.0",
     "tags": [
       "translation",
       "nmt",
@@ -8878,7 +8878,7 @@
     "engine": "@qvac/translation-nmtcpp",
     "quantization": "",
     "params": "",
-    "license": "MPL-2.0",
+    "licenseId": "MPL-2.0",
     "tags": [
       "translation",
       "nmt",
@@ -8894,7 +8894,7 @@
     "engine": "@qvac/translation-nmtcpp",
     "quantization": "",
     "params": "",
-    "license": "MPL-2.0",
+    "licenseId": "MPL-2.0",
     "tags": [
       "translation",
       "nmt",
@@ -8910,7 +8910,7 @@
     "engine": "@qvac/translation-nmtcpp",
     "quantization": "",
     "params": "",
-    "license": "MPL-2.0",
+    "licenseId": "MPL-2.0",
     "tags": [
       "translation",
       "nmt",
@@ -8926,7 +8926,7 @@
     "engine": "@qvac/translation-nmtcpp",
     "quantization": "",
     "params": "",
-    "license": "MPL-2.0",
+    "licenseId": "MPL-2.0",
     "tags": [
       "translation",
       "nmt",
@@ -8942,7 +8942,7 @@
     "engine": "@qvac/translation-nmtcpp",
     "quantization": "",
     "params": "",
-    "license": "MPL-2.0",
+    "licenseId": "MPL-2.0",
     "tags": [
       "translation",
       "nmt",
@@ -8958,7 +8958,7 @@
     "engine": "@qvac/translation-nmtcpp",
     "quantization": "",
     "params": "",
-    "license": "MPL-2.0",
+    "licenseId": "MPL-2.0",
     "tags": [
       "translation",
       "nmt",
@@ -8974,7 +8974,7 @@
     "engine": "@qvac/translation-nmtcpp",
     "quantization": "",
     "params": "",
-    "license": "MPL-2.0",
+    "licenseId": "MPL-2.0",
     "tags": [
       "translation",
       "nmt",
@@ -8990,7 +8990,7 @@
     "engine": "@qvac/translation-nmtcpp",
     "quantization": "",
     "params": "",
-    "license": "MPL-2.0",
+    "licenseId": "MPL-2.0",
     "tags": [
       "translation",
       "nmt",
@@ -9006,7 +9006,7 @@
     "engine": "@qvac/translation-nmtcpp",
     "quantization": "",
     "params": "",
-    "license": "MPL-2.0",
+    "licenseId": "MPL-2.0",
     "tags": [
       "translation",
       "nmt",
@@ -9022,7 +9022,7 @@
     "engine": "@qvac/translation-nmtcpp",
     "quantization": "",
     "params": "",
-    "license": "MPL-2.0",
+    "licenseId": "MPL-2.0",
     "tags": [
       "translation",
       "nmt",
@@ -9038,7 +9038,7 @@
     "engine": "@qvac/translation-nmtcpp",
     "quantization": "",
     "params": "",
-    "license": "MPL-2.0",
+    "licenseId": "MPL-2.0",
     "tags": [
       "translation",
       "nmt",
@@ -9054,7 +9054,7 @@
     "engine": "@qvac/translation-nmtcpp",
     "quantization": "",
     "params": "",
-    "license": "MPL-2.0",
+    "licenseId": "MPL-2.0",
     "tags": [
       "translation",
       "nmt",
@@ -9070,7 +9070,7 @@
     "engine": "@qvac/translation-nmtcpp",
     "quantization": "",
     "params": "",
-    "license": "MPL-2.0",
+    "licenseId": "MPL-2.0",
     "tags": [
       "translation",
       "nmt",
@@ -9086,7 +9086,7 @@
     "engine": "@qvac/translation-nmtcpp",
     "quantization": "",
     "params": "",
-    "license": "MPL-2.0",
+    "licenseId": "MPL-2.0",
     "tags": [
       "translation",
       "nmt",
@@ -9102,7 +9102,7 @@
     "engine": "@qvac/translation-nmtcpp",
     "quantization": "",
     "params": "",
-    "license": "MPL-2.0",
+    "licenseId": "MPL-2.0",
     "tags": [
       "translation",
       "nmt",
@@ -9118,7 +9118,7 @@
     "engine": "@qvac/translation-nmtcpp",
     "quantization": "",
     "params": "",
-    "license": "MPL-2.0",
+    "licenseId": "MPL-2.0",
     "tags": [
       "translation",
       "nmt",
@@ -9134,7 +9134,7 @@
     "engine": "@qvac/translation-nmtcpp",
     "quantization": "",
     "params": "",
-    "license": "MPL-2.0",
+    "licenseId": "MPL-2.0",
     "tags": [
       "translation",
       "nmt",
@@ -9150,7 +9150,7 @@
     "engine": "@qvac/translation-nmtcpp",
     "quantization": "",
     "params": "",
-    "license": "MPL-2.0",
+    "licenseId": "MPL-2.0",
     "tags": [
       "translation",
       "nmt",
@@ -9166,7 +9166,7 @@
     "engine": "@qvac/translation-nmtcpp",
     "quantization": "",
     "params": "",
-    "license": "MPL-2.0",
+    "licenseId": "MPL-2.0",
     "tags": [
       "translation",
       "nmt",
@@ -9182,7 +9182,7 @@
     "engine": "@qvac/translation-nmtcpp",
     "quantization": "",
     "params": "",
-    "license": "MPL-2.0",
+    "licenseId": "MPL-2.0",
     "tags": [
       "translation",
       "nmt",
@@ -9198,7 +9198,7 @@
     "engine": "@qvac/translation-nmtcpp",
     "quantization": "",
     "params": "",
-    "license": "MPL-2.0",
+    "licenseId": "MPL-2.0",
     "tags": [
       "translation",
       "nmt",
@@ -9214,7 +9214,7 @@
     "engine": "@qvac/translation-nmtcpp",
     "quantization": "",
     "params": "",
-    "license": "MPL-2.0",
+    "licenseId": "MPL-2.0",
     "tags": [
       "translation",
       "nmt",
@@ -9230,7 +9230,7 @@
     "engine": "@qvac/translation-nmtcpp",
     "quantization": "",
     "params": "",
-    "license": "MPL-2.0",
+    "licenseId": "MPL-2.0",
     "tags": [
       "translation",
       "nmt",
@@ -9246,7 +9246,7 @@
     "engine": "@qvac/translation-nmtcpp",
     "quantization": "",
     "params": "",
-    "license": "MPL-2.0",
+    "licenseId": "MPL-2.0",
     "tags": [
       "translation",
       "nmt",
@@ -9262,7 +9262,7 @@
     "engine": "@qvac/translation-nmtcpp",
     "quantization": "",
     "params": "",
-    "license": "MPL-2.0",
+    "licenseId": "MPL-2.0",
     "tags": [
       "translation",
       "nmt",
@@ -9278,7 +9278,7 @@
     "engine": "@qvac/translation-nmtcpp",
     "quantization": "",
     "params": "",
-    "license": "MPL-2.0",
+    "licenseId": "MPL-2.0",
     "tags": [
       "translation",
       "nmt",
@@ -9294,7 +9294,7 @@
     "engine": "@qvac/translation-nmtcpp",
     "quantization": "",
     "params": "",
-    "license": "MPL-2.0",
+    "licenseId": "MPL-2.0",
     "tags": [
       "translation",
       "nmt",
@@ -9310,7 +9310,7 @@
     "engine": "@qvac/translation-nmtcpp",
     "quantization": "",
     "params": "",
-    "license": "MPL-2.0",
+    "licenseId": "MPL-2.0",
     "tags": [
       "translation",
       "nmt",
@@ -9326,7 +9326,7 @@
     "engine": "@qvac/translation-nmtcpp",
     "quantization": "",
     "params": "",
-    "license": "MPL-2.0",
+    "licenseId": "MPL-2.0",
     "tags": [
       "translation",
       "nmt",
@@ -9342,7 +9342,7 @@
     "engine": "@qvac/translation-nmtcpp",
     "quantization": "",
     "params": "",
-    "license": "MPL-2.0",
+    "licenseId": "MPL-2.0",
     "tags": [
       "translation",
       "nmt",
@@ -9358,7 +9358,7 @@
     "engine": "@qvac/translation-nmtcpp",
     "quantization": "",
     "params": "",
-    "license": "MPL-2.0",
+    "licenseId": "MPL-2.0",
     "tags": [
       "translation",
       "nmt",
@@ -9374,7 +9374,7 @@
     "engine": "@qvac/translation-nmtcpp",
     "quantization": "",
     "params": "",
-    "license": "MPL-2.0",
+    "licenseId": "MPL-2.0",
     "tags": [
       "translation",
       "nmt",
@@ -9390,7 +9390,7 @@
     "engine": "@qvac/translation-nmtcpp",
     "quantization": "",
     "params": "",
-    "license": "MPL-2.0",
+    "licenseId": "MPL-2.0",
     "tags": [
       "translation",
       "nmt",
@@ -9406,7 +9406,7 @@
     "engine": "@qvac/translation-nmtcpp",
     "quantization": "",
     "params": "",
-    "license": "MPL-2.0",
+    "licenseId": "MPL-2.0",
     "tags": [
       "translation",
       "nmt",
@@ -9422,7 +9422,7 @@
     "engine": "@qvac/translation-nmtcpp",
     "quantization": "",
     "params": "",
-    "license": "MPL-2.0",
+    "licenseId": "MPL-2.0",
     "tags": [
       "translation",
       "nmt",
@@ -9438,7 +9438,7 @@
     "engine": "@qvac/translation-nmtcpp",
     "quantization": "",
     "params": "",
-    "license": "MPL-2.0",
+    "licenseId": "MPL-2.0",
     "tags": [
       "translation",
       "nmt",
@@ -9454,7 +9454,7 @@
     "engine": "@qvac/translation-nmtcpp",
     "quantization": "",
     "params": "",
-    "license": "MPL-2.0",
+    "licenseId": "MPL-2.0",
     "tags": [
       "translation",
       "nmt",
@@ -9470,7 +9470,7 @@
     "engine": "@qvac/translation-nmtcpp",
     "quantization": "",
     "params": "",
-    "license": "MPL-2.0",
+    "licenseId": "MPL-2.0",
     "tags": [
       "translation",
       "nmt",
@@ -9486,7 +9486,7 @@
     "engine": "@qvac/translation-nmtcpp",
     "quantization": "",
     "params": "",
-    "license": "MPL-2.0",
+    "licenseId": "MPL-2.0",
     "tags": [
       "translation",
       "nmt",
@@ -9502,7 +9502,7 @@
     "engine": "@qvac/translation-nmtcpp",
     "quantization": "",
     "params": "",
-    "license": "MPL-2.0",
+    "licenseId": "MPL-2.0",
     "tags": [
       "translation",
       "nmt",
@@ -9518,7 +9518,7 @@
     "engine": "@qvac/translation-nmtcpp",
     "quantization": "",
     "params": "",
-    "license": "MPL-2.0",
+    "licenseId": "MPL-2.0",
     "tags": [
       "translation",
       "nmt",
@@ -9534,7 +9534,7 @@
     "engine": "@qvac/translation-nmtcpp",
     "quantization": "",
     "params": "",
-    "license": "MPL-2.0",
+    "licenseId": "MPL-2.0",
     "tags": [
       "translation",
       "nmt",
@@ -9550,7 +9550,7 @@
     "engine": "@qvac/translation-nmtcpp",
     "quantization": "",
     "params": "",
-    "license": "MPL-2.0",
+    "licenseId": "MPL-2.0",
     "tags": [
       "translation",
       "nmt",
@@ -9566,7 +9566,7 @@
     "engine": "@qvac/translation-nmtcpp",
     "quantization": "",
     "params": "",
-    "license": "MPL-2.0",
+    "licenseId": "MPL-2.0",
     "tags": [
       "translation",
       "nmt",
@@ -9582,7 +9582,7 @@
     "engine": "@qvac/translation-nmtcpp",
     "quantization": "",
     "params": "",
-    "license": "MPL-2.0",
+    "licenseId": "MPL-2.0",
     "tags": [
       "translation",
       "nmt",
@@ -9598,7 +9598,7 @@
     "engine": "@qvac/translation-nmtcpp",
     "quantization": "",
     "params": "",
-    "license": "MPL-2.0",
+    "licenseId": "MPL-2.0",
     "tags": [
       "translation",
       "nmt",
@@ -9614,7 +9614,7 @@
     "engine": "@qvac/translation-nmtcpp",
     "quantization": "",
     "params": "",
-    "license": "MPL-2.0",
+    "licenseId": "MPL-2.0",
     "tags": [
       "translation",
       "nmt",
@@ -9630,7 +9630,7 @@
     "engine": "@qvac/translation-nmtcpp",
     "quantization": "",
     "params": "",
-    "license": "MPL-2.0",
+    "licenseId": "MPL-2.0",
     "tags": [
       "translation",
       "nmt",
@@ -9646,7 +9646,7 @@
     "engine": "@qvac/translation-nmtcpp",
     "quantization": "",
     "params": "",
-    "license": "MPL-2.0",
+    "licenseId": "MPL-2.0",
     "tags": [
       "translation",
       "nmt",
@@ -9662,7 +9662,7 @@
     "engine": "@qvac/translation-nmtcpp",
     "quantization": "",
     "params": "",
-    "license": "MPL-2.0",
+    "licenseId": "MPL-2.0",
     "tags": [
       "translation",
       "nmt",
@@ -9678,7 +9678,7 @@
     "engine": "@qvac/translation-nmtcpp",
     "quantization": "",
     "params": "",
-    "license": "MPL-2.0",
+    "licenseId": "MPL-2.0",
     "tags": [
       "translation",
       "nmt",
@@ -9694,7 +9694,7 @@
     "engine": "@qvac/translation-nmtcpp",
     "quantization": "",
     "params": "",
-    "license": "MPL-2.0",
+    "licenseId": "MPL-2.0",
     "tags": [
       "translation",
       "nmt",
@@ -9710,7 +9710,7 @@
     "engine": "@qvac/translation-nmtcpp",
     "quantization": "",
     "params": "",
-    "license": "MPL-2.0",
+    "licenseId": "MPL-2.0",
     "tags": [
       "translation",
       "nmt",
@@ -9726,7 +9726,7 @@
     "engine": "@qvac/translation-nmtcpp",
     "quantization": "",
     "params": "",
-    "license": "MPL-2.0",
+    "licenseId": "MPL-2.0",
     "tags": [
       "translation",
       "nmt",
@@ -9742,7 +9742,7 @@
     "engine": "@qvac/translation-nmtcpp",
     "quantization": "",
     "params": "",
-    "license": "MPL-2.0",
+    "licenseId": "MPL-2.0",
     "tags": [
       "translation",
       "nmt",
@@ -9758,7 +9758,7 @@
     "engine": "@qvac/translation-nmtcpp",
     "quantization": "",
     "params": "",
-    "license": "MPL-2.0",
+    "licenseId": "MPL-2.0",
     "tags": [
       "translation",
       "nmt",
@@ -9774,7 +9774,7 @@
     "engine": "@qvac/translation-nmtcpp",
     "quantization": "",
     "params": "",
-    "license": "MPL-2.0",
+    "licenseId": "MPL-2.0",
     "tags": [
       "translation",
       "nmt",
@@ -9790,7 +9790,7 @@
     "engine": "@qvac/translation-nmtcpp",
     "quantization": "",
     "params": "",
-    "license": "MPL-2.0",
+    "licenseId": "MPL-2.0",
     "tags": [
       "translation",
       "nmt",
@@ -9806,7 +9806,7 @@
     "engine": "@qvac/translation-nmtcpp",
     "quantization": "",
     "params": "",
-    "license": "MPL-2.0",
+    "licenseId": "MPL-2.0",
     "tags": [
       "translation",
       "nmt",
@@ -9822,7 +9822,7 @@
     "engine": "@qvac/translation-nmtcpp",
     "quantization": "",
     "params": "",
-    "license": "MPL-2.0",
+    "licenseId": "MPL-2.0",
     "tags": [
       "translation",
       "nmt",
@@ -9838,7 +9838,7 @@
     "engine": "@qvac/translation-nmtcpp",
     "quantization": "",
     "params": "",
-    "license": "MPL-2.0",
+    "licenseId": "MPL-2.0",
     "tags": [
       "translation",
       "nmt",
@@ -9854,7 +9854,7 @@
     "engine": "@qvac/translation-nmtcpp",
     "quantization": "",
     "params": "",
-    "license": "MPL-2.0",
+    "licenseId": "MPL-2.0",
     "tags": [
       "translation",
       "nmt",
@@ -9870,7 +9870,7 @@
     "engine": "@qvac/translation-nmtcpp",
     "quantization": "",
     "params": "",
-    "license": "MPL-2.0",
+    "licenseId": "MPL-2.0",
     "tags": [
       "translation",
       "nmt",
@@ -9886,7 +9886,7 @@
     "engine": "@qvac/translation-nmtcpp",
     "quantization": "",
     "params": "",
-    "license": "MPL-2.0",
+    "licenseId": "MPL-2.0",
     "tags": [
       "translation",
       "nmt",
@@ -9902,7 +9902,7 @@
     "engine": "@qvac/translation-nmtcpp",
     "quantization": "",
     "params": "",
-    "license": "MPL-2.0",
+    "licenseId": "MPL-2.0",
     "tags": [
       "translation",
       "nmt",
@@ -9918,7 +9918,7 @@
     "engine": "@qvac/translation-nmtcpp",
     "quantization": "",
     "params": "",
-    "license": "MPL-2.0",
+    "licenseId": "MPL-2.0",
     "tags": [
       "translation",
       "nmt",
@@ -9934,7 +9934,7 @@
     "engine": "@qvac/translation-nmtcpp",
     "quantization": "",
     "params": "",
-    "license": "MPL-2.0",
+    "licenseId": "MPL-2.0",
     "tags": [
       "translation",
       "nmt",
@@ -9950,7 +9950,7 @@
     "engine": "@qvac/translation-nmtcpp",
     "quantization": "",
     "params": "",
-    "license": "MPL-2.0",
+    "licenseId": "MPL-2.0",
     "tags": [
       "translation",
       "nmt",
@@ -9966,7 +9966,7 @@
     "engine": "@qvac/translation-nmtcpp",
     "quantization": "",
     "params": "",
-    "license": "MPL-2.0",
+    "licenseId": "MPL-2.0",
     "tags": [
       "translation",
       "nmt",
@@ -9982,7 +9982,7 @@
     "engine": "@qvac/translation-nmtcpp",
     "quantization": "",
     "params": "",
-    "license": "MPL-2.0",
+    "licenseId": "MPL-2.0",
     "tags": [
       "translation",
       "nmt",
@@ -9998,7 +9998,7 @@
     "engine": "@qvac/translation-nmtcpp",
     "quantization": "",
     "params": "",
-    "license": "MPL-2.0",
+    "licenseId": "MPL-2.0",
     "tags": [
       "translation",
       "nmt",
@@ -10014,7 +10014,7 @@
     "engine": "@qvac/translation-nmtcpp",
     "quantization": "",
     "params": "",
-    "license": "MPL-2.0",
+    "licenseId": "MPL-2.0",
     "tags": [
       "translation",
       "nmt",
@@ -10030,7 +10030,7 @@
     "engine": "@qvac/translation-nmtcpp",
     "quantization": "",
     "params": "",
-    "license": "MPL-2.0",
+    "licenseId": "MPL-2.0",
     "tags": [
       "translation",
       "nmt",
@@ -10046,7 +10046,7 @@
     "engine": "@qvac/translation-nmtcpp",
     "quantization": "",
     "params": "",
-    "license": "MPL-2.0",
+    "licenseId": "MPL-2.0",
     "tags": [
       "translation",
       "nmt",
@@ -10062,7 +10062,7 @@
     "engine": "@qvac/translation-nmtcpp",
     "quantization": "",
     "params": "",
-    "license": "MPL-2.0",
+    "licenseId": "MPL-2.0",
     "tags": [
       "translation",
       "nmt",
@@ -10078,7 +10078,7 @@
     "engine": "@qvac/translation-nmtcpp",
     "quantization": "",
     "params": "",
-    "license": "MPL-2.0",
+    "licenseId": "MPL-2.0",
     "tags": [
       "translation",
       "nmt",
@@ -10094,7 +10094,7 @@
     "engine": "@qvac/translation-nmtcpp",
     "quantization": "",
     "params": "",
-    "license": "MPL-2.0",
+    "licenseId": "MPL-2.0",
     "tags": [
       "translation",
       "nmt",
@@ -10110,7 +10110,7 @@
     "engine": "@qvac/translation-nmtcpp",
     "quantization": "",
     "params": "",
-    "license": "MPL-2.0",
+    "licenseId": "MPL-2.0",
     "tags": [
       "translation",
       "nmt",
@@ -10126,7 +10126,7 @@
     "engine": "@qvac/translation-nmtcpp",
     "quantization": "",
     "params": "",
-    "license": "MPL-2.0",
+    "licenseId": "MPL-2.0",
     "tags": [
       "translation",
       "nmt",
@@ -10142,7 +10142,7 @@
     "engine": "@qvac/translation-nmtcpp",
     "quantization": "",
     "params": "",
-    "license": "MPL-2.0",
+    "licenseId": "MPL-2.0",
     "tags": [
       "translation",
       "nmt",
@@ -10158,7 +10158,7 @@
     "engine": "@qvac/translation-nmtcpp",
     "quantization": "",
     "params": "",
-    "license": "MPL-2.0",
+    "licenseId": "MPL-2.0",
     "tags": [
       "translation",
       "nmt",
@@ -10174,7 +10174,7 @@
     "engine": "@qvac/translation-nmtcpp",
     "quantization": "",
     "params": "",
-    "license": "MPL-2.0",
+    "licenseId": "MPL-2.0",
     "tags": [
       "translation",
       "nmt",
@@ -10190,7 +10190,7 @@
     "engine": "@qvac/translation-nmtcpp",
     "quantization": "",
     "params": "",
-    "license": "MPL-2.0",
+    "licenseId": "MPL-2.0",
     "tags": [
       "translation",
       "nmt",
@@ -10206,7 +10206,7 @@
     "engine": "@qvac/translation-nmtcpp",
     "quantization": "",
     "params": "",
-    "license": "MPL-2.0",
+    "licenseId": "MPL-2.0",
     "tags": [
       "translation",
       "nmt",
@@ -10222,7 +10222,7 @@
     "engine": "@qvac/translation-nmtcpp",
     "quantization": "",
     "params": "",
-    "license": "MPL-2.0",
+    "licenseId": "MPL-2.0",
     "tags": [
       "translation",
       "nmt",
@@ -10238,7 +10238,7 @@
     "engine": "@qvac/translation-nmtcpp",
     "quantization": "",
     "params": "",
-    "license": "MPL-2.0",
+    "licenseId": "MPL-2.0",
     "tags": [
       "translation",
       "nmt",
@@ -10254,7 +10254,7 @@
     "engine": "@qvac/translation-nmtcpp",
     "quantization": "",
     "params": "",
-    "license": "MPL-2.0",
+    "licenseId": "MPL-2.0",
     "tags": [
       "translation",
       "nmt",
@@ -10270,7 +10270,7 @@
     "engine": "@qvac/translation-nmtcpp",
     "quantization": "",
     "params": "",
-    "license": "MPL-2.0",
+    "licenseId": "MPL-2.0",
     "tags": [
       "translation",
       "nmt",
@@ -10286,7 +10286,7 @@
     "engine": "@qvac/translation-nmtcpp",
     "quantization": "",
     "params": "",
-    "license": "MPL-2.0",
+    "licenseId": "MPL-2.0",
     "tags": [
       "translation",
       "nmt",
@@ -10302,7 +10302,7 @@
     "engine": "@qvac/translation-nmtcpp",
     "quantization": "",
     "params": "",
-    "license": "MPL-2.0",
+    "licenseId": "MPL-2.0",
     "tags": [
       "translation",
       "nmt",
@@ -10318,7 +10318,7 @@
     "engine": "@qvac/translation-nmtcpp",
     "quantization": "",
     "params": "",
-    "license": "MPL-2.0",
+    "licenseId": "MPL-2.0",
     "tags": [
       "translation",
       "nmt",
@@ -10334,7 +10334,7 @@
     "engine": "@qvac/translation-nmtcpp",
     "quantization": "",
     "params": "",
-    "license": "MPL-2.0",
+    "licenseId": "MPL-2.0",
     "tags": [
       "translation",
       "nmt",
@@ -10350,7 +10350,7 @@
     "engine": "@qvac/translation-nmtcpp",
     "quantization": "",
     "params": "",
-    "license": "MPL-2.0",
+    "licenseId": "MPL-2.0",
     "tags": [
       "translation",
       "nmt",
@@ -10366,7 +10366,7 @@
     "engine": "@qvac/translation-nmtcpp",
     "quantization": "",
     "params": "",
-    "license": "MPL-2.0",
+    "licenseId": "MPL-2.0",
     "tags": [
       "translation",
       "nmt",
@@ -10382,7 +10382,7 @@
     "engine": "@qvac/translation-nmtcpp",
     "quantization": "",
     "params": "",
-    "license": "MPL-2.0",
+    "licenseId": "MPL-2.0",
     "tags": [
       "translation",
       "nmt",
@@ -10398,7 +10398,7 @@
     "engine": "@qvac/translation-nmtcpp",
     "quantization": "",
     "params": "",
-    "license": "MPL-2.0",
+    "licenseId": "MPL-2.0",
     "tags": [
       "translation",
       "nmt",
@@ -10414,7 +10414,7 @@
     "engine": "@qvac/translation-nmtcpp",
     "quantization": "",
     "params": "",
-    "license": "MPL-2.0",
+    "licenseId": "MPL-2.0",
     "tags": [
       "translation",
       "nmt",
@@ -10430,7 +10430,7 @@
     "engine": "@qvac/translation-nmtcpp",
     "quantization": "",
     "params": "",
-    "license": "MPL-2.0",
+    "licenseId": "MPL-2.0",
     "tags": [
       "translation",
       "nmt",
@@ -10446,7 +10446,7 @@
     "engine": "@qvac/translation-nmtcpp",
     "quantization": "",
     "params": "",
-    "license": "MPL-2.0",
+    "licenseId": "MPL-2.0",
     "tags": [
       "translation",
       "nmt",
@@ -10462,7 +10462,7 @@
     "engine": "@qvac/translation-nmtcpp",
     "quantization": "",
     "params": "",
-    "license": "MPL-2.0",
+    "licenseId": "MPL-2.0",
     "tags": [
       "translation",
       "nmt",
@@ -10478,7 +10478,7 @@
     "engine": "@qvac/translation-nmtcpp",
     "quantization": "",
     "params": "",
-    "license": "MPL-2.0",
+    "licenseId": "MPL-2.0",
     "tags": [
       "translation",
       "nmt",
@@ -10494,7 +10494,7 @@
     "engine": "@qvac/translation-nmtcpp",
     "quantization": "",
     "params": "",
-    "license": "MPL-2.0",
+    "licenseId": "MPL-2.0",
     "tags": [
       "translation",
       "nmt",
@@ -10510,7 +10510,7 @@
     "engine": "@qvac/translation-nmtcpp",
     "quantization": "",
     "params": "",
-    "license": "MPL-2.0",
+    "licenseId": "MPL-2.0",
     "tags": [
       "translation",
       "nmt",
@@ -10526,7 +10526,7 @@
     "engine": "@qvac/translation-nmtcpp",
     "quantization": "",
     "params": "",
-    "license": "MPL-2.0",
+    "licenseId": "MPL-2.0",
     "tags": [
       "translation",
       "nmt",
@@ -10542,7 +10542,7 @@
     "engine": "@qvac/translation-nmtcpp",
     "quantization": "",
     "params": "",
-    "license": "MPL-2.0",
+    "licenseId": "MPL-2.0",
     "tags": [
       "translation",
       "nmt",
@@ -10558,7 +10558,7 @@
     "engine": "@qvac/translation-nmtcpp",
     "quantization": "",
     "params": "",
-    "license": "MPL-2.0",
+    "licenseId": "MPL-2.0",
     "tags": [
       "translation",
       "nmt",
@@ -10574,7 +10574,7 @@
     "engine": "@qvac/translation-nmtcpp",
     "quantization": "",
     "params": "",
-    "license": "MPL-2.0",
+    "licenseId": "MPL-2.0",
     "tags": [
       "translation",
       "nmt",
@@ -10590,7 +10590,7 @@
     "engine": "@qvac/translation-nmtcpp",
     "quantization": "",
     "params": "",
-    "license": "MPL-2.0",
+    "licenseId": "MPL-2.0",
     "tags": [
       "translation",
       "nmt",
@@ -10606,7 +10606,7 @@
     "engine": "@qvac/translation-nmtcpp",
     "quantization": "",
     "params": "",
-    "license": "MPL-2.0",
+    "licenseId": "MPL-2.0",
     "tags": [
       "translation",
       "nmt",
@@ -10622,7 +10622,7 @@
     "engine": "@qvac/translation-nmtcpp",
     "quantization": "",
     "params": "",
-    "license": "MPL-2.0",
+    "licenseId": "MPL-2.0",
     "tags": [
       "translation",
       "nmt",
@@ -10638,7 +10638,7 @@
     "engine": "@qvac/translation-nmtcpp",
     "quantization": "",
     "params": "",
-    "license": "MPL-2.0",
+    "licenseId": "MPL-2.0",
     "tags": [
       "translation",
       "nmt",
@@ -10654,7 +10654,7 @@
     "engine": "@qvac/translation-nmtcpp",
     "quantization": "",
     "params": "",
-    "license": "MPL-2.0",
+    "licenseId": "MPL-2.0",
     "tags": [
       "translation",
       "nmt",
@@ -10670,7 +10670,7 @@
     "engine": "@qvac/translation-nmtcpp",
     "quantization": "",
     "params": "",
-    "license": "MPL-2.0",
+    "licenseId": "MPL-2.0",
     "tags": [
       "translation",
       "nmt",
@@ -10686,7 +10686,7 @@
     "engine": "@qvac/translation-nmtcpp",
     "quantization": "",
     "params": "",
-    "license": "MPL-2.0",
+    "licenseId": "MPL-2.0",
     "tags": [
       "translation",
       "nmt",
@@ -10702,7 +10702,7 @@
     "engine": "@qvac/translation-nmtcpp",
     "quantization": "",
     "params": "",
-    "license": "MPL-2.0",
+    "licenseId": "MPL-2.0",
     "tags": [
       "translation",
       "nmt",
@@ -10718,7 +10718,7 @@
     "engine": "@qvac/translation-nmtcpp",
     "quantization": "",
     "params": "",
-    "license": "MPL-2.0",
+    "licenseId": "MPL-2.0",
     "tags": [
       "translation",
       "nmt",
@@ -10734,7 +10734,7 @@
     "engine": "@qvac/translation-nmtcpp",
     "quantization": "",
     "params": "",
-    "license": "MPL-2.0",
+    "licenseId": "MPL-2.0",
     "tags": [
       "translation",
       "nmt",
@@ -10750,7 +10750,7 @@
     "engine": "@qvac/translation-nmtcpp",
     "quantization": "",
     "params": "",
-    "license": "MPL-2.0",
+    "licenseId": "MPL-2.0",
     "tags": [
       "translation",
       "nmt",
@@ -10766,7 +10766,7 @@
     "engine": "@qvac/translation-nmtcpp",
     "quantization": "",
     "params": "",
-    "license": "MPL-2.0",
+    "licenseId": "MPL-2.0",
     "tags": [
       "translation",
       "nmt",
@@ -10782,7 +10782,7 @@
     "engine": "@qvac/translation-nmtcpp",
     "quantization": "",
     "params": "",
-    "license": "MPL-2.0",
+    "licenseId": "MPL-2.0",
     "tags": [
       "translation",
       "nmt",
@@ -10798,7 +10798,7 @@
     "engine": "@qvac/translation-nmtcpp",
     "quantization": "",
     "params": "",
-    "license": "MPL-2.0",
+    "licenseId": "MPL-2.0",
     "tags": [
       "translation",
       "nmt",
@@ -10814,7 +10814,7 @@
     "engine": "@qvac/translation-nmtcpp",
     "quantization": "",
     "params": "",
-    "license": "MPL-2.0",
+    "licenseId": "MPL-2.0",
     "tags": [
       "translation",
       "nmt",
@@ -10830,7 +10830,7 @@
     "engine": "@qvac/translation-nmtcpp",
     "quantization": "",
     "params": "",
-    "license": "MPL-2.0",
+    "licenseId": "MPL-2.0",
     "tags": [
       "translation",
       "nmt",
@@ -10846,7 +10846,7 @@
     "engine": "@qvac/translation-nmtcpp",
     "quantization": "",
     "params": "",
-    "license": "MPL-2.0",
+    "licenseId": "MPL-2.0",
     "tags": [
       "translation",
       "nmt",
@@ -10862,7 +10862,7 @@
     "engine": "@qvac/translation-nmtcpp",
     "quantization": "",
     "params": "",
-    "license": "MPL-2.0",
+    "licenseId": "MPL-2.0",
     "tags": [
       "translation",
       "nmt",
@@ -10878,7 +10878,7 @@
     "engine": "@qvac/translation-nmtcpp",
     "quantization": "",
     "params": "",
-    "license": "MPL-2.0",
+    "licenseId": "MPL-2.0",
     "tags": [
       "translation",
       "nmt",
@@ -10894,7 +10894,7 @@
     "engine": "@qvac/translation-nmtcpp",
     "quantization": "",
     "params": "",
-    "license": "MPL-2.0",
+    "licenseId": "MPL-2.0",
     "tags": [
       "translation",
       "nmt",
@@ -10910,7 +10910,7 @@
     "engine": "@qvac/translation-nmtcpp",
     "quantization": "",
     "params": "",
-    "license": "MPL-2.0",
+    "licenseId": "MPL-2.0",
     "tags": [
       "translation",
       "nmt",
@@ -10926,7 +10926,7 @@
     "engine": "@qvac/translation-nmtcpp",
     "quantization": "",
     "params": "",
-    "license": "MPL-2.0",
+    "licenseId": "MPL-2.0",
     "tags": [
       "translation",
       "nmt",
@@ -10942,7 +10942,7 @@
     "engine": "@qvac/translation-nmtcpp",
     "quantization": "",
     "params": "",
-    "license": "MPL-2.0",
+    "licenseId": "MPL-2.0",
     "tags": [
       "translation",
       "nmt",
@@ -10958,7 +10958,7 @@
     "engine": "@qvac/translation-nmtcpp",
     "quantization": "",
     "params": "",
-    "license": "MPL-2.0",
+    "licenseId": "MPL-2.0",
     "tags": [
       "translation",
       "nmt",
@@ -10974,7 +10974,7 @@
     "engine": "@qvac/translation-nmtcpp",
     "quantization": "",
     "params": "",
-    "license": "MPL-2.0",
+    "licenseId": "MPL-2.0",
     "tags": [
       "translation",
       "nmt",
@@ -10990,7 +10990,7 @@
     "engine": "@qvac/translation-nmtcpp",
     "quantization": "",
     "params": "",
-    "license": "MPL-2.0",
+    "licenseId": "MPL-2.0",
     "tags": [
       "translation",
       "nmt",
@@ -11006,7 +11006,7 @@
     "engine": "@qvac/translation-nmtcpp",
     "quantization": "",
     "params": "",
-    "license": "MPL-2.0",
+    "licenseId": "MPL-2.0",
     "tags": [
       "translation",
       "nmt",
@@ -11022,7 +11022,7 @@
     "engine": "@qvac/translation-nmtcpp",
     "quantization": "",
     "params": "",
-    "license": "MPL-2.0",
+    "licenseId": "MPL-2.0",
     "tags": [
       "translation",
       "nmt",
@@ -11038,7 +11038,7 @@
     "engine": "@qvac/translation-nmtcpp",
     "quantization": "",
     "params": "",
-    "license": "MPL-2.0",
+    "licenseId": "MPL-2.0",
     "tags": [
       "translation",
       "nmt",
@@ -11054,7 +11054,7 @@
     "engine": "@qvac/translation-nmtcpp",
     "quantization": "",
     "params": "",
-    "license": "MPL-2.0",
+    "licenseId": "MPL-2.0",
     "tags": [
       "translation",
       "nmt",
@@ -11070,7 +11070,7 @@
     "engine": "@qvac/translation-nmtcpp",
     "quantization": "",
     "params": "",
-    "license": "MPL-2.0",
+    "licenseId": "MPL-2.0",
     "tags": [
       "translation",
       "nmt",
@@ -11086,7 +11086,7 @@
     "engine": "@qvac/translation-nmtcpp",
     "quantization": "",
     "params": "",
-    "license": "MPL-2.0",
+    "licenseId": "MPL-2.0",
     "tags": [
       "translation",
       "nmt",
@@ -11102,7 +11102,7 @@
     "engine": "@qvac/translation-nmtcpp",
     "quantization": "",
     "params": "",
-    "license": "MPL-2.0",
+    "licenseId": "MPL-2.0",
     "tags": [
       "translation",
       "nmt",
@@ -11118,7 +11118,7 @@
     "engine": "@qvac/translation-nmtcpp",
     "quantization": "",
     "params": "",
-    "license": "MPL-2.0",
+    "licenseId": "MPL-2.0",
     "tags": [
       "translation",
       "nmt",
@@ -11134,7 +11134,7 @@
     "engine": "@qvac/translation-nmtcpp",
     "quantization": "",
     "params": "",
-    "license": "MPL-2.0",
+    "licenseId": "MPL-2.0",
     "tags": [
       "translation",
       "nmt",
@@ -11150,7 +11150,7 @@
     "engine": "@qvac/translation-nmtcpp",
     "quantization": "",
     "params": "",
-    "license": "MPL-2.0",
+    "licenseId": "MPL-2.0",
     "tags": [
       "translation",
       "nmt",
@@ -11166,7 +11166,7 @@
     "engine": "@qvac/translation-nmtcpp",
     "quantization": "",
     "params": "",
-    "license": "MPL-2.0",
+    "licenseId": "MPL-2.0",
     "tags": [
       "translation",
       "nmt",
@@ -11182,7 +11182,7 @@
     "engine": "@qvac/translation-nmtcpp",
     "quantization": "",
     "params": "",
-    "license": "MPL-2.0",
+    "licenseId": "MPL-2.0",
     "tags": [
       "translation",
       "nmt",
@@ -11198,7 +11198,7 @@
     "engine": "@qvac/translation-nmtcpp",
     "quantization": "",
     "params": "",
-    "license": "MPL-2.0",
+    "licenseId": "MPL-2.0",
     "tags": [
       "translation",
       "nmt",
@@ -11214,7 +11214,7 @@
     "engine": "@qvac/translation-nmtcpp",
     "quantization": "",
     "params": "",
-    "license": "MPL-2.0",
+    "licenseId": "MPL-2.0",
     "tags": [
       "translation",
       "nmt",
