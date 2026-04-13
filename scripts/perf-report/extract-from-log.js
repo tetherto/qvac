@@ -17,7 +17,7 @@
  * When only one device is found, writes to <output-path> directly.
  *
  * Usage:
- *   node scripts/perf-report/extract-from-log.js <log-dir> <output-path>
+ *   node scripts/perf-report/extract-from-log.js <log-dir> <output-path> [--run-number N]
  */
 
 const fs = require('fs')
@@ -137,12 +137,32 @@ function deriveDeviceName (filePath, logDir) {
   return firstSeg.replace(/_/g, ' ')
 }
 
+function parseArgs () {
+  const args = { logDir: null, outputPath: null, runNumber: null }
+  const positional = []
+  for (let i = 2; i < process.argv.length; i++) {
+    if (process.argv[i] === '--run-number' && i + 1 < process.argv.length) {
+      args.runNumber = parseInt(process.argv[++i], 10) || null
+    } else {
+      positional.push(process.argv[i])
+    }
+  }
+  args.logDir = positional[0] || null
+  args.outputPath = positional[1] || null
+  return args
+}
+
+function injectCIMetadata (report, runNumber) {
+  if (runNumber && !report.run_number) {
+    report.run_number = runNumber
+  }
+}
+
 function main () {
-  const logDir = process.argv[2]
-  const outputPath = process.argv[3]
+  const { logDir, outputPath, runNumber } = parseArgs()
 
   if (!logDir || !outputPath) {
-    console.error('Usage: node extract-from-log.js <log-dir> <output-path>')
+    console.error('Usage: node extract-from-log.js <log-dir> <output-path> [--run-number N]')
     process.exit(1)
   }
 
@@ -178,6 +198,7 @@ function main () {
   if (devices.length === 1) {
     const { report, file } = deviceReports[devices[0]]
     if (report.device) report.device.name = devices[0]
+    injectCIMetadata(report, runNumber)
     fs.mkdirSync(outputDir, { recursive: true })
     fs.writeFileSync(outputPath, JSON.stringify(report, null, 2) + '\n')
     console.log(`Extracted performance report from ${file}`)
@@ -187,6 +208,7 @@ function main () {
     for (const key of devices) {
       const { report, file } = deviceReports[key]
       if (report.device) report.device.name = key
+      injectCIMetadata(report, runNumber)
       const deviceDir = path.join(outputDir, key.replace(/ /g, '_'))
       fs.mkdirSync(deviceDir, { recursive: true })
       const deviceOutput = path.join(deviceDir, 'performance-report.json')

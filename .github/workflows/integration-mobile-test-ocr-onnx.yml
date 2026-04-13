@@ -1440,9 +1440,10 @@ jobs:
 
           node "${GITHUB_WORKSPACE}/addon/scripts/perf-report/extract-from-log.js" \
             "$ARTIFACT_DIR" \
-            "$OUTPUT_DIR/performance-report.json"
+            "$OUTPUT_DIR/performance-report.json" \
+            --run-number "${{ github.run_number }}"
 
-          if [ -f "$OUTPUT_DIR/performance-report.json" ]; then
+          if find "$OUTPUT_DIR" -name "performance-report.json" -type f | head -1 | grep -q .; then
             echo "Generating HTML report..."
             node "${GITHUB_WORKSPACE}/addon/scripts/perf-report/aggregate.js" \
               --dir "$OUTPUT_DIR" \
@@ -1456,7 +1457,7 @@ jobs:
         with:
           name: perf-report-ocr-${{ matrix.platform }}-${{ github.run_number }}
           path: |
-            perf-results/${{ matrix.platform }}/performance-report.json
+            perf-results/${{ matrix.platform }}/**/performance-report.json
             perf-results/${{ matrix.platform }}/performance-report.html
             perf-results/${{ matrix.platform }}/performance-summary.json
           retention-days: 90
