@@ -102,6 +102,8 @@ jobs:
 
           if [ -n "${GIT_PAT:-}" ]; then
             git config --global url."https://${GIT_PAT}:@github.com/".insteadOf "https://github.com/"
+            git config --global url."https://${GIT_PAT}:@github.com/".insteadOf "ssh://git@github.com/"
+            git config --global url."https://${GIT_PAT}:@github.com/".insteadOf "git@github.com:"
           else
             git config --global url."https://${{ github.token }}:@github.com/".insteadOf "https://github.com/"
           fi
@@ -126,6 +128,8 @@ jobs:
           $npmrc | Out-File -FilePath .npmrc -Encoding utf8
           if ($env:GIT_PAT) {
             git config --global url."https://$($env:GIT_PAT):@github.com/".insteadOf "https://github.com/"
+            git config --global url."https://$($env:GIT_PAT):@github.com/".insteadOf "ssh://git@github.com/"
+            git config --global url."https://$($env:GIT_PAT):@github.com/".insteadOf "git@github.com:"
           } else {
             git config --global url."https://${{ github.token }}:@github.com/".insteadOf "https://github.com/"
           }
@@ -136,12 +140,64 @@ jobs:
           npm install
           npm install -g bare@1.26.0 bare-make
 
-      - name: Download prebuilds from artifact
-        if: ${{ !inputs.prebuild_package }}
-        uses: actions/download-artifact@v7
-        with:
-          path: ${{ inputs.workdir || env.PKG_DIR }}/prebuilds
-          merge-multiple: true
+      # ── vcpkg setup ──
+
+      - name: Configure vcpkg (macOS)
+        if: ${{ startsWith(matrix.os, 'macos') }}
+        run: |
+          cd ..
+          git clone --branch 2025.12.12 --single-branch https://github.com/microsoft/vcpkg.git
+          cd vcpkg && ./bootstrap-vcpkg.sh -disableMetrics
+          echo "VCPKG_ROOT=$(pwd)" >> $GITHUB_ENV
+          echo "$(pwd)" >> $GITHUB_PATH
+
+      - name: Configure vcpkg (Linux)
+        if: ${{ startsWith(matrix.os, 'ubuntu') }}
+        run: echo "VCPKG_ROOT=$VCPKG_INSTALLATION_ROOT" >> $GITHUB_ENV
+
+      - name: Configure vcpkg (Windows)
+        if: ${{ matrix.platform == 'win32' }}
+        run: echo ("VCPKG_ROOT=$env:VCPKG_INSTALLATION_ROOT" -replace '\\', '/') >> $env:GITHUB_ENV
+
+      - name: Configure cmake generator (Windows)
+        if: ${{ matrix.platform == 'win32' }}
+        run: |
+          echo "CMAKE_GENERATOR=Visual Studio 17 2022" >> $env:GITHUB_ENV
+          echo "CMAKE_GENERATOR_PLATFORM=x64" >> $env:GITHUB_ENV
+          echo "VCPKG_CMAKE_CONFIGURE_OPTIONS=--no-parallel-configure" >> $env:GITHUB_ENV
+
+      # ── platform build dependencies ──
+
+      - name: Linux - install build dependencies
+        if: ${{ matrix.platform == 'linux' }}
+        shell: bash
+        run: |
+          wget -qO- https://apt.llvm.org/llvm-snapshot.gpg.key | sudo tee /etc/apt/trusted.gpg.d/apt.llvm.org.asc > /dev/null
+          sudo chmod 644 /etc/apt/trusted.gpg.d/apt.llvm.org.asc
+          wget https://apt.llvm.org/llvm.sh
+          chmod +x llvm.sh
+          sudo ./llvm.sh 19 all
+          sudo apt-get install -y mesa-vulkan-drivers libopenblas-dev liblapack-dev libfftw3-dev
+
+      - name: macOS - install build dependencies
+        if: ${{ matrix.platform == 'darwin' }}
+        shell: bash
+        run: brew install --quiet openblas lapack fftw
+
+      - name: Windows - configure ccache
+        if: ${{ matrix.platform == 'win32' }}
+        shell: powershell
+        run: |
+          $ccacheVersion = "4.10.2"
+          $ccacheUrl = "https://github.com/ccache/ccache/releases/download/v$ccacheVersion/ccache-$ccacheVersion-windows-x86_64.zip"
+          $ccacheZip = "$env:TEMP\ccache.zip"
+          $ccacheDir = "C:\ccache"
+          Invoke-WebRequest -Uri $ccacheUrl -OutFile $ccacheZip
+          Expand-Archive -Path $ccacheZip -DestinationPath $ccacheDir -Force
+          $ccacheBin = Get-ChildItem -Path $ccacheDir -Recurse -Filter "ccache.exe" | Select-Object -First 1
+          echo "$($ccacheBin.DirectoryName)" | Out-File -FilePath $env:GITHUB_PATH -Encoding utf8 -Append
+
+      # ── build from source (when no prebuilds) ──
 
       - name: Download prebuilds from package (Unix)
         if: ${{ inputs.prebuild_package && matrix.platform != 'win32' }}
@@ -163,6 +219,35 @@ jobs:
           $tgz = Get-ChildItem "$env:TEMP\*.tgz" | Select-Object -First 1
           tar -xzf $tgz.FullName -C $env:TEMP
           Copy-Item -Path "$env:TEMP\package\prebuilds\*" -Destination prebuilds -Recurse -Force
+
+      - name: Create vcpkg cache
+        if: ${{ !inputs.prebuild_package }}
+        working-directory: ${{ inputs.workdir || env.PKG_DIR }}
+        run: mkdir -p vcpkg/cache
+        shell: bash
+
+      - name: Get vcpkg cache
+        if: ${{ !inputs.prebuild_package }}
+        uses: actions/cache@v5
+        with:
+          key: vcpkg-bci-${{ matrix.platform }}-${{ matrix.arch }}-${{ hashFiles('packages/bci-whispercpp/vcpkg.json') }}
+          path: ${{ inputs.workdir || env.PKG_DIR }}/vcpkg/cache
+          restore-keys: |
+            vcpkg-bci-${{ matrix.platform }}-${{ matrix.arch }}-
+
+      - name: Build from source
+        if: ${{ !inputs.prebuild_package }}
+        working-directory: ${{ inputs.workdir || env.PKG_DIR }}
+        shell: bash
+        env:
+          VCPKG_BINARY_SOURCES: "clear;files,${{ github.workspace }}/${{ inputs.workdir || env.PKG_DIR }}/vcpkg/cache,readwrite"
+          VCPKG_BUILD_TYPE: release
+        run: |
+          bare-make generate
+          bare-make build
+          bare-make install
+
+      # ── download models and fixtures ──
 
       - name: Download BCI models and test fixtures from release (Unix)
         if: ${{ matrix.platform != 'win32' }}
@@ -215,18 +300,7 @@ jobs:
           Write-Host "Model files:" ; Get-ChildItem models/
           Write-Host "Test fixtures:" ; Get-ChildItem test/fixtures/
 
-      - name: Linux - install dependencies
-        if: ${{ matrix.platform == 'linux' }}
-        shell: bash
-        run: |
-          sudo apt-get update
-          sudo apt-get install -y mesa-vulkan-drivers
-          sudo apt-get install -y libopenblas-dev liblapack-dev libfftw3-dev
-
-      - name: macOS - install whisper dependencies
-        if: ${{ matrix.platform == 'darwin' }}
-        shell: bash
-        run: brew install --quiet openblas lapack fftw
+      # ── run tests ──
 
       - name: Print run state (Unix)
         if: ${{ matrix.platform != 'win32' }}
