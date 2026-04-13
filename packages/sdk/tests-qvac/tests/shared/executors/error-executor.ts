@@ -1,12 +1,10 @@
 import {
   embed,
   loadModel,
-  unloadModel,
   deleteCache,
   completion,
   ragIngest,
   transcribe,
-  LLAMA_3_2_1B_INST_Q4_0,
   SDK_CLIENT_ERROR_CODES,
   SDK_SERVER_ERROR_CODES,
 } from "@qvac/sdk";
@@ -35,11 +33,6 @@ export class ErrorExecutor extends AbstractModelExecutor<typeof errorTests> {
         "error-use-unloaded-model": this.useUnloadedModel.bind(this),
         "error-rag-unloaded-model": this.ragUnloadedModel.bind(this),
         "error-embedding-empty-input": this.embeddingEmptyInput.bind(this),
-        "error-memory-exceeded": this.memoryExceeded.bind(this),
-        "error-memory-default-ctx-safe": this.memoryDefaultCtxSafe.bind(this),
-        "error-memory-moderate-ctx-safe": this.memoryModerateCtxSafe.bind(this),
-        "error-memory-recover-with-suggested": this.memoryRecoverWithSuggested.bind(this),
-        "error-memory-load-after-rejection": this.memoryLoadAfterRejection.bind(this),
       };
       return [test.testId, map[test.testId] ?? this.completionError.bind(this)];
     }),
@@ -189,159 +182,6 @@ export class ErrorExecutor extends AbstractModelExecutor<typeof errorTests> {
       return { passed: false, output: "Expected error for unloaded embedding model" };
     } catch (error) {
       return { passed: true, output: `Correctly threw: ${error}` };
-    }
-  }
-
-  async memoryDefaultCtxSafe(_params: unknown, _expectation: unknown): Promise<TestResult> {
-    try {
-      const modelId = await loadModel({
-        modelSrc: LLAMA_3_2_1B_INST_Q4_0,
-        modelType: "llm",
-        modelConfig: { verbosity: 0 },
-      });
-      await unloadModel({ modelId });
-      return { passed: true, output: `Model loaded with default ctx_size and unloaded (id=${modelId})` };
-    } catch (error) {
-      const e = error as Error & { code?: number };
-      return { passed: false, output: `Failed to load with default ctx_size: ${e.message ?? error}` };
-    }
-  }
-
-  async memoryModerateCtxSafe(params: unknown, _expectation: unknown): Promise<TestResult> {
-    const p = params as { ctx_size: number };
-    try {
-      const modelId = await loadModel({
-        modelSrc: LLAMA_3_2_1B_INST_Q4_0,
-        modelType: "llm",
-        modelConfig: { verbosity: 0, ctx_size: p.ctx_size },
-      });
-      await unloadModel({ modelId });
-      return { passed: true, output: `Model loaded with ctx_size=${p.ctx_size} and unloaded (id=${modelId})` };
-    } catch (error) {
-      const e = error as Error & { code?: number };
-      return { passed: false, output: `Failed to load with ctx_size=${p.ctx_size}: ${e.message ?? error}` };
-    }
-  }
-
-  async memoryRecoverWithSuggested(params: unknown, _expectation: unknown): Promise<TestResult> {
-    const p = params as { ctx_size: number };
-    let suggestedCtxSize: number | undefined;
-
-    try {
-      await loadModel({
-        modelSrc: LLAMA_3_2_1B_INST_Q4_0,
-        modelType: "llm",
-        modelConfig: { verbosity: 0, ctx_size: p.ctx_size },
-      });
-      return { passed: false, output: `Expected MODEL_MEMORY_EXCEEDED but model loaded with ctx_size=${p.ctx_size}` };
-    } catch (error) {
-      const e = error as Error & { code?: number; suggestedCtxSize?: number };
-      const isMemoryError =
-        e.code === SDK_SERVER_ERROR_CODES.MODEL_MEMORY_EXCEEDED ||
-        (e.message ?? "").includes("MODEL_MEMORY_EXCEEDED");
-      if (!isMemoryError) {
-        return { passed: false, output: `Wrong error (expected MODEL_MEMORY_EXCEEDED): ${e.message ?? error}` };
-      }
-      suggestedCtxSize = e.suggestedCtxSize;
-      if (!suggestedCtxSize) {
-        const match = (e.message ?? "").match(/to (\d+)/);
-        suggestedCtxSize = match ? Number(match[1]) : undefined;
-      }
-    }
-
-    if (!suggestedCtxSize || suggestedCtxSize <= 0) {
-      return { passed: false, output: "MODEL_MEMORY_EXCEEDED thrown but no usable suggestedCtxSize found" };
-    }
-
-    try {
-      const modelId = await loadModel({
-        modelSrc: LLAMA_3_2_1B_INST_Q4_0,
-        modelType: "llm",
-        modelConfig: { verbosity: 0, ctx_size: suggestedCtxSize },
-      });
-      await unloadModel({ modelId });
-      return {
-        passed: true,
-        output: `Recovered: rejected ctx_size=${p.ctx_size}, loaded with suggested=${suggestedCtxSize}`,
-      };
-    } catch (error) {
-      const e = error as Error;
-      return {
-        passed: false,
-        output: `suggestedCtxSize=${suggestedCtxSize} also failed: ${e.message ?? error}`,
-      };
-    }
-  }
-
-  async memoryLoadAfterRejection(params: unknown, _expectation: unknown): Promise<TestResult> {
-    const p = params as { ctx_size: number };
-
-    try {
-      await loadModel({
-        modelSrc: LLAMA_3_2_1B_INST_Q4_0,
-        modelType: "llm",
-        modelConfig: { verbosity: 0, ctx_size: p.ctx_size },
-      });
-      return { passed: false, output: `Expected MODEL_MEMORY_EXCEEDED but model loaded with ctx_size=${p.ctx_size}` };
-    } catch (error) {
-      const e = error as Error & { code?: number };
-      const isMemoryError =
-        e.code === SDK_SERVER_ERROR_CODES.MODEL_MEMORY_EXCEEDED ||
-        (e.message ?? "").includes("MODEL_MEMORY_EXCEEDED");
-      if (!isMemoryError) {
-        return { passed: false, output: `Wrong error (expected MODEL_MEMORY_EXCEEDED): ${e.message ?? error}` };
-      }
-    }
-
-    try {
-      const modelId = await loadModel({
-        modelSrc: LLAMA_3_2_1B_INST_Q4_0,
-        modelType: "llm",
-        modelConfig: { verbosity: 0 },
-      });
-      await unloadModel({ modelId });
-      return {
-        passed: true,
-        output: `SDK recovered: rejected extreme ctx_size, then loaded default ctx_size successfully`,
-      };
-    } catch (error) {
-      const e = error as Error;
-      return {
-        passed: false,
-        output: `SDK broken after rejection — default load failed: ${e.message ?? error}`,
-      };
-    }
-  }
-
-  async memoryExceeded(params: unknown, expectation: unknown): Promise<TestResult> {
-    const p = params as { ctx_size: number };
-    try {
-      const modelId = await loadModel({
-        modelSrc: LLAMA_3_2_1B_INST_Q4_0,
-        modelType: "llm",
-        modelConfig: { verbosity: 0, ctx_size: p.ctx_size },
-      });
-      await unloadModel({ modelId });
-      return {
-        passed: false,
-        output: `Expected MODEL_MEMORY_EXCEEDED error but model loaded successfully with ctx_size=${p.ctx_size}`,
-      };
-    } catch (error) {
-      const e = error as Error & { code?: number };
-      const errorMsg = e.message ?? String(error);
-      const isMemoryError =
-        e.code === SDK_SERVER_ERROR_CODES.MODEL_MEMORY_EXCEEDED ||
-        errorMsg.includes("MODEL_MEMORY_EXCEEDED");
-      if (isMemoryError) {
-        return {
-          passed: true,
-          output: `MODEL_MEMORY_EXCEEDED correctly thrown: ${errorMsg}`,
-        };
-      }
-      return {
-        passed: false,
-        output: `Wrong error type (expected MODEL_MEMORY_EXCEEDED): ${errorMsg}`,
-      };
     }
   }
 }

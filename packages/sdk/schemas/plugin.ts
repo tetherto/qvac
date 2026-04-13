@@ -120,13 +120,6 @@ export interface ResolveResult<
   artifacts?: Partial<Record<K, string>>;
 }
 
-export interface ValidateBeforeLoadParams {
-  modelConfig: Record<string, unknown>;
-  modelFileSize: number;
-  availableMemory: number;
-  kvBytesPerToken?: number;
-}
-
 export interface QvacPlugin<
   TConfig = Record<string, unknown>,
   TArtifactKeys extends string = string,
@@ -149,12 +142,6 @@ export interface QvacPlugin<
     modelConfig: TConfig,
     ctx: ResolveContext,
   ) => Promise<ResolveResult<TConfig, TArtifactKeys>>;
-  /**
-   * Optional hook to validate resource requirements before loading.
-   * Called after config resolution and model path resolution, before createModel.
-   * Throw to reject the load (e.g., insufficient memory for the requested ctx_size).
-   */
-  validateBeforeLoad?: (params: ValidateBeforeLoadParams) => void;
 }
 
 // Non-streaming plugin invoke
@@ -275,7 +262,6 @@ export const pluginDefinitionRuntimeSchema = z
       .catchall(z.unknown())
       .optional(),
     resolveConfig: functionRuntimeSchema.optional(),
-    validateBeforeLoad: functionRuntimeSchema.optional(),
     skipPrimaryModelPathValidation: z.boolean().optional(),
   })
   .catchall(z.unknown());
