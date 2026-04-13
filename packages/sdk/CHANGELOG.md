@@ -4,7 +4,7 @@
 
 📦 **NPM:** https://www.npmjs.com/package/@qvac/sdk/v/0.8.3
 
-This is a patch release that fixes a race condition in the KV cache save path during tool-calling completions, improving stability for multi-turn conversations that use tool integration.
+This release fixes a race condition in the KV cache save path during tool-calling completions, improving stability for multi-turn conversations that use tool integration.
 
 ---
 
