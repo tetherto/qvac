@@ -22,7 +22,7 @@ const configRegistry: QvacConfig = {
   loggerConsoleOutput: undefined,
   httpDownloadConcurrency: undefined,
   deviceDefaults: undefined,
-  memoryValidation: undefined,
+  unsafeDisableMemoryValidation: undefined,
 };
 
 let configIsSet = false;
@@ -106,10 +106,16 @@ export function setSDKConfig(config: QvacConfig) {
     );
   }
 
-  if (config.memoryValidation !== undefined && config.memoryValidation !== null) {
-    configRegistry.memoryValidation = config.memoryValidation;
-    if (!config.memoryValidation) {
-      logger.warn("Memory validation disabled via config");
+  if (
+    config.unsafeDisableMemoryValidation !== undefined &&
+    config.unsafeDisableMemoryValidation !== null
+  ) {
+    configRegistry.unsafeDisableMemoryValidation =
+      config.unsafeDisableMemoryValidation;
+    if (config.unsafeDisableMemoryValidation) {
+      logger.warn(
+        "Memory validation disabled via unsafeDisableMemoryValidation — OOM crashes may occur",
+      );
     }
   }
 
@@ -131,5 +137,5 @@ export function getConfiguredCacheDir(): string {
 }
 
 export function isMemoryValidationEnabled(): boolean {
-  return configRegistry.memoryValidation !== false;
+  return configRegistry.unsafeDisableMemoryValidation !== true;
 }
