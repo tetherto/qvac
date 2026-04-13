@@ -112,6 +112,34 @@ export const errorMemoryExceeded: TestDefinition = {
   metadata: { category: "error", dependency: "none", estimatedDurationMs: 30000 },
 };
 
+export const errorMemoryDefaultCtxSafe: TestDefinition = {
+  testId: "error-memory-default-ctx-safe",
+  params: {},
+  expectation: { validation: "type", expectedType: "string" },
+  metadata: { category: "error", dependency: "none", estimatedDurationMs: 60000 },
+};
+
+export const errorMemoryModerateCtxSafe: TestDefinition = {
+  testId: "error-memory-moderate-ctx-safe",
+  params: { ctx_size: 4096 },
+  expectation: { validation: "type", expectedType: "string" },
+  metadata: { category: "error", dependency: "none", estimatedDurationMs: 60000 },
+};
+
+export const errorMemoryRecoverWithSuggested: TestDefinition = {
+  testId: "error-memory-recover-with-suggested",
+  params: { ctx_size: 3276000 },
+  expectation: { validation: "type", expectedType: "string" },
+  metadata: { category: "error", dependency: "none", estimatedDurationMs: 90000 },
+};
+
+export const errorMemoryLoadAfterRejection: TestDefinition = {
+  testId: "error-memory-load-after-rejection",
+  params: { ctx_size: 3276000 },
+  expectation: { validation: "type", expectedType: "string" },
+  metadata: { category: "error", dependency: "none", estimatedDurationMs: 90000 },
+};
+
 export const errorTests = [
   errorInvalidModelId,
   errorInvalidResponseType,
@@ -129,4 +157,8 @@ export const errorTests = [
   errorUseUnloadedModel,
   errorRagUnloadedModel,
   errorMemoryExceeded,
+  errorMemoryDefaultCtxSafe,
+  errorMemoryModerateCtxSafe,
+  errorMemoryRecoverWithSuggested,
+  errorMemoryLoadAfterRejection,
 ];
