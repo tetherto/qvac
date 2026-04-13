@@ -5,9 +5,10 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-## [0.8.2] - 2026-03-16
+## [0.8.2]
 
 ### Added
+- Support for the following languages: Arabic, Danish, Greek, Finnish, Hindi, Malay, Dutch, Norwegian, Polish, Swedish, Swahili, and Turkish
 - Classifier-Free Guidance (CFG) pipeline for multilingual inference, using conditional/unconditional KV caches and text embedding weights to improve non-English speech quality
 - Temperature sampling with min-P filtering and repetition penalty (2.0) for the multilingual path
 - Token generation stopping heuristics: text-length-based max tokens, consecutive and pattern repetition detection, silence token run detection
