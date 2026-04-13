@@ -48,7 +48,6 @@ jobs:
     permissions:
       contents: read
       packages: read
-      pull-requests: write  # Allow commenting on PRs
     strategy:
       fail-fast: false
       matrix:
