@@ -4,7 +4,6 @@ const fs = require('bare-fs')
 const path = require('bare-path')
 const process = require('bare-process')
 const TranscriptionWhispercpp = require('../index.js')
-const FakeDL = require('../test/mocks/loader.fake.js')
 
 /**
  * Example: Testing audio_ctx with duration_ms
@@ -113,12 +112,13 @@ async function main () {
   }
 
   const constructorArgs = {
-    modelName: 'ggml-tiny.bin',
-    loader: new FakeDL({}),
-    diskPath: modelsDir
+    files: {
+      model: modelPath
+    }
   }
 
   const config = {
+    path: modelPath,
     whisperConfig: {
       language: 'en',
       audio_format: 's16le',

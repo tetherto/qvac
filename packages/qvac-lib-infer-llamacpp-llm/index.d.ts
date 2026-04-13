@@ -21,6 +21,9 @@ export interface AddonMessage {
   type: 'text'
   input: string
   prefill?: boolean
+  generationParams?: GenerationParams
+  cacheKey?: string
+  saveCacheToDisk?: boolean
 }
 export interface AddonMediaMessage {
   type: 'media'
@@ -115,6 +118,8 @@ export interface GenerationParams {
 export interface RunOptions {
   prefill?: boolean
   generationParams?: GenerationParams
+  cacheKey?: string
+  saveCacheToDisk?: boolean
 }
 
 export interface DownloadWeightsOptions {

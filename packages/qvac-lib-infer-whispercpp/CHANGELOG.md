@@ -5,6 +5,53 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.6.0]
+
+This release is a significant interface modernisation. The constructor switches to a local-files map, model download is removed from the load path, concurrent inference runs are serialised instead of rejected, and the class no longer extends `BaseInference`.
+
+## Breaking Changes
+
+### Constructor now takes a `files` map instead of loader + model name
+
+The old API accepted a `loader`, `modelName`, `vadModelName`, and `diskPath`. Those are all removed. Pass local file paths directly:
+
+```typescript
+// Before
+new TranscriptionWhispercpp({ loader, modelName: 'ggml-tiny.bin', diskPath: '/models' }, config)
+
+// After
+new TranscriptionWhispercpp({ files: { model: '/models/ggml-tiny.bin', vadModel: '/models/silero-vad.bin' } }, config)
+```
+
+`files.model` is required; `files.vadModel` is optional. No download step occurs — files must already exist on disk before calling `load()`.
+
+### `TranscriptionWhispercpp` no longer extends `BaseInference`
+
+The class is now standalone. `instanceof BaseInference` checks and any BaseInference-only APIs (`getApiDefinition`, `downloadWeights`, loader helpers) are no longer available on this class.
+
+### Weight download removed from `_load`
+
+`_load` previously triggered a `WeightsProvider` download when a loader was supplied. That path is gone. Load preparation is now the caller's responsibility.
+
+## New APIs
+
+### `runStreaming(audioStream)` is now part of the public API
+
+The VAD-based live streaming path was previously internal. It is now a documented public method with its own TypeScript declaration, accepting the same audio stream types as `run()`.
+
+```typescript
+const response = await model.runStreaming(audioStream)
+for await (const segment of response) { /* ... */ }
+```
+
+### Concurrent runs serialise instead of throwing
+
+When `exclusiveRun` is enabled (the default), a second call to `run()` or `runStreaming()` while a transcription is in progress will **wait** for the first to complete rather than throwing a `JOB_ALREADY_RUNNING` error. This makes it safe to call `run()` from concurrent contexts.
+
+### New typed exports
+
+`TranscriptionWhispercppFiles` and `InferenceClientState` are now exported from the `TranscriptionWhispercpp` namespace. Lifecycle methods (`load`, `unload`, `destroy`, `cancel`, `pause`, `unpause`, `stop`, `status`, `getState`) are now explicitly declared in `index.d.ts`.
+
 ## [0.5.5]
 
 ### Changed

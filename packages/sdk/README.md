@@ -5,8 +5,8 @@
 > _Part of **QVAC** ecosystem_
 > <br>
 > <sup>
-> <a href="https://qvac.tether.dev" >Home</a> &nbsp;•&nbsp;
-> <a href="https://qvac.tether.dev/docs" >Docs</a> &nbsp;•&nbsp;
+> <a href="https://qvac.tether.io/" >Home</a> &nbsp;•&nbsp;
+> <a href="https://docs.qvac.tether.io/" >Docs</a> &nbsp;•&nbsp;
 > <a href="https://discord.com/channels/1425125849346216029/1445400675189264516" >Support</a> &nbsp;•&nbsp;
 > <a href="https://discord.com/invite/tetherdev" >Discord</a>
 
@@ -252,5 +252,3 @@ This will:
 4. Generate `changelog/<version>/CHANGELOG.md`
 5. Generate `changelog/<version>/breaking.md` for BC changes (with code examples)
 6. Generate `changelog/<version>/api.md` for API changes (with code examples)
-
-**Note:** Requires a GitHub token (`GITHUB_TOKEN` or `GH_TOKEN` environment variable) to fetch PR metadata.

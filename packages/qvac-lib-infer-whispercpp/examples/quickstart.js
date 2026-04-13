@@ -4,7 +4,6 @@ const fs = require('bare-fs')
 const path = require('bare-path')
 const process = require('bare-process')
 const TranscriptionWhispercpp = require('../index.js')
-const FakeDL = require('../test/mocks/loader.fake.js')
 const binding = require('../binding.js')
 
 // Configure C++ logger to see logs
@@ -19,7 +18,7 @@ binding.setLogger((priority, message) => {
 
 async function main () {
   const args = process.argv.slice(2)
-  const [, modelPathArg, vadModelPathArg, audioPathArg] = args
+  const [,, vadModelPathArg, audioPathArg] = args
 
   const modelsDir = path.join(__dirname, '..', 'models')
   const audioFilePath = audioPathArg || path.join(__dirname, 'samples', 'sample.raw')
@@ -37,14 +36,14 @@ async function main () {
 
   // Constructor arguments for TranscriptionWhispercpp
   const constructorArgs = {
-    modelName: modelPathArg || 'ggml-tiny.bin',
-    loader: new FakeDL({}),
-    diskPath: modelsDir
+    files: {
+      model: modelPath
+    },
+    opts: { stats: true }
   }
 
   // Configuration object
   const config = {
-    opts: { stats: true },
     whisperConfig: {
       audio_format: 's16le',
       // VAD tuning to avoid trimming the beginning

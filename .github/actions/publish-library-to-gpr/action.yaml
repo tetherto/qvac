@@ -34,16 +34,6 @@ outputs:
 runs:
   using: composite
   steps:
-    - name: Print job context for debugging
-      continue-on-error: true
-      shell: bash
-      env:
-        INPUTS_CONTEXT: ${{ toJSON(inputs) }}
-      run: |
-        echo "Input context: $INPUTS_CONTEXT"
-        ls -l ${{ inputs.path }}
-        tree ${{ inputs.path }}
-
     - uses: actions/setup-node@53b83947a5a98c8d113130e565377fae1a50d02f # 6.3.0
       with:
         node-version: lts/*

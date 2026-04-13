@@ -1099,15 +1099,17 @@ jobs:
             IOS_GREP_HEAVY_3=$(jq -r '.ios.heavy3 | join("|")' "$GROUPS_JSON")
             IOS_GREP_HEAVY_4=$(jq -r '.ios.heavy4 | join("|")' "$GROUPS_JSON")
             IOS_GREP_HEAVY_5=$(jq -r '.ios.heavy5 | join("|")' "$GROUPS_JSON")
+            IOS_GREP_HEAVY_6=$(jq -r '.ios.heavy6 | join("|")' "$GROUPS_JSON")
             IOS_GREP_LIGHT_A=$(jq -r '.ios.lightA | join("|")' "$GROUPS_JSON")
             IOS_GREP_LIGHT_B=$(jq -r '.ios.lightB | join("|")' "$GROUPS_JSON")
 
-            echo "iOS test split (5 heavy + 2 light = 7 groups):"
+            echo "iOS test split (6 heavy + 2 light = 8 groups):"
             echo "  Heavy 1 (iPhone 16 Pro Max): $IOS_GREP_HEAVY_1"
             echo "  Heavy 2 (iPhone 16 Pro Max): $IOS_GREP_HEAVY_2"
             echo "  Heavy 3 (iPhone 17):         $IOS_GREP_HEAVY_3"
             echo "  Heavy 4 (iPhone 17):         $IOS_GREP_HEAVY_4"
             echo "  Heavy 5 (iPhone 17):         $IOS_GREP_HEAVY_5"
+            echo "  Heavy 6 (SlidingContext):     $IOS_GREP_HEAVY_6"
             echo "  Light A (iPhone 16 Pro):     $IOS_GREP_LIGHT_A"
             echo "  Light B (iPhone 16 Pro):     $IOS_GREP_LIGHT_B"
 
@@ -1116,6 +1118,7 @@ jobs:
             make_split "$IOS_GREP_HEAVY_3" testspec-heavy-3.yml
             make_split "$IOS_GREP_HEAVY_4" testspec-heavy-4.yml
             make_split "$IOS_GREP_HEAVY_5" testspec-heavy-5.yml
+            make_split "$IOS_GREP_HEAVY_6" testspec-heavy-6.yml
             make_split "$IOS_GREP_LIGHT_A" testspec-light-a.yml
             make_split "$IOS_GREP_LIGHT_B" testspec-light-b.yml
 
@@ -1129,10 +1132,12 @@ jobs:
             echo "test_spec_arn_4=$SPEC_ARN_H4" >> $GITHUB_OUTPUT
             SPEC_ARN_H5=$(upload_spec testspec-heavy-5.yml "iOS-Heavy5")
             echo "test_spec_arn_5=$SPEC_ARN_H5" >> $GITHUB_OUTPUT
+            SPEC_ARN_H6=$(upload_spec testspec-heavy-6.yml "iOS-Heavy6")
+            echo "test_spec_arn_6=$SPEC_ARN_H6" >> $GITHUB_OUTPUT
             SPEC_ARN_LA=$(upload_spec testspec-light-a.yml "iOS-LightA")
-            echo "test_spec_arn_6=$SPEC_ARN_LA" >> $GITHUB_OUTPUT
+            echo "test_spec_arn_7=$SPEC_ARN_LA" >> $GITHUB_OUTPUT
             SPEC_ARN_LB=$(upload_spec testspec-light-b.yml "iOS-LightB")
-            echo "test_spec_arn_7=$SPEC_ARN_LB" >> $GITHUB_OUTPUT
+            echo "test_spec_arn_8=$SPEC_ARN_LB" >> $GITHUB_OUTPUT
           fi
 
       - name: Schedule Device Farm Test Run
@@ -1188,8 +1193,9 @@ jobs:
             TEST_SPEC_ARN_5="${{ steps.upload_test_spec.outputs.test_spec_arn_5 }}"
             TEST_SPEC_ARN_6="${{ steps.upload_test_spec.outputs.test_spec_arn_6 }}"
             TEST_SPEC_ARN_7="${{ steps.upload_test_spec.outputs.test_spec_arn_7 }}"
+            TEST_SPEC_ARN_8="${{ steps.upload_test_spec.outputs.test_spec_arn_8 }}"
 
-            echo "🚀 Scheduling 7 iOS runs (each runs on ALL devices in pool)..."
+            echo "🚀 Scheduling 8 iOS runs (each runs on ALL devices in pool)..."
             echo "Device Pool ARN: $POOL_ARN"
 
             RUN_ARN_1=$(schedule_run_with_pool "$POOL_ARN" "$RUN_NAME-iOS-Heavy1-Finetuning" "$TEST_SPEC_ARN_1")
@@ -1207,11 +1213,14 @@ jobs:
             RUN_ARN_5=$(schedule_run_with_pool "$POOL_ARN" "$RUN_NAME-iOS-Heavy5-Reasoning" "$TEST_SPEC_ARN_5")
             echo "✅ Heavy5 (Reasoning) scheduled: $RUN_ARN_5"
 
-            RUN_ARN_6=$(schedule_run_with_pool "$POOL_ARN" "$RUN_NAME-iOS-LightA" "$TEST_SPEC_ARN_6")
-            echo "✅ LightA scheduled: $RUN_ARN_6"
+            RUN_ARN_6=$(schedule_run_with_pool "$POOL_ARN" "$RUN_NAME-iOS-Heavy6-SlidingContext" "$TEST_SPEC_ARN_6")
+            echo "✅ Heavy6 (SlidingContext) scheduled: $RUN_ARN_6"
 
-            RUN_ARN_7=$(schedule_run_with_pool "$POOL_ARN" "$RUN_NAME-iOS-LightB" "$TEST_SPEC_ARN_7")
-            echo "✅ LightB scheduled: $RUN_ARN_7"
+            RUN_ARN_7=$(schedule_run_with_pool "$POOL_ARN" "$RUN_NAME-iOS-LightA" "$TEST_SPEC_ARN_7")
+            echo "✅ LightA scheduled: $RUN_ARN_7"
+
+            RUN_ARN_8=$(schedule_run_with_pool "$POOL_ARN" "$RUN_NAME-iOS-LightB" "$TEST_SPEC_ARN_8")
+            echo "✅ LightB scheduled: $RUN_ARN_8"
 
             echo "run_arn_1=$RUN_ARN_1" >> $GITHUB_OUTPUT
             echo "run_arn_2=$RUN_ARN_2" >> $GITHUB_OUTPUT
@@ -1220,7 +1229,8 @@ jobs:
             echo "run_arn_5=$RUN_ARN_5" >> $GITHUB_OUTPUT
             echo "run_arn_6=$RUN_ARN_6" >> $GITHUB_OUTPUT
             echo "run_arn_7=$RUN_ARN_7" >> $GITHUB_OUTPUT
-            echo "run_count=7" >> $GITHUB_OUTPUT
+            echo "run_arn_8=$RUN_ARN_8" >> $GITHUB_OUTPUT
+            echo "run_count=8" >> $GITHUB_OUTPUT
           fi
 
           echo "All runs scheduled."
@@ -1256,6 +1266,7 @@ jobs:
           RUN_ARN_5="${{ steps.schedule_run.outputs.run_arn_5 }}"
           RUN_ARN_6="${{ steps.schedule_run.outputs.run_arn_6 }}"
           RUN_ARN_7="${{ steps.schedule_run.outputs.run_arn_7 }}"
+          RUN_ARN_8="${{ steps.schedule_run.outputs.run_arn_8 }}"
           RUN_COUNT="${{ steps.schedule_run.outputs.run_count }}"
 
           echo "📊 Monitoring $RUN_COUNT Device Farm run(s)..."
@@ -1306,7 +1317,7 @@ jobs:
           done
 
           RUN_ARNS=("$RUN_ARN_1")
-          for i in 2 3 4 5 6 7; do
+          for i in 2 3 4 5 6 7 8; do
             eval "arn=\$RUN_ARN_$i"
             if [ "$RUN_COUNT" -ge "$i" ] && [ -n "$arn" ]; then
               RUN_ARNS+=("$arn")
@@ -1457,12 +1468,13 @@ jobs:
           RUN_ARN_5="${{ steps.schedule_run.outputs.run_arn_5 }}"
           RUN_ARN_6="${{ steps.schedule_run.outputs.run_arn_6 }}"
           RUN_ARN_7="${{ steps.schedule_run.outputs.run_arn_7 }}"
+          RUN_ARN_8="${{ steps.schedule_run.outputs.run_arn_8 }}"
           RUN_COUNT="${{ steps.schedule_run.outputs.run_count }}"
           LOG_DIR="devicefarm-logs/${{ matrix.platform }}"
           mkdir -p "$LOG_DIR"
 
           RUN_ARNS=("$RUN_ARN_1")
-          for i in 2 3 4 5 6 7; do
+          for i in 2 3 4 5 6 7 8; do
             eval "arn=\$RUN_ARN_$i"
             if [ "$RUN_COUNT" -ge "$i" ] && [ -n "$arn" ]; then
               RUN_ARNS+=("$arn")

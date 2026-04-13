@@ -3,12 +3,7 @@ const fs = require('bare-fs')
 const path = require('bare-path')
 const test = require('brittle')
 const TranscriptionWhispercpp = require('../../index.js')
-const FakeDL = require('../mocks/loader.fake.js')
 const { ensureWhisperModel, getTestPaths, createAudioStream, isMobile } = require('./helpers.js')
-
-function createLoader () {
-  return new FakeDL({})
-}
 
 async function transcribeChunk (model, audioStream, offsetMs, durationMs, audioCtx) {
   await model.reload({
@@ -34,7 +29,7 @@ async function transcribeChunk (model, audioStream, offsetMs, durationMs, audioC
   return results
 }
 
-const { modelsDir, modelPath } = getTestPaths()
+const { modelPath } = getTestPaths()
 
 // Skip on mobile - requires 10min audio file (~19MB) which is too large to bundle
 test('Audio context chunking - 10 minute audio file with 30s chunks', { skip: isMobile }, async (t) => {
@@ -77,12 +72,13 @@ test('Audio context chunking - 10 minute audio file with 30s chunks', { skip: is
   const totalChunks = Math.ceil(totalDurationSeconds / CHUNK_SIZE_SECONDS)
 
   const constructorArgs = {
-    modelName: path.basename(modelPath),
-    loader: createLoader(),
-    diskPath: modelsDir
+    files: {
+      model: modelPath
+    }
   }
 
   const config = {
+    path: modelPath,
     whisperConfig: {
       language: 'en',
       audio_format: 's16le',
