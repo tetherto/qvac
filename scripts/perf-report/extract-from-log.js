@@ -27,20 +27,28 @@ function extractFromFile (filePath) {
     return null
   }
 
-  const startIdx = content.indexOf(START_MARKER)
-  if (startIdx === -1) return null
+  // Find the LAST marker pair — on mobile the reporter writes after every
+  // test, so the final marker contains the most complete accumulated report.
+  let lastReport = null
+  let searchFrom = 0
+  while (true) {
+    const startIdx = content.indexOf(START_MARKER, searchFrom)
+    if (startIdx === -1) break
 
-  const jsonStart = startIdx + START_MARKER.length
-  const endIdx = content.indexOf(END_MARKER, jsonStart)
-  if (endIdx === -1) return null
+    const jsonStart = startIdx + START_MARKER.length
+    const endIdx = content.indexOf(END_MARKER, jsonStart)
+    if (endIdx === -1) break
 
-  const jsonStr = content.substring(jsonStart, endIdx)
-  try {
-    return JSON.parse(jsonStr)
-  } catch (err) {
-    console.error(`Found markers in ${filePath} but JSON parse failed: ${err.message}`)
-    return null
+    const jsonStr = content.substring(jsonStart, endIdx)
+    try {
+      lastReport = JSON.parse(jsonStr)
+    } catch (err) {
+      console.error(`Found markers in ${filePath} but JSON parse failed: ${err.message}`)
+    }
+    searchFrom = endIdx + END_MARKER.length
   }
+
+  return lastReport
 }
 
 function walkDir (dir) {

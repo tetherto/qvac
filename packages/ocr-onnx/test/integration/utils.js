@@ -18,15 +18,59 @@ try {
   evaluateQuality = qualityMetricsMod.evaluateQuality
   findGroundTruth = qualityMetricsMod.findGroundTruth
 } catch (_) {
-  // Mobile bundle — provide no-ops
-  createPerformanceReporter = function () {
+  // Mobile bundle — inline lightweight reporter that records metrics and
+  // can output the [PERF_REPORT_START]...[PERF_REPORT_END] markers to
+  // console so extract-from-log.js can capture them from Device Farm logs.
+  createPerformanceReporter = function (opts) {
+    const _results = []
+    const _startedAt = new Date().toISOString()
+    const _addon = (opts && opts.addon) || 'unknown'
+    const _addonType = (opts && opts.addonType) || 'generic'
+    const _device = {
+      name: platform,
+      platform,
+      os_version: '',
+      arch: os.arch ? os.arch() : '',
+      runner: 'device-farm'
+    }
+
     return {
-      record () {},
-      toJSON () { return { results: [] } },
+      record (testName, metrics, extra) {
+        _results.push({
+          test: testName,
+          execution_provider: (extra && extra.execution_provider) || null,
+          metrics: Object.assign({
+            total_time_ms: null,
+            detection_time_ms: null,
+            recognition_time_ms: null,
+            text_regions: null
+          }, metrics),
+          input: (extra && extra.input) || null,
+          output: (extra && extra.output) || null,
+          quality: (extra && extra.quality) || undefined
+        })
+      },
+      toJSON () {
+        return {
+          schema_version: '1.0',
+          addon: _addon,
+          addon_type: _addonType,
+          timestamp: _startedAt,
+          device: _device,
+          results: _results
+        }
+      },
       writeReport () {},
       writeStepSummary () {},
-      writeToConsole () {},
-      get length () { return 0 }
+      writeToConsole () {
+        try {
+          const json = JSON.stringify(this.toJSON())
+          console.log('[PERF_REPORT_START]' + json + '[PERF_REPORT_END]')
+        } catch (err) {
+          console.log('[perf-reporter] mobile console write failed: ' + err.message)
+        }
+      },
+      get length () { return _results.length }
     }
   }
   evaluateQuality = function () { return null }
@@ -361,6 +405,10 @@ function formatOCRPerformanceMetrics (label, stats, outputTexts = [], opts) {
     quality
   })
   _scheduleReportWrite()
+
+  if (isMobile) {
+    _perfReporter.writeToConsole()
+  }
 
   let out = `${label} Performance Metrics:
     - Total time: ${totalTimeMs.toFixed(0)}ms (${totalSeconds}s)
