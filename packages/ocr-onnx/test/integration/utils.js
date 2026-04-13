@@ -86,8 +86,125 @@ try {
       get length () { return _results.length }
     }
   }
-  evaluateQuality = function () { return null }
-  findGroundTruth = function () { return null }
+  // --- Inline quality metrics for mobile (pure computation, no external deps) ---
+
+  function _normalize (text) {
+    return String(text).replace(/\r\n/g, '\n').replace(/[\t\v\f]/g, ' ').replace(/ {2,}/g, ' ').trim().toLowerCase()
+  }
+
+  function _tokenize (text) {
+    return _normalize(text).split(/\s+/).filter(Boolean)
+  }
+
+  function _levenshtein (a, b) {
+    var m = a.length
+    var n = b.length
+    if (m === 0) return n
+    if (n === 0) return m
+    var prev = new Array(n + 1)
+    var curr = new Array(n + 1)
+    var j, i
+    for (j = 0; j <= n; j++) prev[j] = j
+    for (i = 1; i <= m; i++) {
+      curr[0] = i
+      for (j = 1; j <= n; j++) {
+        var cost = a[i - 1] === b[j - 1] ? 0 : 1
+        curr[j] = Math.min(prev[j] + 1, curr[j - 1] + 1, prev[j - 1] + cost)
+      }
+      var tmp = prev; prev = curr; curr = tmp
+    }
+    return prev[n]
+  }
+
+  function _round4 (v) { return Math.round(v * 10000) / 10000 }
+
+  evaluateQuality = function (ocrTexts, groundTruth) {
+    if (!groundTruth) return null
+    var texts = Array.isArray(ocrTexts) ? ocrTexts : [String(ocrTexts)]
+    var joined = texts.join(' ')
+    var gt = groundTruth
+    var result = { ground_truth_id: gt.id || null, description: gt.description || null }
+
+    if (gt.reference_text) {
+      var h = _normalize(joined)
+      var r = _normalize(gt.reference_text)
+      result.cer = _round4(r.length === 0 ? (h.length === 0 ? 0 : 1) : _levenshtein(h, r) / r.length)
+      var hw = _tokenize(joined)
+      var rw = _tokenize(gt.reference_text)
+      result.wer = _round4(rw.length === 0 ? (hw.length === 0 ? 0 : 1) : _levenshtein(hw, rw) / rw.length)
+    }
+
+    if (gt.required_keywords && gt.required_keywords.length > 0) {
+      var lower = joined.toLowerCase()
+      var found = []
+      var missing = []
+      for (var ki = 0; ki < gt.required_keywords.length; ki++) {
+        if (lower.includes(gt.required_keywords[ki].toLowerCase())) found.push(gt.required_keywords[ki])
+        else missing.push(gt.required_keywords[ki])
+      }
+      result.keyword_detection_rate = _round4(found.length / gt.required_keywords.length)
+      result.keywords_found = found.length
+      result.keywords_total = gt.required_keywords.length
+      result.keywords_missing = missing
+    }
+
+    if (gt.key_values && gt.key_values.length > 0) {
+      var lowerKV = joined.toLowerCase()
+      var matched = []
+      var unmatched = []
+      for (var vi = 0; vi < gt.key_values.length; vi++) {
+        var pair = gt.key_values[vi]
+        var keyFound = lowerKV.includes(pair.key.toLowerCase())
+        var valueFound = lowerKV.includes(String(pair.value).toLowerCase())
+        if (keyFound && valueFound) matched.push(pair)
+        else unmatched.push({ key: pair.key, value: pair.value, key_found: keyFound, value_found: valueFound })
+      }
+      result.key_value_accuracy = _round4(matched.length / gt.key_values.length)
+      result.key_values_matched = matched.length
+      result.key_values_total = gt.key_values.length
+      result.key_values_unmatched = unmatched
+    }
+
+    return result
+  }
+
+  findGroundTruth = function (imagePath) {
+    var base = path.basename(imagePath).replace(/\.[^.]+$/, '')
+    var gtFilename = base + '.quality.json'
+
+    // On mobile, look for ground truth in global.assetPaths
+    if (global.assetPaths) {
+      var assetKey = '../../testAssets/' + gtFilename
+      var gtPath = global.assetPaths[assetKey]
+      if (gtPath) {
+        try {
+          var raw = fs.readFileSync(gtPath.replace('file://', ''), 'utf-8')
+          return JSON.parse(raw)
+        } catch (e) {
+          console.log('[quality] failed to load mobile ground truth: ' + e.message)
+        }
+      }
+    }
+
+    // Fallback: look relative to imagePath (same logic as desktop)
+    var dir = path.dirname(imagePath)
+    var candidates = [
+      path.join(dir, gtFilename),
+      path.join(dir, '..', 'quality', gtFilename),
+      path.join(dir, 'quality', gtFilename)
+    ]
+    for (var ci = 0; ci < candidates.length; ci++) {
+      try {
+        var exists = false
+        try { fs.statSync(candidates[ci]); exists = true } catch (_) {}
+        if (exists) {
+          var data = fs.readFileSync(candidates[ci], 'utf-8')
+          return JSON.parse(data)
+        }
+      } catch (_) {}
+    }
+    return null
+  }
 }
 
 const platform = os.platform()
