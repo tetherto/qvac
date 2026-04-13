@@ -129,7 +129,7 @@ test('External data staging: TDT model loads with encoderPath + encoderDataPath'
   console.log(`  Segments: ${transcriptions.length}`)
   console.log(`  Text length: ${fullText.length} chars`)
   console.log(`  WER: ${werResult.werPercent}`)
-  console.log(`  Result: PASS`)
+  console.log('  Result: PASS')
   console.log('='.repeat(60) + '\n')
 
   try { loggerBinding.releaseLogger() } catch (e) {}
