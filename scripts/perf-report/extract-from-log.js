@@ -129,16 +129,29 @@ function main () {
   const files = walkDir(logDir)
   console.log(`Found ${files.length} file(s) to scan`)
 
+  let bestReport = null
+  let bestFile = null
+
   for (const file of files) {
     const report = extractFromFile(file)
-    if (report) {
-      const dir = path.dirname(outputPath)
-      fs.mkdirSync(dir, { recursive: true })
-      fs.writeFileSync(outputPath, JSON.stringify(report, null, 2) + '\n')
-      console.log(`Extracted performance report from ${file}`)
-      console.log(`Written to ${outputPath} (${report.results ? report.results.length : 0} results)`)
-      process.exit(0)
+    if (report && report.results) {
+      const count = report.results.length
+      const prevCount = bestReport ? bestReport.results.length : 0
+      console.log(`  ${file}: found report with ${count} results`)
+      if (count > prevCount) {
+        bestReport = report
+        bestFile = file
+      }
     }
+  }
+
+  if (bestReport) {
+    const dir = path.dirname(outputPath)
+    fs.mkdirSync(dir, { recursive: true })
+    fs.writeFileSync(outputPath, JSON.stringify(bestReport, null, 2) + '\n')
+    console.log(`Extracted performance report from ${bestFile}`)
+    console.log(`Written to ${outputPath} (${bestReport.results.length} results)`)
+    process.exit(0)
   }
 
   console.log('No performance report markers found in logs')

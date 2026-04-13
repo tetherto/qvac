@@ -73,7 +73,11 @@ try {
       writeStepSummary () {},
       writeToConsole () {
         try {
-          const json = JSON.stringify(this.toJSON())
+          const data = this.toJSON()
+          data.results = data.results.map(function (r) {
+            return { test: r.test, execution_provider: r.execution_provider, metrics: r.metrics, quality: r.quality }
+          })
+          const json = JSON.stringify(data)
           console.log('[PERF_REPORT_START]' + json + '[PERF_REPORT_END]')
         } catch (err) {
           console.log('[perf-reporter] mobile console write failed: ' + err.message)
