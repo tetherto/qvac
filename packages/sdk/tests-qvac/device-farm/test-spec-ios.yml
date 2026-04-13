@@ -81,6 +81,19 @@ phases:
         fi
         echo "App launched via Appium (session: $SESSION_ID)"
 
+        # Push models manifest to the app's Documents directory via Appium pushFile.
+        # The consumer's bootstrap() polls for this file and downloads models from S3.
+        MANIFEST="$DEVICEFARM_TEST_PACKAGE_PATH/models-manifest.json"
+        if [ -f "$MANIFEST" ]; then
+          MANIFEST_B64=$(base64 -i "$MANIFEST")
+          PUSH_RESP=$(curl -s -X POST "http://127.0.0.1:4723/wd/hub/session/$SESSION_ID/appium/device/push_file" \
+            -H "Content-Type: application/json" \
+            -d "{\"path\":\"@io.tether.test.qvac:documents/models-manifest.json\",\"data\":\"$MANIFEST_B64\"}")
+          echo "Manifest pushed to app sandbox: $PUSH_RESP"
+        else
+          echo "No models manifest (cache-models not enabled)"
+        fi
+
       - sleep 10
 
       # Start pymobiledevice3 syslog capture in background (filtered to app process)

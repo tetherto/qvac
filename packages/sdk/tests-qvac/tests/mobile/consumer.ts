@@ -337,17 +337,17 @@ function skipTests(testIds: string[], reason: string) {
 const MODELS_MANIFEST_PATH =
   Platform.OS === "android"
     ? "file:///data/local/tmp/models-manifest.json"
-    : null;
+    : `${Paths.document.uri}models-manifest.json`;
 
 /**
- * Copy pre-cached models from /data/local/tmp/qvac-models/ (adb-pushed by
- * Device Farm test spec) into the app's own cache directory. This bypasses
+ * Android: copy pre-cached models from /data/local/tmp/qvac-models/ (adb-pushed
+ * by Device Farm test spec) into the app's own cache directory. This bypasses
  * SELinux restrictions that prevent the app from writing directly to
  * /data/local/tmp/. On local runs or when cache-models is disabled, the
  * manifest won't exist and we fall through to normal SDK downloads.
  */
 async function copyModelsFromCache(): Promise<boolean> {
-  if (!MODELS_MANIFEST_PATH) return false;
+  if (Platform.OS !== "android") return false;
 
   try {
     const manifestFile = new File(MODELS_MANIFEST_PATH);
@@ -425,8 +425,101 @@ async function copyModelsFromCache(): Promise<boolean> {
   }
 }
 
+/**
+ * iOS: download models from S3 via presigned URLs. The manifest is pushed to the
+ * app's Documents directory by the Device Farm test spec (via Appium pushFile)
+ * after the app launches. We poll for it briefly to handle the race between
+ * app startup and manifest delivery.
+ */
+async function downloadModelsFromS3(): Promise<boolean> {
+  if (Platform.OS !== "ios") return false;
+
+  try {
+    const manifestFile = new File(MODELS_MANIFEST_PATH);
+
+    if (!manifestFile.exists) {
+      const maxWait = 30_000;
+      const poll = 2_000;
+      const start = Date.now();
+      while (!manifestFile.exists && Date.now() - start < maxWait) {
+        await new Promise((r) => setTimeout(r, poll));
+      }
+    }
+
+    if (!manifestFile.exists) return false;
+
+    const manifest = JSON.parse(await manifestFile.text()) as Record<
+      string,
+      string
+    >;
+    const filenames = Object.keys(manifest);
+    if (filenames.length === 0) return false;
+
+    console.log(`📦 iOS: ${filenames.length} models to download from S3`);
+
+    const cacheDir = new Directory(Paths.cache, "qvac-models");
+    cacheDir.create();
+
+    const start = Date.now();
+    let downloaded = 0;
+    let skipped = 0;
+    let failed = 0;
+
+    for (const filename of filenames) {
+      const dest = new File(cacheDir, filename);
+      if (dest.exists) {
+        skipped++;
+        continue;
+      }
+
+      try {
+        await File.downloadFileAsync(manifest[filename], dest);
+        downloaded++;
+      } catch (err) {
+        failed++;
+        console.log(`📦 Download failed: ${filename}: ${err}`);
+      }
+
+      const done = downloaded + skipped + failed;
+      if (done % 2 === 0 || done === filenames.length) {
+        const elapsed = Math.round((Date.now() - start) / 1000);
+        console.log(
+          `📦 Progress: ${done}/${filenames.length} (${downloaded} dl, ${skipped} cached, ${failed} failed) [${elapsed}s]`,
+        );
+      }
+    }
+
+    const elapsed = Math.round((Date.now() - start) / 1000);
+    console.log(
+      `📦 Done in ${elapsed}s (${downloaded} dl, ${skipped} cached, ${failed} failed)`,
+    );
+
+    if (downloaded + skipped === 0) {
+      console.log("📦 No models available — skipping cache config");
+      return false;
+    }
+
+    const configFile = new File(Paths.document, "qvac.config.json");
+    configFile.create({ overwrite: true });
+    configFile.write(
+      JSON.stringify({
+        cacheDirectory: cacheDir.uri.replace("file://", ""),
+      }),
+    );
+    console.log(`📦 Cache dir: ${cacheDir.uri}`);
+    return true;
+  } catch (error) {
+    console.log(`📦 iOS cache init failed: ${error}`);
+    return false;
+  }
+}
+
 export async function bootstrap() {
-  await copyModelsFromCache();
+  if (Platform.OS === "android") {
+    await copyModelsFromCache();
+  } else if (Platform.OS === "ios") {
+    await downloadModelsFromS3();
+  }
   await resources.downloadAllOnce(console.log);
 }
 
