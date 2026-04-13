@@ -38,6 +38,7 @@ import {
 } from "@/utils/errors-server";
 import { getServerLogger } from "@/logging";
 import { getPlugin } from "@/server/plugins";
+import { isMemoryValidationEnabled } from "@/server/bare/registry/config-registry";
 import { getPlatformInfo } from "@/server/bare/utils/platform";
 import { promises as fsPromises } from "bare-fs";
 
@@ -144,7 +145,7 @@ export async function handleLoadModel(
       throw new ModelLoadFailedError("modelPath resolution failed");
     }
 
-    if (plugin.validateBeforeLoad) {
+    if (plugin.validateBeforeLoad && isMemoryValidationEnabled()) {
       let modelFileSize = 0;
       try {
         const stat = await fsPromises.stat(resolvedModelPath);

@@ -158,6 +158,15 @@ export const qvacConfigSchema = z.object({
    * ```
    */
   deviceDefaults: z.array(devicePatternSchema).optional(),
+
+  /**
+   * Enable or disable pre-load memory validation for model loading.
+   * When enabled, the SDK estimates memory requirements before loading a model
+   * and throws MODEL_MEMORY_EXCEEDED if the allocation would likely exceed
+   * available system memory.
+   * Defaults to true.
+   */
+  memoryValidation: z.boolean().optional(),
 });
 
 export type QvacConfig = z.infer<typeof qvacConfigSchema>;

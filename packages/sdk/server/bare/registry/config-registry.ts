@@ -22,6 +22,7 @@ const configRegistry: QvacConfig = {
   loggerConsoleOutput: undefined,
   httpDownloadConcurrency: undefined,
   deviceDefaults: undefined,
+  memoryValidation: undefined,
 };
 
 let configIsSet = false;
@@ -105,6 +106,13 @@ export function setSDKConfig(config: QvacConfig) {
     );
   }
 
+  if (config.memoryValidation !== undefined && config.memoryValidation !== null) {
+    configRegistry.memoryValidation = config.memoryValidation;
+    if (!config.memoryValidation) {
+      logger.warn("Memory validation disabled via config");
+    }
+  }
+
   // Mark config as set - now it's immutable
   configIsSet = true;
 }
@@ -120,4 +128,8 @@ function getDefaultCacheDir() {
 
 export function getConfiguredCacheDir(): string {
   return configRegistry.cacheDirectory || getDefaultCacheDir();
+}
+
+export function isMemoryValidationEnabled(): boolean {
+  return configRegistry.memoryValidation !== false;
 }
