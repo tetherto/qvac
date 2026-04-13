@@ -60,6 +60,7 @@ jobs:
       WORKDIR: ${{ inputs.workdir || 'packages/bci-whispercpp' }}
       VCPKG_BINARY_SOURCES: "clear;files,${{ github.workspace }}/${{ inputs.workdir || 'packages/bci-whispercpp' }}/vcpkg/cache,readwrite"
       VCPKG_BUILD_TYPE: release
+      VCPKG_KEEP_ENV_VARS: GIT_CONFIG_GLOBAL
 
     steps:
       - if: ${{ startsWith(matrix.os, 'ubuntu') }}
