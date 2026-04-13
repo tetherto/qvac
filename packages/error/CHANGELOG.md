@@ -11,4 +11,3 @@ The package has been renamed from `@qvac/error-base` to `@qvac/error` to better 
 ## [0.1.1]
 
 Initial tracked release.
-
