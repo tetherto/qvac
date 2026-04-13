@@ -8,7 +8,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [0.8.2]
 
 ### Added
-- Support for the following languages: Arabic, Danish, Greek, Finnish, Hindi, Malay, Dutch, Norwegian, Polish, Swedish, Swahili, and Turkish
+- Support for the following languages: Arabic, Danish, Greek, Finnish, Hebrew, Hindi, Korean, Malay, Dutch, Norwegian, Polish, Swedish, Swahili, and Turkish
 - Classifier-Free Guidance (CFG) pipeline for multilingual inference, using conditional/unconditional KV caches and text embedding weights to improve non-English speech quality
 - Temperature sampling with min-P filtering and repetition penalty (2.0) for the multilingual path
 - Token generation stopping heuristics: text-length-based max tokens, consecutive and pattern repetition detection, silence token run detection
