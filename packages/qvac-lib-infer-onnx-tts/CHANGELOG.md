@@ -14,7 +14,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Token generation stopping heuristics: text-length-based max tokens, consecutive and pattern repetition detection, silence token run detection
 - Trailing silence trimming with dynamic energy-based endpoint detection, tail padding, and fade-out
 - Peak normalization for consistent multilingual audio volume
-- Integration test sentences for 12 additional languages (ar, da, el, fi, hi, ms, nl, no, pl, sv, sw, tr), enabled via `TEST_ALL_LANGUAGES=true`
+- Integration test sentences for 12 additional languages (Arabic, Danish, Greek, Finnish, Hindi, Malay, Dutch, Norwegian, Polish, Swedish, Swahili, and Turkish), enabled via `TEST_ALL_LANGUAGES=true`
 
 ### Changed
 - Refactored `generateSpeechTokensWithCfg` into smaller functions: `prepareCfgEmbeddings`, `runInitialCfgStep`, `shouldStopGeneration`, `runCfgGenerationLoop`
