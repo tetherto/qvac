@@ -21,7 +21,9 @@ function safeCall<T>(fn: () => T, fallback: T): T {
 // memory available for new allocations is much larger.
 // We use totalMemory * fraction as a realistic estimate instead.
 const AVAILABLE_MEMORY_FRACTION_DESKTOP = 0.7;
-const AVAILABLE_MEMORY_FRACTION_MOBILE = 0.5;
+// Modern iOS (iPhone 12+) allows ~60-70% of total RAM before jetsam kill.
+// Android varies but typically 50-65%. We use 65% as a balanced estimate.
+const AVAILABLE_MEMORY_FRACTION_MOBILE = 0.65;
 
 function estimateAvailableMemory(
   totalMemory: number,

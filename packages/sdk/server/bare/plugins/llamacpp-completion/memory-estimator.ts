@@ -2,9 +2,10 @@ import { LLM_CONFIG_DEFAULTS } from "@/schemas/llamacpp-config";
 
 const BYTES_PER_MB = 1024 * 1024;
 const BYTES_PER_GB = 1024 * BYTES_PER_MB;
-const OVERHEAD_BYTES = 512 * BYTES_PER_MB;
 const MEMORY_USAGE_THRESHOLD = 0.80;
 const MAX_CTX_SIZE = 131072;
+const OVERHEAD_FIXED_BYTES = 128 * BYTES_PER_MB;
+const OVERHEAD_MODEL_FRACTION = 0.10;
 
 // llama.cpp KV cache formula: 2 (K+V) * n_layer * n_kv_heads * head_dim * dtype_size
 // Since we can't read GGUF metadata from JS, we estimate based on model file size.
@@ -35,13 +36,17 @@ export function estimateKvBytesPerToken(modelFileSize: number): number {
   return KV_BRACKETS[KV_BRACKETS.length - 1]!.bytesPerToken;
 }
 
+export function estimateOverhead(modelFileSize: number): number {
+  return OVERHEAD_FIXED_BYTES + Math.floor(modelFileSize * OVERHEAD_MODEL_FRACTION);
+}
+
 export function estimateMemoryRequired(
   modelFileSize: number,
   ctxSize: number,
 ): number {
   const kvBytesPerToken = estimateKvBytesPerToken(modelFileSize);
   const kvCacheBytes = ctxSize * kvBytesPerToken;
-  return modelFileSize + kvCacheBytes + OVERHEAD_BYTES;
+  return modelFileSize + kvCacheBytes + estimateOverhead(modelFileSize);
 }
 
 export function computeSafeCtxSize(
@@ -50,7 +55,7 @@ export function computeSafeCtxSize(
 ): number {
   const kvBytesPerToken = estimateKvBytesPerToken(modelFileSize);
   const usableBudget = availableMemory * MEMORY_USAGE_THRESHOLD;
-  const budgetForKv = usableBudget - modelFileSize - OVERHEAD_BYTES;
+  const budgetForKv = usableBudget - modelFileSize - estimateOverhead(modelFileSize);
 
   if (budgetForKv <= 0) return LLM_CONFIG_DEFAULTS.ctx_size;
 

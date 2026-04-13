@@ -3,6 +3,7 @@ import test from "brittle";
 import {
   estimateKvBytesPerToken,
   estimateMemoryRequired,
+  estimateOverhead,
   computeSafeCtxSize,
   validateMemoryForModel,
 } from "@/server/bare/plugins/llamacpp-completion/memory-estimator";
@@ -44,9 +45,10 @@ test("estimateMemoryRequired: includes model size + KV cache + overhead", (t: { 
   const modelSize = 4 * GB;
   const ctxSize = 8192;
   const estimated = estimateMemoryRequired(modelSize, ctxSize);
+  const overhead = estimateOverhead(modelSize);
 
   t.ok(estimated > modelSize, "estimated should exceed model file size");
-  t.ok(estimated > modelSize + 512 * MB, "should include overhead buffer");
+  t.ok(estimated > modelSize + overhead - 1, "should include overhead");
 });
 
 test("estimateMemoryRequired: larger ctx_size produces larger estimate", (t: { ok: Function }) => {
@@ -108,6 +110,45 @@ test("validateMemoryForModel: 1B model with normal ctx_size is safe on 24GB mach
   const result = validateMemoryForModel(737 * MB, 2048, 17 * GB);
   t.is(result.safe, true);
 });
+
+// --- False-positive regression: every real mobile test config must pass ---
+// These use actual model expectedSize values from the registry and ctx_size
+// values from tests-qvac/tests/mobile/consumer.ts.
+// Available memory = totalMem * 0.65 (mobile heuristic).
+// We test against the smallest realistic device (4GB, 6GB, 8GB).
+
+// Models that must load on all mobile devices including 4GB
+const MOBILE_CONFIGS_ALL_DEVICES = [
+  { name: "LLAMA_3_2_1B_INST_Q4_0 ctx=2048", fileSize: 773_025_824, ctxSize: 2048 },
+  { name: "QWEN3_1_7B_INST_Q4 ctx=4096", fileSize: 1_056_782_912, ctxSize: 4096 },
+  { name: "SMOLVLM2_500M_MULTIMODAL_Q8_0 ctx=1024", fileSize: 820_424_704, ctxSize: 1024 },
+];
+
+// Larger models that only run on 8GB+ devices
+const MOBILE_CONFIGS_8GB_PLUS = [
+  { name: "SALAMANDRATA_2B_INST_Q4 ctx=1024 (default)", fileSize: 1_517_617_504, ctxSize: 1024 },
+  { name: "AFRICAN_4B_TRANSLATION_Q4_K_M ctx=2048", fileSize: 2_867_473_376, ctxSize: 2048 },
+];
+
+for (const config of MOBILE_CONFIGS_ALL_DEVICES) {
+  for (const ramGb of [4, 6, 8]) {
+    const availableMemory = Math.floor(ramGb * GB * 0.65);
+    test(`no false positive: ${config.name} on ${ramGb}GB device`, (t: { is: Function }) => {
+      const result = validateMemoryForModel(config.fileSize, config.ctxSize, availableMemory);
+      t.is(result.safe, true);
+    });
+  }
+}
+
+for (const config of MOBILE_CONFIGS_8GB_PLUS) {
+  for (const ramGb of [8, 12]) {
+    const availableMemory = Math.floor(ramGb * GB * 0.65);
+    test(`no false positive: ${config.name} on ${ramGb}GB device`, (t: { is: Function }) => {
+      const result = validateMemoryForModel(config.fileSize, config.ctxSize, availableMemory);
+      t.is(result.safe, true);
+    });
+  }
+}
 
 // --- llmConfigBaseSchema ctx_size validation ---
 
