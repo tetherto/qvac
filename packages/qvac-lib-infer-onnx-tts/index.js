@@ -10,6 +10,7 @@ const {
 } = require('@qvac/infer-base')
 const { TTSInterface } = require('./tts')
 const { QvacErrorAddonTTS, ERR_CODES } = require('./lib/error')
+const { splitTtsText } = require('./lib/textChunker')
 
 // Engine types
 const ENGINE_CHATTERBOX = 'chatterbox'
@@ -138,6 +139,7 @@ class ONNXTTS {
       destroyed: false
     }
     this.addon = null
+    this._sentenceStreamCtx = null
     this._job = createJobHandler({
       cancel: () => {
         const a = this.addon
@@ -298,7 +300,12 @@ class ONNXTTS {
   }
 
   async run (input) {
-    return this._runExclusive(() => this._runInternal(input))
+    return this._runExclusive(async () => {
+      if (input && input.sentenceStream) {
+        return this._runSentenceStreamInternal(input)
+      }
+      return this._runInternal(input)
+    })
   }
 
   async _load () {
@@ -392,9 +399,81 @@ class ONNXTTS {
     return response
   }
 
+  /**
+   * One logical response; multiple native jobs (one per text chunk).
+   * Expects `input.sentenceStream`; other fields match {@link ONNXTTS#run}.
+   */
+  async _runSentenceStreamInternal (input) {
+    const text = input.input != null ? String(input.input) : ''
+    const chunks = splitTtsText(text, {
+      language: this._config?.language,
+      locale: input.locale,
+      maxScalars: input.maxChunkScalars
+    })
+    if (chunks.length === 0) {
+      throw new QvacErrorAddonTTS({
+        code: ERR_CODES.FAILED_TO_APPEND,
+        adds: 'sentenceStream: text produced no chunks after split'
+      })
+    }
+
+    const response = this._job.start()
+    const acc = {
+      totalTime: 0,
+      audioDurationMs: 0,
+      totalSamples: 0
+    }
+
+    this._sentenceStreamCtx = {
+      chunks,
+      chunkIdx: 0,
+      acc,
+      chunkResolver: null
+    }
+
+    try {
+      for (let i = 0; i < chunks.length; i++) {
+        this._sentenceStreamCtx.chunkIdx = i
+        const donePromise = new Promise((resolve, reject) => {
+          this._sentenceStreamCtx.chunkResolver = { resolve, reject }
+        })
+        await this.addon.runJob({
+          type: input.type || 'text',
+          input: chunks[i]
+        })
+        await donePromise
+      }
+    } catch (err) {
+      if (this._sentenceStreamCtx && this._sentenceStreamCtx.chunkResolver) {
+        this._sentenceStreamCtx.chunkResolver.reject(err)
+        this._sentenceStreamCtx.chunkResolver = null
+      }
+      this._sentenceStreamCtx = null
+      this._job.fail(err)
+      throw err
+    }
+
+    this._sentenceStreamCtx = null
+    return response
+  }
+
+  _mergeSentenceStreamStats (acc, data) {
+    const t = typeof data.totalTime === 'number' ? data.totalTime : 0
+    const a = typeof data.audioDurationMs === 'number' ? data.audioDurationMs : 0
+    const s = typeof data.totalSamples === 'number' ? data.totalSamples : 0
+    acc.totalTime += t
+    acc.audioDurationMs += a
+    acc.totalSamples += s
+  }
+
   _addonOutputCallback (addon, event, data, error) {
     if (typeof error === 'string' && error.length > 0) {
       this.logger.error(`TTS job failed with error: ${error}`)
+      if (this._sentenceStreamCtx && this._sentenceStreamCtx.chunkResolver) {
+        const rej = this._sentenceStreamCtx.chunkResolver.reject
+        this._sentenceStreamCtx.chunkResolver = null
+        rej(new Error(error))
+      }
       this._job.fail(error)
       return
     }
@@ -409,7 +488,18 @@ class ONNXTTS {
           throw err
         }
       }
-      this._job.output(data)
+      if (this._sentenceStreamCtx) {
+        const ctx = this._sentenceStreamCtx
+        const idx = ctx.chunkIdx
+        const sentenceChunk = ctx.chunks[idx] || ''
+        this._job.output({
+          outputArray: data.outputArray,
+          chunkIndex: idx,
+          sentenceChunk
+        })
+      } else {
+        this._job.output(data)
+      }
       return
     }
 
@@ -419,6 +509,31 @@ class ONNXTTS {
       ('totalTime' in data || 'audioDurationMs' in data || 'totalSamples' in data)
     ) {
       this.logger.info(`TTS job completed. Stats: ${JSON.stringify(data)}`)
+      if (this._sentenceStreamCtx) {
+        const ctx = this._sentenceStreamCtx
+        this._mergeSentenceStreamStats(ctx.acc, data)
+        const isLast = ctx.chunkIdx >= ctx.chunks.length - 1
+        if (ctx.chunkResolver) {
+          ctx.chunkResolver.resolve()
+          ctx.chunkResolver = null
+        }
+        if (isLast) {
+          const totalChars = ctx.chunks.join('').length
+          const merged = { ...ctx.acc }
+          merged.tokensPerSecond =
+            ctx.acc.totalTime > 0 ? totalChars / ctx.acc.totalTime : 0
+          merged.realTimeFactor =
+            ctx.acc.audioDurationMs > 0
+              ? (ctx.acc.totalTime * 1000.0) / ctx.acc.audioDurationMs
+              : 0
+          if (this.opts?.stats) {
+            this._job.end(merged)
+          } else {
+            this._job.end()
+          }
+        }
+        return
+      }
       if (this.opts?.stats) {
         this._job.end(data)
       } else {
@@ -437,6 +552,13 @@ class ONNXTTS {
   }
 
   _failAndClearActiveResponse (reason) {
+    if (this._sentenceStreamCtx && this._sentenceStreamCtx.chunkResolver) {
+      this._sentenceStreamCtx.chunkResolver.reject(
+        reason instanceof Error ? reason : new Error(String(reason))
+      )
+      this._sentenceStreamCtx.chunkResolver = null
+    }
+    this._sentenceStreamCtx = null
     this._job.fail(reason)
   }
 

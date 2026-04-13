@@ -56,6 +56,7 @@
   "exports": {
     "./package": "./package.json",
     ".": "./index.js",
+    "./text-chunker": "./lib/textChunker.js",
     "./addonLogging": {
       "types": "./addonLogging.d.ts",
       "default": "./addonLogging.js"

@@ -127,6 +127,12 @@ declare namespace ONNXTTS {
   export type TTSRunInput = {
     type?: string
     input: string
+    /** When true, split text into chunks and run one native job per chunk; lower time-to-first-audio. */
+    sentenceStream?: boolean
+    /** Optional BCP-47 locale for Intl.Segmenter (when available). */
+    locale?: string
+    /** Max graphemes per chunk (defaults: 300, or 120 when language is ko). */
+    maxChunkScalars?: number
   }
 
   export {
