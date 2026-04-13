@@ -43,6 +43,23 @@ jobs:
           - os: ubuntu-22.04
             platform: linux
             arch: x64
+          - os: ubuntu-24.04
+            platform: android
+            arch: arm64
+            flags: -D ANDROID_STL=c++_shared
+          - os: macos-14
+            platform: ios
+            arch: arm64
+          - os: macos-14
+            platform: ios
+            arch: arm64
+            tags: -simulator
+            flags: --simulator
+          - os: macos-14
+            platform: ios
+            arch: x64
+            tags: -simulator
+            flags: --simulator
           - os: macos-14
             platform: darwin
             arch: arm64
@@ -54,7 +71,7 @@ jobs:
             arch: x64
 
     runs-on: ${{ matrix.os }}
-    name: ${{ matrix.platform }}-${{ matrix.arch }}
+    name: ${{ matrix.platform }}-${{ matrix.arch }}${{ matrix.tags }}
 
     env:
       WORKDIR: ${{ inputs.workdir || 'packages/bci-whispercpp' }}
@@ -63,6 +80,13 @@ jobs:
       VCPKG_KEEP_ENV_VARS: GIT_CONFIG_GLOBAL
 
     steps:
+      - if: ${{ matrix.platform == 'android' }}
+        name: Select NDK
+        run: |
+          echo "ANDROID_NDK=$ANDROID_NDK_LATEST_HOME" >> $GITHUB_ENV
+          echo "ANDROID_NDK_HOME=$ANDROID_NDK_LATEST_HOME" >> $GITHUB_ENV
+          echo "ANDROID_NDK_ROOT=$ANDROID_NDK_LATEST_HOME" >> $GITHUB_ENV
+
       - if: ${{ startsWith(matrix.os, 'ubuntu') }}
         name: Maximize build space
         run: |
@@ -233,6 +257,12 @@ jobs:
         name: Install macOS build deps
         run: brew install --quiet openblas lapack fftw
 
+      - if: ${{ matrix.platform == 'android' }}
+        name: Configure runner for cross compilation - android
+        run: |
+          echo "ANDROID_TOOLCHAIN_ROOT=$(echo $ANDROID_NDK_HOME)/toolchains/llvm/prebuilt/linux-x86_64" >> $GITHUB_ENV
+          echo "ANDROID_NATIVE_API_LEVEL=34" >> $GITHUB_ENV
+
       # ── build ──
 
       - name: Install npm dependencies
@@ -258,8 +288,8 @@ jobs:
         shell: bash
         working-directory: ${{ env.WORKDIR }}
         run: |
-          WHISPER_FLAGS="-D WHISPER_USE_METAL=${{ matrix.platform == 'darwin' && 'ON' || 'OFF' }} -D WHISPER_USE_CUDA=OFF -D WHISPER_USE_OPENVINO=OFF"
-          bare-make generate --platform ${{ matrix.platform }} --arch ${{ matrix.arch }} $WHISPER_FLAGS
+          WHISPER_FLAGS="-D WHISPER_USE_METAL=${{ (matrix.platform == 'darwin' || matrix.platform == 'ios') && 'ON' || 'OFF' }} -D WHISPER_USE_CUDA=OFF -D WHISPER_USE_OPENVINO=OFF"
+          bare-make generate --platform ${{ matrix.platform }} --arch ${{ matrix.arch }} ${{ matrix.flags }} $WHISPER_FLAGS
 
       - name: Run bare-make build
         shell: bash
@@ -272,7 +302,7 @@ jobs:
         run: bare-make install
 
       - name: Strip debug symbols
-        if: ${{ matrix.platform != 'win32' }}
+        if: ${{ matrix.platform != 'win32' && matrix.platform != 'android' }}
         shell: bash
         working-directory: ${{ env.WORKDIR }}
         run: find prebuilds -name "*.bare" -exec strip {} \;
@@ -282,12 +312,21 @@ jobs:
 
       - uses: actions/upload-artifact@v6
         with:
-          name: bci-whispercpp-${{ matrix.platform }}-${{ matrix.arch }}
+          name: bci-whispercpp-${{ matrix.platform }}-${{ matrix.arch }}${{ matrix.tags }}
           path: ${{ env.WORKDIR }}/prebuilds
 
   run-integration-tests:
     needs: prebuild
     uses: ./.github/workflows/integration-test-bci-whispercpp.yml
+    secrets: inherit
+    with:
+      repository: ${{ inputs.repository || github.repository }}
+      ref: ${{ inputs.ref || github.ref }}
+      workdir: ${{ inputs.workdir || 'packages/bci-whispercpp' }}
+
+  run-mobile-integration-tests:
+    needs: prebuild
+    uses: ./.github/workflows/integration-mobile-test-bci-whispercpp.yml
     secrets: inherit
     with:
       repository: ${{ inputs.repository || github.repository }}
