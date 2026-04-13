@@ -2,7 +2,7 @@
   "dependencies": [
     {
       "name": "ggml",
-      "version>=": "2026-01-30#4"
+      "version>=": "2026-01-30#3"
     },
     "picojson",
     {
@@ -18,13 +18,6 @@
       "version>=": "2026-03-01#2"
     },
     "stb"
-  ],
-  "overrides": [
-    {
-      "name": "ggml",
-      "version": "2026-01-30",
-      "port-version": 4
-    }
   ],
   "features": {
     "cuda": {
