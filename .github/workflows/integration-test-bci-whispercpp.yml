@@ -39,11 +39,6 @@ jobs:
     runs-on: ${{ matrix.os }}
     name: test-${{ matrix.platform }}-${{ matrix.arch }}
 
-    env:
-      AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
-      AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
-      AWS_DEFAULT_REGION: us-east-1
-
     permissions:
       contents: read
       packages: read
@@ -169,49 +164,56 @@ jobs:
           tar -xzf $tgz.FullName -C $env:TEMP
           Copy-Item -Path "$env:TEMP\package\prebuilds\*" -Destination prebuilds -Recurse -Force
 
-      - name: Download BCI model from S3 (Unix)
+      - name: Download BCI models and test fixtures from release (Unix)
         if: ${{ matrix.platform != 'win32' }}
         working-directory: ${{ inputs.workdir || env.PKG_DIR }}
         shell: bash
+        env:
+          GH_TOKEN: ${{ secrets.PAT_TOKEN }}
         run: |
-          mkdir -p models
-          echo "Downloading BCI model files from S3..."
-          aws s3 cp "s3://${{ secrets.MODEL_S3_BUCKET }}/qvac_models_compiled/bci/" models/ --recursive
-          echo "Model files:"
-          ls -la models/
+          mkdir -p models test/fixtures
+          echo "Downloading BCI assets from GitHub release..."
+          gh release download bci-test-assets-v0.1.0 \
+            --repo sharmaraju352/qvac \
+            --pattern "ggml-bci-windowed.bin" --dir models/ \
+            --clobber
+          gh release download bci-test-assets-v0.1.0 \
+            --repo sharmaraju352/qvac \
+            --pattern "bci-embedder.bin" --dir models/ \
+            --clobber
+          gh release download bci-test-assets-v0.1.0 \
+            --repo sharmaraju352/qvac \
+            --pattern "bci-test-fixtures.tar.gz" --dir /tmp \
+            --clobber
+          tar xzf /tmp/bci-test-fixtures.tar.gz -C test/fixtures/
+          echo "Model files:" && ls -la models/
+          echo "Test fixtures:" && ls -la test/fixtures/
 
-      - name: Download BCI model from S3 (Windows)
+      - name: Download BCI models and test fixtures from release (Windows)
         if: ${{ matrix.platform == 'win32' }}
         working-directory: ${{ inputs.workdir || env.PKG_DIR }}
         shell: powershell
+        env:
+          GH_TOKEN: ${{ secrets.PAT_TOKEN }}
         run: |
           New-Item -ItemType Directory -Force -Path models | Out-Null
-          Write-Host "Downloading BCI model files from S3..."
-          aws s3 cp "s3://${{ secrets.MODEL_S3_BUCKET }}/qvac_models_compiled/bci/" models/ --recursive
-          Write-Host "Model files:"
-          Get-ChildItem models/
-
-      - name: Download BCI test fixtures from S3 (Unix)
-        if: ${{ matrix.platform != 'win32' }}
-        working-directory: ${{ inputs.workdir || env.PKG_DIR }}
-        shell: bash
-        run: |
-          mkdir -p test/fixtures
-          echo "Downloading BCI test fixtures from S3..."
-          aws s3 cp "s3://${{ secrets.MODEL_S3_BUCKET }}/qvac_models_compiled/bci/test-fixtures/" test/fixtures/ --recursive --exclude "manifest.json"
-          echo "Test fixtures:"
-          ls -la test/fixtures/
-
-      - name: Download BCI test fixtures from S3 (Windows)
-        if: ${{ matrix.platform == 'win32' }}
-        working-directory: ${{ inputs.workdir || env.PKG_DIR }}
-        shell: powershell
-        run: |
           New-Item -ItemType Directory -Force -Path test/fixtures | Out-Null
-          Write-Host "Downloading BCI test fixtures from S3..."
-          aws s3 cp "s3://${{ secrets.MODEL_S3_BUCKET }}/qvac_models_compiled/bci/test-fixtures/" test/fixtures/ --recursive --exclude "manifest.json"
-          Write-Host "Test fixtures:"
-          Get-ChildItem test/fixtures/
+          Write-Host "Downloading BCI assets from GitHub release..."
+          gh release download bci-test-assets-v0.1.0 `
+            --repo sharmaraju352/qvac `
+            --pattern "ggml-bci-windowed.bin" --dir models/ `
+            --clobber
+          gh release download bci-test-assets-v0.1.0 `
+            --repo sharmaraju352/qvac `
+            --pattern "bci-embedder.bin" --dir models/ `
+            --clobber
+          gh release download bci-test-assets-v0.1.0 `
+            --repo sharmaraju352/qvac `
+            --pattern "bci-test-fixtures.tar.gz" --dir $env:TEMP `
+            --clobber
+          tar xzf "$env:TEMP\bci-test-fixtures.tar.gz" -C test/fixtures/
+          Write-Host "Model files:" ; Get-ChildItem models/
+          Write-Host "Test fixtures:" ; Get-ChildItem test/fixtures/
 
       - name: Linux - install dependencies
         if: ${{ matrix.platform == 'linux' }}
