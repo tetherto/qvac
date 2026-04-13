@@ -111,7 +111,17 @@ jobs:
           repository: ${{ inputs.repository || github.repository }}
           ref: ${{ inputs.ref || github.ref }}
           token: ${{ secrets.PAT_TOKEN }}
+          persist-credentials: false
           fetch-depth: 0
+
+      - name: Configure git credentials for private repos
+        shell: bash
+        env:
+          GIT_PAT: ${{ secrets.PAT_TOKEN }}
+        run: |
+          git config --global url."https://x-access-token:${GIT_PAT}@github.com/".insteadOf "https://github.com/"
+          git config --global url."https://x-access-token:${GIT_PAT}@github.com/".insteadOf "ssh://git@github.com/"
+          git config --global url."https://x-access-token:${GIT_PAT}@github.com/".insteadOf "git@github.com:"
 
       - name: Setup node
         uses: actions/setup-node@v6
@@ -134,14 +144,6 @@ jobs:
           //registry.npmjs.org/:_authToken=${NPM_TOKEN}
           //npm.pkg.github.com/:_authToken=${GIT_PAT}
           NPMRC
-
-          if [ -n "${GIT_PAT:-}" ]; then
-            git config --global url."https://${GIT_PAT}:@github.com/".insteadOf "https://github.com/"
-            git config --global url."https://${GIT_PAT}:@github.com/".insteadOf "ssh://git@github.com/"
-            git config --global url."https://${GIT_PAT}:@github.com/".insteadOf "git@github.com:"
-          else
-            git config --global url."https://${{ github.token }}:@github.com/".insteadOf "https://github.com/"
-          fi
 
       - name: Install global dependencies
         run: npm install -g bare bare-make
