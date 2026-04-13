@@ -1,6 +1,6 @@
 {
   "name": "@qvac/transcription-parakeet",
-  "version": "0.3.1",
+  "version": "0.3.2",
   "description": "High-performance speech-to-text inference addon using NVIDIA Parakeet models for Bare runtime",
   "addon": true,
   "engines": {
