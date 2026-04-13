@@ -124,6 +124,7 @@ export interface ValidateBeforeLoadParams {
   modelConfig: Record<string, unknown>;
   modelFileSize: number;
   availableMemory: number;
+  kvBytesPerToken?: number;
 }
 
 export interface QvacPlugin<

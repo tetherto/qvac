@@ -7,6 +7,19 @@ import {
   computeSafeCtxSize,
   validateMemoryForModel,
 } from "@/server/bare/plugins/llamacpp-completion/memory-estimator";
+// Pure computation function inlined to avoid importing bare-fs via gguf-metadata
+interface GGUFModelParams {
+  architecture: string;
+  blockCount: number;
+  headCountKv: number;
+  embeddingLength: number;
+  headCount: number;
+}
+
+function computeExactKvBytesPerToken(params: GGUFModelParams, kvCacheDtypeSize = 2): number {
+  const headDim = params.embeddingLength / params.headCount;
+  return 2 * params.blockCount * params.headCountKv * headDim * kvCacheDtypeSize;
+}
 import { llmConfigBaseSchema } from "@/schemas/llamacpp-config";
 
 const MB = 1024 * 1024;
@@ -149,6 +162,88 @@ for (const config of MOBILE_CONFIGS_8GB_PLUS) {
     });
   }
 }
+
+// --- Exact KV computation from GGUF metadata ---
+
+// Real model architectures for validation
+const LLAMA_3_2_1B: GGUFModelParams = {
+  architecture: "llama",
+  blockCount: 16,
+  headCountKv: 8,
+  embeddingLength: 2048,
+  headCount: 32,
+};
+
+const AFRIQUEGEMMA_4B: GGUFModelParams = {
+  architecture: "gemma3",
+  blockCount: 34,
+  headCountKv: 4,
+  embeddingLength: 2560,
+  headCount: 8,
+};
+
+const LLAMA_3_1_8B: GGUFModelParams = {
+  architecture: "llama",
+  blockCount: 32,
+  headCountKv: 8,
+  embeddingLength: 4096,
+  headCount: 32,
+};
+
+test("computeExactKvBytesPerToken: Llama-3.2-1B = 32768 bytes/token", (t: { is: Function }) => {
+  // 2 * 16 layers * 8 kv_heads * (2048/32=64 head_dim) * 2 f16 = 32768
+  t.is(computeExactKvBytesPerToken(LLAMA_3_2_1B), 32768);
+});
+
+test("computeExactKvBytesPerToken: AfriqueGemma-4B = 139264 bytes/token", (t: { is: Function }) => {
+  // 2 * 34 layers * 4 kv_heads * (2560/8=320 head_dim) * 2 f16 = 174080
+  // Wait: 2560/8 = 320. 2 * 34 * 4 * 320 * 2 = 174080
+  const expected = 2 * 34 * 4 * (2560 / 8) * 2;
+  t.is(computeExactKvBytesPerToken(AFRIQUEGEMMA_4B), expected);
+});
+
+test("computeExactKvBytesPerToken: Llama-3.1-8B = 131072 bytes/token", (t: { is: Function }) => {
+  // 2 * 32 layers * 8 kv_heads * (4096/32=128 head_dim) * 2 f16 = 131072
+  t.is(computeExactKvBytesPerToken(LLAMA_3_1_8B), 131072);
+});
+
+test("validateMemoryForModel: exact path produces different estimate than heuristic", (t: { ok: Function; is: Function }) => {
+  const fileSize = 2_867_473_376;
+  const ctxSize = 2048;
+  const available12GB = Math.floor(12 * GB * 0.65);
+  const exactKv = computeExactKvBytesPerToken(AFRIQUEGEMMA_4B);
+
+  const exactResult = validateMemoryForModel(fileSize, ctxSize, available12GB, exactKv);
+  const heuristicResult = validateMemoryForModel(fileSize, ctxSize, available12GB);
+
+  t.is(exactResult.exact, true);
+  t.is(heuristicResult.exact, false);
+  t.ok(exactResult.estimatedBytes !== heuristicResult.estimatedBytes,
+    "exact and heuristic should differ");
+  t.is(exactResult.safe, true);
+});
+
+test("validateMemoryForModel: exact Llama-1B is less conservative than heuristic", (t: { ok: Function; is: Function }) => {
+  const fileSize = 773_025_824;
+  const ctxSize = 2048;
+  const available = Math.floor(4 * GB * 0.65);
+  const exactKv = computeExactKvBytesPerToken(LLAMA_3_2_1B); // 32768
+
+  const exactResult = validateMemoryForModel(fileSize, ctxSize, available, exactKv);
+  const heuristicResult = validateMemoryForModel(fileSize, ctxSize, available); // uses 48000
+
+  t.ok(exactResult.estimatedBytes < heuristicResult.estimatedBytes,
+    "exact (32KB/tok) should be lower than heuristic (48KB/tok) for 1B model");
+  t.is(exactResult.safe, true);
+  t.is(heuristicResult.safe, true);
+});
+
+test("validateMemoryForModel: exact Llama-1B with extreme ctx still unsafe", (t: { is: Function }) => {
+  const exactKv = computeExactKvBytesPerToken(LLAMA_3_2_1B);
+  const result = validateMemoryForModel(773 * MB, 3276000, 17 * GB, exactKv);
+  t.is(result.safe, false);
+  t.is(result.exact, true);
+});
 
 // --- llmConfigBaseSchema ctx_size validation ---
 

@@ -7,15 +7,11 @@ const MAX_CTX_SIZE = 131072;
 const OVERHEAD_FIXED_BYTES = 128 * BYTES_PER_MB;
 const OVERHEAD_MODEL_FRACTION = 0.10;
 
-// llama.cpp KV cache formula: 2 (K+V) * n_layer * n_kv_heads * head_dim * dtype_size
-// Since we can't read GGUF metadata from JS, we estimate based on model file size.
-// These brackets are calibrated from actual model architectures with f16 KV cache:
+// Fallback heuristic brackets when GGUF metadata is unavailable.
+// Calibrated from actual model architectures with f16 KV cache:
 //   Llama-3.2-1B  (737MB Q4):  32,768 bytes/token
 //   Llama-3.2-3B  (~2GB Q4):  114,688 bytes/token
 //   Llama-3.1-8B  (~4.5GB Q4): 131,072 bytes/token
-//   Phi-3-mini-3.8B (~2.2GB):  393,216 bytes/token (MHA, not GQA)
-// We use conservative (high) estimates to avoid false negatives.
-
 interface KvBytesPerTokenBracket {
   maxFileSize: number;
   bytesPerToken: number;
@@ -40,11 +36,22 @@ export function estimateOverhead(modelFileSize: number): number {
   return OVERHEAD_FIXED_BYTES + Math.floor(modelFileSize * OVERHEAD_MODEL_FRACTION);
 }
 
+function resolveKvBytesPerToken(
+  modelFileSize: number,
+  exactKvBytesPerToken?: number,
+): number {
+  if (exactKvBytesPerToken !== undefined && exactKvBytesPerToken > 0) {
+    return exactKvBytesPerToken;
+  }
+  return estimateKvBytesPerToken(modelFileSize);
+}
+
 export function estimateMemoryRequired(
   modelFileSize: number,
   ctxSize: number,
+  exactKvBytesPerToken?: number,
 ): number {
-  const kvBytesPerToken = estimateKvBytesPerToken(modelFileSize);
+  const kvBytesPerToken = resolveKvBytesPerToken(modelFileSize, exactKvBytesPerToken);
   const kvCacheBytes = ctxSize * kvBytesPerToken;
   return modelFileSize + kvCacheBytes + estimateOverhead(modelFileSize);
 }
@@ -52,8 +59,9 @@ export function estimateMemoryRequired(
 export function computeSafeCtxSize(
   availableMemory: number,
   modelFileSize: number,
+  exactKvBytesPerToken?: number,
 ): number {
-  const kvBytesPerToken = estimateKvBytesPerToken(modelFileSize);
+  const kvBytesPerToken = resolveKvBytesPerToken(modelFileSize, exactKvBytesPerToken);
   const usableBudget = availableMemory * MEMORY_USAGE_THRESHOLD;
   const budgetForKv = usableBudget - modelFileSize - estimateOverhead(modelFileSize);
 
@@ -69,19 +77,21 @@ export interface MemoryValidationResult {
   availableBytes: number;
   requestedCtxSize: number;
   suggestedCtxSize: number;
+  exact: boolean;
 }
 
 export function validateMemoryForModel(
   modelFileSize: number,
   ctxSize: number,
   availableMemory: number,
+  exactKvBytesPerToken?: number,
 ): MemoryValidationResult {
-  const estimatedBytes = estimateMemoryRequired(modelFileSize, ctxSize);
+  const estimatedBytes = estimateMemoryRequired(modelFileSize, ctxSize, exactKvBytesPerToken);
   const threshold = availableMemory * MEMORY_USAGE_THRESHOLD;
   const safe = availableMemory <= 0 || estimatedBytes <= threshold;
   const suggestedCtxSize = safe
     ? ctxSize
-    : computeSafeCtxSize(availableMemory, modelFileSize);
+    : computeSafeCtxSize(availableMemory, modelFileSize, exactKvBytesPerToken);
 
   return {
     safe,
@@ -89,5 +99,6 @@ export function validateMemoryForModel(
     availableBytes: availableMemory,
     requestedCtxSize: ctxSize,
     suggestedCtxSize,
+    exact: exactKvBytesPerToken !== undefined && exactKvBytesPerToken > 0,
   };
 }
