@@ -92,7 +92,7 @@ class ParakeetInterface {
     this._state = state.LOADING
     this._nextJobId = 1
     this._activeJobId = null
-    this._pendingCancelCallbacks = 0
+    this._onCancelComplete = null
     this._bufferedAudio = []
     this._bufferedBytes = 0
 
@@ -111,7 +111,7 @@ class ParakeetInterface {
     // Wrapper job ids are owned in JS, so recreating the native instance only
     // clears native state and buffered audio.
     this._activeJobId = null
-    this._pendingCancelCallbacks = 0
+    this._onCancelComplete = null
     this._bufferedAudio = []
     this._bufferedBytes = 0
     this._handle = this._binding.createInstance(
@@ -147,14 +147,11 @@ class ParakeetInterface {
 
     const jobId = this._activeJobId
     if (jobId === null) {
-      if (isTerminal && this._pendingCancelCallbacks > 0) {
-        this._pendingCancelCallbacks--
+      if (isTerminal && this._onCancelComplete) {
+        const resolve = this._onCancelComplete
+        this._onCancelComplete = null
+        resolve()
       }
-      return
-    }
-
-    if (isTerminal && this._pendingCancelCallbacks > 0) {
-      this._pendingCancelCallbacks--
       return
     }
 
@@ -295,9 +292,12 @@ class ParakeetInterface {
       this._bufferedAudio = []
       this._bufferedBytes = 0
       if (this._activeJobId !== null) {
-        this._pendingCancelCallbacks++
-        await this._binding.cancel(this._handle)
+        const cancelComplete = new Promise(resolve => {
+          this._onCancelComplete = resolve
+        })
         this._activeJobId = null
+        await this._binding.cancel(this._handle)
+        await cancelComplete
       }
       this._setState(state.STOPPED)
     } catch (error) {
@@ -323,11 +323,14 @@ class ParakeetInterface {
       }
 
       if (this._activeJobId === targetJobId) {
-        this._pendingCancelCallbacks++
+        const cancelComplete = new Promise(resolve => {
+          this._onCancelComplete = resolve
+        })
+        this._activeJobId = null
         await this._binding.cancel(this._handle)
+        await cancelComplete
         this._bufferedAudio = []
         this._bufferedBytes = 0
-        this._activeJobId = null
         this._setState(state.LISTENING)
         return
       }
