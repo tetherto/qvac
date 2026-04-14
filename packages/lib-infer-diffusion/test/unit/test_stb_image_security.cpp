@@ -8,29 +8,29 @@
  *   - CVE-2022-28042: Heap-based use-after-free in stbi__jpeg_huff_decode
  */
 
-#include <gtest/gtest.h>
-
 #include <cstdint>
 #include <vector>
 
-#include "model-interface/SdModel.hpp"
+#include <gtest/gtest.h>
+
 #include "handlers/SdCtxHandlers.hpp"
+#include "model-interface/SdModel.hpp"
 
 using namespace qvac_lib_inference_addon_sd;
 
 // Helper to create a minimal valid PNG header
 std::vector<uint8_t> createValidPngHeader() {
   return {
-      0x89, 0x50, 0x4E, 0x47, 0x0D, 0x0A, 0x1A, 0x0A,  // PNG signature
-      0x00, 0x00, 0x00, 0x0D,                          // IHDR length
-      0x49, 0x48, 0x44, 0x52,                          // "IHDR"
-      0x00, 0x00, 0x00, 0x01,                          // width: 1
-      0x00, 0x00, 0x00, 0x01,                          // height: 1
-      0x08, 0x02, 0x00, 0x00, 0x00,                    // bit depth, color type, etc.
-      0x90, 0x77, 0x53, 0xDE,                          // CRC
-      0x00, 0x00, 0x00, 0x00,                          // IEND length
-      0x49, 0x45, 0x4E, 0x44,                          // "IEND"
-      0xAE, 0x42, 0x60, 0x82                           // CRC
+      0x89, 0x50, 0x4E, 0x47, 0x0D, 0x0A, 0x1A, 0x0A, // PNG signature
+      0x00, 0x00, 0x00, 0x0D,                         // IHDR length
+      0x49, 0x48, 0x44, 0x52,                         // "IHDR"
+      0x00, 0x00, 0x00, 0x01,                         // width: 1
+      0x00, 0x00, 0x00, 0x01,                         // height: 1
+      0x08, 0x02, 0x00, 0x00, 0x00, // bit depth, color type, etc.
+      0x90, 0x77, 0x53, 0xDE,       // CRC
+      0x00, 0x00, 0x00, 0x00,       // IEND length
+      0x49, 0x45, 0x4E, 0x44,       // "IEND"
+      0xAE, 0x42, 0x60, 0x82        // CRC
   };
 }
 
@@ -38,7 +38,7 @@ class StbImageSecurityTest : public ::testing::Test {
 protected:
   void SetUp() override {
     SdCtxConfig config{};
-    config.modelPath = "";  // Not loading actual model for image tests
+    config.modelPath = ""; // Not loading actual model for image tests
     model = std::make_unique<SdModel>(std::move(config));
   }
 
@@ -61,7 +61,7 @@ TEST_F(StbImageSecurityTest, RejectsEmptyInput) {
 TEST_F(StbImageSecurityTest, RejectsInvalidPngMagicBytes) {
   // Wrong magic bytes (not PNG signature)
   std::vector<uint8_t> notPng = {
-      0xFF, 0xD8, 0xFF, 0xE0, 0x00, 0x10, 0x4A, 0x46  // JPEG signature
+      0xFF, 0xD8, 0xFF, 0xE0, 0x00, 0x10, 0x4A, 0x46 // JPEG signature
   };
 
   auto result = model->decodePng(notPng);
@@ -86,8 +86,8 @@ TEST_F(StbImageSecurityTest, RejectsOversizedInput) {
 
   auto result = model->decodePng(huge);
 
-  EXPECT_EQ(result.data, nullptr)
-      << "Should reject images exceeding size limit (CVE-2021-28021 mitigation)";
+  EXPECT_EQ(result.data, nullptr) << "Should reject images exceeding size "
+                                     "limit (CVE-2021-28021 mitigation)";
 }
 
 TEST_F(StbImageSecurityTest, RejectsTruncatedPngHeader) {
@@ -111,8 +111,7 @@ TEST_F(StbImageSecurityTest, AcceptsValidMinimalPng) {
     EXPECT_GT(result.width, 0u);
     EXPECT_GT(result.height, 0u);
     EXPECT_LE(result.width, 16384u) << "Width should be within max dimension";
-    EXPECT_LE(result.height, 16384u)
-        << "Height should be within max dimension";
+    EXPECT_LE(result.height, 16384u) << "Height should be within max dimension";
     stbi_image_free(result.data);
   }
 }
@@ -126,7 +125,7 @@ TEST_F(StbImageSecurityTest, RejectsNullDataPointer) {
   img.width = 100;
   img.height = 100;
   img.channel = 3;
-  img.data = nullptr;  // NULL pointer
+  img.data = nullptr; // NULL pointer
 
   auto result = model->encodeToPng(img);
 
@@ -161,7 +160,7 @@ TEST_F(StbImageSecurityTest, RejectsOversizedDimensions) {
   uint8_t dummyData[3] = {0, 0, 0};
 
   sd_image_t img{};
-  img.width = 20000;  // Exceeds MAX_DIMENSION (16384)
+  img.width = 20000; // Exceeds MAX_DIMENSION (16384)
   img.height = 20000;
   img.channel = 3;
   img.data = dummyData;
@@ -177,7 +176,7 @@ TEST_F(StbImageSecurityTest, RejectsInvalidChannelCount) {
   sd_image_t img{};
   img.width = 100;
   img.height = 100;
-  img.channel = 7;  // Invalid (must be 3 or 4)
+  img.channel = 7; // Invalid (must be 3 or 4)
   img.data = dummyData;
 
   auto result = model->encodeToPng(img);
@@ -206,10 +205,18 @@ TEST_F(StbImageSecurityTest, PreventsStrideOverflow) {
 TEST_F(StbImageSecurityTest, EncodesValidSmallImage) {
   // Create a small 2x2 RGB image
   std::vector<uint8_t> pixels = {
-      255, 0,   0,    // Red
-      0,   255, 0,    // Green
-      0,   0,   255,  // Blue
-      255, 255, 255   // White
+      255,
+      0,
+      0, // Red
+      0,
+      255,
+      0, // Green
+      0,
+      0,
+      255, // Blue
+      255,
+      255,
+      255 // White
   };
 
   sd_image_t img{};
@@ -241,10 +248,18 @@ TEST_F(StbImageSecurityTest, EncodesValidSmallImage) {
 TEST_F(StbImageSecurityTest, RoundTripEncodeDecode) {
   // Create a small test image
   std::vector<uint8_t> originalPixels = {
-      128, 64, 32,   // Pixel 1
-      32,  64, 128,  // Pixel 2
-      255, 0,  0,    // Pixel 3
-      0,   255, 0    // Pixel 4
+      128,
+      64,
+      32, // Pixel 1
+      32,
+      64,
+      128, // Pixel 2
+      255,
+      0,
+      0, // Pixel 3
+      0,
+      255,
+      0 // Pixel 4
   };
 
   sd_image_t original{};
@@ -264,7 +279,7 @@ TEST_F(StbImageSecurityTest, RoundTripEncodeDecode) {
   // Verify dimensions
   EXPECT_EQ(decoded.width, original.width);
   EXPECT_EQ(decoded.height, original.height);
-  EXPECT_EQ(decoded.channel, 3u);  // Forced to 3 in decodePng
+  EXPECT_EQ(decoded.channel, 3u); // Forced to 3 in decodePng
 
   // Cleanup
   stbi_image_free(decoded.data);
