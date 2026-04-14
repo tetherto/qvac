@@ -202,7 +202,7 @@ const config = {
 }
 ```
 
-All config values are coerced to strings internally before being passed to the native layer.
+Config values are coerced to strings internally. Generation parameters (prompt, steps, seed, etc.) are JSON-serialized with their native types preserved.
 
 | Parameter | Type | Default | Description |
 |-----------|------|---------|-------------|
