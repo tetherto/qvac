@@ -248,6 +248,39 @@ function findGroundTruth (imagePath) {
   return null
 }
 
+/**
+ * Word Recognition Rate — what fraction of unique reference words appear
+ * anywhere in the OCR output (single-word substring match).
+ *
+ * This is the same method used by the Android benchmark script: tokenize
+ * the reference text into individual words, then check each one against
+ * the joined OCR output. Because it operates on single words it is
+ * inherently order-independent and tolerant of extra/missing whitespace.
+ *
+ * Returns { rate, matched, missed, total }.
+ */
+function wordRecognitionRate (ocrTexts, referenceText) {
+  const joined = (Array.isArray(ocrTexts) ? ocrTexts.join(' ') : String(ocrTexts)).toLowerCase()
+  const refWords = [...new Set(tokenize(referenceText))]
+  const matched = []
+  const missed = []
+
+  for (const w of refWords) {
+    if (joined.includes(w)) {
+      matched.push(w)
+    } else {
+      missed.push(w)
+    }
+  }
+
+  return {
+    rate: refWords.length > 0 ? matched.length / refWords.length : 1,
+    matched,
+    missed,
+    total: refWords.length
+  }
+}
+
 // ---------------------------------------------------------------------------
 // Full quality evaluation
 // ---------------------------------------------------------------------------
@@ -272,6 +305,12 @@ function evaluateQuality (ocrTexts, groundTruth) {
   if (gt.reference_text) {
     result.cer = round4(cer(joinedOutput, gt.reference_text))
     result.wer = round4(wer(joinedOutput, gt.reference_text))
+
+    const wrr = wordRecognitionRate(texts, gt.reference_text)
+    result.word_recognition_rate = round4(wrr.rate)
+    result.words_recognized = wrr.matched.length
+    result.words_total = wrr.total
+    result.words_missed = wrr.missed
   }
 
   if (gt.required_keywords && gt.required_keywords.length > 0) {
@@ -310,6 +349,7 @@ module.exports = {
   wer,
   keywordDetectionRate,
   keyValueAccuracy,
+  wordRecognitionRate,
   loadGroundTruth,
   findGroundTruth,
   evaluateQuality

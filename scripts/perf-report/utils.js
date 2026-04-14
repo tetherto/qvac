@@ -92,7 +92,7 @@ const QUALITY_LABELS = {
 
 function formatQualityValue (key, value) {
   if (value === null || value === undefined) return '-'
-  if (['cer', 'wer', 'keyword_detection_rate', 'key_value_accuracy'].includes(key)) {
+  if (['cer', 'wer', 'word_recognition_rate', 'keyword_detection_rate', 'key_value_accuracy'].includes(key)) {
     return (value * 100).toFixed(1) + '%'
   }
   if (Number.isInteger(value)) return String(value)
@@ -148,7 +148,7 @@ function generateMarkdownReport (aggregated) {
       lines.push(`### ${deviceName}`)
       lines.push('')
 
-      const qHeader = ['Test', 'CER', 'WER', 'Keyword Rate', 'KV Accuracy']
+      const qHeader = ['Test', 'CER', 'WER', 'Word Recognition', 'Keyword Rate', 'KV Accuracy']
       lines.push('| ' + qHeader.join(' | ') + ' |')
       lines.push('| ' + qHeader.map(() => '---').join(' | ') + ' |')
 
@@ -156,9 +156,10 @@ function generateMarkdownReport (aggregated) {
         if (!Object.keys(metrics).length) continue
         const cerVal = metrics.cer ? formatQualityValue('cer', metrics.cer.mean) : '-'
         const werVal = metrics.wer ? formatQualityValue('wer', metrics.wer.mean) : '-'
+        const wrrVal = metrics.word_recognition_rate ? formatQualityValue('word_recognition_rate', metrics.word_recognition_rate.mean) : '-'
         const kwRate = metrics.keyword_detection_rate ? formatQualityValue('keyword_detection_rate', metrics.keyword_detection_rate.mean) : '-'
         const kvAcc = metrics.key_value_accuracy ? formatQualityValue('key_value_accuracy', metrics.key_value_accuracy.mean) : '-'
-        lines.push(`| ${testName} | ${cerVal} | ${werVal} | ${kwRate} | ${kvAcc} |`)
+        lines.push(`| ${testName} | ${cerVal} | ${werVal} | ${wrrVal} | ${kwRate} | ${kvAcc} |`)
       }
       lines.push('')
     }
@@ -474,8 +475,8 @@ function generateHtmlReport (aggregated) {
   const qualityDetails = aggregated.quality_details || {}
 
   if (quality && Object.keys(quality).length > 0) {
-    const qualityKeys = ['cer', 'wer', 'keyword_detection_rate', 'key_value_accuracy']
-    const qLabels = { cer: 'CER', wer: 'WER', keyword_detection_rate: 'Keyword Detection', key_value_accuracy: 'KV Accuracy' }
+    const qualityKeys = ['cer', 'wer', 'word_recognition_rate', 'keyword_detection_rate', 'key_value_accuracy']
+    const qLabels = { cer: 'CER', wer: 'WER', word_recognition_rate: 'Word Recognition', keyword_detection_rate: 'Keyword Detection', key_value_accuracy: 'KV Accuracy' }
     const LOWER_IS_BETTER_Q = new Set(['cer', 'wer'])
     const colCount = qualityKeys.length + 1
 
@@ -983,13 +984,27 @@ ${qualitySection ? `
     </div>
 
     <div class="method-card">
+      <h5>Word Recognition — Single-Word Detection</h5>
+      <p class="method-formula">Rate = unique_words_found / unique_words_in_reference</p>
+      <p>Tokenizes the reference text into <strong>unique individual words</strong>, then checks whether each word
+      appears anywhere in the OCR output (case-insensitive substring match). This is the same approach used by
+      the <strong>Android on-device benchmark</strong> (Dima's benchmark script).
+      <strong>Higher is better; 100% = every word found.</strong></p>
+      <p class="method-note">This metric is inherently order-independent and lenient — it only asks "did the OCR see this word at all?"
+      It does not check spelling accuracy, word order, or whether key-value pairs are correctly associated.
+      It will show high scores (&gt;95%) even when the full text has significant errors, because most individual
+      common words are correctly recognized.</p>
+    </div>
+
+    <div class="method-card">
       <h5>Keyword Detection Rate</h5>
       <p class="method-formula">Rate = keywords_found / keywords_expected</p>
       <p>Checks whether specific <strong>expected terms</strong> (medical terms, patient identifiers, section headers)
       appear anywhere in the OCR output. Multi-word keywords (e.g., "ALLIED CARE EXPERTS") use <strong>word-level matching</strong>
       — every word in the phrase must exist somewhere in the output, regardless of order.
       <strong>Higher is better; 100% = all keywords found.</strong></p>
-      <p class="method-note">Failures here mean the OCR genuinely could not recognize the term — e.g., reading "ALTISGPT" instead of "ALT/SGPT".</p>
+      <p class="method-note">Unlike Word Recognition, this uses a curated list of domain-specific terms. Failures mean the OCR genuinely
+      could not recognize the term — e.g., reading "ALTISGPT" instead of "ALT/SGPT".</p>
     </div>
 
     <div class="method-card">
@@ -1002,7 +1017,12 @@ ${qualitySection ? `
     </div>
   </div>
 
-  <p style="margin-top:0.8rem"><strong>Note on token sorting:</strong> OCR engines return text regions as individual bounding boxes in spatial
+  <p style="margin-top:0.8rem"><strong>Two approaches to accuracy:</strong> The <em>Word Recognition</em> rate answers "can the OCR see
+  individual words?" — it is lenient and typically shows high scores (&gt;95%). The <em>CER/WER</em> metrics answer "how accurately can
+  you reconstruct the full document text?" — they are stricter and reflect real-world extraction quality. Both are valuable:
+  Word Recognition confirms the engine works; CER/WER reveals how much post-processing or error correction may be needed.</p>
+
+  <p style="margin-top:0.4rem"><strong>Note on token sorting:</strong> OCR engines return text regions as individual bounding boxes in spatial
   detection order, not natural reading order. The same document may be read top-to-bottom on one platform and bottom-to-top on another.
   Sorting tokens alphabetically before computing CER/WER makes the metrics <strong>reading-order independent</strong>,
   ensuring consistent, comparable results across desktop, Android, and iOS.</p>

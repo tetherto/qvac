@@ -132,6 +132,21 @@ try {
       var r = rTokens.join(' ')
       result.cer = _round4(r.length === 0 ? (h.length === 0 ? 0 : 1) : _levenshtein(h, r) / r.length)
       result.wer = _round4(rTokens.length === 0 ? (hTokens.length === 0 ? 0 : 1) : _levenshtein(hTokens, rTokens) / rTokens.length)
+
+      var ocrLower = joined.toLowerCase()
+      var uniqueRef = {}
+      for (var ri = 0; ri < rTokens.length; ri++) { uniqueRef[rTokens[ri]] = true }
+      var refList = Object.keys(uniqueRef)
+      var wrrMatched = 0
+      var wrrMissed = []
+      for (var wri = 0; wri < refList.length; wri++) {
+        if (ocrLower.indexOf(refList[wri]) >= 0) wrrMatched++
+        else wrrMissed.push(refList[wri])
+      }
+      result.word_recognition_rate = _round4(refList.length > 0 ? wrrMatched / refList.length : 1)
+      result.words_recognized = wrrMatched
+      result.words_total = refList.length
+      result.words_missed = wrrMissed
     }
 
     if (gt.required_keywords && gt.required_keywords.length > 0) {
@@ -621,6 +636,9 @@ function formatOCRPerformanceMetrics (label, stats, outputTexts = [], opts) {
     out += '\n    --- Quality ---'
     if (quality.cer !== undefined) out += `\n    - CER: ${(quality.cer * 100).toFixed(1)}%`
     if (quality.wer !== undefined) out += `\n    - WER: ${(quality.wer * 100).toFixed(1)}%`
+    if (quality.word_recognition_rate !== undefined) {
+      out += `\n    - Word Recognition: ${quality.words_recognized}/${quality.words_total} (${(quality.word_recognition_rate * 100).toFixed(1)}%)`
+    }
     if (quality.keyword_detection_rate !== undefined) {
       out += `\n    - Keywords: ${quality.keywords_found}/${quality.keywords_total} (${(quality.keyword_detection_rate * 100).toFixed(1)}%)`
     }
