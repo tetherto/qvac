@@ -540,7 +540,7 @@ function generateHtmlReport (aggregated) {
         let imgThumb = ''
         const imgSrc = _findTestImage(testName, imageDataCache)
         if (imgSrc) {
-          imgThumb = ` <a href="${imgSrc}" target="_blank" class="img-thumb-link"><img src="${imgSrc}" class="img-thumb" alt="test image"></a>`
+          imgThumb = ` <img src="${imgSrc}" class="img-thumb" alt="test image" onclick="openLightbox(this.src)">`
         }
 
         qRows += `<tr><td class="metric-name">${escapeHtml(testName)}${imgThumb}</td>${cells}</tr>`
@@ -882,25 +882,40 @@ function generateHtmlReport (aggregated) {
   }
 
   .img-thumb {
-    height: 32px;
+    height: 28px;
     width: auto;
     border-radius: 3px;
     vertical-align: middle;
     margin-left: 6px;
     border: 1px solid var(--border);
     cursor: pointer;
-    transition: transform 0.15s;
+    transition: box-shadow 0.15s;
   }
 
   .img-thumb:hover {
-    transform: scale(3);
-    z-index: 10;
-    position: relative;
-    box-shadow: 0 4px 16px rgba(0,0,0,0.25);
+    box-shadow: 0 2px 8px rgba(0,0,0,0.3);
   }
 
-  .img-thumb-link {
-    text-decoration: none;
+  .img-lightbox {
+    display: none;
+    position: fixed;
+    inset: 0;
+    z-index: 1000;
+    background: rgba(0,0,0,0.8);
+    align-items: center;
+    justify-content: center;
+    cursor: zoom-out;
+  }
+
+  .img-lightbox.active {
+    display: flex;
+  }
+
+  .img-lightbox img {
+    max-width: 90vw;
+    max-height: 90vh;
+    border-radius: 6px;
+    box-shadow: 0 8px 32px rgba(0,0,0,0.5);
   }
 
   .misread-table {
@@ -1091,6 +1106,24 @@ ${qualitySection ? `
 </div>
 ` : ''}
 
+
+<div class="img-lightbox" id="imgLightbox" onclick="closeLightbox()">
+  <img id="lightboxImg" src="" alt="full size">
+</div>
+
+<script>
+function openLightbox(src) {
+  var lb = document.getElementById('imgLightbox');
+  document.getElementById('lightboxImg').src = src;
+  lb.classList.add('active');
+}
+function closeLightbox() {
+  document.getElementById('imgLightbox').classList.remove('active');
+}
+document.addEventListener('keydown', function(e) {
+  if (e.key === 'Escape') closeLightbox();
+});
+</script>
 
 <script type="application/json" id="report-data">
 ${escapeHtml(dataJson)}

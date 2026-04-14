@@ -610,22 +610,24 @@ function formatOCRPerformanceMetrics (label, stats, outputTexts = [], opts) {
     }
   }
 
-  _perfReporter.record(label, {
-    total_time_ms: Math.round(totalTimeMs),
-    detection_time_ms: Math.round(detectionTimeMs),
-    recognition_time_ms: Math.round(recognitionTimeMs),
-    text_regions: textRegionsCount
-  }, {
-    execution_provider: ep,
-    output: JSON.stringify(outputTexts),
-    quality,
-    image_path: (opts && opts.imagePath) || null
-  })
-  _scheduleReportWrite()
+  if (!(opts && opts.skipReport)) {
+    _perfReporter.record(label, {
+      total_time_ms: Math.round(totalTimeMs),
+      detection_time_ms: Math.round(detectionTimeMs),
+      recognition_time_ms: Math.round(recognitionTimeMs),
+      text_regions: textRegionsCount
+    }, {
+      execution_provider: ep,
+      output: JSON.stringify(outputTexts),
+      quality,
+      image_path: (opts && opts.imagePath) || null
+    })
+    _scheduleReportWrite()
 
-  if (isMobile) {
-    _perfReporter.writeReport()
-    _perfReporter.writeToConsole()
+    if (isMobile) {
+      _perfReporter.writeReport()
+      _perfReporter.writeToConsole()
+    }
   }
 
   let out = `${label} Performance Metrics:
