@@ -109,6 +109,11 @@ phases:
           BUNDLE_ID="${DEVICEFARM_APP_BUNDLE_ID:-io.tether.test.qvac}"
           FILE_COUNT=$(python3 -c "import json; print(len(json.load(open('$MANIFEST'))))" 2>/dev/null || echo "?")
           echo "Models manifest found: ${FILE_COUNT} files"
+
+          echo "Pushing cache-pending marker so the app knows to wait..."
+          echo "1" > /tmp/cache-pending
+          pymobiledevice3 apps push "$BUNDLE_ID" /tmp/cache-pending Documents/cache-pending 2>&1 || true
+
           echo "pymobiledevice3 apps push syntax:"
           pymobiledevice3 apps push -h 2>&1 | head -20 || true
           echo "Downloading models from S3 and pushing to app container..."

@@ -360,10 +360,22 @@ async function copyModelsFromCache(): Promise<boolean> {
     const manifestFile = new File(MODELS_MANIFEST_PATH);
 
     if (Platform.OS === "ios" && !manifestFile.exists) {
+      const marker = new File(`${Paths.document.uri}cache-pending`);
+      const markerTimeout = 60_000;
+      const markerPoll = 2_000;
+      const markerStart = Date.now();
+      while (!marker.exists && Date.now() - markerStart < markerTimeout) {
+        await new Promise((r) => setTimeout(r, markerPoll));
+      }
+      if (!marker.exists) {
+        console.log("📦 No cache marker — cache not enabled, skipping");
+        return false;
+      }
+
+      console.log("📦 Cache enabled, waiting for models manifest...");
       const maxWait = 1_800_000;
       const poll = 5_000;
       const start = Date.now();
-      console.log("📦 Waiting for models manifest...");
       while (!manifestFile.exists && Date.now() - start < maxWait) {
         const waited = Math.round((Date.now() - start) / 1000);
         if (waited > 0 && waited % 60 === 0) {
