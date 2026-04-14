@@ -2,11 +2,8 @@
 #include <memory>
 #include <string>
 #include <unordered_map>
-#include <variant>
 
 #include <gtest/gtest.h>
-#include <qvac-lib-inference-addon-cpp/Errors.hpp>
-#include <qvac-lib-inference-addon-cpp/RuntimeStats.hpp>
 
 #include "common/chat.h"
 #include "model-interface/LlamaModel.hpp"
@@ -14,27 +11,6 @@
 
 namespace {
 constexpr std::string_view THINK_START = "<think>";
-
-double getStatValue(
-    const qvac_lib_inference_addon_cpp::RuntimeStats& stats,
-    const std::string& key) {
-  for (const auto& stat : stats) {
-    if (stat.first == key) {
-      return std::visit(
-          [](const auto& value) -> double {
-            if constexpr (std::is_same_v<
-                              std::decay_t<decltype(value)>,
-                              double>) {
-              return value;
-            } else {
-              return static_cast<double>(value);
-            }
-          },
-          stat.second);
-    }
-  }
-  return 0.0;
-}
 bool isQwen3ModelPath(const std::string& path) {
   std::string lowerPath = path;
   std::transform(
