@@ -30,39 +30,51 @@ phases:
         failed = 0
         start = time.time()
 
+        total_dl_time = 0
+        total_push_time = 0
+
         for i, (filename, url) in enumerate(manifest.items(), 1):
             tmp_path = f"/tmp/qvac-dl-{filename}"
             print(f"[{i}/{total}] {filename}", flush=True)
 
+            t0 = time.time()
             ret = subprocess.run(
                 ["curl", "-fSL", "--connect-timeout", "30", "--max-time", "900",
                  "-o", tmp_path, url],
                 capture_output=True, text=True,
             )
+            dl_time = time.time() - t0
             if ret.returncode != 0:
                 print(f"  curl failed: {ret.stderr[:200]}", flush=True)
                 failed += 1
                 continue
 
             size_mb = round(os.path.getsize(tmp_path) / 1048576, 1)
+            total_dl_time += dl_time
 
+            t0 = time.time()
             ret = subprocess.run(
                 ["adb", "push", tmp_path,
                  f"/data/local/tmp/qvac-models/{filename}"],
                 capture_output=True, text=True,
             )
+            push_time = time.time() - t0
             os.remove(tmp_path)
 
             if ret.returncode != 0:
                 print(f"  push failed: {ret.stderr[:200]}", flush=True)
                 failed += 1
             else:
+                total_push_time += push_time
                 downloaded += 1
                 elapsed = int(time.time() - start)
-                print(f"  OK {size_mb}MB [{elapsed}s elapsed]", flush=True)
+                dl_speed = round(size_mb / dl_time, 1) if dl_time > 0 else 0
+                push_speed = round(size_mb / push_time, 1) if push_time > 0 else 0
+                print(f"  OK {size_mb}MB [dl {int(dl_time)}s @ {dl_speed}MB/s | push {int(push_time)}s @ {push_speed}MB/s | total {elapsed}s]", flush=True)
 
         elapsed = int(time.time() - start)
         print(f"Models ready: {downloaded}/{total} pushed, {failed} failed, {elapsed}s total")
+        print(f"  S3 download: {int(total_dl_time)}s | device push: {int(total_push_time)}s")
         PYEOF
         else
           echo "No models manifest (cache-models not enabled)"
