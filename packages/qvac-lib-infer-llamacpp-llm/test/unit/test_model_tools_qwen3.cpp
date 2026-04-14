@@ -156,7 +156,8 @@ TEST_F(ModelToolsQwen3Test, ToolsCompactRejectsPromptWithoutTools) {
 
   const std::string input =
       R"([{"role": "user", "content": "Hello without tools"}])";
-  EXPECT_THROW({ (void)processPrompt(model, input); }, qvac_errors::StatusError);
+  EXPECT_THROW(
+      { (void)processPrompt(model, input); }, qvac_errors::StatusError);
 }
 
 TEST_F(ModelToolsQwen3Test, ToolsCompactRejectsToolsWithoutUserMessage) {
@@ -171,7 +172,8 @@ TEST_F(ModelToolsQwen3Test, ToolsCompactRejectsToolsWithoutUserMessage) {
 
   const std::string input =
       R"([{"type":"function","name":"getWeather","parameters":{"type":"object"}}])";
-  EXPECT_THROW({ (void)processPrompt(model, input); }, qvac_errors::StatusError);
+  EXPECT_THROW(
+      { (void)processPrompt(model, input); }, qvac_errors::StatusError);
 }
 
 TEST_F(ModelToolsQwen3Test, ToolsCompactRejectsSplitOrDetachedToolBlocks) {
