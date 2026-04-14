@@ -15,6 +15,7 @@ const isDarwin = platform === 'darwin'
 const CHATTERBOX_VARIANT = os.getEnv('CHATTERBOX_VARIANT') || 'fp32'
 const VARIANT_SUFFIX = CHATTERBOX_VARIANT === 'fp32' ? '' : `_${CHATTERBOX_VARIANT}`
 const INPUT_SENTENCES = (isMobile ? 'short' : os.getEnv('INPUT_SENTENCES')) || 'short'
+const TEST_ALL_LANGUAGES = os.getEnv('TEST_ALL_LANGUAGES') === 'true'
 const useSplit = INPUT_SENTENCES !== 'short'
 
 function chatterboxPath (modelDir, baseName, isMultilingual = false) {
@@ -35,11 +36,30 @@ const ENGLISH_SENTENCES_SHORT = [
   'How are you doing today?'
 ]
 
-const MULTILINGUAL_SENTENCES_SHORT = {
+const MULTILINGUAL_SENTENCES_BASE = {
   es: 'Hola mundo. Esta es una prueba del sistema de texto a voz.',
   he: 'שלום עולם.',
   ko: '안녕하세요. 한글입니다.'
 }
+
+const MULTILINGUAL_SENTENCES_EXTENDED = {
+  ar: 'مرحبا بالعالم.',
+  da: 'Hej verden. Vejret er smukt i dag.',
+  el: 'Γεια σου κόσμε. Ο καιρός είναι όμορφος.',
+  fi: 'Hei maailma. Sää on kaunis tänään.',
+  hi: 'नमस्ते दुनिया. आज मौसम अच्छा है.',
+  ms: 'Helo dunia. Cuaca hari ini sangat cantik.',
+  nl: 'Hallo wereld. Het weer is vandaag prachtig.',
+  no: 'Hei verden. Været er vakkert i dag.',
+  pl: 'Witaj świecie. Pogoda jest dziś piękna.',
+  sv: 'Hej världen. Vädret är vackert idag.',
+  sw: 'Habari dunia. Hali ya hewa ni nzuri leo.',
+  tr: 'Merhaba dünya. Bugün hava çok güzel.'
+}
+
+const MULTILINGUAL_SENTENCES_SHORT = TEST_ALL_LANGUAGES
+  ? { ...MULTILINGUAL_SENTENCES_BASE, ...MULTILINGUAL_SENTENCES_EXTENDED }
+  : MULTILINGUAL_SENTENCES_BASE
 
 function getEnglishSentences () {
   if (INPUT_SENTENCES === 'short') return ENGLISH_SENTENCES_SHORT
@@ -317,7 +337,7 @@ test('Supertonic TTS: Basic synthesis test', { timeout: 1800000 }, async (t) => 
     modelDir,
     voiceName: 'F1',
     language: 'en',
-    supertonicMultilingual: true
+    supertonicMultilingual: false
   }
 
   console.log('\n=== Loading Supertonic TTS model ===')
@@ -383,7 +403,7 @@ test('Supertonic TTS: Multiple sentences synthesis', { timeout: 1800000 }, async
     modelDir,
     voiceName: 'F1',
     language: 'en',
-    supertonicMultilingual: true
+    supertonicMultilingual: false
   }
 
   const expectation = {
@@ -458,7 +478,7 @@ test('Supertonic TTS: WER test (TTS + Whisper)', { timeout: 1800000 }, async (t)
   }
 
   const text = 'The quick brown fox jumps over the lazy dog.'
-  const modelParams = { modelDir, voiceName: 'F1', language: 'en', supertonicMultilingual: true }
+  const modelParams = { modelDir, voiceName: 'F1', language: 'en', supertonicMultilingual: false }
 
   console.log('\n=== Loading Supertonic TTS and running synthesis ===')
   const ttsModel = await loadSupertonicTTS(modelParams)

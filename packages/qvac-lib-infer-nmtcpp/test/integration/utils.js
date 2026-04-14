@@ -137,10 +137,8 @@ function loadConfigFromAssets (filename) {
 
 /**
  * Ensures IndicTrans model is available
- * Uses INDICTRANS_MODEL_PATH env var or downloads from S3 on mobile
- *
  * Desktop: Expects model at ../../model/indictrans/ggml-indictrans2-en-indic-dist-200M-q4_0.bin
- * Mobile: Downloads from presigned S3 URL configured in indictrans-model-urls.json
+ * Mobile: Downloads from presigned URL configured in indictrans-model-urls.json
  *
  * @returns {Promise<string>} Path to IndicTrans model file
  * @throws {Error} If model not found/available or corrupted (< 100MB)
@@ -165,7 +163,7 @@ async function ensureIndicTransModel () {
     throw new Error(`IndicTrans model not found at ${modelPath}. Please download it first.`)
   }
 
-  // Mobile: Download from presigned S3 URL
+  // Mobile: Download from presigned URL
   const configFilename = 'indictrans-model-urls.json'
   const urlConfig = loadConfigFromAssets(configFilename)
 
@@ -195,8 +193,7 @@ async function ensureIndicTransModel () {
  *
  * Download priority:
  *   1. Check local path (../../model/bergamot/enit/)
- *   2. Download from Hyperdrive (if key available for the pair)
- *   3. Fallback: download directly from Firefox Remote Settings CDN
+ *   2. Fallback: download directly from Firefox Remote Settings CDN
  *
  * @returns {Promise<string>} Path to Bergamot model directory
  * @throws {Error} If model files not found/available
@@ -218,7 +215,7 @@ async function ensureBergamotModel () {
     }
   }
 
-  // Not found locally — download via Hyperdrive (primary) or Firefox CDN (fallback)
+  // Not found locally — download from Firefox CDN
   const writableRoot = isMobile ? (global.testDir || '/tmp') : path.resolve(__dirname, '../..')
   const destDir = path.join(writableRoot, 'model', 'bergamot', 'enit')
 

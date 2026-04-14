@@ -1,6 +1,6 @@
 {
   "name": "@qvac/tts-onnx",
-  "version": "0.7.2",
+  "version": "0.8.2",
   "description": "Text to Speech (TTS) addon for qvac",
   "addon": true,
   "engines": {
@@ -70,7 +70,7 @@
   "bugs": "https://github.com/tetherto/qvac/issues",
   "homepage": "https://github.com/tetherto/qvac/tree/main/packages/qvac-lib-infer-onnx-tts#readme",
   "devDependencies": {
-    "@qvac/transcription-whispercpp": "^0.3.1",
+    "@qvac/transcription-whispercpp": "^0.5.5",
     "bare-buffer": "^3.4.2",
     "bare-node-stream": "^1.0.0",
     "bare-process": "^4.2.2",
@@ -92,8 +92,8 @@
   },
   "dependencies": {
     "@qvac/error": "^0.1.0",
-    "@qvac/infer-base": "^0.1.0",
     "@qvac/onnx": "^0.14.0",
+    "@qvac/infer-base": "^0.4.0",
     "bare-fs": "^4.5.1",
     "bare-path": "^3.0.0"
   },

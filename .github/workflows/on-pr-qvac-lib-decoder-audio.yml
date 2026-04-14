@@ -51,6 +51,7 @@ permissions:
   pull-requests: read
   packages: read
   checks: read
+  id-token: write
 
 jobs:
   authorize:
@@ -138,7 +139,7 @@ jobs:
     environment: release
     steps:
       - name: Run Sanity checks
-        uses: tetherto/qvac-devops/.github/actions/sanity-checks@v1.1.7
+        uses: tetherto/oss-actions/.github/actions/sanity-checks@v1.1.0
         with:
           secret-token: ${{ secrets.GITHUB_TOKEN }}
           npm-token: ${{ secrets.NPM_TOKEN }}
@@ -149,6 +150,10 @@ jobs:
   run-integration-tests:
     needs: context
     if: needs.context.outputs.run_verify == 'true' || github.event_name == 'workflow_dispatch'
+    permissions:
+      contents: read
+      packages: read
+      id-token: write
     uses: ./.github/workflows/integration-test-qvac-lib-decoder-audio.yml
     secrets: inherit
     with:
@@ -161,6 +166,7 @@ jobs:
       contents: read
       packages: read
       pull-requests: write # Allow commenting on PRs
+      id-token: write
     needs: context
     if: needs.context.outputs.run_verify == 'true' || github.event_name == 'workflow_dispatch'
     uses: ./.github/workflows/integration-mobile-test-qvac-lib-decoder-audio.yml
@@ -173,7 +179,7 @@ jobs:
   merge-guard:
     needs: [authorize, sanity-checks, run-integration-tests, run-mobile-integration-tests]
     if: always()
-    uses: tetherto/qvac-devops/.github/workflows/public-pr.yml@v1.1.7
+    uses: tetherto/oss-actions/.github/workflows/public-pr.yml@v1.1.0
     with:
       sanity-checks-status: ${{ needs.sanity-checks.result == 'success' }}
       build-status: ${{ needs.run-integration-tests.result == 'success' || needs.run-integration-tests.result == 'skipped' }}

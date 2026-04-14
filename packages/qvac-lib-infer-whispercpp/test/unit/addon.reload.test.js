@@ -2,7 +2,6 @@
 
 const test = require('brittle')
 const TranscriptionWhispercpp = require('../../index.js')
-const FakeDL = require('../mocks/loader.fake.js')
 const MockedBinding = require('../mocks/MockedBinding.js')
 const { wait, transitionCb } = require('../mocks/utils.js')
 const { WhisperInterface } = require('../../whisper')
@@ -18,11 +17,8 @@ function createTestModel ({ onOutput = () => { }, binding = undefined } = {}) {
   // Restore any existing stub first
   TranscriptionWhispercpp.prototype.validateModelFiles?.restore?.()
   const args = {
-    modelName: 'ggml-tiny.bin',
-    loader: new FakeDL({}),
-    params: {
-      language: 'en',
-      temperature: 0.0
+    files: {
+      model: 'ggml-tiny.bin'
     }
   }
   const config = {

@@ -118,8 +118,8 @@ async function setupModel (t, overrides = {}) {
   return { model, dirPath }
 }
 
-async function runAndCollect (model, prompt) {
-  const response = await model.run(prompt)
+async function runAndCollect (model, prompt, runOptions) {
+  const response = await model.run(prompt, runOptions)
   const chunks = []
   let chain = response.onUpdate(data => { chunks.push(data) })
   if (typeof response.onError === 'function') {
@@ -136,31 +136,29 @@ test('[dynamic-tools] multi-turn session with changing tools does not accumulate
   const { model, dirPath } = await setupModel(t)
   const sessionName = path.join(dirPath, 'dynamic-tools-changing.bin')
 
+  const opts = { cacheKey: sessionName }
   const prompt1 = [
-    { role: 'session', content: sessionName },
     SYSTEM_MESSAGE,
     { role: 'user', content: 'Hello, what can you do?' },
     TOOL_A
   ]
-  const r1 = await runAndCollect(model, prompt1)
+  const r1 = await runAndCollect(model, prompt1, opts)
   t.ok(r1.output.length > 0, 'turn 1 produces output')
   t.ok(r1.stats.CacheTokens > 0, 'turn 1 has cache tokens')
 
   const prompt2 = [
-    { role: 'session', content: sessionName },
     { role: 'user', content: 'Search for laptops' },
     TOOL_B
   ]
-  const r2 = await runAndCollect(model, prompt2)
+  const r2 = await runAndCollect(model, prompt2, opts)
   t.ok(r2.output.length > 0, 'turn 2 produces output')
   t.ok(r2.stats.CacheTokens > 0, 'turn 2 has cache tokens')
 
   const prompt3 = [
-    { role: 'session', content: sessionName },
     { role: 'user', content: 'Send a report' },
     TOOL_C
   ]
-  const r3 = await runAndCollect(model, prompt3)
+  const r3 = await runAndCollect(model, prompt3, opts)
   t.ok(r3.output.length > 0, 'turn 3 produces output')
   t.ok(r3.stats.CacheTokens > 0, 'turn 3 has cache tokens')
 
@@ -180,22 +178,21 @@ test('[dynamic-tools] multi-turn session with same tools works correctly', { tim
   const { model, dirPath } = await setupModel(t)
   const sessionName = path.join(dirPath, 'dynamic-tools-same.bin')
 
+  const opts = { cacheKey: sessionName }
   const prompt1 = [
-    { role: 'session', content: sessionName },
     SYSTEM_MESSAGE,
     { role: 'user', content: 'What is the weather in Paris?' },
     TOOL_A
   ]
-  const r1 = await runAndCollect(model, prompt1)
+  const r1 = await runAndCollect(model, prompt1, opts)
   t.ok(r1.output.length > 0, 'turn 1 produces output')
   t.ok(r1.stats.CacheTokens > 0, 'turn 1 has cache tokens')
 
   const prompt2 = [
-    { role: 'session', content: sessionName },
     { role: 'user', content: 'What about London?' },
     TOOL_A
   ]
-  const r2 = await runAndCollect(model, prompt2)
+  const r2 = await runAndCollect(model, prompt2, opts)
   t.ok(r2.output.length > 0, 'turn 2 produces output')
   t.ok(r2.stats.CacheTokens > 0, 'turn 2 has cache tokens')
   t.ok(

@@ -2,100 +2,306 @@
 
 const { platform } = require('bare-os')
 const path = require('bare-path')
+const QvacLogger = require('@qvac/logging')
+const {
+  createJobHandler,
+  exclusiveRunQueue,
+  getApiDefinition: inferGetApiDefinition
+} = require('@qvac/infer-base')
 const { TTSInterface } = require('./tts')
 const { QvacErrorAddonTTS, ERR_CODES } = require('./lib/error')
-const InferBase = require('@qvac/infer-base/WeightsProvider/BaseInference')
-const WeightsProvider = require('@qvac/infer-base/WeightsProvider/WeightsProvider')
 
 // Engine types
 const ENGINE_CHATTERBOX = 'chatterbox'
 const ENGINE_SUPERTONIC = 'supertonic'
-const ONLY_ONE_JOB_ID = 'OnlyOneJob'
 
-function createBusyJobError () {
-  return new QvacErrorAddonTTS({ code: ERR_CODES.JOB_ALREADY_RUNNING })
+function firstNonEmpty (...candidates) {
+  for (let i = 0; i < candidates.length; i++) {
+    const v = candidates[i]
+    if (v != null && v !== '') return v
+  }
+  return undefined
 }
 
-class ONNXTTS extends InferBase {
-  constructor ({
-    tokenizerPath,
-    speechEncoderPath,
-    embedTokensPath,
-    conditionalDecoderPath,
-    languageModelPath,
-    referenceAudio,
-    // Supertone / Supertonic (official 4-ONNX + unicode + voice_styles JSON)
-    modelDir,
-    textEncoderPath,
-    durationPredictorPath,
-    vectorEstimatorPath,
-    vocoderPath,
-    unicodeIndexerPath,
-    ttsConfigPath,
-    voiceStyleJsonPath,
-    voiceName,
-    speed,
-    numInferenceSteps,
-    supertonicMultilingual,
-    lazySessionLoading,
-    loader, cache, logger, ...args
-  }, config = {}) {
-    super(args)
+/**
+ * Whether `n` has at least one non-empty explicit artifact path (tokenizer, encoders,
+ * vocoder, config, etc.). Used with `modelDir` to tell Chatterbox vs Supertonic layouts apart.
+ * @param {Record<string, unknown>} n Normalized files map (same shape as {@link normalizeOnnxTtsFiles} output).
+ */
+function hasAnyExplicitArtifact (n) {
+  const keys = [
+    'tokenizer', 'speechEncoder', 'embedTokens', 'conditionalDecoder', 'languageModel',
+    'textEncoder', 'durationPredictor', 'vectorEstimator', 'vocoder',
+    'unicodeIndexer', 'ttsConfig', 'voiceStyle'
+  ]
+  for (let i = 0; i < keys.length; i++) {
+    const v = n[keys[i]]
+    if (v != null && v !== '') return true
+  }
+  return false
+}
 
-    this._loader = loader
-    this._weightsProvider = loader ? new WeightsProvider(loader, logger) : null
-    this._cache = cache || '.'
-    this._config = config
-    this._logger = logger
-    this._hasActiveResponse = false
+/**
+ * @param {{ engine?: string }} options
+ * @param {Record<string, string | undefined>} normalizedFiles
+ */
+function resolveEngineType (options, normalizedFiles) {
+  const e = options.engine
+  if (e != null && e !== '') {
+    if (e === ENGINE_CHATTERBOX || e === ENGINE_SUPERTONIC) return e
+    throw new Error(
+      `ONNXTTS: invalid engine "${e}"; use "${ENGINE_CHATTERBOX}" or "${ENGINE_SUPERTONIC}"`
+    )
+  }
+
+  const modelDirSet =
+    normalizedFiles.modelDir != null && normalizedFiles.modelDir !== ''
+  if (modelDirSet && !hasAnyExplicitArtifact(normalizedFiles)) {
+    return ENGINE_SUPERTONIC
+  }
+
+  if (
+    (normalizedFiles.textEncoder != null && normalizedFiles.textEncoder !== '') ||
+    (normalizedFiles.durationPredictor != null && normalizedFiles.durationPredictor !== '')
+  ) {
+    return ENGINE_SUPERTONIC
+  }
+
+  return ENGINE_CHATTERBOX
+}
+
+function ttsOutputDebugString (data) {
+  if (!data) return ''
+  if (typeof data === 'object') {
+    return JSON.stringify(data)
+  }
+  return data.toString()
+}
+
+function normalizeOnnxTtsFiles (files) {
+  if (files == null || typeof files !== 'object') {
+    return {}
+  }
+  const f = files
+  return {
+    modelDir: firstNonEmpty(f.modelDir),
+    tokenizer: firstNonEmpty(f.tokenizer, f.tokenizerPath),
+    speechEncoder: firstNonEmpty(f.speechEncoder, f.speechEncoderPath),
+    embedTokens: firstNonEmpty(f.embedTokens, f.embedTokensPath),
+    conditionalDecoder: firstNonEmpty(f.conditionalDecoder, f.conditionalDecoderPath),
+    languageModel: firstNonEmpty(f.languageModel, f.languageModelPath),
+    textEncoder: firstNonEmpty(f.textEncoder, f.textEncoderPath, f.supertonicModel),
+    durationPredictor: firstNonEmpty(
+      f.durationPredictor,
+      f.durationPredictorPath,
+      f.latentDenoiser,
+      f.latentDenoiserPath
+    ),
+    vectorEstimator: firstNonEmpty(f.vectorEstimator, f.vectorEstimatorPath),
+    vocoder: firstNonEmpty(
+      f.vocoder,
+      f.vocoderPath,
+      f.voiceDecoder,
+      f.voiceDecoderPath,
+      f.supertonicVocoder
+    ),
+    unicodeIndexer: firstNonEmpty(f.unicodeIndexer, f.unicodeIndexerPath),
+    ttsConfig: firstNonEmpty(f.ttsConfig, f.ttsConfigPath),
+    voiceStyle: firstNonEmpty(f.voiceStyle, f.voiceStyleJsonPath),
+    voicesDir: firstNonEmpty(f.voicesDir)
+  }
+}
+
+class ONNXTTS {
+  constructor (options = {}) {
+    const {
+      files: filesInput = {},
+      config = {},
+      engine,
+      logger,
+      lazySessionLoading,
+      referenceAudio,
+      voiceName,
+      speed,
+      numInferenceSteps,
+      supertonicMultilingual,
+      opts,
+      exclusiveRun
+    } = options
+
+    this.opts = opts || {}
+    this.exclusiveRun = !!exclusiveRun
+    this.logger = new QvacLogger(logger)
+    this.state = {
+      configLoaded: false,
+      weightsLoaded: false,
+      destroyed: false
+    }
+    this.addon = null
+    this._job = createJobHandler({
+      cancel: () => {
+        const a = this.addon
+        return a ? a.cancel() : undefined
+      }
+    })
+    this._runExclusive = this.exclusiveRun
+      ? exclusiveRunQueue()
+      : async function runNow (fn) {
+        return fn()
+      }
+
+    const normalizedFiles = normalizeOnnxTtsFiles(filesInput)
+
+    this._engineType = resolveEngineType({ engine }, normalizedFiles)
+
+    if (
+      this._engineType === ENGINE_SUPERTONIC &&
+      !normalizedFiles.modelDir &&
+      normalizedFiles.textEncoder &&
+      !normalizedFiles.vectorEstimator
+    ) {
+      normalizedFiles.vectorEstimator = path.join(
+        path.dirname(normalizedFiles.textEncoder),
+        'vector_estimator.onnx'
+      )
+    }
+
+    this._config = { ...config }
 
     this._lazySessionLoading = lazySessionLoading != null
       ? lazySessionLoading
       : (platform() === 'ios' || platform() === 'android')
 
-    const hasSupertonicPaths =
-      (textEncoderPath != null && textEncoderPath !== '') ||
-      (durationPredictorPath != null && durationPredictorPath !== '') ||
-      (modelDir != null && modelDir !== '' && voiceName != null && voiceName !== '')
-    this._engineType = hasSupertonicPaths ? ENGINE_SUPERTONIC : ENGINE_CHATTERBOX
-
     if (this._engineType === ENGINE_CHATTERBOX) {
-      this._tokenizerPath = tokenizerPath
-      this._speechEncoderPath = speechEncoderPath
-      this._embedTokensPath = embedTokensPath
-      this._conditionalDecoderPath = conditionalDecoderPath
-      this._languageModelPath = languageModelPath
+      const root = normalizedFiles.modelDir
+      if (root) {
+        this._tokenizerPath = firstNonEmpty(
+          normalizedFiles.tokenizer,
+          path.join(root, 'tokenizer.json')
+        )
+        this._speechEncoderPath = firstNonEmpty(
+          normalizedFiles.speechEncoder,
+          path.join(root, 'speech_encoder.onnx')
+        )
+        this._embedTokensPath = firstNonEmpty(
+          normalizedFiles.embedTokens,
+          path.join(root, 'embed_tokens.onnx')
+        )
+        this._conditionalDecoderPath = firstNonEmpty(
+          normalizedFiles.conditionalDecoder,
+          path.join(root, 'conditional_decoder.onnx')
+        )
+        this._languageModelPath = firstNonEmpty(
+          normalizedFiles.languageModel,
+          path.join(root, 'language_model.onnx')
+        )
+      } else {
+        this._tokenizerPath = normalizedFiles.tokenizer
+        this._speechEncoderPath = normalizedFiles.speechEncoder
+        this._embedTokensPath = normalizedFiles.embedTokens
+        this._conditionalDecoderPath = normalizedFiles.conditionalDecoder
+        this._languageModelPath = normalizedFiles.languageModel
+      }
       this._referenceAudio = referenceAudio
     } else {
-      this._modelDir = modelDir
+      this._modelDir = normalizedFiles.modelDir
       this._voiceName = voiceName ?? 'F1'
       this._speed = speed != null ? speed : 1
       this._numInferenceSteps = numInferenceSteps != null ? numInferenceSteps : 5
       this._supertonicMultilingual = supertonicMultilingual !== false
-      if (modelDir) {
-        const onnx = path.join(modelDir, 'onnx')
-        this._textEncoderPath = path.join(onnx, 'text_encoder.onnx')
-        this._durationPredictorPath = path.join(onnx, 'duration_predictor.onnx')
-        this._vectorEstimatorPath = path.join(onnx, 'vector_estimator.onnx')
-        this._vocoderPath = path.join(onnx, 'vocoder.onnx')
-        this._unicodeIndexerPath = path.join(onnx, 'unicode_indexer.json')
-        this._ttsConfigPath = path.join(onnx, 'tts.json')
-        this._voiceStyleJsonPath = path.join(modelDir, 'voice_styles', `${this._voiceName.replace(/\.json$/i, '')}.json`)
+      if (normalizedFiles.modelDir) {
+        const onnx = path.join(normalizedFiles.modelDir, 'onnx')
+        this._textEncoderPath = firstNonEmpty(
+          normalizedFiles.textEncoder,
+          path.join(onnx, 'text_encoder.onnx')
+        )
+        this._durationPredictorPath = firstNonEmpty(
+          normalizedFiles.durationPredictor,
+          path.join(onnx, 'duration_predictor.onnx')
+        )
+        this._vectorEstimatorPath = firstNonEmpty(
+          normalizedFiles.vectorEstimator,
+          path.join(onnx, 'vector_estimator.onnx')
+        )
+        this._vocoderPath = firstNonEmpty(
+          normalizedFiles.vocoder,
+          path.join(onnx, 'vocoder.onnx')
+        )
+        this._unicodeIndexerPath = firstNonEmpty(
+          normalizedFiles.unicodeIndexer,
+          path.join(onnx, 'unicode_indexer.json')
+        )
+        this._ttsConfigPath = firstNonEmpty(
+          normalizedFiles.ttsConfig,
+          path.join(onnx, 'tts.json')
+        )
+        const voiceStylesRoot = firstNonEmpty(
+          normalizedFiles.voicesDir,
+          path.join(normalizedFiles.modelDir, 'voice_styles')
+        )
+        this._voiceStyleJsonPath = firstNonEmpty(
+          normalizedFiles.voiceStyle,
+          path.join(
+            voiceStylesRoot,
+            `${this._voiceName.replace(/\.json$/i, '')}.json`
+          )
+        )
       } else {
-        this._textEncoderPath = textEncoderPath
-        this._durationPredictorPath = durationPredictorPath
-        this._vectorEstimatorPath = vectorEstimatorPath
-        this._vocoderPath = vocoderPath
-        this._unicodeIndexerPath = unicodeIndexerPath
-        this._ttsConfigPath = ttsConfigPath
-        this._voiceStyleJsonPath = voiceStyleJsonPath
+        this._textEncoderPath = normalizedFiles.textEncoder
+        this._durationPredictorPath = normalizedFiles.durationPredictor
+        this._vectorEstimatorPath = normalizedFiles.vectorEstimator
+        this._vocoderPath = normalizedFiles.vocoder
+        this._unicodeIndexerPath = firstNonEmpty(
+          normalizedFiles.unicodeIndexer,
+          normalizedFiles.tokenizer
+        )
+        this._ttsConfigPath = normalizedFiles.ttsConfig
+        this._voiceStyleJsonPath = firstNonEmpty(
+          normalizedFiles.voiceStyle,
+          normalizedFiles.voicesDir
+            ? path.join(
+              normalizedFiles.voicesDir,
+              `${this._voiceName.replace(/\.json$/i, '')}.json`
+            )
+            : undefined
+        )
       }
     }
   }
 
-  async _load (closeLoader = false, reportProgressCallback) {
-    await this._downloadWeights(reportProgressCallback, { closeLoader })
+  getApiDefinition () {
+    const api = inferGetApiDefinition()
+    this.logger.debug(
+      `Using API definition: ${api} for platform: ${platform()}`
+    )
+    return api
+  }
 
+  getState () {
+    return this.state
+  }
+
+  async load (..._args) {
+    if (this.state.destroyed) {
+      throw new QvacErrorAddonTTS({
+        code: ERR_CODES.FAILED_TO_LOAD,
+        adds: 'instance was destroyed'
+      })
+    }
+    if (this.state.configLoaded || this.state.weightsLoaded) {
+      this.logger.info('Reload requested - unloading existing model first')
+      await this.unload()
+    }
+    await this._load()
+    this.state.configLoaded = true
+    this.state.weightsLoaded = true
+  }
+
+  async run (input) {
+    return this._runExclusive(() => this._runInternal(input))
+  }
+
+  async _load () {
     this.logger.info('[TTS] Engine type:', this._engineType)
     this.logger.info('[TTS] Language:', this._config?.language || 'en')
 
@@ -104,11 +310,11 @@ class ONNXTTS extends InferBase {
       ttsParams = this._getSupertonicTtsParams()
     } else {
       ttsParams = {
-        tokenizerPath: this._resolvePath(this._tokenizerPath),
-        speechEncoderPath: this._resolvePath(this._speechEncoderPath),
-        embedTokensPath: this._resolvePath(this._embedTokensPath),
-        conditionalDecoderPath: this._resolvePath(this._conditionalDecoderPath),
-        languageModelPath: this._resolvePath(this._languageModelPath),
+        tokenizerPath: this._tokenizerPath || '',
+        speechEncoderPath: this._speechEncoderPath || '',
+        embedTokensPath: this._embedTokensPath || '',
+        conditionalDecoderPath: this._conditionalDecoderPath || '',
+        languageModelPath: this._languageModelPath || '',
         language: this._config?.language || 'en',
         useGPU: this._config?.useGPU || false,
         lazySessionLoading: this._lazySessionLoading
@@ -123,20 +329,16 @@ class ONNXTTS extends InferBase {
   }
 
   _getSupertonicTtsParams () {
-    const baseDir = this._modelDir
-      ? this._resolvePath(this._modelDir)
-      : ''
+    const baseDir = this._modelDir || ''
     return {
       modelDir: baseDir,
-      textEncoderPath: this._resolvePath(this._textEncoderPath),
-      durationPredictorPath: this._resolvePath(this._durationPredictorPath),
-      vectorEstimatorPath: this._resolvePath(this._vectorEstimatorPath),
-      vocoderPath: this._resolvePath(this._vocoderPath),
-      unicodeIndexerPath: this._resolvePath(this._unicodeIndexerPath),
-      ttsConfigPath: this._resolvePath(this._ttsConfigPath),
-      voiceStyleJsonPath: this._voiceStyleJsonPath
-        ? this._resolvePath(this._voiceStyleJsonPath)
-        : '',
+      textEncoderPath: this._textEncoderPath || '',
+      durationPredictorPath: this._durationPredictorPath || '',
+      vectorEstimatorPath: this._vectorEstimatorPath || '',
+      vocoderPath: this._vocoderPath || '',
+      unicodeIndexerPath: this._unicodeIndexerPath || '',
+      ttsConfigPath: this._ttsConfigPath || '',
+      voiceStyleJsonPath: this._voiceStyleJsonPath || '',
       voiceName: this._voiceName || 'F1',
       language: this._config?.language || 'en',
       speed: String(this._speed),
@@ -156,54 +358,6 @@ class ONNXTTS extends InferBase {
     return new TTSInterface(binding, configurationParams, outputCb)
   }
 
-  _resolvePath (filePath) {
-    if (!filePath) return ''
-    if (this._loader) {
-      return path.join(this._cache, filePath)
-    }
-    if (platform() === 'win32') {
-      return '\\\\?\\' + path.resolve(filePath)
-    }
-    return path.resolve(filePath)
-  }
-
-  async _downloadWeights (reportProgressCallback, { closeLoader }) {
-    if (!this._weightsProvider) {
-      return
-    }
-
-    const files = this._engineType === ENGINE_SUPERTONIC
-      ? [
-          this._textEncoderPath,
-          this._durationPredictorPath,
-          this._vectorEstimatorPath,
-          this._vocoderPath,
-          this._unicodeIndexerPath,
-          this._ttsConfigPath,
-          this._voiceStyleJsonPath
-        ].filter(Boolean)
-      : [
-          this._tokenizerPath,
-          this._speechEncoderPath,
-          this._embedTokensPath,
-          this._conditionalDecoderPath,
-          this._languageModelPath
-        ].filter(Boolean)
-
-    this.logger.info('Loading weight files:', files)
-
-    const result = await this._weightsProvider.downloadFiles(
-      files,
-      this._cache,
-      {
-        closeLoader,
-        onDownloadProgress: reportProgressCallback
-      }
-    )
-    this.logger.info('Weight files downloaded successfully', { files })
-    return result
-  }
-
   async unload () {
     await this.cancel()
     this._failAndClearActiveResponse('Model was unloaded')
@@ -214,45 +368,49 @@ class ONNXTTS extends InferBase {
     this.state.weightsLoaded = false
   }
 
-  async _runInternal (input) {
-    if (this._hasActiveResponse) {
-      throw createBusyJobError()
-    }
+  /**
+   * Tear down the native addon and mark this instance destroyed (see {@link ONNXTTS#getState}).
+   * @returns {Promise<void>}
+   */
+  async destroy () {
+    await this.unload()
+    this.state.destroyed = true
+  }
 
-    const response = this._createResponse(ONLY_ONE_JOB_ID)
-    let accepted
+  async _runInternal (input) {
+    const response = this._job.start()
     try {
-      accepted = await this.addon.runJob({
+      await this.addon.runJob({
         type: input.type || 'text',
         input: input.input
       })
     } catch (error) {
-      this._deleteJobMapping(ONLY_ONE_JOB_ID)
-      response.failed(error)
+      this._job.fail(error)
       throw error
     }
 
-    if (!accepted) {
-      this._deleteJobMapping(ONLY_ONE_JOB_ID)
-      const busyError = createBusyJobError()
-      response.failed(busyError)
-      throw busyError
-    }
-
-    this._hasActiveResponse = true
-    const finalized = response.await().finally(() => { this._hasActiveResponse = false })
-    finalized.catch(() => {})
-    response.await = () => finalized
     return response
   }
 
   _addonOutputCallback (addon, event, data, error) {
     if (typeof error === 'string' && error.length > 0) {
-      return this._outputCallback(addon, 'Error', ONLY_ONE_JOB_ID, data, error)
+      this.logger.error(`TTS job failed with error: ${error}`)
+      this._job.fail(error)
+      return
     }
 
     if (data && typeof data === 'object' && data.outputArray) {
-      return this._outputCallback(addon, 'Output', ONLY_ONE_JOB_ID, data, null)
+      try {
+        this.logger.debug(`TTS job produced output: ${ttsOutputDebugString(data)}`)
+      } catch (err) {
+        if (err instanceof RangeError) {
+          this.logger.debug('TTS job produced output: [data too large]')
+        } else {
+          throw err
+        }
+      }
+      this._job.output(data)
+      return
     }
 
     if (
@@ -260,10 +418,16 @@ class ONNXTTS extends InferBase {
       typeof data === 'object' &&
       ('totalTime' in data || 'audioDurationMs' in data || 'totalSamples' in data)
     ) {
-      return this._outputCallback(addon, 'JobEnded', ONLY_ONE_JOB_ID, data, null)
+      this.logger.info(`TTS job completed. Stats: ${JSON.stringify(data)}`)
+      if (this.opts?.stats) {
+        this._job.end(data)
+      } else {
+        this._job.end()
+      }
+      return
     }
 
-    return this._outputCallback(addon, event, ONLY_ONE_JOB_ID, data, error)
+    this.logger.debug(`Received TTS event: ${event}`)
   }
 
   async cancel () {
@@ -273,12 +437,7 @@ class ONNXTTS extends InferBase {
   }
 
   _failAndClearActiveResponse (reason) {
-    const currentJobResponse = this._jobToResponse.get(ONLY_ONE_JOB_ID)
-    if (currentJobResponse) {
-      currentJobResponse.failed(new Error(reason))
-      this._deleteJobMapping(ONLY_ONE_JOB_ID)
-    }
-    this._hasActiveResponse = false
+    this._job.fail(reason)
   }
 
   /**
@@ -287,7 +446,6 @@ class ONNXTTS extends InferBase {
    * @param {Object} newConfig - New configuration parameters
    * @param {string} [newConfig.language] - Language setting (defaults to 'en')
    * @param {boolean} [newConfig.useGPU] - Whether to use GPU (defaults to false)
-   * @param {Function} [newConfig.reportProgressCallback] - Hook for download progress updates
    */
   async reload (newConfig = {}) {
     this.logger.debug('Reloading addon with new configuration', newConfig)
@@ -299,21 +457,16 @@ class ONNXTTS extends InferBase {
       this._config.useGPU = newConfig.useGPU
     }
 
-    // Download new weights if model changed and we have a loader
-    if (this._weightsProvider && (newConfig.mainModelUrl || newConfig.configJsonPath)) {
-      await this._downloadWeights(newConfig.reportProgressCallback, { closeLoader: false })
-    }
-
     let ttsParams
     if (this._engineType === ENGINE_SUPERTONIC) {
       ttsParams = this._getSupertonicTtsParams()
     } else {
       ttsParams = {
-        tokenizerPath: this._resolvePath(this._tokenizerPath),
-        speechEncoderPath: this._resolvePath(this._speechEncoderPath),
-        embedTokensPath: this._resolvePath(this._embedTokensPath),
-        conditionalDecoderPath: this._resolvePath(this._conditionalDecoderPath),
-        languageModelPath: this._resolvePath(this._languageModelPath),
+        tokenizerPath: this._tokenizerPath || '',
+        speechEncoderPath: this._speechEncoderPath || '',
+        embedTokensPath: this._embedTokensPath || '',
+        conditionalDecoderPath: this._conditionalDecoderPath || '',
+        languageModelPath: this._languageModelPath || '',
         language: this._config?.language || 'en',
         useGPU: this._config?.useGPU || false,
         lazySessionLoading: this._lazySessionLoading

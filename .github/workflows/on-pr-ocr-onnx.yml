@@ -22,6 +22,7 @@ permissions:
   contents: read
   pull-requests: read
   packages: read
+  id-token: write
 
 jobs:
   authorize:
@@ -106,7 +107,7 @@ jobs:
 
       - name: Verify that yaml files are formatted
         id: yamlfmt
-        uses: tetherto/qvac-devops/.github/actions/yamlfmt@v1.1.7
+        uses: tetherto/oss-actions/.github/actions/yamlfmt@v1.1.0
         continue-on-error: true
 
       - name: Check for disallowed dependencies
@@ -122,7 +123,7 @@ jobs:
       - name: Run JavaScript tests
         id: run_js_tests
         continue-on-error: true
-        uses: tetherto/qvac-devops/.github/actions/run-lint-and-unit-tests@v1.1.7
+        uses: tetherto/oss-actions/.github/actions/run-lint-and-unit-tests@v1.1.0
         with:
           npm-token: ${{ secrets.NPM_TOKEN }}
           gpr-token: ${{ secrets.GITHUB_TOKEN }}
@@ -161,7 +162,7 @@ jobs:
   cpp-lint:
     needs: [authorize, changes]
     if: needs.authorize.outputs.allowed == 'true' || github.event_name == 'workflow_dispatch'
-    uses: tetherto/qvac-devops/.github/workflows/cpp-lint.yaml@v1.1.7
+    uses: tetherto/oss-actions/.github/workflows/cpp-lint.yaml@v1.1.0
     secrets: inherit
     with:
       sha: ${{ github.event.pull_request.base.sha || github.sha }}
@@ -173,6 +174,7 @@ jobs:
       contents: write
       pull-requests: write
       packages: write
+      id-token: write
     needs: [authorize, changes]
     if: |
       (needs.changes.outputs.pkg == 'true' || github.event_name == 'workflow_dispatch') &&
@@ -185,12 +187,12 @@ jobs:
     with:
       repository: ${{ github.event.pull_request.head.repo.full_name || github.repository }}
       ref: ${{ github.event.pull_request.head.ref || github.ref }}
-      publish_target: "gpr"
 
   run-integration-tests:
     permissions:
       contents: read
       packages: read
+      id-token: write
     needs: [authorize, changes, prebuild]
     if: |
       (needs.changes.outputs.pkg == 'true' || github.event_name == 'workflow_dispatch') &&
@@ -209,6 +211,7 @@ jobs:
       contents: read
       packages: read
       pull-requests: write # Allow commenting on PRs
+      id-token: write
     needs: [authorize, changes, prebuild]
     if: |
       (needs.changes.outputs.pkg == 'true' || github.event_name == 'workflow_dispatch') &&
@@ -225,7 +228,7 @@ jobs:
   merge-guard:
     needs: [authorize, changes, sanity-checks, prebuild, run-integration-tests, run-mobile-integration-tests]
     if: always() && (needs.changes.outputs.pkg == 'true' || github.event_name == 'workflow_dispatch')
-    uses: tetherto/qvac-devops/.github/workflows/public-pr.yml@v1.1.7
+    uses: tetherto/oss-actions/.github/workflows/public-pr.yml@v1.1.0
     with:
       sanity-checks-status: ${{ needs.sanity-checks.result == 'success' }}
       build-status: ${{ needs.prebuild.result == 'success' }}

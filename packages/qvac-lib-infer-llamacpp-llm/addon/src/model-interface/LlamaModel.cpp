@@ -298,12 +298,18 @@ void LlamaModel::init(bool acquireLock) {
 
   {
     std::string backendsDir;
-    if (auto backendsDirIt = configFilemap.find("backendsDir");
-        backendsDirIt != configFilemap.end()) {
-      backendsDir = backendsDirIt->second;
-      configFilemap.erase(backendsDirIt);
+    if (auto it = configFilemap.find("backendsDir");
+        it != configFilemap.end()) {
+      backendsDir = it->second;
+      configFilemap.erase(it);
     }
-    snap->backendsHandle_ = LlamaBackendsHandle(backendsDir);
+    std::string openclCacheDir;
+    if (auto it = configFilemap.find("openclCacheDir");
+        it != configFilemap.end()) {
+      openclCacheDir = it->second;
+      configFilemap.erase(it);
+    }
+    snap->backendsHandle_ = LlamaBackendsHandle(backendsDir, openclCacheDir);
   }
 
   common_params params;
@@ -475,21 +481,22 @@ std::any LlamaModel::process(const std::any& input) {
 }
 
 LlamaModel::ResolvedPrompt
-LlamaModel::resolveChatAndTools(const std::string& input) {
+LlamaModel::resolveChatAndTools(const Prompt& prompt) {
   ResolvedPrompt resolved;
   if (state_->cacheManager_.has_value()) {
     resolved.isCacheLoaded = state_->cacheManager_->handleCache(
         resolved.chatMsgs,
         resolved.tools,
-        input,
+        prompt.input,
         [this](const std::string& inputPrompt) {
           return this->formatPrompt(inputPrompt);
-        });
+        },
+        prompt.cacheKey);
     resolved.shouldResetAfterInference =
         state_->cacheManager_->isCacheDisabled() ||
         !state_->cacheManager_->wasCacheUsedInLastPrompt();
   } else {
-    auto formatted = formatPrompt(input);
+    auto formatted = formatPrompt(prompt.input);
     resolved.chatMsgs = std::move(formatted.first);
     resolved.tools = std::move(formatted.second);
     resolved.shouldResetAfterInference = true;
@@ -513,7 +520,7 @@ std::string LlamaModel::processPromptImpl(const Prompt& prompt) {
   }
 
   std::string out;
-  ResolvedPrompt resolved = resolveChatAndTools(prompt.input);
+  ResolvedPrompt resolved = resolveChatAndTools(prompt);
 
   if (resolved.shouldResetAfterInference &&
       state_->llmContext_->getNPast() > 0) {
@@ -521,9 +528,7 @@ std::string LlamaModel::processPromptImpl(const Prompt& prompt) {
   }
 
   if (resolved.chatMsgs.empty() && resolved.tools.empty()) {
-    QLOG_IF(
-        Priority::INFO,
-        "No messages to process after session commands - returning early\n");
+    QLOG_IF(Priority::INFO, "No messages to process - returning early\n");
     return out;
   }
 
@@ -580,6 +585,11 @@ std::string LlamaModel::processPromptImpl(const Prompt& prompt) {
       state_->llmContext_->setFirstMsgTokens(state_->llmContext_->getNPast());
     }
   }
+  if (prompt.saveCacheToDisk && state_->cacheManager_.has_value() &&
+      state_->cacheManager_->hasActiveCache()) {
+    state_->cacheManager_->saveCache();
+  }
+
   if (resolved.shouldResetAfterInference) {
     resetState(false);
   }
@@ -610,7 +620,8 @@ qvac_lib_inference_addon_cpp::RuntimeStats LlamaModel::runtimeStats() const {
       {"CacheTokens", state_->llmContext_->getNPast()},
       {"generatedTokens", generatedTokens},
       {"promptTokens", promptTokens},
-      {"contextSlides", static_cast<int64_t>(contextSlides)}};
+      {"contextSlides", static_cast<int64_t>(contextSlides)},
+      {"backendDevice", runtimeBackendDevice_}};
 }
 
 // NOLINTNEXTLINE(readability-convert-member-functions-to-static,readability-function-cognitive-complexity)
@@ -712,8 +723,10 @@ void LlamaModel::commonParamsParse(
       params.mmproj_use_gpu = true;
 #endif
       params.split_mode = LLAMA_SPLIT_MODE_NONE;
+      runtimeBackendDevice_ = 1;
     } else if (chosenBackend.first == BackendType::CPU) {
       params.mmproj_use_gpu = false;
+      runtimeBackendDevice_ = 0;
     } else {
       throw qvac_errors::StatusError(
           qvac_errors::general_error::InternalError,

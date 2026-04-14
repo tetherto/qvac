@@ -397,10 +397,9 @@ test('inference with session cache works after finetuning', { timeout: PAUSE_RES
     await model.load()
 
     const sessionPrompt = [
-      { role: 'session', content: sessionFile },
       { role: 'user', content: 'What is 1+2? Answer with a number. /no_think' }
     ]
-    const preResponse = await model.run(sessionPrompt)
+    const preResponse = await model.run(sessionPrompt, { cacheKey: sessionFile })
     let preOutput = ''
     await preResponse.onUpdate(token => { preOutput += token }).await()
     t.ok(preOutput.length > 0, 'Pre-finetune inference with session should produce output')
@@ -418,10 +417,9 @@ test('inference with session cache works after finetuning', { timeout: PAUSE_RES
     )
 
     const postPrompt = [
-      { role: 'session', content: sessionFile },
       { role: 'user', content: 'What is the output of the previous computation? answer with a number. /no_think' }
     ]
-    const postResponse = await model.run(postPrompt)
+    const postResponse = await model.run(postPrompt, { cacheKey: sessionFile })
     let postOutput = ''
     await postResponse.onUpdate(token => { postOutput += token }).await()
     t.ok(postOutput.length > 0, 'Post-finetune inference with session should produce output')

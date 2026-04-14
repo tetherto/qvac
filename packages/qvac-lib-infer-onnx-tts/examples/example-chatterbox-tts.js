@@ -15,13 +15,15 @@ if (!modeArg || !['english', 'multilingual'].includes(modeArg)) {
 }
 
 const isMultilingual = modeArg === 'multilingual'
+const pkgRoot = path.join(__dirname, '..')
 const modelsDir = isMultilingual ? 'models/chatterbox-multilingual' : 'models/chatterbox'
+const modelDir = path.join(pkgRoot, modelsDir)
 
-const tokenizerPath = `${modelsDir}/tokenizer.json`
-const speechEncoderPath = `${modelsDir}/speech_encoder.onnx`
-const embedTokensPath = `${modelsDir}/embed_tokens.onnx`
-const conditionalDecoderPath = `${modelsDir}/conditional_decoder.onnx`
-const languageModelPath = `${modelsDir}/language_model.onnx`
+const tokenizerPath = path.join(modelDir, 'tokenizer.json')
+const speechEncoderPath = path.join(modelDir, 'speech_encoder.onnx')
+const embedTokensPath = path.join(modelDir, 'embed_tokens.onnx')
+const conditionalDecoderPath = path.join(modelDir, 'conditional_decoder.onnx')
+const languageModelPath = path.join(modelDir, 'language_model.onnx')
 
 const refWavPath = path.join(__dirname, '..', 'test', 'reference-audio', 'jfk.wav')
 
@@ -62,22 +64,23 @@ async function main () {
 
   console.log(`Mode: ${modeArg}, language: ${language}, models: ${modelsDir}`)
 
-  const chatterboxArgs = {
-    tokenizerPath,
-    speechEncoderPath,
-    embedTokensPath,
-    conditionalDecoderPath,
-    languageModelPath,
+  const model = new ONNXTTS({
+    files: {
+      modelDir,
+      tokenizer: tokenizerPath,
+      speechEncoder: speechEncoderPath,
+      embedTokens: embedTokensPath,
+      conditionalDecoder: conditionalDecoderPath,
+      languageModel: languageModelPath
+    },
+    engine: 'chatterbox',
     referenceAudio,
-    opts: { stats: true },
-    logger: console
-  }
-
-  const config = {
-    language
-  }
-
-  const model = new ONNXTTS(chatterboxArgs, config)
+    config: {
+      language
+    },
+    logger: console,
+    opts: { stats: true }
+  })
 
   try {
     console.log('Loading Chatterbox TTS model...')
