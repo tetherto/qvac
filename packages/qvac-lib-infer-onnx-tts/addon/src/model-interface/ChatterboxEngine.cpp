@@ -329,8 +329,8 @@ ChatterboxEngine::SessionFactory makeDefaultSessionFactory(bool useGPU) {
 
 ChatterboxEngine::ChatterboxEngine(const ChatterboxConfig &cfg,
                                    SessionFactory factory) {
-  sessionFactory_ =
-      factory ? std::move(factory) : makeDefaultSessionFactory(cfg.useGPU);
+  sessionFactory_ = factory ? std::move(factory)
+                            : makeDefaultSessionFactory(cfg.useGPU);
   load(cfg);
 }
 
