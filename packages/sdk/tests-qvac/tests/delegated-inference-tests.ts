@@ -6,20 +6,24 @@ const createDelegatedTest = (
   expectation: TestDefinition["expectation"],
   estimatedDurationMs: number = 15000,
   skip?: TestDefinition["skip"],
+  suites?: string[],
 ): TestDefinition => ({
   testId,
   params,
   expectation,
+  ...(suites && { suites }),
   metadata: { category: "delegated-inference", dependency: "none", estimatedDurationMs },
   skip,
 });
 
 export const delegatedProviderStart = createDelegatedTest(
   "delegated-provider-start", {}, { validation: "function", fn: () => true },
+  15000, undefined, ["smoke"],
 );
 
 export const delegatedProviderStop = createDelegatedTest(
   "delegated-provider-stop", {}, { validation: "function", fn: () => true },
+  15000, undefined, ["smoke"],
 );
 
 export const delegatedProviderFirewall = createDelegatedTest(
@@ -36,7 +40,7 @@ export const delegatedLoadModelFallbackLocal = createDelegatedTest(
   "delegated-load-model-fallback-local",
   { fallbackToLocal: true },
   { validation: "type", expectedType: "string" },
-  90000,
+  90000, undefined, ["smoke"],
 );
 
 export const delegatedHeartbeatProvider = createDelegatedTest(
@@ -51,6 +55,7 @@ export const delegatedConnectionFailure = createDelegatedTest(
   "delegated-connection-failure",
   { timeout: 3000 },
   { validation: "throws-error", errorContains: "" },
+  15000, undefined, ["smoke"],
 );
 
 export const delegatedInvalidTopic = createDelegatedTest(

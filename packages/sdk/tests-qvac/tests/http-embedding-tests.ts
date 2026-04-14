@@ -9,6 +9,7 @@ export const httpShardedEmbedLoad: TestDefinition = {
   testId: "http-sharded-embed-load",
   params: { modelType: "embeddings", modelUrl: SHARDED_URL },
   expectation: { validation: "type", expectedType: "string" },
+  suites: ["smoke"],
   metadata: { category: "http", dependency: "none", estimatedDurationMs: 300000 },
 };
 
@@ -27,6 +28,7 @@ export const httpShardedEmbedInference: TestDefinition = {
     text: "This is a test sentence for embedding generation using an HTTP sharded model.",
   },
   expectation: { validation: "type", expectedType: "array" },
+  suites: ["smoke"],
   metadata: { category: "http", dependency: "none", estimatedDurationMs: 300000 },
 };
 

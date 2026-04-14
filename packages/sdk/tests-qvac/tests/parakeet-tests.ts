@@ -11,10 +11,12 @@ const createParakeetTest = (
     | { validation: "type"; expectedType: "string" | "number" | "array" }
     | { validation: "throws-error"; errorContains: string },
   estimatedDurationMs: number = 60000,
+  suites?: string[],
 ): TestDefinition => ({
   testId,
   params: { audioFileName },
   expectation,
+  ...(suites && { suites }),
   metadata: {
     category: "parakeet",
     dependency,
@@ -31,6 +33,7 @@ export const parakeetTdtWav = createParakeetTest(
   "transcription-short-wav.wav",
   { validation: "contains-all", contains: ["test", "automation"] },
   300000, // download ~700 MB
+  ["smoke"],
 );
 
 export const parakeetTdtMp3 = createParakeetTest(
@@ -82,6 +85,7 @@ export const parakeetTdtCorruptedWav = createParakeetTest(
   "corrupted-wav.wav",
   { validation: "throws-error", errorContains: "" },
   60000,
+  ["smoke"],
 );
 
 // ── CTC tests ─────────────────────────────────────────────────────────────────
@@ -101,6 +105,7 @@ export const parakeetCtcMp3 = createParakeetTest(
   "transcription-short-mp3.mp3",
   { validation: "contains-all", contains: ["test", "automation"] },
   120000,
+  ["smoke"],
 );
 
 export const parakeetCtcSilence = createParakeetTest(
@@ -129,6 +134,7 @@ export const parakeetSortformerSingle = createParakeetTest(
   "diarization-sample-16k.wav",
   { validation: "contains-any", contains: ["Speaker"] },
   600000, // Sortformer model download
+  ["smoke"],
 );
 
 export const parakeetSortformerTwoSpeakers = createParakeetTest(

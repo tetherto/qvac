@@ -6,6 +6,7 @@ const createSalamandraTest = (
   to: string,
   expectation: Expectation,
   opts: { from?: string; context?: string; estimatedDurationMs?: number } = {},
+  suites?: string[],
 ): TestDefinition => ({
   testId,
   params: {
@@ -16,6 +17,7 @@ const createSalamandraTest = (
     ...(opts.context && { context: opts.context }),
   },
   expectation,
+  ...(suites && { suites }),
   metadata: {
     category: "translation-salamandra",
     dependency: "salamandra",
@@ -29,6 +31,7 @@ export const salamandraEnEs = createSalamandraTest(
   "es",
   { validation: "contains-any", contains: ["hola", "cómo", "estás", "hoy", "buenos"] },
   { from: "en" },
+  ["smoke"],
 );
 
 export const salamandraEsEn = createSalamandraTest(
@@ -43,6 +46,7 @@ export const salamandraStreaming: TestDefinition = {
   testId: "translation-salamandra-streaming",
   params: { text: "Hello, how are you today?", from: "en", to: "es", resource: "salamandra" },
   expectation: { validation: "contains-any", contains: ["hola", "cómo", "estás", "hoy", "buenos"] },
+  suites: ["smoke"],
   metadata: { category: "translation-salamandra", dependency: "salamandra", estimatedDurationMs: 30000 },
 };
 
