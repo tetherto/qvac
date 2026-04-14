@@ -1510,6 +1510,25 @@ jobs:
           echo "Downloaded artifacts:"
           find "$ARTIFACT_DIR" -type f -ls 2>/dev/null || echo "  (none)"
 
+      - name: Diagnose Device Farm output
+        if: always() && steps.download_df_logs.outputs.artifact_dir
+        run: |
+          ARTIFACT_DIR="${{ steps.download_df_logs.outputs.artifact_dir }}"
+          echo "=== Searching for perf-related output in TESTSPEC_OUTPUT files ==="
+          for f in $(find "$ARTIFACT_DIR" -name "TESTSPEC_OUTPUT.txt" -type f); do
+            echo ""
+            echo "--- $f ($(wc -c < "$f") bytes) ---"
+            echo "Lines with PERF_REPORT markers:"
+            grep -n "PERF_REPORT" "$f" | head -20 || echo "  (none)"
+            echo "Lines with perf-extract:"
+            grep -n "perf-extract" "$f" | head -20 || echo "  (none)"
+            echo "Lines with perf-report:"
+            grep -n "perf-report" "$f" | head -20 || echo "  (none)"
+            echo "Last 50 lines (post_test output):"
+            tail -50 "$f"
+            echo "---"
+          done
+
       - name: Extract performance report from logs
         if: always() && steps.download_df_logs.outputs.artifact_dir
         run: |
@@ -1534,6 +1553,15 @@ jobs:
               --output-json "$OUTPUT_DIR/performance-summary.json" \
               --output "$OUTPUT_DIR/performance-report.md"
           fi
+
+      - name: Upload raw Device Farm logs
+        if: always() && steps.download_df_logs.outputs.artifact_dir
+        uses: actions/upload-artifact@v4
+        with:
+          name: df-raw-logs-${{ matrix.platform }}-${{ github.run_number }}
+          path: ${{ steps.download_df_logs.outputs.artifact_dir }}
+          retention-days: 30
+          if-no-files-found: ignore
 
       - name: Upload mobile performance report
         if: always()
