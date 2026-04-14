@@ -7,6 +7,7 @@ const binding = require('../../binding')
 const ImgStableDiffusion = require('../../index')
 const {
   ensureModel,
+  GeneratedImageSaver,
   setupJsLogger
 } = require('./utils')
 
@@ -18,8 +19,8 @@ const useCpu = isDarwinX64 || isLinuxArm64 || noGpu
 
 // Smallest model for fast behavior tests
 const MODEL = {
-  name: 'stable-diffusion-v2-1-Q8_0.gguf',
-  url: 'https://huggingface.co/gpustack/stable-diffusion-v2-1-GGUF/resolve/main/stable-diffusion-v2-1-Q8_0.gguf'
+  name: 'stable-diffusion-v2-1-Q4_0.gguf',
+  url: 'https://huggingface.co/gpustack/stable-diffusion-v2-1-GGUF/resolve/main/stable-diffusion-v2-1-Q4_0.gguf'
 }
 
 // Many steps so cancel has time to fire before completion
@@ -34,7 +35,7 @@ const LONG_PARAMS = {
 
 const SHORT_PARAMS = {
   prompt: 'a red fox',
-  steps: 2,
+  steps: 10,
   width: 256,
   height: 256,
   cfg_scale: 7.5,
@@ -71,11 +72,18 @@ async function setupModel (t) {
     try { binding.releaseLogger() } catch (_) {}
   })
 
-  return { model }
+  return { model, modelDir }
+}
+
+function saveGeneratedImages (modelDir, filenameSuffix, images) {
+  const imageSaver = new GeneratedImageSaver(modelDir)
+  for (let i = 0; i < images.length; i++) {
+    imageSaver.save(`api-behavior-${filenameSuffix}-${i}.png`, images[i])
+  }
 }
 
 test('idle | run: allowed, returns QvacResponse', { timeout: 600000 }, async t => {
-  const { model } = await setupModel(t)
+  const { model, modelDir } = await setupModel(t)
   const response = await model.run(SHORT_PARAMS)
   t.ok(response, 'run() returns a response')
   t.ok(typeof response.onUpdate === 'function', 'response has onUpdate')
@@ -87,6 +95,7 @@ test('idle | run: allowed, returns QvacResponse', { timeout: 600000 }, async t =
   }).await()
 
   t.ok(images.length > 0, 'run produces at least one image')
+  saveGeneratedImages(modelDir, 'idle-run', images)
 })
 
 test('idle | cancel: allowed, no-op', { timeout: 600000 }, async t => {
@@ -119,7 +128,7 @@ test('run | cancel: cancels current job', { timeout: 600000 }, async t => {
 })
 
 test('run | run: second run() throws busy error', { timeout: 600000 }, async t => {
-  const { model } = await setupModel(t)
+  const { model, modelDir } = await setupModel(t)
   const firstResponse = await model.run(SHORT_PARAMS)
   let firstError = null
   if (typeof firstResponse.onError === 'function') {
@@ -153,10 +162,11 @@ test('run | run: second run() throws busy error', { timeout: 600000 }, async t =
   }).await()
   t.ok(images.length > 0, 'first response completes with output')
   t.ok(!firstError, 'first response did not fail')
+  saveGeneratedImages(modelDir, 'run-run-first-response', images)
 })
 
 test('cancel | run: can run again after cancel', { timeout: 600000 }, async t => {
-  const { model } = await setupModel(t)
+  const { model, modelDir } = await setupModel(t)
 
   // Start a job and cancel after first progress tick
   const response1 = await model.run(SHORT_PARAMS)
@@ -181,6 +191,7 @@ test('cancel | run: can run again after cancel', { timeout: 600000 }, async t =>
   }).await()
 
   t.ok(images.length > 0, 'can run again after cancel')
+  saveGeneratedImages(modelDir, 'cancel-run-second-response', images)
 })
 
 // Keep event loop alive briefly to let pending async operations complete.

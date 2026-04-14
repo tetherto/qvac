@@ -12,7 +12,7 @@
         "@qvac/langdetect-text": "^0.1.0",
         "@qvac/llm-llamacpp": "^0.12.1",
         "@qvac/logging": "^0.1.0",
-        "@qvac/ocr-onnx": "^0.2.0",
+        "@qvac/ocr-onnx": "^0.4.0",
         "@qvac/rag": "^0.4.4",
         "@qvac/registry-client": "^0.2.1",
         "@qvac/transcription-parakeet": "^0.2.7",
@@ -506,6 +506,8 @@
 
     "@qvac/decoder-audio": ["@qvac/decoder-audio@0.3.6", "", { "dependencies": { "@qvac/error": "^0.1.0", "@qvac/infer-base": "^0.1.0", "@qvac/logging": "^0.1.0", "@qvac/response": "^0.1.0", "bare-assert": "^1.1.0", "bare-channel": "^5.2.2", "bare-ffmpeg": "^1.0.0-32", "bare-fs": "^4.5.1", "bare-path": "^3.0.0", "bare-process": "^4.2.2", "process": "npm:bare-process@^4.2.2" } }, "sha512-k0ePtP1HSLX5H0Og9cER8QHVSPcWwkiSHb58IpbhqSF41qYwUVhKtFI16hHjA2da+chqyu68c6I1tTWqnFWMDA=="],
 
+    "@qvac/diagnostics": ["@qvac/diagnostics@0.1.1", "", {}, "sha512-KUWpnNjtsNM2h2yIJXyQ6E5S53GDdRf2LXxp0E5dH7qLD5hToBrP4wjvdmahwmBobL7nJU9rum6uT3JgLVKm3w=="],
+
     "@qvac/diffusion-cpp": ["@qvac/diffusion-cpp@0.1.1", "", { "dependencies": { "@qvac/infer-base": "^0.2.2", "bare-path": "^3.0.0", "bare-process": "^4.2.2" } }, "sha512-ecUSbeqz5+WHb7V0lnyruBBFrlDwUZYws0wiUckbdj8xzIkhyxnkCDK6W2UcsCl+Gc+NSXCtIRF6pCiRG5fG/g=="],
 
     "@qvac/dl-base": ["@qvac/dl-base@0.2.1", "", { "dependencies": { "@qvac/logging": "^0.1.0", "ready-resource": "^1.1.1" } }, "sha512-Wd1/oOFsGb4O0kTKWw8OuQXhdr5EGBGn99zEdDYj4h1c+jUtAkpb39W5rf7D0A/XWwyVgsxL7vi7YHv6Xe7n/Q=="],
@@ -526,7 +528,7 @@
 
     "@qvac/logging": ["@qvac/logging@0.1.0", "", {}, "sha512-B9JayZKJGzSsM/9JmMdO7wiOOZ2mY5aWTbXl2aIKzy+l2Uqzkoby0IxMjKSVtYo6uMDs2zcrZqLtjI2dDSaYog=="],
 
-    "@qvac/ocr-onnx": ["@qvac/ocr-onnx@0.2.1", "", { "dependencies": { "@qvac/dl-hyperdrive": "^0.1.0", "@qvac/error": "^0.1.0", "@qvac/infer-base": "^0.1.0", "@qvac/response": "^0.1.2", "bare-fetch": "^2.5.1", "bare-fs": "^4.5.1", "bare-path": "^3.0.0", "bare-process": "^4.2.1" } }, "sha512-4njvOvovO4z9I00l2pPYcFm6MOPto7ZbnaWHJeOdn2jAkrpD+7ugttW0jJAapLTeF8hXIbcpX+uRFsXC3Razog=="],
+    "@qvac/ocr-onnx": ["@qvac/ocr-onnx@0.4.0", "", { "dependencies": { "@qvac/dl-hyperdrive": "^0.1.0", "@qvac/error": "^0.1.0", "@qvac/infer-base": "^0.4.0", "@qvac/onnx": "^0.14.0", "@qvac/response": "^0.1.2", "bare-fetch": "^2.5.1", "bare-fs": "^4.5.1", "bare-path": "^3.0.0", "bare-process": "^4.2.1" }, "optionalDependencies": { "@qvac/diagnostics": "^0.1.0" } }, "sha512-Yuj1fNO2D2EfWW0vi3p8tyn5t+uBH1dEHQdrheMuLt1hcfVhOCyKyGaIq9JaDd57dtTvHw+5gDWwdPI//TcsiQ=="],
 
     "@qvac/onnx": ["@qvac/onnx@0.14.0", "", {}, "sha512-P2RlpHcAdOs53aMfdMNBk3e8S6SFzroT5ShlZVM4Kag83nTpATJKIsxWyq64sHwSVtJjRtdxOF8lksbVnwzIvQ=="],
 
@@ -2538,6 +2540,8 @@
 
     "@qvac/llm-llamacpp/@qvac/infer-base": ["@qvac/infer-base@0.2.2", "", { "dependencies": { "@qvac/error": "^0.1.0", "@qvac/logging": "^0.1.0", "bare-events": "2.4.2", "bare-os": "^3.2.0", "bare-path": "^3.0.0" }, "peerDependencies": { "@qvac/dl-hyperdrive": "^0.1.0" } }, "sha512-8D/5PRIy/A+Uhg1ZSoJMu5FSPDHdrMKZoPnAzTZMceikTj+BWwTV//j8pXbRABsjrFbqBegvr/LujirC9I2cRQ=="],
 
+    "@qvac/ocr-onnx/@qvac/infer-base": ["@qvac/infer-base@0.4.0", "", { "dependencies": { "@qvac/error": "^0.1.0", "@qvac/logging": "^0.1.0", "bare-events": "2.4.2", "bare-os": "^3.2.0", "bare-path": "^3.0.0" }, "optionalDependencies": { "@qvac/diagnostics": "^0.1.0" }, "peerDependencies": { "@qvac/dl-hyperdrive": "^0.1.0" } }, "sha512-KoD4PrNzcScFjuLdGSTwtN/i10tMuwpRUW9g5lIiIaoR4s36NHwkfcxjyQDlHFlXkYjf3p3IpWXJgKOSo3jAqg=="],
+
     "@qvac/response/bare-events": ["bare-events@2.4.2", "", {}, "sha512-qMKFd2qG/36aA4GwvKq8MxnPgCQAmBWmSyLWsJcbn8v03wvIPQ/hG1Ms8bPzndZxMDoHpxez5VOS+gC9Yi24/Q=="],
 
     "@qvac/transcription-parakeet/@qvac/infer-base": ["@qvac/infer-base@0.2.2", "", { "dependencies": { "@qvac/error": "^0.1.0", "@qvac/logging": "^0.1.0", "bare-events": "2.4.2", "bare-os": "^3.2.0", "bare-path": "^3.0.0" }, "peerDependencies": { "@qvac/dl-hyperdrive": "^0.1.0" } }, "sha512-8D/5PRIy/A+Uhg1ZSoJMu5FSPDHdrMKZoPnAzTZMceikTj+BWwTV//j8pXbRABsjrFbqBegvr/LujirC9I2cRQ=="],
@@ -2791,6 +2795,8 @@
     "@qvac/embed-llamacpp/@qvac/infer-base/bare-events": ["bare-events@2.4.2", "", {}, "sha512-qMKFd2qG/36aA4GwvKq8MxnPgCQAmBWmSyLWsJcbn8v03wvIPQ/hG1Ms8bPzndZxMDoHpxez5VOS+gC9Yi24/Q=="],
 
     "@qvac/llm-llamacpp/@qvac/infer-base/bare-events": ["bare-events@2.4.2", "", {}, "sha512-qMKFd2qG/36aA4GwvKq8MxnPgCQAmBWmSyLWsJcbn8v03wvIPQ/hG1Ms8bPzndZxMDoHpxez5VOS+gC9Yi24/Q=="],
+
+    "@qvac/ocr-onnx/@qvac/infer-base/bare-events": ["bare-events@2.4.2", "", {}, "sha512-qMKFd2qG/36aA4GwvKq8MxnPgCQAmBWmSyLWsJcbn8v03wvIPQ/hG1Ms8bPzndZxMDoHpxez5VOS+gC9Yi24/Q=="],
 
     "@qvac/transcription-parakeet/@qvac/infer-base/bare-events": ["bare-events@2.4.2", "", {}, "sha512-qMKFd2qG/36aA4GwvKq8MxnPgCQAmBWmSyLWsJcbn8v03wvIPQ/hG1Ms8bPzndZxMDoHpxez5VOS+gC9Yi24/Q=="],
 

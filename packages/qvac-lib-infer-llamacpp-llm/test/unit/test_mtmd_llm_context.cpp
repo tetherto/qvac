@@ -268,8 +268,8 @@ TEST_F(MtmdLlmContextTest, ProcessWithSessionCache) {
   }
 
   LlamaModel::Prompt prompt1;
-  prompt1.input =
-      R"([{"role": "session", "content": "test_session.bin"}, {"role": "user", "content": "Hello"}])";
+  prompt1.input = R"([{"role": "user", "content": "Hello"}])";
+  prompt1.cacheKey = "test_session.bin";
   EXPECT_NO_THROW({
     std::string output1 = model->processPrompt(prompt1);
     EXPECT_GE(output1.length(), 0);
@@ -278,8 +278,8 @@ TEST_F(MtmdLlmContextTest, ProcessWithSessionCache) {
   });
 
   LlamaModel::Prompt prompt2;
-  prompt2.input =
-      R"([{"role": "session", "content": "test_session.bin"}, {"role": "user", "content": "Follow up message"}])";
+  prompt2.input = R"([{"role": "user", "content": "Follow up message"}])";
+  prompt2.cacheKey = "test_session.bin";
   EXPECT_NO_THROW({
     std::string output2 = model->processPrompt(prompt2);
     EXPECT_GE(output2.length(), 0);

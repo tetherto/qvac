@@ -13,19 +13,12 @@
 #include "model-interface/MtmdLlmContext.hpp"
 #include "model-interface/TextLlmContext.hpp"
 #include "test_common.hpp"
+#include "test_prompt_helpers.hpp"
 
 namespace fs = std::filesystem;
 
 using test_common::getStatValue;
-
-namespace {
-std::string processPromptString(
-    const std::unique_ptr<LlamaModel>& model, const std::string& input) {
-  LlamaModel::Prompt prompt;
-  prompt.input = input;
-  return model->processPrompt(prompt);
-}
-} // namespace
+using test_common::processPromptString;
 
 class LlmContextBaseTest : public ::testing::Test {
 protected:

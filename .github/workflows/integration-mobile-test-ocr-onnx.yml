@@ -325,6 +325,7 @@ jobs:
         with:
           role-to-assume: ${{ secrets.AWS_OIDC_ROLE_ARN }}
           aws-region: eu-central-1
+          role-duration-seconds: 7200 # 2hrs for device farm tests
 
       - name: Generate presigned URLs for OCR models
         working-directory: ./addon/${{ inputs.workdir || env.PKG_DIR }}
@@ -781,6 +782,7 @@ jobs:
         with:
           role-to-assume: ${{ secrets.AWS_OIDC_ROLE_ARN }}
           aws-region: us-west-2
+          role-duration-seconds: 7200 # 2hrs for device farm tests
 
       - name: Upload App to Device Farm
         id: upload_app

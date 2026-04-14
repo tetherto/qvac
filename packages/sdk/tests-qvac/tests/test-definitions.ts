@@ -24,6 +24,7 @@ import { httpEmbeddingTests } from "./http-embedding-tests.js";
 import { parakeetTests } from "./parakeet-tests.js";
 import { visionTests } from "./vision-tests.js";
 import { downloadTests } from "./download-tests.js";
+import { delegatedInferenceTests } from "./delegated-inference-tests.js";
 import { diffusionTests } from "./diffusion-tests.js";
 
 // Model loading tests
@@ -220,6 +221,9 @@ export const tests = [
 
   // Diffusion tests
   ...diffusionTests,
+
+  // Delegated inference tests (P2P)
+  ...delegatedInferenceTests,
 
   // Additional model tests
   modelSwitchLlm,

@@ -5,6 +5,7 @@ const path = require('path')
 const { z } = require('zod')
 
 const { parseCanonicalSource } = require('../lib/source-helpers')
+const { baseModelFields } = require('../lib/model-schema')
 
 const ENGINE_PATTERN = /^@qvac\/[a-z][a-z0-9-]*$/
 const S3_DATE_FOLDER_PATTERN = /\/\d{4}-\d{2}-\d{2}\//
@@ -55,27 +56,18 @@ const HF_COMMIT_PIN = (val) => {
   return HF_COMMIT_HASH_PATTERN.test(val)
 }
 
-const baseFields = {
-  source: z.string()
-    .min(1, 'source is required')
+// CI-specific fields: layer refinements on top of shared base
+const ciFields = {
+  ...baseModelFields,
+  source: baseModelFields.source
     .refine(SOURCE_REFINE, { message: 'Invalid source URL (must be s3:// or https://huggingface.co/)' })
     .refine(S3_NO_BUCKET, { message: 'S3 URLs must not contain a bucket name. Use s3:///key format; bucket is resolved from QVAC_S3_BUCKET env var.' })
     .refine(S3_DATE_FOLDER, { message: 'S3 URLs must include a date folder (YYYY-MM-DD) in the path. Upload artifacts to a dated directory to ensure registry consistency when models are updated.' })
     .refine(HF_COMMIT_PIN, { message: 'HuggingFace source URLs must pin to a specific commit hash, not a branch name. Use https://huggingface.co/<org>/<repo>/resolve/<full-commit-sha>/<file>' }),
 
-  engine: z.string()
-    .min(1, 'engine is required')
+  engine: baseModelFields.engine
     .regex(ENGINE_PATTERN, 'Invalid engine format (expected @qvac/<engine-name>)'),
 
-  license: z.string().min(1, 'license is required'),
-
-  description: z.string().max(512).optional(),
-  quantization: z.string().max(512).optional(),
-  params: z.string().max(64).optional(),
-  notes: z.string().max(512).optional(),
-  tags: z.array(z.string().max(128)).max(50).optional(),
-  deprecated: z.boolean().optional(),
-  deprecationReason: z.string().max(512).optional(),
   replacedBy: z.string()
     .refine(SOURCE_REFINE, { message: 'replacedBy must be a valid source URL' })
     .optional()
@@ -83,8 +75,8 @@ const baseFields = {
 
 function createModelSchema (validLicenses) {
   return z.object({
-    ...baseFields,
-    license: baseFields.license.refine(
+    ...ciFields,
+    licenseId: ciFields.licenseId.refine(
       (val) => validLicenses.has(val),
       (val) => ({ message: `Unknown license: "${val}" (not found in licenses.json)` })
     )
@@ -92,7 +84,7 @@ function createModelSchema (validLicenses) {
 }
 
 function createDeprecatedModelSchema () {
-  return z.object(baseFields)
+  return z.object(ciFields)
 }
 
 async function loadValidLicenses () {

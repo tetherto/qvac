@@ -1,6 +1,6 @@
 {
   "name": "@qvac/transcription-whispercpp",
-  "version": "0.5.5",
+  "version": "0.6.0",
   "description": "transcription addon for qvac",
   "addon": true,
   "engines": {
@@ -85,7 +85,7 @@
   "dependencies": {
     "@qvac/decoder-audio": "^0.3.3",
     "@qvac/error": "^0.1.0",
-    "@qvac/infer-base": "^0.2.0",
+    "@qvac/infer-base": "^0.4.0",
     "@qvac/logging": "^0.1.0",
     "bare-channel": "^5.2.2",
     "bare-ffmpeg": "^1.0.0-32",
