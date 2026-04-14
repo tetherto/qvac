@@ -425,9 +425,13 @@ function generateHtmlReport (aggregated) {
   if (image_paths) {
     const fs = require('fs')
     const path = require('path')
+    const fallbackDir = path.resolve(__dirname, '..', '..', 'packages', 'ocr-onnx', 'test', 'images')
     for (const [testKey, imgPath] of Object.entries(image_paths)) {
       try {
-        const resolved = path.resolve(imgPath)
+        let resolved = path.resolve(imgPath)
+        if (!fs.existsSync(resolved)) {
+          resolved = path.join(fallbackDir, path.basename(imgPath))
+        }
         if (fs.existsSync(resolved)) {
           const ext = path.extname(resolved).toLowerCase().replace('.', '')
           const mime = ext === 'jpg' ? 'image/jpeg' : `image/${ext}`
