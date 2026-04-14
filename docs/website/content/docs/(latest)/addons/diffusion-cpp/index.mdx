@@ -15,7 +15,7 @@ Supports SD1.x, SD2.x, SDXL, SD3, and FLUX.2-klein model families.
 ### FLUX.2-klein
 
 Three separate components are required:
-- **Diffusion model** (`flux-2-klein-4b-Q8_0.gguf`) — the main image transformer. This GGUF has no SD metadata KV pairs so it must be loaded via `diffusion_model_path` internally, not `model_path`.
+- **Diffusion model** (`flux-2-klein-4b-Q8_0.gguf`) — the main image transformer.
 - **Text encoder** (`Qwen3-4B-Q4_K_M.gguf`) — Qwen3 4B in standard GGML Q4_K_M format.
 - **VAE** (`flux2-vae.safetensors`) — standard safetensors format, compatible as-is.
 
@@ -25,7 +25,7 @@ Three separate components are required:
 |------|------|--------|
 | Diffusion model | `flux-2-klein-4b-Q8_0.gguf` | [leejet/FLUX.2-klein-4B-GGUF](https://huggingface.co/leejet/FLUX.2-klein-4B-GGUF) |
 | Text encoder | `Qwen3-4B-Q4_K_M.gguf` | [unsloth/Qwen3-4B-GGUF](https://huggingface.co/unsloth/Qwen3-4B-GGUF) |
-| VAE | `flux2-vae.safetensors` | [black-forest-labs/FLUX.2-klein-4B](https://huggingface.co/black-forest-labs/FLUX.2-klein-4B) |
+| VAE | `flux2-vae.safetensors` | [black-forest-labs/FLUX.2-klein-4B](https://huggingface.co/black-forest-labs/FLUX.2-klein-4B/blob/main/vae/diffusion_pytorch_model.safetensors) |
 
 ### Stable Diffusion
 
