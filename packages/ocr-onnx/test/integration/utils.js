@@ -86,12 +86,23 @@ try {
       writeStepSummary () {},
       writeToConsole () {
         try {
-          const data = this.toJSON()
+          var data = this.toJSON()
           data.results = data.results.map(function (r) {
             return { test: r.test, execution_provider: r.execution_provider, metrics: r.metrics, quality: r.quality }
           })
-          const json = JSON.stringify(data)
-          console.log('[PERF_REPORT_START]' + json + '[PERF_REPORT_END]')
+          var json = JSON.stringify(data)
+          // Android logcat truncates lines >4096 bytes. For large reports,
+          // split into numbered chunks that extract-from-log.js reassembles.
+          var CHUNK = 2000
+          if (json.length <= CHUNK) {
+            console.log('[PERF_REPORT_START]' + json + '[PERF_REPORT_END]')
+          } else {
+            var id = Date.now().toString(36)
+            var n = Math.ceil(json.length / CHUNK)
+            for (var i = 0; i < n; i++) {
+              console.log('[PERF_CHUNK:' + id + ':' + i + ':' + n + ']' + json.substring(i * CHUNK, (i + 1) * CHUNK))
+            }
+          }
         } catch (err) {
           console.log('[perf-reporter] mobile console write failed: ' + err.message)
         }

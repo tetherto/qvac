@@ -25,11 +25,8 @@ const path = require('path')
 
 const START_MARKER = '[PERF_REPORT_START]'
 const END_MARKER = '[PERF_REPORT_END]'
+const CHUNK_RE = /\[PERF_CHUNK:([^:]+):(\d+):(\d+)\](.+)/
 
-/**
- * Extracts markers from plain text content.
- * Returns the last valid report found.
- */
 function isValidReport (obj) {
   return obj !== null && typeof obj === 'object' && !Array.isArray(obj) &&
     typeof obj.schema_version === 'string' && Array.isArray(obj.results)
@@ -118,6 +115,54 @@ function extractFromText (text) {
 }
 
 /**
+ * Extracts chunked performance reports from text.
+ *
+ * When a report is too large for a single Android logcat line (~4096 bytes),
+ * the mobile reporter splits it into numbered chunks:
+ *   [PERF_CHUNK:<id>:<index>:<total>]<json-fragment>
+ *
+ * Each chunk appears twice in logcat (bare + ReactNativeJS tags).
+ * We deduplicate by (id, index), reassemble, and parse.
+ * Returns the report with the most results, or null.
+ */
+function extractChunkedFromText (text) {
+  const chunkMap = {}
+  const lines = text.split('\n')
+  for (const line of lines) {
+    const cleaned = cleanJsonFromLogcat(line)
+    const m = cleaned.match(CHUNK_RE)
+    if (!m) continue
+    const [, id, idxStr, totalStr, content] = m
+    const idx = parseInt(idxStr, 10)
+    const total = parseInt(totalStr, 10)
+    if (!chunkMap[id]) chunkMap[id] = { total, chunks: {} }
+    if (chunkMap[id].chunks[idx] === undefined) {
+      chunkMap[id].chunks[idx] = content
+    }
+  }
+
+  let best = null
+  for (const id of Object.keys(chunkMap)) {
+    const { total, chunks } = chunkMap[id]
+    const keys = Object.keys(chunks)
+    if (keys.length !== total) {
+      console.log(`  Chunked report ${id}: got ${keys.length}/${total} chunks (incomplete)`)
+      continue
+    }
+    let json = ''
+    for (let i = 0; i < total; i++) json += chunks[i]
+    const parsed = tryParseReport(json)
+    if (parsed) {
+      console.log(`  Chunked report ${id}: ${parsed.results.length} results`)
+      if (!best || parsed.results.length > best.results.length) best = parsed
+    } else {
+      console.log(`  Chunked report ${id}: all ${total} chunks collected but JSON parse failed`)
+    }
+  }
+  return best
+}
+
+/**
  * Device Farm logcat files are JSON arrays where each entry has a `message`
  * field containing the app's console.log output. We extract all messages
  * and search them as plain text.
@@ -148,8 +193,21 @@ function extractFromFile (filePath) {
     return null
   }
 
-  // Try plain text first (test spec output, plain logcat)
-  let report = extractFromText(content)
+  // Try plain text markers first (test spec output, plain logcat)
+  const markerReport = extractFromText(content)
+
+  // Try chunked format (large reports split across multiple logcat lines)
+  const chunkedReport = extractChunkedFromText(content)
+
+  // Keep whichever found more results
+  let report = null
+  if (markerReport && chunkedReport) {
+    report = chunkedReport.results.length >= markerReport.results.length
+      ? chunkedReport
+      : markerReport
+  } else {
+    report = chunkedReport || markerReport
+  }
   if (report) return report
 
   // Try JSON logcat format (Device Farm DEVICE_LOG / LOGCAT artifacts)
