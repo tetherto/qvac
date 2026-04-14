@@ -5,7 +5,7 @@
     "description": "",
     "quantization": "q8",
     "params": "2B",
-    "license": "Apache-2.0",
+    "licenseId": "Apache-2.0",
     "tags": [
       "generation",
       "instruct",
@@ -19,7 +19,7 @@
     "description": "",
     "quantization": "q4",
     "params": "2B",
-    "license": "Apache-2.0",
+    "licenseId": "Apache-2.0",
     "tags": [
       "generation",
       "instruct",
@@ -33,7 +33,7 @@
     "description": "",
     "quantization": "q8",
     "params": "",
-    "license": "MIT",
+    "licenseId": "MIT",
     "tags": [
       "transcription",
       "small",
@@ -48,7 +48,7 @@
     "description": "",
     "quantization": "",
     "params": "",
-    "license": "MIT",
+    "licenseId": "MIT",
     "tags": [
       "transcription",
       "large",
@@ -63,7 +63,7 @@
     "description": "",
     "quantization": "",
     "params": "",
-    "license": "MIT",
+    "licenseId": "MIT",
     "tags": [
       "transcription",
       "tiny-silero",
@@ -77,7 +77,7 @@
     "description": "",
     "quantization": "q8_0",
     "params": "",
-    "license": "MIT",
+    "licenseId": "MIT",
     "tags": [
       "transcription",
       "tiny",
@@ -91,7 +91,7 @@
     "description": "",
     "quantization": "q0f16",
     "params": "",
-    "license": "MIT",
+    "licenseId": "MIT",
     "tags": [
       "transcription",
       "tiny",
@@ -106,7 +106,7 @@
     "description": "",
     "quantization": "q8_0",
     "params": "",
-    "license": "MIT",
+    "licenseId": "MIT",
     "tags": [
       "transcription",
       "tiny",
@@ -121,7 +121,7 @@
     "description": "",
     "quantization": "q0f16",
     "params": "",
-    "license": "MIT",
+    "licenseId": "MIT",
     "tags": [
       "transcription",
       "base",
@@ -135,7 +135,7 @@
     "description": "",
     "quantization": "q8_0",
     "params": "",
-    "license": "MIT",
+    "licenseId": "MIT",
     "tags": [
       "transcription",
       "base",
@@ -149,7 +149,7 @@
     "description": "",
     "quantization": "q0f16",
     "params": "",
-    "license": "MIT",
+    "licenseId": "MIT",
     "tags": [
       "transcription",
       "base",
@@ -164,7 +164,7 @@
     "description": "",
     "quantization": "q8_0",
     "params": "",
-    "license": "MIT",
+    "licenseId": "MIT",
     "tags": [
       "transcription",
       "base",
@@ -179,7 +179,7 @@
     "description": "",
     "quantization": "q0f16",
     "params": "",
-    "license": "MIT",
+    "licenseId": "MIT",
     "tags": [
       "transcription",
       "small",
@@ -193,7 +193,7 @@
     "description": "",
     "quantization": "q8_0",
     "params": "",
-    "license": "MIT",
+    "licenseId": "MIT",
     "tags": [
       "transcription",
       "small",
@@ -207,7 +207,7 @@
     "description": "",
     "quantization": "q0f16",
     "params": "",
-    "license": "MIT",
+    "licenseId": "MIT",
     "tags": [
       "transcription",
       "small",
@@ -222,7 +222,7 @@
     "description": "VAD model for Whisper",
     "quantization": "",
     "params": "",
-    "license": "MIT",
+    "licenseId": "MIT",
     "tags": [
       "transcription",
       "tiny-silero",
@@ -237,7 +237,7 @@
     "description": "Multimodal 4B model, good for tool calls",
     "quantization": "q4_K_M",
     "params": "4B",
-    "license": "Apache-2.0",
+    "licenseId": "Apache-2.0",
     "tags": [
       "generation",
       "instruct",
@@ -251,7 +251,7 @@
     "description": "Finetuned for medicine 4B model, good for tool calls",
     "quantization": "q4_1",
     "params": "4B",
-    "license": "health-ai-developer-foundations",
+    "licenseId": "health-ai-developer-foundations",
     "tags": [
       "generation",
       "it",
@@ -265,7 +265,7 @@
     "description": "Finetuned for medicine 4B model, good for tool calls",
     "quantization": "q8_0",
     "params": "4B",
-    "license": "health-ai-developer-foundations",
+    "licenseId": "health-ai-developer-foundations",
     "tags": [
       "generation",
       "it",
@@ -279,7 +279,7 @@
     "description": "",
     "quantization": "q4_0",
     "params": "1B",
-    "license": "llama3.2",
+    "licenseId": "llama3.2",
     "tags": [
       "generation",
       "instruct",
@@ -293,7 +293,7 @@
     "description": "",
     "quantization": "fp16",
     "params": "",
-    "license": "MIT",
+    "licenseId": "MIT",
     "tags": [
       "embedding",
       "bert",
@@ -307,7 +307,7 @@
     "description": "",
     "quantization": "q4",
     "params": "1.7B",
-    "license": "Apache-2.0",
+    "licenseId": "Apache-2.0",
     "tags": [
       "generation",
       "instruct",
@@ -321,7 +321,7 @@
     "description": "Vision-language model for video understanding",
     "quantization": "q8_0",
     "params": "500M",
-    "license": "Apache-2.0",
+    "licenseId": "Apache-2.0",
     "tags": [
       "generation",
       "multimodal",
@@ -337,7 +337,7 @@
     "description": "",
     "quantization": "q8_0",
     "params": "500M",
-    "license": "Apache-2.0",
+    "licenseId": "Apache-2.0",
     "tags": [
       "generation",
       "multimodal",
@@ -354,7 +354,7 @@
     "description": "",
     "quantization": "q4_1",
     "params": "4B",
-    "license": "health-ai-developer-foundations",
+    "licenseId": "health-ai-developer-foundations",
     "tags": [
       "generation",
       "it",
@@ -370,7 +370,7 @@
     "description": "",
     "quantization": "q4_1",
     "params": "4B",
-    "license": "health-ai-developer-foundations",
+    "licenseId": "health-ai-developer-foundations",
     "tags": [
       "generation",
       "it",
@@ -386,7 +386,7 @@
     "description": "",
     "quantization": "q4_1",
     "params": "4B",
-    "license": "health-ai-developer-foundations",
+    "licenseId": "health-ai-developer-foundations",
     "tags": [
       "generation",
       "it",
@@ -402,7 +402,7 @@
     "description": "",
     "quantization": "q4_1",
     "params": "4B",
-    "license": "health-ai-developer-foundations",
+    "licenseId": "health-ai-developer-foundations",
     "tags": [
       "generation",
       "it",
@@ -418,7 +418,7 @@
     "description": "",
     "quantization": "q4_1",
     "params": "4B",
-    "license": "health-ai-developer-foundations",
+    "licenseId": "health-ai-developer-foundations",
     "tags": [
       "generation",
       "it",
@@ -433,7 +433,7 @@
     "description": "Required for Llamacpp to create the model layers before the weights are loaded",
     "quantization": "q4_1",
     "params": "4B",
-    "license": "health-ai-developer-foundations",
+    "licenseId": "health-ai-developer-foundations",
     "tags": [
       "generation",
       "it",
@@ -449,7 +449,7 @@
     "description": "",
     "quantization": "q8_0",
     "params": "4B",
-    "license": "health-ai-developer-foundations",
+    "licenseId": "health-ai-developer-foundations",
     "tags": [
       "generation",
       "it",
@@ -465,7 +465,7 @@
     "description": "",
     "quantization": "q8_0",
     "params": "4B",
-    "license": "health-ai-developer-foundations",
+    "licenseId": "health-ai-developer-foundations",
     "tags": [
       "generation",
       "it",
@@ -481,7 +481,7 @@
     "description": "",
     "quantization": "q8_0",
     "params": "4B",
-    "license": "health-ai-developer-foundations",
+    "licenseId": "health-ai-developer-foundations",
     "tags": [
       "generation",
       "it",
@@ -497,7 +497,7 @@
     "description": "",
     "quantization": "q8_0",
     "params": "4B",
-    "license": "health-ai-developer-foundations",
+    "licenseId": "health-ai-developer-foundations",
     "tags": [
       "generation",
       "it",
@@ -513,7 +513,7 @@
     "description": "",
     "quantization": "q8_0",
     "params": "4B",
-    "license": "health-ai-developer-foundations",
+    "licenseId": "health-ai-developer-foundations",
     "tags": [
       "generation",
       "it",
@@ -528,7 +528,7 @@
     "description": "Required for Llamacpp to create the model layers before the weights are loaded",
     "quantization": "q8_0",
     "params": "4B",
-    "license": "health-ai-developer-foundations",
+    "licenseId": "health-ai-developer-foundations",
     "tags": [
       "generation",
       "it",
@@ -544,7 +544,7 @@
     "description": "",
     "quantization": "fp16",
     "params": "335M",
-    "license": "MIT",
+    "licenseId": "MIT",
     "tags": [
       "embedding",
       "bert",
@@ -560,7 +560,7 @@
     "description": "",
     "quantization": "fp16",
     "params": "335M",
-    "license": "MIT",
+    "licenseId": "MIT",
     "tags": [
       "embedding",
       "bert",
@@ -576,7 +576,7 @@
     "description": "",
     "quantization": "fp16",
     "params": "335M",
-    "license": "MIT",
+    "licenseId": "MIT",
     "tags": [
       "embedding",
       "bert",
@@ -592,7 +592,7 @@
     "description": "",
     "quantization": "fp16",
     "params": "335M",
-    "license": "MIT",
+    "licenseId": "MIT",
     "tags": [
       "embedding",
       "bert",
@@ -608,7 +608,7 @@
     "description": "",
     "quantization": "fp16",
     "params": "335M",
-    "license": "MIT",
+    "licenseId": "MIT",
     "tags": [
       "embedding",
       "bert",
@@ -623,7 +623,7 @@
     "description": "Required for Llamacpp to create the model layers before the weights are loaded",
     "quantization": "fp16",
     "params": "335M",
-    "license": "MIT",
+    "licenseId": "MIT",
     "tags": [
       "embedding",
       "bert",
@@ -639,7 +639,7 @@
     "description": "",
     "quantization": "q4_0",
     "params": "1B",
-    "license": "llama3.2",
+    "licenseId": "llama3.2",
     "tags": [
       "generation",
       "instruct",
@@ -655,7 +655,7 @@
     "description": "",
     "quantization": "q4_0",
     "params": "1B",
-    "license": "llama3.2",
+    "licenseId": "llama3.2",
     "tags": [
       "generation",
       "instruct",
@@ -671,7 +671,7 @@
     "description": "",
     "quantization": "q4_0",
     "params": "1B",
-    "license": "llama3.2",
+    "licenseId": "llama3.2",
     "tags": [
       "generation",
       "instruct",
@@ -687,7 +687,7 @@
     "description": "",
     "quantization": "q4_0",
     "params": "1B",
-    "license": "llama3.2",
+    "licenseId": "llama3.2",
     "tags": [
       "generation",
       "instruct",
@@ -703,7 +703,7 @@
     "description": "",
     "quantization": "q4_0",
     "params": "1B",
-    "license": "llama3.2",
+    "licenseId": "llama3.2",
     "tags": [
       "generation",
       "instruct",
@@ -719,7 +719,7 @@
     "description": "",
     "quantization": "q4_0",
     "params": "1B",
-    "license": "llama3.2",
+    "licenseId": "llama3.2",
     "tags": [
       "generation",
       "instruct",
@@ -735,7 +735,7 @@
     "description": "",
     "quantization": "q4_0",
     "params": "1B",
-    "license": "llama3.2",
+    "licenseId": "llama3.2",
     "tags": [
       "generation",
       "instruct",
@@ -751,7 +751,7 @@
     "description": "",
     "quantization": "q4_0",
     "params": "1B",
-    "license": "llama3.2",
+    "licenseId": "llama3.2",
     "tags": [
       "generation",
       "instruct",
@@ -766,7 +766,7 @@
     "description": "Required for Llamacpp to create the model layers before the weights are loaded",
     "quantization": "q4_0",
     "params": "1B",
-    "license": "llama3.2",
+    "licenseId": "llama3.2",
     "tags": [
       "generation",
       "instruct",
@@ -782,7 +782,7 @@
     "description": "",
     "quantization": "q4",
     "params": "4B",
-    "license": "Apache-2.0",
+    "licenseId": "Apache-2.0",
     "tags": [
       "generation",
       "instruct",
@@ -798,7 +798,7 @@
     "description": "",
     "quantization": "q4",
     "params": "4B",
-    "license": "Apache-2.0",
+    "licenseId": "Apache-2.0",
     "tags": [
       "generation",
       "instruct",
@@ -814,7 +814,7 @@
     "description": "",
     "quantization": "q4",
     "params": "4B",
-    "license": "Apache-2.0",
+    "licenseId": "Apache-2.0",
     "tags": [
       "generation",
       "instruct",
@@ -830,7 +830,7 @@
     "description": "",
     "quantization": "q4",
     "params": "4B",
-    "license": "Apache-2.0",
+    "licenseId": "Apache-2.0",
     "tags": [
       "generation",
       "instruct",
@@ -846,7 +846,7 @@
     "description": "",
     "quantization": "q4",
     "params": "4B",
-    "license": "Apache-2.0",
+    "licenseId": "Apache-2.0",
     "tags": [
       "generation",
       "instruct",
@@ -861,7 +861,7 @@
     "description": "Required for Llamacpp to create the model layers before the weights are loaded",
     "quantization": "q4",
     "params": "4B",
-    "license": "Apache-2.0",
+    "licenseId": "Apache-2.0",
     "tags": [
       "generation",
       "instruct",
@@ -877,7 +877,7 @@
     "description": "",
     "quantization": "q4",
     "params": "2B",
-    "license": "Apache-2.0",
+    "licenseId": "Apache-2.0",
     "tags": [
       "generation",
       "instruct",
@@ -893,7 +893,7 @@
     "description": "",
     "quantization": "q4",
     "params": "2B",
-    "license": "Apache-2.0",
+    "licenseId": "Apache-2.0",
     "tags": [
       "generation",
       "instruct",
@@ -909,7 +909,7 @@
     "description": "",
     "quantization": "q4",
     "params": "2B",
-    "license": "Apache-2.0",
+    "licenseId": "Apache-2.0",
     "tags": [
       "generation",
       "instruct",
@@ -924,7 +924,7 @@
     "description": "Required for Llamacpp to create the model layers before the weights are loaded",
     "quantization": "q4",
     "params": "2B",
-    "license": "Apache-2.0",
+    "licenseId": "Apache-2.0",
     "tags": [
       "generation",
       "instruct",
@@ -940,7 +940,7 @@
     "description": "",
     "quantization": "q8",
     "params": "2B",
-    "license": "Apache-2.0",
+    "licenseId": "Apache-2.0",
     "tags": [
       "generation",
       "instruct",
@@ -956,7 +956,7 @@
     "description": "",
     "quantization": "q8",
     "params": "2B",
-    "license": "Apache-2.0",
+    "licenseId": "Apache-2.0",
     "tags": [
       "generation",
       "instruct",
@@ -972,7 +972,7 @@
     "description": "",
     "quantization": "q8",
     "params": "2B",
-    "license": "Apache-2.0",
+    "licenseId": "Apache-2.0",
     "tags": [
       "generation",
       "instruct",
@@ -988,7 +988,7 @@
     "description": "",
     "quantization": "q8",
     "params": "2B",
-    "license": "Apache-2.0",
+    "licenseId": "Apache-2.0",
     "tags": [
       "generation",
       "instruct",
@@ -1003,7 +1003,7 @@
     "description": "Required for Llamacpp to create the model layers before the weights are loaded",
     "quantization": "q8",
     "params": "2B",
-    "license": "Apache-2.0",
+    "licenseId": "Apache-2.0",
     "tags": [
       "generation",
       "instruct",
@@ -1019,7 +1019,7 @@
     "description": "",
     "quantization": "q4",
     "params": "1.7B",
-    "license": "Apache-2.0",
+    "licenseId": "Apache-2.0",
     "tags": [
       "generation",
       "instruct",
@@ -1035,7 +1035,7 @@
     "description": "",
     "quantization": "q4",
     "params": "1.7B",
-    "license": "Apache-2.0",
+    "licenseId": "Apache-2.0",
     "tags": [
       "generation",
       "instruct",
@@ -1051,7 +1051,7 @@
     "description": "",
     "quantization": "q4",
     "params": "1.7B",
-    "license": "Apache-2.0",
+    "licenseId": "Apache-2.0",
     "tags": [
       "generation",
       "instruct",
@@ -1067,7 +1067,7 @@
     "description": "",
     "quantization": "q4",
     "params": "1.7B",
-    "license": "Apache-2.0",
+    "licenseId": "Apache-2.0",
     "tags": [
       "generation",
       "instruct",
@@ -1083,7 +1083,7 @@
     "description": "",
     "quantization": "q4",
     "params": "1.7B",
-    "license": "Apache-2.0",
+    "licenseId": "Apache-2.0",
     "tags": [
       "generation",
       "instruct",
@@ -1098,7 +1098,7 @@
     "description": "Required for Llamacpp to create the model layers before the weights are loaded",
     "quantization": "q4",
     "params": "1.7B",
-    "license": "Apache-2.0",
+    "licenseId": "Apache-2.0",
     "tags": [
       "generation",
       "instruct",
@@ -1113,7 +1113,7 @@
     "description": "Google multilingual embedding model, 768-dim output, 2048 token context",
     "quantization": "q4_0",
     "params": "300M",
-    "license": "gemma",
+    "licenseId": "gemma",
     "tags": [
       "embedding",
       "embed",
@@ -1127,7 +1127,7 @@
     "description": "Google multilingual embedding model, 768-dim output, 2048 token context",
     "quantization": "q8_0",
     "params": "300M",
-    "license": "gemma",
+    "licenseId": "gemma",
     "tags": [
       "embedding",
       "embed",
@@ -1141,7 +1141,7 @@
     "description": "",
     "quantization": "BF16",
     "params": "300M",
-    "license": "gemma",
+    "licenseId": "gemma",
     "tags": [
       "embedding",
       "embed",
@@ -1155,7 +1155,7 @@
     "description": "",
     "quantization": "F32",
     "params": "300M",
-    "license": "gemma",
+    "licenseId": "gemma",
     "tags": [
       "embedding",
       "embed",
@@ -1169,7 +1169,7 @@
     "description": "MoE model with DPO training",
     "quantization": "Q2_K",
     "params": "2x7B",
-    "license": "Apache-2.0",
+    "licenseId": "Apache-2.0",
     "tags": [
       "generation",
       "instruct",
@@ -1184,7 +1184,7 @@
     "description": "",
     "quantization": "f16",
     "params": "1B",
-    "license": "MIT",
+    "licenseId": "MIT",
     "tags": [
       "translation",
       "full",
@@ -1200,7 +1200,7 @@
     "description": "",
     "quantization": "f16",
     "params": "200M",
-    "license": "MIT",
+    "licenseId": "MIT",
     "tags": [
       "translation",
       "full",
@@ -1216,7 +1216,7 @@
     "description": "",
     "quantization": "f16",
     "params": "1B",
-    "license": "MIT",
+    "licenseId": "MIT",
     "tags": [
       "translation",
       "full",
@@ -1232,7 +1232,7 @@
     "description": "",
     "quantization": "f16",
     "params": "200M",
-    "license": "MIT",
+    "licenseId": "MIT",
     "tags": [
       "translation",
       "full",
@@ -1248,7 +1248,7 @@
     "description": "",
     "quantization": "f16",
     "params": "1B",
-    "license": "MIT",
+    "licenseId": "MIT",
     "tags": [
       "translation",
       "full",
@@ -1264,7 +1264,7 @@
     "description": "",
     "quantization": "f16",
     "params": "320M",
-    "license": "MIT",
+    "licenseId": "MIT",
     "tags": [
       "translation",
       "full",
@@ -1280,7 +1280,7 @@
     "description": "",
     "quantization": "q4_0",
     "params": "1B",
-    "license": "MIT",
+    "licenseId": "MIT",
     "tags": [
       "translation",
       "full",
@@ -1296,7 +1296,7 @@
     "description": "",
     "quantization": "q4_0",
     "params": "200M",
-    "license": "MIT",
+    "licenseId": "MIT",
     "tags": [
       "translation",
       "full",
@@ -1312,7 +1312,7 @@
     "description": "",
     "quantization": "q4_0",
     "params": "1B",
-    "license": "MIT",
+    "licenseId": "MIT",
     "tags": [
       "translation",
       "full",
@@ -1328,7 +1328,7 @@
     "description": "",
     "quantization": "q4_0",
     "params": "200M",
-    "license": "MIT",
+    "licenseId": "MIT",
     "tags": [
       "translation",
       "full",
@@ -1344,7 +1344,7 @@
     "description": "",
     "quantization": "q4_0",
     "params": "1B",
-    "license": "MIT",
+    "licenseId": "MIT",
     "tags": [
       "translation",
       "full",
@@ -1360,7 +1360,7 @@
     "description": "",
     "quantization": "q4_0",
     "params": "320M",
-    "license": "MIT",
+    "licenseId": "MIT",
     "tags": [
       "translation",
       "full",
@@ -1377,7 +1377,7 @@
     "description": "",
     "quantization": "Q2_K",
     "params": "2x7B",
-    "license": "Apache-2.0",
+    "licenseId": "Apache-2.0",
     "tags": [
       "generation",
       "moe",
@@ -1393,7 +1393,7 @@
     "description": "",
     "quantization": "Q2_K",
     "params": "2x7B",
-    "license": "Apache-2.0",
+    "licenseId": "Apache-2.0",
     "tags": [
       "generation",
       "moe",
@@ -1409,7 +1409,7 @@
     "description": "",
     "quantization": "Q2_K",
     "params": "2x7B",
-    "license": "Apache-2.0",
+    "licenseId": "Apache-2.0",
     "tags": [
       "generation",
       "moe",
@@ -1425,7 +1425,7 @@
     "description": "",
     "quantization": "Q2_K",
     "params": "2x7B",
-    "license": "Apache-2.0",
+    "licenseId": "Apache-2.0",
     "tags": [
       "generation",
       "moe",
@@ -1441,7 +1441,7 @@
     "description": "",
     "quantization": "Q2_K",
     "params": "2x7B",
-    "license": "Apache-2.0",
+    "licenseId": "Apache-2.0",
     "tags": [
       "generation",
       "moe",
@@ -1456,7 +1456,7 @@
     "description": "Required for Llamacpp to create the model layers before the weights are loaded",
     "quantization": "Q2_K",
     "params": "2x7B",
-    "license": "Apache-2.0",
+    "licenseId": "Apache-2.0",
     "tags": [
       "generation",
       "moe",
@@ -1471,7 +1471,7 @@
     "description": "",
     "quantization": "f16",
     "params": "500M",
-    "license": "Apache-2.0",
+    "licenseId": "Apache-2.0",
     "tags": [
       "generation",
       "multimodal",
@@ -1486,7 +1486,7 @@
     "description": "",
     "quantization": "f16",
     "params": "500M",
-    "license": "Apache-2.0",
+    "licenseId": "Apache-2.0",
     "tags": [
       "generation",
       "multimodal",
@@ -1501,7 +1501,7 @@
     "description": "",
     "quantization": "q4",
     "params": "600M",
-    "license": "Apache-2.0",
+    "licenseId": "Apache-2.0",
     "tags": [
       "generation",
       "instruct",
@@ -1516,7 +1516,7 @@
     "description": "Fine-tuned for Norwegian",
     "quantization": "",
     "params": "",
-    "license": "Apache-2.0",
+    "licenseId": "Apache-2.0",
     "tags": [
       "transcription",
       "tiny-ggml",
@@ -1532,7 +1532,7 @@
     "description": "With acoustic fine-tuning",
     "quantization": "",
     "params": "",
-    "license": "MIT",
+    "licenseId": "MIT",
     "tags": [
       "transcription",
       "ggml",
@@ -1547,7 +1547,7 @@
     "description": "With acoustic fine-tuning",
     "quantization": "",
     "params": "",
-    "license": "MIT",
+    "licenseId": "MIT",
     "tags": [
       "transcription",
       "ggml",
@@ -1561,7 +1561,7 @@
     "description": "Text recognizer - Latin (fixed-width 512px)",
     "quantization": "",
     "params": "",
-    "license": "Apache-2.0",
+    "licenseId": "Apache-2.0",
     "tags": [
       "ocr",
       "recognizer",
@@ -1576,7 +1576,7 @@
     "description": "CRAFT text detector",
     "quantization": "",
     "params": "",
-    "license": "Apache-2.0",
+    "licenseId": "Apache-2.0",
     "tags": [
       "ocr",
       "detector",
@@ -1592,7 +1592,7 @@
     "description": "Fine-tuned for French",
     "quantization": "f16",
     "params": "",
-    "license": "Apache-2.0",
+    "licenseId": "Apache-2.0",
     "tags": [
       "transcription",
       "tiny-ggml",
@@ -1608,7 +1608,7 @@
     "description": "",
     "quantization": "q8_0",
     "params": "",
-    "license": "Apache-2.0",
+    "licenseId": "Apache-2.0",
     "tags": [
       "transcription",
       "tiny-ggml",
@@ -1624,7 +1624,7 @@
     "description": "Fine-tuned for German",
     "quantization": "f16",
     "params": "",
-    "license": "Apache-2.0",
+    "licenseId": "Apache-2.0",
     "tags": [
       "transcription",
       "tiny-ggml",
@@ -1640,7 +1640,7 @@
     "description": "",
     "quantization": "q8_0",
     "params": "",
-    "license": "Apache-2.0",
+    "licenseId": "Apache-2.0",
     "tags": [
       "transcription",
       "tiny-ggml",
@@ -1656,7 +1656,7 @@
     "description": "",
     "quantization": "f16",
     "params": "",
-    "license": "Apache-2.0",
+    "licenseId": "Apache-2.0",
     "tags": [
       "transcription",
       "tiny-ggml",
@@ -1672,7 +1672,7 @@
     "description": "",
     "quantization": "q8_0",
     "params": "",
-    "license": "Apache-2.0",
+    "licenseId": "Apache-2.0",
     "tags": [
       "transcription",
       "tiny-ggml",
@@ -1688,7 +1688,7 @@
     "description": "",
     "quantization": "f16",
     "params": "",
-    "license": "MIT",
+    "licenseId": "MIT",
     "tags": [
       "transcription",
       "tiny-ggml",
@@ -1704,7 +1704,7 @@
     "description": "",
     "quantization": "q8_0",
     "params": "",
-    "license": "MIT",
+    "licenseId": "MIT",
     "tags": [
       "transcription",
       "tiny-ggml",
@@ -1720,7 +1720,7 @@
     "description": "",
     "quantization": "f16",
     "params": "",
-    "license": "MIT",
+    "licenseId": "MIT",
     "tags": [
       "transcription",
       "tiny-ggml",
@@ -1736,7 +1736,7 @@
     "description": "",
     "quantization": "q8_0",
     "params": "",
-    "license": "MIT",
+    "licenseId": "MIT",
     "tags": [
       "transcription",
       "tiny-ggml",
@@ -1752,7 +1752,7 @@
     "description": "",
     "quantization": "f16",
     "params": "",
-    "license": "Apache-2.0",
+    "licenseId": "Apache-2.0",
     "tags": [
       "transcription",
       "base-ggml",
@@ -1768,7 +1768,7 @@
     "description": "",
     "quantization": "q8_0",
     "params": "",
-    "license": "Apache-2.0",
+    "licenseId": "Apache-2.0",
     "tags": [
       "transcription",
       "base-ggml",
@@ -1784,7 +1784,7 @@
     "description": "",
     "quantization": "f16",
     "params": "",
-    "license": "MIT",
+    "licenseId": "MIT",
     "tags": [
       "transcription",
       "base-ggml",
@@ -1800,7 +1800,7 @@
     "description": "",
     "quantization": "q8_0",
     "params": "",
-    "license": "MIT",
+    "licenseId": "MIT",
     "tags": [
       "transcription",
       "base-ggml",
@@ -1816,7 +1816,7 @@
     "description": "",
     "quantization": "f16",
     "params": "",
-    "license": "Apache-2.0",
+    "licenseId": "Apache-2.0",
     "tags": [
       "transcription",
       "base-ggml",
@@ -1832,7 +1832,7 @@
     "description": "",
     "quantization": "q8_0",
     "params": "",
-    "license": "Apache-2.0",
+    "licenseId": "Apache-2.0",
     "tags": [
       "transcription",
       "base-ggml",
@@ -1848,7 +1848,7 @@
     "description": "",
     "quantization": "f16",
     "params": "",
-    "license": "Apache-2.0",
+    "licenseId": "Apache-2.0",
     "tags": [
       "transcription",
       "base-ggml",
@@ -1864,7 +1864,7 @@
     "description": "",
     "quantization": "q8_0",
     "params": "",
-    "license": "Apache-2.0",
+    "licenseId": "Apache-2.0",
     "tags": [
       "transcription",
       "base-ggml",
@@ -1880,7 +1880,7 @@
     "description": "",
     "quantization": "f16",
     "params": "",
-    "license": "Apache-2.0",
+    "licenseId": "Apache-2.0",
     "tags": [
       "transcription",
       "base-ggml",
@@ -1896,7 +1896,7 @@
     "description": "",
     "quantization": "q8_0",
     "params": "",
-    "license": "Apache-2.0",
+    "licenseId": "Apache-2.0",
     "tags": [
       "transcription",
       "base-ggml",
@@ -1912,7 +1912,7 @@
     "description": "",
     "quantization": "f16",
     "params": "",
-    "license": "Apache-2.0",
+    "licenseId": "Apache-2.0",
     "tags": [
       "transcription",
       "base-ggml",
@@ -1928,7 +1928,7 @@
     "description": "",
     "quantization": "q8_0",
     "params": "",
-    "license": "Apache-2.0",
+    "licenseId": "Apache-2.0",
     "tags": [
       "transcription",
       "base-ggml",
@@ -1944,7 +1944,7 @@
     "description": "",
     "quantization": "f16",
     "params": "",
-    "license": "Apache-2.0",
+    "licenseId": "Apache-2.0",
     "tags": [
       "transcription",
       "tiny-ggml",
@@ -1960,7 +1960,7 @@
     "description": "",
     "quantization": "q8_0",
     "params": "",
-    "license": "Apache-2.0",
+    "licenseId": "Apache-2.0",
     "tags": [
       "transcription",
       "tiny-ggml",
@@ -1976,7 +1976,7 @@
     "description": "",
     "quantization": "f16",
     "params": "",
-    "license": "Apache-2.0",
+    "licenseId": "Apache-2.0",
     "tags": [
       "transcription",
       "base-ggml",
@@ -1992,7 +1992,7 @@
     "description": "",
     "quantization": "q8_0",
     "params": "",
-    "license": "Apache-2.0",
+    "licenseId": "Apache-2.0",
     "tags": [
       "transcription",
       "base-ggml",
@@ -2008,7 +2008,7 @@
     "description": "",
     "quantization": "f16",
     "params": "",
-    "license": "Apache-2.0",
+    "licenseId": "Apache-2.0",
     "tags": [
       "transcription",
       "tiny-ggml",
@@ -2024,7 +2024,7 @@
     "description": "",
     "quantization": "q8_0",
     "params": "",
-    "license": "Apache-2.0",
+    "licenseId": "Apache-2.0",
     "tags": [
       "transcription",
       "tiny-ggml",
@@ -2039,7 +2039,7 @@
     "description": "Multimodal 2B model",
     "quantization": "q4_k",
     "params": "2B",
-    "license": "Apache-2.0",
+    "licenseId": "Apache-2.0",
     "tags": [
       "generation",
       "multimodal",
@@ -2055,7 +2055,7 @@
     "description": "Vision adapter (mmproj)",
     "quantization": "q4_k",
     "params": "2B",
-    "license": "Apache-2.0",
+    "licenseId": "Apache-2.0",
     "tags": [
       "generation",
       "multimodal",
@@ -2071,7 +2071,7 @@
     "description": "Bergamot lexical shortlist ar-en",
     "quantization": "",
     "params": "",
-    "license": "MPL-2.0",
+    "licenseId": "MPL-2.0",
     "tags": [
       "translation",
       "nmt",
@@ -2087,7 +2087,7 @@
     "description": "Bergamot metadata ar-en",
     "quantization": "",
     "params": "",
-    "license": "MPL-2.0",
+    "licenseId": "MPL-2.0",
     "tags": [
       "translation",
       "nmt",
@@ -2103,7 +2103,7 @@
     "description": "Bergamot NMT model ar-en",
     "quantization": "",
     "params": "",
-    "license": "MPL-2.0",
+    "licenseId": "MPL-2.0",
     "tags": [
       "translation",
       "nmt",
@@ -2119,7 +2119,7 @@
     "description": "Bergamot vocabulary ar-en",
     "quantization": "",
     "params": "",
-    "license": "MPL-2.0",
+    "licenseId": "MPL-2.0",
     "tags": [
       "translation",
       "nmt",
@@ -2135,7 +2135,7 @@
     "description": "Bergamot lexical shortlist cs-en",
     "quantization": "",
     "params": "",
-    "license": "MPL-2.0",
+    "licenseId": "MPL-2.0",
     "tags": [
       "translation",
       "nmt",
@@ -2151,7 +2151,7 @@
     "description": "Bergamot metadata cs-en",
     "quantization": "",
     "params": "",
-    "license": "MPL-2.0",
+    "licenseId": "MPL-2.0",
     "tags": [
       "translation",
       "nmt",
@@ -2167,7 +2167,7 @@
     "description": "Bergamot NMT model cs-en",
     "quantization": "",
     "params": "",
-    "license": "MPL-2.0",
+    "licenseId": "MPL-2.0",
     "tags": [
       "translation",
       "nmt",
@@ -2183,7 +2183,7 @@
     "description": "Bergamot vocabulary cs-en",
     "quantization": "",
     "params": "",
-    "license": "MPL-2.0",
+    "licenseId": "MPL-2.0",
     "tags": [
       "translation",
       "nmt",
@@ -2199,7 +2199,7 @@
     "description": "Bergamot lexical shortlist en-ar",
     "quantization": "",
     "params": "",
-    "license": "MPL-2.0",
+    "licenseId": "MPL-2.0",
     "tags": [
       "translation",
       "nmt",
@@ -2215,7 +2215,7 @@
     "description": "Bergamot metadata en-ar",
     "quantization": "",
     "params": "",
-    "license": "MPL-2.0",
+    "licenseId": "MPL-2.0",
     "tags": [
       "translation",
       "nmt",
@@ -2231,7 +2231,7 @@
     "description": "Bergamot NMT model en-ar",
     "quantization": "",
     "params": "",
-    "license": "MPL-2.0",
+    "licenseId": "MPL-2.0",
     "tags": [
       "translation",
       "nmt",
@@ -2247,7 +2247,7 @@
     "description": "Bergamot vocabulary en-ar",
     "quantization": "",
     "params": "",
-    "license": "MPL-2.0",
+    "licenseId": "MPL-2.0",
     "tags": [
       "translation",
       "nmt",
@@ -2263,7 +2263,7 @@
     "description": "Bergamot lexical shortlist en-cs",
     "quantization": "",
     "params": "",
-    "license": "MPL-2.0",
+    "licenseId": "MPL-2.0",
     "tags": [
       "translation",
       "nmt",
@@ -2279,7 +2279,7 @@
     "description": "Bergamot metadata en-cs",
     "quantization": "",
     "params": "",
-    "license": "MPL-2.0",
+    "licenseId": "MPL-2.0",
     "tags": [
       "translation",
       "nmt",
@@ -2295,7 +2295,7 @@
     "description": "Bergamot NMT model en-cs",
     "quantization": "",
     "params": "",
-    "license": "MPL-2.0",
+    "licenseId": "MPL-2.0",
     "tags": [
       "translation",
       "nmt",
@@ -2311,7 +2311,7 @@
     "description": "Bergamot vocabulary en-cs",
     "quantization": "",
     "params": "",
-    "license": "MPL-2.0",
+    "licenseId": "MPL-2.0",
     "tags": [
       "translation",
       "nmt",
@@ -2327,7 +2327,7 @@
     "description": "Bergamot lexical shortlist en-es",
     "quantization": "",
     "params": "",
-    "license": "MPL-2.0",
+    "licenseId": "MPL-2.0",
     "tags": [
       "translation",
       "nmt",
@@ -2343,7 +2343,7 @@
     "description": "Bergamot metadata en-es",
     "quantization": "",
     "params": "",
-    "license": "MPL-2.0",
+    "licenseId": "MPL-2.0",
     "tags": [
       "translation",
       "nmt",
@@ -2359,7 +2359,7 @@
     "description": "Bergamot NMT model en-es",
     "quantization": "",
     "params": "",
-    "license": "MPL-2.0",
+    "licenseId": "MPL-2.0",
     "tags": [
       "translation",
       "nmt",
@@ -2375,7 +2375,7 @@
     "description": "Bergamot vocabulary en-es",
     "quantization": "",
     "params": "",
-    "license": "MPL-2.0",
+    "licenseId": "MPL-2.0",
     "tags": [
       "translation",
       "nmt",
@@ -2391,7 +2391,7 @@
     "description": "Bergamot lexical shortlist en-fr",
     "quantization": "",
     "params": "",
-    "license": "MPL-2.0",
+    "licenseId": "MPL-2.0",
     "tags": [
       "translation",
       "nmt",
@@ -2407,7 +2407,7 @@
     "description": "Bergamot metadata en-fr",
     "quantization": "",
     "params": "",
-    "license": "MPL-2.0",
+    "licenseId": "MPL-2.0",
     "tags": [
       "translation",
       "nmt",
@@ -2423,7 +2423,7 @@
     "description": "Bergamot NMT model en-fr",
     "quantization": "",
     "params": "",
-    "license": "MPL-2.0",
+    "licenseId": "MPL-2.0",
     "tags": [
       "translation",
       "nmt",
@@ -2439,7 +2439,7 @@
     "description": "Bergamot vocabulary en-fr",
     "quantization": "",
     "params": "",
-    "license": "MPL-2.0",
+    "licenseId": "MPL-2.0",
     "tags": [
       "translation",
       "nmt",
@@ -2455,7 +2455,7 @@
     "description": "Bergamot lexical shortlist en-it",
     "quantization": "",
     "params": "",
-    "license": "MPL-2.0",
+    "licenseId": "MPL-2.0",
     "tags": [
       "translation",
       "nmt",
@@ -2471,7 +2471,7 @@
     "description": "Bergamot metadata en-it",
     "quantization": "",
     "params": "",
-    "license": "MPL-2.0",
+    "licenseId": "MPL-2.0",
     "tags": [
       "translation",
       "nmt",
@@ -2487,7 +2487,7 @@
     "description": "Bergamot NMT model en-it",
     "quantization": "",
     "params": "",
-    "license": "MPL-2.0",
+    "licenseId": "MPL-2.0",
     "tags": [
       "translation",
       "nmt",
@@ -2503,7 +2503,7 @@
     "description": "Bergamot vocabulary en-it",
     "quantization": "",
     "params": "",
-    "license": "MPL-2.0",
+    "licenseId": "MPL-2.0",
     "tags": [
       "translation",
       "nmt",
@@ -2519,7 +2519,7 @@
     "description": "Bergamot lexical shortlist en-ja",
     "quantization": "",
     "params": "",
-    "license": "MPL-2.0",
+    "licenseId": "MPL-2.0",
     "tags": [
       "translation",
       "nmt",
@@ -2535,7 +2535,7 @@
     "description": "Bergamot metadata en-ja",
     "quantization": "",
     "params": "",
-    "license": "MPL-2.0",
+    "licenseId": "MPL-2.0",
     "tags": [
       "translation",
       "nmt",
@@ -2551,7 +2551,7 @@
     "description": "Bergamot NMT model en-ja",
     "quantization": "",
     "params": "",
-    "license": "MPL-2.0",
+    "licenseId": "MPL-2.0",
     "tags": [
       "translation",
       "nmt",
@@ -2567,7 +2567,7 @@
     "description": "Bergamot vocabulary en-ja",
     "quantization": "",
     "params": "",
-    "license": "MPL-2.0",
+    "licenseId": "MPL-2.0",
     "tags": [
       "translation",
       "nmt",
@@ -2583,7 +2583,7 @@
     "description": "Bergamot vocabulary en-ja",
     "quantization": "",
     "params": "",
-    "license": "MPL-2.0",
+    "licenseId": "MPL-2.0",
     "tags": [
       "translation",
       "nmt",
@@ -2599,7 +2599,7 @@
     "description": "Bergamot lexical shortlist en-pt",
     "quantization": "",
     "params": "",
-    "license": "MPL-2.0",
+    "licenseId": "MPL-2.0",
     "tags": [
       "translation",
       "nmt",
@@ -2615,7 +2615,7 @@
     "description": "Bergamot metadata en-pt",
     "quantization": "",
     "params": "",
-    "license": "MPL-2.0",
+    "licenseId": "MPL-2.0",
     "tags": [
       "translation",
       "nmt",
@@ -2631,7 +2631,7 @@
     "description": "Bergamot NMT model en-pt",
     "quantization": "",
     "params": "",
-    "license": "MPL-2.0",
+    "licenseId": "MPL-2.0",
     "tags": [
       "translation",
       "nmt",
@@ -2647,7 +2647,7 @@
     "description": "Bergamot vocabulary en-pt",
     "quantization": "",
     "params": "",
-    "license": "MPL-2.0",
+    "licenseId": "MPL-2.0",
     "tags": [
       "translation",
       "nmt",
@@ -2663,7 +2663,7 @@
     "description": "Bergamot lexical shortlist en-ru",
     "quantization": "",
     "params": "",
-    "license": "MPL-2.0",
+    "licenseId": "MPL-2.0",
     "tags": [
       "translation",
       "nmt",
@@ -2679,7 +2679,7 @@
     "description": "Bergamot metadata en-ru",
     "quantization": "",
     "params": "",
-    "license": "MPL-2.0",
+    "licenseId": "MPL-2.0",
     "tags": [
       "translation",
       "nmt",
@@ -2695,7 +2695,7 @@
     "description": "Bergamot NMT model en-ru",
     "quantization": "",
     "params": "",
-    "license": "MPL-2.0",
+    "licenseId": "MPL-2.0",
     "tags": [
       "translation",
       "nmt",
@@ -2711,7 +2711,7 @@
     "description": "Bergamot vocabulary en-ru",
     "quantization": "",
     "params": "",
-    "license": "MPL-2.0",
+    "licenseId": "MPL-2.0",
     "tags": [
       "translation",
       "nmt",
@@ -2727,7 +2727,7 @@
     "description": "Bergamot lexical shortlist en-zh",
     "quantization": "",
     "params": "",
-    "license": "MPL-2.0",
+    "licenseId": "MPL-2.0",
     "tags": [
       "translation",
       "nmt",
@@ -2743,7 +2743,7 @@
     "description": "Bergamot metadata en-zh",
     "quantization": "",
     "params": "",
-    "license": "MPL-2.0",
+    "licenseId": "MPL-2.0",
     "tags": [
       "translation",
       "nmt",
@@ -2759,7 +2759,7 @@
     "description": "Bergamot NMT model en-zh",
     "quantization": "",
     "params": "",
-    "license": "MPL-2.0",
+    "licenseId": "MPL-2.0",
     "tags": [
       "translation",
       "nmt",
@@ -2775,7 +2775,7 @@
     "description": "Bergamot vocabulary en-zh",
     "quantization": "",
     "params": "",
-    "license": "MPL-2.0",
+    "licenseId": "MPL-2.0",
     "tags": [
       "translation",
       "nmt",
@@ -2791,7 +2791,7 @@
     "description": "Bergamot vocabulary en-zh",
     "quantization": "",
     "params": "",
-    "license": "MPL-2.0",
+    "licenseId": "MPL-2.0",
     "tags": [
       "translation",
       "nmt",
@@ -2807,7 +2807,7 @@
     "description": "Bergamot lexical shortlist es-en",
     "quantization": "",
     "params": "",
-    "license": "MPL-2.0",
+    "licenseId": "MPL-2.0",
     "tags": [
       "translation",
       "nmt",
@@ -2823,7 +2823,7 @@
     "description": "Bergamot metadata es-en",
     "quantization": "",
     "params": "",
-    "license": "MPL-2.0",
+    "licenseId": "MPL-2.0",
     "tags": [
       "translation",
       "nmt",
@@ -2839,7 +2839,7 @@
     "description": "Bergamot NMT model es-en",
     "quantization": "",
     "params": "",
-    "license": "MPL-2.0",
+    "licenseId": "MPL-2.0",
     "tags": [
       "translation",
       "nmt",
@@ -2855,7 +2855,7 @@
     "description": "Bergamot vocabulary es-en",
     "quantization": "",
     "params": "",
-    "license": "MPL-2.0",
+    "licenseId": "MPL-2.0",
     "tags": [
       "translation",
       "nmt",
@@ -2871,7 +2871,7 @@
     "description": "Bergamot lexical shortlist fr-en",
     "quantization": "",
     "params": "",
-    "license": "MPL-2.0",
+    "licenseId": "MPL-2.0",
     "tags": [
       "translation",
       "nmt",
@@ -2887,7 +2887,7 @@
     "description": "Bergamot metadata fr-en",
     "quantization": "",
     "params": "",
-    "license": "MPL-2.0",
+    "licenseId": "MPL-2.0",
     "tags": [
       "translation",
       "nmt",
@@ -2903,7 +2903,7 @@
     "description": "Bergamot NMT model fr-en",
     "quantization": "",
     "params": "",
-    "license": "MPL-2.0",
+    "licenseId": "MPL-2.0",
     "tags": [
       "translation",
       "nmt",
@@ -2919,7 +2919,7 @@
     "description": "Bergamot vocabulary fr-en",
     "quantization": "",
     "params": "",
-    "license": "MPL-2.0",
+    "licenseId": "MPL-2.0",
     "tags": [
       "translation",
       "nmt",
@@ -2935,7 +2935,7 @@
     "description": "Bergamot lexical shortlist it-en",
     "quantization": "",
     "params": "",
-    "license": "MPL-2.0",
+    "licenseId": "MPL-2.0",
     "tags": [
       "translation",
       "nmt",
@@ -2951,7 +2951,7 @@
     "description": "Bergamot metadata it-en",
     "quantization": "",
     "params": "",
-    "license": "MPL-2.0",
+    "licenseId": "MPL-2.0",
     "tags": [
       "translation",
       "nmt",
@@ -2967,7 +2967,7 @@
     "description": "Bergamot NMT model it-en",
     "quantization": "",
     "params": "",
-    "license": "MPL-2.0",
+    "licenseId": "MPL-2.0",
     "tags": [
       "translation",
       "nmt",
@@ -2983,7 +2983,7 @@
     "description": "Bergamot vocabulary it-en",
     "quantization": "",
     "params": "",
-    "license": "MPL-2.0",
+    "licenseId": "MPL-2.0",
     "tags": [
       "translation",
       "nmt",
@@ -2999,7 +2999,7 @@
     "description": "Bergamot lexical shortlist ja-en",
     "quantization": "",
     "params": "",
-    "license": "MPL-2.0",
+    "licenseId": "MPL-2.0",
     "tags": [
       "translation",
       "nmt",
@@ -3015,7 +3015,7 @@
     "description": "Bergamot metadata ja-en",
     "quantization": "",
     "params": "",
-    "license": "MPL-2.0",
+    "licenseId": "MPL-2.0",
     "tags": [
       "translation",
       "nmt",
@@ -3031,7 +3031,7 @@
     "description": "Bergamot NMT model ja-en",
     "quantization": "",
     "params": "",
-    "license": "MPL-2.0",
+    "licenseId": "MPL-2.0",
     "tags": [
       "translation",
       "nmt",
@@ -3047,7 +3047,7 @@
     "description": "Bergamot vocabulary ja-en",
     "quantization": "",
     "params": "",
-    "license": "MPL-2.0",
+    "licenseId": "MPL-2.0",
     "tags": [
       "translation",
       "nmt",
@@ -3063,7 +3063,7 @@
     "description": "Bergamot lexical shortlist pt-en",
     "quantization": "",
     "params": "",
-    "license": "MPL-2.0",
+    "licenseId": "MPL-2.0",
     "tags": [
       "translation",
       "nmt",
@@ -3079,7 +3079,7 @@
     "description": "Bergamot metadata pt-en",
     "quantization": "",
     "params": "",
-    "license": "MPL-2.0",
+    "licenseId": "MPL-2.0",
     "tags": [
       "translation",
       "nmt",
@@ -3095,7 +3095,7 @@
     "description": "Bergamot NMT model pt-en",
     "quantization": "",
     "params": "",
-    "license": "MPL-2.0",
+    "licenseId": "MPL-2.0",
     "tags": [
       "translation",
       "nmt",
@@ -3111,7 +3111,7 @@
     "description": "Bergamot vocabulary pt-en",
     "quantization": "",
     "params": "",
-    "license": "MPL-2.0",
+    "licenseId": "MPL-2.0",
     "tags": [
       "translation",
       "nmt",
@@ -3127,7 +3127,7 @@
     "description": "Bergamot lexical shortlist ru-en",
     "quantization": "",
     "params": "",
-    "license": "MPL-2.0",
+    "licenseId": "MPL-2.0",
     "tags": [
       "translation",
       "nmt",
@@ -3143,7 +3143,7 @@
     "description": "Bergamot metadata ru-en",
     "quantization": "",
     "params": "",
-    "license": "MPL-2.0",
+    "licenseId": "MPL-2.0",
     "tags": [
       "translation",
       "nmt",
@@ -3159,7 +3159,7 @@
     "description": "Bergamot NMT model ru-en",
     "quantization": "",
     "params": "",
-    "license": "MPL-2.0",
+    "licenseId": "MPL-2.0",
     "tags": [
       "translation",
       "nmt",
@@ -3175,7 +3175,7 @@
     "description": "Bergamot vocabulary ru-en",
     "quantization": "",
     "params": "",
-    "license": "MPL-2.0",
+    "licenseId": "MPL-2.0",
     "tags": [
       "translation",
       "nmt",
@@ -3191,7 +3191,7 @@
     "description": "Bergamot lexical shortlist zh-en",
     "quantization": "",
     "params": "",
-    "license": "MPL-2.0",
+    "licenseId": "MPL-2.0",
     "tags": [
       "translation",
       "nmt",
@@ -3207,7 +3207,7 @@
     "description": "Bergamot metadata zh-en",
     "quantization": "",
     "params": "",
-    "license": "MPL-2.0",
+    "licenseId": "MPL-2.0",
     "tags": [
       "translation",
       "nmt",
@@ -3223,7 +3223,7 @@
     "description": "Bergamot NMT model zh-en",
     "quantization": "",
     "params": "",
-    "license": "MPL-2.0",
+    "licenseId": "MPL-2.0",
     "tags": [
       "translation",
       "nmt",
@@ -3239,7 +3239,7 @@
     "description": "Bergamot vocabulary zh-en",
     "quantization": "",
     "params": "",
-    "license": "MPL-2.0",
+    "licenseId": "MPL-2.0",
     "tags": [
       "translation",
       "nmt",
@@ -3255,7 +3255,7 @@
     "description": "Llama 3.2 1B with tool calling support",
     "quantization": "q4_k",
     "params": "1B",
-    "license": "Apache-2.0",
+    "licenseId": "Apache-2.0",
     "tags": [
       "generation",
       "instruct",
@@ -3270,7 +3270,7 @@
     "description": "GPT-OSS 20B instruct",
     "quantization": "q4_k_m",
     "params": "20B",
-    "license": "Apache-2.0",
+    "licenseId": "Apache-2.0",
     "tags": [
       "generation",
       "instruct",
@@ -3284,7 +3284,7 @@
     "description": "Qwen 3 8B instruct",
     "quantization": "q4_k_m",
     "params": "8B",
-    "license": "Apache-2.0",
+    "licenseId": "Apache-2.0",
     "tags": [
       "generation",
       "instruct",
@@ -3298,7 +3298,7 @@
     "description": "Text recognizer - Arabic",
     "quantization": "",
     "params": "",
-    "license": "Apache-2.0",
+    "licenseId": "Apache-2.0",
     "tags": [
       "ocr",
       "recognizer",
@@ -3313,7 +3313,7 @@
     "description": "Text recognizer - Bengali",
     "quantization": "",
     "params": "",
-    "license": "Apache-2.0",
+    "licenseId": "Apache-2.0",
     "tags": [
       "ocr",
       "recognizer",
@@ -3328,7 +3328,7 @@
     "description": "Text recognizer - Cyrillic",
     "quantization": "",
     "params": "",
-    "license": "Apache-2.0",
+    "licenseId": "Apache-2.0",
     "tags": [
       "ocr",
       "recognizer",
@@ -3343,7 +3343,7 @@
     "description": "Text recognizer - Devanagari",
     "quantization": "",
     "params": "",
-    "license": "Apache-2.0",
+    "licenseId": "Apache-2.0",
     "tags": [
       "ocr",
       "recognizer",
@@ -3358,7 +3358,7 @@
     "description": "Text recognizer - Japanese",
     "quantization": "",
     "params": "",
-    "license": "Apache-2.0",
+    "licenseId": "Apache-2.0",
     "tags": [
       "ocr",
       "recognizer",
@@ -3373,7 +3373,7 @@
     "description": "Text recognizer - Kannada",
     "quantization": "",
     "params": "",
-    "license": "Apache-2.0",
+    "licenseId": "Apache-2.0",
     "tags": [
       "ocr",
       "recognizer",
@@ -3388,7 +3388,7 @@
     "description": "Text recognizer - Korean",
     "quantization": "",
     "params": "",
-    "license": "Apache-2.0",
+    "licenseId": "Apache-2.0",
     "tags": [
       "ocr",
       "recognizer",
@@ -3403,7 +3403,7 @@
     "description": "Text recognizer - Latin",
     "quantization": "",
     "params": "",
-    "license": "Apache-2.0",
+    "licenseId": "Apache-2.0",
     "tags": [
       "ocr",
       "recognizer",
@@ -3418,7 +3418,7 @@
     "description": "Text recognizer - Tamil",
     "quantization": "",
     "params": "",
-    "license": "Apache-2.0",
+    "licenseId": "Apache-2.0",
     "tags": [
       "ocr",
       "recognizer",
@@ -3433,7 +3433,7 @@
     "description": "Text recognizer - Telugu",
     "quantization": "",
     "params": "",
-    "license": "Apache-2.0",
+    "licenseId": "Apache-2.0",
     "tags": [
       "ocr",
       "recognizer",
@@ -3448,7 +3448,7 @@
     "description": "Text recognizer - Thai",
     "quantization": "",
     "params": "",
-    "license": "Apache-2.0",
+    "licenseId": "Apache-2.0",
     "tags": [
       "ocr",
       "recognizer",
@@ -3463,7 +3463,7 @@
     "description": "Text recognizer - Chinese Simplified",
     "quantization": "",
     "params": "",
-    "license": "Apache-2.0",
+    "licenseId": "Apache-2.0",
     "tags": [
       "ocr",
       "recognizer",
@@ -3478,7 +3478,7 @@
     "description": "Text recognizer - Chinese Traditional",
     "quantization": "",
     "params": "",
-    "license": "Apache-2.0",
+    "licenseId": "Apache-2.0",
     "tags": [
       "ocr",
       "recognizer",
@@ -3493,7 +3493,7 @@
     "description": "DocTR text detector - DBNet ResNet50",
     "quantization": "",
     "params": "",
-    "license": "Apache-2.0",
+    "licenseId": "Apache-2.0",
     "tags": [
       "ocr",
       "doctr",
@@ -3509,7 +3509,7 @@
     "description": "DocTR text detector - DBNet MobileNetV3 Large",
     "quantization": "",
     "params": "",
-    "license": "Apache-2.0",
+    "licenseId": "Apache-2.0",
     "tags": [
       "ocr",
       "doctr",
@@ -3525,7 +3525,7 @@
     "description": "DocTR text recognizer - PARSeq",
     "quantization": "",
     "params": "",
-    "license": "Apache-2.0",
+    "licenseId": "Apache-2.0",
     "tags": [
       "ocr",
       "doctr",
@@ -3541,7 +3541,7 @@
     "description": "DocTR text recognizer - CRNN MobileNetV3 Small",
     "quantization": "",
     "params": "",
-    "license": "Apache-2.0",
+    "licenseId": "Apache-2.0",
     "tags": [
       "ocr",
       "doctr",
@@ -3557,7 +3557,7 @@
     "description": "Chatterbox tokenizer",
     "quantization": "",
     "params": "",
-    "license": "MIT",
+    "licenseId": "MIT",
     "tags": [
       "tts",
       "chatterbox",
@@ -3572,7 +3572,7 @@
     "description": "Chatterbox speech encoder (fp32, graph)",
     "quantization": "fp32",
     "params": "",
-    "license": "MIT",
+    "licenseId": "MIT",
     "tags": [
       "tts",
       "chatterbox",
@@ -3587,7 +3587,7 @@
     "description": "Chatterbox speech encoder (fp32, weights)",
     "quantization": "fp32",
     "params": "",
-    "license": "MIT",
+    "licenseId": "MIT",
     "tags": [
       "tts",
       "chatterbox",
@@ -3602,7 +3602,7 @@
     "description": "Chatterbox token embeddings (fp32, graph)",
     "quantization": "fp32",
     "params": "",
-    "license": "MIT",
+    "licenseId": "MIT",
     "tags": [
       "tts",
       "chatterbox",
@@ -3617,7 +3617,7 @@
     "description": "Chatterbox token embeddings (fp32, weights)",
     "quantization": "fp32",
     "params": "",
-    "license": "MIT",
+    "licenseId": "MIT",
     "tags": [
       "tts",
       "chatterbox",
@@ -3632,7 +3632,7 @@
     "description": "Chatterbox conditional decoder (fp32, graph)",
     "quantization": "fp32",
     "params": "",
-    "license": "MIT",
+    "licenseId": "MIT",
     "tags": [
       "tts",
       "chatterbox",
@@ -3647,7 +3647,7 @@
     "description": "Chatterbox conditional decoder (fp32, weights)",
     "quantization": "fp32",
     "params": "",
-    "license": "MIT",
+    "licenseId": "MIT",
     "tags": [
       "tts",
       "chatterbox",
@@ -3662,7 +3662,7 @@
     "description": "Chatterbox language model (fp32, graph)",
     "quantization": "fp32",
     "params": "",
-    "license": "MIT",
+    "licenseId": "MIT",
     "tags": [
       "tts",
       "chatterbox",
@@ -3677,7 +3677,7 @@
     "description": "Chatterbox language model (fp32, weights)",
     "quantization": "fp32",
     "params": "",
-    "license": "MIT",
+    "licenseId": "MIT",
     "tags": [
       "tts",
       "chatterbox",
@@ -3692,7 +3692,7 @@
     "description": "Chatterbox speech encoder (fp16, graph)",
     "quantization": "fp16",
     "params": "",
-    "license": "MIT",
+    "licenseId": "MIT",
     "tags": [
       "tts",
       "chatterbox",
@@ -3707,7 +3707,7 @@
     "description": "Chatterbox speech encoder (fp16, weights)",
     "quantization": "fp16",
     "params": "",
-    "license": "MIT",
+    "licenseId": "MIT",
     "tags": [
       "tts",
       "chatterbox",
@@ -3722,7 +3722,7 @@
     "description": "Chatterbox token embeddings (fp16, graph)",
     "quantization": "fp16",
     "params": "",
-    "license": "MIT",
+    "licenseId": "MIT",
     "tags": [
       "tts",
       "chatterbox",
@@ -3737,7 +3737,7 @@
     "description": "Chatterbox token embeddings (fp16, weights)",
     "quantization": "fp16",
     "params": "",
-    "license": "MIT",
+    "licenseId": "MIT",
     "tags": [
       "tts",
       "chatterbox",
@@ -3752,7 +3752,7 @@
     "description": "Chatterbox conditional decoder (fp16, graph)",
     "quantization": "fp16",
     "params": "",
-    "license": "MIT",
+    "licenseId": "MIT",
     "tags": [
       "tts",
       "chatterbox",
@@ -3767,7 +3767,7 @@
     "description": "Chatterbox conditional decoder (fp16, weights)",
     "quantization": "fp16",
     "params": "",
-    "license": "MIT",
+    "licenseId": "MIT",
     "tags": [
       "tts",
       "chatterbox",
@@ -3782,7 +3782,7 @@
     "description": "Chatterbox language model (fp16, graph)",
     "quantization": "fp16",
     "params": "",
-    "license": "MIT",
+    "licenseId": "MIT",
     "tags": [
       "tts",
       "chatterbox",
@@ -3797,7 +3797,7 @@
     "description": "Chatterbox language model (fp16, weights)",
     "quantization": "fp16",
     "params": "",
-    "license": "MIT",
+    "licenseId": "MIT",
     "tags": [
       "tts",
       "chatterbox",
@@ -3812,7 +3812,7 @@
     "description": "Chatterbox speech encoder (q4, graph)",
     "quantization": "q4",
     "params": "",
-    "license": "MIT",
+    "licenseId": "MIT",
     "tags": [
       "tts",
       "chatterbox",
@@ -3827,7 +3827,7 @@
     "description": "Chatterbox speech encoder (q4, weights)",
     "quantization": "q4",
     "params": "",
-    "license": "MIT",
+    "licenseId": "MIT",
     "tags": [
       "tts",
       "chatterbox",
@@ -3842,7 +3842,7 @@
     "description": "Chatterbox token embeddings (q4, graph)",
     "quantization": "q4",
     "params": "",
-    "license": "MIT",
+    "licenseId": "MIT",
     "tags": [
       "tts",
       "chatterbox",
@@ -3857,7 +3857,7 @@
     "description": "Chatterbox token embeddings (q4, weights)",
     "quantization": "q4",
     "params": "",
-    "license": "MIT",
+    "licenseId": "MIT",
     "tags": [
       "tts",
       "chatterbox",
@@ -3872,7 +3872,7 @@
     "description": "Chatterbox conditional decoder (q4, graph)",
     "quantization": "q4",
     "params": "",
-    "license": "MIT",
+    "licenseId": "MIT",
     "tags": [
       "tts",
       "chatterbox",
@@ -3887,7 +3887,7 @@
     "description": "Chatterbox conditional decoder (q4, weights)",
     "quantization": "q4",
     "params": "",
-    "license": "MIT",
+    "licenseId": "MIT",
     "tags": [
       "tts",
       "chatterbox",
@@ -3902,7 +3902,7 @@
     "description": "Chatterbox language model (q4, graph)",
     "quantization": "q4",
     "params": "",
-    "license": "MIT",
+    "licenseId": "MIT",
     "tags": [
       "tts",
       "chatterbox",
@@ -3917,7 +3917,7 @@
     "description": "Chatterbox language model (q4, weights)",
     "quantization": "q4",
     "params": "",
-    "license": "MIT",
+    "licenseId": "MIT",
     "tags": [
       "tts",
       "chatterbox",
@@ -3932,7 +3932,7 @@
     "description": "Chatterbox speech encoder (quantized, graph)",
     "quantization": "quantized",
     "params": "",
-    "license": "MIT",
+    "licenseId": "MIT",
     "tags": [
       "tts",
       "chatterbox",
@@ -3947,7 +3947,7 @@
     "description": "Chatterbox speech encoder (quantized, weights)",
     "quantization": "quantized",
     "params": "",
-    "license": "MIT",
+    "licenseId": "MIT",
     "tags": [
       "tts",
       "chatterbox",
@@ -3962,7 +3962,7 @@
     "description": "Chatterbox token embeddings (quantized, graph)",
     "quantization": "quantized",
     "params": "",
-    "license": "MIT",
+    "licenseId": "MIT",
     "tags": [
       "tts",
       "chatterbox",
@@ -3977,7 +3977,7 @@
     "description": "Chatterbox token embeddings (quantized, weights)",
     "quantization": "quantized",
     "params": "",
-    "license": "MIT",
+    "licenseId": "MIT",
     "tags": [
       "tts",
       "chatterbox",
@@ -3992,7 +3992,7 @@
     "description": "Chatterbox conditional decoder (quantized, graph)",
     "quantization": "quantized",
     "params": "",
-    "license": "MIT",
+    "licenseId": "MIT",
     "tags": [
       "tts",
       "chatterbox",
@@ -4007,7 +4007,7 @@
     "description": "Chatterbox conditional decoder (quantized, weights)",
     "quantization": "quantized",
     "params": "",
-    "license": "MIT",
+    "licenseId": "MIT",
     "tags": [
       "tts",
       "chatterbox",
@@ -4022,7 +4022,7 @@
     "description": "Chatterbox language model (quantized, graph)",
     "quantization": "quantized",
     "params": "",
-    "license": "MIT",
+    "licenseId": "MIT",
     "tags": [
       "tts",
       "chatterbox",
@@ -4037,7 +4037,7 @@
     "description": "Chatterbox language model (quantized, weights)",
     "quantization": "quantized",
     "params": "",
-    "license": "MIT",
+    "licenseId": "MIT",
     "tags": [
       "tts",
       "chatterbox",
@@ -4052,7 +4052,7 @@
     "description": "Chatterbox speech encoder (q4f16, graph)",
     "quantization": "q4f16",
     "params": "",
-    "license": "MIT",
+    "licenseId": "MIT",
     "tags": [
       "tts",
       "chatterbox",
@@ -4067,7 +4067,7 @@
     "description": "Chatterbox speech encoder (q4f16, weights)",
     "quantization": "q4f16",
     "params": "",
-    "license": "MIT",
+    "licenseId": "MIT",
     "tags": [
       "tts",
       "chatterbox",
@@ -4082,7 +4082,7 @@
     "description": "Chatterbox token embeddings (q4f16, graph)",
     "quantization": "q4f16",
     "params": "",
-    "license": "MIT",
+    "licenseId": "MIT",
     "tags": [
       "tts",
       "chatterbox",
@@ -4097,7 +4097,7 @@
     "description": "Chatterbox token embeddings (q4f16, weights)",
     "quantization": "q4f16",
     "params": "",
-    "license": "MIT",
+    "licenseId": "MIT",
     "tags": [
       "tts",
       "chatterbox",
@@ -4112,7 +4112,7 @@
     "description": "Chatterbox conditional decoder (q4f16, graph)",
     "quantization": "q4f16",
     "params": "",
-    "license": "MIT",
+    "licenseId": "MIT",
     "tags": [
       "tts",
       "chatterbox",
@@ -4127,7 +4127,7 @@
     "description": "Chatterbox conditional decoder (q4f16, weights)",
     "quantization": "q4f16",
     "params": "",
-    "license": "MIT",
+    "licenseId": "MIT",
     "tags": [
       "tts",
       "chatterbox",
@@ -4142,7 +4142,7 @@
     "description": "Chatterbox language model (q4f16, graph)",
     "quantization": "q4f16",
     "params": "",
-    "license": "MIT",
+    "licenseId": "MIT",
     "tags": [
       "tts",
       "chatterbox",
@@ -4157,7 +4157,7 @@
     "description": "Chatterbox language model (q4f16, weights)",
     "quantization": "q4f16",
     "params": "",
-    "license": "MIT",
+    "licenseId": "MIT",
     "tags": [
       "tts",
       "chatterbox",
@@ -4172,7 +4172,7 @@
     "description": "Chatterbox multilingual conditional decoder (fp32, graph)",
     "quantization": "fp32",
     "params": "",
-    "license": "MIT",
+    "licenseId": "MIT",
     "tags": [
       "tts",
       "chatterbox",
@@ -4191,7 +4191,7 @@
     "description": "Chatterbox multilingual conditional decoder (fp32, weights)",
     "quantization": "fp32",
     "params": "",
-    "license": "MIT",
+    "licenseId": "MIT",
     "tags": [
       "tts",
       "chatterbox",
@@ -4210,7 +4210,7 @@
     "description": "Chatterbox multilingual token embeddings (fp32, graph)",
     "quantization": "fp32",
     "params": "",
-    "license": "MIT",
+    "licenseId": "MIT",
     "tags": [
       "tts",
       "chatterbox",
@@ -4229,7 +4229,7 @@
     "description": "Chatterbox multilingual token embeddings (fp32, weights)",
     "quantization": "fp32",
     "params": "",
-    "license": "MIT",
+    "licenseId": "MIT",
     "tags": [
       "tts",
       "chatterbox",
@@ -4248,7 +4248,7 @@
     "description": "Chatterbox multilingual speech encoder (fp32, graph)",
     "quantization": "fp32",
     "params": "",
-    "license": "MIT",
+    "licenseId": "MIT",
     "tags": [
       "tts",
       "chatterbox",
@@ -4267,7 +4267,7 @@
     "description": "Chatterbox multilingual speech encoder (fp32, weights)",
     "quantization": "fp32",
     "params": "",
-    "license": "MIT",
+    "licenseId": "MIT",
     "tags": [
       "tts",
       "chatterbox",
@@ -4286,7 +4286,7 @@
     "description": "Chatterbox multilingual language model (fp32, graph)",
     "quantization": "fp32",
     "params": "",
-    "license": "MIT",
+    "licenseId": "MIT",
     "tags": [
       "tts",
       "chatterbox",
@@ -4305,7 +4305,7 @@
     "description": "Chatterbox multilingual language model (fp32, weights)",
     "quantization": "fp32",
     "params": "",
-    "license": "MIT",
+    "licenseId": "MIT",
     "tags": [
       "tts",
       "chatterbox",
@@ -4324,7 +4324,7 @@
     "description": "Chatterbox multilingual language model (fp16, graph)",
     "quantization": "fp16",
     "params": "",
-    "license": "MIT",
+    "licenseId": "MIT",
     "tags": [
       "tts",
       "chatterbox",
@@ -4343,7 +4343,7 @@
     "description": "Chatterbox multilingual language model (fp16, weights)",
     "quantization": "fp16",
     "params": "",
-    "license": "MIT",
+    "licenseId": "MIT",
     "tags": [
       "tts",
       "chatterbox",
@@ -4362,7 +4362,7 @@
     "description": "Chatterbox multilingual language model (q4, graph)",
     "quantization": "q4",
     "params": "",
-    "license": "MIT",
+    "licenseId": "MIT",
     "tags": [
       "tts",
       "chatterbox",
@@ -4381,7 +4381,7 @@
     "description": "Chatterbox multilingual language model (q4, weights)",
     "quantization": "q4",
     "params": "",
-    "license": "MIT",
+    "licenseId": "MIT",
     "tags": [
       "tts",
       "chatterbox",
@@ -4400,7 +4400,7 @@
     "description": "Chatterbox multilingual language model (q4f16, graph)",
     "quantization": "q4f16",
     "params": "",
-    "license": "MIT",
+    "licenseId": "MIT",
     "tags": [
       "tts",
       "chatterbox",
@@ -4417,7 +4417,7 @@
     "description": "Chatterbox multilingual language model (q4f16, weights)",
     "quantization": "q4f16",
     "params": "",
-    "license": "MIT",
+    "licenseId": "MIT",
     "tags": [
       "tts",
       "chatterbox",
@@ -4436,7 +4436,7 @@
     "description": "Chatterbox multilingual tokenizer",
     "quantization": "",
     "params": "",
-    "license": "MIT",
+    "licenseId": "MIT",
     "tags": [
       "tts",
       "chatterbox",
@@ -4455,7 +4455,7 @@
     "description": "Supertonic tokenizer",
     "quantization": "",
     "params": "",
-    "license": "openrail",
+    "licenseId": "openrail",
     "tags": [
       "tts",
       "supertonic",
@@ -4469,7 +4469,7 @@
     "description": "Supertonic text encoder (graph)",
     "quantization": "fp32",
     "params": "",
-    "license": "openrail",
+    "licenseId": "openrail",
     "tags": [
       "tts",
       "supertonic",
@@ -4483,7 +4483,7 @@
     "description": "Supertonic text encoder (weights)",
     "quantization": "fp32",
     "params": "",
-    "license": "openrail",
+    "licenseId": "openrail",
     "tags": [
       "tts",
       "supertonic",
@@ -4497,7 +4497,7 @@
     "description": "Supertonic latent denoiser (graph)",
     "quantization": "fp32",
     "params": "",
-    "license": "openrail",
+    "licenseId": "openrail",
     "tags": [
       "tts",
       "supertonic",
@@ -4511,7 +4511,7 @@
     "description": "Supertonic latent denoiser (weights)",
     "quantization": "fp32",
     "params": "",
-    "license": "openrail",
+    "licenseId": "openrail",
     "tags": [
       "tts",
       "supertonic",
@@ -4525,7 +4525,7 @@
     "description": "Supertonic voice decoder (graph)",
     "quantization": "fp32",
     "params": "",
-    "license": "openrail",
+    "licenseId": "openrail",
     "tags": [
       "tts",
       "supertonic",
@@ -4539,7 +4539,7 @@
     "description": "Supertonic voice decoder (weights)",
     "quantization": "fp32",
     "params": "",
-    "license": "openrail",
+    "licenseId": "openrail",
     "tags": [
       "tts",
       "supertonic",
@@ -4553,7 +4553,7 @@
     "description": "Supertonic voice style F1 (female)",
     "quantization": "",
     "params": "",
-    "license": "openrail",
+    "licenseId": "openrail",
     "tags": [
       "tts",
       "supertonic",
@@ -4567,7 +4567,7 @@
     "description": "Supertonic voice style F2 (female)",
     "quantization": "",
     "params": "",
-    "license": "openrail",
+    "licenseId": "openrail",
     "tags": [
       "tts",
       "supertonic",
@@ -4581,7 +4581,7 @@
     "description": "Supertonic voice style F3 (female)",
     "quantization": "",
     "params": "",
-    "license": "openrail",
+    "licenseId": "openrail",
     "tags": [
       "tts",
       "supertonic",
@@ -4595,7 +4595,7 @@
     "description": "Supertonic voice style F4 (female)",
     "quantization": "",
     "params": "",
-    "license": "openrail",
+    "licenseId": "openrail",
     "tags": [
       "tts",
       "supertonic",
@@ -4609,7 +4609,7 @@
     "description": "Supertonic voice style F5 (female)",
     "quantization": "",
     "params": "",
-    "license": "openrail",
+    "licenseId": "openrail",
     "tags": [
       "tts",
       "supertonic",
@@ -4623,7 +4623,7 @@
     "description": "Supertonic voice style M1 (male)",
     "quantization": "",
     "params": "",
-    "license": "openrail",
+    "licenseId": "openrail",
     "tags": [
       "tts",
       "supertonic",
@@ -4637,7 +4637,7 @@
     "description": "Supertonic voice style M2 (male)",
     "quantization": "",
     "params": "",
-    "license": "openrail",
+    "licenseId": "openrail",
     "tags": [
       "tts",
       "supertonic",
@@ -4651,7 +4651,7 @@
     "description": "Supertonic voice style M3 (male)",
     "quantization": "",
     "params": "",
-    "license": "openrail",
+    "licenseId": "openrail",
     "tags": [
       "tts",
       "supertonic",
@@ -4665,7 +4665,7 @@
     "description": "Supertonic voice style M4 (male)",
     "quantization": "",
     "params": "",
-    "license": "openrail",
+    "licenseId": "openrail",
     "tags": [
       "tts",
       "supertonic",
@@ -4679,7 +4679,7 @@
     "description": "Supertonic voice style M5 (male)",
     "quantization": "",
     "params": "",
-    "license": "openrail",
+    "licenseId": "openrail",
     "tags": [
       "tts",
       "supertonic",
@@ -4693,7 +4693,7 @@
     "description": "Parakeet TDT 0.6B v3 encoder (graph)",
     "quantization": "fp32",
     "params": "0.6B",
-    "license": "CC-BY-4.0",
+    "licenseId": "CC-BY-4.0",
     "tags": [
       "transcription",
       "parakeet",
@@ -4708,7 +4708,7 @@
     "description": "Parakeet TDT 0.6B v3 encoder (weights)",
     "quantization": "fp32",
     "params": "0.6B",
-    "license": "CC-BY-4.0",
+    "licenseId": "CC-BY-4.0",
     "tags": [
       "transcription",
       "parakeet",
@@ -4723,7 +4723,7 @@
     "description": "Parakeet TDT 0.6B v3 decoder-joint",
     "quantization": "fp32",
     "params": "0.6B",
-    "license": "CC-BY-4.0",
+    "licenseId": "CC-BY-4.0",
     "tags": [
       "transcription",
       "parakeet",
@@ -4739,7 +4739,7 @@
     "description": "Parakeet TDT 0.6B v3 vocabulary",
     "quantization": "",
     "params": "0.6B",
-    "license": "CC-BY-4.0",
+    "licenseId": "CC-BY-4.0",
     "tags": [
       "transcription",
       "parakeet",
@@ -4754,7 +4754,7 @@
     "description": "Parakeet TDT 0.6B v3 preprocessor",
     "quantization": "fp32",
     "params": "0.6B",
-    "license": "CC-BY-4.0",
+    "licenseId": "CC-BY-4.0",
     "tags": [
       "transcription",
       "parakeet",
@@ -4770,7 +4770,7 @@
     "description": "Parakeet TDT 0.6B v3 encoder INT8 (weights embedded)",
     "quantization": "int8",
     "params": "0.6B",
-    "license": "CC-BY-4.0",
+    "licenseId": "CC-BY-4.0",
     "tags": [
       "transcription",
       "parakeet",
@@ -4786,7 +4786,7 @@
     "description": "Parakeet TDT 0.6B v3 decoder-joint INT8",
     "quantization": "int8",
     "params": "0.6B",
-    "license": "CC-BY-4.0",
+    "licenseId": "CC-BY-4.0",
     "tags": [
       "transcription",
       "parakeet",
@@ -4802,7 +4802,7 @@
     "description": "Parakeet TDT 0.6B v3 vocabulary",
     "quantization": "",
     "params": "0.6B",
-    "license": "CC-BY-4.0",
+    "licenseId": "CC-BY-4.0",
     "tags": [
       "transcription",
       "parakeet",
@@ -4818,7 +4818,7 @@
     "description": "Parakeet TDT 0.6B v3 preprocessor INT8",
     "quantization": "int8",
     "params": "0.6B",
-    "license": "CC-BY-4.0",
+    "licenseId": "CC-BY-4.0",
     "tags": [
       "transcription",
       "parakeet",
@@ -4834,7 +4834,7 @@
     "description": "Parakeet CTC 0.6B onnx-community (graph)",
     "quantization": "fp32",
     "params": "0.6B",
-    "license": "CC-BY-4.0",
+    "licenseId": "CC-BY-4.0",
     "tags": [
       "transcription",
       "parakeet",
@@ -4851,7 +4851,7 @@
     "description": "Parakeet CTC 0.6B onnx-community (weights)",
     "quantization": "fp32",
     "params": "0.6B",
-    "license": "CC-BY-4.0",
+    "licenseId": "CC-BY-4.0",
     "tags": [
       "transcription",
       "parakeet",
@@ -4868,7 +4868,7 @@
     "description": "Parakeet CTC 0.6B tokenizer",
     "quantization": "",
     "params": "0.6B",
-    "license": "CC-BY-4.0",
+    "licenseId": "CC-BY-4.0",
     "tags": [
       "transcription",
       "parakeet",
@@ -4886,7 +4886,7 @@
     "description": "Parakeet EOU 120M Decoder",
     "quantization": "fp32",
     "params": "120M",
-    "license": "CC-BY-4.0",
+    "licenseId": "CC-BY-4.0",
     "tags": [
       "transcription",
       "parakeet",
@@ -4904,7 +4904,7 @@
     "description": "Parakeet EOU 120M Encoder",
     "quantization": "fp32",
     "params": "120M",
-    "license": "CC-BY-4.0",
+    "licenseId": "CC-BY-4.0",
     "tags": [
       "transcription",
       "parakeet",
@@ -4922,7 +4922,7 @@
     "description": "Parakeet EOU 120M Tokenizer",
     "quantization": "",
     "params": "120M",
-    "license": "CC-BY-4.0",
+    "licenseId": "CC-BY-4.0",
     "tags": [
       "transcription",
       "parakeet",
@@ -4940,7 +4940,7 @@
     "description": "Parakeet EOU 120M INT8 Encoder",
     "quantization": "int8",
     "params": "120M",
-    "license": "CC-BY-4.0",
+    "licenseId": "CC-BY-4.0",
     "tags": [
       "transcription",
       "parakeet",
@@ -4958,7 +4958,7 @@
     "description": "Parakeet EOU 120M INT8 Decoder",
     "quantization": "int8",
     "params": "120M",
-    "license": "CC-BY-4.0",
+    "licenseId": "CC-BY-4.0",
     "tags": [
       "transcription",
       "parakeet",
@@ -4976,7 +4976,7 @@
     "description": "Parakeet Sortformer 4SPK v2",
     "quantization": "fp32",
     "params": "123M",
-    "license": "CC-BY-4.0",
+    "licenseId": "CC-BY-4.0",
     "tags": [
       "transcription",
       "parakeet",
@@ -4994,7 +4994,7 @@
     "description": "Parakeet Sortformer 4SPK v2 INT8",
     "quantization": "int8",
     "params": "123M",
-    "license": "CC-BY-4.0",
+    "licenseId": "CC-BY-4.0",
     "tags": [
       "transcription",
       "parakeet",
@@ -5011,7 +5011,7 @@
     "description": "OCR-specialized vision-language model for document understanding",
     "quantization": "q4_k_m",
     "params": "0.6B",
-    "license": "Apache-2.0",
+    "licenseId": "Apache-2.0",
     "tags": [
       "generation",
       "multimodal",
@@ -5027,7 +5027,7 @@
     "description": "Vision projector for LightON OCR-2 1B",
     "quantization": "f16",
     "params": "0.6B",
-    "license": "Apache-2.0",
+    "licenseId": "Apache-2.0",
     "tags": [
       "generation",
       "multimodal",
@@ -5043,7 +5043,7 @@
     "description": "AfriqueGemma 4B - African language model (20 languages + EN/FR/PT/AR)",
     "quantization": "Q4_K_M",
     "params": "4B",
-    "license": "CC-BY-4.0",
+    "licenseId": "CC-BY-4.0",
     "tags": [
       "generation",
       "translation",
@@ -5058,7 +5058,7 @@
     "link": "https://huggingface.co/1bitLLM/bitnet_b1_58-3B",
     "description": "Bitnet 3B model",
     "notes": "TQ2_0 quantization of https://huggingface.co/1bitLLM/bitnet_b1_58-3B",
-    "license": "MIT",
+    "licenseId": "MIT",
     "quantization": "TQ2_0",
     "params": "3B",
     "tags": [
@@ -5073,7 +5073,7 @@
     "link": "https://huggingface.co/1bitLLM/bitnet_b1_58-large",
     "description": "Bitnet 0.7B model",
     "notes": "TQ2_0 quantization of https://huggingface.co/1bitLLM/bitnet_b1_58-large",
-    "license": "MIT",
+    "licenseId": "MIT",
     "quantization": "TQ2_0",
     "params": "0.7B",
     "tags": [
@@ -5088,7 +5088,7 @@
     "link": "https://huggingface.co/1bitLLM/bitnet_b1_58-xl",
     "description": "Bitnet 1B model",
     "notes": "TQ2_0 quantization of https://huggingface.co/1bitLLM/bitnet_b1_58-xl",
-    "license": "MIT",
+    "licenseId": "MIT",
     "quantization": "TQ2_0",
     "params": "1B",
     "tags": [
@@ -5102,7 +5102,7 @@
     "engine": "@qvac/diffusion-cpp",
     "description": "FLUX.2 Klein 4B model",
     "notes": "Quantized version of https://huggingface.co/black-forest-labs/FLUX.2-klein-4B",
-    "license": "Apache-2.0",
+    "licenseId": "Apache-2.0",
     "quantization": "Q4_0",
     "params": "4B",
     "tags": [
@@ -5115,7 +5115,7 @@
     "engine": "@qvac/diffusion-cpp",
     "description": "FLUX.2 Klein 4B model",
     "notes": "Quantized version of https://huggingface.co/black-forest-labs/FLUX.2-klein-4B",
-    "license": "Apache-2.0",
+    "licenseId": "Apache-2.0",
     "quantization": "Q8_0",
     "params": "4B",
     "tags": [
@@ -5128,7 +5128,7 @@
     "engine": "@qvac/diffusion-cpp",
     "description": "FLUX.2 Klein 4B model",
     "notes": "Quantized version of https://huggingface.co/black-forest-labs/FLUX.2-klein-4B",
-    "license": "Apache-2.0",
+    "licenseId": "Apache-2.0",
     "quantization": "Q6_K",
     "params": "4B",
     "tags": [
@@ -5141,7 +5141,7 @@
     "engine": "@qvac/diffusion-cpp",
     "description": "FLUX.2 Klein 4B model",
     "notes": "Quantized version of https://huggingface.co/black-forest-labs/FLUX.2-klein-4B",
-    "license": "Apache-2.0",
+    "licenseId": "Apache-2.0",
     "quantization": "Q4_K_M",
     "params": "4B",
     "tags": [
@@ -5153,7 +5153,7 @@
     "source": "https://huggingface.co/unsloth/Qwen3-4B-GGUF/resolve/9b5c4f3506ac99d74e59ecd9aa9abb05537b7f59/Qwen3-4B-Q4_K_M.gguf",
     "engine": "@qvac/diffusion-cpp",
     "description": "Qwen3 4B model",
-    "license": "Apache-2.0",
+    "licenseId": "Apache-2.0",
     "quantization": "Q4_K_M",
     "params": "4B",
     "tags": [
@@ -5165,7 +5165,7 @@
     "source": "https://huggingface.co/black-forest-labs/FLUX.2-klein-4B/resolve/5e67da950fce4a097bc150c22958a05716994cea/vae/diffusion_pytorch_model.safetensors",
     "engine": "@qvac/diffusion-cpp",
     "description": "FLUX.2 Klein Variational Autoencoder model",
-    "license": "Apache-2.0",
+    "licenseId": "Apache-2.0",
     "tags": [
       "vae"
     ]
@@ -5175,7 +5175,7 @@
     "engine": "@qvac/diffusion-cpp",
     "description": "Stable Diffusion 2.1 model",
     "notes": "Quantized version of https://huggingface.co/stabilityai/stable-diffusion-2-1",
-    "license": "openrail++",
+    "licenseId": "openrail++",
     "quantization": "Q8_0",
     "params": "1B",
     "tags": [
@@ -5188,7 +5188,7 @@
     "engine": "@qvac/diffusion-cpp",
     "description": "Stable Diffusion 2.1 model",
     "notes": "Quantized version of https://huggingface.co/stabilityai/stable-diffusion-2-1",
-    "license": "openrail++",
+    "licenseId": "openrail++",
     "quantization": "Q4_0",
     "params": "1B",
     "tags": [
@@ -5201,7 +5201,7 @@
     "engine": "@qvac/diffusion-cpp",
     "description": "Stable Diffusion XL model",
     "notes": "Quantized version of https://huggingface.co/stabilityai/stable-diffusion-xl-base-1.0",
-    "license": "openrail++",
+    "licenseId": "openrail++",
     "quantization": "Q4_0",
     "params": "3B",
     "tags": [
@@ -5214,7 +5214,7 @@
     "engine": "@qvac/diffusion-cpp",
     "description": "Stable Diffusion XL model",
     "notes": "Quantized version of https://huggingface.co/stabilityai/stable-diffusion-xl-base-1.0",
-    "license": "openrail++",
+    "licenseId": "openrail++",
     "quantization": "Q8_0",
     "params": "3B",
     "tags": [
@@ -5228,7 +5228,7 @@
     "link": "https://huggingface.co/unsloth/gpt-oss-120b-GGUF/blob/main/Q4_K_M/gpt-oss-120b-Q4_K_M-00001-of-00002.gguf",
     "description": "GPT-OSS 120B model",
     "notes": "shard 1/2",
-    "license": "Apache-2.0",
+    "licenseId": "Apache-2.0",
     "quantization": "q4_k_m",
     "params": "120B",
     "tags": [
@@ -5244,7 +5244,7 @@
     "link": "https://huggingface.co/unsloth/gpt-oss-120b-GGUF/blob/main/Q4_K_M/gpt-oss-120b-Q4_K_M-00002-of-00002.gguf",
     "description": "GPT-OSS 120B model",
     "notes": "shard 2/2",
-    "license": "Apache-2.0",
+    "licenseId": "Apache-2.0",
     "quantization": "q4_k_m",
     "params": "120B",
     "tags": [
@@ -5260,7 +5260,7 @@
     "description": "Required for Llamacpp to create the model layers before the weights are loaded",
     "quantization": "q4_k_m",
     "params": "120B",
-    "license": "Apache-2.0",
+    "licenseId": "Apache-2.0",
     "tags": [
       "generation",
       "instruct",
