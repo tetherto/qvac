@@ -48,7 +48,7 @@ async function main () {
   // steps 28:           SD3 Medium typically needs 20–30 steps.
   // sampling_method:    Must be 'euler' — euler_a is unstable with flow-matching.
   // ---------------------------------------------------------------------------
-  const STEPS = 100
+  const STEPS = 28
   // stable-diffusion.cpp recommends 4.5 for SD3 flow-matching.
   // The library default of 7.0 is designed for SD1/SD2 DDPM — too high for flow-matching
   // and causes over-saturation and distorted faces in img2img.
