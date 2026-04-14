@@ -84,11 +84,16 @@ try {
         }
       },
       writeStepSummary () {},
-      writeToConsole () {
+      writeToConsole (opts) {
         try {
           var data = this.toJSON()
+          var lightweight = opts && opts.lightweight
           data.results = data.results.map(function (r) {
-            return { test: r.test, execution_provider: r.execution_provider, metrics: r.metrics, quality: r.quality }
+            var q = r.quality
+            if (lightweight && q) {
+              q = { cer: q.cer, wer: q.wer, word_recognition_rate: q.word_recognition_rate, keyword_detection_rate: q.keyword_detection_rate, key_value_accuracy: q.key_value_accuracy }
+            }
+            return { test: r.test, execution_provider: r.execution_provider, metrics: r.metrics, quality: q }
           })
           var json = JSON.stringify(data)
           // Android logcat has per-entry size limits that vary by device.
@@ -649,6 +654,7 @@ function formatOCRPerformanceMetrics (label, stats, outputTexts = [], opts) {
 
     if (isMobile) {
       _perfReporter.writeReport()
+      _perfReporter.writeToConsole({ lightweight: true })
     }
   }
 

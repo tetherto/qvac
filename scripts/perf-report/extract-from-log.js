@@ -192,7 +192,7 @@ function extractChunkedFromText (text) {
 
     if (parsed) {
       console.log(`  Chunked report ${id}: ${parsed.results.length} results`)
-      if (!best || parsed.results.length > best.results.length) best = parsed
+      if (!best || parsed.results.length >= best.results.length) best = parsed
     } else {
       console.log(`  Chunked report ${id}: all ${total} chunks collected but JSON parse failed`)
       try { JSON.parse(json) } catch (err) {
