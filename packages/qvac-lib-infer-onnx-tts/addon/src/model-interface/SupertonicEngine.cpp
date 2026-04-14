@@ -212,10 +212,10 @@ bool isSentenceSplitBeforeWs(const std::string &para, size_t wsStart) {
     return false;
   const bool isAsciiTerm = (punct == '.' || punct == '!' || punct == '?');
   // Ideographic / fullwidth sentence ends (CJK, etc.)
-  const bool isWideTerm = (punct == 0x3002 || punct == 0xFF01 || punct == 0xFF1F ||
-                           punct == 0xFF0E || punct == 0x061F);
-  if (!isAsciiTerm && !isWideTerm)
+  const bool isWideTerm = (punct == 0x3002 || punct == 0xFF01 || punct == 0xFF1F || punct == 0xFF0E || punct == 0x061F);
+  if (!isAsciiTerm && !isWideTerm) {
     return false;
+  }
   if (punct == '.') {
     if (matchesAbbrevAtDot(para, p))
       return false;
