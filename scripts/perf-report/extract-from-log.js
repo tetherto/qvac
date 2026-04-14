@@ -61,6 +61,21 @@ function extractFromText (text) {
       }
     } catch (err) {
       console.error(`  Found markers but JSON parse failed: ${err.message}`)
+      const posMatch = err.message.match(/position (\d+)/)
+      if (posMatch) {
+        const pos = parseInt(posMatch[1], 10)
+        const window = 60
+        const start = Math.max(0, pos - window)
+        const end = Math.min(jsonStr.length, pos + window)
+        const snippet = jsonStr.substring(start, end)
+        const pointer = ' '.repeat(Math.min(window, pos)) + '^'
+        console.error(`  Context around position ${pos}:`)
+        console.error(`  ...${snippet}...`)
+        console.error(`  ...${pointer}`)
+        for (let ci = Math.max(0, pos - 5); ci < Math.min(jsonStr.length, pos + 10); ci++) {
+          console.error(`    char[${ci}] = '${jsonStr[ci]}' (0x${jsonStr.charCodeAt(ci).toString(16)})`)
+        }
+      }
     }
     searchFrom = endIdx + END_MARKER.length
   }
