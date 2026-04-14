@@ -63,13 +63,24 @@ try {
         }
       },
       writeReport () {
-        try {
-          var dir = (global.testDir || '/tmp')
-          var p = path.join(dir, 'perf-report.json')
-          fs.writeFileSync(p, JSON.stringify(this.toJSON()))
-          console.log('[PERF_REPORT_PATH]' + p)
-        } catch (e) {
-          console.log('[perf-reporter] file write failed: ' + e.message)
+        var json = JSON.stringify(this.toJSON())
+        var written = false
+        var dirs = []
+        if (global.testDir) dirs.push(global.testDir)
+        if (platform === 'android') dirs.push('/data/local/tmp')
+        dirs.push('/tmp')
+        for (var di = 0; di < dirs.length; di++) {
+          try {
+            var p = path.join(dirs[di], 'perf-report.json')
+            fs.writeFileSync(p, json)
+            console.log('[PERF_REPORT_PATH]' + p)
+            written = true
+          } catch (e) {
+            console.log('[perf-reporter] write to ' + dirs[di] + ' failed: ' + e.message)
+          }
+        }
+        if (!written) {
+          console.log('[perf-reporter] all write locations failed')
         }
       },
       writeStepSummary () {},

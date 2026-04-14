@@ -1538,10 +1538,12 @@ jobs:
           echo ""
 
           echo "=== Searching ALL files for perf markers ==="
-          for f in $(find "$ARTIFACT_DIR" -type f); do
-            HAS_MARKERS=$(grep -c "PERF_REPORT_START" "$f" 2>/dev/null || echo 0)
-            HAS_PATH=$(grep -c "PERF_REPORT_PATH" "$f" 2>/dev/null || echo 0)
-            if [ "$HAS_MARKERS" -gt 0 ] || [ "$HAS_PATH" -gt 0 ]; then
+          for f in $(find "$ARTIFACT_DIR" -type f -name "*.txt"); do
+            HAS_MARKERS=$(grep -c "PERF_REPORT_START" "$f" 2>/dev/null || true)
+            HAS_PATH=$(grep -c "PERF_REPORT_PATH" "$f" 2>/dev/null || true)
+            HAS_MARKERS=${HAS_MARKERS:-0}
+            HAS_PATH=${HAS_PATH:-0}
+            if [ "$HAS_MARKERS" != "0" ] || [ "$HAS_PATH" != "0" ]; then
               echo "  $f: PERF_REPORT_START=$HAS_MARKERS, PERF_REPORT_PATH=$HAS_PATH"
             fi
           done

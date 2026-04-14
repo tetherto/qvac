@@ -35,6 +35,30 @@ function isValidReport (obj) {
     typeof obj.schema_version === 'string' && Array.isArray(obj.results)
 }
 
+function cleanJsonFromLogcat (raw) {
+  let s = raw.replace(/[\x00-\x1f]/g, '').trim()
+
+  // Strip Android logcat prefixes: "MM-DD HH:MM:SS.mmm PID TID LEVEL TAG  : "
+  // Note: TAG can have trailing spaces before the colon (e.g. "bare    :")
+  s = s.replace(/\d{2}-\d{2}\s+\d{2}:\d{2}:\d{2}\.\d{3}\s+\d+\s+\d+\s+[VDIWEF]\s+[^\s:]+\s*:\s*/g, '')
+
+  // Strip ReactNativeJS wrapper: '[Bare]', '...' → ...
+  s = s.replace(/^'\[Bare\]',\s*'/, '').replace(/'$/, '')
+
+  return s.trim()
+}
+
+function tryParseReport (jsonStr) {
+  if (!jsonStr || jsonStr.length === 0) return null
+  if (jsonStr[0] !== '{' && jsonStr[0] !== '[') return null
+  try {
+    const parsed = JSON.parse(jsonStr)
+    return isValidReport(parsed) ? parsed : null
+  } catch (_) {
+    return null
+  }
+}
+
 function extractFromText (text) {
   let lastReport = null
   let searchFrom = 0
@@ -47,42 +71,44 @@ function extractFromText (text) {
     if (endIdx === -1) break
 
     const jsonRaw = text.substring(jsonStart, endIdx)
-    let jsonStr = jsonRaw.replace(/[\x00-\x1f]/g, '').trim()
+    const cleaned = cleanJsonFromLogcat(jsonRaw)
 
     // Skip content that is clearly shell source code, not JSON.
-    // Device Farm logs the test spec source which contains the marker
-    // strings inside printf/echo statements — these are false positives.
-    if (jsonStr.length > 0 && jsonStr[0] !== '{' && jsonStr[0] !== '[') {
+    if (cleaned.length > 0 && cleaned[0] !== '{' && cleaned[0] !== '[') {
       searchFrom = endIdx + END_MARKER.length
       continue
     }
 
-    // Strip Android logcat line prefixes that get embedded when console.log
-    // output is split across multiple logcat lines.
-    // Format: "MM-DD HH:MM:SS.mmm  PID  TID LEVEL TAG: "
-    jsonStr = jsonStr.replace(/\d{2}-\d{2}\s+\d{2}:\d{2}:\d{2}\.\d{3}\s+\d+\s+\d+\s+[VDIWEF]\s+[^\s:]+:\s*/g, '')
-    try {
-      const parsed = JSON.parse(jsonStr)
-      if (isValidReport(parsed)) {
-        lastReport = parsed
-      } else {
-        console.error('  Found markers but payload is not a valid report object (missing schema_version/results)')
+    let parsed = tryParseReport(cleaned)
+
+    // If parse fails, the outer START may have captured interleaved logcat
+    // lines (bare runtime splits output across lines, other logs interleave).
+    // Look for inner START markers closer to the END — the ReactNativeJS
+    // bridge often has the complete report on a single line.
+    if (!parsed) {
+      let innerFrom = startIdx + 1
+      while (!parsed) {
+        const innerStart = text.indexOf(START_MARKER, innerFrom)
+        if (innerStart === -1 || innerStart >= endIdx) break
+        const innerJson = text.substring(innerStart + START_MARKER.length, endIdx)
+        const innerCleaned = cleanJsonFromLogcat(innerJson)
+        parsed = tryParseReport(innerCleaned)
+        innerFrom = innerStart + 1
       }
-    } catch (err) {
-      console.error(`  Found markers but JSON parse failed: ${err.message}`)
-      const posMatch = err.message.match(/position (\d+)/)
-      if (posMatch) {
-        const pos = parseInt(posMatch[1], 10)
-        const window = 60
-        const start = Math.max(0, pos - window)
-        const end = Math.min(jsonStr.length, pos + window)
-        const snippet = jsonStr.substring(start, end)
-        const pointer = ' '.repeat(Math.min(window, pos)) + '^'
-        console.error(`  Context around position ${pos}:`)
-        console.error(`  ...${snippet}...`)
-        console.error(`  ...${pointer}`)
-        for (let ci = Math.max(0, pos - 5); ci < Math.min(jsonStr.length, pos + 10); ci++) {
-          console.error(`    char[${ci}] = '${jsonStr[ci]}' (0x${jsonStr.charCodeAt(ci).toString(16)})`)
+    }
+
+    if (parsed) {
+      lastReport = parsed
+    } else if (cleaned.length > 0 && cleaned[0] === '{') {
+      console.error('  Found markers but JSON parse failed (tried outer + inner START positions)')
+      try { JSON.parse(cleaned) } catch (err) {
+        const posMatch = err.message.match(/position (\d+)/)
+        if (posMatch) {
+          const pos = parseInt(posMatch[1], 10)
+          const w = 60
+          const snippet = cleaned.substring(Math.max(0, pos - w), Math.min(cleaned.length, pos + w))
+          console.error(`  Error: ${err.message}`)
+          console.error(`  Context: ...${snippet}...`)
         }
       }
     }
