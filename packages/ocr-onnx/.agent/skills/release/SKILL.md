@@ -74,33 +74,12 @@ This workflow:
 - Publishes to NPM with `latest` tag
 - Creates a GitHub release with tag `<package>-v<version>`
 
-### Step 4: Monitor CI pipeline and auto-approve deployments
+### Step 4: Monitor CI pipeline
 
-Use `/loop` to poll the pipeline status every 2 minutes. The release workflow uses GitHub environment protection rules that require approval at multiple stages. **Auto-approve all pending deployments** each time you check.
+Use `/loop` to poll the pipeline status every 2 minutes:
 
-On each check iteration:
-
-1. **Check and approve pending deployments:**
-   ```bash
-   # Check for pending deployments
-   gh api repos/tetherto/qvac/actions/runs/<run-id>/pending_deployments --jq 'length'
-   
-   # If length > 0, get the environment ID and approve:
-   ENV_ID=$(gh api repos/tetherto/qvac/actions/runs/<run-id>/pending_deployments --jq '.[0].environment.id')
-   gh api repos/tetherto/qvac/actions/runs/<run-id>/pending_deployments \
-     --method POST --input - <<< "{\"environment_ids\":[$ENV_ID],\"state\":\"approved\",\"comment\":\"Auto-approved\"}"
-   ```
-
-2. **Check overall run status:**
-   ```bash
-   gh run list --branch release-<package>-<version> --limit 5 --repo tetherto/qvac
-   ```
-
-3. If all runs completed successfully → proceed to Step 5. If any failed → report details. If still running → wait for next poll.
-
-Start the loop:
 ```
-/loop 2m Check CI pipeline status for release branch release-<package>-<version>. Auto-approve any pending deployments on run <run-id>. Run: gh run list --branch release-<package>-<version> --limit 5. If all runs completed successfully, report SUCCESS and stop. If any run failed, report the failure details. If still running, report progress.
+/loop 2m Check the CI pipeline status for the release branch release-<package>-<version>. Run: gh run list --branch release-<package>-<version> --limit 5. If all runs completed successfully, report SUCCESS and stop. If any run failed, report the failure details. If still running, report progress.
 ```
 
 ### Step 5: Verify npm publish
