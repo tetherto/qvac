@@ -150,10 +150,12 @@ public:
     return toolsCompact_ && nPastBeforeTools_ == firstMsgTokens;
   }
 
-  // A usable trim boundary must be strictly beyond the first-message floor.
-  // Otherwise post-generation tool trimming can erase the full conversation.
+  // A usable trim boundary must be positive and non-degenerate.
+  // The only invalid boundary for post-generation trim is the exact
+  // first-message edge (degenerate anchor), which can erase conversation.
   [[nodiscard]] bool hasUsableToolBoundary(llama_pos firstMsgTokens) const {
-    return toolsCompact_ && nPastBeforeTools_ > firstMsgTokens;
+    return toolsCompact_ && nPastBeforeTools_ > 0 &&
+           nPastBeforeTools_ != firstMsgTokens;
   }
 
   // Shift nPastBeforeTools left after a context slide so the trim

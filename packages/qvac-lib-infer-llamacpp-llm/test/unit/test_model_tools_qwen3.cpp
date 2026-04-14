@@ -160,7 +160,7 @@ TEST_F(ModelToolsQwen3Test, ToolsCompactRejectsPromptWithoutTools) {
       { (void)processPrompt(model, input); }, qvac_errors::StatusError);
 }
 
-TEST_F(ModelToolsQwen3Test, ToolsCompactRejectsToolsWithoutUserMessage) {
+TEST_F(ModelToolsQwen3Test, ToolsCompactRejectsToolsWithoutUserOrToolMessage) {
   if (!isQwen3ModelPath(test_model_path)) {
     GTEST_SKIP() << "Test requires Qwen3 model for tools_compact feature";
   }
@@ -202,6 +202,25 @@ TEST_F(ModelToolsQwen3Test, ToolsCompactRejectsSplitOrDetachedToolBlocks) {
   ])";
   EXPECT_THROW(
       { (void)processPrompt(model, splitInput); }, qvac_errors::StatusError);
+}
+
+TEST_F(ModelToolsQwen3Test, ToolsCompactAllowsToolsAfterToolMessage) {
+  if (!isQwen3ModelPath(test_model_path)) {
+    GTEST_SKIP() << "Test requires Qwen3 model for tools_compact feature";
+  }
+
+  auto model = createModel();
+  if (!model) {
+    FAIL() << "Model failed to load";
+  }
+
+  const std::string input = R"([
+    {"role":"assistant","content":"<think>\n\n</think>\n\nCalling weather tool now."},
+    {"role":"tool","content":"{\"city\":\"Paris\",\"temperature\":21}"},
+    {"type":"function","name":"getWeather","parameters":{"type":"object"}}
+  ])";
+
+  EXPECT_NO_THROW({ (void)processPrompt(model, input); });
 }
 
 TEST_F(ModelToolsQwen3Test, CacheEnabledWithToolMessageToolsCompactFalse) {

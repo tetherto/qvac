@@ -47,13 +47,13 @@ TEST(DynamicToolsStateTest, DegenerateAnchorIsNotUsableForPostGenerationTrim) {
   EXPECT_FALSE(shouldTrim);
 }
 
-TEST(DynamicToolsStateTest, StrictlyGreaterAnchorIsUsableForPostTrim) {
+TEST(DynamicToolsStateTest, PositiveNonDegenerateAnchorIsUsableForPostTrim) {
   DynamicToolsState dts;
   dts.setToolsCompact(true);
 
   constexpr llama_pos firstMsgTokens = 100;
   constexpr llama_pos nPast = 180;
-  dts.setNPastBeforeTools(120);
+  dts.setNPastBeforeTools(80);
 
   const bool shouldTrim = dts.hasUsableToolBoundary(firstMsgTokens) &&
                           nPast > dts.nPastBeforeTools();

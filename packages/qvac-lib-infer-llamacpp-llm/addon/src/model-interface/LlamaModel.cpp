@@ -980,7 +980,7 @@ LlamaModel::formatPrompt(const std::string& input) {
     auto& obj = chatJson.get<picojson::array>();
     const bool toolsCompactEnabled =
         state_->llmContext_->dynamicToolsState().toolsCompact();
-    int64_t lastUserIndex = -1;
+    int64_t lastInputAnchorIndex = -1;
     int64_t firstToolIndex = -1;
     bool hasSplitToolBlock = false;
     bool hasNonToolAfterFirstTool = false;
@@ -1019,8 +1019,8 @@ LlamaModel::formatPrompt(const std::string& input) {
               ADDON_ID, toString(NoRoleProvided), errorMsg);
         }
         newMsg.role = jsonObj["role"].get<std::string>();
-        if (newMsg.role == "user") {
-          lastUserIndex = static_cast<int64_t>(i);
+        if (newMsg.role == "user" || newMsg.role == "tool") {
+          lastInputAnchorIndex = static_cast<int64_t>(i);
         }
 
         if (jsonObj.find("content") == jsonObj.end()) {
@@ -1081,9 +1081,9 @@ LlamaModel::formatPrompt(const std::string& input) {
                 qvac_errors::general_error::InvalidArgument),
             errorMsg);
       }
-      if (lastUserIndex < 0) {
+      if (lastInputAnchorIndex < 0) {
         std::string errorMsg = string_format(
-            "%s: tools_compact requires a user message before tools\n",
+            "%s: tools_compact requires a user or tool message before tools\n",
             __func__);
         throw qvac_errors::StatusError(
             ADDON_ID,
@@ -1091,10 +1091,10 @@ LlamaModel::formatPrompt(const std::string& input) {
                 qvac_errors::general_error::InvalidArgument),
             errorMsg);
       }
-      if (hasSplitToolBlock || firstToolIndex != (lastUserIndex + 1)) {
+      if (hasSplitToolBlock || firstToolIndex != (lastInputAnchorIndex + 1)) {
         std::string errorMsg = string_format(
             "%s: tools_compact requires tools to be a contiguous block "
-            "immediately after the last user message\n",
+            "immediately after the last user or tool message\n",
             __func__);
         throw qvac_errors::StatusError(
             ADDON_ID,

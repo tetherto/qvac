@@ -2,7 +2,7 @@
 
 ## Overview
 
-The `tools_compact` configuration option anchors tool definitions after the last user message and automatically compacts completed tool chains from the KV cache. After a tool chain completes, the entire round-trip — tool definitions, intermediate assistant tool-call messages, and tool response messages — is trimmed, leaving only the user prompt and the final assistant answer in the cache.
+The `tools_compact` configuration option anchors tool definitions after the last input anchor message (`user` or `tool`) and automatically compacts completed tool chains from the KV cache. After a tool chain completes, the entire round-trip — tool definitions, intermediate assistant tool-call messages, and tool response messages — is trimmed, leaving only the user prompt and the final assistant answer in the cache.
 
 ## Configuration
 
@@ -20,12 +20,12 @@ When `tools_compact` is enabled, each prompt must follow a strict shape. The mod
 Required:
 
 1. `tools` must be non-empty in the current prompt.
-2. At least one `user` message must exist.
+2. At least one input anchor message must exist: `user` or `tool`.
 3. All tool definitions (`{ "type": "function", ... }`) must form a single contiguous block.
-4. That block must be attached immediately after the **last** `user` message.
+4. That block must be attached immediately after the **last** `user` or `tool` message.
 
 This means tool definitions are not allowed:
-- before any `user` message
+- before any `user` or `tool` message
 - after `assistant` / `tool` / other messages
 - split into multiple blocks
 
@@ -58,7 +58,7 @@ Tools without user:
 ]
 ```
 
-Detached tools (not immediately after last user):
+Detached tools (not immediately after last `user`/`tool`):
 
 ```json
 [

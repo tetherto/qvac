@@ -5,9 +5,9 @@ namespace utils {
 
 const char* getToolsDynamicQwen3Template() {
   return R"({%- set ns = namespace(last_user_idx=-1) %}
-{%- for message in messages[::-1] %}
-    {%- if ns.last_user_idx == -1 and message.role == "user" %}
-        {%- set ns.last_user_idx = (messages|length - 1) - loop.index0 %}
+{%- for message in messages %}
+    {%- if message.role == "user" %}
+        {%- set ns.last_user_idx = loop.index0 %}
     {%- endif %}
 {%- endfor %}
 {%- if messages[0].role == 'system' %}
