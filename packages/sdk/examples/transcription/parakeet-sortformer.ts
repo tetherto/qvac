@@ -1,3 +1,14 @@
+/**
+ * Parakeet Sortformer diarization + TDT transcription example.
+ *
+ * Usage:
+ *   bun examples/transcription/parakeet-sortformer.ts [sortformer-src] [path-to-audio]
+ *
+ * This example requires a test audio file (default: examples/audio/diarization-sample-16k.wav).
+ * Sample audio files are available in the QVAC source repository, but not included in the published npm package.
+ * Pass a custom audio path as the second argument, or download the default audio into examples/audio/:
+ *   https://github.com/tetherto/qvac/blob/main/packages/sdk/examples/audio/diarization-sample-16k.wav
+ */
 import {
   loadModel,
   unloadModel,
@@ -18,7 +29,12 @@ const __dirname = dirname(fileURLToPath(import.meta.url));
 const args = process.argv.slice(2);
 const sortformerSrc = args[0] ?? PARAKEET_SORTFORMER_FP32;
 
-const defaultAudioPath = join(__dirname, "audio", "diarization-sample-16k.wav");
+const defaultAudioPath = join(
+  __dirname,
+  "..",
+  "audio",
+  "diarization-sample-16k.wav",
+);
 const audioFilePath = args[1] ?? defaultAudioPath;
 
 // ── Step 1: Diarize with Sortformer ──
