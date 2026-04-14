@@ -93,7 +93,7 @@ try {
             if (lightweight && q) {
               q = { cer: q.cer, wer: q.wer, word_recognition_rate: q.word_recognition_rate, keyword_detection_rate: q.keyword_detection_rate, key_value_accuracy: q.key_value_accuracy }
             }
-            return { test: r.test, execution_provider: r.execution_provider, metrics: r.metrics, quality: q }
+            return { test: r.test, execution_provider: r.execution_provider, metrics: r.metrics, quality: q, image_path: r.image_path || null }
           })
           var json = JSON.stringify(data)
           // Android logcat has per-entry size limits that vary by device.
