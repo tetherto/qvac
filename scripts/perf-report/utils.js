@@ -239,13 +239,76 @@ function aggregateReports (reports) {
     }
   }
 
+  const qualityDetails = _collectQualityDetails(reports)
+
   return {
     addon,
     generated_at: new Date().toISOString(),
     run_numbers: runNumbers,
     devices: summarized,
-    quality: qualitySummarized
+    quality: qualitySummarized,
+    quality_details: qualityDetails
   }
+}
+
+// ---------------------------------------------------------------------------
+// Quality detail collection
+// ---------------------------------------------------------------------------
+
+function _tokenizeForPreview (text) {
+  return String(text)
+    .replace(/\r\n/g, '\n')
+    .replace(/[\t\v\f]/g, ' ')
+    .replace(/ {2,}/g, ' ')
+    .trim()
+    .toLowerCase()
+    .split(/\s+/)
+    .filter(Boolean)
+}
+
+function _collectQualityDetails (reports) {
+  const details = {}
+  const seen = new Set()
+
+  for (const report of reports) {
+    const deviceName = report.device ? report.device.name : 'unknown'
+    if (!details[deviceName]) details[deviceName] = {}
+
+    for (const result of (report.results || [])) {
+      const testKey = result.test
+      const dedup = `${deviceName}|${testKey}`
+      if (seen.has(dedup)) continue
+      seen.add(dedup)
+
+      if (!result.quality) continue
+
+      const entry = {}
+
+      if (result.quality.keywords_missing && result.quality.keywords_missing.length > 0) {
+        entry.keywords_missing = result.quality.keywords_missing
+      }
+
+      if (result.quality.key_values_unmatched && result.quality.key_values_unmatched.length > 0) {
+        entry.kv_unmatched = result.quality.key_values_unmatched.map(u => u.key || u)
+      }
+
+      if (result.output) {
+        try {
+          const texts = JSON.parse(result.output)
+          if (Array.isArray(texts)) {
+            const sorted = _tokenizeForPreview(texts.join(' ')).sort().join(' ')
+            entry.hypothesis_preview = sorted.substring(0, 200) + (sorted.length > 200 ? '...' : '')
+          }
+        } catch (_) {}
+      }
+
+      if (Object.keys(entry).length > 0) {
+        details[deviceName][testKey] = entry
+      }
+    }
+  }
+
+  return details
 }
 
 // ---------------------------------------------------------------------------
@@ -402,16 +465,19 @@ function generateHtmlReport (aggregated) {
   }
 
   let qualitySection = ''
+  const qualityDetails = aggregated.quality_details || {}
 
   if (quality && Object.keys(quality).length > 0) {
     const qualityKeys = ['cer', 'wer', 'keyword_detection_rate', 'key_value_accuracy']
     const qLabels = { cer: 'CER', wer: 'WER', keyword_detection_rate: 'Keyword Detection', key_value_accuracy: 'KV Accuracy' }
     const LOWER_IS_BETTER_Q = new Set(['cer', 'wer'])
+    const colCount = qualityKeys.length + 1
 
     for (const [deviceName, tests] of Object.entries(quality)) {
       const hasData = Object.values(tests).some(m => Object.keys(m).length > 0)
       if (!hasData) continue
 
+      const devDetails = qualityDetails[deviceName] || {}
       let qRows = ''
       for (const [testName, metrics] of Object.entries(tests)) {
         if (!Object.keys(metrics).length) continue
@@ -431,6 +497,30 @@ function generateHtmlReport (aggregated) {
         }
 
         qRows += `<tr><td class="metric-name">${escapeHtml(testName)}</td>${cells}</tr>`
+
+        const detail = devDetails[testName]
+        if (detail) {
+          let detailContent = ''
+          if (detail.hypothesis_preview) {
+            detailContent += `<div class="detail-row"><span class="detail-label">OCR output (sorted tokens):</span> <code>${escapeHtml(detail.hypothesis_preview)}</code></div>`
+          }
+          if (detail.keywords_missing && detail.keywords_missing.length > 0) {
+            detailContent += `<div class="detail-row"><span class="detail-label">Missing keywords (${detail.keywords_missing.length}):</span> ${escapeHtml(detail.keywords_missing.join(', '))}</div>`
+          }
+          if (detail.kv_unmatched && detail.kv_unmatched.length > 0) {
+            detailContent += `<div class="detail-row"><span class="detail-label">Unmatched KV keys (${detail.kv_unmatched.length}):</span> ${escapeHtml(detail.kv_unmatched.join(', '))}</div>`
+          }
+          if (detailContent) {
+            qRows += `<tr class="detail-expand-row">
+              <td colspan="${colCount}">
+                <details class="quality-details">
+                  <summary>Show diagnostic details</summary>
+                  <div class="detail-body">${detailContent}</div>
+                </details>
+              </td>
+            </tr>`
+          }
+        }
       }
 
       if (qRows) {
@@ -683,6 +773,56 @@ function generateHtmlReport (aggregated) {
     font-size: 1.35rem;
     font-weight: 600;
     color: var(--text);
+  }
+
+  .detail-expand-row td {
+    padding: 0 0.65rem 0.4rem;
+    border-bottom: 1px solid #f0f0f0;
+  }
+
+  .quality-details {
+    font-size: 0.78rem;
+    color: var(--text-secondary);
+  }
+
+  .quality-details summary {
+    cursor: pointer;
+    color: var(--accent);
+    font-weight: 500;
+    padding: 0.2rem 0;
+    user-select: none;
+  }
+
+  .quality-details summary:hover { text-decoration: underline; }
+
+  .detail-body {
+    padding: 0.5rem 0.75rem;
+    margin-top: 0.3rem;
+    background: #f8f9fb;
+    border-radius: 4px;
+    border: 1px solid var(--border);
+  }
+
+  .detail-row {
+    margin-bottom: 0.35rem;
+    line-height: 1.4;
+    word-break: break-word;
+  }
+
+  .detail-row:last-child { margin-bottom: 0; }
+
+  .detail-label {
+    font-weight: 600;
+    color: var(--text);
+  }
+
+  .detail-body code {
+    font-family: 'SFMono-Regular', Consolas, 'Liberation Mono', Menlo, monospace;
+    font-size: 0.72rem;
+    background: #e8ecf0;
+    padding: 0.1rem 0.3rem;
+    border-radius: 3px;
+    word-break: break-all;
   }
 
   @media print {

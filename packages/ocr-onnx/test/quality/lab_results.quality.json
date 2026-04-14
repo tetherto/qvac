@@ -1,11 +1,13 @@
 {
   "id": "lab-results-abg-biochemistry",
-  "description": "Clinical biochemistry and ABG lab report from KIMS-ICON Hospital — structured table with parameters, results, biological references, and methods",
+  "description": "Clinical biochemistry and ABG lab report from Medivista Central Hospital — structured table with parameters, results, biological references, and methods",
   "image": "lab_results.png",
 
   "required_keywords": [
-    "KIMS-ICON",
+    "MEDIVISTA",
+    "CENTRAL",
     "HOSPITAL",
+    "NABL",
     "DEPARTMENT OF CLINICAL BIOCHEMISTRY",
     "Patient",
     "Bill Date",
@@ -52,26 +54,26 @@
   ],
 
   "key_values": [
-    { "key": "cGlu", "value": "137" },
-    { "key": "sO2", "value": "99" },
-    { "key": "FO2Hbe", "value": "-2.9" },
-    { "key": "FHHbe", "value": "-3.8" },
-    { "key": "ctHb", "value": "11.5" },
-    { "key": "Hctc", "value": "37" },
-    { "key": "ctO2e", "value": "21.3" },
-    { "key": "cBase(Ecf)c", "value": "20.4" },
-    { "key": "cHCO3(P,st)c", "value": "22.7" },
-    { "key": "cCa++(7.4)c", "value": "1.92" },
-    { "key": "pH", "value": "7.38" },
-    { "key": "pCO2", "value": "38" },
-    { "key": "pO2", "value": "173" },
-    { "key": "cNa+", "value": "125" },
-    { "key": "cK+", "value": "6.0" },
-    { "key": "cCa++", "value": "1.86" },
-    { "key": "cLac", "value": "1.8" },
-    { "key": "Service No", "value": "S2049181" },
-    { "key": "UMR", "value": "UMR99968" }
+    { "key": "cGlu", "value": "142" },
+    { "key": "sO2", "value": "98" },
+    { "key": "FO2Hbe", "value": "-3.1" },
+    { "key": "FHHbe", "value": "-4.0" },
+    { "key": "ctHb", "value": "12.1" },
+    { "key": "Hctc", "value": "39" },
+    { "key": "ctO2e", "value": "22.1" },
+    { "key": "cBase(Ecf)c", "value": "21.2" },
+    { "key": "cHCO3(P,st)c", "value": "23.4" },
+    { "key": "cCa++(7.4)c", "value": "1.98" },
+    { "key": "pH", "value": "7.41" },
+    { "key": "pCO2", "value": "40" },
+    { "key": "pO2", "value": "168" },
+    { "key": "cNa+", "value": "128" },
+    { "key": "cK+", "value": "5.8" },
+    { "key": "cCa++", "value": "1.91" },
+    { "key": "cLac", "value": "1.9" },
+    { "key": "Service No", "value": "S3067294" },
+    { "key": "UMR", "value": "UMR88452" }
   ],
 
-  "reference_text": "KIMS-ICON HOSPITAL DEPARTMENT OF CLINICAL BIOCHEMISTRY Patient Bill Date 22-Apr-25 10:07 PM By Dr.CHENNA VIJAY MD, DM (NEUROLOGY) Sample Coll. 22-Apr-25 10:07PM Admn / UMR No UMR99968 Sample Rec. 01-Jan--13 12:00 AM Service No S2049181 Report Date 22-Apr-25 10:23 PM Ward/Room/Bed OPERATION THEATRE/OT/OT-1 Parameter Specimen Results Biological Reference cGlu 137 Oximetry Values sO2 99 Calculated FO2Hbe -2.9 Calculated FHHbe -3.8 Calculated ctHb 11.5 Calculated Hctc 37 Calculated Oxygen Status ctO2e 21.3 Calculated Calculated Values cBase(Ecf)c 20.4 Calculated cHCO3(P,st)c 22.7 Calculated cCa++(7.4)c 1.92 Calculated ARTERIAL BLOOD GASES (ABG) Blood Gas Values pH 7.38 7.350 - 7.450 Potentiometry pCO2 38 32.0 - 45.0 mmHg Potentiometry pO2 173 80.0 - 100.0 mmHg Amperometry Electrolyte Values cNa+ 125 134.0 - 146.0 mmol/L Direct ISE cK+ 6.0 3.5 - 5.5 mmol/L Direct ISE cCa++ 1.86 1.15 - 1.32 mEq/L Direct ISE Metabolite Values cLac 1.8 0.5 - 1.6 mmol/L cGlu 140 Oximetry Values sO2 100 Calculated FO2Hbe -2.3 Calculated Printed By 41060009 Printed On 26-Apr-2025 09:23:53 AM"
+  "reference_text": "NABL MEDIVISTA CENTRAL HOSPITAL DEPARTMENT OF CLINICAL BIOCHEMISTRY Patient Rajesh Kumar Sharma Bill Date 18-Mar-25 09:42 PM By Dr.ANAND MOHAN RAO MD, DM (NEUROLOGY) Sample Coll. 18-Mar-25 09:42 PM Admn / UMR No UMR88452 Sample Rec. 01-Jan--13 11:30 AM Service No S3067294 Report Date 18-Mar-25 11:08 AM Ward/Room/Bed OPERATION THEATRE/OT/OT-2 Parameter Specimen Results Biological Reference cGlu 142 Oximetry Values sO2 98 Calculated FO2Hbe -3.1 Calculated FHHbe -4.0 Calculated ctHb 12.1 Calculated Hctc 39 Calculated Oxygen Status ctO2e 22.1 Calculated Calculated Values cBase(Ecf)c 21.2 Calculated cHCO3(P,st)c 23.4 Calculated cCa++(7.4)c 1.98 Calculated ARTERIAL BLOOD GASES (ABG) Blood Gas Values pH 7.41 7.350 - 7.450 Potentiometry pCO2 40 32.0 - 45.0 mmHg Potentiometry pO2 168 80.0 - 100.0 mmHg Amperometry Electrolyte Values cNa+ 128 134.0 - 146.0 mmol/L Direct ISE cK+ 5.8 3.5 - 5.5 mmol/L Direct ISE cCa++ 1.91 1.15 - 1.32 mEq/L Direct ISE Metabolite Values cLac 1.9 0.5 - 1.6 mmol/L cGlu 145 Oximetry Values sO2 99 Calculated FO2Hbe -2.6 Calculated Printed By 52070015 Printed On 18-Mar-2025 11:08:27 AM System BioAnalyzerV3 Medivista Institute of Medical Sciences 45-7-18, Gandhi Nagar, Sector 12 Maharashtra, India CIN U74920MH2019PTC108756"
 }
