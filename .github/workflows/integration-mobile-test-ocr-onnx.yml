@@ -1503,10 +1503,14 @@ jobs:
           OUTPUT_DIR="${GITHUB_WORKSPACE}/perf-results/${{ matrix.platform }}"
           mkdir -p "$OUTPUT_DIR"
 
+          GROUPS_JSON="${GITHUB_WORKSPACE}/addon/${{ inputs.workdir || env.PKG_DIR }}/test/mobile/test-groups.json"
+          PERF_FILTER=$(jq -r '.perf_report_filter' "$GROUPS_JSON")
+
           node "${GITHUB_WORKSPACE}/addon/scripts/perf-report/extract-from-log.js" \
             "$ARTIFACT_DIR" \
             "$OUTPUT_DIR/performance-report.json" \
-            --run-number "${{ github.run_number }}"
+            --run-number "${{ github.run_number }}" \
+            --filter "$PERF_FILTER"
 
           if find "$OUTPUT_DIR" -name "performance-report.json" -type f | head -1 | grep -q .; then
             echo "Generating HTML report..."

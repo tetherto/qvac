@@ -20,5 +20,6 @@
     "runOcrBasicTest",
     "runParamValidationTest",
     "runPipelineTest"
-  ]
+  ],
+  "perf_report_filter": "clinical_chemistry|ct_scan_report|lab_results|liver_function_test"
 }

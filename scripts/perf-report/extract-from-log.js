@@ -47,7 +47,7 @@ function extractFromText (text) {
     if (endIdx === -1) break
 
     const jsonRaw = text.substring(jsonStart, endIdx)
-    const jsonStr = jsonRaw.replace(/[\x00-\x08\x0b\x0c\x0e-\x1f]/g, '')
+    const jsonStr = jsonRaw.replace(/[\x00-\x1f]/g, '')
     try {
       const parsed = JSON.parse(jsonStr)
       if (isValidReport(parsed)) {
@@ -138,11 +138,13 @@ function deriveDeviceName (filePath, logDir) {
 }
 
 function parseArgs () {
-  const args = { logDir: null, outputPath: null, runNumber: null }
+  const args = { logDir: null, outputPath: null, runNumber: null, filter: null }
   const positional = []
   for (let i = 2; i < process.argv.length; i++) {
     if (process.argv[i] === '--run-number' && i + 1 < process.argv.length) {
       args.runNumber = parseInt(process.argv[++i], 10) || null
+    } else if (process.argv[i] === '--filter' && i + 1 < process.argv.length) {
+      args.filter = process.argv[++i]
     } else {
       positional.push(process.argv[i])
     }
@@ -152,6 +154,17 @@ function parseArgs () {
   return args
 }
 
+function filterResults (report, pattern) {
+  if (!pattern) return
+  const re = new RegExp(pattern, 'i')
+  const before = report.results.length
+  report.results = report.results.filter(r => re.test(r.test))
+  const after = report.results.length
+  if (before !== after) {
+    console.log(`  Filtered results: ${before} → ${after} (pattern: ${pattern})`)
+  }
+}
+
 function injectCIMetadata (report, runNumber) {
   if (runNumber && !report.run_number) {
     report.run_number = runNumber
@@ -159,10 +172,10 @@ function injectCIMetadata (report, runNumber) {
 }
 
 function main () {
-  const { logDir, outputPath, runNumber } = parseArgs()
+  const { logDir, outputPath, runNumber, filter } = parseArgs()
 
   if (!logDir || !outputPath) {
-    console.error('Usage: node extract-from-log.js <log-dir> <output-path> [--run-number N]')
+    console.error('Usage: node extract-from-log.js <log-dir> <output-path> [--run-number N] [--filter PATTERN]')
     process.exit(1)
   }
 
@@ -199,6 +212,7 @@ function main () {
     const { report, file } = deviceReports[devices[0]]
     if (report.device) report.device.name = devices[0]
     injectCIMetadata(report, runNumber)
+    filterResults(report, filter)
     fs.mkdirSync(outputDir, { recursive: true })
     fs.writeFileSync(outputPath, JSON.stringify(report, null, 2) + '\n')
     console.log(`Extracted performance report from ${file}`)
@@ -209,6 +223,7 @@ function main () {
       const { report, file } = deviceReports[key]
       if (report.device) report.device.name = key
       injectCIMetadata(report, runNumber)
+      filterResults(report, filter)
       const deviceDir = path.join(outputDir, key.replace(/ /g, '_'))
       fs.mkdirSync(deviceDir, { recursive: true })
       const deviceOutput = path.join(deviceDir, 'performance-report.json')
