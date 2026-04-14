@@ -12,10 +12,13 @@ export interface ExpandedType {
   children: ExpandedType[];
 }
 
+export type ContentSource = "extracted" | "ai";
+
 export interface ApiFunction {
   name: string;
   signature: string;
   description: string;
+  descriptionSource?: ContentSource;
   parameters: Array<{
     name: string;
     type: string;
@@ -28,6 +31,7 @@ export interface ApiFunction {
   expandedReturns: ExpandedType[];
   throws?: Array<{ error: string; description: string }>;
   examples?: string[];
+  examplesSource?: ContentSource;
   deprecated?: string;
 }
 
@@ -41,6 +45,7 @@ export interface GenerateOptions {
   updateLatest: boolean;
   devMode?: boolean;
   forceExtract?: boolean;
+  noAi?: boolean;
 }
 
 export interface ApiData {

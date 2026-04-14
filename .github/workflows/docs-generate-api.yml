@@ -88,7 +88,7 @@ jobs:
             echo "❌ SDK entry not found at $SDK_PATH/index.ts (check SDK_REPOSITORY and SDK_SUBPATH)"
             exit 1
           fi
-          bun run docs:generate-api ${{ steps.version.outputs.version }}
+          bun run docs:generate-api ${{ steps.version.outputs.version }} --no-ai
 
       - name: Update versions list
         working-directory: ${{ env.DOCS_DIR }}

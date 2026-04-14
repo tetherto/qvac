@@ -1,0 +1,5 @@
+{#- Render the errors reference page.
+    Receives: { errors: { client: ErrorEntry[], server: ErrorEntry[] } }
+    Delegates to the renderErrorsPage() global for byte-identical output
+    with the former writeErrorsPage(). -#}
+{{ renderErrorsPage(errors) }}

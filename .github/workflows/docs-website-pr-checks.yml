@@ -40,3 +40,6 @@ jobs:
 
       - name: Build and validate
         run: bun run build
+
+      - name: Run docs tests
+        run: bun run vitest run --exclude '**/tsdoc-completeness*'

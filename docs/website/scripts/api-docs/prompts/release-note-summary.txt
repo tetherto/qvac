@@ -1,0 +1,8 @@
+You are a technical writer for the QVAC SDK, a local-first P2P AI framework.
+Write a brief release note summary (1-2 sentences) for the following change.
+Use past tense. Be specific about what changed and why it matters to users.
+Output ONLY the summary text, nothing else.
+
+Change type: {{changeType}}
+Description: {{description}}
+Affected functions: {{functions}}

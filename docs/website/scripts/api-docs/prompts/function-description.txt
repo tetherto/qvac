@@ -1,0 +1,10 @@
+You are a technical writer for the QVAC SDK, a local-first P2P AI framework.
+Write a concise, accurate description (2-4 sentences) for the following SDK function.
+Focus on what the function does, when to use it, and any important behavior.
+Do NOT include code examples. Do NOT use markdown formatting.
+Output ONLY the description text, nothing else.
+
+Function: {{name}}
+Signature: {{signature}}
+Parameters: {{parameters}}
+Return type: {{returnType}}

@@ -28,6 +28,7 @@
 import * as fs from "fs/promises";
 import * as path from "path";
 import { execSync } from "child_process";
+import { validateLinks } from "./lib/link-validator.js";
 
 const INTERNAL_LINK_PATTERNS = [
   /href="(\/[^"]*?)"/g,
@@ -131,7 +132,7 @@ async function updateTreesIndex(version: string): Promise<void> {
   console.log(`✓ Updated trees/index.ts with v${version}`);
 }
 
-async function createVersionBundle(version: string) {
+async function createVersionBundle(version: string, force = false) {
   if (!/^\d+\.\d+\.\d+$/.test(version)) {
     throw new Error(
       `Invalid version format: "${version}"\nExpected semver: X.Y.Z (e.g., 0.8.0)`
@@ -164,6 +165,22 @@ async function createVersionBundle(version: string) {
   const rewrittenCount = await rewriteLinksInDir(targetDir, versionPrefix);
   console.log(`✓ Rewrote internal links in ${rewrittenCount} files`);
 
+  const brokenLinks = await validateLinks(targetDir, docsDir);
+  if (brokenLinks.length > 0) {
+    console.error(`\n⚠️  Found ${brokenLinks.length} broken internal link(s):`);
+    for (const link of brokenLinks) {
+      console.error(`   ${link.source} → ${link.target}`);
+    }
+    if (!force) {
+      throw new Error(
+        `Aborting: ${brokenLinks.length} broken link(s) found. Use --force to override.`,
+      );
+    }
+    console.log("   Continuing anyway (--force flag set).");
+  } else {
+    console.log("✓ All internal links validated");
+  }
+
   await snapshotTree(version, versionPrefix);
   await updateTreesIndex(version);
 
@@ -178,13 +195,17 @@ async function createVersionBundle(version: string) {
 
 // CLI
 const args = process.argv.slice(2);
-const versionArg = args[0];
+const versionArg = args.find((a) => !a.startsWith("--"));
+const force = args.includes("--force");
 
 if (!versionArg || args.includes("--help") || args.includes("-h")) {
-  console.log("Usage: bun run scripts/create-version-bundle.ts <outgoing-version>");
+  console.log("Usage: bun run scripts/create-version-bundle.ts <outgoing-version> [--force]");
   console.log("");
   console.log("Freezes the current (latest) docs as a versioned bundle.");
   console.log("Run BEFORE updating (latest) with the new SDK version content.");
+  console.log("");
+  console.log("Flags:");
+  console.log("  --force   Continue even if broken internal links are found");
   console.log("");
   console.log("Example workflow when releasing v0.8.0:");
   console.log("  1. bun run scripts/create-version-bundle.ts 0.7.0   # freeze outgoing");
@@ -193,7 +214,7 @@ if (!versionArg || args.includes("--help") || args.includes("-h")) {
   process.exit(versionArg ? 0 : 1);
 }
 
-createVersionBundle(versionArg).catch((err) => {
+createVersionBundle(versionArg, force).catch((err) => {
   console.error(`❌ Error: ${err.message}`);
   process.exit(1);
 });

@@ -26,7 +26,10 @@ For general contribution guidelines (PR labels, changelog format), see the [root
   - [Generate API Documentation](#3-generate-api-documentation)
   - [Deploy Notify](#4-docs-deploy-notify)
   - [CI Doctor](#5-docs-ci-doctor)
+  - [Release Pipeline](#6-docs-release-pipeline)
 - [Script Reference](#script-reference)
+- [AI Augmentation](#ai-augmentation)
+- [Release-Notes Overrides](#release-notes-overrides)
 - [Troubleshooting](#troubleshooting)
 
 ---
@@ -56,13 +59,21 @@ SDK API docs are **generated from TypeScript source** via [TypeDoc](https://type
 
 ### How the Pipeline Works
 
+The generation pipeline has two phases (extraction and rendering) with an optional AI augmentation step in between:
+
 ```
 SDK source (packages/sdk)
   │
   ▼
-TypeDoc analysis  ──►  MDX generation  ──►  content/docs/v{X.Y.Z}/sdk/api/
-                                       ──►  content/docs/(latest)/sdk/api/
-                                       ──►  src/lib/versions.ts (version switcher)
+Phase 1: TypeDoc extraction  ──►  api-data.json
+  │
+  ▼
+Phase 1.5: AI augmentation (optional, --no-ai to skip)
+  │
+  ▼
+Phase 2: Nunjucks rendering  ──►  content/docs/v{X.Y.Z}/sdk/api/
+                              ──►  content/docs/(latest)/sdk/api/
+                              ──►  src/lib/versions.ts (version switcher)
 ```
 
 ---
@@ -126,11 +137,21 @@ bun run scripts/generate-api-docs.ts --rollback
 ```
 
 This will:
-1. Run TypeDoc against the SDK entry point (`SDK_PATH/index.ts`)
-2. Extract exported functions and their JSDoc comments
-3. Write MDX files to `content/docs/v<version>/sdk/api/`
+1. Run TypeDoc against the SDK entry point (`SDK_PATH/index.ts`) and write `api-data.json`
+2. Optionally run AI augmentation to fill content gaps (skipped with `--no-ai`)
+3. Render MDX files to `content/docs/v<version>/sdk/api/` via Nunjucks templates
 4. Copy the version to `content/docs/(latest)/sdk/api/` (unless `--no-update-latest`)
 5. Run a smoke test to verify generated files
+
+**Flags:**
+
+| Flag | Description |
+|---|---|
+| `--no-update-latest` | Skip updating `(latest)/sdk/api/` (use for backfills) |
+| `--force-extract` | Bypass the mtime cache and re-run TypeDoc extraction |
+| `--no-ai` | Skip the AI augmentation step |
+| `--rollback` | Restore `(latest)/sdk/api/` from the previous backup |
+| `--dev` | Generate into `dev/sdk/api/` without a versioned folder |
 
 ### Updating the Versions List
 
@@ -248,7 +269,7 @@ When a `release-*` branch is pushed, the **Docs Deploy Notify** workflow creates
 
 ## CI Workflows
 
-Five GitHub Actions workflows automate the docs lifecycle:
+Six GitHub Actions workflows automate the docs lifecycle:
 
 ### 1. Docs Website PR Checks
 
@@ -260,8 +281,9 @@ Five GitHub Actions workflows automate the docs lifecycle:
 - Installs dependencies with Bun
 - Creates a placeholder `(latest)/sdk/api/index.mdx` (since generated API docs aren't committed)
 - Runs `bun run build` to validate the site compiles
+- Runs Vitest tests (sidebar consistency, link integrity, rendering parity, changelog parser) excluding TSDoc completeness tests that require SDK source
 
-**Purpose:** Catches build errors in docs PRs before merge.
+**Purpose:** Catches build errors and broken links in docs PRs before merge.
 
 ### 2. Docs Post-Merge Sync
 
@@ -275,7 +297,7 @@ Five GitHub Actions workflows automate the docs lifecycle:
 3. Runs `bun run docs:generate` (full orchestrated generation)
 4. If generated files changed, commits and pushes to `main` with `[skip ci]`
 
-**Purpose:** Keeps generated API docs on `main` in sync whenever the SDK source or generation scripts change.
+**Purpose:** Keeps generated API docs and release notes on `main` in sync whenever the SDK source or generation scripts change.
 
 **Required secrets/variables:**
 | Name | Type | Purpose |
@@ -345,6 +367,43 @@ Requires [GitHub CLI](https://cli.github.com) and a token with repo read access:
 GH_TOKEN=ghp_... bash .github/scripts/docs-ci-doctor.sh
 ```
 
+### 6. Docs Release Pipeline
+
+**File:** `.github/workflows/docs-release-pipeline.yml`
+
+**Triggers:**
+- Push to `release-qvac-sdk-*` branches
+- GitHub release events (type: `published`)
+- Manual dispatch with a version input
+
+**What it does:**
+1. Checks out `main` at the latest commit
+2. Extracts the version from the branch name, release tag, or manual input
+3. Runs full API docs generation with `--force-extract`
+4. Runs TSDoc audit in warning mode (non-fatal)
+5. Generates release notes from changelogs
+6. Updates the versions list
+7. Runs link validation tests
+8. Commits generated content and pushes to `main` with `[skip ci]`
+
+The push to `main` triggers the hosting provider to rebuild staging automatically.
+
+**AI augmentation:** Controlled by the `skip_ai` input (default: `true`). When enabled, requires `AI_AUGMENT_API_KEY` secret and `AI_AUGMENT_MODEL` variable.
+
+**Purpose:** Automates the full docs generation pipeline when an SDK release is created, replacing the need for manual `docs:generate-api` runs.
+
+**Required secrets/variables:**
+
+| Name | Type | Purpose |
+|---|---|---|
+| `DOCS_SYNC_BOT_USER` | Variable (optional) | Bot username to prevent infinite loops |
+| `DOCS_SYNC_BOT_NAME` | Variable (optional) | Git commit author name |
+| `DOCS_SYNC_BOT_EMAIL` | Variable (optional) | Git commit author email |
+| `DOCS_SYNC_PAT` | Secret (optional) | PAT for pushing to main |
+| `AI_AUGMENT_BASE_URL` | Secret (optional) | OpenAI-compatible API endpoint |
+| `AI_AUGMENT_API_KEY` | Secret (optional) | API key for AI augmentation |
+| `AI_AUGMENT_MODEL` | Variable (optional) | Model identifier (e.g. `gpt-4o`) |
+
 ---
 
 ## Script Reference
@@ -353,10 +412,51 @@ All scripts live in `docs/website/scripts/` and are designed to run with Bun.
 
 | Script | npm alias | Description |
 |---|---|---|
-| `generate-api-docs.ts` | `docs:generate-api` | TypeDoc → MDX for a given version |
+| `generate-api-docs.ts` | `docs:generate-api` | Orchestrates extraction, AI augment, and rendering for a given version |
+| `api-docs/extract.ts` | -- | Phase 1: TypeDoc analysis, writes `api-data.json` |
+| `api-docs/render.ts` | -- | Phase 2: Nunjucks-based MDX rendering from `api-data.json` |
+| `api-docs/ai-augment.ts` | -- | Phase 1.5: Optional AI-powered content gap filling |
+| `api-docs/audit-tsdoc.ts` | `docs:audit-tsdoc` | TSDoc completeness audit (standalone or via extraction) |
+| `generate-release-notes.ts` | `docs:generate-release-notes` | Generates release notes MDX from package changelogs |
 | `update-versions-list.ts` | `docs:update-versions` | Rebuilds `src/lib/versions.ts` from version directories |
-| `run-docs-generate.ts` | `docs:generate` | Orchestrates both scripts using the monorepo SDK version |
-| `create-version-bundle.ts` | `docs:create-version` | Freezes `(latest)` as a versioned bundle for the outgoing version |
+| `run-docs-generate.ts` | `docs:generate` | Orchestrates generation + version update using monorepo SDK version |
+| `create-version-bundle.ts` | `docs:create-version` | Freezes `(latest)` as a versioned bundle with link validation |
+| `lib/link-validator.ts` | -- | Cross-version internal link extraction and resolution |
+
+---
+
+## AI Augmentation
+
+The generation pipeline includes an optional AI step that identifies functions with thin descriptions or missing examples and generates first-draft content using an LLM. This step runs between extraction and rendering, modifying `api-data.json` in place before templates consume it.
+
+**Skipping:** Pass `--no-ai` to `generate-api-docs.ts`, or omit the required environment variables. The step is skipped silently when env vars are not configured.
+
+**Required environment variables:**
+
+| Variable | Description |
+|---|---|
+| `AI_AUGMENT_BASE_URL` | OpenAI-compatible API endpoint (e.g. `https://api.openai.com/v1`) |
+| `AI_AUGMENT_API_KEY` | API key for the provider |
+| `AI_AUGMENT_MODEL` | Model identifier (e.g. `gpt-4o`, `claude-sonnet-4-20250514`) |
+
+**Source tagging:** Every AI-generated field is tagged in `api-data.json` with `"descriptionSource": "ai"` or `"examplesSource": "ai"`. Fields populated by TypeDoc extraction have no source tag (or `"extracted"`). Reviewers can search for `"source": "ai"` in the JSON or look for the AI-generated content on the staging site before promoting to production.
+
+**Prompt templates** live in `scripts/api-docs/prompts/` and use `{{variable}}` placeholders:
+- `function-description.txt` -- generates a 2-4 sentence function description
+- `usage-example.txt` -- generates a TypeScript usage example
+- `release-note-summary.txt` -- generates a release note summary (reserved for future use)
+
+---
+
+## Release-Notes Overrides
+
+To customize the generated release notes page for a specific version, create a markdown file at:
+
+```
+docs/website/release-notes-overrides/<version>.md
+```
+
+For example, `release-notes-overrides/0.8.1.md`. The file should contain `## Heading` sections that are injected before the auto-generated changelog categories. This is useful for adding highlights, migration guides, or breaking change callouts that don't fit in the standard changelog format.
 
 ---
 

@@ -1,0 +1,152 @@
+# Release-driven docs pipeline: generates API docs, release notes, validates,
+# and pushes to main when an SDK release branch is pushed or a GitHub release
+# is published. The push to main triggers the hosting provider's staging deploy.
+#
+# Exists alongside docs-generate-api.yml (which handles manual/cross-repo use).
+name: Docs Release Pipeline
+
+on:
+  push:
+    branches:
+      - 'release-qvac-sdk-*'
+  release:
+    types: [published]
+  workflow_dispatch:
+    inputs:
+      version:
+        description: 'SDK version (semver, e.g. 0.8.1)'
+        required: true
+        type: string
+      skip_ai:
+        description: 'Skip AI augmentation step'
+        required: false
+        type: boolean
+        default: true
+
+permissions:
+  contents: write
+
+concurrency:
+  group: docs-release-pipeline-${{ github.ref }}
+  cancel-in-progress: false
+
+env:
+  DOCS_DIR: docs/website
+
+jobs:
+  generate-and-publish:
+    runs-on: ubuntu-latest
+    if: ${{ !vars.DOCS_SYNC_BOT_USER || github.actor != vars.DOCS_SYNC_BOT_USER }}
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # 6.0.2
+        with:
+          ref: main
+          fetch-depth: 0
+          token: ${{ secrets.DOCS_SYNC_PAT || secrets.GITHUB_TOKEN }}
+
+      - name: Extract version
+        id: version
+        run: |
+          if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
+            VERSION="${{ inputs.version }}"
+          elif [ "${{ github.event_name }}" = "release" ]; then
+            TAG="${{ github.event.release.tag_name }}"
+            VERSION="${TAG#v}"
+            VERSION="${VERSION#release-qvac-sdk-}"
+          else
+            BRANCH="${{ github.ref_name }}"
+            VERSION="${BRANCH#release-qvac-sdk-}"
+          fi
+          if [ -z "$VERSION" ]; then
+            echo "::error::Could not extract version"
+            exit 1
+          fi
+          if ! echo "$VERSION" | grep -qE '^[0-9]+\.[0-9]+\.[0-9]+$'; then
+            echo "::error::Invalid version format: $VERSION (expected X.Y.Z)"
+            exit 1
+          fi
+          echo "version=$VERSION" >> "$GITHUB_OUTPUT"
+          echo "Version: $VERSION"
+
+      - name: Determine AI flag
+        id: ai
+        run: |
+          SKIP="${{ inputs.skip_ai }}"
+          if [ "$SKIP" = "true" ] || [ -z "${{ secrets.AI_AUGMENT_API_KEY }}" ]; then
+            echo "flag=--no-ai" >> "$GITHUB_OUTPUT"
+          else
+            echo "flag=" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Setup Bun
+        uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6 # 2.2.0
+
+      - name: Install docs dependencies
+        working-directory: ${{ env.DOCS_DIR }}
+        run: bun install
+
+      - name: Install SDK dependencies
+        working-directory: packages/sdk
+        run: bun install
+
+      - name: Generate API docs
+        working-directory: ${{ env.DOCS_DIR }}
+        env:
+          SDK_PATH: ${{ github.workspace }}/packages/sdk
+          AI_AUGMENT_BASE_URL: ${{ secrets.AI_AUGMENT_BASE_URL }}
+          AI_AUGMENT_API_KEY: ${{ secrets.AI_AUGMENT_API_KEY }}
+          AI_AUGMENT_MODEL: ${{ vars.AI_AUGMENT_MODEL || '' }}
+        run: >
+          bun run scripts/generate-api-docs.ts
+          ${{ steps.version.outputs.version }}
+          --force-extract
+          ${{ steps.ai.outputs.flag }}
+
+      - name: Run TSDoc audit (warning mode)
+        working-directory: ${{ env.DOCS_DIR }}
+        env:
+          SDK_PATH: ${{ github.workspace }}/packages/sdk
+        continue-on-error: true
+        run: bun run scripts/api-docs/audit-tsdoc.ts
+
+      - name: Generate release notes
+        working-directory: ${{ env.DOCS_DIR }}
+        continue-on-error: true
+        run: bun run scripts/generate-release-notes.ts ${{ steps.version.outputs.version }}
+
+      - name: Update versions list
+        working-directory: ${{ env.DOCS_DIR }}
+        run: bun run scripts/update-versions-list.ts ${{ steps.version.outputs.version }}
+
+      - name: Run link validation tests
+        working-directory: ${{ env.DOCS_DIR }}
+        run: bun run vitest run tests/link-integrity.test.ts
+
+      - name: Check for changes
+        id: changes
+        run: |
+          git add \
+            "${{ env.DOCS_DIR }}/content/docs/(latest)/sdk/api/" \
+            "${{ env.DOCS_DIR }}/content/docs/v${{ steps.version.outputs.version }}/sdk/api/" \
+            "${{ env.DOCS_DIR }}/content/docs/(latest)/release-notes.mdx" \
+            "${{ env.DOCS_DIR }}/src/lib/versions.ts" \
+            "${{ env.DOCS_DIR }}/scripts/api-docs/api-data.json" \
+            2>/dev/null || true
+          if git diff --staged --quiet; then
+            echo "has_changes=false" >> "$GITHUB_OUTPUT"
+          else
+            echo "has_changes=true" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Commit and push to main
+        if: steps.changes.outputs.has_changes == 'true'
+        env:
+          BOT_NAME: ${{ vars.DOCS_SYNC_BOT_NAME || 'docs-sync-bot' }}
+          BOT_EMAIL: ${{ vars.DOCS_SYNC_BOT_EMAIL || 'docs-sync-bot@users.noreply.github.com' }}
+        run: |
+          git config user.name "$BOT_NAME"
+          git config user.email "$BOT_EMAIL"
+          git commit -m "chore(docs): generate API docs + release notes for v${{ steps.version.outputs.version }} [skip ci]"
+          git push origin main

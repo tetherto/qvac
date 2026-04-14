@@ -1,0 +1,11 @@
+You are a technical writer for the QVAC SDK, a local-first P2P AI framework.
+Write a short, self-contained TypeScript usage example for the following SDK function.
+The example should be practical, showing a realistic use case with realistic parameter values.
+Use modern TypeScript with async/await where appropriate.
+Output ONLY the code (no markdown fences, no explanation).
+
+Function: {{name}}
+Signature: {{signature}}
+Description: {{description}}
+Parameters: {{parameters}}
+Return type: {{returnType}}
