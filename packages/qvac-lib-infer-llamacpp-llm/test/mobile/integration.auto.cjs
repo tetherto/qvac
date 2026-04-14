@@ -6,6 +6,7 @@ require('./integration-runtime.cjs')
 // Functions are invoked dynamically by the mobile test runner framework.
 
 /* global runIntegrationModule */
+
 /* global __shouldRunTest */
 
 const __FILTERED = { modulePath: 'filtered', summary: { total: 0, passed: 0, failed: 0 } }
@@ -93,6 +94,11 @@ async function runSlidingContextTest (options = {}) { // eslint-disable-line no-
 async function runToolCallingTest (options = {}) { // eslint-disable-line no-unused-vars
   if (typeof __shouldRunTest === 'function' && !__shouldRunTest('runToolCallingTest')) return __FILTERED
   return runIntegrationModule('../integration/tool-calling.test.js', options)
+}
+
+async function runTurboquantTest (options = {}) { // eslint-disable-line no-unused-vars
+  if (typeof __shouldRunTest === 'function' && !__shouldRunTest('runTurboquantTest')) return __FILTERED
+  return runIntegrationModule('../integration/turboquant.test.js', options)
 }
 
 async function runUtf8OutputTest (options = {}) { // eslint-disable-line no-unused-vars

@@ -20,7 +20,8 @@
       "runModelLoadingTest",
       "runMoeTest",
       "runMultiInstanceTest",
-      "runUtf8OutputTest"
+      "runUtf8OutputTest",
+      "runTurboquantTest"
     ]
   },
   "android": {
@@ -44,7 +45,8 @@
       "runReasoningTest",
       "runSlidingContextTest",
       "runToolCallingTest",
-      "runUtf8OutputTest"
+      "runUtf8OutputTest",
+      "runTurboquantTest"
     ]
   }
 }
