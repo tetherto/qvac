@@ -360,7 +360,7 @@ std::string preprocessForSupertonic(const std::string &rawUtf8,
     default:
       break;
     }
-    if (diacriticsSet().count(c) != 0)
+    if (!langWrap && diacriticsSet().count(c) != 0)
       continue;
     if (c == 0x2665 || c == 0x2606 || c == 0x2661 || c == 0x00a9 ||
         c == '\\')
