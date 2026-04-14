@@ -150,6 +150,12 @@ public:
     return toolsCompact_ && nPastBeforeTools_ == firstMsgTokens;
   }
 
+  // A usable trim boundary must be strictly beyond the first-message floor.
+  // Otherwise post-generation tool trimming can erase the full conversation.
+  [[nodiscard]] bool hasUsableToolBoundary(llama_pos firstMsgTokens) const {
+    return toolsCompact_ && nPastBeforeTools_ > firstMsgTokens;
+  }
+
   // Shift nPastBeforeTools left after a context slide so the trim
   // boundary stays accurate. No-op when tools_compact is off.
   // Precondition: discard must have been clamped by clampDiscard()

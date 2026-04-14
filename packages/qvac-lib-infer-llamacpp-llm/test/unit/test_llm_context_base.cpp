@@ -20,6 +20,46 @@ namespace fs = std::filesystem;
 using test_common::getStatValue;
 using test_common::processPromptString;
 
+TEST(DynamicToolsStateTest, AnchorCanReachFirstMessageBoundaryAfterSlide) {
+  DynamicToolsState dts;
+  dts.setToolsCompact(true);
+  dts.setNPastBeforeTools(120);
+
+  constexpr llama_pos firstMsgTokens = 100;
+  dts.adjustAfterSlide(/*discard=*/20, firstMsgTokens);
+  EXPECT_EQ(dts.nPastBeforeTools(), firstMsgTokens);
+
+  // Once the anchor reaches firstMsgTokens, further slide adjustments stop.
+  dts.adjustAfterSlide(/*discard=*/5, firstMsgTokens);
+  EXPECT_EQ(dts.nPastBeforeTools(), firstMsgTokens);
+}
+
+TEST(DynamicToolsStateTest, DegenerateAnchorIsNotUsableForPostGenerationTrim) {
+  DynamicToolsState dts;
+  dts.setToolsCompact(true);
+
+  constexpr llama_pos firstMsgTokens = 100;
+  constexpr llama_pos nPast = 180;
+  dts.setNPastBeforeTools(firstMsgTokens);
+
+  const bool shouldTrim = dts.hasUsableToolBoundary(firstMsgTokens) &&
+                          nPast > dts.nPastBeforeTools();
+  EXPECT_FALSE(shouldTrim);
+}
+
+TEST(DynamicToolsStateTest, StrictlyGreaterAnchorIsUsableForPostTrim) {
+  DynamicToolsState dts;
+  dts.setToolsCompact(true);
+
+  constexpr llama_pos firstMsgTokens = 100;
+  constexpr llama_pos nPast = 180;
+  dts.setNPastBeforeTools(120);
+
+  const bool shouldTrim = dts.hasUsableToolBoundary(firstMsgTokens) &&
+                          nPast > dts.nPastBeforeTools();
+  EXPECT_TRUE(shouldTrim);
+}
+
 class LlmContextBaseTest : public ::testing::Test {
 protected:
   void SetUp() override {

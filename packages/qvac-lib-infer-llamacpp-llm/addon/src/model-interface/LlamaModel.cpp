@@ -584,8 +584,22 @@ std::string LlamaModel::processPromptImpl(const Prompt& prompt) {
   // Capture nPastBeforeTools before postInfer cleanup for stats reporting
   state_->lastNPastBeforeTools_ = dts.nPastBeforeTools();
   state_->lastToolsTrimmed_ = false;
+  const llama_pos firstMsgTokens = state_->llmContext_->getFirstMsgTokens();
 
-  if (dts.toolsCompact() && dts.nPastBeforeTools() > 0 &&
+  if (dts.hasDegenerateToolBoundary(firstMsgTokens)) {
+    QLOG_IF(
+        Priority::WARNING,
+        string_format(
+            "[LlamaModel] tools_compact degenerate boundary at first message "
+            "(nPastBeforeTools=%d, firstMsgTokens=%d); skipping "
+            "post-generation "
+            "tools trim\n",
+            dts.nPastBeforeTools(),
+            firstMsgTokens));
+    dts.reset();
+  }
+
+  if (dts.hasUsableToolBoundary(firstMsgTokens) &&
       state_->llmContext_->getNPast() > dts.nPastBeforeTools()) {
     // Check captured output for tool calls. In streaming mode oss has
     // the text; in non-streaming mode out already has it.
