@@ -645,10 +645,13 @@ qvac_lib_inference_addon_cpp::RuntimeStats LlamaModel::runtimeStats() const {
 qvac_lib_inference_addon_cpp::RuntimeStats
 LlamaModel::runtimeDebugStats() const {
   std::shared_lock lock(stateMtx_);
+  const int64_t firstMsgTokens =
+      state_->llmContext_
+          ? static_cast<int64_t>(state_->llmContext_->getFirstMsgTokens())
+          : 0LL;
   return {
       {"nPastBeforeTools", static_cast<int64_t>(state_->lastNPastBeforeTools_)},
-      {"firstMsgTokens",
-       static_cast<int64_t>(state_->llmContext_->getFirstMsgTokens())},
+      {"firstMsgTokens", firstMsgTokens},
       {"toolsTrimmed", state_->lastToolsTrimmed_ ? 1LL : 0LL}};
 }
 
