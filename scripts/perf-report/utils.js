@@ -290,6 +290,12 @@ function _collectQualityDetails (reports) {
 
       if (result.quality.key_values_unmatched && result.quality.key_values_unmatched.length > 0) {
         entry.kv_unmatched = result.quality.key_values_unmatched.map(u => u.key || u)
+        entry.kv_unmatched_detail = result.quality.key_values_unmatched.map(u => ({
+          key: u.key,
+          value: u.value,
+          key_found: u.key_found !== undefined ? u.key_found : null,
+          value_found: u.value_found !== undefined ? u.value_found : null
+        }))
       }
 
       if (result.output) {
@@ -507,7 +513,16 @@ function generateHtmlReport (aggregated) {
           if (detail.keywords_missing && detail.keywords_missing.length > 0) {
             detailContent += `<div class="detail-row"><span class="detail-label">Missing keywords (${detail.keywords_missing.length}):</span> ${escapeHtml(detail.keywords_missing.join(', '))}</div>`
           }
-          if (detail.kv_unmatched && detail.kv_unmatched.length > 0) {
+          if (detail.kv_unmatched_detail && detail.kv_unmatched_detail.length > 0) {
+            let kvTable = '<table class="misread-table"><thead><tr><th>Expected Key</th><th>Expected Value</th><th>Key Found?</th><th>Value Found?</th></tr></thead><tbody>'
+            for (const u of detail.kv_unmatched_detail) {
+              const kCls = u.key_found ? 'found' : 'not-found'
+              const vCls = u.value_found ? 'found' : 'not-found'
+              kvTable += `<tr><td>${escapeHtml(u.key)}</td><td>${escapeHtml(String(u.value))}</td><td class="${kCls}">${u.key_found ? 'Yes' : 'No'}</td><td class="${vCls}">${u.value_found ? 'Yes' : 'No'}</td></tr>`
+            }
+            kvTable += '</tbody></table>'
+            detailContent += `<div class="detail-row"><span class="detail-label">Unmatched key-value pairs (${detail.kv_unmatched_detail.length}):</span>${kvTable}</div>`
+          } else if (detail.kv_unmatched && detail.kv_unmatched.length > 0) {
             detailContent += `<div class="detail-row"><span class="detail-label">Unmatched KV keys (${detail.kv_unmatched.length}):</span> ${escapeHtml(detail.kv_unmatched.join(', '))}</div>`
           }
           if (detailContent) {
@@ -824,6 +839,31 @@ function generateHtmlReport (aggregated) {
     border-radius: 3px;
     word-break: break-all;
   }
+
+  .misread-table {
+    width: 100%;
+    margin-top: 0.4rem;
+    border-collapse: collapse;
+    font-size: 0.75rem;
+  }
+
+  .misread-table th,
+  .misread-table td {
+    padding: 0.25rem 0.5rem;
+    border: 1px solid var(--border);
+    text-align: left;
+  }
+
+  .misread-table th {
+    background: #eef1f5;
+    font-weight: 600;
+    font-size: 0.7rem;
+    text-transform: uppercase;
+    letter-spacing: 0.02em;
+  }
+
+  .misread-table .found { color: #2e7d32; }
+  .misread-table .not-found { color: #c62828; font-weight: 600; }
 
   @media print {
     body { padding: 0.5rem; }
