@@ -18,8 +18,6 @@ import {
   type ResolveContext,
   type ResolveResult,
 } from "@/schemas";
-import fs from "bare-fs";
-import path from "bare-path";
 import { createStreamLogger, registerAddonLogger } from "@/logging";
 import { parseModelPath } from "@/server/utils";
 import {
@@ -52,39 +50,6 @@ type ParakeetModelConfig = {
   parakeetSortformerSrc?: ModelSrcInput;
 };
 
-// ONNX external data files must be co-located with their companion .onnx file.
-// The SDK cache may store them at separate hash-prefixed paths, so we symlink
-// the data file into the .onnx file's directory before the addon opens the session.
-const ONNX_DATA_COMPANIONS = [
-  { onnxKey: "encoder", dataKey: "encoderData", dataFilename: "encoder-model.onnx.data" },
-  { onnxKey: "model", dataKey: "modelData", dataFilename: "model.onnx_data" },
-] as const;
-
-function ensureOnnxDataColocated(
-  artifacts: Record<string, string | undefined>,
-) {
-  for (const { onnxKey, dataKey, dataFilename } of ONNX_DATA_COMPANIONS) {
-    const onnxPath = artifacts[onnxKey];
-    const dataPath = artifacts[dataKey];
-    if (!onnxPath || !dataPath) continue;
-
-    const onnxDir = path.dirname(onnxPath);
-    const colocatedPath = path.join(onnxDir, dataFilename);
-
-    if (dataPath === colocatedPath) continue;
-    if (fs.existsSync(colocatedPath)) {
-      artifacts[dataKey] = colocatedPath;
-      continue;
-    }
-
-    try {
-      fs.symlinkSync(dataPath, colocatedPath);
-      artifacts[dataKey] = colocatedPath;
-    } catch {
-      // Keep original path if symlink creation fails
-    }
-  }
-}
 
 async function resolveTdtConfig(
   cfg: ParakeetModelConfig,
@@ -203,8 +168,6 @@ function createParakeetModel(
       `Parakeet ${modelType} requires a model source`,
     );
   }
-
-  ensureOnnxDataColocated(artifacts);
 
   const { dirPath } = parseModelPath(primaryPath);
   const loader = new FilesystemDL({ dirPath });
