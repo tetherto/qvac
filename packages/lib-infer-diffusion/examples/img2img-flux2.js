@@ -14,7 +14,7 @@ const ImgStableDiffusion = require('../index')
 
 async function main () {
   const modelDir = path.join(__dirname, '../models')
-  const inputImagePath = path.join(__dirname, '../temp/von-neumann_transformed.png')
+  const inputImagePath = path.join(__dirname, '../assets/von-neumann.jpg')
   const outputImagePath = path.join(__dirname, '../temp/von-neumann_transformed_flux2.png')
 
   if (!fs.existsSync(inputImagePath)) {

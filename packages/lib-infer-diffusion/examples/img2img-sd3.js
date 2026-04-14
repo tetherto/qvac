@@ -25,7 +25,7 @@ async function main () {
   // const inputImagePath = path.join(__dirname, '../temp/headshot.jpeg')
   // const outputImagePath = path.join(__dirname, '../assets/headshot_transformed_sd3.jpeg')
   const inputImagePath = path.join(__dirname, '../assets/von-neumann-colorized.jpg')
-  const outputImagePath = path.join(__dirname, '../assets/von-neumann_transformed_sd3.jpg')
+  const outputImagePath = path.join(__dirname, '../temp/von-neumann_transformed_sd3.jpg')
 
   if (!fs.existsSync(inputImagePath)) {
     console.error(`Error: Input image not found at ${inputImagePath}`)
