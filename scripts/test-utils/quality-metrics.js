@@ -89,24 +89,29 @@ function levenshtein (a, b) {
 
 /**
  * Character Error Rate — edit distance at the character level.
- * CER = levenshtein(hypothesis, reference) / len(reference)
+ * Tokens are sorted alphabetically before comparison so that
+ * reading-order differences (e.g. mobile bottom-to-top vs desktop
+ * top-to-bottom) do not inflate the error rate.
+ * CER = levenshtein(sorted_hypothesis, sorted_reference) / len(sorted_reference)
  * Lower is better. 0 = perfect.
  */
 function cer (hypothesis, reference) {
-  const h = normalize(hypothesis)
-  const r = normalize(reference)
+  const h = tokenize(hypothesis).sort().join(' ')
+  const r = tokenize(reference).sort().join(' ')
   if (r.length === 0) return h.length === 0 ? 0 : 1
   return levenshtein(h, r) / r.length
 }
 
 /**
  * Word Error Rate — edit distance at the word level.
- * WER = levenshtein(hyp_words, ref_words) / len(ref_words)
+ * Tokens are sorted alphabetically before comparison so that
+ * reading-order differences do not inflate the error rate.
+ * WER = levenshtein(sorted_hyp_words, sorted_ref_words) / len(sorted_ref_words)
  * Lower is better. 0 = perfect.
  */
 function wer (hypothesis, reference) {
-  const h = tokenize(hypothesis)
-  const r = tokenize(reference)
+  const h = tokenize(hypothesis).sort()
+  const r = tokenize(reference).sort()
   if (r.length === 0) return h.length === 0 ? 0 : 1
   return levenshtein(h, r) / r.length
 }

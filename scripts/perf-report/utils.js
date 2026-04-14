@@ -103,29 +103,33 @@ function generateMarkdownReport (aggregated) {
   const lines = []
   const { addon, generated_at, run_numbers, devices, quality } = aggregated
 
+  const iterCount = _maxIterationCount(devices)
+
   lines.push(`## ${addon} Performance Report`)
-  lines.push(`Generated: ${generated_at} | Runs: ${run_numbers.join(', ')}`)
+  lines.push(`Generated: ${generated_at} | CI Runs: ${run_numbers.join(', ')} | Iterations: ${iterCount}`)
   lines.push('')
 
   for (const [deviceName, tests] of Object.entries(devices)) {
     lines.push(`### ${deviceName}`)
     lines.push('')
 
-    const runCols = run_numbers.map(n => `Run #${n}`)
-    const header = ['Metric', ...runCols, 'Mean']
+    const iterCols = _mdIterationHeaders(iterCount, run_numbers)
+    const header = ['Metric', ...iterCols, 'Mean', 'Std Dev']
     lines.push('| ' + header.join(' | ') + ' |')
     lines.push('| ' + header.map(() => '---').join(' | ') + ' |')
 
     for (const [testName, metrics] of Object.entries(tests)) {
-      lines.push(`| **${testName}** | ${' |'.repeat(run_numbers.length + 1)}`)
+      lines.push(`| **${testName}** | ${' |'.repeat(iterCount + 2)}`)
       for (const [metricKey, summary] of Object.entries(metrics)) {
         if (!summary) continue
-        const vals = run_numbers.map((_, i) => {
+        const vals = []
+        for (let i = 0; i < iterCount; i++) {
           const v = summary.values[i]
-          return v !== undefined ? formatMetricValue(metricKey, v) : '-'
-        })
+          vals.push(v !== undefined ? formatMetricValue(metricKey, v) : '-')
+        }
         const meanStr = formatMetricValue(metricKey, summary.mean)
-        lines.push(`| ${metricLabel(metricKey)} | ${vals.join(' | ')} | ${meanStr} |`)
+        const stdStr = '\u00b1' + formatMetricValue(metricKey, summary.std)
+        lines.push(`| ${metricLabel(metricKey)} | ${vals.join(' | ')} | ${meanStr} | ${stdStr} |`)
       }
     }
     lines.push('')
@@ -270,6 +274,52 @@ function escapeHtml (str) {
 }
 
 /**
+ * Determines the maximum number of iterations (values array length) across
+ * all metrics in the aggregated data. When tests are repeated N times within
+ * a single CI run, values.length == N even though run_numbers has only one entry.
+ */
+function _maxIterationCount (devices) {
+  let max = 0
+  for (const tests of Object.values(devices)) {
+    for (const metrics of Object.values(tests)) {
+      for (const summary of Object.values(metrics)) {
+        if (summary && summary.values && summary.values.length > max) {
+          max = summary.values.length
+        }
+      }
+    }
+  }
+  return max || 1
+}
+
+/**
+ * Builds column headers for iterations. When multiple iterations exist within
+ * one CI run, labels them "Run 1", "Run 2", ... so each value is visible.
+ * When iterations match run_numbers 1:1, uses the original "Run #NNN" format.
+ */
+function _iterationHeaders (count, runNumbers) {
+  if (count === runNumbers.length) {
+    return runNumbers.map(n => `<th>Run #${n}</th>`).join('')
+  }
+  const hdrs = []
+  for (let i = 1; i <= count; i++) {
+    hdrs.push(`<th>Run ${i}</th>`)
+  }
+  return hdrs.join('')
+}
+
+function _mdIterationHeaders (count, runNumbers) {
+  if (count === runNumbers.length) {
+    return runNumbers.map(n => `Run #${n}`)
+  }
+  const hdrs = []
+  for (let i = 1; i <= count; i++) {
+    hdrs.push(`Run ${i}`)
+  }
+  return hdrs
+}
+
+/**
  * Generates a self-contained HTML performance report.
  *
  * @param {Object} aggregated - Output of aggregateReports()
@@ -281,6 +331,8 @@ function generateHtmlReport (aggregated) {
     dateStyle: 'medium',
     timeStyle: 'short'
   })
+
+  const iterationCount = _maxIterationCount(devices)
 
   let deviceCards = ''
 
@@ -298,7 +350,7 @@ function generateHtmlReport (aggregated) {
         const hib = HIGHER_IS_BETTER.has(key)
 
         let valueCells = ''
-        for (let i = 0; i < run_numbers.length; i++) {
+        for (let i = 0; i < iterationCount; i++) {
           const v = summary.values[i]
           if (v === undefined) {
             valueCells += '<td class="val">-</td>'
@@ -323,7 +375,7 @@ function generateHtmlReport (aggregated) {
         </tr>`
       }
 
-      const runHeaders = run_numbers.map(n => `<th>Run #${n}</th>`).join('')
+      const iterHeaders = _iterationHeaders(iterationCount, run_numbers)
 
       tables += `
       <div class="test-block">
@@ -332,7 +384,7 @@ function generateHtmlReport (aggregated) {
           <thead>
             <tr>
               <th class="metric-col">Metric</th>
-              ${runHeaders}
+              ${iterHeaders}
               <th class="mean-hdr">Mean</th>
               <th class="std-hdr">Std Dev</th>
             </tr>
@@ -651,7 +703,8 @@ function generateHtmlReport (aggregated) {
   <h1>${escapeHtml(addon)} Performance Report</h1>
   <div class="report-meta">
     <span>Generated: <strong>${escapeHtml(timestamp)}</strong></span>
-    <span>Runs analyzed: <strong>${run_numbers.length}</strong> (${run_numbers.map(n => '#' + n).join(', ')})</span>
+    <span>CI Runs: <strong>${run_numbers.map(n => '#' + n).join(', ')}</strong></span>
+    <span>Iterations per test: <strong>${iterationCount}</strong></span>
     <span>Devices: <strong>${Object.keys(devices).length}</strong></span>
   </div>
 </header>

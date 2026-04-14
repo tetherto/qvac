@@ -126,12 +126,12 @@ try {
     var result = { ground_truth_id: gt.id || null, description: gt.description || null }
 
     if (gt.reference_text) {
-      var h = _normalize(joined)
-      var r = _normalize(gt.reference_text)
+      var hTokens = _tokenize(joined).sort()
+      var rTokens = _tokenize(gt.reference_text).sort()
+      var h = hTokens.join(' ')
+      var r = rTokens.join(' ')
       result.cer = _round4(r.length === 0 ? (h.length === 0 ? 0 : 1) : _levenshtein(h, r) / r.length)
-      var hw = _tokenize(joined)
-      var rw = _tokenize(gt.reference_text)
-      result.wer = _round4(rw.length === 0 ? (hw.length === 0 ? 0 : 1) : _levenshtein(hw, rw) / rw.length)
+      result.wer = _round4(rTokens.length === 0 ? (hTokens.length === 0 ? 0 : 1) : _levenshtein(hTokens, rTokens) / rTokens.length)
     }
 
     if (gt.required_keywords && gt.required_keywords.length > 0) {
