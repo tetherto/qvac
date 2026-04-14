@@ -1,3 +1,8 @@
 # Known false positive with N-API callbacks under ASan
 leak:SdModel::process
 leak:SdModel::load
+
+# D-Bus library false positives during test initialization
+leak:dbus_bus_register
+leak:dbus_pending_call_block
+leak:_dbus_message_loader_queue_messages
