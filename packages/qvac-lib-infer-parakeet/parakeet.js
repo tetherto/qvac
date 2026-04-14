@@ -155,6 +155,13 @@ class ParakeetInterface {
       return
     }
 
+    if (isTerminal && this._onCancelComplete) {
+      const resolve = this._onCancelComplete
+      this._onCancelComplete = null
+      resolve()
+      return
+    }
+
     if (mappedEvent === 'Output') {
       this._setState(state.PROCESSING)
     }
@@ -326,11 +333,11 @@ class ParakeetInterface {
         const cancelComplete = new Promise(resolve => {
           this._onCancelComplete = resolve
         })
-        this._activeJobId = null
         await this._binding.cancel(this._handle)
         await cancelComplete
         this._bufferedAudio = []
         this._bufferedBytes = 0
+        this._activeJobId = null
         this._setState(state.LISTENING)
         return
       }
