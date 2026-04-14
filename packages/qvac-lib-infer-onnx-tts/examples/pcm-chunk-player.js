@@ -3,7 +3,7 @@
 const fs = require('bare-fs')
 const os = require('bare-os')
 const path = require('bare-path')
-const { spawnSync } = require('bare-subprocess')
+const { spawn, spawnSync } = require('bare-subprocess')
 const { createWav } = require('./wav-helper')
 
 let _seq = 0
@@ -31,9 +31,6 @@ function detectAplay () {
   return _hasAplay
 }
 
-/**
- * Whether this machine is likely able to play 16-bit mono PCM chunks (used by the streaming TTS example).
- */
 function canPlayPcmChunks () {
   if (os.platform() === 'darwin') return true
   if (detectFfplay()) return true
@@ -52,9 +49,18 @@ function unlinkQuiet (p) {
   } catch (_) {}
 }
 
-/**
- * Plays one chunk of int16 mono PCM at `sampleRate` Hz, blocking until playback finishes (queues naturally if called from sequential callbacks).
- */
+function spawnAsync (cmd, args, opts) {
+  return new Promise((resolve, reject) => {
+    try {
+      const child = spawn(cmd, args, opts)
+      child.on('exit', (code) => resolve(code))
+      child.on('error', reject)
+    } catch (err) {
+      reject(err)
+    }
+  })
+}
+
 function playInt16ChunkSync (samples, sampleRate) {
   const pcm = toInt16Array(samples)
   if (pcm.length === 0) return
@@ -95,7 +101,85 @@ function playInt16ChunkSync (samples, sampleRate) {
   }
 }
 
+async function playInt16Chunk (samples, sampleRate) {
+  const pcm = toInt16Array(samples)
+  if (pcm.length === 0) return
+
+  const id = `${Date.now()}-${++_seq}`
+  const tmpDir = os.tmpdir()
+  const plat = os.platform()
+
+  if (plat === 'darwin') {
+    const tmpWav = path.join(tmpDir, `qvac-tts-stream-${id}.wav`)
+    createWav(Array.from(pcm), sampleRate, tmpWav)
+    await spawnAsync('afplay', [tmpWav], { stdio: 'ignore' })
+    unlinkQuiet(tmpWav)
+    return
+  }
+
+  if (detectFfplay()) {
+    const tmpWav = path.join(tmpDir, `qvac-tts-stream-${id}.wav`)
+    createWav(Array.from(pcm), sampleRate, tmpWav)
+    await spawnAsync(
+      'ffplay',
+      ['-nodisp', '-autoexit', '-loglevel', 'error', '-i', tmpWav],
+      { stdio: 'ignore' }
+    )
+    unlinkQuiet(tmpWav)
+    return
+  }
+
+  if (detectAplay()) {
+    const rawPath = path.join(tmpDir, `qvac-tts-stream-${id}.raw`)
+    fs.writeFileSync(rawPath, Buffer.from(pcm.buffer, pcm.byteOffset, pcm.byteLength))
+    await spawnAsync(
+      'aplay',
+      ['-q', '-t', 'raw', '-f', 'S16_LE', '-r', String(sampleRate), '-c', '1', rawPath],
+      { stdio: 'ignore' }
+    )
+    unlinkQuiet(rawPath)
+  }
+}
+
+function createChunkQueue () {
+  const queue = []
+  let waiter = null
+  let done = false
+
+  function push (item) {
+    queue.push(item)
+    if (waiter) {
+      waiter()
+      waiter = null
+    }
+  }
+
+  function end () {
+    done = true
+    if (waiter) {
+      waiter()
+      waiter = null
+    }
+  }
+
+  async function * drain () {
+    while (true) {
+      if (queue.length > 0) {
+        yield queue.shift()
+        continue
+      }
+      if (done) return
+      await new Promise((resolve) => { waiter = resolve })
+    }
+  }
+
+  return { push, end, drain }
+}
+
 module.exports = {
   canPlayPcmChunks,
-  playInt16ChunkSync
+  playInt16ChunkSync,
+  playInt16Chunk,
+  createChunkQueue
 }
+

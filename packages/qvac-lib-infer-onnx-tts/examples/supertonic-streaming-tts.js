@@ -4,7 +4,7 @@ const fs = require('bare-fs')
 const path = require('bare-path')
 const ONNXTTS = require('../')
 const { setLogger, releaseLogger } = require('../addonLogging')
-const { canPlayPcmChunks, playInt16ChunkSync } = require('./pcm-chunk-player')
+const { canPlayPcmChunks, playInt16Chunk, createChunkQueue } = require('./pcm-chunk-player')
 
 const SUPERTONIC_SAMPLE_RATE = 44100
 
@@ -83,7 +83,7 @@ async function main () {
 
     const canPlay = canPlayPcmChunks()
     if (canPlay) {
-      console.log('Streaming playback: each chunk will play as soon as it is synthesized.')
+      console.log('Streaming playback: chunks play asynchronously while inference continues.')
     } else {
       console.warn(
         'No supported player found (need macOS afplay, ffplay from ffmpeg, or Linux aplay). Chunks will be logged only.'
@@ -92,9 +92,16 @@ async function main () {
 
     console.log(`Running streaming TTS on: "${textToSynthesize.substring(0, 80)}${textToSynthesize.length > 80 ? '…' : ''}"`)
 
+    const playbackQueue = createChunkQueue()
+    const playbackDone = (async () => {
+      if (!canPlay) return
+      for await (const { samples, sampleRate } of playbackQueue.drain()) {
+        await playInt16Chunk(samples, sampleRate)
+      }
+    })()
+
     const response = await model.runStream(textToSynthesize)
 
-    console.log('Waiting for streaming TTS results...')
     let chunkCount = 0
 
     await response
@@ -116,14 +123,16 @@ async function main () {
             console.log(`Audio update: ${samples.length} samples (no chunk metadata)`)
           }
 
-          if (canPlay) {
-            playInt16ChunkSync(samples, SUPERTONIC_SAMPLE_RATE)
-          }
+          playbackQueue.push({ samples, sampleRate: SUPERTONIC_SAMPLE_RATE })
         }
       })
       .await()
 
-    console.log(`TTS finished! (${chunkCount} audio update(s))`)
+    console.log(`Inference finished! (${chunkCount} chunk(s)), waiting for playback...`)
+    playbackQueue.end()
+    await playbackDone
+
+    console.log('Playback finished!')
     if (response.stats) {
       const s = response.stats
       console.log(`Inference stats: totalTime=${s.totalTime.toFixed(2)}s, tokensPerSecond=${s.tokensPerSecond.toFixed(2)}, realTimeFactor=${s.realTimeFactor.toFixed(2)}, audioDuration=${s.audioDurationMs}ms, totalSamples=${s.totalSamples}`)
@@ -139,3 +148,4 @@ async function main () {
 }
 
 main().catch(console.error)
+
