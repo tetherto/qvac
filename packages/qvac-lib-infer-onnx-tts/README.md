@@ -14,6 +14,7 @@ The engine is auto-detected based on the arguments you provide.
 - [TTS Engines](#tts-engines)
 - [Installation](#installation)
 - [Building from Source](#building-from-source)
+- [Downloading Models](#downloading-models)
 - [Usage: Chatterbox](#usage-chatterbox)
   - [1. Import the Model Class](#1-import-the-model-class)
   - [2. Create a Data Loader](#2-create-a-data-loader)
@@ -158,7 +159,47 @@ npm run test:unit
 npm run test:integration  # Requires model files
 ```
 
-**Note**: Integration tests require model files to be present in the `model/` directory. See the [CI integration test script](.github/workflows/integration-test.yaml) for details on model requirements.
+**Note**: Integration tests require model files to be present in the `models/` directory. See the [Downloading Models](#downloading-models) section below.
+
+## Downloading Models
+
+Model files must be present locally before running examples or integration tests. Download scripts fetch models from Hugging Face.
+
+```bash
+# Chatterbox only (English q4 by default)
+npm run models:ensure:chatterbox
+
+# Chatterbox with a specific variant
+CHATTERBOX_VARIANT=fp32 npm run models:ensure:chatterbox
+
+# Supertonic only (English by default)
+npm run models:ensure:supertonic
+
+# Multilingual models
+TTS_LANGUAGE=multilingual npm run models:ensure:chatterbox
+TTS_LANGUAGE=multilingual npm run models:ensure:supertonic
+
+# Both English and multilingual for a single engine
+TTS_LANGUAGE=all npm run models:ensure:chatterbox
+
+# Both Chatterbox + Supertonic (English by default)
+npm run models:ensure
+
+# Both Chatterbox + Supertonic multilingual
+TTS_LANGUAGE=multilingual npm run models:ensure
+
+# Everything (both engines, both languages)
+TTS_LANGUAGE=all npm run models:ensure
+```
+
+### Environment Variables
+
+| Variable | Default | Values | Description |
+|----------|---------|--------|-------------|
+| `CHATTERBOX_VARIANT` | `q4` | `fp32`, `fp16`, `q4`, `q4f16` | Chatterbox model quantization variant |
+| `TTS_LANGUAGE` | `en` | `en`, `multilingual`, `all` | Language set for model downloads (`all` downloads both) |
+
+Models are saved to `models/chatterbox/` (English), `models/chatterbox-multilingual/`, `models/supertonic/`, and `models/supertonic-multilingual/`.
 
 ## Usage: Chatterbox
 
@@ -209,8 +250,29 @@ The `args` obj contains the following properties:
 * `embedTokensPath`: Path to the embed tokens ONNX model.
 * `conditionalDecoderPath`: Path to the conditional decoder ONNX model.
 * `languageModelPath`: Path to the language model ONNX model.
-* `referenceAudio`: Float32Array of reference audio samples for voice cloning.
-* `lazySessionLoading`: (optional) Boolean to defer ONNX session creation until first use. Defaults to `true` on iOS, `false` on all other platforms.
+* `referenceAudio`: Float32Array of reference audio samples for voice cloning. See [Reference Audio Guidelines](#reference-audio-guidelines) below.
+* `lazySessionLoading`: (optional) Boolean to defer ONNX session creation until first use. Defaults to `true` on iOS and Android, `false` on all other platforms.
+
+#### Reference Audio Guidelines
+
+The quality of the reference audio directly affects voice cloning results. Poor recordings can cause the model to repeat the reference content instead of synthesizing the target text.
+
+**Recommended specs:**
+
+| Property | Recommendation |
+|----------|---------------|
+| Format | WAV (16-bit PCM, mono) |
+| Sample rate | 24,000 Hz (other rates are resampled automatically) |
+| Duration | 3--6 seconds of clear speech |
+| Quality | Uncompressed or high-bitrate source; avoid low-bitrate AAC (e.g. Voice Memos at 64 kbps) |
+| Content | A single continuous sentence; minimize silence and background noise |
+
+**Common pitfalls:**
+
+- Lossy compression artifacts (AAC, MP3) surviving WAV conversion degrade the speech encoder output
+- Long recordings (>10s) dilute the voice embedding and slow inference
+- Background noise or multiple speakers confuse the encoder
+- Reference content that overlaps with the target text can cause the model to reproduce the reference verbatim
 
 ### 4. Create the `config` obj
 
@@ -531,9 +593,25 @@ console.log(`Total audio samples generated: ${audioSamples.length}`)
 
 ## Other Examples
 
--   [Chatterbox TTS](examples/example-chatterbox-tts.js) - Text-to-speech synthesis with voice cloning from reference audio.
--   [Supertonic TTS](examples/example-supertonic-tts.js) - Text-to-speech synthesis with pre-trained voice styles.
--   Check the `examples/` directory for more usage examples.
+-   [Chatterbox TTS](examples/chatterbox-tts.js) - Voice cloning from reference audio (English or multilingual).
+-   [Supertonic TTS](examples/supertonic-tts.js) - Pre-trained voice styles (English or multilingual).
+
+```bash
+# Chatterbox English (uses bundled jfk.wav as reference audio)
+bare examples/chatterbox-tts.js english
+
+# Chatterbox English with custom reference audio
+bare examples/chatterbox-tts.js english path/to/reference.wav
+
+# Chatterbox Multilingual
+bare examples/chatterbox-tts.js multilingual
+
+# Supertonic English
+bare examples/supertonic-tts.js english
+
+# Supertonic Multilingual
+bare examples/supertonic-tts.js multilingual
+```
 
 ## Tests
 
