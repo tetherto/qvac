@@ -56,10 +56,9 @@ jobs:
           - os: macos-14
             platform: darwin
             arch: arm64
-          - os: windows-11
+          - os: ai-run-windows11-gpu
             platform: win32
             arch: x64
-            runner: ai-run-windows11-gpu
 
     steps:
       - name: Setup Node.js
