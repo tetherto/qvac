@@ -41,10 +41,6 @@ on:
         required: false
         type: string
     secrets:
-      PAT_TOKEN:
-        required: true
-      NPM_TOKEN:
-        required: true
       MQTT_PROTOCOL:
         required: true
       MQTT_HOST:
@@ -74,8 +70,6 @@ jobs:
     outputs:
       runId: ${{ steps.runid.outputs.runId }}
     env:
-      NPM_TOKEN: ${{ secrets.NPM_TOKEN }}
-      PAT_TOKEN: ${{ secrets.PAT_TOKEN }}
       MQTT_PROTOCOL: ${{ secrets.MQTT_PROTOCOL }}
       MQTT_HOST: ${{ secrets.MQTT_HOST }}
       MQTT_PORT: ${{ secrets.MQTT_PORT }}
@@ -85,7 +79,6 @@ jobs:
       - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # 6.0.2
         with:
           ref: ${{ inputs.test-version || github.event.pull_request.head.sha || github.sha }}
-          token: ${{ secrets.PAT_TOKEN }}
           sparse-checkout: ${{ inputs.project-directory }}
 
       - uses: actions/setup-node@53b83947a5a98c8d113130e565377fae1a50d02f # 6.3.0
@@ -116,27 +109,6 @@ jobs:
 
           fs.appendFileSync(process.env.GITHUB_OUTPUT, `runId=${runId}\n`, 'utf8');
           console.log(`Generated runId: ${runId}`);
-
-      - name: Configure npm registries
-        shell: node {0}
-        run: |
-          const fs = require('fs');
-          const path = require('path');
-
-          if (!process.env.NPM_TOKEN) { console.log('NPM_TOKEN is empty'); process.exit(1); }
-          if (!process.env.PAT_TOKEN) { console.log('PAT_TOKEN is empty'); process.exit(1); }
-
-          const lines = [
-            'registry=https://registry.npmjs.org/',
-            '@qvac:registry=https://registry.npmjs.org/',
-            '@tetherto:registry=https://npm.pkg.github.com/',
-            `//registry.npmjs.org/:_authToken=${process.env.NPM_TOKEN}`,
-            `//npm.pkg.github.com/:_authToken=${process.env.PAT_TOKEN}`
-          ];
-          const npmrc = lines.join('\n');
-          const target = path.join('${{ inputs.project-directory }}', '.npmrc');
-          fs.writeFileSync(target, npmrc, 'utf8');
-          console.log(`.npmrc configured at ${target}`);
 
       - name: Setup MQTT CA certificate
         shell: node {0}
@@ -176,20 +148,6 @@ jobs:
             console.log('No build script found in package.json - skipping');
           }
 
-      - name: Copy .npmrc to consumer directory
-        shell: node {0}
-        run: |
-          const fs = require('fs');
-          const path = require('path');
-          const projectDir = '${{ inputs.project-directory }}';
-          const consumerDir = '${{ inputs.working-directory }}';
-          if (consumerDir !== projectDir) {
-            const source = path.join(projectDir, '.npmrc');
-            const npmrcContent = fs.readFileSync(source, 'utf8');
-            fs.writeFileSync(path.join(consumerDir, '.npmrc'), npmrcContent, 'utf8');
-            console.log('.npmrc copied to consumer directory');
-          }
-
       - name: Install dependencies (consumer)
         if: inputs.working-directory != inputs.project-directory
         working-directory: ${{ inputs.working-directory }}
@@ -202,8 +160,6 @@ jobs:
 
       - name: Build mobile consumer APK
         working-directory: ${{ inputs.working-directory }}
-        env:
-          NPM_CONFIG_USERCONFIG: ${{ github.workspace }}/${{ inputs.working-directory }}/.npmrc
         run: |
           echo "Building Android consumer APK..."
           echo "   Run ID: ${{ steps.runid.outputs.runId }}"
@@ -409,8 +365,6 @@ jobs:
     environment: release
     timeout-minutes: 90
     env:
-      NPM_TOKEN: ${{ secrets.NPM_TOKEN }}
-      PAT_TOKEN: ${{ secrets.PAT_TOKEN }}
       MQTT_PROTOCOL: ${{ secrets.MQTT_PROTOCOL }}
       MQTT_HOST: ${{ secrets.MQTT_HOST }}
       MQTT_PORT: ${{ secrets.MQTT_PORT }}
@@ -420,7 +374,6 @@ jobs:
       - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # 6.0.2
         with:
           ref: ${{ inputs.test-version || github.event.pull_request.head.sha || github.sha }}
-          token: ${{ secrets.PAT_TOKEN }}
           sparse-checkout: ${{ inputs.project-directory }}
 
       - uses: actions/setup-node@53b83947a5a98c8d113130e565377fae1a50d02f # 6.3.0
@@ -430,23 +383,6 @@ jobs:
       - uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6 # 2.2.0
         with:
           bun-version: latest
-
-      - name: Configure npm registries
-        shell: node {0}
-        run: |
-          const fs = require('fs');
-          const path = require('path');
-
-          const lines = [
-            'registry=https://registry.npmjs.org/',
-            '@qvac:registry=https://registry.npmjs.org/',
-            '@tetherto:registry=https://npm.pkg.github.com/',
-            `//registry.npmjs.org/:_authToken=${process.env.NPM_TOKEN}`,
-            `//npm.pkg.github.com/:_authToken=${process.env.PAT_TOKEN}`
-          ];
-          const npmrc = lines.join('\n');
-          const target = path.join('${{ inputs.project-directory }}', '.npmrc');
-          fs.writeFileSync(target, npmrc, 'utf8');
 
       - name: Setup MQTT CA certificate
         shell: node {0}
@@ -465,19 +401,6 @@ jobs:
             fs.writeFileSync(caPath, caCert, 'utf8');
             fs.appendFileSync(process.env.GITHUB_ENV, `MQTT_CA_PATH=${caPath}\n`, 'utf8');
             console.log('CA certificate written');
-          }
-
-      - name: Copy .npmrc to consumer directory
-        shell: node {0}
-        run: |
-          const fs = require('fs');
-          const path = require('path');
-          const projectDir = '${{ inputs.project-directory }}';
-          const consumerDir = '${{ inputs.working-directory }}';
-          if (consumerDir !== projectDir) {
-            const source = path.join(projectDir, '.npmrc');
-            const npmrcContent = fs.readFileSync(source, 'utf8');
-            fs.writeFileSync(path.join(consumerDir, '.npmrc'), npmrcContent, 'utf8');
           }
 
       - name: Install dependencies (project)
@@ -588,51 +511,17 @@ jobs:
     if: github.event_name == 'pull_request'
     runs-on: ubuntu-latest
     environment: release
-    env:
-      NPM_TOKEN: ${{ secrets.NPM_TOKEN }}
-      PAT_TOKEN: ${{ secrets.PAT_TOKEN }}
     permissions:
       pull-requests: write
     steps:
       - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # 6.0.2
         with:
           ref: ${{ inputs.test-version || github.event.pull_request.head.sha || github.sha }}
-          token: ${{ secrets.PAT_TOKEN }}
           sparse-checkout: ${{ inputs.project-directory }}
 
       - uses: actions/setup-node@53b83947a5a98c8d113130e565377fae1a50d02f # 6.3.0
         with:
           node-version: 22
-
-      - name: Configure npm registries
-        shell: node {0}
-        run: |
-          const fs = require('fs');
-          const path = require('path');
-
-          const lines = [
-            'registry=https://registry.npmjs.org/',
-            '@qvac:registry=https://registry.npmjs.org/',
-            '@tetherto:registry=https://npm.pkg.github.com/',
-            `//registry.npmjs.org/:_authToken=${process.env.NPM_TOKEN}`,
-            `//npm.pkg.github.com/:_authToken=${process.env.PAT_TOKEN}`
-          ];
-          const npmrc = lines.join('\n');
-          const target = path.join('${{ inputs.project-directory }}', '.npmrc');
-          fs.writeFileSync(target, npmrc, 'utf8');
-
-      - name: Copy .npmrc to consumer directory
-        shell: node {0}
-        run: |
-          const fs = require('fs');
-          const path = require('path');
-          const projectDir = '${{ inputs.project-directory }}';
-          const consumerDir = '${{ inputs.working-directory }}';
-          if (consumerDir !== projectDir) {
-            const source = path.join(projectDir, '.npmrc');
-            const npmrcContent = fs.readFileSync(source, 'utf8');
-            fs.writeFileSync(path.join(consumerDir, '.npmrc'), npmrcContent, 'utf8');
-          }
 
       - name: Install dependencies
         working-directory: ${{ inputs.working-directory }}

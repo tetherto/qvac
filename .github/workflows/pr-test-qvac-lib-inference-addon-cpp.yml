@@ -71,7 +71,6 @@ jobs:
         with:
           repository: ${{ github.event.pull_request.head.repo.full_name }}
           ref: ${{ github.event.pull_request.head.ref }}
-          token: ${{ secrets.PAT_TOKEN }}
 
       - name: yamlfmt
         uses: tetherto/oss-actions/.github/actions/yamlfmt@v1.1.0
@@ -123,11 +122,6 @@ jobs:
       - if: ${{ matrix.os == 'windows-2022' }}
         name: Longpaths on windows
         run: git config --system core.longpaths true
-
-      - name: Configure git
-        run: |
-          git config --global --add url."https://${{ secrets.PAT_TOKEN }}:x-oauth-basic@github.com/".insteadOf "https://github.com/"
-          git config --global --add url."https://${{ secrets.PAT_TOKEN }}:x-oauth-basic@github.com/".insteadOf "git@github.com:"
 
       - if: ${{ matrix.os == 'macos-14' }}
         name: Install vcpkg in macos

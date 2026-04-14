@@ -86,7 +86,6 @@ jobs:
         with:
           repository: ${{ inputs.repository || github.repository }}
           ref: ${{ inputs.ref || github.ref }}
-          token: ${{ secrets.PAT_TOKEN }}
           path: addon
           fetch-depth: 0
 
@@ -95,7 +94,6 @@ jobs:
         with:
           repository: tetherto/qvac-test-addon-mobile
           ref: ${{ env.TEST_FRAMEWORK_REF }}
-          token: ${{ secrets.PAT_TOKEN }}
           path: test-framework
           fetch-depth: 0
 
@@ -103,40 +101,6 @@ jobs:
         uses: actions/setup-node@53b83947a5a98c8d113130e565377fae1a50d02f # 6.3.0
         with:
           node-version: ${{ env.NODE_VERSION }}
-
-      - name: Configure scoped registry for @qvac and @tetherto packages
-        env:
-          GPR_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-          NPM_TOKEN: ${{ secrets.NPM_TOKEN }}
-          GIT_PAT: ${{ secrets.PAT_TOKEN }}
-        run: |
-          echo "Configuring scoped registry for @tetherto and @qvac packages..."
-
-          # Configure addon registry
-          cd addon/${{ inputs.workdir || env.PKG_DIR }}
-          cat > .npmrc <<NPMRC
-          always-auth=true
-          registry=https://registry.npmjs.org/
-          @qvac:registry=https://registry.npmjs.org/
-          @tetherto:registry=https://npm.pkg.github.com/
-          //registry.npmjs.org/:_authToken=${NPM_TOKEN}
-          //npm.pkg.github.com/:_authToken=${GPR_TOKEN}
-          NPMRC
-
-          # Configure test-framework registry (always npmjs for public @qvac deps)
-          cd $GITHUB_WORKSPACE/test-framework
-          cat > .npmrc <<NPMRC
-          registry=https://registry.npmjs.org/
-          @qvac:registry=https://registry.npmjs.org/
-          @tetherto:registry=https://npm.pkg.github.com/
-          //registry.npmjs.org/:_authToken=${NPM_TOKEN}
-          //npm.pkg.github.com/:_authToken=${GPR_TOKEN}
-          NPMRC
-
-          # Configure git for private repos
-          git config --global url."https://${GIT_PAT}:x-oauth-basic@github.com/".insteadOf "https://github.com/"
-          git config --global url."https://${GIT_PAT}:x-oauth-basic@github.com/".insteadOf "git@github.com:"
-          git config --global url."https://${GIT_PAT}:x-oauth-basic@github.com/".insteadOf "ssh://git@github.com/"
 
       - name: Install global dependencies
         run: |
@@ -1359,7 +1323,6 @@ jobs:
         if: always() && github.event.pull_request.number
         uses: actions/github-script@ed597411d8f924073f98dfc5c65a23a2325f34cd # 8.0.0
         with:
-          github-token: ${{ secrets.GITHUB_TOKEN }}
           script: |
             const runArn = '${{ steps.schedule_run.outputs.run_arn }}' || 'N/A';
             const jobStatus = '${{ job.status }}';

@@ -84,7 +84,6 @@ jobs:
     if: needs.authorize.outputs.allowed == 'true'
     needs: authorize
     runs-on: ubuntu-latest
-    environment: release
     steps:
       - name: Checkout code
         uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # 6.0.2
@@ -93,15 +92,6 @@ jobs:
         uses: actions/setup-node@53b83947a5a98c8d113130e565377fae1a50d02f # 6.3.0
         with:
           node-version: 20
-
-      - name: Configure npm auth
-        working-directory: packages/lib-infer-diffusion
-        run: |
-          cat > .npmrc <<NPMRC
-          registry=https://registry.npmjs.org/
-          @qvac:registry=https://registry.npmjs.org/
-          //registry.npmjs.org/:_authToken=${{ secrets.NPM_TOKEN }}
-          NPMRC
 
       - name: Install dependencies
         working-directory: packages/lib-infer-diffusion
