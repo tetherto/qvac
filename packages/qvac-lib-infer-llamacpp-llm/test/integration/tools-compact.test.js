@@ -146,6 +146,23 @@ async function runAndCollect (model, prompt, runOptions) {
   }
 }
 
+async function runExpectingInvalidPrompt (t, model, prompt, expectedReason) {
+  try {
+    await runAndCollect(model, prompt)
+    t.fail(`${expectedReason}: expected prompt validation error`)
+  } catch (err) {
+    const message = String(err && err.message ? err.message : err)
+    t.ok(
+      /InvalidArgument/.test(message),
+      `${expectedReason}: got InvalidArgument`
+    )
+    t.ok(
+      message.includes(expectedReason),
+      `error includes exact reason: ${expectedReason}`
+    )
+  }
+}
+
 test('[tools-compact] multi-turn session with wrong tools provided', { timeout: 600_000 }, async t => {
   const { model, dirPath } = await setupModel(t)
   const sessionName = path.join(dirPath, 'tools-compact-changing.bin')
@@ -284,4 +301,49 @@ test('[tools-compact] single-shot with tools works without session', { timeout: 
   t.is(r.stats.CacheTokens, 0, 'no cache tokens without session')
   t.ok(r.stats.promptTokens > 0, 'prompt tokens tracked')
   t.ok(r.stats.generatedTokens > 0, 'generated tokens tracked')
+})
+
+test('[tools-compact] rejects invalid prompt shapes', { timeout: 600_000 }, async t => {
+  const { model } = await setupModel(t)
+
+  await runExpectingInvalidPrompt(
+    t,
+    model,
+    [
+      { role: 'user', content: 'Hello without tools' }
+    ],
+    'tools_compact requires non-empty tools attached to the last user message'
+  )
+
+  await runExpectingInvalidPrompt(
+    t,
+    model,
+    [
+      TOOL_A
+    ],
+    'tools_compact requires a user message before tools'
+  )
+
+  await runExpectingInvalidPrompt(
+    t,
+    model,
+    [
+      { role: 'user', content: 'Weather?' },
+      { role: 'assistant', content: 'Let me check.' },
+      TOOL_A
+    ],
+    'tools_compact requires tools to be a contiguous block immediately after the last user message'
+  )
+
+  await runExpectingInvalidPrompt(
+    t,
+    model,
+    [
+      { role: 'user', content: 'Weather?' },
+      TOOL_A,
+      { role: 'assistant', content: 'Need one more tool.' },
+      TOOL_B
+    ],
+    'tools_compact requires tools to be a contiguous block immediately after the last user message'
+  )
 })

@@ -978,15 +978,28 @@ LlamaModel::formatPrompt(const std::string& input) {
 
   if (err.empty() && chatJson.is<picojson::array>()) {
     auto& obj = chatJson.get<picojson::array>();
+    const bool toolsCompactEnabled =
+        state_->llmContext_->dynamicToolsState().toolsCompact();
+    int64_t lastUserIndex = -1;
+    int64_t firstToolIndex = -1;
+    bool hasSplitToolBlock = false;
+    bool hasNonToolAfterFirstTool = false;
 
     int addMediaPlaceholder = 0;
     bool isNextUser = false;
-    for (const auto& subObj : obj) {
+    for (size_t i = 0; i < obj.size(); ++i) {
+      const auto& subObj = obj[i];
       if (subObj.is<picojson::object>()) {
         picojson::object jsonObj = subObj.get<picojson::object>();
 
         if (jsonObj.find("type") != jsonObj.end() &&
             jsonObj["type"].get<std::string>() == "function") {
+          if (firstToolIndex < 0) {
+            firstToolIndex = static_cast<int64_t>(i);
+          }
+          if (hasNonToolAfterFirstTool) {
+            hasSplitToolBlock = true;
+          }
           common_chat_tool tool;
           tool.name = jsonObj["name"].get<std::string>();
           if (jsonObj.find("description") != jsonObj.end()) {
@@ -1006,6 +1019,9 @@ LlamaModel::formatPrompt(const std::string& input) {
               ADDON_ID, toString(NoRoleProvided), errorMsg);
         }
         newMsg.role = jsonObj["role"].get<std::string>();
+        if (newMsg.role == "user") {
+          lastUserIndex = static_cast<int64_t>(i);
+        }
 
         if (jsonObj.find("content") == jsonObj.end()) {
           const char* errorMsg = "content is required in the input\n";
@@ -1047,6 +1063,44 @@ LlamaModel::formatPrompt(const std::string& input) {
         }
         newMsg.content = content;
         chatMsgs.push_back(newMsg);
+        if (firstToolIndex >= 0) {
+          hasNonToolAfterFirstTool = true;
+        }
+      }
+    }
+
+    if (toolsCompactEnabled) {
+      if (tools.empty()) {
+        std::string errorMsg = string_format(
+            "%s: tools_compact requires non-empty tools attached to the last "
+            "user message\n",
+            __func__);
+        throw qvac_errors::StatusError(
+            ADDON_ID,
+            qvac_errors::general_error::toString(
+                qvac_errors::general_error::InvalidArgument),
+            errorMsg);
+      }
+      if (lastUserIndex < 0) {
+        std::string errorMsg = string_format(
+            "%s: tools_compact requires a user message before tools\n",
+            __func__);
+        throw qvac_errors::StatusError(
+            ADDON_ID,
+            qvac_errors::general_error::toString(
+                qvac_errors::general_error::InvalidArgument),
+            errorMsg);
+      }
+      if (hasSplitToolBlock || firstToolIndex != (lastUserIndex + 1)) {
+        std::string errorMsg = string_format(
+            "%s: tools_compact requires tools to be a contiguous block "
+            "immediately after the last user message\n",
+            __func__);
+        throw qvac_errors::StatusError(
+            ADDON_ID,
+            qvac_errors::general_error::toString(
+                qvac_errors::general_error::InvalidArgument),
+            errorMsg);
       }
     }
 

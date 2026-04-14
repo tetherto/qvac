@@ -13,6 +13,72 @@ const config = {
 }
 ```
 
+## Prompt Contract (Strict)
+
+When `tools_compact` is enabled, each prompt must follow a strict shape. The model now rejects invalid shapes with `InvalidArgument`.
+
+Required:
+
+1. `tools` must be non-empty in the current prompt.
+2. At least one `user` message must exist.
+3. All tool definitions (`{ "type": "function", ... }`) must form a single contiguous block.
+4. That block must be attached immediately after the **last** `user` message.
+
+This means tool definitions are not allowed:
+- before any `user` message
+- after `assistant` / `tool` / other messages
+- split into multiple blocks
+
+### Valid Shape
+
+```json
+[
+  { "role": "system", "content": "You are a helpful assistant." },
+  { "role": "assistant", "content": "Earlier context..." },
+  { "role": "user", "content": "What is weather in Tokyo?" },
+  { "type": "function", "name": "getWeather", "parameters": { "type": "object" } }
+]
+```
+
+### Invalid Shapes
+
+No tools:
+
+```json
+[
+  { "role": "user", "content": "Hello" }
+]
+```
+
+Tools without user:
+
+```json
+[
+  { "type": "function", "name": "getWeather", "parameters": { "type": "object" } }
+]
+```
+
+Detached tools (not immediately after last user):
+
+```json
+[
+  { "role": "user", "content": "Weather?" },
+  { "role": "assistant", "content": "Let me check." },
+  { "type": "function", "name": "getWeather", "parameters": { "type": "object" } }
+]
+```
+
+Split tool block:
+
+```json
+[
+  { "role": "user", "content": "Weather?" },
+  { "type": "function", "name": "getWeather", "parameters": { "type": "object" } },
+  { "role": "assistant", "content": "Need one more tool." },
+  { "type": "function", "name": "lookupCity", "parameters": { "type": "object" } }
+]
+```
+
 ## Model Support
 
 Currently `tools_compact` is only supported for **Qwen3** models. If enabled on a non-Qwen3 model, the flag is silently ignored and a warning is logged.

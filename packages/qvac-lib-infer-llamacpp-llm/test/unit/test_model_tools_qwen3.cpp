@@ -144,6 +144,64 @@ TEST_F(ModelToolsQwen3Test, CacheEnabledWithToolMessage) {
   }
 }
 
+TEST_F(ModelToolsQwen3Test, ToolsCompactRejectsPromptWithoutTools) {
+  if (!isQwen3ModelPath(test_model_path)) {
+    GTEST_SKIP() << "Test requires Qwen3 model for tools_compact feature";
+  }
+
+  auto model = createModel();
+  if (!model) {
+    FAIL() << "Model failed to load";
+  }
+
+  const std::string input =
+      R"([{"role": "user", "content": "Hello without tools"}])";
+  EXPECT_THROW({ (void)processPrompt(model, input); }, qvac_errors::StatusError);
+}
+
+TEST_F(ModelToolsQwen3Test, ToolsCompactRejectsToolsWithoutUserMessage) {
+  if (!isQwen3ModelPath(test_model_path)) {
+    GTEST_SKIP() << "Test requires Qwen3 model for tools_compact feature";
+  }
+
+  auto model = createModel();
+  if (!model) {
+    FAIL() << "Model failed to load";
+  }
+
+  const std::string input =
+      R"([{"type":"function","name":"getWeather","parameters":{"type":"object"}}])";
+  EXPECT_THROW({ (void)processPrompt(model, input); }, qvac_errors::StatusError);
+}
+
+TEST_F(ModelToolsQwen3Test, ToolsCompactRejectsSplitOrDetachedToolBlocks) {
+  if (!isQwen3ModelPath(test_model_path)) {
+    GTEST_SKIP() << "Test requires Qwen3 model for tools_compact feature";
+  }
+
+  auto model = createModel();
+  if (!model) {
+    FAIL() << "Model failed to load";
+  }
+
+  const std::string detachedInput = R"([
+    {"role":"user","content":"What is weather?"},
+    {"role":"assistant","content":"Let me check."},
+    {"type":"function","name":"getWeather","parameters":{"type":"object"}}
+  ])";
+  EXPECT_THROW(
+      { (void)processPrompt(model, detachedInput); }, qvac_errors::StatusError);
+
+  const std::string splitInput = R"([
+    {"role":"user","content":"What is weather?"},
+    {"type":"function","name":"getWeather","parameters":{"type":"object"}},
+    {"role":"assistant","content":"I may need another tool."},
+    {"type":"function","name":"lookupCity","parameters":{"type":"object"}}
+  ])";
+  EXPECT_THROW(
+      { (void)processPrompt(model, splitInput); }, qvac_errors::StatusError);
+}
+
 TEST_F(ModelToolsQwen3Test, CacheEnabledWithToolMessageToolsCompactFalse) {
   if (!isQwen3ModelPath(test_model_path)) {
     GTEST_SKIP() << "Test model not found";
