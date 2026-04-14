@@ -1,9 +1,10 @@
 'use strict'
 
 const path = require('bare-path')
-const ONNXTTS = require('../')
-const { createWav } = require('./wav-helper')
+const ONNXTTS = require('..')
 const { setLogger, releaseLogger } = require('../addonLogging')
+const { canPlayPcmChunks, playInt16ChunkSync } = require('./pcm-chunk-player')
+const { ensureSupertonicModels } = require('../test/utils/downloadModel')
 
 const SUPERTONIC_SAMPLE_RATE = 44100
 
@@ -13,9 +14,12 @@ const modelDir = path.join(__dirname, '..', 'models', 'supertonic')
 /**
  * Same usage shape as Whisper `runStreaming()` (see examples/example.streaming-vad.js):
  * await `runStream`, attach `response.onUpdate`, then `await response.await()`.
+ * Each audio chunk is played as it arrives (see pcm-chunk-player). For a WAV file example, use supertonic-tts.js.
  */
 
 async function main () {
+  await ensureSupertonicModels()
+
   setLogger((priority, message) => {
     const priorityNames = {
       0: 'ERROR',
@@ -50,6 +54,15 @@ async function main () {
     await model.load()
     console.log('Model loaded.')
 
+    const canPlay = canPlayPcmChunks()
+    if (canPlay) {
+      console.log('Streaming playback: each chunk will play as soon as it is synthesized.')
+    } else {
+      console.warn(
+        'No supported player found (need macOS afplay, ffplay from ffmpeg, or Linux aplay). Chunks will be logged only.'
+      )
+    }
+
     const textToSynthesize = `The rolling hills of the willowed valley glimmered brilliantly under the mellowing autumn sun.
      The sun was setting in the west, casting a golden glow over the landscape.
      The sky was a canvas of hues, from deep reds to warm oranges and golden yellows.
@@ -64,13 +77,11 @@ async function main () {
 
     const response = await model.runStream(textToSynthesize)
 
-    let buffer = []
     let chunkCount = 0
 
     response.onUpdate(data => {
       if (data && data.outputArray) {
         const samples = Array.from(data.outputArray)
-        buffer = buffer.concat(samples)
         chunkCount += 1
 
         const idx = data.chunkIndex
@@ -85,6 +96,10 @@ async function main () {
         } else {
           console.log(`Audio update: ${samples.length} samples (no chunk metadata)`)
         }
+
+        if (canPlay) {
+          playInt16ChunkSync(samples, SUPERTONIC_SAMPLE_RATE)
+        }
       }
     })
 
@@ -94,11 +109,6 @@ async function main () {
     if (response.stats) {
       console.log(`Inference stats: ${JSON.stringify(response.stats)}`)
     }
-
-    const outPath = 'supertonic-streaming-output.wav'
-    console.log(`Writing concatenated PCM to ${outPath}...`)
-    createWav(buffer, SUPERTONIC_SAMPLE_RATE, outPath)
-    console.log(`Done. Wrote ${buffer.length} samples at ${SUPERTONIC_SAMPLE_RATE} Hz.`)
   } catch (err) {
     console.error('Error during TTS processing:', err)
   } finally {
