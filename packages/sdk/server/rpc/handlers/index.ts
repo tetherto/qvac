@@ -23,6 +23,8 @@ import {
   handleModelRegistrySearch,
   handleModelRegistryGetModel,
 } from "./registry";
+import { handleSuspend } from "./suspend";
+import { handleResume } from "./resume";
 
 export const handlers = {
   heartbeat: handleHeartbeat,
@@ -49,4 +51,6 @@ export const handlers = {
   modelRegistryList: handleModelRegistryList,
   modelRegistrySearch: handleModelRegistrySearch,
   modelRegistryGetModel: handleModelRegistryGetModel,
+  suspend: handleSuspend,
+  resume: handleResume,
 };
