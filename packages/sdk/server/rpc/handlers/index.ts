@@ -14,6 +14,7 @@ import { cancelHandler } from "./cancelHandler";
 import { handleDeleteCache } from "./delete-cache";
 import { handleTextToSpeech } from "./text-to-speech";
 import { handleGetModelInfo } from "./get-model-info";
+import { handleFinetune } from "./finetune";
 import { handleOCRStream } from "./ocr-stream";
 import { handleHeartbeat } from "./heartbeat";
 import { handleDiffusionStream } from "./diffusion-stream";
@@ -42,6 +43,7 @@ export const handlers = {
   cancel: cancelHandler,
   textToSpeech: handleTextToSpeech,
   getModelInfo: handleGetModelInfo,
+  finetune: handleFinetune,
   ocrStream: handleOCRStream,
   diffusionStream: handleDiffusionStream,
   pluginInvoke: handlePluginInvoke,

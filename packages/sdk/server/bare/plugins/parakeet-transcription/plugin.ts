@@ -1,7 +1,7 @@
 import parakeetAddonLogging from "@qvac/transcription-parakeet/addonLogging";
 import TranscriptionParakeet, {
   type ParakeetConfig,
-  type TranscriptionParakeetArgs,
+  type TranscriptionParakeetFiles,
   type TranscriptionParakeetConfig,
 } from "@qvac/transcription-parakeet";
 import {
@@ -38,15 +38,18 @@ type ParakeetModelConfig = {
   timestampsEnabled?: boolean;
   // TDT
   parakeetEncoderSrc?: ModelSrcInput;
+  parakeetEncoderDataSrc?: ModelSrcInput;
   parakeetDecoderSrc?: ModelSrcInput;
   parakeetVocabSrc?: ModelSrcInput;
   parakeetPreprocessorSrc?: ModelSrcInput;
   // CTC
   parakeetCtcModelSrc?: ModelSrcInput;
+  parakeetCtcModelDataSrc?: ModelSrcInput;
   parakeetTokenizerSrc?: ModelSrcInput;
   // Sortformer
   parakeetSortformerSrc?: ModelSrcInput;
 };
+
 
 async function resolveTdtConfig(
   cfg: ParakeetModelConfig,
@@ -54,6 +57,7 @@ async function resolveTdtConfig(
 ): Promise<ResolveResult<ParakeetModelConfig>> {
   const {
     parakeetEncoderSrc,
+    parakeetEncoderDataSrc,
     parakeetDecoderSrc,
     parakeetVocabSrc,
     parakeetPreprocessorSrc,
@@ -73,11 +77,13 @@ async function resolveTdtConfig(
   const resolve = ctx.resolveModelPath;
   const [
     encoderPath,
+    encoderDataPath,
     decoderPath,
     vocabPath,
     preprocessorPath,
   ] = await Promise.all([
     resolve(parakeetEncoderSrc),
+    parakeetEncoderDataSrc ? resolve(parakeetEncoderDataSrc) : undefined,
     resolve(parakeetDecoderSrc),
     resolve(parakeetVocabSrc),
     resolve(parakeetPreprocessorSrc),
@@ -86,10 +92,11 @@ async function resolveTdtConfig(
   return {
     config: cfg,
     artifacts: {
-      encoderPath,
-      ...(decoderPath !== undefined && { decoderPath }),
-      ...(vocabPath !== undefined && { vocabPath }),
-      ...(preprocessorPath !== undefined && { preprocessorPath }),
+      encoder: encoderPath,
+      ...(encoderDataPath !== undefined && { encoderData: encoderDataPath }),
+      ...(decoderPath !== undefined && { decoder: decoderPath }),
+      ...(vocabPath !== undefined && { vocab: vocabPath }),
+      ...(preprocessorPath !== undefined && { preprocessor: preprocessorPath }),
     },
   };
 }
@@ -98,7 +105,8 @@ async function resolveCtcConfig(
   cfg: ParakeetModelConfig,
   ctx: ResolveContext,
 ): Promise<ResolveResult<ParakeetModelConfig>> {
-  const { parakeetCtcModelSrc, parakeetTokenizerSrc } = cfg;
+  const { parakeetCtcModelSrc, parakeetCtcModelDataSrc, parakeetTokenizerSrc } =
+    cfg;
 
   if (!parakeetCtcModelSrc || !parakeetTokenizerSrc) {
     throw new ParakeetArtifactsRequiredError(
@@ -107,16 +115,18 @@ async function resolveCtcConfig(
   }
 
   const resolve = ctx.resolveModelPath;
-  const [ctcModelPath, tokenizerPath] = await Promise.all([
+  const [ctcModelPath, ctcModelDataPath, tokenizerPath] = await Promise.all([
     resolve(parakeetCtcModelSrc),
+    parakeetCtcModelDataSrc ? resolve(parakeetCtcModelDataSrc) : undefined,
     resolve(parakeetTokenizerSrc),
   ]);
 
   return {
     config: cfg,
     artifacts: {
-      ctcModelPath,
-      ...(tokenizerPath !== undefined && { tokenizerPath }),
+      model: ctcModelPath,
+      ...(ctcModelDataPath !== undefined && { modelData: ctcModelDataPath }),
+      ...(tokenizerPath !== undefined && { tokenizer: tokenizerPath }),
     },
   };
 }
@@ -139,19 +149,19 @@ async function resolveSortformerConfig(
   return {
     config: cfg,
     artifacts: {
-      ...(sortformerPath !== undefined && { sortformerPath }),
+      ...(sortformerPath !== undefined && { sortformer: sortformerPath }),
     },
   };
 }
 
 function createParakeetModel(
   params: CreateModelParams,
-  addonPathKey: string,
+  primaryFileKey: keyof TranscriptionParakeetFiles,
 ): PluginModelResult {
   const config = (params.modelConfig ?? {}) as ParakeetModelConfig;
-  const artifacts = params.artifacts ?? {};
+  const artifacts = { ...(params.artifacts ?? {}) };
   const modelType = config.modelType ?? "tdt";
-  const primaryPath = artifacts[addonPathKey] ?? params.modelPath;
+  const primaryPath = artifacts[primaryFileKey] ?? params.modelPath;
 
   if (!primaryPath) {
     throw new ModelLoadFailedError(
@@ -164,10 +174,13 @@ function createParakeetModel(
   const logger = createStreamLogger(params.modelId, ModelType.parakeetTranscription);
   registerAddonLogger(params.modelId, ModelType.parakeetTranscription, logger);
 
-  const addonConfig: TranscriptionParakeetConfig = {
-    path: dirPath,
-    [addonPathKey]: primaryPath,
+  const files: TranscriptionParakeetFiles = {
+    [primaryFileKey]: primaryPath,
     ...artifacts,
+  };
+
+  const addonConfig: TranscriptionParakeetConfig = {
+    enableStats: true,
     parakeetConfig: {
       modelType,
       maxThreads: config.maxThreads,
@@ -179,16 +192,11 @@ function createParakeetModel(
     } as ParakeetConfig,
   };
 
-  const model = new TranscriptionParakeet(
-    {
-      loader,
-      logger,
-      modelName: parseModelPath(dirPath).basePath,
-      diskPath: dirPath,
-      opts: { stats: true },
-    } as TranscriptionParakeetArgs,
-    addonConfig,
-  );
+  const model = new TranscriptionParakeet({
+    files,
+    config: addonConfig,
+    logger,
+  });
 
   return { model, loader };
 }
@@ -215,10 +223,10 @@ export const parakeetPlugin = definePlugin({
     const modelType =
       ((params.modelConfig ?? {}) as ParakeetModelConfig).modelType ?? "tdt";
 
-    if (modelType === "ctc") return createParakeetModel(params, "ctcModelPath");
+    if (modelType === "ctc") return createParakeetModel(params, "model");
     if (modelType === "sortformer")
-      return createParakeetModel(params, "sortformerPath");
-    return createParakeetModel(params, "encoderPath");
+      return createParakeetModel(params, "sortformer");
+    return createParakeetModel(params, "encoder");
   },
 
   handlers: {
