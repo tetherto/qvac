@@ -117,18 +117,35 @@ function wer (hypothesis, reference) {
 }
 
 /**
+ * Check whether every word in `phrase` appears somewhere in the
+ * pre-tokenised word set.  Handles multi-word keywords that may be
+ * split across OCR text regions in arbitrary reading order.
+ */
+function _phraseWordsPresent (phrase, wordSet) {
+  const words = phrase.toLowerCase().split(/\s+/).filter(Boolean)
+  return words.every(w => wordSet.has(w))
+}
+
+/**
  * Keyword Detection Rate — what fraction of expected keywords appear
  * anywhere in the OCR output.
+ *
+ * Single-word keywords use a fast Set lookup.
+ * Multi-word keywords first try an exact substring match; if that
+ * fails they check whether every constituent word exists anywhere
+ * in the output (order-independent).
+ *
  * Returns { rate, found, missing, total }.
  */
 function keywordDetectionRate (ocrTexts, expectedKeywords) {
   const joined = (Array.isArray(ocrTexts) ? ocrTexts.join(' ') : String(ocrTexts)).toLowerCase()
+  const wordSet = new Set(joined.split(/\s+/).filter(Boolean))
   const found = []
   const missing = []
 
   for (const kw of expectedKeywords) {
     const target = kw.toLowerCase()
-    if (joined.includes(target)) {
+    if (joined.includes(target) || _phraseWordsPresent(target, wordSet)) {
       found.push(kw)
     } else {
       missing.push(kw)
@@ -145,20 +162,24 @@ function keywordDetectionRate (ocrTexts, expectedKeywords) {
 
 /**
  * Key-Value Extraction Accuracy — for structured documents, checks if the
- * OCR output contains both the key and its expected value in close proximity.
+ * OCR output contains both the key and its expected value.
  *
  * Each entry in `expectedPairs` should be { key, value }.
- * The key and value must both appear in the OCR output.
+ * Multi-word keys use word-level matching (all words present anywhere)
+ * so reading-order differences don't cause false negatives.
+ * Values are checked as exact substrings.
  *
  * Returns { rate, matched, unmatched, total }.
  */
 function keyValueAccuracy (ocrTexts, expectedPairs) {
   const joined = (Array.isArray(ocrTexts) ? ocrTexts.join(' ') : String(ocrTexts)).toLowerCase()
+  const wordSet = new Set(joined.split(/\s+/).filter(Boolean))
   const matched = []
   const unmatched = []
 
   for (const pair of expectedPairs) {
-    const keyFound = joined.includes(pair.key.toLowerCase())
+    const keyLower = pair.key.toLowerCase()
+    const keyFound = joined.includes(keyLower) || _phraseWordsPresent(keyLower, wordSet)
     const valueFound = joined.includes(String(pair.value).toLowerCase())
 
     if (keyFound && valueFound) {

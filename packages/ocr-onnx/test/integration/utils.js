@@ -136,10 +136,22 @@ try {
 
     if (gt.required_keywords && gt.required_keywords.length > 0) {
       var lower = joined.toLowerCase()
+      var wordSet = {}
+      var _words = lower.split(/\s+/)
+      for (var wi = 0; wi < _words.length; wi++) { if (_words[wi]) wordSet[_words[wi]] = true }
       var found = []
       var missing = []
       for (var ki = 0; ki < gt.required_keywords.length; ki++) {
-        if (lower.includes(gt.required_keywords[ki].toLowerCase())) found.push(gt.required_keywords[ki])
+        var kwTarget = gt.required_keywords[ki].toLowerCase()
+        var kwMatch = lower.includes(kwTarget)
+        if (!kwMatch) {
+          var kwParts = kwTarget.split(/\s+/)
+          kwMatch = true
+          for (var kp = 0; kp < kwParts.length; kp++) {
+            if (kwParts[kp] && !wordSet[kwParts[kp]]) { kwMatch = false; break }
+          }
+        }
+        if (kwMatch) found.push(gt.required_keywords[ki])
         else missing.push(gt.required_keywords[ki])
       }
       result.keyword_detection_rate = _round4(found.length / gt.required_keywords.length)
@@ -150,11 +162,22 @@ try {
 
     if (gt.key_values && gt.key_values.length > 0) {
       var lowerKV = joined.toLowerCase()
+      var kvWordSet = {}
+      var _kvWords = lowerKV.split(/\s+/)
+      for (var wj = 0; wj < _kvWords.length; wj++) { if (_kvWords[wj]) kvWordSet[_kvWords[wj]] = true }
       var matched = []
       var unmatched = []
       for (var vi = 0; vi < gt.key_values.length; vi++) {
         var pair = gt.key_values[vi]
-        var keyFound = lowerKV.includes(pair.key.toLowerCase())
+        var kvKeyLower = pair.key.toLowerCase()
+        var keyFound = lowerKV.includes(kvKeyLower)
+        if (!keyFound) {
+          var keyParts = kvKeyLower.split(/\s+/)
+          keyFound = true
+          for (var kpi = 0; kpi < keyParts.length; kpi++) {
+            if (keyParts[kpi] && !kvWordSet[keyParts[kpi]]) { keyFound = false; break }
+          }
+        }
         var valueFound = lowerKV.includes(String(pair.value).toLowerCase())
         if (keyFound && valueFound) matched.push(pair)
         else unmatched.push({ key: pair.key, value: pair.value, key_found: keyFound, value_found: valueFound })
