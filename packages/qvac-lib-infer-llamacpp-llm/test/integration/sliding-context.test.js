@@ -112,9 +112,9 @@ async function runAndCollect (model, prompt, runOptions) {
   return { text: chunks.join(''), stats: response.stats }
 }
 
-function buildPrompt (sessionPath, messages) {
-  if (!sessionPath) return messages
-  return [{ role: 'session', content: sessionPath }, ...messages]
+function cacheOpts (sessionPath) {
+  if (!sessionPath) return undefined
+  return { cacheKey: sessionPath }
 }
 
 function expectedSlides (nPredict, nDiscarded) {
@@ -257,8 +257,10 @@ test('Cached follow-up discards middle tokens to fit new message', {
     n_discarded: '64'
   })
 
+  const opts = cacheOpts(cachePath)
+
   // First run: accumulate n_past with cache
-  const first = await runAndCollect(model, buildPrompt(cachePath, STORY_PROMPT))
+  const first = await runAndCollect(model, STORY_PROMPT, opts)
   t.is(first.stats.promptTokens, PROMPT_TOKENS, 'first run: prompt tokens match')
   t.ok(first.stats.generatedTokens > 0, 'first run: generated output')
   t.is(first.stats.contextSlides, 0, 'first run: no slides (n_past 244 < n_ctx 256)')
@@ -267,8 +269,8 @@ test('Cached follow-up discards middle tokens to fit new message', {
   // After prefill discard: n_past ~200, generate 10 → ~210 < 256 (no generation sliding)
   const second = await runAndCollect(
     model,
-    buildPrompt(cachePath, [FOLLOW_UP_MSG]),
-    { generationParams: { predict: 10 } }
+    [FOLLOW_UP_MSG],
+    { ...opts, generationParams: { predict: 10 } }
   )
   t.ok(second.stats.generatedTokens > 0, 'second run: generated output after prefill discard')
   t.is(second.stats.contextSlides, 1, 'exactly one prefill discard slide')
@@ -296,8 +298,10 @@ test('Cached follow-up clears all middle tokens when discard window is exhausted
     n_discarded: '250'
   })
 
+  const opts = cacheOpts(cachePath)
+
   // First run: accumulate n_past with cache
-  const first = await runAndCollect(model, buildPrompt(cachePath, STORY_PROMPT))
+  const first = await runAndCollect(model, STORY_PROMPT, opts)
   t.is(first.stats.promptTokens, PROMPT_TOKENS, 'first run: prompt tokens match')
   t.ok(first.stats.generatedTokens > 0, 'first run: generated output')
   t.is(first.stats.contextSlides, 0, 'first run: no slides (n_past 244 < n_ctx 256)')
@@ -306,8 +310,8 @@ test('Cached follow-up clears all middle tokens when discard window is exhausted
   // After discard: n_past = 44 (firstMsgTokens), generate 10 → 54 < 256
   const second = await runAndCollect(
     model,
-    buildPrompt(cachePath, [FOLLOW_UP_MSG]),
-    { generationParams: { predict: 10 } }
+    [FOLLOW_UP_MSG],
+    { ...opts, generationParams: { predict: 10 } }
   )
   t.ok(second.stats.generatedTokens > 0, 'second run: generated output after full middle token discard')
   t.is(second.stats.contextSlides, 1, 'exactly one full middle token discard slide')
@@ -335,15 +339,17 @@ test('Cached follow-up overflows when sliding is disabled and context is full', 
     n_discarded: '0'
   })
 
+  const opts = cacheOpts(cachePath)
+
   // First run: accumulate n_past with cache (no overflow since 244 < 256)
-  const first = await runAndCollect(model, buildPrompt(cachePath, STORY_PROMPT))
+  const first = await runAndCollect(model, STORY_PROMPT, opts)
   t.is(first.stats.promptTokens, PROMPT_TOKENS, 'first run: prompt tokens match')
   t.ok(first.stats.generatedTokens > 0, 'first run: generated output')
   t.is(first.stats.contextSlides, 0, 'first run: no slides when n_discarded=0')
 
   // Second run: follow-up triggers context overflow (no discard possible)
   try {
-    await runAndCollect(model, buildPrompt(cachePath, [FOLLOW_UP_MSG]))
+    await runAndCollect(model, [FOLLOW_UP_MSG], opts)
     t.fail('expected context overflow error but follow-up completed without error')
   } catch (err) {
     const msg = err?.message || String(err)

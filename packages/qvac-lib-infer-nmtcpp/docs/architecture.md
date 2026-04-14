@@ -42,7 +42,7 @@ Offline neural machine translation for QVAC-powered applications (mobile and des
 
 **Core value:**
 - High-level JavaScript API for NMT inference
-- Peer-to-peer model distribution via Hyperdrive
+- Model distribution via registry or local files
 - Multi-backend architecture (OPUS/Marian, IndicTrans2, Bergamot)
 - Batch translation support
 - Pluggable model weight loaders
@@ -55,7 +55,7 @@ Offline neural machine translation for QVAC-powered applications (mobile and des
 - **Beam search decoding** with configurable beam size, length penalty, and repetition control
 - **SentencePiece tokenization** for subword segmentation
 - **Batch translation** (Bergamot backend) for high-throughput scenarios
-- **P2P model distribution** via Hyperdrive
+- **Model distribution** via registry or local files
 - **Queue-based inference** with pause/cancel/resume support
 
 ## Target Platforms
@@ -98,7 +98,7 @@ graph TB
 
     subgraph "core libs"
         BASE["@qvac/infer-base"]
-        DL["@qvac/dl-hyperdrive"]
+        DL["@qvac/registry-client"]
     end
 
     subgraph "Native Framework"
@@ -130,7 +130,7 @@ graph TB
 | Package | Type | Version | Purpose |
 |---------|------|---------|---------|
 | @qvac/infer-base | Framework | ^0.2.0 | Base classes, WeightsProvider, QvacResponse |
-| @qvac/dl-hyperdrive | Framework | ^0.1.0 | P2P model distribution |
+| @qvac/registry-client | Framework | ^0.1.0 | Model distribution |
 | qvac-lib-inference-addon-cpp | Native | ≥0.12.2 | C++ addon framework (threading, job queue, JS interop) |
 | ggml | Native | (vcpkg) | Tensor computation and GPU backends |
 | sentencepiece | Native | (vcpkg) | Subword tokenization |
@@ -429,7 +429,7 @@ graph TB
 **Responsibility:** Abstracts model weight acquisition
 
 **Why JavaScript:**
-- Integrates with data loaders (Hyperdrive, filesystem)
+- Integrates with data loaders (registry, filesystem)
 - Progress tracking and reporting
 - Handles multi-file downloads (model + vocabularies)
 

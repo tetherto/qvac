@@ -1,9 +1,19 @@
+/**
+ * Parakeet Sortformer diarization + TDT transcription example.
+ *
+ * Usage:
+ *   bun examples/transcription/parakeet-sortformer.ts [sortformer-src] [path-to-audio]
+ *
+ * This example requires a test audio file (default: examples/audio/diarization-sample-16k.wav).
+ * Sample audio files are available in the QVAC source repository, but not included in the published npm package.
+ * Pass a custom audio path as the second argument, or download the default audio into examples/audio/:
+ *   https://github.com/tetherto/qvac/blob/main/packages/sdk/examples/audio/diarization-sample-16k.wav
+ */
 import {
   loadModel,
   unloadModel,
   transcribe,
   PARAKEET_TDT_ENCODER_FP32,
-  PARAKEET_TDT_ENCODER_DATA_FP32,
   PARAKEET_TDT_DECODER_FP32,
   PARAKEET_TDT_VOCAB,
   PARAKEET_TDT_PREPROCESSOR_FP32,
@@ -22,10 +32,6 @@ const sortformerSrc = args[0] ?? PARAKEET_SORTFORMER_FP32;
 const defaultAudioPath = join(
   __dirname,
   "..",
-  "..",
-  "..",
-  "examples",
-  "transcription",
   "audio",
   "diarization-sample-16k.wav",
 );
@@ -57,7 +63,6 @@ const tdtModelId = await loadModel({
   modelType: "parakeet",
   modelConfig: {
     parakeetEncoderSrc: PARAKEET_TDT_ENCODER_FP32,
-    parakeetEncoderDataSrc: PARAKEET_TDT_ENCODER_DATA_FP32,
     parakeetDecoderSrc: PARAKEET_TDT_DECODER_FP32,
     parakeetVocabSrc: PARAKEET_TDT_VOCAB,
     parakeetPreprocessorSrc: PARAKEET_TDT_PREPROCESSOR_FP32,

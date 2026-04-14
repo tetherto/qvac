@@ -9,14 +9,16 @@
     "build:static": "npm run prebuild:examples && next build && npx @vahor/next-broken-links",
     "dev": "npm run prebuild:examples && next dev --turbo -p 3001",
     "start": "next start",
-    "serve": "npx http-server dist -p 8080 -c-1",
+    "serve": "npx http-server out -p 8080 -c-1",
     "postinstall": "fumadocs-mdx",
     "docs:generate": "bun run scripts/run-docs-generate.ts",
+    "docs:audit-tsdoc": "bun run scripts/api-docs/audit-tsdoc.ts",
     "docs:generate-api": "bun run scripts/generate-api-docs.ts",
     "docs:gen-api-dev": "bun run scripts/generate-api-docs.ts --dev",
     "docs:update-versions": "bun run scripts/update-versions-list.ts",
     "docs:create-version": "bun run scripts/create-version-bundle.ts",
     "docs:release-version": "bun run scripts/release-version.ts",
+    "docs:generate-release-notes": "bun run scripts/generate-release-notes.ts",
     "test": "vitest run",
     "test:watch": "vitest",
     "test:examples": "bun run scripts/test-code-examples.ts"
@@ -74,6 +76,8 @@
     "typescript": "^5.9.2",
     "unified": "^11.0.2",
     "unist-util-visit": "^5.0.0",
-    "vitest": "^4.0.18"
+    "vitest": "^4.0.18",
+    "nunjucks": "^3.2.4",
+    "@types/nunjucks": "^3.2.6"
   }
 }

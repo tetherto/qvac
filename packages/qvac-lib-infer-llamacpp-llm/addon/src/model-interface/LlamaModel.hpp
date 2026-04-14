@@ -129,6 +129,9 @@ public:
     ProgressCallback progressCallback;
     std::optional<qvac_lib_inference_addon_llama::LlamaFinetuningParams>
         finetuningParams;
+
+    std::string cacheKey;
+    bool saveCacheToDisk = false;
   };
 
   std::any process(const std::any& input) final;
@@ -236,7 +239,7 @@ private:
     bool isCacheLoaded = false;
     bool shouldResetAfterInference = false;
   };
-  ResolvedPrompt resolveChatAndTools(const std::string& input);
+  ResolvedPrompt resolveChatAndTools(const Prompt& prompt);
 
   void commonParamsParse(
       const std::string& modelPath,
@@ -274,6 +277,7 @@ private:
   /// only in reload()
   mutable std::shared_mutex stateMtx_;
   std::shared_ptr<ReloadableState> state_;
+  int64_t runtimeBackendDevice_ = 0;
 
   bool isBitnetModel() const;
   void validateBitnetQuantization();

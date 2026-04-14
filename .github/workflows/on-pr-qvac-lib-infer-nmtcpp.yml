@@ -21,6 +21,7 @@ permissions:
   contents: read
   pull-requests: read
   packages: read
+  id-token: write
 
 env:
   PKG_DIR: packages/qvac-lib-infer-nmtcpp
@@ -56,15 +57,29 @@ jobs:
             pkg:
               - "packages/qvac-lib-infer-nmtcpp/**"
               - ".github/workflows/*nmtcpp*.yml"
+  verify-fabric-lockstep:
+    needs: [authorize, changes]
+    if: always() && needs.authorize.outputs.allowed == 'true' && (needs.changes.outputs.pkg == 'true' || github.event_name == 'workflow_dispatch')
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # 6.0.2
+
+      - name: Verify qvac-fabric versions are lockstep
+        id: lockstep
+        uses: ./.github/actions/verify-qvac-fabric-lockstep
+
+      - name: Report verified version
+        run: 'echo "Verified qvac-fabric version: ${{ steps.lockstep.outputs.version }}"'
 
   sanity-checks:
-    needs: [authorize, changes]
+    needs: [authorize, changes, verify-fabric-lockstep]
     if: always() && ((needs.changes.outputs.pkg == 'true' && needs.authorize.outputs.allowed == 'true') || github.event_name == 'workflow_dispatch')
     runs-on: ubuntu-latest
     environment: release
     steps:
       - name: Run Sanity checks
-        uses: tetherto/qvac-devops/.github/actions/sanity-checks@v1.1.7
+        uses: tetherto/oss-actions/.github/actions/sanity-checks@v1.1.0
         with:
           secret-token: ${{ secrets.GITHUB_TOKEN }}
           npm-token: ${{ secrets.NPM_TOKEN }}
@@ -112,7 +127,7 @@ jobs:
       always() &&
        needs.authorize.outputs.allowed == 'true' &&
       (needs.changes.outputs.pkg == 'true' || github.event_name == 'workflow_dispatch')
-    uses: tetherto/qvac-devops/.github/workflows/cpp-lint.yaml@v1.1.7
+    uses: tetherto/oss-actions/.github/workflows/cpp-lint.yaml@v1.1.0
     secrets: inherit
     with:
       sha: ${{ github.event.pull_request.base.sha || github.event.before || 'HEAD~1' }}
@@ -125,6 +140,7 @@ jobs:
       contents: read
       packages: read
       pull-requests: write
+      id-token: write
     if: |
       always() &&
       needs.authorize.outputs.allowed == 'true' &&
@@ -140,6 +156,7 @@ jobs:
       contents: write
       packages: write
       pull-requests: write
+      id-token: write
     needs: [authorize, changes, sanity-checks]
     if: |
       always() &&
@@ -150,8 +167,6 @@ jobs:
     with:
       repository: ${{ github.event.pull_request.head.repo.full_name }}
       ref: ${{ github.event.pull_request.head.ref }}
-      tag: "dev"
-      publish_target: "gpr"
 
   run-integration-tests:
     needs: [authorize, changes, sanity-checks, prebuild]
@@ -159,6 +174,10 @@ jobs:
       always() &&
       needs.authorize.outputs.allowed == 'true' &&
       (needs.changes.outputs.pkg == 'true' || github.event_name == 'workflow_dispatch')
+    permissions:
+      contents: read
+      packages: read
+      id-token: write
     uses: ./.github/workflows/integration-test-qvac-lib-infer-nmtcpp.yml
     secrets: inherit
     with:
@@ -170,6 +189,7 @@ jobs:
       contents: read
       packages: read
       pull-requests: write # Allow commenting on PRs
+      id-token: write
     needs: [authorize, changes, sanity-checks, prebuild]
     if: |
       always() &&
@@ -186,6 +206,7 @@ jobs:
       [
         authorize,
         changes,
+        verify-fabric-lockstep,
         sanity-checks,
         ts-checks,
         cpp-lint,
@@ -195,8 +216,8 @@ jobs:
         run-mobile-integration-tests,
       ]
     if: always() && (needs.changes.outputs.pkg == 'true' || github.event_name == 'workflow_dispatch')
-    uses: tetherto/qvac-devops/.github/workflows/public-pr.yml@v1.1.7
+    uses: tetherto/oss-actions/.github/workflows/public-pr.yml@v1.1.0
     with:
-      sanity-checks-status: ${{ needs.sanity-checks.result == 'success' && needs.cpp-tests.result == 'success' && needs.ts-checks.result == 'success' }}
+      sanity-checks-status: ${{ needs.verify-fabric-lockstep.result == 'success' && needs.sanity-checks.result == 'success' && needs.cpp-tests.result == 'success' && needs.ts-checks.result == 'success' }}
       build-status: ${{ needs.prebuild.result == 'success' }}
       integration-tests-status: ${{ needs.run-integration-tests.result == 'success' }}

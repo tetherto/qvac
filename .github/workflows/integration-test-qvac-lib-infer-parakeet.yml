@@ -43,7 +43,7 @@ jobs:
           - os: ai-run-linux-gpu
             platform: linux
             arch: x64
-          - os: ubuntu-24.04-arm64-private
+          - os: ubuntu-24.04-arm
             platform: linux
             arch: arm64
           - os: macos-14-xlarge
@@ -52,7 +52,7 @@ jobs:
           - os: macos-15-large
             platform: darwin
             arch: x64
-          - os: ai-run-windows11-gpu
+          - os: windows-2022
             platform: win32
             arch: x64
 
@@ -83,7 +83,7 @@ jobs:
           echo "Configuring scoped registry for @tetherto and @qvac packages..."
           set -eu
           echo "Writing .npmrc for dual registry install…"
-          cd ${{ github.workspace }}/packages/qvac-lib-infer-parakeet
+          cd "${{ github.workspace }}/packages/qvac-lib-infer-parakeet"
           cat > .npmrc <<NPMRC
           always-auth=true
           registry=https://registry.npmjs.org/
@@ -108,8 +108,10 @@ jobs:
           npm install
           npm install -g bare bare-make
 
-      - run: mkdir -p ${{ runner.temp }}/qvac-lib-infer-parakeet
-      - run: mkdir -p ${{ github.workspace }}/packages/qvac-lib-infer-parakeet/prebuilds
+      - run: mkdir -p "${{ runner.temp }}/qvac-lib-infer-parakeet"
+        shell: bash
+      - run: mkdir -p "${{ github.workspace }}/packages/qvac-lib-infer-parakeet/prebuilds"
+        shell: bash
 
       - name: Download prebuilds from artifact
         if: ${{ !inputs.prebuild_package }}
@@ -119,7 +121,8 @@ jobs:
           merge-multiple: true
 
       - if: ${{ !inputs.prebuild_package }}
-        run: cp -r ${{ runner.temp }}/qvac-lib-infer-parakeet/* ${{ github.workspace }}/packages/qvac-lib-infer-parakeet/prebuilds
+        shell: bash
+        run: cp -r "${{ runner.temp }}/qvac-lib-infer-parakeet"/* "${{ github.workspace }}/packages/qvac-lib-infer-parakeet/prebuilds"
 
       - name: Download prebuilds from package
         if: ${{ inputs.prebuild_package }}
@@ -128,7 +131,7 @@ jobs:
         run: |
           npm pack ${{ inputs.prebuild_package }}
           tar -xzf *.tgz
-          cp -r ./package/prebuilds/* ${{ github.workspace }}/packages/qvac-lib-infer-parakeet/prebuilds
+          cp -r ./package/prebuilds/* "${{ github.workspace }}/packages/qvac-lib-infer-parakeet/prebuilds"
 
       - name: Rename prebuilds from tetherto_ to qvac_ prefix
         if: ${{ inputs.prebuild_package }}
@@ -155,6 +158,7 @@ jobs:
         run: npm run test:integration
         env:
           GITHUB_TOKEN: ${{ secrets.PAT_TOKEN }}
+          INTEGRATION_TEST_TIMEOUT: ${{ matrix.platform == 'win32' && '1800' || '600' }}
           LD_LIBRARY_PATH: ${{ github.workspace }}/packages/qvac-lib-infer-parakeet/prebuilds/${{ matrix.platform }}-${{ matrix.arch }}
           DYLD_LIBRARY_PATH: ${{ github.workspace }}/packages/qvac-lib-infer-parakeet/prebuilds/${{ matrix.platform }}-${{ matrix.arch }}
 

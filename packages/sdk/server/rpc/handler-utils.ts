@@ -11,11 +11,12 @@ import {
   sendErrorResponse,
   sendStreamErrorResponse,
 } from "@/server/error-handlers";
+import { PluginHandlerTypeMismatchError } from "@/utils/errors-server";
 import { setSDKConfig } from "@/server/bare/registry/config-registry";
 import { setRuntimeContext } from "@/server/bare/registry/runtime-context-registry";
 import { type ServerProfiler } from "./profiling";
-import { nowMs } from "@/profiling/clock";
 import { isTerminalChunk } from "./rpc-utils";
+import { createProgressThrottle } from "./progress-throttle";
 
 function getProfilingMetaFromRequest(
   request: Request,
@@ -35,12 +36,13 @@ type ReplyHandler = (
 ) => Promise<Response> | Response;
 type StreamHandler = (request: any, ...args: any[]) => AsyncGenerator<Response>;
 type ProgressHandler = (request: any, ...args: any[]) => Promise<Response>;
+type DuplexStreamHandler = (request: any, inputStream: any) => AsyncGenerator<Response>;
 /* eslint-enable @typescript-eslint/no-explicit-any */
 
 export type HandlerEntry = {
-  type: "reply" | "stream";
-  handler: ReplyHandler | StreamHandler | ProgressHandler;
-  delegatedHandler?: ReplyHandler | StreamHandler | ProgressHandler;
+  type: "reply" | "stream" | "duplex";
+  handler: ReplyHandler | StreamHandler | ProgressHandler | DuplexStreamHandler;
+  delegatedHandler?: ReplyHandler | StreamHandler | ProgressHandler | DuplexStreamHandler;
   isDelegated?: (request: Request) => boolean;
   supportsProgress?: boolean | ((request: Request) => boolean);
 };
@@ -122,8 +124,6 @@ async function executeStreamHandler(
   }
 }
 
-const PROGRESS_THROTTLE_MS = 150;
-
 async function executeProgressHandler(
   req: RPC.IncomingRequest,
   request: Request,
@@ -134,75 +134,75 @@ async function executeProgressHandler(
   const stream = req.createResponseStream();
   profiler.startHandler();
 
-  let lastProgressWrite = 0;
-  let pendingUpdate: Response | null = null;
-  let flushTimer: ReturnType<typeof setTimeout> | null = null;
-
-  const writeProgress = (update: Response) => {
-    stream.write(profiler.serialize(update, false) + "\n", "utf-8");
+  const writeBatch = (updates: Response[]) => {
+    const payload = updates
+      .map((u) => profiler.serialize(u, false))
+      .join("\n");
+    stream.write(payload + "\n", "utf-8");
   };
 
-  const progressCallback = (update: Response) => {
-    const now = nowMs();
-    if (now - lastProgressWrite >= PROGRESS_THROTTLE_MS) {
-      lastProgressWrite = now;
-      pendingUpdate = null;
-      writeProgress(update);
-    } else {
-      pendingUpdate = update;
-      if (!flushTimer) {
-        flushTimer = setTimeout(
-          () => {
-            flushTimer = null;
-            if (pendingUpdate) {
-              lastProgressWrite = nowMs();
-              writeProgress(pendingUpdate);
-              pendingUpdate = null;
-            }
-          },
-          PROGRESS_THROTTLE_MS - (now - lastProgressWrite),
-        );
-      }
-    }
-  };
+  const throttle = createProgressThrottle<Response>(writeBatch);
 
   try {
     let response: Response;
     if (isDelegated) {
       const profilingMeta = getProfilingMetaFromRequest(request);
       const options: {
-        progressCallback: typeof progressCallback;
+        progressCallback: typeof throttle.push;
         profilingMeta?: ProfilingRequestMeta;
-      } = { progressCallback };
+      } = { progressCallback: throttle.push };
       if (profilingMeta) {
         options.profilingMeta = profilingMeta;
       }
       response = await handler(request, options);
     } else {
-      response = await handler(request, progressCallback);
+      response = await handler(request, throttle.push);
     }
-    if (flushTimer) {
-      clearTimeout(flushTimer);
-      flushTimer = null;
-    }
-    if (pendingUpdate) {
-      writeProgress(pendingUpdate);
-      pendingUpdate = null;
-    }
+    throttle.flush();
     profiler.endHandler();
     stream.write(profiler.serialize(response, true) + "\n", "utf-8");
     stream.end();
   } catch (error) {
-    if (flushTimer) {
-      clearTimeout(flushTimer);
-      flushTimer = null;
-    }
-    if (pendingUpdate) {
-      writeProgress(pendingUpdate);
-      pendingUpdate = null;
-    }
+    throttle.flush();
     profiler.endHandler();
     sendStreamErrorResponse(stream, error, profiler);
+  }
+}
+
+export async function executeDuplexHandler(
+  _req: RPC.IncomingRequest,
+  request: Request,
+  entry: HandlerEntry,
+  inputStream: ReturnType<RPC.IncomingRequest["createRequestStream"]>,
+  outputStream: ReturnType<RPC.IncomingRequest["createResponseStream"]>,
+  profiler: ServerProfiler,
+) {
+  const handler =
+    entry.delegatedHandler && entry.isDelegated?.(request)
+      ? entry.delegatedHandler
+      : entry.handler;
+
+  profiler.startHandler();
+
+  try {
+    for await (const response of (handler as DuplexStreamHandler)(
+      request,
+      inputStream,
+    )) {
+      outputStream.write(
+        profiler.serialize(response, false) + "\n",
+        "utf-8",
+      );
+    }
+    profiler.endHandler();
+    const trailer = profiler.serialize();
+    if (trailer) {
+      outputStream.write(trailer + "\n", "utf-8");
+    }
+    outputStream.end();
+  } catch (error) {
+    profiler.endHandler();
+    sendStreamErrorResponse(outputStream, error, profiler);
   }
 }
 
@@ -224,6 +224,14 @@ export async function executeHandler(
     (typeof entry.supportsProgress === "function"
       ? entry.supportsProgress(request)
       : entry.supportsProgress);
+
+  if (entry.type === "duplex") {
+    throw new PluginHandlerTypeMismatchError(
+      request.type,
+      "reply or stream",
+      "duplex",
+    );
+  }
 
   if (entry.type === "stream") {
     await executeStreamHandler(

@@ -45,12 +45,10 @@ jobs:
     runs-on: ${{ matrix.os }}
     environment: release
     name: test-${{ matrix.platform }}-${{ matrix.arch }}${{ matrix.os_version && format('-{0}', matrix.os_version) || '' }}-${{ matrix.variant }}
-    env:
-      AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
-      AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
     permissions:
       contents: read
       packages: read
+      id-token: write
     strategy:
       fail-fast: false
       matrix:
@@ -61,7 +59,7 @@ jobs:
           - ubuntu-24.04-arm
           - macos-14-xlarge
           - macos-15-large
-          - ai-run-windows11-gpu
+          - windows-2022
         include:
           - os: ubuntu-22.04
             platform: linux
@@ -83,10 +81,10 @@ jobs:
             platform: darwin
             arch: x64
             os_version: m15
-          - os: ai-run-windows11-gpu
+          - os: windows-2022
             platform: win32
             arch: x64
-            os_version: w11
+            os_version: w22
 
     steps:
       - name: Setup Node.js
@@ -105,6 +103,12 @@ jobs:
           repository: ${{ inputs.repository || github.repository }}
           ref: ${{ inputs.ref || github.ref }}
           token: ${{ secrets.PAT_TOKEN }}
+
+      - name: Configure AWS credentials via OIDC
+        uses: aws-actions/configure-aws-credentials@8df5847569e6427dd6c4fb1cf565c83acfa8afa7 # 6.0.0
+        with:
+          role-to-assume: ${{ secrets.AWS_OIDC_ROLE_ARN }}
+          aws-region: eu-central-1
 
       - name: Configure scoped registry for @tetherto and @qvac packages
         env:

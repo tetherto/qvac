@@ -27,14 +27,6 @@ const TranscriptionParakeet = isMobile
   ? require('@qvac/transcription-parakeet')
   : require(_indexDesktop)
 
-let FakeDL = null
-if (!isMobile) {
-  try {
-    const mockPath = '../mocks/loader.fake.js'
-    FakeDL = require(mockPath)
-  } catch (e) {}
-}
-
 /**
  * Detect current platform
  * @returns {string} Platform string (e.g., 'linux-x64', 'darwin-arm64')
@@ -499,34 +491,10 @@ async function runTranscription (params, expectation = {}) {
   const defaultModelPath = path.join(modelsDir, 'parakeet-tdt-0.6b-v3-onnx')
 
   const modelPath = params.modelPath || defaultModelPath
-  const modelDir = path.dirname(modelPath)
-  const modelName = params.modelName || path.basename(modelPath)
-  const diskPath = params.diskPath || modelDir
-  if (!params.loader && !FakeDL) {
-    return {
-      output: 'Error: No loader provided and FakeDL not available (mobile)',
-      passed: false,
-      data: { error: 'No loader provided and FakeDL not available (mobile)' }
-    }
-  }
-  const loader = params.loader || new FakeDL({})
   const parakeetConfig = params.parakeetConfig || {}
+  const modelType = parakeetConfig.modelType || 'tdt'
 
-  const config = {
-    path: modelPath,
-    parakeetConfig: {
-      modelType: parakeetConfig.modelType || 'tdt',
-      maxThreads: parakeetConfig.maxThreads || 4,
-      useGPU: parakeetConfig.useGPU || false,
-      ...parakeetConfig
-    }
-  }
-
-  const constructorArgs = {
-    modelName,
-    diskPath,
-    loader
-  }
+  const files = params.files || getNamedPathsConfig(modelType, modelPath)
 
   if (typeof modelPath === 'string' && !fs.existsSync(modelPath)) {
     return {
@@ -538,7 +506,17 @@ async function runTranscription (params, expectation = {}) {
 
   let model
   try {
-    model = new TranscriptionParakeet(constructorArgs, config)
+    model = new TranscriptionParakeet({
+      files,
+      config: {
+        parakeetConfig: {
+          modelType,
+          maxThreads: parakeetConfig.maxThreads || 4,
+          useGPU: parakeetConfig.useGPU || false,
+          ...parakeetConfig
+        }
+      }
+    })
     await model._load()
 
     if (!params.audioInput) {
@@ -748,7 +726,6 @@ module.exports = {
   binding,
   ParakeetInterface,
   TranscriptionParakeet,
-  FakeDL,
   detectPlatform,
   waitUntilIdle,
   runTranscription,

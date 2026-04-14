@@ -1,5 +1,6 @@
 #pragma once
 
+#include "ChatterboxTextPreprocessor.hpp"
 #include "IChatterboxEngine.hpp"
 #include "IOnnxInferSession.hpp"
 #include "OrtTypes.hpp"
@@ -7,6 +8,7 @@
 
 #include <functional>
 #include <memory>
+#include <random>
 
 namespace qvac::ttslib::chatterbox {
 
@@ -33,7 +35,6 @@ public:
   AudioResult synthesize(const std::string &text) override;
 
 protected:
-  void sanitizeTokenIds(std::vector<int64_t> &inputIds);
   TensorData<int64_t>
   buildInitialPositionIds(const std::vector<int64_t> &inputIds);
 
@@ -90,6 +91,57 @@ private:
   void ensureSession(std::unique_ptr<IOnnxInferSession> &session,
                      const std::string &modelPath);
   void releaseSession(std::unique_ptr<IOnnxInferSession> &session);
+  void loadCangjieTableIfNeeded(const std::string &tokenizerPath);
+  void loadTextEmbWeight(const std::string &embedTokensPath);
+
+  TensorData<float>
+  createUnconditionalEmbeddings(const TensorData<float> &condEmbs,
+                                const std::vector<int64_t> &inputIds);
+
+  void prepareCfgEmbeddings(const std::vector<int64_t> &inputIds,
+                            const std::vector<int64_t> &positionIds,
+                            TensorData<float> &condEmbs,
+                            TensorData<float> &uncondEmbs,
+                            TensorData<int64_t> &promptToken,
+                            TensorData<float> &speakerEmbeddings,
+                            TensorData<float> &speakerFeatures);
+
+  int64_t runInitialCfgStep(
+      const TensorData<float> &condEmbs, const TensorData<float> &uncondEmbs,
+      TensorData<int64_t> &positionIds, TensorData<int64_t> &attentionMask,
+      std::unordered_map<std::string, TensorData<float>> &condKv,
+      std::unordered_map<std::string, TensorData<float>> &uncondKv,
+      std::vector<int64_t> &generatedTokens);
+
+  std::unordered_map<std::string, TensorData<float>> initEmptyKvCache();
+
+  void collectKvShapes(
+      std::vector<std::vector<int64_t>> &inputShapes,
+      const std::unordered_map<std::string, TensorData<float>> &pastKeyValues);
+
+  void writeKvToTensors(
+      const std::unordered_map<std::string, TensorData<float>> &pastKeyValues);
+
+  void runGenerationLoop(
+      std::vector<int64_t> &inputIds, TensorData<int64_t> &positionIds,
+      TensorData<int64_t> &attentionMask,
+      std::unordered_map<std::string, TensorData<float>> &pastKeyValues,
+      TensorData<int64_t> &promptToken, TensorData<float> &speakerEmbeddings,
+      TensorData<float> &speakerFeatures,
+      std::vector<int64_t> &generatedTokens);
+
+  bool shouldStopGeneration(const std::vector<int64_t> &tokens, int step);
+
+  void runCfgGenerationLoop(
+      std::vector<int64_t> &generatedTokens, TensorData<int64_t> &positionIds,
+      TensorData<int64_t> &attentionMask,
+      std::unordered_map<std::string, TensorData<float>> &condKv,
+      std::unordered_map<std::string, TensorData<float>> &uncondKv,
+      int maxSpeechTokens);
+
+  std::vector<int64_t> generateSpeechTokensWithCfg(
+      std::vector<int64_t> &inputIds, TensorData<int64_t> &positionIds,
+      TensorData<float> &speakerEmbeddings, TensorData<float> &speakerFeatures);
 
   TokenizerHandle tokenizerHandle_;
   SessionFactory sessionFactory_;
@@ -103,6 +155,12 @@ private:
   bool lazySessionLoading_ = false;
   std::string language_;
   int keyValueOffset_ = 0;
+  text_preprocess::CangjieTable cangjieTable_;
+
+  std::vector<float> textEmbWeight_;
+  int64_t textEmbRows_ = 0;
+  int64_t textEmbDim_ = 0;
+  std::mt19937 rng_{std::random_device{}()};
 };
 
 } // namespace qvac::ttslib::chatterbox

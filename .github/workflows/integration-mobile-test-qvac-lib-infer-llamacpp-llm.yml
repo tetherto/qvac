@@ -43,6 +43,7 @@ jobs:
       contents: read
       packages: read
       pull-requests: write # Allow commenting on PRs
+      id-token: write
     strategy:
       fail-fast: false
       matrix:
@@ -55,6 +56,15 @@ jobs:
             runner: macos-14
 
     steps:
+      # Validate input data to prevent "Artifact Poisoning"
+      - name: Validate Dispatch Inputs
+        if: github.event_name == 'workflow_dispatch' && github.event.inputs.package
+        run: |
+          if [[ ! "${{ github.event.inputs.package }}" =~ ^@qvac/ ]]; then
+            echo "::error::Invalid package scope. Only @qvac/* is allowed."
+            exit 1
+          fi
+
       # Free up disk space on Ubuntu runner to prevent "No space left on device" errors
       - name: Free up disk space
         if: matrix.platform == 'Android'
@@ -109,7 +119,7 @@ jobs:
           echo "Configuring scoped registry for @tetherto and @qvac packages..."
 
           # Configure addon registry (monorepo package dir)
-          cd "${{ env.ADDON_WORKDIR }}"
+          cd "${{ github.workspace }}/${{ env.ADDON_WORKDIR }}"
           cat > .npmrc <<NPMRC
           always-auth=true
           registry=https://registry.npmjs.org/
@@ -120,7 +130,7 @@ jobs:
           NPMRC
 
           # Configure test-framework registry
-          cd "${GITHUB_WORKSPACE}/test-framework"
+          cd "${{ github.workspace }}/test-framework"
           cat > .npmrc <<NPMRC
           always-auth=true
           registry=https://registry.npmjs.org/
@@ -158,14 +168,14 @@ jobs:
 
       - name: Download prebuilds from package
         if: inputs.package
-        working-directory: ./${{ env.ADDON_WORKDIR }}
+        working-directory: ${{ env.ADDON_WORKDIR }}
         run: |
           PACKAGE_SPEC="${{ inputs.package }}"
           echo "📦 Downloading $PACKAGE_SPEC from npm for manual trigger..."
 
           PACKAGE_NAME="${PACKAGE_SPEC%@*}"
 
-          if ! npm pack "$PACKAGE_SPEC"; then
+          if ! npm pack "$PACKAGE_SPEC" --ignore-scripts; then
             echo "ERROR: Failed to download $PACKAGE_SPEC from npm"
             echo "Please check that the package exists at https://www.npmjs.com/package/$PACKAGE_NAME"
             exit 1
@@ -191,25 +201,20 @@ jobs:
           ls -la prebuilds/
 
       - name: Verify and prepare prebuilds
-        working-directory: ./${{ env.ADDON_WORKDIR }}
+        working-directory: ${{ env.ADDON_WORKDIR }}
         run: |
           echo "Checking for prebuilds..."
+          echo "Current directory: $(pwd)"
           if [ -d "prebuilds" ] && [ "$(ls -A prebuilds)" ]; then
             echo "✅ Prebuilds found from artifacts:"
             ls -la prebuilds/
           else
-            echo "⚠️  No prebuilds from artifacts, checking source..."
-            if [ -d "prebuilds" ] && [ "$(ls -A prebuilds)" ]; then
-              echo "✅ Prebuilds found in source:"
-              ls -la prebuilds/
-            else
-              echo "❌ ERROR: No prebuilds found!"
-              echo "   This workflow requires prebuilds to be available."
-              echo "   Either:"
-              echo "   1. Run this workflow after prebuild job completes"
-              echo "   2. Or commit prebuilds to the repository"
-              exit 1
-            fi
+            echo "❌ ERROR: No prebuilds found!"
+            echo "   This workflow requires prebuilds to be available."
+            echo "   Either:"
+            echo "   1. Run this workflow after prebuild job completes"
+            echo "   2. Or commit prebuilds to the repository"
+            exit 1
           fi
 
           # Copy mobile prebuilds if needed
@@ -220,7 +225,7 @@ jobs:
           fi
 
       - name: Remove desktop prebuilds to save disk space
-        working-directory: ./${{ env.ADDON_WORKDIR }}
+        working-directory: ${{ env.ADDON_WORKDIR }}
         run: |
           echo "Removing desktop prebuilds to save disk space (keeping Android + iOS)..."
           echo "Before cleanup:"
@@ -234,7 +239,7 @@ jobs:
           df -h
 
       - name: Verify test files exist
-        working-directory: ./${{ env.ADDON_WORKDIR }}
+        working-directory: ${{ env.ADDON_WORKDIR }}
         run: |
           echo "Verifying addon has mobile tests..."
 
@@ -278,17 +283,17 @@ jobs:
           echo "✅ Ninja installed successfully"
 
       - name: Install addon dependencies
-        working-directory: ./${{ env.ADDON_WORKDIR }}
+        working-directory: ${{ env.ADDON_WORKDIR }}
         run: |
           echo "Installing addon dependencies..."
-          npm install
+          npm install --ignore-scripts
 
       - name: Validate mobile tests are up-to-date
-        working-directory: ./${{ env.ADDON_WORKDIR }}
+        working-directory: ${{ env.ADDON_WORKDIR }}
         run: npm run test:mobile:validate
 
       - name: Pack addon
-        working-directory: ./${{ env.ADDON_WORKDIR }}
+        working-directory: ${{ env.ADDON_WORKDIR }}
         run: |
           echo "Packing addon..."
           if npm run build:pack 2>/dev/null; then
@@ -296,7 +301,7 @@ jobs:
           else
             echo "📦 Using npm pack directly..."
             mkdir -p dist
-            npm pack --pack-destination dist
+            npm pack --pack-destination dist --ignore-scripts
           fi
 
           # Verify pack file exists
@@ -310,14 +315,14 @@ jobs:
           fi
 
       - name: Setup test framework dependencies
-        working-directory: ./test-framework
+        working-directory: test-framework
         run: |
           echo "Setting up mobile test framework..."
-          npm install
+          npm install --ignore-scripts
           echo "✅ Test framework dependencies installed"
 
       - name: Build test app with addon
-        working-directory: ./test-framework
+        working-directory: test-framework
         run: |
           echo "Building test app with addon..."
           echo "This will:"
@@ -330,7 +335,7 @@ jobs:
           echo "  7. Bundle the app"
           echo ""
 
-          ADDON_PATH="${GITHUB_WORKSPACE}/${{ env.ADDON_WORKDIR }}"
+          ADDON_PATH="${{ github.workspace }}/${{ env.ADDON_WORKDIR }}"
           npm run build "$ADDON_PATH" "$ADDON_PATH/test/mobile"
 
           echo ""
@@ -366,7 +371,7 @@ jobs:
 
       - name: Display build summary
         if: always()
-        working-directory: ./test-framework
+        working-directory: test-framework
         run: |
           echo ""
           echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
@@ -411,7 +416,7 @@ jobs:
 
       - name: Generate Android project
         if: matrix.platform == 'Android'
-        working-directory: ./test-framework
+        working-directory: test-framework
         run: |
           echo "Generating Android project with Expo..."
           npx expo prebuild --platform android --clean
@@ -419,7 +424,7 @@ jobs:
       - name: Build Android APK
         if: matrix.platform == 'Android'
         id: build_apk
-        working-directory: ./test-framework
+        working-directory: test-framework
         run: |
           echo "Building Android APK for Device Farm..."
           export JAVA_HOME=$JAVA_HOME_17_X64
@@ -452,7 +457,7 @@ jobs:
 
           if [ -f "$APK_PATH" ]; then
             # Convert to absolute path
-            APK_ABSOLUTE_PATH="${GITHUB_WORKSPACE}/test-framework/$APK_PATH"
+            APK_ABSOLUTE_PATH="${{ github.workspace }}/test-framework/$APK_PATH"
             SIZE=$(du -h "$APK_PATH" | cut -f1)
             echo "✅ APK built successfully: $APK_PATH (Size: $SIZE)"
             echo "apk_path=$APK_ABSOLUTE_PATH" >> $GITHUB_OUTPUT
@@ -617,14 +622,14 @@ jobs:
 
       - name: Generate iOS project
         if: matrix.platform == 'iOS'
-        working-directory: ./test-framework
+        working-directory: test-framework
         run: |
           echo "Generating iOS project with Expo..."
           npx expo prebuild --platform ios --clean
 
       - name: Install iOS dependencies
         if: matrix.platform == 'iOS'
-        working-directory: ./test-framework/ios
+        working-directory: test-framework/ios
         run: |
           echo "Installing CocoaPods dependencies..."
           pod install --repo-update
@@ -632,7 +637,7 @@ jobs:
       - name: Build and Archive iOS App
         if: matrix.platform == 'iOS'
         id: build_ios
-        working-directory: ./test-framework
+        working-directory: test-framework
         run: |
           echo "Building iOS app for Device Farm..."
 
@@ -683,7 +688,7 @@ jobs:
       - name: Export IPA
         if: matrix.platform == 'iOS'
         id: export_ipa
-        working-directory: ./test-framework/ios
+        working-directory: test-framework/ios
         run: |
           SCHEME_NAME=$(xcodebuild -list | grep -A 1 "Schemes:" | grep -v "Schemes:" | head -1 | xargs)
 
@@ -731,12 +736,13 @@ jobs:
             exit 1
           fi
 
-      - name: Configure AWS credentials
+      - name: Configure AWS credentials via OIDC
         uses: aws-actions/configure-aws-credentials@8df5847569e6427dd6c4fb1cf565c83acfa8afa7 # 6.0.0
         with:
-          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
-          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          role-to-assume: ${{ secrets.AWS_OIDC_ROLE_ARN }}
           aws-region: us-west-2
+          role-session-name: device-farm-upload
+          role-duration-seconds: 7200 # 2hrs for device farm tests
 
       - name: Upload App to Device Farm
         id: upload_app
@@ -801,7 +807,7 @@ jobs:
           done
 
       - name: Verify test package generation
-        working-directory: ./test-framework/e2e
+        working-directory: test-framework/e2e
         run: |
           echo "Verifying e2e test package..."
 
@@ -825,16 +831,16 @@ jobs:
 
       - name: Package and Upload Test Package
         id: upload_test_package
-        working-directory: ./test-framework
+        working-directory: test-framework
         run: |
           echo "📦 Packaging e2e tests..."
           cd e2e
 
           # Install dependencies before packing
-          npm install
+          npm install --ignore-scripts
 
           # Create tarball
-          npm pack
+          npm pack --ignore-scripts
 
           # Create zip with test files only (no node_modules - will be installed on Device Farm)
           ZIP_NAME="e2e-tests-${{ matrix.platform }}.zip"
@@ -931,9 +937,9 @@ jobs:
             AUTOMATION="UiAutomator2"
             HOST_LINE="android_test_host: amazon_linux_2"
             BUNDLE_ID="${{ env.APP_BUNDLE_ID }}"
-            # Android wdio config with crash detection (bail:0 = continue on test failures, crash = process.exit)
-            # Increased timeout to 30 minutes (1800000ms) for long-running LLM tests
-            WDIO_CONFIG='exports.config={runner:"local",hostname:"127.0.0.1",port:4723,path:"/wd/hub",specs:["*.spec.js","*.test.js"],maxInstances:1,bail:0,capabilities:[{platformName:"Android","appium:automationName":"UiAutomator2","appium:appPackage":"'${{ env.APP_BUNDLE_ID }}'","appium:appActivity":"'${{ env.APP_BUNDLE_ID }}'.MainActivity","appium:newCommandTimeout":300,"appium:autoGrantPermissions":true,"appium:autoAcceptAlerts":true,"appium:noReset":true,"appium:dontStopAppOnReset":true,"appium:forceAppLaunch":false}],logLevel:"debug",waitforTimeout:120000,connectionRetryTimeout:30000,connectionRetryCount:3,services:[],framework:"mocha",reporters:["spec"],mochaOpts:{ui:"bdd",timeout:1800000},before:async function(capabilities,specs,browser){const BUNDLE_ID="'${{ env.APP_BUNDLE_ID }}'";global.appCrashed=false;global.checkAppCrash=async(stage)=>{try{const state=await browser.queryAppState(BUNDLE_ID);console.log("["+stage+"] App state: "+state+" (4=foreground,3=background,1=not running)");if(state<3){console.error("\\n🛑 APP CRASHED at "+stage+"! State="+state);console.error("Check device logs for BareKit/native errors.\\n");global.appCrashed=true;process.exit(1);}return state;}catch(e){console.log("["+stage+"] queryAppState error: "+e.message);return-1;}};console.log("Checking initial app state...");await global.checkAppCrash("startup");console.log("Waiting for app to initialize...");await browser.pause(5000);await global.checkAppCrash("after-pause");const initText=await browser.$("android=new UiSelector().textContains(\"INITIALIZED\")");await initText.waitForDisplayed({timeout:60000});await global.checkAppCrash("after-init");console.log("App initialized, clicking Run Automated Tests...");const button=await browser.$("android=new UiSelector().textContains(\"Run Automated Tests\")");await button.waitForDisplayed({timeout:15000});await button.click();console.log("Button clicked!");await browser.pause(5000);await global.checkAppCrash("after-click");},afterTest:async function(test,context,{error}){if(global.appCrashed)return;await global.checkAppCrash("after-test:"+test.title);}};'
+            # Android wdio config with crash detection and test filter support
+            # __TEST_FILTER__ placeholder is replaced per-split by make_split()
+            WDIO_CONFIG='exports.config={runner:"local",hostname:"127.0.0.1",port:4723,path:"/wd/hub",specs:["*.spec.js","*.test.js"],maxInstances:1,bail:0,capabilities:[{platformName:"Android","appium:automationName":"UiAutomator2","appium:appPackage":"'${{ env.APP_BUNDLE_ID }}'","appium:appActivity":"'${{ env.APP_BUNDLE_ID }}'.MainActivity","appium:newCommandTimeout":300,"appium:autoGrantPermissions":true,"appium:autoAcceptAlerts":true,"appium:noReset":true,"appium:dontStopAppOnReset":true,"appium:forceAppLaunch":false}],logLevel:"debug",waitforTimeout:120000,connectionRetryTimeout:30000,connectionRetryCount:3,services:[],framework:"mocha",reporters:["spec"],mochaOpts:{ui:"bdd",timeout:1800000,grep:"__MOCHA_GREP__"},before:async function(capabilities,specs,browser){const BUNDLE_ID="'${{ env.APP_BUNDLE_ID }}'";const TEST_FILTER="__TEST_FILTER__";global.appCrashed=false;global.checkAppCrash=async(stage)=>{try{const state=await browser.queryAppState(BUNDLE_ID);console.log("["+stage+"] App state: "+state+" (4=foreground,3=background,1=not running)");if(state<3){console.error("\\n🛑 APP CRASHED at "+stage+"! State="+state);console.error("Check device logs for BareKit/native errors.\\n");global.appCrashed=true;process.exit(1);}return state;}catch(e){console.log("["+stage+"] queryAppState error: "+e.message);return-1;}};console.log("Checking initial app state...");await global.checkAppCrash("startup");console.log("Waiting for app to initialize...");await browser.pause(5000);await global.checkAppCrash("after-pause");const initText=await browser.$("android=new UiSelector().textContains(\"INITIALIZED\")");await initText.waitForDisplayed({timeout:60000});await global.checkAppCrash("after-init");if(TEST_FILTER!=="__TEST_FILTER__"){try{const b64=Buffer.from(TEST_FILTER).toString("base64");await browser.pushFile("/data/local/tmp/testFilter.txt",b64);console.log("Pushed test filter: "+TEST_FILTER);}catch(e){console.log("pushFile failed: "+e.message);}}console.log("App initialized, clicking Run Automated Tests...");const button=await browser.$("android=new UiSelector().textContains(\"Run Automated Tests\")");await button.waitForDisplayed({timeout:15000});await button.click();console.log("Button clicked!");await browser.pause(5000);await global.checkAppCrash("after-click");global.crashMonitor=setInterval(async()=>{if(global.appCrashed)return;try{const s=await browser.queryAppState(BUNDLE_ID);if(s<3){console.error("\\n🛑 BACKGROUND CRASH DETECTED! App state="+s);global.appCrashed=true;process.exit(1);}}catch(e){}},15000);},after:async function(){if(global.crashMonitor)clearInterval(global.crashMonitor);},afterTest:async function(test,context,{error}){if(global.appCrashed)return;await global.checkAppCrash("after-test:"+test.title);}};'
           else
             PLATFORM="iOS"
             AUTOMATION="XCUITest"
@@ -943,301 +949,450 @@ jobs:
             # iOS wdio config with crash detection (bail:0 = continue on test failures, crash = process.exit)
             # usePrebuiltWDA uses Device Farm's pre-built WebDriverAgent
             # Increased timeout to 30 minutes (1800000ms) for long-running LLM tests
-            WDIO_CONFIG='exports.config={runner:"local",hostname:"127.0.0.1",port:4723,path:"/wd/hub",specs:["*.spec.js","*.test.js"],maxInstances:1,bail:0,capabilities:[{platformName:"iOS","appium:automationName":"XCUITest","appium:bundleId":"'${{ env.APP_BUNDLE_ID }}'","appium:newCommandTimeout":300,"appium:noReset":true,"appium:forceAppLaunch":false,"appium:usePrebuiltWDA":true,"appium:wdaLocalPort":8100,"appium:showIOSLog":true,"appium:realDeviceLogger":"/usr/local/lib/node_modules/appium/node_modules/deviceconsole/deviceconsole"}],logLevel:"debug",waitforTimeout:120000,connectionRetryTimeout:30000,connectionRetryCount:3,services:[],framework:"mocha",reporters:["spec"],mochaOpts:{ui:"bdd",timeout:1800000},before:async function(capabilities,specs,browser){const BUNDLE_ID="'${{ env.APP_BUNDLE_ID }}'";global.appCrashed=false;global.checkAppCrash=async(stage)=>{try{const state=await browser.queryAppState(BUNDLE_ID);console.log("["+stage+"] App state: "+state+" (4=foreground,3=background,1=not running)");if(state<3){console.error("\\n🛑 APP CRASHED at "+stage+"! State="+state);console.error("Check device logs for BareKit/native errors.\\n");global.appCrashed=true;process.exit(1);}return state;}catch(e){console.log("["+stage+"] queryAppState error: "+e.message);return-1;}};console.log("Checking initial app state...");await global.checkAppCrash("startup");console.log("Waiting for app to initialize...");await browser.pause(5000);await global.checkAppCrash("after-pause");const initText=await browser.$("-ios predicate string:label CONTAINS \"INITIALIZED\"");await initText.waitForDisplayed({timeout:60000});await global.checkAppCrash("after-init");console.log("App initialized, clicking Run Automated Tests...");const button=await browser.$("-ios predicate string:label CONTAINS \"Run Automated Tests\"");await button.waitForDisplayed({timeout:15000});await button.click();console.log("Button clicked!");await browser.pause(5000);await global.checkAppCrash("after-click");},afterTest:async function(test,context,{error}){if(global.appCrashed)return;await global.checkAppCrash("after-test:"+test.title);}};'
+            WDIO_CONFIG='exports.config={runner:"local",hostname:"127.0.0.1",port:4723,path:"/wd/hub",specs:["*.spec.js","*.test.js"],maxInstances:1,bail:0,capabilities:[{platformName:"iOS","appium:automationName":"XCUITest","appium:bundleId":"'${{ env.APP_BUNDLE_ID }}'","appium:newCommandTimeout":300,"appium:noReset":true,"appium:forceAppLaunch":false,"appium:usePrebuiltWDA":true,"appium:wdaLocalPort":8100,"appium:showIOSLog":true,"appium:realDeviceLogger":"/usr/local/lib/node_modules/appium/node_modules/deviceconsole/deviceconsole"}],logLevel:"debug",waitforTimeout:120000,connectionRetryTimeout:30000,connectionRetryCount:3,services:[],framework:"mocha",reporters:["spec"],mochaOpts:{ui:"bdd",timeout:1800000,grep:"__MOCHA_GREP__"},before:async function(capabilities,specs,browser){const BUNDLE_ID="'${{ env.APP_BUNDLE_ID }}'";const TEST_FILTER="__TEST_FILTER__";global.appCrashed=false;global.checkAppCrash=async(stage)=>{try{const state=await browser.queryAppState(BUNDLE_ID);console.log("["+stage+"] App state: "+state+" (4=foreground,3=background,1=not running)");if(state<3){console.error("\\n🛑 APP CRASHED at "+stage+"! State="+state);console.error("Check device logs for BareKit/native errors.\\n");global.appCrashed=true;process.exit(1);}return state;}catch(e){console.log("["+stage+"] queryAppState error: "+e.message);return-1;}};console.log("Checking initial app state...");await global.checkAppCrash("startup");console.log("Waiting for app to initialize...");await browser.pause(5000);await global.checkAppCrash("after-pause");const initText=await browser.$("-ios predicate string:label CONTAINS \"INITIALIZED\"");await initText.waitForDisplayed({timeout:60000});await global.checkAppCrash("after-init");if(TEST_FILTER!=="__TEST_FILTER__"){try{const b64=Buffer.from(TEST_FILTER).toString("base64");await browser.pushFile("@"+BUNDLE_ID+":documents/testFilter.txt",b64);console.log("Pushed test filter: "+TEST_FILTER);}catch(e){console.log("pushFile failed: "+e.message);}}console.log("App initialized, clicking Run Automated Tests...");const button=await browser.$("-ios predicate string:label CONTAINS \"Run Automated Tests\"");await button.waitForDisplayed({timeout:15000});await button.click();console.log("Button clicked!");await browser.pause(5000);await global.checkAppCrash("after-click");global.crashMonitor=setInterval(async()=>{if(global.appCrashed)return;try{const s=await browser.queryAppState(BUNDLE_ID);if(s<3){console.error("\\n🛑 BACKGROUND CRASH DETECTED! App state="+s);global.appCrashed=true;process.exit(1);}}catch(e){}},15000);},after:async function(){if(global.crashMonitor)clearInterval(global.crashMonitor);},afterTest:async function(test,context,{error}){if(global.appCrashed)return;await global.checkAppCrash("after-test:"+test.title);}};'
           fi
           
-          # Base64 encode the wdio config to safely embed in YAML
-          # Note: macOS base64 doesn't support -w flag (no line wrapping by default)
-          WDIO_CONFIG_B64=$(echo "$WDIO_CONFIG" | base64 | tr -d '\n')
-          
-          # Create test spec YAML using printf to avoid variable expansion issues
-          {
-            printf 'version: 0.1\n'
-            if [ -n "$HOST_LINE" ]; then
-              printf '%s\n' "$HOST_LINE"
-            fi
-            printf '\n'
-            printf 'phases:\n'
-            printf '  install:\n'
-            printf '    commands:\n'
-            printf '      - echo "Setting up Node.js environment..."\n'
-            printf '      - export NVM_DIR=$HOME/.nvm\n'
-            printf '      - . $NVM_DIR/nvm.sh 2>/dev/null || true\n'
-            printf '      - nvm install 18 2>/dev/null || true\n'
-            printf '      - nvm use 18 2>/dev/null || true\n'
-            printf '      - node --version || echo "Using system node"\n'
-            printf '\n'
-            printf '  pre_test:\n'
-            printf '    commands:\n'
-            printf '      - echo "Setting up test environment..."\n'
-            printf '      - cd $DEVICEFARM_TEST_PACKAGE_PATH\n'
-            printf '      - ls -la\n'
-            printf '      - echo "Installing dependencies (clean install)..."\n'
-            printf '      - rm -rf node_modules package-lock.json 2>/dev/null || true\n'
-            printf '      - npm install --legacy-peer-deps 2>&1\n'
-            printf '      - echo "Verifying wdio installation..."\n'
-            printf '      - ls -la node_modules/.bin/ | grep wdio || echo "wdio not found in .bin"\n'
-            printf '      - node node_modules/@wdio/cli/bin/wdio.js --version || echo "wdio version check failed"\n'
-            printf '      - echo "Creating wdio config for Device Farm..."\n'
-            printf '      - echo "%s" | base64 -d > tests/wdio.config.devicefarm.js\n' "$WDIO_CONFIG_B64"
-            printf '      - cat tests/wdio.config.devicefarm.js\n'
-          
-          # iOS-specific WebDriverAgent configuration (only for iOS platform)
-          if [ "${{ matrix.platform }}" == "iOS" ]; then
-            printf '      - echo "🔧 Configuring WebDriverAgent for iOS..."\n'
-            printf '      - export DEVICEFARM_APPIUM_WDA_DERIVED_DATA_PATH=$DEVICEFARM_APPIUM_WDA_DERIVED_DATA_PATH_V9\n'
-            printf '      - echo "WDA Path: $DEVICEFARM_APPIUM_WDA_DERIVED_DATA_PATH"\n'
+          WDIO_B64=$(echo "$WDIO_CONFIG" | base64 | tr -d '\n')
+
+          generate_spec() {
+            local output_file="$1"
+            local wdio_b64="$2"
+            {
+              printf 'version: 0.1\n'
+              if [ -n "$HOST_LINE" ]; then
+                printf '%s\n' "$HOST_LINE"
+              fi
+              printf '\nphases:\n  install:\n    commands:\n'
+              printf '      - echo "Setting up Node.js environment..."\n'
+              printf '      - export NVM_DIR=$HOME/.nvm\n'
+              printf '      - . $NVM_DIR/nvm.sh 2>/dev/null || true\n'
+              printf '      - nvm install 18 2>/dev/null || true\n'
+              printf '      - nvm use 18 2>/dev/null || true\n'
+              printf '      - node --version || echo "Using system node"\n'
+              printf '\n  pre_test:\n    commands:\n'
+              printf '      - echo "Setting up test environment..."\n'
+              printf '      - cd $DEVICEFARM_TEST_PACKAGE_PATH\n'
+              printf '      - ls -la\n'
+              printf '      - echo "Installing dependencies (clean install)..."\n'
+              printf '      - rm -rf node_modules package-lock.json 2>/dev/null || true\n'
+              printf '      - npm install --legacy-peer-deps 2>&1\n'
+              printf '      - echo "Verifying wdio installation..."\n'
+              printf '      - ls -la node_modules/.bin/ | grep wdio || echo "wdio not found in .bin"\n'
+              printf '      - node node_modules/@wdio/cli/bin/wdio.js --version || echo "wdio version check failed"\n'
+              printf '      - echo "Creating wdio config for Device Farm..."\n'
+              printf '      - echo "%s" | base64 -d > tests/wdio.config.devicefarm.js\n' "$wdio_b64"
+              printf '      - cat tests/wdio.config.devicefarm.js\n'
+              if [ "${{ matrix.platform }}" == "iOS" ]; then
+                printf '      - echo "Configuring WebDriverAgent for iOS..."\n'
+                printf '      - export DEVICEFARM_APPIUM_WDA_DERIVED_DATA_PATH=$DEVICEFARM_APPIUM_WDA_DERIVED_DATA_PATH_V9\n'
+                printf '      - echo "WDA Path: $DEVICEFARM_APPIUM_WDA_DERIVED_DATA_PATH"\n'
+              fi
+              printf '      - echo "Starting Appium server..."\n'
+              printf '      - export APPIUM_BASE_PATH=/wd/hub\n'
+              printf '      - |\n'
+              printf '        appium --base-path=$APPIUM_BASE_PATH --log-timestamp \\\n'
+              printf '          --log-no-colors --relaxed-security --default-capabilities \\\n'
+              printf '          "{\\"appium:deviceName\\": \\"$DEVICEFARM_DEVICE_NAME\\", \\\n'
+              printf '          \\"platformName\\": \\"$DEVICEFARM_DEVICE_PLATFORM_NAME\\", \\\n'
+              printf '          \\"appium:app\\": \\"$DEVICEFARM_APP_PATH\\", \\\n'
+              printf '          \\"appium:udid\\":\\"$DEVICEFARM_DEVICE_UDID\\", \\\n'
+              printf '          \\"appium:platformVersion\\": \\"$DEVICEFARM_DEVICE_OS_VERSION\\", \\\n'
+              printf '          \\"appium:chromedriverExecutableDir\\": \\"$DEVICEFARM_CHROMEDRIVER_EXECUTABLE_DIR\\", \\\n'
+              printf '          \\"appium:wdaLocalPort\\": 8100, \\\n'
+              printf '          \\"appium:derivedDataPath\\": \\"$DEVICEFARM_APPIUM_WDA_DERIVED_DATA_PATH\\", \\\n'
+              printf '          \\"appium:usePrebuiltWDA\\": true, \\\n'
+              printf '          \\"appium:automationName\\": \\"%s\\"}" \\\n' "$AUTOMATION"
+              printf '          >> $DEVICEFARM_LOG_DIR/appium.log 2>&1 &\n'
+              printf '      - echo "Waiting for Appium to be ready (max 30 seconds)..."\n'
+              printf '      - |\n'
+              printf '        appium_initialization_time=0\n'
+              printf '        until curl --silent --fail "http://0.0.0.0:4723${APPIUM_BASE_PATH}/status"; do\n'
+              printf '          if [[ $appium_initialization_time -gt 30 ]]; then\n'
+              printf '            echo "Appium did not start within 30 seconds. Exiting..."\n'
+              printf '            cat $DEVICEFARM_LOG_DIR/appium.log\n'
+              printf '            exit 1\n'
+              printf '          fi\n'
+              printf '          appium_initialization_time=$((appium_initialization_time + 1))\n'
+              printf '          echo "Waiting for Appium to start on port 4723 (${appium_initialization_time}s/30s)..."\n'
+              printf '          sleep 1\n'
+              printf '        done\n'
+              printf '      - echo "Appium server is ready!"\n'
+              printf '      - curl -s http://0.0.0.0:4723${APPIUM_BASE_PATH}/status || echo "Status check failed"\n'
+              printf '\n  test:\n    commands:\n'
+              printf '      - echo "Running WebDriverIO tests..."\n'
+              printf '      - cd $DEVICEFARM_TEST_PACKAGE_PATH\n'
+              printf '      - ps aux | grep appium | grep -v grep || echo "Appium process not found"\n'
+              printf '      - curl -s http://127.0.0.1:4723/wd/hub/status || echo "Appium status check failed"\n'
+              printf '      - node node_modules/@wdio/cli/bin/wdio.js run tests/wdio.config.devicefarm.js\n'
+              printf '\n  post_test:\n    commands:\n'
+              printf '      - echo "Test completed"\n'
+              if [ "${{ matrix.platform }}" == "iOS" ]; then
+                printf '      - echo ""\n'
+                printf '      - echo "iOS Device Console Logs"\n'
+                printf '      - |\n'
+                printf '        if [ -f "$DEVICEFARM_LOG_DIR/device_console.log" ]; then\n'
+                printf '          grep -i "bare\\|console\\|model\\|embedding\\|test\\|error" "$DEVICEFARM_LOG_DIR/device_console.log" || echo "No matching logs"\n'
+                printf '        else\n'
+                printf '          echo "No device_console.log found"\n'
+                printf '        fi\n'
+                printf '      - ls -lh $DEVICEFARM_LOG_DIR/ || true\n'
+              fi
+              printf '\nartifacts:\n  - $DEVICEFARM_LOG_DIR\n'
+            } > "$output_file"
+            echo "Generated: $output_file"
+          }
+
+          upload_spec() {
+            local spec_file="$1"
+            local label="$2"
+            local RESP=$(aws devicefarm create-upload \
+              --project-arn "${{ secrets.LLM_AWS_DEVICE_FARM_PROJECT_ARN }}" \
+              --name "$spec_file" \
+              --type "APPIUM_NODE_TEST_SPEC" \
+              --output json)
+            local URL=$(echo $RESP | jq -r '.upload.url')
+            local ARN=$(echo $RESP | jq -r '.upload.arn')
+            curl -T "$spec_file" "$URL"
+            local MAX=20; local A=1
+            while [ $A -le $MAX ]; do
+              local ST=$(aws devicefarm get-upload --arn "$ARN" --query "upload.status" --output text)
+              if [ "$ST" = "SUCCEEDED" ]; then echo "$ARN"; return 0; fi
+              if [ "$ST" = "FAILED" ]; then echo "$label spec upload failed" >&2; exit 1; fi
+              sleep 5; A=$((A + 1))
+            done
+            echo "$label spec upload timed out after $MAX attempts" >&2; exit 1
+          }
+
+          # For each split: inject mocha grep AND replace __TEST_FILTER__ so
+          # the before-hook pushes a testFilter.txt the app reads at runtime.
+          # This ensures the app only executes matching tests (real splitting).
+          make_split() {
+            local pattern="$1" output="$2"
+            local cfg
+            cfg=$(echo "$WDIO_CONFIG" | sed "s#__MOCHA_GREP__#$pattern#")
+            cfg=$(echo "$cfg" | sed "s#__TEST_FILTER__#$pattern#")
+            local b64
+            b64=$(echo "$cfg" | base64 | tr -d '\n')
+            generate_spec "$output" "$b64"
+          }
+
+          GROUPS_JSON="${{ github.workspace }}/${{ env.ADDON_WORKDIR }}/test/mobile/test-groups.json"
+
+          if [ "${{ matrix.platform }}" == "Android" ]; then
+            ANDROID_GROUP_A=$(jq -r '.android.groupA | join("|")' "$GROUPS_JSON")
+            ANDROID_GROUP_B=$(jq -r '.android.groupB | join("|")' "$GROUPS_JSON")
+
+            echo "Android test split (2 groups):"
+            echo "  Group A: $ANDROID_GROUP_A"
+            echo "  Group B: $ANDROID_GROUP_B"
+
+            make_split "$ANDROID_GROUP_A" testspec-android-a.yml
+            make_split "$ANDROID_GROUP_B" testspec-android-b.yml
+
+            SPEC_ARN_A=$(upload_spec testspec-android-a.yml "Android-A")
+            echo "test_spec_arn=$SPEC_ARN_A" >> $GITHUB_OUTPUT
+            SPEC_ARN_B=$(upload_spec testspec-android-b.yml "Android-B")
+            echo "test_spec_arn_2=$SPEC_ARN_B" >> $GITHUB_OUTPUT
+          else
+            IOS_GREP_HEAVY_1=$(jq -r '.ios.heavy1 | join("|")' "$GROUPS_JSON")
+            IOS_GREP_HEAVY_2=$(jq -r '.ios.heavy2 | join("|")' "$GROUPS_JSON")
+            IOS_GREP_HEAVY_3=$(jq -r '.ios.heavy3 | join("|")' "$GROUPS_JSON")
+            IOS_GREP_HEAVY_4=$(jq -r '.ios.heavy4 | join("|")' "$GROUPS_JSON")
+            IOS_GREP_HEAVY_5=$(jq -r '.ios.heavy5 | join("|")' "$GROUPS_JSON")
+            IOS_GREP_HEAVY_6=$(jq -r '.ios.heavy6 | join("|")' "$GROUPS_JSON")
+            IOS_GREP_LIGHT_A=$(jq -r '.ios.lightA | join("|")' "$GROUPS_JSON")
+            IOS_GREP_LIGHT_B=$(jq -r '.ios.lightB | join("|")' "$GROUPS_JSON")
+
+            echo "iOS test split (6 heavy + 2 light = 8 groups):"
+            echo "  Heavy 1 (iPhone 16 Pro Max): $IOS_GREP_HEAVY_1"
+            echo "  Heavy 2 (iPhone 16 Pro Max): $IOS_GREP_HEAVY_2"
+            echo "  Heavy 3 (iPhone 17):         $IOS_GREP_HEAVY_3"
+            echo "  Heavy 4 (iPhone 17):         $IOS_GREP_HEAVY_4"
+            echo "  Heavy 5 (iPhone 17):         $IOS_GREP_HEAVY_5"
+            echo "  Heavy 6 (SlidingContext):     $IOS_GREP_HEAVY_6"
+            echo "  Light A (iPhone 16 Pro):     $IOS_GREP_LIGHT_A"
+            echo "  Light B (iPhone 16 Pro):     $IOS_GREP_LIGHT_B"
+
+            make_split "$IOS_GREP_HEAVY_1" testspec-heavy-1.yml
+            make_split "$IOS_GREP_HEAVY_2" testspec-heavy-2.yml
+            make_split "$IOS_GREP_HEAVY_3" testspec-heavy-3.yml
+            make_split "$IOS_GREP_HEAVY_4" testspec-heavy-4.yml
+            make_split "$IOS_GREP_HEAVY_5" testspec-heavy-5.yml
+            make_split "$IOS_GREP_HEAVY_6" testspec-heavy-6.yml
+            make_split "$IOS_GREP_LIGHT_A" testspec-light-a.yml
+            make_split "$IOS_GREP_LIGHT_B" testspec-light-b.yml
+
+            SPEC_ARN_H1=$(upload_spec testspec-heavy-1.yml "iOS-Heavy1")
+            echo "test_spec_arn=$SPEC_ARN_H1" >> $GITHUB_OUTPUT
+            SPEC_ARN_H2=$(upload_spec testspec-heavy-2.yml "iOS-Heavy2")
+            echo "test_spec_arn_2=$SPEC_ARN_H2" >> $GITHUB_OUTPUT
+            SPEC_ARN_H3=$(upload_spec testspec-heavy-3.yml "iOS-Heavy3")
+            echo "test_spec_arn_3=$SPEC_ARN_H3" >> $GITHUB_OUTPUT
+            SPEC_ARN_H4=$(upload_spec testspec-heavy-4.yml "iOS-Heavy4")
+            echo "test_spec_arn_4=$SPEC_ARN_H4" >> $GITHUB_OUTPUT
+            SPEC_ARN_H5=$(upload_spec testspec-heavy-5.yml "iOS-Heavy5")
+            echo "test_spec_arn_5=$SPEC_ARN_H5" >> $GITHUB_OUTPUT
+            SPEC_ARN_H6=$(upload_spec testspec-heavy-6.yml "iOS-Heavy6")
+            echo "test_spec_arn_6=$SPEC_ARN_H6" >> $GITHUB_OUTPUT
+            SPEC_ARN_LA=$(upload_spec testspec-light-a.yml "iOS-LightA")
+            echo "test_spec_arn_7=$SPEC_ARN_LA" >> $GITHUB_OUTPUT
+            SPEC_ARN_LB=$(upload_spec testspec-light-b.yml "iOS-LightB")
+            echo "test_spec_arn_8=$SPEC_ARN_LB" >> $GITHUB_OUTPUT
           fi
-          
-            printf '      - echo "🚀 Starting Appium server..."\n'
-            printf '      - export APPIUM_BASE_PATH=/wd/hub\n'
-            printf '      - |\n'
-            printf '        appium --base-path=$APPIUM_BASE_PATH --log-timestamp \\\n'
-            printf '          --log-no-colors --relaxed-security --default-capabilities \\\n'
-            printf '          "{\\"appium:deviceName\\": \\"$DEVICEFARM_DEVICE_NAME\\", \\\n'
-            printf '          \\"platformName\\": \\"$DEVICEFARM_DEVICE_PLATFORM_NAME\\", \\\n'
-            printf '          \\"appium:app\\": \\"$DEVICEFARM_APP_PATH\\", \\\n'
-            printf '          \\"appium:udid\\":\\"$DEVICEFARM_DEVICE_UDID\\", \\\n'
-            printf '          \\"appium:platformVersion\\": \\"$DEVICEFARM_DEVICE_OS_VERSION\\", \\\n'
-            printf '          \\"appium:chromedriverExecutableDir\\": \\"$DEVICEFARM_CHROMEDRIVER_EXECUTABLE_DIR\\", \\\n'
-            printf '          \\"appium:wdaLocalPort\\": 8100, \\\n'
-            printf '          \\"appium:derivedDataPath\\": \\"$DEVICEFARM_APPIUM_WDA_DERIVED_DATA_PATH\\", \\\n'
-            printf '          \\"appium:usePrebuiltWDA\\": true, \\\n'
-            printf '          \\"appium:automationName\\": \\"%s\\"}" \\\n' "$AUTOMATION"
-            printf '          >> $DEVICEFARM_LOG_DIR/appium.log 2>&1 &\n'
-            printf '      - echo "⏳ Waiting for Appium to be ready (max 30 seconds)..."\n'
-            printf '      - |\n'
-            printf '        appium_initialization_time=0\n'
-            printf '        until curl --silent --fail "http://0.0.0.0:4723${APPIUM_BASE_PATH}/status"; do\n'
-            printf '          if [[ $appium_initialization_time -gt 30 ]]; then\n'
-            printf '            echo "❌ Appium did not start within 30 seconds. Exiting..."\n'
-            printf '            cat $DEVICEFARM_LOG_DIR/appium.log\n'
-            printf '            exit 1\n'
-            printf '          fi\n'
-            printf '          appium_initialization_time=$((appium_initialization_time + 1))\n'
-            printf '          echo "Waiting for Appium to start on port 4723 (${appium_initialization_time}s/30s)..."\n'
-            printf '          sleep 1\n'
-            printf '        done\n'
-            printf '      - echo "✅ Appium server is ready!"\n'
-            printf '      - curl -s http://0.0.0.0:4723${APPIUM_BASE_PATH}/status || echo "Status check failed"\n'
-            printf '      - echo "ℹ️  Button click handled via WebDriverIO before hook (single session)"\n'
-            printf '\n'
-            printf '  test:\n'
-            printf '    commands:\n'
-            printf '      - echo "🧪 Running WebDriverIO tests..."\n'
-            printf '      - cd $DEVICEFARM_TEST_PACKAGE_PATH\n'
-            printf '      - echo "Verifying Appium is still running..."\n'
-            printf '      - ps aux | grep appium | grep -v grep || echo "⚠️  Appium process not found"\n'
-            printf '      - curl -s http://127.0.0.1:4723/wd/hub/status || echo "⚠️  Appium status check failed"\n'
-          
-            printf '      - echo "Starting wdio test execution..."\n'
-            printf '      - node node_modules/@wdio/cli/bin/wdio.js run tests/wdio.config.devicefarm.js\n'
-            printf '\n'
-            printf '  post_test:\n'
-            printf '    commands:\n'
-            printf '      - echo "Test completed"\n'
-          
-          # iOS-specific: Output captured device logs
-          if [ "${{ matrix.platform }}" == "iOS" ]; then
-            printf '      - echo ""\n'
-            printf '      - echo "📱 ========== iOS Device Console Logs =========="\n'
-            printf '      - |\n'
-            printf '        if [ -f "$DEVICEFARM_LOG_DIR/device_console.log" ]; then\n'
-            printf '          echo "Device console log found, showing BareKit output:"\n'
-            printf '          grep -i "bare\|console\|model\|embedding\|test\|error" "$DEVICEFARM_LOG_DIR/device_console.log" || echo "No matching logs found"\n'
-            printf '        else\n'
-            printf '          echo "No device_console.log file found"\n'
-            printf '        fi\n'
-            printf '      - echo ""\n'
-            printf '      - echo "📋 Available log files:"\n'
-            printf '      - ls -lh $DEVICEFARM_LOG_DIR/ || echo "Log directory not accessible"\n'
-          fi
-            printf '\n'
-            printf 'artifacts:\n'
-            printf '  - $DEVICEFARM_LOG_DIR\n'
-          } > testspec.yml
-          
-          echo "Generated test spec:"
-          echo "===================="
-          cat testspec.yml
-          echo "===================="
-          
-          echo "📤 Uploading test spec to Device Farm..."
-          SPEC_RESPONSE=$(aws devicefarm create-upload \
-            --project-arn "${{ secrets.LLM_AWS_DEVICE_FARM_PROJECT_ARN }}" \
-            --name "testspec.yml" \
-            --type "APPIUM_NODE_TEST_SPEC" \
-            --output json)
-          
-          SPEC_UPLOAD_URL=$(echo $SPEC_RESPONSE | jq -r '.upload.url')
-          SPEC_UPLOAD_ARN=$(echo $SPEC_RESPONSE | jq -r '.upload.arn')
-          echo "test_spec_arn=$SPEC_UPLOAD_ARN" >> $GITHUB_OUTPUT
-          
-          curl -T testspec.yml "$SPEC_UPLOAD_URL"
-          
-          # Wait for processing
-          echo "⏳ Waiting for test spec to be processed..."
-          MAX_ATTEMPTS=20
-          ATTEMPT=1
-          while [ $ATTEMPT -le $MAX_ATTEMPTS ]; do
-            STATUS=$(aws devicefarm get-upload --arn "$SPEC_UPLOAD_ARN" --query "upload.status" --output text)
-            echo "Test spec status (attempt $ATTEMPT/$MAX_ATTEMPTS): $STATUS"
-            
-            if [ "$STATUS" = "SUCCEEDED" ]; then
-              echo "✅ Test spec upload successful"
-              break
-            fi
-            
-            if [ "$STATUS" = "FAILED" ]; then
-              echo "❌ Test spec upload failed"
-              aws devicefarm get-upload --arn "$SPEC_UPLOAD_ARN"
-              exit 1
-            fi
-            
-            sleep 5
-            ATTEMPT=$((ATTEMPT + 1))
-          done
 
       - name: Schedule Device Farm Test Run
         id: schedule_run
         run: |
-          if [ "${{ matrix.platform }}" == "Android" ]; then
-            POOL_ARN="${{ secrets.LLM_ANDROID_DEVICE_POOL_ARN }}"
-          else
-            POOL_ARN="${{ secrets.LLM_IOS_DEVICE_POOL_ARN }}"
-          fi
-          
-          # Set run name based on trigger
           if [ "${{ github.event_name }}" == "workflow_dispatch" ]; then
             RUN_NAME="Manual-${{ github.run_number }}-${{ matrix.platform }}"
           else
             RUN_NAME="PR-${{ github.event.pull_request.number || github.run_number }}-${{ matrix.platform }}"
           fi
-          
-          echo "🚀 Scheduling Device Farm test run..."
-          echo "Platform: ${{ matrix.platform }}"
-          echo "Device Pool ARN: $POOL_ARN"
-          echo "Run Name: $RUN_NAME"
-          
-          RUN_ARN=$(aws devicefarm schedule-run \
-            --project-arn "${{ secrets.LLM_AWS_DEVICE_FARM_PROJECT_ARN }}" \
-            --device-pool-arn "$POOL_ARN" \
-            --app-arn "${{ steps.upload_app.outputs.app_upload_arn }}" \
-            --name "$RUN_NAME" \
-            --test type=APPIUM_NODE,testPackageArn="${{ steps.upload_test_package.outputs.test_package_upload_arn }}",testSpecArn="${{ steps.upload_test_spec.outputs.test_spec_arn }}" \
-            --execution-configuration jobTimeoutMinutes=60 \
-            --query 'run.arn' --output text)
-          
-          echo "run_arn=$RUN_ARN" >> $GITHUB_OUTPUT
-          echo "✅ Test run scheduled: $RUN_ARN"
+
+          PROJECT_ARN="${{ secrets.LLM_AWS_DEVICE_FARM_PROJECT_ARN }}"
+          APP_ARN="${{ steps.upload_app.outputs.app_upload_arn }}"
+          TEST_PACKAGE_ARN="${{ steps.upload_test_package.outputs.test_package_upload_arn }}"
+
+          schedule_run_with_pool() {
+            local pool_arn="$1"
+            local name="$2"
+            local spec_arn="$3"
+            aws devicefarm schedule-run \
+              --project-arn "$PROJECT_ARN" \
+              --device-pool-arn "$pool_arn" \
+              --app-arn "$APP_ARN" \
+              --name "$name" \
+              --test "type=APPIUM_NODE,testPackageArn=$TEST_PACKAGE_ARN,testSpecArn=$spec_arn" \
+              --execution-configuration jobTimeoutMinutes=60 \
+              --query 'run.arn' --output text
+          }
+
+          if [ "${{ matrix.platform }}" == "Android" ]; then
+            POOL_ARN="${{ secrets.LLM_ANDROID_DEVICE_POOL_ARN }}"
+            TEST_SPEC_ARN_A="${{ steps.upload_test_spec.outputs.test_spec_arn }}"
+            TEST_SPEC_ARN_B="${{ steps.upload_test_spec.outputs.test_spec_arn_2 }}"
+
+            echo "🚀 Scheduling 2 Android runs (each runs on all devices in pool)..."
+            echo "Device Pool ARN: $POOL_ARN"
+
+            RUN_ARN_1=$(schedule_run_with_pool "$POOL_ARN" "$RUN_NAME-Android-GroupA" "$TEST_SPEC_ARN_A")
+            echo "✅ Android Group A scheduled: $RUN_ARN_1"
+
+            RUN_ARN_2=$(schedule_run_with_pool "$POOL_ARN" "$RUN_NAME-Android-GroupB" "$TEST_SPEC_ARN_B")
+            echo "✅ Android Group B scheduled: $RUN_ARN_2"
+
+            echo "run_arn_1=$RUN_ARN_1" >> $GITHUB_OUTPUT
+            echo "run_arn_2=$RUN_ARN_2" >> $GITHUB_OUTPUT
+            echo "run_count=2" >> $GITHUB_OUTPUT
+          else
+            POOL_ARN="${{ secrets.LLM_IOS_DEVICE_POOL_ARN }}"
+            TEST_SPEC_ARN_1="${{ steps.upload_test_spec.outputs.test_spec_arn }}"
+            TEST_SPEC_ARN_2="${{ steps.upload_test_spec.outputs.test_spec_arn_2 }}"
+            TEST_SPEC_ARN_3="${{ steps.upload_test_spec.outputs.test_spec_arn_3 }}"
+            TEST_SPEC_ARN_4="${{ steps.upload_test_spec.outputs.test_spec_arn_4 }}"
+            TEST_SPEC_ARN_5="${{ steps.upload_test_spec.outputs.test_spec_arn_5 }}"
+            TEST_SPEC_ARN_6="${{ steps.upload_test_spec.outputs.test_spec_arn_6 }}"
+            TEST_SPEC_ARN_7="${{ steps.upload_test_spec.outputs.test_spec_arn_7 }}"
+            TEST_SPEC_ARN_8="${{ steps.upload_test_spec.outputs.test_spec_arn_8 }}"
+
+            echo "🚀 Scheduling 8 iOS runs (each runs on ALL devices in pool)..."
+            echo "Device Pool ARN: $POOL_ARN"
+
+            RUN_ARN_1=$(schedule_run_with_pool "$POOL_ARN" "$RUN_NAME-iOS-Heavy1-Finetuning" "$TEST_SPEC_ARN_1")
+            echo "✅ Heavy1 (Finetuning) scheduled: $RUN_ARN_1"
+
+            RUN_ARN_2=$(schedule_run_with_pool "$POOL_ARN" "$RUN_NAME-iOS-Heavy2-ToolCalling" "$TEST_SPEC_ARN_2")
+            echo "✅ Heavy2 (ToolCalling) scheduled: $RUN_ARN_2"
+
+            RUN_ARN_3=$(schedule_run_with_pool "$POOL_ARN" "$RUN_NAME-iOS-Heavy3-Image" "$TEST_SPEC_ARN_3")
+            echo "✅ Heavy3 (Image) scheduled: $RUN_ARN_3"
+
+            RUN_ARN_4=$(schedule_run_with_pool "$POOL_ARN" "$RUN_NAME-iOS-Heavy4-OcrLighton" "$TEST_SPEC_ARN_4")
+            echo "✅ Heavy4 (OcrLighton) scheduled: $RUN_ARN_4"
+
+            RUN_ARN_5=$(schedule_run_with_pool "$POOL_ARN" "$RUN_NAME-iOS-Heavy5-Reasoning" "$TEST_SPEC_ARN_5")
+            echo "✅ Heavy5 (Reasoning) scheduled: $RUN_ARN_5"
+
+            RUN_ARN_6=$(schedule_run_with_pool "$POOL_ARN" "$RUN_NAME-iOS-Heavy6-SlidingContext" "$TEST_SPEC_ARN_6")
+            echo "✅ Heavy6 (SlidingContext) scheduled: $RUN_ARN_6"
+
+            RUN_ARN_7=$(schedule_run_with_pool "$POOL_ARN" "$RUN_NAME-iOS-LightA" "$TEST_SPEC_ARN_7")
+            echo "✅ LightA scheduled: $RUN_ARN_7"
+
+            RUN_ARN_8=$(schedule_run_with_pool "$POOL_ARN" "$RUN_NAME-iOS-LightB" "$TEST_SPEC_ARN_8")
+            echo "✅ LightB scheduled: $RUN_ARN_8"
+
+            echo "run_arn_1=$RUN_ARN_1" >> $GITHUB_OUTPUT
+            echo "run_arn_2=$RUN_ARN_2" >> $GITHUB_OUTPUT
+            echo "run_arn_3=$RUN_ARN_3" >> $GITHUB_OUTPUT
+            echo "run_arn_4=$RUN_ARN_4" >> $GITHUB_OUTPUT
+            echo "run_arn_5=$RUN_ARN_5" >> $GITHUB_OUTPUT
+            echo "run_arn_6=$RUN_ARN_6" >> $GITHUB_OUTPUT
+            echo "run_arn_7=$RUN_ARN_7" >> $GITHUB_OUTPUT
+            echo "run_arn_8=$RUN_ARN_8" >> $GITHUB_OUTPUT
+            echo "run_count=8" >> $GITHUB_OUTPUT
+          fi
+
+          echo "All runs scheduled."
+
+      - name: Refresh AWS credentials for monitoring
+        uses: aws-actions/configure-aws-credentials@8df5847569e6427dd6c4fb1cf565c83acfa8afa7 # 6.0.0
+        with:
+          role-to-assume: ${{ secrets.AWS_OIDC_ROLE_ARN }}
+          aws-region: us-west-2
+          role-session-name: device-farm-monitor
 
       - name: Monitor Test Run
         id: monitor_run
         run: |
-          RUN_ARN="${{ steps.schedule_run.outputs.run_arn }}"
-          echo "📊 Monitoring test run: $RUN_ARN"
+          aws_retry() {
+            local max_attempts=3
+            local attempt=1
+            local result=""
+            while [ $attempt -le $max_attempts ]; do
+              result=$("$@" 2>/dev/null) && { echo "$result"; return 0; }
+              echo "  ⚠️  AWS API attempt $attempt/$max_attempts failed, retrying in 5s..." >&2
+              sleep 5
+              attempt=$((attempt + 1))
+            done
+            echo ""
+            return 1
+          }
+
+          RUN_ARN_1="${{ steps.schedule_run.outputs.run_arn_1 }}"
+          RUN_ARN_2="${{ steps.schedule_run.outputs.run_arn_2 }}"
+          RUN_ARN_3="${{ steps.schedule_run.outputs.run_arn_3 }}"
+          RUN_ARN_4="${{ steps.schedule_run.outputs.run_arn_4 }}"
+          RUN_ARN_5="${{ steps.schedule_run.outputs.run_arn_5 }}"
+          RUN_ARN_6="${{ steps.schedule_run.outputs.run_arn_6 }}"
+          RUN_ARN_7="${{ steps.schedule_run.outputs.run_arn_7 }}"
+          RUN_ARN_8="${{ steps.schedule_run.outputs.run_arn_8 }}"
+          RUN_COUNT="${{ steps.schedule_run.outputs.run_count }}"
+
+          echo "📊 Monitoring $RUN_COUNT Device Farm run(s)..."
+          for i in $(seq 1 "$RUN_COUNT"); do
+            eval "echo \"  Run $i: \$RUN_ARN_$i\""
+          done
           echo ""
-          
-          MAX_WAIT_TIME=7200  # 120 minutes
+
+          MAX_WAIT_TIME=7200
           ELAPSED=0
-          
+          for i in $(seq 1 "$RUN_COUNT"); do eval "DONE_$i=false"; done
+
           while true; do
-            STATUS=$(aws devicefarm get-run --arn "$RUN_ARN" --query 'run.status' --output text)
-            RESULT=$(aws devicefarm get-run --arn "$RUN_ARN" --query 'run.result' --output text)
-            
-            echo "⏳ Run status: $STATUS (Result: $RESULT) - Elapsed: ${ELAPSED}s"
-            
-            if [[ "$STATUS" == "COMPLETED" ]]; then
+            STATUS_LINE="⏳"
+            for i in $(seq 1 "$RUN_COUNT"); do
+              eval "done_val=\$DONE_$i"
+              if [[ "$done_val" != "true" ]]; then
+                eval "arn=\$RUN_ARN_$i"
+                STATUS_VAL=$(aws_retry aws devicefarm get-run --arn "$arn" --query 'run.status' --output text) || true
+                RESULT_VAL=$(aws_retry aws devicefarm get-run --arn "$arn" --query 'run.result' --output text) || true
+                eval "STATUS_$i=\"$STATUS_VAL\""
+                eval "RESULT_$i=\"$RESULT_VAL\""
+                if [[ "$STATUS_VAL" == "COMPLETED" ]]; then eval "DONE_$i=true"; fi
+              fi
+              eval "STATUS_LINE=\"\$STATUS_LINE Run $i: \$STATUS_$i (\$RESULT_$i) |\""
+            done
+            echo "$STATUS_LINE ${ELAPSED}s"
+
+            ALL_DONE=true
+            for i in $(seq 1 "$RUN_COUNT"); do
+              eval "done_val=\$DONE_$i"
+              if [[ "$done_val" != "true" ]]; then ALL_DONE=false; fi
+            done
+            if [[ "$ALL_DONE" == "true" ]]; then
               echo ""
-              echo "✅ Test run completed!"
+              echo "✅ All runs completed!"
               break
             fi
-            
+
             if [ $ELAPSED -ge $MAX_WAIT_TIME ]; then
               echo ""
-              echo "❌ Timeout: Test run exceeded $MAX_WAIT_TIME seconds"
+              echo "❌ Timeout: exceeded ${MAX_WAIT_TIME}s"
               exit 1
             fi
-            
+
             sleep 30
             ELAPSED=$((ELAPSED + 30))
           done
-          
-          # Get detailed results
-          RUN_DETAILS=$(aws devicefarm get-run --arn "$RUN_ARN" --output json)
-          RESULT=$(echo $RUN_DETAILS | jq -r '.run.result')
-          COUNTERS=$(echo $RUN_DETAILS | jq -r '.run.counters')
-          
-          echo ""
-          echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
-          echo "📊 FINAL TEST RESULTS"
-          echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
-          echo "Result: $RESULT"
-          echo ""
-          
-          # Get jobs (devices) and extract actual test names
-          echo "📱 Fetching detailed test results..."
-          JOBS=$(aws devicefarm list-jobs --arn "$RUN_ARN" --output json)
-          
-          echo ""
-          echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
-          echo "📋 YOUR TESTS (excluding Setup/Teardown)"
-          echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
-          echo ""
-          
+
+          RUN_ARNS=("$RUN_ARN_1")
+          for i in 2 3 4 5 6 7 8; do
+            eval "arn=\$RUN_ARN_$i"
+            if [ "$RUN_COUNT" -ge "$i" ] && [ -n "$arn" ]; then
+              RUN_ARNS+=("$arn")
+            fi
+          done
+
           DEVICE_COUNT=0
           USER_TEST_COUNT=0
           USER_PASSED=0
           USER_FAILED=0
           FAILED_TEST_DETAILS=()
-          
-          # Extract project ID and run ID from RUN_ARN for console links
-          # RUN_ARN format: arn:aws:devicefarm:us-west-2:ACCOUNT:run:PROJECT_ID/RUN_ID
-          PROJECT_ID=$(echo "$RUN_ARN" | sed -n 's/.*:run:\([^/]*\)\/.*/\1/p')
-          RUN_ID=$(echo "$RUN_ARN" | sed -n 's/.*:run:[^/]*\/\(.*\)/\1/p')
-          
-          # Process each device/job
-          for JOB_ARN in $(echo "$JOBS" | jq -r '.jobs[].arn'); do
-            DEVICE_COUNT=$((DEVICE_COUNT + 1))
-            JOB_DETAILS=$(aws devicefarm get-job --arn "$JOB_ARN" --output json)
-            DEVICE_NAME=$(echo "$JOB_DETAILS" | jq -r '.job.device.name // "Unknown Device"')
-            JOB_RESULT=$(echo "$JOB_DETAILS" | jq -r '.job.result // "UNKNOWN"')
-            JOB_ID=$(echo "$JOB_ARN" | sed -n 's/.*:job:[^/]*\/[^/]*\/\(.*\)/\1/p')
-            
-            # Build console link (no region param needed when region is in subdomain)
-            CONSOLE_LINK="https://us-west-2.console.aws.amazon.com/devicefarm/home#/mobile/projects/${PROJECT_ID}/runs/${RUN_ID}/jobs/${JOB_ID}"
-            
-            if [ "$JOB_RESULT" = "PASSED" ]; then
-              echo "   ✅ $DEVICE_NAME: PASSED"
-              USER_PASSED=$((USER_PASSED + 1))
+          ALL_RESULTS_PASSED=true
+          TOTAL_TOTAL=0
+          TOTAL_PASSED=0
+          TOTAL_FAILED=0
+          TOTAL_SKIPPED=0
+
+          echo ""
+          echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+          echo "📊 FINAL TEST RESULTS"
+          echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+          echo ""
+
+          RUN_INDEX=0
+          for RUN_ARN in "${RUN_ARNS[@]}"; do
+            RUN_INDEX=$((RUN_INDEX + 1))
+            RUN_DETAILS=$(aws_retry aws devicefarm get-run --arn "$RUN_ARN" --output json) || true
+            [ -z "$RUN_DETAILS" ] && RUN_DETAILS='{}'
+            RESULT=$(echo "$RUN_DETAILS" | jq -r '.run.result // "UNKNOWN"')
+            RUN_NAME_LABEL=$(echo "$RUN_DETAILS" | jq -r '.run.name // "unknown"')
+            COUNTERS=$(echo "$RUN_DETAILS" | jq -r '.run.counters // {}')
+
+            if [[ "$RESULT" != "PASSED" && "$RESULT" != "SKIPPED" ]]; then ALL_RESULTS_PASSED=false; fi
+
+            TOTAL_TOTAL=$((TOTAL_TOTAL + $(echo "$COUNTERS" | jq -r '.total // 0')))
+            TOTAL_PASSED=$((TOTAL_PASSED + $(echo "$COUNTERS" | jq -r '.passed // 0')))
+            TOTAL_FAILED=$((TOTAL_FAILED + $(echo "$COUNTERS" | jq -r '.failed // 0')))
+            TOTAL_SKIPPED=$((TOTAL_SKIPPED + $(echo "$COUNTERS" | jq -r '.skipped // 0')))
+
+            PROJECT_ID=$(echo "$RUN_ARN" | sed -n 's/.*:run:\([^/]*\)\/.*/\1/p')
+            RUN_ID=$(echo "$RUN_ARN" | sed -n 's/.*:run:[^/]*\/\(.*\)/\1/p')
+
+            if [ "$RUN_COUNT" -ge 2 ]; then
+              echo "--- Run $RUN_INDEX: $RUN_NAME_LABEL (Result: $RESULT) ---"
             else
-              echo "   ❌ $DEVICE_NAME: $JOB_RESULT"
-              USER_FAILED=$((USER_FAILED + 1))
-              FAILED_TEST_DETAILS+=("❌ $DEVICE_NAME: $JOB_RESULT")
-              FAILED_TEST_DETAILS+=("   📎 View logs: $CONSOLE_LINK")
+              echo "Result: $RESULT"
             fi
-            
-            USER_TEST_COUNT=$((USER_TEST_COUNT + 1))
+
+            JOBS=$(aws_retry aws devicefarm list-jobs --arn "$RUN_ARN" --output json) || true
+            [ -z "$JOBS" ] && JOBS='{"jobs":[]}'
+            for JOB_ARN in $(echo "$JOBS" | jq -r '.jobs[].arn'); do
+              DEVICE_COUNT=$((DEVICE_COUNT + 1))
+              JOB_DETAILS=$(aws_retry aws devicefarm get-job --arn "$JOB_ARN" --output json) || true
+              [ -z "$JOB_DETAILS" ] && JOB_DETAILS='{}'
+              DEVICE_NAME=$(echo "$JOB_DETAILS" | jq -r '.job.device.name // "Unknown Device"')
+              JOB_RESULT=$(echo "$JOB_DETAILS" | jq -r '.job.result // "UNKNOWN"')
+              JOB_ID=$(echo "$JOB_ARN" | sed -n 's/.*:job:[^/]*\/[^/]*\/\(.*\)/\1/p')
+              CONSOLE_LINK="https://us-west-2.console.aws.amazon.com/devicefarm/home#/mobile/projects/${PROJECT_ID}/runs/${RUN_ID}/jobs/${JOB_ID}"
+
+              if [ "$JOB_RESULT" = "PASSED" ]; then
+                echo "   ✅ $DEVICE_NAME: PASSED"
+                USER_PASSED=$((USER_PASSED + 1))
+              else
+                echo "   ❌ $DEVICE_NAME: $JOB_RESULT"
+                USER_FAILED=$((USER_FAILED + 1))
+                FAILED_TEST_DETAILS+=("❌ $DEVICE_NAME: $JOB_RESULT")
+                FAILED_TEST_DETAILS+=("   📎 View logs: $CONSOLE_LINK")
+              fi
+              USER_TEST_COUNT=$((USER_TEST_COUNT + 1))
+            done
+
+            echo "   🔗 Run link: https://us-west-2.console.aws.amazon.com/devicefarm/home#/mobile/projects/${PROJECT_ID}/runs/${RUN_ID}"
             echo ""
           done
-          
-          # Show AWS Device Farm console link for the entire run
-          echo ""
-          echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
-          echo "🔗 AWS DEVICE FARM LINKS"
-          echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
-          echo ""
-          echo "📊 Full Run Details:"
-          echo "   https://us-west-2.console.aws.amazon.com/devicefarm/home#/mobile/projects/${PROJECT_ID}/runs/${RUN_ID}"
-          echo ""
-          echo "💡 Tip: Click the link above, then select a device to view:"
-          echo "   • Video recording of the test"
-          echo "   • Screenshots"  
-          echo "   • Device logs"
-          echo "   • Test spec output (shows individual test results)"
-          echo ""
-          
-          # Summary
+
           echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
           echo "📊 SUMMARY"
           echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
@@ -1246,20 +1401,7 @@ jobs:
           echo "  ✅ Passed: $USER_PASSED"
           echo "  ❌ Failed: $USER_FAILED"
           echo ""
-          echo "📋 What these tests verify:"
-          echo "   The E2E tests run on Device Farm check that your app:"
-          echo "   1. Shows 'INITIALIZED' after startup"
-          echo "   2. Runs all test functions from test/mobile/*.cjs"
-          echo "   3. Reports PASS/FAIL for each test function"
-          echo ""
-          echo "💡 If a test times out but the video shows PASS:"
-          echo "   → The app test passed, but E2E gave up waiting too early"
-          echo "   → Check timeout settings in qvac-test-addon-mobile"
-          echo ""
-          echo "Device Farm Counters (includes Setup/Teardown):"
-          echo "$COUNTERS" | jq '.'
-          echo ""
-          
+
           if [ ${#FAILED_TEST_DETAILS[@]} -gt 0 ]; then
             echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
             echo "❌ FAILED TESTS"
@@ -1269,47 +1411,164 @@ jobs:
             done
             echo ""
           fi
-          
-          # Save for PR comment
-          echo "test_result=$RESULT" >> $GITHUB_OUTPUT
-          echo "test_counters<<EOF" >> $GITHUB_OUTPUT
-          echo "$COUNTERS" >> $GITHUB_OUTPUT
-          echo "EOF" >> $GITHUB_OUTPUT
-          
-          # Extract test counts
-          TOTAL=$(echo $COUNTERS | jq -r '.total // 0')
-          PASSED=$(echo $COUNTERS | jq -r '.passed // 0')
-          FAILED=$(echo $COUNTERS | jq -r '.failed // 0')
-          SKIPPED=$(echo $COUNTERS | jq -r '.skipped // 0')
-          
-          echo "test_total=$TOTAL" >> $GITHUB_OUTPUT
-          echo "test_passed=$PASSED" >> $GITHUB_OUTPUT
-          echo "test_failed=$FAILED" >> $GITHUB_OUTPUT
-          echo "test_skipped=$SKIPPED" >> $GITHUB_OUTPUT
-          
-          # Also save user test counts
+
+          echo "Device Farm totals: $TOTAL_TOTAL | Passed: $TOTAL_PASSED | Failed: $TOTAL_FAILED | Skipped: $TOTAL_SKIPPED"
+          echo ""
+
+          if [ $USER_FAILED -gt 0 ]; then
+            echo "test_result=FAILED" >> $GITHUB_OUTPUT
+          elif [ $USER_PASSED -gt 0 ]; then
+            echo "test_result=PASSED" >> $GITHUB_OUTPUT
+          else
+            echo "test_result=FAILED" >> $GITHUB_OUTPUT
+          fi
+          echo "test_total=$TOTAL_TOTAL" >> $GITHUB_OUTPUT
+          echo "test_passed=$TOTAL_PASSED" >> $GITHUB_OUTPUT
+          echo "test_failed=$TOTAL_FAILED" >> $GITHUB_OUTPUT
+          echo "test_skipped=$TOTAL_SKIPPED" >> $GITHUB_OUTPUT
           echo "user_test_count=$USER_TEST_COUNT" >> $GITHUB_OUTPUT
           echo "user_test_passed=$USER_PASSED" >> $GITHUB_OUTPUT
           echo "user_test_failed=$USER_FAILED" >> $GITHUB_OUTPUT
-          
-          # Determine if tests passed or failed
-          # Red status (exit 1) if:
-          #   1. Device Farm overall result is not PASSED, OR
-          #   2. Any of your tests failed
-          # Green status (exit 0) only if all tests passed
-          
-          if [[ "$RESULT" != "PASSED" ]] || [ $USER_FAILED -gt 0 ]; then
+
+          if [ $USER_FAILED -gt 0 ]; then
             echo ""
             echo "❌ Device Farm tests failed"
-            if [[ "$RESULT" != "PASSED" ]]; then
-              echo "   Device Farm result: $RESULT"
-            fi
-            echo "   Your tests: $USER_PASSED passed, $USER_FAILED failed (out of $USER_TEST_COUNT total)"
-            echo "   Device Farm total: $TOTAL | Passed: $PASSED | Failed: $FAILED | Skipped: $SKIPPED"
+            echo "   Devices: $USER_PASSED passed, $USER_FAILED failed (out of $USER_TEST_COUNT)"
+            echo "   Totals: $TOTAL_TOTAL | Passed: $TOTAL_PASSED | Failed: $TOTAL_FAILED | Skipped: $TOTAL_SKIPPED"
+            exit 1
+          elif [ $USER_PASSED -eq 0 ] && [[ "$ALL_RESULTS_PASSED" != "true" ]]; then
+            echo ""
+            echo "❌ No devices ran tests (all runs skipped or errored)"
             exit 1
           fi
-          
+
           echo ""
-          echo "✅ All Device Farm tests passed!"
-          echo "   Your tests: $USER_PASSED passed (out of $USER_TEST_COUNT total)"
-          echo "   Device Farm total: $TOTAL | Passed: $PASSED | Failed: $FAILED | Skipped: $SKIPPED"
+          echo "✅ Device Farm tests passed!"
+          echo "   Devices: $USER_PASSED passed (out of $USER_TEST_COUNT)"
+          if [ "$TOTAL_SKIPPED" -gt 0 ]; then
+            echo "   ⚠️  $TOTAL_SKIPPED test(s) skipped (device unavailable)"
+          fi
+          echo "   Totals: $TOTAL_TOTAL | Passed: $TOTAL_PASSED | Failed: $TOTAL_FAILED | Skipped: $TOTAL_SKIPPED"
+
+      - name: Refresh AWS credentials for log download
+        if: always() && steps.schedule_run.outputs.run_arn_1
+        uses: aws-actions/configure-aws-credentials@8df5847569e6427dd6c4fb1cf565c83acfa8afa7 # 6.0.0
+        with:
+          role-to-assume: ${{ secrets.AWS_OIDC_ROLE_ARN }}
+          aws-region: us-west-2
+          role-session-name: device-farm-logs
+
+      - name: Download Device Farm Logs
+        if: always() && steps.schedule_run.outputs.run_arn_1
+        run: |
+          RUN_ARN_1="${{ steps.schedule_run.outputs.run_arn_1 }}"
+          RUN_ARN_2="${{ steps.schedule_run.outputs.run_arn_2 }}"
+          RUN_ARN_3="${{ steps.schedule_run.outputs.run_arn_3 }}"
+          RUN_ARN_4="${{ steps.schedule_run.outputs.run_arn_4 }}"
+          RUN_ARN_5="${{ steps.schedule_run.outputs.run_arn_5 }}"
+          RUN_ARN_6="${{ steps.schedule_run.outputs.run_arn_6 }}"
+          RUN_ARN_7="${{ steps.schedule_run.outputs.run_arn_7 }}"
+          RUN_ARN_8="${{ steps.schedule_run.outputs.run_arn_8 }}"
+          RUN_COUNT="${{ steps.schedule_run.outputs.run_count }}"
+          LOG_DIR="devicefarm-logs/${{ matrix.platform }}"
+          mkdir -p "$LOG_DIR"
+
+          RUN_ARNS=("$RUN_ARN_1")
+          for i in 2 3 4 5 6 7 8; do
+            eval "arn=\$RUN_ARN_$i"
+            if [ "$RUN_COUNT" -ge "$i" ] && [ -n "$arn" ]; then
+              RUN_ARNS+=("$arn")
+            fi
+          done
+
+          echo ""
+          echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+          echo "📥 DOWNLOADING DEVICE FARM LOGS"
+          echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+          echo ""
+
+          for RUN_ARN in "${RUN_ARNS[@]}"; do
+            RUN_DETAILS=$(aws devicefarm get-run --arn "$RUN_ARN" --output json 2>/dev/null || echo '{}')
+            RUN_LABEL=$(echo "$RUN_DETAILS" | jq -r '.run.name // "unknown"')
+            echo ""
+            echo "========================================"
+            echo "📦 Run: $RUN_LABEL"
+            echo "========================================"
+
+            SAFE_RUN=$(echo "$RUN_LABEL" | tr ' /' '__' | tr -cd '[:alnum:]_-')
+            JOBS=$(aws devicefarm list-jobs --arn "$RUN_ARN" --output json 2>/dev/null || echo '{"jobs":[]}')
+
+            for JOB_ARN in $(echo "$JOBS" | jq -r '.jobs[].arn'); do
+              DEVICE_NAME=$(echo "$JOBS" | jq -r --arg arn "$JOB_ARN" '.jobs[] | select(.arn == $arn) | .device.name // "unknown"')
+              JOB_RESULT=$(echo "$JOBS" | jq -r --arg arn "$JOB_ARN" '.jobs[] | select(.arn == $arn) | .result // "UNKNOWN"')
+              SAFE_NAME=$(echo "$DEVICE_NAME" | tr ' /' '__' | tr -cd '[:alnum:]_-')
+
+              echo ""
+              echo "📱 $DEVICE_NAME ($JOB_RESULT)"
+
+              SUITES=$(aws devicefarm list-suites --arn "$JOB_ARN" --output json 2>/dev/null || echo '{"suites":[]}')
+
+              for SUITE_ARN in $(echo "$SUITES" | jq -r '.suites[].arn'); do
+                SUITE_NAME=$(echo "$SUITES" | jq -r --arg arn "$SUITE_ARN" '.suites[] | select(.arn == $arn) | .name // "unknown"')
+                SAFE_SUITE=$(echo "$SUITE_NAME" | tr ' /' '__' | tr -cd '[:alnum:]_-')
+
+                ARTIFACTS=$(aws devicefarm list-artifacts --arn "$SUITE_ARN" --type FILE --output json 2>/dev/null || echo '{"artifacts":[]}')
+                echo "$ARTIFACTS" | jq -c '.artifacts[]' 2>/dev/null | while read -r ARTIFACT; do
+                  ART_NAME=$(echo "$ARTIFACT" | jq -r '.name // "unknown"')
+                  ART_URL=$(echo "$ARTIFACT" | jq -r '.url // empty')
+                  ART_EXT=$(echo "$ARTIFACT" | jq -r '.extension // "txt"')
+                  [ -z "$ART_URL" ] && continue
+                  SAFE_ART=$(echo "$ART_NAME" | tr ' /' '__' | tr -cd '[:alnum:]_-')
+                  DEST="$LOG_DIR/${SAFE_RUN}_${SAFE_NAME}_${SAFE_SUITE}_${SAFE_ART}.${ART_EXT}"
+                  if curl -fsSL -o "$DEST" "$ART_URL" 2>/dev/null; then
+                    echo "  Downloaded: $SUITE_NAME / $ART_NAME"
+                    if echo "$ART_NAME" | grep -qiE "test.spec|testspec"; then
+                      echo ""; echo "::group::📋 [$DEVICE_NAME] $SUITE_NAME -- $ART_NAME"
+                      cat "$DEST" 2>/dev/null || true; echo "::endgroup::"
+                    fi
+                  fi
+                done
+
+                LOG_ARTIFACTS=$(aws devicefarm list-artifacts --arn "$SUITE_ARN" --type LOG --output json 2>/dev/null || echo '{"artifacts":[]}')
+                echo "$LOG_ARTIFACTS" | jq -c '.artifacts[]' 2>/dev/null | while read -r ARTIFACT; do
+                  ART_NAME=$(echo "$ARTIFACT" | jq -r '.name // "unknown"')
+                  ART_URL=$(echo "$ARTIFACT" | jq -r '.url // empty')
+                  ART_EXT=$(echo "$ARTIFACT" | jq -r '.extension // "txt"')
+                  [ -z "$ART_URL" ] && continue
+                  SAFE_ART=$(echo "$ART_NAME" | tr ' /' '__' | tr -cd '[:alnum:]_-')
+                  DEST="$LOG_DIR/${SAFE_RUN}_${SAFE_NAME}_${SAFE_SUITE}_${SAFE_ART}.${ART_EXT}"
+                  if curl -fsSL -o "$DEST" "$ART_URL" 2>/dev/null; then
+                    echo "  Downloaded: $SUITE_NAME / $ART_NAME (LOG)"
+                  fi
+                done
+              done
+
+              JOB_ARTIFACTS=$(aws devicefarm list-artifacts --arn "$JOB_ARN" --type FILE --output json 2>/dev/null || echo '{"artifacts":[]}')
+              echo "$JOB_ARTIFACTS" | jq -c '.artifacts[]' 2>/dev/null | while read -r ARTIFACT; do
+                ART_NAME=$(echo "$ARTIFACT" | jq -r '.name // "unknown"')
+                ART_URL=$(echo "$ARTIFACT" | jq -r '.url // empty')
+                ART_EXT=$(echo "$ARTIFACT" | jq -r '.extension // "txt"')
+                [ -z "$ART_URL" ] && continue
+                SAFE_ART=$(echo "$ART_NAME" | tr ' /' '__' | tr -cd '[:alnum:]_-')
+                DEST="$LOG_DIR/${SAFE_RUN}_${SAFE_NAME}_job_${SAFE_ART}.${ART_EXT}"
+                if curl -fsSL -o "$DEST" "$ART_URL" 2>/dev/null; then
+                  echo "  Downloaded (job-level): $ART_NAME"
+                fi
+              done
+            done
+          done
+
+          echo ""
+          echo "📦 All downloaded logs:"
+          find "$LOG_DIR" -type f -exec ls -lh {} \; 2>/dev/null || echo "  (no logs downloaded)"
+
+      - name: Upload Device Farm Logs
+        if: always() && steps.schedule_run.outputs.run_arn_1
+        uses: actions/upload-artifact@v4
+        with:
+          name: devicefarm-logs-${{ matrix.platform }}
+          path: devicefarm-logs/
+          retention-days: 30
+          if-no-files-found: ignore
+
+

@@ -16,7 +16,6 @@ class MockedBinding {
     this._jobDelayMs = 0
     this._scriptedOutputs = null
     this._runToken = 0
-    this._baseInferenceCallback = null // Store reference to BaseInference callback
     this._nextJobId = 1
     this._currentJobId = null
     this._streaming = false
@@ -49,21 +48,15 @@ class MockedBinding {
     return this._handle
   }
 
-  // Mock only: Method to set the BaseInference callback to call in addition to custom outputCb
+  // Legacy no-op kept so older tests can still call it.
   setBaseInferenceCallback (callback) {
     this._baseInferenceCallback = callback
   }
 
-  // Helper method to call both callbacks
-  _callCallbacks (event, output, error, jobId = this._currentJobId) {
-    // Call the test's onOutput function
+  // Mimic addon-cpp 1.1.5 callback shape: no trailing native job id.
+  _callCallbacks (event, output, error) {
     if (this.outputCb) {
-      this.outputCb(this._interfaceType, event, output, error, jobId)
-    }
-
-    // Call the BaseInference callback to resolve _finishPromise
-    if (this._baseInferenceCallback) {
-      this._baseInferenceCallback(this._interfaceType, event, jobId, output, error)
+      this.outputCb(this._interfaceType, event, output, error)
     }
   }
 
@@ -193,8 +186,8 @@ class MockedBinding {
   startStreaming (handle, config) {
     if (handle !== this._handle) throw new Error('Invalid handle')
     if (this._streaming) throw new Error('Streaming session already active')
-    // Match WhisperInterface.startStreaming: allocate job id before native work so
-    // _addonOutputCallback receives a finite nativeJobId for streaming events.
+    // Match WhisperInterface.startStreaming: reserve the logical job slot before
+    // native work begins so JS-owned ids stay aligned in tests.
     const jobId = this._nextJobId
     this._nextJobId += 1
     this._currentJobId = jobId

@@ -49,6 +49,7 @@ jobs:
       contents: read
       packages: read
       pull-requests: write # Allow commenting on PRs
+      id-token: write
     strategy:
       fail-fast: false
       matrix:
@@ -319,12 +320,12 @@ jobs:
 
       # Model provisioning for mobile: presigned URLs so the app can download detector + all
       # recognizers at runtime (same set as desktop integration tests).
-      - name: Configure AWS credentials for model download
+      - name: Configure AWS credentials via OIDC for model download
         uses: aws-actions/configure-aws-credentials@8df5847569e6427dd6c4fb1cf565c83acfa8afa7 # 6.0.0
         with:
-          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
-          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          role-to-assume: ${{ secrets.AWS_OIDC_ROLE_ARN }}
           aws-region: eu-central-1
+          role-duration-seconds: 7200 # 2hrs for device farm tests
 
       - name: Generate presigned URLs for OCR models
         working-directory: ./addon/${{ inputs.workdir || env.PKG_DIR }}
@@ -339,20 +340,6 @@ jobs:
           OUTPUT_DIR="$OUTPUT_DIR" ./scripts/generate-ocr-presigned-urls.sh
           echo "✅ Presigned URLs generated and saved to testAssets"
           cat "$OUTPUT_DIR/ocr-model-urls.json"
-
-      - name: Generate presigned URLs for DocTR models
-        working-directory: ./addon/${{ inputs.workdir || env.PKG_DIR }}
-        shell: bash
-        env:
-          MODEL_S3_BUCKET: ${{ secrets.MODEL_S3_BUCKET }}
-        run: |
-          echo "🔑 Generating presigned URLs for DocTR models..."
-          chmod +x scripts/generate-doctr-presigned-urls.sh
-          OUTPUT_DIR="${GITHUB_WORKSPACE}/addon/${{ inputs.workdir || env.PKG_DIR }}/test/mobile/testAssets"
-          mkdir -p "$OUTPUT_DIR"
-          OUTPUT_DIR="$OUTPUT_DIR" ./scripts/generate-doctr-presigned-urls.sh
-          echo "✅ DocTR presigned URLs generated and saved to testAssets"
-          cat "$OUTPUT_DIR/doctr-model-urls.json"
 
       - name: Copy test assets to testAssets
         working-directory: ./addon/${{ inputs.workdir || env.PKG_DIR }}
@@ -790,12 +777,12 @@ jobs:
       # ---- everything below here is unchanged logic-wise (Device Farm upload/run/monitor/comment) ----
       # Kept as-is from your workflow (only paths above needed monorepo porting)
 
-      - name: Configure AWS credentials
+      - name: Configure AWS credentials via OIDC for Device Farm
         uses: aws-actions/configure-aws-credentials@8df5847569e6427dd6c4fb1cf565c83acfa8afa7 # 6.0.0
         with:
-          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
-          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          role-to-assume: ${{ secrets.AWS_OIDC_ROLE_ARN }}
           aws-region: us-west-2
+          role-duration-seconds: 7200 # 2hrs for device farm tests
 
       - name: Upload App to Device Farm
         id: upload_app

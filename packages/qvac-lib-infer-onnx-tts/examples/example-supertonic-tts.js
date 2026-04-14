@@ -7,7 +7,7 @@ const { setLogger, releaseLogger } = require('../addonLogging')
 
 const SUPERTONIC_SAMPLE_RATE = 44100
 
-// Supertone English: models/supertonic — use npm run models:ensure or ensureSupertonicModels
+// Supertone supertonic-2 (HF Supertone/supertonic-2) — use npm run models:ensure or ensureSupertonicModels
 const modelDir = path.join(__dirname, '..', 'models', 'supertonic')
 
 async function main () {
@@ -27,21 +27,21 @@ async function main () {
   // Supertonic configuration: modelDir + voiceName (paths are derived inside the package).
   // Recommended: HF Supertone/supertonic (English) + supertonicMultilingual: false for English quality.
   // supertonic-2 (HF Supertone/supertonic-2): use supertonicMultilingual true with <lang> wrapping.
-  const supertonicArgs = {
-    modelDir,
+  const model = new ONNXTTS({
+    files: {
+      modelDir
+    },
+    engine: 'supertonic',
     voiceName: 'F1',
     speed: 1.05,
     numInferenceSteps: 5,
-    supertonicMultilingual: false,
-    opts: { stats: true },
-    logger: console
-  }
-
-  const config = {
-    language: 'en'
-  }
-
-  const model = new ONNXTTS(supertonicArgs, config)
+    supertonicMultilingual: true,
+    config: {
+      language: 'en'
+    },
+    logger: console,
+    opts: { stats: true }
+  })
 
   try {
     console.log('Loading Supertonic TTS model...')

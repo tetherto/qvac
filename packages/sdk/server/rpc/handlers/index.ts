@@ -3,6 +3,7 @@ import { handleDownloadAsset } from "./download-asset";
 import { handleLoadModel } from "./load-model";
 import { handleUnloadModel } from "./unload-model";
 import { handleEmbed } from "./embed";
+import { handleTranscribe } from "./transcribe";
 import { handleTranscribeStream } from "./transcribe-stream";
 import { provideHandler } from "./provideHandler";
 import { stopProvideHandler } from "./stopProvideHandler";
@@ -15,6 +16,7 @@ import { handleTextToSpeech } from "./text-to-speech";
 import { handleGetModelInfo } from "./get-model-info";
 import { handleOCRStream } from "./ocr-stream";
 import { handleHeartbeat } from "./heartbeat";
+import { handleDiffusionStream } from "./diffusion-stream";
 import { handlePluginInvoke, handlePluginInvokeStream } from "./plugin-invoke";
 import {
   handleModelRegistryList,
@@ -30,6 +32,7 @@ export const handlers = {
   loadModel: handleLoadModel,
   unloadModel: handleUnloadModel,
   embed: handleEmbed,
+  transcribe: handleTranscribe,
   transcribeStream: handleTranscribeStream,
   provide: provideHandler,
   stopProvide: stopProvideHandler,
@@ -40,6 +43,7 @@ export const handlers = {
   textToSpeech: handleTextToSpeech,
   getModelInfo: handleGetModelInfo,
   ocrStream: handleOCRStream,
+  diffusionStream: handleDiffusionStream,
   pluginInvoke: handlePluginInvoke,
   pluginInvokeStream: handlePluginInvokeStream,
   modelRegistryList: handleModelRegistryList,

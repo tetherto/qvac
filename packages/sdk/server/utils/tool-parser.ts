@@ -1,5 +1,9 @@
 import type { Tool, ToolCall, ToolCallError } from "@/schemas";
 
+function stripThinkingBlocks(text: string): string {
+  return text.replace(/<think>[\s\S]*?<\/think>/gi, "");
+}
+
 let toolCallSequence = 0;
 
 function generateStableToolCallId(name: string, args: Record<string, unknown>) {
@@ -275,26 +279,28 @@ export function parseToolCalls(
     return { toolCalls: [], errors: [] };
   }
 
-  let result = parseGemmaFormat(text, tools);
+  const cleaned = stripThinkingBlocks(text);
+
+  let result = parseGemmaFormat(cleaned, tools);
   if (result.toolCalls.length > 0) {
     return result;
   }
 
-  result = parseQwenFormat(text, tools);
+  result = parseQwenFormat(cleaned, tools);
   if (result.toolCalls.length > 0) {
     return result;
   }
 
-  result = parseLlamacppFormat(text, tools);
+  result = parseLlamacppFormat(cleaned, tools);
   if (result.toolCalls.length > 0) {
     return result;
   }
 
-  if (text.includes("<tool_call>")) {
+  if (cleaned.includes("<tool_call>")) {
     return { toolCalls: [], errors: [] };
   }
 
-  result = parseGenericFormat(text, tools);
+  result = parseGenericFormat(cleaned, tools);
   return result;
 }
 

@@ -42,31 +42,6 @@ const getPackageVersion = (lib) => {
   }
 }
 
-class FakeLoader {
-  async start () {}
-  async stop () {}
-  async ready () {
-    return true
-  }
-
-  async getStream () {
-    throw new Error('FakeLoader.getStream should not be called when using diskPath')
-  }
-
-  async download (filepath, destPath) {
-    return {
-      await: async () => ({
-        success: false,
-        message: 'FakeLoader does not support downloading. Model files must exist on disk at the specified path.'
-      })
-    }
-  }
-
-  async list () {
-    return []
-  }
-}
-
 const runAddon = async (payload) => {
   const { inputs, whisper, config } =
     InferenceArgsSchema.parse(payload)
@@ -98,16 +73,16 @@ const runAddon = async (payload) => {
     if (!config.path) {
       throw new Error('Model path is required in config')
     }
-    validateFilePath(config.path)
+    const resolvedModelPath = validateFilePath(config.path)
 
     const constructorArgs = {
-      loader: new FakeLoader(),
-      modelName: path.basename(config.path),
-      diskPath: path.dirname(config.path)
+      files: {
+        model: resolvedModelPath
+      }
     }
 
     if (vadModelPath) {
-      constructorArgs.vadModelName = path.basename(vadModelPath)
+      constructorArgs.files.vadModel = validateFilePath(vadModelPath)
     }
 
     const unsupportedParams = ['mode', 'output_format', 'min_seconds', 'max_seconds']

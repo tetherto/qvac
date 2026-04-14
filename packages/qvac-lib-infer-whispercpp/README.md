@@ -237,7 +237,7 @@ The library provides a straightforward workflow for audio transcription:
 
 Data loaders abstract the way model files are accessed, whether from the filesystem, a network drive, or any other storage mechanism. More info about model registry and model builds in [resources](#resources).
 
-- [Filesystem Data Loader](https://github.com/tetherto/qvac/tree/main/packages/qvac-lib-dl-filesystem)
+- [Filesystem Data Loader](https://github.com/tetherto/qvac/tree/main/packages/dl-filesystem)
 
 First, select and instantiate a data loader that provides access to model files:
 
@@ -347,12 +347,6 @@ curl -L -o models/ggml-tiny.bin https://huggingface.co/ggerganov/whisper.cpp/res
 
 # VAD model
 curl -L -o models/ggml-silero-v5.1.2.bin https://huggingface.co/ggml-org/whisper-vad/resolve/main/ggml-silero-v5.1.2.bin
-```
-
-For fine-tuned models maintained by the team, use the S3 download script:
-
-```bash
-MODEL_S3_BUCKET=<bucket> ./scripts/download-models-s3.sh --access-key <KEY> --secret-key <SECRET> --model <name>
 ```
 
 ### 4. Create Model Instance
@@ -485,7 +479,7 @@ try {
 
 ### 1. Clone the repo & Install the dependencies
 ```bash
-git clone git@github.com:tetherto/qvac-lib-infer-whispercpp.git
+git clone https://github.com/tetherto/qvac-lib-infer-whispercpp.git
 cd qvac-lib-infer-whispercpp
 npm install
 ```

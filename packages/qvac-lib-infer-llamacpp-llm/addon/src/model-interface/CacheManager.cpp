@@ -34,21 +34,19 @@ bool CacheManager::handleCache(
     std::function<
         std::pair<std::vector<common_chat_msg>, std::vector<common_chat_tool>>(
             const std::string&)>
-        formatPrompt) {
+        formatPrompt,
+    const std::string& cacheKey) {
 
   auto formatted = formatPrompt(inputPrompt);
   chatMsgs = std::move(formatted.first);
   tools = std::move(formatted.second);
 
-  bool hasSessionMessage = !chatMsgs.empty() && chatMsgs[0].role == "session";
-
-  if (!hasSessionMessage) {
+  if (cacheKey.empty()) {
     if (hasActiveCache()) {
       QLOG_IF(
           Priority::DEBUG,
           string_format(
-              "%s: No session message in prompt, clearing existing cache "
-              "'%s'\n",
+              "%s: No cacheKey provided, clearing existing cache '%s'\n",
               __func__,
               sessionPath_.c_str()));
       saveCache();
@@ -60,106 +58,36 @@ bool CacheManager::handleCache(
     return false;
   }
 
-  bool cacheLoaded = false;
-  bool cachePathSetInThisArray = false;
-
-  while (!chatMsgs.empty() && chatMsgs[0].role == "session") {
-    std::string sessionCommand = chatMsgs[0].content;
-    chatMsgs.erase(chatMsgs.begin());
-
-    if (sessionCommand == "reset") {
-      if (!cachePathSetInThisArray) {
-        std::string errorMsg = string_format(
-            "%s: reset command requires explicit cache file specification in "
-            "the same message array\n",
-            __func__);
-        throw qvac_errors::StatusError(
-            ADDON_ID, toString(InvalidInputFormat), errorMsg);
-      }
-      resetStateCallback_(true);
-      cacheUsedInLastPrompt_ = false;
-    } else if (sessionCommand == "save") {
-      if (!cachePathSetInThisArray) {
-        std::string errorMsg = string_format(
-            "%s: save command requires explicit cache file specification in "
-            "the same message array\n",
-            __func__);
-        throw qvac_errors::StatusError(
-            ADDON_ID, toString(InvalidInputFormat), errorMsg);
-      }
-      saveCache();
-    } else if (sessionCommand == "getTokens") {
-      if (!cachePathSetInThisArray) {
-        std::string errorMsg = string_format(
-            "%s: getTokens command requires explicit cache file specification "
-            "in the same message array\n",
-            __func__);
-        throw qvac_errors::StatusError(
-            ADDON_ID, toString(InvalidInputFormat), errorMsg);
-      }
-      QLOG_IF(
-          Priority::DEBUG,
-          string_format(
-              "%s: getTokens command - querying cache tokens for '%s'\n",
-              __func__,
-              sessionPath_.c_str()));
-    } else {
-      if (!cacheDisabled_ && !sessionPath_.empty() &&
-          sessionCommand == sessionPath_) {
-        QLOG_IF(
-            Priority::DEBUG,
-            string_format(
-                "%s: Same session file '%s' - ignoring command, continuing to "
-                "inference\n",
-                __func__,
-                sessionPath_.c_str()));
-        cachePathSetInThisArray = true;
-        cacheUsedInLastPrompt_ = true;
-        continue;
-      }
-
-      if (!cacheDisabled_ && !sessionPath_.empty() &&
-          sessionCommand != sessionPath_) {
-        QLOG_IF(
-            Priority::DEBUG,
-            string_format(
-                "%s: Switching from cache '%s' to '%s', clearing old cache\n",
-                __func__,
-                sessionPath_.c_str(),
-                sessionCommand.c_str()));
-        saveCache();
-        resetStateCallback_(true);
-      }
-
-      if (cacheDisabled_ && sessionPath_.empty()) {
-        resetStateCallback_(true);
-      }
-
-      sessionPath_ = sessionCommand;
-      cachePathSetInThisArray = true;
-
-      if (!sessionPath_.empty()) {
-        cacheDisabled_ = false;
-
-        QLOG_IF(
-            Priority::DEBUG,
-            string_format(
-                "%s: Cache enabled with session file '%s'\n",
-                __func__,
-                sessionPath_.c_str()));
-
-        cacheLoaded = loadCache();
-        cacheUsedInLastPrompt_ = true;
-      } else {
-        std::string errorMsg =
-            string_format("%s: session msg content is empty\n", __func__);
-        throw qvac_errors::StatusError(
-            ADDON_ID, toString(InvalidInputFormat), errorMsg);
-      }
-    }
+  if (!cacheDisabled_ && sessionPath_ == cacheKey) {
+    cacheUsedInLastPrompt_ = true;
+    return false;
   }
 
-  return cacheLoaded;
+  if (hasActiveCache() && sessionPath_ != cacheKey) {
+    QLOG_IF(
+        Priority::DEBUG,
+        string_format(
+            "%s: Switching from cache '%s' to '%s', saving old cache\n",
+            __func__,
+            sessionPath_.c_str(),
+            cacheKey.c_str()));
+    saveCache();
+  }
+
+  resetStateCallback_(true);
+  cacheUsedInLastPrompt_ = false;
+
+  sessionPath_ = cacheKey;
+  cacheDisabled_ = false;
+
+  QLOG_IF(
+      Priority::DEBUG,
+      string_format(
+          "%s: Cache enabled with key '%s'\n", __func__, sessionPath_.c_str()));
+
+  bool loaded = loadCache();
+  cacheUsedInLastPrompt_ = true;
+  return loaded;
 }
 
 bool CacheManager::loadCache() {
@@ -235,19 +163,18 @@ void CacheManager::saveCache() {
     throw qvac_errors::StatusError(
         ADDON_ID, toString(InvalidInputFormat), errorMsg);
   }
+  writeCacheFile(sessionPath_);
+}
 
-  auto* ctx = llmContext_->getCtx();
+void CacheManager::writeCacheFile(const std::string& path) {
+  llama_context* ctx = llmContext_->getCtx();
   QLOG_IF(
       Priority::DEBUG,
-      string_format(
-          "\n%s: saving final output to session file '%s'\n",
-          __func__,
-          sessionPath_.c_str()));
-
+      string_format("%s: saving cache to '%s'\n", __func__, path.c_str()));
   llama_token sessionTokens[2] = {
       static_cast<llama_token>(llmContext_->getNPast()),
       static_cast<llama_token>(llmContext_->getFirstMsgTokens())};
-  llama_state_save_file(ctx, sessionPath_.c_str(), sessionTokens, 2);
+  llama_state_save_file(ctx, path.c_str(), sessionTokens, 2);
 }
 
 void CacheManager::invalidate() {

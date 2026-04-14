@@ -6,12 +6,12 @@ description: Automatic speech recognition (ASR) for speech-to-text.
 
 ## Overview
 
-[Bare module](https://bare.pears.com) that adds support for transcription in QVAC using [`whisper.cpp`](https://github.com/ggml-org/whisper.cpp) as the inference engine.
+[Bare module](https://bare.pears.com) that adds support for transcription in QVAC using [`qvac-ext-lib-whisper.cpp`](https://github.com/tetherto/qvac-ext-lib-whisper.cpp) as the inference engine.
 
 ## Models
 
 You should load two models:
-- a `whisper.cpp`-compatible model for transcription. Model file format: `*.bin`; and
+- a [`whisper.cpp`](https://github.com/ggml-org/whisper.cpp)-compatible model for transcription. Model file format: `*.bin`; and
 - a VAD model (e.g., Silero) converted to GGML. Model file format: `*.bin` _(optional, recommended)_.
 
 ## Requirement

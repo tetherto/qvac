@@ -97,7 +97,7 @@ export const tree: Node[] = [
     ],
   },
   {
-    name: 'Usage Examples',
+    name: 'Usage examples',
     type: 'folder',
     icon: resolveIcon('ListChecks'),
     children: [
@@ -192,9 +192,8 @@ export const tree: Node[] = [
   },
   {
     name: 'Release notes',
-    url: 'https://github.com/tetherto/qvac/tree/main/packages/sdk/changelog',
+    url: '/release-notes',
     type: 'page',
-    external: true,
     icon: resolveIcon('Tag'),
   },
   {

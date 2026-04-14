@@ -45,7 +45,8 @@ jobs:
     permissions:
       contents: read
       packages: read
-      pull-requests: write  # Allow commenting on PRs
+      pull-requests: write
+      id-token: write
     strategy:
       fail-fast: false
       matrix:
@@ -699,12 +700,12 @@ jobs:
             exit 1
           fi
 
-      - name: Configure AWS credentials
+      - name: Configure AWS credentials via OIDC
         uses: aws-actions/configure-aws-credentials@8df5847569e6427dd6c4fb1cf565c83acfa8afa7 # 6.0.0
         with:
-          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
-          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          role-to-assume: ${{ secrets.AWS_OIDC_ROLE_ARN }}
           aws-region: us-west-2
+          role-duration-seconds: 7200 # 2hrs for device farm tests
 
       - name: Upload App to Device Farm
         id: upload_app
