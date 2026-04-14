@@ -176,12 +176,13 @@ jobs:
           name-suffix: "-mono"
 
   publish-npm:
-    needs: [build, publish-logic, release-merge-guard]
+    needs: [build, publish-logic, release-merge-guard, ensure-npm-public]
     if: >-
       !cancelled() &&
       needs.build.result == 'success' &&
       needs.publish-logic.outputs.publish_release == 'true' &&
-      (needs.release-merge-guard.result == 'success' || needs.release-merge-guard.result == 'skipped')
+      (needs.release-merge-guard.result == 'success' || needs.release-merge-guard.result == 'skipped') &&
+      (needs.ensure-npm-public.result == 'success' || needs.ensure-npm-public.result == 'skipped')
     continue-on-error: false
     outputs:
       published_version: ${{ steps.publish.outputs.npm_published_version }}
