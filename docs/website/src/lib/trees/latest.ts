@@ -113,6 +113,7 @@ export const tree: Node[] = [
           { name: 'Text-to-Speech', url: '/sdk/examples/ai-tasks/text-to-speech', type: 'page', icon: resolveIcon('Volume2') },
           { name: 'OCR', url: '/sdk/examples/ai-tasks/ocr', type: 'page', icon: resolveIcon('ScanText') },
           { name: 'Multimodal', url: '/sdk/examples/ai-tasks/multimodal', type: 'page', icon: resolveIcon('GalleryHorizontal') },
+          { name: 'Fine-tuning', url: '/sdk/examples/ai-tasks/fine-tuning', type: 'page', icon: resolveIcon('FlaskConical') },
           { name: 'RAG', url: '/sdk/examples/ai-tasks/rag', type: 'page', icon: resolveIcon('ScanSearch') },
         ],
       },
