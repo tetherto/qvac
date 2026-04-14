@@ -1140,7 +1140,20 @@ jobs:
             printf '        [ -z "$X" ] && for P in /tmp/perf-report.json /data/local/tmp/perf-report.json; do adb shell "cat $P">$L/perf-report.json 2>/dev/null;[ -s $L/perf-report.json ]&&X=1&&break;done\n'
             printf '        [ -z "$X" ] && for S in files/perf-report.json cache/perf-report.json ./perf-report.json; do adb shell "run-as $B cat $S">$L/perf-report.json 2>/dev/null;[ -s $L/perf-report.json ]&&X=1&&break;done\n'
             printf '        [ -z "$X" ] && FP=$(adb shell "find /data -name perf-report.json -type f 2>/dev/null"|head -1|tr -d "\\r") && [ -n "$FP" ] && adb shell "cat $FP">$L/perf-report.json 2>/dev/null && [ -s $L/perf-report.json ] && X=1\n'
-            printf '        if [ -n "$X" ]; then echo "[PERF_REPORT_START]";cat $L/perf-report.json;echo "[PERF_REPORT_END]";else echo "FAILED: no perf-report.json found";grep -i perf $L/logcat_full.txt 2>/dev/null|tail -20||true;fi\n'
+            printf '        if [ -n "$X" ]; then\n'
+            printf '          echo "[PERF_REPORT_START]"\n'
+            printf '          cat $L/perf-report.json\n'
+            printf '          echo "[PERF_REPORT_END]"\n'
+            printf '        elif grep -q "PERF_REPORT_START" $L/logcat_full.txt 2>/dev/null; then\n'
+            printf '          echo "Extracting perf report from logcat console output..."\n'
+            printf '          sed -n "/PERF_REPORT_START/,/PERF_REPORT_END/p" $L/logcat_full.txt\n'
+            printf '        else\n'
+            printf '          echo "FAILED: no perf data found in files or logcat"\n'
+            printf '          echo "=== logcat perf-related lines ==="\n'
+            printf '          grep -i "perf\\|PERF_REPORT" $L/logcat_full.txt 2>/dev/null|tail -30||true\n'
+            printf '          echo "=== logcat_full.txt size ==="\n'
+            printf '          wc -c $L/logcat_full.txt 2>/dev/null||echo "logcat_full.txt missing"\n'
+            printf '        fi\n'
             printf '      - ls -lh $DEVICEFARM_LOG_DIR/ || true\n'
           fi
 
@@ -1484,11 +1497,15 @@ jobs:
 
             SUITES=$(aws devicefarm list-suites --arn "$JOB_ARN" --output json)
             for SUITE_ARN in $(echo "$SUITES" | jq -r '.suites[].arn'); do
-              # FILE artifacts: test spec output, customer logs
+              # FILE artifacts: test spec output, customer artifacts (files from $DEVICEFARM_LOG_DIR)
               ARTIFACTS=$(aws devicefarm list-artifacts --arn "$SUITE_ARN" --type FILE --output json)
-              echo "$ARTIFACTS" | jq -r '.artifacts[] | select(.type == "TESTSPEC_OUTPUT" or .type == "CUSTOMER_ARTIFACT_LOG") | "\(.type) \(.url)"' | while read -r TYPE URL; do
+              echo "$ARTIFACTS" | jq -r '.artifacts[] | select(.type == "TESTSPEC_OUTPUT" or .type == "CUSTOMER_ARTIFACT_LOG" or .type == "CUSTOMER_ARTIFACT") | "\(.type) \(.name) \(.url)"' | while read -r TYPE NAME URL; do
                 if [ -n "$URL" ] && [ "$URL" != "null" ]; then
-                  FILENAME="${TYPE}.txt"
+                  if [ "$TYPE" = "CUSTOMER_ARTIFACT" ]; then
+                    FILENAME="customer_${NAME}"
+                  else
+                    FILENAME="${TYPE}.txt"
+                  fi
                   echo "  Downloading ${DEVICE_NAME}/${FILENAME}..."
                   curl -sL "$URL" -o "${DEVICE_DIR}/${FILENAME}" || true
                 fi
@@ -1514,19 +1531,53 @@ jobs:
         if: always() && steps.download_df_logs.outputs.artifact_dir
         run: |
           ARTIFACT_DIR="${{ steps.download_df_logs.outputs.artifact_dir }}"
-          echo "=== Searching for perf-related output in TESTSPEC_OUTPUT files ==="
+
+          echo "=== All downloaded artifact files ==="
+          find "$ARTIFACT_DIR" -type f -ls 2>/dev/null || echo "  (none)"
+          echo ""
+
+          echo "=== Searching ALL files for perf markers ==="
+          for f in $(find "$ARTIFACT_DIR" -type f); do
+            HAS_MARKERS=$(grep -c "PERF_REPORT_START" "$f" 2>/dev/null || echo 0)
+            HAS_PATH=$(grep -c "PERF_REPORT_PATH" "$f" 2>/dev/null || echo 0)
+            if [ "$HAS_MARKERS" -gt 0 ] || [ "$HAS_PATH" -gt 0 ]; then
+              echo "  $f: PERF_REPORT_START=$HAS_MARKERS, PERF_REPORT_PATH=$HAS_PATH"
+            fi
+          done
+          echo ""
+
+          echo "=== TESTSPEC_OUTPUT.txt diagnosis ==="
           for f in $(find "$ARTIFACT_DIR" -name "TESTSPEC_OUTPUT.txt" -type f); do
             echo ""
             echo "--- $f ($(wc -c < "$f") bytes) ---"
-            echo "Lines with PERF_REPORT markers:"
+            echo "Lines with PERF_REPORT:"
             grep -n "PERF_REPORT" "$f" | head -20 || echo "  (none)"
             echo "Lines with perf-extract:"
             grep -n "perf-extract" "$f" | head -20 || echo "  (none)"
             echo "Lines with perf-report:"
             grep -n "perf-report" "$f" | head -20 || echo "  (none)"
-            echo "Last 50 lines (post_test output):"
-            tail -50 "$f"
+            echo "Lines with 'post_test' or 'Test completed':"
+            grep -n "post_test\|Test completed\|Extracting perf\|FAILED.*perf\|logcat" "$f" | head -20 || echo "  (none)"
+            echo "Last 80 lines:"
+            tail -80 "$f"
             echo "---"
+          done
+
+          echo ""
+          echo "=== Device log files (LOGCAT/DEVICE_LOG) ==="
+          for f in $(find "$ARTIFACT_DIR" -name "LOGCAT.txt" -o -name "DEVICE_LOG.txt" -type f); do
+            if [ -f "$f" ]; then
+              echo "--- $f ($(wc -c < "$f") bytes) ---"
+              echo "Lines with PERF_REPORT:"
+              grep -n "PERF_REPORT" "$f" | head -20 || echo "  (none)"
+            fi
+          done
+
+          echo ""
+          echo "=== Customer artifact files ==="
+          for f in $(find "$ARTIFACT_DIR" -name "customer_*" -type f); do
+            echo "--- $f ($(wc -c < "$f") bytes) ---"
+            head -5 "$f" 2>/dev/null || true
           done
 
       - name: Extract performance report from logs

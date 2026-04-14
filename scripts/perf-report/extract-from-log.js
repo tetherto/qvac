@@ -209,7 +209,11 @@ function main () {
 
   console.log(`Scanning ${logDir} for performance report markers...`)
   const files = walkDir(logDir)
-  console.log(`Found ${files.length} file(s) to scan`)
+  console.log(`Found ${files.length} file(s) to scan:`)
+  for (const f of files) {
+    const size = fs.statSync(f).size
+    console.log(`  ${f} (${size} bytes)`)
+  }
 
   const deviceReports = {}
 
