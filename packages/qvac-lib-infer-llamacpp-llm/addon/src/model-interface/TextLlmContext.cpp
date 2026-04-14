@@ -430,7 +430,31 @@ void TextLlmContext::applyContextDiscard() {
   // we simply cannot free space and the caller handles overflow.
   auto& dts = dynamicToolsState();
   llama_pos discard = dts.clampDiscard(nDiscarded_, firstMsgTokens_);
+  if (discard == 0 && dts.hasDegenerateToolBoundary(firstMsgTokens_)) {
+    QLOG_IF(
+        Priority::WARNING,
+        string_format(
+            "[TextLlm] tools_compact anchor equals first message boundary "
+            "(nPastBeforeTools=%d, firstMsgTokens=%d) while context is full; "
+            "resetting tool boundary before retry\n",
+            dts.nPastBeforeTools(),
+            firstMsgTokens_));
+    dts.reset();
+    discard = dts.clampDiscard(nDiscarded_, firstMsgTokens_);
+  }
   if (discard == 0) {
+    QLOG_IF(
+        Priority::WARNING,
+        string_format(
+            "[TextLlm] context is full but cannot discard tokens "
+            "(nPast=%d, nCtx=%d, nDiscarded=%d, firstMsgTokens=%d, "
+            "nPastBeforeTools=%d, toolsCompact=%s)\n",
+            nPast_,
+            llama_n_ctx(lctx_),
+            nDiscarded_,
+            firstMsgTokens_,
+            dts.nPastBeforeTools(),
+            dts.toolsCompact() ? "true" : "false"));
     return;
   }
   auto* mem = llama_get_memory(lctx_);
@@ -484,6 +508,18 @@ bool TextLlmContext::generateResponse(
     }
     if (nPast_ + 1 > static_cast<llama_pos>(llama_n_ctx(lctx_)) &&
         nDiscarded_ == 0) {
+      QLOG_IF(
+          Priority::WARNING,
+          string_format(
+              "[TextLlm] generation overflow: context is full and nDiscarded "
+              "is "
+              "0 (nPast=%d, nCtx=%d, firstMsgTokens=%d, nPastBeforeTools=%d, "
+              "toolsCompact=%s)\n",
+              nPast_,
+              llama_n_ctx(lctx_),
+              firstMsgTokens_,
+              dynamicToolsState().nPastBeforeTools(),
+              dynamicToolsState().toolsCompact() ? "true" : "false"));
       return false;
     }
     applyContextDiscard();

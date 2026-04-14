@@ -144,6 +144,12 @@ public:
     return nDiscarded;
   }
 
+  // A degenerate boundary (anchor == first message edge) means tools_compact
+  // cannot preserve any token window beyond the first message.
+  [[nodiscard]] bool hasDegenerateToolBoundary(llama_pos firstMsgTokens) const {
+    return toolsCompact_ && nPastBeforeTools_ == firstMsgTokens;
+  }
+
   // Shift nPastBeforeTools left after a context slide so the trim
   // boundary stays accurate. No-op when tools_compact is off.
   // Precondition: discard must have been clamped by clampDiscard()
