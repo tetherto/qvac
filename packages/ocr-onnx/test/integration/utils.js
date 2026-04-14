@@ -654,7 +654,8 @@ function formatOCRPerformanceMetrics (label, stats, outputTexts = [], opts) {
 
     if (isMobile) {
       _perfReporter.writeReport()
-      _perfReporter.writeToConsole({ lightweight: true })
+      const isCheckpoint = _perfReporter.length % 6 === 0
+      _perfReporter.writeToConsole({ lightweight: !isCheckpoint })
     }
   }
 
