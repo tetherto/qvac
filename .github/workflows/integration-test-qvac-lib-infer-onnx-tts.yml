@@ -56,6 +56,7 @@ jobs:
         os:
           - ubuntu-22.04
           - ubuntu-24.04
+          - ubuntu-latest
           - ubuntu-24.04-arm
           - macos-14-xlarge
           - macos-15-large
@@ -69,6 +70,10 @@ jobs:
             platform: linux
             arch: x64
             os_version: u24
+          - os: ubuntu-latest
+            platform: linux
+            arch: x64
+            os_version: latest
           - os: ubuntu-24.04-arm
             platform: linux
             arch: arm64
