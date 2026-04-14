@@ -111,10 +111,10 @@ declare class ONNXTTS {
   run(input: ONNXTTS.TTSRunInput): Promise<QvacResponse<ONNXTTS.TTSOutputChunk>>
 
   /**
-   * Sentence-chunked synthesis: split long text, emit PCM per chunk on `response.onUpdate`,
-   * then `await response.await()` — same shape as Whisper `runStreaming()`.
+   * Chunked streaming synthesis: split long text, emit PCM per chunk on `response.onUpdate`,
+   * then `await response.await()`.
    */
-  runSentenceStream(
+  runStream(
     text: string,
     options?: ONNXTTS.SentenceStreamOptions,
   ): Promise<QvacResponse<ONNXTTS.TTSOutputChunk & ONNXTTS.SentenceStreamChunkMeta>>

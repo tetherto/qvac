@@ -12,7 +12,7 @@ const modelDir = path.join(__dirname, '..', 'models', 'supertonic')
 
 /**
  * Same usage shape as Whisper `runStreaming()` (see examples/example.streaming-vad.js):
- * await `runSentenceStream`, attach `response.onUpdate`, then `await response.await()`.
+ * await `runStream`, attach `response.onUpdate`, then `await response.await()`.
  */
 
 async function main () {
@@ -60,9 +60,9 @@ async function main () {
      The bees were buzzing around the flowers, collecting nectar.
      The butterflies were fluttering around the flowers, collecting nectar.`
 
-    console.log('Starting runSentenceStream (chunked synthesis, onUpdate per chunk)...')
+    console.log('Starting runStream (chunked synthesis, onUpdate per chunk)...')
 
-    const response = await model.runSentenceStream(textToSynthesize)
+    const response = await model.runStream(textToSynthesize)
 
     let buffer = []
     let chunkCount = 0

@@ -168,9 +168,12 @@ function mergeUpToMaxScalars (pieces, maxScalars) {
  * @param {string} [options.language] BCP-47 / model language (e.g. en, ko)
  * @param {string} [options.locale] Optional override for Intl.Segmenter
  * @param {number} [options.maxScalars] Max graphemes per chunk (default aligns with Supertonic)
+ * @param {boolean} [options.mergeToMaxScalars] When false, return sentence-level pieces only (no
+ *   mergeUpToMaxScalars pass). Default true. Useful for test harnesses that synthesize per sentence.
  * @returns {string[]}
  */
 function splitTtsText (text, options = {}) {
+  const mergeToMaxScalars = options.mergeToMaxScalars !== false
   const language = (options.language || 'en').toLowerCase()
   const maxScalars =
     options.maxScalars != null
@@ -199,7 +202,14 @@ function splitTtsText (text, options = {}) {
   }
 
   if (sentences.length === 0) {
+    if (!mergeToMaxScalars) {
+      return [raw]
+    }
     return mergeUpToMaxScalars([raw], maxScalars)
+  }
+
+  if (!mergeToMaxScalars) {
+    return sentences
   }
 
   return mergeUpToMaxScalars(sentences, maxScalars)

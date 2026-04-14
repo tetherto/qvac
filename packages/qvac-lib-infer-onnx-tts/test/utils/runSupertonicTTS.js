@@ -38,10 +38,10 @@ async function runSupertonicTTS (model, params, expectation = {}) {
 }
 
 /**
- * Integration helper: {@link ONNXTTS#runSentenceStream} then `onUpdate` + `await`
+ * Integration helper: {@link ONNXTTS#runStream} then `onUpdate` + `await`
  * (Whisper-style streaming), concatenating chunk PCM in chunk order.
  */
-async function runSupertonicSentenceStream (model, params, expectation = {}) {
+async function runSupertonicStream (model, params, expectation = {}) {
   const sampleRate = SUPERTONIC_SAMPLE_RATE
   const tag = '[Supertonic] '
 
@@ -65,7 +65,7 @@ async function runSupertonicSentenceStream (model, params, expectation = {}) {
         ? params.streamOptions
         : {}
 
-    const response = await model.runSentenceStream(params.text, streamOpts)
+    const response = await model.runStream(params.text, streamOpts)
     const pcmByChunk = new Map()
     let jobStats = null
 
@@ -143,5 +143,5 @@ async function runSupertonicSentenceStream (model, params, expectation = {}) {
 module.exports = {
   loadSupertonicTTS,
   runSupertonicTTS,
-  runSupertonicSentenceStream
+  runSupertonicStream
 }

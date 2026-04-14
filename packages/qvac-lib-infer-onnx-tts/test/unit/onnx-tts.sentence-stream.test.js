@@ -23,13 +23,13 @@ function createStubbedModel (opts = {}) {
   return model
 }
 
-test('runSentenceStream runs multiple native jobs and enriches output (onUpdate + await)', async (t) => {
+test('runStream runs multiple native jobs and enriches output (onUpdate + await)', async (t) => {
   const runJobSpy = sinon.spy(MockedBinding.prototype, 'runJob')
   const model = createStubbedModel()
   await model.load()
   const text =
     'This is long text one. This is long text two. This is long text three.'
-  const response = await model.runSentenceStream(text, { maxChunkScalars: 18 })
+  const response = await model.runStream(text, { maxChunkScalars: 18 })
   const updates = []
   response.onUpdate(d => {
     updates.push(d)

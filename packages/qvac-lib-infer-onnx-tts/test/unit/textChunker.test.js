@@ -32,3 +32,10 @@ test('splitTtsText uses shorter chunks for Korean default', (t) => {
 test('intlSentenceSegmentationAvailable is boolean', (t) => {
   t.is(typeof intlSentenceSegmentationAvailable(), 'boolean')
 })
+
+test('splitTtsText mergeToMaxScalars:false does not merge sentences by max length', (t) => {
+  const text = 'A. B. C. D. E.'
+  const sentenceLevel = splitTtsText(text, { language: 'en', mergeToMaxScalars: false })
+  const merged = splitTtsText(text, { language: 'en', mergeToMaxScalars: true, maxScalars: 100 })
+  t.ok(sentenceLevel.length >= merged.length)
+})

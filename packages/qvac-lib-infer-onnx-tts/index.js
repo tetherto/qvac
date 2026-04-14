@@ -140,7 +140,7 @@ class ONNXTTS {
     }
     this.addon = null
     this._sentenceStreamCtx = null
-    /** Serializes `runSentenceStream` until each response settles (Whisper-style). */
+    /** Serializes `runStream` until each response settles (Whisper-style). */
     this._ttsInferenceQueueWaiter = Promise.resolve()
     this._job = createJobHandler({
       cancel: () => {
@@ -306,8 +306,7 @@ class ONNXTTS {
   }
 
   /**
-   * Serialize sentence-stream runs until the returned {@link QvacResponse} settles,
-   * matching {@link TranscriptionWhispercpp#runStreaming} + `_enqueueExclusiveRunResponse`.
+   * Serialize streaming runs until the returned {@link QvacResponse} settles.
    */
   async _enqueueExclusiveTtsResponse (runFn) {
     const prev = this._ttsInferenceQueueWaiter || Promise.resolve()
@@ -329,33 +328,32 @@ class ONNXTTS {
 
   /**
    * Chunk long text by sentence (see {@link splitTtsText}), synthesize each chunk in order,
-   * and emit PCM on `response.onUpdate` as each chunk completes — same usage as Whisper
-   * `runStreaming`: `const response = await model.runSentenceStream(text); response.onUpdate(...); await response.await()`.
+   * and emit PCM on `response.onUpdate` as each chunk completes.
    *
    * @param {string} text
    * @param {{ locale?: string, maxChunkScalars?: number }} [options]
    */
-  async runSentenceStream (text, options = {}) {
+  async runStream (text, options = {}) {
     const opts = options == null || typeof options !== 'object' ? {} : options
     if (typeof text !== 'string' || text.trim().length === 0) {
       throw new QvacErrorAddonTTS({
         code: ERR_CODES.FAILED_TO_APPEND,
-        adds: 'runSentenceStream: non-empty string required'
+        adds: 'runStream: non-empty string required'
       })
     }
     if (this.exclusiveRun) {
       return await this._enqueueExclusiveTtsResponse(() =>
-        this._runSentenceStreamOrchestrator(text, opts)
+        this._runStreamOrchestrator(text, opts)
       )
     }
-    return this._runSentenceStreamOrchestrator(text, opts)
+    return this._runStreamOrchestrator(text, opts)
   }
 
   /**
    * Starts a {@link QvacResponse} and schedules chunk synthesis without awaiting completion
    * (so callers can attach `onUpdate` before audio callbacks run).
    */
-  _runSentenceStreamOrchestrator (text, options) {
+  _runStreamOrchestrator (text, options) {
     const chunks = splitTtsText(String(text), {
       language: this._config?.language,
       locale: options.locale,
@@ -364,7 +362,7 @@ class ONNXTTS {
     if (chunks.length === 0) {
       throw new QvacErrorAddonTTS({
         code: ERR_CODES.FAILED_TO_APPEND,
-        adds: 'runSentenceStream: text produced no chunks after split'
+        adds: 'runStream: text produced no chunks after split'
       })
     }
 
