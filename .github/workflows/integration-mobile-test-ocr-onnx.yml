@@ -966,36 +966,41 @@ jobs:
             exit 1
           fi
 
+      - name: Define WDIO Config
+        id: wdio_config
+        run: |
+          if [ "${{ matrix.platform }}" == "Android" ]; then
+            BID="${{ env.APP_BUNDLE_ID }}"
+            cat > /tmp/wdio-config.js << 'WDIO_EOF'
+          exports.config={runner:"local",hostname:"127.0.0.1",port:4723,path:"/wd/hub",specs:["*.spec.js","*.test.js"],maxInstances:1,bail:0,capabilities:[{platformName:"Android","appium:automationName":"UiAutomator2","appium:appPackage":"__BUNDLE_ID__","appium:appActivity":"__BUNDLE_ID__.MainActivity","appium:newCommandTimeout":300,"appium:autoGrantPermissions":true,"appium:autoAcceptAlerts":true,"appium:noReset":true,"appium:dontStopAppOnReset":true,"appium:forceAppLaunch":false}],logLevel:"debug",waitforTimeout:120000,connectionRetryTimeout:30000,connectionRetryCount:3,services:[],framework:"mocha",reporters:["spec"],mochaOpts:{ui:"bdd",timeout:1800000,grep:"__MOCHA_GREP__"},before:async function(capabilities,specs,browser){const BUNDLE_ID="__BUNDLE_ID__";const TEST_FILTER="__TEST_FILTER__";global.appCrashed=false;global.checkAppCrash=async(stage)=>{try{const state=await browser.queryAppState(BUNDLE_ID);console.log("["+stage+"] App state: "+state+" (4=foreground,3=background,1=not running)");if(state<3){console.error("\n APP CRASHED at "+stage+"! State="+state);console.error("Check device logs for BareKit/native errors.\n");global.appCrashed=true;process.exit(1);}return state;}catch(e){console.log("["+stage+"] queryAppState error: "+e.message);return-1;}};console.log("Checking initial app state...");await global.checkAppCrash("startup");console.log("Waiting for app to initialize...");await browser.pause(5000);await global.checkAppCrash("after-pause");const initText=await browser.$("android=new UiSelector().textContains(\"INITIALIZED\")");await initText.waitForDisplayed({timeout:60000});await global.checkAppCrash("after-init");if(TEST_FILTER!=="__TEST_FILTER__"){try{const b64=Buffer.from(TEST_FILTER).toString("base64");await browser.pushFile("/data/local/tmp/testFilter.txt",b64);console.log("Pushed test filter: "+TEST_FILTER);}catch(e){console.log("pushFile failed: "+e.message);}}console.log("App initialized, clicking Run Automated Tests...");const button=await browser.$("android=new UiSelector().textContains(\"Run Automated Tests\")");await button.waitForDisplayed({timeout:15000});await button.click();console.log("Button clicked!");await browser.pause(5000);await global.checkAppCrash("after-click");},afterTest:async function(test,context,{error}){if(global.appCrashed)return;await global.checkAppCrash("after-test:"+test.title);},after:async function(){console.log("[perf-extract] Pulling perf-report.json from device...");var BID="__BUNDLE_ID__";var outDir=process.env.DEVICEFARM_LOG_DIR||process.env.DEVICEFARM_TEST_PACKAGE_PATH||".";var outFile=outDir+"/perf-report-extract.json";var paths=["/data/user/0/"+BID+"/files/perf-report.json","/data/user/0/"+BID+"/cache/perf-report.json","/data/data/"+BID+"/files/perf-report.json","/data/data/"+BID+"/cache/perf-report.json","/tmp/perf-report.json","/data/local/tmp/perf-report.json"];var found=false;for(var i=0;i<paths.length;i++){try{var b64=await browser.pullFile(paths[i]);var json=Buffer.from(b64,"base64").toString();if(json.length<10||json[0]!=="{"){console.log("[perf-extract] "+paths[i]+": not valid JSON ("+json.length+" bytes)");continue;}try{require("fs").writeFileSync(outFile,json);console.log("[perf-extract] Written to "+outFile+" ("+json.length+" bytes)");}catch(we){console.log("[perf-extract] writeFile failed: "+we.message);}found=true;break;}catch(e){console.log("[perf-extract] "+paths[i]+": "+e.message);}}if(!found){console.log("[perf-extract] pullFile failed on all paths");}}};
+          WDIO_EOF
+            sed -i "s#__BUNDLE_ID__#${BID}#g" /tmp/wdio-config.js
+            echo "WDIO_CONFIG_FILE=/tmp/wdio-config.js" >> $GITHUB_OUTPUT
+          else
+            BID="${{ env.APP_BUNDLE_ID }}"
+            cat > /tmp/wdio-config.js << 'WDIO_EOF'
+          exports.config={runner:"local",hostname:"127.0.0.1",port:4723,path:"/wd/hub",specs:["*.spec.js","*.test.js"],maxInstances:1,bail:0,capabilities:[{platformName:"iOS","appium:automationName":"XCUITest","appium:bundleId":"__BUNDLE_ID__","appium:newCommandTimeout":300,"appium:noReset":true,"appium:forceAppLaunch":false,"appium:usePrebuiltWDA":true,"appium:wdaLocalPort":8100,"appium:showIOSLog":true,"appium:realDeviceLogger":"/usr/local/lib/node_modules/appium/node_modules/deviceconsole/deviceconsole"}],logLevel:"debug",waitforTimeout:120000,connectionRetryTimeout:30000,connectionRetryCount:3,services:[],framework:"mocha",reporters:["spec"],mochaOpts:{ui:"bdd",timeout:1800000,grep:"__MOCHA_GREP__"},before:async function(capabilities,specs,browser){const BUNDLE_ID="__BUNDLE_ID__";const TEST_FILTER="__TEST_FILTER__";global.appCrashed=false;global.checkAppCrash=async(stage)=>{try{const state=await browser.queryAppState(BUNDLE_ID);console.log("["+stage+"] App state: "+state+" (4=foreground,3=background,1=not running)");if(state<3){console.error("\n APP CRASHED at "+stage+"! State="+state);console.error("Check device logs for BareKit/native errors.\n");global.appCrashed=true;process.exit(1);}return state;}catch(e){console.log("["+stage+"] queryAppState error: "+e.message);return-1;}};console.log("Checking initial app state...");await global.checkAppCrash("startup");console.log("Waiting for app to initialize...");await browser.pause(5000);await global.checkAppCrash("after-pause");const initText=await browser.$("-ios predicate string:label CONTAINS \"INITIALIZED\"");await initText.waitForDisplayed({timeout:60000});await global.checkAppCrash("after-init");if(TEST_FILTER!=="__TEST_FILTER__"){try{const b64=Buffer.from(TEST_FILTER).toString("base64");await browser.pushFile("@"+BUNDLE_ID+":documents/testFilter.txt",b64);console.log("Pushed test filter: "+TEST_FILTER);}catch(e){console.log("pushFile failed: "+e.message);}}console.log("App initialized, clicking Run Automated Tests...");const button=await browser.$("-ios predicate string:label CONTAINS \"Run Automated Tests\"");await button.waitForDisplayed({timeout:15000});await button.click();console.log("Button clicked!");await browser.pause(5000);await global.checkAppCrash("after-click");},afterTest:async function(test,context,{error}){if(global.appCrashed)return;await global.checkAppCrash("after-test:"+test.title);},after:async function(){console.log("[perf-extract] Pulling perf-report.json from device...");var BID="__BUNDLE_ID__";var pullPaths=["@"+BID+":documents/perf-report.json","@"+BID+":library/perf-report.json"];for(var i=0;i<pullPaths.length;i++){try{var b64=await browser.pullFile(pullPaths[i]);var json=Buffer.from(b64,"base64").toString();try{require("fs").writeFileSync("perf-report-extract.json",json);console.log("[perf-extract] Written to perf-report-extract.json ("+json.length+" bytes)");}catch(we){console.log("[perf-extract] writeFile failed: "+we.message);}console.log("[perf-extract] Success from "+pullPaths[i]);break;}catch(e){console.log("[perf-extract] "+pullPaths[i]+": "+e.message);}}}};
+          WDIO_EOF
+            sed -i "s#__BUNDLE_ID__#${BID}#g" /tmp/wdio-config.js
+            echo "WDIO_CONFIG_FILE=/tmp/wdio-config.js" >> $GITHUB_OUTPUT
+          fi
+
       - name: Create and Upload Test Spec
         id: upload_test_spec
         run: |
           echo "📝 Creating test spec for custom environment mode..."
           echo "Platform: ${{ matrix.platform }}"
 
-          # Create platform-specific test spec using printf for precise control
-          # NOTE: Both platforms use a 'before' hook in the wdio config to click the button
-          # This ensures a single Appium session for reliability (no session handoff issues)
-          # The before hook includes crash detection using queryAppState
+          WDIO_CONFIG=$(cat /tmp/wdio-config.js)
+
           if [ "${{ matrix.platform }}" == "Android" ]; then
             PLATFORM="Android"
             AUTOMATION="UiAutomator2"
             HOST_LINE="android_test_host: amazon_linux_2"
-            BUNDLE_ID="${{ env.APP_BUNDLE_ID }}"
-            # Android wdio config with crash detection (bail:0 = continue on test failures, crash = process.exit)
-            # Increased timeout to 30 minutes (1800000ms) for long-running OCR tests
-            # after hook: pulls perf-report.json from app sandbox via Appium pullFile (deterministic, no console.log dependency)
-            WDIO_CONFIG='exports.config={runner:"local",hostname:"127.0.0.1",port:4723,path:"/wd/hub",specs:["*.spec.js","*.test.js"],maxInstances:1,bail:0,capabilities:[{platformName:"Android","appium:automationName":"UiAutomator2","appium:appPackage":"'${{ env.APP_BUNDLE_ID }}'","appium:appActivity":"'${{ env.APP_BUNDLE_ID }}'.MainActivity","appium:newCommandTimeout":300,"appium:autoGrantPermissions":true,"appium:autoAcceptAlerts":true,"appium:noReset":true,"appium:dontStopAppOnReset":true,"appium:forceAppLaunch":false}],logLevel:"debug",waitforTimeout:120000,connectionRetryTimeout:30000,connectionRetryCount:3,services:[],framework:"mocha",reporters:["spec"],mochaOpts:{ui:"bdd",timeout:1800000,grep:"__MOCHA_GREP__"},before:async function(capabilities,specs,browser){const BUNDLE_ID="'${{ env.APP_BUNDLE_ID }}'";const TEST_FILTER="__TEST_FILTER__";global.appCrashed=false;global.checkAppCrash=async(stage)=>{try{const state=await browser.queryAppState(BUNDLE_ID);console.log("["+stage+"] App state: "+state+" (4=foreground,3=background,1=not running)");if(state<3){console.error("\\n🛑 APP CRASHED at "+stage+"! State="+state);console.error("Check device logs for BareKit/native errors.\\n");global.appCrashed=true;process.exit(1);}return state;}catch(e){console.log("["+stage+"] queryAppState error: "+e.message);return-1;}};console.log("Checking initial app state...");await global.checkAppCrash("startup");console.log("Waiting for app to initialize...");await browser.pause(5000);await global.checkAppCrash("after-pause");const initText=await browser.$("android=new UiSelector().textContains(\"INITIALIZED\")");await initText.waitForDisplayed({timeout:60000});await global.checkAppCrash("after-init");if(TEST_FILTER!=="__TEST_FILTER__"){try{const b64=Buffer.from(TEST_FILTER).toString("base64");await browser.pushFile("/data/local/tmp/testFilter.txt",b64);console.log("Pushed test filter: "+TEST_FILTER);}catch(e){console.log("pushFile failed: "+e.message);}}console.log("App initialized, clicking Run Automated Tests...");const button=await browser.$("android=new UiSelector().textContains(\"Run Automated Tests\")");await button.waitForDisplayed({timeout:15000});await button.click();console.log("Button clicked!");await browser.pause(5000);await global.checkAppCrash("after-click");},afterTest:async function(test,context,{error}){if(global.appCrashed)return;await global.checkAppCrash("after-test:"+test.title);},after:async function(){console.log("[perf-extract] Pulling perf-report.json from device...");var BID="'${{ env.APP_BUNDLE_ID }}'";var outDir=process.env.DEVICEFARM_LOG_DIR||process.env.DEVICEFARM_TEST_PACKAGE_PATH||".";var outFile=outDir+"/perf-report-extract.json";var paths=["/data/user/0/"+BID+"/files/perf-report.json","/data/user/0/"+BID+"/cache/perf-report.json","/data/data/"+BID+"/files/perf-report.json","/data/data/"+BID+"/cache/perf-report.json","/tmp/perf-report.json","/data/local/tmp/perf-report.json"];var found=false;for(var i=0;i<paths.length;i++){try{var b64=await browser.pullFile(paths[i]);var json=Buffer.from(b64,"base64").toString();if(json.length<10||json[0]!=="{"){console.log("[perf-extract] "+paths[i]+": not valid JSON ("+json.length+" bytes)");continue;}try{require("fs").writeFileSync(outFile,json);console.log("[perf-extract] Written to "+outFile+" ("+json.length+" bytes)");}catch(we){console.log("[perf-extract] writeFile to "+outFile+" failed: "+we.message);try{require("fs").writeFileSync("perf-report-extract.json",json);console.log("[perf-extract] Fallback: written to CWD");}catch(we2){console.log("[perf-extract] CWD write also failed: "+we2.message);}}found=true;break;}catch(e){console.log("[perf-extract] "+paths[i]+": "+e.message);}}if(!found){console.log("[perf-extract] pullFile failed on all paths");}}};'
           else
             PLATFORM="iOS"
             AUTOMATION="XCUITest"
-            # iOS 18+ requires macos_sequoia test host (supports iOS 15-26)
             HOST_LINE="ios_test_host: macos_sequoia"
-            BUNDLE_ID="${{ env.APP_BUNDLE_ID }}"
-            # iOS wdio config with crash detection (bail:0 = continue on test failures, crash = process.exit)
-            # usePrebuiltWDA uses Device Farm's pre-built WebDriverAgent
-            # Increased timeout to 30 minutes (1800000ms) for long-running OCR tests
-            # after hook: pulls perf-report.json from app sandbox via Appium pullFile (deterministic, no console.log dependency)
-            WDIO_CONFIG='exports.config={runner:"local",hostname:"127.0.0.1",port:4723,path:"/wd/hub",specs:["*.spec.js","*.test.js"],maxInstances:1,bail:0,capabilities:[{platformName:"iOS","appium:automationName":"XCUITest","appium:bundleId":"'${{ env.APP_BUNDLE_ID }}'","appium:newCommandTimeout":300,"appium:noReset":true,"appium:forceAppLaunch":false,"appium:usePrebuiltWDA":true,"appium:wdaLocalPort":8100,"appium:showIOSLog":true,"appium:realDeviceLogger":"/usr/local/lib/node_modules/appium/node_modules/deviceconsole/deviceconsole"}],logLevel:"debug",waitforTimeout:120000,connectionRetryTimeout:30000,connectionRetryCount:3,services:[],framework:"mocha",reporters:["spec"],mochaOpts:{ui:"bdd",timeout:1800000,grep:"__MOCHA_GREP__"},before:async function(capabilities,specs,browser){const BUNDLE_ID="'${{ env.APP_BUNDLE_ID }}'";const TEST_FILTER="__TEST_FILTER__";global.appCrashed=false;global.checkAppCrash=async(stage)=>{try{const state=await browser.queryAppState(BUNDLE_ID);console.log("["+stage+"] App state: "+state+" (4=foreground,3=background,1=not running)");if(state<3){console.error("\\n🛑 APP CRASHED at "+stage+"! State="+state);console.error("Check device logs for BareKit/native errors.\\n");global.appCrashed=true;process.exit(1);}return state;}catch(e){console.log("["+stage+"] queryAppState error: "+e.message);return-1;}};console.log("Checking initial app state...");await global.checkAppCrash("startup");console.log("Waiting for app to initialize...");await browser.pause(5000);await global.checkAppCrash("after-pause");const initText=await browser.$("-ios predicate string:label CONTAINS \"INITIALIZED\"");await initText.waitForDisplayed({timeout:60000});await global.checkAppCrash("after-init");if(TEST_FILTER!=="__TEST_FILTER__"){try{const b64=Buffer.from(TEST_FILTER).toString("base64");await browser.pushFile("@"+BUNDLE_ID+":documents/testFilter.txt",b64);console.log("Pushed test filter: "+TEST_FILTER);}catch(e){console.log("pushFile failed: "+e.message);}}console.log("App initialized, clicking Run Automated Tests...");const button=await browser.$("-ios predicate string:label CONTAINS \"Run Automated Tests\"");await button.waitForDisplayed({timeout:15000});await button.click();console.log("Button clicked!");await browser.pause(5000);await global.checkAppCrash("after-click");},afterTest:async function(test,context,{error}){if(global.appCrashed)return;await global.checkAppCrash("after-test:"+test.title);},after:async function(){console.log("[perf-extract] Pulling perf-report.json from device...");var BID="'${{ env.APP_BUNDLE_ID }}'";var pullPaths=["@"+BID+":documents/perf-report.json","@"+BID+":library/perf-report.json"];for(var i=0;i<pullPaths.length;i++){try{var b64=await browser.pullFile(pullPaths[i]);var json=Buffer.from(b64,"base64").toString();try{require("fs").writeFileSync("perf-report-extract.json",json);console.log("[perf-extract] Written to perf-report-extract.json ("+json.length+" bytes)");}catch(we){console.log("[perf-extract] writeFile failed: "+we.message);}console.log("[perf-extract] Success from "+pullPaths[i]);break;}catch(e){console.log("[perf-extract] "+pullPaths[i]+": "+e.message);}}}};'
           fi
 
           # Read test groups and create per-group WDIO configs
@@ -1122,80 +1127,19 @@ jobs:
             printf '          echo "No WDIO perf-report-extract.json found in LOG_DIR or TEST_PACKAGE_PATH"\n'
             printf '        fi\n'
 
-          # Android-specific: extract perf report from device using logcat path hint
+          # Android-specific: extract perf report from device using logcat + adb
           if [ "${{ matrix.platform }}" == "Android" ]; then
-            printf '      - echo "========== Android: extracting perf report via logcat path =========="\n'
-            printf '      - adb logcat -d > $DEVICEFARM_LOG_DIR/logcat_full.txt 2>/dev/null || echo "adb logcat failed"\n'
+            printf '      - adb logcat -d > $DEVICEFARM_LOG_DIR/logcat_full.txt 2>/dev/null || true\n'
             printf '      - |\n'
-            printf '        EXTRACTED=""\n'
-            printf '        # Strategy 1: find the exact path from the app'\''s own log\n'
-            printf '        REPORT_PATH=$(grep -oP "\\[PERF_REPORT_PATH\\]\\K.*" $DEVICEFARM_LOG_DIR/logcat_full.txt | tail -1)\n'
-            printf '        if [ -n "$REPORT_PATH" ]; then\n'
-            printf '          echo "App reported perf file at: $REPORT_PATH"\n'
-            printf '          adb shell "cat $REPORT_PATH" > $DEVICEFARM_LOG_DIR/perf-report.json 2>/dev/null\n'
-            printf '          if [ -s "$DEVICEFARM_LOG_DIR/perf-report.json" ]; then\n'
-            printf '            echo "Successfully extracted via adb shell cat ($(wc -c < $DEVICEFARM_LOG_DIR/perf-report.json) bytes)"\n'
-            printf '            EXTRACTED="yes"\n'
-            printf '          else\n'
-            printf '            echo "adb shell cat failed, trying run-as..."\n'
-            printf '            adb shell "run-as %s cat $REPORT_PATH" > $DEVICEFARM_LOG_DIR/perf-report.json 2>/dev/null\n' '${{ env.APP_BUNDLE_ID }}'
-            printf '            if [ -s "$DEVICEFARM_LOG_DIR/perf-report.json" ]; then\n'
-            printf '              echo "Successfully extracted via run-as"\n'
-            printf '              EXTRACTED="yes"\n'
-            printf '            fi\n'
-            printf '          fi\n'
-            printf '        else\n'
-            printf '          echo "No PERF_REPORT_PATH found in logcat"\n'
-            printf '        fi\n'
-            printf '        # Strategy 2: brute-force known paths\n'
-            printf '        if [ -z "$EXTRACTED" ]; then\n'
-            printf '          echo "Trying known paths..."\n'
-            printf '          for P in /tmp/perf-report.json /data/local/tmp/perf-report.json; do\n'
-            printf '            adb shell "cat $P" > $DEVICEFARM_LOG_DIR/perf-report.json 2>/dev/null\n'
-            printf '            if [ -s "$DEVICEFARM_LOG_DIR/perf-report.json" ]; then\n'
-            printf '              echo "Found at $P"\n'
-            printf '              EXTRACTED="yes"\n'
-            printf '              break\n'
-            printf '            fi\n'
-            printf '          done\n'
-            printf '        fi\n'
-            printf '        # Strategy 3: run-as with known sandbox paths\n'
-            printf '        if [ -z "$EXTRACTED" ]; then\n'
-            printf '          for SUBPATH in files/perf-report.json cache/perf-report.json ./perf-report.json; do\n'
-            printf '            adb shell "run-as %s cat $SUBPATH" > $DEVICEFARM_LOG_DIR/perf-report.json 2>/dev/null\n' '${{ env.APP_BUNDLE_ID }}'
-            printf '            if [ -s "$DEVICEFARM_LOG_DIR/perf-report.json" ]; then\n'
-            printf '              echo "Found via run-as at $SUBPATH"\n'
-            printf '              EXTRACTED="yes"\n'
-            printf '              break\n'
-            printf '            fi\n'
-            printf '          done\n'
-            printf '        fi\n'
-            printf '        # Strategy 4: find it anywhere via adb shell find\n'
-            printf '        if [ -z "$EXTRACTED" ]; then\n'
-            printf '          echo "Searching entire device for perf-report.json..."\n'
-            printf '          FOUND_PATH=$(adb shell "find /data -name perf-report.json -type f 2>/dev/null" | head -1)\n'
-            printf '          if [ -n "$FOUND_PATH" ]; then\n'
-            printf '            echo "Found at: $FOUND_PATH"\n'
-            printf '            adb shell "cat $FOUND_PATH" > $DEVICEFARM_LOG_DIR/perf-report.json 2>/dev/null\n'
-            printf '            if [ -s "$DEVICEFARM_LOG_DIR/perf-report.json" ]; then\n'
-            printf '              EXTRACTED="yes"\n'
-            printf '            fi\n'
-            printf '          else\n'
-            printf '            echo "perf-report.json not found anywhere on device"\n'
-            printf '          fi\n'
-            printf '        fi\n'
-            printf '        # Output with markers if we found it\n'
-            printf '        if [ -n "$EXTRACTED" ]; then\n'
-            printf '          echo "[PERF_REPORT_START]"\n'
-            printf '          cat "$DEVICEFARM_LOG_DIR/perf-report.json"\n'
-            printf '          echo "[PERF_REPORT_END]"\n'
-            printf '        else\n'
-            printf '          echo "FAILED: could not extract perf-report.json from Android device"\n'
-            printf '          echo "Logcat PERF lines:"\n'
-            printf '          grep -i "perf" $DEVICEFARM_LOG_DIR/logcat_full.txt | tail -20 || echo "none"\n'
-            printf '        fi\n'
-            printf '      - echo "Available log files:"\n'
-            printf '      - ls -lh $DEVICEFARM_LOG_DIR/ || echo "Log directory not accessible"\n'
+            printf '        echo "=== Android perf report extraction ==="\n'
+            printf '        X="" L=$DEVICEFARM_LOG_DIR B=%s\n' '${{ env.APP_BUNDLE_ID }}'
+            printf '        RP=$(grep -oP "\\[PERF_REPORT_PATH\\]\\K.*" $L/logcat_full.txt 2>/dev/null|tail -1|tr -d "\\r")\n'
+            printf '        [ -n "$RP" ] && adb shell "cat $RP" >$L/perf-report.json 2>/dev/null && [ -s $L/perf-report.json ] && X=1\n'
+            printf '        [ -z "$X" ] && for P in /tmp/perf-report.json /data/local/tmp/perf-report.json; do adb shell "cat $P">$L/perf-report.json 2>/dev/null;[ -s $L/perf-report.json ]&&X=1&&break;done\n'
+            printf '        [ -z "$X" ] && for S in files/perf-report.json cache/perf-report.json ./perf-report.json; do adb shell "run-as $B cat $S">$L/perf-report.json 2>/dev/null;[ -s $L/perf-report.json ]&&X=1&&break;done\n'
+            printf '        [ -z "$X" ] && FP=$(adb shell "find /data -name perf-report.json -type f 2>/dev/null"|head -1|tr -d "\\r") && [ -n "$FP" ] && adb shell "cat $FP">$L/perf-report.json 2>/dev/null && [ -s $L/perf-report.json ] && X=1\n'
+            printf '        if [ -n "$X" ]; then echo "[PERF_REPORT_START]";cat $L/perf-report.json;echo "[PERF_REPORT_END]";else echo "FAILED: no perf-report.json found";grep -i perf $L/logcat_full.txt 2>/dev/null|tail -20||true;fi\n'
+            printf '      - ls -lh $DEVICEFARM_LOG_DIR/ || true\n'
           fi
 
           # iOS-specific: Output captured device logs
