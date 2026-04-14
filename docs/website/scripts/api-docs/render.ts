@@ -23,10 +23,11 @@ function createEnvironment(): nunjucks.Environment {
   env.addFilter("escapeTable", (value: string) => {
     if (typeof value !== "string") return value;
     return value
-      .replace(/\\/g, "\\\\")
       .replace(/\{/g, "\\{")
       .replace(/\}/g, "\\}")
-      .replace(/\|/g, "\\|");
+      .replace(/\|/g, "\\|")
+      .replace(/</g, "&lt;")
+      .replace(/>/g, "&gt;");
   });
 
   env.addFilter("firstSentence", (text: string) => {
@@ -42,7 +43,7 @@ function createEnvironment(): nunjucks.Environment {
 
   env.addFilter("formatShortSignature", (fn: ApiFunction) => {
     const sig = fn.signature.replace(/^function\s+/, "");
-    return sig.replace(/\\/g, "\\\\").replace(/\|/g, "\\|");
+    return sig.replace(/\|/g, "\\|");
   });
 
   env.addFilter("stripCodeFence", (value: string) => {
@@ -72,6 +73,8 @@ export async function renderApiDocs(
     await fs.mkdir(outputDir, { recursive: true });
   }
 
+  const objects = data.objects ?? [];
+
   console.log(`Rendering ${data.functions.length} function pages...`);
 
   for (const fn of data.functions) {
@@ -85,8 +88,24 @@ export async function renderApiDocs(
     }
   }
 
+  if (objects.length > 0) {
+    console.log(`Rendering ${objects.length} object pages...`);
+  }
+
+  for (const obj of objects) {
+    const mdx = env.render("object.njk", { obj });
+    const dest = path.join(outputDir, `${obj.name}.mdx`);
+
+    if (options.dryRun) {
+      console.log(`  [dry-run] ${dest}`);
+    } else {
+      await fs.writeFile(dest, mdx, "utf-8");
+    }
+  }
+
   const indexMdx = env.render("index.njk", {
     functions: data.functions,
+    objects,
     versionLabel,
   });
   const indexDest = path.join(outputDir, "index.mdx");
@@ -111,6 +130,6 @@ export async function renderApiDocs(
     }
   }
 
-  const total = data.functions.length + 1 + (hasErrors ? 1 : 0);
+  const total = data.functions.length + objects.length + 1 + (hasErrors ? 1 : 0);
   console.log(`Rendered ${total} MDX files to ${outputDir}`);
 }

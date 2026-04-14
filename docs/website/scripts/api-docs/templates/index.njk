@@ -1,5 +1,5 @@
-{#- API index page with function summary table.
-    Context: { functions: ApiFunction[], versionLabel: string }
+{#- API index page with function and object summary tables.
+    Context: { functions: ApiFunction[], objects: ApiObject[], versionLabel: string }
 -#}
 ---
 title: "@qvac/sdk"
@@ -13,11 +13,22 @@ description: API reference — {{ versionLabel }}
 
 ## Functions
 
-| Function | Summary | Signature |
-| --- | --- | --- |
+| Function | Summary |
+| --- | --- |
 {% for fn in functions -%}
-| [`{{ fn.name }}()`](./{{ fn.name }}) | {{ fn.description | firstSentence | escapeTable }} | `{{ fn | formatShortSignature }}` |
+| [`{{ fn.name }}()`](./{{ fn.name }}) | {{ fn.description | firstSentence | escapeTable }} |
 {% endfor %}
+{% if objects and objects.length > 0 -%}
+## Object
+
+| Object | Summary |
+| --- | --- |
+{% for obj in objects -%}
+| [`{{ obj.name }}`](./{{ obj.name }}) | {{ obj.description | firstSentence | escapeTable }} |
+{% endfor %}
+{% endif -%}
 ## Errors
 
-See [Errors](./errors) for the full list of SDK error codes.
+<Card href="./errors" title="Error codes">
+  All errors thrown by the SDK and how to handle them via `SDK_CLIENT_ERROR_CODES` and `SDK_SERVER_ERROR_CODES`.
+</Card>

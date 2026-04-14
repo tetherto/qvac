@@ -1,5 +1,5 @@
-{#- Per-function API reference page.
-    Context: { fn: ApiFunction }
+{#- Per-object API reference page (e.g. profiler).
+    Context: { obj: ApiObject }
 
     The macro must be defined before it is called.
 -#}
@@ -21,34 +21,52 @@
 {%- endfor -%}
 {%- endmacro -%}
 
-{%- set desc = (fn.description or "No description available") | replace('"', '\\"') | replace('undefined', '—') -%}
+{%- set desc = (obj.description or "No description available") | replace('"', '\\"') | replace('undefined', '—') -%}
 ---
-title: "{{ fn.name }}( )"
+title: "{{ obj.name }}"
 titleStyle: code
-description: "{{ desc }}"
+description: {{ desc }}
 ---
 
-{% if fn.deprecated -%}
+{% if obj.deprecated -%}
 <Callout type="warn" title="Deprecated">
-{{ fn.deprecated }}
+{{ obj.deprecated }}
 </Callout>
 
 {% endif -%}
 <WrapCode>
-```typescript
-{{ fn.signature }}
+```ts
+{{ obj.signature }}
 ```
 </WrapCode>
-{% if fn.parameters.length > 0 %}
 
-## Parameters
+## Methods
+
+| Method | Description |
+| --- | --- |
+{% for m in obj.methods -%}
+| [`{{ m.name }}()`](#{{ m.name | slugify }}) | {{ m.description | firstSentence | escapeTable }} |
+{% endfor %}
+{% for m in obj.methods -%}
+### `{{ m.name }}()`
+
+<WrapCode>
+```ts
+{{ m.signature }}
+```
+</WrapCode>
+
+{{ m.description }}
+
+{% if m.parameters.length > 0 -%}
+**Parameters**
 
 | Name | Type | Required? | Description |
 | --- | --- | :---: | --- |
-{% for p in fn.parameters -%}
+{% for p in m.parameters -%}
 {%- set typeStr = p.type | escapeTable -%}
 {%- set hasExpansion = false -%}
-{%- for e in fn.expandedParams -%}
+{%- for e in m.expandedParams -%}
 {%- if e.typeName | lower == p.type | lower -%}
 {%- set hasExpansion = true -%}
 {%- endif -%}
@@ -60,44 +78,38 @@ description: "{{ desc }}"
 {%- endif -%}
 | `{{ p.name }}` | {{ typeCell }} | {{ "✓" if p.required else "✗" }} | {{ (p.description or "No description") | escapeTable }} |
 {% endfor -%}
-{%- if fn.expandedParams.length > 0 %}
-{{ renderExpandedTypes(fn.expandedParams, 3) }}
-{%- endif -%}
-{%- endif %}
+{%- if m.expandedParams.length > 0 %}
+{{ renderExpandedTypes(m.expandedParams, 4) }}
+{% endif -%}
+{%- else -%}
+**Parameters**
 
-## Returns
+No parameters.
 
-```typescript
-{{ fn.returns.type or "unknown" }}
-```
+{% endif -%}
+**Returns**
 
-{{ (fn.returns.description or "No description available") | replace('undefined', '—') }}
-{%- if fn.returnFields.length > 0 %}
+{% if m.returnFields.length > 0 -%}
+{{ m.returns.description or "" }}
 
 | Field | Type | Description |
 | --- | --- | --- |
-{% for f in fn.returnFields -%}
+{% for f in m.returnFields -%}
 | `{{ f.name }}` | `{{ f.type | escapeTable }}` | {{ (f.description or "—") | escapeTable }} |
 {% endfor -%}
-{%- endif -%}
-{%- if fn.expandedReturns.length > 0 %}
+{%- if m.expandedReturns.length > 0 %}
 
-{{ renderExpandedTypes(fn.expandedReturns, 3) }}
+{{ renderExpandedTypes(m.expandedReturns, 4) }}
 {%- endif %}
+{% else -%}
+`{{ m.returns.type or "void" }}`{{ " — " + m.returns.description if m.returns.description else "" }}
+{% endif %}
+{% endfor -%}
 
-{% if fn.throws and fn.throws.length > 0 -%}
-## Throws
-
-| Error | When |
-| --- | --- |
-{% for t in fn.throws -%}
-| `{{ t.error }}` | {{ t.description }} |
-{% endfor %}
-{% endif -%}
-{%- if fn.examples and fn.examples.length > 0 -%}
+{%- if obj.examples and obj.examples.length > 0 -%}
 ## Example
 
-{% for ex in fn.examples -%}
+{% for ex in obj.examples -%}
 ```typescript
 {{ ex | stripCodeFence }}
 ```
