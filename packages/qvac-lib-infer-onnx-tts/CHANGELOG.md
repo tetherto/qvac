@@ -7,7 +7,17 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [0.8.2]
 
+This release adds support for streaming and more languages for Chatterbox model.
+
 ### Added
+
+Streaming support:
+- **`ONNXTTS#runStream(text, options?)`**, which returns the same **`QvacResponse`** style as **`run`**: **`onUpdate`** receives **`outputArray`** plus optional **`chunkIndex`** and **`sentenceChunk`** metadata, and **`await()`** settles when the full passage completes. Optional **`locale`** and **`maxChunkScalars`** tune **`Intl.Segmenter`** and chunk size (including a shorter default for Korean). With **`exclusiveRun: true`**, concurrent **`runStream`** calls wait until the previous stream’s response has finished, avoiding overlap on the single native job slot.
+- **`lib/textChunker.js`** (exported as **`@qvac/tts-onnx/text-chunker`**) implementing **`splitTtsText`** for tests, examples, and integrations that need the same rules as **`runStream`** without driving inference.
+- **Examples** **`examples/supertonic-streaming-tts.js`** (english or multilingual layout) and **`examples/pcm-chunk-player.js`** helpers for playing 16-bit mono chunks via **afplay**, **ffplay**, or **aplay** where available.
+- **Unit tests** for **`splitTtsText`**, **`runStream`** orchestration with a stub addon, and an **integration** test that runs Supertonic sentence streaming end-to-end; **`runSupertonicStream`** in **`test/utils/runSupertonicTTS.js`** concatenates chunk PCM for WAV checks.
+
+Support for more languages in Chatterbox:
 - Support for the following languages: Arabic, Danish, Greek, Finnish, Hebrew, Hindi, Korean, Malay, Dutch, Norwegian, Polish, Swedish, Swahili, and Turkish
 - Classifier-Free Guidance (CFG) pipeline for multilingual inference, using conditional/unconditional KV caches and text embedding weights to improve non-English speech quality
 - Temperature sampling with min-P filtering and repetition penalty (2.0) for the multilingual path
