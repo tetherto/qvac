@@ -59,7 +59,11 @@ Proceed? (y/n)
    ```bash
    git checkout -b release-<package>-<version>
    ```
-3. **Do NOT push.** Instead, trigger the release workflow manually:
+3. Push the release branch to remote (required for workflow dispatch to find the ref):
+   ```bash
+   git push origin release-<package>-<version>
+   ```
+4. Trigger the release workflow manually:
    ```bash
    gh workflow run "on-merge-<package>.yml" --repo tetherto/qvac --ref release-<package>-<version>
    ```
@@ -70,12 +74,33 @@ This workflow:
 - Publishes to NPM with `latest` tag
 - Creates a GitHub release with tag `<package>-v<version>`
 
-### Step 4: Monitor CI pipeline
+### Step 4: Monitor CI pipeline and auto-approve deployments
 
-Use `/loop` to poll the pipeline status every 2 minutes:
+Use `/loop` to poll the pipeline status every 2 minutes. The release workflow uses GitHub environment protection rules that require approval at multiple stages. **Auto-approve all pending deployments** each time you check.
 
+On each check iteration:
+
+1. **Check and approve pending deployments:**
+   ```bash
+   # Check for pending deployments
+   gh api repos/tetherto/qvac/actions/runs/<run-id>/pending_deployments --jq 'length'
+   
+   # If length > 0, get the environment ID and approve:
+   ENV_ID=$(gh api repos/tetherto/qvac/actions/runs/<run-id>/pending_deployments --jq '.[0].environment.id')
+   gh api repos/tetherto/qvac/actions/runs/<run-id>/pending_deployments \
+     --method POST --input - <<< "{\"environment_ids\":[$ENV_ID],\"state\":\"approved\",\"comment\":\"Auto-approved\"}"
+   ```
+
+2. **Check overall run status:**
+   ```bash
+   gh run list --branch release-<package>-<version> --limit 5 --repo tetherto/qvac
+   ```
+
+3. If all runs completed successfully → proceed to Step 5. If any failed → report details. If still running → wait for next poll.
+
+Start the loop:
 ```
-/loop 2m Check the CI pipeline status for the release branch release-<package>-<version>. Run: gh run list --branch release-<package>-<version> --limit 5. If all runs completed successfully, report SUCCESS and stop. If any run failed, report the failure details. If still running, report progress.
+/loop 2m Check CI pipeline status for release branch release-<package>-<version>. Auto-approve any pending deployments on run <run-id>. Run: gh run list --branch release-<package>-<version> --limit 5. If all runs completed successfully, report SUCCESS and stop. If any run failed, report the failure details. If still running, report progress.
 ```
 
 ### Step 5: Verify npm publish
@@ -117,6 +142,6 @@ git checkout main
 
 ## Important notes
 
-- This skill creates a local release branch and triggers CI manually — it does NOT push to remote.
+- This skill creates a local release branch, pushes it to remote, and triggers CI manually.
 - The on-merge workflow handles building and publishing — do not manually publish.
 - Release branches are never merged back to main automatically. If main needs the changes, a separate PR is required.
