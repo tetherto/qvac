@@ -865,6 +865,57 @@ function generateHtmlReport (aggregated) {
   .misread-table .found { color: #2e7d32; }
   .misread-table .not-found { color: #c62828; font-weight: 600; }
 
+  .methodology {
+    margin-top: 1.5rem;
+  }
+
+  .methodology h4 {
+    font-size: 1rem;
+    margin-bottom: 0.6rem;
+  }
+
+  .method-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+    gap: 0.75rem;
+    margin-top: 0.75rem;
+  }
+
+  .method-card {
+    padding: 0.75rem 1rem;
+    background: #f8f9fb;
+    border: 1px solid var(--border);
+    border-radius: 6px;
+  }
+
+  .method-card h5 {
+    font-size: 0.82rem;
+    color: var(--text);
+    margin-bottom: 0.3rem;
+  }
+
+  .method-card p {
+    font-size: 0.78rem;
+    line-height: 1.45;
+    margin-bottom: 0.3rem;
+  }
+
+  .method-formula {
+    font-family: 'SFMono-Regular', Consolas, 'Liberation Mono', Menlo, monospace;
+    font-size: 0.72rem !important;
+    background: #e8ecf0;
+    padding: 0.25rem 0.5rem;
+    border-radius: 4px;
+    display: inline-block;
+    margin-bottom: 0.4rem !important;
+  }
+
+  .method-note {
+    font-style: italic;
+    color: var(--text-secondary);
+    font-size: 0.73rem !important;
+  }
+
   @media print {
     body { padding: 0.5rem; }
     .device-card { break-inside: avoid; box-shadow: none; }
@@ -902,14 +953,62 @@ ${qualitySection ? `<h2 class="section-divider">Accuracy &amp; Quality</h2>` + q
     For throughput metrics (TPS, tokens), <strong>green = higher</strong> (better).
     Mini bars at the bottom of each cell show magnitude relative to the max value.
   </p>
-  <p style="margin-top:0.4rem">
-    <strong>Quality metrics:</strong>
-    CER = Character Error Rate (lower is better),
-    WER = Word Error Rate (lower is better),
-    Keyword Detection = fraction of expected keywords found (higher is better),
-    KV Accuracy = key-value pair extraction accuracy (higher is better).
-  </p>
 </div>
+
+${qualitySection ? `
+<div class="legend methodology">
+  <h4>Quality Metrics — How We Measure</h4>
+
+  <p>Each test image has a <strong>ground truth file</strong> (<code>.quality.json</code>) that contains the complete reference text,
+  a list of expected keywords, and expected key-value pairs manually transcribed from the original document.
+  Quality is evaluated by comparing the raw OCR output against this ground truth.</p>
+
+  <div class="method-grid">
+    <div class="method-card">
+      <h5>CER — Character Error Rate</h5>
+      <p class="method-formula">CER = edit_distance(hypothesis, reference) / length(reference)</p>
+      <p>Measures character-level accuracy using <strong>Levenshtein edit distance</strong> — the minimum number of
+      character insertions, deletions, and substitutions needed to transform the OCR output into the reference text.
+      Both texts are normalized (lowercase, whitespace-collapsed) and <strong>tokens are sorted alphabetically</strong>
+      before comparison to eliminate reading-order differences between platforms. <strong>Lower is better; 0% = perfect.</strong></p>
+      <p class="method-note">Example: if OCR reads "Cretinine" instead of "Creatinine", that is 1 character error.</p>
+    </div>
+
+    <div class="method-card">
+      <h5>WER — Word Error Rate</h5>
+      <p class="method-formula">WER = edit_distance(hyp_words, ref_words) / count(ref_words)</p>
+      <p>Same as CER but at the <strong>word level</strong> — counts how many words need to be inserted, deleted,
+      or substituted. Tokens are also sorted alphabetically before comparison.
+      <strong>Lower is better; 0% = perfect.</strong> Values above 100% are possible when the OCR generates more words than the reference.</p>
+    </div>
+
+    <div class="method-card">
+      <h5>Keyword Detection Rate</h5>
+      <p class="method-formula">Rate = keywords_found / keywords_expected</p>
+      <p>Checks whether specific <strong>expected terms</strong> (medical terms, patient identifiers, section headers)
+      appear anywhere in the OCR output. Multi-word keywords (e.g., "ALLIED CARE EXPERTS") use <strong>word-level matching</strong>
+      — every word in the phrase must exist somewhere in the output, regardless of order.
+      <strong>Higher is better; 100% = all keywords found.</strong></p>
+      <p class="method-note">Failures here mean the OCR genuinely could not recognize the term — e.g., reading "ALTISGPT" instead of "ALT/SGPT".</p>
+    </div>
+
+    <div class="method-card">
+      <h5>KV Accuracy — Key-Value Extraction</h5>
+      <p class="method-formula">Accuracy = pairs_matched / pairs_expected</p>
+      <p>For structured documents (lab reports, forms), checks whether both the <strong>key</strong> (e.g., "SGOT")
+      and its <strong>value</strong> (e.g., "162") appear in the OCR output. Keys use word-level matching;
+      values use exact substring matching. <strong>Higher is better; 100% = all pairs extracted.</strong></p>
+      <p class="method-note">A pair fails if the key is misread OR the value is misread. The diagnostic details show which one failed.</p>
+    </div>
+  </div>
+
+  <p style="margin-top:0.8rem"><strong>Note on token sorting:</strong> OCR engines return text regions as individual bounding boxes in spatial
+  detection order, not natural reading order. The same document may be read top-to-bottom on one platform and bottom-to-top on another.
+  Sorting tokens alphabetically before computing CER/WER makes the metrics <strong>reading-order independent</strong>,
+  ensuring consistent, comparable results across desktop, Android, and iOS.</p>
+</div>
+` : ''}
+
 
 <script type="application/json" id="report-data">
 ${escapeHtml(dataJson)}
