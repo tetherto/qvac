@@ -1499,10 +1499,11 @@ jobs:
             for SUITE_ARN in $(echo "$SUITES" | jq -r '.suites[].arn'); do
               # FILE artifacts: test spec output, customer artifacts (files from $DEVICEFARM_LOG_DIR)
               ARTIFACTS=$(aws devicefarm list-artifacts --arn "$SUITE_ARN" --type FILE --output json)
-              echo "$ARTIFACTS" | jq -r '.artifacts[] | select(.type == "TESTSPEC_OUTPUT" or .type == "CUSTOMER_ARTIFACT_LOG" or .type == "CUSTOMER_ARTIFACT") | "\(.type) \(.name) \(.url)"' | while read -r TYPE NAME URL; do
+              echo "$ARTIFACTS" | jq -r '.artifacts[] | select(.type == "TESTSPEC_OUTPUT" or .type == "CUSTOMER_ARTIFACT_LOG" or .type == "CUSTOMER_ARTIFACT") | [.type, .name, .url] | @tsv' | while IFS=$'\t' read -r TYPE NAME URL; do
                 if [ -n "$URL" ] && [ "$URL" != "null" ]; then
                   if [ "$TYPE" = "CUSTOMER_ARTIFACT" ]; then
-                    FILENAME="customer_${NAME}"
+                    SAFE_NAME=$(echo "$NAME" | tr ' /' '_')
+                    FILENAME="customer_${SAFE_NAME}"
                   else
                     FILENAME="${TYPE}.txt"
                   fi
@@ -1633,7 +1634,7 @@ jobs:
           PLATFORM="${{ matrix.platform }}"
           OUTPUT_DIR="perf-results/${PLATFORM}"
           MD_FILE="${OUTPUT_DIR}/performance-report.md"
-          printf '## %s OCR Performance Report\n\n' "${PLATFORM^}" >> $GITHUB_STEP_SUMMARY
+          printf '## %s OCR Performance Report\n\n' "$PLATFORM" >> $GITHUB_STEP_SUMMARY
           if [ -f "$MD_FILE" ]; then
             cat "$MD_FILE" >> $GITHUB_STEP_SUMMARY
           else
