@@ -36,7 +36,7 @@ try {
 
     return {
       record (testName, metrics, extra) {
-        _results.push({
+        var entry = {
           test: testName,
           execution_provider: (extra && extra.execution_provider) || null,
           metrics: Object.assign({
@@ -48,7 +48,9 @@ try {
           input: (extra && extra.input) || null,
           output: (extra && extra.output) || null,
           quality: (extra && extra.quality) || undefined
-        })
+        }
+        if (extra && extra.image_path) entry.image_path = extra.image_path
+        _results.push(entry)
       },
       toJSON () {
         return {
@@ -616,7 +618,8 @@ function formatOCRPerformanceMetrics (label, stats, outputTexts = [], opts) {
   }, {
     execution_provider: ep,
     output: JSON.stringify(outputTexts),
-    quality
+    quality,
+    image_path: (opts && opts.imagePath) || null
   })
   _scheduleReportWrite()
 

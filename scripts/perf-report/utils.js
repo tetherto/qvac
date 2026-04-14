@@ -186,6 +186,7 @@ function aggregateReports (reports) {
 
   const deviceMap = {}
   const qualityMap = {}
+  const imagePathMap = {}
 
   for (const report of reports) {
     const deviceName = report.device ? report.device.name : 'unknown'
@@ -196,6 +197,10 @@ function aggregateReports (reports) {
     for (const result of (report.results || [])) {
       const testKey = result.test
       if (!deviceMap[deviceName][testKey]) deviceMap[deviceName][testKey] = {}
+
+      if (result.image_path && !imagePathMap[testKey]) {
+        imagePathMap[testKey] = result.image_path
+      }
 
       for (const [metricKey, value] of Object.entries(result.metrics || {})) {
         if (value === null || value === undefined) continue
@@ -248,6 +253,7 @@ function aggregateReports (reports) {
     run_numbers: runNumbers,
     devices: summarized,
     quality: qualitySummarized,
+    image_paths: imagePathMap,
     quality_details: qualityDetails
   }
 }
@@ -265,6 +271,17 @@ function _tokenizeForPreview (text) {
     .toLowerCase()
     .split(/\s+/)
     .filter(Boolean)
+}
+
+function _findTestImage (testName, imageDataCache) {
+  if (!imageDataCache || !Object.keys(imageDataCache).length) return null
+  if (imageDataCache[testName]) return imageDataCache[testName]
+  for (const [key, src] of Object.entries(imageDataCache)) {
+    const baseA = testName.replace(/\s*\[(CPU|GPU)\]/gi, '').trim()
+    const baseB = key.replace(/\s*\[(CPU|GPU)\]/gi, '').trim()
+    if (baseA === baseB) return src
+  }
+  return null
 }
 
 function _collectQualityDetails (reports) {
@@ -396,13 +413,30 @@ function _mdIterationHeaders (count, runNumbers) {
  * @returns {string} Complete HTML document
  */
 function generateHtmlReport (aggregated) {
-  const { addon, generated_at, run_numbers, devices, quality } = aggregated
+  const { addon, generated_at, run_numbers, devices, quality, image_paths } = aggregated
   const timestamp = new Date(generated_at).toLocaleString('en-US', {
     dateStyle: 'medium',
     timeStyle: 'short'
   })
 
   const iterationCount = _maxIterationCount(devices)
+
+  const imageDataCache = {}
+  if (image_paths) {
+    const fs = require('fs')
+    const path = require('path')
+    for (const [testKey, imgPath] of Object.entries(image_paths)) {
+      try {
+        const resolved = path.resolve(imgPath)
+        if (fs.existsSync(resolved)) {
+          const ext = path.extname(resolved).toLowerCase().replace('.', '')
+          const mime = ext === 'jpg' ? 'image/jpeg' : `image/${ext}`
+          const b64 = fs.readFileSync(resolved).toString('base64')
+          imageDataCache[testKey] = `data:${mime};base64,${b64}`
+        }
+      } catch (_) {}
+    }
+  }
 
   let deviceCards = ''
 
@@ -503,7 +537,13 @@ function generateHtmlReport (aggregated) {
           cells += `<td class="val ${cls}">${pct.toFixed(1)}%</td>`
         }
 
-        qRows += `<tr><td class="metric-name">${escapeHtml(testName)}</td>${cells}</tr>`
+        let imgThumb = ''
+        const imgSrc = _findTestImage(testName, imageDataCache)
+        if (imgSrc) {
+          imgThumb = ` <a href="${imgSrc}" target="_blank" class="img-thumb-link"><img src="${imgSrc}" class="img-thumb" alt="test image"></a>`
+        }
+
+        qRows += `<tr><td class="metric-name">${escapeHtml(testName)}${imgThumb}</td>${cells}</tr>`
 
         const detail = devDetails[testName]
         if (detail) {
@@ -839,6 +879,28 @@ function generateHtmlReport (aggregated) {
     padding: 0.1rem 0.3rem;
     border-radius: 3px;
     word-break: break-all;
+  }
+
+  .img-thumb {
+    height: 32px;
+    width: auto;
+    border-radius: 3px;
+    vertical-align: middle;
+    margin-left: 6px;
+    border: 1px solid var(--border);
+    cursor: pointer;
+    transition: transform 0.15s;
+  }
+
+  .img-thumb:hover {
+    transform: scale(3);
+    z-index: 10;
+    position: relative;
+    box-shadow: 0 4px 16px rgba(0,0,0,0.25);
+  }
+
+  .img-thumb-link {
+    text-decoration: none;
   }
 
   .misread-table {

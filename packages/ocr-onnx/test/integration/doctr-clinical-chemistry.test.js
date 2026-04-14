@@ -30,25 +30,29 @@ const EXPECTED_WORDS = [
   'bilirubin', 'albumin', 'protein', 'lipid'
 ]
 
-function runClinicalChemistryTest (run) {
-  test(`DocTR clinical chemistry run ${run} - db_mobilenet + crnn_mobilenet`, { timeout: DOCTR_TEST_TIMEOUT }, async function (t) {
+function runClinicalChemistryTest (ep, run) {
+  const useGPU = ep === 'gpu'
+  const tag = ep.toUpperCase()
+
+  test(`DocTR clinical chemistry [${tag}] run ${run} - db_mobilenet + crnn_mobilenet`, { timeout: DOCTR_TEST_TIMEOUT }, async function (t) {
     if (!modelsAvailable) { t.comment('Skipped — models unavailable'); return }
     const imagePath = getImagePath('/test/images/clinical_chemistry.png')
 
-    t.comment(`Testing DocTR on clinical chemistry lab result image (run ${run}/${PERF_RUNS})`)
+    t.comment(`Testing DocTR on clinical chemistry lab result image [${tag}] (run ${run}/${PERF_RUNS})`)
     t.comment('Detector: db_mobilenet_v3_large, Recognizer: crnn_mobilenet_v3_small (CTC)')
-    t.comment('straightenPages: true')
+    t.comment('straightenPages: true, useGPU: ' + useGPU)
 
     const { results, stats } = await runDoctrOCR(t, {
       pathDetector: DB_MOBILENET,
       pathRecognizer: CRNN_MOBILENET,
       decodingMethod: 'ctc',
-      straightenPages: true
+      straightenPages: true,
+      useGPU
     }, imagePath)
 
     const texts = results.map(r => r.text)
     t.comment('Detected texts: ' + JSON.stringify(texts))
-    t.comment(formatOCRPerformanceMetrics('[DocTR clinical_chemistry]', stats, texts, { imagePath }))
+    t.comment(formatOCRPerformanceMetrics(`[DocTR clinical_chemistry] [${tag}]`, stats, texts, { imagePath }))
 
     t.ok(results.length > 0, `should detect text regions, got ${results.length}`)
 
@@ -60,8 +64,9 @@ function runClinicalChemistryTest (run) {
       )
     }
 
-    t.pass(`DocTR clinical chemistry run ${run} completed successfully`)
+    t.pass(`DocTR clinical chemistry [${tag}] run ${run} completed successfully`)
   })
 }
 
-for (let i = 1; i <= PERF_RUNS; i++) runClinicalChemistryTest(i)
+for (let i = 1; i <= PERF_RUNS; i++) runClinicalChemistryTest('cpu', i)
+for (let i = 1; i <= PERF_RUNS; i++) runClinicalChemistryTest('gpu', i)

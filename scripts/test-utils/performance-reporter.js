@@ -194,6 +194,10 @@ function createPerformanceReporter (opts) {
         entry.quality = extra.quality
       }
 
+      if (extra && extra.image_path) {
+        entry.image_path = extra.image_path
+      }
+
       results.push(entry)
     },
 
