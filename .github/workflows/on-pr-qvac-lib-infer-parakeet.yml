@@ -124,7 +124,7 @@ jobs:
     environment: release
     steps:
       - name: Run Sanity checks
-        uses: tetherto/oss-actions/.github/actions/sanity-checks@v1.1.0
+        uses: tetherto/oss-actions/.github/actions/sanity-checks@4c64bed91fc8eba3a201adb1495e61b4c1a2246d
         with:
           secret-token: ${{ secrets.GITHUB_TOKEN }}
           npm-token: ${{ secrets.NPM_TOKEN }}
