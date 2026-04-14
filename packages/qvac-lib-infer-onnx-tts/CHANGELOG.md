@@ -36,6 +36,7 @@ This release adds **runStream** for Supertonic: long text is split into sentence
 - Integration test sentences for 12 additional languages (Arabic, Danish, Greek, Finnish, Hindi, Malay, Dutch, Norwegian, Polish, Swedish, Swahili, and Turkish), enabled via `TEST_ALL_LANGUAGES=true`
 
 ### Changed
+- Fixed supertonic multilingual not recognizing some diacritics such as "ç" and "ã".
 - Refactored `generateSpeechTokensWithCfg` into smaller functions: `prepareCfgEmbeddings`, `runInitialCfgStep`, `shouldStopGeneration`, `runCfgGenerationLoop`
 - Extracted magic numbers into named constants
 - Decomposed `sampleWithTemperature`, `trimTrailingSilence`, `detectPatternRepetition` into single-responsibility helpers
