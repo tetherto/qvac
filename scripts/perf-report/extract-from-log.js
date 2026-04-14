@@ -33,14 +33,19 @@ function isValidReport (obj) {
 }
 
 function cleanJsonFromLogcat (raw) {
-  let s = raw.replace(/[\x00-\x1f]/g, '').trim()
+  let s = raw.replace(/[\x00-\x1f\x7f-\x9f]/g, '').trim()
+
+  // Strip WDIO test runner prefix: "[0-0] " or similar
+  s = s.replace(/^\[\d+-\d+\]\s*/, '')
 
   // Strip Android logcat prefixes: "MM-DD HH:MM:SS.mmm PID TID LEVEL TAG  : "
-  // Note: TAG can have trailing spaces before the colon (e.g. "bare    :")
   s = s.replace(/\d{2}-\d{2}\s+\d{2}:\d{2}:\d{2}\.\d{3}\s+\d+\s+\d+\s+[VDIWEF]\s+[^\s:]+\s*:\s*/g, '')
 
   // Strip ReactNativeJS wrapper: '[Bare]', '...' → ...
-  s = s.replace(/^'\[Bare\]',\s*'/, '').replace(/'$/, '')
+  // Only strip trailing ' when the leading wrapper was present
+  if (/^'\[Bare\]',\s*'/.test(s)) {
+    s = s.replace(/^'\[Bare\]',\s*'/, '').replace(/'$/, '')
+  }
 
   return s.trim()
 }
@@ -115,6 +120,14 @@ function extractFromText (text) {
 }
 
 /**
+ * Strips non-printable / non-JSON characters that logcat may inject.
+ * Keeps only printable ASCII + valid JSON whitespace + multi-byte UTF-8.
+ */
+function sanitizeChunkContent (s) {
+  return s.replace(/[^\x20-\x7e\u00a0-\uffff]/g, '')
+}
+
+/**
  * Extracts chunked performance reports from text.
  *
  * When a report is too large for a single Android logcat line (~4096 bytes),
@@ -122,7 +135,8 @@ function extractFromText (text) {
  *   [PERF_CHUNK:<id>:<index>:<total>]<json-fragment>
  *
  * Each chunk appears twice in logcat (bare + ReactNativeJS tags).
- * We deduplicate by (id, index), reassemble, and parse.
+ * We keep the longest content per (id, index) to guard against truncation,
+ * reassemble, clean, and parse.
  * Returns the report with the most results, or null.
  */
 function extractChunkedFromText (text) {
@@ -136,7 +150,7 @@ function extractChunkedFromText (text) {
     const idx = parseInt(idxStr, 10)
     const total = parseInt(totalStr, 10)
     if (!chunkMap[id]) chunkMap[id] = { total, chunks: {} }
-    if (chunkMap[id].chunks[idx] === undefined) {
+    if (chunkMap[id].chunks[idx] === undefined || content.length > chunkMap[id].chunks[idx].length) {
       chunkMap[id].chunks[idx] = content
     }
   }
@@ -151,12 +165,45 @@ function extractChunkedFromText (text) {
     }
     let json = ''
     for (let i = 0; i < total; i++) json += chunks[i]
-    const parsed = tryParseReport(json)
+
+    let parsed = tryParseReport(json)
+
+    if (!parsed) {
+      const sanitized = sanitizeChunkContent(json)
+      if (sanitized !== json) {
+        console.log(`  Chunked report ${id}: sanitized ${json.length - sanitized.length} non-printable chars`)
+        parsed = tryParseReport(sanitized)
+        if (parsed) json = sanitized
+      }
+    }
+
+    if (!parsed) {
+      const firstBrace = json.indexOf('{')
+      const lastBrace = json.lastIndexOf('}')
+      if (firstBrace >= 0 && lastBrace > firstBrace) {
+        const trimmed = json.substring(firstBrace, lastBrace + 1)
+        parsed = tryParseReport(trimmed)
+        if (parsed) {
+          console.log(`  Chunked report ${id}: recovered by trimming to brace boundaries`)
+          json = trimmed
+        }
+      }
+    }
+
     if (parsed) {
       console.log(`  Chunked report ${id}: ${parsed.results.length} results`)
       if (!best || parsed.results.length > best.results.length) best = parsed
     } else {
       console.log(`  Chunked report ${id}: all ${total} chunks collected but JSON parse failed`)
+      try { JSON.parse(json) } catch (err) {
+        console.log(`    Error: ${err.message}`)
+        console.log(`    Assembled length: ${json.length}`)
+        console.log(`    First 200: ${JSON.stringify(json.substring(0, 200))}`)
+        console.log(`    Last 200: ${JSON.stringify(json.substring(json.length - 200))}`)
+        const chunkLens = []
+        for (let i = 0; i < total; i++) chunkLens.push(chunks[i].length)
+        console.log(`    Chunk lengths: [${chunkLens.join(',')}]`)
+      }
     }
   }
   return best

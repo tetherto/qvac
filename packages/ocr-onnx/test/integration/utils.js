@@ -91,9 +91,10 @@ try {
             return { test: r.test, execution_provider: r.execution_provider, metrics: r.metrics, quality: r.quality }
           })
           var json = JSON.stringify(data)
-          // Android logcat truncates lines >4096 bytes. For large reports,
-          // split into numbered chunks that extract-from-log.js reassembles.
-          var CHUNK = 2000
+          // Android logcat has per-entry size limits that vary by device.
+          // Use a conservative chunk size so header + content stays well
+          // under any limit, even with the ReactNativeJS wrapper overhead.
+          var CHUNK = 800
           if (json.length <= CHUNK) {
             console.log('[PERF_REPORT_START]' + json + '[PERF_REPORT_END]')
           } else {
