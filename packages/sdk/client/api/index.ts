@@ -7,6 +7,7 @@ export { loggingStream } from "./logging-stream";
 export { heartbeat } from "./heartbeat";
 export { transcribe, transcribeStream } from "./transcribe";
 export { embed } from "./embed";
+export { finetune, type FinetuneHandle } from "./finetune";
 export { translate } from "./translate";
 export { cancel } from "./cancel";
 export { startQVACProvider } from "./provide";

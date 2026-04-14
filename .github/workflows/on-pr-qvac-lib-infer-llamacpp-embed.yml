@@ -40,9 +40,24 @@ jobs:
         with:
           github-token: ${{ github.token }}
 
-  sanity-checks:
+  verify-fabric-lockstep:
     if: needs.authorize.outputs.allowed == 'true'
     needs: [authorize]
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # 6.0.2
+
+      - name: Verify qvac-fabric versions are lockstep
+        id: lockstep
+        uses: ./.github/actions/verify-qvac-fabric-lockstep
+
+      - name: Report verified version
+        run: 'echo "Verified qvac-fabric version: ${{ steps.lockstep.outputs.version }}"'
+
+  sanity-checks:
+    if: needs.authorize.outputs.allowed == 'true'
+    needs: [authorize, verify-fabric-lockstep]
     runs-on: ubuntu-latest
     environment: release
     steps:
@@ -151,9 +166,9 @@ jobs:
       ref: ${{ github.event.pull_request.head.ref }}
 
   merge-guard:
-    needs: [authorize, sanity-checks, cpp-lint, cpp-tests, prebuild, integration-tests, run-mobile-integration-tests, ts-checks]
+    needs: [authorize, verify-fabric-lockstep, sanity-checks, cpp-lint, cpp-tests, prebuild, integration-tests, run-mobile-integration-tests, ts-checks]
     if: always()
     uses: tetherto/oss-actions/.github/workflows/public-pr.yml@v1.1.0
     with:
-      sanity-checks-status: ${{ needs.sanity-checks.result == 'success' }}
+      sanity-checks-status: ${{ needs.verify-fabric-lockstep.result == 'success' && needs.sanity-checks.result == 'success' }}
       build-status: ${{ needs.prebuild.result == 'success' }}
