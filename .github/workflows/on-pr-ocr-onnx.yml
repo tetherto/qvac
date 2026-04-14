@@ -125,9 +125,7 @@ jobs:
         continue-on-error: true
         uses: tetherto/oss-actions/.github/actions/run-lint-and-unit-tests@v1.1.0
         with:
-          npm-token: ${{ secrets.NPM_TOKEN }}
           gpr-token: ${{ secrets.GITHUB_TOKEN }}
-          pat-token: ${{ secrets.GITHUB_TOKEN }}
           registry-type: gpr
           workdir: ${{ env.PKG_DIR }}
 
