@@ -5,6 +5,25 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.8.3]
+
+This release adds **runStream** for Supertonic: long text is split into sentence-sized chunks, each chunk is synthesized in order, and PCM is delivered on **`QvacResponse.onUpdate`** as chunks finish so callers can play or buffer incrementally. Splitting is centralized in **`lib/textChunker.js`** (with **`Intl.Segmenter`** when the runtime provides it, and punctuation plus max-grapheme fallbacks otherwise), and the native Supertonic paragraph splitter now treats additional full-width and Arabic-style sentence terminators like ordinary **.** **!** **?** for cleaner breaks in multilingual copy.
+
+### Added
+
+- **`ONNXTTS#runStream(text, options?)`**, which returns the same **`QvacResponse`** style as **`run`**: **`onUpdate`** receives **`outputArray`** plus optional **`chunkIndex`** and **`sentenceChunk`** metadata, and **`await()`** settles when the full passage completes. Optional **`locale`** and **`maxChunkScalars`** tune **`Intl.Segmenter`** and chunk size (including a shorter default for Korean). With **`exclusiveRun: true`**, concurrent **`runStream`** calls wait until the previous stream’s response has finished, avoiding overlap on the single native job slot.
+- **`lib/textChunker.js`** (exported as **`@qvac/tts-onnx/text-chunker`**) implementing **`splitTtsText`** for tests, examples, and integrations that need the same rules as **`runStream`** without driving inference.
+- **Examples** **`examples/supertonic-streaming-tts.js`** (english or multilingual layout) and **`examples/pcm-chunk-player.js`** helpers for playing 16-bit mono chunks via **afplay**, **ffplay**, or **aplay** where available.
+- **Unit tests** for **`splitTtsText`**, **`runStream`** orchestration with a stub addon, and an **integration** test that runs Supertonic sentence streaming end-to-end; **`runSupertonicStream`** in **`test/utils/runSupertonicTTS.js`** concatenates chunk PCM for WAV checks.
+
+### Changed
+
+- **`runTTSWithSplit`** in **`test/utils/runTTS.js`** now uses **`splitTtsText`** from **`lib/textChunker.js`** instead of the removed **`test/utils/textSplitter.js`**, with optional **`splitLanguage`** / **`splitLocale`** on the params object when the model language is not enough.
+
+### Other
+
+- **SupertonicEngine.cpp**: **`isSentenceSplitBeforeWs`** treats ideographic full stop (**U+3002**), fullwidth **! ? .**, and Arabic question mark (**U+061F**) as sentence ends alongside ASCII **.** **!** **?**.
+
 ## [0.8.2]
 
 ### Added
