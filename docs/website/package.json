@@ -78,8 +78,6 @@
     "typescript": "^5.9.2",
     "unified": "^11.0.2",
     "unist-util-visit": "^5.0.0",
-    "vitest": "^4.0.18",
-    "nunjucks": "^3.2.4",
-    "@types/nunjucks": "^3.2.6"
+    "vitest": "^4.0.18"
   }
 }
