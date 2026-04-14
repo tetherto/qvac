@@ -47,7 +47,11 @@ function extractFromText (text) {
     if (endIdx === -1) break
 
     const jsonRaw = text.substring(jsonStart, endIdx)
-    const jsonStr = jsonRaw.replace(/[\x00-\x1f]/g, '')
+    let jsonStr = jsonRaw.replace(/[\x00-\x1f]/g, '')
+    // Strip Android logcat line prefixes that get embedded when console.log
+    // output is split across multiple logcat lines.
+    // Format: "MM-DD HH:MM:SS.mmm  PID  TID LEVEL TAG: "
+    jsonStr = jsonStr.replace(/\d{2}-\d{2}\s+\d{2}:\d{2}:\d{2}\.\d{3}\s+\d+\s+\d+\s+[VDIWEF]\s+[^\s:]+:\s*/g, '')
     try {
       const parsed = JSON.parse(jsonStr)
       if (isValidReport(parsed)) {

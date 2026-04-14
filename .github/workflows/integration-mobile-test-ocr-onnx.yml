@@ -1005,8 +1005,13 @@ jobs:
           echo "Perf test pattern: $PERF_PATTERN"
           echo "Regular test pattern: $REGULAR_PATTERN"
 
-          WDIO_CONFIG_PERF_B64=$(echo "$WDIO_CONFIG" | sed "s#__MOCHA_GREP__#$PERF_PATTERN#" | sed "s#__TEST_FILTER__#$PERF_PATTERN#" | base64 | tr -d '\n')
-          WDIO_CONFIG_REGULAR_B64=$(echo "$WDIO_CONFIG" | sed "s#__MOCHA_GREP__#$REGULAR_PATTERN#" | sed "s#__TEST_FILTER__#$REGULAR_PATTERN#" | base64 | tr -d '\n')
+          # Mocha grep MUST be "." (match-all) — the grep patterns are function names
+          # from test-groups.json, NOT WDIO spec test titles. A non-matching grep
+          # causes WDIO to skip its spec tests and exit immediately without waiting
+          # for the app to finish, producing incomplete perf reports.
+          # Test-level filtering is done post-extraction via --filter in extract-from-log.js.
+          WDIO_CONFIG_PERF_B64=$(echo "$WDIO_CONFIG" | sed "s#__MOCHA_GREP__#.#" | sed "s#__TEST_FILTER__#$PERF_PATTERN#" | base64 | tr -d '\n')
+          WDIO_CONFIG_REGULAR_B64=$(echo "$WDIO_CONFIG" | sed "s#__MOCHA_GREP__#.#" | sed "s#__TEST_FILTER__#$REGULAR_PATTERN#" | base64 | tr -d '\n')
 
           # Function to generate a testspec YAML given a base64-encoded WDIO config
           generate_testspec() {
@@ -1106,7 +1111,14 @@ jobs:
             printf '      - grep "PERF_REPORT_START" $DEVICEFARM_LOG_DIR/logcat_full.txt 2>/dev/null || echo "No perf markers in logcat"\n'
             printf '      - echo "========== Extracting perf-report.json via run-as =========="\n'
             printf '      - adb shell "run-as %s cat files/perf-report.json" > $DEVICEFARM_LOG_DIR/perf-report.json 2>/dev/null || echo "run-as cat failed"\n' '${{ env.APP_BUNDLE_ID }}'
-            printf '      - cat $DEVICEFARM_LOG_DIR/perf-report.json 2>/dev/null || echo "no perf-report.json extracted"\n'
+            printf '      - |\n'
+            printf '        if [ -s "$DEVICEFARM_LOG_DIR/perf-report.json" ]; then\n'
+            printf '          echo "[PERF_REPORT_START]"\n'
+            printf '          cat "$DEVICEFARM_LOG_DIR/perf-report.json"\n'
+            printf '          echo "[PERF_REPORT_END]"\n'
+            printf '        else\n'
+            printf '          echo "no perf-report.json extracted via run-as"\n'
+            printf '        fi\n'
             printf '      - echo "Available log files:"\n'
             printf '      - ls -lh $DEVICEFARM_LOG_DIR/ || echo "Log directory not accessible"\n'
           fi
