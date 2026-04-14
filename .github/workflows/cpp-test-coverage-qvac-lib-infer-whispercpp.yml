@@ -28,6 +28,10 @@ env:
 
 jobs:
   cpp-tests:
+    permissions:
+      contents: read
+      id-token: write
+      checks: write
     runs-on: ${{ matrix.os }}
     environment: release
     name: ${{ matrix.platform }}-${{ matrix.arch }}-cpp-tests
@@ -209,6 +213,9 @@ jobs:
           fi
 
   coverage-report:
+    permissions:
+      contents: read
+      actions: read
     needs: cpp-tests
     runs-on: ubuntu-latest
     if: always()

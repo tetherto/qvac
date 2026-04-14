@@ -6,12 +6,7 @@ const fs = require('bare-fs')
 const os = require('bare-os')
 const { Readable } = require('bare-stream')
 const TranscriptionWhispercpp = require('../../index.js')
-const FakeDL = require('../mocks/loader.fake.js')
 const { setupJsLogger, ensureWhisperModel, isMobile } = require('./helpers.js')
-
-function createLoader () {
-  return new FakeDL({})
-}
 
 /**
  * Helper function to test that corrupted model files throw exceptions
@@ -97,9 +92,9 @@ test('Corrupted model file should throw exception to JavaScript', { timeout: 300
   await testCorruptedModelFile(t, {
     corruptedFilePath: corruptedModelPath,
     constructorArgs: {
-      modelName: path.basename(corruptedModelPath),
-      diskPath: testDir,
-      loader: createLoader()
+      files: {
+        model: corruptedModelPath
+      }
     },
     config: {
       whisperConfig: { language: 'en' },
@@ -141,16 +136,15 @@ test('Corrupted VAD model file should throw exception to JavaScript', { timeout:
   await testCorruptedModelFile(t, {
     corruptedFilePath: corruptedVadPath,
     constructorArgs: {
-      modelName: path.basename(validModelPath),
-      diskPath: path.dirname(validModelPath),
-      loader: createLoader()
+      files: {
+        model: validModelPath
+      }
     },
     config: {
       whisperConfig: {
         language: 'en',
         vad_model_path: corruptedVadPath
       },
-      vad_model_path: corruptedVadPath,
       contextParams: { model: validModelPath },
       miscConfig: { caption_enabled: false }
     }

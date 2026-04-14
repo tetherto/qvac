@@ -18,13 +18,9 @@ function createMockedModel ({ onOutput = () => { }, binding = undefined } = {}) 
   const validateStub = sinon.stub(TranscriptionWhispercpp.prototype, 'validateModelFiles').returns(undefined)
 
   const args = {
-    modelName: 'ggml-tiny.bin',
-    vadModelName: 'ggml-silero-v5.1.2.bin',
-    loader: new FakeDL({}),
-    params: {
-      language: 'en',
-      max_seconds: 29,
-      temperature: 0.0
+    files: {
+      model: 'ggml-tiny.bin',
+      vadModel: 'ggml-silero-v5.1.2.bin'
     }
   }
   const config = {
@@ -317,7 +313,7 @@ test('Destroy fails active response and clears job mapping', async (t) => {
     )
   }
 
-  t.is(model._jobToResponse.size, 0, 'Destroy should clear job-to-response mapping')
+  t.is(model._job.active, null, 'Destroy should clear the single active job handler')
 })
 
 test('Orphan native callbacks are ignored when no active job exists', async (t) => {

@@ -10,6 +10,7 @@ import { fileURLToPath } from "node:url";
 import { Application, ReflectionKind } from "typedoc";
 import type { DeclarationReflection, SignatureReflection } from "typedoc";
 import type { ApiFunction, ExpandedType, ErrorEntry, ApiData } from "./types.js";
+import { auditTsDoc } from "./audit-tsdoc.js";
 
 const SCRIPT_DIR = path.dirname(fileURLToPath(import.meta.url));
 const API_DATA_PATH = path.join(SCRIPT_DIR, "api-data.json");
@@ -98,6 +99,9 @@ export async function extractApiData(
   }
 
   console.log(`✓ TypeDoc analysis complete`);
+
+  console.log(`🔍 Auditing TSDoc completeness...`);
+  await auditTsDoc(project, sdkPath);
 
   const apiFunctions = extractApiFunctions(project);
   console.log(`✓ Extracted ${apiFunctions.length} API functions`);

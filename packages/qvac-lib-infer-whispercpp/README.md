@@ -479,7 +479,7 @@ try {
 
 ### 1. Clone the repo & Install the dependencies
 ```bash
-git clone git@github.com:tetherto/qvac-lib-infer-whispercpp.git
+git clone https://github.com/tetherto/qvac-lib-infer-whispercpp.git
 cd qvac-lib-infer-whispercpp
 npm install
 ```

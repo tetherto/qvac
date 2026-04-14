@@ -21,6 +21,7 @@ import { handleTextToSpeech } from "@/server/rpc/handlers/text-to-speech";
 import { handleGetModelInfo } from "@/server/rpc/handlers/get-model-info";
 import { handleOCRStream } from "@/server/rpc/handlers/ocr-stream";
 import { handleHeartbeat } from "@/server/rpc/handlers/heartbeat";
+import { handleFinetune } from "@/server/rpc/handlers/finetune";
 import { handleHeartbeatDelegated } from "@/server/rpc/handlers/heartbeat-delegated";
 import { handleCancelDelegated } from "@/server/rpc/handlers/cancel-delegated";
 import { handleDiffusionStream } from "@/server/rpc/handlers/diffusion-stream";
@@ -38,6 +39,11 @@ import type { HandlerEntry } from "./handler-utils";
 function ragSupportsProgress(request: Request): boolean {
   if (request.type !== "rag") return false;
   return ["ingest", "saveEmbeddings", "reindex"].includes(request.operation);
+}
+
+function finetuneSupportsProgress(request: Request): boolean {
+  if (request.type !== "finetune") return false;
+  return ["start", "resume", undefined].includes(request.operation);
 }
 
 function isModelDelegated(request: Request): boolean {
@@ -130,5 +136,11 @@ export const registry: Record<string, HandlerEntry> = {
     type: "reply",
     handler: handleRag,
     supportsProgress: ragSupportsProgress,
+  },
+
+  finetune: {
+    type: "reply",
+    handler: handleFinetune,
+    supportsProgress: finetuneSupportsProgress,
   },
 };

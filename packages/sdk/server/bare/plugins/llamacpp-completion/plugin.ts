@@ -3,8 +3,10 @@ import llmAddonLogging from "@qvac/llm-llamacpp/addonLogging";
 import {
   definePlugin,
   defineHandler,
+  finetuneRequestSchema,
   completionStreamRequestSchema,
   completionStreamResponseSchema,
+  finetuneResponseSchema,
   translateRequestSchema,
   translateResponseSchema,
   ModelType,
@@ -21,6 +23,7 @@ import { parseModelPath } from "@/server/utils";
 import FilesystemDL from "@qvac/dl-filesystem";
 import { asLoader } from "@/server/bare/utils/loader-adapter";
 import { completion } from "@/server/bare/plugins/llamacpp-completion/ops/completion-stream";
+import { finetune } from "@/server/bare/plugins/llamacpp-completion/ops/finetune";
 import { translate } from "@/server/bare/ops/translate";
 import { attachModelExecutionMs } from "@/profiling/model-execution";
 
@@ -167,6 +170,16 @@ export const llmPlugin = definePlugin({
         } finally {
           await stream.return?.(undefined as never);
         }
+      },
+    }),
+
+    finetune: defineHandler({
+      requestSchema: finetuneRequestSchema,
+      responseSchema: finetuneResponseSchema,
+      streaming: false,
+
+      handler: function (request) {
+        return finetune(request);
       },
     }),
 

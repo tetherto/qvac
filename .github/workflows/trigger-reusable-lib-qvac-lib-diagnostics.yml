@@ -102,7 +102,6 @@ jobs:
         uses: tetherto/oss-actions/.github/actions/publish-library-to-gpr@v1.1.0
         with:
           secret-token: ${{ secrets.GITHUB_TOKEN }}
-          pat-token: ${{ secrets.PAT_TOKEN }}
           npm-token: ${{ secrets.NPM_TOKEN }}
           tag: ${{ needs.publish-logic.outputs.gpr_tag }}
           workdir: packages/qvac-lib-diagnostics
@@ -153,7 +152,6 @@ jobs:
         uses: tetherto/oss-actions/.github/actions/publish-library-to-gpr@v1.1.0
         with:
           secret-token: ${{ secrets.GITHUB_TOKEN }}
-          pat-token: ${{ secrets.PAT_TOKEN }}
           npm-token: ${{ secrets.NPM_TOKEN }}
           tag: ${{ needs.publish-logic.outputs.gpr_tag }}
           workdir: packages/qvac-lib-diagnostics
@@ -176,7 +174,6 @@ jobs:
         uses: tetherto/oss-actions/.github/actions/publish-library-to-gpr@v1.1.0
         with:
           secret-token: ${{ secrets.GITHUB_TOKEN }}
-          pat-token: ${{ secrets.PAT_TOKEN }}
           npm-token: ${{ secrets.NPM_TOKEN }}
           tag: ${{ needs.publish-logic.outputs.gpr_tag }}
           workdir: packages/qvac-lib-diagnostics

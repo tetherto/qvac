@@ -6,12 +6,7 @@ const test = require('brittle')
 const { Readable } = require('streamx')
 
 const TranscriptionWhispercpp = require('../../index.js')
-const FakeDL = require('../mocks/loader.fake.js')
 const { ensureWhisperModel, getTestPaths, createAudioStream, isMobile } = require('./helpers.js')
-
-function createLoader () {
-  return new FakeDL({})
-}
 
 // Create a pushable Readable to simulate a live input source.
 function createLiveReadable () {
@@ -43,7 +38,7 @@ async function feedStreamLive ({ readable, filePath, chunkBytes, bytesPerSecond 
 // Skip on mobile - requires 10min audio file (~19MB) which is too large to bundle
 test('Live stream simulation using pushable Readable with model.run()', { timeout: 180000, skip: isMobile }, async (t) => {
   // Use standardized test paths from helpers
-  const { modelsDir, modelPath } = getTestPaths()
+  const { modelPath } = getTestPaths()
   // Use the 10-minute s16le sample from examples (provided by repo)
   const audioPath = path.resolve(__dirname, '../../examples/samples/10min-16k-s16le.raw')
 
@@ -57,12 +52,13 @@ test('Live stream simulation using pushable Readable with model.run()', { timeou
   }
 
   const constructorArgs = {
-    modelName: path.basename(modelPath),
-    loader: createLoader(),
-    diskPath: modelsDir
+    files: {
+      model: modelPath
+    }
   }
 
   const config = {
+    path: modelPath,
     whisperConfig: {
       language: 'en',
       audio_format: 's16le',
@@ -143,7 +139,7 @@ test('Live stream simulation using pushable Readable with model.run()', { timeou
 // Skip on mobile - requires 10min audio file (~19MB) which is too large to bundle
 test('Live segmented loop: repeated model.run per 3s chunk (no model teardown until end)', { timeout: 180000, skip: isMobile }, async (t) => {
   // Use standardized test paths from helpers
-  const { modelsDir, modelPath } = getTestPaths()
+  const { modelPath } = getTestPaths()
   const audioPath = path.resolve(__dirname, '../../examples/samples/10min-16k-s16le.raw')
 
   const whisperResult = await ensureWhisperModel(modelPath)
@@ -155,12 +151,13 @@ test('Live segmented loop: repeated model.run per 3s chunk (no model teardown un
   }
 
   const constructorArgs = {
-    modelName: path.basename(modelPath),
-    loader: createLoader(),
-    diskPath: modelsDir
+    files: {
+      model: modelPath
+    }
   }
 
   const config = {
+    path: modelPath,
     whisperConfig: {
       language: 'en',
       audio_format: 's16le',
