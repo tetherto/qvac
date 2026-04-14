@@ -224,6 +224,14 @@ class ImgStableDiffusion extends BaseInference {
    * @returns {Promise<QvacResponse>}
    */
   async _runInternal (params) {
+    // Validate init_image is Uint8Array if provided
+    if (params.init_image != null && !(params.init_image instanceof Uint8Array)) {
+      throw new Error(
+        'init_image must be a Uint8Array (e.g. fs.readFileSync("image.png")). ' +
+        'Got: ' + typeof params.init_image
+      )
+    }
+
     const mode = params.init_image ? 'img2img' : 'txt2img'
     this.logger.info('Starting generation with mode:', mode)
 
