@@ -92,6 +92,7 @@ class ParakeetInterface {
     this._state = state.LOADING
     this._nextJobId = 1
     this._activeJobId = null
+    this._cancelledJobId = null
     this._bufferedAudio = []
     this._bufferedBytes = 0
 
@@ -110,6 +111,7 @@ class ParakeetInterface {
     // Wrapper job ids are owned in JS, so recreating the native instance only
     // clears native state and buffered audio.
     this._activeJobId = null
+    this._cancelledJobId = null
     this._bufferedAudio = []
     this._bufferedBytes = 0
     this._handle = this._binding.createInstance(
@@ -143,6 +145,12 @@ class ParakeetInterface {
 
     const jobId = this._activeJobId
     if (jobId === null) {
+      this._cancelledJobId = null
+      return
+    }
+
+    if (this._cancelledJobId !== null && (mappedEvent === 'Error' || mappedEvent === 'JobEnded')) {
+      this._cancelledJobId = null
       return
     }
 
@@ -226,6 +234,7 @@ class ParakeetInterface {
           throw new Error('Cannot set new job: a job is already set or being processed')
         }
 
+        this._cancelledJobId = null
         this._activeJobId = currentJobId
         this._nextJobId = nextSafeId(this._nextJobId)
         this._bufferedAudio = []
@@ -310,6 +319,7 @@ class ParakeetInterface {
       }
 
       if (this._activeJobId === targetJobId) {
+        this._cancelledJobId = targetJobId
         await this._binding.cancel(this._handle)
         this._bufferedAudio = []
         this._bufferedBytes = 0
@@ -406,6 +416,7 @@ class ParakeetInterface {
         this._setState(previousState)
         return false
       }
+      this._cancelledJobId = null
       this._activeJobId = currentJobId
       this._nextJobId = nextSafeId(this._nextJobId)
       this._setState(state.PROCESSING)
