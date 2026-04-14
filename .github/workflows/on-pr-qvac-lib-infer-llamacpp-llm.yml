@@ -58,7 +58,7 @@ jobs:
         uses: ./.github/actions/verify-qvac-fabric-lockstep
 
       - name: Report verified version
-        run: echo "Verified qvac-fabric version: ${{ steps.lockstep.outputs.version }}"
+        run: 'echo "Verified qvac-fabric version: ${{ steps.lockstep.outputs.version }}"'
 
   sanity-checks:
     if: needs.authorize.outputs.allowed == 'true'
