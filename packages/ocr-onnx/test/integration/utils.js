@@ -649,7 +649,6 @@ function formatOCRPerformanceMetrics (label, stats, outputTexts = [], opts) {
 
     if (isMobile) {
       _perfReporter.writeReport()
-      _perfReporter.writeToConsole()
     }
   }
 
