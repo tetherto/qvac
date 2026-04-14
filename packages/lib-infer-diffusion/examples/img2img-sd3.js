@@ -33,6 +33,12 @@ async function main () {
     return
   }
 
+  // Ensure output directory exists
+  const outputDir = path.dirname(outputImagePath)
+  if (!fs.existsSync(outputDir)) {
+    fs.mkdirSync(outputDir, { recursive: true })
+  }
+
   // SD3 Medium — all-in-one safetensors (diffusion + CLIP-L + CLIP-G).
   // Downloaded via ./scripts/download-model-sd3.sh
   const MODEL_NAME = 'sd3_medium_incl_clips.safetensors'

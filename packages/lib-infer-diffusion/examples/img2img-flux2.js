@@ -22,6 +22,12 @@ async function main () {
     return
   }
 
+  // Ensure output directory exists
+  const outputDir = path.dirname(outputImagePath)
+  if (!fs.existsSync(outputDir)) {
+    fs.mkdirSync(outputDir, { recursive: true })
+  }
+
   console.log('Loading FLUX2-klein model...')
 
   const model = new ImgStableDiffusion(
