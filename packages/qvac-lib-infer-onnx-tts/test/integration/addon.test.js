@@ -697,6 +697,7 @@ test('Supertonic TTS multilingual (Spanish): basic synthesis with HF Supertone/s
 const ENHANCED_SAMPLE_RATE = 48000
 
 test('LavaSR: Chatterbox + enhance produces 48kHz output', { timeout: 1800000 }, async (t) => {
+  if (isMobile) { t.pass('Skipped on mobile — LavaSR models not bundled'); return }
   const baseDir = getBaseDir()
   const chatterboxDir = path.join(baseDir, 'models', 'chatterbox')
   const lavasrDir = path.join(baseDir, 'models', 'lavasr')
@@ -749,6 +750,7 @@ test('LavaSR: Chatterbox + enhance produces 48kHz output', { timeout: 1800000 },
 })
 
 test('LavaSR: Supertonic + denoise + enhance', { timeout: 1800000 }, async (t) => {
+  if (isMobile) { t.pass('Skipped on mobile — LavaSR models not bundled'); return }
   const baseDir = getBaseDir()
   const supertonicDir = path.join(baseDir, 'models', 'supertonic')
   const lavasrDir = path.join(baseDir, 'models', 'lavasr')
@@ -791,6 +793,7 @@ test('LavaSR: Supertonic + denoise + enhance', { timeout: 1800000 }, async (t) =
 })
 
 test('LavaSR: Supertonic + outputSampleRate without enhance (conventional resample)', { timeout: 1800000 }, async (t) => {
+  if (isMobile) { t.pass('Skipped on mobile — LavaSR models not bundled'); return }
   const baseDir = getBaseDir()
   const supertonicDir = path.join(baseDir, 'models', 'supertonic')
 
@@ -831,6 +834,7 @@ test('LavaSR: Supertonic + outputSampleRate without enhance (conventional resamp
 })
 
 test('LavaSR: Supertonic + enhance + custom outputSampleRate', { timeout: 1800000 }, async (t) => {
+  if (isMobile) { t.pass('Skipped on mobile — LavaSR models not bundled'); return }
   const baseDir = getBaseDir()
   const supertonicDir = path.join(baseDir, 'models', 'supertonic')
   const lavasrDir = path.join(baseDir, 'models', 'lavasr')
@@ -874,6 +878,7 @@ test('LavaSR: Supertonic + enhance + custom outputSampleRate', { timeout: 180000
 })
 
 test('LavaSR: Supertonic + enhance', { timeout: 1800000 }, async (t) => {
+  if (isMobile) { t.pass('Skipped on mobile — LavaSR models not bundled'); return }
   const baseDir = getBaseDir()
   const supertonicDir = path.join(baseDir, 'models', 'supertonic')
   const lavasrDir = path.join(baseDir, 'models', 'lavasr')
