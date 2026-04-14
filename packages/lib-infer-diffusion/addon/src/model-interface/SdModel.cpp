@@ -226,7 +226,8 @@ class SdImageBatch {
 public:
   SdImageBatch(sd_image_t* data, int count) : data_(data), count_(count) {}
   ~SdImageBatch() {
-    if (!data_) return;
+    if (!data_)
+      return;
     for (int i = 0; i < count_; ++i) {
       free(data_[i].data);
     }
@@ -240,13 +241,15 @@ public:
 
   [[nodiscard]] int count() const { return count_; }
   [[nodiscard]] const sd_image_t& operator[](int i) const {
-    if (!data_) throw std::runtime_error("SdImageBatch: null data");
+    if (!data_)
+      throw std::runtime_error("SdImageBatch: null data");
     return data_[i];
   }
 
   // Release pixel buffer for image i immediately after it has been consumed.
   void release(int i) {
-    if (!data_) return;
+    if (!data_)
+      return;
     free(data_[i].data);
     data_[i].data = nullptr;
   }
