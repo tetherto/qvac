@@ -34,6 +34,10 @@ async function runGenerateImageTest (options = {}) { // eslint-disable-line no-u
   return runIntegrationModule('../integration/generate-image.test.js', options)
 }
 
+async function runInputValidationTest (options = {}) { // eslint-disable-line no-unused-vars
+  return runIntegrationModule('../integration/input-validation.test.js', options)
+}
+
 async function runModelLoadingTest (options = {}) { // eslint-disable-line no-unused-vars
   return runIntegrationModule('../integration/model-loading.test.js', options)
 }
