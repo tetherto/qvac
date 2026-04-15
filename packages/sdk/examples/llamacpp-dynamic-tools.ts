@@ -168,7 +168,7 @@ async function chatSession ({ modelId, history, tools, kvCache }: ChatSesssionPa
 type ToolInvocationParam = Pick<CompletionParams, 'kvCache'> & {
   toolVariants: [ToolInput[], ToolInput[], ToolInput[]]
 }
-async function runToolInvocationTest({ kvCache, toolVariants }: ToolInvocationParam) {
+export async function runToolInvocationTest({ kvCache, toolVariants }: ToolInvocationParam) {
   try {
     // Load model from provided file path with tools support enabled
     const modelId = await loadModel({
@@ -241,6 +241,103 @@ async function runToolInvocationTest({ kvCache, toolVariants }: ToolInvocationPa
     process.exit(1);
   }
 }
+
+export async function runToolInvocationContTest({ kvCache, toolVariants }: ToolInvocationParam) {
+  try {
+    // Load model from provided file path with tools support enabled
+    const modelId = await loadModel({
+      modelSrc: QWEN3_1_7B_INST_Q4,
+      modelType: "llm",
+      modelConfig: {
+        ctx_size: 4096,
+        tools: true, // Enable tools support
+        toolsMode: 'dynamic',
+      },
+      onProgress: (progress) =>
+        console.log(`Loading: ${progress.percentage.toFixed(1)}%`),
+    });
+    console.log(`✅ Model loaded successfully! Model ID: ${modelId}`);
+
+    // Create conversation history
+    const history = [
+      {
+        role: "system",
+        content:"You are a helpful assistant that can use tools. User's cat name is Windy and dog is Butch",
+      },
+      {
+        role: "user",
+        content: "What's the weather in Tokyo?",
+      },
+      {
+        role: "assistant",
+        content: `
+<think>
+Okay, the user is asking about the weather in Tokyo. I need to check if there's a function available to get the weather. Looking at the tools provided, there's a function called get_weather that takes a city name as a parameter. The city here is Tokyo. So I should call that function with the city parameter set to "Tokyo". Let me make sure I format the JSON correctly within the tool_call tags.
+</think>
+<tool_call>
+{"name": "get_weather", "arguments": {"city": "Tokyo"}}
+</tool_call>"
+`,
+      },
+      {
+        role: "tool",
+        content: "The weather in Tokyo is rainy, 08°C with heavy clouds.",
+      },
+      /*
+      {
+        role: "assistant",
+        content: `
+<think>
+Okay, the user asked about the weather in Tokyo. I used the get_weather function and found out it's rainy with 08°C and heavy clouds. Now I need to respond appropriately. Let me check the details again. The function response says rainy, 08°C, heavy clouds. I should present this info clearly. Maybe mention the current conditions and temperature. Make sure it's friendly and helpful. Alright, the response should be something like informing the user about the weather and offering further help if needed.
+</think>
+The weather in Tokyo is currently rainy with clouds and a temperature of 08°C. Let me know if you need further weather updates or assistance! 🌧️
+`,
+      },
+      {
+        role: "user",
+        content: "What is my cat name?",
+      },
+      */
+    ];
+
+    /*
+    console.log("\n🤖 AI Response:");
+    await chatSession({ modelId, history, tools: toolVariants[0], kvCache })
+    */
+
+    history.push({
+      role: "user",
+      content: "What's my dog name?",
+    })
+
+    console.log("\n🤖 AI Response:");
+    await chatSession({ modelId, history, tools: toolVariants[0], kvCache })
+
+    history.push({
+      role: "user",
+      content: "What is the weather in Tokyo?",
+    })
+    console.log("\n🤖 AI Response:");
+    await chatSession({ modelId, history, tools: toolVariants[2], kvCache })
+
+    history.push({
+      role: "user",
+      content: "only in case the weather in Tokyo is rainy, check my horoscope for Aquarius; if the weather is good - check Taurus; need only one horoscope depending on the whether",
+    })
+
+    console.log("\n🤖 AI Response:");
+    console.log("(Streaming with tool definitions in prompt)\n");
+
+    await chatSession({ modelId, history, tools: toolVariants[1], kvCache })
+
+    console.log("\n\n🎉 Completed!");
+    await unloadModel({ modelId, clearStorage: false });
+  } catch (error) {
+    console.error("❌ Error:", error);
+    process.exit(1);
+  }
+}
 // using same kvCache for a single session
 // await runToolInvocationTest({ kvCache: false, toolVariants: [tools1, tools2] })
-await runToolInvocationTest({ kvCache: `id-${Date.now()}`, toolVariants: [tools1, tools2, tools3] })
+// await runToolInvocationTest({ kvCache: `id-${Date.now()}`, toolVariants: [tools1, tools2, tools3] })
+await runToolInvocationContTest({ kvCache: `id-${Date.now()}`, toolVariants: [tools1, tools2, tools3] })

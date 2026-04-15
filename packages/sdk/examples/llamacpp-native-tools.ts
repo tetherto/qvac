@@ -6,7 +6,11 @@ import {
   type ToolCall,
   type CompletionStats,
   QWEN3_1_7B_INST_Q4,
+  VERBOSITY,
 } from "@/index";
+
+const kvCache = false
+// const kvCache = `id-${Date.now()}`
 
 // Define Zod schemas for tool parameters
 const weatherSchema = z.object({
@@ -46,6 +50,8 @@ try {
     modelConfig: {
       ctx_size: 4096,
       tools: true, // Enable tools support
+      toolsMode: 'dynamic',
+      verbosity: VERBOSITY.DEBUG, // Only log errors, remaining logs are captured by loggingStream
     },
     onProgress: (progress) =>
       console.log(`Loading: ${progress.percentage.toFixed(1)}%`),
@@ -68,7 +74,7 @@ try {
   console.log("\n🤖 AI Response:");
   console.log("(Streaming with tool definitions in prompt)\n");
 
-  const result = completion({ modelId, history, stream: true, tools });
+  const result = completion({ modelId, history, kvCache, stream: true, tools });
 
   // Consume token stream
   const tokensTask = (async () => {
@@ -127,7 +133,8 @@ try {
       let result = "";
       if (call.name === "get_weather") {
         const args = call.arguments as { city: string; country?: string };
-        result = `The weather in ${args.city} is sunny, 22°C with light clouds.`;
+        // result = `The weather in ${args.city} is sunny, 22°C with light clouds.`;
+        result = `The weather in ${args.city} is rainy, 02°C with heavy clouds.`;
       } else if (call.name === "get_horoscope") {
         const args = call.arguments as { sign: string };
         result = `Horoscope for ${args.sign}: Today is a great day for new beginnings and creative endeavors!`;
@@ -155,6 +162,7 @@ try {
     const followUpResult = completion({
       modelId,
       history,
+      kvCache,
       stream: true,
       tools,
     });
