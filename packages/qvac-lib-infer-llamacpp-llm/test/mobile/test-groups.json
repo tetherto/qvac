@@ -3,7 +3,7 @@
     "heavy1": ["runFinetuningPauseResumeTest"],
     "heavy2": ["runToolCallingTest"],
     "heavy3": ["runImageTest"],
-    "heavy4": ["runOcrLightonTest"],
+    "heavy4": ["runGemma4Test", "runOcrLightonTest", "runOcrPaddleTest"],
     "heavy5": ["runReasoningTest"],
     "heavy6": ["runSlidingContextTest"],
     "lightA": [
@@ -20,6 +20,7 @@
       "runModelLoadingTest",
       "runMoeTest",
       "runMultiInstanceTest",
+      "runQwen35Test",
       "runUtf8OutputTest"
     ]
   },
@@ -37,10 +38,13 @@
       "runImageTest"
     ],
     "groupB": [
+      "runGemma4Test",
       "runModelLoadingTest",
       "runMoeTest",
       "runMultiInstanceTest",
       "runOcrLightonTest",
+      "runOcrPaddleTest",
+      "runQwen35Test",
       "runReasoningTest",
       "runSlidingContextTest",
       "runToolCallingTest",
