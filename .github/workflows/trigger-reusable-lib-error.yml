@@ -39,7 +39,6 @@ jobs:
           fetch-depth: 0
       - uses: ./.github/actions/release-merge-guard
         with:
-          github-token: ${{ secrets.GITHUB_TOKEN }}
           base-ref: ${{ github.ref_name }}
           base-sha: ${{ github.event.before }}
           head-sha: ${{ github.sha }}
