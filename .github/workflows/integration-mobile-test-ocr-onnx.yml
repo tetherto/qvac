@@ -1709,6 +1709,7 @@ jobs:
             --output combined-output/performance-report-combined.md
 
       - name: Generate per-device HTML reports
+        if: always()
         shell: bash
         run: |
           mkdir -p per-device-reports
@@ -1754,28 +1755,34 @@ jobs:
         if: always()
         shell: bash
         run: |
+          set +e
           MD_FILE="combined-output/performance-report-combined.md"
-          printf '## OCR Performance Report (All Platforms)\n\n' >> $GITHUB_STEP_SUMMARY
+          echo "## OCR Performance Report (All Platforms)" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
           if [ -f "$MD_FILE" ]; then
             cat "$MD_FILE" >> $GITHUB_STEP_SUMMARY
           else
             echo "No combined performance report available." >> $GITHUB_STEP_SUMMARY
           fi
-          printf '\n---\n\n### Downloadable HTML Reports\n\n' >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "---" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "### Downloadable HTML Reports" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
           if [ -f "combined-output/performance-report-combined.html" ]; then
-            printf '> **Full Combined Report (all platforms)**: download artifact `HTML-Report-All-Platforms-%s`\n\n' "${{ github.run_number }}" >> $GITHUB_STEP_SUMMARY
+            echo "> **Full Combined Report (all platforms)**: download artifact \`HTML-Report-All-Platforms-${{ github.run_number }}\`" >> $GITHUB_STEP_SUMMARY
+            echo "" >> $GITHUB_STEP_SUMMARY
           fi
-          DEVICE_LIST=""
+          HAS_DEVICES=0
           for html in per-device-reports/HTML-Report-*.html; do
             [ -f "$html" ] || continue
+            if [ "$HAS_DEVICES" -eq 0 ]; then
+              echo "> **Individual Device Reports**: download artifact \`HTML-Reports-Per-Device-${{ github.run_number }}\`" >> $GITHUB_STEP_SUMMARY
+              echo ">" >> $GITHUB_STEP_SUMMARY
+              echo "> Includes:" >> $GITHUB_STEP_SUMMARY
+              HAS_DEVICES=1
+            fi
             device=$(basename "$html" .html | sed 's/^HTML-Report-//' | tr '-' ' ')
-            DEVICE_LIST="${DEVICE_LIST}- ${device}\n"
+            echo "> - ${device}" >> $GITHUB_STEP_SUMMARY
           done
-          if [ -n "$DEVICE_LIST" ]; then
-            printf '> **Individual Device Reports**: download artifact `HTML-Reports-Per-Device-%s`\n>\n' "${{ github.run_number }}" >> $GITHUB_STEP_SUMMARY
-            printf '> Includes:\n' >> $GITHUB_STEP_SUMMARY
-            printf "$DEVICE_LIST" | while IFS= read -r line; do
-              printf '> %s\n' "$line" >> $GITHUB_STEP_SUMMARY
-            done
-          fi
           echo "" >> $GITHUB_STEP_SUMMARY
