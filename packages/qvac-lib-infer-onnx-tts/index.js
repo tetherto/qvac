@@ -10,6 +10,7 @@ const {
 } = require('@qvac/infer-base')
 const { TTSInterface } = require('./tts')
 const { QvacErrorAddonTTS, ERR_CODES } = require('./lib/error')
+const { splitTtsText } = require('./lib/textChunker')
 
 // Engine types
 const ENGINE_CHATTERBOX = 'chatterbox'
@@ -138,6 +139,9 @@ class ONNXTTS {
       destroyed: false
     }
     this.addon = null
+    this._sentenceStreamCtx = null
+    /** Serializes `runStream` until each response settles (Whisper-style). */
+    this._ttsInferenceQueueWaiter = Promise.resolve()
     this._job = createJobHandler({
       cancel: () => {
         const a = this.addon
@@ -301,6 +305,109 @@ class ONNXTTS {
     return this._runExclusive(() => this._runInternal(input))
   }
 
+  /**
+   * Serialize streaming runs until the returned {@link QvacResponse} settles.
+   */
+  async _enqueueExclusiveTtsResponse (runFn) {
+    const prev = this._ttsInferenceQueueWaiter || Promise.resolve()
+    let releaseSlot
+    this._ttsInferenceQueueWaiter = new Promise(resolve => {
+      releaseSlot = resolve
+    })
+    await prev
+    let response
+    try {
+      response = await runFn()
+    } catch (err) {
+      releaseSlot()
+      throw err
+    }
+    response.await().finally(() => { releaseSlot() }).catch(() => {})
+    return response
+  }
+
+  /**
+   * Chunk long text by sentence (see {@link splitTtsText}), synthesize each chunk in order,
+   * and emit PCM on `response.onUpdate` as each chunk completes.
+   *
+   * @param {string} text
+   * @param {{ locale?: string, maxChunkScalars?: number }} [options]
+   */
+  async runStream (text, options = {}) {
+    const opts = options == null || typeof options !== 'object' ? {} : options
+    if (typeof text !== 'string' || text.trim().length === 0) {
+      throw new QvacErrorAddonTTS({
+        code: ERR_CODES.FAILED_TO_APPEND,
+        adds: 'runStream: non-empty string required'
+      })
+    }
+    if (this.exclusiveRun) {
+      return await this._enqueueExclusiveTtsResponse(() =>
+        this._runStreamOrchestrator(text, opts)
+      )
+    }
+    return this._runStreamOrchestrator(text, opts)
+  }
+
+  /**
+   * Starts a {@link QvacResponse} and schedules chunk synthesis without awaiting completion
+   * (so callers can attach `onUpdate` before audio callbacks run).
+   */
+  _runStreamOrchestrator (text, options) {
+    const chunks = splitTtsText(String(text), {
+      language: this._config?.language,
+      locale: options.locale,
+      maxScalars: options.maxChunkScalars
+    })
+    if (chunks.length === 0) {
+      throw new QvacErrorAddonTTS({
+        code: ERR_CODES.FAILED_TO_APPEND,
+        adds: 'runStream: text produced no chunks after split'
+      })
+    }
+
+    const response = this._job.start()
+    this._sentenceStreamCtx = {
+      chunks,
+      chunkIdx: 0,
+      acc: {
+        totalTime: 0,
+        audioDurationMs: 0,
+        totalSamples: 0
+      },
+      chunkResolver: null
+    }
+
+    this._sentenceStreamDriveBody().catch((err) => {
+      if (this._sentenceStreamCtx && this._sentenceStreamCtx.chunkResolver) {
+        const rej = this._sentenceStreamCtx.chunkResolver.reject
+        this._sentenceStreamCtx.chunkResolver = null
+        rej(err)
+      }
+      this._sentenceStreamCtx = null
+      this._job.fail(err)
+    })
+
+    return response
+  }
+
+  async _sentenceStreamDriveBody () {
+    const ctx = this._sentenceStreamCtx
+    if (!ctx) return
+    for (let i = 0; i < ctx.chunks.length; i++) {
+      ctx.chunkIdx = i
+      const donePromise = new Promise((resolve, reject) => {
+        ctx.chunkResolver = { resolve, reject }
+      })
+      await this.addon.runJob({
+        type: 'text',
+        input: ctx.chunks[i]
+      })
+      await donePromise
+    }
+    this._sentenceStreamCtx = null
+  }
+
   async _load () {
     this.logger.info('[TTS] Engine type:', this._engineType)
     this.logger.info('[TTS] Language:', this._config?.language || 'en')
@@ -392,9 +499,23 @@ class ONNXTTS {
     return response
   }
 
+  _mergeSentenceStreamStats (acc, data) {
+    const t = typeof data.totalTime === 'number' ? data.totalTime : 0
+    const a = typeof data.audioDurationMs === 'number' ? data.audioDurationMs : 0
+    const s = typeof data.totalSamples === 'number' ? data.totalSamples : 0
+    acc.totalTime += t
+    acc.audioDurationMs += a
+    acc.totalSamples += s
+  }
+
   _addonOutputCallback (addon, event, data, error) {
     if (typeof error === 'string' && error.length > 0) {
       this.logger.error(`TTS job failed with error: ${error}`)
+      if (this._sentenceStreamCtx && this._sentenceStreamCtx.chunkResolver) {
+        const rej = this._sentenceStreamCtx.chunkResolver.reject
+        this._sentenceStreamCtx.chunkResolver = null
+        rej(new Error(error))
+      }
       this._job.fail(error)
       return
     }
@@ -409,7 +530,18 @@ class ONNXTTS {
           throw err
         }
       }
-      this._job.output(data)
+      if (this._sentenceStreamCtx) {
+        const ctx = this._sentenceStreamCtx
+        const idx = ctx.chunkIdx
+        const sentenceChunk = ctx.chunks[idx] || ''
+        this._job.output({
+          outputArray: data.outputArray,
+          chunkIndex: idx,
+          sentenceChunk
+        })
+      } else {
+        this._job.output(data)
+      }
       return
     }
 
@@ -419,6 +551,31 @@ class ONNXTTS {
       ('totalTime' in data || 'audioDurationMs' in data || 'totalSamples' in data)
     ) {
       this.logger.info(`TTS job completed. Stats: ${JSON.stringify(data)}`)
+      if (this._sentenceStreamCtx) {
+        const ctx = this._sentenceStreamCtx
+        this._mergeSentenceStreamStats(ctx.acc, data)
+        const isLast = ctx.chunkIdx >= ctx.chunks.length - 1
+        if (ctx.chunkResolver) {
+          ctx.chunkResolver.resolve()
+          ctx.chunkResolver = null
+        }
+        if (isLast) {
+          const totalChars = ctx.chunks.join('').length
+          const merged = { ...ctx.acc }
+          merged.tokensPerSecond =
+            ctx.acc.totalTime > 0 ? totalChars / ctx.acc.totalTime : 0
+          merged.realTimeFactor =
+            ctx.acc.audioDurationMs > 0
+              ? (ctx.acc.totalTime * 1000.0) / ctx.acc.audioDurationMs
+              : 0
+          if (this.opts?.stats) {
+            this._job.end(merged)
+          } else {
+            this._job.end()
+          }
+        }
+        return
+      }
       if (this.opts?.stats) {
         this._job.end(data)
       } else {
@@ -437,6 +594,13 @@ class ONNXTTS {
   }
 
   _failAndClearActiveResponse (reason) {
+    if (this._sentenceStreamCtx && this._sentenceStreamCtx.chunkResolver) {
+      this._sentenceStreamCtx.chunkResolver.reject(
+        reason instanceof Error ? reason : new Error(String(reason))
+      )
+      this._sentenceStreamCtx.chunkResolver = null
+    }
+    this._sentenceStreamCtx = null
     this._job.fail(reason)
   }
 
