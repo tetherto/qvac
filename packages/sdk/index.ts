@@ -37,6 +37,8 @@ export {
   modelRegistrySearch,
   modelRegistryGetModel,
   type ModelRegistrySearchParams,
+  suspend,
+  resume,
   type FinetuneHandle,
 } from "./client/api";
 export { close } from "./client";

@@ -24,7 +24,7 @@ Built-in plugins cover:
 - **Transcription** (whisper.cpp) — Speech-to-text with VAD support
 - **Transcription** (Parakeet) — Speech-to-text (NVIDIA NeMo ONNX)
 - **Embeddings** (llama.cpp) — Text embeddings for RAG
-- **Translation** (nmtcpp) — Neural machine translation (Marian, IndicTrans2, Bergamot)
+- **Translation** (nmtcpp) — Neural machine translation (IndicTrans2, Bergamot)
 - **Text-to-Speech** (ONNX/Piper, Chatterbox, Supertonic) — Speech synthesis
 - **OCR** (ONNX) — Optical character recognition
 
