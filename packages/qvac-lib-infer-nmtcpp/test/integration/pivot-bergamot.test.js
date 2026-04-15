@@ -41,9 +41,11 @@ const ALL_DEVICE_CONFIGS = [
   { id: 'cpu', useGpu: false }
 ]
 
-const DEVICE_CONFIGS = isMobile
-  ? ALL_DEVICE_CONFIGS
-  : ALL_DEVICE_CONFIGS.filter(c => c.id === 'cpu')
+const DEVICE_CONFIGS = ALL_DEVICE_CONFIGS.filter(c => c.id === 'cpu')
+
+// On mobile, only run core pivot tests to stay within Device Farm time limits.
+// Desktop runs the full suite. bergamot.test.js covers GPU mode separately.
+const desktopTest = isMobile ? function () {} : test
 
 /**
  * Ensures a Bergamot model pair is available on disk.
@@ -220,7 +222,7 @@ test('Pivot translation - stats object is populated (no hang)', { timeout: PIVOT
 // Test: Pivot batch translation via runBatch()
 // ---------------------------------------------------------------------------
 
-test('Pivot translation - batch translation via runBatch()', { timeout: PIVOT_TIMEOUT }, async function (t) {
+desktopTest('Pivot translation - batch translation via runBatch()', { timeout: PIVOT_TIMEOUT }, async function (t) {
   const esEnDir = await ensureModelPair('es', 'en')
   const enItDir = await ensureModelPair('en', 'it')
   const esEn = findModelFiles(esEnDir)
@@ -300,7 +302,7 @@ test('Pivot translation - cancel does not crash', { timeout: PIVOT_TIMEOUT }, as
 // Test: Multiple sequential translations reuse the same loaded model
 // ---------------------------------------------------------------------------
 
-test('Pivot translation - multiple sequential runs', { timeout: PIVOT_TIMEOUT }, async function (t) {
+desktopTest('Pivot translation - multiple sequential runs', { timeout: PIVOT_TIMEOUT }, async function (t) {
   const esEnDir = await ensureModelPair('es', 'en')
   const enItDir = await ensureModelPair('en', 'it')
   const esEn = findModelFiles(esEnDir)
@@ -338,7 +340,7 @@ test('Pivot translation - multiple sequential runs', { timeout: PIVOT_TIMEOUT },
 // Test: Empty string input
 // ---------------------------------------------------------------------------
 
-test('Pivot translation - empty string input', { timeout: PIVOT_TIMEOUT }, async function (t) {
+desktopTest('Pivot translation - empty string input', { timeout: PIVOT_TIMEOUT }, async function (t) {
   const esEnDir = await ensureModelPair('es', 'en')
   const enItDir = await ensureModelPair('en', 'it')
   const esEn = findModelFiles(esEnDir)
@@ -372,7 +374,7 @@ test('Pivot translation - empty string input', { timeout: PIVOT_TIMEOUT }, async
 // Test: Run on unloaded model should throw
 // ---------------------------------------------------------------------------
 
-test('Pivot translation - run after unload throws', { timeout: PIVOT_TIMEOUT }, async function (t) {
+desktopTest('Pivot translation - run after unload throws', { timeout: PIVOT_TIMEOUT }, async function (t) {
   const esEnDir = await ensureModelPair('es', 'en')
   const enItDir = await ensureModelPair('en', 'it')
   const esEn = findModelFiles(esEnDir)
@@ -404,7 +406,7 @@ test('Pivot translation - run after unload throws', { timeout: PIVOT_TIMEOUT }, 
 // Test: Load → unload → reload cycle
 // ---------------------------------------------------------------------------
 
-test('Pivot translation - load, unload, reload cycle', { timeout: PIVOT_TIMEOUT }, async function (t) {
+desktopTest('Pivot translation - load, unload, reload cycle', { timeout: PIVOT_TIMEOUT }, async function (t) {
   const esEnDir = await ensureModelPair('es', 'en')
   const enItDir = await ensureModelPair('en', 'it')
   const esEn = findModelFiles(esEnDir)
@@ -456,68 +458,70 @@ test('Pivot translation - load, unload, reload cycle', { timeout: PIVOT_TIMEOUT 
 // English. This proves the feature is generic, not accidentally hardcoded.
 // ---------------------------------------------------------------------------
 
-for (const deviceConfig of DEVICE_CONFIGS) {
-  const label = `[${deviceConfig.id.toUpperCase()}]`
+if (!isMobile) {
+  for (const deviceConfig of DEVICE_CONFIGS) {
+    const label = `[${deviceConfig.id.toUpperCase()}]`
 
-  test(`Pivot translation ${label} - French → English → Spanish`, { timeout: PIVOT_TIMEOUT }, async function (t) {
-    t.comment('Platform: ' + platform + ', isMobile: ' + isMobile)
+    test(`Pivot translation ${label} - French → English → Spanish`, { timeout: PIVOT_TIMEOUT }, async function (t) {
+      t.comment('Platform: ' + platform + ', isMobile: ' + isMobile)
 
-    t.comment(`${label} Ensuring fr→en model...`)
-    const frEnDir = await ensureModelPair('fr', 'en')
-    t.ok(frEnDir, `${label} fr→en model directory available`)
+      t.comment(`${label} Ensuring fr→en model...`)
+      const frEnDir = await ensureModelPair('fr', 'en')
+      t.ok(frEnDir, `${label} fr→en model directory available`)
 
-    t.comment(`${label} Ensuring en→es model...`)
-    const enEsDir = await ensureModelPair('en', 'es')
-    t.ok(enEsDir, `${label} en→es model directory available`)
+      t.comment(`${label} Ensuring en→es model...`)
+      const enEsDir = await ensureModelPair('en', 'es')
+      t.ok(enEsDir, `${label} en→es model directory available`)
 
-    const frEn = findModelFiles(frEnDir)
-    const enEs = findModelFiles(enEsDir)
+      const frEn = findModelFiles(frEnDir)
+      const enEs = findModelFiles(enEsDir)
 
-    t.ok(frEn.modelFile, `${label} fr→en model file found`)
-    t.ok(frEn.vocabFile, `${label} fr→en vocab file found`)
-    t.ok(enEs.modelFile, `${label} en→es model file found`)
-    t.ok(enEs.vocabFile, `${label} en→es vocab file found`)
+      t.ok(frEn.modelFile, `${label} fr→en model file found`)
+      t.ok(frEn.vocabFile, `${label} fr→en vocab file found`)
+      t.ok(enEs.modelFile, `${label} en→es model file found`)
+      t.ok(enEs.vocabFile, `${label} en→es vocab file found`)
 
-    const logger = createLogger()
-    const perfCollector = createPerformanceCollector()
-    let model
+      const logger = createLogger()
+      const perfCollector = createPerformanceCollector()
+      let model
 
-    try {
-      model = new TranslationNmtcpp(createPivotArgs(frEnDir, frEn, enEsDir, enEs, {
-        params: { srcLang: 'fr', dstLang: 'es' },
-        logger,
-        normalize: 1,
-        use_gpu: deviceConfig.useGpu,
-        pivotNormalize: 1
-      }))
+      try {
+        model = new TranslationNmtcpp(createPivotArgs(frEnDir, frEn, enEsDir, enEs, {
+          params: { srcLang: 'fr', dstLang: 'es' },
+          logger,
+          normalize: 1,
+          use_gpu: deviceConfig.useGpu,
+          pivotNormalize: 1
+        }))
 
-      await model.load()
-      t.pass(`${label} Pivot model loaded (fr→en→es)`)
+        await model.load()
+        t.pass(`${label} Pivot model loaded (fr→en→es)`)
 
-      const testSentence = 'Bonjour, comment allez-vous aujourd\'hui?'
-      t.comment(`${label} Translating: "${testSentence}"`)
+        const testSentence = 'Bonjour, comment allez-vous aujourd\'hui?'
+        t.comment(`${label} Translating: "${testSentence}"`)
 
-      perfCollector.start()
+        perfCollector.start()
 
-      const response = await model.run(testSentence)
-      await response
-        .onUpdate(data => { perfCollector.onToken(data) })
-        .await()
+        const response = await model.run(testSentence)
+        await response
+          .onUpdate(data => { perfCollector.onToken(data) })
+          .await()
 
-      const addonStats = response.stats || {}
-      const metrics = perfCollector.getMetrics(testSentence, addonStats)
-      t.comment(formatPerformanceMetrics(`[Pivot fr→en→es] ${label}`, metrics))
+        const addonStats = response.stats || {}
+        const metrics = perfCollector.getMetrics(testSentence, addonStats)
+        t.comment(formatPerformanceMetrics(`[Pivot fr→en→es] ${label}`, metrics))
 
-      t.ok(metrics.fullOutput.length > 0, `${label} pivot translation produced output`)
-      t.pass(`${label} fr→en→es pivot translation completed successfully`)
-    } finally {
-      if (model) {
-        try { await model.unload() } catch (e) {
-          t.comment(`${label} unload error: ${e.message}`)
+        t.ok(metrics.fullOutput.length > 0, `${label} pivot translation produced output`)
+        t.pass(`${label} fr→en→es pivot translation completed successfully`)
+      } finally {
+        if (model) {
+          try { await model.unload() } catch (e) {
+            t.comment(`${label} unload error: ${e.message}`)
+          }
         }
       }
-    }
-  })
+    })
+  }
 }
 
 // ---------------------------------------------------------------------------
@@ -530,7 +534,7 @@ for (const deviceConfig of DEVICE_CONFIGS) {
 // handoff between models. If this breaks in production, users lose trust.
 // ---------------------------------------------------------------------------
 
-test('Pivot translation - long multi-paragraph text', { timeout: PIVOT_TIMEOUT }, async function (t) {
+desktopTest('Pivot translation - long multi-paragraph text', { timeout: PIVOT_TIMEOUT }, async function (t) {
   const esEnDir = await ensureModelPair('es', 'en')
   const enItDir = await ensureModelPair('en', 'it')
   const esEn = findModelFiles(esEnDir)
@@ -583,7 +587,7 @@ test('Pivot translation - long multi-paragraph text', { timeout: PIVOT_TIMEOUT }
 // This is a common production bug in chained translation pipelines.
 // ---------------------------------------------------------------------------
 
-test('Pivot translation - numbers and special characters preserved', { timeout: PIVOT_TIMEOUT }, async function (t) {
+desktopTest('Pivot translation - numbers and special characters preserved', { timeout: PIVOT_TIMEOUT }, async function (t) {
   const esEnDir = await ensureModelPair('es', 'en')
   const enItDir = await ensureModelPair('en', 'it')
   const esEn = findModelFiles(esEnDir)
@@ -627,7 +631,7 @@ test('Pivot translation - numbers and special characters preserved', { timeout: 
 // subtle bug that only shows up in production integrations.
 // ---------------------------------------------------------------------------
 
-test('Pivot translation - batch with single item', { timeout: PIVOT_TIMEOUT }, async function (t) {
+desktopTest('Pivot translation - batch with single item', { timeout: PIVOT_TIMEOUT }, async function (t) {
   const esEnDir = await ensureModelPair('es', 'en')
   const enItDir = await ensureModelPair('en', 'it')
   const esEn = findModelFiles(esEnDir)
