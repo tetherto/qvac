@@ -1,0 +1,300 @@
+'use strict'
+
+const { QvacErrorAddonBCI, ERR_CODES } = require('./lib/error')
+const { checkConfig } = require('./configChecker')
+
+const state = Object.freeze({
+  LOADING: 'loading',
+  LISTENING: 'listening',
+  PROCESSING: 'processing',
+  IDLE: 'idle',
+  PAUSED: 'paused',
+  STOPPED: 'stopped'
+})
+
+const END_OF_INPUT = 'end of job'
+
+/**
+ * Low-level interface between the Bare C++ BCI addon and the JS runtime.
+ * Accepts neural signal data (Uint8Array) instead of audio.
+ */
+class BCIInterface {
+  /**
+   * @param {Object} binding - the native binding object
+   * @param {Object} configurationParams - configuration for the BCI model
+   * @param {Function} outputCb - callback for inference events (Output, JobEnded, Error)
+   * @param {Function} [transitionCb] - callback for state changes
+   */
+  constructor (binding, configurationParams, outputCb, transitionCb = null) {
+    this._binding = binding
+    this._outputCb = outputCb
+    this._transitionCb = transitionCb
+    this._nextJobId = 1
+    this._activeJobId = null
+    this._bufferedSignal = []
+    this._state = state.LOADING
+
+    checkConfig(configurationParams)
+    this._handle = this._binding.createInstance(
+      this,
+      configurationParams,
+      this._addonOutputCallback.bind(this),
+      transitionCb
+    )
+  }
+
+  _setState (newState) {
+    this._state = newState
+    if (this._transitionCb) {
+      this._transitionCb(this, newState)
+    }
+  }
+
+  _addonOutputCallback (addon, event, data, error) {
+    const isError = typeof error === 'string' && error.length > 0
+    const isStats = data && typeof data === 'object' && (
+      'totalTime' in data ||
+      'audioDurationMs' in data ||
+      'totalSamples' in data
+    )
+    const isTranscriptOutput = (
+      (Array.isArray(data) && data.length > 0) ||
+      (data && typeof data === 'object' && typeof data.text === 'string')
+    )
+
+    let mappedEvent = event
+    if (isError || String(event).includes('Error')) {
+      mappedEvent = 'Error'
+    } else if (isStats || String(event).includes('RuntimeStats')) {
+      mappedEvent = 'JobEnded'
+    } else if (isTranscriptOutput) {
+      mappedEvent = 'Output'
+    } else if (Array.isArray(data) && data.length === 0) {
+      // BCIModel::process returns an empty vector to avoid duplicate
+      // segment emissions; skip forwarding this noop event.
+      return
+    }
+
+    const jobId = this._activeJobId
+    if (jobId === null || jobId === undefined) {
+      return
+    }
+
+    if (mappedEvent === 'Output') {
+      this._setState(state.PROCESSING)
+    }
+
+    if (this._outputCb != null) {
+      this._outputCb(addon, mappedEvent, jobId, data, isError ? error : null)
+    }
+
+    if (mappedEvent === 'Error' || mappedEvent === 'JobEnded') {
+      this._activeJobId = null
+      this._setState(state.LISTENING)
+    }
+  }
+
+  async unload () {
+    await this.destroyInstance()
+  }
+
+  async load (configurationParams) {
+    checkConfig(configurationParams)
+    await this.destroyInstance()
+    this._handle = this._binding.createInstance(
+      this,
+      configurationParams,
+      this._addonOutputCallback.bind(this),
+      this._transitionCb
+    )
+    this._setState(state.LOADING)
+  }
+
+  async reload (configurationParams) {
+    checkConfig(configurationParams)
+    await this.cancel()
+
+    if (typeof this._binding.reload === 'function') {
+      await this._binding.reload(this._handle, configurationParams)
+      this._setState(state.LOADING)
+      return
+    }
+
+    await this.load(configurationParams)
+  }
+
+  async loadWeights (weightsData) {
+    try {
+      this._binding.loadWeights(this._handle, weightsData)
+    } catch (err) {
+      throw new QvacErrorAddonBCI({
+        code: ERR_CODES.FAILED_TO_LOAD_WEIGHTS,
+        adds: err.message,
+        cause: err
+      })
+    }
+  }
+
+  async unloadWeights () {
+    return true
+  }
+
+  async activate () {
+    try {
+      this._binding.activate(this._handle)
+      this._setState(state.LISTENING)
+    } catch (err) {
+      throw new QvacErrorAddonBCI({
+        code: ERR_CODES.FAILED_TO_ACTIVATE,
+        adds: err.message,
+        cause: err
+      })
+    }
+  }
+
+  async cancel (jobId) {
+    try {
+      await this._binding.cancel(this._handle, jobId)
+      this._bufferedSignal = []
+      this._activeJobId = null
+      this._setState(state.LISTENING)
+    } catch (err) {
+      throw new QvacErrorAddonBCI({
+        code: ERR_CODES.FAILED_TO_CANCEL,
+        adds: err.message,
+        cause: err
+      })
+    }
+  }
+
+  /**
+   * Appends neural signal data to the processing buffer.
+   * Send { type: 'end of job' } to trigger processing.
+   * @param {Object} data
+   * @param {string} data.type - 'neural' or 'end of job'
+   * @param {Uint8Array} [data.input] - binary neural signal data
+   * @returns {number} job ID
+   */
+  async append (data) {
+    try {
+      if (data?.type === END_OF_INPUT) {
+        const currentJobId = this._nextJobId
+        const input = this._concatBufferedSignal()
+
+        let accepted = false
+        try {
+          accepted = this._binding.runJob(this._handle, {
+            type: 'neural',
+            input
+          })
+        } catch (err) {
+          this._setState(state.LISTENING)
+          throw err
+        }
+        if (!accepted) {
+          this._setState(state.LISTENING)
+          throw new Error('Cannot set new job: a job is already set or being processed')
+        }
+
+        this._activeJobId = currentJobId
+        this._nextJobId += 1
+        this._bufferedSignal = []
+        this._setState(state.PROCESSING)
+        return currentJobId
+      }
+
+      if (data?.type === 'neural') {
+        if (!(data.input instanceof Uint8Array)) {
+          throw new Error('Neural signal input must be Uint8Array')
+        }
+        this._bufferedSignal.push(data.input)
+        return this._nextJobId
+      }
+
+      throw new Error(`Unknown append input type: ${data?.type}`)
+    } catch (err) {
+      throw new QvacErrorAddonBCI({
+        code: ERR_CODES.FAILED_TO_APPEND,
+        adds: err.message,
+        cause: err
+      })
+    }
+  }
+
+  /**
+   * Run a single batch job directly with neural signal data.
+   * @param {Object} data
+   * @param {Uint8Array} data.input - binary neural signal data
+   */
+  async runJob (data) {
+    try {
+      this._activeJobId = this._nextJobId
+      this._nextJobId += 1
+      this._setState(state.PROCESSING)
+      const accepted = this._binding.runJob(this._handle, {
+        type: 'neural',
+        input: data.input
+      })
+      if (!accepted) {
+        this._activeJobId = null
+        this._setState(state.LISTENING)
+      }
+      return accepted
+    } catch (err) {
+      this._activeJobId = null
+      this._setState(state.LISTENING)
+      throw new QvacErrorAddonBCI({
+        code: ERR_CODES.FAILED_TO_APPEND,
+        adds: err.message,
+        cause: err
+      })
+    }
+  }
+
+  async status () {
+    return this._state
+  }
+
+  async destroyInstance () {
+    if (this._handle === null) {
+      return
+    }
+    try {
+      try {
+        await this._binding.cancel(this._handle)
+      } catch {}
+      this._binding.destroyInstance(this._handle)
+      this._handle = null
+      this._bufferedSignal = []
+      this._activeJobId = null
+      this._setState(state.IDLE)
+    } catch (err) {
+      throw new QvacErrorAddonBCI({
+        code: ERR_CODES.FAILED_TO_DESTROY,
+        adds: err.message,
+        cause: err
+      })
+    }
+  }
+
+  _concatBufferedSignal () {
+    if (this._bufferedSignal.length === 0) {
+      return new Uint8Array()
+    }
+    if (this._bufferedSignal.length === 1) {
+      return this._bufferedSignal[0]
+    }
+    const totalLength = this._bufferedSignal.reduce(
+      (sum, chunk) => sum + chunk.byteLength, 0
+    )
+    const merged = new Uint8Array(totalLength)
+    let offset = 0
+    for (const chunk of this._bufferedSignal) {
+      merged.set(chunk, offset)
+      offset += chunk.byteLength
+    }
+    return merged
+  }
+}
+
+module.exports = { BCIInterface }

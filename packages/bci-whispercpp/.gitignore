@@ -1,0 +1,9 @@
+node_modules/
+build/
+prebuilds/
+models/
+package-lock.json
+test/fixtures/*.bin
+.clang-format
+.clang-tidy
+.valgrind.supp
