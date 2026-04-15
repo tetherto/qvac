@@ -32,7 +32,6 @@ import {
   PARAKEET_TDT_PREPROCESSOR_INT8,
   PARAKEET_TDT_VOCAB,
   PARAKEET_CTC_FP32,
-  PARAKEET_CTC_DATA_FP32,
   PARAKEET_CTC_TOKENIZER,
   PARAKEET_SORTFORMER_FP32,
   SMOLVLM2_500M_MULTIMODAL_Q8_0,
@@ -65,12 +64,20 @@ import { TtsExecutor } from "../shared/executors/tts-executor.js";
 import { ParakeetExecutor } from "./executors/parakeet-executor.js";
 import { VisionExecutor } from "./executors/vision-executor.js";
 import { DownloadExecutor } from "../shared/executors/download-executor.js";
+import { DelegatedInferenceExecutor } from "./executors/delegated-inference-executor.js";
 import { DiffusionExecutor } from "../shared/executors/diffusion-executor.js";
+import { FinetuneExecutor } from "./executors/finetune-executor.js";
 
 const resources = new ResourceManager();
 
 resources.define("llm", {
   constant: LLAMA_3_2_1B_INST_Q4_0,
+  type: "llm",
+  config: { verbosity: 0, ctx_size: 2048, n_discarded: 256 },
+});
+
+resources.define("finetune-llm", {
+  constant: QWEN3_1_7B_INST_Q4,
   type: "llm",
   config: { verbosity: 0, ctx_size: 2048, n_discarded: 256 },
 });
@@ -257,6 +264,7 @@ resources.define("tts-chatterbox", {
   constant: TTS_TOKENIZER_EN_CHATTERBOX,
   type: "tts",
   skipPreDownload: true,
+  preLoadUnload: true,
   config: {
     ttsEngine: "chatterbox",
     language: "en",
@@ -273,6 +281,7 @@ resources.define("tts-supertonic", {
   constant: TTS_TOKENIZER_SUPERTONIC,
   type: "tts",
   skipPreDownload: true,
+  preLoadUnload: true,
   config: {
     ttsEngine: "supertonic",
     language: "en",
@@ -289,6 +298,7 @@ resources.define("parakeet-tdt", {
   constant: PARAKEET_TDT_ENCODER_INT8,
   type: "parakeet",
   skipPreDownload: true,
+  preLoadUnload: true,
   config: {
     parakeetEncoderSrc: PARAKEET_TDT_ENCODER_INT8,
     parakeetDecoderSrc: PARAKEET_TDT_DECODER_INT8,
@@ -302,10 +312,10 @@ resources.define("parakeet-ctc", {
   constant: PARAKEET_CTC_FP32,
   type: "parakeet",
   skipPreDownload: true,
+  preLoadUnload: true,
   config: {
     modelType: "ctc",
     parakeetCtcModelSrc: PARAKEET_CTC_FP32,
-    parakeetCtcModelDataSrc: PARAKEET_CTC_DATA_FP32,
     parakeetTokenizerSrc: PARAKEET_CTC_TOKENIZER,
   },
 });
@@ -315,6 +325,7 @@ resources.define("parakeet-sortformer", {
   constant: PARAKEET_SORTFORMER_FP32,
   type: "parakeet",
   skipPreDownload: true,
+  preLoadUnload: true,
   config: {
     modelType: "sortformer",
     parakeetSortformerSrc: PARAKEET_SORTFORMER_FP32,
@@ -325,6 +336,7 @@ resources.define("vision", {
   constant: SMOLVLM2_500M_MULTIMODAL_Q8_0,
   type: "llm",
   skipPreDownload: true,
+  preLoadUnload: true,
   config: {
     ctx_size: 1024,
     projectionModelSrc: MMPROJ_SMOLVLM2_500M_MULTIMODAL_Q8_0,
@@ -335,6 +347,7 @@ resources.define("diffusion", {
   constant: FLUX_2_KLEIN_4B_Q4_0,
   type: "diffusion",
   skipPreDownload: true,
+  preLoadUnload: true,
   config: {
     device: "gpu",
     threads: 4,
@@ -343,7 +356,9 @@ resources.define("diffusion", {
   },
 });
 
-await resources.downloadAllOnce(console.log);
+export async function bootstrap() {
+  await resources.downloadAllOnce(console.log);
+};
 
 export const executor = createExecutor({
   handlers: [
@@ -368,7 +383,9 @@ export const executor = createExecutor({
     new ParakeetExecutor(resources),
     new VisionExecutor(resources),
     new DownloadExecutor(),
+    new DelegatedInferenceExecutor(),
     new DiffusionExecutor(resources),
+    new FinetuneExecutor(resources),
   ],
   profiling: {
     init: () => profiler.enable({ mode: "summary", includeServerBreakdown: true }),

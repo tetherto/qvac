@@ -39,7 +39,10 @@ import {
 import { parseToolCalls } from "@/server/utils/tool-parser";
 import { AttachmentNotFoundError } from "@/utils/errors-server";
 import { nowMs } from "@/profiling";
-import { buildStreamResult, hasDefinedValues } from "@/profiling/model-execution";
+import {
+  buildStreamResult,
+  hasDefinedValues,
+} from "@/profiling/model-execution";
 import type { LlmStats } from "@/server/bare/types/addon-responses";
 import fs from "bare-fs";
 
@@ -60,6 +63,16 @@ interface ChatHistory {
   name?: string;
   description?: string;
   parameters?: unknown;
+}
+
+const cachedMessageCounts = new Map<string, number>();
+
+export function clearCachedMessageCounts(cachePath?: string): void {
+  if (cachePath) {
+    cachedMessageCounts.delete(cachePath);
+  } else {
+    cachedMessageCounts.clear();
+  }
 }
 
 function transformMessage(
@@ -194,6 +207,11 @@ function prepareMessagesForCache(
 ): ChatHistory[] {
   const addTools = tools?.length ? transformMessages(tools) : [];
   if (cacheExists && history.length > 0) {
+    const savedCount = cachedMessageCounts.get(cachePathToUse) ?? 0;
+    if (savedCount > 0 && savedCount <= history.length) {
+      cachedMessageCounts.delete(cachePathToUse);
+    }
+
     const lastMsg = history[history.length - 1] as HistoryMsg;
     const isToolChainContinuation = lastMsg.role === 'tool';
     let lastMessages: HistoryMsg[];
@@ -320,13 +338,19 @@ async function* processModelResponse(
   } as CompletionStats;
 
   return {
-    ...buildStreamResult(modelExecutionMs, hasDefinedValues(stats) ? stats : undefined),
+    ...buildStreamResult(
+      modelExecutionMs,
+      hasDefinedValues(stats) ? stats : undefined,
+    ),
     toolCalls: toolCallsResult,
   };
 }
 
 export async function* completion(
-  params: CompletionParams & { tools?: Tool[]; generationParams?: GenerationParams },
+  params: CompletionParams & {
+    tools?: Tool[];
+    generationParams?: GenerationParams;
+  },
 ): AsyncGenerator<
   { token: string; toolCallEvent?: ToolCallEvent },
   { modelExecutionMs: number; stats?: CompletionStats; toolCalls: ToolCall[] },
@@ -402,7 +426,15 @@ export async function* completion(
       );
       logMessagesToAddon(messagesToSend, "PROMPT_SEND");
 
-      return yield* processModelResponse(model, messagesToSend, true, tools, generationParams);
+      const result = yield* processModelResponse(
+        model,
+        messagesToSend,
+        false, // TODO - remove that option?
+        tools,
+        generationParams,
+      );
+      cachedMessageCounts.set(cachePathToUse, history.length + 1);
+      return result;
     } else {
       // Auto-generate cache key based on conversation history
       const cacheMessages: CacheMessage[] = history.map((msg) => ({
@@ -454,16 +486,18 @@ export async function* completion(
       const result = yield* processModelResponse(
         model,
         messagesToSend,
-        true,
+        false,
         tools,
         generationParams,
       );
+      cachedMessageCounts.set(cachePathToUse, history.length + 1);
 
-      //If there was an existing cache, we rename it with new hash that includes the current message
       if (
         existingCache !== null &&
         existingCache.cachePath !== currentCacheInfo.cachePath
       ) {
+        cachedMessageCounts.delete(existingCache.cachePath);
+        cachedMessageCounts.set(currentCacheInfo.cachePath, history.length + 1);
         await renameCacheFile(
           existingCache.cachePath,
           currentCacheInfo.cachePath,
@@ -475,6 +509,12 @@ export async function* completion(
   } else {
     logCacheDisabled();
     logMessagesToAddon(transformedHistory, "NO_CACHE");
-    return yield* processModelResponse(model, transformedHistory, false, tools, generationParams);
+    return yield* processModelResponse(
+      model,
+      transformedHistory,
+      false,
+      tools,
+      generationParams,
+    );
   }
 }

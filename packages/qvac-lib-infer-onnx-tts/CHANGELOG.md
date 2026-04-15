@@ -5,6 +5,42 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.8.2]
+
+This release adds support for streaming and more languages for Chatterbox model.
+
+### Added
+
+Streaming support:
+- **`ONNXTTS#runStream(text, options?)`**, which returns the same **`QvacResponse`** style as **`run`**: **`onUpdate`** receives **`outputArray`** plus optional **`chunkIndex`** and **`sentenceChunk`** metadata, and **`await()`** settles when the full passage completes. Optional **`locale`** and **`maxChunkScalars`** tune **`Intl.Segmenter`** and chunk size (including a shorter default for Korean). With **`exclusiveRun: true`**, concurrent **`runStream`** calls wait until the previous stream’s response has finished, avoiding overlap on the single native job slot.
+- **`lib/textChunker.js`** (exported as **`@qvac/tts-onnx/text-chunker`**) implementing **`splitTtsText`** for tests, examples, and integrations that need the same rules as **`runStream`** without driving inference.
+- **Examples** **`examples/supertonic-streaming-tts.js`** (english or multilingual layout) and **`examples/pcm-chunk-player.js`** helpers for playing 16-bit mono chunks via **afplay**, **ffplay**, or **aplay** where available.
+- **Unit tests** for **`splitTtsText`**, **`runStream`** orchestration with a stub addon, and an **integration** test that runs Supertonic sentence streaming end-to-end; **`runSupertonicStream`** in **`test/utils/runSupertonicTTS.js`** concatenates chunk PCM for WAV checks.
+
+Support for more languages in Chatterbox:
+- Support for the following languages: Arabic, Danish, Greek, Finnish, Hebrew, Hindi, Korean, Malay, Dutch, Norwegian, Polish, Swedish, Swahili, and Turkish
+- Classifier-Free Guidance (CFG) pipeline for multilingual inference, using conditional/unconditional KV caches and text embedding weights to improve non-English speech quality
+- Temperature sampling with min-P filtering and repetition penalty (2.0) for the multilingual path
+- Token generation stopping heuristics: text-length-based max tokens, consecutive and pattern repetition detection, silence token run detection
+- Trailing silence trimming with dynamic energy-based endpoint detection, tail padding, and fade-out
+- Peak normalization for consistent multilingual audio volume
+- Integration test sentences for 12 additional languages (Arabic, Danish, Greek, Finnish, Hindi, Malay, Dutch, Norwegian, Polish, Swedish, Swahili, and Turkish), enabled via `TEST_ALL_LANGUAGES=true`
+
+### Changed
+- Fixed supertonic multilingual not recognizing some diacritics such as "ç" and "ã".
+- Refactored `generateSpeechTokensWithCfg` into smaller functions: `prepareCfgEmbeddings`, `runInitialCfgStep`, `shouldStopGeneration`, `runCfgGenerationLoop`
+- Extracted magic numbers into named constants
+- Decomposed `sampleWithTemperature`, `trimTrailingSilence`, `detectPatternRepetition` into single-responsibility helpers
+
+## [0.8.1]
+
+### Added
+- Registered ONNX Runtime execution providers for GPU acceleration when `useGPU: true` is set. Both Chatterbox and Supertonic engines now activate platform-specific EPs: CoreML (macOS/iOS), DirectML (Windows), NNAPI (Android). Falls back to CPU automatically if the GPU provider fails.
+
+### Changed
+- Added `useGPU` field to `ChatterboxConfig` and `SupertonicConfig` C++ structs, threaded from the JS config map through to session creation.
+- Chatterbox sessions (`OnnxInferSession`) and Supertonic sessions now use `onnx_addon::buildSessionOptions()` from `@qvac/onnx` instead of manual `Ort::SessionOptions` construction, aligning with the OCR package EP logic.
+
 ## [0.8.0]
 
 This release refactors the JavaScript client around a smaller public surface: one `files` map and explicit engines, no loader or download stubs, and composition-based job handling via **`@qvac/infer-base`** (**`createJobHandler`**, **`exclusiveRunQueue`**, **`getApiDefinition`**) instead of subclassing **`BaseInference`**. Callers should pass **absolute** artifact paths and use **`exclusiveRun: true`** when they need serialized `run()` / `reload()` / `unload()` with the native single-job model.
@@ -32,6 +68,11 @@ Job/response wiring uses **one** active **`QvacResponse`**, managed by **`create
 ### Internal structure
 
 **`BaseInference`** inheritance is removed. **`@qvac/infer-base`** supplies **`createJobHandler`**, **`exclusiveRunQueue`**, and standalone **`getApiDefinition()`** (used from **`index.js`** for API logging). The job handler owns the single active **`QvacResponse`** slot; **`_addonOutputCallback`** routes native events through **`_job.output`**, **`_job.end`**, **`_job.fail`**, and finetune stats via **`_job.active`**. Unload/reload call **`_job.fail(...)`** to tear down the active response. **`tts.js`** **`runJob`** only forwards to the binding and maps thrown errors to **`FAILED_TO_APPEND`**.
+
+## [0.7.3]
+
+### Changed
+- Bumped `qvac-lib-inference-addon-cpp` to `1.1.5` (again).
 
 ## [0.7.2]
 
@@ -67,6 +108,14 @@ The native Supertonic path gains multilingual support and related stabilization 
 ### Examples and TypeScript
 
 A dedicated multilingual example script documents the new flow, and `index.d.ts` is expanded so Supertonic options and multilingual parameters are described accurately for TypeScript consumers.
+
+### Other
+- Reverted `qvac-lib-inference-addon-cpp` to `1.1.2`.
+
+## [0.6.7]
+
+### Changed
+- Bumped `qvac-lib-inference-addon-cpp` to `1.1.5`.
 
 ## [0.6.6]
 

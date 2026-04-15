@@ -33,7 +33,6 @@ import {
   PARAKEET_TDT_PREPROCESSOR_INT8,
   PARAKEET_TDT_VOCAB,
   PARAKEET_CTC_FP32,
-  PARAKEET_CTC_DATA_FP32,
   PARAKEET_CTC_TOKENIZER,
   PARAKEET_SORTFORMER_FP32,
   SMOLVLM2_500M_MULTIMODAL_Q8_0,
@@ -63,6 +62,7 @@ import { MobileRagExecutor } from "./executors/rag-executor.js";
 import { MobileConfigReloadExecutor } from "./executors/config-reload-executor.js";
 import { MobileTtsExecutor } from "./executors/tts-executor.js";
 import { DownloadExecutor } from "../shared/executors/download-executor.js";
+import { DelegatedInferenceExecutor } from "../shared/executors/delegated-inference-executor.js";
 import { DiffusionExecutor } from "../shared/executors/diffusion-executor.js";
 
 const resources = new ResourceManager();
@@ -300,7 +300,6 @@ resources.define("parakeet-ctc", {
   config: {
     modelType: "ctc",
     parakeetCtcModelSrc: PARAKEET_CTC_FP32,
-    parakeetCtcModelDataSrc: PARAKEET_CTC_DATA_FP32,
     parakeetTokenizerSrc: PARAKEET_CTC_TOKENIZER,
   },
 });
@@ -341,6 +340,10 @@ function skipTests(testIds: string[], reason: string) {
   return new SkipExecutor(new RegExp(`^(${testIds.join("|")})$`), reason);
 }
 
+export async function bootstrap() {
+  await resources.downloadAllOnce(console.log);
+};
+
 export const executor = createExecutor({
   handlers: [
     // Mobile platform skips (before real executors -- first match wins)
@@ -351,6 +354,7 @@ export const executor = createExecutor({
       "http-archive-embed-progress",
       "http-archive-embed-inference",
     ], "HTTP test disabled on mobile (OOM)"),
+    new SkipExecutor(/^finetune-/, "Finetune tests disabled on mobile"),
     new SkipExecutor(/^tools-(?!simple-function$|no-function-match$)/, "Tools test disabled on mobile"),
     ...(Platform.OS === "ios" ? [
       skipTests([
@@ -391,6 +395,7 @@ export const executor = createExecutor({
     new MobileParakeetExecutor(resources),
     new MobileVisionExecutor(resources),
     new DownloadExecutor(),
+    new DelegatedInferenceExecutor(),
     new DiffusionExecutor(resources),
   ],
   profiling: {

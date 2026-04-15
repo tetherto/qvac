@@ -1,0 +1,59 @@
+name: Verify qvac-fabric lockstep
+description: Ensures qvac-fabric dependency version is identical across selected vcpkg manifests.
+
+outputs:
+  version:
+    description: The shared qvac-fabric version when lockstep check passes.
+    value: ${{ steps.verify.outputs.version }}
+
+runs:
+  using: composite
+  steps:
+    - id: verify
+      shell: bash
+      run: |
+        set -euo pipefail
+
+        files=(
+          "packages/qvac-lib-infer-llamacpp-llm/vcpkg.json"
+          "packages/qvac-lib-infer-llamacpp-embed/vcpkg.json"
+          "packages/qvac-lib-infer-nmtcpp/vcpkg.json"
+        )
+
+        versions=()
+        for file in "${files[@]}"; do
+          if [ ! -f "${file}" ]; then
+            echo "Missing file: ${file}"
+            exit 1
+          fi
+
+          version="$(jq -r '
+            [
+              .dependencies[]
+              | objects
+              | select(.name == "qvac-fabric")
+              | .["version>="]
+            ] | first // empty
+          ' "${file}")"
+
+          if [ -z "${version}" ] || [ "${version}" = "null" ]; then
+            echo "qvac-fabric dependency with version>= not found in ${file}"
+            exit 1
+          fi
+
+          echo "${file}: qvac-fabric version>=${version}"
+          versions+=("${version}")
+        done
+
+        baseline="${versions[0]}"
+        for version in "${versions[@]}"; do
+          if [ "${version}" != "${baseline}" ]; then
+            echo "qvac-fabric versions are not in lockstep."
+            echo "Expected all to match: ${baseline}"
+            printf 'Observed versions: %s\n' "${versions[@]}"
+            exit 1
+          fi
+        done
+
+        echo "qvac-fabric lockstep verified: ${baseline}"
+        echo "version=${baseline}" >> "${GITHUB_OUTPUT}"

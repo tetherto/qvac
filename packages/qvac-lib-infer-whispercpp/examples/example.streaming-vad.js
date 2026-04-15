@@ -1,9 +1,9 @@
 'use strict'
 
 const fs = require('bare-fs')
+const path = require('bare-path')
 const process = require('bare-process')
 const TranscriptionWhispercpp = require('../index.js')
-const FakeDL = require('../test/mocks/loader.fake.js')
 const binding = require('../binding.js')
 
 const LOG_PRIORITIES = ['ERROR', 'WARNING', 'INFO', 'DEBUG']
@@ -29,9 +29,10 @@ binding.setLogger((priority, message) => {
 
 async function main () {
   const args = process.argv.slice(2)
-  const audioFilePath = args[0] || './examples/samples/sample.raw'
-  const modelPath = args[1] || './examples/models/ggml-tiny.bin'
-  const vadModelPath = args[2] || './examples/models/ggml-silero-v5.1.2.bin'
+  const modelsDir = path.join(__dirname, '..', 'models')
+  const audioFilePath = args[0] || path.join(__dirname, 'samples', 'sample.raw')
+  const modelPath = args[1] || path.join(modelsDir, 'ggml-tiny.bin')
+  const vadModelPath = args[2] || path.join(modelsDir, 'ggml-silero-v5.1.2.bin')
 
   if (!fs.existsSync(modelPath)) {
     console.error(`Model file not found at ${modelPath}`)
@@ -53,26 +54,27 @@ async function main () {
 
   const model = new TranscriptionWhispercpp(
     {
-      modelName: 'ggml-tiny.bin',
-      loader: new FakeDL({}),
-      diskPath: './examples/models'
+      files: {
+        model: modelPath,
+        vadModel: vadModelPath
+      }
     },
     {
       whisperConfig: {
         language: 'en',
         audio_format: 's16le',
         temperature: 0.0,
-        suppress_nst: true
+        suppress_nst: true,
+        vad_params: {
+          threshold: 0.5,
+          min_silence_duration_ms: 500,
+          min_speech_duration_ms: 250,
+          max_speech_duration_s: 30,
+          speech_pad_ms: 30,
+          samples_overlap: 0.1
+        }
       },
-      vadModelPath,
-      vad_params: {
-        threshold: 0.5,
-        min_silence_duration_ms: 500,
-        min_speech_duration_ms: 250,
-        max_speech_duration_s: 30,
-        speech_pad_ms: 30,
-        samples_overlap: 0.1
-      }
+      vadModelPath
     }
   )
 

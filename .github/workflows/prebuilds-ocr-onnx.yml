@@ -66,6 +66,9 @@ jobs:
           - os: macos-15
             platform: darwin
             arch: arm64
+          - os: macos-15-large
+            platform: darwin
+            arch: x64
           - os: windows-2022
             platform: win32
             arch: x64
@@ -123,7 +126,7 @@ jobs:
         name: Install ccache on Linux
         run: sudo apt-get install -y ccache
 
-      - if: ${{ matrix.os == 'macos-15' }}
+      - if: ${{ startsWith(matrix.os, 'macos') }}
         name: Install ccache on macOS
         run: brew install ccache
 
@@ -196,36 +199,6 @@ jobs:
         with:
           node-version: lts/*
 
-      - name: Configure scoped registry for @tetherto and @qvac packages
-        working-directory: ${{ env.PKG_DIR }}
-        env:
-          GPR_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-          NPM_TOKEN: ${{ secrets.NPM_TOKEN }}
-          GIT_PAT: ${{ secrets.PAT_TOKEN }}
-        shell: bash
-        run: |
-          echo "Configuring scoped registry for @tetherto and @qvac packages..."
-          set -eu
-          echo "Writing .npmrc for dual registry install…"
-          cat > .npmrc <<NPMRC
-          always-auth=true
-          registry=https://registry.npmjs.org/
-          @qvac:registry=https://registry.npmjs.org/
-          @tetherto:registry=https://npm.pkg.github.com/
-          //registry.npmjs.org/:_authToken=${NPM_TOKEN}
-          //npm.pkg.github.com/:_authToken=${GIT_PAT}
-          NPMRC
-
-          # Optional: make private git deps work without prompting
-          if [ -n "${GIT_PAT:-}" ]; then
-            git config --global url."https://${GIT_PAT}:@github.com/".insteadOf "https://github.com/"
-            git config --global url."https://${GIT_PAT}:@github.com/".insteadOf "git@github.com:"
-          else
-            # Using the workflow's GITHUB_TOKEN for git clones when possible
-            git config --global url."https://${{ github.token }}:@github.com/".insteadOf "https://github.com/"
-            git config --global url."https://${{ github.token }}:@github.com/".insteadOf "git@github.com:"
-          fi
-
       - name: Install global dependencies
         run: npm install -g bare-runtime bare-make
 
@@ -236,7 +209,7 @@ jobs:
           Rename-Item -Path "C:\Program Files (x86)\Windows Kits\10\bin\10.0.26100.0" -NewName "C:\Program Files (x86)\Windows Kits\10\bin\old-10.0.26100.0"
           Rename-Item -Path "C:\Program Files (x86)\Windows Kits\10\Lib\10.0.26100.0" -NewName "C:\Program Files (x86)\Windows Kits\10\Lib\old-10.0.26100.0"
 
-      - if: ${{ matrix.os == 'macos-15' }}
+      - if: ${{ startsWith(matrix.os, 'macos') }}
         name: Remove Homebrew LLVM
         working-directory: ${{ env.PKG_DIR }}
         shell: bash
@@ -244,7 +217,7 @@ jobs:
            chmod +x ./ci/remove-brew-llvm.sh
            ./ci/remove-brew-llvm.sh
 
-      - if: ${{ matrix.os == 'macos-15' }}
+      - if: ${{ startsWith(matrix.os, 'macos') }}
         name: Install vcpkg in macos
         run: |
           cd ..
@@ -254,11 +227,7 @@ jobs:
           echo "VCPKG_ROOT=$VCPKG_ROOT" >> $GITHUB_ENV
           echo "$VCPKG_ROOT" >> $GITHUB_PATH
 
-      - if: ${{ matrix.os == 'macos-15' }}
-        name: Select Xcode 16.4
-        run: sudo xcode-select -s /Applications/Xcode_16.4.app/Contents/Developer
-
-      - if: ${{ matrix.os == 'macos-15' }}
+      - if: ${{ startsWith(matrix.os, 'macos') && matrix.platform == 'ios' }}
         name: Verify UIKit Frameworks
         run: |
           SDK_OS=$(xcrun --sdk iphoneos --show-sdk-path)

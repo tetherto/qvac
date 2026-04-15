@@ -250,7 +250,8 @@ std::size_t BertEmbeddings::embeddingSize() const { return embeddingSize_; }
 namespace {
 common_params setupParams(
     const std::string& modelGgufPath,
-    std::unordered_map<std::string, std::string> configFilemap) {
+    std::unordered_map<std::string, std::string> configFilemap,
+    int64_t& resolvedBackendDevice) {
   // Default params
   common_params params;
 
@@ -286,6 +287,11 @@ common_params setupParams(
           qvac_errors::general_error::InternalError,
           "preferredDeviceFromString: wrong deduced device, must be 'gpu' or "
           "'cpu'.\n");
+    }
+    if (chosenBackend.first == BackendType::GPU) {
+      resolvedBackendDevice = 1;
+    } else {
+      resolvedBackendDevice = 0;
     }
     configVector.emplace_back("--device");
     configVector.emplace_back(chosenBackend.second);
@@ -366,10 +372,18 @@ void BertModel::init(
   // Extract and set verbosity level from config (modifies configCopy)
   auto configCopy = config;
   setVerbosityLevel(configCopy);
-  lazyCommonInit();
-  initializeBackend(backendsDir);
 
-  common_params params = setupParams(modelGgufPath, configCopy);
+  std::string openclCacheDir;
+  if (auto it = configCopy.find("openclCacheDir"); it != configCopy.end()) {
+    openclCacheDir = it->second;
+    configCopy.erase(it);
+  }
+
+  lazyCommonInit();
+  initializeBackend(backendsDir, openclCacheDir);
+
+  common_params params =
+      setupParams(modelGgufPath, configCopy, runtimeBackendDevice_);
   BertModel::init(params);
 }
 
@@ -501,8 +515,9 @@ std::any BertModel::process(const std::any& input) {
       "BertModel::process: unsupported input type");
 }
 
-void BertModel::initializeBackend(const std::string& backendsDir) {
-  backendsHandle_ = LlamaBackendsHandle(backendsDir);
+void BertModel::initializeBackend(
+    const std::string& backendsDir, const std::string& openclCacheDir) {
+  backendsHandle_ = LlamaBackendsHandle(backendsDir, openclCacheDir);
 }
 
 void BertModel::reset() {
@@ -749,6 +764,7 @@ qvac_lib_inference_addon_cpp::RuntimeStats BertModel::runtimeStats() const {
     stats.emplace_back(
         "context_size",
         static_cast<long long>(llama_model_n_ctx_train(model_)));
+    stats.emplace_back("backendDevice", runtimeBackendDevice_);
   }
 
   return stats;

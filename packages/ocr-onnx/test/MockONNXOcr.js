@@ -1,21 +1,20 @@
 'use strict'
 
 const AddonInterface = require('./MockAddon')
-const QvacResponse = require('@qvac/response')
+const { createJobHandler } = require('@qvac/infer-base')
 const fs = require('bare-fs')
 const { transitionCb } = require('./utils.js')
 
 const END_OF_INPUT = 'end of job'
 
 class ONNXOcr {
-  _jobToResponse = new Map()
-
   constructor (args) {
     this.args = args
     this.addon = null
+    this._job = createJobHandler({ cancel: () => this.addon.cancel() })
   }
 
-  async load (close = false) {
+  async load () {
     const configurationParams = {
       config: this.config
     }
@@ -52,49 +51,19 @@ class ONNXOcr {
   }
 
   outputCallback (addon, event, jobId, data, error) {
-    const response = this._jobToResponse.get(jobId)
     if (event === 'Error') {
-      console.log('Callback called with error. ', error)
-      response.failed(error)
-      this.deleteJobMapping(jobId)
+      this._job.fail(error)
     } else if (event === 'Output') {
-      console.log(`Callback called for job: ${jobId} with data: ${dataAsString(data)}`)
-      response.updateOutput(data)
+      this._job.output(data)
     } else if (event === 'JobEnded') {
-      console.log(`Callback called for job end: ${jobId}. Stats: ${JSON.stringify(data)}`)
-      if (this.opts?.stats) {
-        response.updateStats(data)
-      }
-      response.ended()
-      this.deleteJobMapping(jobId)
-    } else {
-      console.log('jobId: ' + jobId + ', event: ' + event)
+      this._job.end(this.opts?.stats ? data : null)
     }
-  }
-
-  saveJobToResponseMapping (jobId, response) {
-    this._jobToResponse.set(jobId, response)
-  }
-
-  deleteJobMapping (jobId) {
-    this._jobToResponse.delete(jobId)
   }
 
   async _runInternal (input) {
     const imageInput = this.getImage(input.path)
-    const jobId = await this.addon.append({ type: 'image', input: imageInput, options: input.options })
-    const response = new QvacResponse({
-      cancelHandler: () => {
-        return this.addon.cancel(jobId)
-      },
-      pauseHandler: () => {
-        return this.addon.pause()
-      },
-      continueHandler: () => {
-        return this.addon.activate()
-      }
-    })
-    this.saveJobToResponseMapping(jobId, response)
+    await this.addon.append({ type: 'image', input: imageInput, options: input.options })
+    const response = this._job.start()
     await this.addon.append({ type: END_OF_INPUT })
     return response
   }
@@ -171,14 +140,6 @@ class ONNXOcr {
 
     return 'latin'
   }
-}
-
-function dataAsString (data) {
-  if (!data) return ''
-  if (typeof data === 'object') {
-    return JSON.stringify(data)
-  }
-  return data.toString()
 }
 
 module.exports = ONNXOcr

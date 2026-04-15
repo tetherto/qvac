@@ -14,10 +14,14 @@ public:
    * Initialize the backend lazily.
    * @param backendsDir - path to the backends directory (optional).
    *                      If empty, uses default backend loading.
+   * @param openclCacheDir - writable directory for OpenCL kernel cache
+   * (optional).
    * @return true if initialization was successful, false if already
    * initialized.
    */
-  static bool initialize(const std::string& backendsDir = "");
+  static bool initialize(
+      const std::string& backendsDir = "",
+      const std::string& openclCacheDir = "");
 
   /**
    * Increment the reference count.
@@ -46,8 +50,12 @@ public:
   /**
    * Construct a handle and increment the reference count.
    * @param backendsDir - optional path to the backends directory.
+   * @param openclCacheDir - writable directory for OpenCL kernel cache
+   * (optional).
    */
-  explicit LlamaBackendsHandle(const std::string& backendsDir = "");
+  explicit LlamaBackendsHandle(
+      const std::string& backendsDir = "",
+      const std::string& openclCacheDir = "");
 
   /**
    * Destructor decrements reference count and may free backend.

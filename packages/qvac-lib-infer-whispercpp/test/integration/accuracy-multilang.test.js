@@ -102,9 +102,6 @@ async function runLanguageAccuracyTest (t, langConfig) {
     return { skipped: true, reason: 'model_not_available' }
   }
 
-  const FakeDL = require('../mocks/loader.fake.js')
-  const loader = new FakeDL({})
-
   try {
     console.log(`\n📊 Running ${langConfig.name} accuracy test...`)
     console.log(`   File: ${langConfig.sampleFile}`)
@@ -114,7 +111,6 @@ async function runLanguageAccuracyTest (t, langConfig) {
     const result = await runTranscription({
       audioInput: samplePath,
       modelPath: actualModelPath,
-      loader,
       whisperConfig: {
         language: langConfig.code,
         temperature: 0.0,

@@ -31,7 +31,7 @@ This document contains detailed diagrams showing how data moves through the `@qv
 
 **Session Cache:**
 - Optional KV cache persistence to disk via `CacheManager`
-- Controlled via `session` role messages (path, reset, save)
+- Controlled via `runOptions` fields (`cacheKey`, `saveCacheToDisk`)
 - Context overflow only affects RAM; disk cache preserved until explicit save
 
 </details>
@@ -438,25 +438,28 @@ Images can be provided in two ways:
 
 ## Session Cache Flow
 
-`CacheManager` persists KV cache state between inference calls for multi-turn conversations. Cache is controlled via `session` role messages in the prompt.
+`CacheManager` persists KV cache state between inference calls for multi-turn conversations. Cache is controlled via `runOptions` fields (`cacheKey`, `saveCacheToDisk`).
 
 ```mermaid
 flowchart TD
-    Start([New inference]) --> CheckSession{session role<br/>in prompt?}
-    CheckSession -->|No| ClearRAM[Clear RAM cache if active]
+    Start([New inference]) --> CheckKey{cacheKey<br/>provided?}
+    CheckKey -->|No| ClearRAM[Save & clear active cache]
     ClearRAM --> NormalInference[Process without cache]
-    CheckSession -->|Yes| ParseCmd{Command?}
-    ParseCmd -->|path| LoadCache[Load KV cache from disk]
-    ParseCmd -->|reset| ResetRAM[Clear RAM cache]
-    ParseCmd -->|save| SaveDisk[Save RAM cache to disk]
-    LoadCache --> Generate[Generate response]
-    ResetRAM --> Generate
+    CheckKey -->|Yes| SameKey{Same as<br/>active key?}
+    SameKey -->|Yes| Reuse[Reuse in-memory cache]
+    SameKey -->|No / first use| SaveOld[Save old session if active]
+    SaveOld --> LoadNew[Load cache from disk]
+    Reuse --> Generate[Generate response]
+    LoadNew --> Generate
     NormalInference --> Generate
-    Generate --> End([Return response])
+    Generate --> CheckSave{saveCacheToDisk?}
+    CheckSave -->|Yes| WriteDisk[Write cache to disk]
+    CheckSave -->|No| End([Return response])
+    WriteDisk --> End
 ```
 
 **Cache Control:**
-- Disk cache only modified on explicit `save` command or session switch
+- Disk cache only modified on explicit `saveCacheToDisk: true` or session switch
 - Context overflow discards tokens from RAM only; disk cache preserves state before overflow
 - No automatic cache invalidation in the addon
 

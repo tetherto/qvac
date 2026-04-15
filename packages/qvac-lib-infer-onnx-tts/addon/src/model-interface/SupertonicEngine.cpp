@@ -4,6 +4,12 @@
 #include "OrtSessionFactory.hpp"
 #include "qvac-lib-inference-addon-cpp/Logger.hpp"
 
+#pragma push_macro("QLOG")
+#undef QLOG
+#include <qvac-onnx/OnnxConfig.hpp>
+#include <qvac-onnx/OnnxSessionOptionsBuilder.hpp>
+#pragma pop_macro("QLOG")
+
 #include <utf8proc.h>
 
 #include <nlohmann/json.hpp>
@@ -204,8 +210,12 @@ bool isSentenceSplitBeforeWs(const std::string &para, size_t wsStart) {
   utf8proc_int32_t punct = 0;
   if (!utf8Iterate(para, p, &punct))
     return false;
-  if (punct != '.' && punct != '!' && punct != '?')
+  const bool isAsciiTerm = (punct == '.' || punct == '!' || punct == '?');
+  // Ideographic / fullwidth sentence ends (CJK, etc.)
+  const bool isWideTerm = (punct == 0x3002 || punct == 0xFF01 || punct == 0xFF1F || punct == 0xFF0E || punct == 0x061F);
+  if (!isAsciiTerm && !isWideTerm) {
     return false;
+  }
   if (punct == '.') {
     if (matchesAbbrevAtDot(para, p))
       return false;
@@ -354,7 +364,7 @@ std::string preprocessForSupertonic(const std::string &rawUtf8,
     default:
       break;
     }
-    if (diacriticsSet().count(c) != 0)
+    if (!langWrap && diacriticsSet().count(c) != 0)
       continue;
     if (c == 0x2665 || c == 0x2606 || c == 0x2661 || c == 0x00a9 ||
         c == '\\')
@@ -615,14 +625,37 @@ void SupertonicEngine::load(const SupertonicConfig &cfg) {
     loadStyleTensor(j["style_dp"], styleDpShape_, styleDp_);
   }
 
-  Ort::SessionOptions options;
-  options.SetIntraOpNumThreads(1);
-  options.SetGraphOptimizationLevel(GraphOptimizationLevel::ORT_ENABLE_EXTENDED);
+  onnx_addon::SessionConfig sessionCfg;
+  sessionCfg.provider = cfg.useGPU ? onnx_addon::ExecutionProvider::AUTO_GPU
+                                   : onnx_addon::ExecutionProvider::CPU;
+  sessionCfg.optimization = onnx_addon::GraphOptimizationLevel::EXTENDED;
+  sessionCfg.intraOpThreads = 1;
 
-  dpSession_ = qvac::ttslib::createOrtSession(dpPath, options);
-  textEncSession_ = qvac::ttslib::createOrtSession(tePath, options);
-  vectorEstSession_ = qvac::ttslib::createOrtSession(vePath, options);
-  vocoderSession_ = qvac::ttslib::createOrtSession(vocPath, options);
+  Ort::SessionOptions options = onnx_addon::buildSessionOptions(sessionCfg);
+
+  auto createSessions = [&](Ort::SessionOptions &opts) {
+    dpSession_ = qvac::ttslib::createOrtSession(dpPath, opts);
+    textEncSession_ = qvac::ttslib::createOrtSession(tePath, opts);
+    vectorEstSession_ = qvac::ttslib::createOrtSession(vePath, opts);
+    vocoderSession_ = qvac::ttslib::createOrtSession(vocPath, opts);
+  };
+
+  try {
+    createSessions(options);
+  } catch (const std::exception &e) {
+    if (sessionCfg.provider != onnx_addon::ExecutionProvider::CPU) {
+      QLOG(Priority::WARNING,
+           std::string("GPU session creation failed, retrying CPU-only: ") +
+               e.what());
+      onnx_addon::SessionConfig cpuCfg = sessionCfg;
+      cpuCfg.provider = onnx_addon::ExecutionProvider::CPU;
+      Ort::SessionOptions cpuOptions =
+          onnx_addon::buildSessionOptions(cpuCfg);
+      createSessions(cpuOptions);
+    } else {
+      throw;
+    }
+  }
 
   static const std::vector<std::string> kLangs = {"en", "ko", "es", "pt", "fr"};
   if (std::find(kLangs.begin(), kLangs.end(), cfg.language) == kLangs.end()) {
