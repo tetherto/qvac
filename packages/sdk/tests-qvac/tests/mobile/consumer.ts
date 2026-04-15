@@ -348,6 +348,7 @@ export const executor = createExecutor({
       "http-archive-embed-progress",
       "http-archive-embed-inference",
     ], "HTTP test disabled on mobile (OOM)"),
+    new SkipExecutor(/^finetune-/, "Finetune tests disabled on mobile"),
     new SkipExecutor(/^tools-(?!simple-function$|no-function-match$)/, "Tools test disabled on mobile"),
     ...(Platform.OS === "ios" ? [
       skipTests([
