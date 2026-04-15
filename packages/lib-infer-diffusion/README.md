@@ -1,6 +1,6 @@
 # qvac-lib-infer-stable-diffusion-cpp
 
-Native C++ addon for text-to-image generation using [stable-diffusion.cpp](https://github.com/leejet/stable-diffusion.cpp), built for the Bare Runtime. Supports **Stable Diffusion 1.x / 2.x / XL / 3** and **FLUX.2 [klein]**.
+Native C++ addon for text-to-image generation using [qvac-ext-stable-diffusion.cpp](https://github.com/tetherto/qvac-ext-stable-diffusion.cpp), built for the Bare Runtime. Supports **Stable Diffusion 1.x / 2.x / XL / 3** and **FLUX.2 [klein]**.
 
 ## Table of Contents
 
@@ -36,8 +36,8 @@ Native C++ addon for text-to-image generation using [stable-diffusion.cpp](https
 | Windows | x64 | ✅ Tier 1 | Vulkan |
 
 **Dependencies:**
-- `stable-diffusion.cpp` (bundled via vcpkg overlay port)
-- `ggml` (bundled alongside stable-diffusion.cpp)
+- `qvac-ext-stable-diffusion.cpp` (bundled via vcpkg overlay port)
+- `ggml` (bundled alongside `qvac-ext-stable-diffusion.cpp`)
 - Bare Runtime ≥ 1.24.0
 - CMake ≥ 3.25 and a C++20-capable compiler
 
@@ -366,13 +366,13 @@ Pass an all-in-one checkpoint directly as `modelName`. No separate encoders need
 
 ## FLUX.2 Implementation Notes
 
-This section documents non-obvious issues encountered integrating FLUX.2 [klein] into the addon and how each was resolved. These serve as a reference if the underlying `stable-diffusion.cpp` version is upgraded.
+This section documents non-obvious issues encountered integrating FLUX.2 [klein] into the addon and how each was resolved. These serve as a reference if the underlying `qvac-ext-stable-diffusion.cpp` version is upgraded.
 
 ### 1. Metal GPU backend not activated (macOS)
 
 **Symptom:** Generation ran entirely on CPU at 700%+ CPU usage; 20 steps at 512 × 512 never completed.
 
-**Root cause:** The vcpkg overlay port passed `-DGGML_METAL=ON` to CMake, which compiled the ggml Metal library (`libggml-metal.a`). However, `stable-diffusion.cpp` internally guards `ggml_backend_metal_init()` behind its own `SD_USE_METAL` preprocessor define, which is only set when `-DSD_METAL=ON` is passed — a separate flag from `GGML_METAL`.
+**Root cause:** The vcpkg overlay port passed `-DGGML_METAL=ON` to CMake, which compiled the ggml Metal library (`libggml-metal.a`). However, `qvac-ext-stable-diffusion.cpp` internally guards `ggml_backend_metal_init()` behind its own `SD_USE_METAL` preprocessor define, which is only set when `-DSD_METAL=ON` is passed — a separate flag from `GGML_METAL`.
 
 **Fix:** Changed the portfile (`vcpkg/ports/stable-diffusion-cpp/portfile.cmake`) from:
 
@@ -386,7 +386,7 @@ to:
 -DSD_METAL=${SD_GGML_METAL}
 ```
 
-`-DSD_METAL=ON` causes `stable-diffusion.cpp`'s own `CMakeLists.txt` to set `GGML_METAL=ON` *and* emit `-DSD_USE_METAL`, which activates `ggml_backend_metal_init()` at runtime.
+`-DSD_METAL=ON` causes `qvac-ext-stable-diffusion.cpp`'s own `CMakeLists.txt` to set `GGML_METAL=ON` *and* emit `-DSD_USE_METAL`, which activates `ggml_backend_metal_init()` at runtime.
 
 **Verification:** After the fix, CPU usage dropped from ~700% to ~0.5% during generation, confirming the GPU is handling the compute.
 
@@ -396,7 +396,7 @@ to:
 
 **Symptom:** Generation completed all 20 steps and produced a PNG, but the image was pure coloured noise (TV static).
 
-**Root cause:** `SdCtxConfig::prediction` defaulted to `EPS_PRED` (the classic SD1.x epsilon-prediction denoiser). When `SdModel::load()` passed this to `sd_ctx_params_t.prediction`, it overrode `stable-diffusion.cpp`'s auto-detection, forcing the wrong denoiser on a FLUX.2 flow-matching model. The correct sentinel value for auto-detection is `PREDICTION_COUNT`.
+**Root cause:** `SdCtxConfig::prediction` defaulted to `EPS_PRED` (the classic SD1.x epsilon-prediction denoiser). When `SdModel::load()` passed this to `sd_ctx_params_t.prediction`, it overrode `qvac-ext-stable-diffusion.cpp`'s auto-detection, forcing the wrong denoiser on a FLUX.2 flow-matching model. The correct sentinel value for auto-detection is `PREDICTION_COUNT`.
 
 **Fix:** Changed the default in `addon/src/handlers/SdCtxHandlers.hpp`:
 
@@ -414,7 +414,7 @@ prediction_t prediction = PREDICTION_COUNT;  // auto-detect from GGUF metadata
 
 **Symptom:** Same noise output as above (compounded with fix 2).
 
-**Root cause:** `SdCtxConfig::flowShift` defaulted to `0.0f`. For FLUX.2, `stable-diffusion.cpp` expects `INFINITY` as the sentinel meaning "use the model's embedded flow-shift value". A value of `0.0f` disabled flow-shifting entirely, breaking the entire noise schedule.
+**Root cause:** `SdCtxConfig::flowShift` defaulted to `0.0f`. For FLUX.2, `qvac-ext-stable-diffusion.cpp` expects `INFINITY` as the sentinel meaning "use the model's embedded flow-shift value". A value of `0.0f` disabled flow-shifting entirely, breaking the entire noise schedule.
 
 **Fix:**
 
@@ -432,7 +432,7 @@ float flowShift = std::numeric_limits<float>::infinity();  // use model's embedd
 
 **Symptom:** Even with fixes 1–3, the wrong sampler could be selected if passed explicitly.
 
-**Root cause:** `SdGenConfig::sampleMethod` defaulted to `EULER_A_SAMPLE_METHOD`. The `generate_image()` function in `stable-diffusion.cpp` only runs its auto-detection (`sd_get_default_sample_method()`) when `sample_method == SAMPLE_METHOD_COUNT`. Since we always passed `EULER_A` explicitly, FLUX.2 (a DiT flow-matching model that needs `EULER`) got the ancestral euler sampler instead, producing garbage.
+**Root cause:** `SdGenConfig::sampleMethod` defaulted to `EULER_A_SAMPLE_METHOD`. The `generate_image()` function in `qvac-ext-stable-diffusion.cpp` only runs its auto-detection (`sd_get_default_sample_method()`) when `sample_method == SAMPLE_METHOD_COUNT`. Since we always passed `EULER_A` explicitly, FLUX.2 (a DiT flow-matching model that needs `EULER`) got the ancestral euler sampler instead, producing garbage.
 
 **Fix:** Changed the default in `addon/src/handlers/SdGenHandlers.hpp`:
 
@@ -446,7 +446,7 @@ sample_method_t sampleMethod = SAMPLE_METHOD_COUNT;  // auto (euler for FLUX, eu
 scheduler_t     scheduler    = SCHEDULER_COUNT;      // auto
 ```
 
-With these sentinel values, `stable-diffusion.cpp` selects `euler` for DiT/FLUX models and `euler_a` for SD1.x/SD2.x automatically.
+With these sentinel values, `qvac-ext-stable-diffusion.cpp` selects `euler` for DiT/FLUX models and `euler_a` for SD1.x/SD2.x automatically.
 
 ---
 
@@ -454,7 +454,7 @@ With these sentinel values, `stable-diffusion.cpp` selects `euler` for DiT/FLUX 
 
 **Symptom:** Minor correctness difference vs reference CLI output.
 
-**Root cause:** `SdCtxConfig` defaulted to `rngType = CPU_RNG` (Mersenne Twister). `sd_ctx_params_init()` in `stable-diffusion.cpp` sets `CUDA_RNG` (the philox RNG — named `CUDA_RNG` for historical reasons but not GPU-specific). The philox RNG is the expected default across all platforms.
+**Root cause:** `SdCtxConfig` defaulted to `rngType = CPU_RNG` (Mersenne Twister). `sd_ctx_params_init()` in `qvac-ext-stable-diffusion.cpp` sets `CUDA_RNG` (the philox RNG — named `CUDA_RNG` for historical reasons but not GPU-specific). The philox RNG is the expected default across all platforms.
 
 **Fix:**
 
@@ -472,7 +472,7 @@ rng_type_t samplerRngType = RNG_TYPE_COUNT; // auto
 
 ### Summary of default alignment
 
-The underlying pattern across all these fixes is the same: our C++ config structs had concrete default values that *overrode* `stable-diffusion.cpp`'s own sentinel-based auto-detection. The correct approach is to use the same sentinel values that `sd_ctx_params_init()` and `sd_sample_params_init()` set, and only pass concrete values when the caller explicitly requests them.
+The underlying pattern across all these fixes is the same: our C++ config structs had concrete default values that *overrode* `qvac-ext-stable-diffusion.cpp`'s own sentinel-based auto-detection. The correct approach is to use the same sentinel values that `sd_ctx_params_init()` and `sd_sample_params_init()` set, and only pass concrete values when the caller explicitly requests them.
 
 | Field | Wrong default | Correct default | Effect of wrong value |
 |-------|--------------|-----------------|----------------------|
