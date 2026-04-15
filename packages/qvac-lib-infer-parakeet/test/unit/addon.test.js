@@ -241,6 +241,7 @@ test('ParakeetInterface cancel clears active job only after cancel resolves', as
     t.is(handle, addon._handle, 'cancel should be called with current handle')
     sawActiveJobDuringCancel = addon._activeJobId === 7
     await wait(5)
+    addon._addonOutputCallback(addon, 'Error', null, 'Job cancelled')
   }
 
   await addon.cancel(7)
@@ -376,7 +377,9 @@ test('ParakeetInterface reload preserves wrapper job numbering across native rec
   addon._activeJobId = 6
   addon._bufferedAudio = [new Float32Array([0.1, 0.2])]
 
-  binding.cancel = async () => {}
+  binding.cancel = async () => {
+    addon._addonOutputCallback(addon, 'Error', null, 'Job cancelled')
+  }
   await addon.reload({
     modelPath: './models/parakeet-tdt-0.6b-v3-onnx',
     modelType: 'tdt'

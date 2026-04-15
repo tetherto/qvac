@@ -138,7 +138,7 @@ jobs:
     with:
       sha: ${{ needs.context.outputs.base_sha }}
       pr_head_sha: ${{ needs.context.outputs.head_sha }}
-      workdir: ${{ github.workspace }}/packages/qvac-lib-infer-parakeet
+      workdir: packages/qvac-lib-infer-parakeet
 
   cpp-tests-coverage:
     permissions:

@@ -112,7 +112,9 @@ export const tree: Node[] = [
           { name: 'Transcription', url: '/sdk/examples/ai-tasks/transcription', type: 'page', icon: resolveIcon('Mic') },
           { name: 'Text-to-Speech', url: '/sdk/examples/ai-tasks/text-to-speech', type: 'page', icon: resolveIcon('Volume2') },
           { name: 'OCR', url: '/sdk/examples/ai-tasks/ocr', type: 'page', icon: resolveIcon('ScanText') },
+          { name: 'Image generation', url: '/sdk/examples/ai-tasks/image-generation', type: 'page', icon: resolveIcon('Image') },
           { name: 'Multimodal', url: '/sdk/examples/ai-tasks/multimodal', type: 'page', icon: resolveIcon('GalleryHorizontal') },
+          { name: 'Fine-tuning', url: '/sdk/examples/ai-tasks/fine-tuning', type: 'page', icon: resolveIcon('FlaskConical') },
           { name: 'RAG', url: '/sdk/examples/ai-tasks/rag', type: 'page', icon: resolveIcon('ScanSearch') },
         ],
       },
@@ -209,6 +211,7 @@ export const tree: Node[] = [
       { name: 'transcription-parakeet', url: '/addons/transcription-parakeet', type: 'page' },
       { name: 'tts-onnx', url: '/addons/tts-onnx', type: 'page' },
       { name: 'ocr-onnx', url: '/addons/ocr-onnx', type: 'page' },
+      { name: 'diffusion-cpp', url: '/addons/diffusion-cpp', type: 'page' },
     ],
   },
   {

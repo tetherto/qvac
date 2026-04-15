@@ -75,6 +75,8 @@ import {
   modelRegistryGetModelRequestSchema,
   modelRegistryGetModelResponseSchema,
 } from "./registry";
+import { suspendRequestSchema, suspendResponseSchema } from "./suspend";
+import { resumeRequestSchema, resumeResponseSchema } from "./resume";
 
 export const requestSchema = z.union([
   heartbeatRequestSchema,
@@ -102,6 +104,8 @@ export const requestSchema = z.union([
   modelRegistryListRequestSchema,
   modelRegistrySearchRequestSchema,
   modelRegistryGetModelRequestSchema,
+  suspendRequestSchema,
+  resumeRequestSchema,
 ]);
 
 export const responseSchema = z.discriminatedUnion("type", [
@@ -134,6 +138,8 @@ export const responseSchema = z.discriminatedUnion("type", [
   modelRegistryListResponseSchema,
   modelRegistrySearchResponseSchema,
   modelRegistryGetModelResponseSchema,
+  suspendResponseSchema,
+  resumeResponseSchema,
 ]);
 
 export const rpcOptionsSchema = z.object({

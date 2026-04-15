@@ -42,6 +42,12 @@ import {
   NoBlobFoundError,
 } from "@/utils/errors-server";
 import { getServerLogger } from "@/logging";
+import {
+  registerSwarm,
+  unregisterSwarm,
+  registerCorestore,
+  unregisterCorestore,
+} from "@/server/bare/runtime-lifecycle";
 import type { DownloadMetricsHooks } from "./types";
 
 const logger = getServerLogger();
@@ -101,23 +107,37 @@ async function setupHyperdrive(
   swarm.join(drive.discoveryKey, { server: false, client: true });
   swarm.flush().then(doneFindingPeers, doneFindingPeers);
 
+  registerCorestore(corestore, {
+    label: `hyperdrive:${hyperdriveKey}`,
+    createdAt: Date.now(),
+  });
+  registerSwarm(swarm, {
+    label: `hyperdrive:${hyperdriveKey}`,
+    createdAt: Date.now(),
+  });
+
   return { corestore, drive, swarm, corestoreDir };
 }
 
 async function cleanupHyperdrive(setup: HyperdriveSetup): Promise<void> {
   logger.debug("🧹 Cleaning up hyperdrive setup");
 
-  if (!setup.swarm.suspended) {
-    try {
-      await setup.swarm.suspend();
-    } catch {
-      // If suspend fails, continue with cleanup
+  try {
+    if (!setup.swarm.suspended) {
+      try {
+        await setup.swarm.suspend();
+      } catch (error) {
+        logger.debug("⚠️ Swarm suspend failed during cleanup:", error instanceof Error ? error.message : String(error));
+      }
     }
-  }
 
-  await setup.swarm.destroy();
-  await setup.drive.close();
-  await setup.corestore.close();
+    await setup.swarm.destroy();
+    await setup.drive.close();
+    await setup.corestore.close();
+  } finally {
+    unregisterSwarm(setup.swarm);
+    unregisterCorestore(setup.corestore);
+  }
 }
 
 export async function deleteCorestoreDirectory(

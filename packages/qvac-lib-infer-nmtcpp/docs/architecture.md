@@ -21,7 +21,7 @@
 - [Bare Runtime Integration](#bare-runtime-integration)
 
 ### Architecture Decisions
-- [Decision 1: GGML as Inference Backend](#decision-1-ggml-as-inference-backend-for-opusmarian-and-indictrans2)
+- [Decision 1: GGML as Inference Backend](#decision-1-ggml-as-inference-backend-for-indictrans2)
 - [Decision 2: Bare Runtime over Node.js](#decision-2-bare-runtime-over-nodejs)
 - [Decision 3: Multiple NMT Backends](#decision-3-multiple-nmt-backends-ggml--bergamot)
 - [Decision 4: SentencePiece Tokenization](#decision-4-sentencepiece-tokenization)
@@ -43,13 +43,13 @@ Offline neural machine translation for QVAC-powered applications (mobile and des
 **Core value:**
 - High-level JavaScript API for NMT inference
 - Model distribution via registry or local files
-- Multi-backend architecture (OPUS/Marian, IndicTrans2, Bergamot)
+- Multi-backend architecture (IndicTrans2, Bergamot)
 - Batch translation support
 - Pluggable model weight loaders
 
 ## Key Features
 
-- **Multi-backend architecture:** GGML-based custom NMT (OPUS/Marian and IndicTrans2) and Mozilla Bergamot
+- **Multi-backend architecture:** GGML-based custom NMT (IndicTrans2) and Mozilla Bergamot
 - **Cross-platform support:** macOS, iOS, Linux, Android, Windows
 - **GPU acceleration:** via GGML backends (Metal on Apple, Vulkan on others)
 - **Beam search decoding** with configurable beam size, length penalty, and repetition control
@@ -169,7 +169,6 @@ classDiagram
 
     class ModelTypes {
         +IndicTrans : "IndicTrans"
-        +Opus : "Opus"
         +Bergamot : "Bergamot"
     }
 
@@ -253,7 +252,7 @@ graph TB
     end
 
     subgraph "Layer 2: Bridge"
-        MARIAN["TranslationInterface<br/>(marian.js)"]
+        TRANS_IF["TranslationInterface<br/>(marian.js)"]
         BINDING_JS["require.addon<br/>(binding.js)"]
     end
 
@@ -289,10 +288,10 @@ graph TB
     APP --> NMTCPP
     NMTCPP --> BASEINF
     NMTCPP --> WEIGHTSPR
-    NMTCPP --> MARIAN
+    NMTCPP --> TRANS_IF
     NMTCPP -.-> RESPONSE
 
-    MARIAN --> BINDING_JS
+    TRANS_IF --> BINDING_JS
     BINDING_JS --> BINDING_CPP
 
     BINDING_CPP --> ADDON
@@ -330,7 +329,7 @@ graph TB
 | 2. Bridge | TranslationInterface, binding.js | JS↔C++ communication | JS wrapper | Lifecycle management, handle safety |
 | 3. C++ Addon | JsInterface, Addon\<T\> | Job queue, threading, callbacks | C++ | Performance, native integration |
 | 4. Model | TranslationModel | Backend detection and dispatch | C++ | Multi-backend routing |
-| 5a. GGML Backend | nmt_* modules | Custom encoder-decoder with beam search | C++ | OPUS/Marian/IndicTrans2 inference |
+| 5a. GGML Backend | nmt_* modules | Custom encoder-decoder with beam search | C++ | IndicTrans2 inference |
 | 5b. Bergamot Backend | bergamot wrapper | Bergamot translator integration | C++ | Batch-optimized translation |
 | 6. Native Libraries | ggml, sentencepiece, bergamot | Tensor ops, tokenization, translation | C++ | Optimized inference |
 
@@ -504,12 +503,12 @@ sequenceDiagram
 
 # Architecture Decisions
 
-## Decision 1: GGML as Inference Backend for OPUS/Marian and IndicTrans2
+## Decision 1: GGML as Inference Backend for IndicTrans2
 
 <details>
 <summary>⚡ TL;DR</summary>
 
-**Chose:** Custom encoder-decoder on GGML over full Marian framework  
+**Chose:** Custom encoder-decoder on GGML for lightweight cross-platform inference  
 **Why:** Cross-platform portability, quantization support, no heavy dependencies  
 **Cost:** Custom encoder/decoder graphs require maintenance
 
@@ -517,7 +516,7 @@ sequenceDiagram
 
 ### Context
 
-Needed to run Marian-style NMT models on mobile devices (iOS, Android) and desktop without depending on the full Marian framework.
+Needed to run NMT models on mobile devices (iOS, Android) and desktop without heavy ML framework dependencies.
 
 ### Decision
 
@@ -556,24 +555,23 @@ See [qvac-lib-inference-addon-cpp Decision 4: Why Bare Runtime](https://github.c
 <details>
 <summary>⚡ TL;DR</summary>
 
-**Chose:** Three backends behind a unified API  
+**Chose:** Two backends behind a unified API  
 **Why:** Different language families need different model architectures and optimizations  
-**Cost:** Three backends to build, test, and maintain
+**Cost:** Two backends to build, test, and maintain
 
 </details>
 
 ### Context
 
-Different language families require different model architectures. European language pairs are well-served by OPUS/Marian models, Indic languages by IndicTrans2, and some use cases benefit from Mozilla's Bergamot for batch throughput.
+Different language families require different model architectures. Indic languages are served by IndicTrans2, and some use cases benefit from Mozilla's Bergamot for batch throughput.
 
 ### Decision
 
-Support three model types behind a unified `TranslationNmtcpp` API, with backend auto-detection based on model file format.
+Support two model types behind a unified `TranslationNmtcpp` API, with backend auto-detection based on model file format.
 
 ### Rationale
 
 **Language Coverage:**
-- OPUS/Marian: broad European language coverage, established quality benchmarks
 - IndicTrans2: purpose-built for Indic languages with specialized pre/post-processing
 - Bergamot: mature, production-tested engine with batch translation support
 
@@ -584,7 +582,7 @@ Support three model types behind a unified `TranslationNmtcpp` API, with backend
 ### Trade-offs
 - ✅ Best-in-class translation for each language family
 - ✅ Unified API hides backend complexity from consumers
-- ❌ Three backends to build, test, and maintain
+- ❌ Two backends to build, test, and maintain
 - ❌ Different model formats and loading paths increase code complexity
 
 ---
@@ -595,14 +593,14 @@ Support three model types behind a unified `TranslationNmtcpp` API, with backend
 <summary>⚡ TL;DR</summary>
 
 **Chose:** SentencePiece library for tokenization  
-**Why:** Standard tokenizer used by OPUS and IndicTrans2 model authors  
+**Why:** Standard tokenizer used by IndicTrans2 model authors  
 **Cost:** Additional native dependency (protobuf required)
 
 </details>
 
 ### Context
 
-NMT models require subword tokenization. OPUS and IndicTrans2 models ship with SentencePiece vocabulary files.
+NMT models require subword tokenization. IndicTrans2 models ship with SentencePiece vocabulary files.
 
 ### Decision
 
@@ -611,7 +609,7 @@ Use the SentencePiece library for tokenization and detokenization, loading vocab
 ### Rationale
 
 **Compatibility:**
-- Standard tokenizer used by OPUS and IndicTrans2 model authors
+- Standard tokenizer used by IndicTrans2 model authors
 - Handles both source and target vocabularies with a unified API
 - Integrates cleanly with GGML model loading
 
