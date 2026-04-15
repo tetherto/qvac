@@ -1055,6 +1055,14 @@ jobs:
             printf '      - echo "%s" | base64 -d > tests/wdio.config.devicefarm.js\n' "$config_b64"
             printf '      - echo "wdio config written (not cat-ing to avoid false positive marker extraction)"\n'
 
+          # Android-specific: increase logcat buffer and pre-create external storage dir
+          if [ "${{ matrix.platform }}" == "Android" ]; then
+            printf '      - echo "Increasing logcat buffer to 16MB for reliable log capture..."\n'
+            printf '      - adb shell logcat -G 16M 2>/dev/null || true\n'
+            printf '      - echo "Pre-creating external storage directory for perf report..."\n'
+            printf '      - adb shell mkdir -p /sdcard/Android/data/%s/files/ 2>/dev/null || true\n' '${{ env.APP_BUNDLE_ID }}'
+          fi
+
           # iOS-specific WebDriverAgent configuration (only for iOS platform)
           if [ "${{ matrix.platform }}" == "iOS" ]; then
             printf '      - echo "🔧 Configuring WebDriverAgent for iOS..."\n'
@@ -1131,7 +1139,7 @@ jobs:
 
           # Android-specific: extract perf report from device using logcat + adb
           if [ "${{ matrix.platform }}" == "Android" ]; then
-            printf '      - adb logcat -d > $DEVICEFARM_LOG_DIR/logcat_full.txt 2>/dev/null || true\n'
+            printf '      - adb logcat -d -b all > $DEVICEFARM_LOG_DIR/logcat_full.txt 2>/dev/null || true\n'
             printf '      - |\n'
             printf '        echo "=== Android perf report extraction ==="\n'
             printf '        X="" L=$DEVICEFARM_LOG_DIR B=%s\n' '${{ env.APP_BUNDLE_ID }}'
