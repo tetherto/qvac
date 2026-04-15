@@ -281,6 +281,9 @@ async function* processModelResponse(
     ...(responseWithStats.stats?.CacheTokens !== undefined && {
       cacheTokens: responseWithStats.stats.CacheTokens,
     }),
+    ...(responseWithStats.stats?.backendDevice !== undefined && {
+      backendDevice: responseWithStats.stats.backendDevice,
+    }),
   };
 
   return {

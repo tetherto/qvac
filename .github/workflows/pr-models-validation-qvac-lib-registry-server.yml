@@ -123,7 +123,6 @@ jobs:
       needs.authorize.outputs.allowed == 'true' &&
       needs.detect-changes.outputs.models_changed == 'true'
     runs-on: ubuntu-latest
-    environment: release
     steps:
       - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # 6.0.2
         with:
@@ -133,15 +132,6 @@ jobs:
         uses: actions/setup-node@53b83947a5a98c8d113130e565377fae1a50d02f # 6.3.0
         with:
           node-version: 20
-
-      - name: Configure npm for private packages
-        shell: bash
-        working-directory: ${{ env.PKG_DIR }}
-        run: |
-          echo "@tetherto:registry=https://npm.pkg.github.com" >> ~/.npmrc
-          echo "//npm.pkg.github.com/:_authToken=${{ secrets.GITHUB_TOKEN }}" >> ~/.npmrc
-          echo "@qvac:registry=https://registry.npmjs.org" >> ~/.npmrc
-          echo "//registry.npmjs.org/:_authToken=${{ secrets.NPM_TOKEN }}" >> ~/.npmrc
 
       - name: Install dependencies
         working-directory: ${{ env.PKG_DIR }}
@@ -159,7 +149,6 @@ jobs:
       needs.authorize.outputs.allowed == 'true' &&
       needs.detect-changes.outputs.other_changed == 'true'
     runs-on: ubuntu-latest
-    environment: release
     steps:
       - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # 6.0.2
         with:
@@ -169,15 +158,6 @@ jobs:
         uses: actions/setup-node@53b83947a5a98c8d113130e565377fae1a50d02f # 6.3.0
         with:
           node-version: 20
-
-      - name: Configure npm for private packages
-        shell: bash
-        working-directory: ${{ env.PKG_DIR }}
-        run: |
-          echo "@tetherto:registry=https://npm.pkg.github.com" >> ~/.npmrc
-          echo "//npm.pkg.github.com/:_authToken=${{ secrets.GITHUB_TOKEN }}" >> ~/.npmrc
-          echo "@qvac:registry=https://registry.npmjs.org" >> ~/.npmrc
-          echo "//registry.npmjs.org/:_authToken=${{ secrets.NPM_TOKEN }}" >> ~/.npmrc
 
       - name: Install dependencies
         working-directory: ${{ env.PKG_DIR }}
@@ -242,15 +222,6 @@ jobs:
         with:
           node-version: 20
 
-      - name: Configure npm for private packages
-        shell: bash
-        working-directory: ${{ env.PKG_DIR }}
-        run: |
-          echo "@tetherto:registry=https://npm.pkg.github.com" >> ~/.npmrc
-          echo "//npm.pkg.github.com/:_authToken=${{ secrets.GITHUB_TOKEN }}" >> ~/.npmrc
-          echo "@qvac:registry=https://registry.npmjs.org" >> ~/.npmrc
-          echo "//registry.npmjs.org/:_authToken=${{ secrets.NPM_TOKEN }}" >> ~/.npmrc
-
       - name: Install dependencies
         working-directory: ${{ env.PKG_DIR }}
         shell: bash
@@ -270,7 +241,6 @@ jobs:
   smoke-test:
     needs: sync-staging
     runs-on: ubuntu-latest
-    environment: release
     env:
       QVAC_REGISTRY_CORE_KEY: ${{ secrets.QVAC_REGISTRY_CORE_KEY }}
     steps:
@@ -290,15 +260,6 @@ jobs:
         uses: actions/setup-node@53b83947a5a98c8d113130e565377fae1a50d02f # 6.3.0
         with:
           node-version: 20
-
-      - name: Configure npm for private packages
-        shell: bash
-        working-directory: ${{ env.PKG_DIR }}/client
-        run: |
-          echo "@tetherto:registry=https://npm.pkg.github.com" >> ~/.npmrc
-          echo "//npm.pkg.github.com/:_authToken=${{ secrets.GITHUB_TOKEN }}" >> ~/.npmrc
-          echo "@qvac:registry=https://registry.npmjs.org" >> ~/.npmrc
-          echo "//registry.npmjs.org/:_authToken=${{ secrets.NPM_TOKEN }}" >> ~/.npmrc
 
       - name: Install server dependencies
         working-directory: ${{ env.PKG_DIR }}

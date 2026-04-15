@@ -1,5 +1,61 @@
 # Changelog
 
+## [0.8.3]
+
+📦 **NPM:** https://www.npmjs.com/package/@qvac/sdk/v/0.8.3
+
+This release fixes a race condition in the KV cache save path during tool-calling completions, improving stability for multi-turn conversations that use tool integration.
+
+---
+
+## 🐞 Bug Fixes
+
+### KV Cache Save Race Condition in Tool-Calling Completions
+
+The KV cache save during tool-calling completions could race with ongoing inference because the session path was not passed to the save command and the save response was not awaited. This could result in corrupted or missing session state between tool-call rounds.
+
+The fix ensures the save command receives the correct session path and the SDK awaits the save response before proceeding. If the save fails, the error is now logged as a warning instead of propagating as an unhandled exception, so inference can continue gracefully.
+
+**What changed:**
+
+- The cache save now explicitly passes the session path alongside the save instruction, preventing the addon from writing to a stale or missing path
+- The save response is awaited so subsequent inference steps don't race against an in-flight disk write
+- A new `logCacheSaveError` helper captures save failures as warnings, keeping the completion stream alive even if the cache write fails
+
+---
+
+## 📘 Documentation
+
+- Added npm keywords to `package.json` for better discoverability on the npm registry, covering AI/ML, inference engines, supported platforms, and P2P capabilities.
+- Added a link to the consolidated plaintext documentation export (`llms-full.txt`) in the SDK README for AI/LLM tool consumption.
+
+## [0.8.2]
+
+📦 **NPM:** https://www.npmjs.com/package/@qvac/sdk/v/0.8.2
+
+This is a maintenance release that refreshes the SDK README with a streamlined quickstart guide and updated documentation links pointing to the new docs site at docs.qvac.tether.io.
+
+---
+
+## 📘 Documentation
+
+### README Rewrite
+
+The SDK README has been rewritten to provide a cleaner onboarding experience. The verbose installation, usage, and feature sections have been replaced with a concise quickstart that gets users running in four steps, and all documentation links now point to the new docs site.
+
+Key changes:
+
+- **Simplified quickstart** — A minimal four-step guide (create workspace, install, write script, run) replaces the previous multi-section setup
+- **Updated links** — Documentation URLs now point to `docs.qvac.tether.io` instead of `qvac.tether.dev`
+- **Support channel** — The support link now points to the Discord channel instead of FeatureBase
+- **Leaner content** — Detailed platform instructions (Expo, Linux), feature lists, and example indexes have been moved to the docs site to keep the README focused
+
+---
+
+## ⚙️ Infrastructure
+
+- SDK dependency installs in CI publish and pod check workflows are now frozen to prevent unexpected version drift during builds.
+
 ## [0.8.1]
 
 📦 **NPM:** https://www.npmjs.com/package/@qvac/sdk/v/0.8.1

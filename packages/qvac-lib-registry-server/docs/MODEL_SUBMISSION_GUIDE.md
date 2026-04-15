@@ -7,7 +7,7 @@
    {
      "source": "https://huggingface.co/<org>/<repo>/resolve/<commit>/<file>",
      "engine": "@qvac/<engine-name>",
-     "license": "MIT",
+     "licenseId": "MIT",
      "quantization": "q4_0",
      "params": "1B",
      "tags": ["generation", "instruct"],
@@ -109,7 +109,7 @@ If you remove an entry from `models.prod.json`, the sync script will auto-deprec
 |-------|----------|-------------|
 | `source` | Yes | URL to model file (`https://huggingface.co/...` or `s3:///key`) |
 | `engine` | Yes | Engine identifier (e.g., `@qvac/llm-llamacpp`) |
-| `license` | Yes | License identifier matching an entry in `data/licenses.json` |
+| `licenseId` | Yes | License identifier matching an entry in `data/licenses.json` |
 | `quantization` | No | Quantization format (e.g., `q4_0`, `q8_0`) |
 | `params` | No | Model parameter count (e.g., `1B`, `4B`) |
 | `description` | No | Human-readable description |

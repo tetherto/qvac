@@ -49,16 +49,16 @@ jobs:
             arch: arm64
             variant: ubuntu
             flags: -D ANDROID_STL=c++_shared -D BUILD_TESTING=OFF
-          - os: macos-14
+          - os: macos-15
             platform: ios
             arch: arm64
             flags: -D BUILD_TESTING=OFF
-          - os: macos-14
+          - os: macos-15
             platform: ios
             arch: arm64
             tags: -simulator
             flags: --simulator -D BUILD_TESTING=OFF
-          - os: macos-14
+          - os: macos-15
             platform: ios
             arch: x64
             tags: -simulator
@@ -199,36 +199,6 @@ jobs:
         with:
           node-version: lts/*
 
-      - name: Configure scoped registry for @tetherto and @qvac packages
-        working-directory: ${{ env.PKG_DIR }}
-        env:
-          GPR_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-          NPM_TOKEN: ${{ secrets.NPM_TOKEN }}
-          GIT_PAT: ${{ secrets.PAT_TOKEN }}
-        shell: bash
-        run: |
-          echo "Configuring scoped registry for @tetherto and @qvac packages..."
-          set -eu
-          echo "Writing .npmrc for dual registry install…"
-          cat > .npmrc <<NPMRC
-          always-auth=true
-          registry=https://registry.npmjs.org/
-          @qvac:registry=https://registry.npmjs.org/
-          @tetherto:registry=https://npm.pkg.github.com/
-          //registry.npmjs.org/:_authToken=${NPM_TOKEN}
-          //npm.pkg.github.com/:_authToken=${GIT_PAT}
-          NPMRC
-
-          # Optional: make private git deps work without prompting
-          if [ -n "${GIT_PAT:-}" ]; then
-            git config --global url."https://${GIT_PAT}:@github.com/".insteadOf "https://github.com/"
-            git config --global url."https://${GIT_PAT}:@github.com/".insteadOf "git@github.com:"
-          else
-            # Using the workflow's GITHUB_TOKEN for git clones when possible
-            git config --global url."https://${{ github.token }}:@github.com/".insteadOf "https://github.com/"
-            git config --global url."https://${{ github.token }}:@github.com/".insteadOf "git@github.com:"
-          fi
-
       - name: Install global dependencies
         run: npm install -g bare-runtime bare-make
 
@@ -256,10 +226,6 @@ jobs:
           VCPKG_ROOT=$(pwd)
           echo "VCPKG_ROOT=$VCPKG_ROOT" >> $GITHUB_ENV
           echo "$VCPKG_ROOT" >> $GITHUB_PATH
-
-      - if: ${{ startsWith(matrix.os, 'macos') }}
-        name: Select Xcode 16.4
-        run: sudo xcode-select -s /Applications/Xcode_16.4.app/Contents/Developer
 
       - if: ${{ startsWith(matrix.os, 'macos') && matrix.platform == 'ios' }}
         name: Verify UIKit Frameworks

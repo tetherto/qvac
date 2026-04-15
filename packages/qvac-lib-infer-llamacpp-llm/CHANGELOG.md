@@ -1,5 +1,33 @@
 # Changelog
 
+## [0.15.0] - 2026-04-09
+
+### Breaking Changes
+
+#### KV cache API simplified — `{ role: "session" }` replaced with `runOptions`
+
+Cache control moved from `{ role: "session" }` chat messages to explicit `runOptions` fields: `cacheKey` and `saveCacheToDisk`. The `getTokens`, `save`, and `reset` session commands are removed — use `response.stats.CacheTokens`, `saveCacheToDisk: true`, and a different `cacheKey` (or omit it) instead.
+
+### Added
+
+- `cacheKey`, `saveCacheToDisk` options on `runOptions` and `RunOptions` TypeScript interface.
+- `docs/cache-api.md` — KV cache API usage guide.
+
+### Removed
+
+- `{ role: "session" }` message protocol, `getTokens` command, `save` command.
+
+## [0.14.4] - 2026-04-03
+
+### Changed
+
+- Updated qvac-fabric dependency from 7248.2.1 to 7248.2.3, which fixes OpenCL kernel cache support on Android.
+
+### Added
+
+- `openclCacheDir` option in `LlamaConfig` (`index.d.ts`): writable directory for OpenCL kernel binary cache, required on Android for fast GPU startup.
+- `cache-type-k` and `cache-type-v` options in `LlamaConfig` (`index.d.ts`): configure KV cache quantization types.
+
 ## [0.14.3] - 2026-04-07
 
 ### Added

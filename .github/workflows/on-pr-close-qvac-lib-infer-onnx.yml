@@ -49,7 +49,7 @@ jobs:
   delete-npm-versions-trigger:
     permissions:
       packages: write
-    uses: tetherto/qvac-devops/.github/workflows/public-delete-npm-versions.yml@v1.1.8
+    uses: tetherto/oss-actions/.github/workflows/public-delete-npm-versions.yml@v1.1.0
     with:
       version: ${{ inputs.version }}
       pr-number: ${{ inputs.pr-number }}

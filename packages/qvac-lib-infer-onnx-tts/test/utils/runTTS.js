@@ -4,7 +4,7 @@ const path = require('bare-path')
 const fs = require('bare-fs')
 const os = require('bare-os')
 const { createWavBuffer } = require('./wav-helper')
-const { splitText } = require('./textSplitter')
+const { splitTtsText } = require('@qvac/tts-onnx/text-chunker')
 const { concatenatePcmChunks } = require('./pcmConcatenator')
 
 const platform = os.platform()
@@ -51,7 +51,18 @@ async function runTTSWithSplit (model, params, expectation = {}, options = {}) {
   }
 
   try {
-    const chunks = splitText(params.text)
+    const splitLanguage =
+      typeof params.splitLanguage === 'string' && params.splitLanguage.length > 0
+        ? params.splitLanguage
+        : model?._config?.language || 'en'
+    const splitOpts = {
+      language: splitLanguage,
+      mergeToMaxScalars: false,
+      ...(typeof params.splitLocale === 'string' && params.splitLocale.length > 0
+        ? { locale: params.splitLocale }
+        : {})
+    }
+    const chunks = splitTtsText(params.text, splitOpts)
     console.log(`${tag}Split text into ${chunks.length} chunk(s)`)
 
     const pcmChunks = []
@@ -234,4 +245,11 @@ async function runTTS (model, params, expectation = {}, options = {}) {
   }
 }
 
-module.exports = { getBaseDir, isMobile, runTTS, runTTSWithSplit }
+module.exports = {
+  getBaseDir,
+  isMobile,
+  runTTS,
+  runTTSWithSplit,
+  checkExpectations,
+  saveWavIfNeeded
+}

@@ -62,6 +62,7 @@ import { MobileRagExecutor } from "./executors/rag-executor.js";
 import { MobileConfigReloadExecutor } from "./executors/config-reload-executor.js";
 import { MobileTtsExecutor } from "./executors/tts-executor.js";
 import { DownloadExecutor } from "../shared/executors/download-executor.js";
+import { DelegatedInferenceExecutor } from "../shared/executors/delegated-inference-executor.js";
 import { DiffusionExecutor } from "../shared/executors/diffusion-executor.js";
 
 const resources = new ResourceManager();
@@ -347,6 +348,7 @@ export const executor = createExecutor({
       "http-archive-embed-progress",
       "http-archive-embed-inference",
     ], "HTTP test disabled on mobile (OOM)"),
+    new SkipExecutor(/^finetune-/, "Finetune tests disabled on mobile"),
     new SkipExecutor(/^tools-(?!simple-function$|no-function-match$)/, "Tools test disabled on mobile"),
     ...(Platform.OS === "ios" ? [
       skipTests([
@@ -387,6 +389,7 @@ export const executor = createExecutor({
     new MobileParakeetExecutor(resources),
     new MobileVisionExecutor(resources),
     new DownloadExecutor(),
+    new DelegatedInferenceExecutor(),
     new DiffusionExecutor(resources),
   ],
   profiling: {

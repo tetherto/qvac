@@ -57,6 +57,11 @@ import {
   diffusionStreamResponseSchema,
 } from "./sdcpp-config";
 import {
+  finetuneRequestSchema,
+  finetuneResponseSchema,
+  finetuneProgressResponseSchema,
+} from "./finetune";
+import {
   pluginInvokeRequestSchema,
   pluginInvokeResponseSchema,
   pluginInvokeStreamRequestSchema,
@@ -93,6 +98,7 @@ export const requestSchema = z.union([
   getModelInfoRequestSchema,
   ocrStreamRequestSchema,
   diffusionStreamRequestSchema,
+  finetuneRequestSchema,
   pluginInvokeRequestSchema,
   pluginInvokeStreamRequestSchema,
   modelRegistryListRequestSchema,
@@ -125,6 +131,8 @@ export const responseSchema = z.discriminatedUnion("type", [
   getModelInfoResponseSchema,
   ocrStreamResponseSchema,
   diffusionStreamResponseSchema,
+  finetuneResponseSchema,
+  finetuneProgressResponseSchema,
   pluginInvokeResponseSchema,
   pluginInvokeStreamResponseSchema,
   modelRegistryListResponseSchema,
