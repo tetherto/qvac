@@ -1,0 +1,5 @@
+{
+  "name": "qvac-lint-cpp",
+  "version-string": "1.4.1",
+  "description": "No-op overlay — linting headers not needed for runtime builds"
+}
