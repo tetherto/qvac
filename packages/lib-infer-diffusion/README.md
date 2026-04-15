@@ -184,9 +184,9 @@ const args = {
 | `diskPath` | ✅ | Local directory where model files are already stored |
 | `modelName` | ✅ | Diffusion model file name (all-in-one for SD1.x/2.x; diffusion-only GGUF for FLUX.2) |
 | `logger` | — | Logger instance (e.g. `console`) |
-| `clipLModel` | — | Separate CLIP-L text encoder (FLUX.1 / SD3) |
+| `clipLModel` | — | Separate CLIP-L text encoder (SD3) |
 | `clipGModel` | — | Separate CLIP-G text encoder (SDXL / SD3) |
-| `t5XxlModel` | — | Separate T5-XXL text encoder (FLUX.1 / SD3) |
+| `t5XxlModel` | — | Separate T5-XXL text encoder (SD3) |
 | `llmModel` | — | Qwen3 LLM text encoder (FLUX.2 [klein]) |
 | `vaeModel` | — | Separate VAE file |
 

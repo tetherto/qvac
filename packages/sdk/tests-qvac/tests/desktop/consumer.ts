@@ -22,11 +22,13 @@ import {
   TTS_EMBED_TOKENS_EN_CHATTERBOX_FP32,
   TTS_CONDITIONAL_DECODER_EN_CHATTERBOX_FP32,
   TTS_LANGUAGE_MODEL_EN_CHATTERBOX_FP32,
-  TTS_TOKENIZER_SUPERTONIC,
-  TTS_TEXT_ENCODER_SUPERTONIC_FP32,
-  TTS_LATENT_DENOISER_SUPERTONIC_FP32,
-  TTS_VOICE_DECODER_SUPERTONIC_FP32,
-  TTS_VOICE_STYLE_SUPERTONIC,
+  TTS_SUPERTONIC2_OFFICIAL_TEXT_ENCODER_SUPERTONE_FP32,
+  TTS_SUPERTONIC2_OFFICIAL_DURATION_PREDICTOR_SUPERTONE_FP32,
+  TTS_SUPERTONIC2_OFFICIAL_VECTOR_ESTIMATOR_SUPERTONE_FP32,
+  TTS_SUPERTONIC2_OFFICIAL_VOCODER_SUPERTONE_FP32,
+  TTS_SUPERTONIC2_OFFICIAL_UNICODE_INDEXER_SUPERTONE_FP32,
+  TTS_SUPERTONIC2_OFFICIAL_TTS_CONFIG_SUPERTONE,
+  TTS_SUPERTONIC2_OFFICIAL_VOICE_STYLE_SUPERTONE,
   PARAKEET_TDT_ENCODER_INT8,
   PARAKEET_TDT_DECODER_INT8,
   PARAKEET_TDT_PREPROCESSOR_INT8,
@@ -66,11 +68,18 @@ import { VisionExecutor } from "./executors/vision-executor.js";
 import { DownloadExecutor } from "../shared/executors/download-executor.js";
 import { DelegatedInferenceExecutor } from "./executors/delegated-inference-executor.js";
 import { DiffusionExecutor } from "../shared/executors/diffusion-executor.js";
+import { FinetuneExecutor } from "./executors/finetune-executor.js";
 
 const resources = new ResourceManager();
 
 resources.define("llm", {
   constant: LLAMA_3_2_1B_INST_Q4_0,
+  type: "llm",
+  config: { verbosity: 0, ctx_size: 2048, n_discarded: 256 },
+});
+
+resources.define("finetune-llm", {
+  constant: QWEN3_1_7B_INST_Q4,
   type: "llm",
   config: { verbosity: 0, ctx_size: 2048, n_discarded: 256 },
 });
@@ -264,19 +273,37 @@ resources.define("tts-chatterbox", {
   },
 });
 
+const ttsSupertonicBaseConfig = {
+  ttsEngine: "supertonic",
+  ttsTextEncoderSrc: TTS_SUPERTONIC2_OFFICIAL_TEXT_ENCODER_SUPERTONE_FP32,
+  ttsDurationPredictorSrc: TTS_SUPERTONIC2_OFFICIAL_DURATION_PREDICTOR_SUPERTONE_FP32,
+  ttsVectorEstimatorSrc: TTS_SUPERTONIC2_OFFICIAL_VECTOR_ESTIMATOR_SUPERTONE_FP32,
+  ttsVocoderSrc: TTS_SUPERTONIC2_OFFICIAL_VOCODER_SUPERTONE_FP32,
+  ttsUnicodeIndexerSrc: TTS_SUPERTONIC2_OFFICIAL_UNICODE_INDEXER_SUPERTONE_FP32,
+  ttsTtsConfigSrc: TTS_SUPERTONIC2_OFFICIAL_TTS_CONFIG_SUPERTONE,
+  ttsVoiceStyleSrc: TTS_SUPERTONIC2_OFFICIAL_VOICE_STYLE_SUPERTONE,
+};
+
 resources.define("tts-supertonic", {
-  constant: TTS_TOKENIZER_SUPERTONIC,
-  type: "tts",
+  constant: TTS_SUPERTONIC2_OFFICIAL_TEXT_ENCODER_SUPERTONE_FP32,
+  type: "onnx-tts",
   skipPreDownload: true,
   preLoadUnload: true,
   config: {
-    ttsEngine: "supertonic",
+    ...ttsSupertonicBaseConfig,
     language: "en",
-    ttsTokenizerSrc: TTS_TOKENIZER_SUPERTONIC,
-    ttsTextEncoderSrc: TTS_TEXT_ENCODER_SUPERTONIC_FP32,
-    ttsLatentDenoiserSrc: TTS_LATENT_DENOISER_SUPERTONIC_FP32,
-    ttsVoiceDecoderSrc: TTS_VOICE_DECODER_SUPERTONIC_FP32,
-    ttsVoiceSrc: TTS_VOICE_STYLE_SUPERTONIC,
+  },
+});
+
+resources.define("tts-supertonic-multilingual", {
+  constant: TTS_SUPERTONIC2_OFFICIAL_TEXT_ENCODER_SUPERTONE_FP32,
+  type: "onnx-tts",
+  skipPreDownload: true,
+  preLoadUnload: true,
+  config: {
+    ...ttsSupertonicBaseConfig,
+    language: "es",
+    supertonicMultilingual: true,
   },
 });
 
@@ -372,6 +399,7 @@ export const executor = createExecutor({
     new DownloadExecutor(),
     new DelegatedInferenceExecutor(),
     new DiffusionExecutor(resources),
+    new FinetuneExecutor(resources),
   ],
   profiling: {
     init: () => profiler.enable({ mode: "summary", includeServerBreakdown: true }),

@@ -219,7 +219,7 @@ jobs:
 
       - name: Publish to NPM Package Registry
         id: publish
-        uses: tetherto/oss-actions/.github/actions/publish-library-to-npm@v1.1.0
+        uses: ./.github/actions/publish-library-to-npm
         with:
           secret-token: ${{ secrets.NPM_TOKEN }}
           tag: "latest"

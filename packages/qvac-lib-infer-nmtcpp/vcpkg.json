@@ -13,7 +13,7 @@
     "ssplit",
     {
       "name" : "qvac-fabric",
-      "version>=": "7248.2.2",
+      "version>=": "7248.2.3",
       "default-features" : false
     }
   ],

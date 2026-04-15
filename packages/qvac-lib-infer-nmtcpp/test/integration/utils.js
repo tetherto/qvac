@@ -193,8 +193,7 @@ async function ensureIndicTransModel () {
  *
  * Download priority:
  *   1. Check local path (../../model/bergamot/enit/)
- *   2. Download from Hyperdrive (if key available for the pair)
- *   3. Fallback: download directly from Firefox Remote Settings CDN
+ *   2. Fallback: download directly from Firefox Remote Settings CDN
  *
  * @returns {Promise<string>} Path to Bergamot model directory
  * @throws {Error} If model files not found/available
@@ -216,7 +215,7 @@ async function ensureBergamotModel () {
     }
   }
 
-  // Not found locally — download via Hyperdrive (primary) or Firefox CDN (fallback)
+  // Not found locally — download from Firefox CDN
   const writableRoot = isMobile ? (global.testDir || '/tmp') : path.resolve(__dirname, '../..')
   const destDir = path.join(writableRoot, 'model', 'bergamot', 'enit')
 

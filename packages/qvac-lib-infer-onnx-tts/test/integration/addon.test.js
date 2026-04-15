@@ -4,7 +4,7 @@ const test = require('brittle')
 const os = require('bare-os')
 const path = require('bare-path')
 const { loadChatterboxTTS, runChatterboxTTS, runChatterboxTTSWithSplit } = require('../utils/runChatterboxTTS')
-const { loadSupertonicTTS, runSupertonicTTS } = require('../utils/runSupertonicTTS')
+const { loadSupertonicTTS, runSupertonicTTS, runSupertonicStream } = require('../utils/runSupertonicTTS')
 const { ensureChatterboxModels, ensureSupertonicModels, ensureSupertonicModelsMultilingual, ensureWhisperModel } = require('../utils/downloadModel')
 const { loadWhisper, runWhisper } = require('../utils/runWhisper')
 
@@ -15,6 +15,7 @@ const isDarwin = platform === 'darwin'
 const CHATTERBOX_VARIANT = os.getEnv('CHATTERBOX_VARIANT') || 'fp32'
 const VARIANT_SUFFIX = CHATTERBOX_VARIANT === 'fp32' ? '' : `_${CHATTERBOX_VARIANT}`
 const INPUT_SENTENCES = (isMobile ? 'short' : os.getEnv('INPUT_SENTENCES')) || 'short'
+const TEST_ALL_LANGUAGES = os.getEnv('TEST_ALL_LANGUAGES') === 'true'
 const useSplit = INPUT_SENTENCES !== 'short'
 
 function chatterboxPath (modelDir, baseName, isMultilingual = false) {
@@ -35,11 +36,30 @@ const ENGLISH_SENTENCES_SHORT = [
   'How are you doing today?'
 ]
 
-const MULTILINGUAL_SENTENCES_SHORT = {
+const MULTILINGUAL_SENTENCES_BASE = {
   es: 'Hola mundo. Esta es una prueba del sistema de texto a voz.',
   he: 'שלום עולם.',
   ko: '안녕하세요. 한글입니다.'
 }
+
+const MULTILINGUAL_SENTENCES_EXTENDED = {
+  ar: 'مرحبا بالعالم.',
+  da: 'Hej verden. Vejret er smukt i dag.',
+  el: 'Γεια σου κόσμε. Ο καιρός είναι όμορφος.',
+  fi: 'Hei maailma. Sää on kaunis tänään.',
+  hi: 'नमस्ते दुनिया. आज मौसम अच्छा है.',
+  ms: 'Helo dunia. Cuaca hari ini sangat cantik.',
+  nl: 'Hallo wereld. Het weer is vandaag prachtig.',
+  no: 'Hei verden. Været er vakkert i dag.',
+  pl: 'Witaj świecie. Pogoda jest dziś piękna.',
+  sv: 'Hej världen. Vädret är vackert idag.',
+  sw: 'Habari dunia. Hali ya hewa ni nzuri leo.',
+  tr: 'Merhaba dünya. Bugün hava çok güzel.'
+}
+
+const MULTILINGUAL_SENTENCES_SHORT = TEST_ALL_LANGUAGES
+  ? { ...MULTILINGUAL_SENTENCES_BASE, ...MULTILINGUAL_SENTENCES_EXTENDED }
+  : MULTILINGUAL_SENTENCES_BASE
 
 function getEnglishSentences () {
   if (INPUT_SENTENCES === 'short') return ENGLISH_SENTENCES_SHORT
@@ -364,6 +384,82 @@ test('Supertonic TTS: Basic synthesis test', { timeout: 1800000 }, async (t) => 
     console.log(`Real-time factor: ${result.data.stats.realTimeFactor}`)
     console.log(`Tokens/sec: ${result.data.stats.tokensPerSecond}`)
   }
+  console.log('='.repeat(60))
+})
+
+test('Supertonic TTS: Sentence stream (runStream + onUpdate)', { timeout: 1800000 }, async (t) => {
+  const baseDir = getBaseDir()
+  const modelDir = path.join(baseDir, 'models', 'supertonic')
+
+  console.log('\n=== Ensuring Supertonic models (sentence stream) ===')
+  const downloadResult = await ensureSupertonicModels({ targetDir: modelDir })
+  t.ok(downloadResult.success, 'Supertonic models should be downloaded')
+  if (!downloadResult.success) {
+    console.log('Failed to download Supertonic models, skipping test')
+    return
+  }
+
+  const modelParams = {
+    modelDir,
+    voiceName: 'F1',
+    language: 'en',
+    supertonicMultilingual: false
+  }
+
+  console.log('\n=== Loading Supertonic TTS model (sentence stream) ===')
+  const model = await loadSupertonicTTS(modelParams)
+  t.ok(model, 'Supertonic TTS model should be loaded')
+
+  const text =
+    'The quick brown fox jumps over the lazy dog. How are you doing today? Artificial intelligence is transforming the world.'
+
+  const expectation = {
+    minSamples: 20000,
+    maxSamples: 900000,
+    minDurationMs: 400,
+    maxDurationMs: 120000
+  }
+
+  const saveWav = !isMobile
+  const wavOutputPath = saveWav
+    ? path.join(__dirname, '../output/supertonic-sentence-stream.wav')
+    : undefined
+
+  console.log('\n=== Running Supertonic sentence stream synthesis ===')
+  const result = await runSupertonicStream(
+    model,
+    {
+      text,
+      saveWav,
+      wavOutputPath,
+      streamOptions: { maxChunkScalars: 80 }
+    },
+    expectation
+  )
+  console.log(result.output)
+
+  t.ok(result.passed, 'Supertonic sentence stream should pass expectations')
+  t.ok(result.data.sampleCount > 0, 'Sentence stream should produce audio samples')
+  t.is(result.data.sampleRate, SUPERTONIC_SAMPLE_RATE, 'Sentence stream sample rate is 44.1kHz')
+  t.ok(
+    result.data.streamChunkCount >= 2,
+    'Sentence stream should run multiple native chunks (>=2)'
+  )
+
+  if (result.data?.stats) {
+    console.log(`Inference stats: ${JSON.stringify(result.data.stats)}`)
+  }
+
+  await model.unload()
+  t.pass('Model unloaded successfully')
+
+  console.log('\n' + '='.repeat(60))
+  console.log('SUPERTONIC SENTENCE STREAM TEST SUMMARY')
+  console.log('='.repeat(60))
+  console.log(`Text: "${text}"`)
+  console.log(`Chunks: ${result.data.streamChunkCount}`)
+  console.log(`Samples: ${result.data.sampleCount}`)
+  console.log(`Duration: ${result.data.durationMs?.toFixed(0) || 'N/A'}ms`)
   console.log('='.repeat(60))
 })
 

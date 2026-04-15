@@ -57,18 +57,30 @@ jobs:
             pkg:
               - "packages/qvac-lib-infer-nmtcpp/**"
               - ".github/workflows/*nmtcpp*.yml"
+  verify-fabric-lockstep:
+    needs: [authorize, changes]
+    if: always() && needs.authorize.outputs.allowed == 'true' && (needs.changes.outputs.pkg == 'true' || github.event_name == 'workflow_dispatch')
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # 6.0.2
+
+      - name: Verify qvac-fabric versions are lockstep
+        id: lockstep
+        uses: ./.github/actions/verify-qvac-fabric-lockstep
+
+      - name: Report verified version
+        run: 'echo "Verified qvac-fabric version: ${{ steps.lockstep.outputs.version }}"'
 
   sanity-checks:
-    needs: [authorize, changes]
+    needs: [authorize, changes, verify-fabric-lockstep]
     if: always() && ((needs.changes.outputs.pkg == 'true' && needs.authorize.outputs.allowed == 'true') || github.event_name == 'workflow_dispatch')
     runs-on: ubuntu-latest
-    environment: release
     steps:
       - name: Run Sanity checks
-        uses: tetherto/oss-actions/.github/actions/sanity-checks@v1.1.0
+        uses: tetherto/oss-actions/.github/actions/sanity-checks@4c64bed91fc8eba3a201adb1495e61b4c1a2246d
         with:
           secret-token: ${{ secrets.GITHUB_TOKEN }}
-          npm-token: ${{ secrets.NPM_TOKEN }}
           pat-token: ${{ secrets.PAT_TOKEN }}
           run-integration: ${{ needs.authorize.outputs.allowed == 'true' }}
           workdir: packages/qvac-lib-infer-nmtcpp
@@ -77,7 +89,6 @@ jobs:
     needs: [authorize, changes, sanity-checks]
     if: always() && needs.authorize.outputs.allowed == 'true' && (needs.changes.outputs.pkg == 'true' || github.event_name == 'workflow_dispatch')
     runs-on: ubuntu-latest
-    environment: release
     defaults:
       run:
         working-directory: ${{ env.PKG_DIR }}
@@ -89,17 +100,6 @@ jobs:
         uses: actions/setup-node@53b83947a5a98c8d113130e565377fae1a50d02f # 6.3.0
         with:
           node-version: 20
-
-      - name: Configure npm auth
-        run: |
-          qvac_registry="https://registry.npmjs.org/"
-          cat > .npmrc <<NPMRC
-          registry=https://registry.npmjs.org/
-          @qvac:registry=${qvac_registry}
-          @tetherto:registry=https://npm.pkg.github.com/
-          //registry.npmjs.org/:_authToken=${{ secrets.NPM_TOKEN }}
-          //npm.pkg.github.com/:_authToken=${{ secrets.GITHUB_TOKEN }}
-          NPMRC
 
       - name: Install dependencies
         run: npm install
@@ -192,6 +192,7 @@ jobs:
       [
         authorize,
         changes,
+        verify-fabric-lockstep,
         sanity-checks,
         ts-checks,
         cpp-lint,
@@ -203,6 +204,6 @@ jobs:
     if: always() && (needs.changes.outputs.pkg == 'true' || github.event_name == 'workflow_dispatch')
     uses: tetherto/oss-actions/.github/workflows/public-pr.yml@v1.1.0
     with:
-      sanity-checks-status: ${{ needs.sanity-checks.result == 'success' && needs.cpp-tests.result == 'success' && needs.ts-checks.result == 'success' }}
+      sanity-checks-status: ${{ needs.verify-fabric-lockstep.result == 'success' && needs.sanity-checks.result == 'success' && needs.cpp-tests.result == 'success' && needs.ts-checks.result == 'success' }}
       build-status: ${{ needs.prebuild.result == 'success' }}
       integration-tests-status: ${{ needs.run-integration-tests.result == 'success' }}

@@ -22,9 +22,28 @@ using qvac::ttslib::fp16::writeFloatDataToTensor;
 
 namespace {
 
-const float REPETITION_PENALTY = 1.2;
+const float REPETITION_PENALTY = 1.2f;
+const float MULTILINGUAL_REPETITION_PENALTY = 2.0f;
+const float CFG_WEIGHT = 0.5f;
+const float TEMPERATURE = 0.8f;
+const float MIN_P = 0.05f;
+const float PEAK_NORMALIZE_TARGET = 0.95f;
+const int TOKEN_REPETITION_THRESHOLD = 2;
 const int MAX_NEW_TOKENS_SPEECH = 1024;
-const float EXAGGERATION = 0.5;
+const int SPEECH_TO_TEXT_MAX_RATIO = 3;
+const int MIN_SPEECH_TOKENS = 50;
+const int SILENCE_RUN_THRESHOLD = 5;
+const int PATTERN_MAX_LENGTH = 8;
+const int PATTERN_MIN_REPEATS = 3;
+const int PATTERN_MIN_TOKENS = 6;
+const float EXAGGERATION = 0.5f;
+
+const float TRIM_THRESHOLD_RATIO = 0.08f;
+const int TRIM_WINDOW_DIVISOR = 25;
+const int TRIM_MIN_DURATION_DIVISOR = 4;
+const int TRIM_TAIL_PADDING_MS = 150;
+const int TRIM_FADE_DIVISOR = 50;
+const float NEAR_ZERO = 1e-8f;
 
 const std::vector<std::string> SUPPORTED_LANGUAGES = {
     "ar", "bg", "cs", "da", "de", "el", "en", "es", "fi", "fr",
@@ -50,12 +69,225 @@ void validateConfigs(const qvac::ttslib::chatterbox::ChatterboxConfig &cfg) {
 }
 
 void penalizeRepetitionLogits(std::vector<float> &logits,
-                              const std::vector<int64_t> &inputIds) {
+                              const std::vector<int64_t> &inputIds,
+                              float penalty) {
   for (auto id : inputIds) {
     if (logits[id] < 0) {
-      logits[id] *= REPETITION_PENALTY;
+      logits[id] *= penalty;
     } else {
-      logits[id] /= REPETITION_PENALTY;
+      logits[id] /= penalty;
+    }
+  }
+}
+
+std::vector<float>
+readLastStepLogits(const qvac::ttslib::chatterbox::OrtTensor &logitsTensor) {
+  const int64_t vocabSize = logitsTensor.shape[2];
+  const int64_t offset = (logitsTensor.shape[1] - 1) * vocabSize;
+  std::vector<float> logits(vocabSize);
+  readTensorToFloatBuffer(logitsTensor, logits.data(), offset, vocabSize);
+  return logits;
+}
+
+bool detectTokenRepetition(const std::vector<int64_t> &tokens, int threshold) {
+  if (static_cast<int>(tokens.size()) < threshold) {
+    return false;
+  }
+  int64_t lastToken = tokens.back();
+  int count = 0;
+  for (auto it = tokens.rbegin(); it != tokens.rend(); ++it) {
+    if (*it == lastToken) {
+      count++;
+    } else {
+      break;
+    }
+  }
+  return count >= threshold;
+}
+
+int countPatternRepeats(const std::vector<int64_t> &tokens, int patLen) {
+  int n = static_cast<int>(tokens.size());
+  int repeats = 1;
+  for (int rep = 1; rep * patLen < n; rep++) {
+    bool match = true;
+    for (int j = 0; j < patLen; j++) {
+      if (tokens[n - 1 - j] != tokens[n - 1 - rep * patLen - j]) {
+        match = false;
+        break;
+      }
+    }
+    if (match) {
+      repeats++;
+    } else {
+      break;
+    }
+  }
+  return repeats;
+}
+
+bool detectPatternRepetition(const std::vector<int64_t> &tokens) {
+  int n = static_cast<int>(tokens.size());
+  if (n < PATTERN_MIN_TOKENS) {
+    return false;
+  }
+
+  int maxLen = std::min(PATTERN_MAX_LENGTH, n / PATTERN_MIN_REPEATS);
+  for (int patLen = 2; patLen <= maxLen; patLen++) {
+    if (countPatternRepeats(tokens, patLen) >= PATTERN_MIN_REPEATS) {
+      return true;
+    }
+  }
+  return false;
+}
+
+bool detectSilenceRun(const std::vector<int64_t> &tokens, int threshold) {
+  int n = static_cast<int>(tokens.size());
+  if (n < threshold) {
+    return false;
+  }
+
+  for (int i = n - threshold; i < n; i++) {
+    if (tokens[i] != SILENCE_TOKEN) {
+      return false;
+    }
+  }
+  return true;
+}
+
+void applyCfgCombine(std::vector<float> &condLogits,
+                     const std::vector<float> &uncondLogits, float weight) {
+  for (size_t i = 0; i < condLogits.size(); i++) {
+    condLogits[i] += weight * (condLogits[i] - uncondLogits[i]);
+  }
+}
+
+void scaleByTemperature(std::vector<float> &logits, float temperature) {
+  for (auto &l : logits) {
+    l /= temperature;
+  }
+}
+
+float computeExpAndSum(std::vector<float> &logits) {
+  float maxLogit = *std::max_element(logits.begin(), logits.end());
+  float sum = 0.0f;
+  for (auto &l : logits) {
+    l = std::exp(l - maxLogit);
+    sum += l;
+  }
+  return sum;
+}
+
+void normalizeVector(std::vector<float> &values, float sum) {
+  for (auto &v : values) {
+    v /= sum;
+  }
+}
+
+void applySoftmax(std::vector<float> &logits, float temperature) {
+  scaleByTemperature(logits, temperature);
+  float sum = computeExpAndSum(logits);
+  normalizeVector(logits, sum);
+}
+
+float thresholdProbs(std::vector<float> &probs, float threshold) {
+  float sum = 0.0f;
+  for (auto &p : probs) {
+    if (p < threshold) {
+      p = 0.0f;
+    }
+    sum += p;
+  }
+  return sum;
+}
+
+void applyMinPFilter(std::vector<float> &probs, float minP) {
+  if (minP <= 0.0f) {
+    return;
+  }
+
+  float maxProb = *std::max_element(probs.begin(), probs.end());
+  float sum = thresholdProbs(probs, maxProb * minP);
+  if (sum > 0.0f) {
+    normalizeVector(probs, sum);
+  }
+}
+
+int64_t sampleWithTemperature(std::vector<float> &logits, float temperature,
+                              float minP, std::mt19937 &rng) {
+  applySoftmax(logits, temperature);
+  applyMinPFilter(logits, minP);
+
+  std::discrete_distribution<int> dist(logits.begin(), logits.end());
+  return static_cast<int64_t>(dist(rng));
+}
+
+float findPeakAmplitude(const std::vector<float> &wav) {
+  float peak = 0.0f;
+  for (auto s : wav) {
+    float absVal = std::abs(s);
+    if (absVal > peak) {
+      peak = absVal;
+    }
+  }
+  return peak;
+}
+
+float computeWindowEnergy(const std::vector<float> &wav, int start, int end) {
+  float energy = 0.0f;
+  for (int i = start; i < end; i++) {
+    energy += std::abs(wav[i]);
+  }
+  return energy / static_cast<float>(end - start);
+}
+
+int findSpeechEnd(const std::vector<float> &wav, int windowSize, int minSamples,
+                  float threshold) {
+  int end = static_cast<int>(wav.size());
+  while (end > minSamples) {
+    int windowStart = std::max(0, end - windowSize);
+    if (computeWindowEnergy(wav, windowStart, end) > threshold) {
+      break;
+    }
+    end = windowStart;
+  }
+  return end;
+}
+
+void applyFadeOut(std::vector<float> &wav, int trimPoint, int fadeLen) {
+  for (int i = 0; i < fadeLen; i++) {
+    float gain = static_cast<float>(fadeLen - i) / static_cast<float>(fadeLen);
+    wav[trimPoint - fadeLen + i] *= gain;
+  }
+  wav.resize(trimPoint);
+}
+
+void trimTrailingSilence(std::vector<float> &wav, int sampleRate) {
+  float peak = findPeakAmplitude(wav);
+  if (peak < NEAR_ZERO) {
+    return;
+  }
+
+  int windowSize = sampleRate / TRIM_WINDOW_DIVISOR;
+  int minSamples = sampleRate / TRIM_MIN_DURATION_DIVISOR;
+  float threshold = peak * TRIM_THRESHOLD_RATIO;
+
+  int speechEnd = findSpeechEnd(wav, windowSize, minSamples, threshold);
+  int tailPadding = sampleRate * TRIM_TAIL_PADDING_MS / 1000;
+  int trimPoint =
+      std::min(speechEnd + tailPadding, static_cast<int>(wav.size()));
+
+  if (trimPoint < static_cast<int>(wav.size())) {
+    int fadeLen = std::min(sampleRate / TRIM_FADE_DIVISOR, trimPoint);
+    applyFadeOut(wav, trimPoint, fadeLen);
+  }
+}
+
+void peakNormalize(std::vector<float> &wav, float target) {
+  float peak = findPeakAmplitude(wav);
+  if (peak > NEAR_ZERO) {
+    float scale = target / peak;
+    for (auto &s : wav) {
+      s *= scale;
     }
   }
 }
@@ -97,8 +329,8 @@ ChatterboxEngine::SessionFactory makeDefaultSessionFactory(bool useGPU) {
 
 ChatterboxEngine::ChatterboxEngine(const ChatterboxConfig &cfg,
                                    SessionFactory factory) {
-  sessionFactory_ = factory ? std::move(factory)
-                            : makeDefaultSessionFactory(cfg.useGPU);
+  sessionFactory_ =
+      factory ? std::move(factory) : makeDefaultSessionFactory(cfg.useGPU);
   load(cfg);
 }
 
@@ -122,6 +354,7 @@ void ChatterboxEngine::load(const ChatterboxConfig &cfg) {
   }
 
   loadCangjieTableIfNeeded(cfg.tokenizerPath);
+  loadTextEmbWeight(cfg.embedTokensPath);
 
   isEnglish_ = language_ == "en";
   if (!isEnglish_ && embedTokensSession_ != nullptr &&
@@ -160,6 +393,9 @@ void ChatterboxEngine::unload() {
   embedTokensSession_.reset();
   conditionalDecoderSession_.reset();
   languageModelSession_.reset();
+  textEmbWeight_.clear();
+  textEmbRows_ = 0;
+  textEmbDim_ = 0;
 
   if (tokenizerHandle_ != nullptr) {
     tokenizers_free(tokenizerHandle_);
@@ -235,11 +471,37 @@ void ChatterboxEngine::processSpeechEncoderOutputs(
     std::iota(positionIds.data.begin(), positionIds.data.end(), 0);
   }
 
-  for (size_t i = keyValueOffset_;
-       i < languageModelSession_->getInputNames().size(); i++) {
-    TensorData<float> pastKeyValue;
-    pastKeyValue.shape = {1, NUM_KV_HEADS, 0, HEAD_DIM};
-    pastKeyValues[languageModelSession_->getInputNames()[i]] = pastKeyValue;
+  pastKeyValues = initEmptyKvCache();
+}
+
+std::unordered_map<std::string, TensorData<float>>
+ChatterboxEngine::initEmptyKvCache() {
+  std::unordered_map<std::string, TensorData<float>> kvCache;
+  const auto &inputNames = languageModelSession_->getInputNames();
+  for (size_t i = keyValueOffset_; i < inputNames.size(); i++) {
+    TensorData<float> emptyKv;
+    emptyKv.shape = {1, NUM_KV_HEADS, 0, HEAD_DIM};
+    kvCache[inputNames[i]] = emptyKv;
+  }
+  return kvCache;
+}
+
+void ChatterboxEngine::collectKvShapes(
+    std::vector<std::vector<int64_t>> &inputShapes,
+    const std::unordered_map<std::string, TensorData<float>> &pastKeyValues) {
+  const auto &inputNames = languageModelSession_->getInputNames();
+  for (size_t i = keyValueOffset_; i < inputNames.size(); i++) {
+    inputShapes.push_back(pastKeyValues.at(inputNames[i]).shape);
+  }
+}
+
+void ChatterboxEngine::writeKvToTensors(
+    const std::unordered_map<std::string, TensorData<float>> &pastKeyValues) {
+  const auto &inputNames = languageModelSession_->getInputNames();
+  for (size_t i = keyValueOffset_; i < inputNames.size(); i++) {
+    OrtTensor tensor = languageModelSession_->getInput(inputNames[i]);
+    const auto &kvData = pastKeyValues.at(inputNames[i]).data;
+    writeFloatDataToTensor(tensor, kvData.data(), kvData.size());
   }
 }
 
@@ -253,7 +515,7 @@ ChatterboxEngine::selectNextToken(const OrtTensor &logitsTensor,
   readTensorToFloatBuffer(logitsTensor, logits.data(), logitsOffset,
                           logitsTensor.shape[2]);
 
-  penalizeRepetitionLogits(logits, generatedTokens);
+  penalizeRepetitionLogits(logits, generatedTokens, REPETITION_PENALTY);
   return static_cast<int64_t>(argmax(logits));
 }
 
@@ -286,14 +548,12 @@ void ChatterboxEngine::cachePastKeyValues(
   }
 }
 
-std::vector<int64_t> ChatterboxEngine::generateSpeechTokens(
+void ChatterboxEngine::runGenerationLoop(
     std::vector<int64_t> &inputIds, TensorData<int64_t> &positionIds,
-    TensorData<float> &speakerEmbeddings, TensorData<float> &speakerFeatures) {
-
-  TensorData<int64_t> promptToken;
-  TensorData<int64_t> attentionMask;
-  std::unordered_map<std::string, TensorData<float>> pastKeyValues;
-  std::vector<int64_t> generatedTokens{START_SPEECH_TOKEN};
+    TensorData<int64_t> &attentionMask,
+    std::unordered_map<std::string, TensorData<float>> &pastKeyValues,
+    TensorData<int64_t> &promptToken, TensorData<float> &speakerEmbeddings,
+    TensorData<float> &speakerFeatures, std::vector<int64_t> &generatedTokens) {
 
   const size_t maxNewTokens = static_cast<size_t>(MAX_NEW_TOKENS_SPEECH);
 
@@ -325,6 +585,20 @@ std::vector<int64_t> ChatterboxEngine::generateSpeechTokens(
     advancePositionIds(positionIds, i);
     cachePastKeyValues(pastKeyValues);
   }
+}
+
+std::vector<int64_t> ChatterboxEngine::generateSpeechTokens(
+    std::vector<int64_t> &inputIds, TensorData<int64_t> &positionIds,
+    TensorData<float> &speakerEmbeddings, TensorData<float> &speakerFeatures) {
+
+  TensorData<int64_t> promptToken;
+  TensorData<int64_t> attentionMask;
+  std::unordered_map<std::string, TensorData<float>> pastKeyValues;
+  std::vector<int64_t> generatedTokens{START_SPEECH_TOKEN};
+
+  runGenerationLoop(inputIds, positionIds, attentionMask, pastKeyValues,
+                    promptToken, speakerEmbeddings, speakerFeatures,
+                    generatedTokens);
 
   releaseSession(embedTokensSession_);
   releaseSession(languageModelSession_);
@@ -412,11 +686,24 @@ AudioResult ChatterboxEngine::synthesize(const std::string &text) {
 
   QLOG(Priority::INFO, "Sampling ... " + text);
 
-  std::vector<int64_t> speechTokens = generateSpeechTokens(
-      inputIds, positionIds, speakerEmbeddings, speakerFeatures);
+  bool useCfg = !isEnglish_ && !textEmbWeight_.empty();
+  std::vector<int64_t> speechTokens;
+  if (useCfg) {
+    QLOG(Priority::INFO, "Using CFG pipeline for multilingual");
+    speechTokens = generateSpeechTokensWithCfg(
+        inputIds, positionIds, speakerEmbeddings, speakerFeatures);
+  } else {
+    speechTokens = generateSpeechTokens(inputIds, positionIds,
+                                        speakerEmbeddings, speakerFeatures);
+  }
 
   std::vector<float> wav =
       synthesizeWaveform(speechTokens, speakerEmbeddings, speakerFeatures);
+
+  if (!isEnglish_) {
+    trimTrailingSilence(wav, SAMPLE_RATE);
+    peakNormalize(wav, PEAK_NORMALIZE_TARGET);
+  }
 
   return convertToAudioResult(wav);
 }
@@ -519,15 +806,10 @@ void ChatterboxEngine::runLanguageModelInfer(
     inputShapes.push_back(positionIds.shape);
   }
 
-  for (size_t i = keyValueOffset_;
-       i < languageModelSession_->getInputNames().size(); i++) {
-    inputShapes.push_back(
-        pastKeyValues[languageModelSession_->getInputNames()[i]].shape);
-  }
+  collectKvShapes(inputShapes, pastKeyValues);
 
   languageModelSession_->initInputTensors(inputShapes);
 
-  // fill inputs
   OrtTensor inputsEmbsTensor = languageModelSession_->getInput("inputs_embeds");
   writeFloatDataToTensor(inputsEmbsTensor, inputsEmbs.data.data(),
                          inputsEmbs.data.size());
@@ -544,14 +826,7 @@ void ChatterboxEngine::runLanguageModelInfer(
                 positionIds.data.size() * sizeof(int64_t));
   }
 
-  for (size_t i = keyValueOffset_;
-       i < languageModelSession_->getInputNames().size(); i++) {
-    OrtTensor pastKeyValueTensor = languageModelSession_->getInput(
-        languageModelSession_->getInputNames()[i]);
-    const auto &kvData =
-        pastKeyValues[languageModelSession_->getInputNames()[i]].data;
-    writeFloatDataToTensor(pastKeyValueTensor, kvData.data(), kvData.size());
-  }
+  writeKvToTensors(pastKeyValues);
 
   languageModelSession_->run();
 }
@@ -569,7 +844,6 @@ void ChatterboxEngine::runConditionalDecoderInfer(
 
   conditionalDecoderSession_->initInputTensors(inputShapes);
 
-  // fill inputs
   OrtTensor speechTokensTensor =
       conditionalDecoderSession_->getInput("speech_tokens");
   std::memcpy(speechTokensTensor.data, speechTokens.data(),
@@ -586,6 +860,272 @@ void ChatterboxEngine::runConditionalDecoderInfer(
                          speakerFeatures.data.size());
 
   conditionalDecoderSession_->run();
+}
+
+void ChatterboxEngine::loadTextEmbWeight(const std::string &embedTokensPath) {
+  std::string dir = embedTokensPath;
+  size_t lastSlash = dir.find_last_of("/\\");
+  if (lastSlash != std::string::npos) {
+    dir = dir.substr(0, lastSlash);
+  }
+  std::string binPath = dir + "/text_emb_weight.bin";
+
+  std::ifstream file(binPath, std::ios::binary);
+  if (!file.is_open()) {
+    QLOG(Priority::WARNING,
+         "text_emb_weight.bin not found — CFG disabled: " + binPath);
+    return;
+  }
+
+  int32_t rows = 0;
+  int32_t dim = 0;
+  file.read(reinterpret_cast<char *>(&rows), sizeof(rows));
+  file.read(reinterpret_cast<char *>(&dim), sizeof(dim));
+
+  textEmbRows_ = rows;
+  textEmbDim_ = dim;
+  textEmbWeight_.resize(static_cast<size_t>(rows) * dim);
+  file.read(reinterpret_cast<char *>(textEmbWeight_.data()),
+            textEmbWeight_.size() * sizeof(float));
+
+  QLOG(Priority::INFO, "Loaded text_emb_weight: " + std::to_string(rows) + "x" +
+                           std::to_string(dim));
+}
+
+void subtractTextEmbedding(std::vector<float> &data, size_t offset,
+                           const std::vector<float> &weights,
+                           size_t weightOffset, int64_t dim) {
+  for (int64_t d = 0; d < dim; d++) {
+    data[offset + d] -= weights[weightOffset + d];
+  }
+}
+
+TensorData<float> ChatterboxEngine::createUnconditionalEmbeddings(
+    const TensorData<float> &condEmbs, const std::vector<int64_t> &inputIds) {
+  TensorData<float> uncond;
+  uncond.shape = condEmbs.shape;
+  uncond.data = condEmbs.data;
+
+  const int64_t dim = condEmbs.shape[2];
+
+  for (size_t i = 0; i < inputIds.size(); i++) {
+    int64_t tid = inputIds[i];
+    if (tid < START_SPEECH_TOKEN && tid < textEmbRows_) {
+      subtractTextEmbedding(uncond.data, i * dim, textEmbWeight_,
+                            tid * textEmbDim_, dim);
+    }
+  }
+  return uncond;
+}
+
+void ChatterboxEngine::prepareCfgEmbeddings(
+    const std::vector<int64_t> &inputIds,
+    const std::vector<int64_t> &positionIds, TensorData<float> &condEmbs,
+    TensorData<float> &uncondEmbs, TensorData<int64_t> &promptToken,
+    TensorData<float> &speakerEmbeddings, TensorData<float> &speakerFeatures) {
+
+  condEmbs = extractEmbeddings(inputIds, positionIds);
+  uncondEmbs = createUnconditionalEmbeddings(condEmbs, inputIds);
+
+  QLOG(Priority::INFO, "SpeechEncoderInfer started ...");
+  runSpeechEncoderInfer();
+  QLOG(Priority::INFO, "SpeechEncoderInfer finished");
+
+  OrtTensor audioFeatTensor =
+      speechEncoderSession_->getOutput("audio_features");
+  OrtTensor promptTokenTensor =
+      speechEncoderSession_->getOutput("audio_tokens");
+  OrtTensor speakerEmbTensor =
+      speechEncoderSession_->getOutput("speaker_embeddings");
+  OrtTensor speakerFeatTensor =
+      speechEncoderSession_->getOutput("speaker_features");
+
+  insertFromOrtTensorToVector(promptTokenTensor, promptToken.data,
+                              promptToken.data.begin());
+  promptToken.shape = promptTokenTensor.shape;
+
+  readTensorToFloatVector(speakerEmbTensor, speakerEmbeddings.data,
+                          speakerEmbeddings.data.begin());
+  speakerEmbeddings.shape = speakerEmbTensor.shape;
+
+  readTensorToFloatVector(speakerFeatTensor, speakerFeatures.data,
+                          speakerFeatures.data.begin());
+  speakerFeatures.shape = speakerFeatTensor.shape;
+
+  std::vector<float> audioFeatData;
+  readTensorToFloatVector(audioFeatTensor, audioFeatData,
+                          audioFeatData.begin());
+
+  condEmbs.data.insert(condEmbs.data.begin(), audioFeatData.begin(),
+                       audioFeatData.end());
+  condEmbs.shape[1] += audioFeatTensor.shape[1];
+
+  uncondEmbs.data.insert(uncondEmbs.data.begin(), audioFeatData.begin(),
+                         audioFeatData.end());
+  uncondEmbs.shape[1] += audioFeatTensor.shape[1];
+
+  releaseSession(speechEncoderSession_);
+}
+
+int64_t ChatterboxEngine::runInitialCfgStep(
+    const TensorData<float> &condEmbs, const TensorData<float> &uncondEmbs,
+    TensorData<int64_t> &positionIds, TensorData<int64_t> &attentionMask,
+    std::unordered_map<std::string, TensorData<float>> &condKv,
+    std::unordered_map<std::string, TensorData<float>> &uncondKv,
+    std::vector<int64_t> &generatedTokens) {
+
+  runLanguageModelInfer(condEmbs, positionIds, attentionMask, condKv);
+  std::vector<float> condLogits =
+      readLastStepLogits(languageModelSession_->getOutput("logits"));
+  cachePastKeyValues(condKv);
+
+  runLanguageModelInfer(uncondEmbs, positionIds, attentionMask, uncondKv);
+  std::vector<float> uncondLogits =
+      readLastStepLogits(languageModelSession_->getOutput("logits"));
+  cachePastKeyValues(uncondKv);
+
+  applyCfgCombine(condLogits, uncondLogits, CFG_WEIGHT);
+  penalizeRepetitionLogits(condLogits, generatedTokens,
+                           MULTILINGUAL_REPETITION_PENALTY);
+
+  int64_t firstToken =
+      sampleWithTemperature(condLogits, TEMPERATURE, MIN_P, rng_);
+  generatedTokens.push_back(firstToken);
+
+  QLOG(Priority::INFO,
+       "CFG initial step done, first token: " + std::to_string(firstToken));
+
+  positionIds.data = {1};
+  positionIds.shape = {1, 1};
+
+  return firstToken;
+}
+
+bool ChatterboxEngine::shouldStopGeneration(const std::vector<int64_t> &tokens,
+                                            int step) {
+  int64_t lastToken = tokens.back();
+
+  if (lastToken == STOP_SPEECH_TOKEN) {
+    QLOG(Priority::INFO,
+         "STOP_SPEECH_TOKEN reached at step " + std::to_string(step));
+    return true;
+  }
+
+  if (detectTokenRepetition(tokens, TOKEN_REPETITION_THRESHOLD)) {
+    QLOG(Priority::INFO, "Token repetition detected at step " +
+                             std::to_string(step) + ", forcing stop");
+    return true;
+  }
+
+  if (detectPatternRepetition(tokens)) {
+    QLOG(Priority::INFO, "Pattern repetition detected at step " +
+                             std::to_string(step) + ", forcing stop");
+    return true;
+  }
+
+  if (detectSilenceRun(tokens, SILENCE_RUN_THRESHOLD)) {
+    QLOG(Priority::INFO, "Silence token run detected at step " +
+                             std::to_string(step) + ", forcing stop");
+    return true;
+  }
+
+  return false;
+}
+
+void ChatterboxEngine::runCfgGenerationLoop(
+    std::vector<int64_t> &generatedTokens, TensorData<int64_t> &positionIds,
+    TensorData<int64_t> &attentionMask,
+    std::unordered_map<std::string, TensorData<float>> &condKv,
+    std::unordered_map<std::string, TensorData<float>> &uncondKv,
+    int maxSpeechTokens) {
+
+  for (int step = 0; step < maxSpeechTokens - 1; step++) {
+    if (shouldStopGeneration(generatedTokens, step)) {
+      if (generatedTokens.back() != STOP_SPEECH_TOKEN) {
+        generatedTokens.push_back(STOP_SPEECH_TOKEN);
+      }
+      break;
+    }
+
+    std::vector<int64_t> stepInputIds = {generatedTokens.back()};
+    TensorData<float> nextEmbs =
+        extractEmbeddings(stepInputIds, positionIds.data);
+
+    attentionMask.data.push_back(1);
+    attentionMask.shape[1]++;
+
+    runLanguageModelInfer(nextEmbs, positionIds, attentionMask, condKv);
+    std::vector<float> condLogits =
+        readLastStepLogits(languageModelSession_->getOutput("logits"));
+    cachePastKeyValues(condKv);
+
+    runLanguageModelInfer(nextEmbs, positionIds, attentionMask, uncondKv);
+    std::vector<float> uncondLogits =
+        readLastStepLogits(languageModelSession_->getOutput("logits"));
+    cachePastKeyValues(uncondKv);
+
+    applyCfgCombine(condLogits, uncondLogits, CFG_WEIGHT);
+    penalizeRepetitionLogits(condLogits, generatedTokens,
+                             MULTILINGUAL_REPETITION_PENALTY);
+
+    int64_t nextToken =
+        sampleWithTemperature(condLogits, TEMPERATURE, MIN_P, rng_);
+    generatedTokens.push_back(nextToken);
+
+    positionIds.data = {static_cast<int64_t>(step + 2)};
+    positionIds.shape = {1, 1};
+
+    if (step == maxSpeechTokens - 2) {
+      QLOG(Priority::INFO, "Max speech tokens reached (" +
+                               std::to_string(maxSpeechTokens) +
+                               "), stopping generation");
+    }
+  }
+}
+
+std::vector<int64_t> ChatterboxEngine::generateSpeechTokensWithCfg(
+    std::vector<int64_t> &inputIds, TensorData<int64_t> &positionIds,
+    TensorData<float> &speakerEmbeddings, TensorData<float> &speakerFeatures) {
+
+  int textTokenCount = static_cast<int>(inputIds.size());
+  int maxSpeechTokens =
+      std::max(MIN_SPEECH_TOKENS, textTokenCount * SPEECH_TO_TEXT_MAX_RATIO);
+  maxSpeechTokens = std::min(maxSpeechTokens, MAX_NEW_TOKENS_SPEECH);
+
+  QLOG(Priority::INFO,
+       "Text tokens: " + std::to_string(textTokenCount) +
+           ", max speech tokens: " + std::to_string(maxSpeechTokens));
+
+  TensorData<float> condEmbs;
+  TensorData<float> uncondEmbs;
+  TensorData<int64_t> promptToken;
+  prepareCfgEmbeddings(inputIds, positionIds.data, condEmbs, uncondEmbs,
+                       promptToken, speakerEmbeddings, speakerFeatures);
+
+  const int64_t seqLen = condEmbs.shape[1];
+  TensorData<int64_t> attentionMask;
+  attentionMask.data.resize(seqLen, 1);
+  attentionMask.shape = {1, seqLen};
+
+  std::unordered_map<std::string, TensorData<float>> condKv =
+      initEmptyKvCache();
+  std::unordered_map<std::string, TensorData<float>> uncondKv =
+      initEmptyKvCache();
+
+  std::vector<int64_t> generatedTokens{START_SPEECH_TOKEN};
+  runInitialCfgStep(condEmbs, uncondEmbs, positionIds, attentionMask, condKv,
+                    uncondKv, generatedTokens);
+
+  runCfgGenerationLoop(generatedTokens, positionIds, attentionMask, condKv,
+                       uncondKv, maxSpeechTokens);
+
+  QLOG(Priority::INFO,
+       "CFG generated " + std::to_string(generatedTokens.size()) + " tokens");
+
+  releaseSession(embedTokensSession_);
+  releaseSession(languageModelSession_);
+
+  return assembleSpeechTokenSequence(promptToken, generatedTokens);
 }
 
 } // namespace qvac::ttslib::chatterbox

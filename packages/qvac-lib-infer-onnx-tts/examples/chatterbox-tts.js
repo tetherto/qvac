@@ -1,5 +1,6 @@
 'use strict'
 
+const fs = require('bare-fs')
 const path = require('bare-path')
 const ONNXTTS = require('../')
 const { createWav, readWavAsFloat32, resampleLinear } = require('./wav-helper')
@@ -7,28 +8,58 @@ const { setLogger, releaseLogger } = require('../addonLogging')
 
 const CHATTERBOX_SAMPLE_RATE = 24000
 
-const modeArg = global.Bare ? global.Bare.argv[2] : process.argv[2]
+const argv = global.Bare ? global.Bare.argv : process.argv
+const modeArg = argv[2]
+const refAudioArg = argv[3]
+
 if (!modeArg || !['english', 'multilingual'].includes(modeArg)) {
-  console.error('Usage: example-chatterbox-tts.js <english|multilingual>')
+  console.error('Usage: chatterbox-tts.js <english|multilingual> [path/to/reference.wav]')
   if (global.Bare) global.Bare.exit(1)
   else process.exit(1)
 }
+
+const os = require('bare-os')
+const variant = os.getEnv('CHATTERBOX_VARIANT') || 'q4'
 
 const isMultilingual = modeArg === 'multilingual'
 const pkgRoot = path.join(__dirname, '..')
 const modelsDir = isMultilingual ? 'models/chatterbox-multilingual' : 'models/chatterbox'
 const modelDir = path.join(pkgRoot, modelsDir)
 
-const tokenizerPath = path.join(modelDir, 'tokenizer.json')
-const speechEncoderPath = path.join(modelDir, 'speech_encoder.onnx')
-const embedTokensPath = path.join(modelDir, 'embed_tokens.onnx')
-const conditionalDecoderPath = path.join(modelDir, 'conditional_decoder.onnx')
-const languageModelPath = path.join(modelDir, 'language_model.onnx')
+const suffix = variant === 'fp32' ? '' : `_${variant}`
+const nonLmSuffix = isMultilingual ? '' : suffix
 
-const refWavPath = path.join(__dirname, '..', 'test', 'reference-audio', 'jfk.wav')
+const tokenizerPath = path.join(modelDir, 'tokenizer.json')
+const speechEncoderPath = path.join(modelDir, `speech_encoder${nonLmSuffix}.onnx`)
+const embedTokensPath = path.join(modelDir, `embed_tokens${nonLmSuffix}.onnx`)
+const conditionalDecoderPath = path.join(modelDir, `conditional_decoder${nonLmSuffix}.onnx`)
+const languageModelPath = path.join(modelDir, `language_model${suffix}.onnx`)
+
+const requiredFiles = [tokenizerPath, speechEncoderPath, embedTokensPath, conditionalDecoderPath, languageModelPath]
+for (const f of requiredFiles) {
+  if (!fs.existsSync(f)) {
+    const ensureCmd = isMultilingual
+      ? 'TTS_LANGUAGE=multilingual npm run models:ensure:chatterbox'
+      : 'npm run models:ensure:chatterbox'
+    console.error(`Missing model file: ${f}`)
+    console.error(`Run "${ensureCmd}" to download the required models.`)
+    if (global.Bare) global.Bare.exit(1)
+    else process.exit(1)
+  }
+}
+
+const defaultRefWavPath = path.join(__dirname, '..', 'test', 'reference-audio', 'jfk.wav')
+const refWavPath = refAudioArg || defaultRefWavPath
+
+if (!refAudioArg) {
+  const proc = require('bare-process')
+  const relPath = path.relative(proc.cwd(), defaultRefWavPath)
+  console.warn(`\x1b[33mNo reference audio provided, using default: ${relPath}\x1b[0m`)
+}
 
 async function main () {
   setLogger((priority, message) => {
+    if (priority > 1) return
     const priorityNames = {
       0: 'ERROR',
       1: 'WARNING',
@@ -56,13 +87,13 @@ async function main () {
     throw err
   }
 
-  const language = isMultilingual ? 'it' : 'en'
+  const language = isMultilingual ? 'es' : 'en'
   const textToSynthesize = isMultilingual
-    ? 'Ciao mondo! Questo è un test del sistema Chatterbox TTS. Come stai?'
-    : 'Hello world! This is a test of the Chatterbox TTS system. How are you doing?'
-  const outputFile = isMultilingual ? 'chatterbox-multilingual-output.wav' : 'chatterbox-output.wav'
+    ? 'Hola mundo. Esta es una demostración de la síntesis de texto a voz usando Chatterbox.'
+    : 'Hello world. This is a demonstration of the text to speech synthesis using Chatterbox.'
+  const outputFile = path.join(__dirname, isMultilingual ? 'chatterbox-multilingual-output.wav' : 'chatterbox-output.wav')
 
-  console.log(`Mode: ${modeArg}, language: ${language}, models: ${modelsDir}`)
+  console.log(`Mode: ${modeArg}, language: ${language}, models: ${modelsDir}\n`)
 
   const model = new ONNXTTS({
     files: {
@@ -107,10 +138,11 @@ async function main () {
 
     console.log('TTS finished!')
     if (response.stats) {
-      console.log(`Inference stats: ${JSON.stringify(response.stats)}`)
+      const s = response.stats
+      console.log(`Inference stats: totalTime=${s.totalTime.toFixed(2)}s, tokensPerSecond=${s.tokensPerSecond.toFixed(2)}, realTimeFactor=${s.realTimeFactor.toFixed(2)}, audioDuration=${s.audioDurationMs}ms, totalSamples=${s.totalSamples}`)
     }
 
-    console.log('Writing to .wav file...')
+    console.log('\nWriting to .wav file...')
     createWav(buffer, CHATTERBOX_SAMPLE_RATE, outputFile)
     console.log(`Finished writing to ${outputFile}`)
   } catch (err) {

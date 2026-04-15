@@ -19,10 +19,10 @@ class ImgStableDiffusion extends BaseInference {
    * @param {object} [args.logger] - Structured logger
    * @param {object} [args.opts] - Optional inference options
    * @param {string} [args.diskPath='.'] - Local directory containing model weight files
-   * @param {string} args.modelName - Model file name (e.g. 'flux1-dev-q4_0.gguf')
-   * @param {string} [args.clipLModel] - Optional CLIP-L model file name (FLUX.1 / SD3)
+   * @param {string} args.modelName - Model file name (e.g. 'flux-2-klein-4b-Q8_0.gguf')
+   * @param {string} [args.clipLModel] - Optional CLIP-L model file name (SD3)
    * @param {string} [args.clipGModel] - Optional CLIP-G model file name (SDXL / SD3)
-   * @param {string} [args.t5XxlModel] - Optional T5-XXL text encoder file name (FLUX.1 / SD3)
+   * @param {string} [args.t5XxlModel] - Optional T5-XXL text encoder file name (SD3)
    * @param {string} [args.llmModel] - Optional LLM text encoder file name (FLUX.2 klein → Qwen3 4B)
    * @param {string} [args.vaeModel] - Optional VAE file name
    * @param {object} config - SD context configuration (threads, device, type, etc.)

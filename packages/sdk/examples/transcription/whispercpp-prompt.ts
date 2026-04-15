@@ -1,3 +1,14 @@
+/**
+ * Whisper transcription with prompt example.
+ *
+ * Usage:
+ *   bun examples/transcription/whispercpp-prompt.ts
+ *
+ * This example requires a test audio file (default: examples/audio/sample-16khz.wav).
+ * Sample audio files are available in the QVAC source repository, but not included in the published npm package.
+ * Set audioChunk to a custom WAV, or download the default audio into examples/audio/:
+ *   https://github.com/tetherto/qvac/blob/main/packages/sdk/examples/audio/sample-16khz.wav
+ */
 import { loadModel, unloadModel, transcribe, WHISPER_TINY } from "@qvac/sdk";
 
 try {
