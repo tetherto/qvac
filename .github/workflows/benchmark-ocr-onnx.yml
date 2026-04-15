@@ -80,27 +80,6 @@ jobs:
       - name: Install global dependencies
         run: npm install -g bare-make bare-runtime
 
-      - name: Configure scoped registry for @tetherto and @qvac packages
-        working-directory: ${{ env.PKG_DIR }}
-        env:
-          NPM_TOKEN: ${{ secrets.NPM_TOKEN }}
-          GIT_PAT: ${{ secrets.PAT_TOKEN }}
-        shell: bash
-        run: |
-          echo "Configuring scoped registry for @tetherto and @qvac packages..."
-          set -eu
-          qvac_registry="https://registry.npmjs.org/"
-          cat > .npmrc <<NPMRC
-          registry=https://registry.npmjs.org/
-          @qvac:registry=${qvac_registry}
-          @tetherto:registry=https://npm.pkg.github.com/
-          //registry.npmjs.org/:_authToken=${NPM_TOKEN}
-          //npm.pkg.github.com/:_authToken=${GIT_PAT}
-          NPMRC
-
-          git config --global url."https://${GIT_PAT}:@github.com/".insteadOf "https://github.com/"
-          git config --global url."https://${GIT_PAT}:@github.com/".insteadOf "git@github.com:"
-
       - name: Configure vcpkg
         run: echo "VCPKG_ROOT=$VCPKG_INSTALLATION_ROOT" >> $GITHUB_ENV
 
@@ -210,26 +189,6 @@ jobs:
         with:
           name: qvac-addon-build
           path: ${{ env.PKG_DIR }}
-
-      - name: Configure scoped registry for @tetherto and @qvac packages
-        if: needs.setup.outputs.qvac_needed == 'true'
-        working-directory: ${{ env.PKG_DIR }}
-        env:
-          NPM_TOKEN: ${{ secrets.NPM_TOKEN }}
-          GIT_PAT: ${{ secrets.PAT_TOKEN }}
-        shell: bash
-        run: |
-          qvac_registry="https://registry.npmjs.org/"
-          cat > .npmrc <<NPMRC
-          registry=https://registry.npmjs.org/
-          @qvac:registry=${qvac_registry}
-          @tetherto:registry=https://npm.pkg.github.com/
-          //registry.npmjs.org/:_authToken=${NPM_TOKEN}
-          //npm.pkg.github.com/:_authToken=${GIT_PAT}
-          NPMRC
-
-          git config --global url."https://${GIT_PAT}:@github.com/".insteadOf "https://github.com/"
-          git config --global url."https://${GIT_PAT}:@github.com/".insteadOf "git@github.com:"
 
       - name: Install npm dependencies (for QVAC)
         if: needs.setup.outputs.qvac_needed == 'true'
