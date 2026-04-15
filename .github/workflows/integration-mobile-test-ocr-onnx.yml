@@ -1641,80 +1641,6 @@ jobs:
           retention-days: 90
           if-no-files-found: ignore
 
-      - name: Comment PR with results
-        if: always() && github.event.pull_request.number
-        uses: actions/github-script@ed597411d8f924073f98dfc5c65a23a2325f34cd # 8.0.0
-        with:
-          github-token: ${{ secrets.GITHUB_TOKEN }}
-          script: |
-            const runArn = '${{ steps.schedule_run.outputs.run_arn }}' || 'N/A';
-            const jobStatus = '${{ job.status }}';
-            const testResult = '${{ steps.monitor_run.outputs.test_result }}' || 'UNKNOWN';
-            const platform = '${{ matrix.platform }}';
-            const prNumber = context.payload.pull_request.number;
-
-            const total = '${{ steps.monitor_run.outputs.test_total }}' || '0';
-            const passed = '${{ steps.monitor_run.outputs.test_passed }}' || '0';
-            const failed = '${{ steps.monitor_run.outputs.test_failed }}' || '0';
-            const skipped = '${{ steps.monitor_run.outputs.test_skipped }}' || '0';
-
-            let emoji = jobStatus === 'success' ? '✅' : '❌';
-            let statusText = jobStatus === 'success' ? 'PASSED' : 'FAILED';
-
-            // Extract PROJECT_ID and RUN_ID from ARN
-            // ARN format: arn:aws:devicefarm:us-west-2:ACCOUNT:run:PROJECT_ID/RUN_ID
-            let deviceFarmLink = 'https://us-west-2.console.aws.amazon.com/devicefarm/home#/mobile/projects';
-            const arnMatch = runArn.match(/:run:([^/]+)\/(.+)$/);
-            if (arnMatch) {
-              const projectId = arnMatch[1];
-              const runId = arnMatch[2];
-              deviceFarmLink = `https://us-west-2.console.aws.amazon.com/devicefarm/home#/mobile/projects/${projectId}/runs/${runId}`;
-            }
-
-            // Build test summary table
-            const testSummary = `
-            | Metric | Count |
-            |--------|-------|
-            | Total Tests | ${total} |
-            | ✅ Passed | ${passed} |
-            | ❌ Failed | ${failed} |
-            | ⏭️ Skipped | ${skipped} |
-            `;
-
-            const packageInfo = '${{ github.event_name }}' === 'workflow_dispatch'
-              ? '${{ inputs.package }}'
-              : '${{ env.ADDON_NAME }} (from PR)';
-
-            const comment = `
-            ## ${emoji} E2E Mobile Test Results - ${platform}
-
-            **Overall Status**: ${statusText}
-            **Device Farm Result**: ${testResult}
-            **Platform**: ${platform}
-            **Package**: ${packageInfo}
-            **PR**: #${prNumber}
-            **Commit**: ${context.sha.substring(0, 7)}
-
-            ### Test Summary
-            ${testSummary}
-
-            ### Links
-            - 🔗 **Device Farm Run**: [View on AWS Device Farm](${deviceFarmLink})
-            - 🔗 **Workflow**: [View Details](${context.payload.repository.html_url}/actions/runs/${context.runId})
-            - 📋 **Run ARN**: \`${runArn}\`
-
-            ---
-            *Automated E2E mobile testing powered by AWS Device Farm*
-            *Tests located in: \`test/mobile/\`*
-            `;
-
-            await github.rest.issues.createComment({
-              owner: context.repo.owner,
-              repo: context.repo.repo,
-              issue_number: prNumber,
-              body: comment
-            });
-
   combine-reports:
     name: Combined Performance Report
     needs: [build-and-test]
@@ -1782,15 +1708,45 @@ jobs:
             --output-json combined-output/performance-summary-combined.json \
             --output combined-output/performance-report-combined.md
 
-      - name: Upload combined report
+      - name: Generate per-device HTML reports
+        shell: bash
+        run: |
+          mkdir -p per-device-reports
+          for json in $(find combined-reports -name "performance-report.json" -type f 2>/dev/null); do
+            device_name=$(node -e "const d=JSON.parse(require('fs').readFileSync('$json','utf8'));console.log((d.device&&d.device.name)||'Unknown')" 2>/dev/null)
+            [ -z "$device_name" ] || [ "$device_name" = "Unknown" ] && continue
+
+            safe_name=$(echo "$device_name" | tr ' ' '-')
+            tmp_dir=$(mktemp -d)
+            mkdir -p "$tmp_dir/device"
+            cp "$json" "$tmp_dir/device/performance-report.json"
+
+            echo "Generating HTML for $device_name..."
+            node scripts/perf-report/aggregate.js \
+              --dir "$tmp_dir" \
+              --output-html "per-device-reports/HTML-Report-${safe_name}.html" \
+              2>/dev/null || true
+
+            rm -rf "$tmp_dir"
+          done
+          echo "=== Per-device reports generated ==="
+          ls -la per-device-reports/ 2>/dev/null || echo "No per-device reports"
+
+      - name: Upload combined HTML report
         if: always()
         uses: actions/upload-artifact@v4
         with:
-          name: perf-report-ocr-combined-${{ github.run_number }}
-          path: |
-            combined-output/performance-report-combined.html
-            combined-output/performance-report-combined.md
-            combined-output/performance-summary-combined.json
+          name: HTML-Report-All-Platforms-${{ github.run_number }}
+          path: combined-output/performance-report-combined.html
+          retention-days: 90
+          if-no-files-found: ignore
+
+      - name: Upload per-device HTML reports
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: HTML-Reports-Per-Device-${{ github.run_number }}
+          path: per-device-reports/
           retention-days: 90
           if-no-files-found: ignore
 
@@ -1799,14 +1755,27 @@ jobs:
         shell: bash
         run: |
           MD_FILE="combined-output/performance-report-combined.md"
-          HTML_FILE="combined-output/performance-report-combined.html"
-          printf '## Combined OCR Performance Report (All Platforms)\n\n' >> $GITHUB_STEP_SUMMARY
+          printf '## OCR Performance Report (All Platforms)\n\n' >> $GITHUB_STEP_SUMMARY
           if [ -f "$MD_FILE" ]; then
             cat "$MD_FILE" >> $GITHUB_STEP_SUMMARY
           else
             echo "No combined performance report available." >> $GITHUB_STEP_SUMMARY
           fi
-          if [ -f "$HTML_FILE" ]; then
-            printf '\n> **Full combined HTML report** with all platforms, detailed per-run metrics, heatmaps, image thumbnails, and quality diagnostics is available in artifact `perf-report-ocr-combined-%s`.\n' "${{ github.run_number }}" >> $GITHUB_STEP_SUMMARY
+          printf '\n---\n\n### Downloadable HTML Reports\n\n' >> $GITHUB_STEP_SUMMARY
+          if [ -f "combined-output/performance-report-combined.html" ]; then
+            printf '> **Full Combined Report (all platforms)**: download artifact `HTML-Report-All-Platforms-%s`\n\n' "${{ github.run_number }}" >> $GITHUB_STEP_SUMMARY
+          fi
+          DEVICE_LIST=""
+          for html in per-device-reports/HTML-Report-*.html; do
+            [ -f "$html" ] || continue
+            device=$(basename "$html" .html | sed 's/^HTML-Report-//' | tr '-' ' ')
+            DEVICE_LIST="${DEVICE_LIST}- ${device}\n"
+          done
+          if [ -n "$DEVICE_LIST" ]; then
+            printf '> **Individual Device Reports**: download artifact `HTML-Reports-Per-Device-%s`\n>\n' "${{ github.run_number }}" >> $GITHUB_STEP_SUMMARY
+            printf '> Includes:\n' >> $GITHUB_STEP_SUMMARY
+            printf "$DEVICE_LIST" | while IFS= read -r line; do
+              printf '> %s\n' "$line" >> $GITHUB_STEP_SUMMARY
+            done
           fi
           echo "" >> $GITHUB_STEP_SUMMARY
