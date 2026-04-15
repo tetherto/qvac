@@ -31,6 +31,7 @@ jobs:
     permissions:
       contents: write
       pull-requests: write
+      id-token: write
 
     strategy:
       fail-fast: false
@@ -78,12 +79,32 @@ jobs:
     name: ${{ matrix.platform }}-${{ matrix.arch }}${{ matrix.tags }}
 
     env:
-      # monorepo: keep cache under the package dir to avoid cross-package collisions
       PKG_DIR: packages/qvac-lib-infer-onnx
-      VCPKG_BINARY_SOURCES: "clear;files,${{ github.workspace }}/packages/qvac-lib-infer-onnx/vcpkg/cache,readwrite"
       VCPKG_BUILD_TYPE: release
 
     steps:
+      - name: Configure AWS credentials via OIDC
+        uses: aws-actions/configure-aws-credentials@8df5847569e6427dd6c4fb1cf565c83acfa8afa7 # 6.0.0
+        with:
+          role-to-assume: ${{ secrets.AWS_OIDC_ROLE_ARN }}
+          aws-region: eu-central-1
+
+      - if: ${{ matrix.platform == 'win32' }}
+        name: Install AWS CLI on self-hosted Windows runner
+        shell: powershell
+        run: |
+          if (Get-Command aws -ErrorAction SilentlyContinue) {
+            Write-Host "AWS CLI already installed"
+            aws --version
+          } else {
+            Write-Host "Installing AWS CLI v2..."
+            Invoke-WebRequest -Uri https://awscli.amazonaws.com/AWSCLIV2.msi -OutFile $env:TEMP\AWSCLIV2.msi
+            Start-Process msiexec.exe -Wait -ArgumentList '/I', "$env:TEMP\AWSCLIV2.msi", '/qn'
+            $env:PATH = "C:\Program Files\Amazon\AWSCLIV2;$env:PATH"
+            echo "C:\Program Files\Amazon\AWSCLIV2" >> $env:GITHUB_PATH
+            aws --version
+          }
+
       - if: ${{ matrix.platform == 'android' }}
         name: Select NDK
         run: |
@@ -194,6 +215,14 @@ jobs:
           ref: ${{ inputs.ref || github.ref }}
           token: ${{ secrets.PAT_TOKEN }}
 
+      - name: Setup vcpkg cache
+        uses: ./.github/actions/setup-vcpkg-cache
+        env:
+          MODEL_S3_BUCKET: ${{ secrets.MODEL_S3_BUCKET }}
+        with:
+          platform: ${{ matrix.platform }}
+          arch: ${{ matrix.arch }}
+
       - name: Setup node
         uses: actions/setup-node@53b83947a5a98c8d113130e565377fae1a50d02f # 6.3.0
         with:
@@ -284,31 +313,9 @@ jobs:
         working-directory: ${{ env.PKG_DIR }}
         run: npm install
 
-      - name: Create vcpkg cache location
-        shell: bash
-        working-directory: ${{ env.PKG_DIR }}
-        run: mkdir -p vcpkg/cache
-
-      - name: Restore vcpkg cache
-        id: cache-vcpkg
-        uses: actions/cache/restore@668228422ae6a00e4ad889ee87cd7109ec5666a7 # 5.0.4
-        with:
-          path: ${{ env.PKG_DIR }}/vcpkg/cache
-          key: vcpkg-v3-${{ matrix.platform }}-${{ matrix.arch }}${{ matrix.tags }}-${{ hashFiles('packages/qvac-lib-infer-onnx/vcpkg.json', 'packages/qvac-lib-infer-onnx/vcpkg-configuration.json', 'packages/qvac-lib-infer-onnx/vcpkg-override-triplets/**') }}
-          restore-keys: |
-            vcpkg-v3-${{ matrix.platform }}-${{ matrix.arch }}${{ matrix.tags }}-
-            vcpkg-v3-${{ matrix.platform }}-${{ matrix.arch }}-
-
       - name: Generate
         working-directory: ${{ env.PKG_DIR }}
         run: bare-make generate --platform ${{ matrix.platform }} --arch ${{ matrix.arch }} ${{ matrix.flags }} -D CMAKE_C_COMPILER_LAUNCHER=ccache -D CMAKE_CXX_COMPILER_LAUNCHER=ccache
-
-      - if: ${{ steps.cache-vcpkg.outputs.cache-hit != 'true' }}
-        name: Save vcpkg cache
-        uses: actions/cache/save@668228422ae6a00e4ad889ee87cd7109ec5666a7 # 5.0.4
-        with:
-          path: ${{ env.PKG_DIR }}/vcpkg/cache
-          key: vcpkg-v3-${{ matrix.platform }}-${{ matrix.arch }}${{ matrix.tags }}-${{ hashFiles('packages/qvac-lib-infer-onnx/vcpkg.json', 'packages/qvac-lib-infer-onnx/vcpkg-configuration.json', 'packages/qvac-lib-infer-onnx/vcpkg-override-triplets/**') }}
 
       - name: Run bare-make build
         working-directory: ${{ env.PKG_DIR }}

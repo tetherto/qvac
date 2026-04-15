@@ -76,9 +76,7 @@ jobs:
     name: ${{ matrix.platform }}-${{ matrix.arch }}${{ matrix.tags }}
 
     env:
-      VCPKG_BINARY_SOURCES: "clear;x-aws,s3://${{ secrets.MODEL_S3_BUCKET }}/vcpkg-cache/parakeet/${{ matrix.platform }}-${{ matrix.arch }}/,readwrite"
       VCPKG_BUILD_TYPE: release
-      S3_CACHE_PREFIX: "s3://${{ secrets.MODEL_S3_BUCKET }}/vcpkg-cache/parakeet/${{ matrix.platform }}-${{ matrix.arch }}/"
       WORKDIR: ${{ inputs.workdir || 'packages/qvac-lib-infer-parakeet' }}
 
     steps:
@@ -159,6 +157,14 @@ jobs:
           repository: ${{ inputs.repository }}
           ref: ${{ inputs.ref }}
           token: ${{ secrets.PAT_TOKEN }}
+
+      - name: Setup vcpkg cache
+        uses: ./.github/actions/setup-vcpkg-cache
+        env:
+          MODEL_S3_BUCKET: ${{ secrets.MODEL_S3_BUCKET }}
+        with:
+          platform: ${{ matrix.platform }}
+          arch: ${{ matrix.arch }}
 
       - name: Setup node
         uses: actions/setup-node@53b83947a5a98c8d113130e565377fae1a50d02f # 6.3.0

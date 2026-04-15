@@ -78,10 +78,31 @@ jobs:
 
     env:
       WORKDIR: ${{ inputs.workdir || 'packages/qvac-lib-infer-whispercpp' }}
-      VCPKG_BINARY_SOURCES: "clear;files,${{ github.workspace }}/${{ inputs.workdir || 'packages/qvac-lib-infer-whispercpp' }}/vcpkg/cache,readwrite"
       VCPKG_BUILD_TYPE: release
 
     steps:
+      - name: Configure AWS credentials via OIDC
+        uses: aws-actions/configure-aws-credentials@8df5847569e6427dd6c4fb1cf565c83acfa8afa7 # 6.0.0
+        with:
+          role-to-assume: ${{ secrets.AWS_OIDC_ROLE_ARN }}
+          aws-region: eu-central-1
+
+      - if: ${{ matrix.platform == 'win32' }}
+        name: Install AWS CLI on self-hosted Windows runner
+        shell: powershell
+        run: |
+          if (Get-Command aws -ErrorAction SilentlyContinue) {
+            Write-Host "AWS CLI already installed"
+            aws --version
+          } else {
+            Write-Host "Installing AWS CLI v2..."
+            Invoke-WebRequest -Uri https://awscli.amazonaws.com/AWSCLIV2.msi -OutFile $env:TEMP\AWSCLIV2.msi
+            Start-Process msiexec.exe -Wait -ArgumentList '/I', "$env:TEMP\AWSCLIV2.msi", '/qn'
+            $env:PATH = "C:\Program Files\Amazon\AWSCLIV2;$env:PATH"
+            echo "C:\Program Files\Amazon\AWSCLIV2" >> $env:GITHUB_PATH
+            aws --version
+          }
+
       - if: ${{ matrix.platform == 'android' }}
         name: Select NDK
         run: |
@@ -156,6 +177,14 @@ jobs:
           ref: ${{ inputs.ref || github.ref }}
           token: ${{ secrets.PAT_TOKEN }}
           fetch-depth: 0
+
+      - name: Setup vcpkg cache
+        uses: ./.github/actions/setup-vcpkg-cache
+        env:
+          MODEL_S3_BUCKET: ${{ secrets.MODEL_S3_BUCKET }}
+        with:
+          platform: ${{ matrix.platform }}
+          arch: ${{ matrix.arch }}
 
       - name: Setup node
         uses: actions/setup-node@53b83947a5a98c8d113130e565377fae1a50d02f # 6.3.0
@@ -283,13 +312,6 @@ jobs:
           echo "VULKAN_SDK=$VULKAN_SDK" >> $GITHUB_ENV
 
       - if: ${{ matrix.platform == 'linux' && matrix.arch == 'arm64' }}
-        name: Configure AWS credentials via OIDC
-        uses: aws-actions/configure-aws-credentials@8df5847569e6427dd6c4fb1cf565c83acfa8afa7 # 6.0.0
-        with:
-          role-to-assume: ${{ secrets.AWS_OIDC_ROLE_ARN }}
-          aws-region: eu-central-1
-
-      - if: ${{ matrix.platform == 'linux' && matrix.arch == 'arm64' }}
         name: Setup vulkan sdk path in linux arm64
         run: |
           VULKAN_SDK=~/vulkan/aarch64
@@ -346,24 +368,6 @@ jobs:
       - name: Install npm dependencies
         working-directory: ${{ env.WORKDIR }}
         run: npm install
-
-      - name: Create vcpkg cache location
-        working-directory: ${{ env.WORKDIR }}
-        run: mkdir -p vcpkg/cache
-
-      - name: Get vcpkg cache
-        id: cache-vcpkg
-        uses: actions/cache@668228422ae6a00e4ad889ee87cd7109ec5666a7 # 5.0.4
-        with:
-          key: vcpkg-v2-${{ matrix.platform }}-${{ matrix.arch }}${{ matrix.tags }}-${{ hashFiles(
-            format('{0}/vcpkg.json', inputs.workdir),
-            format('{0}/vcpkg-configuration.json', inputs.workdir),
-            format('{0}/vcpkg/ports/**', inputs.workdir)
-           ) }}
-          path: ${{ inputs.workdir }}/vcpkg/cache
-          restore-keys: |
-            vcpkg-v2-${{ matrix.platform }}-${{ matrix.arch }}${{ matrix.tags }}-
-            vcpkg-v2-${{ matrix.platform }}-${{ matrix.arch }}-
 
       - name: Run bare-make generate
         shell: bash
