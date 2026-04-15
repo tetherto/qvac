@@ -1633,26 +1633,6 @@ jobs:
           retention-days: 90
           if-no-files-found: ignore
 
-      - name: Write GitHub Step Summary
-        if: always()
-        shell: bash
-        run: |
-          PLATFORM="${{ matrix.platform }}"
-          OUTPUT_DIR="perf-results/${PLATFORM}"
-          MD_FILE="${OUTPUT_DIR}/performance-report.md"
-          HTML_FILE="${OUTPUT_DIR}/performance-report.html"
-          printf '## %s OCR Performance Report\n\n' "$PLATFORM" >> $GITHUB_STEP_SUMMARY
-          if [ -f "$MD_FILE" ]; then
-            cat "$MD_FILE" >> $GITHUB_STEP_SUMMARY
-          else
-            echo "No performance report generated for this run." >> $GITHUB_STEP_SUMMARY
-          fi
-          if [ -f "$HTML_FILE" ]; then
-            ARTIFACT="perf-report-ocr-${PLATFORM}-${{ github.run_number }}"
-            printf '\n> **Full HTML report** with detailed per-run metrics, heatmaps, image thumbnails, and quality diagnostics is available in artifact `%s`.\n' "$ARTIFACT" >> $GITHUB_STEP_SUMMARY
-          fi
-          echo "" >> $GITHUB_STEP_SUMMARY
-
       - name: Comment PR with results
         if: always() && github.event.pull_request.number
         uses: actions/github-script@ed597411d8f924073f98dfc5c65a23a2325f34cd # 8.0.0
