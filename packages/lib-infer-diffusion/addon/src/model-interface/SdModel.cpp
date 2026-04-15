@@ -597,6 +597,8 @@ std::any SdModel::process(const std::any& input) {
 
       genParams.width = alignedW;
       genParams.height = alignedH;
+      gen.width = alignedW;
+      gen.height = alignedH;
 
       if (imgW != alignedW || imgH != alignedH) {
         QLOG_IF(
