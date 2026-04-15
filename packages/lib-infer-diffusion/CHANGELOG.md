@@ -1,5 +1,23 @@
 # Changelog
 
+## [0.2.0] - 2026-04-15
+
+### Added
+
+- FLUX.2 img2img support with in-context conditioning (`ref_images`) via `init_image` parameter
+- JS-side input validation for `readImageDimensions()` with buffer-length guards for truncated PNG/JPEG
+- Regression tests for FLUX img2img prediction guard and truncated image handling
+
+### Changed
+
+- FLUX img2img now requires explicit `prediction: 'flux2_flow'` in config to prevent silent fallback to SDEdit
+- Updated `prediction` docstring to clarify auto-detection is insufficient for FLUX img2img
+- Exported `readImageDimensions()` for testing and external use
+
+### Fixed
+
+- `readImageDimensions()` now safely handles truncated/corrupt PNG and JPEG buffers
+
 ## [0.1.3] - 2026-04-15
 
 ### Changed
