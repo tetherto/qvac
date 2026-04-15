@@ -66,11 +66,18 @@ import { VisionExecutor } from "./executors/vision-executor.js";
 import { DownloadExecutor } from "../shared/executors/download-executor.js";
 import { DelegatedInferenceExecutor } from "./executors/delegated-inference-executor.js";
 import { DiffusionExecutor } from "../shared/executors/diffusion-executor.js";
+import { FinetuneExecutor } from "./executors/finetune-executor.js";
 
 const resources = new ResourceManager();
 
 resources.define("llm", {
   constant: LLAMA_3_2_1B_INST_Q4_0,
+  type: "llm",
+  config: { verbosity: 0, ctx_size: 2048, n_discarded: 256 },
+});
+
+resources.define("finetune-llm", {
+  constant: QWEN3_1_7B_INST_Q4,
   type: "llm",
   config: { verbosity: 0, ctx_size: 2048, n_discarded: 256 },
 });
@@ -372,6 +379,7 @@ export const executor = createExecutor({
     new DownloadExecutor(),
     new DelegatedInferenceExecutor(),
     new DiffusionExecutor(resources),
+    new FinetuneExecutor(resources),
   ],
   profiling: {
     init: () => profiler.enable({ mode: "summary", includeServerBreakdown: true }),

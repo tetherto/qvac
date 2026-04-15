@@ -41,6 +41,13 @@ export const llmConfigBaseSchema = z.object({
   stop_sequences: z.array(z.string()).optional(),
   n_discarded: z.number().optional(),
   tools: z.boolean().optional(),
+  "cache-type-k": z.string().optional(),
+  "cache-type-v": z.string().optional(),
+  /**
+   * Writable directory for OpenCL kernel binary cache. Required on Android
+   * for fast GPU startup.
+   */
+  openclCacheDir: z.string().optional(),
   projectionModelSrc: modelSrcInputSchema.optional(),
 });
 
@@ -75,6 +82,11 @@ export const embedConfigBaseSchema = z.object({
     .union([z.number().int().min(0), z.enum(["integrated", "dedicated"])])
     .optional(),
   verbosity: verbositySchema.optional(),
+  /**
+   * Writable directory for OpenCL kernel binary cache. Required on Android
+   * for fast GPU startup.
+   */
+  openclCacheDir: z.string().optional(),
 });
 
 export type EmbedConfigInput = z.infer<typeof embedConfigBaseSchema>;

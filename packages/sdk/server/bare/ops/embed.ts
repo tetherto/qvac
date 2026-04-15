@@ -38,6 +38,7 @@ export async function embed(params: EmbedParams): Promise<EmbedResult> {
     ...(response.stats?.total_time_ms !== undefined && { totalTime: response.stats.total_time_ms }),
     ...(response.stats?.tokens_per_second !== undefined && { tokensPerSecond: response.stats.tokens_per_second }),
     ...(response.stats?.total_tokens !== undefined && { totalTokens: response.stats.total_tokens }),
+    ...(response.stats?.backendDevice !== undefined && { backendDevice: response.stats.backendDevice }),
   };
 
   const embeddingsArray = rawEmbeddings[0];

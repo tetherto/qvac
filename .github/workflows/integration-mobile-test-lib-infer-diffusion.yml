@@ -35,8 +35,8 @@ env:
 jobs:
   build-and-test:
     name: Build ${{ matrix.platform }} and Run E2E Tests
-    runs-on: ${{ matrix.runner }}
     environment: release
+    runs-on: ${{ matrix.runner }}
     timeout-minutes: 120
     continue-on-error: true # Don't block PR merges if tests fail
     permissions:
@@ -100,39 +100,6 @@ jobs:
         uses: actions/setup-node@53b83947a5a98c8d113130e565377fae1a50d02f # 6.3.0
         with:
           node-version: ${{ env.NODE_VERSION }}
-
-      - name: Configure scoped registry for @qvac and @tetherto packages
-        env:
-          GPR_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-          NPM_TOKEN: ${{ secrets.NPM_TOKEN }}
-          GIT_PAT: ${{ secrets.PAT_TOKEN }}
-        run: |
-          echo "Configuring scoped registry for @tetherto and @qvac packages..."
-
-          # Configure addon registry (monorepo package dir)
-          cd "${{ env.ADDON_WORKDIR }}"
-          cat > .npmrc <<NPMRC
-          always-auth=true
-          registry=https://registry.npmjs.org/
-          @qvac:registry=https://registry.npmjs.org/
-          @tetherto:registry=https://npm.pkg.github.com/
-          //registry.npmjs.org/:_authToken=${NPM_TOKEN}
-          //npm.pkg.github.com/:_authToken=${GPR_TOKEN}
-          NPMRC
-
-          # Configure test-framework registry
-          cd "${GITHUB_WORKSPACE}/test-framework"
-          cat > .npmrc <<NPMRC
-          always-auth=true
-          registry=https://registry.npmjs.org/
-          @qvac:registry=https://registry.npmjs.org/
-          @tetherto:registry=https://npm.pkg.github.com/
-          //registry.npmjs.org/:_authToken=${NPM_TOKEN}
-          //npm.pkg.github.com/:_authToken=${GPR_TOKEN}
-          NPMRC
-
-          # Configure git for private repos
-          git config --global url."https://${GIT_PAT}:@github.com/".insteadOf "https://github.com/"
 
       - name: Install global dependencies
         run: |

@@ -105,7 +105,7 @@ try {
   for (const s of samples) {
     ids.push(String(s.id));
     documents.push(s.text);
-    embeddings.push(await embed({ modelId, text: s.text }));
+    embeddings.push((await embed({ modelId, text: s.text })).embedding);
   }
 
   await collection.add({
@@ -115,7 +115,7 @@ try {
   });
 
   console.log("🔎 Searching for similar documents...");
-  const queryEmbedding = await embed({ modelId, text: query });
+  const { embedding: queryEmbedding } = await embed({ modelId, text: query });
 
   // Query top 3 by vector similarity and include distances
   const res = await collection.query({
