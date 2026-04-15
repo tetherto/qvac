@@ -1,0 +1,17 @@
+# Stub workflow — enables branch-based triggering once this file exists on main.
+# Full implementation will be added in QVAC-17063.
+name: "Prebuilds (BCI Whispercpp)"
+
+on:
+  workflow_dispatch:
+    inputs:
+      placeholder:
+        description: "Placeholder — full workflow coming in QVAC-17063"
+        required: false
+        type: string
+
+jobs:
+  placeholder:
+    runs-on: ubuntu-latest
+    steps:
+      - run: echo "Stub workflow — see QVAC-17063 for full implementation"
