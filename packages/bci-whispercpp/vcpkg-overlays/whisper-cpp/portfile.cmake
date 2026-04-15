@@ -2,13 +2,15 @@ set(VERSION "a8d002cfd879315632a579e73f0148d06959de36")
 
 vcpkg_from_github(
   OUT_SOURCE_PATH SOURCE_PATH
-  REPO tetherto/qvac-ext-lib-whisper.cpp
+  REPO ggml-org/whisper.cpp
   REF ${VERSION}
   SHA512 aea24debb836131d14d362ff78c6d12cfe2e82188340e69e71e6874a1fa51fa9405f2c03fe43888b1ff4183f4288bf64f07dd1106224b0108c3e0f844989a409
   HEAD_REF master
   PATCHES
     0001-fix-vcpkg-build.patch
     0002-fix-apple-silicon-cross-compile.patch
+    0003-bci-variable-conv1-kernel.patch
+    0004-bci-windowed-attention.patch
 )
 
 set(PLATFORM_OPTIONS)
