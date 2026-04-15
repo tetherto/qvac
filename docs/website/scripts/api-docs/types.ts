@@ -35,6 +35,23 @@ export interface ApiFunction {
   deprecated?: string;
 }
 
+export interface ApiObject {
+  name: string;
+  description: string;
+  descriptionSource?: ContentSource;
+  fields: TypeField[];
+  children: ExpandedType[];
+  examples?: string[];
+  examplesSource?: ContentSource;
+}
+
+export interface ApiType {
+  name: string;
+  description: string;
+  definition: string;
+  members?: Array<{ name: string; description: string }>;
+}
+
 export interface ErrorEntry {
   name: string;
   code: number;
@@ -52,6 +69,8 @@ export interface ApiData {
   version: string;
   generatedAt: string;
   functions: ApiFunction[];
+  objects?: ApiObject[];
+  types?: ApiType[];
   errors: {
     client: ErrorEntry[];
     server: ErrorEntry[];

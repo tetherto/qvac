@@ -16,7 +16,7 @@
 import * as fs from "fs/promises";
 import * as path from "path";
 import { fileURLToPath } from "node:url";
-import type { ApiData, ApiFunction } from "./types.js";
+import type { ApiData, ApiFunction, ApiObject } from "./types.js";
 
 const SCRIPT_DIR = path.dirname(fileURLToPath(import.meta.url));
 const PROMPTS_DIR = path.join(SCRIPT_DIR, "prompts");
@@ -179,6 +179,57 @@ export async function augmentApiData(
     augmented++;
   }
 
+  if (apiData.objects) {
+    for (const obj of apiData.objects) {
+      const gaps: string[] = [];
+      if (isThinDescription(obj.description)) gaps.push("description");
+      if (!obj.examples || obj.examples.length === 0) gaps.push("examples");
+
+      if (gaps.length === 0) {
+        skipped++;
+        continue;
+      }
+
+      if (options.dryRun) {
+        console.log(`  [dry-run] ${obj.name}: would augment ${gaps.join(", ")}`);
+        augmented++;
+        continue;
+      }
+
+      const promptVars = {
+        name: obj.name,
+        signature: `interface ${obj.name}`,
+        parameters: obj.fields
+          .map((f) => `${f.name}: ${f.type}${f.required ? "" : " (optional)"}`)
+          .join(", ") || "(none)",
+        returnType: "N/A",
+        description: obj.description,
+      };
+
+      for (const gap of gaps) {
+        try {
+          if (gap === "description") {
+            const prompt = await loadPrompt("function-description.txt", promptVars);
+            const result = await callAI(prompt);
+            obj.description = result;
+            obj.descriptionSource = "ai";
+            console.log(`  ✓ ${obj.name}: augmented description`);
+          } else if (gap === "examples") {
+            const prompt = await loadPrompt("usage-example.txt", promptVars);
+            const result = await callAI(prompt);
+            obj.examples = [`\`\`\`typescript\n${result}\n\`\`\``];
+            obj.examplesSource = "ai";
+            console.log(`  ✓ ${obj.name}: augmented example`);
+          }
+        } catch (err) {
+          const msg = err instanceof Error ? err.message : String(err);
+          console.log(`  ⚠️  ${obj.name}: failed to augment ${gap}: ${msg}`);
+        }
+      }
+      augmented++;
+    }
+  }
+
   if (!options.dryRun) {
     await fs.writeFile(
       dataPath,
@@ -188,4 +239,29 @@ export async function augmentApiData(
   }
 
   return { augmented, skipped };
+}
+
+/**
+ * Generate an AI-drafted release note summary for a changelog entry.
+ * Uses the release-note-summary.txt prompt template.
+ */
+export async function generateReleaseSummary(
+  changeType: string,
+  description: string,
+  functions: string,
+): Promise<string | null> {
+  if (!isAugmentConfigured()) return null;
+
+  try {
+    const prompt = await loadPrompt("release-note-summary.txt", {
+      changeType,
+      description,
+      functions,
+    });
+    return await callAI(prompt);
+  } catch (err) {
+    const msg = err instanceof Error ? err.message : String(err);
+    console.log(`  ⚠️  Failed to generate release summary: ${msg}`);
+    return null;
+  }
 }

@@ -43,3 +43,13 @@ jobs:
 
       - name: Run docs tests
         run: bun run vitest run --exclude '**/tsdoc-completeness*'
+
+      - name: Install SDK dependencies
+        run: bun install
+        working-directory: packages/sdk
+
+      - name: TSDoc completeness audit (warning mode)
+        continue-on-error: true
+        env:
+          SDK_PATH: ${{ github.workspace }}/packages/sdk
+        run: bun run vitest run tests/tsdoc-completeness.test.ts

@@ -1,0 +1,34 @@
+{#- Render a shared types reference page.
+    Receives: { types: ApiType[], versionLabel: string } -#}
+---
+title: "Types"
+titleStyle: code
+description: "Shared type definitions — {{ versionLabel }}"
+---
+
+## Overview
+
+Shared TypeScript types used across the `@qvac/sdk` API.
+
+{% for t in types %}
+### `{{ t.name }}`
+
+{{ t.description }}
+
+```typescript
+{{ t.definition }}
+```
+
+{% if t.members and t.members.length > 0 %}
+| Member | Description |
+| --- | --- |
+{% for m in t.members %}
+| `{{ m.name }}` | {{ m.description | escapeTableLight or "—" }} |
+{% endfor %}
+
+{% endif %}
+{% if not loop.last %}
+---
+
+{% endif %}
+{% endfor %}

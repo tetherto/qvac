@@ -13,9 +13,6 @@ import {
   stripFence,
   renderExpandedTypes,
   renderErrorTable,
-  renderFunctionPage,
-  renderIndexPage,
-  renderErrorsPageContent,
 } from '../scripts/api-docs/render'
 
 const SCRIPT_DIR = path.resolve(
@@ -38,11 +35,12 @@ function createTestEnv(): nunjucks.Environment {
   env.addFilter('formatShortSignature', formatShortSignature)
   env.addFilter('escapeQuotes', escapeQuotes)
   env.addFilter('stripFence', stripFence)
+  env.addFilter('lower', (s: string) => s.toLowerCase())
+  env.addFilter('replace', (s: string, from: string, to: string) =>
+    s.replace(new RegExp(from.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'), 'g'), to),
+  )
   env.addGlobal('renderExpandedTypes', renderExpandedTypes)
   env.addGlobal('renderErrorTable', renderErrorTable)
-  env.addGlobal('renderFunctionPage', renderFunctionPage)
-  env.addGlobal('renderIndexPage', renderIndexPage)
-  env.addGlobal('renderErrorsPage', renderErrorsPageContent)
   return env
 }
 
@@ -228,307 +226,165 @@ describe('renderExpandedTypes', () => {
 })
 
 // ---------------------------------------------------------------------------
-// Template snapshot tests
+// Template rendering tests — verify Nunjucks templates produce valid output
 // ---------------------------------------------------------------------------
 
 describe('function-page template', () => {
+  const env = createTestEnv()
+
   it('renders a full function with all sections', () => {
-    const mdx = renderFunctionPage(fullFunction)
-    const result = mdx.replace(/\bundefined\b/g, '\u2014').trim()
+    const mdx = env.render('function-page.njk', { fn: fullFunction }).trim()
+    const result = mdx.replace(/\bundefined\b/g, '\u2014')
     expect(result).toMatchSnapshot()
   })
 
   it('renders a minimal function (no optional sections)', () => {
-    const mdx = renderFunctionPage(minimalFunction)
-    const result = mdx.replace(/\bundefined\b/g, '\u2014').trim()
+    const mdx = env.render('function-page.njk', { fn: minimalFunction }).trim()
+    const result = mdx.replace(/\bundefined\b/g, '\u2014')
     expect(result).toMatchSnapshot()
+  })
+
+  it('includes frontmatter', () => {
+    const mdx = env.render('function-page.njk', { fn: fullFunction }).trim()
+    expect(mdx).toMatch(/^---\ntitle:/)
+  })
+
+  it('includes deprecation callout when deprecated', () => {
+    const mdx = env.render('function-page.njk', { fn: fullFunction }).trim()
+    expect(mdx).toContain('<Callout type="warn" title="Deprecated">')
+    expect(mdx).toContain('Use completionV2() instead.')
+  })
+
+  it('omits deprecation callout when not deprecated', () => {
+    const mdx = env.render('function-page.njk', { fn: minimalFunction }).trim()
+    expect(mdx).not.toContain('Deprecated')
+  })
+
+  it('renders parameters table with expanded type links', () => {
+    const mdx = env.render('function-page.njk', { fn: fullFunction }).trim()
+    expect(mdx).toContain('[`CompletionParams`](#completionparams)')
+  })
+
+  it('renders throws section', () => {
+    const mdx = env.render('function-page.njk', { fn: fullFunction }).trim()
+    expect(mdx).toContain('## Throws')
+    expect(mdx).toContain('`INVALID_TOOLS_ARRAY`')
+  })
+
+  it('shows AI provenance callout for AI-generated descriptions', () => {
+    const aiFunction = { ...minimalFunction, descriptionSource: 'ai' as const }
+    const mdx = env.render('function-page.njk', { fn: aiFunction }).trim()
+    expect(mdx).toContain('AI-generated description')
+  })
+
+  it('shows AI provenance callout for AI-generated examples', () => {
+    const aiFunction = {
+      ...minimalFunction,
+      examples: ['```typescript\nconst x = 1;\n```'],
+      examplesSource: 'ai' as const,
+    }
+    const mdx = env.render('function-page.njk', { fn: aiFunction }).trim()
+    expect(mdx).toContain('AI-generated example')
   })
 })
 
 describe('index-page template', () => {
+  const env = createTestEnv()
+
   it('renders the index page', () => {
-    const result = renderIndexPage([fullFunction, minimalFunction], 'v0.8.0')
+    const result = env.render('index-page.njk', {
+      functions: [fullFunction, minimalFunction],
+      versionLabel: 'v0.8.0',
+    }).trim()
     expect(result).toMatchSnapshot()
+  })
+
+  it('includes function table rows', () => {
+    const result = env.render('index-page.njk', {
+      functions: [fullFunction, minimalFunction],
+      versionLabel: 'v0.8.0',
+    }).trim()
+    expect(result).toContain('[`completion()`](./completion)')
+    expect(result).toContain('[`ping()`](./ping)')
   })
 })
 
 describe('errors-page template', () => {
+  const env = createTestEnv()
+
   it('renders the errors page with client and server errors', () => {
-    const result = renderErrorsPageContent({ client: clientErrors, server: serverErrors })
+    const result = env.render('errors-page.njk', {
+      errors: { client: clientErrors, server: serverErrors },
+    }).trim()
     expect(result).toMatchSnapshot()
   })
 
   it('renders with only client errors', () => {
-    const result = renderErrorsPageContent({ client: clientErrors, server: [] })
-    expect(result).toMatchSnapshot()
+    const result = env.render('errors-page.njk', {
+      errors: { client: clientErrors, server: [] },
+    }).trim()
+    expect(result).toContain('## Client errors')
+    expect(result).not.toContain('## Server errors')
   })
 
-  it('returns null for empty errors', () => {
-    expect(renderErrorsPageContent({ client: [], server: [] })).toBeNull()
+  it('renders with only server errors', () => {
+    const result = env.render('errors-page.njk', {
+      errors: { client: [], server: serverErrors },
+    }).trim()
+    expect(result).not.toContain('## Client errors')
+    expect(result).toContain('## Server errors')
   })
 })
 
 // ---------------------------------------------------------------------------
-// Nunjucks template integration — verify templates call globals correctly
+// Object and shared-types templates
 // ---------------------------------------------------------------------------
 
-describe('Nunjucks template integration', () => {
+describe('object-page template', () => {
   const env = createTestEnv()
 
-  it('function-page.njk produces same output as renderFunctionPage', () => {
-    const direct = renderFunctionPage(fullFunction)
-    const viaTemplate = env.render('function-page.njk', { fn: fullFunction }).trim()
-    expect(viaTemplate).toBe(direct)
-  })
-
-  it('index-page.njk produces same output as renderIndexPage', () => {
-    const direct = renderIndexPage([fullFunction, minimalFunction], 'v0.8.0')
-    const viaTemplate = env.render('index-page.njk', {
-      functions: [fullFunction, minimalFunction],
-      versionLabel: 'v0.8.0',
-    }).trim()
-    expect(viaTemplate).toBe(direct.trim())
-  })
-
-  it('errors-page.njk produces same output as renderErrorsPageContent', () => {
-    const direct = renderErrorsPageContent({ client: clientErrors, server: serverErrors })
-    const viaTemplate = env.render('errors-page.njk', {
-      errors: { client: clientErrors, server: serverErrors },
-    }).trim()
-    expect(viaTemplate).toBe(direct!.trim())
+  it('renders an object page with fields', () => {
+    const obj = {
+      name: 'CompletionParams',
+      description: 'Parameters for the completion function.',
+      fields: [
+        { name: 'modelId', type: 'string', required: true, description: 'The model identifier' },
+        { name: 'stream', type: 'boolean', required: false, description: 'Whether to stream' },
+      ],
+      children: [],
+    }
+    const mdx = env.render('object-page.njk', { obj }).trim()
+    expect(mdx).toContain('title: "CompletionParams"')
+    expect(mdx).toContain('## Fields')
+    expect(mdx).toContain('`modelId`')
+    expect(mdx).toMatchSnapshot()
   })
 })
 
-// ---------------------------------------------------------------------------
-// Parity checks — verify output matches original monolith TS functions
-// ---------------------------------------------------------------------------
+describe('shared-types template', () => {
+  const env = createTestEnv()
 
-describe('output parity with original monolith', () => {
-  /**
-   * Reimplementation of the original generateMDXForFunction from the monolith.
-   * Used as the ground-truth baseline for parity verification.
-   */
-  function originalGenerateMDX(fn: ApiFunction): string {
-    function origRenderExpandedTypes(types: ExpandedType[], baseDepth: number): string {
-      const sections: string[] = []
-      for (const expanded of types) {
-        const heading = '#'.repeat(Math.min(baseDepth, 5))
-        sections.push(`${heading} \`${expanded.typeName}\`
-
-| Field | Type | Required? | Description |
-| --- | --- | :---: | --- |
-${expanded.fields
-  .map((f) => {
-    const typeStr = f.type.replace(/\{/g, '\\{').replace(/\}/g, '\\}').replace(/\|/g, '\\|')
-    return `| \`${f.name}\` | \`${typeStr}\` | ${f.required ? '\u2713' : '\u2717'} | ${(f.description || '\u2014').replace(/\{/g, '\\{').replace(/\}/g, '\\}').replace(/\|/g, '\\|')} |`
-  })
-  .join('\n')}`)
-        if (expanded.children.length > 0) {
-          sections.push(origRenderExpandedTypes(expanded.children, baseDepth + 1))
-        }
-      }
-      return sections.join('\n\n')
-    }
-
-    const expandedParamsSection = fn.expandedParams.length > 0
-      ? '\n\n' + origRenderExpandedTypes(fn.expandedParams, 3)
-      : ''
-
-    const parametersTable =
-      fn.parameters.length > 0
-        ? `## Parameters
-
-| Name | Type | Required? | Description |
-| --- | --- | :---: | --- |
-${fn.parameters
-  .map((p) => {
-    const typeStr = p.type.replace(/\{/g, '\\{').replace(/\}/g, '\\}')
-    const anchor = p.type.toLowerCase().replace(/[^a-z0-9]+/g, '-')
-    const hasExpansion = fn.expandedParams.some(
-      (e) => e.typeName.toLowerCase() === p.type.toLowerCase(),
-    )
-    const typeCell = hasExpansion ? `[\`${typeStr}\`](#${anchor})` : `\`${typeStr}\``
-    return `| \`${p.name}\` | ${typeCell} | ${p.required ? '\u2713' : '\u2717'} | ${(p.description || 'No description').replace(/\{/g, '\\{').replace(/\}/g, '\\}')} |`
-  })
-  .join('\n')}${expandedParamsSection}`
-        : ''
-
-    const examplesSection = fn.examples?.length
-      ? `## Example
-
-${fn.examples
-  .map((ex) => {
-    const stripped = ex.replace(/^```\w*\n?/, '').replace(/\n?```\s*$/, '')
-    return `\`\`\`typescript\n${stripped}\n\`\`\``
-  })
-  .join('\n\n')}`
-      : ''
-
-    const desc = String(fn.description ?? 'No description available').replace(/"/g, '\\"').replace(/\bundefined\b/g, '\u2014')
-    const returnsDesc = String(fn.returns?.description ?? 'No description available').replace(/\bundefined\b/g, '\u2014')
-
-    const deprecationCallout = fn.deprecated
-      ? `<Callout type="warn" title="Deprecated">\n${fn.deprecated}\n</Callout>\n\n`
-      : ''
-
-    const throwsSection = fn.throws?.length
-      ? `## Throws
-
-| Error | When |
-| --- | --- |
-${fn.throws.map((t) => `| \`${t.error}\` | ${t.description} |`).join('\n')}`
-      : ''
-
-    const returnFieldsTable = fn.returnFields.length > 0
-      ? `\n\n| Field | Type | Description |
-| --- | --- | --- |
-${fn.returnFields
-  .map((f) => {
-    const typeStr = f.type.replace(/\{/g, '\\{').replace(/\}/g, '\\}').replace(/\|/g, '\\|')
-    return `| \`${f.name}\` | \`${typeStr}\` | ${(f.description || '\u2014').replace(/\{/g, '\\{').replace(/\}/g, '\\}').replace(/\|/g, '\\|')} |`
-  })
-  .join('\n')}`
-      : ''
-
-    const expandedReturnsSection = fn.expandedReturns.length > 0
-      ? '\n\n' + origRenderExpandedTypes(fn.expandedReturns, 3)
-      : ''
-
-    return `---
-title: "${fn.name}( )"
-titleStyle: code
-description: "${desc}"
----
-
-${deprecationCallout}\`\`\`typescript
-${fn.signature}
-\`\`\`
-
-${parametersTable}
-
-## Returns
-
-\`\`\`typescript
-${fn.returns?.type ?? 'unknown'}
-\`\`\`
-
-${returnsDesc}${returnFieldsTable}${expandedReturnsSection}
-
-${throwsSection}
-
-${examplesSection}
-`.trim()
-  }
-
-  function originalGenerateIndexMDX(functions: ApiFunction[], versionLabel: string): string {
-    const fSentence = (text: string) => {
-      const match = text.match(/^[^.!?]+[.!?]/)
-      return match ? match[0] : text
-    }
-    const fmtSig = (fn: ApiFunction) => {
-      const sig = fn.signature.replace(/^function\s+/, '')
-      return sig.replace(/\|/g, '\\|')
-    }
-
-    return `---
-title: "@qvac/sdk"
-titleStyle: code
-description: API reference \u2014 ${versionLabel}
----
-
-## Overview
-
-\`@qvac/sdk\` npm package exposes a function-centric, typed JS API.
-
-## Functions
-
-| Function | Summary | Signature |
-| --- | --- | --- |
-${functions
-  .map((fn) => {
-    const summary = fSentence(fn.description).replace(/\|/g, '\\|')
-    const sig = fmtSig(fn)
-    return `| [\`${fn.name}()\`](./${fn.name}) | ${summary} | \`${sig}\` |`
-  })
-  .join('\n')}
-
-## Errors
-
-See [Errors](./errors) for the full list of SDK error codes.
-`
-  }
-
-  function originalWriteErrorsContent(
-    errors: { client: ErrorEntry[]; server: ErrorEntry[] },
-  ): string {
-    function renderTable(entries: ErrorEntry[]): string {
-      return `| Error | Code | Summary |
-| --- | --- | --- |
-${entries.map((e) => `| \`${e.name}\` | ${e.code} | ${e.summary.replace(/\\/g, '\\\\').replace(/\|/g, '\\|').replace(/[{}]/g, '\\$&')} |`).join('\n')}`
-    }
-
-    const sections: string[] = []
-    sections.push(`---
-title: Errors
-description: SDK error codes reference
----
-
-## Example
-
-\`\`\`typescript
-import { SDK_CLIENT_ERROR_CODES, SDK_SERVER_ERROR_CODES } from "@qvac/sdk";
-
-try {
-  await loadModel({ modelSrc: "/path/to/model.gguf", modelType: "llm" });
-} catch (error) {
-  if (error.code === SDK_SERVER_ERROR_CODES.MODEL_LOAD_FAILED) {
-    // handle model load failure
-  }
-}
-\`\`\``)
-
-    if (errors.client.length > 0) {
-      sections.push(`## Client errors
-
-Thrown on the client side (response validation, RPC, provider). Access via \`SDK_CLIENT_ERROR_CODES.{ERROR_NAME}\`.
-
-${renderTable(errors.client)}`)
-    }
-
-    if (errors.server.length > 0) {
-      sections.push(`## Server errors
-
-Thrown by the server (model operations, downloads, cache, RAG). Access via \`SDK_SERVER_ERROR_CODES.{ERROR_NAME}\`.
-
-${renderTable(errors.server)}`)
-    }
-
-    return sections.join('\n\n') + '\n'
-  }
-
-  it('function page — full function matches original', () => {
-    const rawExpected = originalGenerateMDX(fullFunction)
-    const expected = rawExpected.replace(/\bundefined\b/g, '\u2014').trim()
-    const actual = renderFunctionPage(fullFunction).replace(/\bundefined\b/g, '\u2014').trim()
-    expect(actual).toBe(expected)
-  })
-
-  it('function page — minimal function matches original', () => {
-    const rawExpected = originalGenerateMDX(minimalFunction)
-    const expected = rawExpected.replace(/\bundefined\b/g, '\u2014').trim()
-    const actual = renderFunctionPage(minimalFunction).replace(/\bundefined\b/g, '\u2014').trim()
-    expect(actual).toBe(expected)
-  })
-
-  it('index page matches original', () => {
-    const expected = originalGenerateIndexMDX([fullFunction, minimalFunction], 'v0.8.0')
-    const actual = renderIndexPage([fullFunction, minimalFunction], 'v0.8.0')
-    expect(actual).toBe(expected)
-  })
-
-  it('errors page matches original', () => {
-    const expected = originalWriteErrorsContent({ client: clientErrors, server: serverErrors })
-    const actual = renderErrorsPageContent({ client: clientErrors, server: serverErrors })
-    expect(actual).toBe(expected)
+  it('renders a shared types page', () => {
+    const types = [
+      {
+        name: 'ModelType',
+        description: 'Supported model types.',
+        definition: 'type ModelType = "llm" | "embed" | "tts"',
+        members: [
+          { name: 'llm', description: 'Large language model' },
+          { name: 'embed', description: 'Embedding model' },
+        ],
+      },
+      {
+        name: 'CachePolicy',
+        description: 'Cache eviction policies.',
+        definition: 'type CachePolicy = "lru" | "fifo"',
+      },
+    ]
+    const mdx = env.render('shared-types.njk', { types, versionLabel: 'v0.8.0' }).trim()
+    expect(mdx).toContain('### `ModelType`')
+    expect(mdx).toContain('### `CachePolicy`')
+    expect(mdx).toContain('| `llm`')
+    expect(mdx).toMatchSnapshot()
   })
 })

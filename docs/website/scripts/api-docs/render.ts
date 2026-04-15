@@ -1,15 +1,15 @@
 /**
  * Rendering phase: reads extracted api-data.json and produces MDX files.
- * Complex section rendering is handled by TypeScript helpers (direct ports
- * of the former monolith functions) registered as Nunjucks globals.
  * Page-level assembly uses Nunjucks templates in scripts/api-docs/templates/.
+ * Complex sub-section helpers (expanded type tables, error tables) are
+ * registered as Nunjucks globals/filters so templates can call them.
  */
 
 import * as fs from "fs/promises";
 import * as path from "path";
 import { fileURLToPath } from "node:url";
 import nunjucks from "nunjucks";
-import type { ApiData, ApiFunction, ExpandedType, TypeField, ErrorEntry } from "./types.js";
+import type { ApiData, ApiFunction, ApiObject, ApiType, ExpandedType, TypeField, ErrorEntry } from "./types.js";
 
 const SCRIPT_DIR = path.dirname(fileURLToPath(import.meta.url));
 const TEMPLATE_DIR = path.join(SCRIPT_DIR, "templates");
@@ -35,12 +35,13 @@ function createEnv(): nunjucks.Environment {
   env.addFilter("formatShortSignature", formatShortSignature);
   env.addFilter("escapeQuotes", escapeQuotes);
   env.addFilter("stripFence", stripFence);
+  env.addFilter("lower", (s: string) => s.toLowerCase());
+  env.addFilter("replace", (s: string, from: string, to: string) =>
+    s.replace(new RegExp(from.replace(/[.*+?^${}()|[\]\\]/g, "\\$&"), "g"), to),
+  );
 
   env.addGlobal("renderExpandedTypes", renderExpandedTypes);
   env.addGlobal("renderErrorTable", renderErrorTable);
-  env.addGlobal("renderFunctionPage", renderFunctionPage);
-  env.addGlobal("renderIndexPage", renderIndexPage);
-  env.addGlobal("renderErrorsPage", renderErrorsPageContent);
 
   return env;
 }
@@ -95,7 +96,7 @@ export function stripFence(str: string): string {
 }
 
 // ---------------------------------------------------------------------------
-// Globals — section rendering helpers (direct ports from monolith)
+// Globals — sub-section rendering helpers used by templates
 // ---------------------------------------------------------------------------
 
 export function renderExpandedTypes(types: ExpandedType[], baseDepth: number): string {
@@ -129,175 +130,6 @@ export function renderErrorTable(entries: ErrorEntry[]): string {
 ${entries.map((e) => `| \`${e.name}\` | ${e.code} | ${escapeTable(e.summary)} |`).join("\n")}`;
 }
 
-export function renderFunctionPage(fn: ApiFunction): string {
-  const expandedParamsSection = fn.expandedParams.length > 0
-    ? "\n\n" + renderExpandedTypes(fn.expandedParams, 3)
-    : "";
-
-  const parametersTable =
-    fn.parameters.length > 0
-      ? `## Parameters
-
-| Name | Type | Required? | Description |
-| --- | --- | :---: | --- |
-${fn.parameters
-  .map(
-    (p) => {
-      const typeStr = escapeTableLight(p.type);
-      const anchor = slugify(p.type);
-      const hasExpansion = fn.expandedParams.some(
-        (e) => e.typeName.toLowerCase() === p.type.toLowerCase(),
-      );
-      const typeCell = hasExpansion ? `[\`${typeStr}\`](#${anchor})` : `\`${typeStr}\``;
-      return `| \`${p.name}\` | ${typeCell} | ${p.required ? "\u2713" : "\u2717"} | ${escapeTableLight(p.description || "No description")} |`;
-    },
-  )
-  .join("\n")}${expandedParamsSection}`
-      : "";
-
-  const examplesSection = fn.examples?.length
-    ? `## Example
-
-${fn.examples
-  .map(
-    (ex) => {
-      const stripped = stripFence(ex);
-      return `\`\`\`typescript\n${stripped}\n\`\`\``;
-    },
-  )
-  .join("\n\n")}`
-    : "";
-
-  const desc = String(fn.description ?? "No description available").replace(/"/g, '\\"').replace(/\bundefined\b/g, "\u2014");
-  const returnsDesc = String(fn.returns?.description ?? "No description available").replace(/\bundefined\b/g, "\u2014");
-
-  const deprecationCallout = fn.deprecated
-    ? `<Callout type="warn" title="Deprecated">\n${fn.deprecated}\n</Callout>\n\n`
-    : "";
-
-  const throwsSection = fn.throws?.length
-    ? `## Throws
-
-| Error | When |
-| --- | --- |
-${fn.throws.map((t) => `| \`${t.error}\` | ${t.description} |`).join("\n")}`
-    : "";
-
-  const returnFieldsTable = fn.returnFields.length > 0
-    ? `\n\n| Field | Type | Description |
-| --- | --- | --- |
-${fn.returnFields
-  .map((f) => {
-    const typeStr = escapeTableLight(f.type);
-    return `| \`${f.name}\` | \`${typeStr}\` | ${escapeTableLight(f.description || "\u2014")} |`;
-  })
-  .join("\n")}`
-    : "";
-
-  const expandedReturnsSection = fn.expandedReturns.length > 0
-    ? "\n\n" + renderExpandedTypes(fn.expandedReturns, 3)
-    : "";
-
-  return `---
-title: "${fn.name}( )"
-titleStyle: code
-description: "${desc}"
----
-
-${deprecationCallout}\`\`\`typescript
-${fn.signature}
-\`\`\`
-
-${parametersTable}
-
-## Returns
-
-\`\`\`typescript
-${fn.returns?.type ?? "unknown"}
-\`\`\`
-
-${returnsDesc}${returnFieldsTable}${expandedReturnsSection}
-
-${throwsSection}
-
-${examplesSection}
-`.trim();
-}
-
-export function renderIndexPage(functions: ApiFunction[], versionLabel: string): string {
-  return `---
-title: "@qvac/sdk"
-titleStyle: code
-description: API reference \u2014 ${versionLabel}
----
-
-## Overview
-
-\`@qvac/sdk\` npm package exposes a function-centric, typed JS API.
-
-## Functions
-
-| Function | Summary | Signature |
-| --- | --- | --- |
-${functions
-  .map((fn) => {
-    const summary = firstSentence(fn.description).replace(/\|/g, "\\|");
-    const sig = formatShortSignature(fn.signature);
-    return `| [\`${fn.name}()\`](./${fn.name}) | ${summary} | \`${sig}\` |`;
-  })
-  .join("\n")}
-
-## Errors
-
-See [Errors](./errors) for the full list of SDK error codes.
-`;
-}
-
-export function renderErrorsPageContent(errors: { client: ErrorEntry[]; server: ErrorEntry[] }): string | null {
-  if (errors.client.length === 0 && errors.server.length === 0) {
-    return null;
-  }
-
-  const sections: string[] = [];
-
-  sections.push(`---
-title: Errors
-description: SDK error codes reference
----
-
-## Example
-
-\`\`\`typescript
-import { SDK_CLIENT_ERROR_CODES, SDK_SERVER_ERROR_CODES } from "@qvac/sdk";
-
-try {
-  await loadModel({ modelSrc: "/path/to/model.gguf", modelType: "llm" });
-} catch (error) {
-  if (error.code === SDK_SERVER_ERROR_CODES.MODEL_LOAD_FAILED) {
-    // handle model load failure
-  }
-}
-\`\`\``);
-
-  if (errors.client.length > 0) {
-    sections.push(`## Client errors
-
-Thrown on the client side (response validation, RPC, provider). Access via \`SDK_CLIENT_ERROR_CODES.{ERROR_NAME}\`.
-
-${renderErrorTable(errors.client)}`);
-  }
-
-  if (errors.server.length > 0) {
-    sections.push(`## Server errors
-
-Thrown by the server (model operations, downloads, cache, RAG). Access via \`SDK_SERVER_ERROR_CODES.{ERROR_NAME}\`.
-
-${renderErrorTable(errors.server)}`);
-  }
-
-  return sections.join("\n\n") + "\n";
-}
-
 // ---------------------------------------------------------------------------
 // Public API
 // ---------------------------------------------------------------------------
@@ -315,8 +147,8 @@ export async function renderApiDocs(
 
   await Promise.all(
     apiData.functions.map(async (fn) => {
-      const mdx = renderFunctionPage(fn);
-      const sanitized = mdx.replace(/\bundefined\b/g, "\u2014").trim();
+      const mdx = env.render("function-page.njk", { fn }).trim();
+      const sanitized = mdx.replace(/\bundefined\b/g, "\u2014");
       if (!sanitized.startsWith("---")) {
         throw new Error(
           `Generated invalid MDX for ${fn.name} (missing frontmatter)`,
@@ -324,22 +156,60 @@ export async function renderApiDocs(
       }
       await fs.writeFile(
         path.join(outputDir, `${fn.name}.mdx`),
-        sanitized,
+        sanitized + "\n",
         "utf-8",
       );
     }),
   );
-  console.log(`\u2713 Generated ${apiData.functions.length} MDX files`);
+  console.log(`\u2713 Generated ${apiData.functions.length} function MDX files`);
 
-  const indexMdx = renderIndexPage(apiData.functions, options.versionLabel);
-  await fs.writeFile(path.join(outputDir, "index.mdx"), indexMdx, "utf-8");
+  if (apiData.objects && apiData.objects.length > 0) {
+    await Promise.all(
+      apiData.objects.map(async (obj) => {
+        const mdx = env.render("object-page.njk", { obj }).trim();
+        await fs.writeFile(
+          path.join(outputDir, `${obj.name}.mdx`),
+          mdx + "\n",
+          "utf-8",
+        );
+      }),
+    );
+    console.log(`\u2713 Generated ${apiData.objects.length} object MDX files`);
+  }
+
+  if (apiData.types && apiData.types.length > 0) {
+    const typesMdx = env
+      .render("shared-types.njk", {
+        types: apiData.types,
+        versionLabel: options.versionLabel,
+      })
+      .trim();
+    await fs.writeFile(
+      path.join(outputDir, "types.mdx"),
+      typesMdx + "\n",
+      "utf-8",
+    );
+    console.log(
+      `\u2713 Generated types.mdx (${apiData.types.length} type definitions)`,
+    );
+  }
+
+  const indexMdx = env
+    .render("index-page.njk", {
+      functions: apiData.functions,
+      versionLabel: options.versionLabel,
+    })
+    .trim();
+  await fs.writeFile(path.join(outputDir, "index.mdx"), indexMdx + "\n", "utf-8");
   console.log("\u2713 Generated index.mdx");
 
-  const errorsMdx = renderErrorsPageContent(apiData.errors);
-  if (errorsMdx) {
+  if (apiData.errors.client.length > 0 || apiData.errors.server.length > 0) {
+    const errorsMdx = env
+      .render("errors-page.njk", { errors: apiData.errors })
+      .trim();
     await fs.writeFile(
       path.join(outputDir, "errors.mdx"),
-      errorsMdx,
+      errorsMdx + "\n",
       "utf-8",
     );
     console.log(

@@ -1,5 +1,24 @@
 {#- Render the API index page.
     Receives: { functions: ApiFunction[], versionLabel: string }
-    Delegates to the renderIndexPage() global for byte-identical output
-    with the former generateIndexMDX(). -#}
-{{ renderIndexPage(functions, versionLabel) }}
+    Filters: firstSentence, formatShortSignature -#}
+---
+title: "@qvac/sdk"
+titleStyle: code
+description: API reference — {{ versionLabel }}
+---
+
+## Overview
+
+`@qvac/sdk` npm package exposes a function-centric, typed JS API.
+
+## Functions
+
+| Function | Summary | Signature |
+| --- | --- | --- |
+{% for fn in functions %}
+| [`{{ fn.name }}()`](./{{ fn.name }}) | {{ fn.description | firstSentence | replace("|", "\\|") }} | `{{ fn.signature | formatShortSignature }}` |
+{% endfor %}
+
+## Errors
+
+See [Errors](./errors) for the full list of SDK error codes.

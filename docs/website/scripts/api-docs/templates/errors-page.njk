@@ -1,5 +1,45 @@
 {#- Render the errors reference page.
     Receives: { errors: { client: ErrorEntry[], server: ErrorEntry[] } }
-    Delegates to the renderErrorsPage() global for byte-identical output
-    with the former writeErrorsPage(). -#}
-{{ renderErrorsPage(errors) }}
+    Filters: escapeTable -#}
+---
+title: Errors
+description: SDK error codes reference
+---
+
+## Example
+
+```typescript
+import { SDK_CLIENT_ERROR_CODES, SDK_SERVER_ERROR_CODES } from "@qvac/sdk";
+
+try {
+  await loadModel({ modelSrc: "/path/to/model.gguf", modelType: "llm" });
+} catch (error) {
+  if (error.code === SDK_SERVER_ERROR_CODES.MODEL_LOAD_FAILED) {
+    // handle model load failure
+  }
+}
+```
+
+{% if errors.client.length > 0 %}
+## Client errors
+
+Thrown on the client side (response validation, RPC, provider). Access via `SDK_CLIENT_ERROR_CODES.{ERROR_NAME}`.
+
+| Error | Code | Summary |
+| --- | --- | --- |
+{% for e in errors.client %}
+| `{{ e.name }}` | {{ e.code }} | {{ e.summary | escapeTable }} |
+{% endfor %}
+{% endif %}
+
+{% if errors.server.length > 0 %}
+## Server errors
+
+Thrown by the server (model operations, downloads, cache, RAG). Access via `SDK_SERVER_ERROR_CODES.{ERROR_NAME}`.
+
+| Error | Code | Summary |
+| --- | --- | --- |
+{% for e in errors.server %}
+| `{{ e.name }}` | {{ e.code }} | {{ e.summary | escapeTable }} |
+{% endfor %}
+{% endif %}

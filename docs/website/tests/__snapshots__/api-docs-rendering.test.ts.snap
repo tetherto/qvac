@@ -36,39 +36,7 @@ Thrown by the server (model operations, downloads, cache, RAG). Access via \`SDK
 | Error | Code | Summary |
 | --- | --- | --- |
 | \`MODEL_NOT_FOUND\` | 52002 | Model ID not found in the registry. |
-| \`DOWNLOAD_CANCELLED\` | 53001 | Download cancelled. |
-"
-`;
-
-exports[`errors-page template > renders with only client errors 1`] = `
-"---
-title: Errors
-description: SDK error codes reference
----
-
-## Example
-
-\`\`\`typescript
-import { SDK_CLIENT_ERROR_CODES, SDK_SERVER_ERROR_CODES } from "@qvac/sdk";
-
-try {
-  await loadModel({ modelSrc: "/path/to/model.gguf", modelType: "llm" });
-} catch (error) {
-  if (error.code === SDK_SERVER_ERROR_CODES.MODEL_LOAD_FAILED) {
-    // handle model load failure
-  }
-}
-\`\`\`
-
-## Client errors
-
-Thrown on the client side (response validation, RPC, provider). Access via \`SDK_CLIENT_ERROR_CODES.{ERROR_NAME}\`.
-
-| Error | Code | Summary |
-| --- | --- | --- |
-| \`INVALID_RESPONSE_TYPE\` | 50001 | Invalid response type received. |
-| \`RPC_CONNECTION_FAILED\` | 50203 | RPC connection failed. |
-"
+| \`DOWNLOAD_CANCELLED\` | 53001 | Download cancelled. |"
 `;
 
 exports[`function-page template > renders a full function with all sections 1`] = `
@@ -91,7 +59,6 @@ function completion(params: CompletionParams): CompletionResult
 | Name | Type | Required? | Description |
 | --- | --- | :---: | --- |
 | \`params\` | [\`CompletionParams\`](#completionparams) | ✓ | The completion parameters |
-
 ### \`CompletionParams\`
 
 | Field | Type | Required? | Description |
@@ -152,7 +119,6 @@ function ping(): Promise<{ type: "pong"; number: number }>
 \`\`\`
 
 
-
 ## Returns
 
 \`\`\`typescript
@@ -182,8 +148,24 @@ description: API reference — v0.8.0
 
 ## Errors
 
-See [Errors](./errors) for the full list of SDK error codes.
-"
+See [Errors](./errors) for the full list of SDK error codes."
+`;
+
+exports[`object-page template > renders an object page with fields 1`] = `
+"---
+title: "CompletionParams"
+titleStyle: code
+description: "Parameters for the completion function."
+---
+
+Parameters for the completion function.
+
+## Fields
+
+| Field | Type | Required? | Description |
+| --- | --- | :---: | --- |
+| \`modelId\` | \`string\` | ✓ | The model identifier |
+| \`stream\` | \`boolean\` | ✗ | Whether to stream |"
 `;
 
 exports[`renderExpandedTypes > renders a flat expanded type 1`] = `
@@ -207,4 +189,39 @@ exports[`renderExpandedTypes > renders nested expanded types 1`] = `
 | Field | Type | Required? | Description |
 | --- | --- | :---: | --- |
 | \`value\` | \`string\` | ✓ | The value |"
+`;
+
+exports[`shared-types template > renders a shared types page 1`] = `
+"---
+title: "Types"
+titleStyle: code
+description: "Shared type definitions — v0.8.0"
+---
+
+## Overview
+
+Shared TypeScript types used across the \`@qvac/sdk\` API.
+
+### \`ModelType\`
+
+Supported model types.
+
+\`\`\`typescript
+type ModelType = "llm" | "embed" | "tts"
+\`\`\`
+
+| Member | Description |
+| --- | --- |
+| \`llm\` | Large language model |
+| \`embed\` | Embedding model |
+
+---
+
+### \`CachePolicy\`
+
+Cache eviction policies.
+
+\`\`\`typescript
+type CachePolicy = "lru" | "fifo"
+\`\`\`"
 `;
