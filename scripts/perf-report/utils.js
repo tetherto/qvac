@@ -110,6 +110,8 @@ function _shortDeviceName (name) {
     .replace(/^Samsung Galaxy\s*/i, '')
     .replace(/^Google\s*/i, '')
     .replace(/^Apple\s*/i, '')
+    .replace(/-xlarge/g, '')
+    .replace(/^GitHub Actions\s+\d+$/i, name)
 }
 
 function generateMarkdownReport (aggregated) {

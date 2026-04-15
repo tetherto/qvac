@@ -1730,26 +1730,41 @@ jobs:
         with:
           node-version: ${{ env.NODE_VERSION }}
 
-      - name: Download Android perf report
+      - name: Download all perf report artifacts
         uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # 8.0.1
         with:
-          name: perf-report-ocr-Android-${{ github.run_number }}
-          path: combined-reports/Android
+          pattern: perf-report-ocr-*-${{ github.run_number }}
+          path: combined-reports
         continue-on-error: true
 
-      - name: Download iOS perf report
-        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # 8.0.1
-        with:
-          name: perf-report-ocr-iOS-${{ github.run_number }}
-          path: combined-reports/iOS
-        continue-on-error: true
+      - name: Fix desktop device names
+        shell: bash
+        run: |
+          for dir in combined-reports/perf-report-ocr-*/; do
+            [ -d "$dir" ] || continue
+            base=$(basename "$dir")
+            platform=$(echo "$base" | sed "s/^perf-report-ocr-//" | sed "s/-${{ github.run_number }}$//")
+
+            # Skip mobile — they already have real device names
+            case "$platform" in Android|iOS) continue ;; esac
+
+            for json in $(find "$dir" -name "performance-report.json" 2>/dev/null); do
+              if command -v jq >/dev/null 2>&1; then
+                jq --arg name "$platform" '.device.name = $name' "$json" > "${json}.tmp" && mv "${json}.tmp" "$json"
+                echo "Patched device name in $json → $platform"
+              fi
+            done
+          done
 
       - name: Generate combined report
         run: |
           if ! find combined-reports -name "performance-report.json" -type f 2>/dev/null | grep -q .; then
-            echo "No performance reports found from either platform."
+            echo "No performance reports found."
             exit 0
           fi
+
+          echo "=== Reports found ==="
+          find combined-reports -name "performance-report.json" -type f
 
           mkdir -p combined-output
 
