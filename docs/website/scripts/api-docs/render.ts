@@ -59,11 +59,12 @@ export function escapeTable(str: string): string {
 }
 
 /**
- * Escape braces and pipes for type strings and descriptions inside
- * parameter / field tables (does NOT escape leading backslashes).
+ * Escape backslashes, braces, and pipes for type strings and descriptions
+ * inside parameter / field tables.
  */
 export function escapeTableLight(str: string): string {
   return str
+    .replace(/\\/g, "\\\\")
     .replace(/\{/g, "\\{")
     .replace(/\}/g, "\\}")
     .replace(/\|/g, "\\|");
@@ -80,14 +81,19 @@ export function slugify(str: string): string {
   return str.toLowerCase().replace(/[^a-z0-9]+/g, "-");
 }
 
-/** Strip leading `function ` keyword and escape pipes for table display. */
+/** Strip leading `function ` keyword and escape backslashes and pipes for table display. */
 export function formatShortSignature(sig: string): string {
-  return sig.replace(/^function\s+/, "").replace(/\|/g, "\\|");
+  return sig
+    .replace(/^function\s+/, "")
+    .replace(/\\/g, "\\\\")
+    .replace(/\|/g, "\\|");
 }
 
-/** Escape double-quotes for safe embedding in YAML frontmatter values. */
+/** Escape backslashes and double-quotes for safe embedding in YAML frontmatter values. */
 export function escapeQuotes(str: string): string {
-  return str.replace(/"/g, '\\"');
+  return str
+    .replace(/\\/g, "\\\\")
+    .replace(/"/g, '\\"');
 }
 
 /** Strip surrounding code fences from an example string. */

@@ -44,13 +44,6 @@ function isMissingExamples(fn: ApiFunction): boolean {
   return !fn.examples || fn.examples.length === 0;
 }
 
-function isMissingReturnDescription(fn: ApiFunction): boolean {
-  return (
-    !fn.returns?.description ||
-    fn.returns.description === "No description available"
-  );
-}
-
 // ---------------------------------------------------------------------------
 // Prompt interpolation
 // ---------------------------------------------------------------------------

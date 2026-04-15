@@ -131,8 +131,8 @@ describe('escapeTable', () => {
 })
 
 describe('escapeTableLight', () => {
-  it('escapes pipes and braces but not backslashes', () => {
-    expect(escapeTableLight('a\\b|c{d}e')).toBe('a\\b\\|c\\{d\\}e')
+  it('escapes backslashes, braces, and pipes', () => {
+    expect(escapeTableLight('a\\b|c{d}e')).toBe('a\\\\b\\|c\\{d\\}e')
   })
 })
 
