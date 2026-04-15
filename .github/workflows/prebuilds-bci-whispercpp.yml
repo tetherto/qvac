@@ -1,17 +1,335 @@
-# Stub workflow — enables branch-based triggering once this file exists on main.
-# Full implementation will be added in QVAC-17063.
-name: "Prebuilds (BCI Whispercpp)"
+name: Prebuilds (BCI Whispercpp)
 
 on:
+  push:
+    branches:
+      - feat/bci-whispercpp
+    paths:
+      - ".github/workflows/prebuilds-bci-whispercpp.yml"
+      - ".github/workflows/integration-test-bci-whispercpp.yml"
+      - ".github/workflows/integration-mobile-test-bci-whispercpp.yml"
+      - "packages/bci-whispercpp/**"
   workflow_dispatch:
     inputs:
-      placeholder:
-        description: "Placeholder — full workflow coming in QVAC-17063"
+      workdir:
+        description: "Working directory"
         required: false
+        default: "packages/bci-whispercpp"
         type: string
+  workflow_call:
+    inputs:
+      ref:
+        description: "ref"
+        type: string
+      repository:
+        type: string
+        required: false
+        default: "tetherto/qvac"
+      workdir:
+        description: "Working directory"
+        type: string
+        required: false
+        default: "packages/bci-whispercpp"
 
 jobs:
-  placeholder:
-    runs-on: ubuntu-latest
+  prebuild:
+    permissions:
+      contents: write
+      pull-requests: write
+      packages: write
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: ubuntu-22.04
+            platform: linux
+            arch: x64
+          - os: ubuntu-24.04
+            platform: android
+            arch: arm64
+            flags: -D ANDROID_STL=c++_shared
+          - os: macos-14
+            platform: ios
+            arch: arm64
+          - os: macos-14
+            platform: ios
+            arch: arm64
+            tags: -simulator
+            flags: --simulator
+          - os: macos-14
+            platform: ios
+            arch: x64
+            tags: -simulator
+            flags: --simulator
+          - os: macos-14
+            platform: darwin
+            arch: arm64
+          - os: macos-15
+            platform: darwin
+            arch: x64
+          - os: windows-2022
+            platform: win32
+            arch: x64
+
+    runs-on: ${{ matrix.os }}
+    name: ${{ matrix.platform }}-${{ matrix.arch }}${{ matrix.tags }}
+
+    env:
+      WORKDIR: ${{ inputs.workdir || 'packages/bci-whispercpp' }}
+      VCPKG_BINARY_SOURCES: "clear;files,${{ github.workspace }}/${{ inputs.workdir || 'packages/bci-whispercpp' }}/vcpkg/cache,readwrite"
+      VCPKG_BUILD_TYPE: release
+      VCPKG_KEEP_ENV_VARS: GIT_CONFIG_GLOBAL
+
     steps:
-      - run: echo "Stub workflow — see QVAC-17063 for full implementation"
+      - if: ${{ matrix.platform == 'android' }}
+        name: Select NDK
+        run: |
+          echo "ANDROID_NDK=$ANDROID_NDK_LATEST_HOME" >> $GITHUB_ENV
+          echo "ANDROID_NDK_HOME=$ANDROID_NDK_LATEST_HOME" >> $GITHUB_ENV
+          echo "ANDROID_NDK_ROOT=$ANDROID_NDK_LATEST_HOME" >> $GITHUB_ENV
+
+      - if: ${{ startsWith(matrix.os, 'ubuntu') }}
+        name: Maximize build space
+        run: |
+          sudo docker image prune --all --force
+          sudo rm -rf /opt/hostedtoolcache/CodeQL
+          sudo rm -rf /opt/ghc
+          sudo rm -rf /usr/share/dotnet
+
+      - if: ${{ matrix.os == 'windows-2022' }}
+        name: Configure windows runner
+        run: |
+          git config --system core.longpaths true
+          $ccacheVersion = "4.10.2"
+          $ccacheUrl = "https://github.com/ccache/ccache/releases/download/v$ccacheVersion/ccache-$ccacheVersion-windows-x86_64.zip"
+          $ccacheZip = "$env:TEMP\ccache.zip"
+          $ccacheDir = "C:\ccache"
+          Invoke-WebRequest -Uri $ccacheUrl -OutFile $ccacheZip
+          Expand-Archive -Path $ccacheZip -DestinationPath $ccacheDir -Force
+          $ccacheBin = Get-ChildItem -Path $ccacheDir -Recurse -Filter "ccache.exe" | Select-Object -First 1
+          echo "$($ccacheBin.DirectoryName)" | Out-File -FilePath $env:GITHUB_PATH -Encoding utf8 -Append
+
+      - if: ${{ matrix.os == 'windows-2022' }}
+        name: Configure ccache on Windows
+        shell: bash
+        run: |
+          ccache --set-config=max_size=2G
+          ccache --set-config=compression=true
+          ccache -z
+          echo "CMAKE_C_COMPILER_LAUNCHER=ccache" >> $GITHUB_ENV
+          echo "CMAKE_CXX_COMPILER_LAUNCHER=ccache" >> $GITHUB_ENV
+
+      - if: ${{ matrix.os == 'windows-2022' }}
+        name: Get ccache cache (Windows)
+        uses: actions/cache@v5
+        with:
+          key: ccache-bci-${{ matrix.platform }}-${{ matrix.arch }}-${{ hashFiles(format('{0}/vcpkg.json', inputs.workdir || 'packages/bci-whispercpp')) }}
+          path: ~\AppData\Local\ccache
+          restore-keys: |
+            ccache-bci-${{ matrix.platform }}-${{ matrix.arch }}-
+
+      - name: Checkout repository
+        uses: actions/checkout@v6
+        with:
+          repository: ${{ inputs.repository || github.repository }}
+          ref: ${{ inputs.ref || github.ref }}
+          token: ${{ secrets.PAT_TOKEN }}
+          persist-credentials: false
+          fetch-depth: 0
+
+      - name: Configure git credentials for private repos
+        shell: bash
+        env:
+          GIT_PAT: ${{ secrets.PAT_TOKEN }}
+        run: |
+          GITCFG="${RUNNER_TEMP}/git-global.cfg"
+          cat > "$GITCFG" <<EOF
+          [url "https://x-access-token:${GIT_PAT}@github.com/"]
+            insteadOf = https://github.com/
+            insteadOf = ssh://git@github.com/
+            insteadOf = git@github.com:
+          EOF
+          git config --global url."https://x-access-token:${GIT_PAT}@github.com/".insteadOf "https://github.com/"
+          git config --global url."https://x-access-token:${GIT_PAT}@github.com/".insteadOf "ssh://git@github.com/"
+          git config --global url."https://x-access-token:${GIT_PAT}@github.com/".insteadOf "git@github.com:"
+          echo "GIT_CONFIG_GLOBAL=$GITCFG" >> $GITHUB_ENV
+
+      - name: Setup node
+        uses: actions/setup-node@v6
+        with:
+          node-version: lts/*
+
+      - name: Configure scoped registry
+        env:
+          GPR_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          NPM_TOKEN: ${{ secrets.NPM_TOKEN }}
+          GIT_PAT: ${{ secrets.PAT_TOKEN }}
+        shell: bash
+        working-directory: ${{ env.WORKDIR }}
+        run: |
+          set -eu
+          cat > .npmrc <<NPMRC
+          registry=https://registry.npmjs.org/
+          @qvac:registry=https://registry.npmjs.org/
+          @tetherto:registry=https://npm.pkg.github.com/
+          //registry.npmjs.org/:_authToken=${NPM_TOKEN}
+          //npm.pkg.github.com/:_authToken=${GIT_PAT}
+          NPMRC
+
+      - name: Install global dependencies
+        run: npm install -g bare bare-make
+
+      # ── vcpkg setup ──
+
+      - if: ${{ startsWith(matrix.os, 'macos') }}
+        name: Install vcpkg (macOS)
+        run: |
+          cd ..
+          git clone --branch 2025.12.12 --single-branch https://github.com/microsoft/vcpkg.git
+          cd vcpkg && ./bootstrap-vcpkg.sh -disableMetrics
+          VCPKG_ROOT=$(pwd)
+          echo "VCPKG_ROOT=$VCPKG_ROOT" >> $GITHUB_ENV
+          echo "$VCPKG_ROOT" >> $GITHUB_PATH
+
+      - if: ${{ startsWith(matrix.os, 'ubuntu') }}
+        name: Configure vcpkg (Linux)
+        run: echo "VCPKG_ROOT=$VCPKG_INSTALLATION_ROOT" >> $GITHUB_ENV
+
+      - if: ${{ matrix.os == 'windows-2022' }}
+        name: Configure vcpkg (Windows)
+        run: echo ("VCPKG_ROOT=$env:VCPKG_INSTALLATION_ROOT" -replace '\\', '/') >> $env:GITHUB_ENV
+
+      - if: ${{ matrix.os == 'windows-2022' }}
+        name: Configure cmake generator (Windows)
+        run: |
+          echo "CMAKE_GENERATOR=Visual Studio 17 2022" >> $env:GITHUB_ENV
+          echo "CMAKE_GENERATOR_PLATFORM=x64" >> $env:GITHUB_ENV
+          echo "VCPKG_CMAKE_CONFIGURE_OPTIONS=--no-parallel-configure" >> $env:GITHUB_ENV
+
+      - if: ${{ startsWith(matrix.os, 'macos') }}
+        name: Disable parallel configuration (macOS)
+        run: echo "VCPKG_CMAKE_CONFIGURE_OPTIONS=--no-parallel-configure" >> $GITHUB_ENV
+
+      # ── platform build dependencies ──
+
+      - if: ${{ startsWith(matrix.os, 'ubuntu') }}
+        name: Update c++ tools (Linux)
+        run: |
+          wget -qO- https://apt.llvm.org/llvm-snapshot.gpg.key | sudo tee /etc/apt/trusted.gpg.d/apt.llvm.org.asc > /dev/null
+          sudo chmod 644 /etc/apt/trusted.gpg.d/apt.llvm.org.asc
+          wget https://apt.llvm.org/llvm.sh
+          chmod +x llvm.sh
+          sudo ./llvm.sh 19 all
+
+      - if: ${{ startsWith(matrix.os, 'ubuntu') }}
+        name: Install ccache (Linux)
+        run: sudo apt-get install -y ccache
+
+      - if: ${{ startsWith(matrix.os, 'macos') }}
+        name: Install ccache (macOS)
+        run: brew install ccache
+
+      - if: ${{ matrix.os != 'windows-2022' }}
+        name: Configure ccache
+        run: |
+          ccache --set-config=max_size=2G
+          ccache --set-config=compression=true
+          ccache -z
+          echo "CMAKE_C_COMPILER_LAUNCHER=ccache" >> $GITHUB_ENV
+          echo "CMAKE_CXX_COMPILER_LAUNCHER=ccache" >> $GITHUB_ENV
+
+      - if: ${{ matrix.os != 'windows-2022' }}
+        name: Get ccache cache
+        uses: actions/cache@v5
+        with:
+          key: ccache-bci-${{ matrix.platform }}-${{ matrix.arch }}-${{ hashFiles(format('{0}/vcpkg.json', inputs.workdir || 'packages/bci-whispercpp')) }}
+          path: ~/.cache/ccache
+          restore-keys: |
+            ccache-bci-${{ matrix.platform }}-${{ matrix.arch }}-
+
+      - if: ${{ matrix.platform == 'linux' }}
+        name: Install Linux build deps
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y libxi-dev libxtst-dev libxrandr-dev
+          sudo apt-get install -y libopenblas-dev liblapack-dev libfftw3-dev
+
+      - if: ${{ startsWith(matrix.os, 'macos') }}
+        name: Install macOS build deps
+        run: brew install --quiet openblas lapack fftw
+
+      - if: ${{ matrix.platform == 'android' }}
+        name: Configure runner for cross compilation - android
+        run: |
+          echo "ANDROID_TOOLCHAIN_ROOT=$(echo $ANDROID_NDK_HOME)/toolchains/llvm/prebuilt/linux-x86_64" >> $GITHUB_ENV
+          echo "ANDROID_NATIVE_API_LEVEL=34" >> $GITHUB_ENV
+
+      # ── build ──
+
+      - name: Install npm dependencies
+        working-directory: ${{ env.WORKDIR }}
+        run: npm install
+
+      - name: Create vcpkg cache location
+        working-directory: ${{ env.WORKDIR }}
+        run: mkdir -p vcpkg/cache
+
+      - name: Get vcpkg cache
+        uses: actions/cache@v5
+        with:
+          key: vcpkg-bci-v1-${{ matrix.platform }}-${{ matrix.arch }}-${{ hashFiles(
+            format('{0}/vcpkg.json', inputs.workdir || 'packages/bci-whispercpp'),
+            format('{0}/vcpkg-configuration.json', inputs.workdir || 'packages/bci-whispercpp')
+           ) }}
+          path: ${{ env.WORKDIR }}/vcpkg/cache
+          restore-keys: |
+            vcpkg-bci-v1-${{ matrix.platform }}-${{ matrix.arch }}-
+
+      - name: Run bare-make generate
+        shell: bash
+        working-directory: ${{ env.WORKDIR }}
+        run: |
+          WHISPER_FLAGS="-D WHISPER_USE_METAL=${{ (matrix.platform == 'darwin' || matrix.platform == 'ios') && 'ON' || 'OFF' }} -D WHISPER_USE_CUDA=OFF -D WHISPER_USE_OPENVINO=OFF"
+          bare-make generate --platform ${{ matrix.platform }} --arch ${{ matrix.arch }} ${{ matrix.flags }} $WHISPER_FLAGS
+
+      - name: Run bare-make build
+        shell: bash
+        working-directory: ${{ env.WORKDIR }}
+        run: bare-make build
+
+      - name: Run bare-make install
+        shell: bash
+        working-directory: ${{ env.WORKDIR }}
+        run: bare-make install
+
+      - name: Strip debug symbols
+        if: ${{ matrix.platform != 'win32' && matrix.platform != 'android' }}
+        shell: bash
+        working-directory: ${{ env.WORKDIR }}
+        run: find prebuilds -name "*.bare" -exec strip {} \;
+
+      - name: Show ccache stats
+        run: ccache -s
+
+      - uses: actions/upload-artifact@v6
+        with:
+          name: bci-whispercpp-${{ matrix.platform }}-${{ matrix.arch }}${{ matrix.tags }}
+          path: ${{ env.WORKDIR }}/prebuilds
+
+  run-integration-tests:
+    needs: prebuild
+    uses: ./.github/workflows/integration-test-bci-whispercpp.yml
+    secrets: inherit
+    with:
+      repository: ${{ inputs.repository || github.repository }}
+      ref: ${{ inputs.ref || github.ref }}
+      workdir: ${{ inputs.workdir || 'packages/bci-whispercpp' }}
+
+  run-mobile-integration-tests:
+    needs: prebuild
+    uses: ./.github/workflows/integration-mobile-test-bci-whispercpp.yml
+    secrets: inherit
+    with:
+      repository: ${{ inputs.repository || github.repository }}
+      ref: ${{ inputs.ref || github.ref }}
+      workdir: ${{ inputs.workdir || 'packages/bci-whispercpp' }}
