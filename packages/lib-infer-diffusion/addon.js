@@ -14,8 +14,11 @@ const path = require('bare-path')
  * @returns {{ width: number, height: number } | null}
  */
 function readImageDimensions (buf) {
-  // PNG — magic: \x89PNG\r\n\x1a\n
+  if (!buf || buf.length < 4) return null
+
+  // PNG — magic: \x89PNG\r\n\x1a\n  (IHDR width/height at bytes 16–23)
   if (buf[0] === 0x89 && buf[1] === 0x50 && buf[2] === 0x4E && buf[3] === 0x47) {
+    if (buf.length < 24) return null
     const w = (buf[16] << 24 | buf[17] << 16 | buf[18] << 8 | buf[19]) >>> 0
     const h = (buf[20] << 24 | buf[21] << 16 | buf[22] << 8 | buf[23]) >>> 0
     return { width: w, height: h }
@@ -28,6 +31,7 @@ function readImageDimensions (buf) {
       if (buf[i] !== 0xFF) break
       const marker = buf[i + 1]
       const segLen = (buf[i + 2] << 8 | buf[i + 3])
+      if (segLen < 2) break
       // SOF0–SOF3, SOF5–SOF7, SOF9–SOF11, SOF13–SOF15
       if (
         (marker >= 0xC0 && marker <= 0xC3) ||
@@ -35,6 +39,7 @@ function readImageDimensions (buf) {
         (marker >= 0xC9 && marker <= 0xCB) ||
         (marker >= 0xCD && marker <= 0xCF)
       ) {
+        if (i + 8 >= buf.length) return null
         const h = (buf[i + 5] << 8 | buf[i + 6])
         const w = (buf[i + 7] << 8 | buf[i + 8])
         return { width: w, height: h }
@@ -146,4 +151,4 @@ class SdInterface {
   }
 }
 
-module.exports = { SdInterface }
+module.exports = { SdInterface, readImageDimensions }
