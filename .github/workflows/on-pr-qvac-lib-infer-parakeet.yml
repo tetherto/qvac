@@ -121,13 +121,11 @@ jobs:
     if: needs.authorize.outputs.allowed == 'true'
     needs: [authorize, context]
     runs-on: ubuntu-latest
-    environment: release
     steps:
       - name: Run Sanity checks
-        uses: tetherto/oss-actions/.github/actions/sanity-checks@v1.1.0
+        uses: tetherto/oss-actions/.github/actions/sanity-checks@4c64bed91fc8eba3a201adb1495e61b4c1a2246d
         with:
           secret-token: ${{ secrets.GITHUB_TOKEN }}
-          npm-token: ${{ secrets.NPM_TOKEN }}
           pat-token: ${{ secrets.PAT_TOKEN }}
           run-integration: ${{ needs.context.outputs.run_verify == 'true' }}
           workdir: ${{ github.workspace }}/packages/qvac-lib-infer-parakeet
@@ -140,7 +138,7 @@ jobs:
     with:
       sha: ${{ needs.context.outputs.base_sha }}
       pr_head_sha: ${{ needs.context.outputs.head_sha }}
-      workdir: ${{ github.workspace }}/packages/qvac-lib-infer-parakeet
+      workdir: packages/qvac-lib-infer-parakeet
 
   cpp-tests-coverage:
     permissions:

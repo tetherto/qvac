@@ -23,4 +23,5 @@ logs/
 output/
 temp/
 *.deb
+*.zip
 test/integration/all.js

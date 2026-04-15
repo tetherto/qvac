@@ -103,6 +103,10 @@ export const SDK_SERVER_ERROR_CODES = {
   PLUGIN_MODEL_TYPE_RESERVED: 53858,
   PLUGIN_LOAD_CONFIG_VALIDATION_FAILED: 53859,
 
+  // Lifecycle (53,600-53,610)
+  LIFECYCLE_SUSPEND_FAILED: 53600,
+  LIFECYCLE_RESUME_FAILED: 53601,
+
   // Security (53,900-53,949)
   PATH_TRAVERSAL: 53900,
 
@@ -510,6 +514,18 @@ const serverErrorDefinitions: ErrorCodesMap = {
     name: "PLUGIN_LOAD_CONFIG_VALIDATION_FAILED",
     message: (modelType: string, details: string) =>
       `modelConfig validation failed for "${modelType}": ${details}`,
+  },
+
+  // Lifecycle (53,600-53,610)
+  [SDK_SERVER_ERROR_CODES.LIFECYCLE_SUSPEND_FAILED]: {
+    name: "LIFECYCLE_SUSPEND_FAILED",
+    message: (details?: string) =>
+      `Runtime suspend failed${details ? `: ${details}` : ""}`,
+  },
+  [SDK_SERVER_ERROR_CODES.LIFECYCLE_RESUME_FAILED]: {
+    name: "LIFECYCLE_RESUME_FAILED",
+    message: (details?: string) =>
+      `Runtime resume failed${details ? `: ${details}` : ""}`,
   },
 
   // Security (53,900-53,949)

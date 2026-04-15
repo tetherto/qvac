@@ -81,22 +81,6 @@ jobs:
           echo "publish_tmp=$publish_tmp" >> "$GITHUB_OUTPUT"
           echo "gpr_tag=$gpr_tag" >> "$GITHUB_OUTPUT"
 
-  ensure-npm-public:
-    name: Ensure NPM package is public
-    runs-on: ubuntu-latest
-    environment: release
-    permissions:
-      id-token: write
-    steps:
-      - uses: actions/setup-node@53b83947a5a98c8d113130e565377fae1a50d02f # 6.3.0
-        with:
-          node-version: 18
-          registry-url: https://registry.npmjs.org/
-      - name: Set package access to public
-        env:
-          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
-        run: npm access set status=public @qvac/ocr-onnx
-
   release-merge-guard:
     name: Release Merge Guard
     if: >-
@@ -176,13 +160,12 @@ jobs:
           name-suffix: "-mono"
 
   publish-npm:
-    needs: [build, publish-logic, release-merge-guard, ensure-npm-public]
+    needs: [build, publish-logic, release-merge-guard]
     if: >-
       !cancelled() &&
       needs.build.result == 'success' &&
       needs.publish-logic.outputs.publish_release == 'true' &&
-      (needs.release-merge-guard.result == 'success' || needs.release-merge-guard.result == 'skipped') &&
-      (needs.ensure-npm-public.result == 'success' || needs.ensure-npm-public.result == 'skipped')
+      (needs.release-merge-guard.result == 'success' || needs.release-merge-guard.result == 'skipped')
     continue-on-error: false
     outputs:
       published_version: ${{ steps.publish.outputs.npm_published_version }}

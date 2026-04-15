@@ -96,7 +96,12 @@ export interface SdConfig {
   mmap?: boolean
   /** Offload model weights to CPU when not in use */
   offload_to_cpu?: boolean
-  /** Noise prediction type override (auto-detected from model by default) */
+  /**
+   * Noise prediction type override. Auto-detected from model for txt2img, but
+   * **required** for FLUX img2img: the addon's branch selection relies on this
+   * value to choose the FLUX in-context conditioning path vs. SDEdit. Set
+   * `'flux2_flow'` for FLUX.2 when using `init_image`.
+   */
   prediction?: PredictionType
   /** Flow-matching guidance shift */
   flow_shift?: number
@@ -203,11 +208,11 @@ export interface ImgStableDiffusionArgs {
   opts?: { stats?: boolean }
   diskPath?: string
   modelName: string
-  /** FLUX.1 / SD3: separate CLIP-L text encoder */
+  /** CLIP-L text encoder */
   clipLModel?: string
-  /** SDXL / SD3: separate CLIP-G text encoder */
+  /** CLIP-G text encoder */
   clipGModel?: string
-  /** FLUX.1 / SD3: separate T5-XXL text encoder */
+  /** T5-XXL text encoder */
   t5XxlModel?: string
   /** FLUX.2 [klein]: Qwen3 4B text encoder (llm_path) */
   llmModel?: string

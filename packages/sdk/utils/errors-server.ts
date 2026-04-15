@@ -957,6 +957,32 @@ export class PluginDefinitionInvalidError extends QvacErrorBase {
   }
 }
 
+// ============== Lifecycle Errors ==============
+
+export class LifecycleSuspendFailedError extends QvacErrorBase {
+  constructor(details?: string, cause?: unknown) {
+    super(
+      createErrorOptions(
+        SDK_SERVER_ERROR_CODES.LIFECYCLE_SUSPEND_FAILED,
+        details ? [details] : undefined,
+        cause,
+      ),
+    );
+  }
+}
+
+export class LifecycleResumeFailedError extends QvacErrorBase {
+  constructor(details?: string, cause?: unknown) {
+    super(
+      createErrorOptions(
+        SDK_SERVER_ERROR_CODES.LIFECYCLE_RESUME_FAILED,
+        details ? [details] : undefined,
+        cause,
+      ),
+    );
+  }
+}
+
 // ============== Security Errors ==============
 
 export class PathTraversalError extends QvacErrorBase {

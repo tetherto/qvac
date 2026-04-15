@@ -68,7 +68,6 @@ jobs:
        needs.authorize.outputs.allowed == 'true') ||
       github.event_name == 'workflow_dispatch'
     runs-on: ubuntu-22.04
-    environment: release
     permissions:
       contents: read
     env:
@@ -121,9 +120,8 @@ jobs:
       - name: Run JavaScript tests
         id: run_js_tests
         continue-on-error: true
-        uses: tetherto/oss-actions/.github/actions/run-lint-and-unit-tests@v1.1.0
+        uses: tetherto/oss-actions/.github/actions/run-lint-and-unit-tests@4c64bed91fc8eba3a201adb1495e61b4c1a2246d
         with:
-          npm-token: ${{ secrets.NPM_TOKEN }}
           gpr-token: ${{ secrets.GITHUB_TOKEN }}
           pat-token: ${{ secrets.GITHUB_TOKEN }}
           registry-type: gpr

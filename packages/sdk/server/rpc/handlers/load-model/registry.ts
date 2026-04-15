@@ -30,6 +30,7 @@ import {
   RegistryDownloadFailedError,
 } from "@/utils/errors-server";
 import { getServerLogger } from "@/logging";
+import { getSDKConfig } from "@/server/bare/registry/config-registry";
 import type { DownloadMetricsHooks } from "./types";
 
 const logger = getServerLogger();
@@ -145,9 +146,12 @@ async function downloadSingleFileFromRegistry(
       }
     : undefined;
 
+  const { registryDownloadMaxRetries } = getSDKConfig();
+
   const clientOptions = {
     timeout: REGISTRY_STREAM_TIMEOUT_MS,
     outputFile: modelPath,
+    ...(registryDownloadMaxRetries !== undefined && { maxRetries: registryDownloadMaxRetries }),
     ...(onProgress && { onProgress }),
     ...(signal && { signal: signal as unknown as globalThis.AbortSignal }),
   };

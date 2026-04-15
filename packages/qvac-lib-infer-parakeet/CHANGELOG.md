@@ -5,6 +5,14 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.3.2]
+
+### Fixed
+- Fixed model activation failure on Windows when the user lacks `SeCreateSymbolicLinkPrivilege`. The external data staging in `loadTDTSessions` and `loadCTCSessions` now uses a symlink → hardlink → copy fallback chain. Staging directories are created next to the model files so hardlinks stay on the same volume, avoiding unnecessary multi-GB copies.
+
+### Added
+- Integration test `external-data-staging.test.js` that validates model loading with external data files (`.onnx.data`) via the staging fallback mechanism.
+
 ## [0.3.1]
 
 ### Added

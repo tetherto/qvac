@@ -40,17 +40,30 @@ jobs:
         with:
           github-token: ${{ github.token }}
 
-  sanity-checks:
+  verify-fabric-lockstep:
     if: needs.authorize.outputs.allowed == 'true'
     needs: [authorize]
     runs-on: ubuntu-latest
-    environment: release
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # 6.0.2
+
+      - name: Verify qvac-fabric versions are lockstep
+        id: lockstep
+        uses: ./.github/actions/verify-qvac-fabric-lockstep
+
+      - name: Report verified version
+        run: 'echo "Verified qvac-fabric version: ${{ steps.lockstep.outputs.version }}"'
+
+  sanity-checks:
+    if: needs.authorize.outputs.allowed == 'true'
+    needs: [authorize, verify-fabric-lockstep]
+    runs-on: ubuntu-latest
     steps:
       - name: Run Sanity checks
-        uses: tetherto/oss-actions/.github/actions/sanity-checks@v1.1.0
+        uses: tetherto/oss-actions/.github/actions/sanity-checks@4c64bed91fc8eba3a201adb1495e61b4c1a2246d
         with:
           secret-token: ${{ secrets.GITHUB_TOKEN }}
-          npm-token: ${{ secrets.NPM_TOKEN }}
           pat-token: ${{ secrets.PAT_TOKEN }}
           run-integration: ${{ needs.authorize.outputs.allowed == 'true' }}
           workdir: packages/qvac-lib-infer-llamacpp-embed
@@ -91,15 +104,6 @@ jobs:
         uses: actions/setup-node@53b83947a5a98c8d113130e565377fae1a50d02f # 6.3.0
         with:
           node-version: 20
-
-      - name: Configure npm auth
-        working-directory: packages/qvac-lib-infer-llamacpp-embed
-        run: |
-          cat > .npmrc <<NPMRC
-          registry=https://registry.npmjs.org/
-          @qvac:registry=https://registry.npmjs.org/
-          //registry.npmjs.org/:_authToken=${{ secrets.NPM_TOKEN }}
-          NPMRC
 
       - name: Install dependencies
         working-directory: packages/qvac-lib-infer-llamacpp-embed
@@ -151,9 +155,9 @@ jobs:
       ref: ${{ github.event.pull_request.head.ref }}
 
   merge-guard:
-    needs: [authorize, sanity-checks, cpp-lint, cpp-tests, prebuild, integration-tests, run-mobile-integration-tests, ts-checks]
+    needs: [authorize, verify-fabric-lockstep, sanity-checks, cpp-lint, cpp-tests, prebuild, integration-tests, run-mobile-integration-tests, ts-checks]
     if: always()
     uses: tetherto/oss-actions/.github/workflows/public-pr.yml@v1.1.0
     with:
-      sanity-checks-status: ${{ needs.sanity-checks.result == 'success' }}
+      sanity-checks-status: ${{ needs.verify-fabric-lockstep.result == 'success' && needs.sanity-checks.result == 'success' }}
       build-status: ${{ needs.prebuild.result == 'success' }}

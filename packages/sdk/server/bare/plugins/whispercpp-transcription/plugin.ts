@@ -19,8 +19,6 @@ import {
   type WhisperConfig,
 } from "@/schemas";
 import { createStreamLogger, registerAddonLogger } from "@/logging";
-import { parseModelPath } from "@/server/utils";
-import FilesystemDL from "@qvac/dl-filesystem";
 import { transcribe, transcribeStream } from "@/server/bare/ops/transcribe";
 import { attachModelExecutionMs } from "@/profiling/model-execution";
 
@@ -30,24 +28,15 @@ function createWhisperModel(
   whisperConfig: WhisperConfig,
   vadModelPath?: string,
 ) {
-  const { dirPath, basePath } = parseModelPath(modelPath);
-
-  let vadModelName = "";
-  if (vadModelPath) {
-    const vadParsed = parseModelPath(vadModelPath);
-    vadModelName = vadParsed.basePath;
-  }
-
-  const loader = new FilesystemDL({ dirPath });
   const logger = createStreamLogger(modelId, ModelType.whispercppTranscription);
   registerAddonLogger(modelId, ModelType.whispercppTranscription, logger);
 
   const args = {
-    loader,
+    files: {
+      model: modelPath,
+      ...(vadModelPath && { vadModel: vadModelPath }),
+    },
     logger,
-    modelName: basePath,
-    diskPath: dirPath,
-    vadModelName,
     opts: {
       stats: true,
     },
@@ -63,7 +52,7 @@ function createWhisperModel(
 
   const model = new TranscriptionWhispercpp(args, config);
 
-  return { model, loader };
+  return { model, loader: null };
 }
 
 export const whisperPlugin = definePlugin({

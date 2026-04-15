@@ -1,6 +1,6 @@
 {
   "name": "@qvac/diffusion-cpp",
-  "version": "0.1.2",
+  "version": "0.2.0",
   "description": "stable-diffusion.cpp addon for qvac image/video generation",
   "addon": true,
   "scripts": {
@@ -62,7 +62,6 @@
   "devDependencies": {
     "@types/node": "^24.2.1",
     "bare-buffer": "^3.4.2",
-    "bare-fs": "^4.5.1",
     "bare-os": "^3.7.1",
     "bare-subprocess": "^5.2.2",
     "bare-url": "^2.1.6",
@@ -74,6 +73,7 @@
   },
   "dependencies": {
     "@qvac/infer-base": "^0.2.2",
+    "bare-fs": "^4.5.1",
     "bare-path": "^3.0.0",
     "bare-process": "^4.2.2"
   },

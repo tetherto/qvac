@@ -21,6 +21,7 @@ export const ttsSupertonicRuntimeConfigSchema = z.object({
   language: ttsLanguageSchema,
   ttsSpeed: z.number().optional(),
   ttsNumInferenceSteps: z.number().optional(),
+  ttsSupertonicMultilingual: z.boolean().optional(),
 });
 
 export const ttsRuntimeConfigSchema = z.union([
@@ -38,11 +39,13 @@ export const ttsChatterboxConfigSchema = ttsChatterboxRuntimeConfigSchema.extend
 });
 
 export const ttsSupertonicConfigSchema = ttsSupertonicRuntimeConfigSchema.extend({
-  ttsTokenizerSrc: modelSrcInputSchema,
   ttsTextEncoderSrc: modelSrcInputSchema,
-  ttsLatentDenoiserSrc: modelSrcInputSchema,
-  ttsVoiceDecoderSrc: modelSrcInputSchema,
-  ttsVoiceSrc: modelSrcInputSchema,
+  ttsDurationPredictorSrc: modelSrcInputSchema,
+  ttsVectorEstimatorSrc: modelSrcInputSchema,
+  ttsVocoderSrc: modelSrcInputSchema,
+  ttsUnicodeIndexerSrc: modelSrcInputSchema,
+  ttsTtsConfigSrc: modelSrcInputSchema,
+  ttsVoiceStyleSrc: modelSrcInputSchema,
 });
 
 export const ttsConfigSchema = z.union([

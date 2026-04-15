@@ -4,6 +4,8 @@ titleStyle: code
 description: Text-to-text neural machine translation (NMT).
 ---
 
+> **Migration Note (v1.0.0+):** Opus/Marian model support has been removed. Only IndicTrans2 and Bergamot backends are supported. If you were using Opus models, migrate to Bergamot for European language pairs.
+
 ## Overview
 
 [Bare module](https://bare.pears.com) that adds support for translation in QVAC using either [`qvac-fabric-llm.cpp`](https://github.com/tetherto/qvac-fabric-llm.cpp) or [Bergamot](https://browser.mt) as the inference engine.
@@ -11,7 +13,7 @@ description: Text-to-text neural machine translation (NMT).
 ## Models
 
 You should load a model compatible with your chosen inference engine:
-- `qvac-fabric-llm.cpp` (default): OPUS-MT or IndicTrans2, converted to GGML. Model file format: `*.bin`.
+- `qvac-fabric-llm.cpp` (default): IndicTrans2, converted to GGML. Model file format: `*.bin`.
 - Bergamot: Bergamot model bundle. Required files: model `*.bin` + `vocab*.spm`.
 
 ## Requirement
@@ -279,36 +281,6 @@ The `args` object contains the `DataLoader` we created in the previous step and 
 
 The structure varies slightly depending on which backend you're using.
 
-#### OPUS/Marian
-
-For European language translations using OPUS models from Hyperdrive:
-
-```javascript
-const HyperdriveDL = require('@qvac/dl-hyperdrive')
-
-const hdDL = new HyperdriveDL({
-  key: 'hd://528eb43b34c57b0fb7116e532cd596a9661b001870bdabf696243e8d079a74ca' // en-it model (MARIAN_OPUS_EN_IT)
-})
-
-const args = {
-  loader: hdDL,
-  params: {
-    mode: 'full',      // Model loading mode (full is recommended)
-    srcLang: 'en',     // Source language (ISO 639-1 code)
-    dstLang: 'it'      // Target language (ISO 639-1 code)
-  },
-  diskPath: './models/opus-en-it',  // Unique directory per model
-  modelName: 'model.bin'            // Always 'model.bin' for OPUS models
-}
-```
-
-**Key Parameters:**
-| Parameter | Description | Example |
-|-----------|-------------|---------|
-| `srcLang` | Source language (ISO 639-1) | `'en'`, `'de'`, `'it'`, `'es'`, `'fr'` |
-| `dstLang` | Target language (ISO 639-1) | `'en'`, `'de'`, `'it'`, `'es'`, `'fr'` |
-| `modelName` | Always `'model.bin'` | `'model.bin'` |
-
 #### IndicTrans2
 
 For Indic language translations (English ↔ Hindi, Bengali, Tamil, etc.):
@@ -317,7 +289,7 @@ For Indic language translations (English ↔ Hindi, Bengali, Tamil, etc.):
 const HyperdriveDL = require('@qvac/dl-hyperdrive')
 
 const hdDL = new HyperdriveDL({
-  key: 'hd://8c0f50e7c75527213a090d2f1dcd9dbdb8262e5549c8cbbb74cb7cb12b156892' // en-hi 200M model (MARIAN_EN_HI_INDIC_200M_Q0F32)
+  key: 'hd://8c0f50e7c75527213a090d2f1dcd9dbdb8262e5549c8cbbb74cb7cb12b156892' // en-hi 200M model (INDICTRANS_EN_HI_200M_Q0F32)
 })
 
 const args = {
@@ -440,7 +412,6 @@ const args = {
 
 <Callout title="`diskPath` Configuration" type="info">
 Use a **unique directory per model** to avoid file conflicts when using multiple models:
-- `./models/opus-en-it` for OPUS English→Italian
 - `./models/indic-en-hi-200M` for IndicTrans English→Hindi
 - `./models/bergamot-en-it` for Bergamot English→Italian
 </Callout>
@@ -458,18 +429,18 @@ The `config` object contains two types of parameters:
 
 #### Model-Specific Parameters
 
-| Parameter | OPUS/Marian | IndicTrans2 | Bergamot |
-|-----------|-------------|-------------|----------|
-| `modelType` | Not needed (default) | **Required** | **Required** |
-| `srcVocabName` | Not needed | Not needed | **Required** |
-| `dstVocabName` | Not needed | Not needed | **Required** |
+| Parameter | IndicTrans2 | Bergamot |
+|-----------|-------------|----------|
+| `modelType` | **Required** | **Required** |
+| `srcVocabName` | Not needed | **Required** |
+| `dstVocabName` | Not needed | **Required** |
 
-#### Generation/Decoding Parameters (OPUS/IndicTrans Only)
+#### Generation/Decoding Parameters (IndicTrans Only)
 
-These parameters control how the model generates output. **Note:** Full parameter support is only available for OPUS/Marian and IndicTrans2 models. Bergamot has limited parameter support.
+These parameters control how the model generates output. **Note:** Full parameter support is only available for IndicTrans2 models. Bergamot has limited parameter support.
 
 ```javascript
-// Generation parameters for OPUS/Marian and IndicTrans2
+// Generation parameters for IndicTrans2
 const generationParams = {
   beamsize: 4,            // Beam search width (>=1). 1 disables beam search
   lengthpenalty: 0.6,     // Length normalization strength (>=0)
@@ -488,19 +459,6 @@ Import `TranslationNmtcpp` and create an instance by combining `args` (from Step
 
 ```javascript
 const TranslationNmtcpp = require('@qvac/translation-nmtcpp')
-```
-
-#### OPUS/Marian (Default)
-
-```javascript
-// OPUS - combine generation parameters (modelType defaults to Opus)
-const config = {
-  ...generationParams,  // Spread generation params from Step 3
-  beamsize: 4,          // Or override specific values
-  maxlength: 128
-}
-
-const model = new TranslationNmtcpp(args, config)
 ```
 
 #### IndicTrans2
@@ -534,9 +492,8 @@ const model = new TranslationNmtcpp(args, config)
 
 ```javascript
 TranslationNmtcpp.ModelTypes = {
-  Opus: 'Opus',           // Default - Marian OPUS models
-  IndicTrans: 'IndicTrans', // Indic language models  
-  Bergamot: 'Bergamot'    // Firefox Translations models
+  IndicTrans: 'IndicTrans', // Indic language models
+  Bergamot: 'Bergamot'      // Firefox Translations models
 }
 ```
 
@@ -582,7 +539,7 @@ try {
 For translating multiple texts efficiently, use the `runBatch()` method instead of calling `run()` multiple times.
 
 <Callout type="info">
-`runBatch()` is only available with the **Bergamot backend**. OPUS/Marian and IndicTrans2 models should use sequential `run()` calls.
+`runBatch()` is only available with the **Bergamot backend**. IndicTrans2 models should use sequential `run()` calls.
 </Callout>
 
 ```javascript
@@ -611,7 +568,7 @@ try {
 
 | Method | Input | Output | Backend Support |
 |--------|-------|--------|-----------------|
-| `run(text)` | Single string | `QVACResponse` with streaming | All (OPUS, IndicTrans, Bergamot) |
+| `run(text)` | Single string | `QVACResponse` with streaming | All (IndicTrans, Bergamot) |
 | `runBatch(texts)` | Array of strings | Array of strings | **Bergamot only** |
 
 <Callout type="info">
@@ -630,36 +587,6 @@ try {
 ```
 
 ## Supported Languages
-
-### Marian/OPUS Models (Hyperdrive)
-
-The following language pairs are available via Hyperdrive.
-
-**Core European Languages (with cross-language support):**
-| Language | Code | Supported Pairs | Hyperdrive |
-|----------|------|-----------------|------------|
-| English | en | ↔ de, es, it, fr, pt, ru, ar, ja, zh | Yes |
-| German | de | ↔ en, es, it, fr | Yes |
-| Spanish | es | ↔ en, de, it, fr | Yes |
-| Italian | it | ↔ en, de, es | Yes |
-| French | fr | ↔ en, de, es | Yes |
-
-**Other Languages (English ↔ X):**
-| Language | Code | Hyperdrive |
-|----------|------|------------|
-| Portuguese | pt | Yes |
-| Russian | ru | Yes |
-| Arabic | ar | Yes |
-| Japanese | ja | Yes |
-| Chinese | zh | Yes |
-
-<Callout type="info">
-**Legend:** `↔` = bidirectional support available in Hyperdrive.
-</Callout>
- 
-<Callout type="info">
-The OPUS project supports many more language pairs. Only the pairs listed above are currently available via Hyperdrive. Additional models may be added in future updates.
-</Callout>
 
 ### IndicTrans2 Models (Hyperdrive)
 
@@ -753,7 +680,6 @@ const TranslationNmtcpp = require('@qvac/translation-nmtcpp')
 // Available model types
 TranslationNmtcpp.ModelTypes = {
   IndicTrans: 'IndicTrans',  // For Indic language translations
-  Opus: 'Opus',              // For Marian OPUS models
   Bergamot: 'Bergamot'       // For Bergamot/Firefox translations
 }
 ```
@@ -764,7 +690,7 @@ TranslationNmtcpp.ModelTypes = {
 
 | Package | Description | Backends | Languages |
 |---------|-------------|----------|-----------|
-| `@qvac/translation-nmtcpp` | Main translation package | OPUS, Bergamot, IndicTrans | See [Supported Languages](#supported-languages) |
+| `@qvac/translation-nmtcpp` | Main translation package | Bergamot, IndicTrans | See [Supported Languages](#supported-languages) |
 
 The main package supports all three backends and all their respective languages. See [Supported Languages](#supported-languages) for the complete list.
 
@@ -788,8 +714,8 @@ const logger = {
 const args = {
   loader: hdDL,
   params: { mode: 'full', srcLang: 'en', dstLang: 'it' },
-  diskPath: './models/opus-en-it',
-  modelName: 'model.bin',
+  diskPath: './models/bergamot-en-it',
+  modelName: 'model.enit.intgemm.alphas.bin',
   logger  // Pass logger to enable C++ logs
 }
 ```
@@ -802,8 +728,8 @@ To suppress all C++ logs, either omit the `logger` parameter or set it to `null`
 const args = {
   loader: hdDL,
   params: { mode: 'full', srcLang: 'en', dstLang: 'it' },
-  diskPath: './models/opus-en-it',
-  modelName: 'model.bin'
+  diskPath: './models/bergamot-en-it',
+  modelName: 'model.enit.intgemm.alphas.bin'
   // No logger = suppress C++ logs
 }
 ```

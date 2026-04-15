@@ -10,8 +10,16 @@ async function runApiBehaviorTest (options = {}) { // eslint-disable-line no-unu
   return runIntegrationModule('../integration/api-behavior.test.js', options)
 }
 
+async function runGenerateImageFlux2I2iTest (options = {}) { // eslint-disable-line no-unused-vars
+  return runIntegrationModule('../integration/generate-image-flux2-i2i.test.js', options)
+}
+
 async function runGenerateImageFlux2Test (options = {}) { // eslint-disable-line no-unused-vars
   return runIntegrationModule('../integration/generate-image-flux2.test.js', options)
+}
+
+async function runGenerateImageSd3I2iTest (options = {}) { // eslint-disable-line no-unused-vars
+  return runIntegrationModule('../integration/generate-image-sd3-i2i.test.js', options)
 }
 
 async function runGenerateImageSd3Test (options = {}) { // eslint-disable-line no-unused-vars
@@ -24,6 +32,10 @@ async function runGenerateImageSdxlTest (options = {}) { // eslint-disable-line 
 
 async function runGenerateImageTest (options = {}) { // eslint-disable-line no-unused-vars
   return runIntegrationModule('../integration/generate-image.test.js', options)
+}
+
+async function runInputValidationTest (options = {}) { // eslint-disable-line no-unused-vars
+  return runIntegrationModule('../integration/input-validation.test.js', options)
 }
 
 async function runModelLoadingTest (options = {}) { // eslint-disable-line no-unused-vars

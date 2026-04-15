@@ -1,6 +1,6 @@
 {
   "name": "@qvac/tts-onnx",
-  "version": "0.8.2",
+  "version": "0.8.3",
   "description": "Text to Speech (TTS) addon for qvac",
   "addon": true,
   "engines": {
@@ -9,8 +9,7 @@
   "scripts": {
     "build": "bare-make generate && bare-make build && bare-make install",
     "build:pack": "mkdir -p dist && npm pack --pack-destination dist",
-    "mobile:copy-prebuilds": "cp -r prebuilds/android-arm64 prebuilds/android-ia32 || echo 'Warning: Failed to copy prebuilds to android-ia32'; cp -r prebuilds/android-arm64 prebuilds/android-arm || echo 'Warning: Failed to copy prebuilds to android-arm'; cp -r prebuilds/android-arm64 prebuilds/android-x64 || echo 'Warning: Failed to copy prebuilds to android-x64'; cp -r prebuilds/ios-arm64 prebuilds/ios-arm64-simulator 2>/dev/null || echo 'iOS prebuilds already present'; cp -r prebuilds/ios-arm64 prebuilds/ios-x64-simulator 2>/dev/null || echo 'iOS prebuilds already present'",
-    "example": "bare examples/example-chatterbox-tts.js",
+    "example": "bare examples/chatterbox-tts.js english",
     "lint": "standard \"test/**/*.js\" \"*.js\" \"lib/*.js\"",
     "lint:fix": "standard --fix \"test/**/*.js\" \"*.js\" \"lib/*.js\"",
     "test:unit": "brittle-bare test/unit/**/*.test.js",
@@ -22,8 +21,10 @@
     "test:mobile:validate": "node scripts/validate-mobile-tests.js",
     "test:cpp:build": "bare-make generate -D BUILD_TESTING=ON && bare-make build",
     "test:cpp:run": "./build/addon/test/unit/qvac-lib-inference-tts-unit-test",
-    "models:ensure": "brittle-bare scripts/ensure-models.js",
     "test:cpp": "npm run test:cpp:build && npm run test:cpp:run",
+    "models:ensure": "bare scripts/ensure-models.js",
+    "models:ensure:chatterbox": "bare scripts/ensure-chatterbox.js",
+    "models:ensure:supertonic": "bare scripts/ensure-supertonic.js",
     "coverage:cpp:build": "bare-make generate -D BUILD_TESTING=ON -D ENABLE_COVERAGE=ON && bare-make build",
     "coverage:cpp:run": "cd build/addon/test/unit && LLVM_PROFILE_FILE=default.profraw ./qvac-lib-inference-tts-unit-test --gtest_output=xml:cpp-test-results.xml",
     "coverage:cpp:summary": "cd build/addon/test/unit && llvm-cov-19 report ./qvac-lib-inference-tts-unit-test  --instr-profile=coverage.profdata -ignore-filename-regex='(test/unit|tests|build|node_modules|gtest|gmock|\\.vcpkg|/usr)/' > coverage-summary.txt",
@@ -47,6 +48,7 @@
     "test/utils/runSupertonicTTS.js",
     "test/utils/downloadModel.js",
     "test/utils/wav-helper.js",
+    "test/utils/lavasr-helpers.js",
     "test/utils/loader.fake.js",
     "test/utils/runWhisper.js",
     "LICENSE",
@@ -55,6 +57,7 @@
   "exports": {
     "./package": "./package.json",
     ".": "./index.js",
+    "./text-chunker": "./lib/textChunker.js",
     "./addonLogging": {
       "types": "./addonLogging.d.ts",
       "default": "./addonLogging.js"
@@ -79,13 +82,13 @@
     "brittle": "^3.17.0",
     "cmake-bare": "^1.7.5",
     "cmake-vcpkg": "^1.1.0",
+    "fflate": "^0.8.2",
     "fs": "npm:bare-fs",
     "husky": "^9.1.7",
     "os": "npm:bare-os@^3.6.2",
     "process": "npm:bare-process",
     "sinon": "^21.0.0",
     "standard": "^17.0.0",
-    "fflate": "^0.8.2",
     "stream": "npm:bare-node-stream",
     "tty": "npm:bare-node-tty",
     "util": "npm:bare-utils@^1.5.1"
@@ -94,7 +97,8 @@
     "@qvac/error": "^0.1.0",
     "@qvac/onnx": "^0.14.0",
     "@qvac/infer-base": "^0.4.0",
-    "bare-fs": "^4.5.1",
+    "bare-fs": "^4.5.6",
+    "bare-os": "^3.8.0",
     "bare-path": "^3.0.0"
   },
   "types": "index.d.ts"
