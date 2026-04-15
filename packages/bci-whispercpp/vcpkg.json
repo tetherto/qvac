@@ -8,11 +8,6 @@
     },
     "whisper-cpp",
     "gtest"
-  ],
-  "overrides": [
-    {
-      "name": "whisper-cpp",
-      "version": "1.7.5.1"
-    }
   ]
 }
+
