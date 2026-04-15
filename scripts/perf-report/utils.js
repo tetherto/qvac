@@ -99,67 +99,106 @@ function formatQualityValue (key, value) {
   return value.toFixed(2)
 }
 
+function _parseTestEp (fullName) {
+  const m = fullName.match(/^(.*?)\s*\[(CPU|GPU)\]\s*$/)
+  if (m) return { base: m[1].trim(), ep: m[2].toUpperCase() }
+  return { base: fullName, ep: '' }
+}
+
+function _shortDeviceName (name) {
+  return name
+    .replace(/^Samsung Galaxy\s*/i, '')
+    .replace(/^Google\s*/i, '')
+    .replace(/^Apple\s*/i, '')
+}
+
 function generateMarkdownReport (aggregated) {
   const lines = []
   const { addon, generated_at, run_numbers, devices, quality } = aggregated
-
   const iterCount = _maxIterationCount(devices)
 
   lines.push(`## ${addon} Performance Report`)
   lines.push(`Generated: ${generated_at} | CI Runs: ${run_numbers.join(', ')} | Iterations: ${iterCount}`)
   lines.push('')
 
-  for (const [deviceName, tests] of Object.entries(devices)) {
-    lines.push(`### ${deviceName}`)
-    lines.push('')
+  const deviceNames = Object.keys(devices)
+  if (!deviceNames.length) return lines.join('\n') + '\n'
 
-    const iterCols = _mdIterationHeaders(iterCount, run_numbers)
-    const header = ['Metric', ...iterCols, 'Mean', 'Std Dev']
-    lines.push('| ' + header.join(' | ') + ' |')
-    lines.push('| ' + header.map(() => '---').join(' | ') + ' |')
+  const shortNames = deviceNames.map(_shortDeviceName)
 
-    for (const [testName, metrics] of Object.entries(tests)) {
-      lines.push(`| **${testName}** | ${' |'.repeat(iterCount + 2)}`)
-      for (const [metricKey, summary] of Object.entries(metrics)) {
-        if (!summary) continue
-        const vals = []
-        for (let i = 0; i < iterCount; i++) {
-          const v = summary.values[i]
-          vals.push(v !== undefined ? formatMetricValue(metricKey, v) : '-')
-        }
-        const meanStr = formatMetricValue(metricKey, summary.mean)
-        const stdStr = '\u00b1' + formatMetricValue(metricKey, summary.std)
-        lines.push(`| ${metricLabel(metricKey)} | ${vals.join(' | ')} | ${meanStr} | ${stdStr} |`)
-      }
-    }
-    lines.push('')
+  const allTests = new Set()
+  for (const tests of Object.values(devices)) {
+    for (const t of Object.keys(tests)) allTests.add(t)
   }
 
+  const parsed = [...allTests].map(n => ({ full: n, ..._parseTestEp(n) }))
+  const epOrder = { CPU: 0, GPU: 1, '': 2 }
+  parsed.sort((a, b) => {
+    if (a.base !== b.base) return a.base.localeCompare(b.base)
+    return (epOrder[a.ep] || 0) - (epOrder[b.ep] || 0)
+  })
+
+  const hasEp = parsed.some(p => p.ep !== '')
+
+  // --- Performance Summary (combined) ---
+  lines.push('### Performance Summary (Mean Total Time)')
+  lines.push('')
+
+  const perfHeader = hasEp ? ['Test', 'EP'] : ['Test']
+  for (const sn of shortNames) perfHeader.push(sn)
+  lines.push('| ' + perfHeader.join(' | ') + ' |')
+  lines.push('| ' + perfHeader.map(() => '---').join(' | ') + ' |')
+
+  for (const t of parsed) {
+    const cells = hasEp ? [t.base, `**${t.ep}**`] : [t.full]
+    for (const devName of deviceNames) {
+      const metrics = devices[devName] && devices[devName][t.full]
+      if (metrics && metrics.total_time_ms) {
+        const s = metrics.total_time_ms
+        cells.push(`${Math.round(s.mean)} \u00b1${Math.round(s.std)}ms`)
+      } else {
+        cells.push('-')
+      }
+    }
+    lines.push('| ' + cells.join(' | ') + ' |')
+  }
+  lines.push('')
+
+  // --- Quality Summary (combined) ---
   if (quality && Object.keys(quality).length > 0) {
-    lines.push('---')
-    lines.push('')
-    lines.push(`## ${addon} Quality Report`)
-    lines.push('')
+    const hasQualityData = Object.values(quality).some(tests =>
+      Object.values(tests).some(m => Object.keys(m).length > 0)
+    )
 
-    for (const [deviceName, tests] of Object.entries(quality)) {
-      const hasData = Object.values(tests).some(m => Object.keys(m).length > 0)
-      if (!hasData) continue
-
-      lines.push(`### ${deviceName}`)
+    if (hasQualityData) {
+      lines.push('---')
+      lines.push('')
+      lines.push('### Quality Summary')
       lines.push('')
 
-      const qHeader = ['Test', 'CER', 'WER', 'Word Recognition', 'Keyword Rate', 'KV Accuracy']
+      const qKeys = ['cer', 'wer', 'keyword_detection_rate', 'key_value_accuracy']
+      const qShort = { cer: 'CER', wer: 'WER', keyword_detection_rate: 'KW', key_value_accuracy: 'KV' }
+
+      const qHeader = hasEp ? ['Test', 'EP'] : ['Test']
+      for (const sn of shortNames) {
+        for (const qk of qKeys) qHeader.push(`${sn} ${qShort[qk]}`)
+      }
       lines.push('| ' + qHeader.join(' | ') + ' |')
       lines.push('| ' + qHeader.map(() => '---').join(' | ') + ' |')
 
-      for (const [testName, metrics] of Object.entries(tests)) {
-        if (!Object.keys(metrics).length) continue
-        const cerVal = metrics.cer ? formatQualityValue('cer', metrics.cer.mean) : '-'
-        const werVal = metrics.wer ? formatQualityValue('wer', metrics.wer.mean) : '-'
-        const wrrVal = metrics.word_recognition_rate ? formatQualityValue('word_recognition_rate', metrics.word_recognition_rate.mean) : '-'
-        const kwRate = metrics.keyword_detection_rate ? formatQualityValue('keyword_detection_rate', metrics.keyword_detection_rate.mean) : '-'
-        const kvAcc = metrics.key_value_accuracy ? formatQualityValue('key_value_accuracy', metrics.key_value_accuracy.mean) : '-'
-        lines.push(`| ${testName} | ${cerVal} | ${werVal} | ${wrrVal} | ${kwRate} | ${kvAcc} |`)
+      for (const t of parsed) {
+        const cells = hasEp ? [t.base, `**${t.ep}**`] : [t.full]
+        for (const devName of deviceNames) {
+          const testQ = quality[devName] && quality[devName][t.full]
+          for (const qk of qKeys) {
+            if (testQ && testQ[qk]) {
+              cells.push(formatQualityValue(qk, testQ[qk].mean))
+            } else {
+              cells.push('-')
+            }
+          }
+        }
+        lines.push('| ' + cells.join(' | ') + ' |')
       }
       lines.push('')
     }
