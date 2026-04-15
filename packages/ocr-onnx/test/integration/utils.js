@@ -67,10 +67,15 @@ try {
         var written = false
         var dirs = []
         if (global.testDir) dirs.push(global.testDir)
-        if (platform === 'android') dirs.push('/data/local/tmp')
+        if (platform === 'android') {
+          dirs.push('/sdcard/Android/data/io.tether.test.qvac/files')
+          dirs.push('/storage/emulated/0/Android/data/io.tether.test.qvac/files')
+          dirs.push('/data/local/tmp')
+        }
         dirs.push('/tmp')
         for (var di = 0; di < dirs.length; di++) {
           try {
+            try { fs.mkdirSync(dirs[di], { recursive: true }) } catch (_) {}
             var p = path.join(dirs[di], 'perf-report.json')
             fs.writeFileSync(p, json)
             console.log('[PERF_REPORT_PATH]' + p)
