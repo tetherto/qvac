@@ -443,7 +443,7 @@ void ParakeetModel::load() {
               ")");
     }
 
-    auto loadSessions = [&](Ort::SessionOptions &opts) {
+    auto loadSessions = [&](Ort::SessionOptions& opts) {
       switch (cfg_.modelType) {
       case ModelType::CTC:
         loadCTCSessions(opts);
@@ -462,7 +462,7 @@ void ParakeetModel::load() {
 
     try {
       loadSessions(session_options);
-    } catch (const std::exception &e) {
+    } catch (const std::exception& e) {
       if (sessionCfg.provider != onnx_addon::ExecutionProvider::CPU) {
         QLOG(qvac_lib_inference_addon_cpp::logger::Priority::WARNING,
              std::string("GPU session creation failed, retrying CPU-only: ") +
@@ -2250,8 +2250,7 @@ std::any ParakeetModel::process(const std::any& input) {
         input.type().name());
   }
 
-  const auto generation =
-      nextGeneration_.fetch_add(1, std::memory_order_relaxed);
+  const auto generation = nextGeneration_.fetch_add(1, std::memory_order_relaxed);
   reset();
   activeGeneration_.store(generation, std::memory_order_relaxed);
   try {
@@ -2330,24 +2329,23 @@ qvac_lib_inference_addon_cpp::RuntimeStats ParakeetModel::runtimeStats() const {
 }
 
 void ParakeetModel::cancel() const {
-  const auto activeGeneration =
-      activeGeneration_.load(std::memory_order_relaxed);
+  const auto activeGeneration = activeGeneration_.load(std::memory_order_relaxed);
   if (activeGeneration != 0) {
     cancelGeneration_.store(activeGeneration, std::memory_order_relaxed);
   }
 }
 
 void ParakeetModel::throwIfCancelled() const {
-  const auto activeGeneration =
-      activeGeneration_.load(std::memory_order_relaxed);
-  if (activeGeneration != 0 &&
+  const auto activeGeneration = activeGeneration_.load(std::memory_order_relaxed);
+  if (
+      activeGeneration != 0 &&
       cancelGeneration_.load(std::memory_order_relaxed) == activeGeneration) {
     cancelGeneration_.store(0, std::memory_order_relaxed);
     throw std::runtime_error(ERR_JOB_CANCELLED);
   }
 }
 
-bool ParakeetModel::isCancellationError(const std::exception &e) {
+bool ParakeetModel::isCancellationError(const std::exception& e) {
   return std::string_view(e.what()) == ERR_JOB_CANCELLED;
 }
 

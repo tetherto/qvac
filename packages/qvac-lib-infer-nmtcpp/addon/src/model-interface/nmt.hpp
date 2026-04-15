@@ -76,90 +76,90 @@ struct nmt_hparams {
 
 struct nmt_layer_decoder {
   // decoder.blocks.*.attn_ln
-  struct ggml_tensor *attn_ln_0_w;
-  struct ggml_tensor *attn_ln_0_b;
+  struct ggml_tensor* attn_ln_0_w;
+  struct ggml_tensor* attn_ln_0_b;
 
   // decoder.blocks.*.attn.out
-  struct ggml_tensor *attn_ln_1_w;
-  struct ggml_tensor *attn_ln_1_b;
+  struct ggml_tensor* attn_ln_1_w;
+  struct ggml_tensor* attn_ln_1_b;
 
   // decoder.blocks.*.attn.query
-  struct ggml_tensor *attn_q_w;
-  struct ggml_tensor *attn_q_b;
+  struct ggml_tensor* attn_q_w;
+  struct ggml_tensor* attn_q_b;
 
   // decoder.blocks.*.attn.key
-  struct ggml_tensor *attn_k_w;
-  struct ggml_tensor *attn_k_b;
+  struct ggml_tensor* attn_k_w;
+  struct ggml_tensor* attn_k_b;
 
   // decoder.blocks.*.attn.value
-  struct ggml_tensor *attn_v_w;
-  struct ggml_tensor *attn_v_b;
+  struct ggml_tensor* attn_v_w;
+  struct ggml_tensor* attn_v_b;
 
   // decoder.blocks.*.cross_attn_ln
-  struct ggml_tensor *cross_attn_ln_0_w;
-  struct ggml_tensor *cross_attn_ln_0_b;
+  struct ggml_tensor* cross_attn_ln_0_w;
+  struct ggml_tensor* cross_attn_ln_0_b;
 
   // decoder.blocks.*.cross_attn.out
-  struct ggml_tensor *cross_attn_ln_1_w;
-  struct ggml_tensor *cross_attn_ln_1_b;
+  struct ggml_tensor* cross_attn_ln_1_w;
+  struct ggml_tensor* cross_attn_ln_1_b;
 
   // decoder.blocks.*.cross_attn.query
-  struct ggml_tensor *cross_attn_q_w;
-  struct ggml_tensor *cross_attn_q_b;
+  struct ggml_tensor* cross_attn_q_w;
+  struct ggml_tensor* cross_attn_q_b;
 
   // decoder.blocks.*.cross_attn.key
-  struct ggml_tensor *cross_attn_k_w;
-  struct ggml_tensor *cross_attn_k_b;
+  struct ggml_tensor* cross_attn_k_w;
+  struct ggml_tensor* cross_attn_k_b;
 
   // decoder.blocks.*.cross_attn.value
-  struct ggml_tensor *cross_attn_v_w;
-  struct ggml_tensor *cross_attn_v_b;
+  struct ggml_tensor* cross_attn_v_w;
+  struct ggml_tensor* cross_attn_v_b;
 
   // decoder.blocks.*.mlp_ln
-  struct ggml_tensor *mlp_ln_w;
-  struct ggml_tensor *mlp_ln_b;
+  struct ggml_tensor* mlp_ln_w;
+  struct ggml_tensor* mlp_ln_b;
 
   // decoder.blocks.*.mlp.0
-  struct ggml_tensor *mlp_0_w;
-  struct ggml_tensor *mlp_0_b;
+  struct ggml_tensor* mlp_0_w;
+  struct ggml_tensor* mlp_0_b;
 
   // decoder.blocks.*.mlp.2
-  struct ggml_tensor *mlp_1_w;
-  struct ggml_tensor *mlp_1_b;
+  struct ggml_tensor* mlp_1_w;
+  struct ggml_tensor* mlp_1_b;
 };
 
 struct nmt_layer_encoder {
   // encoder.blocks.*.attn_ln
-  struct ggml_tensor *attn_ln_0_w;
-  struct ggml_tensor *attn_ln_0_b;
+  struct ggml_tensor* attn_ln_0_w;
+  struct ggml_tensor* attn_ln_0_b;
 
   // encoder.blocks.*.attn.out
-  struct ggml_tensor *attn_ln_1_w;
-  struct ggml_tensor *attn_ln_1_b;
+  struct ggml_tensor* attn_ln_1_w;
+  struct ggml_tensor* attn_ln_1_b;
 
   // encoder.blocks.*.attn.query
-  struct ggml_tensor *attn_q_w;
-  struct ggml_tensor *attn_q_b;
+  struct ggml_tensor* attn_q_w;
+  struct ggml_tensor* attn_q_b;
 
   // encoder.blocks.*.attn.key
-  struct ggml_tensor *attn_k_w;
-  struct ggml_tensor *attn_k_b;
+  struct ggml_tensor* attn_k_w;
+  struct ggml_tensor* attn_k_b;
 
   // encoder.blocks.*.attn.value
-  struct ggml_tensor *attn_v_w;
-  struct ggml_tensor *attn_v_b;
+  struct ggml_tensor* attn_v_w;
+  struct ggml_tensor* attn_v_b;
 
   // encoder.blocks.*.mlp_ln
-  struct ggml_tensor *mlp_ln_w;
-  struct ggml_tensor *mlp_ln_b;
+  struct ggml_tensor* mlp_ln_w;
+  struct ggml_tensor* mlp_ln_b;
 
   // encoder.blocks.*.mlp.0
-  struct ggml_tensor *mlp_0_w;
-  struct ggml_tensor *mlp_0_b;
+  struct ggml_tensor* mlp_0_w;
+  struct ggml_tensor* mlp_0_b;
 
   // encoder.blocks.*.mlp.2
-  struct ggml_tensor *mlp_1_w;
-  struct ggml_tensor *mlp_1_b;
+  struct ggml_tensor* mlp_1_w;
+  struct ggml_tensor* mlp_1_b;
 };
 
 struct nmt_kv_cell {
@@ -167,7 +167,7 @@ struct nmt_kv_cell {
 
   std::set<nmt_seq_id> seq_id;
 
-  [[nodiscard]] bool has_seq_id(const nmt_seq_id &seq_id_param) const {
+  [[nodiscard]] bool has_seq_id(const nmt_seq_id& seq_id_param) const {
     return seq_id.find(seq_id_param) != seq_id.end();
   }
 };
@@ -181,8 +181,8 @@ struct nmt_kv_cache {
 
   std::vector<nmt_kv_cell> cells;
 
-  struct ggml_tensor *k = nullptr;
-  struct ggml_tensor *v = nullptr;
+  struct ggml_tensor* k = nullptr;
+  struct ggml_tensor* v = nullptr;
 
   ggml_backend_buffer_t buffer = nullptr;
 
@@ -207,48 +207,48 @@ struct nmt_model {
 
   nmt_config config;
 
-  struct ggml_tensor *m_encoder_embeddings =
+  struct ggml_tensor* m_encoder_embeddings =
       nullptr; // encoder embeddings (shared)
-  struct ggml_tensor *m_decoder_embeddings = nullptr; // decoder embeddings
-  struct ggml_tensor *m_encoder_pos_emb =
+  struct ggml_tensor* m_decoder_embeddings = nullptr; // decoder embeddings
+  struct ggml_tensor* m_encoder_pos_emb =
       nullptr; // encoder positional embeddings
-  struct ggml_tensor *m_decoder_pos_emb =
+  struct ggml_tensor* m_decoder_pos_emb =
       nullptr; // decoder positional embeddings
-  struct ggml_tensor *m_encoder_norm_w =
+  struct ggml_tensor* m_encoder_norm_w =
       nullptr; // encoder final layer norm weight
-  struct ggml_tensor *m_encoder_norm_b =
+  struct ggml_tensor* m_encoder_norm_b =
       nullptr; // encoder final layer norm bias
-  struct ggml_tensor *m_decoder_norm_w =
+  struct ggml_tensor* m_decoder_norm_w =
       nullptr; // decoder final layer norm weight
-  struct ggml_tensor *m_decoder_norm_b =
+  struct ggml_tensor* m_decoder_norm_b =
       nullptr; // decoder final layer norm bias
-  struct ggml_tensor *m_lm_head_w =
+  struct ggml_tensor* m_lm_head_w =
       nullptr; // language model head weight (often shared with embeddings)
-  struct ggml_tensor *m_final_logits_bias =
+  struct ggml_tensor* m_final_logits_bias =
       nullptr; // final logits bias (shape: 1 x vocab_size)
 
   // IndicTrans2-specific additional tensors
-  struct ggml_tensor *m_enc_layer_norm_w =
+  struct ggml_tensor* m_enc_layer_norm_w =
       nullptr; // encoder layernorm_embedding weight
-  struct ggml_tensor *m_enc_layer_norm_b =
+  struct ggml_tensor* m_enc_layer_norm_b =
       nullptr; // encoder layernorm_embedding bias
-  struct ggml_tensor *m_dec_layer_norm_w =
+  struct ggml_tensor* m_dec_layer_norm_w =
       nullptr; // decoder layernorm_embedding weight
-  struct ggml_tensor *m_dec_layer_norm_b =
+  struct ggml_tensor* m_dec_layer_norm_b =
       nullptr; // decoder layernorm_embedding bias
 
   std::vector<nmt_layer_encoder> layers_encoder;
   std::vector<nmt_layer_decoder> layers_decoder;
 
   // ggml context that contains all the meta information about the model tensors
-  std::vector<ggml_context *> ctxs;
+  std::vector<ggml_context*> ctxs;
 
   // the model backend data is read-only and can be shared between processors
   std::vector<ggml_backend_buffer_t> buffers;
 
   // tensors
   int n_loaded = 0;
-  std::map<std::string, struct ggml_tensor *> tensors;
+  std::map<std::string, struct ggml_tensor*> tensors;
 };
 
 struct nmt_vocab {
@@ -275,7 +275,7 @@ template <typename A, typename B> struct nmt_pair {
   B second;
 
   // Define a constructor that takes two arguments.
-  nmt_pair(const A &firstValue, const B &secondValue)
+  nmt_pair(const A& firstValue, const B& secondValue)
       : first(firstValue), second(secondValue) {}
   // Define a constructor that takes no argument.
   nmt_pair() : first(A()), second(B()) {}
@@ -319,11 +319,11 @@ struct nmt_decoder {
 struct nmt_batch {
   int32_t n_tokens;
 
-  nmt_token *token;
-  nmt_pos *pos;
-  int32_t *n_seq_id;   // always 1, here for consistency with llama.cpp
-  nmt_seq_id **seq_id; // null terminated
-  int8_t *logits;
+  nmt_token* token;
+  nmt_pos* pos;
+  int32_t* n_seq_id;   // always 1, here for consistency with llama.cpp
+  nmt_seq_id** seq_id; // null terminated
+  int8_t* logits;
 };
 
 struct nmt_state {
@@ -365,9 +365,9 @@ struct nmt_state {
 
   // result of the encoder
 
-  struct ggml_tensor *input_embeddings = nullptr;
-  struct ggml_tensor *logits_tensor = nullptr;
-  struct ggml_tensor *embd_enc = nullptr;
+  struct ggml_tensor* input_embeddings = nullptr;
+  struct ggml_tensor* logits_tensor = nullptr;
+  struct ggml_tensor* embd_enc = nullptr;
 
   // This is to surcomvent an issue where accessing embd_enc in docoder was not
   // working The buffer was somehow changed.
@@ -398,7 +398,7 @@ struct nmt_state {
 
   // [EXPERIMENTAL] Token-level timestamps with DTW
   // nmt_aheads_masks aheads_masks;
-  ggml_tensor *aheads_cross_QKs = nullptr;
+  ggml_tensor* aheads_cross_QKs = nullptr;
   std::vector<float> aheads_cross_QKs_data;
 
   // [EXPERIMENTAL] speed-up techniques
@@ -432,7 +432,7 @@ struct nmt_context {
   nmt_model model;
   nmt_vocab vocab;
 
-  nmt_state *state = nullptr;
+  nmt_state* state = nullptr;
 
   std::string path_model; // populated by nmt_init_from_file_with_params()
 
@@ -494,41 +494,41 @@ struct nmt_context {
 };
 
 typedef struct nmt_model_loader {
-  void *context;
+  void* context;
 
-  size_t (*read)(void *ctx, void *output, size_t read_size);
-  bool (*eof)(void *ctx);
-  void (*close)(void *ctx);
+  size_t (*read)(void* ctx, void* output, size_t read_size);
+  bool (*eof)(void* ctx);
+  void (*close)(void* ctx);
 } nmt_model_loader;
 
-int nmt_encode(struct nmt_context *ctx);
+int nmt_encode(struct nmt_context* ctx);
 
-int nmt_full(struct nmt_context *ctx, const char *inputText);
+int nmt_full(struct nmt_context* ctx, const char* inputText);
 
-int nmt_token_count(struct nmt_context *ctx, const char *text);
+int nmt_token_count(struct nmt_context* ctx, const char* text);
 
-const char *nmt_get_output(struct nmt_context *ctx);
+const char* nmt_get_output(struct nmt_context* ctx);
 
-int nmt_get_runtime_stats(struct nmt_context *ctx, double *encodeTime,
-                          double *decodeTime, int *totalTokens);
+int nmt_get_runtime_stats(
+    struct nmt_context* ctx, double* encodeTime, double* decodeTime,
+    int* totalTokens);
 
-void nmt_reset_runtime_stats(struct nmt_context *ctx);
+void nmt_reset_runtime_stats(struct nmt_context* ctx);
 
-void nmt_reset_state(struct nmt_context *ctx);
+void nmt_reset_state(struct nmt_context* ctx);
 
-struct nmt_context *
-nmt_init_from_file_with_params(const char *pathModel,
-                               struct nmt_context_params params);
+struct nmt_context* nmt_init_from_file_with_params(
+    const char* pathModel, struct nmt_context_params params);
 
 struct nmt_context_params nmt_context_default_params();
 
-const char *nmt_model_type_readable(struct nmt_context *ctx);
+const char* nmt_model_type_readable(struct nmt_context* ctx);
 
-int nmt_model_n_vocab(struct nmt_context *ctx);
+int nmt_model_n_vocab(struct nmt_context* ctx);
 
-bool nmt_model_is_indictrans(struct nmt_context *ctx);
+bool nmt_model_is_indictrans(struct nmt_context* ctx);
 
-void nmt_free(struct nmt_context *ctx);
+void nmt_free(struct nmt_context* ctx);
 
 // NOLINTEND(readability-identifier-naming,modernize-use-using,cppcoreguidelines-macro-to-enum,modernize-macro-to-enum,readability-magic-numbers,cppcoreguidelines-avoid-magic-numbers,readability-uppercase-literal-suffix)
 // NOLINTEND

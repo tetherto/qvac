@@ -239,13 +239,13 @@ private:
     bool isCacheLoaded = false;
     bool shouldResetAfterInference = false;
   };
-  ResolvedPrompt resolveChatAndTools(const Prompt &prompt);
+  ResolvedPrompt resolveChatAndTools(const Prompt& prompt);
 
-  void
-  commonParamsParse(const std::string &modelPath,
-                    std::unordered_map<std::string, std::string> &configFilemap,
-                    common_params &params, std::optional<int> &outAdrenoVersion,
-                    bool &outToolsAtEnd);
+  void commonParamsParse(
+      const std::string& modelPath,
+      std::unordered_map<std::string, std::string>& configFilemap,
+      common_params& params, std::optional<int>& outAdrenoVersion,
+      bool& outToolsAtEnd);
 
   /**
    * The Format prompt method. It formats the prompt json to chat messages.
@@ -256,10 +256,9 @@ private:
   std::pair<std::vector<common_chat_msg>, std::vector<common_chat_tool>>
   formatPrompt(const std::string& input);
   void resetState(bool resetStats = true);
-  std::unique_ptr<LlmContext> createContext(std::string &&projectionPath,
-                                            common_params &params,
-                                            common_init_result &&llamaInit,
-                                            bool toolsAtEnd);
+  std::unique_ptr<LlmContext> createContext(
+      std::string&& projectionPath, common_params& params,
+      common_init_result&& llamaInit, bool toolsAtEnd);
 
   bool loadMedia(const std::vector<uint8_t>& input);
 

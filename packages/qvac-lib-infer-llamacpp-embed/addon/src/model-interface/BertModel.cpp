@@ -248,10 +248,10 @@ std::size_t BertEmbeddings::size() const { return embeddingCount_; }
 std::size_t BertEmbeddings::embeddingSize() const { return embeddingSize_; }
 
 namespace {
-common_params
-setupParams(const std::string &modelGgufPath,
-            std::unordered_map<std::string, std::string> configFilemap,
-            int64_t &resolvedBackendDevice) {
+common_params setupParams(
+    const std::string& modelGgufPath,
+    std::unordered_map<std::string, std::string> configFilemap,
+    int64_t& resolvedBackendDevice) {
   // Default params
   common_params params;
 
@@ -515,8 +515,8 @@ std::any BertModel::process(const std::any& input) {
       "BertModel::process: unsupported input type");
 }
 
-void BertModel::initializeBackend(const std::string &backendsDir,
-                                  const std::string &openclCacheDir) {
+void BertModel::initializeBackend(
+    const std::string& backendsDir, const std::string& openclCacheDir) {
   backendsHandle_ = LlamaBackendsHandle(backendsDir, openclCacheDir);
 }
 

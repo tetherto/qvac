@@ -8,8 +8,7 @@
 
 namespace qvac::ttslib::supertonic {
 
-/// Official Supertonic 4-graph ONNX stack (Supertone HF layout) +
-/// unicode_indexer.json + voice_styles/*.json.
+/// Official Supertonic 4-graph ONNX stack (Supertone HF layout) + unicode_indexer.json + voice_styles/*.json.
 class SupertonicEngine : public ISupertonicEngine {
 public:
   explicit SupertonicEngine(const SupertonicConfig &cfg = {});
@@ -40,8 +39,7 @@ private:
   std::unique_ptr<Ort::Session> vectorEstSession_;
   std::unique_ptr<Ort::Session> vocoderSession_;
 
-  std::vector<std::string> chunkText(const std::string &text,
-                                     int maxCharLen) const;
+  std::vector<std::string> chunkText(const std::string &text, int maxCharLen) const;
   AudioResult synthesizeChunk(const std::string &text);
 };
 

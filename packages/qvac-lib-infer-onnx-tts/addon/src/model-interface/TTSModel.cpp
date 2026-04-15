@@ -180,17 +180,15 @@ qvac::ttslib::supertonic::SupertonicConfig TTSModel::createSupertonicConfig(
 
   std::stringstream ss;
   ss << "Supertone ONNX config: modelDir='" << config.modelDir
-     << "' textEncoderPath='" << config.textEncoderPath
-     << "' durationPredictorPath='" << config.durationPredictorPath
-     << "' vectorEstimatorPath='" << config.vectorEstimatorPath
-     << "' vocoderPath='" << config.vocoderPath << "' unicodeIndexerPath='"
-     << config.unicodeIndexerPath << "' ttsConfigPath='" << config.ttsConfigPath
-     << "' voiceStyleJsonPath='" << config.voiceStyleJsonPath << "' voiceName='"
-     << config.voiceName << "' language='" << config.language
+     << "' textEncoderPath='" << config.textEncoderPath << "' durationPredictorPath='"
+     << config.durationPredictorPath << "' vectorEstimatorPath='"
+     << config.vectorEstimatorPath << "' vocoderPath='" << config.vocoderPath
+     << "' unicodeIndexerPath='" << config.unicodeIndexerPath << "' ttsConfigPath='"
+     << config.ttsConfigPath << "' voiceStyleJsonPath='" << config.voiceStyleJsonPath
+     << "' voiceName='" << config.voiceName << "' language='" << config.language
      << "' speed=" << config.speed
      << " numInferenceSteps=" << config.numInferenceSteps
-     << " supertonicMultilingual="
-     << (config.supertonicMultilingual ? "true" : "false");
+     << " supertonicMultilingual=" << (config.supertonicMultilingual ? "true" : "false");
   QLOG(Priority::INFO, ss.str());
 
   return config;

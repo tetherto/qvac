@@ -96,13 +96,7 @@ export interface SdConfig {
   mmap?: boolean
   /** Offload model weights to CPU when not in use */
   offload_to_cpu?: boolean
-  /**
-   * Noise prediction type override. Auto-detected from model for txt2img, but
-   * **required** for FLUX img2img: the addon's branch selection relies on this
-   * value to choose the FLUX in-context conditioning path vs. SDEdit. Set
-   * `'flux2_flow'` for FLUX.2 or `'flux_flow'` for FLUX.1 when using
-   * `init_image`.
-   */
+  /** Noise prediction type override (auto-detected from model by default) */
   prediction?: PredictionType
   /** Flow-matching guidance shift */
   flow_shift?: number

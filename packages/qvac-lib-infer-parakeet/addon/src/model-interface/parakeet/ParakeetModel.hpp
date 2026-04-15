@@ -116,7 +116,7 @@ public:
 
 private:
   void throwIfCancelled() const;
-  static bool isCancellationError(const std::exception &e);
+  static bool isCancellationError(const std::exception& e);
 
   // ── Session loading helpers ─────────────────────────────────────────────
   void loadCTCSessions(Ort::SessionOptions& options);
@@ -220,7 +220,7 @@ private:
   static constexpr const char* ERR_MODEL_NOT_LOADED = "[Model not loaded]";
   static constexpr const char* ERR_INFERENCE = "[Inference error]";
   static constexpr const char* ERR_NO_SPEAKERS = "[No speakers detected]";
-  static constexpr const char *ERR_JOB_CANCELLED = "Job cancelled";
+  static constexpr const char* ERR_JOB_CANCELLED = "Job cancelled";
 
   static bool isSentinel(const std::string& text) {
     return text == ERR_NO_SPEECH || text == ERR_AUDIO_SHORT ||

@@ -17,10 +17,13 @@
 using test_common::getStatValue;
 
 namespace {
-bool isQwen3ModelPath(const std::string &path) {
+bool isQwen3ModelPath(const std::string& path) {
   std::string lowerPath = path;
-  std::transform(lowerPath.begin(), lowerPath.end(), lowerPath.begin(),
-                 [](unsigned char c) { return std::tolower(c); });
+  std::transform(
+      lowerPath.begin(),
+      lowerPath.end(),
+      lowerPath.begin(),
+      [](unsigned char c) { return std::tolower(c); });
   return lowerPath.find("qwen3") != std::string::npos;
 }
 } // namespace

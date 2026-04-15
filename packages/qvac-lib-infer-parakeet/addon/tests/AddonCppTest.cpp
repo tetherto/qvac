@@ -1,5 +1,5 @@
-#include <algorithm>
 #include <any>
+#include <algorithm>
 #include <chrono>
 #include <condition_variable>
 #include <mutex>
@@ -40,9 +40,8 @@ auto hasStatKey(
       [&](const auto& entry) { return entry.first == key; });
 }
 
-class BlockingBusyModel
-    : public qvac_lib_inference_addon_cpp::model::IModel,
-      public qvac_lib_inference_addon_cpp::model::IModelCancel {
+class BlockingBusyModel : public qvac_lib_inference_addon_cpp::model::IModel,
+                          public qvac_lib_inference_addon_cpp::model::IModelCancel {
 public:
   auto getName() const -> std::string override { return "BlockingBusyModel"; }
 
@@ -51,8 +50,8 @@ public:
     return {};
   }
 
-  auto process(const std::any &input) -> std::any override {
-    const auto &inputStr = std::any_cast<const std::string &>(input);
+  auto process(const std::any& input) -> std::any override {
+    const auto& inputStr = std::any_cast<const std::string&>(input);
 
     std::unique_lock<std::mutex> lock(mutex_);
     if (inputStr == "blocking") {
@@ -78,8 +77,8 @@ public:
 
   void waitUntilBlocked() {
     std::unique_lock<std::mutex> lock(mutex_);
-    ASSERT_TRUE(cv_.wait_for(lock, std::chrono::seconds(2),
-                             [this] { return blocked_; }));
+    ASSERT_TRUE(
+        cv_.wait_for(lock, std::chrono::seconds(2), [this] { return blocked_; }));
   }
 
   void unblock() {
@@ -95,9 +94,8 @@ private:
   mutable bool cancelled_{false};
 };
 
-auto createBlockingAddon()
-    -> std::pair<std::unique_ptr<qvac_lib_inference_addon_cpp::AddonCpp>,
-                 BlockingBusyModel *> {
+auto createBlockingAddon() -> std::pair<std::unique_ptr<qvac_lib_inference_addon_cpp::AddonCpp>,
+                                        BlockingBusyModel*> {
   auto stringHandler = std::make_shared<
       qvac_lib_inference_addon_cpp::out_handl::CppContainerOutputHandler<
           std::vector<std::string>>>();
@@ -111,7 +109,7 @@ auto createBlockingAddon()
       std::make_unique<qvac_lib_inference_addon_cpp::OutputCallBackCpp>(
           std::move(outputHandlers));
   auto model = std::make_unique<BlockingBusyModel>();
-  auto *modelPtr = model.get();
+  auto* modelPtr = model.get();
 
   auto addon = std::make_unique<qvac_lib_inference_addon_cpp::AddonCpp>(
       std::move(outputCallback), std::move(model));

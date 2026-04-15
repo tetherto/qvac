@@ -232,23 +232,6 @@ class ImgStableDiffusion extends BaseInference {
       )
     }
 
-    // FLUX models require an explicit prediction type for img2img.
-    // The C++ addon auto-detects the model family at load time, but
-    // SdModel::process() only enters the FLUX ref_images path when
-    // config_.prediction is FLUX_FLOW_PRED or FLUX2_FLOW_PRED. Without
-    // an explicit value the addon silently falls back to SDEdit.
-    if (params.init_image && this._llmModel) {
-      const pred = this._config?.prediction
-      if (pred !== 'flux2_flow' && pred !== 'flux_flow') {
-        throw new Error(
-          'FLUX img2img requires an explicit prediction type in config. ' +
-          "Set prediction: 'flux2_flow' (FLUX.2) or prediction: 'flux_flow' (FLUX.1). " +
-          'Without this the addon silently falls back to the SD/SDEdit img2img branch ' +
-          'instead of the FLUX in-context conditioning path.'
-        )
-      }
-    }
-
     const mode = params.init_image ? 'img2img' : 'txt2img'
     this.logger.info('Starting generation with mode:', mode)
 

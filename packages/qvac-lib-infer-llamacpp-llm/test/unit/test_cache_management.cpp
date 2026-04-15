@@ -150,7 +150,8 @@ TEST_F(CacheManagementTest, EnableCacheWithFilename) {
     std::string output = processPromptWithCacheOptions(
         model,
         R"([{"role": "user", "content": "What is ethereum? Answer shortly."}])",
-        session1_path, true);
+        session1_path,
+        true);
     EXPECT_GE(output.length(), 0);
     auto stats = model->runtimeStats();
     EXPECT_GE(stats.size(), 0);
@@ -173,7 +174,8 @@ TEST_F(CacheManagementTest, SessionPersistence) {
     std::string output1 = processPromptWithCacheOptions(
         model,
         R"([{"role": "user", "content": "What is bitcoin? Answer shortly."}])",
-        session1_path, true);
+        session1_path,
+        true);
     EXPECT_GE(output1.length(), 0);
   });
 
@@ -183,7 +185,8 @@ TEST_F(CacheManagementTest, SessionPersistence) {
     std::string output2 = processPromptWithCacheOptions(
         model,
         R"([{"role": "user", "content": "What did I ask you before? Answer shortly."}])",
-        session1_path, true);
+        session1_path,
+        true);
     EXPECT_GE(output2.length(), 0);
   });
 
@@ -204,7 +207,8 @@ TEST_F(CacheManagementTest, ResetAndPersist) {
     std::string output = processPromptWithCacheOptions(
         model,
         R"([{"role": "user", "content": "What is bitcoin? Answer shortly."}])",
-        session2_path, true);
+        session2_path,
+        true);
     EXPECT_GE(output.length(), 0);
   });
 
@@ -225,7 +229,8 @@ TEST_F(CacheManagementTest, ResetCommand) {
     std::string output1 = processPromptWithCacheOptions(
         model,
         R"([{"role": "user", "content": "What is bitcoin? Answer shortly."}])",
-        session1_path, true);
+        session1_path,
+        true);
     EXPECT_GE(output1.length(), 0);
   });
 
@@ -235,7 +240,8 @@ TEST_F(CacheManagementTest, ResetCommand) {
     std::string output2 = processPromptWithCacheOptions(
         model,
         R"([{"role": "user", "content": "What did I ask you before? Answer shortly."}])",
-        session1_path, true);
+        session1_path,
+        true);
     EXPECT_GE(output2.length(), 0);
   });
 
@@ -256,7 +262,8 @@ TEST_F(CacheManagementTest, SwitchToSession2) {
     processPromptWithCacheOptions(
         model,
         R"([{"role": "user", "content": "What is bitcoin? Answer shortly."}])",
-        session1_path, true);
+        session1_path,
+        true);
   });
 
   EXPECT_TRUE(fs::exists(session1_path));
@@ -265,7 +272,8 @@ TEST_F(CacheManagementTest, SwitchToSession2) {
     processPromptWithCacheOptions(
         model,
         R"([{"role": "user", "content": "What did I ask you before? Answer shortly."}])",
-        session2_path, true);
+        session2_path,
+        true);
   });
 
   EXPECT_TRUE(fs::exists(session1_path));
@@ -347,7 +355,8 @@ TEST_F(CacheManagementTest, ReEnableCacheAfterDisable) {
     processPromptWithCacheOptions(
         model,
         R"([{"role": "user", "content": "What is deep learning? Answer shortly."}])",
-        temp_session_path, true);
+        temp_session_path,
+        true);
   });
 
   EXPECT_TRUE(fs::exists(temp_session_path));
@@ -367,21 +376,24 @@ TEST_F(CacheManagementTest, SwitchAndResetChain) {
     processPromptWithCacheOptions(
         model,
         R"([{"role": "user", "content": "What is bitcoin? Answer shortly."}])",
-        session1_path, true);
+        session1_path,
+        true);
   });
 
   EXPECT_NO_THROW({
     processPromptWithCacheOptions(
         model,
         R"([{"role": "user", "content": "What is ethereum? Answer shortly."}])",
-        session2_path, true);
+        session2_path,
+        true);
   });
 
   EXPECT_NO_THROW({
     processPromptWithCacheOptions(
         model,
         R"([{"role": "user", "content": "What is blockchain? Answer shortly."}])",
-        session1_path, true);
+        session1_path,
+        true);
   });
 
   EXPECT_TRUE(fs::exists(session1_path));
@@ -402,7 +414,8 @@ TEST_F(CacheManagementTest, CacheClearedWhenNoCacheKey) {
     processPromptWithCacheOptions(
         model,
         R"([{"role": "user", "content": "What is bitcoin? Answer shortly."}])",
-        session1_path, true);
+        session1_path,
+        true);
   });
 
   EXPECT_TRUE(fs::exists(session1_path));
@@ -445,7 +458,8 @@ TEST_F(CacheManagementTest, CacheClearedWhenSwitchingToDifferentCache) {
     processPromptWithCacheOptions(
         model,
         R"([{"role": "user", "content": "What is bitcoin? Answer shortly."}])",
-        session1_path, true);
+        session1_path,
+        true);
   });
 
   EXPECT_TRUE(fs::exists(session1_path));
@@ -454,7 +468,8 @@ TEST_F(CacheManagementTest, CacheClearedWhenSwitchingToDifferentCache) {
     processPromptWithCacheOptions(
         model,
         R"([{"role": "user", "content": "What is ethereum? Answer shortly."}])",
-        session2_path, true);
+        session2_path,
+        true);
   });
 
   EXPECT_TRUE(fs::exists(session1_path));
@@ -510,7 +525,8 @@ TEST_F(CacheManagementTest, CacheToNoCacheToCache) {
     processPromptWithCacheOptions(
         model,
         R"([{"role": "user", "content": "What is bitcoin? Answer shortly."}])",
-        session1_path, true);
+        session1_path,
+        true);
   });
 
   EXPECT_TRUE(fs::exists(session1_path));
@@ -527,7 +543,8 @@ TEST_F(CacheManagementTest, CacheToNoCacheToCache) {
     processPromptWithCacheOptions(
         model,
         R"([{"role": "user", "content": "What is blockchain? Answer shortly."}])",
-        session2_path, true);
+        session2_path,
+        true);
     auto stats3 = model->runtimeStats();
     EXPECT_GT(getStatValue(stats3, "CacheTokens"), 0.0);
   });
@@ -580,7 +597,8 @@ TEST_F(CacheManagementTest, CacheTokensExceedContextSize) {
     processPromptWithCacheOptions(
         model_large,
         R"([{"role": "user", "content": "Describe DeFi (Decentralized Finance) applications, including DEXs, lending protocols, and yield farming. Explain how they work and their risks."}])",
-        large_cache_path, true);
+        large_cache_path,
+        true);
   });
 
   auto statsBeforeSave = model_large->runtimeStats();
@@ -606,7 +624,8 @@ TEST_F(CacheManagementTest, CacheTokensExceedContextSize) {
   EXPECT_THROW(
       {
         processPromptWithCacheOptions(
-            model_small, R"([{"role": "user", "content": "Test"}])",
+            model_small,
+            R"([{"role": "user", "content": "Test"}])",
             large_cache_path);
       },
       qvac_errors::StatusError);
@@ -627,7 +646,8 @@ TEST_F(CacheManagementTest, CacheWithToolsAtEndFalseSavesFullCache) {
     processPromptWithCacheOptions(
         model,
         R"([{"role": "user", "content": "What is the weather in Tokyo?"}, {"type": "function", "name": "getWeather", "description": "Get weather forecast", "parameters": {"type": "object", "properties": {"city": {"type": "string"}}, "required": ["city"]}}])",
-        session1_path, true);
+        session1_path,
+        true);
   });
 
   auto statsBeforeSave = model->runtimeStats();
@@ -652,7 +672,8 @@ TEST_F(CacheManagementTest, OptionsNoPersistKeepsRamOnly) {
 
   EXPECT_NO_THROW({
     processPromptWithCacheOptions(
-        model, R"([{"role": "user", "content": "What is bitcoin?"}])",
+        model,
+        R"([{"role": "user", "content": "What is bitcoin?"}])",
         session1_path);
   });
 
@@ -675,8 +696,10 @@ TEST_F(CacheManagementTest, ResetTrueOnFirstCallWithNoPriorCache) {
 
   EXPECT_NO_THROW({
     processPromptWithCacheOptions(
-        model, R"([{"role": "user", "content": "What is bitcoin?"}])",
-        session1_path, true);
+        model,
+        R"([{"role": "user", "content": "What is bitcoin?"}])",
+        session1_path,
+        true);
   });
 
   EXPECT_TRUE(fs::exists(session1_path));
@@ -697,8 +720,10 @@ TEST_F(CacheManagementTest, ResetTrueWithDifferentCacheKey) {
 
   EXPECT_NO_THROW({
     processPromptWithCacheOptions(
-        model, R"([{"role": "user", "content": "What is bitcoin?"}])",
-        session1_path, true);
+        model,
+        R"([{"role": "user", "content": "What is bitcoin?"}])",
+        session1_path,
+        true);
   });
 
   auto stats1 = model->runtimeStats();
@@ -707,8 +732,10 @@ TEST_F(CacheManagementTest, ResetTrueWithDifferentCacheKey) {
 
   EXPECT_NO_THROW({
     processPromptWithCacheOptions(
-        model, R"([{"role": "user", "content": "Fresh start."}])",
-        session2_path, true);
+        model,
+        R"([{"role": "user", "content": "Fresh start."}])",
+        session2_path,
+        true);
   });
 
   auto stats2 = model->runtimeStats();
@@ -730,7 +757,9 @@ TEST_F(CacheManagementTest, PersistToWithNoCacheKeyIsNoOp) {
 
   EXPECT_NO_THROW({
     processPromptWithCacheOptions(
-        model, R"([{"role": "user", "content": "What is bitcoin?"}])", "",
+        model,
+        R"([{"role": "user", "content": "What is bitcoin?"}])",
+        "",
         true);
   });
 
@@ -752,7 +781,8 @@ TEST_F(CacheManagementTest, PersistFalseDoesNotWriteToDisk) {
 
   EXPECT_NO_THROW({
     processPromptWithCacheOptions(
-        model, R"([{"role": "user", "content": "What is bitcoin?"}])",
+        model,
+        R"([{"role": "user", "content": "What is bitcoin?"}])",
         session1_path);
   });
 

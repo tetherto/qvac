@@ -24,9 +24,9 @@ using namespace qvac_lib_inference_addon_cpp;
 // Fake BertEmbeddings for tests that never touch a real model.
 BertEmbeddings makeDummyEmbeddings() {
   std::vector<float> flat = {0.1f, 0.2f, 0.3f};
-  return BertEmbeddings(
-      std::move(flat),
-      BertEmbeddings::Layout{.embeddingCount = 1, .embeddingSize = 3});
+  return BertEmbeddings(std::move(flat),
+                        BertEmbeddings::Layout{.embeddingCount = 1,
+                                               .embeddingSize = 3});
 }
 
 class StaleFlagModel : public model::IModel, public model::IModelCancel {
@@ -43,7 +43,7 @@ public:
   std::string getName() const override { return "StaleFlagModel"; }
   RuntimeStats runtimeStats() const override { return RuntimeStats{}; }
 
-  std::any process(const std::any & /*input*/) override {
+  std::any process(const std::any& /*input*/) override {
     processCallCount_++;
     if (stop_.load()) {
       stop_ = false;
@@ -72,12 +72,12 @@ struct TestHarness {
   std::unique_ptr<AddonCpp> addon;
   std::shared_ptr<out_handl::CppQueuedOutputHandler<BertEmbeddings>>
       outputHandler;
-  StaleFlagModel *modelPtr;
+  StaleFlagModel* modelPtr;
 };
 
 TestHarness createTestAddon(std::chrono::milliseconds workDuration) {
   auto model = std::make_unique<StaleFlagModel>(workDuration);
-  auto *rawModel = model.get();
+  auto* rawModel = model.get();
 
   auto outHandler =
       std::make_shared<out_handl::CppQueuedOutputHandler<BertEmbeddings>>();
@@ -85,8 +85,7 @@ TestHarness createTestAddon(std::chrono::milliseconds workDuration) {
   handlers.add(outHandler);
   auto callback = std::make_unique<OutputCallBackCpp>(std::move(handlers));
 
-  auto addon =
-      std::make_unique<AddonCpp>(std::move(callback), std::move(model));
+  auto addon = std::make_unique<AddonCpp>(std::move(callback), std::move(model));
 
   return {std::move(addon), std::move(outHandler), rawModel};
 }
@@ -168,3 +167,4 @@ TEST_F(CancelStaleFlagTest, RepeatedCancelThenRun_NeverPoisons) {
 }
 
 } // namespace
+

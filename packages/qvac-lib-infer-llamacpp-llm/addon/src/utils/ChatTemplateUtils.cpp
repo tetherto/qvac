@@ -58,9 +58,9 @@ bool isQwen3Model(const ::llama_model* model) {
   return false;
 }
 
-std::string getChatTemplateForModel(const ::llama_model *model,
-                                    const std::string &manualOverride,
-                                    bool toolsAtEnd) {
+std::string getChatTemplateForModel(
+    const ::llama_model* model, const std::string& manualOverride,
+    bool toolsAtEnd) {
   if (!manualOverride.empty()) {
     return manualOverride;
   }
@@ -73,8 +73,8 @@ std::string getChatTemplateForModel(const ::llama_model *model,
   return "";
 }
 
-std::string getChatTemplate(const ::llama_model *model,
-                            const common_params &params, bool toolsAtEnd) {
+std::string getChatTemplate(
+    const ::llama_model* model, const common_params& params, bool toolsAtEnd) {
   // Use fixed Qwen3 template if model is Qwen3 and Jinja is enabled
   std::string chatTemplate = params.chat_template;
   if (params.use_jinja) {

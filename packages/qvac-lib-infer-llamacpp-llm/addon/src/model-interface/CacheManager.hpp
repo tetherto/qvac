@@ -16,14 +16,14 @@ public:
       LlmContext* llmContext, llama_pos configuredNDiscarded,
       std::function<void(bool)> resetStateCallback);
 
-  bool handleCache(std::vector<common_chat_msg> &chatMsgs,
-                   std::vector<common_chat_tool> &tools,
-                   const std::string &inputPrompt,
-                   std::function<std::pair<std::vector<common_chat_msg>,
-                                           std::vector<common_chat_tool>>(
-                       const std::string &)>
-                       formatPrompt,
-                   const std::string &cacheKey = "");
+  bool handleCache(
+      std::vector<common_chat_msg>& chatMsgs,
+      std::vector<common_chat_tool>& tools, const std::string& inputPrompt,
+      std::function<std::pair<
+          std::vector<common_chat_msg>, std::vector<common_chat_tool>>(
+          const std::string&)>
+          formatPrompt,
+      const std::string& cacheKey = "");
 
   bool loadCache();
   void saveCache();
@@ -33,7 +33,7 @@ public:
   bool wasCacheUsedInLastPrompt() const;
 
 private:
-  void writeCacheFile(const std::string &path);
+  void writeCacheFile(const std::string& path);
   static bool isFileInitialized(const std::filesystem::path& path);
 
   LlmContext* llmContext_;

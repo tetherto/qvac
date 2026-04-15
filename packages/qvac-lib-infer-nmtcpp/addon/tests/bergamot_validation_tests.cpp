@@ -176,7 +176,7 @@ TEST(BergamotValidation, DifferentDecodingParamsCanChangeOutput) {
                  << modelDir.string();
   }
 
-  const auto freeCtx = [](bergamot_context *ctx) {
+  const auto freeCtx = [](bergamot_context* ctx) {
     if (ctx != nullptr) {
       bergamot_free(ctx);
     }

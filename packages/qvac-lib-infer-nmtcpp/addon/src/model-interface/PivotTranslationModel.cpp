@@ -121,7 +121,7 @@ void PivotTranslationModel::cancel() const {
   secondModel_->cancel();
 }
 
-std::any PivotTranslationModel::translateString(const std::string &input) {
+std::any PivotTranslationModel::translateString(const std::string& input) {
   if (!isLoaded()) {
     throw std::runtime_error("PivotTranslationModel models are not loaded");
   }
