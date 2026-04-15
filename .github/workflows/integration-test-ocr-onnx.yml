@@ -185,19 +185,6 @@ jobs:
             echo "performance-report.json not found — skipping HTML generation"
           fi
 
-      - name: Write GitHub Step Summary
-        if: always()
-        working-directory: ${{ inputs.workdir || env.PKG_DIR }}
-        shell: bash
-        run: |
-          printf '## OCR Performance Report (%s)\n\n' "${{ matrix.os }}-${{ matrix.arch }}" >> $GITHUB_STEP_SUMMARY
-          if [ -f test/results/performance-report.md ]; then
-            cat test/results/performance-report.md >> $GITHUB_STEP_SUMMARY
-          else
-            echo "No performance report generated for this run." >> $GITHUB_STEP_SUMMARY
-          fi
-          echo "" >> $GITHUB_STEP_SUMMARY
-
       - name: Upload performance report
         if: always()
         uses: actions/upload-artifact@v4
