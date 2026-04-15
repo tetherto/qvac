@@ -62,6 +62,16 @@ export const ttsSupertonicEmptyTextError: TestDefinition = {
   metadata: { category: "tts", dependency: "tts-supertonic", estimatedDurationMs: 10000 },
 };
 
+export const ttsSupertonicMultilingualText: TestDefinition = {
+  testId: "tts-supertonic-multilingual-text",
+  params: {
+    text: "Hola mundo. Esta es una demostración de síntesis de voz con Supertonic en español.",
+    stream: false,
+  },
+  expectation: { validation: "type", expectedType: "string" },
+  metadata: { category: "tts", dependency: "tts-supertonic-multilingual", estimatedDurationMs: 45000 },
+};
+
 export const ttsTests = [
   ttsChatterboxShortText,
   ttsChatterboxMediumText,
@@ -71,4 +81,5 @@ export const ttsTests = [
   ttsSupertonicMediumText,
   ttsSupertonicStreaming,
   ttsSupertonicEmptyTextError,
+  ttsSupertonicMultilingualText,
 ];
