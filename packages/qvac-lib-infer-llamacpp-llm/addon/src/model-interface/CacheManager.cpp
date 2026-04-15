@@ -29,13 +29,12 @@ bool CacheManager::isFileInitialized(const std::filesystem::path& path) {
 }
 
 bool CacheManager::handleCache(
-    std::vector<common_chat_msg>& chatMsgs,
-    std::vector<common_chat_tool>& tools, const std::string& inputPrompt,
-    std::function<
-        std::pair<std::vector<common_chat_msg>, std::vector<common_chat_tool>>(
-            const std::string&)>
+    std::vector<common_chat_msg> &chatMsgs,
+    std::vector<common_chat_tool> &tools, const std::string &inputPrompt,
+    std::function<std::pair<std::vector<common_chat_msg>,
+                            std::vector<common_chat_tool>>(const std::string &)>
         formatPrompt,
-    const std::string& cacheKey) {
+    const std::string &cacheKey) {
 
   auto formatted = formatPrompt(inputPrompt);
   chatMsgs = std::move(formatted.first);
@@ -43,12 +42,10 @@ bool CacheManager::handleCache(
 
   if (cacheKey.empty()) {
     if (hasActiveCache()) {
-      QLOG_IF(
-          Priority::DEBUG,
-          string_format(
-              "%s: No cacheKey provided, clearing existing cache '%s'\n",
-              __func__,
-              sessionPath_.c_str()));
+      QLOG_IF(Priority::DEBUG,
+              string_format(
+                  "%s: No cacheKey provided, clearing existing cache '%s'\n",
+                  __func__, sessionPath_.c_str()));
       saveCache();
       resetStateCallback_(true);
       sessionPath_.clear();
@@ -64,13 +61,10 @@ bool CacheManager::handleCache(
   }
 
   if (hasActiveCache() && sessionPath_ != cacheKey) {
-    QLOG_IF(
-        Priority::DEBUG,
-        string_format(
-            "%s: Switching from cache '%s' to '%s', saving old cache\n",
-            __func__,
-            sessionPath_.c_str(),
-            cacheKey.c_str()));
+    QLOG_IF(Priority::DEBUG,
+            string_format(
+                "%s: Switching from cache '%s' to '%s', saving old cache\n",
+                __func__, sessionPath_.c_str(), cacheKey.c_str()));
     saveCache();
   }
 
@@ -80,10 +74,8 @@ bool CacheManager::handleCache(
   sessionPath_ = cacheKey;
   cacheDisabled_ = false;
 
-  QLOG_IF(
-      Priority::DEBUG,
-      string_format(
-          "%s: Cache enabled with key '%s'\n", __func__, sessionPath_.c_str()));
+  QLOG_IF(Priority::DEBUG, string_format("%s: Cache enabled with key '%s'\n",
+                                         __func__, sessionPath_.c_str()));
 
   bool loaded = loadCache();
   cacheUsedInLastPrompt_ = true;
@@ -166,11 +158,10 @@ void CacheManager::saveCache() {
   writeCacheFile(sessionPath_);
 }
 
-void CacheManager::writeCacheFile(const std::string& path) {
-  llama_context* ctx = llmContext_->getCtx();
-  QLOG_IF(
-      Priority::DEBUG,
-      string_format("%s: saving cache to '%s'\n", __func__, path.c_str()));
+void CacheManager::writeCacheFile(const std::string &path) {
+  llama_context *ctx = llmContext_->getCtx();
+  QLOG_IF(Priority::DEBUG,
+          string_format("%s: saving cache to '%s'\n", __func__, path.c_str()));
   llama_token sessionTokens[2] = {
       static_cast<llama_token>(llmContext_->getNPast()),
       static_cast<llama_token>(llmContext_->getFirstMsgTokens())};

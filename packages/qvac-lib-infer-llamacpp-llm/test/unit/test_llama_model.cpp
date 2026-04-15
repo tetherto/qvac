@@ -1054,10 +1054,8 @@ TEST_F(LlamaModelTest, CommonParamsParseToolsAtEndTrue) {
   config["backendsDir"] = backendDir.string();
 
   EXPECT_NO_THROW({
-    LlamaModel model(
-        getValidModelPath(),
-        std::string(test_projection_path),
-        std::unordered_map<std::string, std::string>(config));
+    LlamaModel model(getValidModelPath(), std::string(test_projection_path),
+                     std::unordered_map<std::string, std::string>(config));
     model.waitForLoadInitialization();
   });
 }
@@ -1083,10 +1081,8 @@ TEST_F(LlamaModelTest, CommonParamsParseToolsAtEndFalse) {
   config["backendsDir"] = backendDir.string();
 
   EXPECT_NO_THROW({
-    LlamaModel model(
-        getValidModelPath(),
-        std::string(test_projection_path),
-        std::unordered_map<std::string, std::string>(config));
+    LlamaModel model(getValidModelPath(), std::string(test_projection_path),
+                     std::unordered_map<std::string, std::string>(config));
     model.waitForLoadInitialization();
   });
 }
@@ -1112,10 +1108,8 @@ TEST_F(LlamaModelTest, CommonParamsParseToolsAtEndUppercase) {
   config["backendsDir"] = backendDir.string();
 
   EXPECT_NO_THROW({
-    LlamaModel model(
-        getValidModelPath(),
-        std::string(test_projection_path),
-        std::unordered_map<std::string, std::string>(config));
+    LlamaModel model(getValidModelPath(), std::string(test_projection_path),
+                     std::unordered_map<std::string, std::string>(config));
     model.waitForLoadInitialization();
   });
 }

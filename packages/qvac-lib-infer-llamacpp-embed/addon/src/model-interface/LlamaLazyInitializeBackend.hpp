@@ -17,9 +17,8 @@ public:
    * @return true if initialization was successful, false if already
    * initialized.
    */
-  static bool initialize(
-      const std::string& backendsDir = "",
-      const std::string& openclCacheDir = "");
+  static bool initialize(const std::string &backendsDir = "",
+                         const std::string &openclCacheDir = "");
 
   /**
    * Increment the reference count.
@@ -49,9 +48,8 @@ public:
    * Construct a handle and increment the reference count.
    * @param backendsDir - optional path to the backends directory.
    */
-  explicit LlamaBackendsHandle(
-      const std::string& backendsDir = "",
-      const std::string& openclCacheDir = "");
+  explicit LlamaBackendsHandle(const std::string &backendsDir = "",
+                               const std::string &openclCacheDir = "");
 
   /**
    * Destructor decrements reference count and may free backend.

@@ -39,18 +39,18 @@ public:
   };
 
   StreamingProcessor(
-      WhisperModel& model,
+      WhisperModel &model,
       std::shared_ptr<qvac_lib_inference_addon_cpp::OutputQueue> outputQueue,
       Config config);
 
   ~StreamingProcessor();
 
-  StreamingProcessor(const StreamingProcessor&) = delete;
-  StreamingProcessor& operator=(const StreamingProcessor&) = delete;
-  StreamingProcessor(StreamingProcessor&&) = delete;
-  StreamingProcessor& operator=(StreamingProcessor&&) = delete;
+  StreamingProcessor(const StreamingProcessor &) = delete;
+  StreamingProcessor &operator=(const StreamingProcessor &) = delete;
+  StreamingProcessor(StreamingProcessor &&) = delete;
+  StreamingProcessor &operator=(StreamingProcessor &&) = delete;
 
-  void appendAudio(std::vector<float>&& samples);
+  void appendAudio(std::vector<float> &&samples);
   void end();
   void cancel();
 
@@ -58,7 +58,7 @@ private:
   void processLoop();
   void processAudioRange(int startSample, int endSample);
 
-  WhisperModel& model_;
+  WhisperModel &model_;
   std::shared_ptr<qvac_lib_inference_addon_cpp::OutputQueue> outputQueue_;
   Config config_;
 
@@ -70,7 +70,7 @@ private:
   bool cancelled_ = false;
   bool hasError_ = false;
 
-  whisper_vad_context* vadCtx_ = nullptr;
+  whisper_vad_context *vadCtx_ = nullptr;
   int bufferSizeAtLastVadRun_ = 0;
 
   std::thread thread_;

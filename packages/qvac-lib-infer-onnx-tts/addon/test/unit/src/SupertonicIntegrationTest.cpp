@@ -21,7 +21,8 @@ namespace fs = std::filesystem;
 
 namespace qvac::ttslib::addon_model::testing {
 
-// Expected layout (Supertone/supertonic English or multilingual HF supertonic-2 — same directory layout):
+// Expected layout (Supertone/supertonic English or multilingual HF supertonic-2
+// — same directory layout):
 //   onnx/{duration_predictor,text_encoder,vector_estimator,vocoder}.onnx
 //   onnx/{tts.json,unicode_indexer.json}
 //   voice_styles/{Voice}.json
@@ -103,8 +104,7 @@ static bool supertonicModelDirExists(const std::string &baseDir) {
   if (!fs::exists(onnx / "text_encoder.onnx") ||
       !fs::exists(onnx / "duration_predictor.onnx") ||
       !fs::exists(onnx / "vector_estimator.onnx") ||
-      !fs::exists(onnx / "vocoder.onnx") ||
-      !fs::exists(onnx / "tts.json") ||
+      !fs::exists(onnx / "vocoder.onnx") || !fs::exists(onnx / "tts.json") ||
       !fs::exists(onnx / "unicode_indexer.json")) {
     return false;
   }
@@ -143,7 +143,8 @@ protected:
     if (!supertonicModelDirExists(baseDir_)) {
       GTEST_SKIP() << "Supertone model dir not found or incomplete: "
                    << baseDir_
-                   << " (set SUPERTONIC_MODEL_DIR; expected HF Supertone/supertonic layout)";
+                   << " (set SUPERTONIC_MODEL_DIR; expected HF "
+                      "Supertone/supertonic layout)";
     }
     voiceName_ = getFirstVoiceName(baseDir_);
     if (voiceName_.empty()) {

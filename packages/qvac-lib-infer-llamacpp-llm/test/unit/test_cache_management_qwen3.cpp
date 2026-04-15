@@ -18,13 +18,10 @@ using test_common::processPromptString;
 using test_common::processPromptWithCacheOptions;
 
 namespace {
-bool isQwen3ModelPath(const std::string& path) {
+bool isQwen3ModelPath(const std::string &path) {
   std::string lowerPath = path;
-  std::transform(
-      lowerPath.begin(),
-      lowerPath.end(),
-      lowerPath.begin(),
-      [](unsigned char c) { return std::tolower(c); });
+  std::transform(lowerPath.begin(), lowerPath.end(), lowerPath.begin(),
+                 [](unsigned char c) { return std::tolower(c); });
   return lowerPath.find("qwen3") != std::string::npos;
 }
 } // namespace
@@ -50,10 +47,8 @@ protected:
   }
 
   void TearDown() override {
-    for (const auto& session_file :
-         {session1_path,
-          session2_path,
-          temp_session_path,
+    for (const auto &session_file :
+         {session1_path, session2_path, temp_session_path,
           std::string("test_large_cache_qwen3.bin")}) {
       if (fs::exists(session_file)) {
         fs::remove(session_file);
@@ -106,8 +101,7 @@ TEST_F(CacheManagementQwen3Test, CacheWithToolsAtEndTrueTrimsToolTokens) {
     processPromptWithCacheOptions(
         model,
         R"([{"role": "user", "content": "What is the weather in Tokyo?"}, {"type": "function", "name": "getWeather", "description": "Get weather forecast", "parameters": {"type": "object", "properties": {"city": {"type": "string"}}, "required": ["city"]}}])",
-        session1_path,
-        true);
+        session1_path, true);
   });
 
   auto statsBeforeSave = model->runtimeStats();
@@ -139,8 +133,7 @@ TEST_F(CacheManagementQwen3Test, CacheReloadWithToolsAtEndTrue) {
     processPromptWithCacheOptions(
         model1,
         R"([{"role": "user", "content": "What is the weather in Tokyo?"}, {"type": "function", "name": "getWeather", "description": "Get weather forecast", "parameters": {"type": "object", "properties": {"city": {"type": "string"}}, "required": ["city"]}}])",
-        session1_path,
-        true);
+        session1_path, true);
   });
 
   llama_pos nPastBeforeTools1 = model1->getNPastBeforeTools();
@@ -189,8 +182,7 @@ TEST_F(CacheManagementQwen3Test, CacheWithoutToolsWithToolsAtEndTrue) {
     processPromptWithCacheOptions(
         model,
         R"([{"role": "user", "content": "What is bitcoin? Answer shortly."}])",
-        session1_path,
-        true);
+        session1_path, true);
   });
 
   auto statsBeforeSave = model->runtimeStats();
@@ -221,8 +213,7 @@ TEST_F(CacheManagementQwen3Test, CacheToolsAtEndModeWithMultiplePrompts) {
   EXPECT_NO_THROW({
     processPromptWithCacheOptions(
         model,
-        R"([{"role": "user", "content": "Hi"}, {"type": "function", "name": "get_weather", "description": "Get detailed weather forecast data with temperature humidity wind speed precipitation UV visibility pressure sunrise sunset alerts", "parameters": {"type": "object", "properties": {"city": {"type": "string", "description": "The name of the city to get weather for"}, "country": {"type": "string", "description": "Country code or name"}, "lat": {"type": "number", "description": "Latitude coordinate"}, "lon": {"type": "number", "description": "Longitude coordinate"}, "zip": {"type": "string", "description": "ZIP postal code"}, "units": {"type": "string", "description": "Temperature units metric imperial or kelvin"}, "lang": {"type": "string", "description": "Language code for localized descriptions"}, "forecast_days": {"type": "integer", "description": "Number of days to forecast from 1 to 7"}, "hourly": {"type": "boolean", "description": "Include hourly forecast data"}, "alerts": {"type": "boolean", "description": "Include weather alerts and warnings"}, "aqi": {"type": "boolean", "description": "Include air quality index data"}, "tides": {"type": "boolean", "description": "Include tide information"}, "solar": {"type": "boolean", "description": "Include solar data like sunrise sunset"}, "tz": {"type": "string", "description": "Timezone identifier"}, "start_dt": {"type": "string", "description": "Start datetime for historical data"}, "end_dt": {"type": "string", "description": "End datetime for historical data"}, "cnt": {"type": "integer", "description": "Number of data points to return"}, "mode": {"type": "string", "description": "Response mode json xml or html"}, "appid": {"type": "string", "description": "API key for authentication"}}, "required": ["city"]}}])",
-        session1_path);
+        R"([{"role": "user", "content": "Hi"}, {"type": "function", "name": "get_weather", "description": "Get detailed weather forecast data with temperature humidity wind speed precipitation UV visibility pressure sunrise sunset alerts", "parameters": {"type": "object", "properties": {"city": {"type": "string", "description": "The name of the city to get weather for"}, "country": {"type": "string", "description": "Country code or name"}, "lat": {"type": "number", "description": "Latitude coordinate"}, "lon": {"type": "number", "description": "Longitude coordinate"}, "zip": {"type": "string", "description": "ZIP postal code"}, "units": {"type": "string", "description": "Temperature units metric imperial or kelvin"}, "lang": {"type": "string", "description": "Language code for localized descriptions"}, "forecast_days": {"type": "integer", "description": "Number of days to forecast from 1 to 7"}, "hourly": {"type": "boolean", "description": "Include hourly forecast data"}, "alerts": {"type": "boolean", "description": "Include weather alerts and warnings"}, "aqi": {"type": "boolean", "description": "Include air quality index data"}, "tides": {"type": "boolean", "description": "Include tide information"}, "solar": {"type": "boolean", "description": "Include solar data like sunrise sunset"}, "tz": {"type": "string", "description": "Timezone identifier"}, "start_dt": {"type": "string", "description": "Start datetime for historical data"}, "end_dt": {"type": "string", "description": "End datetime for historical data"}, "cnt": {"type": "integer", "description": "Number of data points to return"}, "mode": {"type": "string", "description": "Response mode json xml or html"}, "appid": {"type": "string", "description": "API key for authentication"}}, "required": ["city"]}}])", session1_path);
   });
 
   auto stats1 = model->runtimeStats();
@@ -239,8 +230,7 @@ TEST_F(CacheManagementQwen3Test, CacheToolsAtEndModeWithMultiplePrompts) {
 
   EXPECT_NO_THROW({
     processPromptWithCacheOptions(
-        model,
-        R"([{"role": "user", "content": "What about London?"}])",
+        model, R"([{"role": "user", "content": "What about London?"}])",
         session1_path);
   });
 
@@ -255,10 +245,8 @@ TEST_F(CacheManagementQwen3Test, CacheToolsAtEndModeWithMultiplePrompts) {
 
   EXPECT_NO_THROW({
     processPromptWithCacheOptions(
-        model,
-        R"([{"role": "user", "content": "Save checkpoint."}])",
-        session1_path,
-        true);
+        model, R"([{"role": "user", "content": "Save checkpoint."}])",
+        session1_path, true);
   });
 
   EXPECT_TRUE(fs::exists(session1_path));
@@ -272,8 +260,7 @@ TEST_F(CacheManagementQwen3Test, CacheToolsAtEndModeWithMultiplePrompts) {
 
   EXPECT_NO_THROW({
     processPromptWithCacheOptions(
-        model2,
-        R"([{"role": "user", "content": "What about Paris?"}])",
+        model2, R"([{"role": "user", "content": "What about Paris?"}])",
         session1_path);
   });
 
@@ -285,9 +272,8 @@ TEST_F(CacheManagementQwen3Test, CacheToolsAtEndModeWithMultiplePrompts) {
   EXPECT_LT(promptTokens3, 100.0);
 }
 
-TEST_F(
-    CacheManagementQwen3Test,
-    CacheToolsAtEndModeTrimOnlyWhenNPastBeforeToolsPositive) {
+TEST_F(CacheManagementQwen3Test,
+       CacheToolsAtEndModeTrimOnlyWhenNPastBeforeToolsPositive) {
   if (!isQwen3ModelPath(test_model_path)) {
     GTEST_SKIP() << "Test requires Qwen3 model for tools_at_end feature";
   }
@@ -303,11 +289,9 @@ TEST_F(
   }
 
   EXPECT_NO_THROW({
-    processPromptWithCacheOptions(
-        model,
-        R"([{"role": "user", "content": "Hello"}])",
-        session1_path,
-        true);
+    processPromptWithCacheOptions(model,
+                                  R"([{"role": "user", "content": "Hello"}])",
+                                  session1_path, true);
   });
 
   llama_pos nPastBeforeTools = model->getNPastBeforeTools();
@@ -339,8 +323,7 @@ TEST_F(CacheManagementQwen3Test, CacheToolsAtEndModeRestoresNPastBeforeTools) {
     processPromptWithCacheOptions(
         model,
         R"([{"role": "user", "content": "Hi"}, {"type": "function", "name": "get_weather", "description": "Get weather", "parameters": {"type": "object", "properties": {"city": {"type": "string"}}, "required": ["city"]}}])",
-        session1_path,
-        true);
+        session1_path, true);
   });
 
   llama_pos nPastBeforeTools1 = model->getNPastBeforeTools();
@@ -355,8 +338,7 @@ TEST_F(CacheManagementQwen3Test, CacheToolsAtEndModeRestoresNPastBeforeTools) {
 
   EXPECT_NO_THROW({
     processPromptWithCacheOptions(
-        model2,
-        R"([{"role": "user", "content": "What about London?"}])",
+        model2, R"([{"role": "user", "content": "What about London?"}])",
         session1_path);
   });
 

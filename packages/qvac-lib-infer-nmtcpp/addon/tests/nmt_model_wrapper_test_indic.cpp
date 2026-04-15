@@ -101,8 +101,8 @@ TEST_P(NmtCppModelWrapperTest, SaveLoadParamsEmptyPath_ThenLoadThrows) {
   EXPECT_THROW(wrapper.load(), std::runtime_error);
 }
 
-TEST_P(
-    NmtCppModelWrapperTest, SaveLoadParamsAfterLoad_TakesEffectOnlyOnReload) {
+TEST_P(NmtCppModelWrapperTest,
+       SaveLoadParamsAfterLoad_TakesEffectOnlyOnReload) {
   TranslationModel wrapper(getValidModelPath());
   wrapper.load();
   EXPECT_TRUE(wrapper.isLoaded());
@@ -156,9 +156,8 @@ TEST_P(NmtCppModelWrapperTest, ProcessWithoutLoading) {
   EXPECT_NO_THROW(wrapper.process(validInputs));
 }
 
-TEST_P(
-    NmtCppModelWrapperTest,
-    RuntimeStats_NotLoadedReturnsEmptyAndStringMessage) {
+TEST_P(NmtCppModelWrapperTest,
+       RuntimeStats_NotLoadedReturnsEmptyAndStringMessage) {
   TranslationModel wrapper(getValidModelPath());
   const auto stats = wrapper.runtimeStats();
   EXPECT_TRUE(stats.empty());
@@ -175,17 +174,16 @@ TEST_P(NmtCppModelWrapperTest, RuntimeStats_ResetClearsStats) {
   const auto afterReset = wrapper.runtimeStats();
   ASSERT_FALSE(afterReset.empty());
   auto findStatByKey =
-      [&](const char* key) -> const std::variant<double, int64_t>* {
-    const auto iterator = std::find_if(
-        afterReset.begin(), afterReset.end(), [&](const auto& entry) {
-          return entry.first == key;
-        });
+      [&](const char *key) -> const std::variant<double, int64_t> * {
+    const auto iterator =
+        std::find_if(afterReset.begin(), afterReset.end(),
+                     [&](const auto &entry) { return entry.first == key; });
     return iterator == afterReset.end() ? nullptr : &iterator->second;
   };
-  const auto* totalTokens = findStatByKey("totalTokens");
-  const auto* totalTime = findStatByKey("totalTime");
-  const auto* encodeTime = findStatByKey("encodeTime");
-  const auto* decodeTime = findStatByKey("decodeTime");
+  const auto *totalTokens = findStatByKey("totalTokens");
+  const auto *totalTime = findStatByKey("totalTime");
+  const auto *encodeTime = findStatByKey("encodeTime");
+  const auto *decodeTime = findStatByKey("decodeTime");
   ASSERT_NE(totalTokens, nullptr);
   ASSERT_NE(totalTime, nullptr);
   ASSERT_NE(encodeTime, nullptr);
@@ -196,9 +194,8 @@ TEST_P(NmtCppModelWrapperTest, RuntimeStats_ResetClearsStats) {
   EXPECT_DOUBLE_EQ(std::get<double>(*decodeTime), 0.0);
 }
 
-TEST_P(
-    NmtCppModelWrapperTest,
-    RuntimeStatsToString_HasExpectedKeysWhenStatsExist) {
+TEST_P(NmtCppModelWrapperTest,
+       RuntimeStatsToString_HasExpectedKeysWhenStatsExist) {
   TranslationModel wrapper(getValidModelPath());
   wrapper.load();
   auto input = make_valid_input();
@@ -216,23 +213,22 @@ TEST_P(NmtCppModelWrapperTest, RuntimeStatsDisabled) {
 
 TEST_P(NmtCppModelWrapperTest, GetNmtConfig) {
   TranslationModel wrapper(getValidModelPath());
-  const std::
-      unordered_map<std::string, std::variant<double, int64_t, std::string>>
-          generationConfig = {
-              {"beamsize", 4},
-              {"lengthpenalty", 1},
-              {"maxlength", 500},
-              {"norepeatngramsize", 1.2f},
-              {"norepeatngramsize", 10},
-              {"temperature", 1.2f},
-              {"topk", 50},
-              {"topp", 0.8}};
+  const std::unordered_map<std::string,
+                           std::variant<double, int64_t, std::string>>
+      generationConfig = {{"beamsize", 4},
+                          {"lengthpenalty", 1},
+                          {"maxlength", 500},
+                          {"norepeatngramsize", 1.2f},
+                          {"norepeatngramsize", 10},
+                          {"temperature", 1.2f},
+                          {"topk", 50},
+                          {"topp", 0.8}};
   wrapper.setConfig(generationConfig);
   auto modelGenerationConfig = wrapper.getConfig();
-  for (auto&& el : generationConfig) {
-    const auto& configName = el.first;
-    EXPECT_TRUE(
-        modelGenerationConfig.find(configName) != modelGenerationConfig.end());
+  for (auto &&el : generationConfig) {
+    const auto &configName = el.first;
+    EXPECT_TRUE(modelGenerationConfig.find(configName) !=
+                modelGenerationConfig.end());
     auto modelConfigValue = modelGenerationConfig.at(configName);
     auto configValue = generationConfig.at(configName);
     EXPECT_EQ(modelConfigValue, configValue);
@@ -241,15 +237,14 @@ TEST_P(NmtCppModelWrapperTest, GetNmtConfig) {
 
 TEST_P(NmtCppModelWrapperTest, SetConfigStoredBeforeLoad_NoLoad) {
   TranslationModel wrapper;
-  const std::
-      unordered_map<std::string, std::variant<double, int64_t, std::string>>
-          cfg = {
-              {"beamsize", static_cast<int64_t>(5)},
-              {"temperature", 0.7},
-              {"unknown_key_xyz", static_cast<int64_t>(123)}};
+  const std::unordered_map<std::string,
+                           std::variant<double, int64_t, std::string>>
+      cfg = {{"beamsize", static_cast<int64_t>(5)},
+             {"temperature", 0.7},
+             {"unknown_key_xyz", static_cast<int64_t>(123)}};
   EXPECT_NO_THROW(wrapper.setConfig(cfg));
   const auto stored = wrapper.getConfig();
-  for (const auto& kv : cfg) {
+  for (const auto &kv : cfg) {
     EXPECT_TRUE(stored.find(kv.first) != stored.end());
     EXPECT_EQ(stored.at(kv.first), kv.second);
   }
@@ -264,9 +259,8 @@ TEST_P(NmtCppModelWrapperTest, SetConfigBeforeLoad_NotAppliedUntilAfterLoad) {
       "times to ensure length effects. This is a very long input sentence.";
   auto out_before = std::any_cast<std::string>(wrapper.process(longInput));
   EXPECT_FALSE(out_before.empty());
-  wrapper.setConfig(
-      {{"maxlength", static_cast<int64_t>(5)},
-       {"beamsize", static_cast<int64_t>(1)}});
+  wrapper.setConfig({{"maxlength", static_cast<int64_t>(5)},
+                     {"beamsize", static_cast<int64_t>(1)}});
   auto out_after = std::any_cast<std::string>(wrapper.process(longInput));
   EXPECT_FALSE(out_after.empty());
   EXPECT_TRUE(out_after != out_before || out_after.size() < out_before.size());
@@ -275,9 +269,9 @@ TEST_P(NmtCppModelWrapperTest, SetConfigBeforeLoad_NotAppliedUntilAfterLoad) {
 TEST_P(NmtCppModelWrapperTest, UnknownKeysIgnored_NoSideEffects) {
   TranslationModel wrapper(getValidModelPath());
   wrapper.load();
-  EXPECT_NO_THROW(wrapper.setConfig(
-      {{"unknown_param_A", static_cast<int64_t>(42)},
-       {"unknown_param_B", 0.5}}));
+  EXPECT_NO_THROW(
+      wrapper.setConfig({{"unknown_param_A", static_cast<int64_t>(42)},
+                         {"unknown_param_B", 0.5}}));
 }
 
 TEST_P(NmtCppModelWrapperTest, ReapplyConfigOverridesPrevious_LastWriteWins) {

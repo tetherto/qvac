@@ -23,9 +23,8 @@ using namespace qvac_lib_inference_addon_llama::utils;
 // NOLINTNEXTLINE(readability-function-cognitive-complexity)
 
 // NOLINTNEXTLINE(readability-function-cognitive-complexity)
-TextLlmContext::TextLlmContext(
-    common_params& commonParams, common_init_result&& llamaInit,
-    bool toolsAtEnd)
+TextLlmContext::TextLlmContext(common_params &commonParams,
+                               common_init_result &&llamaInit, bool toolsAtEnd)
     : llamaInit_(std::move(llamaInit)), params_(commonParams) {
   dynamicToolsState().setToolsAtEnd(toolsAtEnd);
   {
@@ -226,10 +225,9 @@ void TextLlmContext::tokenizeChat(
       auto tokensNoTools =
           common_tokenize(lctx_, promptNoTools, addSpecial, true);
       dynamicToolsState().setConversationOnlyTokens(tokensNoTools.size());
-      assert(
-          dynamicToolsState().conversationOnlyTokens() <=
-              static_cast<llama_pos>(inputTokens.size()) &&
-          "conversation-only tokens exceeds total tokens");
+      assert(dynamicToolsState().conversationOnlyTokens() <=
+                 static_cast<llama_pos>(inputTokens.size()) &&
+             "conversation-only tokens exceeds total tokens");
     } else {
       dynamicToolsState().setConversationOnlyTokens(0);
     }
@@ -289,8 +287,7 @@ bool TextLlmContext::evalMessageWithTools(
     std::string errorMsg = string_format(
         "[TextLlm] context overflow at prefill step: prompt tokens %ld, max "
         "context tokens %d\n",
-        nTokens,
-        llama_n_ctx(lctx_));
+        nTokens, llama_n_ctx(lctx_));
     throw qvac_errors::StatusError(
         ADDON_ID, toString(ContextOverflow), errorMsg);
   }

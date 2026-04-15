@@ -43,8 +43,8 @@ std::string resolvePath(const std::string &baseDir, const std::string &rel) {
     return rel;
 #ifdef _WIN32
   constexpr char sep = '\\';
-  const bool trailing = !baseDir.empty() &&
-                        (baseDir.back() == '/' || baseDir.back() == '\\');
+  const bool trailing =
+      !baseDir.empty() && (baseDir.back() == '/' || baseDir.back() == '\\');
 #else
   constexpr char sep = '/';
   const bool trailing = !baseDir.empty() && baseDir.back() == '/';
@@ -63,7 +63,7 @@ void utf8AppendCp(std::string &out, utf8proc_int32_t cp) {
 }
 
 std::optional<size_t> utf8Iterate(const std::string &s, size_t i,
-                                    utf8proc_int32_t *cpOut) {
+                                  utf8proc_int32_t *cpOut) {
   if (i >= s.size())
     return {};
   utf8proc_int32_t cp = 0;
@@ -127,7 +127,8 @@ void trimUtf8(std::string &s) {
     s = s.substr(b, e - b);
 }
 
-// `\n\s*\n+` (Python `re` / supertonic `chunk_text`), `\s` = Unicode whitespace.
+// `\n\s*\n+` (Python `re` / supertonic `chunk_text`), `\s` = Unicode
+// whitespace.
 std::optional<size_t> paragraphBreakEnd(const std::string &text, size_t i) {
   if (i >= text.size() || text[i] != '\n')
     return {};
@@ -179,9 +180,8 @@ std::vector<std::string> splitParagraphs(const std::string &text) {
 
 static bool matchesAbbrevAtDot(const std::string &s, size_t dotByte) {
   static const std::string_view abbrevs[] = {
-      "Mr.",   "Mrs.", "Ms.",  "Dr.", "Prof.", "Sr.",   "Jr.",
-      "etc.",  "e.g.", "i.e.", "vs.", "Inc.",  "Ltd.",  "Co.",
-      "Corp.", "St.",  "Ave.", "Blvd."};
+      "Mr.",  "Mrs.", "Ms.",  "Dr.",  "Prof.", "Sr.",   "Jr.", "etc.", "e.g.",
+      "i.e.", "vs.",  "Inc.", "Ltd.", "Co.",   "Corp.", "St.", "Ave.", "Blvd."};
   if (dotByte >= 4 && s.compare(dotByte - 4, 5, "Ph.D.") == 0)
     return true;
   for (std::string_view ab : abbrevs) {
@@ -303,13 +303,14 @@ bool isEmojiCodePoint(utf8proc_int32_t c) {
 
 const std::unordered_set<utf8proc_int32_t> &diacriticsSet() {
   static const std::unordered_set<utf8proc_int32_t> s = {
-      0x0302, 0x0303, 0x0304, 0x0305, 0x0306, 0x0307, 0x0308, 0x030a, 0x030b,
-      0x030c, 0x0327, 0x0328, 0x0329, 0x032a, 0x032b, 0x032c, 0x032d, 0x032e, 0x032f};
+      0x0302, 0x0303, 0x0304, 0x0305, 0x0306, 0x0307, 0x0308,
+      0x030a, 0x030b, 0x030c, 0x0327, 0x0328, 0x0329, 0x032a,
+      0x032b, 0x032c, 0x032d, 0x032e, 0x032f};
   return s;
 }
 
 std::string preprocessForSupertonic(const std::string &rawUtf8,
-                                   const std::string *langWrap) {
+                                    const std::string *langWrap) {
   utf8proc_uint8_t *nfkdRaw = utf8proc_NFKD(
       reinterpret_cast<const utf8proc_uint8_t *>(rawUtf8.c_str()));
   if (!nfkdRaw)
@@ -362,8 +363,7 @@ std::string preprocessForSupertonic(const std::string &rawUtf8,
     }
     if (diacriticsSet().count(c) != 0)
       continue;
-    if (c == 0x2665 || c == 0x2606 || c == 0x2661 || c == 0x00a9 ||
-        c == '\\')
+    if (c == 0x2665 || c == 0x2606 || c == 0x2661 || c == 0x00a9 || c == '\\')
       continue;
     utf8AppendCp(out, c);
   }
@@ -432,13 +432,13 @@ std::string preprocessForSupertonic(const std::string &rawUtf8,
     const size_t lastStart = utf8CharStartBefore(out, out.size());
     utf8proc_int32_t last = 0;
     utf8Iterate(out, lastStart, &last);
-    const bool endsOk =
-        utf8proc_category(last) == UTF8PROC_CATEGORY_PO || last == '.' ||
-        last == '!' || last == '?' || last == ';' || last == ':' ||
-        last == ',' || last == '\'' || last == ')' || last == ']' ||
-        last == '}' || last == 0x2019 || last == 0x2026 || last == 0x3002 ||
-        last == 0x300d || last == 0x300f || last == 0xff09 ||
-        last == 0xff1e || last == 0x300b;
+    const bool endsOk = utf8proc_category(last) == UTF8PROC_CATEGORY_PO ||
+                        last == '.' || last == '!' || last == '?' ||
+                        last == ';' || last == ':' || last == ',' ||
+                        last == '\'' || last == ')' || last == ']' ||
+                        last == '}' || last == 0x2019 || last == 0x2026 ||
+                        last == 0x3002 || last == 0x300d || last == 0x300f ||
+                        last == 0xff09 || last == 0xff1e || last == 0x300b;
     if (!endsOk)
       out.push_back('.');
   }
@@ -493,25 +493,27 @@ void loadStyleTensor(const nlohmann::json &node, std::vector<int64_t> &shape,
     prod *= d;
   }
   if (static_cast<int64_t>(data.size()) != prod) {
-    throw std::runtime_error("voice style data size does not match dims product");
+    throw std::runtime_error(
+        "voice style data size does not match dims product");
   }
 }
 
-std::vector<float> lengthToMask(int64_t batch, const std::vector<int64_t> &lengths,
+std::vector<float> lengthToMask(int64_t batch,
+                                const std::vector<int64_t> &lengths,
                                 int64_t maxLen) {
   std::vector<float> mask(static_cast<size_t>(batch * maxLen));
   for (int64_t b = 0; b < batch; ++b) {
     const int64_t L =
         std::clamp(lengths[static_cast<size_t>(b)], INT64_C(0), maxLen);
     for (int64_t k = 0; k < maxLen; ++k) {
-      mask[static_cast<size_t>(b * maxLen + k)] =
-          (k < L) ? 1.0f : 0.0f;
+      mask[static_cast<size_t>(b * maxLen + k)] = (k < L) ? 1.0f : 0.0f;
     }
   }
   return mask;
 }
 
-/// Same layout as Python `length_to_mask`: shape (B, 1, max_lat) row-major flat.
+/// Same layout as Python `length_to_mask`: shape (B, 1, max_lat) row-major
+/// flat.
 std::vector<float> getLatentMask(const std::vector<int64_t> &wavLengthsSamples,
                                  int baseChunk, int compress) {
   const int64_t B = static_cast<int64_t>(wavLengthsSamples.size());
@@ -520,8 +522,7 @@ std::vector<float> getLatentMask(const std::vector<int64_t> &wavLengthsSamples,
   int64_t maxLat = 0;
   for (int64_t b = 0; b < B; ++b) {
     const int64_t wl = wavLengthsSamples[static_cast<size_t>(b)];
-    const int64_t ll =
-        wl > 0 ? (wl + latentSize - 1) / latentSize : INT64_C(0);
+    const int64_t ll = wl > 0 ? (wl + latentSize - 1) / latentSize : INT64_C(0);
     latentLens[static_cast<size_t>(b)] = ll;
     maxLat = std::max(maxLat, ll);
   }
@@ -566,17 +567,20 @@ void SupertonicEngine::load(const SupertonicConfig &cfg) {
                : explicitPath;
   };
 
-  std::string dpPath = pick(cfg.durationPredictorPath, "duration_predictor.onnx");
+  std::string dpPath =
+      pick(cfg.durationPredictorPath, "duration_predictor.onnx");
   std::string tePath = pick(cfg.textEncoderPath, "text_encoder.onnx");
   std::string vePath = pick(cfg.vectorEstimatorPath, "vector_estimator.onnx");
   std::string vocPath = pick(cfg.vocoderPath, "vocoder.onnx");
   std::string uniPath =
       cfg.unicodeIndexerPath.empty()
-          ? (onnxDir.empty() ? "" : resolvePath(onnxDir, "unicode_indexer.json"))
+          ? (onnxDir.empty() ? ""
+                             : resolvePath(onnxDir, "unicode_indexer.json"))
           : cfg.unicodeIndexerPath;
-  std::string ttsPath = cfg.ttsConfigPath.empty()
-                            ? (onnxDir.empty() ? "" : resolvePath(onnxDir, "tts.json"))
-                            : cfg.ttsConfigPath;
+  std::string ttsPath =
+      cfg.ttsConfigPath.empty()
+          ? (onnxDir.empty() ? "" : resolvePath(onnxDir, "tts.json"))
+          : cfg.ttsConfigPath;
 
   std::string voiceJson = cfg.voiceStyleJsonPath;
   if (voiceJson.empty() && !cfg.modelDir.empty() && !cfg.voiceName.empty()) {
@@ -593,14 +597,11 @@ void SupertonicEngine::load(const SupertonicConfig &cfg) {
 
   {
     auto j = nlohmann::json::parse(qvac::ttslib::loadFileBytes(ttsPath));
-    sampleRate_ =
-        static_cast<int>(j["ae"]["sample_rate"].get<double>());
-    baseChunkSize_ =
-        static_cast<int>(j["ae"]["base_chunk_size"].get<double>());
+    sampleRate_ = static_cast<int>(j["ae"]["sample_rate"].get<double>());
+    baseChunkSize_ = static_cast<int>(j["ae"]["base_chunk_size"].get<double>());
     chunkCompressFactor_ =
         static_cast<int>(j["ttl"]["chunk_compress_factor"].get<double>());
-    latentDim_ =
-        static_cast<int>(j["ttl"]["latent_dim"].get<double>());
+    latentDim_ = static_cast<int>(j["ttl"]["latent_dim"].get<double>());
   }
 
   {
@@ -616,7 +617,8 @@ void SupertonicEngine::load(const SupertonicConfig &cfg) {
   {
     auto j = nlohmann::json::parse(qvac::ttslib::loadFileBytes(voiceJson));
     if (!j.contains("style_ttl") || !j.contains("style_dp"))
-      throw std::runtime_error("voice style JSON must contain style_ttl and style_dp");
+      throw std::runtime_error(
+          "voice style JSON must contain style_ttl and style_dp");
     loadStyleTensor(j["style_ttl"], styleTtlShape_, styleTtl_);
     loadStyleTensor(j["style_dp"], styleDpShape_, styleDp_);
   }
@@ -645,8 +647,7 @@ void SupertonicEngine::load(const SupertonicConfig &cfg) {
                e.what());
       onnx_addon::SessionConfig cpuCfg = sessionCfg;
       cpuCfg.provider = onnx_addon::ExecutionProvider::CPU;
-      Ort::SessionOptions cpuOptions =
-          onnx_addon::buildSessionOptions(cpuCfg);
+      Ort::SessionOptions cpuOptions = onnx_addon::buildSessionOptions(cpuCfg);
       createSessions(cpuOptions);
     } else {
       throw;
@@ -664,8 +665,8 @@ void SupertonicEngine::load(const SupertonicConfig &cfg) {
            std::to_string(sampleRate_) + ")");
 }
 
-std::vector<std::string>
-SupertonicEngine::chunkText(const std::string &text, int maxCharLen) const {
+std::vector<std::string> SupertonicEngine::chunkText(const std::string &text,
+                                                     int maxCharLen) const {
   if (maxCharLen < 10)
     throw std::invalid_argument("chunk max length must be >= 10");
 
@@ -716,9 +717,8 @@ SupertonicEngine::chunkText(const std::string &text, int maxCharLen) const {
 }
 
 AudioResult SupertonicEngine::synthesizeChunk(const std::string &text) {
-  std::string prep =
-      preprocessForSupertonic(text, config_.supertonicMultilingual ? &config_.language
-                                                                  : nullptr);
+  std::string prep = preprocessForSupertonic(
+      text, config_.supertonicMultilingual ? &config_.language : nullptr);
   if (prep.empty())
     throw std::runtime_error("SupertonicEngine: empty text after preprocess");
 
@@ -751,7 +751,8 @@ AudioResult SupertonicEngine::synthesizeChunk(const std::string &text) {
   std::vector<int64_t> textLenVec = {textLen};
   std::vector<float> textMask = lengthToMask(batch, textLenVec, maxTextLen);
 
-  Ort::MemoryInfo mem = Ort::MemoryInfo::CreateCpu(OrtArenaAllocator, OrtMemTypeDefault);
+  Ort::MemoryInfo mem =
+      Ort::MemoryInfo::CreateCpu(OrtArenaAllocator, OrtMemTypeDefault);
   std::vector<int64_t> shapeIds = {batch, maxTextLen};
   std::vector<int64_t> shapeMask = {batch, 1, maxTextLen};
 
@@ -761,17 +762,16 @@ AudioResult SupertonicEngine::synthesizeChunk(const std::string &text) {
   dpInputs.push_back(Ort::Value::CreateTensor<float>(
       mem, styleDp_.data(), styleDp_.size(), styleDpShape_.data(),
       styleDpShape_.size()));
-  dpInputs.push_back(Ort::Value::CreateTensor<float>(
-      mem, textMask.data(), textMask.size(), shapeMask.data(),
-      shapeMask.size()));
+  dpInputs.push_back(
+      Ort::Value::CreateTensor<float>(mem, textMask.data(), textMask.size(),
+                                      shapeMask.data(), shapeMask.size()));
 
   const char *dpNames[] = {"text_ids", "style_dp", "text_mask"};
   Ort::AllocatorWithDefaultOptions alloc;
   auto dpOutNm = dpSession_->GetOutputNameAllocated(0, alloc);
   const char *dpOuts[] = {dpOutNm.get()};
   auto dpOutputs = dpSession_->Run(Ort::RunOptions{nullptr}, dpNames,
-                                     dpInputs.data(), dpInputs.size(), dpOuts,
-                                     1);
+                                   dpInputs.data(), dpInputs.size(), dpOuts, 1);
 
   float speed = std::clamp(config_.speed, kMinSpeed, kMaxSpeed);
   const float *durData = dpOutputs[0].GetTensorData<float>();
@@ -781,7 +781,8 @@ AudioResult SupertonicEngine::synthesizeChunk(const std::string &text) {
     throw std::runtime_error("duration predictor returned empty tensor");
   float durSec = durData[0] / speed;
   if (!(durSec > 0.0f) ||
-      durSec > static_cast<float>(std::numeric_limits<int>::max()) / sampleRate_)
+      durSec >
+          static_cast<float>(std::numeric_limits<int>::max()) / sampleRate_)
     throw std::runtime_error("invalid predicted duration");
 
   std::vector<Ort::Value> teInputs;
@@ -790,9 +791,9 @@ AudioResult SupertonicEngine::synthesizeChunk(const std::string &text) {
   teInputs.push_back(Ort::Value::CreateTensor<float>(
       mem, styleTtl_.data(), styleTtl_.size(), styleTtlShape_.data(),
       styleTtlShape_.size()));
-  teInputs.push_back(Ort::Value::CreateTensor<float>(
-      mem, textMask.data(), textMask.size(), shapeMask.data(),
-      shapeMask.size()));
+  teInputs.push_back(
+      Ort::Value::CreateTensor<float>(mem, textMask.data(), textMask.size(),
+                                      shapeMask.data(), shapeMask.size()));
   const char *teNames[] = {"text_ids", "style_ttl", "text_mask"};
   auto teOutNm = textEncSession_->GetOutputNameAllocated(0, alloc);
   const char *teOuts[] = {teOutNm.get()};
@@ -811,9 +812,10 @@ AudioResult SupertonicEngine::synthesizeChunk(const std::string &text) {
   const int latentChannels = latentDim_ * chunkCompressFactor_;
   const int64_t latentSize =
       static_cast<int64_t>(baseChunkSize_) * chunkCompressFactor_;
-  // Match Python: (duration * sample_rate).astype(int64) truncates; derive latent_len from that.
-  const int64_t wavLen = static_cast<int64_t>(
-      static_cast<double>(durSec) * static_cast<double>(sampleRate_));
+  // Match Python: (duration * sample_rate).astype(int64) truncates; derive
+  // latent_len from that.
+  const int64_t wavLen = static_cast<int64_t>(static_cast<double>(durSec) *
+                                              static_cast<double>(sampleRate_));
   const int64_t latentLen =
       wavLen > 0 ? (wavLen + latentSize - 1) / latentSize : INT64_C(0);
   std::vector<int64_t> wavLens = {wavLen};
@@ -822,7 +824,8 @@ AudioResult SupertonicEngine::synthesizeChunk(const std::string &text) {
   const int64_t latentMaskMaxLen =
       static_cast<int64_t>(latentMaskRow.size()) / (batch * 1);
 
-  std::vector<float> noisy(static_cast<size_t>(batch * latentChannels * latentLen));
+  std::vector<float> noisy(
+      static_cast<size_t>(batch * latentChannels * latentLen));
   {
     std::random_device rd;
     std::mt19937 gen(rd());
@@ -834,8 +837,8 @@ AudioResult SupertonicEngine::synthesizeChunk(const std::string &text) {
         for (int64_t k = 0; k < latentLen; ++k) {
           const float m =
               latentMaskRow[static_cast<size_t>(b * latentMaskMaxLen + k)];
-          noisy[static_cast<size_t>((b * latentChannels + c) * latentLen + k)] *=
-              m;
+          noisy[static_cast<size_t>((b * latentChannels + c) * latentLen +
+                                    k)] *= m;
         }
       }
     }
@@ -858,28 +861,26 @@ AudioResult SupertonicEngine::synthesizeChunk(const std::string &text) {
     veInputs.push_back(Ort::Value::CreateTensor<float>(
         mem, styleTtl_.data(), styleTtl_.size(), styleTtlShape_.data(),
         styleTtlShape_.size()));
-    veInputs.push_back(Ort::Value::CreateTensor<float>(
-        mem, textMask.data(), textMask.size(), shapeMask.data(),
-        shapeMask.size()));
+    veInputs.push_back(
+        Ort::Value::CreateTensor<float>(mem, textMask.data(), textMask.size(),
+                                        shapeMask.data(), shapeMask.size()));
     veInputs.push_back(Ort::Value::CreateTensor<float>(
         mem, latentMaskRow.data(), latentMaskRow.size(), lmShape.data(),
         lmShape.size()));
     std::vector<int64_t> bshape = {batch};
     veInputs.push_back(Ort::Value::CreateTensor<float>(
-        mem, curStep.data(), curStep.size(), bshape.data(),
-        bshape.size()));
+        mem, curStep.data(), curStep.size(), bshape.data(), bshape.size()));
     veInputs.push_back(Ort::Value::CreateTensor<float>(
-        mem, totalStep.data(), totalStep.size(), bshape.data(),
-        bshape.size()));
+        mem, totalStep.data(), totalStep.size(), bshape.data(), bshape.size()));
 
-    const char *veNames[] = {"noisy_latent", "text_emb", "style_ttl",
+    const char *veNames[] = {"noisy_latent", "text_emb",    "style_ttl",
                              "text_mask",    "latent_mask", "current_step",
                              "total_step"};
     auto veOutNm = vectorEstSession_->GetOutputNameAllocated(0, alloc);
     const char *veOuts[] = {veOutNm.get()};
-    auto veOutputs = vectorEstSession_->Run(
-        Ort::RunOptions{nullptr}, veNames, veInputs.data(), veInputs.size(),
-        veOuts, 1);
+    auto veOutputs =
+        vectorEstSession_->Run(Ort::RunOptions{nullptr}, veNames,
+                               veInputs.data(), veInputs.size(), veOuts, 1);
     const float *outX = veOutputs[0].GetTensorData<float>();
     const size_t nOut =
         veOutputs[0].GetTensorTypeAndShapeInfo().GetElementCount();
@@ -921,8 +922,7 @@ AudioResult SupertonicEngine::synthesize(const std::string &text) {
   if (!loaded_)
     throw std::runtime_error("SupertonicEngine not loaded");
 
-  const int maxChunk =
-      (config_.language == "ko") ? 120 : 300;
+  const int maxChunk = (config_.language == "ko") ? 120 : 300;
   std::vector<std::string> chunks = chunkText(text, maxChunk);
   if (chunks.empty()) {
     AudioResult empty;
@@ -931,8 +931,8 @@ AudioResult SupertonicEngine::synthesize(const std::string &text) {
     return empty;
   }
 
-  const int silenceN =
-      static_cast<int>(kSilenceBetweenChunksSec * static_cast<double>(sampleRate_));
+  const int silenceN = static_cast<int>(kSilenceBetweenChunksSec *
+                                        static_cast<double>(sampleRate_));
   std::vector<int16_t> acc;
   for (size_t i = 0; i < chunks.size(); ++i) {
     AudioResult part = synthesizeChunk(chunks[i]);
@@ -945,8 +945,7 @@ AudioResult SupertonicEngine::synthesize(const std::string &text) {
   out.channels = 1;
   out.pcm16 = std::move(acc);
   out.samples = out.pcm16.size();
-  out.durationMs =
-      out.samples * 1000.0 / static_cast<double>(sampleRate_);
+  out.durationMs = out.samples * 1000.0 / static_cast<double>(sampleRate_);
   return out;
 }
 

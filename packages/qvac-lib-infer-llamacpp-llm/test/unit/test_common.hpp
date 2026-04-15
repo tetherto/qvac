@@ -15,20 +15,18 @@
 
 namespace test_common {
 
-inline double getStatValue(
-    const qvac_lib_inference_addon_cpp::RuntimeStats& stats,
-    const std::string& key) {
-  for (const auto& stat : stats) {
+inline double
+getStatValue(const qvac_lib_inference_addon_cpp::RuntimeStats &stats,
+             const std::string &key) {
+  for (const auto &stat : stats) {
     if (stat.first == key) {
       return std::visit(
-          [](const auto& value) -> double {
-            if constexpr (std::is_same_v<
-                              std::decay_t<decltype(value)>,
-                              double>) {
+          [](const auto &value) -> double {
+            if constexpr (std::is_same_v<std::decay_t<decltype(value)>,
+                                         double>) {
               return value;
-            } else if constexpr (std::is_same_v<
-                                     std::decay_t<decltype(value)>,
-                                     int64_t>) {
+            } else if constexpr (std::is_same_v<std::decay_t<decltype(value)>,
+                                                int64_t>) {
               return static_cast<double>(value);
             } else {
               return 0.0;

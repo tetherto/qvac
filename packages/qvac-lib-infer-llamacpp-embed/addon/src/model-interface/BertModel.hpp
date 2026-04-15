@@ -191,9 +191,8 @@ public:
   enum llama_pooling_type pooling_type;
   int n_embd;
 
-  void initializeBackend(
-      const std::string& backendsDir = "",
-      const std::string& openclCacheDir = "");
+  void initializeBackend(const std::string &backendsDir = "",
+                         const std::string &openclCacheDir = "");
 
   /// @brief Ensure model is initialized
   void waitForLoadInitialization() final {

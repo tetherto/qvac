@@ -1,7 +1,7 @@
 #include <bare.h>
 
-#include <opencv2/core.hpp>
 #include "../addon/AddonJs.hpp"
+#include <opencv2/core.hpp>
 
 // Force OpenCV to use single-threaded mode at load time.
 // OpenCV's default multi-threaded parallel backend creates a ThreadPool

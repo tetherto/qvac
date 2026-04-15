@@ -32,8 +32,8 @@ public:
 
   PivotTranslationModel(const PivotTranslationModel&) = delete;
   PivotTranslationModel& operator=(const PivotTranslationModel&) = delete;
-  PivotTranslationModel(PivotTranslationModel&&) noexcept = delete;
-  PivotTranslationModel& operator=(PivotTranslationModel&&) noexcept = delete;
+  PivotTranslationModel(PivotTranslationModel &&) noexcept = delete;
+  PivotTranslationModel &operator=(PivotTranslationModel &&) noexcept = delete;
 
   void load();
   void unload();

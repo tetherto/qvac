@@ -23,8 +23,8 @@ std::string TranslationModel::getName() const {
 
 #endif
   default:
-    throw qvac_errors::StatusError(
-        qvac_errors::general_error::InternalError, "Invalid backend type.");
+    throw qvac_errors::StatusError(qvac_errors::general_error::InternalError,
+                                   "Invalid backend type.");
   }
 }
 
@@ -49,7 +49,8 @@ BackendType TranslationModel::detectBackendType(const std::string& modelPath) {
         std::string filename = entry.path().filename().string();
         // Check for bergamot model signatures
         if (filename.find(".intgemm") != std::string::npos ||
-            (filename.find("vocab.") != std::string::npos && filename.find(".spm") != std::string::npos)) {
+            (filename.find("vocab.") != std::string::npos &&
+             filename.find(".spm") != std::string::npos)) {
           QLOG(
               qvac_lib_inference_addon_cpp::logger::Priority::INFO,
               "[TRANSLATION MODEL] Detected Bergamot backend based on model files");
@@ -118,23 +119,22 @@ void TranslationModel::load() {
     // Set model path
     params.model_path = modelPath_;
 
-    auto setBergamotParam =
-        [&]<typename TValue>(const std::string& key, auto setter) {
-          auto iter = config_.find(key);
-          if (iter == config_.end()) {
-            return;
-          }
+    auto setBergamotParam = [&]<typename TValue>(const std::string &key,
+                                                 auto setter) {
+      auto iter = config_.find(key);
+      if (iter == config_.end()) {
+        return;
+      }
 
-          if (std::holds_alternative<TValue>(iter->second)) {
-            setter(std::get<TValue>(iter->second));
-            return;
-          }
+      if (std::holds_alternative<TValue>(iter->second)) {
+        setter(std::get<TValue>(iter->second));
+        return;
+      }
 
-          QLOG(
-              qvac_lib_inference_addon_cpp::logger::Priority::WARNING,
-              "[TRANSLATION MODEL] Ignoring Bergamot config '" + key +
-                  "' because the value type is unsupported");
-        };
+      QLOG(qvac_lib_inference_addon_cpp::logger::Priority::WARNING,
+           "[TRANSLATION MODEL] Ignoring Bergamot config '" + key +
+               "' because the value type is unsupported");
+    };
 
     setBergamotParam.operator()<int64_t>("beamsize", [&](double value) {
       params.beam_size = static_cast<int>(value);

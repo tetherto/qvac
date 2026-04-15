@@ -3,7 +3,7 @@
 namespace qvac_lib_inference_addon_llama {
 namespace utils {
 
-const char* getToolsDynamicQwen3Template() {
+const char *getToolsDynamicQwen3Template() {
   return R"({%- if messages[0].role == 'system' %}
     {{- '<|im_start|>system\n' + messages[0].content + '<|im_end|>\n' }}
 {%- endif %}

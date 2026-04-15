@@ -7,16 +7,16 @@
 
 namespace test_common {
 
-inline std::string processPromptString(
-    const std::unique_ptr<LlamaModel>& model, const std::string& input) {
+inline std::string processPromptString(const std::unique_ptr<LlamaModel> &model,
+                                       const std::string &input) {
   LlamaModel::Prompt prompt;
   prompt.input = input;
   return model->processPrompt(prompt);
 }
 
 inline std::string processPromptWithCacheOptions(
-    const std::unique_ptr<LlamaModel>& model, const std::string& input,
-    const std::string& cacheKey, bool saveCacheToDisk = false) {
+    const std::unique_ptr<LlamaModel> &model, const std::string &input,
+    const std::string &cacheKey, bool saveCacheToDisk = false) {
   LlamaModel::Prompt prompt;
   prompt.input = input;
   prompt.cacheKey = cacheKey;

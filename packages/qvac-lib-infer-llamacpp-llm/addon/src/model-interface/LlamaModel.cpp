@@ -315,8 +315,8 @@ void LlamaModel::init(bool acquireLock) {
   common_params params;
   std::optional<int> adrenoVersion;
   bool toolsAtEnd = false;
-  commonParamsParse(
-      modelPath, configFilemap, params, adrenoVersion, toolsAtEnd);
+  commonParamsParse(modelPath, configFilemap, params, adrenoVersion,
+                    toolsAtEnd);
 
   const std::string errorWhenFailed = toString(UnableToLoadModel);
   auto streamedFiles =
@@ -339,11 +339,9 @@ void LlamaModel::init(bool acquireLock) {
   }
 
   snap->isTextLlm_ = constructionArgs_.projectionPath.empty();
-  snap->llmContext_ = createContext(
-      std::string(constructionArgs_.projectionPath),
-      params,
-      std::move(llamaInit),
-      toolsAtEnd);
+  snap->llmContext_ =
+      createContext(std::string(constructionArgs_.projectionPath), params,
+                    std::move(llamaInit), toolsAtEnd);
 
   if (snap->configuredNDiscarded_ > 0 && snap->llmContext_) {
     snap->llmContext_->setNDiscarded(snap->configuredNDiscarded_);
@@ -481,14 +479,12 @@ std::any LlamaModel::process(const std::any& input) {
 }
 
 LlamaModel::ResolvedPrompt
-LlamaModel::resolveChatAndTools(const Prompt& prompt) {
+LlamaModel::resolveChatAndTools(const Prompt &prompt) {
   ResolvedPrompt resolved;
   if (state_->cacheManager_.has_value()) {
     resolved.isCacheLoaded = state_->cacheManager_->handleCache(
-        resolved.chatMsgs,
-        resolved.tools,
-        prompt.input,
-        [this](const std::string& inputPrompt) {
+        resolved.chatMsgs, resolved.tools, prompt.input,
+        [this](const std::string &inputPrompt) {
           return this->formatPrompt(inputPrompt);
         },
         prompt.cacheKey);
@@ -573,12 +569,12 @@ std::string LlamaModel::processPromptImpl(const Prompt& prompt) {
   if (!prompt.outputCallback) {
     out = oss.str();
   }
-  auto& dts = state_->llmContext_->dynamicToolsState();
+  auto &dts = state_->llmContext_->dynamicToolsState();
   if (dts.toolsAtEnd() && !resolved.tools.empty() &&
       dts.nPastBeforeTools() > 0 &&
       state_->llmContext_->getNPast() > dts.nPastBeforeTools()) {
-    state_->llmContext_->removeLastNTokens(
-        state_->llmContext_->getNPast() - dts.nPastBeforeTools());
+    state_->llmContext_->removeLastNTokens(state_->llmContext_->getNPast() -
+                                           dts.nPastBeforeTools());
     dts.reset();
     if (state_->llmContext_->getFirstMsgTokens() >
         state_->llmContext_->getNPast()) {
@@ -614,22 +610,21 @@ qvac_lib_inference_addon_cpp::RuntimeStats LlamaModel::runtimeStats() const {
 
   int32_t contextSlides = state_->llmContext_->getNSlides();
 
-  return {
-      {"TTFT", timeToFirstToken},
-      {"TPS", tokensPerSecond},
-      {"CacheTokens", state_->llmContext_->getNPast()},
-      {"generatedTokens", generatedTokens},
-      {"promptTokens", promptTokens},
-      {"contextSlides", static_cast<int64_t>(contextSlides)},
-      {"backendDevice", runtimeBackendDevice_}};
+  return {{"TTFT", timeToFirstToken},
+          {"TPS", tokensPerSecond},
+          {"CacheTokens", state_->llmContext_->getNPast()},
+          {"generatedTokens", generatedTokens},
+          {"promptTokens", promptTokens},
+          {"contextSlides", static_cast<int64_t>(contextSlides)},
+          {"backendDevice", runtimeBackendDevice_}};
 }
 
 // NOLINTNEXTLINE(readability-convert-member-functions-to-static,readability-function-cognitive-complexity)
 void LlamaModel::commonParamsParse(
-    const std::string& modelPath,
-    std::unordered_map<std::string, std::string>& configFilemap,
-    common_params& params, std::optional<int>& outAdrenoVersion,
-    bool& outToolsAtEnd) {
+    const std::string &modelPath,
+    std::unordered_map<std::string, std::string> &configFilemap,
+    common_params &params, std::optional<int> &outAdrenoVersion,
+    bool &outToolsAtEnd) {
 
   std::vector<std::string> configVector;
 
@@ -684,10 +679,9 @@ void LlamaModel::commonParamsParse(
   if (outToolsAtEnd) {
     auto arch = metadata_.tryGetString("general.architecture");
     if (!arch.has_value() || arch.value() != "qwen3") {
-      QLOG_IF(
-          Priority::WARNING,
-          "[LlamaModel] tools_at_end is only supported for Qwen3 models, "
-          "ignoring\n");
+      QLOG_IF(Priority::WARNING,
+              "[LlamaModel] tools_at_end is only supported for Qwen3 models, "
+              "ignoring\n");
       outToolsAtEnd = false;
     }
   }
@@ -1028,16 +1022,16 @@ void LlamaModel::resetState(bool resetStats) {
   state_->llmContext_->resetState(resetStats);
 }
 
-std::unique_ptr<LlmContext> LlamaModel::createContext(
-    std::string&& projectionPath, common_params& params,
-    common_init_result&& llamaInit, bool toolsAtEnd) {
+std::unique_ptr<LlmContext>
+LlamaModel::createContext(std::string &&projectionPath, common_params &params,
+                          common_init_result &&llamaInit, bool toolsAtEnd) {
   if (!projectionPath.empty()) {
     params.mmproj.path = std::move(projectionPath);
-    return std::make_unique<MtmdLlmContext>(
-        params, std::move(llamaInit), toolsAtEnd);
+    return std::make_unique<MtmdLlmContext>(params, std::move(llamaInit),
+                                            toolsAtEnd);
   }
-  return std::make_unique<TextLlmContext>(
-      params, std::move(llamaInit), toolsAtEnd);
+  return std::make_unique<TextLlmContext>(params, std::move(llamaInit),
+                                          toolsAtEnd);
 }
 
 bool LlamaModel::loadMedia(const std::vector<uint8_t>& input) {

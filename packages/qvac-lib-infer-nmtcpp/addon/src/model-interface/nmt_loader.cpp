@@ -265,9 +265,8 @@ static bool load_sentencepiece_model(
   int32_t sp_model_size = 0;
   read_safe(loader, sp_model_size);
 
-  QLOG(
-      qvac_lib_inference_addon_cpp::logger::Priority::DEBUG,
-      "SentencePiece model size: " + std::to_string(sp_model_size));
+  QLOG(qvac_lib_inference_addon_cpp::logger::Priority::DEBUG,
+       "SentencePiece model size: " + std::to_string(sp_model_size));
 
   if (sp_model_size > 0) {
     std::vector<char> sp_model_data(sp_model_size);
@@ -276,20 +275,17 @@ static bool load_sentencepiece_model(
 
     auto status = processor->LoadFromSerializedProto(serialized_model);
     if (status.ok()) {
-      QLOG(
-          qvac_lib_inference_addon_cpp::logger::Priority::DEBUG,
-          "SentencePiece model loaded successfully");
+      QLOG(qvac_lib_inference_addon_cpp::logger::Priority::DEBUG,
+           "SentencePiece model loaded successfully");
       return true;
     } else {
-      QLOG(
-          qvac_lib_inference_addon_cpp::logger::Priority::ERROR,
-          "SentencePiece model load failed: " + status.ToString());
+      QLOG(qvac_lib_inference_addon_cpp::logger::Priority::ERROR,
+           "SentencePiece model load failed: " + status.ToString());
       return false;
     }
   }
-  QLOG(
-      qvac_lib_inference_addon_cpp::logger::Priority::DEBUG,
-      "SentencePiece model size is 0 or negative, skipping");
+  QLOG(qvac_lib_inference_addon_cpp::logger::Priority::DEBUG,
+       "SentencePiece model size is 0 or negative, skipping");
   return false;
 }
 
@@ -748,7 +744,7 @@ static bool nmt_model_load(struct nmt_model_loader* loader, nmt_context& ctx) {
         ggml_new_tensor_1d(ctx, GGML_TYPE_F32, n_text_state);
     ggml_tensor* meta_dec_norm_b =
         ggml_new_tensor_1d(ctx, GGML_TYPE_F32, n_text_state);
-    ggml_tensor* meta_lm_head =
+    ggml_tensor *meta_lm_head =
         ggml_new_tensor_2d(ctx, wtype, n_text_state, decoder_vocab_size);
     ggml_tensor* meta_enc_layer_norm_w = nullptr;
     ggml_tensor* meta_enc_layer_norm_b = nullptr;
@@ -768,7 +764,7 @@ static bool nmt_model_load(struct nmt_model_loader* loader, nmt_context& ctx) {
     // Allocate tensors using backend system
     ggml_backend_buffer_type_t buft =
         select_weight_buft(hparams, meta_encoder_emb, GGML_OP_NONE, buft_list);
-    ggml_context* nmt_ctx = get_ctx(buft);
+    ggml_context *nmt_ctx = get_ctx(buft);
 
     model.m_encoder_embeddings = ggml_dup_tensor(nmt_ctx, meta_encoder_emb);
     model.m_decoder_embeddings = ggml_dup_tensor(nmt_ctx, meta_decoder_emb);

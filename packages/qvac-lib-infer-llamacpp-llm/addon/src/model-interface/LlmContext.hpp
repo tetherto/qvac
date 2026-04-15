@@ -85,25 +85,24 @@ public:
 };
 
 struct ThreadPoolDeleter {
-  void operator()(ggml_threadpool* ptr) {
+  void operator()(ggml_threadpool *ptr) {
     if (ptr != nullptr) {
-      auto* cpuDev = ggml_backend_dev_by_type(GGML_BACKEND_DEVICE_TYPE_CPU);
+      auto *cpuDev = ggml_backend_dev_by_type(GGML_BACKEND_DEVICE_TYPE_CPU);
       if (cpuDev == nullptr) {
-        throw qvac_errors::StatusError(
-            ADDON_ID, toString(NoBackendFound), "no CPU backend found");
+        throw qvac_errors::StatusError(ADDON_ID, toString(NoBackendFound),
+                                       "no CPU backend found");
       }
-      auto* reg = ggml_backend_dev_backend_reg(cpuDev);
-      void* procAddr =
+      auto *reg = ggml_backend_dev_backend_reg(cpuDev);
+      void *procAddr =
           ggml_backend_reg_get_proc_address(reg, "ggml_threadpool_free");
       if (procAddr == nullptr) {
         throw qvac_errors::StatusError(
-            ADDON_ID,
-            toString(UnableToDeleteThreadPool),
+            ADDON_ID, toString(UnableToDeleteThreadPool),
             "Failed to get ggml_threadpool_free function address");
       }
       // NOLINTNEXTLINE(cppcoreguidelines-pro-type-reinterpret-cast)
-      auto* ggmlThreadpoolFreeFn =
-          reinterpret_cast<decltype(ggml_threadpool_free)*>(procAddr);
+      auto *ggmlThreadpoolFreeFn =
+          reinterpret_cast<decltype(ggml_threadpool_free) *>(procAddr);
       ggmlThreadpoolFreeFn(ptr);
     }
   }
@@ -237,8 +236,8 @@ public:
    */
   virtual void setNDiscarded(llama_pos nDiscarded) = 0;
 
-  DynamicToolsState& dynamicToolsState() { return dynamicToolsState_; }
-  [[nodiscard]] const DynamicToolsState& dynamicToolsState() const {
+  DynamicToolsState &dynamicToolsState() { return dynamicToolsState_; }
+  [[nodiscard]] const DynamicToolsState &dynamicToolsState() const {
     return dynamicToolsState_;
   }
 

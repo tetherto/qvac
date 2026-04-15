@@ -516,8 +516,8 @@ TEST_F(TextLlmContextTest, DoubleTokenizationTimeOverhead) {
     }
     auto endNoTools = std::chrono::high_resolution_clock::now();
     auto durationNoTools =
-        std::chrono::duration_cast<std::chrono::microseconds>(
-            endNoTools - startNoTools)
+        std::chrono::duration_cast<std::chrono::microseconds>(endNoTools -
+                                                              startNoTools)
             .count();
 
     auto stats = model->runtimeStats();

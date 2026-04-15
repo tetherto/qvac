@@ -409,7 +409,7 @@ TEST_F(
 
   // Check output queue for bad_optional_access errors
   std::vector<std::any> outputs = outputQueue_->clear();
-  for (const std::any& output : outputs) {
+  for (const std::any &output : outputs) {
     if (output.type() == typeid(Output::Error)) {
       Output::Error error = std::any_cast<Output::Error>(output);
       if (error.find("bad_optional_access") != std::string::npos ||

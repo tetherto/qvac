@@ -47,7 +47,7 @@ static std::vector<nmt_vocab::id> common_sentencepiece_tokenize(
   return tokens;
 }
 
-nmt_vocab::id find_bos_token(const nmt_vocab& vocab) {
+nmt_vocab::id find_bos_token(const nmt_vocab &vocab) {
   std::vector<std::string> bos_candidates = {"</s>"};
 
   for (const auto& candidate : bos_candidates) {
@@ -104,8 +104,8 @@ indictrans_tokenize(const nmt_vocab& vocab, const std::string& text) {
   return tokens;
 }
 
-static std::vector<nmt_vocab::id>
-tokenize(const nmt_context* ctx, const std::string& text) {
+static std::vector<nmt_vocab::id> tokenize(const nmt_context *ctx,
+                                           const std::string &text) {
   if (ctx->model.type == e_model::MODEL_INDICTRANS) {
     return indictrans_tokenize(ctx->vocab, text);
   }
@@ -123,7 +123,7 @@ std::string detokenize_sentencepiece(const nmt_context* ctx) {
   }
 
   std::vector<std::string> tokens;
-  const auto& src_id_to_token = vocab.tgt_id_to_token;
+  const auto &src_id_to_token = vocab.tgt_id_to_token;
   for (auto&& id : token_ids) {
     if (id != 0 && id != 1 && id != vocab.bos_token_id) {
       auto find_iter = src_id_to_token.find(id);

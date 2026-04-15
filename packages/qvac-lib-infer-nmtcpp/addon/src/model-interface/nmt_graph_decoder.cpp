@@ -336,29 +336,29 @@ struct ggml_cgraph* nmt_build_graph_decoder(
   for (int il = 0; il < n_layer; ++il) {
     const auto& layer = model.layers_decoder[il];
 
-    struct ggml_tensor* residual = inpL;
+    struct ggml_tensor *residual = inpL;
 
     // norm
     cur = ggml_norm(ctx0, inpL, hparams.eps);
-    cur = ggml_add(
-        ctx0, ggml_mul(ctx0, cur, layer.attn_ln_0_w), layer.attn_ln_0_b);
+    cur = ggml_add(ctx0, ggml_mul(ctx0, cur, layer.attn_ln_0_w),
+                   layer.attn_ln_0_b);
     ggml_set_name(cur, "self_attn_norm");
 
     // self-attention
     {
-      struct ggml_tensor* Qcur = ggml_mul_mat(ctx0, layer.attn_q_w, cur);
+      struct ggml_tensor *Qcur = ggml_mul_mat(ctx0, layer.attn_q_w, cur);
 
       Qcur = ggml_add(ctx0, Qcur, layer.attn_q_b);
 
       Qcur = ggml_scale(ctx0, Qcur, KQscale);
 
-      struct ggml_tensor* Kcur = ggml_mul_mat(ctx0, layer.attn_k_w, cur);
+      struct ggml_tensor *Kcur = ggml_mul_mat(ctx0, layer.attn_k_w, cur);
 
       Kcur = ggml_add(ctx0, Kcur, layer.attn_k_b);
 
       // store key and value to memory
 
-      struct ggml_tensor* Vcur = ggml_mul_mat(ctx0, layer.attn_v_w, cur);
+      struct ggml_tensor *Vcur = ggml_mul_mat(ctx0, layer.attn_v_w, cur);
       Vcur = ggml_add(ctx0, Vcur, layer.attn_v_b);
 
       struct ggml_tensor* k;
@@ -427,7 +427,7 @@ struct ggml_cgraph* nmt_build_graph_decoder(
       } else {
         // K * Q
         struct ggml_tensor* KQ = ggml_mul_mat(ctx0, K, Q);
-        struct ggml_tensor* KQ_soft_max =
+        struct ggml_tensor *KQ_soft_max =
             ggml_soft_max_ext(ctx0, KQ, nullptr, 1.0F, 0.0F);
 
         struct ggml_tensor* V = ggml_view_3d(
@@ -458,18 +458,16 @@ struct ggml_cgraph* nmt_build_graph_decoder(
     }
 
     // add the input
-    struct ggml_tensor* inpCA = ggml_add(ctx0, cur, residual);
+    struct ggml_tensor *inpCA = ggml_add(ctx0, cur, residual);
 
-    struct ggml_tensor* cross_residual = inpCA;
+    struct ggml_tensor *cross_residual = inpCA;
 
     // norm
     {
       cur = ggml_norm(ctx0, inpCA, hparams.eps); // note: we use inpCA here
 
-      cur = ggml_add(
-          ctx0,
-          ggml_mul(ctx0, cur, layer.cross_attn_ln_0_w),
-          layer.cross_attn_ln_0_b);
+      cur = ggml_add(ctx0, ggml_mul(ctx0, cur, layer.cross_attn_ln_0_w),
+                     layer.cross_attn_ln_0_b);
     }
 
     residual = cur;
@@ -561,7 +559,7 @@ struct ggml_cgraph* nmt_build_graph_decoder(
     // add the input
     cur = ggml_add(ctx0, cur, cross_residual);
 
-    struct ggml_tensor* ffn_residual = cur;
+    struct ggml_tensor *ffn_residual = cur;
 
     // feed-forward network
     {
@@ -594,10 +592,8 @@ struct ggml_cgraph* nmt_build_graph_decoder(
 
   if (model.m_decoder_norm_w != nullptr) {
     cur = ggml_norm(ctx0, cur, hparams.eps);
-    cur = ggml_add(
-        ctx0,
-        ggml_mul(ctx0, cur, model.m_decoder_norm_w),
-        model.m_decoder_norm_b);
+    cur = ggml_add(ctx0, ggml_mul(ctx0, cur, model.m_decoder_norm_w),
+                   model.m_decoder_norm_b);
   }
   if (hparams.has_lm_head && model.m_lm_head_w != nullptr) {
     logits = ggml_mul_mat(ctx0, model.m_lm_head_w, cur);

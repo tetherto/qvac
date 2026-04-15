@@ -39,32 +39,28 @@ TEST_F(ChatTemplateUtilsTest, IsQwen3ModelWithNullptr) {
   EXPECT_FALSE(isQwen3Model(nullptr));
 }
 
-TEST_F(
-    ChatTemplateUtilsTest,
-    GetChatTemplateForModelWithManualOverrideToolsAtEndFalse) {
+TEST_F(ChatTemplateUtilsTest,
+       GetChatTemplateForModelWithManualOverrideToolsAtEndFalse) {
   std::string manual_override = "custom template";
   std::string result = getChatTemplateForModel(nullptr, manual_override, false);
   EXPECT_EQ(result, manual_override);
 }
 
-TEST_F(
-    ChatTemplateUtilsTest,
-    GetChatTemplateForModelWithManualOverrideToolsAtEndTrue) {
+TEST_F(ChatTemplateUtilsTest,
+       GetChatTemplateForModelWithManualOverrideToolsAtEndTrue) {
   std::string manual_override = "custom template";
   std::string result = getChatTemplateForModel(nullptr, manual_override, true);
   EXPECT_EQ(result, manual_override);
 }
 
-TEST_F(
-    ChatTemplateUtilsTest,
-    GetChatTemplateForModelEmptyOverrideNullptrToolsAtEndFalse) {
+TEST_F(ChatTemplateUtilsTest,
+       GetChatTemplateForModelEmptyOverrideNullptrToolsAtEndFalse) {
   std::string result = getChatTemplateForModel(nullptr, "", false);
   EXPECT_EQ(result, "");
 }
 
-TEST_F(
-    ChatTemplateUtilsTest,
-    GetChatTemplateForModelEmptyOverrideNullptrToolsAtEndTrue) {
+TEST_F(ChatTemplateUtilsTest,
+       GetChatTemplateForModelEmptyOverrideNullptrToolsAtEndTrue) {
   std::string result = getChatTemplateForModel(nullptr, "", true);
   EXPECT_EQ(result, "");
 }
@@ -132,20 +128,20 @@ TEST_F(
 }
 
 TEST_F(ChatTemplateUtilsTest, GetFixedQwen3TemplateNotNull) {
-  const char* expectedTemplate = getFixedQwen3Template();
+  const char *expectedTemplate = getFixedQwen3Template();
   ASSERT_NE(expectedTemplate, nullptr);
   EXPECT_GT(strlen(expectedTemplate), 0u);
 }
 
 TEST_F(ChatTemplateUtilsTest, GetToolsDynamicQwen3TemplateNotNull) {
-  const char* expectedTemplate = getToolsDynamicQwen3Template();
+  const char *expectedTemplate = getToolsDynamicQwen3Template();
   ASSERT_NE(expectedTemplate, nullptr);
   EXPECT_GT(strlen(expectedTemplate), 0u);
 }
 
 TEST_F(ChatTemplateUtilsTest, TemplatesAreDifferent) {
-  const char* fixedTemplate = getFixedQwen3Template();
-  const char* dynamicTemplate = getToolsDynamicQwen3Template();
+  const char *fixedTemplate = getFixedQwen3Template();
+  const char *dynamicTemplate = getToolsDynamicQwen3Template();
   ASSERT_NE(fixedTemplate, nullptr);
   ASSERT_NE(dynamicTemplate, nullptr);
   EXPECT_STRNE(fixedTemplate, dynamicTemplate);
@@ -160,8 +156,8 @@ TEST_F(ChatTemplateUtilsTest, ManualOverrideTakesPrecedenceOverToolsAtEnd) {
   EXPECT_EQ(result, "my_custom_template");
 }
 
-TEST_F(
-    ChatTemplateUtilsTest, ManualOverrideTakesPrecedenceOverToolsAtEndFalse) {
+TEST_F(ChatTemplateUtilsTest,
+       ManualOverrideTakesPrecedenceOverToolsAtEndFalse) {
   common_params params;
   params.chat_template = "my_custom_template";
   params.use_jinja = true;

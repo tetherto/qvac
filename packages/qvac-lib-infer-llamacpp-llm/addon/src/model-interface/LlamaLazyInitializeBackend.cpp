@@ -16,8 +16,8 @@ bool LlamaLazyInitializeBackend::g_initialized = false;
 std::string LlamaLazyInitializeBackend::g_recordedBackendsDir;
 int LlamaLazyInitializeBackend::g_refCount = 0;
 
-bool LlamaLazyInitializeBackend::initialize(
-    const std::string& backendsDir, const std::string& openclCacheDir) {
+bool LlamaLazyInitializeBackend::initialize(const std::string &backendsDir,
+                                            const std::string &openclCacheDir) {
   std::lock_guard<std::mutex> lock(g_initMutex);
 
   if (g_initialized) {
@@ -86,8 +86,8 @@ void LlamaLazyInitializeBackend::decrementRefCount() {
   }
 }
 
-LlamaBackendsHandle::LlamaBackendsHandle(
-    const std::string& backendsDir, const std::string& openclCacheDir)
+LlamaBackendsHandle::LlamaBackendsHandle(const std::string &backendsDir,
+                                         const std::string &openclCacheDir)
     : ownsHandle_(true) {
   LlamaLazyInitializeBackend::initialize(backendsDir, openclCacheDir);
   LlamaLazyInitializeBackend::incrementRefCount();

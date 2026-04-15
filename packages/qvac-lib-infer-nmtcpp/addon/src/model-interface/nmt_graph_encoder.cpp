@@ -50,10 +50,8 @@ nmt_build_graph_encoder(nmt_context& ctx, nmt_state& state) {
 
   if (hparams.layernorm_embedding) {
     cur = ggml_norm(ctx0, cur, hparams.eps);
-    cur = ggml_add(
-        ctx0,
-        ggml_mul(ctx0, cur, model.m_enc_layer_norm_w),
-        model.m_enc_layer_norm_b);
+    cur = ggml_add(ctx0, ggml_mul(ctx0, cur, model.m_enc_layer_norm_w),
+                   model.m_enc_layer_norm_b);
   }
 
   const float KQscale = 1.0F / sqrtf(float(n_state_head));
@@ -66,13 +64,9 @@ nmt_build_graph_encoder(nmt_context& ctx, nmt_state& state) {
                                ggml_element_size(model.m_encoder_pos_emb);
     const size_t e_pe_offset = first_token_pos * e_pe_stride;
 
-    struct ggml_tensor* encoder_pos_emb = ggml_view_2d(
-        ctx0,
-        model.m_encoder_pos_emb,
-        model.m_encoder_pos_emb->ne[0],
-        state.tokens_to_process,
-        e_pe_stride,
-        e_pe_offset);
+    struct ggml_tensor *encoder_pos_emb = ggml_view_2d(
+        ctx0, model.m_encoder_pos_emb, model.m_encoder_pos_emb->ne[0],
+        state.tokens_to_process, e_pe_stride, e_pe_offset);
     ggml_tensor* temp = ggml_cont(ctx0, encoder_pos_emb);
     cur = ggml_add(ctx0, cur, temp);
   }
@@ -85,8 +79,8 @@ nmt_build_graph_encoder(nmt_context& ctx, nmt_state& state) {
     struct ggml_tensor* attn_residual = inpL;
     if (hparams.encoder_normalize_before) {
       cur = ggml_norm(ctx0, inpL, hparams.eps);
-      cur = ggml_add(
-          ctx0, ggml_mul(ctx0, cur, layer.attn_ln_0_w), layer.attn_ln_0_b);
+      cur = ggml_add(ctx0, ggml_mul(ctx0, cur, layer.attn_ln_0_w),
+                     layer.attn_ln_0_b);
     } else {
       cur = inpL;
     }
@@ -131,7 +125,7 @@ nmt_build_graph_encoder(nmt_context& ctx, nmt_state& state) {
         // K * Q
         struct ggml_tensor* KQ = ggml_mul_mat(ctx0, K, Q);
 
-        struct ggml_tensor* KQ_soft_max =
+        struct ggml_tensor *KQ_soft_max =
             ggml_soft_max_ext(ctx0, KQ, nullptr, 1.0F, 0.0F);
 
         struct ggml_tensor* V = nullptr;
@@ -165,11 +159,11 @@ nmt_build_graph_encoder(nmt_context& ctx, nmt_state& state) {
 
     if (!hparams.encoder_normalize_before) {
       cur = ggml_norm(ctx0, cur, hparams.eps);
-      cur = ggml_add(
-          ctx0, ggml_mul(ctx0, cur, layer.attn_ln_0_w), layer.attn_ln_0_b);
+      cur = ggml_add(ctx0, ggml_mul(ctx0, cur, layer.attn_ln_0_w),
+                     layer.attn_ln_0_b);
     }
 
-    struct ggml_tensor* inpFF = cur;
+    struct ggml_tensor *inpFF = cur;
     // feed-forward network
     {
       struct ggml_tensor* ffn_residual = inpFF;
