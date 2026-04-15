@@ -1,7 +1,7 @@
 ---
 name: orchestrate
 description: Run the full plan review (can be skipped) → implement → test → CI → review → PR pipeline for a task. Coordinates plan-reviewer, implementer, test-writer, ci-validator, and code-reviewer agents.
-argument-hint: "[--no-plan] <asana-task-id-or-url>"
+argument-hint: "[--no-plan] <asana-task-id-or-url | description | file-path-or-url>"
 disable-model-invocation: true
 ---
 
@@ -11,34 +11,51 @@ Run the complete agent pipeline for a task: branch setup, plan review, implement
 
 ## Usage
 
-`/orchestrate [--no-plan] <asana-task-id-or-url>`
+`/orchestrate [--no-plan] <input>`
 
-Accepts either:
-- Asana task ID: `1213560067347874`
-- Asana URL: `https://app.asana.com/0/1234567890/1213560067347874`
+Accepts three input types:
 
-The `--no-plan` flag skips Phase 0.5 (Plan Review) entirely. Phase 1 receives the Asana task description directly as the plan context.
+| Input | Example | Detection |
+|-------|---------|-----------|
+| Asana task URL | `https://app.asana.com/0/.../1213560067347874` | Contains `app.asana.com` |
+| Asana task ID | `1213560067347874` | All digits, 10+ characters |
+| Markdown file | `./plan.md` or `https://raw.githubusercontent.com/.../plan.md` | Ends with `.md` (no spaces), or non-Asana `https://` URL |
+| Text description | `Add retry logic to the OCR pipeline with exponential backoff` | Everything else |
+
+Detection rules are checked in the order shown. A non-Asana URL (e.g., GitHub raw link) is treated as a file to fetch, not a description.
+
+The `--no-plan` flag skips Phase 0.5 (Plan Review) entirely. Phase 1 receives the task description directly as the plan context.
+
+When no Asana task is linked (`file` or `description` mode), Asana-specific operations (reading the task, commenting, marking complete) are skipped automatically. The pipeline produces the same outputs (branch, commits, PR) regardless of input source.
 
 ## Pipeline
 
 ### Phase 0: Setup
 
-1. **Parse the Asana task ID** from the argument:
-   - If it's a URL, extract the last numeric segment as the task ID
-   - If it's already a numeric ID, use it directly
+1. **Parse the input** and classify it using the detection rules from the Usage section. Strip `--no-plan` if present.
 
-2. **Read the Asana task** to get:
-   - Task title
-   - Task description and acceptance criteria
-   - Any tags or custom fields (e.g., package name, ticket number)
+2. **Build the task context** — a normalized set of fields consumed by all downstream phases:
+
+   | Field | Asana mode | File mode | Description mode |
+   |-------|-----------|-----------|-----------------|
+   | `inputMode` | `"asana"` | `"file"` | `"description"` |
+   | `taskId` | The Asana task ID | `null` | `null` |
+   | `title` | From Asana task name | First `# heading` in file, or filename slug | First ~80 chars of input, truncated at word boundary |
+   | `description` | Task description + acceptance criteria | Full file contents | Full input text |
+   | `ticketNumber` | From task name or custom field (e.g., `QVAC-123`) | `null` | `null` |
+   | `source` | `"Asana task <id>"` | `"File: <path-or-url>"` | `"Inline description"` |
+
+   How to populate:
+   - **Asana mode**: Read the Asana task via MCP to get title, description, acceptance criteria, tags, and custom fields. Extract `ticketNumber` from the task name or a custom field.
+   - **File mode**: Read the file (local path → filesystem read; remote URL → fetch). Extract `title` from the first `# heading` in the file. If no heading exists, slugify the filename (e.g., `add-rag-support.md` → `add rag support`).
+   - **Description mode**: Use the full input text as `description`. Extract `title` from the first ~80 characters, truncated at a word boundary.
 
 3. **Create a feature branch** from main:
    - Pull latest main: `git checkout main && git pull origin main`
-   - Generate branch name from task: `feat/<ticket>-<slug>`
-     - Extract ticket number from task name or custom field (e.g., `QVAC-123`)
-     - Slugify the task title (lowercase, hyphens, max 50 chars)
-     - Example: `feat/QVAC-123-add-rag-support-for-lancedb`
-   - If no ticket number found: `feat/<task-title-slug>`
+   - Generate branch name from task context:
+     - If `ticketNumber` is present: `feat/<ticket>-<slug>` (e.g., `feat/QVAC-123-add-rag-support-for-lancedb`)
+     - Otherwise: `feat/<title-slug>` (e.g., `feat/add-retry-logic-to-ocr-pipeline`)
+     - Slugify: lowercase, hyphens, max 50 chars
    - Create and switch to branch: `git checkout -b <branch-name>`
 
 4. **Determine if planning is needed:**
@@ -50,11 +67,12 @@ The `--no-plan` flag skips Phase 0.5 (Plan Review) entirely. Phase 1 receives th
    | Task description says "no plan needed" or equivalent | No — skip to Phase 1 |
    | User passed `--no-plan` flag to `/orchestrate` | No — skip to Phase 1 |
 
-   **When planning is skipped**: Phase 1 (Implement) receives the Asana task description directly as the plan context. The instructions change to: `"Implement Asana task <id>. No plan was created — work directly from the task description and acceptance criteria."`
+   **When planning is skipped**: Phase 1 (Implement) receives the task `description` directly as the plan context. The instructions change to: `"Implement the following task. No plan was created — work directly from the task description and acceptance criteria."` (include `Task ID: <taskId>` only when `inputMode` is `asana`).
 
 5. **Inform the user** of the setup:
    ```
-   Task: <task-title>
+   Task: <title>
+   Source: <source>
    Branch: <branch-name>
    ```
 
@@ -93,16 +111,22 @@ Before any implementation, create a plan, have it reviewed, and get user approva
    - If multiple reviewers: show consensus status ("All reviewers approved" or "Reviewers agreed after N rounds")
    - Wait for user approval. If the user requests changes, update the plan and optionally re-run reviewers
    - Do NOT proceed until the user explicitly approves
-7. **Comment on the Asana task** with the approved plan and reviewer summaries
+7. **If `inputMode` is `asana`**: comment on the Asana task with the approved plan and reviewer summaries
 
 ### Phase 1: Implement
 
-Launch the **implementer** agent with the Asana task ID **and the approved plan**.
+Launch the **implementer** agent with the task context **and the approved plan**.
 
 ```
-Implement Asana task <task-id>. Follow this approved plan:
+Implement the following task. Follow this approved plan:
 
 <paste the approved plan here>
+
+Task context:
+- Source: <source>
+- Title: <title>
+- Description: <description>
+<if inputMode is asana: "Task ID: <taskId>" — otherwise omit>
 
 Write code within scope of the plan, verify build/tests pass, and commit working changes.
 ```
@@ -111,7 +135,7 @@ Wait for completion. If the implementer reports failure (e.g., ambiguous require
 
 ### Phase 1.5: Determine test and CI requirements
 
-After implementation, analyze the changed files and the Asana task to decide what's needed next.
+After implementation, analyze the changed files and the task description to decide what's needed next.
 
 Run `git diff --name-only main...HEAD` and apply these rules:
 
@@ -130,19 +154,22 @@ If CI is needed, inform the user which packages will be validated and why.
 | New public API / exported functions added | Yes |
 | New feature with user-facing behavior | Yes |
 | Bug fix (regression test) | Yes |
-| Asana task acceptance criteria mention testable behavior | Yes |
+| Task description/acceptance criteria mention testable behavior | Yes |
 | Refactoring with no behavior change | No |
 | Documentation / config / CI workflow only | No |
 | Changes already have corresponding test updates from implementer | No — skip |
 
-Read the Asana task acceptance criteria. If they describe specific behaviors or scenarios, those should become tests.
+Read the task description and acceptance criteria (from the task context `description` field). If they describe specific behaviors or scenarios, those should become tests.
 
 ### Phase 1.75: Write Tests
 
 If Phase 1.5 determined tests are needed, launch the **test-writer** agent:
 
 ```
-Write automated tests for the changes on the current branch. Task ID: <task-id>. Focus on new public APIs, new behavior, and edge cases. Match existing test patterns.
+Write automated tests for the changes on the current branch.
+Task: <title>
+<if inputMode is asana: "Task ID: <taskId>." — otherwise omit>
+Focus on new public APIs, new behavior, and edge cases. Match existing test patterns.
 ```
 
 Wait for completion. If the test-writer discovers code bugs, launch the implementer again with the bug details before proceeding.
@@ -166,7 +193,10 @@ If CI is not needed, skip to Phase 3.
 Launch the **code-reviewer** agent:
 
 ```
-Review all changes on the current branch against main. Task ID: <task-id>. Check requirements match, bugs, conventions, security, scope, and test coverage. Fix issues directly and commit fixes.
+Review all changes on the current branch against main.
+Task: <title>
+<if inputMode is asana: "Task ID: <taskId>." — otherwise omit>
+Check requirements match, bugs, conventions, security, scope, and test coverage. Fix issues directly and commit fixes.
 ```
 
 Wait for completion. Collect the review summary.
@@ -192,25 +222,28 @@ If no CI needed or no reviewer fixes, proceed to reporting.
    - If mixed → use addon format (more detailed)
 
 3. **Create the PR** using `gh pr create`:
-   - **Title**: `<ticket> <prefix>[tags]: <task-title-summary>` (following commit format from CLAUDE.md)
+   - **Title**: If `ticketNumber` is present: `<ticket> <prefix>[tags]: <title-summary>`. Otherwise: `<prefix>[tags]: <title-summary>` (following commit format from CLAUDE.md)
    - **Body**: Generate based on PR type:
      - For addon packages: follow the format from `/addon-pr-description`
      - For SDK packages: follow the format from `/sdk-pr-create`
-     - Include: what changed, why, test plan, link to Asana task
+     - Include: what changed, why, test plan
+     - If `inputMode` is `asana`: include link to Asana task
+     - Otherwise: include `Source: <source>` in the PR body
    - **Base**: `main`
-   - Example:
+   - Examples:
      ```bash
      gh pr create --base main --title "QVAC-123 feat: add RAG support" --body "..."
+     gh pr create --base main --title "feat: add retry logic to OCR pipeline" --body "..."
      ```
 
-4. **Link the PR to the Asana task**: comment on the task with the PR URL.
+4. **If `inputMode` is `asana`**: link the PR to the Asana task by commenting on the task with the PR URL.
 
 ### Phase 6: Report
 
 Produce a final summary:
 
 ```
-Pipeline complete for task <task-id>:
+Pipeline complete for: <title> (<source>)
 
 Branch: <branch-name>
 PR: <pr-url>
@@ -236,8 +269,8 @@ Review:
 Status: [ready for human review / needs attention]
 ```
 
-Update the Asana task:
-- Add the final summary as a comment
+If `inputMode` is `asana`:
+- Add the final summary as a comment on the Asana task
 - If all phases passed, mark the task as complete
 
 ## Error handling
@@ -246,7 +279,7 @@ Update the Asana task:
 - If CI fails after 2 implement→CI loops: report the persistent failure and stop
 - If reviewer finds architectural concerns: report them and stop
 - If PR creation fails: report the error, the branch is still pushed
-- At any stop point, comment on the Asana task with current status
+- At any stop point, if `inputMode` is `asana`, comment on the Asana task with current status
 
 ## Role Dispatch
 
@@ -297,7 +330,13 @@ Launch agent locally, as today.
      "phase": "<phase-name>",
      "agent": "<agent-name>",
      "assignedTo": "<tool-key>",
-     "taskId": "<asana-task-id>",
+     "taskId": "<asana-task-id-or-null>",
+     "taskContext": {
+       "inputMode": "asana|file|description",
+       "title": "<task title>",
+       "description": "<full task description>",
+       "source": "<human-readable source label>"
+     },
      "branch": "<current-branch>",
      "context": {
        "plan": "<approved plan text>",
@@ -326,9 +365,11 @@ Launch agent locally, as today.
    - **Manual fallback tools** (no heartbeat ever written): remind user after 5 min, offer fallback after 15 min
    - **Absolute wall-clock timeout**: Regardless of heartbeat activity, offer local fallback after 60 minutes from request creation. This catches runaway agents that remain active but never complete.
 6. On result: pull latest commits, read result, clean up all handoff files for that phase (request, heartbeat, result, `<phase>-cli.log`), continue pipeline
-7. On failure result: handle same as local agent failure (retry logic, Asana update, stop)
+7. On failure result: handle same as local agent failure (retry logic, Asana update if `inputMode` is `asana`, stop)
 
 ### Asana proxy for handed-off phases
+
+**Only applies when `inputMode` is `asana`.** When no Asana task is linked, skip the proxy entirely.
 
 When a phase was executed by a tool without MCP (`mcp: false` in config), the orchestrator proxies Asana updates immediately after reading the handoff result:
 
@@ -349,6 +390,6 @@ When roles are split across tools, retry loops create cross-tool handoff cycles.
 ## Important notes
 
 - Phase 0 creates the branch automatically — user does not need to set up anything
-- The skill asks for confirmation before marking the Asana task complete
+- When `inputMode` is `asana`, the skill asks for confirmation before marking the Asana task complete
 - Each agent runs in isolation with fresh context
 - The pipeline can be resumed manually if interrupted — just re-run from the failed phase
