@@ -36,8 +36,8 @@ Native C++ addon for text-to-image generation using [qvac-ext-stable-diffusion.c
 | Windows | x64 | ✅ Tier 1 | Vulkan |
 
 **Dependencies:**
-- `qvac-ext-stable-diffusion.cpp` (bundled via vcpkg overlay port)
-- `ggml` (bundled alongside `qvac-ext-stable-diffusion.cpp`)
+- `qvac-ext-stable-diffusion.cpp`
+- `ggml`
 - Bare Runtime ≥ 1.24.0
 - CMake ≥ 3.25 and a C++20-capable compiler
 
