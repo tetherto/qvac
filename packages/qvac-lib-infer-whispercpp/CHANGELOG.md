@@ -5,6 +5,17 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.6.2]
+
+### Changed
+- Fixed chunking issue re-introduced in 0.6.0 in which the inference output was not streamed but instead returned as a single batched result of the end.
+
+## [0.6.1]
+
+### Changed
+
+- Changed `@qvac/transcription-whispercpp` package visibility on NPM from private to public
+
 ## [0.6.0]
 
 This release is a significant interface modernisation. The constructor switches to a local-files map, model download is removed from the load path, concurrent inference runs are serialised instead of rejected, and the class no longer extends `BaseInference`.
@@ -51,6 +62,11 @@ When `exclusiveRun` is enabled (the default), a second call to `run()` or `runSt
 ### New typed exports
 
 `TranscriptionWhispercppFiles` and `InferenceClientState` are now exported from the `TranscriptionWhispercpp` namespace. Lifecycle methods (`load`, `unload`, `destroy`, `cancel`, `pause`, `unpause`, `stop`, `status`, `getState`) are now explicitly declared in `index.d.ts`.
+
+## [0.5.6]
+
+### Changed
+- Fixed chunking issue introduced in 0.5.0 in which the inference output was not streamed but instead returned as a single batched result of the end.
 
 ## [0.5.5]
 

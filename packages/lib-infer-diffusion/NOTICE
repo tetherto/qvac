@@ -301,6 +301,18 @@ JavaScript Dependencies
 
 
 =========================================================================
+Image Assets
+=========================================================================
+
+--- public-domain (U.S. Federal Government Work) ---
+
+  assets/von-neumann.jpg
+    John von Neumann (1956). U.S. Department of Energy, File ID: HD.3F.191.
+    This image is in the Public Domain as a work of the U.S. Federal
+    Government (17 U.S.C. § 105). No copyright restrictions apply.
+    https://commons.wikimedia.org/wiki/File:JohnvonNeumann-LosAlamos.gif
+
+=========================================================================
 C++ Dependencies
 =========================================================================
 

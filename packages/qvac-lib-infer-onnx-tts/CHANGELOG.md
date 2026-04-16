@@ -5,6 +5,21 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.8.3]
+
+### Added
+- **LavaSR audio enhancement**: Opt-in neural speech enhancement post-processing with three independent controls:
+  - `enhance` — Vocos-based neural bandwidth extension to 48 kHz (2 ONNX sessions, ~55 MB)
+  - `denoise` — UL-UNAS denoiser at 16 kHz (1 ONNX session, ~1.7 MB)
+  - `outputSampleRate` — arbitrary target sample rate with smart algorithm selection (neural upscaling + conventional resampling)
+- `sampleRate` field in JS output callback (`data.sampleRate`) and in `runtimeStats` (JobEnded event)
+- Per-job `enhance`/`denoise`/`outputSampleRate` toggle via `run()` input, with lazy ONNX session loading on first use
+- DSP utilities: Lanczos resampler, radix-2 FFT, windowed STFT/ISTFT, Slaney mel filterbank, spectral crossover merge
+- C++ unit tests for all DSP utilities and LavaSR integration
+- Benchmark tests: enhancer ~22x realtime, denoiser ~48x realtime on Apple Silicon CPU
+- `ensureLavaSRModels()` download helper for test infrastructure
+- `example-enhanced-audio.js` comparison example (raw vs enhanced vs denoised+enhanced)
+
 ## [0.8.2]
 
 This release adds support for streaming and more languages for Chatterbox model.

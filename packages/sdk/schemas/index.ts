@@ -27,6 +27,8 @@ export * from "./rag";
 export * from "./ocr";
 export * from "./sdcpp-config";
 export * from "./shard";
+export * from "./suspend";
+export * from "./resume";
 export { SDK_CLIENT_ERROR_CODES } from "./sdk-errors-client";
 export { SDK_SERVER_ERROR_CODES } from "./sdk-errors-server";
 export { REGISTRY_ERROR_CODES } from "./sdk-errors-registry";

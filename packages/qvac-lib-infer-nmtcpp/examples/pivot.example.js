@@ -8,7 +8,7 @@
  * - Second model: English -> Italian (en-it)
  * - Result: Spanish -> Italian translation via English pivot
  *
- * Requires local Bergamot model files for both language pairs.
+ * Model files are downloaded automatically from the Firefox CDN if not found locally.
  *
  * Usage:
  *   bare examples/pivot.example.js
@@ -19,9 +19,13 @@
  */
 
 const TranslationNmtcpp = require('../index')
-const fs = require('bare-fs')
 const path = require('bare-path')
 const process = require('bare-process')
+
+const {
+  ensureBergamotModelFiles,
+  getBergamotFileNames
+} = require('../lib/bergamot-model-fetcher')
 
 // ============================================================
 // LOGGING CONFIGURATION
@@ -54,30 +58,25 @@ async function main () {
   console.log(spanishText)
   console.log('-----------------------------------------------------------\n')
 
-  const esenPath = process.env.BERGAMOT_ESEN_PATH || './models/es-en'
-  const enitPath = process.env.BERGAMOT_ENIT_PATH || './models/en-it'
+  // Use local model paths if provided, otherwise auto-download from Firefox CDN
+  const esenPath = process.env.BERGAMOT_ESEN_PATH || './model/bergamot/esen'
+  const enitPath = process.env.BERGAMOT_ENIT_PATH || './model/bergamot/enit'
 
-  const primaryModel = path.join(esenPath, 'model.esen.intgemm.alphas.bin')
-  const primaryVocab = path.join(esenPath, 'vocab.esen.spm')
-  const pivotModel = path.join(enitPath, 'model.enit.intgemm.alphas.bin')
-  const pivotVocab = path.join(enitPath, 'vocab.enit.spm')
+  // Ensure model files are present (downloads from Firefox CDN if not)
+  const esenDir = await ensureBergamotModelFiles('es', 'en', esenPath)
+  const enitDir = await ensureBergamotModelFiles('en', 'it', enitPath)
 
-  for (const f of [primaryModel, primaryVocab, pivotModel, pivotVocab]) {
-    if (!fs.existsSync(f)) {
-      console.log('Missing model file:', f)
-      console.log('\nSet BERGAMOT_ESEN_PATH and BERGAMOT_ENIT_PATH env vars or place models in ./models/es-en and ./models/en-it')
-      return
-    }
-  }
+  const esenFiles = getBergamotFileNames('es', 'en')
+  const enitFiles = getBergamotFileNames('en', 'it')
 
   const model = new TranslationNmtcpp({
     files: {
-      model: primaryModel,
-      srcVocab: primaryVocab,
-      dstVocab: primaryVocab,
-      pivotModel,
-      pivotSrcVocab: pivotVocab,
-      pivotDstVocab: pivotVocab
+      model: path.join(esenDir, esenFiles.modelName),
+      srcVocab: path.join(esenDir, esenFiles.srcVocabName),
+      dstVocab: path.join(esenDir, esenFiles.dstVocabName),
+      pivotModel: path.join(enitDir, enitFiles.modelName),
+      pivotSrcVocab: path.join(enitDir, enitFiles.srcVocabName),
+      pivotDstVocab: path.join(enitDir, enitFiles.dstVocabName)
     },
     params: {
       srcLang: 'es',

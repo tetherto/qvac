@@ -52,6 +52,11 @@ function transformLlmConfig(llmConfig: LlmConfig) {
     delete transformed["stop_sequences"];
   }
 
+  if ("opencl_cache_dir" in transformed) {
+    transformed["openclCacheDir"] = transformed["opencl_cache_dir"];
+    delete transformed["opencl_cache_dir"];
+  }
+
   if ("tools_mode" in transformed) {
     transformed["tools_compact"] = transformed["tools_mode"] === ToolsModeType.dynamic ? "true" : "false";
     delete transformed["tools_mode"];

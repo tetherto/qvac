@@ -119,6 +119,7 @@ class ONNXTTS {
       files: filesInput = {},
       config = {},
       engine,
+      enhancer,
       logger,
       lazySessionLoading,
       referenceAudio,
@@ -175,6 +176,24 @@ class ONNXTTS {
     this._lazySessionLoading = lazySessionLoading != null
       ? lazySessionLoading
       : (platform() === 'ios' || platform() === 'android')
+
+    const outputSampleRate = this._config.outputSampleRate
+    if (outputSampleRate != null && (outputSampleRate < 8000 || outputSampleRate > 192000)) {
+      throw new Error('outputSampleRate must be between 8000 and 192000, got ' + outputSampleRate)
+    }
+    this._outputSampleRate = outputSampleRate || null
+
+    this._enhancer = null
+    if (enhancer && enhancer.type === 'lavasr') {
+      this._enhancer = {
+        type: 'lavasr',
+        enhance: enhancer.enhance || false,
+        denoise: enhancer.denoise || false,
+        backbonePath: enhancer.backbonePath || null,
+        specHeadPath: enhancer.specHeadPath || null,
+        denoiserPath: enhancer.denoiserPath || null
+      }
+    }
 
     if (this._engineType === ENGINE_CHATTERBOX) {
       const root = normalizedFiles.modelDir
@@ -431,6 +450,8 @@ class ONNXTTS {
       }
     }
 
+    Object.assign(ttsParams, this._getEnhancerParams())
+
     this.addon = this._createAddon(ttsParams, this._addonOutputCallback.bind(this))
     await this.addon.activate()
   }
@@ -454,6 +475,27 @@ class ONNXTTS {
     }
   }
 
+  _getEnhancerParams () {
+    const params = {}
+    if (this._enhancer && this._enhancer.type === 'lavasr') {
+      if (this._enhancer.enhance) params.enhance = true
+      if (this._enhancer.denoise) params.denoise = true
+      if (this._enhancer.backbonePath) {
+        params.enhancerBackbonePath = this._resolvePath(this._enhancer.backbonePath)
+      }
+      if (this._enhancer.specHeadPath) {
+        params.enhancerSpecHeadPath = this._resolvePath(this._enhancer.specHeadPath)
+      }
+      if (this._enhancer.denoiserPath) {
+        params.denoiserPath = this._resolvePath(this._enhancer.denoiserPath)
+      }
+    }
+    if (this._outputSampleRate != null) {
+      params.outputSampleRate = String(this._outputSampleRate)
+    }
+    return params
+  }
+
   /**
    * Instantiate the native addon with the given parameters.
    * @param {Object} configurationParams - Configuration parameters for the addon
@@ -463,6 +505,14 @@ class ONNXTTS {
   _createAddon (configurationParams, outputCb) {
     const binding = require('./binding')
     return new TTSInterface(binding, configurationParams, outputCb)
+  }
+
+  _resolvePath (filePath) {
+    if (!filePath) return ''
+    if (platform() === 'win32') {
+      return '\\\\?\\' + path.resolve(filePath)
+    }
+    return path.resolve(filePath)
   }
 
   async unload () {
@@ -487,10 +537,26 @@ class ONNXTTS {
   async _runInternal (input) {
     const response = this._job.start()
     try {
-      await this.addon.runJob({
+      const jobData = {
         type: input.type || 'text',
         input: input.input
-      })
+      }
+
+      const hasPerRequestOverrides = input.outputSampleRate !== undefined ||
+        (input.enhancer !== undefined && input.enhancer.type === 'lavasr')
+
+      if (hasPerRequestOverrides) {
+        jobData.config = {}
+        if (input.outputSampleRate !== undefined) {
+          jobData.config.outputSampleRate = String(input.outputSampleRate)
+        }
+        if (input.enhancer && input.enhancer.type === 'lavasr') {
+          if (input.enhancer.enhance !== undefined) jobData.config.enhance = input.enhancer.enhance
+          if (input.enhancer.denoise !== undefined) jobData.config.denoise = input.enhancer.denoise
+        }
+      }
+
+      await this.addon.runJob(jobData)
     } catch (error) {
       this._job.fail(error)
       throw error
@@ -621,6 +687,16 @@ class ONNXTTS {
       this._config.useGPU = newConfig.useGPU
     }
 
+    if (newConfig.outputSampleRate !== undefined) this._outputSampleRate = newConfig.outputSampleRate
+    if (newConfig.enhancer !== undefined && newConfig.enhancer.type === 'lavasr') {
+      if (!this._enhancer) this._enhancer = { type: 'lavasr', enhance: false, denoise: false, backbonePath: null, specHeadPath: null, denoiserPath: null }
+      if (newConfig.enhancer.enhance !== undefined) this._enhancer.enhance = newConfig.enhancer.enhance
+      if (newConfig.enhancer.denoise !== undefined) this._enhancer.denoise = newConfig.enhancer.denoise
+      if (newConfig.enhancer.backbonePath !== undefined) this._enhancer.backbonePath = newConfig.enhancer.backbonePath
+      if (newConfig.enhancer.specHeadPath !== undefined) this._enhancer.specHeadPath = newConfig.enhancer.specHeadPath
+      if (newConfig.enhancer.denoiserPath !== undefined) this._enhancer.denoiserPath = newConfig.enhancer.denoiserPath
+    }
+
     let ttsParams
     if (this._engineType === ENGINE_SUPERTONIC) {
       ttsParams = this._getSupertonicTtsParams()
@@ -639,6 +715,8 @@ class ONNXTTS {
         ttsParams.referenceAudio = this._referenceAudio
       }
     }
+
+    Object.assign(ttsParams, this._getEnhancerParams())
 
     await this.cancel()
     this._failAndClearActiveResponse('Model was reloaded')

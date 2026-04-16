@@ -37,6 +37,8 @@ export {
   modelRegistrySearch,
   modelRegistryGetModel,
   type ModelRegistrySearchParams,
+  suspend,
+  resume,
   type FinetuneHandle,
 } from "./client/api";
 export { close } from "./client";
@@ -50,6 +52,7 @@ export {
   type ToolCallError,
   type ToolCallEvent,
   type CompletionStats,
+  type EmbedStats,
   VERBOSITY,
   type Attachment,
   type TranscribeStreamSession,

@@ -49,7 +49,7 @@ try {
 
   console.log("\n🧠 Step 2: Generating embeddings (batch)...");
   const texts = chunks.map((chunk) => chunk.content);
-  const embeddings = await embed({ modelId, text: texts });
+  const { embedding: embeddings } = await embed({ modelId, text: texts });
 
   const embeddedDocs = chunks.map((chunk, i) => ({
     id: chunk.id,

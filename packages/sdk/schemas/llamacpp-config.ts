@@ -45,6 +45,13 @@ export const llmConfigBaseSchema = z.object({
   toolsMode: z.enum([ToolsModeType.static, ToolsModeType.dynamic])
     .describe('"static" is a default way where tools belong to a chat session; "dynamic" mode allows to provide specific tools for each user prompt')
     .optional(),
+  "cache-type-k": z.string().optional(),
+  "cache-type-v": z.string().optional(),
+  /**
+   * Writable directory for OpenCL kernel binary cache. Required on Android
+   * for fast GPU startup.
+   */
+  openclCacheDir: z.string().optional(),
   projectionModelSrc: modelSrcInputSchema.optional(),
 });
 
@@ -80,6 +87,11 @@ export const embedConfigBaseSchema = z.object({
     .union([z.number().int().min(0), z.enum(["integrated", "dedicated"])])
     .optional(),
   verbosity: verbositySchema.optional(),
+  /**
+   * Writable directory for OpenCL kernel binary cache. Required on Android
+   * for fast GPU startup.
+   */
+  openclCacheDir: z.string().optional(),
 });
 
 export type EmbedConfigInput = z.infer<typeof embedConfigBaseSchema>;

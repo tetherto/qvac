@@ -18,6 +18,7 @@ export const embedStatsSchema = z.object({
   totalTime: z.number().optional(),
   tokensPerSecond: z.number().optional(),
   totalTokens: z.number().optional(),
+  backendDevice: z.enum(["cpu", "gpu"]).optional(),
 });
 
 export const embedResponseSchema = z.object({

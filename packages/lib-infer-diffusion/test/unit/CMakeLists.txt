@@ -18,8 +18,10 @@ add_executable(
   test_full_generation.cpp
   test_cancel_context.cpp
   test_cancel_stale_flag.cpp
+  test_img2img.cpp
   test_sd_gen_handlers.cpp
   ${CMAKE_SOURCE_DIR}/addon/src/utils/BackendSelection.cpp
+  ${CMAKE_SOURCE_DIR}/addon/src/utils/ImageUtils.cpp
   ${CMAKE_SOURCE_DIR}/addon/src/utils/LoggingMacros.cpp
   ${CMAKE_SOURCE_DIR}/addon/src/model-interface/SdModel.cpp
   ${CMAKE_SOURCE_DIR}/addon/src/handlers/SdCtxHandlers.cpp

@@ -23,7 +23,7 @@ interface SDKModule {
     tools?: SDKTool[]
     generationParams?: SDKGenerationParams
   }) => Promise<CompletionResult>
-  embed: (opts: { modelId: string; text: string | string[] }) => Promise<number[] | number[][]>
+  embed: (opts: { modelId: string; text: string | string[] }) => Promise<{ embedding: number[] | number[][]; stats?: Record<string, unknown> }>
   transcribe: (opts: { modelId: string; audioChunk: string | Buffer; prompt?: string }) => Promise<string>
   close: () => Promise<void>
   [key: string]: unknown
@@ -157,7 +157,8 @@ export async function sdkEmbed (opts: {
   text: string | string[]
 }): Promise<number[] | number[][]> {
   const { embed } = await getSDK()
-  return embed({ modelId: opts.modelId, text: opts.text })
+  const { embedding } = await embed({ modelId: opts.modelId, text: opts.text })
+  return embedding
 }
 
 export async function sdkTranscribe (opts: {

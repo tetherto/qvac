@@ -117,7 +117,7 @@ test('Streaming transcript output preserves segment ordering', async (t) => {
 
   const outputEvents = events.filter(e => e.event === 'Output' && e.jobId === 1)
   t.alike(
-    outputEvents.map(e => e.output.text),
+    outputEvents.map(e => e.output[0].text),
     ['segment-0', 'segment-1', 'segment-2'],
     'Output segments should keep original ordering'
   )

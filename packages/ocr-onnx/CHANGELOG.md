@@ -12,6 +12,20 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Updated README to use current package name (`@qvac/ocr-onnx`) and monorepo paths
 - Removed redundant `ensure-npm-public` job from on-merge workflow
 
+## [0.4.1] - 2026-04-14
+
+### Fixed
+
+- SIGABRT crash on process exit in OCR addon
+- Use HTTPS instead of SSH for vcpkg registry URLs
+
+### Changed
+
+- Updated OCR integration tests for `createJobHandler` migration
+- Removed hyperdrive references and dependencies
+- Renamed `dl-hyperdrive` and `dl-filesystem` package references
+- Migrated qvac-devops to oss-action
+
 ## [0.4.0] - 2026-04-08
 
 ### Changed

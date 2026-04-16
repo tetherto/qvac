@@ -51,6 +51,7 @@ export const completionStatsSchema = z.object({
   timeToFirstToken: z.number().optional(),
   tokensPerSecond: z.number().optional(),
   cacheTokens: z.number().optional(),
+  backendDevice: z.enum(["cpu", "gpu"]).optional(),
   promptTokens: z.number().optional(),
   generatedTokens: z.number().optional(),
   contextSlides: z.number().optional(),

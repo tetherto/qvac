@@ -34,6 +34,8 @@ import {
   handleModelRegistrySearch,
   handleModelRegistryGetModel,
 } from "@/server/rpc/handlers/registry";
+import { handleSuspend } from "@/server/rpc/handlers/suspend";
+import { handleResume } from "@/server/rpc/handlers/resume";
 import type { HandlerEntry } from "./handler-utils";
 
 function ragSupportsProgress(request: Request): boolean {
@@ -98,6 +100,8 @@ export const registry: Record<string, HandlerEntry> = {
     type: "reply",
     handler: handleModelRegistryGetModel,
   },
+  suspend: { type: "reply", handler: handleSuspend },
+  resume: { type: "reply", handler: handleResume },
 
   // Simple Stream handlers
   transcribe: { type: "stream", handler: handleTranscribe },
