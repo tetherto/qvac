@@ -5,11 +5,24 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-## [2.0.3] - 2026-04-15
+## [2.0.4] - 2026-04-16
 
 ### Added
 
 - Exported `RuntimeStats` interface in `index.d.ts` with fields: `totalTokens`, `totalTime`, `decodeTime`, `TPS` (required), `encodeTime`, `TTFT` (optional — GGML backend only). Matches C++ backend output for SDK type-safety.
+
+## [2.0.3] - 2026-04-15
+
+### Added
+
+- `lib/indictrans-model-fetcher.js` — downloads IndicTrans2 GGML models from the QVAC registry when not found locally
+- `@qvac/registry-client` as devDependency for IndicTrans model downloads
+- Package export for `./lib/indictrans-model-fetcher`
+
+### Changed
+
+- `examples/pivot.example.js` — auto-downloads Bergamot models (es-en, en-it) from Firefox CDN via `ensureBergamotModelFiles()`
+- `examples/indictrans.js` — auto-downloads IndicTrans model from QVAC registry via `ensureIndicTransModelFile()`
 
 ## [2.0.2] - 2026-04-14
 

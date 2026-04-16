@@ -6,7 +6,7 @@
  * This example demonstrates translation using the IndicTrans2 model
  * for English to Hindi translation (eng_Latn -> hin_Deva).
  *
- * Requires a local IndicTrans model file.
+ * The model file is downloaded automatically from the QVAC registry if not found locally.
  *
  * Usage:
  *   bare examples/indictrans.js
@@ -17,8 +17,13 @@
  */
 
 const TranslationNmtcpp = require('../index')
-const fs = require('bare-fs')
+const path = require('bare-path')
 const process = require('bare-process')
+
+const {
+  ensureIndicTransModelFile,
+  getIndicTransFileName
+} = require('../lib/indictrans-model-fetcher')
 
 // ============================================================
 // LOGGING CONFIGURATION
@@ -38,13 +43,12 @@ const logger = VERBOSE
 const text = 'How are you'
 
 async function main () {
-  const modelPath = process.env.INDICTRANS_MODEL_PATH || './models/ggml-indictrans2-en-indic-dist-200M.bin'
+  // Use local model path if provided, otherwise auto-download from QVAC registry
+  const defaultModelPath = path.join('./model/indictrans', getIndicTransFileName())
+  const modelPath = process.env.INDICTRANS_MODEL_PATH || defaultModelPath
 
-  if (!fs.existsSync(modelPath)) {
-    console.log('IndicTrans model not found at:', modelPath)
-    console.log('Set INDICTRANS_MODEL_PATH env var or place model at ./models/ggml-indictrans2-en-indic-dist-200M.bin')
-    return
-  }
+  // Ensure model file is present (downloads from QVAC registry if not)
+  await ensureIndicTransModelFile(modelPath)
 
   const model = new TranslationNmtcpp({
     files: { model: modelPath },
