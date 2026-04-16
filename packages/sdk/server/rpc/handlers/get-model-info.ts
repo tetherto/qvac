@@ -14,7 +14,8 @@ import { getConfiguredCacheDir } from "@/server/bare/registry/config-registry";
 import { generateShortHash } from "@/server/utils";
 import { promises as fsPromises } from "bare-fs";
 import path from "bare-path";
-import { getShardPath } from "@/server/utils/cache";
+import { getShardPath, getModelsCacheDir } from "@/server/utils/cache";
+import { validateAndJoinPath } from "@/server/utils/path-security";
 import { ModelNotFoundError } from "@/utils/errors-server";
 
 type CacheStatusResult = {
@@ -22,6 +23,7 @@ type CacheStatusResult = {
   isCached: boolean;
   actualSize?: number;
   cachedAt?: Date;
+  primaryPath?: string | undefined;
 };
 
 export async function handleGetModelInfo(
@@ -44,16 +46,23 @@ export async function handleGetModelInfo(
   const cacheStatus =
     catalogEntry.shardMetadata && catalogEntry.shardMetadata.length > 0
       ? await handleShardedModel(cacheKey, catalogEntry.shardMetadata)
-      : await handleSingleFileModel(
-          catalogEntry.registryPath,
-          catalogEntry.modelId,
-          catalogEntry.expectedSize,
-          catalogEntry.sha256Checksum,
-        );
+      : catalogEntry.companionSet
+        ? await handleCompanionSetModel(
+            catalogEntry.companionSet,
+            catalogEntry.registryPath,
+          )
+        : await handleSingleFileModel(
+            catalogEntry.registryPath,
+            catalogEntry.modelId,
+            catalogEntry.expectedSize,
+            catalogEntry.sha256Checksum,
+          );
 
-  const { cacheFiles, isCached, actualSize, cachedAt } = cacheStatus;
+  const { cacheFiles, isCached, actualSize, cachedAt, primaryPath } =
+    cacheStatus;
 
   const loadedModelIds = getAllModelIds();
+  const matchPath = primaryPath ?? cacheFiles[0]?.path;
 
   const loadedInstances: LoadedInstance[] = [];
   for (const id of loadedModelIds) {
@@ -62,8 +71,7 @@ export async function handleGetModelInfo(
 
     const matchesByName = entry.local.name && entry.local.name === name;
 
-    const matchesByPath =
-      cacheFiles.length > 0 && entry.local.path === cacheFiles[0]?.path;
+    const matchesByPath = !!matchPath && entry.local.path === matchPath;
 
     if (matchesByName || matchesByPath) {
       const instance: LoadedInstance = {
@@ -120,57 +128,126 @@ async function handleShardedModel(
     blobIndex?: number;
   }[],
 ): Promise<CacheStatusResult> {
+  const fileEntries = shardMetadata.map((s) => ({
+    filename: s.filename,
+    expectedSize: s.expectedSize,
+    sha256Checksum: s.sha256Checksum,
+  }));
+  const paths = shardMetadata.map((s) => getShardPath(cacheKey, s.filename));
+  return probeLayout(fileEntries, paths);
+}
+
+async function handleCompanionSetModel(
+  companionSet: NonNullable<RegistryItem["companionSet"]>,
+  primaryRegistryPath: string,
+): Promise<CacheStatusResult> {
+  const { setKey, primaryKey, files } = companionSet;
+  const baseCache = getModelsCacheDir();
+
+  const fileEntries: ProbeFileEntry[] = files.map((f) => ({
+    filename: f.targetName,
+    expectedSize: f.expectedSize,
+    sha256Checksum: f.sha256Checksum,
+    key: f.key,
+  }));
+  const canonicalPaths = files.map((f) =>
+    validateAndJoinPath(baseCache, "sets", setKey, f.targetName),
+  );
+
+  const canonicalProbe = await probeLayout(
+    fileEntries, canonicalPaths, primaryKey,
+  );
+  if (canonicalProbe.isCached) return canonicalProbe;
+
+  const isOnnxSet = files.some(
+    (f) => f.primary === true && f.targetName.endsWith(".onnx"),
+  );
+  if (isOnnxSet) {
+    const legacyCacheKey = generateShortHash(primaryRegistryPath);
+    const legacyPaths = files.map((f) =>
+      validateAndJoinPath(baseCache, "onnx", legacyCacheKey, f.targetName),
+    );
+    const legacyProbe = await probeLayout(
+      fileEntries, legacyPaths, primaryKey,
+    );
+    if (legacyProbe.isCached) return legacyProbe;
+  }
+
+  return canonicalProbe;
+}
+
+type ProbeFileEntry = {
+  filename: string;
+  expectedSize: number;
+  sha256Checksum: string;
+  key?: string;
+};
+
+async function probeLayout(
+  files: readonly ProbeFileEntry[],
+  paths: string[],
+  primaryKey?: string,
+): Promise<CacheStatusResult> {
   const cacheFiles: CacheFileInfo[] = [];
-  let allShardsCached = true;
+  let allCached = true;
   let totalActualSize = 0;
   let latestCachedAt: Date | undefined;
+  let primaryPath: string | undefined;
 
-  for (const shard of shardMetadata) {
-    const shardPath = getShardPath(cacheKey, shard.filename);
-    let shardIsCached = false;
-    let shardActualSize: number | undefined;
-    let shardCachedAt: Date | undefined;
+  for (let i = 0; i < files.length; i++) {
+    const file = files[i]!;
+    const filePath = paths[i]!;
+
+    let fileCached = false;
+    let fileActualSize: number | undefined;
+    let fileCachedAt: Date | undefined;
 
     try {
-      const stats = await fsPromises.stat(shardPath);
-      const fileExists = stats.isFile();
-      if (fileExists) {
-        shardActualSize = stats.size;
-        shardCachedAt = stats.mtime;
-        shardIsCached = stats.size === shard.expectedSize;
-        if (shardIsCached) {
-          totalActualSize += stats.size;
-          if (!latestCachedAt || stats.mtime > latestCachedAt) {
-            latestCachedAt = stats.mtime;
-          }
-        } else {
-          allShardsCached = false;
-        }
-      } else {
-        allShardsCached = false;
+      const stats = await fsPromises.stat(filePath);
+      if (stats.isFile()) {
+        fileActualSize = stats.size;
+        fileCachedAt = stats.mtime;
+        fileCached = stats.size === file.expectedSize;
       }
     } catch {
-      shardIsCached = false;
-      allShardsCached = false;
+      // file does not exist
+    }
+
+    if (primaryKey && file.key === primaryKey) {
+      primaryPath = filePath;
+    }
+
+    if (fileCached) {
+      totalActualSize += fileActualSize!;
+      if (!latestCachedAt || fileCachedAt! > latestCachedAt) {
+        latestCachedAt = fileCachedAt;
+      }
+    } else {
+      allCached = false;
     }
 
     cacheFiles.push({
-      filename: shard.filename,
-      path: shardPath,
-      expectedSize: shard.expectedSize,
-      sha256Checksum: shard.sha256Checksum,
-      isCached: shardIsCached,
-      actualSize: shardActualSize,
-      cachedAt: shardCachedAt,
+      filename: file.filename,
+      path: filePath,
+      expectedSize: file.expectedSize,
+      sha256Checksum: file.sha256Checksum,
+      isCached: fileCached,
+      actualSize: fileActualSize,
+      cachedAt: fileCachedAt,
     });
+  }
+
+  if (!primaryPath && cacheFiles.length > 0) {
+    primaryPath = cacheFiles[0]!.path;
   }
 
   const result: CacheStatusResult = {
     cacheFiles,
-    isCached: allShardsCached,
+    isCached: allCached,
+    primaryPath,
   };
 
-  if (allShardsCached) {
+  if (allCached) {
     result.actualSize = totalActualSize;
     if (latestCachedAt) {
       result.cachedAt = latestCachedAt;
@@ -187,49 +264,11 @@ async function handleSingleFileModel(
   sha256Checksum: string,
 ): Promise<CacheStatusResult> {
   const cacheDir = getConfiguredCacheDir();
-  // Use registryPath for hash to match download logic in registry.ts
   const sourceHash = generateShortHash(registryPath);
   const filePath = path.join(cacheDir, `${sourceHash}_${modelId}`);
 
-  let fileIsCached = false;
-  let fileActualSize: number | undefined;
-  let fileCachedAt: Date | undefined;
-
-  try {
-    const stats = await fsPromises.stat(filePath);
-    const fileExists = stats.isFile();
-    if (fileExists) {
-      fileActualSize = stats.size;
-      fileCachedAt = stats.mtime;
-      fileIsCached = stats.size === expectedSize;
-    }
-  } catch {
-    fileIsCached = false;
-  }
-
-  const cacheFiles: CacheFileInfo[] = [
-    {
-      filename: modelId,
-      path: filePath,
-      expectedSize,
-      sha256Checksum,
-      isCached: fileIsCached,
-      actualSize: fileActualSize,
-      cachedAt: fileCachedAt,
-    },
-  ];
-
-  const result: CacheStatusResult = {
-    cacheFiles,
-    isCached: fileIsCached,
-  };
-
-  if (fileActualSize !== undefined) {
-    result.actualSize = fileActualSize;
-  }
-  if (fileCachedAt !== undefined) {
-    result.cachedAt = fileCachedAt;
-  }
-
-  return result;
+  return probeLayout(
+    [{ filename: modelId, expectedSize, sha256Checksum }],
+    [filePath],
+  );
 }
