@@ -59,8 +59,7 @@ public:
    * (optional).
    */
   explicit NmtBackendsHandle(
-      const std::string& backendsDir,
-      const std::string& openclCacheDir = "");
+      const std::string& backendsDir, const std::string& openclCacheDir = "");
 
   /**
    * Destructor decrements reference count and may reset backend state.

@@ -30,7 +30,8 @@ protected:
   }
 };
 
-TEST_F(NmtLazyInitializeBackendTest, InitializeOnceReturnsTrueSecondReturnsFalse) {
+TEST_F(
+    NmtLazyInitializeBackendTest, InitializeOnceReturnsTrueSecondReturnsFalse) {
   bool result1 = NmtLazyInitializeBackend::initialize("");
   EXPECT_TRUE(result1);
 
@@ -46,7 +47,9 @@ TEST_F(NmtLazyInitializeBackendTest, InitializeWithBackendsDirDoesNotThrow) {
   });
 }
 
-TEST_F(NmtLazyInitializeBackendTest, InitializeIdempotencyReturnsFalseOnSecondCall) {
+TEST_F(
+    NmtLazyInitializeBackendTest,
+    InitializeIdempotencyReturnsFalseOnSecondCall) {
   std::string backendsDir = getTestBackendsDir();
 
   bool result1 = NmtLazyInitializeBackend::initialize(backendsDir);
@@ -67,7 +70,8 @@ TEST_F(NmtLazyInitializeBackendTest, RefCountIncrementAndDecrementDoNotThrow) {
   });
 }
 
-TEST_F(NmtLazyInitializeBackendTest, RefCountReachingZeroResetsInitializedState) {
+TEST_F(
+    NmtLazyInitializeBackendTest, RefCountReachingZeroResetsInitializedState) {
   NmtLazyInitializeBackend::initialize("");
 
   NmtLazyInitializeBackend::incrementRefCount();
@@ -83,7 +87,9 @@ TEST_F(NmtLazyInitializeBackendTest, RefCountReachingZeroResetsInitializedState)
   EXPECT_TRUE(canReinitialize);
 }
 
-TEST_F(NmtLazyInitializeBackendTest, DifferentBackendsDirWarningStillReturnsFalse) {
+TEST_F(
+    NmtLazyInitializeBackendTest,
+    DifferentBackendsDirWarningStillReturnsFalse) {
   std::string backendsDir = getTestBackendsDir();
 
   bool result1 = NmtLazyInitializeBackend::initialize(backendsDir);
@@ -99,14 +105,17 @@ TEST_F(NmtLazyInitializeBackendTest, DifferentBackendsDirWarningStillReturnsFals
   NmtLazyInitializeBackend::decrementRefCount();
 }
 
-TEST_F(NmtLazyInitializeBackendTest, DecrementRefCountWhenNotInitializedDoesNotCrash) {
+TEST_F(
+    NmtLazyInitializeBackendTest,
+    DecrementRefCountWhenNotInitializedDoesNotCrash) {
   EXPECT_NO_THROW({
     NmtLazyInitializeBackend::decrementRefCount();
     NmtLazyInitializeBackend::decrementRefCount();
   });
 }
 
-TEST_F(NmtLazyInitializeBackendTest, NmtBackendsHandleConstructionDoesNotThrow) {
+TEST_F(
+    NmtLazyInitializeBackendTest, NmtBackendsHandleConstructionDoesNotThrow) {
   std::string backendsDir = getTestBackendsDir();
   EXPECT_NO_THROW({ NmtBackendsHandle handle(backendsDir); });
 }
@@ -152,7 +161,8 @@ TEST_F(NmtLazyInitializeBackendTest, MultipleNmtBackendsHandlesDoNotThrow) {
   });
 }
 
-TEST_F(NmtLazyInitializeBackendTest, NmtBackendsHandleDefaultConstructorIsNoOp) {
+TEST_F(
+    NmtLazyInitializeBackendTest, NmtBackendsHandleDefaultConstructorIsNoOp) {
   // Default-constructed handle does not own the backend; destroying it should
   // not decrement the reference count or touch backend state.
   NmtLazyInitializeBackend::initialize("");

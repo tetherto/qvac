@@ -73,7 +73,8 @@ void NmtLazyInitializeBackend::decrementRefCount() {
     g_refCount--;
     if (g_refCount == 0 && g_initialized) {
       QLOG(
-          Priority::DEBUG, "Resetting backend state (reference count reached zero)");
+          Priority::DEBUG,
+          "Resetting backend state (reference count reached zero)");
       g_initialized = false;
       g_recordedBackendsDir.clear();
     }
