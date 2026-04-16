@@ -181,8 +181,11 @@ function loadConfigFromAssets (filename) {
 
 /**
  * Ensures IndicTrans model is available
- * Desktop: Expects model at ../../model/indictrans/ggml-indictrans2-en-indic-dist-200M-q4_0.bin
- * Mobile: Downloads from presigned URL configured in indictrans-model-urls.json
+ *
+ * Download priority:
+ *   1. Check local path (../../model/indictrans/)
+ *   2. If mobile: try presigned URL from indictrans-model-urls.json in testAssets
+ *   3. Fallback: download from QVAC model registry via indictrans-model-fetcher
  *
  * @returns {Promise<string>} Path to IndicTrans model file
  * @throws {Error} If model not found/available or corrupted (< 100MB)
@@ -192,7 +195,7 @@ async function ensureIndicTransModel () {
   const relativeDir = '../../model/indictrans'
   const modelPath = path.resolve(__dirname, relativeDir, modelFilename)
 
-  // Desktop: Check if model exists locally
+  // Check if model exists locally (works on both desktop and mobile)
   if (fs.existsSync(modelPath)) {
     const stats = fs.statSync(modelPath)
     const sizeMB = stats.size / (1024 * 1024)
@@ -202,34 +205,53 @@ async function ensureIndicTransModel () {
     return modelPath
   }
 
-  // Desktop without model: Error (should be pre-downloaded)
-  if (!isMobile) {
-    throw new Error(`IndicTrans model not found at ${modelPath}. Please download it first.`)
+  // Determine writable destination for downloaded model
+  const writableRoot = isMobile ? (global.testDir || '/tmp') : path.resolve(__dirname, '../..')
+  const modelsDir = path.join(writableRoot, 'model', 'indictrans')
+  fs.mkdirSync(modelsDir, { recursive: true })
+  const destPath = path.join(modelsDir, modelFilename)
+
+  // Check if model was previously downloaded to writable location
+  if (fs.existsSync(destPath)) {
+    const stats = fs.statSync(destPath)
+    const sizeMB = stats.size / (1024 * 1024)
+    if (sizeMB >= 100) {
+      console.log(`[indictrans] Model already available at ${destPath}`)
+      return destPath
+    }
   }
 
-  // Mobile: Download from presigned URL
+  // Try presigned URL from testAssets config (if provided)
   const configFilename = 'indictrans-model-urls.json'
   const urlConfig = loadConfigFromAssets(configFilename)
 
-  if (!urlConfig || !urlConfig.modelUrl) {
-    throw new Error('IndicTrans model URLs config not found - cannot download model on mobile')
+  if (urlConfig && urlConfig.modelUrl) {
+    await downloadFile(urlConfig.modelUrl, destPath)
+    const stats = fs.statSync(destPath)
+    const sizeMB = stats.size / (1024 * 1024)
+    if (sizeMB < 100) {
+      throw new Error(`Downloaded IndicTrans model seems corrupted (expected ~127MB, got ${sizeMB.toFixed(2)}MB)`)
+    }
+    return destPath
   }
 
-  const writableRoot = global.testDir || '/tmp'
-  const modelsDir = path.join(writableRoot, 'translation-models', 'indictrans')
-  fs.mkdirSync(modelsDir, { recursive: true })
-
-  const destPath = path.join(modelsDir, modelFilename)
-  await downloadFile(urlConfig.modelUrl, destPath)
-
-  // Validate downloaded model size
-  const stats = fs.statSync(destPath)
-  const sizeMB = stats.size / (1024 * 1024)
-  if (sizeMB < 100) {
-    throw new Error(`Downloaded IndicTrans model seems corrupted (expected ~127MB, got ${sizeMB.toFixed(2)}MB)`)
+  // Fallback: use the addon's model fetcher (downloads from QVAC registry)
+  // Requires @qvac/translation-nmtcpp v2.0.3+ which includes indictrans-model-fetcher
+  // Dynamic require prevents bare-pack from statically bundling @qvac/registry-client
+  console.log('[indictrans] No presigned URL config found, downloading from QVAC model registry...')
+  const fetcherModule = ['@qvac/translation-nmtcpp', 'lib', 'indictrans-model-fetcher'].join('/')
+  try {
+    const { ensureIndicTransModelFile } = require(fetcherModule)
+    return ensureIndicTransModelFile(destPath)
+  } catch (e) {
+    if (e.code === 'MODULE_NOT_FOUND') {
+      throw new Error(
+        'IndicTrans model not available. Either provide indictrans-model-urls.json in testAssets, ' +
+        'or upgrade to @qvac/translation-nmtcpp v2.0.3+ which includes the QVAC registry model fetcher.'
+      )
+    }
+    throw e
   }
-
-  return destPath
 }
 
 /**
