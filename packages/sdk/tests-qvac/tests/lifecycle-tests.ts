@@ -1,4 +1,4 @@
-import type { TestDefinition } from "@tetherto/qvac-test-suite";
+import type { TestDefinition,  } from "@tetherto/qvac-test-suite";
 
 const createLifecycleTest = (
   testId: string,
@@ -16,6 +16,7 @@ export const lifecycleSuspendIdempotent = createLifecycleTest("lifecycle-suspend
 export const lifecycleResumeIdempotent = createLifecycleTest("lifecycle-resume-idempotent");
 export const lifecycleSuspendResumeInference = createLifecycleTest("lifecycle-suspend-resume-inference", "llm", 60000);
 export const lifecycleRapidToggle = createLifecycleTest("lifecycle-rapid-toggle");
+export const lifecycleSuspendDuringInference = createLifecycleTest("lifecycle-suspend-during-inference", "llm", 60000);
 
 export const lifecycleTests = [
   lifecycleSuspendResumeBasic,
@@ -23,4 +24,5 @@ export const lifecycleTests = [
   lifecycleResumeIdempotent,
   lifecycleSuspendResumeInference,
   lifecycleRapidToggle,
+  lifecycleSuspendDuringInference,
 ] as const;

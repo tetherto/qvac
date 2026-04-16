@@ -12,6 +12,7 @@ import {
   lifecycleResumeIdempotent,
   lifecycleSuspendResumeInference,
   lifecycleRapidToggle,
+  lifecycleSuspendDuringInference,
 } from "../../lifecycle-tests.js";
 
 const formatError = (error: unknown): string => error instanceof Error ? error.message : String(error)
@@ -42,11 +43,11 @@ export class LifecycleExecutor extends AbstractModelExecutor<typeof lifecycleTes
       await this.warmRegistry();
       const output = await this.runStrategy(testId);
       const elapsed = Date.now() - start;
+      await this.ensureActive();
       return ValidationHelpers.validate(`${output} (${elapsed}ms)`, exp);
     } catch (error) {
-      return { passed: false, output: `lifecycle [${testId}] failed: ${formatError(error)}` };
-    } finally {
       await this.ensureActive();
+      return { passed: false, output: `lifecycle [${testId}] failed: ${formatError(error)}` };
     }
   };
 
@@ -66,6 +67,9 @@ export class LifecycleExecutor extends AbstractModelExecutor<typeof lifecycleTes
 
       case lifecycleRapidToggle.testId:
         return await this.runRapidToggle();
+
+      case lifecycleSuspendDuringInference.testId:
+        return await this.runSuspendDuringInference();
 
       default:
         throw new Error(`Unknown lifecycle test: ${testId}`);
@@ -120,6 +124,29 @@ export class LifecycleExecutor extends AbstractModelExecutor<typeof lifecycleTes
 
     const models = await modelRegistryList();
     return `Inference preserved, registry OK (${models.length} models). Before: "${textBefore.trim()}", After: "${textAfter.trim()}"`;
+  }
+
+  private async runSuspendDuringInference(): Promise<string> {
+    const modelId = await this.resources.ensureLoaded("llm");
+
+    const completionPromise = completion({
+      modelId,
+      history: [{ role: "user", content: "Count from 1 to 20, one number per line." }],
+      stream: false,
+    }).text;
+
+    await suspend();
+
+    const text = await completionPromise;
+
+    await resume();
+
+    if (!text?.trim()) {
+      throw new Error("Completion during suspend returned empty text");
+    }
+
+    const models = await modelRegistryList();
+    return `Suspend during inference OK, got ${text.trim().length} chars, registry accessible (${models.length} models)`;
   }
 
   private async runRapidToggle(): Promise<string> {
