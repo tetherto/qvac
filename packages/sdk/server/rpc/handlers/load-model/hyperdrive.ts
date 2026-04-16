@@ -1,8 +1,4 @@
-import type {
-  ModelProgressUpdate,
-  HyperdriveDownloadEntry,
-  ShardFileMetadata,
-} from "@/schemas";
+import type { ModelProgressUpdate, ShardFileMetadata } from "@/schemas";
 import fs, { promises as fsPromises } from "bare-fs";
 import path from "bare-path";
 import Corestore from "corestore";
@@ -10,7 +6,7 @@ import Hyperswarm, { type Connection } from "hyperswarm";
 import Hyperdrive from "hyperdrive";
 import type { Entry } from "hyperdrive";
 import { type Readable, type Writable } from "bare-stream";
-import { AbortController, type AbortSignal } from "bare-abort-controller";
+import type { AbortSignal } from "bare-abort-controller";
 import { getQvacPath } from "@/server/utils/qvac-paths";
 import {
   getModelsCacheDir,
@@ -25,12 +21,8 @@ import {
 } from "@/server/utils";
 import { getModelBySrc } from "@/models/registry";
 import {
-  getActiveDownload,
-  registerDownload,
-  unregisterDownload,
   createHyperdriveDownloadKey,
-  shouldClearCache,
-  clearClearCacheFlag,
+  startOrJoinDownload,
 } from "@/server/rpc/handlers/load-model/download-manager";
 import { getSDKConfig } from "@/server/bare/registry/config-registry";
 import {
@@ -290,6 +282,7 @@ async function downloadSingleFileToFilesystem(
   seed?: boolean,
   signal?: AbortSignal,
   hooks?: DownloadMetricsHooks,
+  shouldClearCache?: () => boolean,
 ): Promise<void> {
   // Check if already aborted
   if (signal?.aborted) {
@@ -356,8 +349,7 @@ async function downloadSingleFileToFilesystem(
       "❌ Error during hyperdrive download:",
       error instanceof Error ? error.message : String(error),
     );
-    // Preserve cancellation errors
-    if (error instanceof Error && error.message === "Download cancelled") {
+    if (error instanceof DownloadCancelledError) {
       throw error;
     }
     throw new HyperdriveDownloadFailedError(
@@ -376,15 +368,17 @@ async function downloadSingleFileToFilesystem(
     }
 
     // Only delete corestore and partial file if user explicitly requested clearCache
-    if (signal?.aborted && shouldClearCache(downloadKey)) {
+    if (signal?.aborted && shouldClearCache?.()) {
       try {
         await fsPromises.unlink(modelPath);
-      } catch {
-        // no-op
+      } catch (cleanupError) {
+        logger.debug("Failed to delete partial model file during cleanup", {
+          path: modelPath,
+          error: cleanupError,
+        });
       }
       await deleteCorestoreDirectory(corestoreDir);
     }
-    clearClearCacheFlag(downloadKey);
   }
 }
 
@@ -483,7 +477,7 @@ async function downloadAndValidateFile(
 
       signal?.addEventListener(
         "abort",
-        () => reject(new Error("Download cancelled")),
+        () => reject(new DownloadCancelledError()),
         { once: true },
       );
     });
@@ -522,39 +516,6 @@ async function downloadAndValidateFile(
   }
 }
 
-function createManagedDownload(
-  downloadKey: string,
-  hyperdriveKey: string,
-  modelFileName: string,
-  downloadFn: (signal: AbortSignal) => Promise<string>,
-  progressCallback?: (progress: ModelProgressUpdate) => void,
-): Promise<string> {
-  const abortController = new AbortController();
-
-  const downloadPromise = (async () => {
-    try {
-      return await downloadFn(abortController.signal);
-    } finally {
-      unregisterDownload(downloadKey);
-      clearClearCacheFlag(downloadKey);
-    }
-  })();
-
-  const downloadEntry: HyperdriveDownloadEntry = {
-    key: downloadKey,
-    promise: downloadPromise,
-    abortController,
-    startTime: Date.now(),
-    type: "hyperdrive",
-    hyperdriveKey,
-    modelFileName,
-    ...(progressCallback && { onProgress: progressCallback }),
-  };
-
-  registerDownload(downloadKey, downloadEntry);
-  return downloadPromise;
-}
-
 async function downloadShardedFilesToFilesystem(
   hyperdriveKey: string,
   firstShardFileName: string,
@@ -563,6 +524,7 @@ async function downloadShardedFilesToFilesystem(
   seed?: boolean,
   signal?: AbortSignal,
   hooks?: DownloadMetricsHooks,
+  shouldClearCache?: () => boolean,
 ): Promise<string> {
   if (signal?.aborted) {
     throw new DownloadCancelledError();
@@ -771,7 +733,7 @@ async function downloadShardedFilesToFilesystem(
       error instanceof Error ? error.message : String(error),
     );
     // Preserve cancellation errors
-    if (error instanceof Error && error.message === "Download cancelled") {
+    if (error instanceof DownloadCancelledError) {
       throw error;
     }
     throw new HyperdriveDownloadFailedError(
@@ -790,14 +752,9 @@ async function downloadShardedFilesToFilesystem(
     }
 
     // Only delete corestore and partial files if user explicitly requested clearCache
-    const downloadKey = createHyperdriveDownloadKey(
-      hyperdriveKey,
-      firstShardFileName,
-    );
-    if (signal?.aborted && shouldClearCache(downloadKey)) {
+    if (signal?.aborted && shouldClearCache?.()) {
       await deleteCorestoreDirectory(corestoreDir);
     }
-    clearClearCacheFlag(downloadKey);
   }
 
   return getShardPath(hyperdriveKey, allFiles[0]!);
@@ -812,78 +769,65 @@ export async function downloadModelFromHyperdrive(
   expectedChecksum?: string,
 ): Promise<string> {
   const downloadKey = createHyperdriveDownloadKey(hyperdriveKey, modelFileName);
-
-  // Check if already downloading
-  const existing = getActiveDownload(downloadKey);
-  if (existing) {
-    hooks?.markCacheMiss();
-    return existing.promise;
-  }
-
   const shardInfo = detectShardedModel(modelFileName);
   const model = getModelBySrc(modelFileName, hyperdriveKey);
 
-  if (shardInfo.isSharded && model?.shardMetadata) {
-    return createManagedDownload(
-      downloadKey,
-      hyperdriveKey,
-      modelFileName,
-      (signal) =>
-        downloadShardedFilesToFilesystem(
+  const { promise: downloadPromise, joined } = startOrJoinDownload(
+    downloadKey,
+    async (ctx) => {
+      if (shardInfo.isSharded && model?.shardMetadata) {
+        return downloadShardedFilesToFilesystem(
           hyperdriveKey,
           modelFileName,
-          model.shardMetadata!,
-          progressCallback,
+          model.shardMetadata,
+          ctx.broadcastProgress,
           seed,
-          signal,
+          ctx.signal,
           hooks,
-        ),
-      progressCallback,
-    );
-  }
-
-  // Non-sharded model download
-  const corestoreDir = getCorestoreDir(hyperdriveKey);
-  const cacheDir = getModelsCacheDir();
-  const sourceHash = generateShortHash(`${hyperdriveKey}/${modelFileName}`);
-  const modelPath = path.join(cacheDir, `${sourceHash}_${modelFileName}`);
-
-  // First, check if we already have a valid cached file (only if we have model metadata)
-  if (model) {
-    const cachedPath = await validateCachedFile(
-      modelPath,
-      modelFileName,
-      model.expectedSize,
-      expectedChecksum || model.sha256Checksum,
-      hooks,
-    );
-
-    if (cachedPath) {
-      hooks?.markCacheHit();
-      if (progressCallback) {
-        progressCallback({
-          type: "modelProgress",
-          downloaded: model.expectedSize,
-          total: model.expectedSize,
-          percentage: 100,
-          downloadKey,
-        });
+          ctx.shouldClearCache,
+        );
       }
 
-      // Delete any leftover corestore directory from previous runs (only when not seeding)
-      if (!seed) {
-        await deleteCorestoreDirectory(corestoreDir);
-      }
-      return cachedPath;
-    }
-  }
+      // Non-sharded model download
+      const corestoreDir = getCorestoreDir(hyperdriveKey);
+      const cacheDir = getModelsCacheDir();
+      const sourceHash = generateShortHash(
+        `${hyperdriveKey}/${modelFileName}`,
+      );
+      const modelPath = path.join(
+        cacheDir,
+        `${sourceHash}_${modelFileName}`,
+      );
 
-  hooks?.markCacheMiss();
-  return createManagedDownload(
-    downloadKey,
-    hyperdriveKey,
-    modelFileName,
-    async (signal) => {
+      // First, check if we already have a valid cached file (only if we have model metadata)
+      if (model) {
+        const cachedPath = await validateCachedFile(
+          modelPath,
+          modelFileName,
+          model.expectedSize,
+          expectedChecksum || model.sha256Checksum,
+          hooks,
+        );
+
+        if (cachedPath) {
+          hooks?.markCacheHit();
+          ctx.broadcastProgress({
+            type: "modelProgress",
+            downloaded: model.expectedSize,
+            total: model.expectedSize,
+            percentage: 100,
+            downloadKey,
+          });
+
+          // Delete any leftover corestore directory from previous runs (only when not seeding)
+          if (!seed) {
+            await deleteCorestoreDirectory(corestoreDir);
+          }
+          return cachedPath;
+        }
+      }
+
+      hooks?.markCacheMiss();
       const checksumToValidate =
         expectedChecksum || model?.sha256Checksum || "";
 
@@ -894,14 +838,22 @@ export async function downloadModelFromHyperdrive(
         corestoreDir,
         downloadKey,
         checksumToValidate,
-        progressCallback,
+        ctx.broadcastProgress,
         seed,
-        signal,
+        ctx.signal,
         hooks,
+        ctx.shouldClearCache,
       );
 
       return modelPath;
     },
     progressCallback,
   );
+
+  if (joined) {
+    hooks?.markCacheMiss();
+    hooks?.markSharedTransfer();
+  }
+
+  return downloadPromise;
 }
