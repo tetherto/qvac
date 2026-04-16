@@ -128,7 +128,8 @@ private:
       std::unordered_map<std::string, TensorData<float>> &pastKeyValues,
       TensorData<int64_t> &promptToken, TensorData<float> &speakerEmbeddings,
       TensorData<float> &speakerFeatures,
-      std::vector<int64_t> &generatedTokens);
+      std::vector<int64_t> &generatedTokens,
+      int maxTokensOverride = 0);
 
   bool shouldStopGeneration(const std::vector<int64_t> &tokens, int step);
 

@@ -41,7 +41,7 @@ const float EXAGGERATION = 0.5f;
 const float TRIM_THRESHOLD_RATIO = 0.08f;
 const int TRIM_WINDOW_DIVISOR = 25;
 const int TRIM_MIN_DURATION_DIVISOR = 4;
-const int TRIM_TAIL_PADDING_MS = 150;
+const int TRIM_TAIL_PADDING_MS = 300;
 const int TRIM_FADE_DIVISOR = 50;
 const float NEAR_ZERO = 1e-8f;
 
@@ -356,14 +356,16 @@ void ChatterboxEngine::load(const ChatterboxConfig &cfg) {
   loadCangjieTableIfNeeded(cfg.tokenizerPath);
   loadTextEmbWeight(cfg.embedTokensPath);
 
-  isEnglish_ = language_ == "en";
-  if (!isEnglish_ && embedTokensSession_ != nullptr &&
-      lang_mode::shouldUseEnglishMode(language_,
-                                      embedTokensSession_->getInputNames())) {
-    QLOG(Priority::INFO,
-         "Requested language '" + language_ +
-             "' but model appears monolingual. Falling back to English mode.");
-    isEnglish_ = true;
+  if (embedTokensSession_ != nullptr) {
+    isEnglish_ = lang_mode::shouldUseEnglishMode(
+        language_, embedTokensSession_->getInputNames());
+    if (isEnglish_ && language_ != "en") {
+      QLOG(Priority::INFO,
+           "Requested language '" + language_ +
+               "' but model appears monolingual. Falling back to English mode.");
+    }
+  } else {
+    isEnglish_ = language_ == "en";
   }
   loaded_ = true;
   QLOG(Priority::INFO, "Language: " + language_);
@@ -553,9 +555,12 @@ void ChatterboxEngine::runGenerationLoop(
     TensorData<int64_t> &attentionMask,
     std::unordered_map<std::string, TensorData<float>> &pastKeyValues,
     TensorData<int64_t> &promptToken, TensorData<float> &speakerEmbeddings,
-    TensorData<float> &speakerFeatures, std::vector<int64_t> &generatedTokens) {
+    TensorData<float> &speakerFeatures, std::vector<int64_t> &generatedTokens,
+    int maxTokensOverride) {
 
-  const size_t maxNewTokens = static_cast<size_t>(MAX_NEW_TOKENS_SPEECH);
+  const size_t maxNewTokens = maxTokensOverride > 0
+      ? static_cast<size_t>(maxTokensOverride)
+      : static_cast<size_t>(MAX_NEW_TOKENS_SPEECH);
 
   for (size_t i = 0; i < maxNewTokens; i++) {
     TensorData<float> inputsEmbs =
@@ -668,11 +673,11 @@ AudioResult ChatterboxEngine::synthesize(const std::string &text) {
   ensureSession(speechEncoderSession_, config_.speechEncoderPath);
   ensureSession(languageModelSession_, config_.languageModelPath);
 
-  if (!isEnglish_ && lang_mode::shouldUseEnglishMode(
-                         language_, embedTokensSession_->getInputNames())) {
-    QLOG(Priority::INFO, "Model is monolingual, falling back to English mode");
-    isEnglish_ = true;
-    keyValueOffset_ = OFFSET;
+  bool shouldBeEnglish = lang_mode::shouldUseEnglishMode(
+      language_, embedTokensSession_->getInputNames());
+  if (shouldBeEnglish != isEnglish_) {
+    isEnglish_ = shouldBeEnglish;
+    keyValueOffset_ = isEnglish_ ? OFFSET : OFFSET_MULTILINGUAL;
   }
 
   std::vector<int64_t> inputIds = tokenize(text);

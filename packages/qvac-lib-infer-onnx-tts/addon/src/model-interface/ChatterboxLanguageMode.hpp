@@ -14,10 +14,10 @@ inline bool supportsMultilingualEmbedInputs(const std::vector<std::string> &inpu
 
 inline bool shouldUseEnglishMode(const std::string &requestedLanguage,
                                  const std::vector<std::string> &embedInputNames) {
-  if (requestedLanguage == "en") {
-    return true;
+  if (supportsMultilingualEmbedInputs(embedInputNames)) {
+    return false;
   }
-  return !supportsMultilingualEmbedInputs(embedInputNames);
+  return true;
 }
 
 inline std::string prepareTextForTokenization(const std::string &text,
