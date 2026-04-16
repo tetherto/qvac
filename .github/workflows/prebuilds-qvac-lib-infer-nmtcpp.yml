@@ -69,10 +69,29 @@ jobs:
     environment: release
     name: ${{ matrix.platform }}-${{ matrix.arch }}${{ matrix.tags }}
 
-    env:
-      VCPKG_BINARY_SOURCES: "clear;files,${{ github.workspace }}/packages/qvac-lib-infer-nmtcpp/vcpkg/cache,readwrite"
-
     steps:
+      - name: Configure AWS credentials via OIDC
+        uses: aws-actions/configure-aws-credentials@8df5847569e6427dd6c4fb1cf565c83acfa8afa7 # 6.0.0
+        with:
+          role-to-assume: ${{ secrets.AWS_OIDC_ROLE_ARN }}
+          aws-region: eu-central-1
+
+      - if: ${{ matrix.platform == 'win32' }}
+        name: Install AWS CLI on self-hosted Windows runner
+        shell: powershell
+        run: |
+          if (Get-Command aws -ErrorAction SilentlyContinue) {
+            Write-Host "AWS CLI already installed"
+            aws --version
+          } else {
+            Write-Host "Installing AWS CLI v2..."
+            Invoke-WebRequest -Uri https://awscli.amazonaws.com/AWSCLIV2.msi -OutFile $env:TEMP\AWSCLIV2.msi
+            Start-Process msiexec.exe -Wait -ArgumentList '/I', "$env:TEMP\AWSCLIV2.msi", '/qn'
+            $env:PATH = "C:\Program Files\Amazon\AWSCLIV2;$env:PATH"
+            echo "C:\Program Files\Amazon\AWSCLIV2" >> $env:GITHUB_PATH
+            aws --version
+          }
+
       - name: Echo workflow inputs
         shell: bash
         env:
@@ -109,6 +128,14 @@ jobs:
           ref: ${{ inputs.ref || github.ref }}
           token: ${{ secrets.PAT_TOKEN }}
           submodules: recursive
+
+      - name: Setup vcpkg cache
+        uses: ./.github/actions/setup-vcpkg-cache
+        env:
+          MODEL_S3_BUCKET: ${{ secrets.MODEL_S3_BUCKET }}
+        with:
+          platform: ${{ matrix.platform }}
+          arch: ${{ matrix.arch }}
 
       - if: ${{ matrix.platform == 'android' }}
         name: Setup Android NDK
@@ -246,13 +273,6 @@ jobs:
           echo "VULKAN_SDK=$VULKAN_SDK" >> $GITHUB_ENV
 
       - if: ${{ matrix.os == 'ubuntu-22.04-arm' }}
-        name: Configure AWS credentials via OIDC
-        uses: aws-actions/configure-aws-credentials@8df5847569e6427dd6c4fb1cf565c83acfa8afa7 # 6.0.0
-        with:
-          role-to-assume: ${{ secrets.AWS_OIDC_ROLE_ARN }}
-          aws-region: eu-central-1
-
-      - if: ${{ matrix.os == 'ubuntu-22.04-arm' }}
         name: Setup vulkan sdk path in linux arm64
         run: |
           VULKAN_SDK=~/vulkan/aarch64
@@ -334,20 +354,6 @@ jobs:
         working-directory: ${{ env.PKG_DIR }}
         shell: bash
         run: npm install
-
-      - name: Create vcpkg cache location
-        working-directory: ${{ env.PKG_DIR }}
-        run: mkdir -p vcpkg/cache
-
-      - name: Restore vcpkg cache
-        id: cache-vcpkg
-        uses: actions/cache/restore@668228422ae6a00e4ad889ee87cd7109ec5666a7 # 5.0.4
-        with:
-          path: ${{ env.PKG_DIR }}/vcpkg/cache
-          key: vcpkg-nmtcpp-v1-${{ matrix.platform }}-${{ matrix.arch }}${{ matrix.tags }}-${{ hashFiles('packages/qvac-lib-infer-nmtcpp/vcpkg.json', 'packages/qvac-lib-infer-nmtcpp/vcpkg-configuration.json', 'packages/qvac-lib-infer-nmtcpp/vcpkg-overlays/**') }}
-          restore-keys: |
-            vcpkg-nmtcpp-v1-${{ matrix.platform }}-${{ matrix.arch }}${{ matrix.tags }}-
-            vcpkg-nmtcpp-v1-${{ matrix.platform }}-${{ matrix.arch }}-
 
       - if: ${{ matrix.os == 'windows-2022' }}
         name: Apply clang-cl compatibility fixes for Windows
@@ -653,13 +659,6 @@ jobs:
         working-directory: ${{ env.PKG_DIR }}
         shell: bash
         run: bare-make install
-
-      - if: ${{ steps.cache-vcpkg.outputs.cache-hit != 'true' }}
-        name: Save vcpkg cache
-        uses: actions/cache/save@668228422ae6a00e4ad889ee87cd7109ec5666a7 # 5.0.4
-        with:
-          path: ${{ env.PKG_DIR }}/vcpkg/cache
-          key: vcpkg-nmtcpp-v1-${{ matrix.platform }}-${{ matrix.arch }}${{ matrix.tags }}-${{ hashFiles('packages/qvac-lib-infer-nmtcpp/vcpkg.json', 'packages/qvac-lib-infer-nmtcpp/vcpkg-configuration.json', 'packages/qvac-lib-infer-nmtcpp/vcpkg-overlays/**') }}
 
       - uses: actions/upload-artifact@bbbca2ddaa5d8feaa63e36b76fdaad77386f024f # 7.0.0
         with:

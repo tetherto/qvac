@@ -80,10 +80,7 @@ jobs:
     name: ${{ matrix.platform }}-${{ matrix.arch }}${{ matrix.tags }}
 
     env:
-      # Use AWS S3 as vcpkg binary cache (platform-prefixed for easy cleanup)
-      VCPKG_BINARY_SOURCES: "clear;x-aws,s3://${{ secrets.MODEL_S3_BUCKET }}/vcpkg-cache/onnx-tts/${{ matrix.platform }}-${{ matrix.arch }}/,readwrite"
       VCPKG_BUILD_TYPE: release
-      S3_CACHE_PREFIX: "s3://${{ secrets.MODEL_S3_BUCKET }}/vcpkg-cache/onnx-tts/${{ matrix.platform }}-${{ matrix.arch }}/"
       WORKDIR: ${{ inputs.workdir || github.event.inputs.workdir || 'packages/qvac-lib-infer-onnx-tts' }}
 
     steps:
@@ -230,6 +227,14 @@ jobs:
           repository: ${{ inputs.repository || github.repository }}
           ref: ${{ inputs.ref || github.ref }}
           token: ${{ secrets.PAT_TOKEN }}
+
+      - name: Setup vcpkg cache
+        uses: ./.github/actions/setup-vcpkg-cache
+        env:
+          MODEL_S3_BUCKET: ${{ secrets.MODEL_S3_BUCKET }}
+        with:
+          platform: ${{ matrix.platform }}
+          arch: ${{ matrix.arch }}
 
       - name: Initialize and update submodules
         run: |
@@ -393,29 +398,6 @@ jobs:
           echo "✅ Android Rust targets installed"
           rustup target list --installed
 
-      - name: Check if vcpkg cache needs rebuild
-        working-directory: ${{ env.WORKDIR }}
-        shell: bash
-        run: |
-          echo "Checking if vcpkg packages need to be rebuilt..."
-          
-          VCPKG_HASH=$(cat vcpkg.json vcpkg-configuration.json | sha256sum | cut -d' ' -f1)
-          echo "Current vcpkg config hash: $VCPKG_HASH"
-          
-          CACHED_HASH_FILE="/tmp/vcpkg-hash-cached.txt"
-          aws s3 cp ${S3_CACHE_PREFIX}vcpkg-hash.txt $CACHED_HASH_FILE 2>/dev/null || echo "no-cache" > $CACHED_HASH_FILE
-          CACHED_HASH=$(cat $CACHED_HASH_FILE)
-          echo "Cached vcpkg config hash: $CACHED_HASH"
-          
-          if [ "$VCPKG_HASH" != "$CACHED_HASH" ]; then
-            echo ""
-            echo "vcpkg config has changed - cache will be replaced after successful build"
-            echo "$VCPKG_HASH" > /tmp/vcpkg-hash-new.txt
-          else
-            echo ""
-            echo "vcpkg config unchanged, using cached packages"
-          fi
-
       - name: Generate
         working-directory: ${{ env.WORKDIR }}
         run: bare-make generate --platform ${{ matrix.platform }} --arch ${{ matrix.arch }} ${{ matrix.flags }}
@@ -427,18 +409,6 @@ jobs:
       - name: Run bare-make install
         working-directory: ${{ env.WORKDIR }}
         run: bare-make install
-
-      - name: Update vcpkg S3 cache hash
-        working-directory: ${{ env.WORKDIR }}
-        shell: bash
-        run: |
-          if [ -f /tmp/vcpkg-hash-new.txt ]; then
-            echo "Uploading new vcpkg config hash to S3 cache..."
-            aws s3 cp /tmp/vcpkg-hash-new.txt ${S3_CACHE_PREFIX}vcpkg-hash.txt
-            echo "vcpkg hash uploaded"
-          else
-            echo "No new hash to upload (cache was already valid)"
-          fi
 
       - name: Strip debug symbols (skip windows and android)
         if: ${{ matrix.platform != 'win32' && matrix.platform != 'android' }}

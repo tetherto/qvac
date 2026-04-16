@@ -170,6 +170,7 @@ jobs:
       contents: write
       packages: write
       pull-requests: write
+      id-token: write
     needs: [authorize, changes]
     if: |
       (needs.changes.outputs.pkg == 'true') &&
