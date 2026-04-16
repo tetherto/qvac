@@ -9,6 +9,7 @@ interface StatsCollector {
   maxBytesDownloaded: number;
   startTimeMs: number;
   cacheHit: boolean | undefined;
+  sharedTransfer: boolean;
   checksumValidationTimeMsTotal: number;
 }
 
@@ -17,6 +18,7 @@ function createStatsCollector(): StatsCollector {
     maxBytesDownloaded: 0,
     startTimeMs: nowMs(),
     cacheHit: undefined,
+    sharedTransfer: false,
     checksumValidationTimeMsTotal: 0,
   };
 }
@@ -32,6 +34,9 @@ function createHooks(collector: StatsCollector): DownloadMetricsHooks {
     markCacheMiss: () => {
       collector.cacheHit = false;
     },
+    markSharedTransfer: () => {
+      collector.sharedTransfer = true;
+    },
     addChecksumValidationTimeMs: (durationMs: number) => {
       collector.checksumValidationTimeMsTotal += durationMs;
     },
@@ -46,7 +51,7 @@ function wrapProgressCallback(
     // Don't track bytes for cache hits (they're not real network transfer)
     if (collector.cacheHit !== true) {
       const downloaded =
-        progress.onnxInfo?.overallDownloaded ??
+        progress.fileSetInfo?.overallDownloaded ??
         progress.shardInfo?.overallDownloaded ??
         progress.downloaded ??
         0;
@@ -67,6 +72,10 @@ function computeStats(collector: StatsCollector): DownloadStats | undefined {
 
   const stats: DownloadStats = {};
 
+  if (collector.sharedTransfer) {
+    stats.sharedTransfer = true;
+  }
+
   if (collector.cacheHit !== undefined) {
     stats.cacheHit = collector.cacheHit;
   }
@@ -76,6 +85,13 @@ function computeStats(collector: StatsCollector): DownloadStats | undefined {
   }
 
   if (collector.cacheHit === true) {
+    return Object.keys(stats).length > 0 ? stats : undefined;
+  }
+
+  if (collector.sharedTransfer) {
+    if (downloadTimeMs > 0) {
+      stats.downloadTimeMs = downloadTimeMs;
+    }
     return Object.keys(stats).length > 0 ? stats : undefined;
   }
 
