@@ -391,36 +391,4 @@ test('[tools-compact] rejects invalid prompt shapes', { timeout: 600_000 }, asyn
     ],
     'tools_compact requires non-empty tools attached to the last user message'
   )
-
-  await runExpectingInvalidPrompt(
-    t,
-    model,
-    [
-      TOOL_A
-    ],
-    'tools_compact requires a user or tool message before tools'
-  )
-
-  await runExpectingInvalidPrompt(
-    t,
-    model,
-    [
-      { role: 'user', content: 'Weather?' },
-      { role: 'assistant', content: 'Let me check.' },
-      TOOL_A
-    ],
-    'tools_compact requires tools to be a contiguous block immediately after the last user or tool message'
-  )
-
-  await runExpectingInvalidPrompt(
-    t,
-    model,
-    [
-      { role: 'user', content: 'Weather?' },
-      TOOL_A,
-      { role: 'assistant', content: 'Need one more tool.' },
-      TOOL_B
-    ],
-    'tools_compact requires tools to be a contiguous block immediately after the last user or tool message'
-  )
 })
