@@ -6,10 +6,12 @@ const createMarianTest = (
   resource: string,
   expectation: Expectation,
   estimatedDurationMs: number = 15000,
+  suites?: string[],
 ): TestDefinition => ({
   testId,
   params: { text, resource },
   expectation,
+  ...(suites && { suites }),
   metadata: { category: "translation-marian", dependency: resource, estimatedDurationMs },
 });
 
@@ -20,6 +22,8 @@ export const marianDeEnBasic = createMarianTest(
   "Hallo, wie geht es dir heute?",
   "marian-de-en",
   { validation: "contains-any", contains: ["hello", "how", "are", "you", "today"] },
+  15000,
+  ["smoke"],
 );
 
 export const marianDeEnLongText = createMarianTest(
@@ -78,6 +82,8 @@ export const marianDeEnStreaming = createMarianTest(
   "Guten Tag, wie geht es Ihnen?",
   "marian-de-en",
   { validation: "contains-any", contains: ["good", "day", "how", "are"] },
+  15000,
+  ["smoke"],
 );
 
 export const marianDeEnStats = createMarianTest(
@@ -91,6 +97,7 @@ export const marianDeEnBatchBasic: TestDefinition = {
   testId: "translation-marian-de-en-batch-basic",
   params: { texts: ["Guten Morgen", "Gute Nacht"], resource: "marian-de-en" },
   expectation: { validation: "contains-any", contains: ["morning", "night", "good"] },
+  suites: ["smoke"],
   metadata: { category: "translation-marian", dependency: "marian-de-en", estimatedDurationMs: 15000 },
 };
 
@@ -111,6 +118,8 @@ export const marianEnEsBasic = createMarianTest(
   "Hello, how are you today?",
   "marian-en-es",
   { validation: "contains-any", contains: ["hola", "cómo", "estás", "hoy"] },
+  15000,
+  ["smoke"],
 );
 
 export const marianEnEsLongText = createMarianTest(

@@ -72,7 +72,7 @@ jobs:
             platform: win32
             arch: x64
             runner: ai-run-windows11-gpu
-            timeout: 600
+            timeout: 1800
 
     steps:
       - name: Setup Node.js

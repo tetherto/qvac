@@ -1,6 +1,30 @@
 import type QvacResponse from '@qvac/infer-base/src/QvacResponse'
 
 /**
+ * LavaSR enhancer configuration.
+ * Opt-in neural speech enhancement, works with any TTS engine.
+ */
+declare interface LavaSREnhancerConfig {
+  type: 'lavasr'
+  /** Run neural bandwidth extension to 48 kHz */
+  enhance?: boolean
+  /** Run denoiser before enhancement */
+  denoise?: boolean
+  /** Path to enhancer backbone ONNX model */
+  backbonePath?: string
+  /** Path to enhancer spec head ONNX model */
+  specHeadPath?: string
+  /** Path to denoiser ONNX model */
+  denoiserPath?: string
+}
+
+/**
+ * Enhancer configuration — currently only LavaSR is supported.
+ * Future enhancers will be added as additional union members.
+ */
+declare type EnhancerConfig = LavaSREnhancerConfig
+
+/**
  * Weight / config paths for ONNX TTS. Use short keys; legacy `*Path` names and
  * SDK aliases (`supertonicModel`, `latentDenoiser`, `voiceDecoder`, `supertonicVocoder`) are accepted.
  * All file paths must be absolute (passed through to the native layer as-is).
@@ -60,6 +84,9 @@ declare interface ONNXTTSRuntimeConfig {
   language?: string
   /** Chatterbox: GPU — default false */
   useGPU?: boolean
+  /** Runtime enhancer overrides (used in reload) */
+  enhancer?: EnhancerConfig
+  outputSampleRate?: number
 }
 
 declare interface ONNXTTSOptions {
@@ -70,6 +97,8 @@ declare interface ONNXTTSOptions {
    */
   engine?: 'chatterbox' | 'supertonic'
   config?: ONNXTTSRuntimeConfig
+  /** Post-processing enhancer config */
+  enhancer?: EnhancerConfig
   logger?: object
   lazySessionLoading?: boolean
   /** Chatterbox voice cloning input */
@@ -148,6 +177,10 @@ declare namespace ONNXTTS {
   export type TTSRunInput = {
     type?: string
     input: string
+    /** Per-job enhancer override (toggle enhance/denoise) */
+    enhancer?: { type: 'lavasr'; enhance?: boolean; denoise?: boolean }
+    /** Per-job output sample rate override */
+    outputSampleRate?: number
   }
 
   export {
@@ -155,6 +188,8 @@ declare namespace ONNXTTS {
     ONNXTTSFiles,
     ONNXTTSOptions,
     ONNXTTSRuntimeConfig,
+    EnhancerConfig,
+    LavaSREnhancerConfig,
     RuntimeStats,
     SentenceStreamChunkMeta,
     SentenceStreamOptions,

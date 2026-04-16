@@ -2,6 +2,7 @@ import { send } from "@/client/rpc/rpc-client";
 import {
   type EmbedParams,
   type EmbedRequest,
+  type EmbedStats,
   type RPCOptions,
 } from "@/schemas";
 import { InvalidResponseError } from "@/utils/errors-client";
@@ -18,7 +19,7 @@ import { InvalidResponseError } from "@/utils/errors-client";
 export async function embed(
   params: { modelId: string; text: string },
   options?: RPCOptions,
-): Promise<number[]>;
+): Promise<{ embedding: number[]; stats?: EmbedStats }>;
 
 /**
  * Generates embeddings for multiple texts using a specified model.
@@ -32,12 +33,12 @@ export async function embed(
 export async function embed(
   params: { modelId: string; text: string[] },
   options?: RPCOptions,
-): Promise<number[][]>;
+): Promise<{ embedding: number[][]; stats?: EmbedStats }>;
 
 export async function embed(
   params: EmbedParams,
   options?: RPCOptions,
-): Promise<number[] | number[][]> {
+): Promise<{ embedding: number[] | number[][]; stats?: EmbedStats }> {
   const request: EmbedRequest = {
     type: "embed",
     ...params,
@@ -48,5 +49,8 @@ export async function embed(
     throw new InvalidResponseError("embed");
   }
 
-  return response.embedding;
+  return {
+    embedding: response.embedding,
+    ...(response.stats !== undefined && { stats: response.stats }),
+  };
 }

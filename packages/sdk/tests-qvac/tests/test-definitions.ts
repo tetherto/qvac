@@ -33,6 +33,7 @@ export const modelLoadLlm: TestDefinition = {
   testId: "model-load-llm",
   params: {},
   expectation: { validation: "type", expectedType: "string" },
+  suites: ["smoke"],
   metadata: {
     category: "model",
     dependency: "none",
@@ -44,6 +45,7 @@ export const modelLoadEmbedding: TestDefinition = {
   testId: "model-load-embedding",
   params: {},
   expectation: { validation: "type", expectedType: "string" },
+  suites: ["smoke"],
   metadata: {
     category: "model",
     dependency: "none",
@@ -55,6 +57,7 @@ export const modelLoadOcr: TestDefinition = {
   testId: "model-load-ocr",
   params: {},
   expectation: { validation: "type", expectedType: "string" },
+  suites: ["smoke"],
   metadata: {
     category: "model",
     dependency: "none",
@@ -72,6 +75,7 @@ export const modelLoadInvalid: TestDefinition = {
     validation: "throws-error",
     errorContains: "failed to locate",
   },
+  suites: ["smoke"],
   metadata: {
     category: "model",
     dependency: "none",
@@ -83,6 +87,7 @@ export const modelUnload: TestDefinition = {
   testId: "model-unload",
   params: { shouldClearStorage: false },
   expectation: { validation: "type", expectedType: "string" },
+  suites: ["smoke"],
   metadata: { category: "model", dependency: "llm", estimatedDurationMs: 5000 },
 };
 
@@ -95,6 +100,7 @@ export const modelLoadConcurrent: TestDefinition = {
     ],
   },
   expectation: { validation: "type", expectedType: "array" },
+  suites: ["smoke"],
   metadata: {
     category: "model",
     dependency: "none",

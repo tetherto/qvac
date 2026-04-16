@@ -10,16 +10,16 @@ import { ttsTests } from "../../tts-tests.js";
 export class TtsExecutor extends AbstractModelExecutor<typeof ttsTests> {
   pattern = /^tts-/;
 
-  protected handlers = Object.fromEntries(
-    ttsTests.map((test) => {
-      const params = test.params as { stream?: boolean };
-      const dep = test.testId.startsWith("tts-supertonic-") ? "tts-supertonic" : "tts-chatterbox";
-      if (params.stream) {
-        return [test.testId, this.makeStreaming(dep)];
-      }
-      return [test.testId, this.makeNonStreaming(dep, !test.params.text || (test.params.text as string).trim().length === 0)];
-    }),
-  ) as never;
+    protected handlers = Object.fromEntries(
+      ttsTests.map((test) => {
+        const params = test.params as { stream?: boolean };
+        const dep = test.metadata?.dependency || "tts-chatterbox";
+        if (params.stream) {
+          return [test.testId, this.makeStreaming(dep)];
+        }
+        return [test.testId, this.makeNonStreaming(dep, !test.params.text || (test.params.text as string).trim().length === 0)];
+      }),
+    ) as never;
 
   private makeNonStreaming(dep: string, isEmptyTest: boolean) {
     return async (params: unknown, expectation: unknown): Promise<TestResult> => {

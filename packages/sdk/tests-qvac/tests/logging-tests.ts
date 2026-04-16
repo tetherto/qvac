@@ -4,6 +4,7 @@ export const addonLoggingLlm: TestDefinition = {
   testId: "addon-logging-llm",
   params: {},
   expectation: { validation: "type", expectedType: "string" },
+  suites: ["smoke"],
   metadata: { category: "addon-logging", dependency: "llm", estimatedDurationMs: 10000 },
 };
 
@@ -40,6 +41,7 @@ export const addonLoggingDuringInference: TestDefinition = {
   testId: "addon-logging-during-inference",
   params: {},
   expectation: { validation: "type", expectedType: "string" },
+  suites: ["smoke"],
   metadata: { category: "addon-logging", dependency: "llm", estimatedDurationMs: 15000 },
 };
 

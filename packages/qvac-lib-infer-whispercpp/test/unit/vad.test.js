@@ -78,9 +78,10 @@ test('VAD mode processes audio with voice activity detection', async (t) => {
 
   if (outputEvents.length > 0) {
     t.ok(outputEvents[0].output, 'Should have transcription output')
-    t.is(typeof outputEvents[0].output, 'object', 'Output should be transcript object')
-    t.ok(outputEvents[0].output.text.includes('Mock transcription') ||
-      outputEvents[0].output.text.includes('Silent audio detected'),
+    t.ok(Array.isArray(outputEvents[0].output), 'Output should be wrapped in array')
+    const transcript = outputEvents[0].output[0]
+    t.ok(transcript.text.includes('Mock transcription') ||
+      transcript.text.includes('Silent audio detected'),
     'Should contain mock transcription or silence detection text')
   }
 

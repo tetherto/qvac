@@ -156,6 +156,12 @@ target_sources(
     ${PROJECT_SOURCE_DIR}/addon/src/model-interface/SupertonicEngine.cpp
     ${PROJECT_SOURCE_DIR}/addon/src/model-interface/Fp16Utils.cpp
     ${PROJECT_SOURCE_DIR}/addon/src/model-interface/TensorFloatHandler.cpp
+    ${PROJECT_SOURCE_DIR}/addon/src/model-interface/LavaSRDenoiser.cpp
+    ${PROJECT_SOURCE_DIR}/addon/src/model-interface/LavaSREnhancer.cpp
+    ${PROJECT_SOURCE_DIR}/addon/src/model-interface/dsp/Resampler.cpp
+    ${PROJECT_SOURCE_DIR}/addon/src/model-interface/dsp/StftProcessor.cpp
+    ${PROJECT_SOURCE_DIR}/addon/src/model-interface/dsp/MelFilterbank.cpp
+    ${PROJECT_SOURCE_DIR}/addon/src/model-interface/dsp/FastLRMerge.cpp
 )
 
 find_path(QVAC_LIB_INFERENCE_ADDON_CPP_INCLUDE_DIRS "qvac-lib-inference-addon-cpp/RuntimeStats.hpp")

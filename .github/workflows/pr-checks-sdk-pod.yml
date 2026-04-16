@@ -176,7 +176,6 @@ jobs:
       needs.authorize.outputs.allowed == 'true' &&
       needs.changes.outputs.has_changes == 'true'
     runs-on: ubuntu-latest
-    environment: release
     strategy:
       matrix:
         include: ${{ fromJSON(needs.changes.outputs.matrix) }}
@@ -214,39 +213,6 @@ jobs:
         uses: actions/setup-node@53b83947a5a98c8d113130e565377fae1a50d02f # 6.3.0
         with:
           node-version: 22
-
-      - name: Configure scoped registry
-        env:
-          NPM_TOKEN: ${{ secrets.NPM_TOKEN }}
-          PAT_TOKEN: ${{ secrets.PAT_TOKEN }}
-        shell: bash
-        run: |
-          set -eu
-          cat > .npmrc <<NPMRC
-          registry=https://registry.npmjs.org/
-          @qvac:registry=https://registry.npmjs.org/
-          @tetherto:registry=https://npm.pkg.github.com/
-          //registry.npmjs.org/:_authToken=${NPM_TOKEN}
-          //npm.pkg.github.com/:_authToken=${PAT_TOKEN}
-          foreground-scripts=true
-          ignore-scripts=true
-          NPMRC
-
-          if [ -n "${PAT_TOKEN:-}" ]; then
-            git config --global url."https://${PAT_TOKEN}:@github.com/".insteadOf "https://github.com/"
-          fi
-
-          # Bun needs bunfig.toml in addition to .npmrc
-          if [ "${{ matrix.pkg_manager }}" = "bun" ]; then
-            cat > bunfig.toml <<EOF
-          [install]
-          registry = "https://registry.npmjs.org/"
-
-          [install.scopes]
-          "@tetherto" = { token = "${PAT_TOKEN}", url = "https://npm.pkg.github.com" }
-          "@qvac" = { token = "${NPM_TOKEN}", url = "https://registry.npmjs.org" }
-          EOF
-          fi
 
       - name: Install dependencies
         shell: bash

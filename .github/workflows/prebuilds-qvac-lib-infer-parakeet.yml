@@ -76,9 +76,7 @@ jobs:
     name: ${{ matrix.platform }}-${{ matrix.arch }}${{ matrix.tags }}
 
     env:
-      VCPKG_BINARY_SOURCES: "clear;x-aws,s3://${{ secrets.MODEL_S3_BUCKET }}/vcpkg-cache/parakeet/${{ matrix.platform }}-${{ matrix.arch }}/,readwrite"
       VCPKG_BUILD_TYPE: release
-      S3_CACHE_PREFIX: "s3://${{ secrets.MODEL_S3_BUCKET }}/vcpkg-cache/parakeet/${{ matrix.platform }}-${{ matrix.arch }}/"
       WORKDIR: ${{ inputs.workdir || 'packages/qvac-lib-infer-parakeet' }}
 
     steps:
@@ -160,6 +158,14 @@ jobs:
           ref: ${{ inputs.ref }}
           token: ${{ secrets.PAT_TOKEN }}
 
+      - name: Setup vcpkg cache
+        uses: ./.github/actions/setup-vcpkg-cache
+        env:
+          MODEL_S3_BUCKET: ${{ secrets.MODEL_S3_BUCKET }}
+        with:
+          platform: ${{ matrix.platform }}
+          arch: ${{ matrix.arch }}
+
       - name: Setup node
         uses: actions/setup-node@53b83947a5a98c8d113130e565377fae1a50d02f # 6.3.0
         with:
@@ -170,36 +176,6 @@ jobs:
         uses: actions/setup-python@v5
         with:
           python-version: '3.12'
-
-      - name: Configure scoped registry for @tetherto and @qvac packages
-        working-directory: ${{ env.WORKDIR }}
-        env:
-          GPR_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-          NPM_TOKEN: ${{ secrets.NPM_TOKEN }}
-          GIT_PAT: ${{ secrets.PAT_TOKEN }}
-        shell: bash
-        run: |
-          echo "Configuring scoped registry for @tetherto and @qvac packages..."
-          set -eu
-          echo "Writing .npmrc for dual registry install…"
-          cat > .npmrc <<NPMRC
-          always-auth=true
-          registry=https://registry.npmjs.org/
-          @qvac:registry=https://registry.npmjs.org/
-          @tetherto:registry=https://npm.pkg.github.com/
-          //registry.npmjs.org/:_authToken=${NPM_TOKEN}
-          //npm.pkg.github.com/:_authToken=${GIT_PAT}
-          NPMRC
-
-          if [ -n "${GIT_PAT:-}" ]; then
-            git config --global url."https://${GIT_PAT}:@github.com/".insteadOf "https://github.com/"
-            git config --global url."https://${GIT_PAT}:@github.com/".insteadOf "ssh://git@github.com/"
-            git config --global url."https://${GIT_PAT}:@github.com/".insteadOf "git@github.com:"
-          else
-            git config --global url."https://${{ github.token }}:@github.com/".insteadOf "https://github.com/"
-            git config --global url."https://${{ github.token }}:@github.com/".insteadOf "ssh://git@github.com/"
-            git config --global url."https://${{ github.token }}:@github.com/".insteadOf "git@github.com:"
-          fi
 
       - name: Install global dependencies
         run: |

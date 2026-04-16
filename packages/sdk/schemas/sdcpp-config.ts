@@ -25,11 +25,11 @@ export const sdcppConfigSchema = z
     flash_attn: z.boolean().optional().describe("Enable flash attention to reduce memory usage"),
     verbosity: z.number().optional(),
     clipLModelSrc: modelSrcInputSchema.optional()
-      .describe("CLIP-L text encoder model — required for SD3 and FLUX.1"),
+      .describe("CLIP-L text encoder model — required for SD3"),
     clipGModelSrc: modelSrcInputSchema.optional()
       .describe("CLIP-G text encoder model — required for SDXL and SD3"),
     t5XxlModelSrc: modelSrcInputSchema.optional()
-      .describe("T5-XXL text encoder model — required for SD3 and FLUX.1"),
+      .describe("T5-XXL text encoder model — required for SD3"),
     llmModelSrc: modelSrcInputSchema.optional()
       .describe("LLM text encoder model (e.g. Qwen3) — required for FLUX.2 [klein]"),
     vaeModelSrc: modelSrcInputSchema.optional()

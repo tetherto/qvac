@@ -8,10 +8,12 @@ const createDiffusionTest = (
     | { validation: "type"; expectedType: "string" | "number" | "array" }
     | { validation: "throws-error"; errorContains: string },
   estimatedDurationMs: number = 300000,
+  suites?: string[],
 ): TestDefinition => ({
   testId,
   params,
   expectation,
+  ...(suites && { suites }),
   metadata: {
     category: "diffusion",
     dependency: "diffusion",
@@ -31,6 +33,8 @@ export const diffusionBasicTxt2img = createDiffusionTest(
     seed: 42,
   },
   { validation: "type", expectedType: "array" },
+  300000,
+  ["smoke"],
 );
 
 export const diffusionDefaultSize = createDiffusionTest(
@@ -161,6 +165,8 @@ export const diffusionStreamingProgress = createDiffusionTest(
     seed: 42,
   },
   { validation: "type", expectedType: "string" },
+  300000,
+  ["smoke"],
 );
 
 // ---- stats ----

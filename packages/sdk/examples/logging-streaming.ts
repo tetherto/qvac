@@ -76,7 +76,7 @@ try {
     history: messages,
     stream: true,
   });
-  const embedding = await embed({
+  const { embedding } = await embed({
     modelId: embedModelId,
     text: messages[0]?.content ?? "Hello, world!",
   });

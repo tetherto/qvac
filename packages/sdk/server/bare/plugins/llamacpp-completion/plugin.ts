@@ -51,6 +51,11 @@ function transformLlmConfig(llmConfig: LlmConfig) {
     delete transformed["stop_sequences"];
   }
 
+  if ("opencl_cache_dir" in transformed) {
+    transformed["openclCacheDir"] = transformed["opencl_cache_dir"];
+    delete transformed["opencl_cache_dir"];
+  }
+
   return transformed;
 }
 

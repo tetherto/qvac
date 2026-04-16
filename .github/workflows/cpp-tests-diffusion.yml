@@ -199,6 +199,18 @@ jobs:
           cp "$MODEL_PATH" ./test/model/stable-diffusion-v2-1-Q8_0.gguf
           test -f ./test/model/stable-diffusion-v2-1-Q8_0.gguf
 
+      - if: ${{ matrix.os == 'windows-11' }}
+        name: Download SD2 model for C++ tests (Windows)
+        working-directory: ${{ env.WORKDIR }}
+        shell: powershell
+        run: |
+          & .\scripts\download-model-sd2.ps1
+          $modelPath = Get-ChildItem -Path . -Filter "stable-diffusion-v2-1-Q8_0.gguf" -Recurse | Select-Object -First 1 -ExpandProperty FullName
+          if (-not $modelPath) { throw "Model file not found" }
+          New-Item -ItemType Directory -Force -Path ".\test\model" | Out-Null
+          Copy-Item -Path $modelPath -Destination ".\test\model\stable-diffusion-v2-1-Q8_0.gguf" -Force
+          if (-not (Test-Path ".\test\model\stable-diffusion-v2-1-Q8_0.gguf")) { throw "Failed to copy model file" }
+
       - if: ${{ matrix.platform == 'darwin' }}
         name: Use Apple clang for Apple platform builds
         run: |
@@ -228,8 +240,8 @@ jobs:
         env:
           SD_TEST_MODEL_PATH: ${{ github.workspace }}/${{ env.WORKDIR }}/test/model/stable-diffusion-v2-1-Q8_0.gguf
         run: |
-          if [ -f "${{ github.workspace }}/.lsan-suppressions.txt" ]; then
-            export LSAN_OPTIONS="suppressions=${{ github.workspace }}/.lsan-suppressions.txt"
+          if [ -f "${{ github.workspace }}/${{ env.WORKDIR }}/.lsan-suppressions.txt" ]; then
+            export LSAN_OPTIONS="suppressions=${{ github.workspace }}/${{ env.WORKDIR }}/.lsan-suppressions.txt"
           fi
           echo "SD_TEST_MODEL_PATH=$SD_TEST_MODEL_PATH"
           ls -lh "$SD_TEST_MODEL_PATH"
