@@ -83,240 +83,240 @@ function runChatterboxSynth (model, params, expectation) {
 // Chatterbox English + Reload + WER
 // ---------------------------------------------------------------------------
 
-// test('Chatterbox TTS: English + Spanish synthesis and WER verification', { timeout: 1800000 }, async (t) => {
-//   const baseDir = getBaseDir()
-//   const enModelDir = path.join(baseDir, 'models', 'chatterbox')
-//   const multiModelDir = path.join(baseDir, 'models', 'chatterbox-multilingual')
-//   const whisperModelDir = path.join(baseDir, 'models', 'whisper')
+test('Chatterbox TTS: English + Spanish synthesis and WER verification', { timeout: 1800000 }, async (t) => {
+  const baseDir = getBaseDir()
+  const enModelDir = path.join(baseDir, 'models', 'chatterbox')
+  const multiModelDir = path.join(baseDir, 'models', 'chatterbox-multilingual')
+  const whisperModelDir = path.join(baseDir, 'models', 'whisper')
 
-//   console.log('\n=== Ensuring Chatterbox English models ===')
-//   const enDownload = await ensureChatterboxModels({ targetDir: enModelDir, variant: CHATTERBOX_VARIANT })
-//   t.ok(enDownload.success, 'Chatterbox English models should be downloaded')
-//   if (!enDownload.success) return
+  console.log('\n=== Ensuring Chatterbox English models ===')
+  const enDownload = await ensureChatterboxModels({ targetDir: enModelDir, variant: CHATTERBOX_VARIANT })
+  t.ok(enDownload.success, 'Chatterbox English models should be downloaded')
+  if (!enDownload.success) return
 
-//   console.log('\n=== Ensuring Chatterbox multilingual models ===')
-//   const multiDownload = await ensureChatterboxModels({ targetDir: multiModelDir, language: 'multilingual', variant: CHATTERBOX_VARIANT })
-//   t.ok(multiDownload.success, 'Chatterbox multilingual models should be downloaded')
-//   if (!multiDownload.success) return
+  console.log('\n=== Ensuring Chatterbox multilingual models ===')
+  const multiDownload = await ensureChatterboxModels({ targetDir: multiModelDir, language: 'multilingual', variant: CHATTERBOX_VARIANT })
+  t.ok(multiDownload.success, 'Chatterbox multilingual models should be downloaded')
+  if (!multiDownload.success) return
 
-//   if (isDarwin) {
-//     console.log('\n=== Ensuring Whisper model ===')
-//     const whisperModelPath = path.join(whisperModelDir, 'ggml-small.bin')
-//     await ensureWhisperModel(whisperModelPath)
-//     t.pass('Whisper model downloaded')
-//   }
+  if (isDarwin) {
+    console.log('\n=== Ensuring Whisper model ===')
+    const whisperModelPath = path.join(whisperModelDir, 'ggml-small.bin')
+    await ensureWhisperModel(whisperModelPath)
+    t.pass('Whisper model downloaded')
+  }
 
-//   const expectation = {
-//     minSamples: 5000,
-//     maxSamples: 5000000,
-//     minDurationMs: 200,
-//     maxDurationMs: 300000
-//   }
+  const expectation = {
+    minSamples: 5000,
+    maxSamples: 5000000,
+    minDurationMs: 200,
+    maxDurationMs: 300000
+  }
 
-//   const werEntries = []
-//   const englishSentences = getEnglishSentences()
+  const werEntries = []
+  const englishSentences = getEnglishSentences()
 
-//   console.log(`\n=== [1/2] English synthesis (${englishSentences.length} sentences, tier: ${INPUT_SENTENCES}) ===`)
-//   const enModel = await loadChatterboxTTS({
-//     tokenizerPath: path.join(enModelDir, 'tokenizer.json'),
-//     speechEncoderPath: chatterboxPath(enModelDir, 'speech_encoder'),
-//     embedTokensPath: chatterboxPath(enModelDir, 'embed_tokens'),
-//     conditionalDecoderPath: chatterboxPath(enModelDir, 'conditional_decoder'),
-//     languageModelPath: chatterboxLmPath(enModelDir),
-//     language: 'en'
-//   })
-//   t.ok(enModel, 'English TTS model should be loaded')
+  console.log(`\n=== [1/2] English synthesis (${englishSentences.length} sentences, tier: ${INPUT_SENTENCES}) ===`)
+  const enModel = await loadChatterboxTTS({
+    tokenizerPath: path.join(enModelDir, 'tokenizer.json'),
+    speechEncoderPath: chatterboxPath(enModelDir, 'speech_encoder'),
+    embedTokensPath: chatterboxPath(enModelDir, 'embed_tokens'),
+    conditionalDecoderPath: chatterboxPath(enModelDir, 'conditional_decoder'),
+    languageModelPath: chatterboxLmPath(enModelDir),
+    language: 'en'
+  })
+  t.ok(enModel, 'English TTS model should be loaded')
 
-//   for (let i = 0; i < englishSentences.length; i++) {
-//     const text = englishSentences[i]
-//     console.log(`\n--- English ${i + 1}/${englishSentences.length}: "${text.substring(0, 60)}${text.length > 60 ? '...' : ''}" ---`)
+  for (let i = 0; i < englishSentences.length; i++) {
+    const text = englishSentences[i]
+    console.log(`\n--- English ${i + 1}/${englishSentences.length}: "${text.substring(0, 60)}${text.length > 60 ? '...' : ''}" ---`)
 
-//     const saveWav = !isMobile
-//     const wavPath = saveWav ? path.join(baseDir, 'test', 'output', `chatterbox-english-${i + 1}.wav`) : undefined
-//     const result = await runChatterboxSynth(enModel, { text, saveWav, wavOutputPath: wavPath }, expectation)
-//     console.log(result.output)
+    const saveWav = !isMobile
+    const wavPath = saveWav ? path.join(baseDir, 'test', 'output', `chatterbox-english-${i + 1}.wav`) : undefined
+    const result = await runChatterboxSynth(enModel, { text, saveWav, wavOutputPath: wavPath }, expectation)
+    console.log(result.output)
 
-//     t.ok(result.passed, `English TTS ${i + 1} should pass expectations`)
-//     t.ok(result.data.sampleCount > 0, `English TTS ${i + 1} should produce audio samples`)
-//     t.is(result.data.reportedSampleRate, 24000, 'Sample rate should be native 24kHz without enhancement')
+    t.ok(result.passed, `English TTS ${i + 1} should pass expectations`)
+    t.ok(result.data.sampleCount > 0, `English TTS ${i + 1} should produce audio samples`)
+    t.is(result.data.reportedSampleRate, 24000, 'Sample rate should be native 24kHz without enhancement')
 
-//     const wavBuffer = result.data?.wavBuffer ? Buffer.from(result.data.wavBuffer) : null
-//     werEntries.push({ text, lang: 'en', wavBuffer, sampleCount: result.data.sampleCount, durationMs: result.data.durationMs })
-//   }
+    const wavBuffer = result.data?.wavBuffer ? Buffer.from(result.data.wavBuffer) : null
+    werEntries.push({ text, lang: 'en', wavBuffer, sampleCount: result.data.sampleCount, durationMs: result.data.durationMs })
+  }
 
-//   await enModel.unload()
-//   t.pass('English model unloaded')
+  await enModel.unload()
+  t.pass('English model unloaded')
 
-//   console.log('\n=== [2/2] Spanish synthesis (multilingual model) ===')
-//   const multiModel = await loadChatterboxTTS({
-//     tokenizerPath: path.join(multiModelDir, 'tokenizer.json'),
-//     speechEncoderPath: chatterboxPath(multiModelDir, 'speech_encoder', true),
-//     embedTokensPath: chatterboxPath(multiModelDir, 'embed_tokens', true),
-//     conditionalDecoderPath: chatterboxPath(multiModelDir, 'conditional_decoder', true),
-//     languageModelPath: chatterboxLmPath(multiModelDir),
-//     language: 'es'
-//   })
-//   t.ok(multiModel, 'Multilingual TTS model should be loaded')
+  console.log('\n=== [2/2] Spanish synthesis (multilingual model) ===')
+  const multiModel = await loadChatterboxTTS({
+    tokenizerPath: path.join(multiModelDir, 'tokenizer.json'),
+    speechEncoderPath: chatterboxPath(multiModelDir, 'speech_encoder', true),
+    embedTokensPath: chatterboxPath(multiModelDir, 'embed_tokens', true),
+    conditionalDecoderPath: chatterboxPath(multiModelDir, 'conditional_decoder', true),
+    languageModelPath: chatterboxLmPath(multiModelDir),
+    language: 'es'
+  })
+  t.ok(multiModel, 'Multilingual TTS model should be loaded')
 
-//   const spanishText = 'Hola mundo! Esta es una prueba del sistema de texto a voz.'
-//   const spanishSaveWav = !isMobile
-//   const spanishWavPath = spanishSaveWav ? path.join(baseDir, 'test', 'output', 'chatterbox-spanish.wav') : undefined
-//   const spanishResult = await runChatterboxTTS(multiModel, { text: spanishText, saveWav: spanishSaveWav, wavOutputPath: spanishWavPath }, expectation)
-//   console.log(spanishResult.output)
+  const spanishText = 'Hola mundo! Esta es una prueba del sistema de texto a voz.'
+  const spanishSaveWav = !isMobile
+  const spanishWavPath = spanishSaveWav ? path.join(baseDir, 'test', 'output', 'chatterbox-spanish.wav') : undefined
+  const spanishResult = await runChatterboxTTS(multiModel, { text: spanishText, saveWav: spanishSaveWav, wavOutputPath: spanishWavPath }, expectation)
+  console.log(spanishResult.output)
 
-//   t.ok(spanishResult.passed, 'Spanish TTS should pass expectations')
-//   t.ok(spanishResult.data.sampleCount > 0, 'Spanish TTS should produce audio samples')
+  t.ok(spanishResult.passed, 'Spanish TTS should pass expectations')
+  t.ok(spanishResult.data.sampleCount > 0, 'Spanish TTS should produce audio samples')
 
-//   const spanishWavBuffer = spanishResult.data?.wavBuffer ? Buffer.from(spanishResult.data.wavBuffer) : null
-//   werEntries.push({ text: spanishText, lang: 'es', wavBuffer: spanishWavBuffer, sampleCount: spanishResult.data.sampleCount, durationMs: spanishResult.data.durationMs })
+  const spanishWavBuffer = spanishResult.data?.wavBuffer ? Buffer.from(spanishResult.data.wavBuffer) : null
+  werEntries.push({ text: spanishText, lang: 'es', wavBuffer: spanishWavBuffer, sampleCount: spanishResult.data.sampleCount, durationMs: spanishResult.data.durationMs })
 
-//   await multiModel.unload()
-//   t.pass('Multilingual model unloaded')
+  await multiModel.unload()
+  t.pass('Multilingual model unloaded')
 
-//   console.log('\n=== WER verification ===')
-//   if (!isDarwin) {
-//     console.log('WER verification skipped (non-darwin)')
-//     t.pass('WER skipped (non-darwin)')
-//   } else if (INPUT_SENTENCES !== 'short') {
-//     console.log('WER verification skipped (non-short input)')
-//     t.pass('WER skipped (non-short input)')
-//   } else {
-//     const whisperModel = await loadWhisper({
-//       modelName: 'ggml-small.bin',
-//       diskPath: whisperModelDir,
-//       language: 'en'
-//     })
-//     t.ok(whisperModel, 'Whisper model should be loaded')
+  console.log('\n=== WER verification ===')
+  if (!isDarwin) {
+    console.log('WER verification skipped (non-darwin)')
+    t.pass('WER skipped (non-darwin)')
+  } else if (INPUT_SENTENCES !== 'short') {
+    console.log('WER verification skipped (non-short input)')
+    t.pass('WER skipped (non-short input)')
+  } else {
+    const whisperModel = await loadWhisper({
+      modelName: 'ggml-small.bin',
+      diskPath: whisperModelDir,
+      language: 'en'
+    })
+    t.ok(whisperModel, 'Whisper model should be loaded')
 
-//     for (let i = 0; i < werEntries.length; i++) {
-//       const entry = werEntries[i]
-//       if (!entry.wavBuffer) {
-//         console.log(`\n--- Whisper ${i + 1}/${werEntries.length}: Skipped (no WAV buffer) ---`)
-//         continue
-//       }
+    for (let i = 0; i < werEntries.length; i++) {
+      const entry = werEntries[i]
+      if (!entry.wavBuffer) {
+        console.log(`\n--- Whisper ${i + 1}/${werEntries.length}: Skipped (no WAV buffer) ---`)
+        continue
+      }
 
-//       if (entry.lang !== 'en') {
-//         await whisperModel.reload({ whisperConfig: { language: entry.lang, translate: false } })
-//       }
+      if (entry.lang !== 'en') {
+        await whisperModel.reload({ whisperConfig: { language: entry.lang, translate: false } })
+      }
 
-//       console.log(`\n--- Whisper ${i + 1}/${werEntries.length} [${entry.lang}]: "${entry.text.substring(0, 50)}..." ---`)
-//       const whisperResult = await runWhisper(whisperModel, entry.text, entry.wavBuffer)
-//       const werPct = (whisperResult.wer * 100).toFixed(1)
-//       console.log(`>>> [WHISPER] [${entry.lang}] WER: ${werPct}%`)
+      console.log(`\n--- Whisper ${i + 1}/${werEntries.length} [${entry.lang}]: "${entry.text.substring(0, 50)}..." ---`)
+      const whisperResult = await runWhisper(whisperModel, entry.text, entry.wavBuffer)
+      const werPct = (whisperResult.wer * 100).toFixed(1)
+      console.log(`>>> [WHISPER] [${entry.lang}] WER: ${werPct}%`)
 
-//       const threshold = entry.lang === 'en' ? 0.4 : 0.5
-//       t.ok(whisperResult.wer <= threshold, `WER [${entry.lang}] should be <= ${threshold * 100}% (got ${werPct}%)`)
-//     }
+      const threshold = entry.lang === 'en' ? 0.4 : 0.5
+      t.ok(whisperResult.wer <= threshold, `WER [${entry.lang}] should be <= ${threshold * 100}% (got ${werPct}%)`)
+    }
 
-//     await whisperModel.unload()
-//     console.log('Whisper model unloaded')
-//   }
+    await whisperModel.unload()
+    console.log('Whisper model unloaded')
+  }
 
-//   console.log('\n' + '='.repeat(60))
-//   console.log('CHATTERBOX ENGLISH + SPANISH TEST SUMMARY')
-//   console.log('='.repeat(60))
-//   for (const e of werEntries) {
-//     console.log(`  [${e.lang}] ${e.sampleCount} samples, ${e.durationMs?.toFixed(0) || 'N/A'}ms - "${e.text.substring(0, 50)}..."`)
-//   }
-//   console.log('='.repeat(60))
-// })
+  console.log('\n' + '='.repeat(60))
+  console.log('CHATTERBOX ENGLISH + SPANISH TEST SUMMARY')
+  console.log('='.repeat(60))
+  for (const e of werEntries) {
+    console.log(`  [${e.lang}] ${e.sampleCount} samples, ${e.durationMs?.toFixed(0) || 'N/A'}ms - "${e.text.substring(0, 50)}..."`)
+  }
+  console.log('='.repeat(60))
+})
 
-// // ---------------------------------------------------------------------------
-// // Chatterbox Multilingual TTS (parameterized by INPUT_SENTENCES)
-// // ---------------------------------------------------------------------------
+// ---------------------------------------------------------------------------
+// Chatterbox Multilingual TTS (parameterized by INPUT_SENTENCES)
+// ---------------------------------------------------------------------------
 
-// test('Chatterbox Multilingual TTS: Synthesis across languages', { timeout: 3600000 }, async (t) => {
-//   if (isMobile) {
-//     t.pass('Skipped on mobile')
-//     return
-//   }
+test('Chatterbox Multilingual TTS: Synthesis across languages', { timeout: 3600000 }, async (t) => {
+  if (isMobile) {
+    t.pass('Skipped on mobile')
+    return
+  }
 
-//   const baseDir = getBaseDir()
-//   const modelDir = path.join(baseDir, 'models', 'chatterbox-multilingual')
+  const baseDir = getBaseDir()
+  const modelDir = path.join(baseDir, 'models', 'chatterbox-multilingual')
 
-//   console.log('\n=== Ensuring Chatterbox multilingual models ===')
-//   const downloadResult = await ensureChatterboxModels({ targetDir: modelDir, language: 'multilingual', variant: CHATTERBOX_VARIANT })
-//   t.ok(downloadResult.success, 'Chatterbox multilingual models should be downloaded')
-//   if (!downloadResult.success) return
+  console.log('\n=== Ensuring Chatterbox multilingual models ===')
+  const downloadResult = await ensureChatterboxModels({ targetDir: modelDir, language: 'multilingual', variant: CHATTERBOX_VARIANT })
+  t.ok(downloadResult.success, 'Chatterbox multilingual models should be downloaded')
+  if (!downloadResult.success) return
 
-//   const multilingualSentences = getMultilingualSentences()
-//   const languages = Object.keys(multilingualSentences)
-//   const firstLang = languages[0]
+  const multilingualSentences = getMultilingualSentences()
+  const languages = Object.keys(multilingualSentences)
+  const firstLang = languages[0]
 
-//   const expectation = {
-//     minSamples: 5000,
-//     maxSamples: 5000000,
-//     minDurationMs: 200,
-//     maxDurationMs: 300000
-//   }
+  const expectation = {
+    minSamples: 5000,
+    maxSamples: 5000000,
+    minDurationMs: 200,
+    maxDurationMs: 300000
+  }
 
-//   const modelParams = {
-//     tokenizerPath: path.join(modelDir, 'tokenizer.json'),
-//     speechEncoderPath: chatterboxPath(modelDir, 'speech_encoder', true),
-//     embedTokensPath: chatterboxPath(modelDir, 'embed_tokens', true),
-//     conditionalDecoderPath: chatterboxPath(modelDir, 'conditional_decoder', true),
-//     languageModelPath: chatterboxLmPath(modelDir),
-//     language: firstLang
-//   }
+  const modelParams = {
+    tokenizerPath: path.join(modelDir, 'tokenizer.json'),
+    speechEncoderPath: chatterboxPath(modelDir, 'speech_encoder', true),
+    embedTokensPath: chatterboxPath(modelDir, 'embed_tokens', true),
+    conditionalDecoderPath: chatterboxPath(modelDir, 'conditional_decoder', true),
+    languageModelPath: chatterboxLmPath(modelDir),
+    language: firstLang
+  }
 
-//   console.log(`\n=== Loading Chatterbox multilingual model (${firstLang}, tier: ${INPUT_SENTENCES}) ===`)
-//   const model = await loadChatterboxTTS(modelParams)
-//   t.ok(model, 'Multilingual TTS model should be loaded')
+  console.log(`\n=== Loading Chatterbox multilingual model (${firstLang}, tier: ${INPUT_SENTENCES}) ===`)
+  const model = await loadChatterboxTTS(modelParams)
+  t.ok(model, 'Multilingual TTS model should be loaded')
 
-//   const results = []
+  const results = []
 
-//   for (let i = 0; i < languages.length; i++) {
-//     const lang = languages[i]
-//     const text = multilingualSentences[lang]
+  for (let i = 0; i < languages.length; i++) {
+    const lang = languages[i]
+    const text = multilingualSentences[lang]
 
-//     if (i > 0) {
-//       console.log(`\n=== Reloading model for language: ${lang} ===`)
-//       try {
-//         await model.reload({ language: lang })
-//       } catch (err) {
-//         t.fail(`Failed to reload for language ${lang}: ${err.message}`)
-//         continue
-//       }
-//     }
+    if (i > 0) {
+      console.log(`\n=== Reloading model for language: ${lang} ===`)
+      try {
+        await model.reload({ language: lang })
+      } catch (err) {
+        t.fail(`Failed to reload for language ${lang}: ${err.message}`)
+        continue
+      }
+    }
 
-//     console.log(`\n--- [${lang}] "${text.substring(0, 60)}${text.length > 60 ? '...' : ''}" ---`)
+    console.log(`\n--- [${lang}] "${text.substring(0, 60)}${text.length > 60 ? '...' : ''}" ---`)
 
-//     const saveWav = !isMobile
-//     const wavPath = saveWav
-//       ? path.join(baseDir, 'test', 'output', `chatterbox-multilingual-${lang}-${INPUT_SENTENCES}.wav`)
-//       : undefined
+    const saveWav = !isMobile
+    const wavPath = saveWav
+      ? path.join(baseDir, 'test', 'output', `chatterbox-multilingual-${lang}-${INPUT_SENTENCES}.wav`)
+      : undefined
 
-//     const startTime = Date.now()
-//     const result = await runChatterboxSynth(model, { text, saveWav, wavOutputPath: wavPath }, expectation)
-//     const elapsedMs = Date.now() - startTime
+    const startTime = Date.now()
+    const result = await runChatterboxSynth(model, { text, saveWav, wavOutputPath: wavPath }, expectation)
+    const elapsedMs = Date.now() - startTime
 
-//     console.log(result.output)
+    console.log(result.output)
 
-//     t.ok(result.passed, `[${lang}] ${INPUT_SENTENCES} should pass expectations`)
-//     t.ok(result.data.sampleCount > 0, `[${lang}] ${INPUT_SENTENCES} should produce audio`)
-//     t.is(result.data.sampleRate, 24000, `[${lang}] sample rate should be 24kHz`)
+    t.ok(result.passed, `[${lang}] ${INPUT_SENTENCES} should pass expectations`)
+    t.ok(result.data.sampleCount > 0, `[${lang}] ${INPUT_SENTENCES} should produce audio`)
+    t.is(result.data.sampleRate, 24000, `[${lang}] sample rate should be 24kHz`)
 
-//     results.push({ lang, text, sampleCount: result.data.sampleCount, durationMs: result.data.durationMs, elapsedMs, stats: result.data.stats })
-//   }
+    results.push({ lang, text, sampleCount: result.data.sampleCount, durationMs: result.data.durationMs, elapsedMs, stats: result.data.stats })
+  }
 
-//   console.log('\n=== Unloading multilingual model ===')
-//   try {
-//     await model.unload()
-//     t.pass('Model unloaded successfully')
-//   } catch (err) {
-//     t.fail(`Model unload failed: ${err.message}`)
-//   }
+  console.log('\n=== Unloading multilingual model ===')
+  try {
+    await model.unload()
+    t.pass('Model unloaded successfully')
+  } catch (err) {
+    t.fail(`Model unload failed: ${err.message}`)
+  }
 
-//   console.log('\n' + '='.repeat(60))
-//   console.log(`CHATTERBOX MULTILINGUAL TEST SUMMARY (tier: ${INPUT_SENTENCES})`)
-//   console.log('='.repeat(60))
-//   for (const r of results) {
-//     const durationSec = (r.durationMs || 0) / 1000
-//     const rtf = durationSec > 0 ? (r.elapsedMs / 1000 / durationSec).toFixed(2) : 'N/A'
-//     console.log(`  [${r.lang}] ${r.sampleCount} samples, ${r.durationMs?.toFixed(0) || 'N/A'}ms audio, RTF: ${rtf} - "${r.text.substring(0, 40)}..."`)
-//   }
-//   console.log('='.repeat(60))
-// })
+  console.log('\n' + '='.repeat(60))
+  console.log(`CHATTERBOX MULTILINGUAL TEST SUMMARY (tier: ${INPUT_SENTENCES})`)
+  console.log('='.repeat(60))
+  for (const r of results) {
+    const durationSec = (r.durationMs || 0) / 1000
+    const rtf = durationSec > 0 ? (r.elapsedMs / 1000 / durationSec).toFixed(2) : 'N/A'
+    console.log(`  [${r.lang}] ${r.sampleCount} samples, ${r.durationMs?.toFixed(0) || 'N/A'}ms audio, RTF: ${rtf} - "${r.text.substring(0, 40)}..."`)
+  }
+  console.log('='.repeat(60))
+})
 
 // ---------------------------------------------------------------------------
 // outputSampleRate tests (no LavaSR models needed, tests resampling)
