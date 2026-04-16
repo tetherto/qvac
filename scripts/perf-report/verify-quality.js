@@ -17,13 +17,7 @@
 const fs = require('fs')
 const path = require('path')
 const {
-  normalize,
   tokenize,
-  levenshtein,
-  cer,
-  wer,
-  keywordDetectionRate,
-  keyValueAccuracy,
   evaluateQuality
 } = require('../test-utils/quality-metrics')
 

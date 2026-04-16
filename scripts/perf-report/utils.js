@@ -79,16 +79,6 @@ function formatMetricValue (key, value) {
  * @param {Object} aggregated - Output of aggregateReports()
  * @returns {string}
  */
-const QUALITY_LABELS = {
-  cer: 'CER',
-  wer: 'WER',
-  keyword_detection_rate: 'Keyword Detection',
-  key_value_accuracy: 'KV Accuracy',
-  keywords_found: 'Keywords Found',
-  keywords_total: 'Keywords Total',
-  key_values_matched: 'KV Matched',
-  key_values_total: 'KV Total'
-}
 
 function formatQualityValue (key, value) {
   if (value === null || value === undefined) return '-'
