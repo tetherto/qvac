@@ -51,6 +51,7 @@ export const completionStatsSchema = z.object({
   timeToFirstToken: z.number().optional(),
   tokensPerSecond: z.number().optional(),
   cacheTokens: z.number().optional(),
+  backendDevice: z.enum(["cpu", "gpu"]).optional(),
 });
 
 export const completionStreamResponseSchema = z.object({

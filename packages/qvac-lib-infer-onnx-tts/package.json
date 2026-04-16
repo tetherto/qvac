@@ -1,6 +1,6 @@
 {
   "name": "@qvac/tts-onnx",
-  "version": "0.8.2",
+  "version": "0.8.3",
   "description": "Text to Speech (TTS) addon for qvac",
   "addon": true,
   "engines": {
@@ -48,6 +48,7 @@
     "test/utils/runSupertonicTTS.js",
     "test/utils/downloadModel.js",
     "test/utils/wav-helper.js",
+    "test/utils/lavasr-helpers.js",
     "test/utils/loader.fake.js",
     "test/utils/runWhisper.js",
     "LICENSE",
@@ -81,13 +82,13 @@
     "brittle": "^3.17.0",
     "cmake-bare": "^1.7.5",
     "cmake-vcpkg": "^1.1.0",
+    "fflate": "^0.8.2",
     "fs": "npm:bare-fs",
     "husky": "^9.1.7",
     "os": "npm:bare-os@^3.6.2",
     "process": "npm:bare-process",
     "sinon": "^21.0.0",
     "standard": "^17.0.0",
-    "fflate": "^0.8.2",
     "stream": "npm:bare-node-stream",
     "tty": "npm:bare-node-tty",
     "util": "npm:bare-utils@^1.5.1"
@@ -96,7 +97,8 @@
     "@qvac/error": "^0.1.0",
     "@qvac/onnx": "^0.14.0",
     "@qvac/infer-base": "^0.4.0",
-    "bare-fs": "^4.5.1",
+    "bare-fs": "^4.5.6",
+    "bare-os": "^3.8.0",
     "bare-path": "^3.0.0"
   },
   "types": "index.d.ts"

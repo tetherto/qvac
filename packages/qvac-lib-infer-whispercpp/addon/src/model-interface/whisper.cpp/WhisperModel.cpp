@@ -389,6 +389,7 @@ std::any WhisperModel::process(const std::any& input) {
 
   if (shouldOverrideCallback) {
     on_segment_ = previousOutputCallback;
+    return Output{};
   }
 
   return output_;
