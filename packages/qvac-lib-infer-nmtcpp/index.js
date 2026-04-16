@@ -1,6 +1,6 @@
 'use strict'
 
-const path = require('path')
+const path = require('bare-path')
 const QvacLogger = require('@qvac/logging')
 const { QvacResponse, createJobHandler, exclusiveRunQueue } = require('@qvac/infer-base')
 
