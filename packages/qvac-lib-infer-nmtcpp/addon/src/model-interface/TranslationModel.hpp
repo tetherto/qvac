@@ -24,7 +24,9 @@ enum class BackendType {
 #endif
 };
 
-class TranslationModel : public qvac_lib_inference_addon_cpp::model::IModel, public qvac_lib_inference_addon_cpp::model::IModelCancel {
+class TranslationModel
+    : public qvac_lib_inference_addon_cpp::model::IModel,
+      public qvac_lib_inference_addon_cpp::model::IModelCancel {
 public:
   TranslationModel() {};
 
@@ -40,14 +42,14 @@ public:
 
   void unload();
 
-  void reload(); 
+  void reload();
 
   void reset() const;
 
   void setUseGpu(bool useGpu);
 
   std::unordered_map<std::string, std::variant<double, int64_t, std::string>>
-  getConfig() const; 
+  getConfig() const;
 
   bool isLoaded() const;
 
@@ -89,10 +91,12 @@ private:
 
   BackendType backendType_ = BackendType::GGML;
 
-  mutable std::unique_ptr<nmt_context, decltype(&nmt_free)> nmtCtx_{nullptr, nmt_free};
+  mutable std::unique_ptr<nmt_context, decltype(&nmt_free)> nmtCtx_{
+      nullptr, nmt_free};
 
 #ifdef HAVE_BERGAMOT
-  std::unique_ptr<bergamot_context, decltype(&bergamot_free)> bergamotCtx_{nullptr, bergamot_free};
+  std::unique_ptr<bergamot_context, decltype(&bergamot_free)> bergamotCtx_{
+      nullptr, bergamot_free};
 #endif
 
   mutable bool isFirstSentence_ = true;

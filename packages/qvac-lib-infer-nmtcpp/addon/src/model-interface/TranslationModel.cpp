@@ -49,10 +49,12 @@ BackendType TranslationModel::detectBackendType(const std::string& modelPath) {
         std::string filename = entry.path().filename().string();
         // Check for bergamot model signatures
         if (filename.find(".intgemm") != std::string::npos ||
-            (filename.find("vocab.") != std::string::npos && filename.find(".spm") != std::string::npos)) {
+            (filename.find("vocab.") != std::string::npos &&
+             filename.find(".spm") != std::string::npos)) {
           QLOG(
               qvac_lib_inference_addon_cpp::logger::Priority::INFO,
-              "[TRANSLATION MODEL] Detected Bergamot backend based on model files");
+              "[TRANSLATION MODEL] Detected Bergamot backend based on model "
+              "files");
           return BackendType::BERGAMOT;
         }
       }
@@ -62,14 +64,16 @@ BackendType TranslationModel::detectBackendType(const std::string& modelPath) {
       if (pathStr.find(".intgemm") != std::string::npos) {
         QLOG(
             qvac_lib_inference_addon_cpp::logger::Priority::INFO,
-            "[TRANSLATION MODEL] Detected Bergamot backend based on model filename");
+            "[TRANSLATION MODEL] Detected Bergamot backend based on model "
+            "filename");
         return BackendType::BERGAMOT;
       }
     }
   } catch (const std::exception& e) {
     QLOG(
         qvac_lib_inference_addon_cpp::logger::Priority::WARNING,
-        "[TRANSLATION MODEL] Error during backend detection: " + std::string(e.what()));
+        "[TRANSLATION MODEL] Error during backend detection: " +
+            std::string(e.what()));
   }
 #endif
 
@@ -88,7 +92,8 @@ void TranslationModel::unload() {
 }
 
 void TranslationModel::load() {
-  // Extract backend loading config and initialize backends before any model loading
+  // Extract backend loading config and initialize backends before any model
+  // loading
   std::string backendsDir;
   if (auto it = config_.find("backendsdir"); it != config_.end()) {
     backendsDir = std::get<std::string>(it->second);
@@ -348,10 +353,7 @@ std::any TranslationModel::process(const std::any& input) {
   }
 }
 
-void TranslationModel::cancel() const 
-{
-    reset();
-}
+void TranslationModel::cancel() const { reset(); }
 std::string TranslationModel::processString(const std::string& text) {
 #ifdef HAVE_BERGAMOT
   if (backendType_ == BackendType::BERGAMOT) {
@@ -559,7 +561,8 @@ TranslationModel::getConfig() const {
 }
 
 void TranslationModel::setConfig(
-    std::unordered_map<std::string, std::variant<double, int64_t, std::string>> config) {
+    std::unordered_map<std::string, std::variant<double, int64_t, std::string>>
+        config) {
   config_ = std::move(config);
   updateConfig();
 }
