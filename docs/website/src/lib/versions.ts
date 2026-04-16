@@ -8,6 +8,7 @@ export interface Version {
 export const VERSIONS: Version[] = [
   { label: 'dev', value: 'dev', isDev: true },
   { label: 'latest (v0.8.0)', value: 'v0.8.0', isLatest: true },
+  { label: 'v0.9.0', value: 'v0.9.0' },
   { label: 'v0.7.0', value: 'v0.7.0' },
 ];
 

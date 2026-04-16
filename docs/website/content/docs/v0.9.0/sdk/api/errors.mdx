@@ -1,0 +1,142 @@
+---
+title: Errors
+description: SDK error codes reference
+---
+
+## Example
+
+```typescript
+import { SDK_CLIENT_ERROR_CODES, SDK_SERVER_ERROR_CODES } from "@qvac/sdk";
+
+try {
+  await loadModel({ modelSrc: "/path/to/model.gguf", modelType: "llm" });
+} catch (error) {
+  if (error.code === SDK_SERVER_ERROR_CODES.MODEL_LOAD_FAILED) {
+    // handle model load failure
+  }
+}
+```
+
+## Client errors
+
+Thrown on the client side (response validation, RPC, provider). Access via `SDK_CLIENT_ERROR_CODES.{ERROR_NAME}`.
+
+| Error | Code | Summary | Thrown by |
+| --- | --- | --- | --- |
+| `INVALID_RESPONSE_TYPE` | 50001 | Invalid response type received. | `cancel()`, `downloadAsset()`, `embed()`, `finetune()`, `getModelInfo()`, `heartbeat()`, `loadModel()`, `loggingStream()`, `ragDeleteEmbeddings()`, `ragSaveEmbeddings()`, `ragSearch()`, `resume()`, `startQVACProvider()`, `stopQVACProvider()`, `suspend()`, `unloadModel()` |
+| `INVALID_OPERATION_IN_RESPONSE` | 50002 | Response operation didn't match the expected RAG operation. | `ragDeleteEmbeddings()`, `ragSaveEmbeddings()`, `ragSearch()` |
+| `STREAM_ENDED_WITHOUT_RESPONSE` | 50003 | Streaming RPC ended without a final response. | `downloadAsset()`, `finetune()`, `loadModel()`, `ragDeleteEmbeddings()`, `ragSaveEmbeddings()`, `ragSearch()` |
+| `INVALID_AUDIO_CHUNK_TYPE` | 50004 | Invalid audio chunk input type provided. | `transcribe()`, `transcribeStream()` |
+| `INVALID_TOOLS_ARRAY` | 50005 | Invalid tools array provided. | `completion()` |
+| `INVALID_TOOL_SCHEMA` | 50006 | Invalid tool schema provided. | `completion()` |
+| `OCR_FAILED` | 50007 | OCR operation failed. | `ocr()` |
+| `RPC_NO_HANDLER` | 50200 | No handler registered for request type. | Internal RPC layer |
+| `RPC_REQUEST_NOT_SENT` | 50201 | Request has not been sent yet. | Internal RPC layer |
+| `RPC_RESPONSE_STREAM_NOT_CREATED` | 50202 | Response stream not created. | Internal RPC layer |
+| `RPC_CONNECTION_FAILED` | 50203 | RPC connection failed. | Any API call (startup/transport) |
+| `PROVIDER_START_FAILED` | 50400 | Failed to start provider. | `startQVACProvider()` |
+| `PROVIDER_STOP_FAILED` | 50401 | Failed to stop provider. | `stopQVACProvider()` |
+| `DELEGATE_NO_FINAL_RESPONSE` | 50402 | No final response received from delegated provider. | `loadModel()`, `completion()` |
+| `DELEGATE_PROVIDER_ERROR` | 50403 | Delegated provider returned an error. | `loadModel()`, `completion()` |
+| `DELEGATE_CONNECTION_FAILED` | 50404 | Failed to connect to delegated provider. | `loadModel()`, `completion()` |
+| `SDK_NOT_FOUND_IN_NODE_MODULES` | 50600 | QVAC SDK not found in node_modules. | Any API call (during SDK initialization) |
+| `WORKER_FILE_NOT_FOUND` | 50601 | Worker file not found. | Any API call (during SDK initialization) |
+| `CONFIG_FILE_NOT_FOUND` | 50602 | Config file not found. | Any API call (during SDK initialization) |
+| `CONFIG_FILE_INVALID` | 50603 | Config file is invalid. | Any API call (during SDK initialization) |
+| `CONFIG_FILE_PARSE_FAILED` | 50604 | Failed to import/parse a `qvac.config.*` file. | Any API call (during SDK initialization) |
+| `CONFIG_VALIDATION_FAILED` | 50605 | Config validation failed (schema mismatch / invalid JSON). | Any API call (during SDK initialization) |
+| `PEAR_WORKER_ENTRY_REQUIRED` | 50606 | No plugins registered; Pear worker entry required. | Any API call (during SDK initialization) |
+| `MULTIPLE_SDK_INSTALLATIONS` | 50607 | Multiple QVAC SDK installations found. | Any API call (during SDK initialization) |
+| `PROFILER_INVALID_CAPACITY` | 50800 | Ring buffer capacity is below minimum. | `profiler.enable()` |
+
+## Server errors
+
+Thrown by the server (model operations, downloads, cache, RAG). Access via `SDK_SERVER_ERROR_CODES.{ERROR_NAME}`.
+
+| Error | Code | Summary | Thrown by |
+| --- | --- | --- | --- |
+| `MODEL_ALREADY_REGISTERED` | 52001 | Model with the same ID is already registered. | `loadModel()` |
+| `MODEL_NOT_FOUND` | 52002 | Model ID not found in the registry. | `completion()`, `embed()`, `getModelInfo()`, `loggingStream()`, `ocr()`, `textToSpeech()`, `transcribe()`, `transcribeStream()`, `translate()`, `unloadModel()`, `ragDeleteEmbeddings()`, `ragSaveEmbeddings()`, `ragSearch()` |
+| `MODEL_NOT_LOADED` | 52003 | Model exists but is not loaded. | `completion()`, `embed()`, `ocr()`, `textToSpeech()`, `transcribe()`, `transcribeStream()`, `translate()` |
+| `MODEL_IS_DELEGATED` | 52004 | Model is delegated and cannot be accessed as a local model. | `completion()`, `embed()`, `ocr()`, `textToSpeech()`, `transcribe()`, `transcribeStream()`, `translate()` |
+| `UNKNOWN_MODEL_TYPE` | 52005 | Unknown `modelType` in `loadModel()`. | `loadModel()` |
+| `MODEL_LOAD_FAILED` | 52200 | Failed to load model (generic). | `loadModel()` |
+| `MODEL_FILE_NOT_FOUND` | 52201 | Model file not found at given path. | `loadModel()` |
+| `MODEL_FILE_NOT_FOUND_IN_DIR` | 52202 | Expected model file not found in directory (e.g., by type). | `loadModel()` |
+| `MODEL_FILE_LOCATE_FAILED` | 52203 | Failed to locate model file for the given `modelType`. | `loadModel()` |
+| `PROJECTION_MODEL_REQUIRED` | 52204 | Projection model source is required for multimodal LLM models. | `loadModel()` |
+| `VAD_MODEL_REQUIRED` | 52205 | VAD model source is required for this configuration. | `loadModel()` |
+| `TTS_ARTIFACTS_REQUIRED` | 52208 | TTS (Chatterbox) model artifacts are missing. | `loadModel()` |
+| `TTS_REFERENCE_AUDIO_REQUIRED` | 52209 | TTS (Chatterbox) reference audio is required for voice cloning. | `loadModel()` |
+| `PARAKEET_ARTIFACTS_REQUIRED` | 52210 | Parakeet model sources are missing. | `loadModel()` |
+| `MODEL_UNLOAD_FAILED` | 52400 | Failed to unload model. | `unloadModel()` |
+| `EMBED_FAILED` | 52401 | Failed to generate embeddings. | `embed()` |
+| `EMBED_NO_EMBEDDINGS` | 52402 | No embeddings returned from model. | `embed()` |
+| `TRANSCRIPTION_FAILED` | 52403 | Transcription failed. | `transcribe()`, `transcribeStream()` |
+| `AUDIO_FILE_NOT_FOUND` | 52404 | Audio file not found or not accessible. | `transcribe()`, `transcribeStream()` |
+| `TRANSLATION_FAILED` | 52405 | Translation failed. | `translate()` |
+| `COMPLETION_FAILED` | 52406 | Completion failed. | `completion()` |
+| `ATTACHMENT_NOT_FOUND` | 52407 | Attachment file not found at path. | `completion()` |
+| `CANCEL_FAILED` | 52408 | Failed to cancel operation. | `cancel()` |
+| `TEXT_TO_SPEECH_FAILED` | 52409 | Text-to-speech operation failed. | `textToSpeech()` |
+| `CONFIG_RELOAD_NOT_SUPPORTED` | 52410 | Model does not support hot config reload. | `transcribe()`, `transcribeStream()` |
+| `MODEL_TYPE_MISMATCH` | 52411 | Model type mismatch (expected vs provided). | `completion()`, `embed()`, `ocr()`, `textToSpeech()`, `transcribe()`, `transcribeStream()`, `translate()`, `ragDeleteEmbeddings()`, `ragSaveEmbeddings()`, `ragSearch()` |
+| `OCR_FAILED` | 52412 | OCR operation failed. | `ocr()` |
+| `IMAGE_FILE_NOT_FOUND` | 52413 | Image file not found or not accessible. | `ocr()` |
+| `INVALID_IMAGE_INPUT` | 52414 | Invalid image input type provided. | `ocr()` |
+| `RAG_SAVE_FAILED` | 52800 | Failed to save embeddings. | `ragSaveEmbeddings()` |
+| `RAG_SEARCH_FAILED` | 52801 | Failed to search embeddings. | `ragSearch()` |
+| `RAG_DELETE_FAILED` | 52802 | Failed to delete embeddings. | `ragDeleteEmbeddings()` |
+| `RAG_UNKNOWN_OPERATION` | 52803 | Unknown RAG operation. | `ragIngest()`, `ragReindex()` |
+| `RAG_HYPERDB_FAILED` | 52804 | HyperDB RAG operation failed. | `ragDeleteEmbeddings()`, `ragSaveEmbeddings()`, `ragSearch()` |
+| `RAG_WORKSPACE_MODEL_MISMATCH` | 52805 | Workspace is configured for a different embeddings model. | `ragDeleteEmbeddings()`, `ragSaveEmbeddings()`, `ragSearch()` |
+| `RAG_WORKSPACE_NOT_FOUND` | 52806 | RAG workspace not found. | `ragDeleteEmbeddings()`, `ragSaveEmbeddings()`, `ragSearch()` |
+| `RAG_WORKSPACE_IN_USE` | 52807 | RAG workspace is in use and can't be closed/deleted. | `ragDeleteEmbeddings()`, `ragSaveEmbeddings()`, `ragSearch()` |
+| `RAG_WORKSPACE_CLOSE_FAILED` | 52808 | Failed to close RAG workspace. | `ragCloseWorkspace()` |
+| `RAG_LIST_WORKSPACES_FAILED` | 52809 | Failed to list RAG workspaces. | `ragListWorkspaces()` |
+| `RAG_CHUNK_FAILED` | 52810 | Failed to chunk input into embeddings. | `ragChunk()`, `ragSaveEmbeddings()` |
+| `RAG_WORKSPACE_NOT_OPEN` | 52811 | RAG workspace is not open. | `ragDeleteEmbeddings()`, `ragSaveEmbeddings()`, `ragSearch()` |
+| `FILE_NOT_FOUND` | 53000 | File not found. | `loadModel()`, `downloadAsset()` |
+| `DOWNLOAD_CANCELLED` | 53001 | Download cancelled. | `cancel()`, `downloadAsset()`, `loadModel()` |
+| `CHECKSUM_VALIDATION_FAILED` | 53002 | Downloaded file checksum validation failed. | `downloadAsset()`, `loadModel()` |
+| `HTTP_ERROR` | 53003 | HTTP request failed with status code. | `downloadAsset()`, `loadModel()` |
+| `NO_RESPONSE_BODY` | 53004 | No response body received from HTTP request. | `downloadAsset()`, `loadModel()` |
+| `RESPONSE_BODY_NOT_READABLE` | 53005 | Response body is not readable. | `downloadAsset()`, `loadModel()` |
+| `NO_BLOB_FOUND` | 53006 | No blob found for the requested resource. | `downloadAsset()`, `loadModel()` |
+| `DOWNLOAD_ASSET_FAILED` | 53007 | Download failed. | `downloadAsset()`, `loadModel()` |
+| `SEEDING_NOT_SUPPORTED` | 53008 | Seeding is only supported for Hyperdrive models. | `loadModel()` |
+| `HYPERDRIVE_DOWNLOAD_FAILED` | 53009 | Hyperdrive download failed. | `downloadAsset()`, `loadModel()` |
+| `INVALID_SHARD_URL_PATTERN` | 53010 | Invalid shard URL pattern for sharded downloads. | `downloadAsset()`, `loadModel()` |
+| `ARCHIVE_EXTRACTION_FAILED` | 53011 | Failed to extract an archive. | `downloadAsset()`, `loadModel()` |
+| `ARCHIVE_UNSUPPORTED_TYPE` | 53012 | Unsupported archive type. | `downloadAsset()`, `loadModel()` |
+| `ARCHIVE_MISSING_SHARDS` | 53013 | Archive is missing required shards. | `downloadAsset()`, `loadModel()` |
+| `PARTIAL_DOWNLOAD_OFFLINE` | 53014 | Partial download exists but offline prevents resuming. | `downloadAsset()`, `loadModel()` |
+| `REGISTRY_DOWNLOAD_FAILED` | 53015 | Registry download failed. | `downloadAsset()`, `loadModel()` |
+| `DELETE_CACHE_FAILED` | 53200 | Failed to delete cache. | `deleteCache()` |
+| `INVALID_DELETE_CACHE_PARAMS` | 53201 | Invalid parameters for `deleteCache()`. | `deleteCache()` |
+| `CACHE_DIR_NOT_ABSOLUTE` | 53202 | Cache directory must be an absolute path. | `deleteCache()` |
+| `CACHE_DIR_NOT_WRITABLE` | 53203 | Cache directory is not writable. | `deleteCache()` |
+| `SET_CONFIG_FAILED` | 53350 | Failed to set config. | Any API call (during SDK initialization) |
+| `CONFIG_ALREADY_SET` | 53351 | Config is immutable and has already been set. | Any API call (during SDK initialization) |
+| `FFMPEG_NOT_AVAILABLE` | 53500 | Audio decoding required but FFmpeg is not available. | `transcribe()`, `transcribeStream()` |
+| `AUDIO_PLAYER_FAILED` | 53501 | Audio player failed. | `textToSpeech()` |
+| `INVALID_AUDIO_CHUNK_TYPE` | 53502 | Invalid audio chunk type. | `transcribe()`, `transcribeStream()` |
+| `DELEGATE_NO_FINAL_RESPONSE` | 53700 | No final response received from delegated provider. | `completion()`, `loadModel()` |
+| `DELEGATE_CONNECTION_FAILED` | 53701 | Failed to connect to delegated provider. | `completion()`, `loadModel()` |
+| `DELEGATE_PROVIDER_ERROR` | 53702 | Delegated provider returned an error. | `completion()`, `loadModel()` |
+| `RPC_NO_DATA_RECEIVED` | 53703 | No data received from request. | Internal server RPC |
+| `RPC_UNKNOWN_REQUEST_TYPE` | 53704 | Unknown request type received. | Internal server RPC |
+| `LIFECYCLE_SUSPEND_FAILED` | 53600 | Failed to suspend one or more resources. | `suspend()` |
+| `LIFECYCLE_RESUME_FAILED` | 53601 | Failed to resume one or more resources. | `resume()` |
+| `PLUGIN_NOT_FOUND` | 53850 | Plugin not found for the specified model type. | `invokePlugin()`, `invokePluginStream()`, `loadModel()` |
+| `PLUGIN_HANDLER_NOT_FOUND` | 53851 | Handler not found in plugin. | `invokePlugin()`, `invokePluginStream()` |
+| `PLUGIN_REQUEST_VALIDATION_FAILED` | 53852 | Plugin request validation failed. | `invokePlugin()`, `invokePluginStream()` |
+| `PLUGIN_RESPONSE_VALIDATION_FAILED` | 53853 | Plugin response validation failed. | `invokePlugin()`, `invokePluginStream()` |
+| `PLUGIN_ALREADY_REGISTERED` | 53854 | Plugin already registered for model type. | `definePlugin()` |
+| `PLUGIN_HANDLER_TYPE_MISMATCH` | 53855 | Handler type mismatch (streaming vs non-streaming). | `invokePlugin()`, `invokePluginStream()` |
+| `PLUGIN_LOGGING_INVALID` | 53856 | Plugin has invalid logging configuration. | `definePlugin()` |
+| `PLUGIN_DEFINITION_INVALID` | 53857 | Plugin definition is invalid. | `definePlugin()` |
+| `PLUGIN_MODEL_TYPE_RESERVED` | 53858 | Model type is reserved for built-in plugins. | `definePlugin()` |
+| `PLUGIN_LOAD_CONFIG_VALIDATION_FAILED` | 53859 | Model config validation failed for plugin. | `loadModel()` |
+| `PATH_TRAVERSAL` | 53900 | Path traversal detected. | `loadModel()`, `downloadAsset()` |
+| `QVAC_MODEL_REGISTRY_QUERY_FAILED` | 53950 | Model registry query failed. | `modelRegistryGetModel()`, `modelRegistryList()`, `modelRegistrySearch()` |
