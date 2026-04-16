@@ -9,13 +9,39 @@ inputs:
     description: Build architecture
     required: true
   version:
-    description: Vulkan SDK version in x.y.z.n form, or latest
+    description: Optional Vulkan SDK version in x.y.z.n form, or latest
     required: false
-    default: latest
 
 runs:
   using: composite
   steps:
+    - name: Resolve Vulkan SDK version
+      shell: bash
+      env:
+        INPUT_VERSION: ${{ inputs.version }}
+      run: |
+        CONFIG_PATH=".github/config/vulkan-sdk-version.txt"
+
+        if [ -n "${INPUT_VERSION:-}" ]; then
+          RESOLVED_VERSION="$INPUT_VERSION"
+        elif [ -f "$CONFIG_PATH" ]; then
+          RESOLVED_VERSION=$(tr -d '\r\n[:space:]' < "$CONFIG_PATH")
+        else
+          RESOLVED_VERSION="latest"
+        fi
+
+        if [ -z "$RESOLVED_VERSION" ]; then
+          echo "::error::Resolved Vulkan SDK version is empty"
+          exit 1
+        fi
+
+        if [ "$RESOLVED_VERSION" != "latest" ] && ! printf '%s' "$RESOLVED_VERSION" | rg '^[0-9]+\.[0-9]+\.[0-9]+\.[0-9]+$' > /dev/null; then
+          echo "::error::Vulkan SDK version must be latest or use x.y.z.n format"
+          exit 1
+        fi
+
+        echo "VULKAN_VERSION=$RESOLVED_VERSION" >> "$GITHUB_ENV"
+
     - name: Validate Linux ARM64 Vulkan cache settings
       if: ${{ inputs.platform == 'linux' && inputs.arch == 'arm64' }}
       shell: bash
@@ -28,8 +54,6 @@ runs:
     - name: Install Vulkan SDK (Linux)
       if: ${{ inputs.platform == 'linux' || inputs.platform == 'android' }}
       shell: bash
-      env:
-        VULKAN_VERSION: ${{ inputs.version }}
       run: |
         if [ "$VULKAN_VERSION" = "latest" ]; then
           VULKAN_URL="https://sdk.lunarg.com/sdk/download/latest/linux/vulkan_sdk.tar.xz"
@@ -51,8 +75,6 @@ runs:
     - name: Setup Vulkan SDK path in Linux arm64
       if: ${{ inputs.platform == 'linux' && inputs.arch == 'arm64' }}
       shell: bash
-      env:
-        VULKAN_VERSION: ${{ inputs.version }}
       run: |
         echo "VULKAN_SDK=$HOME/vulkan/aarch64" >> "$GITHUB_ENV"
 
@@ -99,8 +121,6 @@ runs:
     - name: Install Vulkan SDK (Windows)
       if: ${{ inputs.platform == 'win32' }}
       shell: powershell
-      env:
-        VULKAN_VERSION: ${{ inputs.version }}
       run: |
         $ErrorActionPreference = "Stop"
         $ProgressPreference = "SilentlyContinue"
