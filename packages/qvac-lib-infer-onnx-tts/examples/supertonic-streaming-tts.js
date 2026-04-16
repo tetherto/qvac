@@ -13,6 +13,7 @@ const path = require('bare-path')
 const ONNXTTS = require('../')
 const { setLogger, releaseLogger } = require('../addonLogging')
 const { canPlayPcmChunks, playInt16Chunk, createChunkQueue } = require('./pcm-chunk-player')
+const { ensureSupertonicModels } = require('../test/utils/downloadModel')
 
 const SUPERTONIC_SAMPLE_RATE = 44100
 
@@ -39,6 +40,8 @@ if (!fs.existsSync(modelDir)) {
 }
 
 async function main () {
+  await ensureSupertonicModels()
+
   setLogger((priority, message) => {
     if (priority > 1) return
     const priorityNames = {
