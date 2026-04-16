@@ -141,7 +141,7 @@ class ONNXTTS {
     }
     this.addon = null
     this._sentenceStreamCtx = null
-    /** Serializes `runStream` until each response settles (Whisper-style). */
+    /** Serializes `run({ streamOutput: true })`, `runStream`, and `runStreaming` until each response settles (Whisper-style). */
     this._ttsInferenceQueueWaiter = Promise.resolve()
     this._job = createJobHandler({
       cancel: () => {
@@ -320,7 +320,35 @@ class ONNXTTS {
     this.state.weightsLoaded = true
   }
 
+  /**
+   * Run text-to-speech. Set `streamOutput: true` to split `input` into sentence chunks and emit
+   * PCM on `response.onUpdate` as each chunk completes (same behavior as `runStream`).
+   *
+   * @param {Object} input
+   * @param {string} input.input - Text to synthesize
+   * @param {boolean} [input.streamOutput=false] - When true, chunked streaming output (optional `locale`, `maxChunkScalars`; same as `runStream`)
+   * @param {string} [input.locale] - BCP-47 locale for chunking when `streamOutput`
+   * @param {number} [input.maxChunkScalars] - Max graphemes per chunk when `streamOutput`
+   */
   async run (input) {
+    if (input && typeof input === 'object' && input.streamOutput === true) {
+      if (typeof input.input !== 'string' || input.input.trim().length === 0) {
+        throw new QvacErrorAddonTTS({
+          code: ERR_CODES.FAILED_TO_APPEND,
+          adds: 'run with streamOutput: non-empty string `input` is required'
+        })
+      }
+      const streamOpts = {
+        locale: input.locale,
+        maxChunkScalars: input.maxChunkScalars
+      }
+      if (this.exclusiveRun) {
+        return await this._enqueueExclusiveTtsResponse(() =>
+          this._runStreamOrchestrator(input.input, streamOpts)
+        )
+      }
+      return this._runStreamOrchestrator(input.input, streamOpts)
+    }
     return this._runExclusive(() => this._runInternal(input))
   }
 
@@ -348,24 +376,168 @@ class ONNXTTS {
   /**
    * Chunk long text by sentence (see {@link splitTtsText}), synthesize each chunk in order,
    * and emit PCM on `response.onUpdate` as each chunk completes.
+   * Equivalent to `run({ input: text, streamOutput: true, ...options })`.
    *
    * @param {string} text
    * @param {{ locale?: string, maxChunkScalars?: number }} [options]
    */
   async runStream (text, options = {}) {
     const opts = options == null || typeof options !== 'object' ? {} : options
-    if (typeof text !== 'string' || text.trim().length === 0) {
-      throw new QvacErrorAddonTTS({
-        code: ERR_CODES.FAILED_TO_APPEND,
-        adds: 'runStream: non-empty string required'
-      })
-    }
+    return this.run({
+      input: text,
+      streamOutput: true,
+      locale: opts.locale,
+      maxChunkScalars: opts.maxChunkScalars
+    })
+  }
+
+  /**
+   * Streaming input + streaming output: each yielded string (after trim) is one synthesis job;
+   * PCM is emitted on `response.onUpdate` as each job completes. Same chunk metadata shape as `runStream`.
+   * Mirrors Whisper's `runStreaming` naming (time-varying input).
+   *
+   * @param {AsyncIterable<string>|Iterable<string>|string} textStream
+   */
+  async runStreaming (textStream) {
+    const normalized = this._normalizeTextStream(textStream)
     if (this.exclusiveRun) {
       return await this._enqueueExclusiveTtsResponse(() =>
-        this._runStreamOrchestrator(text, opts)
+        this._runTextStreamOrchestrator(normalized)
       )
     }
-    return this._runStreamOrchestrator(text, opts)
+    return this._runTextStreamOrchestrator(normalized)
+  }
+
+  _normalizeTextStream (textStream) {
+    if (textStream == null) {
+      throw new QvacErrorAddonTTS({
+        code: ERR_CODES.FAILED_TO_APPEND,
+        adds: 'runStreaming: text stream is required'
+      })
+    }
+    if (typeof textStream === 'string') {
+      async function * oneString () {
+        yield textStream
+      }
+      return oneString()
+    }
+    if (typeof textStream[Symbol.asyncIterator] === 'function') {
+      return textStream
+    }
+    if (Array.isArray(textStream)) {
+      async function * fromArray () {
+        for (let i = 0; i < textStream.length; i++) {
+          yield textStream[i]
+        }
+      }
+      return fromArray()
+    }
+    if (typeof textStream[Symbol.iterator] === 'function') {
+      async function * fromIterable () {
+        for (const x of textStream) {
+          yield x
+        }
+      }
+      return fromIterable()
+    }
+    throw new QvacErrorAddonTTS({
+      code: ERR_CODES.FAILED_TO_APPEND,
+      adds: 'runStreaming: expected string, array of strings, Iterable, or AsyncIterable'
+    })
+  }
+
+  /**
+   * Starts a {@link QvacResponse} and schedules chunk synthesis without awaiting completion
+   * (so callers can attach `onUpdate` before audio callbacks run).
+   */
+  _runTextStreamOrchestrator (asyncTextSource) {
+    const response = this._job.start()
+    this._sentenceStreamCtx = {
+      textStreamMode: true,
+      asyncTextSource,
+      chunks: [],
+      chunkIdx: 0,
+      acc: {
+        totalTime: 0,
+        audioDurationMs: 0,
+        totalSamples: 0
+      },
+      chunkResolver: null
+    }
+
+    this._sentenceStreamTextIterableDrive().catch((err) => {
+      if (this._sentenceStreamCtx && this._sentenceStreamCtx.chunkResolver) {
+        const rej = this._sentenceStreamCtx.chunkResolver.reject
+        this._sentenceStreamCtx.chunkResolver = null
+        rej(err)
+      }
+      this._sentenceStreamCtx = null
+      this._job.fail(err)
+    })
+
+    return response
+  }
+
+  async _sentenceStreamTextIterableDrive () {
+    const ctx = this._sentenceStreamCtx
+    if (!ctx || !ctx.textStreamMode) return
+    try {
+      for await (const piece of ctx.asyncTextSource) {
+        const s = String(piece).trim()
+        if (s.length === 0) continue
+        ctx.chunks.push(s)
+        ctx.chunkIdx = ctx.chunks.length - 1
+        const donePromise = new Promise((resolve, reject) => {
+          ctx.chunkResolver = { resolve, reject }
+        })
+        await this.addon.runJob({
+          type: 'text',
+          input: s
+        })
+        await donePromise
+      }
+    } catch (err) {
+      if (this._sentenceStreamCtx && this._sentenceStreamCtx.chunkResolver) {
+        const rej = this._sentenceStreamCtx.chunkResolver.reject
+        this._sentenceStreamCtx.chunkResolver = null
+        rej(err)
+      }
+      this._sentenceStreamCtx = null
+      this._job.fail(err)
+      return
+    }
+
+    const chunks = this._sentenceStreamCtx ? this._sentenceStreamCtx.chunks : []
+    const acc = this._sentenceStreamCtx
+      ? this._sentenceStreamCtx.acc
+      : { totalTime: 0, audioDurationMs: 0, totalSamples: 0 }
+    this._sentenceStreamCtx = null
+
+    if (chunks.length === 0) {
+      if (this.opts?.stats) {
+        this._job.end({
+          totalTime: 0,
+          tokensPerSecond: 0,
+          realTimeFactor: 0,
+          audioDurationMs: 0,
+          totalSamples: 0
+        })
+      } else {
+        this._job.end()
+      }
+      return
+    }
+
+    const totalChars = chunks.join('').length
+    const merged = { ...acc }
+    merged.tokensPerSecond = acc.totalTime > 0 ? totalChars / acc.totalTime : 0
+    merged.realTimeFactor =
+      acc.audioDurationMs > 0 ? (acc.totalTime * 1000.0) / acc.audioDurationMs : 0
+    if (this.opts?.stats) {
+      this._job.end(merged)
+    } else {
+      this._job.end()
+    }
   }
 
   /**
@@ -381,7 +553,7 @@ class ONNXTTS {
     if (chunks.length === 0) {
       throw new QvacErrorAddonTTS({
         code: ERR_CODES.FAILED_TO_APPEND,
-        adds: 'runStream: text produced no chunks after split'
+        adds: 'chunked synthesis: text produced no chunks after split'
       })
     }
 
@@ -412,7 +584,7 @@ class ONNXTTS {
 
   async _sentenceStreamDriveBody () {
     const ctx = this._sentenceStreamCtx
-    if (!ctx) return
+    if (!ctx || ctx.textStreamMode) return
     for (let i = 0; i < ctx.chunks.length; i++) {
       ctx.chunkIdx = i
       const donePromise = new Promise((resolve, reject) => {
@@ -620,11 +792,14 @@ class ONNXTTS {
       if (this._sentenceStreamCtx) {
         const ctx = this._sentenceStreamCtx
         this._mergeSentenceStreamStats(ctx.acc, data)
-        const isLast = ctx.chunkIdx >= ctx.chunks.length - 1
         if (ctx.chunkResolver) {
           ctx.chunkResolver.resolve()
           ctx.chunkResolver = null
         }
+        if (ctx.textStreamMode) {
+          return
+        }
+        const isLast = ctx.chunkIdx >= ctx.chunks.length - 1
         if (isLast) {
           const totalChars = ctx.chunks.join('').length
           const merged = { ...ctx.acc }

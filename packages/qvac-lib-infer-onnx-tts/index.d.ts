@@ -135,17 +135,30 @@ declare class ONNXTTS {
   addon: unknown
 
   /**
-   * Run text-to-speech. When `opts.stats` was set, `response.stats` matches {@link ONNXTTS.RuntimeStats}.
+   * Run text-to-speech. With `{ streamOutput: true }`, splits `input` into chunks and emits PCM on `onUpdate` per chunk.
+   * When `opts.stats` was set, `response.stats` matches {@link ONNXTTS.RuntimeStats}.
    */
+  run(
+    input: ONNXTTS.TTSRunInput & { streamOutput: true },
+  ): Promise<QvacResponse<ONNXTTS.TTSOutputChunk & ONNXTTS.SentenceStreamChunkMeta>>
+
   run(input: ONNXTTS.TTSRunInput): Promise<QvacResponse<ONNXTTS.TTSOutputChunk>>
 
   /**
-   * Chunked streaming synthesis: split long text, emit PCM per chunk on `response.onUpdate`,
-   * then `await response.await()`.
+   * Chunked streaming synthesis: forwards to `run({ input: text, streamOutput: true, ... })`.
    */
   runStream(
     text: string,
     options?: ONNXTTS.SentenceStreamOptions,
+  ): Promise<QvacResponse<ONNXTTS.TTSOutputChunk & ONNXTTS.SentenceStreamChunkMeta>>
+
+  /**
+   * Streaming text in, streaming audio out: each yielded string becomes one native job;
+   * PCM arrives on `onUpdate` per chunk (same metadata as `runStream`). Accepts string, array,
+   * sync iterable, or async iterable of strings.
+   */
+  runStreaming(
+    textStream: ONNXTTS.TextStreamInput,
   ): Promise<QvacResponse<ONNXTTS.TTSOutputChunk & ONNXTTS.SentenceStreamChunkMeta>>
 }
 
@@ -174,9 +187,25 @@ declare namespace ONNXTTS {
     maxChunkScalars?: number
   }
 
+  /** Input accepted by `runStreaming`. */
+  export type TextStreamInput =
+    | string
+    | string[]
+    | Iterable<string>
+    | AsyncIterable<string>
+
   export type TTSRunInput = {
     type?: string
     input: string
+    /**
+     * When true, sentence-chunk synthesis with streamed `onUpdate` (same behavior as `runStream`).
+     * Optional `locale` and `maxChunkScalars` apply in this mode.
+     */
+    streamOutput?: boolean
+    /** With `streamOutput: true`: BCP-47 locale for Intl.Segmenter when available. */
+    locale?: string
+    /** With `streamOutput: true`: max graphemes per chunk (defaults: 300, or 120 when language is ko). */
+    maxChunkScalars?: number
     /** Per-job enhancer override (toggle enhance/denoise) */
     enhancer?: { type: 'lavasr'; enhance?: boolean; denoise?: boolean }
     /** Per-job output sample rate override */
@@ -193,6 +222,7 @@ declare namespace ONNXTTS {
     RuntimeStats,
     SentenceStreamChunkMeta,
     SentenceStreamOptions,
+    TextStreamInput,
     TTSOutputChunk,
     TTSRunInput
   }

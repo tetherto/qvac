@@ -44,6 +44,57 @@ test('runStream runs multiple native jobs and enriches output (onUpdate + await)
   runJobSpy.restore()
 })
 
+test('run({ streamOutput: true }) matches chunked runStream behavior', async (t) => {
+  const runJobSpy = sinon.spy(MockedBinding.prototype, 'runJob')
+  const model = createStubbedModel()
+  await model.load()
+  const text =
+    'This is long text one. This is long text two. This is long text three.'
+  const response = await model.run({
+    input: text,
+    streamOutput: true,
+    maxChunkScalars: 18
+  })
+  const updates = []
+  response.onUpdate(d => {
+    updates.push(d)
+  })
+  await response.await()
+  t.ok(runJobSpy.callCount >= 2, 'expected multiple runJob calls')
+  const withChunk = updates.filter(u => u.chunkIndex !== undefined)
+  t.ok(withChunk.length >= 2, 'expected chunk metadata on outputs')
+  t.is(withChunk[0].chunkIndex, 0)
+  t.ok(typeof withChunk[0].sentenceChunk === 'string')
+  t.ok(response.stats && typeof response.stats.totalTime === 'number')
+  runJobSpy.restore()
+})
+
+test('runStreaming yields multiple jobs from async text chunks', async (t) => {
+  const runJobSpy = sinon.spy(MockedBinding.prototype, 'runJob')
+  const model = createStubbedModel()
+  await model.load()
+
+  async function * lines () {
+    yield 'First sentence for TTS.'
+    yield 'Second sentence follows.'
+    yield 'Third sentence ends here.'
+  }
+
+  const response = await model.runStreaming(lines())
+  const updates = []
+  response.onUpdate(d => {
+    updates.push(d)
+  })
+  await response.await()
+  t.is(runJobSpy.callCount, 3, 'expected one runJob per yielded string')
+  const withChunk = updates.filter(u => u.chunkIndex !== undefined)
+  t.is(withChunk.length, 3)
+  t.is(withChunk[0].chunkIndex, 0)
+  t.is(withChunk[2].chunkIndex, 2)
+  t.ok(typeof withChunk[1].sentenceChunk === 'string')
+  runJobSpy.restore()
+})
+
 test('plain run() uses single job', async (t) => {
   const runJobSpy = sinon.spy(MockedBinding.prototype, 'runJob')
   const model = createStubbedModel()
