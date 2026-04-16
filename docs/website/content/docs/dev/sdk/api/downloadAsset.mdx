@@ -8,26 +8,29 @@ doesn't accept runtime configuration options like modelConfig or delegate.
 Use this for download-only operations instead of loadModel for better semantic clarity."
 ---
 
+<WrapCode>
+
 ```typescript
-function downloadAsset(options: any): Promise
+function downloadAsset(options: DownloadAssetOptions, rpcOptions?: { forceNewConnection?: boolean; healthCheckTimeout?: number; profiling?: { enabled?: boolean; includeServerBreakdown?: boolean; mode?: "summary" | "verbose" }; timeout?: number }): Promise
 ```
 
-## Description
-
-Downloads an asset (model file) without loading it into memory.
-
-This function is specifically designed for download-only operations and
-doesn't accept runtime configuration options like modelConfig or delegate.
-Use this for download-only operations instead of loadModel for better semantic clarity.
+</WrapCode>
 
 ## Parameters
 
 | Name | Type | Required? | Description |
 | --- | --- | :---: | --- |
-| `options` | `any` | ✓ | Download configuration including:
+| `options` | [`DownloadAssetOptions`](#downloadassetoptions) | ✓ | Download configuration including:
   - assetSrc: The location from which the asset is downloaded (local path, remote URL, or Hyperdrive URL)
   - seed: Optional boolean for hyperdrive seeding
-  - onProgress: Optional callback for download progress |
+  - onProgress: Optional callback for download progress || `rpcOptions` | `\{ forceNewConnection?: boolean; healthCheckTimeout?: number; profiling?: \{ enabled?: boolean; includeServerBreakdown?: boolean; mode?: "summary" \| "verbose" \}; timeout?: number \}` | ✗ | Optional RPC options including per-call profiling configuration |
+### `DownloadAssetOptions`
+
+| Field | Type | Required? | Description |
+| --- | --- | :---: | --- |
+| `assetSrc` | `string \| \{ src: string; name?: string \| —; modelId?: string \| —; registryPath?: string \| —; registrySource?: string \| —; blobCoreKey?: string \| —; ... 4 more ...; addon?: "llamacpp-completion" \| ... 16 more ... \| —; \}` | ✓ | — |
+| `seed` | `boolean \| —` | ✗ | — |
+| `onProgress` | `(progress: \{ type: "modelProgress"; downloaded: number; total: number; percentage: number; downloadKey: string; shardInfo?: \{ currentShard: number; totalShards: number; shardName: string; overallDownloaded: number; overallTotal: number; overallPercentage: number; \} \| —; onnxInfo?: \{ ...; \} \| —; \}) =>...` | ✗ | — |
 
 ## Returns
 
@@ -35,9 +38,17 @@ Use this for download-only operations instead of loadModel for better semantic c
 Promise
 ```
 
+No description available
 
+## Throws
 
-## Examples
+| Error | When |
+| --- | --- |
+| `When asset download fails, with details in the error message` |  |
+| `When streaming ends unexpectedly (only when using onProgress)` |  |
+| `When receiving an invalid response type from the server` |  |
+
+## Example
 
 ```typescript
 // Download model without loading

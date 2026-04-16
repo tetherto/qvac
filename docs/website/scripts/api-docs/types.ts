@@ -23,6 +23,7 @@ export interface ApiFunction {
     name: string;
     type: string;
     required: boolean;
+    defaultValue?: string;
     description: string;
   }>;
   expandedParams: ExpandedType[];

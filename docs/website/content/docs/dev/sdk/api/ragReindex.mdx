@@ -11,26 +11,27 @@ For HyperDB, this is 16 documents by default. If there are insufficient document
 `reindexed` will be `false` with `details` explaining the reason."
 ---
 
+<WrapCode>
+
 ```typescript
-function ragReindex(params: any): Promise
+function ragReindex(params: RagReindexParams, options?: { forceNewConnection?: boolean; healthCheckTimeout?: number; profiling?: { enabled?: boolean; includeServerBreakdown?: boolean; mode?: "summary" | "verbose" }; timeout?: number }): Promise
 ```
 
-## Description
-
-Reindexes the RAG database to optimize search performance.
-For HyperDB, this rebalances centroids using k-means clustering.
-
-**Workspace lifecycle:** This operation requires an existing workspace.
-
-**Note:** Reindex requires a minimum number of documents to perform clustering.
-For HyperDB, this is 16 documents by default. If there are insufficient documents,
-`reindexed` will be `false` with `details` explaining the reason.
+</WrapCode>
 
 ## Parameters
 
 | Name | Type | Required? | Description |
 | --- | --- | :---: | --- |
-| `params` | `any` | ✓ | The parameters for reindexing |
+| `params` | [`RagReindexParams`](#ragreindexparams) | ✓ | The parameters for reindexing || `options` | `\{ forceNewConnection?: boolean; healthCheckTimeout?: number; profiling?: \{ enabled?: boolean; includeServerBreakdown?: boolean; mode?: "summary" \| "verbose" \}; timeout?: number \}` | ✗ | No description |
+### `RagReindexParams`
+
+| Field | Type | Required? | Description |
+| --- | --- | :---: | --- |
+| `modelId` | `string \| —` | ✗ | — |
+| `workspace` | `string \| —` | ✗ | — |
+| `onProgress` | `(stage: ReindexStage, current: number, total: number) => void` | ✗ | — |
+| `withProgress` | `boolean \| —` | ✗ | — |
 
 ## Returns
 
@@ -38,9 +39,16 @@ For HyperDB, this is 16 documents by default. If there are insufficient document
 Promise
 ```
 
+No description available
 
+## Throws
 
-## Examples
+| Error | When |
+| --- | --- |
+| `When the operation fails or workspace doesn't exist` |  |
+| `When streaming ends unexpectedly (only when using onProgress)` |  |
+
+## Example
 
 ```typescript
 // Simple reindex

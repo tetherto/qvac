@@ -4,22 +4,29 @@ titleStyle: code
 description: "Generates embeddings for a single text using a specified model."
 ---
 
+<WrapCode>
+
 ```typescript
-function embed(params: { modelId: string; text: string }): Promise
+function embed(params: { modelId: string; text: string }, options?: { forceNewConnection?: boolean; healthCheckTimeout?: number; profiling?: { enabled?: boolean; includeServerBreakdown?: boolean; mode?: "summary" | "verbose" }; timeout?: number }): Promise
 ```
 
-## Description
-
-Generates embeddings for a single text using a specified model.
+</WrapCode>
 
 ## Parameters
 
 | Name | Type | Required? | Description |
 | --- | --- | :---: | --- |
-| `params` | `\{ modelId: string; text: string \}` | ✓ | The parameters for the embedding |
-
+| `params` | `\{ modelId: string; text: string \}` | ✓ | The parameters for the embedding || `options` | `\{ forceNewConnection?: boolean; healthCheckTimeout?: number; profiling?: \{ enabled?: boolean; includeServerBreakdown?: boolean; mode?: "summary" \| "verbose" \}; timeout?: number \}` | ✗ | Optional RPC options including per-call profiling |
 ## Returns
 
 ```typescript
 Promise
 ```
+
+No description available
+
+## Throws
+
+| Error | When |
+| --- | --- |
+| `When the response type is invalid or when the embedding fails` |  |

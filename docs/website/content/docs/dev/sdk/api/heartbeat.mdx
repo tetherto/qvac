@@ -1,0 +1,52 @@
+---
+title: "heartbeat( )"
+titleStyle: code
+description: "Checks if a delegated provider is online by sending a heartbeat round-trip.
+Can also be used to check if the local SDK worker is responsive."
+---
+
+<WrapCode>
+
+```typescript
+function heartbeat(params?: { delegate?: { healthCheckTimeout?: number; providerPublicKey: string; timeout?: number; topic: string } }): Promise
+```
+
+</WrapCode>
+
+## Parameters
+
+| Name | Type | Required? | Description |
+| --- | --- | :---: | --- |
+| `params` | `\{ delegate?: \{ healthCheckTimeout?: number; providerPublicKey: string; timeout?: number; topic: string \} \}` | ✗ | Delegation target to check |
+## Returns
+
+```typescript
+Promise
+```
+
+No description available
+
+## Throws
+
+| Error | When |
+| --- | --- |
+| `When the provider is unreachable or the response is invalid.` |  |
+
+## Example
+
+```typescript
+// Check if a delegated provider is online
+try {
+  await heartbeat({
+    delegate: { topic: "topicHex", providerPublicKey: "peerHex", timeout: 3000 },
+  });
+  console.log("Provider is online");
+} catch {
+  console.log("Provider is offline");
+}
+```
+
+```typescript
+// Check if the local SDK worker is responsive
+await heartbeat();
+```

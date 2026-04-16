@@ -4,22 +4,29 @@ titleStyle: code
 description: "Stops a running provider service and leaves the specified topic."
 ---
 
+<WrapCode>
+
 ```typescript
-function stopQVACProvider(params: infer): Promise
+function stopQVACProvider(params: { topic: string }): Promise
 ```
 
-## Description
-
-Stops a running provider service and leaves the specified topic.
+</WrapCode>
 
 ## Parameters
 
 | Name | Type | Required? | Description |
 | --- | --- | :---: | --- |
-| `params` | `infer` | ✓ | No description |
-
+| `params` | `\{ topic: string \}` | ✓ | No description |
 ## Returns
 
 ```typescript
 Promise
 ```
+
+No description available
+
+## Throws
+
+| Error | When |
+| --- | --- |
+| `When the response type is not "stopProvide" or the request fails` |  |

@@ -4,29 +4,34 @@ titleStyle: code
 description: "Cancels an ongoing operation."
 ---
 
+<WrapCode>
+
 ```typescript
-function cancel(params: infer): Promise
+function cancel(params: { modelId: string; operation: "inference" } | { clearCache?: boolean; delegate?: { healthCheckTimeout?: number; providerPublicKey: string; timeout?: number; topic: string }; downloadKey: string; operation: "downloadAsset" } | { operation: "rag"; workspace?: string }): Promise
 ```
 
-## Description
-
-Cancels an ongoing operation.
+</WrapCode>
 
 ## Parameters
 
 | Name | Type | Required? | Description |
 | --- | --- | :---: | --- |
-| `params` | `infer` | ✓ | The parameters for the cancellation |
-
+| `params` | `\{ modelId: string; operation: "inference" \} \| \{ clearCache?: boolean; delegate?: \{ healthCheckTimeout?: number; providerPublicKey: string; timeout?: number; topic: string \}; downloadKey: string; operation: "downloadAsset" \} \| \{ operation: "rag"; workspace?: string \}` | ✓ | The parameters for the cancellation |
 ## Returns
 
 ```typescript
 Promise
 ```
 
+No description available
 
+## Throws
 
-## Examples
+| Error | When |
+| --- | --- |
+| `When the response type is invalid or when the cancellation fails` |  |
+
+## Example
 
 ```typescript
 // Cancel inference
@@ -41,6 +46,15 @@ await cancel({ operation: "downloadAsset", downloadKey: "download-key" });
 ```typescript
 // Cancel download completely (deletes partial file)
 await cancel({ operation: "downloadAsset", downloadKey: "download-key", clearCache: true });
+```
+
+```typescript
+// Cancel delegated remote download
+await cancel({
+  operation: "downloadAsset",
+  downloadKey: "download-key",
+  delegate: { topic: "topicHex", providerPublicKey: "peerHex" },
+});
 ```
 
 ```typescript

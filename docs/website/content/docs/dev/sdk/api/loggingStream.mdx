@@ -4,29 +4,34 @@ titleStyle: code
 description: "Opens a logging stream to receive real-time logs."
 ---
 
+<WrapCode>
+
 ```typescript
-function loggingStream(params: infer): AsyncGenerator
+function loggingStream(params: { id: string }): AsyncGenerator
 ```
 
-## Description
-
-Opens a logging stream to receive real-time logs.
+</WrapCode>
 
 ## Parameters
 
 | Name | Type | Required? | Description |
 | --- | --- | :---: | --- |
-| `params` | `infer` | ✓ | The arguments for the logging stream |
-
+| `params` | `\{ id: string \}` | ✓ | The arguments for the logging stream |
 ## Returns
 
 ```typescript
 AsyncGenerator
 ```
 
+No description available
 
+## Throws
 
-## Examples
+| Error | When |
+| --- | --- |
+| `When the response type is invalid or when the stream fails` |  |
+
+## Example
 
 ```typescript
 // Open a logging stream for a model

@@ -1,27 +1,35 @@
 ---
 title: "transcribe( )"
 titleStyle: code
-description: "This function provides a simple interface for transcribing audio by
-collecting all streaming results into a single string response."
+description: "Transcribe audio and return the complete text. Accepts either a file
+path or an audio buffer."
 ---
 
+<WrapCode>
+
 ```typescript
-function transcribe(params: TranscribeClientParams): Promise
+function transcribe(params: TranscribeClientParams, options?: { forceNewConnection?: boolean; healthCheckTimeout?: number; profiling?: { enabled?: boolean; includeServerBreakdown?: boolean; mode?: "summary" | "verbose" }; timeout?: number }): Promise
 ```
 
-## Description
-
-This function provides a simple interface for transcribing audio by
-collecting all streaming results into a single string response.
+</WrapCode>
 
 ## Parameters
 
 | Name | Type | Required? | Description |
 | --- | --- | :---: | --- |
-| `params` | `TranscribeClientParams` | ✓ | The arguments for the transcription |
+| `params` | [`TranscribeClientParams`](#transcribeclientparams) | ✓ | No description || `options` | `\{ forceNewConnection?: boolean; healthCheckTimeout?: number; profiling?: \{ enabled?: boolean; includeServerBreakdown?: boolean; mode?: "summary" \| "verbose" \}; timeout?: number \}` | ✗ | Optional RPC options including per-call profiling |
+### `TranscribeClientParams`
+
+| Field | Type | Required? | Description |
+| --- | --- | :---: | --- |
+| `modelId` | `string` | ✓ | — |
+| `audioChunk` | `string \| Buffer<ArrayBufferLike>` | ✓ | — |
+| `prompt` | `string` | ✗ | — |
 
 ## Returns
 
 ```typescript
 Promise
 ```
+
+No description available

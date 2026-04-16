@@ -4,22 +4,33 @@ titleStyle: code
 description: "No description available"
 ---
 
+<WrapCode>
+
 ```typescript
 function modelRegistrySearch(params: ModelRegistrySearchParams): Promise
 ```
 
-## Description
-
-No description available
+</WrapCode>
 
 ## Parameters
 
-| Name | Type | Required? | Description |
+| Name | Type | Required? | Default | Description |
+| --- | --- | :---: | --- | --- |
+| `params` | [`ModelRegistrySearchParams`](#modelregistrysearchparams) | ✓ | `\{\}` | No description |
+### `ModelRegistrySearchParams`
+
+| Field | Type | Required? | Description |
 | --- | --- | :---: | --- |
-| `params` | `ModelRegistrySearchParams` | ✓ | No description |
+| `addon` | `"llm" \| "whisper" \| "embeddings" \| "nmt" \| "vad" \| "tts" \| "ocr" \| "parakeet" \| "diffusion" \| "other"` | ✗ | — |
+| `engine` | `string` | ✗ | — |
+| `filter` | `string` | ✗ | — |
+| `modelType` | `"llm" \| "whisper" \| "embeddings" \| "nmt" \| "vad" \| "tts" \| "ocr" \| "parakeet" \| "diffusion" \| "other"` | ✗ | — |
+| `quantization` | `string` | ✗ | — |
 
 ## Returns
 
 ```typescript
 Promise
 ```
+
+No description available

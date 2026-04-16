@@ -1,0 +1,38 @@
+---
+title: "resume( )"
+titleStyle: code
+description: "Resumes all suspended Hyperswarm and Corestore resources
+
+Idempotent — calling while already active is a no-op.
+Also serves as the recovery path after a partial suspend failure."
+---
+
+<WrapCode>
+
+```typescript
+function resume(): Promise
+```
+
+</WrapCode>
+
+
+## Returns
+
+```typescript
+Promise
+```
+
+No description available
+
+## Throws
+
+| Error | When |
+| --- | --- |
+| `When one or more resources fail to resume.` |  |
+
+## Example
+
+```typescript
+// Foreground handler
+await resume();
+```

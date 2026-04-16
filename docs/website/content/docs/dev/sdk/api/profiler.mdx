@@ -1,0 +1,22 @@
+---
+title: "profiler"
+titleStyle: code
+description: "No description available"
+---
+
+No description available
+
+## Fields
+
+| Field | Type | Required? | Description |
+| --- | --- | :---: | --- |
+| `clear` | `() => void` | ✓ | — |
+| `disable` | `() => void` | ✓ | — |
+| `enable` | `(options?: ProfilerRuntimeOptions) => void` | ✓ | — |
+| `exportJSON` | `(options?: \{ includeRecentEvents?: boolean \}) => ProfilerExport` | ✓ | — |
+| `exportSummary` | `() => string` | ✓ | — |
+| `exportTable` | `() => string` | ✓ | — |
+| `getAggregates` | `() => Record<string, AggregatedStats>` | ✓ | — |
+| `getConfig` | `() => ResolvedProfilerConfig` | ✓ | — |
+| `isEnabled` | `() => boolean` | ✓ | — |
+| `onRecord` | `(callback: (event: ProfilingEvent) => void) => () => void` | ✓ | — |

@@ -1,5 +1,5 @@
 ---
-title: "modelRegistryGetModel( )"
+title: "defineDuplexHandler( )"
 titleStyle: code
 description: "No description available"
 ---
@@ -7,7 +7,7 @@ description: "No description available"
 <WrapCode>
 
 ```typescript
-function modelRegistryGetModel(registryPath: string, registrySource: string): Promise
+function defineDuplexHandler(definition: DuplexPluginHandlerDefinition): PluginHandlerDefinition
 ```
 
 </WrapCode>
@@ -16,11 +16,11 @@ function modelRegistryGetModel(registryPath: string, registrySource: string): Pr
 
 | Name | Type | Required? | Description |
 | --- | --- | :---: | --- |
-| `registryPath` | `string` | ✓ | No description || `registrySource` | `string` | ✓ | No description |
+| `definition` | `DuplexPluginHandlerDefinition` | ✓ | No description |
 ## Returns
 
 ```typescript
-Promise
+PluginHandlerDefinition
 ```
 
 No description available

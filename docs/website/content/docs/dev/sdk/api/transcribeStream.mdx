@@ -1,27 +1,42 @@
 ---
 title: "transcribeStream( )"
 titleStyle: code
-description: "This function streams audio transcription results in real-time, yielding
-text chunks as they become available from the model."
+description: "No description available"
 ---
 
+<Callout type="warn" title="Deprecated">
+Pass audio via `transcribe()` instead. This overload will be
+removed in the next major version.
+
+Streaming transcription with upfront audio: sends full audio, yields text
+chunks as they arrive.
+</Callout>
+
+<WrapCode>
+
 ```typescript
-function transcribeStream(params: TranscribeClientParams): AsyncGenerator
+function transcribeStream(params: TranscribeClientParams, options?: { forceNewConnection?: boolean; healthCheckTimeout?: number; profiling?: { enabled?: boolean; includeServerBreakdown?: boolean; mode?: "summary" | "verbose" }; timeout?: number }): AsyncGenerator
 ```
 
-## Description
-
-This function streams audio transcription results in real-time, yielding
-text chunks as they become available from the model.
+</WrapCode>
 
 ## Parameters
 
 | Name | Type | Required? | Description |
 | --- | --- | :---: | --- |
-| `params` | `TranscribeClientParams` | ✓ | The arguments for the transcription |
+| `params` | [`TranscribeClientParams`](#transcribeclientparams) | ✓ | No description || `options` | `\{ forceNewConnection?: boolean; healthCheckTimeout?: number; profiling?: \{ enabled?: boolean; includeServerBreakdown?: boolean; mode?: "summary" \| "verbose" \}; timeout?: number \}` | ✗ | No description |
+### `TranscribeClientParams`
+
+| Field | Type | Required? | Description |
+| --- | --- | :---: | --- |
+| `modelId` | `string` | ✓ | — |
+| `audioChunk` | `string \| Buffer<ArrayBufferLike>` | ✓ | — |
+| `prompt` | `string` | ✗ | — |
 
 ## Returns
 
 ```typescript
 AsyncGenerator
 ```
+
+No description available

@@ -5,30 +5,49 @@ description: "Translates text from one language to another using a specified tra
 Supports both NMT (Neural Machine Translation) and LLM models."
 ---
 
+<WrapCode>
+
 ```typescript
-function translate(params: TranslateClientParams): { stats: Promise<any>; text: Promise<string>; tokenStream: AsyncGenerator<string> }
+function translate(params: TranslateClientParams, options?: { forceNewConnection?: boolean; healthCheckTimeout?: number; profiling?: { enabled?: boolean; includeServerBreakdown?: boolean; mode?: "summary" | "verbose" }; timeout?: number }): { stats: Promise<{ cacheTokens?: number; decodeTime?: number; encodeTime?: number; timeToFirstToken?: number; tokensPerSecond?: number; totalTime?: number; totalTokens?: number } | —>; text: Promise<string>; tokenStream: AsyncGenerator<string> }
 ```
 
-## Description
-
-Translates text from one language to another using a specified translation model.
-Supports both NMT (Neural Machine Translation) and LLM models.
+</WrapCode>
 
 ## Parameters
 
 | Name | Type | Required? | Description |
 | --- | --- | :---: | --- |
-| `params` | `TranslateClientParams` | ✓ | Translation configuration object |
+| `params` | [`TranslateClientParams`](#translateclientparams) | ✓ | Translation configuration object || `options` | `\{ forceNewConnection?: boolean; healthCheckTimeout?: number; profiling?: \{ enabled?: boolean; includeServerBreakdown?: boolean; mode?: "summary" \| "verbose" \}; timeout?: number \}` | ✗ | No description |
+### `TranslateClientParams`
+
+| Field | Type | Required? | Description |
+| --- | --- | :---: | --- |
+| `modelId` | `string` | ✓ | — |
+| `text` | `string \| string[]` | ✓ | — |
+| `stream` | `boolean` | ✓ | — |
+| `modelType` | `"llamacpp-completion" \| "nmtcpp-translation" \| "llm" \| "nmt"` | ✓ | — |
 
 ## Returns
 
 ```typescript
-{ stats: Promise<any>; text: Promise<string>; tokenStream: AsyncGenerator<string> }
+{ stats: Promise<{ cacheTokens?: number; decodeTime?: number; encodeTime?: number; timeToFirstToken?: number; tokensPerSecond?: number; totalTime?: number; totalTokens?: number } | —>; text: Promise<string>; tokenStream: AsyncGenerator<string> }
 ```
 
+No description available
 
+| Field | Type | Description |
+| --- | --- | --- |
+| `stats` | `Promise` | — |
+| `text` | `Promise` | — |
+| `tokenStream` | `AsyncGenerator` | — |
 
-## Examples
+## Throws
+
+| Error | When |
+| --- | --- |
+| `When translation fails with an error message or when language detection fails` |  |
+
+## Example
 
 ```typescript
 // Streaming mode (default)

@@ -1,0 +1,1189 @@
+---
+title: "Types"
+titleStyle: code
+description: "Shared type definitions — dev"
+---
+
+## Overview
+
+Shared TypeScript types used across the `@qvac/sdk` API.
+
+### `Attachment`
+
+No description available
+
+```typescript
+interface Attachment {
+  path: string;
+}
+```
+
+| Member | Description |
+| --- | --- |
+| `path` | — |
+
+---
+
+### `BuiltinPlugin`
+
+No description available
+
+```typescript
+type BuiltinPlugin = typeof SDK_DEFAULT_PLUGINS[number]
+```
+
+---
+
+### `CacheFileInfo`
+
+No description available
+
+```typescript
+interface CacheFileInfo {
+  actualSize?: number;
+  cachedAt?: Date;
+  expectedSize: number;
+  filename: string;
+  isCached: boolean;
+  path: string;
+  sha256Checksum: string;
+}
+```
+
+| Member | Description |
+| --- | --- |
+| `actualSize` | — |
+| `cachedAt` | — |
+| `expectedSize` | — |
+| `filename` | — |
+| `isCached` | — |
+| `path` | — |
+| `sha256Checksum` | — |
+
+---
+
+### `CompletionParams`
+
+No description available
+
+```typescript
+interface CompletionParams {
+  history: { attachments?: { path: string }[]; content: string; role: string }[];
+  kvCache?: string | boolean;
+  modelId: string;
+}
+```
+
+| Member | Description |
+| --- | --- |
+| `history` | — |
+| `kvCache` | — |
+| `modelId` | — |
+
+---
+
+### `CompletionStats`
+
+No description available
+
+```typescript
+interface CompletionStats {
+  backendDevice?: "cpu" | "gpu";
+  cacheTokens?: number;
+  timeToFirstToken?: number;
+  tokensPerSecond?: number;
+}
+```
+
+| Member | Description |
+| --- | --- |
+| `backendDevice` | — |
+| `cacheTokens` | — |
+| `timeToFirstToken` | — |
+| `tokensPerSecond` | — |
+
+---
+
+### `CreateModelParams`
+
+Parameters passed to createModel when loading a plugin model.
+
+Core fields are always present. The `artifacts` map contains
+additional file paths required by specific plugins (e.g., projection
+models, VAD models, config files).
+
+Built-in artifact keys:
+- `projectionModelPath` - LLM multimodal projection model
+- `vadModelPath` - Whisper voice activity detection model
+- `tokenizerPath`, `speechEncoderPath`, `embedTokensPath`, `conditionalDecoderPath`, `languageModelPath` - TTS (Chatterbox) model files
+- `referenceAudioPath` - TTS (Chatterbox) path to reference WAV file for voice cloning
+- `tokenizerPath`, `textEncoderPath`, `latentDenoiserPath`, `voiceDecoderPath` - TTS (Supertonic) model files
+- `voicePath` - TTS (Supertonic) path to voice .bin file (e.g. voices/M1.bin)
+- `speed`, `numInferenceSteps` - TTS (Supertonic) options
+- `detectorModelPath` - OCR detector model
+
+Custom plugins can define their own artifact keys.
+
+```typescript
+type CreateModelParams = unknown
+```
+
+| Member | Description |
+| --- | --- |
+| `artifacts` | — |
+| `modelConfig` | — |
+| `modelId` | — |
+| `modelName` | — |
+| `modelPath` | — |
+
+---
+
+### `DiffusionClientParams`
+
+No description available
+
+```typescript
+type DiffusionClientParams = DiffusionRequest
+```
+
+---
+
+### `DiffusionProgressTick`
+
+No description available
+
+```typescript
+type DiffusionProgressTick = unknown
+```
+
+| Member | Description |
+| --- | --- |
+| `elapsedMs` | — |
+| `step` | — |
+| `totalSteps` | — |
+
+---
+
+### `DiffusionStats`
+
+No description available
+
+```typescript
+interface DiffusionStats {
+  generationMs?: number;
+  height?: number;
+  modelLoadMs?: number;
+  seed?: number;
+  totalGenerationMs?: number;
+  totalGenerations?: number;
+  totalImages?: number;
+  totalPixels?: number;
+  totalSteps?: number;
+  totalWallMs?: number;
+  width?: number;
+}
+```
+
+| Member | Description |
+| --- | --- |
+| `generationMs` | — |
+| `height` | — |
+| `modelLoadMs` | — |
+| `seed` | — |
+| `totalGenerationMs` | — |
+| `totalGenerations` | — |
+| `totalImages` | — |
+| `totalPixels` | — |
+| `totalSteps` | — |
+| `totalWallMs` | — |
+| `width` | — |
+
+---
+
+### `DiffusionStreamResponse`
+
+No description available
+
+```typescript
+interface DiffusionStreamResponse {
+  data?: string;
+  done?: boolean;
+  elapsedMs?: number;
+  outputIndex?: number;
+  stats?: { generationMs?: number; height?: number; modelLoadMs?: number; seed?: number; totalGenerationMs?: number; totalGenerations?: number; totalImages?: number; totalPixels?: number; totalSteps?: number; totalWallMs?: number; width?: number };
+  step?: number;
+  totalSteps?: number;
+  type: "diffusionStream";
+}
+```
+
+| Member | Description |
+| --- | --- |
+| `data` | — |
+| `done` | — |
+| `elapsedMs` | — |
+| `outputIndex` | — |
+| `stats` | — |
+| `step` | — |
+| `totalSteps` | — |
+| `type` | — |
+
+---
+
+### `DownloadAssetOptions`
+
+No description available
+
+```typescript
+type DownloadAssetOptions = z.input<typeof downloadAssetOptionsSchema> & { onProgress?: (progress: ModelProgressUpdate) => void }
+```
+
+---
+
+### `EmbedStats`
+
+No description available
+
+```typescript
+interface EmbedStats {
+  backendDevice?: "cpu" | "gpu";
+  tokensPerSecond?: number;
+  totalTime?: number;
+  totalTokens?: number;
+}
+```
+
+| Member | Description |
+| --- | --- |
+| `backendDevice` | — |
+| `tokensPerSecond` | — |
+| `totalTime` | — |
+| `totalTokens` | — |
+
+---
+
+### `FinetuneGetStateParams`
+
+No description available
+
+```typescript
+interface FinetuneGetStateParams {
+  modelId: string;
+  operation: "getState";
+  options: { assistantLossOnly?: boolean; batchSize?: number; chatTemplatePath?: string; checkpointSaveDir?: string; checkpointSaveSteps?: number; contextLength?: number; learningRate?: number; loraAlpha?: number; loraInitStd?: number; loraModules?: string; loraRank?: number; loraSeed?: number; lrMin?: number; lrScheduler?: "constant" | "cosine" | "linear"; microBatchSize?: number; numberOfEpochs?: number; outputParametersDir: string; trainDatasetDir: string; validation: { type: "none" } | { fraction?: number; type: "split" } | { path: string; type: "dataset" }; warmupRatio?: number; warmupRatioSet?: boolean; warmupSteps?: number; warmupStepsSet?: boolean; weightDecay?: number };
+}
+```
+
+| Member | Description |
+| --- | --- |
+| `modelId` | — |
+| `operation` | — |
+| `options` | — |
+
+---
+
+### `FinetuneHandle`
+
+No description available
+
+```typescript
+type FinetuneHandle = unknown
+```
+
+| Member | Description |
+| --- | --- |
+| `progressStream` | — |
+| `result` | — |
+
+---
+
+### `FinetuneParams`
+
+No description available
+
+```typescript
+type FinetuneParams = { modelId: string; operation?: "start" | "resume"; options: { assistantLossOnly?: boolean; batchSize?: number; chatTemplatePath?: string; checkpointSaveDir?: string; checkpointSaveSteps?: number; contextLength?: number; learningRate?: number; loraAlpha?: number; loraInitStd?: number; loraModules?: string; loraRank?: number; loraSeed?: number; lrMin?: number; lrScheduler?: "constant" | "cosine" | "linear"; microBatchSize?: number; numberOfEpochs?: number; outputParametersDir: string; trainDatasetDir: string; validation: { type: "none" } | { fraction?: number; type: "split" } | { path: string; type: "dataset" }; warmupRatio?: number; warmupRatioSet?: boolean; warmupSteps?: number; warmupStepsSet?: boolean; weightDecay?: number } } | { modelId: string; operation: "getState"; options: { assistantLossOnly?: boolean; batchSize?: number; chatTemplatePath?: string; checkpointSaveDir?: string; checkpointSaveSteps?: number; contextLength?: number; learningRate?: number; loraAlpha?: number; loraInitStd?: number; loraModules?: string; loraRank?: number; loraSeed?: number; lrMin?: number; lrScheduler?: "constant" | "cosine" | "linear"; microBatchSize?: number; numberOfEpochs?: number; outputParametersDir: string; trainDatasetDir: string; validation: { type: "none" } | { fraction?: number; type: "split" } | { path: string; type: "dataset" }; warmupRatio?: number; warmupRatioSet?: boolean; warmupSteps?: number; warmupStepsSet?: boolean; weightDecay?: number } } | { modelId: string; operation: "cancel" | "pause" }
+```
+
+---
+
+### `FinetuneProgress`
+
+No description available
+
+```typescript
+interface FinetuneProgress {
+  accuracy: number | null;
+  accuracy_uncertainty: number | null;
+  current_batch: number;
+  current_epoch: number;
+  elapsed_ms: number;
+  eta_ms: number;
+  global_steps: number;
+  is_train: boolean;
+  loss: number | null;
+  loss_uncertainty: number | null;
+  total_batches: number;
+}
+```
+
+| Member | Description |
+| --- | --- |
+| `accuracy` | — |
+| `accuracy_uncertainty` | — |
+| `current_batch` | — |
+| `current_epoch` | — |
+| `elapsed_ms` | — |
+| `eta_ms` | — |
+| `global_steps` | — |
+| `is_train` | — |
+| `loss` | — |
+| `loss_uncertainty` | — |
+| `total_batches` | — |
+
+---
+
+### `FinetuneResult`
+
+No description available
+
+```typescript
+interface FinetuneResult {
+  stats?: { epochs_completed: number; global_steps: number; learning_rate?: number; train_accuracy?: number; train_accuracy_uncertainty?: number | null; train_loss?: number; train_loss_uncertainty?: number | null; val_accuracy?: number; val_accuracy_uncertainty?: number | null; val_loss?: number; val_loss_uncertainty?: number | null };
+  status: "IDLE" | "RUNNING" | "PAUSED" | "CANCELLED" | "COMPLETED";
+  type: "finetune";
+}
+```
+
+| Member | Description |
+| --- | --- |
+| `stats` | — |
+| `status` | — |
+| `type` | — |
+
+---
+
+### `FinetuneRunParams`
+
+No description available
+
+```typescript
+interface FinetuneRunParams {
+  modelId: string;
+  operation?: "start" | "resume";
+  options: { assistantLossOnly?: boolean; batchSize?: number; chatTemplatePath?: string; checkpointSaveDir?: string; checkpointSaveSteps?: number; contextLength?: number; learningRate?: number; loraAlpha?: number; loraInitStd?: number; loraModules?: string; loraRank?: number; loraSeed?: number; lrMin?: number; lrScheduler?: "constant" | "cosine" | "linear"; microBatchSize?: number; numberOfEpochs?: number; outputParametersDir: string; trainDatasetDir: string; validation: { type: "none" } | { fraction?: number; type: "split" } | { path: string; type: "dataset" }; warmupRatio?: number; warmupRatioSet?: boolean; warmupSteps?: number; warmupStepsSet?: boolean; weightDecay?: number };
+}
+```
+
+| Member | Description |
+| --- | --- |
+| `modelId` | — |
+| `operation` | — |
+| `options` | — |
+
+---
+
+### `FinetuneStats`
+
+No description available
+
+```typescript
+interface FinetuneStats {
+  epochs_completed: number;
+  global_steps: number;
+  learning_rate?: number;
+  train_accuracy?: number;
+  train_accuracy_uncertainty?: number | null;
+  train_loss?: number;
+  train_loss_uncertainty?: number | null;
+  val_accuracy?: number;
+  val_accuracy_uncertainty?: number | null;
+  val_loss?: number;
+  val_loss_uncertainty?: number | null;
+}
+```
+
+| Member | Description |
+| --- | --- |
+| `epochs_completed` | — |
+| `global_steps` | — |
+| `learning_rate` | — |
+| `train_accuracy` | — |
+| `train_accuracy_uncertainty` | — |
+| `train_loss` | — |
+| `train_loss_uncertainty` | — |
+| `val_accuracy` | — |
+| `val_accuracy_uncertainty` | — |
+| `val_loss` | — |
+| `val_loss_uncertainty` | — |
+
+---
+
+### `FinetuneStatus`
+
+No description available
+
+```typescript
+type FinetuneStatus = "IDLE" | "RUNNING" | "PAUSED" | "CANCELLED" | "COMPLETED"
+```
+
+| Member | Description |
+| --- | --- |
+| `IDLE` | — |
+| `RUNNING` | — |
+| `PAUSED` | — |
+| `CANCELLED` | — |
+| `COMPLETED` | — |
+
+---
+
+### `FinetuneStopParams`
+
+No description available
+
+```typescript
+interface FinetuneStopParams {
+  modelId: string;
+  operation: "cancel" | "pause";
+}
+```
+
+| Member | Description |
+| --- | --- |
+| `modelId` | — |
+| `operation` | — |
+
+---
+
+### `FinetuneValidation`
+
+No description available
+
+```typescript
+type FinetuneValidation = { type: "none" } | { fraction?: number; type: "split" } | { path: string; type: "dataset" }
+```
+
+---
+
+### `GetModelInfoParams`
+
+No description available
+
+```typescript
+interface GetModelInfoParams {
+  name: string;
+}
+```
+
+| Member | Description |
+| --- | --- |
+| `name` | — |
+
+---
+
+### `LoadedInstance`
+
+No description available
+
+```typescript
+interface LoadedInstance {
+  config?: unknown;
+  loadedAt: Date;
+  registryId: string;
+}
+```
+
+| Member | Description |
+| --- | --- |
+| `config` | — |
+| `loadedAt` | — |
+| `registryId` | — |
+
+---
+
+### `LoadModelOptions`
+
+No description available
+
+```typescript
+type LoadModelOptions = z.input<typeof loadModelOptionsSchema> & { logger?: Logger; onProgress?: (progress: ModelProgressUpdate) => void }
+```
+
+---
+
+### `Logger`
+
+No description available
+
+```typescript
+type Logger = unknown
+```
+
+| Member | Description |
+| --- | --- |
+| `addTransport` | — |
+| `debug` | — |
+| `error` | — |
+| `getLevel` | — |
+| `info` | — |
+| `setConsoleOutput` | — |
+| `setLevel` | — |
+| `trace` | — |
+| `warn` | — |
+
+---
+
+### `LoggerOptions`
+
+No description available
+
+```typescript
+type LoggerOptions = unknown
+```
+
+| Member | Description |
+| --- | --- |
+| `enableConsole` | — |
+| `level` | — |
+| `namespace` | — |
+| `transports` | — |
+
+---
+
+### `LogTransport`
+
+No description available
+
+```typescript
+type LogTransport = (level: RagSearchResult, namespace: string, message: string) => void | Promise<void>
+```
+
+---
+
+### `McpClient`
+
+No description available
+
+```typescript
+type McpClient = unknown
+```
+
+| Member | Description |
+| --- | --- |
+| `callTool` | — |
+| `listResources` | — |
+| `listTools` | — |
+| `readResource` | — |
+
+---
+
+### `McpClientInput`
+
+No description available
+
+```typescript
+type McpClientInput = unknown
+```
+
+| Member | Description |
+| --- | --- |
+| `client` | — |
+| `includeResources` | — |
+
+---
+
+### `ModelConstant`
+
+No description available
+
+```typescript
+type ModelConstant = unknown
+```
+
+| Member | Description |
+| --- | --- |
+| `addon` | — |
+| `blobBlockLength` | — |
+| `blobBlockOffset` | — |
+| `blobByteOffset` | — |
+| `blobCoreKey` | — |
+| `engine` | — |
+| `expectedSize` | — |
+| `modelId` | — |
+| `name` | — |
+| `params` | — |
+| `quantization` | — |
+| `registryPath` | — |
+| `registrySource` | — |
+| `sha256Checksum` | — |
+| `src` | — |
+
+---
+
+### `ModelInfo`
+
+No description available
+
+```typescript
+interface ModelInfo {
+  actualSize?: number;
+  addon: "llm" | "whisper" | "embeddings" | "nmt" | "vad" | "tts" | "ocr" | "parakeet" | "diffusion" | "other";
+  blobBlockLength?: number;
+  blobBlockOffset?: number;
+  blobByteOffset?: number;
+  blobCoreKey?: string;
+  cachedAt?: Date;
+  cacheFiles: { actualSize?: number; cachedAt?: Date; expectedSize: number; filename: string; isCached: boolean; path: string; sha256Checksum: string }[];
+  engine?: string;
+  expectedSize: number;
+  isCached: boolean;
+  isLoaded: boolean;
+  loadedInstances?: { config?: unknown; loadedAt: Date; registryId: string }[];
+  modelId: string;
+  name: string;
+  params?: string;
+  quantization?: string;
+  registryPath?: string;
+  registrySource?: string;
+  sha256Checksum: string;
+}
+```
+
+| Member | Description |
+| --- | --- |
+| `actualSize` | — |
+| `addon` | — |
+| `blobBlockLength` | — |
+| `blobBlockOffset` | — |
+| `blobByteOffset` | — |
+| `blobCoreKey` | — |
+| `cachedAt` | — |
+| `cacheFiles` | — |
+| `engine` | — |
+| `expectedSize` | — |
+| `isCached` | — |
+| `isLoaded` | — |
+| `loadedInstances` | — |
+| `modelId` | — |
+| `name` | — |
+| `params` | — |
+| `quantization` | — |
+| `registryPath` | — |
+| `registrySource` | — |
+| `sha256Checksum` | — |
+
+---
+
+### `ModelProgressUpdate`
+
+No description available
+
+```typescript
+interface ModelProgressUpdate {
+  downloaded: number;
+  downloadKey: string;
+  onnxInfo?: { currentFile: string; fileIndex: number; overallDownloaded: number; overallPercentage: number; overallTotal: number; totalFiles: number };
+  percentage: number;
+  shardInfo?: { currentShard: number; overallDownloaded: number; overallPercentage: number; overallTotal: number; shardName: string; totalShards: number };
+  total: number;
+  type: "modelProgress";
+}
+```
+
+| Member | Description |
+| --- | --- |
+| `downloaded` | — |
+| `downloadKey` | — |
+| `onnxInfo` | — |
+| `percentage` | — |
+| `shardInfo` | — |
+| `total` | — |
+| `type` | — |
+
+---
+
+### `ModelRegistryEntry`
+
+No description available
+
+```typescript
+interface ModelRegistryEntry {
+  addon: "llm" | "whisper" | "embeddings" | "nmt" | "vad" | "tts" | "ocr" | "parakeet" | "diffusion" | "other";
+  blobBlockLength: number;
+  blobBlockOffset: number;
+  blobByteOffset: number;
+  blobCoreKey: string;
+  engine: "sdcpp-generation" | "llamacpp-embedding" | "llamacpp-completion" | "nmtcpp-translation" | "onnx-ocr" | "parakeet-transcription" | "onnx-tts" | "whispercpp-transcription" | "onnx-vad";
+  expectedSize: number;
+  modelId: string;
+  name: string;
+  params: string;
+  quantization: string;
+  registryPath: string;
+  registrySource: string;
+  sha256Checksum: string;
+}
+```
+
+| Member | Description |
+| --- | --- |
+| `addon` | — |
+| `blobBlockLength` | — |
+| `blobBlockOffset` | — |
+| `blobByteOffset` | — |
+| `blobCoreKey` | — |
+| `engine` | — |
+| `expectedSize` | — |
+| `modelId` | — |
+| `name` | — |
+| `params` | — |
+| `quantization` | — |
+| `registryPath` | — |
+| `registrySource` | — |
+| `sha256Checksum` | — |
+
+---
+
+### `ModelRegistryEntryAddon`
+
+No description available
+
+```typescript
+type ModelRegistryEntryAddon = "llm" | "whisper" | "embeddings" | "nmt" | "vad" | "tts" | "ocr" | "parakeet" | "diffusion" | "other"
+```
+
+| Member | Description |
+| --- | --- |
+| `llm` | — |
+| `whisper` | — |
+| `embeddings` | — |
+| `nmt` | — |
+| `vad` | — |
+| `tts` | — |
+| `ocr` | — |
+| `parakeet` | — |
+| `diffusion` | — |
+| `other` | — |
+
+---
+
+### `ModelRegistrySearchParams`
+
+No description available
+
+```typescript
+type ModelRegistrySearchParams = unknown
+```
+
+| Member | Description |
+| --- | --- |
+| `addon` | — |
+| `engine` | — |
+| `filter` | — |
+| `modelType` | — |
+| `quantization` | — |
+
+---
+
+### `OCRClientParams`
+
+No description available
+
+```typescript
+type OCRClientParams = unknown
+```
+
+| Member | Description |
+| --- | --- |
+| `image` | — |
+| `modelId` | — |
+| `options` | — |
+| `stream` | — |
+
+---
+
+### `OCROptions`
+
+No description available
+
+```typescript
+interface OCROptions {
+  paragraph?: boolean;
+}
+```
+
+| Member | Description |
+| --- | --- |
+| `paragraph` | — |
+
+---
+
+### `OCRTextBlock`
+
+No description available
+
+```typescript
+interface OCRTextBlock {
+  bbox?: [number, number, number, number];
+  confidence?: number;
+  text: string;
+}
+```
+
+| Member | Description |
+| --- | --- |
+| `bbox` | — |
+| `confidence` | — |
+| `text` | — |
+
+---
+
+### `PluginModelResult`
+
+No description available
+
+```typescript
+type PluginModelResult = unknown
+```
+
+| Member | Description |
+| --- | --- |
+| `loader` | — |
+| `model` | — |
+
+---
+
+### `ProfilerExport`
+
+No description available
+
+```typescript
+type ProfilerExport = unknown
+```
+
+| Member | Description |
+| --- | --- |
+| `aggregates` | — |
+| `config` | — |
+| `exportedAt` | — |
+| `recentEvents` | — |
+
+---
+
+### `ProfilerMode`
+
+No description available
+
+```typescript
+type ProfilerMode = "summary" | "verbose"
+```
+
+| Member | Description |
+| --- | --- |
+| `summary` | — |
+| `verbose` | — |
+
+---
+
+### `ProfilerRuntimeOptions`
+
+No description available
+
+```typescript
+type ProfilerRuntimeOptions = unknown
+```
+
+| Member | Description |
+| --- | --- |
+| `includeServerBreakdown` | — |
+| `mode` | — |
+| `operationFilters` | — |
+
+---
+
+### `QvacConfig`
+
+No description available
+
+```typescript
+interface QvacConfig {
+  cacheDirectory?: string;
+  deviceDefaults?: { defaults: { diffusion?: { clip_on_cpu?: boolean; clipGModelSrc?: string | { addon?: "llm" | "whisper" | "embeddings" | "nmt" | "vad" | "tts" | "ocr" | "parakeet" | "diffusion" | "sdcpp-generation" | "llamacpp-embedding" | "llamacpp-completion" | "nmtcpp-translation" | "onnx-ocr" | "parakeet-transcription" | "onnx-tts" | "whispercpp-transcription"; blobCoreKey?: string; blobIndex?: number; engine?: string; expectedSize?: number; modelId?: string; name?: string; registryPath?: string; registrySource?: string; sha256Checksum?: string; src: string }; clipLModelSrc?: string | { addon?: "llm" | "whisper" | "embeddings" | "nmt" | "vad" | "tts" | "ocr" | "parakeet" | "diffusion" | "sdcpp-generation" | "llamacpp-embedding" | "llamacpp-completion" | "nmtcpp-translation" | "onnx-ocr" | "parakeet-transcription" | "onnx-tts" | "whispercpp-transcription"; blobCoreKey?: string; blobIndex?: number; engine?: string; expectedSize?: number; modelId?: string; name?: string; registryPath?: string; registrySource?: string; sha256Checksum?: string; src: string }; device?: "cpu" | "gpu"; flash_attn?: boolean; llmModelSrc?: string | { addon?: "llm" | "whisper" | "embeddings" | "nmt" | "vad" | "tts" | "ocr" | "parakeet" | "diffusion" | "sdcpp-generation" | "llamacpp-embedding" | "llamacpp-completion" | "nmtcpp-translation" | "onnx-ocr" | "parakeet-transcription" | "onnx-tts" | "whispercpp-transcription"; blobCoreKey?: string; blobIndex?: number; engine?: string; expectedSize?: number; modelId?: string; name?: string; registryPath?: string; registrySource?: string; sha256Checksum?: string; src: string }; prediction?: "auto" | "eps" | "v" | "edm_v" | "flow" | "flux_flow" | "flux2_flow"; rng?: "cpu" | "cuda" | "std_default"; sampler_rng?: "cpu" | "cuda" | "std_default"; t5XxlModelSrc?: string | { addon?: "llm" | "whisper" | "embeddings" | "nmt" | "vad" | "tts" | "ocr" | "parakeet" | "diffusion" | "sdcpp-generation" | "llamacpp-embedding" | "llamacpp-completion" | "nmtcpp-translation" | "onnx-ocr" | "parakeet-transcription" | "onnx-tts" | "whispercpp-transcription"; blobCoreKey?: string; blobIndex?: number; engine?: string; expectedSize?: number; modelId?: string; name?: string; registryPath?: string; registrySource?: string; sha256Checksum?: string; src: string }; threads?: number; type?: "q4_0" | "q8_0" | "f16" | "q4_k" | "q4_1" | "auto" | "f32" | "bf16" | "q2_k" | "q3_k" | "q5_0" | "q5_1" | "q5_k" | "q6_k"; vae_on_cpu?: boolean; vae_tiling?: boolean; vaeModelSrc?: string | { addon?: "llm" | "whisper" | "embeddings" | "nmt" | "vad" | "tts" | "ocr" | "parakeet" | "diffusion" | "sdcpp-generation" | "llamacpp-embedding" | "llamacpp-completion" | "nmtcpp-translation" | "onnx-ocr" | "parakeet-transcription" | "onnx-tts" | "whispercpp-transcription"; blobCoreKey?: string; blobIndex?: number; engine?: string; expectedSize?: number; modelId?: string; name?: string; registryPath?: string; registrySource?: string; sha256Checksum?: string; src: string }; verbosity?: number }; embeddings?: { attention?: "causal" | "non-causal"; batchSize?: number; device?: "cpu" | "gpu"; embdNormalize?: number; flashAttention?: "on" | "off" | "auto"; gpuLayers?: number; mainGpu?: number | "integrated" | "dedicated"; openclCacheDir?: string; pooling?: "none" | "mean" | "cls" | "last" | "rank"; verbosity?: 0 | 1 | 2 | 3 }; llamacpp-completion?: { cache-type-k?: string; cache-type-v?: string; ctx_size?: number; device?: string; frequency_penalty?: number; gpu_layers?: number; lora?: string; n_discarded?: number; no_mmap?: boolean; openclCacheDir?: string; predict?: number; presence_penalty?: number; projectionModelSrc?: string | { addon?: "llm" | "whisper" | "embeddings" | "nmt" | "vad" | "tts" | "ocr" | "parakeet" | "diffusion" | "sdcpp-generation" | "llamacpp-embedding" | "llamacpp-completion" | "nmtcpp-translation" | "onnx-ocr" | "parakeet-transcription" | "onnx-tts" | "whispercpp-transcription"; blobCoreKey?: string; blobIndex?: number; engine?: string; expectedSize?: number; modelId?: string; name?: string; registryPath?: string; registrySource?: string; sha256Checksum?: string; src: string }; repeat_penalty?: number; seed?: number; stop_sequences?: string[]; system_prompt?: string; temp?: number; tools?: boolean; top_k?: number; top_p?: number; verbosity?: 0 | 1 | 2 | 3 }; llamacpp-embedding?: { attention?: "causal" | "non-causal"; batchSize?: number; device?: "cpu" | "gpu"; embdNormalize?: number; flashAttention?: "on" | "off" | "auto"; gpuLayers?: number; mainGpu?: number | "integrated" | "dedicated"; openclCacheDir?: string; pooling?: "none" | "mean" | "cls" | "last" | "rank"; verbosity?: 0 | 1 | 2 | 3 }; llm?: { cache-type-k?: string; cache-type-v?: string; ctx_size?: number; device?: string; frequency_penalty?: number; gpu_layers?: number; lora?: string; n_discarded?: number; no_mmap?: boolean; openclCacheDir?: string; predict?: number; presence_penalty?: number; projectionModelSrc?: string | { addon?: "llm" | "whisper" | "embeddings" | "nmt" | "vad" | "tts" | "ocr" | "parakeet" | "diffusion" | "sdcpp-generation" | "llamacpp-embedding" | "llamacpp-completion" | "nmtcpp-translation" | "onnx-ocr" | "parakeet-transcription" | "onnx-tts" | "whispercpp-transcription"; blobCoreKey?: string; blobIndex?: number; engine?: string; expectedSize?: number; modelId?: string; name?: string; registryPath?: string; registrySource?: string; sha256Checksum?: string; src: string }; repeat_penalty?: number; seed?: number; stop_sequences?: string[]; system_prompt?: string; temp?: number; tools?: boolean; top_k?: number; top_p?: number; verbosity?: 0 | 1 | 2 | 3 }; nmt?: Record<string, unknown>; nmtcpp-translation?: Record<string, unknown>; ocr?: { contrastRetry?: boolean; decodingMethod?: "ctc" | "attention"; defaultRotationAngles?: number[]; detectorModelSrc?: string | { addon?: "llm" | "whisper" | "embeddings" | "nmt" | "vad" | "tts" | "ocr" | "parakeet" | "diffusion" | "sdcpp-generation" | "llamacpp-embedding" | "llamacpp-completion" | "nmtcpp-translation" | "onnx-ocr" | "parakeet-transcription" | "onnx-tts" | "whispercpp-transcription"; blobCoreKey?: string; blobIndex?: number; engine?: string; expectedSize?: number; modelId?: string; name?: string; registryPath?: string; registrySource?: string; sha256Checksum?: string; src: string }; langList?: string[]; lowConfidenceThreshold?: number; magRatio?: number; pipelineMode?: "easyocr" | "doctr"; recognizerBatchSize?: number; straightenPages?: boolean; timeout?: number; useGPU?: boolean }; onnx-ocr?: { contrastRetry?: boolean; decodingMethod?: "ctc" | "attention"; defaultRotationAngles?: number[]; detectorModelSrc?: string | { addon?: "llm" | "whisper" | "embeddings" | "nmt" | "vad" | "tts" | "ocr" | "parakeet" | "diffusion" | "sdcpp-generation" | "llamacpp-embedding" | "llamacpp-completion" | "nmtcpp-translation" | "onnx-ocr" | "parakeet-transcription" | "onnx-tts" | "whispercpp-transcription"; blobCoreKey?: string; blobIndex?: number; engine?: string; expectedSize?: number; modelId?: string; name?: string; registryPath?: string; registrySource?: string; sha256Checksum?: string; src: string }; langList?: string[]; lowConfidenceThreshold?: number; magRatio?: number; pipelineMode?: "easyocr" | "doctr"; recognizerBatchSize?: number; straightenPages?: boolean; timeout?: number; useGPU?: boolean }; onnx-tts?: Record<string, unknown>; parakeet?: { captionEnabled?: boolean; channels?: number; maxThreads?: number; modelType?: "tdt" | "ctc" | "sortformer"; parakeetCtcModelSrc?: string | { addon?: "llm" | "whisper" | "embeddings" | "nmt" | "vad" | "tts" | "ocr" | "parakeet" | "diffusion" | "sdcpp-generation" | "llamacpp-embedding" | "llamacpp-completion" | "nmtcpp-translation" | "onnx-ocr" | "parakeet-transcription" | "onnx-tts" | "whispercpp-transcription"; blobCoreKey?: string; blobIndex?: number; engine?: string; expectedSize?: number; modelId?: string; name?: string; registryPath?: string; registrySource?: string; sha256Checksum?: string; src: string }; parakeetDecoderSrc?: string | { addon?: "llm" | "whisper" | "embeddings" | "nmt" | "vad" | "tts" | "ocr" | "parakeet" | "diffusion" | "sdcpp-generation" | "llamacpp-embedding" | "llamacpp-completion" | "nmtcpp-translation" | "onnx-ocr" | "parakeet-transcription" | "onnx-tts" | "whispercpp-transcription"; blobCoreKey?: string; blobIndex?: number; engine?: string; expectedSize?: number; modelId?: string; name?: string; registryPath?: string; registrySource?: string; sha256Checksum?: string; src: string }; parakeetEncoderSrc?: string | { addon?: "llm" | "whisper" | "embeddings" | "nmt" | "vad" | "tts" | "ocr" | "parakeet" | "diffusion" | "sdcpp-generation" | "llamacpp-embedding" | "llamacpp-completion" | "nmtcpp-translation" | "onnx-ocr" | "parakeet-transcription" | "onnx-tts" | "whispercpp-transcription"; blobCoreKey?: string; blobIndex?: number; engine?: string; expectedSize?: number; modelId?: string; name?: string; registryPath?: string; registrySource?: string; sha256Checksum?: string; src: string }; parakeetPreprocessorSrc?: string | { addon?: "llm" | "whisper" | "embeddings" | "nmt" | "vad" | "tts" | "ocr" | "parakeet" | "diffusion" | "sdcpp-generation" | "llamacpp-embedding" | "llamacpp-completion" | "nmtcpp-translation" | "onnx-ocr" | "parakeet-transcription" | "onnx-tts" | "whispercpp-transcription"; blobCoreKey?: string; blobIndex?: number; engine?: string; expectedSize?: number; modelId?: string; name?: string; registryPath?: string; registrySource?: string; sha256Checksum?: string; src: string }; parakeetSortformerSrc?: string | { addon?: "llm" | "whisper" | "embeddings" | "nmt" | "vad" | "tts" | "ocr" | "parakeet" | "diffusion" | "sdcpp-generation" | "llamacpp-embedding" | "llamacpp-completion" | "nmtcpp-translation" | "onnx-ocr" | "parakeet-transcription" | "onnx-tts" | "whispercpp-transcription"; blobCoreKey?: string; blobIndex?: number; engine?: string; expectedSize?: number; modelId?: string; name?: string; registryPath?: string; registrySource?: string; sha256Checksum?: string; src: string }; parakeetTokenizerSrc?: string | { addon?: "llm" | "whisper" | "embeddings" | "nmt" | "vad" | "tts" | "ocr" | "parakeet" | "diffusion" | "sdcpp-generation" | "llamacpp-embedding" | "llamacpp-completion" | "nmtcpp-translation" | "onnx-ocr" | "parakeet-transcription" | "onnx-tts" | "whispercpp-transcription"; blobCoreKey?: string; blobIndex?: number; engine?: string; expectedSize?: number; modelId?: string; name?: string; registryPath?: string; registrySource?: string; sha256Checksum?: string; src: string }; parakeetVocabSrc?: string | { addon?: "llm" | "whisper" | "embeddings" | "nmt" | "vad" | "tts" | "ocr" | "parakeet" | "diffusion" | "sdcpp-generation" | "llamacpp-embedding" | "llamacpp-completion" | "nmtcpp-translation" | "onnx-ocr" | "parakeet-transcription" | "onnx-tts" | "whispercpp-transcription"; blobCoreKey?: string; blobIndex?: number; engine?: string; expectedSize?: number; modelId?: string; name?: string; registryPath?: string; registrySource?: string; sha256Checksum?: string; src: string }; sampleRate?: number; timestampsEnabled?: boolean; useGPU?: boolean }; parakeet-transcription?: { captionEnabled?: boolean; channels?: number; maxThreads?: number; modelType?: "tdt" | "ctc" | "sortformer"; parakeetCtcModelSrc?: string | { addon?: "llm" | "whisper" | "embeddings" | "nmt" | "vad" | "tts" | "ocr" | "parakeet" | "diffusion" | "sdcpp-generation" | "llamacpp-embedding" | "llamacpp-completion" | "nmtcpp-translation" | "onnx-ocr" | "parakeet-transcription" | "onnx-tts" | "whispercpp-transcription"; blobCoreKey?: string; blobIndex?: number; engine?: string; expectedSize?: number; modelId?: string; name?: string; registryPath?: string; registrySource?: string; sha256Checksum?: string; src: string }; parakeetDecoderSrc?: string | { addon?: "llm" | "whisper" | "embeddings" | "nmt" | "vad" | "tts" | "ocr" | "parakeet" | "diffusion" | "sdcpp-generation" | "llamacpp-embedding" | "llamacpp-completion" | "nmtcpp-translation" | "onnx-ocr" | "parakeet-transcription" | "onnx-tts" | "whispercpp-transcription"; blobCoreKey?: string; blobIndex?: number; engine?: string; expectedSize?: number; modelId?: string; name?: string; registryPath?: string; registrySource?: string; sha256Checksum?: string; src: string }; parakeetEncoderSrc?: string | { addon?: "llm" | "whisper" | "embeddings" | "nmt" | "vad" | "tts" | "ocr" | "parakeet" | "diffusion" | "sdcpp-generation" | "llamacpp-embedding" | "llamacpp-completion" | "nmtcpp-translation" | "onnx-ocr" | "parakeet-transcription" | "onnx-tts" | "whispercpp-transcription"; blobCoreKey?: string; blobIndex?: number; engine?: string; expectedSize?: number; modelId?: string; name?: string; registryPath?: string; registrySource?: string; sha256Checksum?: string; src: string }; parakeetPreprocessorSrc?: string | { addon?: "llm" | "whisper" | "embeddings" | "nmt" | "vad" | "tts" | "ocr" | "parakeet" | "diffusion" | "sdcpp-generation" | "llamacpp-embedding" | "llamacpp-completion" | "nmtcpp-translation" | "onnx-ocr" | "parakeet-transcription" | "onnx-tts" | "whispercpp-transcription"; blobCoreKey?: string; blobIndex?: number; engine?: string; expectedSize?: number; modelId?: string; name?: string; registryPath?: string; registrySource?: string; sha256Checksum?: string; src: string }; parakeetSortformerSrc?: string | { addon?: "llm" | "whisper" | "embeddings" | "nmt" | "vad" | "tts" | "ocr" | "parakeet" | "diffusion" | "sdcpp-generation" | "llamacpp-embedding" | "llamacpp-completion" | "nmtcpp-translation" | "onnx-ocr" | "parakeet-transcription" | "onnx-tts" | "whispercpp-transcription"; blobCoreKey?: string; blobIndex?: number; engine?: string; expectedSize?: number; modelId?: string; name?: string; registryPath?: string; registrySource?: string; sha256Checksum?: string; src: string }; parakeetTokenizerSrc?: string | { addon?: "llm" | "whisper" | "embeddings" | "nmt" | "vad" | "tts" | "ocr" | "parakeet" | "diffusion" | "sdcpp-generation" | "llamacpp-embedding" | "llamacpp-completion" | "nmtcpp-translation" | "onnx-ocr" | "parakeet-transcription" | "onnx-tts" | "whispercpp-transcription"; blobCoreKey?: string; blobIndex?: number; engine?: string; expectedSize?: number; modelId?: string; name?: string; registryPath?: string; registrySource?: string; sha256Checksum?: string; src: string }; parakeetVocabSrc?: string | { addon?: "llm" | "whisper" | "embeddings" | "nmt" | "vad" | "tts" | "ocr" | "parakeet" | "diffusion" | "sdcpp-generation" | "llamacpp-embedding" | "llamacpp-completion" | "nmtcpp-translation" | "onnx-ocr" | "parakeet-transcription" | "onnx-tts" | "whispercpp-transcription"; blobCoreKey?: string; blobIndex?: number; engine?: string; expectedSize?: number; modelId?: string; name?: string; registryPath?: string; registrySource?: string; sha256Checksum?: string; src: string }; sampleRate?: number; timestampsEnabled?: boolean; useGPU?: boolean }; sdcpp-generation?: { clip_on_cpu?: boolean; clipGModelSrc?: string | { addon?: "llm" | "whisper" | "embeddings" | "nmt" | "vad" | "tts" | "ocr" | "parakeet" | "diffusion" | "sdcpp-generation" | "llamacpp-embedding" | "llamacpp-completion" | "nmtcpp-translation" | "onnx-ocr" | "parakeet-transcription" | "onnx-tts" | "whispercpp-transcription"; blobCoreKey?: string; blobIndex?: number; engine?: string; expectedSize?: number; modelId?: string; name?: string; registryPath?: string; registrySource?: string; sha256Checksum?: string; src: string }; clipLModelSrc?: string | { addon?: "llm" | "whisper" | "embeddings" | "nmt" | "vad" | "tts" | "ocr" | "parakeet" | "diffusion" | "sdcpp-generation" | "llamacpp-embedding" | "llamacpp-completion" | "nmtcpp-translation" | "onnx-ocr" | "parakeet-transcription" | "onnx-tts" | "whispercpp-transcription"; blobCoreKey?: string; blobIndex?: number; engine?: string; expectedSize?: number; modelId?: string; name?: string; registryPath?: string; registrySource?: string; sha256Checksum?: string; src: string }; device?: "cpu" | "gpu"; flash_attn?: boolean; llmModelSrc?: string | { addon?: "llm" | "whisper" | "embeddings" | "nmt" | "vad" | "tts" | "ocr" | "parakeet" | "diffusion" | "sdcpp-generation" | "llamacpp-embedding" | "llamacpp-completion" | "nmtcpp-translation" | "onnx-ocr" | "parakeet-transcription" | "onnx-tts" | "whispercpp-transcription"; blobCoreKey?: string; blobIndex?: number; engine?: string; expectedSize?: number; modelId?: string; name?: string; registryPath?: string; registrySource?: string; sha256Checksum?: string; src: string }; prediction?: "auto" | "eps" | "v" | "edm_v" | "flow" | "flux_flow" | "flux2_flow"; rng?: "cpu" | "cuda" | "std_default"; sampler_rng?: "cpu" | "cuda" | "std_default"; t5XxlModelSrc?: string | { addon?: "llm" | "whisper" | "embeddings" | "nmt" | "vad" | "tts" | "ocr" | "parakeet" | "diffusion" | "sdcpp-generation" | "llamacpp-embedding" | "llamacpp-completion" | "nmtcpp-translation" | "onnx-ocr" | "parakeet-transcription" | "onnx-tts" | "whispercpp-transcription"; blobCoreKey?: string; blobIndex?: number; engine?: string; expectedSize?: number; modelId?: string; name?: string; registryPath?: string; registrySource?: string; sha256Checksum?: string; src: string }; threads?: number; type?: "q4_0" | "q8_0" | "f16" | "q4_k" | "q4_1" | "auto" | "f32" | "bf16" | "q2_k" | "q3_k" | "q5_0" | "q5_1" | "q5_k" | "q6_k"; vae_on_cpu?: boolean; vae_tiling?: boolean; vaeModelSrc?: string | { addon?: "llm" | "whisper" | "embeddings" | "nmt" | "vad" | "tts" | "ocr" | "parakeet" | "diffusion" | "sdcpp-generation" | "llamacpp-embedding" | "llamacpp-completion" | "nmtcpp-translation" | "onnx-ocr" | "parakeet-transcription" | "onnx-tts" | "whispercpp-transcription"; blobCoreKey?: string; blobIndex?: number; engine?: string; expectedSize?: number; modelId?: string; name?: string; registryPath?: string; registrySource?: string; sha256Checksum?: string; src: string }; verbosity?: number }; tts?: Record<string, unknown>; whisper?: { audio_ctx?: number; audio_format?: "f32le" | "s16le"; beam_search_beam_size?: number; contextParams?: { flash_attn?: boolean; gpu_device?: number; model?: string; use_gpu?: boolean }; debug_mode?: boolean; detect_language?: boolean; duration_ms?: number; entropy_thold?: number; greedy_best_of?: number; initial_prompt?: string; language?: string; length_penalty?: number; logprob_thold?: number; max_len?: number; max_tokens?: number; miscConfig?: { caption_enabled?: boolean }; n_max_text_ctx?: number; n_threads?: number; no_context?: boolean; no_timestamps?: boolean; offset_ms?: number; print_progress?: boolean; print_realtime?: boolean; print_special?: boolean; print_timestamps?: boolean; single_segment?: boolean; split_on_word?: boolean; strategy?: "greedy" | "beam_search"; suppress_blank?: boolean; suppress_nst?: boolean; suppress_regex?: string; tdrz_enable?: boolean; temperature?: number; temperature_inc?: number; thold_pt?: number; thold_ptsum?: number; token_timestamps?: boolean; translate?: boolean; vad_params?: { max_speech_duration_s?: number; min_silence_duration_ms?: number; min_speech_duration_ms?: number; samples_overlap?: number; speech_pad_ms?: number; threshold?: number }; vadModelSrc?: string | { addon?: "llm" | "whisper" | "embeddings" | "nmt" | "vad" | "tts" | "ocr" | "parakeet" | "diffusion" | "sdcpp-generation" | "llamacpp-embedding" | "llamacpp-completion" | "nmtcpp-translation" | "onnx-ocr" | "parakeet-transcription" | "onnx-tts" | "whispercpp-transcription"; blobCoreKey?: string; blobIndex?: number; engine?: string; expectedSize?: number; modelId?: string; name?: string; registryPath?: string; registrySource?: string; sha256Checksum?: string; src: string } }; whispercpp-transcription?: { audio_ctx?: number; audio_format?: "f32le" | "s16le"; beam_search_beam_size?: number; contextParams?: { flash_attn?: boolean; gpu_device?: number; model?: string; use_gpu?: boolean }; debug_mode?: boolean; detect_language?: boolean; duration_ms?: number; entropy_thold?: number; greedy_best_of?: number; initial_prompt?: string; language?: string; length_penalty?: number; logprob_thold?: number; max_len?: number; max_tokens?: number; miscConfig?: { caption_enabled?: boolean }; n_max_text_ctx?: number; n_threads?: number; no_context?: boolean; no_timestamps?: boolean; offset_ms?: number; print_progress?: boolean; print_realtime?: boolean; print_special?: boolean; print_timestamps?: boolean; single_segment?: boolean; split_on_word?: boolean; strategy?: "greedy" | "beam_search"; suppress_blank?: boolean; suppress_nst?: boolean; suppress_regex?: string; tdrz_enable?: boolean; temperature?: number; temperature_inc?: number; thold_pt?: number; thold_ptsum?: number; token_timestamps?: boolean; translate?: boolean; vad_params?: { max_speech_duration_s?: number; min_silence_duration_ms?: number; min_speech_duration_ms?: number; samples_overlap?: number; speech_pad_ms?: number; threshold?: number }; vadModelSrc?: string | { addon?: "llm" | "whisper" | "embeddings" | "nmt" | "vad" | "tts" | "ocr" | "parakeet" | "diffusion" | "sdcpp-generation" | "llamacpp-embedding" | "llamacpp-completion" | "nmtcpp-translation" | "onnx-ocr" | "parakeet-transcription" | "onnx-tts" | "whispercpp-transcription"; blobCoreKey?: string; blobIndex?: number; engine?: string; expectedSize?: number; modelId?: string; name?: string; registryPath?: string; registrySource?: string; sha256Checksum?: string; src: string } } }; match: { deviceBrand?: string; deviceModelContains?: string; deviceModelPrefix?: string; platform?: "android" | "ios" | "darwin" | "linux" | "win32" }; name: string }[];
+  httpConnectionTimeoutMs?: number;
+  httpDownloadConcurrency?: number;
+  loggerConsoleOutput?: boolean;
+  loggerLevel?: any;
+  registryDownloadMaxRetries?: number;
+  swarmRelays?: string[];
+}
+```
+
+| Member | Description |
+| --- | --- |
+| `cacheDirectory` | Absolute path to the directory where models and other cached assets are stored.
+If not specified, defaults to ~/.qvac/models |
+| `deviceDefaults` | Device-specific config defaults.
+Use this to override model config defaults for specific devices.
+User-defined patterns are checked before SDK built-in patterns.
+First matching pattern wins. |
+| `httpConnectionTimeoutMs` | Timeout in milliseconds for HTTP connection establishment.
+This applies to HEAD and GET requests.
+If the connection is not established within this time, the request fails.
+Defaults to 10000 (10 seconds). |
+| `httpDownloadConcurrency` | Maximum number of concurrent HTTP downloads for sharded models.
+Higher values may improve download speed but increase memory usage.
+Defaults to 3. |
+| `loggerConsoleOutput` | Enable or disable console output for SDK loggers.
+When false, logs are only sent to streams/transports, not printed to console.
+Defaults to true. |
+| `loggerLevel` | Global log level for all SDK loggers.
+Options: "error", "warn", "info", "debug"
+Defaults to "info". |
+| `registryDownloadMaxRetries` | Maximum number of retry attempts for registry (P2P) downloads on timeout.
+When a download times out due to a P2P connection stall, the SDK will
+automatically retry up to this many times before failing.
+Defaults to 3. |
+| `swarmRelays` | Array of Hyperswarm relay public keys (hex strings) for improved P2P connectivity.
+Blind relays help with NAT traversal and firewall bypassing. |
+
+---
+
+### `QvacPlugin`
+
+No description available
+
+```typescript
+type QvacPlugin = unknown
+```
+
+| Member | Description |
+| --- | --- |
+| `addonPackage` | — |
+| `createModel` | — |
+| `displayName` | — |
+| `handlers` | — |
+| `loadConfigSchema` | — |
+| `logging` | — |
+| `modelType` | — |
+| `resolveConfig` | Optional hook to resolve model sources in modelConfig to local paths.
+Called before createModel if the plugin needs to download/resolve artifacts.
+Returns transformed config and optional artifact paths. |
+| `skipPrimaryModelPathValidation` | When true, skips file-existence validation for modelPath. Use for plugins that derive paths from config. |
+
+---
+
+### `RagCloseWorkspaceParams`
+
+No description available
+
+```typescript
+interface RagCloseWorkspaceParams {
+  deleteOnClose?: boolean;
+  workspace?: string;
+}
+```
+
+| Member | Description |
+| --- | --- |
+| `deleteOnClose` | — |
+| `workspace` | — |
+
+---
+
+### `RagDeleteWorkspaceParams`
+
+No description available
+
+```typescript
+interface RagDeleteWorkspaceParams {
+  workspace: string;
+}
+```
+
+| Member | Description |
+| --- | --- |
+| `workspace` | — |
+
+---
+
+### `RagSearchResult`
+
+No description available
+
+```typescript
+type RagSearchResult = any
+```
+
+---
+
+### `RagWorkspaceInfo`
+
+No description available
+
+```typescript
+interface RagWorkspaceInfo {
+  name: string;
+  open: boolean;
+}
+```
+
+| Member | Description |
+| --- | --- |
+| `name` | — |
+| `open` | — |
+
+---
+
+### `RegistryItem`
+
+No description available
+
+```typescript
+type RegistryItem = unknown
+```
+
+| Member | Description |
+| --- | --- |
+| `addon` | — |
+| `blobBlockLength` | — |
+| `blobBlockOffset` | — |
+| `blobByteOffset` | — |
+| `blobCoreKey` | — |
+| `engine` | — |
+| `expectedSize` | — |
+| `modelId` | — |
+| `name` | — |
+| `params` | — |
+| `quantization` | — |
+| `registryPath` | — |
+| `registrySource` | — |
+| `sha256Checksum` | — |
+| `shardMetadata` | — |
+
+---
+
+### `Tool`
+
+No description available
+
+```typescript
+interface Tool {
+  description: string;
+  name: string;
+  parameters: { properties: Record<string, { description?: string; enum?: string[]; type: "string" | "number" | "boolean" | "object" | "array" | "integer" }>; required?: string[]; type: "object" };
+  type: "function";
+}
+```
+
+| Member | Description |
+| --- | --- |
+| `description` | — |
+| `name` | — |
+| `parameters` | — |
+| `type` | — |
+
+---
+
+### `ToolCall`
+
+No description available
+
+```typescript
+interface ToolCall {
+  arguments: Record;
+  id: string;
+  name: string;
+  raw?: string;
+}
+```
+
+| Member | Description |
+| --- | --- |
+| `arguments` | — |
+| `id` | — |
+| `name` | — |
+| `raw` | — |
+
+---
+
+### `ToolCallError`
+
+No description available
+
+```typescript
+interface ToolCallError {
+  code: "PARSE_ERROR" | "VALIDATION_ERROR" | "UNKNOWN_TOOL";
+  message: string;
+  raw?: string;
+}
+```
+
+| Member | Description |
+| --- | --- |
+| `code` | — |
+| `message` | — |
+| `raw` | — |
+
+---
+
+### `ToolCallEvent`
+
+No description available
+
+```typescript
+type ToolCallEvent = { call: { arguments: Record<string, unknown>; id: string; name: string; raw?: string }; type: "toolCall" } | { error: { code: "PARSE_ERROR" | "VALIDATION_ERROR" | "UNKNOWN_TOOL"; message: string; raw?: string }; type: "toolCallError" }
+```
+
+---
+
+### `ToolCallWithCall`
+
+No description available
+
+```typescript
+type ToolCallWithCall = ToolCall & { invoke?: () => Promise<unknown> }
+```
+
+---
+
+### `ToolHandler`
+
+No description available
+
+```typescript
+type ToolHandler = (args: Record<string, unknown>) => Promise<unknown>
+```
+
+---
+
+### `ToolInput`
+
+No description available
+
+```typescript
+type ToolInput = unknown
+```
+
+| Member | Description |
+| --- | --- |
+| `description` | — |
+| `handler` | — |
+| `name` | — |
+| `parameters` | — |
+
+---
+
+### `TranscribeStreamSession`
+
+No description available
+
+```typescript
+type TranscribeStreamSession = unknown
+```
+
+| Member | Description |
+| --- | --- |
+| `[asyncIterator]` | — |
+| `destroy` | — |
+| `end` | — |
+| `write` | — |

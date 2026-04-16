@@ -8,33 +8,34 @@ This function explicitly closes them, releasing memory and file locks. The works
 remains on disk unless `deleteOnClose` is set to true."
 ---
 
+<WrapCode>
+
 ```typescript
-function ragCloseWorkspace(params?: any): Promise
+function ragCloseWorkspace(params?: { deleteOnClose?: boolean; workspace?: string }, options?: { forceNewConnection?: boolean; healthCheckTimeout?: number; profiling?: { enabled?: boolean; includeServerBreakdown?: boolean; mode?: "summary" | "verbose" }; timeout?: number }): Promise
 ```
 
-## Description
-
-Closes a RAG workspace, releasing in-memory resources (Corestore, HyperDB adapter, RAG instance).
-
-**Workspace lifecycle:** Workspaces are implicitly opened.
-This function explicitly closes them, releasing memory and file locks. The workspace data
-remains on disk unless `deleteOnClose` is set to true.
+</WrapCode>
 
 ## Parameters
 
 | Name | Type | Required? | Description |
 | --- | --- | :---: | --- |
-| `params` | `any` | ✗ | The parameters for closing |
-
+| `params` | `\{ deleteOnClose?: boolean; workspace?: string \}` | ✗ | The parameters for closing || `options` | `\{ forceNewConnection?: boolean; healthCheckTimeout?: number; profiling?: \{ enabled?: boolean; includeServerBreakdown?: boolean; mode?: "summary" \| "verbose" \}; timeout?: number \}` | ✗ | No description |
 ## Returns
 
 ```typescript
 Promise
 ```
 
+No description available
 
+## Throws
 
-## Examples
+| Error | When |
+| --- | --- |
+| `When the operation fails` |  |
+
+## Example
 
 ```typescript
 // Close a specific workspace

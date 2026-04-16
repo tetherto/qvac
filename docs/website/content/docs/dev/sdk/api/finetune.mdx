@@ -1,0 +1,54 @@
+---
+title: "finetune( )"
+titleStyle: code
+description: "Starts, resumes, inspects, pauses, or cancels a finetuning job for a loaded model."
+---
+
+<WrapCode>
+
+```typescript
+function finetune(params: { modelId: string; operation?: "start" | "resume"; options: { assistantLossOnly?: boolean; batchSize?: number; chatTemplatePath?: string; checkpointSaveDir?: string; checkpointSaveSteps?: number; contextLength?: number; learningRate?: number; loraAlpha?: number; loraInitStd?: number; loraModules?: string; loraRank?: number; loraSeed?: number; lrMin?: number; lrScheduler?: "constant" | "cosine" | "linear"; microBatchSize?: number; numberOfEpochs?: number; outputParametersDir: string; trainDatasetDir: string; validation: { type: "none" } | { fraction?: number; type: "split" } | { path: string; type: "dataset" }; warmupRatio?: number; warmupRatioSet?: boolean; warmupSteps?: number; warmupStepsSet?: boolean; weightDecay?: number } }, rpcOptions?: { forceNewConnection?: boolean; healthCheckTimeout?: number; profiling?: { enabled?: boolean; includeServerBreakdown?: boolean; mode?: "summary" | "verbose" }; timeout?: number }): FinetuneHandle
+```
+
+</WrapCode>
+
+## Parameters
+
+| Name | Type | Required? | Description |
+| --- | --- | :---: | --- |
+| `params` | `\{ modelId: string; operation?: "start" \| "resume"; options: \{ assistantLossOnly?: boolean; batchSize?: number; chatTemplatePath?: string; checkpointSaveDir?: string; checkpointSaveSteps?: number; contextLength?: number; learningRate?: number; loraAlpha?: number; loraInitStd?: number; loraModules?: string; loraRank?: number; loraSeed?: number; lrMin?: number; lrScheduler?: "constant" \| "cosine" \| "linear"; microBatchSize?: number; numberOfEpochs?: number; outputParametersDir: string; trainDatasetDir: string; validation: \{ type: "none" \} \| \{ fraction?: number; type: "split" \} \| \{ path: string; type: "dataset" \}; warmupRatio?: number; warmupRatioSet?: boolean; warmupSteps?: number; warmupStepsSet?: boolean; weightDecay?: number \} \}` | ✓ | The finetuning parameters || `rpcOptions` | `\{ forceNewConnection?: boolean; healthCheckTimeout?: number; profiling?: \{ enabled?: boolean; includeServerBreakdown?: boolean; mode?: "summary" \| "verbose" \}; timeout?: number \}` | ✗ | Optional RPC transport options |
+## Returns
+
+```typescript
+FinetuneHandle
+```
+
+No description available
+
+| Field | Type | Description |
+| --- | --- | --- |
+| `progressStream` | `AsyncGenerator` | — |
+| `result` | `Promise` | — |
+
+## Example
+
+```typescript
+const handle = finetune({
+  modelId,
+  options: {
+    trainDatasetDir: "./dataset/train",
+    validation: { type: "split", fraction: 0.05 },
+    outputParametersDir: "./artifacts/lora",
+    numberOfEpochs: 2,
+  },
+});
+
+for await (const progress of handle.progressStream) {
+  console.log(progress.global_steps, progress.loss);
+}
+
+console.log(await handle.result);
+
+const pauseResult = await finetune({ modelId, operation: "pause" });
+console.log(pauseResult.status);
+```

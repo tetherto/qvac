@@ -4,29 +4,28 @@ titleStyle: code
 description: "Deletes KV cache files."
 ---
 
+<WrapCode>
+
 ```typescript
 function deleteCache(params: { all: true } | { kvCacheKey: string; modelId?: string }): Promise
 ```
 
-## Description
-
-Deletes KV cache files.
+</WrapCode>
 
 ## Parameters
 
 | Name | Type | Required? | Description |
 | --- | --- | :---: | --- |
-| `params` | `\{ all: true \} | \{ kvCacheKey: string; modelId?: string \}` | ✓ | The delete cache parameters |
-
+| `params` | `\{ all: true \} \| \{ kvCacheKey: string; modelId?: string \}` | ✓ | The delete cache parameters |
 ## Returns
 
 ```typescript
 Promise
 ```
 
+No description available
 
-
-## Examples
+## Example
 
 ```typescript
 // Delete all caches

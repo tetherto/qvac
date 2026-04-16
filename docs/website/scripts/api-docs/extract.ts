@@ -7,9 +7,10 @@
 import * as fs from "fs/promises";
 import * as path from "path";
 import { fileURLToPath } from "node:url";
+import ts from "typescript";
 import { Application, ReflectionKind } from "typedoc";
 import type { DeclarationReflection, SignatureReflection } from "typedoc";
-import type { ApiFunction, ApiObject, ApiType, ExpandedType, ErrorEntry, ApiData } from "./types.js";
+import type { ApiFunction, ApiObject, ApiType, ExpandedType, TypeField, ErrorEntry, ApiData } from "./types.js";
 import { auditTsDoc } from "./audit-tsdoc.js";
 
 const SCRIPT_DIR = path.dirname(fileURLToPath(import.meta.url));
@@ -102,6 +103,7 @@ export async function extractApiData(
   console.log(`✓ TypeDoc analysis complete`);
 
   buildTypeMap(project);
+  initTsProgram(tsconfigPath);
 
   console.log(`🔍 Auditing TSDoc completeness...`);
   await auditTsDoc(project, sdkPath);
@@ -256,10 +258,21 @@ function extractApiFunctions(project: any): ApiFunction[] {
         name: p.name,
         type: formatType(p.type),
         required: !p.flags?.isOptional,
+        defaultValue: cleanDefaultValue(p.defaultValue),
         description: extractComment(p.comment?.summary) || "",
       })),
       expandedParams: ((sig as any).parameters || [])
         .map((p: any) => {
+          const _target = p.type?._target;
+          if (_target?.fileName && _target?.qualifiedName) {
+            const tsResult = resolveExpandedViaTypeScript(
+              _target.fileName,
+              _target.qualifiedName,
+              _target.pos,
+            );
+            if (tsResult && tsResult.fields.length > 0) return tsResult;
+          }
+
           const typeName = getResolvableTypeName(p.type)
             ?? (p.type?.type === "array" ? getResolvableTypeName(p.type.elementType) : null);
           if (!typeName) return null;
@@ -522,6 +535,103 @@ function buildTypeMap(project: any): void {
 }
 
 // ---------------------------------------------------------------------------
+// TypeScript compiler fallback for unresolved references
+// ---------------------------------------------------------------------------
+
+let tsChecker: ts.TypeChecker | null = null;
+let tsProgram: ts.Program | null = null;
+
+function initTsProgram(tsconfigPath: string): void {
+  const configFile = ts.readConfigFile(tsconfigPath, ts.sys.readFile);
+  if (configFile.error) return;
+
+  const parsed = ts.parseJsonConfigFileContent(
+    configFile.config,
+    ts.sys,
+    path.dirname(tsconfigPath),
+  );
+
+  tsProgram = ts.createProgram(parsed.fileNames, {
+    ...parsed.options,
+    skipLibCheck: true,
+    noEmit: true,
+  });
+  tsChecker = tsProgram.getTypeChecker();
+}
+
+function resolveViaTypeScript(
+  fileName: string,
+  qualifiedName: string,
+  pos?: number,
+): TypeField[] | null {
+  if (!tsChecker || !tsProgram) return null;
+
+  const normalizedPath = fileName.replace(/\\/g, "/");
+  const sourceFile = tsProgram.getSourceFile(normalizedPath);
+  if (!sourceFile) return null;
+
+  let targetNode: ts.TypeAliasDeclaration | undefined;
+  ts.forEachChild(sourceFile, (node) => {
+    if (ts.isTypeAliasDeclaration(node) && node.name.text === qualifiedName) {
+      if (pos == null || Math.abs(node.pos - pos) < 50) {
+        targetNode = node;
+      }
+    }
+  });
+  if (!targetNode) return null;
+
+  const type = tsChecker.getTypeAtLocation(targetNode);
+  return extractTsProperties(type, targetNode, new Set<string>(), 0);
+}
+
+function extractTsProperties(
+  type: ts.Type,
+  location: ts.Node,
+  visited: Set<string>,
+  depth: number,
+): TypeField[] | null {
+  if (depth > 5) return null;
+
+  const props = type.getProperties();
+  if (!props || props.length === 0) return null;
+
+  const fields: TypeField[] = [];
+  for (const prop of props) {
+    const propType = tsChecker!.getTypeOfSymbolAtLocation(prop, location);
+    const typeStr = tsChecker!.typeToString(propType);
+    const isOptional = !!(prop.flags & ts.SymbolFlags.Optional);
+
+    const comment = prop.getDocumentationComment(tsChecker!);
+    const description = comment.map((c) => c.text).join("").trim();
+
+    const jsTags = prop.getJsDocTags(tsChecker!);
+    const defaultTag = jsTags.find((t) => t.name === "default" || t.name === "defaultValue");
+    const defaultValue = defaultTag?.text?.map((t) => t.text).join("").trim();
+
+    fields.push({
+      name: prop.name,
+      type: typeStr,
+      required: !isOptional,
+      defaultValue: cleanDefaultValue(defaultValue),
+      description,
+    });
+  }
+
+  return fields;
+}
+
+function resolveExpandedViaTypeScript(
+  fileName: string,
+  qualifiedName: string,
+  pos?: number,
+  depth?: number,
+): ExpandedType | null {
+  const fields = resolveViaTypeScript(fileName, qualifiedName, pos);
+  if (!fields || fields.length === 0) return null;
+  return { typeName: qualifiedName, fields, children: [] };
+}
+
+// ---------------------------------------------------------------------------
 // TypeDoc helpers (module-private)
 // ---------------------------------------------------------------------------
 
@@ -666,6 +776,8 @@ function getResolvableTypeName(type: any): string | null {
       if (aliasType?.type === "reflection" && aliasType.declaration?.children) return name;
       if (aliasType?.type === "intersection") return name;
     }
+
+    if (type._target?.fileName && name) return name;
   }
   if (type.type === "reflection" && type.declaration?.children) return null;
   return null;

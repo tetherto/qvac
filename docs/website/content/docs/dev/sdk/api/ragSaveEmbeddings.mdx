@@ -8,23 +8,29 @@ Part of the segregated flow: chunk() → embed() → saveEmbeddings()
 The workspace remains open until closed."
 ---
 
+<WrapCode>
+
 ```typescript
-function ragSaveEmbeddings(params: any): Promise
+function ragSaveEmbeddings(params: RagSaveEmbeddingsParams, options?: { forceNewConnection?: boolean; healthCheckTimeout?: number; profiling?: { enabled?: boolean; includeServerBreakdown?: boolean; mode?: "summary" | "verbose" }; timeout?: number }): Promise
 ```
 
-## Description
-
-Saves pre-embedded documents to the RAG vector database.
-Part of the segregated flow: chunk() → embed() → saveEmbeddings()
-
-**Workspace lifecycle:** This operation implicitly opens (or creates) the workspace.
-The workspace remains open until closed.
+</WrapCode>
 
 ## Parameters
 
 | Name | Type | Required? | Description |
 | --- | --- | :---: | --- |
-| `params` | `any` | ✓ | The parameters for saving |
+| `params` | [`RagSaveEmbeddingsParams`](#ragsaveembeddingsparams) | ✓ | The parameters for saving || `options` | `\{ forceNewConnection?: boolean; healthCheckTimeout?: number; profiling?: \{ enabled?: boolean; includeServerBreakdown?: boolean; mode?: "summary" \| "verbose" \}; timeout?: number \}` | ✗ | No description |
+### `RagSaveEmbeddingsParams`
+
+| Field | Type | Required? | Description |
+| --- | --- | :---: | --- |
+| `documents` | `\{ id: string; content: string; embedding: number[]; embeddingModelId: string; metadata?: Record<string, unknown> \| —; \}[]` | ✓ | — |
+| `modelId` | `string \| —` | ✗ | — |
+| `workspace` | `string \| —` | ✗ | — |
+| `progressInterval` | `number \| —` | ✗ | — |
+| `onProgress` | `(stage: SaveStage, current: number, total: number) => void` | ✗ | — |
+| `withProgress` | `boolean \| —` | ✗ | — |
 
 ## Returns
 
@@ -32,14 +38,21 @@ The workspace remains open until closed.
 Promise
 ```
 
+No description available
 
+## Throws
 
-## Examples
+| Error | When |
+| --- | --- |
+| `When the operation fails` |  |
+| `When streaming ends unexpectedly (only when using onProgress)` |  |
+
+## Example
 
 ```typescript
 // Segregated flow
 const chunks = await ragChunk({ documents: ["text1", "text2"] });
-const embeddings = await embed({ modelId, text: chunks.map(c => c.content) });
+const { embedding: embeddings } = await embed({ modelId, text: chunks.map(c => c.content) });
 const embeddedDocs = chunks.map((chunk, i) => ({
   ...chunk,
   embedding: embeddings[i],

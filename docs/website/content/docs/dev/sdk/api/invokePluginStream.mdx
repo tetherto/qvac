@@ -4,22 +4,23 @@ titleStyle: code
 description: "Invoke a streaming plugin handler."
 ---
 
+<WrapCode>
+
 ```typescript
-function invokePluginStream(options: InvokePluginOptions): AsyncGenerator
+function invokePluginStream(options: InvokePluginOptions, rpcOptions?: { forceNewConnection?: boolean; healthCheckTimeout?: number; profiling?: { enabled?: boolean; includeServerBreakdown?: boolean; mode?: "summary" | "verbose" }; timeout?: number }): AsyncGenerator
 ```
 
-## Description
-
-Invoke a streaming plugin handler.
+</WrapCode>
 
 ## Parameters
 
 | Name | Type | Required? | Description |
 | --- | --- | :---: | --- |
-| `options` | `InvokePluginOptions` | ✓ | No description |
-
+| `options` | `InvokePluginOptions` | ✓ | No description || `rpcOptions` | `\{ forceNewConnection?: boolean; healthCheckTimeout?: number; profiling?: \{ enabled?: boolean; includeServerBreakdown?: boolean; mode?: "summary" \| "verbose" \}; timeout?: number \}` | ✗ | No description |
 ## Returns
 
 ```typescript
 AsyncGenerator
 ```
+
+No description available
