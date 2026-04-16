@@ -39,36 +39,44 @@ export function extractInternalLinks(content: string): string[] {
 }
 
 /**
- * Resolve an internal link path to a filesystem path.
+ * Build a Set of all file paths under a directory (relative to that directory,
+ * normalized with forward slashes). Collected once and used for O(1) lookups
+ * instead of per-link fs.stat calls.
+ */
+async function buildFileIndex(dir: string): Promise<Set<string>> {
+  const index = new Set<string>();
+  const entries = await fs.readdir(dir, { recursive: true });
+  for (const entry of entries) {
+    index.add(entry.replace(/\\/g, "/"));
+  }
+  return index;
+}
+
+/**
+ * Resolve an internal link path against the pre-built file index.
  * Handles the Fumadocs (latest) folder convention: unversioned paths
  * (e.g. /sdk/api/loadModel) resolve into (latest)/, while versioned
  * paths (e.g. /v0.7.0/sdk/api/loadModel) resolve directly.
  */
-async function resolveLink(linkPath: string, docsBase: string): Promise<boolean> {
-  const cleaned = linkPath.replace(/\/$/, "");
+function resolveLink(linkPath: string, fileIndex: Set<string>): boolean {
+  const cleaned = linkPath.replace(/\/$/, "").replace(/^\//, "");
 
-  const isVersioned = /^\/v\d+\.\d+\.\d+\//.test(cleaned);
+  const isVersioned = /^v\d+\.\d+\.\d+\//.test(cleaned);
   const fsPrefixes = isVersioned
     ? [cleaned]
-    : [cleaned, path.join("(latest)", cleaned)];
+    : [cleaned, `(latest)/${cleaned}`];
 
   for (const prefix of fsPrefixes) {
-    const fsPath = path.join(docsBase, prefix);
     const candidates = [
-      `${fsPath}.mdx`,
-      `${fsPath}.md`,
-      path.join(fsPath, "index.mdx"),
-      path.join(fsPath, "index.md"),
-      fsPath,
+      `${prefix}.mdx`,
+      `${prefix}.md`,
+      `${prefix}/index.mdx`,
+      `${prefix}/index.md`,
+      prefix,
     ];
 
     for (const candidate of candidates) {
-      try {
-        await fs.stat(candidate);
-        return true;
-      } catch {
-        // not found, try next
-      }
+      if (fileIndex.has(candidate)) return true;
     }
   }
   return false;
@@ -102,7 +110,10 @@ export async function validateLinks(
   targetDir: string,
   docsBase: string,
 ): Promise<BrokenLink[]> {
-  const files = await collectMdxFiles(targetDir);
+  const [files, fileIndex] = await Promise.all([
+    collectMdxFiles(targetDir),
+    buildFileIndex(docsBase),
+  ]);
   const broken: BrokenLink[] = [];
 
   for (const file of files) {
@@ -110,8 +121,7 @@ export async function validateLinks(
     const links = extractInternalLinks(content);
 
     for (const linkPath of links) {
-      const resolved = await resolveLink(linkPath, docsBase);
-      if (!resolved) {
+      if (!resolveLink(linkPath, fileIndex)) {
         broken.push({
           source: path.relative(docsBase, file),
           target: linkPath,

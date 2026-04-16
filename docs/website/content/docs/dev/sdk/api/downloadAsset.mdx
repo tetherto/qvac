@@ -28,9 +28,9 @@ function downloadAsset(options: DownloadAssetOptions, rpcOptions?: { forceNewCon
 
 | Field | Type | Required? | Description |
 | --- | --- | :---: | --- |
-| `assetSrc` | `string \| \{ src: string; name?: string \| —; modelId?: string \| —; registryPath?: string \| —; registrySource?: string \| —; blobCoreKey?: string \| —; ... 4 more ...; addon?: "llamacpp-completion" \| ... 16 more ... \| —; \}` | ✓ | — |
-| `seed` | `boolean \| —` | ✗ | — |
-| `onProgress` | `(progress: \{ type: "modelProgress"; downloaded: number; total: number; percentage: number; downloadKey: string; shardInfo?: \{ currentShard: number; totalShards: number; shardName: string; overallDownloaded: number; overallTotal: number; overallPercentage: number; \} \| —; onnxInfo?: \{ ...; \} \| —; \}) =>...` | ✗ | — |
+| `assetSrc` | `string \| \{ src: string; name?: string \| undefined; modelId?: string \| undefined; registryPath?: string \| undefined; registrySource?: string \| undefined; blobCoreKey?: string \| undefined; ... 4 more ...; addon?: "llamacpp-completion" \| ... 16 more ... \| undefined; \}` | ✓ | — |
+| `seed` | `boolean \| undefined` | ✗ | — |
+| `onProgress` | `(progress: \{ type: "modelProgress"; downloaded: number; total: number; percentage: number; downloadKey: string; shardInfo?: \{ currentShard: number; totalShards: number; shardName: string; overallDownloaded: number; overallTotal: number; overallPercentage: number; \} \| undefined; onnxInfo?: \{ ...; \} \| undefined; \}) =>...` | ✗ | — |
 
 ## Returns
 

@@ -33,11 +33,11 @@ function loadModel(options: LoadModelOptions, rpcOptions?: { forceNewConnection?
 | Field | Type | Required? | Description |
 | --- | --- | :---: | --- |
 | `modelType` | `string` | ✓ | — |
-| `modelSrc` | `string \| \{ src: string; name?: string \| —; modelId?: string \| —; registryPath?: string \| —; registrySource?: string \| —; blobCoreKey?: string \| —; ... 4 more ...; addon?: "llamacpp-completion" \| ... 16 more ... \| —; \}` | ✓ | — |
-| `modelConfig` | `Record<string, unknown> \| \{ engine: "Opus"; from: "en" \| "de" \| "es" \| "it" \| "ru" \| "ja"; to: "en" \| "de" \| "es" \| "it" \| "ru" \| "ja"; mode?: "full" \| —; beamsize?: number \| —; ... 6 more ...; topp?: number \| —; \} \| ... 10 more ... \| —` | ✗ | — |
-| `seed` | `boolean \| —` | ✗ | — |
-| `delegate` | `\{ topic: string; providerPublicKey: string; timeout?: number \| —; healthCheckTimeout?: number \| —; fallbackToLocal?: boolean \| —; forceNewConnection?: boolean \| —; \} \| —` | ✗ | — |
-| `onProgress` | `(progress: \{ type: "modelProgress"; downloaded: number; total: number; percentage: number; downloadKey: string; shardInfo?: \{ currentShard: number; totalShards: number; shardName: string; overallDownloaded: number; overallTotal: number; overallPercentage: number; \} \| —; onnxInfo?: \{ ...; \} \| —; \}) =>...` | ✗ | — |
+| `modelSrc` | `string \| \{ src: string; name?: string \| undefined; modelId?: string \| undefined; registryPath?: string \| undefined; registrySource?: string \| undefined; blobCoreKey?: string \| undefined; ... 4 more ...; addon?: "llamacpp-completion" \| ... 16 more ... \| undefined; \}` | ✓ | — |
+| `modelConfig` | `Record<string, unknown> \| \{ engine: "Opus"; from: "en" \| "de" \| "es" \| "it" \| "ru" \| "ja"; to: "en" \| "de" \| "es" \| "it" \| "ru" \| "ja"; mode?: "full" \| undefined; beamsize?: number \| undefined; ... 6 more ...; topp?: number \| undefined; \} \| ... 10 more ... \| undefined` | ✗ | — |
+| `seed` | `boolean \| undefined` | ✗ | — |
+| `delegate` | `\{ topic: string; providerPublicKey: string; timeout?: number \| undefined; healthCheckTimeout?: number \| undefined; fallbackToLocal?: boolean \| undefined; forceNewConnection?: boolean \| undefined; \} \| undefined` | ✗ | — |
+| `onProgress` | `(progress: \{ type: "modelProgress"; downloaded: number; total: number; percentage: number; downloadKey: string; shardInfo?: \{ currentShard: number; totalShards: number; shardName: string; overallDownloaded: number; overallTotal: number; overallPercentage: number; \} \| undefined; onnxInfo?: \{ ...; \} \| undefined; \}) =>...` | ✗ | — |
 | `logger` | `Logger` | ✗ | — |
 
 ## Returns

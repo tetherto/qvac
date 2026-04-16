@@ -112,6 +112,7 @@ jobs:
         run: bun run scripts/api-docs/audit-tsdoc.ts
 
       - name: Generate release notes
+        id: release_notes
         working-directory: ${{ env.DOCS_DIR }}
         continue-on-error: true
         run: bun run scripts/generate-release-notes.ts ${{ steps.version.outputs.version }}
@@ -148,5 +149,10 @@ jobs:
         run: |
           git config user.name "$BOT_NAME"
           git config user.email "$BOT_EMAIL"
-          git commit -m "chore(docs): generate API docs + release notes for v${{ steps.version.outputs.version }} [skip ci]"
+          if [ "${{ steps.release_notes.outcome }}" = "success" ]; then
+            MSG="chore(docs): generate API docs + release notes for v${{ steps.version.outputs.version }} [skip ci]"
+          else
+            MSG="chore(docs): generate API docs for v${{ steps.version.outputs.version }} [skip ci]"
+          fi
+          git commit -m "$MSG"
           git push origin main

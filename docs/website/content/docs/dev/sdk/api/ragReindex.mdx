@@ -28,10 +28,10 @@ function ragReindex(params: RagReindexParams, options?: { forceNewConnection?: b
 
 | Field | Type | Required? | Description |
 | --- | --- | :---: | --- |
-| `modelId` | `string \| —` | ✗ | — |
-| `workspace` | `string \| —` | ✗ | — |
+| `modelId` | `string \| undefined` | ✗ | — |
+| `workspace` | `string \| undefined` | ✗ | — |
 | `onProgress` | `(stage: ReindexStage, current: number, total: number) => void` | ✗ | — |
-| `withProgress` | `boolean \| —` | ✗ | — |
+| `withProgress` | `boolean \| undefined` | ✗ | — |
 
 ## Returns
 

@@ -146,6 +146,28 @@ ${entries.map((e) => `| \`${e.name}\` | ${e.code} | ${escapeTable(e.summary)} |`
 }
 
 // ---------------------------------------------------------------------------
+// Data sanitization — replace "undefined" artifacts in prose fields only,
+// leaving type signatures and code examples intact.
+// ---------------------------------------------------------------------------
+
+function sanitizeText(text: string): string {
+  return text === "undefined" || text === "null" ? "\u2014" : text;
+}
+
+function sanitizeFunctionData(fn: ApiFunction): void {
+  fn.description = sanitizeText(fn.description);
+  if (fn.returns) {
+    fn.returns.description = sanitizeText(fn.returns.description);
+  }
+  for (const p of fn.parameters) {
+    p.description = sanitizeText(p.description);
+  }
+  for (const f of fn.returnFields) {
+    f.description = sanitizeText(f.description);
+  }
+}
+
+// ---------------------------------------------------------------------------
 // Public API
 // ---------------------------------------------------------------------------
 
@@ -162,16 +184,16 @@ export async function renderApiDocs(
 
   await Promise.all(
     apiData.functions.map(async (fn) => {
+      sanitizeFunctionData(fn);
       const mdx = env.render("function-page.njk", { fn }).trim();
-      const sanitized = mdx.replace(/\bundefined\b/g, "\u2014");
-      if (!sanitized.startsWith("---")) {
+      if (!mdx.startsWith("---")) {
         throw new Error(
           `Generated invalid MDX for ${fn.name} (missing frontmatter)`,
         );
       }
       await fs.writeFile(
         path.join(outputDir, `${fn.name}.mdx`),
-        sanitized + "\n",
+        mdx + "\n",
         "utf-8",
       );
     }),

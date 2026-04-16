@@ -521,6 +521,10 @@ function validateApiFunction(fn: ApiFunction): void {
 
 // ---------------------------------------------------------------------------
 // Project-wide type lookup (populated once after TypeDoc conversion)
+//
+// Module-level mutable state: typeMap, tsChecker, tsProgram are initialized
+// by extractApiData() via buildTypeMap() and initTsProgram(). All extraction
+// helpers depend on this state, so extractApiData() must run first.
 // ---------------------------------------------------------------------------
 
 const typeMap = new Map<string, DeclarationReflection>();

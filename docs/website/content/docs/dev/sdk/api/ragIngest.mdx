@@ -27,12 +27,12 @@ function ragIngest(params: RagIngestParams, options?: { forceNewConnection?: boo
 | --- | --- | :---: | --- |
 | `modelId` | `string` | ✓ | — |
 | `documents` | `string \| string[]` | ✓ | — |
-| `workspace` | `string \| —` | ✗ | — |
-| `chunk` | `boolean \| —` | ✗ | — |
-| `chunkOpts` | `\{ chunkSize?: number \| —; chunkOverlap?: number \| —; chunkStrategy?: "character" \| "paragraph" \| —; splitStrategy?: "character" \| "word" \| "token" \| "sentence" \| "line" \| —; \} \| —` | ✗ | — |
-| `progressInterval` | `number \| —` | ✗ | — |
+| `workspace` | `string \| undefined` | ✗ | — |
+| `chunk` | `boolean \| undefined` | ✗ | — |
+| `chunkOpts` | `\{ chunkSize?: number \| undefined; chunkOverlap?: number \| undefined; chunkStrategy?: "character" \| "paragraph" \| undefined; splitStrategy?: "character" \| "word" \| "token" \| "sentence" \| "line" \| undefined; \} \| undefined` | ✗ | — |
+| `progressInterval` | `number \| undefined` | ✗ | — |
 | `onProgress` | `(stage: IngestStage, current: number, total: number) => void` | ✗ | — |
-| `withProgress` | `boolean \| —` | ✗ | — |
+| `withProgress` | `boolean \| undefined` | ✗ | — |
 
 ## Returns
 

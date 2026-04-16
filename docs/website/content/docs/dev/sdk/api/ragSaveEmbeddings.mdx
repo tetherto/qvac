@@ -25,12 +25,12 @@ function ragSaveEmbeddings(params: RagSaveEmbeddingsParams, options?: { forceNew
 
 | Field | Type | Required? | Description |
 | --- | --- | :---: | --- |
-| `documents` | `\{ id: string; content: string; embedding: number[]; embeddingModelId: string; metadata?: Record<string, unknown> \| —; \}[]` | ✓ | — |
-| `modelId` | `string \| —` | ✗ | — |
-| `workspace` | `string \| —` | ✗ | — |
-| `progressInterval` | `number \| —` | ✗ | — |
+| `documents` | `\{ id: string; content: string; embedding: number[]; embeddingModelId: string; metadata?: Record<string, unknown> \| undefined; \}[]` | ✓ | — |
+| `modelId` | `string \| undefined` | ✗ | — |
+| `workspace` | `string \| undefined` | ✗ | — |
+| `progressInterval` | `number \| undefined` | ✗ | — |
 | `onProgress` | `(stage: SaveStage, current: number, total: number) => void` | ✗ | — |
-| `withProgress` | `boolean \| —` | ✗ | — |
+| `withProgress` | `boolean \| undefined` | ✗ | — |
 
 ## Returns
 

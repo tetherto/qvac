@@ -17,6 +17,7 @@ import * as fs from "fs/promises";
 import * as path from "path";
 import { fileURLToPath } from "node:url";
 import type { ApiData, ApiFunction, ApiObject } from "./types.js";
+import { stripFence } from "./render.js";
 
 const SCRIPT_DIR = path.dirname(fileURLToPath(import.meta.url));
 const PROMPTS_DIR = path.join(SCRIPT_DIR, "prompts");
@@ -159,7 +160,7 @@ export async function augmentApiData(
         } else if (gap === "examples") {
           const prompt = await loadPrompt("usage-example.txt", promptVars);
           const result = await callAI(prompt);
-          fn.examples = [`\`\`\`typescript\n${result}\n\`\`\``];
+          fn.examples = [`\`\`\`typescript\n${stripFence(result)}\n\`\`\``];
           fn.examplesSource = "ai";
           console.log(`  ✓ ${fn.name}: augmented example`);
         }
@@ -210,7 +211,7 @@ export async function augmentApiData(
           } else if (gap === "examples") {
             const prompt = await loadPrompt("usage-example.txt", promptVars);
             const result = await callAI(prompt);
-            obj.examples = [`\`\`\`typescript\n${result}\n\`\`\``];
+            obj.examples = [`\`\`\`typescript\n${stripFence(result)}\n\`\`\``];
             obj.examplesSource = "ai";
             console.log(`  ✓ ${obj.name}: augmented example`);
           }

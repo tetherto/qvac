@@ -7,7 +7,7 @@ description: "Generates completion from a language model based on conversation h
 <WrapCode>
 
 ```typescript
-function completion(params: CompletionParams): { stats: Promise<{ backendDevice?: "cpu" | "gpu"; cacheTokens?: number; timeToFirstToken?: number; tokensPerSecond?: number } | —>; text: Promise<string>; tokenStream: AsyncGenerator<string>; toolCalls: Promise<ToolCallWithCall[]>; toolCallStream: AsyncGenerator<{ call: { arguments: Record<string, unknown>; id: string; name: string; raw?: string }; type: "toolCall" } | { error: { code: "PARSE_ERROR" | "VALIDATION_ERROR" | "UNKNOWN_TOOL"; message: string; raw?: string }; type: "toolCallError" }> }
+function completion(params: CompletionParams): { stats: Promise<{ backendDevice?: "cpu" | "gpu"; cacheTokens?: number; timeToFirstToken?: number; tokensPerSecond?: number } | undefined>; text: Promise<string>; tokenStream: AsyncGenerator<string>; toolCalls: Promise<ToolCallWithCall[]>; toolCallStream: AsyncGenerator<{ call: { arguments: Record<string, unknown>; id: string; name: string; raw?: string }; type: "toolCall" } | { error: { code: "PARSE_ERROR" | "VALIDATION_ERROR" | "UNKNOWN_TOOL"; message: string; raw?: string }; type: "toolCallError" }> }
 ```
 
 </WrapCode>
@@ -21,19 +21,19 @@ function completion(params: CompletionParams): { stats: Promise<{ backendDevice?
 
 | Field | Type | Required? | Description |
 | --- | --- | :---: | --- |
-| `history` | `\{ role: string; content: string; attachments?: \{ path: string; \}[] \| —; \}[]` | ✓ | — |
+| `history` | `\{ role: string; content: string; attachments?: \{ path: string; \}[] \| undefined; \}[]` | ✓ | — |
 | `modelId` | `string` | ✓ | — |
-| `kvCache` | `string \| boolean \| —` | ✗ | — |
+| `kvCache` | `string \| boolean \| undefined` | ✗ | — |
 | `stream` | `boolean` | ✓ | — |
-| `generationParams` | `\{ temp?: number \| —; top_p?: number \| —; top_k?: number \| —; predict?: number \| —; seed?: number \| —; frequency_penalty?: number \| —; presence_penalty?: number \| —; repeat_penalty?: number \| —; \} \| —` | ✗ | — |
-| `tools` | `\{ type: "function"; name: string; description: string; parameters: \{ type: "object"; properties: Record<string, \{ type: "string" \| "number" \| "boolean" \| "object" \| "array" \| "integer"; description?: string \| —; enum?: string[] \| —; \}>; required?: string[] \| —; \}; \}[] \| ToolInput[]` | ✗ | — |
+| `generationParams` | `\{ temp?: number \| undefined; top_p?: number \| undefined; top_k?: number \| undefined; predict?: number \| undefined; seed?: number \| undefined; frequency_penalty?: number \| undefined; presence_penalty?: number \| undefined; repeat_penalty?: number \| undefined; \} \| undefined` | ✗ | — |
+| `tools` | `\{ type: "function"; name: string; description: string; parameters: \{ type: "object"; properties: Record<string, \{ type: "string" \| "number" \| "boolean" \| "object" \| "array" \| "integer"; description?: string \| undefined; enum?: string[] \| undefined; \}>; required?: string[] \| undefined; \}; \}[] \| ToolInput[]` | ✗ | — |
 | `mcp` | `McpClientInput[]` | ✗ | — |
-| `rpcOptions` | `\{ timeout?: number \| —; healthCheckTimeout?: number \| —; forceNewConnection?: boolean \| —; profiling?: \{ enabled?: boolean \| —; includeServerBreakdown?: boolean \| —; mode?: "summary" \| ... 1 more ... \| —; \} \| —; \}` | ✗ | — |
+| `rpcOptions` | `\{ timeout?: number \| undefined; healthCheckTimeout?: number \| undefined; forceNewConnection?: boolean \| undefined; profiling?: \{ enabled?: boolean \| undefined; includeServerBreakdown?: boolean \| undefined; mode?: "summary" \| ... 1 more ... \| undefined; \} \| undefined; \}` | ✗ | — |
 
 ## Returns
 
 ```typescript
-{ stats: Promise<{ backendDevice?: "cpu" | "gpu"; cacheTokens?: number; timeToFirstToken?: number; tokensPerSecond?: number } | —>; text: Promise<string>; tokenStream: AsyncGenerator<string>; toolCalls: Promise<ToolCallWithCall[]>; toolCallStream: AsyncGenerator<{ call: { arguments: Record<string, unknown>; id: string; name: string; raw?: string }; type: "toolCall" } | { error: { code: "PARSE_ERROR" | "VALIDATION_ERROR" | "UNKNOWN_TOOL"; message: string; raw?: string }; type: "toolCallError" }> }
+{ stats: Promise<{ backendDevice?: "cpu" | "gpu"; cacheTokens?: number; timeToFirstToken?: number; tokensPerSecond?: number } | undefined>; text: Promise<string>; tokenStream: AsyncGenerator<string>; toolCalls: Promise<ToolCallWithCall[]>; toolCallStream: AsyncGenerator<{ call: { arguments: Record<string, unknown>; id: string; name: string; raw?: string }; type: "toolCall" } | { error: { code: "PARSE_ERROR" | "VALIDATION_ERROR" | "UNKNOWN_TOOL"; message: string; raw?: string }; type: "toolCallError" }> }
 ```
 
 No description available

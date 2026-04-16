@@ -7,7 +7,7 @@ description: "Performs Optical Character Recognition (OCR) on an image to extrac
 <WrapCode>
 
 ```typescript
-function ocr(params: OCRClientParams): { blocks: Promise<{ bbox?: [number, number, number, number]; confidence?: number; text: string }[]>; blockStream: AsyncGenerator<{ bbox?: [number, number, number, number]; confidence?: number; text: string }[]>; stats: Promise<{ detectionTime?: number; recognitionTime?: number; totalTime?: number } | —> }
+function ocr(params: OCRClientParams): { blocks: Promise<{ bbox?: [number, number, number, number]; confidence?: number; text: string }[]>; blockStream: AsyncGenerator<{ bbox?: [number, number, number, number]; confidence?: number; text: string }[]>; stats: Promise<{ detectionTime?: number; recognitionTime?: number; totalTime?: number } | undefined> }
 ```
 
 </WrapCode>
@@ -23,13 +23,13 @@ function ocr(params: OCRClientParams): { blocks: Promise<{ bbox?: [number, numbe
 | --- | --- | :---: | --- |
 | `modelId` | `string` | ✓ | — |
 | `image` | `string \| Buffer<ArrayBufferLike>` | ✓ | — |
-| `options` | `\{ paragraph?: boolean \| —; \}` | ✗ | — |
+| `options` | `\{ paragraph?: boolean \| undefined; \}` | ✗ | — |
 | `stream` | `boolean` | ✗ | — |
 
 ## Returns
 
 ```typescript
-{ blocks: Promise<{ bbox?: [number, number, number, number]; confidence?: number; text: string }[]>; blockStream: AsyncGenerator<{ bbox?: [number, number, number, number]; confidence?: number; text: string }[]>; stats: Promise<{ detectionTime?: number; recognitionTime?: number; totalTime?: number } | —> }
+{ blocks: Promise<{ bbox?: [number, number, number, number]; confidence?: number; text: string }[]>; blockStream: AsyncGenerator<{ bbox?: [number, number, number, number]; confidence?: number; text: string }[]>; stats: Promise<{ detectionTime?: number; recognitionTime?: number; totalTime?: number } | undefined> }
 ```
 
 No description available
