@@ -315,15 +315,13 @@ function parseArgs () {
 
 function filterResults (report, pattern) {
   if (!pattern) return
-  let re
-  try {
-    re = new RegExp(pattern, 'i')
-  } catch (_) {
-    const escaped = pattern.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
-    re = new RegExp(escaped, 'i')
-  }
+  const keywords = pattern.split('|').map(k => k.trim().toLowerCase()).filter(Boolean)
+  if (!keywords.length) return
   const before = report.results.length
-  report.results = report.results.filter(r => re.test(r.test))
+  report.results = report.results.filter(r => {
+    const name = (r.test || '').toLowerCase()
+    return keywords.some(k => name.includes(k))
+  })
   const after = report.results.length
   if (before !== after) {
     console.log(`  Filtered results: ${before} → ${after} (pattern: ${pattern})`)
