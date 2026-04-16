@@ -4,7 +4,6 @@ const test = require('brittle')
 const TranscriptionWhispercpp = require('../../index.js')
 const path = require('bare-path')
 const os = require('bare-os')
-const FakeDL = require('../mocks/loader.fake.js')
 const { ensureWhisperModel, ensureVADModel, isMobile } = require('./helpers.js')
 
 const tmpDir = isMobile ? (global.testDir || os.tmpdir()) : os.tmpdir()
@@ -21,28 +20,21 @@ async function ensureModelsDownloaded () {
   modelsReady = true
 }
 
-function createLoader () {
-  return new FakeDL({})
-}
-
 /**
- * Test 1: If the model path is not provided, an exception should be thrown
+ * Test 1: If files.model is not provided, an exception should be thrown
  * Works on both mobile and desktop - just tests constructor validation
  */
-test('Should throw error when model path is not provided', { timeout: 60000 }, async (t) => {
+test('Should throw error when files.model is not provided', { timeout: 60000 }, async (t) => {
   // Restore any stubs from other tests
   TranscriptionWhispercpp.prototype.validateModelFiles?.restore?.()
 
-  const args = {
-    modelName: '', // Empty model name
-    loader: createLoader()
-  }
+  const args = {}
   const config = {
     whisperConfig: {
       language: 'en'
     },
     contextParams: {
-      model: '' // Empty model path
+      model: ''
     },
     miscConfig: {
       caption_enabled: false
@@ -51,9 +43,9 @@ test('Should throw error when model path is not provided', { timeout: 60000 }, a
 
   try {
     new TranscriptionWhispercpp(args, config) // eslint-disable-line no-new
-    t.fail('Should have thrown an error for missing model path')
+    t.fail('Should have thrown an error for missing files.model')
   } catch (error) {
-    t.ok(error.message.includes('Model file doesn\'t exist'), 'Error message should mention model file doesn\'t exist')
+    t.ok(error.message.includes('files.model'), 'Error message should mention files.model')
   }
 })
 
@@ -65,16 +57,18 @@ test('Should throw error when model file does not exist', { timeout: 60000 }, as
   // Restore any stubs from other tests
   TranscriptionWhispercpp.prototype.validateModelFiles?.restore?.()
 
+  const nonexistent = path.join(tmpDir, 'qvac-test-models', 'non-existent-model.bin')
   const args = {
-    modelName: 'non-existent-model.bin',
-    loader: createLoader()
+    files: {
+      model: nonexistent
+    }
   }
   const config = {
     whisperConfig: {
       language: 'en'
     },
     contextParams: {
-      model: 'non-existent-model.bin'
+      model: nonexistent
     },
     miscConfig: {
       caption_enabled: false
@@ -102,8 +96,9 @@ test('Should throw error when VAD model file does not exist', { timeout: 180000 
   await ensureModelsDownloaded()
 
   const args = {
-    modelName: testModelPath,
-    loader: createLoader()
+    files: {
+      model: testModelPath
+    }
   }
   const config = {
     whisperConfig: {
@@ -122,7 +117,7 @@ test('Should throw error when VAD model file does not exist', { timeout: 180000 
     new TranscriptionWhispercpp(args, config) // eslint-disable-line no-new
     t.fail('Should have thrown an error for non-existent VAD model file')
   } catch (error) {
-    t.ok(error.message.includes("VAD model file doesn't exist"), 'Error message should mention VAD model file doesn\'t exist')
+    t.ok(error.message.includes('VAD model file not found'), 'Error message should mention VAD model file doesn\'t exist')
     t.ok(error.message.includes('non-existent-vad-model.bin'), 'Error message should include the VAD model filename')
   }
 })
@@ -139,8 +134,9 @@ test('Should not throw error when model file exists and VAD is not specified', {
   await ensureModelsDownloaded()
 
   const args = {
-    modelName: testModelPath,
-    loader: createLoader()
+    files: {
+      model: testModelPath
+    }
   }
   const config = {
     whisperConfig: {
@@ -176,9 +172,10 @@ test('Should not throw error when both model and VAD model files exist', { timeo
   await ensureModelsDownloaded()
 
   const args = {
-    modelName: testModelPath,
-    vadModelName: testVadPath,
-    loader: createLoader()
+    files: {
+      model: testModelPath,
+      vadModel: testVadPath
+    }
   }
   const config = {
     whisperConfig: {

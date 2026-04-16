@@ -44,7 +44,6 @@ one of these identifiers.
   Compiled / quantized derivatives (see Modification Notice below):
     Qwen3-1.7B, Qwen3-4B
     dolphin-mixtral-2x7b-dpo
-    Marian translation models (various language pairs)
     salamandrata-2b-instruct (q4, q8)
     Whisper fine-tuned (English, French, German, Italian, Japanese,
       Norwegian, Portuguese, Russian)
@@ -72,14 +71,6 @@ one of these identifiers.
 
   Original model weights are publicly available from Mozilla's
   firefox-translations-models repository.
-
---- CC-BY-4.0 (Creative Commons Attribution 4.0 International) ---
-
-  Compiled / quantized derivatives (see Modification Notice below):
-    Marian/Opus-MT translation models (en-de, en-pt, ru-en, zh-en)
-
-  Attribution: Helsinki-NLP / OPUS-MT project
-  (https://github.com/Helsinki-NLP/Opus-MT)
 
 --- llama3.2 (Llama 3.2 Community License) ---
 

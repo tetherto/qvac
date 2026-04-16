@@ -24,7 +24,7 @@ Built-in plugins cover:
 - **Transcription** (whisper.cpp) — Speech-to-text with VAD support
 - **Transcription** (Parakeet) — Speech-to-text (NVIDIA NeMo ONNX)
 - **Embeddings** (llama.cpp) — Text embeddings for RAG
-- **Translation** (nmtcpp) — Neural machine translation (Marian, IndicTrans2, Bergamot)
+- **Translation** (nmtcpp) — Neural machine translation (IndicTrans2, Bergamot)
 - **Text-to-Speech** (ONNX/Piper, Chatterbox, Supertonic) — Speech synthesis
 - **OCR** (ONNX) — Optical character recognition
 
@@ -270,8 +270,8 @@ All packages live in this monorepo under `packages/`:
 |-----------|---------|---------|
 | `qvac-lib-rag` | `@qvac/rag` | RAG with HyperDB |
 | `dl-base` | `@qvac/dl-base` | Base data loader |
-| `qvac-lib-dl-hyperdrive` | `@qvac/dl-hyperdrive` | Hyperdrive data loader |
-| `qvac-lib-dl-filesystem` | `@qvac/dl-filesystem` | Filesystem data loader |
+| `dl-hyperdrive` | `@qvac/dl-hyperdrive` | Hyperdrive data loader |
+| `dl-filesystem` | `@qvac/dl-filesystem` | Filesystem data loader |
 | `qvac-lib-infer-base` | `@qvac/infer-base` | Base inference client |
 | `qvac-lib-decoder-audio` | `@qvac/decoder-audio` | Audio decoding |
 | `qvac-lib-logging` | `@qvac/logging` | Logging utilities |

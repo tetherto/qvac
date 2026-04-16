@@ -155,7 +155,14 @@ inline js_value_t* runJob(js_env_t* env, js_callback_info_t* info) try {
   vector<uint8_t> audioBytes =
       js::TypedArray<uint8_t>(env, jsInput).as<std::vector<uint8_t>>(env);
   auto samples = WhisperModel::preprocessAudioData(audioBytes, audioFormat);
-  return instance.runJob(std::any(std::move(samples)));
+
+  WhisperModel::AnyInput anyInput;
+  anyInput.input = std::move(samples);
+  anyInput.outputCallback = [&instance](const Transcript& transcript) {
+    instance.addonCpp->outputQueue->queueResult(std::any(transcript));
+  };
+
+  return instance.runJob(std::any(std::move(anyInput)));
 }
 JSCATCH
 

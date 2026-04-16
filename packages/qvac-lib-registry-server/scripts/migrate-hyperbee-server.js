@@ -4,7 +4,7 @@ const fs = require('fs')
 const path = require('path')
 
 // Read the prod.config.json file
-const configPath = path.join(__dirname, '../../qvac-devops/hyperbee-models-server/prod.config.json')
+const configPath = path.join(__dirname, '../../oss-actions/hyperbee-models-server/prod.config.json')
 const config = JSON.parse(fs.readFileSync(configPath, 'utf8'))
 
 // Transform the data

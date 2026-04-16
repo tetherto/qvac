@@ -26,14 +26,7 @@ ln -sf ../ggml-indictrans2-en-indic-dist-200M.bin models/unit-test/ggml-indictra
 ./build/addon/tests/addon-test
 ```
 
-### Option 2: Using AWS S3 (Requires AWS Access)
-
-```bash
-# Download from S3 (requires AWS credentials)
-aws s3 cp s3://${MODEL_S3_BUCKET}/qvac_models_compiled/ggml/indictrans2/q4_0/ggml-indictrans2-en-indic-dist-200M/2026-01-01/ggml-indictrans2-en-indic-dist-200M-q4_0.bin models/unit-test/
-```
-
-### Option 3: Run Only Tests That Don't Need Models
+### Option 2: Run Only Tests That Don't Need Models
 
 ```bash
 # Bergamot validation tests (no models needed)
@@ -48,7 +41,7 @@ aws s3 cp s3://${MODEL_S3_BUCKET}/qvac_models_compiled/ggml/indictrans2/q4_0/ggm
 
 ## CI/CD
 
-In CI/CD pipelines, models are automatically downloaded from S3 before running tests.
+In CI/CD pipelines, models are automatically downloaded before running tests.
 See `.github/workflows/cpp-tests.yaml` for the automated configuration.
 
 ## Verifying Setup

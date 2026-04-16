@@ -1,3 +1,9 @@
+import ReadyResource = require('ready-resource')
+
+export interface LifecycleLogOptions {
+  log?: (msg: string) => Promise<void> | void
+}
+
 export interface QVACBlobBinding {
   coreKey: Buffer | string
   blockOffset: number
@@ -80,11 +86,29 @@ export interface FindByParams {
   includeDeprecated?: boolean
 }
 
-export class QVACRegistryClient {
+export interface LifecycleSwarmHandle {
+  readonly suspended: boolean
+  suspend (opts?: LifecycleLogOptions): Promise<void>
+  resume (opts?: LifecycleLogOptions): Promise<void>
+}
+
+export interface LifecycleStoreHandle {
+  suspend (opts?: LifecycleLogOptions): Promise<void>
+  resume (): Promise<void>
+}
+
+export class QVACRegistryClient extends ReadyResource {
   constructor (opts?: QVACRegistryClientOptions)
+
+  /** Valid only while the client remains open. Cached handles become stale after close(). */
+  readonly corestore: LifecycleStoreHandle | null
+  /** Valid only while the client remains open. Cached handles become stale after close(). */
+  readonly hyperswarm: LifecycleSwarmHandle | null
 
   ready (): Promise<void>
   close (): Promise<void>
+  suspend (opts?: LifecycleLogOptions): Promise<void>
+  resume (opts?: LifecycleLogOptions): Promise<void>
 
   getModel (path: string, source: string): Promise<QVACModelEntry | null>
   downloadModel (path: string, source: string, options?: QVACDownloadOptions): Promise<QVACDownloadResult>

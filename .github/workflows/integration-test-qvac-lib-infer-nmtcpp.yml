@@ -56,7 +56,7 @@ jobs:
           - os: macos-14
             platform: darwin
             arch: arm64
-          - os: windows-2022
+          - os: ai-run-windows11-gpu
             platform: win32
             arch: x64
 
@@ -161,6 +161,22 @@ jobs:
         run: |
           sudo apt-get update
           sudo apt-get install -y mesa-vulkan-drivers
+      
+      - if: ${{ matrix.platform == 'win32' }}
+        name: Install AWS CLI on self-hosted Windows runner
+        shell: powershell
+        run: |
+          if (Get-Command aws -ErrorAction SilentlyContinue) {
+            Write-Host "AWS CLI already installed"
+            aws --version
+          } else {
+            Write-Host "Installing AWS CLI v2..."
+            Invoke-WebRequest -Uri https://awscli.amazonaws.com/AWSCLIV2.msi -OutFile $env:TEMP\AWSCLIV2.msi
+            Start-Process msiexec.exe -Wait -ArgumentList '/I', "$env:TEMP\AWSCLIV2.msi", '/qn'
+            $env:PATH = "C:\Program Files\Amazon\AWSCLIV2;$env:PATH"
+            echo "C:\Program Files\Amazon\AWSCLIV2" >> $env:GITHUB_PATH
+            aws --version
+          }
 
       - name: Configure AWS credentials via OIDC
         uses: aws-actions/configure-aws-credentials@8df5847569e6427dd6c4fb1cf565c83acfa8afa7 # 6.0.0
@@ -168,58 +184,16 @@ jobs:
           role-to-assume: ${{ secrets.AWS_OIDC_ROLE_ARN }}
           aws-region: eu-central-1
 
-      - name: Download Bergamot models from Firefox CDN
+      - name: Download Bergamot models from S3
         working-directory: ${{ inputs.workdir || env.PKG_DIR }}
         shell: bash
         run: |
-          RECORDS_URL="https://firefox.settings.services.mozilla.com/v1/buckets/main/collections/translations-models/records"
-          ATTACHMENT_BASE="https://firefox-settings-attachments.cdn.mozilla.net"
-
-          echo "Fetching model index from Mozilla..."
-          RECORDS=$(curl -sS "$RECORDS_URL")
-
-          download_bergamot_pair() {
-            local SRC_LANG="$1"
-            local DST_LANG="$2"
-            local PAIR_CODE="${SRC_LANG}${DST_LANG}"
-            local DEST_DIR="model/bergamot/${PAIR_CODE}"
-            mkdir -p "$DEST_DIR"
-
-            echo "Downloading Bergamot ${SRC_LANG}-${DST_LANG} model..."
-
-            URLS=$(echo "$RECORDS" | python3 -c "
-          import sys, json
-          data = json.load(sys.stdin)
-          for r in data.get('data', []):
-              if r.get('fromLang') == '${SRC_LANG}' and r.get('toLang') == '${DST_LANG}':
-                  att = r.get('attachment', {})
-                  loc = att.get('location', '')
-                  name = r.get('name', '') or att.get('filename', '')
-                  if loc and name:
-                      print(f'{name}|{loc}')
-          " | tr -d '\r')
-
-            if [ -z "$URLS" ]; then
-                echo "  ⚠ No Firefox model found for ${SRC_LANG}-${DST_LANG} (skipping)"
-                return 1
-            fi
-
-            while IFS='|' read -r FILENAME LOCATION; do
-                FILENAME=$(echo "$FILENAME" | tr -d '\r')
-                LOCATION=$(echo "$LOCATION" | tr -d '\r')
-                URL="${ATTACHMENT_BASE}/${LOCATION}"
-                echo "  Downloading ${FILENAME}..."
-                curl -sS -L -o "${DEST_DIR}/${FILENAME}" "$URL"
-            done <<< "$URLS"
-
-            echo "  ✅ ${SRC_LANG}-${DST_LANG} ready"
-          }
-
-          download_bergamot_pair "en" "it"
-          download_bergamot_pair "es" "en"
-          download_bergamot_pair "fr" "en"
-          download_bergamot_pair "en" "es"
-
+          echo "Downloading Bergamot models from S3..."
+          mkdir -p model/bergamot
+          aws s3 cp "s3://${{ secrets.MODEL_S3_BUCKET }}/qvac_models_compiled/bergamot/bergamot-enit/2025-12-18/" model/bergamot/enit --recursive
+          aws s3 cp "s3://${{ secrets.MODEL_S3_BUCKET }}/qvac_models_compiled/bergamot/bergamot-esen/2025-12-18/" model/bergamot/esen --recursive
+          aws s3 cp "s3://${{ secrets.MODEL_S3_BUCKET }}/qvac_models_compiled/bergamot/bergamot-fren/2025-12-18/" model/bergamot/fren --recursive
+          aws s3 cp "s3://${{ secrets.MODEL_S3_BUCKET }}/qvac_models_compiled/bergamot/bergamot-enes/2025-12-18/" model/bergamot/enes --recursive
           echo ""
           echo "Bergamot model directories:"
           ls -la model/bergamot/

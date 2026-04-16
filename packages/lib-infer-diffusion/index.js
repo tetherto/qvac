@@ -19,10 +19,10 @@ class ImgStableDiffusion extends BaseInference {
    * @param {object} [args.logger] - Structured logger
    * @param {object} [args.opts] - Optional inference options
    * @param {string} [args.diskPath='.'] - Local directory containing model weight files
-   * @param {string} args.modelName - Model file name (e.g. 'flux1-dev-q4_0.gguf')
-   * @param {string} [args.clipLModel] - Optional CLIP-L model file name (FLUX.1 / SD3)
-   * @param {string} [args.clipGModel] - Optional CLIP-G model file name (SDXL / SD3)
-   * @param {string} [args.t5XxlModel] - Optional T5-XXL text encoder file name (FLUX.1 / SD3)
+   * @param {string} args.modelName - Model file name (e.g. 'flux-2-klein-4b-Q8_0.gguf')
+   * @param {string} [args.clipLModel] - Optional CLIP-L text encoder file name (SD3)
+   * @param {string} [args.clipGModel] - Optional CLIP-G text encoder file name (SDXL / SD3)
+   * @param {string} [args.t5XxlModel] - Optional T5-XXL text encoder file name (SD3)
    * @param {string} [args.llmModel] - Optional LLM text encoder file name (FLUX.2 klein → Qwen3 4B)
    * @param {string} [args.vaeModel] - Optional VAE file name
    * @param {object} config - SD context configuration (threads, device, type, etc.)
@@ -181,10 +181,24 @@ class ImgStableDiffusion extends BaseInference {
   }
 
   /**
-   * Generate an image from a text prompt, or from an input image + text prompt.
+   * Generate an image from a text prompt, or transform an input image with a prompt.
    *
-   * Currently supports txt2img only. img2img is not yet wired in the JS
-   * layer — passing `init_image` will throw.
+   * Mode is determined automatically:
+   *   - If `params.init_image` is provided → img2img
+   *   - Otherwise → txt2img
+   *
+   * img2img routing depends on the model architecture:
+   *
+   *   FLUX2 (prediction: 'flux2_flow'):
+   *     Uses in-context conditioning (ref_images). The input image is VAE-encoded
+   *     into separate latent tokens that the FLUX transformer attends to via joint
+   *     attention with distinct RoPE positions. The target starts from pure noise,
+   *     preserving features (skin tone, structure, etc.).
+   *
+   *   SD1.x / SD2.x / SDXL / SD3 (all other prediction types):
+   *     Uses traditional SDEdit (init_image). The input image is noised to the
+   *     level set by `strength`, then denoised for the remaining steps. Lower
+   *     strength = closer to the original image.
    *
    * Returns a QvacResponse that streams two types of updates:
    *   - Uint8Array  — PNG-encoded output image (one per batch_count)
@@ -204,16 +218,38 @@ class ImgStableDiffusion extends BaseInference {
    * @param {number} [params.batch_count=1]         - Images per call
    * @param {boolean} [params.vae_tiling=false]     - Enable VAE tiling (for large images)
    * @param {string}  [params.cache_preset]         - Cache preset: slow/medium/fast/ultra
-   * @param {Uint8Array} [params.init_image]        - Source image bytes for img2img (PNG/JPEG) — not yet supported
-   * @param {number}    [params.strength=0.75]      - img2img: 0 = keep source, 1 = ignore source — not yet supported
+   * @param {Uint8Array} [params.init_image]        - Source image bytes for img2img (PNG/JPEG).
+   *                                                   FLUX2: in-context conditioning (ref_images).
+   *                                                   Others: SDEdit (init_image + strength).
    * @returns {Promise<QvacResponse>}
    */
   async _runInternal (params) {
-    if (params.init_image) {
-      throw new Error('img2img is not yet supported — omit init_image to run txt2img')
+    // Validate init_image is Uint8Array if provided
+    if (params.init_image != null && !(params.init_image instanceof Uint8Array)) {
+      throw new Error(
+        'init_image must be a Uint8Array (e.g. fs.readFileSync("image.png")). ' +
+        'Got: ' + typeof params.init_image
+      )
     }
 
-    const mode = 'txt2img'
+    // FLUX models require an explicit prediction type for img2img.
+    // The C++ addon auto-detects the model family at load time, but
+    // SdModel::process() only enters the FLUX ref_images path when
+    // config_.prediction is FLUX_FLOW_PRED or FLUX2_FLOW_PRED. Without
+    // an explicit value the addon silently falls back to SDEdit.
+    if (params.init_image && this._llmModel) {
+      const pred = this._config?.prediction
+      if (pred !== 'flux2_flow' && pred !== 'flux_flow') {
+        throw new Error(
+          'FLUX img2img requires an explicit prediction type in config. ' +
+          "Set prediction: 'flux2_flow' (FLUX.2). " +
+          'Without this the addon silently falls back to the SD/SDEdit img2img branch ' +
+          'instead of the FLUX in-context conditioning path.'
+        )
+      }
+    }
+
+    const mode = params.init_image ? 'img2img' : 'txt2img'
     this.logger.info('Starting generation with mode:', mode)
 
     return await this._withExclusiveRun(async () => {

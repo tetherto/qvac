@@ -139,6 +139,14 @@ export const qvacConfigSchema = z.object({
   httpConnectionTimeoutMs: z.number().int().positive().optional(),
 
   /**
+   * Maximum number of retry attempts for registry (P2P) downloads on timeout.
+   * When a download times out due to a P2P connection stall, the SDK will
+   * automatically retry up to this many times before failing.
+   * Defaults to 3.
+   */
+  registryDownloadMaxRetries: z.number().int().min(0).optional(),
+
+  /**
    * Device-specific config defaults.
    * Use this to override model config defaults for specific devices.
    * User-defined patterns are checked before SDK built-in patterns.
