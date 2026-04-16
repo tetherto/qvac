@@ -51,9 +51,18 @@ export const finetuneErrorCases = createFinetuneTest(
   30000,
 );
 
+export const finetuneProgressZeroDrop = createFinetuneTest(
+  "finetune-progress-zero-drop",
+  {
+    numberOfEpochs: 2,
+  },
+  120000,
+);
+
 export const finetuneTests = [
   finetuneStartComplete,
   finetunePauseResume,
   finetuneProgressStreaming,
   finetuneErrorCases,
+  finetuneProgressZeroDrop,
 ];
