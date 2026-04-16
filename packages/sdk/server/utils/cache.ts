@@ -7,6 +7,7 @@ import { calculateFileChecksum } from "@/server/utils/checksum";
 import { validateAndJoinPath } from "@/server/utils/path-security";
 import { getServerLogger } from "@/logging";
 import { nowMs } from "@/profiling";
+import { resolveClearStorageTarget } from "@/server/utils/clear-storage";
 
 const logger = getServerLogger();
 
@@ -64,32 +65,35 @@ export function getShardedModelCacheDir(hyperdriveKey: string): string {
 }
 
 /**
- * Get cache directory for ONNX model with external data
- * Returns: cache/onnx/<cacheKey>/
+ * Get cache directory for a companion set.
+ * Returns: cache/sets/<setKey>/
  */
-function getOnnxModelCacheDir(cacheKey: string): string {
+export function getCompanionSetCacheDir(setKey: string): string {
   const baseCache = getModelsCacheDir();
-  const onnxDir = validateAndJoinPath(baseCache, "onnx", cacheKey);
+  const setDir = validateAndJoinPath(baseCache, "sets", setKey);
 
   try {
-    fs.mkdirSync(onnxDir, { recursive: true });
+    fs.mkdirSync(setDir, { recursive: true });
   } catch (error) {
     logger.error(
-      `Error creating ONNX model cache directory:`,
+      `Error creating companion set cache directory:`,
       error instanceof Error ? error.message : String(error),
     );
   }
 
-  return onnxDir;
+  return setDir;
 }
 
 /**
- * Get full path to ONNX file in cache
- * Returns: cache/onnx/<cacheKey>/<filename>
+ * Get full path to a file within a companion set cache.
+ * Returns: cache/sets/<setKey>/<targetName>
  */
-export function getOnnxModelPath(cacheKey: string, filename: string): string {
-  const onnxDir = getOnnxModelCacheDir(cacheKey);
-  return validateAndJoinPath(onnxDir, filename);
+export function getCompanionSetPath(
+  setKey: string,
+  targetName: string,
+): string {
+  const setDir = getCompanionSetCacheDir(setKey);
+  return validateAndJoinPath(setDir, targetName);
 }
 
 /**
@@ -102,6 +106,17 @@ export function getShardPath(
 ): string {
   const shardDir = getShardedModelCacheDir(hyperdriveKey);
   return validateAndJoinPath(shardDir, shardFilename);
+}
+
+/**
+ * Returns the deletion target for `clearStorage`. Scoped to the SDK cache
+ * directory — companion set and legacy ONNX paths delete the parent directory.
+ */
+export function getClearStorageTarget(modelPath: string): {
+  path: string;
+  kind: "file" | "directory";
+} {
+  return resolveClearStorageTarget(modelPath, getModelsCacheDir());
 }
 
 /**
