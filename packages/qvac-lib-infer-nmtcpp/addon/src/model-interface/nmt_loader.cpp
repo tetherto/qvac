@@ -28,7 +28,7 @@
 #include "nmt_utils.hpp"
 #include "qvac-lib-inference-addon-cpp/Logger.hpp"
 
-static std::string format(const char* fmt, ...) {
+static std::string format(const char *fmt, ...) {
   va_list ap;
   va_list ap2;
   va_start(ap, fmt);
@@ -46,8 +46,8 @@ static std::string format(const char* fmt, ...) {
 #if defined(NMT_BIG_ENDIAN)
 template <typename T> static T byteswap(T value) {
   T value_swapped;
-  char* source = reinterpret_cast<char*>(&value);
-  char* target = reinterpret_cast<char*>(&value_swapped);
+  char *source = reinterpret_cast<char *>(&value);
+  char *target = reinterpret_cast<char *>(&value_swapped);
   int size = sizeof(T);
   for (int i = 0; i < size; i++) {
     target[size - 1 - i] = source[i];
@@ -55,14 +55,14 @@ template <typename T> static T byteswap(T value) {
   return value_swapped;
 }
 
-template <typename T> static void byteswap_tensor_data(ggml_tensor* tensor) {
-  T* datum = reinterpret_cast<T*>(tensor->data);
+template <typename T> static void byteswap_tensor_data(ggml_tensor *tensor) {
+  T *datum = reinterpret_cast<T *>(tensor->data);
   for (int i = 0; i < ggml_nelements(tensor); i++) {
     datum[i] = byteswap(datum[i]);
   }
 }
 
-static void byteswap_tensor(ggml_tensor* tensor) {
+static void byteswap_tensor(ggml_tensor *tensor) {
   switch (tensor->type) {
   case GGML_TYPE_I16: {
     byteswap_tensor_data<int16_t>(tensor);
@@ -89,7 +89,7 @@ static void byteswap_tensor(ggml_tensor* tensor) {
 #define BYTESWAP_VALUE(d) d = byteswap(d)
 #define BYTESWAP_FILTERS(f)                                                    \
   do {                                                                         \
-    for (auto& datum : f.data) {                                               \
+    for (auto &datum : f.data) {                                               \
       datum = byteswap(datum);                                                 \
     }                                                                          \
   } while (0)
@@ -109,7 +109,7 @@ static void byteswap_tensor(ggml_tensor* tensor) {
   } while (0)
 #endif
 
-template <typename T> static void read_safe(nmt_model_loader* loader, T& dest) {
+template <typename T> static void read_safe(nmt_model_loader *loader, T &dest) {
   loader->read(loader->context, &dest, sizeof(T));
   BYTESWAP_VALUE(dest);
 }
@@ -117,13 +117,12 @@ template <typename T> static void read_safe(nmt_model_loader* loader, T& dest) {
 using buft_list_t =
     std::vector<std::pair<ggml_backend_dev_t, ggml_backend_buffer_type_t>>;
 
-static buft_list_t make_buft_list(nmt_context_params& params) {
+static buft_list_t make_buft_list(nmt_context_params &params) {
   // Prio order: GPU -> CPU Extra -> CPU
   buft_list_t buft_list;
 
-  QLOG(
-      qvac_lib_inference_addon_cpp::logger::Priority::DEBUG,
-      "=== make_buft_list called ===");
+  QLOG(qvac_lib_inference_addon_cpp::logger::Priority::DEBUG,
+       "=== make_buft_list called ===");
   std::ostringstream oss1;
   oss1 << "use_gpu=" << params.use_gpu << ", gpu_device=" << params.gpu_device;
   QLOG(qvac_lib_inference_addon_cpp::logger::Priority::DEBUG, oss1.str());
@@ -137,23 +136,21 @@ static buft_list_t make_buft_list(nmt_context_params& params) {
     for (size_t i = 0; i < ggml_backend_dev_count(); ++i) {
       ggml_backend_dev_t dev = ggml_backend_dev_get(i);
       enum ggml_backend_dev_type dev_type = ggml_backend_dev_type(dev);
-      const char* name = ggml_backend_dev_name(dev);
+      const char *name = ggml_backend_dev_name(dev);
       std::ostringstream oss3;
       oss3 << "  Backend[" << i << "]: type=" << dev_type << ", name=" << name;
       QLOG(qvac_lib_inference_addon_cpp::logger::Priority::DEBUG, oss3.str());
 
       if (dev_type == GGML_BACKEND_DEVICE_TYPE_GPU) {
-        QLOG(
-            qvac_lib_inference_addon_cpp::logger::Priority::DEBUG,
-            "  -> This is a GPU backend!");
+        QLOG(qvac_lib_inference_addon_cpp::logger::Priority::DEBUG,
+             "  -> This is a GPU backend!");
 
         if (cnt == 0 || cnt == params.gpu_device) {
-          auto* buft = ggml_backend_dev_buffer_type(dev);
+          auto *buft = ggml_backend_dev_buffer_type(dev);
           if (buft) {
             buft_list.emplace_back(dev, buft);
-            QLOG(
-                qvac_lib_inference_addon_cpp::logger::Priority::DEBUG,
-                "  -> Added to buft_list");
+            QLOG(qvac_lib_inference_addon_cpp::logger::Priority::DEBUG,
+                 "  -> Added to buft_list");
           }
         }
 
@@ -167,35 +164,42 @@ static buft_list_t make_buft_list(nmt_context_params& params) {
   std::ostringstream oss_selected;
   oss_selected << "make_buft_list: Selected " << buft_list.size()
                << " GPU buffer types";
-  QLOG(
-      qvac_lib_inference_addon_cpp::logger::Priority::DEBUG,
-      oss_selected.str());
+  QLOG(qvac_lib_inference_addon_cpp::logger::Priority::DEBUG,
+       oss_selected.str());
 
-  // CPU Extra
-  auto* cpu_dev = ggml_backend_dev_by_type(GGML_BACKEND_DEVICE_TYPE_CPU);
-  auto* cpu_reg = ggml_backend_dev_backend_reg(cpu_dev);
-  auto get_extra_bufts_fn =
-      (ggml_backend_dev_get_extra_bufts_t)ggml_backend_reg_get_proc_address(
-          cpu_reg, "ggml_backend_dev_get_extra_bufts");
-  if (get_extra_bufts_fn) {
-    ggml_backend_buffer_type_t* extra_bufts = get_extra_bufts_fn(cpu_dev);
-    while (extra_bufts && *extra_bufts) {
-      buft_list.emplace_back(cpu_dev, *extra_bufts);
-      ++extra_bufts;
+  // CPU Extra + CPU
+  auto *cpu_dev = ggml_backend_dev_by_type(GGML_BACKEND_DEVICE_TYPE_CPU);
+  if (cpu_dev) {
+    auto *cpu_reg = ggml_backend_dev_backend_reg(cpu_dev);
+    if (cpu_reg) {
+      auto get_extra_bufts_fn =
+          (ggml_backend_dev_get_extra_bufts_t)ggml_backend_reg_get_proc_address(
+              cpu_reg, "ggml_backend_dev_get_extra_bufts");
+      if (get_extra_bufts_fn) {
+        ggml_backend_buffer_type_t *extra_bufts = get_extra_bufts_fn(cpu_dev);
+        while (extra_bufts && *extra_bufts) {
+          buft_list.emplace_back(cpu_dev, *extra_bufts);
+          ++extra_bufts;
+        }
+      }
     }
+    buft_list.emplace_back(cpu_dev, ggml_backend_cpu_buffer_type());
+  } else {
+    QLOG(qvac_lib_inference_addon_cpp::logger::Priority::WARNING,
+         "No CPU backend device found in GGML registry; "
+         "falling back to default CPU buffer type");
+    buft_list.emplace_back(nullptr, ggml_backend_cpu_buffer_type());
   }
-
-  // CPU
-  buft_list.emplace_back(cpu_dev, ggml_backend_cpu_buffer_type());
 
   return buft_list;
 }
-static bool weight_buft_supported(
-    const nmt_hparams& hparams, ggml_tensor* w, ggml_op op,
-    ggml_backend_buffer_type_t buft, ggml_backend_dev_t dev) {
+static bool weight_buft_supported(const nmt_hparams &hparams, ggml_tensor *w,
+                                  ggml_op op, ggml_backend_buffer_type_t buft,
+                                  ggml_backend_dev_t dev) {
   bool op_supported = true;
 
-  if (ggml_backend_dev_type(dev) == GGML_BACKEND_DEVICE_TYPE_GPU ||
+  if (!dev || buft == ggml_backend_cpu_buffer_type() ||
+      ggml_backend_dev_type(dev) == GGML_BACKEND_DEVICE_TYPE_GPU ||
       (ggml_backend_dev_type(dev) == GGML_BACKEND_DEVICE_TYPE_CPU &&
        buft == ggml_backend_cpu_buffer_type())) {
     // GPU and default CPU backend support all operators
@@ -215,13 +219,13 @@ static bool weight_buft_supported(
       if (!ctx_ptr) {
         throw std::runtime_error("failed to create ggml context");
       }
-      ggml_context* ctx = ctx_ptr.get();
+      ggml_context *ctx = ctx_ptr.get();
 
-      ggml_tensor* op_tensor = nullptr;
+      ggml_tensor *op_tensor = nullptr;
 
       int64_t n_ctx = hparams.n_encoder_ctx;
-      ggml_tensor* b = ggml_new_tensor_4d(
-          ctx, GGML_TYPE_F32, w->ne[0], n_ctx, w->ne[2], w->ne[3]);
+      ggml_tensor *b = ggml_new_tensor_4d(ctx, GGML_TYPE_F32, w->ne[0], n_ctx,
+                                          w->ne[2], w->ne[3]);
       op_tensor = ggml_mul_mat(ctx, w, b);
 
       // create a temporary dummy buffer for the weight so that supports_op can
@@ -243,11 +247,11 @@ static bool weight_buft_supported(
   return op_supported;
 }
 
-static ggml_backend_buffer_type_t select_weight_buft(
-    const nmt_hparams& hparams, ggml_tensor* w, ggml_op op,
-    buft_list_t buft_list) {
+static ggml_backend_buffer_type_t select_weight_buft(const nmt_hparams &hparams,
+                                                     ggml_tensor *w, ggml_op op,
+                                                     buft_list_t buft_list) {
   GGML_ASSERT(!buft_list.empty());
-  for (const auto& p : buft_list) {
+  for (const auto &p : buft_list) {
     ggml_backend_dev_t dev = p.first;
     ggml_backend_buffer_type_t buft = p.second;
     if (weight_buft_supported(hparams, w, op, buft, dev)) {
@@ -259,15 +263,14 @@ static ggml_backend_buffer_type_t select_weight_buft(
 }
 
 static bool load_sentencepiece_model(
-    nmt_model_loader* loader,
-    std::unique_ptr<sentencepiece::SentencePieceProcessor>& processor) {
+    nmt_model_loader *loader,
+    std::unique_ptr<sentencepiece::SentencePieceProcessor> &processor) {
 
   int32_t sp_model_size = 0;
   read_safe(loader, sp_model_size);
 
-  QLOG(
-      qvac_lib_inference_addon_cpp::logger::Priority::DEBUG,
-      "SentencePiece model size: " + std::to_string(sp_model_size));
+  QLOG(qvac_lib_inference_addon_cpp::logger::Priority::DEBUG,
+       "SentencePiece model size: " + std::to_string(sp_model_size));
 
   if (sp_model_size > 0) {
     std::vector<char> sp_model_data(sp_model_size);
@@ -276,50 +279,45 @@ static bool load_sentencepiece_model(
 
     auto status = processor->LoadFromSerializedProto(serialized_model);
     if (status.ok()) {
-      QLOG(
-          qvac_lib_inference_addon_cpp::logger::Priority::DEBUG,
-          "SentencePiece model loaded successfully");
+      QLOG(qvac_lib_inference_addon_cpp::logger::Priority::DEBUG,
+           "SentencePiece model loaded successfully");
       return true;
     } else {
-      QLOG(
-          qvac_lib_inference_addon_cpp::logger::Priority::ERROR,
-          "SentencePiece model load failed: " + status.ToString());
+      QLOG(qvac_lib_inference_addon_cpp::logger::Priority::ERROR,
+           "SentencePiece model load failed: " + status.ToString());
       return false;
     }
   }
-  QLOG(
-      qvac_lib_inference_addon_cpp::logger::Priority::DEBUG,
-      "SentencePiece model size is 0 or negative, skipping");
+  QLOG(qvac_lib_inference_addon_cpp::logger::Priority::DEBUG,
+       "SentencePiece model size is 0 or negative, skipping");
   return false;
 }
 
-static bool nmt_model_load(struct nmt_model_loader* loader, nmt_context& ctx) {
-  QLOG(
-      qvac_lib_inference_addon_cpp::logger::Priority::DEBUG,
-      "=== nmt_model_load() starting ===");
+static bool nmt_model_load(struct nmt_model_loader *loader, nmt_context &ctx) {
+  QLOG(qvac_lib_inference_addon_cpp::logger::Priority::DEBUG,
+       "=== nmt_model_load() starting ===");
 
   const int64_t t_start_us = get_time_us();
 
   ctx.t_start_us = t_start_us;
 
-  auto& model = ctx.model;
-  auto& vocab = ctx.vocab;
+  auto &model = ctx.model;
+  auto &vocab = ctx.vocab;
 
   // verify magic
   {
     uint32_t magic;
     read_safe(loader, magic);
     if (magic != GGML_FILE_MAGIC) {
-      QLOG(
-          qvac_lib_inference_addon_cpp::logger::Priority::ERROR,
-          "ERROR: Invalid file magic number");
+      QLOG(qvac_lib_inference_addon_cpp::logger::Priority::ERROR,
+           "ERROR: Invalid file magic number");
       return false;
     }
   }
 
   // load hparams
   {
-    auto& hparams = model.hparams;
+    auto &hparams = model.hparams;
 
     read_safe(loader, hparams.n_vocab);
     read_safe(loader, hparams.n_encoder_ctx);
@@ -341,12 +339,11 @@ static bool nmt_model_load(struct nmt_model_loader* loader, nmt_context& ctx) {
           ") are no longer supported. Only IndicTrans (model_type=1) is "
           "supported.");
     } else {
-      throw std::runtime_error(
-          "Unsupported model type: " + std::to_string(model_type));
+      throw std::runtime_error("Unsupported model type: " +
+                               std::to_string(model_type));
     }
-    QLOG(
-        qvac_lib_inference_addon_cpp::logger::Priority::INFO,
-        std::string("Detected model type: ") + nmt_model_type_readable(&ctx));
+    QLOG(qvac_lib_inference_addon_cpp::logger::Priority::INFO,
+         std::string("Detected model type: ") + nmt_model_type_readable(&ctx));
 
     read_safe(loader, hparams.ftype);
     const int32_t qntvr = hparams.ftype / GGML_QNT_VERSION_FACTOR;
@@ -368,9 +365,8 @@ static bool nmt_model_load(struct nmt_model_loader* loader, nmt_context& ctx) {
     // computation
     ctx.wtype = ggml_ftype_to_ggml_type((ggml_ftype)(model.hparams.ftype));
     if (ctx.wtype == GGML_TYPE_COUNT) {
-      QLOG(
-          qvac_lib_inference_addon_cpp::logger::Priority::ERROR,
-          "ERROR: Invalid weight type");
+      QLOG(qvac_lib_inference_addon_cpp::logger::Priority::ERROR,
+           "ERROR: Invalid weight type");
       return false;
     }
   }
@@ -449,7 +445,7 @@ static bool nmt_model_load(struct nmt_model_loader* loader, nmt_context& ctx) {
   const ggml_type vtype =
       ctx.wtype == GGML_TYPE_F32 ? GGML_TYPE_F32 : GGML_TYPE_F16; // conv type
 
-  const auto& hparams = model.hparams;
+  const auto &hparams = model.hparams;
 
   const size_t n_tensors_input = 24;
   const size_t n_tensors_encoder = hparams.n_encoder_layers * 18;
@@ -457,8 +453,8 @@ static bool nmt_model_load(struct nmt_model_loader* loader, nmt_context& ctx) {
   const size_t n_tensors =
       n_tensors_input + n_tensors_encoder + n_tensors_decoder;
 
-  std::map<ggml_backend_buffer_type_t, ggml_context*> ctx_map;
-  auto get_ctx = [&](ggml_backend_buffer_type_t buft) -> ggml_context* {
+  std::map<ggml_backend_buffer_type_t, ggml_context *> ctx_map;
+  auto get_ctx = [&](ggml_backend_buffer_type_t buft) -> ggml_context * {
     auto it = ctx_map.find(buft);
     if (it == ctx_map.end()) {
       ggml_init_params params = {
@@ -467,7 +463,7 @@ static bool nmt_model_load(struct nmt_model_loader* loader, nmt_context& ctx) {
           /*.no_alloc   =*/true,
       };
 
-      ggml_context* ctx = ggml_init(params);
+      ggml_context *ctx = ggml_init(params);
       if (ctx == nullptr) {
         throw std::runtime_error("failed to create ggml context");
       }
@@ -492,9 +488,9 @@ static bool nmt_model_load(struct nmt_model_loader* loader, nmt_context& ctx) {
         /*.no_alloc   =*/true,
     };
 
-    ggml_context* ctx = ggml_init(params);
+    ggml_context *ctx = ggml_init(params);
 
-    const auto& hparams = model.hparams;
+    const auto &hparams = model.hparams;
 
     const int n_vocab = hparams.n_vocab;
 
@@ -513,13 +509,11 @@ static bool nmt_model_load(struct nmt_model_loader* loader, nmt_context& ctx) {
 
     // Create encoder layers - use standard ASR tensor system for compatibility
     for (int i = 0; i < n_encoder_layers; ++i) {
-      auto& layer = model.layers_encoder[i];
+      auto &layer = model.layers_encoder[i];
 
-      ggml_context* nmt_ctx = get_ctx(select_weight_buft(
-          hparams,
-          ggml_new_tensor_1d(ctx, GGML_TYPE_F32, d_model),
-          GGML_OP_NONE,
-          buft_list));
+      ggml_context *nmt_ctx = get_ctx(select_weight_buft(
+          hparams, ggml_new_tensor_1d(ctx, GGML_TYPE_F32, d_model),
+          GGML_OP_NONE, buft_list));
 
       layer.attn_ln_0_w = ggml_dup_tensor(
           nmt_ctx, ggml_new_tensor_1d(ctx, GGML_TYPE_F32, d_model));
@@ -545,17 +539,15 @@ static bool nmt_model_load(struct nmt_model_loader* loader, nmt_context& ctx) {
           nmt_ctx, ggml_new_tensor_1d(ctx, GGML_TYPE_F32, d_model));
       layer.mlp_ln_b = ggml_dup_tensor(
           nmt_ctx, ggml_new_tensor_1d(ctx, GGML_TYPE_F32, d_model));
-      layer.mlp_0_w = ggml_dup_tensor(
-          nmt_ctx,
-          ggml_new_tensor_2d(
-              ctx, wtype, n_text_state, hparams.decoder_ffn_dim));
-      layer.mlp_0_b = ggml_dup_tensor(
-          nmt_ctx,
-          ggml_new_tensor_1d(ctx, GGML_TYPE_F32, hparams.decoder_ffn_dim));
+      layer.mlp_0_w =
+          ggml_dup_tensor(nmt_ctx, ggml_new_tensor_2d(ctx, wtype, n_text_state,
+                                                      hparams.decoder_ffn_dim));
+      layer.mlp_0_b =
+          ggml_dup_tensor(nmt_ctx, ggml_new_tensor_1d(ctx, GGML_TYPE_F32,
+                                                      hparams.decoder_ffn_dim));
       layer.mlp_1_w = ggml_dup_tensor(
-          nmt_ctx,
-          ggml_new_tensor_2d(
-              ctx, wtype, hparams.decoder_ffn_dim, n_text_state));
+          nmt_ctx, ggml_new_tensor_2d(ctx, wtype, hparams.decoder_ffn_dim,
+                                      n_text_state));
       layer.mlp_1_b = ggml_dup_tensor(
           nmt_ctx, ggml_new_tensor_1d(ctx, GGML_TYPE_F32, d_model));
 
@@ -592,13 +584,11 @@ static bool nmt_model_load(struct nmt_model_loader* loader, nmt_context& ctx) {
     }
 
     for (int i = 0; i < n_decoder_layers; ++i) {
-      auto& layer = model.layers_decoder[i];
+      auto &layer = model.layers_decoder[i];
 
-      ggml_context* nmt_ctx = get_ctx(select_weight_buft(
-          hparams,
-          ggml_new_tensor_1d(ctx, GGML_TYPE_F32, n_text_state),
-          GGML_OP_NONE,
-          buft_list));
+      ggml_context *nmt_ctx = get_ctx(select_weight_buft(
+          hparams, ggml_new_tensor_1d(ctx, GGML_TYPE_F32, n_text_state),
+          GGML_OP_NONE, buft_list));
 
       // Self-attention tensors
       layer.attn_ln_0_w = ggml_dup_tensor(
@@ -649,17 +639,15 @@ static bool nmt_model_load(struct nmt_model_loader* loader, nmt_context& ctx) {
           nmt_ctx, ggml_new_tensor_1d(ctx, GGML_TYPE_F32, n_text_state));
       layer.mlp_ln_b = ggml_dup_tensor(
           nmt_ctx, ggml_new_tensor_1d(ctx, GGML_TYPE_F32, n_text_state));
-      layer.mlp_0_w = ggml_dup_tensor(
-          nmt_ctx,
-          ggml_new_tensor_2d(
-              ctx, wtype, n_text_state, hparams.decoder_ffn_dim));
-      layer.mlp_0_b = ggml_dup_tensor(
-          nmt_ctx,
-          ggml_new_tensor_1d(ctx, GGML_TYPE_F32, hparams.decoder_ffn_dim));
+      layer.mlp_0_w =
+          ggml_dup_tensor(nmt_ctx, ggml_new_tensor_2d(ctx, wtype, n_text_state,
+                                                      hparams.decoder_ffn_dim));
+      layer.mlp_0_b =
+          ggml_dup_tensor(nmt_ctx, ggml_new_tensor_1d(ctx, GGML_TYPE_F32,
+                                                      hparams.decoder_ffn_dim));
       layer.mlp_1_w = ggml_dup_tensor(
-          nmt_ctx,
-          ggml_new_tensor_2d(
-              ctx, wtype, hparams.decoder_ffn_dim, n_text_state));
+          nmt_ctx, ggml_new_tensor_2d(ctx, wtype, hparams.decoder_ffn_dim,
+                                      n_text_state));
       layer.mlp_1_b = ggml_dup_tensor(
           nmt_ctx, ggml_new_tensor_1d(ctx, GGML_TYPE_F32, n_text_state));
 
@@ -725,35 +713,35 @@ static bool nmt_model_load(struct nmt_model_loader* loader, nmt_context& ctx) {
     int32_t decoder_vocab_size =
         hparams.n_tgt_vocab > 0 ? hparams.n_tgt_vocab : n_vocab;
 
-    ggml_tensor* meta_encoder_emb =
+    ggml_tensor *meta_encoder_emb =
         ggml_new_tensor_2d(ctx, wtype, n_text_state, encoder_vocab_size);
-    ggml_tensor* meta_decoder_emb =
+    ggml_tensor *meta_decoder_emb =
         ggml_new_tensor_2d(ctx, wtype, n_text_state, decoder_vocab_size);
 
-    ggml_tensor* meta_enc_pos_emb = nullptr;
-    ggml_tensor* meta_dec_pos_emb = nullptr;
+    ggml_tensor *meta_enc_pos_emb = nullptr;
+    ggml_tensor *meta_dec_pos_emb = nullptr;
     {
       const int max_pos = 1024; // IndicTrans2 typical max length
-      meta_enc_pos_emb = ggml_new_tensor_2d(
-          ctx, GGML_TYPE_F32, n_text_state, max_pos); // Shape: (512, 1024)
-      meta_dec_pos_emb = ggml_new_tensor_2d(
-          ctx, GGML_TYPE_F32, n_text_state, max_pos); // Shape: (512, 1024)
+      meta_enc_pos_emb = ggml_new_tensor_2d(ctx, GGML_TYPE_F32, n_text_state,
+                                            max_pos); // Shape: (512, 1024)
+      meta_dec_pos_emb = ggml_new_tensor_2d(ctx, GGML_TYPE_F32, n_text_state,
+                                            max_pos); // Shape: (512, 1024)
     }
 
-    ggml_tensor* meta_enc_norm_w =
+    ggml_tensor *meta_enc_norm_w =
         ggml_new_tensor_1d(ctx, GGML_TYPE_F32, n_text_state);
-    ggml_tensor* meta_enc_norm_b =
+    ggml_tensor *meta_enc_norm_b =
         ggml_new_tensor_1d(ctx, GGML_TYPE_F32, n_text_state);
-    ggml_tensor* meta_dec_norm_w =
+    ggml_tensor *meta_dec_norm_w =
         ggml_new_tensor_1d(ctx, GGML_TYPE_F32, n_text_state);
-    ggml_tensor* meta_dec_norm_b =
+    ggml_tensor *meta_dec_norm_b =
         ggml_new_tensor_1d(ctx, GGML_TYPE_F32, n_text_state);
-    ggml_tensor* meta_lm_head =
+    ggml_tensor *meta_lm_head =
         ggml_new_tensor_2d(ctx, wtype, n_text_state, decoder_vocab_size);
-    ggml_tensor* meta_enc_layer_norm_w = nullptr;
-    ggml_tensor* meta_enc_layer_norm_b = nullptr;
-    ggml_tensor* meta_dec_layer_norm_w = nullptr;
-    ggml_tensor* meta_dec_layer_norm_b = nullptr;
+    ggml_tensor *meta_enc_layer_norm_w = nullptr;
+    ggml_tensor *meta_enc_layer_norm_b = nullptr;
+    ggml_tensor *meta_dec_layer_norm_w = nullptr;
+    ggml_tensor *meta_dec_layer_norm_b = nullptr;
     if (model.type == MODEL_INDICTRANS) {
       meta_enc_layer_norm_w =
           ggml_new_tensor_1d(ctx, GGML_TYPE_F32, n_text_state);
@@ -768,7 +756,7 @@ static bool nmt_model_load(struct nmt_model_loader* loader, nmt_context& ctx) {
     // Allocate tensors using backend system
     ggml_backend_buffer_type_t buft =
         select_weight_buft(hparams, meta_encoder_emb, GGML_OP_NONE, buft_list);
-    ggml_context* nmt_ctx = get_ctx(buft);
+    ggml_context *nmt_ctx = get_ctx(buft);
 
     model.m_encoder_embeddings = ggml_dup_tensor(nmt_ctx, meta_encoder_emb);
     model.m_decoder_embeddings = ggml_dup_tensor(nmt_ctx, meta_decoder_emb);
@@ -823,9 +811,9 @@ static bool nmt_model_load(struct nmt_model_loader* loader, nmt_context& ctx) {
   }
 
   // allocate tensors in the backend buffers
-  for (auto& p : ctx_map) {
+  for (auto &p : ctx_map) {
     ggml_backend_buffer_type_t buft = p.first;
-    ggml_context* ctx = p.second;
+    ggml_context *ctx = p.second;
     ggml_backend_buffer_t buf =
         ggml_backend_alloc_ctx_tensors_from_buft(ctx, buft);
     if (buf) {
@@ -904,8 +892,8 @@ static bool nmt_model_load(struct nmt_model_loader* loader, nmt_context& ctx) {
 
         loader->read(loader->context, read_buf.data(), read_buf.size());
 
-        ggml_backend_tensor_set(
-            tensor, read_buf.data(), 0, ggml_nbytes(tensor));
+        ggml_backend_tensor_set(tensor, read_buf.data(), 0,
+                                ggml_nbytes(tensor));
       }
 
       total_size += ggml_nbytes(tensor);
@@ -934,14 +922,14 @@ static bool nmt_model_load(struct nmt_model_loader* loader, nmt_context& ctx) {
           pos_emb_data.data(), d_model, max_pos);
       size_t bytes_to_copy = pos_emb_data.size() * sizeof(float);
 
-      ggml_backend_tensor_set(
-          model.m_encoder_pos_emb, pos_emb_data.data(), 0, bytes_to_copy);
-      ggml_backend_tensor_set(
-          model.m_decoder_pos_emb, pos_emb_data.data(), 0, bytes_to_copy);
+      ggml_backend_tensor_set(model.m_encoder_pos_emb, pos_emb_data.data(), 0,
+                              bytes_to_copy);
+      ggml_backend_tensor_set(model.m_decoder_pos_emb, pos_emb_data.data(), 0,
+                              bytes_to_copy);
     }
   }
 
-  for (auto& buf : model.buffers) {
+  for (auto &buf : model.buffers) {
     ggml_backend_buffer_set_usage(buf, GGML_BACKEND_BUFFER_USAGE_WEIGHTS);
   }
 
@@ -950,9 +938,10 @@ static bool nmt_model_load(struct nmt_model_loader* loader, nmt_context& ctx) {
   return true;
 }
 
-struct nmt_context* nmt_init_with_params_no_state(
-    struct nmt_model_loader* loader, struct nmt_context_params params) {
-  nmt_context* ctx = new nmt_context;
+struct nmt_context *
+nmt_init_with_params_no_state(struct nmt_model_loader *loader,
+                              struct nmt_context_params params) {
+  nmt_context *ctx = new nmt_context;
   ctx->params = params;
 
   if (!nmt_model_load(loader, *ctx)) {
@@ -966,12 +955,12 @@ struct nmt_context* nmt_init_with_params_no_state(
   return ctx;
 }
 
-struct nmt_context* nmt_init_from_file_with_params_no_state(
-    const char* path_model, struct nmt_context_params params) {
-  QLOG(
-      qvac_lib_inference_addon_cpp::logger::Priority::DEBUG,
-      std::string("=== nmt_init_from_file_with_params_no_state: path=") +
-          path_model);
+struct nmt_context *
+nmt_init_from_file_with_params_no_state(const char *path_model,
+                                        struct nmt_context_params params) {
+  QLOG(qvac_lib_inference_addon_cpp::logger::Priority::DEBUG,
+       std::string("=== nmt_init_from_file_with_params_no_state: path=") +
+           path_model);
 #ifdef _MSC_VER
   // Convert UTF-8 path to wide string (UTF-16) for Windows, resolving character
   // encoding issues.
@@ -982,32 +971,30 @@ struct nmt_context* nmt_init_from_file_with_params_no_state(
   auto fin = std::ifstream(path_model, std::ios::binary);
 #endif
   if (!fin) {
-    QLOG(
-        qvac_lib_inference_addon_cpp::logger::Priority::ERROR,
-        std::string("ERROR: Failed to open file: ") + path_model);
+    QLOG(qvac_lib_inference_addon_cpp::logger::Priority::ERROR,
+         std::string("ERROR: Failed to open file: ") + path_model);
     return nullptr;
   }
-  QLOG(
-      qvac_lib_inference_addon_cpp::logger::Priority::DEBUG,
-      "File opened successfully");
+  QLOG(qvac_lib_inference_addon_cpp::logger::Priority::DEBUG,
+       "File opened successfully");
 
   nmt_model_loader loader = {};
 
   loader.context = &fin;
 
-  loader.read = [](void* ctx, void* output, size_t read_size) {
-    std::ifstream* fin = (std::ifstream*)ctx;
-    fin->read((char*)output, read_size);
+  loader.read = [](void *ctx, void *output, size_t read_size) {
+    std::ifstream *fin = (std::ifstream *)ctx;
+    fin->read((char *)output, read_size);
     return read_size;
   };
 
-  loader.eof = [](void* ctx) {
-    std::ifstream* fin = (std::ifstream*)ctx;
+  loader.eof = [](void *ctx) {
+    std::ifstream *fin = (std::ifstream *)ctx;
     return fin->eof();
   };
 
-  loader.close = [](void* ctx) {
-    std::ifstream* fin = (std::ifstream*)ctx;
+  loader.close = [](void *ctx) {
+    std::ifstream *fin = (std::ifstream *)ctx;
     fin->close();
   };
 
@@ -1020,28 +1007,26 @@ struct nmt_context* nmt_init_from_file_with_params_no_state(
   return ctx;
 }
 
-struct nmt_context* nmt_init_from_file_with_params(
-    const char* path_model, struct nmt_context_params params) {
-  QLOG(
-      qvac_lib_inference_addon_cpp::logger::Priority::DEBUG,
-      "=== nmt_init_from_file_with_params called ===\n");
-  nmt_context* ctx =
+struct nmt_context *
+nmt_init_from_file_with_params(const char *path_model,
+                               struct nmt_context_params params) {
+  QLOG(qvac_lib_inference_addon_cpp::logger::Priority::DEBUG,
+       "=== nmt_init_from_file_with_params called ===\n");
+  nmt_context *ctx =
       nmt_init_from_file_with_params_no_state(path_model, params);
   if (ctx == nullptr) {
     return nullptr;
   }
 
-  QLOG(
-      qvac_lib_inference_addon_cpp::logger::Priority::DEBUG,
-      "About to call nmt_init_state");
+  QLOG(qvac_lib_inference_addon_cpp::logger::Priority::DEBUG,
+       "About to call nmt_init_state");
   ctx->state = nmt_init_state(ctx);
   if (!ctx->state) {
     nmt_free(ctx);
     return nullptr;
   }
-  QLOG(
-      qvac_lib_inference_addon_cpp::logger::Priority::DEBUG,
-      "nmt_init_state returned successfully");
+  QLOG(qvac_lib_inference_addon_cpp::logger::Priority::DEBUG,
+       "nmt_init_state returned successfully");
 
   return ctx;
 }
