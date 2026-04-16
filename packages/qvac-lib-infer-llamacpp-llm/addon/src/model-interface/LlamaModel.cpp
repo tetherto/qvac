@@ -707,13 +707,16 @@ void LlamaModel::commonParamsParse(
 
     const std::optional<MainGpu> mainGpu = tryMainGpuFromMap(configFilemap);
 
+    const auto cacheTypes = CacheTypeConfig::fromConfigMap(configFilemap);
+
     const std::pair<BackendType, std::string> chosenBackend = chooseBackend(
         preferredBackend,
         LlamaModel::llamaLogCallback,
         mainGpu,
         &metadata_,
         &outAdrenoVersion,
-        pendingFinetuneOverrides_.active);
+        pendingFinetuneOverrides_.active,
+        cacheTypes);
 
     if (chosenBackend.first == BackendType::GPU) {
       params.mmproj_backend = chosenBackend.second;

@@ -46,11 +46,20 @@ struct BackendInterface {
   llamaLogCallbackF llamaLogCallback;
 };
 
+struct CacheTypeConfig {
+  std::string cacheTypeK;
+  std::string cacheTypeV;
+
+  static std::optional<CacheTypeConfig>
+  fromConfigMap(const std::unordered_map<std::string, std::string>& configMap);
+};
+
 std::pair<BackendType, std::string> chooseBackend(
     BackendType preferredBackendType, const BackendInterface& bckI,
     const ModelMetaData* metadata = nullptr,
     const std::optional<MainGpu>& mainGpu = std::nullopt,
-    std::optional<int>* outAdrenoVersion = nullptr, bool isFinetuning = false);
+    std::optional<int>* outAdrenoVersion = nullptr, bool isFinetuning = false,
+    const std::optional<CacheTypeConfig>& cacheTypes = std::nullopt);
 
 /// @brief Choose the backend to use for the model based on GPU device and
 /// available backends. Prefer OpenCL backend for Adreno GPUs, otherwise
@@ -65,8 +74,12 @@ std::pair<BackendType, std::string> chooseBackend(
 /// Adreno:
 ///   - Adreno 800+: prefer Vulkan
 ///   - Adreno <800: CPU
+///
+/// When TurboQuant cache types (tbq*) are used, throws StatusError if the
+/// resolved GPU backend is not Vulkan or CPU.
 std::pair<BackendType, std::string> chooseBackend(
     BackendType preferredBackendType, llamaLogCallbackF llamaLogcallback,
     const std::optional<MainGpu>& mainGpu, const ModelMetaData* metadata,
-    std::optional<int>* outAdrenoVersion = nullptr, bool isFinetuning = false);
+    std::optional<int>* outAdrenoVersion = nullptr, bool isFinetuning = false,
+    const std::optional<CacheTypeConfig>& cacheTypes = std::nullopt);
 } // namespace backend_selection

@@ -795,3 +795,134 @@ TEST_F(BackendSelectionTest, Finetuning_Llama_Adreno650_Throws) {
   MockModelMetaData meta(false, "llama");
   expectFinetuningThrows(mockBackend, BackendType::GPU, &meta);
 }
+
+// ---- TurboQuant (tbq*/pq*) backend validation ----
+
+void expectChosenWithCacheTypes(
+    MockBackendInterface& mockBackend, BackendType preferredBackend,
+    BackendType expectedBackend, const std::string& expectedBackendName,
+    const CacheTypeConfig& cacheTypes) {
+  BackendInterface bckI = mockBackend.toBackendInterface();
+  auto result = chooseBackend(
+      preferredBackend, bckI, nullptr, std::nullopt, nullptr, false,
+      cacheTypes);
+  expectChosen(result, expectedBackend, expectedBackendName);
+}
+
+void expectCacheTypesThrow(
+    MockBackendInterface& mockBackend, BackendType preferredBackend,
+    const CacheTypeConfig& cacheTypes) {
+  BackendInterface bckI = mockBackend.toBackendInterface();
+  EXPECT_THROW(
+      chooseBackend(
+          preferredBackend, bckI, nullptr, std::nullopt, nullptr, false,
+          cacheTypes),
+      qvac_errors::StatusError);
+}
+
+// tbq on Vulkan GPU: OK
+TEST_F(BackendSelectionTest, TurboQuant_tbq3_0_Vulkan_OK) {
+  mockBackend.addDevice(createGPUDevice(MALI_DESC, VULKAN0_BACK));
+  CacheTypeConfig ct{.cacheTypeK = "tbq3_0", .cacheTypeV = "pq3_0"};
+  expectChosenWithCacheTypes(
+      mockBackend, BackendType::GPU, BackendType::GPU, "vulkan0", ct);
+}
+
+TEST_F(BackendSelectionTest, TurboQuant_tbq4_0_Vulkan_OK) {
+  mockBackend.addDevice(createGPUDevice(MALI_DESC, VULKAN0_BACK));
+  CacheTypeConfig ct{.cacheTypeK = "tbq4_0", .cacheTypeV = "q4_0"};
+  expectChosenWithCacheTypes(
+      mockBackend, BackendType::GPU, BackendType::GPU, "vulkan0", ct);
+}
+
+TEST_F(BackendSelectionTest, TurboQuant_pq4_0_Vulkan_OK) {
+  mockBackend.addDevice(createGPUDevice(MALI_DESC, VULKAN0_BACK));
+  CacheTypeConfig ct{.cacheTypeK = "pq4_0", .cacheTypeV = "pq4_0"};
+  expectChosenWithCacheTypes(
+      mockBackend, BackendType::GPU, BackendType::GPU, "vulkan0", ct);
+}
+
+// tbq on CPU: OK (preferred CPU bypasses GPU entirely)
+TEST_F(BackendSelectionTest, TurboQuant_tbq3_0_CPU_OK) {
+  mockBackend.addDevice(createGPUDevice(MALI_DESC, VULKAN0_BACK));
+  CacheTypeConfig ct{.cacheTypeK = "tbq3_0", .cacheTypeV = "pq3_0"};
+  expectChosenWithCacheTypes(
+      mockBackend, BackendType::CPU, BackendType::CPU, "none", ct);
+}
+
+// tbq on CPU fallback (no GPU devices): OK
+TEST_F(BackendSelectionTest, TurboQuant_tbq4_0_NoGPU_FallsCPU_OK) {
+  CacheTypeConfig ct{.cacheTypeK = "tbq4_0", .cacheTypeV = "pq3_0"};
+  expectChosenWithCacheTypes(
+      mockBackend, BackendType::GPU, BackendType::CPU, "none", ct);
+}
+
+// tbq on OpenCL (non-Vulkan): throws
+TEST_F(BackendSelectionTest, TurboQuant_tbq3_0_OpenCL_Throws) {
+  mockBackend.addDevice(createGPUDevice(ADRENO_DESC, OPENCL_BACK));
+  mockBackend.addDevice(createIGPUDevice(ADRENO_DESC, VULKAN0_BACK));
+  CacheTypeConfig ct{.cacheTypeK = "tbq3_0", .cacheTypeV = "pq3_0"};
+  expectCacheTypesThrow(mockBackend, BackendType::GPU, ct);
+}
+
+TEST_F(BackendSelectionTest, TurboQuant_pq4_0_OpenCL_Throws) {
+  mockBackend.addDevice(createGPUDevice(ADRENO_DESC, OPENCL_BACK));
+  mockBackend.addDevice(createIGPUDevice(ADRENO_DESC, VULKAN0_BACK));
+  CacheTypeConfig ct{.cacheTypeK = "q4_0", .cacheTypeV = "pq4_0"};
+  expectCacheTypesThrow(mockBackend, BackendType::GPU, ct);
+}
+
+// tbq on Metal: throws
+TEST_F(BackendSelectionTest, TurboQuant_tbq4_0_Metal_Throws) {
+  mockBackend.addDevice(createGPUDevice("apple m1", "metal"));
+  CacheTypeConfig ct{.cacheTypeK = "tbq4_0", .cacheTypeV = "pq3_0"};
+  expectCacheTypesThrow(mockBackend, BackendType::GPU, ct);
+}
+
+// pq only (V side) on OpenCL: throws
+TEST_F(BackendSelectionTest, TurboQuant_pq3_0_V_Only_OpenCL_Throws) {
+  mockBackend.addDevice(createGPUDevice(ADRENO_DESC, OPENCL_BACK));
+  CacheTypeConfig ct{.cacheTypeK = "q4_0", .cacheTypeV = "pq3_0"};
+  expectCacheTypesThrow(mockBackend, BackendType::GPU, ct);
+}
+
+// Non-TurboQuant cache types on OpenCL: OK (no restriction)
+TEST_F(BackendSelectionTest, NonTurboQuant_q4_0_OpenCL_OK) {
+  mockBackend.addDevice(createGPUDevice(ADRENO_DESC, OPENCL_BACK));
+  mockBackend.addDevice(createIGPUDevice(ADRENO_DESC, VULKAN0_BACK));
+  CacheTypeConfig ct{.cacheTypeK = "q4_0", .cacheTypeV = "q4_0"};
+  expectChosenWithCacheTypes(
+      mockBackend, BackendType::GPU, BackendType::GPU, "gpuopencl", ct);
+}
+
+// Non-TurboQuant on Metal: OK
+TEST_F(BackendSelectionTest, NonTurboQuant_f16_Metal_OK) {
+  mockBackend.addDevice(createGPUDevice("apple m1", "metal"));
+  CacheTypeConfig ct{.cacheTypeK = "f16", .cacheTypeV = "f16"};
+  expectChosenWithCacheTypes(
+      mockBackend, BackendType::GPU, BackendType::GPU, "metal", ct);
+}
+
+// Empty cache types (no CacheTypeConfig): OK on any backend
+TEST_F(BackendSelectionTest, NoCacheTypes_OpenCL_OK) {
+  mockBackend.addDevice(createGPUDevice(ADRENO_DESC, OPENCL_BACK));
+  mockBackend.addDevice(createIGPUDevice(ADRENO_DESC, VULKAN0_BACK));
+  BackendInterface bckI = mockBackend.toBackendInterface();
+  auto result = chooseBackend(BackendType::GPU, bckI);
+  expectChosen(result, BackendType::GPU, "gpuopencl");
+}
+
+// Partial TurboQuant: only K is tbq, V is normal — still throws on OpenCL
+TEST_F(BackendSelectionTest, TurboQuant_K_Only_tbq3_0_OpenCL_Throws) {
+  mockBackend.addDevice(createGPUDevice(ADRENO_DESC, OPENCL_BACK));
+  CacheTypeConfig ct{.cacheTypeK = "tbq3_0", .cacheTypeV = "q4_0"};
+  expectCacheTypesThrow(mockBackend, BackendType::GPU, ct);
+}
+
+// Partial TurboQuant: only K is tbq, V is normal — OK on Vulkan
+TEST_F(BackendSelectionTest, TurboQuant_K_Only_tbq4_0_Vulkan_OK) {
+  mockBackend.addDevice(createGPUDevice(MALI_DESC, VULKAN0_BACK));
+  CacheTypeConfig ct{.cacheTypeK = "tbq4_0", .cacheTypeV = "q4_0"};
+  expectChosenWithCacheTypes(
+      mockBackend, BackendType::GPU, BackendType::GPU, "vulkan0", ct);
+}

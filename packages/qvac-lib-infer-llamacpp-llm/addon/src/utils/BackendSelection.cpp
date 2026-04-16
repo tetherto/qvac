@@ -19,6 +19,30 @@ using namespace backend_selection;
 
 namespace {
 
+bool isTurboQuantCacheType(const std::string& value) {
+  static const std::regex turboQuantRegex(
+      R"(^(?:tbq|pq)\d_0)", std::regex_constants::icase);
+  return std::regex_search(value, turboQuantRegex);
+}
+
+/// Assumes Fabric engine does not set tbq/pq cache types by default;
+/// they are only present when explicitly requested by the caller.
+bool usesTurboQuant(
+    const std::optional<backend_selection::CacheTypeConfig>& cacheTypes) {
+  if (!cacheTypes.has_value()) {
+    return false;
+  }
+  return isTurboQuantCacheType(cacheTypes->cacheTypeK) ||
+         isTurboQuantCacheType(cacheTypes->cacheTypeV);
+}
+
+bool isVulkanBackend(const std::string& backendName) {
+  std::string lower = backendName;
+  std::ranges::transform(
+      lower, lower.begin(), [](unsigned char ch) { return std::tolower(ch); });
+  return lower.starts_with("vulkan");
+}
+
 constexpr std::array<std::string_view, 3> kSupportedFinetuneArchitectures = {
     "gemma3", "qwen3", "bitnet"};
 
@@ -212,6 +236,27 @@ backend_selection::preferredBackendTypeFromString(const std::string& device) {
       "'cpu'.\n");
 }
 
+std::optional<CacheTypeConfig> CacheTypeConfig::fromConfigMap(
+    const std::unordered_map<std::string, std::string>& configMap) {
+  auto find = [&](const char* withHyphen,
+                  const char* withUnderscore) -> std::string {
+    if (auto cfgIt = configMap.find(withHyphen); cfgIt != configMap.end()) {
+      return cfgIt->second;
+    }
+    if (auto cfgIt = configMap.find(withUnderscore); cfgIt != configMap.end()) {
+      return cfgIt->second;
+    }
+    return {};
+  };
+  std::string cfgK = find("cache-type-k", "cache_type_k");
+  std::string cfgV = find("cache-type-v", "cache_type_v");
+  if (cfgK.empty() && cfgV.empty()) {
+    return std::nullopt;
+  }
+  return CacheTypeConfig{
+      .cacheTypeK = std::move(cfgK), .cacheTypeV = std::move(cfgV)};
+}
+
 std::optional<MainGpu>
 backend_selection::parseMainGpu(const std::string& mainGpuStr) {
   if (mainGpuStr.empty()) {
@@ -254,7 +299,8 @@ std::optional<MainGpu> backend_selection::tryMainGpuFromMap(
 std::pair<BackendType, std::string> backend_selection::chooseBackend(
     const BackendType preferredBackendType, const BackendInterface& bckI,
     const ModelMetaData* metadata, const std::optional<MainGpu>& mainGpu,
-    std::optional<int>* outAdrenoVersion, const bool isFinetuning) {
+    std::optional<int>* outAdrenoVersion, const bool isFinetuning,
+    const std::optional<CacheTypeConfig>& cacheTypes) {
 
   std::vector<std::string> gpuBackends;
   std::vector<std::string> igpuBackends;
@@ -359,29 +405,43 @@ std::pair<BackendType, std::string> backend_selection::chooseBackend(
     *outAdrenoVersion = maxAdrenoVersion;
   }
 
-  if (!openClBackends.empty()) {
-    bckI.llamaLogCallback(GGML_LOG_LEVEL_INFO, "Chosen GPU OpenCL", nullptr);
-    return {BackendType::GPU, openClBackends.front()};
+  auto pickGpuBackend = [&]() -> std::pair<BackendType, std::string> {
+    if (!openClBackends.empty()) {
+      bckI.llamaLogCallback(GGML_LOG_LEVEL_INFO, "Chosen GPU OpenCL", nullptr);
+      return {BackendType::GPU, openClBackends.front()};
+    }
+    if (!gpuBackends.empty()) {
+      bckI.llamaLogCallback(GGML_LOG_LEVEL_INFO, "Chosen GPU Backend", nullptr);
+      return {BackendType::GPU, gpuBackends.front()};
+    }
+    if (!igpuBackends.empty()) {
+      bckI.llamaLogCallback(
+          GGML_LOG_LEVEL_INFO, "Chosen iGPU Backend", nullptr);
+      return {BackendType::GPU, igpuBackends.front()};
+    }
+    bckI.llamaLogCallback(GGML_LOG_LEVEL_INFO, "Chosen CPU", nullptr);
+    return {BackendType::CPU, "none"};
+  };
+
+  auto result = pickGpuBackend();
+
+  if (usesTurboQuant(cacheTypes) && result.first == BackendType::GPU &&
+      !isVulkanBackend(result.second)) {
+    throw qvac_errors::StatusError(
+        qvac_errors::general_error::InvalidArgument,
+        "TurboQuant cache types (tbq*/pq*) are not supported. "
+        "resolved backend '" +
+            result.second + "' is not supported.\n");
   }
 
-  if (!gpuBackends.empty()) {
-    bckI.llamaLogCallback(GGML_LOG_LEVEL_INFO, "Chosen GPU Backend", nullptr);
-    return {BackendType::GPU, gpuBackends.front()};
-  }
-
-  if (!igpuBackends.empty()) {
-    bckI.llamaLogCallback(GGML_LOG_LEVEL_INFO, "Chosen iGPU Backend", nullptr);
-    return {BackendType::GPU, igpuBackends.front()};
-  }
-
-  bckI.llamaLogCallback(GGML_LOG_LEVEL_INFO, "Chosen CPU", nullptr);
-  return {BackendType::CPU, "none"};
+  return result;
 };
 
 std::pair<BackendType, std::string> backend_selection::chooseBackend(
     const BackendType preferredBackendType, llamaLogCallbackF llamaLogcallback,
     const std::optional<MainGpu>& mainGpu, const ModelMetaData* metadata,
-    std::optional<int>* outAdrenoVersion, const bool isFinetuning) {
+    std::optional<int>* outAdrenoVersion, const bool isFinetuning,
+    const std::optional<CacheTypeConfig>& cacheTypes) {
   BackendInterface bckI{
       ggml_backend_dev_count,
       ggml_backend_dev_backend_reg,
@@ -397,5 +457,6 @@ std::pair<BackendType, std::string> backend_selection::chooseBackend(
       metadata,
       mainGpu,
       outAdrenoVersion,
-      isFinetuning);
+      isFinetuning,
+      cacheTypes);
 }
