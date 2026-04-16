@@ -17,8 +17,7 @@ export interface NotSharded {
 
 export type ShardDetection = ShardInfo | NotSharded;
 
-export interface ShardMetadataEntry {
-  filename: string;
+export interface BlobRef {
   expectedSize: number;
   sha256Checksum: string;
   blobCoreKey: string;
@@ -27,17 +26,29 @@ export interface ShardMetadataEntry {
   blobByteOffset: number;
 }
 
-export interface ProcessedModel {
+export interface ShardMetadataEntry extends BlobRef {
+  filename: string;
+}
+
+export interface CompanionSetMetadataEntry extends BlobRef {
+  key: string;
   registryPath: string;
   registrySource: string;
-  blobCoreKey: string;
-  blobBlockOffset: number;
-  blobBlockLength: number;
-  blobByteOffset: number;
+  targetName: string;
+  primary?: boolean;
+}
+
+export interface CompanionSetMetadata {
+  setKey: string;
+  primaryKey: string;
+  files: readonly CompanionSetMetadataEntry[];
+}
+
+export interface ProcessedModel extends BlobRef {
+  registryPath: string;
+  registrySource: string;
   modelId: string;
   addon: ModelRegistryEntryAddon;
-  expectedSize: number;
-  sha256Checksum: string;
   engine: ModelRegistryEngine;
   modelName: string;
   quantization: string;
@@ -46,6 +57,8 @@ export interface ProcessedModel {
   isShardPart?: boolean;
   shardInfo?: ShardInfo;
   shardMetadata?: ShardMetadataEntry[];
+  companionSet?: CompanionSetMetadata;
+  isCompanionOnly?: boolean;
   name?: string;
 }
 
