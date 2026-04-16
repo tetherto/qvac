@@ -77,17 +77,13 @@ async function setupModel (t, model, kvTypes) {
     opts: { stats: true }
   }, config)
 
-  await inference.load()
-
   t.teardown(async () => {
-    try {
-      specLogger.release()
-      if (loader) await loader.close()
-      if (inference) await inference.unload()
-    } catch (err) {
-      // Ignore cleanup errors
-    }
+    try { specLogger.release() } catch (err) {}
+    try { if (inference) await inference.unload() } catch (err) {}
+    try { if (loader) await loader.close() } catch (err) {}
   })
+
+  await inference.load()
 
   return inference
 }
@@ -107,7 +103,19 @@ for (const model of MODELS) {
     test(label, { skip: skipReason, timeout: 600_000 }, async t => {
       t.comment(`head_dim=${model.headDim}  cache-type-k=${kv.k}  cache-type-v=${kv.v}`)
 
-      const inference = await setupModel(t, model, kv)
+      let inference
+      try {
+        inference = await setupModel(t, model, kv)
+      } catch (err) {
+        if (isAndroid && /TurboQuant.*not supported/i.test(err.message)) {
+          t.comment(`TurboQuant not supported on this backend, skipping: ${err.message}`)
+          t.pass('backend does not support TurboQuant cache types')
+          return
+        }
+        t.fail(`unexpected load error: ${err.message}`)
+        return
+      }
+
       const response = await inference.run(PROMPT)
       const output = await collectResponse(response)
 
