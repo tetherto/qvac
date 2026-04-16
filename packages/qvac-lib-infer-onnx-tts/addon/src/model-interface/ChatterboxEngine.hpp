@@ -128,7 +128,8 @@ private:
       std::unordered_map<std::string, TensorData<float>> &pastKeyValues,
       TensorData<int64_t> &promptToken, TensorData<float> &speakerEmbeddings,
       TensorData<float> &speakerFeatures,
-      std::vector<int64_t> &generatedTokens);
+      std::vector<int64_t> &generatedTokens,
+      int maxTokensOverride = 0);
 
   bool shouldStopGeneration(const std::vector<int64_t> &tokens, int step);
 
@@ -160,6 +161,7 @@ private:
   std::vector<float> textEmbWeight_;
   int64_t textEmbRows_ = 0;
   int64_t textEmbDim_ = 0;
+  size_t lastPromptTokenCount_ = 0;
   std::mt19937 rng_{std::random_device{}()};
 };
 

@@ -11,9 +11,10 @@ const CHATTERBOX_SAMPLE_RATE = 24000
 const argv = global.Bare ? global.Bare.argv : process.argv
 const modeArg = argv[2]
 const refAudioArg = argv[3]
+const langArg = argv[4]
 
 if (!modeArg || !['english', 'multilingual'].includes(modeArg)) {
-  console.error('Usage: chatterbox-tts.js <english|multilingual> [path/to/reference.wav]')
+  console.error('Usage: chatterbox-tts.js <english|multilingual> [path/to/reference.wav] [language]')
   if (global.Bare) global.Bare.exit(1)
   else process.exit(1)
 }
@@ -87,8 +88,8 @@ async function main () {
     throw err
   }
 
-  const language = isMultilingual ? 'es' : 'en'
-  const textToSynthesize = isMultilingual
+  const language = langArg || (isMultilingual ? 'es' : 'en')
+  const textToSynthesize = language === 'es'
     ? 'Hola mundo. Esta es una demostración de la síntesis de texto a voz usando Chatterbox.'
     : 'Hello world. This is a demonstration of the text to speech synthesis using Chatterbox.'
   const outputFile = path.join(__dirname, isMultilingual ? 'chatterbox-multilingual-output.wav' : 'chatterbox-output.wav')

@@ -19,8 +19,13 @@ TEST(ChatterboxLanguageModeTest, RejectsMultilingualWhenOnlyMonolingualInputsExi
   EXPECT_FALSE(lang_mode::supportsMultilingualEmbedInputs(inputNames));
 }
 
-TEST(ChatterboxLanguageModeTest, EnglishLanguageAlwaysUsesEnglishMode) {
+TEST(ChatterboxLanguageModeTest, EnglishLanguageUsesMultilingualWhenModelSupportsIt) {
   const std::vector<std::string> inputNames = {"input_ids", "position_ids", "language_id"};
+  EXPECT_FALSE(lang_mode::shouldUseEnglishMode("en", inputNames));
+}
+
+TEST(ChatterboxLanguageModeTest, EnglishLanguageUsesEnglishModeForMonolingualModel) {
+  const std::vector<std::string> inputNames = {"input_ids"};
   EXPECT_TRUE(lang_mode::shouldUseEnglishMode("en", inputNames));
 }
 
