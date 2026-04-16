@@ -64,13 +64,11 @@ jobs:
     if: needs.authorize.outputs.allowed == 'true'
     needs: [authorize, verify-fabric-lockstep]
     runs-on: ubuntu-latest
-    environment: release
     steps:
       - name: Run Sanity checks
-        uses: tetherto/oss-actions/.github/actions/sanity-checks@v1.1.0
+        uses: tetherto/oss-actions/.github/actions/sanity-checks@4c64bed91fc8eba3a201adb1495e61b4c1a2246d
         with:
           secret-token: ${{ secrets.GITHUB_TOKEN }}
-          npm-token: ${{ secrets.NPM_TOKEN }}
           pat-token: ${{ secrets.PAT_TOKEN }}
           run-integration: ${{ needs.authorize.outputs.allowed == 'true' }}
           workdir: packages/qvac-lib-infer-llamacpp-llm
@@ -108,15 +106,6 @@ jobs:
         uses: actions/setup-node@53b83947a5a98c8d113130e565377fae1a50d02f # 6.3.0
         with:
           node-version: 20
-
-      - name: Configure npm auth
-        working-directory: packages/qvac-lib-infer-llamacpp-llm
-        run: |
-          cat > .npmrc <<NPMRC
-          registry=https://registry.npmjs.org/
-          @qvac:registry=https://registry.npmjs.org/
-          //registry.npmjs.org/:_authToken=${{ secrets.NPM_TOKEN }}
-          NPMRC
 
       - name: Install dependencies
         working-directory: packages/qvac-lib-infer-llamacpp-llm

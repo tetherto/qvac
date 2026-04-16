@@ -88,7 +88,7 @@ phases:
       - adb shell screencap -p > "$DEVICEFARM_SCREENSHOT_PATH/final.png" 2>/dev/null
 
       # Generate JUnit XML from captured test results (script is in the test package)
-      - python3 $DEVICEFARM_TEST_PACKAGE_PATH/device-farm-gen-junit.py
+      - python3 $DEVICEFARM_TEST_PACKAGE_PATH/gen-junit.py
 
 artifacts:
   - $DEVICEFARM_LOG_DIR

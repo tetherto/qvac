@@ -4,7 +4,7 @@ const path = require('bare-path')
 const fs = require('bare-fs')
 const os = require('bare-os')
 const { createWavBuffer } = require('./wav-helper')
-const { splitText } = require('./textSplitter')
+const { splitTtsText } = require('@qvac/tts-onnx/text-chunker')
 const { concatenatePcmChunks } = require('./pcmConcatenator')
 
 const platform = os.platform()
@@ -17,6 +17,7 @@ function getBaseDir () {
 async function synthesizeChunk (model, text, tag) {
   let outputArray = []
   let jobStats = null
+  let reportedSampleRate = null
 
   const response = await model.run({
     input: text,
@@ -29,13 +30,16 @@ async function synthesizeChunk (model, text, tag) {
         const temp = Array.from(data.outputArray)
         outputArray = outputArray.concat(temp)
       }
+      if (data && data.sampleRate) {
+        reportedSampleRate = data.sampleRate
+      }
       if (data.event === 'JobEnded') {
         jobStats = data
       }
     })
     .await()
 
-  return { outputArray, jobStats, stats: response.stats || jobStats }
+  return { outputArray, reportedSampleRate, jobStats, stats: response.stats || jobStats }
 }
 
 async function runTTSWithSplit (model, params, expectation = {}, options = {}) {
@@ -51,12 +55,24 @@ async function runTTSWithSplit (model, params, expectation = {}, options = {}) {
   }
 
   try {
-    const chunks = splitText(params.text)
+    const splitLanguage =
+      typeof params.splitLanguage === 'string' && params.splitLanguage.length > 0
+        ? params.splitLanguage
+        : model?._config?.language || 'en'
+    const splitOpts = {
+      language: splitLanguage,
+      mergeToMaxScalars: false,
+      ...(typeof params.splitLocale === 'string' && params.splitLocale.length > 0
+        ? { locale: params.splitLocale }
+        : {})
+    }
+    const chunks = splitTtsText(params.text, splitOpts)
     console.log(`${tag}Split text into ${chunks.length} chunk(s)`)
 
     const pcmChunks = []
     let totalTime = 0
     let totalSamples = 0
+    let lastReportedSampleRate = null
 
     for (let i = 0; i < chunks.length; i++) {
       const chunkText = chunks[i]
@@ -67,6 +83,7 @@ async function runTTSWithSplit (model, params, expectation = {}, options = {}) {
 
       if (result.stats?.totalTime) totalTime += result.stats.totalTime
       totalSamples += result.outputArray.length
+      if (result.reportedSampleRate) lastReportedSampleRate = result.reportedSampleRate
 
       console.log(`${tag}  -> ${result.outputArray.length} samples`)
     }
@@ -90,6 +107,7 @@ async function runTTSWithSplit (model, params, expectation = {}, options = {}) {
         sampleCount,
         durationMs,
         sampleRate,
+        reportedSampleRate: lastReportedSampleRate,
         wavBuffer,
         stats: { totalTime, totalSamples, audioDurationMs: durationMs }
       }
@@ -143,6 +161,7 @@ async function runTTS (model, params, expectation = {}, options = {}) {
   try {
     let outputArray = []
     let jobStats = null
+    let reportedSampleRate = null
     const response = await model.run({
       input: params.text,
       type: 'text'
@@ -153,6 +172,9 @@ async function runTTS (model, params, expectation = {}, options = {}) {
         if (data && data.outputArray) {
           const temp = Array.from(data.outputArray)
           outputArray = outputArray.concat(temp)
+        }
+        if (data && data.sampleRate) {
+          reportedSampleRate = data.sampleRate
         }
         if (data.event === 'JobEnded') {
           jobStats = data
@@ -221,6 +243,7 @@ async function runTTS (model, params, expectation = {}, options = {}) {
         sampleCount,
         durationMs,
         sampleRate,
+        reportedSampleRate,
         wavBuffer,
         stats: roundedStats
       }
@@ -234,4 +257,11 @@ async function runTTS (model, params, expectation = {}, options = {}) {
   }
 }
 
-module.exports = { getBaseDir, isMobile, runTTS, runTTSWithSplit }
+module.exports = {
+  getBaseDir,
+  isMobile,
+  runTTS,
+  runTTSWithSplit,
+  checkExpectations,
+  saveWavIfNeeded
+}

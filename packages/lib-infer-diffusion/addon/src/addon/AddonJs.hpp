@@ -86,6 +86,14 @@ inline js_value_t* runJob(js_env_t* env, js_callback_info_t* info) try {
   SdModel::GenerationJob job;
   job.paramsJson = paramsJson;
 
+  auto inputObj = args.getJsObject(1, "inputObj");
+  auto initBuf =
+      inputObj
+          .getOptionalPropertyAs<js::TypedArray<uint8_t>, std::vector<uint8_t>>(
+              env, "initImageBuffer");
+  if (initBuf.has_value())
+    job.initImageBytes = std::move(initBuf.value());
+
   // Progress updates are queued as JSON strings (JsStringOutputHandler).
   job.progressCallback = [&instance](const std::string& progressJson) {
     instance.addonCpp->outputQueue->queueResult(std::any(progressJson));

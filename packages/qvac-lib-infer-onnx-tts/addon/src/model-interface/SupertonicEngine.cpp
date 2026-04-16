@@ -210,8 +210,12 @@ bool isSentenceSplitBeforeWs(const std::string &para, size_t wsStart) {
   utf8proc_int32_t punct = 0;
   if (!utf8Iterate(para, p, &punct))
     return false;
-  if (punct != '.' && punct != '!' && punct != '?')
+  const bool isAsciiTerm = (punct == '.' || punct == '!' || punct == '?');
+  // Ideographic / fullwidth sentence ends (CJK, etc.)
+  const bool isWideTerm = (punct == 0x3002 || punct == 0xFF01 || punct == 0xFF1F || punct == 0xFF0E || punct == 0x061F);
+  if (!isAsciiTerm && !isWideTerm) {
     return false;
+  }
   if (punct == '.') {
     if (matchesAbbrevAtDot(para, p))
       return false;
@@ -360,7 +364,7 @@ std::string preprocessForSupertonic(const std::string &rawUtf8,
     default:
       break;
     }
-    if (diacriticsSet().count(c) != 0)
+    if (!langWrap && diacriticsSet().count(c) != 0)
       continue;
     if (c == 0x2665 || c == 0x2606 || c == 0x2661 || c == 0x00a9 ||
         c == '\\')

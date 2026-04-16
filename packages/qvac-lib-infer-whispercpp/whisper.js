@@ -90,6 +90,22 @@ class WhisperInterface {
 
     if (mappedEvent === 'Output') {
       this._setState(state.PROCESSING)
+      if (this._outputCb != null) {
+        const isTranscriptArray = Array.isArray(data) && data.length > 0 &&
+          typeof data[0]?.text === 'string'
+        const isSingleTranscript = !Array.isArray(data) &&
+          data && typeof data === 'object' && typeof data.text === 'string'
+        if (isTranscriptArray) {
+          for (const segment of data) {
+            this._outputCb(addon, 'Output', jobId, [segment], null)
+          }
+        } else if (isSingleTranscript) {
+          this._outputCb(addon, 'Output', jobId, [data], null)
+        } else {
+          this._outputCb(addon, 'Output', jobId, data, null)
+        }
+      }
+      return
     }
 
     if (this._outputCb != null) {

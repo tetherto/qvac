@@ -1,6 +1,6 @@
 {
   "name": "@qvac/translation-nmtcpp",
-  "version": "2.0.2",
+  "version": "2.0.3",
   "description": "translation addon for qvac",
   "addon": true,
   "engines": {
@@ -66,6 +66,7 @@
   "homepage": "https://github.com/tetherto/qvac/tree/main/packages/qvac-lib-infer-nmtcpp#readme",
   "devDependencies": {
     "@qvac/dl-base": "^0.1.0",
+    "@qvac/registry-client": "^0.4.0",
     "bare-fetch": "^2.5.1",
     "bare-fs": "^4.5.1",
     "bare-process": "^4.2.2",
@@ -91,7 +92,8 @@
       "default": "./addonLogging.js"
     },
     "./addonLogging.js": "./addonLogging.js",
-    "./lib/bergamot-model-fetcher": "./lib/bergamot-model-fetcher.js"
+    "./lib/bergamot-model-fetcher": "./lib/bergamot-model-fetcher.js",
+    "./lib/indictrans-model-fetcher": "./lib/indictrans-model-fetcher.js"
   },
   "types": "index.d.ts",
   "standard": {

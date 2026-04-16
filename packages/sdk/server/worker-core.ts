@@ -15,6 +15,10 @@ import {
 } from "@/server/bare/registry/logging-stream-registry";
 import { clearAllAddonLoggers, getServerLogger, SDK_LOG_ID } from "@/logging";
 import { clearPlugins } from "@/server/plugins";
+import {
+  acquireWorkerLock,
+  releaseWorkerLock,
+} from "@/server/utils/worker-lock";
 
 let coreInitialized = false;
 let rpcInitialized = false;
@@ -32,6 +36,7 @@ export function initializeWorkerCore(): { hasRPCConfig: boolean } {
 
   const { hasRPCConfig } = initEnv();
 
+  acquireWorkerLock();
   setupShutdownHandlers();
 
   coreInitialized = true;
@@ -57,7 +62,9 @@ export function ensureRPCSetup() {
       logger.info(
         `Running in desktop mode, connecting to IPC socket: ${ipcSocketPath}`,
       );
-      const rpc = createIPCClient(ipcSocketPath);
+      const rpc = createIPCClient(ipcSocketPath, {
+        onDisconnect: () => void shutdownBareDirectWorker("ipc-disconnect"),
+      });
       logger.debug("Desktop IPC client created?", !!rpc);
     } else {
       logger.info("Running in BareKit IPC mode");
@@ -82,7 +89,12 @@ function clearRegistries() {
   clearPlugins();
 }
 
-export type BareDirectShutdownReason = "signal" | "rpc-close";
+export type BareDirectShutdownReason =
+  | "signal"
+  | "rpc-close"
+  | "uncaught-exception"
+  | "unhandled-rejection"
+  | "ipc-disconnect";
 
 export async function shutdownBareDirectWorker(
   reason: BareDirectShutdownReason,
@@ -90,11 +102,14 @@ export async function shutdownBareDirectWorker(
   if (isShuttingDown) return;
   isShuttingDown = true;
 
-  const message =
-    reason === "signal"
-      ? "🐻 Bare worker shutdown signal received, cleaning up..."
-      : "🧹 Bare direct mode RPC closed, cleaning up...";
-  logger.info(message);
+  const messages: Record<BareDirectShutdownReason, string> = {
+    signal: "🐻 Bare worker shutdown signal received, cleaning up...",
+    "rpc-close": "🧹 Bare direct mode RPC closed, cleaning up...",
+    "uncaught-exception": "💥 Uncaught exception, cleaning up...",
+    "unhandled-rejection": "💥 Unhandled rejection, cleaning up...",
+    "ipc-disconnect": "🔌 Parent IPC disconnected, cleaning up...",
+  };
+  logger.info(messages[reason]);
 
   try {
     clearRegistries();
@@ -110,12 +125,23 @@ export async function shutdownBareDirectWorker(
     logger.error("❌ Error during shutdown cleanup:", error);
   }
 
-  process.exit(0);
+  releaseWorkerLock();
+
+  const isGraceful = reason === "signal" || reason === "rpc-close";
+  process.exit(isGraceful ? 0 : 1);
 }
 
 function setupShutdownHandlers() {
-  process.once("SIGTERM", () =>
-    void shutdownBareDirectWorker("signal"),
-  );
+  process.once("SIGTERM", () => void shutdownBareDirectWorker("signal"));
   process.once("SIGINT", () => void shutdownBareDirectWorker("signal"));
+
+  process.on("uncaughtException", (err) => {
+    logger.error("Uncaught exception in worker:", err);
+    void shutdownBareDirectWorker("uncaught-exception");
+  });
+
+  process.on("unhandledRejection", (reason) => {
+    logger.error("Unhandled rejection in worker:", reason);
+    void shutdownBareDirectWorker("unhandled-rejection");
+  });
 }

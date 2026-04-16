@@ -70,7 +70,7 @@ This package supports two TTS engines. The engine is auto-detected based on the 
 | Sample Rate | 24,000 Hz | 44,100 Hz |
 | Voice Method | Voice cloning from reference audio | Pre-trained voice styles (`.bin` files) |
 | ONNX Models | 5 (tokenizer, speech_encoder, embed_tokens, conditional_decoder, language_model) | 3 (text_encoder, latent_denoiser, voice_decoder) |
-| Languages | en, es, fr, de, it, pt, ru | en, ko, es, pt, fr |
+| Languages | English (en), Spanish (es), French (fr), German (de), Italian (it), Portuguese (pt), Russian (ru), Arabic (ar), Danish (da), Greek (el), Finnish (fi), Hebrew (he), Hindi (hi), Korean (ko), Malay (ms), Dutch (nl), Norwegian (no), Polish (pl), Swedish (sv), Swahili (sw), Turkish (tr) | English (en), Korean (ko), Spanish (es), Portuguese (pt), French (fr) |
 | Speed Control | N/A | Configurable via `speed` parameter |
 | Inference Steps | Single-pass | Configurable via `numInferenceSteps` (default: 5) |
 | Use Case | Voice cloning from a reference audio sample | General-purpose TTS with selectable voice presets |
@@ -510,18 +510,6 @@ Supertonic includes 10 pre-trained voice styles:
 | `M3` | Male | Male voice style 3 |
 | `M4` | Male | Male voice style 4 |
 | `M5` | Male | Male voice style 5 |
-
-### Supported Languages
-
-Supertonic supports the following languages via the `language` config parameter:
-
-| Code | Language |
-|------|----------|
-| `en` | English |
-| `ko` | Korean |
-| `es` | Spanish |
-| `pt` | Portuguese |
-| `fr` | French |
 
 ## Output Format
 

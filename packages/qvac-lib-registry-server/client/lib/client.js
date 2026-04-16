@@ -1,6 +1,7 @@
 'use strict'
 
 const { QvacErrorRegistryClient, ERR_CODES } = require('../utils/error')
+const { withRetry } = require('../utils/retry')
 const RegistryConfig = require('./config')
 const { RegistryDatabase } = require('@qvac/registry-schema')
 const ReadyResource = require('ready-resource')
@@ -12,6 +13,9 @@ const IdEnc = require('hypercore-id-encoding')
 const path = require('#path')
 const fs = require('#fs')
 
+const DEFAULT_DOWNLOAD_MAX_RETRIES = 3
+const RETRIABLE_DOWNLOAD_CODES = ['REQUEST_TIMEOUT']
+
 class QVACRegistryClient extends ReadyResource {
   constructor (opts = {}) {
     super()
@@ -20,13 +24,13 @@ class QVACRegistryClient extends ReadyResource {
     this.registryConfig = new RegistryConfig({ logger: this.logger })
 
     this.db = null
-    this.corestore = null
     this.hyperswarm = null
     this._connectionHandler = null
     this._metadataReady = null
 
     this.storage = this.registryConfig.getRegistryStorage(opts.storage)
     this.registryCoreKey = this.registryConfig.getRegistryCoreKey(opts.registryCoreKey)
+    this.corestore = new Corestore(this.storage, opts.corestoreOpts || {})
 
     this.logger.debug('Initializing QVAC Registry Client', {
       mode: 'read',
@@ -39,8 +43,7 @@ class QVACRegistryClient extends ReadyResource {
   async _open () {
     this.logger.debug('_open called')
 
-    this.logger.debug('Creating corestore for open')
-    this.corestore = new Corestore(this.storage)
+    this.logger.debug('Opening corestore')
     await this.corestore.ready()
 
     this.logger.debug('Creating Hyperswarm for open')
@@ -257,7 +260,15 @@ class QVACRegistryClient extends ReadyResource {
 
       let artifact
       if (options.outputFile) {
-        await this._streamBlobToFile(blobs, core, model.blobBinding, options.outputFile, options)
+        await withRetry(
+          () => this._streamBlobToFile(blobs, core, model.blobBinding, options.outputFile, options),
+          {
+            maxRetries: options.maxRetries != null ? options.maxRetries : DEFAULT_DOWNLOAD_MAX_RETRIES,
+            retryCodes: RETRIABLE_DOWNLOAD_CODES,
+            onRetry: () => fs.promises.unlink(options.outputFile).catch(() => {}),
+            logger: this.logger
+          }
+        )
         artifact = { path: options.outputFile, totalSize }
 
         rangeDownload.destroy()
@@ -381,7 +392,15 @@ class QVACRegistryClient extends ReadyResource {
 
       let artifact
       if (options.outputFile) {
-        await this._streamBlobToFile(blobs, core, pointer, options.outputFile, options)
+        await withRetry(
+          () => this._streamBlobToFile(blobs, core, pointer, options.outputFile, options),
+          {
+            maxRetries: options.maxRetries != null ? options.maxRetries : DEFAULT_DOWNLOAD_MAX_RETRIES,
+            retryCodes: RETRIABLE_DOWNLOAD_CODES,
+            onRetry: () => fs.promises.unlink(options.outputFile).catch(() => {}),
+            logger: this.logger
+          }
+        )
         artifact = { path: options.outputFile, totalSize }
 
         rangeDownload.destroy()

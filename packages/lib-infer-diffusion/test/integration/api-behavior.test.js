@@ -14,8 +14,13 @@ const {
 const isDarwinX64 = os.platform() === 'darwin' && os.arch() === 'x64'
 const isLinuxArm64 = os.platform() === 'linux' && os.arch() === 'arm64'
 const isAndroid = os.platform() === 'android'
+const isWindows = os.platform() === 'win32'
 const noGpu = proc.env && proc.env.NO_GPU === 'true'
 const useCpu = isDarwinX64 || isLinuxArm64 || noGpu
+
+// Windows Vulkan backend is slower, increase timeout
+const BASE_TIMEOUT = 600000
+const testTimeout = isWindows ? BASE_TIMEOUT * 2 : BASE_TIMEOUT
 
 // Smallest model for fast behavior tests
 const MODEL = {
@@ -82,7 +87,7 @@ function saveGeneratedImages (modelDir, filenameSuffix, images) {
   }
 }
 
-test('idle | run: allowed, returns QvacResponse', { timeout: 600000 }, async t => {
+test('idle | run: allowed, returns QvacResponse', { timeout: testTimeout }, async t => {
   const { model, modelDir } = await setupModel(t)
   const response = await model.run(SHORT_PARAMS)
   t.ok(response, 'run() returns a response')
@@ -98,13 +103,13 @@ test('idle | run: allowed, returns QvacResponse', { timeout: 600000 }, async t =
   saveGeneratedImages(modelDir, 'idle-run', images)
 })
 
-test('idle | cancel: allowed, no-op', { timeout: 600000 }, async t => {
+test('idle | cancel: allowed, no-op', { timeout: testTimeout }, async t => {
   const { model } = await setupModel(t)
   await model.cancel()
   t.pass('cancel when idle does not throw')
 })
 
-test('run | cancel: cancels current job', { timeout: 600000 }, async t => {
+test('run | cancel: cancels current job', { timeout: testTimeout }, async t => {
   const { model } = await setupModel(t)
   const response = await model.run(LONG_PARAMS)
 
@@ -127,7 +132,7 @@ test('run | cancel: cancels current job', { timeout: 600000 }, async t => {
   t.pass('cancel during run resolves and stops job')
 })
 
-test('run | run: second run() throws busy error', { timeout: 600000 }, async t => {
+test('run | run: second run() throws busy error', { timeout: testTimeout }, async t => {
   const { model, modelDir } = await setupModel(t)
   const firstResponse = await model.run(SHORT_PARAMS)
   let firstError = null
@@ -165,7 +170,7 @@ test('run | run: second run() throws busy error', { timeout: 600000 }, async t =
   saveGeneratedImages(modelDir, 'run-run-first-response', images)
 })
 
-test('cancel | run: can run again after cancel', { timeout: 600000 }, async t => {
+test('cancel | run: can run again after cancel', { timeout: testTimeout }, async t => {
   const { model, modelDir } = await setupModel(t)
 
   // Start a job and cancel after first progress tick
