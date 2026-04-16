@@ -8,6 +8,10 @@ inputs:
   arch:
     description: Build architecture
     required: true
+  version:
+    description: Vulkan SDK version in x.y.z.n form, or latest
+    required: false
+    default: latest
 
 runs:
   using: composite
@@ -24,9 +28,17 @@ runs:
     - name: Install Vulkan SDK (Linux)
       if: ${{ inputs.platform == 'linux' || inputs.platform == 'android' }}
       shell: bash
+      env:
+        VULKAN_VERSION: ${{ inputs.version }}
       run: |
+        if [ "$VULKAN_VERSION" = "latest" ]; then
+          VULKAN_URL="https://sdk.lunarg.com/sdk/download/latest/linux/vulkan_sdk.tar.xz"
+        else
+          VULKAN_URL="https://sdk.lunarg.com/sdk/download/${VULKAN_VERSION}/linux/vulkansdk-linux-x86_64-${VULKAN_VERSION}.tar.xz"
+        fi
+
         sudo apt install -y xz-utils
-        wget -q -O /tmp/vulkansdk.tar.xz https://sdk.lunarg.com/sdk/download/latest/linux/vulkan_sdk.tar.xz
+        wget -q -O /tmp/vulkansdk.tar.xz "$VULKAN_URL"
         mkdir -p "$HOME/vulkan"
         tar xf /tmp/vulkansdk.tar.xz --directory "$HOME/vulkan" --strip-components=1
 
@@ -39,12 +51,19 @@ runs:
     - name: Setup Vulkan SDK path in Linux arm64
       if: ${{ inputs.platform == 'linux' && inputs.arch == 'arm64' }}
       shell: bash
+      env:
+        VULKAN_VERSION: ${{ inputs.version }}
       run: |
         echo "VULKAN_SDK=$HOME/vulkan/aarch64" >> "$GITHUB_ENV"
 
         cd "$HOME/vulkan"
 
-        SDK_VERSION=$(grep -o 'sdk/[0-9]*\.[0-9]*' README.txt | head -1 | sed 's|sdk/||')
+        if [ "$VULKAN_VERSION" = "latest" ]; then
+          SDK_VERSION=$(grep -o 'sdk/[0-9]*\.[0-9]*\.[0-9]*\.[0-9]*' README.txt | head -1 | sed 's|sdk/||')
+        else
+          SDK_VERSION="$VULKAN_VERSION"
+        fi
+
         if [ -z "$SDK_VERSION" ]; then
           echo "::error::Unable to determine Vulkan SDK version from README.txt"
           exit 1
@@ -80,11 +99,17 @@ runs:
     - name: Install Vulkan SDK (Windows)
       if: ${{ inputs.platform == 'win32' }}
       shell: powershell
+      env:
+        VULKAN_VERSION: ${{ inputs.version }}
       run: |
         $ErrorActionPreference = "Stop"
         $ProgressPreference = "SilentlyContinue"
 
-        $url = "https://sdk.lunarg.com/sdk/download/latest/windows/vulkan-sdk.exe"
+        if ($env:VULKAN_VERSION -eq "latest") {
+          $url = "https://sdk.lunarg.com/sdk/download/latest/windows/vulkan-sdk.exe"
+        } else {
+          $url = "https://sdk.lunarg.com/sdk/download/$env:VULKAN_VERSION/windows/vulkansdk-windows-X64-$env:VULKAN_VERSION.exe"
+        }
         $out = "$env:RUNNER_TEMP\vulkan-sdk.exe"
 
         [Net.ServicePointManager]::SecurityProtocol = [Net.SecurityProtocolType]::Tls12
