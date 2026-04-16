@@ -321,7 +321,7 @@ jobs:
       # Model provisioning for mobile: presigned URLs so the app can download detector + all
       # recognizers at runtime (same set as desktop integration tests).
       - name: Configure AWS credentials via OIDC for model download
-        uses: aws-actions/configure-aws-credentials@8df5847569e6427dd6c4fb1cf565c83acfa8afa7 # 6.0.0
+        uses: aws-actions/configure-aws-credentials@ec61189d14ec14c8efccab744f656cffd0e33f37 # 6.1.0
         with:
           role-to-assume: ${{ secrets.AWS_OIDC_ROLE_ARN }}
           aws-region: eu-central-1
@@ -453,7 +453,7 @@ jobs:
 
       - name: Setup Android SDK
         if: matrix.platform == 'Android'
-        uses: android-actions/setup-android@9fc6c4e9069bf8d3d10b2204b1fb8f6ef7065407 # 3.2.2
+        uses: android-actions/setup-android@40fd30fb8d7440372e1316f5d1809ec01dcd3699 # 4.0.1
 
       - name: Generate Android project
         if: matrix.platform == 'Android'
@@ -778,7 +778,7 @@ jobs:
       # Kept as-is from your workflow (only paths above needed monorepo porting)
 
       - name: Configure AWS credentials via OIDC for Device Farm
-        uses: aws-actions/configure-aws-credentials@8df5847569e6427dd6c4fb1cf565c83acfa8afa7 # 6.0.0
+        uses: aws-actions/configure-aws-credentials@ec61189d14ec14c8efccab744f656cffd0e33f37 # 6.1.0
         with:
           role-to-assume: ${{ secrets.AWS_OIDC_ROLE_ARN }}
           aws-region: us-west-2
@@ -1357,7 +1357,7 @@ jobs:
 
       - name: Comment PR with results
         if: always() && github.event.pull_request.number
-        uses: actions/github-script@ed597411d8f924073f98dfc5c65a23a2325f34cd # 8.0.0
+        uses: actions/github-script@3a2844b7e9c422d3c10d287c895573f7108da1b3 # 9.0.0
         with:
           github-token: ${{ secrets.GITHUB_TOKEN }}
           script: |
