@@ -3,11 +3,13 @@
 #include <any>
 #include <atomic>
 #include <cstdint>
+#include <optional>
 #include <string>
 #include <unordered_map>
 #include <variant>
 #include <vector>
 
+#include "NmtLazyInitializeBackend.hpp"
 #include "TranslationModel.hpp"
 #include "qvac-lib-inference-addon-cpp/ModelInterfaces.hpp"
 
@@ -71,6 +73,8 @@ private:
       config_;
 
   mutable std::atomic<bool> stopTranslation_ = false;
+
+  std::optional<NmtBackendsHandle> backendsHandle_;
 };
 
 } // namespace qvac_lib_inference_addon_nmt

@@ -2,10 +2,12 @@
 
 #include <memory>
 #include <mutex>
+#include <optional>
 #include <string>
 #include <unordered_map>
 #include <variant>
 
+#include "NmtLazyInitializeBackend.hpp"
 #include "nmt.hpp"
 #ifdef HAVE_BERGAMOT
 #include "bergamot.hpp"
@@ -99,6 +101,8 @@ private:
 
   std::unordered_map<std::string, std::variant<double, int64_t, std::string>>
       config_;
+
+  std::optional<NmtBackendsHandle> backendsHandle_;
 };
 
 } // namespace qvac_lib_inference_addon_nmt

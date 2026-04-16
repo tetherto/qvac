@@ -17,6 +17,17 @@ PivotTranslationModel::PivotTranslationModel(
       secondModel_(std::make_unique<TranslationModel>(secondModelPath)),
       stopTranslation_(false) {
 
+  // Initialize backends before sub-models load (do NOT erase keys)
+  std::string backendsDir;
+  if (auto it = firstModelConfig.find("backendsdir"); it != firstModelConfig.end()) {
+    backendsDir = std::get<std::string>(it->second);
+  }
+  std::string openclCacheDir;
+  if (auto it = firstModelConfig.find("openclcachedir"); it != firstModelConfig.end()) {
+    openclCacheDir = std::get<std::string>(it->second);
+  }
+  backendsHandle_.emplace(backendsDir, openclCacheDir);
+
   firstModel_->setConfig(std::move(firstModelConfig));
   secondModel_->setConfig(std::move(secondModelConfig));
 

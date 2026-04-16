@@ -88,6 +88,19 @@ void TranslationModel::unload() {
 }
 
 void TranslationModel::load() {
+  // Extract backend loading config and initialize backends before any model loading
+  std::string backendsDir;
+  if (auto it = config_.find("backendsdir"); it != config_.end()) {
+    backendsDir = std::get<std::string>(it->second);
+    config_.erase(it);
+  }
+  std::string openclCacheDir;
+  if (auto it = config_.find("openclcachedir"); it != config_.end()) {
+    openclCacheDir = std::get<std::string>(it->second);
+    config_.erase(it);
+  }
+  backendsHandle_.emplace(backendsDir, openclCacheDir);
+
   QLOG(
       qvac_lib_inference_addon_cpp::logger::Priority::INFO,
       "[TRANSLATION MODEL] modelPath_: " + modelPath_);
