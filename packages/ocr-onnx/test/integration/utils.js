@@ -296,7 +296,6 @@ let _reportScheduled = false
 function _flushPerfReport () {
   if (_perfReporter.length > 0) {
     _perfReporter.writeReport(_reportPath)
-    _perfReporter.writeStepSummary()
     _perfReporter.writeToConsole()
   }
 }
