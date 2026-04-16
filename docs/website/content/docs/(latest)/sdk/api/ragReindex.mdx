@@ -5,7 +5,7 @@ description: Reindexes the RAG database to optimize search performance.
 ---
 
 ```ts
-function ragReindex(params, options?): Promise<RagReindexResult>;
+function ragReindex(params: RagReindexParams, options?: RPCOptions): Promise<RagReindexResult>;
 ```
 
 For HyperDB, rebalances centroids using k-means clustering. Requires a minimum number of documents (16 by default).

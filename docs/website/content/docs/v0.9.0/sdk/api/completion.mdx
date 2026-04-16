@@ -5,7 +5,7 @@ description: Generates completion from a language model based on conversation hi
 ---
 
 ```ts
-function completion(params): {
+function completion(params: CompletionParams): {
   tokenStream: AsyncGenerator<string>;
   toolCallStream: AsyncGenerator<ToolCallEvent>;
   text: Promise<string>;

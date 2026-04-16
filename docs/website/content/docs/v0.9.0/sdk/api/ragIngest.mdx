@@ -5,7 +5,7 @@ description: Ingests documents into the RAG vector database.
 ---
 
 ```ts
-function ragIngest(params, options?): Promise<{ processed: RagSaveEmbeddingsResult[]; droppedIndices: number[] }>;
+function ragIngest(params: RagIngestParams, options?: RPCOptions): Promise<{ processed: RagSaveEmbeddingsResult[]; droppedIndices: number[] }>;
 ```
 
 Full pipeline: chunk → embed → save. Implicitly opens (or creates) the workspace.

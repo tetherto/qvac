@@ -5,20 +5,15 @@ description: Opens a logging stream to receive real-time logs.
 ---
 
 ```ts
-function loggingStream(params: { id: string }): AsyncGenerator<LoggingStreamResponse>;
+function loggingStream(params: LoggingParams): AsyncGenerator<LoggingStreamResponse>;
 ```
 
 ## Parameters
 
 | Name | Type | Required? | Description |
 | --- | --- | :---: | --- |
-| params | [`LoggingStreamParams`](#loggingstreamparams) | ✓ | The logging stream parameters |
-
-### `LoggingStreamParams`
-
-| Field | Type | Required? | Description |
-| --- | --- | :---: | --- |
-| id | `string` | ✓ | The identifier to stream logs for. Pass a model ID for model logs, or the exported constant `SDK_LOG_ID` for SDK server logs. |
+| params | `object` | ✓ | The logging stream parameters |
+| params.id | `string` | ✓ | The identifier to stream logs for. Pass a model ID for model logs, or the exported constant `SDK_LOG_ID` for SDK server logs. |
 
 ## Returns
 

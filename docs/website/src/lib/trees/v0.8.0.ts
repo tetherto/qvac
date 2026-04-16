@@ -6,8 +6,8 @@ export const tree: Node[] = latestTree.map(node =>
   node.type === 'folder' && node.name === 'JS API'
     ? {
         ...node,
-        index: node.index ? { ...node.index, url: '/v0.9.0/sdk/api' } : node.index,
-        children: findFolderChildren(source.pageTree.children, '/v0.9.0/sdk/api'),
+        index: node.index ? { ...node.index, url: '/v0.8.0/sdk/api' } : node.index,
+        children: findFolderChildren(source.pageTree.children, '/v0.8.0/sdk/api'),
       }
     : node
 );

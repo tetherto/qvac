@@ -5,7 +5,7 @@ description: Provides a simple interface for transcribing audio by collecting al
 ---
 
 ```ts
-function transcribe(params, options?): Promise<string>;
+function transcribe(params: TranscribeClientParams, options?: RPCOptions): Promise<string>;
 ```
 
 Collects all streaming results from [`transcribeStream()`](../transcribeStream) into a single string.

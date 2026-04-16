@@ -5,7 +5,7 @@ description: Converts text to speech audio.
 ---
 
 ```ts
-function textToSpeech(params, options?): {
+function textToSpeech(params: TtsClientParams, options?: RPCOptions): {
   bufferStream: AsyncGenerator<number>;
   buffer: Promise<number[]>;
   done: Promise<boolean>;

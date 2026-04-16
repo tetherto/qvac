@@ -23,9 +23,9 @@ Thrown on the client side (response validation, RPC, provider). Access via `SDK_
 
 | Error | Code | Summary | Thrown by |
 | --- | --- | --- | --- |
-| `INVALID_RESPONSE_TYPE` | 50001 | Invalid response type received. | `cancel()`, `downloadAsset()`, `embed()`, `getModelInfo()`, `loadModel()`, `loggingStream()`, `ping()`, `ragDeleteEmbeddings()`, `ragSaveEmbeddings()`, `ragSearch()`, `startQVACProvider()`, `stopQVACProvider()`, `unloadModel()` |
+| `INVALID_RESPONSE_TYPE` | 50001 | Invalid response type received. | `cancel()`, `downloadAsset()`, `embed()`, `finetune()`, `getModelInfo()`, `heartbeat()`, `loadModel()`, `loggingStream()`, `ragDeleteEmbeddings()`, `ragSaveEmbeddings()`, `ragSearch()`, `resume()`, `startQVACProvider()`, `stopQVACProvider()`, `suspend()`, `unloadModel()` |
 | `INVALID_OPERATION_IN_RESPONSE` | 50002 | Response operation didn't match the expected RAG operation. | `ragDeleteEmbeddings()`, `ragSaveEmbeddings()`, `ragSearch()` |
-| `STREAM_ENDED_WITHOUT_RESPONSE` | 50003 | Streaming RPC ended without a final response. | `downloadAsset()`, `loadModel()`, `ragDeleteEmbeddings()`, `ragSaveEmbeddings()`, `ragSearch()` |
+| `STREAM_ENDED_WITHOUT_RESPONSE` | 50003 | Streaming RPC ended without a final response. | `downloadAsset()`, `finetune()`, `loadModel()`, `ragDeleteEmbeddings()`, `ragSaveEmbeddings()`, `ragSearch()` |
 | `INVALID_AUDIO_CHUNK_TYPE` | 50004 | Invalid audio chunk input type provided. | `transcribe()`, `transcribeStream()` |
 | `INVALID_TOOLS_ARRAY` | 50005 | Invalid tools array provided. | `completion()` |
 | `INVALID_TOOL_SCHEMA` | 50006 | Invalid tool schema provided. | `completion()` |
@@ -126,6 +126,8 @@ Thrown by the server (model operations, downloads, cache, RAG). Access via `SDK_
 | `DELEGATE_PROVIDER_ERROR` | 53702 | Delegated provider returned an error. | `completion()`, `loadModel()` |
 | `RPC_NO_DATA_RECEIVED` | 53703 | No data received from request. | Internal server RPC |
 | `RPC_UNKNOWN_REQUEST_TYPE` | 53704 | Unknown request type received. | Internal server RPC |
+| `LIFECYCLE_SUSPEND_FAILED` | 53600 | Failed to suspend one or more resources. | `suspend()` |
+| `LIFECYCLE_RESUME_FAILED` | 53601 | Failed to resume one or more resources. | `resume()` |
 | `PLUGIN_NOT_FOUND` | 53850 | Plugin not found for the specified model type. | `invokePlugin()`, `invokePluginStream()`, `loadModel()` |
 | `PLUGIN_HANDLER_NOT_FOUND` | 53851 | Handler not found in plugin. | `invokePlugin()`, `invokePluginStream()` |
 | `PLUGIN_REQUEST_VALIDATION_FAILED` | 53852 | Plugin request validation failed. | `invokePlugin()`, `invokePluginStream()` |

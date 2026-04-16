@@ -5,7 +5,7 @@ description: Starts a provider service that offers QVAC capabilities to remote p
 ---
 
 ```ts
-function startQVACProvider(params): Promise<object>;
+function startQVACProvider(params: ProvideParams): Promise<object>;
 ```
 
 The provider's keypair can be controlled via the seed option or the `QVAC_HYPERSWARM_SEED` environment variable.

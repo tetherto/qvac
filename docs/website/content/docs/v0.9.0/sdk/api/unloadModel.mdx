@@ -5,7 +5,7 @@ description: Unloads a previously loaded model from the server.
 ---
 
 ```ts
-function unloadModel(params): Promise<void>;
+function unloadModel(params: UnloadModelParams): Promise<void>;
 ```
 
 When the last model is unloaded and no providers are active, the RPC connection is automatically closed, allowing the process to exit naturally.

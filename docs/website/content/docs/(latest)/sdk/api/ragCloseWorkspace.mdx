@@ -5,7 +5,7 @@ description: Closes a RAG workspace, releasing in-memory resources (Corestore, H
 ---
 
 ```ts
-function ragCloseWorkspace(params?, options?): Promise<void>;
+function ragCloseWorkspace(params?: RagCloseWorkspaceParams, options?: RPCOptions): Promise<void>;
 ```
 
 Releases Corestore, HyperDB adapter, and RAG instance. Workspace data remains on disk unless `deleteOnClose` is set.
