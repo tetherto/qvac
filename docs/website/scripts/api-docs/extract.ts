@@ -9,7 +9,7 @@ import * as path from "path";
 import { fileURLToPath } from "node:url";
 import { Application, ReflectionKind } from "typedoc";
 import type { DeclarationReflection, SignatureReflection } from "typedoc";
-import type { ApiFunction, ExpandedType, ErrorEntry, ApiData } from "./types.js";
+import type { ApiFunction, ApiObject, ApiType, ExpandedType, ErrorEntry, ApiData } from "./types.js";
 import { auditTsDoc } from "./audit-tsdoc.js";
 
 const SCRIPT_DIR = path.dirname(fileURLToPath(import.meta.url));
@@ -91,6 +91,7 @@ export async function extractApiData(
     excludeProtected: true,
     excludeExternals: true,
     skipErrorChecking: true,
+    plugin: ["typedoc-plugin-zod"],
   });
 
   const project = await app.convert();
@@ -99,6 +100,8 @@ export async function extractApiData(
   }
 
   console.log(`✓ TypeDoc analysis complete`);
+
+  buildTypeMap(project);
 
   console.log(`🔍 Auditing TSDoc completeness...`);
   await auditTsDoc(project, sdkPath);
@@ -121,12 +124,20 @@ export async function extractApiData(
   }
   console.log(`✓ Validation passed for all ${apiFunctions.length} functions`);
 
+  const apiObjects = extractApiObjects(project);
+  console.log(`✓ Extracted ${apiObjects.length} API objects`);
+
+  const apiTypes = extractApiTypes(project);
+  console.log(`✓ Extracted ${apiTypes.length} shared types`);
+
   const errors = await extractErrors(sdkPath);
 
   const apiData: ApiData = {
     version,
     generatedAt: new Date().toISOString(),
     functions: apiFunctions,
+    objects: apiObjects.length > 0 ? apiObjects : undefined,
+    types: apiTypes.length > 0 ? apiTypes : undefined,
     errors,
   };
 
@@ -313,6 +324,155 @@ function extractApiFunctions(project: any): ApiFunction[] {
 }
 
 // ---------------------------------------------------------------------------
+// TypeDoc object extraction (exported variables with object-like shapes)
+// ---------------------------------------------------------------------------
+
+function extractApiObjects(project: any): ApiObject[] {
+  const objects: ApiObject[] = [];
+  const allVars = project.getReflectionsByKind(ReflectionKind.Variable) as DeclarationReflection[];
+
+  for (const refl of allVars) {
+    const decl = refl as DeclarationReflection;
+    const type = (decl as any).type;
+    const props = extractTypeProperties(type, new Set<string>());
+    if (!props || props.length === 0) continue;
+
+    const hasMethodMember = props.some((p: any) =>
+      p.type?.type === "reflection" && p.type.declaration?.signatures?.length > 0,
+    );
+    if (!hasMethodMember) continue;
+
+    const sourcePath = (decl.sources?.[0]?.fullFileName ?? (decl as any).sources?.[0]?.file?.fullFileName ?? "") as string;
+    const normalizedPath = sourcePath.replace(/\\/g, "/");
+    if (normalizedPath && (normalizedPath.includes("/server/") || normalizedPath.includes("/examples/"))) continue;
+
+    const comment = decl.comment;
+    const summary = comment?.summary;
+    const blockTags = comment?.blockTags ?? [];
+
+    const fields = props.map((p: any) => ({
+      name: p.name,
+      type: formatType(p.type),
+      required: !p.flags?.isOptional,
+      defaultValue: cleanDefaultValue(p.defaultValue),
+      description: extractComment(p.comment?.summary),
+    }));
+
+    const children: ExpandedType[] = [];
+    for (const prop of props) {
+      const childName = getResolvableTypeName(prop.type)
+        ?? (prop.type?.type === "array" ? getResolvableTypeName(prop.type.elementType) : null);
+      if (!childName) continue;
+      const visited = new Set<string>([childName]);
+      const target = prop.type?.type === "array" ? prop.type.elementType : prop.type;
+      const expanded = resolveExpandedType(target, childName, visited, 0);
+      if (expanded) children.push(expanded);
+    }
+
+    objects.push({
+      name: decl.name,
+      description: extractComment(summary) || "No description available",
+      fields,
+      children,
+      examples: blockTags
+        .filter((tag: any) => tag.tag === "@example")
+        .map((tag: any) => extractComment(tag.content)) || [],
+    });
+  }
+
+  return objects.sort((a, b) => a.name.localeCompare(b.name));
+}
+
+// ---------------------------------------------------------------------------
+// TypeDoc shared-type extraction (type aliases + interfaces)
+// ---------------------------------------------------------------------------
+
+function extractApiTypes(project: any): ApiType[] {
+  const types: ApiType[] = [];
+
+  const allTypeAliases = project.getReflectionsByKind(ReflectionKind.TypeAlias) as DeclarationReflection[];
+  const allInterfaces = project.getReflectionsByKind(ReflectionKind.Interface) as DeclarationReflection[];
+  const allReflections = [...allTypeAliases, ...allInterfaces];
+
+  for (const refl of allReflections) {
+    const decl = refl as DeclarationReflection;
+
+    const sourcePath = (decl.sources?.[0]?.fullFileName ?? (decl as any).sources?.[0]?.file?.fullFileName ?? "") as string;
+    const normalizedPath = sourcePath.replace(/\\/g, "/");
+    if (normalizedPath && (normalizedPath.includes("/server/") || normalizedPath.includes("/examples/"))) continue;
+
+    const comment = decl.comment;
+    const summary = comment?.summary;
+
+    const definition = formatTypeDefinition(decl);
+    const members = extractTypeMembers(decl);
+
+    types.push({
+      name: decl.name,
+      description: extractComment(summary) || "No description available",
+      definition,
+      members: members.length > 0 ? members : undefined,
+    });
+  }
+
+  return types.sort((a, b) => a.name.localeCompare(b.name));
+}
+
+function formatTypeDefinition(decl: DeclarationReflection): string {
+  const type = (decl as any).type;
+  if (!type) return `type ${decl.name} = unknown`;
+
+  if (type.type === "union" && type.types) {
+    const members = type.types.map((t: any) => {
+      if (t.type === "literal") return JSON.stringify(t.value);
+      return formatType(t);
+    });
+    return `type ${decl.name} = ${members.join(" | ")}`;
+  }
+
+  if (type.type === "reflection" && type.declaration?.children) {
+    const fields = type.declaration.children.map((c: any) => {
+      const opt = c.flags?.isOptional ? "?" : "";
+      return `  ${c.name}${opt}: ${formatType(c.type)};`;
+    });
+    return `interface ${decl.name} {\n${fields.join("\n")}\n}`;
+  }
+
+  if (decl.children && decl.children.length > 0) {
+    const fields = decl.children.map((c: any) => {
+      const opt = c.flags?.isOptional ? "?" : "";
+      return `  ${c.name}${opt}: ${formatType((c as any).type)};`;
+    });
+    return `interface ${decl.name} {\n${fields.join("\n")}\n}`;
+  }
+
+  return `type ${decl.name} = ${formatType(type)}`;
+}
+
+function extractTypeMembers(decl: DeclarationReflection): Array<{ name: string; description: string }> {
+  const type = (decl as any).type;
+
+  if (type?.type === "union" && type.types) {
+    return type.types
+      .filter((t: any) => t.type === "literal" && t.value != null)
+      .map((t: any) => ({
+        name: String(t.value),
+        description: "",
+      }));
+  }
+
+  const children = decl.children ?? type?.declaration?.children;
+  if (children && children.length > 0) {
+    return children.map((c: any) => ({
+      name: c.name,
+      description: extractComment(c.comment?.summary),
+    }));
+  }
+
+  return [];
+}
+
+// ---------------------------------------------------------------------------
 // Validation
 // ---------------------------------------------------------------------------
 
@@ -347,8 +507,28 @@ function validateApiFunction(fn: ApiFunction): void {
 }
 
 // ---------------------------------------------------------------------------
+// Project-wide type lookup (populated once after TypeDoc conversion)
+// ---------------------------------------------------------------------------
+
+const typeMap = new Map<string, DeclarationReflection>();
+
+function buildTypeMap(project: any): void {
+  typeMap.clear();
+  const aliases = project.getReflectionsByKind(ReflectionKind.TypeAlias) as DeclarationReflection[];
+  const interfaces = project.getReflectionsByKind(ReflectionKind.Interface) as DeclarationReflection[];
+  for (const r of [...aliases, ...interfaces]) {
+    typeMap.set(r.name, r);
+  }
+}
+
+// ---------------------------------------------------------------------------
 // TypeDoc helpers (module-private)
 // ---------------------------------------------------------------------------
+
+function cleanDefaultValue(raw: string | undefined): string | undefined {
+  if (!raw || raw === "..." || raw === "undefined") return undefined;
+  return raw;
+}
 
 function formatType(type: any): string {
   if (!type) return "unknown";
@@ -399,7 +579,7 @@ function resolveExpandedType(
       name: prop.name,
       type: formatType(prop.type),
       required: !prop.flags?.isOptional,
-      defaultValue: prop.defaultValue ?? undefined,
+      defaultValue: cleanDefaultValue(prop.defaultValue),
       description: extractComment(prop.comment?.summary),
     });
 
@@ -434,6 +614,22 @@ function extractTypeProperties(type: any, visited: Set<string>): any[] | null {
       if (refl.children) return refl.children;
       if (refl.type) return extractTypeProperties(refl.type, visited);
     }
+
+    const name = type.name as string | undefined;
+    if (name) {
+      const alias = typeMap.get(name);
+      if (alias) {
+        if (alias.children) return alias.children;
+        const aliasType = (alias as any).type;
+        if (aliasType && !visited.has(name)) {
+          visited.add(name);
+          return extractTypeProperties(aliasType, visited);
+        }
+        if (aliasType?.type === "reflection" && aliasType.declaration?.children) {
+          return aliasType.declaration.children;
+        }
+      }
+    }
     return null;
   }
 
@@ -458,8 +654,19 @@ function extractTypeProperties(type: any, visited: Set<string>): any[] | null {
 
 function getResolvableTypeName(type: any): string | null {
   if (!type) return null;
-  if (type.type === "reference" && type.reflection?.children) return type.reflection.name ?? type.name;
-  if (type.type === "reference" && type.target?.children) return type.target.name ?? type.name;
+  if (type.type === "reference") {
+    if (type.reflection?.children) return type.reflection.name ?? type.name;
+    if (type.target?.children) return type.target.name ?? type.name;
+
+    const name = type.name as string | undefined;
+    if (name && typeMap.has(name)) {
+      const alias = typeMap.get(name)!;
+      if (alias.children) return name;
+      const aliasType = (alias as any).type;
+      if (aliasType?.type === "reflection" && aliasType.declaration?.children) return name;
+      if (aliasType?.type === "intersection") return name;
+    }
+  }
   if (type.type === "reflection" && type.declaration?.children) return null;
   return null;
 }

@@ -50,9 +50,13 @@ description: "Generates completion from a language model. Returns streamed token
 Use completionV2() instead.
 </Callout>
 
+<WrapCode>
+
 \`\`\`typescript
 function completion(params: CompletionParams): CompletionResult
 \`\`\`
+
+</WrapCode>
 
 ## Parameters
 
@@ -114,9 +118,13 @@ titleStyle: code
 description: "Sends a ping request to the server."
 ---
 
+<WrapCode>
+
 \`\`\`typescript
 function ping(): Promise<{ type: "pong"; number: number }>
 \`\`\`
+
+</WrapCode>
 
 
 ## Returns
@@ -141,14 +149,22 @@ description: API reference — v0.8.0
 
 ## Functions
 
-| Function | Summary | Signature |
-| --- | --- | --- |
-| [\`completion()\`](./completion) | Generates completion from a language model. | \`completion(params: CompletionParams): CompletionResult\` |
-| [\`ping()\`](./ping) | Sends a ping request to the server. | \`ping(): Promise<{ type: "pong"; number: number }>\` |
+| Function | Summary |
+| --- | --- |
+| [\`completion()\`](./completion) | Generates completion from a language model. |
+| [\`ping()\`](./ping) | Sends a ping request to the server. |
+
+## Shared types
+
+<Card href="./shared-types" title="Shared types">
+  Common type definitions used across SDK functions.
+</Card>
 
 ## Errors
 
-See [Errors](./errors) for the full list of SDK error codes."
+<Card href="./errors" title="Error codes">
+  All errors thrown by the SDK and how to handle them via \`SDK_CLIENT_ERROR_CODES\` and \`SDK_SERVER_ERROR_CODES\`.
+</Card>"
 `;
 
 exports[`object-page template > renders an object page with fields 1`] = `

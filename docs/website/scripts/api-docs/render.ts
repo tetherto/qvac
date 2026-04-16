@@ -110,17 +110,26 @@ export function renderExpandedTypes(types: ExpandedType[], baseDepth: number): s
 
   for (const expanded of types) {
     const heading = "#".repeat(Math.min(baseDepth, 5));
+    const hasDefaults = expanded.fields.some((f) => f.defaultValue != null);
 
-    sections.push(`${heading} \`${expanded.typeName}\`
+    const header = hasDefaults
+      ? `| Field | Type | Required? | Default | Description |\n| --- | --- | :---: | --- | --- |`
+      : `| Field | Type | Required? | Description |\n| --- | --- | :---: | --- |`;
 
-| Field | Type | Required? | Description |
-| --- | --- | :---: | --- |
-${expanded.fields
-  .map((f) => {
-    const typeStr = escapeTableLight(f.type);
-    return `| \`${f.name}\` | \`${typeStr}\` | ${f.required ? "\u2713" : "\u2717"} | ${escapeTableLight(f.description || "\u2014")} |`;
-  })
-  .join("\n")}`);
+    const rows = expanded.fields
+      .map((f) => {
+        const typeStr = escapeTableLight(f.type);
+        const req = f.required ? "\u2713" : "\u2717";
+        const desc = escapeTableLight(f.description || "\u2014");
+        if (hasDefaults) {
+          const def = f.defaultValue ? `\`${escapeTableLight(f.defaultValue)}\`` : "\u2014";
+          return `| \`${f.name}\` | \`${typeStr}\` | ${req} | ${def} | ${desc} |`;
+        }
+        return `| \`${f.name}\` | \`${typeStr}\` | ${req} | ${desc} |`;
+      })
+      .join("\n");
+
+    sections.push(`${heading} \`${expanded.typeName}\`\n\n${header}\n${rows}`);
 
     if (expanded.children.length > 0) {
       sections.push(renderExpandedTypes(expanded.children, baseDepth + 1));
@@ -203,6 +212,7 @@ export async function renderApiDocs(
   const indexMdx = env
     .render("index-page.njk", {
       functions: apiData.functions,
+      objects: apiData.objects ?? [],
       versionLabel: options.versionLabel,
     })
     .trim();
