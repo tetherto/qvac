@@ -35,8 +35,7 @@ export class LifecycleExecutor extends AbstractModelExecutor<typeof lifecycleTes
     this.registryWarmed = true;
   }
 
-  protected defaultHandler = async (testId: string, _params: unknown, expectation: unknown): Promise<TestResult> => {
-    const exp = expectation as Expectation;
+  protected defaultHandler = (async (testId: string, _params: {}, expectation: Expectation): Promise<TestResult> => {
     const start = Date.now();
 
     try {
@@ -44,12 +43,12 @@ export class LifecycleExecutor extends AbstractModelExecutor<typeof lifecycleTes
       const output = await this.runStrategy(testId);
       const elapsed = Date.now() - start;
       await this.ensureActive();
-      return ValidationHelpers.validate(`${output} (${elapsed}ms)`, exp);
+      return ValidationHelpers.validate(`${output} (${elapsed}ms)`, expectation);
     } catch (error) {
       await this.ensureActive();
       return { passed: false, output: `lifecycle [${testId}] failed: ${formatError(error)}` };
     }
-  };
+  }) as never;
 
   private async runStrategy(testId: string): Promise<string> {
     switch (testId) {
