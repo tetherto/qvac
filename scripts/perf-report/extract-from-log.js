@@ -315,8 +315,13 @@ function parseArgs () {
 
 function filterResults (report, pattern) {
   if (!pattern) return
-  const escaped = pattern.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
-  const re = new RegExp(escaped, 'i')
+  let re
+  try {
+    re = new RegExp(pattern, 'i')
+  } catch (_) {
+    const escaped = pattern.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
+    re = new RegExp(escaped, 'i')
+  }
   const before = report.results.length
   report.results = report.results.filter(r => re.test(r.test))
   const after = report.results.length
