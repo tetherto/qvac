@@ -1,5 +1,48 @@
 const path = require('bare-path')
 
+/**
+ * Normalize a raw native event into `Output` / `Error` / `JobEnded`, mapping
+ * `backendDevice` from `0/1` to `'cpu'/'gpu'`. Returns `null` for unknown
+ * event names (caller logs and skips dispatch).
+ *
+ * @param {string} rawEvent
+ * @param {*} rawData
+ * @param {*} rawError
+ * @returns {{ type: string, data: *, error: * } | null}
+ */
+function mapAddonEvent (rawEvent, rawData, rawError) {
+  // RuntimeStats detected structurally (any of the known stats keys).
+  const isStatsData =
+    rawData &&
+    typeof rawData === 'object' &&
+    (
+      'tokens_per_second' in rawData ||
+      'total_tokens' in rawData ||
+      'total_time_ms' in rawData ||
+      'batch_size' in rawData ||
+      'context_size' in rawData
+    )
+  if (isStatsData) {
+    const stats = { ...rawData }
+    if (stats.backendDevice === 0) {
+      stats.backendDevice = 'cpu'
+    } else if (stats.backendDevice === 1) {
+      stats.backendDevice = 'gpu'
+    }
+    return { type: 'JobEnded', data: stats, error: null }
+  }
+
+  if (typeof rawEvent === 'string' && rawEvent.includes('Error')) {
+    return { type: 'Error', data: rawData, error: rawError }
+  }
+
+  if (typeof rawEvent === 'string' && rawEvent.includes('Embeddings')) {
+    return { type: 'Output', data: rawData, error: null }
+  }
+
+  return null
+}
+
 /// An interface between Bare addon in C++ and JS runtime.
 class BertInterface {
   /**
@@ -37,11 +80,10 @@ class BertInterface {
   }
 
   /**
-   * Loads model weights
    * @param {Object} data
    * @param {String} data.filename
-   * @param {Buffer} data.contents
-   * @param {Promise<Boolean>} data.completed
+   * @param {Uint8Array|null} data.chunk
+   * @param {Boolean} data.completed
    */
   async loadWeights (data) {
     return this._binding.loadWeights(this._handle, data)
@@ -65,5 +107,6 @@ class BertInterface {
 }
 
 module.exports = {
-  BertInterface
+  BertInterface,
+  mapAddonEvent
 }
