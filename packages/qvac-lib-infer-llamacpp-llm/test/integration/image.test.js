@@ -7,7 +7,27 @@ const { ensureModel, getMediaPath } = require('./utils')
 const FilesystemDL = require('@qvac/dl-filesystem')
 const LlmLlamacpp = require('../../index.js')
 const os = require('bare-os')
-const { createPerformanceReporter } = require('../../../../scripts/test-utils/performance-reporter')
+const process = require('bare-process')
+
+// Dynamic require via path.join prevents bare-pack from statically resolving
+// the path during mobile bundling (the script lives outside the addon package).
+let createPerformanceReporter
+const _scriptBase = path.join('..', '..', '..', '..', 'scripts', 'test-utils')
+try {
+  const perfReporterMod = require(path.join(_scriptBase, 'performance-reporter'))
+  perfReporterMod.configure({ fs, path, process, os })
+  createPerformanceReporter = perfReporterMod.createPerformanceReporter
+} catch (_) {
+  createPerformanceReporter = function (opts) {
+    return {
+      record () {},
+      toJSON () { return { schema_version: '1.0', addon: opts.addon, results: [] } },
+      writeReport () {},
+      writeStepSummary () {},
+      get length () { return 0 }
+    }
+  }
+}
 
 const platform = os.platform()
 const arch = os.arch()

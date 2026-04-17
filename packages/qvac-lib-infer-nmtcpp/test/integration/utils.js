@@ -2,8 +2,8 @@
 
 const fs = require('bare-fs')
 const path = require('bare-path')
+const os = require('bare-os')
 const process = require('bare-process')
-const { createPerformanceReporter } = require('../../../../scripts/test-utils/performance-reporter')
 
 // ============================================================================
 // Platform Detection
@@ -18,6 +18,26 @@ const isMobile = platform === 'ios' || platform === 'android'
 // ============================================================================
 // Singleton Performance Reporter
 // ============================================================================
+
+// Dynamic require via path.join prevents bare-pack from statically resolving
+// the path during mobile bundling (the script lives outside the addon package).
+let createPerformanceReporter
+const _scriptBase = path.join('..', '..', '..', '..', 'scripts', 'test-utils')
+try {
+  const perfReporterMod = require(path.join(_scriptBase, 'performance-reporter'))
+  perfReporterMod.configure({ fs, path, process, os })
+  createPerformanceReporter = perfReporterMod.createPerformanceReporter
+} catch (_) {
+  createPerformanceReporter = function (opts) {
+    return {
+      record () {},
+      toJSON () { return { schema_version: '1.0', addon: opts.addon, results: [] } },
+      writeReport () {},
+      writeStepSummary () {},
+      get length () { return 0 }
+    }
+  }
+}
 
 const _perfReporter = createPerformanceReporter({
   addon: 'nmtcpp',
