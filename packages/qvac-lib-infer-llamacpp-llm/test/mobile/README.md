@@ -1,46 +1,43 @@
 # Mobile Testing for LLM Llamacpp
 
-This directory contains the mobile test configuration for the `@qvac/llm-llamacpp` addon.
+This directory contains the mobile test entrypoint for the `@qvac/llm-llamacpp` addon.
 
 > ⚠️ **Note**: This test directory is included in the published npm package to support the mobile testing framework. These test files are NOT part of the public API and should only be used by the internal mobile testing infrastructure.
 
 ## Test Structure
 
-- `test.cjs` - Main test file with `startTest()` function that runs automatically on mobile
-- `testAssets/` - Directory for model files and test data
+- `integration-runtime.cjs` — Bare-runtime helper that exposes a global `runIntegrationModule()` so each generated test entry can dynamically import a single file under `../integration/`.
+- `integration.auto.cjs` — **Auto-generated** by `npm run test:mobile:generate`. Each function in this file mirrors one `.test.js` under `test/integration/` and invokes it through the runtime helper. Do not edit by hand; regenerate after adding or renaming integration tests.
+- `testAssets/` — Directory for model files and test data referenced by the integration tests.
+
+## What the Mobile Tests Do
+
+The mobile tests run the **same integration suite** that lives under `test/integration/`. They exercise the public `LlmLlamacpp` API end-to-end:
+
+1. **Construct the addon** with the new constructor shape — `new LlmLlamacpp({ files: { model: [absolutePath] }, config, logger?, opts? })`. For sharded GGUF models the caller pre-resolves the shard list (`tensors.txt` + every `*-NNNNN-of-MMMMM.gguf` file).
+2. **Load** the model into memory via `model.load()`.
+3. **Run** inference, finetuning, generation-parameter, KV-cache, and other scenarios depending on which test entry is invoked.
+4. **Unload** the model via `model.unload()` (or via `t.teardown()` in brittle tests).
+
+There is **no separate `test.cjs` file** and the addon no longer takes a `Loader` instance — file paths are passed directly to the constructor by the test (or by the test helper in `test/integration/utils.js`). Mobile testing reuses these helpers unchanged.
 
 ## Setup
 
-### Download Test Model
+### Test Assets
 
-The test requires a small GGUF model file. Download it to the `testAssets` directory:
+Each integration test downloads or expects its own model under `test/integration/...` (or under `testAssets/`). See the individual test files for the exact model required. Most tests rely on `setupModel()` / `setupTinyModel()` helpers in `test/integration/utils.js`, which resolve the absolute file paths and pass them through `files.model`.
 
-```bash
-cd test/mobile/testAssets
+## Regenerating `integration.auto.cjs`
 
-# Download a small test model (~500KB)
-curl -L -o small-test-model.gguf \
-  https://huggingface.co/ggml-org/models/resolve/main/tinyllamas/stories260K.gguf
-```
-
-### Verify Setup
+After adding a new file under `test/integration/`, regenerate the mobile entries:
 
 ```bash
-ls -lh testAssets/
-# Should show: small-test-model.gguf (~500KB)
+npm run test:mobile:generate
 ```
 
-## What the Test Does
+This walks `test/integration/`, derives a function name per test file, and rewrites `integration.auto.cjs`. The generator script also runs from CI to ensure mobile and desktop test inventories stay in sync.
 
-The mobile test performs a complete LLM inference workflow:
-
-1. **Initialize Filesystem Loader** - Sets up file access for the model
-2. **Configure Model** - Uses GPU-accelerated settings (99 GPU layers) for faster inference
-3. **Load Model** - Loads the GGUF model weights into memory and offloads to GPU
-4. **Run Inference** - Generates text from the prompt "Say hello in one word"
-5. **Cleanup** - Properly destroys the model instance and closes the loader
-
-## Running the Test
+## Running the Tests
 
 From the mobile tester app root:
 
@@ -55,42 +52,16 @@ npm run android
 npm run ios
 ```
 
-The app will:
-- Automatically initialize after 3 seconds
-- Start the test after 5 seconds
-- Display progress and results on screen
-
-## Expected Output
-
-Success message will show:
-```
-TEST COMPLETE ✓
-
-Model loaded and generated X characters in response to: "Say hello in one word."
-
-Generated: Hello
-```
+The app drives the auto-generated entrypoints to execute the desired test scenarios on-device.
 
 ## Troubleshooting
 
 ### Model file not found
-- Ensure `small-test-model.gguf` is in the `testAssets/` directory
-- Check that the file downloaded completely (~500KB)
+- Ensure the test asset referenced by the failing integration test is present under `test/integration/` (or `testAssets/`).
+- For sharded models, every shard plus the `*.tensors.txt` file must be present — the caller is responsible for the full file set since the addon no longer downloads weights.
 
 ### Out of memory
-- The test uses a very small model (~500KB)
-- If issues persist, try closing other apps
+- Mobile devices have limited RAM. Prefer the smaller test models (e.g. tinyllama / Qwen-0.6B) for on-device runs and skip large-model tests where possible.
 
 ### Timeout errors
-- The test waits up to 60 seconds for generation
-- On slower devices, this may need to be increased in `test.cjs`
-
-## Model Details
-
-**Model**: TinyLlamas Stories 260K
-- Size: ~500KB
-- Format: GGUF
-- Purpose: Fast mobile testing
-- Source: https://huggingface.co/ggml-org/models
-
-This is an extremely small model designed for quick testing, not production use.
+- Generation timeouts can be tuned per test file in `test/integration/...` via the brittle `{ timeout }` option.

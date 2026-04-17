@@ -41,18 +41,17 @@ async function main () {
   console.log('Seed   :', SEED)
   console.log()
 
-  const model = new ImgStableDiffusion(
-    {
-      logger: console,
-      diskPath: MODELS_DIR,
-      modelName: MODEL_NAME,
-      llmModel: LLM_MODEL,
-      vaeModel: VAE_MODEL
+  const model = new ImgStableDiffusion({
+    files: {
+      model: path.join(MODELS_DIR, MODEL_NAME),
+      llm: path.join(MODELS_DIR, LLM_MODEL),
+      vae: path.join(MODELS_DIR, VAE_MODEL)
     },
-    {
+    config: {
       threads: 4
-    }
-  )
+    },
+    logger: console
+  })
 
   try {
     // ── 1. Load weights ───────────────────────────────────────────────────────

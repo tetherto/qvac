@@ -1,7 +1,6 @@
 'use strict'
 
 const test = require('brittle')
-const FilesystemDL = require('@qvac/dl-filesystem')
 const LlmLlamacpp = require('../../index.js')
 const os = require('bare-os')
 const fs = require('bare-fs')
@@ -71,14 +70,12 @@ const TIMEOUT = 1_800_000
 // ---------------------------------------------------------------------------
 test('AfriqueGemma: empty and whitespace input must not crash', { timeout: TIMEOUT }, async t => {
   const [modelName, dirPath] = await resolveModel()
-  const loader = new FilesystemDL({ dirPath })
   const addon = new LlmLlamacpp({
-    loader,
-    modelName,
-    diskPath: dirPath,
+    files: { model: [path.join(dirPath, modelName)] },
+    config: AFRIQUEGEMMA_CONFIG,
     logger: console,
     opts: { stats: true }
-  }, AFRIQUEGEMMA_CONFIG)
+  })
   try {
     await addon.load()
     const emptyPrompt = 'Translate English to Swahili.\nEnglish: \nSwahili:'
@@ -91,7 +88,6 @@ test('AfriqueGemma: empty and whitespace input must not crash', { timeout: TIMEO
     t.pass('whitespace-style prompt did not crash')
   } finally {
     await addon.unload().catch(() => {})
-    await loader.close().catch(() => {})
   }
 })
 
@@ -103,34 +99,28 @@ test('AfriqueGemma: empty and whitespace input must not crash', { timeout: TIMEO
 // ---------------------------------------------------------------------------
 test('AfriqueGemma: lifecycle load-unload-fresh-load-use', { timeout: TIMEOUT }, async t => {
   const [modelName, dirPath] = await resolveModel()
-  const loader1 = new FilesystemDL({ dirPath })
   const addon1 = new LlmLlamacpp({
-    loader: loader1,
-    modelName,
-    diskPath: dirPath,
+    files: { model: [path.join(dirPath, modelName)] },
+    config: AFRIQUEGEMMA_CONFIG,
     logger: console,
     opts: { stats: true }
-  }, AFRIQUEGEMMA_CONFIG)
+  })
   try {
     await addon1.load()
     const r1 = await addon1.run([{ role: 'user', content: EN_SW_PROMPT }])
     const out1 = await collectTranslation(r1)
     t.ok(out1.length > 0, 'first run produced output')
     await addon1.unload()
-    await loader1.close()
   } catch (err) {
     await addon1.unload().catch(() => {})
-    await loader1.close().catch(() => {})
     throw err
   }
-  const loader2 = new FilesystemDL({ dirPath })
   const addon2 = new LlmLlamacpp({
-    loader: loader2,
-    modelName,
-    diskPath: dirPath,
+    files: { model: [path.join(dirPath, modelName)] },
+    config: AFRIQUEGEMMA_CONFIG,
     logger: console,
     opts: { stats: true }
-  }, AFRIQUEGEMMA_CONFIG)
+  })
   try {
     await addon2.load()
     const r2 = await addon2.run([{ role: 'user', content: EN_SW_PROMPT }])
@@ -138,7 +128,6 @@ test('AfriqueGemma: lifecycle load-unload-fresh-load-use', { timeout: TIMEOUT },
     t.ok(out2.length > 0, 'second run after fresh load produced output')
   } finally {
     await addon2.unload().catch(() => {})
-    await loader2.close().catch(() => {})
   }
 })
 
@@ -149,14 +138,12 @@ test('AfriqueGemma: lifecycle load-unload-fresh-load-use', { timeout: TIMEOUT },
 // ---------------------------------------------------------------------------
 test('AfriqueGemma: cancel mid-translation, model reusable after', { timeout: TIMEOUT }, async t => {
   const [modelName, dirPath] = await resolveModel()
-  const loader = new FilesystemDL({ dirPath })
   const addon = new LlmLlamacpp({
-    loader,
-    modelName,
-    diskPath: dirPath,
+    files: { model: [path.join(dirPath, modelName)] },
+    config: { ...AFRIQUEGEMMA_CONFIG, n_predict: '512' },
     logger: console,
     opts: { stats: true }
-  }, { ...AFRIQUEGEMMA_CONFIG, n_predict: '512' })
+  })
   try {
     await addon.load()
     const longPrompt = 'Translate English to Swahili.\nEnglish: The children are playing in the park. Their mother watches from the bench. The sun is shining brightly today. Many families enjoy this beautiful place.\nSwahili:'
@@ -183,7 +170,6 @@ test('AfriqueGemma: cancel mid-translation, model reusable after', { timeout: TI
     t.ok(out2.length > 0, 'model produced output after cancel')
   } finally {
     await addon.unload().catch(() => {})
-    await loader.close().catch(() => {})
   }
 })
 
@@ -195,18 +181,16 @@ test('AfriqueGemma: cancel mid-translation, model reusable after', { timeout: TI
 // ---------------------------------------------------------------------------
 test('AfriqueGemma: tools true required for load', { timeout: TIMEOUT }, async t => {
   const [modelName, dirPath] = await resolveModel()
-  const loader = new FilesystemDL({ dirPath })
   const configWithoutTools = {
     ...AFRIQUEGEMMA_CONFIG,
     tools: undefined
   }
   delete configWithoutTools.tools
   const addon = new LlmLlamacpp({
-    loader,
-    modelName,
-    diskPath: dirPath,
+    files: { model: [path.join(dirPath, modelName)] },
+    config: configWithoutTools,
     logger: console
-  }, configWithoutTools)
+  })
   try {
     await addon.load()
     t.pass('load without tools succeeded (addon defaults to jinja)')
@@ -217,8 +201,6 @@ test('AfriqueGemma: tools true required for load', { timeout: TIMEOUT }, async t
       /template|jinja|tools|not supported|custom/.test(msg),
       'load without tools fails with clear message about template/jinja'
     )
-  } finally {
-    await loader.close().catch(() => {})
   }
 })
 
@@ -232,14 +214,12 @@ test('AfriqueGemma: tools true required for load', { timeout: TIMEOUT }, async t
 // ---------------------------------------------------------------------------
 test('AfriqueGemma: run after unload rejects cleanly', { timeout: TIMEOUT }, async t => {
   const [modelName, dirPath] = await resolveModel()
-  const loader = new FilesystemDL({ dirPath })
   const addon = new LlmLlamacpp({
-    loader,
-    modelName,
-    diskPath: dirPath,
+    files: { model: [path.join(dirPath, modelName)] },
+    config: AFRIQUEGEMMA_CONFIG,
     logger: console,
     opts: { stats: true }
-  }, AFRIQUEGEMMA_CONFIG)
+  })
 
   await addon.load()
   const r1 = await addon.run([{ role: 'user', content: EN_SW_PROMPT }])
@@ -275,7 +255,6 @@ test('AfriqueGemma: run after unload rejects cleanly', { timeout: TIMEOUT }, asy
     t.comment('Expected: synchronous throw or a response that resolves to an error')
   }
   t.ok(rejected || hadUnhandled, 'run() after unload() does not silently succeed')
-  await loader.close().catch(() => {})
 })
 
 // ---------------------------------------------------------------------------
@@ -288,14 +267,12 @@ test('AfriqueGemma: run after unload rejects cleanly', { timeout: TIMEOUT }, asy
 // ---------------------------------------------------------------------------
 test('AfriqueGemma: small n_predict produces truncated but valid output', { timeout: TIMEOUT }, async t => {
   const [modelName, dirPath] = await resolveModel()
-  const loader = new FilesystemDL({ dirPath })
   const addon = new LlmLlamacpp({
-    loader,
-    modelName,
-    diskPath: dirPath,
+    files: { model: [path.join(dirPath, modelName)] },
+    config: { ...AFRIQUEGEMMA_CONFIG, n_predict: '8' },
     logger: console,
     opts: { stats: true }
-  }, { ...AFRIQUEGEMMA_CONFIG, n_predict: '8' })
+  })
 
   try {
     await addon.load()
@@ -313,7 +290,6 @@ test('AfriqueGemma: small n_predict produces truncated but valid output', { time
     }
   } finally {
     await addon.unload().catch(() => {})
-    await loader.close().catch(() => {})
   }
 })
 
@@ -328,14 +304,12 @@ test('AfriqueGemma: small n_predict produces truncated but valid output', { time
 // ---------------------------------------------------------------------------
 test('AfriqueGemma: long input approaching ctx_size boundary', { timeout: TIMEOUT }, async t => {
   const [modelName, dirPath] = await resolveModel()
-  const loader = new FilesystemDL({ dirPath })
   const addon = new LlmLlamacpp({
-    loader,
-    modelName,
-    diskPath: dirPath,
+    files: { model: [path.join(dirPath, modelName)] },
+    config: { ...AFRIQUEGEMMA_CONFIG, ctx_size: '512', n_predict: '32' },
     logger: console,
     opts: { stats: true }
-  }, { ...AFRIQUEGEMMA_CONFIG, ctx_size: '512', n_predict: '32' })
+  })
 
   try {
     await addon.load()
@@ -359,6 +333,5 @@ test('AfriqueGemma: long input approaching ctx_size boundary', { timeout: TIMEOU
     t.ok(gotOutput || gotError, 'long input either produced output or a clear error — no crash or hang')
   } finally {
     await addon.unload().catch(() => {})
-    await loader.close().catch(() => {})
   }
 })
