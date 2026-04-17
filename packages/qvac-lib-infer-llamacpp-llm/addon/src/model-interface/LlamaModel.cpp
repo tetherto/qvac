@@ -338,12 +338,15 @@ void LlamaModel::init(bool acquireLock) {
     return;
   }
 
+  // Create tools compact controller before context (contexts hold reference)
+  snap->tools_ = std::make_unique<ToolsCompactController>(toolsCompact);
+
   snap->isTextLlm_ = constructionArgs_.projectionPath.empty();
   snap->llmContext_ = createContext(
       std::string(constructionArgs_.projectionPath),
       params,
       std::move(llamaInit),
-      toolsCompact);
+      *snap->tools_);
 
   if (snap->configuredNDiscarded_ > 0 && snap->llmContext_) {
     snap->llmContext_->setNDiscarded(snap->configuredNDiscarded_);
@@ -371,8 +374,8 @@ bool LlamaModel::isLoaded() {
 
 llama_pos LlamaModel::getNPastBeforeTools() const {
   std::shared_lock lock(stateMtx_);
-  if (state_->llmContext_) {
-    return state_->llmContext_->dynamicToolsState().nPastBeforeTools();
+  if (state_->tools_) {
+    return state_->tools_->anchor();
   }
   return -1;
 }
@@ -558,8 +561,7 @@ std::string LlamaModel::processPromptImpl(const Prompt& prompt) {
   }
 
   std::ostringstream oss;
-  bool needsOutputCapture =
-      state_->llmContext_->dynamicToolsState().toolsCompact();
+  bool needsOutputCapture = state_->tools_->enabled();
   auto callback = prompt.outputCallback;
   if (!prompt.outputCallback) {
     callback = [&](const std::string& token) { oss << token; };
@@ -580,41 +582,20 @@ std::string LlamaModel::processPromptImpl(const Prompt& prompt) {
   if (!prompt.outputCallback) {
     out = oss.str();
   }
-  auto& dts = state_->llmContext_->dynamicToolsState();
-  // Capture nPastBeforeTools before postInfer cleanup for stats reporting
-  state_->lastNPastBeforeTools_ = dts.nPastBeforeTools();
-  state_->lastToolsTrimmed_ = false;
-  const llama_pos firstMsgTokens = state_->llmContext_->getFirstMsgTokens();
 
-  if (dts.hasDegenerateToolBoundary(firstMsgTokens)) {
-    QLOG_IF(
-        Priority::WARNING,
-        string_format(
-            "[LlamaModel] tools_compact degenerate boundary at first message "
-            "(nPastBeforeTools=%d, firstMsgTokens=%d); skipping "
-            "post-generation "
-            "tools trim\n",
-            dts.nPastBeforeTools(),
-            firstMsgTokens));
-    dts.reset();
-  }
-
-  if (dts.hasUsableToolBoundary(firstMsgTokens) &&
-      state_->llmContext_->getNPast() > dts.nPastBeforeTools()) {
-    // Check captured output for tool calls. In streaming mode oss has
-    // the text; in non-streaming mode out already has it.
-    std::string ossStr = needsOutputCapture ? oss.str() : std::string();
-    const std::string& outputToCheck = needsOutputCapture ? ossStr : out;
-    bool hasToolCall = outputToCheck.find("<tool_call>") != std::string::npos;
-    if (!hasToolCall) {
-      state_->lastToolsTrimmed_ = true;
-      state_->llmContext_->removeLastNTokens(
-          state_->llmContext_->getNPast() - dts.nPastBeforeTools());
-      dts.reset();
-      if (state_->llmContext_->getFirstMsgTokens() >
-          state_->llmContext_->getNPast()) {
-        state_->llmContext_->setFirstMsgTokens(state_->llmContext_->getNPast());
-      }
+  // Post-generation tools trim decision via controller
+  std::string ossStr = needsOutputCapture ? oss.str() : std::string();
+  const std::string& outputToCheck = needsOutputCapture ? ossStr : out;
+  auto decision = state_->tools_->onGenerationComplete(
+      outputToCheck,
+      state_->llmContext_->getNPast(),
+      state_->llmContext_->getFirstMsgTokens());
+  if (decision.trim) {
+    state_->llmContext_->removeLastNTokens(decision.tokensToRemoveFromTail);
+    if (decision.clampFirstMsgTokensToNPast &&
+        state_->llmContext_->getFirstMsgTokens() >
+            state_->llmContext_->getNPast()) {
+      state_->llmContext_->setFirstMsgTokens(state_->llmContext_->getNPast());
     }
   }
   if (prompt.saveCacheToDisk && state_->cacheManager_.has_value() &&
@@ -663,10 +644,12 @@ LlamaModel::runtimeDebugStats() const {
       state_->llmContext_
           ? static_cast<int64_t>(state_->llmContext_->getFirstMsgTokens())
           : 0LL;
+  auto snapshot = state_->tools_ ? state_->tools_->debugSnapshot()
+                                 : ToolsCompactController::DebugSnapshot{};
   return {
-      {"nPastBeforeTools", static_cast<int64_t>(state_->lastNPastBeforeTools_)},
+      {"nPastBeforeTools", static_cast<int64_t>(snapshot.nPastBeforeTools)},
       {"firstMsgTokens", firstMsgTokens},
-      {"toolsTrimmed", state_->lastToolsTrimmed_ ? 1LL : 0LL}};
+      {"toolsTrimmed", snapshot.lastToolsTrimmed ? 1LL : 0LL}};
 }
 
 // NOLINTNEXTLINE(readability-convert-member-functions-to-static,readability-function-cognitive-complexity)
@@ -978,13 +961,13 @@ LlamaModel::formatPrompt(const std::string& input) {
 
   if (err.empty() && chatJson.is<picojson::array>()) {
     auto& obj = chatJson.get<picojson::array>();
-    const bool toolsCompactEnabled =
-        state_->llmContext_->dynamicToolsState().toolsCompact();
-    int64_t firstToolIndex = -1;
+
+    // Build PromptLayout for tools_compact validation
+    PromptLayout layout;
+    layout.totalItems = obj.size();
 
     int addMediaPlaceholder = 0;
     bool isNextUser = false;
-    bool isLastUserMsg = false;
     for (size_t i = 0; i < obj.size(); ++i) {
       const auto& subObj = obj[i];
       if (subObj.is<picojson::object>()) {
@@ -992,9 +975,12 @@ LlamaModel::formatPrompt(const std::string& input) {
 
         if (jsonObj.find("type") != jsonObj.end() &&
             jsonObj["type"].get<std::string>() == "function") {
-          if (firstToolIndex < 0) {
-            firstToolIndex = static_cast<int64_t>(i);
+          if (!layout.firstToolIdx.has_value()) {
+            layout.firstToolIdx = i;
           }
+          layout.lastToolIdx = i;
+          layout.toolCount++;
+
           common_chat_tool tool;
           tool.name = jsonObj["name"].get<std::string>();
           if (jsonObj.find("description") != jsonObj.end()) {
@@ -1015,9 +1001,14 @@ LlamaModel::formatPrompt(const std::string& input) {
         }
         newMsg.role = jsonObj["role"].get<std::string>();
 
-        if (newMsg.role == "user") {
-          int64_t idx = static_cast<int64_t>(i);
-          isLastUserMsg = idx == (obj.size() - 1);
+        // Track last anchor (user/tool) message index for tools_compact
+        if (newMsg.role == "user" || newMsg.role == "tool") {
+          layout.lastAnchorIdx = i;
+        }
+
+        // Track if the very last array item is a user message
+        if (newMsg.role == "user" && i == obj.size() - 1) {
+          layout.lastItemIsUserMsg = true;
         }
 
         if (jsonObj.find("content") == jsonObj.end()) {
@@ -1063,17 +1054,8 @@ LlamaModel::formatPrompt(const std::string& input) {
       }
     }
 
-    if (toolsCompactEnabled && isLastUserMsg && tools.empty()) {
-      std::string errorMsg = string_format(
-          "%s: tools_compact requires non-empty tools attached to the last "
-          "user message\n",
-          __func__);
-      throw qvac_errors::StatusError(
-          ADDON_ID,
-          qvac_errors::general_error::toString(
-              qvac_errors::general_error::InvalidArgument),
-          errorMsg);
-    }
+    // Validate prompt shape via controller
+    state_->tools_->validatePrompt(chatMsgs, tools, layout);
 
     if (addMediaPlaceholder > 0) {
       state_->llmContext_->resetMedia();
@@ -1100,14 +1082,14 @@ void LlamaModel::resetState(bool resetStats) {
 
 std::unique_ptr<LlmContext> LlamaModel::createContext(
     std::string&& projectionPath, common_params& params,
-    common_init_result&& llamaInit, bool toolsCompact) {
+    common_init_result&& llamaInit, ToolsCompactController& tools) {
   if (!projectionPath.empty()) {
     params.mmproj.path = std::move(projectionPath);
     return std::make_unique<MtmdLlmContext>(
-        params, std::move(llamaInit), toolsCompact);
+        params, std::move(llamaInit), tools);
   }
   return std::make_unique<TextLlmContext>(
-      params, std::move(llamaInit), toolsCompact);
+      params, std::move(llamaInit), tools);
 }
 
 bool LlamaModel::loadMedia(const std::vector<uint8_t>& input) {

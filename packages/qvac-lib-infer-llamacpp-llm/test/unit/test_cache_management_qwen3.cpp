@@ -474,23 +474,3 @@ TEST_F(
         << "Without reported slide, anchor should not jump left unexpectedly";
   }
 }
-
-// Same deterministic setup but enforce unclamped discard:
-// safeLimit > n_discarded, so the single slide must shift anchor exactly by
-// n_discarded.
-TEST_F(CacheManagementQwen3Test, CacheToolsCompactSlidingUnclampedFullDiscard) {
-  DynamicToolsState dts;
-  dts.setToolsCompact(true);
-
-  constexpr llama_pos firstMsgTokens = 11;
-  constexpr llama_pos anchorBefore = 241;
-  constexpr llama_pos nDiscarded = 32;
-
-  dts.setNPastBeforeTools(anchorBefore);
-  const llama_pos discard = dts.clampDiscard(nDiscarded, firstMsgTokens);
-  dts.adjustAfterSlide(discard, firstMsgTokens);
-
-  EXPECT_EQ(discard, nDiscarded);
-  EXPECT_EQ(dts.nPastBeforeTools(), anchorBefore - nDiscarded);
-  EXPECT_GE(dts.nPastBeforeTools(), firstMsgTokens);
-}

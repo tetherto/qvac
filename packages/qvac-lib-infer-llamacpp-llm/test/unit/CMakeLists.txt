@@ -24,6 +24,7 @@ add_executable(
   # Placeholder tests (to be implemented)
   test_mtmd_llm_context.cpp
   test_llm_context_base.cpp
+  test_tools_compact_controller.cpp
   test_model_metadata.cpp
   test_model_full_loading.cpp
   # Utility tests
@@ -43,6 +44,7 @@ add_executable(
   ${CMAKE_SOURCE_DIR}/addon/src/model-interface/ModelMetadata.cpp
   ${CMAKE_SOURCE_DIR}/addon/src/model-interface/MtmdLlmContext.cpp
   ${CMAKE_SOURCE_DIR}/addon/src/model-interface/TextLlmContext.cpp
+  ${CMAKE_SOURCE_DIR}/addon/src/model-interface/ToolsCompactController.cpp
   ${CMAKE_SOURCE_DIR}/addon/src/utils/LoggingMacros.cpp
   ${CMAKE_SOURCE_DIR}/addon/src/utils/BackendSelection.cpp
   ${CMAKE_SOURCE_DIR}/addon/src/utils/ChatTemplateUtils.cpp

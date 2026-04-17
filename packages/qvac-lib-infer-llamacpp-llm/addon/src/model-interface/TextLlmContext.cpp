@@ -25,9 +25,8 @@ using namespace qvac_lib_inference_addon_llama::utils;
 // NOLINTNEXTLINE(readability-function-cognitive-complexity)
 TextLlmContext::TextLlmContext(
     common_params& commonParams, common_init_result&& llamaInit,
-    bool toolsCompact)
-    : llamaInit_(std::move(llamaInit)), params_(commonParams) {
-  dynamicToolsState().setToolsCompact(toolsCompact);
+    ToolsCompactController& tools)
+    : tools_(tools), llamaInit_(std::move(llamaInit)), params_(commonParams) {
   {
 
     model_ = llamaInit_.model.get();
@@ -53,7 +52,7 @@ TextLlmContext::TextLlmContext(
     }
 
     std::string chatTemplate =
-        getChatTemplate(model_, params_, dynamicToolsState().toolsCompact());
+        getChatTemplate(model_, params_, tools_.enabled());
     tmpls_ = common_chat_templates_init(model_, chatTemplate);
 
     smpl_.reset(common_sampler_init(model_, params_.sampling));
@@ -193,7 +192,7 @@ void TextLlmContext::tokenizeChat(
   bool addSpecial = false;
 
   if (nPast_ == 0 && !isCacheLoaded) {
-    dynamicToolsState().reset();
+    tools_.reset();
     const auto& lastRole = chatMsgs.back().role;
     isLastMessageFromUser = lastRole == "user" || lastRole == "tool";
     addSpecial = true;
@@ -230,20 +229,16 @@ void TextLlmContext::tokenizeChat(
   if (!prompt.empty()) {
     inputTokens = common_tokenize(lctx_, prompt, addSpecial, true);
 
-    if (dynamicToolsState().toolsCompact() && !tools.empty()) {
+    if (tools_.enabled() && !tools.empty()) {
       inputs.tools = {};
       inputs.add_generation_prompt = false;
       inputs.use_jinja = params_.use_jinja;
       auto promptNoTools = getPrompt(tmpls_.get(), inputs);
       auto tokensNoTools =
           common_tokenize(lctx_, promptNoTools, addSpecial, true);
-      dynamicToolsState().setConversationOnlyTokens(tokensNoTools.size());
-      assert(
-          dynamicToolsState().conversationOnlyTokens() <=
-              static_cast<llama_pos>(inputTokens.size()) &&
-          "conversation-only tokens exceeds total tokens");
+      tools_.onTokenize(inputTokens.size(), tokensNoTools.size());
     } else {
-      dynamicToolsState().setConversationOnlyTokens(0);
+      tools_.onTokenize(inputTokens.size(), 0);
     }
   } else {
     std::string errorMsg = string_format(
@@ -309,8 +304,7 @@ bool TextLlmContext::evalMessageWithTools(
   if (nPast_ + nTokens >= llama_n_ctx(lctx_)) {
 
     // Clamp discard so it never eats into tool tokens
-    auto& dts = dynamicToolsState();
-    llama_pos discard = dts.clampDiscard(nDiscarded_, firstMsgTokens_);
+    llama_pos discard = tools_.clampDiscard(nDiscarded_, firstMsgTokens_);
     llama_pos leftTokens = nPast_ - firstMsgTokens_ - discard;
     if (leftTokens >= 0 && discard > 0 &&
         nPast_ + nTokens - discard < llama_n_ctx(lctx_)) {
@@ -318,7 +312,7 @@ bool TextLlmContext::evalMessageWithTools(
       llama_memory_seq_rm(mem, 0, firstMsgTokens_, firstMsgTokens_ + discard);
       llama_memory_seq_add(mem, 0, firstMsgTokens_ + discard, nPast_, -discard);
       nPast_ -= discard;
-      dts.adjustAfterSlide(discard, firstMsgTokens_);
+      tools_.onSlide(discard, firstMsgTokens_);
       ++nSlides_;
       QLOG_IF(
           Priority::DEBUG,
@@ -335,8 +329,8 @@ bool TextLlmContext::evalMessageWithTools(
       auto* mem = llama_get_memory(lctx_);
       llama_memory_seq_rm(mem, 0, firstMsgTokens_, nPast_);
       nPast_ = firstMsgTokens_;
-      if (dts.toolsCompact()) {
-        dts.reset();
+      if (tools_.enabled()) {
+        tools_.reset();
       }
       ++nSlides_;
       QLOG_IF(
@@ -404,8 +398,7 @@ bool TextLlmContext::evalMessageWithTools(
       nDiscarded_ = ctxSize - firstMsgTokens_ - 1;
     }
   }
-  dynamicToolsState().recordToolBoundary(
-      nPast_, static_cast<llama_pos>(inputTokens.size()));
+  tools_.onEvalComplete(nPast_, static_cast<llama_pos>(inputTokens.size()));
   return true;
 }
 
@@ -428,19 +421,18 @@ void TextLlmContext::applyContextDiscard() {
   // Clamp discard so it never eats into tool tokens.
   // During generation there is no fallback path — if discard is 0
   // we simply cannot free space and the caller handles overflow.
-  auto& dts = dynamicToolsState();
-  llama_pos discard = dts.clampDiscard(nDiscarded_, firstMsgTokens_);
-  if (discard == 0 && dts.hasDegenerateToolBoundary(firstMsgTokens_)) {
+  llama_pos discard = tools_.clampDiscard(nDiscarded_, firstMsgTokens_);
+  if (discard == 0 && tools_.degenerateBoundary(firstMsgTokens_)) {
     QLOG_IF(
         Priority::WARNING,
         string_format(
             "[TextLlm] tools_compact anchor equals first message boundary "
             "(nPastBeforeTools=%d, firstMsgTokens=%d) while context is full; "
             "resetting tool boundary before retry\n",
-            dts.nPastBeforeTools(),
+            tools_.anchor(),
             firstMsgTokens_));
-    dts.reset();
-    discard = dts.clampDiscard(nDiscarded_, firstMsgTokens_);
+    tools_.reset();
+    discard = tools_.clampDiscard(nDiscarded_, firstMsgTokens_);
   }
   if (discard == 0) {
     QLOG_IF(
@@ -453,15 +445,15 @@ void TextLlmContext::applyContextDiscard() {
             llama_n_ctx(lctx_),
             nDiscarded_,
             firstMsgTokens_,
-            dts.nPastBeforeTools(),
-            dts.toolsCompact() ? "true" : "false"));
+            tools_.anchor(),
+            tools_.enabled() ? "true" : "false"));
     return;
   }
   auto* mem = llama_get_memory(lctx_);
   llama_memory_seq_rm(mem, 0, firstMsgTokens_, firstMsgTokens_ + discard);
   llama_memory_seq_add(mem, 0, firstMsgTokens_ + discard, nPast_, -discard);
   nPast_ -= discard;
-  dts.adjustAfterSlide(discard, firstMsgTokens_);
+  tools_.onSlide(discard, firstMsgTokens_);
   ++nSlides_;
   QLOG_IF(
       Priority::DEBUG,
@@ -518,8 +510,8 @@ bool TextLlmContext::generateResponse(
               nPast_,
               llama_n_ctx(lctx_),
               firstMsgTokens_,
-              dynamicToolsState().nPastBeforeTools(),
-              dynamicToolsState().toolsCompact() ? "true" : "false"));
+              tools_.anchor(),
+              tools_.enabled() ? "true" : "false"));
       return false;
     }
     applyContextDiscard();
@@ -617,7 +609,7 @@ void TextLlmContext::stop() { stopGeneration_.store(true); }
 void TextLlmContext::resetState(bool resetStats) {
   // Reset the n_past
 
-  dynamicToolsState().reset();
+  tools_.reset();
   nPast_ = 0;
 
   // Reset the first msg token length

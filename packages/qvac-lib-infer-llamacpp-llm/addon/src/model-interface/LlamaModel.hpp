@@ -22,6 +22,7 @@
 #include "LlamaLazyInitializeBackend.hpp"
 #include "LlmContext.hpp"
 #include "ModelMetadata.hpp"
+#include "ToolsCompactController.hpp"
 #include "common/chat.h"
 #include "qvac-lib-inference-addon-cpp/BlobsStream.hpp"
 #include "qvac-lib-inference-addon-cpp/GGUFShards.hpp"
@@ -232,8 +233,11 @@ private:
     std::optional<CacheManager> cacheManager_;
 
     bool lastRunWasPrefill_ = false;
-    llama_pos lastNPastBeforeTools_ = -1;
-    bool lastToolsTrimmed_ = false;
+
+    // tools_compact controller - owned by ReloadableState, lifetime matches
+    // the state. Declared before llmContext_ to ensure contexts are
+    // destroyed before the controller they reference.
+    std::unique_ptr<ToolsCompactController> tools_;
   };
 
   struct ResolvedPrompt {
@@ -261,7 +265,7 @@ private:
   void resetState(bool resetStats = true);
   std::unique_ptr<LlmContext> createContext(
       std::string&& projectionPath, common_params& params,
-      common_init_result&& llamaInit, bool toolsCompact);
+      common_init_result&& llamaInit, ToolsCompactController& tools);
 
   bool loadMedia(const std::vector<uint8_t>& input);
 

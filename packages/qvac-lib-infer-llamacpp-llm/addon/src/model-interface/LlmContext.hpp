@@ -111,68 +111,6 @@ struct ThreadPoolDeleter {
 };
 using ThreadPoolPtr = std::unique_ptr<ggml_threadpool, ThreadPoolDeleter>;
 
-class DynamicToolsState {
-public:
-  void setToolsCompact(bool v) { toolsCompact_ = v; }
-  [[nodiscard]] bool toolsCompact() const { return toolsCompact_; }
-  [[nodiscard]] llama_pos nPastBeforeTools() const { return nPastBeforeTools_; }
-  void setNPastBeforeTools(llama_pos pos) { nPastBeforeTools_ = pos; }
-  void recordToolBoundary(llama_pos nPast, llama_pos totalTokens) {
-    if (toolsCompact_ && nConversationOnlyTokens_ > 0 &&
-        nPastBeforeTools_ == -1) {
-      // Only set anchor on first round — preserve position during chain
-      nPastBeforeTools_ = nPast - (totalTokens - nConversationOnlyTokens_);
-    }
-  }
-  void setConversationOnlyTokens(llama_pos n) { nConversationOnlyTokens_ = n; }
-  [[nodiscard]] llama_pos conversationOnlyTokens() const {
-    return nConversationOnlyTokens_;
-  }
-  void reset() {
-    nConversationOnlyTokens_ = 0;
-    nPastBeforeTools_ = -1;
-  }
-
-  // Clamp a discard amount so it never eats into the tool region.
-  // Returns the original value unchanged when tools_compact is off.
-  [[nodiscard]] llama_pos
-  clampDiscard(llama_pos nDiscarded, llama_pos firstMsgTokens) const {
-    if (toolsCompact_ && nPastBeforeTools_ > firstMsgTokens) {
-      llama_pos safeLimit = nPastBeforeTools_ - firstMsgTokens;
-      return std::min(nDiscarded, safeLimit);
-    }
-    return nDiscarded;
-  }
-
-  // A degenerate boundary (anchor == first message edge) means tools_compact
-  // cannot preserve any token window beyond the first message.
-  [[nodiscard]] bool hasDegenerateToolBoundary(llama_pos firstMsgTokens) const {
-    return toolsCompact_ && nPastBeforeTools_ == firstMsgTokens;
-  }
-
-  // A usable trim boundary must be positive and non-degenerate.
-  // The only invalid boundary for post-generation trim is the exact
-  // first-message edge (degenerate anchor), which can erase conversation.
-  [[nodiscard]] bool hasUsableToolBoundary(llama_pos firstMsgTokens) const {
-    return toolsCompact_ && nPastBeforeTools_ > 0 &&
-           nPastBeforeTools_ != firstMsgTokens;
-  }
-
-  // Shift nPastBeforeTools left after a context slide so the trim
-  // boundary stays accurate. No-op when tools_compact is off.
-  // Precondition: discard must have been clamped by clampDiscard()
-  void adjustAfterSlide(llama_pos discard, llama_pos firstMsgTokens) {
-    if (toolsCompact_ && nPastBeforeTools_ > firstMsgTokens) {
-      nPastBeforeTools_ -= discard;
-    }
-  }
-
-private:
-  bool toolsCompact_ = false;
-  llama_pos nConversationOnlyTokens_ = 0;
-  llama_pos nPastBeforeTools_ = -1;
-};
-
 class LlmContext { // NOLINT(cppcoreguidelines-special-member-functions)
 public:
   LlmContext() = default;
@@ -274,11 +212,6 @@ public:
    */
   virtual void setNDiscarded(llama_pos nDiscarded) = 0;
 
-  DynamicToolsState& dynamicToolsState() { return dynamicToolsState_; }
-  [[nodiscard]] const DynamicToolsState& dynamicToolsState() const {
-    return dynamicToolsState_;
-  }
-
   /**
    * Get the number of context slides (discards) that have occurred.
    */
@@ -344,7 +277,4 @@ public:
    *
    */
   virtual void resetMedia() {};
-
-private:
-  DynamicToolsState dynamicToolsState_;
 };
