@@ -140,35 +140,6 @@ jobs:
         name: Configure windows runner
         run: |
           git config --system core.longpaths true
-          $ccacheVersion = "4.10.2"
-          $ccacheUrl = "https://github.com/ccache/ccache/releases/download/v$ccacheVersion/ccache-$ccacheVersion-windows-x86_64.zip"
-          $ccacheZip = "$env:TEMP\ccache.zip"
-          $ccacheDir = "C:\ccache"
-          Invoke-WebRequest -Uri $ccacheUrl -OutFile $ccacheZip
-          Expand-Archive -Path $ccacheZip -DestinationPath $ccacheDir -Force
-          $ccacheBin = Get-ChildItem -Path $ccacheDir -Recurse -Filter "ccache.exe" | Select-Object -First 1
-          $ccachePath = $ccacheBin.DirectoryName
-          echo "$ccachePath" | Out-File -FilePath $env:GITHUB_PATH -Encoding utf8 -Append
-
-      - if: ${{ matrix.platform == 'win32' }}
-        name: Configure ccache on Windows
-        shell: bash
-        run: |
-          ccache --set-config=max_size=2G
-          ccache --set-config=compression=true
-          ccache -z
-          echo "CMAKE_C_COMPILER_LAUNCHER=ccache" >> $GITHUB_ENV
-          echo "CMAKE_CXX_COMPILER_LAUNCHER=ccache" >> $GITHUB_ENV
-
-      - if: ${{ matrix.platform == 'win32' }}
-        name: Get ccache cache (Windows)
-        uses: actions/cache@668228422ae6a00e4ad889ee87cd7109ec5666a7 # 5.0.4
-        with:
-          key: ccache-${{ matrix.platform }}-${{ matrix.arch }}-${{ matrix.tags }}-${{ hashFiles(format('{0}/vcpkg.json', inputs.workdir)) }}
-          path: ~\AppData\Local\ccache
-          restore-keys: |
-            ccache-${{ matrix.platform }}-${{ matrix.arch }}-${{ matrix.tags }}-
-            ccache-${{ matrix.platform }}-${{ matrix.arch }}-
 
       - name: Checkout repository
         uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # 6.0.2
@@ -262,33 +233,6 @@ jobs:
           chmod +x llvm.sh
           sudo ./llvm.sh 19 all
 
-      - if: ${{ startsWith(matrix.os, 'ubuntu') }}
-        name: Install ccache on Linux
-        run: sudo apt-get install -y ccache
-
-      - if: ${{ startsWith(matrix.os, 'macos') }}
-        name: Install ccache on macOS
-        run: brew install ccache
-
-      - if: ${{ matrix.platform != 'win32' }}
-        name: Configure ccache
-        run: |
-          ccache --set-config=max_size=2G
-          ccache --set-config=compression=true
-          ccache -z
-          echo "CMAKE_C_COMPILER_LAUNCHER=ccache" >> $GITHUB_ENV
-          echo "CMAKE_CXX_COMPILER_LAUNCHER=ccache" >> $GITHUB_ENV
-
-      - if: ${{ matrix.platform != 'win32' }}
-        name: Get ccache cache
-        uses: actions/cache@668228422ae6a00e4ad889ee87cd7109ec5666a7 # 5.0.4
-        with:
-          key: ccache-${{ matrix.platform }}-${{ matrix.arch }}${{ matrix.tags }}-${{ hashFiles(format('{0}/vcpkg.json', inputs.workdir)) }}
-          path: ~/.cache/ccache
-          restore-keys: |
-            ccache-${{ matrix.platform }}-${{ matrix.arch }}${{ matrix.tags }}-
-            ccache-${{ matrix.platform }}-${{ matrix.arch }}-
-
       - if: ${{ matrix.platform == 'linux' }}
         name: Install required packages linux
         run: |
@@ -349,9 +293,6 @@ jobs:
         working-directory: ${{ env.WORKDIR }}
         run: |
           find prebuilds -name "*.bare" -exec strip {} \;
-
-      - name: Show ccache stats
-        run: ccache -s
 
       - uses: actions/upload-artifact@bbbca2ddaa5d8feaa63e36b76fdaad77386f024f # 7.0.0
         with:
