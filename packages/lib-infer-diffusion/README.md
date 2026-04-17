@@ -176,28 +176,35 @@ const path = require('bare-path')
 const MODELS_DIR = path.resolve(__dirname, './models')
 const args = {
   logger: console,
-  diskPath: MODELS_DIR,
-  modelName:  'flux-2-klein-4b-Q8_0.gguf',
-  llmModel:   'Qwen3-4B-Q4_K_M.gguf',   // Qwen3 text encoder for FLUX.2 [klein]
-  vaeModel:   'flux2-vae.safetensors'
+  files: {
+    model: path.join(MODELS_DIR, 'flux-2-klein-4b-Q8_0.gguf'),
+    llm:   path.join(MODELS_DIR, 'Qwen3-4B-Q4_K_M.gguf'),   // Qwen3 text encoder for FLUX.2 [klein]
+    vae:   path.join(MODELS_DIR, 'flux2-vae.safetensors')
+  },
+  config: { threads: 8 },
+  opts: { stats: true }
 }
 ```
 
 | Property | Required | Description |
 |----------|----------|-------------|
-| `diskPath` | ✅ | Local directory where model files are already stored |
-| `modelName` | ✅ | Diffusion model file name (all-in-one for SD1.x/2.x; diffusion-only GGUF for FLUX.2) |
+| `files` | ✅ | Object of absolute paths to model files (see below) |
+| `files.model` | ✅ | Absolute path to diffusion model file (all-in-one for SD1.x/2.x; diffusion-only GGUF for FLUX.2) |
+| `files.clipL` | — | Absolute path to separate CLIP-L text encoder (SD3) |
+| `files.clipG` | — | Absolute path to separate CLIP-G text encoder (SDXL / SD3) |
+| `files.t5Xxl` | — | Absolute path to separate T5-XXL text encoder (SD3) |
+| `files.llm` | — | Absolute path to Qwen3 LLM text encoder (FLUX.2 [klein]) |
+| `files.vae` | — | Absolute path to separate VAE file |
+| `config` | — | Native backend configuration object (see next section) |
 | `logger` | — | Logger instance (e.g. `console`) |
-| `clipLModel` | — | Separate CLIP-L text encoder (SD3) |
-| `clipGModel` | — | Separate CLIP-G text encoder (SDXL / SD3) |
-| `t5XxlModel` | — | Separate T5-XXL text encoder (SD3) |
-| `llmModel` | — | Qwen3 LLM text encoder (FLUX.2 [klein]) |
-| `vaeModel` | — | Separate VAE file |
+| `opts` | — | Additional options (e.g. `{ stats: true }`) |
 
-### 3. Create the `config` object
+### 3. Configure the native backend (`args.config`)
+
+`config` is a field on the `args` object built in step 2 — there is no separate constructor argument. The native backend reads it during `load()`.
 
 ```js
-const config = {
+args.config = {
   threads: 8  // CPU threads for tensor operations (Metal handles GPU automatically)
 }
 ```
@@ -216,10 +223,10 @@ Config values are coerced to strings internally. Generation parameters (prompt, 
 ### 4. Create a Model Instance
 
 ```js
-const model = new ImgStableDiffusion(args, config)
+const model = new ImgStableDiffusion(args)
 ```
 
-The constructor stores configuration only — no memory is allocated yet.
+The constructor takes a single object containing `files`, `config`, `logger`, and `opts`. It stores configuration only — no memory is allocated yet.
 
 ### 5. Load the Model
 
@@ -227,7 +234,7 @@ The constructor stores configuration only — no memory is allocated yet.
 await model.load()
 ```
 
-This creates the native `sd_ctx_t` and loads all weights into memory. It can take 10–30 seconds depending on disk speed and model size. All model files must already be present on disk at `diskPath`.
+This creates the native `sd_ctx_t` and loads all weights into memory. It can take 10–30 seconds depending on disk speed and model size. All model files must be passed as absolute paths via the `files` object.
 
 ### 6. Run Inference
 
@@ -360,7 +367,7 @@ await model.unload()
 
 ### Stable Diffusion 1.x / 2.x
 
-Pass an all-in-one checkpoint directly as `modelName`. No separate encoders needed.
+Pass an all-in-one checkpoint absolute path as `files.model`. No separate encoders needed.
 
 ---
 
