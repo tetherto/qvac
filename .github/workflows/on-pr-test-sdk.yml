@@ -33,7 +33,8 @@ jobs:
       - name: Checkout
         uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # 6.0.2
         with:
-          fetch-depth: 0
+          sparse-checkout: .github/actions/authorize-pr
+          sparse-checkout-cone-mode: false
 
       - name: Authorize PR
         id: auth
@@ -63,16 +64,10 @@ jobs:
               echo "should-run=false" >> "$GITHUB_OUTPUT"
             fi
           elif echo "$TARGET" | grep -q '^release-'; then
-            git fetch origin "refs/pull/${{ github.event.pull_request.number }}/head"
-            CHANGED=$(git diff --name-only "${{ github.event.pull_request.base.sha }}...${{ github.event.pull_request.head.sha }}" -- packages/sdk/)
-            if [ -n "$CHANGED" ]; then
-              echo "::notice::Release branch PR with SDK changes — running full suite"
-              echo "should-run=true" >> "$GITHUB_OUTPUT"
-              echo "suite=" >> "$GITHUB_OUTPUT"
-            else
-              echo "::notice::Release branch PR but no changes in packages/sdk/ — skipping"
-              echo "should-run=false" >> "$GITHUB_OUTPUT"
-            fi
+            # Path filter on the trigger already ensures packages/sdk/ changes exist
+            echo "::notice::Release branch PR with SDK changes — running full suite"
+            echo "should-run=true" >> "$GITHUB_OUTPUT"
+            echo "suite=" >> "$GITHUB_OUTPUT"
           else
             echo "should-run=false" >> "$GITHUB_OUTPUT"
           fi
