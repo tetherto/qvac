@@ -294,7 +294,6 @@ jobs:
         uses: ./.github/actions/setup-aws-prebuild
         with:
           role-to-assume: ${{ secrets.AWS_OIDC_ROLE_ARN }}
-          install-windows-cli: 'false'
 
       - name: Download onnx model files
         run: |
