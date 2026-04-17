@@ -25,6 +25,7 @@ add_executable(
   test_mtmd_llm_context.cpp
   test_llm_context_base.cpp
   test_tools_compact_controller.cpp
+  test_context_slider.cpp
   test_model_metadata.cpp
   test_model_full_loading.cpp
   # Utility tests
@@ -38,6 +39,7 @@ add_executable(
   test_borrow_tracked_shared_buffer.cpp
   ${CMAKE_SOURCE_DIR}/addon/src/model-interface/AsyncWeightsLoader.cpp
   ${CMAKE_SOURCE_DIR}/addon/src/model-interface/CacheManager.cpp
+  ${CMAKE_SOURCE_DIR}/addon/src/model-interface/ContextSlider.cpp
   ${CMAKE_SOURCE_DIR}/addon/src/model-interface/LlamaModel.cpp
   ${CMAKE_SOURCE_DIR}/addon/src/model-interface/LlamaFinetuningHelpers.cpp
   ${CMAKE_SOURCE_DIR}/addon/src/model-interface/LlamaLazyInitializeBackend.cpp

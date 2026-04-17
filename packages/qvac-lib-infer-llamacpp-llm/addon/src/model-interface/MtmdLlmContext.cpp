@@ -8,6 +8,7 @@
 #include <llama/mtmd/mtmd.h>
 #include <qvac-lib-inference-addon-cpp/Errors.hpp>
 
+#include "ContextSlider.hpp"
 #include "addon/LlmErrors.hpp"
 #include "qvac-lib-inference-addon-cpp/Logger.hpp"
 #include "utils/ChatTemplateUtils.hpp"
@@ -18,6 +19,7 @@
 using namespace qvac_lib_inference_addon_llama::errors;
 using namespace qvac_lib_inference_addon_cpp::logger;
 using namespace qvac_lib_inference_addon_llama::utils;
+using namespace qvac_lib_inference_addon_llama::context_slider;
 
 // NOLINTNEXTLINE(readability-function-cognitive-complexity)
 MtmdLlmContext::MtmdLlmContext(
@@ -266,49 +268,41 @@ bool MtmdLlmContext::evalMessageWithTools(
         ADDON_ID, toString(ContextOverflow), errorMsg);
   }
   if (nPast_ + nTokens >= llama_n_ctx(lctx_)) {
-
-    // Clamp discard so it never eats into tool tokens
-    llama_pos discard = tools_.clampDiscard(nDiscarded_, firstMsgTokens_);
-    llama_pos leftTokens = nPast_ - firstMsgTokens_ - discard;
-    if (leftTokens >= 0 && discard > 0 &&
-        nPast_ + nTokens - discard < llama_n_ctx(lctx_)) {
-      auto* mem = llama_get_memory(lctx_);
-      llama_memory_seq_rm(mem, 0, firstMsgTokens_, firstMsgTokens_ + discard);
-      llama_memory_seq_add(mem, 0, firstMsgTokens_ + discard, nPast_, -discard);
-      nPast_ -= discard;
-      tools_.onSlide(discard, firstMsgTokens_);
-      ++nSlides_;
-      QLOG_IF(
-          Priority::DEBUG,
-          string_format(
-              "[MtmdLlm] Prefill step: discarded %d tokens after the first "
-              "message\n",
-              discard));
-    } else if (
-        leftTokens < 0 && firstMsgTokens_ + nTokens < llama_n_ctx(lctx_) &&
-        nDiscarded_ > 0) {
-      // Fallback: wipe everything after the first message.
-      auto* mem = llama_get_memory(lctx_);
-      llama_memory_seq_rm(mem, 0, firstMsgTokens_, nPast_);
-      nPast_ = firstMsgTokens_;
-      if (tools_.enabled()) {
-        tools_.reset();
+    auto outcome = trySlidePrefill(
+        lctx_, nPast_, firstMsgTokens_, static_cast<llama_pos>(nTokens),
+        nDiscarded_, tools_);
+    switch (outcome.kind) {
+      case SlideOutcome::Kind::Slid:
+        nPast_ = outcome.newNPast;
+        ++nSlides_;
+        QLOG_IF(
+            Priority::DEBUG,
+            string_format(
+                "[MtmdLlm] Prefill step: discarded %d tokens after the first "
+                "message\n",
+                outcome.discarded));
+        break;
+      case SlideOutcome::Kind::FullWipe:
+        nPast_ = outcome.newNPast;
+        ++nSlides_;
+        QLOG_IF(
+            Priority::DEBUG,
+            string_format(
+                "[MtmdLlm] Prefill step: wiped %d tokens after the first "
+                "message\n",
+                outcome.discarded));
+        break;
+      case SlideOutcome::Kind::Overflow: {
+        std::string errorMsg = string_format(
+            "[MtmdLlm] context overflow at prefill step (%ld tokens, max "
+            "%d)\n",
+            nPast_ + nTokens,
+            llama_n_ctx(lctx_));
+        throw qvac_errors::StatusError(
+            ADDON_ID, toString(ContextOverflow), errorMsg);
       }
-      ++nSlides_;
-      QLOG_IF(
-          Priority::DEBUG,
-          string_format(
-              "[MtmdLlm] Prefill step: discarded %d tokens after the first "
-              "message\n",
-              nDiscarded_));
-    } else {
-      std::string errorMsg = string_format(
-          "[MtmdLlm] context overflow at prefill step (%ld tokens, max "
-          "%d)\n",
-          nPast_ + nTokens,
-          llama_n_ctx(lctx_));
-      throw qvac_errors::StatusError(
-          ADDON_ID, toString(ContextOverflow), errorMsg);
+      case SlideOutcome::Kind::NotNeeded:
+        break;
     }
   }
 
@@ -372,51 +366,17 @@ void MtmdLlmContext::flushPendingUtf8ToCallback(
 }
 
 void MtmdLlmContext::applyContextDiscard() {
-  if (nPast_ + 1 <= static_cast<llama_pos>(llama_n_ctx(lctx_)) ||
-      nDiscarded_ == 0) {
-    return;
-  }
-  // Clamp discard so it never eats into tool tokens.
-  // During generation there is no fallback path — if discard is 0
-  // we simply cannot free space and the caller handles overflow.
-  llama_pos discard = tools_.clampDiscard(nDiscarded_, firstMsgTokens_);
-  if (discard == 0 && tools_.degenerateBoundary(firstMsgTokens_)) {
+  auto outcome =
+      trySlideGeneration(lctx_, nPast_, firstMsgTokens_, nDiscarded_, tools_);
+  if (outcome.kind == SlideOutcome::Kind::Slid) {
+    nPast_ = outcome.newNPast;
+    ++nSlides_;
     QLOG_IF(
-        Priority::WARNING,
+        Priority::DEBUG,
         string_format(
-            "[MtmdLlm] tools_compact anchor equals first message boundary "
-            "(nPastBeforeTools=%d, firstMsgTokens=%d) while context is full; "
-            "resetting tool boundary before retry\n",
-            tools_.anchor(),
-            firstMsgTokens_));
-    tools_.reset();
-    discard = tools_.clampDiscard(nDiscarded_, firstMsgTokens_);
+            "[MtmdLlm] discarded %d tokens after the first message\n",
+            outcome.discarded));
   }
-  if (discard == 0) {
-    QLOG_IF(
-        Priority::WARNING,
-        string_format(
-            "[MtmdLlm] context is full but cannot discard tokens "
-            "(nPast=%d, nCtx=%d, nDiscarded=%d, firstMsgTokens=%d, "
-            "nPastBeforeTools=%d, toolsCompact=%s)\n",
-            nPast_,
-            llama_n_ctx(lctx_),
-            nDiscarded_,
-            firstMsgTokens_,
-            tools_.anchor(),
-            tools_.enabled() ? "true" : "false"));
-    return;
-  }
-  auto* mem = llama_get_memory(lctx_);
-  llama_memory_seq_rm(mem, 0, firstMsgTokens_, firstMsgTokens_ + discard);
-  llama_memory_seq_add(mem, 0, firstMsgTokens_ + discard, nPast_, -discard);
-  nPast_ -= discard;
-  tools_.onSlide(discard, firstMsgTokens_);
-  ++nSlides_;
-  QLOG_IF(
-      Priority::DEBUG,
-      string_format(
-          "[MtmdLlm] discarded %d tokens after the first message\n", discard));
 }
 
 void MtmdLlmContext::handleStopRequestAndAddEot(LlamaBatch& batch) {
