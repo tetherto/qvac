@@ -37,6 +37,7 @@
 #include "addon/LlmErrors.hpp"
 #include "qvac-lib-inference-addon-cpp/LlamacppUtils.hpp"
 #include "utils/BackendSelection.hpp"
+#include "utils/ChatTemplateUtils.hpp"
 #include "utils/LoggingMacros.hpp"
 #include "utils/ScopeGuard.hpp"
 #include "utils/SharedSnapshot.hpp"
@@ -315,8 +316,14 @@ void LlamaModel::init(bool acquireLock) {
   common_params params;
   std::optional<int> adrenoVersion;
   bool toolsCompact = false;
+  ToolsCompactProfile toolsCompactProfile;
   commonParamsParse(
-      modelPath, configFilemap, params, adrenoVersion, toolsCompact);
+      modelPath,
+      configFilemap,
+      params,
+      adrenoVersion,
+      toolsCompact,
+      toolsCompactProfile);
 
   const std::string errorWhenFailed = toString(UnableToLoadModel);
   auto streamedFiles =
@@ -339,14 +346,15 @@ void LlamaModel::init(bool acquireLock) {
   }
 
   // Create tools compact controller before context (contexts hold reference)
-  snap->tools_ = std::make_unique<ToolsCompactController>(toolsCompact);
+  snap->toolsCompact_ =
+      std::make_unique<ToolsCompactController>(toolsCompact, toolsCompactProfile);
 
   snap->isTextLlm_ = constructionArgs_.projectionPath.empty();
   snap->llmContext_ = createContext(
       std::string(constructionArgs_.projectionPath),
       params,
       std::move(llamaInit),
-      *snap->tools_);
+      *snap->toolsCompact_);
 
   if (snap->configuredNDiscarded_ > 0 && snap->llmContext_) {
     snap->llmContext_->setNDiscarded(snap->configuredNDiscarded_);
@@ -374,8 +382,8 @@ bool LlamaModel::isLoaded() {
 
 llama_pos LlamaModel::getNPastBeforeTools() const {
   std::shared_lock lock(stateMtx_);
-  if (state_->tools_) {
-    return state_->tools_->anchor();
+  if (state_->toolsCompact_) {
+    return state_->toolsCompact_->anchor();
   }
   return -1;
 }
@@ -561,7 +569,7 @@ std::string LlamaModel::processPromptImpl(const Prompt& prompt) {
   }
 
   std::ostringstream oss;
-  bool needsOutputCapture = state_->tools_->enabled();
+  bool needsOutputCapture = state_->toolsCompact_->enabled();
   auto callback = prompt.outputCallback;
   if (!prompt.outputCallback) {
     callback = [&](const std::string& token) { oss << token; };
@@ -586,7 +594,7 @@ std::string LlamaModel::processPromptImpl(const Prompt& prompt) {
   // Post-generation tools trim decision via controller
   std::string ossStr = needsOutputCapture ? oss.str() : std::string();
   const std::string& outputToCheck = needsOutputCapture ? ossStr : out;
-  auto decision = state_->tools_->onGenerationComplete(
+  auto decision = state_->toolsCompact_->onGenerationComplete(
       outputToCheck,
       state_->llmContext_->getNPast(),
       state_->llmContext_->getFirstMsgTokens());
@@ -644,8 +652,9 @@ LlamaModel::runtimeDebugStats() const {
       state_->llmContext_
           ? static_cast<int64_t>(state_->llmContext_->getFirstMsgTokens())
           : 0LL;
-  auto snapshot = state_->tools_ ? state_->tools_->debugSnapshot()
-                                 : ToolsCompactController::DebugSnapshot{};
+  auto snapshot = state_->toolsCompact_
+                      ? state_->toolsCompact_->debugSnapshot()
+                      : ToolsCompactController::DebugSnapshot{};
   return {
       {"nPastBeforeTools", static_cast<int64_t>(snapshot.nPastBeforeTools)},
       {"firstMsgTokens", firstMsgTokens},
@@ -657,9 +666,10 @@ void LlamaModel::commonParamsParse(
     const std::string& modelPath,
     std::unordered_map<std::string, std::string>& configFilemap,
     common_params& params, std::optional<int>& outAdrenoVersion,
-    bool& outToolsCompact) {
+    bool& outToolsCompact, ToolsCompactProfile& outToolsCompactProfile) {
 
   std::vector<std::string> configVector;
+  outToolsCompactProfile = ToolsCompactProfile{};
 
   // Check if tools are enabled and exclude it with jinja from the config file
   if (auto iter = configFilemap.find("tools"); iter != configFilemap.end()) {
@@ -711,11 +721,16 @@ void LlamaModel::commonParamsParse(
 
   if (outToolsCompact) {
     auto arch = metadata_.tryGetString("general.architecture");
-    if (!arch.has_value() || arch.value() != "qwen3") {
+    outToolsCompactProfile = qvac_lib_inference_addon_llama::utils::
+        selectToolsCompactProfile(arch.value_or(""));
+    if (
+        !arch.has_value() ||
+        !qvac_lib_inference_addon_llama::utils::
+            isToolsCompactSupportedArchitecture(arch.value())) {
       QLOG_IF(
           Priority::WARNING,
-          "[LlamaModel] tools_compact is only supported for Qwen3 models, "
-          "ignoring\n");
+          "[LlamaModel] tools_compact is supported for qwen3/llama/mistral "
+          "architectures only, ignoring\n");
       outToolsCompact = false;
     }
   }
@@ -1055,7 +1070,7 @@ LlamaModel::formatPrompt(const std::string& input) {
     }
 
     // Validate prompt shape via controller
-    state_->tools_->validatePrompt(chatMsgs, tools, layout);
+    state_->toolsCompact_->validatePrompt(chatMsgs, tools, layout);
 
     if (addMediaPlaceholder > 0) {
       state_->llmContext_->resetMedia();

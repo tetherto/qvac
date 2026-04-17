@@ -2,6 +2,7 @@
 
 #include <algorithm>
 #include <optional>
+#include <string>
 #include <string_view>
 #include <vector>
 
@@ -21,6 +22,11 @@ struct PromptLayout {
   bool lastItemIsUserMsg = false; // true if the very last array item is role=user
 };
 
+/// Model/template-specific markers used by tools_compact chain detection.
+struct ToolsCompactProfile {
+  std::string toolCallStartMarker = "<tool_call>";
+};
+
 /// Controller for the tools_compact feature.
 ///
 /// Owns all state and decision logic for anchoring tool definitions in the KV
@@ -31,7 +37,8 @@ struct PromptLayout {
 /// Owned by LlamaModel; contexts hold a non-owning reference.
 class ToolsCompactController {
 public:
-  explicit ToolsCompactController(bool enabled);
+  explicit ToolsCompactController(
+      bool enabled, ToolsCompactProfile profile = {});
 
   [[nodiscard]] bool enabled() const noexcept;
   [[nodiscard]] llama_pos anchor() const noexcept;
@@ -112,6 +119,7 @@ public:
 
 private:
   const bool enabled_;
+  ToolsCompactProfile profile_;
   llama_pos nConversationOnlyTokens_ = 0;
   llama_pos nPastBeforeTools_ = -1;
 

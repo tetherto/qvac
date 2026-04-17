@@ -2,6 +2,7 @@
 
 #include <cassert>
 #include <string>
+#include <utility>
 
 #include <qvac-lib-inference-addon-cpp/Errors.hpp>
 
@@ -13,8 +14,13 @@
 using namespace qvac_lib_inference_addon_llama::errors;
 using namespace qvac_lib_inference_addon_cpp::logger;
 
-ToolsCompactController::ToolsCompactController(bool enabled)
-    : enabled_(enabled) {}
+ToolsCompactController::ToolsCompactController(
+    bool enabled, ToolsCompactProfile profile)
+    : enabled_(enabled), profile_(std::move(profile)) {
+  if (profile_.toolCallStartMarker.empty()) {
+    profile_.toolCallStartMarker = "<tool_call>";
+  }
+}
 
 bool ToolsCompactController::enabled() const noexcept { return enabled_; }
 
@@ -211,7 +217,9 @@ ToolsCompactController::onGenerationComplete(
   }
 
   // Check if output contains a tool call marker - if so, chain continues
-  bool hasToolCall = assistantOutput.find("<tool_call>") != std::string_view::npos;
+  bool hasToolCall =
+      assistantOutput.find(profile_.toolCallStartMarker) !=
+      std::string_view::npos;
   if (hasToolCall) {
     return decision;
   }

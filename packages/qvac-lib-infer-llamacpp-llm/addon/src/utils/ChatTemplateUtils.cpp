@@ -1,6 +1,7 @@
 #include "ChatTemplateUtils.hpp"
 
 #include <algorithm>
+#include <cctype>
 
 #include <llama.h>
 
@@ -13,9 +14,46 @@ using namespace qvac_lib_inference_addon_cpp::logger;
 namespace qvac_lib_inference_addon_llama {
 namespace utils {
 
+namespace {
+
+std::string normalizeArchitecture(const std::string& architecture) {
+  std::string normalized = architecture;
+  std::transform(
+      normalized.begin(),
+      normalized.end(),
+      normalized.begin(),
+      [](unsigned char c) { return std::tolower(c); });
+  return normalized;
+}
+
+} // namespace
+
+std::optional<std::string> getModelArchitecture(const ::llama_model* model) {
+  if (model == nullptr) {
+    return std::nullopt;
+  }
+
+  // Check architecture metadata first; this drives family-specific template and
+  // tools_compact profile selection.
+  char arch[64] = {0};
+  int32_t len = llama_model_meta_val_str(
+      model, "general.architecture", arch, sizeof(arch));
+  if (len > 0 && len < sizeof(arch)) {
+    arch[len] = '\0';
+    return normalizeArchitecture(std::string(arch));
+  }
+  return std::nullopt;
+}
+
 bool isQwen3Model(const ::llama_model* model) {
   if (model == nullptr) {
     return false;
+  }
+
+  if (auto arch = getModelArchitecture(model); arch.has_value()) {
+    if (arch.value() == "qwen3") {
+      return true;
+    }
   }
 
   // Check model name metadata
@@ -37,25 +75,33 @@ bool isQwen3Model(const ::llama_model* model) {
     }
   }
 
-  // Check architecture metadata
-  char arch[64] = {0};
-  len = llama_model_meta_val_str(
-      model, "general.architecture", arch, sizeof(arch));
-
-  if (len > 0 && len < sizeof(arch)) {
-    arch[len] = '\0';
-    std::string archStr(arch);
-    std::transform(
-        archStr.begin(), archStr.end(), archStr.begin(), [](unsigned char c) {
-          return std::tolower(c);
-        });
-
-    if (archStr.find("qwen3") != std::string::npos) {
-      return true;
-    }
-  }
-
   return false;
+}
+
+ToolsCompactProfile selectToolsCompactProfile(const std::string& architecture) {
+  const std::string archStr = normalizeArchitecture(architecture);
+  if (archStr == "qwen3") {
+    return ToolsCompactProfile{.toolCallStartMarker = "<tool_call>"};
+  }
+  if (archStr == "llama") {
+    return ToolsCompactProfile{.toolCallStartMarker = "<|python_tag|>"};
+  }
+  if (archStr == "mistral") {
+    return ToolsCompactProfile{.toolCallStartMarker = "[TOOL_CALLS]"};
+  }
+  return ToolsCompactProfile{};
+}
+
+ToolsCompactProfile selectToolsCompactProfile(const ::llama_model* model) {
+  if (auto arch = getModelArchitecture(model); arch.has_value()) {
+    return selectToolsCompactProfile(arch.value());
+  }
+  return ToolsCompactProfile{};
+}
+
+bool isToolsCompactSupportedArchitecture(const std::string& architecture) {
+  const std::string archStr = normalizeArchitecture(architecture);
+  return archStr == "qwen3" || archStr == "llama" || archStr == "mistral";
 }
 
 std::string getChatTemplateForModel(
@@ -65,9 +111,20 @@ std::string getChatTemplateForModel(
     return manualOverride;
   }
 
-  if (isQwen3Model(model)) {
+  const std::optional<std::string> architecture = getModelArchitecture(model);
+  if (architecture.has_value() && architecture.value() == "qwen3") {
     return toolsCompact ? getToolsDynamicQwen3Template()
                         : getFixedQwen3Template();
+  }
+  if (architecture.has_value() && architecture.value() == "llama") {
+    // Keep model-provided template for now; adding an explicit Llama template
+    // is a separate family-template edit.
+    return "";
+  }
+  if (architecture.has_value() && architecture.value() == "mistral") {
+    // Keep model-provided template for now; adding an explicit Mistral template
+    // is a separate family-template edit.
+    return "";
   }
 
   return "";

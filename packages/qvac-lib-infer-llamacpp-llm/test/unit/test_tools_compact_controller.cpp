@@ -278,6 +278,37 @@ TEST(ToolsCompactControllerTest, GenerationCompleteNoTrimWhenToolCallContinuesCh
   EXPECT_FALSE(snapshot.lastToolsTrimmed);
 }
 
+TEST(
+    ToolsCompactControllerTest,
+    GenerationCompleteNoTrimWhenToolCallMatchesCustomProfileMarker) {
+  ToolsCompactProfile profile;
+  profile.toolCallStartMarker = "<function_call>";
+  ToolsCompactController controller(true, profile);
+  constexpr llama_pos firstMsgTokens = 50;
+  controller.onTokenize(140, 80);
+  controller.onEvalComplete(140, 140); // anchor = 80
+  auto decision = controller.onGenerationComplete(
+      "<function_call>{\"name\":\"foo\"}</function_call>", 120, firstMsgTokens);
+  EXPECT_FALSE(decision.trim);
+  EXPECT_EQ(controller.anchor(), 80);
+}
+
+TEST(
+    ToolsCompactControllerTest,
+    GenerationCompleteTrimWhenMarkerDoesNotMatchProfile) {
+  ToolsCompactProfile profile;
+  profile.toolCallStartMarker = "<function_call>";
+  ToolsCompactController controller(true, profile);
+  constexpr llama_pos firstMsgTokens = 50;
+  controller.onTokenize(140, 80);
+  controller.onEvalComplete(140, 140); // anchor = 80
+  auto decision = controller.onGenerationComplete(
+      "<tool_call>{\"name\":\"foo\"}</tool_call>", 120, firstMsgTokens);
+  EXPECT_TRUE(decision.trim);
+  EXPECT_EQ(decision.tokensToRemoveFromTail, 40);
+  EXPECT_EQ(controller.anchor(), -1);
+}
+
 TEST(ToolsCompactControllerTest, GenerationCompleteNoTrimWhenNPastNotPastAnchor) {
   ToolsCompactController controller(true);
   constexpr llama_pos firstMsgTokens = 50;

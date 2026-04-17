@@ -81,13 +81,19 @@ Split tool block:
 
 ## Model Support
 
-Currently `tools_compact` is only supported for **Qwen3** models. If enabled on a non-Qwen3 model, the flag is silently ignored and a warning is logged.
+`tools_compact` is supported for these model architectures:
+
+- `qwen3` (marker: `<tool_call>`)
+- `llama` (marker: `<|python_tag|>`)
+- `mistral` (marker: `[TOOL_CALLS]`)
+
+If enabled on any other architecture, the flag is ignored and a warning is logged.
 
 ## How It Works
 
 ### Tool Chain Lifecycle
 
-During a tool chain, tools stay anchored in the KV cache. Trimming only happens when the chain completes (the model's output contains no `<tool_call>` tag):
+During a tool chain, tools stay anchored in the KV cache. Trimming only happens when the chain completes (the model output contains no active family marker):
 
 ```
 Round 1 (tool call):

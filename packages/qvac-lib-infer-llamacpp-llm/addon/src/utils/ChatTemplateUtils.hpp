@@ -1,7 +1,9 @@
 #pragma once
 
+#include <optional>
 #include <string>
 
+#include "model-interface/ToolsCompactController.hpp"
 #include "common/chat.h"
 #include "common/common.h"
 
@@ -13,6 +15,11 @@ namespace qvac_lib_inference_addon_llama {
 namespace utils {
 
 bool isQwen3Model(const ::llama_model* model);
+std::optional<std::string> getModelArchitecture(const ::llama_model* model);
+
+ToolsCompactProfile selectToolsCompactProfile(const std::string& architecture);
+ToolsCompactProfile selectToolsCompactProfile(const ::llama_model* model);
+bool isToolsCompactSupportedArchitecture(const std::string& architecture);
 
 /**
  * @brief Gets the appropriate chat template for a model

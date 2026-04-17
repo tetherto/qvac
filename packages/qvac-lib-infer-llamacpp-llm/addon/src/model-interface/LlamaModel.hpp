@@ -227,7 +227,7 @@ private:
     // tools_compact controller - owned by ReloadableState, lifetime matches
     // the state. Must be declared before llmContext_ so it is destroyed
     // after contexts that hold references to it.
-    std::unique_ptr<ToolsCompactController> tools_;
+    std::unique_ptr<ToolsCompactController> toolsCompact_;
 
     // Store the appropriate context (TextLlmContext or MtmdLlmContext)
     // Destroyed before backendsHandle_ to avoid use-after-free
@@ -252,7 +252,7 @@ private:
       const std::string& modelPath,
       std::unordered_map<std::string, std::string>& configFilemap,
       common_params& params, std::optional<int>& outAdrenoVersion,
-      bool& outToolsCompact);
+      bool& outToolsCompact, ToolsCompactProfile& outToolsCompactProfile);
 
   /**
    * The Format prompt method. It formats the prompt json to chat messages.
