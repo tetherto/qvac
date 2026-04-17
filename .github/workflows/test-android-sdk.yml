@@ -480,7 +480,7 @@ jobs:
             const npmrcContent = fs.readFileSync(source, 'utf8');
             fs.writeFileSync(path.join(consumerDir, '.npmrc'), npmrcContent, 'utf8');
           }
-      
+
       - name: Install dependencies (project)
         working-directory: ${{ inputs.project-directory }}
         run: bun install
@@ -605,10 +605,6 @@ jobs:
         with:
           node-version: 22
 
-      - name: Install dependencies
-        working-directory: ${{ inputs.working-directory }}
-        run: npm install --install-links --ignore-scripts
-
       - name: Configure npm registries
         shell: node {0}
         run: |
@@ -638,6 +634,9 @@ jobs:
             const npmrcContent = fs.readFileSync(source, 'utf8');
             fs.writeFileSync(path.join(consumerDir, '.npmrc'), npmrcContent, 'utf8');
           }
+      - name: Install dependencies
+        working-directory: ${{ inputs.working-directory }}
+        run: npm install --install-links --ignore-scripts
       - name: Download current results
         uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # 8.0.1
         with:
