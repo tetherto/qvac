@@ -16,27 +16,6 @@ PivotTranslationModel::PivotTranslationModel(
       firstModel_(std::make_unique<TranslationModel>(firstModelPath)),
       secondModel_(std::make_unique<TranslationModel>(secondModelPath)),
       stopTranslation_(false) {
-
-  // Initialize backends before sub-models load. Keys are read from the first
-  // model's config only — both sub-models share one process-wide backend, so
-  // the second model's backendsdir/openclcachedir (if any) are ignored. Keys
-  // are not erased so sub-model load() calls can re-read them.
-  std::string backendsDir;
-  if (auto it = firstModelConfig.find("backendsdir");
-      it != firstModelConfig.end()) {
-    if (const auto* value = std::get_if<std::string>(&it->second)) {
-      backendsDir = *value;
-    }
-  }
-  std::string openclCacheDir;
-  if (auto it = firstModelConfig.find("openclcachedir");
-      it != firstModelConfig.end()) {
-    if (const auto* value = std::get_if<std::string>(&it->second)) {
-      openclCacheDir = *value;
-    }
-  }
-  backendsHandle_.emplace(backendsDir, openclCacheDir);
-
   firstModel_->setConfig(std::move(firstModelConfig));
   secondModel_->setConfig(std::move(secondModelConfig));
 
