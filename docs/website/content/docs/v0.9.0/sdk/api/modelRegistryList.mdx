@@ -1,0 +1,30 @@
+---
+title: "modelRegistryList( )"
+titleStyle: code
+description: Returns all available models from the QVAC distributed model registry.
+---
+
+```ts
+function modelRegistryList(): Promise<ModelRegistryEntry[]>;
+```
+
+## Returns
+
+`Promise<`[`ModelRegistryEntry[]`](../modelRegistryGetModel#modelregistryentry)`>` — Array of all models in the registry.
+
+## Throws
+
+| Error | When |
+| --- | --- |
+| `QVAC_MODEL_REGISTRY_QUERY_FAILED` | The registry query fails |
+
+## Example
+
+```typescript
+import { modelRegistryList } from "@qvac/sdk";
+
+const models = await modelRegistryList();
+for (const model of models) {
+  console.log(model.registryPath, model.addon);
+}
+```

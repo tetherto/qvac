@@ -1471,6 +1471,7 @@ jobs:
           RUN_ARN_8="${{ steps.schedule_run.outputs.run_arn_8 }}"
           RUN_COUNT="${{ steps.schedule_run.outputs.run_count }}"
           LOG_DIR="devicefarm-logs/${{ matrix.platform }}"
+          PLATFORM="${{ matrix.platform }}"
           mkdir -p "$LOG_DIR"
 
           RUN_ARNS=("$RUN_ARN_1")
@@ -1518,6 +1519,12 @@ jobs:
                   ART_URL=$(echo "$ARTIFACT" | jq -r '.url // empty')
                   ART_EXT=$(echo "$ARTIFACT" | jq -r '.extension // "txt"')
                   [ -z "$ART_URL" ] && continue
+                  if [ "$PLATFORM" = "Android" ]; then
+                    if echo "$ART_NAME" | grep -qiE "^video$" || echo "$ART_EXT" | grep -qiE "^mp4$"; then
+                      echo "  Skipped (video): $SUITE_NAME / $ART_NAME"
+                      continue
+                    fi
+                  fi
                   SAFE_ART=$(echo "$ART_NAME" | tr ' /' '__' | tr -cd '[:alnum:]_-')
                   DEST="$LOG_DIR/${SAFE_RUN}_${SAFE_NAME}_${SAFE_SUITE}_${SAFE_ART}.${ART_EXT}"
                   if curl -fsSL -o "$DEST" "$ART_URL" 2>/dev/null; then
@@ -1549,6 +1556,12 @@ jobs:
                 ART_URL=$(echo "$ARTIFACT" | jq -r '.url // empty')
                 ART_EXT=$(echo "$ARTIFACT" | jq -r '.extension // "txt"')
                 [ -z "$ART_URL" ] && continue
+                if [ "$PLATFORM" = "Android" ]; then
+                  if echo "$ART_NAME" | grep -qiE "^video$" || echo "$ART_EXT" | grep -qiE "^mp4$"; then
+                    echo "  Skipped (video): job-level / $ART_NAME"
+                    continue
+                  fi
+                fi
                 SAFE_ART=$(echo "$ART_NAME" | tr ' /' '__' | tr -cd '[:alnum:]_-')
                 DEST="$LOG_DIR/${SAFE_RUN}_${SAFE_NAME}_job_${SAFE_ART}.${ART_EXT}"
                 if curl -fsSL -o "$DEST" "$ART_URL" 2>/dev/null; then

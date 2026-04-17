@@ -52,6 +52,7 @@ export class FinetuneExecutor extends AbstractModelExecutor<typeof finetuneTests
     "finetune-pause-resume": this.pauseResume.bind(this),
     "finetune-progress-streaming": this.progressStreaming.bind(this),
     "finetune-error-cases": this.errorCases.bind(this),
+    "finetune-progress-zero-drop": this.progressZeroDrop.bind(this),
   } as never;
 
   async teardown(testId: string, context: unknown) {
@@ -293,6 +294,73 @@ export class FinetuneExecutor extends AbstractModelExecutor<typeof finetuneTests
       );
     } catch (error) {
       return this.failWithError("finetune error cases", error);
+    }
+  }
+
+  async progressZeroDrop(params: BaseParams, expectation: Expectation): Promise<TestResult> {
+    const modelId = await this.resources.ensureLoaded(FINETUNE_DEPENDENCY);
+    const paths = await this.createDatasets();
+
+    try {
+      const handle = finetune({
+        modelId,
+        options: this.buildOptions(paths, params.numberOfEpochs ?? 2),
+      });
+      const progress = await this.collectProgress(handle.progressStream);
+      const result = await handle.result;
+
+      if (result.status !== "COMPLETED") {
+        return {
+          passed: false,
+          output: `Expected COMPLETED status, got ${result.status}`,
+        };
+      }
+
+      if (progress.length === 0) {
+        return { passed: false, output: "No progress events received" };
+      }
+
+      const groups = new Map<string, { batches: Set<number>; totalBatches: number }>();
+
+      for (const ev of progress) {
+        const key = `${ev.is_train ? "train" : "val"}:epoch${ev.current_epoch}`;
+        let group = groups.get(key);
+        if (!group) {
+          group = { batches: new Set(), totalBatches: ev.total_batches };
+          groups.set(key, group);
+        }
+        group.batches.add(ev.current_batch);
+        if (ev.total_batches > group.totalBatches) {
+          group.totalBatches = ev.total_batches;
+        }
+      }
+
+      const drops: string[] = [];
+      for (const [key, group] of groups) {
+        if (group.batches.size < group.totalBatches) {
+          const received = [...group.batches].sort((a, b) => a - b);
+          drops.push(
+            `${key}: ${received.length}/${group.totalBatches} unique batches` +
+            ` (received=[${received.join(",")}])`,
+          );
+        }
+      }
+
+      if (drops.length > 0) {
+        return {
+          passed: false,
+          output:
+            `Progress events dropped: ${drops.join("; ")}. ` +
+            `Total received: ${progress.length}`,
+        };
+      }
+
+      return ValidationHelpers.validate(
+        `Zero-drop verified: ${progress.length} progress events across ${groups.size} phases, no batch gaps`,
+        expectation,
+      );
+    } catch (error) {
+      return this.failWithError("finetune progress zero-drop", error);
     }
   }
 

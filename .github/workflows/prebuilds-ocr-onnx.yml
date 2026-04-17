@@ -143,70 +143,11 @@ jobs:
           chmod +x llvm.sh
           sudo ./llvm.sh 19 all
 
-      - if: ${{ matrix.variant == 'ubuntu' }}
-        name: Install ccache on Linux
-        run: sudo apt-get install -y ccache
-
-      - if: ${{ startsWith(matrix.os, 'macos') }}
-        name: Install ccache on macOS
-        run: brew install ccache
-
-      - if: ${{ matrix.os != 'windows-2022' }}
-        name: Configure ccache
-        run: |
-          ccache --set-config=max_size=2G
-          ccache --set-config=compression=true
-          ccache -z
-
-      - if: ${{ matrix.os != 'windows-2022' }}
-        name: Restore ccache cache
-        id: cache-ccache
-        uses: actions/cache/restore@668228422ae6a00e4ad889ee87cd7109ec5666a7 # 5.0.4
-        with:
-          path: ~/.cache/ccache
-          key: ccache-${{ matrix.platform }}-${{ matrix.arch }}${{ matrix.tags }}-${{ github.sha }}
-          restore-keys: |
-            ccache-${{ matrix.platform }}-${{ matrix.arch }}${{ matrix.tags }}-
-            ccache-${{ matrix.platform }}-${{ matrix.arch }}-
-
       - if: ${{ matrix.os == 'windows-2022' }}
         name: Configure windows runner
         run: |
           git config --system core.longpaths true
           choco upgrade llvm -y --no-progress
-
-      - if: ${{ matrix.os == 'windows-2022' }}
-        name: Install and configure ccache on Windows
-        shell: pwsh
-        run: |
-          # Download ccache directly from GitHub releases
-          $ccacheVersion = "4.10.2"
-          $ccacheUrl = "https://github.com/ccache/ccache/releases/download/v$ccacheVersion/ccache-$ccacheVersion-windows-x86_64.zip"
-          $ccacheZip = "$env:TEMP\ccache.zip"
-          $ccacheDir = "C:\ccache"
-
-          Invoke-WebRequest -Uri $ccacheUrl -OutFile $ccacheZip
-          Expand-Archive -Path $ccacheZip -DestinationPath $env:TEMP -Force
-          New-Item -ItemType Directory -Path $ccacheDir -Force | Out-Null
-          Move-Item -Path "$env:TEMP\ccache-$ccacheVersion-windows-x86_64\*" -Destination $ccacheDir -Force
-
-          # Add to PATH for subsequent steps
-          echo "C:\ccache" | Out-File -FilePath $env:GITHUB_PATH -Encoding utf8 -Append
-
-          # Configure ccache
-          & "C:\ccache\ccache.exe" --set-config=max_size=2G
-          & "C:\ccache\ccache.exe" --set-config=compression=true
-          & "C:\ccache\ccache.exe" -z
-
-      - if: ${{ matrix.os == 'windows-2022' }}
-        name: Restore ccache cache (Windows)
-        id: cache-ccache-win
-        uses: actions/cache/restore@668228422ae6a00e4ad889ee87cd7109ec5666a7 # 5.0.4
-        with:
-          path: ~\AppData\Local\ccache
-          key: ccache-${{ matrix.platform }}-${{ matrix.arch }}-${{ github.sha }}
-          restore-keys: |
-            ccache-${{ matrix.platform }}-${{ matrix.arch }}-
 
       - name: Checkout repository
         uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # 6.0.2
@@ -311,7 +252,7 @@ jobs:
 
       - name: Generate
         working-directory: ${{ env.PKG_DIR }}
-        run: bare-make generate --platform ${{ matrix.platform }} --arch ${{ matrix.arch }} ${{ matrix.flags }} -D CMAKE_C_COMPILER_LAUNCHER=ccache -D CMAKE_CXX_COMPILER_LAUNCHER=ccache
+        run: bare-make generate --platform ${{ matrix.platform }} --arch ${{ matrix.arch }} ${{ matrix.flags }}
 
       - name: Run bare-make build
         working-directory: ${{ env.PKG_DIR }}
@@ -331,23 +272,6 @@ jobs:
           else
             find prebuilds -name "*.bare" -exec strip {} \;
           fi
-
-      - name: Show ccache stats
-        run: ccache -s
-
-      - if: ${{ matrix.os != 'windows-2022' && steps.cache-ccache.outputs.cache-hit != 'true' }}
-        name: Save ccache cache
-        uses: actions/cache/save@668228422ae6a00e4ad889ee87cd7109ec5666a7 # 5.0.4
-        with:
-          path: ~/.cache/ccache
-          key: ccache-${{ matrix.platform }}-${{ matrix.arch }}${{ matrix.tags }}-${{ github.sha }}
-
-      - if: ${{ matrix.os == 'windows-2022' && steps.cache-ccache-win.outputs.cache-hit != 'true' }}
-        name: Save ccache cache (Windows)
-        uses: actions/cache/save@668228422ae6a00e4ad889ee87cd7109ec5666a7 # 5.0.4
-        with:
-          path: ~\AppData\Local\ccache
-          key: ccache-${{ matrix.platform }}-${{ matrix.arch }}-${{ github.sha }}
 
       - uses: actions/upload-artifact@bbbca2ddaa5d8feaa63e36b76fdaad77386f024f # 7.0.0
         with:

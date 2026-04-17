@@ -1,0 +1,77 @@
+---
+title: "getLogger( )"
+titleStyle: code
+description: Creates or retrieves a cached logger instance for the given namespace.
+---
+
+```ts
+function getLogger(namespace: string, options?: LoggerOptions): Logger;
+```
+
+## Parameters
+
+| Name | Type | Required? | Description |
+| --- | --- | :---: | --- |
+| namespace | `string` | ✓ | Logger namespace (used for identification and filtering) |
+| options | [`LoggerOptions`](#loggeroptions) | ✗ | Optional logger configuration. When omitted, the logger is cached by namespace. When provided, a new logger is always created. |
+
+### `LoggerOptions`
+
+| Field | Type | Required? | Description |
+| --- | --- | :---: | --- |
+| level | `"error" \| "warn" \| "info" \| "debug" \| "trace"` | ✗ | Log level |
+| namespace | `string` | ✗ | Override namespace |
+| transports | [`LogTransport[]`](#logtransport) | ✗ | Custom log transports |
+| enableConsole | `boolean` | ✗ | Whether to output logs to console |
+
+### `LogTransport`
+
+```ts
+type LogTransport = (
+  level: LogLevel,
+  namespace: string,
+  message: string,
+) => void | Promise<void>;
+```
+
+A callback function invoked for each log entry. `LogLevel` is `"error" | "warn" | "info" | "debug" | "trace"`.
+
+## Returns
+
+[`Logger`](#logger) — A logger instance.
+
+### `Logger`
+
+| Method | Signature | Description |
+| --- | --- | --- |
+| error | `(...args: unknown[]) => void` | Log at error level |
+| warn | `(...args: unknown[]) => void` | Log at warn level |
+| info | `(...args: unknown[]) => void` | Log at info level |
+| debug | `(...args: unknown[]) => void` | Log at debug level |
+| trace | `(...args: unknown[]) => void` | Log at trace level |
+| setLevel | `(level) => void` | Change the log level |
+| getLevel | `() => LogLevel` | Get the current log level |
+| addTransport | `(transport:` [`LogTransport`](#logtransport)`) => void` | Add a custom transport |
+| setConsoleOutput | `(enabled: boolean) => void` | Enable or disable console output |
+
+## Example
+
+```typescript
+import { getLogger } from "@qvac/sdk";
+
+const logger = getLogger("my-app");
+
+logger.info("Application started");
+logger.debug("Debug details:", { key: "value" });
+
+logger.setLevel("error");
+logger.info("This will not be logged");
+
+const verboseLogger = getLogger("my-app:verbose", {
+  level: "debug",
+  enableConsole: true,
+  transports: [(level, namespace, message) => {
+    // Custom transport: write to file, send to server, etc.
+  }],
+});
+```

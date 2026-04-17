@@ -18,7 +18,7 @@ console.log = function () {
   if (arguments.length === 1) {
     const arg = arguments[0]
     if (arg === '# ok' || arg === '# not ok') {
-      writeExitCode()
+      flushAndWriteExitCode()
     }
   }
 }
@@ -26,6 +26,16 @@ console.log = function () {
 require('./all.js')
 
 const RUNNER = Symbol.for('brittle-runner')
+
+let utils = null
+try { utils = require('./utils.js') } catch (_) {}
+
+function flushAndWriteExitCode () {
+  if (utils && typeof utils.flushPerfReport === 'function') {
+    try { utils.flushPerfReport() } catch (_) {}
+  }
+  writeExitCode()
+}
 
 function writeExitCode () {
   let code = 0
@@ -55,6 +65,7 @@ const stabilityPoll = setInterval(function () {
   if (stableTicks >= 3) {
     done = true
     clearInterval(stabilityPoll)
+    flushAndWriteExitCode()
     try { runner.end() } catch (e) {}
   }
 }, 5000)

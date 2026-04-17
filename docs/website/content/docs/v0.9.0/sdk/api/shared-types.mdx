@@ -1,0 +1,22 @@
+---
+title: Shared types
+description: Shared type definitions used across SDK functions.
+---
+
+## `RPCOptions`
+
+Many functions accept an optional `rpcOptions` parameter for transport-level configuration:
+
+| Field | Type | Required? | Default | Description |
+| --- | --- | :---: | --- | --- |
+| timeout | `number` | ✗ | — | Request timeout in milliseconds (min 100) |
+| forceNewConnection | `boolean` | ✗ | `false` | Force a new RPC connection instead of reusing an existing one |
+| profiling | [`PerCallProfiling`](#percallprofiling) | ✗ | — | Per-call profiling configuration |
+
+### `PerCallProfiling`
+
+| Field | Type | Required? | Description |
+| --- | --- | :---: | --- |
+| enabled | `boolean` | ✗ | Enable profiling for this call |
+| includeServerBreakdown | `boolean` | ✗ | Include server-side timing breakdown in profiling data |
+| mode | `"summary" \| "verbose"` | ✗ | Profiling detail level |
