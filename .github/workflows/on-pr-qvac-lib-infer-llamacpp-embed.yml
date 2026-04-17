@@ -113,6 +113,15 @@ jobs:
         working-directory: packages/qvac-lib-infer-llamacpp-embed
         run: npm run test:dts
 
+      - name: Run lint and unit tests
+        id: run_lint_and_unit_tests
+        uses: tetherto/oss-actions/.github/actions/run-lint-and-unit-tests@4c64bed91fc8eba3a201adb1495e61b4c1a2246d
+        with:
+          gpr-token: ${{ secrets.GITHUB_TOKEN }}
+          pat-token: ${{ secrets.GITHUB_TOKEN }}
+          registry-type: gpr
+          workdir: packages/qvac-lib-infer-llamacpp-embed
+
   prebuild:
     permissions:
       contents: write
