@@ -8,13 +8,13 @@ This native C++ addon, built using the `Bare` Runtime, simplifies running Large 
 - [Building from Source](#building-from-source)
 - [Usage](#usage)
   - [1. Import the Model Class](#1-import-the-model-class)
-  - [2. Create a Data Loader](#2-create-a-data-loader)
-  - [3. Create the `args` obj](#3-create-the-args-obj)
-  - [4. Create the `config` obj](#4-create-the-config-obj)
-  - [5. Create Model Instance](#5-create-model-instance)
-  - [6. Load Model](#6-load-model)
-  - [7. Run Inference](#7-run-inference)
-  - [8. Release Resources](#8-release-resources)
+  - [2. Create the `args` obj](#2-create-the-args-obj)
+    - [Sharded models](#sharded-models)
+  - [3. Create the `config` obj](#3-create-the-config-obj)
+  - [4. Create Model Instance](#4-create-model-instance)
+  - [5. Load Model](#5-load-model)
+  - [6. Run Inference](#6-run-inference)
+  - [7. Release Resources](#7-release-resources)
 - [API behavior by state](#api-behavior-by-state)
 - [Fine-tuning](#fine-tuning)
 - [Quickstart Example](#quickstart-example)
@@ -72,47 +72,77 @@ See [build.md](./build.md) for detailed instructions on how to build the addon f
 
 ```js
 const LlmLlamacpp = require('@qvac/llm-llamacpp')
+const path = require('bare-path')
 ```
 
-### 2. Create a Data Loader
-
-Data Loaders abstract the way model files are accessed. Use a [`FileSystemDataLoader`](../dl-filesystem) to load model files from your local file system. Models can be downloaded directly from HuggingFace.
+### 2. Create the `args` obj
 
 ```js
-const FilesystemDL = require('@qvac/dl-filesystem')
+const dirPath = path.resolve('./models')
+const modelName = 'Llama-3.2-1B-Instruct-Q4_0.gguf'
 
-// Download model from HuggingFace (see examples/utils.js for downloadModel helper)
-const [modelName, dirPath] = await downloadModel(
-  'https://huggingface.co/bartowski/Llama-3.2-1B-Instruct-GGUF/resolve/main/Llama-3.2-1B-Instruct-Q4_0.gguf',
-  'Llama-3.2-1B-Instruct-Q4_0.gguf'
-)
-
-const fsDL = new FilesystemDL({ dirPath })
-```
-
-### 3. Create the `args` obj
-
-```js
 const args = {
-  loader: fsDL,
+  files: {
+    model: [path.join(dirPath, modelName)]
+    // projectionModel: path.join(dirPath, 'mmproj-SmolVLM2-500M-Video-Instruct-Q8_0.gguf') // for multimodal support pass the projection model path
+  },
+  config,
   opts: { stats: true },
-  logger: console,
-  diskPath: dirPath,
-  modelName,
-  // projectionModel: 'mmproj-SmolVLM2-500M-Video-Instruct-Q8_0.gguf' // for multimodal support you need to pass the projection model name
+  logger: console
 }
 ```
 
 The `args` obj contains the following properties:
 
-* `loader`: The Data Loader instance from which the model file will be streamed.
-* `logger`: This property is used to create a [`QvacLogger`](../logging) instance, which handles all logging functionality. 
+* `files.model`: Required. An array of absolute paths to the GGUF model file(s) to load. The caller is responsible for passing the complete set of files for the model, including every shard and the `.tensors.txt` companion for multi-shard models (see [Sharded models](#sharded-models) below).
+* `files.projectionModel`: Optional. Absolute path to the projection model file. This is required for multimodal support.
+* `config`: The model configuration object (see next section).
+* `logger`: This property is used to create a [`QvacLogger`](../logging) instance, which handles all logging functionality.
 * `opts.stats`: This flag determines whether to calculate inference stats.
-* `diskPath`: The local directory where the model file will be downloaded to.
-* `modelName`: The name of model file in the Data Loader.
-* `projectionModel`: The name of the projection model file in the Data Loader. This is required for multimodal support.
 
-### 4. Create the `config` obj
+#### Sharded models
+
+The addon no longer expands sharded models internally. If you are loading a multi-shard GGUF model, **the caller MUST pass every file** — including the `.tensors.txt` companion file that lives alongside the shards — in `files.model`. Anything missing will cause the addon to fail during weight streaming.
+
+**Required ordering for multi-shard models:**
+1. The `.tensors.txt` companion file **first**.
+2. Each `*-NNNNN-of-MMMMM.gguf` shard in **numerical order** (shard `00001` before `00002`, and so on).
+
+Example — loading a 5-shard model:
+
+```js
+const path = require('bare-path')
+const LlmLlamacpp = require('@qvac/llm-llamacpp')
+
+const dir = path.resolve('./models')
+const modelBase = 'my-big-model-Q4_K_M'
+
+const model = new LlmLlamacpp({
+  files: {
+    model: [
+      path.join(dir, `${modelBase}.tensors.txt`),
+      path.join(dir, `${modelBase}-00001-of-00005.gguf`),
+      path.join(dir, `${modelBase}-00002-of-00005.gguf`),
+      path.join(dir, `${modelBase}-00003-of-00005.gguf`),
+      path.join(dir, `${modelBase}-00004-of-00005.gguf`),
+      path.join(dir, `${modelBase}-00005-of-00005.gguf`)
+    ]
+  },
+  config,
+  logger: console,
+  opts: { stats: true }
+})
+
+await model.load()
+```
+
+For single-file GGUF models, pass a one-element array:
+
+```js
+files: { model: [path.join(dir, 'Llama-3.2-1B-Instruct-Q4_0.gguf')] }
+```
+
+### 3. Create the `config` obj
 
 The `config` obj consists of a set of hyper-parameters which can be used to tweak the behaviour of the model.  
 *All parameters must by strings.*
@@ -159,43 +189,21 @@ const config = {
 | System with both                | ✅ Uses dedicated GPU (preferred)     | ✅ Uses dedicated GPU               | ✅ Uses integrated GPU              |
 
 
-### 5. Create Model Instance
+### 4. Create Model Instance
 
 ```js
-const model = new LlmLlamacpp(args, config)
+const model = new LlmLlamacpp(args)
 ```
 
-### 6. Load Model
+### 5. Load Model
 
 ```js
 await model.load()
 ```
 
-_Optionally_ you can pass the following parameters to tweak the loading behaviour.
-* `close?`: This boolean value determines whether to close the Data Loader after loading. Defaults to `true`
-* `reportProgressCallback?`: A callback function which gets called periodically with progress updates. It can be used to display overall progress percentage.
+Loads the model file(s) passed in `files.model` and activates the native addon. If a projection model was provided (`files.projectionModel`), it is loaded as part of the same step.
 
-_For example:_
-
-```js
-await model.load(false, progress => process.stdout.write(`\rOverall Progress: ${progress.overallProgress}%`))
-```
-
-**Progress Callback Data**
-
-The progress callback receives an object with the following properties:
-
-| Property            | Type   | Description                             |
-|---------------------|--------|-----------------------------------------|
-| `action`            | string | Current operation being performed       |
-| `totalSize`         | number | Total bytes to be loaded                |
-| `totalFiles`        | number | Total number of files to process        |
-| `filesProcessed`    | number | Number of files completed so far        |
-| `currentFile`       | string | Name of file currently being processed  |
-| `currentFileProgress` | string | Percentage progress on current file     |
-| `overallProgress`   | string | Overall loading progress percentage     |
-
-### 7. Run Inference
+### 6. Run Inference
 
 Pass an array of messages (following the chat completion format) to the `run` method. Process the generated tokens asynchronously:
 
@@ -227,14 +235,13 @@ try {
 
 When `opts.stats` is enabled, `response.stats` includes runtime metrics such as `TTFT`, `TPS`, token counters, and `backendDevice` (`"cpu"` or `"gpu"`). `backendDevice` reflects the resolved device used at runtime after backend selection/fallback logic, not only the requested config.
 
-### 8. Release Resources
+### 7. Release Resources
 
 Unload the model when finished:
 
 ```javascript
 try {
   await model.unload()
-  await fsDL.close()
 } catch (error) {
   console.error('Failed to unload model:', error)
 }
@@ -341,24 +348,24 @@ In addition to ONNX-based OCR (`@qvac/ocr-onnx`), you can use vision-language mo
 
 ```js
 const LlmLlamacpp = require('@qvac/llm-llamacpp')
-const FilesystemDL = require('@qvac/dl-filesystem')
 const fs = require('bare-fs')
+const path = require('bare-path')
 
-const dirPath = './models'
-const loader = new FilesystemDL({ dirPath })
+const dirPath = path.resolve('./models')
 
 const model = new LlmLlamacpp({
-  modelName: 'LightOnOCR-2-1B-ocr-soup-Q4_K_M.gguf',
-  loader,
-  logger: console,
-  diskPath: dirPath,
-  projectionModel: 'mmproj-F16.gguf'
-}, {
-  device: 'cpu',
-  gpu_layers: '0',
-  ctx_size: '4096',
-  temp: '0.1',
-  predict: '2048'
+  files: {
+    model: [path.join(dirPath, 'LightOnOCR-2-1B-ocr-soup-Q4_K_M.gguf')],
+    projectionModel: path.join(dirPath, 'mmproj-F16.gguf')
+  },
+  config: {
+    device: 'cpu',
+    gpu_layers: '0',
+    ctx_size: '4096',
+    temp: '0.1',
+    predict: '2048'
+  },
+  logger: console
 })
 
 await model.load()
@@ -382,7 +389,6 @@ await response.await()
 console.log(output.join(''))
 
 await model.unload()
-await loader.close()
 ```
 
 ## Architecture
