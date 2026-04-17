@@ -25,10 +25,10 @@ class IChatterboxEngine {
 public:
   IChatterboxEngine() = default;
   virtual ~IChatterboxEngine() = default;
-  virtual void load(const ChatterboxConfig &cfg) = 0;
+  virtual void load(const ChatterboxConfig& cfg) = 0;
   virtual void unload() = 0;
   virtual bool isLoaded() const = 0;
-  virtual AudioResult synthesize(const std::string &text) = 0;
+  virtual AudioResult synthesize(const std::string& text) = 0;
 };
 
 } // namespace qvac::ttslib::chatterbox

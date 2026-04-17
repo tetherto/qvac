@@ -1,17 +1,19 @@
-#include "mocks/OnnxInferSessionMock.hpp"
-#include "src/model-interface/ChatterboxEngine.hpp"
-#include "src/model-interface/IChatterboxEngine.hpp"
 #include <cstdlib>
 #include <fstream>
-#include <gtest/gtest.h>
 #include <memory>
 #include <string>
 #include <vector>
 
+#include <gtest/gtest.h>
+
+#include "mocks/OnnxInferSessionMock.hpp"
+#include "src/model-interface/ChatterboxEngine.hpp"
+#include "src/model-interface/IChatterboxEngine.hpp"
+
 namespace qvac::ttslib::chatterbox::testing {
 
 static std::string getTokenizerPathFromEnv() {
-  const char *path = std::getenv("CHATTERBOX_TOKENIZER_PATH");
+  const char* path = std::getenv("CHATTERBOX_TOKENIZER_PATH");
   if (path == nullptr || path[0] == '\0') {
     return "";
   }
@@ -31,7 +33,7 @@ TEST(ChatterboxEngineFactoryTest, injectedFactoryIsUsedWhenLoadingSessions) {
 
   std::vector<std::string> factoryInvokedPaths;
   ChatterboxEngine::SessionFactory factory =
-      [&factoryInvokedPaths](const std::string &path) {
+      [&factoryInvokedPaths](const std::string& path) {
         factoryInvokedPaths.push_back(path);
         return std::make_unique<OnnxInferSessionMock>();
       };
@@ -42,9 +44,16 @@ TEST(ChatterboxEngineFactoryTest, injectedFactoryIsUsedWhenLoadingSessions) {
   const std::string condDecPath = "conditional_decoder.onnx";
   const std::string langPath = "language_model.onnx";
 
-  ChatterboxConfig config{"en",      referenceAudio, tokenizerPath, speechPath,
-                          embedPath, condDecPath,    langPath,      "",
-                          false};
+  ChatterboxConfig config{
+      "en",
+      referenceAudio,
+      tokenizerPath,
+      speechPath,
+      embedPath,
+      condDecPath,
+      langPath,
+      "",
+      false};
 
   ChatterboxEngine engine(config, factory);
 
@@ -56,8 +65,8 @@ TEST(ChatterboxEngineFactoryTest, injectedFactoryIsUsedWhenLoadingSessions) {
   EXPECT_EQ(factoryInvokedPaths[3], langPath);
 }
 
-TEST(ChatterboxEngineFactoryTest,
-     constructorAcceptsNullFactoryWithLazyLoading) {
+TEST(
+    ChatterboxEngineFactoryTest, constructorAcceptsNullFactoryWithLazyLoading) {
   const std::string tokenizerPath = getTokenizerPathFromEnv();
   if (tokenizerPath.empty()) {
     GTEST_SKIP()
@@ -66,9 +75,16 @@ TEST(ChatterboxEngineFactoryTest,
 
   const std::vector<float> referenceAudio = {0.1f, 0.2f, 0.3f, 0.4f, 0.5f};
   const std::string dummyPath = "dummy.onnx";
-  ChatterboxConfig config{"en",      referenceAudio, tokenizerPath, dummyPath,
-                          dummyPath, dummyPath,      dummyPath,     "",
-                          true};
+  ChatterboxConfig config{
+      "en",
+      referenceAudio,
+      tokenizerPath,
+      dummyPath,
+      dummyPath,
+      dummyPath,
+      dummyPath,
+      "",
+      true};
 
   EXPECT_NO_THROW({
     ChatterboxEngine engine(config, nullptr);
