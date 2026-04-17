@@ -174,3 +174,12 @@ jobs:
         env:
           CHATTERBOX_VARIANT: ${{ matrix.variant }}
           QASE_API_TOKEN: ${{ secrets.QASE_API_TOKEN }}
+
+      - name: Upload performance report
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: perf-report-tts-${{ matrix.platform }}-${{ matrix.arch }}-${{ matrix.variant }}-${{ github.run_number }}
+          path: ${{ inputs.workdir }}/test/results/performance-report.json
+          retention-days: 90
+          if-no-files-found: ignore

@@ -34,7 +34,7 @@ on:
       desktop-platforms:
         description: "JSON array of runner labels for desktop tests"
         type: string
-        default: '["ai-run-windows11-gpu", "ai-run-linux-gpu", "macos-latest-xlarge"]'
+        default: '["ai-run-windows11-gpu", "ai-run-linux-gpu", "mac-mini-m4-gpu"]'
       test-version:
         description: "Git ref to checkout for the tested project (branch, tag, or SHA). Defaults to current branch HEAD."
         type: string
@@ -70,7 +70,7 @@ jobs:
     with:
       project-directory: "packages/sdk"
       working-directory: "packages/sdk/tests-qvac"
-      platforms: ${{ inputs.desktop-platforms || '["ai-run-windows11-gpu", "ai-run-linux-gpu", "macos-latest-xlarge"]' }}
+      platforms: ${{ inputs.desktop-platforms || '["ai-run-windows11-gpu", "ai-run-linux-gpu", "mac-mini-m4-gpu"]' }}
       consumer-timeout: ${{ fromJSON(inputs.desktop-consumer-timeout || '60') }}
       filter: ${{ inputs.filter }}
       test-version: ${{ inputs.test-version || '' }}

@@ -1293,3 +1293,142 @@ jobs:
           echo "✅ All Device Farm tests passed!"
           echo "   Your tests: $USER_PASSED passed (out of $USER_TEST_COUNT total)"
           echo "   Device Farm total: $TOTAL | Passed: $PASSED | Failed: $FAILED | Skipped: $SKIPPED"
+
+      - name: Refresh AWS credentials for log download
+        if: always() && steps.schedule_run.outputs.run_arn
+        uses: aws-actions/configure-aws-credentials@8df5847569e6427dd6c4fb1cf565c83acfa8afa7 # 6.0.0
+        with:
+          role-to-assume: ${{ secrets.AWS_OIDC_ROLE_ARN }}
+          aws-region: us-west-2
+          role-session-name: device-farm-logs
+
+      - name: Download Device Farm Logs
+        if: always() && steps.schedule_run.outputs.run_arn
+        run: |
+          RUN_ARN="${{ steps.schedule_run.outputs.run_arn }}"
+          LOG_DIR="devicefarm-logs/${{ matrix.platform }}"
+          PLATFORM="${{ matrix.platform }}"
+          mkdir -p "$LOG_DIR"
+
+          echo ""
+          echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+          echo "📥 DOWNLOADING DEVICE FARM LOGS"
+          echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+          echo ""
+          echo "Logs are downloaded so anyone with repo access can view them"
+          echo "without needing AWS Device Farm credentials."
+          if [ "$PLATFORM" = "Android" ]; then
+            echo "ℹ️  Skipping video artifacts on Android to reduce artifact size."
+          fi
+          echo ""
+
+          RUN_DETAILS=$(aws devicefarm get-run --arn "$RUN_ARN" --output json 2>/dev/null || echo '{}')
+          RUN_LABEL=$(echo "$RUN_DETAILS" | jq -r '.run.name // "unknown"')
+          echo ""
+          echo "========================================"
+          echo "📦 Run: $RUN_LABEL"
+          echo "========================================"
+
+          SAFE_RUN=$(echo "$RUN_LABEL" | tr ' /' '__' | tr -cd '[:alnum:]_-')
+          JOBS=$(aws devicefarm list-jobs --arn "$RUN_ARN" --output json 2>/dev/null || echo '{"jobs":[]}')
+
+          for JOB_ARN in $(echo "$JOBS" | jq -r '.jobs[].arn'); do
+            DEVICE_NAME=$(echo "$JOBS" | jq -r --arg arn "$JOB_ARN" '.jobs[] | select(.arn == $arn) | .device.name // "unknown"')
+            JOB_RESULT=$(echo "$JOBS" | jq -r --arg arn "$JOB_ARN" '.jobs[] | select(.arn == $arn) | .result // "UNKNOWN"')
+            SAFE_NAME=$(echo "$DEVICE_NAME" | tr ' /' '__' | tr -cd '[:alnum:]_-')
+
+            echo ""
+            echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+            echo "📱 $DEVICE_NAME ($JOB_RESULT)"
+            echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+
+            SUITES=$(aws devicefarm list-suites --arn "$JOB_ARN" --output json 2>/dev/null || echo '{"suites":[]}')
+
+            for SUITE_ARN in $(echo "$SUITES" | jq -r '.suites[].arn'); do
+              SUITE_NAME=$(echo "$SUITES" | jq -r --arg arn "$SUITE_ARN" '.suites[] | select(.arn == $arn) | .name // "unknown"')
+              SAFE_SUITE=$(echo "$SUITE_NAME" | tr ' /' '__' | tr -cd '[:alnum:]_-')
+
+              ARTIFACTS=$(aws devicefarm list-artifacts --arn "$SUITE_ARN" --type FILE --output json 2>/dev/null || echo '{"artifacts":[]}')
+
+              echo "$ARTIFACTS" | jq -c '.artifacts[]' 2>/dev/null | while read -r ARTIFACT; do
+                ART_NAME=$(echo "$ARTIFACT" | jq -r '.name // "unknown"')
+                ART_URL=$(echo "$ARTIFACT" | jq -r '.url // empty')
+                ART_EXT=$(echo "$ARTIFACT" | jq -r '.extension // "txt"')
+                [ -z "$ART_URL" ] && continue
+
+                if [ "$PLATFORM" = "Android" ]; then
+                  if echo "$ART_NAME" | grep -qiE "^video$" || echo "$ART_EXT" | grep -qiE "^mp4$"; then
+                    echo "  Skipped (video): $SUITE_NAME / $ART_NAME"
+                    continue
+                  fi
+                fi
+
+                SAFE_ART=$(echo "$ART_NAME" | tr ' /' '__' | tr -cd '[:alnum:]_-')
+                DEST="$LOG_DIR/${SAFE_RUN}_${SAFE_NAME}_${SAFE_SUITE}_${SAFE_ART}.${ART_EXT}"
+
+                if curl -fsSL -o "$DEST" "$ART_URL" 2>/dev/null; then
+                  echo "  Downloaded: $SUITE_NAME / $ART_NAME"
+
+                  if echo "$ART_NAME" | grep -qiE "test.spec|testspec"; then
+                    echo ""
+                    echo "::group::📋 [$DEVICE_NAME] $SUITE_NAME — $ART_NAME"
+                    cat "$DEST" 2>/dev/null || true
+                    echo "::endgroup::"
+                  fi
+                fi
+              done
+
+              LOG_ARTIFACTS=$(aws devicefarm list-artifacts --arn "$SUITE_ARN" --type LOG --output json 2>/dev/null || echo '{"artifacts":[]}')
+
+              echo "$LOG_ARTIFACTS" | jq -c '.artifacts[]' 2>/dev/null | while read -r ARTIFACT; do
+                ART_NAME=$(echo "$ARTIFACT" | jq -r '.name // "unknown"')
+                ART_URL=$(echo "$ARTIFACT" | jq -r '.url // empty')
+                ART_EXT=$(echo "$ARTIFACT" | jq -r '.extension // "txt"')
+                [ -z "$ART_URL" ] && continue
+
+                SAFE_ART=$(echo "$ART_NAME" | tr ' /' '__' | tr -cd '[:alnum:]_-')
+                DEST="$LOG_DIR/${SAFE_RUN}_${SAFE_NAME}_${SAFE_SUITE}_${SAFE_ART}.${ART_EXT}"
+
+                if curl -fsSL -o "$DEST" "$ART_URL" 2>/dev/null; then
+                  echo "  Downloaded: $SUITE_NAME / $ART_NAME (LOG)"
+                fi
+              done
+            done
+
+            JOB_ARTIFACTS=$(aws devicefarm list-artifacts --arn "$JOB_ARN" --type FILE --output json 2>/dev/null || echo '{"artifacts":[]}')
+            echo "$JOB_ARTIFACTS" | jq -c '.artifacts[]' 2>/dev/null | while read -r ARTIFACT; do
+              ART_NAME=$(echo "$ARTIFACT" | jq -r '.name // "unknown"')
+              ART_URL=$(echo "$ARTIFACT" | jq -r '.url // empty')
+              ART_EXT=$(echo "$ARTIFACT" | jq -r '.extension // "txt"')
+              [ -z "$ART_URL" ] && continue
+
+              if [ "$PLATFORM" = "Android" ]; then
+                if echo "$ART_NAME" | grep -qiE "^video$" || echo "$ART_EXT" | grep -qiE "^mp4$"; then
+                  echo "  Skipped (video): job-level / $ART_NAME"
+                  continue
+                fi
+              fi
+
+              SAFE_ART=$(echo "$ART_NAME" | tr ' /' '__' | tr -cd '[:alnum:]_-')
+              DEST="$LOG_DIR/${SAFE_RUN}_${SAFE_NAME}_job_${SAFE_ART}.${ART_EXT}"
+
+              if curl -fsSL -o "$DEST" "$ART_URL" 2>/dev/null; then
+                echo "  Downloaded (job-level): $ART_NAME"
+              fi
+            done
+          done
+
+          echo ""
+          echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+          echo "📦 All downloaded logs:"
+          echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+          find "$LOG_DIR" -type f -exec ls -lh {} \; 2>/dev/null || echo "  (no logs downloaded)"
+
+      - name: Upload Device Farm Logs
+        if: always() && steps.schedule_run.outputs.run_arn
+        uses: actions/upload-artifact@v4
+        with:
+          name: devicefarm-logs-diffusion-${{ matrix.platform }}
+          path: devicefarm-logs/
+          retention-days: 30
+          if-no-files-found: ignore
