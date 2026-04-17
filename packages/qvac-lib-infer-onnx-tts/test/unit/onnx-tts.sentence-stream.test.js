@@ -69,6 +69,48 @@ test('run({ streamOutput: true }) matches chunked runStream behavior', async (t)
   runJobSpy.restore()
 })
 
+test('runStreaming accumulate merges token stream into one job when sentence completes', async (t) => {
+  const runJobSpy = sinon.spy(MockedBinding.prototype, 'runJob')
+  const model = createStubbedModel()
+  await model.load()
+  async function * tokens () {
+    yield 'One '
+    yield 'sentence '
+    yield 'only.'
+  }
+  const response = await model.runStreaming(tokens())
+  await response.await()
+  t.is(runJobSpy.callCount, 1)
+  runJobSpy.restore()
+})
+
+test('runStreaming accumulateSentences false runs one job per yield', async (t) => {
+  const runJobSpy = sinon.spy(MockedBinding.prototype, 'runJob')
+  const model = createStubbedModel()
+  await model.load()
+  async function * tokens () {
+    yield 'a'
+    yield 'b'
+  }
+  const response = await model.runStreaming(tokens(), { accumulateSentences: false })
+  await response.await()
+  t.is(runJobSpy.callCount, 2)
+  runJobSpy.restore()
+})
+
+test('runStreaming accumulate hard-splits when buffer exceeds maxBufferScalars', async (t) => {
+  const runJobSpy = sinon.spy(MockedBinding.prototype, 'runJob')
+  const model = createStubbedModel()
+  await model.load()
+  async function * oneBig () {
+    yield 'a'.repeat(250)
+  }
+  const response = await model.runStreaming(oneBig(), { maxBufferScalars: 100 })
+  await response.await()
+  t.is(runJobSpy.callCount, 3)
+  runJobSpy.restore()
+})
+
 test('runStreaming yields multiple jobs from async text chunks', async (t) => {
   const runJobSpy = sinon.spy(MockedBinding.prototype, 'runJob')
   const model = createStubbedModel()

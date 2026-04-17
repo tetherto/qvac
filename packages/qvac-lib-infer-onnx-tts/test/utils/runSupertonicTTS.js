@@ -39,7 +39,12 @@ async function runSupertonicTTS (model, params, expectation = {}) {
 
 /**
  * Integration helper: {@link ONNXTTS#runStreaming} (streaming text in + PCM on `onUpdate`),
- * concatenating chunk PCM in chunk order. Each string in `params.phrases` is one native job.
+ * concatenating chunk PCM in chunk order.
+ *
+ * Uses default `runStreaming` options (`accumulateSentences` true for this async generator). Each
+ * phrase should end with sentence punctuation so the stream accumulator flushes once per yield;
+ * then chunk count matches `phrases.length`. Optional `params.streamingOptions` is forwarded as
+ * the second argument to `runStreaming` for tests that need explicit overrides.
  */
 async function runSupertonicStreaming (model, params, expectation = {}) {
   const sampleRate = SUPERTONIC_SAMPLE_RATE
@@ -67,7 +72,13 @@ async function runSupertonicStreaming (model, params, expectation = {}) {
       }
     }
 
-    const response = await model.runStreaming(textStream())
+    const streamingOptions =
+      params.streamingOptions && typeof params.streamingOptions === 'object'
+        ? params.streamingOptions
+        : undefined
+    const response = streamingOptions
+      ? await model.runStreaming(textStream(), streamingOptions)
+      : await model.runStreaming(textStream())
     const pcmByChunk = new Map()
     const textByChunk = new Map()
     let jobStats = null

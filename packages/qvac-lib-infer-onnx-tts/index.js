@@ -11,6 +11,7 @@ const {
 const { TTSInterface } = require('./tts')
 const { QvacErrorAddonTTS, ERR_CODES } = require('./lib/error')
 const { splitTtsText } = require('./lib/textChunker')
+const { accumulateTextStream } = require('./lib/textStreamAccumulator')
 
 // Engine types
 const ENGINE_CHATTERBOX = 'chatterbox'
@@ -111,6 +112,20 @@ function normalizeOnnxTtsFiles (files) {
     voiceStyle: firstNonEmpty(f.voiceStyle, f.voiceStyleJsonPath),
     voicesDir: firstNonEmpty(f.voicesDir)
   }
+}
+
+/**
+ * Default `accumulateSentences` for `runStreaming`: true only for native `AsyncIterable`
+ * (e.g. incremental text from an upstream async source), not for strings, arrays, or sync-only iterables.
+ * @param {unknown} textStream
+ * @returns {boolean}
+ */
+function defaultAccumulateSentencesForStreamInput (textStream) {
+  if (textStream == null) return false
+  if (typeof textStream === 'string') return false
+  if (Array.isArray(textStream)) return false
+  if (typeof textStream[Symbol.asyncIterator] === 'function') return true
+  return false
 }
 
 class ONNXTTS {
@@ -392,20 +407,68 @@ class ONNXTTS {
   }
 
   /**
-   * Streaming input + streaming output: each yielded string (after trim) is one synthesis job;
-   * PCM is emitted on `response.onUpdate` as each job completes. Same chunk metadata shape as `runStream`.
-   * Mirrors Whisper's `runStreaming` naming (time-varying input).
+   * Streaming input + streaming output: each flushed string is one synthesis job; PCM is emitted on
+   * `response.onUpdate` per job. Same chunk metadata shape as `runStream`.
+   *
+   * For **AsyncIterable** inputs (incremental text from streaming sources), **`accumulateSentences` defaults to
+   * true**: fragments are concatenated until a sentence end (see `sentenceDelimiterPreset`), max buffer
+   * size (`maxBufferScalars`), or `flushAfterMs` idle after the last fragment. Strings and arrays
+   * default to one job per yield (`accumulateSentences` false).
    *
    * @param {AsyncIterable<string>|Iterable<string>|string} textStream
+   * @param {Object} [options]
+   * @param {boolean} [options.accumulateSentences] - Default: true for `AsyncIterable` inputs only.
+   * @param {'latin'|'cjk'|'multilingual'} [options.sentenceDelimiterPreset]
+   * @param {RegExp} [options.sentenceDelimiter] - Overrides preset when set (tested against full buffer).
+   * @param {number} [options.maxBufferScalars] - Max graphemes before hard flush (default by language).
+   * @param {number} [options.flushAfterMs] - Idle flush after last fragment (default 500).
    */
-  async runStreaming (textStream) {
-    const normalized = this._normalizeTextStream(textStream)
+  async runStreaming (textStream, options = {}) {
+    const streamOpts = this._resolveRunStreamingOptions(textStream, options)
+    let normalized = this._normalizeTextStream(textStream)
+    if (streamOpts.accumulateSentences) {
+      normalized = accumulateTextStream(normalized, {
+        sentenceDelimiterPreset: streamOpts.sentenceDelimiterPreset,
+        maxBufferScalars: streamOpts.maxBufferScalars,
+        flushAfterMs: streamOpts.flushAfterMs,
+        sentenceDelimiter: streamOpts.sentenceDelimiter,
+        language: this._config?.language
+      })
+    }
     if (this.exclusiveRun) {
       return await this._enqueueExclusiveTtsResponse(() =>
         this._runTextStreamOrchestrator(normalized)
       )
     }
     return this._runTextStreamOrchestrator(normalized)
+  }
+
+  /**
+   * @param {unknown} textStream
+   * @param {Record<string, unknown>} options
+   */
+  _resolveRunStreamingOptions (textStream, options) {
+    const o = options == null || typeof options !== 'object' ? {} : options
+    let accumulateSentences = o.accumulateSentences
+    if (accumulateSentences === undefined) {
+      accumulateSentences = defaultAccumulateSentencesForStreamInput(textStream)
+    }
+    const rawPreset = o.sentenceDelimiterPreset
+    const sentenceDelimiterPreset =
+      rawPreset === 'latin' || rawPreset === 'cjk' || rawPreset === 'multilingual'
+        ? rawPreset
+        : 'multilingual'
+    const maxBufferScalars = o.maxBufferScalars
+    const flushAfterMs = o.flushAfterMs != null ? o.flushAfterMs : 500
+    const sentenceDelimiter =
+      o.sentenceDelimiter instanceof RegExp ? o.sentenceDelimiter : undefined
+    return {
+      accumulateSentences: !!accumulateSentences,
+      sentenceDelimiterPreset,
+      maxBufferScalars,
+      flushAfterMs,
+      sentenceDelimiter
+    }
   }
 
   _normalizeTextStream (textStream) {

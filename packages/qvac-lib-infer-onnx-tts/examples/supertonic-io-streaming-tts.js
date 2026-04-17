@@ -2,11 +2,15 @@
 
 /**
  * Streaming **input** + streaming **output**: text arrives over time (async generator simulating
- * an LLM or upstream source). Each yielded string is one native TTS job; PCM is emitted on
- * `response.onUpdate` as each job completes (`runStreaming`).
+ * an upstream async source). Uses `runStreaming()` — for `AsyncIterable` inputs,
+ * **`accumulateSentences` defaults to true**, so small fragments are concatenated until a sentence
+ * end, max buffer size, or idle timeout (see `RunStreamingOptions` in `index.d.ts`).
  *
- * Contrast with `supertonic-streaming-tts.js`, where the full script is known up front and only
- * the audio is streamed (`run({ streamOutput: true })` / sentence splitting on one string).
+ * Here each yield is already a short phrase ending with punctuation, so playback still chunks
+ * per phrase. For sub-word or word-sized stream chunks, rely on defaults or tune `maxBufferScalars` /
+ * `flushAfterMs` / `sentenceDelimiterPreset`.
+ *
+ * Contrast with `supertonic-streaming-tts.js`: full script known up front, `run({ streamOutput: true })`.
  */
 
 const fs = require('bare-fs')

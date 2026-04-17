@@ -2,8 +2,10 @@
 
 /**
  * Chunked streaming **output** only: the full script is known up front; `run({ input, streamOutput: true })`
- * splits it into sentences and emits PCM on `onUpdate` per chunk (same as `runStream`).
- * For text that arrives over time plus streamed audio, see `supertonic-io-streaming-tts.js` (`runStreaming`).
+ * splits it into sentences and emits PCM on `onUpdate` per chunk. Same path as `runStream(text, options)`
+ * (optional `locale`, `maxChunkScalars` on that object).
+ *
+ * For incremental text input (async yields) plus streamed PCM, see `supertonic-io-streaming-tts.js` (`runStreaming`).
  */
 
 const fs = require('bare-fs')

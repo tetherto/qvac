@@ -153,12 +153,12 @@ declare class ONNXTTS {
   ): Promise<QvacResponse<ONNXTTS.TTSOutputChunk & ONNXTTS.SentenceStreamChunkMeta>>
 
   /**
-   * Streaming text in, streaming audio out: each yielded string becomes one native job;
-   * PCM arrives on `onUpdate` per chunk (same metadata as `runStream`). Accepts string, array,
-   * sync iterable, or async iterable of strings.
+   * Streaming text in, streaming audio out. Each flushed string is one native job; PCM on `onUpdate`.
+   * For `AsyncIterable` inputs, `accumulateSentences` defaults true (coalesce small streamed fragments).
    */
   runStreaming(
     textStream: ONNXTTS.TextStreamInput,
+    options?: ONNXTTS.RunStreamingOptions,
   ): Promise<QvacResponse<ONNXTTS.TTSOutputChunk & ONNXTTS.SentenceStreamChunkMeta>>
 }
 
@@ -194,6 +194,22 @@ declare namespace ONNXTTS {
     | Iterable<string>
     | AsyncIterable<string>
 
+  export interface RunStreamingOptions {
+    /**
+     * When true, concatenate small streamed fragments until a sentence end, max buffer size, or idle time.
+     * Default: true only when `textStream` is an `AsyncIterable` (not a plain string or array).
+     */
+    accumulateSentences?: boolean
+    /** Sentence end detection when buffer matches this pattern (overrides `sentenceDelimiterPreset`). */
+    sentenceDelimiter?: RegExp
+    /** Preset for built-in sentence-end patterns (ignored if `sentenceDelimiter` is set). */
+    sentenceDelimiterPreset?: 'latin' | 'cjk' | 'multilingual'
+    /** Max graphemes per buffered chunk before a forced flush (aligned with `splitTtsText` defaults by language). */
+    maxBufferScalars?: number
+    /** Idle time after the last fragment before flushing the buffer (timer resets on each fragment). Default 500. */
+    flushAfterMs?: number
+  }
+
   export type TTSRunInput = {
     type?: string
     input: string
@@ -222,6 +238,7 @@ declare namespace ONNXTTS {
     RuntimeStats,
     SentenceStreamChunkMeta,
     SentenceStreamOptions,
+    RunStreamingOptions,
     TextStreamInput,
     TTSOutputChunk,
     TTSRunInput
