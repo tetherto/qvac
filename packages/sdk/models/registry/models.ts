@@ -8884,7 +8884,7 @@ export const models = [
     params: "320M",
   },
   {
-    name: "NMT_Q0F16",
+    name: "MARIAN_OPUS_DE_FR_Q0F16",
     registryPath:
       "qvac_models_compiled/ggml/marian/q0f16/ggml-opus-de-fr/2025-11-09/ggml-opus-de-fr.bin",
     registrySource: "s3",
@@ -8903,7 +8903,7 @@ export const models = [
     params: "",
   },
   {
-    name: "NMT_Q0F16_1",
+    name: "MARIAN_OPUS_EN_FR_Q0F16",
     registryPath:
       "qvac_models_compiled/ggml/marian/q0f16/ggml-opus-en-fr/2025-11-09/ggml-opus-en-fr.bin",
     registrySource: "s3",
@@ -8922,7 +8922,7 @@ export const models = [
     params: "",
   },
   {
-    name: "NMT_Q0F16_2",
+    name: "MARIAN_OPUS_EN_PT_Q0F16",
     registryPath:
       "qvac_models_compiled/ggml/marian/q0f16/ggml-opus-en-pt/2025-11-07/ggml-opus-mt-en-roa-f16.bin",
     registrySource: "s3",
@@ -8941,7 +8941,7 @@ export const models = [
     params: "",
   },
   {
-    name: "NMT_Q0F16_3",
+    name: "MARIAN_OPUS_EN_RU_Q0F16",
     registryPath:
       "qvac_models_compiled/ggml/marian/q0f16/ggml-opus-en-ru/2025-11-09/ggml-opus-en-ru.bin",
     registrySource: "s3",
@@ -8960,7 +8960,7 @@ export const models = [
     params: "",
   },
   {
-    name: "NMT_Q0F16_4",
+    name: "MARIAN_OPUS_ES_FR_Q0F16",
     registryPath:
       "qvac_models_compiled/ggml/marian/q0f16/ggml-opus-es-fr/2025-11-09/ggml-opus-es-fr.bin",
     registrySource: "s3",
@@ -8979,7 +8979,7 @@ export const models = [
     params: "",
   },
   {
-    name: "NMT_Q0F16_5",
+    name: "MARIAN_OPUS_FR_DE_Q0F16",
     registryPath:
       "qvac_models_compiled/ggml/marian/q0f16/ggml-opus-fr-de/2025-11-09/ggml-opus-fr-de.bin",
     registrySource: "s3",
@@ -8998,7 +8998,7 @@ export const models = [
     params: "",
   },
   {
-    name: "NMT_Q0F16_6",
+    name: "MARIAN_OPUS_FR_EN_Q0F16",
     registryPath:
       "qvac_models_compiled/ggml/marian/q0f16/ggml-opus-fr-en/2025-11-09/ggml-opus-fr-en.bin",
     registrySource: "s3",
@@ -9017,7 +9017,7 @@ export const models = [
     params: "",
   },
   {
-    name: "NMT_Q0F16_7",
+    name: "MARIAN_OPUS_FR_ES_Q0F16",
     registryPath:
       "qvac_models_compiled/ggml/marian/q0f16/ggml-opus-fr-es/2025-11-09/ggml-opus-fr-es.bin",
     registrySource: "s3",
@@ -9036,7 +9036,7 @@ export const models = [
     params: "",
   },
   {
-    name: "NMT_Q0F16_8",
+    name: "MARIAN_OPUS_PT_EN_Q0F16",
     registryPath:
       "qvac_models_compiled/ggml/marian/q0f16/ggml-opus-pt-en/2025-11-07/ggml-opus-mt-roa-en-f16.bin",
     registrySource: "s3",
@@ -9055,7 +9055,7 @@ export const models = [
     params: "",
   },
   {
-    name: "NMT_Q0F16_9",
+    name: "MARIAN_OPUS_RU_EN_Q0F16",
     registryPath:
       "qvac_models_compiled/ggml/marian/q0f16/ggml-opus-ru-en/2025-11-09/ggml-opus-ru-en.bin",
     registrySource: "s3",
@@ -9074,7 +9074,7 @@ export const models = [
     params: "",
   },
   {
-    name: "NMT_Q4_0",
+    name: "MARIAN_OPUS_AR_EN_Q4_0",
     registryPath:
       "qvac_models_compiled/ggml/marian/q4_0/ggml-opus-ar-en/2025-11-20/ggml-opus-ar-en.bin",
     registrySource: "s3",
@@ -9093,7 +9093,7 @@ export const models = [
     params: "",
   },
   {
-    name: "NMT_Q4_0_1",
+    name: "MARIAN_OPUS_DE_EN_Q4_0",
     registryPath:
       "qvac_models_compiled/ggml/marian/q4_0/ggml-opus-de-en/2025-09-10/ggml-opus-de-en.bin",
     registrySource: "s3",
@@ -9112,7 +9112,7 @@ export const models = [
     params: "",
   },
   {
-    name: "NMT_Q4_0_2",
+    name: "MARIAN_OPUS_DE_FR_Q4_0",
     registryPath:
       "qvac_models_compiled/ggml/marian/q4_0/ggml-opus-de-fr/2025-11-04/ggml-opus-de-fr.bin",
     registrySource: "s3",
@@ -9131,7 +9131,7 @@ export const models = [
     params: "",
   },
   {
-    name: "NMT_Q4_0_3",
+    name: "MARIAN_OPUS_EN_AR_Q4_0",
     registryPath:
       "qvac_models_compiled/ggml/marian/q4_0/ggml-opus-en-ar/2025-11-20/ggml-opus-en-ar.bin",
     registrySource: "s3",
@@ -9150,7 +9150,7 @@ export const models = [
     params: "",
   },
   {
-    name: "NMT_Q4_0_4",
+    name: "MARIAN_OPUS_EN_DE_Q4_0",
     registryPath:
       "qvac_models_compiled/ggml/marian/q4_0/ggml-opus-en-de/2025-09-10/ggml-opus-en-de.bin",
     registrySource: "s3",
@@ -9169,7 +9169,7 @@ export const models = [
     params: "",
   },
   {
-    name: "NMT_Q4_0_5",
+    name: "MARIAN_OPUS_EN_ES_Q4_0",
     registryPath:
       "qvac_models_compiled/ggml/marian/q4_0/ggml-opus-en-es/2025-09-10/ggml-opus-en-es.bin",
     registrySource: "s3",
@@ -9188,7 +9188,7 @@ export const models = [
     params: "",
   },
   {
-    name: "NMT_Q4_0_6",
+    name: "MARIAN_OPUS_EN_FR_Q4_0",
     registryPath:
       "qvac_models_compiled/ggml/marian/q4_0/ggml-opus-en-fr/2025-11-04/ggml-opus-en-fr.bin",
     registrySource: "s3",
@@ -9207,7 +9207,7 @@ export const models = [
     params: "",
   },
   {
-    name: "NMT_Q4_0_7",
+    name: "MARIAN_OPUS_EN_IT_Q4_0",
     registryPath:
       "qvac_models_compiled/ggml/marian/q4_0/ggml-opus-en-it/2025-09-10/ggml-opus-en-it.bin",
     registrySource: "s3",
@@ -9226,7 +9226,7 @@ export const models = [
     params: "",
   },
   {
-    name: "NMT_Q4_0_8",
+    name: "MARIAN_OPUS_EN_PT_Q4_0",
     registryPath:
       "qvac_models_compiled/ggml/marian/q4_0/ggml-opus-en-pt/2025-11-04/ggml-opus-en-pt.bin",
     registrySource: "s3",
@@ -9245,7 +9245,7 @@ export const models = [
     params: "",
   },
   {
-    name: "NMT_Q4_0_9",
+    name: "MARIAN_OPUS_EN_ROA_Q4_0",
     registryPath:
       "qvac_models_compiled/ggml/marian/q4_0/ggml-opus-en-roa/2025-11-20/ggml-opus-en-roa.bin",
     registrySource: "s3",
@@ -9264,7 +9264,7 @@ export const models = [
     params: "",
   },
   {
-    name: "NMT_Q4_0_10",
+    name: "MARIAN_OPUS_EN_RU_Q4_0",
     registryPath:
       "qvac_models_compiled/ggml/marian/q4_0/ggml-opus-en-ru/2025-09-23/ggml-opus-en-ru.bin",
     registrySource: "s3",
@@ -9283,7 +9283,7 @@ export const models = [
     params: "",
   },
   {
-    name: "NMT_Q4_0_11",
+    name: "MARIAN_OPUS_EN_ZH_Q4_0",
     registryPath:
       "qvac_models_compiled/ggml/marian/q4_0/ggml-opus-en-zh/2025-11-19/ggml-opus-en-zh.bin",
     registrySource: "s3",
@@ -9302,7 +9302,7 @@ export const models = [
     params: "",
   },
   {
-    name: "NMT_Q4_0_12",
+    name: "MARIAN_OPUS_ES_EN_Q4_0",
     registryPath:
       "qvac_models_compiled/ggml/marian/q4_0/ggml-opus-es-en/2025-09-10/ggml-opus-es-en.bin",
     registrySource: "s3",
@@ -9321,7 +9321,7 @@ export const models = [
     params: "",
   },
   {
-    name: "NMT_Q4_0_13",
+    name: "MARIAN_OPUS_ES_FR_Q4_0",
     registryPath:
       "qvac_models_compiled/ggml/marian/q4_0/ggml-opus-es-fr/2025-11-04/ggml-opus-es-fr.bin",
     registrySource: "s3",
@@ -9340,7 +9340,7 @@ export const models = [
     params: "",
   },
   {
-    name: "NMT_Q4_0_14",
+    name: "MARIAN_OPUS_FR_DE_Q4_0",
     registryPath:
       "qvac_models_compiled/ggml/marian/q4_0/ggml-opus-fr-de/2025-11-04/ggml-opus-fr-de.bin",
     registrySource: "s3",
@@ -9359,7 +9359,7 @@ export const models = [
     params: "",
   },
   {
-    name: "NMT_Q4_0_15",
+    name: "MARIAN_OPUS_FR_EN_Q4_0",
     registryPath:
       "qvac_models_compiled/ggml/marian/q4_0/ggml-opus-fr-en/2025-11-04/ggml-opus-fr-en.bin",
     registrySource: "s3",
@@ -9378,7 +9378,7 @@ export const models = [
     params: "",
   },
   {
-    name: "NMT_Q4_0_16",
+    name: "MARIAN_OPUS_FR_ES_Q4_0",
     registryPath:
       "qvac_models_compiled/ggml/marian/q4_0/ggml-opus-fr-es/2025-11-04/ggml-opus-fr-es.bin",
     registrySource: "s3",
@@ -9397,7 +9397,7 @@ export const models = [
     params: "",
   },
   {
-    name: "NMT_Q4_0_17",
+    name: "MARIAN_OPUS_IT_EN_Q4_0",
     registryPath:
       "qvac_models_compiled/ggml/marian/q4_0/ggml-opus-it-en/2025-09-10/ggml-opus-it-en.bin",
     registrySource: "s3",
@@ -9416,7 +9416,7 @@ export const models = [
     params: "",
   },
   {
-    name: "NMT_Q4_0_18",
+    name: "MARIAN_OPUS_JA_EN_Q4_0",
     registryPath:
       "qvac_models_compiled/ggml/marian/q4_0/ggml-opus-ja-en/2025-11-19/ggml-opus-ja-en.bin",
     registrySource: "s3",
@@ -9435,7 +9435,7 @@ export const models = [
     params: "",
   },
   {
-    name: "NMT_Q4_0_19",
+    name: "MARIAN_OPUS_ROA_EN_Q4_0",
     registryPath:
       "qvac_models_compiled/ggml/marian/q4_0/ggml-opus-roa-en/2025-11-19/ggml-opus-roa-en.bin",
     registrySource: "s3",
@@ -9454,7 +9454,7 @@ export const models = [
     params: "",
   },
   {
-    name: "NMT_Q4_0_20",
+    name: "MARIAN_OPUS_RU_EN_Q4_0",
     registryPath:
       "qvac_models_compiled/ggml/marian/q4_0/ggml-opus-ru-en/2025-09-23/ggml-opus-ru-en.bin",
     registrySource: "s3",
@@ -9473,7 +9473,7 @@ export const models = [
     params: "",
   },
   {
-    name: "NMT_Q4_0_21",
+    name: "MARIAN_OPUS_ZH_EN_Q4_0",
     registryPath:
       "qvac_models_compiled/ggml/marian/q4_0/ggml-opus-zh-en/2025-11-19/ggml-opus-zh-en.bin",
     registrySource: "s3",
@@ -9963,43 +9963,6 @@ export const models = [
     engine: "parakeet-transcription",
     quantization: "fp32",
     params: "0.6B",
-    companionSet: {
-      setKey: "58bc6ded7c93a073",
-      primaryKey: "modelPath",
-      files: [
-        {
-          key: "modelPath",
-          registryPath:
-            "istupakov/parakeet-tdt-0.6b-v3-onnx/resolve/abd2878d52a678ce380088ef9d9b1d9664404565/encoder-model.onnx",
-          registrySource: "hf",
-          targetName: "encoder-model.onnx",
-          expectedSize: 41770866,
-          sha256Checksum:
-            "98a74b21b4cc0017c1e7030319a4a96f4a9506e50f0708f3a516d02a77c96bb1",
-          blobCoreKey:
-            "d90c0263033385abdb2290a69936d5cef030d5c63c87baa33c3a4a2d01b84ca8",
-          blobBlockOffset: 0,
-          blobBlockLength: 638,
-          blobByteOffset: 0,
-          primary: true,
-        },
-        {
-          key: "dataPath",
-          registryPath:
-            "istupakov/parakeet-tdt-0.6b-v3-onnx/resolve/abd2878d52a678ce380088ef9d9b1d9664404565/encoder-model.onnx.data",
-          registrySource: "hf",
-          targetName: "encoder-model.onnx.data",
-          expectedSize: 2435420160,
-          sha256Checksum:
-            "9a22d372c51455c34f13405da2520baefb7125bd16981397561423ed32d24f36",
-          blobCoreKey:
-            "d90c0263033385abdb2290a69936d5cef030d5c63c87baa33c3a4a2d01b84ca8",
-          blobBlockOffset: 638,
-          blobBlockLength: 37162,
-          blobByteOffset: 41770866,
-        },
-      ],
-    },
   },
   {
     name: "PARAKEET_TDT_ENCODER_DATA_FP32",
@@ -10076,43 +10039,6 @@ export const models = [
     engine: "parakeet-transcription",
     quantization: "fp32",
     params: "0.6B",
-    companionSet: {
-      setKey: "e224cc55eb5e3e4d",
-      primaryKey: "modelPath",
-      files: [
-        {
-          key: "modelPath",
-          registryPath:
-            "onnx-community/parakeet-ctc-0.6b-ONNX/resolve/7df2cab7aed886b8b7f80d68a8214007e4847601/onnx/model.onnx",
-          registrySource: "hf",
-          targetName: "model.onnx",
-          expectedSize: 887486,
-          sha256Checksum:
-            "5c459a949508ff0da5b36e8d94feb8ed1746fea9e732879117dd7c1f78a8a86c",
-          blobCoreKey:
-            "6309722b3460d91d38ad7526875ecfa29183245826b717949c55ba443093d963",
-          blobBlockOffset: 1148260,
-          blobBlockLength: 14,
-          blobByteOffset: 75242595678,
-          primary: true,
-        },
-        {
-          key: "dataPath",
-          registryPath:
-            "onnx-community/parakeet-ctc-0.6b-ONNX/resolve/7df2cab7aed886b8b7f80d68a8214007e4847601/onnx/model.onnx_data",
-          registrySource: "hf",
-          targetName: "model.onnx_data",
-          expectedSize: 2435004420,
-          sha256Checksum:
-            "8ebe1f7360dc705dfe8163fe72bc7a4d9b823d9ef6d426f1f1f8da18fffcc1ec",
-          blobCoreKey:
-            "6309722b3460d91d38ad7526875ecfa29183245826b717949c55ba443093d963",
-          blobBlockOffset: 1148274,
-          blobBlockLength: 37156,
-          blobByteOffset: 75243483164,
-        },
-      ],
-    },
   },
   {
     name: "PARAKEET_CTC_DATA_FP32",
@@ -10227,43 +10153,6 @@ export const models = [
     engine: "onnx-tts",
     quantization: "fp32",
     params: "",
-    companionSet: {
-      setKey: "24f5c81fe00112b1",
-      primaryKey: "modelPath",
-      files: [
-        {
-          key: "modelPath",
-          registryPath:
-            "onnx-community/chatterbox-multilingual-ONNX/resolve/452d3f434aa592098f1eedac9099f33642ab2da5/onnx/conditional_decoder.onnx",
-          registrySource: "hf",
-          targetName: "conditional_decoder.onnx",
-          expectedSize: 6350448,
-          sha256Checksum:
-            "1656d0d31332bae1854839959a3139300ebb67c178651dfa3f8c5fbfa5351351",
-          blobCoreKey:
-            "6309722b3460d91d38ad7526875ecfa29183245826b717949c55ba443093d963",
-          blobBlockOffset: 944751,
-          blobBlockLength: 97,
-          blobByteOffset: 61906381774,
-          primary: true,
-        },
-        {
-          key: "dataPath",
-          registryPath:
-            "onnx-community/chatterbox-multilingual-ONNX/resolve/452d3f434aa592098f1eedac9099f33642ab2da5/onnx/conditional_decoder.onnx_data",
-          registrySource: "hf",
-          targetName: "conditional_decoder.onnx_data",
-          expectedSize: 533970816,
-          sha256Checksum:
-            "51d58345a272747665ec9d5bb61e01835258a940e321a288582ac4c18cf01b5a",
-          blobCoreKey:
-            "6309722b3460d91d38ad7526875ecfa29183245826b717949c55ba443093d963",
-          blobBlockOffset: 944848,
-          blobBlockLength: 8148,
-          blobByteOffset: 61912732222,
-        },
-      ],
-    },
   },
   {
     name: "TTS_MULTILINGUAL_CONDITIONAL_DECODER_CHATTERBOX_FP32_DATA",
@@ -10302,43 +10191,6 @@ export const models = [
     engine: "onnx-tts",
     quantization: "fp32",
     params: "",
-    companionSet: {
-      setKey: "d9cd5615f97aa165",
-      primaryKey: "modelPath",
-      files: [
-        {
-          key: "modelPath",
-          registryPath:
-            "onnx-community/chatterbox-multilingual-ONNX/resolve/452d3f434aa592098f1eedac9099f33642ab2da5/onnx/embed_tokens.onnx",
-          registrySource: "hf",
-          targetName: "embed_tokens.onnx",
-          expectedSize: 13286,
-          sha256Checksum:
-            "f785819ca4f6271262d5bb8971d62796c3a909e3b031982c113dbe83a4c3b854",
-          blobCoreKey:
-            "6309722b3460d91d38ad7526875ecfa29183245826b717949c55ba443093d963",
-          blobBlockOffset: 952996,
-          blobBlockLength: 1,
-          blobByteOffset: 62446703038,
-          primary: true,
-        },
-        {
-          key: "dataPath",
-          registryPath:
-            "onnx-community/chatterbox-multilingual-ONNX/resolve/452d3f434aa592098f1eedac9099f33642ab2da5/onnx/embed_tokens.onnx_data",
-          registrySource: "hf",
-          targetName: "embed_tokens.onnx_data",
-          expectedSize: 68390912,
-          sha256Checksum:
-            "2a15f7dd73b2ee47f6edf87740324011594b5a528ed6471ae55e327ed6cad68c",
-          blobCoreKey:
-            "6309722b3460d91d38ad7526875ecfa29183245826b717949c55ba443093d963",
-          blobBlockOffset: 952997,
-          blobBlockLength: 1044,
-          blobByteOffset: 62446716324,
-        },
-      ],
-    },
   },
   {
     name: "TTS_MULTILINGUAL_EMBED_TOKENS_CHATTERBOX_FP32_DATA",
@@ -10377,43 +10229,6 @@ export const models = [
     engine: "onnx-tts",
     quantization: "fp16",
     params: "",
-    companionSet: {
-      setKey: "353bb697efea258c",
-      primaryKey: "modelPath",
-      files: [
-        {
-          key: "modelPath",
-          registryPath:
-            "onnx-community/chatterbox-multilingual-ONNX/resolve/452d3f434aa592098f1eedac9099f33642ab2da5/onnx/language_model_fp16.onnx",
-          registrySource: "hf",
-          targetName: "language_model_fp16.onnx",
-          expectedSize: 172657,
-          sha256Checksum:
-            "0c36a5bbbc2a4ed8c345033896612cd320fd0971a0f5e6447ab4cdd2d7f22e36",
-          blobCoreKey:
-            "6309722b3460d91d38ad7526875ecfa29183245826b717949c55ba443093d963",
-          blobBlockOffset: 994834,
-          blobBlockLength: 3,
-          blobByteOffset: 65188370943,
-          primary: true,
-        },
-        {
-          key: "dataPath",
-          registryPath:
-            "onnx-community/chatterbox-multilingual-ONNX/resolve/452d3f434aa592098f1eedac9099f33642ab2da5/onnx/language_model_fp16.onnx_data",
-          registrySource: "hf",
-          targetName: "language_model_fp16.onnx_data",
-          expectedSize: 1040316416,
-          sha256Checksum:
-            "16dca11ae994e78427fa3090cc6faf347a15988ca40809c1bd9f2721f3b759a0",
-          blobCoreKey:
-            "6309722b3460d91d38ad7526875ecfa29183245826b717949c55ba443093d963",
-          blobBlockOffset: 994837,
-          blobBlockLength: 15874,
-          blobByteOffset: 65188543600,
-        },
-      ],
-    },
   },
   {
     name: "TTS_MULTILINGUAL_LANGUAGE_MODEL_CHATTERBOX_FP16_DATA",
@@ -10452,43 +10267,6 @@ export const models = [
     engine: "onnx-tts",
     quantization: "q4",
     params: "",
-    companionSet: {
-      setKey: "98c5d1550c77e389",
-      primaryKey: "modelPath",
-      files: [
-        {
-          key: "modelPath",
-          registryPath:
-            "onnx-community/chatterbox-multilingual-ONNX/resolve/452d3f434aa592098f1eedac9099f33642ab2da5/onnx/language_model_q4.onnx",
-          registrySource: "hf",
-          targetName: "language_model_q4.onnx",
-          expectedSize: 227911,
-          sha256Checksum:
-            "7f8cdca83b2493536cbf3acf421199808a3d68736f55f4eabd20ef8a99da4313",
-          blobCoreKey:
-            "6309722b3460d91d38ad7526875ecfa29183245826b717949c55ba443093d963",
-          blobBlockOffset: 1010711,
-          blobBlockLength: 4,
-          blobByteOffset: 66228860016,
-          primary: true,
-        },
-        {
-          key: "dataPath",
-          registryPath:
-            "onnx-community/chatterbox-multilingual-ONNX/resolve/452d3f434aa592098f1eedac9099f33642ab2da5/onnx/language_model_q4.onnx_data",
-          registrySource: "hf",
-          targetName: "language_model_q4.onnx_data",
-          expectedSize: 353621248,
-          sha256Checksum:
-            "e79ab8784122a501718868b9631ff46e151c552d9b24e50f25d721f375e3526c",
-          blobCoreKey:
-            "6309722b3460d91d38ad7526875ecfa29183245826b717949c55ba443093d963",
-          blobBlockOffset: 1010715,
-          blobBlockLength: 5396,
-          blobByteOffset: 66229087927,
-        },
-      ],
-    },
   },
   {
     name: "TTS_MULTILINGUAL_LANGUAGE_MODEL_CHATTERBOX_Q4_DATA",
@@ -10527,43 +10305,6 @@ export const models = [
     engine: "onnx-tts",
     quantization: "q4f16",
     params: "",
-    companionSet: {
-      setKey: "91e42830d2e36b4b",
-      primaryKey: "modelPath",
-      files: [
-        {
-          key: "modelPath",
-          registryPath:
-            "onnx-community/chatterbox-multilingual-ONNX/resolve/452d3f434aa592098f1eedac9099f33642ab2da5/onnx/language_model_q4f16.onnx",
-          registrySource: "hf",
-          targetName: "language_model_q4f16.onnx",
-          expectedSize: 229388,
-          sha256Checksum:
-            "3b78e9235be5e2e2a811e482399155cb30415f6d87c98c21d12bf48843fc928f",
-          blobCoreKey:
-            "6309722b3460d91d38ad7526875ecfa29183245826b717949c55ba443093d963",
-          blobBlockOffset: 1016111,
-          blobBlockLength: 4,
-          blobByteOffset: 66582709175,
-          primary: true,
-        },
-        {
-          key: "dataPath",
-          registryPath:
-            "onnx-community/chatterbox-multilingual-ONNX/resolve/452d3f434aa592098f1eedac9099f33642ab2da5/onnx/language_model_q4f16.onnx_data",
-          registrySource: "hf",
-          targetName: "language_model_q4f16.onnx_data",
-          expectedSize: 304737408,
-          sha256Checksum:
-            "bdbc79504d20742b5d028074b4f1cdca8872e013fdfbbcea6b8b03154fe85a42",
-          blobCoreKey:
-            "6309722b3460d91d38ad7526875ecfa29183245826b717949c55ba443093d963",
-          blobBlockOffset: 1016115,
-          blobBlockLength: 4650,
-          blobByteOffset: 66582938563,
-        },
-      ],
-    },
   },
   {
     name: "TTS_MULTILINGUAL_LANGUAGE_MODEL_CHATTERBOX_Q4F16_DATA",
@@ -10602,43 +10343,6 @@ export const models = [
     engine: "onnx-tts",
     quantization: "fp32",
     params: "",
-    companionSet: {
-      setKey: "cf5a4b123e29d36d",
-      primaryKey: "modelPath",
-      files: [
-        {
-          key: "modelPath",
-          registryPath:
-            "onnx-community/chatterbox-multilingual-ONNX/resolve/452d3f434aa592098f1eedac9099f33642ab2da5/onnx/language_model.onnx",
-          registrySource: "hf",
-          targetName: "language_model.onnx",
-          expectedSize: 171387,
-          sha256Checksum:
-            "861a34585605e8ad671051788afc495dcbeaee833a41523a1b33aded9c3babc7",
-          blobCoreKey:
-            "6309722b3460d91d38ad7526875ecfa29183245826b717949c55ba443093d963",
-          blobBlockOffset: 963083,
-          blobBlockLength: 3,
-          blobByteOffset: 63107566724,
-          primary: true,
-        },
-        {
-          key: "dataPath",
-          registryPath:
-            "onnx-community/chatterbox-multilingual-ONNX/resolve/452d3f434aa592098f1eedac9099f33642ab2da5/onnx/language_model.onnx_data",
-          registrySource: "hf",
-          targetName: "language_model.onnx_data",
-          expectedSize: 2080632832,
-          sha256Checksum:
-            "b3556d41085196c122b7197e4d44ec4475b6d7cfe0971a70faa95caa38ad787a",
-          blobCoreKey:
-            "6309722b3460d91d38ad7526875ecfa29183245826b717949c55ba443093d963",
-          blobBlockOffset: 963086,
-          blobBlockLength: 31748,
-          blobByteOffset: 63107738111,
-        },
-      ],
-    },
   },
   {
     name: "TTS_MULTILINGUAL_LANGUAGE_MODEL_CHATTERBOX_FP32_DATA",
@@ -10677,43 +10381,6 @@ export const models = [
     engine: "onnx-tts",
     quantization: "fp32",
     params: "",
-    companionSet: {
-      setKey: "a4836655ee2c5b8c",
-      primaryKey: "modelPath",
-      files: [
-        {
-          key: "modelPath",
-          registryPath:
-            "onnx-community/chatterbox-multilingual-ONNX/resolve/452d3f434aa592098f1eedac9099f33642ab2da5/onnx/speech_encoder.onnx",
-          registrySource: "hf",
-          targetName: "speech_encoder.onnx",
-          expectedSize: 1184608,
-          sha256Checksum:
-            "8f1c8a0f89b77bf9cd5dd8f2e034eb2c79dc00fe70d41196b28c257643b00ccb",
-          blobCoreKey:
-            "6309722b3460d91d38ad7526875ecfa29183245826b717949c55ba443093d963",
-          blobBlockOffset: 954041,
-          blobBlockLength: 19,
-          blobByteOffset: 62515107236,
-          primary: true,
-        },
-        {
-          key: "dataPath",
-          registryPath:
-            "onnx-community/chatterbox-multilingual-ONNX/resolve/452d3f434aa592098f1eedac9099f33642ab2da5/onnx/speech_encoder.onnx_data",
-          registrySource: "hf",
-          targetName: "speech_encoder.onnx_data",
-          expectedSize: 591274880,
-          sha256Checksum:
-            "92f8f290fc9720e169bc2412c507209e20b03f6564bc3243739e25c56f7dfb8f",
-          blobCoreKey:
-            "6309722b3460d91d38ad7526875ecfa29183245826b717949c55ba443093d963",
-          blobBlockOffset: 954060,
-          blobBlockLength: 9023,
-          blobByteOffset: 62516291844,
-        },
-      ],
-    },
   },
   {
     name: "TTS_MULTILINGUAL_SPEECH_ENCODER_CHATTERBOX_FP32_DATA",
@@ -10771,43 +10438,6 @@ export const models = [
     engine: "onnx-tts",
     quantization: "fp32",
     params: "",
-    companionSet: {
-      setKey: "9ad174701f2dc744",
-      primaryKey: "modelPath",
-      files: [
-        {
-          key: "modelPath",
-          registryPath:
-            "onnx-community/Supertonic-TTS-ONNX/resolve/cff123c84b0655d9d647641f1b532c3cbb8f7faa/onnx/latent_denoiser.onnx",
-          registrySource: "hf",
-          targetName: "latent_denoiser.onnx",
-          expectedSize: 398102,
-          sha256Checksum:
-            "9a639a8c05c9be111848562c5cf10ea2697a589c6341830aac479d0ce7b75aa9",
-          blobCoreKey:
-            "6309722b3460d91d38ad7526875ecfa29183245826b717949c55ba443093d963",
-          blobBlockOffset: 941170,
-          blobBlockLength: 7,
-          blobByteOffset: 61671954279,
-          primary: true,
-        },
-        {
-          key: "dataPath",
-          registryPath:
-            "onnx-community/Supertonic-TTS-ONNX/resolve/cff123c84b0655d9d647641f1b532c3cbb8f7faa/onnx/latent_denoiser.onnx_data",
-          registrySource: "hf",
-          targetName: "latent_denoiser.onnx_data",
-          expectedSize: 132098880,
-          sha256Checksum:
-            "cde4abf1136defce235bc446eaab4954a57721ae8d5a4754cdd337bf191b612f",
-          blobCoreKey:
-            "6309722b3460d91d38ad7526875ecfa29183245826b717949c55ba443093d963",
-          blobBlockOffset: 941177,
-          blobBlockLength: 2016,
-          blobByteOffset: 61672352381,
-        },
-      ],
-    },
   },
   {
     name: "TTS_LATENT_DENOISER_SUPERTONIC_FP32_DATA",
@@ -10846,43 +10476,6 @@ export const models = [
     engine: "onnx-tts",
     quantization: "fp32",
     params: "",
-    companionSet: {
-      setKey: "76d0aa8384649723",
-      primaryKey: "modelPath",
-      files: [
-        {
-          key: "modelPath",
-          registryPath:
-            "onnx-community/Supertonic-TTS-ONNX/resolve/cff123c84b0655d9d647641f1b532c3cbb8f7faa/onnx/text_encoder.onnx",
-          registrySource: "hf",
-          targetName: "text_encoder.onnx",
-          expectedSize: 433169,
-          sha256Checksum:
-            "50a03d29d5dc95918eeff578f542b814f3cf5a741f927116f5a8462a76ff6898",
-          blobCoreKey:
-            "6309722b3460d91d38ad7526875ecfa29183245826b717949c55ba443093d963",
-          blobBlockOffset: 940729,
-          blobBlockLength: 7,
-          blobByteOffset: 61643094358,
-          primary: true,
-        },
-        {
-          key: "dataPath",
-          registryPath:
-            "onnx-community/Supertonic-TTS-ONNX/resolve/cff123c84b0655d9d647641f1b532c3cbb8f7faa/onnx/text_encoder.onnx_data",
-          registrySource: "hf",
-          targetName: "text_encoder.onnx_data",
-          expectedSize: 28426752,
-          sha256Checksum:
-            "6415854f135a318909dc716e90f83a391d9a91bd9da09bdb6d6763d6b0a6c102",
-          blobCoreKey:
-            "6309722b3460d91d38ad7526875ecfa29183245826b717949c55ba443093d963",
-          blobBlockOffset: 940736,
-          blobBlockLength: 434,
-          blobByteOffset: 61643527527,
-        },
-      ],
-    },
   },
   {
     name: "TTS_TEXT_ENCODER_SUPERTONIC_FP32_DATA",
@@ -10921,43 +10514,6 @@ export const models = [
     engine: "onnx-tts",
     quantization: "fp32",
     params: "",
-    companionSet: {
-      setKey: "19ca8337c16df8f7",
-      primaryKey: "modelPath",
-      files: [
-        {
-          key: "modelPath",
-          registryPath:
-            "onnx-community/Supertonic-TTS-ONNX/resolve/cff123c84b0655d9d647641f1b532c3cbb8f7faa/onnx/voice_decoder.onnx",
-          registrySource: "hf",
-          targetName: "voice_decoder.onnx",
-          expectedSize: 59921,
-          sha256Checksum:
-            "83c104006dabcd6b568c0d5acb6fec18f65609d2391dd2c459e4440e85027669",
-          blobCoreKey:
-            "6309722b3460d91d38ad7526875ecfa29183245826b717949c55ba443093d963",
-          blobBlockOffset: 943193,
-          blobBlockLength: 1,
-          blobByteOffset: 61804451261,
-          primary: true,
-        },
-        {
-          key: "dataPath",
-          registryPath:
-            "onnx-community/Supertonic-TTS-ONNX/resolve/cff123c84b0655d9d647641f1b532c3cbb8f7faa/onnx/voice_decoder.onnx_data",
-          registrySource: "hf",
-          targetName: "voice_decoder.onnx_data",
-          expectedSize: 101353472,
-          sha256Checksum:
-            "ea52402c9ba5131ee2b3901a86db2f0b435b322169cd75157e053493d967d17f",
-          blobCoreKey:
-            "6309722b3460d91d38ad7526875ecfa29183245826b717949c55ba443093d963",
-          blobBlockOffset: 943194,
-          blobBlockLength: 1547,
-          blobByteOffset: 61804511182,
-        },
-      ],
-    },
   },
   {
     name: "TTS_VOICE_DECODER_SUPERTONIC_FP32_DATA",
@@ -11224,43 +10780,6 @@ export const models = [
     engine: "onnx-tts",
     quantization: "fp32",
     params: "",
-    companionSet: {
-      setKey: "240e4f609ef49d13",
-      primaryKey: "modelPath",
-      files: [
-        {
-          key: "modelPath",
-          registryPath:
-            "qvac_models_compiled/onnx/lavasr/2026-04-03/enhancer_backbone.onnx",
-          registrySource: "s3",
-          targetName: "enhancer_backbone.onnx",
-          expectedSize: 190195,
-          sha256Checksum:
-            "841e96d261dffdf1dc974f3d29e2cfcf1b16fd0b358749c1ace0bbfa1d4c8ddd",
-          blobCoreKey:
-            "6309722b3460d91d38ad7526875ecfa29183245826b717949c55ba443093d963",
-          blobBlockOffset: 2198058,
-          blobBlockLength: 3,
-          blobByteOffset: 144041164373,
-          primary: true,
-        },
-        {
-          key: "dataPath",
-          registryPath:
-            "qvac_models_compiled/onnx/lavasr/2026-04-03/enhancer_backbone.onnx.data",
-          registrySource: "s3",
-          targetName: "enhancer_backbone.onnx.data",
-          expectedSize: 51773440,
-          sha256Checksum:
-            "a125a4ede7cfdd1073d906a3cadf2171a30be6a40f296ad28772e0ba258de8c5",
-          blobCoreKey:
-            "6309722b3460d91d38ad7526875ecfa29183245826b717949c55ba443093d963",
-          blobBlockOffset: 2198061,
-          blobBlockLength: 790,
-          blobByteOffset: 144041354568,
-        },
-      ],
-    },
   },
   {
     name: "TTS_ENHANCER_BACKBONE_LAVASR_FP32_1",
@@ -11299,43 +10818,6 @@ export const models = [
     engine: "onnx-tts",
     quantization: "fp32",
     params: "",
-    companionSet: {
-      setKey: "b4c4d4008b8cd2b7",
-      primaryKey: "modelPath",
-      files: [
-        {
-          key: "modelPath",
-          registryPath:
-            "qvac_models_compiled/onnx/lavasr/2026-04-03/enhancer_spec_head.onnx",
-          registrySource: "s3",
-          targetName: "enhancer_spec_head.onnx",
-          expectedSize: 7484,
-          sha256Checksum:
-            "f66fd164c55fd1b07e5cea5e687c71522b192f452691128fd7ae4e6b26dbc683",
-          blobCoreKey:
-            "6309722b3460d91d38ad7526875ecfa29183245826b717949c55ba443093d963",
-          blobBlockOffset: 2198851,
-          blobBlockLength: 1,
-          blobByteOffset: 144093128008,
-          primary: true,
-        },
-        {
-          key: "dataPath",
-          registryPath:
-            "qvac_models_compiled/onnx/lavasr/2026-04-03/enhancer_spec_head.onnx.data",
-          registrySource: "s3",
-          targetName: "enhancer_spec_head.onnx.data",
-          expectedSize: 4263936,
-          sha256Checksum:
-            "b855e309b027af9aa75285b97b345571b6bd695a30fde434d06c979d83885fd6",
-          blobCoreKey:
-            "6309722b3460d91d38ad7526875ecfa29183245826b717949c55ba443093d963",
-          blobBlockOffset: 2198852,
-          blobBlockLength: 66,
-          blobByteOffset: 144093135492,
-        },
-      ],
-    },
   },
   {
     name: "TTS_ENHANCER_SPEC_HEAD_LAVASR_FP32_1",
@@ -11374,43 +10856,6 @@ export const models = [
     engine: "onnx-tts",
     quantization: "fp16",
     params: "",
-    companionSet: {
-      setKey: "33f90b4f2c14ce8b",
-      primaryKey: "modelPath",
-      files: [
-        {
-          key: "modelPath",
-          registryPath:
-            "ResembleAI/chatterbox-turbo-ONNX/resolve/d21799bd0354adb85e348b8a0442a8405110a2cf/onnx/conditional_decoder_fp16.onnx",
-          registrySource: "hf",
-          targetName: "conditional_decoder_fp16.onnx",
-          expectedSize: 2104016,
-          sha256Checksum:
-            "cbdc0281548eb90a02fa2430647237df63fa0cb695e42b91c10b860b9b6d2230",
-          blobCoreKey:
-            "6309722b3460d91d38ad7526875ecfa29183245826b717949c55ba443093d963",
-          blobBlockOffset: 888458,
-          blobBlockLength: 33,
-          blobByteOffset: 58218557580,
-          primary: true,
-        },
-        {
-          key: "dataPath",
-          registryPath:
-            "ResembleAI/chatterbox-turbo-ONNX/resolve/d21799bd0354adb85e348b8a0442a8405110a2cf/onnx/conditional_decoder_fp16.onnx_data",
-          registrySource: "hf",
-          targetName: "conditional_decoder_fp16.onnx_data",
-          expectedSize: 384019328,
-          sha256Checksum:
-            "c6c3e79e6ff86bc41f77381a3d67b8edaa16b13e43a2700ca8159d0894bd594a",
-          blobCoreKey:
-            "6309722b3460d91d38ad7526875ecfa29183245826b717949c55ba443093d963",
-          blobBlockOffset: 888491,
-          blobBlockLength: 5860,
-          blobByteOffset: 58220661596,
-        },
-      ],
-    },
   },
   {
     name: "TTS_CONDITIONAL_DECODER_EN_CHATTERBOX_FP16_DATA",
@@ -11449,43 +10894,6 @@ export const models = [
     engine: "onnx-tts",
     quantization: "q4",
     params: "",
-    companionSet: {
-      setKey: "71925140895dd0fb",
-      primaryKey: "modelPath",
-      files: [
-        {
-          key: "modelPath",
-          registryPath:
-            "ResembleAI/chatterbox-turbo-ONNX/resolve/d21799bd0354adb85e348b8a0442a8405110a2cf/onnx/conditional_decoder_q4.onnx",
-          registrySource: "hf",
-          targetName: "conditional_decoder_q4.onnx",
-          expectedSize: 2179022,
-          sha256Checksum:
-            "dccb7a6cea3472dc7f7d070eeb70ade18e6327fb4ec61a3d62cf211bfed90ea2",
-          blobCoreKey:
-            "6309722b3460d91d38ad7526875ecfa29183245826b717949c55ba443093d963",
-          blobBlockOffset: 908135,
-          blobBlockLength: 34,
-          blobByteOffset: 59507802472,
-          primary: true,
-        },
-        {
-          key: "dataPath",
-          registryPath:
-            "ResembleAI/chatterbox-turbo-ONNX/resolve/d21799bd0354adb85e348b8a0442a8405110a2cf/onnx/conditional_decoder_q4.onnx_data",
-          registrySource: "hf",
-          targetName: "conditional_decoder_q4.onnx_data",
-          expectedSize: 246397384,
-          sha256Checksum:
-            "b5c5317e0b79a1a19dd3d5e2b2091ea06b15716716ab801a54eaeb906c6971ec",
-          blobCoreKey:
-            "6309722b3460d91d38ad7526875ecfa29183245826b717949c55ba443093d963",
-          blobBlockOffset: 908169,
-          blobBlockLength: 3760,
-          blobByteOffset: 59509981494,
-        },
-      ],
-    },
   },
   {
     name: "TTS_CONDITIONAL_DECODER_EN_CHATTERBOX_Q4_DATA",
@@ -11524,43 +10932,6 @@ export const models = [
     engine: "onnx-tts",
     quantization: "q4f16",
     params: "",
-    companionSet: {
-      setKey: "7f54ee2de8be85a6",
-      primaryKey: "modelPath",
-      files: [
-        {
-          key: "modelPath",
-          registryPath:
-            "ResembleAI/chatterbox-turbo-ONNX/resolve/d21799bd0354adb85e348b8a0442a8405110a2cf/onnx/conditional_decoder_q4f16.onnx",
-          registrySource: "hf",
-          targetName: "conditional_decoder_q4f16.onnx",
-          expectedSize: 2394210,
-          sha256Checksum:
-            "17c9f7caef818605df2dc197c2f41682c0bda7fe437b8652dae8366de8b68b7e",
-          blobCoreKey:
-            "6309722b3460d91d38ad7526875ecfa29183245826b717949c55ba443093d963",
-          blobBlockOffset: 935390,
-          blobBlockLength: 37,
-          blobByteOffset: 61293443741,
-          primary: true,
-        },
-        {
-          key: "dataPath",
-          registryPath:
-            "ResembleAI/chatterbox-turbo-ONNX/resolve/d21799bd0354adb85e348b8a0442a8405110a2cf/onnx/conditional_decoder_q4f16.onnx_data",
-          registrySource: "hf",
-          targetName: "conditional_decoder_q4f16.onnx_data",
-          expectedSize: 162996136,
-          sha256Checksum:
-            "3e53cc7cc05e72957797c620e1bf0c6d6b909df937de4756c6e534d50854ca3e",
-          blobCoreKey:
-            "6309722b3460d91d38ad7526875ecfa29183245826b717949c55ba443093d963",
-          blobBlockOffset: 935427,
-          blobBlockLength: 2488,
-          blobByteOffset: 61295837951,
-        },
-      ],
-    },
   },
   {
     name: "TTS_CONDITIONAL_DECODER_EN_CHATTERBOX_Q4F16_DATA",
@@ -11599,43 +10970,6 @@ export const models = [
     engine: "onnx-tts",
     quantization: "quantized",
     params: "",
-    companionSet: {
-      setKey: "f73f7a3f68d0b2a8",
-      primaryKey: "modelPath",
-      files: [
-        {
-          key: "modelPath",
-          registryPath:
-            "ResembleAI/chatterbox-turbo-ONNX/resolve/d21799bd0354adb85e348b8a0442a8405110a2cf/onnx/conditional_decoder_quantized.onnx",
-          registrySource: "hf",
-          targetName: "conditional_decoder_quantized.onnx",
-          expectedSize: 2202035,
-          sha256Checksum:
-            "2af3b150196d9d559cd3c91e03da80eb27a466032369dc2b57ea729cddad3ebb",
-          blobCoreKey:
-            "6309722b3460d91d38ad7526875ecfa29183245826b717949c55ba443093d963",
-          blobBlockOffset: 921513,
-          blobBlockLength: 34,
-          blobByteOffset: 60384292589,
-          primary: true,
-        },
-        {
-          key: "dataPath",
-          registryPath:
-            "ResembleAI/chatterbox-turbo-ONNX/resolve/d21799bd0354adb85e348b8a0442a8405110a2cf/onnx/conditional_decoder_quantized.onnx_data",
-          registrySource: "hf",
-          targetName: "conditional_decoder_quantized.onnx_data",
-          expectedSize: 326548688,
-          sha256Checksum:
-            "4918ca09e05e41d2b4aa1ace6201d1cd911ffc58a42801002bab177d495cfe0a",
-          blobCoreKey:
-            "6309722b3460d91d38ad7526875ecfa29183245826b717949c55ba443093d963",
-          blobBlockOffset: 921547,
-          blobBlockLength: 4983,
-          blobByteOffset: 60386494624,
-        },
-      ],
-    },
   },
   {
     name: "TTS_CONDITIONAL_DECODER_EN_CHATTERBOX_QUANTIZED_DATA",
@@ -11674,43 +11008,6 @@ export const models = [
     engine: "onnx-tts",
     quantization: "fp32",
     params: "",
-    companionSet: {
-      setKey: "551caf7c863ac598",
-      primaryKey: "modelPath",
-      files: [
-        {
-          key: "modelPath",
-          registryPath:
-            "ResembleAI/chatterbox-turbo-ONNX/resolve/d21799bd0354adb85e348b8a0442a8405110a2cf/onnx/conditional_decoder.onnx",
-          registrySource: "hf",
-          targetName: "conditional_decoder.onnx",
-          expectedSize: 1889468,
-          sha256Checksum:
-            "8c43f3a1d0ddb1a86e226a244d7cda5396c67f5c6412789c23900c646e3ffc50",
-          blobCoreKey:
-            "6309722b3460d91d38ad7526875ecfa29183245826b717949c55ba443093d963",
-          blobBlockOffset: 847555,
-          blobBlockLength: 29,
-          blobByteOffset: 55538237192,
-          primary: true,
-        },
-        {
-          key: "dataPath",
-          registryPath:
-            "ResembleAI/chatterbox-turbo-ONNX/resolve/d21799bd0354adb85e348b8a0442a8405110a2cf/onnx/conditional_decoder.onnx_data",
-          registrySource: "hf",
-          targetName: "conditional_decoder.onnx_data",
-          expectedSize: 768593792,
-          sha256Checksum:
-            "05f162a519f3e9abaf0b7337ae037f4af8b2b30c4455d39b2c61ed3a9b2b5476",
-          blobCoreKey:
-            "6309722b3460d91d38ad7526875ecfa29183245826b717949c55ba443093d963",
-          blobBlockOffset: 847584,
-          blobBlockLength: 11728,
-          blobByteOffset: 55540126660,
-        },
-      ],
-    },
   },
   {
     name: "TTS_CONDITIONAL_DECODER_EN_CHATTERBOX_FP32_DATA",
@@ -11749,43 +11046,6 @@ export const models = [
     engine: "onnx-tts",
     quantization: "fp16",
     params: "",
-    companionSet: {
-      setKey: "b1bc9d091f52ca6a",
-      primaryKey: "modelPath",
-      files: [
-        {
-          key: "modelPath",
-          registryPath:
-            "ResembleAI/chatterbox-turbo-ONNX/resolve/d21799bd0354adb85e348b8a0442a8405110a2cf/onnx/embed_tokens_fp16.onnx",
-          registrySource: "hf",
-          targetName: "embed_tokens_fp16.onnx",
-          expectedSize: 1754,
-          sha256Checksum:
-            "f7a7a83e91337e10add2fad054544421f9080e27b72af1aef27f339a1a66776c",
-          blobCoreKey:
-            "6309722b3460d91d38ad7526875ecfa29183245826b717949c55ba443093d963",
-          blobBlockOffset: 886680,
-          blobBlockLength: 1,
-          blobByteOffset: 58102149554,
-          primary: true,
-        },
-        {
-          key: "dataPath",
-          registryPath:
-            "ResembleAI/chatterbox-turbo-ONNX/resolve/d21799bd0354adb85e348b8a0442a8405110a2cf/onnx/embed_tokens_fp16.onnx_data",
-          registrySource: "hf",
-          targetName: "embed_tokens_fp16.onnx_data",
-          expectedSize: 116406272,
-          sha256Checksum:
-            "cdda886a9e58ad39059fe8f6cf5a3a628994a1a2dfc1a8b58502c252fec70327",
-          blobCoreKey:
-            "6309722b3460d91d38ad7526875ecfa29183245826b717949c55ba443093d963",
-          blobBlockOffset: 886681,
-          blobBlockLength: 1777,
-          blobByteOffset: 58102151308,
-        },
-      ],
-    },
   },
   {
     name: "TTS_EMBED_TOKENS_EN_CHATTERBOX_FP16_DATA",
@@ -11824,43 +11084,6 @@ export const models = [
     engine: "onnx-tts",
     quantization: "q4",
     params: "",
-    companionSet: {
-      setKey: "f29a0a423cbcd2bc",
-      primaryKey: "modelPath",
-      files: [
-        {
-          key: "modelPath",
-          registryPath:
-            "ResembleAI/chatterbox-turbo-ONNX/resolve/d21799bd0354adb85e348b8a0442a8405110a2cf/onnx/embed_tokens_q4.onnx",
-          registrySource: "hf",
-          targetName: "embed_tokens_q4.onnx",
-          expectedSize: 2844,
-          sha256Checksum:
-            "fd6ba1d22902e8f539d3dd6d7c1c44b98ebb4c84ebbb5e47fcb826ddcf667561",
-          blobCoreKey:
-            "6309722b3460d91d38ad7526875ecfa29183245826b717949c55ba443093d963",
-          blobBlockOffset: 907565,
-          blobBlockLength: 1,
-          blobByteOffset: 59470513244,
-          primary: true,
-        },
-        {
-          key: "dataPath",
-          registryPath:
-            "ResembleAI/chatterbox-turbo-ONNX/resolve/d21799bd0354adb85e348b8a0442a8405110a2cf/onnx/embed_tokens_q4.onnx_data",
-          registrySource: "hf",
-          targetName: "embed_tokens_q4.onnx_data",
-          expectedSize: 37286384,
-          sha256Checksum:
-            "f54a51e234b509b64c3a03bb79e1149fba7e2eba6c2d9c222f18883379e1f5d8",
-          blobCoreKey:
-            "6309722b3460d91d38ad7526875ecfa29183245826b717949c55ba443093d963",
-          blobBlockOffset: 907566,
-          blobBlockLength: 569,
-          blobByteOffset: 59470516088,
-        },
-      ],
-    },
   },
   {
     name: "TTS_EMBED_TOKENS_EN_CHATTERBOX_Q4_DATA",
@@ -11899,43 +11122,6 @@ export const models = [
     engine: "onnx-tts",
     quantization: "q4f16",
     params: "",
-    companionSet: {
-      setKey: "69d01d68e2a72bf8",
-      primaryKey: "modelPath",
-      files: [
-        {
-          key: "modelPath",
-          registryPath:
-            "ResembleAI/chatterbox-turbo-ONNX/resolve/d21799bd0354adb85e348b8a0442a8405110a2cf/onnx/embed_tokens_q4f16.onnx",
-          registrySource: "hf",
-          targetName: "embed_tokens_q4f16.onnx",
-          expectedSize: 2548,
-          sha256Checksum:
-            "e5c9507c89e770e35d68bdd669e4ae44b34272232e84f010f2c97959feae79b3",
-          blobCoreKey:
-            "6309722b3460d91d38ad7526875ecfa29183245826b717949c55ba443093d963",
-          blobBlockOffset: 934875,
-          blobBlockLength: 1,
-          blobByteOffset: 61259792505,
-          primary: true,
-        },
-        {
-          key: "dataPath",
-          registryPath:
-            "ResembleAI/chatterbox-turbo-ONNX/resolve/d21799bd0354adb85e348b8a0442a8405110a2cf/onnx/embed_tokens_q4f16.onnx_data",
-          registrySource: "hf",
-          targetName: "embed_tokens_q4f16.onnx_data",
-          expectedSize: 33648688,
-          sha256Checksum:
-            "37e96447b5f3ef46f46fb35cc599cfcb95b277e5528cc0c89bab78169da620ef",
-          blobCoreKey:
-            "6309722b3460d91d38ad7526875ecfa29183245826b717949c55ba443093d963",
-          blobBlockOffset: 934876,
-          blobBlockLength: 514,
-          blobByteOffset: 61259795053,
-        },
-      ],
-    },
   },
   {
     name: "TTS_EMBED_TOKENS_EN_CHATTERBOX_Q4F16_DATA",
@@ -11974,43 +11160,6 @@ export const models = [
     engine: "onnx-tts",
     quantization: "quantized",
     params: "",
-    companionSet: {
-      setKey: "d64517c10b1f2a5d",
-      primaryKey: "modelPath",
-      files: [
-        {
-          key: "modelPath",
-          registryPath:
-            "ResembleAI/chatterbox-turbo-ONNX/resolve/d21799bd0354adb85e348b8a0442a8405110a2cf/onnx/embed_tokens_quantized.onnx",
-          registrySource: "hf",
-          targetName: "embed_tokens_quantized.onnx",
-          expectedSize: 2887,
-          sha256Checksum:
-            "0efe1bc01c2c48a98425a74444fd9887924d887f922c2722a6ec961ebb9e1db6",
-          blobCoreKey:
-            "6309722b3460d91d38ad7526875ecfa29183245826b717949c55ba443093d963",
-          blobBlockOffset: 920485,
-          blobBlockLength: 1,
-          blobByteOffset: 60316992326,
-          primary: true,
-        },
-        {
-          key: "dataPath",
-          registryPath:
-            "ResembleAI/chatterbox-turbo-ONNX/resolve/d21799bd0354adb85e348b8a0442a8405110a2cf/onnx/embed_tokens_quantized.onnx_data",
-          registrySource: "hf",
-          targetName: "embed_tokens_quantized.onnx_data",
-          expectedSize: 67297376,
-          sha256Checksum:
-            "9025d04c124899823124b1d7bb7069b1f535fb8a6c2d88f97520eb6fecced986",
-          blobCoreKey:
-            "6309722b3460d91d38ad7526875ecfa29183245826b717949c55ba443093d963",
-          blobBlockOffset: 920486,
-          blobBlockLength: 1027,
-          blobByteOffset: 60316995213,
-        },
-      ],
-    },
   },
   {
     name: "TTS_EMBED_TOKENS_EN_CHATTERBOX_QUANTIZED_DATA",
@@ -12049,43 +11198,6 @@ export const models = [
     engine: "onnx-tts",
     quantization: "fp32",
     params: "",
-    companionSet: {
-      setKey: "d28edd54895b90f5",
-      primaryKey: "modelPath",
-      files: [
-        {
-          key: "modelPath",
-          registryPath:
-            "ResembleAI/chatterbox-turbo-ONNX/resolve/d21799bd0354adb85e348b8a0442a8405110a2cf/onnx/embed_tokens.onnx",
-          registrySource: "hf",
-          targetName: "embed_tokens.onnx",
-          expectedSize: 2058,
-          sha256Checksum:
-            "27796e8252f36b463b0421cafdcc35b5f1e670ab0d96c9182f37ac6571c2f4bc",
-          blobCoreKey:
-            "6309722b3460d91d38ad7526875ecfa29183245826b717949c55ba443093d963",
-          blobBlockOffset: 844001,
-          blobBlockLength: 1,
-          blobByteOffset: 55305422590,
-          primary: true,
-        },
-        {
-          key: "dataPath",
-          registryPath:
-            "ResembleAI/chatterbox-turbo-ONNX/resolve/d21799bd0354adb85e348b8a0442a8405110a2cf/onnx/embed_tokens.onnx_data",
-          registrySource: "hf",
-          targetName: "embed_tokens.onnx_data",
-          expectedSize: 232812544,
-          sha256Checksum:
-            "a1c37edc6ec6adb655351f02e958da297221b50211c2c01b69312cb6f008a293",
-          blobCoreKey:
-            "6309722b3460d91d38ad7526875ecfa29183245826b717949c55ba443093d963",
-          blobBlockOffset: 844002,
-          blobBlockLength: 3553,
-          blobByteOffset: 55305424648,
-        },
-      ],
-    },
   },
   {
     name: "TTS_EMBED_TOKENS_EN_CHATTERBOX_FP32_DATA",
@@ -12124,43 +11236,6 @@ export const models = [
     engine: "onnx-tts",
     quantization: "fp16",
     params: "",
-    companionSet: {
-      setKey: "45d1ac921a78ac7c",
-      primaryKey: "modelPath",
-      files: [
-        {
-          key: "modelPath",
-          registryPath:
-            "ResembleAI/chatterbox-turbo-ONNX/resolve/d21799bd0354adb85e348b8a0442a8405110a2cf/onnx/language_model_fp16.onnx",
-          registrySource: "hf",
-          targetName: "language_model_fp16.onnx",
-          expectedSize: 209456,
-          sha256Checksum:
-            "396b35570dd1dbc5f537ffc932c3e69130ab8a09bf1390469d92338c8eae7da4",
-          blobCoreKey:
-            "6309722b3460d91d38ad7526875ecfa29183245826b717949c55ba443093d963",
-          blobBlockOffset: 894351,
-          blobBlockLength: 4,
-          blobByteOffset: 58604680924,
-          primary: true,
-        },
-        {
-          key: "dataPath",
-          registryPath:
-            "ResembleAI/chatterbox-turbo-ONNX/resolve/d21799bd0354adb85e348b8a0442a8405110a2cf/onnx/language_model_fp16.onnx_data",
-          registrySource: "hf",
-          targetName: "language_model_fp16.onnx_data",
-          expectedSize: 634862406,
-          sha256Checksum:
-            "d730d6437126d3e232747b26e2a7adece68844f22133277ca5012298ffe36f93",
-          blobCoreKey:
-            "6309722b3460d91d38ad7526875ecfa29183245826b717949c55ba443093d963",
-          blobBlockOffset: 894355,
-          blobBlockLength: 9688,
-          blobByteOffset: 58604890380,
-        },
-      ],
-    },
   },
   {
     name: "TTS_LANGUAGE_MODEL_EN_CHATTERBOX_FP16_DATA",
@@ -12199,43 +11274,6 @@ export const models = [
     engine: "onnx-tts",
     quantization: "q4",
     params: "",
-    companionSet: {
-      setKey: "3e9f08f1693434fb",
-      primaryKey: "modelPath",
-      files: [
-        {
-          key: "modelPath",
-          registryPath:
-            "ResembleAI/chatterbox-turbo-ONNX/resolve/d21799bd0354adb85e348b8a0442a8405110a2cf/onnx/language_model_q4.onnx",
-          registrySource: "hf",
-          targetName: "language_model_q4.onnx",
-          expectedSize: 274572,
-          sha256Checksum:
-            "b39d03d3f8b943b9e60c6fce3fb41191dbc1df4589f913291db1e214eef669b1",
-          blobCoreKey:
-            "6309722b3460d91d38ad7526875ecfa29183245826b717949c55ba443093d963",
-          blobBlockOffset: 911929,
-          blobBlockLength: 5,
-          blobByteOffset: 59756378878,
-          primary: true,
-        },
-        {
-          key: "dataPath",
-          registryPath:
-            "ResembleAI/chatterbox-turbo-ONNX/resolve/d21799bd0354adb85e348b8a0442a8405110a2cf/onnx/language_model_q4.onnx_data",
-          registrySource: "hf",
-          targetName: "language_model_q4.onnx_data",
-          expectedSize: 204456572,
-          sha256Checksum:
-            "2c029dc0acf48752473d8c74c72b5ceaaad76b9886fe106eaf2022142d5b5d5e",
-          blobCoreKey:
-            "6309722b3460d91d38ad7526875ecfa29183245826b717949c55ba443093d963",
-          blobBlockOffset: 911934,
-          blobBlockLength: 3120,
-          blobByteOffset: 59756653450,
-        },
-      ],
-    },
   },
   {
     name: "TTS_LANGUAGE_MODEL_EN_CHATTERBOX_Q4_DATA",
@@ -12274,43 +11312,6 @@ export const models = [
     engine: "onnx-tts",
     quantization: "q4f16",
     params: "",
-    companionSet: {
-      setKey: "90ef94e71680af09",
-      primaryKey: "modelPath",
-      files: [
-        {
-          key: "modelPath",
-          registryPath:
-            "ResembleAI/chatterbox-turbo-ONNX/resolve/d21799bd0354adb85e348b8a0442a8405110a2cf/onnx/language_model_q4f16.onnx",
-          registrySource: "hf",
-          targetName: "language_model_q4f16.onnx",
-          expectedSize: 276803,
-          sha256Checksum:
-            "4c5d83674c52bb71683a1ea1f60e2608b80cda48aafce67e8f8c03162c474ad5",
-          blobCoreKey:
-            "6309722b3460d91d38ad7526875ecfa29183245826b717949c55ba443093d963",
-          blobBlockOffset: 937915,
-          blobBlockLength: 5,
-          blobByteOffset: 61458834087,
-          primary: true,
-        },
-        {
-          key: "dataPath",
-          registryPath:
-            "ResembleAI/chatterbox-turbo-ONNX/resolve/d21799bd0354adb85e348b8a0442a8405110a2cf/onnx/language_model_q4f16.onnx_data",
-          registrySource: "hf",
-          targetName: "language_model_q4f16.onnx_data",
-          expectedSize: 183981430,
-          sha256Checksum:
-            "f084f21f977e365e76e622d2958c309ff894537f7b7133ac7fc5ce8fc055d6f9",
-          blobCoreKey:
-            "6309722b3460d91d38ad7526875ecfa29183245826b717949c55ba443093d963",
-          blobBlockOffset: 937920,
-          blobBlockLength: 2808,
-          blobByteOffset: 61459110890,
-        },
-      ],
-    },
   },
   {
     name: "TTS_LANGUAGE_MODEL_EN_CHATTERBOX_Q4F16_DATA",
@@ -12349,43 +11350,6 @@ export const models = [
     engine: "onnx-tts",
     quantization: "quantized",
     params: "",
-    companionSet: {
-      setKey: "24f3196f529d67af",
-      primaryKey: "modelPath",
-      files: [
-        {
-          key: "modelPath",
-          registryPath:
-            "ResembleAI/chatterbox-turbo-ONNX/resolve/d21799bd0354adb85e348b8a0442a8405110a2cf/onnx/language_model_quantized.onnx",
-          registrySource: "hf",
-          targetName: "language_model_quantized.onnx",
-          expectedSize: 279670,
-          sha256Checksum:
-            "0b40581277e30b7034331ec8c3ad47ed71d321f015b387a95221e54e2fcbfde8",
-          blobCoreKey:
-            "6309722b3460d91d38ad7526875ecfa29183245826b717949c55ba443093d963",
-          blobBlockOffset: 926530,
-          blobBlockLength: 5,
-          blobByteOffset: 60713043312,
-          primary: true,
-        },
-        {
-          key: "dataPath",
-          registryPath:
-            "ResembleAI/chatterbox-turbo-ONNX/resolve/d21799bd0354adb85e348b8a0442a8405110a2cf/onnx/language_model_quantized.onnx_data",
-          registrySource: "hf",
-          targetName: "language_model_quantized.onnx_data",
-          expectedSize: 367962860,
-          sha256Checksum:
-            "ec9945df36cb5d131d46688f2609fd715fbfcb0b8ee9681af5c84118de2d55a2",
-          blobCoreKey:
-            "6309722b3460d91d38ad7526875ecfa29183245826b717949c55ba443093d963",
-          blobBlockOffset: 926535,
-          blobBlockLength: 5615,
-          blobByteOffset: 60713322982,
-        },
-      ],
-    },
   },
   {
     name: "TTS_LANGUAGE_MODEL_EN_CHATTERBOX_QUANTIZED_DATA",
@@ -12424,43 +11388,6 @@ export const models = [
     engine: "onnx-tts",
     quantization: "fp32",
     params: "",
-    companionSet: {
-      setKey: "8ee93fc7439a8e37",
-      primaryKey: "modelPath",
-      files: [
-        {
-          key: "modelPath",
-          registryPath:
-            "ResembleAI/chatterbox-turbo-ONNX/resolve/d21799bd0354adb85e348b8a0442a8405110a2cf/onnx/language_model.onnx",
-          registrySource: "hf",
-          targetName: "language_model.onnx",
-          expectedSize: 207266,
-          sha256Checksum:
-            "c12e31df78c74f9589b165c8d51e65171f5028b77b7fedb41900f55f7f410dc8",
-          blobCoreKey:
-            "6309722b3460d91d38ad7526875ecfa29183245826b717949c55ba443093d963",
-          blobBlockOffset: 859312,
-          blobBlockLength: 4,
-          blobByteOffset: 56308720452,
-          primary: true,
-        },
-        {
-          key: "dataPath",
-          registryPath:
-            "ResembleAI/chatterbox-turbo-ONNX/resolve/d21799bd0354adb85e348b8a0442a8405110a2cf/onnx/language_model.onnx_data",
-          registrySource: "hf",
-          targetName: "language_model.onnx_data",
-          expectedSize: 1269724812,
-          sha256Checksum:
-            "67db106868f5354b2e425651f1791aef36ae3e6f00ac5e1d91e32c985cad6b39",
-          blobCoreKey:
-            "6309722b3460d91d38ad7526875ecfa29183245826b717949c55ba443093d963",
-          blobBlockOffset: 859316,
-          blobBlockLength: 19375,
-          blobByteOffset: 56308927718,
-        },
-      ],
-    },
   },
   {
     name: "TTS_LANGUAGE_MODEL_EN_CHATTERBOX_FP32_DATA",
@@ -12499,43 +11426,6 @@ export const models = [
     engine: "onnx-tts",
     quantization: "fp16",
     params: "",
-    companionSet: {
-      setKey: "ae62d0fa9f3988d9",
-      primaryKey: "modelPath",
-      files: [
-        {
-          key: "modelPath",
-          registryPath:
-            "ResembleAI/chatterbox-turbo-ONNX/resolve/d21799bd0354adb85e348b8a0442a8405110a2cf/onnx/speech_encoder_fp16.onnx",
-          registrySource: "hf",
-          targetName: "speech_encoder_fp16.onnx",
-          expectedSize: 1189888,
-          sha256Checksum:
-            "5544f87c3e1615a31f5dc3ccdf9ba52a9f5fb8f6018e72796235fc1cfd5ebc9f",
-          blobCoreKey:
-            "6309722b3460d91d38ad7526875ecfa29183245826b717949c55ba443093d963",
-          blobBlockOffset: 878691,
-          blobBlockLength: 19,
-          blobByteOffset: 57578652530,
-          primary: true,
-        },
-        {
-          key: "dataPath",
-          registryPath:
-            "ResembleAI/chatterbox-turbo-ONNX/resolve/d21799bd0354adb85e348b8a0442a8405110a2cf/onnx/speech_encoder_fp16.onnx_data",
-          registrySource: "hf",
-          targetName: "speech_encoder_fp16.onnx_data",
-          expectedSize: 522307136,
-          sha256Checksum:
-            "d24b817ff61489373ab13033cbdc28a5ba8347341248a00f9a63f10888e81d73",
-          blobCoreKey:
-            "6309722b3460d91d38ad7526875ecfa29183245826b717949c55ba443093d963",
-          blobBlockOffset: 878710,
-          blobBlockLength: 7970,
-          blobByteOffset: 57579842418,
-        },
-      ],
-    },
   },
   {
     name: "TTS_SPEECH_ENCODER_EN_CHATTERBOX_FP16_DATA",
@@ -12574,43 +11464,6 @@ export const models = [
     engine: "onnx-tts",
     quantization: "q4",
     params: "",
-    companionSet: {
-      setKey: "51d47e9adf4cd869",
-      primaryKey: "modelPath",
-      files: [
-        {
-          key: "modelPath",
-          registryPath:
-            "ResembleAI/chatterbox-turbo-ONNX/resolve/d21799bd0354adb85e348b8a0442a8405110a2cf/onnx/speech_encoder_q4.onnx",
-          registrySource: "hf",
-          targetName: "speech_encoder_q4.onnx",
-          expectedSize: 1200346,
-          sha256Checksum:
-            "37956c20b67bed85a0da4bc83509d67b5969a1b257d1c546516a5236a17ad71e",
-          blobCoreKey:
-            "6309722b3460d91d38ad7526875ecfa29183245826b717949c55ba443093d963",
-          blobBlockOffset: 904043,
-          blobBlockLength: 19,
-          blobByteOffset: 59239752786,
-          primary: true,
-        },
-        {
-          key: "dataPath",
-          registryPath:
-            "ResembleAI/chatterbox-turbo-ONNX/resolve/d21799bd0354adb85e348b8a0442a8405110a2cf/onnx/speech_encoder_q4.onnx_data",
-          registrySource: "hf",
-          targetName: "speech_encoder_q4.onnx_data",
-          expectedSize: 229560112,
-          sha256Checksum:
-            "58956db217c6443e49c91bdd54d7cf76b4a243f225c748b7bf746459fc27bc7d",
-          blobCoreKey:
-            "6309722b3460d91d38ad7526875ecfa29183245826b717949c55ba443093d963",
-          blobBlockOffset: 904062,
-          blobBlockLength: 3503,
-          blobByteOffset: 59240953132,
-        },
-      ],
-    },
   },
   {
     name: "TTS_SPEECH_ENCODER_EN_CHATTERBOX_Q4_DATA",
@@ -12649,43 +11502,6 @@ export const models = [
     engine: "onnx-tts",
     quantization: "q4f16",
     params: "",
-    companionSet: {
-      setKey: "f5c445135945fed5",
-      primaryKey: "modelPath",
-      files: [
-        {
-          key: "modelPath",
-          registryPath:
-            "ResembleAI/chatterbox-turbo-ONNX/resolve/d21799bd0354adb85e348b8a0442a8405110a2cf/onnx/speech_encoder_q4f16.onnx",
-          registrySource: "hf",
-          targetName: "speech_encoder_q4f16.onnx",
-          expectedSize: 1217655,
-          sha256Checksum:
-            "004407d26127c1d8e974bd213ecff8dbe67611527ca7a1930e656b80d9c51125",
-          blobCoreKey:
-            "6309722b3460d91d38ad7526875ecfa29183245826b717949c55ba443093d963",
-          blobBlockOffset: 932150,
-          blobBlockLength: 19,
-          blobByteOffset: 61081285842,
-          primary: true,
-        },
-        {
-          key: "dataPath",
-          registryPath:
-            "ResembleAI/chatterbox-turbo-ONNX/resolve/d21799bd0354adb85e348b8a0442a8405110a2cf/onnx/speech_encoder_q4f16.onnx_data",
-          registrySource: "hf",
-          targetName: "speech_encoder_q4f16.onnx_data",
-          expectedSize: 177289008,
-          sha256Checksum:
-            "c017ab57887418e0609afdef52b0cbc17f43cb304e78af44300c0292cd2b2fa9",
-          blobCoreKey:
-            "6309722b3460d91d38ad7526875ecfa29183245826b717949c55ba443093d963",
-          blobBlockOffset: 932169,
-          blobBlockLength: 2706,
-          blobByteOffset: 61082503497,
-        },
-      ],
-    },
   },
   {
     name: "TTS_SPEECH_ENCODER_EN_CHATTERBOX_Q4F16_DATA",
@@ -12724,43 +11540,6 @@ export const models = [
     engine: "onnx-tts",
     quantization: "quantized",
     params: "",
-    companionSet: {
-      setKey: "00381b6db7f2b857",
-      primaryKey: "modelPath",
-      files: [
-        {
-          key: "modelPath",
-          registryPath:
-            "ResembleAI/chatterbox-turbo-ONNX/resolve/d21799bd0354adb85e348b8a0442a8405110a2cf/onnx/speech_encoder_quantized.onnx",
-          registrySource: "hf",
-          targetName: "speech_encoder_quantized.onnx",
-          expectedSize: 1205728,
-          sha256Checksum:
-            "5b6f15870a43cf97892df86fc550a0ef4763522d527cde72b2a4316f80a34de4",
-          blobCoreKey:
-            "6309722b3460d91d38ad7526875ecfa29183245826b717949c55ba443093d963",
-          blobBlockOffset: 915054,
-          blobBlockLength: 19,
-          blobByteOffset: 59961110022,
-          primary: true,
-        },
-        {
-          key: "dataPath",
-          registryPath:
-            "ResembleAI/chatterbox-turbo-ONNX/resolve/d21799bd0354adb85e348b8a0442a8405110a2cf/onnx/speech_encoder_quantized.onnx_data",
-          registrySource: "hf",
-          targetName: "speech_encoder_quantized.onnx_data",
-          expectedSize: 354676576,
-          sha256Checksum:
-            "d59861fb55e806fbeee731da9d4f8ff819fb5735de5d15e262d902594ee4dbb6",
-          blobCoreKey:
-            "6309722b3460d91d38ad7526875ecfa29183245826b717949c55ba443093d963",
-          blobBlockOffset: 915073,
-          blobBlockLength: 5412,
-          blobByteOffset: 59962315750,
-        },
-      ],
-    },
   },
   {
     name: "TTS_SPEECH_ENCODER_EN_CHATTERBOX_QUANTIZED_DATA",
@@ -12799,43 +11578,6 @@ export const models = [
     engine: "onnx-tts",
     quantization: "fp32",
     params: "",
-    companionSet: {
-      setKey: "c2ae8c52ce330071",
-      primaryKey: "modelPath",
-      files: [
-        {
-          key: "modelPath",
-          registryPath:
-            "ResembleAI/chatterbox-turbo-ONNX/resolve/d21799bd0354adb85e348b8a0442a8405110a2cf/onnx/speech_encoder.onnx",
-          registrySource: "hf",
-          targetName: "speech_encoder.onnx",
-          expectedSize: 1172072,
-          sha256Checksum:
-            "4d66128037517dd51d370edc9b89ce36d42c75dcbd96e7216c7fb45dfae36045",
-          blobCoreKey:
-            "6309722b3460d91d38ad7526875ecfa29183245826b717949c55ba443093d963",
-          blobBlockOffset: 828041,
-          blobBlockLength: 18,
-          blobByteOffset: 54259537686,
-          primary: true,
-        },
-        {
-          key: "dataPath",
-          registryPath:
-            "ResembleAI/chatterbox-turbo-ONNX/resolve/d21799bd0354adb85e348b8a0442a8405110a2cf/onnx/speech_encoder.onnx_data",
-          registrySource: "hf",
-          targetName: "speech_encoder.onnx_data",
-          expectedSize: 1044712832,
-          sha256Checksum:
-            "c9915ff6c529e7bb80983b525255e6744d6c39c7e35b12720925ba99ed0d0a2f",
-          blobCoreKey:
-            "6309722b3460d91d38ad7526875ecfa29183245826b717949c55ba443093d963",
-          blobBlockOffset: 828059,
-          blobBlockLength: 15942,
-          blobByteOffset: 54260709758,
-        },
-      ],
-    },
   },
   {
     name: "TTS_SPEECH_ENCODER_EN_CHATTERBOX_FP32_DATA",
@@ -22115,8 +20857,8 @@ export const MARIAN_HI_HI_INDIC_320M_Q4_0 = {
   params: models[434].params,
 } as const;
 
-export const NMT_Q0F16 = {
-  name: "NMT_Q0F16",
+export const MARIAN_OPUS_DE_FR_Q0F16 = {
+  name: "MARIAN_OPUS_DE_FR_Q0F16",
   src: `registry://${models[435].registrySource}/${models[435].registryPath}`,
   registryPath: models[435].registryPath,
   registrySource: models[435].registrySource,
@@ -22133,8 +20875,8 @@ export const NMT_Q0F16 = {
   params: models[435].params,
 } as const;
 
-export const NMT_Q0F16_1 = {
-  name: "NMT_Q0F16_1",
+export const MARIAN_OPUS_EN_FR_Q0F16 = {
+  name: "MARIAN_OPUS_EN_FR_Q0F16",
   src: `registry://${models[436].registrySource}/${models[436].registryPath}`,
   registryPath: models[436].registryPath,
   registrySource: models[436].registrySource,
@@ -22151,8 +20893,8 @@ export const NMT_Q0F16_1 = {
   params: models[436].params,
 } as const;
 
-export const NMT_Q0F16_2 = {
-  name: "NMT_Q0F16_2",
+export const MARIAN_OPUS_EN_PT_Q0F16 = {
+  name: "MARIAN_OPUS_EN_PT_Q0F16",
   src: `registry://${models[437].registrySource}/${models[437].registryPath}`,
   registryPath: models[437].registryPath,
   registrySource: models[437].registrySource,
@@ -22169,8 +20911,8 @@ export const NMT_Q0F16_2 = {
   params: models[437].params,
 } as const;
 
-export const NMT_Q0F16_3 = {
-  name: "NMT_Q0F16_3",
+export const MARIAN_OPUS_EN_RU_Q0F16 = {
+  name: "MARIAN_OPUS_EN_RU_Q0F16",
   src: `registry://${models[438].registrySource}/${models[438].registryPath}`,
   registryPath: models[438].registryPath,
   registrySource: models[438].registrySource,
@@ -22187,8 +20929,8 @@ export const NMT_Q0F16_3 = {
   params: models[438].params,
 } as const;
 
-export const NMT_Q0F16_4 = {
-  name: "NMT_Q0F16_4",
+export const MARIAN_OPUS_ES_FR_Q0F16 = {
+  name: "MARIAN_OPUS_ES_FR_Q0F16",
   src: `registry://${models[439].registrySource}/${models[439].registryPath}`,
   registryPath: models[439].registryPath,
   registrySource: models[439].registrySource,
@@ -22205,8 +20947,8 @@ export const NMT_Q0F16_4 = {
   params: models[439].params,
 } as const;
 
-export const NMT_Q0F16_5 = {
-  name: "NMT_Q0F16_5",
+export const MARIAN_OPUS_FR_DE_Q0F16 = {
+  name: "MARIAN_OPUS_FR_DE_Q0F16",
   src: `registry://${models[440].registrySource}/${models[440].registryPath}`,
   registryPath: models[440].registryPath,
   registrySource: models[440].registrySource,
@@ -22223,8 +20965,8 @@ export const NMT_Q0F16_5 = {
   params: models[440].params,
 } as const;
 
-export const NMT_Q0F16_6 = {
-  name: "NMT_Q0F16_6",
+export const MARIAN_OPUS_FR_EN_Q0F16 = {
+  name: "MARIAN_OPUS_FR_EN_Q0F16",
   src: `registry://${models[441].registrySource}/${models[441].registryPath}`,
   registryPath: models[441].registryPath,
   registrySource: models[441].registrySource,
@@ -22241,8 +20983,8 @@ export const NMT_Q0F16_6 = {
   params: models[441].params,
 } as const;
 
-export const NMT_Q0F16_7 = {
-  name: "NMT_Q0F16_7",
+export const MARIAN_OPUS_FR_ES_Q0F16 = {
+  name: "MARIAN_OPUS_FR_ES_Q0F16",
   src: `registry://${models[442].registrySource}/${models[442].registryPath}`,
   registryPath: models[442].registryPath,
   registrySource: models[442].registrySource,
@@ -22259,8 +21001,8 @@ export const NMT_Q0F16_7 = {
   params: models[442].params,
 } as const;
 
-export const NMT_Q0F16_8 = {
-  name: "NMT_Q0F16_8",
+export const MARIAN_OPUS_PT_EN_Q0F16 = {
+  name: "MARIAN_OPUS_PT_EN_Q0F16",
   src: `registry://${models[443].registrySource}/${models[443].registryPath}`,
   registryPath: models[443].registryPath,
   registrySource: models[443].registrySource,
@@ -22277,8 +21019,8 @@ export const NMT_Q0F16_8 = {
   params: models[443].params,
 } as const;
 
-export const NMT_Q0F16_9 = {
-  name: "NMT_Q0F16_9",
+export const MARIAN_OPUS_RU_EN_Q0F16 = {
+  name: "MARIAN_OPUS_RU_EN_Q0F16",
   src: `registry://${models[444].registrySource}/${models[444].registryPath}`,
   registryPath: models[444].registryPath,
   registrySource: models[444].registrySource,
@@ -22295,8 +21037,8 @@ export const NMT_Q0F16_9 = {
   params: models[444].params,
 } as const;
 
-export const NMT_Q4_0 = {
-  name: "NMT_Q4_0",
+export const MARIAN_OPUS_AR_EN_Q4_0 = {
+  name: "MARIAN_OPUS_AR_EN_Q4_0",
   src: `registry://${models[445].registrySource}/${models[445].registryPath}`,
   registryPath: models[445].registryPath,
   registrySource: models[445].registrySource,
@@ -22313,8 +21055,8 @@ export const NMT_Q4_0 = {
   params: models[445].params,
 } as const;
 
-export const NMT_Q4_0_1 = {
-  name: "NMT_Q4_0_1",
+export const MARIAN_OPUS_DE_EN_Q4_0 = {
+  name: "MARIAN_OPUS_DE_EN_Q4_0",
   src: `registry://${models[446].registrySource}/${models[446].registryPath}`,
   registryPath: models[446].registryPath,
   registrySource: models[446].registrySource,
@@ -22331,8 +21073,8 @@ export const NMT_Q4_0_1 = {
   params: models[446].params,
 } as const;
 
-export const NMT_Q4_0_2 = {
-  name: "NMT_Q4_0_2",
+export const MARIAN_OPUS_DE_FR_Q4_0 = {
+  name: "MARIAN_OPUS_DE_FR_Q4_0",
   src: `registry://${models[447].registrySource}/${models[447].registryPath}`,
   registryPath: models[447].registryPath,
   registrySource: models[447].registrySource,
@@ -22349,8 +21091,8 @@ export const NMT_Q4_0_2 = {
   params: models[447].params,
 } as const;
 
-export const NMT_Q4_0_3 = {
-  name: "NMT_Q4_0_3",
+export const MARIAN_OPUS_EN_AR_Q4_0 = {
+  name: "MARIAN_OPUS_EN_AR_Q4_0",
   src: `registry://${models[448].registrySource}/${models[448].registryPath}`,
   registryPath: models[448].registryPath,
   registrySource: models[448].registrySource,
@@ -22367,8 +21109,8 @@ export const NMT_Q4_0_3 = {
   params: models[448].params,
 } as const;
 
-export const NMT_Q4_0_4 = {
-  name: "NMT_Q4_0_4",
+export const MARIAN_OPUS_EN_DE_Q4_0 = {
+  name: "MARIAN_OPUS_EN_DE_Q4_0",
   src: `registry://${models[449].registrySource}/${models[449].registryPath}`,
   registryPath: models[449].registryPath,
   registrySource: models[449].registrySource,
@@ -22385,8 +21127,8 @@ export const NMT_Q4_0_4 = {
   params: models[449].params,
 } as const;
 
-export const NMT_Q4_0_5 = {
-  name: "NMT_Q4_0_5",
+export const MARIAN_OPUS_EN_ES_Q4_0 = {
+  name: "MARIAN_OPUS_EN_ES_Q4_0",
   src: `registry://${models[450].registrySource}/${models[450].registryPath}`,
   registryPath: models[450].registryPath,
   registrySource: models[450].registrySource,
@@ -22403,8 +21145,8 @@ export const NMT_Q4_0_5 = {
   params: models[450].params,
 } as const;
 
-export const NMT_Q4_0_6 = {
-  name: "NMT_Q4_0_6",
+export const MARIAN_OPUS_EN_FR_Q4_0 = {
+  name: "MARIAN_OPUS_EN_FR_Q4_0",
   src: `registry://${models[451].registrySource}/${models[451].registryPath}`,
   registryPath: models[451].registryPath,
   registrySource: models[451].registrySource,
@@ -22421,8 +21163,8 @@ export const NMT_Q4_0_6 = {
   params: models[451].params,
 } as const;
 
-export const NMT_Q4_0_7 = {
-  name: "NMT_Q4_0_7",
+export const MARIAN_OPUS_EN_IT_Q4_0 = {
+  name: "MARIAN_OPUS_EN_IT_Q4_0",
   src: `registry://${models[452].registrySource}/${models[452].registryPath}`,
   registryPath: models[452].registryPath,
   registrySource: models[452].registrySource,
@@ -22439,8 +21181,8 @@ export const NMT_Q4_0_7 = {
   params: models[452].params,
 } as const;
 
-export const NMT_Q4_0_8 = {
-  name: "NMT_Q4_0_8",
+export const MARIAN_OPUS_EN_PT_Q4_0 = {
+  name: "MARIAN_OPUS_EN_PT_Q4_0",
   src: `registry://${models[453].registrySource}/${models[453].registryPath}`,
   registryPath: models[453].registryPath,
   registrySource: models[453].registrySource,
@@ -22457,8 +21199,8 @@ export const NMT_Q4_0_8 = {
   params: models[453].params,
 } as const;
 
-export const NMT_Q4_0_9 = {
-  name: "NMT_Q4_0_9",
+export const MARIAN_OPUS_EN_ROA_Q4_0 = {
+  name: "MARIAN_OPUS_EN_ROA_Q4_0",
   src: `registry://${models[454].registrySource}/${models[454].registryPath}`,
   registryPath: models[454].registryPath,
   registrySource: models[454].registrySource,
@@ -22475,8 +21217,8 @@ export const NMT_Q4_0_9 = {
   params: models[454].params,
 } as const;
 
-export const NMT_Q4_0_10 = {
-  name: "NMT_Q4_0_10",
+export const MARIAN_OPUS_EN_RU_Q4_0 = {
+  name: "MARIAN_OPUS_EN_RU_Q4_0",
   src: `registry://${models[455].registrySource}/${models[455].registryPath}`,
   registryPath: models[455].registryPath,
   registrySource: models[455].registrySource,
@@ -22493,8 +21235,8 @@ export const NMT_Q4_0_10 = {
   params: models[455].params,
 } as const;
 
-export const NMT_Q4_0_11 = {
-  name: "NMT_Q4_0_11",
+export const MARIAN_OPUS_EN_ZH_Q4_0 = {
+  name: "MARIAN_OPUS_EN_ZH_Q4_0",
   src: `registry://${models[456].registrySource}/${models[456].registryPath}`,
   registryPath: models[456].registryPath,
   registrySource: models[456].registrySource,
@@ -22511,8 +21253,8 @@ export const NMT_Q4_0_11 = {
   params: models[456].params,
 } as const;
 
-export const NMT_Q4_0_12 = {
-  name: "NMT_Q4_0_12",
+export const MARIAN_OPUS_ES_EN_Q4_0 = {
+  name: "MARIAN_OPUS_ES_EN_Q4_0",
   src: `registry://${models[457].registrySource}/${models[457].registryPath}`,
   registryPath: models[457].registryPath,
   registrySource: models[457].registrySource,
@@ -22529,8 +21271,8 @@ export const NMT_Q4_0_12 = {
   params: models[457].params,
 } as const;
 
-export const NMT_Q4_0_13 = {
-  name: "NMT_Q4_0_13",
+export const MARIAN_OPUS_ES_FR_Q4_0 = {
+  name: "MARIAN_OPUS_ES_FR_Q4_0",
   src: `registry://${models[458].registrySource}/${models[458].registryPath}`,
   registryPath: models[458].registryPath,
   registrySource: models[458].registrySource,
@@ -22547,8 +21289,8 @@ export const NMT_Q4_0_13 = {
   params: models[458].params,
 } as const;
 
-export const NMT_Q4_0_14 = {
-  name: "NMT_Q4_0_14",
+export const MARIAN_OPUS_FR_DE_Q4_0 = {
+  name: "MARIAN_OPUS_FR_DE_Q4_0",
   src: `registry://${models[459].registrySource}/${models[459].registryPath}`,
   registryPath: models[459].registryPath,
   registrySource: models[459].registrySource,
@@ -22565,8 +21307,8 @@ export const NMT_Q4_0_14 = {
   params: models[459].params,
 } as const;
 
-export const NMT_Q4_0_15 = {
-  name: "NMT_Q4_0_15",
+export const MARIAN_OPUS_FR_EN_Q4_0 = {
+  name: "MARIAN_OPUS_FR_EN_Q4_0",
   src: `registry://${models[460].registrySource}/${models[460].registryPath}`,
   registryPath: models[460].registryPath,
   registrySource: models[460].registrySource,
@@ -22583,8 +21325,8 @@ export const NMT_Q4_0_15 = {
   params: models[460].params,
 } as const;
 
-export const NMT_Q4_0_16 = {
-  name: "NMT_Q4_0_16",
+export const MARIAN_OPUS_FR_ES_Q4_0 = {
+  name: "MARIAN_OPUS_FR_ES_Q4_0",
   src: `registry://${models[461].registrySource}/${models[461].registryPath}`,
   registryPath: models[461].registryPath,
   registrySource: models[461].registrySource,
@@ -22601,8 +21343,8 @@ export const NMT_Q4_0_16 = {
   params: models[461].params,
 } as const;
 
-export const NMT_Q4_0_17 = {
-  name: "NMT_Q4_0_17",
+export const MARIAN_OPUS_IT_EN_Q4_0 = {
+  name: "MARIAN_OPUS_IT_EN_Q4_0",
   src: `registry://${models[462].registrySource}/${models[462].registryPath}`,
   registryPath: models[462].registryPath,
   registrySource: models[462].registrySource,
@@ -22619,8 +21361,8 @@ export const NMT_Q4_0_17 = {
   params: models[462].params,
 } as const;
 
-export const NMT_Q4_0_18 = {
-  name: "NMT_Q4_0_18",
+export const MARIAN_OPUS_JA_EN_Q4_0 = {
+  name: "MARIAN_OPUS_JA_EN_Q4_0",
   src: `registry://${models[463].registrySource}/${models[463].registryPath}`,
   registryPath: models[463].registryPath,
   registrySource: models[463].registrySource,
@@ -22637,8 +21379,8 @@ export const NMT_Q4_0_18 = {
   params: models[463].params,
 } as const;
 
-export const NMT_Q4_0_19 = {
-  name: "NMT_Q4_0_19",
+export const MARIAN_OPUS_ROA_EN_Q4_0 = {
+  name: "MARIAN_OPUS_ROA_EN_Q4_0",
   src: `registry://${models[464].registrySource}/${models[464].registryPath}`,
   registryPath: models[464].registryPath,
   registrySource: models[464].registrySource,
@@ -22655,8 +21397,8 @@ export const NMT_Q4_0_19 = {
   params: models[464].params,
 } as const;
 
-export const NMT_Q4_0_20 = {
-  name: "NMT_Q4_0_20",
+export const MARIAN_OPUS_RU_EN_Q4_0 = {
+  name: "MARIAN_OPUS_RU_EN_Q4_0",
   src: `registry://${models[465].registrySource}/${models[465].registryPath}`,
   registryPath: models[465].registryPath,
   registrySource: models[465].registrySource,
@@ -22673,8 +21415,8 @@ export const NMT_Q4_0_20 = {
   params: models[465].params,
 } as const;
 
-export const NMT_Q4_0_21 = {
-  name: "NMT_Q4_0_21",
+export const MARIAN_OPUS_ZH_EN_Q4_0 = {
+  name: "MARIAN_OPUS_ZH_EN_Q4_0",
   src: `registry://${models[466].registrySource}/${models[466].registryPath}`,
   registryPath: models[466].registryPath,
   registrySource: models[466].registrySource,
@@ -23141,6 +21883,24 @@ export const PARAKEET_TDT_ENCODER_FP32 = {
   params: models[491].params,
 } as const;
 
+export const PARAKEET_TDT_ENCODER_DATA_FP32 = {
+  name: "PARAKEET_TDT_ENCODER_DATA_FP32",
+  src: `registry://${models[492].registrySource}/${models[492].registryPath}`,
+  registryPath: models[492].registryPath,
+  registrySource: models[492].registrySource,
+  blobCoreKey: models[492].blobCoreKey,
+  blobBlockOffset: models[492].blobBlockOffset,
+  blobBlockLength: models[492].blobBlockLength,
+  blobByteOffset: models[492].blobByteOffset,
+  modelId: models[492].modelId,
+  expectedSize: models[492].expectedSize,
+  sha256Checksum: models[492].sha256Checksum,
+  addon: models[492].addon,
+  engine: models[492].engine,
+  quantization: models[492].quantization,
+  params: models[492].params,
+} as const;
+
 export const PARAKEET_TDT_PREPROCESSOR_FP32 = {
   name: "PARAKEET_TDT_PREPROCESSOR_FP32",
   src: `registry://${models[493].registrySource}/${models[493].registryPath}`,
@@ -23193,6 +21953,24 @@ export const PARAKEET_CTC_FP32 = {
   engine: models[495].engine,
   quantization: models[495].quantization,
   params: models[495].params,
+} as const;
+
+export const PARAKEET_CTC_DATA_FP32 = {
+  name: "PARAKEET_CTC_DATA_FP32",
+  src: `registry://${models[496].registrySource}/${models[496].registryPath}`,
+  registryPath: models[496].registryPath,
+  registrySource: models[496].registrySource,
+  blobCoreKey: models[496].blobCoreKey,
+  blobBlockOffset: models[496].blobBlockOffset,
+  blobBlockLength: models[496].blobBlockLength,
+  blobByteOffset: models[496].blobByteOffset,
+  modelId: models[496].modelId,
+  expectedSize: models[496].expectedSize,
+  sha256Checksum: models[496].sha256Checksum,
+  addon: models[496].addon,
+  engine: models[496].engine,
+  quantization: models[496].quantization,
+  params: models[496].params,
 } as const;
 
 export const PARAKEET_CTC_TOKENIZER = {
@@ -23285,6 +22063,24 @@ export const TTS_MULTILINGUAL_CONDITIONAL_DECODER_CHATTERBOX_FP32 = {
   params: models[501].params,
 } as const;
 
+export const TTS_MULTILINGUAL_CONDITIONAL_DECODER_CHATTERBOX_FP32_DATA = {
+  name: "TTS_MULTILINGUAL_CONDITIONAL_DECODER_CHATTERBOX_FP32_DATA",
+  src: `registry://${models[502].registrySource}/${models[502].registryPath}`,
+  registryPath: models[502].registryPath,
+  registrySource: models[502].registrySource,
+  blobCoreKey: models[502].blobCoreKey,
+  blobBlockOffset: models[502].blobBlockOffset,
+  blobBlockLength: models[502].blobBlockLength,
+  blobByteOffset: models[502].blobByteOffset,
+  modelId: models[502].modelId,
+  expectedSize: models[502].expectedSize,
+  sha256Checksum: models[502].sha256Checksum,
+  addon: models[502].addon,
+  engine: models[502].engine,
+  quantization: models[502].quantization,
+  params: models[502].params,
+} as const;
+
 export const TTS_MULTILINGUAL_EMBED_TOKENS_CHATTERBOX_FP32 = {
   name: "TTS_MULTILINGUAL_EMBED_TOKENS_CHATTERBOX_FP32",
   src: `registry://${models[503].registrySource}/${models[503].registryPath}`,
@@ -23301,6 +22097,24 @@ export const TTS_MULTILINGUAL_EMBED_TOKENS_CHATTERBOX_FP32 = {
   engine: models[503].engine,
   quantization: models[503].quantization,
   params: models[503].params,
+} as const;
+
+export const TTS_MULTILINGUAL_EMBED_TOKENS_CHATTERBOX_FP32_DATA = {
+  name: "TTS_MULTILINGUAL_EMBED_TOKENS_CHATTERBOX_FP32_DATA",
+  src: `registry://${models[504].registrySource}/${models[504].registryPath}`,
+  registryPath: models[504].registryPath,
+  registrySource: models[504].registrySource,
+  blobCoreKey: models[504].blobCoreKey,
+  blobBlockOffset: models[504].blobBlockOffset,
+  blobBlockLength: models[504].blobBlockLength,
+  blobByteOffset: models[504].blobByteOffset,
+  modelId: models[504].modelId,
+  expectedSize: models[504].expectedSize,
+  sha256Checksum: models[504].sha256Checksum,
+  addon: models[504].addon,
+  engine: models[504].engine,
+  quantization: models[504].quantization,
+  params: models[504].params,
 } as const;
 
 export const TTS_MULTILINGUAL_LANGUAGE_MODEL_CHATTERBOX_FP16 = {
@@ -23321,6 +22135,24 @@ export const TTS_MULTILINGUAL_LANGUAGE_MODEL_CHATTERBOX_FP16 = {
   params: models[505].params,
 } as const;
 
+export const TTS_MULTILINGUAL_LANGUAGE_MODEL_CHATTERBOX_FP16_DATA = {
+  name: "TTS_MULTILINGUAL_LANGUAGE_MODEL_CHATTERBOX_FP16_DATA",
+  src: `registry://${models[506].registrySource}/${models[506].registryPath}`,
+  registryPath: models[506].registryPath,
+  registrySource: models[506].registrySource,
+  blobCoreKey: models[506].blobCoreKey,
+  blobBlockOffset: models[506].blobBlockOffset,
+  blobBlockLength: models[506].blobBlockLength,
+  blobByteOffset: models[506].blobByteOffset,
+  modelId: models[506].modelId,
+  expectedSize: models[506].expectedSize,
+  sha256Checksum: models[506].sha256Checksum,
+  addon: models[506].addon,
+  engine: models[506].engine,
+  quantization: models[506].quantization,
+  params: models[506].params,
+} as const;
+
 export const TTS_MULTILINGUAL_LANGUAGE_MODEL_CHATTERBOX_Q4 = {
   name: "TTS_MULTILINGUAL_LANGUAGE_MODEL_CHATTERBOX_Q4",
   src: `registry://${models[507].registrySource}/${models[507].registryPath}`,
@@ -23337,6 +22169,24 @@ export const TTS_MULTILINGUAL_LANGUAGE_MODEL_CHATTERBOX_Q4 = {
   engine: models[507].engine,
   quantization: models[507].quantization,
   params: models[507].params,
+} as const;
+
+export const TTS_MULTILINGUAL_LANGUAGE_MODEL_CHATTERBOX_Q4_DATA = {
+  name: "TTS_MULTILINGUAL_LANGUAGE_MODEL_CHATTERBOX_Q4_DATA",
+  src: `registry://${models[508].registrySource}/${models[508].registryPath}`,
+  registryPath: models[508].registryPath,
+  registrySource: models[508].registrySource,
+  blobCoreKey: models[508].blobCoreKey,
+  blobBlockOffset: models[508].blobBlockOffset,
+  blobBlockLength: models[508].blobBlockLength,
+  blobByteOffset: models[508].blobByteOffset,
+  modelId: models[508].modelId,
+  expectedSize: models[508].expectedSize,
+  sha256Checksum: models[508].sha256Checksum,
+  addon: models[508].addon,
+  engine: models[508].engine,
+  quantization: models[508].quantization,
+  params: models[508].params,
 } as const;
 
 export const TTS_EN_ES_CHATTERBOX_Q4F16 = {
@@ -23357,6 +22207,24 @@ export const TTS_EN_ES_CHATTERBOX_Q4F16 = {
   params: models[509].params,
 } as const;
 
+export const TTS_MULTILINGUAL_LANGUAGE_MODEL_CHATTERBOX_Q4F16_DATA = {
+  name: "TTS_MULTILINGUAL_LANGUAGE_MODEL_CHATTERBOX_Q4F16_DATA",
+  src: `registry://${models[510].registrySource}/${models[510].registryPath}`,
+  registryPath: models[510].registryPath,
+  registrySource: models[510].registrySource,
+  blobCoreKey: models[510].blobCoreKey,
+  blobBlockOffset: models[510].blobBlockOffset,
+  blobBlockLength: models[510].blobBlockLength,
+  blobByteOffset: models[510].blobByteOffset,
+  modelId: models[510].modelId,
+  expectedSize: models[510].expectedSize,
+  sha256Checksum: models[510].sha256Checksum,
+  addon: models[510].addon,
+  engine: models[510].engine,
+  quantization: models[510].quantization,
+  params: models[510].params,
+} as const;
+
 export const TTS_MULTILINGUAL_LANGUAGE_MODEL_CHATTERBOX_FP32 = {
   name: "TTS_MULTILINGUAL_LANGUAGE_MODEL_CHATTERBOX_FP32",
   src: `registry://${models[511].registrySource}/${models[511].registryPath}`,
@@ -23375,6 +22243,24 @@ export const TTS_MULTILINGUAL_LANGUAGE_MODEL_CHATTERBOX_FP32 = {
   params: models[511].params,
 } as const;
 
+export const TTS_MULTILINGUAL_LANGUAGE_MODEL_CHATTERBOX_FP32_DATA = {
+  name: "TTS_MULTILINGUAL_LANGUAGE_MODEL_CHATTERBOX_FP32_DATA",
+  src: `registry://${models[512].registrySource}/${models[512].registryPath}`,
+  registryPath: models[512].registryPath,
+  registrySource: models[512].registrySource,
+  blobCoreKey: models[512].blobCoreKey,
+  blobBlockOffset: models[512].blobBlockOffset,
+  blobBlockLength: models[512].blobBlockLength,
+  blobByteOffset: models[512].blobByteOffset,
+  modelId: models[512].modelId,
+  expectedSize: models[512].expectedSize,
+  sha256Checksum: models[512].sha256Checksum,
+  addon: models[512].addon,
+  engine: models[512].engine,
+  quantization: models[512].quantization,
+  params: models[512].params,
+} as const;
+
 export const TTS_MULTILINGUAL_SPEECH_ENCODER_CHATTERBOX_FP32 = {
   name: "TTS_MULTILINGUAL_SPEECH_ENCODER_CHATTERBOX_FP32",
   src: `registry://${models[513].registrySource}/${models[513].registryPath}`,
@@ -23391,6 +22277,24 @@ export const TTS_MULTILINGUAL_SPEECH_ENCODER_CHATTERBOX_FP32 = {
   engine: models[513].engine,
   quantization: models[513].quantization,
   params: models[513].params,
+} as const;
+
+export const TTS_MULTILINGUAL_SPEECH_ENCODER_CHATTERBOX_FP32_DATA = {
+  name: "TTS_MULTILINGUAL_SPEECH_ENCODER_CHATTERBOX_FP32_DATA",
+  src: `registry://${models[514].registrySource}/${models[514].registryPath}`,
+  registryPath: models[514].registryPath,
+  registrySource: models[514].registrySource,
+  blobCoreKey: models[514].blobCoreKey,
+  blobBlockOffset: models[514].blobBlockOffset,
+  blobBlockLength: models[514].blobBlockLength,
+  blobByteOffset: models[514].blobByteOffset,
+  modelId: models[514].modelId,
+  expectedSize: models[514].expectedSize,
+  sha256Checksum: models[514].sha256Checksum,
+  addon: models[514].addon,
+  engine: models[514].engine,
+  quantization: models[514].quantization,
+  params: models[514].params,
 } as const;
 
 export const TTS_MULTILINGUAL_LANGUAGE_MODEL_CHATTERBOX = {
@@ -23429,6 +22333,24 @@ export const TTS_LATENT_DENOISER_SUPERTONIC_FP32 = {
   params: models[516].params,
 } as const;
 
+export const TTS_LATENT_DENOISER_SUPERTONIC_FP32_DATA = {
+  name: "TTS_LATENT_DENOISER_SUPERTONIC_FP32_DATA",
+  src: `registry://${models[517].registrySource}/${models[517].registryPath}`,
+  registryPath: models[517].registryPath,
+  registrySource: models[517].registrySource,
+  blobCoreKey: models[517].blobCoreKey,
+  blobBlockOffset: models[517].blobBlockOffset,
+  blobBlockLength: models[517].blobBlockLength,
+  blobByteOffset: models[517].blobByteOffset,
+  modelId: models[517].modelId,
+  expectedSize: models[517].expectedSize,
+  sha256Checksum: models[517].sha256Checksum,
+  addon: models[517].addon,
+  engine: models[517].engine,
+  quantization: models[517].quantization,
+  params: models[517].params,
+} as const;
+
 export const TTS_TEXT_ENCODER_SUPERTONIC_FP32 = {
   name: "TTS_TEXT_ENCODER_SUPERTONIC_FP32",
   src: `registry://${models[518].registrySource}/${models[518].registryPath}`,
@@ -23447,6 +22369,24 @@ export const TTS_TEXT_ENCODER_SUPERTONIC_FP32 = {
   params: models[518].params,
 } as const;
 
+export const TTS_TEXT_ENCODER_SUPERTONIC_FP32_DATA = {
+  name: "TTS_TEXT_ENCODER_SUPERTONIC_FP32_DATA",
+  src: `registry://${models[519].registrySource}/${models[519].registryPath}`,
+  registryPath: models[519].registryPath,
+  registrySource: models[519].registrySource,
+  blobCoreKey: models[519].blobCoreKey,
+  blobBlockOffset: models[519].blobBlockOffset,
+  blobBlockLength: models[519].blobBlockLength,
+  blobByteOffset: models[519].blobByteOffset,
+  modelId: models[519].modelId,
+  expectedSize: models[519].expectedSize,
+  sha256Checksum: models[519].sha256Checksum,
+  addon: models[519].addon,
+  engine: models[519].engine,
+  quantization: models[519].quantization,
+  params: models[519].params,
+} as const;
+
 export const TTS_VOICE_DECODER_SUPERTONIC_FP32 = {
   name: "TTS_VOICE_DECODER_SUPERTONIC_FP32",
   src: `registry://${models[520].registrySource}/${models[520].registryPath}`,
@@ -23463,6 +22403,24 @@ export const TTS_VOICE_DECODER_SUPERTONIC_FP32 = {
   engine: models[520].engine,
   quantization: models[520].quantization,
   params: models[520].params,
+} as const;
+
+export const TTS_VOICE_DECODER_SUPERTONIC_FP32_DATA = {
+  name: "TTS_VOICE_DECODER_SUPERTONIC_FP32_DATA",
+  src: `registry://${models[521].registrySource}/${models[521].registryPath}`,
+  registryPath: models[521].registryPath,
+  registrySource: models[521].registrySource,
+  blobCoreKey: models[521].blobCoreKey,
+  blobBlockOffset: models[521].blobBlockOffset,
+  blobBlockLength: models[521].blobBlockLength,
+  blobByteOffset: models[521].blobByteOffset,
+  modelId: models[521].modelId,
+  expectedSize: models[521].expectedSize,
+  sha256Checksum: models[521].sha256Checksum,
+  addon: models[521].addon,
+  engine: models[521].engine,
+  quantization: models[521].quantization,
+  params: models[521].params,
 } as const;
 
 export const TTS_TOKENIZER_SUPERTONIC = {
@@ -23699,6 +22657,24 @@ export const TTS_ENHANCER_BACKBONE_LAVASR_FP32 = {
   params: models[534].params,
 } as const;
 
+export const TTS_ENHANCER_BACKBONE_LAVASR_FP32_1 = {
+  name: "TTS_ENHANCER_BACKBONE_LAVASR_FP32_1",
+  src: `registry://${models[535].registrySource}/${models[535].registryPath}`,
+  registryPath: models[535].registryPath,
+  registrySource: models[535].registrySource,
+  blobCoreKey: models[535].blobCoreKey,
+  blobBlockOffset: models[535].blobBlockOffset,
+  blobBlockLength: models[535].blobBlockLength,
+  blobByteOffset: models[535].blobByteOffset,
+  modelId: models[535].modelId,
+  expectedSize: models[535].expectedSize,
+  sha256Checksum: models[535].sha256Checksum,
+  addon: models[535].addon,
+  engine: models[535].engine,
+  quantization: models[535].quantization,
+  params: models[535].params,
+} as const;
+
 export const TTS_ENHANCER_SPEC_HEAD_LAVASR_FP32 = {
   name: "TTS_ENHANCER_SPEC_HEAD_LAVASR_FP32",
   src: `registry://${models[536].registrySource}/${models[536].registryPath}`,
@@ -23715,6 +22691,24 @@ export const TTS_ENHANCER_SPEC_HEAD_LAVASR_FP32 = {
   engine: models[536].engine,
   quantization: models[536].quantization,
   params: models[536].params,
+} as const;
+
+export const TTS_ENHANCER_SPEC_HEAD_LAVASR_FP32_1 = {
+  name: "TTS_ENHANCER_SPEC_HEAD_LAVASR_FP32_1",
+  src: `registry://${models[537].registrySource}/${models[537].registryPath}`,
+  registryPath: models[537].registryPath,
+  registrySource: models[537].registrySource,
+  blobCoreKey: models[537].blobCoreKey,
+  blobBlockOffset: models[537].blobBlockOffset,
+  blobBlockLength: models[537].blobBlockLength,
+  blobByteOffset: models[537].blobByteOffset,
+  modelId: models[537].modelId,
+  expectedSize: models[537].expectedSize,
+  sha256Checksum: models[537].sha256Checksum,
+  addon: models[537].addon,
+  engine: models[537].engine,
+  quantization: models[537].quantization,
+  params: models[537].params,
 } as const;
 
 export const TTS_CONDITIONAL_DECODER_EN_CHATTERBOX_FP16 = {
@@ -23735,6 +22729,24 @@ export const TTS_CONDITIONAL_DECODER_EN_CHATTERBOX_FP16 = {
   params: models[538].params,
 } as const;
 
+export const TTS_CONDITIONAL_DECODER_EN_CHATTERBOX_FP16_DATA = {
+  name: "TTS_CONDITIONAL_DECODER_EN_CHATTERBOX_FP16_DATA",
+  src: `registry://${models[539].registrySource}/${models[539].registryPath}`,
+  registryPath: models[539].registryPath,
+  registrySource: models[539].registrySource,
+  blobCoreKey: models[539].blobCoreKey,
+  blobBlockOffset: models[539].blobBlockOffset,
+  blobBlockLength: models[539].blobBlockLength,
+  blobByteOffset: models[539].blobByteOffset,
+  modelId: models[539].modelId,
+  expectedSize: models[539].expectedSize,
+  sha256Checksum: models[539].sha256Checksum,
+  addon: models[539].addon,
+  engine: models[539].engine,
+  quantization: models[539].quantization,
+  params: models[539].params,
+} as const;
+
 export const TTS_CONDITIONAL_DECODER_EN_CHATTERBOX_Q4 = {
   name: "TTS_CONDITIONAL_DECODER_EN_CHATTERBOX_Q4",
   src: `registry://${models[540].registrySource}/${models[540].registryPath}`,
@@ -23751,6 +22763,24 @@ export const TTS_CONDITIONAL_DECODER_EN_CHATTERBOX_Q4 = {
   engine: models[540].engine,
   quantization: models[540].quantization,
   params: models[540].params,
+} as const;
+
+export const TTS_CONDITIONAL_DECODER_EN_CHATTERBOX_Q4_DATA = {
+  name: "TTS_CONDITIONAL_DECODER_EN_CHATTERBOX_Q4_DATA",
+  src: `registry://${models[541].registrySource}/${models[541].registryPath}`,
+  registryPath: models[541].registryPath,
+  registrySource: models[541].registrySource,
+  blobCoreKey: models[541].blobCoreKey,
+  blobBlockOffset: models[541].blobBlockOffset,
+  blobBlockLength: models[541].blobBlockLength,
+  blobByteOffset: models[541].blobByteOffset,
+  modelId: models[541].modelId,
+  expectedSize: models[541].expectedSize,
+  sha256Checksum: models[541].sha256Checksum,
+  addon: models[541].addon,
+  engine: models[541].engine,
+  quantization: models[541].quantization,
+  params: models[541].params,
 } as const;
 
 export const TTS_CONDITIONAL_DECODER_EN_CHATTERBOX_Q4F16 = {
@@ -23771,6 +22801,24 @@ export const TTS_CONDITIONAL_DECODER_EN_CHATTERBOX_Q4F16 = {
   params: models[542].params,
 } as const;
 
+export const TTS_CONDITIONAL_DECODER_EN_CHATTERBOX_Q4F16_DATA = {
+  name: "TTS_CONDITIONAL_DECODER_EN_CHATTERBOX_Q4F16_DATA",
+  src: `registry://${models[543].registrySource}/${models[543].registryPath}`,
+  registryPath: models[543].registryPath,
+  registrySource: models[543].registrySource,
+  blobCoreKey: models[543].blobCoreKey,
+  blobBlockOffset: models[543].blobBlockOffset,
+  blobBlockLength: models[543].blobBlockLength,
+  blobByteOffset: models[543].blobByteOffset,
+  modelId: models[543].modelId,
+  expectedSize: models[543].expectedSize,
+  sha256Checksum: models[543].sha256Checksum,
+  addon: models[543].addon,
+  engine: models[543].engine,
+  quantization: models[543].quantization,
+  params: models[543].params,
+} as const;
+
 export const TTS_CONDITIONAL_DECODER_EN_CHATTERBOX_QUANTIZED = {
   name: "TTS_CONDITIONAL_DECODER_EN_CHATTERBOX_QUANTIZED",
   src: `registry://${models[544].registrySource}/${models[544].registryPath}`,
@@ -23787,6 +22835,24 @@ export const TTS_CONDITIONAL_DECODER_EN_CHATTERBOX_QUANTIZED = {
   engine: models[544].engine,
   quantization: models[544].quantization,
   params: models[544].params,
+} as const;
+
+export const TTS_CONDITIONAL_DECODER_EN_CHATTERBOX_QUANTIZED_DATA = {
+  name: "TTS_CONDITIONAL_DECODER_EN_CHATTERBOX_QUANTIZED_DATA",
+  src: `registry://${models[545].registrySource}/${models[545].registryPath}`,
+  registryPath: models[545].registryPath,
+  registrySource: models[545].registrySource,
+  blobCoreKey: models[545].blobCoreKey,
+  blobBlockOffset: models[545].blobBlockOffset,
+  blobBlockLength: models[545].blobBlockLength,
+  blobByteOffset: models[545].blobByteOffset,
+  modelId: models[545].modelId,
+  expectedSize: models[545].expectedSize,
+  sha256Checksum: models[545].sha256Checksum,
+  addon: models[545].addon,
+  engine: models[545].engine,
+  quantization: models[545].quantization,
+  params: models[545].params,
 } as const;
 
 export const TTS_CONDITIONAL_DECODER_EN_CHATTERBOX_FP32 = {
@@ -23807,6 +22873,24 @@ export const TTS_CONDITIONAL_DECODER_EN_CHATTERBOX_FP32 = {
   params: models[546].params,
 } as const;
 
+export const TTS_CONDITIONAL_DECODER_EN_CHATTERBOX_FP32_DATA = {
+  name: "TTS_CONDITIONAL_DECODER_EN_CHATTERBOX_FP32_DATA",
+  src: `registry://${models[547].registrySource}/${models[547].registryPath}`,
+  registryPath: models[547].registryPath,
+  registrySource: models[547].registrySource,
+  blobCoreKey: models[547].blobCoreKey,
+  blobBlockOffset: models[547].blobBlockOffset,
+  blobBlockLength: models[547].blobBlockLength,
+  blobByteOffset: models[547].blobByteOffset,
+  modelId: models[547].modelId,
+  expectedSize: models[547].expectedSize,
+  sha256Checksum: models[547].sha256Checksum,
+  addon: models[547].addon,
+  engine: models[547].engine,
+  quantization: models[547].quantization,
+  params: models[547].params,
+} as const;
+
 export const TTS_EMBED_TOKENS_EN_CHATTERBOX_FP16 = {
   name: "TTS_EMBED_TOKENS_EN_CHATTERBOX_FP16",
   src: `registry://${models[548].registrySource}/${models[548].registryPath}`,
@@ -23823,6 +22907,24 @@ export const TTS_EMBED_TOKENS_EN_CHATTERBOX_FP16 = {
   engine: models[548].engine,
   quantization: models[548].quantization,
   params: models[548].params,
+} as const;
+
+export const TTS_EMBED_TOKENS_EN_CHATTERBOX_FP16_DATA = {
+  name: "TTS_EMBED_TOKENS_EN_CHATTERBOX_FP16_DATA",
+  src: `registry://${models[549].registrySource}/${models[549].registryPath}`,
+  registryPath: models[549].registryPath,
+  registrySource: models[549].registrySource,
+  blobCoreKey: models[549].blobCoreKey,
+  blobBlockOffset: models[549].blobBlockOffset,
+  blobBlockLength: models[549].blobBlockLength,
+  blobByteOffset: models[549].blobByteOffset,
+  modelId: models[549].modelId,
+  expectedSize: models[549].expectedSize,
+  sha256Checksum: models[549].sha256Checksum,
+  addon: models[549].addon,
+  engine: models[549].engine,
+  quantization: models[549].quantization,
+  params: models[549].params,
 } as const;
 
 export const TTS_EMBED_TOKENS_EN_CHATTERBOX_Q4 = {
@@ -23843,6 +22945,24 @@ export const TTS_EMBED_TOKENS_EN_CHATTERBOX_Q4 = {
   params: models[550].params,
 } as const;
 
+export const TTS_EMBED_TOKENS_EN_CHATTERBOX_Q4_DATA = {
+  name: "TTS_EMBED_TOKENS_EN_CHATTERBOX_Q4_DATA",
+  src: `registry://${models[551].registrySource}/${models[551].registryPath}`,
+  registryPath: models[551].registryPath,
+  registrySource: models[551].registrySource,
+  blobCoreKey: models[551].blobCoreKey,
+  blobBlockOffset: models[551].blobBlockOffset,
+  blobBlockLength: models[551].blobBlockLength,
+  blobByteOffset: models[551].blobByteOffset,
+  modelId: models[551].modelId,
+  expectedSize: models[551].expectedSize,
+  sha256Checksum: models[551].sha256Checksum,
+  addon: models[551].addon,
+  engine: models[551].engine,
+  quantization: models[551].quantization,
+  params: models[551].params,
+} as const;
+
 export const TTS_EMBED_TOKENS_EN_CHATTERBOX_Q4F16 = {
   name: "TTS_EMBED_TOKENS_EN_CHATTERBOX_Q4F16",
   src: `registry://${models[552].registrySource}/${models[552].registryPath}`,
@@ -23859,6 +22979,24 @@ export const TTS_EMBED_TOKENS_EN_CHATTERBOX_Q4F16 = {
   engine: models[552].engine,
   quantization: models[552].quantization,
   params: models[552].params,
+} as const;
+
+export const TTS_EMBED_TOKENS_EN_CHATTERBOX_Q4F16_DATA = {
+  name: "TTS_EMBED_TOKENS_EN_CHATTERBOX_Q4F16_DATA",
+  src: `registry://${models[553].registrySource}/${models[553].registryPath}`,
+  registryPath: models[553].registryPath,
+  registrySource: models[553].registrySource,
+  blobCoreKey: models[553].blobCoreKey,
+  blobBlockOffset: models[553].blobBlockOffset,
+  blobBlockLength: models[553].blobBlockLength,
+  blobByteOffset: models[553].blobByteOffset,
+  modelId: models[553].modelId,
+  expectedSize: models[553].expectedSize,
+  sha256Checksum: models[553].sha256Checksum,
+  addon: models[553].addon,
+  engine: models[553].engine,
+  quantization: models[553].quantization,
+  params: models[553].params,
 } as const;
 
 export const TTS_EMBED_TOKENS_EN_CHATTERBOX_QUANTIZED = {
@@ -23879,6 +23017,24 @@ export const TTS_EMBED_TOKENS_EN_CHATTERBOX_QUANTIZED = {
   params: models[554].params,
 } as const;
 
+export const TTS_EMBED_TOKENS_EN_CHATTERBOX_QUANTIZED_DATA = {
+  name: "TTS_EMBED_TOKENS_EN_CHATTERBOX_QUANTIZED_DATA",
+  src: `registry://${models[555].registrySource}/${models[555].registryPath}`,
+  registryPath: models[555].registryPath,
+  registrySource: models[555].registrySource,
+  blobCoreKey: models[555].blobCoreKey,
+  blobBlockOffset: models[555].blobBlockOffset,
+  blobBlockLength: models[555].blobBlockLength,
+  blobByteOffset: models[555].blobByteOffset,
+  modelId: models[555].modelId,
+  expectedSize: models[555].expectedSize,
+  sha256Checksum: models[555].sha256Checksum,
+  addon: models[555].addon,
+  engine: models[555].engine,
+  quantization: models[555].quantization,
+  params: models[555].params,
+} as const;
+
 export const TTS_EMBED_TOKENS_EN_CHATTERBOX_FP32 = {
   name: "TTS_EMBED_TOKENS_EN_CHATTERBOX_FP32",
   src: `registry://${models[556].registrySource}/${models[556].registryPath}`,
@@ -23895,6 +23051,24 @@ export const TTS_EMBED_TOKENS_EN_CHATTERBOX_FP32 = {
   engine: models[556].engine,
   quantization: models[556].quantization,
   params: models[556].params,
+} as const;
+
+export const TTS_EMBED_TOKENS_EN_CHATTERBOX_FP32_DATA = {
+  name: "TTS_EMBED_TOKENS_EN_CHATTERBOX_FP32_DATA",
+  src: `registry://${models[557].registrySource}/${models[557].registryPath}`,
+  registryPath: models[557].registryPath,
+  registrySource: models[557].registrySource,
+  blobCoreKey: models[557].blobCoreKey,
+  blobBlockOffset: models[557].blobBlockOffset,
+  blobBlockLength: models[557].blobBlockLength,
+  blobByteOffset: models[557].blobByteOffset,
+  modelId: models[557].modelId,
+  expectedSize: models[557].expectedSize,
+  sha256Checksum: models[557].sha256Checksum,
+  addon: models[557].addon,
+  engine: models[557].engine,
+  quantization: models[557].quantization,
+  params: models[557].params,
 } as const;
 
 export const TTS_LANGUAGE_MODEL_EN_CHATTERBOX_FP16 = {
@@ -23915,6 +23089,24 @@ export const TTS_LANGUAGE_MODEL_EN_CHATTERBOX_FP16 = {
   params: models[558].params,
 } as const;
 
+export const TTS_LANGUAGE_MODEL_EN_CHATTERBOX_FP16_DATA = {
+  name: "TTS_LANGUAGE_MODEL_EN_CHATTERBOX_FP16_DATA",
+  src: `registry://${models[559].registrySource}/${models[559].registryPath}`,
+  registryPath: models[559].registryPath,
+  registrySource: models[559].registrySource,
+  blobCoreKey: models[559].blobCoreKey,
+  blobBlockOffset: models[559].blobBlockOffset,
+  blobBlockLength: models[559].blobBlockLength,
+  blobByteOffset: models[559].blobByteOffset,
+  modelId: models[559].modelId,
+  expectedSize: models[559].expectedSize,
+  sha256Checksum: models[559].sha256Checksum,
+  addon: models[559].addon,
+  engine: models[559].engine,
+  quantization: models[559].quantization,
+  params: models[559].params,
+} as const;
+
 export const TTS_LANGUAGE_MODEL_EN_CHATTERBOX_Q4 = {
   name: "TTS_LANGUAGE_MODEL_EN_CHATTERBOX_Q4",
   src: `registry://${models[560].registrySource}/${models[560].registryPath}`,
@@ -23931,6 +23123,24 @@ export const TTS_LANGUAGE_MODEL_EN_CHATTERBOX_Q4 = {
   engine: models[560].engine,
   quantization: models[560].quantization,
   params: models[560].params,
+} as const;
+
+export const TTS_LANGUAGE_MODEL_EN_CHATTERBOX_Q4_DATA = {
+  name: "TTS_LANGUAGE_MODEL_EN_CHATTERBOX_Q4_DATA",
+  src: `registry://${models[561].registrySource}/${models[561].registryPath}`,
+  registryPath: models[561].registryPath,
+  registrySource: models[561].registrySource,
+  blobCoreKey: models[561].blobCoreKey,
+  blobBlockOffset: models[561].blobBlockOffset,
+  blobBlockLength: models[561].blobBlockLength,
+  blobByteOffset: models[561].blobByteOffset,
+  modelId: models[561].modelId,
+  expectedSize: models[561].expectedSize,
+  sha256Checksum: models[561].sha256Checksum,
+  addon: models[561].addon,
+  engine: models[561].engine,
+  quantization: models[561].quantization,
+  params: models[561].params,
 } as const;
 
 export const TTS_LANGUAGE_MODEL_EN_CHATTERBOX_Q4F16 = {
@@ -23951,6 +23161,24 @@ export const TTS_LANGUAGE_MODEL_EN_CHATTERBOX_Q4F16 = {
   params: models[562].params,
 } as const;
 
+export const TTS_LANGUAGE_MODEL_EN_CHATTERBOX_Q4F16_DATA = {
+  name: "TTS_LANGUAGE_MODEL_EN_CHATTERBOX_Q4F16_DATA",
+  src: `registry://${models[563].registrySource}/${models[563].registryPath}`,
+  registryPath: models[563].registryPath,
+  registrySource: models[563].registrySource,
+  blobCoreKey: models[563].blobCoreKey,
+  blobBlockOffset: models[563].blobBlockOffset,
+  blobBlockLength: models[563].blobBlockLength,
+  blobByteOffset: models[563].blobByteOffset,
+  modelId: models[563].modelId,
+  expectedSize: models[563].expectedSize,
+  sha256Checksum: models[563].sha256Checksum,
+  addon: models[563].addon,
+  engine: models[563].engine,
+  quantization: models[563].quantization,
+  params: models[563].params,
+} as const;
+
 export const TTS_LANGUAGE_MODEL_EN_CHATTERBOX_QUANTIZED = {
   name: "TTS_LANGUAGE_MODEL_EN_CHATTERBOX_QUANTIZED",
   src: `registry://${models[564].registrySource}/${models[564].registryPath}`,
@@ -23967,6 +23195,24 @@ export const TTS_LANGUAGE_MODEL_EN_CHATTERBOX_QUANTIZED = {
   engine: models[564].engine,
   quantization: models[564].quantization,
   params: models[564].params,
+} as const;
+
+export const TTS_LANGUAGE_MODEL_EN_CHATTERBOX_QUANTIZED_DATA = {
+  name: "TTS_LANGUAGE_MODEL_EN_CHATTERBOX_QUANTIZED_DATA",
+  src: `registry://${models[565].registrySource}/${models[565].registryPath}`,
+  registryPath: models[565].registryPath,
+  registrySource: models[565].registrySource,
+  blobCoreKey: models[565].blobCoreKey,
+  blobBlockOffset: models[565].blobBlockOffset,
+  blobBlockLength: models[565].blobBlockLength,
+  blobByteOffset: models[565].blobByteOffset,
+  modelId: models[565].modelId,
+  expectedSize: models[565].expectedSize,
+  sha256Checksum: models[565].sha256Checksum,
+  addon: models[565].addon,
+  engine: models[565].engine,
+  quantization: models[565].quantization,
+  params: models[565].params,
 } as const;
 
 export const TTS_LANGUAGE_MODEL_EN_CHATTERBOX_FP32 = {
@@ -23987,6 +23233,24 @@ export const TTS_LANGUAGE_MODEL_EN_CHATTERBOX_FP32 = {
   params: models[566].params,
 } as const;
 
+export const TTS_LANGUAGE_MODEL_EN_CHATTERBOX_FP32_DATA = {
+  name: "TTS_LANGUAGE_MODEL_EN_CHATTERBOX_FP32_DATA",
+  src: `registry://${models[567].registrySource}/${models[567].registryPath}`,
+  registryPath: models[567].registryPath,
+  registrySource: models[567].registrySource,
+  blobCoreKey: models[567].blobCoreKey,
+  blobBlockOffset: models[567].blobBlockOffset,
+  blobBlockLength: models[567].blobBlockLength,
+  blobByteOffset: models[567].blobByteOffset,
+  modelId: models[567].modelId,
+  expectedSize: models[567].expectedSize,
+  sha256Checksum: models[567].sha256Checksum,
+  addon: models[567].addon,
+  engine: models[567].engine,
+  quantization: models[567].quantization,
+  params: models[567].params,
+} as const;
+
 export const TTS_SPEECH_ENCODER_EN_CHATTERBOX_FP16 = {
   name: "TTS_SPEECH_ENCODER_EN_CHATTERBOX_FP16",
   src: `registry://${models[568].registrySource}/${models[568].registryPath}`,
@@ -24003,6 +23267,24 @@ export const TTS_SPEECH_ENCODER_EN_CHATTERBOX_FP16 = {
   engine: models[568].engine,
   quantization: models[568].quantization,
   params: models[568].params,
+} as const;
+
+export const TTS_SPEECH_ENCODER_EN_CHATTERBOX_FP16_DATA = {
+  name: "TTS_SPEECH_ENCODER_EN_CHATTERBOX_FP16_DATA",
+  src: `registry://${models[569].registrySource}/${models[569].registryPath}`,
+  registryPath: models[569].registryPath,
+  registrySource: models[569].registrySource,
+  blobCoreKey: models[569].blobCoreKey,
+  blobBlockOffset: models[569].blobBlockOffset,
+  blobBlockLength: models[569].blobBlockLength,
+  blobByteOffset: models[569].blobByteOffset,
+  modelId: models[569].modelId,
+  expectedSize: models[569].expectedSize,
+  sha256Checksum: models[569].sha256Checksum,
+  addon: models[569].addon,
+  engine: models[569].engine,
+  quantization: models[569].quantization,
+  params: models[569].params,
 } as const;
 
 export const TTS_SPEECH_ENCODER_EN_CHATTERBOX_Q4 = {
@@ -24023,6 +23305,24 @@ export const TTS_SPEECH_ENCODER_EN_CHATTERBOX_Q4 = {
   params: models[570].params,
 } as const;
 
+export const TTS_SPEECH_ENCODER_EN_CHATTERBOX_Q4_DATA = {
+  name: "TTS_SPEECH_ENCODER_EN_CHATTERBOX_Q4_DATA",
+  src: `registry://${models[571].registrySource}/${models[571].registryPath}`,
+  registryPath: models[571].registryPath,
+  registrySource: models[571].registrySource,
+  blobCoreKey: models[571].blobCoreKey,
+  blobBlockOffset: models[571].blobBlockOffset,
+  blobBlockLength: models[571].blobBlockLength,
+  blobByteOffset: models[571].blobByteOffset,
+  modelId: models[571].modelId,
+  expectedSize: models[571].expectedSize,
+  sha256Checksum: models[571].sha256Checksum,
+  addon: models[571].addon,
+  engine: models[571].engine,
+  quantization: models[571].quantization,
+  params: models[571].params,
+} as const;
+
 export const TTS_SPEECH_ENCODER_EN_CHATTERBOX_Q4F16 = {
   name: "TTS_SPEECH_ENCODER_EN_CHATTERBOX_Q4F16",
   src: `registry://${models[572].registrySource}/${models[572].registryPath}`,
@@ -24039,6 +23339,24 @@ export const TTS_SPEECH_ENCODER_EN_CHATTERBOX_Q4F16 = {
   engine: models[572].engine,
   quantization: models[572].quantization,
   params: models[572].params,
+} as const;
+
+export const TTS_SPEECH_ENCODER_EN_CHATTERBOX_Q4F16_DATA = {
+  name: "TTS_SPEECH_ENCODER_EN_CHATTERBOX_Q4F16_DATA",
+  src: `registry://${models[573].registrySource}/${models[573].registryPath}`,
+  registryPath: models[573].registryPath,
+  registrySource: models[573].registrySource,
+  blobCoreKey: models[573].blobCoreKey,
+  blobBlockOffset: models[573].blobBlockOffset,
+  blobBlockLength: models[573].blobBlockLength,
+  blobByteOffset: models[573].blobByteOffset,
+  modelId: models[573].modelId,
+  expectedSize: models[573].expectedSize,
+  sha256Checksum: models[573].sha256Checksum,
+  addon: models[573].addon,
+  engine: models[573].engine,
+  quantization: models[573].quantization,
+  params: models[573].params,
 } as const;
 
 export const TTS_SPEECH_ENCODER_EN_CHATTERBOX_QUANTIZED = {
@@ -24059,6 +23377,24 @@ export const TTS_SPEECH_ENCODER_EN_CHATTERBOX_QUANTIZED = {
   params: models[574].params,
 } as const;
 
+export const TTS_SPEECH_ENCODER_EN_CHATTERBOX_QUANTIZED_DATA = {
+  name: "TTS_SPEECH_ENCODER_EN_CHATTERBOX_QUANTIZED_DATA",
+  src: `registry://${models[575].registrySource}/${models[575].registryPath}`,
+  registryPath: models[575].registryPath,
+  registrySource: models[575].registrySource,
+  blobCoreKey: models[575].blobCoreKey,
+  blobBlockOffset: models[575].blobBlockOffset,
+  blobBlockLength: models[575].blobBlockLength,
+  blobByteOffset: models[575].blobByteOffset,
+  modelId: models[575].modelId,
+  expectedSize: models[575].expectedSize,
+  sha256Checksum: models[575].sha256Checksum,
+  addon: models[575].addon,
+  engine: models[575].engine,
+  quantization: models[575].quantization,
+  params: models[575].params,
+} as const;
+
 export const TTS_SPEECH_ENCODER_EN_CHATTERBOX_FP32 = {
   name: "TTS_SPEECH_ENCODER_EN_CHATTERBOX_FP32",
   src: `registry://${models[576].registrySource}/${models[576].registryPath}`,
@@ -24075,6 +23411,24 @@ export const TTS_SPEECH_ENCODER_EN_CHATTERBOX_FP32 = {
   engine: models[576].engine,
   quantization: models[576].quantization,
   params: models[576].params,
+} as const;
+
+export const TTS_SPEECH_ENCODER_EN_CHATTERBOX_FP32_DATA = {
+  name: "TTS_SPEECH_ENCODER_EN_CHATTERBOX_FP32_DATA",
+  src: `registry://${models[577].registrySource}/${models[577].registryPath}`,
+  registryPath: models[577].registryPath,
+  registrySource: models[577].registrySource,
+  blobCoreKey: models[577].blobCoreKey,
+  blobBlockOffset: models[577].blobBlockOffset,
+  blobBlockLength: models[577].blobBlockLength,
+  blobByteOffset: models[577].blobByteOffset,
+  modelId: models[577].modelId,
+  expectedSize: models[577].expectedSize,
+  sha256Checksum: models[577].sha256Checksum,
+  addon: models[577].addon,
+  engine: models[577].engine,
+  quantization: models[577].quantization,
+  params: models[577].params,
 } as const;
 
 export const TTS_TOKENIZER_EN_CHATTERBOX = {
