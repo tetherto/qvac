@@ -36,7 +36,12 @@ import {
   loggingStreamRequestSchema,
   loggingStreamResponseSchema,
 } from "./logging-stream";
-import { ttsRequestSchema, ttsResponseSchema } from "./text-to-speech";
+import {
+  ttsRequestSchema,
+  ttsResponseSchema,
+  textToSpeechStreamRequestSchema,
+  textToSpeechStreamResponseSchema,
+} from "./text-to-speech";
 import { errorResponseSchema } from "./error";
 import {
   ragRequestSchema,
@@ -90,6 +95,7 @@ export const requestSchema = z.union([
   embedRequestSchema,
   translateRequestSchema,
   ttsRequestSchema,
+  textToSpeechStreamRequestSchema,
   cancelRequestSchema,
   provideRequestSchema,
   stopProvideRequestSchema,
@@ -121,6 +127,7 @@ export const responseSchema = z.discriminatedUnion("type", [
   embedResponseSchema,
   translateResponseSchema,
   ttsResponseSchema,
+  textToSpeechStreamResponseSchema,
   cancelResponseSchema,
   provideResponseSchema,
   stopProvideResponseSchema,

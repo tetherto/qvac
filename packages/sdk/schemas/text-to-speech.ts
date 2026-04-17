@@ -58,6 +58,9 @@ export const ttsClientParamsSchema = z.object({
   inputType: z.string().default("text"),
   text: z.string().trim().min(1, "text must not be empty or whitespace-only"),
   stream: z.boolean().default(true),
+  sentenceStream: z.boolean().optional(),
+  sentenceStreamLocale: z.string().optional(),
+  sentenceStreamMaxChunkScalars: z.number().positive().optional(),
 });
 
 export const ttsRequestSchema = ttsClientParamsSchema.extend({
@@ -74,6 +77,31 @@ export const ttsResponseSchema = z.object({
   buffer: z.array(z.number()),
   done: z.boolean().default(false),
   stats: ttsStatsSchema.optional(),
+  chunkIndex: z.number().int().nonnegative().optional(),
+  sentenceChunk: z.string().optional(),
+});
+
+const textToSpeechStreamRequestBaseSchema = z.object({
+  modelId: z.string(),
+  inputType: z.string().default("text"),
+  accumulateSentences: z.boolean().optional(),
+  sentenceDelimiterPreset: z.enum(["latin", "cjk", "multilingual"]).optional(),
+  maxBufferScalars: z.number().optional(),
+  flushAfterMs: z.number().optional(),
+});
+
+export const textToSpeechStreamRequestSchema =
+  textToSpeechStreamRequestBaseSchema.extend({
+    type: z.literal("textToSpeechStream"),
+  });
+
+export const textToSpeechStreamResponseSchema = z.object({
+  type: z.literal("textToSpeechStream"),
+  buffer: z.array(z.number()),
+  done: z.boolean().default(false),
+  stats: ttsStatsSchema.optional(),
+  chunkIndex: z.number().int().nonnegative().optional(),
+  sentenceChunk: z.string().optional(),
 });
 
 export type TtsLanguage = (typeof TTS_LANGUAGES)[number];
@@ -91,3 +119,32 @@ export type TtsClientParams = z.infer<typeof ttsClientParamsSchema>;
 export type TtsRequest = z.infer<typeof ttsRequestSchema>;
 export type TtsResponse = z.infer<typeof ttsResponseSchema>;
 export type TtsStats = z.infer<typeof ttsStatsSchema>;
+
+export type TtsSentenceChunkUpdate = {
+  buffer: number[];
+  chunkIndex?: number;
+  sentenceChunk?: string;
+};
+
+export type TextToSpeechStreamRequest = z.infer<
+  typeof textToSpeechStreamRequestSchema
+>;
+export type TextToSpeechStreamResponse = z.infer<
+  typeof textToSpeechStreamResponseSchema
+>;
+
+export type TextToSpeechStreamClientParams = {
+  modelId: string;
+  inputType?: string;
+  accumulateSentences?: boolean;
+  sentenceDelimiterPreset?: "latin" | "cjk" | "multilingual";
+  maxBufferScalars?: number;
+  flushAfterMs?: number;
+};
+
+export interface TextToSpeechStreamSession {
+  write(textFragment: string | Buffer): void;
+  end(): void;
+  destroy(): void;
+  [Symbol.asyncIterator](): AsyncIterator<TextToSpeechStreamResponse>;
+}
