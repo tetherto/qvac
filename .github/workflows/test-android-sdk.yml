@@ -573,7 +573,7 @@ jobs:
     if: always()
     runs-on: ubuntu-latest
     environment: release
-    timeout-minutes: 5
+    timeout-minutes: 10
     steps:
       - name: Configure AWS credentials
         uses: aws-actions/configure-aws-credentials@8df5847569e6427dd6c4fb1cf565c83acfa8afa7 # 6.0.0
@@ -608,6 +608,60 @@ jobs:
               fi
             fi
           done
+
+      - name: Download Device Farm artifacts
+        run: |
+          mkdir -p ./device-farm-logs
+
+          for arn_file in run-arns/*.txt; do
+            if [ -f "$arn_file" ]; then
+              RUN_ARN=$(cat "$arn_file")
+              DEVICE_NAME=$(basename "$arn_file" .txt)
+
+              echo "Waiting for run to finish: $DEVICE_NAME"
+              for attempt in $(seq 1 30); do
+                STATUS=$(aws devicefarm get-run --arn "$RUN_ARN" --query 'run.status' --output text 2>/dev/null || echo "UNKNOWN")
+                if [ "$STATUS" = "COMPLETED" ] || [ "$STATUS" = "STOPPED" ] || [ "$STATUS" = "ERRORED" ]; then
+                  echo "Run $DEVICE_NAME finished with status: $STATUS"
+                  break
+                fi
+                echo "Run $DEVICE_NAME still $STATUS (attempt $attempt/30)..."
+                sleep 10
+              done
+
+              DEVICE_DIR="./device-farm-logs/$DEVICE_NAME"
+              mkdir -p "$DEVICE_DIR"
+
+              echo "Downloading Customer Artifacts for $DEVICE_NAME..."
+              JOBS=$(aws devicefarm list-jobs --arn "$RUN_ARN" --query 'jobs[*].arn' --output text 2>/dev/null || echo "")
+              for JOB_ARN in $JOBS; do
+                aws devicefarm list-artifacts \
+                  --arn "$JOB_ARN" \
+                  --type FILE \
+                  --query "artifacts[?contains(name,'Customer')].[name,extension,url]" \
+                  --output text 2>/dev/null \
+                | while IFS=$'\t' read -r NAME EXT URL; do
+                    if [ -z "$URL" ] || [ "$URL" = "None" ]; then
+                      continue
+                    fi
+                    SAFE_NAME=$(echo "$NAME" | tr ' /' '__')
+                    echo "  Downloading ${SAFE_NAME}.${EXT}"
+                    curl -sS -o "$DEVICE_DIR/${SAFE_NAME}.${EXT}" "$URL" || echo "  Failed: ${SAFE_NAME}.${EXT}"
+                  done
+              done
+
+              echo "Artifacts for $DEVICE_NAME:"
+              ls -lh "$DEVICE_DIR" 2>/dev/null || echo "  (empty)"
+            fi
+          done
+
+      - name: Upload Device Farm logs
+        if: always()
+        uses: actions/upload-artifact@bbbca2ddaa5d8feaa63e36b76fdaad77386f024f # 7.0.0
+        with:
+          name: device-farm-logs-android-${{ needs.build.outputs.runId }}
+          path: ./device-farm-logs/
+          retention-days: 30
 
   compare-results:
     needs: [build, run-producer]
