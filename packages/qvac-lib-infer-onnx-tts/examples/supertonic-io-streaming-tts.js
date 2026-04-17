@@ -1,14 +1,11 @@
 'use strict'
 
 /**
- * Streaming **input** + streaming **output**: text arrives over time (async generator simulating
- * an upstream async source). Uses `runStreaming()` — for `AsyncIterable` inputs,
- * **`accumulateSentences` defaults to true**, so small fragments are concatenated until a sentence
- * end, max buffer size, or idle timeout (see `RunStreamingOptions` in `index.d.ts`).
- *
- * Here each yield is already a short phrase ending with punctuation, so playback still chunks
- * per phrase. For sub-word or word-sized stream chunks, rely on defaults or tune `maxBufferScalars` /
- * `flushAfterMs` / `sentenceDelimiterPreset`.
+ * Streaming **input** + streaming **output**: text arrives as an **LLM-like token stream**
+ * (tiny pseudo-token yields with short delays). Uses `runStreaming()` — for `AsyncIterable` inputs,
+ * **`accumulateSentences` defaults to true**, so fragments concatenate until a sentence end, max
+ * buffer size, or idle timeout (see `RunStreamingOptions` in `index.d.ts`). Tune `flushAfterMs` /
+ * `maxBufferScalars` / `sentenceDelimiterPreset` if needed.
  *
  * Contrast with `supertonic-streaming-tts.js`: full script known up front, `run({ streamOutput: true })`.
  */
@@ -21,8 +18,33 @@ const { canPlayPcmChunks, playInt16Chunk, createChunkQueue } = require('./pcm-ch
 
 const SUPERTONIC_SAMPLE_RATE = 44100
 
+const TOKEN_DELAY_MS = 22
+
 function delay (ms) {
   return new Promise(resolve => setTimeout(resolve, ms))
+}
+
+/**
+ * Pseudo–BPE-style slices (not a real tokenizer) — simulates an upstream LLM token stream.
+ *
+ * @param {string} fullText
+ * @param {number} pauseMs
+ */
+async function * simulateLlmTokenStream (fullText, pauseMs) {
+  let i = 0
+  let tokenIndex = 0
+  while (i < fullText.length) {
+    const take = Math.min(1 + (Math.abs((i * 7 + tokenIndex * 3) % 11) % 5), fullText.length - i)
+    const piece = fullText.slice(i, i + take)
+    i += take
+    tokenIndex += 1
+    const shown = piece.length > 24 ? `${piece.slice(0, 24)}…` : piece
+    console.log(`[stream in] token ${tokenIndex}: ${JSON.stringify(shown)}`)
+    if (pauseMs > 0) {
+      await delay(pauseMs)
+    }
+    yield piece
+  }
 }
 
 const modeArg = global.Bare ? global.Bare.argv[2] : process.argv[2]
@@ -75,7 +97,12 @@ async function main () {
         'Each yield becomes one TTS job and one audio chunk on onUpdate.'
       ]
 
-  console.log(`Mode: ${modeArg}, language: ${language}, models: ${modelsDir}\n`)
+  const fullScript = streamedPhrases.join(' ')
+
+  console.log(`Mode: ${modeArg}, language: ${language}, models: ${modelsDir}`)
+  console.log(
+    `LLM-style token stream (${TOKEN_DELAY_MS}ms between pseudo-tokens), script length ${fullScript.length} chars.\n`
+  )
 
   const model = new ONNXTTS({
     files: {
@@ -107,18 +134,6 @@ async function main () {
       )
     }
 
-    async function * textChunksOverTime () {
-      for (let i = 0; i < streamedPhrases.length; i++) {
-        if (i > 0) {
-          await delay(200)
-        }
-        const tin = streamedPhrases[i]
-        const tinPreview = tin.length > 60 ? `${tin.slice(0, 60)}…` : tin
-        console.log(`[stream in] chunk ${i}: "${tinPreview}"`)
-        yield streamedPhrases[i]
-      }
-    }
-
     const playbackQueue = createChunkQueue()
     const playbackDone = (async () => {
       if (!canPlay) return
@@ -127,7 +142,11 @@ async function main () {
       }
     })()
 
-    const response = await model.runStreaming(textChunksOverTime())
+    const tokenStream = simulateLlmTokenStream(fullScript, TOKEN_DELAY_MS)
+
+    const response = await model.runStreaming(tokenStream, {
+      flushAfterMs: 500
+    })
 
     let chunkCount = 0
 

@@ -1,6 +1,6 @@
 'use strict'
 
-/** Batch TTS: `run({ input })`. Chunked output: `run({ input, streamOutput: true })`. Streaming text in: `runStreaming(...)` — see `chatterbox-io-streaming-tts.js`. */
+/** Batch TTS: `run({ input })`. Chunked output: `run({ input, streamOutput: true })`. Streaming text in: `runStreaming(...)` — see `chatterbox-streaming-tts.js`. */
 
 const fs = require('bare-fs')
 const path = require('bare-path')
