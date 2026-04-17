@@ -9,3 +9,7 @@
 /v0.8.0/sdk/api/:page/ /v0.8.0/sdk/api/:page/index.html 200
 /v0.8.0/sdk/api/:page /v0.8.0/sdk/api/:page/index.html 200
 /v0.8.0/sdk/api/ /v0.8.0/sdk/api/index.html 200
+
+/v0.9.0/sdk/api/:page/ /v0.9.0/sdk/api/:page/index.html 200
+/v0.9.0/sdk/api/:page /v0.9.0/sdk/api/:page/index.html 200
+/v0.9.0/sdk/api/ /v0.9.0/sdk/api/index.html 200

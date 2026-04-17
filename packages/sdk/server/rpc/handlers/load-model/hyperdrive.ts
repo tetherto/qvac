@@ -11,7 +11,7 @@ import Hyperdrive from "hyperdrive";
 import type { Entry } from "hyperdrive";
 import { type Readable, type Writable } from "bare-stream";
 import { AbortController, type AbortSignal } from "bare-abort-controller";
-import { getEnv } from "@/server/env";
+import { getQvacPath } from "@/server/utils/qvac-paths";
 import {
   getModelsCacheDir,
   generateShortHash,
@@ -72,7 +72,7 @@ interface ProgressContext {
 }
 
 function getCorestoreDir(hyperdriveKey: string): string {
-  return path.join(getEnv().HOME_DIR, ".qvac", "corestore", hyperdriveKey);
+  return getQvacPath("corestore", hyperdriveKey);
 }
 
 async function setupHyperdrive(

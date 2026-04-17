@@ -16,7 +16,7 @@ type DelegationTarget = {
 function resolveDelegationTarget(
   request: CancelRequest,
 ): DelegationTarget | null {
-  if (request.operation === "inference") {
+  if (request.operation === "inference" || request.operation === "embeddings") {
     const entry = getModelEntry(request.modelId);
     if (!entry?.isDelegated || !entry.delegated) {
       return null;

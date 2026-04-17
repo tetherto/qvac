@@ -1,0 +1,174 @@
+name: Setup Vulkan SDK
+description: Configure shared Vulkan SDK setup for prebuild workflows.
+
+inputs:
+  platform:
+    description: Build platform
+    required: true
+  arch:
+    description: Build architecture
+    required: true
+  version:
+    description: Optional Vulkan SDK version in x.y.z.n form, or latest
+    required: false
+  aws-role-to-assume:
+    description: AWS role ARN used to refresh credentials before Linux ARM64 cache upload
+    required: false
+  aws-region:
+    description: AWS region used to refresh credentials before Linux ARM64 cache upload
+    required: false
+
+runs:
+  using: composite
+  steps:
+    - name: Resolve Vulkan SDK version
+      shell: bash
+      env:
+        INPUT_VERSION: ${{ inputs.version }}
+      run: |
+        CONFIG_PATH=".github/config/vulkan-sdk-version.txt"
+
+        if [ -n "${INPUT_VERSION:-}" ]; then
+          RESOLVED_VERSION="$INPUT_VERSION"
+        elif [ -f "$CONFIG_PATH" ]; then
+          RESOLVED_VERSION=$(tr -d '\r\n[:space:]' < "$CONFIG_PATH")
+        else
+          RESOLVED_VERSION="latest"
+        fi
+
+        if [ -z "$RESOLVED_VERSION" ]; then
+          echo "::error::Resolved Vulkan SDK version is empty"
+          exit 1
+        fi
+
+        if [ "$RESOLVED_VERSION" != "latest" ] && [[ ! "$RESOLVED_VERSION" =~ ^[0-9]+\.[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
+          echo "::error::Vulkan SDK version must be latest or use x.y.z.n format"
+          exit 1
+        fi
+
+        echo "VULKAN_VERSION=$RESOLVED_VERSION" >> "$GITHUB_ENV"
+
+    - name: Validate Linux ARM64 Vulkan cache settings
+      if: ${{ inputs.platform == 'linux' && inputs.arch == 'arm64' }}
+      shell: bash
+      run: |
+        if [ -z "${MODEL_S3_BUCKET:-}" ]; then
+          echo "::error::MODEL_S3_BUCKET is required for Linux ARM64 Vulkan cache"
+          exit 1
+        fi
+
+        if [ -z "${{ inputs.aws-role-to-assume }}" ]; then
+          echo "::error::aws-role-to-assume is required for Linux ARM64 Vulkan cache upload refresh"
+          exit 1
+        fi
+
+        if [ -z "${{ inputs.aws-region }}" ]; then
+          echo "::error::aws-region is required for Linux ARM64 Vulkan cache upload refresh"
+          exit 1
+        fi
+
+    - name: Install Vulkan SDK (Linux)
+      if: ${{ inputs.platform == 'linux' || inputs.platform == 'android' }}
+      shell: bash
+      run: |
+        if [ "$VULKAN_VERSION" = "latest" ]; then
+          VULKAN_URL="https://sdk.lunarg.com/sdk/download/latest/linux/vulkan_sdk.tar.xz"
+        else
+          VULKAN_URL="https://sdk.lunarg.com/sdk/download/${VULKAN_VERSION}/linux/vulkansdk-linux-x86_64-${VULKAN_VERSION}.tar.xz"
+        fi
+
+        sudo apt install -y xz-utils
+        wget -q -O /tmp/vulkansdk.tar.xz "$VULKAN_URL"
+        mkdir -p "$HOME/vulkan"
+        tar xf /tmp/vulkansdk.tar.xz --directory "$HOME/vulkan" --strip-components=1
+
+    - name: Setup Vulkan SDK path in Linux x64
+      if: ${{ (inputs.platform == 'linux' && inputs.arch == 'x64') || inputs.platform == 'android' }}
+      shell: bash
+      run: |
+        echo "VULKAN_SDK=$HOME/vulkan/x86_64" >> "$GITHUB_ENV"
+
+    - name: Setup Vulkan SDK path in Linux arm64
+      if: ${{ inputs.platform == 'linux' && inputs.arch == 'arm64' }}
+      shell: bash
+      run: |
+        echo "VULKAN_SDK=$HOME/vulkan/aarch64" >> "$GITHUB_ENV"
+
+        cd "$HOME/vulkan"
+
+        if [ "$VULKAN_VERSION" = "latest" ]; then
+          SDK_VERSION=$(grep -o 'sdk/[0-9]*\.[0-9]*\.[0-9]*\.[0-9]*' README.txt | head -1 | sed 's|sdk/||')
+        else
+          SDK_VERSION="$VULKAN_VERSION"
+        fi
+
+        if [ -z "$SDK_VERSION" ]; then
+          echo "::error::Unable to determine Vulkan SDK version from README.txt"
+          exit 1
+        fi
+
+        S3_KEY="vulkan-sdk-cache/linux-arm64-${SDK_VERSION}.tar.gz"
+
+        echo "Vulkan SDK version: ${SDK_VERSION}"
+        echo "VULKAN_ARM64_S3_KEY=$S3_KEY" >> "$GITHUB_ENV"
+
+        if aws s3 cp "s3://${MODEL_S3_BUCKET}/${S3_KEY}" /tmp/vulkan-arm64-cache.tar.gz 2>/dev/null; then
+          echo "Found cached Vulkan SDK, extracting..."
+          tar xzf /tmp/vulkan-arm64-cache.tar.gz -C "$HOME/vulkan"
+          rm /tmp/vulkan-arm64-cache.tar.gz
+          echo "VULKAN_ARM64_CACHE_HIT=true" >> "$GITHUB_ENV"
+        else
+          echo "No cache found, building Vulkan SDK for ARM64..."
+          ./vulkansdk --maxjobs
+          tar czf /tmp/vulkan-arm64-cache.tar.gz aarch64
+          echo "VULKAN_ARM64_CACHE_HIT=false" >> "$GITHUB_ENV"
+        fi
+
+    - name: Refresh AWS credentials before Vulkan ARM64 cache upload
+      if: ${{ inputs.platform == 'linux' && inputs.arch == 'arm64' && env.VULKAN_ARM64_CACHE_HIT == 'false' }}
+      uses: aws-actions/configure-aws-credentials@8df5847569e6427dd6c4fb1cf565c83acfa8afa7 # 6.0.0
+      with:
+        role-to-assume: ${{ inputs.aws-role-to-assume }}
+        aws-region: ${{ inputs.aws-region }}
+
+    - name: Upload Vulkan ARM64 cache to S3
+      if: ${{ inputs.platform == 'linux' && inputs.arch == 'arm64' && env.VULKAN_ARM64_CACHE_HIT == 'false' }}
+      shell: bash
+      run: |
+        echo "Uploading compiled SDK to S3..."
+        aws s3 cp /tmp/vulkan-arm64-cache.tar.gz "s3://${MODEL_S3_BUCKET}/${VULKAN_ARM64_S3_KEY}"
+        rm /tmp/vulkan-arm64-cache.tar.gz
+
+    - name: Export Vulkan SDK variables in Linux
+      if: ${{ inputs.platform == 'linux' || inputs.platform == 'android' }}
+      shell: bash
+      run: |
+        echo "PATH=$VULKAN_SDK/bin:$PATH" >> "$GITHUB_ENV"
+        echo "LD_LIBRARY_PATH=$VULKAN_SDK/lib${LD_LIBRARY_PATH:+:$LD_LIBRARY_PATH}" >> "$GITHUB_ENV"
+        echo "VK_ADD_LAYER_PATH=$VULKAN_SDK/share/vulkan/explicit_layer.d" >> "$GITHUB_ENV"
+        echo "PKG_CONFIG_PATH=$VULKAN_SDK/share/pkgconfig:$VULKAN_SDK/lib/pkgconfig${PKG_CONFIG_PATH:+:$PKG_CONFIG_PATH}" >> "$GITHUB_ENV"
+
+    - name: Install Vulkan SDK (Windows)
+      if: ${{ inputs.platform == 'win32' }}
+      shell: powershell
+      run: |
+        $ErrorActionPreference = "Stop"
+        $ProgressPreference = "SilentlyContinue"
+
+        if ($env:VULKAN_VERSION -eq "latest") {
+          $url = "https://sdk.lunarg.com/sdk/download/latest/windows/vulkan-sdk.exe"
+        } else {
+          $url = "https://sdk.lunarg.com/sdk/download/$env:VULKAN_VERSION/windows/vulkansdk-windows-X64-$env:VULKAN_VERSION.exe"
+        }
+        $out = "$env:RUNNER_TEMP\vulkan-sdk.exe"
+
+        [Net.ServicePointManager]::SecurityProtocol = [Net.SecurityProtocolType]::Tls12
+
+        Write-Host "Downloading Vulkan SDK from $url to $out"
+        Start-BitsTransfer -Source $url -Destination $out
+
+        Write-Host "Installing Vulkan SDK..."
+        & $out --root "C:\VulkanSDK" --accept-licenses --default-answer --confirm-command install
+
+        "VULKAN_SDK=C:\VulkanSDK" | Out-File -FilePath $Env:GITHUB_ENV -Encoding utf8 -Append
+        "PATH=C:\VulkanSDK\Bin;$Env:PATH" | Out-File -FilePath $Env:GITHUB_ENV -Encoding utf8 -Append

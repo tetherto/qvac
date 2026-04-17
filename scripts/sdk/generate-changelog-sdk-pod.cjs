@@ -19,6 +19,7 @@ const {
   generateChangelog,
   getRepoRoot,
   parseArgs,
+  git,
 } = require("../generate-changelog-qvac.cjs");
 
 const SECTIONS = [
@@ -136,6 +137,162 @@ function extractModelsSection(body) {
 }
 
 /**
+ * Parse a model history file into structured data.
+ * Files live in packages/<pkg>/models/history/<sha>.txt and contain:
+ *   commit=<sha>
+ *   timestamp=<iso>
+ *   previous_count=N
+ *   new_count=N
+ *   [added]
+ *   MODEL_A
+ *   MODEL_B
+ *   [removed]   (optional)
+ *   MODEL_C
+ *
+ * @param {string} filePath
+ * @returns {{ commit: string, previousCount: number, newCount: number, added: string[], removed: string[] } | null}
+ */
+function parseModelHistoryFile(filePath) {
+  try {
+    const content = fs.readFileSync(filePath, "utf8");
+    const lines = content.split("\n").map((l) => l.trim()).filter(Boolean);
+
+    const meta = {};
+    let section = null;
+    const added = [];
+    const removed = [];
+
+    for (const line of lines) {
+      if (line.startsWith("commit=")) {
+        meta.commit = line.slice("commit=".length);
+      } else if (line.startsWith("previous_count=")) {
+        meta.previousCount = parseInt(line.slice("previous_count=".length), 10);
+      } else if (line.startsWith("new_count=")) {
+        meta.newCount = parseInt(line.slice("new_count=".length), 10);
+      } else if (line.startsWith("timestamp=")) {
+        continue;
+      } else if (line === "[added]") {
+        section = "added";
+      } else if (line === "[removed]") {
+        section = "removed";
+      } else if (section === "added") {
+        added.push(line);
+      } else if (section === "removed") {
+        removed.push(line);
+      }
+    }
+
+    return { commit: meta.commit || "", previousCount: meta.previousCount || 0, newCount: meta.newCount || 0, added, removed };
+  } catch (error) {
+    return null;
+  }
+}
+
+/**
+ * Find model history files added between baseRef and HEAD,
+ * parse them, and aggregate into a single added/removed summary.
+ *
+ * @param {string} packageName
+ * @param {string} baseRef - tag or commit SHA
+ * @returns {{ added: string[], removed: string[], previousCount: number, newCount: number } | null}
+ */
+function getModelChangesFromHistory(packageName, baseRef) {
+  const historyPath = `packages/${packageName}/models/history`;
+  const repoRoot = getRepoRoot();
+  const historyDir = path.join(repoRoot, historyPath);
+
+  if (!fs.existsSync(historyDir)) return null;
+
+  let newFiles;
+  try {
+    const diff = git(`diff --name-only ${baseRef}..HEAD -- ":(top)${historyPath}"`);
+    if (!diff) return null;
+    newFiles = diff.split("\n").map((f) => f.trim()).filter(Boolean);
+  } catch (error) {
+    return null;
+  }
+
+  if (newFiles.length === 0) return null;
+
+  const allAdded = new Set();
+  const allRemoved = new Set();
+  let firstPreviousCount = null;
+  let lastNewCount = null;
+
+  for (const relPath of newFiles) {
+    const fullPath = path.join(repoRoot, relPath);
+    const parsed = parseModelHistoryFile(fullPath);
+    if (!parsed) continue;
+
+    if (firstPreviousCount === null) {
+      firstPreviousCount = parsed.previousCount;
+    }
+    lastNewCount = parsed.newCount;
+
+    for (const m of parsed.added) allAdded.add(m);
+    for (const m of parsed.removed) allRemoved.add(m);
+  }
+
+  // Net out: if added and removed, treat as update (remove from both)
+  for (const model of [...allAdded]) {
+    if (allRemoved.has(model)) {
+      allAdded.delete(model);
+      allRemoved.delete(model);
+    }
+  }
+
+  if (allAdded.size === 0 && allRemoved.size === 0) return null;
+
+  return {
+    added: [...allAdded].sort(),
+    removed: [...allRemoved].sort(),
+    previousCount: firstPreviousCount || 0,
+    newCount: lastNewCount || 0,
+  };
+}
+
+/**
+ * Generate models.md from model history files (fallback when no [mod] PRs).
+ *
+ * @param {string} packageName
+ * @param {string} version
+ * @param {string} baseRef
+ * @param {string} changelogDir
+ * @returns {boolean} true if models.md was generated
+ */
+function generateModelsFromHistory(packageName, version, baseRef, changelogDir) {
+  const changes = getModelChangesFromHistory(packageName, baseRef);
+  if (!changes) return false;
+
+  let modelsMd = `# 📦 Model Changes v${version}\n\n`;
+  modelsMd += `Total model constants: ${changes.previousCount} → ${changes.newCount}`;
+  const delta = changes.newCount - changes.previousCount;
+  if (delta !== 0) {
+    modelsMd += ` (${delta > 0 ? "+" : ""}${delta})`;
+  }
+  modelsMd += "\n\n";
+  modelsMd += `_Generated from model history files (no \\[mod\\] tagged PRs found)._\n\n`;
+
+  if (changes.added.length > 0) {
+    modelsMd += `## Added Models\n\n`;
+    modelsMd += "```\n";
+    modelsMd += changes.added.join("\n") + "\n";
+    modelsMd += "```\n\n";
+  }
+
+  if (changes.removed.length > 0) {
+    modelsMd += `## Removed Models\n\n`;
+    modelsMd += "```\n";
+    modelsMd += changes.removed.join("\n") + "\n";
+    modelsMd += "```\n\n";
+  }
+
+  fs.writeFileSync(path.join(changelogDir, "models.md"), modelsMd);
+  console.log(`✅ Generated ${changelogDir}/models.md (from model history fallback)`);
+  return true;
+}
+
+/**
  * Capitalize first letter of string
  * @param {string} str
  * @returns {string}
@@ -185,11 +342,13 @@ function generateChangelogEntry(
 
 /**
  * Generate SDK-specific changelog files
+ * @param {string} packageName
  * @param {string} version
  * @param {Array} prs - Array of PR objects with parsed titles
  * @param {string} [outputDir] - Override output directory (for testing)
+ * @param {string} [baseRef] - Base tag/commit for model history fallback
  */
-function generateChangelogFiles(packageName, version, prs, outputDir) {
+function generateChangelogFiles(packageName, version, prs, outputDir, baseRef) {
   const changelogDir =
     outputDir || path.join(getRepoRoot(), "packages", packageName, "changelog", version);
 
@@ -369,6 +528,81 @@ function generateChangelogFiles(packageName, version, prs, outputDir) {
     fs.writeFileSync(path.join(changelogDir, "models.md"), modelsMd);
     console.log(`✅ Generated ${changelogDir}/models.md`);
   }
+
+  // Fallback: if no [mod] PRs found, try model history files
+  if (modelChanges.length === 0 && baseRef) {
+    const changes = getModelChangesFromHistory(packageName, baseRef);
+    if (changes) {
+      generateModelsFromHistory(packageName, version, baseRef, changelogDir);
+
+      const changelogPath = path.join(changelogDir, "CHANGELOG.md");
+      let existing = fs.readFileSync(changelogPath, "utf8");
+
+      let section = `## 📦 Models\n\n`;
+      section += `- Model registry updated: ${changes.previousCount} → ${changes.newCount}`;
+      const delta = changes.newCount - changes.previousCount;
+      if (delta !== 0) {
+        section += ` (${delta > 0 ? "+" : ""}${delta})`;
+      }
+      section += `. See [model changes](./models.md) for full list.\n`;
+
+      if (changes.added.length > 0) {
+        const groups = groupModelsByPrefix(changes.added);
+        for (const [prefix, names] of Object.entries(groups)) {
+          section += `- Added ${names.length} ${prefix} model${names.length === 1 ? "" : "s"}.\n`;
+        }
+      }
+
+      if (changes.removed.length > 0) {
+        section += `- Removed ${changes.removed.length} model${changes.removed.length === 1 ? "" : "s"}.\n`;
+      }
+
+      section += "\n";
+      existing += section;
+      fs.writeFileSync(changelogPath, existing);
+      console.log(`  ℹ️  No [mod] tagged PRs — used model history files as fallback`);
+    }
+  }
+}
+
+/**
+ * Group model constant names by their addon/category prefix.
+ * e.g. "SD_V2_1_1B_Q4_0" → "SD", "BERGAMOT_EN_DE" → "Bergamot",
+ *      "TTS_SUPERTONIC_OFFICIAL_*" → "TTS Supertonic"
+ *
+ * @param {string[]} names
+ * @returns {Record<string, string[]>}
+ */
+function groupModelsByPrefix(names) {
+  const groups = {};
+
+  for (const name of names) {
+    let prefix;
+    if (name.startsWith("BERGAMOT_")) {
+      prefix = "Bergamot translation";
+    } else if (name.startsWith("TTS_SUPERTONIC")) {
+      prefix = "TTS Supertonic";
+    } else if (name.startsWith("SD_") || name.startsWith("SDXL_")) {
+      prefix = "Stable Diffusion";
+    } else if (name.startsWith("FLUX_")) {
+      prefix = "FLUX";
+    } else if (name.startsWith("PARAKEET_")) {
+      prefix = "Parakeet";
+    } else if (name.startsWith("WHISPER_")) {
+      prefix = "Whisper";
+    } else if (name.startsWith("OCR_")) {
+      prefix = "OCR";
+    } else if (name.startsWith("EMBEDDINGS_")) {
+      prefix = "Embeddings";
+    } else {
+      prefix = "LLM";
+    }
+
+    if (!groups[prefix]) groups[prefix] = [];
+    groups[prefix].push(name);
+  }
+
+  return groups;
 }
 
 /**
@@ -520,6 +754,7 @@ async function main() {
       "  --base-commit    Initial commit SHA (overrides tag lookup)",
     );
     console.error("  --base-version   Version label for base commit");
+    console.error("  --release-type   minor or patch (auto-detected from package.json version)");
     console.error("  --update-root-changelog  Update root CHANGELOG.md");
     process.exit(1);
   }
@@ -534,6 +769,7 @@ async function main() {
       packageName,
       baseCommit: params["base-commit"] || undefined,
       baseVersion: params["base-version"] || undefined,
+      releaseType: params["release-type"] || undefined,
       dryRun: true, // Don't let generic script write files
     });
 
@@ -555,7 +791,7 @@ async function main() {
 
     // Generate SDK-specific changelog files
     console.log("📝 Generating changelog files...");
-    generateChangelogFiles(packageName, data.version, validPRs);
+    generateChangelogFiles(packageName, data.version, validPRs, undefined, data.baseRef);
     rebuildRootChangelog(packageName);
 
     console.log("\n🎉 Changelog generation complete!");
@@ -578,6 +814,9 @@ module.exports = {
   extractBeforeAfter,
   extractModelNames,
   extractModelsSection,
+  parseModelHistoryFile,
+  getModelChangesFromHistory,
+  generateModelsFromHistory,
   capitalize,
   generateChangelogEntry,
   generateChangelogFiles,

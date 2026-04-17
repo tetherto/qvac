@@ -15,7 +15,7 @@ on:
         required: true
         type: string
       platforms:
-        description: 'JSON array of runner labels (e.g., ["ubuntu-latest"] or ["ai-run-linux-gpu", "macos-latest-xlarge"])'
+        description: 'JSON array of runner labels (e.g., ["ubuntu-latest"] or ["ai-run-linux-gpu", "mac-mini-m4-gpu"])'
         required: true
         type: string
       consumer-timeout:

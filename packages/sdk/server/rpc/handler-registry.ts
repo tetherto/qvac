@@ -57,7 +57,7 @@ function isModelDelegated(request: Request): boolean {
 function isCancelDelegated(request: Request): boolean {
   if (request.type !== "cancel") return false;
 
-  if (request.operation === "inference") {
+  if (request.operation === "inference" || request.operation === "embeddings") {
     return isModelDelegated(request);
   }
 
