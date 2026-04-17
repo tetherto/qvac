@@ -15,6 +15,7 @@
         "vcpkg-tool-meson",
         "nlohmann-json",
         "fmt",
+        "mecab",
         "spdlog",
         "zlib"
       ]

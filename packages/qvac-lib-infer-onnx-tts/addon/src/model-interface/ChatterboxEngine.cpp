@@ -353,7 +353,7 @@ void ChatterboxEngine::load(const ChatterboxConfig &cfg) {
     languageModelSession_ = sessionFactory_(cfg.languageModelPath);
   }
 
-  loadCangjieTableIfNeeded(cfg.tokenizerPath);
+  loadTextPreprocessor(cfg.tokenizerPath, cfg.dictPath);
   loadTextEmbWeight(cfg.embedTokensPath);
 
   isEnglish_ = language_ == "en";
@@ -710,7 +710,7 @@ AudioResult ChatterboxEngine::synthesize(const std::string &text) {
 
 std::vector<int64_t> ChatterboxEngine::tokenize(const std::string &text) {
   const std::string preprocessed =
-      text_preprocess::preprocessText(text, language_, cangjieTable_);
+      textPreprocessor_.preprocess(text, language_);
   const std::string preparedText = lang_mode::prepareTextForTokenization(
       preprocessed, language_, isEnglish_);
   QLOG(Priority::INFO, "tokenizing text: " + preparedText);
@@ -726,24 +726,31 @@ std::vector<int64_t> ChatterboxEngine::tokenize(const std::string &text) {
   return tokens;
 }
 
-void ChatterboxEngine::loadCangjieTableIfNeeded(
-    const std::string &tokenizerPath) {
-  if (language_ != "zh") {
-    cangjieTable_.clear();
-    return;
-  }
+void ChatterboxEngine::loadTextPreprocessor(
+    const std::string &tokenizerPath, const std::string &dictPath) {
+  textPreprocessor_.reset();
 
-  std::string dir = tokenizerPath;
-  size_t lastSlash = dir.find_last_of("/\\");
+  std::string tokenizerDir = tokenizerPath;
+  size_t lastSlash = tokenizerDir.find_last_of("/\\");
   if (lastSlash != std::string::npos) {
-    dir = dir.substr(0, lastSlash);
+    tokenizerDir = tokenizerDir.substr(0, lastSlash);
   }
-  std::string cangjieTablePath = dir + "/Cangjie5_TC.tsv";
 
-  QLOG(Priority::INFO, "Loading Cangjie table from: " + cangjieTablePath);
-  cangjieTable_ = text_preprocess::loadCangjieTable(cangjieTablePath);
-  QLOG(Priority::INFO, "Cangjie table loaded: " +
-                           std::to_string(cangjieTable_.size()) + " entries");
+  if (language_ == "zh") {
+    std::string cangjieTablePath = tokenizerDir + "/Cangjie5_TC.tsv";
+    QLOG(Priority::INFO, "Loading Cangjie table from: " + cangjieTablePath);
+    textPreprocessor_.loadCangjieTable(cangjieTablePath);
+    QLOG(Priority::INFO,
+         "Cangjie table loaded: " +
+             std::to_string(textPreprocessor_.cangjieTableSize()) + " entries");
+  }
+
+  if (language_ == "ja") {
+    std::string mecabDicPath = dictPath + "/mecab-ipadic";
+    QLOG(Priority::INFO, "Loading MeCab dictionary from: " + mecabDicPath);
+    textPreprocessor_.loadMeCab(mecabDicPath);
+    QLOG(Priority::INFO, "MeCab dictionary loaded");
+  }
 }
 
 void ChatterboxEngine::runEmbedTokensInfer(

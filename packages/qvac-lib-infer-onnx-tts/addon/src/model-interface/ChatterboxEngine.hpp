@@ -91,7 +91,8 @@ private:
   void ensureSession(std::unique_ptr<IOnnxInferSession> &session,
                      const std::string &modelPath);
   void releaseSession(std::unique_ptr<IOnnxInferSession> &session);
-  void loadCangjieTableIfNeeded(const std::string &tokenizerPath);
+  void loadTextPreprocessor(const std::string &tokenizerPath,
+                            const std::string &dictPath);
   void loadTextEmbWeight(const std::string &embedTokensPath);
 
   TensorData<float>
@@ -155,7 +156,7 @@ private:
   bool lazySessionLoading_ = false;
   std::string language_;
   int keyValueOffset_ = 0;
-  text_preprocess::CangjieTable cangjieTable_;
+  text_preprocess::ChatterboxTextPreprocessor textPreprocessor_;
 
   std::vector<float> textEmbWeight_;
   int64_t textEmbRows_ = 0;

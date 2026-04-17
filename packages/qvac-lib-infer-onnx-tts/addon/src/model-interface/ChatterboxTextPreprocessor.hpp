@@ -1,27 +1,56 @@
 #pragma once
 
+#include <memory>
 #include <string>
 #include <unordered_map>
 #include <vector>
+
+struct mecab_t;
+struct mecab_node_t;
 
 namespace qvac::ttslib::chatterbox::text_preprocess {
 
 using CangjieTable = std::unordered_map<uint32_t, std::string>;
 
-std::string preprocessText(const std::string &text, const std::string &language,
-                           const CangjieTable &cangjieTable);
+class ChatterboxTextPreprocessor {
+public:
+  ChatterboxTextPreprocessor() = default;
+  ~ChatterboxTextPreprocessor();
 
-std::string decomposeKoreanToJamo(const std::string &text);
+  ChatterboxTextPreprocessor(const ChatterboxTextPreprocessor &) = delete;
+  ChatterboxTextPreprocessor &
+  operator=(const ChatterboxTextPreprocessor &) = delete;
+  ChatterboxTextPreprocessor(ChatterboxTextPreprocessor &&) noexcept;
+  ChatterboxTextPreprocessor &
+  operator=(ChatterboxTextPreprocessor &&) noexcept;
 
-std::string convertKatakanaToHiragana(const std::string &text);
+  void loadCangjieTable(const std::string &tsvPath);
+  void loadMeCab(const std::string &dicPath);
+  void reset();
 
-std::string convertChineseToCangjie(const std::string &text,
-                                    const CangjieTable &table);
+  size_t cangjieTableSize() const;
 
-CangjieTable loadCangjieTable(const std::string &tsvPath);
+  std::string preprocess(const std::string &text,
+                         const std::string &language) const;
 
-std::vector<uint32_t> decodeUtf8(const std::string &text);
+  std::string decomposeKoreanToJamo(const std::string &text) const;
+  std::string convertKatakanaToHiragana(const std::string &text) const;
+  std::string convertChineseToCangjie(const std::string &text) const;
+  std::string convertJapaneseWithMeCab(const std::string &text) const;
 
-std::string encodeCodepoint(uint32_t cp);
+  static std::vector<uint32_t> decodeUtf8(const std::string &text);
+  static std::string encodeCodepoint(uint32_t cp);
+
+private:
+  void appendNodeReading(const mecab_node_t *node, std::string &result) const;
+  std::string buildHiraganaFromNodes(const mecab_node_t *node) const;
+
+  CangjieTable cangjieTable_;
+
+  struct MeCabDeleter {
+    void operator()(mecab_t *p) const;
+  };
+  std::unique_ptr<mecab_t, MeCabDeleter> mecabTagger_;
+};
 
 } // namespace qvac::ttslib::chatterbox::text_preprocess

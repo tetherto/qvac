@@ -16,6 +16,8 @@ const { splitTtsText } = require('./lib/textChunker')
 const ENGINE_CHATTERBOX = 'chatterbox'
 const ENGINE_SUPERTONIC = 'supertonic'
 
+const CHATTERBOX_DICT_DIR = path.join(__dirname, 'dict')
+
 function firstNonEmpty (...candidates) {
   for (let i = 0; i < candidates.length; i++) {
     const v = candidates[i]
@@ -435,25 +437,31 @@ class ONNXTTS {
     if (this._engineType === ENGINE_SUPERTONIC) {
       ttsParams = this._getSupertonicTtsParams()
     } else {
-      ttsParams = {
-        tokenizerPath: this._tokenizerPath || '',
-        speechEncoderPath: this._speechEncoderPath || '',
-        embedTokensPath: this._embedTokensPath || '',
-        conditionalDecoderPath: this._conditionalDecoderPath || '',
-        languageModelPath: this._languageModelPath || '',
-        language: this._config?.language || 'en',
-        useGPU: this._config?.useGPU || false,
-        lazySessionLoading: this._lazySessionLoading
-      }
-      if (this._referenceAudio != null) {
-        ttsParams.referenceAudio = this._referenceAudio
-      }
+      ttsParams = this._getChatterboxTtsParams()
     }
 
     Object.assign(ttsParams, this._getEnhancerParams())
 
     this.addon = this._createAddon(ttsParams, this._addonOutputCallback.bind(this))
     await this.addon.activate()
+  }
+
+  _getChatterboxTtsParams () {
+    const params = {
+      tokenizerPath: this._tokenizerPath || '',
+      speechEncoderPath: this._speechEncoderPath || '',
+      embedTokensPath: this._embedTokensPath || '',
+      conditionalDecoderPath: this._conditionalDecoderPath || '',
+      languageModelPath: this._languageModelPath || '',
+      dictPath: CHATTERBOX_DICT_DIR,
+      language: this._config?.language || 'en',
+      useGPU: this._config?.useGPU || false,
+      lazySessionLoading: this._lazySessionLoading
+    }
+    if (this._referenceAudio != null) {
+      params.referenceAudio = this._referenceAudio
+    }
+    return params
   }
 
   _getSupertonicTtsParams () {
@@ -701,19 +709,7 @@ class ONNXTTS {
     if (this._engineType === ENGINE_SUPERTONIC) {
       ttsParams = this._getSupertonicTtsParams()
     } else {
-      ttsParams = {
-        tokenizerPath: this._tokenizerPath || '',
-        speechEncoderPath: this._speechEncoderPath || '',
-        embedTokensPath: this._embedTokensPath || '',
-        conditionalDecoderPath: this._conditionalDecoderPath || '',
-        languageModelPath: this._languageModelPath || '',
-        language: this._config?.language || 'en',
-        useGPU: this._config?.useGPU || false,
-        lazySessionLoading: this._lazySessionLoading
-      }
-      if (this._referenceAudio != null) {
-        ttsParams.referenceAudio = this._referenceAudio
-      }
+      ttsParams = this._getChatterboxTtsParams()
     }
 
     Object.assign(ttsParams, this._getEnhancerParams())

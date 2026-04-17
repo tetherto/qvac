@@ -103,6 +103,7 @@ qvac::ttslib::chatterbox::ChatterboxConfig TTSModel::createChatterboxConfig(
   updateConfig("embedTokensPath", config.embedTokensPath);
   updateConfig("conditionalDecoderPath", config.conditionalDecoderPath);
   updateConfig("languageModelPath", config.languageModelPath);
+  updateConfig("dictPath", config.dictPath);
 
   auto lazyIt = configMap.find("lazySessionLoading");
   if (lazyIt != configMap.end()) {
@@ -121,7 +122,8 @@ qvac::ttslib::chatterbox::ChatterboxConfig TTSModel::createChatterboxConfig(
      << "' speechEncoderPath='" << config.speechEncoderPath << "'"
      << "' embedTokensPath='" << config.embedTokensPath << "'"
      << "' conditionalDecoderPath='" << config.conditionalDecoderPath << "'"
-     << "' languageModelPath='" << config.languageModelPath << "'";
+     << "' languageModelPath='" << config.languageModelPath << "'"
+     << "' dictPath='" << config.dictPath << "'";
   QLOG(Priority::INFO, ss.str());
 
   return config;

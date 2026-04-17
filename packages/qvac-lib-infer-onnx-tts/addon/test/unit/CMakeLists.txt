@@ -56,6 +56,7 @@ target_link_libraries(
   PRIVATE
     qvac-onnx::headers
     ${QVAC_TTS_TEST_ORT_TARGET}
+    mecab::mecab
     tokenizers::tokenizers_cpp
     ${QVAC_UTF8PROC_TARGET}
     GTest::gtest

@@ -1,6 +1,7 @@
 #include "ChatterboxTextPreprocessor.hpp"
 #include "FileUtils.hpp"
 
+#include <mecab/mecab.h>
 #include <sstream>
 #include <stdexcept>
 
@@ -21,6 +22,8 @@ const uint32_t JAMO_FINAL_BASE = 0x11A8;
 const uint32_t KATAKANA_START = 0x30A1;
 const uint32_t KATAKANA_END = 0x30F6;
 const uint32_t KATAKANA_TO_HIRAGANA_OFFSET = 0x60;
+
+const int IPADIC_READING_FIELD_INDEX = 7;
 
 bool isHangulSyllable(uint32_t cp) {
   return cp >= HANGUL_SYLLABLE_BASE && cp <= HANGUL_SYLLABLE_END;
@@ -45,54 +48,103 @@ void appendJamoForSyllable(uint32_t cp, std::string &result) {
                   JAMO_FINAL_COUNT;
   int finalIdx = syllableIndex % JAMO_FINAL_COUNT;
 
-  result += encodeCodepoint(JAMO_INITIAL_BASE + initialIdx);
-  result += encodeCodepoint(JAMO_MEDIAL_BASE + medialIdx);
+  result += ChatterboxTextPreprocessor::encodeCodepoint(
+      JAMO_INITIAL_BASE + initialIdx);
+  result += ChatterboxTextPreprocessor::encodeCodepoint(
+      JAMO_MEDIAL_BASE + medialIdx);
   if (finalIdx > 0) {
-    result += encodeCodepoint(JAMO_FINAL_BASE + finalIdx - 1);
+    result += ChatterboxTextPreprocessor::encodeCodepoint(
+        JAMO_FINAL_BASE + finalIdx - 1);
   }
+}
+
+std::string extractReading(const char *feature) {
+  int fieldIdx = 0;
+  const char *start = feature;
+  while (*start) {
+    if (fieldIdx == IPADIC_READING_FIELD_INDEX) {
+      const char *end = start;
+      while (*end && *end != ',') {
+        ++end;
+      }
+      return std::string(start, end);
+    }
+    if (*start == ',') {
+      ++fieldIdx;
+    }
+    ++start;
+  }
+  return "";
 }
 
 } // namespace
 
-std::vector<uint32_t> decodeUtf8(const std::string &text) {
+void ChatterboxTextPreprocessor::MeCabDeleter::operator()(mecab_t *p) const {
+  if (p) {
+    mecab_destroy(p);
+  }
+}
+
+ChatterboxTextPreprocessor::~ChatterboxTextPreprocessor() = default;
+
+ChatterboxTextPreprocessor::ChatterboxTextPreprocessor(
+    ChatterboxTextPreprocessor &&) noexcept = default;
+
+ChatterboxTextPreprocessor &ChatterboxTextPreprocessor::operator=(
+    ChatterboxTextPreprocessor &&) noexcept = default;
+
+namespace {
+
+int detectSequenceLength(unsigned char byte) {
+  if (byte < 0x80) return 1;
+  if ((byte & 0xE0) == 0xC0) return 2;
+  if ((byte & 0xF0) == 0xE0) return 3;
+  if ((byte & 0xF8) == 0xF0) return 4;
+  return 0;
+}
+
+uint32_t extractLeadingBits(unsigned char byte, int seqLen) {
+  switch (seqLen) {
+  case 1: return byte;
+  case 2: return byte & 0x1F;
+  case 3: return byte & 0x0F;
+  case 4: return byte & 0x07;
+  default: return 0;
+  }
+}
+
+uint32_t decodeCodepointAt(const unsigned char *bytes, size_t pos, size_t len,
+                           int seqLen) {
+  uint32_t cp = extractLeadingBits(bytes[pos], seqLen);
+  for (int j = 1; j < seqLen && (pos + j) < len; ++j) {
+    cp = (cp << 6) | (bytes[pos + j] & 0x3F);
+  }
+  return cp;
+}
+
+} // namespace
+
+std::vector<uint32_t>
+ChatterboxTextPreprocessor::decodeUtf8(const std::string &text) {
   std::vector<uint32_t> codepoints;
   const auto *bytes = reinterpret_cast<const unsigned char *>(text.data());
   size_t len = text.size();
   size_t i = 0;
 
   while (i < len) {
-    uint32_t cp = 0;
-    int seqLen = 0;
-
-    if (bytes[i] < 0x80) {
-      cp = bytes[i];
-      seqLen = 1;
-    } else if ((bytes[i] & 0xE0) == 0xC0) {
-      cp = bytes[i] & 0x1F;
-      seqLen = 2;
-    } else if ((bytes[i] & 0xF0) == 0xE0) {
-      cp = bytes[i] & 0x0F;
-      seqLen = 3;
-    } else if ((bytes[i] & 0xF8) == 0xF0) {
-      cp = bytes[i] & 0x07;
-      seqLen = 4;
-    } else {
+    int seqLen = detectSequenceLength(bytes[i]);
+    if (seqLen == 0) {
       ++i;
       continue;
     }
-
-    for (int j = 1; j < seqLen && (i + j) < len; ++j) {
-      cp = (cp << 6) | (bytes[i + j] & 0x3F);
-    }
-
-    codepoints.push_back(cp);
+    codepoints.push_back(decodeCodepointAt(bytes, i, len, seqLen));
     i += seqLen;
   }
 
   return codepoints;
 }
 
-std::string encodeCodepoint(uint32_t cp) {
+std::string ChatterboxTextPreprocessor::encodeCodepoint(uint32_t cp) {
   std::string result;
   if (cp < 0x80) {
     result += static_cast<char>(cp);
@@ -112,7 +164,9 @@ std::string encodeCodepoint(uint32_t cp) {
   return result;
 }
 
-std::string decomposeKoreanToJamo(const std::string &text) {
+std::string
+ChatterboxTextPreprocessor::decomposeKoreanToJamo(const std::string &text)
+    const {
   std::vector<uint32_t> codepoints = decodeUtf8(text);
   std::string result;
   result.reserve(text.size() * 2);
@@ -128,7 +182,9 @@ std::string decomposeKoreanToJamo(const std::string &text) {
   return result;
 }
 
-std::string convertKatakanaToHiragana(const std::string &text) {
+std::string
+ChatterboxTextPreprocessor::convertKatakanaToHiragana(const std::string &text)
+    const {
   std::vector<uint32_t> codepoints = decodeUtf8(text);
   std::string result;
   result.reserve(text.size());
@@ -144,16 +200,17 @@ std::string convertKatakanaToHiragana(const std::string &text) {
   return result;
 }
 
-std::string convertChineseToCangjie(const std::string &text,
-                                    const CangjieTable &table) {
+std::string
+ChatterboxTextPreprocessor::convertChineseToCangjie(const std::string &text)
+    const {
   std::vector<uint32_t> codepoints = decodeUtf8(text);
   std::string result;
   result.reserve(text.size() * 3);
 
   for (uint32_t cp : codepoints) {
     if (isCjkIdeograph(cp)) {
-      auto it = table.find(cp);
-      if (it != table.end()) {
+      auto it = cangjieTable_.find(cp);
+      if (it != cangjieTable_.end()) {
         result += it->second;
       } else {
         result += encodeCodepoint(cp);
@@ -166,8 +223,8 @@ std::string convertChineseToCangjie(const std::string &text,
   return result;
 }
 
-CangjieTable loadCangjieTable(const std::string &tsvPath) {
-  CangjieTable table;
+void ChatterboxTextPreprocessor::loadCangjieTable(const std::string &tsvPath) {
+  cangjieTable_.clear();
   std::string content = qvac::ttslib::loadFileBytes(tsvPath);
   std::istringstream stream(content);
   std::string line;
@@ -185,24 +242,92 @@ CangjieTable loadCangjieTable(const std::string &tsvPath) {
     std::string code = line.substr(tabPos + 1);
 
     std::vector<uint32_t> charCp = decodeUtf8(character);
-    if (charCp.size() == 1 && table.find(charCp[0]) == table.end()) {
-      table[charCp[0]] = code;
+    if (charCp.size() == 1 && cangjieTable_.find(charCp[0]) == cangjieTable_.end()) {
+      cangjieTable_[charCp[0]] = code;
     }
   }
-
-  return table;
 }
 
-std::string preprocessText(const std::string &text, const std::string &language,
-                           const CangjieTable &cangjieTable) {
+void ChatterboxTextPreprocessor::loadMeCab(const std::string &dicPath) {
+  std::string rcPath = dicPath + "/mecabrc";
+  std::string arg = "-r " + rcPath + " -d " + dicPath;
+  mecabTagger_.reset(mecab_new2(arg.c_str()));
+  if (!mecabTagger_) {
+    const char *err = mecab_strerror(nullptr);
+    std::string detail = err != nullptr ? err : "unknown";
+    throw std::runtime_error("Failed to create MeCab tagger with dictionary: " +
+                             dicPath + " (" + detail + ")");
+  }
+}
+
+void ChatterboxTextPreprocessor::reset() {
+  cangjieTable_.clear();
+  mecabTagger_.reset();
+}
+
+size_t ChatterboxTextPreprocessor::cangjieTableSize() const {
+  return cangjieTable_.size();
+}
+
+namespace {
+
+bool isContentNode(const mecab_node_t *node) {
+  return node->stat != MECAB_BOS_NODE && node->stat != MECAB_EOS_NODE;
+}
+
+bool hasReading(const std::string &reading) {
+  return !reading.empty() && reading != "*";
+}
+
+} // namespace
+
+void ChatterboxTextPreprocessor::appendNodeReading(
+    const mecab_node_t *node, std::string &result) const {
+  std::string reading = extractReading(node->feature);
+  if (hasReading(reading)) {
+    result += convertKatakanaToHiragana(reading);
+    return;
+  }
+  result.append(node->surface, node->length);
+}
+
+std::string ChatterboxTextPreprocessor::buildHiraganaFromNodes(
+    const mecab_node_t *node) const {
+  std::string result;
+  for (; node; node = node->next) {
+    if (isContentNode(node)) {
+      appendNodeReading(node, result);
+    }
+  }
+  return result;
+}
+
+std::string ChatterboxTextPreprocessor::convertJapaneseWithMeCab(
+    const std::string &text) const {
+  if (!mecabTagger_) {
+    return convertKatakanaToHiragana(text);
+  }
+
+  const mecab_node_t *node =
+      mecab_sparse_tonode(mecabTagger_.get(), text.c_str());
+  if (!node) {
+    return convertKatakanaToHiragana(text);
+  }
+
+  return buildHiraganaFromNodes(node);
+}
+
+std::string
+ChatterboxTextPreprocessor::preprocess(const std::string &text,
+                                       const std::string &language) const {
   if (language == "ko") {
     return decomposeKoreanToJamo(text);
   }
   if (language == "ja") {
-    return convertKatakanaToHiragana(text);
+    return convertJapaneseWithMeCab(text);
   }
   if (language == "zh") {
-    return convertChineseToCangjie(text, cangjieTable);
+    return convertChineseToCangjie(text);
   }
   return text;
 }

@@ -129,6 +129,7 @@ endif()
 
 set(qvac-onnx_DIR "${CMAKE_CURRENT_SOURCE_DIR}/node_modules/@qvac/onnx/prebuilds/share/qvac-onnx/cmake")
 find_package(qvac-onnx CONFIG REQUIRED)
+find_package(mecab CONFIG REQUIRED)
 find_package(nlohmann_json CONFIG REQUIRED)
 find_package(unofficial-utf8proc CONFIG REQUIRED)
 if(TARGET utf8proc::utf8proc)
@@ -211,6 +212,7 @@ if((ANDROID OR (APPLE AND CMAKE_SYSTEM_NAME STREQUAL "iOS")) AND NOT MOBILE_DYNA
     ${qvac-lib-inference-tts}
     PRIVATE
       qvac-onnx::qvac-onnx-static
+      mecab::mecab
       tokenizers::tokenizers_cpp
       nlohmann_json::nlohmann_json
       ${QVAC_UTF8PROC_TARGET}
@@ -222,6 +224,7 @@ else()
     ${qvac-lib-inference-tts}
     PRIVATE
       qvac-onnx::headers
+      mecab::mecab
       tokenizers::tokenizers_cpp
       nlohmann_json::nlohmann_json
       ${QVAC_UTF8PROC_TARGET}
