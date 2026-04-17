@@ -134,7 +134,17 @@ if(USE_BERGAMOT)
   find_package(bergamot-translator CONFIG REQUIRED)
 endif()
 
-add_bare_module(qvac-lib-infer-nmtcpp EXPORTS)
+# Install GGML dynamic backend libs (.so) into the prebuild folder so they are
+# shipped in the APK/IPA.  Without this, ggml_backend_load_all() finds nothing
+# at runtime and model init fails on Android.  Pattern taken from llamacpp-llm.
+set(BACKEND_DL_LIBS "")
+if((ANDROID OR UNIX) AND NOT APPLE)
+  foreach(_backend ${GGML_AVAILABLE_BACKENDS})
+    list(APPEND BACKEND_DL_LIBS INSTALL TARGET ggml::${_backend})
+  endforeach()
+endif()
+
+add_bare_module(qvac-lib-infer-nmtcpp EXPORTS ${BACKEND_DL_LIBS})
 
 if(CMAKE_SYSTEM_NAME STREQUAL "Linux")
   target_link_options(${qvac-lib-infer-nmtcpp}_module PRIVATE -Wl,--exclude-libs,ALL)
@@ -208,6 +218,41 @@ target_link_libraries(
   PRIVATE
     ggml::ggml
 )
+
+# On Android the vcpkg ggml port builds with GGML_BACKEND_DL=ON (GPU backends
+# as shared libs) + GGML_CPU_STATIC=ON (CPU backend as static archive).  The
+# ggml-config.cmake skips creating ggml::ggml-cpu when GGML_BACKEND_DL is ON,
+# so the static CPU library is present on disk but not linked.  Without it the
+# GGML backend device registry is empty and model init fails with
+# "failed to initialize CPU backend".
+#
+# Fix: find libggml-cpu.a manually and force-link with --whole-archive so the
+# CPU backend's self-registration constructor is preserved by the linker.
+if(NOT TARGET ggml::ggml-cpu)
+  find_library(GGML_CPU_LIBRARY ggml-cpu HINTS "${GGML_LIB_DIR}" "${_VCPKG_INSTALLED_DIR}/${VCPKG_TARGET_TRIPLET}/lib")
+  if(GGML_CPU_LIBRARY)
+    find_library(GGML_BASE_LIBRARY ggml-base HINTS "${GGML_LIB_DIR}" "${_VCPKG_INSTALLED_DIR}/${VCPKG_TARGET_TRIPLET}/lib")
+    message(STATUS "Manually linking ggml-cpu: ${GGML_CPU_LIBRARY}")
+    target_link_libraries(
+      ${qvac-lib-infer-nmtcpp}
+      PRIVATE
+        -Wl,--whole-archive "${GGML_CPU_LIBRARY}" -Wl,--no-whole-archive
+    )
+    if(GGML_BASE_LIBRARY)
+      target_link_libraries(
+        ${qvac-lib-infer-nmtcpp}
+        PRIVATE
+          "${GGML_BASE_LIBRARY}"
+      )
+    endif()
+  endif()
+else()
+  target_link_libraries(
+    ${qvac-lib-infer-nmtcpp}
+    PRIVATE
+      ggml::ggml-cpu
+  )
+endif()
 
 # When using Bergamot, we configured SPM_PROTOBUF_PROVIDER=package, which means sentencepiece
 # uses external protobuf (from vcpkg) instead of its built-in protobuf-lite.

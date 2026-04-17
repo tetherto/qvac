@@ -121,6 +121,12 @@ static buft_list_t make_buft_list(nmt_context_params &params) {
   // Prio order: GPU -> CPU Extra -> CPU
   buft_list_t buft_list;
 
+  // When GGML is built with GGML_BACKEND_DL (e.g. via qvac-fabric on Android),
+  // backends are compiled as dynamic modules (.so) and must be loaded at
+  // runtime. Without this call the backend device registry is empty and model
+  // init fails.
+  ggml_backend_load_all();
+
   QLOG(qvac_lib_inference_addon_cpp::logger::Priority::DEBUG,
        "=== make_buft_list called ===");
   std::ostringstream oss1;

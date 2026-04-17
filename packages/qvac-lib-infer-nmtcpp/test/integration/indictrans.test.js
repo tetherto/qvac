@@ -11,8 +11,7 @@
  *   - No manual language prefixes needed (unlike raw model access)
  *
  * Platform Behavior:
- *   - iOS: Tests both CPU and GPU modes
- *   - Android: Tests CPU mode only (GPU init crashes with SIGABRT)
+ *   - Mobile (iOS/Android): Tests both CPU and GPU modes
  *   - Desktop: Tests CPU mode only
  *
  * Usage:
@@ -33,8 +32,7 @@ const {
 
 /**
  * Device configurations for testing
- * - iOS: Both CPU and GPU
- * - Android: CPU only (IndicTrans GPU init crashes with SIGABRT on Android)
+ * - Mobile (iOS/Android): Both CPU and GPU
  * - Desktop: CPU only
  */
 const ALL_DEVICE_CONFIGS = [
@@ -42,7 +40,7 @@ const ALL_DEVICE_CONFIGS = [
   { id: 'cpu', useGpu: false }
 ]
 
-const DEVICE_CONFIGS = platform === 'ios'
+const DEVICE_CONFIGS = isMobile
   ? ALL_DEVICE_CONFIGS
   : ALL_DEVICE_CONFIGS.filter(c => c.id === 'cpu')
 
