@@ -92,17 +92,30 @@ void TranslationModel::unload() {
 }
 
 void TranslationModel::load() {
-  // Extract backend loading config and initialize backends before any model
-  // loading
+  // Read backend loading config and initialize backends before any model
+  // loading. Keys are preserved in config_ so reload() can re-initialize with
+  // the same backends directory.
   std::string backendsDir;
   if (auto it = config_.find("backendsdir"); it != config_.end()) {
-    backendsDir = std::get<std::string>(it->second);
-    config_.erase(it);
+    if (const auto* value = std::get_if<std::string>(&it->second)) {
+      backendsDir = *value;
+    } else {
+      QLOG(
+          qvac_lib_inference_addon_cpp::logger::Priority::WARNING,
+          "[TRANSLATION MODEL] 'backendsdir' config value is not a string; "
+          "ignoring");
+    }
   }
   std::string openclCacheDir;
   if (auto it = config_.find("openclcachedir"); it != config_.end()) {
-    openclCacheDir = std::get<std::string>(it->second);
-    config_.erase(it);
+    if (const auto* value = std::get_if<std::string>(&it->second)) {
+      openclCacheDir = *value;
+    } else {
+      QLOG(
+          qvac_lib_inference_addon_cpp::logger::Priority::WARNING,
+          "[TRANSLATION MODEL] 'openclcachedir' config value is not a string; "
+          "ignoring");
+    }
   }
   backendsHandle_.emplace(backendsDir, openclCacheDir);
 

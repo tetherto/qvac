@@ -222,7 +222,7 @@ class TranslationNmtcpp {
   async _load () {
     const { use_gpu: useGpu, ...otherConfig } = this._config
 
-    if (!otherConfig.backendsDir) {
+    if (otherConfig.backendsDir === undefined) {
       otherConfig.backendsDir = path.join(__dirname, 'prebuilds')
     }
 
