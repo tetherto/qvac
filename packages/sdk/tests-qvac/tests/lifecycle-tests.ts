@@ -1,22 +1,32 @@
-import type { TestDefinition,  } from "@tetherto/qvac-test-suite";
+import type { TestDefinition } from "@tetherto/qvac-test-suite";
+
+interface LifecycleTestOptions {
+  dependency?: string;
+  estimatedDurationMs?: number;
+  suites?: string[];
+}
 
 const createLifecycleTest = (
   testId: string,
-  dependency: string = "none",
-  estimatedDurationMs: number = 30000,
+  options: LifecycleTestOptions = {},
 ): TestDefinition => ({
   testId,
   params: {},
   expectation: { validation: "type", expectedType: "string" },
-  metadata: { category: "lifecycle", dependency, estimatedDurationMs },
+  ...(options.suites ? { suites: options.suites } : {}),
+  metadata: {
+    category: "lifecycle",
+    dependency: options.dependency ?? "none",
+    estimatedDurationMs: options.estimatedDurationMs ?? 30000,
+  },
 });
 
-export const lifecycleSuspendResumeBasic = createLifecycleTest("lifecycle-suspend-resume-basic");
+export const lifecycleSuspendResumeBasic = createLifecycleTest("lifecycle-suspend-resume-basic", { suites: ["smoke"] });
 export const lifecycleSuspendIdempotent = createLifecycleTest("lifecycle-suspend-idempotent");
 export const lifecycleResumeIdempotent = createLifecycleTest("lifecycle-resume-idempotent");
-export const lifecycleSuspendResumeInference = createLifecycleTest("lifecycle-suspend-resume-inference", "llm", 60000);
+export const lifecycleSuspendResumeInference = createLifecycleTest("lifecycle-suspend-resume-inference", { dependency: "llm", estimatedDurationMs: 60000 });
 export const lifecycleRapidToggle = createLifecycleTest("lifecycle-rapid-toggle");
-export const lifecycleSuspendDuringInference = createLifecycleTest("lifecycle-suspend-during-inference", "llm", 60000);
+export const lifecycleSuspendDuringInference = createLifecycleTest("lifecycle-suspend-during-inference", { dependency: "llm", estimatedDurationMs: 60000 });
 
 export const lifecycleTests = [
   lifecycleSuspendResumeBasic,
