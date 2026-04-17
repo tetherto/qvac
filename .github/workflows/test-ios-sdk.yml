@@ -22,6 +22,14 @@ on:
         description: "Filter tests by category or testId prefix (comma-separated)"
         required: false
         type: string
+      suite:
+        description: "Suite filter (e.g. 'smoke'). Empty = all tests."
+        required: false
+        type: string
+      exclude-suite:
+        description: "Exclude suites (comma-separated)"
+        required: false
+        type: string
       device-farm-timeout:
         description: "Maximum time in minutes to keep Device Farm session alive."
         required: false
@@ -633,17 +641,31 @@ jobs:
           echo "   Run ID: ${{ needs.build.outputs.runId }}"
           echo "   Consumer timeout: ${{ inputs.consumer-timeout }}s"
           echo "   Filter: ${{ inputs.filter || '(none)' }}"
+          echo "   Suite: ${{ inputs.suite || '(all)' }}"
+          echo "   Exclude suite: ${{ inputs.exclude-suite || '(none)' }}"
 
           FILTER_ARG=""
           if [ -n "${{ inputs.filter }}" ]; then
             FILTER_ARG="--filter=${{ inputs.filter }}"
           fi
 
+          SUITE_ARG=""
+          if [ -n "${{ inputs.suite }}" ]; then
+            SUITE_ARG="--suite=${{ inputs.suite }}"
+          fi
+
+          EXCLUDE_SUITE_ARG=""
+          if [ -n "${{ inputs.exclude-suite }}" ]; then
+            EXCLUDE_SUITE_ARG="--exclude-suite=${{ inputs.exclude-suite }}"
+          fi
+
           npx qvac-test run:producer \
             --runId "${{ needs.build.outputs.runId }}" \
             --consumer-timeout "${{ inputs.consumer-timeout }}" \
             --config . \
-            $FILTER_ARG
+            $FILTER_ARG \
+            $SUITE_ARG \
+            $EXCLUDE_SUITE_ARG
 
       - name: Upload results
         if: always()
