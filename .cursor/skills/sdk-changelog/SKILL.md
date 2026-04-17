@@ -25,12 +25,22 @@ Generate changelogs for SDK pod packages following the monorepo GitFlow.
 
 If the user doesn't specify, ask which SDK pod package they want to generate a changelog for.
 
-### Step 2: Check for Tags
+### Step 2: Fetch Tags and Resolve Base
+
+Tags live on the **upstream** remote (tetherto/qvac), not the contributor's fork.
+The script fetches from `upstream` first, falling back to `origin`.
 
 Run `git tag --list "<package>-v*" --sort=-v:refname` to check for existing version tags.
 
-- If tags exist: proceed normally (latest tag used as base)
+- If tags exist: the script auto-detects the release type from `package.json` version:
+  - **Minor/major release** (version ends in `.0`, e.g. `0.9.0`): uses the latest `.0` tag as base (e.g. `sdk-v0.8.0`), skipping patch tags
+  - **Patch release** (version ends in non-zero patch, e.g. `0.8.4`): uses the absolute latest tag as base (e.g. `sdk-v0.8.3`)
 - If no tags: ask the user for `--base-commit` and `--base-version` (migration scenario)
+
+**Why this matters:** patches ship on separate release branches and get backmerged into main.
+Using the latest patch tag as base for a minor release would miss all PRs that landed on main
+between the previous minor release and the last backmerge. The correct base for a minor release
+is the previous minor's `.0` tag.
 
 ### Step 3: Generate Raw Changelog
 
@@ -53,12 +63,13 @@ See [references/changelog-llm-format.md](references/changelog-llm-format.md) for
 
 ## CLI Parameters
 
-| Flag             | Required | Description                                             |
-| ---------------- | -------- | ------------------------------------------------------- |
-| `--package`      | Yes      | Package name (e.g., `sdk`)                         |
-| `--base-commit`  | No       | Initial commit SHA for migration (overrides tag lookup) |
-| `--base-version` | No       | Version label for base commit (display only)            |
-| `--dry-run`      | No       | Preview output without writing files                    |
+| Flag             | Required | Description                                                        |
+| ---------------- | -------- | ------------------------------------------------------------------ |
+| `--package`      | Yes      | Package name (e.g., `sdk`)                                         |
+| `--base-commit`  | No       | Initial commit SHA for migration (overrides tag lookup)            |
+| `--base-version` | No       | Version label for base commit (display only)                       |
+| `--release-type` | No       | `minor` or `patch` (auto-detected from package.json version)       |
+| `--dry-run`      | No       | Preview output without writing files                               |
 
 ## Output
 
@@ -76,12 +87,12 @@ Additionally:
 
 ## Tag Format
 
-Tags follow the pattern: `<package>-v<x.y.z>`
+Tags follow the pattern: `<package>-v<x.y.z>` and are created on **upstream** (not the fork).
 
 Examples:
 
-- `sdk-v1.0.0`
-- `docs-v0.1.0`
+- `sdk-v0.8.0` (minor — used as base for next minor release)
+- `sdk-v0.8.1` (patch — used as base for next patch release)
 - `rag-v2.0.0`
 
 ### Step 5: Update NOTICE file for the target package
