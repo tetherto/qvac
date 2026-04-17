@@ -360,16 +360,28 @@ LlamaModel
 
 ## The plan
 
-Two PRs, sequential, both behaviorally no-op, both gated on the full existing test suite passing unchanged.
+One PR, behaviorally no-op at the feature level, gated on the full existing test suite passing unchanged.
 
-| \# | PR title | What it does | Risk | Review effort |
+Implementation should be split across **commit-sized units** (3 or more commits) to keep review and bisect quality high.
+
+| \# | Commit title (example) | What it does | Risk | Review effort |
 | :---- | :---- | :---- | :---- | :---- |
-| 1 | `refactor(llamacpp-llm): extract ToolsCompactController` | Creates the controller. Moves validation, tokenize hook, eval hook, trim decision, debug snapshot into it. | Low | 1 reviewer, \~1 day |
-| 2 | `refactor(llamacpp-llm): extract ContextSlider helpers` | Replaces the four slide-related functions (two per context) with calls into `trySlidePrefill` / `trySlideGeneration`. | Low | 1 reviewer, \~1 day |
+| 1 | `refactor(llamacpp-llm): extract tools compact controller` | Creates the controller. Moves validation, tokenize hook, eval hook, trim decision, debug snapshot into it. | Low | Small |
+| 2 | `refactor(llamacpp-llm): extract context slider helpers` | Replaces the four slide-related functions (two per context) with calls into `trySlidePrefill` / `trySlideGeneration`. | Low | Small |
+| 3 | `test(llamacpp-llm): migrate tools compact tests to deterministic unit coverage` | Moves/removes model-dependent duplicate tests and adds model-free controller tests that run on CI. | Low | Small |
+| 4+ | `fix/chore(llamacpp-llm): targeted follow-ups as needed` | Optional cleanup (dead fields, UB guardrails, minor polish) kept in separate commits if required. | Low | Small |
 
-Both should land within a week of merging PR \#1379.
+The full set should land as one cohesive PR.
 
-A third small PR can follow to delete the dead `firstToolIndex`, close the empty-`chatMsgs` UB in `tokenizeChat`, and move the existing "rejection" tests from `test_model_tools_qwen3.cpp` (model-required, CI-skipped) into the new controller test file (always runs). This is a **fix**, not a refactor — easier to scope and review on its own.
+Within that PR, keep any fix-oriented changes (for example dead `firstToolIndex`, empty-`chatMsgs` UB handling, or test migration cleanups) as separate commits so they remain easy to review and cherry-pick.
+
+### Suggested commit messages
+
+1. `mod: extract tools compact controller from llm contexts`
+2. `mod: extract shared context slider helpers for text and mtmd`
+3. `test: migrate tools compact coverage to deterministic unit tests`
+4. `fix: harden tools compact edge cases and remove dead fields` *(optional, only if fixes are included)*
+5. `doc: update tools compact structure and migration docs` *(optional, if docs are adjusted during implementation)*
 
 ---
 
