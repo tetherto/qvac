@@ -81,11 +81,9 @@ Split tool block:
 
 ## Model Support
 
-`tools_compact` is supported for these model architectures:
+`tools_compact` is currently supported for:
 
 - `qwen3` (marker: `<tool_call>`)
-- `llama` (marker: `<|python_tag|>`)
-- `mistral` (marker: `[TOOL_CALLS]`)
 
 If enabled on any other architecture, the flag is ignored and a warning is logged.
 

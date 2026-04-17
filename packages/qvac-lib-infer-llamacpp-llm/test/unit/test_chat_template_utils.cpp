@@ -39,26 +39,16 @@ TEST_F(ChatTemplateUtilsTest, IsQwen3ModelWithNullptr) {
   EXPECT_FALSE(isQwen3Model(nullptr));
 }
 
-TEST_F(ChatTemplateUtilsTest, SelectToolsCompactProfileForQwen3) {
-  ToolsCompactProfile profile = selectToolsCompactProfile("qwen3");
-  EXPECT_EQ(profile.toolCallStartMarker, "<tool_call>");
+TEST_F(ChatTemplateUtilsTest, SelectToolsCompactMarkerForQwen3) {
+  auto marker = selectToolsCompactMarker("qwen3");
+  ASSERT_TRUE(marker.has_value());
+  EXPECT_EQ(marker.value(), "<tool_call>");
 }
 
-TEST_F(ChatTemplateUtilsTest, SelectToolsCompactProfileForLlama) {
-  ToolsCompactProfile profile = selectToolsCompactProfile("llama");
-  EXPECT_EQ(profile.toolCallStartMarker, "<|python_tag|>");
-}
-
-TEST_F(ChatTemplateUtilsTest, SelectToolsCompactProfileForMistral) {
-  ToolsCompactProfile profile = selectToolsCompactProfile("mistral");
-  EXPECT_EQ(profile.toolCallStartMarker, "[TOOL_CALLS]");
-}
-
-TEST_F(ChatTemplateUtilsTest, SupportedToolsCompactArchitecturesAllowList) {
-  EXPECT_TRUE(isToolsCompactSupportedArchitecture("qwen3"));
-  EXPECT_TRUE(isToolsCompactSupportedArchitecture("llama"));
-  EXPECT_TRUE(isToolsCompactSupportedArchitecture("mistral"));
-  EXPECT_FALSE(isToolsCompactSupportedArchitecture("gemma"));
+TEST_F(ChatTemplateUtilsTest, SelectToolsCompactMarkerForUnsupportedArchitecture) {
+  EXPECT_FALSE(selectToolsCompactMarker("llama").has_value());
+  EXPECT_FALSE(selectToolsCompactMarker("mistral").has_value());
+  EXPECT_FALSE(selectToolsCompactMarker("gemma").has_value());
 }
 
 TEST_F(

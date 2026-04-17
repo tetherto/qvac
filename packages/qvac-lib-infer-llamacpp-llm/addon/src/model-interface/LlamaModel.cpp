@@ -721,17 +721,16 @@ void LlamaModel::commonParamsParse(
 
   if (outToolsCompact) {
     auto arch = metadata_.tryGetString("general.architecture");
-    outToolsCompactProfile = qvac_lib_inference_addon_llama::utils::
-        selectToolsCompactProfile(arch.value_or(""));
-    if (
-        !arch.has_value() ||
-        !qvac_lib_inference_addon_llama::utils::
-            isToolsCompactSupportedArchitecture(arch.value())) {
+    auto marker = qvac_lib_inference_addon_llama::utils::selectToolsCompactMarker(
+        arch.value_or(""));
+    if (!marker.has_value()) {
       QLOG_IF(
           Priority::WARNING,
-          "[LlamaModel] tools_compact is supported for qwen3/llama/mistral "
-          "architectures only, ignoring\n");
+          "[LlamaModel] tools_compact is supported for qwen3 architecture "
+          "only, ignoring\n");
       outToolsCompact = false;
+    } else {
+      outToolsCompactProfile.toolCallStartMarker = marker.value();
     }
   }
 

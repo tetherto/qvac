@@ -24,7 +24,7 @@ struct PromptLayout {
 
 /// Model/template-specific markers used by tools_compact chain detection.
 struct ToolsCompactProfile {
-  std::string toolCallStartMarker = "<tool_call>";
+  std::string toolCallStartMarker;
 };
 
 /// Controller for the tools_compact feature.
@@ -103,7 +103,8 @@ public:
 
   // ── Lifecycle ────────────────────────────────────────────────────────
 
-  /// Resets all state for a new inference session.
+  /// Resets inference state for a new session.
+  /// Keeps the last captured debug snapshot from onGenerationComplete.
   void reset() noexcept;
 
   // ── Debug stats (read by LlamaModel::runtimeDebugStats) ──────────────

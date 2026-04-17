@@ -12,11 +12,11 @@ Capture post-refactor follow-up actions after implementing `structure-proposal.m
 - Current behavior checks only `"<tool_call>"`.
 - Risk: compaction chain-completion detection is tied to Qwen-style output and is not portable to other model families / template conventions.
 
-### 2) Scope decision required: Qwen-only gating for `tools_compact`
+### 2) Phase 2 decision: keep Qwen-only gating for `tools_compact`
 
 - Location: `LlamaModel::commonParamsParse`
-- Current behavior disables `tools_compact` unless `general.architecture == "qwen3"`.
-- This is acceptable only if product scope intentionally remains Qwen-only for now.
+- Decision: keep `tools_compact` gated to `general.architecture == "qwen3"` in this cycle.
+- Gate implementation remains profile-driven so additional families can be added in a follow-up without reworking controller wiring.
 
 ### 3) Alignment decision required: strict prompt contract wording vs runtime behavior
 
@@ -58,14 +58,10 @@ Not acceptable divergence (without explicit decision + docs update):
 
 ## Phase 2 - Product/scope decisions
 
-1. Decide whether `tools_compact` remains Qwen-only in this release cycle.
-2. If **yes**:
-   - keep architecture gate,
-   - document gate explicitly in all relevant docs.
-3. If **no**:
-   - widen architecture allow-list,
-   - add per-family marker mapping,
-   - add family-specific tests.
+1. Decision: `tools_compact` remains Qwen-only in this release cycle.
+2. Keep architecture gate and profile plumbing in place (Qwen profile active, other families blocked).
+3. Document Qwen-only scope explicitly in `docs/tools-compact.md` and warning messages.
+4. Defer allow-list expansion and family-specific markers/tests to a later phase.
 
 ## Phase 3 - Contract alignment (docs vs code)
 
@@ -83,7 +79,7 @@ Not acceptable divergence (without explicit decision + docs update):
 ## Completion Checklist
 
 - [ ] Chain completion marker is not hardcoded to Qwen syntax.
-- [ ] Support matrix (Qwen-only vs multi-family) is explicitly decided and documented.
+- [x] Support matrix (Qwen-only vs multi-family) is explicitly decided and documented.
 - [ ] Prompt validation contract is unambiguous and tested.
 - [ ] Unit tests cover marker detection and chosen contract behavior.
 - [ ] Docs reflect real behavior and implementation scope.

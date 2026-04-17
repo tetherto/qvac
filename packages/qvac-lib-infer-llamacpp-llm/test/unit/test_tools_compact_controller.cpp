@@ -13,6 +13,12 @@ common_chat_tool makeTool(const std::string& name = "tool") {
   tool.name = name;
   return tool;
 }
+
+ToolsCompactProfile makeQwen3Profile() {
+  ToolsCompactProfile profile;
+  profile.toolCallStartMarker = "<tool_call>";
+  return profile;
+}
 } // namespace
 
 TEST(ToolsCompactControllerTest, EnabledReturnsTrueWhenConstructedWithTrue) {
@@ -265,7 +271,7 @@ TEST(ToolsCompactControllerTest, GenerationCompleteDegenerateBoundaryResetsState
 }
 
 TEST(ToolsCompactControllerTest, GenerationCompleteNoTrimWhenToolCallContinuesChain) {
-  ToolsCompactController controller(true);
+  ToolsCompactController controller(true, makeQwen3Profile());
   constexpr llama_pos firstMsgTokens = 50;
   controller.onTokenize(140, 80);
   controller.onEvalComplete(140, 140); // anchor = 80
@@ -309,6 +315,16 @@ TEST(
   EXPECT_EQ(controller.anchor(), -1);
 }
 
+TEST(ToolsCompactControllerTest, GenerationCompleteNoTrimWhenProfileMarkerIsEmpty) {
+  ToolsCompactController controller(true);
+  constexpr llama_pos firstMsgTokens = 50;
+  controller.onTokenize(140, 80);
+  controller.onEvalComplete(140, 140); // anchor = 80
+  auto decision = controller.onGenerationComplete("final answer", 120, firstMsgTokens);
+  EXPECT_FALSE(decision.trim);
+  EXPECT_EQ(controller.anchor(), 80);
+}
+
 TEST(ToolsCompactControllerTest, GenerationCompleteNoTrimWhenNPastNotPastAnchor) {
   ToolsCompactController controller(true);
   constexpr llama_pos firstMsgTokens = 50;
@@ -320,7 +336,7 @@ TEST(ToolsCompactControllerTest, GenerationCompleteNoTrimWhenNPastNotPastAnchor)
 }
 
 TEST(ToolsCompactControllerTest, GenerationCompleteTrimDecisionAndResetWhenChainDone) {
-  ToolsCompactController controller(true);
+  ToolsCompactController controller(true, makeQwen3Profile());
   constexpr llama_pos firstMsgTokens = 50;
   controller.onTokenize(140, 80);
   controller.onEvalComplete(140, 140); // anchor = 80
@@ -335,7 +351,7 @@ TEST(ToolsCompactControllerTest, GenerationCompleteTrimDecisionAndResetWhenChain
 }
 
 TEST(ToolsCompactControllerTest, DebugSnapshotStaysConsistentAcrossReset) {
-  ToolsCompactController controller(true);
+  ToolsCompactController controller(true, makeQwen3Profile());
   constexpr llama_pos firstMsgTokens = 50;
   controller.onTokenize(140, 80);
   controller.onEvalComplete(140, 140);

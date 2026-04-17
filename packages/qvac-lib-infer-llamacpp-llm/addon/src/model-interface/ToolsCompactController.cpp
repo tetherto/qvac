@@ -16,11 +16,7 @@ using namespace qvac_lib_inference_addon_cpp::logger;
 
 ToolsCompactController::ToolsCompactController(
     bool enabled, ToolsCompactProfile profile)
-    : enabled_(enabled), profile_(std::move(profile)) {
-  if (profile_.toolCallStartMarker.empty()) {
-    profile_.toolCallStartMarker = "<tool_call>";
-  }
-}
+    : enabled_(enabled), profile_(std::move(profile)) {}
 
 bool ToolsCompactController::enabled() const noexcept { return enabled_; }
 
@@ -213,6 +209,14 @@ ToolsCompactController::onGenerationComplete(
 
   // Check for usable boundary and if we have tokens to trim
   if (!usableBoundary(firstMsgTokens) || nPast <= nPastBeforeTools_) {
+    return decision;
+  }
+
+  if (profile_.toolCallStartMarker.empty()) {
+    QLOG_IF(
+        Priority::WARNING,
+        "[ToolsCompactController] tools_compact profile marker is empty; "
+        "skipping post-generation tools trim\n");
     return decision;
   }
 

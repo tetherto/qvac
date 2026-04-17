@@ -78,30 +78,13 @@ bool isQwen3Model(const ::llama_model* model) {
   return false;
 }
 
-ToolsCompactProfile selectToolsCompactProfile(const std::string& architecture) {
+std::optional<std::string>
+selectToolsCompactMarker(const std::string& architecture) {
   const std::string archStr = normalizeArchitecture(architecture);
   if (archStr == "qwen3") {
-    return ToolsCompactProfile{.toolCallStartMarker = "<tool_call>"};
+    return std::string("<tool_call>");
   }
-  if (archStr == "llama") {
-    return ToolsCompactProfile{.toolCallStartMarker = "<|python_tag|>"};
-  }
-  if (archStr == "mistral") {
-    return ToolsCompactProfile{.toolCallStartMarker = "[TOOL_CALLS]"};
-  }
-  return ToolsCompactProfile{};
-}
-
-ToolsCompactProfile selectToolsCompactProfile(const ::llama_model* model) {
-  if (auto arch = getModelArchitecture(model); arch.has_value()) {
-    return selectToolsCompactProfile(arch.value());
-  }
-  return ToolsCompactProfile{};
-}
-
-bool isToolsCompactSupportedArchitecture(const std::string& architecture) {
-  const std::string archStr = normalizeArchitecture(architecture);
-  return archStr == "qwen3" || archStr == "llama" || archStr == "mistral";
+  return std::nullopt;
 }
 
 std::string getChatTemplateForModel(
@@ -115,16 +98,6 @@ std::string getChatTemplateForModel(
   if (architecture.has_value() && architecture.value() == "qwen3") {
     return toolsCompact ? getToolsDynamicQwen3Template()
                         : getFixedQwen3Template();
-  }
-  if (architecture.has_value() && architecture.value() == "llama") {
-    // Keep model-provided template for now; adding an explicit Llama template
-    // is a separate family-template edit.
-    return "";
-  }
-  if (architecture.has_value() && architecture.value() == "mistral") {
-    // Keep model-provided template for now; adding an explicit Mistral template
-    // is a separate family-template edit.
-    return "";
   }
 
   return "";
