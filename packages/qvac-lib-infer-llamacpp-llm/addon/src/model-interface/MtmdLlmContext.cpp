@@ -151,6 +151,12 @@ void MtmdLlmContext::tokenizeChat(
     const std::vector<common_chat_msg>& chatMsgs,
     const std::vector<common_chat_tool>& tools, mtmd::input_chunks& chunks,
     bool isCacheLoaded) {
+  if (chatMsgs.empty()) {
+    std::string errorMsg =
+        string_format("[MtmdLlm] %s: no chat messages provided\n", __func__);
+    throw qvac_errors::StatusError(ADDON_ID, toString(EmptyPrompt), errorMsg);
+  }
+
   common_chat_templates_inputs inputs;
   std::string formattedChat;
 

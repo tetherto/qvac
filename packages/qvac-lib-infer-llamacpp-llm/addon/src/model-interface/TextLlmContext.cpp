@@ -187,6 +187,12 @@ void TextLlmContext::tokenizeChat(
     const std::vector<common_chat_msg>& chatMsgs,
     const std::vector<common_chat_tool>& tools,
     std::vector<llama_token>& inputTokens, bool isCacheLoaded) {
+  if (chatMsgs.empty()) {
+    std::string errorMsg =
+        string_format("[TextLlm] %s: no chat messages provided\n", __func__);
+    throw qvac_errors::StatusError(ADDON_ID, toString(EmptyPrompt), errorMsg);
+  }
+
   std::string prompt;
   common_chat_templates_inputs inputs;
 

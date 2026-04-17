@@ -150,6 +150,13 @@ TEST(
   EXPECT_EQ(controller.anchor(), 80);
 }
 
+TEST(ToolsCompactControllerTest, OnTokenizeWithNoToolsLeavesAnchorUnset) {
+  ToolsCompactController controller(true);
+  controller.onTokenize(120, 0);
+  controller.onEvalComplete(120, 120);
+  EXPECT_EQ(controller.anchor(), -1);
+}
+
 TEST(ToolsCompactControllerTest, OnTokenizeAndEvalNoOpWhenDisabled) {
   ToolsCompactController controller(false);
   controller.onTokenize(120, 80);
