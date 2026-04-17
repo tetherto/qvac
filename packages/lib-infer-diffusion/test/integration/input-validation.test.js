@@ -184,3 +184,260 @@ test('non-FLUX model | does NOT throw for img2img without prediction', async (t)
     )
   }
 })
+
+// ---------- init_images (multi-reference "fusion") guards ----------
+
+test('init_images | rejects combining init_image + init_images', async (t) => {
+  const model = new ImgStableDiffusion(
+    {
+      logger: console,
+      diskPath: '.',
+      modelName: 'flux-2-klein-4b-Q8_0.gguf',
+      llmModel: 'Qwen3-4B-Q4_K_M.gguf'
+    },
+    { threads: 1, prediction: 'flux2_flow' }
+  )
+
+  try {
+    await model.run({
+      prompt: 'test @image1',
+      init_image: VALID_PNG_HEADER,
+      init_images: [VALID_PNG_HEADER, VALID_JPEG_HEADER]
+    })
+    t.fail('should have thrown')
+  } catch (err) {
+    t.ok(
+      /mutually exclusive/.test(err.message),
+      'error mentions mutual exclusion'
+    )
+  }
+})
+
+test('init_images | rejects non-FLUX2 model (no llmModel)', async (t) => {
+  const model = new ImgStableDiffusion(
+    {
+      logger: console,
+      diskPath: '.',
+      modelName: 'stable-diffusion-v2-1-Q4_0.gguf'
+    },
+    { threads: 1 }
+  )
+
+  try {
+    await model.run({
+      prompt: 'test @image1 @image2',
+      init_images: [VALID_PNG_HEADER, VALID_JPEG_HEADER]
+    })
+    t.fail('should have thrown')
+  } catch (err) {
+    t.ok(
+      /multi-reference fusion\) requires a FLUX2 model/.test(err.message),
+      'error mentions FLUX2 requirement'
+    )
+  }
+})
+
+test('init_images | rejects FLUX model without prediction=flux2_flow', async (t) => {
+  const model = new ImgStableDiffusion(
+    {
+      logger: console,
+      diskPath: '.',
+      modelName: 'flux-2-klein-4b-Q8_0.gguf',
+      llmModel: 'Qwen3-4B-Q4_K_M.gguf'
+    },
+    { threads: 1 /* no prediction */ }
+  )
+
+  try {
+    await model.run({
+      prompt: 'test @image1 @image2',
+      init_images: [VALID_PNG_HEADER, VALID_JPEG_HEADER]
+    })
+    t.fail('should have thrown')
+  } catch (err) {
+    t.ok(
+      /multi-reference fusion\) requires a FLUX2 model/.test(err.message),
+      'error message mentions FLUX2 / fusion'
+    )
+  }
+})
+
+test('init_images | rejects non-Uint8Array entries', async (t) => {
+  const model = new ImgStableDiffusion(
+    {
+      logger: console,
+      diskPath: '.',
+      modelName: 'flux-2-klein-4b-Q8_0.gguf',
+      llmModel: 'Qwen3-4B-Q4_K_M.gguf'
+    },
+    { threads: 1, prediction: 'flux2_flow' }
+  )
+
+  try {
+    await model.run({
+      prompt: 'test @image1 @image2',
+      init_images: [VALID_PNG_HEADER, 'not-a-buffer']
+    })
+    t.fail('should have thrown')
+  } catch (err) {
+    t.ok(
+      /init_images\[1\] must be a non-empty Uint8Array/.test(err.message),
+      'error names the offending index'
+    )
+  }
+})
+
+test('init_images | rejects empty Uint8Array entry', async (t) => {
+  const model = new ImgStableDiffusion(
+    {
+      logger: console,
+      diskPath: '.',
+      modelName: 'flux-2-klein-4b-Q8_0.gguf',
+      llmModel: 'Qwen3-4B-Q4_K_M.gguf'
+    },
+    { threads: 1, prediction: 'flux2_flow' }
+  )
+
+  try {
+    await model.run({
+      prompt: 'test @image1 @image2',
+      init_images: [VALID_PNG_HEADER, new Uint8Array(0)]
+    })
+    t.fail('should have thrown')
+  } catch (err) {
+    t.ok(
+      /init_images\[1\] must be a non-empty Uint8Array/.test(err.message),
+      'error rejects empty buffer'
+    )
+  }
+})
+
+test('init_images | warns when prompt is missing all @imageN placeholders', async (t) => {
+  const warnings = []
+  const logger = {
+    error: () => {},
+    warn: (msg) => warnings.push(msg),
+    info: () => {},
+    debug: () => {}
+  }
+
+  const model = new ImgStableDiffusion(
+    {
+      logger,
+      diskPath: '.',
+      modelName: 'flux-2-klein-4b-Q8_0.gguf',
+      llmModel: 'Qwen3-4B-Q4_K_M.gguf'
+    },
+    { threads: 1, prediction: 'flux2_flow' }
+  )
+
+  try {
+    // Prompt references NONE of @image1, @image2 — warn, don't throw.
+    await model.run({
+      prompt: 'just a plain prompt with no references',
+      init_images: [VALID_PNG_HEADER, VALID_JPEG_HEADER]
+    })
+  } catch (_err) {
+    // will fail later because the model isn't actually loaded — that's fine.
+  }
+
+  t.ok(
+    warnings.some((w) => /If multiple images have been selected/.test(String(w))),
+    'logs the @imageN prompt-check warning'
+  )
+})
+
+test('init_images | warns when prompt references only some @imageN', async (t) => {
+  const warnings = []
+  const logger = {
+    error: () => {},
+    warn: (msg) => warnings.push(msg),
+    info: () => {},
+    debug: () => {}
+  }
+
+  const model = new ImgStableDiffusion(
+    {
+      logger,
+      diskPath: '.',
+      modelName: 'flux-2-klein-4b-Q8_0.gguf',
+      llmModel: 'Qwen3-4B-Q4_K_M.gguf'
+    },
+    { threads: 1, prediction: 'flux2_flow' }
+  )
+
+  try {
+    await model.run({
+      prompt: 'mix of @image1 only, nothing else',
+      init_images: [VALID_PNG_HEADER, VALID_JPEG_HEADER]
+    })
+  } catch (_err) {
+    // expected — no model loaded
+  }
+
+  t.ok(
+    warnings.some((w) => /missing @image2/.test(String(w))),
+    'logs a "missing @image2" warning when only some refs are mentioned'
+  )
+})
+
+test('init_images | logs "fusion" mode info message', async (t) => {
+  const infos = []
+  const logger = {
+    error: () => {},
+    warn: () => {},
+    info: (msg) => infos.push(msg),
+    debug: () => {}
+  }
+
+  const model = new ImgStableDiffusion(
+    {
+      logger,
+      diskPath: '.',
+      modelName: 'flux-2-klein-4b-Q8_0.gguf',
+      llmModel: 'Qwen3-4B-Q4_K_M.gguf'
+    },
+    { threads: 1, prediction: 'flux2_flow' }
+  )
+
+  try {
+    await model.run({
+      prompt: '@image1 and @image2 fused',
+      init_images: [VALID_PNG_HEADER, VALID_JPEG_HEADER]
+    })
+  } catch (_err) {
+    // expected — no model loaded
+  }
+
+  t.ok(
+    infos.some((m) => /entering "fusion" mode/.test(String(m))),
+    'addon notifies the user that SD is entering fusion mode'
+  )
+})
+
+test('init_image | still works on FLUX2 (regression — single-image path unchanged)', async (t) => {
+  const model = new ImgStableDiffusion(
+    {
+      logger: console,
+      diskPath: '.',
+      modelName: 'flux-2-klein-4b-Q8_0.gguf',
+      llmModel: 'Qwen3-4B-Q4_K_M.gguf'
+    },
+    { threads: 1, prediction: 'flux2_flow' }
+  )
+
+  // Single-image path must NOT trigger any of the new init_images errors.
+  try {
+    await model.run({ prompt: 'test', init_image: VALID_PNG_HEADER })
+    t.fail('should have thrown (no model loaded)')
+  } catch (err) {
+    t.absent(
+      /mutually exclusive/.test(err.message),
+      'single init_image does not trip the mutual-exclusion guard'
+    )
+    t.absent(
+      /multi-reference fusion/.test(err.message),
+      'single init_image does not trip the fusion/FLUX2 guard'
+    )
+  }
+})

@@ -221,10 +221,28 @@ class ImgStableDiffusion extends BaseInference {
    * @param {Uint8Array} [params.init_image]        - Source image bytes for img2img (PNG/JPEG).
    *                                                   FLUX2: in-context conditioning (ref_images).
    *                                                   Others: SDEdit (init_image + strength).
+   * @param {Uint8Array[]} [params.init_images]     - **FLUX2-only**. Array of reference images
+   *                                                   (PNG/JPEG) for multi-reference "fusion"
+   *                                                   conditioning. Addressed in the prompt as
+   *                                                   `@image1 … @imageN`. Mutually exclusive
+   *                                                   with `init_image`.
    * @returns {Promise<QvacResponse>}
    */
   async _runInternal (params) {
-    // Validate init_image is Uint8Array if provided
+    // ── init_image / init_images validation ────────────────────────────────
+    const hasInitImages =
+      Array.isArray(params.init_images) && params.init_images.length > 0
+
+    // Mutual exclusion — pick one, not both.
+    if (params.init_image != null && hasInitImages) {
+      throw new Error(
+        'init_image and init_images are mutually exclusive — pick one. ' +
+        'Use init_images (with FLUX2) for multi-reference "fusion" mode, ' +
+        'or init_image for single-image conditioning (SDEdit / FLUX single-ref).'
+      )
+    }
+
+    // Single-image type check (Uint8Array only).
     if (params.init_image != null && !(params.init_image instanceof Uint8Array)) {
       throw new Error(
         'init_image must be a Uint8Array (e.g. fs.readFileSync("image.png")). ' +
@@ -232,13 +250,73 @@ class ImgStableDiffusion extends BaseInference {
       )
     }
 
-    // FLUX models require an explicit prediction type for img2img.
+    // Multi-image: every entry must be a non-empty Uint8Array.
+    if (hasInitImages) {
+      for (let i = 0; i < params.init_images.length; i++) {
+        const img = params.init_images[i]
+        if (!(img instanceof Uint8Array) || img.length === 0) {
+          throw new Error(
+            `init_images[${i}] must be a non-empty Uint8Array (PNG/JPEG bytes). ` +
+            'Got: ' + (img === null ? 'null' : typeof img)
+          )
+        }
+      }
+    }
+
+    // Multi-reference fusion is a FLUX2-only feature.
+    // The C++ addon re-validates this (see SdModel::process) but we fail
+    // fast here with a clearer message and before any native work starts.
+    const pred = this._config?.prediction
+    if (hasInitImages) {
+      const isFlux2 = !!this._llmModel && pred === 'flux2_flow'
+      if (!isFlux2) {
+        throw new Error(
+          'init_images (multi-reference fusion) requires a FLUX2 model. ' +
+          "Load a FLUX.2 [klein] checkpoint with llmModel set and pass config.prediction: 'flux2_flow'. " +
+          'Other architectures (SD1.x, SD2.x, SDXL, SD3, single-image FLUX) do not support ' +
+          '@image1/@imageN in-context references.'
+        )
+      }
+
+      // Prompt sanity-check: warn (not throw) if the prompt never mentions
+      // any of the @imageN placeholders. FLUX2 will still run, but the
+      // references will be ignored and the output will effectively be a
+      // plain txt2img — almost never what the caller wanted.
+      const prompt = typeof params.prompt === 'string' ? params.prompt : ''
+      const mentioned = []
+      const missing = []
+      for (let i = 1; i <= params.init_images.length; i++) {
+        const tag = '@image' + i
+        if (prompt.includes(tag)) mentioned.push(tag)
+        else missing.push(tag)
+      }
+      if (mentioned.length === 0) {
+        this.logger.warn(
+          'If multiple images have been selected, you need to check the prompt to see ' +
+          `if "@image1" and "@imageX" is mentioned at all so that the prompt makes sense. ` +
+          `None of @image1…@image${params.init_images.length} were found in the prompt ` +
+          '— FLUX2 will run but the references will have no effect.'
+        )
+      } else if (missing.length > 0) {
+        this.logger.warn(
+          `Only ${mentioned.join(', ')} found in the prompt; ` +
+          `missing ${missing.join(', ')}. Those reference images will be ignored by FLUX2.`
+        )
+      }
+
+      this.logger.info(
+        `stable-diffusion: entering "fusion" mode — ${params.init_images.length} reference images ` +
+        '(FLUX2 in-context conditioning via ref_images). ' +
+        'Generation will attend to every referenced @imageN in the prompt.'
+      )
+    }
+
+    // FLUX models require an explicit prediction type for img2img (single ref).
     // The C++ addon auto-detects the model family at load time, but
     // SdModel::process() only enters the FLUX ref_images path when
     // config_.prediction is FLUX_FLOW_PRED or FLUX2_FLOW_PRED. Without
     // an explicit value the addon silently falls back to SDEdit.
     if (params.init_image && this._llmModel) {
-      const pred = this._config?.prediction
       if (pred !== 'flux2_flow' && pred !== 'flux_flow') {
         throw new Error(
           'FLUX img2img requires an explicit prediction type in config. ' +
@@ -249,7 +327,7 @@ class ImgStableDiffusion extends BaseInference {
       }
     }
 
-    const mode = params.init_image ? 'img2img' : 'txt2img'
+    const mode = (params.init_image || hasInitImages) ? 'img2img' : 'txt2img'
     this.logger.info('Starting generation with mode:', mode)
 
     return await this._withExclusiveRun(async () => {

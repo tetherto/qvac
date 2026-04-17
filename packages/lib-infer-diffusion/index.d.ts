@@ -158,8 +158,50 @@ export interface GenerationParams {
   img_cfg_scale?: number
   /** Skip last N CLIP encoder layers (SD1.x/SD2.x) */
   clip_skip?: number
-  /** Input image as PNG/JPEG bytes for img2img (not yet supported — throws at runtime) */
+  /**
+   * Input image as PNG/JPEG bytes for img2img.
+   *   - FLUX / FLUX2 → in-context conditioning (ref_images)
+   *   - SD1.x / SD2.x / SDXL / SD3 → SDEdit (init_image + strength)
+   *
+   * Mutually exclusive with `init_images`.
+   */
   init_image?: Uint8Array
+  /**
+   * **FLUX2-only.** Array of PNG/JPEG buffers for multi-reference "fusion"
+   * conditioning. Each buffer becomes a separate reference image that the
+   * FLUX2 transformer attends to via joint attention (the RoPE path).
+   * Mutually exclusive with `init_image`; requires the context to be loaded
+   * with `llmModel` and `config.prediction: 'flux2_flow'`.
+   *
+   * Note on FLUX2-klein specifically: the Qwen3 text encoder does **not**
+   * receive vision tokens for these references, so `@image1`, `@image2`, …
+   * tags in the prompt are just prose to the LLM. The actual fusion is
+   * purely visual (attention between ref latents and target latents in the
+   * DiT). This still works well for "blend two portraits" style prompts.
+   */
+  init_images?: Uint8Array[]
+  /**
+   * Maps to `sd_img_gen_params_t.increase_ref_index`. Default: `false`
+   * (matches the upstream library / sd-cli default).
+   *
+   *   `false` → all reference latents share the same RoPE index slot and
+   *             tile into the same image coordinate space. Attention
+   *             blends their features. **This is what produces visible
+   *             visual fusion on FLUX / FLUX2-klein.** Recommended.
+   *
+   *   `true`  → each reference gets its own incrementing RoPE index. Use
+   *             with models whose text encoder receives per-image vision
+   *             tokens (Qwen-Image-Edit, Z-Image-Omni). On FLUX2-klein
+   *             this typically makes one ref dominate and kills fusion.
+   */
+  increase_ref_index?: boolean
+  /**
+   * When `true` (default), every reference image in `init_images` (or the
+   * single `init_image` on FLUX models) is auto-resized to the target
+   * width/height before VAE-encoding. Disable only if you have manually
+   * pre-resized the buffers.
+   */
+  auto_resize_ref_image?: boolean
   /** img2img denoising strength (0.0–1.0). 0 = keep source, 1 = ignore source (not yet supported) */
   strength?: number
 }

@@ -521,74 +521,167 @@ std::any SdModel::process(const std::any& input) {
 
   // ── img2img ──────────────────────────────────────────────────────────────
   //
-  // Two code paths depending on model architecture:
+  // Three code paths depending on model architecture and input shape:
   //
-  //   FLUX2 (FLUX2_FLOW_PRED):
-  //     Uses ref_images — in-context conditioning. The input image is
+  //   FLUX2 (FLUX2_FLOW_PRED) with N reference images (N≥1):
+  //     Uses ref_images — in-context conditioning. Each reference image is
   //     VAE-encoded into separate latent tokens that the FLUX transformer
   //     attends to via joint attention with distinct RoPE positions. The
   //     target starts from pure noise, so the model preserves features
-  //     (skin tone, structure, etc.) while generating a fully new image.
+  //     (skin tone, structure, etc.) from every reference while generating
+  //     a fully new image. N≥2 is "fusion" mode — addressable in the prompt
+  //     as @image1, @image2, …
+  //
+  //   FLUX (FLUX_FLOW_PRED) with a single reference image:
+  //     Same ref_images path as FLUX2, just a single ref. Multi-image is
+  //     rejected here because only FLUX2 defines the @imageN placeholders.
   //
   //   All other models (SD1.x, SD2.x, SDXL, SD3):
   //     Uses init_image — traditional SDEdit. The input image is noised to
   //     the level specified by `strength`, then denoised for the remaining
-  //     steps. Lower strength = closer to the original image.
+  //     steps. Lower strength = closer to the original image. Multi-image
+  //     is rejected outright for these architectures.
   //
-  sd_image_t initImg{};
+  sd_image_t initImg{};                       // single-image (SDEdit or 1× FLUX)
   std::vector<uint8_t> initPng;
+  std::vector<sd_image_t> refImgs;            // multi-image FLUX fusion
+  // RAII guard: frees any pixel buffers in refImgs on scope exit (normal
+  // or exceptional). The single-image initImg is still freed explicitly
+  // below to keep the existing control-flow readable.
+  struct RefImgsGuard {
+    std::vector<sd_image_t>& v;
+    ~RefImgsGuard() {
+      for (auto& img : v) {
+        if (img.data) {
+          free(img.data);
+          img.data = nullptr;
+        }
+      }
+    }
+  } refImgsGuard{refImgs};
 
   if (gen.mode == "img2img") {
-    // Prefer the binary buffer passed directly from the JS layer (Uint8Array,
-    // no JSON overhead).  Fall back to the JSON "init_image_bytes" array for
-    // backwards compatibility (e.g. C++ unit tests that build paramsJson by
-    // hand).
-    if (!job.initImageBytes.empty()) {
-      initPng = job.initImageBytes;
-    } else if (auto it = v.get<picojson::object>().find("init_image_bytes");
-               it != v.get<picojson::object>().end() &&
-               it->second.is<picojson::array>()) {
-      const auto& arr = it->second.get<picojson::array>();
-      initPng.reserve(arr.size());
-      for (const auto& el : arr)
-        initPng.push_back(static_cast<uint8_t>(el.get<double>()));
-    }
-    if (!initPng.empty())
-      initImg = decodePng(initPng);
+    const bool isFluxFamily = config_.prediction == FLUX2_FLOW_PRED ||
+                              config_.prediction == FLUX_FLOW_PRED;
+    const bool isFlux2 = config_.prediction == FLUX2_FLOW_PRED;
+    const size_t nMulti = job.initImagesBytes.size();
 
-    if (!initImg.data)
+    // ── Input validation: mutual exclusion + FLUX-only for multi ───────────
+    //
+    // These checks mirror the JS-layer validation in index.js but are
+    // duplicated here so the C++ API stays safe when called directly from
+    // unit tests or bindings that bypass index.js.
+    if (!job.initImageBytes.empty() && nMulti > 0)
       throw StatusError(
           general_error::InvalidArgument,
-          "img2img: failed to decode init_image (corrupt or unsupported "
-          "format)");
+          "img2img: init_image and init_images are mutually exclusive — "
+          "pick one. Use init_images (with FLUX2) for multi-reference "
+          "fusion, or init_image for single-image conditioning.");
 
-    const int imgW = static_cast<int>(initImg.width);
-    const int imgH = static_cast<int>(initImg.height);
+    if (nMulti > 0 && !isFlux2)
+      throw StatusError(
+          general_error::InvalidArgument,
+          "img2img: init_images (multi-reference fusion) requires a FLUX2 "
+          "model with prediction='flux2_flow'. The current model does not "
+          "support @image1/@imageN in-context references.");
 
-    const bool useRefImages = config_.prediction == FLUX2_FLOW_PRED ||
-                              config_.prediction == FLUX_FLOW_PRED;
+    // ── Multi-image (FLUX2 "fusion" mode) ─────────────────────────────────
+    if (nMulti > 0) {
+      refImgs.reserve(nMulti);
+      for (size_t i = 0; i < nMulti; ++i) {
+        if (job.initImagesBytes[i].empty())
+          throw StatusError(
+              general_error::InvalidArgument,
+              "img2img: init_images[" + std::to_string(i) +
+                  "] is empty — every reference must be a non-empty "
+                  "PNG/JPEG buffer.");
 
-    if (useRefImages) {
-      // FLUX in-context conditioning: ref_images handles its own resizing
-      // via auto_resize_ref_image, so only override genParams dimensions
-      // when they are still at the 512×512 default.
+        sd_image_t decoded = decodePng(job.initImagesBytes[i]);
+        if (!decoded.data)
+          throw StatusError(
+              general_error::InvalidArgument,
+              "img2img: failed to decode init_images[" + std::to_string(i) +
+                  "] (corrupt or unsupported format; supported: PNG, JPEG)");
+        refImgs.push_back(decoded);
+      }
+
+      // Use the first reference to pick sensible output dimensions if the
+      // caller left the defaults at 512×512 — auto_resize_ref_image handles
+      // the remaining refs.
+      const int refW = static_cast<int>(refImgs.front().width);
+      const int refH = static_cast<int>(refImgs.front().height);
       if (gen.width == 512 && gen.height == 512) {
-        genParams.width = imgW;
-        genParams.height = imgH;
-        genParams.height = imgH;
+        genParams.width = refW;
+        genParams.height = refH;
       }
       gen.width = genParams.width;
       gen.height = genParams.height;
 
       QLOG_IF(
           qvac_lib_inference_addon_cpp::logger::Priority::INFO,
-          "img2img: " + std::to_string(imgW) + "x" + std::to_string(imgH) +
-              " — FLUX in-context conditioning (ref_images)");
+          "img2img: entering FLUX2 *fusion* mode — " + std::to_string(nMulti) +
+              " reference images. increase_ref_index=" +
+              (gen.increaseRefIndex
+                   ? std::string("true (distinct RoPE slots per ref — use "
+                                 "when the text encoder supports vision "
+                                 "tokens, e.g. Qwen-Image-Edit)")
+                   : std::string("false (refs tile into one coordinate "
+                                 "space — visual feature fusion; CLI "
+                                 "default, recommended for FLUX2-klein)")));
 
-      genParams.ref_images = &initImg;
-      genParams.ref_images_count = 1;
-      genParams.auto_resize_ref_image = true;
+      genParams.ref_images = refImgs.data();
+      genParams.ref_images_count = static_cast<int>(nMulti);
+      genParams.auto_resize_ref_image = gen.autoResizeRefImage;
+      // See SdGenConfig::increaseRefIndex for semantics. For FLUX2-klein the
+      // CLI default (false) is what produces visible fusion: both refs share
+      // a RoPE slot and their features blend in attention. Setting true
+      // tends to make one ref dominate.
+      genParams.increase_ref_index = gen.increaseRefIndex;
+      // Fall through to the generate_image() call below.
     } else {
+      // ── Single-image path (existing behaviour) ──────────────────────────
+      if (!job.initImageBytes.empty()) {
+        initPng = job.initImageBytes;
+      } else if (auto it = v.get<picojson::object>().find("init_image_bytes");
+                 it != v.get<picojson::object>().end() &&
+                 it->second.is<picojson::array>()) {
+        const auto& arr = it->second.get<picojson::array>();
+        initPng.reserve(arr.size());
+        for (const auto& el : arr)
+          initPng.push_back(static_cast<uint8_t>(el.get<double>()));
+      }
+      if (!initPng.empty())
+        initImg = decodePng(initPng);
+
+      if (!initImg.data)
+        throw StatusError(
+            general_error::InvalidArgument,
+            "img2img: failed to decode init_image (corrupt or unsupported "
+            "format)");
+
+      const int imgW = static_cast<int>(initImg.width);
+      const int imgH = static_cast<int>(initImg.height);
+
+      if (isFluxFamily) {
+        // FLUX in-context conditioning: ref_images handles its own resizing
+        // via auto_resize_ref_image, so only override genParams dimensions
+        // when they are still at the 512×512 default.
+        if (gen.width == 512 && gen.height == 512) {
+          genParams.width = imgW;
+          genParams.height = imgH;
+        }
+        gen.width = genParams.width;
+        gen.height = genParams.height;
+
+        QLOG_IF(
+            qvac_lib_inference_addon_cpp::logger::Priority::INFO,
+            "img2img: " + std::to_string(imgW) + "x" + std::to_string(imgH) +
+                " — FLUX in-context conditioning (ref_images, count=1)");
+
+        genParams.ref_images = &initImg;
+        genParams.ref_images_count = 1;
+        genParams.auto_resize_ref_image = true;
+      } else {
       // SDEdit path — the vcpkg version of generate_image() rounds
       // width/height UP to a spatial multiple (typically 8) before
       // creating tensors, then asserts init_image matches those aligned
@@ -652,8 +745,9 @@ std::any SdModel::process(const std::any& input) {
             1,
             maskData};
       }
-    }
-  }
+      }  // end SDEdit else
+    }    // end single-image else (nMulti == 0)
+  }      // end gen.mode == "img2img"
 
   // ── Generate ──────────────────────────────────────────────────────────────
   const auto t0 = std::chrono::steady_clock::now();

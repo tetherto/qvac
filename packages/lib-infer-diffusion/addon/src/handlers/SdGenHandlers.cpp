@@ -299,6 +299,33 @@ const SdGenHandlersMap SD_GEN_HANDLERS = {
        c.vaeTiling = v.get<bool>();
      }},
 
+    // ── Multi-reference (FLUX/FLUX2 fusion) ──────────────────────────────
+    //
+    // increase_ref_index: when true, every ref_image gets a distinct RoPE
+    //   index so `@image1`, `@image2`, … resolve to separate references.
+    //   Required for proper FLUX2 multi-image "fusion"; default is true in
+    //   our SdGenConfig (overrides the library default of false).
+    //
+    // auto_resize_ref_image: when true, each ref image is resized to the
+    //   target width/height before being VAE-encoded.
+    {"increase_ref_index",
+     [](SdGenConfig& c, const picojson::value& v) {
+       if (!v.is<bool>())
+         throw StatusError(
+             general_error::InvalidArgument,
+             "increase_ref_index must be a boolean");
+       c.increaseRefIndex = v.get<bool>();
+     }},
+
+    {"auto_resize_ref_image",
+     [](SdGenConfig& c, const picojson::value& v) {
+       if (!v.is<bool>())
+         throw StatusError(
+             general_error::InvalidArgument,
+             "auto_resize_ref_image must be a boolean");
+       c.autoResizeRefImage = v.get<bool>();
+     }},
+
     // vae_tile_size accepts either an integer (applied to both axes) or "WxH"
     // string.
     {"vae_tile_size",

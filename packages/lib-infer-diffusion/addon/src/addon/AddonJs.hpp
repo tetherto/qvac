@@ -94,6 +94,21 @@ inline js_value_t* runJob(js_env_t* env, js_callback_info_t* info) try {
   if (initBuf.has_value())
     job.initImageBytes = std::move(initBuf.value());
 
+  // Multi-reference ("fusion") input: a JS Array of Uint8Array, forwarded by
+  // addon.js as `initImageBuffers`. FLUX2 supports attending to >=1 reference
+  // image in-context; the JS layer already rejects this for non-FLUX models
+  // and mutual-exclusion with initImageBuffer is enforced in SdModel::process.
+  auto initBufs = inputObj.getOptionalProperty<js::Array>(env, "initImageBuffers");
+  if (initBufs.has_value()) {
+    auto arr = initBufs.value();
+    const uint32_t n = arr.size(env);
+    job.initImagesBytes.reserve(n);
+    for (uint32_t i = 0; i < n; ++i) {
+      auto elem = arr.get<js::TypedArray<uint8_t>>(env, i);
+      job.initImagesBytes.emplace_back(elem.as<std::vector<uint8_t>>(env));
+    }
+  }
+
   // Progress updates are queued as JSON strings (JsStringOutputHandler).
   job.progressCallback = [&instance](const std::string& progressJson) {
     instance.addonCpp->outputQueue->queueResult(std::any(progressJson));

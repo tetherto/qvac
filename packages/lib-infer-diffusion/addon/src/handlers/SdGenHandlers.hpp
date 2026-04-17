@@ -58,6 +58,31 @@ struct SdGenConfig {
   int clipSkip =
       -1; // skip last N CLIP encoder layers (SD1.x / SD2.x); -1 = auto
 
+  // ── Multi-reference (FLUX/FLUX2 "fusion") ────────────────────────────────
+  // Maps to sd_img_gen_params_t.increase_ref_index. This default matches the
+  // upstream library / sd-cli default (false).
+  //
+  // How it actually behaves (see stable-diffusion.cpp/src/rope.hpp ::
+  // gen_refs_ids):
+  //   false → all reference latents share the same RoPE index slot and tile
+  //           into the same image coordinate space as the target. Attention
+  //           blends their features → this is what produces visible visual
+  //           "fusion" on FLUX / FLUX2-klein. CLI default. Recommended.
+  //   true  → each reference gets its own incrementing index. The model
+  //           treats refs as independent samples in separate slots. For
+  //           models whose text encoder understands "Picture N:" / vision
+  //           tokens (Qwen-Image-Edit, Z-Image-Omni) this is what lets
+  //           @imageN in the prompt bind to a specific ref. For FLUX2-klein
+  //           (whose Qwen3 text encoder has no vision tokens for refs) this
+  //           usually just makes one ref dominate and suppresses fusion.
+  //
+  // Callers can override per-job by setting `increase_ref_index: true/false`.
+  //
+  // autoResizeRefImage maps to sd_img_gen_params_t.auto_resize_ref_image —
+  // on by default; disable only if you have pre-resized every reference.
+  bool increaseRefIndex = false;
+  bool autoResizeRefImage = true;
+
   // ── VAE tiling — required for images > ~768px on 16 GB machines ──────────
   // Maps to sd_img_gen_params_t.vae_tiling_params
   bool vaeTiling = false;
