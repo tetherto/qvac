@@ -1,21 +1,59 @@
 'use strict'
 
-/** Batch TTS: `run({ input })`. Chunked output: `run({ input, streamOutput: true })`. Streaming text in: `runStreaming(...)` — see `chatterbox-io-streaming-tts.js`. */
+/**
+ * Chatterbox: streaming **input** + streaming **output** with **LLM-like token simulation**.
+ * Tiny fragments (1–5 chars) are yielded with short delays; `runStreaming` uses default
+ * `accumulateSentences` + `flushAfterMs` so text batches into sentences before each native job.
+ *
+ * Requires reference audio (voice cloning). Usage matches `chatterbox-tts.js`.
+ *
+ * Contrast: `chatterbox-tts.js` — batch `run({ input })`; `supertonic-io-streaming-tts.js` — Supertonic engine.
+ */
 
 const fs = require('bare-fs')
 const path = require('bare-path')
 const ONNXTTS = require('../')
 const { createWav, readWavAsFloat32, resampleLinear } = require('./wav-helper')
 const { setLogger, releaseLogger } = require('../addonLogging')
+const { canPlayPcmChunks, playInt16Chunk, createChunkQueue } = require('./pcm-chunk-player')
 
 const CHATTERBOX_SAMPLE_RATE = 24000
+
+const TOKEN_DELAY_MS = 22
+
+function delay (ms) {
+  return new Promise(resolve => setTimeout(resolve, ms))
+}
+
+/**
+ * Pseudo–BPE-style slices (not a real tokenizer).
+ *
+ * @param {string} fullText
+ * @param {number} pauseMs
+ */
+async function * simulateLlmTokenStream (fullText, pauseMs) {
+  let i = 0
+  let tokenIndex = 0
+  while (i < fullText.length) {
+    const take = Math.min(1 + (Math.abs((i * 7 + tokenIndex * 3) % 11) % 5), fullText.length - i)
+    const piece = fullText.slice(i, i + take)
+    i += take
+    tokenIndex += 1
+    const shown = piece.length > 24 ? `${piece.slice(0, 24)}…` : piece
+    console.log(`[stream in] token ${tokenIndex}: ${JSON.stringify(shown)}`)
+    if (pauseMs > 0) {
+      await delay(pauseMs)
+    }
+    yield piece
+  }
+}
 
 const argv = global.Bare ? global.Bare.argv : process.argv
 const modeArg = argv[2]
 const refAudioArg = argv[3]
 
 if (!modeArg || !['english', 'multilingual'].includes(modeArg)) {
-  console.error('Usage: chatterbox-tts.js <english|multilingual> [path/to/reference.wav]')
+  console.error('Usage: chatterbox-io-streaming-tts.js <english|multilingual> [path/to/reference.wav]')
   if (global.Bare) global.Bare.exit(1)
   else process.exit(1)
 }
@@ -90,12 +128,14 @@ async function main () {
   }
 
   const language = isMultilingual ? 'es' : 'en'
-  const textToSynthesize = isMultilingual
-    ? 'Hola mundo. Esta es una demostración de la síntesis de texto a voz usando Chatterbox.'
-    : 'Hello world. This is a demonstration of the text to speech synthesis using Chatterbox.'
-  const outputFile = path.join(__dirname, isMultilingual ? 'chatterbox-multilingual-output.wav' : 'chatterbox-output.wav')
+  const scriptToSpeak = isMultilingual
+    ? 'El texto llega en fragmentos diminutos. La voz clonada habla cuando termina cada frase.'
+    : 'Streaming text arrives in tiny fragments. Chatterbox speaks each sentence after it accumulates.'
 
-  console.log(`Mode: ${modeArg}, language: ${language}, models: ${modelsDir}\n`)
+  console.log(`Mode: ${modeArg}, language: ${language}, models: ${modelsDir}`)
+  console.log(
+    `LLM-style token stream (${TOKEN_DELAY_MS}ms between pseudo-tokens), script length ${scriptToSpeak.length} chars.\n`
+  )
 
   const model = new ONNXTTS({
     files: {
@@ -115,38 +155,83 @@ async function main () {
     opts: { stats: true }
   })
 
+  const outputFile = path.join(
+    __dirname,
+    isMultilingual ? 'chatterbox-multilingual-io-stream-output.wav' : 'chatterbox-io-stream-output.wav'
+  )
+
   try {
     console.log('Loading Chatterbox TTS model...')
     await model.load()
     console.log('Model loaded.')
 
-    console.log(`Running TTS on: "${textToSynthesize}"`)
+    const canPlay = canPlayPcmChunks()
+    if (canPlay) {
+      console.log('Streaming playback: 24 kHz chunks as each accumulated sentence is synthesized.')
+    } else {
+      console.warn(
+        'No supported player found (need macOS afplay, ffplay from ffmpeg, or Linux aplay). Chunks will be logged only.'
+      )
+    }
 
-    const response = await model.run({
-      input: textToSynthesize,
-      type: 'text'
+    const playbackQueue = createChunkQueue()
+    const playbackDone = (async () => {
+      if (!canPlay) return
+      for await (const { samples, sampleRate } of playbackQueue.drain()) {
+        await playInt16Chunk(samples, sampleRate)
+      }
+    })()
+
+    let pcmConcat = []
+
+    const tokenStream = simulateLlmTokenStream(scriptToSpeak, TOKEN_DELAY_MS)
+
+    const response = await model.runStreaming(tokenStream, {
+      flushAfterMs: 500
     })
 
-    console.log('Waiting for TTS results...')
-    let buffer = []
+    let chunkCount = 0
 
     await response
       .onUpdate(data => {
         if (data && data.outputArray) {
-          buffer = buffer.concat(Array.from(data.outputArray))
+          const samples = Array.from(data.outputArray)
+          pcmConcat = pcmConcat.concat(samples)
+          chunkCount += 1
+
+          const idx = data.chunkIndex
+          const preview =
+            typeof data.sentenceChunk === 'string'
+              ? data.sentenceChunk.slice(0, 80).replace(/\s+/g, ' ')
+              : ''
+          if (idx !== undefined) {
+            console.log(
+              `[stream out] synthesis ${idx}: ${samples.length} samples; accumulated text: "${preview}${preview.length >= 80 ? '…' : ''}"`
+            )
+          } else {
+            console.log(`Audio update: ${samples.length} samples (no chunk metadata)`)
+          }
+
+          playbackQueue.push({ samples, sampleRate: CHATTERBOX_SAMPLE_RATE })
         }
       })
       .await()
 
-    console.log('TTS finished!')
+    console.log(`Inference finished! (${chunkCount} synthesis chunk(s)), waiting for playback...`)
+    playbackQueue.end()
+    await playbackDone
+
+    console.log('Playback finished!')
     if (response.stats) {
       const s = response.stats
       console.log(`Inference stats: totalTime=${s.totalTime.toFixed(2)}s, tokensPerSecond=${s.tokensPerSecond.toFixed(2)}, realTimeFactor=${s.realTimeFactor.toFixed(2)}, audioDuration=${s.audioDurationMs}ms, totalSamples=${s.totalSamples}`)
     }
 
-    console.log('\nWriting to .wav file...')
-    createWav(buffer, CHATTERBOX_SAMPLE_RATE, outputFile)
-    console.log(`Finished writing to ${outputFile}`)
+    if (pcmConcat.length > 0) {
+      console.log(`\nWriting concatenated PCM to ${outputFile}`)
+      createWav(pcmConcat, CHATTERBOX_SAMPLE_RATE, outputFile)
+      console.log('Done.')
+    }
   } catch (err) {
     console.error('Error during TTS processing:', err)
   } finally {
