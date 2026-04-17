@@ -9,7 +9,7 @@ let DB_MOBILENET
 let CRNN_MOBILENET
 let modelsAvailable = false
 
-test('DocTR lab results - download models', { timeout: DOCTR_TEST_TIMEOUT }, async function (t) {
+test('DocTR CT scan - download models', { timeout: DOCTR_TEST_TIMEOUT }, async function (t) {
   const models = await ensureDoctrModels(['db_mobilenet_v3_large.onnx', 'crnn_mobilenet_v3_small.onnx'])
   if (!models) {
     t.comment('DocTR models unavailable (download failed) — remaining tests will be skipped')
@@ -23,23 +23,24 @@ test('DocTR lab results - download models', { timeout: DOCTR_TEST_TIMEOUT }, asy
 })
 
 const EXPECTED_WORDS = [
-  'parameter', 'results', 'calculated', 'direct', 'values',
-  'clinical', 'blood', 'patient', 'medivista', 'hospital',
-  'biochemistry', 'department', 'arterial', 'gases',
-  'oxygen', 'electrolyte', 'metabolite', 'oximetry'
+  'diagnostic', 'imaging', 'computed', 'tomography',
+  'chest', 'abdomen', 'lung', 'liver', 'pancreas',
+  'gallbladder', 'spleen', 'radiologist', 'allied',
+  'medical', 'center', 'patient', 'heart', 'trachea',
+  'vascular', 'normal'
 ]
 
 const PERF_RUNS = 3
 
-function runLabResultsTest (ep, run) {
+function runCtScanTest (ep, run) {
   const useGPU = ep === 'gpu'
   const tag = ep.toUpperCase()
 
-  test(`DocTR lab results [${tag}] run ${run} - db_mobilenet + crnn_mobilenet`, { timeout: DOCTR_TEST_TIMEOUT }, async function (t) {
+  test(`DocTR CT scan [${tag}] run ${run} - db_mobilenet + crnn_mobilenet`, { timeout: DOCTR_TEST_TIMEOUT }, async function (t) {
     if (!modelsAvailable) { t.comment('Skipped — models unavailable'); return }
-    const imagePath = getImagePath('/test/images/lab_results.png')
+    const imagePath = getImagePath('/test/images/ct_scan_report.png')
 
-    t.comment(`Testing DocTR on medical lab results image [${tag}] (run ${run}/${PERF_RUNS})`)
+    t.comment(`Testing DocTR on CT scan diagnostic report image [${tag}] (run ${run}/${PERF_RUNS})`)
     t.comment('Detector: db_mobilenet_v3_large, Recognizer: crnn_mobilenet_v3_small (CTC)')
     t.comment('straightenPages: true, useGPU: ' + useGPU)
 
@@ -53,7 +54,7 @@ function runLabResultsTest (ep, run) {
 
     const texts = results.map(r => r.text)
     t.comment('Detected texts: ' + JSON.stringify(texts))
-    t.comment(formatOCRPerformanceMetrics(`[DocTR lab_results] [${tag}]`, stats, texts, { imagePath }))
+    t.comment(formatOCRPerformanceMetrics(`[DocTR ct_scan_report] [${tag}]`, stats, texts, { imagePath }))
 
     t.ok(results.length > 0, `should detect text regions, got ${results.length}`)
 
@@ -61,13 +62,13 @@ function runLabResultsTest (ep, run) {
     for (const word of EXPECTED_WORDS) {
       t.ok(
         lowerTexts.some(w => w.includes(word)),
-        `should detect "${word}" in lab results`
+        `should detect "${word}" in CT scan report`
       )
     }
 
-    t.pass(`DocTR lab results [${tag}] run ${run} completed successfully`)
+    t.pass(`DocTR CT scan report [${tag}] run ${run} completed successfully`)
   })
 }
 
-for (let i = 1; i <= PERF_RUNS; i++) runLabResultsTest('cpu', i)
-for (let i = 1; i <= PERF_RUNS; i++) runLabResultsTest('gpu', i)
+for (let i = 1; i <= PERF_RUNS; i++) runCtScanTest('cpu', i)
+for (let i = 1; i <= PERF_RUNS; i++) runCtScanTest('gpu', i)

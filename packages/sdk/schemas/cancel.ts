@@ -25,10 +25,15 @@ const cancelRagParamsSchema = z.object({
   workspace: z.string().optional(),
 });
 
+const cancelEmbeddingsParamsSchema = cancelInferenceBaseSchema.extend({
+  operation: z.literal("embeddings"),
+});
+
 const cancelParamsSchema = z.discriminatedUnion("operation", [
   cancelInferenceParamsSchema,
   cancelDownloadParamsSchema,
   cancelRagParamsSchema,
+  cancelEmbeddingsParamsSchema,
 ]);
 
 export const cancelRequestSchema = z.intersection(

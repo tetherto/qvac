@@ -3,6 +3,7 @@
 const fs = require('bare-fs')
 const path = require('bare-path')
 const process = require('bare-process')
+const { createPerformanceReporter } = require('../../../../scripts/test-utils/performance-reporter')
 
 // ============================================================================
 // Platform Detection
@@ -13,6 +14,29 @@ const platform = process.platform
 
 /** Whether running on mobile device (iOS or Android) */
 const isMobile = platform === 'ios' || platform === 'android'
+
+// ============================================================================
+// Singleton Performance Reporter
+// ============================================================================
+
+const _perfReporter = createPerformanceReporter({
+  addon: 'nmtcpp',
+  addonType: 'translation'
+})
+
+const _reportPath = path.resolve(__dirname, '../../test/results/performance-report.json')
+let _reportScheduled = false
+
+function _scheduleReportWrite () {
+  if (_reportScheduled) return
+  _reportScheduled = true
+  process.on('exit', () => {
+    if (_perfReporter.length > 0) {
+      _perfReporter.writeReport(_reportPath)
+      _perfReporter.writeStepSummary()
+    }
+  })
+}
 
 // ============================================================================
 // Test Timeouts
@@ -330,6 +354,17 @@ function formatPerformanceMetrics (label, metrics) {
   const totalSeconds = (totalTimeMs / 1000).toFixed(2)
   const tpsValue = typeof tps === 'number' ? tps.toFixed(2) : '0.00'
   const decodeTimeMs = typeof decodeTime === 'number' ? decodeTime : 0
+
+  _perfReporter.record(label, {
+    total_time_ms: Math.round(totalTimeMs),
+    decode_time_ms: Math.round(decodeTimeMs),
+    generated_tokens: generatedTokens || null,
+    tps: typeof tps === 'number' ? parseFloat(tpsValue) : null
+  }, {
+    input: prompt || null,
+    output: fullOutput || null
+  })
+  _scheduleReportWrite()
 
   return `${label} Performance Metrics:
     - Total time: ${totalTimeMs.toFixed(0)}ms (${totalSeconds}s)
