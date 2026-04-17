@@ -302,6 +302,8 @@ jobs:
         with:
           platform: ${{ matrix.platform }}
           arch: ${{ matrix.arch }}
+          aws-role-to-assume: ${{ secrets.AWS_OIDC_ROLE_ARN }}
+          aws-region: eu-central-1
 
       - if: ${{ startsWith(matrix.os, 'macos') }}
         name: Install whisper dependencies for macOS

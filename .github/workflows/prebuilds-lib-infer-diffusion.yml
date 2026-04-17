@@ -255,6 +255,8 @@ jobs:
         with:
           platform: ${{ matrix.platform }}
           arch: ${{ matrix.arch }}
+          aws-role-to-assume: ${{ secrets.AWS_OIDC_ROLE_ARN }}
+          aws-region: eu-central-1
 
       - if: ${{ matrix.platform == 'android' }}
         name: Configure runner for cross compilation - android
