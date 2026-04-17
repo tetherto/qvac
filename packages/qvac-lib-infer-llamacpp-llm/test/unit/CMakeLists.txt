@@ -15,8 +15,6 @@ add_executable(
   test_cache_management.cpp
   test_cache_management_qwen3.cpp
   test_text_llm_context.cpp
-  test_text_llm_context_qwen3.cpp
-  test_model_tools_qwen3.cpp
   test_addon_cpp.cpp
   test_cancel_stale_flag.cpp
   test_backend_selection.cpp

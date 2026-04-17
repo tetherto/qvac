@@ -135,6 +135,28 @@ TEST(ToolsCompactControllerTest, ValidatePromptAcceptsContiguousAttachedBlock) {
   EXPECT_NO_THROW(controller.validatePrompt(chatMsgs, tools, layout));
 }
 
+TEST(
+    ToolsCompactControllerTest,
+    OnTokenizeAndEvalSetAnchorOnlyWhenToolsAddExtraTokens) {
+  ToolsCompactController controller(true);
+
+  controller.onTokenize(120, 120);
+  controller.onEvalComplete(120, 120);
+  EXPECT_EQ(controller.anchor(), -1);
+
+  controller.reset();
+  controller.onTokenize(120, 80);
+  controller.onEvalComplete(120, 120);
+  EXPECT_EQ(controller.anchor(), 80);
+}
+
+TEST(ToolsCompactControllerTest, OnTokenizeAndEvalNoOpWhenDisabled) {
+  ToolsCompactController controller(false);
+  controller.onTokenize(120, 80);
+  controller.onEvalComplete(120, 120);
+  EXPECT_EQ(controller.anchor(), -1);
+}
+
 TEST(ToolsCompactControllerTest, ClampDiscardPreservesToolRegion) {
   ToolsCompactController controller(true);
   constexpr llama_pos firstMsgTokens = 50;
@@ -272,4 +294,25 @@ TEST(ToolsCompactControllerTest, GenerationCompleteTrimDecisionAndResetWhenChain
   auto snapshot = controller.debugSnapshot();
   EXPECT_EQ(snapshot.nPastBeforeTools, 80);
   EXPECT_TRUE(snapshot.lastToolsTrimmed);
+}
+
+TEST(ToolsCompactControllerTest, DebugSnapshotStaysConsistentAcrossReset) {
+  ToolsCompactController controller(true);
+  constexpr llama_pos firstMsgTokens = 50;
+  controller.onTokenize(140, 80);
+  controller.onEvalComplete(140, 140);
+
+  auto decision = controller.onGenerationComplete("final answer", 130, firstMsgTokens);
+  EXPECT_TRUE(decision.trim);
+
+  auto snapshotBeforeReset = controller.debugSnapshot();
+  EXPECT_EQ(snapshotBeforeReset.nPastBeforeTools, 80);
+  EXPECT_TRUE(snapshotBeforeReset.lastToolsTrimmed);
+
+  controller.reset();
+  EXPECT_EQ(controller.anchor(), -1);
+
+  auto snapshotAfterReset = controller.debugSnapshot();
+  EXPECT_EQ(snapshotAfterReset.nPastBeforeTools, 80);
+  EXPECT_TRUE(snapshotAfterReset.lastToolsTrimmed);
 }

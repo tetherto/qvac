@@ -136,7 +136,9 @@ void ToolsCompactController::onTokenize(
 
 void ToolsCompactController::onEvalComplete(
     llama_pos nPast, llama_pos totalTokensEvaled) {
-  if (!enabled_ || nConversationOnlyTokens_ == 0 || nPastBeforeTools_ != -1) {
+  if (
+      !enabled_ || nConversationOnlyTokens_ == 0 || nPastBeforeTools_ != -1 ||
+      totalTokensEvaled <= nConversationOnlyTokens_) {
     // Only set anchor on first round — preserve position during chain
     return;
   }
