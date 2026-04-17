@@ -224,26 +224,6 @@ jobs:
         name: Update apt sources
         run: sudo apt-get update
 
-      - if: ${{ matrix.os == 'ubuntu-22.04-arm' }}
-        name: Install ccache on Linux
-        run: sudo apt-get install -y ccache
-
-      - if: ${{ matrix.os == 'ubuntu-22.04-arm' }}
-        name: Configure ccache
-        run: |
-          ccache --set-config=max_size=2G
-          ccache --set-config=compression=true
-          ccache -z
-          echo "CMAKE_C_COMPILER_LAUNCHER=ccache" >> $GITHUB_ENV
-          echo "CMAKE_CXX_COMPILER_LAUNCHER=ccache" >> $GITHUB_ENV
-
-      - if: ${{ matrix.os == 'ubuntu-22.04-arm' }}
-        name: Get ccache cache
-        uses: actions/cache@668228422ae6a00e4ad889ee87cd7109ec5666a7 # 5.0.4
-        with:
-          key: ccache-${{ matrix.platform }}-${{ matrix.arch }}
-          path: ~/.cache/ccache-arm
-
       - if: ${{ matrix.platform == 'linux' }}
         name: Install required packages linux
         run: sudo apt-get install libxi-dev libxtst-dev libxrandr-dev
