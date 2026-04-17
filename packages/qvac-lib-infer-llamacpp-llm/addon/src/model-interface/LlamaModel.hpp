@@ -224,6 +224,11 @@ private:
     // llmContext_ is destroyed first (members destroyed in reverse order)
     std::optional<LlamaBackendsHandle> backendsHandle_;
 
+    // tools_compact controller - owned by ReloadableState, lifetime matches
+    // the state. Must be declared before llmContext_ so it is destroyed
+    // after contexts that hold references to it.
+    std::unique_ptr<ToolsCompactController> tools_;
+
     // Store the appropriate context (TextLlmContext or MtmdLlmContext)
     // Destroyed before backendsHandle_ to avoid use-after-free
     std::unique_ptr<LlmContext> llmContext_;
@@ -233,11 +238,6 @@ private:
     std::optional<CacheManager> cacheManager_;
 
     bool lastRunWasPrefill_ = false;
-
-    // tools_compact controller - owned by ReloadableState, lifetime matches
-    // the state. Declared before llmContext_ to ensure contexts are
-    // destroyed before the controller they reference.
-    std::unique_ptr<ToolsCompactController> tools_;
   };
 
   struct ResolvedPrompt {

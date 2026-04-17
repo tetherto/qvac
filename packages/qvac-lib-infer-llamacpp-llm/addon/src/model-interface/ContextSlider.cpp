@@ -10,12 +10,42 @@ using namespace qvac_lib_inference_addon_cpp::logger;
 namespace qvac_lib_inference_addon_llama {
 namespace context_slider {
 
+namespace {
+class LlamaContextOps final : public ILlamaContextOps {
+public:
+  llama_pos nCtx(llama_context* lctx) const override {
+    return static_cast<llama_pos>(llama_n_ctx(lctx));
+  }
+
+  LlamaMemoryHandle memory(llama_context* lctx) const override {
+    return llama_get_memory(lctx);
+  }
+
+  void seqRm(
+      LlamaMemoryHandle mem, llama_seq_id seqId, llama_pos startPos,
+      llama_pos endPos) const override {
+    llama_memory_seq_rm(mem, seqId, startPos, endPos);
+  }
+
+  void seqAdd(
+      LlamaMemoryHandle mem, llama_seq_id seqId, llama_pos startPos,
+      llama_pos endPos, llama_pos delta) const override {
+    llama_memory_seq_add(mem, seqId, startPos, endPos, delta);
+  }
+};
+} // namespace
+
+const ILlamaContextOps& defaultLlamaContextOps() {
+  static const LlamaContextOps ops;
+  return ops;
+}
+
 SlideOutcome trySlidePrefill(
     llama_context* lctx, llama_pos nPast, llama_pos firstMsgTokens,
     llama_pos nTokensToAppend, llama_pos nDiscarded,
-    ToolsCompactController& tools) {
+    ToolsCompactController& tools, const ILlamaContextOps& ops) {
 
-  const auto nCtx = static_cast<llama_pos>(llama_n_ctx(lctx));
+  const auto nCtx = ops.nCtx(lctx);
 
   // Check if sliding is needed
   if (nPast + nTokensToAppend < nCtx) {
@@ -29,9 +59,9 @@ SlideOutcome trySlidePrefill(
   // Try partial slide
   if (leftTokens >= 0 && discard > 0 &&
       nPast + nTokensToAppend - discard < nCtx) {
-    auto* mem = llama_get_memory(lctx);
-    llama_memory_seq_rm(mem, 0, firstMsgTokens, firstMsgTokens + discard);
-    llama_memory_seq_add(mem, 0, firstMsgTokens + discard, nPast, -discard);
+    auto mem = ops.memory(lctx);
+    ops.seqRm(mem, 0, firstMsgTokens, firstMsgTokens + discard);
+    ops.seqAdd(mem, 0, firstMsgTokens + discard, nPast, -discard);
     llama_pos newNPast = nPast - discard;
     tools.onSlide(discard, firstMsgTokens);
     return {SlideOutcome::Kind::Slid, newNPast, discard};
@@ -40,8 +70,8 @@ SlideOutcome trySlidePrefill(
   // Fallback: wipe everything after the first message
   if (leftTokens < 0 && firstMsgTokens + nTokensToAppend < nCtx &&
       nDiscarded > 0) {
-    auto* mem = llama_get_memory(lctx);
-    llama_memory_seq_rm(mem, 0, firstMsgTokens, nPast);
+    auto mem = ops.memory(lctx);
+    ops.seqRm(mem, 0, firstMsgTokens, nPast);
     llama_pos wiped = nPast - firstMsgTokens;
     if (tools.enabled()) {
       tools.reset();
@@ -55,9 +85,10 @@ SlideOutcome trySlidePrefill(
 
 SlideOutcome trySlideGeneration(
     llama_context* lctx, llama_pos nPast, llama_pos firstMsgTokens,
-    llama_pos nDiscarded, ToolsCompactController& tools) {
+    llama_pos nDiscarded, ToolsCompactController& tools,
+    const ILlamaContextOps& ops) {
 
-  const auto nCtx = static_cast<llama_pos>(llama_n_ctx(lctx));
+  const auto nCtx = ops.nCtx(lctx);
 
   // Check if sliding is needed (need room for 1 more token)
   if (nPast + 1 <= nCtx || nDiscarded == 0) {
@@ -99,9 +130,9 @@ SlideOutcome trySlideGeneration(
   }
 
   // Perform the slide
-  auto* mem = llama_get_memory(lctx);
-  llama_memory_seq_rm(mem, 0, firstMsgTokens, firstMsgTokens + discard);
-  llama_memory_seq_add(mem, 0, firstMsgTokens + discard, nPast, -discard);
+  auto mem = ops.memory(lctx);
+  ops.seqRm(mem, 0, firstMsgTokens, firstMsgTokens + discard);
+  ops.seqAdd(mem, 0, firstMsgTokens + discard, nPast, -discard);
   llama_pos newNPast = nPast - discard;
   tools.onSlide(discard, firstMsgTokens);
   return {SlideOutcome::Kind::Slid, newNPast, discard};

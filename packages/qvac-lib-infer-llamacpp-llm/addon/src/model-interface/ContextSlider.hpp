@@ -7,6 +7,27 @@ class ToolsCompactController;
 namespace qvac_lib_inference_addon_llama {
 namespace context_slider {
 
+using LlamaMemoryHandle =
+    decltype(llama_get_memory(static_cast<llama_context*>(nullptr)));
+
+/// Small indirection layer around llama context/memory operations.
+///
+/// This makes ContextSlider testable without requiring a real llama_context.
+struct ILlamaContextOps {
+  virtual ~ILlamaContextOps() = default;
+  virtual llama_pos nCtx(llama_context* lctx) const = 0;
+  virtual LlamaMemoryHandle memory(llama_context* lctx) const = 0;
+  virtual void seqRm(
+      LlamaMemoryHandle mem, llama_seq_id seqId, llama_pos startPos,
+      llama_pos endPos) const = 0;
+  virtual void seqAdd(
+      LlamaMemoryHandle mem, llama_seq_id seqId, llama_pos startPos,
+      llama_pos endPos, llama_pos delta) const = 0;
+};
+
+/// Returns the default llama-backed ops implementation.
+const ILlamaContextOps& defaultLlamaContextOps();
+
 /// Outcome of a sliding-window operation on the KV cache.
 struct SlideOutcome {
   enum class Kind {
@@ -41,7 +62,8 @@ struct SlideOutcome {
 SlideOutcome trySlidePrefill(
     llama_context* lctx, llama_pos nPast, llama_pos firstMsgTokens,
     llama_pos nTokensToAppend, llama_pos nDiscarded,
-    ToolsCompactController& tools);
+    ToolsCompactController& tools,
+    const ILlamaContextOps& ops = defaultLlamaContextOps());
 
 /// Attempts to slide the context window during generation phase.
 ///
@@ -57,7 +79,8 @@ SlideOutcome trySlidePrefill(
 /// @return SlideOutcome describing what happened and the new state
 SlideOutcome trySlideGeneration(
     llama_context* lctx, llama_pos nPast, llama_pos firstMsgTokens,
-    llama_pos nDiscarded, ToolsCompactController& tools);
+    llama_pos nDiscarded, ToolsCompactController& tools,
+    const ILlamaContextOps& ops = defaultLlamaContextOps());
 
 } // namespace context_slider
 } // namespace qvac_lib_inference_addon_llama

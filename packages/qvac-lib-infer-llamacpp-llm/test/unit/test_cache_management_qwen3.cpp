@@ -474,3 +474,58 @@ TEST_F(
         << "Without reported slide, anchor should not jump left unexpectedly";
   }
 }
+
+TEST_F(
+    CacheManagementQwen3Test,
+    ToolsCompactPromptValidationRejectsMalformedLayoutsEndToEnd) {
+  if (!isQwen3ModelPath(test_model_path)) {
+    GTEST_SKIP() << "Test requires Qwen3 model for tools_compact feature";
+  }
+  if (!hasValidModel()) {
+    FAIL() << "Test model not found";
+  }
+
+  config_files["tools_compact"] = "true";
+  config_files["ctx_size"] = "256";
+  config_files["n_predict"] = "0";
+  config_files["temp"] = "0";
+
+  auto model = createModel();
+  if (!model) {
+    FAIL() << "Model failed to load";
+  }
+
+  auto expectInvalid = [&](const std::string& input, const std::string& hint) {
+    LlamaModel::Prompt prompt;
+    prompt.input = input;
+    try {
+      (void)model->processPrompt(prompt);
+      FAIL() << "Expected invalid prompt error: " << hint;
+    } catch (const qvac_errors::StatusError& err) {
+      const std::string msg = err.what();
+      EXPECT_NE(msg.find(hint), std::string::npos)
+          << "Unexpected error message: " << msg;
+    }
+  };
+
+  expectInvalid(
+      R"([{"role":"system","content":"policy"},{"type":"function","name":"get_weather","description":"Get weather","parameters":{"type":"object","properties":{"city":{"type":"string"}},"required":["city"]}}])",
+      "tools_compact requires at least one user or tool message before tool definitions");
+
+  expectInvalid(
+      R"([{"role":"user","content":"hello"},{"role":"assistant","content":"thinking"},{"type":"function","name":"get_weather","description":"Get weather","parameters":{"type":"object","properties":{"city":{"type":"string"}},"required":["city"]}}])",
+      "tools_compact requires tool definitions to immediately follow the last user/tool message");
+
+  expectInvalid(
+      R"([{"role":"user","content":"hello"},{"type":"function","name":"tool_a","description":"A","parameters":{"type":"object","properties":{"x":{"type":"string"}},"required":["x"]}},{"role":"assistant","content":"between"},{"type":"function","name":"tool_b","description":"B","parameters":{"type":"object","properties":{"y":{"type":"string"}},"required":["y"]}}])",
+      "tools_compact requires tool definitions to form a contiguous block");
+
+  expectInvalid(
+      R"([{"role":"user","content":"hello"},{"type":"function","name":"get_weather","description":"Get weather","parameters":{"type":"object","properties":{"city":{"type":"string"}},"required":["city"]}},{"role":"assistant","content":"after tools"}])",
+      "tools_compact requires tool definitions to be at the end of the prompt");
+
+  LlamaModel::Prompt validPrompt;
+  validPrompt.input =
+      R"([{"role":"user","content":"what weather?"},{"type":"function","name":"get_weather","description":"Get weather","parameters":{"type":"object","properties":{"city":{"type":"string"}},"required":["city"]}}])";
+  EXPECT_NO_THROW((void)model->processPrompt(validPrompt));
+}
