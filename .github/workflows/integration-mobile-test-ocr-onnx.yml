@@ -321,7 +321,7 @@ jobs:
       # Model provisioning for mobile: presigned URLs so the app can download detector + all
       # recognizers at runtime (same set as desktop integration tests).
       - name: Configure AWS credentials via OIDC for model download
-        uses: aws-actions/configure-aws-credentials@8df5847569e6427dd6c4fb1cf565c83acfa8afa7 # 6.0.0
+        uses: aws-actions/configure-aws-credentials@ec61189d14ec14c8efccab744f656cffd0e33f37 # 6.1.0
         with:
           role-to-assume: ${{ secrets.AWS_OIDC_ROLE_ARN }}
           aws-region: eu-central-1
@@ -461,7 +461,7 @@ jobs:
 
       - name: Setup Android SDK
         if: matrix.platform == 'Android'
-        uses: android-actions/setup-android@9fc6c4e9069bf8d3d10b2204b1fb8f6ef7065407 # 3.2.2
+        uses: android-actions/setup-android@40fd30fb8d7440372e1316f5d1809ec01dcd3699 # 4.0.1
 
       - name: Generate Android project
         if: matrix.platform == 'Android'
@@ -786,7 +786,7 @@ jobs:
       # Kept as-is from your workflow (only paths above needed monorepo porting)
 
       - name: Configure AWS credentials via OIDC for Device Farm
-        uses: aws-actions/configure-aws-credentials@8df5847569e6427dd6c4fb1cf565c83acfa8afa7 # 6.0.0
+        uses: aws-actions/configure-aws-credentials@ec61189d14ec14c8efccab744f656cffd0e33f37 # 6.1.0
         with:
           role-to-assume: ${{ secrets.AWS_OIDC_ROLE_ARN }}
           aws-region: us-west-2
@@ -1621,7 +1621,7 @@ jobs:
 
       - name: Upload raw Device Farm logs
         if: always() && steps.download_df_logs.outputs.artifact_dir
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: df-raw-logs-${{ matrix.platform }}-${{ github.run_number }}
           path: ${{ steps.download_df_logs.outputs.artifact_dir }}
@@ -1630,7 +1630,7 @@ jobs:
 
       - name: Upload mobile performance report
         if: always()
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: perf-report-ocr-${{ matrix.platform }}-${{ github.run_number }}
           path: |
@@ -1643,7 +1643,7 @@ jobs:
 
       - name: Refresh AWS credentials for log download
         if: always() && (steps.schedule_run.outputs.run_arn_perf || steps.schedule_run.outputs.run_arn_regular)
-        uses: aws-actions/configure-aws-credentials@8df5847569e6427dd6c4fb1cf565c83acfa8afa7 # 6.0.0
+        uses: aws-actions/configure-aws-credentials@ec61189d14ec14c8efccab744f656cffd0e33f37 # 6.1.0
         with:
           role-to-assume: ${{ secrets.AWS_OIDC_ROLE_ARN }}
           aws-region: us-west-2
@@ -1784,7 +1784,7 @@ jobs:
 
       - name: Upload Device Farm Logs
         if: always() && (steps.schedule_run.outputs.run_arn_perf || steps.schedule_run.outputs.run_arn_regular)
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: devicefarm-logs-ocr-onnx-${{ matrix.platform }}
           path: devicefarm-logs/
@@ -1810,7 +1810,7 @@ jobs:
             packages/ocr-onnx/test/images
 
       - name: Setup Node.js
-        uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # 4.4.0
+        uses: actions/setup-node@53b83947a5a98c8d113130e565377fae1a50d02f # 6.3.0
         with:
           node-version: ${{ env.NODE_VERSION }}
 
@@ -1885,7 +1885,7 @@ jobs:
 
       - name: Upload combined HTML report
         if: always()
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: HTML-Report-All-Platforms-${{ github.run_number }}
           path: combined-output/performance-report-combined.html
@@ -1894,7 +1894,7 @@ jobs:
 
       - name: Upload per-device HTML reports
         if: always()
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: HTML-Reports-Per-Device-${{ github.run_number }}
           path: per-device-reports/

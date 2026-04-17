@@ -333,7 +333,7 @@ jobs:
           fi
 
       - name: Upload IPA artifact
-        uses: actions/upload-artifact@bbbca2ddaa5d8feaa63e36b76fdaad77386f024f # 7.0.0
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # 7.0.1
         with:
           name: mobile-consumer-ipa
           path: ${{ inputs.working-directory }}/build/consumers/ios/consumer.ipa
@@ -361,7 +361,7 @@ jobs:
           path: ./ipa
 
       - name: Configure AWS credentials
-        uses: aws-actions/configure-aws-credentials@8df5847569e6427dd6c4fb1cf565c83acfa8afa7 # 6.0.0
+        uses: aws-actions/configure-aws-credentials@ec61189d14ec14c8efccab744f656cffd0e33f37 # 6.1.0
         with:
           role-to-assume: ${{ secrets.AWS_OIDC_ROLE_ARN }}
           aws-region: us-west-2
@@ -517,7 +517,7 @@ jobs:
           echo "safe-name=${SAFE_NAME}" >> $GITHUB_OUTPUT
 
       - name: Upload run ARN
-        uses: actions/upload-artifact@bbbca2ddaa5d8feaa63e36b76fdaad77386f024f # 7.0.0
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # 7.0.1
         with:
           name: device-farm-arn-ios-${{ needs.build.outputs.runId }}-${{ steps.save-arn.outputs.safe-name }}
           path: ${{ steps.save-arn.outputs.safe-name }}.txt
@@ -647,7 +647,7 @@ jobs:
 
       - name: Upload results
         if: always()
-        uses: actions/upload-artifact@bbbca2ddaa5d8feaa63e36b76fdaad77386f024f # 7.0.0
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # 7.0.1
         with:
           name: ios-results-${{ github.run_number }}
           path: ${{ inputs.working-directory }}/reports/
@@ -655,7 +655,7 @@ jobs:
 
       - name: Upload baseline (main/develop only)
         if: always() && (github.ref == 'refs/heads/main' || github.ref == 'refs/heads/develop')
-        uses: actions/upload-artifact@bbbca2ddaa5d8feaa63e36b76fdaad77386f024f # 7.0.0
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # 7.0.1
         with:
           name: ios-baseline
           path: ${{ inputs.working-directory }}/reports/results-*.json
@@ -670,7 +670,7 @@ jobs:
     timeout-minutes: 10
     steps:
       - name: Configure AWS credentials
-        uses: aws-actions/configure-aws-credentials@8df5847569e6427dd6c4fb1cf565c83acfa8afa7 # 6.0.0
+        uses: aws-actions/configure-aws-credentials@ec61189d14ec14c8efccab744f656cffd0e33f37 # 6.1.0
         with:
           role-to-assume: ${{ secrets.AWS_OIDC_ROLE_ARN }}
           aws-region: us-west-2
@@ -751,7 +751,7 @@ jobs:
 
       - name: Upload Device Farm logs
         if: always()
-        uses: actions/upload-artifact@bbbca2ddaa5d8feaa63e36b76fdaad77386f024f # 7.0.0
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # 7.0.1
         with:
           name: device-farm-logs-ios-${{ needs.build.outputs.runId }}
           path: ./device-farm-logs/

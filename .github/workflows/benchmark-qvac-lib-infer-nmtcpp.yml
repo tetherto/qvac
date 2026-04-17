@@ -257,7 +257,7 @@ jobs:
 
       - name: Restore vcpkg cache
         id: cache-vcpkg
-        uses: actions/cache/restore@668228422ae6a00e4ad889ee87cd7109ec5666a7 # 5.0.4
+        uses: actions/cache/restore@27d5ce7f107fe9357f9df03efb73ab90386fccae # 5.0.5
         with:
           path: ${{ env.PKG_DIR }}/vcpkg/cache
           key: vcpkg-nmtcpp-v1-linux-x64-benchmark-${{ hashFiles('packages/qvac-lib-infer-nmtcpp/vcpkg.json', 'packages/qvac-lib-infer-nmtcpp/vcpkg-configuration.json', 'packages/qvac-lib-infer-nmtcpp/vcpkg-overlays/**') }}
@@ -327,13 +327,13 @@ jobs:
 
       - if: ${{ steps.cache-vcpkg.outputs.cache-hit != 'true' }}
         name: Save vcpkg cache
-        uses: actions/cache/save@668228422ae6a00e4ad889ee87cd7109ec5666a7 # 5.0.4
+        uses: actions/cache/save@27d5ce7f107fe9357f9df03efb73ab90386fccae # 5.0.5
         with:
           path: ${{ env.PKG_DIR }}/vcpkg/cache
           key: vcpkg-nmtcpp-v1-linux-x64-benchmark-${{ hashFiles('packages/qvac-lib-infer-nmtcpp/vcpkg.json', 'packages/qvac-lib-infer-nmtcpp/vcpkg-configuration.json', 'packages/qvac-lib-infer-nmtcpp/vcpkg-overlays/**') }}
 
       - name: Upload build artifact
-        uses: actions/upload-artifact@bbbca2ddaa5d8feaa63e36b76fdaad77386f024f # 7.0.0
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # 7.0.1
         with:
           name: qvac-addon-build-${{ inputs.translators }}
           path: |
@@ -399,7 +399,7 @@ jobs:
 
       - name: Configure AWS credentials via OIDC
         if: needs.setup.outputs.qvac_needed == 'true'
-        uses: aws-actions/configure-aws-credentials@8df5847569e6427dd6c4fb1cf565c83acfa8afa7 # 6.0.0
+        uses: aws-actions/configure-aws-credentials@ec61189d14ec14c8efccab744f656cffd0e33f37 # 6.1.0
         with:
           role-to-assume: ${{ secrets.AWS_OIDC_ROLE_ARN }}
           aws-region: eu-central-1
@@ -514,7 +514,7 @@ jobs:
         continue-on-error: true
 
       - name: Cache datasets
-        uses: actions/cache@668228422ae6a00e4ad889ee87cd7109ec5666a7 # 5.0.4
+        uses: actions/cache@27d5ce7f107fe9357f9df03efb73ab90386fccae # 5.0.5
         with:
           key: datasets-${{ needs.setup.outputs.datasets_cache_key }}
           path: ${{ env.PKG_DIR }}/benchmarks/quality_eval/data
@@ -722,7 +722,7 @@ jobs:
           PYTHONUNBUFFERED: 1
 
       - name: Upload evaluation results
-        uses: actions/upload-artifact@bbbca2ddaa5d8feaa63e36b76fdaad77386f024f # 7.0.0
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # 7.0.1
         if: always()
         with:
           name: results-${{ matrix.pair }}-${{ inputs.translators }}-${{ steps.metrics.outputs.metrics }}-${{ inputs.hyperparams }}${{ inputs.use_pivot && '-pivot' || '' }}
@@ -730,7 +730,7 @@ jobs:
           retention-days: 30
 
       - name: Upload evaluation logs
-        uses: actions/upload-artifact@bbbca2ddaa5d8feaa63e36b76fdaad77386f024f # 7.0.0
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # 7.0.1
         if: failure()
         with:
           name: logs-${{ matrix.pair }}-${{ inputs.translators }}-${{ steps.metrics.outputs.metrics }}-${{ inputs.hyperparams }}
@@ -855,7 +855,7 @@ jobs:
           echo "- Metrics: chrF++=\`${{ inputs.metric_chrfpp }}\`, COMET=\`${{ inputs.metric_comet }}\`" >> $GITHUB_STEP_SUMMARY
 
       - name: Upload consolidated results
-        uses: actions/upload-artifact@bbbca2ddaa5d8feaa63e36b76fdaad77386f024f # 7.0.0
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # 7.0.1
         with:
           name: consolidated-results-${{ inputs.translators }}
           path: all-results
