@@ -18,7 +18,7 @@ using qvac::ttslib::AudioResult;
 namespace {
 
 bool isSupertonicOnnxConfigValid(
-    const qvac::ttslib::supertonic::SupertonicConfig& c) {
+    const qvac::ttslib::supertonic::SupertonicConfig &c) {
   if (c.language.empty())
     return false;
   const bool haveVoice = !c.voiceStyleJsonPath.empty() ||
@@ -35,8 +35,8 @@ bool isSupertonicOnnxConfigValid(
 } // namespace
 
 TTSModel::TTSModel(
-    const std::unordered_map<std::string, std::string>& configMap,
-    const std::vector<float>& referenceAudio,
+    const std::unordered_map<std::string, std::string> &configMap,
+    const std::vector<float> &referenceAudio,
     std::shared_ptr<chatterbox::IChatterboxEngine> chatterboxEngine,
     std::shared_ptr<qvac::ttslib::supertonic::ISupertonicEngine>
         supertonicEngine) {
@@ -69,9 +69,9 @@ TTSModel::TTSModel(
 }
 
 EngineType TTSModel::detectEngineType(
-    const std::unordered_map<std::string, std::string>& configMap) const {
-  auto nonEmpty = [](const std::unordered_map<std::string, std::string>& m,
-                     const char* k) {
+    const std::unordered_map<std::string, std::string> &configMap) const {
+  auto nonEmpty = [](const std::unordered_map<std::string, std::string> &m,
+                     const char *k) {
     auto it = m.find(k);
     return it != m.end() && !it->second.empty();
   };
@@ -88,10 +88,10 @@ EngineType TTSModel::detectEngineType(
 }
 
 qvac::ttslib::chatterbox::ChatterboxConfig TTSModel::createChatterboxConfig(
-    const std::unordered_map<std::string, std::string>& configMap) {
+    const std::unordered_map<std::string, std::string> &configMap) {
   qvac::ttslib::chatterbox::ChatterboxConfig config = chatterboxConfig_;
 
-  auto updateConfig = [&](const std::string& key, std::string& configField) {
+  auto updateConfig = [&](const std::string &key, std::string &configField) {
     auto it = configMap.find(key);
     if (it != configMap.end()) {
       configField = it->second;
@@ -103,7 +103,7 @@ qvac::ttslib::chatterbox::ChatterboxConfig TTSModel::createChatterboxConfig(
   updateConfig("embedTokensPath", config.embedTokensPath);
   updateConfig("conditionalDecoderPath", config.conditionalDecoderPath);
   updateConfig("languageModelPath", config.languageModelPath);
-  updateConfig("dictPath", config.dictPath);
+  updateConfig("mecabDictPath", config.mecabDictPath);
 
   auto lazyIt = configMap.find("lazySessionLoading");
   if (lazyIt != configMap.end()) {
@@ -123,14 +123,14 @@ qvac::ttslib::chatterbox::ChatterboxConfig TTSModel::createChatterboxConfig(
      << "' embedTokensPath='" << config.embedTokensPath << "'"
      << "' conditionalDecoderPath='" << config.conditionalDecoderPath << "'"
      << "' languageModelPath='" << config.languageModelPath << "'"
-     << "' dictPath='" << config.dictPath << "'";
+     << "' mecabDictPath='" << config.mecabDictPath << "'";
   QLOG(Priority::INFO, ss.str());
 
   return config;
 }
 
 bool TTSModel::isChatterboxConfigValid(
-    const chatterbox::ChatterboxConfig& config) const {
+    const chatterbox::ChatterboxConfig &config) const {
   return !config.language.empty() && !config.referenceAudio.empty() &&
          !config.tokenizerPath.empty() && !config.speechEncoderPath.empty() &&
          !config.embedTokensPath.empty() &&
@@ -139,10 +139,10 @@ bool TTSModel::isChatterboxConfigValid(
 }
 
 qvac::ttslib::supertonic::SupertonicConfig TTSModel::createSupertonicConfig(
-    const std::unordered_map<std::string, std::string>& configMap) {
+    const std::unordered_map<std::string, std::string> &configMap) {
   qvac::ttslib::supertonic::SupertonicConfig config = supertonicConfig_;
 
-  auto updateConfig = [&](const std::string& key, std::string& configField) {
+  auto updateConfig = [&](const std::string &key, std::string &configField) {
     auto it = configMap.find(key);
     if (it != configMap.end()) {
       configField = it->second;
@@ -203,12 +203,12 @@ qvac::ttslib::supertonic::SupertonicConfig TTSModel::createSupertonicConfig(
 }
 
 bool TTSModel::isSupertonicConfigValid(
-    const qvac::ttslib::supertonic::SupertonicConfig& config) const {
+    const qvac::ttslib::supertonic::SupertonicConfig &config) const {
   return isSupertonicOnnxConfigValid(config);
 }
 
 void TTSModel::saveLoadParams(
-    const std::unordered_map<std::string, std::string>& configMap) {
+    const std::unordered_map<std::string, std::string> &configMap) {
   if (engineType_ == EngineType::Chatterbox) {
     chatterboxConfig_ = createChatterboxConfig(configMap);
     configSet_ = isChatterboxConfigValid(chatterboxConfig_);
@@ -273,7 +273,7 @@ void TTSModel::initializeBackend() {
 
 bool TTSModel::isLoaded() const { return loaded_; }
 
-TTSModel::Output TTSModel::process(const Input& text) {
+TTSModel::Output TTSModel::process(const Input &text) {
   if (cancelRequested_.exchange(false)) {
     throw std::runtime_error("Job cancelled");
   }
@@ -284,8 +284,8 @@ TTSModel::Output TTSModel::process(const Input& text) {
 
   if (!isLoaded()) {
     QLOG(Priority::ERROR, "Model not loaded, processing failed.");
-    throw qvac_errors::createTTSError(
-        qvac_errors::tts_error::ModelNotLoaded, "Model not loaded");
+    throw qvac_errors::createTTSError(qvac_errors::tts_error::ModelNotLoaded,
+                                      "Model not loaded");
   }
 
   auto startTime = std::chrono::high_resolution_clock::now();
@@ -334,9 +334,10 @@ TTSModel::Output TTSModel::process(const Input& text) {
   return result.pcm16;
 }
 
-TTSModel::Output TTSModel::process(
-    const Input& text, const std::function<void(const Output&)>& consumer) {
-  const auto& result = process(text);
+TTSModel::Output
+TTSModel::process(const Input &text,
+                  const std::function<void(const Output &)> &consumer) {
+  const auto &result = process(text);
 
   if (consumer) {
     consumer(result);
@@ -345,12 +346,12 @@ TTSModel::Output TTSModel::process(
   return result;
 }
 
-std::any TTSModel::process(const std::any& input) {
+std::any TTSModel::process(const std::any &input) {
   if (input.type() == typeid(Input)) {
-    return std::any{process(std::any_cast<const Input&>(input))};
+    return std::any{process(std::any_cast<const Input &>(input))};
   }
   if (input.type() == typeid(AnyInput)) {
-    const auto& jobInput = std::any_cast<const AnyInput&>(input);
+    const auto &jobInput = std::any_cast<const AnyInput &>(input);
     if (!jobInput.config.empty()) {
       auto savedLavaSR = lavaSRConfig_;
       saveLoadParams(jobInput.config);
@@ -360,9 +361,9 @@ std::any TTSModel::process(const std::any& input) {
     }
     return std::any{process(jobInput.text)};
   }
-  throw qvac_errors::StatusError(
-      qvac_errors::general_error::InvalidArgument,
-      std::string("Unsupported TTS input type: ") + input.type().name());
+  throw qvac_errors::StatusError(qvac_errors::general_error::InvalidArgument,
+                                 std::string("Unsupported TTS input type: ") +
+                                     input.type().name());
 }
 
 qvac_lib_inference_addon_cpp::RuntimeStats TTSModel::runtimeStats() const {
@@ -373,8 +374,8 @@ qvac_lib_inference_addon_cpp::RuntimeStats TTSModel::runtimeStats() const {
   stats.emplace_back("realTimeFactor", realTimeFactor_);
   stats.emplace_back("audioDurationMs", audioDurationMs_);
   stats.emplace_back("totalSamples", totalSamples_);
-  stats.emplace_back(
-      "sampleRate", static_cast<double>(outputSampleRate_->load()));
+  stats.emplace_back("sampleRate",
+                     static_cast<double>(outputSampleRate_->load()));
 
   return stats;
 }
@@ -395,21 +396,20 @@ void TTSModel::resetRuntimeStats() {
   textLength_ = 0;
 }
 
-void TTSModel::setReferenceAudio(const std::vector<float>& referenceAudio) {
+void TTSModel::setReferenceAudio(const std::vector<float> &referenceAudio) {
   if (engineType_ == EngineType::Chatterbox) {
     chatterboxConfig_.referenceAudio = referenceAudio;
-    QLOG(
-        Priority::INFO,
-        "Reference audio set, size: " + std::to_string(referenceAudio.size()));
+    QLOG(Priority::INFO,
+         "Reference audio set, size: " + std::to_string(referenceAudio.size()));
   }
 }
 
 void TTSModel::parseLavaSRConfig(
-    const std::unordered_map<std::string, std::string>& configMap) {
-  auto hasBool = [&](const std::string& key) -> bool {
+    const std::unordered_map<std::string, std::string> &configMap) {
+  auto hasBool = [&](const std::string &key) -> bool {
     return configMap.find(key) != configMap.end();
   };
-  auto getBool = [&](const std::string& key) -> bool {
+  auto getBool = [&](const std::string &key) -> bool {
     auto it = configMap.find(key);
     return it != configMap.end() && it->second == "true";
   };
@@ -441,18 +441,16 @@ void TTSModel::parseLavaSRConfig(
       if (rate <= 0) {
         lavaSRConfig_.outputSampleRate = 0;
       } else if (rate < 8000 || rate > 192000) {
-        QLOG(
-            Priority::WARNING,
-            "outputSampleRate " + std::to_string(rate) +
-                " is outside the supported range [8000, 192000]");
+        QLOG(Priority::WARNING,
+             "outputSampleRate " + std::to_string(rate) +
+                 " is outside the supported range [8000, 192000]");
         lavaSRConfig_.outputSampleRate = 0;
       } else {
         lavaSRConfig_.outputSampleRate = rate;
       }
-    } catch (const std::exception& e) {
-      QLOG(
-          Priority::WARNING,
-          "Invalid outputSampleRate value '" + srIt->second + "': " + e.what());
+    } catch (const std::exception &e) {
+      QLOG(Priority::WARNING, "Invalid outputSampleRate value '" +
+                                  srIt->second + "': " + e.what());
       lavaSRConfig_.outputSampleRate = 0;
     }
   }
@@ -525,10 +523,8 @@ AudioResult TTSModel::postProcess(AudioResult result) {
                              ? lavaSRConfig_.outputSampleRate
                              : currentRate;
   if (targetRate != currentRate) {
-    QLOG(
-        Priority::INFO,
-        "Resampling from " + std::to_string(currentRate) + " to " +
-            std::to_string(targetRate));
+    QLOG(Priority::INFO, "Resampling from " + std::to_string(currentRate) +
+                             " to " + std::to_string(targetRate));
     audio = dsp::Resampler::resample(audio, currentRate, targetRate);
     currentRate = targetRate;
   }

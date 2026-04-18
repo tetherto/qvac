@@ -16,7 +16,7 @@ const { splitTtsText } = require('./lib/textChunker')
 const ENGINE_CHATTERBOX = 'chatterbox'
 const ENGINE_SUPERTONIC = 'supertonic'
 
-const CHATTERBOX_DICT_DIR = path.join(__dirname, 'dict')
+const MECAB_DICT_DIR = path.join(__dirname, 'dict')
 
 function firstNonEmpty (...candidates) {
   for (let i = 0; i < candidates.length; i++) {
@@ -111,7 +111,8 @@ function normalizeOnnxTtsFiles (files) {
     unicodeIndexer: firstNonEmpty(f.unicodeIndexer, f.unicodeIndexerPath),
     ttsConfig: firstNonEmpty(f.ttsConfig, f.ttsConfigPath),
     voiceStyle: firstNonEmpty(f.voiceStyle, f.voiceStyleJsonPath),
-    voicesDir: firstNonEmpty(f.voicesDir)
+    voicesDir: firstNonEmpty(f.voicesDir),
+    mecabDictPath: firstNonEmpty(f.mecabDictPath)
   }
 }
 
@@ -227,6 +228,7 @@ class ONNXTTS {
         this._conditionalDecoderPath = normalizedFiles.conditionalDecoder
         this._languageModelPath = normalizedFiles.languageModel
       }
+      this._mecabDictPath = firstNonEmpty(normalizedFiles.mecabDictPath, MECAB_DICT_DIR)
       this._referenceAudio = referenceAudio
     } else {
       this._modelDir = normalizedFiles.modelDir
@@ -453,7 +455,7 @@ class ONNXTTS {
       embedTokensPath: this._embedTokensPath || '',
       conditionalDecoderPath: this._conditionalDecoderPath || '',
       languageModelPath: this._languageModelPath || '',
-      dictPath: CHATTERBOX_DICT_DIR,
+      mecabDictPath: this._mecabDictPath || MECAB_DICT_DIR,
       language: this._config?.language || 'en',
       useGPU: this._config?.useGPU || false,
       lazySessionLoading: this._lazySessionLoading

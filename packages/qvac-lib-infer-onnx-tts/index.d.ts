@@ -63,6 +63,13 @@ declare interface ONNXTTSFiles {
    * if `voiceStyle` is not set.
    */
   voicesDir?: string
+  /**
+   * Chatterbox `ja` only: directory containing the MeCab dictionary tree
+   * (expects a `mecab-ipadic/` subfolder with a valid `mecabrc`). When
+   * omitted, defaults to the dictionary bundled with this package
+   * (`<package>/dict`). Ignored for non-Japanese languages and for Supertonic.
+   */
+  mecabDictPath?: string
   tokenizerPath?: string
   speechEncoderPath?: string
   embedTokensPath?: string

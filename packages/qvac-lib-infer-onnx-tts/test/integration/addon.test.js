@@ -319,6 +319,119 @@ test('Chatterbox Multilingual TTS: Synthesis across languages', { timeout: 36000
 })
 
 // ---------------------------------------------------------------------------
+// Chatterbox Japanese TTS (kanji + MeCab) with Whisper CER verification
+// ---------------------------------------------------------------------------
+
+const TEXT_JA = 'こんにちは世界。今日はいい天気です。'
+const WHISPER_MODEL_JA = 'ggml-medium.bin'
+const CER_THRESHOLD_JA = 0.5
+
+function normalizeJapaneseForCer (text) {
+  return text
+    .replace(/[、。！？「」『』（）〈〉《》【】\s\u3000]/g, '')
+    .replace(/[.,!?;:"'()[\]{}]/g, '')
+    .trim()
+}
+
+function levenshtein (a, b) {
+  const d = Array(a.length + 1)
+    .fill(null)
+    .map(() => Array(b.length + 1).fill(0))
+  for (let i = 0; i <= a.length; i++) d[i][0] = i
+  for (let j = 0; j <= b.length; j++) d[0][j] = j
+  for (let i = 1; i <= a.length; i++) {
+    for (let j = 1; j <= b.length; j++) {
+      const cost = a[i - 1] === b[j - 1] ? 0 : 1
+      d[i][j] = Math.min(
+        d[i - 1][j] + 1,
+        d[i][j - 1] + 1,
+        d[i - 1][j - 1] + cost
+      )
+    }
+  }
+  return d[a.length][b.length]
+}
+
+function characterErrorRate (expected, actual) {
+  const ref = Array.from(normalizeJapaneseForCer(expected))
+  const hyp = Array.from(normalizeJapaneseForCer(actual))
+  if (ref.length === 0) return hyp.length === 0 ? 0 : 1
+  return levenshtein(ref, hyp) / ref.length
+}
+
+test('Chatterbox Multilingual TTS: Japanese (kanji + MeCab) with Whisper CER', { timeout: 3600000 }, async (t) => {
+  if (isMobile) {
+    t.pass('Skipped on mobile')
+    return
+  }
+
+  const baseDir = getBaseDir()
+  const modelDir = path.join(baseDir, 'models', 'chatterbox-multilingual')
+  const whisperModelDir = path.join(baseDir, 'models', 'whisper')
+  const whisperModelPath = path.join(whisperModelDir, WHISPER_MODEL_JA)
+
+  console.log('\n=== Ensuring Chatterbox multilingual models ===')
+  const downloadResult = await ensureChatterboxModels({ targetDir: modelDir, language: 'multilingual', variant: CHATTERBOX_VARIANT })
+  t.ok(downloadResult.success, 'Chatterbox multilingual models should be downloaded')
+  if (!downloadResult.success) return
+
+  console.log('\n=== Ensuring Whisper model (medium, CJK-friendly) ===')
+  const whisperDownload = await ensureWhisperModel(whisperModelPath)
+  t.ok(whisperDownload.success, 'Whisper model should be downloaded')
+  if (!whisperDownload.success) return
+
+  const expectation = {
+    minSamples: 5000,
+    maxSamples: 5000000,
+    minDurationMs: 200,
+    maxDurationMs: 300000
+  }
+
+  console.log('\n=== Loading Chatterbox multilingual model (ja) ===')
+  const model = await loadChatterboxTTS({
+    tokenizerPath: path.join(modelDir, 'tokenizer.json'),
+    speechEncoderPath: chatterboxPath(modelDir, 'speech_encoder', true),
+    embedTokensPath: chatterboxPath(modelDir, 'embed_tokens', true),
+    conditionalDecoderPath: chatterboxPath(modelDir, 'conditional_decoder', true),
+    languageModelPath: chatterboxLmPath(modelDir),
+    language: 'ja'
+  })
+  t.ok(model, 'Japanese TTS model should be loaded')
+
+  console.log(`\nInput text: "${TEXT_JA}"`)
+  const saveWav = !isMobile
+  const wavPath = saveWav ? path.join(baseDir, 'test', 'output', 'chatterbox-japanese.wav') : undefined
+  const result = await runChatterboxSynth(model, { text: TEXT_JA, saveWav, wavOutputPath: wavPath }, expectation)
+  console.log(result.output)
+
+  t.ok(result.passed, '[ja] should pass basic audio bounds')
+  t.ok(result.data.sampleCount > 0, '[ja] should produce audio samples')
+
+  console.log('\n=== Loading Whisper (ja) and transcribing for CER ===')
+  const whisperModel = await loadWhisper({
+    modelName: WHISPER_MODEL_JA,
+    diskPath: whisperModelDir,
+    language: 'ja'
+  })
+  t.ok(whisperModel, 'Whisper model should be loaded')
+
+  const whisperResult = await runWhisper(whisperModel, TEXT_JA, result.data.wavBuffer)
+  const cer = characterErrorRate(TEXT_JA, whisperResult.text)
+  const cerPct = (cer * 100).toFixed(1)
+  console.log(`>>> [WHISPER][ja] Expected: "${TEXT_JA}"`)
+  console.log(`>>> [WHISPER][ja] Got:      "${whisperResult.text}"`)
+  console.log(`>>> [WHISPER][ja] CER: ${cerPct}%`)
+
+  t.ok(cer <= CER_THRESHOLD_JA, `CER [ja] should be <= ${CER_THRESHOLD_JA * 100}% (got ${cerPct}%)`)
+
+  await whisperModel.unload()
+  t.pass('Whisper model unloaded')
+
+  await model.unload()
+  t.pass('Japanese TTS model unloaded')
+})
+
+// ---------------------------------------------------------------------------
 // outputSampleRate tests (no LavaSR models needed, tests resampling)
 // ---------------------------------------------------------------------------
 
