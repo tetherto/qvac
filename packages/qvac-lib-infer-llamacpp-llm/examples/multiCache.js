@@ -1,7 +1,7 @@
 'use strict'
 
 const LlmLlamacpp = require('../index')
-const FilesystemDL = require('@qvac/dl-filesystem')
+const path = require('bare-path')
 const process = require('bare-process')
 const { downloadModel } = require('./utils')
 
@@ -15,17 +15,8 @@ async function main () {
     'Llama-3.2-1B-Instruct-Q4_0.gguf'
   )
 
-  // 2. Initializing data loader
-  const fsDL = new FilesystemDL({ dirPath })
-
-  // 3. Configuring model settings
-  const args = {
-    loader: fsDL,
-    opts: { stats: true },
-    logger: console,
-    diskPath: dirPath,
-    modelName
-  }
+  // 2. Configuring model settings
+  const modelPath = path.join(dirPath, modelName)
 
   const config = {
     device: 'gpu',
@@ -33,12 +24,17 @@ async function main () {
     ctx_size: '10000'
   }
 
-  // 4. Loading model
-  const model = new LlmLlamacpp(args, config)
+  // 3. Loading model
+  const model = new LlmLlamacpp({
+    files: { model: [modelPath] },
+    config,
+    logger: console,
+    opts: { stats: true }
+  })
   await model.load()
 
   try {
-    // 5. First conversation - no cache will be used. One shot inference
+    // 4. First conversation - no cache will be used. One shot inference
     const messages = [
       {
         role: 'system',
@@ -73,7 +69,7 @@ async function main () {
     console.log(`Inference stats: ${JSON.stringify(response1.stats)}`)
     console.log('\n')
 
-    // 6. Switching to a new session with cache1.bin file
+    // 5. Switching to a new session with cache1.bin file
     const messages2 = [
       {
         role: 'user',
@@ -96,7 +92,7 @@ async function main () {
     console.log(`Inference stats: ${JSON.stringify(response2.stats)}`)
     console.log('\n')
 
-    // 7. Continuing conversation with cache1.bin
+    // 6. Continuing conversation with cache1.bin
     const messages3 = [
       {
         role: 'user',
@@ -123,9 +119,8 @@ async function main () {
     console.error('Error occurred:', errorMessage)
     console.error('Error details:', error)
   } finally {
-    // 8. Cleaning up resources
+    // 7. Cleaning up resources
     await model.unload()
-    await fsDL.close()
   }
 }
 

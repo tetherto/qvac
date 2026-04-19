@@ -6,6 +6,7 @@ require('./integration-runtime.cjs')
 // Functions are invoked dynamically by the mobile test runner framework.
 
 /* global runIntegrationModule */
+
 /* global __shouldRunTest */
 
 const __FILTERED = { modulePath: 'filtered', summary: { total: 0, passed: 0, failed: 0 } }

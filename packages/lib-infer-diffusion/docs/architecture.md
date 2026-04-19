@@ -1,7 +1,7 @@
 # Architecture Documentation
 
-**Package:** `@qvac/diffusion-cpp` v0.1.0  
-**Stack:** JavaScript, C++20, stable-diffusion.cpp, Bare Runtime, CMake, vcpkg  
+**Package:** `@qvac/diffusion-cpp` v0.3.0
+**Stack:** JavaScript, C++20, stable-diffusion.cpp, Bare Runtime, CMake, vcpkg
 **License:** Apache-2.0
 
 ---
@@ -49,12 +49,12 @@
 ## Key Features
 
 - **Cross-platform**: macOS, Linux, Windows, iOS, Android
-- **Disk-local models**: Files must be present on disk at `diskPath`
+- **Disk-local models**: Files must be present on disk; the caller passes absolute file paths via `files.{model,clipL,clipG,t5Xxl,llm,vae}` to the constructor
 - **Progress tracking**: Step-by-step generation progress callbacks
 - **GPU acceleration**: Metal, Vulkan, OpenCL
 - **Quantized models**: GGUF, safetensors, checkpoint formats
 - **Diffusion models**: SD1.x, SD2.x, SDXL, SD3, FLUX.2 [klein]
-- **Generation modes**: txt2img
+- **Generation modes**: txt2img, img2img
 
 ## Target Platforms
 
@@ -122,8 +122,8 @@ graph TB
 
 | Package | Type | Version | Purpose |
 |---------|------|---------|---------|
-| @qvac/infer-base | Framework | ^0.2.0 | Base classes (BaseInference, QvacResponse) |
-| qvac-lib-inference-addon-cpp | Native | ≥1.1.1 | C++ addon framework (single-job runner) |
+| @qvac/infer-base | Framework | ^0.4.0 | Composition utilities (`createJobHandler`, `exclusiveRunQueue`, `QvacResponse`) |
+| qvac-lib-inference-addon-cpp | Native | ≥1.1.2 | C++ addon framework (single-job runner) |
 | stable-diffusion.cpp | Native | latest | Diffusion inference engine |
 | Bare Runtime | Runtime | ≥1.24.0 | JavaScript execution |
 
@@ -131,8 +131,8 @@ graph TB
 
 | From | To | Mechanism | Data Format |
 |------|-----|-----------|-------------|
-| JavaScript | ImgStableDiffusion | Constructor | args, config objects |
-| ImgStableDiffusion | BaseInference | Inheritance | Template method pattern |
+| JavaScript | ImgStableDiffusion | Constructor | Single `{ files, config, logger?, opts? }` object |
+| ImgStableDiffusion | createJobHandler / exclusiveRunQueue | Composition | Job lifecycle + run-queue helpers from `@qvac/infer-base` |
 | ImgStableDiffusion | SdInterface | Composition | Method calls |
 | SdInterface | C++ Addon | require.addon() | Native binding |
 
@@ -147,20 +147,26 @@ graph TB
 ```mermaid
 classDiagram
     class ImgStableDiffusion {
-        +constructor(args, config)
+        +constructor(args: ImgStableDiffusionArgs)
         +load() Promise~void~
         +run(params: GenerationParams) Promise~QvacResponse~
         +cancel() Promise~void~
         +unload() Promise~void~
+        +getState() State
     }
 
-    class BaseInference {
-        <<abstract>>
-        +load() Promise~void~
-        +run() Promise~QvacResponse~
-        +unload() Promise~void~
-        #_runInternal() Promise~QvacResponse~
-        #_withExclusiveRun(fn) Promise~any~
+    class JobHandler {
+        <<from @qvac/infer-base>>
+        +start() QvacResponse
+        +output(data)
+        +end(stats?, payload?)
+        +fail(error)
+        +active QvacResponse
+    }
+
+    class ExclusiveRunQueue {
+        <<from @qvac/infer-base>>
+        +(fn) Promise~T~
     }
 
     class QvacResponse {
@@ -169,8 +175,9 @@ classDiagram
         +cancel() Promise~void~
     }
 
-    ImgStableDiffusion --|> BaseInference
-    ImgStableDiffusion ..> QvacResponse : creates
+    ImgStableDiffusion ..> JobHandler : composes via createJobHandler()
+    ImgStableDiffusion ..> ExclusiveRunQueue : composes via exclusiveRunQueue()
+    JobHandler ..> QvacResponse : creates per start()
 ```
 
 <details>
@@ -180,16 +187,20 @@ classDiagram
 
 | Class | Responsibility | Lifecycle | Dependencies |
 |-------|----------------|-----------|--------------|
-| ImgStableDiffusion | Orchestrate model lifecycle, manage loading/inference | Created by user, persistent | SdInterface |
-| BaseInference | Define standard inference API (template method pattern) | Abstract base class | None |
-| QvacResponse | Handle generation progress and result | Created per `run()` call | None |
+| ImgStableDiffusion | Orchestrate model lifecycle, manage loading/inference | Created by user, persistent | SdInterface, JobHandler, ExclusiveRunQueue |
+| JobHandler (`createJobHandler`) | Start/end/fail a single in-flight job and emit a `QvacResponse` | Per-instance, lives as long as the model | None |
+| ExclusiveRunQueue (`exclusiveRunQueue`) | Serialize public API calls so only one job is in flight at a time | Per-instance | None |
+| QvacResponse | Handle generation progress and result | Created per `run()` call by the JobHandler | None |
 
 **Key Relationships:**
 
 | From | To | Type | Purpose |
 |------|-----|------|---------|
-| ImgStableDiffusion | BaseInference | Inheritance | Standard QVAC inference API |
-| ImgStableDiffusion | QvacResponse | Creates | Progress/result per generation |
+| ImgStableDiffusion | JobHandler | Composition | Lifecycle of the active job (replaces inheriting from `BaseInference`) |
+| ImgStableDiffusion | ExclusiveRunQueue | Composition | Serializes `load()`, `run()`, and `unload()` (cancel is intentionally outside the queue so it can interrupt an in-flight run) |
+| JobHandler | QvacResponse | Creates | Progress/result per generation |
+
+> **Note:** `ImgStableDiffusion` no longer extends `BaseInference`. It composes the helpers exposed by `@qvac/infer-base` (`createJobHandler`, `exclusiveRunQueue`) directly.
 
 </details>
 
@@ -206,7 +217,7 @@ graph TB
     subgraph "Layer 1: JavaScript API"
         APP["Application Code"]
         IMGCLASS["ImgStableDiffusion<br/>(index.js)"]
-        BASEINF["BaseInference<br/>(@qvac/infer-base)"]
+        BASE["createJobHandler / exclusiveRunQueue<br/>(@qvac/infer-base)"]
         RESPONSE["QvacResponse"]
     end
     
@@ -234,7 +245,7 @@ graph TB
     end
     
     APP --> IMGCLASS
-    IMGCLASS --> BASEINF
+    IMGCLASS --> BASE
     IMGCLASS --> SDIF
     IMGCLASS -.-> RESPONSE
 
@@ -267,7 +278,7 @@ graph TB
 
 | Layer | Components | Responsibility | Language | Why This Layer |
 |-------|------------|----------------|----------|----------------|
-| 1. JavaScript API | ImgStableDiffusion, BaseInference, QvacResponse | High-level API, error handling | JS | Ergonomic API for npm consumers |
+| 1. JavaScript API | ImgStableDiffusion, `createJobHandler` / `exclusiveRunQueue` (from `@qvac/infer-base`), QvacResponse | High-level API, error handling | JS | Ergonomic API for npm consumers |
 | 2. Bridge | SdInterface, binding.js | JS↔C++ communication | JS wrapper | Lifecycle management, handle safety |
 | 3. C++ Addon | JsInterface, AddonCpp/AddonJs | Single-job runner, threading, callbacks | C++ | Performance, native integration |
 | 4. Model | SdModel, Contexts | Diffusion logic, sampling | C++ | Direct stable-diffusion.cpp integration |
@@ -533,14 +544,14 @@ See [qvac-lib-inference-addon-cpp Decision 4: Why Bare Runtime](https://github.c
 
 ---
 
-## Decision 3: Disk-Local Model Files
+## Decision 3: Disk-Local Model Files (caller-supplied absolute paths)
 
 <details>
 <summary>⚡ TL;DR</summary>
 
-**Chose:** Require model files to already exist on disk at `diskPath`
-**Why:** Simplicity — the addon loads files directly from disk, no streaming/download layer needed
-**Cost:** Caller must ensure files are present before calling `load()`
+**Chose:** Require model files to already exist on disk; the caller passes absolute paths via `files.{model,clipL,clipG,t5Xxl,llm,vae}`
+**Why:** Simplicity — the addon loads files directly from disk, no streaming/download layer needed and no loader abstraction
+**Cost:** Caller must ensure files are present and supply absolute paths before calling `load()`
 
 </details>
 
@@ -548,28 +559,28 @@ See [qvac-lib-inference-addon-cpp Decision 4: Why Bare Runtime](https://github.c
 
 Diffusion models consist of multiple large files (diffusion model, text encoders, VAE). The addon needs these files to create the native `sd_ctx_t` context.
 
-Unlike the LLM addon which historically used WeightsProvider for streaming weights, diffusion loads files directly from disk paths — no loader abstraction is involved.
+Unlike the LLM addon which historically used WeightsProvider for streaming weights, diffusion has always loaded files directly from disk. After the addon-loader-abstraction refactor, there is also no `Loader` interface and no `diskPath` / `modelName` joining inside the addon — the caller passes absolute paths through the new `files` argument.
 
 ### Decision
 
-Require all model files to be present on disk at `diskPath` before `load()` is called. The addon constructs file paths by joining `diskPath` with each model filename and passes them directly to stable-diffusion.cpp.
+Require all model files to be present on disk before `load()` is called. The constructor accepts a single `files` object whose entries are absolute paths (`files.model` is required; `files.clipL`, `files.clipG`, `files.t5Xxl`, `files.llm`, `files.vae` are optional companions). `_load()` reads `this._files` and forwards the paths directly to stable-diffusion.cpp.
 
 ### Rationale
 
 **Simplicity:**
 - No download/streaming abstraction layer needed
-- No WeightsProvider, no progress tracking for downloads
+- No WeightsProvider, no Loader, no progress tracking for downloads
 - Direct file paths to stable-diffusion.cpp
 
 **Split-model support:**
 - Diffusion models may have multiple components (diffusion GGUF, CLIP-L, CLIP-G, T5-XXL, LLM encoder, VAE)
-- All resolved as `path.join(diskPath, filename)` in `_load()`
-- Split vs all-in-one layout detected via heuristic (`isSplitLayout = !!llmModel || !!t5XxlModel`)
+- The caller supplies each component as an absolute path on `files`
+- Split vs all-in-one layout is detected via heuristic in `_load()` (`isSplitLayout = !!this._files.llm || !!this._files.t5Xxl || !!this._files.clipL || !!this._files.clipG`). Any caller-supplied separate encoder implies the primary file is the standalone diffusion model rather than an all-in-one checkpoint, so FLUX.1 (`{ model, clipL, clipG, vae }` without `t5Xxl`) is also routed correctly.
 
 ### Trade-offs
 - ✅ Simple, no abstraction overhead
 - ✅ No streaming/buffering complexity
-- ❌ Caller responsible for ensuring files exist on disk
+- ❌ Caller responsible for ensuring files exist on disk and for resolving absolute paths
 
 ---
 
@@ -578,7 +589,7 @@ Require all model files to be present on disk at `diskPath` before `load()` is c
 <details>
 <summary>⚡ TL;DR</summary>
 
-**Chose:** Pass file paths directly to stable-diffusion.cpp via `sd_ctx_params_t`
+**Chose:** Pass absolute file paths directly to stable-diffusion.cpp via `sd_ctx_params_t`
 **Why:** stable-diffusion.cpp natively loads from file paths; no need for buffer intermediary
 **Cost:** Files must exist on disk (no streaming from P2P sources)
 
@@ -586,11 +597,11 @@ Require all model files to be present on disk at `diskPath` before `load()` is c
 
 ### Context
 
-stable-diffusion.cpp accepts model files via file paths in its context parameters (`model_path`, `diffusion_model_path`, `clip_l_path`, `vae_path`, etc.). The addon constructs these paths from `diskPath` + filenames.
+stable-diffusion.cpp accepts model files via file paths in its context parameters (`model_path`, `diffusion_model_path`, `clip_l_path`, `vae_path`, etc.). The caller supplies these as absolute paths on the constructor's `files` object; the addon never joins a base directory with a filename.
 
 ### Decision
 
-Pass absolute file paths directly to stable-diffusion.cpp rather than using buffer-based loading. The `_load()` method constructs a `configurationParams` object with resolved paths and passes it to the native addon.
+Pass absolute file paths directly to stable-diffusion.cpp rather than using buffer-based loading. `_load()` builds a `configurationParams` object from `this._files` and passes it to the native addon as-is.
 
 ### Rationale
 
@@ -679,8 +690,8 @@ interface GenerationParams {
 <details>
 <summary>⚡ TL;DR</summary>
 
-**Chose:** Promise-based exclusive run queue using `_withExclusiveRun()` wrapper  
-**Why:** Ensure generation jobs complete without interruption (long-running operations)  
+**Chose:** Compose `exclusiveRunQueue()` from `@qvac/infer-base` to serialize public API entrypoints
+**Why:** Ensure generation jobs complete without interruption (long-running operations)
 **Cost:** One generation at a time per model instance
 
 </details>
@@ -691,7 +702,7 @@ Diffusion generation takes significant time (seconds to minutes). Without coordi
 
 ### Decision
 
-Implement JavaScript-level promise queue ensuring only one generation job runs at a time per model instance.
+Use the `exclusiveRunQueue()` helper from `@qvac/infer-base`. The constructor stores the queue as `this._run`, and `load()`, `run()`, and `unload()` wrap their bodies with `this._run(() => …)`. `cancel()` is intentionally **not** queued — it must be able to interrupt an in-flight `run()` to terminate it, so it bypasses the queue and delegates straight to `addon.cancel()` (which is itself a no-op when there is no active job). This replaces the previous `BaseInference._withExclusiveRun()` template-method approach with a small composable utility.
 
 ### Rationale
 
@@ -760,4 +771,4 @@ Provide hand-written TypeScript definitions in `index.d.ts`.
 
 ---
 
-**Last Updated:** 2026-03-11
+**Last Updated:** 2026-04-16
