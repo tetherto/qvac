@@ -575,7 +575,6 @@ std::any SdModel::process(const std::any& input) {
       if (gen.width == 512 && gen.height == 512) {
         genParams.width = imgW;
         genParams.height = imgH;
-        genParams.height = imgH;
       }
       gen.width = genParams.width;
       gen.height = genParams.height;

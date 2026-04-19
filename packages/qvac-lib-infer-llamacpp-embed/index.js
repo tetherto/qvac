@@ -1,160 +1,172 @@
 'use strict'
 
+const fs = require('bare-fs')
 const path = require('bare-path')
-const BaseInference = require('@qvac/infer-base/WeightsProvider/BaseInference')
-const WeightsProvider = require('@qvac/infer-base/WeightsProvider/WeightsProvider')
-const { BertInterface } = require('./addon')
+const QvacLogger = require('@qvac/logging')
+const { createJobHandler, exclusiveRunQueue } = require('@qvac/infer-base')
+const { BertInterface, mapAddonEvent } = require('./addon')
 
 const RUN_BUSY_ERROR_MESSAGE = 'Cannot set new job: a job is already set or being processed'
 
 /**
- * GGML client implementation for BERT GTE model
+ * Returns the first shard (matching `-NNNNN-of-MMMMM.gguf`) or the sole
+ * entry for single-file models. Matches the C++ shard-expansion contract
+ * in `GGUFShards::expandGGUFIntoShards`.
+ *
+ * @param {string[]} files - ordered array of absolute paths
+ * @returns {string}
  */
-class GGMLBert extends BaseInference {
-  /**
-   * Creates an instance of GGMLBert.
-   * @constructor
-   * @param {Object} params - arguments for model setup
-   * @param {Object} args arguments for inference setup
-   * @param {Object} config - environment specific inference setup configuration
-   */
-  constructor (
-    { opts = {}, loader, logger = null, diskPath = '.', modelName },
-    config = {}
-  ) {
-    super({ logger, opts })
+function pickPrimaryGgufPath (files) {
+  const SHARD_REGEX = /-\d+-of-\d+\.gguf$/
+  return files.find((p) => SHARD_REGEX.test(p)) || files[0]
+}
+
+/** BERT client wrapping the native BertInterface for embedding generation. */
+class GGMLBert {
+  constructor ({ files, config = {}, logger = null, opts = {} }) {
+    if (!files || !Array.isArray(files.model) || files.model.length === 0) {
+      throw new TypeError('files.model must be a non-empty array of absolute paths')
+    }
+    for (const [i, entry] of files.model.entries()) {
+      if (typeof entry !== 'string' || entry.length === 0) {
+        throw new TypeError(`files.model[${i}] must be an absolute path string`)
+      }
+      if (!path.isAbsolute(entry)) {
+        throw new TypeError(`files.model[${i}] must be an absolute path (got: ${entry})`)
+      }
+    }
+    this._files = files.model
     this._config = config
-    this._diskPath = diskPath
-    this._modelName = modelName
-    // _shards will be null if the modelName is not a sharded file.
-    this._shards = WeightsProvider.expandGGUFIntoShards(this._modelName)
-    this.weightsProvider = new WeightsProvider(loader, this.logger)
+    this.logger = new QvacLogger(logger)
+    this.opts = opts
+    // Lazy deref + optional chain: safe before `_load()` and after `unload()`.
+    this._job = createJobHandler({ cancel: () => this.addon?.cancel() })
+    this._run = exclusiveRunQueue()
+    this.addon = null
     this._hasActiveResponse = false
+    this.state = { configLoaded: false }
   }
 
-  async _load (closeLoader = false, reportProgressCallback) {
-    this.logger.info('Starting model load')
+  async load () {
+    return this._run(async () => {
+      if (this.state.configLoaded) return
+      await this._load()
+      this.state.configLoaded = true
+    })
+  }
 
+  async _load () {
+    this.logger.info('Starting model load')
+    const primaryGgufPath = pickPrimaryGgufPath(this._files)
     const configurationParams = {
-      path: path.join(this._diskPath, this._modelName),
+      path: primaryGgufPath,
       config: this._config
     }
 
     this.logger.info('Creating addon with configuration:', configurationParams)
-    this.addon = this._createAddon(configurationParams)
 
-    if (this._shards !== null) {
-      await this._loadWeights(reportProgressCallback)
-    } else {
-      await this.downloadWeights(reportProgressCallback, { closeLoader })
+    try {
+      this.addon = this._createAddon(configurationParams)
+      if (this._files.length > 1) {
+        await this._streamShards()
+      }
+      this.logger.info('Activating addon')
+      await this.addon.activate()
+    } catch (loadError) {
+      // Best-effort cleanup of the partially-initialized addon so a subsequent
+      // load() does not leak a zombie native instance.
+      try { await this.addon?.unload?.() } catch (_) {}
+      this.addon = null
+      throw loadError
     }
-
-    this.logger.info('Activating addon')
-    await this.addon.activate()
-
     this.logger.info('Model load completed successfully')
   }
 
-  /**
-   * Download the model weight files and return the local path to the primary file.
-   * @param {ProgressReportCallback} [onDownloadProgress] - Callback invoked with bytes downloaded
-   * @param {Object} opts - Options for the download
-   * @param {boolean} opts.closeLoader - Whether to close the loader when done
-   * @returns {Promise<{filePath: string, completed: boolean, error: boolean}[]>} Local file path for the model weights
-   */
-  async _downloadWeights (onDownloadProgress, opts) {
-    return await this.weightsProvider.downloadFiles(
-      [this._modelName],
-      this._diskPath,
-      {
-        closeLoader: opts.closeLoader,
-        onDownloadProgress
+  async _streamShards () {
+    for (const filePath of this._files) {
+      const filename = path.basename(filePath)
+      const stream = fs.createReadStream(filePath)
+      for await (const chunk of stream) {
+        await this.addon.loadWeights({ filename, chunk, completed: false })
       }
-    )
-  }
-
-  async _loadWeights (reportProgressCallback) {
-    const onChunk = async (chunkedWeightsData) => {
-      this.addon.loadWeights(chunkedWeightsData, this.logger)
-    }
-    await this.weightsProvider.streamFiles(this._shards, onChunk, reportProgressCallback)
-  }
-
-  /**
-   * Cancel the current task.
-   */
-  async cancel () {
-    if (this.addon?.cancel) {
-      await this.addon.cancel()
+      await this.addon.loadWeights({ filename, chunk: null, completed: true })
+      this.logger.info(`Streamed weights for ${filename}`)
     }
   }
 
-  /**
-   * Unload the model and clear resources. Ensures any in-flight job is resolved as failed.
-   * @returns {Promise<void>}
-   */
-  async unload () {
-    return await this._withExclusiveRun(async () => {
-      await this.cancel()
-      const currentJobResponse = this._jobToResponse.get('OnlyOneJob')
-      if (currentJobResponse) {
-        // Make sure not to leak jobs to avoid "job already exists" errors after
-        // loading the model again.
-        currentJobResponse.failed(new Error('Model was unloaded'))
-        this._deleteJobMapping('OnlyOneJob')
-      }
-      this._hasActiveResponse = false
-      await super.unload()
-    })
+  async run (input) {
+    return this._run(() => this._runInternal(input))
   }
 
   async _runInternal (text) {
-    return this._withExclusiveRun(async () => {
-      if (this._hasActiveResponse) {
-        throw new Error(RUN_BUSY_ERROR_MESSAGE)
-      }
+    if (!this.addon) {
+      throw new Error('Addon not initialized. Call load() first.')
+    }
+    if (this._hasActiveResponse) {
+      throw new Error(RUN_BUSY_ERROR_MESSAGE)
+    }
 
-      this.logger.info('Starting inference embeddings for text:', text)
+    this.logger.info('Starting inference embeddings for text:', text)
+    // Array input → type: 'sequences' (batched pass); string input → type: 'text'.
+    const inputData = Array.isArray(text)
+      ? { type: 'sequences', input: text }
+      : { type: 'text', input: text }
 
-      // Detect arrays and set type: 'sequences' for direct vector passing
-      // Otherwise use type: 'text' for string input
-      const inputData = Array.isArray(text)
-        ? { type: 'sequences', input: text }
-        : { type: 'text', input: text }
+    const response = this._job.start()
 
-      const response = this._createResponse('OnlyOneJob')
+    // addon-cpp guarantees no output events until runJob is fully accepted.
+    // If runJob throws or returns false, no events will fire for this job.
+    let accepted
+    try {
+      accepted = await this.addon.runJob(inputData)
+    } catch (error) {
+      this._job.fail(error)
+      throw error
+    }
+    if (!accepted) {
+      this._job.fail(new Error(RUN_BUSY_ERROR_MESSAGE))
+      throw new Error(RUN_BUSY_ERROR_MESSAGE)
+    }
 
-      // addon-cpp C++ guarantees no events will be generated until job is
-      // fully accepted. If runJob throws or returns false, no events will be
-      // generated for this job.
-      let accepted
-      try {
-        accepted = await this.addon.runJob(inputData)
-      } catch (error) {
-        this._deleteJobMapping('OnlyOneJob')
-        response.failed(error)
-        throw error
-      }
-      if (!accepted) {
-        this._deleteJobMapping('OnlyOneJob')
-        response.failed(new Error(RUN_BUSY_ERROR_MESSAGE))
-        throw new Error(RUN_BUSY_ERROR_MESSAGE)
-      }
-
-      this._hasActiveResponse = true
-      const finalized = response.await().finally(() => { this._hasActiveResponse = false })
-      finalized.catch(() => {})
-      response.await = () => finalized
-
-      return response
+    this._hasActiveResponse = true
+    const finalized = response.await().finally(() => { this._hasActiveResponse = false })
+    finalized.catch((err) => {
+      this.logger?.warn?.('Inference response rejected:', err?.message || err)
     })
+    response.await = () => finalized
+    return response
+  }
+
+  _addonOutputCallback (addon, event, data, error) {
+    const mapped = mapAddonEvent(event, data, error)
+    if (mapped === null) {
+      // Reaching here means the native layer added an event shape the JS
+      // wrapper does not know about. Warn and skip.
+      this.logger.warn(`Unhandled addon event: ${event} (data type: ${typeof data})`)
+      return
+    }
+
+    if (mapped.type === 'Error') {
+      this.logger.error('Job failed with error:', mapped.error)
+      this._job.fail(mapped.error)
+      return
+    }
+
+    if (mapped.type === 'JobEnded') {
+      this._job.end(this.opts.stats ? mapped.data : null)
+      return
+    }
+
+    if (mapped.type === 'Output') {
+      this._job.output(mapped.data)
+    }
   }
 
   /**
    * Instantiate the native addon with the given parameters.
    * @param {Object} configurationParams - Configuration parameters for the addon
    * @param {string} configurationParams.path - Local file or directory path
-   * @param {Object} configurationParams.settings - Bert-specific settings
+   * @param {Object} configurationParams.config - Bert-specific settings
    * @returns {Addon} The instantiated addon interface
    */
   _createAddon (configurationParams) {
@@ -170,31 +182,38 @@ class GGMLBert extends BaseInference {
     )
   }
 
-  _addonOutputCallback (addon, event, data, error) {
-    // Map C++ mangled type names to expected event names
-    // Stats / job-ended: LLM uses tokens_per_second; embed uses total_tokens, total_time_ms, etc. (RuntimeStats)
-    const isStatsData = typeof data === 'object' && data !== null && (
-      'tokens_per_second' in data ||
-      ('total_tokens' in data || 'total_time_ms' in data || 'batch_size' in data || 'context_size' in data)
-    )
-    if (isStatsData) {
-      const runtimeStats = { ...data }
-      if (runtimeStats.backendDevice === 0) {
-        runtimeStats.backendDevice = 'cpu'
-      } else if (runtimeStats.backendDevice === 1) {
-        runtimeStats.backendDevice = 'gpu'
+  /**
+   * Unload the model and clear resources. Ensures any in-flight job is resolved as failed.
+   * @returns {Promise<void>}
+   */
+  async unload () {
+    return this._run(async () => {
+      await this.cancel()
+      if (this._job.active) {
+        this._job.fail(new Error('Model was unloaded'))
       }
-      return this._outputCallback(addon, 'JobEnded', 'OnlyOneJob', runtimeStats, null)
-    }
-
-    let mappedEvent = event
-    if (event.includes('Error')) {
-      mappedEvent = 'Error'
-    } else if (event.includes('Embeddings')) {
-      mappedEvent = 'Output'
-    }
-    return this._outputCallback(addon, mappedEvent, 'OnlyOneJob', data, error)
+      this._hasActiveResponse = false
+      if (this.addon) {
+        await this.addon.unload()
+        // Null the addon reference so post-unload `cancel()` / `run()` calls hit the
+        // `if (!this.addon)` guard instead of dereferencing a disposed native handle.
+        this.addon = null
+      }
+      this.state.configLoaded = false
+    })
   }
+
+  /**
+   * Cancel the current task.
+   */
+  async cancel () {
+    if (this.addon?.cancel) {
+      await this.addon.cancel()
+    }
+  }
+
+  getState () { return this.state }
 }
 
 module.exports = GGMLBert
+module.exports.pickPrimaryGgufPath = pickPrimaryGgufPath
