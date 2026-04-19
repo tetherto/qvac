@@ -1,6 +1,6 @@
 {
   "name": "@qvac/embed-llamacpp",
-  "version": "0.13.4",
+  "version": "0.14.0",
   "description": "bert addon for qvac",
   "addon": true,
   "engines": {
@@ -15,6 +15,8 @@
     "lint:fix": "standard --fix",
     "lint-cpp": "clang-tidy -p build $(find addon -name '*.cpp')",
     "test:integration": "bare test/integration/addon.test.js",
+    "test:unit:generate": "brittle -r test/unit/all.js test/unit/*.test.js",
+    "test:unit": "npm run test:unit:generate && bare test/unit/all.js --exit",
     "test:cpp:build": "bare-make generate -D BUILD_TESTING=ON && bare-make build --target addon-test",
     "test:cpp:run": "PROJECT_ROOT=$(pwd) && cd build/test/unit/ && LSAN_OPTIONS=suppressions=$PROJECT_ROOT/.lsan-suppressions.txt ./addon-test --gtest_output=xml:cpp-test-results.xml",
     "test:cpp": "npm run test:cpp:build && npm run test:cpp:run",
@@ -23,7 +25,7 @@
     "coverage:cpp:summary": "cd build/test/unit && llvm-cov-19 report ./addon-test --instr-profile=coverage.profdata -ignore-filename-regex='(tests|build|node_modules|gtest|gmock|\\.vcpkg|/usr)/' > coverage-summary.txt",
     "coverage:cpp:report": "cd build/test/unit/ && ls -lha && llvm-profdata-19 merge -sparse default.profraw -o coverage.profdata && llvm-cov-19 show ./addon-test -instr-profile=coverage.profdata -format=html -output-dir=coverage-html -ignore-filename-regex='(tests|build|node_modules|gtest|gmock|\\.vcpkg|/usr)/' && llvm-cov-19 export ./addon-test -instr-profile=coverage.profdata -format=lcov -ignore-filename-regex='(tests|build|node_modules|gtest|gmock|\\.vcpkg|/usr)/' > lcov.info && npm run coverage:cpp:summary",
     "coverage:cpp": "npm run coverage:cpp:build && npm run coverage:cpp:run && npm run coverage:cpp:report",
-    "test:all": "npm run test:integration && npm run test:cpp",
+    "test:all": "npm run test:unit && npm run test:integration && npm run test:cpp",
     "test:mobile:generate": "bare ./scripts/generate-mobile-integration-tests.js",
     "test:mobile:validate": "node scripts/validate-mobile-tests.js",
     "test:dts": "tsc -p tsconfig.dts.json",
@@ -59,9 +61,7 @@
   "bugs": "https://github.com/tetherto/qvac/issues",
   "homepage": "https://github.com/tetherto/qvac/tree/main/packages/qvac-lib-infer-llamacpp-embed#readme",
   "devDependencies": {
-    "@qvac/dl-filesystem": "^0.1.2",
     "@types/node": "^24.2.1",
-    "bare-fs": "^4.5.1",
     "brittle": "^3.4.0",
     "cmake-bare": "^1.7.1",
     "cmake-vcpkg": "^1.1.0",
@@ -69,12 +69,10 @@
     "typescript": "^5.9.2"
   },
   "dependencies": {
-    "@qvac/infer-base": "^0.2.2",
+    "@qvac/infer-base": "^0.4.0",
     "@qvac/logging": "^0.1.0",
+    "bare-fs": "^4.5.1",
     "bare-path": "^3.0.0"
-  },
-  "peerDependencies": {
-    "@qvac/dl-hyperdrive": "^0.1.0"
   },
   "exports": {
     "./package": "./package.json",

@@ -194,7 +194,7 @@ export const tree: Node[] = [
   },
   {
     name: 'Release notes',
-    url: '/release-notes',
+    url: 'https://github.com/tetherto/qvac/tree/main/packages/sdk/changelog',
     type: 'page',
     icon: resolveIcon('Tag'),
   },
