@@ -14,8 +14,7 @@ PACKAGE_DIR="$(dirname "$SCRIPT_DIR")"
 MODELS_DIR="${PACKAGE_DIR}/models"
 FIXTURES_DIR="${PACKAGE_DIR}/test/fixtures"
 RELEASE_TAG="bci-test-assets-v0.1.0"
-# TODO(QVAC-17058): Move release assets to tetherto/qvac once CI workflows land.
-RELEASE_REPO="sharmaraju352/qvac"
+RELEASE_REPO="tetherto/qvac"
 
 download_models() {
   mkdir -p "$MODELS_DIR"

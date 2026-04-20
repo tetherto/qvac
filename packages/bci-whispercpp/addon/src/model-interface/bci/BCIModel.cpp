@@ -77,8 +77,10 @@ void BCIModel::loadEmbedderIfNeeded() {
   }
   const auto modelPath = std::get<std::string>(modelPathIt->second);
 
-  // Try: same directory, "bci-embedder.bin"
-  auto dir = modelPath.substr(0, modelPath.find_last_of('/'));
+  auto lastSep = modelPath.find_last_of("/\\");
+  auto dir = (lastSep != std::string::npos)
+                 ? modelPath.substr(0, lastSep)
+                 : ".";
   auto embedderPath = dir + "/bci-embedder.bin";
 
   if (neuralProcessor_.loadEmbedderWeights(embedderPath)) {

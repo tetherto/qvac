@@ -137,25 +137,27 @@ class BCIWhispercpp {
    * @returns {Promise<QvacResponse>}
    */
   async transcribe (neuralData) {
-    const response = this._job.start()
+    return await this._withExclusiveRun(async () => {
+      const response = this._job.start()
 
-    let accepted
-    try {
-      accepted = await this.addon.runJob({ input: neuralData })
-    } catch (err) {
-      this._job.fail(err)
-      throw err
-    }
-    if (!accepted) {
-      const error = new QvacErrorAddonBCI({ code: ERR_CODES.JOB_ALREADY_RUNNING })
-      this._job.fail(error)
-      throw error
-    }
+      let accepted
+      try {
+        accepted = await this.addon.runJob({ input: neuralData })
+      } catch (err) {
+        this._job.fail(err)
+        throw err
+      }
+      if (!accepted) {
+        const error = new QvacErrorAddonBCI({ code: ERR_CODES.JOB_ALREADY_RUNNING })
+        this._job.fail(error)
+        throw error
+      }
 
-    const finalized = response.await()
-    finalized.catch(() => {})
-    response.await = () => finalized
-    return response
+      const finalized = response.await()
+      finalized.catch(() => {})
+      response.await = () => finalized
+      return response
+    })
   }
 
   _outputCallback (addon, event, jobId, data, error) {

@@ -35,13 +35,14 @@ Neural Signal (512ch, 20ms bins)
 
 Native GGML inference matches the Python BrainWhisperer reference on all test samples:
 
-| Sample | Ground Truth | GGML Native Output | Python Reference |
-|--------|-------------|-------------------|-----------------|
-| 0 | "You can see the code at this point as well." | "You can see the good at this point as well." | "you can see the good at this point as well" |
-| 1 | "How does it keep the cost down?" | "How does it keep the cost said?" | "how does it keep the cost said" |
-| 2 | "Not too controversial." | "Not too controversial." | "not too controversial" |
-| 3 | "The jury and a judge work together on it." | "The jury and a judge work together on it." | "the jury and a judge work together on it" |
-| 4 | "Were quite vocal about it." | "We're quite vocal about it." | "we're quite vocal about it" |
+| Sample | Ground Truth | GGML Native Output | WER |
+|--------|-------------|-------------------|-----|
+| 0 | "You can see the code at this point as well." | "You can see the good at this point as well." | 10.0% |
+| 1 | "How does it keep the cost down?" | "How does it keep the cost down?" | 0.0% |
+| 2 | "Not too controversial." | "Not too controversial." | 0.0% |
+| 3 | "The jury and a judge work together on it." | "The jury and a judge work together on it." | 0.0% |
+| 4 | "Were quite vocal about it." | "We're quite vocal about it." | 20.0% |
+| **Average** | | | **6.0%** |
 
 ## Neural Signal Format
 
@@ -68,6 +69,10 @@ VCPKG_ROOT=/path/to/vcpkg npm run build
 - **Bare runtime** >= 1.19.0
 - **CMake** >= 3.25
 - **vcpkg** with `VCPKG_ROOT` environment variable set
+
+### Model Conversion Prerequisites
+
+- **Python 3** with `numpy`, `torch`, and `transformers` (`pip install numpy torch transformers`)
 
 ### Model Conversion
 
@@ -172,14 +177,14 @@ VCPKG_ROOT=/path/to/vcpkg npm run test:cpp
 
 ## whisper.cpp Patches
 
-The package includes a vcpkg overlay with 4 patches applied to whisper.cpp:
+The package uses a vcpkg overlay that fetches from the `tetherto/qvac-ext-lib-whisper.cpp` fork (v1.8.4 base) with BCI patches baked in:
 
-| Patch | Description |
-|-------|-------------|
-| 0001 | Fix vcpkg build |
-| 0002 | Fix Apple Silicon cross-compilation |
-| 0003 | Variable conv1 kernel size (read `n_audio_conv1_kernel` from model header) |
-| 0004 | Windowed attention mask, window size/layer params in header, BCI-specific SOS tokens |
+| Feature | Description |
+|---------|-------------|
+| Variable conv1 kernel | Read `n_audio_conv1_kernel` from model header (k=7 for 512ch BCI vs k=3 for audio) |
+| Windowed attention | Attention mask with configurable window size/layer params in header |
+| BCI SOS tokens | BCI-specific start-of-sequence token handling |
+| Graph placement fix | Correct encoder-graph mask population (see `docs/BCI_V184_COMPAT.md`) |
 
 ## Platform Support
 

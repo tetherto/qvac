@@ -55,6 +55,12 @@ PyTorch checkpoints to the GGML + embedder binary format requires:
   torch
     https://pytorch.org
 
+--- apache-2.0 (Apache License 2.0) ---
+
+  transformers
+    https://github.com/huggingface/transformers
+    (used by convert-model.py for WhisperTokenizer)
+
 
 =========================================================================
 C++ Dependencies

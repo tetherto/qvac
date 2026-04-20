@@ -52,5 +52,5 @@ Patch `0005-fix-bci-window-mask-encoder-graph.patch` moves the `window_mask` dat
 - BCI model: `models/ggml-bci-windowed.bin`
 - Embedder weights: `models/bci-embedder.bin`
 - Conversion script: `scripts/convert-model.py`
-- Overlay portfile: `vcpkg-overlays/whisper-cpp/portfile.cmake` (points to `tetherto/qvac-ext-lib-whisper.cpp` at `bbb3535`)
-- Test: `test/integration/bci-addon.test.js`
+- Overlay portfile: `vcpkg-overlays/whisper-cpp/portfile.cmake` (points to `tetherto/qvac-ext-lib-whisper.cpp` at `3e91e3a4`)
+- Test: `test/integration/addon.test.js`

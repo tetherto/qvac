@@ -190,6 +190,12 @@ class BCIInterface {
   async append (data) {
     try {
       if (data?.type === END_OF_INPUT) {
+        if (this._bufferedSignal.length === 0) {
+          throw new QvacErrorAddonBCI({
+            code: ERR_CODES.INVALID_NEURAL_INPUT,
+            adds: 'no neural signal data was appended before end-of-job'
+          })
+        }
         const currentJobId = this._nextJobId
         const input = this._concatBufferedSignal()
 
