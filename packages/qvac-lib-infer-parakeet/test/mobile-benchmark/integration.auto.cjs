@@ -29,7 +29,7 @@ function setBenchmarkEnv (modelType, useGPU) {
 
 async function runMobileBenchmark (modelType, useGPU) {
   setBenchmarkEnv(modelType, useGPU)
-  return runIntegrationModule('../benchmark/rtf-benchmark.test.js')
+  return runIntegrationModule('../integration/rtf-benchmark-mobile.js')
 }
 
 async function runRtfBenchmarkTdtMobileGpu (options = {}) { // eslint-disable-line no-unused-vars
