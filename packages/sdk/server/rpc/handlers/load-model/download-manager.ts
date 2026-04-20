@@ -97,6 +97,17 @@ function deliverProgress(
   }
 }
 
+function broadcastTransferProgress(
+  transfer: Transfer,
+  progress: ModelProgressUpdate,
+): void {
+  transfer.lastProgress = progress;
+
+  for (const sub of Array.from(transfer.subscribers.values())) {
+    deliverProgress(transfer, sub, progress);
+  }
+}
+
 export function startOrJoinDownload(
   downloadKey: string,
   startDownload: (ctx: DownloadContext) => Promise<string>,
@@ -131,15 +142,10 @@ export function startOrJoinDownload(
   transfer.subscribers.set(initialSubscriber.id, initialSubscriber);
   activeTransfers.set(downloadKey, transfer);
 
-  function broadcastProgress(progress: ModelProgressUpdate) {
-    transfer.lastProgress = progress;
-    for (const sub of Array.from(transfer.subscribers.values())) {
-      deliverProgress(transfer, sub, progress);
-    }
-  }
-
   const downloadPromise = startDownload({
-    broadcastProgress,
+    broadcastProgress: (progress) => {
+      broadcastTransferProgress(transfer, progress);
+    },
     signal: abortController.signal,
     shouldClearCache: () => transfer.clearCache,
     setCacheHit: (cacheHit: boolean) => {
@@ -205,15 +211,6 @@ export function createRegistryDownloadKey(
   registryPath: string,
 ): string {
   return `registry:${registrySource}:${registryPath}`;
-}
-
-export function createCancelFunction(
-  downloadKey: string,
-  clearCache = false,
-) {
-  return () => {
-    cancelTransfer(downloadKey, clearCache);
-  };
 }
 
 export function applyJoinedDownloadStats(
