@@ -111,6 +111,19 @@ test('runStreaming accumulate hard-splits when buffer exceeds maxBufferScalars',
   runJobSpy.restore()
 })
 
+test('runStreaming maxBufferScalars 0 falls back to default (no infinite loop)', async (t) => {
+  const runJobSpy = sinon.spy(MockedBinding.prototype, 'runJob')
+  const model = createStubbedModel()
+  await model.load()
+  async function * oneBig () {
+    yield 'a'.repeat(250)
+  }
+  const response = await model.runStreaming(oneBig(), { maxBufferScalars: 0 })
+  await response.await()
+  t.is(runJobSpy.callCount, 1, '250 graphemes under default max ~300 → one job')
+  runJobSpy.restore()
+})
+
 test('runStreaming yields multiple jobs from async text chunks', async (t) => {
   const runJobSpy = sinon.spy(MockedBinding.prototype, 'runJob')
   const model = createStubbedModel()

@@ -66,9 +66,14 @@ function defaultMaxBufferScalars (language) {
  */
 async function * accumulateTextStream (source, opts) {
   const flushAfterMs = opts.flushAfterMs != null ? opts.flushAfterMs : 500
-  const maxScalars = opts.maxBufferScalars != null
-    ? opts.maxBufferScalars
-    : defaultMaxBufferScalars(opts.language)
+  const defaultMax = defaultMaxBufferScalars(opts.language)
+  let maxScalars
+  if (opts.maxBufferScalars == null) {
+    maxScalars = defaultMax
+  } else {
+    const n = Number(opts.maxBufferScalars)
+    maxScalars = Number.isFinite(n) && n > 0 ? n : defaultMax
+  }
   const testEnd = buildSentenceEndTester(opts)
 
   const queue = []
