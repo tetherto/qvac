@@ -34,7 +34,7 @@ env:
   NODE_VERSION: 'lts/*'
   ADDON_NAME: '@qvac/ocr-onnx'
   PREBUILD_ARTIFACT_PREFIX: 'onnx-ocr-' # Prefix for prebuild artifacts
-  TEST_FRAMEWORK_REF: 'main' # Branch/tag of qvac-test-addon-mobile framework
+  TEST_FRAMEWORK_REF: 'feat/ios-cpp-log-capture' # Branch/tag of qvac-test-addon-mobile framework
   APP_BUNDLE_ID: 'io.tether.test.qvac' # Bundle ID for the test app (same for all addons)
   PKG_DIR: packages/ocr-onnx
 
