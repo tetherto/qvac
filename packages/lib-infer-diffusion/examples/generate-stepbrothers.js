@@ -28,10 +28,10 @@ const ImgStableDiffusion = require('../index')
 async function main () {
   const modelDir = path.join(__dirname, '../models')
   const refPaths = [
-    path.join(__dirname, '../temp/maks.png'),
-    path.join(__dirname, '../temp/fast2.png'),
+    path.join(__dirname, '../temp/gianni.png'),
+    path.join(__dirname, '../temp/goku.png'),
   ]
-  const outputImagePath = path.join(__dirname, '../output/fusion_fast2.png')
+  const outputImagePath = path.join(__dirname, '../output/fusion_stepbrothers.png')
 
   for (const p of refPaths) {
     if (!fs.existsSync(p)) {
@@ -81,7 +81,7 @@ async function main () {
 
     // TODO: write your own prompt here
     const prompt = [
-      'the face of @image1 mapped onto @image2, keep everything else the same from @image2 except for the face.'
+      'the face of @image1 in the style of @image2, add blonde hair, blue eyes, and yelling at the sky'
     ].join(', ')
 
     console.log('\n=== FLUX2 fusion (3 references — stepbrothers) ===')
