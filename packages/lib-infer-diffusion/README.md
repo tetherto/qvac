@@ -487,11 +487,17 @@ The underlying pattern across all these fixes is the same: our C++ config struct
 
 ## Credits
 
-### Test Image
+### Test Images
 
 `assets/von-neumann.jpg` — **John von Neumann** (1956).
 Source: U.S. Department of Energy, File ID: HD.3F.191.
 This image is in the **Public Domain** as a work of the U.S. Federal Government.
+
+`assets/claude-shannon.jpg` — **Claude Shannon**.
+Source: Bell Labs / [Wikimedia Commons](https://commons.wikimedia.org/wiki/Category:Claude_Shannon).
+Licensed under **Creative Commons Attribution-ShareAlike (CC BY-SA)**.
+Attribution must be preserved; any redistribution of this image or a derivative
+must be released under a compatible CC BY-SA license.
 
 ---
 
