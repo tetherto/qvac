@@ -55,7 +55,14 @@ if(ANDROID)
   set(ANDROID_NATIVE_API_LEVEL "$ENV{ANDROID_NATIVE_API_LEVEL}")
 endif()
 
-add_bare_module(qvac-lib-infer-whispercpp EXPORTS)
+set(BACKEND_DL_LIBS "")
+if((ANDROID OR UNIX) AND NOT APPLE)
+  foreach(_backend ${GGML_AVAILABLE_BACKENDS})
+    list(APPEND BACKEND_DL_LIBS INSTALL TARGET ggml::${_backend})
+  endforeach()
+endif()
+
+add_bare_module(qvac-lib-infer-whispercpp EXPORTS ${BACKEND_DL_LIBS})
 
 if(CMAKE_SYSTEM_NAME STREQUAL "Linux")
   target_link_options(${qvac-lib-infer-whispercpp}_module PRIVATE -Wl,--exclude-libs,ALL)

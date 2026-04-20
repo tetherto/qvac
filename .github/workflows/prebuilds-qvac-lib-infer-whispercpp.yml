@@ -250,7 +250,8 @@ jobs:
         working-directory: ${{ env.WORKDIR }}
         run: |
           WHISPER_FLAGS="-D WHISPER_USE_METAL=${{ (matrix.platform == 'darwin' || matrix.platform == 'ios') && 'ON' || 'OFF' }} -D WHISPER_USE_CUDA=OFF -D WHISPER_USE_OPENVINO=OFF"
-          bare-make generate --platform ${{ matrix.platform }} --arch ${{ matrix.arch }} ${{ matrix.flags }} $WHISPER_FLAGS
+          VULKAN_FLAG="-D ENABLE_VULKAN=${{ (matrix.platform == 'linux' || matrix.platform == 'android' || matrix.platform == 'win32') && 'ON' || 'OFF' }}"
+          bare-make generate --platform ${{ matrix.platform }} --arch ${{ matrix.arch }} ${{ matrix.flags }} $WHISPER_FLAGS $VULKAN_FLAG
 
       - name: Run bare-make build
         shell: bash
