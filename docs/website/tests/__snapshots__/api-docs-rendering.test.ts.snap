@@ -63,6 +63,7 @@ function completion(params: CompletionParams): CompletionResult
 | Name | Type | Required? | Description |
 | --- | --- | :---: | --- |
 | \`params\` | [\`CompletionParams\`](#completionparams) | ✓ | The completion parameters |
+
 ### \`CompletionParams\`
 
 | Field | Type | Required? | Description |

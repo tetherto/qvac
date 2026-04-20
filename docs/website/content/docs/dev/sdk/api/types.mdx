@@ -920,31 +920,14 @@ interface QvacConfig {
 
 | Member | Description |
 | --- | --- |
-| `cacheDirectory` | Absolute path to the directory where models and other cached assets are stored.
-If not specified, defaults to ~/.qvac/models |
-| `deviceDefaults` | Device-specific config defaults.
-Use this to override model config defaults for specific devices.
-User-defined patterns are checked before SDK built-in patterns.
-First matching pattern wins. |
-| `httpConnectionTimeoutMs` | Timeout in milliseconds for HTTP connection establishment.
-This applies to HEAD and GET requests.
-If the connection is not established within this time, the request fails.
-Defaults to 10000 (10 seconds). |
-| `httpDownloadConcurrency` | Maximum number of concurrent HTTP downloads for sharded models.
-Higher values may improve download speed but increase memory usage.
-Defaults to 3. |
-| `loggerConsoleOutput` | Enable or disable console output for SDK loggers.
-When false, logs are only sent to streams/transports, not printed to console.
-Defaults to true. |
-| `loggerLevel` | Global log level for all SDK loggers.
-Options: "error", "warn", "info", "debug"
-Defaults to "info". |
-| `registryDownloadMaxRetries` | Maximum number of retry attempts for registry (P2P) downloads on timeout.
-When a download times out due to a P2P connection stall, the SDK will
-automatically retry up to this many times before failing.
-Defaults to 3. |
-| `swarmRelays` | Array of Hyperswarm relay public keys (hex strings) for improved P2P connectivity.
-Blind relays help with NAT traversal and firewall bypassing. |
+| `cacheDirectory` | Absolute path to the directory where models and other cached assets are stored. If not specified, defaults to ~/.qvac/models |
+| `deviceDefaults` | Device-specific config defaults. Use this to override model config defaults for specific devices. User-defined patterns are checked before SDK built-in patterns. First matching pattern wins. |
+| `httpConnectionTimeoutMs` | Timeout in milliseconds for HTTP connection establishment. This applies to HEAD and GET requests. If the connection is not established within this time, the request fails. Defaults to 10000 (10 seconds). |
+| `httpDownloadConcurrency` | Maximum number of concurrent HTTP downloads for sharded models. Higher values may improve download speed but increase memory usage. Defaults to 3. |
+| `loggerConsoleOutput` | Enable or disable console output for SDK loggers. When false, logs are only sent to streams/transports, not printed to console. Defaults to true. |
+| `loggerLevel` | Global log level for all SDK loggers. Options: "error", "warn", "info", "debug" Defaults to "info". |
+| `registryDownloadMaxRetries` | Maximum number of retry attempts for registry (P2P) downloads on timeout. When a download times out due to a P2P connection stall, the SDK will automatically retry up to this many times before failing. Defaults to 3. |
+| `swarmRelays` | Array of Hyperswarm relay public keys (hex strings) for improved P2P connectivity. Blind relays help with NAT traversal and firewall bypassing. |
 
 ---
 
@@ -965,9 +948,7 @@ type QvacPlugin = unknown
 | `loadConfigSchema` | — |
 | `logging` | — |
 | `modelType` | — |
-| `resolveConfig` | Optional hook to resolve model sources in modelConfig to local paths.
-Called before createModel if the plugin needs to download/resolve artifacts.
-Returns transformed config and optional artifact paths. |
+| `resolveConfig` | Optional hook to resolve model sources in modelConfig to local paths. Called before createModel if the plugin needs to download/resolve artifacts. Returns transformed config and optional artifact paths. |
 | `skipPrimaryModelPathValidation` | When true, skips file-existence validation for modelPath. Use for plugins that derive paths from config. |
 
 ---
@@ -1090,7 +1071,7 @@ No description available
 
 ```typescript
 interface ToolCall {
-  arguments: Record;
+  arguments: Record<string, unknown>;
   id: string;
   name: string;
   raw?: string;

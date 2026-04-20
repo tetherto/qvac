@@ -1,14 +1,13 @@
 ---
 title: "heartbeat( )"
 titleStyle: code
-description: "Checks if a delegated provider is online by sending a heartbeat round-trip.
-Can also be used to check if the local SDK worker is responsive."
+description: "Checks if a delegated provider is online by sending a heartbeat round-trip. Can also be used to check if the local SDK worker is responsive."
 ---
 
 <WrapCode>
 
 ```typescript
-function heartbeat(params?: { delegate?: { healthCheckTimeout?: number; providerPublicKey: string; timeout?: number; topic: string } }): Promise
+function heartbeat(params?: { delegate?: { healthCheckTimeout?: number; providerPublicKey: string; timeout?: number; topic: string } }): Promise<{ number: number; type: "heartbeat" }>
 ```
 
 </WrapCode>
@@ -18,10 +17,11 @@ function heartbeat(params?: { delegate?: { healthCheckTimeout?: number; provider
 | Name | Type | Required? | Description |
 | --- | --- | :---: | --- |
 | `params` | `\{ delegate?: \{ healthCheckTimeout?: number; providerPublicKey: string; timeout?: number; topic: string \} \}` | ✗ | Delegation target to check |
+
 ## Returns
 
 ```typescript
-Promise
+Promise<{ number: number; type: "heartbeat" }>
 ```
 
 No description available
@@ -30,7 +30,7 @@ No description available
 
 | Error | When |
 | --- | --- |
-| `When the provider is unreachable or the response is invalid.` |  |
+| `When the provider is unreachable or the response is invalid.` | — |
 
 ## Example
 

@@ -7,7 +7,7 @@ description: "Generates embeddings for a single text using a specified model."
 <WrapCode>
 
 ```typescript
-function embed(params: { modelId: string; text: string }, options?: { forceNewConnection?: boolean; healthCheckTimeout?: number; profiling?: { enabled?: boolean; includeServerBreakdown?: boolean; mode?: "summary" | "verbose" }; timeout?: number }): Promise
+function embed(params: { modelId: string; text: string }, options?: { forceNewConnection?: boolean; healthCheckTimeout?: number; profiling?: { enabled?: boolean; includeServerBreakdown?: boolean; mode?: "summary" | "verbose" }; timeout?: number }): Promise<{ embedding: number[]; stats?: { backendDevice?: "cpu" | "gpu"; tokensPerSecond?: number; totalTime?: number; totalTokens?: number } }>
 ```
 
 </WrapCode>
@@ -16,11 +16,13 @@ function embed(params: { modelId: string; text: string }, options?: { forceNewCo
 
 | Name | Type | Required? | Description |
 | --- | --- | :---: | --- |
-| `params` | `\{ modelId: string; text: string \}` | ✓ | The parameters for the embedding || `options` | `\{ forceNewConnection?: boolean; healthCheckTimeout?: number; profiling?: \{ enabled?: boolean; includeServerBreakdown?: boolean; mode?: "summary" \| "verbose" \}; timeout?: number \}` | ✗ | Optional RPC options including per-call profiling |
+| `params` | `\{ modelId: string; text: string \}` | ✓ | The parameters for the embedding |
+| `options` | `\{ forceNewConnection?: boolean; healthCheckTimeout?: number; profiling?: \{ enabled?: boolean; includeServerBreakdown?: boolean; mode?: "summary" \| "verbose" \}; timeout?: number \}` | ✗ | Optional RPC options including per-call profiling |
+
 ## Returns
 
 ```typescript
-Promise
+Promise<{ embedding: number[]; stats?: { backendDevice?: "cpu" | "gpu"; tokensPerSecond?: number; totalTime?: number; totalTokens?: number } }>
 ```
 
 No description available
@@ -29,4 +31,4 @@ No description available
 
 | Error | When |
 | --- | --- |
-| `When the response type is invalid or when the embedding fails` |  |
+| `When the response type is invalid or when the embedding fails` | — |

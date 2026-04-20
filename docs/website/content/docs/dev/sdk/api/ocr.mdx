@@ -17,6 +17,7 @@ function ocr(params: OCRClientParams): { blocks: Promise<{ bbox?: [number, numbe
 | Name | Type | Required? | Description |
 | --- | --- | :---: | --- |
 | `params` | [`OCRClientParams`](#ocrclientparams) | ✓ | The OCR parameters |
+
 ### `OCRClientParams`
 
 | Field | Type | Required? | Description |
@@ -36,9 +37,9 @@ No description available
 
 | Field | Type | Description |
 | --- | --- | --- |
-| `blocks` | `Promise` | — |
-| `blockStream` | `AsyncGenerator` | — |
-| `stats` | `Promise` | — |
+| `blocks` | `Promise<\{ bbox?: [number, number, number, number]; confidence?: number; text: string \}[]>` | — |
+| `blockStream` | `AsyncGenerator<\{ bbox?: [number, number, number, number]; confidence?: number; text: string \}[]>` | — |
+| `stats` | `Promise<\{ detectionTime?: number; recognitionTime?: number; totalTime?: number \} \| undefined>` | — |
 
 ## Example
 

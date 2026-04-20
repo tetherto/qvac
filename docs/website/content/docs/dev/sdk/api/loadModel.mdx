@@ -1,19 +1,13 @@
 ---
 title: "loadModel( )"
 titleStyle: code
-description: "Loads a machine learning model from a local path, remote URL, or Hyperdrive key.
-
-This function supports multiple model types: LLM (Large Language Model), Whisper (speech recognition),
-embeddings, NMT (translation), and TTS. It can handle both local file paths and Hyperdrive URLs (pear://).
-
-When `onProgress` is provided, the function uses streaming to provide real-time download progress.
-Otherwise, it uses a simple request-response pattern for faster execution."
+description: "Loads a machine learning model from a local path, remote URL, or Hyperdrive key. This function supports multiple model types: LLM (Large Language Model), Whisper (speech recognition), embeddings, NMT (translation), and TTS. It can handle both local file paths and Hyperdrive URLs (pear://). When `onProgress` is provided, the function uses streaming to provide real-time download progress. Otherwise, it uses a simple request-response pattern for faster execution."
 ---
 
 <WrapCode>
 
 ```typescript
-function loadModel(options: LoadModelOptions, rpcOptions?: { forceNewConnection?: boolean; healthCheckTimeout?: number; profiling?: { enabled?: boolean; includeServerBreakdown?: boolean; mode?: "summary" | "verbose" }; timeout?: number }): Promise
+function loadModel(options: LoadModelOptions, rpcOptions?: { forceNewConnection?: boolean; healthCheckTimeout?: number; profiling?: { enabled?: boolean; includeServerBreakdown?: boolean; mode?: "summary" | "verbose" }; timeout?: number }): Promise<string>
 ```
 
 </WrapCode>
@@ -22,12 +16,9 @@ function loadModel(options: LoadModelOptions, rpcOptions?: { forceNewConnection?
 
 | Name | Type | Required? | Description |
 | --- | --- | :---: | --- |
-| `options` | [`LoadModelOptions`](#loadmodeloptions) | ✓ | An object that defines all configuration parameters required for loading the model, including:
-  - modelSrc: The location from which the model weights are fetched (local path, remote URL, or Hyperdrive URL)
-  - modelType: The type of model ("llm", "whisper", "embeddings", "nmt", or "tts")
-  - modelConfig: Model-specific configuration options (companion sources, model parameters, etc.)
-  - onProgress: Callback for download progress updates
-  - logger: Logger instance for model operation logs || `rpcOptions` | `\{ forceNewConnection?: boolean; healthCheckTimeout?: number; profiling?: \{ enabled?: boolean; includeServerBreakdown?: boolean; mode?: "summary" \| "verbose" \}; timeout?: number \}` | ✗ | Optional RPC options including per-call profiling configuration |
+| `options` | [`LoadModelOptions`](#loadmodeloptions) | ✓ | An object that defines all configuration parameters required for loading the model, including: - modelSrc: The location from which the model weights are fetched (local path, remote URL, or Hyperdrive URL) - modelType: The type of model ("llm", "whisper", "embeddings", "nmt", or "tts") - modelConfig: Model-specific configuration options (companion sources, model parameters, etc.) - onProgress: Callback for download progress updates - logger: Logger instance for model operation logs |
+| `rpcOptions` | `\{ forceNewConnection?: boolean; healthCheckTimeout?: number; profiling?: \{ enabled?: boolean; includeServerBreakdown?: boolean; mode?: "summary" \| "verbose" \}; timeout?: number \}` | ✗ | Optional RPC options including per-call profiling configuration |
+
 ### `LoadModelOptions`
 
 | Field | Type | Required? | Description |
@@ -40,10 +31,24 @@ function loadModel(options: LoadModelOptions, rpcOptions?: { forceNewConnection?
 | `onProgress` | `(progress: \{ type: "modelProgress"; downloaded: number; total: number; percentage: number; downloadKey: string; shardInfo?: \{ currentShard: number; totalShards: number; shardName: string; overallDownloaded: number; overallTotal: number; overallPercentage: number; \} \| undefined; onnxInfo?: \{ ...; \} \| undefined; \}) =>...` | ✗ | — |
 | `logger` | `Logger` | ✗ | — |
 
+#### `Logger`
+
+| Field | Type | Required? | Description |
+| --- | --- | :---: | --- |
+| `error` | `(...args: unknown[]) => void` | ✓ | — |
+| `warn` | `(...args: unknown[]) => void` | ✓ | — |
+| `info` | `(...args: unknown[]) => void` | ✓ | — |
+| `debug` | `(...args: unknown[]) => void` | ✓ | — |
+| `trace` | `(...args: unknown[]) => void` | ✓ | — |
+| `setLevel` | `(level: LogLevel) => void` | ✓ | — |
+| `getLevel` | `() => LogLevel` | ✓ | — |
+| `addTransport` | `(transport: LogTransport) => void` | ✓ | — |
+| `setConsoleOutput` | `(enabled: boolean) => void` | ✓ | — |
+
 ## Returns
 
 ```typescript
-Promise
+Promise<string>
 ```
 
 No description available
@@ -52,9 +57,9 @@ No description available
 
 | Error | When |
 | --- | --- |
-| `When model loading fails, with details in the error message` |  |
-| `When streaming ends unexpectedly (only when using onProgress)` |  |
-| `When receiving an invalid response type from the server` |  |
+| `When model loading fails, with details in the error message` | — |
+| `When streaming ends unexpectedly (only when using onProgress)` | — |
+| `When receiving an invalid response type from the server` | — |
 
 ## Example
 

@@ -1,15 +1,13 @@
 ---
 title: "suspend( )"
 titleStyle: code
-description: "Suspends all active Hyperswarm and Corestore resources
-
-Idempotent — calling while already suspended is a no-op."
+description: "Suspends all active Hyperswarm and Corestore resources Idempotent — calling while already suspended is a no-op."
 ---
 
 <WrapCode>
 
 ```typescript
-function suspend(): Promise
+function suspend(): Promise<void>
 ```
 
 </WrapCode>
@@ -18,7 +16,7 @@ function suspend(): Promise
 ## Returns
 
 ```typescript
-Promise
+Promise<void>
 ```
 
 No description available
@@ -27,7 +25,7 @@ No description available
 
 | Error | When |
 | --- | --- |
-| `When one or more resources fail to suspend (partial failure).` |  |
+| `When one or more resources fail to suspend (partial failure).` | — |
 
 ## Example
 

@@ -42,6 +42,7 @@ function createEnv(): nunjucks.Environment {
 
   env.addGlobal("renderExpandedTypes", renderExpandedTypes);
   env.addGlobal("renderErrorTable", renderErrorTable);
+  env.addGlobal("renderParamRow", renderParamRow);
 
   return env;
 }
@@ -50,9 +51,17 @@ function createEnv(): nunjucks.Environment {
 // Filters — each replicates logic formerly inlined in generate-api-docs.ts
 // ---------------------------------------------------------------------------
 
+/**
+ * Collapse newlines and runs of whitespace into single spaces, so multi-line
+ * JSDoc descriptions render as a single logical line in GFM pipe tables.
+ */
+function collapseWhitespace(str: string): string {
+  return str.replace(/\s+/g, " ").trim();
+}
+
 /** Escape backslashes, pipes, and braces for error-table cells. */
 export function escapeTable(str: string): string {
-  return str
+  return collapseWhitespace(str)
     .replace(/\\/g, "\\\\")
     .replace(/\|/g, "\\|")
     .replace(/[{}]/g, "\\$&");
@@ -60,20 +69,22 @@ export function escapeTable(str: string): string {
 
 /**
  * Escape backslashes, braces, and pipes for type strings and descriptions
- * inside parameter / field tables.
+ * inside parameter / field tables. Also collapses newlines so multi-line
+ * prose fits in a single table cell without breaking the row.
  */
 export function escapeTableLight(str: string): string {
-  return str
+  return collapseWhitespace(str)
     .replace(/\\/g, "\\\\")
     .replace(/\{/g, "\\{")
     .replace(/\}/g, "\\}")
     .replace(/\|/g, "\\|");
 }
 
-/** Extract the first sentence from a block of text. */
+/** Extract the first sentence from a block of text, on a single line. */
 export function firstSentence(text: string): string {
-  const match = text.match(/^[^.!?]+[.!?]/);
-  return match ? match[0] : text;
+  const normalized = collapseWhitespace(text);
+  const match = normalized.match(/^[^.!?]+[.!?]/);
+  return match ? match[0] : normalized;
 }
 
 /** Convert a string to a URL-safe anchor slug. */
@@ -89,9 +100,12 @@ export function formatShortSignature(sig: string): string {
     .replace(/\|/g, "\\|");
 }
 
-/** Escape backslashes and double-quotes for safe embedding in YAML frontmatter values. */
+/**
+ * Escape a string for safe embedding in a single-line YAML frontmatter value.
+ * Collapses newlines/whitespace runs and escapes backslashes and double-quotes.
+ */
 export function escapeQuotes(str: string): string {
-  return str
+  return collapseWhitespace(str)
     .replace(/\\/g, "\\\\")
     .replace(/"/g, '\\"');
 }
@@ -137,6 +151,42 @@ export function renderExpandedTypes(types: ExpandedType[], baseDepth: number): s
   }
 
   return sections.join("\n\n");
+}
+
+export interface ApiParameter {
+  name: string;
+  type: string;
+  required: boolean;
+  defaultValue?: string;
+  description: string;
+}
+
+/**
+ * Render a single parameter row for the top-level Parameters table.
+ * Emits plain markdown without Nunjucks whitespace artifacts. Links to an
+ * expanded type section when the parameter's type name matches one of the
+ * already-expanded types.
+ */
+export function renderParamRow(
+  p: ApiParameter,
+  expandedParams: ExpandedType[],
+  hasDefaults: boolean,
+): string {
+  const typeStr = escapeTableLight(p.type);
+  const anchor = slugify(p.type);
+  const hasExpansion = expandedParams.some(
+    (e) => e.typeName.toLowerCase() === p.type.toLowerCase(),
+  );
+  const typeCell = hasExpansion
+    ? `[\`${typeStr}\`](#${anchor})`
+    : `\`${typeStr}\``;
+  const req = p.required ? "\u2713" : "\u2717";
+  const desc = escapeTableLight(p.description || "No description");
+  if (hasDefaults) {
+    const def = p.defaultValue ? `\`${escapeTableLight(p.defaultValue)}\`` : "\u2014";
+    return `| \`${p.name}\` | ${typeCell} | ${req} | ${def} | ${desc} |`;
+  }
+  return `| \`${p.name}\` | ${typeCell} | ${req} | ${desc} |`;
 }
 
 export function renderErrorTable(entries: ErrorEntry[]): string {

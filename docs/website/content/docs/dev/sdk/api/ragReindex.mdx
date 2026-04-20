@@ -1,20 +1,13 @@
 ---
 title: "ragReindex( )"
 titleStyle: code
-description: "Reindexes the RAG database to optimize search performance.
-For HyperDB, this rebalances centroids using k-means clustering.
-
-**Workspace lifecycle:** This operation requires an existing workspace.
-
-**Note:** Reindex requires a minimum number of documents to perform clustering.
-For HyperDB, this is 16 documents by default. If there are insufficient documents,
-`reindexed` will be `false` with `details` explaining the reason."
+description: "Reindexes the RAG database to optimize search performance. For HyperDB, this rebalances centroids using k-means clustering. **Workspace lifecycle:** This operation requires an existing workspace. **Note:** Reindex requires a minimum number of documents to perform clustering. For HyperDB, this is 16 documents by default. If there are insufficient documents, `reindexed` will be `false` with `details` explaining the reason."
 ---
 
 <WrapCode>
 
 ```typescript
-function ragReindex(params: RagReindexParams, options?: { forceNewConnection?: boolean; healthCheckTimeout?: number; profiling?: { enabled?: boolean; includeServerBreakdown?: boolean; mode?: "summary" | "verbose" }; timeout?: number }): Promise
+function ragReindex(params: RagReindexParams, options?: { forceNewConnection?: boolean; healthCheckTimeout?: number; profiling?: { enabled?: boolean; includeServerBreakdown?: boolean; mode?: "summary" | "verbose" }; timeout?: number }): Promise<RagReindexResult>
 ```
 
 </WrapCode>
@@ -23,7 +16,9 @@ function ragReindex(params: RagReindexParams, options?: { forceNewConnection?: b
 
 | Name | Type | Required? | Description |
 | --- | --- | :---: | --- |
-| `params` | [`RagReindexParams`](#ragreindexparams) | ✓ | The parameters for reindexing || `options` | `\{ forceNewConnection?: boolean; healthCheckTimeout?: number; profiling?: \{ enabled?: boolean; includeServerBreakdown?: boolean; mode?: "summary" \| "verbose" \}; timeout?: number \}` | ✗ | No description |
+| `params` | [`RagReindexParams`](#ragreindexparams) | ✓ | The parameters for reindexing |
+| `options` | `\{ forceNewConnection?: boolean; healthCheckTimeout?: number; profiling?: \{ enabled?: boolean; includeServerBreakdown?: boolean; mode?: "summary" \| "verbose" \}; timeout?: number \}` | ✗ | No description |
+
 ### `RagReindexParams`
 
 | Field | Type | Required? | Description |
@@ -36,7 +31,7 @@ function ragReindex(params: RagReindexParams, options?: { forceNewConnection?: b
 ## Returns
 
 ```typescript
-Promise
+Promise<RagReindexResult>
 ```
 
 No description available
@@ -45,8 +40,8 @@ No description available
 
 | Error | When |
 | --- | --- |
-| `When the operation fails or workspace doesn't exist` |  |
-| `When streaming ends unexpectedly (only when using onProgress)` |  |
+| `When the operation fails or workspace doesn't exist` | — |
+| `When streaming ends unexpectedly (only when using onProgress)` | — |
 
 ## Example
 

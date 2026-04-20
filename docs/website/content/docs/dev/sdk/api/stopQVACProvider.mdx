@@ -7,7 +7,7 @@ description: "Stops a running provider service and leaves the specified topic."
 <WrapCode>
 
 ```typescript
-function stopQVACProvider(params: { topic: string }): Promise
+function stopQVACProvider(params: { topic: string }): Promise<{ error?: string; success: boolean; type: "stopProvide" }>
 ```
 
 </WrapCode>
@@ -17,10 +17,11 @@ function stopQVACProvider(params: { topic: string }): Promise
 | Name | Type | Required? | Description |
 | --- | --- | :---: | --- |
 | `params` | `\{ topic: string \}` | ✓ | No description |
+
 ## Returns
 
 ```typescript
-Promise
+Promise<{ error?: string; success: boolean; type: "stopProvide" }>
 ```
 
 No description available
@@ -29,4 +30,4 @@ No description available
 
 | Error | When |
 | --- | --- |
-| `When the response type is not "stopProvide" or the request fails` |  |
+| `When the response type is not "stopProvide" or the request fails` | — |

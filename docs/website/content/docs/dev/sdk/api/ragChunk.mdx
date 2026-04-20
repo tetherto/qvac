@@ -1,14 +1,13 @@
 ---
 title: "ragChunk( )"
 titleStyle: code
-description: "Chunks documents into smaller pieces for embedding.
-Part of the segregated flow: ragChunk() → embed() → ragSaveEmbeddings()"
+description: "Chunks documents into smaller pieces for embedding. Part of the segregated flow: ragChunk() → embed() → ragSaveEmbeddings()"
 ---
 
 <WrapCode>
 
 ```typescript
-function ragChunk(params: { chunkOpts?: { chunkOverlap?: number; chunkSize?: number; chunkStrategy?: "character" | "paragraph"; splitStrategy?: "character" | "word" | "token" | "sentence" | "line" }; documents: string | string[] }, options?: { forceNewConnection?: boolean; healthCheckTimeout?: number; profiling?: { enabled?: boolean; includeServerBreakdown?: boolean; mode?: "summary" | "verbose" }; timeout?: number }): Promise
+function ragChunk(params: { chunkOpts?: { chunkOverlap?: number; chunkSize?: number; chunkStrategy?: "character" | "paragraph"; splitStrategy?: "character" | "word" | "token" | "sentence" | "line" }; documents: string | string[] }, options?: { forceNewConnection?: boolean; healthCheckTimeout?: number; profiling?: { enabled?: boolean; includeServerBreakdown?: boolean; mode?: "summary" | "verbose" }; timeout?: number }): Promise<RagDoc[]>
 ```
 
 </WrapCode>
@@ -17,11 +16,13 @@ function ragChunk(params: { chunkOpts?: { chunkOverlap?: number; chunkSize?: num
 
 | Name | Type | Required? | Description |
 | --- | --- | :---: | --- |
-| `params` | `\{ chunkOpts?: \{ chunkOverlap?: number; chunkSize?: number; chunkStrategy?: "character" \| "paragraph"; splitStrategy?: "character" \| "word" \| "token" \| "sentence" \| "line" \}; documents: string \| string[] \}` | ✓ | The parameters for chunking || `options` | `\{ forceNewConnection?: boolean; healthCheckTimeout?: number; profiling?: \{ enabled?: boolean; includeServerBreakdown?: boolean; mode?: "summary" \| "verbose" \}; timeout?: number \}` | ✗ | No description |
+| `params` | `\{ chunkOpts?: \{ chunkOverlap?: number; chunkSize?: number; chunkStrategy?: "character" \| "paragraph"; splitStrategy?: "character" \| "word" \| "token" \| "sentence" \| "line" \}; documents: string \| string[] \}` | ✓ | The parameters for chunking |
+| `options` | `\{ forceNewConnection?: boolean; healthCheckTimeout?: number; profiling?: \{ enabled?: boolean; includeServerBreakdown?: boolean; mode?: "summary" \| "verbose" \}; timeout?: number \}` | ✗ | No description |
+
 ## Returns
 
 ```typescript
-Promise
+Promise<RagDoc[]>
 ```
 
 No description available
@@ -30,7 +31,7 @@ No description available
 
 | Error | When |
 | --- | --- |
-| `When the operation fails` |  |
+| `When the operation fails` | — |
 
 ## Example
 

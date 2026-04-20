@@ -1,14 +1,13 @@
 ---
 title: "startQVACProvider( )"
 titleStyle: code
-description: "Starts a provider service that offers QVAC capabilities to remote peers.
-The provider's keypair can be controlled via the seed option or QVAC_HYPERSWARM_SEED environment variable."
+description: "Starts a provider service that offers QVAC capabilities to remote peers. The provider's keypair can be controlled via the seed option or QVAC_HYPERSWARM_SEED environment variable."
 ---
 
 <WrapCode>
 
 ```typescript
-function startQVACProvider(params: { firewall?: { mode: "allow" | "deny"; publicKeys: string[] }; topic: string }): Promise
+function startQVACProvider(params: { firewall?: { mode: "allow" | "deny"; publicKeys: string[] }; topic: string }): Promise<{ error?: string; publicKey?: string; success: boolean; type: "provide" }>
 ```
 
 </WrapCode>
@@ -18,10 +17,11 @@ function startQVACProvider(params: { firewall?: { mode: "allow" | "deny"; public
 | Name | Type | Required? | Description |
 | --- | --- | :---: | --- |
 | `params` | `\{ firewall?: \{ mode: "allow" \| "deny"; publicKeys: string[] \}; topic: string \}` | ✓ | No description |
+
 ## Returns
 
 ```typescript
-Promise
+Promise<{ error?: string; publicKey?: string; success: boolean; type: "provide" }>
 ```
 
 No description available
@@ -30,4 +30,4 @@ No description available
 
 | Error | When |
 | --- | --- |
-| `When the response type is not "provide" or the request fails` |  |
+| `When the response type is not "provide" or the request fails` | — |

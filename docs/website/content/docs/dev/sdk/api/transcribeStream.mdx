@@ -15,7 +15,7 @@ chunks as they arrive.
 <WrapCode>
 
 ```typescript
-function transcribeStream(params: TranscribeClientParams, options?: { forceNewConnection?: boolean; healthCheckTimeout?: number; profiling?: { enabled?: boolean; includeServerBreakdown?: boolean; mode?: "summary" | "verbose" }; timeout?: number }): AsyncGenerator
+function transcribeStream(params: TranscribeClientParams, options?: { forceNewConnection?: boolean; healthCheckTimeout?: number; profiling?: { enabled?: boolean; includeServerBreakdown?: boolean; mode?: "summary" | "verbose" }; timeout?: number }): AsyncGenerator<string>
 ```
 
 </WrapCode>
@@ -24,7 +24,9 @@ function transcribeStream(params: TranscribeClientParams, options?: { forceNewCo
 
 | Name | Type | Required? | Description |
 | --- | --- | :---: | --- |
-| `params` | [`TranscribeClientParams`](#transcribeclientparams) | ✓ | No description || `options` | `\{ forceNewConnection?: boolean; healthCheckTimeout?: number; profiling?: \{ enabled?: boolean; includeServerBreakdown?: boolean; mode?: "summary" \| "verbose" \}; timeout?: number \}` | ✗ | No description |
+| `params` | [`TranscribeClientParams`](#transcribeclientparams) | ✓ | No description |
+| `options` | `\{ forceNewConnection?: boolean; healthCheckTimeout?: number; profiling?: \{ enabled?: boolean; includeServerBreakdown?: boolean; mode?: "summary" \| "verbose" \}; timeout?: number \}` | ✗ | No description |
+
 ### `TranscribeClientParams`
 
 | Field | Type | Required? | Description |
@@ -36,7 +38,7 @@ function transcribeStream(params: TranscribeClientParams, options?: { forceNewCo
 ## Returns
 
 ```typescript
-AsyncGenerator
+AsyncGenerator<string>
 ```
 
 No description available

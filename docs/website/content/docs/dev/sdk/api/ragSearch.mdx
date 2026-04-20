@@ -1,16 +1,13 @@
 ---
 title: "ragSearch( )"
 titleStyle: code
-description: "Searches for similar documents in the RAG vector database.
-
-**Workspace lifecycle:** This operation requires an existing workspace. If the workspace
-doesn't exist, returns an empty array."
+description: "Searches for similar documents in the RAG vector database. **Workspace lifecycle:** This operation requires an existing workspace. If the workspace doesn't exist, returns an empty array."
 ---
 
 <WrapCode>
 
 ```typescript
-function ragSearch(params: { modelId: string; n?: number; query: string; topK?: number; workspace?: string }, options?: { forceNewConnection?: boolean; healthCheckTimeout?: number; profiling?: { enabled?: boolean; includeServerBreakdown?: boolean; mode?: "summary" | "verbose" }; timeout?: number }): Promise
+function ragSearch(params: { modelId: string; n?: number; query: string; topK?: number; workspace?: string }, options?: { forceNewConnection?: boolean; healthCheckTimeout?: number; profiling?: { enabled?: boolean; includeServerBreakdown?: boolean; mode?: "summary" | "verbose" }; timeout?: number }): Promise<RagSearchResult[]>
 ```
 
 </WrapCode>
@@ -19,11 +16,13 @@ function ragSearch(params: { modelId: string; n?: number; query: string; topK?: 
 
 | Name | Type | Required? | Description |
 | --- | --- | :---: | --- |
-| `params` | `\{ modelId: string; n?: number; query: string; topK?: number; workspace?: string \}` | ✓ | The parameters for searching || `options` | `\{ forceNewConnection?: boolean; healthCheckTimeout?: number; profiling?: \{ enabled?: boolean; includeServerBreakdown?: boolean; mode?: "summary" \| "verbose" \}; timeout?: number \}` | ✗ | No description |
+| `params` | `\{ modelId: string; n?: number; query: string; topK?: number; workspace?: string \}` | ✓ | The parameters for searching |
+| `options` | `\{ forceNewConnection?: boolean; healthCheckTimeout?: number; profiling?: \{ enabled?: boolean; includeServerBreakdown?: boolean; mode?: "summary" \| "verbose" \}; timeout?: number \}` | ✗ | No description |
+
 ## Returns
 
 ```typescript
-Promise
+Promise<RagSearchResult[]>
 ```
 
 No description available
@@ -32,7 +31,7 @@ No description available
 
 | Error | When |
 | --- | --- |
-| `When the operation fails` |  |
+| `When the operation fails` | — |
 
 ## Example
 

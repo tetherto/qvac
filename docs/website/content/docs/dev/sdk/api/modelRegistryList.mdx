@@ -7,7 +7,7 @@ description: "No description available"
 <WrapCode>
 
 ```typescript
-function modelRegistryList(): Promise
+function modelRegistryList(): Promise<{ addon: "llm" | "whisper" | "embeddings" | "nmt" | "vad" | "tts" | "ocr" | "parakeet" | "diffusion" | "other"; blobBlockLength: number; blobBlockOffset: number; blobByteOffset: number; blobCoreKey: string; engine: "sdcpp-generation" | "llamacpp-embedding" | "llamacpp-completion" | "nmtcpp-translation" | "onnx-ocr" | "parakeet-transcription" | "onnx-tts" | "whispercpp-transcription" | "onnx-vad"; expectedSize: number; modelId: string; name: string; params: string; quantization: string; registryPath: string; registrySource: string; sha256Checksum: string }[]>
 ```
 
 </WrapCode>
@@ -16,7 +16,7 @@ function modelRegistryList(): Promise
 ## Returns
 
 ```typescript
-Promise
+Promise<{ addon: "llm" | "whisper" | "embeddings" | "nmt" | "vad" | "tts" | "ocr" | "parakeet" | "diffusion" | "other"; blobBlockLength: number; blobBlockOffset: number; blobByteOffset: number; blobCoreKey: string; engine: "sdcpp-generation" | "llamacpp-embedding" | "llamacpp-completion" | "nmtcpp-translation" | "onnx-ocr" | "parakeet-transcription" | "onnx-tts" | "whispercpp-transcription" | "onnx-vad"; expectedSize: number; modelId: string; name: string; params: string; quantization: string; registryPath: string; registrySource: string; sha256Checksum: string }[]>
 ```
 
 No description available

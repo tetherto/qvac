@@ -13,6 +13,7 @@ import {
   stripFence,
   renderExpandedTypes,
   renderErrorTable,
+  renderParamRow,
 } from '../scripts/api-docs/render'
 
 const SCRIPT_DIR = path.resolve(
@@ -41,6 +42,7 @@ function createTestEnv(): nunjucks.Environment {
   )
   env.addGlobal('renderExpandedTypes', renderExpandedTypes)
   env.addGlobal('renderErrorTable', renderErrorTable)
+  env.addGlobal('renderParamRow', renderParamRow)
   return env
 }
 

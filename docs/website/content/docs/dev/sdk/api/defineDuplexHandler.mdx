@@ -7,7 +7,7 @@ description: "No description available"
 <WrapCode>
 
 ```typescript
-function defineDuplexHandler(definition: DuplexPluginHandlerDefinition): PluginHandlerDefinition
+function defineDuplexHandler(definition: DuplexPluginHandlerDefinition<TRequest, TResponse>): PluginHandlerDefinition<TRequest, TResponse>
 ```
 
 </WrapCode>
@@ -16,11 +16,12 @@ function defineDuplexHandler(definition: DuplexPluginHandlerDefinition): PluginH
 
 | Name | Type | Required? | Description |
 | --- | --- | :---: | --- |
-| `definition` | `DuplexPluginHandlerDefinition` | ✓ | No description |
+| `definition` | `DuplexPluginHandlerDefinition<TRequest, TResponse>` | ✓ | No description |
+
 ## Returns
 
 ```typescript
-PluginHandlerDefinition
+PluginHandlerDefinition<TRequest, TResponse>
 ```
 
 No description available

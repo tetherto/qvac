@@ -1,8 +1,7 @@
 ---
 title: "translate( )"
 titleStyle: code
-description: "Translates text from one language to another using a specified translation model.
-Supports both NMT (Neural Machine Translation) and LLM models."
+description: "Translates text from one language to another using a specified translation model. Supports both NMT (Neural Machine Translation) and LLM models."
 ---
 
 <WrapCode>
@@ -17,7 +16,9 @@ function translate(params: TranslateClientParams, options?: { forceNewConnection
 
 | Name | Type | Required? | Description |
 | --- | --- | :---: | --- |
-| `params` | [`TranslateClientParams`](#translateclientparams) | ✓ | Translation configuration object || `options` | `\{ forceNewConnection?: boolean; healthCheckTimeout?: number; profiling?: \{ enabled?: boolean; includeServerBreakdown?: boolean; mode?: "summary" \| "verbose" \}; timeout?: number \}` | ✗ | No description |
+| `params` | [`TranslateClientParams`](#translateclientparams) | ✓ | Translation configuration object |
+| `options` | `\{ forceNewConnection?: boolean; healthCheckTimeout?: number; profiling?: \{ enabled?: boolean; includeServerBreakdown?: boolean; mode?: "summary" \| "verbose" \}; timeout?: number \}` | ✗ | No description |
+
 ### `TranslateClientParams`
 
 | Field | Type | Required? | Description |
@@ -37,15 +38,15 @@ No description available
 
 | Field | Type | Description |
 | --- | --- | --- |
-| `stats` | `Promise` | — |
-| `text` | `Promise` | — |
-| `tokenStream` | `AsyncGenerator` | — |
+| `stats` | `Promise<\{ cacheTokens?: number; decodeTime?: number; encodeTime?: number; timeToFirstToken?: number; tokensPerSecond?: number; totalTime?: number; totalTokens?: number \} \| undefined>` | — |
+| `text` | `Promise<string>` | — |
+| `tokenStream` | `AsyncGenerator<string>` | — |
 
 ## Throws
 
 | Error | When |
 | --- | --- |
-| `When translation fails with an error message or when language detection fails` |  |
+| `When translation fails with an error message or when language detection fails` | — |
 
 ## Example
 

@@ -1,17 +1,13 @@
 ---
 title: "ragListWorkspaces( )"
 titleStyle: code
-description: "Lists all RAG workspaces with their open status.
-
-Returns all workspaces that exist on disk. The `open` field indicates whether
-the workspace is currently loaded in memory and holding active resources
-(Corestore, HyperDB adapter, and possibly a RAG instance)."
+description: "Lists all RAG workspaces with their open status. Returns all workspaces that exist on disk. The `open` field indicates whether the workspace is currently loaded in memory and holding active resources (Corestore, HyperDB adapter, and possibly a RAG instance)."
 ---
 
 <WrapCode>
 
 ```typescript
-function ragListWorkspaces(options?: { forceNewConnection?: boolean; healthCheckTimeout?: number; profiling?: { enabled?: boolean; includeServerBreakdown?: boolean; mode?: "summary" | "verbose" }; timeout?: number }): Promise
+function ragListWorkspaces(options?: { forceNewConnection?: boolean; healthCheckTimeout?: number; profiling?: { enabled?: boolean; includeServerBreakdown?: boolean; mode?: "summary" | "verbose" }; timeout?: number }): Promise<{ name: string; open: boolean }[]>
 ```
 
 </WrapCode>
@@ -21,10 +17,11 @@ function ragListWorkspaces(options?: { forceNewConnection?: boolean; healthCheck
 | Name | Type | Required? | Description |
 | --- | --- | :---: | --- |
 | `options` | `\{ forceNewConnection?: boolean; healthCheckTimeout?: number; profiling?: \{ enabled?: boolean; includeServerBreakdown?: boolean; mode?: "summary" \| "verbose" \}; timeout?: number \}` | ✗ | No description |
+
 ## Returns
 
 ```typescript
-Promise
+Promise<{ name: string; open: boolean }[]>
 ```
 
 No description available
@@ -33,7 +30,7 @@ No description available
 
 | Error | When |
 | --- | --- |
-| `When the operation fails` |  |
+| `When the operation fails` | — |
 
 ## Example
 

@@ -1,15 +1,13 @@
 ---
 title: "ragDeleteEmbeddings( )"
 titleStyle: code
-description: "Deletes document embeddings from the RAG vector database.
-
-**Workspace lifecycle:** This operation requires an existing workspace."
+description: "Deletes document embeddings from the RAG vector database. **Workspace lifecycle:** This operation requires an existing workspace."
 ---
 
 <WrapCode>
 
 ```typescript
-function ragDeleteEmbeddings(params: { ids: string[]; modelId?: string; workspace?: string }, options?: { forceNewConnection?: boolean; healthCheckTimeout?: number; profiling?: { enabled?: boolean; includeServerBreakdown?: boolean; mode?: "summary" | "verbose" }; timeout?: number }): Promise
+function ragDeleteEmbeddings(params: { ids: string[]; modelId?: string; workspace?: string }, options?: { forceNewConnection?: boolean; healthCheckTimeout?: number; profiling?: { enabled?: boolean; includeServerBreakdown?: boolean; mode?: "summary" | "verbose" }; timeout?: number }): Promise<void>
 ```
 
 </WrapCode>
@@ -18,11 +16,13 @@ function ragDeleteEmbeddings(params: { ids: string[]; modelId?: string; workspac
 
 | Name | Type | Required? | Description |
 | --- | --- | :---: | --- |
-| `params` | `\{ ids: string[]; modelId?: string; workspace?: string \}` | ✓ | The parameters for deleting embeddings || `options` | `\{ forceNewConnection?: boolean; healthCheckTimeout?: number; profiling?: \{ enabled?: boolean; includeServerBreakdown?: boolean; mode?: "summary" \| "verbose" \}; timeout?: number \}` | ✗ | No description |
+| `params` | `\{ ids: string[]; modelId?: string; workspace?: string \}` | ✓ | The parameters for deleting embeddings |
+| `options` | `\{ forceNewConnection?: boolean; healthCheckTimeout?: number; profiling?: \{ enabled?: boolean; includeServerBreakdown?: boolean; mode?: "summary" \| "verbose" \}; timeout?: number \}` | ✗ | No description |
+
 ## Returns
 
 ```typescript
-Promise
+Promise<void>
 ```
 
 No description available
@@ -31,7 +31,7 @@ No description available
 
 | Error | When |
 | --- | --- |
-| `When the operation fails or workspace doesn't exist` |  |
+| `When the operation fails or workspace doesn't exist` | — |
 
 ## Example
 

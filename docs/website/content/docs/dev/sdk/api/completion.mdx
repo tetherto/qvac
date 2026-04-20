@@ -17,6 +17,7 @@ function completion(params: CompletionParams): { stats: Promise<{ backendDevice?
 | Name | Type | Required? | Description |
 | --- | --- | :---: | --- |
 | `params` | [`CompletionParams`](#completionparams) | ✓ | The completion parameters |
+
 ### `CompletionParams`
 
 | Field | Type | Required? | Description |
@@ -30,6 +31,22 @@ function completion(params: CompletionParams): { stats: Promise<{ backendDevice?
 | `mcp` | `McpClientInput[]` | ✗ | — |
 | `rpcOptions` | `\{ timeout?: number \| undefined; healthCheckTimeout?: number \| undefined; forceNewConnection?: boolean \| undefined; profiling?: \{ enabled?: boolean \| undefined; includeServerBreakdown?: boolean \| undefined; mode?: "summary" \| ... 1 more ... \| undefined; \} \| undefined; \}` | ✗ | — |
 
+#### `McpClientInput`
+
+| Field | Type | Required? | Description |
+| --- | --- | :---: | --- |
+| `client` | `McpClient` | ✓ | — |
+| `includeResources` | `boolean` | ✗ | — |
+
+##### `McpClient`
+
+| Field | Type | Required? | Description |
+| --- | --- | :---: | --- |
+| `listTools` | `() => Promise<\{ [key: string]: unknown; tools: McpTool[]; \}>` | ✓ | — |
+| `callTool` | `(params: \{ name: string; arguments: Record<string, unknown>; \}) => Promise<Record<string, unknown> \| McpToolCallResult>` | ✓ | — |
+| `listResources` | `() => Promise<\{ [key: string]: unknown; resources: McpResource[]; \}>` | ✗ | — |
+| `readResource` | `(params: \{ uri: string; \}) => Promise<\{ [key: string]: unknown; contents: unknown[]; \}>` | ✗ | — |
+
 ## Returns
 
 ```typescript
@@ -40,11 +57,11 @@ No description available
 
 | Field | Type | Description |
 | --- | --- | --- |
-| `stats` | `Promise` | — |
-| `text` | `Promise` | — |
-| `tokenStream` | `AsyncGenerator` | — |
-| `toolCalls` | `Promise` | — |
-| `toolCallStream` | `AsyncGenerator` | — |
+| `stats` | `Promise<\{ backendDevice?: "cpu" \| "gpu"; cacheTokens?: number; timeToFirstToken?: number; tokensPerSecond?: number \} \| undefined>` | — |
+| `text` | `Promise<string>` | — |
+| `tokenStream` | `AsyncGenerator<string>` | — |
+| `toolCalls` | `Promise<ToolCallWithCall[]>` | — |
+| `toolCallStream` | `AsyncGenerator<\{ call: \{ arguments: Record<string, unknown>; id: string; name: string; raw?: string \}; type: "toolCall" \} \| \{ error: \{ code: "PARSE_ERROR" \| "VALIDATION_ERROR" \| "UNKNOWN_TOOL"; message: string; raw?: string \}; type: "toolCallError" \}>` | — |
 
 ## Example
 

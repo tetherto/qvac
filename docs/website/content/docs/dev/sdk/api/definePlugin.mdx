@@ -1,8 +1,7 @@
 ---
 title: "definePlugin( )"
 titleStyle: code
-description: "Helper function to define a plugin with full type inference.
-This is an identity function that provides type checking."
+description: "Helper function to define a plugin with full type inference. This is an identity function that provides type checking."
 ---
 
 <WrapCode>
@@ -18,6 +17,7 @@ function definePlugin(plugin: T): T
 | Name | Type | Required? | Description |
 | --- | --- | :---: | --- |
 | `plugin` | [`T`](#t) | ✓ | No description |
+
 ### `T`
 
 | Field | Type | Required? | Description |
@@ -25,13 +25,11 @@ function definePlugin(plugin: T): T
 | `addonPackage` | `string` | ✓ | — |
 | `createModel` | `(params: CreateModelParams) => PluginModelResult` | ✓ | — |
 | `displayName` | `string` | ✓ | — |
-| `handlers` | `Record` | ✓ | — |
+| `handlers` | `Record<string, PluginHandlerDefinition>` | ✓ | — |
 | `loadConfigSchema` | `ZodType` | ✓ | — |
 | `logging` | `PluginLogging` | ✗ | — |
 | `modelType` | `string` | ✓ | — |
-| `resolveConfig` | `(modelConfig: TConfig, ctx: ResolveContext) => Promise<ResolveResult<TConfig, TArtifactKeys>>` | ✗ | Optional hook to resolve model sources in modelConfig to local paths.
-Called before createModel if the plugin needs to download/resolve artifacts.
-Returns transformed config and optional artifact paths. |
+| `resolveConfig` | `(modelConfig: TConfig, ctx: ResolveContext) => Promise<ResolveResult<TConfig, TArtifactKeys>>` | ✗ | Optional hook to resolve model sources in modelConfig to local paths. Called before createModel if the plugin needs to download/resolve artifacts. Returns transformed config and optional artifact paths. |
 | `skipPrimaryModelPathValidation` | `boolean` | ✗ | When true, skips file-existence validation for modelPath. Use for plugins that derive paths from config. |
 
 ## Returns
@@ -47,11 +45,9 @@ No description available
 | `addonPackage` | `string` | — |
 | `createModel` | `(params: CreateModelParams) => PluginModelResult` | — |
 | `displayName` | `string` | — |
-| `handlers` | `Record` | — |
+| `handlers` | `Record<string, PluginHandlerDefinition>` | — |
 | `loadConfigSchema` | `ZodType` | — |
 | `logging` | `PluginLogging` | — |
 | `modelType` | `string` | — |
-| `resolveConfig` | `(modelConfig: TConfig, ctx: ResolveContext) => Promise<ResolveResult<TConfig, TArtifactKeys>>` | Optional hook to resolve model sources in modelConfig to local paths.
-Called before createModel if the plugin needs to download/resolve artifacts.
-Returns transformed config and optional artifact paths. |
+| `resolveConfig` | `(modelConfig: TConfig, ctx: ResolveContext) => Promise<ResolveResult<TConfig, TArtifactKeys>>` | Optional hook to resolve model sources in modelConfig to local paths. Called before createModel if the plugin needs to download/resolve artifacts. Returns transformed config and optional artifact paths. |
 | `skipPrimaryModelPathValidation` | `boolean` | When true, skips file-existence validation for modelPath. Use for plugins that derive paths from config. |

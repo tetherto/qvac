@@ -7,7 +7,7 @@ description: "Invoke a non-streaming plugin handler."
 <WrapCode>
 
 ```typescript
-function invokePlugin(options: InvokePluginOptions, rpcOptions?: { forceNewConnection?: boolean; healthCheckTimeout?: number; profiling?: { enabled?: boolean; includeServerBreakdown?: boolean; mode?: "summary" | "verbose" }; timeout?: number }): Promise
+function invokePlugin(options: InvokePluginOptions<TParams>, rpcOptions?: { forceNewConnection?: boolean; healthCheckTimeout?: number; profiling?: { enabled?: boolean; includeServerBreakdown?: boolean; mode?: "summary" | "verbose" }; timeout?: number }): Promise<TResponse>
 ```
 
 </WrapCode>
@@ -16,11 +16,21 @@ function invokePlugin(options: InvokePluginOptions, rpcOptions?: { forceNewConne
 
 | Name | Type | Required? | Description |
 | --- | --- | :---: | --- |
-| `options` | `InvokePluginOptions` | ✓ | No description || `rpcOptions` | `\{ forceNewConnection?: boolean; healthCheckTimeout?: number; profiling?: \{ enabled?: boolean; includeServerBreakdown?: boolean; mode?: "summary" \| "verbose" \}; timeout?: number \}` | ✗ | No description |
+| `options` | `InvokePluginOptions<TParams>` | ✓ | No description |
+| `rpcOptions` | `\{ forceNewConnection?: boolean; healthCheckTimeout?: number; profiling?: \{ enabled?: boolean; includeServerBreakdown?: boolean; mode?: "summary" \| "verbose" \}; timeout?: number \}` | ✗ | No description |
+
+### `InvokePluginOptions`
+
+| Field | Type | Required? | Description |
+| --- | --- | :---: | --- |
+| `modelId` | `string` | ✓ | — |
+| `handler` | `string` | ✓ | — |
+| `params` | `TParams` | ✓ | — |
+
 ## Returns
 
 ```typescript
-Promise
+Promise<TResponse>
 ```
 
 No description available

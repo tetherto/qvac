@@ -1,14 +1,13 @@
 ---
 title: "transcribe( )"
 titleStyle: code
-description: "Transcribe audio and return the complete text. Accepts either a file
-path or an audio buffer."
+description: "Transcribe audio and return the complete text. Accepts either a file path or an audio buffer."
 ---
 
 <WrapCode>
 
 ```typescript
-function transcribe(params: TranscribeClientParams, options?: { forceNewConnection?: boolean; healthCheckTimeout?: number; profiling?: { enabled?: boolean; includeServerBreakdown?: boolean; mode?: "summary" | "verbose" }; timeout?: number }): Promise
+function transcribe(params: TranscribeClientParams, options?: { forceNewConnection?: boolean; healthCheckTimeout?: number; profiling?: { enabled?: boolean; includeServerBreakdown?: boolean; mode?: "summary" | "verbose" }; timeout?: number }): Promise<string>
 ```
 
 </WrapCode>
@@ -17,7 +16,9 @@ function transcribe(params: TranscribeClientParams, options?: { forceNewConnecti
 
 | Name | Type | Required? | Description |
 | --- | --- | :---: | --- |
-| `params` | [`TranscribeClientParams`](#transcribeclientparams) | ✓ | No description || `options` | `\{ forceNewConnection?: boolean; healthCheckTimeout?: number; profiling?: \{ enabled?: boolean; includeServerBreakdown?: boolean; mode?: "summary" \| "verbose" \}; timeout?: number \}` | ✗ | Optional RPC options including per-call profiling |
+| `params` | [`TranscribeClientParams`](#transcribeclientparams) | ✓ | No description |
+| `options` | `\{ forceNewConnection?: boolean; healthCheckTimeout?: number; profiling?: \{ enabled?: boolean; includeServerBreakdown?: boolean; mode?: "summary" \| "verbose" \}; timeout?: number \}` | ✗ | Optional RPC options including per-call profiling |
+
 ### `TranscribeClientParams`
 
 | Field | Type | Required? | Description |
@@ -29,7 +30,7 @@ function transcribe(params: TranscribeClientParams, options?: { forceNewConnecti
 ## Returns
 
 ```typescript
-Promise
+Promise<string>
 ```
 
 No description available

@@ -7,7 +7,7 @@ description: "No description available"
 <WrapCode>
 
 ```typescript
-function modelRegistrySearch(params: ModelRegistrySearchParams): Promise
+function modelRegistrySearch(params: ModelRegistrySearchParams): Promise<{ addon: "llm" | "whisper" | "embeddings" | "nmt" | "vad" | "tts" | "ocr" | "parakeet" | "diffusion" | "other"; blobBlockLength: number; blobBlockOffset: number; blobByteOffset: number; blobCoreKey: string; engine: "sdcpp-generation" | "llamacpp-embedding" | "llamacpp-completion" | "nmtcpp-translation" | "onnx-ocr" | "parakeet-transcription" | "onnx-tts" | "whispercpp-transcription" | "onnx-vad"; expectedSize: number; modelId: string; name: string; params: string; quantization: string; registryPath: string; registrySource: string; sha256Checksum: string }[]>
 ```
 
 </WrapCode>
@@ -17,20 +17,21 @@ function modelRegistrySearch(params: ModelRegistrySearchParams): Promise
 | Name | Type | Required? | Default | Description |
 | --- | --- | :---: | --- | --- |
 | `params` | [`ModelRegistrySearchParams`](#modelregistrysearchparams) | ✓ | `\{\}` | No description |
+
 ### `ModelRegistrySearchParams`
 
 | Field | Type | Required? | Description |
 | --- | --- | :---: | --- |
-| `addon` | `"llm" \| "whisper" \| "embeddings" \| "nmt" \| "vad" \| "tts" \| "ocr" \| "parakeet" \| "diffusion" \| "other"` | ✗ | — |
-| `engine` | `string` | ✗ | — |
 | `filter` | `string` | ✗ | — |
-| `modelType` | `"llm" \| "whisper" \| "embeddings" \| "nmt" \| "vad" \| "tts" \| "ocr" \| "parakeet" \| "diffusion" \| "other"` | ✗ | — |
+| `engine` | `string` | ✗ | — |
 | `quantization` | `string` | ✗ | — |
+| `modelType` | `"llm" \| "whisper" \| "embeddings" \| "nmt" \| "parakeet" \| "tts" \| "ocr" \| "diffusion" \| "vad" \| "other"` | ✗ | — |
+| `addon` | `"llm" \| "whisper" \| "embeddings" \| "nmt" \| "parakeet" \| "tts" \| "ocr" \| "diffusion" \| "vad" \| "other"` | ✗ | — |
 
 ## Returns
 
 ```typescript
-Promise
+Promise<{ addon: "llm" | "whisper" | "embeddings" | "nmt" | "vad" | "tts" | "ocr" | "parakeet" | "diffusion" | "other"; blobBlockLength: number; blobBlockOffset: number; blobByteOffset: number; blobCoreKey: string; engine: "sdcpp-generation" | "llamacpp-embedding" | "llamacpp-completion" | "nmtcpp-translation" | "onnx-ocr" | "parakeet-transcription" | "onnx-tts" | "whispercpp-transcription" | "onnx-vad"; expectedSize: number; modelId: string; name: string; params: string; quantization: string; registryPath: string; registrySource: string; sha256Checksum: string }[]>
 ```
 
 No description available

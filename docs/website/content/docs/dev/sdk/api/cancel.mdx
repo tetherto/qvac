@@ -7,7 +7,7 @@ description: "Cancels an ongoing operation."
 <WrapCode>
 
 ```typescript
-function cancel(params: { modelId: string; operation: "inference" } | { clearCache?: boolean; delegate?: { healthCheckTimeout?: number; providerPublicKey: string; timeout?: number; topic: string }; downloadKey: string; operation: "downloadAsset" } | { operation: "rag"; workspace?: string }): Promise
+function cancel(params: { modelId: string; operation: "inference" } | { clearCache?: boolean; delegate?: { healthCheckTimeout?: number; providerPublicKey: string; timeout?: number; topic: string }; downloadKey: string; operation: "downloadAsset" } | { operation: "rag"; workspace?: string }): Promise<void>
 ```
 
 </WrapCode>
@@ -17,10 +17,11 @@ function cancel(params: { modelId: string; operation: "inference" } | { clearCac
 | Name | Type | Required? | Description |
 | --- | --- | :---: | --- |
 | `params` | `\{ modelId: string; operation: "inference" \} \| \{ clearCache?: boolean; delegate?: \{ healthCheckTimeout?: number; providerPublicKey: string; timeout?: number; topic: string \}; downloadKey: string; operation: "downloadAsset" \} \| \{ operation: "rag"; workspace?: string \}` | ✓ | The parameters for the cancellation |
+
 ## Returns
 
 ```typescript
-Promise
+Promise<void>
 ```
 
 No description available
@@ -29,7 +30,7 @@ No description available
 
 | Error | When |
 | --- | --- |
-| `When the response type is invalid or when the cancellation fails` |  |
+| `When the response type is invalid or when the cancellation fails` | — |
 
 ## Example
 

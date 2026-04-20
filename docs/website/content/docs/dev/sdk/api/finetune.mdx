@@ -16,7 +16,9 @@ function finetune(params: { modelId: string; operation?: "start" | "resume"; opt
 
 | Name | Type | Required? | Description |
 | --- | --- | :---: | --- |
-| `params` | `\{ modelId: string; operation?: "start" \| "resume"; options: \{ assistantLossOnly?: boolean; batchSize?: number; chatTemplatePath?: string; checkpointSaveDir?: string; checkpointSaveSteps?: number; contextLength?: number; learningRate?: number; loraAlpha?: number; loraInitStd?: number; loraModules?: string; loraRank?: number; loraSeed?: number; lrMin?: number; lrScheduler?: "constant" \| "cosine" \| "linear"; microBatchSize?: number; numberOfEpochs?: number; outputParametersDir: string; trainDatasetDir: string; validation: \{ type: "none" \} \| \{ fraction?: number; type: "split" \} \| \{ path: string; type: "dataset" \}; warmupRatio?: number; warmupRatioSet?: boolean; warmupSteps?: number; warmupStepsSet?: boolean; weightDecay?: number \} \}` | ✓ | The finetuning parameters || `rpcOptions` | `\{ forceNewConnection?: boolean; healthCheckTimeout?: number; profiling?: \{ enabled?: boolean; includeServerBreakdown?: boolean; mode?: "summary" \| "verbose" \}; timeout?: number \}` | ✗ | Optional RPC transport options |
+| `params` | `\{ modelId: string; operation?: "start" \| "resume"; options: \{ assistantLossOnly?: boolean; batchSize?: number; chatTemplatePath?: string; checkpointSaveDir?: string; checkpointSaveSteps?: number; contextLength?: number; learningRate?: number; loraAlpha?: number; loraInitStd?: number; loraModules?: string; loraRank?: number; loraSeed?: number; lrMin?: number; lrScheduler?: "constant" \| "cosine" \| "linear"; microBatchSize?: number; numberOfEpochs?: number; outputParametersDir: string; trainDatasetDir: string; validation: \{ type: "none" \} \| \{ fraction?: number; type: "split" \} \| \{ path: string; type: "dataset" \}; warmupRatio?: number; warmupRatioSet?: boolean; warmupSteps?: number; warmupStepsSet?: boolean; weightDecay?: number \} \}` | ✓ | The finetuning parameters |
+| `rpcOptions` | `\{ forceNewConnection?: boolean; healthCheckTimeout?: number; profiling?: \{ enabled?: boolean; includeServerBreakdown?: boolean; mode?: "summary" \| "verbose" \}; timeout?: number \}` | ✗ | Optional RPC transport options |
+
 ## Returns
 
 ```typescript
@@ -27,8 +29,8 @@ No description available
 
 | Field | Type | Description |
 | --- | --- | --- |
-| `progressStream` | `AsyncGenerator` | — |
-| `result` | `Promise` | — |
+| `progressStream` | `AsyncGenerator<\{ accuracy: number \| null; accuracy_uncertainty: number \| null; current_batch: number; current_epoch: number; elapsed_ms: number; eta_ms: number; global_steps: number; is_train: boolean; loss: number \| null; loss_uncertainty: number \| null; total_batches: number \}>` | — |
+| `result` | `Promise<\{ stats?: \{ epochs_completed: number; global_steps: number; learning_rate?: number; train_accuracy?: number; train_accuracy_uncertainty?: number \| null; train_loss?: number; train_loss_uncertainty?: number \| null; val_accuracy?: number; val_accuracy_uncertainty?: number \| null; val_loss?: number; val_loss_uncertainty?: number \| null \}; status: "IDLE" \| "RUNNING" \| "PAUSED" \| "CANCELLED" \| "COMPLETED"; type: "finetune" \}>` | — |
 
 ## Example
 

@@ -7,7 +7,7 @@ description: "Opens a logging stream to receive real-time logs."
 <WrapCode>
 
 ```typescript
-function loggingStream(params: { id: string }): AsyncGenerator
+function loggingStream(params: { id: string }): AsyncGenerator<{ id: string; level: LogLevel; message: string; namespace: string; timestamp: number; type: "loggingStream" }>
 ```
 
 </WrapCode>
@@ -17,10 +17,11 @@ function loggingStream(params: { id: string }): AsyncGenerator
 | Name | Type | Required? | Description |
 | --- | --- | :---: | --- |
 | `params` | `\{ id: string \}` | ✓ | The arguments for the logging stream |
+
 ## Returns
 
 ```typescript
-AsyncGenerator
+AsyncGenerator<{ id: string; level: LogLevel; message: string; namespace: string; timestamp: number; type: "loggingStream" }>
 ```
 
 No description available
@@ -29,7 +30,7 @@ No description available
 
 | Error | When |
 | --- | --- |
-| `When the response type is invalid or when the stream fails` |  |
+| `When the response type is invalid or when the stream fails` | — |
 
 ## Example
 

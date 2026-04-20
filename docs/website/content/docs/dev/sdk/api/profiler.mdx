@@ -1,10 +1,10 @@
 ---
 title: "profiler"
 titleStyle: code
-description: "No description available"
+description: "QVAC SDK Profiler"
 ---
 
-No description available
+QVAC SDK Profiler
 
 ## Fields
 
@@ -20,3 +20,14 @@ No description available
 | `getConfig` | `() => ResolvedProfilerConfig` | ✓ | — |
 | `isEnabled` | `() => boolean` | ✓ | — |
 | `onRecord` | `(callback: (event: ProfilingEvent) => void) => () => void` | ✓ | — |
+
+## Example
+
+```typescript
+import { profiler } from "@qvac/sdk";
+
+profiler.enable({ mode: "summary" });
+// ... run SDK operations ...
+console.log(profiler.exportTable());
+profiler.disable();
+```

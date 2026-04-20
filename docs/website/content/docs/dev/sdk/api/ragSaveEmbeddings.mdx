@@ -1,17 +1,13 @@
 ---
 title: "ragSaveEmbeddings( )"
 titleStyle: code
-description: "Saves pre-embedded documents to the RAG vector database.
-Part of the segregated flow: chunk() → embed() → saveEmbeddings()
-
-**Workspace lifecycle:** This operation implicitly opens (or creates) the workspace.
-The workspace remains open until closed."
+description: "Saves pre-embedded documents to the RAG vector database. Part of the segregated flow: chunk() → embed() → saveEmbeddings() **Workspace lifecycle:** This operation implicitly opens (or creates) the workspace. The workspace remains open until closed."
 ---
 
 <WrapCode>
 
 ```typescript
-function ragSaveEmbeddings(params: RagSaveEmbeddingsParams, options?: { forceNewConnection?: boolean; healthCheckTimeout?: number; profiling?: { enabled?: boolean; includeServerBreakdown?: boolean; mode?: "summary" | "verbose" }; timeout?: number }): Promise
+function ragSaveEmbeddings(params: RagSaveEmbeddingsParams, options?: { forceNewConnection?: boolean; healthCheckTimeout?: number; profiling?: { enabled?: boolean; includeServerBreakdown?: boolean; mode?: "summary" | "verbose" }; timeout?: number }): Promise<RagSaveEmbeddingsResult[]>
 ```
 
 </WrapCode>
@@ -20,7 +16,9 @@ function ragSaveEmbeddings(params: RagSaveEmbeddingsParams, options?: { forceNew
 
 | Name | Type | Required? | Description |
 | --- | --- | :---: | --- |
-| `params` | [`RagSaveEmbeddingsParams`](#ragsaveembeddingsparams) | ✓ | The parameters for saving || `options` | `\{ forceNewConnection?: boolean; healthCheckTimeout?: number; profiling?: \{ enabled?: boolean; includeServerBreakdown?: boolean; mode?: "summary" \| "verbose" \}; timeout?: number \}` | ✗ | No description |
+| `params` | [`RagSaveEmbeddingsParams`](#ragsaveembeddingsparams) | ✓ | The parameters for saving |
+| `options` | `\{ forceNewConnection?: boolean; healthCheckTimeout?: number; profiling?: \{ enabled?: boolean; includeServerBreakdown?: boolean; mode?: "summary" \| "verbose" \}; timeout?: number \}` | ✗ | No description |
+
 ### `RagSaveEmbeddingsParams`
 
 | Field | Type | Required? | Description |
@@ -35,7 +33,7 @@ function ragSaveEmbeddings(params: RagSaveEmbeddingsParams, options?: { forceNew
 ## Returns
 
 ```typescript
-Promise
+Promise<RagSaveEmbeddingsResult[]>
 ```
 
 No description available
@@ -44,8 +42,8 @@ No description available
 
 | Error | When |
 | --- | --- |
-| `When the operation fails` |  |
-| `When streaming ends unexpectedly (only when using onProgress)` |  |
+| `When the operation fails` | — |
+| `When streaming ends unexpectedly (only when using onProgress)` | — |
 
 ## Example
 

@@ -16,15 +16,17 @@ function getLogger(namespace: string, options?: LoggerOptions): Logger
 
 | Name | Type | Required? | Description |
 | --- | --- | :---: | --- |
-| `namespace` | `string` | ✓ | No description || `options` | [`LoggerOptions`](#loggeroptions) | ✗ | No description |
+| `namespace` | `string` | ✓ | No description |
+| `options` | [`LoggerOptions`](#loggeroptions) | ✗ | No description |
+
 ### `LoggerOptions`
 
 | Field | Type | Required? | Description |
 | --- | --- | :---: | --- |
-| `enableConsole` | `boolean` | ✗ | — |
 | `level` | `any` | ✗ | — |
 | `namespace` | `string` | ✗ | — |
 | `transports` | `LogTransport[]` | ✗ | — |
+| `enableConsole` | `boolean` | ✗ | — |
 
 ## Returns
 

@@ -382,14 +382,23 @@ function extractApiObjects(project: any): ApiObject[] {
       if (expanded) children.push(expanded);
     }
 
+    const moduleDoc = extractComment(summary)
+      ? null
+      : readModuleJsDoc(sourcePath);
+    const description = extractComment(summary) || moduleDoc?.description || "No description available";
+    const extractedExamples = blockTags
+      .filter((tag: any) => tag.tag === "@example")
+      .map((tag: any) => extractComment(tag.content));
+    const examples = extractedExamples.length > 0
+      ? extractedExamples
+      : moduleDoc?.examples ?? [];
+
     objects.push({
       name: decl.name,
-      description: extractComment(summary) || "No description available",
+      description,
       fields,
       children,
-      examples: blockTags
-        .filter((tag: any) => tag.tag === "@example")
-        .map((tag: any) => extractComment(tag.content)) || [],
+      examples,
     });
   }
 
@@ -563,6 +572,135 @@ function initTsProgram(tsconfigPath: string): void {
   tsChecker = tsProgram.getTypeChecker();
 }
 
+/**
+ * Extract a module-level JSDoc block (the first /** ... *\/ comment at the
+ * top of a file, above any statements). Used as a fallback description for
+ * exports that don't have their own JSDoc but whose module does.
+ */
+function readModuleJsDoc(
+  fileName: string,
+): { description: string; examples: string[] } | null {
+  if (!tsProgram) return null;
+  const normalizedPath = fileName.replace(/\\/g, "/");
+  const sourceFile = tsProgram.getSourceFile(normalizedPath);
+  if (!sourceFile) return null;
+
+  const fullText = sourceFile.getFullText();
+  const firstStatement = sourceFile.statements[0];
+  if (!firstStatement) return null;
+
+  const commentRanges = ts.getLeadingCommentRanges(fullText, firstStatement.pos) ?? [];
+  const jsdoc = commentRanges.find(
+    (r) =>
+      r.kind === ts.SyntaxKind.MultiLineCommentTrivia &&
+      fullText.slice(r.pos, r.pos + 3) === "/**",
+  );
+  if (!jsdoc) return null;
+
+  const raw = fullText.slice(jsdoc.pos, jsdoc.end);
+  return parseJsDocBlock(raw);
+}
+
+function parseJsDocBlock(raw: string): { description: string; examples: string[] } {
+  const inner = raw
+    .replace(/^\/\*\*\s*/, "")
+    .replace(/\s*\*\/$/, "")
+    .split("\n")
+    .map((line) => line.replace(/^\s*\*\s?/, ""))
+    .join("\n");
+
+  const exampleRe = /@example\s+([\s\S]*?)(?=\n@\w|$)/g;
+  const examples: string[] = [];
+  let m: RegExpExecArray | null;
+  while ((m = exampleRe.exec(inner)) !== null) {
+    examples.push(m[1].trim());
+  }
+
+  const description = inner.replace(/@\w+[\s\S]*$/, "").trim();
+  return { description, examples };
+}
+
+function findTsTypeAlias(
+  fileName: string,
+  qualifiedName: string,
+  pos?: number,
+): ts.TypeAliasDeclaration | ts.InterfaceDeclaration | undefined {
+  if (!tsProgram) return undefined;
+  const normalizedPath = fileName.replace(/\\/g, "/");
+  const sourceFile = tsProgram.getSourceFile(normalizedPath);
+  if (!sourceFile) return undefined;
+
+  let target: ts.TypeAliasDeclaration | ts.InterfaceDeclaration | undefined;
+  ts.forEachChild(sourceFile, (node) => {
+    if (
+      (ts.isTypeAliasDeclaration(node) || ts.isInterfaceDeclaration(node)) &&
+      node.name.text === qualifiedName
+    ) {
+      if (pos == null || Math.abs(node.pos - pos) < 50) {
+        target = node;
+      }
+    }
+  });
+  return target;
+}
+
+/**
+ * Given a ts.Type for a property, try to resolve a named type to expand as a
+ * child section. Returns the name and the underlying object type, or null.
+ */
+function resolveNamedChildType(
+  propType: ts.Type,
+): { name: string; objectType: ts.Type } | null {
+  if (!tsChecker) return null;
+
+  let candidate: ts.Type = propType;
+
+  // Unwrap arrays: Array<T> / readonly T[] — drill into element type.
+  const refFlags = (ts as any).ObjectFlags?.Reference ?? 4;
+  const objectFlags = ((candidate as any).objectFlags ?? 0) as number;
+  if (
+    (candidate as any).flags & ts.TypeFlags.Object &&
+    objectFlags & refFlags &&
+    tsChecker.isArrayType?.(candidate)
+  ) {
+    const args = tsChecker.getTypeArguments(candidate as ts.TypeReference);
+    if (args && args[0]) candidate = args[0];
+  }
+
+  // Unwrap unions of T | undefined / T | null, keeping the meaningful branch.
+  if (candidate.isUnion?.()) {
+    const meaningful = (candidate as ts.UnionType).types.filter(
+      (t) => !(t.flags & (ts.TypeFlags.Undefined | ts.TypeFlags.Null)),
+    );
+    if (meaningful.length === 1) candidate = meaningful[0];
+  }
+
+  const aliasName = candidate.aliasSymbol?.name;
+  const symbolName = candidate.symbol?.name;
+  const name = aliasName ?? symbolName;
+
+  // Only expand named object types with their own property list. Skip
+  // anonymous inline objects, intrinsics, utility types like Record<>, etc.
+  if (!name || name === "__type" || name === "__object") return null;
+  if (BUILTIN_TYPES.has(name)) return null;
+
+  const hasOwnProps = candidate.getProperties().length > 0;
+  if (!hasOwnProps) return null;
+
+  return { name, objectType: candidate };
+}
+
+const BUILTIN_TYPES = new Set([
+  "Promise", "Array", "ReadonlyArray", "Map", "Set", "WeakMap", "WeakSet",
+  "Record", "Partial", "Required", "Readonly", "Pick", "Omit", "Exclude",
+  "Extract", "NonNullable", "Parameters", "ReturnType", "InstanceType",
+  "Date", "RegExp", "Error", "Function", "Object", "String", "Number",
+  "Boolean", "Symbol", "BigInt", "AsyncGenerator", "Generator",
+  "AsyncIterable", "Iterable", "AsyncIterableIterator", "IterableIterator",
+  "Uint8Array", "Int8Array", "Uint16Array", "Int16Array", "Uint32Array",
+  "Int32Array", "Float32Array", "Float64Array", "ArrayBuffer",
+]);
+
 function resolveViaTypeScript(
   fileName: string,
   qualifiedName: string,
@@ -570,45 +708,29 @@ function resolveViaTypeScript(
 ): TypeField[] | null {
   if (!tsChecker || !tsProgram) return null;
 
-  const normalizedPath = fileName.replace(/\\/g, "/");
-  const sourceFile = tsProgram.getSourceFile(normalizedPath);
-  if (!sourceFile) return null;
-
-  let targetNode: ts.TypeAliasDeclaration | undefined;
-  ts.forEachChild(sourceFile, (node) => {
-    if (ts.isTypeAliasDeclaration(node) && node.name.text === qualifiedName) {
-      if (pos == null || Math.abs(node.pos - pos) < 50) {
-        targetNode = node;
-      }
-    }
-  });
+  const targetNode = findTsTypeAlias(fileName, qualifiedName, pos);
   if (!targetNode) return null;
 
   const type = tsChecker.getTypeAtLocation(targetNode);
-  return extractTsProperties(type, targetNode, new Set<string>(), 0);
+  return extractTsProperties(type, targetNode);
 }
 
-function extractTsProperties(
-  type: ts.Type,
-  location: ts.Node,
-  visited: Set<string>,
-  depth: number,
-): TypeField[] | null {
-  if (depth > 5) return null;
+function extractTsProperties(type: ts.Type, location: ts.Node): TypeField[] | null {
+  if (!tsChecker) return null;
 
   const props = type.getProperties();
   if (!props || props.length === 0) return null;
 
   const fields: TypeField[] = [];
   for (const prop of props) {
-    const propType = tsChecker!.getTypeOfSymbolAtLocation(prop, location);
-    const typeStr = tsChecker!.typeToString(propType);
+    const propType = tsChecker.getTypeOfSymbolAtLocation(prop, location);
+    const typeStr = tsChecker.typeToString(propType);
     const isOptional = !!(prop.flags & ts.SymbolFlags.Optional);
 
-    const comment = prop.getDocumentationComment(tsChecker!);
+    const comment = prop.getDocumentationComment(tsChecker);
     const description = comment.map((c) => c.text).join("").trim();
 
-    const jsTags = prop.getJsDocTags(tsChecker!);
+    const jsTags = prop.getJsDocTags(tsChecker);
     const defaultTag = jsTags.find((t) => t.name === "default" || t.name === "defaultValue");
     const defaultValue = defaultTag?.text?.map((t) => t.text).join("").trim();
 
@@ -624,15 +746,53 @@ function extractTsProperties(
   return fields;
 }
 
+/**
+ * Expand a named TS type into an ExpandedType, recursively expanding any
+ * named child types referenced by its properties. `visited` prevents cycles.
+ */
+function expandTsType(
+  type: ts.Type,
+  typeName: string,
+  location: ts.Node,
+  visited: Set<string>,
+  depth: number,
+): ExpandedType | null {
+  if (!tsChecker) return null;
+  if (depth > 4) return null;
+
+  const fields = extractTsProperties(type, location);
+  if (!fields || fields.length === 0) return null;
+
+  const children: ExpandedType[] = [];
+  const seen = new Set<string>();
+  for (const prop of type.getProperties()) {
+    const propType = tsChecker.getTypeOfSymbolAtLocation(prop, location);
+    const named = resolveNamedChildType(propType);
+    if (!named) continue;
+    if (visited.has(named.name) || seen.has(named.name)) continue;
+    seen.add(named.name);
+    const childVisited = new Set(visited);
+    childVisited.add(named.name);
+    const child = expandTsType(named.objectType, named.name, location, childVisited, depth + 1);
+    if (child) children.push(child);
+  }
+
+  return { typeName, fields, children };
+}
+
 function resolveExpandedViaTypeScript(
   fileName: string,
   qualifiedName: string,
   pos?: number,
-  depth?: number,
 ): ExpandedType | null {
-  const fields = resolveViaTypeScript(fileName, qualifiedName, pos);
-  if (!fields || fields.length === 0) return null;
-  return { typeName: qualifiedName, fields, children: [] };
+  if (!tsChecker || !tsProgram) return null;
+
+  const targetNode = findTsTypeAlias(fileName, qualifiedName, pos);
+  if (!targetNode) return null;
+
+  const type = tsChecker.getTypeAtLocation(targetNode);
+  const visited = new Set<string>([qualifiedName]);
+  return expandTsType(type, qualifiedName, targetNode, visited, 0);
 }
 
 // ---------------------------------------------------------------------------
@@ -647,12 +807,30 @@ function cleanDefaultValue(raw: string | undefined): string | undefined {
 function formatType(type: any): string {
   if (!type) return "unknown";
   if (type.type === "intrinsic") return type.name;
-  if (type.type === "reference") return type.name;
+  if (type.type === "literal") {
+    if (typeof type.value === "string") return `"${type.value}"`;
+    if (type.value === null) return "null";
+    return String(type.value);
+  }
+  if (type.type === "reference") {
+    const args = (type.typeArguments as any[] | undefined) ?? [];
+    if (args.length > 0) {
+      return `${type.name}<${args.map(formatType).join(", ")}>`;
+    }
+    return type.name;
+  }
   if (type.type === "union") {
     return type.types.map((t: any) => formatType(t)).join(" | ");
   }
+  if (type.type === "intersection") {
+    return type.types.map((t: any) => formatType(t)).join(" & ");
+  }
   if (type.type === "array") {
     return `${formatType(type.elementType)}[]`;
+  }
+  if (type.type === "tuple") {
+    const elems = (type.elements as any[] | undefined) ?? [];
+    return `[${elems.map(formatType).join(", ")}]`;
   }
   return type.toString?.() ?? "unknown";
 }

@@ -1,17 +1,13 @@
 ---
 title: "ragCloseWorkspace( )"
 titleStyle: code
-description: "Closes a RAG workspace, releasing in-memory resources (Corestore, HyperDB adapter, RAG instance).
-
-**Workspace lifecycle:** Workspaces are implicitly opened.
-This function explicitly closes them, releasing memory and file locks. The workspace data
-remains on disk unless `deleteOnClose` is set to true."
+description: "Closes a RAG workspace, releasing in-memory resources (Corestore, HyperDB adapter, RAG instance). **Workspace lifecycle:** Workspaces are implicitly opened. This function explicitly closes them, releasing memory and file locks. The workspace data remains on disk unless `deleteOnClose` is set to true."
 ---
 
 <WrapCode>
 
 ```typescript
-function ragCloseWorkspace(params?: { deleteOnClose?: boolean; workspace?: string }, options?: { forceNewConnection?: boolean; healthCheckTimeout?: number; profiling?: { enabled?: boolean; includeServerBreakdown?: boolean; mode?: "summary" | "verbose" }; timeout?: number }): Promise
+function ragCloseWorkspace(params?: { deleteOnClose?: boolean; workspace?: string }, options?: { forceNewConnection?: boolean; healthCheckTimeout?: number; profiling?: { enabled?: boolean; includeServerBreakdown?: boolean; mode?: "summary" | "verbose" }; timeout?: number }): Promise<void>
 ```
 
 </WrapCode>
@@ -20,11 +16,13 @@ function ragCloseWorkspace(params?: { deleteOnClose?: boolean; workspace?: strin
 
 | Name | Type | Required? | Description |
 | --- | --- | :---: | --- |
-| `params` | `\{ deleteOnClose?: boolean; workspace?: string \}` | ✗ | The parameters for closing || `options` | `\{ forceNewConnection?: boolean; healthCheckTimeout?: number; profiling?: \{ enabled?: boolean; includeServerBreakdown?: boolean; mode?: "summary" \| "verbose" \}; timeout?: number \}` | ✗ | No description |
+| `params` | `\{ deleteOnClose?: boolean; workspace?: string \}` | ✗ | The parameters for closing |
+| `options` | `\{ forceNewConnection?: boolean; healthCheckTimeout?: number; profiling?: \{ enabled?: boolean; includeServerBreakdown?: boolean; mode?: "summary" \| "verbose" \}; timeout?: number \}` | ✗ | No description |
+
 ## Returns
 
 ```typescript
-Promise
+Promise<void>
 ```
 
 No description available
@@ -33,7 +31,7 @@ No description available
 
 | Error | When |
 | --- | --- |
-| `When the operation fails` |  |
+| `When the operation fails` | — |
 
 ## Example
 

@@ -1,14 +1,13 @@
 ---
 title: "defineHandler( )"
 titleStyle: code
-description: "Helper function to define a handler with full type inference.
-This is an identity function that provides type checking."
+description: "Helper function to define a handler with full type inference. This is an identity function that provides type checking."
 ---
 
 <WrapCode>
 
 ```typescript
-function defineHandler(definition: PluginHandlerDefinition): PluginHandlerDefinition
+function defineHandler(definition: PluginHandlerDefinition<TRequest, TResponse>): PluginHandlerDefinition<TRequest, TResponse>
 ```
 
 </WrapCode>
@@ -17,11 +16,12 @@ function defineHandler(definition: PluginHandlerDefinition): PluginHandlerDefini
 
 | Name | Type | Required? | Description |
 | --- | --- | :---: | --- |
-| `definition` | `PluginHandlerDefinition` | ✓ | No description |
+| `definition` | `PluginHandlerDefinition<TRequest, TResponse>` | ✓ | No description |
+
 ## Returns
 
 ```typescript
-PluginHandlerDefinition
+PluginHandlerDefinition<TRequest, TResponse>
 ```
 
 No description available

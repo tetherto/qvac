@@ -1,17 +1,13 @@
 ---
 title: "downloadAsset( )"
 titleStyle: code
-description: "Downloads an asset (model file) without loading it into memory.
-
-This function is specifically designed for download-only operations and
-doesn't accept runtime configuration options like modelConfig or delegate.
-Use this for download-only operations instead of loadModel for better semantic clarity."
+description: "Downloads an asset (model file) without loading it into memory. This function is specifically designed for download-only operations and doesn't accept runtime configuration options like modelConfig or delegate. Use this for download-only operations instead of loadModel for better semantic clarity."
 ---
 
 <WrapCode>
 
 ```typescript
-function downloadAsset(options: DownloadAssetOptions, rpcOptions?: { forceNewConnection?: boolean; healthCheckTimeout?: number; profiling?: { enabled?: boolean; includeServerBreakdown?: boolean; mode?: "summary" | "verbose" }; timeout?: number }): Promise
+function downloadAsset(options: DownloadAssetOptions, rpcOptions?: { forceNewConnection?: boolean; healthCheckTimeout?: number; profiling?: { enabled?: boolean; includeServerBreakdown?: boolean; mode?: "summary" | "verbose" }; timeout?: number }): Promise<string>
 ```
 
 </WrapCode>
@@ -20,10 +16,9 @@ function downloadAsset(options: DownloadAssetOptions, rpcOptions?: { forceNewCon
 
 | Name | Type | Required? | Description |
 | --- | --- | :---: | --- |
-| `options` | [`DownloadAssetOptions`](#downloadassetoptions) | ✓ | Download configuration including:
-  - assetSrc: The location from which the asset is downloaded (local path, remote URL, or Hyperdrive URL)
-  - seed: Optional boolean for hyperdrive seeding
-  - onProgress: Optional callback for download progress || `rpcOptions` | `\{ forceNewConnection?: boolean; healthCheckTimeout?: number; profiling?: \{ enabled?: boolean; includeServerBreakdown?: boolean; mode?: "summary" \| "verbose" \}; timeout?: number \}` | ✗ | Optional RPC options including per-call profiling configuration |
+| `options` | [`DownloadAssetOptions`](#downloadassetoptions) | ✓ | Download configuration including: - assetSrc: The location from which the asset is downloaded (local path, remote URL, or Hyperdrive URL) - seed: Optional boolean for hyperdrive seeding - onProgress: Optional callback for download progress |
+| `rpcOptions` | `\{ forceNewConnection?: boolean; healthCheckTimeout?: number; profiling?: \{ enabled?: boolean; includeServerBreakdown?: boolean; mode?: "summary" \| "verbose" \}; timeout?: number \}` | ✗ | Optional RPC options including per-call profiling configuration |
+
 ### `DownloadAssetOptions`
 
 | Field | Type | Required? | Description |
@@ -35,7 +30,7 @@ function downloadAsset(options: DownloadAssetOptions, rpcOptions?: { forceNewCon
 ## Returns
 
 ```typescript
-Promise
+Promise<string>
 ```
 
 No description available
@@ -44,9 +39,9 @@ No description available
 
 | Error | When |
 | --- | --- |
-| `When asset download fails, with details in the error message` |  |
-| `When streaming ends unexpectedly (only when using onProgress)` |  |
-| `When receiving an invalid response type from the server` |  |
+| `When asset download fails, with details in the error message` | — |
+| `When streaming ends unexpectedly (only when using onProgress)` | — |
+| `When receiving an invalid response type from the server` | — |
 
 ## Example
 

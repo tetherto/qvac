@@ -7,7 +7,7 @@ description: "No description available"
 <WrapCode>
 
 ```typescript
-function getModelInfo(params: { name: string }): Promise
+function getModelInfo(params: { name: string }): Promise<{ actualSize?: number; addon: "llm" | "whisper" | "embeddings" | "nmt" | "vad" | "tts" | "ocr" | "parakeet" | "diffusion" | "other"; blobBlockLength?: number; blobBlockOffset?: number; blobByteOffset?: number; blobCoreKey?: string; cachedAt?: Date; cacheFiles: { actualSize?: number; cachedAt?: Date; expectedSize: number; filename: string; isCached: boolean; path: string; sha256Checksum: string }[]; engine?: string; expectedSize: number; isCached: boolean; isLoaded: boolean; loadedInstances?: { config?: unknown; loadedAt: Date; registryId: string }[]; modelId: string; name: string; params?: string; quantization?: string; registryPath?: string; registrySource?: string; sha256Checksum: string }>
 ```
 
 </WrapCode>
@@ -17,10 +17,11 @@ function getModelInfo(params: { name: string }): Promise
 | Name | Type | Required? | Description |
 | --- | --- | :---: | --- |
 | `params` | `\{ name: string \}` | ✓ | No description |
+
 ## Returns
 
 ```typescript
-Promise
+Promise<{ actualSize?: number; addon: "llm" | "whisper" | "embeddings" | "nmt" | "vad" | "tts" | "ocr" | "parakeet" | "diffusion" | "other"; blobBlockLength?: number; blobBlockOffset?: number; blobByteOffset?: number; blobCoreKey?: string; cachedAt?: Date; cacheFiles: { actualSize?: number; cachedAt?: Date; expectedSize: number; filename: string; isCached: boolean; path: string; sha256Checksum: string }[]; engine?: string; expectedSize: number; isCached: boolean; isLoaded: boolean; loadedInstances?: { config?: unknown; loadedAt: Date; registryId: string }[]; modelId: string; name: string; params?: string; quantization?: string; registryPath?: string; registrySource?: string; sha256Checksum: string }>
 ```
 
 No description available
