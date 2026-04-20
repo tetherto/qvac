@@ -10,11 +10,13 @@ import {
   getAllModelIds,
   getModelEntry,
 } from "@/server/bare/registry/model-registry";
-import { getConfiguredCacheDir } from "@/server/bare/registry/config-registry";
 import { generateShortHash } from "@/server/utils";
 import { promises as fsPromises } from "bare-fs";
-import path from "bare-path";
-import { getShardPath, getModelsCacheDir } from "@/server/utils/cache";
+import {
+  getShardPath,
+  getModelsCacheDir,
+  getSingleFileCachePath,
+} from "@/server/utils/cache";
 import { validateAndJoinPath } from "@/server/utils/path-security";
 import { ModelNotFoundError } from "@/utils/errors-server";
 
@@ -53,7 +55,6 @@ export async function handleGetModelInfo(
           )
         : await handleSingleFileModel(
             catalogEntry.registryPath,
-            catalogEntry.modelId,
             catalogEntry.expectedSize,
             catalogEntry.sha256Checksum,
           );
@@ -259,16 +260,14 @@ async function probeLayout(
 
 async function handleSingleFileModel(
   registryPath: string,
-  modelId: string,
   expectedSize: number,
   sha256Checksum: string,
 ): Promise<CacheStatusResult> {
-  const cacheDir = getConfiguredCacheDir();
-  const sourceHash = generateShortHash(registryPath);
-  const filePath = path.join(cacheDir, `${sourceHash}_${modelId}`);
+  const filename = registryPath.split("/").pop() || registryPath;
+  const filePath = getSingleFileCachePath(registryPath);
 
   return probeLayout(
-    [{ filename: modelId, expectedSize, sha256Checksum }],
+    [{ filename, expectedSize, sha256Checksum }],
     [filePath],
   );
 }

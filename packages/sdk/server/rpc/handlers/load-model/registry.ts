@@ -1,10 +1,8 @@
 import type { ModelProgressUpdate } from "@/schemas";
 import type { QVACModelEntry, QVACBlobBinding } from "@qvac/registry-client";
 import { promises as fsPromises } from "bare-fs";
-import path from "bare-path";
 import type { AbortSignal } from "bare-abort-controller";
 import {
-  getModelsCacheDir,
   generateShortHash,
   detectShardedModel,
   getShardedModelCacheDir,
@@ -12,6 +10,7 @@ import {
   extractTensorsFromShards,
   calculatePercentage,
 } from "@/server/utils";
+import { getSingleFileCachePath } from "@/server/utils/cache";
 import { getModelByPath, type RegistryItem } from "@/models/registry";
 import { getRegistryClient } from "@/server/bare/registry/registry-client";
 import {
@@ -395,9 +394,7 @@ export async function downloadModelFromRegistry(
         });
       }
 
-      const cacheDir = getModelsCacheDir();
-      const sourceHash = generateShortHash(registryPath);
-      const modelPath = path.join(cacheDir, `${sourceHash}_${filename}`);
+      const modelPath = getSingleFileCachePath(registryPath);
 
       const expectedSize = modelMetadata?.expectedSize || 0;
       const checksum =
