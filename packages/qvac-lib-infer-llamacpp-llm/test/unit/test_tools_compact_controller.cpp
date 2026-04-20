@@ -1,5 +1,6 @@
 #include <string>
 #include <vector>
+#include <optional>
 
 #include <gtest/gtest.h>
 #include <qvac-lib-inference-addon-cpp/Errors.hpp>
@@ -28,23 +29,23 @@ common_chat_msg makeMsg(const std::string& role, const std::string& content = ""
 }
 } // namespace
 
-TEST(ToolsCompactControllerTest, EnabledReturnsTrueWhenConstructedWithTrue) {
-  ToolsCompactController controller(true);
+TEST(ToolsCompactControllerTest, EnabledReturnsTrueWhenConstructedWithProfile) {
+  ToolsCompactController controller(ToolsCompactProfile{});
   EXPECT_TRUE(controller.enabled());
 }
 
-TEST(ToolsCompactControllerTest, EnabledReturnsFalseWhenConstructedWithFalse) {
-  ToolsCompactController controller(false);
+TEST(ToolsCompactControllerTest, EnabledReturnsFalseWhenConstructedWithoutProfile) {
+  ToolsCompactController controller(std::nullopt);
   EXPECT_FALSE(controller.enabled());
 }
 
 TEST(ToolsCompactControllerTest, AnchorIsMinusOneInitially) {
-  ToolsCompactController controller(true);
+  ToolsCompactController controller(ToolsCompactProfile{});
   EXPECT_EQ(controller.anchor(), -1);
 }
 
 TEST(ToolsCompactControllerTest, ResetClearsAnchor) {
-  ToolsCompactController controller(true);
+  ToolsCompactController controller(ToolsCompactProfile{});
   controller.onTokenize(200, 100);
   controller.onEvalComplete(200, 200);
   EXPECT_EQ(controller.anchor(), 100);
@@ -53,7 +54,7 @@ TEST(ToolsCompactControllerTest, ResetClearsAnchor) {
 }
 
 TEST(ToolsCompactControllerTest, ValidatePromptNoOpsWhenDisabled) {
-  ToolsCompactController controller(false);
+  ToolsCompactController controller(std::nullopt);
   PromptLayout layout;
   layout.totalItems = 1;
   layout.lastItemIsUserMsg = true;
@@ -65,7 +66,7 @@ TEST(ToolsCompactControllerTest, ValidatePromptNoOpsWhenDisabled) {
 TEST(
     ToolsCompactControllerTest,
     ValidatePromptRejectsMissingToolsOnLastUserMessage) {
-  ToolsCompactController controller(true);
+  ToolsCompactController controller(ToolsCompactProfile{});
   PromptLayout layout;
   std::vector<common_chat_msg> chatMsgs = {makeMsg("user", "Need weather")};
   std::vector<common_chat_tool> tools;
@@ -75,7 +76,7 @@ TEST(
 }
 
 TEST(ToolsCompactControllerTest, ValidatePromptRejectsMissingAnchor) {
-  ToolsCompactController controller(true);
+  ToolsCompactController controller(ToolsCompactProfile{});
   PromptLayout layout;
   layout.totalItems = 1;
   layout.firstToolIdx = 0;
@@ -89,7 +90,7 @@ TEST(ToolsCompactControllerTest, ValidatePromptRejectsMissingAnchor) {
 }
 
 TEST(ToolsCompactControllerTest, ValidatePromptRejectsDetachedToolBlock) {
-  ToolsCompactController controller(true);
+  ToolsCompactController controller(ToolsCompactProfile{});
   PromptLayout layout;
   layout.totalItems = 3;
   layout.firstToolIdx = 2;
@@ -104,7 +105,7 @@ TEST(ToolsCompactControllerTest, ValidatePromptRejectsDetachedToolBlock) {
 }
 
 TEST(ToolsCompactControllerTest, ValidatePromptRejectsSplitToolBlock) {
-  ToolsCompactController controller(true);
+  ToolsCompactController controller(ToolsCompactProfile{});
   PromptLayout layout;
   layout.totalItems = 4;
   layout.firstToolIdx = 1;
@@ -119,7 +120,7 @@ TEST(ToolsCompactControllerTest, ValidatePromptRejectsSplitToolBlock) {
 }
 
 TEST(ToolsCompactControllerTest, ValidatePromptRejectsToolBlockNotAtEnd) {
-  ToolsCompactController controller(true);
+  ToolsCompactController controller(ToolsCompactProfile{});
   PromptLayout layout;
   layout.totalItems = 3;
   layout.firstToolIdx = 1;
@@ -134,7 +135,7 @@ TEST(ToolsCompactControllerTest, ValidatePromptRejectsToolBlockNotAtEnd) {
 }
 
 TEST(ToolsCompactControllerTest, ValidatePromptAcceptsContiguousAttachedBlock) {
-  ToolsCompactController controller(true);
+  ToolsCompactController controller(ToolsCompactProfile{});
   PromptLayout layout;
   layout.totalItems = 3;
   layout.firstToolIdx = 1;
@@ -147,7 +148,7 @@ TEST(ToolsCompactControllerTest, ValidatePromptAcceptsContiguousAttachedBlock) {
 }
 
 TEST(ToolsCompactControllerTest, ValidatePromptRequiresToolsForUserTailWithoutCache) {
-  ToolsCompactController controller(true, makeQwen3Profile());
+  ToolsCompactController controller(makeQwen3Profile());
   PromptLayout layout;
   std::vector<common_chat_msg> chatMsgs = {
       makeMsg("system", "You are helpful"),
@@ -161,7 +162,7 @@ TEST(ToolsCompactControllerTest, ValidatePromptRequiresToolsForUserTailWithoutCa
 TEST(
     ToolsCompactControllerTest,
     ValidatePromptRequiresToolsForAssistantToolCallTailWithoutCache) {
-  ToolsCompactController controller(true, makeQwen3Profile());
+  ToolsCompactController controller(makeQwen3Profile());
   PromptLayout layout;
   std::vector<common_chat_msg> chatMsgs = {
       makeMsg("system", "You are helpful"),
@@ -176,7 +177,7 @@ TEST(
 TEST(
     ToolsCompactControllerTest,
     ValidatePromptAllowsAssistantToolCallTailWithCacheAndNoTools) {
-  ToolsCompactController controller(true, makeQwen3Profile());
+  ToolsCompactController controller(makeQwen3Profile());
   PromptLayout layout;
   std::vector<common_chat_msg> chatMsgs = {
       makeMsg("system", "You are helpful"),
@@ -187,7 +188,7 @@ TEST(
 }
 
 TEST(ToolsCompactControllerTest, ValidatePromptRequiresToolsForToolTailWithoutCache) {
-  ToolsCompactController controller(true, makeQwen3Profile());
+  ToolsCompactController controller(makeQwen3Profile());
   PromptLayout layout;
   std::vector<common_chat_msg> chatMsgs = {
       makeMsg("system", "You are helpful"),
@@ -201,7 +202,7 @@ TEST(ToolsCompactControllerTest, ValidatePromptRequiresToolsForToolTailWithoutCa
 }
 
 TEST(ToolsCompactControllerTest, ValidatePromptAllowsToolTailWithCacheAndNoTools) {
-  ToolsCompactController controller(true, makeQwen3Profile());
+  ToolsCompactController controller(makeQwen3Profile());
   PromptLayout layout;
   std::vector<common_chat_msg> chatMsgs = {
       makeMsg("system", "You are helpful"),
@@ -215,7 +216,7 @@ TEST(ToolsCompactControllerTest, ValidatePromptAllowsToolTailWithCacheAndNoTools
 TEST(
     ToolsCompactControllerTest,
     ValidatePromptAllowsAssistantNonToolCallTailWithoutCacheAndNoTools) {
-  ToolsCompactController controller(true, makeQwen3Profile());
+  ToolsCompactController controller(makeQwen3Profile());
   PromptLayout layout;
   std::vector<common_chat_msg> chatMsgs = {
       makeMsg("system", "You are helpful"),
@@ -228,7 +229,7 @@ TEST(
 TEST(
     ToolsCompactControllerTest,
     ValidatePromptAllowsFinalAssistantAfterToolRoundWithoutCacheAndNoTools) {
-  ToolsCompactController controller(true, makeQwen3Profile());
+  ToolsCompactController controller(makeQwen3Profile());
   PromptLayout layout;
   std::vector<common_chat_msg> chatMsgs = {
       makeMsg("system", "You are helpful"),
@@ -243,7 +244,7 @@ TEST(
 TEST(
     ToolsCompactControllerTest,
     OnTokenizeAndEvalSetAnchorOnlyWhenToolsAddExtraTokens) {
-  ToolsCompactController controller(true);
+  ToolsCompactController controller(ToolsCompactProfile{});
 
   controller.onTokenize(120, 120);
   controller.onEvalComplete(120, 120);
@@ -256,21 +257,21 @@ TEST(
 }
 
 TEST(ToolsCompactControllerTest, OnTokenizeWithNoToolsLeavesAnchorUnset) {
-  ToolsCompactController controller(true);
+  ToolsCompactController controller(ToolsCompactProfile{});
   controller.onTokenize(120, 0);
   controller.onEvalComplete(120, 120);
   EXPECT_EQ(controller.anchor(), -1);
 }
 
 TEST(ToolsCompactControllerTest, OnTokenizeAndEvalNoOpWhenDisabled) {
-  ToolsCompactController controller(false);
+  ToolsCompactController controller(std::nullopt);
   controller.onTokenize(120, 80);
   controller.onEvalComplete(120, 120);
   EXPECT_EQ(controller.anchor(), -1);
 }
 
 TEST(ToolsCompactControllerTest, ClampDiscardPreservesToolRegion) {
-  ToolsCompactController controller(true);
+  ToolsCompactController controller(ToolsCompactProfile{});
   constexpr llama_pos firstMsgTokens = 50;
   controller.onTokenize(200, 100);
   controller.onEvalComplete(200, 200);
@@ -279,7 +280,7 @@ TEST(ToolsCompactControllerTest, ClampDiscardPreservesToolRegion) {
 }
 
 TEST(ToolsCompactControllerTest, ClampDiscardReturnsRequestedWhenSafe) {
-  ToolsCompactController controller(true);
+  ToolsCompactController controller(ToolsCompactProfile{});
   constexpr llama_pos firstMsgTokens = 10;
   controller.onTokenize(300, 200);
   controller.onEvalComplete(300, 300);
@@ -288,7 +289,7 @@ TEST(ToolsCompactControllerTest, ClampDiscardReturnsRequestedWhenSafe) {
 }
 
 TEST(ToolsCompactControllerTest, OnSlideAdjustsAnchor) {
-  ToolsCompactController controller(true);
+  ToolsCompactController controller(ToolsCompactProfile{});
   constexpr llama_pos firstMsgTokens = 50;
   controller.onTokenize(200, 100);
   controller.onEvalComplete(200, 200);
@@ -297,7 +298,7 @@ TEST(ToolsCompactControllerTest, OnSlideAdjustsAnchor) {
 }
 
 TEST(ToolsCompactControllerTest, OnSlideStopsAtFirstMsgTokens) {
-  ToolsCompactController controller(true);
+  ToolsCompactController controller(ToolsCompactProfile{});
   constexpr llama_pos firstMsgTokens = 80;
   controller.onTokenize(200, 100);
   controller.onEvalComplete(200, 200);
@@ -306,7 +307,7 @@ TEST(ToolsCompactControllerTest, OnSlideStopsAtFirstMsgTokens) {
 }
 
 TEST(ToolsCompactControllerTest, AnchorCanReachFirstMessageBoundaryAfterSlide) {
-  ToolsCompactController controller(true);
+  ToolsCompactController controller(ToolsCompactProfile{});
   controller.onTokenize(200, 120);
   controller.onEvalComplete(200, 200);
   constexpr llama_pos firstMsgTokens = 100;
@@ -317,7 +318,7 @@ TEST(ToolsCompactControllerTest, AnchorCanReachFirstMessageBoundaryAfterSlide) {
 }
 
 TEST(ToolsCompactControllerTest, DegenerateAnchorIsNotUsableForPostGenerationTrim) {
-  ToolsCompactController controller(true);
+  ToolsCompactController controller(ToolsCompactProfile{});
   constexpr llama_pos firstMsgTokens = 100;
   controller.onTokenize(220, 100);
   controller.onEvalComplete(220, 220);
@@ -326,7 +327,7 @@ TEST(ToolsCompactControllerTest, DegenerateAnchorIsNotUsableForPostGenerationTri
 }
 
 TEST(ToolsCompactControllerTest, PositiveNonDegenerateAnchorIsUsableForPostTrim) {
-  ToolsCompactController controller(true);
+  ToolsCompactController controller(ToolsCompactProfile{});
   constexpr llama_pos firstMsgTokens = 100;
   controller.onTokenize(100, 80);
   controller.onEvalComplete(100, 100);
@@ -335,7 +336,7 @@ TEST(ToolsCompactControllerTest, PositiveNonDegenerateAnchorIsUsableForPostTrim)
 }
 
 TEST(ToolsCompactControllerTest, SlidingUnclampedFullDiscard) {
-  ToolsCompactController controller(true);
+  ToolsCompactController controller(ToolsCompactProfile{});
   constexpr llama_pos firstMsgTokens = 11;
   constexpr llama_pos anchorBefore = 241;
   constexpr llama_pos nDiscarded = 32;
@@ -349,7 +350,7 @@ TEST(ToolsCompactControllerTest, SlidingUnclampedFullDiscard) {
 }
 
 TEST(ToolsCompactControllerTest, GenerationCompleteNoopWhenDisabled) {
-  ToolsCompactController controller(false);
+  ToolsCompactController controller(std::nullopt);
   auto decision = controller.onGenerationComplete("done", 10, 5);
   EXPECT_FALSE(decision.trim);
   EXPECT_EQ(decision.tokensToRemoveFromTail, 0);
@@ -357,7 +358,7 @@ TEST(ToolsCompactControllerTest, GenerationCompleteNoopWhenDisabled) {
 }
 
 TEST(ToolsCompactControllerTest, GenerationCompleteDegenerateBoundaryResetsState) {
-  ToolsCompactController controller(true);
+  ToolsCompactController controller(ToolsCompactProfile{});
   constexpr llama_pos firstMsgTokens = 100;
   controller.onTokenize(200, 100);
   controller.onEvalComplete(200, 200); // anchor == firstMsgTokens
@@ -370,7 +371,7 @@ TEST(ToolsCompactControllerTest, GenerationCompleteDegenerateBoundaryResetsState
 }
 
 TEST(ToolsCompactControllerTest, GenerationCompleteNoTrimWhenToolCallContinuesChain) {
-  ToolsCompactController controller(true, makeQwen3Profile());
+  ToolsCompactController controller(makeQwen3Profile());
   constexpr llama_pos firstMsgTokens = 50;
   controller.onTokenize(140, 80);
   controller.onEvalComplete(140, 140); // anchor = 80
@@ -388,7 +389,7 @@ TEST(
     GenerationCompleteNoTrimWhenToolCallMatchesCustomProfileMarker) {
   ToolsCompactProfile profile;
   profile.toolCallStartMarker = "<function_call>";
-  ToolsCompactController controller(true, profile);
+  ToolsCompactController controller(profile);
   constexpr llama_pos firstMsgTokens = 50;
   controller.onTokenize(140, 80);
   controller.onEvalComplete(140, 140); // anchor = 80
@@ -403,7 +404,7 @@ TEST(
     GenerationCompleteTrimWhenMarkerDoesNotMatchProfile) {
   ToolsCompactProfile profile;
   profile.toolCallStartMarker = "<function_call>";
-  ToolsCompactController controller(true, profile);
+  ToolsCompactController controller(profile);
   constexpr llama_pos firstMsgTokens = 50;
   controller.onTokenize(140, 80);
   controller.onEvalComplete(140, 140); // anchor = 80
@@ -415,7 +416,7 @@ TEST(
 }
 
 TEST(ToolsCompactControllerTest, GenerationCompleteNoTrimWhenProfileMarkerIsEmpty) {
-  ToolsCompactController controller(true);
+  ToolsCompactController controller(ToolsCompactProfile{});
   constexpr llama_pos firstMsgTokens = 50;
   controller.onTokenize(140, 80);
   controller.onEvalComplete(140, 140); // anchor = 80
@@ -425,7 +426,7 @@ TEST(ToolsCompactControllerTest, GenerationCompleteNoTrimWhenProfileMarkerIsEmpt
 }
 
 TEST(ToolsCompactControllerTest, GenerationCompleteNoTrimWhenNPastNotPastAnchor) {
-  ToolsCompactController controller(true);
+  ToolsCompactController controller(ToolsCompactProfile{});
   constexpr llama_pos firstMsgTokens = 50;
   controller.onTokenize(140, 80);
   controller.onEvalComplete(140, 140); // anchor = 80
@@ -435,7 +436,7 @@ TEST(ToolsCompactControllerTest, GenerationCompleteNoTrimWhenNPastNotPastAnchor)
 }
 
 TEST(ToolsCompactControllerTest, GenerationCompleteTrimDecisionAndResetWhenChainDone) {
-  ToolsCompactController controller(true, makeQwen3Profile());
+  ToolsCompactController controller(makeQwen3Profile());
   constexpr llama_pos firstMsgTokens = 50;
   controller.onTokenize(140, 80);
   controller.onEvalComplete(140, 140); // anchor = 80
@@ -450,7 +451,7 @@ TEST(ToolsCompactControllerTest, GenerationCompleteTrimDecisionAndResetWhenChain
 }
 
 TEST(ToolsCompactControllerTest, DebugSnapshotStaysConsistentAcrossReset) {
-  ToolsCompactController controller(true, makeQwen3Profile());
+  ToolsCompactController controller(makeQwen3Profile());
   constexpr llama_pos firstMsgTokens = 50;
   controller.onTokenize(140, 80);
   controller.onEvalComplete(140, 140);
@@ -473,7 +474,7 @@ TEST(ToolsCompactControllerTest, DebugSnapshotStaysConsistentAcrossReset) {
 TEST(
     ToolsCompactControllerTest,
     DebugSnapshotIsGenerationCapturedNotLiveAnchorAfterSlide) {
-  ToolsCompactController controller(true, makeQwen3Profile());
+  ToolsCompactController controller(makeQwen3Profile());
   constexpr llama_pos firstMsgTokens = 50;
   controller.onTokenize(140, 80);
   controller.onEvalComplete(140, 140); // anchor = 80
@@ -498,7 +499,7 @@ TEST(
 TEST(
     ToolsCompactControllerTest,
     ResetDoesNotClearDebugSnapshotAfterNoTrimGenerationComplete) {
-  ToolsCompactController controller(true, makeQwen3Profile());
+  ToolsCompactController controller(makeQwen3Profile());
   constexpr llama_pos firstMsgTokens = 50;
   controller.onTokenize(140, 80);
   controller.onEvalComplete(140, 140); // anchor = 80

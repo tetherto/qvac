@@ -247,13 +247,27 @@ private:
     bool isCacheLoaded = false;
     bool shouldResetAfterInference = false;
   };
+
+  enum class ToolsCompactResolution {
+    NotRequested,
+    RequestedUnsupported,
+    RequestedSupported
+  };
+
+  struct ResolvedToolsCompactConfig {
+    ToolsCompactResolution resolution = ToolsCompactResolution::NotRequested;
+    std::optional<ToolsCompactProfile> profile;
+  };
+
   ResolvedPrompt resolveChatAndTools(const Prompt& prompt);
+  ResolvedToolsCompactConfig
+  resolveToolsCompactConfig(bool toolsCompactRequested) const;
 
   void commonParamsParse(
       const std::string& modelPath,
       std::unordered_map<std::string, std::string>& configFilemap,
       common_params& params, std::optional<int>& outAdrenoVersion,
-      bool& outToolsCompact, ToolsCompactProfile& outToolsCompactProfile);
+      ResolvedToolsCompactConfig& outToolsCompactConfig);
 
   /**
    * The Format prompt method. It formats the prompt json to chat messages.

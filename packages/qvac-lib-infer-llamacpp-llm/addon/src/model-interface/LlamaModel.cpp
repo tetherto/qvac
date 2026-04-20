@@ -315,15 +315,13 @@ void LlamaModel::init(bool acquireLock) {
 
   common_params params;
   std::optional<int> adrenoVersion;
-  bool toolsCompact = false;
-  ToolsCompactProfile toolsCompactProfile;
+  ResolvedToolsCompactConfig toolsCompactConfig;
   commonParamsParse(
       modelPath,
       configFilemap,
       params,
       adrenoVersion,
-      toolsCompact,
-      toolsCompactProfile);
+      toolsCompactConfig);
 
   const std::string errorWhenFailed = toString(UnableToLoadModel);
   auto streamedFiles =
@@ -347,7 +345,7 @@ void LlamaModel::init(bool acquireLock) {
 
   // Create tools compact controller before context (contexts hold reference)
   snap->toolsCompact_ =
-      std::make_unique<ToolsCompactController>(toolsCompact, toolsCompactProfile);
+      std::make_unique<ToolsCompactController>(toolsCompactConfig.profile);
 
   snap->isTextLlm_ = constructionArgs_.projectionPath.empty();
   snap->llmContext_ = createContext(
@@ -674,14 +672,38 @@ LlamaModel::runtimeDebugStats() const {
 }
 
 // NOLINTNEXTLINE(readability-convert-member-functions-to-static,readability-function-cognitive-complexity)
+LlamaModel::ResolvedToolsCompactConfig
+LlamaModel::resolveToolsCompactConfig(bool toolsCompactRequested) const {
+  if (!toolsCompactRequested) {
+    return {};
+  }
+
+  auto arch = metadata_.tryGetString("general.architecture");
+  auto modelName = metadata_.tryGetString("general.name");
+  auto marker =
+      qvac_lib_inference_addon_llama::utils::
+          selectToolsCompactMarkerForModelMetadata(arch, modelName);
+
+  if (!marker.has_value()) {
+    return {.resolution = ToolsCompactResolution::RequestedUnsupported,
+            .profile = std::nullopt};
+  }
+
+  ToolsCompactProfile profile;
+  profile.toolCallStartMarker = marker.value();
+  return {.resolution = ToolsCompactResolution::RequestedSupported,
+          .profile = std::move(profile)};
+}
+
+// NOLINTNEXTLINE(readability-convert-member-functions-to-static,readability-function-cognitive-complexity)
 void LlamaModel::commonParamsParse(
     const std::string& modelPath,
     std::unordered_map<std::string, std::string>& configFilemap,
     common_params& params, std::optional<int>& outAdrenoVersion,
-    bool& outToolsCompact, ToolsCompactProfile& outToolsCompactProfile) {
+    ResolvedToolsCompactConfig& outToolsCompactConfig) {
 
   std::vector<std::string> configVector;
-  outToolsCompactProfile = ToolsCompactProfile{};
+  outToolsCompactConfig = ResolvedToolsCompactConfig{};
 
   // Check if tools are enabled and exclude it with jinja from the config file
   if (auto iter = configFilemap.find("tools"); iter != configFilemap.end()) {
@@ -723,27 +745,22 @@ void LlamaModel::commonParamsParse(
   }
 
   // parse tools_compact flag from config
+  bool toolsCompactRequested = false;
   if (auto iter = configFilemap.find("tools_compact");
       iter != configFilemap.end()) {
     std::string val = iter->second;
     std::transform(val.begin(), val.end(), val.begin(), ::tolower);
-    outToolsCompact = (val == "true");
+    toolsCompactRequested = (val == "true");
     configFilemap.erase(iter);
   }
 
-  if (outToolsCompact) {
-    auto arch = metadata_.tryGetString("general.architecture");
-    auto marker = qvac_lib_inference_addon_llama::utils::selectToolsCompactMarker(
-        arch.value_or(""));
-    if (!marker.has_value()) {
-      QLOG_IF(
-          Priority::WARNING,
-          "[LlamaModel] tools_compact is supported for qwen3 architecture "
-          "only, ignoring\n");
-      outToolsCompact = false;
-    } else {
-      outToolsCompactProfile.toolCallStartMarker = marker.value();
-    }
+  outToolsCompactConfig = resolveToolsCompactConfig(toolsCompactRequested);
+  if (outToolsCompactConfig.resolution ==
+      ToolsCompactResolution::RequestedUnsupported) {
+    QLOG_IF(
+        Priority::WARNING,
+        "[LlamaModel] tools_compact is not supported for this model "
+        "architecture, ignoring\n");
   }
 
   auto deviceIt = configFilemap.find("device");

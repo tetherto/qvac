@@ -37,8 +37,7 @@ struct ToolsCompactProfile {
 /// Owned by LlamaModel; contexts hold a non-owning reference.
 class ToolsCompactController {
 public:
-  explicit ToolsCompactController(
-      bool enabled, ToolsCompactProfile profile = {});
+  explicit ToolsCompactController(std::optional<ToolsCompactProfile> profile);
 
   [[nodiscard]] bool enabled() const noexcept;
   [[nodiscard]] llama_pos anchor() const noexcept;

@@ -26,6 +26,37 @@ std::string normalizeArchitecture(const std::string& architecture) {
   return normalized;
 }
 
+bool isQwen3Architecture(const std::string& architecture) {
+  const std::string archStr = normalizeArchitecture(architecture);
+  return archStr == "qwen3";
+}
+
+bool modelNameLooksLikeQwen3(const std::string& modelName) {
+  std::string normalizedName = modelName;
+  std::transform(
+      normalizedName.begin(),
+      normalizedName.end(),
+      normalizedName.begin(),
+      [](unsigned char c) { return std::tolower(c); });
+  return normalizedName.find("qwen3") != std::string::npos ||
+         normalizedName.find("qwen-3") != std::string::npos;
+}
+
+std::optional<std::string> getModelName(const ::llama_model* model) {
+  if (model == nullptr) {
+    return std::nullopt;
+  }
+
+  char modelName[256] = {0};
+  int32_t len = llama_model_meta_val_str(
+      model, "general.name", modelName, sizeof(modelName));
+  if (len > 0 && len < sizeof(modelName)) {
+    modelName[len] = '\0';
+    return std::string(modelName);
+  }
+  return std::nullopt;
+}
+
 } // namespace
 
 std::optional<std::string> getModelArchitecture(const ::llama_model* model) {
@@ -50,41 +81,37 @@ bool isQwen3Model(const ::llama_model* model) {
     return false;
   }
 
-  if (auto arch = getModelArchitecture(model); arch.has_value()) {
-    if (arch.value() == "qwen3") {
-      return true;
-    }
+  return supportsToolsCompactForModelMetadata(
+      getModelArchitecture(model), getModelName(model));
+}
+
+bool supportsToolsCompactForModelMetadata(
+    const std::optional<std::string>& architecture,
+    const std::optional<std::string>& modelName) {
+  if (architecture.has_value() && isQwen3Architecture(architecture.value())) {
+    return true;
   }
-
-  // Check model name metadata
-  char modelName[256] = {0};
-  int32_t len = llama_model_meta_val_str(
-      model, "general.name", modelName, sizeof(modelName));
-
-  if (len > 0 && len < sizeof(modelName)) {
-    modelName[len] = '\0';
-    std::string nameStr(modelName);
-    std::transform(
-        nameStr.begin(), nameStr.end(), nameStr.begin(), [](unsigned char c) {
-          return std::tolower(c);
-        });
-
-    if (nameStr.find("qwen3") != std::string::npos ||
-        nameStr.find("qwen-3") != std::string::npos) {
-      return true;
-    }
+  if (modelName.has_value() && modelNameLooksLikeQwen3(modelName.value())) {
+    return true;
   }
-
   return false;
 }
 
 std::optional<std::string>
 selectToolsCompactMarker(const std::string& architecture) {
-  const std::string archStr = normalizeArchitecture(architecture);
-  if (archStr == "qwen3") {
+  if (isQwen3Architecture(architecture)) {
     return std::string("<tool_call>");
   }
   return std::nullopt;
+}
+
+std::optional<std::string> selectToolsCompactMarkerForModelMetadata(
+    const std::optional<std::string>& architecture,
+    const std::optional<std::string>& modelName) {
+  if (!supportsToolsCompactForModelMetadata(architecture, modelName)) {
+    return std::nullopt;
+  }
+  return std::string("<tool_call>");
 }
 
 std::string getChatTemplateForModel(
@@ -94,8 +121,9 @@ std::string getChatTemplateForModel(
     return manualOverride;
   }
 
-  const std::optional<std::string> architecture = getModelArchitecture(model);
-  if (architecture.has_value() && architecture.value() == "qwen3") {
+  // Keep a single source of truth for Qwen3 detection so architecture-only and
+  // metadata-name fallback behave consistently across marker/template paths.
+  if (isQwen3Model(model)) {
     return toolsCompact ? getToolsDynamicQwen3Template()
                         : getFixedQwen3Template();
   }

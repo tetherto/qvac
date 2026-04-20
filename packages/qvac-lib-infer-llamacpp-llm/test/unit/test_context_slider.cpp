@@ -12,6 +12,7 @@
 #include <gtest/gtest.h>
 
 #include <cstdint>
+#include <optional>
 #include <vector>
 
 #include "model-interface/ContextSlider.hpp"
@@ -112,7 +113,7 @@ TEST_F(ContextSliderTest, SlideOutcomeCanBeConstructedWithValues) {
 // ═══════════════════════════════════════════════════════════════════════════
 
 TEST_F(ContextSliderTest, ClampDiscardRespectsToolAnchor) {
-  ToolsCompactController controller(true);
+  ToolsCompactController controller(ToolsCompactProfile{});
 
   // Set anchor at 200 (simulating tool tokens from position 200 onwards)
   controller.onTokenize(300, 200);
@@ -128,7 +129,7 @@ TEST_F(ContextSliderTest, ClampDiscardRespectsToolAnchor) {
 }
 
 TEST_F(ContextSliderTest, ClampDiscardAllowsFullRequestWhenBelowAnchor) {
-  ToolsCompactController controller(true);
+  ToolsCompactController controller(ToolsCompactProfile{});
 
   controller.onTokenize(500, 400);
   controller.onEvalComplete(500, 500);
@@ -142,7 +143,7 @@ TEST_F(ContextSliderTest, ClampDiscardAllowsFullRequestWhenBelowAnchor) {
 }
 
 TEST_F(ContextSliderTest, ClampDiscardPassesThroughWhenAnchorAtFirstMsg) {
-  ToolsCompactController controller(true);
+  ToolsCompactController controller(ToolsCompactProfile{});
 
   // Create degenerate case: anchor == firstMsgTokens
   controller.onTokenize(200, 100);
@@ -158,7 +159,7 @@ TEST_F(ContextSliderTest, ClampDiscardPassesThroughWhenAnchorAtFirstMsg) {
 }
 
 TEST_F(ContextSliderTest, ClampDiscardPassesThroughWhenDisabled) {
-  ToolsCompactController controller(false);
+  ToolsCompactController controller(std::nullopt);
 
   constexpr llama_pos firstMsgTokens = 50;
   constexpr llama_pos requested = 100;
@@ -169,7 +170,7 @@ TEST_F(ContextSliderTest, ClampDiscardPassesThroughWhenDisabled) {
 }
 
 TEST_F(ContextSliderTest, OnSlideAdjustsAnchorCorrectly) {
-  ToolsCompactController controller(true);
+  ToolsCompactController controller(ToolsCompactProfile{});
 
   controller.onTokenize(300, 200);
   controller.onEvalComplete(300, 300);
@@ -183,7 +184,7 @@ TEST_F(ContextSliderTest, OnSlideAdjustsAnchorCorrectly) {
 }
 
 TEST_F(ContextSliderTest, OnSlideStopsAtFirstMsgTokens) {
-  ToolsCompactController controller(true);
+  ToolsCompactController controller(ToolsCompactProfile{});
 
   controller.onTokenize(300, 200);
   controller.onEvalComplete(300, 300);
@@ -197,7 +198,7 @@ TEST_F(ContextSliderTest, OnSlideStopsAtFirstMsgTokens) {
 }
 
 TEST_F(ContextSliderTest, DegenerateBoundaryDetectedCorrectly) {
-  ToolsCompactController controller(true);
+  ToolsCompactController controller(ToolsCompactProfile{});
 
   // Set anchor exactly at firstMsgTokens
   controller.onTokenize(200, 100);
@@ -209,7 +210,7 @@ TEST_F(ContextSliderTest, DegenerateBoundaryDetectedCorrectly) {
 }
 
 TEST_F(ContextSliderTest, DegenerateBoundaryFalseWhenAnchorAbove) {
-  ToolsCompactController controller(true);
+  ToolsCompactController controller(ToolsCompactProfile{});
 
   controller.onTokenize(300, 200);
   controller.onEvalComplete(300, 300);
@@ -220,7 +221,7 @@ TEST_F(ContextSliderTest, DegenerateBoundaryFalseWhenAnchorAbove) {
 }
 
 TEST_F(ContextSliderTest, ResetClearsAnchorForFreshSliding) {
-  ToolsCompactController controller(true);
+  ToolsCompactController controller(ToolsCompactProfile{});
 
   controller.onTokenize(300, 200);
   controller.onEvalComplete(300, 300);
@@ -252,7 +253,7 @@ TEST_F(ContextSliderTest, PrefillSlideScenario_EnoughRoom) {
 }
 
 TEST_F(ContextSliderTest, PrefillSlidInvokesLlamaOpsWithExpectedRanges) {
-  ToolsCompactController controller(false);
+  ToolsCompactController controller(std::nullopt);
   FakeLlamaContextOps ops(/*ctxSize=*/400);
 
   SlideOutcome outcome = trySlidePrefill(
@@ -282,7 +283,7 @@ TEST_F(ContextSliderTest, PrefillSlidInvokesLlamaOpsWithExpectedRanges) {
 }
 
 TEST_F(ContextSliderTest, PrefillFullWipeInvokesSeqRmOnly) {
-  ToolsCompactController controller(true);
+  ToolsCompactController controller(ToolsCompactProfile{});
   FakeLlamaContextOps ops(/*ctxSize=*/300);
 
   // Set anchor at firstMsgTokens to preserve the existing full-wipe branch
@@ -323,7 +324,7 @@ TEST_F(ContextSliderTest, PrefillSlideScenario_NeedsSlidingCalculation) {
   // nPast + nTokensToAppend = 550 >= 500 = nCtx -> needs sliding
   EXPECT_GE(nPast + nTokensToAppend, nCtx);
 
-  ToolsCompactController controller(true);
+  ToolsCompactController controller(ToolsCompactProfile{});
   controller.onTokenize(nPast, 200);
   controller.onEvalComplete(nPast, nPast);
 
@@ -349,7 +350,7 @@ TEST_F(ContextSliderTest, PrefillSlideScenario_FullWipeFallback) {
   constexpr llama_pos firstMsgTokens = 50;
 
   // Simulate a case where discard would exceed available tokens
-  ToolsCompactController controller(true);
+  ToolsCompactController controller(ToolsCompactProfile{});
 
   // Set anchor very close to firstMsgTokens so clamped discard is small
   controller.onTokenize(200, 55);
@@ -399,7 +400,7 @@ TEST_F(ContextSliderTest, GenerationSlideScenario_EnoughRoom) {
 }
 
 TEST_F(ContextSliderTest, GenerationSlidInvokesLlamaOpsWithExpectedRanges) {
-  ToolsCompactController controller(false);
+  ToolsCompactController controller(std::nullopt);
   FakeLlamaContextOps ops(/*ctxSize=*/400);
 
   SlideOutcome outcome = trySlideGeneration(
@@ -428,7 +429,7 @@ TEST_F(ContextSliderTest, GenerationSlidInvokesLlamaOpsWithExpectedRanges) {
 }
 
 TEST_F(ContextSliderTest, GenerationNotNeededDoesNotCallLlamaOps) {
-  ToolsCompactController controller(false);
+  ToolsCompactController controller(std::nullopt);
   FakeLlamaContextOps ops(/*ctxSize=*/500);
 
   SlideOutcome outcome = trySlideGeneration(
@@ -471,7 +472,7 @@ TEST_F(ContextSliderTest, GenerationSlideScenario_NoDiscardAllowed) {
 TEST_F(ContextSliderTest, GenerationSlideScenario_DegenerateBoundaryReset) {
   // When degenerateBoundary is true, the ContextSlider handles the degenerate
   // case by resetting the controller before retrying
-  ToolsCompactController controller(true);
+  ToolsCompactController controller(ToolsCompactProfile{});
 
   constexpr llama_pos firstMsgTokens = 100;
 
@@ -501,7 +502,7 @@ TEST_F(ContextSliderTest, GenerationSlideScenario_DegenerateBoundaryReset) {
 // ═══════════════════════════════════════════════════════════════════════════
 
 TEST_F(ContextSliderTest, MultipleSlidesMaintainAnchorConsistency) {
-  ToolsCompactController controller(true);
+  ToolsCompactController controller(ToolsCompactProfile{});
 
   constexpr llama_pos firstMsgTokens = 50;
 
@@ -528,7 +529,7 @@ TEST_F(ContextSliderTest, MultipleSlidesMaintainAnchorConsistency) {
 }
 
 TEST_F(ContextSliderTest, ClampDiscardBecomesMoreRestrictiveAsAnchorApproaches) {
-  ToolsCompactController controller(true);
+  ToolsCompactController controller(ToolsCompactProfile{});
 
   constexpr llama_pos firstMsgTokens = 100;
 
@@ -560,7 +561,7 @@ TEST_F(ContextSliderTest, ClampDiscardBecomesMoreRestrictiveAsAnchorApproaches) 
 // ═══════════════════════════════════════════════════════════════════════════
 
 TEST_F(ContextSliderTest, DisabledControllerAlwaysReturnsRequestedDiscard) {
-  ToolsCompactController controller(false);
+  ToolsCompactController controller(std::nullopt);
 
   constexpr llama_pos firstMsgTokens = 100;
 
@@ -571,7 +572,7 @@ TEST_F(ContextSliderTest, DisabledControllerAlwaysReturnsRequestedDiscard) {
 }
 
 TEST_F(ContextSliderTest, DisabledControllerDegenerateBoundaryAlwaysFalse) {
-  ToolsCompactController controller(false);
+  ToolsCompactController controller(std::nullopt);
 
   constexpr llama_pos firstMsgTokens = 100;
 
@@ -584,7 +585,7 @@ TEST_F(ContextSliderTest, DisabledControllerDegenerateBoundaryAlwaysFalse) {
 // ═══════════════════════════════════════════════════════════════════════════
 
 TEST_F(ContextSliderTest, ZeroFirstMsgTokensEdgeCase) {
-  ToolsCompactController controller(true);
+  ToolsCompactController controller(ToolsCompactProfile{});
 
   constexpr llama_pos firstMsgTokens = 0;
 
@@ -601,7 +602,7 @@ TEST_F(ContextSliderTest, ZeroFirstMsgTokensEdgeCase) {
 }
 
 TEST_F(ContextSliderTest, AnchorNeverGoesNegativeAfterSlide) {
-  ToolsCompactController controller(true);
+  ToolsCompactController controller(ToolsCompactProfile{});
 
   constexpr llama_pos firstMsgTokens = 50;
 
@@ -619,7 +620,7 @@ TEST_F(ContextSliderTest, AnchorNeverGoesNegativeAfterSlide) {
 }
 
 TEST_F(ContextSliderTest, LargeValuesDoNotOverflow) {
-  ToolsCompactController controller(true);
+  ToolsCompactController controller(ToolsCompactProfile{});
 
   constexpr llama_pos firstMsgTokens = 1000;
   constexpr llama_pos largeAnchor = 1000000;

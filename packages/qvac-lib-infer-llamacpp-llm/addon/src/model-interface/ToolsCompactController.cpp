@@ -15,8 +15,9 @@ using namespace qvac_lib_inference_addon_llama::errors;
 using namespace qvac_lib_inference_addon_cpp::logger;
 
 ToolsCompactController::ToolsCompactController(
-    bool enabled, ToolsCompactProfile profile)
-    : enabled_(enabled), profile_(std::move(profile)) {}
+    std::optional<ToolsCompactProfile> profile)
+    : enabled_(profile.has_value()),
+      profile_(profile.value_or(ToolsCompactProfile{})) {}
 
 bool ToolsCompactController::enabled() const noexcept { return enabled_; }
 

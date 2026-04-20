@@ -145,7 +145,7 @@ Lives in `ToolsCompactController.{hpp,cpp}`. One class, one file pair, \~180 lin
 ```c
 class ToolsCompactController {
 public:
-  explicit ToolsCompactController(bool enabled);
+  explicit ToolsCompactController(std::optional<ToolsCompactProfile> profile);
 
   [[nodiscard]] bool enabled() const noexcept;
   [[nodiscard]] llama_pos anchor() const noexcept;

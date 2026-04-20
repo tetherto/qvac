@@ -51,6 +51,40 @@ TEST_F(ChatTemplateUtilsTest, SelectToolsCompactMarkerForUnsupportedArchitecture
   EXPECT_FALSE(selectToolsCompactMarker("gemma").has_value());
 }
 
+TEST_F(ChatTemplateUtilsTest, SupportsToolsCompactForModelMetadataByArchitecture) {
+  EXPECT_TRUE(
+      supportsToolsCompactForModelMetadata(std::string("qwen3"), std::nullopt));
+  EXPECT_FALSE(supportsToolsCompactForModelMetadata(
+      std::string("llama"), std::nullopt));
+}
+
+TEST_F(ChatTemplateUtilsTest, SupportsToolsCompactForModelMetadataByModelName) {
+  EXPECT_TRUE(supportsToolsCompactForModelMetadata(
+      std::nullopt, std::string("Qwen3-1.7B-Instruct")));
+  EXPECT_TRUE(supportsToolsCompactForModelMetadata(
+      std::nullopt, std::string("qwen-3-4b")));
+  EXPECT_FALSE(supportsToolsCompactForModelMetadata(
+      std::nullopt, std::string("Llama-3.1-8B")));
+}
+
+TEST_F(
+    ChatTemplateUtilsTest,
+    SelectToolsCompactMarkerForModelMetadataUsesArchitectureOrNameFallback) {
+  auto markerFromArch = selectToolsCompactMarkerForModelMetadata(
+      std::string("qwen3"), std::nullopt);
+  ASSERT_TRUE(markerFromArch.has_value());
+  EXPECT_EQ(markerFromArch.value(), "<tool_call>");
+
+  auto markerFromName = selectToolsCompactMarkerForModelMetadata(
+      std::nullopt, std::string("Qwen3-1.7B-Instruct"));
+  ASSERT_TRUE(markerFromName.has_value());
+  EXPECT_EQ(markerFromName.value(), "<tool_call>");
+
+  EXPECT_FALSE(selectToolsCompactMarkerForModelMetadata(
+                   std::string("llama"), std::string("Llama-3.1-8B"))
+                   .has_value());
+}
+
 TEST_F(
     ChatTemplateUtilsTest,
     GetChatTemplateForModelWithManualOverrideToolsCompactFalse) {
