@@ -2,6 +2,7 @@
 
 const test = require('brittle')
 const fs = require('bare-fs')
+const path = require('bare-path')
 const FilesystemDL = require('@qvac/dl-filesystem')
 const LlmLlamacpp = require('../../index.js')
 const { ensureModel, getMediaPath } = require('./utils')
@@ -92,6 +93,67 @@ test('Gemma 4 can run basic text inference', {
       t.ok(response.stats.promptTokens > 0, `prompt tokens: ${response.stats.promptTokens}`)
       t.ok(response.stats.generatedTokens > 0, `generated tokens: ${response.stats.generatedTokens}`)
     }
+  } finally {
+    await addon.unload().catch(() => {})
+    await loader.close().catch(() => {})
+  }
+})
+
+test('Gemma 4 supports multi-turn conversation with KV cache', {
+  timeout: 1_800_000
+}, async t => {
+  const [modelName, dirPath] = await ensureModel(GEMMA4_MODEL.llmModel)
+
+  const loader = new FilesystemDL({ dirPath })
+  const config = {
+    device: useCpu ? 'cpu' : 'gpu',
+    gpu_layers: '999',
+    ctx_size: '2048',
+    n_predict: '128',
+    temp: '0',
+    seed: '42',
+    verbosity: '2'
+  }
+
+  const addon = new LlmLlamacpp({
+    loader,
+    modelName,
+    diskPath: dirPath,
+    logger: createLogger(),
+    opts: { stats: true }
+  }, config)
+
+  try {
+    await addon.load()
+
+    const sessionName = path.join(dirPath, 'gemma4-multiturn-cache.bin')
+    const systemMsg = { role: 'system', content: 'You are a helpful assistant. Answer concisely with just the city name.' }
+    const userTurn1 = { role: 'user', content: 'What is the capital of France?' }
+
+    const prompt1 = [
+      { role: 'session', content: sessionName },
+      systemMsg,
+      userTurn1
+    ]
+    const response1 = await addon.run(prompt1)
+    const output1 = await collectResponse(response1)
+    t.ok(output1.length > 0, `first turn produced output (${output1.length} chars)`)
+    const lowerOutput1 = output1.toLowerCase()
+    t.ok(/paris/.test(lowerOutput1), `first turn mentions Paris: "${output1.slice(0, 100)}"`)
+
+    const prompt2 = [
+      { role: 'session', content: sessionName },
+      systemMsg,
+      userTurn1,
+      { role: 'assistant', content: output1 },
+      { role: 'user', content: 'And what about Germany?' }
+    ]
+    const response2 = await addon.run(prompt2)
+    const output2 = await collectResponse(response2)
+    t.ok(output2.length > 0, `second turn produced output (${output2.length} chars)`)
+    const lowerOutput2 = output2.toLowerCase()
+    t.ok(/berlin/.test(lowerOutput2), `second turn mentions Berlin: "${output2.slice(0, 100)}"`)
+    t.ok(output2 !== output1, 'second turn produced different output from first')
   } finally {
     await addon.unload().catch(() => {})
     await loader.close().catch(() => {})

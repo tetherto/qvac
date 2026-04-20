@@ -1,6 +1,7 @@
 'use strict'
 
 const test = require('brittle')
+const path = require('bare-path')
 const FilesystemDL = require('@qvac/dl-filesystem')
 const LlmLlamacpp = require('../../index.js')
 const { ensureModel } = require('./utils')
@@ -93,7 +94,7 @@ test('Qwen3.5-0.8B can run basic inference', {
   }
 })
 
-test('Qwen3.5-0.8B supports multi-turn conversation', {
+test('Qwen3.5-0.8B supports multi-turn conversation with KV cache', {
   timeout: 600_000
 }, async t => {
   const [modelName, dirPath] = await ensureModel({
@@ -123,9 +124,14 @@ test('Qwen3.5-0.8B supports multi-turn conversation', {
   try {
     await addon.load()
 
+    const sessionName = path.join(dirPath, 'qwen3-5-multiturn-cache.bin')
+    const systemMsg = { role: 'system', content: 'You are a helpful assistant. Answer concisely with just the city name.' }
+    const userTurn1 = { role: 'user', content: 'What is the capital of France?' }
+
     const prompt1 = [
-      { role: 'system', content: 'You are a helpful assistant. Be concise.' },
-      { role: 'user', content: 'What is the capital of France?' }
+      { role: 'session', content: sessionName },
+      systemMsg,
+      userTurn1
     ]
     const response1 = await addon.run(prompt1)
     const output1 = await collectResponse(response1)
@@ -134,7 +140,9 @@ test('Qwen3.5-0.8B supports multi-turn conversation', {
     t.ok(/paris/.test(lowerOutput1), `first turn mentions Paris: "${output1.slice(0, 100)}"`)
 
     const prompt2 = [
-      ...prompt1,
+      { role: 'session', content: sessionName },
+      systemMsg,
+      userTurn1,
       { role: 'assistant', content: output1 },
       { role: 'user', content: 'And what about Germany?' }
     ]
