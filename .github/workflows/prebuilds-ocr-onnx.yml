@@ -135,12 +135,12 @@ jobs:
           token: ${{ secrets.PAT_TOKEN }}
 
       - name: Setup AWS + Windows CLI
-        uses: ./.github/actions/setup-aws-prebuild
+        uses: tetherto/qvac/.github/actions/setup-aws-prebuild@0bbdca93da303a0b1634ba14a89cec085621078d
         with:
           role-to-assume: ${{ secrets.AWS_OIDC_ROLE_ARN }}
 
       - name: Setup vcpkg cache
-        uses: ./.github/actions/setup-vcpkg-cache
+        uses: tetherto/qvac/.github/actions/setup-vcpkg-cache@0bbdca93da303a0b1634ba14a89cec085621078d
         env:
           MODEL_S3_BUCKET: ${{ secrets.MODEL_S3_BUCKET }}
         with:
@@ -148,7 +148,7 @@ jobs:
           arch: ${{ matrix.arch }}
 
       - name: Setup Bare tooling
-        uses: ./.github/actions/setup-bare-tooling
+        uses: tetherto/qvac/.github/actions/setup-bare-tooling@0bbdca93da303a0b1634ba14a89cec085621078d
 
       - if: ${{ matrix.os == 'windows-2022' && matrix.arch == 'arm64' }}
         name: Rename win sdk folder to disable it
@@ -291,7 +291,7 @@ jobs:
           path: prebuilds
 
       - name: Setup AWS + Windows CLI
-        uses: ./.github/actions/setup-aws-prebuild
+        uses: tetherto/qvac/.github/actions/setup-aws-prebuild@0bbdca93da303a0b1634ba14a89cec085621078d
         with:
           role-to-assume: ${{ secrets.AWS_OIDC_ROLE_ARN }}
 
