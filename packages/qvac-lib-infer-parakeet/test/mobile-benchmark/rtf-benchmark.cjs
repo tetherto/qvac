@@ -47,3 +47,10 @@ async function runRtfBenchmarkEouMobileGpu (options = {}) { // eslint-disable-li
 async function runRtfBenchmarkSortformerMobileGpu (options = {}) { // eslint-disable-line no-unused-vars
   return runMobileBenchmark('sortformer', true)
 }
+
+module.exports = {
+  runRtfBenchmarkTdtMobileGpu,
+  runRtfBenchmarkCtcMobileGpu,
+  runRtfBenchmarkEouMobileGpu,
+  runRtfBenchmarkSortformerMobileGpu
+}
