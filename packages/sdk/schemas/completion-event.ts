@@ -61,11 +61,13 @@ const rawOutputSchema = z.object({
   fullText: z.string(),
 });
 
+const stopReasonEnum = z.enum(["eos", "length", "stopSequence"]);
+
 const successDoneSchema = z
   .object({
     type: z.literal("completionDone"),
     seq: seqSchema,
-    stopReason: z.enum(["eos", "length", "stopSequence"]).optional(),
+    stopReason: stopReasonEnum.optional(),
     raw: rawOutputSchema.optional(),
   })
   .strict();
@@ -102,6 +104,7 @@ export type StatsEvent = z.infer<typeof statsEventSchema>;
 export type CompletionError = z.infer<typeof completionErrorSchema>;
 export type DoneEvent = z.infer<typeof doneEventSchema>;
 export type CompletionEvent = z.infer<typeof completionEventSchema>;
+export type StopReason = z.infer<typeof stopReasonEnum>;
 
 export type CompletionFinal = {
   contentText: string;
