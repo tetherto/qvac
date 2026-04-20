@@ -1,35 +1,47 @@
 # Tools Compact Follow-up Next Steps
 
+## Last Verified
+
+- Date: 2026-04-20
+- Scope: `tools_compact` marker/profile plumbing, Qwen-only support gate, cache-aware prompt contract, controller unit coverage, and docs alignment.
+
+## How to Re-Verify
+
+- [ ] Build C++ tests: `npm run test:cpp:build`
+- [ ] Run C++ unit tests (includes `test_tools_compact_controller.cpp`): `npm run test:cpp:run`
+- [ ] Regenerate integration bundle: `npm run test:integration:generate`
+- [ ] Run tools-compact integration: `bare test/integration/tools-compact.test.js`
+- [ ] Run sliding-context integration: `bare test/integration/sliding-context.test.js`
+- [ ] Re-check docs consistency after behavior/config changes in:
+  - [ ] `docs/tools-compact.md`
+  - [ ] `docs/implementation-migration-plan.md`
+  - [ ] `docs/tools-compact-follow-up-next-steps.md`
+
 ## Purpose
 
 Capture post-refactor follow-up actions after implementing `structure-proposal.md`, while allowing reasonable implementation divergence when behavior remains intentional and documented.
 
 ## Current Review Findings
 
-### 1) Must fix: hardcoded tool-call marker in compaction completion check
+### 1) Marker/profile portability is implemented
 
-- Location: `ToolsCompactController::onGenerationComplete`
-- Current behavior checks only `"<tool_call>"`.
-- Risk: compaction chain-completion detection is tied to Qwen-style output and is not portable to other model families / template conventions.
+- `ToolsCompactController::onGenerationComplete` now checks `ToolsCompactProfile.toolCallStartMarker` (not a hardcoded `"<tool_call>"` string).
+- Marker/profile is plumbed from model initialization, keeping controller behavior template/family-aware.
 
-### 2) Phase 2 decision: keep Qwen-only gating for `tools_compact`
+### 2) Support matrix decision is implemented and documented
 
-- Location: `LlamaModel::commonParamsParse`
-- Decision: keep `tools_compact` gated to `general.architecture == "qwen3"` in this cycle.
-- Gate implementation remains profile-driven so additional families can be added in a follow-up without reworking controller wiring.
+- `LlamaModel::commonParamsParse` keeps `tools_compact` gated to `general.architecture == "qwen3"` in this cycle.
+- `docs/tools-compact.md` explicitly documents Qwen-only scope and behavior for unsupported families.
 
-### 3) Alignment decision required: strict prompt contract wording vs runtime behavior
+### 3) Prompt contract alignment is implemented
 
-- Docs currently describe strict contract: `tools` must be non-empty when `tools_compact` is enabled.
-- Runtime validation currently treats some empty-tools shapes as no-op instead of hard rejection.
-- This is either:
-  - a behavior bug (if strict contract is intended), or
-  - a docs mismatch (if conditional/no-op behavior is intended).
+- Runtime uses a cache-aware empty-tools contract (strict on user-tail and selected no-cache chain states; conditional/no-op in allowed cached/final shapes).
+- Documentation now matches runtime behavior and test coverage.
 
-### 4) Minor consistency cleanup: reset/debug wording
+### 4) Reset/debug semantics are aligned
 
-- `ToolsCompactController::reset()` does not clear all debug snapshot state.
-- Header wording should match behavior, or reset should clear debug fields.
+- `ToolsCompactController::reset()` intentionally preserves debug snapshot fields.
+- Header comments/documentation reflect that snapshots are generation-captured and not live mutable state.
 
 ## Source of Truth Policy
 
@@ -47,47 +59,35 @@ Not acceptable divergence (without explicit decision + docs update):
 - Changed support matrix (which model families are supported).
 - Changed prompt validation contract.
 
-## Next Steps (Prioritized)
+## Next Steps (Optional, Non-Blocking)
 
-## Phase 1 - Correctness and portability
+## Phase 1 - Hardening
 
-1. Introduce a model/template profile input for tool-call marker detection (e.g. `ToolsCompactProfile`).
-2. Pass marker/profile into `ToolsCompactController` from model initialization path.
-3. Replace hardcoded `"<tool_call>"` check with profile-driven marker check.
-4. Add deterministic unit tests for marker detection behavior (at minimum two marker variants).
+1. Tighten marker detection beyond substring checks (e.g., structured block detection) to reduce false positives in free-form assistant text.
+2. Add negative tests for marker-like text that should not be interpreted as active tool calls.
 
-## Phase 2 - Product/scope decisions
+## Phase 2 - Future support expansion
 
-1. Decision: `tools_compact` remains Qwen-only in this release cycle.
-2. Keep architecture gate and profile plumbing in place (Qwen profile active, other families blocked).
-3. Document Qwen-only scope explicitly in `docs/tools-compact.md` and warning messages.
-4. Defer allow-list expansion and family-specific markers/tests to a later phase.
+1. Extend `selectToolsCompactMarker(...)` allow-list for additional model families when templates are validated.
+2. Add family-specific marker and contract tests alongside each new support addition.
+3. Keep Qwen-only default behavior until new family templates are verified end-to-end.
 
-## Phase 3 - Contract alignment (docs vs code)
+## Phase 3 - Docs maintenance
 
-1. Decide contract for empty-tools prompts under `tools_compact`:
-   - strict rejection for all shapes, or
-   - conditional/no-op behavior.
-2. Update runtime validation and tests to chosen contract.
-3. Update `docs/tools-compact.md` and `docs/implementation-migration-plan.md` accordingly.
-
-## Phase 4 - Consistency cleanup
-
-1. Align `reset()` behavior and header comments in `ToolsCompactController`.
-2. Keep debug stats semantics explicit (captured at generation-complete vs live state).
+1. Keep `docs/tools-compact.md` and this follow-up doc synchronized when support matrix or contract logic changes.
+2. Periodically prune historical implementation notes once they no longer aid maintainers.
 
 ## Completion Checklist
 
-- [ ] Chain completion marker is not hardcoded to Qwen syntax.
+- [x] Chain completion marker is not hardcoded to Qwen syntax.
 - [x] Support matrix (Qwen-only vs multi-family) is explicitly decided and documented.
-- [ ] Prompt validation contract is unambiguous and tested.
-- [ ] Unit tests cover marker detection and chosen contract behavior.
-- [ ] Docs reflect real behavior and implementation scope.
+- [x] Prompt validation contract is unambiguous and tested.
+- [x] Unit tests cover marker detection and chosen contract behavior.
+- [x] Docs reflect real behavior and implementation scope.
 
-## Suggested Implementation Order
+## Suggested Implementation Order (If Optional Work Is Started)
 
-1. Marker/profile support + tests.
-2. Support matrix decision + code/docs update.
-3. Prompt contract decision + code/docs/tests update.
-4. Reset/debug consistency cleanup.
+1. Marker detection hardening + focused unit tests.
+2. Family support expansion one architecture at a time (code + tests + docs per step).
+3. Documentation cleanup pass after each behavior change.
 
