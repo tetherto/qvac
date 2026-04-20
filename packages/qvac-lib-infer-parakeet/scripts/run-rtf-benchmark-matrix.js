@@ -8,6 +8,20 @@ function getNpmCommand () {
   return process.platform === 'win32' ? 'npm.cmd' : 'npm'
 }
 
+function getSpawnOptions (pkgDir, env) {
+  const options = {
+    cwd: pkgDir,
+    env,
+    stdio: 'inherit'
+  }
+
+  if (process.platform === 'win32') {
+    options.shell = true
+  }
+
+  return options
+}
+
 function parseMatrixConfig () {
   const raw = process.env.QVAC_PARAKEET_BENCHMARK_MATRIX_JSON
   if (!raw) {
@@ -70,11 +84,15 @@ function runBenchmarkEntry (pkgDir, entry, index) {
   console.log(`  label:      ${env.QVAC_PARAKEET_BENCHMARK_LABEL}`)
   console.log('='.repeat(70))
 
-  const result = spawnSync(getNpmCommand(), ['run', 'test:benchmark:rtf'], {
-    cwd: pkgDir,
-    env,
-    stdio: 'inherit'
-  })
+  const result = spawnSync(
+    getNpmCommand(),
+    ['run', 'test:benchmark:rtf'],
+    getSpawnOptions(pkgDir, env)
+  )
+
+  if (result.error) {
+    throw result.error
+  }
 
   if (result.status !== 0) {
     throw new Error(`Benchmark entry failed for ${label} (exit ${result.status})`)
