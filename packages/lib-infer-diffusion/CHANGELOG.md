@@ -1,5 +1,41 @@
 # Changelog
 
+## [0.5.0] - 2026-04-20
+
+### Added
+
+- **FLUX2 multi-reference fusion** (`init_images` parameter) — blend multiple reference images into a single output via in-context conditioning with RoPE attention
+- `@imageN` tag support in prompts for semantic anchoring of reference images (FLUX2-klein, Qwen3 text-only constraint)
+- Fusion-specific parameters: `increase_ref_index`, `auto_resize_ref_image` for fine-grained control
+- Image dimension utility (`alignImageDimensions()`) to resize to nearest multiple of 8 while preserving aspect ratio
+- Comprehensive integration test for FLUX2 multi-reference fusion (`generate-image-flux2-fusion.test.js`)
+- Example script demonstrating fusion workflow with two scientists (`generate-fusion.js`)
+- Detailed README section on multi-reference fusion, `@imageN` tags, and best practices
+
+### Added (Assets)
+
+- Claude Shannon test image (Bell Labs / Wikimedia Commons, CC BY-SA licensed)
+- Updated credits section to document licensing for both von Neumann and Shannon images
+
+### Changed
+
+- Enhanced parameter validation in `_runInternal()`:
+  - Strict dimension alignment (width/height multiples of 8)
+  - Type checking for `init_images`, `increase_ref_index`, `auto_resize_ref_image`
+  - Mutual exclusion validation for `init_image` vs `init_images`
+  - FLUX2-only gating for fusion features
+  - Empty array and context-awareness checks
+- Consolidated and simplified fusion examples (removed `generate-stepbrothers.js`, updated `generate-fusion.js`)
+- `.gitignore` refinement: exclude generated `*.png` at package root, but preserve `assets/**` for test images and licenses
+
+### Fixed
+
+- Linting issues: trailing commas, undefined variables, quote style consistency
+
+### Removed
+
+- `scripts/download-flux2-small-decoder.sh` (unused)
+
 ## [0.2.0] - 2026-04-15
 
 ### Added
