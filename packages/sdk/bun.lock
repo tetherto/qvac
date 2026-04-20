@@ -1,12 +1,11 @@
 {
   "lockfileVersion": 1,
-  "configVersion": 0,
   "workspaces": {
     "": {
       "name": "@qvac/sdk",
       "dependencies": {
         "@qvac/decoder-audio": "^0.3.7",
-        "@qvac/diffusion-cpp": "0.1.3",
+        "@qvac/diffusion-cpp": "^0.1.3",
         "@qvac/dl-filesystem": "^0.2.1",
         "@qvac/embed-llamacpp": "^0.13.4",
         "@qvac/error": "^0.1.1",
@@ -19,7 +18,7 @@
         "@qvac/transcription-parakeet": "^0.3.1",
         "@qvac/transcription-whispercpp": "^0.6.1",
         "@qvac/translation-nmtcpp": "^0.6.10",
-        "@qvac/tts-onnx": "^0.8.2",
+        "@qvac/tts-onnx": "^0.8.3",
         "fast-safe-stringify": "2.1.1",
         "which-runtime": "^1.3.2",
         "zod": "^4.0.17",
@@ -547,7 +546,7 @@
 
     "@qvac/translation-nmtcpp": ["@qvac/translation-nmtcpp@0.6.10", "", { "dependencies": { "@qvac/dl-hyperdrive": "^0.1.0", "@qvac/error": "^0.1.0", "@qvac/infer-base": "^0.2.0", "bare-path": "^3.0.0" } }, "sha512-lCySo8lzwyb1Wzv1xnN4ziTgTadA6UibWVS792fRGlNSkLcPYeS5Z5x7apzEyUNdE07SxPry/CrUZD56ZUc/VA=="],
 
-    "@qvac/tts-onnx": ["@qvac/tts-onnx@0.8.2", "", { "dependencies": { "@qvac/error": "^0.1.0", "@qvac/infer-base": "^0.4.0", "@qvac/onnx": "^0.14.0", "bare-fs": "^4.5.1", "bare-path": "^3.0.0" } }, "sha512-/x6T4aGrHnBpndBZZN9W9FHQmjb+X7uXp1AQv+mi4dJai4XNxhahh7tK8OCS5Z3HdB/Iv/6YZ2PL0wnVf+OgVQ=="],
+    "@qvac/tts-onnx": ["@qvac/tts-onnx@0.8.3", "", { "dependencies": { "@qvac/error": "^0.1.0", "@qvac/infer-base": "^0.4.0", "@qvac/onnx": "^0.14.0", "bare-fs": "^4.5.6", "bare-os": "^3.8.0", "bare-path": "^3.0.0" } }, "sha512-l7EUfE7zNr2cDn2elieF39RKqJsckxs2xN2inemb/YEJuiPGdY4Q2wOZknNfHgFXF4aC//nmKgRy5Q8nfhk8rA=="],
 
     "@react-native/assets-registry": ["@react-native/assets-registry@0.84.1", "", {}, "sha512-lAJ6PDZv95FdT9s9uhc9ivhikW1Zwh4j9XdXM7J2l4oUA3t37qfoBmTSDLuPyE3Bi+Xtwa11hJm0BUTT2sc/gg=="],
 
