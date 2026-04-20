@@ -47,21 +47,20 @@ async function main () {
 
   console.log('Loading FLUX2-klein-4B (GPU / Metal, diffusion_fa=on)...')
 
-  const model = new ImgStableDiffusion(
-    {
-      logger: console,
-      diskPath: modelDir,
-      modelName: 'flux-2-klein-4b-Q8_0.gguf',
-      llmModel: 'Qwen3-4B-Q4_K_M.gguf',
-      vaeModel: 'flux2-vae.safetensors'
+  const model = new ImgStableDiffusion({
+    files: {
+      model: path.join(modelDir, 'flux-2-klein-4b-Q8_0.gguf'),
+      llm: path.join(modelDir, 'Qwen3-4B-Q4_K_M.gguf'),
+      vae: path.join(modelDir, 'flux2-vae.safetensors')
     },
-    {
+    config: {
       threads: 4,
       device: 'gpu',
       prediction: 'flux2_flow',
       diffusion_fa: true
-    }
-  )
+    },
+    logger: console
+  })
 
   try {
     await model.load()

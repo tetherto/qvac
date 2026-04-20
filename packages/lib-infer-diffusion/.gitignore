@@ -29,3 +29,4 @@ temp/
 *.png
 test/model/
 test/integration/all.js
+test/unit/all.js

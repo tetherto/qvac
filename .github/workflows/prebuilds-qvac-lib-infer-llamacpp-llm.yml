@@ -88,28 +88,6 @@ jobs:
     name: ${{ matrix.platform }}-${{ matrix.arch }}${{ matrix.tags }}
 
     steps:
-      - name: Configure AWS credentials via OIDC
-        uses: aws-actions/configure-aws-credentials@8df5847569e6427dd6c4fb1cf565c83acfa8afa7 # 6.0.0
-        with:
-          role-to-assume: ${{ secrets.AWS_OIDC_ROLE_ARN }}
-          aws-region: eu-central-1
-
-      - if: ${{ matrix.platform == 'win32' }}
-        name: Install AWS CLI on self-hosted Windows runner
-        shell: powershell
-        run: |
-          if (Get-Command aws -ErrorAction SilentlyContinue) {
-            Write-Host "AWS CLI already installed"
-            aws --version
-          } else {
-            Write-Host "Installing AWS CLI v2..."
-            Invoke-WebRequest -Uri https://awscli.amazonaws.com/AWSCLIV2.msi -OutFile $env:TEMP\AWSCLIV2.msi
-            Start-Process msiexec.exe -Wait -ArgumentList '/I', "$env:TEMP\AWSCLIV2.msi", '/qn'
-            $env:PATH = "C:\Program Files\Amazon\AWSCLIV2;$env:PATH"
-            echo "C:\Program Files\Amazon\AWSCLIV2" >> $env:GITHUB_PATH
-            aws --version
-          }
-
       - if: ${{ matrix.platform == 'android' }}
         name: Select NDK
         run: |
@@ -167,21 +145,21 @@ jobs:
           ref: ${{ inputs.ref || github.ref }}
           token: ${{ secrets.PAT_TOKEN }}
 
+      - name: Setup AWS + Windows CLI
+        uses: tetherto/qvac/.github/actions/setup-aws-prebuild@0bbdca93da303a0b1634ba14a89cec085621078d
+        with:
+          role-to-assume: ${{ secrets.AWS_OIDC_ROLE_ARN }}
+
       - name: Setup vcpkg cache
-        uses: ./.github/actions/setup-vcpkg-cache
+        uses: tetherto/qvac/.github/actions/setup-vcpkg-cache@0bbdca93da303a0b1634ba14a89cec085621078d
         env:
           MODEL_S3_BUCKET: ${{ secrets.MODEL_S3_BUCKET }}
         with:
           platform: ${{ matrix.platform }}
           arch: ${{ matrix.arch }}
 
-      - name: Setup node
-        uses: actions/setup-node@53b83947a5a98c8d113130e565377fae1a50d02f # 6.3.0
-        with:
-          node-version: lts/*
-
-      - name: Install global dependencies
-        run: npm install -g bare bare-make
+      - name: Setup Bare tooling
+        uses: tetherto/qvac/.github/actions/setup-bare-tooling@0bbdca93da303a0b1634ba14a89cec085621078d
 
       - if: ${{ matrix.os == 'windows-2022' && matrix.arch == 'arm64' }}
         name: Rename win sdk folder to disable it
@@ -232,37 +210,19 @@ jobs:
         name: Update apt sources
         run: sudo apt-get update
 
-      - if: ${{ matrix.os == 'ubuntu-22.04-arm' }}
-        name: Install ccache on Linux
-        run: sudo apt-get install -y ccache
-
-      - if: ${{ matrix.os == 'ubuntu-22.04-arm' }}
-        name: Configure ccache
-        run: |
-          ccache --set-config=max_size=2G
-          ccache --set-config=compression=true
-          ccache -z
-          echo "CMAKE_C_COMPILER_LAUNCHER=ccache" >> $GITHUB_ENV
-          echo "CMAKE_CXX_COMPILER_LAUNCHER=ccache" >> $GITHUB_ENV
-
-      - if: ${{ matrix.os == 'ubuntu-22.04-arm' }}
-        name: Get ccache cache
-        uses: actions/cache@668228422ae6a00e4ad889ee87cd7109ec5666a7 # 5.0.4
-        with:
-          key: ccache-${{ matrix.platform }}-${{ matrix.arch }}
-          path: ~/.cache/ccache-arm
-
       - if: ${{ matrix.platform == 'linux' }}
         name: Install required packages linux
         run: sudo apt-get install libxi-dev libxtst-dev libxrandr-dev
 
       - name: Setup Vulkan SDK
-        uses: ./.github/actions/setup-vulkan-sdk
+        uses: tetherto/qvac/.github/actions/setup-vulkan-sdk@0bbdca93da303a0b1634ba14a89cec085621078d
         env:
           MODEL_S3_BUCKET: ${{ secrets.MODEL_S3_BUCKET }}
         with:
           platform: ${{ matrix.platform }}
           arch: ${{ matrix.arch }}
+          aws-role-to-assume: ${{ secrets.AWS_OIDC_ROLE_ARN }}
+          aws-region: eu-central-1
 
 
       - if: ${{ matrix.platform == 'android' }}

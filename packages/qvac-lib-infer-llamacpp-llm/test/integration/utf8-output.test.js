@@ -1,7 +1,7 @@
 'use strict'
 
 const test = require('brittle')
-const FilesystemDL = require('@qvac/dl-filesystem')
+const path = require('bare-path')
 const LlmLlamacpp = require('../../index.js')
 const { ensureModel } = require('./utils')
 const { attachSpecLogger } = require('./spec-logger')
@@ -39,7 +39,7 @@ test('model returns UTF-8 emoji without truncation', { timeout: 600_000 }, async
     downloadUrl: MODEL.url
   })
 
-  const loader = new FilesystemDL({ dirPath })
+  const modelPath = path.join(dirPath, modelName)
   const specLogger = attachSpecLogger({ forwardToConsole: true })
   let loggerReleased = false
   const releaseLogger = () => {
@@ -61,12 +61,11 @@ test('model returns UTF-8 emoji without truncation', { timeout: 600_000 }, async
   }
 
   const model = new LlmLlamacpp({
-    loader,
-    modelName,
-    diskPath: dirPath,
+    files: { model: [modelPath] },
+    config,
     logger: console,
     opts: { stats: true }
-  }, config)
+  })
 
   let output = ''
   try {
@@ -86,7 +85,6 @@ test('model returns UTF-8 emoji without truncation', { timeout: 600_000 }, async
     t.ok(response.stats.generatedTokens > 0, 'token stats recorded')
   } finally {
     await model.unload().catch(() => {})
-    await loader.close().catch(() => {})
     releaseLogger()
   }
 })

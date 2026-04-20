@@ -1,0 +1,137 @@
+name: Performance Report
+
+on:
+  schedule:
+    - cron: "0 9 * * 1" # Every Monday 9am UTC
+  workflow_dispatch:
+    inputs:
+      addon:
+        description: "Addon to generate report for"
+        type: choice
+        required: true
+        options:
+          - ocr-onnx
+          - nmtcpp
+          - llamacpp-llm
+          - onnx-tts
+      workflow_name:
+        description: "Integration test workflow name to query"
+        type: choice
+        required: true
+        options:
+          - "Integration Tests (OCR)"
+          - "Mobile Integration Tests (OCR)"
+          - "Integration Tests (NMTCPP)"
+          - "Integration Tests (LLM)"
+          - "Integration Tests (TTS)"
+      runs:
+        description: "Number of recent runs to aggregate"
+        type: number
+        required: false
+        default: 6
+
+jobs:
+  generate-report:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      actions: read
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v6
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v6
+        with:
+          node-version: lts/*
+
+      - name: Generate performance report (manual)
+        if: ${{ github.event_name == 'workflow_dispatch' }}
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          node scripts/perf-report/aggregate.js \
+            --addon "${{ inputs.addon }}" \
+            --workflow "${{ inputs.workflow_name }}" \
+            --runs ${{ inputs.runs }} \
+            --output "reports/${{ inputs.addon }}-performance.md" \
+            --output-json "reports/${{ inputs.addon }}-performance.json" \
+            --output-html "reports/${{ inputs.addon }}-performance.html"
+
+      - name: Generate performance reports (scheduled - all addons)
+        if: ${{ github.event_name == 'schedule' }}
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          mkdir -p reports
+
+          echo "=== OCR (Desktop) ==="
+          node scripts/perf-report/aggregate.js \
+            --addon ocr-onnx \
+            --workflow "Integration Tests (OCR)" \
+            --runs 6 \
+            --output reports/ocr-onnx-performance.md \
+            --output-json reports/ocr-onnx-performance.json \
+            --output-html reports/ocr-onnx-performance.html || true
+
+          echo "=== OCR (Mobile) ==="
+          node scripts/perf-report/aggregate.js \
+            --addon ocr-onnx \
+            --workflow "Mobile Integration Tests (OCR)" \
+            --runs 6 \
+            --output reports/ocr-onnx-mobile-performance.md \
+            --output-json reports/ocr-onnx-mobile-performance.json \
+            --output-html reports/ocr-onnx-mobile-performance.html || true
+
+          echo "=== Translation ==="
+          node scripts/perf-report/aggregate.js \
+            --addon nmtcpp \
+            --workflow "Integration Tests (NMTCPP)" \
+            --runs 6 \
+            --output reports/nmtcpp-performance.md \
+            --output-json reports/nmtcpp-performance.json \
+            --output-html reports/nmtcpp-performance.html || true
+
+          echo "=== Vision/LLM ==="
+          node scripts/perf-report/aggregate.js \
+            --addon llamacpp-llm \
+            --workflow "Integration Tests (LLM)" \
+            --runs 6 \
+            --output reports/llamacpp-llm-performance.md \
+            --output-json reports/llamacpp-llm-performance.json \
+            --output-html reports/llamacpp-llm-performance.html || true
+
+          echo "=== TTS ==="
+          node scripts/perf-report/aggregate.js \
+            --addon onnx-tts \
+            --workflow "Integration Tests (TTS)" \
+            --runs 6 \
+            --output reports/onnx-tts-performance.md \
+            --output-json reports/onnx-tts-performance.json \
+            --output-html reports/onnx-tts-performance.html || true
+
+      - name: Write GitHub Step Summary
+        if: always()
+        run: |
+          echo "# Performance Reports" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "Generated: $(date -u '+%Y-%m-%d %H:%M UTC')" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          for f in reports/*.md; do
+            if [ -f "$f" ]; then
+              cat "$f" >> $GITHUB_STEP_SUMMARY
+              echo "" >> $GITHUB_STEP_SUMMARY
+              echo "---" >> $GITHUB_STEP_SUMMARY
+              echo "" >> $GITHUB_STEP_SUMMARY
+            fi
+          done
+
+      - name: Upload reports
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: performance-reports-${{ github.run_number }}
+          path: reports/
+          retention-days: 90
+          if-no-files-found: ignore

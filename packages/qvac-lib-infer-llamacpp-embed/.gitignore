@@ -9,6 +9,9 @@ package-lock.json
 .cache/
 .npmrc
 
+test/unit/all.js
+test/integration/all.js
+
 __pycache__/
 .pytest_cache/
 poetry.lock

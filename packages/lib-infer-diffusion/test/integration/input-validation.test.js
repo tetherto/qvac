@@ -87,15 +87,14 @@ test('readImageDimensions | unrecognised format returns null', async (t) => {
 // ---------- FLUX img2img prediction guard ----------
 
 test('FLUX img2img | throws when prediction is omitted', async (t) => {
-  const model = new ImgStableDiffusion(
-    {
-      logger: console,
-      diskPath: '.',
-      modelName: 'flux-2-klein-4b-Q8_0.gguf',
-      llmModel: 'Qwen3-4B-Q4_K_M.gguf'
+  const model = new ImgStableDiffusion({
+    files: {
+      model: '/tmp/flux-2-klein-4b-Q8_0.gguf',
+      llm: '/tmp/Qwen3-4B-Q4_K_M.gguf'
     },
-    { threads: 1 }
-  )
+    config: { threads: 1 },
+    logger: console
+  })
 
   const fakeImage = VALID_PNG_HEADER
 
@@ -115,15 +114,14 @@ test('FLUX img2img | throws when prediction is omitted', async (t) => {
 })
 
 test('FLUX img2img | throws when prediction is "auto"', async (t) => {
-  const model = new ImgStableDiffusion(
-    {
-      logger: console,
-      diskPath: '.',
-      modelName: 'flux-2-klein-4b-Q8_0.gguf',
-      llmModel: 'Qwen3-4B-Q4_K_M.gguf'
+  const model = new ImgStableDiffusion({
+    files: {
+      model: '/tmp/flux-2-klein-4b-Q8_0.gguf',
+      llm: '/tmp/Qwen3-4B-Q4_K_M.gguf'
     },
-    { threads: 1, prediction: 'auto' }
-  )
+    config: { threads: 1, prediction: 'auto' },
+    logger: console
+  })
 
   const fakeImage = VALID_PNG_HEADER
 
@@ -139,15 +137,14 @@ test('FLUX img2img | throws when prediction is "auto"', async (t) => {
 })
 
 test('FLUX img2img | does NOT throw for txt2img even without prediction', async (t) => {
-  const model = new ImgStableDiffusion(
-    {
-      logger: console,
-      diskPath: '.',
-      modelName: 'flux-2-klein-4b-Q8_0.gguf',
-      llmModel: 'Qwen3-4B-Q4_K_M.gguf'
+  const model = new ImgStableDiffusion({
+    files: {
+      model: '/tmp/flux-2-klein-4b-Q8_0.gguf',
+      llm: '/tmp/Qwen3-4B-Q4_K_M.gguf'
     },
-    { threads: 1 }
-  )
+    config: { threads: 1 },
+    logger: console
+  })
 
   // txt2img (no init_image) should pass the guard even without prediction.
   // It will fail later because no model is loaded, but that's expected —
@@ -164,16 +161,15 @@ test('FLUX img2img | does NOT throw for txt2img even without prediction', async 
 })
 
 test('non-FLUX model | does NOT throw for img2img without prediction', async (t) => {
-  const model = new ImgStableDiffusion(
-    {
-      logger: console,
-      diskPath: '.',
-      modelName: 'stable-diffusion-v2-1-Q4_0.gguf'
+  const model = new ImgStableDiffusion({
+    files: {
+      model: '/tmp/stable-diffusion-v2-1-Q4_0.gguf'
     },
-    { threads: 1 }
-  )
+    config: { threads: 1 },
+    logger: console
+  })
 
-  // SD model (no llmModel) should not trigger the FLUX guard.
+  // SD model (no files.llm) should not trigger the FLUX guard.
   try {
     await model.run({ prompt: 'test', init_image: VALID_PNG_HEADER })
     t.fail('should have thrown (no model loaded)')
@@ -188,15 +184,14 @@ test('non-FLUX model | does NOT throw for img2img without prediction', async (t)
 // ---------- init_images (multi-reference "fusion") guards ----------
 
 test('init_images | rejects combining init_image + init_images', async (t) => {
-  const model = new ImgStableDiffusion(
-    {
-      logger: console,
-      diskPath: '.',
-      modelName: 'flux-2-klein-4b-Q8_0.gguf',
-      llmModel: 'Qwen3-4B-Q4_K_M.gguf'
+  const model = new ImgStableDiffusion({
+    files: {
+      model: '/tmp/flux-2-klein-4b-Q8_0.gguf',
+      llm: '/tmp/Qwen3-4B-Q4_K_M.gguf'
     },
-    { threads: 1, prediction: 'flux2_flow' }
-  )
+    config: { threads: 1, prediction: 'flux2_flow' },
+    logger: console
+  })
 
   try {
     await model.run({
@@ -213,15 +208,14 @@ test('init_images | rejects combining init_image + init_images', async (t) => {
   }
 })
 
-test('init_images | rejects non-FLUX2 model (no llmModel)', async (t) => {
-  const model = new ImgStableDiffusion(
-    {
-      logger: console,
-      diskPath: '.',
-      modelName: 'stable-diffusion-v2-1-Q4_0.gguf'
+test('init_images | rejects non-FLUX.2 model (no files.llm)', async (t) => {
+  const model = new ImgStableDiffusion({
+    files: {
+      model: '/tmp/stable-diffusion-v2-1-Q4_0.gguf'
     },
-    { threads: 1 }
-  )
+    config: { threads: 1 },
+    logger: console
+  })
 
   try {
     await model.run({
@@ -231,22 +225,21 @@ test('init_images | rejects non-FLUX2 model (no llmModel)', async (t) => {
     t.fail('should have thrown')
   } catch (err) {
     t.ok(
-      /multi-reference fusion\) requires a FLUX2 model/.test(err.message),
-      'error mentions FLUX2 requirement'
+      /multi-reference fusion\) requires a FLUX\.2 model/.test(err.message),
+      'error mentions FLUX.2 requirement'
     )
   }
 })
 
-test('init_images | rejects FLUX model without prediction=flux2_flow', async (t) => {
-  const model = new ImgStableDiffusion(
-    {
-      logger: console,
-      diskPath: '.',
-      modelName: 'flux-2-klein-4b-Q8_0.gguf',
-      llmModel: 'Qwen3-4B-Q4_K_M.gguf'
+test('init_images | rejects FLUX.2 model without prediction=flux2_flow', async (t) => {
+  const model = new ImgStableDiffusion({
+    files: {
+      model: '/tmp/flux-2-klein-4b-Q8_0.gguf',
+      llm: '/tmp/Qwen3-4B-Q4_K_M.gguf'
     },
-    { threads: 1 /* no prediction */ }
-  )
+    config: { threads: 1 /* no prediction */ },
+    logger: console
+  })
 
   try {
     await model.run({
@@ -256,22 +249,21 @@ test('init_images | rejects FLUX model without prediction=flux2_flow', async (t)
     t.fail('should have thrown')
   } catch (err) {
     t.ok(
-      /multi-reference fusion\) requires a FLUX2 model/.test(err.message),
-      'error message mentions FLUX2 / fusion'
+      /multi-reference fusion\) requires a FLUX\.2 model/.test(err.message),
+      'error message mentions FLUX.2 / fusion'
     )
   }
 })
 
 test('init_images | rejects non-Uint8Array entries', async (t) => {
-  const model = new ImgStableDiffusion(
-    {
-      logger: console,
-      diskPath: '.',
-      modelName: 'flux-2-klein-4b-Q8_0.gguf',
-      llmModel: 'Qwen3-4B-Q4_K_M.gguf'
+  const model = new ImgStableDiffusion({
+    files: {
+      model: '/tmp/flux-2-klein-4b-Q8_0.gguf',
+      llm: '/tmp/Qwen3-4B-Q4_K_M.gguf'
     },
-    { threads: 1, prediction: 'flux2_flow' }
-  )
+    config: { threads: 1, prediction: 'flux2_flow' },
+    logger: console
+  })
 
   try {
     await model.run({
@@ -288,15 +280,14 @@ test('init_images | rejects non-Uint8Array entries', async (t) => {
 })
 
 test('init_images | rejects empty Uint8Array entry', async (t) => {
-  const model = new ImgStableDiffusion(
-    {
-      logger: console,
-      diskPath: '.',
-      modelName: 'flux-2-klein-4b-Q8_0.gguf',
-      llmModel: 'Qwen3-4B-Q4_K_M.gguf'
+  const model = new ImgStableDiffusion({
+    files: {
+      model: '/tmp/flux-2-klein-4b-Q8_0.gguf',
+      llm: '/tmp/Qwen3-4B-Q4_K_M.gguf'
     },
-    { threads: 1, prediction: 'flux2_flow' }
-  )
+    config: { threads: 1, prediction: 'flux2_flow' },
+    logger: console
+  })
 
   try {
     await model.run({
@@ -321,15 +312,14 @@ test('init_images | warns when prompt is missing all @imageN placeholders', asyn
     debug: () => {}
   }
 
-  const model = new ImgStableDiffusion(
-    {
-      logger,
-      diskPath: '.',
-      modelName: 'flux-2-klein-4b-Q8_0.gguf',
-      llmModel: 'Qwen3-4B-Q4_K_M.gguf'
+  const model = new ImgStableDiffusion({
+    files: {
+      model: '/tmp/flux-2-klein-4b-Q8_0.gguf',
+      llm: '/tmp/Qwen3-4B-Q4_K_M.gguf'
     },
-    { threads: 1, prediction: 'flux2_flow' }
-  )
+    config: { threads: 1, prediction: 'flux2_flow' },
+    logger
+  })
 
   try {
     // Prompt references NONE of @image1, @image2 — warn, don't throw.
@@ -356,15 +346,14 @@ test('init_images | warns when prompt references only some @imageN', async (t) =
     debug: () => {}
   }
 
-  const model = new ImgStableDiffusion(
-    {
-      logger,
-      diskPath: '.',
-      modelName: 'flux-2-klein-4b-Q8_0.gguf',
-      llmModel: 'Qwen3-4B-Q4_K_M.gguf'
+  const model = new ImgStableDiffusion({
+    files: {
+      model: '/tmp/flux-2-klein-4b-Q8_0.gguf',
+      llm: '/tmp/Qwen3-4B-Q4_K_M.gguf'
     },
-    { threads: 1, prediction: 'flux2_flow' }
-  )
+    config: { threads: 1, prediction: 'flux2_flow' },
+    logger
+  })
 
   try {
     await model.run({
@@ -390,15 +379,14 @@ test('init_images | logs "fusion" mode info message', async (t) => {
     debug: () => {}
   }
 
-  const model = new ImgStableDiffusion(
-    {
-      logger,
-      diskPath: '.',
-      modelName: 'flux-2-klein-4b-Q8_0.gguf',
-      llmModel: 'Qwen3-4B-Q4_K_M.gguf'
+  const model = new ImgStableDiffusion({
+    files: {
+      model: '/tmp/flux-2-klein-4b-Q8_0.gguf',
+      llm: '/tmp/Qwen3-4B-Q4_K_M.gguf'
     },
-    { threads: 1, prediction: 'flux2_flow' }
-  )
+    config: { threads: 1, prediction: 'flux2_flow' },
+    logger
+  })
 
   try {
     await model.run({
@@ -415,16 +403,15 @@ test('init_images | logs "fusion" mode info message', async (t) => {
   )
 })
 
-test('init_image | still works on FLUX2 (regression — single-image path unchanged)', async (t) => {
-  const model = new ImgStableDiffusion(
-    {
-      logger: console,
-      diskPath: '.',
-      modelName: 'flux-2-klein-4b-Q8_0.gguf',
-      llmModel: 'Qwen3-4B-Q4_K_M.gguf'
+test('init_image | still works on FLUX.2 (regression — single-image path unchanged)', async (t) => {
+  const model = new ImgStableDiffusion({
+    files: {
+      model: '/tmp/flux-2-klein-4b-Q8_0.gguf',
+      llm: '/tmp/Qwen3-4B-Q4_K_M.gguf'
     },
-    { threads: 1, prediction: 'flux2_flow' }
-  )
+    config: { threads: 1, prediction: 'flux2_flow' },
+    logger: console
+  })
 
   // Single-image path must NOT trigger any of the new init_images errors.
   try {
@@ -437,7 +424,7 @@ test('init_image | still works on FLUX2 (regression — single-image path unchan
     )
     t.absent(
       /multi-reference fusion/.test(err.message),
-      'single init_image does not trip the fusion/FLUX2 guard'
+      'single init_image does not trip the fusion/FLUX.2 guard'
     )
   }
 })

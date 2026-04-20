@@ -11,6 +11,12 @@ inputs:
   version:
     description: Optional Vulkan SDK version in x.y.z.n form, or latest
     required: false
+  aws-role-to-assume:
+    description: AWS role ARN used to refresh credentials before Linux ARM64 cache upload
+    required: false
+  aws-region:
+    description: AWS region used to refresh credentials before Linux ARM64 cache upload
+    required: false
 
 runs:
   using: composite
@@ -35,7 +41,7 @@ runs:
           exit 1
         fi
 
-        if [ "$RESOLVED_VERSION" != "latest" ] && ! printf '%s' "$RESOLVED_VERSION" | rg '^[0-9]+\.[0-9]+\.[0-9]+\.[0-9]+$' > /dev/null; then
+        if [ "$RESOLVED_VERSION" != "latest" ] && [[ ! "$RESOLVED_VERSION" =~ ^[0-9]+\.[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
           echo "::error::Vulkan SDK version must be latest or use x.y.z.n format"
           exit 1
         fi
@@ -48,6 +54,16 @@ runs:
       run: |
         if [ -z "${MODEL_S3_BUCKET:-}" ]; then
           echo "::error::MODEL_S3_BUCKET is required for Linux ARM64 Vulkan cache"
+          exit 1
+        fi
+
+        if [ -z "${{ inputs.aws-role-to-assume }}" ]; then
+          echo "::error::aws-role-to-assume is required for Linux ARM64 Vulkan cache upload refresh"
+          exit 1
+        fi
+
+        if [ -z "${{ inputs.aws-region }}" ]; then
+          echo "::error::aws-region is required for Linux ARM64 Vulkan cache upload refresh"
           exit 1
         fi
 
@@ -94,20 +110,34 @@ runs:
         S3_KEY="vulkan-sdk-cache/linux-arm64-${SDK_VERSION}.tar.gz"
 
         echo "Vulkan SDK version: ${SDK_VERSION}"
+        echo "VULKAN_ARM64_S3_KEY=$S3_KEY" >> "$GITHUB_ENV"
 
         if aws s3 cp "s3://${MODEL_S3_BUCKET}/${S3_KEY}" /tmp/vulkan-arm64-cache.tar.gz 2>/dev/null; then
           echo "Found cached Vulkan SDK, extracting..."
           tar xzf /tmp/vulkan-arm64-cache.tar.gz -C "$HOME/vulkan"
           rm /tmp/vulkan-arm64-cache.tar.gz
+          echo "VULKAN_ARM64_CACHE_HIT=true" >> "$GITHUB_ENV"
         else
           echo "No cache found, building Vulkan SDK for ARM64..."
           ./vulkansdk --maxjobs
-
-          echo "Uploading compiled SDK to S3..."
           tar czf /tmp/vulkan-arm64-cache.tar.gz aarch64
-          aws s3 cp /tmp/vulkan-arm64-cache.tar.gz "s3://${MODEL_S3_BUCKET}/${S3_KEY}"
-          rm /tmp/vulkan-arm64-cache.tar.gz
+          echo "VULKAN_ARM64_CACHE_HIT=false" >> "$GITHUB_ENV"
         fi
+
+    - name: Refresh AWS credentials before Vulkan ARM64 cache upload
+      if: ${{ inputs.platform == 'linux' && inputs.arch == 'arm64' && env.VULKAN_ARM64_CACHE_HIT == 'false' }}
+      uses: aws-actions/configure-aws-credentials@8df5847569e6427dd6c4fb1cf565c83acfa8afa7 # 6.0.0
+      with:
+        role-to-assume: ${{ inputs.aws-role-to-assume }}
+        aws-region: ${{ inputs.aws-region }}
+
+    - name: Upload Vulkan ARM64 cache to S3
+      if: ${{ inputs.platform == 'linux' && inputs.arch == 'arm64' && env.VULKAN_ARM64_CACHE_HIT == 'false' }}
+      shell: bash
+      run: |
+        echo "Uploading compiled SDK to S3..."
+        aws s3 cp /tmp/vulkan-arm64-cache.tar.gz "s3://${MODEL_S3_BUCKET}/${VULKAN_ARM64_S3_KEY}"
+        rm /tmp/vulkan-arm64-cache.tar.gz
 
     - name: Export Vulkan SDK variables in Linux
       if: ${{ inputs.platform == 'linux' || inputs.platform == 'android' }}

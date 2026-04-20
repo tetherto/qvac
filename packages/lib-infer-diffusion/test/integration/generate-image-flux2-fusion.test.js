@@ -72,21 +72,20 @@ test('FLUX2-klein fusion — fuses multiple reference images', { timeout: 180000
   const modelPath = path.join(modelDir, downloadedModelName)
   t.ok(fs.existsSync(modelPath), 'Model file exists on disk')
 
-  const model = new ImgStableDiffusion(
-    {
-      logger: console,
-      diskPath: modelDir,
-      modelName: downloadedModelName,
-      llmModel: qwenName,
-      vaeModel: vaeName
+  const model = new ImgStableDiffusion({
+    files: {
+      model: path.join(modelDir, downloadedModelName),
+      llm: path.join(modelDir, qwenName),
+      vae: path.join(modelDir, vaeName)
     },
-    {
+    config: {
       threads: 4,
       device: useCpu ? 'cpu' : 'gpu',
       prediction: 'flux2_flow',
       diffusion_fa: true
-    }
-  )
+    },
+    logger: console
+  })
 
   const images = []
   const progressTicks = []

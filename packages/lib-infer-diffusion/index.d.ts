@@ -1,4 +1,3 @@
-import BaseInference from '@qvac/infer-base/WeightsProvider/BaseInference'
 import type { QvacResponse } from '@qvac/infer-base'
 import type QvacLogger from '@qvac/logging'
 
@@ -122,6 +121,33 @@ export interface SdConfig {
   [key: string]: string | number | boolean | undefined
 }
 
+export interface DiffusionFiles {
+  /** Absolute path to main model weights */
+  model: string
+  /** SD3: absolute path to CLIP-L text encoder */
+  clipL?: string
+  /** SDXL / SD3: absolute path to CLIP-G text encoder */
+  clipG?: string
+  /** SD3: absolute path to T5-XXL text encoder */
+  t5Xxl?: string
+  /** FLUX.2 [klein]: absolute path to Qwen3 4B text encoder (llm_path) */
+  llm?: string
+  /** Absolute path to VAE file */
+  vae?: string
+}
+
+export interface ImgStableDiffusionArgs {
+  files: DiffusionFiles
+  /**
+   * Native backend configuration. Optional — when omitted, the addon
+   * forwards an empty config object and the C++ layer falls back to
+   * stable-diffusion.cpp defaults for every parameter.
+   */
+  config?: SdConfig
+  logger?: QvacLogger | Console | null
+  opts?: { stats?: boolean }
+}
+
 export interface GenerationParams {
   prompt: string
   negative_prompt?: string
@@ -160,20 +186,20 @@ export interface GenerationParams {
   clip_skip?: number
   /**
    * Input image as PNG/JPEG bytes for img2img.
-   *   - FLUX / FLUX2 → in-context conditioning (ref_images)
-   *   - SD1.x / SD2.x / SDXL / SD3 → SDEdit (init_image + strength)
+   *   - FLUX.2 → in-context conditioning (single `ref_image`). `strength` is ignored.
+   *   - SD1.x / SD2.x / SDXL / SD3 → SDEdit (noised init + `strength`-controlled denoise).
    *
    * Mutually exclusive with `init_images`.
    */
   init_image?: Uint8Array
   /**
-   * **FLUX2-only.** Array of PNG/JPEG buffers for multi-reference "fusion"
+   * **FLUX.2 only.** Array of PNG/JPEG buffers for multi-reference "fusion"
    * conditioning. Each buffer becomes a separate reference image that the
-   * FLUX2 transformer attends to via joint attention (the RoPE path).
-   * Mutually exclusive with `init_image`; requires the context to be loaded
-   * with `llmModel` and `config.prediction: 'flux2_flow'`.
+   * FLUX.2 transformer attends to via joint attention with distinct RoPE
+   * positions. Mutually exclusive with `init_image`; requires the context
+   * to be loaded with `files.llm` and `config.prediction: 'flux2_flow'`.
    *
-   * Note on FLUX2-klein specifically: the Qwen3 text encoder does **not**
+   * Note on FLUX.2-klein specifically: the Qwen3 text encoder does **not**
    * receive vision tokens for these references, so `@image1`, `@image2`, …
    * tags in the prompt are just prose to the LLM. The actual fusion is
    * purely visual (attention between ref latents and target latents in the
@@ -187,22 +213,26 @@ export interface GenerationParams {
    *   `false` → all reference latents share the same RoPE index slot and
    *             tile into the same image coordinate space. Attention
    *             blends their features. **This is what produces visible
-   *             visual fusion on FLUX / FLUX2-klein.** Recommended.
+   *             visual fusion on FLUX.2-klein.** Recommended.
    *
    *   `true`  → each reference gets its own incrementing RoPE index. Use
    *             with models whose text encoder receives per-image vision
-   *             tokens (Qwen-Image-Edit, Z-Image-Omni). On FLUX2-klein
+   *             tokens (Qwen-Image-Edit, Z-Image-Omni). On FLUX.2-klein
    *             this typically makes one ref dominate and kills fusion.
    */
   increase_ref_index?: boolean
   /**
    * When `true` (default), every reference image in `init_images` (or the
-   * single `init_image` on FLUX models) is auto-resized to the target
-   * width/height before VAE-encoding. Disable only if you have manually
-   * pre-resized the buffers.
+   * single `init_image` on FLUX.2) is auto-resized to the target width /
+   * height before VAE-encoding. Disable only if you have manually
+   * pre-resized the buffers to the exact `width`/`height`.
    */
   auto_resize_ref_image?: boolean
-  /** img2img denoising strength (0.0–1.0). 0 = keep source, 1 = ignore source (not yet supported) */
+  /**
+   * img2img denoising strength (0.0 to 1.0). 0 = keep source, 1 = ignore source.
+   * SD1.x/SD2.x/SDXL/SD3 only. FLUX.2 ignores `strength` and routes `init_image`
+   * (or `init_images`) through in-context conditioning instead.
+   */
   strength?: number
 }
 
@@ -245,28 +275,13 @@ export interface RuntimeStats {
   seed: number
 }
 
-export interface ImgStableDiffusionArgs {
-  logger?: QvacLogger | Console | null
-  opts?: { stats?: boolean }
-  diskPath?: string
-  modelName: string
-  /** CLIP-L text encoder */
-  clipLModel?: string
-  /** CLIP-G text encoder */
-  clipGModel?: string
-  /** T5-XXL text encoder */
-  t5XxlModel?: string
-  /** FLUX.2 [klein]: Qwen3 4B text encoder (llm_path) */
-  llmModel?: string
-  vaeModel?: string
-}
+export default class ImgStableDiffusion {
+  protected addon: Addon | null
+  opts: { stats?: boolean }
+  logger: QvacLogger
+  state: { configLoaded: boolean }
 
-export default class ImgStableDiffusion extends BaseInference {
-  protected addon: Addon
-
-  constructor(args: ImgStableDiffusionArgs, config: SdConfig)
-
-  _load(): Promise<void>
+  constructor(args: ImgStableDiffusionArgs)
 
   load(): Promise<void>
 
@@ -275,6 +290,8 @@ export default class ImgStableDiffusion extends BaseInference {
   unload(): Promise<void>
 
   cancel(): Promise<void>
+
+  getState(): { configLoaded: boolean }
 }
 
 export { QvacResponse, RuntimeStats }

@@ -3,10 +3,308 @@
 const fs = require('bare-fs')
 const path = require('bare-path')
 const os = require('bare-os')
+const process = require('bare-process')
+
+// Dynamic require via path.join prevents bare-pack from statically resolving
+// these paths during mobile bundling (they live outside the addon package).
+let createPerformanceReporter, evaluateQuality, findGroundTruth
+const _scriptBase = path.join('..', '..', '..', '..', 'scripts', 'test-utils')
+try {
+  const perfReporterMod = require(path.join(_scriptBase, 'performance-reporter'))
+  const qualityMetricsMod = require(path.join(_scriptBase, 'quality-metrics'))
+  perfReporterMod.configure({ fs, path, process, os })
+  qualityMetricsMod.configure({ fs, path })
+  createPerformanceReporter = perfReporterMod.createPerformanceReporter
+  evaluateQuality = qualityMetricsMod.evaluateQuality
+  findGroundTruth = qualityMetricsMod.findGroundTruth
+} catch (_) {
+  // Mobile bundle — inline lightweight reporter that records metrics and
+  // can output the [PERF_REPORT_START]...[PERF_REPORT_END] markers to
+  // console so extract-from-log.js can capture them from Device Farm logs.
+  createPerformanceReporter = function (opts) {
+    const _results = []
+    const _startedAt = new Date().toISOString()
+    const _addon = (opts && opts.addon) || 'unknown'
+    const _addonType = (opts && opts.addonType) || 'generic'
+    const _device = {
+      name: platform,
+      platform,
+      os_version: '',
+      arch: os.arch ? os.arch() : '',
+      runner: 'device-farm'
+    }
+
+    return {
+      record (testName, metrics, extra) {
+        var entry = {
+          test: testName,
+          execution_provider: (extra && extra.execution_provider) || null,
+          metrics: Object.assign({
+            total_time_ms: null,
+            detection_time_ms: null,
+            recognition_time_ms: null,
+            text_regions: null
+          }, metrics),
+          input: (extra && extra.input) || null,
+          output: (extra && extra.output) || null,
+          quality: (extra && extra.quality) || undefined
+        }
+        if (extra && extra.image_path) entry.image_path = extra.image_path
+        _results.push(entry)
+      },
+      toJSON () {
+        return {
+          schema_version: '1.0',
+          addon: _addon,
+          addon_type: _addonType,
+          timestamp: _startedAt,
+          device: _device,
+          results: _results
+        }
+      },
+      writeReport () {
+        var json = JSON.stringify(this.toJSON())
+        var written = false
+        var dirs = []
+        if (global.testDir) dirs.push(global.testDir)
+        if (platform === 'android') {
+          dirs.push('/sdcard/Android/data/io.tether.test.qvac/files')
+          dirs.push('/storage/emulated/0/Android/data/io.tether.test.qvac/files')
+          dirs.push('/data/local/tmp')
+        }
+        dirs.push('/tmp')
+        for (var di = 0; di < dirs.length; di++) {
+          try {
+            try { fs.mkdirSync(dirs[di], { recursive: true }) } catch (_) {}
+            var p = path.join(dirs[di], 'perf-report.json')
+            fs.writeFileSync(p, json)
+            console.log('[PERF_REPORT_PATH]' + p)
+            written = true
+          } catch (e) {
+            console.log('[perf-reporter] write to ' + dirs[di] + ' failed: ' + e.message)
+          }
+        }
+        if (!written) {
+          console.log('[perf-reporter] all write locations failed')
+        }
+      },
+      writeStepSummary () {},
+      writeToConsole (opts) {
+        try {
+          var data = this.toJSON()
+          var lightweight = opts && opts.lightweight
+          data.results = data.results.map(function (r) {
+            var q = r.quality
+            if (lightweight && q) {
+              q = { cer: q.cer, wer: q.wer, word_recognition_rate: q.word_recognition_rate, keyword_detection_rate: q.keyword_detection_rate, key_value_accuracy: q.key_value_accuracy }
+            }
+            return { test: r.test, execution_provider: r.execution_provider, metrics: r.metrics, quality: q, image_path: r.image_path || null }
+          })
+          var json = JSON.stringify(data)
+          // Android logcat has per-entry size limits that vary by device.
+          // Use a conservative chunk size so header + content stays well
+          // under any limit, even with the ReactNativeJS wrapper overhead.
+          var CHUNK = 800
+          if (json.length <= CHUNK) {
+            console.log('[PERF_REPORT_START]' + json + '[PERF_REPORT_END]')
+          } else {
+            var id = Date.now().toString(36)
+            var n = Math.ceil(json.length / CHUNK)
+            for (var i = 0; i < n; i++) {
+              console.log('[PERF_CHUNK:' + id + ':' + i + ':' + n + ']' + json.substring(i * CHUNK, (i + 1) * CHUNK))
+            }
+          }
+        } catch (err) {
+          console.log('[perf-reporter] mobile console write failed: ' + err.message)
+        }
+      },
+      get length () { return _results.length }
+    }
+  }
+  // --- Inline quality metrics for mobile (pure computation, no external deps) ---
+
+  function _normalize (text) {
+    return String(text).replace(/\r\n/g, '\n').replace(/[\t\v\f]/g, ' ').replace(/ {2,}/g, ' ').trim().toLowerCase()
+  }
+
+  function _tokenize (text) {
+    return _normalize(text).split(/\s+/).filter(Boolean)
+  }
+
+  function _levenshtein (a, b) {
+    var m = a.length
+    var n = b.length
+    if (m === 0) return n
+    if (n === 0) return m
+    var prev = new Array(n + 1)
+    var curr = new Array(n + 1)
+    var j, i
+    for (j = 0; j <= n; j++) prev[j] = j
+    for (i = 1; i <= m; i++) {
+      curr[0] = i
+      for (j = 1; j <= n; j++) {
+        var cost = a[i - 1] === b[j - 1] ? 0 : 1
+        curr[j] = Math.min(prev[j] + 1, curr[j - 1] + 1, prev[j - 1] + cost)
+      }
+      var tmp = prev; prev = curr; curr = tmp
+    }
+    return prev[n]
+  }
+
+  function _round4 (v) { return Math.round(v * 10000) / 10000 }
+
+  evaluateQuality = function (ocrTexts, groundTruth) {
+    if (!groundTruth) return null
+    var texts = Array.isArray(ocrTexts) ? ocrTexts : [String(ocrTexts)]
+    var joined = texts.join(' ')
+    var gt = groundTruth
+    var result = { ground_truth_id: gt.id || null, description: gt.description || null }
+
+    if (gt.reference_text) {
+      var hTokens = _tokenize(joined).sort()
+      var rTokens = _tokenize(gt.reference_text).sort()
+      var h = hTokens.join(' ')
+      var r = rTokens.join(' ')
+      result.cer = _round4(r.length === 0 ? (h.length === 0 ? 0 : 1) : _levenshtein(h, r) / r.length)
+      result.wer = _round4(rTokens.length === 0 ? (hTokens.length === 0 ? 0 : 1) : _levenshtein(hTokens, rTokens) / rTokens.length)
+
+      var ocrLower = joined.toLowerCase()
+      var uniqueRef = {}
+      for (var ri = 0; ri < rTokens.length; ri++) { uniqueRef[rTokens[ri]] = true }
+      var refList = Object.keys(uniqueRef)
+      var wrrMatched = 0
+      var wrrMissed = []
+      for (var wri = 0; wri < refList.length; wri++) {
+        if (ocrLower.indexOf(refList[wri]) >= 0) wrrMatched++
+        else wrrMissed.push(refList[wri])
+      }
+      result.word_recognition_rate = _round4(refList.length > 0 ? wrrMatched / refList.length : 1)
+      result.words_recognized = wrrMatched
+      result.words_total = refList.length
+      result.words_missed = wrrMissed
+    }
+
+    if (gt.required_keywords && gt.required_keywords.length > 0) {
+      var lower = joined.toLowerCase()
+      var wordSet = {}
+      var _words = lower.split(/\s+/)
+      for (var wi = 0; wi < _words.length; wi++) { if (_words[wi]) wordSet[_words[wi]] = true }
+      var found = []
+      var missing = []
+      for (var ki = 0; ki < gt.required_keywords.length; ki++) {
+        var kwTarget = gt.required_keywords[ki].toLowerCase()
+        var kwMatch = lower.includes(kwTarget)
+        if (!kwMatch) {
+          var kwParts = kwTarget.split(/\s+/)
+          kwMatch = true
+          for (var kp = 0; kp < kwParts.length; kp++) {
+            if (kwParts[kp] && !wordSet[kwParts[kp]]) { kwMatch = false; break }
+          }
+        }
+        if (kwMatch) found.push(gt.required_keywords[ki])
+        else missing.push(gt.required_keywords[ki])
+      }
+      result.keyword_detection_rate = _round4(found.length / gt.required_keywords.length)
+      result.keywords_found = found.length
+      result.keywords_total = gt.required_keywords.length
+      result.keywords_missing = missing
+    }
+
+    if (gt.key_values && gt.key_values.length > 0) {
+      var lowerKV = joined.toLowerCase()
+      var kvWordSet = {}
+      var _kvWords = lowerKV.split(/\s+/)
+      for (var wj = 0; wj < _kvWords.length; wj++) { if (_kvWords[wj]) kvWordSet[_kvWords[wj]] = true }
+      var matched = []
+      var unmatched = []
+      for (var vi = 0; vi < gt.key_values.length; vi++) {
+        var pair = gt.key_values[vi]
+        var kvKeyLower = pair.key.toLowerCase()
+        var keyFound = lowerKV.includes(kvKeyLower)
+        if (!keyFound) {
+          var keyParts = kvKeyLower.split(/\s+/)
+          keyFound = true
+          for (var kpi = 0; kpi < keyParts.length; kpi++) {
+            if (keyParts[kpi] && !kvWordSet[keyParts[kpi]]) { keyFound = false; break }
+          }
+        }
+        var valueFound = lowerKV.includes(String(pair.value).toLowerCase())
+        if (keyFound && valueFound) matched.push(pair)
+        else unmatched.push({ key: pair.key, value: pair.value, key_found: keyFound, value_found: valueFound })
+      }
+      result.key_value_accuracy = _round4(matched.length / gt.key_values.length)
+      result.key_values_matched = matched.length
+      result.key_values_total = gt.key_values.length
+      result.key_values_unmatched = unmatched
+    }
+
+    return result
+  }
+
+  findGroundTruth = function (imagePath) {
+    var base = path.basename(imagePath).replace(/\.[^.]+$/, '')
+    var gtFilename = base + '.quality.json'
+
+    // On mobile, look for ground truth in global.assetPaths
+    if (global.assetPaths) {
+      var assetKey = '../../testAssets/' + gtFilename
+      var gtPath = global.assetPaths[assetKey]
+      if (gtPath) {
+        try {
+          var raw = fs.readFileSync(gtPath.replace('file://', ''), 'utf-8')
+          return JSON.parse(raw)
+        } catch (e) {
+          console.log('[quality] failed to load mobile ground truth: ' + e.message)
+        }
+      }
+    }
+
+    // Fallback: look relative to imagePath (same logic as desktop)
+    var dir = path.dirname(imagePath)
+    var candidates = [
+      path.join(dir, gtFilename),
+      path.join(dir, '..', 'quality', gtFilename),
+      path.join(dir, 'quality', gtFilename)
+    ]
+    for (var ci = 0; ci < candidates.length; ci++) {
+      try {
+        var exists = false
+        try { fs.statSync(candidates[ci]); exists = true } catch (_) {}
+        if (exists) {
+          var data = fs.readFileSync(candidates[ci], 'utf-8')
+          return JSON.parse(data)
+        }
+      } catch (_) {}
+    }
+    return null
+  }
+}
 
 const platform = os.platform()
 const isMobile = platform === 'ios' || platform === 'android'
 const isWindows = platform === 'win32'
+
+// Singleton performance reporter — collects metrics across all OCR integration tests
+const _perfReporter = createPerformanceReporter({
+  addon: 'ocr-onnx',
+  addonType: 'ocr'
+})
+
+const _reportPath = path.resolve('.', 'test/results/performance-report.json')
+let _reportScheduled = false
+
+function _flushPerfReport () {
+  if (_perfReporter.length > 0) {
+    _perfReporter.writeReport(_reportPath)
+    _perfReporter.writeToConsole()
+  }
+}
+
+function _scheduleReportWrite () {
+  if (_reportScheduled) return
+  _reportScheduled = true
+  process.on('exit', _flushPerfReport)
+}
 
 // Windows CI runners have limited memory (~7GB): use BASIC optimization,
 // disable BFC arena pre-allocation, and limit to 1 thread to reduce
@@ -107,8 +405,41 @@ function sha256 (buffer) {
 }
 
 /**
+ * Resolves the download URL for a DocTR model.
+ * On mobile, checks ocr-model-urls.json first (supports S3 presigned URLs),
+ * then falls back to the hardcoded GitHub release URL.
+ */
+function _resolveDoctrUrl (filename) {
+  const model = DOCTR_MODELS[filename]
+  if (!model) return null
+
+  if (!isMobile) return model.url
+
+  const jsonKey = 'doctr_' + filename.replace('.onnx', '') + '_url'
+  let urlConfig = null
+  if (global.assetPaths) {
+    const configPath = global.assetPaths['../../testAssets/ocr-model-urls.json']
+    if (configPath) {
+      try {
+        urlConfig = JSON.parse(fs.readFileSync(configPath.replace('file://', ''), 'utf8'))
+      } catch (_) {}
+    }
+  }
+  if (!urlConfig) {
+    for (const p of ['../../testAssets/ocr-model-urls.json', '../testAssets/ocr-model-urls.json']) {
+      if (fs.existsSync(p)) {
+        try { urlConfig = JSON.parse(fs.readFileSync(p, 'utf8')); break } catch (_) {}
+      }
+    }
+  }
+  if (urlConfig && urlConfig[jsonKey]) return urlConfig[jsonKey]
+  return model.url
+}
+
+/**
  * Downloads a single DocTR model if not already cached.
  * Downloads from OnnxTR GitHub releases with retry on transient errors.
+ * On mobile, checks ocr-model-urls.json first for presigned/alternative URLs.
  * Verifies SHA-256 checksum after download.
  * @param {string} filename - Model filename (e.g., 'db_resnet50.onnx')
  */
@@ -119,14 +450,16 @@ async function downloadDoctrModel (filename) {
   const model = DOCTR_MODELS[filename]
   if (!model) throw new Error(`No download URL for DocTR model: ${filename}`)
 
-  console.log(`Downloading ${filename} from GitHub releases...`)
+  const downloadUrl = _resolveDoctrUrl(filename)
+  console.log(`Downloading ${filename}...`)
+  console.log(`   URL: ${downloadUrl.substring(0, 80)}...`)
 
   const fetch = require('bare-fetch')
-  const maxAttempts = 3
+  const maxAttempts = isMobile ? 5 : 3
   let lastError
   for (let attempt = 1; attempt <= maxAttempts; attempt++) {
     try {
-      const response = await fetch(model.url)
+      const response = await fetch(downloadUrl)
       if (!response.ok) throw new Error(`HTTP ${response.status} downloading ${filename}`)
       const buffer = Buffer.from(await response.arrayBuffer())
       if (model.sha256) {
@@ -142,8 +475,8 @@ async function downloadDoctrModel (filename) {
     } catch (e) {
       lastError = e
       if (attempt < maxAttempts) {
-        const delayMs = attempt * 5000
-        console.log(`   Attempt ${attempt} failed: ${e.message}. Retrying in ${delayMs / 1000}s...`)
+        const delayMs = isMobile ? attempt * 10000 : attempt * 5000
+        console.log(`   Attempt ${attempt}/${maxAttempts} failed: ${e.message}. Retrying in ${delayMs / 1000}s...`)
         await new Promise(resolve => setTimeout(resolve, delayMs))
       }
     }
@@ -154,15 +487,26 @@ async function downloadDoctrModel (filename) {
 /**
  * Ensures all requested DocTR models are available.
  * Downloads from OnnxTR GitHub releases if not already present.
+ * On mobile, returns null instead of crashing if downloads fail
+ * (Device Farm has intermittent connectivity to GitHub releases).
  * @param {string[]} [models] - Model filenames to ensure. Defaults to all 4 models.
- * @returns {Promise<Object>} Map of model name (without extension) to full path
+ * @returns {Promise<Object|null>} Map of model name (without extension) to full path, or null on mobile failure
  */
 async function ensureDoctrModels (models) {
   if (!models) models = Object.keys(DOCTR_MODEL_URLS)
   fs.mkdirSync(DOCTR_MODELS_DIR, { recursive: true })
 
   for (const filename of models) {
-    await downloadDoctrModel(filename)
+    try {
+      await downloadDoctrModel(filename)
+    } catch (e) {
+      if (isMobile) {
+        console.log(`[ensureDoctrModels] Failed to download ${filename}: ${e.message}`)
+        console.log('[ensureDoctrModels] Returning null — DocTR tests will be skipped on this device')
+        return null
+      }
+      throw e
+    }
   }
   const paths = {}
   for (const filename of models) {
@@ -268,19 +612,87 @@ async function ensureModelPath (modelName) {
  * @param {Array} outputTexts - Array of detected texts
  * @returns {string} Formatted performance metrics string
  */
-function formatOCRPerformanceMetrics (label, stats, outputTexts = []) {
+/**
+ * Formats OCR performance metrics for test output.
+ *
+ * @param {string} label - Test label prefix (e.g., '[OCR] [GPU]')
+ * @param {Object} stats - Stats object from response.stats
+ * @param {Array} outputTexts - Array of detected texts
+ * @param {Object} [opts] - Optional settings
+ * @param {string} [opts.imagePath] - Path to the source image (triggers quality evaluation)
+ * @param {Object} [opts.groundTruth] - Explicit ground truth (overrides auto-discovery)
+ * @returns {string} Formatted performance metrics string
+ */
+function formatOCRPerformanceMetrics (label, stats, outputTexts = [], opts) {
   const totalTimeMs = stats.totalTime ? stats.totalTime * 1000 : 0
   const detectionTimeMs = stats.detectionTime ? stats.detectionTime * 1000 : 0
   const recognitionTimeMs = stats.recognitionTime ? stats.recognitionTime * 1000 : 0
   const textRegionsCount = stats.textRegionsCount || 0
   const totalSeconds = (totalTimeMs / 1000).toFixed(2)
 
-  return `${label} Performance Metrics:
+  const ep = /\[gpu\]/i.test(label) ? 'gpu' : /\[cpu\]/i.test(label) ? 'cpu' : null
+
+  let quality = null
+  const gt = (opts && opts.groundTruth) || (opts && opts.imagePath ? findGroundTruth(opts.imagePath) : null)
+  if (gt && outputTexts.length > 0) {
+    try {
+      quality = evaluateQuality(outputTexts, gt)
+    } catch (err) {
+      console.log(`[quality] evaluation failed: ${err.message}`)
+    }
+  }
+
+  if (!(opts && opts.skipReport)) {
+    _perfReporter.record(label, {
+      total_time_ms: Math.round(totalTimeMs),
+      detection_time_ms: Math.round(detectionTimeMs),
+      recognition_time_ms: Math.round(recognitionTimeMs),
+      text_regions: textRegionsCount
+    }, {
+      execution_provider: ep,
+      output: JSON.stringify(outputTexts),
+      quality,
+      image_path: (opts && opts.imagePath) || null
+    })
+    _scheduleReportWrite()
+
+    if (isMobile) {
+      _perfReporter.writeReport()
+      const isCheckpoint = _perfReporter.length % 6 === 0
+      _perfReporter.writeToConsole({ lightweight: !isCheckpoint })
+    }
+  }
+
+  let out = `${label} Performance Metrics:
     - Total time: ${totalTimeMs.toFixed(0)}ms (${totalSeconds}s)
     - Detection time: ${detectionTimeMs.toFixed(0)}ms
     - Recognition time: ${recognitionTimeMs.toFixed(0)}ms
     - Text regions detected: ${textRegionsCount}
     - Detected texts: ${JSON.stringify(outputTexts)}`
+
+  if (quality) {
+    out += '\n    --- Quality ---'
+    if (quality.cer !== undefined) out += `\n    - CER: ${(quality.cer * 100).toFixed(1)}%`
+    if (quality.wer !== undefined) out += `\n    - WER: ${(quality.wer * 100).toFixed(1)}%`
+    if (quality.word_recognition_rate !== undefined) {
+      out += `\n    - Word Recognition: ${quality.words_recognized}/${quality.words_total} (${(quality.word_recognition_rate * 100).toFixed(1)}%)`
+    }
+    if (quality.keyword_detection_rate !== undefined) {
+      out += `\n    - Keywords: ${quality.keywords_found}/${quality.keywords_total} (${(quality.keyword_detection_rate * 100).toFixed(1)}%)`
+    }
+    if (quality.key_value_accuracy !== undefined) {
+      out += `\n    - KV Accuracy: ${quality.key_values_matched}/${quality.key_values_total} (${(quality.key_value_accuracy * 100).toFixed(1)}%)`
+    }
+    if (quality.keywords_missing && quality.keywords_missing.length > 0) {
+      out += `\n    - Missing keywords: ${JSON.stringify(quality.keywords_missing)}`
+    }
+    if (quality.key_values_unmatched && quality.key_values_unmatched.length > 0) {
+      const unmatchedKeys = quality.key_values_unmatched.map(u => u.key)
+      out += `\n    - Unmatched KV keys: ${JSON.stringify(unmatchedKeys)}`
+    }
+  }
+
+  return out
 }
 
 /**
@@ -374,5 +786,6 @@ module.exports = {
   DOCTR_MODELS_DIR,
   formatOCRPerformanceMetrics,
   safeUnload,
-  runDoctrOCR
+  runDoctrOCR,
+  flushPerfReport: _flushPerfReport
 }
