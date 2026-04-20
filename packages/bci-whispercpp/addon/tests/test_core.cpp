@@ -88,8 +88,9 @@ TEST(NeuralProcessor, PaddedFramesAreZero) {
 
   float lastFrameSum = 0;
   int lastFrame = NeuralProcessor::K_WHISPER_MEL_FRAMES - 1;
+  // mel output is mel-major: data[bin * n_frames + frame]
   for (int m = 0; m < NeuralProcessor::K_WHISPER_N_MEL; ++m) {
-    lastFrameSum += std::abs(result[lastFrame * NeuralProcessor::K_WHISPER_N_MEL + m]);
+    lastFrameSum += std::abs(result[m * NeuralProcessor::K_WHISPER_MEL_FRAMES + lastFrame]);
   }
   EXPECT_FLOAT_EQ(lastFrameSum, 0.0F);
 }
