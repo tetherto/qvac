@@ -84,7 +84,7 @@ jobs:
           token: ${{ secrets.PAT_TOKEN }}
           sparse-checkout: ${{ inputs.project-directory }}
 
-      - uses: actions/setup-node@53b83947a5a98c8d113130e565377fae1a50d02f # 6.3.0
+      - uses: actions/setup-node@48b55a011bda9f5d6aeb4c2d9c7362e8dae4041e # 6.4.0
         with:
           node-version: 22
 
@@ -210,7 +210,7 @@ jobs:
       - name: Restore models cache
         id: models-cache
         if: inputs.cache-models != false
-        uses: actions/cache/restore@v4
+        uses: actions/cache/restore@v5
         with:
           path: ${{ inputs.working-directory }}/.qvac-cache
           key: qvac-models-${{ hashFiles('packages/sdk/models/registry/models.ts') }}
@@ -224,7 +224,7 @@ jobs:
       # others get a non-fatal "unable to reserve" warning which is expected.
       - name: Save models cache
         if: steps.models-cache.outputs.cache-hit != 'true' && inputs.cache-models != false
-        uses: actions/cache/save@v4
+        uses: actions/cache/save@v5
         with:
           path: ${{ inputs.working-directory }}/.qvac-cache
           key: qvac-models-${{ hashFiles('packages/sdk/models/registry/models.ts') }}
@@ -387,7 +387,7 @@ jobs:
 
       - name: Upload consumer logs
         if: always()
-        uses: actions/upload-artifact@bbbca2ddaa5d8feaa63e36b76fdaad77386f024f # 7.0.0
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # 7.0.1
         with:
           name: consumer-log-${{ steps.runid.outputs.platform }}
           path: ${{ inputs.working-directory }}/consumer.log
@@ -395,7 +395,7 @@ jobs:
 
       - name: Upload results
         if: always()
-        uses: actions/upload-artifact@bbbca2ddaa5d8feaa63e36b76fdaad77386f024f # 7.0.0
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # 7.0.1
         with:
           name: results-${{ steps.runid.outputs.platform }}-${{ github.run_number }}
           path: ${{ inputs.working-directory }}/reports/
@@ -403,7 +403,7 @@ jobs:
 
       - name: Upload baseline (main/develop only)
         if: always() && (github.ref == 'refs/heads/main' || github.ref == 'refs/heads/develop')
-        uses: actions/upload-artifact@bbbca2ddaa5d8feaa63e36b76fdaad77386f024f # 7.0.0
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # 7.0.1
         with:
           name: baseline-${{ steps.runid.outputs.platform }}
           path: ${{ inputs.working-directory }}/reports/results-*.json
@@ -437,7 +437,7 @@ jobs:
           token: ${{ secrets.PAT_TOKEN }}
           sparse-checkout: ${{ inputs.project-directory }}
 
-      - uses: actions/setup-node@53b83947a5a98c8d113130e565377fae1a50d02f # 6.3.0
+      - uses: actions/setup-node@48b55a011bda9f5d6aeb4c2d9c7362e8dae4041e # 6.4.0
         with:
           node-version: 22
 
@@ -607,7 +607,7 @@ jobs:
           fs.writeFileSync('comment.md', comment, 'utf8');
 
       - name: Comment on PR
-        uses: actions/github-script@ed597411d8f924073f98dfc5c65a23a2325f34cd # 8.0.0
+        uses: actions/github-script@3a2844b7e9c422d3c10d287c895573f7108da1b3 # 9.0.0
         with:
           script: |
             const fs = require('fs');
