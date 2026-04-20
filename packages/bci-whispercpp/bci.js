@@ -14,6 +14,16 @@ const state = Object.freeze({
 
 const END_OF_INPUT = 'end of job'
 
+// Upper bound on buffered neural-signal bytes between append() calls.
+// Neural data is ~1 MB/s at 512ch * 50 Hz * 4 B, so 500 MB ~= 8 minutes of
+// signal. The bound matches qvac-lib-infer-whispercpp and protects against
+// runaway producers.
+const MAX_BUFFERED_BYTES = 500 * 1024 * 1024
+
+function nextSafeId (current) {
+  return current >= Number.MAX_SAFE_INTEGER ? 1 : current + 1
+}
+
 /**
  * Low-level interface between the Bare C++ BCI addon and the JS runtime.
  * Accepts neural signal data (Uint8Array) instead of audio.
@@ -32,6 +42,7 @@ class BCIInterface {
     this._nextJobId = 1
     this._activeJobId = null
     this._bufferedSignal = []
+    this._bufferedBytes = 0
     this._state = state.LOADING
 
     checkConfig(configurationParams)
@@ -156,6 +167,7 @@ class BCIInterface {
     try {
       await this._binding.cancel(this._handle, jobId)
       this._bufferedSignal = []
+      this._bufferedBytes = 0
       this._activeJobId = null
       this._setState(state.LISTENING)
     } catch (err) {
@@ -193,26 +205,38 @@ class BCIInterface {
         }
         if (!accepted) {
           this._setState(state.LISTENING)
-          throw new Error('Cannot set new job: a job is already set or being processed')
+          throw new QvacErrorAddonBCI({ code: ERR_CODES.JOB_ALREADY_RUNNING })
         }
 
         this._activeJobId = currentJobId
-        this._nextJobId += 1
+        this._nextJobId = nextSafeId(this._nextJobId)
         this._bufferedSignal = []
+        this._bufferedBytes = 0
         this._setState(state.PROCESSING)
         return currentJobId
       }
 
       if (data?.type === 'neural') {
         if (!(data.input instanceof Uint8Array)) {
-          throw new Error('Neural signal input must be Uint8Array')
+          throw new QvacErrorAddonBCI({
+            code: ERR_CODES.INVALID_NEURAL_INPUT,
+            adds: 'input must be Uint8Array'
+          })
+        }
+        if (this._bufferedBytes + data.input.byteLength > MAX_BUFFERED_BYTES) {
+          throw new QvacErrorAddonBCI({
+            code: ERR_CODES.BUFFER_LIMIT_EXCEEDED,
+            adds: MAX_BUFFERED_BYTES + ' bytes'
+          })
         }
         this._bufferedSignal.push(data.input)
+        this._bufferedBytes += data.input.byteLength
         return this._nextJobId
       }
 
       throw new Error(`Unknown append input type: ${data?.type}`)
     } catch (err) {
+      if (err instanceof QvacErrorAddonBCI) throw err
       throw new QvacErrorAddonBCI({
         code: ERR_CODES.FAILED_TO_APPEND,
         adds: err.message,
@@ -227,21 +251,14 @@ class BCIInterface {
    * @param {Uint8Array} data.input - binary neural signal data
    */
   async runJob (data) {
+    const candidateJobId = this._nextJobId
+    let accepted = false
     try {
-      this._activeJobId = this._nextJobId
-      this._nextJobId += 1
-      this._setState(state.PROCESSING)
-      const accepted = this._binding.runJob(this._handle, {
+      accepted = this._binding.runJob(this._handle, {
         type: 'neural',
         input: data.input
       })
-      if (!accepted) {
-        this._activeJobId = null
-        this._setState(state.LISTENING)
-      }
-      return accepted
     } catch (err) {
-      this._activeJobId = null
       this._setState(state.LISTENING)
       throw new QvacErrorAddonBCI({
         code: ERR_CODES.FAILED_TO_APPEND,
@@ -249,6 +266,16 @@ class BCIInterface {
         cause: err
       })
     }
+
+    if (!accepted) {
+      this._setState(state.LISTENING)
+      return false
+    }
+
+    this._activeJobId = candidateJobId
+    this._nextJobId = nextSafeId(this._nextJobId)
+    this._setState(state.PROCESSING)
+    return accepted
   }
 
   async status () {
@@ -266,6 +293,7 @@ class BCIInterface {
       this._binding.destroyInstance(this._handle)
       this._handle = null
       this._bufferedSignal = []
+      this._bufferedBytes = 0
       this._activeJobId = null
       this._setState(state.IDLE)
     } catch (err) {
@@ -297,4 +325,6 @@ class BCIInterface {
   }
 }
 
-module.exports = { BCIInterface }
+BCIInterface.END_OF_INPUT = END_OF_INPUT
+
+module.exports = { BCIInterface, END_OF_INPUT, MAX_BUFFERED_BYTES, nextSafeId }

@@ -1,7 +1,9 @@
 declare interface BCIConfig {
-  smooth_kernel_std?: number;
-  smooth_kernel_size?: number;
-  sample_rate?: number;
+  /**
+   * Index into the day-specific projection matrices in bci-embedder.bin.
+   * Must match the recording day the neural signal was captured on.
+   * Defaults to 0.
+   */
   day_idx?: number;
 }
 
@@ -17,13 +19,20 @@ declare interface WhisperConfig {
   [key: string]: unknown;
 }
 
+declare interface BCIWhispercppFiles {
+  model: string;
+}
+
 declare interface BCIWhispercppArgs {
-  modelPath: string;
+  files: BCIWhispercppFiles;
   logger?: {
     debug(...args: unknown[]): void;
     info(...args: unknown[]): void;
     warn(...args: unknown[]): void;
     error(...args: unknown[]): void;
+  };
+  opts?: {
+    stats?: boolean;
   };
 }
 
@@ -49,14 +58,22 @@ declare interface TranscriptSegment {
   id: number;
 }
 
-declare interface TranscriptionResult {
-  text: string;
-  segments: TranscriptSegment[];
-  stats: Record<string, number> | null;
+declare interface QvacResponse {
+  output: unknown[];
+  stats: Record<string, number>;
+  onUpdate(callback: (data: unknown) => void): QvacResponse;
+  onFinish(callback: (result: unknown) => void): QvacResponse;
+  onError(callback: (error: Error) => void): QvacResponse;
+  onCancel(callback: () => void): QvacResponse;
+  await(): Promise<unknown[]>;
+  cancel(): Promise<void>;
+  iterate(): AsyncGenerator<unknown>;
+  getLatest(): unknown;
 }
 
 /**
  * BCI neural signal transcription client powered by whisper.cpp.
+ * Uses createJobHandler + exclusiveRunQueue from @qvac/infer-base.
  */
 declare class BCIWhispercpp {
   constructor(args: BCIWhispercppArgs, config?: BCIWhispercppConfig);
@@ -64,17 +81,23 @@ declare class BCIWhispercpp {
   /** Load and activate the model. */
   load(): Promise<void>;
 
-  /** Transcribe a neural signal binary file. */
-  transcribeFile(filePath: string): Promise<TranscriptionResult>;
+  /** Transcribe a neural signal binary file (convenience wrapper). */
+  transcribeFile(filePath: string): Promise<QvacResponse>;
 
-  /** Transcribe neural signal data (batch). */
-  transcribe(neuralData: Uint8Array): Promise<TranscriptionResult>;
+  /** Transcribe neural signal data (batch). Returns QvacResponse. */
+  transcribe(neuralData: Uint8Array): Promise<QvacResponse>;
 
   /** Cancel current inference. */
   cancel(): Promise<void>;
 
-  /** Destroy the instance and release resources. */
+  /** Unload the model and release native resources. */
+  unload(): Promise<void>;
+
+  /** Destroy the instance, unload, and mark as permanently destroyed. */
   destroy(): Promise<void>;
+
+  /** Get current state (configLoaded, destroyed). */
+  getState(): { configLoaded: boolean; destroyed: boolean };
 }
 
 /**
@@ -89,10 +112,11 @@ declare namespace BCIWhispercpp {
     BCIWhispercpp,
     BCIConfig,
     WhisperConfig,
+    BCIWhispercppFiles,
     BCIWhispercppArgs,
     BCIWhispercppConfig,
     TranscriptSegment,
-    TranscriptionResult,
+    QvacResponse,
     computeWER,
   };
 }

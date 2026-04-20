@@ -1,48 +1,85 @@
 'use strict'
 
 const fs = require('bare-fs')
+const QvacLogger = require('@qvac/logging')
+const { createJobHandler, exclusiveRunQueue } = require('@qvac/infer-base')
 
 const { BCIInterface } = require('./bci')
 const { checkConfig } = require('./configChecker')
 const { QvacErrorAddonBCI, ERR_CODES } = require('./lib/error')
 const { computeWER } = require('./lib/wer')
 
-const END_OF_INPUT = 'end of job'
-
 /**
- * High-level BCI transcription client powered by whisper.cpp.
- * Accepts neural signal streams and returns text transcriptions.
+ * BCI neural signal transcription client powered by whisper.cpp.
+ *
+ * Follows the same architecture as TranscriptionWhispercpp / LlmLlamacpp:
+ * standalone class using createJobHandler + exclusiveRunQueue from
+ * @qvac/infer-base.
  */
 class BCIWhispercpp {
   /**
    * @param {Object} args
-   * @param {string} args.modelPath - path to whisper GGML model file
-   * @param {Object} [args.logger] - optional logger
+   * @param {Object} args.files - local model file paths
+   * @param {string} args.files.model - path to the BCI GGML model file
+   * @param {Object} [args.logger] - optional logger instance
+   * @param {Object} [args.opts] - optional options (e.g. { stats: true })
    * @param {Object} config - inference configuration
    * @param {Object} config.whisperConfig - whisper decoding params
-   * @param {Object} [config.bciConfig] - BCI-specific params
+   * @param {Object} [config.bciConfig] - BCI-specific params (e.g. { day_idx: 1 })
    * @param {Object} [config.contextParams] - whisper context params
+   * @param {Object} [config.miscConfig] - miscellaneous config
    */
-  constructor ({ modelPath, logger = null }, config = {}) {
-    this._modelPath = modelPath
-    this._logger = logger || { debug () {}, info () {}, warn () {}, error () {} }
-    this._config = config
-    this._addon = null
-    this._hasActiveResponse = false
-    this._pendingResolve = null
-    this._pendingReject = null
-    this._segments = []
-    this._stats = null
+  constructor ({ files, logger = null, opts = {} }, config = {}) {
+    if (!files || typeof files.model !== 'string' || files.model.length === 0) {
+      throw new QvacErrorAddonBCI({
+        code: ERR_CODES.MODEL_FILE_NOT_FOUND,
+        adds: 'files.model is required'
+      })
+    }
 
-    if (!this._modelPath || !fs.existsSync(this._modelPath)) {
-      throw new Error(`Model file doesn't exist: ${this._modelPath}`)
+    if (!fs.existsSync(files.model)) {
+      throw new QvacErrorAddonBCI({
+        code: ERR_CODES.MODEL_FILE_NOT_FOUND,
+        adds: files.model
+      })
+    }
+
+    this._files = { model: files.model }
+    this._config = config
+    this.opts = opts
+    this.logger = new QvacLogger(logger)
+    this._withExclusiveRun = exclusiveRunQueue()
+    this._job = createJobHandler({
+      cancel: () => this.addon?.cancel()
+    })
+
+    this.addon = null
+    this.state = {
+      configLoaded: false,
+      destroyed: false
     }
   }
 
-  /**
-   * Load and activate the model.
-   */
+  getState () {
+    return this.state
+  }
+
   async load () {
+    if (this.state.destroyed) {
+      throw new QvacErrorAddonBCI({
+        code: ERR_CODES.MODEL_NOT_LOADED,
+        adds: 'instance was destroyed'
+      })
+    }
+    if (this.state.configLoaded) {
+      this.logger.info('Reload requested - unloading existing model first')
+      await this.unload()
+    }
+    await this._load()
+    this.state.configLoaded = true
+  }
+
+  async _load () {
     const whisperConfig = {
       language: 'en',
       temperature: 0.0,
@@ -53,7 +90,7 @@ class BCIWhispercpp {
 
     const configurationParams = {
       contextParams: {
-        model: this._modelPath,
+        model: this._files.model,
         ...(this._config.contextParams || {})
       },
       whisperConfig,
@@ -70,22 +107,22 @@ class BCIWhispercpp {
     checkConfig(configurationParams)
 
     const binding = require('./binding')
-    this._addon = new BCIInterface(
+    this.addon = new BCIInterface(
       binding,
       configurationParams,
       this._outputCallback.bind(this),
-      this._logger.info.bind(this._logger)
+      this.logger.info.bind(this.logger)
     )
 
-    await this._addon.activate()
-    this._logger.info('BCI addon activated')
+    await this.addon.activate()
+    this.logger.info('BCI addon activated')
   }
 
   /**
    * Transcribe a neural signal from a binary file.
-   * Binary format: [uint32 numTimesteps, uint32 numChannels, float32[] data]
+   * Convenience wrapper around transcribe().
    * @param {string} filePath - path to .bin neural signal file
-   * @returns {Promise<Object>} - { text, segments, stats }
+   * @returns {Promise<QvacResponse>}
    */
   async transcribeFile (filePath) {
     const data = fs.readFileSync(filePath)
@@ -94,76 +131,91 @@ class BCIWhispercpp {
 
   /**
    * Transcribe neural signal data (batch mode).
+   * Returns a QvacResponse; use response.await() for the final output array,
+   * response.onUpdate() for streaming updates, response.stats for runtime stats.
    * @param {Uint8Array} neuralData - binary neural signal
-   * @returns {Promise<Object>} - { text, segments, stats }
+   * @returns {Promise<QvacResponse>}
    */
   async transcribe (neuralData) {
-    if (this._hasActiveResponse) {
-      throw new QvacErrorAddonBCI({ code: ERR_CODES.JOB_ALREADY_RUNNING })
+    const response = this._job.start()
+
+    let accepted
+    try {
+      accepted = await this.addon.runJob({ input: neuralData })
+    } catch (err) {
+      this._job.fail(err)
+      throw err
+    }
+    if (!accepted) {
+      const error = new QvacErrorAddonBCI({ code: ERR_CODES.JOB_ALREADY_RUNNING })
+      this._job.fail(error)
+      throw error
     }
 
-    return new Promise((resolve, reject) => {
-      this._beginJob(resolve, reject)
-
-      this._addon.runJob({ input: neuralData }).catch((err) => {
-        this._clearJob()
-        reject(err)
-      })
-    })
-  }
-
-  _beginJob (resolve, reject) {
-    this._segments = []
-    this._stats = null
-    this._hasActiveResponse = true
-    this._pendingResolve = resolve
-    this._pendingReject = reject
-  }
-
-  _clearJob () {
-    this._hasActiveResponse = false
-    this._pendingResolve = null
-    this._pendingReject = null
+    const finalized = response.await()
+    finalized.catch(() => {})
+    response.await = () => finalized
+    return response
   }
 
   _outputCallback (addon, event, jobId, data, error) {
-    if (event === 'Output') {
-      if (Array.isArray(data)) {
-        this._segments.push(...data)
-      } else if (data && data.text) {
-        this._segments.push(data)
-      }
-    } else if (event === 'JobEnded') {
-      this._stats = data
-      const segments = this._segments
-      const stats = this._stats
-      const resolve = this._pendingResolve
-      this._clearJob()
-      if (resolve) {
-        const text = segments.map(s => s.text).join('').trim()
-        resolve({ text, segments, stats })
-      }
-    } else if (event === 'Error') {
-      const reject = this._pendingReject
-      this._clearJob()
-      if (reject) {
-        reject(new Error(error || 'Transcription failed'))
-      }
+    if (event === 'Error') {
+      this.logger.error('Job ' + jobId + ' failed with error: ' + error)
+      this._job.fail(error)
+      return
     }
+    if (event === 'Output') {
+      this._job.output(data)
+      return
+    }
+    if (event === 'JobEnded') {
+      this.logger.info('Job ' + jobId + ' completed')
+      if (this.opts.stats) {
+        this._job.end(data)
+      } else {
+        this._job.end()
+      }
+      return
+    }
+    this.logger.debug('Received event for job ' + jobId + ': ' + event)
   }
 
   async cancel () {
-    if (this._addon?.cancel) {
-      await this._addon.cancel()
+    if (this.addon?.cancel) {
+      await this.addon.cancel()
     }
-    this._clearJob()
+    if (this._job.active) {
+      this._job.fail(new Error('Job cancelled'))
+    }
+  }
+
+  async unload () {
+    return await this._withExclusiveRun(async () => {
+      if (this._job.active) {
+        this._job.fail(new Error('Model was unloaded'))
+      }
+      await this.cancel()
+      if (this.addon) {
+        await this.addon.destroyInstance()
+        this.addon = null
+      }
+      this.state.configLoaded = false
+    })
   }
 
   async destroy () {
-    await this.cancel()
-    if (this._addon) {
-      await this._addon.destroyInstance()
-    }
+    return await this._withExclusiveRun(async () => {
+      if (this._job.active) {
+        this._job.fail(new Error('Model was destroyed'))
+      }
+      await this.cancel()
+      if (this.addon) {
+        await this.addon.destroyInstance()
+        this.addon = null
+      }
+      this.state.configLoaded = false
+      this.state.destroyed = true
+    })
   }
 }
 

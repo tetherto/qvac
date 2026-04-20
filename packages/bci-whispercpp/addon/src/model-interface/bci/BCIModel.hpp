@@ -119,11 +119,24 @@ private:
   bool is_loaded_ = false;
   bool is_warmed_up_ = false;
 
-  int64_t totalSamples_ = 0;
   int64_t totalTokens_ = 0;
   int64_t totalSegments_ = 0;
   int64_t processCalls_ = 0;
   double totalWallMs_ = 0.0;
+
+  // whisper.cpp internal stage timings aggregated across process() calls.
+  double whisperSampleMs_ = 0.0;
+  double whisperEncodeMs_ = 0.0;
+  double whisperDecodeMs_ = 0.0;
+  double whisperBatchdMs_ = 0.0;
+  double whisperPromptMs_ = 0.0;
+
+  // 30 s of silent audio reused on every process() call; whisper.cpp does
+  // the actual encode via our encoder_begin_callback, but it still requires
+  // a padding buffer of the right shape. Hoisted to a member so we don't
+  // reallocate ~1.9 MB per call.
+  std::vector<float> dummyAudioPad_;
+
   mutable std::atomic_bool cancelRequested_{false};
 };
 

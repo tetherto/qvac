@@ -17,7 +17,9 @@ const ERR_CODES = Object.freeze({
   FAILED_TO_PAUSE: 7008,
   INVALID_NEURAL_INPUT: 7009,
   JOB_ALREADY_RUNNING: 7010,
-  MODEL_NOT_LOADED: 7011
+  MODEL_NOT_LOADED: 7011,
+  MODEL_FILE_NOT_FOUND: 7012,
+  BUFFER_LIMIT_EXCEEDED: 7013
 })
 
 addCodes({
@@ -64,6 +66,14 @@ addCodes({
   [ERR_CODES.MODEL_NOT_LOADED]: {
     name: 'MODEL_NOT_LOADED',
     message: () => 'Model is not loaded'
+  },
+  [ERR_CODES.MODEL_FILE_NOT_FOUND]: {
+    name: 'MODEL_FILE_NOT_FOUND',
+    message: (modelPath) => `Model file not found at: ${modelPath}`
+  },
+  [ERR_CODES.BUFFER_LIMIT_EXCEEDED]: {
+    name: 'BUFFER_LIMIT_EXCEEDED',
+    message: (limit) => `Neural signal buffer exceeded limit of ${limit}`
   }
 }, {
   name,

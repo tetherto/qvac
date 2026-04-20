@@ -11,6 +11,10 @@ find_package(cmake-vcpkg REQUIRED PATHS node_modules/cmake-vcpkg)
 
 set(VCPKG_OVERLAY_PORTS "${CMAKE_CURRENT_SOURCE_DIR}/vcpkg-overlays;${VCPKG_OVERLAY_PORTS}")
 
+if(CMAKE_SYSTEM_NAME STREQUAL "Linux")
+  set(VCPKG_OVERLAY_TRIPLETS "${CMAKE_CURRENT_SOURCE_DIR}/vcpkg/triplets")
+endif()
+
 project(bci-whispercpp CXX C)
 
 if(CMAKE_SYSTEM_NAME STREQUAL "Linux")

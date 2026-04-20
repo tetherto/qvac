@@ -14,6 +14,12 @@ namespace qvac_lib_inference_addon_bci {
 namespace {
 constexpr size_t K_HEADER_BYTES = 8;
 constexpr uint32_t K_EMBEDDER_MAGIC = 0x42434945;
+
+// Kernel-trim threshold used by gaussianSmooth: values below this are
+// considered numerically negligible and trimmed from the ends of the kernel
+// so the convolution loop touches fewer source timesteps. Matches the
+// BrainWhisperer Python reference.
+constexpr float K_KERNEL_TRIM_THRESHOLD = 0.01F;
 } // namespace
 
 NeuralProcessor::NeuralProcessor() = default;
@@ -100,8 +106,8 @@ std::vector<float> NeuralProcessor::gaussianSmooth(
   for (auto& k : kernel) k /= sum;
 
   int start = 0, end = kernelSize - 1;
-  while (start < end && kernel[start] < 0.01F) ++start;
-  while (end > start && kernel[end] < 0.01F) --end;
+  while (start < end && kernel[start] < K_KERNEL_TRIM_THRESHOLD) ++start;
+  while (end > start && kernel[end] < K_KERNEL_TRIM_THRESHOLD) --end;
   std::vector<float> trimK(kernel.begin() + start, kernel.begin() + end + 1);
   const int halfK = static_cast<int>(trimK.size()) / 2;
 

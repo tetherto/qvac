@@ -1,9 +1,9 @@
 {
   "name": "whisper-cpp",
-  "version": "1.7.5.1",
+  "version": "1.8.4",
   "port-version": 1,
-  "description": "Port of OpenAI's Whisper model in C/C++ (BCI patched)",
-  "homepage": "https://github.com/tetherto/whisper.cpp",
+  "description": "Port of OpenAI's Whisper model in C/C++ (BCI patched, based on tetherto/qvac-ext-lib-whisper.cpp PR #10)",
+  "homepage": "https://github.com/tetherto/qvac-ext-lib-whisper.cpp",
   "license": "MIT",
   "dependencies": [
     {

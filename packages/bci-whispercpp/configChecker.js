@@ -30,8 +30,7 @@ function checkConfig (configObject) {
     'suppress_nst',
     'temperature',
     'greedy_best_of',
-    'beam_search_beam_size',
-    'seed'
+    'beam_search_beam_size'
   ]
 
   const validContextParams = [
@@ -45,10 +44,10 @@ function checkConfig (configObject) {
     'caption_enabled'
   ]
 
+  // Only parameters wired through to the C++ addon are accepted. Adding
+  // smoothing/sample-rate knobs here without consuming them in NeuralProcessor
+  // would silently drop user intent, so they are kept out until implemented.
   const validBCIParams = [
-    'smooth_kernel_std',
-    'smooth_kernel_size',
-    'sample_rate',
     'day_idx'
   ]
 

@@ -11,7 +11,7 @@
     "lint:fix": "standard --fix \"examples/**/*.js\" \"test/**/*.js\" \"**/*.js\"",
     "build": "bare-make generate && bare-make build && bare-make install",
     "test:unit": "brittle-bare test/unit/**/*.test.js",
-    "test:integration": "brittle-bare test/integration/bci-addon.test.js",
+    "test:integration": "brittle-bare test/integration/addon.test.js",
     "test:cpp:build": "bare-make generate -D BUILD_TESTING=ON && bare-make build --target test-bci-core && bare-make install",
     "test:cpp:run": "cd build/addon/tests/ && ./test-bci-core --gtest_output=xml:cpp-test-results.xml",
     "test:cpp": "npm run test:cpp:build && npm run test:cpp:run",
@@ -60,6 +60,7 @@
   },
   "dependencies": {
     "@qvac/error": "^0.1.0",
+    "@qvac/infer-base": "^0.4.0",
     "@qvac/logging": "^0.1.0",
     "bare-path": "^3.0.0",
     "bare-stream": "^2.7.0",

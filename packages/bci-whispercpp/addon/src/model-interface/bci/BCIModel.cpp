@@ -4,9 +4,7 @@
 #include <chrono>
 #include <cmath>
 #include <cstring>
-#include <iostream>
 #include <ranges>
-#include <thread>
 #include <utility>
 
 #include "BCIConfig.hpp"
@@ -136,11 +134,15 @@ void BCIModel::reload() {
 
 void BCIModel::reset() {
   output_.clear();
-  totalSamples_ = 0;
   totalTokens_ = 0;
   totalSegments_ = 0;
   processCalls_ = 0;
   totalWallMs_ = 0.0;
+  whisperSampleMs_ = 0.0;
+  whisperEncodeMs_ = 0.0;
+  whisperDecodeMs_ = 0.0;
+  whisperBatchdMs_ = 0.0;
+  whisperPromptMs_ = 0.0;
 }
 
 qvac_lib_inference_addon_cpp::RuntimeStats BCIModel::runtimeStats() const {
@@ -157,6 +159,11 @@ qvac_lib_inference_addon_cpp::RuntimeStats BCIModel::runtimeStats() const {
   stats.emplace_back("totalSegments", totalSegments_);
   stats.emplace_back("processCalls", processCalls_);
   stats.emplace_back("totalWallMs", totalWallMs_);
+  stats.emplace_back("whisperSampleMs", whisperSampleMs_);
+  stats.emplace_back("whisperEncodeMs", whisperEncodeMs_);
+  stats.emplace_back("whisperDecodeMs", whisperDecodeMs_);
+  stats.emplace_back("whisperBatchdMs", whisperBatchdMs_);
+  stats.emplace_back("whisperPromptMs", whisperPromptMs_);
   return stats;
 }
 
@@ -183,7 +190,6 @@ static void onNewSegment(
     transcript.id = i;
 
     bci->emitSegment(transcript);
-    std::this_thread::sleep_for(std::chrono::milliseconds(1));
     bci->addTranscription(transcript);
 
     const int nTokens = whisper_full_n_tokens_from_state(state, i);
@@ -218,7 +224,10 @@ void BCIModel::process(const Input& rawNeuralData) {
        "Processing neural signal (" +
            std::to_string(rawNeuralData.size()) + " bytes)");
 
-  int dayIdx = 0;
+  // The BCI embedder ships with per-day projection matrices; day_idx=1 is the
+  // day the shipped test fixtures were recorded on. Callers should pass the
+  // real day_idx for their recording; this default keeps the POC honest.
+  int dayIdx = 1;
   auto it = cfg_.bciConfig.find("day_idx");
   if (it != cfg_.bciConfig.end()) {
     if (auto* d = std::get_if<double>(&it->second)) {
@@ -234,9 +243,7 @@ void BCIModel::process(const Input& rawNeuralData) {
 
   processCalls_ += 1;
 
-  if (ctx_ != nullptr) {
-    whisper_reset_timings(ctx_.get());
-  }
+  whisper_reset_timings(ctx_.get());
 
   const auto startTime = std::chrono::steady_clock::now();
 
@@ -254,15 +261,26 @@ void BCIModel::process(const Input& rawNeuralData) {
   params.encoder_begin_callback = onEncoderBegin;
   params.encoder_begin_callback_user_data = &cbData;
 
-  std::vector<float> dummyAudio(K_DUMMY_AUDIO_30S, 0.0F);
+  if (dummyAudioPad_.size() != static_cast<size_t>(K_DUMMY_AUDIO_30S)) {
+    dummyAudioPad_.assign(K_DUMMY_AUDIO_30S, 0.0F);
+  }
 
   int result = whisper_full(
       ctx_.get(), params,
-      dummyAudio.data(), static_cast<int>(dummyAudio.size()));
+      dummyAudioPad_.data(), static_cast<int>(dummyAudioPad_.size()));
 
   const auto endTime = std::chrono::steady_clock::now();
   totalWallMs_ +=
       std::chrono::duration<double, std::milli>(endTime - startTime).count();
+
+  if (auto* whisperTimings = whisper_get_timings(ctx_.get());
+      whisperTimings != nullptr) {
+    whisperSampleMs_ += whisperTimings->sample_ms;
+    whisperEncodeMs_ += whisperTimings->encode_ms;
+    whisperDecodeMs_ += whisperTimings->decode_ms;
+    whisperBatchdMs_ += whisperTimings->batchd_ms;
+    whisperPromptMs_ += whisperTimings->prompt_ms;
+  }
 
   if (result != 0) {
     if (cancelRequested_.load(std::memory_order_relaxed)) {
