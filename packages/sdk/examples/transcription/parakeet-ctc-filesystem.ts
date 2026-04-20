@@ -19,8 +19,7 @@ if (!args[0]) {
 
 const audioFilePath = args[0];
 const parakeetCtcModelSrc = args[1] ?? PARAKEET_CTC_FP32;
-const parakeetCtcModelDataSrc = args[2];
-const parakeetTokenizerSrc = args[3] ?? PARAKEET_CTC_TOKENIZER;
+const parakeetTokenizerSrc = args[2] ?? PARAKEET_CTC_TOKENIZER;
 
 try {
   console.log("Loading Parakeet CTC model...");
@@ -30,7 +29,6 @@ try {
     modelConfig: {
       modelType: "ctc",
       parakeetCtcModelSrc,
-      ...(parakeetCtcModelDataSrc !== undefined && { parakeetCtcModelDataSrc }),
       parakeetTokenizerSrc,
     },
     onProgress: (progress) => {
