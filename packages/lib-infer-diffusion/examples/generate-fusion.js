@@ -5,21 +5,17 @@ const path = require('bare-path')
 const ImgStableDiffusion = require('../index')
 
 /**
- * FLUX2-klein multi-reference ("fusion") example
+ * FLUX2-klein multi-reference ("fusion") example — two scientists edition
  *
- * Fuses N reference images into a single output via FLUX2's ref_images /
- * RoPE in-context conditioning. All refs share one RoPE coordinate space
- * (increase_ref_index=false, the library default), so their visual
- * features blend in attention — this is the "fusion" behaviour.
- *
- * Current run: 1970s Italian-American mafia group portrait with four refs.
+ * Fuses two reference images (two scientists) into a single
+ * output via FLUX2's ref_images / RoPE in-context conditioning.
  *
  *   Model      : flux-2-klein-4b-Q8_0.gguf
  *   LLM        : Qwen3-4B-Q4_K_M.gguf
  *   VAE        : flux2-vae.safetensors
  *   Sampler    : euler, cfg_scale: 1.0
  *   Flash attn : on (diffusion_fa)
- *   refs       : temp/headshot.jpeg + temp/jamie.png + temp/marco.png
+ *   refs       : assets/von-neumann.jpg + assets/claude-shannon.jpg
  *
  * Note: FLUX2-klein's text encoder (Qwen3) does not receive vision tokens
  * for refs, so @imageN tags in the prompt are prose to the model. The
@@ -32,12 +28,10 @@ const ImgStableDiffusion = require('../index')
 async function main () {
   const modelDir = path.join(__dirname, '../models')
   const refPaths = [
-    path.join(__dirname, '../temp/headshot.jpeg'),
-    path.join(__dirname, '../temp/jamie.png'),
-    path.join(__dirname, '../temp/marco.png'),
-    path.join(__dirname, '../temp/gianni.png')
+    path.join(__dirname, '../assets/von-neumann.jpg'),
+    path.join(__dirname, '../assets/claude-shannon.jpg'),
   ]
-  const outputImagePath = path.join(__dirname, '../output/fusion_quad_mafia.png')
+  const outputImagePath = path.join(__dirname, '../output/fusion_two_scientists.png')
 
   for (const p of refPaths) {
     if (!fs.existsSync(p)) {
@@ -79,17 +73,18 @@ async function main () {
       return buf
     })
 
-    const STEPS = 20
+    const STEPS = 10
     const SEED = 10
-    const WIDTH = 1024
-    const HEIGHT = 1024
+    const WIDTH = 624
+    const HEIGHT = 624
     const GUIDANCE = 3.5
 
+    // TODO: write your own prompt here
     const prompt = [
-      'iconic 1990s italian mobster group portrait with four guys @image1 @image2 @image3 @image4 they retain all features from @image1 @image2 @image3',
+      'two scientists in @image1 and @image2 shaking hands in a lab, use @image1 and @image2 as the two scientists, black studio background, colorized.'
     ].join(', ')
 
-    console.log('\n=== FLUX2 fusion (4 references — italian mobster group portrait) ===')
+    console.log('\n=== FLUX2 fusion (2 references — two scientists) ===')
     console.log('  Model      : flux-2-klein-4b-Q8_0.gguf')
     console.log('  Refs       : ' + refBuffers.length)
     console.log('  Steps      : ' + STEPS)
@@ -100,7 +95,7 @@ async function main () {
     console.log('  Seed       : ' + SEED)
     console.log('  Output     : ' + outputImagePath)
     console.log()
-
+    console.log('prompt: ' + prompt)
     const tGenStart = Date.now()
     let lastStepTime = tGenStart
 
