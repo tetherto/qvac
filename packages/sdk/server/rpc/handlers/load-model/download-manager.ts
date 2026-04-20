@@ -2,6 +2,7 @@ import type { ModelProgressUpdate } from "@/schemas";
 import { AbortController } from "bare-abort-controller";
 import { DownloadCancelledError } from "@/utils/errors-server";
 import { getServerLogger } from "@/logging";
+import type { DownloadHooks } from "@/server/rpc/handlers/load-model/types";
 
 const logger = getServerLogger();
 
@@ -21,17 +22,20 @@ export interface Transfer {
   lastProgress?: ModelProgressUpdate | undefined;
   downloadPromise?: Promise<string> | undefined;
   clearCache: boolean;
+  cacheHit?: boolean;
 }
 
 export interface DownloadContext {
   broadcastProgress: (progress: ModelProgressUpdate) => void;
   signal: AbortSignal;
   shouldClearCache: () => boolean;
+  setCacheHit: (cacheHit: boolean) => void;
 }
 
 export interface StartOrJoinResult {
   promise: Promise<string>;
   joined: boolean;
+  getCacheHit: () => boolean | undefined;
 }
 
 const activeTransfers = new Map<string, Transfer>();
@@ -110,6 +114,7 @@ export function startOrJoinDownload(
     return {
       promise: subscriber.promise,
       joined: true,
+      getCacheHit: () => existing.cacheHit,
     };
   }
 
@@ -136,6 +141,9 @@ export function startOrJoinDownload(
     broadcastProgress,
     signal: abortController.signal,
     shouldClearCache: () => transfer.clearCache,
+    setCacheHit: (cacheHit: boolean) => {
+      transfer.cacheHit = cacheHit;
+    },
   });
   transfer.downloadPromise = downloadPromise;
 
@@ -161,6 +169,7 @@ export function startOrJoinDownload(
   return {
     promise: initialSubscriber.promise,
     joined: false,
+    getCacheHit: () => transfer.cacheHit,
   };
 }
 
@@ -204,6 +213,28 @@ export function createCancelFunction(
   return () => {
     cancelTransfer(downloadKey, clearCache);
   };
+}
+
+export function applyJoinedDownloadStats(
+  result: StartOrJoinResult,
+  hooks?: DownloadHooks,
+): Promise<string> {
+  if (!result.joined) return result.promise;
+
+  return result.promise.then((path) => {
+    const cacheHit = result.getCacheHit();
+
+    if (cacheHit === true) {
+      hooks?.markCacheHit?.();
+    } else if (cacheHit === false) {
+      hooks?.markCacheMiss?.();
+      hooks?.markSharedTransfer?.();
+    } else {
+      hooks?.markSharedTransfer?.();
+    }
+
+    return path;
+  });
 }
 
 export function cancelAllDownloads(): void {

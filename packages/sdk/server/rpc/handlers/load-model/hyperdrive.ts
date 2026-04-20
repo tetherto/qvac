@@ -23,6 +23,7 @@ import { getModelBySrc } from "@/models/registry";
 import {
   createHyperdriveDownloadKey,
   startOrJoinDownload,
+  applyJoinedDownloadStats,
 } from "@/server/rpc/handlers/load-model/download-manager";
 import { getSDKConfig } from "@/server/bare/registry/config-registry";
 import {
@@ -773,10 +774,22 @@ export async function downloadModelFromHyperdrive(
   const shardInfo = detectShardedModel(modelFileName);
   const model = getModelBySrc(modelFileName, hyperdriveKey);
 
-  const { promise: downloadPromise, joined } = startOrJoinDownload(
+  const result = startOrJoinDownload(
     downloadKey,
     async (ctx) => {
       if (shardInfo.isSharded && model?.shardMetadata) {
+        const hooksWithCacheHit: DownloadHooks = {
+          ...hooks,
+          markCacheHit: () => {
+            hooks?.markCacheHit?.();
+            ctx.setCacheHit(true);
+          },
+          markCacheMiss: () => {
+            hooks?.markCacheMiss?.();
+            ctx.setCacheHit(false);
+          },
+        };
+
         return downloadShardedFilesToFilesystem(
           hyperdriveKey,
           modelFileName,
@@ -784,7 +797,7 @@ export async function downloadModelFromHyperdrive(
           ctx.broadcastProgress,
           seed,
           ctx.signal,
-          hooks,
+          hooksWithCacheHit,
           ctx.shouldClearCache,
         );
       }
@@ -812,6 +825,7 @@ export async function downloadModelFromHyperdrive(
 
         if (cachedPath) {
           hooks?.markCacheHit?.();
+          ctx.setCacheHit(true);
           ctx.broadcastProgress({
             type: "modelProgress",
             downloaded: model.expectedSize,
@@ -829,6 +843,7 @@ export async function downloadModelFromHyperdrive(
       }
 
       hooks?.markCacheMiss?.();
+      ctx.setCacheHit(false);
       const checksumToValidate =
         expectedChecksum || model?.sha256Checksum || "";
 
@@ -851,10 +866,5 @@ export async function downloadModelFromHyperdrive(
     progressCallback,
   );
 
-  if (joined) {
-    hooks?.markCacheMiss?.();
-    hooks?.markSharedTransfer?.();
-  }
-
-  return downloadPromise;
+  return applyJoinedDownloadStats(result, hooks);
 }

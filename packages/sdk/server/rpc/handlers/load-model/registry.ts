@@ -17,6 +17,7 @@ import { getRegistryClient } from "@/server/bare/registry/registry-client";
 import {
   createRegistryDownloadKey,
   startOrJoinDownload,
+  applyJoinedDownloadStats,
 } from "@/server/rpc/handlers/load-model/download-manager";
 import {
   buildBlobBinding,
@@ -282,7 +283,7 @@ export async function downloadModelFromRegistry(
   // Look up model metadata from our generated models.ts
   const modelMetadata = getModelByPath(registryPath);
 
-  const { promise: downloadPromise, joined } = startOrJoinDownload(
+  const result = startOrJoinDownload(
     downloadKey,
     async (ctx) => {
       if (shardInfo.isSharded) {
@@ -311,6 +312,7 @@ export async function downloadModelFromRegistry(
             const firstShardFilename = localShardMeta[0]!.filename;
             logger.info(`✅ All ${localShardMeta.length} shards cached`);
             hooks?.markCacheHit?.();
+            ctx.setCacheHit(true);
 
             const overallTotal = localShardMeta.reduce(
               (sum, s) => sum + s.expectedSize,
@@ -337,6 +339,7 @@ export async function downloadModelFromRegistry(
         }
 
         hooks?.markCacheMiss?.();
+        ctx.setCacheHit(false);
         try {
           return await downloadShardedFilesFromRegistry(
             registryPath,
@@ -370,12 +373,24 @@ export async function downloadModelFromRegistry(
 
       // Generic companion set via generated metadata
       if (modelMetadata?.companionSet) {
+        const companionHooks: DownloadHooks = {
+          ...hooks,
+          markCacheHit: () => {
+            hooks?.markCacheHit?.();
+            ctx.setCacheHit(true);
+          },
+          markCacheMiss: () => {
+            hooks?.markCacheMiss?.();
+            ctx.setCacheHit(false);
+          },
+        };
+
         return await downloadCompanionSetFromRegistry({
           companionSet: modelMetadata.companionSet,
           downloadKey,
           progressCallback: ctx.broadcastProgress,
           signal: ctx.signal,
-          hooks,
+          hooks: companionHooks,
           shouldClearCache: ctx.shouldClearCache,
         });
       }
@@ -399,6 +414,7 @@ export async function downloadModelFromRegistry(
       if (cachedPath) {
         logger.info(`✅ Using cached model: ${cachedPath}`);
         hooks?.markCacheHit?.();
+        ctx.setCacheHit(true);
 
         ctx.broadcastProgress({
           type: "modelProgress",
@@ -416,6 +432,7 @@ export async function downloadModelFromRegistry(
         : undefined;
 
       hooks?.markCacheMiss?.();
+      ctx.setCacheHit(false);
       try {
         await downloadSingleFileFromRegistry(
           registryPath,
@@ -452,10 +469,5 @@ export async function downloadModelFromRegistry(
     progressCallback,
   );
 
-  if (joined) {
-    hooks?.markCacheMiss?.();
-    hooks?.markSharedTransfer?.();
-  }
-
-  return downloadPromise;
+  return applyJoinedDownloadStats(result, hooks);
 }
