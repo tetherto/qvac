@@ -116,7 +116,10 @@ Before building, ensure you have the following installed:
    ```
 
 2. **Build tools** for your platform:
-   - **Linux**: `sudo apt install build-essential autoconf automake libtool pkg-config`
+   - **Linux**:
+     ```bash
+     sudo apt install clang libc++-dev libc++abi-dev build-essential autoconf automake libtool pkg-config
+     ```
    - **macOS**: Xcode command line tools
    - **Windows**: Visual Studio with C++ build tools
 
