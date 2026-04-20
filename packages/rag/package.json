@@ -42,7 +42,7 @@
     "test-tmp": "^1.4.0"
   },
   "dependencies": {
-    "@qvac/error": "^0.1.0",
+    "@qvac/error": "^0.1.1",
     "hyperdht": "^6.23.0",
     "ready-resource": "^1.1.2",
     "uuid-random": "^1.3.2",
