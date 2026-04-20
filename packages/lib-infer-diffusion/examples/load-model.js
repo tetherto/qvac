@@ -24,18 +24,17 @@ async function main () {
   console.log()
 
   // ── 1. Construct — stores config, allocates nothing ────────────────────────
-  const model = new ImgStableDiffusion(
-    {
-      logger: console,
-      diskPath: MODELS_DIR,
-      modelName: MODEL_NAME,
-      llmModel: LLM_MODEL,
-      vaeModel: VAE_MODEL
+  const model = new ImgStableDiffusion({
+    files: {
+      model: path.join(MODELS_DIR, MODEL_NAME),
+      llm: path.join(MODELS_DIR, LLM_MODEL),
+      vae: path.join(MODELS_DIR, VAE_MODEL)
     },
-    {
+    config: {
       threads: 8 // Metal handles GPU; threads are for CPU fallback ops
-    }
-  )
+    },
+    logger: console
+  })
 
   try {
     // ── 2. Load — reads weights into memory via activate() → new_sd_ctx() ───

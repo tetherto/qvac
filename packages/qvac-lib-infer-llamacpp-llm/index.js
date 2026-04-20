@@ -2,12 +2,9 @@
 
 const fs = require('bare-fs')
 const path = require('bare-path')
-
-const BaseInference = require('@qvac/infer-base/WeightsProvider/BaseInference')
-const WeightsProvider = require('@qvac/infer-base/WeightsProvider/WeightsProvider')
-const { LlamaInterface } = require('./addon')
-
-const noop = () => { }
+const QvacLogger = require('@qvac/logging')
+const { createJobHandler, exclusiveRunQueue } = require('@qvac/infer-base')
+const { LlamaInterface, mapAddonEvent } = require('./addon')
 
 const RUN_BUSY_ERROR_MESSAGE = 'Cannot set new job: a job is already set or being processed'
 
@@ -99,187 +96,272 @@ function normalizeFinetuneParams (opts) {
 }
 
 /**
- * GGML client implementation for Llama LLM model
+ * Returns the first shard (matching `-NNNNN-of-MMMMM.gguf`) or the sole
+ * entry for single-file models. Matches the C++ shard-expansion contract
+ * in `GGUFShards::expandGGUFIntoShards`.
+ *
+ * @param {string[]} files - ordered array of absolute paths
+ * @returns {string}
  */
-class LlmLlamacpp extends BaseInference {
-  /**
-   * Creates an instance of LlmLlamacpp.
-   * @constructor
-   * @param {Object} args - Setup parameters including loader, logger, disk path, and model name
-   * @param {Loader} args.loader - External loader instance
-   * @param {Logger} [args.logger] - Optional structured logger
-   * @param {Object} [args.opts] - Optional inference options
-   * @param {string} args.diskPath - Disk directory where model files are stored
-   * @param {string} args.modelName - Name of the model directory or file. The usage of a sharded
-   * filename (e.g. "llama-00001-of-00004.gguf") will trigger asynchronous loading of the weights for
-   * all remaining files.
-   * @param {string} args.projectionModel - Name of the projection model directory or file
-   * @param {Object} config - Model-specific configuration settings
-   */
-  constructor (
-    { opts = {}, loader, logger = null, diskPath = '.', modelName, projectionModel },
-    config
-  ) {
-    super({ logger, opts })
+function pickPrimaryGgufPath (files) {
+  const SHARD_REGEX = /-\d+-of-\d+\.gguf$/
+  return files.find((p) => SHARD_REGEX.test(p)) || files[0]
+}
+
+/** LLM client wrapping the native LlamaInterface for inference, finetuning, and pause/resume. */
+class LlmLlamacpp {
+  constructor ({ files, config, logger = null, opts = {} }) {
+    if (!files || !Array.isArray(files.model) || files.model.length === 0) {
+      throw new TypeError('files.model must be a non-empty array of absolute paths')
+    }
+    for (const [i, entry] of files.model.entries()) {
+      if (typeof entry !== 'string' || entry.length === 0) {
+        throw new TypeError(`files.model[${i}] must be an absolute path string`)
+      }
+      if (!path.isAbsolute(entry)) {
+        throw new TypeError(`files.model[${i}] must be an absolute path (got: ${entry})`)
+      }
+    }
+    if (files.projectionModel !== undefined) {
+      if (typeof files.projectionModel !== 'string' || files.projectionModel.length === 0) {
+        throw new TypeError('files.projectionModel must be an absolute path string')
+      }
+      if (!path.isAbsolute(files.projectionModel)) {
+        throw new TypeError(`files.projectionModel must be an absolute path (got: ${files.projectionModel})`)
+      }
+    }
+    this._files = files.model
+    this._projectionModelPath = files.projectionModel || ''
     this._config = config
-    this._diskPath = diskPath
-    this._modelName = modelName
-    this._projectionModel = projectionModel
-    this._shards = WeightsProvider.expandGGUFIntoShards(this._modelName)
-    this.weightsProvider = new WeightsProvider(loader, this.logger)
+    this.logger = new QvacLogger(logger)
+    this.opts = opts
+    // Lazy deref + optional chain: safe before `_load()` and after `unload()`.
+    this._job = createJobHandler({ cancel: () => this.addon?.cancel() })
+    this._run = exclusiveRunQueue()
+    this.addon = null
     this._checkpointSaveDir = null
     this._hasActiveResponse = false
-    this._skipNextRuntimeStats = false
-    this._originalLogger = this.logger
-    this._baseOutputCallback = this._outputCallback.bind(this)
+    // Carried across mapAddonEvent calls to drop the post-finetune TPS trailer.
+    this._addonEventState = { skipNextRuntimeStats: false }
+    this.state = { configLoaded: false }
   }
 
-  /**
-   * Load model weights, initialize the native addon, and activate the model.
-   * @param {boolean} [closeLoader=true] - Whether to close the loader when complete
-   * @param {ProgressReportCallback} [onDownloadProgress] - Optional byte-level progress callback
-   * @returns {Promise<void>}
-   */
-  async _load (closeLoader = true, onDownloadProgress = noop) {
+  async load () {
+    return this._run(async () => {
+      if (this.state.configLoaded) return
+      await this._load()
+      this.state.configLoaded = true
+    })
+  }
+
+  async _load () {
     this.logger.info('Starting model load')
+    const primaryGgufPath = pickPrimaryGgufPath(this._files)
+    const configurationParams = {
+      path: primaryGgufPath,
+      projectionPath: this._projectionModelPath,
+      config: { ...this._config }
+    }
+
+    this.logger.info('Creating addon with configuration:', configurationParams)
 
     try {
-      const configForLoad = { ...this._config }
-
-      const configurationParams = {
-        path: path.join(this._diskPath, this._modelName),
-        projectionPath: this._projectionModel ? path.join(this._diskPath, this._projectionModel) : '',
-        config: configForLoad
-      }
-
-      this.logger.info('Creating addon with configuration:', configurationParams)
       this.addon = this._createAddon(configurationParams)
-
-      if (this._shards !== null) {
-        await this._loadWeights(onDownloadProgress)
-      } else {
-        await this.downloadWeights(onDownloadProgress, { closeLoader })
+      if (this._files.length > 1) {
+        await this._streamShards()
       }
-
       this.logger.info('Activating addon')
       await this.addon.activate()
-
-      this.logger.info('Model load completed successfully')
-    } catch (error) {
-      this.logger.error('Error during model load:', error)
-      throw error
+    } catch (loadError) {
+      this.logger.error('Error during model load:', loadError)
+      // Best-effort cleanup of the partially-initialized addon so a subsequent
+      // load() does not leak a zombie native instance.
+      try { await this.addon?.unload?.() } catch (_) {}
+      this.addon = null
+      throw loadError
     }
+    this.logger.info('Model load completed successfully')
   }
 
-  /**
-   * Download the model weight files and return the local path to the primary file.
-   * @param {ProgressReportCallback} [onDownloadProgress] - Callback invoked with bytes downloaded
-   * @returns {Promise<{filePath: string, completed: boolean, error: boolean}[]>} Local file path for the model weights
-   */
-  async _downloadWeights (onDownloadProgress, opts) {
-    return await this.weightsProvider.downloadFiles(
-      this._projectionModel ? [this._modelName, this._projectionModel] : [this._modelName],
-      this._diskPath,
-      {
-        closeLoader: opts.closeLoader,
-        onDownloadProgress
+  async _streamShards () {
+    for (const filePath of this._files) {
+      const filename = path.basename(filePath)
+      const stream = fs.createReadStream(filePath)
+      for await (const chunk of stream) {
+        await this.addon.loadWeights({ filename, chunk, completed: false })
       }
-    )
-  }
-
-  async _loadWeights (reportProgressCallback) {
-    const onChunk = async (chunkedWeightsData) => {
-      this.addon.loadWeights(chunkedWeightsData, this.logger)
-    }
-    await this.weightsProvider.streamFiles(this._shards, onChunk, reportProgressCallback)
-  }
-
-  _isSuppressedNoResponseLog (args) {
-    const message = args.map(arg => {
-      if (typeof arg === 'string') return arg
-      if (arg && typeof arg === 'object') {
-        if (arg.message && typeof arg.message === 'string') return arg.message
-        return JSON.stringify(arg)
-      }
-      return String(arg)
-    }).join(' ')
-    return message && message.includes('No response found for job')
-  }
-
-  _createFilteredLogger (sourceLogger) {
-    const filteredLogger = sourceLogger ? Object.create(Object.getPrototypeOf(sourceLogger)) : {}
-    Object.assign(filteredLogger, sourceLogger)
-
-    const originalInfo = sourceLogger && typeof sourceLogger.info === 'function'
-      ? sourceLogger.info.bind(sourceLogger)
-      : null
-    const originalWarn = sourceLogger && typeof sourceLogger.warn === 'function'
-      ? sourceLogger.warn.bind(sourceLogger)
-      : null
-
-    filteredLogger.info = (...args) => {
-      if (this._isSuppressedNoResponseLog(args)) return
-      if (originalInfo) return originalInfo.apply(sourceLogger, args)
-    }
-
-    filteredLogger.warn = (...args) => {
-      if (this._isSuppressedNoResponseLog(args)) return
-      if (originalWarn) return originalWarn.apply(sourceLogger, args)
-    }
-
-    return filteredLogger
-  }
-
-  _handleAddonOutputEvent (originalOutputCb, originalLoggerRef, instance, eventType, jobId, data, extra) {
-    if (eventType === 'JobEnded' || eventType === 'Error') {
-      this._hasActiveResponse = false
-    }
-
-    if (eventType === 'LogMsg') {
-      const logMsg = typeof data === 'string' ? data : (data?.message || JSON.stringify(data))
-      originalLoggerRef?.info?.(logMsg)
-      return
-    }
-
-    if (originalOutputCb) {
-      return originalOutputCb(instance, eventType, jobId, data, extra)
+      await this.addon.loadWeights({ filename, chunk: null, completed: true })
+      this.logger.info(`Streamed weights for ${filename}`)
     }
   }
 
   /**
    * Public API entrypoint for inference.
    * @param {Message[]} prompt - Input prompt array of messages
-   * @param {{prefill?: boolean}} [runOptions] - Optional run settings
+   * @param {RunOptions} [runOptions] - Optional run settings (prefill, generationParams, cacheKey, saveCacheToDisk)
    * @returns {Promise<QvacResponse>}
    */
   async run (prompt, runOptions = {}) {
-    return await this._runInternal(prompt, runOptions)
+    return this._run(() => this._runInternal(prompt, runOptions))
+  }
+
+  async _runInternal (prompt, runOptions = {}) {
+    if (!this.addon) {
+      throw new Error('Addon not initialized. Call load() first.')
+    }
+    if (this._hasActiveResponse) {
+      throw new Error(RUN_BUSY_ERROR_MESSAGE)
+    }
+
+    if (!Array.isArray(prompt)) {
+      throw new TypeError('Prompt input must be Message[]')
+    }
+    const { prefill, generationParams, cacheKey, saveCacheToDisk } = normalizeRunOptions(runOptions)
+
+    this.logger.info('Starting inference with prompt:', prompt)
+
+    // Separate media messages from text messages
+    const textMessages = []
+    const mediaItems = []
+
+    for (const message of prompt) {
+      if (message.role === 'user' &&
+          message.type === 'media' &&
+          message.content instanceof Uint8Array) {
+        mediaItems.push(message.content)
+        textMessages.push({ ...message, content: '' })
+      } else {
+        textMessages.push(message)
+      }
+    }
+
+    const promptMessages = []
+
+    // Send media first (in order), then the stringified text messages.
+    for (const mediaData of mediaItems) {
+      promptMessages.push({ type: 'media', content: mediaData })
+    }
+
+    promptMessages.push({
+      type: 'text',
+      input: JSON.stringify(textMessages),
+      prefill,
+      generationParams,
+      cacheKey,
+      saveCacheToDisk
+    })
+
+    const response = this._job.start()
+
+    let accepted
+    try {
+      accepted = await this.addon.runJob(promptMessages)
+    } catch (error) {
+      this._job.fail(error)
+      throw error
+    }
+    if (!accepted) {
+      this._job.fail(new Error(RUN_BUSY_ERROR_MESSAGE))
+      throw new Error(RUN_BUSY_ERROR_MESSAGE)
+    }
+
+    this._hasActiveResponse = true
+    const finalized = response.await().finally(() => { this._hasActiveResponse = false })
+    finalized.catch((err) => {
+      this.logger?.warn?.('Inference response rejected:', err?.message || err)
+    })
+    response.await = () => finalized
+
+    this.logger.info('Inference job started successfully')
+    return response
+  }
+
+  async finetune (finetuningOptions = undefined) {
+    if (!finetuningOptions) {
+      throw new Error('Finetuning parameters are required.')
+    }
+    const paramsToSend = normalizeFinetuneParams(finetuningOptions)
+    this.logger.info('finetune() called')
+    this.logger.info('Finetuning parameters:', finetuningOptions)
+
+    return this._run(async () => {
+      if (!this.addon) {
+        throw new Error('Addon not initialized. Call load() first.')
+      }
+      if (this._hasActiveResponse) {
+        throw new Error(RUN_BUSY_ERROR_MESSAGE)
+      }
+      if (finetuningOptions.checkpointSaveDir) {
+        this._checkpointSaveDir = finetuningOptions.checkpointSaveDir
+      }
+
+      const response = this._job.start()
+      let accepted
+      try {
+        accepted = await this.addon.finetune(paramsToSend)
+      } catch (err) {
+        this._job.fail(err)
+        throw err
+      }
+
+      if (!accepted) {
+        this._job.fail(new Error(RUN_BUSY_ERROR_MESSAGE))
+        throw new Error(RUN_BUSY_ERROR_MESSAGE)
+      }
+
+      this._hasActiveResponse = true
+      const finalized = response.await().finally(() => { this._hasActiveResponse = false })
+      finalized.catch((err) => {
+        this.logger?.warn?.('Finetune response rejected:', err?.message || err)
+      })
+      response.await = () => finalized
+      return response
+    })
+  }
+
+  _handleAddonOutputEvent (eventType, data, error) {
+    if (eventType === 'LogMsg') {
+      const logMsg = typeof data === 'string' ? data : (data?.message || JSON.stringify(data))
+      this.logger?.info?.(logMsg)
+      return
+    }
+
+    if (eventType === 'Error') {
+      this.logger.error('Job failed with error:', error)
+      this._job.fail(error)
+    } else if (eventType === 'Output') {
+      this._job.output(data)
+    } else if (eventType === 'FinetuneProgress') {
+      if (this.opts.stats && data && data.stats) {
+        this._job.active?.updateStats(data.stats)
+      }
+    } else if (eventType === 'JobEnded') {
+      this.logger.info('Job completed')
+      const isFinetuneTerminal = data && typeof data === 'object' && data.op === 'finetune' && typeof data.status === 'string'
+      if (isFinetuneTerminal) {
+        this._job.end(null, data)
+      } else {
+        this._job.end(this.opts.stats ? data : null)
+      }
+    }
+  }
+
+  _addonOutputCallback (addon, event, data, error) {
+    const mapped = mapAddonEvent(event, data, error, this._addonEventState)
+    if (mapped === null) return
+    this._handleAddonOutputEvent(mapped.type, mapped.data, mapped.error)
   }
 
   /**
    * Instantiate the native addon with the given parameters.
    * @param {Object} configurationParams - Configuration parameters for the addon
-   * @param {string} configurationParams.path - Local file or directory path
-   * @param {Object} configurationParams.settings - LLM-specific settings
+   * @param {string} configurationParams.path - Absolute path to the primary model file (first shard for sharded models)
+   * @param {string} configurationParams.projectionPath - Absolute path to the multimodal projection model, or '' when not provided
+   * @param {Object} configurationParams.config - LLM-specific settings
    * @returns {Addon} The instantiated addon interface
    */
   _createAddon (configurationParams) {
     const binding = require('./binding')
-
-    this.logger = this._createFilteredLogger(this._originalLogger)
-
-    this._outputCallback = (instance, eventType, jobId, data, extra) => {
-      return this._handleAddonOutputEvent(
-        this._baseOutputCallback,
-        this._originalLogger,
-        instance,
-        eventType,
-        jobId,
-        data,
-        extra
-      )
-    }
-
     return new LlamaInterface(
       binding,
       configurationParams,
@@ -287,50 +369,9 @@ class LlmLlamacpp extends BaseInference {
     )
   }
 
-  _addonOutputCallback (addon, event, data, error) {
-    if (typeof data === 'object' && data !== null && 'TPS' in data) {
-      if (this._skipNextRuntimeStats) {
-        this._skipNextRuntimeStats = false
-        return
-      }
-      const runtimeStats = { ...data }
-      if (runtimeStats.backendDevice === 0) {
-        runtimeStats.backendDevice = 'cpu'
-      } else if (runtimeStats.backendDevice === 1) {
-        runtimeStats.backendDevice = 'gpu'
-      }
-      return this._outputCallback(addon, 'JobEnded', 'OnlyOneJob', runtimeStats, null)
-    }
-    if (
-      typeof data === 'object' &&
-      data !== null &&
-      data.op === 'finetune' &&
-      typeof data.status === 'string'
-    ) {
-      this._skipNextRuntimeStats = true
-      return this._outputCallback(addon, 'JobEnded', 'OnlyOneJob', data, null)
-    }
-    if (
-      typeof data === 'object' &&
-      data !== null &&
-      data.type === 'finetune_progress'
-    ) {
-      return this._outputCallback(addon, 'FinetuneProgress', 'OnlyOneJob', data, null)
-    }
-
-    let mappedEvent = event
-    if (event.includes('Error')) {
-      mappedEvent = 'Error'
-    } else if (typeof data === 'string') {
-      mappedEvent = 'Output'
-    }
-
-    return this._outputCallback(addon, mappedEvent, 'OnlyOneJob', data, error)
-  }
-
   /**
    * Pause finetuning, saving a checkpoint so training can resume later.
-   * cancel inference job if it is running
+   * Also cancels any inference job in flight.
    */
   async pause () {
     if (this.addon?.cancel) {
@@ -340,8 +381,8 @@ class LlmLlamacpp extends BaseInference {
 
   /**
    * Cancel finetuning and remove the pause checkpoint so the next
-   * finetune() call starts fresh instead of resuming.
-   * cancel inference job if it is running
+   * `finetune()` call starts fresh instead of resuming. Also cancels
+   * any inference job in flight.
    */
   async cancel () {
     if (this.addon?.cancel) {
@@ -366,160 +407,32 @@ class LlmLlamacpp extends BaseInference {
   }
 
   /**
-   * Unload model safely by cancelling and clearing pending jobs.
+   * Unload the model safely by cancelling the in-flight job and releasing
+   * native resources. Subsequent calls to `run()` / `finetune()` / `cancel()`
+   * are safe; they hit the `!this.addon` guard and throw or no-op.
    * @returns {Promise<void>}
    */
   async unload () {
-    return await this._withExclusiveRun(async () => {
+    return this._run(async () => {
       try {
         await this.pause()
       } catch (_) {}
-      const currentJobResponse = this._jobToResponse.get('OnlyOneJob')
-      if (currentJobResponse) {
-        currentJobResponse.failed(new Error('Model was unloaded'))
-        this._deleteJobMapping('OnlyOneJob')
+      if (this._job.active) {
+        this._job.fail(new Error('Model was unloaded'))
       }
       this._hasActiveResponse = false
-      await super.unload()
+      if (this.addon) {
+        await this.addon.unload()
+        // Null the addon reference so post-unload `cancel()` / `run()` calls hit the
+        // `if (!this.addon)` guard instead of dereferencing a disposed native handle.
+        this.addon = null
+      }
+      this.state.configLoaded = false
     })
   }
 
-  /**
-   * Internal method to start inference with a text prompt.
-   * @param {Message[]} prompt - Input prompt array of messages
-   * @param {{prefill?: boolean}} [runOptions] - Optional run settings
-   * @returns {Promise<QvacResponse>} A QvacResponse representing the inference job
-   */
-  async _runInternal (prompt, runOptions = {}) {
-    return this._withExclusiveRun(async () => {
-      if (this._hasActiveResponse) {
-        throw new Error(RUN_BUSY_ERROR_MESSAGE)
-      }
-
-      if (!Array.isArray(prompt)) {
-        throw new TypeError('Prompt input must be Message[]')
-      }
-      const { prefill, generationParams, cacheKey, saveCacheToDisk } = normalizeRunOptions(runOptions)
-
-      this.logger.info('Starting inference with prompt:', prompt)
-
-      // Separate media messages from text messages
-      const textMessages = []
-      const mediaItems = []
-
-      for (const message of prompt) {
-        if (message.role === 'user' &&
-            message.type === 'media' &&
-            message.content instanceof Uint8Array) {
-          mediaItems.push(message.content)
-          // Keep the message as a placeholder marker (with empty content) for tokenization
-          textMessages.push({ ...message, content: '' })
-        } else {
-          textMessages.push(message)
-        }
-      }
-
-      const promptMessages = []
-
-      // Send media first (in order) if present
-      for (const mediaData of mediaItems) {
-        promptMessages.push({ type: 'media', content: mediaData })
-      }
-
-      // Send text messages
-      promptMessages.push({
-        type: 'text',
-        input: JSON.stringify(textMessages),
-        prefill,
-        generationParams,
-        cacheKey,
-        saveCacheToDisk
-      })
-
-      const response = this._createResponse('OnlyOneJob')
-
-      // addon-cpp C++ guarantees no events will be generated
-      // until job is fully accepted. This means even if trying
-      // to queue a job fails right now as not accepted,
-      // it will not generate events.
-      //
-      // If any unexpected exception is thrown (e.g. in the C++ code)
-      // it will unwind here and the job will not be accepted.
-      let accepted
-      try {
-        accepted = await this.addon.runJob(promptMessages)
-      } catch (error) {
-        this._deleteJobMapping('OnlyOneJob')
-        response.failed(error)
-        throw error
-      }
-      if (!accepted) {
-        this._deleteJobMapping('OnlyOneJob')
-        const msg = RUN_BUSY_ERROR_MESSAGE
-        response.failed(new Error(msg))
-        throw new Error(msg)
-      }
-
-      this._hasActiveResponse = true
-      const finalized = response.await().finally(() => { this._hasActiveResponse = false })
-      finalized.catch(() => {})
-      response.await = () => finalized
-
-      this.logger.info('Inference job started successfully')
-
-      return response
-    })
-  }
-
-  async finetune (finetuningOptions = undefined) {
-    if (!this.addon) {
-      throw new Error(
-        'Addon not initialized. Call load() first.'
-      )
-    }
-
-    if (!finetuningOptions) {
-      throw new Error(
-        'Finetuning parameters are required.'
-      )
-    }
-    if (finetuningOptions.checkpointSaveDir) {
-      this._checkpointSaveDir = finetuningOptions.checkpointSaveDir
-    }
-    const paramsToSend = normalizeFinetuneParams(finetuningOptions)
-    this.logger?.info?.('finetune() called')
-    this.logger?.info?.('Finetuning parameters:', finetuningOptions)
-
-    return this._withExclusiveRun(async () => {
-      if (this._hasActiveResponse) {
-        throw new Error(RUN_BUSY_ERROR_MESSAGE)
-      }
-
-      const response = this._createResponse('OnlyOneJob')
-      let accepted
-      try {
-        accepted = await this.addon.finetune(paramsToSend)
-      } catch (err) {
-        this._deleteJobMapping('OnlyOneJob')
-        response.failed(err)
-        throw err
-      }
-
-      if (!accepted) {
-        this._deleteJobMapping('OnlyOneJob')
-        const msg = RUN_BUSY_ERROR_MESSAGE
-        response.failed(new Error(msg))
-        throw new Error(msg)
-      }
-
-      this._hasActiveResponse = true
-      const finalized = response.await().finally(() => { this._hasActiveResponse = false })
-      finalized.catch(() => {})
-      response.await = () => finalized
-
-      return response
-    })
-  }
+  getState () { return this.state }
 }
 
 module.exports = LlmLlamacpp
+module.exports.pickPrimaryGgufPath = pickPrimaryGgufPath

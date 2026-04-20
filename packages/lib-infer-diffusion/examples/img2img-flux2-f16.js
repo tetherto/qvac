@@ -29,20 +29,19 @@ async function main () {
 
   console.log('Loading FLUX2-klein F16 model (full precision)...')
 
-  const model = new ImgStableDiffusion(
-    {
-      logger: console,
-      diskPath: modelDir,
-      modelName: 'flux-2-klein-4b-F16.gguf', // F16 full precision
-      llmModel: 'Qwen3-4B-Q8_0.gguf', // Q8 text encoder
-      vaeModel: 'flux2-vae.safetensors'
+  const model = new ImgStableDiffusion({
+    files: {
+      model: path.join(modelDir, 'flux-2-klein-4b-F16.gguf'), // F16 full precision
+      llm: path.join(modelDir, 'Qwen3-4B-Q8_0.gguf'), // Q8 text encoder
+      vae: path.join(modelDir, 'flux2-vae.safetensors')
     },
-    {
+    config: {
       threads: 4,
       device: 'gpu',
       prediction: 'flux2_flow'
-    }
-  )
+    },
+    logger: console
+  })
 
   try {
     // Load model weights

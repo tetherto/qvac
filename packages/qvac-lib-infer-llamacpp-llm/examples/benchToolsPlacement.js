@@ -1,7 +1,6 @@
 'use strict'
 
 const LlmLlamacpp = require('../index')
-const FilesystemDL = require('@qvac/dl-filesystem')
 const path = require('bare-path')
 const fs = require('bare-fs')
 const process = require('bare-process')
@@ -213,16 +212,15 @@ function makeBaseConfig (toolsAtEnd) {
 }
 
 async function loadModel (dirPath, modelName, config) {
-  const loader = new FilesystemDL({ dirPath })
+  const modelPath = path.join(dirPath, modelName)
   const model = new LlmLlamacpp({
-    loader,
-    modelName,
-    diskPath: dirPath,
+    files: { model: [modelPath] },
+    config,
     logger: console,
     opts: { stats: true }
-  }, config)
+  })
   await model.load()
-  return { model, loader }
+  return { model }
 }
 
 async function runAndCollect (model, prompt, runOptions) {
@@ -255,7 +253,7 @@ async function runScenario (dirPath, modelName, opts) {
   console.log('='.repeat(70))
 
   const config = makeBaseConfig(toolsAtEnd)
-  const { model, loader } = await loadModel(dirPath, modelName, config)
+  const { model } = await loadModel(dirPath, modelName, config)
   const cachePath = path.join(dirPath, cacheName)
   cleanCache(cachePath)
 
@@ -340,7 +338,6 @@ async function runScenario (dirPath, modelName, opts) {
     }
   } finally {
     await model.unload()
-    await loader.close()
     cleanCache(cachePath)
   }
 
