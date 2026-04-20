@@ -2,6 +2,7 @@
 
 const fs = require('bare-fs')
 const path = require('bare-path')
+const Bare = require('bare-process')
 const ImgStableDiffusion = require('../index')
 
 /**

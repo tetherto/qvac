@@ -331,7 +331,7 @@ class ImgStableDiffusion extends BaseInference {
       if (mentioned.length === 0) {
         this.logger.warn(
           'If multiple images have been selected, you need to check the prompt to see ' +
-          `if "@image1" and "@imageX" is mentioned at all so that the prompt makes sense. ` +
+          'if "@image1" and "@imageX" is mentioned at all so that the prompt makes sense. ' +
           `None of @image1…@image${params.init_images.length} were found in the prompt ` +
           '— FLUX2 will run but the references will have no effect.'
         )

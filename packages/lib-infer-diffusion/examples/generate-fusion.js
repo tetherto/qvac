@@ -29,7 +29,7 @@ async function main () {
   const modelDir = path.join(__dirname, '../models')
   const refPaths = [
     path.join(__dirname, '../assets/von-neumann.jpg'),
-    path.join(__dirname, '../assets/claude-shannon.jpg'),
+    path.join(__dirname, '../assets/claude-shannon.jpg')
   ]
   const outputImagePath = path.join(__dirname, '../output/fusion_two_scientists.png')
 
