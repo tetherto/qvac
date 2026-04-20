@@ -83,28 +83,6 @@ jobs:
       VCPKG_BUILD_TYPE: release
 
     steps:
-      - name: Configure AWS credentials via OIDC
-        uses: aws-actions/configure-aws-credentials@8df5847569e6427dd6c4fb1cf565c83acfa8afa7 # 6.0.0
-        with:
-          role-to-assume: ${{ secrets.AWS_OIDC_ROLE_ARN }}
-          aws-region: eu-central-1
-
-      - if: ${{ matrix.platform == 'win32' }}
-        name: Install AWS CLI on self-hosted Windows runner
-        shell: powershell
-        run: |
-          if (Get-Command aws -ErrorAction SilentlyContinue) {
-            Write-Host "AWS CLI already installed"
-            aws --version
-          } else {
-            Write-Host "Installing AWS CLI v2..."
-            Invoke-WebRequest -Uri https://awscli.amazonaws.com/AWSCLIV2.msi -OutFile $env:TEMP\AWSCLIV2.msi
-            Start-Process msiexec.exe -Wait -ArgumentList '/I', "$env:TEMP\AWSCLIV2.msi", '/qn'
-            $env:PATH = "C:\Program Files\Amazon\AWSCLIV2;$env:PATH"
-            echo "C:\Program Files\Amazon\AWSCLIV2" >> $env:GITHUB_PATH
-            aws --version
-          }
-
       - if: ${{ matrix.platform == 'android' }}
         name: Select NDK
         run: |
@@ -156,21 +134,21 @@ jobs:
           ref: ${{ inputs.ref || github.ref }}
           token: ${{ secrets.PAT_TOKEN }}
 
+      - name: Setup AWS + Windows CLI
+        uses: tetherto/qvac/.github/actions/setup-aws-prebuild@0bbdca93da303a0b1634ba14a89cec085621078d
+        with:
+          role-to-assume: ${{ secrets.AWS_OIDC_ROLE_ARN }}
+
       - name: Setup vcpkg cache
-        uses: ./.github/actions/setup-vcpkg-cache
+        uses: tetherto/qvac/.github/actions/setup-vcpkg-cache@0bbdca93da303a0b1634ba14a89cec085621078d
         env:
           MODEL_S3_BUCKET: ${{ secrets.MODEL_S3_BUCKET }}
         with:
           platform: ${{ matrix.platform }}
           arch: ${{ matrix.arch }}
 
-      - name: Setup node
-        uses: actions/setup-node@53b83947a5a98c8d113130e565377fae1a50d02f # 6.3.0
-        with:
-          node-version: lts/*
-
-      - name: Install global dependencies
-        run: npm install -g bare-runtime bare-make
+      - name: Setup Bare tooling
+        uses: tetherto/qvac/.github/actions/setup-bare-tooling@0bbdca93da303a0b1634ba14a89cec085621078d
 
       - if: ${{ matrix.os == 'windows-2022' && matrix.arch == 'arm64' }}
         name: Rename win sdk folder to disable it
@@ -286,6 +264,13 @@ jobs:
       id-token: write
     needs: prebuild
     steps:
+      - name: Checkout repository
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # 6.0.2
+        with:
+          repository: ${{ inputs.repository || github.repository }}
+          ref: ${{ inputs.ref || github.ref }}
+          token: ${{ secrets.PAT_TOKEN }}
+
       - name: Download all build artifacts
         uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # 8.0.1
         with:
@@ -305,11 +290,10 @@ jobs:
           name: prebuilds
           path: prebuilds
 
-      - name: Configure AWS credentials via OIDC
-        uses: aws-actions/configure-aws-credentials@8df5847569e6427dd6c4fb1cf565c83acfa8afa7 # 6.0.0
+      - name: Setup AWS + Windows CLI
+        uses: tetherto/qvac/.github/actions/setup-aws-prebuild@0bbdca93da303a0b1634ba14a89cec085621078d
         with:
           role-to-assume: ${{ secrets.AWS_OIDC_ROLE_ARN }}
-          aws-region: eu-central-1
 
       - name: Download onnx model files
         run: |

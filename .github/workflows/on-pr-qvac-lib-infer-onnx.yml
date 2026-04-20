@@ -104,7 +104,7 @@ jobs:
 
       - name: Verify that yaml files are formatted
         id: yamlfmt
-        uses: tetherto/oss-actions/.github/actions/yamlfmt@v1.1.0
+        uses: ./.github/actions/yamlfmt
         continue-on-error: true
 
       - name: Check for disallowed dependencies
@@ -120,7 +120,7 @@ jobs:
       - name: Run JavaScript tests
         id: run_js_tests
         continue-on-error: true
-        uses: tetherto/oss-actions/.github/actions/run-lint-and-unit-tests@4c64bed91fc8eba3a201adb1495e61b4c1a2246d
+        uses: ./.github/actions/run-lint-and-unit-tests
         with:
           gpr-token: ${{ secrets.GITHUB_TOKEN }}
           pat-token: ${{ secrets.GITHUB_TOKEN }}
@@ -158,7 +158,7 @@ jobs:
   cpp-lint:
     needs: [authorize, changes]
     if: needs.authorize.outputs.allowed == 'true' || github.event_name == 'workflow_dispatch'
-    uses: tetherto/oss-actions/.github/workflows/cpp-lint.yaml@v1.1.0
+    uses: ./.github/workflows/cpp-lint.yaml
     secrets: inherit
     with:
       sha: ${{ github.event.pull_request.base.sha || github.sha }}
@@ -187,7 +187,7 @@ jobs:
   merge-guard:
     needs: [authorize, changes, sanity-checks, prebuild]
     if: always() && (needs.changes.outputs.pkg == 'true' || github.event_name == 'workflow_dispatch')
-    uses: tetherto/oss-actions/.github/workflows/public-pr.yml@v1.1.0
+    uses: ./.github/workflows/public-pr.yml
     with:
       sanity-checks-status: ${{ needs.sanity-checks.result == 'success' }}
       build-status: ${{ needs.prebuild.result == 'success' }}
