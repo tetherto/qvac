@@ -1,11 +1,13 @@
 'use strict'
 
 /**
- * Chunked streaming **output** only: the full script is known up front; `run({ input, streamOutput: true })`
- * splits it into sentences and emits PCM on `onUpdate` per chunk. Same path as `runStream(text, options)`
- * (optional `locale`, `maxChunkScalars` on that object).
+ * Streaming **input** + streaming **output**: text arrives as an **LLM-like token stream**
+ * (tiny pseudo-token yields with short delays). Uses `runStreaming()` — for `AsyncIterable` inputs,
+ * **`accumulateSentences` defaults to true**, so fragments concatenate until a sentence end, max
+ * buffer size, or idle timeout (see `RunStreamingOptions` in `index.d.ts`). Tune `flushAfterMs` /
+ * `maxBufferScalars` / `sentenceDelimiterPreset` if needed.
  *
- * For incremental text input (async yields) plus streamed PCM, see `supertonic-io-streaming-tts.js` (`runStreaming`).
+ * Contrast with `supertonic-streaming-tts.js`: full script known up front, `run({ streamOutput: true })`.
  */
 
 const fs = require('bare-fs')
@@ -16,9 +18,38 @@ const { canPlayPcmChunks, playInt16Chunk, createChunkQueue } = require('./pcm-ch
 
 const SUPERTONIC_SAMPLE_RATE = 44100
 
+const TOKEN_DELAY_MS = 22
+
+function delay (ms) {
+  return new Promise(resolve => setTimeout(resolve, ms))
+}
+
+/**
+ * Pseudo–BPE-style slices (not a real tokenizer) — simulates an upstream LLM token stream.
+ *
+ * @param {string} fullText
+ * @param {number} pauseMs
+ */
+async function * simulateLlmTokenStream (fullText, pauseMs) {
+  let i = 0
+  let tokenIndex = 0
+  while (i < fullText.length) {
+    const take = Math.min(1 + (Math.abs((i * 7 + tokenIndex * 3) % 11) % 5), fullText.length - i)
+    const piece = fullText.slice(i, i + take)
+    i += take
+    tokenIndex += 1
+    const shown = piece.length > 24 ? `${piece.slice(0, 24)}…` : piece
+    console.log(`[stream in] token ${tokenIndex}: ${JSON.stringify(shown)}`)
+    if (pauseMs > 0) {
+      await delay(pauseMs)
+    }
+    yield piece
+  }
+}
+
 const modeArg = global.Bare ? global.Bare.argv[2] : process.argv[2]
 if (!modeArg || !['english', 'multilingual'].includes(modeArg)) {
-  console.error('Usage: supertonic-streaming-tts.js <english|multilingual>')
+  console.error('Usage: supertonic-io-streaming-tts.js <english|multilingual>')
   if (global.Bare) global.Bare.exit(1)
   else process.exit(1)
 }
@@ -54,19 +85,24 @@ async function main () {
   })
 
   const language = isMultilingual ? 'es' : 'en'
-  const textToSynthesize = isMultilingual
-    ? 'Hola mundo. Esta es una demostración de síntesis por fragmentos. Cada oración puede reproducirse al estar lista. El modelo Supertonic procesa el texto en español.'
-    : `The rolling hills of the willowed valley glimmered brilliantly under the mellowing autumn sun.
-     The sun was setting in the west, casting a golden glow over the landscape.
-     The sky was a canvas of hues, from deep reds to warm oranges and golden yellows.
-     The leaves on the trees were a vibrant red, orange, and yellow.
-     The air was crisp and cool, with a slight chill in the breeze.
-     The sound of the leaves rustling in the wind was a soothing melody.
-     The birds were singing a beautiful song, as if they were happy to be alive.
-     The bees were buzzing around the flowers, collecting nectar.
-     The butterflies were fluttering around the flowers, collecting nectar.`
+  const streamedPhrases = isMultilingual
+    ? [
+        'Primera frase que llega desde el flujo de texto.',
+        'Una breve pausa simula latencia de red.',
+        'Cada entrega se sintetiza como un trabajo aparte.'
+      ]
+    : [
+        'First phrase arrives from the upstream text stream.',
+        'A short pause simulates network latency between chunks.',
+        'Each yield becomes one TTS job and one audio chunk on onUpdate.'
+      ]
 
-  console.log(`Mode: ${modeArg}, language: ${language}, models: ${modelsDir}\n`)
+  const fullScript = streamedPhrases.join(' ')
+
+  console.log(`Mode: ${modeArg}, language: ${language}, models: ${modelsDir}`)
+  console.log(
+    `LLM-style token stream (${TOKEN_DELAY_MS}ms between pseudo-tokens), script length ${fullScript.length} chars.\n`
+  )
 
   const model = new ONNXTTS({
     files: {
@@ -91,14 +127,12 @@ async function main () {
 
     const canPlay = canPlayPcmChunks()
     if (canPlay) {
-      console.log('Streaming playback: chunks play asynchronously while inference continues.')
+      console.log('Streaming playback: chunks play as each text slice is synthesized.')
     } else {
       console.warn(
         'No supported player found (need macOS afplay, ffplay from ffmpeg, or Linux aplay). Chunks will be logged only.'
       )
     }
-
-    console.log(`Running streaming TTS on: "${textToSynthesize.substring(0, 80)}${textToSynthesize.length > 80 ? '…' : ''}"`)
 
     const playbackQueue = createChunkQueue()
     const playbackDone = (async () => {
@@ -108,9 +142,10 @@ async function main () {
       }
     })()
 
-    const response = await model.run({
-      input: textToSynthesize,
-      streamOutput: true
+    const tokenStream = simulateLlmTokenStream(fullScript, TOKEN_DELAY_MS)
+
+    const response = await model.runStreaming(tokenStream, {
+      flushAfterMs: 500
     })
 
     let chunkCount = 0
@@ -128,7 +163,7 @@ async function main () {
               : ''
           if (idx !== undefined) {
             console.log(
-              `Chunk ${idx}: ${samples.length} samples; text preview: "${preview}${preview.length >= 80 ? '…' : ''}"`
+              `[stream out] chunk ${idx}: ${samples.length} samples; text: "${preview}${preview.length >= 80 ? '…' : ''}"`
             )
           } else {
             console.log(`Audio update: ${samples.length} samples (no chunk metadata)`)
@@ -159,4 +194,3 @@ async function main () {
 }
 
 main().catch(console.error)
-
