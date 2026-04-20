@@ -19,7 +19,8 @@ struct PromptLayout {
   std::optional<size_t> lastAnchorIdx; // last user/tool role in JSON array
   size_t totalItems = 0;
   size_t toolCount = 0;
-  bool lastItemIsUserMsg = false; // true if the very last array item is role=user
+  bool lastItemIsUserMsg =
+      false; // true if the very last array item is role=user
 };
 
 /// Model/template-specific markers used by tools_compact chain detection.
@@ -53,8 +54,7 @@ public:
   /// Throws InvalidArgument on validation failure. No-op when disabled.
   void validatePrompt(
       const std::vector<common_chat_msg>& chatMsgs,
-      const std::vector<common_chat_tool>& tools,
-      const PromptLayout& layout,
+      const std::vector<common_chat_tool>& tools, const PromptLayout& layout,
       bool hasKvCacheContext) const;
 
   // ── Tokenize/eval lifecycle (called by the concrete contexts) ────────
@@ -80,7 +80,8 @@ public:
 
   /// Returns true if the anchor equals the first message boundary (degenerate
   /// case where tools_compact cannot preserve any window beyond first message).
-  [[nodiscard]] bool degenerateBoundary(llama_pos firstMsgTokens) const noexcept;
+  [[nodiscard]] bool
+  degenerateBoundary(llama_pos firstMsgTokens) const noexcept;
 
   /// Returns true if the anchor is valid for post-generation trim (positive,
   /// and not degenerate).

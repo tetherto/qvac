@@ -7,8 +7,8 @@
 
 #include <llama.h>
 
-#include "ToolsCompactController.hpp"
 #include "LlmContext.hpp"
+#include "ToolsCompactController.hpp"
 #include "common/chat.h"
 
 struct ParsedPromptPayload {
@@ -25,8 +25,7 @@ public:
 
   bool handleCache(
       ParsedPromptPayload& parsedPrompt, const std::string& inputPrompt,
-      std::function<ParsedPromptPayload(const std::string&)>
-          formatPrompt,
+      std::function<ParsedPromptPayload(const std::string&)> formatPrompt,
       const std::string& cacheKey = "");
 
   bool loadCache();

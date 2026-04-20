@@ -311,40 +311,44 @@ bool TextLlmContext::evalMessageWithTools(
   }
   if (nPast_ + nTokens >= llama_n_ctx(lctx_)) {
     auto outcome = trySlidePrefill(
-        lctx_, nPast_, firstMsgTokens_, static_cast<llama_pos>(nTokens),
-        nDiscarded_, tools_);
+        lctx_,
+        nPast_,
+        firstMsgTokens_,
+        static_cast<llama_pos>(nTokens),
+        nDiscarded_,
+        tools_);
     switch (outcome.kind) {
-      case SlideOutcome::Kind::Slid:
-        nPast_ = outcome.newNPast;
-        ++nSlides_;
-        QLOG_IF(
-            Priority::DEBUG,
-            string_format(
-                "[TextLlm] Prefill step: discarded %d tokens after the first "
-                "message\n",
-                outcome.discarded));
-        break;
-      case SlideOutcome::Kind::FullWipe:
-        nPast_ = outcome.newNPast;
-        ++nSlides_;
-        QLOG_IF(
-            Priority::DEBUG,
-            string_format(
-                "[TextLlm] Prefill step: wiped %d tokens after the first "
-                "message\n",
-                outcome.discarded));
-        break;
-      case SlideOutcome::Kind::Overflow: {
-        std::string errorMsg = string_format(
-            "[TextLlm] context overflow at prefill step (%ld tokens, max "
-            "%d)\n",
-            nPast_ + nTokens,
-            llama_n_ctx(lctx_));
-        throw qvac_errors::StatusError(
-            ADDON_ID, toString(ContextOverflow), errorMsg);
-      }
-      case SlideOutcome::Kind::NotNeeded:
-        break;
+    case SlideOutcome::Kind::Slid:
+      nPast_ = outcome.newNPast;
+      ++nSlides_;
+      QLOG_IF(
+          Priority::DEBUG,
+          string_format(
+              "[TextLlm] Prefill step: discarded %d tokens after the first "
+              "message\n",
+              outcome.discarded));
+      break;
+    case SlideOutcome::Kind::FullWipe:
+      nPast_ = outcome.newNPast;
+      ++nSlides_;
+      QLOG_IF(
+          Priority::DEBUG,
+          string_format(
+              "[TextLlm] Prefill step: wiped %d tokens after the first "
+              "message\n",
+              outcome.discarded));
+      break;
+    case SlideOutcome::Kind::Overflow: {
+      std::string errorMsg = string_format(
+          "[TextLlm] context overflow at prefill step (%ld tokens, max "
+          "%d)\n",
+          nPast_ + nTokens,
+          llama_n_ctx(lctx_));
+      throw qvac_errors::StatusError(
+          ADDON_ID, toString(ContextOverflow), errorMsg);
+    }
+    case SlideOutcome::Kind::NotNeeded:
+      break;
     }
   }
   LlamaBatch textBatch(params_.n_batch, 0, 1);

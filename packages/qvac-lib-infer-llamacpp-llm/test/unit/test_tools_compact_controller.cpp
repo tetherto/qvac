@@ -1,6 +1,6 @@
+#include <optional>
 #include <string>
 #include <vector>
-#include <optional>
 
 #include <gtest/gtest.h>
 #include <qvac-lib-inference-addon-cpp/Errors.hpp>
@@ -21,7 +21,8 @@ ToolsCompactProfile makeQwen3Profile() {
   return profile;
 }
 
-common_chat_msg makeMsg(const std::string& role, const std::string& content = "") {
+common_chat_msg
+makeMsg(const std::string& role, const std::string& content = "") {
   common_chat_msg msg;
   msg.role = role;
   msg.content = content;
@@ -34,7 +35,9 @@ TEST(ToolsCompactControllerTest, EnabledReturnsTrueWhenConstructedWithProfile) {
   EXPECT_TRUE(controller.enabled());
 }
 
-TEST(ToolsCompactControllerTest, EnabledReturnsFalseWhenConstructedWithoutProfile) {
+TEST(
+    ToolsCompactControllerTest,
+    EnabledReturnsFalseWhenConstructedWithoutProfile) {
   ToolsCompactController controller(std::nullopt);
   EXPECT_FALSE(controller.enabled());
 }
@@ -147,12 +150,13 @@ TEST(ToolsCompactControllerTest, ValidatePromptAcceptsContiguousAttachedBlock) {
   EXPECT_NO_THROW(controller.validatePrompt(chatMsgs, tools, layout, false));
 }
 
-TEST(ToolsCompactControllerTest, ValidatePromptRequiresToolsForUserTailWithoutCache) {
+TEST(
+    ToolsCompactControllerTest,
+    ValidatePromptRequiresToolsForUserTailWithoutCache) {
   ToolsCompactController controller(makeQwen3Profile());
   PromptLayout layout;
   std::vector<common_chat_msg> chatMsgs = {
-      makeMsg("system", "You are helpful"),
-      makeMsg("user", "Need weather")};
+      makeMsg("system", "You are helpful"), makeMsg("user", "Need weather")};
   std::vector<common_chat_tool> tools;
   EXPECT_THROW(
       controller.validatePrompt(chatMsgs, tools, layout, false),
@@ -167,7 +171,8 @@ TEST(
   std::vector<common_chat_msg> chatMsgs = {
       makeMsg("system", "You are helpful"),
       makeMsg("user", "Need weather"),
-      makeMsg("assistant", "<tool_call>{\"name\":\"get_weather\"}</tool_call>")};
+      makeMsg(
+          "assistant", "<tool_call>{\"name\":\"get_weather\"}</tool_call>")};
   std::vector<common_chat_tool> tools;
   EXPECT_THROW(
       controller.validatePrompt(chatMsgs, tools, layout, false),
@@ -182,12 +187,15 @@ TEST(
   std::vector<common_chat_msg> chatMsgs = {
       makeMsg("system", "You are helpful"),
       makeMsg("user", "Need weather"),
-      makeMsg("assistant", "<tool_call>{\"name\":\"get_weather\"}</tool_call>")};
+      makeMsg(
+          "assistant", "<tool_call>{\"name\":\"get_weather\"}</tool_call>")};
   std::vector<common_chat_tool> tools;
   EXPECT_NO_THROW(controller.validatePrompt(chatMsgs, tools, layout, true));
 }
 
-TEST(ToolsCompactControllerTest, ValidatePromptRequiresToolsForToolTailWithoutCache) {
+TEST(
+    ToolsCompactControllerTest,
+    ValidatePromptRequiresToolsForToolTailWithoutCache) {
   ToolsCompactController controller(makeQwen3Profile());
   PromptLayout layout;
   std::vector<common_chat_msg> chatMsgs = {
@@ -201,7 +209,9 @@ TEST(ToolsCompactControllerTest, ValidatePromptRequiresToolsForToolTailWithoutCa
       qvac_errors::StatusError);
 }
 
-TEST(ToolsCompactControllerTest, ValidatePromptAllowsToolTailWithCacheAndNoTools) {
+TEST(
+    ToolsCompactControllerTest,
+    ValidatePromptAllowsToolTailWithCacheAndNoTools) {
   ToolsCompactController controller(makeQwen3Profile());
   PromptLayout layout;
   std::vector<common_chat_msg> chatMsgs = {
@@ -317,7 +327,9 @@ TEST(ToolsCompactControllerTest, AnchorCanReachFirstMessageBoundaryAfterSlide) {
   EXPECT_EQ(controller.anchor(), firstMsgTokens);
 }
 
-TEST(ToolsCompactControllerTest, DegenerateAnchorIsNotUsableForPostGenerationTrim) {
+TEST(
+    ToolsCompactControllerTest,
+    DegenerateAnchorIsNotUsableForPostGenerationTrim) {
   ToolsCompactController controller(ToolsCompactProfile{});
   constexpr llama_pos firstMsgTokens = 100;
   controller.onTokenize(220, 100);
@@ -326,7 +338,9 @@ TEST(ToolsCompactControllerTest, DegenerateAnchorIsNotUsableForPostGenerationTri
   EXPECT_FALSE(controller.usableBoundary(firstMsgTokens));
 }
 
-TEST(ToolsCompactControllerTest, PositiveNonDegenerateAnchorIsUsableForPostTrim) {
+TEST(
+    ToolsCompactControllerTest,
+    PositiveNonDegenerateAnchorIsUsableForPostTrim) {
   ToolsCompactController controller(ToolsCompactProfile{});
   constexpr llama_pos firstMsgTokens = 100;
   controller.onTokenize(100, 80);
@@ -357,7 +371,9 @@ TEST(ToolsCompactControllerTest, GenerationCompleteNoopWhenDisabled) {
   EXPECT_FALSE(decision.clampFirstMsgTokensToNPast);
 }
 
-TEST(ToolsCompactControllerTest, GenerationCompleteDegenerateBoundaryResetsState) {
+TEST(
+    ToolsCompactControllerTest,
+    GenerationCompleteDegenerateBoundaryResetsState) {
   ToolsCompactController controller(ToolsCompactProfile{});
   constexpr llama_pos firstMsgTokens = 100;
   controller.onTokenize(200, 100);
@@ -370,7 +386,9 @@ TEST(ToolsCompactControllerTest, GenerationCompleteDegenerateBoundaryResetsState
   EXPECT_FALSE(snapshot.lastToolsTrimmed);
 }
 
-TEST(ToolsCompactControllerTest, GenerationCompleteNoTrimWhenToolCallContinuesChain) {
+TEST(
+    ToolsCompactControllerTest,
+    GenerationCompleteNoTrimWhenToolCallContinuesChain) {
   ToolsCompactController controller(makeQwen3Profile());
   constexpr llama_pos firstMsgTokens = 50;
   controller.onTokenize(140, 80);
@@ -415,17 +433,22 @@ TEST(
   EXPECT_EQ(controller.anchor(), -1);
 }
 
-TEST(ToolsCompactControllerTest, GenerationCompleteNoTrimWhenProfileMarkerIsEmpty) {
+TEST(
+    ToolsCompactControllerTest,
+    GenerationCompleteNoTrimWhenProfileMarkerIsEmpty) {
   ToolsCompactController controller(ToolsCompactProfile{});
   constexpr llama_pos firstMsgTokens = 50;
   controller.onTokenize(140, 80);
   controller.onEvalComplete(140, 140); // anchor = 80
-  auto decision = controller.onGenerationComplete("final answer", 120, firstMsgTokens);
+  auto decision =
+      controller.onGenerationComplete("final answer", 120, firstMsgTokens);
   EXPECT_FALSE(decision.trim);
   EXPECT_EQ(controller.anchor(), 80);
 }
 
-TEST(ToolsCompactControllerTest, GenerationCompleteNoTrimWhenNPastNotPastAnchor) {
+TEST(
+    ToolsCompactControllerTest,
+    GenerationCompleteNoTrimWhenNPastNotPastAnchor) {
   ToolsCompactController controller(ToolsCompactProfile{});
   constexpr llama_pos firstMsgTokens = 50;
   controller.onTokenize(140, 80);
@@ -435,12 +458,15 @@ TEST(ToolsCompactControllerTest, GenerationCompleteNoTrimWhenNPastNotPastAnchor)
   EXPECT_EQ(controller.anchor(), 80);
 }
 
-TEST(ToolsCompactControllerTest, GenerationCompleteTrimDecisionAndResetWhenChainDone) {
+TEST(
+    ToolsCompactControllerTest,
+    GenerationCompleteTrimDecisionAndResetWhenChainDone) {
   ToolsCompactController controller(makeQwen3Profile());
   constexpr llama_pos firstMsgTokens = 50;
   controller.onTokenize(140, 80);
   controller.onEvalComplete(140, 140); // anchor = 80
-  auto decision = controller.onGenerationComplete("final answer", 130, firstMsgTokens);
+  auto decision =
+      controller.onGenerationComplete("final answer", 130, firstMsgTokens);
   EXPECT_TRUE(decision.trim);
   EXPECT_EQ(decision.tokensToRemoveFromTail, 50);
   EXPECT_TRUE(decision.clampFirstMsgTokensToNPast);
@@ -456,7 +482,8 @@ TEST(ToolsCompactControllerTest, DebugSnapshotStaysConsistentAcrossReset) {
   controller.onTokenize(140, 80);
   controller.onEvalComplete(140, 140);
 
-  auto decision = controller.onGenerationComplete("final answer", 130, firstMsgTokens);
+  auto decision =
+      controller.onGenerationComplete("final answer", 130, firstMsgTokens);
   EXPECT_TRUE(decision.trim);
 
   auto snapshotBeforeReset = controller.debugSnapshot();

@@ -6,14 +6,15 @@
 //
 // Test strategy:
 // - SlideOutcome struct construction and kind variants
-// - ToolsCompactController integration (clampDiscard, onSlide, degenerateBoundary)
+// - ToolsCompactController integration (clampDiscard, onSlide,
+// degenerateBoundary)
 // - Edge cases in prefill vs generation sliding logic
-
-#include <gtest/gtest.h>
 
 #include <cstdint>
 #include <optional>
 #include <vector>
+
+#include <gtest/gtest.h>
 
 #include "model-interface/ContextSlider.hpp"
 #include "model-interface/ToolsCompactController.hpp"
@@ -65,8 +66,8 @@ public:
 
 private:
   llama_pos ctxSize_;
-  LlamaMemoryHandle fakeMemory_ = reinterpret_cast<LlamaMemoryHandle>(
-      static_cast<uintptr_t>(0x1));
+  LlamaMemoryHandle fakeMemory_ =
+      reinterpret_cast<LlamaMemoryHandle>(static_cast<uintptr_t>(0x1));
   mutable int memoryCalls_ = 0;
   mutable std::vector<SeqRmCall> seqRmCalls_;
   mutable std::vector<SeqAddCall> seqAddCalls_;
@@ -337,7 +338,8 @@ TEST_F(ContextSliderTest, PrefillSlideScenario_NeedsSlidingCalculation) {
   EXPECT_EQ(leftTokens, 300);
   EXPECT_GE(leftTokens, 0);
 
-  // After slide: nPast - discard + nTokensToAppend = 450 - 100 + 100 = 450 < 500
+  // After slide: nPast - discard + nTokensToAppend = 450 - 100 + 100 = 450 <
+  // 500
   EXPECT_LT(nPast - discard + nTokensToAppend, nCtx);
 }
 
@@ -528,7 +530,8 @@ TEST_F(ContextSliderTest, MultipleSlidesMaintainAnchorConsistency) {
   EXPECT_EQ(controller.anchor(), firstMsgTokens); // clamped to 50
 }
 
-TEST_F(ContextSliderTest, ClampDiscardBecomesMoreRestrictiveAsAnchorApproaches) {
+TEST_F(
+    ContextSliderTest, ClampDiscardBecomesMoreRestrictiveAsAnchorApproaches) {
   ToolsCompactController controller(ToolsCompactProfile{});
 
   constexpr llama_pos firstMsgTokens = 100;

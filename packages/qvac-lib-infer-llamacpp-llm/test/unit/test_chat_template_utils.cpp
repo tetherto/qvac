@@ -45,17 +45,19 @@ TEST_F(ChatTemplateUtilsTest, SelectToolsCompactMarkerForQwen3) {
   EXPECT_EQ(marker.value(), "<tool_call>");
 }
 
-TEST_F(ChatTemplateUtilsTest, SelectToolsCompactMarkerForUnsupportedArchitecture) {
+TEST_F(
+    ChatTemplateUtilsTest, SelectToolsCompactMarkerForUnsupportedArchitecture) {
   EXPECT_FALSE(selectToolsCompactMarker("llama").has_value());
   EXPECT_FALSE(selectToolsCompactMarker("mistral").has_value());
   EXPECT_FALSE(selectToolsCompactMarker("gemma").has_value());
 }
 
-TEST_F(ChatTemplateUtilsTest, SupportsToolsCompactForModelMetadataByArchitecture) {
+TEST_F(
+    ChatTemplateUtilsTest, SupportsToolsCompactForModelMetadataByArchitecture) {
   EXPECT_TRUE(
       supportsToolsCompactForModelMetadata(std::string("qwen3"), std::nullopt));
-  EXPECT_FALSE(supportsToolsCompactForModelMetadata(
-      std::string("llama"), std::nullopt));
+  EXPECT_FALSE(
+      supportsToolsCompactForModelMetadata(std::string("llama"), std::nullopt));
 }
 
 TEST_F(ChatTemplateUtilsTest, SupportsToolsCompactForModelMetadataByModelName) {

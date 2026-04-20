@@ -103,7 +103,8 @@ SlideOutcome trySlideGeneration(
     QLOG_IF(
         Priority::WARNING,
         string_format(
-            "[ContextSlider] tools_compact anchor equals first message boundary "
+            "[ContextSlider] tools_compact anchor equals first message "
+            "boundary "
             "(nPastBeforeTools=%d, firstMsgTokens=%d) while context is full; "
             "resetting tool boundary before retry\n",
             tools.anchor(),

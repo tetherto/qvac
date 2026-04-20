@@ -27,8 +27,7 @@ llama_pos ToolsCompactController::anchor() const noexcept {
 
 void ToolsCompactController::validatePrompt(
     const std::vector<common_chat_msg>& chatMsgs,
-    const std::vector<common_chat_tool>& tools,
-    const PromptLayout& layout,
+    const std::vector<common_chat_tool>& tools, const PromptLayout& layout,
     bool hasKvCacheContext) const {
   if (!enabled_) {
     return;
@@ -155,8 +154,7 @@ void ToolsCompactController::onTokenize(
 
 void ToolsCompactController::onEvalComplete(
     llama_pos nPast, llama_pos totalTokensEvaled) {
-  if (
-      !enabled_ || nConversationOnlyTokens_ == 0 || nPastBeforeTools_ != -1 ||
+  if (!enabled_ || nConversationOnlyTokens_ == 0 || nPastBeforeTools_ != -1 ||
       totalTokensEvaled <= nConversationOnlyTokens_) {
     // Only set anchor on first round — preserve position during chain
     return;
@@ -240,9 +238,8 @@ ToolsCompactController::onGenerationComplete(
   }
 
   // Check if output contains a tool call marker - if so, chain continues
-  bool hasToolCall =
-      assistantOutput.find(profile_.toolCallStartMarker) !=
-      std::string_view::npos;
+  bool hasToolCall = assistantOutput.find(profile_.toolCallStartMarker) !=
+                     std::string_view::npos;
   if (hasToolCall) {
     return decision;
   }

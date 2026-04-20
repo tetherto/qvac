@@ -317,11 +317,7 @@ void LlamaModel::init(bool acquireLock) {
   std::optional<int> adrenoVersion;
   ResolvedToolsCompactConfig toolsCompactConfig;
   commonParamsParse(
-      modelPath,
-      configFilemap,
-      params,
-      adrenoVersion,
-      toolsCompactConfig);
+      modelPath, configFilemap, params, adrenoVersion, toolsCompactConfig);
 
   const std::string errorWhenFailed = toString(UnableToLoadModel);
   auto streamedFiles =
@@ -680,19 +676,20 @@ LlamaModel::resolveToolsCompactConfig(bool toolsCompactRequested) const {
 
   auto arch = metadata_.tryGetString("general.architecture");
   auto modelName = metadata_.tryGetString("general.name");
-  auto marker =
-      qvac_lib_inference_addon_llama::utils::
-          selectToolsCompactMarkerForModelMetadata(arch, modelName);
+  auto marker = qvac_lib_inference_addon_llama::utils::
+      selectToolsCompactMarkerForModelMetadata(arch, modelName);
 
   if (!marker.has_value()) {
-    return {.resolution = ToolsCompactResolution::RequestedUnsupported,
-            .profile = std::nullopt};
+    return {
+        .resolution = ToolsCompactResolution::RequestedUnsupported,
+        .profile = std::nullopt};
   }
 
   ToolsCompactProfile profile;
   profile.toolCallStartMarker = marker.value();
-  return {.resolution = ToolsCompactResolution::RequestedSupported,
-          .profile = std::move(profile)};
+  return {
+      .resolution = ToolsCompactResolution::RequestedSupported,
+      .profile = std::move(profile)};
 }
 
 // NOLINTNEXTLINE(readability-convert-member-functions-to-static,readability-function-cognitive-complexity)
@@ -989,8 +986,7 @@ void LlamaModel::commonParamsParse(
   }
 }
 // NOLINTNEXTLINE(readability-convert-member-functions-to-static,readability-function-cognitive-complexity)
-ParsedPromptPayload
-LlamaModel::formatPrompt(const std::string& input) {
+ParsedPromptPayload LlamaModel::formatPrompt(const std::string& input) {
   if (input.empty()) {
     state_->llmContext_->resetMedia();
     std::string errorMsg = string_format("%s: empty prompt\n", __func__);
@@ -1131,8 +1127,7 @@ std::unique_ptr<LlmContext> LlamaModel::createContext(
     return std::make_unique<MtmdLlmContext>(
         params, std::move(llamaInit), tools);
   }
-  return std::make_unique<TextLlmContext>(
-      params, std::move(llamaInit), tools);
+  return std::make_unique<TextLlmContext>(params, std::move(llamaInit), tools);
 }
 
 bool LlamaModel::loadMedia(const std::vector<uint8_t>& input) {

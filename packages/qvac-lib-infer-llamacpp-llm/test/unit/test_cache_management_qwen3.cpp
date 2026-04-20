@@ -169,7 +169,8 @@ TEST_F(CacheManagementQwen3Test, CacheReloadWithToolsCompactTrue) {
   EXPECT_TRUE(fs::exists(session1_path));
 }
 
-TEST_F(CacheManagementQwen3Test, CacheWithoutToolsWithToolsCompactTrueIsRejected) {
+TEST_F(
+    CacheManagementQwen3Test, CacheWithoutToolsWithToolsCompactTrueIsRejected) {
   if (!isQwen3ModelPath(test_model_path)) {
     GTEST_SKIP() << "Test requires Qwen3 model for tools_compact feature";
   }
@@ -266,9 +267,7 @@ TEST_F(CacheManagementQwen3Test, CacheToolsCompactModeWithMultiplePrompts) {
   EXPECT_TRUE(fs::exists(session1_path));
 }
 
-TEST_F(
-    CacheManagementQwen3Test,
-    CacheToolsCompactModeWithoutToolsIsRejected) {
+TEST_F(CacheManagementQwen3Test, CacheToolsCompactModeWithoutToolsIsRejected) {
   if (!isQwen3ModelPath(test_model_path)) {
     GTEST_SKIP() << "Test requires Qwen3 model for tools_compact feature";
   }
@@ -338,4 +337,3 @@ TEST_F(CacheManagementQwen3Test, CacheToolsCompactModeCanReloadSavedSession) {
   double cacheTokensAfterReload = getStatValue(statsAfterReload, "CacheTokens");
   EXPECT_GT(cacheTokensAfterReload, 0.0);
 }
-
