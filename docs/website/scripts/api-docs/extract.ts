@@ -701,20 +701,6 @@ const BUILTIN_TYPES = new Set([
   "Int32Array", "Float32Array", "Float64Array", "ArrayBuffer",
 ]);
 
-function resolveViaTypeScript(
-  fileName: string,
-  qualifiedName: string,
-  pos?: number,
-): TypeField[] | null {
-  if (!tsChecker || !tsProgram) return null;
-
-  const targetNode = findTsTypeAlias(fileName, qualifiedName, pos);
-  if (!targetNode) return null;
-
-  const type = tsChecker.getTypeAtLocation(targetNode);
-  return extractTsProperties(type, targetNode);
-}
-
 function extractTsProperties(type: ts.Type, location: ts.Node): TypeField[] | null {
   if (!tsChecker) return null;
 
