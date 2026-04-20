@@ -1,5 +1,5 @@
 import type { ModelProgressUpdate } from "@/schemas";
-import type { DownloadStats, DownloadResult, DownloadHooks } from "./types";
+import type { DownloadStats, DownloadResult, DownloadHooks, ResolveResult } from "./types";
 import { downloadModelFromHttp } from "./http";
 import { downloadModelFromRegistry } from "./registry";
 import { downloadModelFromHyperdrive } from "./hyperdrive";
@@ -161,3 +161,45 @@ export async function downloadModelFromHyperdriveWithStats(
   const stats = computeStats(collector);
   return stats ? { path, stats } : { path };
 }
+
+export function mergeDownloadStats(
+  results: ResolveResult[],
+): DownloadStats | undefined {
+  const stats = results
+    .map((r) => r.downloadStats)
+    .filter((s): s is DownloadStats => s !== undefined);
+
+  if (stats.length === 0) return undefined;
+
+  const downloadTimeMs = Math.max(
+    ...stats.map((s) => s.downloadTimeMs ?? 0),
+  );
+
+  const totalBytesDownloaded = stats.reduce(
+    (sum, s) => sum + (s.totalBytesDownloaded ?? 0),
+    0,
+  );
+
+  const checksumValidationTimeMs = stats.reduce(
+    (sum, s) => sum + (s.checksumValidationTimeMs ?? 0),
+    0,
+  );
+
+  const cacheHitValues = stats
+    .map((s) => s.cacheHit)
+    .filter((v): v is boolean => v !== undefined);
+
+  const merged: DownloadStats = {};
+
+  if (downloadTimeMs > 0) merged.downloadTimeMs = downloadTimeMs;
+  if (totalBytesDownloaded > 0) merged.totalBytesDownloaded = totalBytesDownloaded;
+  if (downloadTimeMs > 0 && totalBytesDownloaded > 0) {
+    merged.downloadSpeedBps = (totalBytesDownloaded * 1000) / downloadTimeMs;
+  }
+  if (checksumValidationTimeMs > 0) merged.checksumValidationTimeMs = checksumValidationTimeMs;
+  if (cacheHitValues.length > 0) merged.cacheHit = cacheHitValues.every(Boolean);
+  if (stats.some((s) => s.sharedTransfer)) merged.sharedTransfer = true;
+
+  return Object.keys(merged).length > 0 ? merged : undefined;
+}
+

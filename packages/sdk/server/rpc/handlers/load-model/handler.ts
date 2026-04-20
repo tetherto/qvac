@@ -98,9 +98,11 @@ export async function handleLoadModel(
 
     try {
       const pluginResolve = plugin.resolveConfig
-        ? plugin.resolveConfig(
-            resolvedModelConfig,
-            session.createResolveContext(modelSrc, canonicalModelType, modelName),
+        ? Promise.resolve().then(() =>
+            plugin.resolveConfig!(
+              resolvedModelConfig,
+              session.createResolveContext(modelSrc, canonicalModelType, modelName),
+            ),
           )
         : undefined;
 
@@ -164,7 +166,7 @@ export async function handleLoadModel(
       const totalLoadTimeMs = nowMs() - totalLoadStart;
       const profileId = profilingMeta?.id ?? generateProfileId();
 
-      const resolveResult = session.getPrimaryResult();
+      const resolveResult = session.getAggregateResult();
       const { gauges, tags } = buildDownloadProfilingFields(
         resolveResult?.downloadStats,
         resolveResult?.sourceType,
