@@ -1,7 +1,6 @@
 'use strict'
 
 const LlamaClient = require('../../../index')
-const FilesystemDL = require('@qvac/dl-filesystem')
 const process = require('bare-process')
 const path = require('bare-path')
 const fs = require('bare-fs')
@@ -143,15 +142,7 @@ async function runScenario (client, messages) {
 async function main () {
   const [modelName, modelDir] = await downloadModel(MODEL.url, MODEL.name)
 
-  const loader = new FilesystemDL({ dirPath: modelDir })
-
-  const args = {
-    loader,
-    opts: { stats: true },
-    logger: console,
-    diskPath: modelDir,
-    modelName
-  }
+  const modelPath = path.join(modelDir, modelName)
 
   const sharedConfig = {
     device: 'gpu',
@@ -184,7 +175,12 @@ async function main () {
       console.log('  Model: ' + MODEL.name)
       console.log(separator('='))
 
-      baselineClient = new LlamaClient(args, baselineConfig)
+      baselineClient = new LlamaClient({
+        files: { model: [modelPath] },
+        config: baselineConfig,
+        logger: console,
+        opts: { stats: true }
+      })
       await baselineClient.load()
       console.log('Base model loaded (no LoRA).\n')
 
@@ -263,7 +259,12 @@ async function main () {
       console.log('  Adapter: ' + LORA_ADAPTER)
       console.log(separator('='))
 
-      client = new LlamaClient(args, config)
+      client = new LlamaClient({
+        files: { model: [modelPath] },
+        config,
+        logger: console,
+        opts: { stats: true }
+      })
       await client.load()
       console.log('Model + LoRA adapter loaded.\n')
 
@@ -408,8 +409,6 @@ async function main () {
     console.error('\nTest failed:', error.message)
     console.error('Stack:', error.stack)
     process.exit(1)
-  } finally {
-    try { await loader.close() } catch (e) { console.error('Failed to close loader:', e) }
   }
 }
 

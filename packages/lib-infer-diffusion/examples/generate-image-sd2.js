@@ -49,21 +49,20 @@ async function main () {
   console.log('Seed   :', SEED)
   console.log()
 
-  const model = new ImgStableDiffusion(
-    {
-      logger: console,
-      diskPath: MODELS_DIR,
-      modelName: MODEL_NAME
-      // No llmModel — SD2.1 uses the CLIP text encoder baked into the checkpoint.
-      // No vaeModel — the VAE is baked into the checkpoint.
+  const model = new ImgStableDiffusion({
+    files: {
+      model: path.join(MODELS_DIR, MODEL_NAME)
+      // No llm — SD2.1 uses the CLIP text encoder baked into the checkpoint.
+      // No vae — the VAE is baked into the checkpoint.
     },
-    {
+    config: {
       threads: 8,
       // SD2.1 uses v-prediction. This safetensors file has no GGUF metadata so
       // auto-detection cannot determine the prediction type; set it explicitly.
       prediction: 'v'
-    }
-  )
+    },
+    logger: console
+  })
 
   try {
     // ── 1. Load weights ───────────────────────────────────────────────────────

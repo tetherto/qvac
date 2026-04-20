@@ -66,6 +66,7 @@ export interface QVACRegistryClientOptions {
   storage?: string
   registryCoreKey?: string
   logger?: any
+  corestoreOpts?: { wait?: boolean }
 }
 
 export interface QVACModelQuery {

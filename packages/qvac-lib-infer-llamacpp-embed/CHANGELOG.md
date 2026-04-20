@@ -1,5 +1,145 @@
 # Changelog
 
+## [0.14.0] - 2026-04-10
+
+This release migrates the embed addon off `BaseInference` inheritance and the `WeightsProvider` download layer onto the composable `createJobHandler` + `exclusiveRunQueue` utilities from `@qvac/infer-base@^0.4.0`. The constructor signature is replaced with a single object whose `files.model` field is an ordered array of absolute paths, mirroring the parallel LLM and diffusion addon refactors. This is a breaking change — every caller must update.
+
+## Breaking Changes
+
+### Constructor signature: single object with `files`, no `Loader`
+
+`GGMLBert` now takes a single `{ files, config?, logger?, opts? }` object. The old `Loader` + `diskPath` + `modelName` + two-arg `(args, config)` shape is gone — callers pre-resolve absolute paths and supply them as `files.model`.
+
+```js
+// BEFORE (≤ 0.13.x)
+const FilesystemDL = require('@qvac/dl-filesystem')
+const loader = new FilesystemDL({ dirPath: '/models' })
+const model = new GGMLBert({
+  loader,
+  modelName: 'bge-small-en-v1.5-q4_0.gguf',
+  diskPath: '/models',
+  logger: console,
+  opts: { stats: true }
+}, { device: 'gpu', batch_size: '512' })
+
+// AFTER (0.14.0)
+const model = new GGMLBert({
+  files: {
+    model: ['/models/bge-small-en-v1.5-q4_0.gguf']
+  },
+  config: { device: 'gpu', batch_size: '512' },
+  logger: console,
+  opts: { stats: true }
+})
+```
+
+For sharded models the caller passes the full ordered list — the `<basename>.tensors.txt` companion first, followed by every `<basename>-NNNNN-of-MMMMM.gguf` shard in ascending order:
+
+```js
+const model = new GGMLBert({
+  files: {
+    model: [
+      '/models/big-embed-model.tensors.txt',
+      '/models/big-embed-model-00001-of-00003.gguf',
+      '/models/big-embed-model-00002-of-00003.gguf',
+      '/models/big-embed-model-00003-of-00003.gguf'
+    ]
+  },
+  config: { device: 'gpu' }
+})
+```
+
+### `BaseInference` inheritance and `WeightsProvider` removed
+
+`GGMLBert` no longer extends `BaseInference` and no longer touches the `WeightsProvider` download layer. The class composes `createJobHandler` and `exclusiveRunQueue` from `@qvac/infer-base@^0.4.0` directly. Public lifecycle methods (`load` / `run` / `cancel` / `unload` / `getState`) are unchanged in shape, but `downloadWeights` and the loader-based progress callbacks are gone — the caller is responsible for placing files on disk before constructing the model.
+
+In-memory streaming from network sources (URLs, Hyperdrive) is no longer supported in the current API. The SDK does not currently use it (models are stored to disk first); this can be re-added when/if the SDK plans to support that feature. Before, it was possible through the `Loader` abstraction.
+
+### Dependency changes
+
+- `@qvac/infer-base` bumped from `^0.2.2` to `^0.4.0`.
+- `bare-fs` is now a runtime dependency (used to stream shards from disk).
+- `@qvac/dl-filesystem` and `@qvac/dl-hyperdrive` are no longer used by this package and have been removed from `devDependencies` / `peerDependencies`.
+
+### `getState()` returns a narrower shape
+
+`getState()` previously returned `{ configLoaded, weightsLoaded, destroyed }` (the three-field shape inherited from `BaseInference`). It now returns `{ configLoaded }` only. The `weightsLoaded` and `destroyed` fields are gone — `weightsLoaded` collapsed into `configLoaded` because the refactored `load()` does both in one step, and `destroyed` is no longer tracked since `unload()` resets `configLoaded` and nulls the addon handle instead. Callers reading `state.weightsLoaded` or `state.destroyed` must switch to `state.configLoaded`.
+
+### Public methods removed from `GGMLBert`
+
+`GGMLBert` previously exposed these methods via `BaseInference` inheritance, all of which are now gone:
+
+- `downloadWeights(onDownloadProgress, opts)` — the download layer is removed; the caller places files on disk and passes absolute paths in `files.model`.
+- `pause()` / `unpause()` / `stop()` — BaseInference job-lifecycle helpers. The refactor uses `createJobHandler` directly; use `cancel()` to terminate an in-flight run.
+- `status()` — replaced by `getState()` for the static readiness flag; per-job state is observed via the `QvacResponse` returned by `run()`.
+- `destroy()` — folded into `unload()`, which now both releases native resources and nulls `this.addon`.
+- `getApiDefinition()` — no longer exposed; consumers should import types from `index.d.ts`.
+
+### `load()` takes no arguments
+
+`load()` previously forwarded `...args` through `BaseInference.load` into embed's `_load(closeLoader, reportProgressCallback)`. Both arguments are gone — `closeLoader` is meaningless without a `Loader`, and `reportProgressCallback` is superseded by the caller owning download-and-placement before construction. Call `await model.load()` with no arguments.
+
+### Type exports removed from `index.d.ts`
+
+The following exports are no longer part of the package's public type surface because the loader/download layer they described is gone: `ReportProgressCallback`, `Loader`, `GGMLArgs`, `DownloadWeightsOptions`, `DownloadResult`. TypeScript consumers importing any of these must update to the new `GGMLBertArgs` / `files` shape.
+
+### `BertInterface` `outputCb` signature: `jobId` dropped
+
+The exported `BertInterface` class's constructor still takes `(binding, configurationParams, outputCb)`, but the `outputCb` signature changed:
+
+```ts
+// BEFORE
+(addon: unknown, event: string, jobId: number, data: unknown, error?: Error) => void
+// AFTER
+(addon: unknown, event: string, data: unknown, error?: Error) => void
+```
+
+The `jobId: number` argument is gone because `createJobHandler` owns the single active job directly; the wrapper no longer needs a per-job identifier in the callback chain. External callers constructing `BertInterface` with a custom `outputCb` must drop the third argument.
+
+### `BertInterface.runJob` return type
+
+`BertInterface.runJob(input)` previously returned `Promise<void>`. It now returns `Promise<boolean>` — `true` if the job was accepted, `false` if the addon was already busy. `GGMLBert` uses this return to surface a busy error to the caller instead of silently dropping the job.
+
+## Features
+
+### Constructor input validation
+
+The constructor now throws `TypeError('files.model must be a non-empty array of absolute paths')` when `files` or `files.model` is missing or empty. This produces a clear error for callers porting old code instead of a confusing `Cannot read properties of undefined`.
+
+### `run()`-before-`load()` guard
+
+Calling `run()` before `load()` now throws `Error('Addon not initialized. Call load() first.')` instead of dereferencing `null` and crashing.
+
+### `load()` is now idempotent when already loaded
+
+A second `load()` call on an already-loaded instance is now a silent no-op instead of unloading and reloading. This aligns with the ReadyResource pattern used elsewhere in QVAC and prevents accidental double-loads from triggering expensive work. Callers that intentionally want to swap weights must call `unload()` first (which clears `configLoaded`) and then `load()` again.
+
+### Crash-safe shard streaming
+
+If `_streamShards()` or `addon.activate()` throws mid-load (for example a corrupted shard file or a native init failure), the partially-initialized addon is now best-effort-unloaded and `this.addon` is reset to `null`. A subsequent `load()` call starts cleanly instead of leaking a zombie native instance.
+
+## Bug Fixes
+
+### `unload()` clears the addon reference
+
+`unload()` now sets `this.addon = null` after `await this.addon.unload()`, so post-unload `cancel()` / `run()` calls hit the explicit guards rather than dereferencing a disposed native handle. `cancel()` and the job-handler cancel closure both use optional chaining for the same reason.
+
+### Unknown addon events no longer pollute the output stream
+
+`_addonOutputCallback` previously fed any non-stats / non-error event payload into `response.output`, including unknown events. It now logs unknown events at warn level (these indicate a native-layer change worth surfacing) and only forwards `Embeddings` payloads to the active response.
+
+### `load()` is serialized through the exclusive run queue
+
+`load()` is now routed through the same `exclusiveRunQueue` used by `run()` and `unload()`. Previously two overlapping `load()` calls on the same instance could both pass the `configLoaded` guard before it flipped to `true`, both stream shards into and activate the native addon, and clobber `this.addon` — leaking one native handle. Concurrent `load()` on a single instance is now safe.
+
+### Constructor rejects non-absolute path entries
+
+Each entry in `files.model` is now validated with `path.isAbsolute()` (matching the existing error-message contract). Relative paths are rejected at construction time instead of bubbling up from `bare-fs` or the native load.
+
+## Pull Requests
+
+- [#1493](https://github.com/tetherto/qvac/pull/1493) - chore[bc]: embed addon interface refactor — remove BaseInference and WeightsProvider
+
 ## [0.13.4] - 2026-04-03
 
 ### Changed

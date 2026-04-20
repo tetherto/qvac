@@ -1,6 +1,6 @@
 import fs from "bare-fs";
 import path from "bare-path";
-import { getEnv } from "@/server/env";
+import { getQvacPath } from "@/server/utils/qvac-paths";
 import {
   CacheDirNotAbsoluteError,
   CacheDirNotWritableError,
@@ -125,8 +125,7 @@ export function getSDKConfig(): QvacConfig {
 }
 
 function getDefaultCacheDir() {
-  const homeDir = getEnv().HOME_DIR;
-  return path.join(homeDir, ".qvac", "models");
+  return getQvacPath("models");
 }
 
 export function getConfiguredCacheDir(): string {

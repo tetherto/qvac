@@ -1,0 +1,296 @@
+---
+title: "profiler"
+titleStyle: code
+description: Singleton object that collects and exports profiling data for SDK operations.
+---
+
+```ts
+const profiler: {
+  enable(options?: ProfilerRuntimeOptions): void;
+  disable(): void;
+  isEnabled(): boolean;
+  exportJSON(options?: { includeRecentEvents?: boolean }): ProfilerExport;
+  exportTable(): string;
+  exportSummary(): string;
+  onRecord(callback: (event: ProfilingEvent) => void): () => void;
+  getConfig(): ResolvedProfilerConfig;
+  getAggregates(): Record<string, AggregatedStats>;
+  clear(): void;
+};
+```
+
+## Methods
+
+| Method | Description |
+| --- | --- |
+| [`enable()`](#enable) | Enables profiling and resets aggregated data |
+| [`disable()`](#disable) | Disables profiling |
+| [`isEnabled()`](#isenabled) | Returns whether profiling is currently enabled |
+| [`exportJSON()`](#exportjson) | Exports profiling data as a structured JSON object |
+| [`exportTable()`](#exporttable) | Exports aggregated stats as a formatted ASCII table |
+| [`exportSummary()`](#exportsummary) | Exports a human-readable summary string |
+| [`onRecord()`](#onrecord) | Registers a listener for profiling events; returns an unsubscribe function |
+| [`getConfig()`](#getconfig) | Returns the current effective profiler configuration |
+| [`getAggregates()`](#getaggregates) | Returns all aggregated stats keyed by operation name |
+| [`clear()`](#clear) | Clears all aggregated data and recent events |
+
+### `enable()`
+
+```ts
+function enable(options?: ProfilerRuntimeOptions): void
+```
+
+Enables profiling and resets all previously aggregated data.
+
+**Parameters**
+
+| Name | Type | Required? | Description |
+| --- | --- | :---: | --- |
+| options | [`ProfilerRuntimeOptions`](#profilerruntimeoptions) | ✗ | Runtime profiler options |
+
+#### `ProfilerRuntimeOptions`
+
+| Field | Type | Required? | Default | Description |
+| --- | --- | :---: | --- | --- |
+| mode | `"summary" \| "verbose"` | ✗ | `"summary"` | Profiling detail level — `"verbose"` retains recent events |
+| includeServerBreakdown | `boolean` | ✗ | `false` | Include server-side timing breakdown in profiling data |
+| operationFilters | `string[]` | ✗ | `[]` | Only profile operations whose names match these filters (empty = all) |
+
+**Returns**
+
+`void`
+
+### `disable()`
+
+```ts
+function disable(): void
+```
+
+Disables profiling. New SDK operations will no longer be recorded.
+
+**Parameters**
+
+No parameters.
+
+**Returns**
+
+`void`
+
+### `isEnabled()`
+
+```ts
+function isEnabled(): boolean
+```
+
+Returns whether profiling is currently enabled.
+
+**Parameters**
+
+No parameters.
+
+**Returns**
+
+`boolean` — `true` if profiling is enabled, `false` otherwise.
+
+### `exportJSON()`
+
+```ts
+function exportJSON(options?: { includeRecentEvents?: boolean }): ProfilerExport
+```
+
+Exports profiling data as a structured JSON object.
+
+**Parameters**
+
+| Name | Type | Required? | Description |
+| --- | --- | :---: | --- |
+| options | `object` | ✗ | Export options |
+| options.includeRecentEvents | `boolean` | ✗ | Include recent events in the export (only available in `"verbose"` mode) |
+
+**Returns**
+
+[`ProfilerExport`](#profilerexport) — structured JSON object containing configuration snapshot, aggregated statistics, and optionally recent events.
+
+#### `ProfilerExport`
+
+| Field | Type | Description |
+| --- | --- | --- |
+| config | `object` | Snapshot of the profiler configuration at export time |
+| config.enabled | `boolean` | Whether profiling was enabled |
+| config.mode | `"summary" \| "verbose"` | Profiling mode |
+| config.includeServerBreakdown | `boolean` | Whether server breakdown was enabled |
+| config.operationFilters | `string[]` | Active operation filters |
+| config.maxRecentEvents | `number` | Max recent events setting |
+| aggregates | `Record<string,` [`AggregatedStats`](#aggregatedstats)`>` | Aggregated statistics keyed by operation name |
+| recentEvents | [`ProfilingEvent[]`](#profilingevent) | Recent profiling events (only when `includeRecentEvents: true`) |
+| exportedAt | `number` | Monotonic timestamp of the export |
+
+#### `AggregatedStats`
+
+Per-operation aggregated statistics:
+
+| Field | Type | Description |
+| --- | --- | --- |
+| count | `number` | Number of recorded events |
+| min | `number` | Minimum duration in milliseconds |
+| max | `number` | Maximum duration in milliseconds |
+| avg | `number` | Average duration in milliseconds |
+| sum | `number` | Total accumulated duration in milliseconds |
+| last | `number` | Most recent duration in milliseconds |
+
+#### `ProfilingEvent`
+
+Individual profiling event recorded during an SDK operation:
+
+| Field | Type | Required? | Description |
+| --- | --- | :---: | --- |
+| ts | `number` | ✓ | Monotonic timestamp in milliseconds |
+| op | `string` | ✓ | Operation name (e.g., `"completion"`, `"loadModel"`) |
+| kind | [`ProfilingEventKind`](#profilingeventkind) | ✓ | Event category |
+| profileId | `string` | ✗ | Unique identifier for the profiling session |
+| phase | `string` | ✗ | Sub-phase within the operation (e.g., `"rpc.send"`, `"handler.run"`) |
+| ms | `number` | ✗ | Duration in milliseconds |
+| count | `number` | ✗ | Count metric (e.g., tokens, chunks) |
+| bytes | `number` | ✗ | Byte count metric |
+| gauges | `Record<string, number>` | ✗ | Numeric gauges (e.g., throughput, token counters) |
+| tags | `Record<string, string>` | ✗ | String tags (e.g., `handlerType`, `sourceType`, `modelId`) |
+
+#### `ProfilingEventKind`
+
+`"rpc" | "handler" | "download" | "load" | "delegation"`
+
+### `exportTable()`
+
+```ts
+function exportTable(): string
+```
+
+Exports aggregated stats as a formatted ASCII table suitable for console output.
+
+**Parameters**
+
+No parameters.
+
+**Returns**
+
+`string` — formatted ASCII table of all aggregated profiling data.
+
+### `exportSummary()`
+
+```ts
+function exportSummary(): string
+```
+
+Exports a human-readable summary of all aggregated profiling data.
+
+**Parameters**
+
+No parameters.
+
+**Returns**
+
+`string` — human-readable summary string.
+
+### `onRecord()`
+
+```ts
+function onRecord(callback: (event: ProfilingEvent) => void): () => void
+```
+
+Registers a listener that is called for every profiling event.
+
+**Parameters**
+
+| Name | Type | Required? | Description |
+| --- | --- | :---: | --- |
+| callback | `(event:` [`ProfilingEvent`](#profilingevent)`) => void` | ✓ | Function called with each profiling event |
+
+**Returns**
+
+`() => void` — an unsubscribe function. Call it to stop receiving events.
+
+### `getConfig()`
+
+```ts
+function getConfig(): ResolvedProfilerConfig
+```
+
+Returns the current effective profiler configuration.
+
+**Parameters**
+
+No parameters.
+
+**Returns**
+
+[`ResolvedProfilerConfig`](#resolvedprofilerconfig):
+
+#### `ResolvedProfilerConfig`
+
+| Field | Type | Description |
+| --- | --- | --- |
+| enabled | `boolean` | Whether profiling is currently enabled |
+| mode | `"summary" \| "verbose"` | Active profiling mode |
+| includeServerBreakdown | `boolean` | Whether server breakdown is included |
+| operationFilters | `string[]` | Active operation filters |
+| maxRecentEvents | `number` | Maximum number of recent events retained (default 1000) |
+
+### `getAggregates()`
+
+```ts
+function getAggregates(): Record<string, AggregatedStats>
+```
+
+Returns all aggregated stats keyed by operation name.
+
+**Parameters**
+
+No parameters.
+
+**Returns**
+
+[`Record<string, AggregatedStats>`](#aggregatedstats) — all aggregated stats keyed by operation name.
+
+### `clear()`
+
+```ts
+function clear(): void
+```
+
+Clears all aggregated data and recent events. Does not disable profiling.
+
+**Parameters**
+
+No parameters.
+
+**Returns**
+
+`void`
+
+## Example
+
+```typescript
+import { profiler, completion, loadModel } from "@qvac/sdk";
+
+profiler.enable({ mode: "verbose", includeServerBreakdown: true });
+
+const modelId = await loadModel({
+  modelSrc: "/path/to/model.gguf",
+  modelType: "llm",
+});
+
+const result = completion({
+  modelId,
+  history: [{ role: "user", content: "Hello!" }],
+});
+
+await result.text;
+
+console.log(profiler.exportTable());
+
+const json = profiler.exportJSON({ includeRecentEvents: true });
+console.log("Aggregates:", json.aggregates);
+
+profiler.clear();
+profiler.disable();
+```

@@ -15,6 +15,7 @@ export async function cancelHandler(
   try {
     switch (request.operation) {
       case "inference":
+      case "embeddings":
         await cancel({ modelId: request.modelId });
         break;
       case "downloadAsset": {

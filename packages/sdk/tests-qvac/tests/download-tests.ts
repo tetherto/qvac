@@ -5,6 +5,7 @@ export const downloadCancelIsolation: TestDefinition = {
   params: { cancelAtPercent: 1 },
   // expectation is ignored in test executor, it does validation in the executor itself.
   expectation: { validation: "function", fn: () => true },
+  suites: ["smoke"],
   metadata: {
     category: "download",
     dependency: "none",

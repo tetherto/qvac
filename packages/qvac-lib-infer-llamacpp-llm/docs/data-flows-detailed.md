@@ -22,12 +22,13 @@ This document contains detailed diagrams showing how data moves through the `@qv
 - Emits: Output (streaming), JobStarted, JobEnded, Error
 
 **Weight Loading:**
-- JavaScript sends model weights in chunks (streaming, zero-copy)
-- C++ creates std::streambuf over JS ArrayBuffers
-- For streamed models, the first shard is lent to `ModelMetaData` for GGUF metadata extraction before proceeding to weight loading
+- Caller passes every file (primary model + every shard + `.tensors.txt` companion) as an array of absolute paths in `files.model`
+- `LlmLlamacpp._streamShards()` iterates those paths, opening `bare-fs.createReadStream` and forwarding chunks via `addon.loadWeights`
+- C++ creates `std::streambuf` over JS ArrayBuffers (zero-copy)
+- For streamed sharded models, the first shard is lent to `ModelMetaData` for GGUF metadata extraction before proceeding to weight loading
 - llama.cpp reads weights via stream interface
-- Supports sharded models (GGUF multi-file)
 - JS references kept alive during load, cleaned up after
+- The addon performs **no** download, discovery, or shard expansion — the caller owns transport
 
 **Session Cache:**
 - Optional KV cache persistence to disk via `CacheManager`
@@ -192,56 +193,67 @@ flowchart TD
 
 ### Streaming Weight Loading
 
+The caller is responsible for providing the **complete** list of files in `files.model`: the `.tensors.txt` companion first, followed by every shard in ascending order (for sharded models). The addon picks the first entry matching the shard regex `/-\d+-of-\d+\.gguf$/` as the primary path (falling back to `files.model[0]` for non-sharded models). The addon does no discovery, no expansion, and no download.
+
 ```mermaid
 sequenceDiagram
-    participant JS as JavaScript
-    participant WP as WeightsProvider
+    participant User as User code
+    participant LLM as LlmLlamacpp (index.js)
+    participant FS as bare-fs
     participant IF as LlamaInterface
     participant Bind as Native Binding
     participant WL as WeightsLoader
     participant Model as LlamaModel
     participant LC as llama.cpp
-    
-    JS->>WP: load()
-    WP->>WP: expandGGUFIntoShards()
-    
-    loop For each shard chunk
-        WP->>WP: Read 10MB chunk
-        WP->>WP: Create Uint8Array
-        WP->>IF: loadWeights({filename, chunk, completed: false})
-        IF->>Bind: loadWeights(handle, data)
-        Bind->>WL: addChunk()
-        WL->>WL: js_create_reference (pin from GC)
-        WL->>WL: Store reference
-        Bind-->>IF: void
-        IF-->>WP: void
+
+    User->>LLM: new LlmLlamacpp({ files, config, logger, opts })
+    User->>LLM: load()
+
+    Note over LLM: _load(): build configurationParams with<br/>path = pickPrimaryGgufPath(files.model), projectionPath, config
+    LLM->>IF: new LlamaInterface(binding, configurationParams, outputCb)
+
+    alt files.model.length > 1 (sharded)
+        loop For each filePath in files.model (in order)
+            LLM->>FS: createReadStream(filePath)
+            loop For each chunk
+                FS-->>LLM: chunk (Uint8Array)
+                LLM->>IF: loadWeights({ filename, chunk, completed: false })
+                IF->>Bind: loadWeights(handle, data)
+                Bind->>WL: addChunk()
+                WL->>WL: js_create_reference (pin from GC)
+                WL->>WL: Store reference
+                Bind-->>IF: void
+                IF-->>LLM: void
+            end
+            LLM->>IF: loadWeights({ filename, chunk: null, completed: true })
+            IF->>Bind: loadWeights(handle, final)
+            Bind->>WL: addChunk() + finalize
+            WL->>WL: Create FinalizedStream
+            WL->>WL: Create BlobsStream (std::streambuf)
+            WL->>Model: set_weights_for_file(filename, stream)
+        end
     end
-    
-    WP->>IF: loadWeights({filename, chunk, completed: true})
-    IF->>Bind: loadWeights(handle, data)
-    Bind->>WL: addChunk() + finalize
-    WL->>WL: Create FinalizedStream
-    WL->>WL: Create BlobsStream (std::streambuf)
-    WL->>Model: set_weights_for_file(filename, stream)
+
+    LLM->>IF: activate()
+    IF->>Bind: activate(handle)
+    Bind->>Model: load via llama.cpp
     Model->>LC: llama_model_load_from_file(stream)
-    
+
     LC->>LC: Read via streambuf->sgetn()
     Note over LC: Zero-copy access to JS buffers
     LC->>LC: Parse GGUF metadata
     LC->>LC: Load weights
     LC-->>Model: Model loaded
-    
+
     Model->>WL: Mark for deletion
     WL->>WL: Queue js_delete_reference
-    
-    Note over JS: Next API call
-    JS->>IF: activate()
-    IF->>Bind: activate(handle)
-    Bind->>WL: Process deletion queue
+    Bind->>WL: Process deletion queue (during activate)
     WL->>WL: js_delete_reference (unpin)
-    WL-->>Bind: References cleaned
-    
-    Note over JS: GC can now collect ArrayBuffers
+
+    IF-->>LLM: activated
+    LLM-->>User: load() resolves
+
+    Note over User: GC can now collect ArrayBuffers
 ```
 
 <details>
@@ -251,36 +263,36 @@ sequenceDiagram
 
 | Stage | JS Buffer State | C++ Reference State | Memory Location | Notes |
 |-------|-----------------|---------------------|-----------------|-------|
-| 1. Create | Allocated by JS | None | JS heap | Uint8Array created |
+| 1. Read from disk | Allocated by bare-fs | None | JS heap | Uint8Array chunk yielded by read stream |
 | 2. loadWeights() | Passed to C++ | js_create_reference() | JS heap | Pinned from GC |
 | 3. Accumulation | Still in JS | Stored in vector | JS heap | Multiple refs held |
 | 4. Finalize | Still in JS | Owned by FinalizedStream | JS heap | RAII wrapper |
-| 5. Loading | Still in JS | Active | JS heap | Zero-copy access |
+| 5. activate() load | Still in JS | Active | JS heap | Zero-copy access from llama.cpp |
 | 6. Load complete | Still in JS | Marked for deletion | JS heap | Queued cleanup |
-| 7. Next API call | Still in JS | js_delete_reference() | JS heap | Unpinned |
+| 7. activate() returns | Still in JS | js_delete_reference() | JS heap | Unpinned during activate |
 | 8. After return | May be GC'd | None | Freed | Memory reclaimed |
 
-**Sharded Model Handling:**
+**Sharded Model Handling (caller-owned):**
 
-Input: `"model-00001-of-00004.gguf"`
+For a 4-shard model, the caller must pass **five** absolute paths in `files.model`, in this exact order:
 
-Expanded to:
-1. `model-00001-of-00004.gguf`
-2. `model-00002-of-00004.gguf`
-3. `model-00003-of-00004.gguf`
-4. `model-00004-of-00004.gguf`
+1. `model.tensors.txt` (companion file — **required**)
+2. `model-00001-of-00004.gguf`
+3. `model-00002-of-00004.gguf`
+4. `model-00003-of-00004.gguf`
+5. `model-00004-of-00004.gguf`
 
-JavaScript sends each file separately. C++ concatenates into single logical stream.
+`_load()` uses `pickPrimaryGgufPath(files.model)` — the first entry matching the shard regex `/-\d+-of-\d+\.gguf$/`, falling back to `files.model[0]` for non-sharded models — as the primary path passed to the native addon constructor. `_streamShards()` iterates **all** entries streaming each via `bare-fs`. C++ concatenates them into a single logical stream per filename.
 
 **Performance:**
 
 | Operation | Duration | Memory Impact | Notes |
 |-----------|----------|---------------|-------|
-| Create 10MB chunk | ~1ms | +10MB JS heap | Async I/O |
+| bare-fs chunk | depends on FS | +chunk size in JS heap | Async I/O |
 | loadWeights() call | <1ms | +small C++ overhead | Non-blocking |
 | FinalizeStream | ~0.1ms | Transfer ownership | Zero-copy |
-| llama_model_load() | Seconds | +model size in RAM | Background thread |
-| Reference cleanup | <0.1ms | -10MB JS heap per chunk | Deferred to JS thread |
+| llama_model_load() | Seconds | +model size in RAM | During activate() |
+| Reference cleanup | <0.1ms | -chunk size per reference | During activate() |
 
 </details>
 
@@ -468,5 +480,5 @@ flowchart TD
 **Related Documents:**
 - [architecture.md](architecture.md) - Complete architecture documentation
 
-**Last Updated:** 2026-03-02
+**Last Updated:** 2026-04-16
 

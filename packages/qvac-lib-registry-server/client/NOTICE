@@ -51,6 +51,42 @@ Third-Party Model Licenses
     https://huggingface.co/personalizedrefrigerator/whisper-base-fr
   fr-tiny-ggml-model-f16
     https://huggingface.co/JaepaX/whisper-tiny-fr
+  ggml-opus-ar-en
+    https://huggingface.co/Helsinki-NLP/opus-mt-ar-en
+  ggml-opus-de-en
+    https://huggingface.co/Helsinki-NLP/opus-mt-de-en
+  ggml-opus-de-fr
+    https://huggingface.co/Helsinki-NLP/opus-mt-de-fr
+  ggml-opus-en-ar
+    https://huggingface.co/Helsinki-NLP/opus-mt-en-ar
+  ggml-opus-en-es
+    https://huggingface.co/Helsinki-NLP/opus-mt-en-es
+  ggml-opus-en-fr
+    https://huggingface.co/Helsinki-NLP/opus-mt-en-fr
+  ggml-opus-en-it
+    https://huggingface.co/Helsinki-NLP/opus-mt-en-it
+  ggml-opus-en-ru
+    https://huggingface.co/Helsinki-NLP/opus-mt-en-ru
+  ggml-opus-en-zh
+    https://huggingface.co/Helsinki-NLP/opus-mt-en-zh
+  ggml-opus-es-en
+    https://huggingface.co/Helsinki-NLP/opus-mt-es-en
+  ggml-opus-es-fr
+    https://huggingface.co/Helsinki-NLP/opus-mt-es-fr
+  ggml-opus-fr-de
+    https://huggingface.co/Helsinki-NLP/opus-mt-fr-de
+  ggml-opus-fr-en
+    https://huggingface.co/Helsinki-NLP/opus-mt-fr-en
+  ggml-opus-fr-es
+    https://huggingface.co/Helsinki-NLP/opus-mt-fr-es
+  ggml-opus-it-en
+    https://huggingface.co/Helsinki-NLP/opus-mt-it-en
+  ggml-opus-ja-en
+    https://huggingface.co/Helsinki-NLP/opus-mt-ja-en
+  ggml-opus-mt-en-roa-f16
+    https://huggingface.co/Helsinki-NLP/opus-mt-en-roa
+  ggml-opus-mt-roa-en-f16
+    https://huggingface.co/Helsinki-NLP/opus-mt-roa-en
   gpt-oss-20b-GGUF
     https://huggingface.co/unsloth/gpt-oss-20b-GGUF
   it-base-ggml-model-f16
@@ -91,6 +127,17 @@ Third-Party Model Licenses
     https://huggingface.co/BSC-LT/salamandraTA-2B-instruct-GGUF
   SmolVLM2-500M-Video-Instruct-GGUF
     https://huggingface.co/ggml-org/SmolVLM2-500M-Video-Instruct-GGUF
+
+--- cc-by-4.0 (Creative Commons Attribution 4.0 International) ---
+
+  ggml-opus-en-de
+    https://huggingface.co/Helsinki-NLP/opus-mt-en-de
+  ggml-opus-en-pt
+    https://huggingface.co/Helsinki-NLP/opus-mt-tc-big-en-pt
+  ggml-opus-ru-en
+    https://huggingface.co/Helsinki-NLP/opus-mt-ru-en
+  ggml-opus-zh-en
+    https://huggingface.co/Helsinki-NLP/opus-mt-zh-en
 
 --- gemma (Gemma Terms of Use) ---
 

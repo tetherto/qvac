@@ -6,10 +6,12 @@ const createBergamotTest = (
   resource: string,
   expectation: Expectation,
   estimatedDurationMs: number = 15000,
+  suites?: string[],
 ): TestDefinition => ({
   testId,
   params: { text, resource },
   expectation,
+  ...(suites && { suites }),
   metadata: { category: "translation-bergamot", dependency: resource, estimatedDurationMs },
 });
 
@@ -20,6 +22,8 @@ export const bergamotEnFrBasic = createBergamotTest(
   "Hello, how are you today?",
   "bergamot-en-fr",
   { validation: "contains-any", contains: ["bonjour", "comment", "vous", "aujourd"] },
+  15000,
+  ["smoke"],
 );
 
 export const bergamotEnFrLongText = createBergamotTest(
@@ -71,6 +75,8 @@ export const bergamotEnFrStreaming = createBergamotTest(
   "Good morning, how are you?",
   "bergamot-en-fr",
   { validation: "contains-any", contains: ["bonjour", "comment", "allez"] },
+  15000,
+  ["smoke"],
 );
 
 export const bergamotEnFrStats = createBergamotTest(
@@ -104,6 +110,8 @@ export const bergamotEnEsBasic = createBergamotTest(
   "Hello, how are you today?",
   "bergamot-en-es",
   { validation: "contains-any", contains: ["hola", "cómo", "estás", "hoy"] },
+  15000,
+  ["smoke"],
 );
 
 export const bergamotEnEsLongText = createBergamotTest(

@@ -46,19 +46,18 @@ async function main () {
   console.log(`Model : ${MODEL_NAME}`)
   console.log(`Prompt: ${PROMPT}\n`)
 
-  const model = new ImgStableDiffusion(
-    {
-      logger: console,
-      diskPath: MODELS_DIR,
-      modelName: MODEL_NAME,
-      opts: { stats: true }
+  const model = new ImgStableDiffusion({
+    files: {
+      model: path.join(MODELS_DIR, MODEL_NAME)
     },
-    {
+    config: {
       threads: 4,
       prediction: 'v',
       verbosity: 2
-    }
-  )
+    },
+    logger: console,
+    opts: { stats: true }
+  })
 
   try {
     // 3. Load model weights

@@ -70,22 +70,21 @@ async function main () {
   console.log('  Seed     : ' + SEED)
   console.log('  Note     : VAE encode runs first (no progress tick) — please wait...\n')
 
-  const model = new ImgStableDiffusion(
-    {
-      logger: console,
-      diskPath: modelDir,
-      modelName: MODEL_NAME
-      // All-in-one safetensors: no clipLModel, clipGModel, t5XxlModel, or vaeModel.
+  const model = new ImgStableDiffusion({
+    files: {
+      model: path.join(modelDir, MODEL_NAME)
+      // All-in-one safetensors: no clipL, clipG, t5Xxl, or vae.
       // To improve text-following, add T5-XXL (download via download-model-sd3.sh):
-      //   t5XxlModel: 't5xxl_fp8_e4m3fn.safetensors'
+      //   t5Xxl: path.join(modelDir, 't5xxl_fp8_e4m3fn.safetensors')
     },
-    {
+    config: {
       threads: 4,
       device: 'gpu',
       prediction: 'flow', // SD3 rectified flow-matching (not flux2_flow)
       flow_shift: '3.0' // SD3 Medium default; controls noise schedule shift
-    }
-  )
+    },
+    logger: console
+  })
 
   try {
     console.log('Loading SD3 Medium model...')
