@@ -3,7 +3,8 @@ import {
   resolveModelPath,
   resolveModelPathWithStats,
 } from "@/server/rpc/handlers/load-model/resolve";
-import type { ResolveResult } from "./types";
+import { cancelTransfer } from "@/server/rpc/handlers/load-model/download-manager";
+import type { ResolveResult, DownloadHooks } from "@/server/rpc/handlers/load-model/types";
 
 export interface ResolveSessionOptions {
   progressCallback?: ((update: ModelProgressUpdate) => void) | undefined;
@@ -19,11 +20,19 @@ export interface ResolveSession {
     modelName?: string,
   ): ResolveContext;
   getPrimaryResult(): ResolveResult | undefined;
+  cancelAll(): void;
 }
 
 export function createResolveSession(options: ResolveSessionOptions): ResolveSession {
   const { progressCallback, seed, profilingEnabled } = options;
   let primaryResult: ResolveResult | undefined;
+  const activeDownloadKeys = new Set<string>();
+
+  const downloadHooks: DownloadHooks = {
+    onDownloadKey(key: string) {
+      activeDownloadKeys.add(key);
+    },
+  };
 
   async function resolvePrimaryModelPath(modelSrc: unknown) {
     if (profilingEnabled) {
@@ -31,15 +40,16 @@ export function createResolveSession(options: ResolveSessionOptions): ResolveSes
         modelSrc,
         progressCallback,
         seed,
+        downloadHooks,
       );
       primaryResult = result;
       return result.path;
     }
-    return resolveModelPath(modelSrc, progressCallback, seed);
+    return resolveModelPath(modelSrc, progressCallback, seed, downloadHooks);
   }
 
   function resolveForPlugin(src: unknown) {
-    return resolveModelPath(src, progressCallback, seed);
+    return resolveModelPath(src, progressCallback, seed, downloadHooks);
   }
 
   function createResolveContext(
@@ -59,9 +69,17 @@ export function createResolveSession(options: ResolveSessionOptions): ResolveSes
     return primaryResult;
   }
 
+  function cancelAll() {
+    for (const key of activeDownloadKeys) {
+      cancelTransfer(key);
+    }
+    activeDownloadKeys.clear();
+  }
+
   return {
     resolvePrimaryModelPath,
     createResolveContext,
     getPrimaryResult,
+    cancelAll,
   };
 }

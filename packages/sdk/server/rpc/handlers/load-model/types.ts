@@ -20,11 +20,12 @@ export interface DownloadResult {
   stats?: DownloadStats;
 }
 
-export interface DownloadMetricsHooks {
-  markCacheHit: () => void;
-  markCacheMiss: () => void;
-  markSharedTransfer: () => void;
-  addChecksumValidationTimeMs: (durationMs: number) => void;
+export interface DownloadHooks {
+  onDownloadKey?: (key: string) => void;
+  markCacheHit?: () => void;
+  markCacheMiss?: () => void;
+  markSharedTransfer?: () => void;
+  addChecksumValidationTimeMs?: (durationMs: number) => void;
 }
 
 export interface LoadModelProfilingMeta {

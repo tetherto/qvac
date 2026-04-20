@@ -1,5 +1,5 @@
 import type { ModelProgressUpdate } from "@/schemas";
-import type { DownloadStats, DownloadResult, DownloadMetricsHooks } from "./types";
+import type { DownloadStats, DownloadResult, DownloadHooks } from "./types";
 import { downloadModelFromHttp } from "./http";
 import { downloadModelFromRegistry } from "./registry";
 import { downloadModelFromHyperdrive } from "./hyperdrive";
@@ -23,7 +23,7 @@ function createStatsCollector(): StatsCollector {
   };
 }
 
-function createHooks(collector: StatsCollector): DownloadMetricsHooks {
+function createStatsHooks(collector: StatsCollector): DownloadHooks {
   return {
     markCacheHit: () => {
       if (collector.cacheHit === undefined) {
@@ -110,9 +110,10 @@ function computeStats(collector: StatsCollector): DownloadStats | undefined {
 export async function downloadModelFromHttpWithStats(
   url: string,
   progressCallback?: (progress: ModelProgressUpdate) => void,
+  downloadHooks?: DownloadHooks,
 ): Promise<DownloadResult> {
   const collector = createStatsCollector();
-  const hooks = createHooks(collector);
+  const hooks: DownloadHooks = { ...downloadHooks, ...createStatsHooks(collector) };
   const wrappedCallback = wrapProgressCallback(collector, progressCallback);
   const path = await downloadModelFromHttp(url, wrappedCallback, hooks);
   const stats = computeStats(collector);
@@ -124,9 +125,10 @@ export async function downloadModelFromRegistryWithStats(
   registrySource: string,
   progressCallback?: (progress: ModelProgressUpdate) => void,
   expectedChecksum?: string,
+  downloadHooks?: DownloadHooks,
 ): Promise<DownloadResult> {
   const collector = createStatsCollector();
-  const hooks = createHooks(collector);
+  const hooks: DownloadHooks = { ...downloadHooks, ...createStatsHooks(collector) };
   const wrappedCallback = wrapProgressCallback(collector, progressCallback);
   const path = await downloadModelFromRegistry(
     registryPath,
@@ -144,9 +146,10 @@ export async function downloadModelFromHyperdriveWithStats(
   modelFileName: string,
   seed?: boolean,
   progressCallback?: (progress: ModelProgressUpdate) => void,
+  downloadHooks?: DownloadHooks,
 ): Promise<DownloadResult> {
   const collector = createStatsCollector();
-  const hooks = createHooks(collector);
+  const hooks: DownloadHooks = { ...downloadHooks, ...createStatsHooks(collector) };
   const wrappedCallback = wrapProgressCallback(collector, progressCallback);
   const path = await downloadModelFromHyperdrive(
     hyperdriveKey,

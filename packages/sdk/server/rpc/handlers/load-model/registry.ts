@@ -30,7 +30,7 @@ import {
   RegistryDownloadFailedError,
 } from "@/utils/errors-server";
 import { getServerLogger } from "@/logging";
-import type { DownloadMetricsHooks } from "./types";
+import type { DownloadHooks } from "./types";
 
 const logger = getServerLogger();
 
@@ -93,7 +93,7 @@ async function downloadShardedFilesFromRegistry(
   progressCallback?: (progress: ModelProgressUpdate) => void,
   signal?: AbortSignal,
   localShardMetadata?: RegistryItem["shardMetadata"],
-  hooks?: DownloadMetricsHooks,
+  hooks?: DownloadHooks,
 ): Promise<string> {
   if (signal?.aborted) {
     throw new DownloadCancelledError();
@@ -272,9 +272,10 @@ export async function downloadModelFromRegistry(
   registrySource: string,
   progressCallback?: (progress: ModelProgressUpdate) => void,
   expectedChecksum?: string,
-  hooks?: DownloadMetricsHooks,
+  hooks?: DownloadHooks,
 ): Promise<string> {
   const downloadKey = createRegistryDownloadKey(registrySource, registryPath);
+  hooks?.onDownloadKey?.(downloadKey);
   const filename = registryPath.split("/").pop() || registryPath;
   const shardInfo = detectShardedModel(filename);
 
@@ -309,7 +310,7 @@ export async function downloadModelFromRegistry(
           if (allCached) {
             const firstShardFilename = localShardMeta[0]!.filename;
             logger.info(`✅ All ${localShardMeta.length} shards cached`);
-            hooks?.markCacheHit();
+            hooks?.markCacheHit?.();
 
             const overallTotal = localShardMeta.reduce(
               (sum, s) => sum + s.expectedSize,
@@ -335,7 +336,7 @@ export async function downloadModelFromRegistry(
           }
         }
 
-        hooks?.markCacheMiss();
+        hooks?.markCacheMiss?.();
         try {
           return await downloadShardedFilesFromRegistry(
             registryPath,
@@ -397,7 +398,7 @@ export async function downloadModelFromRegistry(
 
       if (cachedPath) {
         logger.info(`✅ Using cached model: ${cachedPath}`);
-        hooks?.markCacheHit();
+        hooks?.markCacheHit?.();
 
         ctx.broadcastProgress({
           type: "modelProgress",
@@ -414,7 +415,7 @@ export async function downloadModelFromRegistry(
         ? buildBlobBinding(modelMetadata)
         : undefined;
 
-      hooks?.markCacheMiss();
+      hooks?.markCacheMiss?.();
       try {
         await downloadSingleFileFromRegistry(
           registryPath,
@@ -452,8 +453,8 @@ export async function downloadModelFromRegistry(
   );
 
   if (joined) {
-    hooks?.markCacheMiss();
-    hooks?.markSharedTransfer();
+    hooks?.markCacheMiss?.();
+    hooks?.markSharedTransfer?.();
   }
 
   return downloadPromise;

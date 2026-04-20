@@ -92,16 +92,25 @@ export async function handleLoadModel(
     });
 
     const primaryResolve = session.resolvePrimaryModelPath(modelSrc);
-    const pluginResolve = plugin.resolveConfig
-      ? plugin.resolveConfig(
-          resolvedModelConfig,
-          session.createResolveContext(modelSrc, canonicalModelType, modelName),
-        )
-      : undefined;
 
-    const [resolvedModelPath, pluginResolveResult] = pluginResolve
-      ? await Promise.all([primaryResolve, pluginResolve])
-      : [await primaryResolve, undefined];
+    let resolvedModelPath: string;
+    let pluginResolveResult: Awaited<ReturnType<NonNullable<typeof plugin.resolveConfig>>> | undefined;
+
+    try {
+      const pluginResolve = plugin.resolveConfig
+        ? plugin.resolveConfig(
+            resolvedModelConfig,
+            session.createResolveContext(modelSrc, canonicalModelType, modelName),
+          )
+        : undefined;
+
+      [resolvedModelPath, pluginResolveResult] = pluginResolve
+        ? await Promise.all([primaryResolve, pluginResolve])
+        : [await primaryResolve, undefined];
+    } catch (error) {
+      session.cancelAll();
+      throw error;
+    }
 
     const configStr = canonicalConfigString(
       request.modelConfig as Record<string, unknown> | undefined,

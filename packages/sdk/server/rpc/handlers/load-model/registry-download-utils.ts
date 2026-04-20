@@ -13,7 +13,7 @@ import {
   DownloadCancelledError,
 } from "@/utils/errors-server";
 import { getServerLogger } from "@/logging";
-import type { DownloadMetricsHooks } from "./types";
+import type { DownloadHooks } from "./types";
 
 const logger = getServerLogger();
 
@@ -43,7 +43,7 @@ export async function validateCachedFile(
   modelFileName: string,
   expectedSize: number,
   expectedChecksum?: string,
-  hooks?: DownloadMetricsHooks,
+  hooks?: DownloadHooks,
 ): Promise<string | null> {
   try {
     await fsPromises.access(modelPath);
@@ -96,7 +96,7 @@ export async function downloadSingleFileFromRegistry(
   progressCallback?: (progress: ModelProgressUpdate) => void,
   signal?: AbortSignal,
   blobBinding?: QVACBlobBinding,
-  hooks?: DownloadMetricsHooks,
+  hooks?: DownloadHooks,
 ): Promise<void> {
   if (signal?.aborted) {
     throw new DownloadCancelledError();

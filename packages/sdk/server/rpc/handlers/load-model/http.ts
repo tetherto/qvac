@@ -34,7 +34,7 @@ import {
   ResponseBodyNotReadableError,
 } from "@/utils/errors-server";
 import { getServerLogger } from "@/logging";
-import type { DownloadMetricsHooks } from "./types";
+import type { DownloadHooks } from "./types";
 
 const logger = getServerLogger();
 
@@ -429,7 +429,7 @@ async function performHttpDownload(
 export async function downloadModelFromHttp(
   url: string,
   progressCallback?: (progress: ModelProgressUpdate) => void,
-  hooks?: DownloadMetricsHooks,
+  hooks?: DownloadHooks,
 ) {
   const filename = extractFilenameFromUrl(url);
 
@@ -444,6 +444,7 @@ export async function downloadModelFromHttp(
   }
 
   const downloadKey = createHttpDownloadKey(url);
+  hooks?.onDownloadKey?.(downloadKey);
   const cacheDir = getModelsCacheDir();
   const sourceHash = generateShortHash(url);
   const modelPath = `${cacheDir}/${sourceHash}_${filename}`;
@@ -459,7 +460,7 @@ export async function downloadModelFromHttp(
           ctx.signal,
         );
         if (cachedPath) {
-          hooks?.markCacheHit();
+          hooks?.markCacheHit?.();
           try {
             const stats = await fsPromises.stat(cachedPath);
             ctx.broadcastProgress({
@@ -479,7 +480,7 @@ export async function downloadModelFromHttp(
         }
 
         // Download the file
-        hooks?.markCacheMiss();
+        hooks?.markCacheMiss?.();
         await performHttpDownload(
           url,
           modelPath,
@@ -538,8 +539,8 @@ export async function downloadModelFromHttp(
   );
 
   if (joined) {
-    hooks?.markCacheMiss();
-    hooks?.markSharedTransfer();
+    hooks?.markCacheMiss?.();
+    hooks?.markSharedTransfer?.();
   }
 
   return downloadPromise;
@@ -548,13 +549,14 @@ export async function downloadModelFromHttp(
 async function downloadShardedModelFromHttp(
   shardUrl: string,
   progressCallback?: (progress: ModelProgressUpdate) => void,
-  hooks?: DownloadMetricsHooks,
+  hooks?: DownloadHooks,
 ) {
   const config = getSDKConfig();
   const concurrency = config.httpDownloadConcurrency ?? DEFAULT_CONCURRENCY;
   const { shardUrls: shardInfos, cacheKey } =
     parsePatternBasedShardUrl(shardUrl);
   const downloadKey = `http-sharded:${cacheKey}`;
+  hooks?.onDownloadKey?.(downloadKey);
 
   logger.info(
     `📥 HTTP sharded download: ${shardInfos.length} shards detected from ${shardUrl}`,
@@ -633,9 +635,9 @@ async function downloadShardedModelFromHttp(
         );
 
         if (shardsToDownload.length === 0) {
-          hooks?.markCacheHit();
+          hooks?.markCacheHit?.();
         } else {
-          hooks?.markCacheMiss();
+          hooks?.markCacheMiss?.();
         }
 
         await downloadShardsWithConcurrency(
@@ -686,8 +688,8 @@ async function downloadShardedModelFromHttp(
   );
 
   if (joined) {
-    hooks?.markCacheMiss();
-    hooks?.markSharedTransfer();
+    hooks?.markCacheMiss?.();
+    hooks?.markSharedTransfer?.();
   }
 
   return downloadPromise;
@@ -696,11 +698,12 @@ async function downloadShardedModelFromHttp(
 async function downloadShardedModelFromArchive(
   archiveUrl: string,
   progressCallback?: (progress: ModelProgressUpdate) => void,
-  hooks?: DownloadMetricsHooks,
+  hooks?: DownloadHooks,
 ) {
   const filename = extractFilenameFromUrl(archiveUrl);
   const sourceHash = generateShortHash(archiveUrl);
   const downloadKey = `http-archive:${sourceHash}`;
+  hooks?.onDownloadKey?.(downloadKey);
 
   logger.info(`📦 HTTP archive download: ${filename}`);
 
@@ -719,7 +722,7 @@ async function downloadShardedModelFromArchive(
         );
 
         if (!shardedFile) {
-          hooks?.markCacheMiss();
+          hooks?.markCacheMiss?.();
           return downloadAndExtractArchive();
         }
 
@@ -731,7 +734,7 @@ async function downloadShardedModelFromArchive(
 
         if (!allShardsExist) {
           logger.warn(`⚠️ Incomplete shards found, re-downloading archive`);
-          hooks?.markCacheMiss();
+          hooks?.markCacheMiss?.();
           return downloadAndExtractArchive();
         }
 
@@ -744,7 +747,7 @@ async function downloadShardedModelFromArchive(
 
         if (isComplete) {
           logger.info(`✅ Archive already extracted: ${extractDir}`);
-          hooks?.markCacheHit();
+          hooks?.markCacheHit?.();
           ctx.broadcastProgress({
             type: "modelProgress",
             downloaded: 1,
@@ -761,7 +764,7 @@ async function downloadShardedModelFromArchive(
         try {
           await extractTensorsFromShards(extractDir, shardFilename);
           logger.info(`✅ Tensors extracted successfully`);
-          hooks?.markCacheHit();
+          hooks?.markCacheHit?.();
           ctx.broadcastProgress({
             type: "modelProgress",
             downloaded: 1,
@@ -774,7 +777,7 @@ async function downloadShardedModelFromArchive(
           logger.warn(`Failed to extract tensors, will re-download archive`, {
             error,
           });
-          hooks?.markCacheMiss();
+          hooks?.markCacheMiss?.();
           return downloadAndExtractArchive();
         }
       } catch (error) {
@@ -840,8 +843,8 @@ async function downloadShardedModelFromArchive(
   );
 
   if (joined) {
-    hooks?.markCacheMiss();
-    hooks?.markSharedTransfer();
+    hooks?.markCacheMiss?.();
+    hooks?.markSharedTransfer?.();
   }
 
   return downloadPromise;

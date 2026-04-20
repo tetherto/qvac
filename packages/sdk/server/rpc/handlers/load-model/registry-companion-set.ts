@@ -21,7 +21,7 @@ import {
   RegistryDownloadFailedError,
 } from "@/utils/errors-server";
 import { getServerLogger } from "@/logging";
-import type { DownloadMetricsHooks } from "./types";
+import type { DownloadHooks } from "./types";
 
 type CompanionSetMetadata = NonNullable<RegistryItem["companionSet"]>;
 type CompanionSetMetadataEntry = CompanionSetMetadata["files"][number];
@@ -33,7 +33,7 @@ export interface DownloadCompanionSetOptions {
   downloadKey: string;
   progressCallback?: ((progress: ModelProgressUpdate) => void) | undefined;
   signal?: AbortSignal | undefined;
-  hooks?: DownloadMetricsHooks | undefined;
+  hooks?: DownloadHooks | undefined;
   shouldClearCache?: (() => boolean) | undefined;
 }
 
@@ -65,7 +65,7 @@ export async function downloadCompanionSetFromRegistry(
     const legacyPath = await checkLegacyOnnxCache(primaryRegistryPath, files, hooks);
     if (legacyPath) {
       logger.info(`✅ Using legacy ONNX cache for companion set: ${legacyPath}`);
-      hooks?.markCacheHit();
+      hooks?.markCacheHit?.();
       emitFinalProgress(progressCallback, downloadKey, setKey, files);
       return legacyPath;
     }
@@ -90,13 +90,13 @@ export async function downloadCompanionSetFromRegistry(
 
   if (validatedFiles.size === files.length) {
     logger.info(`✅ All companion set files cached`);
-    hooks?.markCacheHit();
+    hooks?.markCacheHit?.();
     emitFinalProgress(progressCallback, downloadKey, setKey, files);
     return getCompanionSetPath(setKey, primaryEntry.targetName);
   }
 
   // Download missing files
-  hooks?.markCacheMiss();
+  hooks?.markCacheMiss?.();
   const overallTotal = files.reduce((sum, f) => sum + f.expectedSize, 0);
   let overallDownloaded = 0;
 
@@ -238,7 +238,7 @@ function isLegacyOnnxSet(
 async function checkLegacyOnnxCache(
   primaryRegistryPath: string,
   files: readonly CompanionSetMetadataEntry[],
-  hooks?: DownloadMetricsHooks,
+  hooks?: DownloadHooks,
 ): Promise<string | null> {
   const cacheKey = generateShortHash(primaryRegistryPath);
   let primaryPath: string | null = null;

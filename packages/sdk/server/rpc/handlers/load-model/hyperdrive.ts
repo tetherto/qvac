@@ -40,7 +40,7 @@ import {
   registerCorestore,
   unregisterCorestore,
 } from "@/server/bare/runtime-lifecycle";
-import type { DownloadMetricsHooks } from "./types";
+import type { DownloadHooks } from "./types";
 
 const logger = getServerLogger();
 
@@ -236,7 +236,7 @@ async function validateCachedFile(
   modelFileName: string,
   expectedSize: number,
   expectedChecksum?: string,
-  hooks?: DownloadMetricsHooks,
+  hooks?: DownloadHooks,
 ): Promise<string | null> {
   try {
     await fsPromises.access(modelPath);
@@ -281,7 +281,7 @@ async function downloadSingleFileToFilesystem(
   progressCallback?: (progress: ModelProgressUpdate) => void,
   seed?: boolean,
   signal?: AbortSignal,
-  hooks?: DownloadMetricsHooks,
+  hooks?: DownloadHooks,
   shouldClearCache?: () => boolean,
 ): Promise<void> {
   // Check if already aborted
@@ -390,7 +390,7 @@ async function downloadAndValidateFile(
   expectedChecksum: string,
   progressContext?: ProgressContext,
   signal?: AbortSignal,
-  hooks?: DownloadMetricsHooks,
+  hooks?: DownloadHooks,
 ): Promise<void> {
   const {
     entry,
@@ -523,7 +523,7 @@ async function downloadShardedFilesToFilesystem(
   progressCallback?: (progress: ModelProgressUpdate) => void,
   seed?: boolean,
   signal?: AbortSignal,
-  hooks?: DownloadMetricsHooks,
+  hooks?: DownloadHooks,
   shouldClearCache?: () => boolean,
 ): Promise<string> {
   if (signal?.aborted) {
@@ -550,14 +550,14 @@ async function downloadShardedFilesToFilesystem(
     hyperdriveKey,
     allFiles,
     shardMetadata,
-    hooks ? (ms) => hooks.addChecksumValidationTimeMs(ms) : undefined,
+    hooks?.addChecksumValidationTimeMs ? (ms) => hooks.addChecksumValidationTimeMs!(ms) : undefined,
   );
 
   if (invalidIndices.length === 0) {
     logger.info(
       `✅ All ${allFiles.length} files already downloaded and validated`,
     );
-    hooks?.markCacheHit();
+    hooks?.markCacheHit?.();
 
     if (progressCallback) {
       const overallTotal = shardMetadata.reduce(
@@ -593,7 +593,7 @@ async function downloadShardedFilesToFilesystem(
   logger.info(
     `📥 Need to download ${invalidIndices.length} of ${allFiles.length} files`,
   );
-  hooks?.markCacheMiss();
+  hooks?.markCacheMiss?.();
 
   // Setup hyperdrive once for all shards
   const corestoreDir = getCorestoreDir(hyperdriveKey);
@@ -765,10 +765,11 @@ export async function downloadModelFromHyperdrive(
   modelFileName: string,
   seed?: boolean,
   progressCallback?: (progress: ModelProgressUpdate) => void,
-  hooks?: DownloadMetricsHooks,
+  hooks?: DownloadHooks,
   expectedChecksum?: string,
 ): Promise<string> {
   const downloadKey = createHyperdriveDownloadKey(hyperdriveKey, modelFileName);
+  hooks?.onDownloadKey?.(downloadKey);
   const shardInfo = detectShardedModel(modelFileName);
   const model = getModelBySrc(modelFileName, hyperdriveKey);
 
@@ -810,7 +811,7 @@ export async function downloadModelFromHyperdrive(
         );
 
         if (cachedPath) {
-          hooks?.markCacheHit();
+          hooks?.markCacheHit?.();
           ctx.broadcastProgress({
             type: "modelProgress",
             downloaded: model.expectedSize,
@@ -827,7 +828,7 @@ export async function downloadModelFromHyperdrive(
         }
       }
 
-      hooks?.markCacheMiss();
+      hooks?.markCacheMiss?.();
       const checksumToValidate =
         expectedChecksum || model?.sha256Checksum || "";
 
@@ -851,8 +852,8 @@ export async function downloadModelFromHyperdrive(
   );
 
   if (joined) {
-    hooks?.markCacheMiss();
-    hooks?.markSharedTransfer();
+    hooks?.markCacheMiss?.();
+    hooks?.markSharedTransfer?.();
   }
 
   return downloadPromise;
