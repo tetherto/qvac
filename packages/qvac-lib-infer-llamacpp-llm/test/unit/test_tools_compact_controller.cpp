@@ -19,6 +19,13 @@ ToolsCompactProfile makeQwen3Profile() {
   profile.toolCallStartMarker = "<tool_call>";
   return profile;
 }
+
+common_chat_msg makeMsg(const std::string& role, const std::string& content = "") {
+  common_chat_msg msg;
+  msg.role = role;
+  msg.content = content;
+  return msg;
+}
 } // namespace
 
 TEST(ToolsCompactControllerTest, EnabledReturnsTrueWhenConstructedWithTrue) {
@@ -52,7 +59,7 @@ TEST(ToolsCompactControllerTest, ValidatePromptNoOpsWhenDisabled) {
   layout.lastItemIsUserMsg = true;
   std::vector<common_chat_msg> chatMsgs;
   std::vector<common_chat_tool> tools;
-  EXPECT_NO_THROW(controller.validatePrompt(chatMsgs, tools, layout));
+  EXPECT_NO_THROW(controller.validatePrompt(chatMsgs, tools, layout, false));
 }
 
 TEST(
@@ -60,12 +67,10 @@ TEST(
     ValidatePromptRejectsMissingToolsOnLastUserMessage) {
   ToolsCompactController controller(true);
   PromptLayout layout;
-  layout.totalItems = 1;
-  layout.lastItemIsUserMsg = true;
-  std::vector<common_chat_msg> chatMsgs;
+  std::vector<common_chat_msg> chatMsgs = {makeMsg("user", "Need weather")};
   std::vector<common_chat_tool> tools;
   EXPECT_THROW(
-      controller.validatePrompt(chatMsgs, tools, layout),
+      controller.validatePrompt(chatMsgs, tools, layout, false),
       qvac_errors::StatusError);
 }
 
@@ -79,7 +84,7 @@ TEST(ToolsCompactControllerTest, ValidatePromptRejectsMissingAnchor) {
   std::vector<common_chat_tool> tools = {makeTool()};
   std::vector<common_chat_msg> chatMsgs;
   EXPECT_THROW(
-      controller.validatePrompt(chatMsgs, tools, layout),
+      controller.validatePrompt(chatMsgs, tools, layout, false),
       qvac_errors::StatusError);
 }
 
@@ -94,7 +99,7 @@ TEST(ToolsCompactControllerTest, ValidatePromptRejectsDetachedToolBlock) {
   std::vector<common_chat_tool> tools = {makeTool()};
   std::vector<common_chat_msg> chatMsgs;
   EXPECT_THROW(
-      controller.validatePrompt(chatMsgs, tools, layout),
+      controller.validatePrompt(chatMsgs, tools, layout, false),
       qvac_errors::StatusError);
 }
 
@@ -109,7 +114,7 @@ TEST(ToolsCompactControllerTest, ValidatePromptRejectsSplitToolBlock) {
   std::vector<common_chat_tool> tools = {makeTool("a"), makeTool("b")};
   std::vector<common_chat_msg> chatMsgs;
   EXPECT_THROW(
-      controller.validatePrompt(chatMsgs, tools, layout),
+      controller.validatePrompt(chatMsgs, tools, layout, false),
       qvac_errors::StatusError);
 }
 
@@ -124,7 +129,7 @@ TEST(ToolsCompactControllerTest, ValidatePromptRejectsToolBlockNotAtEnd) {
   std::vector<common_chat_tool> tools = {makeTool()};
   std::vector<common_chat_msg> chatMsgs;
   EXPECT_THROW(
-      controller.validatePrompt(chatMsgs, tools, layout),
+      controller.validatePrompt(chatMsgs, tools, layout, false),
       qvac_errors::StatusError);
 }
 
@@ -138,7 +143,101 @@ TEST(ToolsCompactControllerTest, ValidatePromptAcceptsContiguousAttachedBlock) {
   layout.toolCount = 2;
   std::vector<common_chat_tool> tools = {makeTool("a"), makeTool("b")};
   std::vector<common_chat_msg> chatMsgs;
-  EXPECT_NO_THROW(controller.validatePrompt(chatMsgs, tools, layout));
+  EXPECT_NO_THROW(controller.validatePrompt(chatMsgs, tools, layout, false));
+}
+
+TEST(ToolsCompactControllerTest, ValidatePromptRequiresToolsForUserTailWithoutCache) {
+  ToolsCompactController controller(true, makeQwen3Profile());
+  PromptLayout layout;
+  std::vector<common_chat_msg> chatMsgs = {
+      makeMsg("system", "You are helpful"),
+      makeMsg("user", "Need weather")};
+  std::vector<common_chat_tool> tools;
+  EXPECT_THROW(
+      controller.validatePrompt(chatMsgs, tools, layout, false),
+      qvac_errors::StatusError);
+}
+
+TEST(
+    ToolsCompactControllerTest,
+    ValidatePromptRequiresToolsForAssistantToolCallTailWithoutCache) {
+  ToolsCompactController controller(true, makeQwen3Profile());
+  PromptLayout layout;
+  std::vector<common_chat_msg> chatMsgs = {
+      makeMsg("system", "You are helpful"),
+      makeMsg("user", "Need weather"),
+      makeMsg("assistant", "<tool_call>{\"name\":\"get_weather\"}</tool_call>")};
+  std::vector<common_chat_tool> tools;
+  EXPECT_THROW(
+      controller.validatePrompt(chatMsgs, tools, layout, false),
+      qvac_errors::StatusError);
+}
+
+TEST(
+    ToolsCompactControllerTest,
+    ValidatePromptAllowsAssistantToolCallTailWithCacheAndNoTools) {
+  ToolsCompactController controller(true, makeQwen3Profile());
+  PromptLayout layout;
+  std::vector<common_chat_msg> chatMsgs = {
+      makeMsg("system", "You are helpful"),
+      makeMsg("user", "Need weather"),
+      makeMsg("assistant", "<tool_call>{\"name\":\"get_weather\"}</tool_call>")};
+  std::vector<common_chat_tool> tools;
+  EXPECT_NO_THROW(controller.validatePrompt(chatMsgs, tools, layout, true));
+}
+
+TEST(ToolsCompactControllerTest, ValidatePromptRequiresToolsForToolTailWithoutCache) {
+  ToolsCompactController controller(true, makeQwen3Profile());
+  PromptLayout layout;
+  std::vector<common_chat_msg> chatMsgs = {
+      makeMsg("system", "You are helpful"),
+      makeMsg("user", "Need weather"),
+      makeMsg("assistant", "I will call a tool"),
+      makeMsg("tool", "{\"temp\": 20}")};
+  std::vector<common_chat_tool> tools;
+  EXPECT_THROW(
+      controller.validatePrompt(chatMsgs, tools, layout, false),
+      qvac_errors::StatusError);
+}
+
+TEST(ToolsCompactControllerTest, ValidatePromptAllowsToolTailWithCacheAndNoTools) {
+  ToolsCompactController controller(true, makeQwen3Profile());
+  PromptLayout layout;
+  std::vector<common_chat_msg> chatMsgs = {
+      makeMsg("system", "You are helpful"),
+      makeMsg("user", "Need weather"),
+      makeMsg("assistant", "I will call a tool"),
+      makeMsg("tool", "{\"temp\": 20}")};
+  std::vector<common_chat_tool> tools;
+  EXPECT_NO_THROW(controller.validatePrompt(chatMsgs, tools, layout, true));
+}
+
+TEST(
+    ToolsCompactControllerTest,
+    ValidatePromptAllowsAssistantNonToolCallTailWithoutCacheAndNoTools) {
+  ToolsCompactController controller(true, makeQwen3Profile());
+  PromptLayout layout;
+  std::vector<common_chat_msg> chatMsgs = {
+      makeMsg("system", "You are helpful"),
+      makeMsg("user", "Need weather"),
+      makeMsg("assistant", "It is sunny in Tokyo")};
+  std::vector<common_chat_tool> tools;
+  EXPECT_NO_THROW(controller.validatePrompt(chatMsgs, tools, layout, false));
+}
+
+TEST(
+    ToolsCompactControllerTest,
+    ValidatePromptAllowsFinalAssistantAfterToolRoundWithoutCacheAndNoTools) {
+  ToolsCompactController controller(true, makeQwen3Profile());
+  PromptLayout layout;
+  std::vector<common_chat_msg> chatMsgs = {
+      makeMsg("system", "You are helpful"),
+      makeMsg("user", "Need weather"),
+      makeMsg("assistant", "<tool_call>{\"name\":\"get_weather\"}</tool_call>"),
+      makeMsg("tool", "{\"temp\": 20}"),
+      makeMsg("assistant", "It is 20C and sunny")};
+  std::vector<common_chat_tool> tools;
+  EXPECT_NO_THROW(controller.validatePrompt(chatMsgs, tools, layout, false));
 }
 
 TEST(

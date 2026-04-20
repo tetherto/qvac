@@ -55,7 +55,8 @@ public:
   void validatePrompt(
       const std::vector<common_chat_msg>& chatMsgs,
       const std::vector<common_chat_tool>& tools,
-      const PromptLayout& layout) const;
+      const PromptLayout& layout,
+      bool hasKvCacheContext) const;
 
   // ── Tokenize/eval lifecycle (called by the concrete contexts) ────────
 

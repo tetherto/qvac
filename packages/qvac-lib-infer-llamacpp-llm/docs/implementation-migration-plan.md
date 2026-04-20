@@ -26,7 +26,9 @@ The output of this plan is one implementation PR split into multiple logical com
 ## Current Baseline (Migration Inputs)
 
 - `docs/structure-proposal.md` defines target ownership and method boundaries.
-- `docs/tools-compact.md` defines prompt-shape contract (4 strict validation rules).
+- `docs/tools-compact.md` defines a cache-aware prompt-shape contract
+  (user-tail strict, tool/assistant-tail conditional on KV cache presence,
+  plus contiguous attachment rules when tools are present).
 - Existing tests include:
   - Model-dependent C++ tests that skip when Qwen model is missing.
   - Integration brittle tests that cover runtime behavior and cache/sliding outcomes.

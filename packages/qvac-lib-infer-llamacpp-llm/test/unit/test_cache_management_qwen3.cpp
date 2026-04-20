@@ -87,9 +87,9 @@ protected:
 
 // tools_compact prompt-shape contract:
 // - when tools_compact=true and the last message is role=user, tools must be
-//   attached in the same prompt payload.
-// - cache tests in this file therefore either include tool definitions or
-//   explicitly assert StatusError for no-tools user-final prompts.
+//   attached in the same prompt payload regardless of cache.
+// - cache-aware exceptions apply to assistant/tool tails and are covered in
+//   deterministic controller unit tests.
 TEST_F(CacheManagementQwen3Test, CacheWithToolsCompactTruePersistsSession) {
   if (!isQwen3ModelPath(test_model_path)) {
     GTEST_SKIP() << "Test requires Qwen3 model for tools_compact feature";

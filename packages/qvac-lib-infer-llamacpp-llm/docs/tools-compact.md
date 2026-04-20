@@ -13,16 +13,17 @@ const config = {
 }
 ```
 
-## Prompt Contract (Strict)
+## Prompt Contract (Cache-Aware)
 
-When `tools_compact` is enabled, each prompt must follow a strict shape. The model now rejects invalid shapes with `InvalidArgument`.
+When `tools_compact` is enabled, prompt validation is cache-aware. The model rejects invalid shapes with `InvalidArgument`.
 
 Required:
 
-1. `tools` must be non-empty in the current prompt.
-2. At least one input anchor message must exist: `user` or `tool`.
-3. All tool definitions (`{ "type": "function", ... }`) must form a single contiguous block.
-4. That block must be attached immediately after the **last** `user` or `tool` message.
+1. If the last message is `user`, `tools` must be non-empty (always required, with or without cache).
+2. If the prompt ends with `tool`, `tools` are required only when no KV cache context is present.
+3. If the prompt ends with `assistant` and includes the model marker (Qwen3: `<tool_call>`), `tools` are required only when no KV cache context is present.
+4. If the prompt ends with `assistant` without a tool-call marker, empty `tools` are allowed.
+5. When `tools` are provided, all tool definitions (`{ "type": "function", ... }`) must form a single contiguous block attached immediately after the **last** `user` or `tool` message.
 
 This means tool definitions are not allowed:
 - before any `user` or `tool` message
@@ -42,7 +43,7 @@ This means tool definitions are not allowed:
 
 ### Invalid Shapes
 
-No tools:
+No tools after a `user` tail:
 
 ```json
 [
@@ -50,7 +51,7 @@ No tools:
 ]
 ```
 
-Tools without user:
+Tools without user/tool anchor:
 
 ```json
 [
@@ -76,6 +77,16 @@ Split tool block:
   { "type": "function", "name": "getWeather", "parameters": { "type": "object" } },
   { "role": "assistant", "content": "Need one more tool." },
   { "type": "function", "name": "lookupCity", "parameters": { "type": "object" } }
+]
+```
+
+No cache + assistant tool-call tail without tools:
+
+```json
+[
+  { "role": "system", "content": "You are helpful." },
+  { "role": "user", "content": "Weather in Tokyo?" },
+  { "role": "assistant", "content": "<tool_call>{\"name\":\"getWeather\"}</tool_call>" }
 ]
 ```
 

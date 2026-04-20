@@ -27,28 +27,44 @@ llama_pos ToolsCompactController::anchor() const noexcept {
 void ToolsCompactController::validatePrompt(
     const std::vector<common_chat_msg>& chatMsgs,
     const std::vector<common_chat_tool>& tools,
-    const PromptLayout& layout) const {
+    const PromptLayout& layout,
+    bool hasKvCacheContext) const {
   if (!enabled_) {
     return;
   }
 
-  // Original validation: when tools_compact is enabled and the last array item
-  // is a user message, tools must be non-empty. This prevents accidental
-  // misuse where tools_compact is enabled but no tools are provided.
-  if (layout.lastItemIsUserMsg && tools.empty()) {
-    std::string errorMsg = string_format(
-        "tools_compact requires non-empty tools attached to the last "
-        "user message");
-    throw qvac_errors::StatusError(
-        ADDON_ID,
-        qvac_errors::general_error::toString(
-            qvac_errors::general_error::InvalidArgument),
-        errorMsg);
-  }
-
-  // When tools are empty (and last item is not a user message),
-  // tools_compact is effectively a no-op for this prompt.
   if (tools.empty()) {
+    // Empty-tools contract:
+    // - last user message always requires tools.
+    // - without KV cache context, unresolved tool-chain turns also require
+    //   tools (last tool message, or assistant output that begins tool-call).
+    // - other shapes are treated as no-op validation.
+    bool requiresTools = false;
+    if (!chatMsgs.empty()) {
+      const common_chat_msg& lastMsg = chatMsgs.back();
+      if (lastMsg.role == "user") {
+        requiresTools = true;
+      } else if (!hasKvCacheContext) {
+        if (lastMsg.role == "tool") {
+          requiresTools = true;
+        } else if (
+            lastMsg.role == "assistant" &&
+            !profile_.toolCallStartMarker.empty()) {
+          requiresTools = lastMsg.content.find(profile_.toolCallStartMarker) !=
+                          std::string::npos;
+        }
+      }
+    }
+
+    if (requiresTools) {
+      std::string errorMsg = string_format(
+          "tools_compact requires non-empty tools for this prompt shape");
+      throw qvac_errors::StatusError(
+          ADDON_ID,
+          qvac_errors::general_error::toString(
+              qvac_errors::general_error::InvalidArgument),
+          errorMsg);
+    }
     return;
   }
 

@@ -495,21 +495,25 @@ LlamaModel::ResolvedPrompt
 LlamaModel::resolveChatAndTools(const Prompt& prompt) {
   ResolvedPrompt resolved;
   if (state_->cacheManager_.has_value()) {
+    ParsedPromptPayload parsedPrompt;
     resolved.isCacheLoaded = state_->cacheManager_->handleCache(
-        resolved.chatMsgs,
-        resolved.tools,
+        parsedPrompt,
         prompt.input,
         [this](const std::string& inputPrompt) {
           return this->formatPrompt(inputPrompt);
         },
         prompt.cacheKey);
+    resolved.chatMsgs = std::move(parsedPrompt.chatMsgs);
+    resolved.tools = std::move(parsedPrompt.tools);
+    resolved.layout = std::move(parsedPrompt.layout);
     resolved.shouldResetAfterInference =
         state_->cacheManager_->isCacheDisabled() ||
         !state_->cacheManager_->wasCacheUsedInLastPrompt();
   } else {
-    auto formatted = formatPrompt(prompt.input);
-    resolved.chatMsgs = std::move(formatted.first);
-    resolved.tools = std::move(formatted.second);
+    ParsedPromptPayload parsedPrompt = formatPrompt(prompt.input);
+    resolved.chatMsgs = std::move(parsedPrompt.chatMsgs);
+    resolved.tools = std::move(parsedPrompt.tools);
+    resolved.layout = std::move(parsedPrompt.layout);
     resolved.shouldResetAfterInference = true;
   }
   return resolved;
@@ -537,6 +541,14 @@ std::string LlamaModel::processPromptImpl(const Prompt& prompt) {
       state_->llmContext_->getNPast() > 0) {
     resetState(true);
   }
+
+  bool hasKvCacheContext = resolved.isCacheLoaded;
+  if (state_->llmContext_->getNPast() > 0) {
+    hasKvCacheContext = true;
+  }
+
+  state_->toolsCompact_->validatePrompt(
+      resolved.chatMsgs, resolved.tools, resolved.layout, hasKvCacheContext);
 
   if (resolved.chatMsgs.empty() && resolved.tools.empty()) {
     QLOG_IF(Priority::INFO, "No messages to process - returning early\n");
@@ -960,15 +972,16 @@ void LlamaModel::commonParamsParse(
   }
 }
 // NOLINTNEXTLINE(readability-convert-member-functions-to-static,readability-function-cognitive-complexity)
-std::pair<std::vector<common_chat_msg>, std::vector<common_chat_tool>>
+ParsedPromptPayload
 LlamaModel::formatPrompt(const std::string& input) {
   if (input.empty()) {
     state_->llmContext_->resetMedia();
     std::string errorMsg = string_format("%s: empty prompt\n", __func__);
     throw qvac_errors::StatusError(ADDON_ID, toString(EmptyPrompt), errorMsg);
   }
-  std::vector<common_chat_msg> chatMsgs;
-  std::vector<common_chat_tool> tools;
+  ParsedPromptPayload parsed;
+  std::vector<common_chat_msg>& chatMsgs = parsed.chatMsgs;
+  std::vector<common_chat_tool>& tools = parsed.tools;
 
   picojson::value chatJson;
   std::string err = picojson::parse(chatJson, input);
@@ -1068,8 +1081,7 @@ LlamaModel::formatPrompt(const std::string& input) {
       }
     }
 
-    // Validate prompt shape via controller
-    state_->toolsCompact_->validatePrompt(chatMsgs, tools, layout);
+    parsed.layout = std::move(layout);
 
     if (addMediaPlaceholder > 0) {
       state_->llmContext_->resetMedia();
@@ -1086,7 +1098,7 @@ LlamaModel::formatPrompt(const std::string& input) {
     throw qvac_errors::StatusError(
         ADDON_ID, toString(InvalidInputFormat), errorMsg);
   }
-  return {chatMsgs, tools};
+  return parsed;
 }
 
 void LlamaModel::resetState(bool resetStats) {

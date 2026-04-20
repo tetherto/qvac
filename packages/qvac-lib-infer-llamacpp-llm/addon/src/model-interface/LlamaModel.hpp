@@ -243,6 +243,7 @@ private:
   struct ResolvedPrompt {
     std::vector<common_chat_msg> chatMsgs;
     std::vector<common_chat_tool> tools;
+    PromptLayout layout;
     bool isCacheLoaded = false;
     bool shouldResetAfterInference = false;
   };
@@ -260,8 +261,7 @@ private:
    * @param input - input prompt.
    * @return formatted chat messages and tools.
    */
-  std::pair<std::vector<common_chat_msg>, std::vector<common_chat_tool>>
-  formatPrompt(const std::string& input);
+  ParsedPromptPayload formatPrompt(const std::string& input);
   void resetState(bool resetStats = true);
   std::unique_ptr<LlmContext> createContext(
       std::string&& projectionPath, common_params& params,

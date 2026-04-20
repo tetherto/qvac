@@ -187,8 +187,8 @@ async function runAndCollect (model, prompt, runOptions) {
   }
 }
 
-async function runExpectingInvalidPrompt (t, model, prompt, expectedReason) {
-  const response = await model.run(prompt)
+async function runExpectingInvalidPrompt (t, model, prompt, expectedReason, runOptions) {
+  const response = await model.run(prompt, runOptions)
 
   let capturedError = null
   if (typeof response.onError === 'function') {
@@ -212,6 +212,33 @@ async function runExpectingInvalidPrompt (t, model, prompt, expectedReason) {
   t.ok(
     message.includes(expectedReason),
     `error includes exact reason: ${expectedReason}`
+  )
+}
+
+async function runExpectingNoPromptValidationError (t, model, prompt, runOptions, invalidReason) {
+  const response = await model.run(prompt, runOptions)
+
+  let capturedError = null
+  if (typeof response.onError === 'function') {
+    response.onError(err => { capturedError = err })
+  }
+  response.onUpdate(() => {})
+
+  try {
+    await response.await()
+  } catch (err) {
+    capturedError = capturedError || err
+  }
+
+  if (!capturedError) {
+    t.pass('prompt accepted without validation errors')
+    return
+  }
+
+  const message = String(capturedError && capturedError.message ? capturedError.message : capturedError)
+  t.absent(
+    message.includes(invalidReason),
+    `prompt should not fail validation with reason: ${invalidReason}`
   )
 }
 
@@ -380,8 +407,11 @@ test('[tools-compact] rejects invalid prompt shapes', { timeout: 600_000 }, asyn
     t.pass('tools unsupported in runtime; assertions skipped')
     return
   }
-  const { model, logs } = await setupModel(t)
-  if (!await ensureToolsSupportOrSkip(t, model, logs)) return
+  const { model: probeModel, logs } = await setupModel(t)
+  if (!await ensureToolsSupportOrSkip(t, probeModel, logs)) return
+  const { model, dirPath } = await setupModel(t)
+
+  const noCacheOpts = { cacheKey: path.join(dirPath, 'tools-compact-invalid-user-tail.bin') }
 
   await runExpectingInvalidPrompt(
     t,
@@ -389,6 +419,84 @@ test('[tools-compact] rejects invalid prompt shapes', { timeout: 600_000 }, asyn
     [
       { role: 'user', content: 'Hello without tools' }
     ],
-    'tools_compact requires non-empty tools attached to the last user message'
+    'tools_compact requires non-empty tools for this prompt shape',
+    noCacheOpts
+  )
+})
+
+test('[tools-compact] cache-aware empty-tools contract', { timeout: 600_000 }, async t => {
+  if (cachedToolsSupport === false) {
+    t.comment('Skipping strict tools_compact invalid-shape assertions: model/template runtime does not support tools in this environment')
+    t.pass('tools unsupported in runtime; assertions skipped')
+    return
+  }
+  const { model: probeModel, logs } = await setupModel(t)
+  if (!await ensureToolsSupportOrSkip(t, probeModel, logs)) return
+  const { model, dirPath } = await setupModel(t)
+
+  const invalidReason = 'tools_compact requires non-empty tools for this prompt shape'
+
+  // no-cache: assistant marker tail must include tools
+  await runExpectingInvalidPrompt(
+    t,
+    model,
+    [
+      SYSTEM_MESSAGE,
+      { role: 'user', content: 'Need weather update' },
+      { role: 'assistant', content: '<tool_call>{"name":"getWeather","arguments":{"city":"Tokyo"}}</tool_call>' }
+    ],
+    invalidReason
+  )
+
+  // no-cache: assistant without marker can omit tools
+  await runExpectingNoPromptValidationError(
+    t,
+    model,
+    [
+      SYSTEM_MESSAGE,
+      { role: 'user', content: 'Need weather update' },
+      { role: 'assistant', content: 'Tokyo is sunny right now.' }
+    ],
+    { prefill: true },
+    invalidReason
+  )
+
+  // with cache: marker/tool tails can omit tools.
+  // No-cache marker/tool strictness is covered deterministically in
+  // test/unit/test_tools_compact_controller.cpp.
+  const sessionName = path.join(dirPath, 'tools-compact-cache-aware-contract.bin')
+  const opts = { cacheKey: sessionName }
+
+  await runExpectingNoPromptValidationError(
+    t,
+    model,
+    [
+      SYSTEM_MESSAGE,
+      { role: 'user', content: 'Start session with available tools.' },
+      TOOL_A
+    ],
+    { ...opts, prefill: true },
+    invalidReason
+  )
+
+  await runExpectingNoPromptValidationError(
+    t,
+    model,
+    [
+      { role: 'assistant', content: '<tool_call>{"name":"getWeather","arguments":{"city":"London"}}</tool_call>' }
+    ],
+    { ...opts, prefill: true },
+    invalidReason
+  )
+
+  await runExpectingNoPromptValidationError(
+    t,
+    model,
+    [
+      { role: 'assistant', content: 'Calling tool now.' },
+      { role: 'tool', content: '{"city":"London","weather":"rainy"}' }
+    ],
+    { ...opts, prefill: true },
+    invalidReason
   )
 })

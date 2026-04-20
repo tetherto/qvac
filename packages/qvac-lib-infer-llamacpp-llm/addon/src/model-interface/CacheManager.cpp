@@ -29,17 +29,11 @@ bool CacheManager::isFileInitialized(const std::filesystem::path& path) {
 }
 
 bool CacheManager::handleCache(
-    std::vector<common_chat_msg>& chatMsgs,
-    std::vector<common_chat_tool>& tools, const std::string& inputPrompt,
-    std::function<
-        std::pair<std::vector<common_chat_msg>, std::vector<common_chat_tool>>(
-            const std::string&)>
-        formatPrompt,
+    ParsedPromptPayload& parsedPrompt, const std::string& inputPrompt,
+    std::function<ParsedPromptPayload(const std::string&)> formatPrompt,
     const std::string& cacheKey) {
 
-  auto formatted = formatPrompt(inputPrompt);
-  chatMsgs = std::move(formatted.first);
-  tools = std::move(formatted.second);
+  parsedPrompt = formatPrompt(inputPrompt);
 
   if (cacheKey.empty()) {
     if (hasActiveCache()) {

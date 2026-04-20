@@ -7,8 +7,15 @@
 
 #include <llama.h>
 
+#include "ToolsCompactController.hpp"
 #include "LlmContext.hpp"
 #include "common/chat.h"
+
+struct ParsedPromptPayload {
+  std::vector<common_chat_msg> chatMsgs;
+  std::vector<common_chat_tool> tools;
+  PromptLayout layout;
+};
 
 class CacheManager {
 public:
@@ -17,11 +24,8 @@ public:
       std::function<void(bool)> resetStateCallback);
 
   bool handleCache(
-      std::vector<common_chat_msg>& chatMsgs,
-      std::vector<common_chat_tool>& tools, const std::string& inputPrompt,
-      std::function<std::pair<
-          std::vector<common_chat_msg>, std::vector<common_chat_tool>>(
-          const std::string&)>
+      ParsedPromptPayload& parsedPrompt, const std::string& inputPrompt,
+      std::function<ParsedPromptPayload(const std::string&)>
           formatPrompt,
       const std::string& cacheKey = "");
 
