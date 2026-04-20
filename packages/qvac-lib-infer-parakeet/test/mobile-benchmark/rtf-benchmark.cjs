@@ -1,6 +1,6 @@
 'use strict'
 
-require('../mobile/integration-runtime.cjs')
+require('./integration-runtime.cjs')
 
 const os = require('bare-os')
 const process = require('bare-process')
