@@ -151,11 +151,13 @@ test("ttsSupertonicConfigSchema: requires model sources in enhancer at load time
   const withSources = ttsSupertonicConfigSchema.safeParse({
     ttsEngine: "supertonic",
     language: "en",
-    ttsTokenizerSrc: "tok.bin",
     ttsTextEncoderSrc: "enc.onnx",
-    ttsLatentDenoiserSrc: "den.onnx",
-    ttsVoiceDecoderSrc: "vdec.onnx",
-    ttsVoiceSrc: "voice.bin",
+    ttsDurationPredictorSrc: "dp.onnx",
+    ttsVectorEstimatorSrc: "ve.onnx",
+    ttsVocoderSrc: "voc.onnx",
+    ttsUnicodeIndexerSrc: "ui.json",
+    ttsTtsConfigSrc: "tts.json",
+    ttsVoiceStyleSrc: "voice.json",
     enhancer: {
       type: "lavasr",
       enhance: true,
@@ -184,11 +186,13 @@ test("ttsSupertonicConfigSchema: accepts config without enhancer", (t) => {
   const result = ttsSupertonicConfigSchema.safeParse({
     ttsEngine: "supertonic",
     language: "en",
-    ttsTokenizerSrc: "tok.bin",
     ttsTextEncoderSrc: "enc.onnx",
-    ttsLatentDenoiserSrc: "den.onnx",
-    ttsVoiceDecoderSrc: "vdec.onnx",
-    ttsVoiceSrc: "voice.bin",
+    ttsDurationPredictorSrc: "dp.onnx",
+    ttsVectorEstimatorSrc: "ve.onnx",
+    ttsVocoderSrc: "voc.onnx",
+    ttsUnicodeIndexerSrc: "ui.json",
+    ttsTtsConfigSrc: "tts.json",
+    ttsVoiceStyleSrc: "voice.json",
   });
   t.is(result.success, true);
 });

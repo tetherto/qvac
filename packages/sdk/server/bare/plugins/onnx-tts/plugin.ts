@@ -18,6 +18,7 @@ import {
   type TtsSupertonicRuntimeConfig,
   type TtsRuntimeConfig,
   type TtsEnhancerConfig,
+  type TtsEnhancerRuntimeConfig,
 } from "@/schemas";
 import { createStreamLogger, registerAddonLogger } from "@/logging";
 import {
@@ -47,6 +48,8 @@ async function resolveEnhancerArtifacts(
         ...(denoiserPath && { denoiserPath }),
       };
     }
+    default:
+      throw new Error(`Unknown enhancer type: ${(enhancer as { type: string }).type}`);
   }
 }
 
@@ -59,11 +62,13 @@ function buildRuntimeEnhancer(enhancer: TtsEnhancerConfig | undefined) {
         enhance: enhancer.enhance ?? false,
         denoise: enhancer.denoise ?? false,
       };
+    default:
+      throw new Error(`Unknown enhancer type: ${(enhancer as { type: string }).type}`);
   }
 }
 
 function buildEnhancerArg(
-  enhancer: { type: "lavasr"; enhance?: boolean | undefined; denoise?: boolean | undefined } | undefined,
+  enhancer: TtsEnhancerRuntimeConfig | undefined,
   artifacts: Record<string, string | undefined>,
 ) {
   if (!enhancer) return undefined;
@@ -82,6 +87,8 @@ function buildEnhancerArg(
         ...(artifacts["denoiserPath"] && { denoiserPath: artifacts["denoiserPath"] }),
       };
     }
+    default:
+      throw new Error(`Unknown enhancer type: ${(enhancer as { type: string }).type}`);
   }
 }
 
@@ -115,22 +122,27 @@ async function resolveChatterboxConfig(
 
   const resolve = ctx.resolveModelPath;
   const [
-    tokenizerPath,
-    speechEncoderPath,
-    embedTokensPath,
-    conditionalDecoderPath,
-    languageModelPath,
-    referenceAudioPath,
+    [
+      tokenizerPath,
+      speechEncoderPath,
+      embedTokensPath,
+      conditionalDecoderPath,
+      languageModelPath,
+      referenceAudioPath,
+    ],
+    enhancerArtifacts,
   ] = await Promise.all([
-    resolve(ttsTokenizerSrc),
-    resolve(ttsSpeechEncoderSrc),
-    resolve(ttsEmbedTokensSrc),
-    resolve(ttsConditionalDecoderSrc),
-    resolve(ttsLanguageModelSrc),
-    resolve(referenceAudioSrc),
+    Promise.all([
+      resolve(ttsTokenizerSrc),
+      resolve(ttsSpeechEncoderSrc),
+      resolve(ttsEmbedTokensSrc),
+      resolve(ttsConditionalDecoderSrc),
+      resolve(ttsLanguageModelSrc),
+      resolve(referenceAudioSrc),
+    ]),
+    resolveEnhancerArtifacts(enhancer, resolve),
   ]);
 
-  const enhancerArtifacts = await resolveEnhancerArtifacts(enhancer, resolve);
   const runtimeEnhancer = buildRuntimeEnhancer(enhancer);
 
   return {
@@ -184,24 +196,29 @@ async function resolveSupertonicConfig(
 
   const resolve = ctx.resolveModelPath;
   const [
-    textEncoderPath,
-    durationPredictorPath,
-    vectorEstimatorPath,
-    vocoderPath,
-    unicodeIndexerPath,
-    ttsConfigPath,
-    voiceStylePath,
+    [
+      textEncoderPath,
+      durationPredictorPath,
+      vectorEstimatorPath,
+      vocoderPath,
+      unicodeIndexerPath,
+      ttsConfigPath,
+      voiceStylePath,
+    ],
+    enhancerArtifacts,
   ] = await Promise.all([
-    resolve(ttsTextEncoderSrc),
-    resolve(ttsDurationPredictorSrc),
-    resolve(ttsVectorEstimatorSrc),
-    resolve(ttsVocoderSrc),
-    resolve(ttsUnicodeIndexerSrc),
-    resolve(ttsTtsConfigSrc),
-    resolve(ttsVoiceStyleSrc),
+    Promise.all([
+      resolve(ttsTextEncoderSrc),
+      resolve(ttsDurationPredictorSrc),
+      resolve(ttsVectorEstimatorSrc),
+      resolve(ttsVocoderSrc),
+      resolve(ttsUnicodeIndexerSrc),
+      resolve(ttsTtsConfigSrc),
+      resolve(ttsVoiceStyleSrc),
+    ]),
+    resolveEnhancerArtifacts(enhancer, resolve),
   ]);
 
-  const enhancerArtifacts = await resolveEnhancerArtifacts(enhancer, resolve);
   const runtimeEnhancer = buildRuntimeEnhancer(enhancer);
 
   return {
