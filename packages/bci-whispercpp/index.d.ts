@@ -12,11 +12,18 @@ declare interface WhisperConfig {
   n_threads?: number;
   temperature?: number;
   suppress_nst?: boolean;
+  suppress_blank?: boolean;
   duration_ms?: number;
   translate?: boolean;
   no_timestamps?: boolean;
   single_segment?: boolean;
-  [key: string]: unknown;
+  print_special?: boolean;
+  print_progress?: boolean;
+  print_realtime?: boolean;
+  print_timestamps?: boolean;
+  detect_language?: boolean;
+  greedy_best_of?: number;
+  beam_search_beam_size?: number;
 }
 
 declare interface BCIWhispercppFiles {

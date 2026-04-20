@@ -24,20 +24,17 @@ public:
       qvac_lib_inference_addon_cpp::js::Object jsObject, js_env_t* env)
       -> BCIConfig;
 
-  auto loadContextParams(
+  void loadContextParams(
       qvac_lib_inference_addon_cpp::js::Object contextParamsObj, js_env_t* env,
-      BCIConfig& config)
-      -> BCIConfig;
+      BCIConfig& config);
 
-  auto loadMiscParams(
+  void loadMiscParams(
       qvac_lib_inference_addon_cpp::js::Object miscParamsObj, js_env_t* env,
-      BCIConfig& config)
-      -> BCIConfig;
+      BCIConfig& config);
 
-  auto loadBCIParams(
+  void loadBCIParams(
       qvac_lib_inference_addon_cpp::js::Object bciParamsObj, js_env_t* env,
-      BCIConfig& config)
-      -> BCIConfig;
+      BCIConfig& config);
 
 private:
   void loadMap(

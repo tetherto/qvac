@@ -108,22 +108,19 @@ BCIConfig JSAdapter::loadFromJSObject(Object jsObject, js_env_t* env) {
   return config;
 }
 
-BCIConfig JSAdapter::loadContextParams(
+void JSAdapter::loadContextParams(
     Object contextParamsObj, js_env_t* env, BCIConfig& config) {
   loadMap(contextParamsObj, env, config.whisperContextCfg);
-  return config;
 }
 
-BCIConfig JSAdapter::loadMiscParams(
+void JSAdapter::loadMiscParams(
     Object miscParamsObj, js_env_t* env, BCIConfig& config) {
   loadMap(miscParamsObj, env, config.miscConfig);
-  return config;
 }
 
-BCIConfig JSAdapter::loadBCIParams(
+void JSAdapter::loadBCIParams(
     Object bciParamsObj, js_env_t* env, BCIConfig& config) {
   loadMap(bciParamsObj, env, config.bciConfig);
-  return config;
 }
 
 } // namespace qvac_lib_inference_addon_bci

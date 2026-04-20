@@ -52,6 +52,7 @@ public:
       int dayIdx) const;
 
   bool hasWeights() const { return weights_.loaded; }
+  uint32_t getNumDays() const { return weights_.numDays; }
   int getMelBins() const { return K_WHISPER_N_MEL; }
   int getMelFrames() const { return K_WHISPER_MEL_FRAMES; }
 

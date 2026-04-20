@@ -13,7 +13,7 @@
     "test:unit": "brittle-bare test/unit/**/*.test.js",
     "test:integration": "brittle-bare test/integration/addon.test.js",
     "test:cpp:build": "bare-make generate -D BUILD_TESTING=ON && bare-make build --target test-bci-core && bare-make install",
-    "test:cpp:run": "cd build/addon/tests/ && ./test-bci-core --gtest_output=xml:cpp-test-results.xml",
+    "test:cpp:run": "build/addon/tests/test-bci-core --gtest_output=xml:build/addon/tests/cpp-test-results.xml",
     "test:cpp": "npm run test:cpp:build && npm run test:cpp:run",
     "test": "npm run test:integration",
     "test:dts": "tsc index.d.ts --noEmit --lib es2018 --esModuleInterop --skipLibCheck"

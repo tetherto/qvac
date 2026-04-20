@@ -20,6 +20,12 @@ constexpr uint32_t K_EMBEDDER_MAGIC = 0x42434945;
 // so the convolution loop touches fewer source timesteps. Matches the
 // BrainWhisperer Python reference.
 constexpr float K_KERNEL_TRIM_THRESHOLD = 0.01F;
+
+// Default Gaussian smoothing parameters matching the BrainWhisperer Python
+// notebook. These are the σ and kernel width used for temporal smoothing of
+// the raw neural signal before day-projection and mel padding.
+constexpr float K_SMOOTH_KERNEL_STD = 2.0F;
+constexpr int K_SMOOTH_KERNEL_SIZE = 100;
 } // namespace
 
 NeuralProcessor::NeuralProcessor() = default;
@@ -215,8 +221,9 @@ std::vector<float> NeuralProcessor::processToMel(
     return melOutput;
   }
 
-  // Step 1: Gaussian smoothing (std=2.0, kernel_size=100, matching BrainWhisperer)
-  auto smoothed = gaussianSmooth(features, numTimesteps, numChannels, 2.0F, 100);
+  auto smoothed = gaussianSmooth(
+      features, numTimesteps, numChannels,
+      K_SMOOTH_KERNEL_STD, K_SMOOTH_KERNEL_SIZE);
 
   // Step 2: Day projection (if available)
   std::vector<float> projected;

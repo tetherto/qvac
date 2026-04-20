@@ -226,9 +226,6 @@ void BCIModel::process(const Input& rawNeuralData) {
        "Processing neural signal (" +
            std::to_string(rawNeuralData.size()) + " bytes)");
 
-  // The BCI embedder ships with per-day projection matrices; day_idx=1 is the
-  // day the shipped test fixtures were recorded on. Callers should pass the
-  // real day_idx for their recording; this default keeps the POC honest.
   int dayIdx = 1;
   auto it = cfg_.bciConfig.find("day_idx");
   if (it != cfg_.bciConfig.end()) {
@@ -236,6 +233,17 @@ void BCIModel::process(const Input& rawNeuralData) {
       dayIdx = static_cast<int>(*d);
     } else if (auto* i = std::get_if<int>(&it->second)) {
       dayIdx = *i;
+    }
+  }
+
+  if (neuralProcessor_.hasWeights()) {
+    const int maxDay =
+        static_cast<int>(neuralProcessor_.getNumDays()) - 1;
+    if (maxDay >= 0 && (dayIdx < 0 || dayIdx > maxDay)) {
+      QLOG(qvac_lib_inference_addon_cpp::logger::Priority::WARNING,
+           "day_idx " + std::to_string(dayIdx) +
+               " is outside [0, " + std::to_string(maxDay) +
+               "]; it will be clamped");
     }
   }
 

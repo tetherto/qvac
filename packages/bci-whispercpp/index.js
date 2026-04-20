@@ -107,12 +107,21 @@ class BCIWhispercpp {
     checkConfig(configurationParams)
 
     const binding = require('./binding')
-    this.addon = new BCIInterface(
-      binding,
-      configurationParams,
-      this._outputCallback.bind(this),
-      this.logger.info.bind(this.logger)
-    )
+    try {
+      this.addon = new BCIInterface(
+        binding,
+        configurationParams,
+        this._outputCallback.bind(this),
+        this.logger.info.bind(this.logger)
+      )
+    } catch (err) {
+      this.addon = null
+      throw new QvacErrorAddonBCI({
+        code: ERR_CODES.FAILED_TO_LOAD_WEIGHTS,
+        adds: err.message,
+        cause: err
+      })
+    }
 
     await this.addon.activate()
     this.logger.info('BCI addon activated')
@@ -193,13 +202,12 @@ class BCIWhispercpp {
 
   async unload () {
     return await this._withExclusiveRun(async () => {
-      if (this._job.active) {
-        this._job.fail(new Error('Model was unloaded'))
-      }
-      await this.cancel()
       if (this.addon) {
         await this.addon.destroyInstance()
         this.addon = null
+      }
+      if (this._job.active) {
+        this._job.fail(new Error('Model was unloaded'))
       }
       this.state.configLoaded = false
     })
@@ -207,13 +215,12 @@ class BCIWhispercpp {
 
   async destroy () {
     return await this._withExclusiveRun(async () => {
-      if (this._job.active) {
-        this._job.fail(new Error('Model was destroyed'))
-      }
-      await this.cancel()
       if (this.addon) {
         await this.addon.destroyInstance()
         this.addon = null
+      }
+      if (this._job.active) {
+        this._job.fail(new Error('Model was destroyed'))
       }
       this.state.configLoaded = false
       this.state.destroyed = true
