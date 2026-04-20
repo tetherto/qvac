@@ -84,15 +84,16 @@ function deliverProgress(
   try {
     subscriber.onProgress(progress);
   } catch (err) {
-    settleSubscriber(
-      subscriber,
-      err instanceof Error ? err : new Error(String(err)),
-    );
-    transfer.subscribers.delete(subscriber.id);
+    const error = err instanceof Error ? err : new Error(String(err));
 
-    if (transfer.subscribers.size === 0) {
-      transfer.abortController.abort();
-    }
+    logger.warn("Progress callback threw; detaching subscriber", {
+      downloadKey: transfer.downloadKey,
+      subscriberId: subscriber.id,
+      error,
+    });
+
+    settleSubscriber(subscriber, error);
+    transfer.subscribers.delete(subscriber.id);
   }
 }
 
