@@ -221,6 +221,14 @@ jobs:
         env:
           GITHUB_TOKEN: ${{ secrets.PAT_TOKEN }}
 
+      - name: Run Vulkan GPU smoke test
+        if: matrix.os == 'ai-run-linux-gpu'
+        working-directory: ${{ inputs.workdir }}
+        shell: bash
+        run: npm run test:stand-alone:gpu
+        env:
+          GITHUB_TOKEN: ${{ secrets.PAT_TOKEN }}
+
       - name: Print run state (Unix)
         if: ${{ matrix.platform != 'win32' }}
         working-directory: ${{ inputs.workdir }}
