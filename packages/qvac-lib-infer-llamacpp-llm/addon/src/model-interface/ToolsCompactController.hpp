@@ -104,19 +104,24 @@ public:
 
   // ── Lifecycle ────────────────────────────────────────────────────────
 
-  /// Resets inference state for a new session.
-  /// Keeps the last captured debug snapshot from onGenerationComplete.
+  /// Resets live inference state (conversation-token delta and current anchor).
+  /// Does not clear debug snapshot fields, which are intentionally retained
+  /// until the next onGenerationComplete capture.
   void reset() noexcept;
 
   // ── Debug stats (read by LlamaModel::runtimeDebugStats) ──────────────
 
   struct DebugSnapshot {
+    // Anchor captured at the start of the most recent onGenerationComplete
+    // call. This is not the live anchor value after subsequent sliding/reset.
     llama_pos nPastBeforeTools = -1;
+    // Whether the most recent onGenerationComplete decided to trim tools.
     bool lastToolsTrimmed = false;
   };
 
-  /// Returns a snapshot of the debug state. Values are captured at
-  /// onGenerationComplete time so they reflect the state at chain completion.
+  /// Returns the most recently captured generation-complete snapshot.
+  /// Snapshot values remain stable across reset()/slide operations and are
+  /// replaced only by a subsequent onGenerationComplete call.
   [[nodiscard]] DebugSnapshot debugSnapshot() const noexcept;
 
 private:
@@ -125,9 +130,9 @@ private:
   llama_pos nConversationOnlyTokens_ = 0;
   llama_pos nPastBeforeTools_ = -1;
 
-  // Captured at the start of onGenerationComplete, surfaces via
-  // debugSnapshot so runtimeDebugStats reads the anchor position
-  // at the moment of chain completion (not post-trim).
+  // Captured at the start of onGenerationComplete and surfaced via
+  // debugSnapshot, so runtimeDebugStats reports chain-completion state
+  // rather than mutable live anchor state.
   struct LastRunInfo {
     llama_pos anchorAtGenerationEnd = -1;
     bool trimmed = false;

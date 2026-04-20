@@ -199,7 +199,9 @@ ToolsCompactController::TrimDecision
 ToolsCompactController::onGenerationComplete(
     std::string_view assistantOutput, llama_pos nPast,
     llama_pos firstMsgTokens) {
-  // Capture debug state before any modifications
+  // Capture snapshot once per generation-complete event before any state
+  // mutation. This snapshot is intentionally decoupled from subsequent live
+  // anchor updates (slide/reset) until the next generation-complete call.
   lastRunInfo_.anchorAtGenerationEnd = nPastBeforeTools_;
   lastRunInfo_.trimmed = false;
 
@@ -257,6 +259,8 @@ ToolsCompactController::onGenerationComplete(
 }
 
 void ToolsCompactController::reset() noexcept {
+  // Intentionally keep lastRunInfo_ so runtime debug stats can report
+  // the last completed generation decision even after state cleanup.
   nConversationOnlyTokens_ = 0;
   nPastBeforeTools_ = -1;
 }

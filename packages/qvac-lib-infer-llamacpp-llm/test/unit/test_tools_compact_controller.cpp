@@ -469,3 +469,52 @@ TEST(ToolsCompactControllerTest, DebugSnapshotStaysConsistentAcrossReset) {
   EXPECT_EQ(snapshotAfterReset.nPastBeforeTools, 80);
   EXPECT_TRUE(snapshotAfterReset.lastToolsTrimmed);
 }
+
+TEST(
+    ToolsCompactControllerTest,
+    DebugSnapshotIsGenerationCapturedNotLiveAnchorAfterSlide) {
+  ToolsCompactController controller(true, makeQwen3Profile());
+  constexpr llama_pos firstMsgTokens = 50;
+  controller.onTokenize(140, 80);
+  controller.onEvalComplete(140, 140); // anchor = 80
+
+  auto decision = controller.onGenerationComplete(
+      "<tool_call>{\"name\":\"foo\"}</tool_call>", 120, firstMsgTokens);
+  EXPECT_FALSE(decision.trim);
+  EXPECT_EQ(controller.anchor(), 80);
+
+  auto snapshotBeforeSlide = controller.debugSnapshot();
+  EXPECT_EQ(snapshotBeforeSlide.nPastBeforeTools, 80);
+  EXPECT_FALSE(snapshotBeforeSlide.lastToolsTrimmed);
+
+  controller.onSlide(20, firstMsgTokens);
+  EXPECT_EQ(controller.anchor(), 60);
+
+  auto snapshotAfterSlide = controller.debugSnapshot();
+  EXPECT_EQ(snapshotAfterSlide.nPastBeforeTools, 80);
+  EXPECT_FALSE(snapshotAfterSlide.lastToolsTrimmed);
+}
+
+TEST(
+    ToolsCompactControllerTest,
+    ResetDoesNotClearDebugSnapshotAfterNoTrimGenerationComplete) {
+  ToolsCompactController controller(true, makeQwen3Profile());
+  constexpr llama_pos firstMsgTokens = 50;
+  controller.onTokenize(140, 80);
+  controller.onEvalComplete(140, 140); // anchor = 80
+
+  auto decision = controller.onGenerationComplete(
+      "<tool_call>{\"name\":\"foo\"}</tool_call>", 120, firstMsgTokens);
+  EXPECT_FALSE(decision.trim);
+
+  auto snapshotBeforeReset = controller.debugSnapshot();
+  EXPECT_EQ(snapshotBeforeReset.nPastBeforeTools, 80);
+  EXPECT_FALSE(snapshotBeforeReset.lastToolsTrimmed);
+
+  controller.reset();
+  EXPECT_EQ(controller.anchor(), -1);
+
+  auto snapshotAfterReset = controller.debugSnapshot();
+  EXPECT_EQ(snapshotAfterReset.nPastBeforeTools, 80);
+  EXPECT_FALSE(snapshotAfterReset.lastToolsTrimmed);
+}
