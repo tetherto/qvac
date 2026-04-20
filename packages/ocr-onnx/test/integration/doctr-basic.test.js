@@ -56,7 +56,7 @@ test('DocTR basic - BMP image', { timeout: TEST_TIMEOUT }, async function (t) {
   // tilted/vertical vary by platform and DocTR lacks per-crop rotation handling (unlike EasyOCR).
   t.ok(outputTexts.some(w => w.toLowerCase().includes('normal')), 'BMP should detect "normal"')
   t.comment('BMP detected texts: ' + JSON.stringify(outputTexts))
-  t.comment(formatOCRPerformanceMetrics('[DocTR BMP]', stats, outputTexts))
+  t.comment(formatOCRPerformanceMetrics('[DocTR BMP]', stats, outputTexts, { skipReport: true }))
 })
 
 test('DocTR basic - JPEG image', { timeout: TEST_TIMEOUT }, async function (t) {
@@ -74,7 +74,7 @@ test('DocTR basic - JPEG image', { timeout: TEST_TIMEOUT }, async function (t) {
   t.ok(results.length > 0, `JPEG: should detect text regions, got ${results.length}`)
   t.ok(outputTexts.some(w => w.toLowerCase().includes('normal')), 'JPEG should detect "normal"')
   t.comment('JPEG detected texts: ' + JSON.stringify(outputTexts))
-  t.comment(formatOCRPerformanceMetrics('[DocTR JPEG]', stats, outputTexts))
+  t.comment(formatOCRPerformanceMetrics('[DocTR JPEG]', stats, outputTexts, { skipReport: true }))
 })
 
 test('DocTR basic - PNG image', { timeout: TEST_TIMEOUT }, async function (t) {
@@ -92,7 +92,7 @@ test('DocTR basic - PNG image', { timeout: TEST_TIMEOUT }, async function (t) {
   t.ok(results.length > 0, `PNG: should detect text regions, got ${results.length}`)
   t.ok(outputTexts.some(w => w.toLowerCase().includes('normal')), 'PNG should detect "normal"')
   t.comment('PNG detected texts: ' + JSON.stringify(outputTexts))
-  t.comment(formatOCRPerformanceMetrics('[DocTR PNG]', stats, outputTexts))
+  t.comment(formatOCRPerformanceMetrics('[DocTR PNG]', stats, outputTexts, { skipReport: true }))
 })
 
 test('DocTR basic - English image', { timeout: TEST_TIMEOUT }, async function (t) {
@@ -124,5 +124,5 @@ test('DocTR basic - English image', { timeout: TEST_TIMEOUT }, async function (t
   t.ok(coordsInBounds, 'All bbox coordinates within image bounds (905x480)')
 
   t.comment('English detected texts: ' + JSON.stringify(outputTexts))
-  t.comment(formatOCRPerformanceMetrics('[DocTR English]', stats, outputTexts))
+  t.comment(formatOCRPerformanceMetrics('[DocTR English]', stats, outputTexts, { skipReport: true }))
 })

@@ -6,6 +6,7 @@ const createVisionTest = (
   imagePath: string,
   expectation: Expectation,
   opts: { stream?: boolean; estimatedDurationMs?: number } = {},
+  suites?: string[],
 ): TestDefinition => ({
   testId,
   params: {
@@ -19,6 +20,7 @@ const createVisionTest = (
     ...(opts.stream && { stream: true }),
   },
   expectation,
+  ...(suites && { suites }),
   metadata: {
     category: "vision",
     dependency: "vision",
@@ -31,6 +33,8 @@ export const visionBasic = createVisionTest(
   "What animal is in this image?",
   "elephant.jpg",
   { validation: "contains-any", contains: ["elephant"] },
+  {},
+  ["smoke"],
 );
 
 export const visionStreaming = createVisionTest(
@@ -39,6 +43,7 @@ export const visionStreaming = createVisionTest(
   "elephant.jpg",
   { validation: "contains-any", contains: ["elephant"] },
   { stream: true },
+  ["smoke"],
 );
 
 export const visionStats = createVisionTest(
@@ -159,6 +164,7 @@ export const visionErrorMissingImage: TestDefinition = {
     ],
   },
   expectation: { validation: "throws-error", errorContains: "not found" },
+  suites: ["smoke"],
   metadata: {
     category: "vision",
     dependency: "vision",

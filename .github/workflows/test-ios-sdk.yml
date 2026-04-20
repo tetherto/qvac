@@ -1,0 +1,758 @@
+name: QVAC iOS Tests (Device Farm)
+# Reusable workflow for running iOS tests via AWS Device Farm
+
+on:
+  workflow_call:
+    inputs:
+      working-directory:
+        description: "Working directory containing qvac-test.config.js"
+        required: false
+        type: string
+        default: "."
+      project-directory:
+        description: "Root project directory (where package.json lives)"
+        required: true
+        type: string
+      consumer-timeout:
+        description: "Timeout in seconds for consumer connection (mobile needs longer)"
+        required: false
+        type: number
+        default: 600
+      filter:
+        description: "Filter tests by category or testId prefix (comma-separated)"
+        required: false
+        type: string
+      device-farm-timeout:
+        description: "Maximum time in minutes to keep Device Farm session alive."
+        required: false
+        type: number
+        default: 60
+      device-farm-project-arn:
+        description: "AWS Device Farm project ARN"
+        required: true
+        type: string
+      ios-device-pools:
+        description: 'JSON array of iOS device pools [{name, arn}]'
+        required: true
+        type: string
+      test-version:
+        description: "Git ref to checkout (branch, tag, or SHA). Defaults to trigger ref."
+        required: false
+        type: string
+    secrets:
+      PAT_TOKEN:
+        required: true
+      NPM_TOKEN:
+        required: true
+      MQTT_PROTOCOL:
+        required: true
+      MQTT_HOST:
+        required: true
+      MQTT_PORT:
+        required: true
+      MQTT_USERNAME:
+        required: true
+      MQTT_PASSWORD:
+        required: true
+      MQTT_CA_CERT:
+        required: false
+      AWS_OIDC_ROLE_ARN:
+        required: true
+      TEST_APP_APPLE_DISTRIBUTION_CERTIFICATE:
+        required: true
+      APPLE_P12_PASSWORD:
+        required: true
+      TEST_APP_APPLE_PROVISIONING_PROFILE:
+        required: true
+      APPLE_KEYCHAIN_PASSWORD:
+        required: true
+      APPLE_TEAM_ID:
+        required: true
+
+env:
+  APP_BUNDLE_ID: "io.tether.test.qvac"
+
+permissions:
+  id-token: write
+  contents: read
+
+jobs:
+  build:
+    runs-on: macos-14
+    environment: release
+    timeout-minutes: 60
+    outputs:
+      runId: ${{ steps.runid.outputs.runId }}
+    env:
+      NPM_TOKEN: ${{ secrets.NPM_TOKEN }}
+      PAT_TOKEN: ${{ secrets.PAT_TOKEN }}
+      MQTT_PROTOCOL: ${{ secrets.MQTT_PROTOCOL }}
+      MQTT_HOST: ${{ secrets.MQTT_HOST }}
+      MQTT_PORT: ${{ secrets.MQTT_PORT }}
+      MQTT_USERNAME: ${{ secrets.MQTT_USERNAME }}
+      MQTT_PASSWORD: ${{ secrets.MQTT_PASSWORD }}
+    steps:
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # 6.0.2
+        with:
+          ref: ${{ inputs.test-version || github.event.pull_request.head.sha || github.sha }}
+          token: ${{ secrets.PAT_TOKEN }}
+          sparse-checkout: ${{ inputs.project-directory }}
+
+      - uses: actions/setup-node@53b83947a5a98c8d113130e565377fae1a50d02f # 6.3.0
+        with:
+          node-version: 22
+
+      - uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6 # 2.2.0
+        with:
+          bun-version: latest
+
+      - name: Select Xcode
+        run: |
+          echo "Available Xcode versions:"
+          ls -d /Applications/Xcode*.app 2>/dev/null || echo "No Xcode found"
+
+          if [ -d "/Applications/Xcode_16.1.app" ]; then
+            sudo xcode-select -s /Applications/Xcode_16.1.app
+          elif [ -d "/Applications/Xcode_16.1.0.app" ]; then
+            sudo xcode-select -s /Applications/Xcode_16.1.0.app
+          elif [ -d "/Applications/Xcode_16.2.app" ]; then
+            sudo xcode-select -s /Applications/Xcode_16.2.app
+          else
+            echo "No suitable Xcode version found (need >= 16.1)"
+            exit 1
+          fi
+
+          xcodebuild -version
+          xcodebuild -showsdks | grep -i ios
+
+      - name: Install CocoaPods
+        run: |
+          sudo gem install cocoapods
+          pod --version
+
+      - name: Create Keychain and Import Certificate
+        env:
+          BUILD_CERTIFICATE_BASE64: ${{ secrets.TEST_APP_APPLE_DISTRIBUTION_CERTIFICATE }}
+          P12_PASSWORD: ${{ secrets.APPLE_P12_PASSWORD }}
+          BUILD_PROVISION_PROFILE_BASE64: ${{ secrets.TEST_APP_APPLE_PROVISIONING_PROFILE }}
+          KEYCHAIN_PASSWORD: ${{ secrets.APPLE_KEYCHAIN_PASSWORD }}
+        run: |
+          CERTIFICATE_PATH=$RUNNER_TEMP/build_certificate.p12
+          PP_PATH=$RUNNER_TEMP/build_pp.mobileprovision
+          KEYCHAIN_PATH=$RUNNER_TEMP/app-signing.keychain-db
+
+          echo -n "$BUILD_CERTIFICATE_BASE64" | base64 --decode -o $CERTIFICATE_PATH
+          echo -n "$BUILD_PROVISION_PROFILE_BASE64" | base64 --decode -o $PP_PATH
+
+          security create-keychain -p "$KEYCHAIN_PASSWORD" $KEYCHAIN_PATH
+          security set-keychain-settings -lut 21600 $KEYCHAIN_PATH
+          security unlock-keychain -p "$KEYCHAIN_PASSWORD" $KEYCHAIN_PATH
+
+          security import $CERTIFICATE_PATH -P "$P12_PASSWORD" -A -t cert -f pkcs12 -k $KEYCHAIN_PATH
+          security set-key-partition-list -S apple-tool:,apple: -s -k "$KEYCHAIN_PASSWORD" $KEYCHAIN_PATH
+          security list-keychain -d user -s $KEYCHAIN_PATH
+
+          PP_UUID=$(/usr/libexec/PlistBuddy -c 'Print :UUID' /dev/stdin <<< $(security cms -D -i $PP_PATH))
+          echo "PP_UUID=$PP_UUID" >> $GITHUB_ENV
+          echo "Provisioning Profile UUID: $PP_UUID"
+
+          mkdir -p ~/Library/MobileDevice/Provisioning\ Profiles
+          cp $PP_PATH ~/Library/MobileDevice/Provisioning\ Profiles/$PP_UUID.mobileprovision
+
+          security find-identity -p codesigning -v
+
+      - name: Verify provisioning profile
+        run: |
+          echo "Verifying provisioning profile..."
+          PP_FILE=~/Library/MobileDevice/Provisioning\ Profiles/$PP_UUID.mobileprovision
+          if [ ! -f "$PP_FILE" ]; then
+            echo "Provisioning profile not found at: $PP_FILE"
+            ls -la ~/Library/MobileDevice/Provisioning\ Profiles/
+            exit 1
+          fi
+
+          security cms -D -i "$PP_FILE" > /tmp/profile.plist
+
+          PROFILE_NAME=$(/usr/libexec/PlistBuddy -c "Print :Name" /tmp/profile.plist 2>/dev/null || echo "Unknown")
+          PROFILE_BUNDLE_ID=$(/usr/libexec/PlistBuddy -c "Print :Entitlements:application-identifier" /tmp/profile.plist 2>/dev/null || echo "Unknown")
+          PROFILE_TEAM_ID=$(/usr/libexec/PlistBuddy -c "Print :Entitlements:com.apple.developer.team-identifier" /tmp/profile.plist 2>/dev/null || echo "Unknown")
+
+          HAS_DEVICES=$(/usr/libexec/PlistBuddy -c "Print :ProvisionedDevices" /tmp/profile.plist 2>/dev/null && echo "yes" || echo "no")
+          PROVISIONS_ALL=$(/usr/libexec/PlistBuddy -c "Print :ProvisionsAllDevices" /tmp/profile.plist 2>/dev/null || echo "false")
+          HAS_GET_TASK_ALLOW=$(/usr/libexec/PlistBuddy -c "Print :Entitlements:get-task-allow" /tmp/profile.plist 2>/dev/null || echo "false")
+
+          if [[ "$PROVISIONS_ALL" == "true" ]]; then
+            EXPORT_METHOD="enterprise"
+          elif [[ "$HAS_DEVICES" == "yes" && "$HAS_GET_TASK_ALLOW" == "true" ]]; then
+            EXPORT_METHOD="development"
+          elif [[ "$HAS_DEVICES" == "yes" && "$HAS_GET_TASK_ALLOW" == "false" ]]; then
+            EXPORT_METHOD="ad-hoc"
+          else
+            EXPORT_METHOD="app-store"
+          fi
+
+          echo "  Name: $PROFILE_NAME"
+          echo "  Export Method: $EXPORT_METHOD"
+          echo "  Application ID: $PROFILE_BUNDLE_ID"
+          echo "  Team ID: $PROFILE_TEAM_ID"
+          echo "  Expected Bundle ID: $APP_BUNDLE_ID"
+
+          echo "EXPORT_METHOD=$EXPORT_METHOD" >> $GITHUB_ENV
+
+          BUNDLE_ID_ONLY=$(echo "$PROFILE_BUNDLE_ID" | sed 's/^[^.]*\.//')
+          if [[ "$BUNDLE_ID_ONLY" != "$APP_BUNDLE_ID" ]]; then
+            echo "Provisioning profile bundle ID mismatch: $BUNDLE_ID_ONLY vs $APP_BUNDLE_ID"
+            exit 1
+          fi
+
+          echo "Provisioning profile matches expected bundle ID"
+
+      - name: Generate runId
+        id: runid
+        shell: node {0}
+        run: |
+          const fs = require('fs');
+          const repoName = process.env.GITHUB_REPOSITORY.split('/').pop();
+          const refName = process.env.GITHUB_REF_NAME.replace(/\//g, '-');
+          const sha = process.env.GITHUB_SHA.substring(0, 7);
+          const timestamp = Math.floor(Date.now() / 1000);
+          const runId = `ios-${repoName}-${refName}-${sha}-${timestamp}`;
+
+          fs.appendFileSync(process.env.GITHUB_OUTPUT, `runId=${runId}\n`, 'utf8');
+          console.log(`Generated runId: ${runId}`);
+
+      - name: Configure npm registries
+        shell: node {0}
+        run: |
+          const fs = require('fs');
+          const path = require('path');
+
+          if (!process.env.NPM_TOKEN) { console.log('NPM_TOKEN is empty'); process.exit(1); }
+          if (!process.env.PAT_TOKEN) { console.log('PAT_TOKEN is empty'); process.exit(1); }
+
+          const lines = [
+            'registry=https://registry.npmjs.org/',
+            '@qvac:registry=https://registry.npmjs.org/',
+            '@tetherto:registry=https://npm.pkg.github.com/',
+            `//registry.npmjs.org/:_authToken=${process.env.NPM_TOKEN}`,
+            `//npm.pkg.github.com/:_authToken=${process.env.PAT_TOKEN}`
+          ];
+          const npmrc = lines.join('\n');
+          const target = path.join('${{ inputs.project-directory }}', '.npmrc');
+          fs.writeFileSync(target, npmrc, 'utf8');
+          console.log(`.npmrc configured at ${target}`);
+
+      - name: Setup MQTT CA certificate
+        shell: node {0}
+        env:
+          CA_CERT: ${{ secrets.MQTT_CA_CERT }}
+        run: |
+          const fs = require('fs');
+          const path = require('path');
+          const os = require('os');
+
+          const caCert = (process.env.CA_CERT || '').trim();
+          if (caCert) {
+            const certsDir = path.join(os.tmpdir(), 'mqtt-certs');
+            fs.mkdirSync(certsDir, { recursive: true });
+            const caPath = path.join(certsDir, 'ca.crt');
+            fs.writeFileSync(caPath, caCert, 'utf8');
+            fs.appendFileSync(process.env.GITHUB_ENV, `MQTT_CA_PATH=${caPath}\n`, 'utf8');
+            console.log('CA certificate written');
+          }
+
+      - name: Install dependencies (project)
+        working-directory: ${{ inputs.project-directory }}
+        run: bun install
+
+      - name: Build project
+        working-directory: ${{ inputs.project-directory }}
+        shell: node {0}
+        run: |
+          const { execSync } = require('child_process');
+          const fs = require('fs');
+
+          const packageJson = JSON.parse(fs.readFileSync('package.json', 'utf8'));
+          if (packageJson.scripts && packageJson.scripts.build) {
+            console.log('Building project...');
+            execSync('bun run build', { stdio: 'inherit' });
+          } else {
+            console.log('No build script found in package.json - skipping');
+          }
+
+      - name: Copy .npmrc to consumer directory
+        shell: node {0}
+        run: |
+          const fs = require('fs');
+          const path = require('path');
+          const projectDir = '${{ inputs.project-directory }}';
+          const consumerDir = '${{ inputs.working-directory }}';
+          if (consumerDir !== projectDir) {
+            const source = path.join(projectDir, '.npmrc');
+            const npmrcContent = fs.readFileSync(source, 'utf8');
+            fs.writeFileSync(path.join(consumerDir, '.npmrc'), npmrcContent, 'utf8');
+            console.log('.npmrc copied to consumer directory');
+          }
+
+      - name: Install dependencies (consumer)
+        if: inputs.working-directory != inputs.project-directory
+        working-directory: ${{ inputs.working-directory }}
+        run: npm install --install-links
+
+      - name: Build consumer
+        if: inputs.working-directory != inputs.project-directory
+        working-directory: ${{ inputs.working-directory }}
+        run: bun run build
+
+      - name: Build iOS consumer IPA
+        working-directory: ${{ inputs.working-directory }}
+        env:
+          NPM_CONFIG_USERCONFIG: ${{ github.workspace }}/${{ inputs.working-directory }}/.npmrc
+          QVAC_IOS_BUNDLE_ID: ${{ env.APP_BUNDLE_ID }}
+          QVAC_IOS_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
+          QVAC_IOS_CODE_SIGN_IDENTITY: "Apple Distribution"
+          QVAC_IOS_PROVISIONING_PROFILE: ${{ env.PP_UUID }}
+          QVAC_IOS_EXPORT_METHOD: ${{ env.EXPORT_METHOD }}
+        run: |
+          echo "Building iOS consumer IPA..."
+          echo "   Run ID: ${{ steps.runid.outputs.runId }}"
+          echo "   Bundle ID: $QVAC_IOS_BUNDLE_ID"
+          echo "   MQTT Host: $MQTT_HOST"
+
+          npx qvac-test build:consumer:ios \
+            --runId "${{ steps.runid.outputs.runId }}" \
+            --config .
+
+          IPA_PATH="build/consumers/ios/consumer.ipa"
+          if [ -f "$IPA_PATH" ]; then
+            echo "IPA built successfully"
+            ls -lh "$IPA_PATH"
+          else
+            echo "IPA not found at $IPA_PATH"
+            exit 1
+          fi
+
+      - name: Upload IPA artifact
+        uses: actions/upload-artifact@bbbca2ddaa5d8feaa63e36b76fdaad77386f024f # 7.0.0
+        with:
+          name: mobile-consumer-ipa
+          path: ${{ inputs.working-directory }}/build/consumers/ios/consumer.ipa
+          retention-days: 7
+
+  device-farm:
+    needs: build
+    runs-on: ubuntu-latest
+    environment: release
+    timeout-minutes: 45
+    strategy:
+      fail-fast: false
+      matrix:
+        device: ${{ fromJson(inputs.ios-device-pools) }}
+    steps:
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # 6.0.2
+        with:
+          ref: ${{ inputs.test-version || github.event.pull_request.head.sha || github.sha }}
+          sparse-checkout: ${{ inputs.working-directory }}/device-farm
+
+      - name: Download IPA artifact
+        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # 8.0.1
+        with:
+          name: mobile-consumer-ipa
+          path: ./ipa
+
+      - name: Configure AWS credentials
+        uses: aws-actions/configure-aws-credentials@8df5847569e6427dd6c4fb1cf565c83acfa8afa7 # 6.0.0
+        with:
+          role-to-assume: ${{ secrets.AWS_OIDC_ROLE_ARN }}
+          aws-region: us-west-2
+
+      - name: Upload IPA to Device Farm
+        id: upload-app
+        run: |
+          echo "Uploading IPA to Device Farm for ${{ matrix.device.name }}..."
+
+          IPA_FILE=$(find ./ipa -name "*.ipa" | head -1)
+          if [ -z "$IPA_FILE" ]; then
+            echo "No IPA file found in ./ipa"
+            ls -la ./ipa/
+            exit 1
+          fi
+
+          UPLOAD_RESPONSE=$(aws devicefarm create-upload \
+            --project-arn "${{ inputs.device-farm-project-arn }}" \
+            --name "consumer-${{ needs.build.outputs.runId }}-${{ matrix.device.name }}.ipa" \
+            --type "IOS_APP" \
+            --output json)
+
+          APP_UPLOAD_URL=$(echo $UPLOAD_RESPONSE | jq -r '.upload.url')
+          APP_UPLOAD_ARN=$(echo $UPLOAD_RESPONSE | jq -r '.upload.arn')
+
+          echo "app-arn=$APP_UPLOAD_ARN" >> $GITHUB_OUTPUT
+
+          curl -T "$IPA_FILE" "$APP_UPLOAD_URL"
+
+          echo "Waiting for IPA to be processed..."
+          for i in {1..30}; do
+            STATUS=$(aws devicefarm get-upload --arn "$APP_UPLOAD_ARN" --query "upload.status" --output text)
+            echo "Status (attempt $i/30): $STATUS"
+
+            if [ "$STATUS" = "SUCCEEDED" ]; then
+              echo "IPA upload successful"
+              break
+            fi
+
+            if [ "$STATUS" = "FAILED" ]; then
+              echo "IPA upload failed"
+              aws devicefarm get-upload --arn "$APP_UPLOAD_ARN"
+              exit 1
+            fi
+
+            sleep 10
+          done
+
+      - name: Create and upload dummy test package
+        id: upload-test-pkg
+        run: |
+          mkdir -p /tmp/dummy-test-pkg
+          echo '{"name":"qvac-test-stub","version":"1.0.0"}' > /tmp/dummy-test-pkg/package.json
+          cp "${{ inputs.working-directory }}/device-farm/gen-junit.py" /tmp/dummy-test-pkg/
+          (cd /tmp/dummy-test-pkg && zip -r /tmp/dummy-test-pkg.zip .)
+
+          PKG_RESPONSE=$(aws devicefarm create-upload \
+            --project-arn "${{ inputs.device-farm-project-arn }}" \
+            --name "qvac-test-stub.zip" \
+            --type "APPIUM_NODE_TEST_PACKAGE" \
+            --output json)
+
+          PKG_URL=$(echo $PKG_RESPONSE | jq -r '.upload.url')
+          PKG_ARN=$(echo $PKG_RESPONSE | jq -r '.upload.arn')
+
+          echo "pkg-arn=$PKG_ARN" >> $GITHUB_OUTPUT
+
+          curl -T /tmp/dummy-test-pkg.zip "$PKG_URL"
+
+          for i in {1..15}; do
+            STATUS=$(aws devicefarm get-upload --arn "$PKG_ARN" --query "upload.status" --output text)
+            if [ "$STATUS" = "SUCCEEDED" ]; then
+              echo "Test package upload successful"
+              break
+            fi
+            if [ "$STATUS" = "FAILED" ]; then
+              echo "Test package upload failed"
+              aws devicefarm get-upload --arn "$PKG_ARN"
+              exit 1
+            fi
+            sleep 5
+          done
+
+      - name: Upload test spec to Device Farm
+        id: upload-spec
+        run: |
+          SPEC_RESPONSE=$(aws devicefarm create-upload \
+            --project-arn "${{ inputs.device-farm-project-arn }}" \
+            --name "qvac-ios-test-spec-${{ needs.build.outputs.runId }}.yml" \
+            --type "APPIUM_NODE_TEST_SPEC" \
+            --output json)
+
+          SPEC_URL=$(echo $SPEC_RESPONSE | jq -r '.upload.url')
+          SPEC_ARN=$(echo $SPEC_RESPONSE | jq -r '.upload.arn')
+
+          echo "spec-arn=$SPEC_ARN" >> $GITHUB_OUTPUT
+
+          TIMEOUT_SECONDS=$(( ${{ inputs.device-farm-timeout || 90 }} * 60 ))
+          sed -i "s/DEVICEFARM_TIMEOUT:-5400/DEVICEFARM_TIMEOUT:-${TIMEOUT_SECONDS}/" "${{ inputs.working-directory }}/device-farm/test-spec-ios.yml"
+          curl -T "${{ inputs.working-directory }}/device-farm/test-spec-ios.yml" "$SPEC_URL"
+
+          echo "Waiting for test spec to be processed..."
+          for i in {1..15}; do
+            STATUS=$(aws devicefarm get-upload --arn "$SPEC_ARN" --query "upload.status" --output text)
+            echo "Status (attempt $i/15): $STATUS"
+
+            if [ "$STATUS" = "SUCCEEDED" ]; then
+              echo "Test spec upload successful"
+              break
+            fi
+
+            if [ "$STATUS" = "FAILED" ]; then
+              echo "Test spec upload failed"
+              aws devicefarm get-upload --arn "$SPEC_ARN"
+              exit 1
+            fi
+
+            sleep 5
+          done
+
+      - name: Schedule Device Farm run
+        id: schedule
+        run: |
+          echo "Scheduling Device Farm run on ${{ matrix.device.name }}..."
+
+          RUN_NAME="ios-${{ matrix.device.name }}-${{ github.run_number }}-${{ github.run_attempt }}"
+
+          RUN_ARN=$(aws devicefarm schedule-run \
+            --project-arn "${{ inputs.device-farm-project-arn }}" \
+            --device-pool-arn "${{ matrix.device.arn }}" \
+            --app-arn "${{ steps.upload-app.outputs.app-arn }}" \
+            --name "$RUN_NAME" \
+            --test type=APPIUM_NODE,testPackageArn=${{ steps.upload-test-pkg.outputs.pkg-arn }},testSpecArn=${{ steps.upload-spec.outputs.spec-arn }} \
+            --execution-configuration jobTimeoutMinutes=${{ inputs.device-farm-timeout }} \
+            --query 'run.arn' --output text)
+
+          echo "run-arn=$RUN_ARN" >> $GITHUB_OUTPUT
+          echo "Device Farm run scheduled: $RUN_ARN"
+
+          PROJECT_ID=$(echo "${{ inputs.device-farm-project-arn }}" | sed -n 's/.*:project:\(.*\)/\1/p')
+          RUN_ID=$(echo "$RUN_ARN" | sed -n 's/.*:run:[^/]*\/\(.*\)/\1/p')
+          DF_URL="https://us-west-2.console.aws.amazon.com/devicefarm/home#/mobile/projects/${PROJECT_ID}/runs/${RUN_ID}"
+          echo "Device Farm Console (${{ matrix.device.name }}): $DF_URL"
+
+          echo "### Device Farm: ${{ matrix.device.name }}" >> $GITHUB_STEP_SUMMARY
+          echo "[Open Device Farm Console]($DF_URL)" >> $GITHUB_STEP_SUMMARY
+
+      - name: Save run ARN
+        id: save-arn
+        run: |
+          SAFE_NAME=$(echo "${{ matrix.device.name }}" | tr ' /\\:*?"<>|' '_')
+          echo "${{ steps.schedule.outputs.run-arn }}" > "${SAFE_NAME}.txt"
+          echo "safe-name=${SAFE_NAME}" >> $GITHUB_OUTPUT
+
+      - name: Upload run ARN
+        uses: actions/upload-artifact@bbbca2ddaa5d8feaa63e36b76fdaad77386f024f # 7.0.0
+        with:
+          name: device-farm-arn-ios-${{ needs.build.outputs.runId }}-${{ steps.save-arn.outputs.safe-name }}
+          path: ${{ steps.save-arn.outputs.safe-name }}.txt
+          retention-days: 1
+
+  run-producer:
+    needs: build
+    runs-on: ubuntu-latest
+    environment: release
+    timeout-minutes: 90
+    env:
+      NPM_TOKEN: ${{ secrets.NPM_TOKEN }}
+      PAT_TOKEN: ${{ secrets.PAT_TOKEN }}
+      MQTT_PROTOCOL: ${{ secrets.MQTT_PROTOCOL }}
+      MQTT_HOST: ${{ secrets.MQTT_HOST }}
+      MQTT_PORT: ${{ secrets.MQTT_PORT }}
+      MQTT_USERNAME: ${{ secrets.MQTT_USERNAME }}
+      MQTT_PASSWORD: ${{ secrets.MQTT_PASSWORD }}
+    steps:
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # 6.0.2
+        with:
+          ref: ${{ inputs.test-version || github.event.pull_request.head.sha || github.sha }}
+          token: ${{ secrets.PAT_TOKEN }}
+          sparse-checkout: ${{ inputs.project-directory }}
+
+      - uses: actions/setup-node@53b83947a5a98c8d113130e565377fae1a50d02f # 6.3.0
+        with:
+          node-version: 22
+
+      - uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6 # 2.2.0
+        with:
+          bun-version: latest
+
+      - name: Configure npm registries
+        shell: node {0}
+        run: |
+          const fs = require('fs');
+          const path = require('path');
+
+          const lines = [
+            'registry=https://registry.npmjs.org/',
+            '@qvac:registry=https://registry.npmjs.org/',
+            '@tetherto:registry=https://npm.pkg.github.com/',
+            `//registry.npmjs.org/:_authToken=${process.env.NPM_TOKEN}`,
+            `//npm.pkg.github.com/:_authToken=${process.env.PAT_TOKEN}`
+          ];
+          const npmrc = lines.join('\n');
+          const target = path.join('${{ inputs.project-directory }}', '.npmrc');
+          fs.writeFileSync(target, npmrc, 'utf8');
+
+      - name: Setup MQTT CA certificate
+        shell: node {0}
+        env:
+          CA_CERT: ${{ secrets.MQTT_CA_CERT }}
+        run: |
+          const fs = require('fs');
+          const path = require('path');
+          const os = require('os');
+
+          const caCert = (process.env.CA_CERT || '').trim();
+          if (caCert) {
+            const certsDir = path.join(os.tmpdir(), 'mqtt-certs');
+            fs.mkdirSync(certsDir, { recursive: true });
+            const caPath = path.join(certsDir, 'ca.crt');
+            fs.writeFileSync(caPath, caCert, 'utf8');
+            fs.appendFileSync(process.env.GITHUB_ENV, `MQTT_CA_PATH=${caPath}\n`, 'utf8');
+            console.log('CA certificate written');
+          }
+
+      - name: Copy .npmrc to consumer directory
+        shell: node {0}
+        run: |
+          const fs = require('fs');
+          const path = require('path');
+          const projectDir = '${{ inputs.project-directory }}';
+          const consumerDir = '${{ inputs.working-directory }}';
+          if (consumerDir !== projectDir) {
+            const source = path.join(projectDir, '.npmrc');
+            const npmrcContent = fs.readFileSync(source, 'utf8');
+            fs.writeFileSync(path.join(consumerDir, '.npmrc'), npmrcContent, 'utf8');
+          }
+
+      - name: Install dependencies (project)
+        working-directory: ${{ inputs.project-directory }}
+        run: bun install
+
+      - name: Build project
+        working-directory: ${{ inputs.project-directory }}
+        shell: node {0}
+        run: |
+          const { execSync } = require('child_process');
+          const fs = require('fs');
+
+          const packageJson = JSON.parse(fs.readFileSync('package.json', 'utf8'));
+          if (packageJson.scripts && packageJson.scripts.build) {
+            execSync('bun run build', { stdio: 'inherit' });
+          }
+
+      - name: Install dependencies (consumer)
+        if: inputs.working-directory != inputs.project-directory
+        working-directory: ${{ inputs.working-directory }}
+        run: npm install --install-links
+
+      - name: Build consumer
+        if: inputs.working-directory != inputs.project-directory
+        working-directory: ${{ inputs.working-directory }}
+        run: bun run build
+
+      - name: Run producer
+        working-directory: ${{ inputs.working-directory }}
+        run: |
+          echo "Starting producer..."
+          echo "   Run ID: ${{ needs.build.outputs.runId }}"
+          echo "   Consumer timeout: ${{ inputs.consumer-timeout }}s"
+          echo "   Filter: ${{ inputs.filter || '(none)' }}"
+
+          FILTER_ARG=""
+          if [ -n "${{ inputs.filter }}" ]; then
+            FILTER_ARG="--filter=${{ inputs.filter }}"
+          fi
+
+          npx qvac-test run:producer \
+            --runId "${{ needs.build.outputs.runId }}" \
+            --consumer-timeout "${{ inputs.consumer-timeout }}" \
+            --config . \
+            $FILTER_ARG
+
+      - name: Upload results
+        if: always()
+        uses: actions/upload-artifact@bbbca2ddaa5d8feaa63e36b76fdaad77386f024f # 7.0.0
+        with:
+          name: ios-results-${{ github.run_number }}
+          path: ${{ inputs.working-directory }}/reports/
+          retention-days: 30
+
+      - name: Upload baseline (main/develop only)
+        if: always() && (github.ref == 'refs/heads/main' || github.ref == 'refs/heads/develop')
+        uses: actions/upload-artifact@bbbca2ddaa5d8feaa63e36b76fdaad77386f024f # 7.0.0
+        with:
+          name: ios-baseline
+          path: ${{ inputs.working-directory }}/reports/results-*.json
+          retention-days: 90
+          overwrite: true
+
+  cleanup-device-farm:
+    needs: [build, run-producer, device-farm]
+    if: always()
+    runs-on: ubuntu-latest
+    environment: release
+    timeout-minutes: 10
+    steps:
+      - name: Configure AWS credentials
+        uses: aws-actions/configure-aws-credentials@8df5847569e6427dd6c4fb1cf565c83acfa8afa7 # 6.0.0
+        with:
+          role-to-assume: ${{ secrets.AWS_OIDC_ROLE_ARN }}
+          aws-region: us-west-2
+
+      - name: Download run ARNs
+        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # 8.0.1
+        with:
+          pattern: device-farm-arn-ios-${{ needs.build.outputs.runId }}-*
+          path: ./run-arns
+          merge-multiple: true
+
+      - name: Stop Device Farm runs
+        run: |
+          echo "Cleaning up Device Farm runs for runId: ${{ needs.build.outputs.runId }}"
+
+          for arn_file in run-arns/*.txt; do
+            if [ -f "$arn_file" ]; then
+              RUN_ARN=$(cat "$arn_file")
+              DEVICE_NAME=$(basename "$arn_file" .txt)
+
+              STATUS=$(aws devicefarm get-run --arn "$RUN_ARN" --query 'run.status' --output text 2>/dev/null || echo "UNKNOWN")
+              echo "Device $DEVICE_NAME: status=$STATUS"
+
+              if [ "$STATUS" = "RUNNING" ] || [ "$STATUS" = "PENDING" ]; then
+                echo "Stopping run: $RUN_ARN"
+                aws devicefarm stop-run --arn "$RUN_ARN" || true
+              else
+                echo "Run already finished ($STATUS), skipping"
+              fi
+            fi
+          done
+
+      - name: Download Device Farm artifacts
+        run: |
+          mkdir -p ./device-farm-logs
+
+          for arn_file in run-arns/*.txt; do
+            if [ -f "$arn_file" ]; then
+              RUN_ARN=$(cat "$arn_file")
+              DEVICE_NAME=$(basename "$arn_file" .txt)
+
+              echo "Waiting for run to finish: $DEVICE_NAME"
+              for attempt in $(seq 1 30); do
+                STATUS=$(aws devicefarm get-run --arn "$RUN_ARN" --query 'run.status' --output text 2>/dev/null || echo "UNKNOWN")
+                if [ "$STATUS" = "COMPLETED" ] || [ "$STATUS" = "STOPPED" ] || [ "$STATUS" = "ERRORED" ]; then
+                  echo "Run $DEVICE_NAME finished with status: $STATUS"
+                  break
+                fi
+                echo "Run $DEVICE_NAME still $STATUS (attempt $attempt/30)..."
+                sleep 10
+              done
+
+              DEVICE_DIR="./device-farm-logs/$DEVICE_NAME"
+              mkdir -p "$DEVICE_DIR"
+
+              echo "Downloading Customer Artifacts for $DEVICE_NAME..."
+              JOBS=$(aws devicefarm list-jobs --arn "$RUN_ARN" --query 'jobs[*].arn' --output text 2>/dev/null || echo "")
+              for JOB_ARN in $JOBS; do
+                aws devicefarm list-artifacts \
+                  --arn "$JOB_ARN" \
+                  --type FILE \
+                  --query "artifacts[?contains(name,'Customer')].[name,extension,url]" \
+                  --output text 2>/dev/null \
+                | while IFS=$'\t' read -r NAME EXT URL; do
+                    if [ -z "$URL" ] || [ "$URL" = "None" ]; then
+                      continue
+                    fi
+                    SAFE_NAME=$(echo "$NAME" | tr ' /' '__')
+                    echo "  Downloading ${SAFE_NAME}.${EXT}"
+                    curl -sS -o "$DEVICE_DIR/${SAFE_NAME}.${EXT}" "$URL" || echo "  Failed: ${SAFE_NAME}.${EXT}"
+                  done
+              done
+
+              echo "Artifacts for $DEVICE_NAME:"
+              ls -lh "$DEVICE_DIR" 2>/dev/null || echo "  (empty)"
+            fi
+          done
+
+      - name: Upload Device Farm logs
+        if: always()
+        uses: actions/upload-artifact@bbbca2ddaa5d8feaa63e36b76fdaad77386f024f # 7.0.0
+        with:
+          name: device-farm-logs-ios-${{ needs.build.outputs.runId }}
+          path: ./device-farm-logs/
+          retention-days: 30

@@ -5,7 +5,8 @@ export const BUILTIN_PLUGINS: Record<string, { exportName: string }> = {
   'parakeet-transcription': { exportName: 'parakeetPlugin' },
   'nmtcpp-translation': { exportName: 'nmtPlugin' },
   'onnx-tts': { exportName: 'ttsPlugin' },
-  'onnx-ocr': { exportName: 'ocrPlugin' }
+  'onnx-ocr': { exportName: 'ocrPlugin' },
+  'sdcpp-generation': { exportName: 'diffusionPlugin' }
 }
 
 export const BUILTIN_SUFFIXES = Object.keys(BUILTIN_PLUGINS)

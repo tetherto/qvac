@@ -72,7 +72,7 @@ export class HttpEmbeddingExecutor extends AbstractModelExecutor<typeof httpEmbe
         modelType: p.modelType as "embeddings",
       });
       this.resources.register("embeddings", modelId);
-      const embeddings = await embed({ modelId, text: p.text });
+      const { embedding: embeddings } = await embed({ modelId, text: p.text });
       return ValidationHelpers.validate(embeddings, expectation as Expectation);
     } catch (error) {
       const errorMsg = error instanceof Error ? error.message : String(error);

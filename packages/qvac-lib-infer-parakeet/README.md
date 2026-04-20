@@ -154,20 +154,13 @@ bare examples/quickstart-diarized.js
 
 ### Downloading Models
 
-Download the TDT model from S3 using the provided script:
+Download models from HuggingFace using the provided script:
 
 ```bash
-# Download INT8 full model (default, recommended - ~650 MB)
-./scripts/download-models-s3.sh \
-  --access-key YOUR_AWS_ACCESS_KEY_ID \
-  --secret-key YOUR_AWS_SECRET_ACCESS_KEY
-
-# Or download FP32 full precision model (~2.4 GB)
-./scripts/download-models-s3.sh \
-  --access-key YOUR_AWS_ACCESS_KEY_ID \
-  --secret-key YOUR_AWS_SECRET_ACCESS_KEY \
-  --model fp32
+./scripts/download-models.sh
 ```
+
+The interactive script lets you choose which model variant to download (TDT, CTC, EOU, Sortformer, or all).
 
 **Model Variants:**
 | Variant | Size | Path | Notes |
@@ -310,7 +303,7 @@ The output callback receives these events:
   - **INT8 full (recommended):** ~650 MB - Conv+MatMul quantized, 73% smaller
   - **INT8 partial:** ~890 MB - MatMul-only quantized, 63% smaller
   - **FP32:** ~2.4 GB - Full precision weights
-- **Download:** Use `./scripts/download-models-s3.sh` or [Hugging Face](https://huggingface.co/istupakov/parakeet-tdt-0.6b-v3-onnx)
+- **Download:** Use `./scripts/download-models.sh` or [Hugging Face](https://huggingface.co/istupakov/parakeet-tdt-0.6b-v3-onnx)
 
 ### EOU Model
 - **Use case:** Real-time streaming with end-of-utterance detection
@@ -382,9 +375,9 @@ qvac-lib-infer-parakeet/
 |----------|-------------|-------------|--------|-------------|
 | macOS | arm64, x64 | 14.0+ | ✅ Tier 1 | CoreML |
 | iOS | arm64 | 17.0+ | ✅ Tier 1 | CoreML |
-| Linux | arm64, x64 | Ubuntu-22+ | ✅ Tier 1 | CUDA, ROCm |
+| Linux | arm64, x64 | Ubuntu-22+ | ✅ Tier 1 | CPU only |
 | Android | arm64 | 12+ | ✅ Tier 1 | NNAPI |
-| Windows | x64 | 10+ | ✅ Tier 1 | DirectML, CUDA |
+| Windows | x64 | 10+ | ✅ Tier 1 | DirectML |
 
 **Dependencies:**
 - qvac-lib-inference-addon-cpp: C++ addon framework
@@ -394,13 +387,13 @@ qvac-lib-infer-parakeet/
 
 ### Hardware Acceleration
 
-ONNX Runtime provides automatic hardware acceleration:
+ONNX Runtime provides automatic hardware acceleration when `useGPU: true` is set:
 - **macOS/iOS**: CoreML
-- **Windows**: DirectML or CUDA
-- **Linux**: CUDA, ROCm, or CPU
+- **Windows**: DirectML
+- **Linux**: CPU only (no GPU EP in current prebuilds)
 - **Android**: NNAPI
 
-Enable with `useGPU: true` in the config.
+If the selected GPU provider fails at session creation, inference falls back to CPU automatically.
 
 ## Resources
 

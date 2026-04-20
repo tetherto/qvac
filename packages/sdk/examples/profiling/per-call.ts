@@ -18,21 +18,21 @@ try {
   console.log("Model loaded:", modelId);
 
   console.log("\n=== Embed with per-call profiling ===");
-  const embedding1 = await embed(
+  const { embedding: embedding1 } = await embed(
     { modelId, text: "Profile this specific call" },
     { profiling: { enabled: true, includeServerBreakdown: true } },
   );
   console.log("Embedding dimensions:", embedding1.length);
 
   console.log("\n=== Embed without profiling ===");
-  const embedding2 = await embed({
+  const { embedding: embedding2 } = await embed({
     modelId,
     text: "This call is not profiled",
   });
   console.log("Embedding dimensions:", embedding2.length);
 
   console.log("\n=== Embed with profiling explicitly disabled ===");
-  const embedding3 = await embed(
+  const { embedding: embedding3 } = await embed(
     { modelId, text: "Profiling explicitly disabled for this call" },
     { profiling: { enabled: false } },
   );

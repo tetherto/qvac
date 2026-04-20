@@ -18,6 +18,7 @@
 #include <stb_image_write.h>
 
 #include "utils/BackendSelection.hpp"
+#include "utils/ImageUtils.hpp"
 #include "utils/LoggingMacros.hpp"
 
 using namespace qvac_lib_inference_addon_cpp;
@@ -225,6 +226,8 @@ class SdImageBatch {
 public:
   SdImageBatch(sd_image_t* data, int count) : data_(data), count_(count) {}
   ~SdImageBatch() {
+    if (!data_)
+      return;
     for (int i = 0; i < count_; ++i) {
       free(data_[i].data);
     }
@@ -237,10 +240,16 @@ public:
   SdImageBatch& operator=(SdImageBatch&&) = delete;
 
   [[nodiscard]] int count() const { return count_; }
-  [[nodiscard]] const sd_image_t& operator[](int i) const { return data_[i]; }
+  [[nodiscard]] const sd_image_t& operator[](int i) const {
+    if (!data_)
+      throw std::runtime_error("SdImageBatch: null data");
+    return data_[i];
+  }
 
   // Release pixel buffer for image i immediately after it has been consumed.
   void release(int i) {
+    if (!data_)
+      return;
     free(data_[i].data);
     data_[i].data = nullptr;
   }
@@ -280,6 +289,12 @@ void SdModel::load() {
 
   sd_ctx_params_t params{};
   sd_ctx_params_init(&params);
+
+  // Load the VAE encoder as well as the decoder so img2img (encode → denoise →
+  // decode) works.  sd_ctx_params_init() sets vae_decode_only = true by
+  // default which skips building the encoder graph and causes:
+  //   GGML_ASSERT(!decode_only || decode_graph) in vae_encode()
+  params.vae_decode_only = false;
 
   // ── Model paths ────────────────────────────────────────────────────────────
   // For FLUX.2 [klein] the GGUF contains only diffusion weights with no SD
@@ -463,8 +478,7 @@ std::any SdModel::process(const std::any& input) {
   if (gen.mode != "txt2img" && gen.mode != "img2img")
     throw StatusError(
         general_error::InvalidArgument,
-        "Unsupported mode: '" + gen.mode +
-            "'. Only txt2img and img2img are supported.");
+        "Unsupported mode: '" + gen.mode + "'. Supported: txt2img, img2img.");
 
   // ── Build sd_img_gen_params_t ─────────────────────────────────────────────
   sd_img_gen_params_t genParams{};
@@ -505,14 +519,35 @@ std::any SdModel::process(const std::any& input) {
   if (gen.cacheEnd > 0.0f)
     genParams.cache.end_percent = gen.cacheEnd;
 
-  // ── img2img init image (bytes passed as JSON array) ───────────────────────
+  // ── img2img ──────────────────────────────────────────────────────────────
+  //
+  // Two code paths depending on model architecture:
+  //
+  //   FLUX2 (FLUX2_FLOW_PRED):
+  //     Uses ref_images — in-context conditioning. The input image is
+  //     VAE-encoded into separate latent tokens that the FLUX transformer
+  //     attends to via joint attention with distinct RoPE positions. The
+  //     target starts from pure noise, so the model preserves features
+  //     (skin tone, structure, etc.) while generating a fully new image.
+  //
+  //   All other models (SD1.x, SD2.x, SDXL, SD3):
+  //     Uses init_image — traditional SDEdit. The input image is noised to
+  //     the level specified by `strength`, then denoised for the remaining
+  //     steps. Lower strength = closer to the original image.
+  //
   sd_image_t initImg{};
   std::vector<uint8_t> initPng;
 
   if (gen.mode == "img2img") {
-    if (auto it = v.get<picojson::object>().find("init_image_bytes");
-        it != v.get<picojson::object>().end() &&
-        it->second.is<picojson::array>()) {
+    // Prefer the binary buffer passed directly from the JS layer (Uint8Array,
+    // no JSON overhead).  Fall back to the JSON "init_image_bytes" array for
+    // backwards compatibility (e.g. C++ unit tests that build paramsJson by
+    // hand).
+    if (!job.initImageBytes.empty()) {
+      initPng = job.initImageBytes;
+    } else if (auto it = v.get<picojson::object>().find("init_image_bytes");
+               it != v.get<picojson::object>().end() &&
+               it->second.is<picojson::array>()) {
       const auto& arr = it->second.get<picojson::array>();
       initPng.reserve(arr.size());
       for (const auto& el : arr)
@@ -520,8 +555,104 @@ std::any SdModel::process(const std::any& input) {
     }
     if (!initPng.empty())
       initImg = decodePng(initPng);
+
+    if (!initImg.data)
+      throw StatusError(
+          general_error::InvalidArgument,
+          "img2img: failed to decode init_image (corrupt or unsupported "
+          "format)");
+
+    const int imgW = static_cast<int>(initImg.width);
+    const int imgH = static_cast<int>(initImg.height);
+
+    const bool useRefImages = config_.prediction == FLUX2_FLOW_PRED ||
+                              config_.prediction == FLUX_FLOW_PRED;
+
+    if (useRefImages) {
+      // FLUX in-context conditioning: ref_images handles its own resizing
+      // via auto_resize_ref_image, so only override genParams dimensions
+      // when they are still at the 512×512 default.
+      if (gen.width == 512 && gen.height == 512) {
+        genParams.width = imgW;
+        genParams.height = imgH;
+      }
+      gen.width = genParams.width;
+      gen.height = genParams.height;
+
+      QLOG_IF(
+          qvac_lib_inference_addon_cpp::logger::Priority::INFO,
+          "img2img: " + std::to_string(imgW) + "x" + std::to_string(imgH) +
+              " — FLUX in-context conditioning (ref_images)");
+
+      genParams.ref_images = &initImg;
+      genParams.ref_images_count = 1;
+      genParams.auto_resize_ref_image = true;
+    } else {
+      // SDEdit path — the vcpkg version of generate_image() rounds
+      // width/height UP to a spatial multiple (typically 8) before
+      // creating tensors, then asserts init_image matches those aligned
+      // dimensions.  We must align here too and resize the decoded image
+      // if its pixel dimensions aren't already a multiple of 8.
+      constexpr int kAlign = 8;
+      const int alignedW = (imgW + kAlign - 1) / kAlign * kAlign;
+      const int alignedH = (imgH + kAlign - 1) / kAlign * kAlign;
+
+      genParams.width = alignedW;
+      genParams.height = alignedH;
+      gen.width = alignedW;
+      gen.height = alignedH;
+
+      if (imgW != alignedW || imgH != alignedH) {
+        QLOG_IF(
+            qvac_lib_inference_addon_cpp::logger::Priority::INFO,
+            "img2img: resizing " + std::to_string(imgW) + "x" +
+                std::to_string(imgH) + " → " + std::to_string(alignedW) + "x" +
+                std::to_string(alignedH) + " (align to " +
+                std::to_string(kAlign) + ")");
+
+        sd_image_t resized =
+            image_utils::resizeSdImage(initImg, alignedW, alignedH);
+        if (!resized.data)
+          throw StatusError(
+              general_error::InternalError,
+              "Failed to resize init_image from " + std::to_string(imgW) + "x" +
+                  std::to_string(imgH) + " to " + std::to_string(alignedW) +
+                  "x" + std::to_string(alignedH));
+        free(initImg.data);
+        initImg = resized;
+      }
+
+      QLOG_IF(
+          qvac_lib_inference_addon_cpp::logger::Priority::INFO,
+          "img2img: " + std::to_string(alignedW) + "x" +
+              std::to_string(alignedH) + " — SDEdit (init_image, strength=" +
+              std::to_string(gen.strength) + ")");
+
+      genParams.init_image = initImg;
+
+      // The vcpkg version of generate_image() unconditionally calls
+      // sd_image_to_ggml_tensor() on mask_image (even when no mask was
+      // provided), which asserts mask_image dimensions match the tensor.
+      // Provide an all-white mask (= denoise everywhere) to satisfy it.
+      if (!genParams.mask_image.data) {
+        const size_t maskSize =
+            static_cast<size_t>(alignedW) * static_cast<size_t>(alignedH);
+        auto* maskData = static_cast<uint8_t*>(malloc(maskSize));
+        if (!maskData)
+          throw StatusError(
+              general_error::InternalError,
+              "Failed to allocate " + std::to_string(maskSize) +
+                  " bytes for SDEdit mask (" + std::to_string(alignedW) + "x" +
+                  std::to_string(alignedH) + ")");
+        memset(maskData, 255, maskSize);
+        genParams.mask_image = {
+            static_cast<uint32_t>(alignedW),
+            static_cast<uint32_t>(alignedH),
+            1,
+            maskData};
+      }
+    }
   }
-  genParams.init_image = initImg;
 
   // ── Generate ──────────────────────────────────────────────────────────────
   const auto t0 = std::chrono::steady_clock::now();
@@ -531,6 +662,9 @@ std::any SdModel::process(const std::any& input) {
 
   if (initImg.data) {
     free(initImg.data);
+  }
+  if (genParams.mask_image.data) {
+    free(genParams.mask_image.data);
   }
 
   const bool wasCancelled = cancelRequested_.load();

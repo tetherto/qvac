@@ -1,0 +1,31 @@
+---
+title: "defineDuplexHandler( )"
+titleStyle: code
+description: Helper function to define a duplex (bidirectional streaming) handler with full type inference.
+---
+
+```ts
+function defineDuplexHandler<TRequest extends ZodType, TResponse extends ZodType>(
+  definition: DuplexPluginHandlerDefinition<TRequest, TResponse>
+): PluginHandlerDefinition<TRequest, TResponse>;
+```
+
+## Parameters
+
+| Name | Type | Required? | Description |
+| --- | --- | :---: | --- |
+| definition | [`DuplexPluginHandlerDefinition`](#duplexpluginhandlerdefinition) | ✓ | The duplex handler definition with schemas and handler function |
+
+### `DuplexPluginHandlerDefinition`
+
+| Field | Type | Required? | Description |
+| --- | --- | :---: | --- |
+| requestSchema | `ZodType` | ✓ | Zod schema for validating incoming requests |
+| responseSchema | `ZodType` | ✓ | Zod schema for validating outgoing responses |
+| streaming | `true` | ✓ | Must be `true` — duplex handlers are always streaming |
+| duplex | `true` | ✓ | Must be `true` — marks this handler as bidirectional |
+| handler | `(request, inputStream: AsyncIterable<Buffer>) => AsyncGenerator<response>` | ✓ | The handler function — receives a validated request and an input stream, yields validated response chunks |
+
+## Returns
+
+`PluginHandlerDefinition<TRequest, TResponse>` — The same definition object, with full type inference applied. This is an identity function used for type checking.

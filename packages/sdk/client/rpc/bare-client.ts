@@ -7,7 +7,10 @@ import type {
 } from "@/schemas";
 import { normalizeModelType } from "@/schemas";
 import os from "bare-os";
+import type { Readable } from "bare-stream";
 import { handlers } from "@/server/rpc/handlers";
+import { registry } from "@/server/rpc/handler-registry";
+import { createErrorResponse } from "@/schemas";
 import {
   PearWorkerEntryRequiredError,
   RPCNoHandlerError,
@@ -20,7 +23,10 @@ import { resolveModelConfig } from "@/server/bare/registry/model-config-registry
 import { resolveConfig } from "@/client/config-loader/resolve-config.bare";
 import { getClientLogger } from "@/logging";
 import { getAllPlugins } from "@/server/plugins";
-import { initializeWorkerCore } from "@/server/worker-core";
+import {
+  initializeWorkerCore,
+  shutdownBareDirectWorker,
+} from "@/server/worker-core";
 
 const logger = getClientLogger();
 
@@ -94,6 +100,49 @@ function applyDeviceDefaultsToLoadModel<T extends Request>(request: T): T {
   return { ...request, modelConfig: configWithDefaults } as T;
 }
 
+function supportsProgressStreaming(request: Request) {
+  return (
+    "withProgress" in request &&
+    request.withProgress &&
+    ["loadModel", "downloadAsset", "rag", "finetune"].includes(request.type)
+  );
+}
+
+async function* streamWithProgress(
+  request: Request,
+  handler: (
+    req: Request,
+    callback: (update: Response) => void,
+  ) => Promise<Response>,
+) {
+  const queue: Response[] = [];
+  const errors: Error[] = [];
+  let done = false;
+
+  handler(request, (update) => queue.push(update))
+    .then((final) => {
+      queue.push(final);
+      done = true;
+    })
+    .catch((error: Error) => {
+      errors.push(error);
+      done = true;
+    });
+
+  while (!done || queue.length > 0) {
+    if (queue.length > 0) {
+      yield queue.shift()!;
+    } else {
+      await new Promise((resolve) => setTimeout(resolve, 10));
+    }
+  }
+
+  const handlerError = errors[0];
+  if (handlerError) {
+    throw handlerError;
+  }
+}
+
 export async function send<T extends Request>(request: T): Promise<Response> {
   const handler = getHandler(request.type);
   if (!handler) throw new RPCNoHandlerError(request.type);
@@ -106,75 +155,15 @@ async function* stream<T extends Request>(request: T) {
   const handler = getHandler(request.type);
   if (!handler) throw new RPCNoHandlerError(request.type);
 
-  // Special handling for loadModel with progress
-  if (
-    request.type === "loadModel" &&
-    "withProgress" in request &&
-    request.withProgress
-  ) {
+  if (supportsProgressStreaming(request)) {
     const processedRequest = applyDeviceDefaultsToLoadModel(request);
-
-    async function* streamWithProgress() {
-      const queue: Response[] = [];
-      let done = false;
-
-      const loadModelHandler = handler as (
+    yield* streamWithProgress(
+      processedRequest,
+      handler as (
         req: Request,
         callback: (update: Response) => void,
-      ) => Promise<Response>;
-      loadModelHandler(processedRequest, (update) => queue.push(update))
-        .then((final) => {
-          queue.push(final);
-          done = true;
-        })
-        .catch((error) => {
-          done = true;
-          throw error;
-        });
-
-      while (!done || queue.length > 0) {
-        if (queue.length > 0) {
-          yield queue.shift()!;
-        } else {
-          await new Promise((resolve) => setTimeout(resolve, 10));
-        }
-      }
-    }
-
-    yield* streamWithProgress();
-  } else if (
-    request.type === "downloadAsset" &&
-    "withProgress" in request &&
-    request.withProgress
-  ) {
-    async function* streamWithProgress() {
-      const queue: Response[] = [];
-      let done = false;
-
-      const downloadAssetHandler = handler as (
-        req: Request,
-        callback: (update: Response) => void,
-      ) => Promise<Response>;
-      downloadAssetHandler(request, (update) => queue.push(update))
-        .then((final) => {
-          queue.push(final);
-          done = true;
-        })
-        .catch((error) => {
-          done = true;
-          throw error;
-        });
-
-      while (!done || queue.length > 0) {
-        if (queue.length > 0) {
-          yield queue.shift()!;
-        } else {
-          await new Promise((resolve) => setTimeout(resolve, 10));
-        }
-      }
-    }
-
-    yield* streamWithProgress();
+      ) => Promise<Response>,
+    );
   } else {
     const result = handler(request);
 
@@ -277,6 +266,46 @@ export async function getRPC() {
   return mockRPC;
 }
 
-export function close() {
-  // noop
+export async function close() {
+  await shutdownBareDirectWorker("rpc-close");
+}
+
+// eslint-disable-next-line @typescript-eslint/no-unused-vars
+export async function createDuplexSession(payload: string, _commandId: number) {
+  await getRPC();
+
+  const { PassThrough } = await import("bare-stream");
+  const request = JSON.parse(payload) as Request;
+
+  const entry = registry[request.type];
+  if (!entry || entry.type !== "duplex") {
+    throw new RPCNoHandlerError(request.type);
+  }
+
+  const inputStream = new PassThrough();
+  const outputStream = new PassThrough();
+
+  const duplexHandler = entry.handler as (
+    req: Request,
+    stream: Readable,
+  ) => AsyncGenerator<Response>;
+
+  void (async () => {
+    try {
+      for await (const response of duplexHandler(request, inputStream)) {
+        outputStream.write(JSON.stringify(response) + "\n", "utf-8");
+      }
+    } catch (error) {
+      inputStream.destroy();
+      const errorResponse = createErrorResponse(error);
+      outputStream.write(JSON.stringify(errorResponse) + "\n", "utf-8");
+    } finally {
+      outputStream.end();
+    }
+  })();
+
+  return {
+    requestStream: inputStream,
+    responseStream: outputStream,
+  };
 }

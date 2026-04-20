@@ -45,3 +45,7 @@ async function runMultipleTranscriptionsTest (options = {}) { // eslint-disable-
 async function runNamedPathsAllModelsTest (options = {}) { // eslint-disable-line no-unused-vars
   return runIntegrationModule('../integration/named-paths-all-models.test.js', options)
 }
+
+async function runNamedPathsReloadTest (options = {}) { // eslint-disable-line no-unused-vars
+  return runIntegrationModule('../integration/named-paths-reload.test.js', options)
+}

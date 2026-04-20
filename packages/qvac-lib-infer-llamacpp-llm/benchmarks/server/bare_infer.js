@@ -24,38 +24,26 @@ async function main () {
   const prompts = JSON.parse(fs.readFileSync(promptsFile, 'utf-8'))
   console.log(`Loaded ${prompts.length} prompts`)
 
-  // Load FilesystemDL directly (same package used by modelManager)
-  let FsDL
-  try {
-    FsDL = require('@qvac/dl-filesystem')
-  } catch {
-    // Fallback: resolve from main package node_modules
-    FsDL = require('../../node_modules/@qvac/dl-filesystem')
-  }
-
-  const loader = new FsDL({ dirPath: diskPath })
-
   // Create LlmLlamacpp directly (bypassing modelManager) so we can pass
   // tools: 'true' which enables jinja template rendering for models with
   // custom chat templates (like AfriqueGemma)
   const model = new LlmLlamacpp({
-    loader,
-    logger: console,
-    diskPath,
-    modelName
-  }, {
-    device: 'cpu',
-    gpu_layers: '0',
-    ctx_size: '2048',
-    temp: '0',
-    top_p: '1',
-    top_k: '1',
-    predict: maxTokens,
-    repeat_penalty: '1',
-    seed: '42',
-    tools: 'true',
-    'reverse-prompt': '\n',
-    verbosity: '1'
+    files: { model: [path.join(diskPath, modelName)] },
+    config: {
+      device: 'cpu',
+      gpu_layers: '0',
+      ctx_size: '2048',
+      temp: '0',
+      top_p: '1',
+      top_k: '1',
+      predict: maxTokens,
+      repeat_penalty: '1',
+      seed: '42',
+      tools: 'true',
+      'reverse-prompt': '\n',
+      verbosity: '1'
+    },
+    logger: console
   })
 
   await model.load()
@@ -84,7 +72,6 @@ async function main () {
   console.log(`Outputs written to ${outputsFile}`)
 
   await model.unload()
-  await loader.close()
 }
 
 main().catch(error => {

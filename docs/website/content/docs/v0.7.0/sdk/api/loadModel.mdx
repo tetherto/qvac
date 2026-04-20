@@ -92,7 +92,7 @@ Additional fields depend on `modelType`:
 
 | Field | Type | Required? | Description |
 | --- | --- | :---: | --- |
-| modelConfig.engine | `"Opus" \| "Bergamot" \| "IndicTrans"` | ✓ | Translation engine (determines available languages) |
+| modelConfig.engine | `"Opus" \| "Bergamot" \| "IndicTrans"` | ✓ | Translation engine (determines available languages). **Opus is deprecated in v1.0.0 — use Bergamot instead.** |
 | modelConfig.from | `string` | ✓ | Source language code |
 | modelConfig.to | `string` | ✓ | Target language code |
 | srcVocabSrc | `string` | ✗ | Source vocabulary file |
@@ -202,7 +202,7 @@ Discriminated union on `engine`. Common generation parameters (all optional):
 
 Engine-specific:
 
-- **Opus**: `from`/`to` accept `"en" | "de" | "es" | "it" | "ru" | "ja"`
+- **Opus**: _Deprecated in v1.0.0. Use Bergamot for European language pairs._
 - **Bergamot**: `from`/`to` accept 24 languages (en, ar, bg, ca, cs, de, es, et, fi, fr, hu, is, it, ja, ko, lt, lv, nl, pl, pt, ru, sk, sl, uk, zh). Additional fields: `srcVocabPath`, `dstVocabPath`, `normalize`
 - **IndicTrans**: `from`/`to` accept 26 Indic language codes (e.g., `"eng_Latn"`, `"hin_Deva"`)
 

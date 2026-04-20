@@ -1,7 +1,7 @@
 'use strict'
 
 const test = require('brittle')
-const FilesystemDL = require('@qvac/dl-filesystem')
+const path = require('bare-path')
 const LlmLlamacpp = require('../../index.js')
 const { ensureModel } = require('./utils')
 const { attachSpecLogger } = require('./spec-logger')
@@ -27,7 +27,7 @@ async function setupModel (t, configOverrides = {}) {
     downloadUrl: MODEL.url
   })
 
-  const loader = new FilesystemDL({ dirPath })
+  const modelPath = path.join(dirPath, modelName)
   const config = {
     device: useCpu ? 'cpu' : 'gpu',
     gpu_layers: '999',
@@ -40,18 +40,16 @@ async function setupModel (t, configOverrides = {}) {
 
   const specLogger = attachSpecLogger({ forwardToConsole: true })
   const model = new LlmLlamacpp({
-    loader,
-    modelName,
-    diskPath: dirPath,
+    files: { model: [modelPath] },
+    config,
     logger: console,
     opts: { stats: true }
-  }, config)
+  })
 
   await model.load()
 
   t.teardown(async () => {
     await model.unload().catch(() => {})
-    await loader.close().catch(() => {})
     specLogger.release()
   })
 

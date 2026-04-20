@@ -6,10 +6,12 @@ const createIndicTransTest = (
   resource: string,
   expectation: Expectation,
   estimatedDurationMs: number = 20000,
+  suites?: string[],
 ): TestDefinition => ({
   testId,
   params: { text, resource },
   expectation,
+  ...(suites && { suites }),
   metadata: { category: "translation-indictrans", dependency: resource, estimatedDurationMs },
 });
 
@@ -21,6 +23,8 @@ export const indictransEnHiBasic = createIndicTransTest(
   "Hello, how are you today?",
   "indictrans-en-hi",
   { validation: "type", expectedType: "string" },
+  20000,
+  ["smoke"],
 );
 
 export const indictransEnHiLongText = createIndicTransTest(
@@ -88,6 +92,8 @@ export const indictransHiEnBasic = createIndicTransTest(
   "नमस्ते, आप कैसे हैं?",
   "indictrans-hi-en",
   { validation: "contains-any", contains: ["hello", "how", "are", "you", "namaste"] },
+  20000,
+  ["smoke"],
 );
 
 export const indictransHiEnLongText = createIndicTransTest(

@@ -4,6 +4,51 @@ const path = require('bare-path')
 const https = require('bare-https')
 const os = require('bare-os')
 
+const ANDROID_GENERATED_IMAGE_ARTIFACT_DIRS = [
+  '/sdcard/Download/qvac-generated-images',
+  '/storage/emulated/0/Download/qvac-generated-images'
+]
+
+class GeneratedImageSaver {
+  constructor (modelDir) {
+    const platform = os.platform()
+
+    try {
+      if (platform === 'android') {
+        for (const artifactDir of ANDROID_GENERATED_IMAGE_ARTIFACT_DIRS) {
+          try {
+            fs.mkdirSync(artifactDir, { recursive: true })
+            this.artifactDir = artifactDir
+            break
+          } catch (_) {}
+        }
+        return
+      }
+
+      // Use a separate directory on iOS to avoid pulling the model file on device farm runs.
+      this.artifactDir = platform === 'ios'
+        ? path.resolve(modelDir, '../generated-images')
+        : modelDir
+      fs.mkdirSync(this.artifactDir, { recursive: true })
+    } catch (err) {
+      console.log(`Could not prepare artifact directory: ${err.message}`)
+    }
+  }
+
+  save (filename, imageData) {
+    if (!this.artifactDir) return
+
+    const outputPath = path.join(this.artifactDir, filename)
+
+    try {
+      fs.writeFileSync(outputPath, imageData)
+      console.log(`Image saved to ${outputPath}`)
+    } catch (err) {
+      console.log(`Could not save image to ${this.artifactDir}: ${err.message}`)
+    }
+  }
+}
+
 async function downloadFile (url, dest) {
   return new Promise((resolve, reject) => {
     let resolved = false
@@ -184,6 +229,7 @@ function isPng (buf) {
 }
 
 module.exports = {
+  GeneratedImageSaver,
   ensureModel,
   ensureModelPath,
   getMediaPath,

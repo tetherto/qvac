@@ -285,22 +285,19 @@ TEST(SdGenHandlers_VaeTileSize, MissingRhsThrows) {
 TEST(SdGenHandlers_Steps, ZeroThrows) {
   SdGenConfig cfg;
   EXPECT_THROW(
-      applySdGenHandlers(cfg, makeObj("steps", num(0.0))),
-      StatusError);
+      applySdGenHandlers(cfg, makeObj("steps", num(0.0))), StatusError);
 }
 
 TEST(SdGenHandlers_Width, NonMultipleOf8Throws) {
   SdGenConfig cfg;
   EXPECT_THROW(
-      applySdGenHandlers(cfg, makeObj("width", num(7.0))),
-      StatusError);
+      applySdGenHandlers(cfg, makeObj("width", num(7.0))), StatusError);
 }
 
 TEST(SdGenHandlers_Strength, AboveOneThrows) {
   SdGenConfig cfg;
   EXPECT_THROW(
-      applySdGenHandlers(cfg, makeObj("strength", num(1.1))),
-      StatusError);
+      applySdGenHandlers(cfg, makeObj("strength", num(1.1))), StatusError);
 }
 
 // ─────────────────────────────────────────────────────────────────────────────

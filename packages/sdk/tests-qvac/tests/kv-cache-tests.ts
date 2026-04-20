@@ -4,6 +4,7 @@ export const kvCacheDeleteAll: TestDefinition = {
   testId: "kv-cache-delete-all",
   params: { deleteAll: true },
   expectation: { validation: "type", expectedType: "string" },
+  suites: ["smoke"],
   metadata: { category: "kv-cache", dependency: "none", estimatedDurationMs: 10000 },
 };
 
@@ -48,6 +49,7 @@ export const kvCacheSlidingWindow: TestDefinition = {
     kvCache: "test-sliding-window-session",
   },
   expectation: { validation: "type", expectedType: "string" },
+  suites: ["smoke"],
   metadata: { category: "kv-cache", dependency: "llm", estimatedDurationMs: 30000 },
 };
 
@@ -90,6 +92,7 @@ export const kvCacheStreamingSlidingWindow: TestDefinition = {
     kvCache: "streaming-sliding-window-session",
   },
   expectation: { validation: "contains-any", contains: ["14"] },
+  suites: ["smoke"],
   metadata: { category: "kv-cache", dependency: "llm", estimatedDurationMs: 35000 },
 };
 
@@ -185,6 +188,7 @@ export const kvCacheStatsVerification: TestDefinition = {
     stream: false,
   },
   expectation: { validation: "type", expectedType: "string" },
+  suites: ["smoke"],
   metadata: { category: "kv-cache", dependency: "llm", estimatedDurationMs: 30000 },
 };
 
@@ -197,6 +201,36 @@ export const kvCacheNoSystemPrompt: TestDefinition = {
   },
   expectation: { validation: "type", expectedType: "string" },
   metadata: { category: "kv-cache", dependency: "llm", estimatedDurationMs: 20000 },
+};
+
+export const kvCacheToolsSequentialSave: TestDefinition = {
+  testId: "kv-cache-tools-sequential-save",
+  params: {
+    cacheKey: "tools-sequential-save-session",
+    tools: [
+      {
+        type: "function",
+        name: "calculator",
+        description: "Performs basic math operations",
+        parameters: {
+          type: "object",
+          properties: {
+            operation: { type: "string", enum: ["add", "subtract", "multiply", "divide"] },
+            a: { type: "number" },
+            b: { type: "number" },
+          },
+          required: ["operation", "a", "b"],
+        },
+      },
+    ],
+    messages: [
+      "What is 10 + 20?",
+      "Now what is 5 + 5?",
+    ],
+    stream: true,
+  },
+  expectation: { validation: "type", expectedType: "string" },
+  metadata: { category: "kv-cache", dependency: "tools", estimatedDurationMs: 90000 },
 };
 
 export const kvCacheTests = [
@@ -215,4 +249,5 @@ export const kvCacheTests = [
   kvCacheDeleteAndReuse,
   kvCacheStatsVerification,
   kvCacheNoSystemPrompt,
+  kvCacheToolsSequentialSave,
 ];

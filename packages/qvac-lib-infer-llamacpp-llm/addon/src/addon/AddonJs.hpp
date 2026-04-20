@@ -340,6 +340,15 @@ inline js_value_t* runJob(js_env_t* env, js_callback_info_t* info) try {
       readNum("presence_penalty", ov.presence_penalty);
       readNum("repeat_penalty", ov.repeat_penalty);
     }
+
+    prompt.cacheKey =
+        inputObj.getOptionalPropertyAs<js::String, std::string>(env, "cacheKey")
+            .value_or("");
+
+    prompt.saveCacheToDisk =
+        inputObj
+            .getOptionalPropertyAs<js::Boolean, bool>(env, "saveCacheToDisk")
+            .value_or(false);
   };
 
   auto parseMedia = [&](js::Object& inputObj) {

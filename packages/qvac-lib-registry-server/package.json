@@ -79,12 +79,13 @@
     "protomux-rpc": "^1.7.0",
     "readline": "npm:bare-node-readline",
     "ready-resource": "^1.2.0",
-    "stream": "npm:bare-node-stream"
+    "stream": "npm:bare-node-stream",
+    "zod": "^3.24.0"
   },
   "devDependencies": {
+    "@qvac/error": "^0.1.1",
     "brittle": "^3.4.0",
     "dotenv": "^17.2.3",
-    "standard": "^17.1.0",
-    "zod": "^3.24.0"
+    "standard": "^17.1.0"
   }
 }

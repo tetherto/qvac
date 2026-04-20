@@ -2,7 +2,6 @@
 
 const test = require('brittle')
 const TranscriptionWhispercpp = require('../../index.js')
-const FakeDL = require('../mocks/loader.fake.js')
 const MockedBinding = require('../mocks/MockedBinding.js')
 const { wait, transitionCb } = require('../mocks/utils.js')
 const { WhisperInterface } = require('../../whisper')
@@ -21,10 +20,10 @@ function createTestModel ({ onOutput = () => { }, vadModelPath = 'ggml-silero-v5
   sinon.stub(TranscriptionWhispercpp.prototype, 'validateModelFiles').returns(undefined)
 
   const args = {
-    modelName: 'ggml-tiny.bin',
-    vadModelName: vadModelPath,
-    loader: new FakeDL({}),
-    params: {}
+    files: {
+      model: 'ggml-tiny.bin',
+      vadModel: vadModelPath
+    }
   }
   const config = {
     vadModelPath,
@@ -79,9 +78,10 @@ test('VAD mode processes audio with voice activity detection', async (t) => {
 
   if (outputEvents.length > 0) {
     t.ok(outputEvents[0].output, 'Should have transcription output')
-    t.is(typeof outputEvents[0].output, 'object', 'Output should be transcript object')
-    t.ok(outputEvents[0].output.text.includes('Mock transcription') ||
-      outputEvents[0].output.text.includes('Silent audio detected'),
+    t.ok(Array.isArray(outputEvents[0].output), 'Output should be wrapped in array')
+    const transcript = outputEvents[0].output[0]
+    t.ok(transcript.text.includes('Mock transcription') ||
+      transcript.text.includes('Silent audio detected'),
     'Should contain mock transcription or silence detection text')
   }
 

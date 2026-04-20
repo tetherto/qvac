@@ -3,7 +3,7 @@
 // Tests must match the behavior described in README section "API behavior by state".
 
 const test = require('brittle')
-const FilesystemDL = require('@qvac/dl-filesystem')
+const path = require('bare-path')
 const LlmLlamacpp = require('../../index.js')
 const { ensureModel } = require('./utils')
 const { attachSpecLogger } = require('./spec-logger')
@@ -35,7 +35,7 @@ async function setupModel (t, configOverrides = {}) {
     downloadUrl: MODEL.url
   })
 
-  const loader = new FilesystemDL({ dirPath })
+  const modelPath = path.join(dirPath, modelName)
   const config = {
     device: useCpu ? 'cpu' : 'gpu',
     gpu_layers: '999',
@@ -47,18 +47,16 @@ async function setupModel (t, configOverrides = {}) {
 
   const specLogger = attachSpecLogger({ forwardToConsole: true })
   const model = new LlmLlamacpp({
-    loader,
-    modelName,
-    diskPath: dirPath,
+    files: { model: [modelPath] },
+    config,
     logger: console,
     opts: { stats: true }
-  }, config)
+  })
 
   await model.load()
 
   t.teardown(async () => {
     await model.unload().catch(() => {})
-    await loader.close().catch(() => {})
     specLogger.release()
   })
 
@@ -81,6 +79,10 @@ test('idle | run: allowed, returns QvacResponse', { timeout: 600_000 }, async t 
   t.ok(typeof response.await === 'function', 'response has await')
   const output = await collectResponse(response)
   t.ok(output.length > 0, 'inference produces output')
+  t.ok(
+    response?.stats?.backendDevice === 'cpu' || response?.stats?.backendDevice === 'gpu',
+    'runtime stats report resolved backendDevice as cpu or gpu'
+  )
 })
 
 test('idle | run with prefill: evaluates prompt without token generation', { timeout: 600_000 }, async t => {

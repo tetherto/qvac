@@ -1,0 +1,79 @@
+---
+title: Image generation
+description: Text-to-image generation using Stable Diffusion.
+---
+
+## Overview
+
+Image generation uses [`qvac-ext-stable-diffusion.cpp`](https://github.com/tetherto/qvac-ext-stable-diffusion.cpp) as the inference engine. Load a supported model using `modelType: "diffusion"`. Then, provide a text `prompt` describing the image to generate. 
+
+`diffusion()` returns one or more PNG images as `Uint8Array` buffers. Use `progressStream` to track generation progress step-by-step.
+
+## Functions
+
+Use the following sequence of function calls:
+1. [`loadModel()`](/sdk/api/loadModel)
+2. [`diffusion()`](/sdk/api/diffusion)
+3. [`unloadModel()`](/sdk/api/unloadModel)
+
+For how to use each function, see [SDK — API reference](/sdk/api/).
+
+## Models
+
+Supported model families and their file layouts:
+
+- **SD1.x, SD2.x**: single all-in-one `*.gguf` file. No companion files needed.
+- **SDXL, SD3**: may require separate CLIP/T5 text encoder files (`clipLModelSrc`, `clipGModelSrc`, `t5XxlModelSrc`) in `modelConfig` depending on the model variant.
+- **FLUX.2-klein**: split layout — diffusion model `*.gguf` + LLM text encoder `*.gguf` (via `llmModelSrc`) + VAE `*.safetensors` (via `vaeModelSrc`).
+
+For models available as constants, see [SDK — Models](/sdk/getting-started#models).
+
+## Examples
+
+### Stable Diffusion
+
+The following script shows a minimal text-to-image generation example using a single all-in-one SD 2.1 model:
+
+<Tabs>
+<Tab value="js" label="JavaScript" default>
+<WrapCode>
+
+```js file=<rootDir>/packages/sdk/dist/examples/diffusion-simple.js title="diffusion-simple.js" lineNumbers
+```
+</WrapCode>
+</Tab>
+
+<Tab value="ts" label="TypeScript">
+<WrapCode>
+
+```ts file=<rootDir>/packages/sdk/examples/diffusion-simple.ts title="diffusion-simple.ts" lineNumbers
+```
+</WrapCode>
+</Tab>
+</Tabs>
+
+### FLUX.2-klein
+
+The following script shows text-to-image generation using FLUX.2-klein with its split-layout model (separate diffusion model, LLM text encoder, and VAE):
+
+<Tabs>
+<Tab value="js" label="JavaScript" default>
+<WrapCode>
+
+```js file=<rootDir>/packages/sdk/dist/examples/diffusion-flux2-klein.js title="diffusion-flux2-klein.js" lineNumbers
+```
+</WrapCode>
+</Tab>
+
+<Tab value="ts" label="TypeScript">
+<WrapCode>
+
+```ts file=<rootDir>/packages/sdk/examples/diffusion-flux2-klein.ts title="diffusion-flux2-klein.ts" lineNumbers
+```
+</WrapCode>
+</Tab>
+</Tabs>
+
+<Callout type="success">
+**Tip:** all examples throughout this documentation are self-contained and runnable. For instructions on how to run them, see [SDK quickstart](/sdk/getting-started/quickstart).
+</Callout>

@@ -1,0 +1,94 @@
+version: 0.1
+android_test_host: amazon_linux_2
+
+phases:
+  pre_test:
+    commands:
+      # Install and launch the app (custom test spec doesn't do this automatically)
+      - |-
+        echo "Installing app..."
+        adb install -r "$DEVICEFARM_APP_PATH"
+        echo "Launching app..."
+        adb shell am start -n io.tether.qvac_test_consumer_mobile/.MainActivity
+        sleep 5
+        echo "App launched"
+
+      # Periodic screenshots every 30s in the background
+      - |-
+        (while true; do
+          TIMESTAMP=$(date +%s)
+          adb shell screencap -p > "$DEVICEFARM_SCREENSHOT_PATH/screen-${TIMESTAMP}.png" 2>/dev/null
+          sleep 30
+        done) &
+        echo "Screenshot capture started (every 30s)"
+
+  test:
+    commands:
+      # Stream logcat, track test progress in real-time, detect completion
+      - |-
+        TIMEOUT=${DEVICEFARM_TIMEOUT:-5400}
+        START=$(date +%s)
+        PASSED=0
+        FAILED=0
+        COMPLETED=0
+        EXPECTED="?"
+        RESULTS_FILE="$DEVICEFARM_LOG_DIR/test-results.txt"
+
+        touch "$RESULTS_FILE"
+        adb logcat -c
+
+        echo "Monitoring app logcat for test results (timeout: ${TIMEOUT}s)..."
+
+        adb logcat ReactNativeJS:I *:S | while IFS= read -r line; do
+          case "$line" in
+            *"Registration ack"*"tests in queue"*)
+              EXPECTED=$(echo "$line" | grep -oP '\d+(?= tests in queue)')
+              echo "Registered: $EXPECTED tests expected"
+              ;;
+            *"✅"*"ms)"*)
+              PASSED=$((PASSED+1))
+              COMPLETED=$((COMPLETED+1))
+              echo "[PASS $COMPLETED/$EXPECTED] $line"
+              echo "PASS|$line" >> "$RESULTS_FILE"
+              ;;
+            *"❌"*"ms)"*)
+              FAILED=$((FAILED+1))
+              COMPLETED=$((COMPLETED+1))
+              echo "[FAIL $COMPLETED/$EXPECTED] $line"
+              echo "FAIL|$line" >> "$RESULTS_FILE"
+              ;;
+            *"❌"*"failed:"*)
+              FAILED=$((FAILED+1))
+              COMPLETED=$((COMPLETED+1))
+              echo "[ERROR $COMPLETED/$EXPECTED] $line"
+              echo "ERROR|$line" >> "$RESULTS_FILE"
+              ;;
+            *"Consumer shutting down"*)
+              echo ""
+              echo "========================================="
+              echo "COMPLETE: $PASSED passed, $FAILED failed ($COMPLETED/$EXPECTED)"
+              echo "========================================="
+              break
+              ;;
+          esac
+
+          NOW=$(date +%s)
+          if [ $((NOW - START)) -ge $TIMEOUT ]; then
+            echo "TIMEOUT after ${TIMEOUT}s ($PASSED passed, $FAILED failed, $COMPLETED/$EXPECTED completed)"
+            exit 1
+          fi
+        done
+
+  post_test:
+    commands:
+      # Capture full logcat
+      - adb logcat -d ReactNativeJS:I *:S > "$DEVICEFARM_LOG_DIR/app-console.log"
+
+      # Final screenshot
+      - adb shell screencap -p > "$DEVICEFARM_SCREENSHOT_PATH/final.png" 2>/dev/null
+
+      # Generate JUnit XML from captured test results (script is in the test package)
+      - python3 $DEVICEFARM_TEST_PACKAGE_PATH/gen-junit.py
+
+artifacts:
+  - $DEVICEFARM_LOG_DIR

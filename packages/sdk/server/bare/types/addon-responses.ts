@@ -3,6 +3,7 @@ export interface LlmStats {
   TPS?: number;
   CacheTokens?: number;
   generatedTokens?: number;
+  backendDevice?: "cpu" | "gpu";
 }
 
 export interface LlmResponse {
@@ -38,6 +39,7 @@ export interface EmbedStats {
   total_time_ms?: number;
   tokens_per_second?: number;
   total_tokens?: number;
+  backendDevice?: "cpu" | "gpu";
 }
 
 export interface EmbedResponse {

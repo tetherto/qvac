@@ -1,16 +1,9 @@
+# Build-only workflow. Publishing is handled by on-merge-qvac-lib-infer-llamacpp-embed.yml
 name: Prebuilds (Embed)
 
 on:
   workflow_dispatch:
     inputs:
-      tag:
-        description: "Tag to publish with ('latest' by default)"
-        required: true
-        default: "latest"
-        type: choice
-        options:
-          - latest
-          - dev
       vk-profiling:
         type: boolean
         default: false
@@ -19,34 +12,28 @@ on:
         required: false
         type: string
         default: "packages/qvac-lib-infer-llamacpp-embed"
+
   workflow_call:
     inputs:
       ref:
         description: "ref"
         type: string
+        required: false
       repository:
         type: string
         required: false
         default: "tetherto/qvac"
-      tag:
-        description: "Tag to publish"
-        type: string
+      vk-profiling:
+        description: "Enable Vulkan profiling"
+        type: boolean
         required: false
-        default: "dev"
-      publish_target:
-        description: "Target registry for publishing (npm, gpr, or both)"
-        type: string
-        required: false
-        default: ""
+        default: false
       workdir:
         description: "Working directory (optional)"
         required: false
         type: string
         default: "packages/qvac-lib-infer-llamacpp-embed"
-    outputs:
-      published_version:
-        description: "Version published to registry"
-        value: ${{ jobs.publish-npm.outputs.published_version || jobs.publish-gpr.outputs.published_version }}
+
 env:
   WORKDIR: ${{ inputs.workdir }}
 
@@ -58,6 +45,7 @@ jobs:
     permissions:
       contents: write
       pull-requests: write
+      id-token: write
     strategy:
       fail-fast: false
       matrix:
@@ -100,9 +88,29 @@ jobs:
     environment: release
     name: ${{ matrix.platform }}-${{ matrix.arch }}${{ matrix.tags }}
 
-    env:
-      VCPKG_BINARY_SOURCES: clear;files,${{ github.workspace }}/${{ inputs.workdir || 'packages/qvac-lib-infer-llamacpp-embed' }}/vcpkg/cache,readwrite
     steps:
+      - name: Configure AWS credentials via OIDC
+        uses: aws-actions/configure-aws-credentials@8df5847569e6427dd6c4fb1cf565c83acfa8afa7 # 6.0.0
+        with:
+          role-to-assume: ${{ secrets.AWS_OIDC_ROLE_ARN }}
+          aws-region: eu-central-1
+
+      - if: ${{ matrix.platform == 'win32' }}
+        name: Install AWS CLI on self-hosted Windows runner
+        shell: powershell
+        run: |
+          if (Get-Command aws -ErrorAction SilentlyContinue) {
+            Write-Host "AWS CLI already installed"
+            aws --version
+          } else {
+            Write-Host "Installing AWS CLI v2..."
+            Invoke-WebRequest -Uri https://awscli.amazonaws.com/AWSCLIV2.msi -OutFile $env:TEMP\AWSCLIV2.msi
+            Start-Process msiexec.exe -Wait -ArgumentList '/I', "$env:TEMP\AWSCLIV2.msi", '/qn'
+            $env:PATH = "C:\Program Files\Amazon\AWSCLIV2;$env:PATH"
+            echo "C:\Program Files\Amazon\AWSCLIV2" >> $env:GITHUB_PATH
+            aws --version
+          }
+
       - if: ${{ matrix.platform == 'android' }}
         name: Select NDK
         run: |
@@ -125,7 +133,6 @@ jobs:
       - name: Echo workflow inputs
         shell: bash
         env:
-          INPUT_TAG: ${{ inputs.tag || github.event.inputs.tag }}
           INPUT_REF: ${{ inputs.ref || github.ref }}
           INPUT_REPO: ${{ inputs.repository || github.repository }}
           INPUT_WORKDIR: ${{ inputs.workdir }}
@@ -134,7 +141,6 @@ jobs:
           MATRIX_TAGS: ${{ matrix.tags }}
         run: |
           echo "Workflow inputs:"
-          echo "Tag: $INPUT_TAG"
           echo "Ref: $INPUT_REF"
           echo "Repository: $INPUT_REPO"
           echo "Workdir: $INPUT_WORKDIR"
@@ -162,37 +168,18 @@ jobs:
           ref: ${{ inputs.ref || github.ref }}
           token: ${{ secrets.PAT_TOKEN }}
 
+      - name: Setup vcpkg cache
+        uses: ./.github/actions/setup-vcpkg-cache
+        env:
+          MODEL_S3_BUCKET: ${{ secrets.MODEL_S3_BUCKET }}
+        with:
+          platform: ${{ matrix.platform }}
+          arch: ${{ matrix.arch }}
+
       - name: Setup node
         uses: actions/setup-node@53b83947a5a98c8d113130e565377fae1a50d02f # 6.3.0
         with:
           node-version: lts/*
-
-      - name: Configure scoped registry for @tetherto and @qvac packages
-        env:
-          GPR_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-          NPM_TOKEN: ${{ secrets.NPM_TOKEN }}
-          GIT_PAT: ${{ secrets.PAT_TOKEN }}
-        shell: bash
-        working-directory: ${{ inputs.workdir }}
-        run: |
-          echo "Configuring scoped registry for @tetherto and @qvac packages..."
-          set -eu
-          cat > .npmrc <<NPMRC
-          registry=https://registry.npmjs.org/
-          @qvac:registry=https://registry.npmjs.org/
-          @tetherto:registry=https://npm.pkg.github.com/
-          //registry.npmjs.org/:_authToken=${NPM_TOKEN}
-          //npm.pkg.github.com/:_authToken=${GIT_PAT}
-          NPMRC
-
-          if [ -n "${GIT_PAT:-}" ]; then
-            git config --global url."https://${GIT_PAT}:@github.com/".insteadOf "https://github.com/"
-            git config --global url."https://${GIT_PAT}:@github.com/".insteadOf "git@github.com:"
-          else
-            git config --global url."https://${{ github.token }}:@github.com/".insteadOf "https://github.com/"
-            git config --global url."https://${{ github.token }}:@github.com/".insteadOf "git@github.com:"
-          fi
-
       - name: Install global dependencies
         run: npm install -g bare bare-make
 
@@ -238,113 +225,19 @@ jobs:
         name: Update apt sources
         run: sudo apt-get update
 
-      - if: ${{ matrix.os == 'ubuntu-22.04-arm' }}
-        name: Install ccache on Linux
-        run: |
-          sudo apt-get install -y ccache
-
-      - if: ${{ matrix.os == 'ubuntu-22.04-arm' }}
-        name: Configure ccache
-        run: |
-          ccache --set-config=max_size=2G
-          ccache --set-config=compression=true
-          ccache -z
-          echo "CMAKE_C_COMPILER_LAUNCHER=ccache" >> $GITHUB_ENV
-          echo "CMAKE_CXX_COMPILER_LAUNCHER=ccache" >> $GITHUB_ENV
-
-      - if: ${{ matrix.os == 'ubuntu-22.04-arm' }}
-        name: Get ccache cache
-        uses: actions/cache@668228422ae6a00e4ad889ee87cd7109ec5666a7 # 5.0.4
-        with:
-          key: ccache-${{ matrix.platform }}-${{ matrix.arch }}
-          path: ~/.cache/ccache-arm
-
       - if: ${{ matrix.platform == 'linux' }}
         name: Install required packages linux
         run: sudo apt-get install libxi-dev libxtst-dev libxrandr-dev
 
-      - if: ${{ startsWith(matrix.os, 'ubuntu-') }}
-        name: Install vulkan in linux
-        run: |
-          sudo apt install xz-utils
-          # Get the latest vulkan sdk to be consistent with windows
-          wget -q -O /tmp/vulkansdk.tar.xz https://sdk.lunarg.com/sdk/download/latest/linux/vulkan_sdk.tar.xz
-          cd ~
-          mkdir vulkan
-          cd vulkan
-          tar xf /tmp/vulkansdk.tar.xz --strip-components=1
-
-      - if: ${{ matrix.os == 'ubuntu-22.04' || matrix.os == 'ubuntu-24.04' }}
-        name: Setup vulkan sdk path in linux x64
-        run: |
-          VULKAN_SDK=~/vulkan/x86_64
-          echo "VULKAN_SDK=$VULKAN_SDK" >> $GITHUB_ENV
-
-      - if: ${{ matrix.os == 'ubuntu-22.04-arm' }}
-        name: Setup vulkan sdk path in linux arm64
+      - name: Setup Vulkan SDK
+        uses: ./.github/actions/setup-vulkan-sdk
         env:
-          AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
-          AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
-          AWS_DEFAULT_REGION: us-east-1
-        run: |
-          VULKAN_SDK=~/vulkan/aarch64
-          echo "VULKAN_SDK=$VULKAN_SDK" >> $GITHUB_ENV
-          
-          cd ~/vulkan
-          
-          # Extract SDK major.minor version from README.txt (e.g., "1.4" from "1.4.341.0")
-          SDK_VERSION=$(grep -o 'sdk/[0-9]*\.[0-9]*' README.txt | head -1 | sed 's|sdk/||')
-          S3_BUCKET="${{ secrets.MODEL_S3_BUCKET }}"
-          S3_KEY="vulkan-sdk-cache/linux-arm64-${SDK_VERSION}.tar.gz"
-          
-          echo "Vulkan SDK version: ${SDK_VERSION}"
-          
-          # Try to download cached build from S3
-          if aws s3 cp "s3://${S3_BUCKET}/${S3_KEY}" /tmp/vulkan-arm64-cache.tar.gz 2>/dev/null; then
-            echo "Found cached Vulkan SDK, extracting..."
-            tar xzf /tmp/vulkan-arm64-cache.tar.gz -C ~/vulkan
-            rm /tmp/vulkan-arm64-cache.tar.gz
-          else
-            echo "No cache found, building Vulkan SDK for ARM64..."
-            ./vulkansdk --maxjobs
-            
-            # Upload the compiled SDK to S3 for future runs
-            echo "Uploading compiled SDK to S3..."
-            tar czf /tmp/vulkan-arm64-cache.tar.gz aarch64
-            aws s3 cp /tmp/vulkan-arm64-cache.tar.gz "s3://${S3_BUCKET}/${S3_KEY}"
-            rm /tmp/vulkan-arm64-cache.tar.gz
-          fi
-
-      - if: ${{ startsWith(matrix.os, 'ubuntu-') }}
-        name: Export rest of vulkan sdk variables in linux
-        run: |
-          echo "PATH=$VULKAN_SDK/bin:$PATH" >> $GITHUB_ENV
-          echo "LD_LIBRARY_PATH=$VULKAN_SDK/lib${LD_LIBRARY_PATH:+:$LD_LIBRARY_PATH}" >> $GITHUB_ENV
-          echo "VK_ADD_LAYER_PATH=$VULKAN_SDK/share/vulkan/explicit_layer.d" >> $GITHUB_ENV
-          echo "PKG_CONFIG_PATH=$VULKAN_SDK/share/pkgconfig:$VULKAN_SDK/lib/pkgconfig${PKG_CONFIG_PATH:+:$PKG_CONFIG_PATH}" >> $GITHUB_ENV
-
-      - if: ${{ matrix.platform == 'win32' }}
-        name: Install Vulkan SDK (Windows)
-        shell: powershell
-        run: |
-          $ErrorActionPreference = "Stop"
-          $ProgressPreference = "SilentlyContinue"
-
-          # Use a stable URL (latest) but download with BITS (more reliable than Invoke-WebRequest)
-          $url = "https://sdk.lunarg.com/sdk/download/latest/windows/vulkan-sdk.exe"
-          $out = "$env:RUNNER_TEMP\vulkan-sdk.exe"
-
-          # Some environments need TLS 1.2 explicitly
-          [Net.ServicePointManager]::SecurityProtocol = [Net.SecurityProtocolType]::Tls12
-
-          Write-Host "Downloading Vulkan SDK from $url to $out"
-          Start-BitsTransfer -Source $url -Destination $out
-
-          Write-Host "Installing Vulkan SDK..."
-          & $out --root "C:\VulkanSDK" --accept-licenses --default-answer --confirm-command install
-
-          "VULKAN_SDK=C:\VulkanSDK" | Out-File -FilePath $Env:GITHUB_ENV -Encoding utf8 -Append
-          "PATH=C:\VulkanSDK\Bin;$Env:PATH" | Out-File -FilePath $Env:GITHUB_ENV -Encoding utf8 -Append
+          MODEL_S3_BUCKET: ${{ secrets.MODEL_S3_BUCKET }}
+        with:
+          platform: ${{ matrix.platform }}
+          arch: ${{ matrix.arch }}
+          aws-role-to-assume: ${{ secrets.AWS_OIDC_ROLE_ARN }}
+          aws-region: eu-central-1
 
       - if: ${{ matrix.platform == 'android' }}
         name: Configure runner for cross compilation - android
@@ -355,17 +248,6 @@ jobs:
       - name: Install npm dependencies
         working-directory: ${{ inputs.workdir }}
         run: npm install
-
-      - name: Create vcpkg cache location
-        run: mkdir -p vcpkg/cache
-
-      - name: Get vcpkg cache
-        id: cache-vcpkg
-        uses: actions/cache@668228422ae6a00e4ad889ee87cd7109ec5666a7 # 5.0.4
-        with:
-          key: ${{ matrix.platform }}-${{ matrix.arch }}-${{ hashFiles(format('{0}/vcpkg.json', inputs.workdir), format('{0}/vcpkg-configuration.json', inputs.workdir), format('{0}/vcpkg/ports/**', inputs.workdir)) }}
-          path: vcpkg/cache
-          restore-keys: ${{ matrix.platform }}-${{ matrix.arch }}-
 
       - if: ${{ inputs.vk-profiling }}
         name: Enable vulkan profiling
@@ -443,97 +325,3 @@ jobs:
           name: prebuilds
           path: prebuilds
 
-  publish-gpr:
-    needs: [prebuild, merge]
-    if: ${{ inputs.publish_target == 'gpr'
-      || inputs.publish_target == 'both'
-      || (
-          (github.event_name == 'workflow_dispatch' || github.event_name == 'workflow_call' || github.event_name == 'push')
-          && (inputs.publish_target == '' || inputs.publish_target == null)
-          && (
-            github.ref_name == 'main'
-            || startsWith(github.ref_name, 'feature-')
-            || startsWith(github.ref_name, 'tmp-')
-            || (inputs.ref != '' && (
-                  inputs.ref == 'refs/heads/main'
-                  || startsWith(inputs.ref, 'refs/heads/feature-')
-                  || startsWith(inputs.ref, 'refs/heads/tmp-')
-                ))
-          )
-        ) }}
-    continue-on-error: true
-    outputs:
-      published_version: ${{ steps.publish.outputs.npm_published_version }}
-    runs-on: ubuntu-latest
-    environment: release
-    permissions:
-      contents: write
-      packages: write
-    steps:
-      - name: Checkout repository
-        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # 6.0.2
-        with:
-          repository: ${{ inputs.repository || github.repository }}
-          ref: ${{ inputs.ref || github.ref }}
-          token: ${{ secrets.PAT_TOKEN }}
-
-      - name: Download prebuild artifacts
-        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # 8.0.1
-        with:
-          name: prebuilds
-          path: ${{ env.WORKDIR }}/prebuilds
-
-      - name: Publish to GitHub Package Registry
-        id: publish
-        uses: tetherto/qvac-devops/.github/actions/publish-library-to-gpr@v1.1.7
-        with:
-          secret-token: ${{ secrets.GITHUB_TOKEN }}
-          tag: ${{ inputs.tag || github.event.inputs.tag || 'dev' }}
-          name-suffix: "-mono"
-          workdir:  ${{ env.WORKDIR }}
-
-  publish-npm:
-    needs: [prebuild, merge]
-    if: ${{ inputs.publish_target == 'npm'
-        || inputs.publish_target == 'both'
-        || (
-            (github.event_name == 'workflow_dispatch' || github.event_name == 'workflow_call' || github.event_name == 'push')
-            && (inputs.publish_target == '' || inputs.publish_target == null)
-            && (
-              startsWith(github.ref_name, 'release-')
-              || (inputs.ref != '' && startsWith(inputs.ref, 'refs/heads/release-'))
-            )
-          ) }}
-    continue-on-error: false
-    outputs:
-      published_version: ${{ steps.publish.outputs.npm_published_version }}
-    runs-on: ubuntu-latest
-    environment: release
-    permissions:
-      contents: write
-      packages: write
-    steps:
-      - name: Checkout repository
-        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # 6.0.2
-        with:
-          repository: ${{ inputs.repository || github.repository }}
-          ref: ${{ inputs.ref || github.ref }}
-          token: ${{ secrets.PAT_TOKEN }}
-
-      - name: Download prebuild artifacts
-        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # 8.0.1
-        with:
-          name: prebuilds
-          path: ${{ env.WORKDIR }}/prebuilds
-
-      - name: Publish to NPM Package Registry
-        id: publish
-        uses: tetherto/qvac-devops/.github/actions/publish-library-to-npm@v1.1.7
-        with:
-          secret-token: ${{ secrets.NPM_TOKEN }}
-          tag: "latest"
-          workdir: ${{ env.WORKDIR }}
-          repo_name: "llamacpp-embed"
-          git-token: ${{ secrets.GITHUB_TOKEN }}
-          create-tag: "false"
-          

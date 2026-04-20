@@ -1,7 +1,6 @@
 'use strict'
 
 const LlamaClient = require('../../index')
-const FilesystemDL = require('@qvac/dl-filesystem')
 const process = require('bare-process')
 const path = require('bare-path')
 const fs = require('bare-fs')
@@ -52,17 +51,9 @@ async function main () {
   const trainDatasetPath = './examples/input/small_train_HF.jsonl'
   const evalDatasetPath = './examples/input/small_eval_HF.jsonl'
 
-  const loader = new FilesystemDL({ dirPath: modelDir })
+  const modelPath = path.join(modelDir, modelName)
 
   const { logger: filteredLogger, restore: restoreConsole } = createFilteredLogger()
-
-  const args = {
-    loader,
-    opts: { stats: true },
-    logger: filteredLogger,
-    diskPath: modelDir,
-    modelName
-  }
 
   const config = {
     device: 'gpu',
@@ -76,7 +67,12 @@ async function main () {
   try {
     console.log('=== Multiple Pause/Resume Finetuning Test ===\n')
     console.log('Loading model...')
-    client = new LlamaClient(args, config)
+    client = new LlamaClient({
+      files: { model: [modelPath] },
+      config,
+      logger: filteredLogger,
+      opts: { stats: true }
+    })
 
     await client.load()
     console.log('Model loaded successfully\n')

@@ -56,6 +56,10 @@ function transformEmbedConfig(embedConfig: EmbedConfig): GGMLConfig {
     config.verbosity = `${embedConfig.verbosity}`;
   }
 
+  if (embedConfig.openclCacheDir) {
+    config.openclCacheDir = embedConfig.openclCacheDir;
+  }
+
   return config;
 }
 

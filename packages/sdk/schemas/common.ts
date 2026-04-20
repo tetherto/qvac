@@ -19,6 +19,8 @@ import {
   unloadModelResponseSchema,
 } from "./unload-model";
 import {
+  transcribeRequestSchema,
+  transcribeResponseSchema,
   transcribeStreamRequestSchema,
   transcribeStreamResponseSchema,
 } from "./transcription";
@@ -55,6 +57,11 @@ import {
   diffusionStreamResponseSchema,
 } from "./sdcpp-config";
 import {
+  finetuneRequestSchema,
+  finetuneResponseSchema,
+  finetuneProgressResponseSchema,
+} from "./finetune";
+import {
   pluginInvokeRequestSchema,
   pluginInvokeResponseSchema,
   pluginInvokeStreamRequestSchema,
@@ -68,6 +75,8 @@ import {
   modelRegistryGetModelRequestSchema,
   modelRegistryGetModelResponseSchema,
 } from "./registry";
+import { suspendRequestSchema, suspendResponseSchema } from "./suspend";
+import { resumeRequestSchema, resumeResponseSchema } from "./resume";
 
 export const requestSchema = z.union([
   heartbeatRequestSchema,
@@ -75,6 +84,7 @@ export const requestSchema = z.union([
   downloadAssetRequestSchema,
   completionStreamRequestSchema,
   unloadModelRequestSchema,
+  transcribeRequestSchema,
   transcribeStreamRequestSchema,
   loggingStreamRequestSchema,
   embedRequestSchema,
@@ -88,11 +98,14 @@ export const requestSchema = z.union([
   getModelInfoRequestSchema,
   ocrStreamRequestSchema,
   diffusionStreamRequestSchema,
+  finetuneRequestSchema,
   pluginInvokeRequestSchema,
   pluginInvokeStreamRequestSchema,
   modelRegistryListRequestSchema,
   modelRegistrySearchRequestSchema,
   modelRegistryGetModelRequestSchema,
+  suspendRequestSchema,
+  resumeRequestSchema,
 ]);
 
 export const responseSchema = z.discriminatedUnion("type", [
@@ -102,6 +115,7 @@ export const responseSchema = z.discriminatedUnion("type", [
   completionStreamResponseSchema,
   unloadModelResponseSchema,
   modelProgressUpdateSchema,
+  transcribeResponseSchema,
   transcribeStreamResponseSchema,
   loggingStreamResponseSchema,
   embedResponseSchema,
@@ -117,11 +131,15 @@ export const responseSchema = z.discriminatedUnion("type", [
   getModelInfoResponseSchema,
   ocrStreamResponseSchema,
   diffusionStreamResponseSchema,
+  finetuneResponseSchema,
+  finetuneProgressResponseSchema,
   pluginInvokeResponseSchema,
   pluginInvokeStreamResponseSchema,
   modelRegistryListResponseSchema,
   modelRegistrySearchResponseSchema,
   modelRegistryGetModelResponseSchema,
+  suspendResponseSchema,
+  resumeResponseSchema,
 ]);
 
 export const rpcOptionsSchema = z.object({

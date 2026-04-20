@@ -4,6 +4,7 @@ export const modelInfoGet: TestDefinition = {
   testId: "model-info-get",
   params: { modelConstant: "LLAMA_3_2_1B_INST_Q4_0" },
   expectation: { validation: "type", expectedType: "string" },
+  suites: ["smoke"],
   metadata: { category: "model-info", dependency: "llm", estimatedDurationMs: 5000 },
 };
 
@@ -25,6 +26,7 @@ export const modelInfoPersistsAfterUnload: TestDefinition = {
   testId: "model-info-persists-after-unload",
   params: { modelConstant: "LLAMA_3_2_1B_INST_Q4_0" },
   expectation: { validation: "type", expectedType: "string" },
+  suites: ["smoke"],
   metadata: { category: "model-info", dependency: "llm", estimatedDurationMs: 5000 },
 };
 
