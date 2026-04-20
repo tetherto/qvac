@@ -1,0 +1,229 @@
+name: cpp-lint
+
+on:
+  workflow_call:
+    inputs:
+      sha:
+        required: true
+        description: "Base branch SHA or name to diff against"
+        type: string
+      pr_head_sha:
+        required: false
+        description: "PR head SHA (optional)"
+        type: string
+      workdir:
+        default: "."
+        type: string
+
+env:
+  LLVM_VERSION: "19"
+  LLVM_PACKAGES: "clang clang-format clang-tidy lld libc++-dev libc++abi-dev"
+  VULKAN_SDK_VERSION: "1.4.328.1"
+
+jobs:
+  cpp-lint:
+    runs-on: ai-run-linux
+    env:
+      VCPKG_BINARY_SOURCES: "clear;files,${{ github.workspace }}/vcpkg/cache,readwrite"
+      WORKDIR: ${{ inputs.workdir }}
+    environment: release
+    steps:
+      - name: Maximize build space
+        run: |
+          sudo docker image prune --all --force
+          sudo rm -rf /opt/hostedtoolcache/CodeQL
+          sudo rm -rf /opt/ghc
+          sudo rm -rf /usr/share/dotnet
+
+      - name: Get runner image version
+        id: runner-image
+        run: echo "version=${ImageVersion}" >> $GITHUB_OUTPUT
+
+      - name: Cache Vulkan SDK
+        id: cache-vulkan
+        uses: actions/cache@v4
+        with:
+          path: ~/vulkan
+          key: vulkan-sdk-${{ env.VULKAN_SDK_VERSION }}-${{ steps.runner-image.outputs.version }}
+
+      - name: Compute LLVM cache key
+        id: llvm-key
+        run: echo "hash=$(echo '${{ env.LLVM_VERSION }} ${{ env.LLVM_PACKAGES }}' | sha256sum | cut -d' ' -f1 | head -c 12)" >> $GITHUB_OUTPUT
+
+      - name: Cache LLVM packages
+        id: cache-llvm
+        uses: actions/cache@v4
+        with:
+          path: ~/llvm-debs
+          key: llvm-debs-${{ env.LLVM_VERSION }}-${{ steps.runner-image.outputs.version }}-${{ steps.llvm-key.outputs.hash }}
+
+      - name: Setup LLVM apt repository
+        run: |
+          wget -qO- https://apt.llvm.org/llvm-snapshot.gpg.key | sudo tee /etc/apt/trusted.gpg.d/apt.llvm.org.asc > /dev/null
+          echo "deb http://apt.llvm.org/noble/ llvm-toolchain-noble-${{ env.LLVM_VERSION }} main" | sudo tee /etc/apt/sources.list.d/llvm.list
+          sudo apt-get update
+
+      - name: Download LLVM packages (cache miss)
+        if: steps.cache-llvm.outputs.cache-hit != 'true'
+        env:
+          DEBIAN_FRONTEND: noninteractive
+        run: |
+          mkdir -p ~/llvm-debs
+          cd ~/llvm-debs
+          VERSIONED=""
+          for pkg in ${{ env.LLVM_PACKAGES }}; do
+            if [[ "$pkg" == *-dev ]]; then
+              VERSIONED="$VERSIONED ${pkg%-dev}-${{ env.LLVM_VERSION }}-dev"
+            else
+              VERSIONED="$VERSIONED ${pkg}-${{ env.LLVM_VERSION }}"
+            fi
+          done
+          apt-get download $(apt-cache depends --recurse --no-recommends --no-suggests \
+            --no-conflicts --no-breaks --no-replaces --no-enhances \
+            $VERSIONED | grep "^\w" | sort -u)
+
+      - name: Install LLVM packages (from cache or download)
+        env:
+          DEBIAN_FRONTEND: noninteractive
+        run: |
+          sudo dpkg -i ~/llvm-debs/*.deb 2>/dev/null || true
+          sudo apt-get install -f -y --no-install-recommends
+
+      - name: Setup LLVM paths
+        run: |
+          echo "/usr/lib/llvm-${{ env.LLVM_VERSION }}/bin" >> $GITHUB_PATH
+          clang-format-${{ env.LLVM_VERSION }} --version
+
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          submodules: recursive
+          repository: ${{ github.event.pull_request.head.repo.full_name }}
+          ref: ${{ github.event.pull_request.head.ref }}
+
+      - name: Configure git
+        run: git config --global --add url."https://${{ secrets.PAT_TOKEN }}:x-oauth-basic@github.com/".insteadOf "git@github.com:"
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: "18.x"
+
+      - name: Restore npm cache
+        id: cache-npm
+        uses: actions/cache@v4
+        with:
+          path: ~/.npm
+          key: npm-${{ runner.os }}-${{ hashFiles(format('{0}/package-lock.json', inputs.workdir), format('{0}/package.json', inputs.workdir)) }}
+          restore-keys: |
+            npm-${{ runner.os }}-
+
+      - name: Configure npm registries
+        shell: bash
+        working-directory: ${{ env.WORKDIR }}
+        run: |
+          # @tetherto/* from GitHub Packages
+          echo "@tetherto:registry=https://npm.pkg.github.com/" >> .npmrc
+          echo "//npm.pkg.github.com/:_authToken=${{ secrets.PAT_TOKEN }}" >> .npmrc
+
+          git config --global url."https://${{ secrets.PAT_TOKEN }}:@github.com/".insteadOf "https://github.com/"
+
+      - name: Install npm dependencies
+        shell: bash
+        working-directory: ${{ env.WORKDIR }}
+        run: npm install
+
+      - name: Configure vcpkg
+        id: configure_vcpkg
+        run: echo "VCPKG_ROOT=$VCPKG_INSTALLATION_ROOT" >> $GITHUB_ENV
+
+      - name: Create vcpkg cache location
+        id: create_vcpkg_cache
+        run: mkdir -p vcpkg/cache
+
+      - name: Get vcpkg cache
+        id: cache-vcpkg
+        uses: actions/cache@v4
+        with:
+          path: vcpkg/cache
+          key: vcpkg-linux-x64-${{ hashFiles('vcpkg.json', 'vcpkg-configuration.json', 'vcpkg/ports/**') }}
+          restore-keys: |
+            vcpkg-linux-x64-
+
+      - name: Install bare-make
+        id: install_bare_make
+        run: npm install -g bare-make
+
+      - name: Install Vulkan SDK (if not cached)
+        if: steps.cache-vulkan.outputs.cache-hit != 'true'
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends xz-utils
+          wget -O /tmp/vulkansdk.tar.xz https://sdk.lunarg.com/sdk/download/${{ env.VULKAN_SDK_VERSION }}/linux/vulkansdk-linux-x86_64-${{ env.VULKAN_SDK_VERSION }}.tar.xz
+          mkdir -p ~/vulkan
+          cd ~/vulkan
+          tar xf /tmp/vulkansdk.tar.xz
+          rm /tmp/vulkansdk.tar.xz
+
+      - name: Configure Vulkan SDK environment
+        run: |
+          VULKAN_SDK=~/vulkan/${{ env.VULKAN_SDK_VERSION }}/x86_64
+          echo "VULKAN_SDK=$VULKAN_SDK" >> $GITHUB_ENV
+          echo "PATH=$VULKAN_SDK/bin:$PATH" >> $GITHUB_ENV
+          echo "LD_LIBRARY_PATH=$VULKAN_SDK/lib${LD_LIBRARY_PATH:+:$LD_LIBRARY_PATH}" >> $GITHUB_ENV
+          echo "VK_ADD_LAYER_PATH=$VULKAN_SDK/share/vulkan/explicit_layer.d" >> $GITHUB_ENV
+          echo "PKG_CONFIG_PATH=$VULKAN_SDK/share/pkgconfig:$VULKAN_SDK/lib/pkgconfig${PKG_CONFIG_PATH:+:$PKG_CONFIG_PATH}" >> $GITHUB_ENV
+
+      - name: Generate build system
+        id: bare_make_generate
+        working-directory: ${{ env.WORKDIR }}
+        run: bare-make generate
+
+      - name: Check C++ files format
+        id: cpp_files_fmt
+        continue-on-error: true
+        run: |
+          TARGET_SHA=${{ inputs.sha }}
+          if ! git-clang-format-${{ env.LLVM_VERSION }} --extensions c,cc,cpp,cxx,h,hh,hpp,hxx --diff "$TARGET_SHA" -- "${{ inputs.workdir }}"; then
+            echo "::error title=Unformatted C++ files::Please format your C++ files with 'git-clang-format-${{ env.LLVM_VERSION }} --extensions c,cc,cpp,cxx,h,hh,hpp,hxx $TARGET_SHA -- ${{ inputs.workdir }}'"
+            exit 1
+          fi
+
+      - name: Run C++ clang-tidy
+        id: run_cpp_clang_tidy
+        shell: bash
+        working-directory: ${{ env.WORKDIR }}
+        run: |
+          read -r -a tidy_cmd < <($(find build -name clang-tidy-helper.py) build/compile_commands.json --clang-tidy-cmd)
+          echo "Running: ${tidy_cmd[*]}"
+          if "${tidy_cmd[@]}"; then
+            echo "OK: clang-tidy passed without errors."
+          else
+            echo "::error title=Static analysis failed::clang-tidy found issues."
+          fi
+
+      - name: Build
+        id: bare_make_build
+        if: steps.bare_make_generate.outcome == 'success'
+        continue-on-error: true
+        working-directory: ${{ env.WORKDIR }}
+        run: bare-make build
+
+      - name: Run C++ tests
+        id: run_cpp_tests
+        if: steps.bare_make_build.outcome == 'success'
+        continue-on-error: true
+        working-directory: ${{ env.WORKDIR }}
+        run: bare-make test
+
+      - name: Check for errors
+        run: |
+          count=0
+          if [ "${{ steps.cpp_files_fmt.outcome }}" = "failure" ]; then
+            echo "::error::Step - Check C++ files format failed"
+            count=$((count + 1))
+          fi
+          if [ $count -gt 0 ]; then
+            echo "::error::There were $count failed checks"
+            exit 1
+          fi

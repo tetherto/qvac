@@ -51,7 +51,7 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - name: Run Sanity checks
-        uses: tetherto/oss-actions/.github/actions/sanity-checks@4c64bed91fc8eba3a201adb1495e61b4c1a2246d
+        uses: ./.github/actions/sanity-checks
         with:
           secret-token: ${{ secrets.GITHUB_TOKEN }}
           pat-token: ${{ secrets.PAT_TOKEN }}
@@ -70,7 +70,7 @@ jobs:
 
   cpp-lint:
     if: needs.authorize.outputs.allowed == 'true'
-    uses: tetherto/oss-actions/.github/workflows/cpp-lint.yaml@v1.1.0
+    uses: ./.github/workflows/cpp-lint.yaml
     needs: authorize
     secrets: inherit
     with:
@@ -162,7 +162,7 @@ jobs:
         ts-checks,
       ]
     if: always()
-    uses: tetherto/oss-actions/.github/workflows/public-pr.yml@v1.1.0
+    uses: ./.github/workflows/public-pr.yml
     permissions:
       contents: read
       pull-requests: write
