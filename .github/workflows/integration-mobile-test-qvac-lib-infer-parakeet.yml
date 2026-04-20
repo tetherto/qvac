@@ -16,6 +16,16 @@ on:
         type: string
         required: false
         default: "packages/qvac-lib-infer-parakeet"
+      test_subdir:
+        description: "Relative path to the mobile test directory inside the package"
+        type: string
+        required: false
+        default: "test/mobile"
+      extract_rtf_results:
+        description: "Extract structured RTF benchmark results from Device Farm logs"
+        type: boolean
+        required: false
+        default: false
   workflow_dispatch:
     inputs:
       ref:
@@ -33,6 +43,16 @@ on:
         type: string
         required: false
         default: "packages/qvac-lib-infer-parakeet"
+      test_subdir:
+        description: "Relative path to the mobile test directory inside the package"
+        type: string
+        required: false
+        default: "test/mobile"
+      extract_rtf_results:
+        description: "Extract structured RTF benchmark results from Device Farm logs"
+        type: boolean
+        required: false
+        default: false
 
 env:
   NODE_VERSION: "lts/*"
@@ -42,6 +62,7 @@ env:
   APP_BUNDLE_ID: "io.tether.test.qvac"
   WORKDIR: ${{ inputs.workdir || github.event.inputs.workdir || 'packages/qvac-lib-infer-parakeet' }}
   ADDON_DIR: addon/${{ inputs.workdir || github.event.inputs.workdir || 'packages/qvac-lib-infer-parakeet' }}
+  TEST_SOURCE_DIR: ${{ inputs.test_subdir || github.event.inputs.test_subdir || 'test/mobile' }}
   TEST_FRAMEWORK_DIR: test-framework
 
 jobs:
@@ -267,30 +288,30 @@ jobs:
         run: |
           echo "Verifying addon has mobile tests..."
 
-          if [ ! -d "test/mobile" ]; then
-            echo "ERROR: test/mobile directory not found!"
+          if [ ! -d "${{ env.TEST_SOURCE_DIR }}" ]; then
+            echo "ERROR: ${{ env.TEST_SOURCE_DIR }} directory not found!"
             echo ""
             echo "This workflow requires the addon to have mobile tests at:"
-            echo "  test/mobile/"
+            echo "  ${{ env.TEST_SOURCE_DIR }}"
             echo ""
             echo "Please create this directory with your test files."
             echo "See qvac-test-addon-mobile README for test file format."
             exit 1
           fi
 
-          CJS_COUNT=$(find test/mobile -name "*.cjs" -type f | wc -l)
+          CJS_COUNT=$(find "${{ env.TEST_SOURCE_DIR }}" -name "*.cjs" -type f | wc -l)
           if [ "$CJS_COUNT" -eq 0 ]; then
-            echo "ERROR: No .cjs test files found in test/mobile!"
+            echo "ERROR: No .cjs test files found in ${{ env.TEST_SOURCE_DIR }}!"
             exit 1
           fi
 
           echo "Mobile test files found:"
-          ls -la test/mobile/*.cjs
+          ls -la "${{ env.TEST_SOURCE_DIR }}"/*.cjs
 
-          if [ -d "test/mobile/testAssets" ]; then
+          if [ -d "${{ env.TEST_SOURCE_DIR }}/testAssets" ]; then
             echo ""
             echo "Test assets found:"
-            ls -lah test/mobile/testAssets/
+            ls -lah "${{ env.TEST_SOURCE_DIR }}/testAssets/"
           else
             echo ""
             echo "No testAssets directory (this is optional)"
@@ -309,7 +330,7 @@ jobs:
           npm install
 
       - name: Validate mobile tests are up-to-date
-        if: github.event_name != 'workflow_dispatch'
+        if: github.event_name != 'workflow_dispatch' && env.TEST_SOURCE_DIR == 'test/mobile'
         working-directory: ${{ env.ADDON_DIR }}
         run: npm run test:mobile:validate
         continue-on-error: true
@@ -348,7 +369,7 @@ jobs:
           echo "Building test app with addon..."
           echo "This will:"
           echo "  1. Install the addon package"
-          echo "  2. Extract test code from addon's test/mobile/ directory"
+          echo "  2. Extract test code from addon's ${{ env.TEST_SOURCE_DIR }}/ directory"
           echo "  3. Auto-detect and order test files by dependencies"
           echo "  4. Generate backend.cjs with test functions"
           echo "  5. Generate e2e tests for each test function"
@@ -357,7 +378,7 @@ jobs:
           echo ""
 
           ADDON_PATH="${GITHUB_WORKSPACE}/${{ env.ADDON_DIR }}"
-          npm run build "$ADDON_PATH" "$ADDON_PATH/test/mobile"
+          npm run build "$ADDON_PATH" "$ADDON_PATH/${{ env.TEST_SOURCE_DIR }}"
 
           echo ""
           echo "Test app built successfully"
@@ -1467,6 +1488,21 @@ jobs:
           echo "📦 All downloaded logs:"
           echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
           find "$LOG_DIR" -type f -exec ls -lh {} \; 2>/dev/null || echo "  (no logs downloaded)"
+
+      - name: Extract mobile RTF results
+        if: always() && steps.schedule_run.outputs.run_arn_1 && inputs.extract_rtf_results == true
+        shell: bash
+        run: |
+          node scripts/perf-report/extract-parakeet-rtf-from-logs.js "devicefarm-logs/${{ matrix.platform }}" "mobile-benchmark-results/${{ matrix.platform }}"
+
+      - name: Upload mobile RTF results
+        if: always() && steps.schedule_run.outputs.run_arn_1 && inputs.extract_rtf_results == true
+        uses: actions/upload-artifact@v4
+        with:
+          name: mobile-rtf-results-parakeet-${{ matrix.platform }}
+          path: mobile-benchmark-results/
+          retention-days: 30
+          if-no-files-found: ignore
 
       - name: Upload Device Farm Logs
         if: always() && steps.schedule_run.outputs.run_arn_1

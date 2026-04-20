@@ -1,5 +1,7 @@
 'use strict'
 
+/* global Bare */
+
 const path = require('bare-path')
 const fs = require('bare-fs')
 const { pathToFileURL } = require('bare-url')
@@ -27,4 +29,3 @@ async function runIntegrationModule (relativeModulePath, options = {}) {
 }
 
 global.runIntegrationModule = runIntegrationModule
-

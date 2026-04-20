@@ -26,6 +26,10 @@ async function runCorruptedModelTest (options = {}) { // eslint-disable-line no-
   return runIntegrationModule('../integration/corrupted-model.test.js', options)
 }
 
+async function runExternalDataStagingTest (options = {}) { // eslint-disable-line no-unused-vars
+  return runIntegrationModule('../integration/external-data-staging.test.js', options)
+}
+
 async function runIndividualFilePathsTest (options = {}) { // eslint-disable-line no-unused-vars
   return runIntegrationModule('../integration/individual-file-paths.test.js', options)
 }
