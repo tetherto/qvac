@@ -1,6 +1,7 @@
 'use strict'
 
 const test = require('brittle')
+const path = require('bare-path')
 const os = require('bare-os')
 const proc = require('bare-process')
 const binding = require('../../binding')
@@ -55,26 +56,24 @@ async function setupModel (t) {
     downloadUrl: MODEL.url
   })
 
-  const model = new ImgStableDiffusion(
-    {
-      logger: console,
-      diskPath: modelDir,
-      modelName
+  const model = new ImgStableDiffusion({
+    files: {
+      model: path.join(modelDir, modelName)
     },
-    {
+    config: {
       device: useCpu ? 'cpu' : 'gpu',
       vae_on_cpu: isAndroid,
       threads: 4,
       prediction: 'v',
       verbosity: '2'
-    }
-  )
+    },
+    logger: console
+  })
 
   await model.load()
 
   t.teardown(async () => {
     await model.unload().catch(() => {})
-    try { binding.releaseLogger() } catch (_) {}
   })
 
   return { model, modelDir }
@@ -197,6 +196,30 @@ test('cancel | run: can run again after cancel', { timeout: testTimeout }, async
 
   t.ok(images.length > 0, 'can run again after cancel')
   saveGeneratedImages(modelDir, 'cancel-run-second-response', images)
+})
+
+test('run() before load() throws clear initialization error', { timeout: 60000 }, async t => {
+  const [, modelDir] = await ensureModel({
+    modelName: MODEL.name,
+    downloadUrl: MODEL.url
+  })
+
+  const model = new ImgStableDiffusion({
+    files: { model: path.join(modelDir, MODEL.name) },
+    config: { device: useCpu ? 'cpu' : 'gpu', threads: 4 },
+    logger: console,
+    opts: { stats: true }
+  })
+
+  let caught = null
+  try {
+    await model.run(SHORT_PARAMS)
+  } catch (err) {
+    caught = err
+  }
+
+  t.ok(caught, 'run() before load() throws')
+  t.ok(/load\(\) first/i.test(caught?.message || ''), 'error message instructs to call load() first')
 })
 
 // Keep event loop alive briefly to let pending async operations complete.

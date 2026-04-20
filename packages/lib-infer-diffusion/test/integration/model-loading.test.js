@@ -1,6 +1,7 @@
 'use strict'
 
 const test = require('brittle')
+const path = require('bare-path')
 const os = require('bare-os')
 const proc = require('bare-process')
 
@@ -37,10 +38,12 @@ test('model loading - load and unload', { timeout: testTimeout }, async t => {
   }
 
   const addon = new ImgStableDiffusion({
-    modelName: downloadedModelName,
-    diskPath: modelDir,
+    files: {
+      model: path.join(modelDir, downloadedModelName)
+    },
+    config,
     logger: console
-  }, config)
+  })
 
   await addon.load()
   t.pass('model loaded successfully')
