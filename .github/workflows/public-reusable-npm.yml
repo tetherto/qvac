@@ -1,0 +1,154 @@
+name: General Library CI/CD Workflow
+# Shared by multiple projects
+
+on:
+  workflow_call:
+    inputs:
+      debug_mode:
+        required: false
+        type: boolean
+        default: false # DEBUG MODE ENABLED
+      caller_event_name:
+        description: "Event name from the calling workflow"
+        required: false
+        type: string
+      workdir:
+        required: false
+        type: string
+        default: "."
+      repo_name:
+        description: "repo suffix name appended to created git tag"
+        required: false
+        type: string
+      git-token:
+        description: "PAT with contents:write to create and push git tags"
+        required: false
+        type: string
+    outputs:
+      published_version:
+        description: "The version published to npm (empty if skipped)"
+        value: ${{ jobs.push-event.outputs.npm_published_version }}
+      publish_skipped:
+        description: "true if publish was skipped, else false"
+        value: ${{ jobs.push-event.outputs.npm_publish_skipped }}
+
+jobs:
+  pull-request-event:
+    runs-on: ubuntu-latest
+    environment: release
+    if: github.event_name == 'pull_request' || github.event_name == 'pull_request_target' || inputs.debug_mode
+    permissions:
+      contents: read
+      packages: write
+    steps:
+      - name: Echo Step
+        run: |
+          echo "Processing ${{ github.event_name }} event"
+          echo "PR Number: ${{ github.event.pull_request.number }}"
+          echo "PR Title: ${{ github.event.pull_request.title }}"
+          echo "repository: ${{ github.event.pull_request.head.repo.full_name }}"
+          echo "ref: ${{ github.event.pull_request.head.ref }}"
+          echo "workdir: ${{ inputs.workdir }}"
+
+      - uses: actions/checkout@v4
+        with:
+          token: ${{ secrets.PAT_TOKEN }}
+          repository: ${{ github.event.pull_request.head.repo.full_name }}
+          ref: ${{ github.event.pull_request.head.ref }}
+
+      - name: Enable Socket Firewall Guard
+        uses: ./.github/actions/sfw-guard
+        with:
+          firewall-mode: firewall-free
+          clear-caches: "false"
+          managers: npm,pip,pip3,uv,cargo
+          workdir: ${{ inputs.workdir }}
+
+      - name: Run lint and unit tests
+        uses: ./.github/actions/run-lint-and-unit-tests
+        with:
+          gpr-token: ${{ secrets.GITHUB_TOKEN }}
+          npm-token: ${{ secrets.NPM_TOKEN }}
+          pat-token: ${{ secrets.PAT_TOKEN }}
+          workdir: ${{ inputs.workdir }}
+
+      - name: Run integration tests if labeled
+        if: contains(github.event.pull_request.labels.*.name, 'verify')
+        uses: ./.github/actions/run-lint-and-integration-tests
+        with:
+          gpr-token: ${{ secrets.GITHUB_TOKEN }}
+          npm-token: ${{ secrets.NPM_TOKEN }}
+          pat-token: ${{ secrets.PAT_TOKEN }}
+          workdir: ${{ inputs.workdir }}
+
+      - name: Check for disallowed dependencies
+        working-directory: ${{ inputs.workdir }}
+        run: |
+          deps=$(jq -r '[.dependencies // {}, .devDependencies // {}] | add | to_entries[] | .value' package.json)
+          if echo "$deps" | grep -Eq '^(git\+https:\/\/github.com|[0-9]+\.[0-9]+\.[0-9]+-(dev|tmp)[^"]*)$'; then
+            echo "::error title=Disallowed dependency detected::Do not use git URLs or dev/tmp versions in dependencies"
+            exit 1
+          fi
+
+      - name: Check for @qvac/ prefix in package name
+        working-directory: ${{ inputs.workdir }}
+        run: |
+          PACKAGE_NAME=$(node -p "require('./package.json').name")
+          
+          # Allow @qvac/* scoped packages
+          if [[ "$PACKAGE_NAME" == @qvac/* ]]; then
+            echo "✅ Package name is scoped: $PACKAGE_NAME"
+            exit 0
+          fi
+          
+          # Allow specific unscoped packages
+          ALLOWED_UNSCOPED=("qvac")
+          for allowed in "${ALLOWED_UNSCOPED[@]}"; do
+            if [[ "$PACKAGE_NAME" == "$allowed" ]]; then
+              echo "✅ Package name is allowed unscoped: $PACKAGE_NAME"
+              exit 0
+            fi
+          done
+          
+          echo "::error title=Invalid package name::Package name must be @qvac/* or an allowed unscoped"
+          exit 1
+
+      - name: Call Publish NPM Action
+        uses: ./.github/actions/publish-library-to-npm
+        with:
+          secret-token: ${{ secrets.NPM_TOKEN }}
+          tag: "dev"
+          workdir: ${{ inputs.workdir }}
+          repo_name: ${{ inputs.repo_name }}
+          git-token: ${{ secrets.GITHUB_TOKEN }}
+
+  push-event:
+    runs-on: ubuntu-latest
+    environment: release
+    if: github.event_name == 'push' || inputs.caller_event_name == 'workflow_dispatch' || inputs.debug_mode
+    outputs:
+      npm_published_version: ${{ steps.publish-npm.outputs.npm_published_version }}
+      npm_publish_skipped: ${{ steps.publish-npm.outputs.npm_publish_skipped }}
+    permissions:
+      contents: write
+      packages: write
+      id-token: write
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Enable Socket Firewall Guard
+        uses: ./.github/actions/sfw-guard
+        with:
+          firewall-mode: firewall-free
+          clear-caches: "false"
+          managers: npm,pip,pip3,uv,cargo
+          workdir: ${{ inputs.workdir }}
+
+      - name: Publish to NPM
+        id: publish-npm
+        uses: ./.github/actions/publish-library-to-npm
+        with:
+          secret-token: ${{ secrets.NPM_TOKEN }}
+          workdir: ${{ inputs.workdir }}
+          repo_name: ${{ inputs.repo_name }}
+          git-token: ${{ secrets.GITHUB_TOKEN }}

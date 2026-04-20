@@ -230,7 +230,7 @@ jobs:
           echo "//npm.pkg.github.com/:_authToken=${{ secrets.GITHUB_TOKEN }}" >> ~/.npmrc
 
       - name: Publish to GitHub Package Registry
-        uses: tetherto/oss-actions/.github/actions/publish-library-to-gpr@v1.1.0
+        uses: ./.github/actions/publish-library-to-gpr
         with:
           secret-token: ${{ secrets.GITHUB_TOKEN }}
           workdir: ${{ env.PKG_DIR }}/shared
@@ -404,7 +404,7 @@ jobs:
           echo "//registry.npmjs.org/:_authToken=${{ secrets.NPM_TOKEN }}" >> ~/.npmrc
 
       - name: Publish to GitHub Package Registry
-        uses: tetherto/oss-actions/.github/actions/publish-library-to-gpr@v1.1.0
+        uses: ./.github/actions/publish-library-to-gpr
         with:
           secret-token: ${{ secrets.GITHUB_TOKEN }}
           workdir: ${{ env.PKG_DIR }}/client
