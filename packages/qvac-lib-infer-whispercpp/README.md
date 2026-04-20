@@ -206,6 +206,18 @@ This command runs the complete build sequence:
 2. `bare-make build` - Compiles the native C++ addon
 3. `bare-make install` - Installs the built addon
 
+#### Building with Vulkan GPU Acceleration
+
+On Linux, Android, and Windows, Vulkan support can be enabled at build time. Ensure the [Vulkan SDK](#gpu-acceleration-optional) is installed, then pass `-D ENABLE_VULKAN=ON` during the generate step:
+
+```bash
+bare-make generate -D ENABLE_VULKAN=ON
+bare-make build
+bare-make install
+```
+
+CI prebuilds for Linux, Android, and Windows include Vulkan by default. macOS and iOS use Metal instead.
+
 #### Running Tests
 
 After building, you can run the test suite:
