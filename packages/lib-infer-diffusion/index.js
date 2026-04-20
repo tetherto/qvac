@@ -229,6 +229,16 @@ class ImgStableDiffusion extends BaseInference {
    * @returns {Promise<QvacResponse>}
    */
   async _runInternal (params) {
+    // ── Dimension validation ────────────────────────────────────────────────
+    const alignTo = 8
+    if ((params.width % alignTo !== 0) || (params.height % alignTo !== 0)) {
+      throw new Error(
+        `width and height must be multiples of ${alignTo}. ` +
+        `Got: ${params.width}x${params.height}. ` +
+        `Use ${Math.round(params.width / alignTo) * alignTo}x${Math.round(params.height / alignTo) * alignTo} instead.`
+      )
+    }
+
     // ── init_image / init_images validation ────────────────────────────────
     const hasInitImages =
       Array.isArray(params.init_images) && params.init_images.length > 0
@@ -247,6 +257,14 @@ class ImgStableDiffusion extends BaseInference {
       throw new Error(
         'init_image must be a Uint8Array (e.g. fs.readFileSync("image.png")). ' +
         'Got: ' + typeof params.init_image
+      )
+    }
+
+    // Multi-image: check array is not empty.
+    if (params.init_images != null && Array.isArray(params.init_images) && params.init_images.length === 0) {
+      throw new Error(
+        'init_images must not be an empty array. ' +
+        'Pass at least one reference image or use init_image for single-image mode.'
       )
     }
 
@@ -276,6 +294,26 @@ class ImgStableDiffusion extends BaseInference {
           'Other architectures (SD1.x, SD2.x, SDXL, SD3, single-image FLUX) do not support ' +
           '@image1/@imageN in-context references.'
         )
+      }
+
+      // Validate increase_ref_index parameter.
+      if (params.increase_ref_index != null) {
+        if (typeof params.increase_ref_index !== 'boolean') {
+          throw new Error(
+            'increase_ref_index must be a boolean. ' +
+            'Got: ' + typeof params.increase_ref_index
+          )
+        }
+      }
+
+      // Validate auto_resize_ref_image parameter.
+      if (params.auto_resize_ref_image != null) {
+        if (typeof params.auto_resize_ref_image !== 'boolean') {
+          throw new Error(
+            'auto_resize_ref_image must be a boolean. ' +
+            'Got: ' + typeof params.auto_resize_ref_image
+          )
+        }
       }
 
       // Prompt sanity-check: warn (not throw) if the prompt never mentions
@@ -308,6 +346,22 @@ class ImgStableDiffusion extends BaseInference {
         `stable-diffusion: entering "fusion" mode — ${params.init_images.length} reference images ` +
         '(FLUX2 in-context conditioning via ref_images). ' +
         'Generation will attend to every referenced @imageN in the prompt.'
+      )
+    }
+
+    // Validate increase_ref_index outside of fusion context (error if used).
+    if (params.increase_ref_index != null && !hasInitImages) {
+      throw new Error(
+        'increase_ref_index is only valid with init_images (multi-reference fusion). ' +
+        'Your params do not include init_images.'
+      )
+    }
+
+    // Validate auto_resize_ref_image outside of fusion context (error if used).
+    if (params.auto_resize_ref_image != null && !params.init_image && !hasInitImages) {
+      throw new Error(
+        'auto_resize_ref_image can only be used with init_image or init_images. ' +
+        'No reference images provided.'
       )
     }
 
@@ -366,3 +420,4 @@ class ImgStableDiffusion extends BaseInference {
 }
 
 module.exports = ImgStableDiffusion
+module.exports.alignImageDimensions = require('./lib/image-utils').alignImageDimensions
