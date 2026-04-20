@@ -26,6 +26,7 @@ function buildSentenceEndTester (opts) {
   if (opts.sentenceDelimiter instanceof RegExp) {
     const re = opts.sentenceDelimiter
     return function testCustom (buffer) {
+      re.lastIndex = 0
       return re.test(buffer)
     }
   }

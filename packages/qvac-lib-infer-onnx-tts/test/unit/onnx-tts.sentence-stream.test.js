@@ -2,6 +2,7 @@
 
 const test = require('brittle')
 const sinon = require('sinon')
+const { buildSentenceEndTester } = require('../../lib/textStreamAccumulator.js')
 const ONNXTTS = require('../../index.js')
 const { TTSInterface } = require('../../tts.js')
 const MockedBinding = require('../mock/MockedBinding.js')
@@ -121,6 +122,28 @@ test('runStreaming maxBufferScalars 0 falls back to default (no infinite loop)',
   const response = await model.runStreaming(oneBig(), { maxBufferScalars: 0 })
   await response.await()
   t.is(runJobSpy.callCount, 1, '250 graphemes under default max ~300 → one job')
+  runJobSpy.restore()
+})
+
+test('buildSentenceEndTester resets global delimiter lastIndex before each test', (t) => {
+  const delimiter = /[.!?]\s*$/g
+  const testEnd = buildSentenceEndTester({ sentenceDelimiter: delimiter })
+  t.ok(testEnd('A.'))
+  t.ok(testEnd('B.'), 'second buffer must match from lastIndex 0 (global /g otherwise sticks)')
+})
+
+test('runStreaming custom sentenceDelimiter with /g still flushes each fragment', async (t) => {
+  const runJobSpy = sinon.spy(MockedBinding.prototype, 'runJob')
+  const model = createStubbedModel()
+  await model.load()
+  const delimiter = /[.!?]\s*$/g
+  async function * parts () {
+    yield 'A.'
+    yield 'B.'
+  }
+  const response = await model.runStreaming(parts(), { sentenceDelimiter: delimiter })
+  await response.await()
+  t.is(runJobSpy.callCount, 2)
   runJobSpy.restore()
 })
 
