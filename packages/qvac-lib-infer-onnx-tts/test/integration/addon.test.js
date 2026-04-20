@@ -4,7 +4,7 @@ const test = require('brittle')
 const os = require('bare-os')
 const path = require('bare-path')
 const { loadChatterboxTTS, runChatterboxTTS, runChatterboxTTSWithSplit } = require('../utils/runChatterboxTTS')
-const { loadSupertonicTTS, runSupertonicTTS, runSupertonicStream } = require('../utils/runSupertonicTTS')
+const { loadSupertonicTTS, runSupertonicTTS, runSupertonicStream, runSupertonicStreaming } = require('../utils/runSupertonicTTS')
 const { ensureChatterboxModels, ensureSupertonicModels, ensureSupertonicModelsMultilingual, ensureWhisperModel, ensureLavaSRModels } = require('../utils/downloadModel')
 const { loadWhisper, runWhisper } = require('../utils/runWhisper')
 const { lavasrEnhancerConfig, loadReferenceAudio } = require('../utils/lavasr-helpers')
@@ -452,11 +452,11 @@ test('Supertonic TTS: Basic synthesis test', { timeout: 1800000 }, async (t) => 
   console.log('='.repeat(60))
 })
 
-test('Supertonic TTS: Sentence stream (runStream + onUpdate)', { timeout: 1800000 }, async (t) => {
+test('Supertonic TTS: Output-only stream (run({ streamOutput: true }) + onUpdate)', { timeout: 1800000 }, async (t) => {
   const baseDir = getBaseDir()
   const modelDir = path.join(baseDir, 'models', 'supertonic')
 
-  console.log('\n=== Ensuring Supertonic models (sentence stream) ===')
+  console.log('\n=== Ensuring Supertonic models (output-only stream) ===')
   const downloadResult = await ensureSupertonicModels({ targetDir: modelDir })
   t.ok(downloadResult.success, 'Supertonic models should be downloaded')
   if (!downloadResult.success) {
@@ -471,7 +471,7 @@ test('Supertonic TTS: Sentence stream (runStream + onUpdate)', { timeout: 180000
     supertonicMultilingual: false
   }
 
-  console.log('\n=== Loading Supertonic TTS model (sentence stream) ===')
+  console.log('\n=== Loading Supertonic TTS model (output-only stream) ===')
   const model = await loadSupertonicTTS(modelParams)
   t.ok(model, 'Supertonic TTS model should be loaded')
 
@@ -490,7 +490,7 @@ test('Supertonic TTS: Sentence stream (runStream + onUpdate)', { timeout: 180000
     ? path.join(__dirname, '../output/supertonic-sentence-stream.wav')
     : undefined
 
-  console.log('\n=== Running Supertonic sentence stream synthesis ===')
+  console.log('\n=== Running Supertonic output-only stream synthesis ===')
   const result = await runSupertonicStream(
     model,
     {
@@ -503,13 +503,29 @@ test('Supertonic TTS: Sentence stream (runStream + onUpdate)', { timeout: 180000
   )
   console.log(result.output)
 
-  t.ok(result.passed, 'Supertonic sentence stream should pass expectations')
-  t.ok(result.data.sampleCount > 0, 'Sentence stream should produce audio samples')
-  t.is(result.data.sampleRate, SUPERTONIC_SAMPLE_RATE, 'Sentence stream sample rate is 44.1kHz')
+  t.ok(result.passed, 'Supertonic output-only stream should pass expectations')
+  t.ok(result.data.sampleCount > 0, 'Output-only stream should produce audio samples')
+  t.is(result.data.sampleRate, SUPERTONIC_SAMPLE_RATE, 'Output-only stream sample rate is 44.1kHz')
   t.ok(
     result.data.streamChunkCount >= 2,
-    'Sentence stream should run multiple native chunks (>=2)'
+    'Output-only stream splits one string into multiple native chunks (>=2)'
   )
+
+  t.is(
+    result.data.sentenceChunks.length,
+    result.data.streamChunkCount,
+    'Should collect one sentenceChunk per audio chunk'
+  )
+  const normalizedInput = text.replace(/\s+/g, ' ').trim()
+  for (let i = 0; i < result.data.sentenceChunks.length; i++) {
+    const sc = result.data.sentenceChunks[i]
+    t.ok(typeof sc === 'string' && sc.trim().length > 0, `chunk ${i} should carry non-empty sentenceChunk`)
+    const n = sc.replace(/\s+/g, ' ').trim()
+    t.ok(
+      normalizedInput.includes(n),
+      `chunk ${i} text should be a substring of the single run() input (output-only, not runStreaming)`
+    )
+  }
 
   if (result.data?.stats) {
     console.log(`Inference stats: ${JSON.stringify(result.data.stats)}`)
@@ -519,9 +535,96 @@ test('Supertonic TTS: Sentence stream (runStream + onUpdate)', { timeout: 180000
   t.pass('Model unloaded successfully')
 
   console.log('\n' + '='.repeat(60))
-  console.log('SUPERTONIC SENTENCE STREAM TEST SUMMARY')
+  console.log('SUPERTONIC OUTPUT-ONLY STREAM TEST SUMMARY')
   console.log('='.repeat(60))
   console.log(`Text: "${text}"`)
+  console.log(`Chunks: ${result.data.streamChunkCount}`)
+  console.log(`Samples: ${result.data.sampleCount}`)
+  console.log(`Duration: ${result.data.durationMs?.toFixed(0) || 'N/A'}ms`)
+  console.log('='.repeat(60))
+})
+
+test('Supertonic TTS: IO stream (runStreaming + onUpdate)', { timeout: 1800000 }, async (t) => {
+  const baseDir = getBaseDir()
+  const modelDir = path.join(baseDir, 'models', 'supertonic')
+
+  console.log('\n=== Ensuring Supertonic models (IO stream) ===')
+  const downloadResult = await ensureSupertonicModels({ targetDir: modelDir })
+  t.ok(downloadResult.success, 'Supertonic models should be downloaded')
+  if (!downloadResult.success) {
+    console.log('Failed to download Supertonic models, skipping test')
+    return
+  }
+
+  const modelParams = {
+    modelDir,
+    voiceName: 'F1',
+    language: 'en',
+    supertonicMultilingual: false
+  }
+
+  console.log('\n=== Loading Supertonic TTS model (IO stream) ===')
+  const model = await loadSupertonicTTS(modelParams)
+  t.ok(model, 'Supertonic TTS model should be loaded')
+
+  const phrases = [
+    'First phrase arrives from the upstream text stream.',
+    'A short pause could sit between chunks.',
+    'Each yield is one discrete synthesis job.'
+  ]
+
+  const expectation = {
+    minSamples: 15000,
+    maxSamples: 900000,
+    minDurationMs: 400,
+    maxDurationMs: 120000
+  }
+
+  const saveWav = !isMobile
+  const wavOutputPath = saveWav
+    ? path.join(__dirname, '../output/supertonic-io-stream.wav')
+    : undefined
+
+  console.log('\n=== Running Supertonic IO stream synthesis (runStreaming) ===')
+  const result = await runSupertonicStreaming(
+    model,
+    {
+      phrases,
+      saveWav,
+      wavOutputPath
+    },
+    expectation
+  )
+  console.log(result.output)
+
+  t.ok(result.passed, 'Supertonic IO stream should pass expectations')
+  t.ok(result.data.sampleCount > 0, 'IO stream should produce audio samples')
+  t.is(result.data.sampleRate, SUPERTONIC_SAMPLE_RATE, 'IO stream sample rate is 44.1kHz')
+  t.is(
+    result.data.streamChunkCount,
+    phrases.length,
+    'runStreaming should emit one native chunk per yielded phrase'
+  )
+  t.is(result.data.sentenceChunks.length, phrases.length)
+  for (let i = 0; i < phrases.length; i++) {
+    t.is(
+      result.data.sentenceChunks[i],
+      phrases[i],
+      `chunk ${i} sentenceChunk should match the streamed-in phrase (not sentence-split from one string)`
+    )
+  }
+
+  if (result.data?.stats) {
+    console.log(`Inference stats: ${JSON.stringify(result.data.stats)}`)
+  }
+
+  await model.unload()
+  t.pass('Model unloaded successfully')
+
+  console.log('\n' + '='.repeat(60))
+  console.log('SUPERTONIC IO STREAM TEST SUMMARY')
+  console.log('='.repeat(60))
+  console.log(`Phrases: ${phrases.length}`)
   console.log(`Chunks: ${result.data.streamChunkCount}`)
   console.log(`Samples: ${result.data.sampleCount}`)
   console.log(`Duration: ${result.data.durationMs?.toFixed(0) || 'N/A'}ms`)

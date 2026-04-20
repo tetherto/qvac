@@ -1,5 +1,7 @@
 'use strict'
 
+/** Batch TTS: `run({ input })` — single job, full audio on `onUpdate`. For streamed output from one string use `run({ input, streamOutput: true })`; for streamed text in use `runStreaming(asyncIterable)`. */
+
 const fs = require('bare-fs')
 const path = require('bare-path')
 const ONNXTTS = require('../')
