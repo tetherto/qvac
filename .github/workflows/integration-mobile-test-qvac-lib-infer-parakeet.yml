@@ -1493,7 +1493,7 @@ jobs:
         if: always() && steps.schedule_run.outputs.run_arn_1 && inputs.extract_rtf_results == true
         shell: bash
         run: |
-          node scripts/perf-report/extract-parakeet-rtf-from-logs.js "devicefarm-logs/${{ matrix.platform }}" "mobile-benchmark-results/${{ matrix.platform }}"
+          node "${{ env.ADDON_DIR }}/scripts/perf-report/extract-parakeet-rtf-from-logs.js" "devicefarm-logs/${{ matrix.platform }}" "mobile-benchmark-results/${{ matrix.platform }}"
 
       - name: Upload mobile RTF results
         if: always() && steps.schedule_run.outputs.run_arn_1 && inputs.extract_rtf_results == true
