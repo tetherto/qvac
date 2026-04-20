@@ -25,14 +25,14 @@ runs:
     - name: Setup Node.js
       uses: actions/setup-node@53b83947a5a98c8d113130e565377fae1a50d02f # 6.3.0
       with:
-        node-version: 18
+        node-version: "18.x"
 
     - name: Restore npm cache
       id: cache-npm
       uses: actions/cache@668228422ae6a00e4ad889ee87cd7109ec5666a7 # 5.0.4
       with:
-        key: npm-${{ runner.os }}-${{ hashFiles(format('{0}/package-lock.json', inputs.workdir), format('{0}/package.json', inputs.workdir)) }}
         path: ~/.npm
+        key: npm-${{ runner.os }}-${{ hashFiles(format('{0}/package-lock.json', inputs.workdir), format('{0}/package.json', inputs.workdir)) }}
         restore-keys: npm-${{ runner.os }}-
 
     - name: Configure .npmrc for both npmjs and GitHub Packages
@@ -43,16 +43,16 @@ runs:
         # Default public registry
         echo "registry=https://registry.npmjs.org/" >> .npmrc
 
-        # @qvac/* from npmjs.org
+        # @qvac/* from npmjs.org (public, auth optional)
         echo "@qvac:registry=https://registry.npmjs.org/" >> .npmrc
-        echo "//registry.npmjs.org/:_authToken=${{ inputs.npm-token }}" >> .npmrc
+        if [ -n "${{ inputs.npm-token }}" ]; then
+          echo "//registry.npmjs.org/:_authToken=${{ inputs.npm-token }}" >> .npmrc
+        fi
 
-        # @tetherto/* from GitHub Packages
-        echo "@tetherto:registry=https://npm.pkg.github.com/" >> .npmrc
-        echo "//npm.pkg.github.com/:_authToken=${{ inputs.pat-token }}" >> .npmrc
-
-        # If you use git+https deps, rewrite to include a PAT for private repos
+        # @tetherto/* from GitHub Packages (only when pat-token provided)
         if [ -n "${{ inputs.pat-token }}" ]; then
+          echo "@tetherto:registry=https://npm.pkg.github.com/" >> .npmrc
+          echo "//npm.pkg.github.com/:_authToken=${{ inputs.pat-token }}" >> .npmrc
           git config --global url."https://${{ inputs.pat-token }}:@github.com/".insteadOf "https://github.com/"
         fi
       shell: bash
@@ -73,4 +73,3 @@ runs:
       shell: bash
       run: npm run test:unit --if-present
       working-directory: ${{ inputs.workdir }}
-

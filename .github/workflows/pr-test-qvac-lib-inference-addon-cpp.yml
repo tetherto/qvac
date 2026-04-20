@@ -74,7 +74,7 @@ jobs:
           token: ${{ secrets.PAT_TOKEN }}
 
       - name: yamlfmt
-        uses: tetherto/oss-actions/.github/actions/yamlfmt@v1.1.0
+        uses: ./.github/actions/yamlfmt
         with:
           workdir: ${{ env.PKG_DIR }}
         
