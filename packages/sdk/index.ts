@@ -39,10 +39,12 @@ export {
   type ModelRegistrySearchParams,
   suspend,
   resume,
+  state,
   type FinetuneHandle,
 } from "./client/api";
 export { close } from "./client";
 export {
+  type LifecycleState,
   type ModelProgressUpdate,
   type LoadModelOptions,
   type DownloadAssetOptions,
