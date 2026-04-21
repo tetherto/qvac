@@ -252,6 +252,7 @@ jobs:
     with:
       repository: ${{ github.repository }}
       ref: ${{ github.sha }}
+      tts_integration_profile: short
 
   mobile-integration-tests:
     uses: ./.github/workflows/integration-mobile-test-qvac-lib-infer-onnx-tts.yml
