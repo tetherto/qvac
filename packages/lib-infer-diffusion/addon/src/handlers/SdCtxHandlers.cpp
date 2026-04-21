@@ -8,8 +8,8 @@ namespace qvac_lib_inference_addon_sd {
 
 using namespace qvac_errors;
 
-// ── Parse helpers
-// ─────────────────────────────────────────────────────────────
+// -- Parse helpers
+// -------------------------------------------------------------
 
 static bool parseBool(const std::string& v, const std::string& key) {
   if (v == "true" || v == "1")
@@ -41,20 +41,20 @@ static float parseFloat(const std::string& v, const std::string& key) {
   }
 }
 
-// ── Handler map
-// ───────────────────────────────────────────────────────────────
+// -- Handler map
+// ---------------------------------------------------------------
 
 const SdCtxHandlersMap SD_CTX_HANDLERS = {
 
-    // ── Compute
-    // ────────────────────────────────────────────────────────────────
+    // -- Compute
+    // ----------------------------------------------------------------
 
     {"threads",
      [](SdCtxConfig& c, const std::string& v) {
        c.nThreads = parseInt(v, "threads");
      }},
 
-    // "fa" is the CLI short-form; "flash_attn" is the long-form — both
+    // "fa" is the CLI short-form; "flash_attn" is the long-form -- both
     // accepted.
     {"fa",
      [](SdCtxConfig& c, const std::string& v) {
@@ -69,8 +69,8 @@ const SdCtxHandlersMap SD_CTX_HANDLERS = {
        c.diffusionFlashAttn = parseBool(v, "diffusion_fa");
      }},
 
-    // ── Memory management
-    // ──────────────────────────────────────────────────────
+    // -- Memory management
+    // ------------------------------------------------------
 
     {"mmap",
      [](SdCtxConfig& c, const std::string& v) {
@@ -90,8 +90,8 @@ const SdCtxHandlersMap SD_CTX_HANDLERS = {
        c.keepVaeOnCpu = parseBool(v, "vae_on_cpu");
      }},
 
-    // ── Weight precision
-    // ───────────────────────────────────────────────────────
+    // -- Weight precision
+    // -------------------------------------------------------
 
     {"type",
      [](SdCtxConfig& c, const std::string& v) {
@@ -132,8 +132,8 @@ const SdCtxHandlersMap SD_CTX_HANDLERS = {
     {"tensor_type_rules",
      [](SdCtxConfig& c, const std::string& v) { c.tensorTypeRules = v; }},
 
-    // ── Sampling RNG
-    // ───────────────────────────────────────────────────────────
+    // -- Sampling RNG
+    // -----------------------------------------------------------
 
     {"rng",
      [](SdCtxConfig& c, const std::string& v) {
@@ -164,12 +164,12 @@ const SdCtxHandlersMap SD_CTX_HANDLERS = {
                  "'");
      }},
 
-    // ── Prediction type
-    // ────────────────────────────────────────────────────────
-    // SD1.x  → "eps"         (epsilon prediction)
-    // SD2.x  → "v"           (v-prediction)
-    // SD3    → "flow"        (flow matching)
-    // FLUX.2 → "flux2_flow"  (FLUX.2 flow matching)
+    // -- Prediction type
+    // --------------------------------------------------------
+    // SD1.x  -> "eps"         (epsilon prediction)
+    // SD2.x  -> "v"           (v-prediction)
+    // SD3    -> "flow"        (flow matching)
+    // FLUX.2 -> "flux2_flow"  (FLUX.2 flow matching)
     // Leave unset (or "auto") to use PREDICTION_COUNT sentinel for
     // auto-detection.
 
@@ -196,8 +196,8 @@ const SdCtxHandlersMap SD_CTX_HANDLERS = {
              "flux2_flow");
      }},
 
-    // ── LoRA apply mode
-    // ────────────────────────────────────────────────────────
+    // -- LoRA apply mode
+    // --------------------------------------------------------
 
     {"lora_apply_mode",
      [](SdCtxConfig& c, const std::string& v) {
@@ -213,16 +213,16 @@ const SdCtxHandlersMap SD_CTX_HANDLERS = {
              "lora_apply_mode must be 'auto', 'immediately', or 'at_runtime'");
      }},
 
-    // ── Flow matching (FLUX)
-    // ───────────────────────────────────────────────────
+    // -- Flow matching (FLUX)
+    // ---------------------------------------------------
 
     {"flow_shift",
      [](SdCtxConfig& c, const std::string& v) {
        c.flowShift = parseFloat(v, "flow_shift");
      }},
 
-    // ── Convolution optimisations
-    // ──────────────────────────────────────────────
+    // -- Convolution optimisations
+    // ----------------------------------------------
 
     {"diffusion_conv_direct",
      [](SdCtxConfig& c, const std::string& v) {
@@ -234,22 +234,22 @@ const SdCtxHandlersMap SD_CTX_HANDLERS = {
        c.vaeConvDirect = parseBool(v, "vae_conv_direct");
      }},
 
-    // ── SDXL compat
-    // ────────────────────────────────────────────────────────────
+    // -- SDXL compat
+    // ------------------------------------------------------------
 
     {"force_sdxl_vae_conv_scale",
      [](SdCtxConfig& c, const std::string& v) {
        c.forceSDXLVaeConvScale = parseBool(v, "force_sdxl_vae_conv_scale");
      }},
 
-    // ── Backend loading
-    // ────────────────────────────────────────────────────────────
+    // -- Backend loading
+    // ------------------------------------------------------------
 
     {"backendsDir",
      [](SdCtxConfig& c, const std::string& v) { c.backendsDir = v; }},
 
-    // ── Logging
-    // ────────────────────────────────────────────────────────────────
+    // -- Logging
+    // ----------------------------------------------------------------
 
     {"verbosity",
      [](SdCtxConfig& /*c*/, const std::string& v) {
@@ -259,7 +259,7 @@ const SdCtxHandlersMap SD_CTX_HANDLERS = {
 
 };
 
-// ─────────────────────────────────────────────────────────────────────────────
+// -----------------------------------------------------------------------------
 
 void applySdCtxHandlers(
     SdCtxConfig& config,

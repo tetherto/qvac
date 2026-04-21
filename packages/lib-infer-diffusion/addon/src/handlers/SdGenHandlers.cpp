@@ -11,8 +11,8 @@ namespace qvac_lib_inference_addon_sd {
 
 using namespace qvac_errors;
 
-// ── JSON value helpers
-// ────────────────────────────────────────────────────────
+// -- JSON value helpers
+// --------------------------------------------------------
 
 static double requireNum(const picojson::value& v, const std::string& key) {
   if (!v.is<double>())
@@ -29,7 +29,7 @@ requireStr(const picojson::value& v, const std::string& key) {
   return v.get<std::string>();
 }
 
-// ── Enum parsers ─────────────────────────────────────────────────────────────
+// -- Enum parsers -------------------------------------------------------------
 
 static sample_method_t parseSampler(const std::string& name) {
   static const std::unordered_map<std::string, sample_method_t> samplers{
@@ -139,13 +139,13 @@ static sd_cache_mode_t parseCacheMode(const std::string& name) {
           "cache-dit");
 }
 
-// ── Handler map
-// ───────────────────────────────────────────────────────────────
+// -- Handler map
+// ---------------------------------------------------------------
 
 const SdGenHandlersMap SD_GEN_HANDLERS = {
 
-    // ── Mode
-    // ────────────────────────────────────────────────────────────────────
+    // -- Mode
+    // --------------------------------------------------------------------
 
     {"mode",
      [](SdGenConfig& c, const picojson::value& v) {
@@ -157,8 +157,8 @@ const SdGenHandlersMap SD_GEN_HANDLERS = {
        c.mode = mode;
      }},
 
-    // ── Prompt
-    // ──────────────────────────────────────────────────────────────────
+    // -- Prompt
+    // ------------------------------------------------------------------
 
     {"prompt",
      [](SdGenConfig& c, const picojson::value& v) {
@@ -169,8 +169,8 @@ const SdGenHandlersMap SD_GEN_HANDLERS = {
        c.negativePrompt = requireStr(v, "negative_prompt");
      }},
 
-    // ── Image dimensions
-    // ────────────────────────────────────────────────────────
+    // -- Image dimensions
+    // --------------------------------------------------------
 
     {"width",
      [](SdGenConfig& c, const picojson::value& v) {
@@ -194,8 +194,8 @@ const SdGenHandlersMap SD_GEN_HANDLERS = {
        c.height = h;
      }},
 
-    // ── Sampling
-    // ────────────────────────────────────────────────────────────────
+    // -- Sampling
+    // ----------------------------------------------------------------
 
     {"steps",
      [](SdGenConfig& c, const picojson::value& v) {
@@ -225,15 +225,15 @@ const SdGenHandlersMap SD_GEN_HANDLERS = {
        c.eta = static_cast<float>(requireNum(v, "eta"));
      }},
 
-    // ── Guidance
-    // ────────────────────────────────────────────────────────────────
+    // -- Guidance
+    // ----------------------------------------------------------------
 
     {"cfg_scale",
      [](SdGenConfig& c, const picojson::value& v) {
        c.cfgScale = static_cast<float>(requireNum(v, "cfg_scale"));
      }},
 
-    // distilled_guidance — FLUX.2 specific; separate from cfg_scale.
+    // distilled_guidance -- FLUX.2 specific; separate from cfg_scale.
     // Default 3.5 is the FLUX recommendation. Too low = washed out, too high =
     // over-saturated.
     {"guidance",
@@ -241,23 +241,23 @@ const SdGenHandlersMap SD_GEN_HANDLERS = {
        c.guidance = static_cast<float>(requireNum(v, "guidance"));
      }},
 
-    // img_cfg — image guidance for img2img / inpaint workflows; -1 = use
+    // img_cfg -- image guidance for img2img / inpaint workflows; -1 = use
     // cfg_scale.
     {"img_cfg_scale",
      [](SdGenConfig& c, const picojson::value& v) {
        c.imgCfgScale = static_cast<float>(requireNum(v, "img_cfg_scale"));
      }},
 
-    // ── Reproducibility
-    // ─────────────────────────────────────────────────────────
+    // -- Reproducibility
+    // ---------------------------------------------------------
 
     {"seed",
      [](SdGenConfig& c, const picojson::value& v) {
        c.seed = static_cast<int64_t>(requireNum(v, "seed"));
      }},
 
-    // ── Batching
-    // ────────────────────────────────────────────────────────────────
+    // -- Batching
+    // ----------------------------------------------------------------
 
     {"batch_count",
      [](SdGenConfig& c, const picojson::value& v) {
@@ -268,8 +268,8 @@ const SdGenHandlersMap SD_GEN_HANDLERS = {
        c.batchCount = b;
      }},
 
-    // ── img2img
-    // ─────────────────────────────────────────────────────────────────
+    // -- img2img
+    // -----------------------------------------------------------------
 
     {"strength",
      [](SdGenConfig& c, const picojson::value& v) {
@@ -281,15 +281,15 @@ const SdGenHandlersMap SD_GEN_HANDLERS = {
        c.strength = s;
      }},
 
-    // clip_skip — skip last N CLIP layers. Used by SD1.x / SD2.x fine-tunes.
+    // clip_skip -- skip last N CLIP layers. Used by SD1.x / SD2.x fine-tunes.
     // -1 = auto (1 for SD1, 2 for SD2). Ignored for FLUX.
     {"clip_skip",
      [](SdGenConfig& c, const picojson::value& v) {
        c.clipSkip = static_cast<int>(requireNum(v, "clip_skip"));
      }},
 
-    // ── VAE tiling
-    // ──────────────────────────────────────────────────────────────
+    // -- VAE tiling
+    // --------------------------------------------------------------
 
     {"vae_tiling",
      [](SdGenConfig& c, const picojson::value& v) {
@@ -299,10 +299,10 @@ const SdGenHandlersMap SD_GEN_HANDLERS = {
        c.vaeTiling = v.get<bool>();
      }},
 
-    // ── Multi-reference (FLUX/FLUX2 fusion) ──────────────────────────────
+    // -- Multi-reference (FLUX/FLUX2 fusion) ------------------------------
     //
     // increase_ref_index: when true, every ref_image gets a distinct RoPE
-    //   index so `@image1`, `@image2`, … resolve to separate references.
+    //   index so `@image1`, `@image2`, ... resolve to separate references.
     //   Required for proper FLUX2 multi-image "fusion"; default is true in
     //   our SdGenConfig (overrides the library default of false).
     //
@@ -346,8 +346,8 @@ const SdGenHandlersMap SD_GEN_HANDLERS = {
        c.vaeTileOverlap = overlap;
      }},
 
-    // ── Step-caching
-    // ────────────────────────────────────────────────────────────
+    // -- Step-caching
+    // ------------------------------------------------------------
     // cache_mode selects the algorithm. cache_preset is a convenience shorthand
     // that sets both the mode and sensible threshold defaults.
 
@@ -356,12 +356,12 @@ const SdGenHandlersMap SD_GEN_HANDLERS = {
        c.cacheMode = parseCacheMode(requireStr(v, "cache_mode"));
      }},
 
-    // cache_preset — shorthand for "easycache + threshold".
+    // cache_preset -- shorthand for "easycache + threshold".
     {"cache_preset",
      [](SdGenConfig& c, const picojson::value& v) {
        // Approximate threshold values mirroring the stable-diffusion.cpp CLI
-       // presets:  slow ≈ 0.60 (~10% speed-up)  medium ≈ 0.40 (~25%)
-       //           fast ≈ 0.25 (~40%)            ultra  ≈ 0.15 (fastest)
+       // presets:  slow ~= 0.60 (~10% speed-up)  medium ~= 0.40 (~25%)
+       //           fast ~= 0.25 (~40%)            ultra  ~= 0.15 (fastest)
        using Preset = std::pair<sd_cache_mode_t, float>;
        static const std::unordered_map<std::string, Preset> presets{
            {"slow", {SD_CACHE_EASYCACHE, 0.60f}},
@@ -380,7 +380,7 @@ const SdGenHandlersMap SD_GEN_HANDLERS = {
        }
      }},
 
-    // cache_threshold — direct override for reuse_threshold; 0 = library
+    // cache_threshold -- direct override for reuse_threshold; 0 = library
     // default.
     {"cache_threshold",
      [](SdGenConfig& c, const picojson::value& v) {
@@ -389,7 +389,7 @@ const SdGenHandlersMap SD_GEN_HANDLERS = {
 
 };
 
-// ─────────────────────────────────────────────────────────────────────────────
+// -----------------------------------------------------------------------------
 
 void applySdGenHandlers(SdGenConfig& config, const picojson::object& obj) {
   for (const auto& [key, value] : obj) {
