@@ -209,7 +209,7 @@ jobs:
         run: sudo apt-get install libxi-dev libxtst-dev libxrandr-dev
 
       - name: Setup Vulkan SDK
-        uses: tetherto/qvac/.github/actions/setup-vulkan-sdk@0bbdca93da303a0b1634ba14a89cec085621078d
+        uses: tetherto/qvac/.github/actions/setup-vulkan-sdk@a59839387bb3d9ea828f95878afb5ffdbe199f6e
         env:
           MODEL_S3_BUCKET: ${{ secrets.MODEL_S3_BUCKET }}
         with:
