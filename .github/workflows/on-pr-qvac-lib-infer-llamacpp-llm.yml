@@ -65,6 +65,11 @@ jobs:
     needs: [authorize, verify-fabric-lockstep]
     runs-on: ubuntu-latest
     steps:
+      - name: Checkout code
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # 6.0.2
+        with:
+          fetch-depth: 0
+
       - name: Run Sanity checks
         uses: ./.github/actions/sanity-checks
         with:
@@ -117,7 +122,7 @@ jobs:
 
       - name: Run lint and unit tests
         id: run_lint_and_unit_tests
-        uses: tetherto/oss-actions/.github/actions/run-lint-and-unit-tests@4c64bed91fc8eba3a201adb1495e61b4c1a2246d
+        uses: ./.github/actions/run-lint-and-unit-tests
         with:
           gpr-token: ${{ secrets.GITHUB_TOKEN }}
           pat-token: ${{ secrets.GITHUB_TOKEN }}
