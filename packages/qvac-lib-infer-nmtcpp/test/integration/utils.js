@@ -422,12 +422,13 @@ function formatPerformanceMetrics (label, metrics, qualityOpts) {
     total_time_ms: Math.round(totalTimeMs),
     decode_time_ms: Math.round(decodeTimeMs),
     generated_tokens: generatedTokens || null,
-    tps: typeof tps === 'number' ? parseFloat(tpsValue) : null
+    tps: typeof tps === 'number' ? parseFloat(tpsValue) : null,
+    chrfpp: quality ? quality.chrfpp : null
   }, {
     execution_provider: ep,
     input: prompt || null,
     output: fullOutput || null,
-    quality: quality ? { chrfpp: quality.chrfpp, reference: quality.reference } : null
+    reference: quality ? quality.reference : null
   })
   _scheduleReportWrite()
 
