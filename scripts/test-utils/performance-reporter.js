@@ -105,6 +105,9 @@ const QUALITY_COLUMNS = {
     { key: 'wer', label: 'WER' },
     { key: 'keyword_detection_rate', label: 'Keyword Rate' },
     { key: 'key_value_accuracy', label: 'KV Accuracy' }
+  ],
+  translation: [
+    { key: 'chrfpp', label: 'chrF++' }
   ]
 }
 

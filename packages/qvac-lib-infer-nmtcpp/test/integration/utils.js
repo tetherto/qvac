@@ -344,13 +344,26 @@ function createPerformanceCollector () {
      * @returns {Object} Performance metrics
      */
     getMetrics (prompt, addonStats = {}) {
-      // Use native addon stats directly (times are in seconds, convert to milliseconds)
-      const totalTimeMs = addonStats.totalTime ? addonStats.totalTime * 1000 : 0
-      const decodeTimeMs = addonStats.decodeTime ? addonStats.decodeTime * 1000 : 0
+      // Prefer native addon stats (seconds → ms). Fall back to wall-clock
+      // timing when the addon does not populate stats (e.g. pivot translation
+      // runs two sub-models sequentially and does not aggregate their timing
+      // into response.stats). Without this fallback the reporter shows 0ms
+      // for every pivot row.
+      const now = Date.now()
+      const wallClockTotalMs = startTime ? (now - startTime) : 0
+      const wallClockDecodeMs = firstTokenTime ? (now - firstTokenTime) : 0
 
-      // Use native stats directly
+      const hasAddonTotal = typeof addonStats.totalTime === 'number' && addonStats.totalTime > 0
+      const hasAddonDecode = typeof addonStats.decodeTime === 'number' && addonStats.decodeTime > 0
+
+      const totalTimeMs = hasAddonTotal ? addonStats.totalTime * 1000 : wallClockTotalMs
+      const decodeTimeMs = hasAddonDecode ? addonStats.decodeTime * 1000 : wallClockDecodeMs
+
       const generatedTokens = addonStats.totalTokens || 0
-      const tps = addonStats.TPS || 0
+      let tps = addonStats.TPS || 0
+      if (!tps && generatedTokens > 0 && decodeTimeMs > 0) {
+        tps = (generatedTokens / decodeTimeMs) * 1000
+      }
 
       return {
         totalTime: totalTimeMs,
@@ -403,16 +416,18 @@ function formatPerformanceMetrics (label, metrics, qualityOpts) {
     }
   }
 
+  const ep = /\[gpu\]/i.test(label) ? 'gpu' : /\[cpu\]/i.test(label) ? 'cpu' : null
+
   _perfReporter.record(label, {
     total_time_ms: Math.round(totalTimeMs),
     decode_time_ms: Math.round(decodeTimeMs),
     generated_tokens: generatedTokens || null,
-    tps: typeof tps === 'number' ? parseFloat(tpsValue) : null,
-    chrfpp: quality ? quality.chrfpp : null
+    tps: typeof tps === 'number' ? parseFloat(tpsValue) : null
   }, {
+    execution_provider: ep,
     input: prompt || null,
     output: fullOutput || null,
-    reference: quality ? quality.reference : null
+    quality: quality ? { chrfpp: quality.chrfpp, reference: quality.reference } : null
   })
   _scheduleReportWrite()
 
