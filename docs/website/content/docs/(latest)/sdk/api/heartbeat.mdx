@@ -1,0 +1,61 @@
+---
+title: "heartbeat( )"
+titleStyle: code
+description: Checks if a delegated provider or the local SDK worker is responsive.
+---
+
+```ts
+function heartbeat(params?: { delegate?: DelegateBase }): Promise<HeartbeatResponse>;
+```
+
+Sends a heartbeat round-trip to verify that a delegated provider is online or that the local SDK worker is responsive. When called without arguments, checks the local worker.
+
+## Parameters
+
+| Name | Type | Required? | Description |
+| --- | --- | :---: | --- |
+| params | `object` | ✗ | Optional delegation target |
+| params.delegate | [`DelegateBase`](#delegatebase) | ✗ | The provider to check — omit to check the local worker |
+
+### `DelegateBase`
+
+| Field | Type | Required? | Description |
+| --- | --- | :---: | --- |
+| topic | `string` | ✓ | Hyperswarm topic hex string |
+| providerPublicKey | `string` | ✓ | Provider peer public key hex string |
+| timeout | `number` | ✗ | Connection timeout in milliseconds (min 100) |
+| healthCheckTimeout | `number` | ✗ | Health check timeout in milliseconds (min 100) |
+
+## Returns
+
+`Promise<HeartbeatResponse>`
+
+### `HeartbeatResponse`
+
+| Field | Type | Description |
+| --- | --- | --- |
+| type | `"heartbeat"` | Response type discriminator |
+| number | `number` | Round-trip sequence number |
+
+## Throws
+
+| Error | When |
+| --- | --- |
+| `INVALID_RESPONSE_TYPE` | Response type does not match expected `"heartbeat"` |
+
+## Examples
+
+```typescript
+// Check if a delegated provider is online
+try {
+  await heartbeat({
+    delegate: { topic: "topicHex", providerPublicKey: "peerHex", timeout: 3000 },
+  });
+  console.log("Provider is online");
+} catch {
+  console.log("Provider is offline");
+}
+
+// Check if the local SDK worker is responsive
+await heartbeat();
+```

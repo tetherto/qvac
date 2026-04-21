@@ -1,7 +1,7 @@
 'use strict'
 
 const LlmLlamacpp = require('../index')
-const FilesystemDL = require('@qvac/dl-filesystem')
+const path = require('bare-path')
 const process = require('bare-process')
 const { downloadModel } = require('./utils')
 
@@ -80,17 +80,8 @@ async function main () {
     'Qwen3-1.7B-Q4_0.gguf'
   )
 
-  // 2. Initializing data loader
-  const fsDL = new FilesystemDL({ dirPath })
-
-  // 3. Configuring model settings
-  const args = {
-    loader: fsDL,
-    opts: { stats: true },
-    logger: console,
-    diskPath: dirPath,
-    modelName
-  }
+  // 2. Configuring model settings
+  const modelPath = path.join(dirPath, modelName)
 
   const config = {
     device: 'gpu',
@@ -99,12 +90,17 @@ async function main () {
     tools: 'true'
   }
 
-  // 4. Loading model
-  const model = new LlmLlamacpp(args, config)
+  // 3. Loading model
+  const model = new LlmLlamacpp({
+    files: { model: [modelPath] },
+    config,
+    logger: console,
+    opts: { stats: true }
+  })
   await model.load()
 
   try {
-    // 5. Defining tool queries with function schemas
+    // 4. Defining tool queries with function schemas
     const systemMessageAmbiguous = {
       role: 'system',
       content: 'You are a helpful assistant with access to various tools. If request is ambiguous,skip tool calls.'
@@ -276,7 +272,7 @@ async function main () {
       }
     ]
 
-    // 6. Running tool calling queries
+    // 5. Running tool calling queries
     const queries = [
       { name: 'Query 1: Complex tool calling with multiple parameters', prompt: toolQuery1 },
       { name: 'Query 2: Math calculation and ambiguous query', prompt: toolQuery2 },
@@ -296,9 +292,8 @@ async function main () {
     console.error('Error occurred:', errorMessage)
     console.error('Error details:', error)
   } finally {
-    // 7. Cleaning up resources
+    // 6. Cleaning up resources
     await model.unload()
-    await fsDL.close()
   }
 }
 

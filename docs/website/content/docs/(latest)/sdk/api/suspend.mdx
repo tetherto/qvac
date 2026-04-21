@@ -1,0 +1,34 @@
+---
+title: "suspend( )"
+titleStyle: code
+description: Suspends all active Hyperswarm and Corestore resources.
+---
+
+```ts
+function suspend(): Promise<void>;
+```
+
+Suspends all active Hyperswarm and Corestore resources. Idempotent — calling while already suspended is a no-op.
+
+Typically used in mobile apps when the application moves to the background, paired with [`resume()`](./resume) when it returns to the foreground.
+
+## Parameters
+
+None.
+
+## Returns
+
+`Promise<void>`
+
+## Throws
+
+| Error | When |
+| --- | --- |
+| `INVALID_RESPONSE_TYPE` | Response type does not match expected `"suspend"` |
+| `LIFECYCLE_SUSPEND_FAILED` | One or more resources failed to suspend (partial failure) |
+
+## Example
+
+```typescript
+await suspend();
+```

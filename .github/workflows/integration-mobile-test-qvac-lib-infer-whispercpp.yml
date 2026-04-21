@@ -1381,12 +1381,17 @@ jobs:
           RUN_ARN_2="${{ steps.schedule_run.outputs.run_arn_2 }}"
           RUN_COUNT="${{ steps.schedule_run.outputs.run_count }}"
           LOG_DIR="devicefarm-logs/${{ matrix.platform }}"
+          PLATFORM="${{ matrix.platform }}"
           mkdir -p "$LOG_DIR"
 
           echo ""
           echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
           echo "📥 DOWNLOADING DEVICE FARM LOGS"
           echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+          echo ""
+          if [ "$PLATFORM" = "Android" ]; then
+            echo "ℹ️  Skipping video artifacts on Android to reduce artifact size."
+          fi
           echo ""
 
           RUN_ARNS=("$RUN_ARN_1")
@@ -1429,6 +1434,13 @@ jobs:
                   ART_EXT=$(echo "$ARTIFACT" | jq -r '.extension // "txt"')
                   [ -z "$ART_URL" ] && continue
 
+                  if [ "$PLATFORM" = "Android" ]; then
+                    if echo "$ART_NAME" | grep -qiE "^video$" || echo "$ART_EXT" | grep -qiE "^mp4$"; then
+                      echo "  Skipped (video): $SUITE_NAME / $ART_NAME"
+                      continue
+                    fi
+                  fi
+
                   SAFE_ART=$(echo "$ART_NAME" | tr ' /' '__' | tr -cd '[:alnum:]_-')
                   DEST="$LOG_DIR/${SAFE_RUN}_${SAFE_NAME}_${SAFE_SUITE}_${SAFE_ART}.${ART_EXT}"
 
@@ -1467,6 +1479,13 @@ jobs:
                 ART_URL=$(echo "$ARTIFACT" | jq -r '.url // empty')
                 ART_EXT=$(echo "$ARTIFACT" | jq -r '.extension // "txt"')
                 [ -z "$ART_URL" ] && continue
+
+                if [ "$PLATFORM" = "Android" ]; then
+                  if echo "$ART_NAME" | grep -qiE "^video$" || echo "$ART_EXT" | grep -qiE "^mp4$"; then
+                    echo "  Skipped (video): job-level / $ART_NAME"
+                    continue
+                  fi
+                fi
 
                 SAFE_ART=$(echo "$ART_NAME" | tr ' /' '__' | tr -cd '[:alnum:]_-')
                 DEST="$LOG_DIR/${SAFE_RUN}_${SAFE_NAME}_job_${SAFE_ART}.${ART_EXT}"

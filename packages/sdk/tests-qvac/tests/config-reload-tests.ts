@@ -25,6 +25,7 @@ export const configReloadInvalidModelId: TestDefinition = {
   testId: "config-reload-invalid-model-id",
   params: { invalidModelId: "0000000000000000" },
   expectation: { validation: "throws-error", errorContains: "" },
+  suites: ["smoke"],
   metadata: { category: "config-reload", dependency: "whisper", estimatedDurationMs: 5000 },
 };
 
@@ -39,6 +40,7 @@ export const configReloadThenTranscribe: TestDefinition = {
   testId: "config-reload-then-transcribe",
   params: { audioFileName: "transcription-short-wav.wav", newLanguage: "en" },
   expectation: { validation: "type", expectedType: "string" },
+  suites: ["smoke"],
   metadata: { category: "config-reload", dependency: "whisper", estimatedDurationMs: 30000 },
 };
 

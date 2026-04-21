@@ -6,6 +6,7 @@ const createAfriquegemmaTest = (
   to: string,
   expectation: Expectation,
   opts: { from?: string; estimatedDurationMs?: number } = {},
+  suites?: string[],
 ): TestDefinition => ({
   testId,
   params: {
@@ -15,6 +16,7 @@ const createAfriquegemmaTest = (
     ...(opts.from && { from: opts.from }),
   },
   expectation,
+  ...(suites && { suites }),
   metadata: {
     category: "translation-afriquegemma",
     dependency: "afriquegemma",
@@ -36,6 +38,7 @@ export const afriquegemmSwEn = createAfriquegemmaTest(
   "en",
   { validation: "contains-any", contains: ["hello", "how", "are", "you", "today", "news"] },
   { from: "sw" },
+  ["smoke"],
 );
 
 export const afriquegemmaStreaming: TestDefinition = {

@@ -1,0 +1,34 @@
+---
+title: "resume( )"
+titleStyle: code
+description: Resumes all suspended Hyperswarm and Corestore resources.
+---
+
+```ts
+function resume(): Promise<void>;
+```
+
+Resumes all suspended Hyperswarm and Corestore resources. Idempotent — calling while already active is a no-op. Also serves as the recovery path after a partial suspend failure.
+
+Typically used in mobile apps when the application returns to the foreground, paired with [`suspend()`](./suspend) when it moves to the background.
+
+## Parameters
+
+None.
+
+## Returns
+
+`Promise<void>`
+
+## Throws
+
+| Error | When |
+| --- | --- |
+| `INVALID_RESPONSE_TYPE` | Response type does not match expected `"resume"` |
+| `LIFECYCLE_RESUME_FAILED` | One or more resources failed to resume |
+
+## Example
+
+```typescript
+await resume();
+```

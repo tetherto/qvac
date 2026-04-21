@@ -4,6 +4,7 @@ export const kvCacheDeleteAll: TestDefinition = {
   testId: "kv-cache-delete-all",
   params: { deleteAll: true },
   expectation: { validation: "type", expectedType: "string" },
+  suites: ["smoke"],
   metadata: { category: "kv-cache", dependency: "none", estimatedDurationMs: 10000 },
 };
 
@@ -48,6 +49,7 @@ export const kvCacheSlidingWindow: TestDefinition = {
     kvCache: "test-sliding-window-session",
   },
   expectation: { validation: "type", expectedType: "string" },
+  suites: ["smoke"],
   metadata: { category: "kv-cache", dependency: "llm", estimatedDurationMs: 30000 },
 };
 
@@ -90,6 +92,7 @@ export const kvCacheStreamingSlidingWindow: TestDefinition = {
     kvCache: "streaming-sliding-window-session",
   },
   expectation: { validation: "contains-any", contains: ["14"] },
+  suites: ["smoke"],
   metadata: { category: "kv-cache", dependency: "llm", estimatedDurationMs: 35000 },
 };
 
@@ -185,6 +188,7 @@ export const kvCacheStatsVerification: TestDefinition = {
     stream: false,
   },
   expectation: { validation: "type", expectedType: "string" },
+  suites: ["smoke"],
   metadata: { category: "kv-cache", dependency: "llm", estimatedDurationMs: 30000 },
 };
 

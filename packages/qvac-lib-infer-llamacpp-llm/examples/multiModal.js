@@ -1,7 +1,7 @@
 'use strict'
 
 const LlmLlamacpp = require('../index')
-const FilesystemDL = require('@qvac/dl-filesystem')
+const path = require('bare-path')
 const fs = require('bare-fs')
 const process = require('bare-process')
 const { downloadModel } = require('./utils')
@@ -16,23 +16,13 @@ async function main () {
     'SmolVLM2-500M-Video-Instruct-Q8_0.gguf'
   )
 
-  const [projectionModel] = await downloadModel(
+  const [projModelName] = await downloadModel(
     'https://huggingface.co/ggml-org/SmolVLM2-500M-Video-Instruct-GGUF/resolve/main/mmproj-SmolVLM2-500M-Video-Instruct-Q8_0.gguf',
     'mmproj-SmolVLM2-500M-Video-Instruct-Q8_0.gguf'
   )
 
-  // 2. Initializing data loader
-  const fsDL = new FilesystemDL({ dirPath })
-
-  // 3. Configuring model settings
-  const args = {
-    loader: fsDL,
-    opts: { stats: true },
-    logger: console,
-    diskPath: dirPath,
-    modelName,
-    projectionModel
-  }
+  // 2. Configuring model settings
+  const modelPath = path.join(dirPath, modelName)
 
   const config = {
     device: 'gpu',
@@ -40,16 +30,21 @@ async function main () {
     ctx_size: '2048'
   }
 
-  // 4. Loading model
-  const model = new LlmLlamacpp(args, config)
+  // 3. Loading model
+  const model = new LlmLlamacpp({
+    files: { model: [modelPath], projectionModel: path.join(dirPath, projModelName) },
+    config,
+    logger: console,
+    opts: { stats: true }
+  })
   await model.load()
 
-  // 5. Preparing media. We will use both the path and the buffer in different inferences
+  // 4. Preparing media. We will use both the path and the buffer in different inferences
   const imageFilePath = 'media/news-paper.jpg'
   const imageBuffer = new Uint8Array(fs.readFileSync(imageFilePath))
 
   try {
-    // 6. First inference with image buffer
+    // 5. First inference with image buffer (Uint8Array)
     const messages1 = [
       {
         role: 'system',
@@ -81,7 +76,7 @@ async function main () {
     console.log(`Inference stats: ${JSON.stringify(response1.stats)}`)
     console.log('\n')
 
-    // 7. Second inference with image file path
+    // 6. Second inference with image file path (string)
     const messages2 = [
       {
         role: 'system',
@@ -94,7 +89,7 @@ async function main () {
       },
       {
         role: 'user',
-        content: 'what is in the image?'
+        content: 'Describe the image in one sentence.'
       }
     ]
 
@@ -117,9 +112,8 @@ async function main () {
     console.error('Error occurred:', errorMessage)
     console.error('Error details:', error)
   } finally {
-    // 8. Cleaning up resources
+    // 7. Cleaning up resources
     await model.unload()
-    await fsDL.close()
   }
 }
 

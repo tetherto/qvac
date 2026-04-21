@@ -23,10 +23,12 @@ const createCompletionTest = (
         expectedType: "string" | "number" | "array";
       },
   estimatedDurationMs: number = 10000,
+  suites?: string[],
 ): TestDefinition => ({
   testId,
   params,
   expectation,
+  ...(suites && { suites }),
   metadata: { category: "completion", dependency: "llm", estimatedDurationMs },
 });
 
@@ -40,6 +42,8 @@ export const completionStreaming = createCompletionTest(
     stream: true,
   },
   { validation: "contains-all", contains: ["4"] },
+  10000,
+  ["smoke"],
 );
 
 export const completionEmptyPrompt = createCompletionTest(
@@ -50,6 +54,7 @@ export const completionEmptyPrompt = createCompletionTest(
   },
   { validation: "type", expectedType: "string" },
   5000,
+  ["smoke"],
 );
 
 export const completionMultiTurn = createCompletionTest(
@@ -67,6 +72,8 @@ export const completionMultiTurn = createCompletionTest(
     stream: false,
   },
   { validation: "contains-all", contains: ["42"] },
+  10000,
+  ["smoke"],
 );
 
 export const completionSpecialChars: TestDefinition = {
@@ -98,6 +105,7 @@ export const completionTemperature00 = createCompletionTest(
   },
   { validation: "contains-all", contains: ["10"] },
   8000,
+  ["smoke"],
 );
 
 export const completionTemperature05 = createCompletionTest(
@@ -169,6 +177,7 @@ export const completionTopP01 = createCompletionTest(
   },
   { validation: "contains-all", contains: ["1", "2", "3", "4", "5"] },
   8000,
+  ["smoke"],
 );
 
 export const completionTopP05 = createCompletionTest(
@@ -418,6 +427,7 @@ export const completionConcurrentRequests = createCompletionTest(
   { history: [{ role: "user", content: "What is 3 + 3?" }], stream: false },
   { validation: "contains-all", contains: ["6"] },
   15000,
+  ["smoke"],
 );
 
 export const completionRepeatedTokens = createCompletionTest(
@@ -456,6 +466,8 @@ export const completionJsonFormat = createCompletionTest(
     stream: false,
   },
   { validation: "contains-all", contains: ["25", "{", "}"] },
+  10000,
+  ["smoke"],
 );
 
 export const completionCodeGeneration = createCompletionTest(
@@ -496,6 +508,8 @@ export const completionQaFromContext = createCompletionTest(
     stream: false,
   },
   { validation: "contains-all", contains: ["blue"] },
+  10000,
+  ["smoke"],
 );
 
 export const completionSimpleYesNo: TestDefinition = {

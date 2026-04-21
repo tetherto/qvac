@@ -359,6 +359,14 @@ jobs:
           cp test/images/english.bmp "$ASSETS_DIR/english.bmp"
           cp test/images/french.bmp "$ASSETS_DIR/french.bmp"
           cp test/images/lab_results.png "$ASSETS_DIR/lab_results.png"
+          cp test/images/liver_function_test.png "$ASSETS_DIR/liver_function_test.png"
+          cp test/images/clinical_chemistry.png "$ASSETS_DIR/clinical_chemistry.png"
+          cp test/images/ct_scan_report.png "$ASSETS_DIR/ct_scan_report.png"
+          # Ground truth files for quality metrics (CER, WER, keyword detection, KV accuracy)
+          cp test/quality/lab_results.quality.json "$ASSETS_DIR/lab_results.quality.json"
+          cp test/quality/liver_function_test.quality.json "$ASSETS_DIR/liver_function_test.quality.json"
+          cp test/quality/clinical_chemistry.quality.json "$ASSETS_DIR/clinical_chemistry.quality.json"
+          cp test/quality/ct_scan_report.quality.json "$ASSETS_DIR/ct_scan_report.quality.json"
           echo "✅ Test assets copied"
           ls -la "$ASSETS_DIR/"
 
@@ -958,42 +966,65 @@ jobs:
             exit 1
           fi
 
+      - name: Define WDIO Config
+        id: wdio_config
+        run: |
+          if [ "${{ matrix.platform }}" == "Android" ]; then
+            BID="${{ env.APP_BUNDLE_ID }}"
+            cat > /tmp/wdio-config.js << 'WDIO_EOF'
+          exports.config={runner:"local",hostname:"127.0.0.1",port:4723,path:"/wd/hub",specs:["*.spec.js","*.test.js"],maxInstances:1,bail:0,capabilities:[{platformName:"Android","appium:automationName":"UiAutomator2","appium:appPackage":"__BUNDLE_ID__","appium:appActivity":"__BUNDLE_ID__.MainActivity","appium:newCommandTimeout":300,"appium:autoGrantPermissions":true,"appium:autoAcceptAlerts":true,"appium:noReset":true,"appium:dontStopAppOnReset":true,"appium:forceAppLaunch":false}],logLevel:"debug",waitforTimeout:120000,connectionRetryTimeout:30000,connectionRetryCount:3,services:[],framework:"mocha",reporters:["spec"],mochaOpts:{ui:"bdd",timeout:1800000,grep:"__MOCHA_GREP__"},before:async function(capabilities,specs,browser){const BUNDLE_ID="__BUNDLE_ID__";const TEST_FILTER="__TEST_FILTER__";global.appCrashed=false;global.checkAppCrash=async(stage)=>{try{const state=await browser.queryAppState(BUNDLE_ID);console.log("["+stage+"] App state: "+state+" (4=foreground,3=background,1=not running)");if(state<3){console.error("\n APP CRASHED at "+stage+"! State="+state);console.error("Check device logs for BareKit/native errors.\n");global.appCrashed=true;process.exit(1);}return state;}catch(e){console.log("["+stage+"] queryAppState error: "+e.message);return-1;}};console.log("Checking initial app state...");await global.checkAppCrash("startup");console.log("Waiting for app to initialize...");await browser.pause(5000);await global.checkAppCrash("after-pause");const initText=await browser.$("android=new UiSelector().textContains(\"INITIALIZED\")");await initText.waitForDisplayed({timeout:60000});await global.checkAppCrash("after-init");if(TEST_FILTER!=="__TEST_FILTER__"){try{const b64=Buffer.from(TEST_FILTER).toString("base64");await browser.pushFile("/data/local/tmp/testFilter.txt",b64);console.log("Pushed test filter: "+TEST_FILTER);}catch(e){console.log("pushFile failed: "+e.message);}}console.log("App initialized, clicking Run Automated Tests...");const button=await browser.$("android=new UiSelector().textContains(\"Run Automated Tests\")");await button.waitForDisplayed({timeout:15000});await button.click();console.log("Button clicked!");await browser.pause(5000);await global.checkAppCrash("after-click");},afterTest:async function(test,context,{error}){if(global.appCrashed)return;await global.checkAppCrash("after-test:"+test.title);},after:async function(){console.log("[perf-extract] Starting extraction...");var BID="__BUNDLE_ID__";var pollShellPaths=["/sdcard/Android/data/"+BID+"/files/perf-report.json","/storage/emulated/0/Android/data/"+BID+"/files/perf-report.json","/data/local/tmp/perf-report.json","/tmp/perf-report.json","/data/data/"+BID+"/files/perf-report.json","/data/user/0/"+BID+"/files/perf-report.json"];var lastCnt=0;var stableCnt=0;var pollJson=null;for(var pw=0;pw<48;pw++){var pHit=false;for(var pp=0;pp<pollShellPaths.length;pp++){try{var sr=await browser.execute("mobile: shell",{command:"cat",args:[pollShellPaths[pp]]});if(sr&&sr.length>10){var si2=sr.indexOf("{");if(si2>=0){var sj=sr.substring(si2);try{var sd=JSON.parse(sj);var cnt=sd.results?sd.results.length:0;console.log("[perf-extract] poll "+pw+": "+cnt+" results from "+pollShellPaths[pp]);if(cnt>0&&cnt===lastCnt){stableCnt++;}else{stableCnt=0;}lastCnt=cnt;pollJson=sj;pHit=true;break;}catch(pje){}}}}catch(se){}}if(!pHit&&pw%6===5){console.log("[perf-extract] poll "+pw+": no file found yet, still waiting...");}if(stableCnt>=6)break;await new Promise(function(r){setTimeout(r,5000);});}console.log("[perf-extract] poll done: "+lastCnt+" results (stable="+stableCnt+")");var outDir=process.env.DEVICEFARM_LOG_DIR||process.env.DEVICEFARM_TEST_PACKAGE_PATH||".";var outFile=outDir+"/perf-report-extract.json";var rj=pollJson;if(rj){console.log("[perf-extract] using poll result ("+lastCnt+" results, "+rj.length+"b)");}var paths=["@"+BID+"/files/perf-report.json","/sdcard/Android/data/"+BID+"/files/perf-report.json","/storage/emulated/0/Android/data/"+BID+"/files/perf-report.json","/data/user/0/"+BID+"/files/perf-report.json","/data/user/0/"+BID+"/cache/perf-report.json","/data/data/"+BID+"/files/perf-report.json","/data/data/"+BID+"/cache/perf-report.json","/tmp/perf-report.json","/data/local/tmp/perf-report.json"];for(var i=0;i<paths.length;i++){try{var b64=await browser.pullFile(paths[i]);var json=Buffer.from(b64,"base64").toString();if(json.length>10&&json[0]==="{"){console.log("[perf-extract] pullFile OK: "+paths[i]+" ("+json.length+"b)");rj=json;break;}console.log("[perf-extract] "+paths[i]+": not JSON ("+json.length+"b)");}catch(e){console.log("[perf-extract] "+paths[i]+": "+e.message);}}if(!rj){console.log("[perf-extract] pullFile failed, trying logcat...");try{var logs=await browser.getLogs("logcat");console.log("[perf-extract] logcat: "+logs.length+" entries");var all=logs.map(function(e){return(e&&e.message)||""}).join("\n");var si=all.lastIndexOf("[PERF_REPORT_START]");if(si>=0){var js=si+"[PERF_REPORT_START]".length;var ei=all.indexOf("[PERF_REPORT_END]",js);if(ei>=0){var raw=all.substring(js,ei).trim();try{JSON.parse(raw);rj=raw;console.log("[perf-extract] logcat OK ("+raw.length+"b)");}catch(pe){console.log("[perf-extract] logcat parse fail: "+pe.message);}}else{console.log("[perf-extract] logcat: START but no END");}}else{console.log("[perf-extract] logcat: no markers");}if(!rj){var cm={};for(var li=0;li<logs.length;li++){var msg=(logs[li]&&logs[li].message)||"";msg=msg.replace(/^'\[Bare\]',\s*'/,"").replace(/'$/,"");var lm=msg.match(/\[PERF_CHUNK:([^:]+):(\d+):(\d+)\](.+)/);if(lm){var cid=lm[1],cix=parseInt(lm[2],10),ctot=parseInt(lm[3],10),cd=lm[4];if(!cm[cid])cm[cid]={t:ctot,c:{}};if(!cm[cid].c[cix]||cd.length>cm[cid].c[cix].length)cm[cid].c[cix]=cd;}}var ck=Object.keys(cm);for(var ki=0;ki<ck.length;ki++){var ce=cm[ck[ki]];if(Object.keys(ce.c).length===ce.t){var cj="";for(var ci2=0;ci2<ce.t;ci2++)cj+=ce.c[ci2];cj=cj.replace(/[^\x20-\x7e\u00a0-\uffff]/g,"");var fb=cj.indexOf("{");if(fb>0)cj=cj.substring(fb);try{JSON.parse(cj);rj=cj;console.log("[perf-extract] logcat chunks OK ("+cj.length+"b)");break;}catch(pe4){console.log("[perf-extract] chunk set "+ck[ki]+": parse fail: "+pe4.message);}}}}if(!rj&&ck.length>0){console.log("[perf-extract] logcat: found "+ck.length+" chunk sets but reassembly failed");}}catch(le){console.log("[perf-extract] getLogs error: "+le.message);}}if(!rj){console.log("[perf-extract] trying mobile:shell...");var sp=["/sdcard/Android/data/"+BID+"/files/perf-report.json","/storage/emulated/0/Android/data/"+BID+"/files/perf-report.json","/data/data/"+BID+"/files/perf-report.json","/data/user/0/"+BID+"/files/perf-report.json","/data/local/tmp/perf-report.json","/tmp/perf-report.json"];for(var k=0;k<sp.length;k++){try{var res=await browser.execute("mobile: shell",{command:"cat",args:[sp[k]]});if(res&&res.length>10){var ci=res.indexOf("{");if(ci>=0){var cl=res.substring(ci);try{JSON.parse(cl);rj=cl;console.log("[perf-extract] shell OK: "+sp[k]+" ("+cl.length+"b)");break;}catch(pe2){}}}}catch(se){console.log("[perf-extract] shell "+sp[k]+": "+se.message);}}}if(!rj){console.log("[perf-extract] trying run-as...");var rp=["files/perf-report.json","cache/perf-report.json"];for(var ri=0;ri<rp.length;ri++){try{var rr=await browser.execute("mobile: shell",{command:"run-as",args:[BID,"cat",rp[ri]]});if(rr&&rr.length>10){var rc=rr.indexOf("{");if(rc>=0){var rl=rr.substring(rc);try{JSON.parse(rl);rj=rl;console.log("[perf-extract] run-as OK: "+rp[ri]+" ("+rl.length+"b)");break;}catch(pe5){}}}}catch(re){console.log("[perf-extract] run-as "+rp[ri]+": "+re.message);}}}if(rj){try{require("fs").writeFileSync(outFile,rj);console.log("[perf-extract] file: "+outFile);}catch(we){console.log("[perf-extract] write fail: "+we.message);}console.log("[PERF_REPORT_START]"+rj+"[PERF_REPORT_END]");}else{console.log("[perf-extract] ALL methods failed");}}};
+          WDIO_EOF
+            sed "s#__BUNDLE_ID__#${BID}#g" /tmp/wdio-config.js > /tmp/wdio-config-final.js
+            mv /tmp/wdio-config-final.js /tmp/wdio-config.js
+            echo "WDIO_CONFIG_FILE=/tmp/wdio-config.js" >> $GITHUB_OUTPUT
+          else
+            BID="${{ env.APP_BUNDLE_ID }}"
+            cat > /tmp/wdio-config.js << 'WDIO_EOF'
+          exports.config={runner:"local",hostname:"127.0.0.1",port:4723,path:"/wd/hub",specs:["*.spec.js","*.test.js"],maxInstances:1,bail:0,capabilities:[{platformName:"iOS","appium:automationName":"XCUITest","appium:bundleId":"__BUNDLE_ID__","appium:newCommandTimeout":300,"appium:noReset":true,"appium:forceAppLaunch":false,"appium:usePrebuiltWDA":true,"appium:wdaLocalPort":8100,"appium:showIOSLog":true,"appium:realDeviceLogger":"/usr/local/lib/node_modules/appium/node_modules/deviceconsole/deviceconsole"}],logLevel:"debug",waitforTimeout:120000,connectionRetryTimeout:30000,connectionRetryCount:3,services:[],framework:"mocha",reporters:["spec"],mochaOpts:{ui:"bdd",timeout:1800000,grep:"__MOCHA_GREP__"},before:async function(capabilities,specs,browser){const BUNDLE_ID="__BUNDLE_ID__";const TEST_FILTER="__TEST_FILTER__";global.appCrashed=false;global.checkAppCrash=async(stage)=>{try{const state=await browser.queryAppState(BUNDLE_ID);console.log("["+stage+"] App state: "+state+" (4=foreground,3=background,1=not running)");if(state<3){console.error("\n APP CRASHED at "+stage+"! State="+state);console.error("Check device logs for BareKit/native errors.\n");global.appCrashed=true;process.exit(1);}return state;}catch(e){console.log("["+stage+"] queryAppState error: "+e.message);return-1;}};console.log("Checking initial app state...");await global.checkAppCrash("startup");console.log("Waiting for app to initialize...");await browser.pause(5000);await global.checkAppCrash("after-pause");const initText=await browser.$("-ios predicate string:label CONTAINS \"INITIALIZED\"");await initText.waitForDisplayed({timeout:60000});await global.checkAppCrash("after-init");if(TEST_FILTER!=="__TEST_FILTER__"){try{const b64=Buffer.from(TEST_FILTER).toString("base64");await browser.pushFile("@"+BUNDLE_ID+":documents/testFilter.txt",b64);console.log("Pushed test filter: "+TEST_FILTER);}catch(e){console.log("pushFile failed: "+e.message);}}console.log("App initialized, clicking Run Automated Tests...");const button=await browser.$("-ios predicate string:label CONTAINS \"Run Automated Tests\"");await button.waitForDisplayed({timeout:15000});await button.click();console.log("Button clicked!");await browser.pause(5000);await global.checkAppCrash("after-click");},afterTest:async function(test,context,{error}){if(global.appCrashed)return;await global.checkAppCrash("after-test:"+test.title);},after:async function(){console.log("[perf-extract] Pulling perf-report.json from device...");var BID="__BUNDLE_ID__";var pullPaths=["@"+BID+":documents/perf-report.json","@"+BID+":library/perf-report.json"];for(var i=0;i<pullPaths.length;i++){try{var b64=await browser.pullFile(pullPaths[i]);var json=Buffer.from(b64,"base64").toString();try{require("fs").writeFileSync("perf-report-extract.json",json);console.log("[perf-extract] Written to perf-report-extract.json ("+json.length+" bytes)");}catch(we){console.log("[perf-extract] writeFile failed: "+we.message);}console.log("[perf-extract] Success from "+pullPaths[i]);break;}catch(e){console.log("[perf-extract] "+pullPaths[i]+": "+e.message);}}}};
+          WDIO_EOF
+            sed "s#__BUNDLE_ID__#${BID}#g" /tmp/wdio-config.js > /tmp/wdio-config-final.js
+            mv /tmp/wdio-config-final.js /tmp/wdio-config.js
+            echo "WDIO_CONFIG_FILE=/tmp/wdio-config.js" >> $GITHUB_OUTPUT
+          fi
+
       - name: Create and Upload Test Spec
         id: upload_test_spec
         run: |
           echo "📝 Creating test spec for custom environment mode..."
           echo "Platform: ${{ matrix.platform }}"
 
-          # Create platform-specific test spec using printf for precise control
-          # NOTE: Both platforms use a 'before' hook in the wdio config to click the button
-          # This ensures a single Appium session for reliability (no session handoff issues)
-          # The before hook includes crash detection using queryAppState
+          WDIO_CONFIG=$(cat /tmp/wdio-config.js)
+
           if [ "${{ matrix.platform }}" == "Android" ]; then
             PLATFORM="Android"
             AUTOMATION="UiAutomator2"
             HOST_LINE="android_test_host: amazon_linux_2"
-            BUNDLE_ID="${{ env.APP_BUNDLE_ID }}"
-            # Android wdio config with crash detection (bail:0 = continue on test failures, crash = process.exit)
-            # Increased timeout to 30 minutes (1800000ms) for long-running OCR tests
-            WDIO_CONFIG='exports.config={runner:"local",hostname:"127.0.0.1",port:4723,path:"/wd/hub",specs:["*.spec.js","*.test.js"],maxInstances:1,bail:0,capabilities:[{platformName:"Android","appium:automationName":"UiAutomator2","appium:appPackage":"'${{ env.APP_BUNDLE_ID }}'","appium:appActivity":"'${{ env.APP_BUNDLE_ID }}'.MainActivity","appium:newCommandTimeout":300,"appium:autoGrantPermissions":true,"appium:autoAcceptAlerts":true,"appium:noReset":true,"appium:dontStopAppOnReset":true,"appium:forceAppLaunch":false}],logLevel:"debug",waitforTimeout:120000,connectionRetryTimeout:30000,connectionRetryCount:3,services:[],framework:"mocha",reporters:["spec"],mochaOpts:{ui:"bdd",timeout:1800000},before:async function(capabilities,specs,browser){const BUNDLE_ID="'${{ env.APP_BUNDLE_ID }}'";global.appCrashed=false;global.checkAppCrash=async(stage)=>{try{const state=await browser.queryAppState(BUNDLE_ID);console.log("["+stage+"] App state: "+state+" (4=foreground,3=background,1=not running)");if(state<3){console.error("\\n🛑 APP CRASHED at "+stage+"! State="+state);console.error("Check device logs for BareKit/native errors.\\n");global.appCrashed=true;process.exit(1);}return state;}catch(e){console.log("["+stage+"] queryAppState error: "+e.message);return-1;}};console.log("Checking initial app state...");await global.checkAppCrash("startup");console.log("Waiting for app to initialize...");await browser.pause(5000);await global.checkAppCrash("after-pause");const initText=await browser.$("android=new UiSelector().textContains(\"INITIALIZED\")");await initText.waitForDisplayed({timeout:60000});await global.checkAppCrash("after-init");console.log("App initialized, clicking Run Automated Tests...");const button=await browser.$("android=new UiSelector().textContains(\"Run Automated Tests\")");await button.waitForDisplayed({timeout:15000});await button.click();console.log("Button clicked!");await browser.pause(5000);await global.checkAppCrash("after-click");},afterTest:async function(test,context,{error}){if(global.appCrashed)return;await global.checkAppCrash("after-test:"+test.title);}};'
           else
             PLATFORM="iOS"
             AUTOMATION="XCUITest"
-            # iOS 18+ requires macos_sequoia test host (supports iOS 15-26)
             HOST_LINE="ios_test_host: macos_sequoia"
-            BUNDLE_ID="${{ env.APP_BUNDLE_ID }}"
-            # iOS wdio config with crash detection (bail:0 = continue on test failures, crash = process.exit)
-            # usePrebuiltWDA uses Device Farm's pre-built WebDriverAgent
-            # Increased timeout to 30 minutes (1800000ms) for long-running OCR tests
-            WDIO_CONFIG='exports.config={runner:"local",hostname:"127.0.0.1",port:4723,path:"/wd/hub",specs:["*.spec.js","*.test.js"],maxInstances:1,bail:0,capabilities:[{platformName:"iOS","appium:automationName":"XCUITest","appium:bundleId":"'${{ env.APP_BUNDLE_ID }}'","appium:newCommandTimeout":300,"appium:noReset":true,"appium:forceAppLaunch":false,"appium:usePrebuiltWDA":true,"appium:wdaLocalPort":8100,"appium:showIOSLog":true,"appium:realDeviceLogger":"/usr/local/lib/node_modules/appium/node_modules/deviceconsole/deviceconsole"}],logLevel:"debug",waitforTimeout:120000,connectionRetryTimeout:30000,connectionRetryCount:3,services:[],framework:"mocha",reporters:["spec"],mochaOpts:{ui:"bdd",timeout:1800000},before:async function(capabilities,specs,browser){const BUNDLE_ID="'${{ env.APP_BUNDLE_ID }}'";global.appCrashed=false;global.checkAppCrash=async(stage)=>{try{const state=await browser.queryAppState(BUNDLE_ID);console.log("["+stage+"] App state: "+state+" (4=foreground,3=background,1=not running)");if(state<3){console.error("\\n🛑 APP CRASHED at "+stage+"! State="+state);console.error("Check device logs for BareKit/native errors.\\n");global.appCrashed=true;process.exit(1);}return state;}catch(e){console.log("["+stage+"] queryAppState error: "+e.message);return-1;}};console.log("Checking initial app state...");await global.checkAppCrash("startup");console.log("Waiting for app to initialize...");await browser.pause(5000);await global.checkAppCrash("after-pause");const initText=await browser.$("-ios predicate string:label CONTAINS \"INITIALIZED\"");await initText.waitForDisplayed({timeout:60000});await global.checkAppCrash("after-init");console.log("App initialized, clicking Run Automated Tests...");const button=await browser.$("-ios predicate string:label CONTAINS \"Run Automated Tests\"");await button.waitForDisplayed({timeout:15000});await button.click();console.log("Button clicked!");await browser.pause(5000);await global.checkAppCrash("after-click");},afterTest:async function(test,context,{error}){if(global.appCrashed)return;await global.checkAppCrash("after-test:"+test.title);}};'
           fi
 
-          # Base64 encode the wdio config to safely embed in YAML
-          # Note: macOS base64 doesn't support -w flag (no line wrapping by default)
-          WDIO_CONFIG_B64=$(echo "$WDIO_CONFIG" | base64 | tr -d '\n')
+          # Read test groups and create per-group WDIO configs
+          GROUPS_JSON="${GITHUB_WORKSPACE}/addon/${{ inputs.workdir || env.PKG_DIR }}/test/mobile/test-groups.json"
+          PERF_PATTERN=$(jq -r '.perf | join("|")' "$GROUPS_JSON")
+          REGULAR_PATTERN=$(jq -r '.regular | join("|")' "$GROUPS_JSON")
+          echo "Perf test pattern: $PERF_PATTERN"
+          echo "Regular test pattern: $REGULAR_PATTERN"
 
-          # Create test spec YAML using printf to avoid variable expansion issues
-          {
+          # Mocha grep MUST be "." (match-all) — the grep patterns are function names
+          # from test-groups.json, NOT WDIO spec test titles. A non-matching grep
+          # causes WDIO to skip its spec tests and exit immediately without waiting
+          # for the app to finish, producing incomplete perf reports.
+          # Test-level filtering is done post-extraction via --filter in extract-from-log.js.
+          WDIO_CONFIG_PERF_B64=$(echo "$WDIO_CONFIG" | sed "s#__MOCHA_GREP__#.#" | sed "s#__TEST_FILTER__#$PERF_PATTERN#" | base64 | tr -d '\n')
+          WDIO_CONFIG_REGULAR_B64=$(echo "$WDIO_CONFIG" | sed "s#__MOCHA_GREP__#.#" | sed "s#__TEST_FILTER__#$REGULAR_PATTERN#" | base64 | tr -d '\n')
+
+          # Function to generate a testspec YAML given a base64-encoded WDIO config
+          generate_testspec() {
+            local config_b64="$1"
+            local output_file="$2"
+            {
             printf 'version: 0.1\n'
             if [ -n "$HOST_LINE" ]; then
               printf '%s\n' "$HOST_LINE"
@@ -1021,8 +1052,16 @@ jobs:
             printf '      - ls -la node_modules/.bin/ | grep wdio || echo "wdio not found in .bin"\n'
             printf '      - node node_modules/@wdio/cli/bin/wdio.js --version || echo "wdio version check failed"\n'
             printf '      - echo "Creating wdio config for Device Farm..."\n'
-            printf '      - echo "%s" | base64 -d > tests/wdio.config.devicefarm.js\n' "$WDIO_CONFIG_B64"
-            printf '      - cat tests/wdio.config.devicefarm.js\n'
+            printf '      - echo "%s" | base64 -d > tests/wdio.config.devicefarm.js\n' "$config_b64"
+            printf '      - echo "wdio config written (not cat-ing to avoid false positive marker extraction)"\n'
+
+          # Android-specific: increase logcat buffer and pre-create external storage dir
+          if [ "${{ matrix.platform }}" == "Android" ]; then
+            printf '      - echo "Increasing logcat buffer to 16MB for reliable log capture..."\n'
+            printf '      - adb shell logcat -G 16M 2>/dev/null || true\n'
+            printf '      - echo "Pre-creating external storage directory for perf report..."\n'
+            printf '      - adb shell mkdir -p /sdcard/Android/data/%s/files/ 2>/dev/null || true\n' '${{ env.APP_BUNDLE_ID }}'
+          fi
 
           # iOS-specific WebDriverAgent configuration (only for iOS platform)
           if [ "${{ matrix.platform }}" == "iOS" ]; then
@@ -1079,68 +1118,122 @@ jobs:
             printf '    commands:\n'
             printf '      - echo "Test completed"\n'
 
+          # Output perf report from WDIO-written file (clean, no console.log interleaving)
+            printf '      - |\n'
+            printf '        echo "========== Extracting perf report from WDIO file =========="\n'
+            printf '        WDIO_PERF=""\n'
+            printf '        for CANDIDATE in "$DEVICEFARM_LOG_DIR/perf-report-extract.json" "$DEVICEFARM_TEST_PACKAGE_PATH/perf-report-extract.json"; do\n'
+            printf '          if [ -s "$CANDIDATE" ]; then\n'
+            printf '            WDIO_PERF="$CANDIDATE"\n'
+            printf '            break\n'
+            printf '          fi\n'
+            printf '        done\n'
+            printf '        if [ -n "$WDIO_PERF" ]; then\n'
+            printf '          echo "Found WDIO perf report at $WDIO_PERF: $(wc -c < "$WDIO_PERF") bytes"\n'
+            printf '          echo "[PERF_REPORT_START]"\n'
+            printf '          cat "$WDIO_PERF"\n'
+            printf '          echo "[PERF_REPORT_END]"\n'
+            printf '        else\n'
+            printf '          echo "No WDIO perf-report-extract.json found in LOG_DIR or TEST_PACKAGE_PATH"\n'
+            printf '        fi\n'
+
+          # Android-specific: extract perf report from device using logcat + adb
+          if [ "${{ matrix.platform }}" == "Android" ]; then
+            printf '      - adb logcat -d -b all > $DEVICEFARM_LOG_DIR/logcat_full.txt 2>/dev/null || true\n'
+            printf '      - |\n'
+            printf '        echo "=== Android perf report extraction ==="\n'
+            printf '        X="" L=$DEVICEFARM_LOG_DIR B=%s\n' '${{ env.APP_BUNDLE_ID }}'
+            printf '        RP=$(grep -oP "\\[PERF_REPORT_PATH\\]\\K.*" $L/logcat_full.txt 2>/dev/null|tail -1|tr -d "\\r")\n'
+            printf '        [ -n "$RP" ] && adb shell "cat $RP" >$L/perf-report.json 2>/dev/null && [ -s $L/perf-report.json ] && X=1\n'
+            printf '        [ -z "$X" ] && for P in /sdcard/Android/data/$B/files/perf-report.json /storage/emulated/0/Android/data/$B/files/perf-report.json /tmp/perf-report.json /data/local/tmp/perf-report.json; do adb shell "cat $P">$L/perf-report.json 2>/dev/null;[ -s $L/perf-report.json ]&&X=1&&break;done\n'
+            printf '        [ -z "$X" ] && for S in files/perf-report.json cache/perf-report.json ./perf-report.json; do adb shell "run-as $B cat $S">$L/perf-report.json 2>/dev/null;[ -s $L/perf-report.json ]&&X=1&&break;done\n'
+            printf '        [ -z "$X" ] && FP=$(adb shell "find /data /sdcard/Android/data -name perf-report.json -type f 2>/dev/null"|head -1|tr -d "\\r") && [ -n "$FP" ] && adb shell "cat $FP">$L/perf-report.json 2>/dev/null && [ -s $L/perf-report.json ] && X=1\n'
+            printf '        if [ -n "$X" ]; then\n'
+            printf '          echo "[PERF_REPORT_START]"\n'
+            printf '          cat $L/perf-report.json\n'
+            printf '          echo "[PERF_REPORT_END]"\n'
+            printf '        elif grep -q "PERF_REPORT_START\\|PERF_CHUNK" $L/logcat_full.txt 2>/dev/null; then\n'
+            printf '          echo "Extracting perf report from logcat console output..."\n'
+            printf '          sed -n "/PERF_REPORT_START/,/PERF_REPORT_END/p" $L/logcat_full.txt\n'
+            printf '          grep "PERF_CHUNK" $L/logcat_full.txt 2>/dev/null||true\n'
+            printf '        else\n'
+            printf '          echo "FAILED: no perf data found in files or logcat"\n'
+            printf '          echo "=== logcat perf-related lines ==="\n'
+            printf '          grep -i "perf\\|PERF_REPORT" $L/logcat_full.txt 2>/dev/null|tail -30||true\n'
+            printf '          echo "=== logcat_full.txt size ==="\n'
+            printf '          wc -c $L/logcat_full.txt 2>/dev/null||echo "logcat_full.txt missing"\n'
+            printf '        fi\n'
+            printf '      - ls -lh $DEVICEFARM_LOG_DIR/ || true\n'
+          fi
+
           # iOS-specific: Output captured device logs
           if [ "${{ matrix.platform }}" == "iOS" ]; then
-            printf '      - echo ""\n'
-            printf '      - echo "📱 ========== iOS Device Console Logs =========="\n'
-            printf '      - |\n'
-            printf '        if [ -f "$DEVICEFARM_LOG_DIR/device_console.log" ]; then\n'
-            printf '          echo "Device console log found, showing BareKit output:"\n'
-            printf '          grep -i "bare\|console\|model\|ocr\|test\|error" "$DEVICEFARM_LOG_DIR/device_console.log" || echo "No matching logs found"\n'
-            printf '        else\n'
-            printf '          echo "No device_console.log file found"\n'
-            printf '        fi\n'
-            printf '      - echo ""\n'
             printf '      - echo "📋 Available log files:"\n'
             printf '      - ls -lh $DEVICEFARM_LOG_DIR/ || echo "Log directory not accessible"\n'
           fi
             printf '\n'
             printf 'artifacts:\n'
             printf '  - $DEVICEFARM_LOG_DIR\n'
-          } > testspec.yml
+          } > "$output_file"
+          }
 
-          echo "Generated test spec:"
+          generate_testspec "$WDIO_CONFIG_PERF_B64" "testspec-perf.yml"
+          generate_testspec "$WDIO_CONFIG_REGULAR_B64" "testspec-regular.yml"
+
+          echo "Generated perf test spec:"
           echo "===================="
-          cat testspec.yml
+          head -5 testspec-perf.yml
+          echo "..."
+          echo "===================="
+          echo "Generated regular test spec:"
+          echo "===================="
+          head -5 testspec-regular.yml
+          echo "..."
           echo "===================="
 
-          echo "📤 Uploading test spec to Device Farm..."
-          SPEC_RESPONSE=$(aws devicefarm create-upload \
-            --project-arn "${{ secrets.AWS_DEVICE_FARM_PROJECT_ARN_OCR_FASTTEXT }}" \
-            --name "testspec.yml" \
-            --type "APPIUM_NODE_TEST_SPEC" \
-            --output json)
+          # Upload helper (status messages go to stderr, only the ARN goes to stdout)
+          upload_spec() {
+            local spec_file="$1"
+            local label="$2"
+            echo "📤 Uploading $label test spec ($spec_file)..." >&2
+            SPEC_RESPONSE=$(aws devicefarm create-upload \
+              --project-arn "${{ secrets.AWS_DEVICE_FARM_PROJECT_ARN_OCR_FASTTEXT }}" \
+              --name "$spec_file" \
+              --type "APPIUM_NODE_TEST_SPEC" \
+              --output json)
 
-          SPEC_UPLOAD_URL=$(echo $SPEC_RESPONSE | jq -r '.upload.url')
-          SPEC_UPLOAD_ARN=$(echo $SPEC_RESPONSE | jq -r '.upload.arn')
-          echo "test_spec_arn=$SPEC_UPLOAD_ARN" >> $GITHUB_OUTPUT
+            SPEC_UPLOAD_URL=$(echo $SPEC_RESPONSE | jq -r '.upload.url')
+            SPEC_UPLOAD_ARN=$(echo $SPEC_RESPONSE | jq -r '.upload.arn')
 
-          curl -T testspec.yml "$SPEC_UPLOAD_URL"
+            curl -sT "$spec_file" "$SPEC_UPLOAD_URL"
 
-          # Wait for processing
-          echo "⏳ Waiting for test spec to be processed..."
-          MAX_ATTEMPTS=20
-          ATTEMPT=1
-          while [ $ATTEMPT -le $MAX_ATTEMPTS ]; do
-            STATUS=$(aws devicefarm get-upload --arn "$SPEC_UPLOAD_ARN" --query "upload.status" --output text)
-            echo "Test spec status (attempt $ATTEMPT/$MAX_ATTEMPTS): $STATUS"
+            echo "⏳ Waiting for $label spec to be processed..." >&2
+            MAX_ATTEMPTS=20
+            ATTEMPT=1
+            while [ $ATTEMPT -le $MAX_ATTEMPTS ]; do
+              STATUS=$(aws devicefarm get-upload --arn "$SPEC_UPLOAD_ARN" --query "upload.status" --output text)
+              if [ "$STATUS" = "SUCCEEDED" ]; then
+                echo "✅ $label spec upload successful" >&2
+                break
+              fi
+              if [ "$STATUS" = "FAILED" ]; then
+                echo "❌ $label spec upload failed" >&2
+                aws devicefarm get-upload --arn "$SPEC_UPLOAD_ARN" >&2
+                exit 1
+              fi
+              sleep 5
+              ATTEMPT=$((ATTEMPT + 1))
+            done
+            echo "$SPEC_UPLOAD_ARN"
+          }
 
-            if [ "$STATUS" = "SUCCEEDED" ]; then
-              echo "✅ Test spec upload successful"
-              break
-            fi
+          PERF_SPEC_ARN=$(upload_spec "testspec-perf.yml" "Perf")
+          echo "test_spec_arn_perf=$PERF_SPEC_ARN" >> $GITHUB_OUTPUT
 
-            if [ "$STATUS" = "FAILED" ]; then
-              echo "❌ Test spec upload failed"
-              aws devicefarm get-upload --arn "$SPEC_UPLOAD_ARN"
-              exit 1
-            fi
+          REGULAR_SPEC_ARN=$(upload_spec "testspec-regular.yml" "Regular")
+          echo "test_spec_arn_regular=$REGULAR_SPEC_ARN" >> $GITHUB_OUTPUT
 
-            sleep 5
-            ATTEMPT=$((ATTEMPT + 1))
-          done
-
-      - name: Schedule Device Farm Test Run
+      - name: Schedule Device Farm Test Runs (Perf + Regular)
         id: schedule_run
         run: |
           if [ "${{ matrix.platform }}" == "Android" ]; then
@@ -1149,54 +1242,87 @@ jobs:
             POOL_ARN="${{ secrets.IOS_DEVICE_POOL_ARN_OCR_FASTTEXT }}"
           fi
 
-          # Set run name based on trigger
           if [ "${{ github.event_name }}" == "workflow_dispatch" ]; then
             RUN_NAME="Manual-${{ github.run_number }}-${{ matrix.platform }}"
           else
             RUN_NAME="PR-${{ github.event.pull_request.number || github.run_number }}-${{ matrix.platform }}"
           fi
 
-          echo "🚀 Scheduling Device Farm test run..."
+          PROJECT_ARN="${{ secrets.AWS_DEVICE_FARM_PROJECT_ARN_OCR_FASTTEXT }}"
+          APP_ARN="${{ steps.upload_app.outputs.app_upload_arn }}"
+          TEST_PKG_ARN="${{ steps.upload_test_package.outputs.test_package_upload_arn }}"
+          PERF_SPEC_ARN="${{ steps.upload_test_spec.outputs.test_spec_arn_perf }}"
+          REGULAR_SPEC_ARN="${{ steps.upload_test_spec.outputs.test_spec_arn_regular }}"
+
+          echo "🚀 Scheduling 2 Device Farm runs (Perf + Regular)..."
           echo "Platform: ${{ matrix.platform }}"
-          echo "Device Pool ARN: $POOL_ARN"
-          echo "Run Name: $RUN_NAME"
+          echo "Device Pool: $POOL_ARN"
 
-          RUN_ARN=$(aws devicefarm schedule-run \
-            --project-arn "${{ secrets.AWS_DEVICE_FARM_PROJECT_ARN_OCR_FASTTEXT }}" \
+          PERF_RUN_ARN=$(aws devicefarm schedule-run \
+            --project-arn "$PROJECT_ARN" \
             --device-pool-arn "$POOL_ARN" \
-            --app-arn "${{ steps.upload_app.outputs.app_upload_arn }}" \
-            --name "$RUN_NAME" \
-            --test type=APPIUM_NODE,testPackageArn="${{ steps.upload_test_package.outputs.test_package_upload_arn }}",testSpecArn="${{ steps.upload_test_spec.outputs.test_spec_arn }}" \
+            --app-arn "$APP_ARN" \
+            --name "${RUN_NAME}-Perf" \
+            --test "type=APPIUM_NODE,testPackageArn=$TEST_PKG_ARN,testSpecArn=$PERF_SPEC_ARN" \
             --query 'run.arn' --output text)
+          echo "✅ Perf run scheduled: $PERF_RUN_ARN"
+          echo "run_arn_perf=$PERF_RUN_ARN" >> $GITHUB_OUTPUT
 
-          echo "run_arn=$RUN_ARN" >> $GITHUB_OUTPUT
-          echo "✅ Test run scheduled: $RUN_ARN"
+          REGULAR_RUN_ARN=$(aws devicefarm schedule-run \
+            --project-arn "$PROJECT_ARN" \
+            --device-pool-arn "$POOL_ARN" \
+            --app-arn "$APP_ARN" \
+            --name "${RUN_NAME}-Regular" \
+            --test "type=APPIUM_NODE,testPackageArn=$TEST_PKG_ARN,testSpecArn=$REGULAR_SPEC_ARN" \
+            --query 'run.arn' --output text)
+          echo "✅ Regular run scheduled: $REGULAR_RUN_ARN"
+          echo "run_arn_regular=$REGULAR_RUN_ARN" >> $GITHUB_OUTPUT
 
-      - name: Monitor Test Run
+          echo "run_arn=$PERF_RUN_ARN" >> $GITHUB_OUTPUT
+
+      - name: Monitor Test Runs (Perf + Regular)
         id: monitor_run
         run: |
-          RUN_ARN="${{ steps.schedule_run.outputs.run_arn }}"
-          echo "📊 Monitoring test run: $RUN_ARN"
+          PERF_ARN="${{ steps.schedule_run.outputs.run_arn_perf }}"
+          REGULAR_ARN="${{ steps.schedule_run.outputs.run_arn_regular }}"
+          echo "📊 Monitoring 2 test runs:"
+          echo "  Perf:    $PERF_ARN"
+          echo "  Regular: $REGULAR_ARN"
           echo ""
 
-          MAX_WAIT_TIME=7200 # 120 minutes
+          MAX_WAIT_TIME=7200
           ELAPSED=0
+          PERF_DONE=false
+          REGULAR_DONE=false
 
           while true; do
-            STATUS=$(aws devicefarm get-run --arn "$RUN_ARN" --query 'run.status' --output text)
-            RESULT=$(aws devicefarm get-run --arn "$RUN_ARN" --query 'run.result' --output text)
+            if [ "$PERF_DONE" = false ]; then
+              PERF_STATUS=$(aws devicefarm get-run --arn "$PERF_ARN" --query 'run.status' --output text)
+              if [[ "$PERF_STATUS" == "COMPLETED" ]]; then
+                PERF_DONE=true
+                echo "✅ Perf run completed! (${ELAPSED}s)"
+              fi
+            fi
 
-            echo "⏳ Run status: $STATUS (Result: $RESULT) - Elapsed: ${ELAPSED}s"
+            if [ "$REGULAR_DONE" = false ]; then
+              REG_STATUS=$(aws devicefarm get-run --arn "$REGULAR_ARN" --query 'run.status' --output text)
+              if [[ "$REG_STATUS" == "COMPLETED" ]]; then
+                REGULAR_DONE=true
+                echo "✅ Regular run completed! (${ELAPSED}s)"
+              fi
+            fi
 
-            if [[ "$STATUS" == "COMPLETED" ]]; then
+            if [ "$PERF_DONE" = true ] && [ "$REGULAR_DONE" = true ]; then
               echo ""
-              echo "✅ Test run completed!"
+              echo "✅ Both runs completed!"
               break
             fi
 
+            echo "⏳ Perf: ${PERF_STATUS:-done} | Regular: ${REG_STATUS:-done} | Elapsed: ${ELAPSED}s"
+
             if [ $ELAPSED -ge $MAX_WAIT_TIME ]; then
               echo ""
-              echo "❌ Timeout: Test run exceeded $MAX_WAIT_TIME seconds"
+              echo "❌ Timeout: Runs exceeded $MAX_WAIT_TIME seconds"
               exit 1
             fi
 
@@ -1204,7 +1330,8 @@ jobs:
             ELAPSED=$((ELAPSED + 30))
           done
 
-          # Get detailed results
+          # Report on perf run (primary)
+          RUN_ARN="$PERF_ARN"
           RUN_DETAILS=$(aws devicefarm get-run --arn "$RUN_ARN" --output json)
           RESULT=$(echo $RUN_DETAILS | jq -r '.run.result')
           COUNTERS=$(echo $RUN_DETAILS | jq -r '.run.counters')
@@ -1333,100 +1460,479 @@ jobs:
           echo "user_test_passed=$USER_PASSED" >> $GITHUB_OUTPUT
           echo "user_test_failed=$USER_FAILED" >> $GITHUB_OUTPUT
 
-          # Determine if tests passed or failed
-          # Red status (exit 1) if:
-          #   1. Device Farm overall result is not PASSED, OR
-          #   2. Any of your tests failed
-          # Green status (exit 0) only if all tests passed
+          # Also check regular run result
+          REGULAR_RESULT=$(aws devicefarm get-run --arn "$REGULAR_ARN" --query 'run.result' --output text)
+          echo ""
+          echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+          echo "📋 REGULAR RUN RESULT"
+          echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+          echo "Regular run result: $REGULAR_RESULT"
+          echo ""
 
-          if [[ "$RESULT" != "PASSED" ]] || [ $USER_FAILED -gt 0 ]; then
+          if [[ "$RESULT" != "PASSED" ]] || [[ "$REGULAR_RESULT" != "PASSED" ]] || [ $USER_FAILED -gt 0 ]; then
             echo ""
             echo "❌ Device Farm tests failed"
             if [[ "$RESULT" != "PASSED" ]]; then
-              echo "   Device Farm result: $RESULT"
+              echo "   Perf run result: $RESULT"
             fi
-            echo "   Your tests: $USER_PASSED passed, $USER_FAILED failed (out of $USER_TEST_COUNT total)"
-            echo "   Device Farm total: $TOTAL | Passed: $PASSED | Failed: $FAILED | Skipped: $SKIPPED"
+            if [[ "$REGULAR_RESULT" != "PASSED" ]]; then
+              echo "   Regular run result: $REGULAR_RESULT"
+            fi
+            echo "   Perf devices: $USER_PASSED passed, $USER_FAILED failed (out of $USER_TEST_COUNT total)"
+            echo "   Perf counters: $TOTAL total | $PASSED passed | $FAILED failed | $SKIPPED skipped"
             exit 1
           fi
 
           echo ""
-          echo "✅ All Device Farm tests passed!"
-          echo "   Your tests: $USER_PASSED passed (out of $USER_TEST_COUNT total)"
-          echo "   Device Farm total: $TOTAL | Passed: $PASSED | Failed: $FAILED | Skipped: $SKIPPED"
+          echo "✅ All Device Farm tests passed (Perf + Regular)!"
+          echo "   Perf devices: $USER_PASSED passed (out of $USER_TEST_COUNT total)"
+          echo "   Perf counters: $TOTAL total | $PASSED passed | $FAILED failed | $SKIPPED skipped"
 
-      - name: Comment PR with results
-        if: always() && github.event.pull_request.number
-        uses: actions/github-script@ed597411d8f924073f98dfc5c65a23a2325f34cd # 8.0.0
+      - name: Download Device Farm artifacts (perf run logs)
+        if: always() && steps.schedule_run.outputs.run_arn_perf
+        id: download_df_logs
+        run: |
+          RUN_ARN="${{ steps.schedule_run.outputs.run_arn_perf }}"
+          echo "Downloading Device Farm artifacts for perf run: $RUN_ARN"
+
+          JOBS=$(aws devicefarm list-jobs --arn "$RUN_ARN" --output json)
+          ARTIFACT_DIR="${GITHUB_WORKSPACE}/df-artifacts/${{ matrix.platform }}"
+          mkdir -p "$ARTIFACT_DIR"
+
+          for JOB_ARN in $(echo "$JOBS" | jq -r '.jobs[].arn'); do
+            DEVICE_NAME=$(aws devicefarm get-job --arn "$JOB_ARN" --query 'job.device.name' --output text | tr ' ' '_')
+            DEVICE_DIR="${ARTIFACT_DIR}/${DEVICE_NAME}"
+            mkdir -p "$DEVICE_DIR"
+
+            SUITES=$(aws devicefarm list-suites --arn "$JOB_ARN" --output json)
+            for SUITE_ARN in $(echo "$SUITES" | jq -r '.suites[].arn'); do
+              # FILE artifacts: test spec output, customer artifacts (files from $DEVICEFARM_LOG_DIR)
+              ARTIFACTS=$(aws devicefarm list-artifacts --arn "$SUITE_ARN" --type FILE --output json)
+              echo "$ARTIFACTS" | jq -r '.artifacts[] | select(.type == "TESTSPEC_OUTPUT" or .type == "CUSTOMER_ARTIFACT_LOG" or .type == "CUSTOMER_ARTIFACT") | [.type, .name, .url] | @tsv' | while IFS=$'\t' read -r TYPE NAME URL; do
+                if [ -n "$URL" ] && [ "$URL" != "null" ]; then
+                  if [ "$TYPE" = "CUSTOMER_ARTIFACT" ]; then
+                    SAFE_NAME=$(echo "$NAME" | tr ' /' '_')
+                    FILENAME="customer_${SAFE_NAME}"
+                  else
+                    FILENAME="${TYPE}.txt"
+                  fi
+                  echo "  Downloading ${DEVICE_NAME}/${FILENAME}..."
+                  curl -sL "$URL" -o "${DEVICE_DIR}/${FILENAME}" || true
+                fi
+              done
+
+              # LOG artifacts: device logcat/syslog (contains app console.log output with perf markers)
+              LOG_ARTIFACTS=$(aws devicefarm list-artifacts --arn "$SUITE_ARN" --type LOG --output json)
+              echo "$LOG_ARTIFACTS" | jq -r '.artifacts[] | select(.type == "DEVICE_LOG" or .type == "LOGCAT") | "\(.type) \(.url)"' | while read -r TYPE URL; do
+                if [ -n "$URL" ] && [ "$URL" != "null" ]; then
+                  FILENAME="${TYPE}.txt"
+                  echo "  Downloading ${DEVICE_NAME}/${FILENAME} (device log)..."
+                  curl -sL "$URL" -o "${DEVICE_DIR}/${FILENAME}" || true
+                fi
+              done
+            done
+          done
+
+          echo "artifact_dir=$ARTIFACT_DIR" >> $GITHUB_OUTPUT
+          echo "Downloaded artifacts:"
+          find "$ARTIFACT_DIR" -type f -ls 2>/dev/null || echo "  (none)"
+
+      - name: Diagnose Device Farm output
+        if: always() && steps.download_df_logs.outputs.artifact_dir
+        run: |
+          ARTIFACT_DIR="${{ steps.download_df_logs.outputs.artifact_dir }}"
+
+          echo "=== All downloaded artifact files ==="
+          find "$ARTIFACT_DIR" -type f -ls 2>/dev/null || echo "  (none)"
+          echo ""
+
+          echo "=== Searching ALL files for perf markers ==="
+          for f in $(find "$ARTIFACT_DIR" -type f -name "*.txt"); do
+            HAS_MARKERS=$(grep -c "PERF_REPORT_START" "$f" 2>/dev/null || true)
+            HAS_PATH=$(grep -c "PERF_REPORT_PATH" "$f" 2>/dev/null || true)
+            HAS_CHUNKS=$(grep -c "PERF_CHUNK" "$f" 2>/dev/null || true)
+            HAS_MARKERS=${HAS_MARKERS:-0}
+            HAS_PATH=${HAS_PATH:-0}
+            HAS_CHUNKS=${HAS_CHUNKS:-0}
+            if [ "$HAS_MARKERS" != "0" ] || [ "$HAS_PATH" != "0" ] || [ "$HAS_CHUNKS" != "0" ]; then
+              echo "  $f: PERF_REPORT_START=$HAS_MARKERS, PERF_REPORT_PATH=$HAS_PATH, PERF_CHUNK=$HAS_CHUNKS"
+            fi
+          done
+          echo ""
+
+          echo "=== TESTSPEC_OUTPUT.txt diagnosis ==="
+          for f in $(find "$ARTIFACT_DIR" -name "TESTSPEC_OUTPUT.txt" -type f); do
+            echo ""
+            echo "--- $f ($(wc -c < "$f") bytes) ---"
+            echo "Lines with PERF_REPORT:"
+            grep -n "PERF_REPORT" "$f" | head -20 || echo "  (none)"
+            echo "Lines with perf-extract:"
+            grep -n "perf-extract" "$f" | head -20 || echo "  (none)"
+            echo "Lines with perf-report:"
+            grep -n "perf-report" "$f" | head -20 || echo "  (none)"
+            echo "Lines with 'post_test' or 'Test completed':"
+            grep -n "post_test\|Test completed\|Extracting perf\|FAILED.*perf\|logcat" "$f" | head -20 || echo "  (none)"
+            echo "Last 80 lines:"
+            tail -80 "$f"
+            echo "---"
+          done
+
+          echo ""
+          echo "=== Device log files (LOGCAT/DEVICE_LOG) ==="
+          for f in $(find "$ARTIFACT_DIR" -name "LOGCAT.txt" -o -name "DEVICE_LOG.txt" -type f); do
+            if [ -f "$f" ]; then
+              echo "--- $f ($(wc -c < "$f") bytes) ---"
+              echo "Lines with PERF_REPORT:"
+              grep -n "PERF_REPORT" "$f" | head -20 || echo "  (none)"
+            fi
+          done
+
+          echo ""
+          echo "=== Customer artifact files ==="
+          for f in $(find "$ARTIFACT_DIR" -name "customer_*" -type f); do
+            echo "--- $f ($(wc -c < "$f") bytes) ---"
+            head -5 "$f" 2>/dev/null || true
+          done
+
+      - name: Extract performance report from logs
+        if: always() && steps.download_df_logs.outputs.artifact_dir
+        run: |
+          ARTIFACT_DIR="${{ steps.download_df_logs.outputs.artifact_dir }}"
+          OUTPUT_DIR="${GITHUB_WORKSPACE}/perf-results/${{ matrix.platform }}"
+          mkdir -p "$OUTPUT_DIR"
+
+          GROUPS_JSON="${GITHUB_WORKSPACE}/addon/${{ inputs.workdir || env.PKG_DIR }}/test/mobile/test-groups.json"
+          PERF_FILTER=$(jq -r '.perf_report_filter' "$GROUPS_JSON")
+
+          node "${GITHUB_WORKSPACE}/addon/scripts/perf-report/extract-from-log.js" \
+            "$ARTIFACT_DIR" \
+            "$OUTPUT_DIR/performance-report.json" \
+            --run-number "${{ github.run_number }}" \
+            --filter "$PERF_FILTER"
+
+          if find "$OUTPUT_DIR" -name "performance-report.json" -type f | head -1 | grep -q .; then
+            echo "Generating HTML report..."
+            node "${GITHUB_WORKSPACE}/addon/scripts/perf-report/aggregate.js" \
+              --dir "$OUTPUT_DIR" \
+              --output-html "$OUTPUT_DIR/performance-report.html" \
+              --output-json "$OUTPUT_DIR/performance-summary.json" \
+              --output "$OUTPUT_DIR/performance-report.md"
+          fi
+
+      - name: Upload raw Device Farm logs
+        if: always() && steps.download_df_logs.outputs.artifact_dir
+        uses: actions/upload-artifact@v4
         with:
-          github-token: ${{ secrets.GITHUB_TOKEN }}
-          script: |
-            const runArn = '${{ steps.schedule_run.outputs.run_arn }}' || 'N/A';
-            const jobStatus = '${{ job.status }}';
-            const testResult = '${{ steps.monitor_run.outputs.test_result }}' || 'UNKNOWN';
-            const platform = '${{ matrix.platform }}';
-            const prNumber = context.payload.pull_request.number;
+          name: df-raw-logs-${{ matrix.platform }}-${{ github.run_number }}
+          path: ${{ steps.download_df_logs.outputs.artifact_dir }}
+          retention-days: 30
+          if-no-files-found: ignore
 
-            const total = '${{ steps.monitor_run.outputs.test_total }}' || '0';
-            const passed = '${{ steps.monitor_run.outputs.test_passed }}' || '0';
-            const failed = '${{ steps.monitor_run.outputs.test_failed }}' || '0';
-            const skipped = '${{ steps.monitor_run.outputs.test_skipped }}' || '0';
+      - name: Upload mobile performance report
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: perf-report-ocr-${{ matrix.platform }}-${{ github.run_number }}
+          path: |
+            perf-results/${{ matrix.platform }}/**/performance-report.json
+            perf-results/${{ matrix.platform }}/performance-report.html
+            perf-results/${{ matrix.platform }}/performance-report.md
+            perf-results/${{ matrix.platform }}/performance-summary.json
+          retention-days: 90
+          if-no-files-found: ignore
 
-            let emoji = jobStatus === 'success' ? '✅' : '❌';
-            let statusText = jobStatus === 'success' ? 'PASSED' : 'FAILED';
+      - name: Refresh AWS credentials for log download
+        if: always() && (steps.schedule_run.outputs.run_arn_perf || steps.schedule_run.outputs.run_arn_regular)
+        uses: aws-actions/configure-aws-credentials@8df5847569e6427dd6c4fb1cf565c83acfa8afa7 # 6.0.0
+        with:
+          role-to-assume: ${{ secrets.AWS_OIDC_ROLE_ARN }}
+          aws-region: us-west-2
+          role-session-name: device-farm-logs
 
-            // Extract PROJECT_ID and RUN_ID from ARN
-            // ARN format: arn:aws:devicefarm:us-west-2:ACCOUNT:run:PROJECT_ID/RUN_ID
-            let deviceFarmLink = 'https://us-west-2.console.aws.amazon.com/devicefarm/home#/mobile/projects';
-            const arnMatch = runArn.match(/:run:([^/]+)\/(.+)$/);
-            if (arnMatch) {
-              const projectId = arnMatch[1];
-              const runId = arnMatch[2];
-              deviceFarmLink = `https://us-west-2.console.aws.amazon.com/devicefarm/home#/mobile/projects/${projectId}/runs/${runId}`;
-            }
+      - name: Download Device Farm Logs (all runs)
+        if: always() && (steps.schedule_run.outputs.run_arn_perf || steps.schedule_run.outputs.run_arn_regular)
+        run: |
+          RUN_ARN_PERF="${{ steps.schedule_run.outputs.run_arn_perf }}"
+          RUN_ARN_REGULAR="${{ steps.schedule_run.outputs.run_arn_regular }}"
+          LOG_DIR="devicefarm-logs/${{ matrix.platform }}"
+          PLATFORM="${{ matrix.platform }}"
+          mkdir -p "$LOG_DIR"
 
-            // Build test summary table
-            const testSummary = `
-            | Metric | Count |
-            |--------|-------|
-            | Total Tests | ${total} |
-            | ✅ Passed | ${passed} |
-            | ❌ Failed | ${failed} |
-            | ⏭️ Skipped | ${skipped} |
-            `;
+          echo ""
+          echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+          echo "📥 DOWNLOADING DEVICE FARM LOGS (ALL RUNS)"
+          echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+          echo ""
+          echo "Logs are downloaded so anyone with repo access can view them"
+          echo "without needing AWS Device Farm credentials."
+          if [ "$PLATFORM" = "Android" ]; then
+            echo "ℹ️  Skipping video artifacts on Android to reduce artifact size."
+          fi
+          echo ""
 
-            const packageInfo = '${{ github.event_name }}' === 'workflow_dispatch'
-              ? '${{ inputs.package }}'
-              : '${{ env.ADDON_NAME }} (from PR)';
+          RUN_ARNS=()
+          if [ -n "$RUN_ARN_PERF" ]; then
+            RUN_ARNS+=("$RUN_ARN_PERF")
+          fi
+          if [ -n "$RUN_ARN_REGULAR" ]; then
+            RUN_ARNS+=("$RUN_ARN_REGULAR")
+          fi
 
-            const comment = `
-            ## ${emoji} E2E Mobile Test Results - ${platform}
+          for RUN_ARN in "${RUN_ARNS[@]}"; do
+            RUN_DETAILS=$(aws devicefarm get-run --arn "$RUN_ARN" --output json 2>/dev/null || echo '{}')
+            RUN_LABEL=$(echo "$RUN_DETAILS" | jq -r '.run.name // "unknown"')
+            echo ""
+            echo "========================================"
+            echo "📦 Run: $RUN_LABEL"
+            echo "========================================"
 
-            **Overall Status**: ${statusText}
-            **Device Farm Result**: ${testResult}
-            **Platform**: ${platform}
-            **Package**: ${packageInfo}
-            **PR**: #${prNumber}
-            **Commit**: ${context.sha.substring(0, 7)}
+            SAFE_RUN=$(echo "$RUN_LABEL" | tr ' /' '__' | tr -cd '[:alnum:]_-')
+            JOBS=$(aws devicefarm list-jobs --arn "$RUN_ARN" --output json 2>/dev/null || echo '{"jobs":[]}')
 
-            ### Test Summary
-            ${testSummary}
+            for JOB_ARN in $(echo "$JOBS" | jq -r '.jobs[].arn'); do
+              DEVICE_NAME=$(echo "$JOBS" | jq -r --arg arn "$JOB_ARN" '.jobs[] | select(.arn == $arn) | .device.name // "unknown"')
+              JOB_RESULT=$(echo "$JOBS" | jq -r --arg arn "$JOB_ARN" '.jobs[] | select(.arn == $arn) | .result // "UNKNOWN"')
+              SAFE_NAME=$(echo "$DEVICE_NAME" | tr ' /' '__' | tr -cd '[:alnum:]_-')
 
-            ### Links
-            - 🔗 **Device Farm Run**: [View on AWS Device Farm](${deviceFarmLink})
-            - 🔗 **Workflow**: [View Details](${context.payload.repository.html_url}/actions/runs/${context.runId})
-            - 📋 **Run ARN**: \`${runArn}\`
+              echo ""
+              echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+              echo "📱 $DEVICE_NAME ($JOB_RESULT)"
+              echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
 
-            ---
-            *Automated E2E mobile testing powered by AWS Device Farm*
-            *Tests located in: \`test/mobile/\`*
-            `;
+              SUITES=$(aws devicefarm list-suites --arn "$JOB_ARN" --output json 2>/dev/null || echo '{"suites":[]}')
 
-            await github.rest.issues.createComment({
-              owner: context.repo.owner,
-              repo: context.repo.repo,
-              issue_number: prNumber,
-              body: comment
-            });
+              for SUITE_ARN in $(echo "$SUITES" | jq -r '.suites[].arn'); do
+                SUITE_NAME=$(echo "$SUITES" | jq -r --arg arn "$SUITE_ARN" '.suites[] | select(.arn == $arn) | .name // "unknown"')
+                SAFE_SUITE=$(echo "$SUITE_NAME" | tr ' /' '__' | tr -cd '[:alnum:]_-')
 
+                ARTIFACTS=$(aws devicefarm list-artifacts --arn "$SUITE_ARN" --type FILE --output json 2>/dev/null || echo '{"artifacts":[]}')
 
+                echo "$ARTIFACTS" | jq -c '.artifacts[]' 2>/dev/null | while read -r ARTIFACT; do
+                  ART_NAME=$(echo "$ARTIFACT" | jq -r '.name // "unknown"')
+                  ART_URL=$(echo "$ARTIFACT" | jq -r '.url // empty')
+                  ART_EXT=$(echo "$ARTIFACT" | jq -r '.extension // "txt"')
+                  [ -z "$ART_URL" ] && continue
+
+                  if [ "$PLATFORM" = "Android" ]; then
+                    if echo "$ART_NAME" | grep -qiE "^video$" || echo "$ART_EXT" | grep -qiE "^mp4$"; then
+                      echo "  Skipped (video): $SUITE_NAME / $ART_NAME"
+                      continue
+                    fi
+                  fi
+
+                  SAFE_ART=$(echo "$ART_NAME" | tr ' /' '__' | tr -cd '[:alnum:]_-')
+                  DEST="$LOG_DIR/${SAFE_RUN}_${SAFE_NAME}_${SAFE_SUITE}_${SAFE_ART}.${ART_EXT}"
+
+                  if curl -fsSL -o "$DEST" "$ART_URL" 2>/dev/null; then
+                    echo "  Downloaded: $SUITE_NAME / $ART_NAME"
+
+                    if echo "$ART_NAME" | grep -qiE "test.spec|testspec"; then
+                      echo ""
+                      echo "::group::📋 [$DEVICE_NAME] $SUITE_NAME — $ART_NAME"
+                      cat "$DEST" 2>/dev/null || true
+                      echo "::endgroup::"
+                    fi
+                  fi
+                done
+
+                LOG_ARTIFACTS=$(aws devicefarm list-artifacts --arn "$SUITE_ARN" --type LOG --output json 2>/dev/null || echo '{"artifacts":[]}')
+
+                echo "$LOG_ARTIFACTS" | jq -c '.artifacts[]' 2>/dev/null | while read -r ARTIFACT; do
+                  ART_NAME=$(echo "$ARTIFACT" | jq -r '.name // "unknown"')
+                  ART_URL=$(echo "$ARTIFACT" | jq -r '.url // empty')
+                  ART_EXT=$(echo "$ARTIFACT" | jq -r '.extension // "txt"')
+                  [ -z "$ART_URL" ] && continue
+
+                  SAFE_ART=$(echo "$ART_NAME" | tr ' /' '__' | tr -cd '[:alnum:]_-')
+                  DEST="$LOG_DIR/${SAFE_RUN}_${SAFE_NAME}_${SAFE_SUITE}_${SAFE_ART}.${ART_EXT}"
+
+                  if curl -fsSL -o "$DEST" "$ART_URL" 2>/dev/null; then
+                    echo "  Downloaded: $SUITE_NAME / $ART_NAME (LOG)"
+                  fi
+                done
+              done
+
+              JOB_ARTIFACTS=$(aws devicefarm list-artifacts --arn "$JOB_ARN" --type FILE --output json 2>/dev/null || echo '{"artifacts":[]}')
+              echo "$JOB_ARTIFACTS" | jq -c '.artifacts[]' 2>/dev/null | while read -r ARTIFACT; do
+                ART_NAME=$(echo "$ARTIFACT" | jq -r '.name // "unknown"')
+                ART_URL=$(echo "$ARTIFACT" | jq -r '.url // empty')
+                ART_EXT=$(echo "$ARTIFACT" | jq -r '.extension // "txt"')
+                [ -z "$ART_URL" ] && continue
+
+                if [ "$PLATFORM" = "Android" ]; then
+                  if echo "$ART_NAME" | grep -qiE "^video$" || echo "$ART_EXT" | grep -qiE "^mp4$"; then
+                    echo "  Skipped (video): job-level / $ART_NAME"
+                    continue
+                  fi
+                fi
+
+                SAFE_ART=$(echo "$ART_NAME" | tr ' /' '__' | tr -cd '[:alnum:]_-')
+                DEST="$LOG_DIR/${SAFE_RUN}_${SAFE_NAME}_job_${SAFE_ART}.${ART_EXT}"
+
+                if curl -fsSL -o "$DEST" "$ART_URL" 2>/dev/null; then
+                  echo "  Downloaded (job-level): $ART_NAME"
+                fi
+              done
+            done
+          done
+
+          echo ""
+          echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+          echo "📦 All downloaded logs:"
+          echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+          find "$LOG_DIR" -type f -exec ls -lh {} \; 2>/dev/null || echo "  (no logs downloaded)"
+
+      - name: Upload Device Farm Logs
+        if: always() && (steps.schedule_run.outputs.run_arn_perf || steps.schedule_run.outputs.run_arn_regular)
+        uses: actions/upload-artifact@v4
+        with:
+          name: devicefarm-logs-ocr-onnx-${{ matrix.platform }}
+          path: devicefarm-logs/
+          retention-days: 30
+          if-no-files-found: ignore
+
+  combine-reports:
+    name: Combined Performance Report
+    needs: [build-and-test]
+    if: always()
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    permissions:
+      contents: read
+    steps:
+      - name: Checkout addon repository
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # 6.0.2
+        with:
+          repository: ${{ inputs.repository || github.repository }}
+          ref: ${{ inputs.ref || github.ref }}
+          sparse-checkout: |
+            scripts/perf-report
+            packages/ocr-onnx/test/images
+
+      - name: Setup Node.js
+        uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # 4.4.0
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+
+      - name: Download all perf report artifacts
+        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # 8.0.1
+        with:
+          pattern: perf-report-ocr-*-${{ github.run_number }}
+          path: combined-reports
+        continue-on-error: true
+
+      - name: Fix desktop device names
+        shell: bash
+        run: |
+          for dir in combined-reports/perf-report-ocr-*/; do
+            [ -d "$dir" ] || continue
+            base=$(basename "$dir")
+            platform=$(echo "$base" | sed "s/^perf-report-ocr-//" | sed "s/-${{ github.run_number }}$//")
+
+            # Skip mobile — they already have real device names
+            case "$platform" in Android|iOS) continue ;; esac
+
+            for json in $(find "$dir" -name "performance-report.json" 2>/dev/null); do
+              if command -v jq >/dev/null 2>&1; then
+                jq --arg name "$platform" '.device.name = $name' "$json" > "${json}.tmp" && mv "${json}.tmp" "$json"
+                echo "Patched device name in $json → $platform"
+              fi
+            done
+          done
+
+      - name: Generate combined report
+        run: |
+          if ! find combined-reports -name "performance-report.json" -type f 2>/dev/null | grep -q .; then
+            echo "No performance reports found."
+            exit 0
+          fi
+
+          echo "=== Reports found ==="
+          find combined-reports -name "performance-report.json" -type f
+
+          mkdir -p combined-output
+
+          node scripts/perf-report/aggregate.js \
+            --dir combined-reports \
+            --output-html combined-output/performance-report-combined.html \
+            --output-json combined-output/performance-summary-combined.json \
+            --output combined-output/performance-report-combined.md
+
+      - name: Generate per-device HTML reports
+        if: always()
+        shell: bash
+        run: |
+          mkdir -p per-device-reports
+          for json in $(find combined-reports -name "performance-report.json" -type f 2>/dev/null); do
+            device_name=$(node -e "const d=JSON.parse(require('fs').readFileSync('$json','utf8'));console.log((d.device&&d.device.name)||'Unknown')" 2>/dev/null)
+            [ -z "$device_name" ] || [ "$device_name" = "Unknown" ] && continue
+
+            safe_name=$(echo "$device_name" | tr ' ' '-')
+            tmp_dir=$(mktemp -d)
+            mkdir -p "$tmp_dir/device"
+            cp "$json" "$tmp_dir/device/performance-report.json"
+
+            echo "Generating HTML for $device_name..."
+            node scripts/perf-report/aggregate.js \
+              --dir "$tmp_dir" \
+              --output-html "per-device-reports/HTML-Report-${safe_name}.html" \
+              2>/dev/null || true
+
+            rm -rf "$tmp_dir"
+          done
+          echo "=== Per-device reports generated ==="
+          ls -la per-device-reports/ 2>/dev/null || echo "No per-device reports"
+
+      - name: Upload combined HTML report
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: HTML-Report-All-Platforms-${{ github.run_number }}
+          path: combined-output/performance-report-combined.html
+          retention-days: 90
+          if-no-files-found: ignore
+
+      - name: Upload per-device HTML reports
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: HTML-Reports-Per-Device-${{ github.run_number }}
+          path: per-device-reports/
+          retention-days: 90
+          if-no-files-found: ignore
+
+      - name: Write combined summary
+        if: always()
+        shell: bash
+        run: |
+          set +e
+          MD_FILE="combined-output/performance-report-combined.md"
+          echo "## OCR Performance Report (All Platforms)" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          if [ -f "$MD_FILE" ]; then
+            cat "$MD_FILE" >> $GITHUB_STEP_SUMMARY
+          else
+            echo "No combined performance report available." >> $GITHUB_STEP_SUMMARY
+          fi
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "---" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "### Downloadable HTML Reports" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          if [ -f "combined-output/performance-report-combined.html" ]; then
+            echo "> **Full Combined Report (all platforms)**: download artifact \`HTML-Report-All-Platforms-${{ github.run_number }}\`" >> $GITHUB_STEP_SUMMARY
+            echo "" >> $GITHUB_STEP_SUMMARY
+          fi
+          HAS_DEVICES=0
+          for html in per-device-reports/HTML-Report-*.html; do
+            [ -f "$html" ] || continue
+            if [ "$HAS_DEVICES" -eq 0 ]; then
+              echo "> **Individual Device Reports**: download artifact \`HTML-Reports-Per-Device-${{ github.run_number }}\`" >> $GITHUB_STEP_SUMMARY
+              echo ">" >> $GITHUB_STEP_SUMMARY
+              echo "> Includes:" >> $GITHUB_STEP_SUMMARY
+              HAS_DEVICES=1
+            fi
+            device=$(basename "$html" .html | sed 's/^HTML-Report-//' | tr '-' ' ')
+            echo "> - ${device}" >> $GITHUB_STEP_SUMMARY
+          done
+          echo "" >> $GITHUB_STEP_SUMMARY

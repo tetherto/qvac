@@ -4,6 +4,7 @@ export const errorInvalidModelId: TestDefinition = {
   testId: "error-invalid-model-id",
   params: { modelId: "nonexistent-model-id-12345", operation: "embed" },
   expectation: { validation: "throws-error", errorContains: "" },
+  suites: ["smoke"],
   metadata: { category: "error", dependency: "embeddings", estimatedDurationMs: 5000 },
 };
 
@@ -32,6 +33,7 @@ export const errorStructuredErrorCode: TestDefinition = {
   testId: "error-structured-error-code",
   params: { verifyErrorCodes: true },
   expectation: { validation: "type", expectedType: "string" },
+  suites: ["smoke"],
   metadata: { category: "error", dependency: "none", estimatedDurationMs: 2000 },
 };
 
@@ -46,6 +48,7 @@ export const errorRagOperationFailed: TestDefinition = {
   testId: "error-rag-operation-failed",
   params: { modelId: "nonexistent-model", query: "test query" },
   expectation: { validation: "throws-error", errorContains: "" },
+  suites: ["smoke"],
   metadata: { category: "error", dependency: "embeddings", estimatedDurationMs: 5000 },
 };
 
@@ -60,6 +63,7 @@ export const errorCompletionNegativeTemperature: TestDefinition = {
   testId: "error-completion-negative-temperature",
   params: { history: [{ role: "user", content: "Test" }], stream: false, temperature: -0.5 },
   expectation: { validation: "throws-error", errorContains: "" },
+  suites: ["smoke"],
   metadata: { category: "error", dependency: "llm", estimatedDurationMs: 3000 },
 };
 
@@ -95,6 +99,7 @@ export const errorUseUnloadedModel: TestDefinition = {
   testId: "error-use-unloaded-model",
   params: { modelIdOverride: "unloaded-model-id-12345", history: [{ role: "user", content: "Test" }], stream: false },
   expectation: { validation: "throws-error", errorContains: "" },
+  suites: ["smoke"],
   metadata: { category: "error", dependency: "llm", estimatedDurationMs: 3000 },
 };
 

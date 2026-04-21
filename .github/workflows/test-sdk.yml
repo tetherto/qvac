@@ -34,7 +34,7 @@ on:
       desktop-platforms:
         description: "JSON array of runner labels for desktop tests"
         type: string
-        default: '["ai-run-windows11-gpu", "ai-run-linux-gpu", "macos-latest-xlarge"]'
+        default: '["ai-run-windows11-gpu", "ai-run-linux-gpu", "mac-mini-m4-gpu"]'
       test-version:
         description: "Git ref to checkout for the tested project (branch, tag, or SHA). Defaults to current branch HEAD."
         type: string
@@ -70,7 +70,7 @@ jobs:
     with:
       project-directory: "packages/sdk"
       working-directory: "packages/sdk/tests-qvac"
-      platforms: ${{ inputs.desktop-platforms || '["ai-run-windows11-gpu", "ai-run-linux-gpu", "macos-latest-xlarge"]' }}
+      platforms: ${{ inputs.desktop-platforms || '["ai-run-windows11-gpu", "ai-run-linux-gpu", "mac-mini-m4-gpu"]' }}
       consumer-timeout: ${{ fromJSON(inputs.desktop-consumer-timeout || '60') }}
       filter: ${{ inputs.filter }}
       test-version: ${{ inputs.test-version || '' }}
@@ -97,9 +97,22 @@ jobs:
       test-version: ${{ inputs.test-version || '' }}
     secrets: inherit
 
-  # ios-tests:
-  #   # Runs for: all, mobile, ios, empty (future PR/push)
-  #   if: inputs.targets != 'desktop' && inputs.targets != 'android'
-  #   uses: ./.github/workflows/test-ios-sdk.yml
-  #   with:
-  #     ...
+  ios-tests:
+    permissions:
+      id-token: write
+      contents: read
+      pull-requests: write
+      packages: read
+    # Runs for: all, mobile, ios, empty (future PR/push)
+    if: inputs.targets != 'desktop' && inputs.targets != 'android'
+    uses: ./.github/workflows/test-ios-sdk.yml
+    with:
+      project-directory: "packages/sdk"
+      working-directory: "packages/sdk/tests-qvac"
+      consumer-timeout: ${{ fromJSON(inputs.mobile-consumer-timeout || '600') }}
+      filter: ${{ inputs.filter }}
+      device-farm-timeout: ${{ fromJSON(inputs.device-farm-timeout || '90') }}
+      device-farm-project-arn: ${{ vars.SDK_DEVICE_FARM_PROJECT_ARN }}
+      ios-device-pools: ${{ vars.SDK_IOS_DEVICE_FARM_POOLS }}
+      test-version: ${{ inputs.test-version || '' }}
+    secrets: inherit

@@ -79,6 +79,14 @@ for name in "${RECOGNIZERS[@]}"; do
     url_escaped="${url//\"/\\\"}"
     printf '  "%s": "%s",\n' "$key" "$url_escaped" >> "$JSON_FILE"
 done
+# DocTR models — direct GitHub release URLs (no S3 presigning needed, these are public).
+# On mobile, _resolveDoctrUrl() in utils.js reads these from ocr-model-urls.json first,
+# falling back to hardcoded GitHub URLs if missing. Kept here as override point in case
+# GitHub releases are rate-limited on Device Farm.
+printf '  "doctr_db_resnet50_url": "%s",\n' "https://github.com/felixdittrich92/OnnxTR/releases/download/v0.0.1/db_resnet50-69ba0015.onnx" >> "$JSON_FILE"
+printf '  "doctr_parseq_url": "%s",\n' "https://github.com/felixdittrich92/OnnxTR/releases/download/v0.0.1/parseq-00b40714.onnx" >> "$JSON_FILE"
+printf '  "doctr_db_mobilenet_v3_large_url": "%s",\n' "https://github.com/felixdittrich92/OnnxTR/releases/download/v0.2.0/db_mobilenet_v3_large-4987e7bd.onnx" >> "$JSON_FILE"
+printf '  "doctr_crnn_mobilenet_v3_small_url": "%s",\n' "https://github.com/felixdittrich92/OnnxTR/releases/download/v0.0.1/crnn_mobilenet_v3_small-bded4d49.onnx" >> "$JSON_FILE"
 printf '  "generatedAt": "%s"\n}\n' "$(date -u +%Y-%m-%dT%H:%M:%SZ)" >> "$JSON_FILE"
 
 echo ""

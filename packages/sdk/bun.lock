@@ -1,12 +1,11 @@
 {
   "lockfileVersion": 1,
-  "configVersion": 0,
   "workspaces": {
     "": {
       "name": "@qvac/sdk",
       "dependencies": {
         "@qvac/decoder-audio": "^0.3.7",
-        "@qvac/diffusion-cpp": "0.1.3",
+        "@qvac/diffusion-cpp": "^0.1.3",
         "@qvac/dl-filesystem": "^0.2.1",
         "@qvac/embed-llamacpp": "^0.13.4",
         "@qvac/error": "^0.1.1",
@@ -18,7 +17,7 @@
         "@qvac/registry-client": "^0.4.0",
         "@qvac/transcription-parakeet": "^0.3.1",
         "@qvac/transcription-whispercpp": "^0.6.1",
-        "@qvac/translation-nmtcpp": "^0.6.10",
+        "@qvac/translation-nmtcpp": "^1.0.1",
         "@qvac/tts-onnx": "^0.8.2",
         "fast-safe-stringify": "2.1.1",
         "which-runtime": "^1.3.2",
@@ -545,7 +544,7 @@
 
     "@qvac/transcription-whispercpp": ["@qvac/transcription-whispercpp@0.6.1", "", { "dependencies": { "@qvac/decoder-audio": "^0.3.3", "@qvac/error": "^0.1.0", "@qvac/infer-base": "^0.4.0", "@qvac/logging": "^0.1.0", "bare-channel": "^5.2.2", "bare-ffmpeg": "^1.0.0-32", "bare-node-worker-threads": "^1.0.0", "bare-path": "^3.0.0", "bare-stream": "^2.7.0", "bare-worker": "^4.1.0", "path": "npm:bare-path", "process": "npm:bare-process@^4.2.2", "stream": "npm:bare-node-stream", "worker_threads": "npm:bare-node-worker-threads@^1.0.0" } }, "sha512-GrOKYjtCAJGVnCssDpoKgMD2S7O6zdOG2rFnR1+Almc5/+924U08peR3eQEuvTiP0+No6X5Aa0CIx0lGsOFBig=="],
 
-    "@qvac/translation-nmtcpp": ["@qvac/translation-nmtcpp@0.6.10", "", { "dependencies": { "@qvac/dl-hyperdrive": "^0.1.0", "@qvac/error": "^0.1.0", "@qvac/infer-base": "^0.2.0", "bare-path": "^3.0.0" } }, "sha512-lCySo8lzwyb1Wzv1xnN4ziTgTadA6UibWVS792fRGlNSkLcPYeS5Z5x7apzEyUNdE07SxPry/CrUZD56ZUc/VA=="],
+    "@qvac/translation-nmtcpp": ["@qvac/translation-nmtcpp@1.0.1", "", { "dependencies": { "@qvac/dl-hyperdrive": "^0.1.0", "@qvac/error": "^0.1.0", "@qvac/infer-base": "^0.2.0", "bare-path": "^3.0.0" } }, "sha512-KMF/8A2b7SxSMTsHxSZWH/YTFDyW1LSUEKs/x7f4P/zZTrqJYzZqOkEvxe9IS27kiz7dRAh7i3Q1hyvCnLdzIg=="],
 
     "@qvac/tts-onnx": ["@qvac/tts-onnx@0.8.2", "", { "dependencies": { "@qvac/error": "^0.1.0", "@qvac/infer-base": "^0.4.0", "@qvac/onnx": "^0.14.0", "bare-fs": "^4.5.1", "bare-path": "^3.0.0" } }, "sha512-/x6T4aGrHnBpndBZZN9W9FHQmjb+X7uXp1AQv+mi4dJai4XNxhahh7tK8OCS5Z3HdB/Iv/6YZ2PL0wnVf+OgVQ=="],
 

@@ -38,6 +38,7 @@ const createToolsTest = (
     validation: "type",
     expectedType: "string",
   },
+  suites?: string[],
 ): TestDefinition => ({
   testId,
   params: {
@@ -47,6 +48,7 @@ const createToolsTest = (
     ...(toolsMode && { toolsMode }),
   },
   expectation,
+  ...(suites && { suites }),
   metadata: {
     category: "tools",
     dependency: "tools",
@@ -83,6 +85,8 @@ export const toolsSimpleFunction = createToolsTest(
       },
     },
   ],
+  undefined,
+  ["smoke"],
 );
 
 export const toolsMultipleFunctions = createToolsTest(
@@ -115,6 +119,8 @@ export const toolsMultipleFunctions = createToolsTest(
       },
     },
   ],
+  undefined,
+  ["smoke"],
 );
 
 // Add remaining ~40 tools tests as simplified placeholders
