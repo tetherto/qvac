@@ -22,7 +22,7 @@ function createStreamAccumulator ({
   targetBufferSize = TARGET_BUFFER_SIZE
 }) {
   if (targetBufferSize < TARGET_BUFFER_SIZE) {
-    throw new QvacErrorDecoderAudio(ERR_CODES.BUFFER_SIZE_TOO_SMALL)
+    throw new QvacErrorDecoderAudio({ code: ERR_CODES.BUFFER_SIZE_TOO_SMALL })
   }
 
   let accumulator = Buffer.alloc(0)
