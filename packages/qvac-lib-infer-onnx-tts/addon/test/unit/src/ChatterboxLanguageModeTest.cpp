@@ -19,19 +19,19 @@ TEST(ChatterboxLanguageModeTest, RejectsMultilingualWhenOnlyMonolingualInputsExi
   EXPECT_FALSE(lang_mode::supportsMultilingualEmbedInputs(inputNames));
 }
 
-TEST(ChatterboxLanguageModeTest, EnglishLanguageAlwaysUsesEnglishMode) {
+TEST(ChatterboxLanguageModeTest, UsesMultilingualModeWhenModelSupportsIt) {
   const std::vector<std::string> inputNames = {"input_ids", "position_ids", "language_id"};
-  EXPECT_TRUE(lang_mode::shouldUseEnglishMode("en", inputNames));
+  EXPECT_FALSE(lang_mode::shouldUseEnglishMode(inputNames));
 }
 
-TEST(ChatterboxLanguageModeTest, NonEnglishUsesFallbackForMonolingualInputs) {
+TEST(ChatterboxLanguageModeTest, UsesEnglishModeForMonolingualModel) {
+  const std::vector<std::string> inputNames = {"input_ids"};
+  EXPECT_TRUE(lang_mode::shouldUseEnglishMode(inputNames));
+}
+
+TEST(ChatterboxLanguageModeTest, UsesEnglishModeWhenOnlyTwoInputs) {
   const std::vector<std::string> inputNames = {"input_ids", "attention_mask"};
-  EXPECT_TRUE(lang_mode::shouldUseEnglishMode("es", inputNames));
-}
-
-TEST(ChatterboxLanguageModeTest, NonEnglishStaysMultilingualWhenSupported) {
-  const std::vector<std::string> inputNames = {"input_ids", "position_ids", "language_id"};
-  EXPECT_FALSE(lang_mode::shouldUseEnglishMode("es", inputNames));
+  EXPECT_TRUE(lang_mode::shouldUseEnglishMode(inputNames));
 }
 
 TEST(ChatterboxLanguageModeTest, TokenizationPrefixTracksRuntimeLanguageMode) {

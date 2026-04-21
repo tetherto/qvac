@@ -12,7 +12,7 @@ import {
   resolveModelPath,
   resolveModelPathWithStats,
 } from "@/server/rpc/handlers/load-model/resolve";
-import type { DownloadStats } from "@/server/rpc/handlers/load-model/types";
+import { buildDownloadProfilingFields, type DownloadStats } from "@/server/rpc/handlers/load-model/types";
 import { nowMs, generateProfileId } from "@/profiling/clock";
 import { getServerLogger } from "@/logging";
 
@@ -57,31 +57,8 @@ export async function handleDownloadAsset(
       const totalDownloadTimeMs = nowMs() - totalDownloadStart;
       const profileId = profilingMeta?.id ?? generateProfileId();
 
-      const gauges: Record<string, number> = {
-        totalDownloadTime: totalDownloadTimeMs,
-      };
-      if (downloadStats) {
-        if (downloadStats.downloadTimeMs !== undefined) {
-          gauges["downloadTime"] = downloadStats.downloadTimeMs;
-        }
-        if (downloadStats.totalBytesDownloaded !== undefined) {
-          gauges["totalBytesDownloaded"] = downloadStats.totalBytesDownloaded;
-        }
-        if (downloadStats.downloadSpeedBps !== undefined) {
-          gauges["downloadSpeedBps"] = downloadStats.downloadSpeedBps;
-        }
-        if (downloadStats.checksumValidationTimeMs !== undefined) {
-          gauges["checksumValidationTime"] = downloadStats.checksumValidationTimeMs;
-        }
-      }
-
-      const tags: Record<string, string> = {};
-      if (sourceType) {
-        tags["sourceType"] = sourceType;
-      }
-      if (downloadStats?.cacheHit !== undefined) {
-        tags["cacheHit"] = downloadStats.cacheHit ? "true" : "false";
-      }
+      const { gauges, tags } = buildDownloadProfilingFields(downloadStats, sourceType);
+      gauges["totalDownloadTime"] = totalDownloadTimeMs;
 
       const operationEvent: OperationEvent = {
         op: "downloadAsset",
