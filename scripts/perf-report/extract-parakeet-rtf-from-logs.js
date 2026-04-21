@@ -54,7 +54,7 @@ function collectReports (logDir) {
   const chunks = new Map()
 
   for (const filePath of files) {
-    if (path.basename(filePath) === 'perf-report.json') {
+    if (/^perf-report(?:-.*)?\.json$/.test(path.basename(filePath))) {
       try {
         const parsed = JSON.parse(fs.readFileSync(filePath, 'utf8'))
         parsed.logSource = path.relative(logDir, filePath)

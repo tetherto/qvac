@@ -123,27 +123,35 @@ function getArtifactFileName (benchmarkSettings) {
 function writeMobileReport (json) {
   const dirs = []
 
-  if (global.testDir) dirs.push(global.testDir)
-
   if (platform.startsWith('android')) {
     dirs.push('/sdcard/Android/data/' + BUNDLE_ID + '/files')
     dirs.push('/storage/emulated/0/Android/data/' + BUNDLE_ID + '/files')
     dirs.push('/data/local/tmp')
   }
 
+  if (global.testDir) dirs.push(global.testDir)
+
   dirs.push('/tmp')
 
+  const seen = new Set()
+  let writeCount = 0
+
   for (let i = 0; i < dirs.length; i++) {
+    if (!dirs[i] || seen.has(dirs[i])) continue
+    seen.add(dirs[i])
+
     try {
       try { fs.mkdirSync(dirs[i], { recursive: true }) } catch (_) {}
       const reportPath = path.join(dirs[i], 'perf-report.json')
       fs.writeFileSync(reportPath, json)
       console.log('[PERF_REPORT_PATH]' + reportPath)
-      return
+      writeCount++
     } catch (_) {}
   }
 
-  console.log('[perf-reporter] all write locations failed')
+  if (writeCount === 0) {
+    console.log('[perf-reporter] all write locations failed')
+  }
 }
 
 function writeToConsole (json) {
