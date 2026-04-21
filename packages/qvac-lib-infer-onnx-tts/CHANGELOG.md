@@ -7,6 +7,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+<<<<<<< HEAD
 ### Changed
 
 - Fixed bug when using multilingual model for English inference, bypassing model configuration and allowing input tokens to leak into the output
@@ -81,6 +82,11 @@ Support for more languages in Chatterbox:
 ### Changed
 - Added `useGPU` field to `ChatterboxConfig` and `SupertonicConfig` C++ structs, threaded from the JS config map through to session creation.
 - Chatterbox sessions (`OnnxInferSession`) and Supertonic sessions now use `onnx_addon::buildSessionOptions()` from `@qvac/onnx` instead of manual `Ort::SessionOptions` construction, aligning with the OCR package EP logic.
+=======
+### Fixed
+
+- Preserve UTF-8 text correctly at the Chatterbox addon boundary so Portuguese diacritics like `á`, `ã`, `ç`, `é`, and `í` reach tokenization intact.
+>>>>>>> 67540351 (doc: add unreleased changelog entry for Portuguese UTF-8 fix)
 
 ## [0.8.0]
 
