@@ -152,6 +152,7 @@ target_sources(
     ${PROJECT_SOURCE_DIR}/addon/src/js-interface/binding.cpp
     ${PROJECT_SOURCE_DIR}/addon/src/model-interface/TTSModel.cpp
     ${PROJECT_SOURCE_DIR}/addon/src/model-interface/ChatterboxEngine.cpp
+    ${PROJECT_SOURCE_DIR}/addon/src/model-interface/ChatterboxLanguageMode.cpp
     ${PROJECT_SOURCE_DIR}/addon/src/model-interface/ChatterboxTextPreprocessor.cpp
     ${PROJECT_SOURCE_DIR}/addon/src/model-interface/OnnxInferSession.cpp
     ${PROJECT_SOURCE_DIR}/addon/src/model-interface/SupertonicEngine.cpp

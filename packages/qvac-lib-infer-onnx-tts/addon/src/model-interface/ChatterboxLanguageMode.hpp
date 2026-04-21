@@ -1,29 +1,20 @@
 #pragma once
 
-#include <algorithm>
 #include <string>
 #include <vector>
 
 namespace qvac::ttslib::chatterbox::lang_mode {
 
-inline bool supportsMultilingualEmbedInputs(const std::vector<std::string> &inputNames) {
-  const bool hasPositionIds = std::find(inputNames.begin(), inputNames.end(), "position_ids") != inputNames.end();
-  const bool hasLanguageId = std::find(inputNames.begin(), inputNames.end(), "language_id") != inputNames.end();
-  return (hasPositionIds && hasLanguageId) || inputNames.size() >= 3;
-}
+bool supportsMultilingualEmbedInputs(
+    const std::vector<std::string>& inputNames);
 
-inline bool
-shouldUseEnglishMode(const std::vector<std::string> &embedInputNames) {
-  return !supportsMultilingualEmbedInputs(embedInputNames);
-}
+bool shouldUseEnglishMode(const std::vector<std::string>& embedInputNames);
 
-inline std::string prepareTextForTokenization(const std::string &text,
-                                              const std::string &language,
-                                              const bool isEnglishMode) {
-  if (isEnglishMode || language == "en") {
-    return text;
-  }
-  return "[" + language + "]" + text;
-}
+std::string applyLowercaseNfkd(const std::string& text);
+
+std::string replaceSpacesWithToken(const std::string& text);
+
+std::string prepareTextForTokenization(
+    const std::string& text, const std::string& language, bool isEnglishMode);
 
 } // namespace qvac::ttslib::chatterbox::lang_mode
