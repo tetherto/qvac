@@ -12,11 +12,8 @@ inline bool supportsMultilingualEmbedInputs(const std::vector<std::string> &inpu
   return (hasPositionIds && hasLanguageId) || inputNames.size() >= 3;
 }
 
-inline bool shouldUseEnglishMode(const std::string &requestedLanguage,
-                                 const std::vector<std::string> &embedInputNames) {
-  if (requestedLanguage == "en") {
-    return true;
-  }
+inline bool
+shouldUseEnglishMode(const std::vector<std::string> &embedInputNames) {
   return !supportsMultilingualEmbedInputs(embedInputNames);
 }
 
