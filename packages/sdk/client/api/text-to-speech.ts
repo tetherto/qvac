@@ -23,11 +23,23 @@ function createTtsMulticast(
 ): { subscribe: () => AsyncGenerator<TtsResponse> } {
   const queue: TtsResponse[] = [];
   const waiters: Array<() => void> = [];
+  const subscriberIndexes: number[] = [];
   let ended = false;
   let fatal: Error | undefined;
 
   function notify() {
     for (const fn of waiters.splice(0)) fn();
+  }
+
+  function trimConsumed() {
+    if (subscriberIndexes.length === 0) return;
+    const minIndex = Math.min(...subscriberIndexes);
+    if (minIndex > 0) {
+      queue.splice(0, minIndex);
+      for (let j = 0; j < subscriberIndexes.length; j++) {
+        subscriberIndexes[j] = (subscriberIndexes[j] ?? 0) - minIndex;
+      }
+    }
   }
 
   async function pump() {
@@ -50,12 +62,17 @@ function createTtsMulticast(
   void pump();
 
   function subscribe(): AsyncGenerator<TtsResponse> {
+    const subIdx = subscriberIndexes.length;
+    subscriberIndexes.push(0);
+
     return (async function* () {
-      let i = 0;
       while (true) {
-        while (i < queue.length) {
-          yield queue[i] as TtsResponse;
-          i += 1;
+        while ((subscriberIndexes[subIdx] ?? 0) < queue.length) {
+          const currentIdx = subscriberIndexes[subIdx] ?? 0;
+          const item = queue[currentIdx] as TtsResponse;
+          subscriberIndexes[subIdx] = currentIdx + 1;
+          trimConsumed();
+          yield item;
         }
         if (fatal) throw fatal;
         if (ended) return;
