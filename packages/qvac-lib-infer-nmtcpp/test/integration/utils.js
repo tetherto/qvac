@@ -344,23 +344,52 @@ function createPerformanceCollector () {
      * @returns {Object} Performance metrics
      */
     getMetrics (prompt, addonStats = {}) {
-      // Prefer native addon stats (seconds → ms). Fall back to wall-clock
-      // timing when the addon does not populate stats (e.g. pivot translation
-      // runs two sub-models sequentially and does not aggregate their timing
-      // into response.stats). Without this fallback the reporter shows 0ms
-      // for every pivot row.
+      // The pivot addon reports per-sub-model stats under prefixed keys
+      // (e.g. "BERGAMOT : ->totalTokens", "BERGAMOT : ->TPS") rather than
+      // flat keys, so a naive `addonStats.totalTokens` read returns 0 for
+      // pivot rows even though the data is present.
+      //
+      // We read prefixed values for TOKENS and TPS (better than showing 0
+      // or "-"), but NOT for time — when the addon only reports prefix
+      // stats, those reflect a single sub-model, and wall-clock time is
+      // a more faithful "pivot total time" for the composite operation.
+      function _extractStat (key, { allowPrefix = true } = {}) {
+        if (addonStats == null) return null
+        if (typeof addonStats[key] === 'number') return addonStats[key]
+        if (!allowPrefix) return null
+        for (const k of Object.keys(addonStats)) {
+          if (k === key) return addonStats[k]
+          if (k.endsWith('->' + key) || k.endsWith(key)) {
+            if (typeof addonStats[k] === 'number') return addonStats[k]
+          }
+        }
+        return null
+      }
+
+      // Time columns: flat addon time only. Fall back to wall-clock when
+      // the addon omits it (pivot case). For decode, when there is no
+      // better signal we approximate decode ≈ total — prompt processing
+      // is negligible for short NMT sentences, and the pivot addon fires
+      // onUpdate once at the end rather than streaming, so firstTokenTime
+      // ≈ completion time.
       const now = Date.now()
       const wallClockTotalMs = startTime ? (now - startTime) : 0
-      const wallClockDecodeMs = firstTokenTime ? (now - firstTokenTime) : 0
 
-      const hasAddonTotal = typeof addonStats.totalTime === 'number' && addonStats.totalTime > 0
-      const hasAddonDecode = typeof addonStats.decodeTime === 'number' && addonStats.decodeTime > 0
+      const addonTotalSec = _extractStat('totalTime', { allowPrefix: false })
+      const addonDecodeSec = _extractStat('decodeTime', { allowPrefix: false })
 
-      const totalTimeMs = hasAddonTotal ? addonStats.totalTime * 1000 : wallClockTotalMs
-      const decodeTimeMs = hasAddonDecode ? addonStats.decodeTime * 1000 : wallClockDecodeMs
+      const totalTimeMs = (addonTotalSec && addonTotalSec > 0)
+        ? addonTotalSec * 1000
+        : wallClockTotalMs
+      const decodeTimeMs = (addonDecodeSec && addonDecodeSec > 0)
+        ? addonDecodeSec * 1000
+        : totalTimeMs
 
-      const generatedTokens = addonStats.totalTokens || 0
-      let tps = addonStats.TPS || 0
+      // Token count and TPS: accept prefixed values too (pivot). If TPS
+      // is missing but tokens + decode are available, compute it so the
+      // column is never "0" when data is in fact inferrable.
+      const generatedTokens = _extractStat('totalTokens') || 0
+      let tps = _extractStat('TPS') || 0
       if (!tps && generatedTokens > 0 && decodeTimeMs > 0) {
         tps = (generatedTokens / decodeTimeMs) * 1000
       }
@@ -422,7 +451,7 @@ function formatPerformanceMetrics (label, metrics, qualityOpts) {
     total_time_ms: Math.round(totalTimeMs),
     decode_time_ms: Math.round(decodeTimeMs),
     generated_tokens: generatedTokens || null,
-    tps: typeof tps === 'number' ? parseFloat(tpsValue) : null,
+    tps: (typeof tps === 'number' && tps > 0) ? parseFloat(tpsValue) : null,
     chrfpp: quality ? quality.chrfpp : null
   }, {
     execution_provider: ep,
