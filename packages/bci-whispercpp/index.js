@@ -49,6 +49,7 @@ class BCIWhispercpp {
     this.opts = opts
     this.logger = new QvacLogger(logger)
     this._withExclusiveRun = exclusiveRunQueue()
+    this._inferenceQueueWaiter = Promise.resolve()
     this._job = createJobHandler({
       cancel: () => this.addon?.cancel()
     })
@@ -146,7 +147,7 @@ class BCIWhispercpp {
    * @returns {Promise<QvacResponse>}
    */
   async transcribe (neuralData) {
-    return await this._withExclusiveRun(async () => {
+    return await this._enqueueInference(async () => {
       const response = this._job.start()
 
       let accepted
@@ -167,6 +168,27 @@ class BCIWhispercpp {
       response.await = () => finalized
       return response
     })
+  }
+
+  /**
+   * Serialize inference runs so a second transcribe() waits until the first
+   * response settles. Separate from _withExclusiveRun (lifecycle ops) so
+   * destroy/unload can still preempt.
+   */
+  async _enqueueInference (runFn) {
+    const prev = this._inferenceQueueWaiter
+    let releaseSlot
+    this._inferenceQueueWaiter = new Promise(resolve => { releaseSlot = resolve })
+    await prev
+    let response
+    try {
+      response = await runFn()
+    } catch (err) {
+      releaseSlot()
+      throw err
+    }
+    response.await().finally(() => { releaseSlot() }).catch(() => {})
+    return response
   }
 
   _outputCallback (addon, event, jobId, data, error) {
