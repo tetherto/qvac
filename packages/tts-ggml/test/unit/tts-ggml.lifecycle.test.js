@@ -5,16 +5,18 @@ const sinon = require('sinon')
 const TTSGgml = require('../../index.js')
 const { TTSInterface } = require('../../tts.js')
 const MockedBinding = require('../mock/MockedBinding.js')
-const { QvacErrorAddonTTS, ERR_CODES } = require('../../lib/error.js')
+const { QvacErrorAddonTTSGgml, ERR_CODES } = require('../../lib/error.js')
 const process = require('process')
 
 global.process = process
 
 function createStubbedModel () {
   const model = new TTSGgml({
-    files: { modelDir: './models/chatterbox' },
-    engine: 'chatterbox',
-    config: { language: 'en', useGPU: false }
+    files: {
+      t3Model: './models/chatterbox-t3-turbo.gguf',
+      s3genModel: './models/chatterbox-s3gen.gguf'
+    },
+    config: { language: 'en' }
   })
   sinon.stub(model, '_createAddon').callsFake((configurationParams, outputCb) => {
     return new TTSInterface(new MockedBinding(), configurationParams, outputCb)
@@ -64,7 +66,7 @@ test('load() after destroy() rejects with FAILED_TO_LOAD', async (t) => {
     await model.load()
     t.fail('load() should throw after destroy()')
   } catch (err) {
-    t.ok(err instanceof QvacErrorAddonTTS, 'should throw QvacErrorAddonTTS')
+    t.ok(err instanceof QvacErrorAddonTTSGgml, 'should throw QvacErrorAddonTTSGgml')
     t.is(err.code, ERR_CODES.FAILED_TO_LOAD, 'code should be FAILED_TO_LOAD')
   }
 })

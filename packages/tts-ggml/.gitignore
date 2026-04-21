@@ -6,6 +6,10 @@ yarn-error.log*
 
 # Build outputs
 build/
+build_*/
+.clang-format
+.clang-tidy
+.valgrind.supp
 dist/
 out/
 *.o

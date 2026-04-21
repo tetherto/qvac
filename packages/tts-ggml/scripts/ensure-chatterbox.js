@@ -3,25 +3,12 @@
 const path = require('bare-path')
 const { ensureChatterboxModels } = require('../test/utils/downloadModel.js')
 
-const baseDir = '.'
-const modelsDir = path.join(baseDir, 'models')
-
-const os = require('bare-os')
-const variant = os.getEnv('CHATTERBOX_VARIANT') || 'q4'
-const language = os.getEnv('TTS_LANGUAGE') || 'en'
+const modelsDir = path.join('.', 'models')
 
 async function run () {
-  const errors = []
-  const languages = language === 'all' ? ['en', 'multilingual'] : [language]
-
-  for (const lang of languages) {
-    const dir = path.join(modelsDir, lang === 'en' ? 'chatterbox' : 'chatterbox-multilingual')
-    const r = await ensureChatterboxModels({ targetDir: dir, variant, language: lang })
-    if (!r.success) errors.push(`Chatterbox ${lang} ${variant}`)
-  }
-
-  if (errors.length) {
-    const e = new Error(`Chatterbox model download failed: ${errors.join(', ')}`)
+  const r = await ensureChatterboxModels({ targetDir: modelsDir })
+  if (!r.success) {
+    const e = new Error('Chatterbox GGUFs are not available locally (see instructions above).')
     console.error(e.message)
     throw e
   }

@@ -9,7 +9,7 @@
   "scripts": {
     "build": "bare-make generate && bare-make build && bare-make install",
     "build:pack": "mkdir -p dist && npm pack --pack-destination dist",
-    "example": "bare examples/chatterbox-tts.js",
+    "example": "bare examples/chatterbox-tts.js \"Hello from qvac tts ggml.\"",
     "lint": "standard \"test/**/*.js\" \"*.js\" \"lib/*.js\"",
     "lint:fix": "standard --fix \"test/**/*.js\" \"*.js\" \"lib/*.js\"",
     "test:unit": "brittle-bare test/unit/**/*.test.js",
@@ -33,6 +33,7 @@
     "index.d.ts",
     "tts.js",
     "test/integration",
+    "test/mobile",
     "test/reference-audio",
     "test/utils/runTTS.js",
     "test/utils/runChatterboxTTS.js",

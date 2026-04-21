@@ -109,7 +109,8 @@ std::vector<int16_t> readPcm16Wav(const std::filesystem::path& path, int& sample
 class ArgvBuilder {
 public:
   void add(std::string arg) { storage_.emplace_back(std::move(arg)); }
-  /** Call after all adds.  Returns char**/size pair valid while this object lives. */
+  // Call after all adds.  Returned (char**, size) pair stays valid while
+  // this builder is alive.
   std::pair<char**, int> buildArgv() {
     pointers_.clear();
     pointers_.reserve(storage_.size());

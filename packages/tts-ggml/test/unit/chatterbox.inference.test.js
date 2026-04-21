@@ -1,6 +1,5 @@
 'use strict'
 
-const path = require('bare-path')
 const test = require('brittle')
 const TTSGgml = require('../../index.js')
 const { TTSInterface } = require('../../tts.js')
@@ -10,16 +9,17 @@ const process = require('process')
 global.process = process
 const sinon = require('sinon')
 
-function createMockedChatterboxModel ({ onOutput = () => { }, binding = undefined, exclusiveRun = false } = {}) {
+function createMockedModel ({
+  onOutput = () => { },
+  binding = undefined,
+  exclusiveRun = false
+} = {}) {
   const model = new TTSGgml({
     files: {
-      modelDir: './models/chatterbox'
+      t3Model: './models/chatterbox-t3-turbo.gguf',
+      s3genModel: './models/chatterbox-s3gen.gguf'
     },
-    engine: 'chatterbox',
-    config: {
-      language: 'en',
-      useGPU: false
-    },
+    config: { language: 'en' },
     opts: { stats: true },
     exclusiveRun
   })
@@ -27,11 +27,9 @@ function createMockedChatterboxModel ({ onOutput = () => { }, binding = undefine
   sinon.stub(model, '_createAddon').callsFake((configurationParams, outputCb) => {
     const _binding = binding || new MockedBinding()
     const addon = new TTSInterface(_binding, configurationParams, outputCb)
-
     if (_binding.setBaseInferenceCallback) {
       _binding.setBaseInferenceCallback(onOutput)
     }
-
     return addon
   })
   return model
@@ -52,7 +50,7 @@ async function waitWithTimeout (promise, timeoutMs, message) {
 test('Chatterbox: run returns audio output and stats', async (t) => {
   const events = []
   const callbackArity = []
-  const model = createMockedChatterboxModel({
+  const model = createMockedModel({
     onOutput: function (addon, event, data, error) {
       callbackArity.push(arguments.length)
       events.push({ event, data, error })
@@ -73,7 +71,7 @@ test('Chatterbox: run returns audio output and stats', async (t) => {
 })
 
 test('Chatterbox: exclusiveRun does not deadlock run()', async (t) => {
-  const model = createMockedChatterboxModel({ exclusiveRun: true })
+  const model = createMockedModel({ exclusiveRun: true })
   await model.load()
 
   const response = await waitWithTimeout(
@@ -92,15 +90,15 @@ test('Chatterbox: exclusiveRun does not deadlock run()', async (t) => {
   await model.unload()
 })
 
-test('Chatterbox: Reload reloads configuration', async (t) => {
-  const model = createMockedChatterboxModel()
+test('Chatterbox: reload reloads configuration', async (t) => {
+  const model = createMockedModel()
   await model.load()
 
   const before = await model.run({ type: 'text', input: 'hello' })
   await before.await()
 
-  await model.reload({ language: 'es' })
-  const after = await model.run({ type: 'text', input: 'hola' })
+  await model.reload({ language: 'en' })
+  const after = await model.run({ type: 'text', input: 'hello again' })
   await after.await()
 
   t.ok(after.stats.audioDurationMs > 0, 'Reloaded model should still produce stats')
@@ -108,11 +106,11 @@ test('Chatterbox: Reload reloads configuration', async (t) => {
 })
 
 test('Chatterbox: exclusiveRun does not deadlock reload() or unload()', async (t) => {
-  const model = createMockedChatterboxModel({ exclusiveRun: true })
+  const model = createMockedModel({ exclusiveRun: true })
   await model.load()
 
   await waitWithTimeout(
-    model.reload({ language: 'es' }),
+    model.reload({ language: 'en' }),
     1000,
     'reload() timed out under exclusiveRun'
   )
@@ -138,11 +136,11 @@ test('Chatterbox: exclusiveRun does not deadlock reload() or unload()', async (t
 
 test('Chatterbox: reload during in-flight job does not stay busy', async (t) => {
   const binding = new MockedBinding({ jobDelayMs: 100 })
-  const model = createMockedChatterboxModel({ binding })
+  const model = createMockedModel({ binding })
   await model.load()
 
   const inFlight = await model.run({ type: 'text', input: 'hello before reload' })
-  await model.reload({ language: 'es' })
+  await model.reload({ language: 'en' })
 
   let rejected = false
   try {
@@ -163,46 +161,44 @@ test('Chatterbox: reload during in-flight job does not stay busy', async (t) => 
   await model.unload()
 })
 
-test('Chatterbox: Static methods return expected values', async (t) => {
+test('Chatterbox: static methods return expected values', async (t) => {
   const modelKey = TTSGgml.getModelKey({})
-  t.is(modelKey, 'onnx-tts', 'getModelKey should return "onnx-tts"')
+  t.is(modelKey, 'tts-ggml', 'getModelKey should return "tts-ggml"')
   t.ok(TTSGgml.inferenceManagerConfig, 'inferenceManagerConfig should exist')
   t.is(TTSGgml.inferenceManagerConfig.noAdditionalDownload, true, 'noAdditionalDownload should be true')
 })
 
-test('Chatterbox: Engine type is detected correctly', async (t) => {
-  const chatterboxModel = new TTSGgml({
-    files: {
-      tokenizer: './tokenizer.json',
-      speechEncoder: './speech_encoder.onnx',
-      embedTokens: './embed_tokens.onnx',
-      conditionalDecoder: './conditional_decoder.onnx',
-      languageModel: './language_model.onnx'
-    }
+test('Chatterbox: modelDir fills in the two GGUF paths', async (t) => {
+  const path = require('bare-path')
+  const model = new TTSGgml({
+    files: { modelDir: './models' }
   })
-  t.is(chatterboxModel._engineType, 'chatterbox', 'Should detect Chatterbox engine when Chatterbox paths are provided')
-
-  const fromBundle = new TTSGgml({
-    files: { modelDir: './models/chatterbox' },
-    engine: 'chatterbox'
-  })
-  t.is(fromBundle._engineType, 'chatterbox', 'engine chatterbox + modelDir uses Chatterbox layout')
   t.is(
-    fromBundle._tokenizerPath,
-    path.join('./models/chatterbox', 'tokenizer.json'),
-    'modelDir derives tokenizer path'
+    model._t3ModelPath,
+    path.join('./models', 'chatterbox-t3-turbo.gguf'),
+    'modelDir derives T3 GGUF path'
+  )
+  t.is(
+    model._s3genModelPath,
+    path.join('./models', 'chatterbox-s3gen.gguf'),
+    'modelDir derives S3Gen GGUF path'
   )
 })
 
-test('Chatterbox: invalid engine throws', async (t) => {
-  t.exception(
-    () => new TTSGgml({ files: { modelDir: './x' }, engine: 'other' }),
-    /invalid engine/
-  )
+test('Chatterbox: explicit t3Model / s3genModel override modelDir defaults', async (t) => {
+  const model = new TTSGgml({
+    files: {
+      modelDir: './models',
+      t3Model: '/abs/custom-t3.gguf',
+      s3genModel: '/abs/custom-s3gen.gguf'
+    }
+  })
+  t.is(model._t3ModelPath, '/abs/custom-t3.gguf', 'explicit t3Model wins over modelDir')
+  t.is(model._s3genModelPath, '/abs/custom-s3gen.gguf', 'explicit s3genModel wins over modelDir')
 })
 
 test('Chatterbox: cancel propagates as job failure', async (t) => {
-  const model = createMockedChatterboxModel()
+  const model = createMockedModel()
   await model.load()
 
   const response = await model.run({ type: 'text', input: 'cancel me' })

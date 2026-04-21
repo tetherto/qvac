@@ -12,9 +12,11 @@ global.process = process
 
 function createStubbedModel (opts = {}) {
   const model = new TTSGgml({
-    files: { modelDir: './models/chatterbox' },
-    engine: 'chatterbox',
-    config: { language: 'en', useGPU: false },
+    files: {
+      t3Model: './models/chatterbox-t3-turbo.gguf',
+      s3genModel: './models/chatterbox-s3gen.gguf'
+    },
+    config: { language: 'en' },
     opts: { stats: true },
     ...opts
   })
