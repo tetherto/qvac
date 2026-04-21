@@ -403,7 +403,7 @@ jobs:
       - name: Install Device Farm perf report helper
         working-directory: ./test-framework
         run: |
-          cp "${GITHUB_WORKSPACE}/${{ env.ADDON_DIR }}/scripts/perf-report/devicefarm-perf-report-helper.js" "./e2e/tests/perf-report-helper.js"
+          cp "${GITHUB_WORKSPACE}/addon/scripts/perf-report/devicefarm-perf-report-helper.js" "./e2e/tests/perf-report-helper.js"
 
           echo ""
           echo "EXTRACTED TEST FUNCTIONS:"
