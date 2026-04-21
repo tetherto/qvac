@@ -10,6 +10,7 @@
     "build": "bare-make generate && bare-make build && bare-make install",
     "build:pack": "mkdir -p dist && npm pack --pack-destination dist",
     "example": "bare examples/chatterbox-tts.js english",
+    "example:langdetect": "bare examples/chatterbox-langdetect-tts.js",
     "lint": "standard \"test/**/*.js\" \"*.js\" \"lib/*.js\"",
     "lint:fix": "standard --fix \"test/**/*.js\" \"*.js\" \"lib/*.js\"",
     "test:unit": "brittle-bare test/unit/**/*.test.js",
@@ -74,6 +75,7 @@
   "bugs": "https://github.com/tetherto/qvac/issues",
   "homepage": "https://github.com/tetherto/qvac/tree/main/packages/qvac-lib-infer-onnx-tts#readme",
   "devDependencies": {
+    "@qvac/langdetect-text": "^0.1.2",
     "@qvac/transcription-whispercpp": "^0.5.5",
     "bare-buffer": "^3.4.2",
     "bare-node-stream": "^1.0.0",
