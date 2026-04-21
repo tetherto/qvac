@@ -971,6 +971,12 @@ jobs:
             printf '      - echo "%s" | base64 -d > tests/wdio.config.devicefarm.js\n' "$WDIO_CONFIG_B64"
             printf '      - cat tests/wdio.config.devicefarm.js\n'
 
+          if [ "${{ matrix.platform }}" == "Android" ]; then
+            printf '      - echo "Expanding logcat buffer..."\n'
+            printf '      - adb shell logcat -G 16M 2>/dev/null || true\n'
+            printf '      - adb logcat -c 2>/dev/null || true\n'
+          fi
+
           if [ "${{ matrix.platform }}" == "iOS" ]; then
             printf '      - echo "Configuring WebDriverAgent for iOS..."\n'
             printf '      - export DEVICEFARM_APPIUM_WDA_DERIVED_DATA_PATH=$DEVICEFARM_APPIUM_WDA_DERIVED_DATA_PATH_V9\n'
@@ -1024,7 +1030,40 @@ jobs:
             printf '    commands:\n'
             printf '      - echo "Test completed"\n'
 
+          if [ "${{ matrix.platform }}" == "Android" ]; then
+            printf '      - adb logcat -d -b all > $DEVICEFARM_LOG_DIR/logcat_full.txt 2>/dev/null || true\n'
+            printf '      - |\n'
+            printf '        echo "=== Android perf report extraction ==="\n'
+            printf '        X="" L=$DEVICEFARM_LOG_DIR B=%s\n' "${{ env.APP_BUNDLE_ID }}"
+            printf '        RP=$(grep -oP "\\[PERF_REPORT_PATH\\]\\K.*" $L/logcat_full.txt 2>/dev/null | tail -1 | tr -d "\\r")\n'
+            printf '        [ -n "$RP" ] && adb shell "cat $RP" >$L/perf-report.json 2>/dev/null && [ -s $L/perf-report.json ] && X=1\n'
+            printf '        [ -z "$X" ] && for P in /sdcard/Android/data/$B/files/perf-report.json /storage/emulated/0/Android/data/$B/files/perf-report.json /data/local/tmp/perf-report.json /tmp/perf-report.json; do adb shell "cat $P" >$L/perf-report.json 2>/dev/null; [ -s $L/perf-report.json ] && X=1 && break; done\n'
+            printf '        [ -z "$X" ] && for S in files/perf-report.json cache/perf-report.json ./perf-report.json; do adb shell "run-as $B cat $S" >$L/perf-report.json 2>/dev/null; [ -s $L/perf-report.json ] && X=1 && break; done\n'
+            printf '        if [ -n "$X" ]; then\n'
+            printf '          echo "[PERF_REPORT_START]"\n'
+            printf '          cat $L/perf-report.json\n'
+            printf '          echo "[PERF_REPORT_END]"\n'
+            printf '        elif grep -q "PERF_REPORT_START\\|PERF_CHUNK" $L/logcat_full.txt 2>/dev/null; then\n'
+            printf '          echo "Extracting perf report from logcat console output..."\n'
+            printf '          sed -n "/PERF_REPORT_START/,/PERF_REPORT_END/p" $L/logcat_full.txt\n'
+            printf '          grep "PERF_CHUNK" $L/logcat_full.txt 2>/dev/null || true\n'
+            printf '        else\n'
+            printf '          echo "No perf data found in files or logcat"\n'
+            printf '          grep -i "perf\\|PERF_REPORT\\|QVAC_RTF" $L/logcat_full.txt 2>/dev/null | tail -30 || true\n'
+            printf '        fi\n'
+          fi
+
           if [ "${{ matrix.platform }}" == "iOS" ]; then
+            printf '      - |\n'
+            printf '        echo "iOS perf report extraction"\n'
+            printf '        for P in "$DEVICEFARM_LOG_DIR/perf-report.json" "/tmp/perf-report.json"; do\n'
+            printf '          if [ -s "$P" ]; then\n'
+            printf '            echo "[PERF_REPORT_START]"\n'
+            printf '            cat "$P"\n'
+            printf '            echo "[PERF_REPORT_END]"\n'
+            printf '            break\n'
+            printf '          fi\n'
+            printf '        done\n'
             printf '      - echo ""\n'
             printf '      - echo "iOS Device Console Logs"\n'
             printf '      - |\n'

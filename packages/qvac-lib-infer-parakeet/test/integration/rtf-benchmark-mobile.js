@@ -23,6 +23,7 @@ const SAMPLE_RATE = 16000
 const VALID_MODEL_TYPES = ['tdt', 'ctc', 'eou', 'sortformer']
 const RTF_RESULTS_DIR = path.resolve(__dirname, '../../benchmarks/results')
 const RESULT_MARKER = 'QVAC_RTF_REPORT::'
+const BUNDLE_ID = 'io.tether.test.qvac'
 
 function getEnvBoolean (name, fallback) {
   const value = process.env[name]
@@ -117,6 +118,48 @@ function getArtifactFileName (benchmarkSettings) {
   }
 
   return `${parts.join('-')}.json`
+}
+
+function writeMobileReport (json) {
+  const dirs = []
+
+  if (global.testDir) dirs.push(global.testDir)
+
+  if (platform.startsWith('android')) {
+    dirs.push('/sdcard/Android/data/' + BUNDLE_ID + '/files')
+    dirs.push('/storage/emulated/0/Android/data/' + BUNDLE_ID + '/files')
+    dirs.push('/data/local/tmp')
+  }
+
+  dirs.push('/tmp')
+
+  for (let i = 0; i < dirs.length; i++) {
+    try {
+      try { fs.mkdirSync(dirs[i], { recursive: true }) } catch (_) {}
+      const reportPath = path.join(dirs[i], 'perf-report.json')
+      fs.writeFileSync(reportPath, json)
+      console.log('[PERF_REPORT_PATH]' + reportPath)
+      return
+    } catch (_) {}
+  }
+
+  console.log('[perf-reporter] all write locations failed')
+}
+
+function writeToConsole (json) {
+  const CHUNK = 800
+
+  if (json.length <= CHUNK) {
+    console.log('[PERF_REPORT_START]' + json + '[PERF_REPORT_END]')
+    return
+  }
+
+  const id = Date.now().toString(36)
+  const n = Math.ceil(json.length / CHUNK)
+  for (let i = 0; i < n; i++) {
+    console.log('[PERF_CHUNK:' + id + ':' + i + ':' + n + ']' +
+      json.substring(i * CHUNK, (i + 1) * CHUNK))
+  }
 }
 
 function getTimeMs () {
@@ -421,9 +464,19 @@ test('RTF benchmark: collect real-time factor on CI device', { timeout: 600000 }
       fs.writeFileSync(outPath, JSON.stringify(report, null, 2))
       console.log(`Results written to ${outPath}\n`)
       console.log(`${RESULT_MARKER}${JSON.stringify(emittedSummary)}`)
+      if (isMobile) {
+        const fullJson = JSON.stringify(report)
+        writeMobileReport(fullJson)
+        writeToConsole(fullJson)
+      }
     } catch (writeErr) {
       console.log(`Warning: could not write results file: ${writeErr.message}`)
       console.log(`${RESULT_MARKER}${JSON.stringify(emittedSummary)}`)
+      if (isMobile) {
+        const fullJson = JSON.stringify(report)
+        writeMobileReport(fullJson)
+        writeToConsole(fullJson)
+      }
     }
 
     t.ok(allResults.length === benchmarkSettings.numRuns,
