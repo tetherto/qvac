@@ -2,6 +2,38 @@
 
 #include <gtest/gtest.h>
 
+namespace qvac::ttslib::chatterbox::lang_mode::testing {
+
+namespace {
+
+std::string asUtf8String(const char8_t *text) {
+  return std::string(reinterpret_cast<const char *>(text));
+}
+
+} // namespace
+
+TEST(ChatterboxLanguageModeTest, prefixesPortugueseInMultilingualMode) {
+  const std::string text = asUtf8String(
+      u8"Olá mundo! Essa é uma demonstração de síntese de texto para voz usando Chatterbox");
+
+  EXPECT_EQ(prepareTextForTokenization(text, "pt", false), "[pt]" + text);
+}
+
+TEST(ChatterboxLanguageModeTest, keepsPortugueseUnchangedInEnglishMode) {
+  const std::string text = asUtf8String(u8"Olá mundo!");
+
+  EXPECT_EQ(prepareTextForTokenization(text, "pt", true), text);
+}
+
+TEST(ChatterboxLanguageModeTest, detectsMultilingualEmbedInputs) {
+  const std::vector<std::string> inputNames = {"input_ids", "position_ids", "language_id"};
+
+  EXPECT_TRUE(supportsMultilingualEmbedInputs(inputNames));
+  EXPECT_FALSE(shouldUseEnglishMode("pt", inputNames));
+}
+
+} // namespace qvac::ttslib::chatterbox::lang_mode::testing
+
 namespace qvac::ttslib::chatterbox::testing {
 
 TEST(ChatterboxLanguageModeTest, SupportsMultilingualWhenExpectedInputNamesPresent) {
