@@ -1,7 +1,7 @@
 'use strict'
 
 const LlamaClient = require('../../../index')
-const FilesystemDL = require('@qvac/dl-filesystem')
+const path = require('bare-path')
 const process = require('bare-process')
 const { downloadModel, formatProgress, createFilteredLogger } = require('../../utils')
 
@@ -20,7 +20,6 @@ const OUTPUT_DIR = './smart-home-lora'
 
 async function main () {
   let client
-  let loader
 
   const { logger: filteredLogger, restore: restoreConsole } = createFilteredLogger()
 
@@ -33,15 +32,7 @@ async function main () {
 
     const [modelName, modelDir] = await downloadModel(MODEL.url, MODEL.name)
 
-    loader = new FilesystemDL({ dirPath: modelDir })
-
-    const args = {
-      loader,
-      opts: { stats: true },
-      logger: filteredLogger,
-      diskPath: modelDir,
-      modelName
-    }
+    const modelPath = path.join(modelDir, modelName)
 
     const config = {
       gpu_layers: '999',
@@ -50,7 +41,12 @@ async function main () {
       flash_attn: 'off'
     }
 
-    client = new LlamaClient(args, config)
+    client = new LlamaClient({
+      files: { model: [modelPath] },
+      config,
+      logger: filteredLogger,
+      opts: { stats: true }
+    })
     await client.load()
     console.log('Model loaded.\n')
 
@@ -117,13 +113,6 @@ async function main () {
         await client.unload()
       } catch (unloadErr) {
         console.error('Failed to unload model during cleanup:', unloadErr)
-      }
-    }
-    if (loader) {
-      try {
-        await loader.close()
-      } catch (closeErr) {
-        console.error('Failed to close loader during cleanup:', closeErr)
       }
     }
   }

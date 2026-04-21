@@ -5,7 +5,7 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-## [0.8.4]
+## [0.8.5]
 
 ### Added
 - **Japanese (ja) support via MeCab**: word-level morphological preprocessing for Chatterbox multilingual. The addon now extracts phonetic readings from MeCab and converts katakana to hiragana before tokenization, fixing prior hallucinations caused by kanji being mapped to `[UNK]`.
@@ -17,10 +17,31 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Japanese (kanji + MeCab) integration test added to `test/integration/addon.test.js` (`Chatterbox Multilingual TTS: Japanese ...`), validating end-to-end synthesis and asserting Whisper CER (`ggml-medium.bin`) `<= 50%`.
 
 ### Changed
+- Fixed bug when using multilingual model for English inference, bypassing model configuration and allowing input tokens to leak into the output
 - Refactor: text preprocessing moved from free functions in the `text_preprocess` namespace into a new `class ChatterboxTextPreprocessor` with RAII (`std::unique_ptr<mecab_t, MeCabDeleter>` for the MeCab tagger).
 - `ChatterboxEngine` now owns a single `ChatterboxTextPreprocessor` instead of separate Cangjie/MeCab members; `loadTextPreprocessor(tokenizerPath, mecabDictPath)` replaces the previous loader.
 - `decodeUtf8`/`encodeCodepoint` are now `static` utility methods; long loops split into focused helpers (`detectSequenceLength`, `extractLeadingBits`, `decodeCodepointAt`, `isContentNode`, `hasReading`, `appendNodeReading`, `buildHiraganaFromNodes`).
 - `package.json` ships the new `dict/` folder and exposes the `build:mecab-dict` npm script.
+
+## [0.8.4]
+
+This release adds streaming options for both directions: you can stream **PCM out** from a full string (`run` with `streamOutput`, or `runStream`), and you can feed **incremental text** from an async source (`runStreaming`) with optional sentence accumulation before each native job. Examples and tests cover Supertonic and Chatterbox so you can copy a pattern that matches your integration.
+
+## New APIs
+
+### Chunked output on `run` and `runStream`
+
+`run({ input, streamOutput: true })` splits the input into sentence-sized chunks and invokes `onUpdate` for each PCM chunk, similar to the existing `runStream(text)` path. `runStream(text, options)` remains a thin wrapper over that behavior for callers that already have the full script as a string.
+
+### Streaming text in with `runStreaming`
+
+`runStreaming(textStream, options)` accepts async string input (including token-by-token yields), optionally coalescing fragments with `accumulateTextStream` from `lib/textStreamAccumulator.js` so small chunks are merged until a sentence boundary, a grapheme limit, or an idle flush. You can turn accumulation off when you want one native job per yield.
+
+## Features
+
+### Examples and tests
+
+New and updated examples demonstrate Chatterbox and Supertonic: output-only streaming, IO streaming with `runStreaming`, and header comments on batch examples pointing to the streaming APIs. Integration coverage exercises `run({ streamOutput: true })` and `runStreaming`, and unit tests cover `runStream` orchestration and streaming accumulation behavior with a stub engine.
 
 ## [0.8.3]
 

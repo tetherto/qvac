@@ -3,7 +3,6 @@
 const test = require('brittle')
 const path = require('bare-path')
 const fs = require('bare-fs')
-const FilesystemDL = require('@qvac/dl-filesystem')
 const LlmLlamacpp = require('../../index.js')
 const { ensureModel } = require('./utils')
 const { attachSpecLogger } = require('./spec-logger')
@@ -92,7 +91,7 @@ async function setupModel (t, overrides = {}) {
     downloadUrl: DEFAULT_MODEL.url
   })
 
-  const loader = new FilesystemDL({ dirPath })
+  const modelPath = path.join(dirPath, modelName)
   const config = { ...BASE_CONFIG, ...overrides }
   const specLogger = attachSpecLogger({ forwardToConsole: true })
   let loggerReleased = false
@@ -103,24 +102,21 @@ async function setupModel (t, overrides = {}) {
   }
 
   const model = new LlmLlamacpp({
-    loader,
-    modelName,
-    diskPath: dirPath,
+    files: { model: [modelPath] },
+    config,
     logger: console,
     opts: { stats: true }
-  }, config)
+  })
 
   try {
     await model.load()
   } catch (err) {
     releaseLogger()
-    await loader.close().catch(() => { })
     throw err
   }
 
   t.teardown(async () => {
     await model.unload().catch(() => { })
-    await loader.close().catch(() => { })
     releaseLogger()
   })
 
