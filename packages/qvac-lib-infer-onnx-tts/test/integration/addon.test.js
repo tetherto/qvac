@@ -12,8 +12,7 @@ const { lavasrEnhancerConfig, loadReferenceAudio } = require('../utils/lavasr-he
 const platform = os.platform()
 const isMobile = platform === 'ios' || platform === 'android'
 
-const CHATTERBOX_VARIANT = os.getEnv('CHATTERBOX_VARIANT') ||
-  (platform === 'darwin' && os.arch() === 'arm64' ? 'fp32' : 'q4')
+const CHATTERBOX_VARIANT = os.getEnv('CHATTERBOX_VARIANT') || 'q4'
 const VARIANT_SUFFIX = CHATTERBOX_VARIANT === 'fp32' ? '' : `_${CHATTERBOX_VARIANT}`
 const INPUT_SENTENCES = (isMobile ? 'short' : os.getEnv('INPUT_SENTENCES')) || 'short'
 const TEST_ALL_LANGUAGES = os.getEnv('TEST_ALL_LANGUAGES') === 'true'
@@ -74,9 +73,13 @@ function getEnglishSentences () {
 }
 
 function getMultilingualSentences () {
-  if (INPUT_SENTENCES === 'short') return MULTILINGUAL_SENTENCES_SHORT
-  const { en, ...multilingual } = require(`../data/sentences-${INPUT_SENTENCES}`)
-  return multilingual
+  const sentences = INPUT_SENTENCES === 'short'
+    ? MULTILINGUAL_SENTENCES_SHORT
+    : (() => { const { en, ...multilingual } = require(`../data/sentences-${INPUT_SENTENCES}`); return multilingual })()
+  if (TTS_INTEGRATION_PROFILE === 'short') {
+    return Object.fromEntries(Object.keys(sentences).slice(0, 2).map((k) => [k, sentences[k]]))
+  }
+  return sentences
 }
 
 function runChatterboxSynth (model, params, expectation) {
@@ -244,12 +247,7 @@ test('Chatterbox Multilingual TTS: Synthesis across languages', { timeout: 36000
   t.ok(downloadResult.success, 'Chatterbox multilingual models should be downloaded')
   if (!downloadResult.success) return
 
-  const fullMultilingualSentences = getMultilingualSentences()
-  const multilingualSentences = TTS_INTEGRATION_PROFILE === 'short'
-    ? Object.fromEntries(
-      Object.keys(fullMultilingualSentences).slice(0, 2).map((k) => [k, fullMultilingualSentences[k]])
-    )
-    : fullMultilingualSentences
+  const multilingualSentences = getMultilingualSentences()
   const languages = Object.keys(multilingualSentences)
   const firstLang = languages[0]
 
