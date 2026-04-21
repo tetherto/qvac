@@ -233,7 +233,7 @@ async function runExpectingNoPromptValidationError (t, model, prompt, runOptions
     return
   }
 
-  const message = String(capturedError && capturedError.message ? capturedError.message : capturedError)
+  const message = String(capturedError.message ? capturedError.message : capturedError)
   t.absent(
     message.includes(invalidReason),
     `prompt should not fail validation with reason: ${invalidReason}`
