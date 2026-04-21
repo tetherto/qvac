@@ -2,7 +2,6 @@
 
 const test = require('brittle')
 const path = require('bare-path')
-const FilesystemDL = require('@qvac/dl-filesystem')
 const LlmLlamacpp = require('../../index.js')
 const { ensureModel } = require('./utils')
 const { attachSpecLogger } = require('./spec-logger')
@@ -98,8 +97,8 @@ async function setupModel (t, overrides = {}) {
     modelName: QWEN3_MODEL.name,
     downloadUrl: QWEN3_MODEL.url
   })
+  const modelPath = path.join(dirPath, modelName)
 
-  const loader = new FilesystemDL({ dirPath })
   const config = { ...BASE_CONFIG, ...overrides }
   const specLogger = attachSpecLogger({ forwardToConsole: false })
   let loggerReleased = false
@@ -110,24 +109,23 @@ async function setupModel (t, overrides = {}) {
   }
 
   const model = new LlmLlamacpp({
-    loader,
-    modelName,
-    diskPath: dirPath,
+    files: {
+      model: [modelPath]
+    },
+    config,
     logger: QUIET_LOGGER,
     opts: { stats: true }
-  }, config)
+  })
 
   try {
     await model.load()
   } catch (err) {
     releaseLogger()
-    await loader.close().catch(() => {})
     throw err
   }
 
   t.teardown(async () => {
     await model.unload().catch(() => {})
-    await loader.close().catch(() => {})
     releaseLogger()
   })
 
