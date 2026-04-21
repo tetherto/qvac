@@ -171,7 +171,7 @@ function main () {
   const outputDir = process.argv[3]
 
   if (!logDir || !outputDir) {
-    console.error('Usage: node scripts/perf-report/extract-parakeet-rtf-from-logs.js <log-dir> <output-dir>')
+    console.error('Usage: node scripts/perf-report/extract-parakeet-rtf-from-logs.js <input-dir> <output-dir>')
     process.exit(1)
   }
 
@@ -182,7 +182,7 @@ function main () {
 
   const reports = dedupeReports(collectReports(logDir))
   if (reports.length === 0) {
-    console.log('No Parakeet RTF reports found in logs.')
+    console.log('No Parakeet RTF reports found in the input directory.')
     process.exit(0)
   }
 

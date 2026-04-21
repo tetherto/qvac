@@ -133,7 +133,8 @@ jobs:
             --dir benchmark-artifacts \
             --manual-dir packages/qvac-lib-infer-parakeet/benchmarks/manual-results \
             --output benchmark-artifacts/parakeet-performance-findings.md \
-            --output-json benchmark-artifacts/parakeet-performance-findings.json
+            --output-json benchmark-artifacts/parakeet-performance-findings.json \
+            --output-html benchmark-artifacts/parakeet-performance-findings.html
 
       - name: Add summary
         run: cat benchmark-artifacts/parakeet-performance-findings.md >> "$GITHUB_STEP_SUMMARY"
@@ -145,4 +146,5 @@ jobs:
           path: |
             benchmark-artifacts/parakeet-performance-findings.md
             benchmark-artifacts/parakeet-performance-findings.json
+            benchmark-artifacts/parakeet-performance-findings.html
           retention-days: 30
