@@ -6,6 +6,7 @@ const test = require('brittle')
 const os = require('bare-os')
 const BCIWhispercpp = require('../../index')
 const { getTestPaths, computeWER, detectPlatform } = require('./helpers')
+const { flattenSegments } = require('../../lib/util')
 
 const platform = detectPlatform()
 const { manifest, getSamplePath } = getTestPaths()
@@ -30,18 +31,6 @@ if (requireModel && !hasModel) {
 
 function bciConfigFor (sample) {
   return typeof sample?.day_idx === 'number' ? { day_idx: sample.day_idx } : undefined
-}
-
-function flattenSegments (output) {
-  const segments = []
-  for (const entry of output) {
-    if (Array.isArray(entry)) {
-      segments.push(...entry)
-    } else if (entry && typeof entry.text === 'string') {
-      segments.push(entry)
-    }
-  }
-  return segments
 }
 
 test('[BCI] load and destroy via package interface', { skip: !hasModel, timeout: 120000 }, async (t) => {

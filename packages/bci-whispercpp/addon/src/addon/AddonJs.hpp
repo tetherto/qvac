@@ -6,6 +6,8 @@
 #include <string>
 #include <vector>
 
+#include <mutex>
+
 #include <js.h>
 #include <qvac-lib-inference-addon-cpp/JsInterface.hpp>
 #include <qvac-lib-inference-addon-cpp/JsUtils.hpp>
@@ -91,22 +93,20 @@ inline js_value_t* createInstance(js_env_t* env, js_callback_info_t* info) try {
   using namespace qvac_lib_inference_addon_cpp;
   using namespace std;
 
-  // Route whisper.cpp log output through the addon-cpp logger instead of
-  // silencing globally. This avoids clobbering log handlers installed by
-  // coexisting whisper-based addons (e.g. @qvac/transcription-whispercpp)
-  // in the same process, since each addon instance re-sets the handler
-  // to its own logger anyway.
-  whisper_log_set(
-      [](enum ggml_log_level level, const char* text, void*) {
-        if (text == nullptr) return;
-        auto prio = (level == GGML_LOG_LEVEL_ERROR)
-                        ? qvac_lib_inference_addon_cpp::logger::Priority::ERROR
-                    : (level == GGML_LOG_LEVEL_WARN)
-                        ? qvac_lib_inference_addon_cpp::logger::Priority::WARNING
-                        : qvac_lib_inference_addon_cpp::logger::Priority::DEBUG;
-        QLOG(prio, std::string("[whisper.cpp] ") + text);
-      },
-      nullptr);
+  static std::once_flag whisperLogOnce;
+  std::call_once(whisperLogOnce, []() {
+    whisper_log_set(
+        [](enum ggml_log_level level, const char* text, void*) {
+          if (text == nullptr) return;
+          auto prio = (level == GGML_LOG_LEVEL_ERROR)
+                          ? qvac_lib_inference_addon_cpp::logger::Priority::ERROR
+                      : (level == GGML_LOG_LEVEL_WARN)
+                          ? qvac_lib_inference_addon_cpp::logger::Priority::WARNING
+                          : qvac_lib_inference_addon_cpp::logger::Priority::DEBUG;
+          QLOG(prio, std::string("[whisper.cpp] ") + text);
+        },
+        nullptr);
+  });
   JsArgsParser args(env, info);
   auto configurationParams = args.getJsObject(1, "configurationParams");
 

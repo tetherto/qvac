@@ -36,13 +36,6 @@ class BCIWhispercpp {
       })
     }
 
-    if (!fs.existsSync(files.model)) {
-      throw new QvacErrorAddonBCI({
-        code: ERR_CODES.MODEL_FILE_NOT_FOUND,
-        adds: files.model
-      })
-    }
-
     this._files = { model: files.model }
     this._config = config
     this.opts = opts
@@ -80,11 +73,13 @@ class BCIWhispercpp {
   }
 
   async _load () {
-    // BCI-tuned whisper defaults (beam_size, suppress_nst, temperature,
-    // length_penalty, ...) are applied natively in
-    // addon/src/model-interface/bci/BCIConfig.cpp::toWhisperFullParams.
-    // Only the transport-level defaults live in JS; everything else is
-    // delegated to the C++ layer to avoid double-specification.
+    if (!fs.existsSync(this._files.model)) {
+      throw new QvacErrorAddonBCI({
+        code: ERR_CODES.MODEL_FILE_NOT_FOUND,
+        adds: this._files.model
+      })
+    }
+
     const whisperConfig = {
       language: 'en',
       n_threads: 0,

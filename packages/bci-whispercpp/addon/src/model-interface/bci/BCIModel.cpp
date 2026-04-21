@@ -87,7 +87,8 @@ void BCIModel::loadEmbedderIfNeeded() {
     QLOG(qvac_lib_inference_addon_cpp::logger::Priority::INFO,
          "Loaded BCI embedder weights from: " + embedderPath);
   } else {
-    throw std::runtime_error(
+    throw qvac_errors::bci_error::makeStatus(
+        qvac_errors::bci_error::Code::InvalidNeuralSignal,
         "BCI embedder weights not found at: " + embedderPath +
         ". This file is required for neural signal preprocessing. "
         "Generate it with: python3 scripts/convert-model.py --checkpoint <ckpt>");
@@ -101,7 +102,9 @@ void BCIModel::load() {
 
   const auto modelPathIt = cfg_.whisperContextCfg.find("model");
   if (modelPathIt == cfg_.whisperContextCfg.end()) {
-    throw std::runtime_error("Model path not specified");
+    throw qvac_errors::StatusError(
+        qvac_errors::general_error::InvalidArgument,
+        "Model path not specified in contextParams");
   }
   const auto modelPath = std::get<std::string>(modelPathIt->second);
 
@@ -110,7 +113,9 @@ void BCIModel::load() {
 
   auto* rawCtx = whisper_init_from_file_with_params(modelPath.c_str(), contextParams);
   if (rawCtx == nullptr) {
-    throw std::runtime_error("Failed to initialize Whisper context for BCI");
+    throw qvac_errors::bci_error::makeStatus(
+        qvac_errors::bci_error::Code::InvalidNeuralSignal,
+        "Failed to initialize Whisper context from: " + modelPath);
   }
 
   try {
@@ -310,10 +315,12 @@ void BCIModel::process(const Input& rawNeuralData) {
 
 std::any BCIModel::process(const std::any& input) {
   AnyInput modelInput;
-  if (const auto* anyInput = std::any_cast<AnyInput>(&input)) {
-    modelInput = *anyInput;
-  } else if (const auto* inputVector = std::any_cast<Input>(&input)) {
-    modelInput.input = *inputVector;
+  if (auto* anyInput = std::any_cast<AnyInput>(
+          const_cast<std::any*>(&input))) {
+    modelInput = std::move(*anyInput);
+  } else if (auto* inputVector = std::any_cast<Input>(
+                 const_cast<std::any*>(&input))) {
+    modelInput.input = std::move(*inputVector);
   } else {
     throw qvac_errors::StatusError(
         qvac_errors::general_error::InvalidArgument,

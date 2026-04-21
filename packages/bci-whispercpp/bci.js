@@ -7,9 +7,7 @@ const state = Object.freeze({
   LOADING: 'loading',
   LISTENING: 'listening',
   PROCESSING: 'processing',
-  IDLE: 'idle',
-  PAUSED: 'paused',
-  STOPPED: 'stopped'
+  IDLE: 'idle'
 })
 
 const END_OF_INPUT = 'end of job'
@@ -74,15 +72,13 @@ class BCIInterface {
     )
 
     let mappedEvent = event
-    if (isError || String(event).includes('Error')) {
+    if (event === 'Error' || isError || String(event).includes('Error')) {
       mappedEvent = 'Error'
-    } else if (isStats || String(event).includes('RuntimeStats')) {
+    } else if (event === 'JobEnded' || isStats || String(event).includes('RuntimeStats')) {
       mappedEvent = 'JobEnded'
-    } else if (isTranscriptOutput) {
+    } else if (event === 'Output' || isTranscriptOutput) {
       mappedEvent = 'Output'
     } else if (Array.isArray(data) && data.length === 0) {
-      // BCIModel::process returns an empty vector to avoid duplicate
-      // segment emissions; skip forwarding this noop event.
       return
     }
 
@@ -95,10 +91,6 @@ class BCIInterface {
       this._setState(state.PROCESSING)
 
       if (this._outputCb != null) {
-        // Unpack transcript arrays into one event per segment so the
-        // QvacResponse output iterator yields flat segments (matches
-        // TranscriptionWhispercpp; avoids callers having to flatten
-        // [[seg,seg]] back out themselves).
         const isTranscriptArray = Array.isArray(data) && data.length > 0 &&
           typeof data[0]?.text === 'string'
         const isSingleTranscript = !Array.isArray(data) &&

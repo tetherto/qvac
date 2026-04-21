@@ -1,6 +1,6 @@
 {
   "name": "bci-whispercpp",
-  "version-string": "0.1.0",
+  "version": "0.1.0",
   "dependencies": [
     {
       "name": "qvac-lib-inference-addon-cpp",

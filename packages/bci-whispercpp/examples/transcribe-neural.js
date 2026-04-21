@@ -15,21 +15,10 @@ const fs = require('bare-fs')
 const path = require('bare-path')
 const os = require('bare-os')
 const BCIWhispercpp = require('../index')
+const { flattenSegments } = require('../lib/util')
 
 const DEFAULT_MODEL = (os.hasEnv('WHISPER_MODEL_PATH') ? os.getEnv('WHISPER_MODEL_PATH') : null) ||
   path.join(__dirname, '..', 'models', 'ggml-bci-windowed.bin')
-
-function flattenSegments (output) {
-  const segments = []
-  for (const entry of output) {
-    if (Array.isArray(entry)) {
-      segments.push(...entry)
-    } else if (entry && typeof entry.text === 'string') {
-      segments.push(entry)
-    }
-  }
-  return segments
-}
 
 async function main () {
   const args = global.Bare ? global.Bare.argv.slice(2) : process.argv.slice(2)

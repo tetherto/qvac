@@ -76,6 +76,10 @@ function checkConfig (configObject) {
       throw new Error(`${userParam} is not a valid parameter for miscConfig`)
     }
   }
+  if (configObject.miscConfig.caption_enabled !== undefined &&
+      typeof configObject.miscConfig.caption_enabled !== 'boolean') {
+    throw new Error('miscConfig.caption_enabled must be a boolean')
+  }
 
   if (configObject.bciConfig) {
     for (const userParam of Object.keys(configObject.bciConfig)) {

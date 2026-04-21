@@ -9,7 +9,7 @@
   "scripts": {
     "lint": "standard \"examples/**/*.js\" \"test/**/*.js\" \"*.js\" \"lib/**/*.js\"",
     "lint:fix": "standard --fix \"examples/**/*.js\" \"test/**/*.js\" \"*.js\" \"lib/**/*.js\"",
-    "lint-cpp": "clang-tidy -p build $(find addon -name '*.cpp')",
+    "lint-cpp": "clang-tidy -p build addon/src/js-interface/JSAdapter.cpp addon/src/js-interface/binding.cpp addon/src/model-interface/bci/BCIConfig.cpp addon/src/model-interface/bci/BCIModel.cpp addon/src/model-interface/bci/NeuralProcessor.cpp",
     "build": "bare-make generate && bare-make build && bare-make install",
     "build:pack": "mkdir -p dist && npm pack --pack-destination dist",
     "test": "npm run test:integration",
@@ -55,7 +55,6 @@
   "devDependencies": {
     "@types/node": "^22.15.3",
     "bare-buffer": "^3.4.2",
-    "bare-tty": "^5.0.3",
     "brittle": "^3.17.0",
     "cmake-bare": "^1.7.5",
     "cmake-vcpkg": "^1.1.0",
@@ -69,8 +68,8 @@
     "@qvac/error": "^0.1.0",
     "@qvac/infer-base": "^0.4.0",
     "@qvac/logging": "^0.1.0",
+    "bare-fs": "^4.5.1",
     "bare-path": "^3.0.0",
-    "bare-stream": "^2.7.0",
     "path": "npm:bare-path"
   },
   "exports": {
