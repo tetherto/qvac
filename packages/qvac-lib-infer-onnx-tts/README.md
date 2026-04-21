@@ -582,6 +582,7 @@ console.log(`Total audio samples generated: ${audioSamples.length}`)
 ## Other Examples
 
 -   [Chatterbox TTS](examples/chatterbox-tts.js) - Voice cloning from reference audio (English or multilingual).
+-   [Chatterbox Langdetect TTS](examples/chatterbox-langdetect-tts.js) - Detects the input language with `@qvac/langdetect-text`, selects the English or multilingual Chatterbox bundle, and synthesizes terminal text.
 -   [Supertonic TTS](examples/supertonic-tts.js) - Pre-trained voice styles (English or multilingual).
 
 ```bash
@@ -593,6 +594,9 @@ bare examples/chatterbox-tts.js english path/to/reference.wav
 
 # Chatterbox Multilingual
 bare examples/chatterbox-tts.js multilingual
+
+# Chatterbox with automatic language detection
+bare examples/chatterbox-langdetect-tts.js "Hola mundo. Esta demo detecta el idioma automaticamente."
 
 # Supertonic English
 bare examples/supertonic-tts.js english
