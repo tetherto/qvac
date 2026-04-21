@@ -81,7 +81,7 @@ export const ttsResponseSchema = z.object({
   sentenceChunk: z.string().optional(),
 });
 
-const textToSpeechStreamRequestBaseSchema = z.object({
+export const textToSpeechStreamRequestBaseSchema = z.object({
   modelId: z.string(),
   inputType: z.string().default("text"),
   accumulateSentences: z.boolean().optional(),
@@ -133,14 +133,9 @@ export type TextToSpeechStreamResponse = z.infer<
   typeof textToSpeechStreamResponseSchema
 >;
 
-export type TextToSpeechStreamClientParams = {
-  modelId: string;
-  inputType?: string;
-  accumulateSentences?: boolean;
-  sentenceDelimiterPreset?: "latin" | "cjk" | "multilingual";
-  maxBufferScalars?: number;
-  flushAfterMs?: number;
-};
+export type TextToSpeechStreamClientParams = z.infer<
+  typeof textToSpeechStreamRequestBaseSchema
+>;
 
 export interface TextToSpeechStreamSession {
   write(textFragment: string | Buffer): void;
