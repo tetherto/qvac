@@ -235,12 +235,24 @@ class ImgStableDiffusion {
     // readiness/busy checks.
 
     // ── Dimension validation ────────────────────────────────────────────────
+    // Only validate dimensions the caller actually provided. When width/height
+    // are omitted the addon falls back to its defaults (512x512), and using
+    // `undefined % 8` here would yield NaN which spuriously trips the guard
+    // for every txt2img / img2img call that omits explicit dimensions.
     const alignTo = 8
-    if ((params.width % alignTo !== 0) || (params.height % alignTo !== 0)) {
+    const w = params.width
+    const h = params.height
+    const wProvided = w != null
+    const hProvided = h != null
+    const wBad = wProvided && (!Number.isFinite(w) || w % alignTo !== 0)
+    const hBad = hProvided && (!Number.isFinite(h) || h % alignTo !== 0)
+    if (wBad || hBad) {
+      const suggestW = Number.isFinite(w) ? Math.round(w / alignTo) * alignTo : 512
+      const suggestH = Number.isFinite(h) ? Math.round(h / alignTo) * alignTo : 512
       throw new Error(
         `width and height must be multiples of ${alignTo}. ` +
-        `Got: ${params.width}x${params.height}. ` +
-        `Use ${Math.round(params.width / alignTo) * alignTo}x${Math.round(params.height / alignTo) * alignTo} instead.`
+        `Got: ${w}x${h}. ` +
+        `Use ${suggestW}x${suggestH} instead.`
       )
     }
 
