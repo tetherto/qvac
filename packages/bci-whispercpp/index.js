@@ -191,6 +191,37 @@ class BCIWhispercpp {
     return response
   }
 
+  /**
+   * Streaming transcription: accepts an async iterable of neural signal chunks.
+   * Each chunk is appended and processing starts on end-of-stream.
+   * @param {AsyncIterable<Uint8Array>} signalStream
+   * @returns {Promise<QvacResponse>}
+   */
+  async transcribeStream (signalStream) {
+    return await this._enqueueInference(async () => {
+      const response = this._job.start()
+      const finalized = response.await()
+      finalized.catch(() => {})
+      response.await = () => finalized
+
+      this._handleSignalStream(signalStream).catch((err) => {
+        this._job.fail(err)
+      })
+
+      return response
+    })
+  }
+
+  async _handleSignalStream (signalStream) {
+    for await (const chunk of signalStream) {
+      await this.addon.append({
+        type: 'neural',
+        input: new Uint8Array(chunk.buffer, chunk.byteOffset, chunk.byteLength)
+      })
+    }
+    await this.addon.append({ type: BCIInterface.END_OF_INPUT })
+  }
+
   _outputCallback (addon, event, jobId, data, error) {
     if (event === 'Error') {
       this.logger.error('Job ' + jobId + ' failed with error: ' + error)

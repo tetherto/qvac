@@ -83,6 +83,52 @@ test('[BCI] batch transcription from neural signal file', { skip: !hasModel, tim
   }
 })
 
+test('[BCI] streaming transcription from neural signal chunks', { skip: !hasModel, timeout: 120000 }, async (t) => {
+  t.ok(manifest.samples.length > 0, 'Manifest must contain at least one sample')
+
+  const sample = manifest.samples[1] || manifest.samples[0]
+  const samplePath = getSamplePath(sample.file)
+  t.ok(fs.existsSync(samplePath), 'Fixture ' + sample.file + ' must exist')
+
+  const bci = new BCIWhispercpp({
+    files: { model: MODEL_PATH }
+  }, {
+    whisperConfig: { language: 'en', temperature: 0.0 },
+    miscConfig: { caption_enabled: false },
+    bciConfig: bciConfigFor(sample)
+  })
+
+  try {
+    await bci.load()
+
+    const fullData = fs.readFileSync(samplePath)
+    const chunkSize = Math.ceil(fullData.length / 3)
+
+    async function * generateChunks () {
+      for (let i = 0; i < fullData.length; i += chunkSize) {
+        const end = Math.min(i + chunkSize, fullData.length)
+        yield new Uint8Array(fullData.buffer, fullData.byteOffset + i, end - i)
+      }
+    }
+
+    const response = await bci.transcribeStream(generateChunks())
+    const output = await response.await()
+    const segments = flattenSegments(output)
+    const text = segments.map(s => s.text).join('').trim()
+
+    t.comment('Expected: "' + sample.expected_text + '"')
+    t.comment('Got:      "' + text + '"')
+
+    const wer = computeWER(text, sample.expected_text)
+    t.comment('WER:      ' + (wer * 100).toFixed(1) + '%')
+
+    t.ok(typeof text === 'string' && text.length > 0, 'Streaming should produce transcription')
+    t.ok(typeof wer === 'number', 'WER should be computable')
+  } finally {
+    await bci.destroy()
+  }
+})
+
 test('[BCI] WER measurement across all test samples', { skip: !hasModel, timeout: 180000 }, async (t) => {
   t.ok(manifest.samples.length > 0, 'Manifest must contain at least one sample')
 

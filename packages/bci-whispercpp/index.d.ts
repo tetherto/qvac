@@ -94,6 +94,11 @@ declare class BCIWhispercpp {
   /** Transcribe neural signal data (batch). Returns QvacResponse. */
   transcribe(neuralData: Uint8Array): Promise<QvacResponse>;
 
+  /** Transcribe a stream of neural signal chunks. Returns QvacResponse. */
+  transcribeStream(
+    signalStream: AsyncIterable<Uint8Array>
+  ): Promise<QvacResponse>;
+
   /** Cancel current inference. */
   cancel(): Promise<void>;
 
