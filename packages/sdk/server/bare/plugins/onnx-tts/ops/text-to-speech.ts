@@ -8,12 +8,11 @@ import { nowMs } from "@/profiling";
 import { buildStreamResult, hasDefinedValues } from "@/profiling/model-execution";
 import type { TtsResponse } from "@/server/bare/types/addon-responses";
 import { TextToSpeechFailedError } from "@/utils/errors-server";
-
-type TtsStreamChunk = {
-  outputArray: ArrayLike<number>;
-  chunkIndex?: number;
-  sentenceChunk?: string;
-};
+import {
+  type TtsStreamChunk,
+  type TtsOpYield,
+  collectTtsStats,
+} from "@/server/bare/utils/tts-stats";
 
 type RunStreamModel = {
   runStream: (
@@ -32,25 +31,6 @@ function hasRunStream(model: unknown): model is RunStreamModel {
     "runStream" in model &&
     typeof (model as RunStreamModel).runStream === "function"
   );
-}
-
-type TtsOpYield = {
-  buffer: number[];
-  chunkIndex?: number;
-  sentenceChunk?: string;
-};
-
-function collectTtsStats(response: {
-  stats?: { audioDurationMs?: number; totalSamples?: number };
-}): TtsStats {
-  return {
-    ...(response.stats?.audioDurationMs !== undefined && {
-      audioDuration: response.stats.audioDurationMs,
-    }),
-    ...(response.stats?.totalSamples !== undefined && {
-      totalSamples: response.stats.totalSamples,
-    }),
-  };
 }
 
 export async function* textToSpeech(
