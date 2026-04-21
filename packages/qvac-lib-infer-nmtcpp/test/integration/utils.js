@@ -28,13 +28,103 @@ try {
   perfReporterMod.configure({ fs, path, process, os })
   createPerformanceReporter = perfReporterMod.createPerformanceReporter
 } catch (_) {
+  // Mobile bundle — inline lightweight reporter that records metrics and
+  // emits [PERF_REPORT_START]...[PERF_REPORT_END] markers to console so the
+  // NMT mobile workflow (or a manual `grep` on Device Farm logs) can pull
+  // the numbers out. Mirrors the OCR pattern from PR #1625.
   createPerformanceReporter = function (opts) {
+    const _results = []
+    const _startedAt = new Date().toISOString()
+    const _addon = (opts && opts.addon) || 'unknown'
+    const _addonType = (opts && opts.addonType) || 'generic'
+    const _platform = (process && process.platform) || ''
+    const _device = {
+      name: _platform,
+      platform: _platform,
+      os_version: '',
+      arch: (os && os.arch) ? os.arch() : '',
+      runner: 'device-farm'
+    }
+
     return {
-      record () {},
-      toJSON () { return { schema_version: '1.0', addon: opts.addon, results: [] } },
-      writeReport () {},
-      writeStepSummary () {},
-      get length () { return 0 }
+      record (testName, metrics, extra) {
+        const entry = {
+          test: testName,
+          execution_provider: (extra && extra.execution_provider) || null,
+          metrics: Object.assign({
+            total_time_ms: null,
+            decode_time_ms: null,
+            generated_tokens: null,
+            tps: null,
+            chrfpp: null
+          }, metrics || {}),
+          input: (extra && extra.input) || null,
+          output: (extra && extra.output) || null,
+          reference: (extra && extra.reference) || null
+        }
+        _results.push(entry)
+      },
+      toJSON () {
+        return {
+          schema_version: '1.0',
+          addon: _addon,
+          addon_type: _addonType,
+          timestamp: _startedAt,
+          device: _device,
+          results: _results
+        }
+      },
+      writeReport (destPath) {
+        const json = JSON.stringify(this.toJSON())
+        // Write JSON to best-effort device paths so Device Farm artifact
+        // collection can grab it. Mirrors OCR's inline reporter.
+        const dirs = []
+        if (typeof global !== 'undefined' && global.testDir) dirs.push(global.testDir)
+        if (_platform === 'android') {
+          dirs.push('/sdcard/Android/data/io.tether.test.qvac/files')
+          dirs.push('/storage/emulated/0/Android/data/io.tether.test.qvac/files')
+          dirs.push('/data/local/tmp')
+        }
+        dirs.push('/tmp')
+        for (const d of dirs) {
+          try {
+            try { fs.mkdirSync(d, { recursive: true }) } catch (_) {}
+            const p = path.join(d, 'perf-report.json')
+            fs.writeFileSync(p, json)
+            console.log('[PERF_REPORT_PATH]' + p)
+          } catch (_) {}
+        }
+        // Also write to the explicit destPath the desktop reporter uses,
+        // when it is writable (e.g. when running integration tests on a
+        // simulator host with shared filesystem).
+        if (destPath) {
+          try {
+            try { fs.mkdirSync(path.dirname(destPath), { recursive: true }) } catch (_) {}
+            fs.writeFileSync(destPath, json)
+          } catch (_) {}
+        }
+      },
+      writeStepSummary () { /* no step summary on mobile */ },
+      writeToConsole () {
+        try {
+          const json = JSON.stringify(this.toJSON())
+          // Chunk large payloads so Android logcat per-entry size limits
+          // don't truncate the report.
+          const CHUNK = 800
+          if (json.length <= CHUNK) {
+            console.log('[PERF_REPORT_START]' + json + '[PERF_REPORT_END]')
+          } else {
+            const id = Date.now().toString(36)
+            const n = Math.ceil(json.length / CHUNK)
+            for (let i = 0; i < n; i++) {
+              console.log('[PERF_CHUNK:' + id + ':' + i + ':' + n + ']' + json.substring(i * CHUNK, (i + 1) * CHUNK))
+            }
+          }
+        } catch (err) {
+          console.log('[perf-reporter] mobile console write failed: ' + err.message)
+        }
+      },
+      get length () { return _results.length }
     }
   }
 }
@@ -45,10 +135,111 @@ try {
   evaluateTranslationQuality = translationQualityMod.evaluateTranslationQuality
   findTranslationGroundTruth = translationQualityMod.findTranslationGroundTruth
 } catch (_) {
-  // Mobile bundle fallback — skip quality scoring (no ground-truth fixtures
-  // shipped to device). chrfpp field will simply be null in reporter records.
-  evaluateTranslationQuality = function () { return null }
-  findTranslationGroundTruth = function () { return null }
+  // Mobile bundle fallback — inline chrF++ + fixture data so quality
+  // scoring works on device without file I/O for fixture JSONs.
+  //
+  // The inline fixtures are a verbatim copy of the three
+  // packages/qvac-lib-infer-nmtcpp/test/integration/fixtures/*.quality.json
+  // files. Keep them in sync if the on-disk fixtures change.
+  const _inlineFixtures = {
+    'bergamot.quality.json': [
+      { source: 'Hello, how are you?', src_lang: 'en', dst_lang: 'it', reference: 'Ciao, come stai?', notes: 'placeholder baseline — verify with native speaker' }
+    ],
+    'indictrans.quality.json': [
+      { source: 'Hello, how are you?', src_lang: 'eng_Latn', dst_lang: 'hin_Deva', reference: 'नमस्ते, आप कैसे हैं?', notes: 'placeholder baseline — verify with native speaker' }
+    ],
+    'pivot-bergamot.quality.json': [
+      { source: 'Buenos días, ¿cómo estás hoy?', src_lang: 'es', dst_lang: 'it', reference: 'Buongiorno, come stai oggi?', notes: 'placeholder baseline — verify with native speaker' },
+      { source: "Bonjour, comment allez-vous aujourd'hui?", src_lang: 'fr', dst_lang: 'es', reference: 'Hola, ¿cómo está usted hoy?', notes: 'placeholder baseline — verify with native speaker' }
+    ]
+  }
+
+  function _cleanWhitespace (text) {
+    return String(text).replace(/\r\n/g, '\n').replace(/[\t\v\f]/g, ' ').replace(/ {2,}/g, ' ').trim()
+  }
+
+  function _extractCharNgrams (text, n) {
+    const stripped = text.replace(/\s+/g, '')
+    const grams = new Map()
+    if (stripped.length < n) return grams
+    for (let i = 0; i <= stripped.length - n; i++) {
+      const g = stripped.slice(i, i + n)
+      grams.set(g, (grams.get(g) || 0) + 1)
+    }
+    return grams
+  }
+
+  function _extractWordNgrams (text, n) {
+    const words = text.split(/\s+/).filter(Boolean)
+    const grams = new Map()
+    if (words.length < n) return grams
+    for (let i = 0; i <= words.length - n; i++) {
+      const g = words.slice(i, i + n).join(' ')
+      grams.set(g, (grams.get(g) || 0) + 1)
+    }
+    return grams
+  }
+
+  function _computePR (hGrams, rGrams) {
+    let hTotal = 0; for (const c of hGrams.values()) hTotal += c
+    let rTotal = 0; for (const c of rGrams.values()) rTotal += c
+    if (hTotal === 0 || rTotal === 0) return null
+    let matches = 0
+    for (const [g, hc] of hGrams) {
+      const rc = rGrams.get(g)
+      if (rc !== undefined) matches += Math.min(hc, rc)
+    }
+    return { p: matches / hTotal, r: matches / rTotal }
+  }
+
+  function _chrfpp (hypothesis, reference) {
+    const h = _cleanWhitespace(hypothesis)
+    const r = _cleanWhitespace(reference)
+    if (h.length === 0 || r.length === 0) return 0
+    let precSum = 0, recSum = 0, validOrders = 0
+    for (let n = 1; n <= 6; n++) {
+      const res = _computePR(_extractCharNgrams(h, n), _extractCharNgrams(r, n))
+      if (res) { precSum += res.p; recSum += res.r; validOrders++ }
+    }
+    for (let n = 1; n <= 2; n++) {
+      const res = _computePR(_extractWordNgrams(h, n), _extractWordNgrams(r, n))
+      if (res) { precSum += res.p; recSum += res.r; validOrders++ }
+    }
+    if (validOrders === 0) return 0
+    const avgP = precSum / validOrders
+    const avgR = recSum / validOrders
+    if (avgP === 0 && avgR === 0) return 0
+    const b2 = 4 // beta=2 squared
+    return (1 + b2) * avgP * avgR / (b2 * avgP + avgR)
+  }
+
+  function _round4 (v) { return Math.round(v * 10000) / 10000 }
+
+  evaluateTranslationQuality = function (hypothesis, groundTruthEntry) {
+    if (!groundTruthEntry || typeof groundTruthEntry !== 'object') return null
+    const reference = groundTruthEntry.reference || ''
+    return {
+      source: groundTruthEntry.source || null,
+      reference,
+      src_lang: groundTruthEntry.src_lang || null,
+      dst_lang: groundTruthEntry.dst_lang || null,
+      chrfpp: _round4(_chrfpp(hypothesis, reference))
+    }
+  }
+
+  findTranslationGroundTruth = function (fixturePath, source, srcLang, dstLang) {
+    // Map fixture file basename → inline entries. Works on mobile where
+    // the fixture JSON isn't bundled as a readable file.
+    const key = String(fixturePath).split(/[\\/]/).pop()
+    const entries = _inlineFixtures[key]
+    if (!Array.isArray(entries)) return null
+    for (const entry of entries) {
+      if (entry.source === source && entry.src_lang === srcLang && entry.dst_lang === dstLang) {
+        return entry
+      }
+    }
+    return null
+  }
 }
 
 const _perfReporter = createPerformanceReporter({
@@ -66,6 +257,12 @@ function _scheduleReportWrite () {
     if (_perfReporter.length > 0) {
       _perfReporter.writeReport(_reportPath)
       _perfReporter.writeStepSummary()
+      // On mobile, also emit the report to console so Device Farm log
+      // collection captures it. No-op on desktop (writeToConsole is
+      // only defined on the mobile inline reporter).
+      if (isMobile && typeof _perfReporter.writeToConsole === 'function') {
+        _perfReporter.writeToConsole()
+      }
     }
   })
 }
