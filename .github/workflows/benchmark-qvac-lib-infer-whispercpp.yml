@@ -3,6 +3,14 @@ name: Benchmark (Whispercpp)
 on:
   workflow_dispatch:
     inputs:
+      repository:
+        description: 'Repository to benchmark'
+        required: false
+        type: string
+      ref:
+        description: 'Git ref (branch/tag/SHA) to benchmark'
+        required: false
+        type: string
       dataset_type:
         description: 'Dataset type'
         required: true
@@ -292,6 +300,9 @@ jobs:
       - name: Checkout repository
         uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # 6.0.2
         with:
+          repository: ${{ github.event.inputs.repository || github.repository }}
+          ref: ${{ github.event.inputs.ref || github.ref }}
+          token: ${{ secrets.PAT_TOKEN }}
           submodules: recursive
 
       - name: Configure scoped registry for @tetherto and @qvac packages
@@ -343,6 +354,25 @@ jobs:
         run: |
           npm install -g bare-dev
           npm install -g bare bare-make
+
+      - name: Download prebuilds
+        id: prebuilds
+        continue-on-error: true
+        env:
+          GH_TOKEN: ${{ secrets.PAT_TOKEN }}
+          BENCHMARK_REPOSITORY: ${{ github.event.inputs.repository || github.repository }}
+          BENCHMARK_REF: ${{ github.event.inputs.ref || github.ref_name }}
+        run: |
+          echo "Fetching prebuilds artifact from latest successful prebuilds run..."
+          RUN_ID=$(gh run list --repo "$BENCHMARK_REPOSITORY" --workflow=prebuilds-qvac-lib-infer-whispercpp.yml --branch "$BENCHMARK_REF" --status=success --limit 1 --json databaseId --jq '.[0].databaseId')
+          if [ -z "$RUN_ID" ]; then
+            echo "::warning::No successful prebuilds run found - will fall back to published npm package"
+            exit 1
+          fi
+
+          echo "Using prebuilds from run ID: $RUN_ID"
+          gh run download "$RUN_ID" --repo "$BENCHMARK_REPOSITORY" -n prebuilds -D "${{ env.WORKDIR }}/prebuilds"
+          ls -la "${{ env.WORKDIR }}/prebuilds/" || true
 
       - name: Clone custom model repository
         if: github.event.inputs.custom_model_repo != ''
@@ -536,6 +566,7 @@ jobs:
             esac
             echo "Using default max_samples for $MODEL_SIZE: $MAX_SAMPLES"
           fi
+          echo "MAX_SAMPLES=$MAX_SAMPLES" >> $GITHUB_ENV
 
           # Set timeout based on model size
           case "$MODEL_SIZE" in
@@ -604,9 +635,21 @@ jobs:
           echo "=== Updated ${CONFIG_FILE} ==="
           cat "$CONFIG_PATH"
 
+      - name: Install main package dependencies
+        if: steps.prebuilds.outcome == 'success'
+        working-directory: ${{ env.WORKDIR }}
+        run: npm install
+
       - name: Install benchmark server dependencies
         working-directory: ${{ env.WORKDIR }}/benchmarks/server
-        run: npm install
+        run: |
+          npm install
+          if [ "${{ steps.prebuilds.outcome }}" = "success" ]; then
+            echo "Installing addon from local source (prebuilds available)..."
+            npm install ../../
+          else
+            echo "Using published addon dependency from npm..."
+          fi
 
       - name: Install benchmark client dependencies
         working-directory: ${{ env.WORKDIR }}/benchmarks/client
@@ -674,10 +717,6 @@ jobs:
           DATASET_LANG="${{ github.event.inputs.language }}"
           VAD_SUFFIX="no_vad"
           STREAMING_SUFFIX="batch"
-
-          if [ "${{ github.event.inputs.vad_enabled }}" = "true" ]; then
-            VAD_SUFFIX="vad"
-          fi
 
           if [ "${{ github.event.inputs.streaming_mode }}" = "true" ]; then
             STREAMING_SUFFIX="streaming"
