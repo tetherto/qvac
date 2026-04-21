@@ -24,21 +24,44 @@ permissions:
   id-token: write
 
 jobs:
-  authorize:
-    runs-on: ubuntu-latest
-    permissions:
-      contents: read
-      pull-requests: write
-    outputs:
-      allowed: ${{ steps.auth.outputs.allowed }}
-    steps:
-      - name: Checkout
-        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # 6.0.2
-      - name: Authorize
-        id: auth
-        uses: ./.github/actions/authorize-pr
-        with:
-          github-token: ${{ github.token }}
+   authorize:
+     runs-on: ubuntu-latest
+     permissions:
+       contents: read
+       pull-requests: write
+     outputs:
+       allowed: ${{ steps.label-check.outputs.allowed }}
+     steps:
+       - name: Checkout
+         uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # 6.0.2
+       - name: Authorize
+         id: auth
+         uses: ./.github/actions/authorize-pr
+         with:
+           github-token: ${{ github.token }}
+           label: "ready-to-test"
+       - name: Check label for same-repo PRs
+         id: label-check
+         run: |
+           if [ "${{ steps.auth.outputs.allowed }}" = "true" ]; then
+             # Check if this is a same-repo PR
+             if [ "${{ github.event.pull_request.head.repo.full_name }}" = "${{ github.repository }}" ]; then
+               # Same-repo PR: check for the label
+               LABELS_JSON="${{ toJSON(github.event.pull_request.labels.*.name) }}"
+               HAS_LABEL=$(echo "$LABELS_JSON" | jq -r --arg l "ready-to-test" 'if . == null then "false" elif any(. == $l) then "true" else "false" end')
+               if [ "$HAS_LABEL" = "true" ]; then
+                 echo "allowed=true" >> "$GITHUB_OUTPUT"
+               else
+                 echo "allowed=false" >> "$GITHUB_OUTPUT"
+               fi
+             else
+               # External fork: the authorize step already checked for the label we passed (ready-to-test)
+               echo "allowed=true" >> "$GITHUB_OUTPUT"
+             fi
+           else
+             # If the authorize step already said false, we just pass that through.
+             echo "allowed=false" >> "$GITHUB_OUTPUT"
+           fi
 
   verify-fabric-lockstep:
     if: needs.authorize.outputs.allowed == 'true'
