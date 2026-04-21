@@ -13,12 +13,18 @@ namespace qvac_errors {
 namespace bci_error {
 enum class Code : std::uint8_t {
   InvalidNeuralSignal,
+  FailedToLoadModel,
+  EmbedderWeightsNotFound,
 };
 
 inline const char* codeName(Code code) {
   switch (code) {
     case Code::InvalidNeuralSignal:
       return "InvalidNeuralSignal";
+    case Code::FailedToLoadModel:
+      return "FailedToLoadModel";
+    case Code::EmbedderWeightsNotFound:
+      return "EmbedderWeightsNotFound";
   }
   return "BCIError";
 }

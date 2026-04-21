@@ -87,7 +87,7 @@ void BCIModel::loadEmbedderIfNeeded() {
          "Loaded BCI embedder weights from: " + embedderPath);
   } else {
     throw qvac_errors::bci_error::makeStatus(
-        qvac_errors::bci_error::Code::InvalidNeuralSignal,
+        qvac_errors::bci_error::Code::EmbedderWeightsNotFound,
         "BCI embedder weights not found at: " + embedderPath +
         ". This file is required for neural signal preprocessing. "
         "Generate it with: python3 scripts/convert-model.py --checkpoint <ckpt>");
@@ -113,7 +113,7 @@ void BCIModel::load() {
   auto* rawCtx = whisper_init_from_file_with_params(modelPath.c_str(), contextParams);
   if (rawCtx == nullptr) {
     throw qvac_errors::bci_error::makeStatus(
-        qvac_errors::bci_error::Code::InvalidNeuralSignal,
+        qvac_errors::bci_error::Code::FailedToLoadModel,
         "Failed to initialize Whisper context from: " + modelPath);
   }
 
@@ -135,6 +135,7 @@ void BCIModel::load() {
 void BCIModel::unload() {
   resetContext();
   is_loaded_ = false;
+  is_warmed_up_ = false;
 }
 
 void BCIModel::reload() {

@@ -127,7 +127,16 @@ class BCIWhispercpp {
       })
     }
 
-    await this.addon.activate()
+    try {
+      await this.addon.activate()
+    } catch (err) {
+      this.addon = null
+      throw new QvacErrorAddonBCI({
+        code: ERR_CODES.FAILED_TO_ACTIVATE,
+        adds: err.message,
+        cause: err
+      })
+    }
     this.logger.info('BCI addon activated')
   }
 
