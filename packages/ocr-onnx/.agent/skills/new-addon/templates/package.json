@@ -1,7 +1,7 @@
 {
-  "name": "@qvac/vla",
+  "name": "{{NPM_NAME}}",
   "version": "0.1.0",
-  "description": "Hello-world inference addon scaffold (qvac-lib-infer-vla)",
+  "description": "Hello-world inference addon scaffold ({{PACKAGE_NAME}})",
   "addon": true,
   "engines": {
     "bare": ">=1.24.0"
@@ -32,12 +32,12 @@
   "repository": {
     "type": "git",
     "url": "git+https://github.com/tetherto/qvac.git",
-    "directory": "packages/qvac-lib-infer-vla"
+    "directory": "packages/{{PACKAGE_NAME}}"
   },
   "author": "Tether",
   "license": "Apache-2.0",
   "bugs": "https://github.com/tetherto/qvac/issues",
-  "homepage": "https://github.com/tetherto/qvac/tree/main/packages/qvac-lib-infer-vla#readme",
+  "homepage": "https://github.com/tetherto/qvac/tree/main/packages/{{PACKAGE_NAME}}#readme",
   "devDependencies": {
     "@types/node": "^24.2.1",
     "brittle": "^3.4.0",
@@ -46,7 +46,7 @@
     "standard": "^17.0.0",
     "typescript": "^5.9.2"
   },
-  "dependencies": {},
+  "dependencies": {{BACKEND_NPM_DEPS_JSON}},
   "exports": {
     "./package": "./package.json",
     ".": {
