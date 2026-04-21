@@ -177,7 +177,7 @@ VCPKG_ROOT=/path/to/vcpkg npm run test:cpp
 
 ## whisper.cpp Patches
 
-The package uses a vcpkg overlay that fetches from the `tetherto/qvac-ext-lib-whisper.cpp` fork (v1.8.4 base) with BCI patches baked in:
+The BCI patches live in the `tetherto/qvac-ext-lib-whisper.cpp` fork (v1.8.4.2) and are consumed via the `qvac-registry-vcpkg` port:
 
 | Feature | Description |
 |---------|-------------|

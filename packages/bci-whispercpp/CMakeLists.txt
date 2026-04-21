@@ -9,8 +9,6 @@ endif()
 find_package(cmake-bare REQUIRED PATHS node_modules/cmake-bare)
 find_package(cmake-vcpkg REQUIRED PATHS node_modules/cmake-vcpkg)
 
-set(VCPKG_OVERLAY_PORTS "${CMAKE_CURRENT_SOURCE_DIR}/vcpkg-overlays;${VCPKG_OVERLAY_PORTS}")
-
 # Prepend the local overlay triplets on every platform and preserve any
 # externally-set value (matches the other qvac addons). Only the Linux
 # triplets actually differ from vcpkg's defaults today, but exposing the
