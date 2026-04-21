@@ -54,24 +54,23 @@ async function main () {
   console.log('Seed   :', SEED)
   console.log()
 
-  const model = new ImgStableDiffusion(
-    {
-      logger: console,
-      diskPath: MODELS_DIR,
-      modelName: MODEL_NAME
-      // All-in-one safetensors: no clipLModel, clipGModel, t5XxlModel, or vaeModel.
+  const model = new ImgStableDiffusion({
+    files: {
+      model: path.join(MODELS_DIR, MODEL_NAME)
+      // All-in-one safetensors: no clipL, clipG, t5Xxl, or vae.
       //
       // To add T5-XXL (better text following) without redownloading the main file:
-      //   t5XxlModel: 't5xxl_fp8_e4m3fn.safetensors'   // download via download-model-sd3.sh
+      //   t5Xxl: path.join(MODELS_DIR, 't5xxl_fp8_e4m3fn.safetensors')   // download via download-model-sd3.sh
     },
-    {
+    config: {
       threads: 4,
       // SD3 uses flow-matching. The safetensors metadata allows auto-detection,
       // but we set these explicitly as safety overrides.
       prediction: 'flow', // FLOW_PRED — SD3 flow-matching
       flow_shift: '3.0' // SD3 Medium default; overrides INFINITY sentinel
-    }
-  )
+    },
+    logger: console
+  })
 
   try {
     // ── 1. Load weights ───────────────────────────────────────────────────────

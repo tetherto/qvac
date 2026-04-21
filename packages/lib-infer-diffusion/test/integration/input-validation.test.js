@@ -87,15 +87,14 @@ test('readImageDimensions | unrecognised format returns null', async (t) => {
 // ---------- FLUX img2img prediction guard ----------
 
 test('FLUX img2img | throws when prediction is omitted', async (t) => {
-  const model = new ImgStableDiffusion(
-    {
-      logger: console,
-      diskPath: '.',
-      modelName: 'flux-2-klein-4b-Q8_0.gguf',
-      llmModel: 'Qwen3-4B-Q4_K_M.gguf'
+  const model = new ImgStableDiffusion({
+    files: {
+      model: '/tmp/flux-2-klein-4b-Q8_0.gguf',
+      llm: '/tmp/Qwen3-4B-Q4_K_M.gguf'
     },
-    { threads: 1 }
-  )
+    config: { threads: 1 },
+    logger: console
+  })
 
   const fakeImage = VALID_PNG_HEADER
 
@@ -115,15 +114,14 @@ test('FLUX img2img | throws when prediction is omitted', async (t) => {
 })
 
 test('FLUX img2img | throws when prediction is "auto"', async (t) => {
-  const model = new ImgStableDiffusion(
-    {
-      logger: console,
-      diskPath: '.',
-      modelName: 'flux-2-klein-4b-Q8_0.gguf',
-      llmModel: 'Qwen3-4B-Q4_K_M.gguf'
+  const model = new ImgStableDiffusion({
+    files: {
+      model: '/tmp/flux-2-klein-4b-Q8_0.gguf',
+      llm: '/tmp/Qwen3-4B-Q4_K_M.gguf'
     },
-    { threads: 1, prediction: 'auto' }
-  )
+    config: { threads: 1, prediction: 'auto' },
+    logger: console
+  })
 
   const fakeImage = VALID_PNG_HEADER
 
@@ -139,15 +137,14 @@ test('FLUX img2img | throws when prediction is "auto"', async (t) => {
 })
 
 test('FLUX img2img | does NOT throw for txt2img even without prediction', async (t) => {
-  const model = new ImgStableDiffusion(
-    {
-      logger: console,
-      diskPath: '.',
-      modelName: 'flux-2-klein-4b-Q8_0.gguf',
-      llmModel: 'Qwen3-4B-Q4_K_M.gguf'
+  const model = new ImgStableDiffusion({
+    files: {
+      model: '/tmp/flux-2-klein-4b-Q8_0.gguf',
+      llm: '/tmp/Qwen3-4B-Q4_K_M.gguf'
     },
-    { threads: 1 }
-  )
+    config: { threads: 1 },
+    logger: console
+  })
 
   // txt2img (no init_image) should pass the guard even without prediction.
   // It will fail later because no model is loaded, but that's expected —
@@ -164,16 +161,15 @@ test('FLUX img2img | does NOT throw for txt2img even without prediction', async 
 })
 
 test('non-FLUX model | does NOT throw for img2img without prediction', async (t) => {
-  const model = new ImgStableDiffusion(
-    {
-      logger: console,
-      diskPath: '.',
-      modelName: 'stable-diffusion-v2-1-Q4_0.gguf'
+  const model = new ImgStableDiffusion({
+    files: {
+      model: '/tmp/stable-diffusion-v2-1-Q4_0.gguf'
     },
-    { threads: 1 }
-  )
+    config: { threads: 1 },
+    logger: console
+  })
 
-  // SD model (no llmModel) should not trigger the FLUX guard.
+  // SD model (no files.llm) should not trigger the FLUX guard.
   try {
     await model.run({ prompt: 'test', init_image: VALID_PNG_HEADER })
     t.fail('should have thrown (no model loaded)')

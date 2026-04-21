@@ -1,5 +1,135 @@
 # Changelog
 
+## [0.16.0] - 2026-04-14
+
+This release migrates the LLM addon off `BaseInference` inheritance and the `WeightsProvider` download layer onto the composable `createJobHandler` + `exclusiveRunQueue` utilities from `@qvac/infer-base@^0.4.0`. The constructor signature is replaced with a single object whose `files.model` field is an ordered array of absolute paths and `files.projectionModel` is an optional absolute path for multimodal models. This is a breaking change — every caller must update.
+
+## Breaking Changes
+
+### Constructor signature: single object with `files`, no `Loader`
+
+`LlmLlamacpp` now takes a single `{ files, config, logger?, opts? }` object. The old `Loader` + `diskPath` + `modelName` + two-arg `(args, config)` shape is gone — callers pre-resolve absolute paths and supply them as `files.model`.
+
+```js
+// BEFORE (≤ 0.15.x)
+const FilesystemDL = require('@qvac/dl-filesystem')
+const loader = new FilesystemDL({ dirPath: '/models' })
+const model = new LlmLlamacpp({
+  loader,
+  modelName: 'Qwen3-1.7B-Q4_0.gguf',
+  diskPath: '/models',
+  logger: console,
+  opts: { stats: true }
+}, { ctx_size: '4096', gpu_layers: '99' })
+
+// AFTER (0.16.0)
+const model = new LlmLlamacpp({
+  files: {
+    model: ['/models/Qwen3-1.7B-Q4_0.gguf']
+  },
+  config: { ctx_size: '4096', gpu_layers: '99' },
+  logger: console,
+  opts: { stats: true }
+})
+```
+
+For sharded models the caller passes the full ordered list — the `<basename>.tensors.txt` companion first, followed by every `<basename>-NNNNN-of-MMMMM.gguf` shard in ascending order. For multimodal models, `files.projectionModel` carries the absolute path to the mmproj file:
+
+```js
+const model = new LlmLlamacpp({
+  files: {
+    model: [
+      '/models/medgemma-4b-it-Q4_1.tensors.txt',
+      '/models/medgemma-4b-it-Q4_1-00001-of-00005.gguf',
+      '/models/medgemma-4b-it-Q4_1-00002-of-00005.gguf',
+      '/models/medgemma-4b-it-Q4_1-00003-of-00005.gguf',
+      '/models/medgemma-4b-it-Q4_1-00004-of-00005.gguf',
+      '/models/medgemma-4b-it-Q4_1-00005-of-00005.gguf'
+    ],
+    projectionModel: '/models/mmproj-model-f16.gguf'
+  },
+  config: { gpu_layers: '99' }
+})
+```
+
+### `BaseInference` inheritance and `WeightsProvider` removed
+
+`LlmLlamacpp` no longer extends `BaseInference` and no longer touches the `WeightsProvider` download layer. The class composes `createJobHandler` and `exclusiveRunQueue` from `@qvac/infer-base@^0.4.0` directly. Public lifecycle methods (`load` / `run` / `finetune` / `pause` / `cancel` / `unload` / `getState`) are unchanged in shape, but `downloadWeights` and the loader-based progress callbacks are gone — the caller is responsible for placing files on disk before constructing the model.
+
+In-memory streaming from network sources (URLs, Hyperdrive) is no longer supported in the current API. The SDK does not currently use it (models are stored to disk first); this can be re-added when/if the SDK plans to support that feature. Before, it was possible through the `Loader` abstraction.
+
+### Dependency changes
+
+- `@qvac/infer-base` bumped from `^0.3.0` to `^0.4.0`.
+- `bare-fs` is now a runtime dependency (used to stream shards from disk).
+- `@qvac/dl-base` and `@qvac/dl-filesystem` are no longer used by this package and have been removed from `devDependencies`.
+
+### `getState()` returns a narrower shape
+
+`getState()` previously returned `{ configLoaded, weightsLoaded, destroyed }` (the three-field shape inherited from `BaseInference`). It now returns `{ configLoaded }` only. The `weightsLoaded` and `destroyed` fields are gone — `weightsLoaded` collapsed into `configLoaded` because the refactored `load()` does both in one step, and `destroyed` is no longer tracked since `unload()` resets `configLoaded` and nulls the addon handle instead. Callers reading `state.weightsLoaded` or `state.destroyed` must switch to `state.configLoaded`.
+
+### Public methods removed from `LlmLlamacpp`
+
+`LlmLlamacpp` previously exposed these methods via `BaseInference` inheritance, all of which are now gone:
+
+- `downloadWeights(onDownloadProgress, opts)` — the download layer is removed; the caller places files on disk and passes absolute paths in `files.model` / `files.projectionModel`.
+- `unpause()` / `stop()` — BaseInference job-lifecycle helpers. The refactor still exposes `pause()` and `cancel()`; `unpause` is superseded by issuing a new `run()` after `cancel()`.
+- `status()` — replaced by `getState()` for the static readiness flag; per-job state is observed via the `QvacResponse` returned by `run()`.
+- `destroy()` — folded into `unload()`, which now both releases native resources and nulls `this.addon`.
+- `getApiDefinition()` — no longer exposed; consumers should import types from `index.d.ts`.
+
+### `load()` takes no arguments
+
+`load()` previously forwarded `...args` through `BaseInference.load` into LLM's `_load(closeLoader, onDownloadProgress)`. Both arguments are gone — `closeLoader` is meaningless without a `Loader`, and `onDownloadProgress` is superseded by the caller owning download-and-placement before construction. Call `await model.load()` with no arguments.
+
+### Type exports removed from `index.d.ts`
+
+The following exports are no longer part of the package's public type surface because the loader/download layer they described is gone: `ReportProgressCallback`, `Loader`, `DownloadWeightsOptions`, `DownloadResult`. TypeScript consumers importing any of these must update to the new `LlmLlamacppArgs` / `files` shape.
+
+## Features
+
+### Constructor input validation
+
+The constructor now throws `TypeError('files.model must be a non-empty array of absolute paths')` when `files` or `files.model` is missing or empty. This produces a clear error for callers porting old code instead of a confusing `Cannot read properties of undefined`.
+
+### `run()`-before-`load()` guard
+
+Calling `run()` before `load()` now throws `Error('Addon not initialized. Call load() first.')` instead of dereferencing `null` and crashing. `finetune()` already had this guard since the previous release.
+
+### `load()` is now idempotent when already loaded
+
+A second `load()` call on an already-loaded instance is now a silent no-op instead of unloading and reloading. This aligns with the ReadyResource pattern used elsewhere in QVAC and prevents accidental double-loads from triggering expensive work. Callers that intentionally want to swap weights must call `unload()` first (which clears `configLoaded`) and then `load()` again.
+
+### Crash-safe shard streaming
+
+If `_streamShards()` or `addon.activate()` throws mid-load (for example a corrupted shard file or a native init failure), the partially-initialized addon is now best-effort-unloaded and `this.addon` is reset to `null`. A subsequent `load()` call starts cleanly instead of leaking a zombie native instance.
+
+### Restored JSDoc on `FinetuneOptions`
+
+Every `FinetuneOptions` field carries a `/** … */` doc comment again, including the default values (`numberOfEpochs = 1`, `learningRate = 1e-4`, `batchSize = 128`, …) so IDE tooltips show them without needing to read `docs/finetuning.md`.
+
+## Bug Fixes
+
+### `unload()` clears the addon reference
+
+`unload()` now sets `this.addon = null` after `await this.addon.unload()`, so post-unload `cancel()` / `pause()` / `run()` calls hit the explicit guards rather than dereferencing a disposed native handle. `pause()`, `cancel()`, and the job-handler cancel closure all use optional chaining for the same reason.
+
+### Removed dead `_isSuppressedNoResponseLog` filter
+
+The `_createFilteredLogger` infrastructure that wrapped the user-supplied logger to swallow `'No response found for job'` warnings was tied to the old `BaseInference` `_jobToResponse` Map. The new architecture cannot emit that message at all, so the filter, the wrapped logger, and the `_originalLogger` indirection are all removed. The user-supplied logger is now used directly.
+
+### `load()` is serialized through the exclusive run queue
+
+`load()` is now routed through the same `exclusiveRunQueue` used by `run()`, `finetune()`, and `unload()`. Previously two overlapping `load()` calls on the same instance could both pass the `configLoaded` guard before it flipped to `true`, both stream shards into and activate the native addon, and clobber `this.addon` — leaking one native handle. Concurrent `load()` on a single instance is now safe.
+
+### Constructor rejects non-absolute path entries
+
+Each entry in `files.model` is now validated with `path.isAbsolute()` (matching the existing error-message contract), and the same check now applies to the optional `files.projectionModel` — previously it had no validation at all. Relative paths are rejected at construction time instead of bubbling up from `bare-fs` or the native load.
+
+## Pull Requests
+
+- [#1494](https://github.com/tetherto/qvac/pull/1494) - chore[bc]: LLM addon interface refactor — remove BaseInference and WeightsProvider
+
 ## [0.15.0] - 2026-04-09
 
 ### Breaking Changes

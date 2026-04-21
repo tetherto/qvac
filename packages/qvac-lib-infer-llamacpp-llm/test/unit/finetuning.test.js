@@ -60,17 +60,12 @@ async function assertInferenceSucceeds (t, model, token) {
 }
 
 const createModelWithMockAddon = (opts = {}) => {
-  const loader = { close: () => Promise.resolve() }
-  const model = new LlmLlamacpp(
-    {
-      loader,
-      opts,
-      logger: { info: () => {}, warn: () => {}, error: () => {}, debug: () => {} },
-      diskPath: '.',
-      modelName: 'test.gguf'
-    },
-    { device: 'cpu', ctx_size: '256' }
-  )
+  const model = new LlmLlamacpp({
+    files: { model: ['/tmp/test.gguf'] },
+    config: { device: 'cpu', ctx_size: '256' },
+    opts,
+    logger: { info: () => {}, warn: () => {}, error: () => {}, debug: () => {} }
+  })
   model.addon = createMockAddon()
   return model
 }
@@ -183,13 +178,14 @@ test('finetune() runs inside exclusive queue wrapper', async (t) => {
   model.addon.finetune.callsFake(completeFinetuneWith(model))
 
   let wrapperCalled = false
-  model._withExclusiveRun = async (fn) => {
+  const originalRun = model._run
+  model._run = async (fn) => {
     wrapperCalled = true
-    return await fn()
+    return await originalRun(fn)
   }
 
   const handle = await model.finetune(opts)
-  t.ok(wrapperCalled, 'finetune should execute inside _withExclusiveRun')
+  t.ok(wrapperCalled, 'finetune should execute inside exclusiveRunQueue')
   const result = await handle.await()
   t.alike(result, { op: 'finetune', status: 'COMPLETED' })
 })
@@ -405,16 +401,16 @@ test('_skipNextRuntimeStats swallows TPS stats that follow a finetune terminal r
   model.addon.finetune.callsFake(() => true)
 
   const handle = await model.finetune(opts)
-  t.is(model._skipNextRuntimeStats, false, 'flag starts false before finetune terminal arrives')
+  t.is(model._addonEventState.skipNextRuntimeStats, false, 'flag starts false before finetune terminal arrives')
 
   model._addonOutputCallback(null, 'Output', { op: 'finetune', status: 'COMPLETED' }, null)
-  t.is(model._skipNextRuntimeStats, true, 'flag must be set after finetune terminal result')
+  t.is(model._addonEventState.skipNextRuntimeStats, true, 'flag must be set after finetune terminal result')
 
   const result = await handle.await()
   t.alike(result, { op: 'finetune', status: 'COMPLETED' })
 
   model._addonOutputCallback(null, 'Output', { TPS: 0, tokens: 0, time_ms: 100 }, null)
-  t.is(model._skipNextRuntimeStats, false, 'flag must reset after TPS stats are consumed')
+  t.is(model._addonEventState.skipNextRuntimeStats, false, 'flag must reset after TPS stats are consumed')
 })
 
 test('TPS stats without prior finetune are forwarded as normal JobEnded', async (t) => {
@@ -422,7 +418,7 @@ test('TPS stats without prior finetune are forwarded as normal JobEnded', async 
   model.addon.runJob.callsFake(() => true)
 
   const response = await model._runInternal([{ role: 'user', content: 'Hello' }])
-  t.is(model._skipNextRuntimeStats, false, 'flag should be false without finetune')
+  t.is(model._addonEventState.skipNextRuntimeStats, false, 'flag should be false without finetune')
 
   model._addonOutputCallback(null, 'Output', 'world', null)
   model._addonOutputCallback(null, 'Output', { TPS: 42.5, tokens: 10, time_ms: 235 }, null)
@@ -430,7 +426,7 @@ test('TPS stats without prior finetune are forwarded as normal JobEnded', async 
   const output = await response.await()
   t.ok(Array.isArray(output), 'inference response should resolve with output array')
   t.ok(output.includes('world'), 'output should contain the emitted token')
-  t.is(model._skipNextRuntimeStats, false, 'flag should remain false')
+  t.is(model._addonEventState.skipNextRuntimeStats, false, 'flag should remain false')
   t.is(model._hasActiveResponse, false, 'busy state should be cleared')
 })
 
@@ -442,13 +438,13 @@ test('_skipNextRuntimeStats prevents finetune TPS from ending a subsequent infer
   const finetuneHandle = await model.finetune(opts)
   model._addonOutputCallback(null, 'Output', { op: 'finetune', status: 'COMPLETED' }, null)
   await finetuneHandle.await()
-  t.is(model._skipNextRuntimeStats, true, 'skip flag should be armed after finetune')
+  t.is(model._addonEventState.skipNextRuntimeStats, true, 'skip flag should be armed after finetune')
 
   model.addon.runJob.callsFake(() => true)
   const inferResponse = await model._runInternal([{ role: 'user', content: 'Hello' }])
 
   model._addonOutputCallback(null, 'Output', { TPS: 0, tokens: 0 }, null)
-  t.is(model._skipNextRuntimeStats, false, 'flag should reset after consuming stale TPS')
+  t.is(model._addonEventState.skipNextRuntimeStats, false, 'flag should reset after consuming stale TPS')
   t.is(inferResponse.getStatus(), 'running', 'inference must still be running after stale TPS was swallowed')
 
   model._addonOutputCallback(null, 'Output', 'answer', null)
