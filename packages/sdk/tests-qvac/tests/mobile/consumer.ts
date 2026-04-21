@@ -63,6 +63,7 @@ import { MobileTtsExecutor } from "./executors/tts-executor.js";
 import { DownloadExecutor } from "../shared/executors/download-executor.js";
 import { DelegatedInferenceExecutor } from "../shared/executors/delegated-inference-executor.js";
 import { DiffusionExecutor } from "../shared/executors/diffusion-executor.js";
+import { LifecycleExecutor } from "../shared/executors/lifecycle-executor.js";
 
 const resources = new ResourceManager();
 
@@ -362,6 +363,7 @@ export const executor = createExecutor({
     new DownloadExecutor(),
     new DelegatedInferenceExecutor(),
     new DiffusionExecutor(resources),
+    new LifecycleExecutor(resources),
   ],
   profiling: {
     init: () => profiler.enable({ mode: "summary", includeServerBreakdown: true }),

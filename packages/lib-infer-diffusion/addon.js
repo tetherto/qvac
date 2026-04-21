@@ -3,6 +3,32 @@
 const path = require('bare-path')
 
 /**
+ * Normalize a raw native event into `Output` (image bytes or progress
+ * tick), `Error`, or `JobEnded`. Returns `null` for unknown shapes
+ * (caller logs and skips).
+ *
+ * @param {string} rawEvent
+ * @param {*} rawData
+ * @param {*} rawError
+ * @returns {{ type: string, data: *, error: * } | null}
+ */
+function mapAddonEvent (rawEvent, rawData, rawError) {
+  if (typeof rawEvent === 'string' && rawEvent.includes('Error')) {
+    return { type: 'Error', data: rawData, error: rawError }
+  }
+
+  if (rawData instanceof Uint8Array || typeof rawData === 'string') {
+    return { type: 'Output', data: rawData, error: null }
+  }
+
+  if (rawData && typeof rawData === 'object') {
+    return { type: 'JobEnded', data: rawData, error: null }
+  }
+
+  return null
+}
+
+/**
  * Extract pixel dimensions from a PNG or JPEG buffer without a full decode.
  *
  * PNG: width/height are stored as big-endian uint32 at bytes 16–23 of the IHDR chunk.
@@ -151,4 +177,4 @@ class SdInterface {
   }
 }
 
-module.exports = { SdInterface, readImageDimensions }
+module.exports = { SdInterface, mapAddonEvent, readImageDimensions }

@@ -51,20 +51,19 @@ async function main () {
   console.log('Seed   :', SEED)
   console.log()
 
-  const model = new ImgStableDiffusion(
-    {
-      logger: console,
-      diskPath: MODELS_DIR,
-      modelName: MODEL_NAME
-      // No llmModel — SDXL uses CLIP-L + CLIP-G baked into the checkpoint.
-      // No vaeModel — the VAE is baked into the checkpoint.
+  const model = new ImgStableDiffusion({
+    files: {
+      model: path.join(MODELS_DIR, MODEL_NAME)
+      // No llm — SDXL uses CLIP-L + CLIP-G baked into the checkpoint.
+      // No vae — the VAE is baked into the checkpoint.
     },
-    {
+    config: {
       threads: 4
       // No prediction override — SDXL uses eps-prediction and the GGUF
       // has the correct metadata for auto-detection.
-    }
-  )
+    },
+    logger: console
+  })
 
   try {
     // ── 1. Load weights ───────────────────────────────────────────────────────

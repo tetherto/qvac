@@ -1,7 +1,7 @@
 'use strict'
 
 const LlmLlamacpp = require('../index')
-const FilesystemDL = require('@qvac/dl-filesystem')
+const path = require('bare-path')
 const process = require('bare-process')
 const { downloadModel } = require('./utils')
 
@@ -15,17 +15,8 @@ async function main () {
     'Llama-3.2-1B-Instruct-Q4_0.gguf'
   )
 
-  // 2. Initializing data loader
-  const fsDL = new FilesystemDL({ dirPath })
-
-  // 3. Configuring model settings
-  const args = {
-    loader: fsDL,
-    opts: { stats: true },
-    logger: console,
-    diskPath: dirPath,
-    modelName
-  }
+  // 2. Configuring model settings
+  const modelPath = path.join(dirPath, modelName)
 
   const config = {
     device: 'gpu',
@@ -33,12 +24,17 @@ async function main () {
     ctx_size: '1024'
   }
 
-  // 4. Loading model
-  const model = new LlmLlamacpp(args, config)
+  // 3. Loading model
+  const model = new LlmLlamacpp({
+    files: { model: [modelPath] },
+    config,
+    logger: console,
+    opts: { stats: true }
+  })
   await model.load()
 
   try {
-    // 5. Running inference with conversation prompt
+    // 4. Running inference with conversation prompt
     const prompt = [
       {
         role: 'system',
@@ -76,9 +72,8 @@ async function main () {
     console.error('Error occurred:', errorMessage)
     console.error('Error details:', error)
   } finally {
-    // 6. Cleaning up resources
+    // 5. Cleaning up resources
     await model.unload()
-    await fsDL.close()
   }
 }
 

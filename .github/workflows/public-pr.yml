@@ -1,0 +1,88 @@
+name: Validate PR for Quality Standards before merging
+# Shared by multiple projects
+# Used in branch protection rulesets
+
+on:
+  workflow_call:
+    inputs:
+      build-with-model-status:
+        required: false
+        type: boolean
+        description: "Status of build process with model integration"
+        default: true
+      build-status:
+        required: false
+        type: boolean
+        description: "Status of build process"
+        default: true
+      sanity-checks-status:
+        required: false
+        type: boolean
+        description: "Status of sanity checks"
+        default: true
+      integration-tests-status:
+        required: false
+        type: boolean
+        description: "Status of integration tests"
+        default: true
+      general-checks-status:
+        required: false
+        type: boolean
+        description: "Status of general checks"
+        default: true
+      tests-status: # Deprecated, use sanity-checks-status, integration-tests-status, and general-checks-status instead
+        required: false
+        type: boolean
+        description: "Status of tests and PR checks"
+        default: true
+      workdir:
+        required: false
+        type: string
+        default: "."
+
+jobs:
+  validate-pr: # to do checks after other workflows have run
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      packages: read
+    steps:
+      - name: Check tests status
+        run: |
+          failed=0
+          echo "Labels: ${{ join(github.event.pull_request.labels.*.name, ' ') }}"
+          if [[ ! " ${{ join(github.event.pull_request.labels.*.name, ' ') }} " =~ " verify " ]]; then
+            echo "::error title=PR is not verified::This PR needs the 'verify' label to be merged"
+            echo "Warning:Label 'verify' must be present on the PR to run the full suite of checks"
+            failed=1
+          fi
+          if [[ "${{ inputs.sanity-checks-status }}" != "" && "${{ inputs.sanity-checks-status }}" != "true" ]]; then
+            echo "::error title=Sanity checks have not returned success::Some sanity checks have not returned success"
+            failed=1
+          fi
+          if [[ "${{ inputs.build-with-model-status }}" != "" && "${{ inputs.build-with-model-status }}" != "true" ]]; then
+            echo "::error title=Build with model has not returned success::The build process with model integration has not returned success"
+            failed=1
+          fi
+          if [[ "${{ inputs.build-status }}" != "" && "${{ inputs.build-status }}" != "true" ]]; then
+            echo "::error title=Build has not returned success::The build process has not returned success"
+            failed=1
+          fi
+          if [[ "${{ inputs.integration-tests-status }}" != "" && "${{ inputs.integration-tests-status }}" != "true" ]]; then
+            echo "::error title=Integration tests have not returned success::Some integration tests have not returned success"
+            failed=1
+          fi
+          if [[ "${{ inputs.general-checks-status }}" != "" && "${{ inputs.general-checks-status }}" != "true" ]]; then
+            echo "::error title=General checks have not returned success::Some general checks have not returned success"
+            failed=1
+          fi
+          if [[ "${{ inputs.tests-status }}" != "" && "${{ inputs.tests-status }}" != "true" ]]; then
+            echo "::error title=Tests have not returned success::Some tests have not returned success"
+            failed=1
+          fi
+          if [[ "${{ github.repository }}" == "tetherto/qvac-lib-inference-addon-mlc-marian" ]]; then
+            echo "per repo additionals checks"
+          fi
+          if [[ $failed -eq 1 ]]; then
+            exit 1
+          fi

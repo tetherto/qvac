@@ -1,0 +1,68 @@
+---
+title: "definePlugin( )"
+titleStyle: code
+description: Helper function to define a plugin with full type inference.
+---
+
+```ts
+function definePlugin<T extends QvacPlugin>(plugin: T): T;
+```
+
+## Parameters
+
+| Name | Type | Required? | Description |
+| --- | --- | :---: | --- |
+| plugin | [`QvacPlugin`](#qvacplugin) | ✓ | The plugin definition |
+
+### `QvacPlugin`
+
+| Field | Type | Required? | Description |
+| --- | --- | :---: | --- |
+| modelType | `string` | ✓ | Unique identifier for the model type this plugin handles |
+| displayName | `string` | ✓ | Human-readable name for the plugin |
+| addonPackage | `string` | ✓ | The npm package name of the addon this plugin wraps |
+| createModel | `(params:` [`CreateModelParams`](#createmodelparams)`) =>` [`PluginModelResult`](#pluginmodelresult) | ✓ | Factory function that creates a model instance |
+| handlers | `Record<string,` [`PluginHandlerDefinition`](../defineHandler#pluginhandlerdefinition)`>` | ✓ | Map of handler names to handler definitions |
+| logging | [`PluginLogging`](#pluginlogging) | ✗ | Optional logging configuration |
+| loadConfigSchema | `ZodType` | ✗ | Zod schema used to validate and parse the `modelConfig` passed to `loadModel()` |
+| resolveConfig | `(modelConfig, ctx) => Promise<ResolveResult>` | ✗ | Optional hook to resolve model sources in modelConfig to local paths. Called before `createModel` if the plugin needs to download/resolve artifacts. Returns transformed config and optional artifact paths. |
+| skipPrimaryModelPathValidation | `boolean` | ✗ | When true, skips file-existence validation for modelPath. Use for plugins that derive paths from config. |
+
+### `CreateModelParams`
+
+| Field | Type | Required? | Description |
+| --- | --- | :---: | --- |
+| modelId | `string` | ✓ | The model identifier |
+| modelPath | `string` | ✓ | Path to the model file |
+| modelConfig | `Record<string, unknown>` | ✗ | Model-specific configuration |
+| modelName | `string` | ✗ | Human-readable model name |
+| artifacts | `Record<string, string>` | ✗ | Additional file paths (e.g., `projectionModelPath`, `vadModelPath`, `ttsConfigModelPath`) |
+
+### `PluginModelResult`
+
+| Field | Type | Description |
+| --- | --- | --- |
+| model | [`PluginModel`](#pluginmodel) | The model instance |
+| loader | `unknown` | Engine-specific loader reference |
+
+### `PluginModel`
+
+| Method | Signature | Required? | Description |
+| --- | --- | :---: | --- |
+| load | `(force?: boolean) => Promise<void>` | ✓ | Loads the model into memory |
+| unload | `() => void \| Promise<void>` | ✗ | Releases model resources |
+
+### `PluginLogging`
+
+| Field | Type | Required? | Description |
+| --- | --- | :---: | --- |
+| module | `unknown` | ✓ | The addon logging module |
+| namespace | `string` | ✓ | Logger namespace |
+
+## Returns
+
+`T` — The same plugin object, with full type inference applied. This is an identity function used for type checking.
+
+## Note
+
+See the [Write a custom plugin](/sdk/examples/utilities/write-custom-plugin) guide for a full walkthrough.

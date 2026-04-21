@@ -26,6 +26,7 @@ import { downloadTests } from "./download-tests.js";
 import { delegatedInferenceTests } from "./delegated-inference-tests.js";
 import { diffusionTests } from "./diffusion-tests.js";
 import { finetuneTests } from "./finetune-tests.js";
+import { lifecycleTests } from "./lifecycle-tests.js";
 
 // Model loading tests
 export const modelLoadLlm: TestDefinition = {
@@ -230,6 +231,9 @@ export const tests = [
 
   // Finetuning tests
   ...finetuneTests,
+
+  // Lifecycle tests (suspend/resume)
+  ...lifecycleTests,
 
   // Additional model tests
   modelSwitchLlm,

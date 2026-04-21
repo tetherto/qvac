@@ -1,7 +1,6 @@
 'use strict'
 
 const LlamaClient = require('../../index')
-const FilesystemDL = require('@qvac/dl-filesystem')
 const process = require('bare-process')
 const path = require('bare-path')
 const fs = require('bare-fs')
@@ -76,17 +75,9 @@ async function main () {
   const trainDatasetPath = './examples/input/small_train_HF.jsonl'
   const evalDatasetPath = './examples/input/small_eval_HF.jsonl'
 
-  const loader = new FilesystemDL({ dirPath: modelDir })
+  const modelPath = path.join(modelDir, modelName)
 
   const { logger: filteredLogger, restore: restoreConsole } = createFilteredLogger()
-
-  const args = {
-    loader,
-    opts: { stats: true },
-    logger: filteredLogger,
-    diskPath: modelDir,
-    modelName
-  }
 
   const config = {
     device: 'gpu',
@@ -100,7 +91,12 @@ async function main () {
   try {
     console.log('=== Pause Finetuning, Inference, and Resume Test ===\n')
     console.log('Loading model...')
-    client = new LlamaClient(args, config)
+    client = new LlamaClient({
+      files: { model: [modelPath] },
+      config,
+      logger: filteredLogger,
+      opts: { stats: true }
+    })
 
     await client.load()
     console.log('Model loaded successfully\n')
@@ -219,7 +215,12 @@ async function main () {
       }
 
       console.log('🔮 Preparing inference 1: Loading model with LoRA adapter...')
-      inferenceClientWithLora = new LlamaClient(args, inferenceConfigWithLora)
+      inferenceClientWithLora = new LlamaClient({
+        files: { model: [modelPath] },
+        config: inferenceConfigWithLora,
+        logger: filteredLogger,
+        opts: { stats: true }
+      })
       await inferenceClientWithLora.load()
       console.log('✅ Model with LoRA adapter loaded successfully\n')
 
@@ -246,7 +247,12 @@ async function main () {
       }
 
       console.log('🔮 Preparing inference 2: Loading base model (no LoRA adapters)...')
-      inferenceClientBase = new LlamaClient(args, inferenceConfigBase)
+      inferenceClientBase = new LlamaClient({
+        files: { model: [modelPath] },
+        config: inferenceConfigBase,
+        logger: filteredLogger,
+        opts: { stats: true }
+      })
       await inferenceClientBase.load()
       console.log('✅ Base model loaded successfully\n')
 

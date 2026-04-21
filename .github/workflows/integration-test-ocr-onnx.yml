@@ -166,3 +166,33 @@ jobs:
         run: npm run test:integration
         env:
           QASE_API_TOKEN: ${{ secrets.QASE_API_TOKEN }}
+
+      - name: Generate HTML performance report
+        if: always()
+        working-directory: ${{ inputs.workdir || env.PKG_DIR }}
+        shell: bash
+        run: |
+          echo "Checking for performance report..."
+          ls -la test/results/ 2>/dev/null || echo "test/results/ directory not found"
+          if [ -f test/results/performance-report.json ]; then
+            echo "Found performance-report.json, generating HTML..."
+            node ../../scripts/perf-report/aggregate.js \
+              --dir test/results \
+              --output-html test/results/performance-report.html \
+              --output-json test/results/performance-summary.json \
+              --output test/results/performance-report.md
+          else
+            echo "performance-report.json not found — skipping HTML generation"
+          fi
+
+      - name: Upload performance report
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: perf-report-ocr-${{ matrix.os }}-${{ matrix.arch }}-${{ github.run_number }}
+          path: |
+            ${{ inputs.workdir || env.PKG_DIR }}/test/results/performance-report.json
+            ${{ inputs.workdir || env.PKG_DIR }}/test/results/performance-report.html
+            ${{ inputs.workdir || env.PKG_DIR }}/test/results/performance-summary.json
+          retention-days: 90
+          if-no-files-found: ignore

@@ -46,18 +46,16 @@ test('SDXL txt2img — generates a valid PNG image', { timeout: 900000, skip }, 
   const modelPath = path.join(modelDir, downloadedModelName)
   t.ok(fs.existsSync(modelPath), 'Model file exists on disk')
 
-  const model = new ImgStableDiffusion(
-    {
-      logger: console,
-      diskPath: modelDir,
-      modelName: downloadedModelName
+  const model = new ImgStableDiffusion({
+    files: {
+      model: path.join(modelDir, downloadedModelName)
     },
-    {
+    config: {
       threads: 4,
       device: useCpu ? 'cpu' : 'gpu'
-
-    }
-  )
+    },
+    logger: console
+  })
 
   const images = []
   const progressTicks = []

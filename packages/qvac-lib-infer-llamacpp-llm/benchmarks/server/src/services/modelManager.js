@@ -1,7 +1,7 @@
 'use strict'
 
 const LlmLlamacpp = require('@qvac/llm-llamacpp')
-const FilesystemDL = require('@qvac/dl-filesystem')
+const path = require('bare-path')
 const logger = require('../utils/logger')
 
 /**
@@ -71,32 +71,26 @@ class ModelManager {
    * Internal method to load a model
    */
   async _loadModel (modelPath, diskPath, localModelName, config) {
-    // Create FilesystemDL for local model loading
-    const loader = new FilesystemDL({
-      dirPath: diskPath
-    })
-
     const model = new LlmLlamacpp({
-      diskPath,
-      modelName: localModelName,
-      loader,
+      files: { model: [path.join(diskPath, localModelName)] },
+      config: {
+        device: config?.device,
+        gpu_layers: config?.gpu_layers,
+        ctx_size: config?.ctx_size,
+        temp: config?.temp,
+        top_p: config?.top_p,
+        top_k: config?.top_k,
+        n_predict: config?.n_predict,
+        repeat_penalty: config?.repeat_penalty,
+        seed: config?.seed,
+        verbosity: '3'
+      },
       logger: {
         info: logger.info.bind(logger),
         error: logger.error.bind(logger),
         warn: logger.warn.bind(logger),
         debug: logger.debug.bind(logger)
       }
-    }, {
-      device: config?.device,
-      gpu_layers: config?.gpu_layers,
-      ctx_size: config?.ctx_size,
-      temp: config?.temp,
-      top_p: config?.top_p,
-      top_k: config?.top_k,
-      n_predict: config?.n_predict,
-      repeat_penalty: config?.repeat_penalty,
-      seed: config?.seed,
-      verbosity: '3'
     })
 
     logger.info('Loading model into VRAM...')

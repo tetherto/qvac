@@ -1,4 +1,3 @@
-import BaseInference from '@qvac/infer-base/WeightsProvider/BaseInference'
 import type { QvacResponse } from '@qvac/infer-base'
 import type QvacLogger from '@qvac/logging'
 
@@ -122,6 +121,33 @@ export interface SdConfig {
   [key: string]: string | number | boolean | undefined
 }
 
+export interface DiffusionFiles {
+  /** Absolute path to main model weights */
+  model: string
+  /** SD3: absolute path to CLIP-L text encoder */
+  clipL?: string
+  /** SDXL / SD3: absolute path to CLIP-G text encoder */
+  clipG?: string
+  /** SD3: absolute path to T5-XXL text encoder */
+  t5Xxl?: string
+  /** FLUX.2 [klein]: absolute path to Qwen3 4B text encoder (llm_path) */
+  llm?: string
+  /** Absolute path to VAE file */
+  vae?: string
+}
+
+export interface ImgStableDiffusionArgs {
+  files: DiffusionFiles
+  /**
+   * Native backend configuration. Optional — when omitted, the addon
+   * forwards an empty config object and the C++ layer falls back to
+   * stable-diffusion.cpp defaults for every parameter.
+   */
+  config?: SdConfig
+  logger?: QvacLogger | Console | null
+  opts?: { stats?: boolean }
+}
+
 export interface GenerationParams {
   prompt: string
   negative_prompt?: string
@@ -158,9 +184,13 @@ export interface GenerationParams {
   img_cfg_scale?: number
   /** Skip last N CLIP encoder layers (SD1.x/SD2.x) */
   clip_skip?: number
-  /** Input image as PNG/JPEG bytes for img2img (not yet supported — throws at runtime) */
+  /** Input image as PNG/JPEG bytes for img2img. */
   init_image?: Uint8Array
-  /** img2img denoising strength (0.0–1.0). 0 = keep source, 1 = ignore source (not yet supported) */
+  /**
+   * img2img denoising strength (0.0 to 1.0). 0 = keep source, 1 = ignore source.
+   * SD1.x/SD2.x/SDXL/SD3 only. FLUX.2 ignores `strength` and routes `init_image`
+   * through in-context conditioning instead.
+   */
   strength?: number
 }
 
@@ -203,28 +233,13 @@ export interface RuntimeStats {
   seed: number
 }
 
-export interface ImgStableDiffusionArgs {
-  logger?: QvacLogger | Console | null
-  opts?: { stats?: boolean }
-  diskPath?: string
-  modelName: string
-  /** CLIP-L text encoder */
-  clipLModel?: string
-  /** CLIP-G text encoder */
-  clipGModel?: string
-  /** T5-XXL text encoder */
-  t5XxlModel?: string
-  /** FLUX.2 [klein]: Qwen3 4B text encoder (llm_path) */
-  llmModel?: string
-  vaeModel?: string
-}
+export default class ImgStableDiffusion {
+  protected addon: Addon | null
+  opts: { stats?: boolean }
+  logger: QvacLogger
+  state: { configLoaded: boolean }
 
-export default class ImgStableDiffusion extends BaseInference {
-  protected addon: Addon
-
-  constructor(args: ImgStableDiffusionArgs, config: SdConfig)
-
-  _load(): Promise<void>
+  constructor(args: ImgStableDiffusionArgs)
 
   load(): Promise<void>
 
@@ -233,6 +248,8 @@ export default class ImgStableDiffusion extends BaseInference {
   unload(): Promise<void>
 
   cancel(): Promise<void>
+
+  getState(): { configLoaded: boolean }
 }
 
 export { QvacResponse, RuntimeStats }

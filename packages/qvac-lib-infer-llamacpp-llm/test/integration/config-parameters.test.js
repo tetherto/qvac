@@ -1,7 +1,7 @@
 'use strict'
 
 const test = require('brittle')
-const FilesystemDL = require('@qvac/dl-filesystem')
+const path = require('bare-path')
 const LlmLlamacpp = require('../../index.js')
 const { ensureModel } = require('./utils')
 const { attachSpecLogger } = require('./spec-logger')
@@ -343,7 +343,7 @@ async function executeScenario (t, scenario) {
     downloadUrl: 'https://huggingface.co/bartowski/Llama-3.2-1B-Instruct-GGUF/resolve/main/Llama-3.2-1B-Instruct-Q4_0.gguf'
   })
 
-  const loader = new FilesystemDL({ dirPath })
+  const modelPath = path.join(dirPath, modelName)
 
   const baseConfig = {
     device: useCpu ? 'cpu' : 'gpu',
@@ -362,12 +362,11 @@ async function executeScenario (t, scenario) {
   const logs = specLogger.logs
 
   const addon = new LlmLlamacpp({
-    loader,
-    modelName,
-    diskPath: dirPath,
+    files: { model: [modelPath] },
+    config: { ...baseConfig, ...scenario.overrides },
     logger: createTestLogger(),
     opts: { stats: true }
-  }, { ...baseConfig, ...scenario.overrides })
+  })
 
   let loadSucceeded = false
 
@@ -410,7 +409,6 @@ async function executeScenario (t, scenario) {
     if (loadSucceeded) {
       await addon.unload().catch(() => {})
     }
-    await loader.close().catch(() => {})
     specLogger.release()
   }
 }
