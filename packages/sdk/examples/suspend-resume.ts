@@ -5,6 +5,7 @@ import {
   unloadModel,
   suspend,
   resume,
+  state,
 } from "@qvac/sdk";
 
 try {
@@ -18,6 +19,8 @@ try {
   });
 
   console.log("✅ Model loaded\n");
+
+  console.log(`📊 Lifecycle state: ${await state()}\n`);
 
   // Run a completion before suspending
   console.log("--- Completion before suspend ---");
@@ -34,16 +37,31 @@ try {
   // Suspend all networking and storage (e.g. app going to background)
   console.log("⏸️  Suspending...");
   await suspend();
-  console.log("✅ Suspended — Hyperswarm and Corestore resources are paused\n");
+  console.log(`📊 Lifecycle state: ${await state()}\n`);
+
+  try {
+    await completion({
+      modelId,
+      history: [{ role: "user", content: "This should fail" }],
+      stream: false,
+    }).text;
+  } catch (error: unknown) {
+    const name = (error as { name?: string }).name;
+    if (name === "LIFECYCLE_OPERATION_BLOCKED") {
+      console.log(`🚫 Operation blocked while suspended (${name})`);
+    } else {
+      throw error;
+    }
+  }
 
   // Simulate time in background
-  console.log("💤 Simulating 3 seconds in background...");
+  console.log("\n💤 Simulating 3 seconds in background...");
   await new Promise((resolve) => setTimeout(resolve, 3000));
 
   // Resume when returning to foreground
   console.log("▶️  Resuming...");
   await resume();
-  console.log("✅ Resumed — networking and storage restored\n");
+  console.log(`📊 Lifecycle state: ${await state()}\n`);
 
   // Run another completion after resuming
   console.log("--- Completion after resume ---");
