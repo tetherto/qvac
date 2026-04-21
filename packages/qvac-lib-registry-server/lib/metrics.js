@@ -2,15 +2,10 @@
 
 const promClient = require('prom-client')
 
-const MODEL_CACHE_TTL_MS = 15000
-
 class QvacMetrics {
   constructor (service, opts = {}) {
     this._service = service
     this._logger = opts.logger || console
-
-    this._modelCache = null
-    this._modelCacheExpiry = 0
 
     this._rpcRequests = new promClient.Counter({
       name: 'qvac_registry_rpc_requests_total',
@@ -42,9 +37,29 @@ class QvacMetrics {
     new promClient.Gauge({
       name: 'qvac_registry_models_total',
       help: 'Total number of models in the registry',
-      async collect () {
-        const models = await self._getCachedModels()
-        this.set(models.length)
+      collect () {
+        this.set(self._service.modelCount)
+      }
+    })
+
+    // eslint-disable-next-line no-new
+    new promClient.Gauge({
+      name: 'qvac_registry_total_blob_bytes',
+      help: 'Total bytes across all model blobs (sum of blobBinding.byteLength across view records)',
+      collect () {
+        this.set(self._service.totalModelBytes)
+      }
+    })
+
+    // Derived from totalModelBytes via a background refresh; expose staleness so
+    // operators can alert when the refresh stalls.
+    // eslint-disable-next-line no-new
+    new promClient.Gauge({
+      name: 'qvac_registry_totals_refreshed_age_seconds',
+      help: 'Seconds since qvac_registry_total_blob_bytes and qvac_registry_models_total were last recomputed (-1 if never)',
+      collect () {
+        const ts = self._service.totalsRefreshedAt
+        this.set(ts ? (Date.now() - ts) / 1000 : -1)
       }
     })
 
@@ -141,7 +156,7 @@ class QvacMetrics {
     // eslint-disable-next-line no-new
     new promClient.Gauge({
       name: 'qvac_registry_blob_core_byte_length',
-      help: 'Byte length of each blob core',
+      help: 'Byte length of each blob core (only populated on nodes that opened the blob core locally)',
       labelNames: ['core_name'],
       collect () {
         this.reset()
@@ -150,45 +165,6 @@ class QvacMetrics {
         }
       }
     })
-
-    // eslint-disable-next-line no-new
-    new promClient.Gauge({
-      name: 'qvac_registry_model_size_bytes',
-      help: 'Size in bytes of each model blob',
-      labelNames: ['path', 'engine', 'quantization'],
-      async collect () {
-        const models = await self._getCachedModels()
-        this.reset()
-        for (const m of models) {
-          if (m.blobBinding && m.blobBinding.byteLength > 0) {
-            this.set({
-              path: m.path,
-              engine: m.engine || '',
-              quantization: m.quantization || ''
-            }, m.blobBinding.byteLength)
-          }
-        }
-      }
-    })
-  }
-
-  async _getCachedModels () {
-    const now = Date.now()
-    if (this._modelCache && now < this._modelCacheExpiry) {
-      return this._modelCache
-    }
-
-    try {
-      const view = this._service.view
-      if (!view || !view.opened) return this._modelCache || []
-      const models = await view.findModelsByPath({}).toArray()
-      this._modelCache = models
-      this._modelCacheExpiry = now + MODEL_CACHE_TTL_MS
-      return models
-    } catch (err) {
-      this._logger.warn({ err: err.message }, 'QvacMetrics: failed to query models')
-      return this._modelCache || []
-    }
   }
 }
 

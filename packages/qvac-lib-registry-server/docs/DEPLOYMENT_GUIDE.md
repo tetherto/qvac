@@ -558,10 +558,13 @@ node scripts/bin.js run --storage ./corestore --metrics-port 0
 
 | Metric | Type | Description |
 |--------|------|-------------|
-| `qvac_registry_models_total` | Gauge | Total models in the registry |
-| `qvac_registry_blob_cores_total` | Gauge | Number of blob cores |
+| `qvac_registry_models_total` | Gauge | Total models in the registry (refreshed every 5 min and on local writes) |
+| `qvac_registry_total_blob_bytes` | Gauge | Sum of `blobBinding.byteLength` across every model record in the view |
+| `qvac_registry_totals_refreshed_age_seconds` | Gauge | Seconds since `total_blob_bytes` / `models_total` were last recomputed (-1 if never) |
+| `qvac_registry_blob_cores_total` | Gauge | Number of blob cores opened locally on this node |
 | `qvac_registry_blob_core_peers` | Gauge | Connected peers per blob core |
 | `qvac_registry_blob_core_fully_downloaded` | Gauge | Whether each blob core is fully replicated |
+| `qvac_registry_blob_core_byte_length` | Gauge | Byte length per locally-opened blob core |
 | `qvac_registry_view_core_length` | Gauge | View core length (total blocks) |
 | `qvac_registry_view_core_contiguous_length` | Gauge | View core contiguous length (gap indicates replication lag) |
 | `qvac_registry_rpc_requests_total` | Counter | RPC requests by method |
@@ -569,8 +572,8 @@ node scripts/bin.js run --storage ./corestore --metrics-port 0
 | `qvac_registry_is_indexer` | Gauge | Whether this node is an indexer |
 | `qvac_registry_blind_peers_connected` | Gauge | Number of configured blind peers with an active connection |
 | `qvac_registry_blind_peer_connected` | Gauge | Per-blind-peer connection status (labeled by `peer_key`) |
-| `qvac_registry_blob_core_byte_length` | Gauge | Byte length per blob core |
-| `qvac_registry_model_size_bytes` | Gauge | Size of each model blob (labeled by path, engine, quantization) |
+
+`qvac_registry_total_blob_bytes` is derived from the view, not from the on-disk blob cores, so it reports the logical registry size consistently on every node (indexers that do not store blobs locally still report the same value).
 
 **Prometheus scrape config (local Prometheus, loopback bind):**
 
@@ -652,9 +655,10 @@ Use Holepunch's pre-built [Grafana dashboard](https://grafana.com/grafana/dashbo
 **Add QVAC-specific panels for:**
 
 - **Model availability:** `qvac_registry_models_total`, `hyper_health_peers_with_all_data_total`
-- **Storage breakdown:** `qvac_registry_model_size_bytes` by engine/quantization, `sum(qvac_registry_blob_core_byte_length)`
+- **Storage:** `qvac_registry_total_blob_bytes` (view-derived logical size), `sum(qvac_registry_blob_core_byte_length)` (on-disk per node)
 - **RPC activity:** `rate(qvac_registry_rpc_requests_total[5m])`, error ratio
 - **Cluster health:** `qvac_registry_is_indexer` across nodes, `qvac_registry_view_core_length` vs `qvac_registry_view_core_contiguous_length`
+- **Metric freshness:** `qvac_registry_totals_refreshed_age_seconds` — alert if it exceeds 15 minutes (background refresh runs every 5)
 
 **Import the baseline dashboard:**
 

@@ -46,6 +46,8 @@ const DISPATCH_DELETE_MODEL = `@${QVAC_MAIN_REGISTRY}/delete-model`
 
 const BLOB_CORE_NAME = 'models'
 
+const MODEL_TOTALS_REFRESH_INTERVAL_MS = 5 * 60 * 1000
+
 class RegistryService extends ReadyResource {
   constructor (store, swarm, config, opts = {}) {
     super()
@@ -76,6 +78,11 @@ class RegistryService extends ReadyResource {
     this.blindPeering = null
     this.reseedTracker = null
     this.metrics = null
+
+    this._totalModelBytes = 0
+    this._modelCount = 0
+    this._totalModelBytesRefreshedAt = 0
+    this._totalsRefreshTimer = null
 
     this._registerApplyHandlers()
 
@@ -144,10 +151,6 @@ class RegistryService extends ReadyResource {
 
     this.view = this.base.view
     await this.view.ready()
-
-    this._logAvailableModels().catch(err => {
-      this.logger.error({ err }, 'RegistryService: Failed to log available models')
-    })
 
     this.swarm.on('connection', (conn, peerInfo) => {
       const peerKey = peerInfo?.publicKey ? IdEnc.normalize(peerInfo.publicKey) : null
@@ -259,11 +262,24 @@ class RegistryService extends ReadyResource {
       this._startCompactionInterval()
     }
 
+    await this._refreshTotals()
+    this._totalsRefreshTimer = setInterval(() => {
+      this._refreshTotals().catch(err => {
+        this.logger.warn({ err: err.message }, 'RegistryService: failed to refresh model totals')
+      })
+    }, MODEL_TOTALS_REFRESH_INTERVAL_MS)
+    if (this._totalsRefreshTimer.unref) this._totalsRefreshTimer.unref()
+
     this.logger.info('RegistryService: swarm joined and flushed')
   }
 
   async _close () {
     this.logger.info('RegistryService: closing')
+
+    if (this._totalsRefreshTimer) {
+      clearInterval(this._totalsRefreshTimer)
+      this._totalsRefreshTimer = null
+    }
 
     if (this._compactionInterval) {
       clearInterval(this._compactionInterval)
@@ -704,6 +720,8 @@ class RegistryService extends ReadyResource {
 
       await this._appendOperation(DISPATCH_PUT_MODEL, modelData)
 
+      this._scheduleTotalsRefresh()
+
       if (this.reseedTracker) {
         await this.reseedTracker.waitForComplete()
         this.logger.info({
@@ -1132,6 +1150,8 @@ class RegistryService extends ReadyResource {
 
     await this._appendOperation(DISPATCH_DELETE_MODEL, { path, source })
 
+    this._scheduleTotalsRefresh()
+
     this.logger.info({ path, source }, 'deleteModel: completed')
 
     return { success: true, path, source }
@@ -1212,26 +1232,45 @@ class RegistryService extends ReadyResource {
     }
   }
 
-  async _logAvailableModels () {
-    if (!this.view) return
+  async _refreshTotals () {
+    if (!this.view || !this.view.opened) return
 
-    try {
-      if (!this.view.opened) await this.view.ready()
-      const models = await this.view.findModelsByPath({}).toArray()
+    const startedAt = Date.now()
+    let total = 0
+    let count = 0
 
-      if (models.length === 0) {
-        this.logger.info('RegistryService: No models in registry yet')
-      } else {
-        const modelsToLog = models.length > 5 ? models.slice(-5) : models
-        this.logger.info({
-          count: models.length,
-          showing: modelsToLog.length,
-          models: modelsToLog.map(m => `${m.path} [${m.engine}]`)
-        }, 'RegistryService: models available')
-      }
-    } catch (err) {
-      this.logger.error({ err }, 'RegistryService: Failed to log models')
+    for await (const model of this.view.findModelsByPath({})) {
+      total += model.blobBinding?.byteLength || 0
+      count++
     }
+
+    this._totalModelBytes = total
+    this._modelCount = count
+    this._totalModelBytesRefreshedAt = Date.now()
+
+    this.logger.debug({
+      totalBytes: total,
+      models: count,
+      durationMs: Date.now() - startedAt
+    }, 'RegistryService: refreshed model totals')
+  }
+
+  _scheduleTotalsRefresh () {
+    this._refreshTotals().catch(err => {
+      this.logger.warn({ err: err.message }, 'RegistryService: failed to refresh model totals')
+    })
+  }
+
+  get totalModelBytes () {
+    return this._totalModelBytes
+  }
+
+  get modelCount () {
+    return this._modelCount
+  }
+
+  get totalsRefreshedAt () {
+    return this._totalModelBytesRefreshedAt
   }
 
   _normalizeKey (key) {

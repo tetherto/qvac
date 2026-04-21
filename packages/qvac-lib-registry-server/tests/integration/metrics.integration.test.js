@@ -112,6 +112,8 @@ test('/metrics includes QVAC custom gauges', async (t) => {
     const body = res.body
 
     t.ok(body.includes('qvac_registry_models_total'), 'has models_total')
+    t.ok(body.includes('qvac_registry_total_blob_bytes'), 'has total_blob_bytes')
+    t.ok(body.includes('qvac_registry_totals_refreshed_age_seconds'), 'has totals_refreshed_age_seconds')
     t.ok(body.includes('qvac_registry_blob_cores_total'), 'has blob_cores_total')
     t.ok(body.includes('qvac_registry_view_core_length'), 'has view_core_length')
     t.ok(body.includes('qvac_registry_view_core_contiguous_length'), 'has view_core_contiguous_length')
@@ -120,6 +122,18 @@ test('/metrics includes QVAC custom gauges', async (t) => {
     t.ok(body.includes('qvac_registry_blind_peer_connected'), 'has blind_peer_connected')
     t.ok(body.includes('qvac_registry_rpc_requests_total'), 'has rpc_requests_total')
     t.ok(body.includes('qvac_registry_rpc_errors_total'), 'has rpc_errors_total')
+
+    const totalBytesLine = body.split('\n')
+      .find(line => line.startsWith('qvac_registry_total_blob_bytes '))
+    t.ok(totalBytesLine, 'exports total_blob_bytes as a single series')
+    t.ok(totalBytesLine.endsWith(' 0'), 'total_blob_bytes is 0 on an empty registry')
+
+    const modelsTotalLine = body.split('\n')
+      .find(line => line.startsWith('qvac_registry_models_total '))
+    t.ok(modelsTotalLine, 'exports models_total as a single series')
+    t.ok(modelsTotalLine.endsWith(' 0'), 'models_total is 0 on an empty registry')
+
+    t.absent(body.includes('qvac_registry_model_size_bytes'), 'per-path model_size_bytes metric is removed')
   } finally {
     await cleanup(ctx)
   }
