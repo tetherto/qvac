@@ -32,6 +32,7 @@ export const SDK_SERVER_ERROR_CODES = {
   CANCEL_FAILED: 52408,
   TEXT_TO_SPEECH_FAILED: 52409,
   CONFIG_RELOAD_NOT_SUPPORTED: 52410,
+  TEXT_TO_SPEECH_STREAM_FAILED: 52415,
   MODEL_TYPE_MISMATCH: 52411,
   OCR_FAILED: 52412,
   IMAGE_FILE_NOT_FOUND: 52413,
@@ -233,6 +234,11 @@ const serverErrorDefinitions: ErrorCodesMap = {
     name: "TEXT_TO_SPEECH_FAILED",
     message: (details?: string) =>
       `Text-to-speech operation failed${details ? `: ${details}` : ""}`,
+  },
+  [SDK_SERVER_ERROR_CODES.TEXT_TO_SPEECH_STREAM_FAILED]: {
+    name: "TEXT_TO_SPEECH_STREAM_FAILED",
+    message: (details?: string) =>
+      `Text-to-speech stream operation failed${details ? `: ${details}` : ""}`,
   },
   [SDK_SERVER_ERROR_CODES.CONFIG_RELOAD_NOT_SUPPORTED]: {
     name: "CONFIG_RELOAD_NOT_SUPPORTED",

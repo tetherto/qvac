@@ -343,7 +343,7 @@ export class TextToSpeechStreamFailedError extends QvacErrorBase {
   constructor(details?: string, cause?: unknown) {
     super(
       createErrorOptions(
-        SDK_SERVER_ERROR_CODES.TEXT_TO_SPEECH_FAILED,
+        SDK_SERVER_ERROR_CODES.TEXT_TO_SPEECH_STREAM_FAILED,
         details ? [details] : undefined,
         cause,
       ),
