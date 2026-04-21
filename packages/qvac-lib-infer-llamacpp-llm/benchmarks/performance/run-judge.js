@@ -3,7 +3,6 @@
 const fs = require('bare-fs')
 const path = require('bare-path')
 const process = require('bare-process')
-const FilesystemDL = require('@qvac/dl-filesystem')
 const {
   parseAddonSource,
   resolveAddonCtor,
@@ -94,22 +93,20 @@ function pairKey (reference, candidate) {
 
 function createJudgeRuntimeManager (opts) {
   let model = null
-  let loader = null
   const cache = new Map()
   const maxChars = 6000
 
   return {
     async init () {
       if (model) return
-      loader = new FilesystemDL({ dirPath: opts.modelDef.modelDir })
       const config = buildConfigObject(opts.runtimeConfig)
-      model = new opts.AddonCtor({
-        modelName: opts.modelName,
-        loader,
-        diskPath: opts.modelDef.modelDir,
+      const AddonCtor = opts.AddonCtor
+      model = new AddonCtor({
+        files: { model: [path.join(opts.modelDef.modelDir, opts.modelName)] },
+        config,
         opts: { stats: true },
         logger: createAddonRuntimeLogger(opts.debug)
-      }, config)
+      })
       await model.load()
     },
 
@@ -155,10 +152,6 @@ function createJudgeRuntimeManager (opts) {
       if (model) {
         await model.unload().catch(() => {})
         model = null
-      }
-      if (loader) {
-        await loader.close().catch(() => {})
-        loader = null
       }
     }
   }

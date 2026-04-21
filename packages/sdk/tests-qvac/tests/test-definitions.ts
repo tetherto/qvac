@@ -4,7 +4,6 @@ import { completionTests } from "./completion-tests.js";
 import { transcriptionTests } from "./transcription-tests.js";
 import { embeddingTests } from "./embedding-tests.js";
 import { ragTests } from "./rag-tests.js";
-import { translationMarianTests } from "./translation-marian-tests.js";
 import { translationIndicTransTests } from "./translation-indictrans-tests.js";
 import { translationBergamotTests } from "./translation-bergamot-tests.js";
 import { translationLlmTests } from "./translation-llm-tests.js";
@@ -27,6 +26,7 @@ import { downloadTests } from "./download-tests.js";
 import { delegatedInferenceTests } from "./delegated-inference-tests.js";
 import { diffusionTests } from "./diffusion-tests.js";
 import { finetuneTests } from "./finetune-tests.js";
+import { lifecycleTests } from "./lifecycle-tests.js";
 
 // Model loading tests
 export const modelLoadLlm: TestDefinition = {
@@ -169,9 +169,6 @@ export const tests = [
   // RAG tests
   ...ragTests,
 
-  // Translation: Marian Opus (DE↔EN, EN↔FR, FR↔EN)
-  ...translationMarianTests,
-
   // Translation: IndicTrans2 (EN↔HI)
   ...translationIndicTransTests,
 
@@ -234,6 +231,9 @@ export const tests = [
 
   // Finetuning tests
   ...finetuneTests,
+
+  // Lifecycle tests (suspend/resume)
+  ...lifecycleTests,
 
   // Additional model tests
   modelSwitchLlm,

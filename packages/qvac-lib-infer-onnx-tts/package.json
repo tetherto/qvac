@@ -1,6 +1,6 @@
 {
   "name": "@qvac/tts-onnx",
-  "version": "0.8.3",
+  "version": "0.8.4",
   "description": "Text to Speech (TTS) addon for qvac",
   "addon": true,
   "engines": {
@@ -62,7 +62,8 @@
       "types": "./addonLogging.d.ts",
       "default": "./addonLogging.js"
     },
-    "./addonLogging.js": "./addonLogging.js"
+    "./addonLogging.js": "./addonLogging.js",
+    "./lib/textStreamAccumulator.js": "./lib/textStreamAccumulator.js"
   },
   "license": "Apache-2.0",
   "repository": {

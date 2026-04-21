@@ -1,6 +1,6 @@
 # Architecture Documentation
 
-**Package:** `@qvac/llm-llamacpp` v0.9.0  
+**Package:** `@qvac/llm-llamacpp` v0.16.0
 **Stack:** JavaScript, C++20, llama.cpp, Bare Runtime, CMake, vcpkg  
 **License:** Apache-2.0
 
@@ -23,7 +23,7 @@
 ### Architecture Decisions
 - [Decision 1: llama.cpp as Inference Backend](#decision-1-llamacpp-as-inference-backend)
 - [Decision 2: Bare Runtime over Node.js](#decision-2-bare-runtime-over-nodejs)
-- [Decision 3: Pluggable Data Loader Architecture](#decision-3-pluggable-data-loader-architecture)
+- [Decision 3: Caller-Supplied File Paths](#decision-3-caller-supplied-file-paths)
 - [Decision 4: Incremental Buffer-Based Weight Loading](#decision-4-incremental-buffer-based-weight-loading)
 - [Decision 5: Chat Message Format](#decision-5-chat-message-format-json-serialization)
 - [Decision 6: Exclusive Run Queue](#decision-6-exclusive-run-queue-indexjs)
@@ -42,20 +42,19 @@
 
 **Core value:**
 - High-level JavaScript API for LLM inference
-- Peer-to-peer model distribution via Hyperdrive
 - Streaming token-by-token output
 - Text and multimodal (vision + text) models
-- Pluggable model weight loaders
+- Caller-owned model files (any source: filesystem, P2P, HTTP, etc.)
 
 ## Key Features
 
 - **Cross-platform**: macOS, Linux, Windows, iOS, Android
-- **Multiple loaders**: Hyperdrive (P2P), filesystem, custom
+- **Caller-owned files**: caller provides absolute file paths; the addon never downloads or discovers files on its own
 - **Streaming responses**: Async iterators or callbacks
 - **GPU acceleration**: Metal, Vulkan, OpenCL
 - **Quantized models**: GGUF format
 - **Multimodal**: Vision models (i.e. Qwen3-VL, SmolVLM, etc.)
-- **Sharded loading**: Automatic split GGUF handling
+- **Sharded loading**: Caller passes every shard (and the `.tensors.txt` companion); the addon streams them into llama.cpp in order
 
 ## Target Platforms
 
@@ -70,6 +69,8 @@
 **Dependencies:**
 - qvac-lib-inference-addon-cpp (≥1.1.2): C++ addon framework (single-job runner, runJob/activate/loadWeights/cancel/destroyInstance)
 - qvac-fabric-llm.cpp (≥7248.2.3): Inference engine
+- @qvac/infer-base: `createJobHandler` and `exclusiveRunQueue` helpers (job/response lifecycle + single-job serialization)
+- @qvac/logging: `QvacLogger` wrapper
 - Bare Runtime (≥1.24.0): JavaScript runtime
 - Linux requires Clang/LLVM 19 with libc++
 
@@ -86,35 +87,35 @@ graph TB
     subgraph "Application Layer"
         APP[QVAC Applications]
     end
-    
+
     subgraph "Inference Addons"
         LLM[llm-llamacpp<br/>LLMs]
         EMBED[embed-llamacpp<br/>Embeddings]
         WHISPER[whispercpp<br/>STT]
         NMT[nmtcpp<br/>Translation]
     end
-    
+
     subgraph "core libs"
-        BASE["@qvac/infer-base"]
-        DL["@qvac/dl-hyperdrive"]
+        BASE["@qvac/infer-base<br/>(job handler + run queue)"]
+        LOG["@qvac/logging"]
     end
-    
+
     subgraph "Native Framework"
         ADDON[addon-cpp]
     end
-    
+
     subgraph "Backend"
         BARE[Bare Runtime]
         LLAMA[llama.cpp]
     end
-    
+
     APP --> LLM
     LLM --> BASE
-    LLM --> DL
+    LLM --> LOG
     LLM --> ADDON
     ADDON --> BARE
     ADDON --> LLAMA
-    
+
     style LLM fill:#e1f5ff,stroke:#0066cc,stroke-width:3px
 ```
 
@@ -123,23 +124,24 @@ graph TB
 
 **Dependency Table:**
 
-| Package | Type | Version | Purpose |
-|---------|------|---------|---------|
-| @qvac/infer-base | Framework | ^0.2.0 | Base classes, WeightsProvider, QvacResponse |
-| @qvac/dl-hyperdrive | Peer | ^0.1.1 | P2P model loading |
-| qvac-lib-inference-addon-cpp | Native | ≥1.1.1 | C++ addon framework (single-job runner) |
-| qvac-fabric-llm.cpp | Native | ≥7248.2.3 | Inference engine |
-| Bare Runtime | Runtime | ≥1.24.0 | JavaScript execution |
+| Package | Type | Purpose |
+|---------|------|---------|
+| @qvac/infer-base | Framework | `createJobHandler`, `exclusiveRunQueue`, `QvacResponse` |
+| @qvac/logging | Framework | `QvacLogger` wrapper |
+| qvac-lib-inference-addon-cpp | Native | C++ addon framework (single-job runner) |
+| qvac-fabric-llm.cpp | Native | Inference engine |
+| Bare Runtime | Runtime | JavaScript execution |
 
 **Integration Points:**
 
 | From | To | Mechanism | Data Format |
 |------|-----|-----------|-------------|
-| JavaScript | LlmLlamacpp | Constructor | args, config objects |
-| LlmLlamacpp | BaseInference | Inheritance | Template method pattern |
+| JavaScript | LlmLlamacpp | Constructor `{ files, config, logger, opts }` | Object |
+| LlmLlamacpp | createJobHandler | Composition | Job handle + callbacks |
+| LlmLlamacpp | exclusiveRunQueue | Composition | Promise-based queue |
 | LlmLlamacpp | LlamaInterface | Composition | Method calls |
 | LlamaInterface | C++ Addon | require.addon() | Native binding |
-| WeightsProvider | Data Loader | Interface | Stream protocol |
+| LlmLlamacpp | bare-fs | Direct read stream | Absolute file paths |
 
 </details>
 
@@ -149,39 +151,56 @@ graph TB
 
 ### Main Class: LlmLlamacpp
 
+`LlmLlamacpp` is a standalone class (no inheritance). It composes a job handler (`createJobHandler`), a single-job run queue (`exclusiveRunQueue`), and a `LlamaInterface` native bridge.
+
 ```mermaid
 classDiagram
     class LlmLlamacpp {
-        +constructor(args, config)
-        +load(closeLoader, onProgress) Promise~void~
-        +run(messages) Promise~QvacResponse~
-        +unload() Promise~void~
-        +downloadWeights(onProgress, opts) Promise~string~
-    }
-    
-    class BaseInference {
-        <<abstract>>
+        +constructor(args: LlmLlamacppArgs)
         +load() Promise~void~
-        +run() Promise~QvacResponse~
+        +run(messages, runOptions?) Promise~QvacResponse~
+        +finetune(finetuningOptions) Promise~FinetuneHandle~
+        +pause() Promise~void~
+        +cancel() Promise~void~
+        +unload() Promise~void~
+        +getState() object
+    }
+
+    class LlamaInterface {
+        +activate() Promise~void~
+        +loadWeights(chunk) Promise~void~
+        +runJob(inputs) Promise~boolean~
+        +finetune(params) Promise~boolean~
+        +cancel() Promise~void~
         +unload() Promise~void~
     }
-    
+
+    class JobHandler {
+        <<createJobHandler>>
+        +start() QvacResponse
+        +output(token) void
+        +end(stats?, payload?) void
+        +fail(error) void
+        +active QvacResponse
+    }
+
+    class RunQueue {
+        <<exclusiveRunQueue>>
+        +(fn) Promise~any~
+    }
+
     class QvacResponse {
         +iterate() AsyncIterator~string~
-        +onUpdate(callback) QvacResponse
-        +await() Promise~void~
+        +onUpdate(cb) QvacResponse
+        +await() Promise~object~
         +cancel() Promise~void~
         +stats object
     }
-    
-    class WeightsProvider {
-        +downloadFiles(files, path, opts) Promise~void~
-        +streamFiles(shards, onChunk, onProgress) Promise~void~
-    }
-    
-    LlmLlamacpp --|> BaseInference
-    LlmLlamacpp *-- WeightsProvider
-    LlmLlamacpp ..> QvacResponse : creates
+
+    LlmLlamacpp *-- LlamaInterface
+    LlmLlamacpp *-- JobHandler
+    LlmLlamacpp *-- RunQueue
+    JobHandler ..> QvacResponse : creates
 ```
 
 <details>
@@ -191,18 +210,34 @@ classDiagram
 
 | Class | Responsibility | Lifecycle | Dependencies |
 |-------|----------------|-----------|--------------|
-| LlmLlamacpp | Orchestrate model lifecycle, manage loading/inference | Created by user, persistent | WeightsProvider, LlamaInterface |
-| BaseInference | Define standard inference API | Abstract base class | None |
-| QvacResponse | Stream inference output | Created per run() call, short-lived | None |
-| WeightsProvider | Abstract model weight loading | Created by LlmLlamacpp | DataLoader |
+| LlmLlamacpp | Orchestrate model lifecycle, stream weights, submit jobs, handle events | Created by user, persistent | LlamaInterface, createJobHandler, exclusiveRunQueue |
+| LlamaInterface | JS wrapper around the native addon (handle, callbacks) | Created lazily in `_load()` | binding.js |
+| JobHandler (createJobHandler) | Track the current job, create `QvacResponse`, route `output`/`end`/`fail` | One per LlmLlamacpp instance | None |
+| exclusiveRunQueue | Serialize `run()` / `finetune()` / `unload()` into single-in-flight FIFO | One per LlmLlamacpp instance | None |
+| QvacResponse | Stream inference output, expose `await()`/`iterate()`/`onUpdate()` | Created per job, short-lived | None |
 
 **Key Relationships:**
 
 | From | To | Type | Purpose |
 |------|-----|------|---------|
-| LlmLlamacpp | BaseInference | Inheritance | Standard QVAC inference API |
-| LlmLlamacpp | WeightsProvider | Composition | Model weight acquisition |
-| LlmLlamacpp | QvacResponse | Creates | Streaming output per inference |
+| LlmLlamacpp | LlamaInterface | Composition | Native addon bridge |
+| LlmLlamacpp | JobHandler | Composition | Per-job lifecycle + response |
+| LlmLlamacpp | exclusiveRunQueue | Composition | Serialize public API calls |
+| LlmLlamacpp | bare-fs | Direct use | Stream shard files in `_streamShards()` |
+
+**Constructor signature (new):**
+
+```js
+new LlmLlamacpp({
+  files: { model: string[], projectionModel?: string },
+  config: Record<string, string>,
+  logger?: object,
+  opts?: { stats?: boolean }
+})
+```
+
+- `files.model` is an array of absolute file paths. For single-file GGUFs, pass a one-element array. For sharded GGUFs the caller passes the `.tensors.txt` companion first, followed by every shard in numerical order.
+- `load()` takes no arguments. It constructs the native addon with the first shard-matching entry of `files.model` (via `pickPrimaryGgufPath`) as the primary model path, streams all entries via `bare-fs` + `loadWeights`, and finally calls `activate()`.
 
 </details>
 
@@ -219,22 +254,23 @@ graph TB
     subgraph "Layer 1: JavaScript API"
         APP["Application Code"]
         LLMCLASS["LlmLlamacpp<br/>(index.js)"]
-        BASEINF["BaseInference<br/>(@qvac/infer-base)"]
-        WEIGHTSPR["WeightsProvider<br/>(@qvac/infer-base)"]
+        JOBH["createJobHandler<br/>(@qvac/infer-base)"]
+        RUNQ["exclusiveRunQueue<br/>(@qvac/infer-base)"]
         RESPONSE["QvacResponse<br/>(@qvac/infer-base)"]
+        BAREFS["bare-fs read stream<br/>(shard streaming)"]
     end
-    
+
     subgraph "Layer 2: Bridge"
         LLAMAIF["LlamaInterface<br/>(addon.js)"]
         BINDING["require.addon<br/>(binding.js)"]
     end
-    
+
     subgraph "Layer 3: C++ Addon"
         JSINTERFACE["JsInterface<br/>(addon-cpp JsInterface)"]
         ADDONCPP["AddonCpp / AddonJs<br/>(addon-cpp + addon/AddonJs.hpp)"]
         WEIGHTSLOAD["WeightsLoader<br/>(addon-cpp)"]
     end
-    
+
     subgraph "Layer 4: Model"
         LLAMAMODEL["LlamaModel<br/>(model-interface/LlamaModel.cpp)"]
         METADATA["ModelMetaData<br/>(model-interface/ModelMetadata.cpp)"]
@@ -242,28 +278,28 @@ graph TB
         TEXTCTX["TextLlmContext<br/>(model-interface/TextLlmContext.cpp)"]
         MTMDCTX["MtmdLlmContext<br/>(model-interface/MtmdLlmContext.cpp)"]
     end
-    
+
     subgraph "Layer 5: Backend"
         LLAMACPP["llama.cpp"]
         GGML["GGML"]
         GPU["GPU Backends"]
     end
-    
+
     APP --> LLMCLASS
-    LLMCLASS --> BASEINF
-    LLMCLASS --> WEIGHTSPR
+    LLMCLASS --> JOBH
+    LLMCLASS --> RUNQ
+    LLMCLASS --> BAREFS
     LLMCLASS --> LLAMAIF
-    LLMCLASS -.-> RESPONSE
-    
+    JOBH -.-> RESPONSE
+
     LLAMAIF --> BINDING
     BINDING --> JSINTERFACE
-    WEIGHTSPR --> WEIGHTSLOAD
-    
+    BAREFS --> LLAMAIF
+
     JSINTERFACE --> ADDONCPP
     ADDONCPP --> WEIGHTSLOAD
     ADDONCPP --> LLAMAMODEL
-    ADDONCPP --> WEIGHTSLOAD
-    
+
     LLAMAMODEL --> METADATA
     LLAMAMODEL --> ASYNCWL
     ASYNCWL --> METADATA
@@ -271,10 +307,10 @@ graph TB
     LLAMAMODEL --> MTMDCTX
     TEXTCTX --> LLAMACPP
     MTMDCTX --> LLAMACPP
-    
+
     LLAMACPP --> GGML
     GGML --> GPU
-    
+
     style LLMCLASS fill:#e1f5ff
     style ADDONCPP fill:#ffe1e1
     style LLAMAMODEL fill:#ffe1e1
@@ -288,7 +324,7 @@ graph TB
 
 | Layer | Components | Responsibility | Language | Why This Layer |
 |-------|------------|----------------|----------|----------------|
-| 1. JavaScript API | LlmLlamacpp, BaseInference | High-level API, error handling | JS | Ergonomic API for npm consumers |
+| 1. JavaScript API | LlmLlamacpp, createJobHandler, exclusiveRunQueue, bare-fs | High-level API, job/response lifecycle, shard streaming | JS | Ergonomic API for npm consumers |
 | 2. Bridge | LlamaInterface, binding.js | JS↔C++ communication | JS wrapper | Lifecycle management, handle safety |
 | 3. C++ Addon | JsInterface, AddonCpp/AddonJs | Single-job runner, threading, callbacks | C++ | Performance, native integration |
 | 4. Model | LlamaModel, ModelMetaData, AsyncWeightsLoader, Contexts | Inference logic, metadata extraction, streaming weight coordination, chat formatting | C++ | Direct llama.cpp integration |
@@ -298,13 +334,14 @@ graph TB
 
 | Direction | Path | Data Format | Transform |
 |-----------|------|-------------|-----------|
+| Weights → | bare-fs → LlmLlamacpp → LlamaInterface → Addon | Buffer chunks | Streamed via `loadWeights({filename, chunk, completed})` |
 | Input → | JS → Bridge → Addon | JSON string | Serialize messages |
 | Input → | Addon → Model | parsed chat_msg | Parse JSON, format template |
 | Input → | Model → llama.cpp | tokens | Tokenize |
 | Output ← | llama.cpp → Model | token IDs | Sample |
 | Output ← | Model → Addon | UTF-8 string | Decode token |
 | Output ← | Addon → Bridge | string | Queue output |
-| Output ← | Bridge → JS | string | Emit via callback |
+| Output ← | Bridge → JS | string | Emit via `_addonOutputCallback` → `JobHandler.output()` |
 
 </details>
 
@@ -316,7 +353,7 @@ graph TB
 
 #### **LlmLlamacpp (index.js)**
 
-**Responsibility:** Main API class, orchestrates model lifecycle, manages data loaders
+**Responsibility:** Main API class. Standalone (no inheritance). Orchestrates the lifecycle: creates the native addon, streams shards from absolute file paths via `bare-fs`, serializes public API calls through `exclusiveRunQueue`, tracks the current job via `createJobHandler`, and routes addon events to the active `QvacResponse`.
 
 **Why JavaScript:**
 - High-level API ergonomics for npm consumers
@@ -324,7 +361,10 @@ graph TB
 - Event loop integration for streaming
 - Configuration parsing
 
-
+**Composition (no base class):**
+- `this._job = createJobHandler({ cancel: () => this.addon.cancel() })` — single active job + response
+- `this._run = exclusiveRunQueue()` — serialized `run()` / `finetune()` / `unload()`
+- `this.addon = new LlamaInterface(...)` — native bridge, created lazily in `_load()`
 
 #### **LlamaInterface (addon.js)**
 
@@ -359,15 +399,14 @@ graph TB
 
 **LLM specialization:** createInstance builds LlamaModel with config; runJob parses inputs array (media + text) into LlamaModel::Prompt
 
-#### **WeightsProvider (@qvac/infer-base)**
+#### **Shard streaming (`_streamShards` in index.js)**
 
-**Responsibility:** Abstracts model weight acquisition
+**Responsibility:** Stream caller-supplied shard files from disk into the native addon.
 
-**Why JavaScript:**
-- Integrates with data loaders (Hyperdrive, filesystem)
-- Progress tracking and reporting
-- Handles sharded GGUF expansion
-- Streaming chunk delivery
+- Iterates all entries of `files.model` (the primary path selected by `pickPrimaryGgufPath` was already passed to the constructor)
+- For each file, opens a `bare-fs.createReadStream`, forwards every chunk via `addon.loadWeights({ filename, chunk, completed: false })`
+- Calls `addon.loadWeights({ filename, chunk: null, completed: true })` after each file to finalize that shard
+- The caller is responsible for the **complete set of files and their order** (including the `.tensors.txt` companion first for sharded models). No discovery, no expansion, no download logic inside the addon.
 
 #### **ModelMetaData (model-interface/ModelMetadata.cpp)**
 
@@ -592,131 +631,50 @@ See [qvac-lib-inference-addon-cpp Decision 4: Why Bare Runtime](https://github.c
 
 ---
 
-## Decision 3: Pluggable Data Loader Architecture
+## Decision 3: Caller-Supplied File Paths
 
 <details>
 <summary>⚡ TL;DR</summary>
 
-**Chose:** Abstract data loading via WeightsProvider interface  
-**Why:** Support multiple distribution methods (P2P, HTTP, local files, S3)  
-**Cost:** Additional abstraction layer, must implement loader interface
+**Chose:** Caller passes absolute file paths in `files.model`; the addon does **no** download, discovery, or shard expansion.
+**Why:** Keeps the addon focused on inference; distribution is the application's responsibility.
+**Cost:** Callers must resolve sharded models themselves (including the `.tensors.txt` companion file).
 
 </details>
 
 ### Context
 
-Need to load multi-GB model files from various sources:
-- Local filesystem (for offline/development)
-- P2P networks (for privacy/decentralization)
-- HTTP/CDN (for enterprise deployments)
-- Cloud storage (S3, Azure Blob, etc.)
-
-Different use cases have different distribution requirements. No single distribution method fits all scenarios.
+Earlier iterations of this package shipped a `WeightsProvider` + pluggable data-loader abstraction that tried to own download, caching, and shard expansion. In practice this coupled the inference addon to an I/O layer with very different lifecycle and failure modes, and forced consumers to pick (or adapt) a loader even for the trivial "file is already on disk" case.
 
 ### Decision
 
-Create a pluggable data loader abstraction (WeightsProvider interface) that decouples model loading from the inference engine, allowing applications to choose their distribution strategy.
+`LlmLlamacpp` accepts **only** absolute file paths via `files.model`. Downloading, caching, P2P, HTTP, and shard discovery all live outside the addon. The addon:
+
+1. Constructs the native instance with the primary path selected by `pickPrimaryGgufPath(files.model)` — the first entry matching the shard regex, or `files.model[0]` for non-sharded models.
+2. If `files.model.length > 1`, streams all files (in the provided order) via `bare-fs.createReadStream` into `addon.loadWeights({ filename, chunk, completed })`.
+3. Calls `addon.activate()` to finalize load.
+
+For sharded GGUFs, the caller must pass **every** shard **and** the `.tensors.txt` companion file, in order: `.tensors.txt` first, then each shard in numerical order. See the [README sharded models section](../README.md#sharded-models) for the concrete example.
 
 ### Rationale
 
-**Flexibility:**
-- Different users have different distribution needs (privacy vs speed vs simplicity)
-- Enterprises may require HTTP/CDN, privacy users may prefer P2P
-- Development/testing needs local filesystem access
-- No single distribution method fits all use cases
+**Single responsibility:**
+- The addon is an inference engine. It should not own download/caching/P2P logic.
+- Callers already have transport libraries that fit their deployment (Hyperdrive, HTTP, S3, bare file copy, etc.).
 
-**Separation of Concerns:**
-- Inference engine doesn't need to know about distribution details
-- Model loading is orthogonal to inference logic
-- Easier to test inference separately from data loading
+**Predictable failure modes:**
+- No hidden retries, no hidden temp files, no partial-state recovery inside the addon.
+- If a shard is missing, the failure happens at a clear boundary (`loadWeights` or `activate`).
 
-**Extensibility:**
-- Applications can implement custom loaders (S3, IPFS, Torrent, etc.)
-- Can optimize loaders for specific platforms (mobile vs desktop)
-- Future-proof: new distribution methods don't require engine changes
+**Simpler API:**
+- `load()` takes no arguments. No `closeLoader`, no `onProgress`, no `downloadWeights()`.
+- Callers who want progress reporting attach it to their own download step, before calling `load()`.
 
 ### Trade-offs
-- ✅ Can mock loaders for unit testing inference logic
-- ❌ Additional abstraction complexity vs hardcoding a single method
-- ❌ Applications must choose/implement their loader (no batteries-included default)
-
-### WeightsProvider Interface
-
-```javascript
-// Core abstraction that all loaders must implement
-interface WeightsProvider {
-  // Get readable stream for model file
-  async getStream(path: string): ReadableStream
-  
-  // Wait for loader to be ready
-  async ready(): Promise<void>
-  
-  // Cleanup resources
-  async close(): Promise<void>
-}
-```
-
-### Example Implementations
-
-<details>
-<summary>📊 LLM-Friendly: Loader Comparison</summary>
-
-**Performance Characteristics:**
-
-| Loader | Use Case | Initial Download | Subsequent Access | Setup Complexity |
-|--------|----------|------------------|-------------------|------------------|
-| **FileSystemDataLoader** | Development, offline | Instant | Instant | Low (just file path) |
-| **HyperdriveDataLoader** | Privacy, P2P | 10-100 MB/s | Instant (cached) | Medium (P2P keys) |
-| **HttpDataLoader** | Enterprise, CDN | 50-500 MB/s | Varies | Low (just URL) |
-| **S3DataLoader** | Cloud deployments | 50-200 MB/s | Varies | Medium (AWS credentials) |
-
-**Example: Local Filesystem Loader**
-```javascript
-class FileSystemDataLoader {
-  constructor(basePath) { this.basePath = basePath }
-  
-  async getStream(path) {
-    return fs.createReadStream(`${this.basePath}/${path}`)
-  }
-  async ready() { /* no-op */ }
-  async close() { /* no-op */ }
-}
-```
-
-**Example: HTTP/CDN Loader**
-```javascript
-class HttpDataLoader {
-  constructor(baseUrl) { this.baseUrl = baseUrl }
-  
-  async getStream(path) {
-    const response = await fetch(`${this.baseUrl}/${path}`)
-    return response.body
-  }
-  async ready() { /* no-op */ }
-  async close() { /* no-op */ }
-}
-```
-
-**Example: Hyperdrive (P2P) Loader**
-```javascript
-class HyperdriveDataLoader {
-  constructor(key) { 
-    this.drive = new Hyperdrive(key)
-  }
-  
-  async getStream(path) {
-    return this.drive.createReadStream(path)
-  }
-  async ready() {
-    await this.drive.ready()
-  }
-  async close() {
-    await this.drive.close()
-  }
-}
-```
-
-</details>
+- ✅ Zero coupling between inference and transport
+- ✅ Trivial to test with plain local files
+- ❌ Callers must implement (or reuse) shard resolution — including listing the `.tensors.txt` companion file alongside the shards
+- ❌ No "batteries included" default — intentional
 
 ---
 
@@ -737,23 +695,18 @@ ML models can be gigabytes in size. llama.cpp expects either:
 1. A file descriptor (simple but requires file on disk)
 2. A buffer (via `std::streambuf` interface)
 
-**Problem:** We need to load directly from Hyperdrive (P2P storage) without duplicating storage by saving to disk first.
-
-Alternative approach would be: download from Hyperdrive → save to temp file → pass file descriptor to llama.cpp. But this doubles storage requirements (Hyperdrive cache + temp file).
+Even though the addon now reads shard files from disk via `bare-fs`, we still prefer the buffer path so that:
+- The same code path works whether the caller streams from disk, from memory, or from any future transport.
+- Multi-shard GGUFs can be fed incrementally instead of materialized to a single temp file.
 
 ### Decision
 
-Implement custom `std::streambuf` over JavaScript-owned ArrayBuffers with incremental shard-by-shard loading, as provided by `qvac-lib-inference-addon-cpp` framework. This allows feeding buffer chunks from any source (Hyperdrive, HTTP, local files) directly to llama.cpp without intermediate file storage.
-
-JavaScript sends model data as buffer chunks, C++ wraps them in a `std::streambuf`, enabling llama.cpp to load sharded models incrementally with zero-copy access to JavaScript memory. See our [llama.cpp fork implementation](https://github.com/tetherto/qvac-ext-lib-llama.cpp/compare/master...tetherto:qvac-ext-lib-llama.cpp:temp-load-from-buffer?diff=unified&w).
+Implement a custom `std::streambuf` over JavaScript-owned ArrayBuffers with incremental shard-by-shard loading, as provided by the `qvac-lib-inference-addon-cpp` framework. JavaScript forwards buffer chunks via `addon.loadWeights({ filename, chunk, completed })`; C++ wraps them in a `std::streambuf`, enabling llama.cpp to load sharded models incrementally with zero-copy access to JavaScript memory. See our [llama.cpp fork implementation](https://github.com/tetherto/qvac-ext-lib-llama.cpp/compare/master...tetherto:qvac-ext-lib-llama.cpp:temp-load-from-buffer?diff=unified&w).
 
 ### Rationale
 
-**Avoid Storage Duplication:**
-- Load directly from Hyperdrive streams without saving to disk first
-- No temporary files consuming additional storage
-- Critical for mobile devices with limited storage
-- Hyperdrive data stays in its cache, not duplicated
+**Incremental loading:**
+- Sharded GGUFs are streamed into llama.cpp as chunks arrive, rather than requiring the full model to sit in RAM or a temp file before load.
 
 **Zero-Copy:**
 - C++ reads directly from JavaScript ArrayBuffer memory
@@ -761,19 +714,18 @@ JavaScript sends model data as buffer chunks, C++ wraps them in a `std::streambu
 - Further reduces memory footprint
 
 **Source Flexibility:**
-- Works with any data source (Hyperdrive, HTTP, filesystem)
-- Data loader provides buffer chunks, streambuf wrapper handles delivery to llama.cpp
-- Same incremental loading path for all distribution methods
+- Works with any data source (bare-fs read stream today; any other in-process source tomorrow)
+- Same incremental loading path regardless of where chunks come from
 - Supports sharded GGUF files with incremental tensor loading
 
 ### Trade-offs
-- ✅ Can report loading progress per chunk
+- ✅ Works with arbitrary in-process data sources
 - ❌ Complex streambuf implementation with seeking across blobs
 - ❌ Must keep JS buffers alive during load, defer cleanup to correct thread
 - ❌ Seeking overhead O(N) across N blobs (acceptable, rarely needed)
 
 **Key Components:**
-- `WeightsProvider` (JavaScript): Orchestrates chunk delivery
+- `LlmLlamacpp._streamShards()` (JavaScript): opens `bare-fs` read streams for each caller-provided shard path and forwards chunks via `addon.loadWeights`
 - `BlobsStream` (C++): Implements `std::basic_streambuf<char>` over multiple blobs
 - `FinalizedStream` (C++): RAII wrapper owning JavaScript references
 - `ThreadQueuedRefDeleter` (C++): Defers reference deletion to JavaScript thread
@@ -931,4 +883,4 @@ Provide hand-written TypeScript definitions in `index.d.ts` alongside JavaScript
 **Related Document:**
 - [data-flows-detailed.md](data-flows-detailed.md) - Detailed data flow diagrams and sequences
 
-**Last Updated:** 2026-03-02
+**Last Updated:** 2026-04-16

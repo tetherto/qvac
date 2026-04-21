@@ -242,9 +242,6 @@ function generateNmtName(input: BaseNameInput): string {
   ) {
     return generateNmtIndictransName(input);
   }
-  if (lowerPath.includes("opus") || lowerFilename.includes("opus")) {
-    return generateNmtOpusName(input);
-  }
   if (lowerPath.includes("bergamot") || lowerFilename.includes("bergamot")) {
     return generateNmtBergamotName(input);
   }
@@ -280,34 +277,6 @@ function generateNmtIndictransName({
     (p) => p && p !== "",
   );
   return `MARIAN_${nameParts.map(cleanPart).join("_")}`;
-}
-
-function generateNmtOpusName({
-  filename,
-  quantization,
-  tagExtra,
-}: BaseNameInput): string {
-  const langMatch = filename.match(/-([a-z]{2,3})-([a-z]{2,3})\./i);
-  let langPair = "";
-  if (langMatch) {
-    langPair = `${langMatch[1]!.toUpperCase()}_${langMatch[2]!.toUpperCase()}`;
-  } else {
-    const tagLang = tagExtra || "";
-    if (tagLang.match(/^[a-z]{2}-[a-z]{2}$/i)) {
-      const [src, tgt] = tagLang.split("-");
-      langPair = `${src!.toUpperCase()}_${tgt!.toUpperCase()}`;
-    }
-  }
-
-  if (!langPair) {
-    const roaMatch = filename.match(/-([a-z]{2,3})-([a-z]{2,3})-f16/i);
-    if (roaMatch) {
-      langPair = `${roaMatch[1]!.toUpperCase()}_${roaMatch[2]!.toUpperCase()}`;
-    }
-  }
-
-  const nameParts = [langPair, quantization].filter((p) => p && p !== "");
-  return `MARIAN_OPUS_${nameParts.map(cleanPart).join("_")}`;
 }
 
 function generateNmtBergamotName({ filename }: BaseNameInput): string {

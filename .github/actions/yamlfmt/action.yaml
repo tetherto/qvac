@@ -1,6 +1,13 @@
 name: Autoformat yaml files
 description: Fail and print diff if yaml files are not formatted correctly
 
+inputs:
+  workdir:
+    description: "Working directory inside the repo (monorepo package path)"
+    required: false
+    default: "."
+    type: string
+
 runs:
   using: composite
   steps:
@@ -24,18 +31,20 @@ runs:
 
     - name: yamlfmt
       shell: bash
+      working-directory: ${{ inputs.workdir }}
       run: yamlfmt -formatter retain_line_breaks_single=true .
 
     - name: Check for diffs
       shell: bash
       run: |
-        if git diff --quiet; then
+        # Only consider diffs under workdir (monorepo-safe)
+        if git diff --quiet -- "${{ inputs.workdir }}"; then
           exit 0
         fi
         echo "Some yaml files are not formatted correctly. Run yamlfmt"
         echo "or apply the following diff manually:"
         echo
-        git diff | cat
-        # Clean tree for subsequent steps
-        git checkout -- .
+        git diff -- "${{ inputs.workdir }}" | cat
+        # Clean tree for subsequent steps (only workdir)
+        git checkout -- "${{ inputs.workdir }}"
         exit 1

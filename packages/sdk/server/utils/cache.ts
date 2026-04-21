@@ -1,7 +1,7 @@
 import fs, { promises as fsPromises } from "bare-fs";
 import path from "bare-path";
-import { getEnv } from "@/server/env";
 import { getConfiguredCacheDir } from "@/server/bare/registry/config-registry";
+import { getQvacPath } from "@/server/utils/qvac-paths";
 import type { ShardFileMetadata } from "@/schemas";
 import { calculateFileChecksum } from "@/server/utils/checksum";
 import { validateAndJoinPath } from "@/server/utils/path-security";
@@ -11,8 +11,7 @@ import { nowMs } from "@/profiling";
 const logger = getServerLogger();
 
 export function getCacheDir(subDir: string): string {
-  const homeDir = getEnv().HOME_DIR;
-  const cacheDir = path.join(homeDir, ".qvac", subDir);
+  const cacheDir = getQvacPath(subDir);
   try {
     fs.mkdirSync(cacheDir, { recursive: true });
   } catch (error) {

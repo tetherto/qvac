@@ -1,0 +1,79 @@
+---
+title: "cancel( )"
+titleStyle: code
+description: Cancels an ongoing operation.
+---
+
+```ts
+function cancel(params: CancelParams): Promise<void>;
+```
+
+## Parameters
+
+| Name | Type | Required? | Description |
+| --- | --- | :---: | --- |
+| params | [`CancelParams`](#cancelparams) | ✓ | The parameters for the cancellation |
+
+### `CancelParams`
+
+Discriminated union on `operation`. One of:
+
+#### Cancel inference
+
+| Field | Type | Required? | Description |
+| --- | --- | :---: | --- |
+| operation | `"inference"` | ✓ | Operation type |
+| modelId | `string` | ✓ | The model ID to cancel inference for |
+
+#### Cancel download
+
+| Field | Type | Required? | Default | Description |
+| --- | --- | :---: | --- | --- |
+| operation | `"downloadAsset"` | ✓ | — | Operation type |
+| downloadKey | `string` | ✓ | — | The download key to cancel |
+| clearCache | `boolean` | ✗ | `false` | If true, deletes the partial download file |
+
+#### Cancel RAG
+
+| Field | Type | Required? | Default | Description |
+| --- | --- | :---: | --- | --- |
+| operation | `"rag"` | ✓ | — | Operation type |
+| workspace | `string` | ✗ | `"default"` | The RAG workspace to cancel |
+
+## Returns
+
+`Promise<void>` — Resolves when the operation is cancelled.
+
+## Throws
+
+| Error | When |
+| --- | --- |
+| `INVALID_RESPONSE_TYPE` | Response type does not match expected `"cancel"` |
+| `CANCEL_FAILED` | The server reports cancellation failure |
+
+## Examples
+
+```ts
+// Cancel inference
+await cancel({ operation: "inference", modelId: "model-123" });
+```
+
+```ts
+// Pause download (preserves partial file for automatic resume)
+await cancel({ operation: "downloadAsset", downloadKey: "download-key" });
+```
+
+```ts
+// Cancel download completely (deletes partial file)
+await cancel({ operation: "downloadAsset", downloadKey: "download-key", clearCache: true });
+```
+
+```ts
+// Cancel RAG operation on default workspace
+await cancel({ operation: "rag" });
+```
+
+```ts
+// Cancel RAG operation on specific workspace
+await cancel({ operation: "rag", workspace: "my-workspace" });
+```

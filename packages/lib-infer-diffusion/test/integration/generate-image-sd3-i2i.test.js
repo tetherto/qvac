@@ -51,20 +51,19 @@ test('SD3 Medium img2img — transforms an input image', { timeout: 1800000, ski
   const modelPath = path.join(modelDir, downloadedModelName)
   t.ok(fs.existsSync(modelPath), 'Model file exists on disk')
 
-  const model = new ImgStableDiffusion(
-    {
-      logger: console,
-      diskPath: modelDir,
-      modelName: downloadedModelName
+  const model = new ImgStableDiffusion({
+    files: {
+      model: path.join(modelDir, downloadedModelName)
     },
-    {
+    config: {
       threads: 4,
       device: useCpu ? 'cpu' : 'gpu',
       vae_on_cpu: true,
       prediction: 'flow',
       flow_shift: '3.0'
-    }
-  )
+    },
+    logger: console
+  })
 
   const images = []
   const progressTicks = []

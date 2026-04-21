@@ -1,0 +1,107 @@
+---
+title: "diffusion( )"
+titleStyle: code
+description: Generates images using a loaded diffusion model.
+---
+
+```ts
+function diffusion(params: DiffusionClientParams): {
+  progressStream: AsyncGenerator<DiffusionProgressTick>;
+  outputs: Promise<Uint8Array[]>;
+  stats: Promise<DiffusionStats | undefined>;
+};
+```
+
+## Parameters
+
+| Name | Type | Required? | Description |
+| --- | --- | :---: | --- |
+| params | [`DiffusionClientParams`](#diffusionclientparams) | ✓ | The diffusion parameters |
+
+### `DiffusionClientParams`
+
+| Field | Type | Required? | Description |
+| --- | --- | :---: | --- |
+| modelId | `string` | ✓ | The identifier of the loaded diffusion model |
+| prompt | `string` | ✓ | Text prompt describing the image to generate |
+| negative_prompt | `string` | ✗ | Text describing what to avoid in the generated image |
+| width | `number` | ✗ | Image width in pixels (must be a multiple of 8) |
+| height | `number` | ✗ | Image height in pixels (must be a multiple of 8) |
+| steps | `number` | ✗ | Number of diffusion steps |
+| cfg_scale | `number` | ✗ | Classifier-free guidance scale for SD 1.x / 2.x / XL / SD3 models (typical range 1–20, default 7) |
+| guidance | `number` | ✗ | Distilled guidance for FLUX models (typical range 1–10, default 3.5) |
+| sampling_method | [`SamplingMethod`](#samplingmethod) | ✗ | Sampling algorithm |
+| scheduler | [`Scheduler`](#scheduler) | ✗ | Noise scheduler |
+| seed | `number` | ✗ | Random seed for reproducibility |
+| batch_count | `number` | ✗ | Number of images to generate |
+| vae_tiling | `boolean` | ✗ | Enable VAE tiling for large images on limited VRAM |
+| cache_preset | `string` | ✗ | Cache preset identifier |
+
+#### `SamplingMethod`
+
+`"euler" | "euler_a" | "heun" | "dpm2" | "dpm++2m" | "dpm++2mv2" | "dpm++2s_a" | "lcm" | "ipndm" | "ipndm_v" | "ddim_trailing" | "tcd" | "res_multistep" | "res_2s"`
+
+#### `Scheduler`
+
+`"discrete" | "karras" | "exponential" | "ays" | "gits" | "sgm_uniform" | "simple" | "lcm" | "smoothstep" | "kl_optimal" | "bong_tangent"`
+
+## Returns
+
+`object` — Object with the following fields:
+
+| Field | Type | Description |
+| --- | --- | --- |
+| progressStream | `AsyncGenerator<`[`DiffusionProgressTick`](#diffusionprogresstick)`>` | Stream of generation progress ticks |
+| outputs | `Promise<Uint8Array[]>` | Generated image buffers (resolves when generation completes) |
+| stats | `Promise<`[`DiffusionStats`](#diffusionstats) `\| undefined>` | Performance statistics |
+
+### `DiffusionProgressTick`
+
+| Field | Type | Description |
+| --- | --- | --- |
+| step | `number` | Current diffusion step |
+| totalSteps | `number` | Total number of steps |
+| elapsedMs | `number` | Elapsed time in milliseconds |
+
+### `DiffusionStats`
+
+| Field | Type | Description |
+| --- | --- | --- |
+| modelLoadMs | `number \| undefined` | Model loading time in milliseconds |
+| generationMs | `number \| undefined` | Single generation time in milliseconds |
+| totalGenerationMs | `number \| undefined` | Total generation time in milliseconds |
+| totalWallMs | `number \| undefined` | Total wall-clock time in milliseconds |
+| totalSteps | `number \| undefined` | Total diffusion steps performed |
+| totalGenerations | `number \| undefined` | Number of generations completed |
+| totalImages | `number \| undefined` | Number of images produced |
+| totalPixels | `number \| undefined` | Total pixels generated |
+| width | `number \| undefined` | Output image width |
+| height | `number \| undefined` | Output image height |
+| seed | `number \| undefined` | Seed used for generation |
+
+## Example
+
+```typescript
+import fs from "fs";
+
+// Basic usage
+const { outputs, stats } = diffusion({ modelId, prompt: "a cat" });
+const buffers = await outputs;
+fs.writeFileSync("output.png", buffers[0]);
+
+// With progress tracking
+const { progressStream, outputs: images } = diffusion({
+  modelId,
+  prompt: "a cat sitting on a windowsill",
+  width: 512,
+  height: 512,
+  steps: 20,
+  cfg_scale: 7,
+});
+
+for await (const { step, totalSteps } of progressStream) {
+  console.log(`${step}/${totalSteps}`);
+}
+
+const imageBuffers = await images;
+```

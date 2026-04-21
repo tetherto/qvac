@@ -38,7 +38,7 @@ flowchart TD
     Start([JS: model.run]) --> ParseParams[Parse generation params]
     ParseParams --> SerializeJSON[Serialize to JSON]
     
-    SerializeJSON --> RunJob[addon.runJob(paramsJson)]
+    SerializeJSON --> RunJob["addon.runJob(paramsJson)"]
     RunJob --> CreateResp[Create QvacResponse]
     CreateResp --> ReturnJS([Return to JavaScript])
     
@@ -60,9 +60,9 @@ flowchart TD
     EmitStart --> SendAsync1[uv_async_send]
     
     SendAsync1 --> ParseJSON[Parse JSON params]
-    ParseJSON --> EncodePrompt[Encode prompt (CLIP)]
+    ParseJSON --> EncodePrompt["Encode prompt (CLIP)"]
     EncodePrompt --> EncodeNeg[Encode negative prompt]
-    EncodeNeg --> InitLatents[Initialize random latents (seed)]
+    EncodeNeg --> InitLatents["Initialize random latents (seed)"]
     
     InitLatents --> DiffusionLoop{Diffusion Loop}
     DiffusionLoop -->|Continue| PredictNoise[UNet predict noise]

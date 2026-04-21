@@ -24,13 +24,13 @@ class QVACRegistryClient extends ReadyResource {
     this.registryConfig = new RegistryConfig({ logger: this.logger })
 
     this.db = null
-    this.corestore = null
     this.hyperswarm = null
     this._connectionHandler = null
     this._metadataReady = null
 
     this.storage = this.registryConfig.getRegistryStorage(opts.storage)
     this.registryCoreKey = this.registryConfig.getRegistryCoreKey(opts.registryCoreKey)
+    this.corestore = new Corestore(this.storage, opts.corestoreOpts || {})
 
     this.logger.debug('Initializing QVAC Registry Client', {
       mode: 'read',
@@ -43,8 +43,7 @@ class QVACRegistryClient extends ReadyResource {
   async _open () {
     this.logger.debug('_open called')
 
-    this.logger.debug('Creating corestore for open')
-    this.corestore = new Corestore(this.storage)
+    this.logger.debug('Opening corestore')
     await this.corestore.ready()
 
     this.logger.debug('Creating Hyperswarm for open')
