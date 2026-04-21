@@ -12,7 +12,11 @@ function sanitizeName (value) {
 
 function getRemotePaths (platformName, bundleId) {
   if (platformName === 'ios') {
-    return [`@${bundleId}:documents/perf-report.json`]
+    return [
+      `@${bundleId}:documents/perf-report.json`,
+      `@${bundleId}:Documents/perf-report.json`,
+      `@${bundleId}/perf-report.json`
+    ]
   }
 
   return [
@@ -24,10 +28,9 @@ function getRemotePaths (platformName, bundleId) {
   ]
 }
 
-function writePulledReport (rawBase64, options) {
+function writePulledReport (jsonText, options) {
   const outputDir = process.env.DEVICEFARM_LOG_DIR || process.cwd()
-  const decoded = Buffer.from(rawBase64, 'base64').toString('utf8')
-  const parsed = JSON.parse(decoded)
+  const parsed = JSON.parse(jsonText)
   const fileName = `perf-report-${sanitizeName(options.testName)}.json`
   const outputPath = path.join(outputDir, fileName)
 
@@ -46,22 +49,77 @@ function writePulledReport (rawBase64, options) {
   return outputPath
 }
 
+function decodeBase64Report (rawBase64) {
+  return Buffer.from(rawBase64, 'base64').toString('utf8')
+}
+
+function getShellStdout (result) {
+  if (!result) return ''
+  if (typeof result === 'string') return result
+  if (typeof result.stdout === 'string') return result.stdout
+  return ''
+}
+
+function shouldCollectPerfReport (testName) {
+  return /^runRtfBenchmark/.test(String(testName || ''))
+}
+
+async function sleep (ms) {
+  await new Promise(resolve => setTimeout(resolve, ms))
+}
+
+async function tryAndroidRunAs (browser, bundleId) {
+  const result = await browser.execute('mobile: shell', {
+    command: 'run-as',
+    args: [bundleId, 'cat', 'files/perf-report.json'],
+    includeStderr: true,
+    timeout: 10000
+  })
+
+  return getShellStdout(result).trim()
+}
+
 async function persistPerfReport (browser, options) {
+  if (!shouldCollectPerfReport(options.testName)) {
+    return false
+  }
+
   const platformName = String(options.platformName || '').toLowerCase()
   const remotePaths = getRemotePaths(platformName, options.bundleId)
   let lastError = null
 
-  for (const remotePath of remotePaths) {
-    try {
-      const rawBase64 = await browser.pullFile(remotePath)
-      if (!rawBase64) continue
-      writePulledReport(rawBase64, {
-        testName: options.testName,
-        remotePath
-      })
-      return true
-    } catch (error) {
-      lastError = error
+  for (let attempt = 0; attempt < 10; attempt++) {
+    for (const remotePath of remotePaths) {
+      try {
+        const rawBase64 = await browser.pullFile(remotePath)
+        if (!rawBase64) continue
+        writePulledReport(decodeBase64Report(rawBase64), {
+          testName: options.testName,
+          remotePath
+        })
+        return true
+      } catch (error) {
+        lastError = error
+      }
+    }
+
+    if (platformName === 'android') {
+      try {
+        const stdout = await tryAndroidRunAs(browser, options.bundleId)
+        if (stdout) {
+          writePulledReport(stdout, {
+            testName: options.testName,
+            remotePath: `run-as:${options.bundleId}:files/perf-report.json`
+          })
+          return true
+        }
+      } catch (error) {
+        lastError = error
+      }
+    }
+
+    if (attempt < 9) {
+      await sleep(1000)
     }
   }
 
