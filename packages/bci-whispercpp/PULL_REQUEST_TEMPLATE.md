@@ -23,13 +23,13 @@
 
 **BEFORE:**
 
-```typescript
+```javascript
 // old code example
 ```
 
 **AFTER:**
 
-```typescript
+```javascript
 // new code example
 ```
 
@@ -37,6 +37,6 @@
 
 **Delete this section if not applicable.**
 
-```typescript
+```javascript
 // new API usage example
 ```

@@ -256,6 +256,7 @@ class BCIWhispercpp {
 
   async unload () {
     return await this._withExclusiveRun(async () => {
+      await this._inferenceQueueWaiter
       if (this.addon) {
         await this.addon.destroyInstance()
         this.addon = null
@@ -269,6 +270,7 @@ class BCIWhispercpp {
 
   async destroy () {
     return await this._withExclusiveRun(async () => {
+      await this._inferenceQueueWaiter
       if (this.addon) {
         await this.addon.destroyInstance()
         this.addon = null

@@ -4,7 +4,6 @@
 #include <atomic>
 #include <functional>
 #include <memory>
-#include <span>
 #include <string>
 #include <vector>
 
@@ -77,9 +76,6 @@ public:
   void setWeightsForFile(
       const std::string&,
       std::unique_ptr<std::basic_streambuf<char>>&&) override {}
-  void set_weights_for_file(
-      const std::string&,
-      const std::span<const uint8_t>&, bool) {}
   bool isLoaded() const { return is_loaded_; }
   qvac_lib_inference_addon_cpp::RuntimeStats runtimeStats() const override;
   void warmup();

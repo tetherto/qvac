@@ -2,7 +2,6 @@
 
 #include <any>
 #include <memory>
-#include <mutex>
 #include <span>
 #include <string>
 #include <vector>
@@ -25,9 +24,6 @@ namespace qvac_lib_inference_addon_bci {
 
 namespace js = qvac_lib_inference_addon_cpp::js;
 using qvac_lib_inference_addon_cpp::OutputQueue;
-
-inline void disableWhisperLogs(
-    enum ggml_log_level, const char*, void*) {}
 
 inline BCIConfig
 createBCIConfig(js_env_t* env, const js::Object& configurationParams) {
@@ -95,14 +91,22 @@ inline js_value_t* createInstance(js_env_t* env, js_callback_info_t* info) try {
   using namespace qvac_lib_inference_addon_cpp;
   using namespace std;
 
-  // whisper_log_set is a process-wide global. Only install our silencing
-  // handler once; otherwise every addon-instance construction clobbers any
-  // handler a coexisting whisper-based addon (e.g. @qvac/transcription-
-  // whispercpp) may have installed in the same process.
-  static std::once_flag logOnce;
-  std::call_once(logOnce, []() {
-    whisper_log_set(disableWhisperLogs, nullptr);
-  });
+  // Route whisper.cpp log output through the addon-cpp logger instead of
+  // silencing globally. This avoids clobbering log handlers installed by
+  // coexisting whisper-based addons (e.g. @qvac/transcription-whispercpp)
+  // in the same process, since each addon instance re-sets the handler
+  // to its own logger anyway.
+  whisper_log_set(
+      [](enum ggml_log_level level, const char* text, void*) {
+        if (text == nullptr) return;
+        auto prio = (level == GGML_LOG_LEVEL_ERROR)
+                        ? qvac_lib_inference_addon_cpp::logger::Priority::ERROR
+                    : (level == GGML_LOG_LEVEL_WARN)
+                        ? qvac_lib_inference_addon_cpp::logger::Priority::WARNING
+                        : qvac_lib_inference_addon_cpp::logger::Priority::DEBUG;
+        QLOG(prio, std::string("[whisper.cpp] ") + text);
+      },
+      nullptr);
   JsArgsParser args(env, info);
   auto configurationParams = args.getJsObject(1, "configurationParams");
 

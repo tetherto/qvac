@@ -217,9 +217,8 @@ void BCIModel::warmup() {
 }
 
 void BCIModel::process(const Input& rawNeuralData) {
-  if (ctx_ == nullptr) load();
   if (ctx_ == nullptr) {
-    throw std::runtime_error("BCI Whisper context is not initialized");
+    throw std::runtime_error("BCI Whisper context is not initialized — call load() first");
   }
 
   if (cancelRequested_.load(std::memory_order_relaxed)) {

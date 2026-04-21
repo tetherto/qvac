@@ -111,13 +111,13 @@ declare class BCIWhispercpp {
   getState(): BCIWhispercppState
 }
 
-/**
- * Compute Word Error Rate between hypothesis and reference strings.
- * @returns WER as a ratio (0.0 = perfect).
- */
-declare function computeWER(hypothesis: string, reference: string): number
-
 declare namespace BCIWhispercpp {
+  /**
+   * Compute Word Error Rate between hypothesis and reference strings.
+   * @returns WER as a ratio (0.0 = perfect).
+   */
+  function computeWER(hypothesis: string, reference: string): number
+
   export {
     BCIWhispercpp as default,
     BCIWhispercpp,
@@ -127,8 +127,7 @@ declare namespace BCIWhispercpp {
     BCIWhispercppArgs,
     BCIWhispercppConfig,
     BCIWhispercppState,
-    TranscriptSegment,
-    computeWER
+    TranscriptSegment
   }
 }
 
