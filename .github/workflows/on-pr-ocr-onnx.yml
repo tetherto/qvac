@@ -1,4 +1,4 @@
-name: On PR Trigger (OCR)
+name: On PR Trigger (Vla)
 
 on:
   pull_request_target:
@@ -13,10 +13,9 @@ on:
       - feature-*
       - tmp-*
     paths:
-      - "packages/ocr-onnx/**"
-      - ".github/workflows/*ocr*.yml"
+      - "packages/qvac-lib-infer-vla/**"
+      - ".github/workflows/*qvac-lib-infer-vla*.yml"
   workflow_dispatch:
-  workflow_call:
 
 permissions:
   contents: read
@@ -41,165 +40,99 @@ jobs:
         with:
           github-token: ${{ github.token }}
 
-  # Gate the workflow so label events (and other PR_target quirks) don't trigger unrelated packages.
-  changes:
-    runs-on: ubuntu-latest
-    outputs:
-      pkg: ${{ steps.filter.outputs.pkg }}
-    steps:
-      - name: Checkout repository
-        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # 6.0.2
-        with:
-          fetch-depth: 0
-
-      - uses: dorny/paths-filter@fbd0ab8f3e69293af611ebaee6363fc25e6d187d # 4.0.1
-        id: filter
-        with:
-          token: ${{ secrets.GITHUB_TOKEN }}
-          filters: |
-            pkg:
-              - "packages/ocr-onnx/**"
-              - ".github/workflows/*ocr*.yml"
-
   sanity-checks:
-    needs: [authorize, changes]
-    if: |
-      (needs.changes.outputs.pkg == 'true' &&
-       needs.authorize.outputs.allowed == 'true') ||
-      github.event_name == 'workflow_dispatch'
-    runs-on: ubuntu-22.04
-    env:
-      VCPKG_BINARY_SOURCES: "clear;files,${{ github.workspace }}/packages/ocr-onnx/vcpkg/cache,readwrite"
-      PKG_DIR: packages/ocr-onnx
+    if: needs.authorize.outputs.allowed == 'true'
+    needs: [authorize]
+    runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # 6.0.2
+      - name: Run Sanity checks
+        uses: tetherto/oss-actions/.github/actions/sanity-checks@4c64bed91fc8eba3a201adb1495e61b4c1a2246d
         with:
-          repository: ${{ github.event.pull_request.head.repo.full_name || github.repository }}
-          ref: ${{ github.event.pull_request.head.ref || github.ref }}
-          token: ${{ secrets.PAT_TOKEN }}
-          fetch-depth: 0
-
-      - name: Fetch PR head and target branch
-        id: fetch_pr
-        if: github.event_name == 'pull_request_target' || github.event_name == 'pull_request'
-        continue-on-error: true
-        env:
-          BASE_REF: ${{ github.event.pull_request.base.ref }}
-          HEAD_SHA: ${{ github.event.pull_request.head.sha }}
-        run: |
-          git fetch origin "$BASE_REF:refs/remotes/origin/$BASE_REF"
-          git fetch origin "$HEAD_SHA:refs/pr/head"
-
-      - name: Check PR Status with Target Branch
-        continue-on-error: true
-        id: target_branch_checks
-        if: github.event_name == 'pull_request_target' || github.event_name == 'pull_request'
-        env:
-          TARGET_SHA: ${{ github.event.pull_request.base.sha }}
-          PR_HEAD_SHA: ${{ github.event.pull_request.head.sha }}
-        run: |
-          if ! git merge-base --is-ancestor "$TARGET_SHA" "$PR_HEAD_SHA"; then
-            echo "::error title=PR is not up to date::This PR is not up to date with target branch"
-          fi
-
-      - name: Verify that yaml files are formatted
-        id: yamlfmt
-        uses: ./.github/actions/yamlfmt
-        continue-on-error: true
-
-      - name: Check for disallowed dependencies
-        id: check_dependencies
-        continue-on-error: true
-        working-directory: ${{ env.PKG_DIR }}
-        run: |
-          deps=$(jq -r '.dependencies, .devDependencies // {} | to_entries[] | .value' package.json)
-          if echo "$deps" | grep -Eq '^(git\+https:\/\/github.com|[0-9]+\.[0-9]+\.[0-9]+-(dev|tmp)[^"]*)$'; then
-            echo "::error title=Disallowed dependency detected::Do not use git URLs or dev/tmp versions in dependencies"
-          fi
-
-      - name: Run JavaScript tests
-        id: run_js_tests
-        continue-on-error: true
-        uses: ./.github/actions/run-lint-and-unit-tests
-        with:
-          gpr-token: ${{ secrets.GITHUB_TOKEN }}
-          registry-type: gpr
-          workdir: ${{ env.PKG_DIR }}
-
-      - name: Check for errors
-        run: |
-          count=0
-          if [ "${{ steps.run_js_tests.outcome }}" = "failure" ]; then
-            echo "::error::Step - Lint or unit tests failed"
-            count=$((count + 1))
-          fi
-          if [ "${{ steps.yamlfmt.outcome }}" = "failure" ]; then
-            echo "::error::Step - Verify that yaml files are formatted failed"
-            count=$((count + 1))
-          fi
-          if [ "${{ steps.check_dependencies.outcome }}" = "failure" ]; then
-            echo "::error::Step - Check for disallowed dependencies failed"
-            count=$((count + 1))
-          fi
-          if [ "${{ steps.target_branch_checks.outcome }}" = "failure" ]; then
-            echo "::error::Step - Check PR Status with Target Branch failed"
-            count=$((count + 1))
-          fi
-          if [ "${{ steps.fetch_pr.outcome }}" = "failure" ]; then
-            echo "::error::Step - Fetch PR head and target branch failed"
-            count=$((count + 1))
-          fi
-          if [ $count -gt 0 ]; then
-            echo "::error::There were $count failed checks"
-            exit 1
-          fi
+          secret-token: ${{ secrets.GITHUB_TOKEN }}
+          pat-token: ${{ secrets.PAT_TOKEN }}
+          run-integration: ${{ needs.authorize.outputs.allowed == 'true' }}
+          workdir: packages/qvac-lib-infer-vla
 
   cpp-lint:
-    needs: [authorize, changes]
-    if: needs.authorize.outputs.allowed == 'true' || github.event_name == 'workflow_dispatch'
-    uses: ./.github/workflows/cpp-lint.yaml
+    if: needs.authorize.outputs.allowed == 'true'
+    needs: authorize
+    uses: tetherto/oss-actions/.github/workflows/cpp-lint.yaml@v1.1.0
     secrets: inherit
     with:
-      sha: ${{ github.event.pull_request.base.sha || github.sha }}
+      sha: ${{ github.event.pull_request.base.sha }}
       pr_head_sha: ${{ github.event.pull_request.head.sha }}
-      workdir: packages/ocr-onnx
+      workdir: packages/qvac-lib-infer-vla
+
+  cpp-tests:
+    permissions:
+      contents: read
+      packages: read
+      pull-requests: write
+    if: needs.authorize.outputs.allowed == 'true'
+    needs: [authorize, sanity-checks]
+    uses: ./.github/workflows/cpp-tests-vla.yml
+    secrets: inherit
+    with:
+      repository: ${{ github.event.pull_request.head.repo.full_name }}
+      ref: ${{ github.event.pull_request.head.ref }}
+
+  ts-checks:
+    if: needs.authorize.outputs.allowed == 'true'
+    needs: authorize
+    runs-on: ubuntu-latest
+    environment: release
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # 6.0.2
+
+      - name: Set up Node.js
+        uses: actions/setup-node@53b83947a5a98c8d113130e565377fae1a50d02f # 6.3.0
+        with:
+          node-version: 20
+
+      - name: Install dependencies
+        working-directory: packages/qvac-lib-infer-vla
+        run: npm install
+
+      - name: Type declaration check
+        working-directory: packages/qvac-lib-infer-vla
+        run: npm run test:dts
+
+      - name: Run lint and unit tests
+        id: run_lint_and_unit_tests
+        uses: tetherto/oss-actions/.github/actions/run-lint-and-unit-tests@4c64bed91fc8eba3a201adb1495e61b4c1a2246d
+        with:
+          gpr-token: ${{ secrets.GITHUB_TOKEN }}
+          pat-token: ${{ secrets.GITHUB_TOKEN }}
+          registry-type: gpr
+          workdir: packages/qvac-lib-infer-vla
 
   prebuild:
     permissions:
       contents: write
-      pull-requests: write
       packages: write
+      pull-requests: write
       id-token: write
-    needs: [authorize, changes]
-    if: |
-      (needs.changes.outputs.pkg == 'true' || github.event_name == 'workflow_dispatch') &&
-      (
-        github.event_name == 'workflow_dispatch' ||
-        needs.authorize.outputs.allowed == 'true'
-      )
-    uses: ./.github/workflows/prebuilds-ocr-onnx.yml
+    if: needs.authorize.outputs.allowed == 'true'
+    needs: [authorize, sanity-checks]
+    uses: ./.github/workflows/prebuilds-qvac-lib-infer-vla.yml
     secrets: inherit
     with:
-      repository: ${{ github.event.pull_request.head.repo.full_name || github.repository }}
-      ref: ${{ github.event.pull_request.head.ref || github.ref }}
+      repository: ${{ github.event.pull_request.head.repo.full_name }}
+      ref: ${{ github.event.pull_request.head.ref }}
 
-  run-integration-tests:
+  integration-tests:
+    needs: [authorize, prebuild]
+    if: needs.authorize.outputs.allowed == 'true'
     permissions:
       contents: read
       packages: read
       id-token: write
-    needs: [authorize, changes, prebuild]
-    if: |
-      (needs.changes.outputs.pkg == 'true' || github.event_name == 'workflow_dispatch') &&
-      (
-        github.event_name == 'workflow_dispatch' ||
-        needs.authorize.outputs.allowed == 'true'
-      )
-    uses: ./.github/workflows/integration-test-ocr-onnx.yml
+    uses: ./.github/workflows/integration-test-qvac-lib-infer-vla.yml
     secrets: inherit
     with:
-      repository: ${{ github.event.pull_request.head.repo.full_name || github.repository }}
-      ref: ${{ github.event.pull_request.head.ref || github.ref }}
+      repository: ${{ github.event.pull_request.head.repo.full_name }}
+      ref: ${{ github.event.pull_request.head.ref }}
 
   run-mobile-integration-tests:
     permissions:
@@ -207,24 +140,18 @@ jobs:
       packages: read
       pull-requests: write # Allow commenting on PRs
       id-token: write
-    needs: [authorize, changes, prebuild]
-    if: |
-      (needs.changes.outputs.pkg == 'true' || github.event_name == 'workflow_dispatch') &&
-      (
-        github.event_name == 'workflow_dispatch' ||
-        needs.authorize.outputs.allowed == 'true'
-      )
-    uses: ./.github/workflows/integration-mobile-test-ocr-onnx.yml
+    if: needs.authorize.outputs.allowed == 'true'
+    needs: [authorize, prebuild]
+    uses: ./.github/workflows/integration-mobile-test-qvac-lib-infer-vla.yml
     secrets: inherit
     with:
-      repository: ${{ github.event.pull_request.head.repo.full_name || github.repository }}
-      ref: ${{ github.event.pull_request.head.ref || github.ref }}
+      repository: ${{ github.event.pull_request.head.repo.full_name }}
+      ref: ${{ github.event.pull_request.head.ref }}
 
   merge-guard:
-    needs: [authorize, changes, sanity-checks, prebuild, run-integration-tests, run-mobile-integration-tests]
-    if: always() && (needs.changes.outputs.pkg == 'true' || github.event_name == 'workflow_dispatch')
-    uses: ./.github/workflows/public-pr.yml
+    needs: [authorize, sanity-checks, cpp-lint, cpp-tests, prebuild, integration-tests, run-mobile-integration-tests, ts-checks]
+    if: always()
+    uses: tetherto/oss-actions/.github/workflows/public-pr.yml@v1.1.0
     with:
       sanity-checks-status: ${{ needs.sanity-checks.result == 'success' }}
       build-status: ${{ needs.prebuild.result == 'success' }}
-      integration-tests-status: ${{ needs.run-integration-tests.result == 'success' }}

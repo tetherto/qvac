@@ -1,0 +1,26 @@
+{
+  "name": "qvac-lib-infer-vla",
+  "version": "0.1.0",
+  "dependencies": [
+    {
+      "name": "ggml",
+      "version>=": "2026-01-30#5"
+    },
+    {
+      "name": "qvac-lib-inference-addon-cpp",
+      "version>=": "1.1.5#1"
+    },
+    {
+      "name": "qvac-lint-cpp",
+      "version>=": "1.4.4#2"
+    }
+  ],
+  "features": {
+    "tests": {
+      "description": "Build and run unit tests",
+      "dependencies": [
+        "gtest"
+      ]
+    }
+  }
+}

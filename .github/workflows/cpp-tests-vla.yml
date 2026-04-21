@@ -1,0 +1,250 @@
+name: CPP Tests (Vla)
+
+on:
+  workflow_call:
+    inputs:
+      ref:
+        description: "ref"
+        type: string
+        required: false
+      repository:
+        type: string
+        required: false
+      workdir:
+        description: "Working directory"
+        type: string
+        required: false
+        default: "packages/qvac-lib-infer-vla"
+  workflow_dispatch:
+    inputs:
+      ref:
+        description: "Git ref (branch/tag/SHA) to test"
+        type: string
+        required: false
+        default: "main"
+      workdir:
+        description: "Working directory"
+        type: string
+        required: false
+        default: "packages/qvac-lib-infer-vla"
+
+jobs:
+  run-cpp-tests:
+    runs-on: ${{ matrix.runner || matrix.os }}
+    environment: release
+    name: ${{ matrix.platform }}-${{ matrix.arch || 'x64' }}-cpp-tests
+    permissions:
+      contents: read
+      packages: read
+      pull-requests: write
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: ubuntu-24.04
+            platform: linux
+            arch: x64
+          - os: macos-14
+            platform: darwin
+            arch: arm64
+          - os: macos-15-intel
+            platform: darwin
+            arch: x64
+          - os: windows-11
+            platform: windows
+            arch: x64
+            runner: ai-run-windows11-gpu
+
+    env:
+      WORKDIR: ${{ inputs.workdir }}
+      # Keep vcpkg cache under the package directory in a monorepo
+      VCPKG_BINARY_SOURCES: ${{ format('clear;files,{0}/{1}/vcpkg/cache,readwrite', github.workspace, inputs.workdir) }}
+      GIT_TERMINAL_PROMPT: "0"
+
+    steps:
+      - name: Echo workflow inputs
+        shell: bash
+        env:
+          INPUT_REF: ${{ inputs.ref || github.ref }}
+          INPUT_REPO: ${{ inputs.repository || github.repository }}
+          INPUT_WORKDIR: ${{ env.WORKDIR }}
+        run: |
+          echo "ref=$INPUT_REF"
+          echo "repository=$INPUT_REPO"
+          echo "workdir=$INPUT_WORKDIR"
+
+      - name: Setup Node.js
+        uses: actions/setup-node@53b83947a5a98c8d113130e565377fae1a50d02f # 6.3.0
+        with:
+          node-version: lts/*
+
+      - if: ${{ matrix.os == 'windows-11' }}
+        name: Configure Windows runner
+        run: |
+          git config --system core.longpaths true
+          choco upgrade llvm -y
+
+      - name: Checkout code
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # 6.0.2
+        with:
+          repository: ${{ inputs.repository || github.repository }}
+          ref: ${{ inputs.ref || github.ref }}
+          token: ${{ secrets.PAT_TOKEN }}
+
+      - name: Configure scoped registry for @tetherto and @qvac packages
+        working-directory: ${{ env.WORKDIR }}
+        env:
+          GPR_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          NPM_TOKEN: ${{ secrets.NPM_TOKEN }}
+          GIT_PAT: ${{ secrets.PAT_TOKEN }}
+        shell: bash
+        run: |
+          echo "Configuring scoped registry for @tetherto and @qvac packages..."
+          set -eu
+          cat > .npmrc <<NPMRC
+          registry=https://registry.npmjs.org/
+          @qvac:registry=https://registry.npmjs.org/
+          @tetherto:registry=https://npm.pkg.github.com/
+          //registry.npmjs.org/:_authToken=${NPM_TOKEN}
+          //npm.pkg.github.com/:_authToken=${GPR_TOKEN}
+          NPMRC
+
+          if [ -n "${GIT_PAT:-}" ]; then
+            git config --global url."https://${GIT_PAT}:@github.com/".insteadOf "https://github.com/"
+            git config --global url."https://${GIT_PAT}:@github.com/".insteadOf "git@github.com:"
+          else
+            git config --global url."https://${{ github.token }}:@github.com/".insteadOf "https://github.com/"
+            git config --global url."https://${{ github.token }}:@github.com/".insteadOf "git@github.com:"
+          fi
+
+      - name: Install NPM dependencies
+        working-directory: ${{ env.WORKDIR }}
+        shell: bash
+        run: |
+          npm install
+          npm install -g bare bare-make
+
+      - if: ${{ matrix.os == 'ubuntu-24.04' }}
+        name: Install llvm-19 on Linux
+        shell: bash
+        run: |
+          wget -q https://apt.llvm.org/llvm.sh
+          chmod +x llvm.sh
+          sudo ./llvm.sh 19 all
+
+      - if: ${{ matrix.os == 'ubuntu-24.04' }}
+        name: Install Vulkan SDK on Linux
+        shell: bash
+        run: |
+          wget -qO- https://packages.lunarg.com/lunarg-signing-key-pub.asc | sudo tee /etc/apt/trusted.gpg.d/lunarg.asc > /dev/null
+          sudo wget -qO /etc/apt/sources.list.d/lunarg-vulkan-noble.list http://packages.lunarg.com/vulkan/lunarg-vulkan-noble.list
+          sudo apt update
+          sudo apt install -y vulkan-sdk
+
+      - if: ${{ matrix.os == 'windows-11' }}
+        name: Install Vulkan SDK on Windows
+        working-directory: ${{ env.WORKDIR }}
+        run: |
+          $ProgressPreference = 'SilentlyContinue'
+          Invoke-WebRequest -Uri https://sdk.lunarg.com/sdk/download/latest/windows/vulkan-sdk.exe -OutFile vulkan-sdk.exe
+          ./vulkan-sdk.exe --root C:\VulkanSDK --accept-licenses --default-answer --confirm-command install
+          echo "VULKAN_SDK=C:\VulkanSDK" >> $Env:GITHUB_ENV
+
+      - if: ${{ startsWith(matrix.os, 'macos') }}
+        name: Install vcpkg on macOS
+        shell: bash
+        run: |
+          git clone --branch 2025.12.12 --single-branch https://github.com/microsoft/vcpkg.git vcpkg_microsoft
+          cd vcpkg_microsoft && ./bootstrap-vcpkg.sh -disableMetrics
+          VCPKG_ROOT=$(pwd)
+          echo "VCPKG_ROOT=$VCPKG_ROOT" >> $GITHUB_ENV
+          echo "$VCPKG_ROOT" >> $GITHUB_PATH
+          echo "MACOSX_DEPLOYMENT_TARGET=14.0" >> $GITHUB_ENV
+
+      - if: ${{ matrix.os == 'ubuntu-24.04' }}
+        name: Configure vcpkg in linux
+        shell: bash
+        run: echo "VCPKG_ROOT=$VCPKG_INSTALLATION_ROOT" >> $GITHUB_ENV
+
+      - if: ${{ matrix.os == 'windows-11' }}
+        name: Clone and bootstrap vcpkg (Windows)
+        run: |
+          git clone https://github.com/microsoft/vcpkg.git
+          ./vcpkg/bootstrap-vcpkg.bat -disableMetrics
+          echo ("VCPKG_ROOT=$env:GITHUB_WORKSPACE/vcpkg" -replace '\\', '/') >> $env:GITHUB_ENV
+
+      - if: ${{ matrix.os == 'windows-11' }}
+        name: Configure CMake generator on Windows
+        shell: powershell
+        run: |
+          echo "CMAKE_GENERATOR=Visual Studio 17 2022" >> $env:GITHUB_ENV
+          echo "CMAKE_GENERATOR_PLATFORM=x64" >> $env:GITHUB_ENV
+
+      - name: Create vcpkg cache location (package-local)
+        shell: bash
+        run: mkdir -p "${{ env.WORKDIR }}/vcpkg/cache"
+
+      - name: Get vcpkg cache (package-local)
+        uses: actions/cache@668228422ae6a00e4ad889ee87cd7109ec5666a7 # 5.0.4
+        with:
+          key: >-
+            cpp-tests-v4-${{ matrix.platform }}-${{ matrix.arch || 'x64' }}-${{
+              hashFiles(
+                format('{0}/vcpkg.json', inputs.workdir),
+                format('{0}/vcpkg-configuration.json', inputs.workdir),
+                format('{0}/vcpkg/ports/**', inputs.workdir),
+                'vcpkg.json',
+                'vcpkg-configuration.json',
+                'vcpkg/ports/**'
+              )
+            }}
+          path: ${{ github.workspace }}/${{ env.WORKDIR }}/vcpkg/cache
+          restore-keys: cpp-tests-v4-${{ matrix.platform }}-${{ matrix.arch || 'x64' }}-
+
+      - if: ${{ matrix.platform == 'darwin' }}
+        name: Use Apple clang for Apple platform builds
+        run: |
+          sudo mv /opt/homebrew/opt/llvm@18 /opt/homebrew/opt/llvm@18.bak 2>/dev/null || true
+          sudo mv /opt/homebrew/opt/llvm /opt/homebrew/opt/llvm.bak 2>/dev/null || true
+          sudo rm -f /opt/homebrew/bin/clang /opt/homebrew/bin/clang++ 2>/dev/null || true
+
+      - name: Build C++ tests
+        working-directory: ${{ env.WORKDIR }}
+        shell: bash
+        run: npm run test:cpp:build
+
+      - name: Run C++ tests
+        id: cpp-tests
+        working-directory: ${{ env.WORKDIR }}
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          if [ ! -f "build/test/unit/addon-test" ]; then
+            echo "ERROR: Test executable not found at ${PWD}/build/test/unit/addon-test"
+            exit 1
+          fi
+
+          cd build/test/unit/
+          ./addon-test --gtest_output=xml:cpp-test-results.xml
+
+          if [ -f cpp-test-results.xml ]; then
+            test_count=$(grep -c '<testcase' cpp-test-results.xml || echo "0")
+            if [ "$test_count" -eq 0 ]; then
+              echo "ERROR: No tests were executed! Test count: $test_count"
+              exit 1
+            fi
+            echo "✓ Successfully executed $test_count test(s)"
+          else
+            echo "ERROR: Test results file not generated"
+            exit 1
+          fi
+
+      - name: Archive Test Results
+        if: ${{ always() }}
+        uses: actions/upload-artifact@bbbca2ddaa5d8feaa63e36b76fdaad77386f024f # 7.0.0
+        with:
+          name: cpp-test-results-${{ matrix.platform }}-${{ matrix.arch || 'x64' }}
+          path: |
+            ${{ env.WORKDIR }}/build/test/unit/cpp-test-results.xml
+          retention-days: 30
