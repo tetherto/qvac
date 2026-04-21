@@ -1,4 +1,4 @@
-import type { QvacResponse } from '@qvac/infer-base'
+import QvacResponse from '@qvac/infer-base/src/QvacResponse'
 import type { LoggerInterface } from '@qvac/logging'
 
 declare interface BCIConfig {

@@ -44,17 +44,6 @@ function checkConfig (configObject) {
     'caption_enabled'
   ]
 
-  // Only parameters wired through to the C++ addon are accepted. Adding
-  // smoothing/sample-rate knobs here without consuming them in NeuralProcessor
-  // would silently drop user intent, so they are kept out until implemented.
-  //
-  // `day_idx` is an integer session index.
-  //   - day_idx >= 0 applies the day-specific projection matrices from
-  //     bci-embedder.bin, clamped to the valid range at the C++ layer.
-  //   - day_idx === -1 is a passthrough escape hatch that skips
-  //     preprocessing entirely and treats the input buffer as
-  //     pre-computed 512-bin mel features in frame-major layout. Useful
-  //     for reproducing the Python reference output end-to-end.
   const validBCIParams = [
     'day_idx'
   ]

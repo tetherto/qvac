@@ -9,7 +9,7 @@
   "scripts": {
     "lint": "standard \"examples/**/*.js\" \"test/**/*.js\" \"*.js\" \"lib/**/*.js\"",
     "lint:fix": "standard --fix \"examples/**/*.js\" \"test/**/*.js\" \"*.js\" \"lib/**/*.js\"",
-    "lint-cpp": "clang-tidy -p build addon/src/js-interface/JSAdapter.cpp addon/src/js-interface/binding.cpp addon/src/model-interface/bci/BCIConfig.cpp addon/src/model-interface/bci/BCIModel.cpp addon/src/model-interface/bci/NeuralProcessor.cpp",
+    "lint-cpp": "clang-tidy -p build addon/src/js-interface/JSAdapter.cpp addon/src/js-interface/binding.cpp addon/src/model-interface/bci/BCIConfig.cpp addon/src/model-interface/bci/BCIModel.cpp addon/src/model-interface/bci/NeuralProcessor.cpp addon/src/addon/AddonJs.hpp addon/src/js-interface/JSAdapter.hpp addon/src/addon/BCIErrors.hpp addon/src/model-interface/BCITypes.hpp addon/src/model-interface/bci/BCIConfig.hpp addon/src/model-interface/bci/BCIModel.hpp addon/src/model-interface/bci/NeuralProcessor.hpp",
     "build": "bare-make generate && bare-make build && bare-make install",
     "build:pack": "mkdir -p dist && npm pack --pack-destination dist",
     "test": "npm run test:integration",

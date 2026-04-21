@@ -20,6 +20,8 @@ __pycache__/
 .pytest_cache/
 .vscode
 
+cpp-test-results.xml
+
 .clang-format
 .clang-tidy
 .valgrind.supp

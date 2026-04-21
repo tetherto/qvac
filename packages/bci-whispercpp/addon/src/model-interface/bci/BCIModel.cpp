@@ -16,7 +16,6 @@
 namespace qvac_lib_inference_addon_bci {
 
 namespace {
-constexpr double K_SAMPLES_PER_SECOND = 16000.0;
 constexpr float K_SEGMENT_TIMESTAMP_SCALE = 0.01F;
 constexpr int K_WARMUP_SAMPLE_COUNT = 8000;
 constexpr int K_DUMMY_AUDIO_30S = 16000 * 30;

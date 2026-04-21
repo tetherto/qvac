@@ -205,17 +205,10 @@ class BCIWhispercpp {
   }
 
   _isConfigurationError (err) {
-    const message = String(err?.message || '')
-    return (
-      message.includes('object is required') ||
-      message.includes('is not a valid parameter') ||
-      message.includes('bciConfig.day_idx') ||
-      message.includes('Unknown whisperConfig key') ||
-      message.includes('Unknown contextParams key') ||
-      message.includes('Unknown miscConfig key') ||
-      message.includes('error in whisperConfig handler') ||
-      message.includes('error in contextParams handler')
-    )
+    if (err && err.code === 'ERR_ASSERTION') return true
+    if (err instanceof TypeError) return true
+    const msg = String(err?.message || '')
+    return msg.includes('is required') || msg.includes('is not a valid parameter') || msg.includes('must be')
   }
 
   _outputCallback (addon, event, jobId, data, error) {

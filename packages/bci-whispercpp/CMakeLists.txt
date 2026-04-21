@@ -24,6 +24,14 @@ if(CMAKE_SYSTEM_NAME STREQUAL "Linux")
   add_link_options(-stdlib=libc++ -static-libstdc++)
 endif()
 
+find_path(VCPKG_INSTALLED_PATH share/qvac-lint-cpp/.clang-format REQUIRED)
+configure_file(${VCPKG_INSTALLED_PATH}/share/qvac-lint-cpp/.clang-format
+               ${CMAKE_CURRENT_SOURCE_DIR}/.clang-format COPYONLY)
+configure_file(${VCPKG_INSTALLED_PATH}/share/qvac-lint-cpp/.clang-tidy
+               ${CMAKE_CURRENT_SOURCE_DIR}/.clang-tidy COPYONLY)
+configure_file(${VCPKG_INSTALLED_PATH}/share/qvac-lint-cpp/.valgrind.supp
+               ${CMAKE_CURRENT_SOURCE_DIR}/.valgrind.supp COPYONLY)
+
 find_path(QVAC_LIB_INFERENCE_ADDON_CPP_INCLUDE_DIRS "qvac-lib-inference-addon-cpp/ModelInterfaces.hpp")
 find_package(whisper CONFIG REQUIRED)
 

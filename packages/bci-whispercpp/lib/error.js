@@ -16,11 +16,8 @@ const ERR_CODES = Object.freeze({
   FAILED_TO_LOAD_WEIGHTS: 26001,
   FAILED_TO_CANCEL: 26002,
   FAILED_TO_APPEND: 26003,
-  FAILED_TO_GET_STATUS: 26004,
   FAILED_TO_DESTROY: 26005,
   FAILED_TO_ACTIVATE: 26006,
-  FAILED_TO_RESET: 26007,
-  FAILED_TO_PAUSE: 26008,
   INVALID_NEURAL_INPUT: 26009,
   JOB_ALREADY_RUNNING: 26010,
   MODEL_NOT_LOADED: 26011,
@@ -44,10 +41,6 @@ addCodes({
     name: 'FAILED_TO_APPEND',
     message: (message) => `Failed to append data to processing queue, error: ${message}`
   },
-  [ERR_CODES.FAILED_TO_GET_STATUS]: {
-    name: 'FAILED_TO_GET_STATUS',
-    message: (message) => `Failed to get addon status, error: ${message}`
-  },
   [ERR_CODES.FAILED_TO_DESTROY]: {
     name: 'FAILED_TO_DESTROY',
     message: (message) => `Failed to destroy instance, error: ${message}`
@@ -55,14 +48,6 @@ addCodes({
   [ERR_CODES.FAILED_TO_ACTIVATE]: {
     name: 'FAILED_TO_ACTIVATE',
     message: (message) => `Failed to activate model, error: ${message}`
-  },
-  [ERR_CODES.FAILED_TO_RESET]: {
-    name: 'FAILED_TO_RESET',
-    message: (message) => `Failed to reset model state, error: ${message}`
-  },
-  [ERR_CODES.FAILED_TO_PAUSE]: {
-    name: 'FAILED_TO_PAUSE',
-    message: (message) => `Failed to pause inference, error: ${message}`
   },
   [ERR_CODES.INVALID_NEURAL_INPUT]: {
     name: 'INVALID_NEURAL_INPUT',
