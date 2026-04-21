@@ -1,6 +1,7 @@
 .vs/
 build/
 models/
+test-models/
 node_modules/
 prebuilds/
 package-lock.json

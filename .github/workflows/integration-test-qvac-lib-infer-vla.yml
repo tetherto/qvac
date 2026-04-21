@@ -28,6 +28,7 @@ jobs:
     permissions:
       contents: read
       packages: read
+      id-token: write
 
     env:
       WORKDIR: packages/qvac-lib-infer-vla
@@ -270,6 +271,50 @@ jobs:
         shell: bash
         run: sudo apt-get update && sudo apt-get install -y mesa-vulkan-drivers
 
-      - name: Run integration test
+      - if: ${{ matrix.platform == 'win32' }}
+        name: Install AWS CLI on self-hosted Windows runner
+        shell: powershell
+        run: |
+          if (Get-Command aws -ErrorAction SilentlyContinue) {
+            Write-Host "AWS CLI already installed"
+            aws --version
+          } else {
+            Write-Host "Installing AWS CLI v2..."
+            Invoke-WebRequest -Uri https://awscli.amazonaws.com/AWSCLIV2.msi -OutFile $env:TEMP\AWSCLIV2.msi
+            Start-Process msiexec.exe -Wait -ArgumentList '/I', "$env:TEMP\AWSCLIV2.msi", '/qn'
+            $env:PATH = "C:\Program Files\Amazon\AWSCLIV2;$env:PATH"
+            echo "C:\Program Files\Amazon\AWSCLIV2" >> $env:GITHUB_PATH
+            aws --version
+          }
+
+      - name: Configure AWS credentials via OIDC
+        uses: aws-actions/configure-aws-credentials@8df5847569e6427dd6c4fb1cf565c83acfa8afa7 # 6.0.0
+        with:
+          role-to-assume: ${{ secrets.AWS_OIDC_ROLE_ARN }}
+          aws-region: eu-central-1
+
+      - name: Download SmolVLA model from S3
         working-directory: ${{ env.WORKDIR }}
+        shell: bash
+        run: |
+          echo "Downloading SmolVLA LIBERO model from S3..."
+          mkdir -p model/vla
+          aws s3 cp "s3://${{ secrets.MODEL_S3_BUCKET }}/qvac_models_compiled/vla/smolvla-libero/2026-04-21/smolvla-libero-f32-fixed.gguf" model/vla/smolvla-libero-f32-fixed.gguf
+          echo "SmolVLA model files:"
+          ls -la model/vla/
+
+      - name: Run integration test (Linux/macOS)
+        if: ${{ matrix.platform != 'win32' }}
+        working-directory: ${{ env.WORKDIR }}
+        shell: bash
+        env:
+          QVAC_VLA_MODEL: ${{ github.workspace }}/${{ env.WORKDIR }}/model/vla/smolvla-libero-f32-fixed.gguf
+        run: npm run test:integration ${{ matrix.platform }}-${{ matrix.arch }}
+
+      - name: Run integration test (Windows)
+        if: ${{ matrix.platform == 'win32' }}
+        working-directory: ${{ env.WORKDIR }}
+        shell: powershell
+        env:
+          QVAC_VLA_MODEL: ${{ github.workspace }}/${{ env.WORKDIR }}/model/vla/smolvla-libero-f32-fixed.gguf
         run: npm run test:integration ${{ matrix.platform }}-${{ matrix.arch }}

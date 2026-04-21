@@ -2,7 +2,7 @@ find_package(GTest CONFIG REQUIRED)
 
 add_executable(
   addon-test
-  test_hello.cpp
+  test_hparams.cpp
 )
 
 target_compile_options(
@@ -24,12 +24,13 @@ target_compile_features(addon-test PRIVATE cxx_std_20)
 target_link_libraries(
   addon-test
   PRIVATE
+    ggml::ggml
     GTest::gtest
     GTest::gtest_main
     GTest::gmock_main
 )
 
-add_test(NAME HelloUnit COMMAND addon-test)
-set_tests_properties(HelloUnit PROPERTIES
+add_test(NAME SmolvlaUnit COMMAND addon-test)
+set_tests_properties(SmolvlaUnit PROPERTIES
   WORKING_DIRECTORY ${CMAKE_SOURCE_DIR}
   TIMEOUT 120)

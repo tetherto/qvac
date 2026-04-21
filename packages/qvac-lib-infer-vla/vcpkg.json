@@ -3,8 +3,9 @@
   "version": "0.1.0",
   "dependencies": [
     {
-      "name": "ggml",
-      "version>=": "2026-01-30#5"
+      "name": "qvac-fabric",
+      "version>=": "7248.2.3",
+      "default-features": false
     },
     {
       "name": "qvac-lib-inference-addon-cpp",
