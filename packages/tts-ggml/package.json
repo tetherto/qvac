@@ -1,0 +1,94 @@
+{
+  "name": "@qvac/tts-ggml",
+  "version": "0.1.0",
+  "description": "Text to Speech (TTS) addon for qvac (ggml backend, currently wrapping Chatterbox English)",
+  "addon": true,
+  "engines": {
+    "bare": ">=1.19.0"
+  },
+  "scripts": {
+    "build": "bare-make generate && bare-make build && bare-make install",
+    "build:pack": "mkdir -p dist && npm pack --pack-destination dist",
+    "example": "bare examples/chatterbox-tts.js",
+    "lint": "standard \"test/**/*.js\" \"*.js\" \"lib/*.js\"",
+    "lint:fix": "standard --fix \"test/**/*.js\" \"*.js\" \"lib/*.js\"",
+    "test:unit": "brittle-bare test/unit/**/*.test.js",
+    "test": "npm run test:unit && npm run test:integration",
+    "test:integration": "brittle-bare test/integration/addon.test.js",
+    "test:integration:medium": "INPUT_SENTENCES=medium brittle-bare test/integration/addon.test.js",
+    "test:integration:long": "INPUT_SENTENCES=long brittle-bare test/integration/addon.test.js",
+    "test:cpp:build": "bare-make generate -D BUILD_TESTING=ON && bare-make build",
+    "test:cpp:run": "./build/addon/test/unit/qvac-lib-inference-tts-ggml-unit-test",
+    "test:cpp": "npm run test:cpp:build && npm run test:cpp:run",
+    "models:ensure": "bare scripts/ensure-models.js",
+    "models:ensure:chatterbox": "bare scripts/ensure-chatterbox.js"
+  },
+  "files": [
+    "addonLogging.js",
+    "addonLogging.d.ts",
+    "binding.js",
+    "index.js",
+    "lib",
+    "prebuilds",
+    "index.d.ts",
+    "tts.js",
+    "test/integration",
+    "test/reference-audio",
+    "test/utils/runTTS.js",
+    "test/utils/runChatterboxTTS.js",
+    "test/utils/downloadModel.js",
+    "test/utils/wav-helper.js",
+    "test/utils/loader.fake.js",
+    "test/utils/runWhisper.js",
+    "LICENSE"
+  ],
+  "exports": {
+    "./package": "./package.json",
+    ".": "./index.js",
+    "./text-chunker": "./lib/textChunker.js",
+    "./addonLogging": {
+      "types": "./addonLogging.d.ts",
+      "default": "./addonLogging.js"
+    },
+    "./addonLogging.js": "./addonLogging.js",
+    "./lib/textStreamAccumulator.js": "./lib/textStreamAccumulator.js"
+  },
+  "license": "Apache-2.0",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/tetherto/qvac.git",
+    "directory": "packages/tts-ggml"
+  },
+  "bugs": "https://github.com/tetherto/qvac/issues",
+  "homepage": "https://github.com/tetherto/qvac/tree/main/packages/tts-ggml#readme",
+  "devDependencies": {
+    "@qvac/transcription-whispercpp": "^0.5.5",
+    "bare-buffer": "^3.4.2",
+    "bare-node-stream": "^1.0.0",
+    "bare-process": "^4.2.2",
+    "bare-subprocess": "^5.2.1",
+    "bare-tty": "^5.0.3",
+    "brittle": "^3.17.0",
+    "cmake-bare": "^1.7.5",
+    "cmake-vcpkg": "^1.1.0",
+    "fflate": "^0.8.2",
+    "fs": "npm:bare-fs",
+    "husky": "^9.1.7",
+    "os": "npm:bare-os@^3.6.2",
+    "process": "npm:bare-process",
+    "sinon": "^21.0.0",
+    "standard": "^17.0.0",
+    "stream": "npm:bare-node-stream",
+    "tty": "npm:bare-node-tty",
+    "util": "npm:bare-utils@^1.5.1"
+  },
+  "dependencies": {
+    "@qvac/error": "^0.1.0",
+    "@qvac/infer-base": "^0.4.0",
+    "@qvac/logging": "^0.1.0",
+    "bare-fs": "^4.5.6",
+    "bare-os": "^3.8.0",
+    "bare-path": "^3.0.0"
+  },
+  "types": "index.d.ts"
+}
