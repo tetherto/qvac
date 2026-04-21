@@ -137,6 +137,13 @@ export type TextToSpeechStreamClientParams = z.infer<
   typeof textToSpeechStreamRequestBaseSchema
 >;
 
+export interface TextToSpeechStreamResult {
+  bufferStream: AsyncGenerator<number, void, unknown>;
+  chunkUpdates?: AsyncGenerator<TtsSentenceChunkUpdate, void, unknown>;
+  buffer: Promise<number[]>;
+  done: Promise<boolean>;
+}
+
 export interface TextToSpeechStreamSession {
   write(textFragment: string | Buffer): void;
   end(): void;

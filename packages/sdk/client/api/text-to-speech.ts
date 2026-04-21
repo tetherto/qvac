@@ -5,24 +5,17 @@ import {
   type TtsRequest,
   type RPCOptions,
   type TtsResponse,
-  type TtsSentenceChunkUpdate,
   type TextToSpeechStreamRequest,
   type TextToSpeechStreamResponse,
   type TextToSpeechStreamClientParams,
   type TextToSpeechStreamSession,
+  type TextToSpeechStreamResult,
 } from "@/schemas";
 import { stream as streamRpc, duplex, type DuplexReadable } from "@/client/rpc/rpc-client";
 import { getClientLogger } from "@/logging";
 import { TextToSpeechStreamFailedError } from "@/utils/errors-client";
 
 const logger = getClientLogger();
-
-export interface TextToSpeechStreamResult {
-  bufferStream: AsyncGenerator<number, void, unknown>;
-  chunkUpdates?: AsyncGenerator<TtsSentenceChunkUpdate, void, unknown>;
-  buffer: Promise<number[]>;
-  done: Promise<boolean>;
-}
 
 function createTtsMulticast(
   request: TtsRequest,
