@@ -154,7 +154,7 @@ jobs:
           fetch-depth: 0
 
       - name: Publish to GitHub Packages
-        uses: tetherto/oss-actions/.github/actions/publish-library-to-gpr@v1.1.0
+        uses: ./.github/actions/publish-library-to-gpr
         with:
           secret-token: ${{ secrets.GITHUB_TOKEN }}
           npm-token: ${{ secrets.NPM_TOKEN }}

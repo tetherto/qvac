@@ -135,17 +135,30 @@ declare class ONNXTTS {
   addon: unknown
 
   /**
-   * Run text-to-speech. When `opts.stats` was set, `response.stats` matches {@link ONNXTTS.RuntimeStats}.
+   * Run text-to-speech. With `{ streamOutput: true }`, splits `input` into chunks and emits PCM on `onUpdate` per chunk.
+   * When `opts.stats` was set, `response.stats` matches {@link ONNXTTS.RuntimeStats}.
    */
+  run(
+    input: ONNXTTS.TTSRunInput & { streamOutput: true },
+  ): Promise<QvacResponse<ONNXTTS.TTSOutputChunk & ONNXTTS.SentenceStreamChunkMeta>>
+
   run(input: ONNXTTS.TTSRunInput): Promise<QvacResponse<ONNXTTS.TTSOutputChunk>>
 
   /**
-   * Chunked streaming synthesis: split long text, emit PCM per chunk on `response.onUpdate`,
-   * then `await response.await()`.
+   * Chunked streaming synthesis: forwards to `run({ input: text, streamOutput: true, ... })`.
    */
   runStream(
     text: string,
     options?: ONNXTTS.SentenceStreamOptions,
+  ): Promise<QvacResponse<ONNXTTS.TTSOutputChunk & ONNXTTS.SentenceStreamChunkMeta>>
+
+  /**
+   * Streaming text in, streaming audio out. Each flushed string is one native job; PCM on `onUpdate`.
+   * For `AsyncIterable` inputs, `accumulateSentences` defaults true (coalesce small streamed fragments).
+   */
+  runStreaming(
+    textStream: ONNXTTS.TextStreamInput,
+    options?: ONNXTTS.RunStreamingOptions,
   ): Promise<QvacResponse<ONNXTTS.TTSOutputChunk & ONNXTTS.SentenceStreamChunkMeta>>
 }
 
@@ -174,9 +187,41 @@ declare namespace ONNXTTS {
     maxChunkScalars?: number
   }
 
+  /** Input accepted by `runStreaming`. */
+  export type TextStreamInput =
+    | string
+    | string[]
+    | Iterable<string>
+    | AsyncIterable<string>
+
+  export interface RunStreamingOptions {
+    /**
+     * When true, concatenate small streamed fragments until a sentence end, max buffer size, or idle time.
+     * Default: true only when `textStream` is an `AsyncIterable` (not a plain string or array).
+     */
+    accumulateSentences?: boolean
+    /** Sentence end detection when buffer matches this pattern (overrides `sentenceDelimiterPreset`). */
+    sentenceDelimiter?: RegExp
+    /** Preset for built-in sentence-end patterns (ignored if `sentenceDelimiter` is set). */
+    sentenceDelimiterPreset?: 'latin' | 'cjk' | 'multilingual'
+    /** Max graphemes per buffered chunk before a forced flush (aligned with `splitTtsText` defaults by language). */
+    maxBufferScalars?: number
+    /** Idle time after the last fragment before flushing the buffer (timer resets on each fragment). Default 500. */
+    flushAfterMs?: number
+  }
+
   export type TTSRunInput = {
     type?: string
     input: string
+    /**
+     * When true, sentence-chunk synthesis with streamed `onUpdate` (same behavior as `runStream`).
+     * Optional `locale` and `maxChunkScalars` apply in this mode.
+     */
+    streamOutput?: boolean
+    /** With `streamOutput: true`: BCP-47 locale for Intl.Segmenter when available. */
+    locale?: string
+    /** With `streamOutput: true`: max graphemes per chunk (defaults: 300, or 120 when language is ko). */
+    maxChunkScalars?: number
     /** Per-job enhancer override (toggle enhance/denoise) */
     enhancer?: { type: 'lavasr'; enhance?: boolean; denoise?: boolean }
     /** Per-job output sample rate override */
@@ -193,6 +238,8 @@ declare namespace ONNXTTS {
     RuntimeStats,
     SentenceStreamChunkMeta,
     SentenceStreamOptions,
+    RunStreamingOptions,
+    TextStreamInput,
     TTSOutputChunk,
     TTSRunInput
   }
