@@ -6,6 +6,38 @@ import {
 } from "@/schemas";
 import { stream as streamRpc } from "@/client/rpc/rpc-client";
 
+/**
+ * Converts text to speech audio.
+ *
+ * Returns an object exposing both a streaming generator of audio samples and
+ * a buffered promise for the full output, depending on `params.stream`.
+ *
+ * @param params - TTS parameters
+ * @param params.modelId - The identifier of the loaded TTS model
+ * @param params.text - The text to convert to speech (non-empty)
+ * @param params.inputType - Input type
+ * @default "text"
+ * @param params.stream - Whether to stream audio samples or return all at once
+ * @default true
+ * @param options - Optional RPC transport options
+ * @returns An object with:
+ *   - `bufferStream`: Stream of audio samples (active when `stream: true`)
+ *   - `buffer`: Complete audio buffer (populated when `stream: false`)
+ *   - `done`: Resolves to `true` when generation completes
+ *
+ * @example
+ * ```typescript
+ * // Streaming mode
+ * const { bufferStream } = textToSpeech({ modelId, text: "Hello world" });
+ * for await (const sample of bufferStream) {
+ *   // process audio sample
+ * }
+ *
+ * // Non-streaming mode
+ * const { buffer } = textToSpeech({ modelId, text: "Hello world", stream: false });
+ * const audioData = await buffer;
+ * ```
+ */
 export function textToSpeech(
   params: TtsClientParams,
   options?: RPCOptions,

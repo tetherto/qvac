@@ -237,6 +237,118 @@ function parseErrorCodes(source: string, constantName: string): ErrorEntry[] {
 // TypeDoc function extraction
 // ---------------------------------------------------------------------------
 
+/**
+ * Build an ApiFunction record from a TypeDoc declaration + signature pair.
+ * Used for both top-level exported functions and object methods.
+ */
+function buildApiFunction(
+  name: string,
+  decl: DeclarationReflection | null,
+  sig: SignatureReflection,
+  commentOverride?: any,
+): ApiFunction {
+  const comment = commentOverride ?? decl?.comment ?? (sig as any).comment;
+  const summary = comment?.summary ?? (sig as any).comment?.summary;
+  const blockTags = comment?.blockTags ?? (sig as any).comment?.blockTags ?? [];
+  return {
+    name,
+    signature: formatSignature(sig, name),
+    description: extractComment(summary) || "No description available",
+    parameters: ((sig as any).parameters || []).map((p: any) => ({
+      name: p.name,
+      type: formatType(p.type),
+      required: !p.flags?.isOptional,
+      defaultValue: cleanDefaultValue(p.defaultValue) ?? readJsDocDefault(p.comment),
+      description: extractComment(p.comment?.summary) || "",
+    })),
+    expandedParams: ((sig as any).parameters || [])
+      .map((p: any) => {
+        const _target = p.type?._target;
+        if (_target?.fileName && _target?.qualifiedName) {
+          const tsResult = resolveExpandedViaTypeScript(
+            _target.fileName,
+            _target.qualifiedName,
+            _target.pos,
+          );
+          if (tsResult && tsResult.fields.length > 0) return tsResult;
+        }
+
+        const typeName = getResolvableTypeName(p.type)
+          ?? (p.type?.type === "array" ? getResolvableTypeName(p.type.elementType) : null);
+        if (typeName) {
+          const visited = new Set<string>([typeName]);
+          const target = p.type?.type === "array" ? p.type.elementType : p.type;
+          const resolved = resolveExpandedType(target, typeName, visited, 0);
+          if (resolved) return resolved;
+        }
+
+        // Anonymous inline object parameter type (e.g., `opts: { a, b }`).
+        // Use the parameter name as the heading for the sub-section.
+        const inlineType = p.type?.type === "array" ? p.type.elementType : p.type;
+        if (
+          inlineType?.type === "reflection" &&
+          inlineType.declaration?.children?.length >= 2
+        ) {
+          const visited = new Set<string>([p.name]);
+          return resolveExpandedType(inlineType, p.name, visited, 0);
+        }
+
+        return null;
+      })
+      .filter(Boolean) as ExpandedType[],
+    returns: {
+      type: formatType((sig as any).type),
+      description: extractComment((comment as any)?.returns ?? (sig as any).comment?.returns) || "",
+    },
+    returnFields: (() => {
+      const retType = (sig as any).type;
+      const props = extractTypeProperties(retType, new Set());
+      if (!props) return [];
+      return props.map((p: any) => ({
+        name: p.name,
+        type: formatType(p.type),
+        required: !p.flags?.isOptional,
+        description: extractComment(p.comment?.summary),
+      }));
+    })(),
+    expandedReturns: (() => {
+      const retType = (sig as any).type;
+      const results: ExpandedType[] = [];
+      const props = extractTypeProperties(retType, new Set());
+      if (props) {
+        for (const prop of props) {
+          const childName = getResolvableTypeName(prop.type)
+            ?? (prop.type?.type === "array" ? getResolvableTypeName(prop.type.elementType) : null);
+          if (!childName) continue;
+          const visited = new Set<string>([childName]);
+          const target = prop.type?.type === "array" ? prop.type.elementType : prop.type;
+          const expanded = resolveExpandedType(target, childName, visited, 0);
+          if (expanded) results.push(expanded);
+        }
+      }
+      return results;
+    })(),
+    throws: blockTags
+      .filter((tag: any) => tag.tag === "@throws")
+      .map((tag: any) => {
+        const text = extractComment(tag.content);
+        const match = text.match(/^\{([^}]+)\}\s*(.*)/);
+        if (match) return { error: match[1], description: match[2] };
+        return { error: text, description: "" };
+      })
+      .filter((t: any) => t.error) || [],
+    examples: blockTags
+      .filter((tag: any) => tag.tag === "@example")
+      .map((tag: any) => extractComment(tag.content)) || [],
+    deprecated: (() => {
+      const depTag = blockTags.find((tag: any) => tag.tag === "@deprecated");
+      if (depTag) return extractComment(depTag.content) || "This function is deprecated.";
+      if (comment?.isDeprecated) return "This function is deprecated.";
+      return undefined;
+    })(),
+  };
+}
+
 function extractApiFunctions(project: any): ApiFunction[] {
   const functions: ApiFunction[] = [];
   const allFunctions = project.getReflectionsByKind(ReflectionKind.Function) as DeclarationReflection[];
@@ -244,94 +356,10 @@ function extractApiFunctions(project: any): ApiFunction[] {
     const decl = refl as DeclarationReflection;
     const sig = (decl.signatures?.[0] ?? decl.children?.find((c: any) => c.kind === ReflectionKind.CallSignature)) as SignatureReflection | undefined;
     if (!sig) continue;
-    const comment = decl.comment ?? (sig as any).comment;
-    const summary = comment?.summary ?? (sig as any).comment?.summary;
-    const blockTags = comment?.blockTags ?? (sig as any).comment?.blockTags ?? [];
     const sourcePath = (decl.sources?.[0]?.fullFileName ?? (decl as any).sources?.[0]?.file?.fullFileName ?? "") as string;
     const normalizedPath = sourcePath.replace(/\\/g, "/");
     if (normalizedPath && (normalizedPath.includes("/server/") || normalizedPath.includes("/examples/"))) continue;
-    functions.push({
-      name: decl.name,
-      signature: formatSignature(sig),
-      description: extractComment(summary) || "No description available",
-      parameters: ((sig as any).parameters || []).map((p: any) => ({
-        name: p.name,
-        type: formatType(p.type),
-        required: !p.flags?.isOptional,
-        defaultValue: cleanDefaultValue(p.defaultValue),
-        description: extractComment(p.comment?.summary) || "",
-      })),
-      expandedParams: ((sig as any).parameters || [])
-        .map((p: any) => {
-          const _target = p.type?._target;
-          if (_target?.fileName && _target?.qualifiedName) {
-            const tsResult = resolveExpandedViaTypeScript(
-              _target.fileName,
-              _target.qualifiedName,
-              _target.pos,
-            );
-            if (tsResult && tsResult.fields.length > 0) return tsResult;
-          }
-
-          const typeName = getResolvableTypeName(p.type)
-            ?? (p.type?.type === "array" ? getResolvableTypeName(p.type.elementType) : null);
-          if (!typeName) return null;
-          const visited = new Set<string>([typeName]);
-          const target = p.type?.type === "array" ? p.type.elementType : p.type;
-          return resolveExpandedType(target, typeName, visited, 0);
-        })
-        .filter(Boolean) as ExpandedType[],
-      returns: {
-        type: formatType((sig as any).type),
-        description: extractComment((comment as any)?.returns ?? (sig as any).comment?.returns) || "",
-      },
-      returnFields: (() => {
-        const retType = (sig as any).type;
-        const props = extractTypeProperties(retType, new Set());
-        if (!props) return [];
-        return props.map((p: any) => ({
-          name: p.name,
-          type: formatType(p.type),
-          required: !p.flags?.isOptional,
-          description: extractComment(p.comment?.summary),
-        }));
-      })(),
-      expandedReturns: (() => {
-        const retType = (sig as any).type;
-        const results: ExpandedType[] = [];
-        const props = extractTypeProperties(retType, new Set());
-        if (props) {
-          for (const prop of props) {
-            const childName = getResolvableTypeName(prop.type)
-              ?? (prop.type?.type === "array" ? getResolvableTypeName(prop.type.elementType) : null);
-            if (!childName) continue;
-            const visited = new Set<string>([childName]);
-            const target = prop.type?.type === "array" ? prop.type.elementType : prop.type;
-            const expanded = resolveExpandedType(target, childName, visited, 0);
-            if (expanded) results.push(expanded);
-          }
-        }
-        return results;
-      })(),
-      throws: blockTags
-        .filter((tag: any) => tag.tag === "@throws")
-        .map((tag: any) => {
-          const text = extractComment(tag.content);
-          const match = text.match(/^\{([^}]+)\}\s*(.*)/);
-          if (match) return { error: match[1], description: match[2] };
-          return { error: text, description: "" };
-        })
-        .filter((t: any) => t.error) || [],
-      examples: blockTags
-        .filter((tag: any) => tag.tag === "@example")
-        .map((tag: any) => extractComment(tag.content)) || [],
-      deprecated: (() => {
-        const depTag = blockTags.find((tag: any) => tag.tag === "@deprecated");
-        if (depTag) return extractComment(depTag.content) || "This function is deprecated.";
-        if (comment?.isDeprecated) return "This function is deprecated.";
-        return undefined;
-      })(),
-    });
+    functions.push(buildApiFunction(decl.name, decl, sig));
   }
   return functions.sort((a, b) => a.name.localeCompare(b.name));
 }
@@ -350,10 +378,10 @@ function extractApiObjects(project: any): ApiObject[] {
     const props = extractTypeProperties(type, new Set<string>());
     if (!props || props.length === 0) continue;
 
-    const hasMethodMember = props.some((p: any) =>
-      p.type?.type === "reflection" && p.type.declaration?.signatures?.length > 0,
+    const methodProps = props.filter(
+      (p: any) => p.type?.type === "reflection" && p.type.declaration?.signatures?.length > 0,
     );
-    if (!hasMethodMember) continue;
+    if (methodProps.length === 0) continue;
 
     const sourcePath = (decl.sources?.[0]?.fullFileName ?? (decl as any).sources?.[0]?.file?.fullFileName ?? "") as string;
     const normalizedPath = sourcePath.replace(/\\/g, "/");
@@ -367,42 +395,72 @@ function extractApiObjects(project: any): ApiObject[] {
       name: p.name,
       type: formatType(p.type),
       required: !p.flags?.isOptional,
-      defaultValue: cleanDefaultValue(p.defaultValue),
+      defaultValue: cleanDefaultValue(p.defaultValue) ?? readJsDocDefault(p.comment),
       description: extractComment(p.comment?.summary),
     }));
 
-    const children: ExpandedType[] = [];
-    for (const prop of props) {
-      const childName = getResolvableTypeName(prop.type)
-        ?? (prop.type?.type === "array" ? getResolvableTypeName(prop.type.elementType) : null);
-      if (!childName) continue;
-      const visited = new Set<string>([childName]);
-      const target = prop.type?.type === "array" ? prop.type.elementType : prop.type;
-      const expanded = resolveExpandedType(target, childName, visited, 0);
-      if (expanded) children.push(expanded);
-    }
+    // Per-method ApiFunction records: one for each callable property.
+    const methods: ApiFunction[] = methodProps.map((p: any) => {
+      const sig = p.type.declaration.signatures[0];
+      return buildApiFunction(p.name, null, sig, p.comment);
+    });
 
-    const moduleDoc = extractComment(summary)
-      ? null
-      : readModuleJsDoc(sourcePath);
-    const description = extractComment(summary) || moduleDoc?.description || "No description available";
-    const extractedExamples = blockTags
-      .filter((tag: any) => tag.tag === "@example")
-      .map((tag: any) => extractComment(tag.content));
-    const examples = extractedExamples.length > 0
-      ? extractedExamples
-      : moduleDoc?.examples ?? [];
+    // Build a pre-formatted object signature block, e.g.
+    // `const profiler: { enable(options?: ...): void; ...; };`
+    const objectSignature = buildObjectSignature(decl.name, methodProps, props);
 
     objects.push({
       name: decl.name,
-      description,
+      description: (() => {
+        const moduleDoc = extractComment(summary) ? null : readModuleJsDoc(sourcePath);
+        return extractComment(summary) || moduleDoc?.description || "No description available";
+      })(),
+      objectSignature,
       fields,
-      children,
-      examples,
+      children: [],
+      methods,
+      examples: (() => {
+        const extracted = blockTags
+          .filter((tag: any) => tag.tag === "@example")
+          .map((tag: any) => extractComment(tag.content));
+        if (extracted.length > 0) return extracted;
+        return readModuleJsDoc(sourcePath)?.examples ?? [];
+      })(),
     });
   }
 
   return objects.sort((a, b) => a.name.localeCompare(b.name));
+}
+
+/**
+ * Produce a pre-formatted TypeScript declaration summarizing an object's
+ * shape, matching the style of hand-written samples:
+ *
+ *   const name: {
+ *     method1(args): ret;
+ *     method2(): ret;
+ *     field: Type;
+ *   };
+ */
+function buildObjectSignature(
+  name: string,
+  methodProps: any[],
+  allProps: any[],
+): string {
+  const lines: string[] = [];
+  for (const p of allProps) {
+    const isMethod = methodProps.includes(p);
+    if (isMethod) {
+      const sig = p.type.declaration.signatures[0];
+      const params = (sig.parameters || [])
+        .map((arg: any) => `${arg.name}${arg.flags?.isOptional ? "?" : ""}: ${formatType(arg.type)}`)
+        .join(", ");
+      lines.push(`  ${p.name}(${params}): ${formatType(sig.type)};`);
+    } else {
+      lines.push(`  ${p.name}${p.flags?.isOptional ? "?" : ""}: ${formatType(p.type)};`);
+    }
+  }
+  return `const ${name}: {\n${lines.join("\n")}\n};`;
 }
 
 // ---------------------------------------------------------------------------
@@ -645,17 +703,14 @@ function findTsTypeAlias(
 }
 
 /**
- * Given a ts.Type for a property, try to resolve a named type to expand as a
- * child section. Returns the name and the underlying object type, or null.
+ * Unwrap arrays and nullable unions to get the "meaningful" underlying type
+ * for a property. Returns null when the type has no useful object shape to
+ * drill into.
  */
-function resolveNamedChildType(
-  propType: ts.Type,
-): { name: string; objectType: ts.Type } | null {
+function unwrapContainerType(propType: ts.Type): ts.Type | null {
   if (!tsChecker) return null;
-
   let candidate: ts.Type = propType;
 
-  // Unwrap arrays: Array<T> / readonly T[] — drill into element type.
   const refFlags = (ts as any).ObjectFlags?.Reference ?? 4;
   const objectFlags = ((candidate as any).objectFlags ?? 0) as number;
   if (
@@ -667,13 +722,25 @@ function resolveNamedChildType(
     if (args && args[0]) candidate = args[0];
   }
 
-  // Unwrap unions of T | undefined / T | null, keeping the meaningful branch.
   if (candidate.isUnion?.()) {
     const meaningful = (candidate as ts.UnionType).types.filter(
       (t) => !(t.flags & (ts.TypeFlags.Undefined | ts.TypeFlags.Null)),
     );
     if (meaningful.length === 1) candidate = meaningful[0];
   }
+
+  return candidate;
+}
+
+/**
+ * Given a ts.Type for a property, try to resolve a named type to expand as a
+ * child section. Returns the name and the underlying object type, or null.
+ */
+function resolveNamedChildType(
+  propType: ts.Type,
+): { name: string; objectType: ts.Type } | null {
+  const candidate = unwrapContainerType(propType);
+  if (!candidate) return null;
 
   const aliasName = candidate.aliasSymbol?.name;
   const symbolName = candidate.symbol?.name;
@@ -688,6 +755,36 @@ function resolveNamedChildType(
   if (!hasOwnProps) return null;
 
   return { name, objectType: candidate };
+}
+
+/**
+ * Detect an anonymous inline object type (e.g., `{ a: string; b: number }`)
+ * with 2+ own properties. Used to build unnamed child sections labeled by the
+ * property name when no named alias exists (common for Zod-inferred types).
+ * Returns null when the type is named, primitive, function, or too shallow.
+ */
+function resolveInlineObjectType(propType: ts.Type): ts.Type | null {
+  if (!tsChecker) return null;
+  const candidate = unwrapContainerType(propType);
+  if (!candidate) return null;
+
+  // Skip named types — those are handled by resolveNamedChildType.
+  const aliasName = candidate.aliasSymbol?.name;
+  const symbolName = candidate.symbol?.name;
+  const name = aliasName ?? symbolName;
+  if (name && name !== "__type" && name !== "__object") return null;
+  if (name && BUILTIN_TYPES.has(name)) return null;
+
+  // Only expand real object types with an own property list. Skip intrinsics,
+  // unions, functions, etc.
+  if (!(candidate.flags & ts.TypeFlags.Object)) return null;
+  if (candidate.getCallSignatures().length > 0) return null;
+  if (candidate.getConstructSignatures().length > 0) return null;
+
+  const props = candidate.getProperties();
+  if (props.length < 2) return null;
+
+  return candidate;
 }
 
 const BUILTIN_TYPES = new Set([
@@ -734,7 +831,9 @@ function extractTsProperties(type: ts.Type, location: ts.Node): TypeField[] | nu
 
 /**
  * Expand a named TS type into an ExpandedType, recursively expanding any
- * named child types referenced by its properties. `visited` prevents cycles.
+ * named child types referenced by its properties. `visited` prevents cycles
+ * for named types. Anonymous inline object properties (e.g. Zod-inferred
+ * nested shapes) are also expanded using the property name as the heading.
  */
 function expandTsType(
   type: ts.Type,
@@ -753,14 +852,27 @@ function expandTsType(
   const seen = new Set<string>();
   for (const prop of type.getProperties()) {
     const propType = tsChecker.getTypeOfSymbolAtLocation(prop, location);
+
     const named = resolveNamedChildType(propType);
-    if (!named) continue;
-    if (visited.has(named.name) || seen.has(named.name)) continue;
-    seen.add(named.name);
-    const childVisited = new Set(visited);
-    childVisited.add(named.name);
-    const child = expandTsType(named.objectType, named.name, location, childVisited, depth + 1);
-    if (child) children.push(child);
+    if (named) {
+      if (visited.has(named.name) || seen.has(named.name)) continue;
+      seen.add(named.name);
+      const childVisited = new Set(visited);
+      childVisited.add(named.name);
+      const child = expandTsType(named.objectType, named.name, location, childVisited, depth + 1);
+      if (child) children.push(child);
+      continue;
+    }
+
+    const inline = resolveInlineObjectType(propType);
+    if (inline) {
+      // Use the property name itself as the sub-section heading, since the
+      // type has no user-facing alias in the source.
+      if (seen.has(prop.name)) continue;
+      seen.add(prop.name);
+      const child = expandTsType(inline, prop.name, location, visited, depth + 1);
+      if (child) children.push(child);
+    }
   }
 
   return { typeName, fields, children };
@@ -788,6 +900,23 @@ function resolveExpandedViaTypeScript(
 function cleanDefaultValue(raw: string | undefined): string | undefined {
   if (!raw || raw === "..." || raw === "undefined") return undefined;
   return raw;
+}
+
+/**
+ * Pull an `@default` / `@defaultValue` JSDoc block tag value from a TypeDoc
+ * comment, stripping surrounding backticks (TypeDoc renders inline code as
+ * backtick-wrapped text in block tags).
+ */
+function readJsDocDefault(comment: any): string | undefined {
+  const blockTags = comment?.blockTags;
+  if (!Array.isArray(blockTags)) return undefined;
+  const tag = blockTags.find(
+    (t: any) => t?.tag === "@default" || t?.tag === "@defaultValue",
+  );
+  if (!tag) return undefined;
+  const raw = extractComment(tag.content).trim();
+  if (!raw) return undefined;
+  return raw.replace(/^`+|`+$/g, "").trim();
 }
 
 function formatType(type: any): string {
@@ -821,14 +950,15 @@ function formatType(type: any): string {
   return type.toString?.() ?? "unknown";
 }
 
-function formatSignature(signature: any): string {
+function formatSignature(signature: any, displayName?: string): string {
   const params = (signature.parameters || [])
     .map(
       (p: any) =>
         `${p.name}${p.flags?.isOptional ? "?" : ""}: ${formatType(p.type)}`,
     )
     .join(", ");
-  return `function ${signature.name}(${params}): ${formatType(signature.type)}`;
+  const name = displayName ?? signature.name;
+  return `function ${name}(${params}): ${formatType(signature.type)}`;
 }
 
 function extractComment(nodes: any): string {
@@ -857,7 +987,7 @@ function resolveExpandedType(
       name: prop.name,
       type: formatType(prop.type),
       required: !prop.flags?.isOptional,
-      defaultValue: cleanDefaultValue(prop.defaultValue),
+      defaultValue: cleanDefaultValue(prop.defaultValue) ?? readJsDocDefault(prop.comment),
       description: extractComment(prop.comment?.summary),
     });
 

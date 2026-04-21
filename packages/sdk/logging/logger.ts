@@ -26,6 +26,38 @@ function createLogger(namespace: string, options?: LoggerOptions): Logger {
   return createBaseLogger(namespace, safeOptions);
 }
 
+/**
+ * Creates or retrieves a cached logger instance for the given namespace.
+ *
+ * When `options` is omitted, the logger is cached by namespace and subsequent
+ * calls with the same namespace return the same instance. When `options` is
+ * provided, a new logger is always created.
+ *
+ * @param namespace - Logger namespace (used for identification and filtering)
+ * @param options - Optional logger configuration
+ * @returns A logger instance.
+ *
+ * @example
+ * ```typescript
+ * import { getLogger } from "@qvac/sdk";
+ *
+ * const logger = getLogger("my-app");
+ *
+ * logger.info("Application started");
+ * logger.debug("Debug details:", { key: "value" });
+ *
+ * logger.setLevel("error");
+ * logger.info("This will not be logged");
+ *
+ * const verboseLogger = getLogger("my-app:verbose", {
+ *   level: "debug",
+ *   enableConsole: true,
+ *   transports: [(level, namespace, message) => {
+ *     // Custom transport: write to file, send to server, etc.
+ *   }],
+ * });
+ * ```
+ */
 export function getLogger(namespace: string, options?: LoggerOptions): Logger {
   const cache = getLoggerCache();
 

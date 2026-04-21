@@ -1,22 +1,30 @@
 ---
 title: "modelRegistryList( )"
 titleStyle: code
-description: "No description available"
+description: Returns all available models from the QVAC distributed model registry.
 ---
 
-<WrapCode>
-
-```typescript
-function modelRegistryList(): Promise<{ addon: "llm" | "whisper" | "embeddings" | "nmt" | "vad" | "tts" | "ocr" | "parakeet" | "diffusion" | "other"; blobBlockLength: number; blobBlockOffset: number; blobByteOffset: number; blobCoreKey: string; engine: "sdcpp-generation" | "llamacpp-embedding" | "llamacpp-completion" | "nmtcpp-translation" | "onnx-ocr" | "parakeet-transcription" | "onnx-tts" | "whispercpp-transcription" | "onnx-vad"; expectedSize: number; modelId: string; name: string; params: string; quantization: string; registryPath: string; registrySource: string; sha256Checksum: string }[]>
+```ts
+function modelRegistryList(): Promise<ModelRegistryEntry[]>;
 ```
-
-</WrapCode>
-
 
 ## Returns
 
-```typescript
-Promise<{ addon: "llm" | "whisper" | "embeddings" | "nmt" | "vad" | "tts" | "ocr" | "parakeet" | "diffusion" | "other"; blobBlockLength: number; blobBlockOffset: number; blobByteOffset: number; blobCoreKey: string; engine: "sdcpp-generation" | "llamacpp-embedding" | "llamacpp-completion" | "nmtcpp-translation" | "onnx-ocr" | "parakeet-transcription" | "onnx-tts" | "whispercpp-transcription" | "onnx-vad"; expectedSize: number; modelId: string; name: string; params: string; quantization: string; registryPath: string; registrySource: string; sha256Checksum: string }[]>
-```
+`Promise<`[`ModelRegistryEntry[]`](../modelRegistryGetModel#modelregistryentry)`>` — Array of all models in the registry.
 
-No description available
+## Throws
+
+| Error | When |
+| --- | --- |
+| `QVAC_MODEL_REGISTRY_QUERY_FAILED` | The registry query fails |
+
+## Example
+
+```typescript
+import { modelRegistryList } from "@qvac/sdk";
+
+const models = await modelRegistryList();
+for (const model of models) {
+  console.log(model.registryPath, model.addon);
+}
+```

@@ -1,32 +1,48 @@
 ---
 title: "deleteCache( )"
 titleStyle: code
-description: "Deletes KV cache files."
+description: Deletes KV cache files.
 ---
 
-<WrapCode>
-
-```typescript
-function deleteCache(params: { all: true } | { kvCacheKey: string; modelId?: string }): Promise<{ success: boolean }>
+```ts
+function deleteCache(params: DeleteCacheParams): Promise<{ success: boolean }>;
 ```
-
-</WrapCode>
 
 ## Parameters
 
 | Name | Type | Required? | Description |
 | --- | --- | :---: | --- |
-| `params` | `\{ all: true \} \| \{ kvCacheKey: string; modelId?: string \}` | ✓ | The delete cache parameters |
+| params | [`DeleteCacheParams`](#deletecacheparams) | ✓ | The delete cache parameters |
+
+### `DeleteCacheParams`
+
+Union type. One of:
+
+#### Delete all caches
+
+| Field | Type | Required? | Description |
+| --- | --- | :---: | --- |
+| all | `true` | ✓ | Deletes all cache files |
+
+#### Delete by cache key
+
+| Field | Type | Required? | Description |
+| --- | --- | :---: | --- |
+| kvCacheKey | `string` | ✓ | The cache key to delete |
+| modelId | `string` | ✗ | Specific model ID to delete within the cache key. If not provided, deletes the entire cache key. |
 
 ## Returns
 
-```typescript
-Promise<{ success: boolean }>
-```
+`Promise<{ success: boolean }>` — Resolves with the success status.
 
-No description available
+## Throws
 
-## Example
+| Error | When |
+| --- | --- |
+| `INVALID_DELETE_CACHE_PARAMS` | Neither `all` nor `kvCacheKey` was provided |
+| `DELETE_CACHE_FAILED` | The server reports cache deletion failure |
+
+## Examples
 
 ```typescript
 // Delete all caches

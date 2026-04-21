@@ -19,6 +19,23 @@ function finetune(params: { modelId: string; operation?: "start" | "resume"; opt
 | `params` | `\{ modelId: string; operation?: "start" \| "resume"; options: \{ assistantLossOnly?: boolean; batchSize?: number; chatTemplatePath?: string; checkpointSaveDir?: string; checkpointSaveSteps?: number; contextLength?: number; learningRate?: number; loraAlpha?: number; loraInitStd?: number; loraModules?: string; loraRank?: number; loraSeed?: number; lrMin?: number; lrScheduler?: "constant" \| "cosine" \| "linear"; microBatchSize?: number; numberOfEpochs?: number; outputParametersDir: string; trainDatasetDir: string; validation: \{ type: "none" \} \| \{ fraction?: number; type: "split" \} \| \{ path: string; type: "dataset" \}; warmupRatio?: number; warmupRatioSet?: boolean; warmupSteps?: number; warmupStepsSet?: boolean; weightDecay?: number \} \}` | ✓ | The finetuning parameters |
 | `rpcOptions` | `\{ forceNewConnection?: boolean; healthCheckTimeout?: number; profiling?: \{ enabled?: boolean; includeServerBreakdown?: boolean; mode?: "summary" \| "verbose" \}; timeout?: number \}` | ✗ | Optional RPC transport options |
 
+### `params`
+
+| Field | Type | Required? | Default | Description |
+| --- | --- | :---: | --- | --- |
+| `modelId` | `string` | ✓ | — | The identifier of the loaded model to finetune |
+| `operation` | `"start" \| "resume"` | ✗ | — | The finetuning operation. Omit it to let the add-on choose whether to start fresh or resume automatically |
+| `options` | `\{ assistantLossOnly?: boolean; batchSize?: number; chatTemplatePath?: string; checkpointSaveDir?: string; checkpointSaveSteps?: number; contextLength?: number; learningRate?: number; loraAlpha?: number; loraInitStd?: number; loraModules?: string; loraRank?: number; loraSeed?: number; lrMin?: number; lrScheduler?: "constant" \| "cosine" \| "linear"; microBatchSize?: number; numberOfEpochs?: number; outputParametersDir: string; trainDatasetDir: string; validation: \{ type: "none" \} \| \{ fraction?: number; type: "split" \} \| \{ path: string; type: "dataset" \}; warmupRatio?: number; warmupRatioSet?: boolean; warmupSteps?: number; warmupStepsSet?: boolean; weightDecay?: number \}` | ✓ | `finetuneOptionsPayloadSchema` | Finetuning options for run and `getState` operations |
+
+### `rpcOptions`
+
+| Field | Type | Required? | Description |
+| --- | --- | :---: | --- |
+| `forceNewConnection` | `boolean` | ✗ | — |
+| `healthCheckTimeout` | `number` | ✗ | — |
+| `profiling` | `\{ enabled?: boolean; includeServerBreakdown?: boolean; mode?: "summary" \| "verbose" \}` | ✗ | — |
+| `timeout` | `number` | ✗ | — |
+
 ## Returns
 
 ```typescript

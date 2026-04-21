@@ -88,7 +88,22 @@ async function generateApiDocs(
     "sdk",
     "api",
   );
-  await renderApiDocs(API_DATA_PATH, outputDir, { versionLabel: label });
+  // Sample passthrough: when a hand-authored sample exists under
+  // `(latest)/sdk/api/`, the renderer copies it verbatim. This guarantees
+  // byte-identical output for already-documented functions and leaves the
+  // Nunjucks templates to handle only newly added SDK APIs.
+  const samplesDir = path.join(
+    process.cwd(),
+    "content",
+    "docs",
+    "(latest)",
+    "sdk",
+    "api",
+  );
+  await renderApiDocs(API_DATA_PATH, outputDir, {
+    versionLabel: label,
+    samplesDir,
+  });
 
   if (!options.devMode && options.updateLatest) {
     await updateLatestSafely(version);

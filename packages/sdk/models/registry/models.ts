@@ -13849,17 +13849,64 @@ export const WHISPER_Q8_0_1 = {
   params: models[357].params,
 } as const;
 
-// Helper function to get model by name
+/**
+ * Retrieves a model constant from the built-in registry by its human-readable name.
+ *
+ * @param name - The human-readable model name (e.g., `"Llama 3.2 3B Q4"`)
+ * @returns The matching model constant, or `undefined` if not found.
+ *
+ * @example
+ * ```typescript
+ * import { getModelByName } from "@qvac/sdk";
+ *
+ * const model = getModelByName("Llama 3.2 3B Q4");
+ * if (model) {
+ *   console.log(model.modelId, model.expectedSize);
+ * }
+ * ```
+ */
 export function getModelByName(name: string): RegistryItem | undefined {
   return models.find((model) => model.name === name);
 }
 
-// Helper function to get model by registry path
+/**
+ * Looks up a model in the built-in catalog by its registry path.
+ *
+ * @param registryPath - The full registry path of the model (e.g., `"llama-3.2-1b-instruct-q4_0-gguf"`)
+ * @returns The matching model constant, or `undefined` if not found.
+ *
+ * @example
+ * ```typescript
+ * import { getModelByPath } from "@qvac/sdk";
+ *
+ * const model = getModelByPath("llama-3.2-1b-instruct-q4_0-gguf");
+ * if (model) {
+ *   console.log(model.name, model.expectedSize);
+ * }
+ * ```
+ */
 export function getModelByPath(registryPath: string): RegistryItem | undefined {
   return models.find((model) => model.registryPath === registryPath);
 }
 
-// Helper function for blob-based lookups
+/**
+ * Retrieves a model constant from the built-in registry by its model ID and
+ * blob core key.
+ *
+ * @param modelId - The unique model identifier
+ * @param blobCoreKey - The Hyperdrive blob core key
+ * @returns The matching model constant, or `undefined` if not found.
+ *
+ * @example
+ * ```typescript
+ * import { getModelBySrc } from "@qvac/sdk";
+ *
+ * const model = getModelBySrc("model-abc123", "blob-core-key-hex");
+ * if (model) {
+ *   console.log(model.name, model.expectedSize);
+ * }
+ * ```
+ */
 export function getModelBySrc(
   modelId: string,
   blobCoreKey: string,

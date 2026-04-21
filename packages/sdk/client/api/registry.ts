@@ -37,6 +37,23 @@ function validateRegistryResponse(
   }
 }
 
+/**
+ * Returns all available models from the QVAC distributed model registry.
+ *
+ * @returns Array of all models in the registry.
+ *
+ * @throws {QVAC_MODEL_REGISTRY_QUERY_FAILED} The registry query fails
+ *
+ * @example
+ * ```typescript
+ * import { modelRegistryList } from "@qvac/sdk";
+ *
+ * const models = await modelRegistryList();
+ * for (const model of models) {
+ *   console.log(model.registryPath, model.addon);
+ * }
+ * ```
+ */
 async function modelRegistryList(): Promise<ModelRegistryEntry[]> {
   const request: ModelRegistryListRequest = {
     type: "modelRegistryList",
@@ -48,6 +65,29 @@ async function modelRegistryList(): Promise<ModelRegistryEntry[]> {
   return response.models!;
 }
 
+/**
+ * Searches the QVAC model registry with optional filters.
+ *
+ * @param params - Optional search filters. If omitted, returns all models.
+ * @returns Matching model entries.
+ *
+ * @throws {QVAC_MODEL_REGISTRY_QUERY_FAILED} The registry query fails
+ *
+ * @example
+ * ```typescript
+ * // Search LLM models
+ * const llmModels = await modelRegistrySearch({ modelType: "llm" });
+ *
+ * // Search by name
+ * const llamaModels = await modelRegistrySearch({ filter: "llama" });
+ *
+ * // Combined filters
+ * const models = await modelRegistrySearch({
+ *   modelType: "llm",
+ *   quantization: "Q4_K_M",
+ * });
+ * ```
+ */
 async function modelRegistrySearch(
   params: ModelRegistrySearchParams = {},
 ): Promise<ModelRegistryEntry[]> {
@@ -64,6 +104,22 @@ async function modelRegistrySearch(
   return response.models!;
 }
 
+/**
+ * Retrieves a single model entry from the QVAC model registry by path and
+ * source.
+ *
+ * @param registryPath - The registry path of the model
+ * @param registrySource - The registry source identifier
+ * @returns The matching model entry.
+ *
+ * @throws {QVAC_MODEL_REGISTRY_QUERY_FAILED} The registry query fails or model is not found
+ *
+ * @example
+ * ```typescript
+ * const model = await modelRegistryGetModel("llama-3.2-3b-q4", "qvac");
+ * console.log(model.name, model.expectedSize);
+ * ```
+ */
 async function modelRegistryGetModel(
   registryPath: string,
   registrySource: string,

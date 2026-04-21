@@ -1,7 +1,7 @@
 ---
 title: "defineDuplexHandler( )"
 titleStyle: code
-description: "No description available"
+description: "Helper function to define a duplex plugin handler with full type inference. A duplex handler runs on the server side and receives both an `inputStream` of client requests and a `sendStream` to emit responses, enabling bidirectional streaming plugin APIs."
 ---
 
 <WrapCode>
@@ -16,7 +16,7 @@ function defineDuplexHandler(definition: DuplexPluginHandlerDefinition<TRequest,
 
 | Name | Type | Required? | Description |
 | --- | --- | :---: | --- |
-| `definition` | `DuplexPluginHandlerDefinition<TRequest, TResponse>` | ✓ | No description |
+| `definition` | `DuplexPluginHandlerDefinition<TRequest, TResponse>` | ✓ | The duplex handler definition (request/response schemas + `handler` with `duplex: true`) |
 
 ## Returns
 
@@ -25,3 +25,22 @@ PluginHandlerDefinition<TRequest, TResponse>
 ```
 
 No description available
+
+## Example
+
+```typescript
+import { defineDuplexHandler } from "@qvac/sdk";
+import { z } from "zod";
+
+export default defineDuplexHandler({
+  request: z.object({ kind: z.literal("chat") }),
+  response: z.object({ chunk: z.string() }),
+  duplex: true,
+  handler: async ({ inputStream, sendStream }) => {
+    for await (const msg of inputStream) {
+      await sendStream.write({ chunk: `echo:${msg.kind}` });
+    }
+    await sendStream.end();
+  },
+});
+```

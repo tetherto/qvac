@@ -1,56 +1,52 @@
 ---
 title: "ragSaveEmbeddings( )"
 titleStyle: code
-description: "Saves pre-embedded documents to the RAG vector database. Part of the segregated flow: chunk() → embed() → saveEmbeddings() **Workspace lifecycle:** This operation implicitly opens (or creates) the workspace. The workspace remains open until closed."
+description: Saves pre-embedded documents to the RAG vector database.
 ---
 
-<WrapCode>
-
-```typescript
-function ragSaveEmbeddings(params: RagSaveEmbeddingsParams, options?: { forceNewConnection?: boolean; healthCheckTimeout?: number; profiling?: { enabled?: boolean; includeServerBreakdown?: boolean; mode?: "summary" | "verbose" }; timeout?: number }): Promise<RagSaveEmbeddingsResult[]>
+```ts
+function ragSaveEmbeddings(params, options?): Promise<RagSaveEmbeddingsResult[]>;
 ```
 
-</WrapCode>
+Part of the segregated flow: [`ragChunk()`](../ragChunk) → [`embed()`](../embed) → `ragSaveEmbeddings()`. Implicitly opens (or creates) the workspace.
 
 ## Parameters
 
-| Name | Type | Required? | Description |
-| --- | --- | :---: | --- |
-| `params` | [`RagSaveEmbeddingsParams`](#ragsaveembeddingsparams) | ✓ | The parameters for saving |
-| `options` | `\{ forceNewConnection?: boolean; healthCheckTimeout?: number; profiling?: \{ enabled?: boolean; includeServerBreakdown?: boolean; mode?: "summary" \| "verbose" \}; timeout?: number \}` | ✗ | No description |
+| Name | Type | Required? | Default | Description |
+| --- | --- | :---: | --- | --- |
+| params.documents | [`RagEmbeddedDoc[]`](#ragembeddeddoc) | ✓ | — | Pre-embedded documents |
+| params.modelId | `string` | ✗ | — | Embedding model ID (required if no cached RAG instance exists) |
+| params.workspace | `string` | ✗ | `"default"` | Workspace for isolated storage |
+| params.onProgress | `(stage, current, total) => void` | ✗ | — | Progress callback |
+| params.progressInterval | `number` | ✗ | — | Minimum interval between progress updates in ms |
+| options | [`RPCOptions`](../index#rpcoptions) | ✗ | — | Optional RPC transport options |
 
-### `RagSaveEmbeddingsParams`
+### `RagEmbeddedDoc`
 
 | Field | Type | Required? | Description |
 | --- | --- | :---: | --- |
-| `documents` | `\{ id: string; content: string; embedding: number[]; embeddingModelId: string; metadata?: Record<string, unknown> \| undefined; \}[]` | ✓ | — |
-| `modelId` | `string \| undefined` | ✗ | — |
-| `workspace` | `string \| undefined` | ✗ | — |
-| `progressInterval` | `number \| undefined` | ✗ | — |
-| `onProgress` | `(stage: SaveStage, current: number, total: number) => void` | ✗ | — |
-| `withProgress` | `boolean \| undefined` | ✗ | — |
+| id | `string` | ✓ | Document identifier |
+| content | `string` | ✓ | Document text content |
+| embedding | `number[]` | ✓ | Pre-computed embedding vector |
+| embeddingModelId | `string` | ✓ | Model used to generate the embedding |
+| metadata | `Record<string, unknown>` | ✗ | Optional metadata |
 
 ## Returns
 
-```typescript
-Promise<RagSaveEmbeddingsResult[]>
-```
-
-No description available
+`Promise<RagSaveEmbeddingsResult[]>` — Array of `{ status: "fulfilled" | "rejected", id?, error? }`.
 
 ## Throws
 
 | Error | When |
 | --- | --- |
-| `When the operation fails` | — |
-| `When streaming ends unexpectedly (only when using onProgress)` | — |
+| `RAG_SAVE_FAILED` | The save operation fails |
+| `STREAM_ENDED_WITHOUT_RESPONSE` | Streaming ends unexpectedly (when using `onProgress`) |
 
 ## Example
 
 ```typescript
-// Segregated flow
 const chunks = await ragChunk({ documents: ["text1", "text2"] });
-const { embedding: embeddings } = await embed({ modelId, text: chunks.map(c => c.content) });
+const embeddings = await embed({ modelId, text: chunks.map(c => c.content) });
 const embeddedDocs = chunks.map((chunk, i) => ({
   ...chunk,
   embedding: embeddings[i],

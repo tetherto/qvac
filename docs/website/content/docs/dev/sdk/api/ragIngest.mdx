@@ -1,62 +1,45 @@
 ---
 title: "ragIngest( )"
 titleStyle: code
-description: "Ingests documents into the RAG vector database. Full pipeline: chunk → embed → save **Workspace lifecycle:** This operation implicitly opens (or creates) the workspace. The workspace remains open until closed."
+description: Ingests documents into the RAG vector database.
 ---
 
-<WrapCode>
-
-```typescript
-function ragIngest(params: RagIngestParams, options?: { forceNewConnection?: boolean; healthCheckTimeout?: number; profiling?: { enabled?: boolean; includeServerBreakdown?: boolean; mode?: "summary" | "verbose" }; timeout?: number }): Promise<{ droppedIndices: number[]; processed: RagSaveEmbeddingsResult[] }>
+```ts
+function ragIngest(params, options?): Promise<{ processed: RagSaveEmbeddingsResult[]; droppedIndices: number[] }>;
 ```
 
-</WrapCode>
+Full pipeline: chunk → embed → save. Implicitly opens (or creates) the workspace.
 
 ## Parameters
 
-| Name | Type | Required? | Description |
-| --- | --- | :---: | --- |
-| `params` | [`RagIngestParams`](#ragingestparams) | ✓ | The parameters for ingestion |
-| `options` | `\{ forceNewConnection?: boolean; healthCheckTimeout?: number; profiling?: \{ enabled?: boolean; includeServerBreakdown?: boolean; mode?: "summary" \| "verbose" \}; timeout?: number \}` | ✗ | No description |
-
-### `RagIngestParams`
-
-| Field | Type | Required? | Description |
-| --- | --- | :---: | --- |
-| `modelId` | `string` | ✓ | — |
-| `documents` | `string \| string[]` | ✓ | — |
-| `workspace` | `string \| undefined` | ✗ | — |
-| `chunk` | `boolean \| undefined` | ✗ | — |
-| `chunkOpts` | `\{ chunkSize?: number \| undefined; chunkOverlap?: number \| undefined; chunkStrategy?: "character" \| "paragraph" \| undefined; splitStrategy?: "character" \| "word" \| "token" \| "sentence" \| "line" \| undefined; \} \| undefined` | ✗ | — |
-| `progressInterval` | `number \| undefined` | ✗ | — |
-| `onProgress` | `(stage: IngestStage, current: number, total: number) => void` | ✗ | — |
-| `withProgress` | `boolean \| undefined` | ✗ | — |
+| Name | Type | Required? | Default | Description |
+| --- | --- | :---: | --- | --- |
+| params.modelId | `string` | ✓ | — | The embedding model identifier |
+| params.documents | `string \| string[]` | ✓ | — | Documents to ingest |
+| params.chunk | `boolean` | ✗ | `true` | Whether to chunk documents before embedding |
+| params.chunkOpts | [`ChunkOptions`](../ragChunk#chunkoptions) | ✗ | — | Chunking options |
+| params.workspace | `string` | ✗ | `"default"` | Workspace for isolated storage. Created if it doesn't exist. |
+| params.onProgress | `(stage, current, total) => void` | ✗ | — | Progress callback |
+| params.progressInterval | `number` | ✗ | — | Minimum interval between progress updates in ms |
+| options | [`RPCOptions`](../index#rpcoptions) | ✗ | — | Optional RPC transport options |
 
 ## Returns
 
-```typescript
-Promise<{ droppedIndices: number[]; processed: RagSaveEmbeddingsResult[] }>
-```
-
-No description available
+| Field | Type | Description |
+| --- | --- | --- |
+| processed | `RagSaveEmbeddingsResult[]` | Array of `{ status: "fulfilled" \| "rejected", id?, error? }` |
+| droppedIndices | `number[]` | Indices of documents that were dropped |
 
 ## Throws
 
 | Error | When |
 | --- | --- |
-| `When the operation fails` | — |
-| `When streaming ends unexpectedly (only when using onProgress)` | — |
+| `RAG_SAVE_FAILED` | The ingestion operation fails |
+| `STREAM_ENDED_WITHOUT_RESPONSE` | Streaming ends unexpectedly (when using `onProgress`) |
 
 ## Example
 
 ```typescript
-// Simple ingest
-const result = await ragIngest({
-  modelId,
-  documents: ["Document 1", "Document 2"],
-});
-
-// With progress tracking
 const result = await ragIngest({
   modelId,
   documents: ["Document 1", "Document 2"],

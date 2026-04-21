@@ -1,22 +1,39 @@
 ---
 title: "close( )"
 titleStyle: code
-description: "No description available"
+description: Closes the SDK client connection and releases all associated resources.
 ---
 
-<WrapCode>
-
-```typescript
-function close(): Promise<void>
+```ts
+function close(): Promise<void>;
 ```
 
-</WrapCode>
+Safe to call multiple times — subsequent calls are a no-op if already closed.
 
+## Bare direct runtime
+
+When the SDK runs in-process on Bare (not under Node.js with a separate worker process), calling `close()` runs the same teardown as a signal-driven shutdown and then **ends the process with exit code 0**. The returned promise may not settle in that case because the process exits immediately afterward. This matches the behavior users expect after the last model is unloaded (the SDK calls `close()` automatically when nothing remains loaded).
 
 ## Returns
 
-```typescript
-Promise<void>
-```
+`Promise<void>` — Resolves when the connection is closed (Node.js and Expo). On Bare direct mode, the process usually exits before the promise resolves.
 
-No description available
+## Example
+
+```typescript
+import { loadModel, completion, close } from "@qvac/sdk";
+
+const modelId = await loadModel({
+  modelSrc: "/path/to/model.gguf",
+  modelType: "llm",
+});
+
+const result = completion({
+  modelId,
+  history: [{ role: "user", content: "Hello" }],
+});
+
+console.log(await result.text);
+
+await close();
+```

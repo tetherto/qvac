@@ -40,8 +40,21 @@ export interface ApiObject {
   name: string;
   description: string;
   descriptionSource?: ContentSource;
+  /**
+   * Optional pre-formatted TypeScript declaration of the object shape
+   * (e.g., `const profiler: { enable(...): void; ... };`). When present,
+   * rendered as a `<WrapCode>` block at the top of the page.
+   */
+  objectSignature?: string;
   fields: TypeField[];
   children: ExpandedType[];
+  /**
+   * When non-empty, the object is rendered as a "namespace" page with a
+   * `## Methods` index table and one `### name()` subsection per method,
+   * mirroring the per-function layout. The flat `fields` table is omitted
+   * in this mode.
+   */
+  methods?: ApiFunction[];
   examples?: string[];
   examplesSource?: ContentSource;
 }
