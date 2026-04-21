@@ -203,8 +203,9 @@ TEST_F(PreprocessDispatchTest, passesSpanishThrough) {
 }
 
 TEST_F(PreprocessDispatchTest, passesPortugueseDiacriticsThrough) {
-  const std::string portuguese = asUtf8String(
-      u8"Olá mundo! Essa é uma demonstração de síntese de texto para voz usando Chatterbox");
+  const std::string portuguese =
+      asUtf8String(u8"Olá mundo! Essa é uma demonstração de síntese de texto "
+                   u8"para voz usando Chatterbox");
   const std::string result = preprocessText(portuguese, "pt", table_);
   EXPECT_EQ(result, portuguese);
 }
