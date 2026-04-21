@@ -542,9 +542,9 @@ std::any SdModel::process(const std::any& input) {
   //     steps. Lower strength = closer to the original image. Multi-image
   //     is rejected outright for these architectures.
   //
-  sd_image_t initImg{};                       // single-image (SDEdit or 1× FLUX)
+  sd_image_t initImg{}; // single-image (SDEdit or 1× FLUX)
   std::vector<uint8_t> initPng;
-  std::vector<sd_image_t> refImgs;            // multi-image FLUX fusion
+  std::vector<sd_image_t> refImgs; // multi-image FLUX fusion
   // RAII guard: frees any pixel buffers in refImgs on scope exit (normal
   // or exceptional). The single-image initImg is still freed explicitly
   // below to keep the existing control-flow readable.
@@ -622,12 +622,14 @@ std::any SdModel::process(const std::any& input) {
           "img2img: entering FLUX2 *fusion* mode — " + std::to_string(nMulti) +
               " reference images. increase_ref_index=" +
               (gen.increaseRefIndex
-                   ? std::string("true (distinct RoPE slots per ref — use "
-                                 "when the text encoder supports vision "
-                                 "tokens, e.g. Qwen-Image-Edit)")
-                   : std::string("false (refs tile into one coordinate "
-                                 "space — visual feature fusion; CLI "
-                                 "default, recommended for FLUX2-klein)")));
+                   ? std::string(
+                         "true (distinct RoPE slots per ref — use "
+                         "when the text encoder supports vision "
+                         "tokens, e.g. Qwen-Image-Edit)")
+                   : std::string(
+                         "false (refs tile into one coordinate "
+                         "space — visual feature fusion; CLI "
+                         "default, recommended for FLUX2-klein)")));
 
       genParams.ref_images = refImgs.data();
       genParams.ref_images_count = static_cast<int>(nMulti);
@@ -682,72 +684,72 @@ std::any SdModel::process(const std::any& input) {
         genParams.ref_images_count = 1;
         genParams.auto_resize_ref_image = true;
       } else {
-      // SDEdit path — the vcpkg version of generate_image() rounds
-      // width/height UP to a spatial multiple (typically 8) before
-      // creating tensors, then asserts init_image matches those aligned
-      // dimensions.  We must align here too and resize the decoded image
-      // if its pixel dimensions aren't already a multiple of 8.
-      constexpr int kAlign = 8;
-      const int alignedW = (imgW + kAlign - 1) / kAlign * kAlign;
-      const int alignedH = (imgH + kAlign - 1) / kAlign * kAlign;
+        // SDEdit path — the vcpkg version of generate_image() rounds
+        // width/height UP to a spatial multiple (typically 8) before
+        // creating tensors, then asserts init_image matches those aligned
+        // dimensions.  We must align here too and resize the decoded image
+        // if its pixel dimensions aren't already a multiple of 8.
+        constexpr int kAlign = 8;
+        const int alignedW = (imgW + kAlign - 1) / kAlign * kAlign;
+        const int alignedH = (imgH + kAlign - 1) / kAlign * kAlign;
 
-      genParams.width = alignedW;
-      genParams.height = alignedH;
-      gen.width = alignedW;
-      gen.height = alignedH;
+        genParams.width = alignedW;
+        genParams.height = alignedH;
+        gen.width = alignedW;
+        gen.height = alignedH;
 
-      if (imgW != alignedW || imgH != alignedH) {
+        if (imgW != alignedW || imgH != alignedH) {
+          QLOG_IF(
+              qvac_lib_inference_addon_cpp::logger::Priority::INFO,
+              "img2img: resizing " + std::to_string(imgW) + "x" +
+                  std::to_string(imgH) + " → " + std::to_string(alignedW) +
+                  "x" + std::to_string(alignedH) + " (align to " +
+                  std::to_string(kAlign) + ")");
+
+          sd_image_t resized =
+              image_utils::resizeSdImage(initImg, alignedW, alignedH);
+          if (!resized.data)
+            throw StatusError(
+                general_error::InternalError,
+                "Failed to resize init_image from " + std::to_string(imgW) +
+                    "x" + std::to_string(imgH) + " to " +
+                    std::to_string(alignedW) + "x" + std::to_string(alignedH));
+          free(initImg.data);
+          initImg = resized;
+        }
+
         QLOG_IF(
             qvac_lib_inference_addon_cpp::logger::Priority::INFO,
-            "img2img: resizing " + std::to_string(imgW) + "x" +
-                std::to_string(imgH) + " → " + std::to_string(alignedW) + "x" +
-                std::to_string(alignedH) + " (align to " +
-                std::to_string(kAlign) + ")");
+            "img2img: " + std::to_string(alignedW) + "x" +
+                std::to_string(alignedH) + " — SDEdit (init_image, strength=" +
+                std::to_string(gen.strength) + ")");
 
-        sd_image_t resized =
-            image_utils::resizeSdImage(initImg, alignedW, alignedH);
-        if (!resized.data)
-          throw StatusError(
-              general_error::InternalError,
-              "Failed to resize init_image from " + std::to_string(imgW) + "x" +
-                  std::to_string(imgH) + " to " + std::to_string(alignedW) +
-                  "x" + std::to_string(alignedH));
-        free(initImg.data);
-        initImg = resized;
-      }
+        genParams.init_image = initImg;
 
-      QLOG_IF(
-          qvac_lib_inference_addon_cpp::logger::Priority::INFO,
-          "img2img: " + std::to_string(alignedW) + "x" +
-              std::to_string(alignedH) + " — SDEdit (init_image, strength=" +
-              std::to_string(gen.strength) + ")");
-
-      genParams.init_image = initImg;
-
-      // The vcpkg version of generate_image() unconditionally calls
-      // sd_image_to_ggml_tensor() on mask_image (even when no mask was
-      // provided), which asserts mask_image dimensions match the tensor.
-      // Provide an all-white mask (= denoise everywhere) to satisfy it.
-      if (!genParams.mask_image.data) {
-        const size_t maskSize =
-            static_cast<size_t>(alignedW) * static_cast<size_t>(alignedH);
-        auto* maskData = static_cast<uint8_t*>(malloc(maskSize));
-        if (!maskData)
-          throw StatusError(
-              general_error::InternalError,
-              "Failed to allocate " + std::to_string(maskSize) +
-                  " bytes for SDEdit mask (" + std::to_string(alignedW) + "x" +
-                  std::to_string(alignedH) + ")");
-        memset(maskData, 255, maskSize);
-        genParams.mask_image = {
-            static_cast<uint32_t>(alignedW),
-            static_cast<uint32_t>(alignedH),
-            1,
-            maskData};
-      }
-      }  // end SDEdit else
-    }    // end single-image else (nMulti == 0)
-  }      // end gen.mode == "img2img"
+        // The vcpkg version of generate_image() unconditionally calls
+        // sd_image_to_ggml_tensor() on mask_image (even when no mask was
+        // provided), which asserts mask_image dimensions match the tensor.
+        // Provide an all-white mask (= denoise everywhere) to satisfy it.
+        if (!genParams.mask_image.data) {
+          const size_t maskSize =
+              static_cast<size_t>(alignedW) * static_cast<size_t>(alignedH);
+          auto* maskData = static_cast<uint8_t*>(malloc(maskSize));
+          if (!maskData)
+            throw StatusError(
+                general_error::InternalError,
+                "Failed to allocate " + std::to_string(maskSize) +
+                    " bytes for SDEdit mask (" + std::to_string(alignedW) +
+                    "x" + std::to_string(alignedH) + ")");
+          memset(maskData, 255, maskSize);
+          genParams.mask_image = {
+              static_cast<uint32_t>(alignedW),
+              static_cast<uint32_t>(alignedH),
+              1,
+              maskData};
+        }
+      } // end SDEdit else
+    } // end single-image else (nMulti == 0)
+  } // end gen.mode == "img2img"
 
   // ── Generate ──────────────────────────────────────────────────────────────
   const auto t0 = std::chrono::steady_clock::now();

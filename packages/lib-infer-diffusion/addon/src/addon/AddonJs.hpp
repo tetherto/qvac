@@ -98,7 +98,8 @@ inline js_value_t* runJob(js_env_t* env, js_callback_info_t* info) try {
   // addon.js as `initImageBuffers`. FLUX2 supports attending to >=1 reference
   // image in-context; the JS layer already rejects this for non-FLUX models
   // and mutual-exclusion with initImageBuffer is enforced in SdModel::process.
-  auto initBufs = inputObj.getOptionalProperty<js::Array>(env, "initImageBuffers");
+  auto initBufs =
+      inputObj.getOptionalProperty<js::Array>(env, "initImageBuffers");
   if (initBufs.has_value()) {
     auto arr = initBufs.value();
     const uint32_t n = arr.size(env);
