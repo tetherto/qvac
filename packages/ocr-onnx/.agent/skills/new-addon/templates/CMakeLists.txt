@@ -32,6 +32,10 @@ find_path(QVAC_LIB_INFERENCE_ADDON_CPP_INCLUDE_DIRS "qvac-lib-inference-addon-cp
 
 {{BACKEND_CMAKE_FIND}}
 
+if(WIN32)
+  add_definitions(-DNOMINMAX -DWIN32_LEAN_AND_MEAN -DNOGDI)
+endif()
+
 add_bare_module({{PACKAGE_NAME}})
 
 target_sources(
@@ -53,4 +57,12 @@ if(BUILD_TESTING)
   enable_testing()
 
   add_subdirectory(test/unit)
+endif()
+
+if(WIN32)
+  target_link_libraries(
+    ${{{PACKAGE_NAME}}}
+    PRIVATE
+      msvcrt.lib
+  )
 endif()
