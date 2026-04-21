@@ -76,35 +76,10 @@ jobs:
     name: ${{ matrix.platform }}-${{ matrix.arch }}${{ matrix.tags }}
 
     env:
-      VCPKG_BINARY_SOURCES: "clear;x-aws,s3://${{ secrets.MODEL_S3_BUCKET }}/vcpkg-cache/parakeet/${{ matrix.platform }}-${{ matrix.arch }}/,readwrite"
       VCPKG_BUILD_TYPE: release
-      S3_CACHE_PREFIX: "s3://${{ secrets.MODEL_S3_BUCKET }}/vcpkg-cache/parakeet/${{ matrix.platform }}-${{ matrix.arch }}/"
       WORKDIR: ${{ inputs.workdir || 'packages/qvac-lib-infer-parakeet' }}
 
     steps:
-      - name: Configure AWS credentials via OIDC
-        uses: aws-actions/configure-aws-credentials@8df5847569e6427dd6c4fb1cf565c83acfa8afa7 # 6.0.0
-        with:
-          role-to-assume: ${{ secrets.AWS_OIDC_ROLE_ARN }}
-          aws-region: eu-central-1
-
-
-      - if: ${{ matrix.platform == 'win32' }}
-        name: Install AWS CLI on self-hosted Windows runner
-        shell: powershell
-        run: |
-          if (Get-Command aws -ErrorAction SilentlyContinue) {
-            Write-Host "AWS CLI already installed"
-            aws --version
-          } else {
-            Write-Host "Installing AWS CLI v2..."
-            Invoke-WebRequest -Uri https://awscli.amazonaws.com/AWSCLIV2.msi -OutFile $env:TEMP\AWSCLIV2.msi
-            Start-Process msiexec.exe -Wait -ArgumentList '/I', "$env:TEMP\AWSCLIV2.msi", '/qn'
-            $env:PATH = "C:\Program Files\Amazon\AWSCLIV2;$env:PATH"
-            echo "C:\Program Files\Amazon\AWSCLIV2" >> $env:GITHUB_PATH
-            aws --version
-          }
-
       - if: ${{ matrix.platform == 'android' }}
         name: Select NDK
         run: |
@@ -124,34 +99,6 @@ jobs:
         name: Configure windows runner
         run: |
           git config --system core.longpaths true
-          $ccacheVersion = "4.10.2"
-          $ccacheUrl = "https://github.com/ccache/ccache/releases/download/v$ccacheVersion/ccache-$ccacheVersion-windows-x86_64.zip"
-          $ccacheZip = "$env:TEMP\ccache.zip"
-          $ccacheDir = "C:\ccache"
-          Invoke-WebRequest -Uri $ccacheUrl -OutFile $ccacheZip
-          Expand-Archive -Path $ccacheZip -DestinationPath $ccacheDir -Force
-          $ccacheBin = Get-ChildItem -Path $ccacheDir -Recurse -Filter "ccache.exe" | Select-Object -First 1
-          $ccachePath = $ccacheBin.DirectoryName
-          echo "$ccachePath" | Out-File -FilePath $env:GITHUB_PATH -Encoding utf8 -Append
-
-      - if: ${{ matrix.platform == 'win32' }}
-        name: Configure ccache on Windows
-        shell: bash
-        run: |
-          ccache --set-config=max_size=2G
-          ccache --set-config=compression=true
-          ccache -z
-          echo "CMAKE_C_COMPILER_LAUNCHER=ccache" >> $GITHUB_ENV
-          echo "CMAKE_CXX_COMPILER_LAUNCHER=ccache" >> $GITHUB_ENV
-
-      - if: ${{ matrix.platform == 'win32' }}
-        name: Get ccache cache (Windows)
-        uses: actions/cache@668228422ae6a00e4ad889ee87cd7109ec5666a7 # 5.0.4
-        with:
-          key: ccache-parakeet-${{ matrix.platform }}-${{ matrix.arch }}-${{ hashFiles(format('{0}/vcpkg.json', env.WORKDIR)) }}
-          path: ~\AppData\Local\ccache
-          restore-keys: |
-            ccache-parakeet-${{ matrix.platform }}-${{ matrix.arch }}-
 
       - name: Checkout repository
         uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # 6.0.2
@@ -160,50 +107,27 @@ jobs:
           ref: ${{ inputs.ref }}
           token: ${{ secrets.PAT_TOKEN }}
 
-      - name: Setup node
-        uses: actions/setup-node@53b83947a5a98c8d113130e565377fae1a50d02f # 6.3.0
+      - name: Setup AWS + Windows CLI
+        uses: tetherto/qvac/.github/actions/setup-aws-prebuild@0bbdca93da303a0b1634ba14a89cec085621078d
         with:
-          node-version: lts/*
+          role-to-assume: ${{ secrets.AWS_OIDC_ROLE_ARN }}
+
+      - name: Setup vcpkg cache
+        uses: tetherto/qvac/.github/actions/setup-vcpkg-cache@0bbdca93da303a0b1634ba14a89cec085621078d
+        env:
+          MODEL_S3_BUCKET: ${{ secrets.MODEL_S3_BUCKET }}
+        with:
+          platform: ${{ matrix.platform }}
+          arch: ${{ matrix.arch }}
+
+      - name: Setup Bare tooling
+        uses: tetherto/qvac/.github/actions/setup-bare-tooling@0bbdca93da303a0b1634ba14a89cec085621078d
 
       - if: ${{ matrix.platform == 'win32' }}
         name: Setup Python on self-hosted Windows runner
         uses: actions/setup-python@v5
         with:
           python-version: '3.12'
-
-      - name: Configure scoped registry for @tetherto and @qvac packages
-        working-directory: ${{ env.WORKDIR }}
-        env:
-          GPR_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-          NPM_TOKEN: ${{ secrets.NPM_TOKEN }}
-          GIT_PAT: ${{ secrets.PAT_TOKEN }}
-        shell: bash
-        run: |
-          echo "Configuring scoped registry for @tetherto and @qvac packages..."
-          set -eu
-          echo "Writing .npmrc for dual registry install…"
-          cat > .npmrc <<NPMRC
-          always-auth=true
-          registry=https://registry.npmjs.org/
-          @qvac:registry=https://registry.npmjs.org/
-          @tetherto:registry=https://npm.pkg.github.com/
-          //registry.npmjs.org/:_authToken=${NPM_TOKEN}
-          //npm.pkg.github.com/:_authToken=${GIT_PAT}
-          NPMRC
-
-          if [ -n "${GIT_PAT:-}" ]; then
-            git config --global url."https://${GIT_PAT}:@github.com/".insteadOf "https://github.com/"
-            git config --global url."https://${GIT_PAT}:@github.com/".insteadOf "ssh://git@github.com/"
-            git config --global url."https://${GIT_PAT}:@github.com/".insteadOf "git@github.com:"
-          else
-            git config --global url."https://${{ github.token }}:@github.com/".insteadOf "https://github.com/"
-            git config --global url."https://${{ github.token }}:@github.com/".insteadOf "ssh://git@github.com/"
-            git config --global url."https://${{ github.token }}:@github.com/".insteadOf "git@github.com:"
-          fi
-
-      - name: Install global dependencies
-        run: |
-          npm install -g bare bare-make
 
       - if: ${{ matrix.platform == 'win32' && matrix.arch == 'arm64' }}
         name: Rename win sdk folder to disable it
@@ -271,33 +195,6 @@ jobs:
           wget https://apt.llvm.org/llvm.sh
           chmod +x llvm.sh
           sudo ./llvm.sh 19 all
-
-      - if: ${{ startsWith(matrix.os, 'ubuntu') }}
-        name: Install ccache on Linux
-        run: sudo apt-get install -y ccache
-
-      - if: ${{ startsWith(matrix.os, 'macos') }}
-        name: Install ccache on macOS
-        run: brew install ccache
-
-      - if: ${{ matrix.platform != 'win32' }}
-        name: Configure ccache
-        run: |
-          ccache --set-config=max_size=2G
-          ccache --set-config=compression=true
-          ccache -z
-          echo "CMAKE_C_COMPILER_LAUNCHER=ccache" >> $GITHUB_ENV
-          echo "CMAKE_CXX_COMPILER_LAUNCHER=ccache" >> $GITHUB_ENV
-
-      - if: ${{ matrix.platform != 'win32' }}
-        name: Get ccache cache
-        uses: actions/cache@668228422ae6a00e4ad889ee87cd7109ec5666a7 # 5.0.4
-        with:
-          key: ccache-parakeet-${{ matrix.platform }}-${{ matrix.arch }}${{ matrix.tags }}-${{ hashFiles(format('{0}/vcpkg.json', env.WORKDIR)) }}
-          path: ~/.cache/ccache
-          restore-keys: |
-            ccache-parakeet-${{ matrix.platform }}-${{ matrix.arch }}${{ matrix.tags }}-
-            ccache-parakeet-${{ matrix.platform }}-${{ matrix.arch }}-
 
       - if: ${{ startsWith(matrix.os, 'ubuntu') }}
         name: Update apt sources
@@ -387,9 +284,6 @@ jobs:
           fi
 
           echo "All Android binaries have debug sections removed."
-
-      - name: Show ccache stats
-        run: ccache -s
 
       - uses: actions/upload-artifact@bbbca2ddaa5d8feaa63e36b76fdaad77386f024f # 7.0.0
         with:

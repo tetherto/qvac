@@ -11,6 +11,7 @@ export const registryListReturnsModels: TestDefinition = {
   testId: "registry-list-returns-models",
   params: { action: "list" },
   expectation: { validation: "type", expectedType: "array", minLength: 1 },
+  suites: ["smoke"],
   metadata: { category: "registry", dependency: "none", estimatedDurationMs: 5000 },
 };
 
@@ -32,6 +33,7 @@ export const registrySearchByEngineLlm: TestDefinition = {
   testId: "registry-search-by-engine-llm",
   params: { action: "search", engine: "llamacpp-completion" },
   expectation: { validation: "type", expectedType: "array", minLength: 1 },
+  suites: ["smoke"],
   metadata: { category: "registry", dependency: "none", estimatedDurationMs: 5000 },
 };
 
@@ -60,6 +62,7 @@ export const registryGetModelValid: TestDefinition = {
   testId: "registry-get-model-valid",
   params: { action: "getModel", useFirstFromList: true },
   expectation: { validation: "regex", pattern: ".+" },
+  suites: ["smoke"],
   metadata: { category: "registry", dependency: "none", estimatedDurationMs: 5000 },
 };
 
@@ -67,6 +70,7 @@ export const registryGetModelNotFound: TestDefinition = {
   testId: "registry-get-model-not-found",
   params: { action: "getModel", registryPath: "nonexistent/model/path.gguf", registrySource: "nonexistent-source" },
   expectation: { validation: "throws-error", errorContains: "not found" },
+  suites: ["smoke"],
   metadata: { category: "registry", dependency: "none", estimatedDurationMs: 5000 },
 };
 

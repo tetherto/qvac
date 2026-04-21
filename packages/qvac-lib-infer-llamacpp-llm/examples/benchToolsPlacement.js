@@ -1,7 +1,6 @@
 'use strict'
 
 const LlmLlamacpp = require('../index')
-const FilesystemDL = require('@qvac/dl-filesystem')
 const path = require('bare-path')
 const fs = require('bare-fs')
 const process = require('bare-process')
@@ -213,20 +212,19 @@ function makeBaseConfig (toolsAtEnd) {
 }
 
 async function loadModel (dirPath, modelName, config) {
-  const loader = new FilesystemDL({ dirPath })
+  const modelPath = path.join(dirPath, modelName)
   const model = new LlmLlamacpp({
-    loader,
-    modelName,
-    diskPath: dirPath,
+    files: { model: [modelPath] },
+    config,
     logger: console,
     opts: { stats: true }
-  }, config)
+  })
   await model.load()
-  return { model, loader }
+  return { model }
 }
 
-async function runAndCollect (model, prompt) {
-  const response = await model.run(prompt)
+async function runAndCollect (model, prompt, runOptions) {
+  const response = await model.run(prompt, runOptions)
   const chunks = []
   await response
     .onUpdate(data => { chunks.push(data) })
@@ -255,7 +253,7 @@ async function runScenario (dirPath, modelName, opts) {
   console.log('='.repeat(70))
 
   const config = makeBaseConfig(toolsAtEnd)
-  const { model, loader } = await loadModel(dirPath, modelName, config)
+  const { model } = await loadModel(dirPath, modelName, config)
   const cachePath = path.join(dirPath, cacheName)
   cleanCache(cachePath)
 
@@ -271,10 +269,11 @@ async function runScenario (dirPath, modelName, opts) {
       const turnTools = getToolsForTurn(i)
       let prompt
 
+      let runOptions = { cacheKey: cachePath }
+
       if (toolsAtEnd) {
         // tools_at_end: session cache + re-send last assistant response + new user + tools
         prompt = [
-          { role: 'session', content: cachePath },
           ...(i === 0
             ? [{ role: 'system', content: 'You are a helpful assistant.' }, { role: 'user', content: turn.user }]
             : [
@@ -284,10 +283,9 @@ async function runScenario (dirPath, modelName, opts) {
           ...turnTools
         ]
       } else if (dynamicTools) {
-        // tools_in_system with changing tools: reset cache and replay full history with new tools
+        // tools_in_system with changing tools: omit cacheKey and replay full history with new tools
+        if (i > 0) runOptions = {}
         prompt = [
-          { role: 'session', content: cachePath },
-          ...(i > 0 ? [{ role: 'session', content: 'reset' }] : []),
           { role: 'system', content: 'You are a helpful assistant.' },
           ...conversationHistory,
           { role: 'user', content: turn.user },
@@ -296,7 +294,6 @@ async function runScenario (dirPath, modelName, opts) {
       } else {
         // tools_in_system with same tools: session cache + only new user msg (tools cached from turn 1)
         prompt = [
-          { role: 'session', content: cachePath },
           ...(i === 0
             ? [{ role: 'system', content: 'You are a helpful assistant.' }, { role: 'user', content: turn.user }]
             : [{ role: 'user', content: turn.user }]),
@@ -305,7 +302,7 @@ async function runScenario (dirPath, modelName, opts) {
       }
 
       const t0 = process.hrtime()
-      const result = await runAndCollect(model, prompt)
+      const result = await runAndCollect(model, prompt, runOptions)
       const elapsed = process.hrtime(t0)
       lastAssistantResponse = stripInternalBlocks(result.output)
 
@@ -341,7 +338,6 @@ async function runScenario (dirPath, modelName, opts) {
     }
   } finally {
     await model.unload()
-    await loader.close()
     cleanCache(cachePath)
   }
 
@@ -459,9 +455,9 @@ async function main () {
     cacheName: 'bench-C-at-end-dynamic.bin'
   })
 
-  // ── Scenario D: tools_in_system with dynamic tools (must reset+replay each turn) ──
+  // ── Scenario D: tools_in_system with dynamic tools (must replay each turn) ──
   const resultD = await runScenario(dirPath, modelName, {
-    name: 'SCENARIO D: tools_at_end = false, DIFFERENT tools each turn (reset+replay)',
+    name: 'SCENARIO D: tools_at_end = false, DIFFERENT tools each turn (full replay)',
     toolsAtEnd: false,
     dynamicTools: true,
     conversationTurns: CONVERSATION_TURNS_DYNAMIC,
@@ -477,7 +473,7 @@ async function main () {
   printComparison(
     'tools_at_end (dynamic tools)',
     resultC.turnStats,
-    'tools_in_system (dynamic tools, reset+replay)',
+    'tools_in_system (dynamic tools, full replay)',
     resultD.turnStats
   )
 
@@ -487,12 +483,12 @@ async function main () {
   console.log('#'.repeat(80))
 
   printToolValidationSummary('Scenario C — tools_at_end, dynamic tools', resultC.toolValidations)
-  printToolValidationSummary('Scenario D — tools_in_system, dynamic tools (reset+replay)', resultD.toolValidations)
+  printToolValidationSummary('Scenario D — tools_in_system, dynamic tools (full replay)', resultD.toolValidations)
 
   console.log('\n' + '─'.repeat(80))
   console.log('Key:')
   console.log('  Scenario C: tools_at_end=true with dynamic tools — trims & re-sends prev response')
-  console.log('  Scenario D: tools_at_end=false with dynamic tools — must reset cache & replay full history')
+  console.log('  Scenario D: tools_at_end=false with dynamic tools — replay full history without cache')
   console.log('  PASS = model only called tools available in that turn')
   console.log('  FAIL = model called a tool from a previous turn (stale/trimmed tool leak)')
   console.log('─'.repeat(80))

@@ -73,7 +73,7 @@ try {
   console.log("📚 Embedding documents...");
   const documents = [];
   for (const sample of samples) {
-    const embedding = await embed({ modelId, text: sample.text });
+    const { embedding } = await embed({ modelId, text: sample.text });
     const record = {
       id: sample.id,
       text: sample.text,
@@ -85,7 +85,7 @@ try {
   await documentsTable.add(documents);
 
   console.log("🔎 Searching for similar documents...");
-  const queryEmbedding = await embed({ modelId, text: query });
+  const { embedding: queryEmbedding } = await embed({ modelId, text: query });
   const results = (await documentsTable
     .vectorSearch(queryEmbedding)
     .limit(1)

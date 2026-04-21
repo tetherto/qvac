@@ -1,0 +1,24 @@
+name: Setup Bare tooling
+description: Setup Node and install the global Bare runtime and bare-make tooling used by prebuild workflows.
+
+inputs:
+  node-version:
+    description: Node version to install
+    required: false
+    default: lts/*
+  extra-packages:
+    description: Whitespace-separated list of additional global npm packages to install alongside bare-runtime and bare-make
+    required: false
+    default: ''
+
+runs:
+  using: composite
+  steps:
+    - name: Setup node
+      uses: actions/setup-node@53b83947a5a98c8d113130e565377fae1a50d02f # 6.3.0
+      with:
+        node-version: ${{ inputs.node-version }}
+
+    - name: Install global dependencies
+      shell: bash
+      run: npm install -g bare-runtime bare-make ${{ inputs.extra-packages }}

@@ -10,6 +10,8 @@ const {
 } = require('@qvac/infer-base')
 const { TTSInterface } = require('./tts')
 const { QvacErrorAddonTTS, ERR_CODES } = require('./lib/error')
+const { splitTtsText } = require('./lib/textChunker')
+const { accumulateTextStream } = require('./lib/textStreamAccumulator')
 
 // Engine types
 const ENGINE_CHATTERBOX = 'chatterbox'
@@ -112,12 +114,27 @@ function normalizeOnnxTtsFiles (files) {
   }
 }
 
+/**
+ * Default `accumulateSentences` for `runStreaming`: true only for native `AsyncIterable`
+ * (e.g. incremental text from an upstream async source), not for strings, arrays, or sync-only iterables.
+ * @param {unknown} textStream
+ * @returns {boolean}
+ */
+function defaultAccumulateSentencesForStreamInput (textStream) {
+  if (textStream == null) return false
+  if (typeof textStream === 'string') return false
+  if (Array.isArray(textStream)) return false
+  if (typeof textStream[Symbol.asyncIterator] === 'function') return true
+  return false
+}
+
 class ONNXTTS {
   constructor (options = {}) {
     const {
       files: filesInput = {},
       config = {},
       engine,
+      enhancer,
       logger,
       lazySessionLoading,
       referenceAudio,
@@ -138,6 +155,9 @@ class ONNXTTS {
       destroyed: false
     }
     this.addon = null
+    this._sentenceStreamCtx = null
+    /** Serializes `run({ streamOutput: true })`, `runStream`, and `runStreaming` until each response settles (Whisper-style). */
+    this._ttsInferenceQueueWaiter = Promise.resolve()
     this._job = createJobHandler({
       cancel: () => {
         const a = this.addon
@@ -171,6 +191,24 @@ class ONNXTTS {
     this._lazySessionLoading = lazySessionLoading != null
       ? lazySessionLoading
       : (platform() === 'ios' || platform() === 'android')
+
+    const outputSampleRate = this._config.outputSampleRate
+    if (outputSampleRate != null && (outputSampleRate < 8000 || outputSampleRate > 192000)) {
+      throw new Error('outputSampleRate must be between 8000 and 192000, got ' + outputSampleRate)
+    }
+    this._outputSampleRate = outputSampleRate || null
+
+    this._enhancer = null
+    if (enhancer && enhancer.type === 'lavasr') {
+      this._enhancer = {
+        type: 'lavasr',
+        enhance: enhancer.enhance || false,
+        denoise: enhancer.denoise || false,
+        backbonePath: enhancer.backbonePath || null,
+        specHeadPath: enhancer.specHeadPath || null,
+        denoiserPath: enhancer.denoiserPath || null
+      }
+    }
 
     if (this._engineType === ENGINE_CHATTERBOX) {
       const root = normalizedFiles.modelDir
@@ -297,8 +335,331 @@ class ONNXTTS {
     this.state.weightsLoaded = true
   }
 
+  /**
+   * Run text-to-speech. Set `streamOutput: true` to split `input` into sentence chunks and emit
+   * PCM on `response.onUpdate` as each chunk completes (same behavior as `runStream`).
+   *
+   * @param {Object} input
+   * @param {string} input.input - Text to synthesize
+   * @param {boolean} [input.streamOutput=false] - When true, chunked streaming output (optional `locale`, `maxChunkScalars`; same as `runStream`)
+   * @param {string} [input.locale] - BCP-47 locale for chunking when `streamOutput`
+   * @param {number} [input.maxChunkScalars] - Max graphemes per chunk when `streamOutput`
+   */
   async run (input) {
+    if (input && typeof input === 'object' && input.streamOutput === true) {
+      if (typeof input.input !== 'string' || input.input.trim().length === 0) {
+        throw new QvacErrorAddonTTS({
+          code: ERR_CODES.FAILED_TO_APPEND,
+          adds: 'run with streamOutput: non-empty string `input` is required'
+        })
+      }
+      const streamOpts = {
+        locale: input.locale,
+        maxChunkScalars: input.maxChunkScalars
+      }
+      if (this.exclusiveRun) {
+        return await this._enqueueExclusiveTtsResponse(() =>
+          this._runStreamOrchestrator(input.input, streamOpts)
+        )
+      }
+      return this._runStreamOrchestrator(input.input, streamOpts)
+    }
     return this._runExclusive(() => this._runInternal(input))
+  }
+
+  /**
+   * Serialize streaming runs until the returned {@link QvacResponse} settles.
+   */
+  async _enqueueExclusiveTtsResponse (runFn) {
+    const prev = this._ttsInferenceQueueWaiter || Promise.resolve()
+    let releaseSlot
+    this._ttsInferenceQueueWaiter = new Promise(resolve => {
+      releaseSlot = resolve
+    })
+    await prev
+    let response
+    try {
+      response = await runFn()
+    } catch (err) {
+      releaseSlot()
+      throw err
+    }
+    response.await().finally(() => { releaseSlot() }).catch(() => {})
+    return response
+  }
+
+  /**
+   * Chunk long text by sentence (see {@link splitTtsText}), synthesize each chunk in order,
+   * and emit PCM on `response.onUpdate` as each chunk completes.
+   * Equivalent to `run({ input: text, streamOutput: true, ...options })`.
+   *
+   * @param {string} text
+   * @param {{ locale?: string, maxChunkScalars?: number }} [options]
+   */
+  async runStream (text, options = {}) {
+    const opts = options == null || typeof options !== 'object' ? {} : options
+    return this.run({
+      input: text,
+      streamOutput: true,
+      locale: opts.locale,
+      maxChunkScalars: opts.maxChunkScalars
+    })
+  }
+
+  /**
+   * Streaming input + streaming output: each flushed string is one synthesis job; PCM is emitted on
+   * `response.onUpdate` per job. Same chunk metadata shape as `runStream`.
+   *
+   * For **AsyncIterable** inputs (incremental text from streaming sources), **`accumulateSentences` defaults to
+   * true**: fragments are concatenated until a sentence end (see `sentenceDelimiterPreset`), max buffer
+   * size (`maxBufferScalars`), or `flushAfterMs` idle after the last fragment. Strings and arrays
+   * default to one job per yield (`accumulateSentences` false).
+   *
+   * @param {AsyncIterable<string>|Iterable<string>|string} textStream
+   * @param {Object} [options]
+   * @param {boolean} [options.accumulateSentences] - Default: true for `AsyncIterable` inputs only.
+   * @param {'latin'|'cjk'|'multilingual'} [options.sentenceDelimiterPreset]
+   * @param {RegExp} [options.sentenceDelimiter] - Overrides preset when set (tested against full buffer).
+   * @param {number} [options.maxBufferScalars] - Max graphemes before hard flush (default by language).
+   * @param {number} [options.flushAfterMs] - Idle flush after last fragment (default 500).
+   */
+  async runStreaming (textStream, options = {}) {
+    const streamOpts = this._resolveRunStreamingOptions(textStream, options)
+    let normalized = this._normalizeTextStream(textStream)
+    if (streamOpts.accumulateSentences) {
+      normalized = accumulateTextStream(normalized, {
+        sentenceDelimiterPreset: streamOpts.sentenceDelimiterPreset,
+        maxBufferScalars: streamOpts.maxBufferScalars,
+        flushAfterMs: streamOpts.flushAfterMs,
+        sentenceDelimiter: streamOpts.sentenceDelimiter,
+        language: this._config?.language
+      })
+    }
+    if (this.exclusiveRun) {
+      return await this._enqueueExclusiveTtsResponse(() =>
+        this._runTextStreamOrchestrator(normalized)
+      )
+    }
+    return this._runTextStreamOrchestrator(normalized)
+  }
+
+  /**
+   * @param {unknown} textStream
+   * @param {Record<string, unknown>} options
+   */
+  _resolveRunStreamingOptions (textStream, options) {
+    const o = options == null || typeof options !== 'object' ? {} : options
+    let accumulateSentences = o.accumulateSentences
+    if (accumulateSentences === undefined) {
+      accumulateSentences = defaultAccumulateSentencesForStreamInput(textStream)
+    }
+    const rawPreset = o.sentenceDelimiterPreset
+    const sentenceDelimiterPreset =
+      rawPreset === 'latin' || rawPreset === 'cjk' || rawPreset === 'multilingual'
+        ? rawPreset
+        : 'multilingual'
+    const maxBufferScalars = o.maxBufferScalars
+    const flushAfterMs = o.flushAfterMs != null ? o.flushAfterMs : 500
+    const sentenceDelimiter =
+      o.sentenceDelimiter instanceof RegExp ? o.sentenceDelimiter : undefined
+    return {
+      accumulateSentences: !!accumulateSentences,
+      sentenceDelimiterPreset,
+      maxBufferScalars,
+      flushAfterMs,
+      sentenceDelimiter
+    }
+  }
+
+  _normalizeTextStream (textStream) {
+    if (textStream == null) {
+      throw new QvacErrorAddonTTS({
+        code: ERR_CODES.FAILED_TO_APPEND,
+        adds: 'runStreaming: text stream is required'
+      })
+    }
+    if (typeof textStream === 'string') {
+      async function * oneString () {
+        yield textStream
+      }
+      return oneString()
+    }
+    if (typeof textStream[Symbol.asyncIterator] === 'function') {
+      return textStream
+    }
+    if (Array.isArray(textStream)) {
+      async function * fromArray () {
+        for (let i = 0; i < textStream.length; i++) {
+          yield textStream[i]
+        }
+      }
+      return fromArray()
+    }
+    if (typeof textStream[Symbol.iterator] === 'function') {
+      async function * fromIterable () {
+        for (const x of textStream) {
+          yield x
+        }
+      }
+      return fromIterable()
+    }
+    throw new QvacErrorAddonTTS({
+      code: ERR_CODES.FAILED_TO_APPEND,
+      adds: 'runStreaming: expected string, array of strings, Iterable, or AsyncIterable'
+    })
+  }
+
+  /**
+   * Starts a {@link QvacResponse} and schedules chunk synthesis without awaiting completion
+   * (so callers can attach `onUpdate` before audio callbacks run).
+   */
+  _runTextStreamOrchestrator (asyncTextSource) {
+    const response = this._job.start()
+    this._sentenceStreamCtx = {
+      textStreamMode: true,
+      asyncTextSource,
+      chunks: [],
+      chunkIdx: 0,
+      acc: {
+        totalTime: 0,
+        audioDurationMs: 0,
+        totalSamples: 0
+      },
+      chunkResolver: null
+    }
+
+    this._sentenceStreamTextIterableDrive().catch((err) => {
+      if (this._sentenceStreamCtx && this._sentenceStreamCtx.chunkResolver) {
+        const rej = this._sentenceStreamCtx.chunkResolver.reject
+        this._sentenceStreamCtx.chunkResolver = null
+        rej(err)
+      }
+      this._sentenceStreamCtx = null
+      this._job.fail(err)
+    })
+
+    return response
+  }
+
+  async _sentenceStreamTextIterableDrive () {
+    const ctx = this._sentenceStreamCtx
+    if (!ctx || !ctx.textStreamMode) return
+    try {
+      for await (const piece of ctx.asyncTextSource) {
+        const s = String(piece).trim()
+        if (s.length === 0) continue
+        ctx.chunks.push(s)
+        ctx.chunkIdx = ctx.chunks.length - 1
+        const donePromise = new Promise((resolve, reject) => {
+          ctx.chunkResolver = { resolve, reject }
+        })
+        await this.addon.runJob({
+          type: 'text',
+          input: s
+        })
+        await donePromise
+      }
+    } catch (err) {
+      if (this._sentenceStreamCtx && this._sentenceStreamCtx.chunkResolver) {
+        const rej = this._sentenceStreamCtx.chunkResolver.reject
+        this._sentenceStreamCtx.chunkResolver = null
+        rej(err)
+      }
+      this._sentenceStreamCtx = null
+      this._job.fail(err)
+      return
+    }
+
+    const chunks = this._sentenceStreamCtx ? this._sentenceStreamCtx.chunks : []
+    const acc = this._sentenceStreamCtx
+      ? this._sentenceStreamCtx.acc
+      : { totalTime: 0, audioDurationMs: 0, totalSamples: 0 }
+    this._sentenceStreamCtx = null
+
+    if (chunks.length === 0) {
+      if (this.opts?.stats) {
+        this._job.end({
+          totalTime: 0,
+          tokensPerSecond: 0,
+          realTimeFactor: 0,
+          audioDurationMs: 0,
+          totalSamples: 0
+        })
+      } else {
+        this._job.end()
+      }
+      return
+    }
+
+    const totalChars = chunks.join('').length
+    const merged = { ...acc }
+    merged.tokensPerSecond = acc.totalTime > 0 ? totalChars / acc.totalTime : 0
+    merged.realTimeFactor =
+      acc.audioDurationMs > 0 ? (acc.totalTime * 1000.0) / acc.audioDurationMs : 0
+    if (this.opts?.stats) {
+      this._job.end(merged)
+    } else {
+      this._job.end()
+    }
+  }
+
+  /**
+   * Starts a {@link QvacResponse} and schedules chunk synthesis without awaiting completion
+   * (so callers can attach `onUpdate` before audio callbacks run).
+   */
+  _runStreamOrchestrator (text, options) {
+    const chunks = splitTtsText(String(text), {
+      language: this._config?.language,
+      locale: options.locale,
+      maxScalars: options.maxChunkScalars
+    })
+    if (chunks.length === 0) {
+      throw new QvacErrorAddonTTS({
+        code: ERR_CODES.FAILED_TO_APPEND,
+        adds: 'chunked synthesis: text produced no chunks after split'
+      })
+    }
+
+    const response = this._job.start()
+    this._sentenceStreamCtx = {
+      chunks,
+      chunkIdx: 0,
+      acc: {
+        totalTime: 0,
+        audioDurationMs: 0,
+        totalSamples: 0
+      },
+      chunkResolver: null
+    }
+
+    this._sentenceStreamDriveBody().catch((err) => {
+      if (this._sentenceStreamCtx && this._sentenceStreamCtx.chunkResolver) {
+        const rej = this._sentenceStreamCtx.chunkResolver.reject
+        this._sentenceStreamCtx.chunkResolver = null
+        rej(err)
+      }
+      this._sentenceStreamCtx = null
+      this._job.fail(err)
+    })
+
+    return response
+  }
+
+  async _sentenceStreamDriveBody () {
+    const ctx = this._sentenceStreamCtx
+    if (!ctx || ctx.textStreamMode) return
+    for (let i = 0; i < ctx.chunks.length; i++) {
+      ctx.chunkIdx = i
+      const donePromise = new Promise((resolve, reject) => {
+        ctx.chunkResolver = { resolve, reject }
+      })
+      await this.addon.runJob({
+        type: 'text',
+        input: ctx.chunks[i]
+      })
+      await donePromise
+    }
+    this._sentenceStreamCtx = null
   }
 
   async _load () {
@@ -324,6 +685,8 @@ class ONNXTTS {
       }
     }
 
+    Object.assign(ttsParams, this._getEnhancerParams())
+
     this.addon = this._createAddon(ttsParams, this._addonOutputCallback.bind(this))
     await this.addon.activate()
   }
@@ -347,6 +710,27 @@ class ONNXTTS {
     }
   }
 
+  _getEnhancerParams () {
+    const params = {}
+    if (this._enhancer && this._enhancer.type === 'lavasr') {
+      if (this._enhancer.enhance) params.enhance = true
+      if (this._enhancer.denoise) params.denoise = true
+      if (this._enhancer.backbonePath) {
+        params.enhancerBackbonePath = this._resolvePath(this._enhancer.backbonePath)
+      }
+      if (this._enhancer.specHeadPath) {
+        params.enhancerSpecHeadPath = this._resolvePath(this._enhancer.specHeadPath)
+      }
+      if (this._enhancer.denoiserPath) {
+        params.denoiserPath = this._resolvePath(this._enhancer.denoiserPath)
+      }
+    }
+    if (this._outputSampleRate != null) {
+      params.outputSampleRate = String(this._outputSampleRate)
+    }
+    return params
+  }
+
   /**
    * Instantiate the native addon with the given parameters.
    * @param {Object} configurationParams - Configuration parameters for the addon
@@ -356,6 +740,14 @@ class ONNXTTS {
   _createAddon (configurationParams, outputCb) {
     const binding = require('./binding')
     return new TTSInterface(binding, configurationParams, outputCb)
+  }
+
+  _resolvePath (filePath) {
+    if (!filePath) return ''
+    if (platform() === 'win32') {
+      return '\\\\?\\' + path.resolve(filePath)
+    }
+    return path.resolve(filePath)
   }
 
   async unload () {
@@ -380,10 +772,26 @@ class ONNXTTS {
   async _runInternal (input) {
     const response = this._job.start()
     try {
-      await this.addon.runJob({
+      const jobData = {
         type: input.type || 'text',
         input: input.input
-      })
+      }
+
+      const hasPerRequestOverrides = input.outputSampleRate !== undefined ||
+        (input.enhancer !== undefined && input.enhancer.type === 'lavasr')
+
+      if (hasPerRequestOverrides) {
+        jobData.config = {}
+        if (input.outputSampleRate !== undefined) {
+          jobData.config.outputSampleRate = String(input.outputSampleRate)
+        }
+        if (input.enhancer && input.enhancer.type === 'lavasr') {
+          if (input.enhancer.enhance !== undefined) jobData.config.enhance = input.enhancer.enhance
+          if (input.enhancer.denoise !== undefined) jobData.config.denoise = input.enhancer.denoise
+        }
+      }
+
+      await this.addon.runJob(jobData)
     } catch (error) {
       this._job.fail(error)
       throw error
@@ -392,9 +800,23 @@ class ONNXTTS {
     return response
   }
 
+  _mergeSentenceStreamStats (acc, data) {
+    const t = typeof data.totalTime === 'number' ? data.totalTime : 0
+    const a = typeof data.audioDurationMs === 'number' ? data.audioDurationMs : 0
+    const s = typeof data.totalSamples === 'number' ? data.totalSamples : 0
+    acc.totalTime += t
+    acc.audioDurationMs += a
+    acc.totalSamples += s
+  }
+
   _addonOutputCallback (addon, event, data, error) {
     if (typeof error === 'string' && error.length > 0) {
       this.logger.error(`TTS job failed with error: ${error}`)
+      if (this._sentenceStreamCtx && this._sentenceStreamCtx.chunkResolver) {
+        const rej = this._sentenceStreamCtx.chunkResolver.reject
+        this._sentenceStreamCtx.chunkResolver = null
+        rej(new Error(error))
+      }
       this._job.fail(error)
       return
     }
@@ -409,7 +831,18 @@ class ONNXTTS {
           throw err
         }
       }
-      this._job.output(data)
+      if (this._sentenceStreamCtx) {
+        const ctx = this._sentenceStreamCtx
+        const idx = ctx.chunkIdx
+        const sentenceChunk = ctx.chunks[idx] || ''
+        this._job.output({
+          outputArray: data.outputArray,
+          chunkIndex: idx,
+          sentenceChunk
+        })
+      } else {
+        this._job.output(data)
+      }
       return
     }
 
@@ -419,6 +852,34 @@ class ONNXTTS {
       ('totalTime' in data || 'audioDurationMs' in data || 'totalSamples' in data)
     ) {
       this.logger.info(`TTS job completed. Stats: ${JSON.stringify(data)}`)
+      if (this._sentenceStreamCtx) {
+        const ctx = this._sentenceStreamCtx
+        this._mergeSentenceStreamStats(ctx.acc, data)
+        if (ctx.chunkResolver) {
+          ctx.chunkResolver.resolve()
+          ctx.chunkResolver = null
+        }
+        if (ctx.textStreamMode) {
+          return
+        }
+        const isLast = ctx.chunkIdx >= ctx.chunks.length - 1
+        if (isLast) {
+          const totalChars = ctx.chunks.join('').length
+          const merged = { ...ctx.acc }
+          merged.tokensPerSecond =
+            ctx.acc.totalTime > 0 ? totalChars / ctx.acc.totalTime : 0
+          merged.realTimeFactor =
+            ctx.acc.audioDurationMs > 0
+              ? (ctx.acc.totalTime * 1000.0) / ctx.acc.audioDurationMs
+              : 0
+          if (this.opts?.stats) {
+            this._job.end(merged)
+          } else {
+            this._job.end()
+          }
+        }
+        return
+      }
       if (this.opts?.stats) {
         this._job.end(data)
       } else {
@@ -437,6 +898,13 @@ class ONNXTTS {
   }
 
   _failAndClearActiveResponse (reason) {
+    if (this._sentenceStreamCtx && this._sentenceStreamCtx.chunkResolver) {
+      this._sentenceStreamCtx.chunkResolver.reject(
+        reason instanceof Error ? reason : new Error(String(reason))
+      )
+      this._sentenceStreamCtx.chunkResolver = null
+    }
+    this._sentenceStreamCtx = null
     this._job.fail(reason)
   }
 
@@ -457,6 +925,16 @@ class ONNXTTS {
       this._config.useGPU = newConfig.useGPU
     }
 
+    if (newConfig.outputSampleRate !== undefined) this._outputSampleRate = newConfig.outputSampleRate
+    if (newConfig.enhancer !== undefined && newConfig.enhancer.type === 'lavasr') {
+      if (!this._enhancer) this._enhancer = { type: 'lavasr', enhance: false, denoise: false, backbonePath: null, specHeadPath: null, denoiserPath: null }
+      if (newConfig.enhancer.enhance !== undefined) this._enhancer.enhance = newConfig.enhancer.enhance
+      if (newConfig.enhancer.denoise !== undefined) this._enhancer.denoise = newConfig.enhancer.denoise
+      if (newConfig.enhancer.backbonePath !== undefined) this._enhancer.backbonePath = newConfig.enhancer.backbonePath
+      if (newConfig.enhancer.specHeadPath !== undefined) this._enhancer.specHeadPath = newConfig.enhancer.specHeadPath
+      if (newConfig.enhancer.denoiserPath !== undefined) this._enhancer.denoiserPath = newConfig.enhancer.denoiserPath
+    }
+
     let ttsParams
     if (this._engineType === ENGINE_SUPERTONIC) {
       ttsParams = this._getSupertonicTtsParams()
@@ -475,6 +953,8 @@ class ONNXTTS {
         ttsParams.referenceAudio = this._referenceAudio
       }
     }
+
+    Object.assign(ttsParams, this._getEnhancerParams())
 
     await this.cancel()
     this._failAndClearActiveResponse('Model was reloaded')

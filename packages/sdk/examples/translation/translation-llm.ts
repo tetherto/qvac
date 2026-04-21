@@ -25,7 +25,9 @@ try {
     stream: false,
   });
 
-  // With autodetection
+  const translatedTextExplicit = await resultExplicit.text;
+
+  // With autodetection (must await previous translate — LLM addon runs one job at a time)
   const espText = "Hola, como estas?";
   const resultAutodetect = translate({
     modelId,
@@ -35,7 +37,6 @@ try {
     stream: false,
   });
 
-  const translatedTextExplicit = await resultExplicit.text;
   const translatedTextAutodetect = await resultAutodetect.text;
 
   console.log(`Explicit source: ${engText} -> "${translatedTextExplicit}"`);

@@ -1,0 +1,177 @@
+---
+title: Fine-tuning
+description: Adapting LLMs to domain-specific tasks via LoRA — i.e., train small adapter weights on custom datasets to specialize model behavior.
+---
+
+## Overview
+
+Fine-tuning trains a [LoRA](https://arxiv.org/abs/2106.09685) (Low-Rank Adaptation) adapter on top of an LLM base model, to be used at inference time with [completion](/sdk/examples/ai-tasks/completion).
+
+Load any supported LLM using `modelType: "llm"`. Then call `finetune()` with the dataset and training settings. Training can be done in two modes:
+
+- [SFT](#sft): chat-based; enable with `assistantLossOnly: true`.
+- [Causal](#causal): raw text; default (`assistantLossOnly: false`).
+
+The output is a small `.gguf` adapter file that you can pass to `completion()` via `modelConfig.lora`.
+
+## Functions
+
+Use the following sequence of function calls:
+1. [`loadModel()`](/sdk/api/loadModel)
+2. [`finetune()`](/sdk/api/finetune)
+3. [`unloadModel()`](/sdk/api/unloadModel)
+
+For how to use each function, see [SDK — API reference](/sdk/api/).
+
+## Models
+
+You can fine-tune any [`llama.cpp`](https://github.com/ggml-org/llama.cpp)-compatible text-generation/chat model. Base model file format: `*.gguf`.
+
+For models available as constants, see [SDK — Models](/sdk/getting-started#models).
+
+## Training
+
+### SFT
+
+Supervised fine-tuning (SFT) teaches the model how to respond to prompts. Use it for chat tuning, instruction following, or any task where you want to shape assistant responses.
+
+**Dataset format:** JSONL where each line is a JSON object with a `messages` array. Supported roles: `system`, `user`, `assistant`, and `tool`. Example:
+
+```jsonl
+{"messages":[{"role":"system","content":"You are a helpful assistant."},{"role":"user","content":"What is 2+2?"},{"role":"assistant","content":"2+2 equals 4."}]}
+{"messages":[{"role":"user","content":"What is the capital of France?"},{"role":"assistant","content":"The capital of France is Paris."}]}
+```
+
+### Causal
+
+Causal fine-tuning adapts the model to a domain by training on raw text. Use it for domain adaptation, style transfer, or tasks where you want the model to better reflect specialized vocabulary, patterns, or tone.
+
+**Dataset format:** plain text file. Example:
+
+```
+This is sample training text.
+Another paragraph of content.
+```
+
+## Example
+
+The following script loads an LLM, runs fine-tuning on a chat dataset with a separate eval file, and optionally demonstrates pause/resume when invoked with `--pause-resume`:
+
+<WrapCode>
+
+```ts title="llamacpp-finetune.ts" lineNumbers
+import {
+  finetune,
+  loadModel,
+  QWEN3_600M_INST_Q4,
+  unloadModel,
+  type FinetuneHandle,
+  type FinetuneResult,
+  type FinetuneRunParams,
+} from "@qvac/sdk";
+
+const pauseResumeEnabled = process.argv.includes("--pause-resume");
+
+let modelId: string | undefined;
+let exitCode = 0;
+
+async function readProgress(
+  handle: FinetuneHandle,
+  onTick: (globalSteps: number) => void,
+) {
+  for await (const tick of handle.progressStream) {
+    const phase = tick.is_train ? "train" : "val";
+    console.log(
+      `epoch=${tick.current_epoch + 1} step=${tick.global_steps} batch=${tick.current_batch}/${tick.total_batches} ${phase} loss=${tick.loss?.toFixed(4)} acc=${tick.accuracy?.toFixed(4)} eta=${Math.round(tick.eta_ms / 1000)}s`,
+    );
+
+    onTick(tick.global_steps);
+  }
+}
+
+try {
+  modelId = await loadModel({
+    modelSrc: QWEN3_600M_INST_Q4,
+    modelType: "llm",
+    modelConfig: {
+      device: "gpu",
+      ctx_size: 512,
+    },
+  });
+
+  console.log(`Model loaded with ID: ${modelId}`);
+  const loadedModelId = modelId;
+
+  const finetuneParams: FinetuneRunParams = {
+    modelId: loadedModelId,
+    options: {
+      trainDatasetDir: "./examples/finetune/input/small_train_HF.jsonl",
+      validation: {
+        type: "dataset",
+        path: "./examples/finetune/input/small_eval_HF.jsonl",
+      },
+      numberOfEpochs: 2,
+      learningRate: 1e-4,
+      lrMin: 1e-8,
+      loraModules: "attn_q,attn_k,attn_v,attn_o,ffn_gate,ffn_up,ffn_down",
+      assistantLossOnly: true,
+      checkpointSaveSteps: 2,
+      checkpointSaveDir: "./examples/finetune/results/checkpoints",
+      outputParametersDir: "./examples/finetune/results",
+    },
+  };
+
+  const handle = finetune(finetuneParams);
+  let pauseRequested = false;
+  let pauseResultPromise: Promise<FinetuneResult> | undefined;
+
+  const progressTask = readProgress(handle, (globalSteps) => {
+    if (pauseResumeEnabled && !pauseRequested && globalSteps >= 10) {
+      pauseRequested = true;
+      console.log("Requesting a pause so the run can be resumed...");
+      pauseResultPromise = finetune({
+        modelId: loadedModelId,
+        operation: "pause",
+      });
+    }
+  });
+
+  const initialResult = await handle.result;
+  await progressTask;
+
+  if (pauseResultPromise) {
+    await pauseResultPromise;
+  }
+
+  console.log("Initial finetune result:", initialResult);
+
+  if (pauseResumeEnabled && initialResult.status === "PAUSED") {
+    console.log("Resuming from the saved checkpoint...");
+
+    const resumedHandle = finetune({
+      ...finetuneParams,
+      operation: "resume",
+    });
+    const resumedProgressTask = readProgress(resumedHandle, function () {});
+
+    const resumedResult = await resumedHandle.result;
+    await resumedProgressTask;
+
+    console.log("Resumed finetune result:", resumedResult);
+  }
+} catch (error) {
+  console.error("Error:", error);
+  exitCode = 1;
+} finally {
+  if (modelId) {
+    await unloadModel({ modelId, clearStorage: false });
+  }
+}
+
+process.exit(exitCode);
+```
+</WrapCode>
+
+<Callout type="success">
+**Tip:** all examples throughout this documentation are self-contained and runnable. For instructions on how to run them, see [SDK quickstart](/sdk/getting-started/quickstart).
+</Callout>

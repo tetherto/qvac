@@ -1,6 +1,6 @@
 # qvac-lib-infer-stable-diffusion-cpp
 
-Native C++ addon for text-to-image generation using [stable-diffusion.cpp](https://github.com/leejet/stable-diffusion.cpp), built for the Bare Runtime. Supports **Stable Diffusion 1.x / 2.x / XL / 3** and **FLUX.2 [klein]**.
+Native C++ addon for text-to-image generation using [qvac-ext-stable-diffusion.cpp](https://github.com/tetherto/qvac-ext-stable-diffusion.cpp), built for the Bare Runtime. Supports **Stable Diffusion 1.x / 2.x / XL / 3** and **FLUX.2 [klein]**.
 
 ## Table of Contents
 
@@ -19,6 +19,7 @@ Native C++ addon for text-to-image generation using [stable-diffusion.cpp](https
   - [7. Release Resources](#7-release-resources)
 - [Model File Reference](#model-file-reference)
 - [FLUX.2 Implementation Notes](#flux2-implementation-notes)
+- [Credits](#credits)
 - [License](#license)
 
 ---
@@ -35,8 +36,8 @@ Native C++ addon for text-to-image generation using [stable-diffusion.cpp](https
 | Windows | x64 | ✅ Tier 1 | Vulkan |
 
 **Dependencies:**
-- `stable-diffusion.cpp` (bundled via vcpkg overlay port)
-- `ggml` (bundled alongside stable-diffusion.cpp)
+- `qvac-ext-stable-diffusion.cpp`
+- `ggml`
 - Bare Runtime ≥ 1.24.0
 - CMake ≥ 3.25 and a C++20-capable compiler
 
@@ -146,13 +147,16 @@ Source: [`examples/generate-image.js`](./examples/generate-image.js)
 
 > **Performance note:** On an M1 MacBook Air (16 GB) with Metal enabled, loading takes ~15 s and 20 steps at 512 × 512 take ~10 minutes. Reduce `STEPS` to 4 for quick tests — FLUX.2's distilled model is designed for low step counts.
 
-## Other Exampless
+## Other Examples
 
 -   [Quickstart](./examples/quickstart.js) – Minimal text-to-image generation with SD2.1.
 -   [Generate Image (SD2.1)](./examples/generate-image-sd2.js) – Text-to-image with an SD2.1 all-in-one GGUF model.
 -   [Generate Image (SD3)](./examples/generate-image-sd3.js) – Text-to-image with SD3 Medium (safetensors, diffusion + CLIP encoders).
 -   [Generate Image (SDXL)](./examples/generate-image-sdxl.js) – Text-to-image with an SDXL base all-in-one GGUF model.
 -   [Runtime Stats](./examples/runtime-stats-sd2.js) – Run SD2.1 inference and report runtime statistics.
+-   [img2img FLUX2](./examples/img2img-flux2.js) – Transform an image with FLUX2-klein (Q8_0, in-context conditioning).
+-   [img2img FLUX2 F16](./examples/img2img-flux2-f16.js) – Transform an image with FLUX2-klein (F16 full precision).
+-   [img2img SD3](./examples/img2img-sd3.js) – Transform an image with SD3 Medium (SDEdit, flow-matching).
 
 ---
 
@@ -172,33 +176,40 @@ const path = require('bare-path')
 const MODELS_DIR = path.resolve(__dirname, './models')
 const args = {
   logger: console,
-  diskPath: MODELS_DIR,
-  modelName:  'flux-2-klein-4b-Q8_0.gguf',
-  llmModel:   'Qwen3-4B-Q4_K_M.gguf',   // Qwen3 text encoder for FLUX.2 [klein]
-  vaeModel:   'flux2-vae.safetensors'
+  files: {
+    model: path.join(MODELS_DIR, 'flux-2-klein-4b-Q8_0.gguf'),
+    llm:   path.join(MODELS_DIR, 'Qwen3-4B-Q4_K_M.gguf'),   // Qwen3 text encoder for FLUX.2 [klein]
+    vae:   path.join(MODELS_DIR, 'flux2-vae.safetensors')
+  },
+  config: { threads: 8 },
+  opts: { stats: true }
 }
 ```
 
 | Property | Required | Description |
 |----------|----------|-------------|
-| `diskPath` | ✅ | Local directory where model files are already stored |
-| `modelName` | ✅ | Diffusion model file name (all-in-one for SD1.x/2.x; diffusion-only GGUF for FLUX.2) |
+| `files` | ✅ | Object of absolute paths to model files (see below) |
+| `files.model` | ✅ | Absolute path to diffusion model file (all-in-one for SD1.x/2.x; diffusion-only GGUF for FLUX.2) |
+| `files.clipL` | — | Absolute path to separate CLIP-L text encoder (SD3) |
+| `files.clipG` | — | Absolute path to separate CLIP-G text encoder (SDXL / SD3) |
+| `files.t5Xxl` | — | Absolute path to separate T5-XXL text encoder (SD3) |
+| `files.llm` | — | Absolute path to Qwen3 LLM text encoder (FLUX.2 [klein]) |
+| `files.vae` | — | Absolute path to separate VAE file |
+| `config` | — | Native backend configuration object (see next section) |
 | `logger` | — | Logger instance (e.g. `console`) |
-| `clipLModel` | — | Separate CLIP-L text encoder (FLUX.1 / SD3) |
-| `clipGModel` | — | Separate CLIP-G text encoder (SDXL / SD3) |
-| `t5XxlModel` | — | Separate T5-XXL text encoder (FLUX.1 / SD3) |
-| `llmModel` | — | Qwen3 LLM text encoder (FLUX.2 [klein]) |
-| `vaeModel` | — | Separate VAE file |
+| `opts` | — | Additional options (e.g. `{ stats: true }`) |
 
-### 3. Create the `config` object
+### 3. Configure the native backend (`args.config`)
+
+`config` is a field on the `args` object built in step 2 — there is no separate constructor argument. The native backend reads it during `load()`.
 
 ```js
-const config = {
+args.config = {
   threads: 8  // CPU threads for tensor operations (Metal handles GPU automatically)
 }
 ```
 
-All config values are coerced to strings internally before being passed to the native layer.
+Config values are coerced to strings internally. Generation parameters (prompt, steps, seed, etc.) are JSON-serialized with their native types preserved.
 
 | Parameter | Type | Default | Description |
 |-----------|------|---------|-------------|
@@ -212,10 +223,10 @@ All config values are coerced to strings internally before being passed to the n
 ### 4. Create a Model Instance
 
 ```js
-const model = new ImgStableDiffusion(args, config)
+const model = new ImgStableDiffusion(args)
 ```
 
-The constructor stores configuration only — no memory is allocated yet.
+The constructor takes a single object containing `files`, `config`, `logger`, and `opts`. It stores configuration only — no memory is allocated yet.
 
 ### 5. Load the Model
 
@@ -223,7 +234,7 @@ The constructor stores configuration only — no memory is allocated yet.
 await model.load()
 ```
 
-This creates the native `sd_ctx_t` and loads all weights into memory. It can take 10–30 seconds depending on disk speed and model size. All model files must already be present on disk at `diskPath`.
+This creates the native `sd_ctx_t` and loads all weights into memory. It can take 10–30 seconds depending on disk speed and model size. All model files must be passed as absolute paths via the `files` object.
 
 ### 6. Run Inference
 
@@ -279,20 +290,60 @@ require('bare-fs').writeFileSync('output.png', images[0])
 
 > **Sampler note:** Do not set `sampling_method: 'euler_a'` for FLUX.2 models — it will produce random noise. Leave the field unset to let the library auto-select `euler` for flow-matching models.
 
-#### Image-to-image (not yet supported)
+#### Image-to-image (`init_image`)
 
-> **Note:** img2img is not yet wired in the JS layer — calling `model.run()` with `init_image` will throw. The parameters below are reserved for a future release.
+Pass `init_image` (a `Uint8Array` of PNG or JPEG bytes) to transform an existing image with a text prompt. Width and height are auto-detected from the image header and rounded to the nearest multiple of 8.
+
+The addon automatically selects the correct img2img strategy based on the model's prediction type:
+
+| Model family | Prediction type | Strategy | How it works |
+|-------------|----------------|----------|-------------|
+| FLUX.2 | `flux2_flow` / `flux_flow` | In-context conditioning (`ref_images`) | Input image is VAE-encoded into separate latent tokens; the transformer attends to them via joint attention with distinct RoPE positions. The target starts from pure noise, so the model preserves features while generating a fully new image. |
+| SD1.x / SD2.x / SDXL / SD3 | All others | SDEdit (`init_image`) | Input image is noised according to `strength` (0.0–1.0), then denoised with the text prompt. Lower strength preserves more of the original; higher strength allows more creative freedom. |
+
+**FLUX.2 example (in-context conditioning):**
 
 ```js
-const inputPng = require('bare-fs').readFileSync('input.png')
+const fs = require('bare-fs')
+
+const inputImage = fs.readFileSync('assets/von-neumann.jpg')
 
 const response = await model.run({
-  prompt: 'a photo of a cat in a snowy landscape',
-  init_image: inputPng,
-  strength: 0.75,  // 0.0 = no change, 1.0 = full redraw
-  steps: 20
+  prompt: 'a modern tech CEO version of this person, professional headshot',
+  init_image: inputImage,
+  cfg_scale: 1.0,
+  steps: 20,
+  guidance: 9.0,
+  seed: 42
 })
 ```
+
+**SD3 example (SDEdit):**
+
+```js
+const inputImage = fs.readFileSync('headshot.jpeg')
+
+const response = await model.run({
+  prompt: 'anime portrait, same pose, studio ghibli style, soft cel shading',
+  negative_prompt: 'photorealistic, blurry, low quality',
+  init_image: inputImage,
+  cfg_scale: 4.5,
+  steps: 30,
+  strength: 0.75,
+  sampling_method: 'euler',
+  seed: 42
+})
+```
+
+> **SDEdit img2img limitations:**
+>
+> - **Black-and-white input images** produce weaker results because the model must hallucinate all color information. Consider colorizing the image before feeding it in.
+> - **Low-resolution images** (below ~512×512) give the model less detail to preserve identity. Upscaling beforehand helps.
+> - **High `strength` values** (≥ 0.7) allow the model to deviate significantly from the input, including changing facial features, gender, or ethnicity. Use `strength` 0.35–0.55 for identity-preserving edits.
+> - **Style prompts** like "anime" or "studio ghibli" carry training-data biases that can alter the subject's appearance. Anchor the prompt with terms like "same person, same face" and use the negative prompt to block unwanted changes.
+> - **Non-multiple-of-8 images** are automatically aligned (nearest-neighbor resize to the next multiple of 8) before processing. For best quality, provide images with dimensions that are already multiples of 8.
+
+The bundled test image (`assets/von-neumann.jpg`) is a 1956 portrait of John von Neumann sourced from the U.S. Department of Energy (Public Domain). See the [Credits](#credits) section for details.
 
 ### 7. Release Resources
 
@@ -316,19 +367,19 @@ await model.unload()
 
 ### Stable Diffusion 1.x / 2.x
 
-Pass an all-in-one checkpoint directly as `modelName`. No separate encoders needed.
+Pass an all-in-one checkpoint absolute path as `files.model`. No separate encoders needed.
 
 ---
 
 ## FLUX.2 Implementation Notes
 
-This section documents non-obvious issues encountered integrating FLUX.2 [klein] into the addon and how each was resolved. These serve as a reference if the underlying `stable-diffusion.cpp` version is upgraded.
+This section documents non-obvious issues encountered integrating FLUX.2 [klein] into the addon and how each was resolved. These serve as a reference if the underlying `qvac-ext-stable-diffusion.cpp` version is upgraded.
 
 ### 1. Metal GPU backend not activated (macOS)
 
 **Symptom:** Generation ran entirely on CPU at 700%+ CPU usage; 20 steps at 512 × 512 never completed.
 
-**Root cause:** The vcpkg overlay port passed `-DGGML_METAL=ON` to CMake, which compiled the ggml Metal library (`libggml-metal.a`). However, `stable-diffusion.cpp` internally guards `ggml_backend_metal_init()` behind its own `SD_USE_METAL` preprocessor define, which is only set when `-DSD_METAL=ON` is passed — a separate flag from `GGML_METAL`.
+**Root cause:** The vcpkg overlay port passed `-DGGML_METAL=ON` to CMake, which compiled the ggml Metal library (`libggml-metal.a`). However, `qvac-ext-stable-diffusion.cpp` internally guards `ggml_backend_metal_init()` behind its own `SD_USE_METAL` preprocessor define, which is only set when `-DSD_METAL=ON` is passed — a separate flag from `GGML_METAL`.
 
 **Fix:** Changed the portfile (`vcpkg/ports/stable-diffusion-cpp/portfile.cmake`) from:
 
@@ -342,7 +393,7 @@ to:
 -DSD_METAL=${SD_GGML_METAL}
 ```
 
-`-DSD_METAL=ON` causes `stable-diffusion.cpp`'s own `CMakeLists.txt` to set `GGML_METAL=ON` *and* emit `-DSD_USE_METAL`, which activates `ggml_backend_metal_init()` at runtime.
+`-DSD_METAL=ON` causes `qvac-ext-stable-diffusion.cpp`'s own `CMakeLists.txt` to set `GGML_METAL=ON` *and* emit `-DSD_USE_METAL`, which activates `ggml_backend_metal_init()` at runtime.
 
 **Verification:** After the fix, CPU usage dropped from ~700% to ~0.5% during generation, confirming the GPU is handling the compute.
 
@@ -352,7 +403,7 @@ to:
 
 **Symptom:** Generation completed all 20 steps and produced a PNG, but the image was pure coloured noise (TV static).
 
-**Root cause:** `SdCtxConfig::prediction` defaulted to `EPS_PRED` (the classic SD1.x epsilon-prediction denoiser). When `SdModel::load()` passed this to `sd_ctx_params_t.prediction`, it overrode `stable-diffusion.cpp`'s auto-detection, forcing the wrong denoiser on a FLUX.2 flow-matching model. The correct sentinel value for auto-detection is `PREDICTION_COUNT`.
+**Root cause:** `SdCtxConfig::prediction` defaulted to `EPS_PRED` (the classic SD1.x epsilon-prediction denoiser). When `SdModel::load()` passed this to `sd_ctx_params_t.prediction`, it overrode `qvac-ext-stable-diffusion.cpp`'s auto-detection, forcing the wrong denoiser on a FLUX.2 flow-matching model. The correct sentinel value for auto-detection is `PREDICTION_COUNT`.
 
 **Fix:** Changed the default in `addon/src/handlers/SdCtxHandlers.hpp`:
 
@@ -370,7 +421,7 @@ prediction_t prediction = PREDICTION_COUNT;  // auto-detect from GGUF metadata
 
 **Symptom:** Same noise output as above (compounded with fix 2).
 
-**Root cause:** `SdCtxConfig::flowShift` defaulted to `0.0f`. For FLUX.2, `stable-diffusion.cpp` expects `INFINITY` as the sentinel meaning "use the model's embedded flow-shift value". A value of `0.0f` disabled flow-shifting entirely, breaking the entire noise schedule.
+**Root cause:** `SdCtxConfig::flowShift` defaulted to `0.0f`. For FLUX.2, `qvac-ext-stable-diffusion.cpp` expects `INFINITY` as the sentinel meaning "use the model's embedded flow-shift value". A value of `0.0f` disabled flow-shifting entirely, breaking the entire noise schedule.
 
 **Fix:**
 
@@ -388,7 +439,7 @@ float flowShift = std::numeric_limits<float>::infinity();  // use model's embedd
 
 **Symptom:** Even with fixes 1–3, the wrong sampler could be selected if passed explicitly.
 
-**Root cause:** `SdGenConfig::sampleMethod` defaulted to `EULER_A_SAMPLE_METHOD`. The `generate_image()` function in `stable-diffusion.cpp` only runs its auto-detection (`sd_get_default_sample_method()`) when `sample_method == SAMPLE_METHOD_COUNT`. Since we always passed `EULER_A` explicitly, FLUX.2 (a DiT flow-matching model that needs `EULER`) got the ancestral euler sampler instead, producing garbage.
+**Root cause:** `SdGenConfig::sampleMethod` defaulted to `EULER_A_SAMPLE_METHOD`. The `generate_image()` function in `qvac-ext-stable-diffusion.cpp` only runs its auto-detection (`sd_get_default_sample_method()`) when `sample_method == SAMPLE_METHOD_COUNT`. Since we always passed `EULER_A` explicitly, FLUX.2 (a DiT flow-matching model that needs `EULER`) got the ancestral euler sampler instead, producing garbage.
 
 **Fix:** Changed the default in `addon/src/handlers/SdGenHandlers.hpp`:
 
@@ -402,7 +453,7 @@ sample_method_t sampleMethod = SAMPLE_METHOD_COUNT;  // auto (euler for FLUX, eu
 scheduler_t     scheduler    = SCHEDULER_COUNT;      // auto
 ```
 
-With these sentinel values, `stable-diffusion.cpp` selects `euler` for DiT/FLUX models and `euler_a` for SD1.x/SD2.x automatically.
+With these sentinel values, `qvac-ext-stable-diffusion.cpp` selects `euler` for DiT/FLUX models and `euler_a` for SD1.x/SD2.x automatically.
 
 ---
 
@@ -410,7 +461,7 @@ With these sentinel values, `stable-diffusion.cpp` selects `euler` for DiT/FLUX 
 
 **Symptom:** Minor correctness difference vs reference CLI output.
 
-**Root cause:** `SdCtxConfig` defaulted to `rngType = CPU_RNG` (Mersenne Twister). `sd_ctx_params_init()` in `stable-diffusion.cpp` sets `CUDA_RNG` (the philox RNG — named `CUDA_RNG` for historical reasons but not GPU-specific). The philox RNG is the expected default across all platforms.
+**Root cause:** `SdCtxConfig` defaulted to `rngType = CPU_RNG` (Mersenne Twister). `sd_ctx_params_init()` in `qvac-ext-stable-diffusion.cpp` sets `CUDA_RNG` (the philox RNG — named `CUDA_RNG` for historical reasons but not GPU-specific). The philox RNG is the expected default across all platforms.
 
 **Fix:**
 
@@ -428,7 +479,7 @@ rng_type_t samplerRngType = RNG_TYPE_COUNT; // auto
 
 ### Summary of default alignment
 
-The underlying pattern across all these fixes is the same: our C++ config structs had concrete default values that *overrode* `stable-diffusion.cpp`'s own sentinel-based auto-detection. The correct approach is to use the same sentinel values that `sd_ctx_params_init()` and `sd_sample_params_init()` set, and only pass concrete values when the caller explicitly requests them.
+The underlying pattern across all these fixes is the same: our C++ config structs had concrete default values that *overrode* `qvac-ext-stable-diffusion.cpp`'s own sentinel-based auto-detection. The correct approach is to use the same sentinel values that `sd_ctx_params_init()` and `sd_sample_params_init()` set, and only pass concrete values when the caller explicitly requests them.
 
 | Field | Wrong default | Correct default | Effect of wrong value |
 |-------|--------------|-----------------|----------------------|
@@ -438,6 +489,16 @@ The underlying pattern across all these fixes is the same: our C++ config struct
 | `scheduler` | `DISCRETE_SCHEDULER` | `SCHEDULER_COUNT` | Wrong schedule for FLUX.2 |
 | `rng_type` | `CPU_RNG` | `CUDA_RNG` | Different noise seed generation vs reference |
 | `ggml_metal` cmake flag | `-DGGML_METAL=ON` | `-DSD_METAL=ON` | Metal library compiled but never initialised |
+
+---
+
+## Credits
+
+### Test Image
+
+`assets/von-neumann.jpg` — **John von Neumann** (1956).
+Source: U.S. Department of Energy, File ID: HD.3F.191.
+This image is in the **Public Domain** as a work of the U.S. Federal Government.
 
 ---
 

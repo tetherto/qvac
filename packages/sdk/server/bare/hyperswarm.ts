@@ -3,6 +3,7 @@ import Hyperswarm from "hyperswarm";
 import crypto from "bare-crypto";
 import { envSchema, type FirewallConfig } from "@/schemas/provide";
 import { getSDKConfig } from "@/server/bare/registry/config-registry";
+import { registerSwarm, unregisterSwarm } from "@/server/bare/runtime-lifecycle";
 import { getServerLogger } from "@/logging";
 
 const logger = getServerLogger();
@@ -80,7 +81,7 @@ function createSwarm(firewallConfig?: FirewallConfig) {
   return new Hyperswarm(swarmOptions);
 }
 
-let swarm: Hyperswarm;
+let swarm: Hyperswarm | null = null;
 
 const activeProviderTopics = new Set<string>();
 
@@ -93,6 +94,7 @@ export function getSwarm({
     return swarm;
   }
   swarm = createSwarm(firewallConfig);
+  registerSwarm(swarm, { label: "shared-swarm", createdAt: Date.now() });
   return swarm;
 }
 
@@ -109,8 +111,17 @@ export function hasActiveProviders(): boolean {
 }
 
 export async function destroySwarm() {
-  if (swarm) {
+  if (!swarm) return;
+
+  const ref = swarm;
+  swarm = null;
+
+  try {
+    await ref.destroy();
+    unregisterSwarm(ref);
     activeProviderTopics.clear();
-    return swarm.destroy();
+  } catch (error) {
+    if (swarm === null) swarm = ref;
+    throw error;
   }
 }

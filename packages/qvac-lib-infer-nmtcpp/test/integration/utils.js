@@ -2,6 +2,7 @@
 
 const fs = require('bare-fs')
 const path = require('bare-path')
+const os = require('bare-os')
 const process = require('bare-process')
 
 // ============================================================================
@@ -13,6 +14,49 @@ const platform = process.platform
 
 /** Whether running on mobile device (iOS or Android) */
 const isMobile = platform === 'ios' || platform === 'android'
+
+// ============================================================================
+// Singleton Performance Reporter
+// ============================================================================
+
+// Dynamic require via path.join prevents bare-pack from statically resolving
+// the path during mobile bundling (the script lives outside the addon package).
+let createPerformanceReporter
+const _scriptBase = path.join('..', '..', '..', '..', 'scripts', 'test-utils')
+try {
+  const perfReporterMod = require(path.join(_scriptBase, 'performance-reporter'))
+  perfReporterMod.configure({ fs, path, process, os })
+  createPerformanceReporter = perfReporterMod.createPerformanceReporter
+} catch (_) {
+  createPerformanceReporter = function (opts) {
+    return {
+      record () {},
+      toJSON () { return { schema_version: '1.0', addon: opts.addon, results: [] } },
+      writeReport () {},
+      writeStepSummary () {},
+      get length () { return 0 }
+    }
+  }
+}
+
+const _perfReporter = createPerformanceReporter({
+  addon: 'nmtcpp',
+  addonType: 'translation'
+})
+
+const _reportPath = path.resolve(__dirname, '../../test/results/performance-report.json')
+let _reportScheduled = false
+
+function _scheduleReportWrite () {
+  if (_reportScheduled) return
+  _reportScheduled = true
+  process.on('exit', () => {
+    if (_perfReporter.length > 0) {
+      _perfReporter.writeReport(_reportPath)
+      _perfReporter.writeStepSummary()
+    }
+  })
+}
 
 // ============================================================================
 // Test Timeouts
@@ -137,10 +181,8 @@ function loadConfigFromAssets (filename) {
 
 /**
  * Ensures IndicTrans model is available
- * Uses INDICTRANS_MODEL_PATH env var or downloads from S3 on mobile
- *
  * Desktop: Expects model at ../../model/indictrans/ggml-indictrans2-en-indic-dist-200M-q4_0.bin
- * Mobile: Downloads from presigned S3 URL configured in indictrans-model-urls.json
+ * Mobile: Downloads from presigned URL configured in indictrans-model-urls.json
  *
  * @returns {Promise<string>} Path to IndicTrans model file
  * @throws {Error} If model not found/available or corrupted (< 100MB)
@@ -165,7 +207,7 @@ async function ensureIndicTransModel () {
     throw new Error(`IndicTrans model not found at ${modelPath}. Please download it first.`)
   }
 
-  // Mobile: Download from presigned S3 URL
+  // Mobile: Download from presigned URL
   const configFilename = 'indictrans-model-urls.json'
   const urlConfig = loadConfigFromAssets(configFilename)
 
@@ -195,8 +237,7 @@ async function ensureIndicTransModel () {
  *
  * Download priority:
  *   1. Check local path (../../model/bergamot/enit/)
- *   2. Download from Hyperdrive (if key available for the pair)
- *   3. Fallback: download directly from Firefox Remote Settings CDN
+ *   2. Fallback: download directly from Firefox Remote Settings CDN
  *
  * @returns {Promise<string>} Path to Bergamot model directory
  * @throws {Error} If model files not found/available
@@ -218,7 +259,7 @@ async function ensureBergamotModel () {
     }
   }
 
-  // Not found locally — download via Hyperdrive (primary) or Firefox CDN (fallback)
+  // Not found locally — download from Firefox CDN
   const writableRoot = isMobile ? (global.testDir || '/tmp') : path.resolve(__dirname, '../..')
   const destDir = path.join(writableRoot, 'model', 'bergamot', 'enit')
 
@@ -333,6 +374,17 @@ function formatPerformanceMetrics (label, metrics) {
   const totalSeconds = (totalTimeMs / 1000).toFixed(2)
   const tpsValue = typeof tps === 'number' ? tps.toFixed(2) : '0.00'
   const decodeTimeMs = typeof decodeTime === 'number' ? decodeTime : 0
+
+  _perfReporter.record(label, {
+    total_time_ms: Math.round(totalTimeMs),
+    decode_time_ms: Math.round(decodeTimeMs),
+    generated_tokens: generatedTokens || null,
+    tps: typeof tps === 'number' ? parseFloat(tpsValue) : null
+  }, {
+    input: prompt || null,
+    output: fullOutput || null
+  })
+  _scheduleReportWrite()
 
   return `${label} Performance Metrics:
     - Total time: ${totalTimeMs.toFixed(0)}ms (${totalSeconds}s)

@@ -5,6 +5,7 @@ const createLlmTest = (
   text: string,
   to: string,
   opts: { from?: string; context?: string; estimatedDurationMs?: number } = {},
+  suites?: string[],
 ): TestDefinition => ({
   testId,
   params: {
@@ -15,6 +16,7 @@ const createLlmTest = (
     ...(opts.context && { context: opts.context }),
   },
   expectation: { validation: "type", expectedType: "string" },
+  ...(suites && { suites }),
   metadata: {
     category: "translation-llm",
     dependency: "llm",
@@ -27,6 +29,7 @@ export const llmEnEs = createLlmTest(
   "Hello, how are you today?",
   "es",
   { from: "en" },
+  ["smoke"],
 );
 
 export const llmEnFr = createLlmTest(
@@ -53,6 +56,7 @@ export const llmStreaming: TestDefinition = {
   testId: "translation-llm-streaming",
   params: { text: "Hello, how are you today?", from: "en", to: "es", resource: "llm" },
   expectation: { validation: "type", expectedType: "string" },
+  suites: ["smoke"],
   metadata: { category: "translation-llm", dependency: "llm", estimatedDurationMs: 30000 },
 };
 

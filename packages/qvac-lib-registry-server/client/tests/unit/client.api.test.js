@@ -17,6 +17,8 @@ test('client api surface', async t => {
   t.ok(QVACRegistryClient.prototype.findBy, 'has findBy method')
   t.ok(QVACRegistryClient.prototype.ready, 'has ready method')
   t.ok(QVACRegistryClient.prototype.close, 'has close method')
+  t.ok(QVACRegistryClient.prototype.suspend, 'has suspend method')
+  t.ok(QVACRegistryClient.prototype.resume, 'has resume method')
 })
 
 test('client find methods are async functions', async t => {
@@ -27,4 +29,6 @@ test('client find methods are async functions', async t => {
   t.ok(QVACRegistryClient.prototype.findModelsByName.constructor.name === 'AsyncFunction', 'findModelsByName is async')
   t.ok(QVACRegistryClient.prototype.findModelsByQuantization.constructor.name === 'AsyncFunction', 'findModelsByQuantization is async')
   t.ok(QVACRegistryClient.prototype.findBy.constructor.name === 'AsyncFunction', 'findBy is async')
+  t.ok(QVACRegistryClient.prototype.suspend.constructor.name === 'AsyncFunction', 'suspend is async')
+  t.ok(QVACRegistryClient.prototype.resume.constructor.name === 'AsyncFunction', 'resume is async')
 })

@@ -59,7 +59,11 @@ Proceed? (y/n)
    ```bash
    git checkout -b release-<package>-<version>
    ```
-3. **Do NOT push.** Instead, trigger the release workflow manually:
+3. Push the release branch to remote (required for workflow dispatch to find the ref):
+   ```bash
+   git push origin release-<package>-<version>
+   ```
+4. Trigger the release workflow manually:
    ```bash
    gh workflow run "on-merge-<package>.yml" --repo tetherto/qvac --ref release-<package>-<version>
    ```
@@ -102,7 +106,43 @@ Once CI completes successfully:
      Branch: release-<package>-<version>
    ```
 
-### Step 6: Switch back to main
+### Step 6: Verify public access
+
+Verify the published package is publicly accessible without authentication by installing it in a clean temp directory with no npm token:
+
+```bash
+# Create a temp directory and install without any auth
+TMPDIR=$(mktemp -d)
+cd $TMPDIR
+echo "registry=https://registry.npmjs.org/" > .npmrc
+npm install <npm-package-name>@<version> --ignore-scripts --no-package-lock
+```
+
+If the install succeeds, the package is publicly accessible. If it fails with a 401/403, the package may still be private — flag this to the user.
+
+**Sanity checks on the installed package:**
+
+```bash
+# Verify the tarball contents look correct
+npm pack <npm-package-name>@<version> --pack-destination $TMPDIR
+tar tf $TMPDIR/<tarball-filename> | head -20
+
+# Check that key files are present in the installed package:
+ls $TMPDIR/node_modules/<npm-package-name>/
+# Expected: package.json, README.md, index.js (or similar entry point), prebuilds/ (for addons)
+
+# Verify package.json version matches
+node -e "console.log(require('$TMPDIR/node_modules/<npm-package-name>/package.json').version)"
+```
+
+Clean up:
+```bash
+rm -rf $TMPDIR
+```
+
+If any check fails, report the issue to the user before proceeding.
+
+### Step 7: Switch back to main
 
 ```bash
 git checkout main
@@ -117,6 +157,6 @@ git checkout main
 
 ## Important notes
 
-- This skill creates a local release branch and triggers CI manually — it does NOT push to remote.
+- This skill creates a local release branch, pushes it to remote, and triggers CI manually.
 - The on-merge workflow handles building and publishing — do not manually publish.
 - Release branches are never merged back to main automatically. If main needs the changes, a separate PR is required.

@@ -49,13 +49,16 @@ jobs:
     if: needs.authorize.outputs.allowed == 'true'
     needs: authorize
     runs-on: ubuntu-latest
-    environment: release
     steps:
+      - name: Checkout code
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # 6.0.2
+        with:
+          fetch-depth: 0
+
       - name: Run Sanity checks
-        uses: tetherto/qvac-devops/.github/actions/sanity-checks@v1.1.8
+        uses: ./.github/actions/sanity-checks
         with:
           secret-token: ${{ secrets.GITHUB_TOKEN }}
-          npm-token: ${{ secrets.NPM_TOKEN }}
           pat-token: ${{ secrets.PAT_TOKEN }}
           run-integration: ${{ needs.authorize.outputs.allowed == 'true' }}
           workdir: packages/lib-infer-diffusion
@@ -72,7 +75,7 @@ jobs:
 
   cpp-lint:
     if: needs.authorize.outputs.allowed == 'true'
-    uses: tetherto/qvac-devops/.github/workflows/cpp-lint.yaml@v1.1.8
+    uses: ./.github/workflows/cpp-lint.yaml
     needs: authorize
     secrets: inherit
     with:
@@ -93,16 +96,6 @@ jobs:
         uses: actions/setup-node@53b83947a5a98c8d113130e565377fae1a50d02f # 6.3.0
         with:
           node-version: 20
-
-      - name: Configure npm auth
-        working-directory: packages/lib-infer-diffusion
-        run: |
-          cat > .npmrc <<NPMRC
-          registry=https://registry.npmjs.org/
-          @qvac:registry=https://registry.npmjs.org/
-          //registry.npmjs.org/:_authToken=${{ secrets.NPM_TOKEN }}
-          NPMRC
-
       - name: Install dependencies
         working-directory: packages/lib-infer-diffusion
         run: npm install
@@ -110,6 +103,15 @@ jobs:
       - name: Type declaration check
         working-directory: packages/lib-infer-diffusion
         run: npm run test:dts
+
+      - name: Run lint and unit tests
+        id: run_lint_and_unit_tests
+        uses: ./.github/actions/run-lint-and-unit-tests
+        with:
+          gpr-token: ${{ secrets.GITHUB_TOKEN }}
+          pat-token: ${{ secrets.GITHUB_TOKEN }}
+          registry-type: gpr
+          workdir: packages/lib-infer-diffusion
 
   prebuild:
     needs: [authorize, sanity-checks]
@@ -165,7 +167,7 @@ jobs:
         ts-checks,
       ]
     if: always()
-    uses: tetherto/qvac-devops/.github/workflows/public-pr.yml@v1.1.8
+    uses: ./.github/workflows/public-pr.yml
     permissions:
       contents: read
       pull-requests: write

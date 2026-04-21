@@ -31,6 +31,7 @@ jobs:
     permissions:
       contents: write
       pull-requests: write
+      id-token: write
 
     strategy:
       fail-fast: false
@@ -78,9 +79,7 @@ jobs:
     name: ${{ matrix.platform }}-${{ matrix.arch }}${{ matrix.tags }}
 
     env:
-      # monorepo: keep cache under the package dir to avoid cross-package collisions
       PKG_DIR: packages/qvac-lib-infer-onnx
-      VCPKG_BINARY_SOURCES: "clear;files,${{ github.workspace }}/packages/qvac-lib-infer-onnx/vcpkg/cache,readwrite"
       VCPKG_BUILD_TYPE: release
 
     steps:
@@ -122,70 +121,11 @@ jobs:
           chmod +x llvm.sh
           sudo ./llvm.sh 19 all
 
-      - if: ${{ matrix.variant == 'ubuntu' }}
-        name: Install ccache on Linux
-        run: sudo apt-get install -y ccache
-
-      - if: ${{ startsWith(matrix.os, 'macos') }}
-        name: Install ccache on macOS
-        run: brew install ccache
-
-      - if: ${{ matrix.os != 'windows-2022' }}
-        name: Configure ccache
-        run: |
-          ccache --set-config=max_size=2G
-          ccache --set-config=compression=true
-          ccache -z
-
-      - if: ${{ matrix.os != 'windows-2022' }}
-        name: Restore ccache cache
-        id: cache-ccache
-        uses: actions/cache/restore@668228422ae6a00e4ad889ee87cd7109ec5666a7 # 5.0.4
-        with:
-          path: ~/.cache/ccache
-          key: ccache-${{ matrix.platform }}-${{ matrix.arch }}${{ matrix.tags }}-${{ github.sha }}
-          restore-keys: |
-            ccache-${{ matrix.platform }}-${{ matrix.arch }}${{ matrix.tags }}-
-            ccache-${{ matrix.platform }}-${{ matrix.arch }}-
-
       - if: ${{ matrix.os == 'windows-2022' }}
         name: Configure windows runner
         run: |
           git config --system core.longpaths true
           choco upgrade llvm -y --no-progress
-
-      - if: ${{ matrix.os == 'windows-2022' }}
-        name: Install and configure ccache on Windows
-        shell: pwsh
-        run: |
-          # Download ccache directly from GitHub releases
-          $ccacheVersion = "4.10.2"
-          $ccacheUrl = "https://github.com/ccache/ccache/releases/download/v$ccacheVersion/ccache-$ccacheVersion-windows-x86_64.zip"
-          $ccacheZip = "$env:TEMP\ccache.zip"
-          $ccacheDir = "C:\ccache"
-
-          Invoke-WebRequest -Uri $ccacheUrl -OutFile $ccacheZip
-          Expand-Archive -Path $ccacheZip -DestinationPath $env:TEMP -Force
-          New-Item -ItemType Directory -Path $ccacheDir -Force | Out-Null
-          Move-Item -Path "$env:TEMP\ccache-$ccacheVersion-windows-x86_64\*" -Destination $ccacheDir -Force
-
-          # Add to PATH for subsequent steps
-          echo "C:\ccache" | Out-File -FilePath $env:GITHUB_PATH -Encoding utf8 -Append
-
-          # Configure ccache
-          & "C:\ccache\ccache.exe" --set-config=max_size=2G
-          & "C:\ccache\ccache.exe" --set-config=compression=true
-          & "C:\ccache\ccache.exe" -z
-
-      - if: ${{ matrix.os == 'windows-2022' }}
-        name: Restore ccache cache (Windows)
-        id: cache-ccache-win
-        uses: actions/cache/restore@668228422ae6a00e4ad889ee87cd7109ec5666a7 # 5.0.4
-        with:
-          path: ~\AppData\Local\ccache
-          key: ccache-${{ matrix.platform }}-${{ matrix.arch }}-${{ github.sha }}
-          restore-keys: |
-            ccache-${{ matrix.platform }}-${{ matrix.arch }}-
 
       - name: Checkout repository
         uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # 6.0.2
@@ -194,43 +134,21 @@ jobs:
           ref: ${{ inputs.ref || github.ref }}
           token: ${{ secrets.PAT_TOKEN }}
 
-      - name: Setup node
-        uses: actions/setup-node@53b83947a5a98c8d113130e565377fae1a50d02f # 6.3.0
+      - name: Setup AWS + Windows CLI
+        uses: tetherto/qvac/.github/actions/setup-aws-prebuild@0bbdca93da303a0b1634ba14a89cec085621078d
         with:
-          node-version: lts/*
+          role-to-assume: ${{ secrets.AWS_OIDC_ROLE_ARN }}
 
-      - name: Configure scoped registry for @tetherto and @qvac packages
-        working-directory: ${{ env.PKG_DIR }}
+      - name: Setup vcpkg cache
+        uses: tetherto/qvac/.github/actions/setup-vcpkg-cache@0bbdca93da303a0b1634ba14a89cec085621078d
         env:
-          GPR_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-          NPM_TOKEN: ${{ secrets.NPM_TOKEN }}
-          GIT_PAT: ${{ secrets.PAT_TOKEN }}
-        shell: bash
-        run: |
-          echo "Configuring scoped registry for @tetherto and @qvac packages..."
-          set -eu
-          echo "Writing .npmrc for dual registry install…"
-          cat > .npmrc <<NPMRC
-          always-auth=true
-          registry=https://registry.npmjs.org/
-          @qvac:registry=https://registry.npmjs.org/
-          @tetherto:registry=https://npm.pkg.github.com/
-          //registry.npmjs.org/:_authToken=${NPM_TOKEN}
-          //npm.pkg.github.com/:_authToken=${GIT_PAT}
-          NPMRC
+          MODEL_S3_BUCKET: ${{ secrets.MODEL_S3_BUCKET }}
+        with:
+          platform: ${{ matrix.platform }}
+          arch: ${{ matrix.arch }}
 
-          # Optional: make private git deps work without prompting
-          if [ -n "${GIT_PAT:-}" ]; then
-            git config --global url."https://${GIT_PAT}:@github.com/".insteadOf "https://github.com/"
-            git config --global url."https://${GIT_PAT}:@github.com/".insteadOf "git@github.com:"
-          else
-            # Using the workflow's GITHUB_TOKEN for git clones when possible
-            git config --global url."https://${{ github.token }}:@github.com/".insteadOf "https://github.com/"
-            git config --global url."https://${{ github.token }}:@github.com/".insteadOf "git@github.com:"
-          fi
-
-      - name: Install global dependencies
-        run: npm install -g bare-runtime bare-make
+      - name: Setup Bare tooling
+        uses: tetherto/qvac/.github/actions/setup-bare-tooling@0bbdca93da303a0b1634ba14a89cec085621078d
 
       - if: ${{ matrix.os == 'windows-2022' && matrix.arch == 'arm64' }}
         name: Rename win sdk folder to disable it
@@ -314,31 +232,9 @@ jobs:
         working-directory: ${{ env.PKG_DIR }}
         run: npm install
 
-      - name: Create vcpkg cache location
-        shell: bash
-        working-directory: ${{ env.PKG_DIR }}
-        run: mkdir -p vcpkg/cache
-
-      - name: Restore vcpkg cache
-        id: cache-vcpkg
-        uses: actions/cache/restore@668228422ae6a00e4ad889ee87cd7109ec5666a7 # 5.0.4
-        with:
-          path: ${{ env.PKG_DIR }}/vcpkg/cache
-          key: vcpkg-v3-${{ matrix.platform }}-${{ matrix.arch }}${{ matrix.tags }}-${{ hashFiles('packages/qvac-lib-infer-onnx/vcpkg.json', 'packages/qvac-lib-infer-onnx/vcpkg-configuration.json', 'packages/qvac-lib-infer-onnx/vcpkg-override-triplets/**') }}
-          restore-keys: |
-            vcpkg-v3-${{ matrix.platform }}-${{ matrix.arch }}${{ matrix.tags }}-
-            vcpkg-v3-${{ matrix.platform }}-${{ matrix.arch }}-
-
       - name: Generate
         working-directory: ${{ env.PKG_DIR }}
-        run: bare-make generate --platform ${{ matrix.platform }} --arch ${{ matrix.arch }} ${{ matrix.flags }} -D CMAKE_C_COMPILER_LAUNCHER=ccache -D CMAKE_CXX_COMPILER_LAUNCHER=ccache
-
-      - if: ${{ steps.cache-vcpkg.outputs.cache-hit != 'true' }}
-        name: Save vcpkg cache
-        uses: actions/cache/save@668228422ae6a00e4ad889ee87cd7109ec5666a7 # 5.0.4
-        with:
-          path: ${{ env.PKG_DIR }}/vcpkg/cache
-          key: vcpkg-v3-${{ matrix.platform }}-${{ matrix.arch }}${{ matrix.tags }}-${{ hashFiles('packages/qvac-lib-infer-onnx/vcpkg.json', 'packages/qvac-lib-infer-onnx/vcpkg-configuration.json', 'packages/qvac-lib-infer-onnx/vcpkg-override-triplets/**') }}
+        run: bare-make generate --platform ${{ matrix.platform }} --arch ${{ matrix.arch }} ${{ matrix.flags }}
 
       - name: Run bare-make build
         working-directory: ${{ env.PKG_DIR }}
@@ -359,23 +255,6 @@ jobs:
             find prebuilds -name "*.bare" -exec strip {} \;
           fi
 
-      - name: Show ccache stats
-        run: ccache -s
-
-      - if: ${{ matrix.os != 'windows-2022' && steps.cache-ccache.outputs.cache-hit != 'true' }}
-        name: Save ccache cache
-        uses: actions/cache/save@668228422ae6a00e4ad889ee87cd7109ec5666a7 # 5.0.4
-        with:
-          path: ~/.cache/ccache
-          key: ccache-${{ matrix.platform }}-${{ matrix.arch }}${{ matrix.tags }}-${{ github.sha }}
-
-      - if: ${{ matrix.os == 'windows-2022' && steps.cache-ccache-win.outputs.cache-hit != 'true' }}
-        name: Save ccache cache (Windows)
-        uses: actions/cache/save@668228422ae6a00e4ad889ee87cd7109ec5666a7 # 5.0.4
-        with:
-          path: ~\AppData\Local\ccache
-          key: ccache-${{ matrix.platform }}-${{ matrix.arch }}-${{ github.sha }}
-
       - uses: actions/upload-artifact@bbbca2ddaa5d8feaa63e36b76fdaad77386f024f # 7.0.0
         with:
           name: onnx-${{ matrix.platform }}-${{ matrix.arch }}${{ matrix.tags }}
@@ -383,22 +262,15 @@ jobs:
 
   merge:
     runs-on: ubuntu-latest
+    needs: prebuild
     permissions:
       contents: write
-    needs: prebuild
     steps:
       - name: Download all build artifacts
         uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # 8.0.1
         with:
           path: prebuilds
           merge-multiple: true
-
-      - name: Replicate android artifacts
-        run: |
-          mkdir -p prebuilds/android-arm prebuilds/android-ia32 prebuilds/android-x64
-          cp -rv prebuilds/android-arm64/* prebuilds/android-arm/
-          cp -rv prebuilds/android-arm64/* prebuilds/android-x64/
-          cp -rv prebuilds/android-arm64/* prebuilds/android-ia32/
 
       - name: Upload merged artifacts
         uses: actions/upload-artifact@bbbca2ddaa5d8feaa63e36b76fdaad77386f024f # 7.0.0

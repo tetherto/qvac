@@ -1,7 +1,6 @@
 'use strict'
 
 const LlmLlamacpp = require('../index')
-const FilesystemDL = require('@qvac/dl-filesystem')
 const path = require('bare-path')
 const fs = require('bare-fs')
 const process = require('bare-process')
@@ -65,20 +64,19 @@ function extractToolCalls (response) {
 }
 
 async function loadModel (dirPath, modelName, config) {
-  const loader = new FilesystemDL({ dirPath })
+  const modelPath = path.join(dirPath, modelName)
   const model = new LlmLlamacpp({
-    loader,
-    modelName,
-    diskPath: dirPath,
+    files: { model: [modelPath] },
+    config,
     logger: console,
     opts: { stats: true }
-  }, config)
+  })
   await model.load()
-  return { model, loader }
+  return { model }
 }
 
-async function runAndCollect (model, prompt) {
-  const response = await model.run(prompt)
+async function runAndCollect (model, prompt, runOptions) {
+  const response = await model.run(prompt, runOptions)
   const chunks = []
   await response.onUpdate(data => { chunks.push(data) }).await()
   return { output: chunks.join(''), stats: response.stats }
@@ -102,22 +100,23 @@ async function main () {
     tools_at_end: 'true'
   }
 
-  const { model, loader } = await loadModel(dirPath, modelName, config)
+  const { model } = await loadModel(dirPath, modelName, config)
   const cachePath = path.join(dirPath, 'test-tool-removal.bin')
   try { fs.unlinkSync(cachePath) } catch (_) {}
 
   let lastResponse = null
 
   try {
+    const cacheOpts = { cacheKey: cachePath }
+
     // ── Turn 1: provide getWeather, ask about weather ──
     console.log('── Turn 1: tools=[getWeather], ask about weather ──')
     const prompt1 = [
-      { role: 'session', content: cachePath },
       { role: 'system', content: 'You are a helpful assistant. You must use tools when available. Do not answer without using a tool.' },
       { role: 'user', content: 'What is the weather in Paris?' },
       TOOL_WEATHER
     ]
-    const r1 = await runAndCollect(model, prompt1)
+    const r1 = await runAndCollect(model, prompt1, cacheOpts)
     lastResponse = stripInternalBlocks(r1.output)
     const calls1 = extractToolCalls(r1.output)
     console.log(`   Response tools called: [${calls1.join(', ') || 'none'}]`)
@@ -128,12 +127,11 @@ async function main () {
     // ── Turn 2: REMOVE getWeather, provide calculate instead ──
     console.log('── Turn 2: tools=[calculate] (getWeather REMOVED), ask to calculate ──')
     const prompt2 = [
-      { role: 'session', content: cachePath },
       { role: 'assistant', content: lastResponse },
       { role: 'user', content: 'Calculate 256 * 128' },
       TOOL_CALCULATOR
     ]
-    const r2 = await runAndCollect(model, prompt2)
+    const r2 = await runAndCollect(model, prompt2, cacheOpts)
     lastResponse = stripInternalBlocks(r2.output)
     const calls2 = extractToolCalls(r2.output)
     console.log(`   Response tools called: [${calls2.join(', ') || 'none'}]`)
@@ -145,12 +143,11 @@ async function main () {
     console.log('── Turn 3: tools=[calculate] (getWeather still removed), ask about weather ──')
     console.log('   This is the KEY test: model should NOT call getWeather (it was removed)')
     const prompt3 = [
-      { role: 'session', content: cachePath },
       { role: 'assistant', content: lastResponse },
       { role: 'user', content: 'What is the weather in London?' },
       TOOL_CALCULATOR
     ]
-    const r3 = await runAndCollect(model, prompt3)
+    const r3 = await runAndCollect(model, prompt3, cacheOpts)
     lastResponse = stripInternalBlocks(r3.output)
     const calls3 = extractToolCalls(r3.output)
     console.log(`   Response tools called: [${calls3.join(', ') || 'none'}]`)
@@ -163,12 +160,11 @@ async function main () {
     console.log('── Turn 4: tools=[getWeather] (calculate REMOVED), ask to calculate ──')
     console.log('   Model should NOT call calculate (it was removed)')
     const prompt4 = [
-      { role: 'session', content: cachePath },
       { role: 'assistant', content: lastResponse },
       { role: 'user', content: 'Calculate 999 / 3' },
       TOOL_WEATHER
     ]
-    const r4 = await runAndCollect(model, prompt4)
+    const r4 = await runAndCollect(model, prompt4, cacheOpts)
     lastResponse = stripInternalBlocks(r4.output)
     const calls4 = extractToolCalls(r4.output)
     console.log(`   Response tools called: [${calls4.join(', ') || 'none'}]`)
@@ -197,16 +193,15 @@ async function main () {
       : '  FAILURES DETECTED — removed tools leaked through the cache')
   } finally {
     await model.unload()
-    await loader.close()
     try { fs.unlinkSync(cachePath) } catch (_) {}
   }
 }
 
-// ─── Same test but with tools_in_system (reset+replay) ─────────────────────
+// ─── Same test but with tools_in_system (full replay) ──────────────────────
 
 async function mainInSystem () {
   console.log('\n\n')
-  console.log('Test: tool removal correctness with tools_in_system (reset+replay)')
+  console.log('Test: tool removal correctness with tools_in_system (full replay)')
   console.log('='.repeat(70))
   console.log('')
 
@@ -223,7 +218,7 @@ async function mainInSystem () {
     tools_at_end: 'false'
   }
 
-  const { model, loader } = await loadModel(dirPath, modelName, config)
+  const { model } = await loadModel(dirPath, modelName, config)
   const cachePath = path.join(dirPath, 'test-tool-removal-insystem.bin')
   try { fs.unlinkSync(cachePath) } catch (_) {}
 
@@ -231,15 +226,16 @@ async function mainInSystem () {
   const history = [] // accumulate {role, content} for replay
 
   try {
+    const cacheOpts = { cacheKey: cachePath }
+
     // ── Turn 1: provide getWeather, ask about weather ──
     console.log('── Turn 1: tools=[getWeather], ask about weather ──')
     const prompt1 = [
-      { role: 'session', content: cachePath },
       { role: 'system', content: SYSTEM },
       { role: 'user', content: 'What is the weather in Paris?' },
       TOOL_WEATHER
     ]
-    const r1 = await runAndCollect(model, prompt1)
+    const r1 = await runAndCollect(model, prompt1, cacheOpts)
     history.push({ role: 'user', content: 'What is the weather in Paris?' })
     history.push({ role: 'assistant', content: stripInternalBlocks(r1.output) })
     const calls1 = extractToolCalls(r1.output)
@@ -248,11 +244,9 @@ async function mainInSystem () {
     console.log(`   ${calls1.includes('getWeather') ? 'PASS ✓' : 'FAIL ✗'}`)
     console.log('')
 
-    // ── Turn 2: REMOVE getWeather, provide calculate — reset+replay ──
+    // ── Turn 2: REMOVE getWeather, provide calculate — full replay ──
     console.log('── Turn 2: tools=[calculate] (getWeather REMOVED), ask to calculate ──')
     const prompt2 = [
-      { role: 'session', content: cachePath },
-      { role: 'session', content: 'reset' },
       { role: 'system', content: SYSTEM },
       ...history,
       { role: 'user', content: 'Calculate 256 * 128' },
@@ -271,8 +265,6 @@ async function mainInSystem () {
     console.log('── Turn 3: tools=[calculate] (getWeather still removed), ask about weather ──')
     console.log('   This is the KEY test: model should NOT call getWeather (it was removed)')
     const prompt3 = [
-      { role: 'session', content: cachePath },
-      { role: 'session', content: 'reset' },
       { role: 'system', content: SYSTEM },
       ...history,
       { role: 'user', content: 'What is the weather in London?' },
@@ -292,8 +284,6 @@ async function mainInSystem () {
     console.log('── Turn 4: tools=[getWeather] (calculate REMOVED), ask to calculate ──')
     console.log('   Model should NOT call calculate (it was removed)')
     const prompt4 = [
-      { role: 'session', content: cachePath },
-      { role: 'session', content: 'reset' },
       { role: 'system', content: SYSTEM },
       ...history,
       { role: 'user', content: 'Calculate 999 / 3' },
@@ -309,7 +299,7 @@ async function mainInSystem () {
 
     // ── Summary ──
     console.log('='.repeat(70))
-    console.log('SUMMARY (tools_in_system, reset+replay)')
+    console.log('SUMMARY (tools_in_system, full replay)')
     console.log('='.repeat(70))
     const results = [
       { turn: 1, pass: calls1.includes('getWeather'), desc: 'getWeather available → called it' },
@@ -327,7 +317,6 @@ async function mainInSystem () {
       : '  FAILURES DETECTED — removed tools leaked from conversation history')
   } finally {
     await model.unload()
-    await loader.close()
     try { fs.unlinkSync(cachePath) } catch (_) {}
   }
 }

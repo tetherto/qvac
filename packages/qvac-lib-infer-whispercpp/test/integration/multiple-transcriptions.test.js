@@ -5,7 +5,6 @@ const path = require('bare-path')
 const fs = require('bare-fs')
 const os = require('bare-os')
 const TranscriptionWhispercpp = require('../../index')
-const FakeDL = require('../mocks/loader.fake.js')
 const { ensureWhisperModel, getAssetPath, createAudioStream, isMobile } = require('./helpers.js')
 
 // On mobile, runs fewer transcriptions to avoid memory pressure
@@ -46,13 +45,11 @@ test('Multiple consecutive transcriptions should work without errors', { timeout
   t.ok(fs.existsSync(modelPath), 'Model file should exist')
   t.ok(fs.existsSync(audioPath), 'Audio file should exist')
 
-  const loader = new FakeDL({})
-
   const args = {
-    loader,
-    logger: { debug: () => {}, info: () => {}, warn: () => {}, error: () => {} },
-    modelName: 'ggml-tiny.bin',
-    diskPath: modelsDir
+    files: {
+      model: modelPath
+    },
+    logger: { debug: () => {}, info: () => {}, warn: () => {}, error: () => {} }
   }
 
   const config = {

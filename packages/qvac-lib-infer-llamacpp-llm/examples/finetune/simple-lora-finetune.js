@@ -1,7 +1,7 @@
 'use strict'
 
 const LlmLlamacpp = require('../../index')
-const FilesystemDL = require('@qvac/dl-filesystem')
+const path = require('bare-path')
 const { downloadModel, formatProgress, createFilteredLogger } = require('../utils')
 
 const MODEL = {
@@ -11,22 +11,13 @@ const MODEL = {
 
 async function runFinetuningTests () {
   let model
-  let loader
 
   const { logger: filteredLogger, restore: restoreConsole } = createFilteredLogger()
 
   try {
     const [modelName, modelDir] = await downloadModel(MODEL.url, MODEL.name)
 
-    loader = new FilesystemDL({ dirPath: modelDir })
-
-    const args = {
-      loader,
-      opts: { stats: true },
-      logger: filteredLogger,
-      diskPath: modelDir,
-      modelName
-    }
+    const modelPath = path.join(modelDir, modelName)
 
     const config = {
       gpu_layers: '999',
@@ -35,7 +26,12 @@ async function runFinetuningTests () {
       flash_attn: 'off'
     }
 
-    model = new LlmLlamacpp(args, config)
+    model = new LlmLlamacpp({
+      files: { model: [modelPath] },
+      config,
+      logger: filteredLogger,
+      opts: { stats: true }
+    })
     await model.load()
 
     const finetuneOptions = {
@@ -57,12 +53,10 @@ async function runFinetuningTests () {
     })
     const finetuneResult = await handle.await()
     console.log('Finetune completed:', finetuneResult)
-    if (args.opts?.stats) {
-      if (finetuneResult && typeof finetuneResult.stats === 'object' && finetuneResult.stats !== null) {
-        console.log('✅ Finetune terminal stats:', finetuneResult.stats)
-      } else {
-        console.warn('⚠️  opts.stats is enabled, but no finetune terminal stats were returned')
-      }
+    if (finetuneResult && typeof finetuneResult.stats === 'object' && finetuneResult.stats !== null) {
+      console.log('✅ Finetune terminal stats:', finetuneResult.stats)
+    } else {
+      console.warn('⚠️  opts.stats is enabled, but no finetune terminal stats were returned')
     }
   } catch (error) {
     console.error('Test failed:', error.message)
@@ -75,13 +69,6 @@ async function runFinetuningTests () {
         await model.unload()
       } catch (unloadErr) {
         console.error('Failed to unload model during cleanup:', unloadErr)
-      }
-    }
-    if (loader) {
-      try {
-        await loader.close()
-      } catch (closeErr) {
-        console.error('Failed to close loader during cleanup:', closeErr)
       }
     }
   }

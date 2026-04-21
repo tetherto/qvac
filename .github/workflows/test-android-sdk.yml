@@ -243,7 +243,7 @@ jobs:
       - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # 6.0.2
         with:
           ref: ${{ inputs.test-version || github.event.pull_request.head.sha || github.sha }}
-          sparse-checkout: ${{ inputs.working-directory }}/device-farm-test-spec.yml
+          sparse-checkout: ${{ inputs.working-directory }}/device-farm
 
       - name: Download APK artifact
         uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # 8.0.1
@@ -299,7 +299,7 @@ jobs:
         run: |
           mkdir -p /tmp/dummy-test-pkg
           echo '{"name":"qvac-test-stub","version":"1.0.0"}' > /tmp/dummy-test-pkg/package.json
-          cp "${{ inputs.working-directory }}/device-farm-gen-junit.py" /tmp/dummy-test-pkg/
+          cp "${{ inputs.working-directory }}/device-farm/gen-junit.py" /tmp/dummy-test-pkg/
           (cd /tmp/dummy-test-pkg && zip -r /tmp/dummy-test-pkg.zip .)
 
           PKG_RESPONSE=$(aws devicefarm create-upload \
@@ -344,8 +344,8 @@ jobs:
           echo "spec-arn=$SPEC_ARN" >> $GITHUB_OUTPUT
 
           TIMEOUT_SECONDS=$(( ${{ inputs.device-farm-timeout || 90 }} * 60 ))
-          sed -i "s/DEVICEFARM_TIMEOUT:-5400/DEVICEFARM_TIMEOUT:-${TIMEOUT_SECONDS}/" "${{ inputs.working-directory }}/device-farm-test-spec.yml"
-          curl -T "${{ inputs.working-directory }}/device-farm-test-spec.yml" "$SPEC_URL"
+          sed -i "s/DEVICEFARM_TIMEOUT:-5400/DEVICEFARM_TIMEOUT:-${TIMEOUT_SECONDS}/" "${{ inputs.working-directory }}/device-farm/test-spec-android.yml"
+          curl -T "${{ inputs.working-directory }}/device-farm/test-spec-android.yml" "$SPEC_URL"
 
           echo "Waiting for test spec to be processed..."
           for i in {1..15}; do
@@ -387,7 +387,11 @@ jobs:
 
           PROJECT_ID=$(echo "${{ inputs.device-farm-project-arn }}" | sed -n 's/.*:project:\(.*\)/\1/p')
           RUN_ID=$(echo "$RUN_ARN" | sed -n 's/.*:run:[^/]*\/\(.*\)/\1/p')
-          echo "Device Farm Console (${{ matrix.device.name }}): https://us-west-2.console.aws.amazon.com/devicefarm/home#/mobile/projects/${PROJECT_ID}/runs/${RUN_ID}"
+          DF_URL="https://us-west-2.console.aws.amazon.com/devicefarm/home#/mobile/projects/${PROJECT_ID}/runs/${RUN_ID}"
+          echo "Device Farm Console (${{ matrix.device.name }}): $DF_URL"
+
+          echo "### Device Farm: ${{ matrix.device.name }}" >> $GITHUB_STEP_SUMMARY
+          echo "[Open Device Farm Console]($DF_URL)" >> $GITHUB_STEP_SUMMARY
 
       - name: Save run ARN
         id: save-arn

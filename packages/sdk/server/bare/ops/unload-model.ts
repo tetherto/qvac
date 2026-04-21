@@ -2,6 +2,7 @@ import { promises as fsPromises } from "bare-fs";
 import path from "bare-path";
 import { unregisterModel } from "@/server/bare/registry/model-registry";
 import { unregisterAllLoggingStreams } from "@/server/bare/registry/logging-stream-registry";
+import { clearFinetuneRuntimeState } from "@/server/bare/plugins/llamacpp-completion/ops/finetune";
 import { unregisterAddonLogger, getServerLogger } from "@/logging";
 import { type UnloadModelParams, unloadModelParamsSchema } from "@/schemas";
 import { ModelNotLoadedError } from "@/utils/errors-server";
@@ -16,6 +17,8 @@ export async function unloadModel(params: UnloadModelParams) {
   if (!entry) {
     throw new ModelNotLoadedError(modelId);
   }
+
+  clearFinetuneRuntimeState(modelId);
 
   if (entry.local?.loader) {
     await entry.local.loader.close();

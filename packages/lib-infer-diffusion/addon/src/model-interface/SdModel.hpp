@@ -100,6 +100,10 @@ public:
 
   struct GenerationJob {
     std::string paramsJson;
+    /** Raw init-image bytes (PNG/JPEG) passed directly from the JS layer
+     *  as a Uint8Array, bypassing JSON serialisation. Falls back to the
+     *  JSON "init_image_bytes" array when empty (e.g. C++ unit tests). */
+    std::vector<uint8_t> initImageBytes;
     /** Called each diffusion step: {"step":N,"total":M,"elapsed_ms":T} */
     std::function<void(const std::string&)> progressCallback;
     /** Called once per output image with PNG-encoded bytes */

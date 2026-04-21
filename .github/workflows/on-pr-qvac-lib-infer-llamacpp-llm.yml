@@ -45,17 +45,35 @@ jobs:
         with:
           github-token: ${{ github.token }}
 
-  sanity-checks:
+  verify-fabric-lockstep:
     if: needs.authorize.outputs.allowed == 'true'
     needs: [authorize]
     runs-on: ubuntu-latest
-    environment: release
     steps:
+      - name: Checkout code
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # 6.0.2
+
+      - name: Verify qvac-fabric versions are lockstep
+        id: lockstep
+        uses: ./.github/actions/verify-qvac-fabric-lockstep
+
+      - name: Report verified version
+        run: 'echo "Verified qvac-fabric version: ${{ steps.lockstep.outputs.version }}"'
+
+  sanity-checks:
+    if: needs.authorize.outputs.allowed == 'true'
+    needs: [authorize, verify-fabric-lockstep]
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # 6.0.2
+        with:
+          fetch-depth: 0
+
       - name: Run Sanity checks
-        uses: tetherto/qvac-devops/.github/actions/sanity-checks@v1.1.8
+        uses: ./.github/actions/sanity-checks
         with:
           secret-token: ${{ secrets.GITHUB_TOKEN }}
-          npm-token: ${{ secrets.NPM_TOKEN }}
           pat-token: ${{ secrets.PAT_TOKEN }}
           run-integration: ${{ needs.authorize.outputs.allowed == 'true' }}
           workdir: packages/qvac-lib-infer-llamacpp-llm
@@ -72,7 +90,7 @@ jobs:
 
   cpp-lint:
     if: needs.authorize.outputs.allowed == 'true'
-    uses: tetherto/qvac-devops/.github/workflows/cpp-lint.yaml@v1.1.8
+    uses: ./.github/workflows/cpp-lint.yaml
     needs: authorize
     secrets: inherit
     with:
@@ -94,15 +112,6 @@ jobs:
         with:
           node-version: 20
 
-      - name: Configure npm auth
-        working-directory: packages/qvac-lib-infer-llamacpp-llm
-        run: |
-          cat > .npmrc <<NPMRC
-          registry=https://registry.npmjs.org/
-          @qvac:registry=https://registry.npmjs.org/
-          //registry.npmjs.org/:_authToken=${{ secrets.NPM_TOKEN }}
-          NPMRC
-
       - name: Install dependencies
         working-directory: packages/qvac-lib-infer-llamacpp-llm
         run: npm install
@@ -110,6 +119,15 @@ jobs:
       - name: Type declaration check
         working-directory: packages/qvac-lib-infer-llamacpp-llm
         run: npm run test:dts
+
+      - name: Run lint and unit tests
+        id: run_lint_and_unit_tests
+        uses: ./.github/actions/run-lint-and-unit-tests
+        with:
+          gpr-token: ${{ secrets.GITHUB_TOKEN }}
+          pat-token: ${{ secrets.GITHUB_TOKEN }}
+          registry-type: gpr
+          workdir: packages/qvac-lib-infer-llamacpp-llm
 
   prebuild:
     needs: [authorize, sanity-checks]
@@ -156,6 +174,7 @@ jobs:
     needs:
       [
         authorize,
+        verify-fabric-lockstep,
         run-integration-tests,
         run-mobile-integration-tests,
         sanity-checks,
@@ -165,7 +184,7 @@ jobs:
         ts-checks,
       ]
     if: always()
-    uses: tetherto/qvac-devops/.github/workflows/public-pr.yml@v1.1.8
+    uses: ./.github/workflows/public-pr.yml
     with:
-      sanity-checks-status: ${{ needs.sanity-checks.result == 'success' }}
+      sanity-checks-status: ${{ needs.verify-fabric-lockstep.result == 'success' && needs.sanity-checks.result == 'success' }}
       build-status: ${{ needs.prebuild.result == 'success'}}

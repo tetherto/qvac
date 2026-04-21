@@ -88,8 +88,6 @@ jobs:
     environment: release
     name: ${{ matrix.platform }}-${{ matrix.arch }}${{ matrix.tags }}
 
-    env:
-      VCPKG_BINARY_SOURCES: clear;files,${{ github.workspace }}/${{ inputs.workdir || 'packages/qvac-lib-infer-llamacpp-embed' }}/vcpkg/cache,readwrite
     steps:
       - if: ${{ matrix.platform == 'android' }}
         name: Select NDK
@@ -148,39 +146,21 @@ jobs:
           ref: ${{ inputs.ref || github.ref }}
           token: ${{ secrets.PAT_TOKEN }}
 
-      - name: Setup node
-        uses: actions/setup-node@53b83947a5a98c8d113130e565377fae1a50d02f # 6.3.0
+      - name: Setup AWS + Windows CLI
+        uses: tetherto/qvac/.github/actions/setup-aws-prebuild@0bbdca93da303a0b1634ba14a89cec085621078d
         with:
-          node-version: lts/*
+          role-to-assume: ${{ secrets.AWS_OIDC_ROLE_ARN }}
 
-      - name: Configure scoped registry for @tetherto and @qvac packages
+      - name: Setup vcpkg cache
+        uses: tetherto/qvac/.github/actions/setup-vcpkg-cache@0bbdca93da303a0b1634ba14a89cec085621078d
         env:
-          GPR_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-          NPM_TOKEN: ${{ secrets.NPM_TOKEN }}
-          GIT_PAT: ${{ secrets.PAT_TOKEN }}
-        shell: bash
-        working-directory: ${{ inputs.workdir }}
-        run: |
-          echo "Configuring scoped registry for @tetherto and @qvac packages..."
-          set -eu
-          cat > .npmrc <<NPMRC
-          registry=https://registry.npmjs.org/
-          @qvac:registry=https://registry.npmjs.org/
-          @tetherto:registry=https://npm.pkg.github.com/
-          //registry.npmjs.org/:_authToken=${NPM_TOKEN}
-          //npm.pkg.github.com/:_authToken=${GIT_PAT}
-          NPMRC
+          MODEL_S3_BUCKET: ${{ secrets.MODEL_S3_BUCKET }}
+        with:
+          platform: ${{ matrix.platform }}
+          arch: ${{ matrix.arch }}
 
-          if [ -n "${GIT_PAT:-}" ]; then
-            git config --global url."https://${GIT_PAT}:@github.com/".insteadOf "https://github.com/"
-            git config --global url."https://${GIT_PAT}:@github.com/".insteadOf "git@github.com:"
-          else
-            git config --global url."https://${{ github.token }}:@github.com/".insteadOf "https://github.com/"
-            git config --global url."https://${{ github.token }}:@github.com/".insteadOf "git@github.com:"
-          fi
-
-      - name: Install global dependencies
-        run: npm install -g bare bare-make
+      - name: Setup Bare tooling
+        uses: tetherto/qvac/.github/actions/setup-bare-tooling@0bbdca93da303a0b1634ba14a89cec085621078d
 
       - if: ${{ matrix.os == 'windows-2022' && matrix.arch == 'arm64' }}
         name: Rename win sdk folder to disable it
@@ -224,116 +204,19 @@ jobs:
         name: Update apt sources
         run: sudo apt-get update
 
-      - if: ${{ matrix.os == 'ubuntu-22.04-arm' }}
-        name: Install ccache on Linux
-        run: |
-          sudo apt-get install -y ccache
-
-      - if: ${{ matrix.os == 'ubuntu-22.04-arm' }}
-        name: Configure ccache
-        run: |
-          ccache --set-config=max_size=2G
-          ccache --set-config=compression=true
-          ccache -z
-          echo "CMAKE_C_COMPILER_LAUNCHER=ccache" >> $GITHUB_ENV
-          echo "CMAKE_CXX_COMPILER_LAUNCHER=ccache" >> $GITHUB_ENV
-
-      - if: ${{ matrix.os == 'ubuntu-22.04-arm' }}
-        name: Get ccache cache
-        uses: actions/cache@668228422ae6a00e4ad889ee87cd7109ec5666a7 # 5.0.4
-        with:
-          key: ccache-${{ matrix.platform }}-${{ matrix.arch }}
-          path: ~/.cache/ccache-arm
-
       - if: ${{ matrix.platform == 'linux' }}
         name: Install required packages linux
         run: sudo apt-get install libxi-dev libxtst-dev libxrandr-dev
 
-      - if: ${{ startsWith(matrix.os, 'ubuntu-') }}
-        name: Install vulkan in linux
-        run: |
-          sudo apt install xz-utils
-          # Get the latest vulkan sdk to be consistent with windows
-          wget -q -O /tmp/vulkansdk.tar.xz https://sdk.lunarg.com/sdk/download/latest/linux/vulkan_sdk.tar.xz
-          cd ~
-          mkdir vulkan
-          cd vulkan
-          tar xf /tmp/vulkansdk.tar.xz --strip-components=1
-
-      - if: ${{ matrix.os == 'ubuntu-22.04' || matrix.os == 'ubuntu-24.04' }}
-        name: Setup vulkan sdk path in linux x64
-        run: |
-          VULKAN_SDK=~/vulkan/x86_64
-          echo "VULKAN_SDK=$VULKAN_SDK" >> $GITHUB_ENV
-
-      - if: ${{ matrix.os == 'ubuntu-22.04-arm' }}
-        name: Configure AWS credentials via OIDC
-        uses: aws-actions/configure-aws-credentials@8df5847569e6427dd6c4fb1cf565c83acfa8afa7 # 6.0.0
+      - name: Setup Vulkan SDK
+        uses: tetherto/qvac/.github/actions/setup-vulkan-sdk@0bbdca93da303a0b1634ba14a89cec085621078d
+        env:
+          MODEL_S3_BUCKET: ${{ secrets.MODEL_S3_BUCKET }}
         with:
-          role-to-assume: ${{ secrets.AWS_OIDC_ROLE_ARN }}
+          platform: ${{ matrix.platform }}
+          arch: ${{ matrix.arch }}
+          aws-role-to-assume: ${{ secrets.AWS_OIDC_ROLE_ARN }}
           aws-region: eu-central-1
-
-      - if: ${{ matrix.os == 'ubuntu-22.04-arm' }}
-        name: Setup vulkan sdk path in linux arm64
-        run: |
-          VULKAN_SDK=~/vulkan/aarch64
-          echo "VULKAN_SDK=$VULKAN_SDK" >> $GITHUB_ENV
-          
-          cd ~/vulkan
-          
-          # Extract SDK major.minor version from README.txt (e.g., "1.4" from "1.4.341.0")
-          SDK_VERSION=$(grep -o 'sdk/[0-9]*\.[0-9]*' README.txt | head -1 | sed 's|sdk/||')
-          S3_BUCKET="${{ secrets.MODEL_S3_BUCKET }}"
-          S3_KEY="vulkan-sdk-cache/linux-arm64-${SDK_VERSION}.tar.gz"
-          
-          echo "Vulkan SDK version: ${SDK_VERSION}"
-          
-          # Try to download cached build from S3
-          if aws s3 cp "s3://${S3_BUCKET}/${S3_KEY}" /tmp/vulkan-arm64-cache.tar.gz 2>/dev/null; then
-            echo "Found cached Vulkan SDK, extracting..."
-            tar xzf /tmp/vulkan-arm64-cache.tar.gz -C ~/vulkan
-            rm /tmp/vulkan-arm64-cache.tar.gz
-          else
-            echo "No cache found, building Vulkan SDK for ARM64..."
-            ./vulkansdk --maxjobs
-            
-            # Upload the compiled SDK to S3 for future runs
-            echo "Uploading compiled SDK to S3..."
-            tar czf /tmp/vulkan-arm64-cache.tar.gz aarch64
-            aws s3 cp /tmp/vulkan-arm64-cache.tar.gz "s3://${S3_BUCKET}/${S3_KEY}"
-            rm /tmp/vulkan-arm64-cache.tar.gz
-          fi
-
-      - if: ${{ startsWith(matrix.os, 'ubuntu-') }}
-        name: Export rest of vulkan sdk variables in linux
-        run: |
-          echo "PATH=$VULKAN_SDK/bin:$PATH" >> $GITHUB_ENV
-          echo "LD_LIBRARY_PATH=$VULKAN_SDK/lib${LD_LIBRARY_PATH:+:$LD_LIBRARY_PATH}" >> $GITHUB_ENV
-          echo "VK_ADD_LAYER_PATH=$VULKAN_SDK/share/vulkan/explicit_layer.d" >> $GITHUB_ENV
-          echo "PKG_CONFIG_PATH=$VULKAN_SDK/share/pkgconfig:$VULKAN_SDK/lib/pkgconfig${PKG_CONFIG_PATH:+:$PKG_CONFIG_PATH}" >> $GITHUB_ENV
-
-      - if: ${{ matrix.platform == 'win32' }}
-        name: Install Vulkan SDK (Windows)
-        shell: powershell
-        run: |
-          $ErrorActionPreference = "Stop"
-          $ProgressPreference = "SilentlyContinue"
-
-          # Use a stable URL (latest) but download with BITS (more reliable than Invoke-WebRequest)
-          $url = "https://sdk.lunarg.com/sdk/download/latest/windows/vulkan-sdk.exe"
-          $out = "$env:RUNNER_TEMP\vulkan-sdk.exe"
-
-          # Some environments need TLS 1.2 explicitly
-          [Net.ServicePointManager]::SecurityProtocol = [Net.SecurityProtocolType]::Tls12
-
-          Write-Host "Downloading Vulkan SDK from $url to $out"
-          Start-BitsTransfer -Source $url -Destination $out
-
-          Write-Host "Installing Vulkan SDK..."
-          & $out --root "C:\VulkanSDK" --accept-licenses --default-answer --confirm-command install
-
-          "VULKAN_SDK=C:\VulkanSDK" | Out-File -FilePath $Env:GITHUB_ENV -Encoding utf8 -Append
-          "PATH=C:\VulkanSDK\Bin;$Env:PATH" | Out-File -FilePath $Env:GITHUB_ENV -Encoding utf8 -Append
 
       - if: ${{ matrix.platform == 'android' }}
         name: Configure runner for cross compilation - android
@@ -344,17 +227,6 @@ jobs:
       - name: Install npm dependencies
         working-directory: ${{ inputs.workdir }}
         run: npm install
-
-      - name: Create vcpkg cache location
-        run: mkdir -p vcpkg/cache
-
-      - name: Get vcpkg cache
-        id: cache-vcpkg
-        uses: actions/cache@668228422ae6a00e4ad889ee87cd7109ec5666a7 # 5.0.4
-        with:
-          key: ${{ matrix.platform }}-${{ matrix.arch }}-${{ hashFiles(format('{0}/vcpkg.json', inputs.workdir), format('{0}/vcpkg-configuration.json', inputs.workdir), format('{0}/vcpkg/ports/**', inputs.workdir)) }}
-          path: vcpkg/cache
-          restore-keys: ${{ matrix.platform }}-${{ matrix.arch }}-
 
       - if: ${{ inputs.vk-profiling }}
         name: Enable vulkan profiling
@@ -418,7 +290,6 @@ jobs:
     needs: prebuild
     permissions:
       contents: write
-
     steps:
       - name: Download all build artifacts
         uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # 8.0.1

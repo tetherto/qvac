@@ -1,5 +1,19 @@
 # Changelog
 
+## [0.4.0]
+
+Release Date: 2026-04-12
+
+### ✨ Features
+
+- Add `suspend()` and `resume()` lifecycle methods to `QVACRegistryClient` — coordinates `Hyperswarm` and `Corestore` shutdown/restart in the correct order with idempotency guards for safe repeated calls (#1469)
+- Expose `corestore` and `hyperswarm` as readonly typed lifecycle handles (`LifecycleStoreHandle`, `LifecycleSwarmHandle`) for orchestrators that coordinate resources directly (#1469)
+- `QVACRegistryClient` type definition now extends `ReadyResource`, with new `LifecycleLogOptions` interface exported for downstream consumers (#1469)
+
+### 🔧 Changed
+
+- Bumped `@qvac/registry-schema` from `^0.1.1` to `^0.1.2` (#1106)
+
 ## [0.3.1]
 
 Release Date: 2026-03-30

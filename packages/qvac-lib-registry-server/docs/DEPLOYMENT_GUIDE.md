@@ -395,6 +395,22 @@ pm2 restart registry
 pm2 restart registry
 ```
 
+### Authenticated CI RPC Connections
+
+By default, CI RPC clients discover registry servers via a derived topic key. This is unauthenticated -- any peer that derives the same topic can intercept connections.
+
+For production, configure `QVAC_INDEXER_KEYS` so CI clients connect directly to known indexer public keys via `swarm.joinPeer()`. The Noise protocol handshake inherently verifies server identity.
+
+**On each CI runner or RPC writer client**, set the indexer keys:
+
+```bash
+QVAC_INDEXER_KEYS=<indexer1-z32-public-key>,<indexer2-z32-public-key>
+```
+
+The RPC client picks a random indexer from the list on each connection attempt and only accepts peers whose public key matches the configured keys.
+
+If `QVAC_INDEXER_KEYS` is not set, the client falls back to topic-based discovery (backward compatible).
+
 ### Sync Models from JSON Config
 
 Preview changes:
@@ -526,6 +542,7 @@ node scripts/bin.js run --storage ./new-writer --bootstrap <key> --skip-storage-
 | `QVAC_ADDITIONAL_INDEXERS` | Comma-separated writer local keys to promote to indexers |
 | `QVAC_REMOVE_INDEXERS` | Comma-separated writer local keys to remove from quorum (one-shot, clean up after restart) |
 | `QVAC_ALLOWED_WRITER_KEYS` | Comma-separated hex keys allowed to call add-model RPC |
+| `QVAC_INDEXER_KEYS` | Comma-separated z32 indexer public keys for authenticated CI RPC connections (see below) |
 | `QVAC_BLIND_PEER_KEYS` | Comma-separated blind peer public keys for replication |
 | `QVAC_PRIMARY_KEY` | Optional: Deterministic key generation (testing only) |
 | `QVAC_WRITER_PRIMARY_KEY` | Optional: Deterministic writer key (testing only) |

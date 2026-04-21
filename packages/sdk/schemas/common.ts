@@ -57,6 +57,11 @@ import {
   diffusionStreamResponseSchema,
 } from "./sdcpp-config";
 import {
+  finetuneRequestSchema,
+  finetuneResponseSchema,
+  finetuneProgressResponseSchema,
+} from "./finetune";
+import {
   pluginInvokeRequestSchema,
   pluginInvokeResponseSchema,
   pluginInvokeStreamRequestSchema,
@@ -70,6 +75,8 @@ import {
   modelRegistryGetModelRequestSchema,
   modelRegistryGetModelResponseSchema,
 } from "./registry";
+import { suspendRequestSchema, suspendResponseSchema } from "./suspend";
+import { resumeRequestSchema, resumeResponseSchema } from "./resume";
 
 export const requestSchema = z.union([
   heartbeatRequestSchema,
@@ -91,11 +98,14 @@ export const requestSchema = z.union([
   getModelInfoRequestSchema,
   ocrStreamRequestSchema,
   diffusionStreamRequestSchema,
+  finetuneRequestSchema,
   pluginInvokeRequestSchema,
   pluginInvokeStreamRequestSchema,
   modelRegistryListRequestSchema,
   modelRegistrySearchRequestSchema,
   modelRegistryGetModelRequestSchema,
+  suspendRequestSchema,
+  resumeRequestSchema,
 ]);
 
 export const responseSchema = z.discriminatedUnion("type", [
@@ -121,11 +131,15 @@ export const responseSchema = z.discriminatedUnion("type", [
   getModelInfoResponseSchema,
   ocrStreamResponseSchema,
   diffusionStreamResponseSchema,
+  finetuneResponseSchema,
+  finetuneProgressResponseSchema,
   pluginInvokeResponseSchema,
   pluginInvokeStreamResponseSchema,
   modelRegistryListResponseSchema,
   modelRegistrySearchResponseSchema,
   modelRegistryGetModelResponseSchema,
+  suspendResponseSchema,
+  resumeResponseSchema,
 ]);
 
 export const rpcOptionsSchema = z.object({
