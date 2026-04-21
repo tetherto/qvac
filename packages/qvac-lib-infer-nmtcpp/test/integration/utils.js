@@ -46,7 +46,7 @@ try {
   findTranslationGroundTruth = translationQualityMod.findTranslationGroundTruth
 } catch (_) {
   // Mobile bundle fallback — skip quality scoring (no ground-truth fixtures
-  // shipped to device). chrF field will simply be null in reporter records.
+  // shipped to device). chrfpp field will simply be null in reporter records.
   evaluateTranslationQuality = function () { return null }
   findTranslationGroundTruth = function () { return null }
 }
@@ -408,7 +408,7 @@ function formatPerformanceMetrics (label, metrics, qualityOpts) {
     decode_time_ms: Math.round(decodeTimeMs),
     generated_tokens: generatedTokens || null,
     tps: typeof tps === 'number' ? parseFloat(tpsValue) : null,
-    chrf: quality ? quality.chrf : null
+    chrfpp: quality ? quality.chrfpp : null
   }, {
     input: prompt || null,
     output: fullOutput || null,
@@ -424,8 +424,8 @@ function formatPerformanceMetrics (label, metrics, qualityOpts) {
     - Tokens per second (TPS): ${tpsValue} t/s
     - Full output: "${fullOutput}"`
 
-  if (quality && typeof quality.chrf === 'number') {
-    out += `\n    - chrF: ${quality.chrf.toFixed(4)}`
+  if (quality && typeof quality.chrfpp === 'number') {
+    out += `\n    - chrF++: ${quality.chrfpp.toFixed(4)}`
   }
 
   return out

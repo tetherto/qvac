@@ -3,16 +3,27 @@
 /**
  * Translation quality metrics for NMT output validation.
  *
- * Computes chrF-2 (character n-gram F-score with beta=2, SacreBLEU default)
- * by comparing a translation hypothesis against a ground truth reference.
+ * Computes chrF++ (character + word n-gram F-score, beta=2), matching
+ * sacrebleu's `-m chrf --chrf-word-order 2` formulation. This aligns with
+ * the repo-wide NMT quality metric used by
+ * `packages/qvac-lib-infer-nmtcpp/benchmarks/quality_eval/evaluate.py`
+ * for comparing QVAC against OpusMT / Google / NLLB / Bergamot on
+ * FLORES-200. Integration-test scores are therefore directly comparable
+ * to benchmark scores.
+ *
+ * chrF++ extends chrF-2 (character n-grams, n=1..charOrder, default 6)
+ * with word n-grams (n=1..wordOrder, default 2). Precision and recall
+ * are averaged uniformly across all n-gram orders (char + word pooled),
+ * then combined into F-beta with beta=2.
  *
  * Ground truth fixtures are JSON arrays of entries keyed by
  * { source, src_lang, dst_lang } so a single fixture can serve multiple
  * translation calls in the same test file.
  *
- * Scores are returned in the [0, 1] range to match the CER/WER convention
- * used by scripts/test-utils/quality-metrics.js (multiply by 100 at the
- * display layer if a percentage is desired).
+ * Scores are in [0, 1] to match the CER/WER convention used by
+ * scripts/test-utils/quality-metrics.js. Case-sensitive by default to
+ * mirror sacrebleu; pass `{caseSensitive: false}` if model output casing
+ * is known to vary and shouldn't be penalized.
  *
  * Compatible with both Node.js and Bare runtime.
  */
@@ -30,13 +41,12 @@ function _ensureNodeDefaults () {
  * Inject runtime modules for Bare compatibility.
  * Must be called before any function that accesses the filesystem.
  *
- * Accepts the same `{fs, path}` shape as quality-metrics.js for consistency,
- * though only `fs` is currently used — fixture paths are passed in by the
- * caller already fully resolved (no directory lookup needed).
+ * Accepts `{fs, path}` for parity with quality-metrics.js; only `fs` is
+ * used here (fixture paths are pre-resolved by callers).
  *
  * @param {Object} mods
- * @param {Object} mods.fs   - bare-fs or Node fs
- * @param {Object} [mods.path] - bare-path or Node path (accepted for parity, unused)
+ * @param {Object} mods.fs     - bare-fs or Node fs
+ * @param {Object} [mods.path] - accepted for parity, unused
  */
 function configure (mods) {
   fs = mods.fs
@@ -47,27 +57,38 @@ function configure (mods) {
 // Text normalization
 // ---------------------------------------------------------------------------
 
-function normalize (text) {
+/**
+ * Whitespace cleanup only — matches sacrebleu's default chrF behaviour
+ * (preserves case).
+ */
+function _cleanWhitespace (text) {
   return String(text)
     .replace(/\r\n/g, '\n')
     .replace(/[\t\v\f]/g, ' ')
     .replace(/ {2,}/g, ' ')
     .trim()
-    .toLowerCase()
+}
+
+/**
+ * Full normalization: whitespace cleanup + lowercasing. Exposed for
+ * callers that want case-insensitive text comparison; chrF++ itself
+ * defaults to case-sensitive per sacrebleu.
+ */
+function normalize (text) {
+  return _cleanWhitespace(text).toLowerCase()
 }
 
 // ---------------------------------------------------------------------------
-// chrF-2: character n-gram F-score (SacreBLEU-compatible defaults)
+// N-gram extraction
 // ---------------------------------------------------------------------------
 
 /**
- * Extracts a character n-gram frequency map from a string.
- * Whitespace is stripped before extraction, matching the standard
- * SacreBLEU chrF behaviour (whitespace-independent n-grams).
+ * Character n-gram frequency map. Internal whitespace is stripped before
+ * extraction, matching sacrebleu's default chrF whitespace handling.
  *
- * @param {string} text - already-normalized input string
- * @param {number} n    - n-gram size (1..6 for chrF-2)
- * @returns {Map<string, number>} gram → count
+ * @param {string} text - whitespace-cleaned input
+ * @param {number} n    - n-gram order
+ * @returns {Map<string, number>}
  */
 function _extractCharNgrams (text, n) {
   const stripped = text.replace(/\s+/g, '')
@@ -81,58 +102,95 @@ function _extractCharNgrams (text, n) {
 }
 
 /**
- * chrF-2 — character n-gram F-score with beta=2 (SacreBLEU default).
+ * Word n-gram frequency map. Words are whitespace-separated tokens.
+ * Used for the "++" (word-level) component of chrF++.
  *
- * Computes precision and recall over character n-grams for n=1..maxN,
- * averages each uniformly across n, then combines into an F-beta score
- * with beta=2 (recall weighted 2x precision).
- *
- * Operates on normalized strings; whitespace is ignored when extracting
- * n-grams. Returns a score in [0, 1], where 1 is a perfect match.
- * Returns 0 if either input is empty after normalization.
- *
- * @param {string} hypothesis - the translation output to evaluate
- * @param {string} reference  - the ground truth translation
- * @param {Object} [opts]
- * @param {number} [opts.beta=2] - recall weight (2 for chrF-2)
- * @param {number} [opts.maxN=6] - maximum n-gram order
- * @returns {number} chrF-2 score in [0, 1]
+ * @param {string} text - whitespace-cleaned input
+ * @param {number} n    - n-gram order
+ * @returns {Map<string, number>}
  */
-function chrf (hypothesis, reference, opts) {
-  const beta = (opts && typeof opts.beta === 'number') ? opts.beta : 2
-  const maxN = (opts && typeof opts.maxN === 'number') ? opts.maxN : 6
+function _extractWordNgrams (text, n) {
+  const words = text.split(/\s+/).filter(Boolean)
+  const grams = new Map()
+  if (words.length < n) return grams
+  for (let i = 0; i <= words.length - n; i++) {
+    const g = words.slice(i, i + n).join(' ')
+    grams.set(g, (grams.get(g) || 0) + 1)
+  }
+  return grams
+}
 
-  const h = normalize(hypothesis)
-  const r = normalize(reference)
+/**
+ * Precision and recall for a pair of n-gram frequency maps.
+ * Returns null if either side has no n-grams (order skipped in averaging).
+ *
+ * @returns {{p: number, r: number}|null}
+ */
+function _computePR (hGrams, rGrams) {
+  let hTotal = 0
+  for (const c of hGrams.values()) hTotal += c
+  let rTotal = 0
+  for (const c of rGrams.values()) rTotal += c
+  if (hTotal === 0 || rTotal === 0) return null
+
+  let matches = 0
+  for (const [g, hc] of hGrams) {
+    const rc = rGrams.get(g)
+    if (rc !== undefined) matches += Math.min(hc, rc)
+  }
+  return { p: matches / hTotal, r: matches / rTotal }
+}
+
+// ---------------------------------------------------------------------------
+// chrF++ — character + word n-gram F-score (sacrebleu-compatible)
+// ---------------------------------------------------------------------------
+
+/**
+ * chrF++ — character n-gram F-score augmented with word n-grams.
+ *
+ * Matches sacrebleu's `chrF --chrf-word-order 2` (Popović 2017).
+ * Extracts character n-grams for n=1..charOrder (default 6) AND word
+ * n-grams for n=1..wordOrder (default 2). Precision and recall are
+ * averaged across all n-gram orders together, then combined into
+ * F-beta with beta=2.
+ *
+ * Passing `{wordOrder: 0}` degrades gracefully to plain chrF-2.
+ *
+ * @param {string} hypothesis
+ * @param {string} reference
+ * @param {Object} [opts]
+ * @param {number}  [opts.beta=2]           recall weight
+ * @param {number}  [opts.charOrder=6]      max character n-gram order
+ * @param {number}  [opts.wordOrder=2]      max word n-gram order (0 → chrF-2)
+ * @param {boolean} [opts.caseSensitive=true]
+ * @returns {number} chrF++ score in [0, 1]
+ */
+function chrfpp (hypothesis, reference, opts) {
+  const beta = (opts && typeof opts.beta === 'number') ? opts.beta : 2
+  const charOrder = (opts && typeof opts.charOrder === 'number') ? opts.charOrder : 6
+  const wordOrder = (opts && typeof opts.wordOrder === 'number') ? opts.wordOrder : 2
+  const caseSensitive = (opts && typeof opts.caseSensitive === 'boolean') ? opts.caseSensitive : true
+
+  let h = _cleanWhitespace(hypothesis)
+  let r = _cleanWhitespace(reference)
+  if (!caseSensitive) {
+    h = h.toLowerCase()
+    r = r.toLowerCase()
+  }
   if (h.length === 0 || r.length === 0) return 0
 
   let precSum = 0
   let recSum = 0
   let validOrders = 0
 
-  for (let n = 1; n <= maxN; n++) {
-    const hGrams = _extractCharNgrams(h, n)
-    const rGrams = _extractCharNgrams(r, n)
+  for (let n = 1; n <= charOrder; n++) {
+    const res = _computePR(_extractCharNgrams(h, n), _extractCharNgrams(r, n))
+    if (res) { precSum += res.p; recSum += res.r; validOrders++ }
+  }
 
-    let hTotal = 0
-    for (const c of hGrams.values()) hTotal += c
-    let rTotal = 0
-    for (const c of rGrams.values()) rTotal += c
-
-    // Skip n-gram orders where either side has no n-grams (e.g. very
-    // short strings). This matches sacrebleu's behaviour of averaging
-    // only over n-orders that are actually defined for the pair.
-    if (hTotal === 0 || rTotal === 0) continue
-
-    let matches = 0
-    for (const [g, hc] of hGrams) {
-      const rc = rGrams.get(g)
-      if (rc !== undefined) matches += Math.min(hc, rc)
-    }
-
-    precSum += matches / hTotal
-    recSum += matches / rTotal
-    validOrders++
+  for (let n = 1; n <= wordOrder; n++) {
+    const res = _computePR(_extractWordNgrams(h, n), _extractWordNgrams(r, n))
+    if (res) { precSum += res.p; recSum += res.r; validOrders++ }
   }
 
   if (validOrders === 0) return 0
@@ -154,8 +212,8 @@ const _fixtureCache = new Map()
 /**
  * Loads and caches a translation-quality fixture file.
  *
- * @param {string} fixturePath - Absolute or relative path to the .json file
- * @returns {Array|null} Parsed fixture array or null on failure
+ * @param {string} fixturePath
+ * @returns {Array|null}
  */
 function loadTranslationFixture (fixturePath) {
   _ensureNodeDefaults()
@@ -174,13 +232,7 @@ function loadTranslationFixture (fixturePath) {
 
 /**
  * Looks up the ground-truth entry for a given source + language pair.
- * Uses case-sensitive exact match on source text and language codes.
- *
- * @param {string} fixturePath - Path to the fixture JSON file
- * @param {string} source      - Source text that was translated
- * @param {string} srcLang     - Source language code (matches entry.src_lang)
- * @param {string} dstLang     - Destination language code (matches entry.dst_lang)
- * @returns {Object|null} Fixture entry or null if not found
+ * Case-sensitive exact match on source text and language codes.
  */
 function findTranslationGroundTruth (fixturePath, source, srcLang, dstLang) {
   const fixture = loadTranslationFixture(fixturePath)
@@ -201,10 +253,9 @@ function findTranslationGroundTruth (fixturePath, source, srcLang, dstLang) {
 /**
  * Runs translation quality checks against a ground-truth entry.
  *
- * @param {string} hypothesis - The translation output produced by the model
- * @param {Object|null} groundTruthEntry - Entry from the fixture file
- *   (with `source`, `reference`, `src_lang`, `dst_lang` fields)
- * @returns {Object|null} Quality result, or null if groundTruthEntry is null
+ * @param {string} hypothesis
+ * @param {Object|null} groundTruthEntry - with {source, reference, src_lang, dst_lang}
+ * @returns {Object|null} {source, reference, src_lang, dst_lang, chrfpp} or null
  */
 function evaluateTranslationQuality (hypothesis, groundTruthEntry) {
   if (!groundTruthEntry || typeof groundTruthEntry !== 'object') return null
@@ -214,7 +265,7 @@ function evaluateTranslationQuality (hypothesis, groundTruthEntry) {
     reference,
     src_lang: groundTruthEntry.src_lang || null,
     dst_lang: groundTruthEntry.dst_lang || null,
-    chrf: round4(chrf(hypothesis, reference))
+    chrfpp: round4(chrfpp(hypothesis, reference))
   }
 }
 
@@ -229,7 +280,7 @@ function round4 (v) {
 module.exports = {
   configure,
   normalize,
-  chrf,
+  chrfpp,
   loadTranslationFixture,
   findTranslationGroundTruth,
   evaluateTranslationQuality

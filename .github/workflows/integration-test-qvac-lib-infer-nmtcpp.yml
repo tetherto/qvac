@@ -248,18 +248,18 @@ jobs:
           fi
 
           awk '
-          /^[[:space:]]*- chrF: / {
-            last_chrf = $0
-            sub(/^.*chrF: */, "", last_chrf)
+          /^[[:space:]]*- chrF\+\+: / {
+            last_chrfpp = $0
+            sub(/^.*chrF\+\+: */, "", last_chrfpp)
             next
           }
           /^ok [0-9]+ - / {
             name = $0; sub(/^ok [0-9]+ - /, "", name)
             passed++
             line = "PASS: " name
-            if (last_chrf != "") {
-              line = line "  |  chrF = " last_chrf
-              last_chrf = ""
+            if (last_chrfpp != "") {
+              line = line "  |  chrF++ = " last_chrfpp
+              last_chrfpp = ""
             }
             results[++total] = line
             next
@@ -268,9 +268,9 @@ jobs:
             name = $0; sub(/^not ok [0-9]+ - /, "", name)
             failed++
             line = "FAIL: " name
-            if (last_chrf != "") {
-              line = line "  |  chrF = " last_chrf
-              last_chrf = ""
+            if (last_chrfpp != "") {
+              line = line "  |  chrF++ = " last_chrfpp
+              last_chrfpp = ""
             }
             results[++total] = line
             capturing = 1
@@ -351,17 +351,17 @@ jobs:
           $failed = @()
           $failDetails = @{}
           $currentFail = $null
-          $lastChrf = $null
+          $lastChrfpp = $null
 
           foreach ($line in $lines) {
-            if ($line -match '^\s*- chrF:\s*(.+)$') {
-              $lastChrf = $Matches[1].Trim()
+            if ($line -match '^\s*- chrF\+\+:\s*(.+)$') {
+              $lastChrfpp = $Matches[1].Trim()
             }
             elseif ($line -match '^ok \d+ - (.+)') {
               $name = $Matches[1]
-              if ($lastChrf) {
-                $passed += "PASS: $name  |  chrF = $lastChrf"
-                $lastChrf = $null
+              if ($lastChrfpp) {
+                $passed += "PASS: $name  |  chrF++ = $lastChrfpp"
+                $lastChrfpp = $null
               } else {
                 $passed += "PASS: $name"
               }
@@ -369,9 +369,9 @@ jobs:
             }
             elseif ($line -match '^not ok \d+ - (.+)') {
               $testName = $Matches[1]
-              if ($lastChrf) {
-                $failed += "FAIL: $testName  |  chrF = $lastChrf"
-                $lastChrf = $null
+              if ($lastChrfpp) {
+                $failed += "FAIL: $testName  |  chrF++ = $lastChrfpp"
+                $lastChrfpp = $null
               } else {
                 $failed += "FAIL: $testName"
               }
