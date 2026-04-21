@@ -135,7 +135,7 @@ async function handleShardedModel(
     sha256Checksum: s.sha256Checksum,
   }));
   const paths = shardMetadata.map((s) => getShardPath(cacheKey, s.filename));
-  return probeLayout(fileEntries, paths);
+  return checkCacheStatus(fileEntries, paths);
 }
 
 async function handleCompanionSetModel(
@@ -145,7 +145,7 @@ async function handleCompanionSetModel(
   const { setKey, primaryKey, files } = companionSet;
   const baseCache = getModelsCacheDir();
 
-  const fileEntries: ProbeFileEntry[] = files.map((f) => ({
+  const fileEntries: CacheFileEntry[] = files.map((f) => ({
     filename: f.targetName,
     expectedSize: f.expectedSize,
     sha256Checksum: f.sha256Checksum,
@@ -155,10 +155,10 @@ async function handleCompanionSetModel(
     validateAndJoinPath(baseCache, "sets", setKey, f.targetName),
   );
 
-  const canonicalProbe = await probeLayout(
+  const canonicalResult = await checkCacheStatus(
     fileEntries, canonicalPaths, primaryKey,
   );
-  if (canonicalProbe.isCached) return canonicalProbe;
+  if (canonicalResult.isCached) return canonicalResult;
 
   const isOnnxSet = files.some(
     (f) => f.primary === true && f.targetName.endsWith(".onnx"),
@@ -168,24 +168,24 @@ async function handleCompanionSetModel(
     const legacyPaths = files.map((f) =>
       validateAndJoinPath(baseCache, "onnx", legacyCacheKey, f.targetName),
     );
-    const legacyProbe = await probeLayout(
+    const legacyResult = await checkCacheStatus(
       fileEntries, legacyPaths, primaryKey,
     );
-    if (legacyProbe.isCached) return legacyProbe;
+    if (legacyResult.isCached) return legacyResult;
   }
 
-  return canonicalProbe;
+  return canonicalResult;
 }
 
-type ProbeFileEntry = {
+type CacheFileEntry = {
   filename: string;
   expectedSize: number;
   sha256Checksum: string;
   key?: string;
 };
 
-async function probeLayout(
-  files: readonly ProbeFileEntry[],
+async function checkCacheStatus(
+  files: readonly CacheFileEntry[],
   paths: string[],
   primaryKey?: string,
 ): Promise<CacheStatusResult> {
@@ -266,7 +266,7 @@ async function handleSingleFileModel(
   const filename = registryPath.split("/").pop() || registryPath;
   const filePath = getSingleFileCachePath(registryPath);
 
-  return probeLayout(
+  return checkCacheStatus(
     [{ filename, expectedSize, sha256Checksum }],
     [filePath],
   );
