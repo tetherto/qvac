@@ -21,7 +21,7 @@ const isMobile = platform === 'ios' || platform === 'android'
 
 // Dynamic require via path.join prevents bare-pack from statically resolving
 // the path during mobile bundling (the script lives outside the addon package).
-let createPerformanceReporter
+let createPerformanceReporter, evaluateTranslationQuality, findTranslationGroundTruth
 const _scriptBase = path.join('..', '..', '..', '..', 'scripts', 'test-utils')
 try {
   const perfReporterMod = require(path.join(_scriptBase, 'performance-reporter'))
@@ -37,6 +37,18 @@ try {
       get length () { return 0 }
     }
   }
+}
+
+try {
+  const translationQualityMod = require(path.join(_scriptBase, 'translation-quality'))
+  translationQualityMod.configure({ fs, path })
+  evaluateTranslationQuality = translationQualityMod.evaluateTranslationQuality
+  findTranslationGroundTruth = translationQualityMod.findTranslationGroundTruth
+} catch (_) {
+  // Mobile bundle fallback — skip quality scoring (no ground-truth fixtures
+  // shipped to device). chrF field will simply be null in reporter records.
+  evaluateTranslationQuality = function () { return null }
+  findTranslationGroundTruth = function () { return null }
 }
 
 const _perfReporter = createPerformanceReporter({
@@ -358,9 +370,13 @@ function createPerformanceCollector () {
  *
  * @param {string} label - Test label prefix (e.g., '[Bergamot]')
  * @param {Object} metrics - Metrics object from createPerformanceCollector().getMetrics()
+ * @param {Object} [qualityOpts] - Optional translation-quality context
+ * @param {string} [qualityOpts.fixturePath] - Path to the ground-truth fixture JSON
+ * @param {string} [qualityOpts.srcLang]     - Source language code (matches fixture entry)
+ * @param {string} [qualityOpts.dstLang]     - Destination language code (matches fixture entry)
  * @returns {string} Formatted performance metrics string
  */
-function formatPerformanceMetrics (label, metrics) {
+function formatPerformanceMetrics (label, metrics, qualityOpts) {
   const {
     totalTime,
     generatedTokens,
@@ -375,24 +391,44 @@ function formatPerformanceMetrics (label, metrics) {
   const tpsValue = typeof tps === 'number' ? tps.toFixed(2) : '0.00'
   const decodeTimeMs = typeof decodeTime === 'number' ? decodeTime : 0
 
+  let quality = null
+  if (qualityOpts && qualityOpts.fixturePath && prompt && qualityOpts.srcLang && qualityOpts.dstLang) {
+    try {
+      const gt = findTranslationGroundTruth(qualityOpts.fixturePath, prompt, qualityOpts.srcLang, qualityOpts.dstLang)
+      if (gt) {
+        quality = evaluateTranslationQuality(fullOutput || '', gt)
+      }
+    } catch (err) {
+      console.log(`[translation-quality] evaluation failed: ${err.message}`)
+    }
+  }
+
   _perfReporter.record(label, {
     total_time_ms: Math.round(totalTimeMs),
     decode_time_ms: Math.round(decodeTimeMs),
     generated_tokens: generatedTokens || null,
-    tps: typeof tps === 'number' ? parseFloat(tpsValue) : null
+    tps: typeof tps === 'number' ? parseFloat(tpsValue) : null,
+    chrf: quality ? quality.chrf : null
   }, {
     input: prompt || null,
-    output: fullOutput || null
+    output: fullOutput || null,
+    reference: quality ? quality.reference : null
   })
   _scheduleReportWrite()
 
-  return `${label} Performance Metrics:
+  let out = `${label} Performance Metrics:
     - Total time: ${totalTimeMs.toFixed(0)}ms (${totalSeconds}s)
     - Decode time: ${decodeTimeMs.toFixed(2)}ms
     - Generated tokens: ${generatedTokens} tokens
     - Prompt: "${prompt}"
     - Tokens per second (TPS): ${tpsValue} t/s
     - Full output: "${fullOutput}"`
+
+  if (quality && typeof quality.chrf === 'number') {
+    out += `\n    - chrF: ${quality.chrf.toFixed(4)}`
+  }
+
+  return out
 }
 
 // ============================================================================
