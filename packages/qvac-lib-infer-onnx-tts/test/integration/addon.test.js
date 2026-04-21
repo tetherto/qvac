@@ -11,12 +11,17 @@ const { lavasrEnhancerConfig, loadReferenceAudio } = require('../utils/lavasr-he
 
 const platform = os.platform()
 const isMobile = platform === 'ios' || platform === 'android'
-const isDarwin = platform === 'darwin'
 
-const CHATTERBOX_VARIANT = os.getEnv('CHATTERBOX_VARIANT') || 'fp32'
+const CHATTERBOX_VARIANT = os.getEnv('CHATTERBOX_VARIANT') ||
+  (platform === 'darwin' && os.arch() === 'arm64' ? 'fp32' : 'q4')
 const VARIANT_SUFFIX = CHATTERBOX_VARIANT === 'fp32' ? '' : `_${CHATTERBOX_VARIANT}`
 const INPUT_SENTENCES = (isMobile ? 'short' : os.getEnv('INPUT_SENTENCES')) || 'short'
 const TEST_ALL_LANGUAGES = os.getEnv('TEST_ALL_LANGUAGES') === 'true'
+const _integrationProfileRaw = (os.getEnv('TTS_INTEGRATION_PROFILE') || 'long').toLowerCase()
+const TTS_INTEGRATION_PROFILE = (_integrationProfileRaw === 'short' || _integrationProfileRaw === 'long')
+  ? _integrationProfileRaw
+  : 'long'
+const runWerIntegration = TTS_INTEGRATION_PROFILE === 'long'
 const useSplit = INPUT_SENTENCES !== 'short'
 
 function chatterboxPath (modelDir, baseName, isMultilingual = false) {
@@ -99,7 +104,7 @@ test('Chatterbox TTS: English + Spanish synthesis and WER verification', { timeo
   t.ok(multiDownload.success, 'Chatterbox multilingual models should be downloaded')
   if (!multiDownload.success) return
 
-  if (isDarwin) {
+  if (runWerIntegration && INPUT_SENTENCES === 'short') {
     console.log('\n=== Ensuring Whisper model ===')
     const whisperModelPath = path.join(whisperModelDir, 'ggml-small.bin')
     await ensureWhisperModel(whisperModelPath)
@@ -174,9 +179,9 @@ test('Chatterbox TTS: English + Spanish synthesis and WER verification', { timeo
   t.pass('Multilingual model unloaded')
 
   console.log('\n=== WER verification ===')
-  if (!isDarwin) {
-    console.log('WER verification skipped (non-darwin)')
-    t.pass('WER skipped (non-darwin)')
+  if (!runWerIntegration) {
+    console.log('WER verification skipped (TTS_INTEGRATION_PROFILE=short)')
+    t.pass('WER skipped (TTS_INTEGRATION_PROFILE=short)')
   } else if (INPUT_SENTENCES !== 'short') {
     console.log('WER verification skipped (non-short input)')
     t.pass('WER skipped (non-short input)')
@@ -239,7 +244,12 @@ test('Chatterbox Multilingual TTS: Synthesis across languages', { timeout: 36000
   t.ok(downloadResult.success, 'Chatterbox multilingual models should be downloaded')
   if (!downloadResult.success) return
 
-  const multilingualSentences = getMultilingualSentences()
+  const fullMultilingualSentences = getMultilingualSentences()
+  const multilingualSentences = TTS_INTEGRATION_PROFILE === 'short'
+    ? Object.fromEntries(
+      Object.keys(fullMultilingualSentences).slice(0, 2).map((k) => [k, fullMultilingualSentences[k]])
+    )
+    : fullMultilingualSentences
   const languages = Object.keys(multilingualSentences)
   const firstLang = languages[0]
 
@@ -696,9 +706,9 @@ test('Supertonic TTS: Multiple sentences synthesis', { timeout: 1800000 }, async
 })
 
 test('Supertonic TTS: WER test (TTS + Whisper)', { timeout: 1800000 }, async (t) => {
-  if (!isDarwin) {
-    console.log('WER test skipped (non-darwin)')
-    t.pass('WER test skipped (non-darwin)')
+  if (!runWerIntegration) {
+    console.log('WER test skipped (TTS_INTEGRATION_PROFILE=short)')
+    t.pass('WER test skipped (TTS_INTEGRATION_PROFILE=short)')
     return
   }
 

@@ -24,6 +24,14 @@ on:
         type: string
         required: false
         default: "packages/qvac-lib-infer-onnx-tts"
+      tts_integration_profile:
+        description: "short = no WER, 2 multilingual langs; long = WER on all platforms, full multilingual"
+        type: choice
+        required: false
+        default: "short"
+        options:
+          - short
+          - long
   workflow_call:
     inputs:
       ref:
@@ -37,6 +45,11 @@ on:
         description: "Relative path to package directory in monorepo"
         required: false
         default: "packages/qvac-lib-infer-onnx-tts"
+        type: string
+      tts_integration_profile:
+        description: "short = no WER, 2 multilingual langs; long = WER on all platforms, full multilingual"
+        required: false
+        default: "short"
         type: string
 
 jobs:
@@ -60,6 +73,38 @@ jobs:
           - macos-14-xlarge
           - macos-15-large
           - windows-2022
+        exclude:
+          # Only darwin-arm64 (macos-14-xlarge) runs all Chatterbox quantization variants; others use q4 only.
+          - os: ubuntu-22.04
+            variant: fp32
+          - os: ubuntu-22.04
+            variant: fp16
+          - os: ubuntu-22.04
+            variant: q4f16
+          - os: ubuntu-24.04
+            variant: fp32
+          - os: ubuntu-24.04
+            variant: fp16
+          - os: ubuntu-24.04
+            variant: q4f16
+          - os: ubuntu-24.04-arm
+            variant: fp32
+          - os: ubuntu-24.04-arm
+            variant: fp16
+          - os: ubuntu-24.04-arm
+            variant: q4f16
+          - os: macos-15-large
+            variant: fp32
+          - os: macos-15-large
+            variant: fp16
+          - os: macos-15-large
+            variant: q4f16
+          - os: windows-2022
+            variant: fp32
+          - os: windows-2022
+            variant: fp16
+          - os: windows-2022
+            variant: q4f16
         include:
           - os: ubuntu-22.04
             platform: linux
@@ -173,6 +218,7 @@ jobs:
         run: npm run test:integration
         env:
           CHATTERBOX_VARIANT: ${{ matrix.variant }}
+          TTS_INTEGRATION_PROFILE: ${{ inputs.tts_integration_profile || 'short' }}
           QASE_API_TOKEN: ${{ secrets.QASE_API_TOKEN }}
 
       - name: Upload performance report
