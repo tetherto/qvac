@@ -622,14 +622,12 @@ std::any SdModel::process(const std::any& input) {
           "img2img: entering FLUX2 *fusion* mode — " + std::to_string(nMulti) +
               " reference images. increase_ref_index=" +
               (gen.increaseRefIndex
-                   ? std::string(
-                         "true (distinct RoPE slots per ref — use "
-                         "when the text encoder supports vision "
-                         "tokens, e.g. Qwen-Image-Edit)")
-                   : std::string(
-                         "false (refs tile into one coordinate "
-                         "space — visual feature fusion; CLI "
-                         "default, recommended for FLUX2-klein)")));
+                   ? std::string("true (distinct RoPE slots per ref — use "
+                                 "when the text encoder supports vision "
+                                 "tokens, e.g. Qwen-Image-Edit)")
+                   : std::string("false (refs tile into one coordinate "
+                                 "space — visual feature fusion; CLI "
+                                 "default, recommended for FLUX2-klein)")));
 
       genParams.ref_images = refImgs.data();
       genParams.ref_images_count = static_cast<int>(nMulti);
