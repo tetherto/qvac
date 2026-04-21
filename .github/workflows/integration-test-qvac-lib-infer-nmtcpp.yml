@@ -248,16 +248,31 @@ jobs:
           fi
 
           awk '
+          /^[[:space:]]*- chrF: / {
+            last_chrf = $0
+            sub(/^.*chrF: */, "", last_chrf)
+            next
+          }
           /^ok [0-9]+ - / {
             name = $0; sub(/^ok [0-9]+ - /, "", name)
             passed++
-            results[++total] = "PASS: " name
+            line = "PASS: " name
+            if (last_chrf != "") {
+              line = line "  |  chrF = " last_chrf
+              last_chrf = ""
+            }
+            results[++total] = line
             next
           }
           /^not ok [0-9]+ - / {
             name = $0; sub(/^not ok [0-9]+ - /, "", name)
             failed++
-            results[++total] = "FAIL: " name
+            line = "FAIL: " name
+            if (last_chrf != "") {
+              line = line "  |  chrF = " last_chrf
+              last_chrf = ""
+            }
+            results[++total] = line
             capturing = 1
             fail_detail[total] = ""
             next
@@ -336,15 +351,30 @@ jobs:
           $failed = @()
           $failDetails = @{}
           $currentFail = $null
+          $lastChrf = $null
 
           foreach ($line in $lines) {
-            if ($line -match '^ok \d+ - (.+)') {
-              $passed += "PASS: $($Matches[1])"
+            if ($line -match '^\s*- chrF:\s*(.+)$') {
+              $lastChrf = $Matches[1].Trim()
+            }
+            elseif ($line -match '^ok \d+ - (.+)') {
+              $name = $Matches[1]
+              if ($lastChrf) {
+                $passed += "PASS: $name  |  chrF = $lastChrf"
+                $lastChrf = $null
+              } else {
+                $passed += "PASS: $name"
+              }
               $currentFail = $null
             }
             elseif ($line -match '^not ok \d+ - (.+)') {
               $testName = $Matches[1]
-              $failed += "FAIL: $testName"
+              if ($lastChrf) {
+                $failed += "FAIL: $testName  |  chrF = $lastChrf"
+                $lastChrf = $null
+              } else {
+                $failed += "FAIL: $testName"
+              }
               $currentFail = $testName
               $failDetails[$testName] = @()
             }
@@ -401,6 +431,7 @@ jobs:
           path: |
             ${{ inputs.workdir || env.PKG_DIR }}/test-report.txt
             ${{ inputs.workdir || env.PKG_DIR }}/test-output.log
+            ${{ inputs.workdir || env.PKG_DIR }}/test/results/performance-report.json
           retention-days: 14
 
       - name: Run quickstart example with deps installed
