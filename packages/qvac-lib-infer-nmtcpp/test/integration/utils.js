@@ -181,8 +181,10 @@ try {
   }
 
   function _computePR (hGrams, rGrams) {
-    let hTotal = 0; for (const c of hGrams.values()) hTotal += c
-    let rTotal = 0; for (const c of rGrams.values()) rTotal += c
+    let hTotal = 0
+    for (const c of hGrams.values()) hTotal += c
+    let rTotal = 0
+    for (const c of rGrams.values()) rTotal += c
     if (hTotal === 0 || rTotal === 0) return null
     let matches = 0
     for (const [g, hc] of hGrams) {
@@ -196,14 +198,24 @@ try {
     const h = _cleanWhitespace(hypothesis)
     const r = _cleanWhitespace(reference)
     if (h.length === 0 || r.length === 0) return 0
-    let precSum = 0, recSum = 0, validOrders = 0
+    let precSum = 0
+    let recSum = 0
+    let validOrders = 0
     for (let n = 1; n <= 6; n++) {
       const res = _computePR(_extractCharNgrams(h, n), _extractCharNgrams(r, n))
-      if (res) { precSum += res.p; recSum += res.r; validOrders++ }
+      if (res) {
+        precSum += res.p
+        recSum += res.r
+        validOrders++
+      }
     }
     for (let n = 1; n <= 2; n++) {
       const res = _computePR(_extractWordNgrams(h, n), _extractWordNgrams(r, n))
-      if (res) { precSum += res.p; recSum += res.r; validOrders++ }
+      if (res) {
+        precSum += res.p
+        recSum += res.r
+        validOrders++
+      }
     }
     if (validOrders === 0) return 0
     const avgP = precSum / validOrders
