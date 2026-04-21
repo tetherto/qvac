@@ -617,19 +617,23 @@ std::any SdModel::process(const std::any& input) {
       gen.width = genParams.width;
       gen.height = genParams.height;
 
+      // clang-format off
+      // NOTE: Homebrew and apt.llvm.org builds of clang-format-19 disagree on
+      // whether the std::string(...) branches of this ternary should hang the
+      // call open-paren on its own line. Pinning the layout here keeps local
+      // and CI bit-for-bit.
       QLOG_IF(
           qvac_lib_inference_addon_cpp::logger::Priority::INFO,
           "img2img: entering FLUX2 *fusion* mode -- " + std::to_string(nMulti) +
               " reference images. increase_ref_index=" +
               (gen.increaseRefIndex
-                   ? std::string(
-                         "true (distinct RoPE slots per ref -- use "
-                         "when the text encoder supports vision "
-                         "tokens, e.g. Qwen-Image-Edit)")
-                   : std::string(
-                         "false (refs tile into one coordinate "
-                         "space -- visual feature fusion; CLI "
-                         "default, recommended for FLUX2-klein)")));
+                   ? std::string("true (distinct RoPE slots per ref -- use "
+                                 "when the text encoder supports vision "
+                                 "tokens, e.g. Qwen-Image-Edit)")
+                   : std::string("false (refs tile into one coordinate "
+                                 "space -- visual feature fusion; CLI "
+                                 "default, recommended for FLUX2-klein)")));
+      // clang-format on
 
       genParams.ref_images = refImgs.data();
       genParams.ref_images_count = static_cast<int>(nMulti);
