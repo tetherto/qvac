@@ -5,7 +5,7 @@ description: Chunks documents into smaller pieces for embedding.
 ---
 
 ```ts
-function ragChunk(params, options?): Promise<RagDoc[]>;
+function ragChunk(params: RagChunkParams, options?: RPCOptions): Promise<RagDoc[]>;
 ```
 
 Part of the segregated flow: `ragChunk()` → [`embed()`](../embed) → [`ragSaveEmbeddings()`](../ragSaveEmbeddings)

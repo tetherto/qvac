@@ -5,8 +5,8 @@ description: Generates embeddings for a single text using a specified model.
 ---
 
 ```ts
-function embed(params: { modelId: string; text: string }, options?: RPCOptions): Promise<number[]>;
-function embed(params: { modelId: string; text: string[] }, options?: RPCOptions): Promise<number[][]>;
+function embed(params: { modelId: string; text: string }, options?: RPCOptions): Promise<{ embedding: number[]; stats?: EmbedStats }>;
+function embed(params: { modelId: string; text: string[] }, options?: RPCOptions): Promise<{ embedding: number[][]; stats?: EmbedStats }>;
 ```
 
 ## Parameters
@@ -14,7 +14,7 @@ function embed(params: { modelId: string; text: string[] }, options?: RPCOptions
 | Name | Type | Required? | Description |
 | --- | --- | :---: | --- |
 | params | [`EmbedParams`](#embedparams) | ✓ | The embedding parameters |
-| options | [`RPCOptions`](../shared-types/#rpcoptions) | ✗ | Optional RPC transport options |
+| options | [`RPCOptions`](./shared-types#rpcoptions) | ✗ | Optional RPC transport options |
 
 ### `EmbedParams`
 
@@ -25,8 +25,21 @@ function embed(params: { modelId: string; text: string[] }, options?: RPCOptions
 
 ## Returns
 
-- `Promise<number[]>` — When `text` is a single string, returns the embedding vector.
-- `Promise<number[][]>` — When `text` is an array, returns an array of embedding vectors.
+`Promise<object>` — Resolves to an object with the following fields:
+
+| Field | Type | Description |
+| --- | --- | --- |
+| embedding | `number[] \| number[][]` | The embedding vector(s). Single `number[]` when `text` is a string; `number[][]` when `text` is an array. |
+| stats | [`EmbedStats`](#embedstats) ` \| undefined` | Performance statistics |
+
+### `EmbedStats`
+
+| Field | Type | Description |
+| --- | --- | --- |
+| totalTime | `number \| undefined` | Total embedding time in milliseconds |
+| tokensPerSecond | `number \| undefined` | Tokens processed per second |
+| totalTokens | `number \| undefined` | Total tokens processed |
+| backendDevice | `"cpu" \| "gpu" \| undefined` | Compute backend used for inference |
 
 ## Throws
 
@@ -38,13 +51,17 @@ function embed(params: { modelId: string; text: string[] }, options?: RPCOptions
 
 ```typescript
 // Single text
-const vector = await embed({ modelId: "embedding-model", text: "Hello world" });
-console.log(vector.length); // e.g. 384
+const { embedding, stats } = await embed({
+  modelId: "embedding-model",
+  text: "Hello world",
+});
+console.log(embedding.length); // e.g. 384
+console.log(stats?.tokensPerSecond);
 
 // Multiple texts (batch)
-const vectors = await embed({
+const { embedding: vectors } = await embed({
   modelId: "embedding-model",
-  text: ["Hello world", "How are you?"]
+  text: ["Hello world", "How are you?"],
 });
 console.log(vectors.length); // 2
 ```

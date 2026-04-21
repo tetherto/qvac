@@ -5,7 +5,7 @@ description: Translates text from one language to another using a specified tran
 ---
 
 ```ts
-function translate(params): {
+function translate(params: TranslateClientParams): {
   tokenStream: AsyncGenerator<string>;
   text: Promise<string>;
   stats: Promise<TranslationStats | undefined>;

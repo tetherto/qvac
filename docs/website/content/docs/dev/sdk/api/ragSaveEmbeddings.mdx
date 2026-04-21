@@ -5,7 +5,7 @@ description: Saves pre-embedded documents to the RAG vector database.
 ---
 
 ```ts
-function ragSaveEmbeddings(params, options?): Promise<RagSaveEmbeddingsResult[]>;
+function ragSaveEmbeddings(params: RagSaveEmbeddingsParams, options?: RPCOptions): Promise<RagSaveEmbeddingsResult[]>;
 ```
 
 Part of the segregated flow: [`ragChunk()`](../ragChunk) → [`embed()`](../embed) → `ragSaveEmbeddings()`. Implicitly opens (or creates) the workspace.

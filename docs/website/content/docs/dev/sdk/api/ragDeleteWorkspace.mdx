@@ -5,7 +5,7 @@ description: Deletes a RAG workspace and all its data.
 ---
 
 ```ts
-function ragDeleteWorkspace(params, options?): Promise<void>;
+function ragDeleteWorkspace(params: RagDeleteWorkspaceParams, options?: RPCOptions): Promise<void>;
 ```
 
 The workspace must not be currently loaded/in-use.

@@ -91,38 +91,6 @@ export function transcribeStream(
   options?: RPCOptions,
 ): Promise<TranscribeStreamSession>;
 
-/**
- * Streams audio transcription results in real-time, yielding text chunks as
- * they become available from the model.
- *
- * Two call modes are supported:
- * - Pass `audioChunk` to send the full audio upfront (deprecated — use
- *   {@link transcribe} instead).
- * - Omit `audioChunk` to open a bidirectional streaming session where you
- *   call `write()` with audio frames as they arrive.
- *
- * @param params - Transcription parameters
- * @param params.modelId - The identifier of the transcription model
- * @param params.audioChunk - Audio input as file path (string) or audio buffer (deprecated)
- * @param params.prompt - Optional initial prompt to guide the transcription
- * @param options - Optional RPC transport options
- * @returns `AsyncGenerator<string>` yielding text chunks, or a
- *   `Promise<TranscribeStreamSession>` for the duplex mode.
- *
- * @throws {TRANSCRIPTION_FAILED} Transcription fails
- *
- * @example
- * ```typescript
- * const stream = transcribeStream({
- *   modelId: "whisper-model",
- *   audioChunk: "/path/to/audio.wav",
- * });
- *
- * for await (const textChunk of stream) {
- *   process.stdout.write(textChunk);
- * }
- * ```
- */
 export function transcribeStream(
   params: TranscribeClientParams | TranscribeStreamClientParams,
   options?: RPCOptions,

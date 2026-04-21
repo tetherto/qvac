@@ -1,46 +1,31 @@
 ---
 title: "defineDuplexHandler( )"
 titleStyle: code
-description: "Helper function to define a duplex plugin handler with full type inference. A duplex handler runs on the server side and receives both an `inputStream` of client requests and a `sendStream` to emit responses, enabling bidirectional streaming plugin APIs."
+description: Helper function to define a duplex (bidirectional streaming) handler with full type inference.
 ---
 
-<WrapCode>
-
-```typescript
-function defineDuplexHandler(definition: DuplexPluginHandlerDefinition<TRequest, TResponse>): PluginHandlerDefinition<TRequest, TResponse>
+```ts
+function defineDuplexHandler<TRequest extends ZodType, TResponse extends ZodType>(
+  definition: DuplexPluginHandlerDefinition<TRequest, TResponse>
+): PluginHandlerDefinition<TRequest, TResponse>;
 ```
-
-</WrapCode>
 
 ## Parameters
 
 | Name | Type | Required? | Description |
 | --- | --- | :---: | --- |
-| `definition` | `DuplexPluginHandlerDefinition<TRequest, TResponse>` | ✓ | The duplex handler definition (request/response schemas + `handler` with `duplex: true`) |
+| definition | [`DuplexPluginHandlerDefinition`](#duplexpluginhandlerdefinition) | ✓ | The duplex handler definition with schemas and handler function |
+
+### `DuplexPluginHandlerDefinition`
+
+| Field | Type | Required? | Description |
+| --- | --- | :---: | --- |
+| requestSchema | `ZodType` | ✓ | Zod schema for validating incoming requests |
+| responseSchema | `ZodType` | ✓ | Zod schema for validating outgoing responses |
+| streaming | `true` | ✓ | Must be `true` — duplex handlers are always streaming |
+| duplex | `true` | ✓ | Must be `true` — marks this handler as bidirectional |
+| handler | `(request, inputStream: AsyncIterable<Buffer>) => AsyncGenerator<response>` | ✓ | The handler function — receives a validated request and an input stream, yields validated response chunks |
 
 ## Returns
 
-```typescript
-PluginHandlerDefinition<TRequest, TResponse>
-```
-
-No description available
-
-## Example
-
-```typescript
-import { defineDuplexHandler } from "@qvac/sdk";
-import { z } from "zod";
-
-export default defineDuplexHandler({
-  request: z.object({ kind: z.literal("chat") }),
-  response: z.object({ chunk: z.string() }),
-  duplex: true,
-  handler: async ({ inputStream, sendStream }) => {
-    for await (const msg of inputStream) {
-      await sendStream.write({ chunk: `echo:${msg.kind}` });
-    }
-    await sendStream.end();
-  },
-});
-```
+`PluginHandlerDefinition<TRequest, TResponse>` — The same definition object, with full type inference applied. This is an identity function used for type checking.

@@ -5,12 +5,6 @@ export const attachmentSchema = z.object({
   path: z.string(),
 });
 
-export const historyMessageSchema = z.object({
-  role: z.string(),
-  content: z.string(),
-  attachments: z.array(attachmentSchema).optional(),
-});
-
 const kvCacheSchema = z.union([
   z.boolean(),
   z.string().min(1, "KV cache key cannot be empty string"),
@@ -30,14 +24,20 @@ export const generationParamsSchema = z
   .strict();
 
 export const completionParamsSchema = z.object({
-  history: z.array(historyMessageSchema),
+  history: z.array(
+    z.object({
+      role: z.string(),
+      content: z.string(),
+      attachments: z.array(attachmentSchema).optional(),
+    }),
+  ),
   modelId: z.string(),
   kvCache: kvCacheSchema.optional(),
 });
 
 export const completionClientParamsSchema = completionParamsSchema.extend({
   tools: z.array(toolSchema).optional(),
-  stream: z.boolean().default(true),
+  stream: z.boolean(),
   kvCache: kvCacheSchema.optional(),
   generationParams: generationParamsSchema.optional(),
 });
@@ -76,5 +76,4 @@ export type CompletionStreamResponse = z.infer<
   typeof completionStreamResponseSchema
 >;
 export type Attachment = z.infer<typeof attachmentSchema>;
-export type HistoryMessage = z.infer<typeof historyMessageSchema>;
 export type CompletionStats = z.infer<typeof completionStatsSchema>;

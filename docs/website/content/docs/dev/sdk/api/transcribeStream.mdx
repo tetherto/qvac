@@ -5,7 +5,7 @@ description: Streams audio transcription results in real-time, yielding text chu
 ---
 
 ```ts
-function transcribeStream(params, options?): AsyncGenerator<string>;
+function transcribeStream(params: TranscribeClientParams, options?: RPCOptions): AsyncGenerator<string>;
 ```
 
 Yields text chunks as they become available from the model.

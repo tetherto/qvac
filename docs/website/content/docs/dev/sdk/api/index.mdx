@@ -1,8 +1,7 @@
 ---
 title: "@qvac/sdk"
 titleStyle: code
-description: API reference — v0.8.0
-ogImage: /og-sdk-js-api-reference.png
+description: API reference — v0.9.0
 ---
 
 ## Overview
@@ -16,16 +15,20 @@ ogImage: /og-sdk-js-api-reference.png
 | [`cancel()`](./cancel) | Cancels an ongoing operation. |
 | [`close()`](./close) | Closes the SDK client connection and releases all associated resources. |
 | [`completion()`](./completion) | Generates completion from a language model based on conversation history. |
+| [`defineDuplexHandler()`](./defineDuplexHandler) | Helper function to define a duplex (bidirectional streaming) handler with full type inference. |
 | [`defineHandler()`](./defineHandler) | Helper function to define a handler with full type inference. |
 | [`definePlugin()`](./definePlugin) | Helper function to define a plugin with full type inference. |
 | [`deleteCache()`](./deleteCache) | Deletes KV cache files. |
+| [`diffusion()`](./diffusion) | Generates images using a loaded diffusion model. |
 | [`downloadAsset()`](./downloadAsset) | Downloads an asset (model file) without loading it into memory. |
 | [`embed()`](./embed) | Generates embeddings for a single text using a specified model. |
+| [`finetune()`](./finetune) | Starts, resumes, inspects, pauses, or cancels a finetuning job. |
 | [`getLogger()`](./getLogger) | Creates or retrieves a namespaced logger instance. |
 | [`getModelByName()`](./getModelByName) | Looks up a model in the built-in catalog by its constant name. |
 | [`getModelByPath()`](./getModelByPath) | Looks up a model in the built-in catalog by its registry path. |
 | [`getModelBySrc()`](./getModelBySrc) | Looks up a model in the built-in catalog by model file ID and blob core key. |
 | [`getModelInfo()`](./getModelInfo) | Returns status information for a catalog model, including cache state and loaded instances. |
+| [`heartbeat()`](./heartbeat) | Checks if a delegated provider or the local SDK worker is responsive. |
 | [`invokePlugin()`](./invokePlugin) | Invoke a non-streaming plugin handler. |
 | [`invokePluginStream()`](./invokePluginStream) | Invoke a streaming plugin handler. |
 | [`loadModel()`](./loadModel) | Loads a machine learning model from a local path, remote URL, or Hyperdrive key. |
@@ -34,7 +37,6 @@ ogImage: /og-sdk-js-api-reference.png
 | [`modelRegistryList()`](./modelRegistryList) | Returns all available models from the QVAC distributed model registry. |
 | [`modelRegistrySearch()`](./modelRegistrySearch) | Searches the model registry with optional filters for model type, engine, and quantization. |
 | [`ocr()`](./ocr) | Performs Optical Character Recognition (OCR) on an image to extract text. |
-| [`ping()`](./ping) | Sends a ping request to the server and returns the pong response. |
 | [`ragChunk()`](./ragChunk) | Chunks documents into smaller pieces for embedding. |
 | [`ragCloseWorkspace()`](./ragCloseWorkspace) | Closes a RAG workspace, releasing in-memory resources (Corestore, HyperDB adapter, RAG instance). |
 | [`ragDeleteEmbeddings()`](./ragDeleteEmbeddings) | Deletes document embeddings from the RAG vector database. |
@@ -44,8 +46,10 @@ ogImage: /og-sdk-js-api-reference.png
 | [`ragReindex()`](./ragReindex) | Reindexes the RAG database to optimize search performance. |
 | [`ragSaveEmbeddings()`](./ragSaveEmbeddings) | Saves pre-embedded documents to the RAG vector database. |
 | [`ragSearch()`](./ragSearch) | Searches for similar documents in the RAG vector database. |
+| [`resume()`](./resume) | Resumes all suspended Hyperswarm and Corestore resources. |
 | [`startQVACProvider()`](./startQVACProvider) | Starts a provider service that offers QVAC capabilities to remote peers. |
 | [`stopQVACProvider()`](./stopQVACProvider) | Stops a running provider service and leaves the specified topic. |
+| [`suspend()`](./suspend) | Suspends all active Hyperswarm and Corestore resources. |
 | [`textToSpeech()`](./textToSpeech) | Converts text to speech audio using a loaded TTS model. |
 | [`transcribe()`](./transcribe) | Collects all streaming results into a single string response. |
 | [`transcribeStream()`](./transcribeStream) | Streams audio transcription results in real-time, yielding text chunks as they become available. |

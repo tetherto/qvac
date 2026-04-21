@@ -25,15 +25,10 @@ import {
 import { nowMs, generateProfileId } from "./clock";
 
 export interface ResolvedProfilerConfig {
-  /** Whether profiling is currently enabled */
   enabled: boolean;
-  /** Active profiling mode */
   mode: ProfilerMode;
-  /** Whether server breakdown is included */
   includeServerBreakdown: boolean;
-  /** Active operation filters */
   operationFilters: string[];
-  /** Maximum number of recent events retained (default 1000) */
   maxRecentEvents: number;
 }
 

@@ -205,34 +205,6 @@ export function defineHandler<
   return definition;
 }
 
-/**
- * Helper function to define a duplex plugin handler with full type inference.
- *
- * A duplex handler runs on the server side and receives both an `inputStream`
- * of client requests and a `sendStream` to emit responses, enabling
- * bidirectional streaming plugin APIs.
- *
- * @param definition - The duplex handler definition (request/response schemas + `handler` with `duplex: true`)
- * @returns The handler registered as a regular `PluginHandlerDefinition` for the plugin runtime.
- *
- * @example
- * ```typescript
- * import { defineDuplexHandler } from "@qvac/sdk";
- * import { z } from "zod";
- *
- * export default defineDuplexHandler({
- *   request: z.object({ kind: z.literal("chat") }),
- *   response: z.object({ chunk: z.string() }),
- *   duplex: true,
- *   handler: async ({ inputStream, sendStream }) => {
- *     for await (const msg of inputStream) {
- *       await sendStream.write({ chunk: `echo:${msg.kind}` });
- *     }
- *     await sendStream.end();
- *   },
- * });
- * ```
- */
 export function defineDuplexHandler<
   TRequest extends z.ZodType,
   TResponse extends z.ZodType,

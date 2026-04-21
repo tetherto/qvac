@@ -5,7 +5,7 @@ description: Searches the QVAC model registry with optional filters.
 ---
 
 ```ts
-function modelRegistrySearch(params?): Promise<ModelRegistryEntry[]>;
+function modelRegistrySearch(params?: ModelRegistrySearchParams): Promise<ModelRegistryEntry[]>;
 ```
 
 ## Parameters
@@ -26,7 +26,7 @@ function modelRegistrySearch(params?): Promise<ModelRegistryEntry[]>;
 
 ## Returns
 
-`Promise<`[`ModelRegistryEntry[]`](../modelRegistryGetModel#modelregistryentry)`>` — Matching model entries. See [`modelRegistryGetModel()`](../modelRegistryGetModel#modelregistryentry) for the `ModelRegistryEntry` shape.
+`Promise<`[`ModelRegistryEntry[]`](../modelRegistryGetModel#modelregistryentry)`>` — Matching model entries. 
 
 ## Throws
 

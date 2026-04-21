@@ -547,36 +547,6 @@ async function duplexProfiled<T extends Request>(
   };
 }
 
-/**
- * Closes the SDK client connection and releases all associated resources.
- *
- * Safe to call multiple times — subsequent calls are a no-op if already closed.
- * When the SDK runs in-process on Bare (not under Node.js with a separate
- * worker process), calling `close()` runs the same teardown as a signal-driven
- * shutdown and then ends the process with exit code 0.
- *
- * @returns Resolves when the connection is closed (Node.js and Expo). On Bare
- *   direct mode, the process usually exits before the promise resolves.
- *
- * @example
- * ```typescript
- * import { loadModel, completion, close } from "@qvac/sdk";
- *
- * const modelId = await loadModel({
- *   modelSrc: "/path/to/model.gguf",
- *   modelType: "llm",
- * });
- *
- * const result = completion({
- *   modelId,
- *   history: [{ role: "user", content: "Hello" }],
- * });
- *
- * console.log(await result.text);
- *
- * await close();
- * ```
- */
 export async function close() {
   if (!rpcInstance) return;
   rpcInstance = null;
