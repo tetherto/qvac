@@ -35,15 +35,18 @@ download_models() {
 
 download_fixtures() {
   mkdir -p "$FIXTURES_DIR"
+  local temp_dir archive_path
+  temp_dir="$(mktemp -d "${TMPDIR:-/tmp}/bci-test-fixtures.XXXXXX")"
+  archive_path="${temp_dir}/bci-test-fixtures.tar.gz"
+  trap 'rm -rf "$temp_dir"' RETURN
 
   echo "Downloading BCI test fixtures..."
   gh release download "$RELEASE_TAG" \
     --repo "$RELEASE_REPO" \
-    --pattern "bci-test-fixtures.tar.gz" --dir /tmp \
+    --pattern "bci-test-fixtures.tar.gz" --dir "$temp_dir" \
     --clobber
 
-  tar xzf /tmp/bci-test-fixtures.tar.gz -C "$FIXTURES_DIR/"
-  rm -f /tmp/bci-test-fixtures.tar.gz
+  tar xzf "$archive_path" -C "$FIXTURES_DIR/"
 
   echo "Test fixtures:" && ls -lh "$FIXTURES_DIR"/*.bin
 }
@@ -51,7 +54,12 @@ download_fixtures() {
 case "${1:-all}" in
   --models)  download_models ;;
   --fixtures) download_fixtures ;;
-  all|*)     download_models; echo; download_fixtures ;;
+  all)       download_models; echo; download_fixtures ;;
+  *)
+    echo "Unknown option: ${1}"
+    echo "Usage: bash scripts/download-models.sh [all|--models|--fixtures]"
+    exit 1
+    ;;
 esac
 
 echo ""

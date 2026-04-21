@@ -111,6 +111,12 @@ async function main () {
     console.log('Average WER: ' + (avgWER * 100).toFixed(1) + '% (n=' + total + ')')
     console.log('Time: ' + elapsed + 's')
   } else {
+    const signalPath = args[0]
+    if (!fs.existsSync(signalPath)) {
+      console.error('Error: Signal file not found: ' + signalPath)
+      return
+    }
+
     const bci = new BCIWhispercpp({
       files: { model: modelPath }
     }, {
@@ -120,12 +126,6 @@ async function main () {
 
     await bci.load()
     console.log('Model loaded.\n')
-
-    const signalPath = args[0]
-    if (!fs.existsSync(signalPath)) {
-      console.error('Error: Signal file not found: ' + signalPath)
-      return
-    }
 
     const buf = fs.readFileSync(signalPath)
     const view = new DataView(buf.buffer, buf.byteOffset, buf.byteLength)

@@ -219,6 +219,8 @@ class BCIInterface {
         }
         const currentJobId = this._nextJobId
         const input = this._concatBufferedSignal()
+        const previousState = this._state
+        const previousJobId = this._activeJobId
 
         let accepted = false
         try {
@@ -227,11 +229,13 @@ class BCIInterface {
             input
           })
         } catch (err) {
-          this._setState(state.LISTENING)
+          this._activeJobId = previousJobId
+          this._setState(previousState)
           throw err
         }
         if (!accepted) {
-          this._setState(state.LISTENING)
+          this._activeJobId = previousJobId
+          this._setState(previousState)
           throw new QvacErrorAddonBCI({ code: ERR_CODES.JOB_ALREADY_RUNNING })
         }
 
@@ -292,6 +296,8 @@ class BCIInterface {
     }
 
     const candidateJobId = this._nextJobId
+    const previousState = this._state
+    const previousJobId = this._activeJobId
     let accepted = false
     try {
       accepted = this._binding.runJob(this._handle, {
@@ -299,7 +305,8 @@ class BCIInterface {
         input: data.input
       })
     } catch (err) {
-      this._setState(state.LISTENING)
+      this._activeJobId = previousJobId
+      this._setState(previousState)
       throw new QvacErrorAddonBCI({
         code: ERR_CODES.FAILED_TO_START_JOB,
         adds: err.message,
@@ -308,7 +315,8 @@ class BCIInterface {
     }
 
     if (!accepted) {
-      this._setState(state.LISTENING)
+      this._activeJobId = previousJobId
+      this._setState(previousState)
       return false
     }
 

@@ -59,14 +59,14 @@ Each timestep represents a 20ms bin of neural activity. Channels correspond to i
 ## Installation
 
 ```bash
-cd packages/qvac-lib-infer-bci-whispercpp
+cd packages/bci-whispercpp
 npm install
 VCPKG_ROOT=/path/to/vcpkg npm run build
 ```
 
 ### Prerequisites
 
-- **Bare runtime** >= 1.19.0
+- **Bare runtime** >= 1.24.0
 - **CMake** >= 3.25
 - **vcpkg** with `VCPKG_ROOT` environment variable set
 
@@ -117,7 +117,7 @@ const config = {
 }
 
 const onOutput = (addon, event, jobId, data, error) => {
-  if (event === 'Output') console.log('Segment:', data.text)
+  if (event === 'Output') console.log('Segment:', data[0]?.text)
   if (event === 'JobEnded') console.log('Done:', data)
   if (event === 'Error') console.error('Error:', error)
 }
@@ -184,7 +184,7 @@ The package uses a vcpkg overlay that fetches from the `tetherto/qvac-ext-lib-wh
 | Variable conv1 kernel | Read `n_audio_conv1_kernel` from model header (k=7 for 512ch BCI vs k=3 for audio) |
 | Windowed attention | Attention mask with configurable window size/layer params in header |
 | BCI SOS tokens | BCI-specific start-of-sequence token handling |
-| Graph placement fix | Correct encoder-graph mask population (see `docs/BCI_V184_COMPAT.md`) |
+| Graph placement fix | Correct encoder-graph mask population for the encoder graph refactor |
 
 ## Platform Support
 

@@ -26,6 +26,10 @@ constexpr float K_KERNEL_TRIM_THRESHOLD = 0.01F;
 // the raw neural signal before day-projection and mel padding.
 constexpr float K_SMOOTH_KERNEL_STD = 2.0F;
 constexpr int K_SMOOTH_KERNEL_SIZE = 100;
+
+bool hasExpectedSize(const std::vector<float>& vec, size_t expected) {
+  return vec.size() == expected;
+}
 } // namespace
 
 NeuralProcessor::NeuralProcessor() = default;
@@ -106,6 +110,28 @@ bool NeuralProcessor::loadEmbedderWeights(const std::string& path) {
     n = readU32(); weights_.monthWeights[i] = readFloats(n);
     n = readU32(); weights_.monthBiases[i] = readFloats(n);
     if (readFailed) return false;
+  }
+
+  const size_t nf = static_cast<size_t>(weights_.numFeatures);
+  const size_t r = static_cast<size_t>(weights_.r);
+  const size_t expectedDayA = nf * r;
+  const size_t expectedDayB = r * nf;
+  const size_t expectedDayBias = nf;
+  const size_t expectedMonthW = nf * nf;
+
+  for (uint32_t i = 0; i < weights_.numDays; ++i) {
+    if (!hasExpectedSize(weights_.dayAs[i], expectedDayA) ||
+        !hasExpectedSize(weights_.dayBs[i], expectedDayB) ||
+        !hasExpectedSize(weights_.dayBiases[i], expectedDayBias)) {
+      return false;
+    }
+  }
+
+  for (uint32_t i = 0; i < weights_.numMonths; ++i) {
+    if (!hasExpectedSize(weights_.monthWeights[i], expectedMonthW) ||
+        !hasExpectedSize(weights_.monthBiases[i], expectedDayBias)) {
+      return false;
+    }
   }
 
   weights_.loaded = true;

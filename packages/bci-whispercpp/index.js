@@ -107,8 +107,13 @@ class BCIWhispercpp {
       configurationParams.bciConfig = this._config.bciConfig
     }
 
-    // Validation happens once inside BCIInterface's constructor via
-    // configChecker.checkConfig. Calling it here too would duplicate the work.
+    if (this.state.destroyed) {
+      throw new QvacErrorAddonBCI({
+        code: ERR_CODES.MODEL_NOT_LOADED,
+        adds: 'instance was destroyed'
+      })
+    }
+
     const binding = require('./binding')
     try {
       this.addon = new BCIInterface(
@@ -119,8 +124,9 @@ class BCIWhispercpp {
       )
     } catch (err) {
       this.addon = null
+      const configError = this._isConfigurationError(err)
       throw new QvacErrorAddonBCI({
-        code: ERR_CODES.FAILED_TO_LOAD_WEIGHTS,
+        code: configError ? ERR_CODES.INVALID_CONFIG : ERR_CODES.FAILED_TO_LOAD_WEIGHTS,
         adds: err.message,
         cause: err
       })
@@ -149,6 +155,7 @@ class BCIWhispercpp {
    * @returns {Promise<QvacResponse>}
    */
   async transcribe (neuralData) {
+    this._assertReadyForInference()
     return await this._enqueueInference(async () => {
       const response = this._job.start()
 
@@ -191,6 +198,29 @@ class BCIWhispercpp {
     }
     response.await().finally(() => { releaseSlot() }).catch(() => {})
     return response
+  }
+
+  _assertReadyForInference () {
+    if (this.state.destroyed || !this.state.configLoaded || !this.addon) {
+      throw new QvacErrorAddonBCI({
+        code: ERR_CODES.MODEL_NOT_LOADED,
+        adds: this.state.destroyed ? 'instance was destroyed' : 'call load() before transcribe()'
+      })
+    }
+  }
+
+  _isConfigurationError (err) {
+    const message = String(err?.message || '')
+    return (
+      message.includes('object is required') ||
+      message.includes('is not a valid parameter') ||
+      message.includes('bciConfig.day_idx') ||
+      message.includes('Unknown whisperConfig key') ||
+      message.includes('Unknown contextParams key') ||
+      message.includes('Unknown miscConfig key') ||
+      message.includes('error in whisperConfig handler') ||
+      message.includes('error in contextParams handler')
+    )
   }
 
   _outputCallback (addon, event, jobId, data, error) {

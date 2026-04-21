@@ -36,6 +36,5 @@ signal transcription addon powered by a BCI-patched fork of whisper.cpp.
 
 - Streaming transcription is not implemented in this release; see follow-up
   work tracked under QVAC-17062.
-- Inference error codes live in the `26001-27000` range; migrations that
-  pinned the older `7xxx` range used during initial development should update
-  to the new constants exported from `@qvac/bci-whispercpp/lib/error`.
+- Inference error codes live in the `26001-27000` range in the current
+  implementation.

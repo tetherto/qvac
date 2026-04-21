@@ -37,7 +37,7 @@
   "repository": {
     "type": "git",
     "url": "git+https://github.com/tetherto/qvac.git",
-    "directory": "packages/qvac-lib-infer-bci-whispercpp"
+    "directory": "packages/bci-whispercpp"
   },
   "author": "Tether",
   "keywords": [
@@ -51,7 +51,7 @@
   ],
   "license": "Apache-2.0",
   "bugs": "https://github.com/tetherto/qvac/issues",
-  "homepage": "https://github.com/tetherto/qvac/tree/main/packages/qvac-lib-infer-bci-whispercpp#readme",
+  "homepage": "https://github.com/tetherto/qvac/tree/main/packages/bci-whispercpp#readme",
   "devDependencies": {
     "@types/node": "^24.2.1",
     "bare-buffer": "^3.4.2",

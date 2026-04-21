@@ -95,32 +95,36 @@ void BCIModel::loadEmbedderIfNeeded() {
 }
 
 void BCIModel::load() {
-  if (!ctx_) {
-    whisper_context_params contextParams = toWhisperContextParams(cfg_);
+  if (ctx_) return;
 
-    const auto modelPathIt = cfg_.whisperContextCfg.find("model");
-    if (modelPathIt == cfg_.whisperContextCfg.end()) {
-      throw std::runtime_error("Model path not specified");
-    }
-    const auto modelPath = std::get<std::string>(modelPathIt->second);
+  whisper_context_params contextParams = toWhisperContextParams(cfg_);
 
-    QLOG(qvac_lib_inference_addon_cpp::logger::Priority::INFO,
-         "Loading BCI model from: " + modelPath);
-    ctx_.reset(
-        whisper_init_from_file_with_params(modelPath.c_str(), contextParams));
+  const auto modelPathIt = cfg_.whisperContextCfg.find("model");
+  if (modelPathIt == cfg_.whisperContextCfg.end()) {
+    throw std::runtime_error("Model path not specified");
+  }
+  const auto modelPath = std::get<std::string>(modelPathIt->second);
 
-    if (ctx_ == nullptr) {
-      throw std::runtime_error("Failed to initialize Whisper context for BCI");
-    }
+  QLOG(qvac_lib_inference_addon_cpp::logger::Priority::INFO,
+       "Loading BCI model from: " + modelPath);
 
-    is_loaded_ = true;
+  auto* rawCtx = whisper_init_from_file_with_params(modelPath.c_str(), contextParams);
+  if (rawCtx == nullptr) {
+    throw std::runtime_error("Failed to initialize Whisper context for BCI");
+  }
 
+  try {
+    ctx_.reset(rawCtx);
     loadEmbedderIfNeeded();
-
     if (!is_warmed_up_) {
       warmup();
       is_warmed_up_ = true;
     }
+    is_loaded_ = true;
+  } catch (...) {
+    ctx_.reset();
+    is_loaded_ = false;
+    throw;
   }
 }
 

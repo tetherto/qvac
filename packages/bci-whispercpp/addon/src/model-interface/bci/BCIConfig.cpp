@@ -2,6 +2,7 @@
 
 #include <algorithm>
 #include <cmath>
+#include <limits>
 #include <sstream>
 #include <stdexcept>
 #include <string>
@@ -23,6 +24,17 @@ int toInt(const JSValueVariant& v, const std::string& key) {
       throw qvac_errors::StatusError(
           qvac_errors::general_error::InvalidArgument,
           key + " must be a finite number");
+    }
+    if (*d < static_cast<double>(std::numeric_limits<int>::min()) ||
+        *d > static_cast<double>(std::numeric_limits<int>::max())) {
+      throw qvac_errors::StatusError(
+          qvac_errors::general_error::InvalidArgument,
+          key + " is out of int32 range");
+    }
+    if (std::floor(*d) != *d) {
+      throw qvac_errors::StatusError(
+          qvac_errors::general_error::InvalidArgument,
+          key + " must be an integer");
     }
     return static_cast<int>(*d);
   }
