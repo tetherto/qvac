@@ -1,6 +1,14 @@
+import type { LifecycleState, Request } from "@/schemas";
 import { getServerLogger } from "@/logging";
+import { LifecycleOperationBlockedError } from "@/utils/errors-server";
 
 const logger = getServerLogger();
+
+const LIFECYCLE_ALLOWED_TYPES: ReadonlySet<string> = new Set([
+  "suspend",
+  "resume",
+  "state",
+]);
 
 export interface SuspendableSwarm {
   readonly suspended: boolean;
@@ -12,8 +20,6 @@ export interface SuspendableStore {
   suspend(): Promise<void>;
   resume(): Promise<void>;
 }
-
-type LifecycleState = "active" | "suspending" | "suspended" | "resuming";
 
 interface ResourceMeta {
   label: string;
@@ -54,6 +60,12 @@ export function unregisterCorestore(store: SuspendableStore) {
 
 export function getLifecycleState(): LifecycleState {
   return state;
+}
+
+export function assertLifecycleAllowed(request: Request): void {
+  if (state === "active" || LIFECYCLE_ALLOWED_TYPES.has(request.type)) return;
+
+  throw new LifecycleOperationBlockedError(request.type, state);
 }
 
 export function getRegisteredResourceCounts() {
@@ -191,8 +203,8 @@ export async function resumeRuntime(): Promise<void> {
       logger.info("▶️ Runtime resumed");
     })
     .catch((error: unknown) => {
-      state = "active";
-      logger.error("▶️ Runtime resume partially failed, state committed for recovery");
+      state = "suspended";
+      logger.error("▶️ Runtime resume partially failed, staying suspended for retry");
       throw error;
     })
     .finally(() => {

@@ -983,6 +983,17 @@ export class LifecycleResumeFailedError extends QvacErrorBase {
   }
 }
 
+export class LifecycleOperationBlockedError extends QvacErrorBase {
+  constructor(requestType: string, lifecycleState: string) {
+    super(
+      createErrorOptions(
+        SDK_SERVER_ERROR_CODES.LIFECYCLE_OPERATION_BLOCKED,
+        [requestType, lifecycleState],
+      ),
+    );
+  }
+}
+
 // ============== Security Errors ==============
 
 export class PathTraversalError extends QvacErrorBase {
