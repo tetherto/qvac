@@ -13,8 +13,9 @@ std::string asUtf8String(const char8_t *text) {
 } // namespace
 
 TEST(ChatterboxLanguageModeTest, prefixesPortugueseInMultilingualMode) {
-  const std::string text = asUtf8String(
-      u8"Olá mundo! Essa é uma demonstração de síntese de texto para voz usando Chatterbox");
+  const std::string text =
+      asUtf8String(u8"Olá mundo! Essa é uma demonstração de síntese de texto "
+                   u8"para voz usando Chatterbox");
 
   EXPECT_EQ(prepareTextForTokenization(text, "pt", false), "[pt]" + text);
 }
@@ -26,7 +27,8 @@ TEST(ChatterboxLanguageModeTest, keepsPortugueseUnchangedInEnglishMode) {
 }
 
 TEST(ChatterboxLanguageModeTest, detectsMultilingualEmbedInputs) {
-  const std::vector<std::string> inputNames = {"input_ids", "position_ids", "language_id"};
+  const std::vector<std::string> inputNames = {"input_ids", "position_ids",
+                                               "language_id"};
 
   EXPECT_TRUE(supportsMultilingualEmbedInputs(inputNames));
   EXPECT_FALSE(shouldUseEnglishMode("pt", inputNames));
@@ -36,39 +38,46 @@ TEST(ChatterboxLanguageModeTest, detectsMultilingualEmbedInputs) {
 
 namespace qvac::ttslib::chatterbox::testing {
 
-TEST(ChatterboxLanguageModeTest, SupportsMultilingualWhenExpectedInputNamesPresent) {
-  const std::vector<std::string> inputNames = {"input_ids", "position_ids", "language_id"};
+TEST(ChatterboxLanguageModeTest,
+     SupportsMultilingualWhenExpectedInputNamesPresent) {
+  const std::vector<std::string> inputNames = {"input_ids", "position_ids",
+                                               "language_id"};
   EXPECT_TRUE(lang_mode::supportsMultilingualEmbedInputs(inputNames));
 }
 
-TEST(ChatterboxLanguageModeTest, SupportsMultilingualWhenInputArityLooksMultilingual) {
+TEST(ChatterboxLanguageModeTest,
+     SupportsMultilingualWhenInputArityLooksMultilingual) {
   const std::vector<std::string> inputNames = {"foo", "bar", "baz"};
   EXPECT_TRUE(lang_mode::supportsMultilingualEmbedInputs(inputNames));
 }
 
-TEST(ChatterboxLanguageModeTest, RejectsMultilingualWhenOnlyMonolingualInputsExist) {
+TEST(ChatterboxLanguageModeTest,
+     RejectsMultilingualWhenOnlyMonolingualInputsExist) {
   const std::vector<std::string> inputNames = {"input_ids", "attention_mask"};
   EXPECT_FALSE(lang_mode::supportsMultilingualEmbedInputs(inputNames));
 }
 
 TEST(ChatterboxLanguageModeTest, UsesMultilingualModeWhenModelSupportsIt) {
-  const std::vector<std::string> inputNames = {"input_ids", "position_ids", "language_id"};
-  EXPECT_FALSE(lang_mode::shouldUseEnglishMode(inputNames));
+  const std::vector<std::string> inputNames = {"input_ids", "position_ids",
+                                               "language_id"};
+  EXPECT_FALSE(lang_mode::shouldUseEnglishMode("es", inputNames));
 }
 
 TEST(ChatterboxLanguageModeTest, UsesEnglishModeForMonolingualModel) {
   const std::vector<std::string> inputNames = {"input_ids"};
-  EXPECT_TRUE(lang_mode::shouldUseEnglishMode(inputNames));
+  EXPECT_TRUE(lang_mode::shouldUseEnglishMode("es", inputNames));
 }
 
 TEST(ChatterboxLanguageModeTest, UsesEnglishModeWhenOnlyTwoInputs) {
   const std::vector<std::string> inputNames = {"input_ids", "attention_mask"};
-  EXPECT_TRUE(lang_mode::shouldUseEnglishMode(inputNames));
+  EXPECT_TRUE(lang_mode::shouldUseEnglishMode("es", inputNames));
 }
 
 TEST(ChatterboxLanguageModeTest, TokenizationPrefixTracksRuntimeLanguageMode) {
-  EXPECT_EQ(lang_mode::prepareTextForTokenization("Hola mundo", "es", true), "Hola mundo");
-  EXPECT_EQ(lang_mode::prepareTextForTokenization("Hola mundo", "es", false), "[es]Hola mundo");
+  EXPECT_EQ(lang_mode::prepareTextForTokenization("Hola mundo", "es", true),
+            "Hola mundo");
+  EXPECT_EQ(lang_mode::prepareTextForTokenization("Hola mundo", "es", false),
+            "[es]Hola mundo");
 }
 
 } // namespace qvac::ttslib::chatterbox::testing
