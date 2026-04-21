@@ -85,7 +85,12 @@ protected:
   std::string temp_session_path;
 };
 
-TEST_F(CacheManagementQwen3Test, CacheWithToolsCompactTrueTrimsToolTokens) {
+// tools_compact prompt-shape contract:
+// - when tools_compact=true and the last message is role=user, tools must be
+//   attached in the same prompt payload regardless of cache.
+// - cache-aware exceptions apply to assistant/tool tails and are covered in
+//   deterministic controller unit tests.
+TEST_F(CacheManagementQwen3Test, CacheWithToolsCompactTruePersistsSession) {
   if (!isQwen3ModelPath(test_model_path)) {
     GTEST_SKIP() << "Test requires Qwen3 model for tools_compact feature";
   }
@@ -112,9 +117,6 @@ TEST_F(CacheManagementQwen3Test, CacheWithToolsCompactTrueTrimsToolTokens) {
   auto statsBeforeSave = model->runtimeStats();
   double cacheTokensBeforeSave = getStatValue(statsBeforeSave, "CacheTokens");
   EXPECT_GT(cacheTokensBeforeSave, 0.0);
-
-  llama_pos nPastBeforeTools = model->getNPastBeforeTools();
-  EXPECT_EQ(nPastBeforeTools, -1);
 
   EXPECT_TRUE(fs::exists(session1_path));
 }
@@ -143,9 +145,6 @@ TEST_F(CacheManagementQwen3Test, CacheReloadWithToolsCompactTrue) {
     EXPECT_FALSE(output.empty());
   });
 
-  llama_pos nPastBeforeTools1 = model1->getNPastBeforeTools();
-  EXPECT_EQ(nPastBeforeTools1, -1);
-
   EXPECT_TRUE(fs::exists(session1_path));
 
   model1.reset();
@@ -158,7 +157,7 @@ TEST_F(CacheManagementQwen3Test, CacheReloadWithToolsCompactTrue) {
   EXPECT_NO_THROW({
     std::string output = processPromptWithCacheOptions(
         model2,
-        R"([{"role": "user", "content": "What is the weather in London?"}])",
+        R"([{"role": "user", "content": "What is the weather in London?"}, {"type": "function", "name": "getWeather", "description": "Get weather forecast", "parameters": {"type": "object", "properties": {"city": {"type": "string"}}, "required": ["city"]}}])",
         session1_path);
     EXPECT_FALSE(output.empty());
   });
@@ -167,11 +166,11 @@ TEST_F(CacheManagementQwen3Test, CacheReloadWithToolsCompactTrue) {
   double cacheTokensAfterReload = getStatValue(statsAfterReload, "CacheTokens");
   EXPECT_GT(cacheTokensAfterReload, 0.0);
 
-  llama_pos nPastBeforeTools2 = model2->getNPastBeforeTools();
-  EXPECT_EQ(nPastBeforeTools2, -1);
+  EXPECT_TRUE(fs::exists(session1_path));
 }
 
-TEST_F(CacheManagementQwen3Test, CacheWithoutToolsWithToolsCompactTrue) {
+TEST_F(
+    CacheManagementQwen3Test, CacheWithoutToolsWithToolsCompactTrueIsRejected) {
   if (!isQwen3ModelPath(test_model_path)) {
     GTEST_SKIP() << "Test requires Qwen3 model for tools_compact feature";
   }
@@ -186,23 +185,16 @@ TEST_F(CacheManagementQwen3Test, CacheWithoutToolsWithToolsCompactTrue) {
     FAIL() << "Model failed to load";
   }
 
-  EXPECT_NO_THROW({
-    std::string output = processPromptWithCacheOptions(
-        model,
-        R"([{"role": "user", "content": "What is bitcoin? Answer shortly."}])",
-        session1_path,
-        true);
-    EXPECT_FALSE(output.empty());
-  });
-
-  auto statsBeforeSave = model->runtimeStats();
-  double cacheTokensBeforeSave = getStatValue(statsBeforeSave, "CacheTokens");
-  EXPECT_GT(cacheTokensBeforeSave, 0.0);
-
-  llama_pos nPastBeforeTools = model->getNPastBeforeTools();
-  EXPECT_EQ(nPastBeforeTools, -1);
-
-  EXPECT_TRUE(fs::exists(session1_path));
+  EXPECT_THROW(
+      {
+        processPromptWithCacheOptions(
+            model,
+            R"([{"role": "user", "content": "What is bitcoin? Answer shortly."}])",
+            session1_path,
+            true);
+      },
+      qvac_errors::StatusError);
+  EXPECT_FALSE(fs::exists(session1_path));
 }
 
 TEST_F(CacheManagementQwen3Test, CacheToolsCompactModeWithMultiplePrompts) {
@@ -230,37 +222,24 @@ TEST_F(CacheManagementQwen3Test, CacheToolsCompactModeWithMultiplePrompts) {
 
   auto stats1 = model->runtimeStats();
   double cacheTokens1 = getStatValue(stats1, "CacheTokens");
-  double promptTokens1 = getStatValue(stats1, "promptTokens");
   EXPECT_GT(cacheTokens1, 0.0);
-  EXPECT_GT(promptTokens1, 500.0);
-
-  const int maxExpectedCacheTokens = 50;
-  EXPECT_GT(cacheTokens1, 0);
-  EXPECT_LE(cacheTokens1, maxExpectedCacheTokens)
-      << "Cache tokens (" << cacheTokens1 << ") should not exceed "
-      << maxExpectedCacheTokens << " - function tokens should be trimmed";
 
   EXPECT_NO_THROW({
     std::string output = processPromptWithCacheOptions(
         model,
-        R"([{"role": "user", "content": "What about London?"}])",
+        R"([{"role": "user", "content": "What about London?"}, {"type": "function", "name": "getWeather", "description": "Get weather forecast", "parameters": {"type": "object", "properties": {"city": {"type": "string"}}, "required": ["city"]}}])",
         session1_path);
     EXPECT_FALSE(output.empty());
   });
 
   auto stats2 = model->runtimeStats();
   double cacheTokens2 = getStatValue(stats2, "CacheTokens");
-  double promptTokens2 = getStatValue(stats2, "promptTokens");
   EXPECT_GT(cacheTokens2, cacheTokens1);
-  EXPECT_LT(promptTokens2, 500.0);
-  EXPECT_LE(cacheTokens2, maxExpectedCacheTokens)
-      << "Cache tokens (" << cacheTokens1 << ") should not exceed "
-      << maxExpectedCacheTokens << " - function tokens should be trimmed";
 
   EXPECT_NO_THROW({
     processPromptWithCacheOptions(
         model,
-        R"([{"role": "user", "content": "Save checkpoint."}])",
+        R"([{"role": "user", "content": "Save checkpoint."}, {"type": "function", "name": "getWeather", "description": "Get weather forecast", "parameters": {"type": "object", "properties": {"city": {"type": "string"}}, "required": ["city"]}}])",
         session1_path,
         true);
   });
@@ -277,22 +256,18 @@ TEST_F(CacheManagementQwen3Test, CacheToolsCompactModeWithMultiplePrompts) {
   EXPECT_NO_THROW({
     std::string output = processPromptWithCacheOptions(
         model2,
-        R"([{"role": "user", "content": "What about Paris?"}])",
+        R"([{"role": "user", "content": "What about Paris?"}, {"type": "function", "name": "getWeather", "description": "Get weather forecast", "parameters": {"type": "object", "properties": {"city": {"type": "string"}}, "required": ["city"]}}])",
         session1_path);
     EXPECT_FALSE(output.empty());
   });
 
   auto stats3 = model2->runtimeStats();
   double cacheTokens3 = getStatValue(stats3, "CacheTokens");
-  double promptTokens3 = getStatValue(stats3, "promptTokens");
-
   EXPECT_GT(cacheTokens3, cacheTokens2);
-  EXPECT_LT(promptTokens3, 100.0);
+  EXPECT_TRUE(fs::exists(session1_path));
 }
 
-TEST_F(
-    CacheManagementQwen3Test,
-    CacheToolsCompactModeTrimOnlyWhenNPastBeforeToolsPositive) {
+TEST_F(CacheManagementQwen3Test, CacheToolsCompactModeWithoutToolsIsRejected) {
   if (!isQwen3ModelPath(test_model_path)) {
     GTEST_SKIP() << "Test requires Qwen3 model for tools_compact feature";
   }
@@ -307,27 +282,19 @@ TEST_F(
     FAIL() << "Model failed to load";
   }
 
-  EXPECT_NO_THROW({
-    std::string output = processPromptWithCacheOptions(
-        model,
-        R"([{"role": "user", "content": "Hello"}])",
-        session1_path,
-        true);
-    EXPECT_FALSE(output.empty());
-  });
-
-  llama_pos nPastBeforeTools = model->getNPastBeforeTools();
-  EXPECT_EQ(nPastBeforeTools, -1);
-
-  auto statsAfterSave = model->runtimeStats();
-  double cacheTokensAfterSave = getStatValue(statsAfterSave, "CacheTokens");
-  EXPECT_GT(cacheTokensAfterSave, 0.0);
-
-  EXPECT_TRUE(fs::exists(session1_path));
+  EXPECT_THROW(
+      {
+        processPromptWithCacheOptions(
+            model,
+            R"([{"role": "user", "content": "Hello"}])",
+            session1_path,
+            true);
+      },
+      qvac_errors::StatusError);
+  EXPECT_FALSE(fs::exists(session1_path));
 }
 
-TEST_F(
-    CacheManagementQwen3Test, CacheToolsCompactModeRestoresNPastBeforeTools) {
+TEST_F(CacheManagementQwen3Test, CacheToolsCompactModeCanReloadSavedSession) {
   if (!isQwen3ModelPath(test_model_path)) {
     GTEST_SKIP() << "Test requires Qwen3 model for tools_compact feature";
   }
@@ -351,9 +318,6 @@ TEST_F(
     EXPECT_FALSE(output.empty());
   });
 
-  llama_pos nPastBeforeTools1 = model->getNPastBeforeTools();
-  EXPECT_EQ(nPastBeforeTools1, -1);
-
   EXPECT_TRUE(fs::exists(session1_path));
 
   auto model2 = createModel();
@@ -364,133 +328,12 @@ TEST_F(
   EXPECT_NO_THROW({
     std::string output = processPromptWithCacheOptions(
         model2,
-        R"([{"role": "user", "content": "What about London?"}])",
+        R"([{"role": "user", "content": "What about London?"}, {"type": "function", "name": "getWeather", "description": "Get weather forecast", "parameters": {"type": "object", "properties": {"city": {"type": "string"}}, "required": ["city"]}}])",
         session1_path);
     EXPECT_FALSE(output.empty());
   });
 
-  llama_pos nPastBeforeTools2 = model2->getNPastBeforeTools();
-  EXPECT_EQ(nPastBeforeTools2, -1);
-}
-
-// Deterministic regression: once tools boundary is set, a later prefill slide
-// must shift nPastBeforeTools left by exactly min(n_discarded, safeLimit).
-// This exercises the same adjustAfterSlide path without stochastic generation.
-TEST_F(
-    CacheManagementQwen3Test,
-    CacheToolsCompactSlidingDuringGenDoesNotLeakToolTokens) {
-  if (!isQwen3ModelPath(test_model_path)) {
-    GTEST_SKIP() << "Test requires Qwen3 model for tools_compact feature";
-  }
-  if (!hasValidModel()) {
-    FAIL() << "Test model not found";
-  }
-
-  auto runPrefillWithCache = [](const std::unique_ptr<LlamaModel>& model,
-                                const std::string& input,
-                                const std::string& cacheKey) {
-    LlamaModel::Prompt p;
-    p.input = input;
-    p.prefill = true;
-    p.cacheKey = cacheKey;
-    model->processPrompt(p);
-  };
-
-  std::string toolJson =
-      R"({"type":"function","name":"get_weather","description":"Get weather",)"
-      R"("parameters":{"type":"object","properties":{"city":{"type":"string"}},"required":["city"]}})";
-
-  std::string stepA =
-      R"([{"role":"user","content":"What is weather in Tokyo?"},)" + toolJson +
-      R"(])";
-
-  std::string stepB =
-      R"([{"role":"assistant","content":"<tool_call>{\"name\":\"get_weather\",\"arguments\":{\"city\":\"Tokyo\"}}</tool_call>"},)"
-      R"({"role":"tool","content":"{\"city\":\"Tokyo\",\"temp_c\":24}"},)"
-      R"({"role":"user","content":"Summarize weather and practical tips for clothes and hydration."}])";
-
-  const std::string sessionPath = "test_sliding_qwen3.bin";
-  constexpr int nDiscarded = 1000;
-
-  config_files["tools_compact"] = "true";
-  config_files["ctx_size"] = "2048";
-  config_files["n_discarded"] = std::to_string(nDiscarded);
-  config_files["temp"] = "0";
-  config_files["n_predict"] = "0";
-
-  auto seedModel = createModel();
-  ASSERT_TRUE(seedModel);
-  EXPECT_NO_THROW(processPromptWithCacheOptions(
-      seedModel,
-      R"([{"role":"system","content":"You are a helpful assistant."}])",
-      sessionPath,
-      true));
-
-  auto baselineModel = createModel();
-  ASSERT_TRUE(baselineModel);
-  EXPECT_NO_THROW(runPrefillWithCache(baselineModel, stepA, sessionPath));
-  const double anchorBefore =
-      static_cast<double>(baselineModel->getNPastBeforeTools());
-  const double firstMsg =
-      getStatValue(baselineModel->runtimeDebugStats(), "firstMsgTokens");
-  const double nPastAfterA =
-      getStatValue(baselineModel->runtimeStats(), "CacheTokens");
-  EXPECT_GT(anchorBefore, firstMsg);
-
-  EXPECT_NO_THROW(runPrefillWithCache(baselineModel, stepB, sessionPath));
-  const double nPastAfterB =
-      getStatValue(baselineModel->runtimeStats(), "CacheTokens");
-  const double stepBTokens = nPastAfterB - nPastAfterA;
-  ASSERT_GT(stepBTokens, 0);
-
-  // Force exactly one prefill slide in step B:
-  // nPastAfterA + stepBTokens >= ctx
-  // nPastAfterA + stepBTokens - discard < ctx
-  // with discard = min(nDiscarded, anchorBefore-firstMsg)
-  const double expectedDiscard =
-      std::min(static_cast<double>(nDiscarded), anchorBefore - firstMsg);
-  const int slideCtx = static_cast<int>(nPastAfterA + 1.0);
-
-  config_files["ctx_size"] = std::to_string(slideCtx);
-  auto slideModel = createModel();
-  ASSERT_TRUE(slideModel);
-  EXPECT_NO_THROW(runPrefillWithCache(slideModel, stepA, sessionPath));
-  EXPECT_NO_THROW(runPrefillWithCache(slideModel, stepB, sessionPath));
-
-  const auto slideStats = slideModel->runtimeStats();
-  const double slides = getStatValue(slideStats, "contextSlides");
-  const double anchorAfter =
-      static_cast<double>(slideModel->getNPastBeforeTools());
-
-  EXPECT_LE(anchorAfter, anchorBefore) << "Anchor should never move right";
-  EXPECT_GE(anchorAfter, firstMsg)
-      << "Anchor should never cross first message boundary";
-
-  if (slides > 0) {
-    EXPECT_LT(anchorAfter, anchorBefore)
-        << "Anchor should move left when slide is reported";
-  } else {
-    EXPECT_GE(anchorAfter, anchorBefore - expectedDiscard)
-        << "Without reported slide, anchor should not jump left unexpectedly";
-  }
-}
-
-// Same deterministic setup but enforce unclamped discard:
-// safeLimit > n_discarded, so the single slide must shift anchor exactly by
-// n_discarded.
-TEST_F(CacheManagementQwen3Test, CacheToolsCompactSlidingUnclampedFullDiscard) {
-  DynamicToolsState dts;
-  dts.setToolsCompact(true);
-
-  constexpr llama_pos firstMsgTokens = 11;
-  constexpr llama_pos anchorBefore = 241;
-  constexpr llama_pos nDiscarded = 32;
-
-  dts.setNPastBeforeTools(anchorBefore);
-  const llama_pos discard = dts.clampDiscard(nDiscarded, firstMsgTokens);
-  dts.adjustAfterSlide(discard, firstMsgTokens);
-
-  EXPECT_EQ(discard, nDiscarded);
-  EXPECT_EQ(dts.nPastBeforeTools(), anchorBefore - nDiscarded);
-  EXPECT_GE(dts.nPastBeforeTools(), firstMsgTokens);
+  auto statsAfterReload = model2->runtimeStats();
+  double cacheTokensAfterReload = getStatValue(statsAfterReload, "CacheTokens");
+  EXPECT_GT(cacheTokensAfterReload, 0.0);
 }
