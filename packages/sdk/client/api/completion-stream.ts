@@ -14,6 +14,7 @@ import {
   type ToolCallWithCall,
   type RPCOptions,
 } from "@/schemas";
+import { CompletionFailedError } from "@/utils/errors-server";
 import { getMcpToolsWithHandlers } from "@/utils/mcp-adapter";
 import {
   validateTools,
@@ -227,7 +228,7 @@ export function completion(params: CompletionParams): CompletionRun {
           if (streamResponse.done) {
             const { final, error } = buildFinalFromEvents(allEvents, allHandlers);
             if (error) {
-              const err = new Error(error.message, { cause: error });
+              const err = new CompletionFailedError(error.message, error);
               finalRejecter(err);
               statsRejecter(err);
               toolCallsRejecter(err);
