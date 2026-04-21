@@ -74,7 +74,7 @@ runs:
         if [ "$VULKAN_VERSION" = "latest" ]; then
           VULKAN_URL="https://sdk.lunarg.com/sdk/download/latest/linux/vulkan_sdk.tar.xz"
         else
-          VULKAN_URL="https://sdk.lunarg.com/sdk/download/${VULKAN_VERSION}/linux/vulkansdk-linux-x86_64-${VULKAN_VERSION}.tar.xz"
+          VULKAN_URL="https://sdk.lunarg.com/sdk/download/${VULKAN_VERSION}/linux/vulkan_sdk.tar.xz"
         fi
 
         sudo apt install -y xz-utils
