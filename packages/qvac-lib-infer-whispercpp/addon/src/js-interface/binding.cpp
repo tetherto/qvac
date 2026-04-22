@@ -1,16 +1,13 @@
-#include <bare.h>
-
 #include <cstdlib>
+
+#include <bare.h>
 
 #include "src/addon/AddonJs.hpp"
 
 namespace {
 void atexitCleanup() {
-  {
-    std::lock_guard lock(qvac_lib_inference_addon_whisper::g_streamingMtx);
-    qvac_lib_inference_addon_whisper::g_streamingSessions.clear();
-  }
-  qvac_lib_inference_addon_cpp::JsInterface::clearAll();
+  std::lock_guard lock(qvac_lib_inference_addon_whisper::g_streamingMtx);
+  qvac_lib_inference_addon_whisper::g_streamingSessions.clear();
 }
 } // namespace
 

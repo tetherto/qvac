@@ -11,7 +11,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Enabled Vulkan GPU acceleration in CI prebuilds for Linux, Android, and Windows
 - Added dynamic ggml backend library installation in CMakeLists.txt for Android/Linux (matching the LLM addon pattern)
 - Vulkan SDK installation on Windows integration test runner so `vulkan-1.dll` is available at runtime
-- `atexit` cleanup handler in `binding.cpp` that explicitly destroys all addon instances and streaming sessions before C++ static destructors run
+- `atexit` cleanup handler in `binding.cpp` that clears streaming sessions before C++ static destructors run
 
 ### Changed
 - GPU usage is now opt-in: `use_gpu` defaults to `false` in `toWhisperContextParams` instead of inheriting the upstream default (`true`). Callers must explicitly set `use_gpu: true` to enable GPU acceleration.
