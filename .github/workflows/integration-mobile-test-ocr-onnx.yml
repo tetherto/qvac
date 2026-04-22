@@ -34,7 +34,7 @@ env:
   NODE_VERSION: 'lts/*'
   ADDON_NAME: '@qvac/ocr-onnx'
   PREBUILD_ARTIFACT_PREFIX: 'onnx-ocr-' # Prefix for prebuild artifacts
-  TEST_FRAMEWORK_REF: 'feat/ios-cpp-log-capture' # Branch/tag of qvac-test-addon-mobile framework
+  TEST_FRAMEWORK_REF: 'main' # Branch/tag of qvac-test-addon-mobile framework
   APP_BUNDLE_ID: 'io.tether.test.qvac' # Bundle ID for the test app (same for all addons)
   PKG_DIR: packages/ocr-onnx
 
@@ -1782,7 +1782,34 @@ jobs:
           echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
           find "$LOG_DIR" -type f -exec ls -lh {} \; 2>/dev/null || echo "  (no logs downloaded)"
 
-      - name: Upload Device Farm Logs
+      - name: Extract Console Logs
+        if: always() && (steps.schedule_run.outputs.run_arn_perf || steps.schedule_run.outputs.run_arn_regular)
+        run: |
+          LOG_DIR="devicefarm-logs/${{ matrix.platform }}"
+          CONSOLE_DIR="console-logs/${{ matrix.platform }}"
+          mkdir -p "$CONSOLE_DIR"
+          for f in "$LOG_DIR"/*; do
+            [ -f "$f" ] || continue
+            fname=$(basename "$f")
+            if echo "$fname" | grep -qiE "bare_console|Testspec|Test_spec|Logcat"; then
+              cp "$f" "$CONSOLE_DIR/"
+              echo "  Console log: $fname"
+            fi
+          done
+          echo ""
+          echo "📋 Console logs extracted:"
+          find "$CONSOLE_DIR" -type f -exec ls -lh {} \; 2>/dev/null || echo "  (no console logs found)"
+
+      - name: Upload Console Logs
+        if: always() && (steps.schedule_run.outputs.run_arn_perf || steps.schedule_run.outputs.run_arn_regular)
+        uses: actions/upload-artifact@v4
+        with:
+          name: console-logs-ocr-onnx-${{ matrix.platform }}
+          path: console-logs/
+          retention-days: 30
+          if-no-files-found: ignore
+
+      - name: Upload Full Device Farm Logs
         if: always() && (steps.schedule_run.outputs.run_arn_perf || steps.schedule_run.outputs.run_arn_regular)
         uses: actions/upload-artifact@v4
         with:

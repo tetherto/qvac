@@ -1468,7 +1468,34 @@ jobs:
           echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
           find "$LOG_DIR" -type f -exec ls -lh {} \; 2>/dev/null || echo "  (no logs downloaded)"
 
-      - name: Upload Device Farm Logs
+      - name: Extract Console Logs
+        if: always() && steps.schedule_run.outputs.run_arn_1
+        run: |
+          LOG_DIR="devicefarm-logs/${{ matrix.platform }}"
+          CONSOLE_DIR="console-logs/${{ matrix.platform }}"
+          mkdir -p "$CONSOLE_DIR"
+          for f in "$LOG_DIR"/*; do
+            [ -f "$f" ] || continue
+            fname=$(basename "$f")
+            if echo "$fname" | grep -qiE "bare_console|Testspec|Test_spec|Logcat"; then
+              cp "$f" "$CONSOLE_DIR/"
+              echo "  Console log: $fname"
+            fi
+          done
+          echo ""
+          echo "📋 Console logs extracted:"
+          find "$CONSOLE_DIR" -type f -exec ls -lh {} \; 2>/dev/null || echo "  (no console logs found)"
+
+      - name: Upload Console Logs
+        if: always() && steps.schedule_run.outputs.run_arn_1
+        uses: actions/upload-artifact@v4
+        with:
+          name: console-logs-parakeet-${{ matrix.platform }}
+          path: console-logs/
+          retention-days: 30
+          if-no-files-found: ignore
+
+      - name: Upload Full Device Farm Logs
         if: always() && steps.schedule_run.outputs.run_arn_1
         uses: actions/upload-artifact@v4
         with:
