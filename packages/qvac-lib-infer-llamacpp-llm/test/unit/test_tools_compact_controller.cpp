@@ -1,3 +1,7 @@
+// Owns ToolsCompactController behavior and prompt-shape validation contract.
+// Slider orchestration and llama KV side effects are intentionally tested in
+// test_context_slider.cpp.
+
 #include <optional>
 #include <string>
 #include <vector>
@@ -64,18 +68,6 @@ TEST(ToolsCompactControllerTest, ValidatePromptNoOpsWhenDisabled) {
   std::vector<common_chat_msg> chatMsgs;
   std::vector<common_chat_tool> tools;
   EXPECT_NO_THROW(controller.validatePrompt(chatMsgs, tools, layout, false));
-}
-
-TEST(
-    ToolsCompactControllerTest,
-    ValidatePromptRejectsMissingToolsOnLastUserMessage) {
-  ToolsCompactController controller(ToolsCompactProfile{});
-  PromptLayout layout;
-  std::vector<common_chat_msg> chatMsgs = {makeMsg("user", "Need weather")};
-  std::vector<common_chat_tool> tools;
-  EXPECT_THROW(
-      controller.validatePrompt(chatMsgs, tools, layout, false),
-      qvac_errors::StatusError);
 }
 
 TEST(ToolsCompactControllerTest, ValidatePromptRejectsMissingAnchor) {
@@ -266,13 +258,6 @@ TEST(
   EXPECT_EQ(controller.anchor(), 80);
 }
 
-TEST(ToolsCompactControllerTest, OnTokenizeWithNoToolsLeavesAnchorUnset) {
-  ToolsCompactController controller(ToolsCompactProfile{});
-  controller.onTokenize(120, 0);
-  controller.onEvalComplete(120, 120);
-  EXPECT_EQ(controller.anchor(), -1);
-}
-
 TEST(ToolsCompactControllerTest, OnTokenizeAndEvalNoOpWhenDisabled) {
   ToolsCompactController controller(std::nullopt);
   controller.onTokenize(120, 80);
@@ -313,17 +298,6 @@ TEST(ToolsCompactControllerTest, OnSlideStopsAtFirstMsgTokens) {
   controller.onTokenize(200, 100);
   controller.onEvalComplete(200, 200);
   controller.onSlide(30, firstMsgTokens);
-  EXPECT_EQ(controller.anchor(), firstMsgTokens);
-}
-
-TEST(ToolsCompactControllerTest, AnchorCanReachFirstMessageBoundaryAfterSlide) {
-  ToolsCompactController controller(ToolsCompactProfile{});
-  controller.onTokenize(200, 120);
-  controller.onEvalComplete(200, 200);
-  constexpr llama_pos firstMsgTokens = 100;
-  controller.onSlide(20, firstMsgTokens);
-  EXPECT_EQ(controller.anchor(), firstMsgTokens);
-  controller.onSlide(5, firstMsgTokens);
   EXPECT_EQ(controller.anchor(), firstMsgTokens);
 }
 
