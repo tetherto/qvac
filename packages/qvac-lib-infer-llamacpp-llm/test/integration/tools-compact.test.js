@@ -55,6 +55,11 @@ const TOOL_A = {
     required: ['city']
   }
 }
+/**
+ * manual count with a following debug:
+ * printf("ToolsCompactController::onTokenize with=%zu, without=%zu\n", tokensWithTools, tokensWithoutTools);
+ * $> ToolsCompactController::onTokenize with=161, without=13
+ */
 const TOOL_A_TOKENS = 148
 
 const TOOL_B = {
