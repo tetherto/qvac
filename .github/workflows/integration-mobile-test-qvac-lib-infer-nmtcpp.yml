@@ -1675,7 +1675,16 @@ jobs:
             fi
           done
 
-          node scripts/perf-report/extract-from-log.js \
+          # The monorepo is checked out under ./monorepo (per the checkout
+          # step above); scripts are NOT in the workspace root.
+          SCRIPTS_DIR="monorepo/scripts/perf-report"
+          if [ ! -f "$SCRIPTS_DIR/extract-from-log.js" ]; then
+            echo "::warning::$SCRIPTS_DIR/extract-from-log.js not found; skipping"
+            echo "extracted=false" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+
+          node "$SCRIPTS_DIR/extract-from-log.js" \
             "$LOG_DIR" \
             "$OUTPUT_DIR/performance-report.json" \
             --run-number "${{ github.run_number }}" || true
@@ -1683,7 +1692,7 @@ jobs:
           if find "$OUTPUT_DIR" -name "performance-report.json" -type f | head -1 | grep -q .; then
             echo ""
             echo "✓ performance-report.json produced. Generating HTML/MD/summary..."
-            node scripts/perf-report/aggregate.js \
+            node "$SCRIPTS_DIR/aggregate.js" \
               --dir "$OUTPUT_DIR" \
               --output-html "$OUTPUT_DIR/performance-report.html" \
               --output-json "$OUTPUT_DIR/performance-summary.json" \
