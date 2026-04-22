@@ -303,6 +303,13 @@ export const ttsPlugin = definePlugin({
               type: "textToSpeech" as const,
               buffer: result.value.buffer,
               done: false,
+              ...(result.value.chunkIndex !== undefined
+                ? { chunkIndex: result.value.chunkIndex }
+                : {}),
+              ...(typeof result.value.sentenceChunk === "string" &&
+              result.value.sentenceChunk.length > 0
+                ? { sentenceChunk: result.value.sentenceChunk }
+                : {}),
             };
             result = await stream.next();
           }
