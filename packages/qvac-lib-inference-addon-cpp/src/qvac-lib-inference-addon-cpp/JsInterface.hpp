@@ -275,6 +275,11 @@ public:
   }
   JSCATCH
 
+  static void clearAll() {
+    std::scoped_lock lockGuard{instancesMtx_};
+    instances_.clear();
+  }
+
   static auto cancel(js_env_t* env, js_callback_info_t* info)
       -> js_value_t* try {
     JsArgsParser argsParser(env, info);

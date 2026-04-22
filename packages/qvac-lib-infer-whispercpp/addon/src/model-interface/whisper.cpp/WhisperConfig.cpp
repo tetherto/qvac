@@ -70,6 +70,10 @@ whisper_context_params
 toWhisperContextParams(const WhisperConfig& whisperConfig) {
 
   whisper_context_params contextParams = whisper_context_default_params();
+  // GPU is opt-in: callers must explicitly set use_gpu=true.
+  // Leaving it at the upstream default (true) causes a SIGSEGV at process exit
+  // due to ggml Vulkan backend static cleanup (whisper.cpp#2373).
+  contextParams.use_gpu = false;
   for (const auto& [key, value] : whisperConfig.whisperContextCfg) {
     try {
       WHISPER_CONTEXT_HANDLERS.at(key)(contextParams, value);

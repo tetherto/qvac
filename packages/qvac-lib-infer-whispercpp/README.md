@@ -273,6 +273,20 @@ Most users interact with the addon exclusively through `index.js`. From that ent
 | `whisperConfig` | *(any `whisper_full_params` key)* | Forwarded untouched. We surface convenience defaults in `index.js`, but every whisper.cpp flag is accepted—see [Advanced configuration](#advanced-configuration). |
 | `miscConfig` | `caption_enabled` | Formats segments with `<\|start\|>..<\|end\|>` markers |
 
+#### GPU acceleration is opt-in
+
+`use_gpu` defaults to `false`. To enable Vulkan (Linux/Windows/Android) or Metal (macOS/iOS) acceleration, set `use_gpu: true` explicitly in `contextParams`:
+
+```javascript
+const config = {
+  contextParams: {
+    model: './models/ggml-tiny.bin',
+    use_gpu: true,   // opt-in to GPU
+    gpu_device: 0
+  }
+}
+```
+
 #### Context keys that force a full reload
 
 Internally `WhisperModel::configContextIsChanged()` watches `model`, `use_gpu`, `flash_attn` and `gpu_device`. If any of these change we must:
