@@ -1,7 +1,7 @@
 import nmtAddonLogging from "@qvac/translation-nmtcpp/addonLogging";
 import TranslationNmtcpp, {
   type TranslationNmtcppConfig,
-  type Loader,
+  type TranslationNmtcppFiles,
 } from "@qvac/translation-nmtcpp";
 import {
   definePlugin,
@@ -22,9 +22,7 @@ import {
 import { createStreamLogger, registerAddonLogger } from "@/logging";
 import { parseModelPath } from "@/server/utils";
 import path from "bare-path";
-import FilesystemDL from "@qvac/dl-filesystem";
 import { ModelLoadFailedError } from "@/utils/errors-server";
-import { asLoader } from "@/server/bare/utils/loader-adapter";
 import { translate } from "@/server/bare/ops/translate";
 import { attachModelExecutionMs } from "@/profiling/model-execution";
 
@@ -101,8 +99,6 @@ function createNmtModel(
   pivotSrcVocabPath?: string,
   pivotDstVocabPath?: string,
 ) {
-  const { dirPath, basePath } = parseModelPath(modelPath);
-  const loader = new FilesystemDL({ dirPath });
   const logger = createStreamLogger(modelId, ModelType.nmtcppTranslation);
   registerAddonLogger(modelId, ModelType.nmtcppTranslation, logger);
 
@@ -121,17 +117,13 @@ function createNmtModel(
     topp,
   } = nmtConfig;
 
-  const args = {
-    loader: asLoader<Loader>(loader),
-    logger,
-    modelName: basePath,
-    diskPath: dirPath,
-    opts: { stats: true },
-    params: {
-      mode,
-      srcLang: from,
-      dstLang: to,
-    },
+  const files: TranslationNmtcppFiles = {
+    model: modelPath,
+    ...(srcVocabPath && { srcVocab: srcVocabPath }),
+    ...(dstVocabPath && { dstVocab: dstVocabPath }),
+    ...(pivotModelPath && { pivotModel: pivotModelPath }),
+    ...(pivotSrcVocabPath && { pivotSrcVocab: pivotSrcVocabPath }),
+    ...(pivotDstVocabPath && { pivotDstVocab: pivotDstVocabPath }),
   };
 
   const generationParams = {
@@ -146,38 +138,31 @@ function createNmtModel(
   };
 
   const config: TranslationNmtcppConfig = {
-    modelType: TranslationNmtcpp.ModelTypes[engine],
+    modelType: TranslationNmtcpp.ModelTypes[engine as keyof typeof TranslationNmtcpp.ModelTypes],
     ...generationParams,
     ...(nmtConfig.engine === "Bergamot" && {
-      ...(srcVocabPath && { srcVocabPath }),
-      ...(dstVocabPath && { dstVocabPath }),
       ...(nmtConfig.normalize !== undefined && {
         normalize: nmtConfig.normalize,
       }),
-      // Add pivot model configuration if present
       ...(nmtConfig.pivotModel && pivotModelPath && {
-        bergamotPivotModel: (() => {
+        pivotConfig: (() => {
           // eslint-disable-next-line @typescript-eslint/no-unused-vars
-          const {modelSrc, dstVocabSrc, srcVocabSrc, ...config} = nmtConfig.pivotModel
-          const { dirPath, basePath } = parseModelPath(pivotModelPath);
-          return {
-            loader: asLoader<Loader>(new FilesystemDL({ dirPath })),
-            modelName: basePath,
-            diskPath: dirPath,
-            config: {
-              ...config,
-              srcVocabPath: pivotSrcVocabPath,
-              dstVocabPath: pivotDstVocabPath
-            }
-          };
+          const { modelSrc, dstVocabSrc, srcVocabSrc, ...pivotGenConfig } = nmtConfig.pivotModel;
+          return pivotGenConfig;
         })(),
       }),
     }),
   };
 
-  const model = new TranslationNmtcpp(args, config);
+  const model = new TranslationNmtcpp({
+    files,
+    params: { mode, srcLang: from, dstLang: to },
+    config,
+    logger,
+    opts: { stats: true },
+  });
 
-  return { model, loader };
+  return { model, loader: null };
 }
 
 async function resolveBergamotVocab(
