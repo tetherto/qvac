@@ -13,6 +13,15 @@ phases:
         sleep 5
         echo "App launched"
 
+      # Clear logcat buffer and start continuous background capture (unfiltered)
+      # Captures everything; filtering happens post-test when extracting subsets
+      - |-
+        adb logcat -c
+        adb logcat -v threadtime \
+          >> "$DEVICEFARM_LOG_DIR/testconsumer.log" 2>&1 &
+        echo $! > "$DEVICEFARM_LOG_DIR/logcat-pid.txt"
+        echo "Background logcat capture started (pid: $(cat $DEVICEFARM_LOG_DIR/logcat-pid.txt))"
+
       # Periodic screenshots every 30s in the background
       - |-
         (while true; do
@@ -24,7 +33,7 @@ phases:
 
   test:
     commands:
-      # Stream logcat, track test progress in real-time, detect completion
+      # Poll the background log file for test progress and completion
       - |-
         TIMEOUT=${DEVICEFARM_TIMEOUT:-5400}
         START=$(date +%s)
@@ -33,13 +42,13 @@ phases:
         COMPLETED=0
         EXPECTED="?"
         RESULTS_FILE="$DEVICEFARM_LOG_DIR/test-results.txt"
+        LOGFILE="$DEVICEFARM_LOG_DIR/testconsumer.log"
 
         touch "$RESULTS_FILE"
-        adb logcat -c
 
-        echo "Monitoring app logcat for test results (timeout: ${TIMEOUT}s)..."
+        echo "Monitoring app logs for test results (timeout: ${TIMEOUT}s)..."
 
-        adb logcat ReactNativeJS:I *:S | while IFS= read -r line; do
+        tail -f "$LOGFILE" | while IFS= read -r line; do
           case "$line" in
             *"Registration ack"*"tests in queue"*)
               EXPECTED=$(echo "$line" | grep -oP '\d+(?= tests in queue)')
@@ -81,8 +90,26 @@ phases:
 
   post_test:
     commands:
-      # Capture full logcat
-      - adb logcat -d ReactNativeJS:I *:S > "$DEVICEFARM_LOG_DIR/app-console.log"
+      # Stop background logcat capture
+      - |-
+        if [ -f "$DEVICEFARM_LOG_DIR/logcat-pid.txt" ]; then
+          kill $(cat "$DEVICEFARM_LOG_DIR/logcat-pid.txt") 2>/dev/null || true
+          echo "Background logcat stopped"
+        fi
+
+      # Extract React Native JS logs into a separate file
+      - |-
+        grep "ReactNativeJS" "$DEVICEFARM_LOG_DIR/testconsumer.log" \
+          > "$DEVICEFARM_LOG_DIR/react-native-logs.log" 2>/dev/null || true
+        RN_LINES=$(wc -l < "$DEVICEFARM_LOG_DIR/react-native-logs.log" 2>/dev/null || echo 0)
+        echo "=== React Native logs: ${RN_LINES} lines ==="
+        tail -50 "$DEVICEFARM_LOG_DIR/react-native-logs.log" 2>/dev/null || echo "(none)"
+
+      - echo "=== Full logcat summary ==="
+      - wc -l "$DEVICEFARM_LOG_DIR/testconsumer.log" 2>/dev/null || echo "No logs captured"
+
+      - echo "Available log files:"
+      - ls -lh $DEVICEFARM_LOG_DIR/ || true
 
       # Final screenshot
       - adb shell screencap -p > "$DEVICEFARM_SCREENSHOT_PATH/final.png" 2>/dev/null
@@ -92,3 +119,4 @@ phases:
 
 artifacts:
   - $DEVICEFARM_LOG_DIR
+

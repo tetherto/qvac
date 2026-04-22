@@ -21,7 +21,7 @@ import {
   downloadModelFromHyperdriveWithStats,
   downloadModelFromRegistryWithStats,
 } from "./download-stats";
-import type { ResolveResult, DownloadResult } from "./types";
+import type { ResolveResult, DownloadResult, DownloadHooks } from "./types";
 import {
   ModelLoadFailedError,
   ModelNotFoundError,
@@ -32,25 +32,6 @@ import { getServerLogger } from "@/logging";
 import { modelInputToSrcSchema } from "@/schemas";
 
 type ResolveMode = "base" | "stats";
-
-type DownloadHttpFn = (
-  url: string,
-  progressCallback?: (progress: ModelProgressUpdate) => void,
-) => Promise<string | DownloadResult>;
-
-type DownloadRegistryFn = (
-  registryPath: string,
-  registrySource: string,
-  progressCallback?: (progress: ModelProgressUpdate) => void,
-  expectedChecksum?: string,
-) => Promise<string | DownloadResult>;
-
-type DownloadHyperdriveFn = (
-  hyperdriveKey: string,
-  modelFileName: string,
-  seed?: boolean,
-  progressCallback?: (progress: ModelProgressUpdate) => void,
-) => Promise<string | DownloadResult>;
 
 const logger = getServerLogger();
 
@@ -121,21 +102,6 @@ async function resolveLocalOrCachedFile(modelIdOrPath: string) {
   }
 }
 
-function selectDownloaders(mode: ResolveMode) {
-  if (mode === "stats") {
-    return {
-      http: downloadModelFromHttpWithStats as DownloadHttpFn,
-      registry: downloadModelFromRegistryWithStats as DownloadRegistryFn,
-      hyperdrive: downloadModelFromHyperdriveWithStats as DownloadHyperdriveFn,
-    };
-  }
-  return {
-    http: downloadModelFromHttp as DownloadHttpFn,
-    registry: downloadModelFromRegistry as DownloadRegistryFn,
-    hyperdrive: downloadModelFromHyperdrive as DownloadHyperdriveFn,
-  };
-}
-
 function isDownloadResult(value: string | DownloadResult): value is DownloadResult {
   return value !== null && typeof value === "object" && "path" in value;
 }
@@ -157,9 +123,9 @@ async function resolveModelPathCore(
   progressCallback: ((progress: ModelProgressUpdate) => void) | undefined,
   seed: boolean | undefined,
   mode: ResolveMode,
+  hooks?: DownloadHooks,
 ): Promise<ResolveResult> {
   const srcString = modelInputToSrcSchema.parse(modelSrc);
-  const downloaders = selectDownloaders(mode);
 
   // Parse hyperdrive URLs if present
   let hyperdriveKey: string | undefined;
@@ -180,12 +146,13 @@ async function resolveModelPathCore(
     const modelMetadata = getModelByPath(registryPath);
     const expectedChecksum = modelMetadata?.sha256Checksum;
 
-    const result = await downloaders.registry(
-      registryPath,
-      registrySource,
-      progressCallback,
-      expectedChecksum,
-    );
+    const result = mode === "stats"
+      ? await downloadModelFromRegistryWithStats(
+          registryPath, registrySource, progressCallback, expectedChecksum, hooks,
+        )
+      : await downloadModelFromRegistry(
+          registryPath, registrySource, progressCallback, expectedChecksum, hooks,
+        );
     logger.info(`Loaded Model to ${isDownloadResult(result) ? result.path : result}`);
     return buildResult(result, "registry");
   }
@@ -201,7 +168,10 @@ async function resolveModelPathCore(
     actualModelSrc.startsWith("https://")
   ) {
     logger.info(`Loading from HTTP URL: ${actualModelSrc}`);
-    const result = await downloaders.http(actualModelSrc, progressCallback);
+
+    const result = mode === "stats"
+      ? await downloadModelFromHttpWithStats(actualModelSrc, progressCallback, hooks)
+      : await downloadModelFromHttp(actualModelSrc, progressCallback, hooks);
     logger.info(`Loaded Model to ${isDownloadResult(result) ? result.path : result}`);
     return buildResult(result, "http");
   }
@@ -209,12 +179,14 @@ async function resolveModelPathCore(
   // Hyperdrive source
   if (hyperdriveKey) {
     logger.info(`Loading from hyperdrive: ${hyperdriveKey}`);
-    const result = await downloaders.hyperdrive(
-      hyperdriveKey,
-      actualModelSrc,
-      seed,
-      progressCallback,
-    );
+
+    const result = mode === "stats"
+      ? await downloadModelFromHyperdriveWithStats(
+          hyperdriveKey, actualModelSrc, seed, progressCallback, hooks,
+        )
+      : await downloadModelFromHyperdrive(
+          hyperdriveKey, actualModelSrc, seed, progressCallback, hooks,
+        );
     return buildResult(result, "hyperdrive");
   }
 
@@ -243,8 +215,9 @@ export async function resolveModelPath(
   modelSrc: unknown,
   progressCallback?: (progress: ModelProgressUpdate) => void,
   seed?: boolean,
+  hooks?: DownloadHooks,
 ): Promise<string> {
-  const result = await resolveModelPathCore(modelSrc, progressCallback, seed, "base");
+  const result = await resolveModelPathCore(modelSrc, progressCallback, seed, "base", hooks);
   return result.path;
 }
 
@@ -252,6 +225,7 @@ export async function resolveModelPathWithStats(
   modelSrc: unknown,
   progressCallback?: (progress: ModelProgressUpdate) => void,
   seed?: boolean,
+  hooks?: DownloadHooks,
 ): Promise<ResolveResult> {
-  return resolveModelPathCore(modelSrc, progressCallback, seed, "stats");
+  return resolveModelPathCore(modelSrc, progressCallback, seed, "stats", hooks);
 }

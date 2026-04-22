@@ -1,12 +1,11 @@
-import {
-  ToolsModeType,
-  type CompletionParams,
-  type CompletionStats,
-  type GenerationParams,
-  type Tool,
-  type ToolCall,
-  type ToolCallEvent,
+import type {
+  CompletionParams,
+  CompletionStats,
+  GenerationParams,
+  Tool,
+  ToolCall,
 } from "@/schemas";
+import { type ToolCallEvent, ToolsModeType } from "@/schemas/tools";
 import {
   logCacheDisabled,
   logCacheInit,

@@ -15,12 +15,15 @@ class MockedBinding {
     this._baseInferenceCallback = null
     this._cancelRequested = false
     this._jobDelayMs = jobDelayMs
+    this.lastCreatedConfiguration = null
+    this.lastRunJob = null
   }
 
   createInstance (interfaceType, configurationParams, outputCb) {
     console.log('Constructing the TTS addon')
     this.outputCb = outputCb
     this._handle = { id: Date.now() }
+    this.lastCreatedConfiguration = configurationParams
     return this._handle
   }
 
@@ -60,6 +63,7 @@ class MockedBinding {
       throw new TypeError('runJob(data) expects { type: "text", input: string }')
     }
 
+    this.lastRunJob = data
     this._state = state.PROCESSING
     this._cancelRequested = false
 
