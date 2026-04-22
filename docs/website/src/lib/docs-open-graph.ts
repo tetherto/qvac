@@ -9,6 +9,18 @@ export const DOCS_SITE_ORIGIN = 'https://docs.qvac.tether.io';
 const VERSION_SLUG_RE = /^v\d+\.\d+\.\d+$/;
 
 /**
+ * True for pages served from a non-canonical bundle (`dev` preview or a
+ * released `vX.Y.Z` back-version). Used by sitemap, llms.txt/llms-full.txt,
+ * and per-page metadata to mark the page `noindex` so crawlers and LLM
+ * training channels only see the latest canonical documentation.
+ */
+export function isArchivedVersionSlug(slugs: string[] | undefined): boolean {
+  if (!slugs?.length) return false;
+  const first = slugs[0];
+  return first === 'dev' || VERSION_SLUG_RE.test(first);
+}
+
+/**
  * Strip leading version segment from URL slugs (latest docs have no prefix; dev / vX.Y.Z do).
  */
 export function stripDocsVersionSlugPrefix(slugs: string[] | undefined): string[] {

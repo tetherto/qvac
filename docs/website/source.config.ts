@@ -4,6 +4,7 @@ import {
   frontmatterSchema,
   metaSchema,
 } from 'fumadocs-mdx/config';
+import lastModified from 'fumadocs-mdx/plugins/last-modified';
 import { remarkMdxMermaid } from 'fumadocs-core/mdx-plugins';
 import { z } from "zod";
 import { resolve } from 'path';
@@ -32,6 +33,9 @@ export const docs = defineDocs({
 });
 
 export default defineConfig({
+  // Injects `page.data.lastModified: Date` from `git log -1` per MDX file at build time.
+  // Consumed by `app/sitemap.ts` to emit `<lastmod>` entries.
+  plugins: [lastModified()],
   mdxOptions: {
     remarkPlugins: [
       remarkMath,

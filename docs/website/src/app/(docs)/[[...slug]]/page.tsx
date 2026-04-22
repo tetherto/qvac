@@ -15,6 +15,7 @@ import { LLMCopyButton, ViewOptions, VersionSelector } from '@/components/page-a
 import {
   buildCanonicalDocsUrl,
   inferDiataxisOpenGraph,
+  isArchivedVersionSlug,
 } from '@/lib/docs-open-graph';
 import { QVAC_DOC_OG_HEIGHT, QVAC_DOC_OG_WIDTH } from '@/lib/qvac-doc-og';
 
@@ -110,10 +111,17 @@ export async function generateMetadata(
   const canonicalUrl = buildCanonicalDocsUrl(params.slug);
   const { section, tags } = inferDiataxisOpenGraph(page.path);
   const ogImage = getPageImage(page);
+  // Non-canonical bundles (dev + vX.Y.Z) are hidden from search engines and
+  // LLM training channels via per-page noindex. Canonical/OG/Twitter stay
+  // intact so shared links still render a rich social card; `noindex` makes
+  // the canonical pointer inert for Google even when its target was removed
+  // in latest (e.g., `ping` existed in v0.7.0 but not in v0.8.0+).
+  const isArchived = isArchivedVersionSlug(params.slug);
 
   return {
     title: isHomePage ? { absolute: title } : title,
     description,
+    ...(isArchived && { robots: { index: false, follow: true } }),
     alternates: {
       canonical: canonicalUrl,
     },
