@@ -74,6 +74,17 @@ export const ttsSupertonicMultilingualText: TestDefinition = {
   metadata: { category: "tts", dependency: "tts-supertonic-multilingual", estimatedDurationMs: 45000 },
 };
 
+export const ttsSupertonicSentenceStream: TestDefinition = {
+  testId: "tts-supertonic-sentence-stream",
+  params: {
+    text: "This is the first sentence. Here comes the second one. And a third to close it out.",
+    stream: true,
+    sentenceStream: true,
+  },
+  expectation: { validation: "type", expectedType: "string" },
+  metadata: { category: "tts", dependency: "tts-supertonic", estimatedDurationMs: 45000 },
+};
+
 export const ttsTests = [
   ttsChatterboxShortText,
   ttsChatterboxMediumText,
@@ -84,4 +95,5 @@ export const ttsTests = [
   ttsSupertonicStreaming,
   ttsSupertonicEmptyTextError,
   ttsSupertonicMultilingualText,
+  ttsSupertonicSentenceStream,
 ];
