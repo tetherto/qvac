@@ -294,21 +294,24 @@ jobs:
           if command -v aws >/dev/null 2>&1; then
             echo "AWS CLI already installed"
             aws --version
-          else
-            echo "Installing AWS CLI v2..."
-            ARCH=$(uname -m)
-            case "$ARCH" in
-              x86_64) AWS_ARCH="x86_64" ;;
-              aarch64|arm64) AWS_ARCH="aarch64" ;;
-              *) echo "Unsupported arch $ARCH" ; exit 1 ;;
-            esac
-            curl -sSL "https://awscli.amazonaws.com/awscli-exe-linux-${AWS_ARCH}.zip" -o /tmp/awscliv2.zip
-            sudo apt-get update -y && sudo apt-get install -y unzip
-            unzip -q /tmp/awscliv2.zip -d /tmp/
-            sudo /tmp/aws/install --update
-            rm -rf /tmp/aws /tmp/awscliv2.zip
-            aws --version
+            exit 0
           fi
+          echo "Installing AWS CLI v2..."
+          ARCH=$(uname -m)
+          case "$ARCH" in
+            x86_64) AWS_ARCH="x86_64" ;;
+            aarch64|arm64) AWS_ARCH="aarch64" ;;
+            *) echo "Unsupported arch $ARCH" ; exit 1 ;;
+          esac
+          curl -sSL "https://awscli.amazonaws.com/awscli-exe-linux-${AWS_ARCH}.zip" -o /tmp/awscliv2.zip
+          sudo apt-get update -y && sudo apt-get install -y unzip
+          unzip -q /tmp/awscliv2.zip -d /tmp/
+          sudo /tmp/aws/install --update
+          rm -rf /tmp/aws /tmp/awscliv2.zip
+          # Self-hosted runners (e.g. ai-run-linux-gpu) don't always have
+          # /usr/local/bin on PATH. Persist it for subsequent steps.
+          echo "/usr/local/bin" >> "$GITHUB_PATH"
+          /usr/local/bin/aws --version
 
       - name: Configure AWS credentials via OIDC
         # Intel-mac runners use the Apple Paravirtual GPU which has ~1 GB of

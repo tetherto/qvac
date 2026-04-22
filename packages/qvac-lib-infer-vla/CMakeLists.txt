@@ -59,6 +59,14 @@ message("Building qvac-lib-infer-vla with BACKENDS_SUBDIR='${BACKENDS_SUBDIR_VAL
 # backend is compiled into ggml itself, so there's nothing extra to copy.
 set(BACKEND_DL_LIBS "")
 if((ANDROID OR UNIX) AND NOT APPLE)
+  # When ggml is built with dynamic backend loading (Android uses
+  # GGML_BACKEND_DL=ON in the qvac-fabric port), the ggml core + base
+  # libraries are themselves shared objects and must ship alongside the
+  # addon — otherwise the addon .so fails dlopen with unresolved ggml_*.
+  if(GGML_BACKEND_DL)
+    list(APPEND BACKEND_DL_LIBS INSTALL TARGET ggml::ggml)
+    list(APPEND BACKEND_DL_LIBS INSTALL TARGET ggml::ggml-base)
+  endif()
   foreach(_backend ${GGML_AVAILABLE_BACKENDS})
     list(APPEND BACKEND_DL_LIBS INSTALL TARGET ggml::${_backend})
   endforeach()
