@@ -60,7 +60,15 @@ export interface TranscribeStats {
   melSpecMs?: number;
 }
 
+export interface TranscribeAddonSegment {
+  text: string;
+  start?: number;
+  end?: number;
+  toAppend?: boolean;
+  id?: number;
+}
+
 export interface TranscribeResponse {
   stats?: TranscribeStats;
-  iterate(): AsyncIterable<Array<{ text: string }>>;
+  iterate(): AsyncIterable<Array<TranscribeAddonSegment>>;
 }

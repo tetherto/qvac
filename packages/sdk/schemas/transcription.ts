@@ -14,6 +14,7 @@ export const audioInputSchema = z.discriminatedUnion("type", [
 const transcribeBaseSchema = z.object({
   modelId: z.string(),
   prompt: z.string().optional(),
+  metadata: z.boolean().optional(),
 });
 
 export const transcribeParamsSchema = transcribeBaseSchema.extend({
@@ -33,6 +34,14 @@ export const transcribeStatsSchema = z.object({
   melSpecTime: z.number().optional(),
 });
 
+export const transcribeSegmentSchema = z.object({
+  text: z.string(),
+  startMs: z.number(),
+  endMs: z.number(),
+  append: z.boolean(),
+  id: z.number(),
+});
+
 export const transcribeRequestSchema = transcribeParamsSchema.extend({
   type: z.literal("transcribe"),
 });
@@ -42,6 +51,7 @@ const transcriptionResultBase = z.object({
   done: z.boolean().optional(),
   stats: transcribeStatsSchema.optional(),
   error: z.string().optional(),
+  segment: transcribeSegmentSchema.optional(),
 });
 
 export const transcribeResponseSchema = transcriptionResultBase.extend({
@@ -50,10 +60,12 @@ export const transcribeResponseSchema = transcriptionResultBase.extend({
 
 export type AudioInput = z.infer<typeof audioInputSchema>;
 export type TranscribeParams = z.infer<typeof transcribeParamsSchema>;
+export type TranscribeSegment = z.infer<typeof transcribeSegmentSchema>;
 export type TranscribeClientParams = {
   modelId: string;
   audioChunk: string | Buffer;
   prompt?: string;
+  metadata?: boolean;
 };
 export type TranscribeRequest = z.infer<typeof transcribeRequestSchema>;
 export type TranscribeResponse = z.infer<typeof transcribeResponseSchema>;
@@ -76,6 +88,7 @@ export type TranscribeStreamResponse = z.infer<
 export type TranscribeStreamClientParams = {
   modelId: string;
   prompt?: string;
+  metadata?: boolean;
 };
 
 export interface TranscribeStreamSession {
@@ -83,6 +96,13 @@ export interface TranscribeStreamSession {
   end(): void;
   destroy(): void;
   [Symbol.asyncIterator](): AsyncIterator<string>;
+}
+
+export interface TranscribeStreamMetadataSession {
+  write(audioChunk: Buffer): void;
+  end(): void;
+  destroy(): void;
+  [Symbol.asyncIterator](): AsyncIterator<TranscribeSegment>;
 }
 
 export type TranscribeStats = z.infer<typeof transcribeStatsSchema>;

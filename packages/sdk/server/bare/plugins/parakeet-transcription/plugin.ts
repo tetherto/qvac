@@ -240,6 +240,7 @@ export const parakeetPlugin = definePlugin({
           modelId: request.modelId,
           audioChunk: request.audioChunk,
           prompt: request.prompt,
+          ...(request.metadata === true && { metadata: true as const }),
         });
 
         try {
