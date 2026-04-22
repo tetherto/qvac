@@ -57,6 +57,15 @@ export const BERGAMOT_LANGUAGES = [
   "vi",
 ] as const;
 
+export const BERGAMOT_MODEL_RE =
+  /^(.+\/)model\.([a-z]+)\.intgemm\.alphas\.bin$/;
+
+export const BERGAMOT_CJK_LANG_PAIRS: readonly string[] = [
+  "enja",
+  "enko",
+  "enzh",
+];
+
 // IndicTrans2 model languages
 export const INDICTRANS_LANGUAGES = [
   "asm_Beng", // Assamese
