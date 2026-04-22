@@ -22,6 +22,14 @@ on:
         description: "Filter tests by category or testId prefix (comma-separated)"
         required: false
         type: string
+      suite:
+        description: "Suite filter (e.g. 'smoke'). Empty = all tests."
+        required: false
+        type: string
+      exclude-suite:
+        description: "Exclude suites (comma-separated)"
+        required: false
+        type: string
       device-farm-timeout:
         description: "Maximum time in minutes to keep Device Farm session alive."
         required: false
@@ -633,17 +641,31 @@ jobs:
           echo "   Run ID: ${{ needs.build.outputs.runId }}"
           echo "   Consumer timeout: ${{ inputs.consumer-timeout }}s"
           echo "   Filter: ${{ inputs.filter || '(none)' }}"
+          echo "   Suite: ${{ inputs.suite || '(all)' }}"
+          echo "   Exclude suite: ${{ inputs.exclude-suite || '(none)' }}"
 
           FILTER_ARG=""
           if [ -n "${{ inputs.filter }}" ]; then
             FILTER_ARG="--filter=${{ inputs.filter }}"
           fi
 
+          SUITE_ARG=""
+          if [ -n "${{ inputs.suite }}" ]; then
+            SUITE_ARG="--suite=${{ inputs.suite }}"
+          fi
+
+          EXCLUDE_SUITE_ARG=""
+          if [ -n "${{ inputs.exclude-suite }}" ]; then
+            EXCLUDE_SUITE_ARG="--exclude-suite=${{ inputs.exclude-suite }}"
+          fi
+
           npx qvac-test run:producer \
             --runId "${{ needs.build.outputs.runId }}" \
             --consumer-timeout "${{ inputs.consumer-timeout }}" \
             --config . \
-            $FILTER_ARG
+            $FILTER_ARG \
+            $SUITE_ARG \
+            $EXCLUDE_SUITE_ARG
 
       - name: Upload results
         if: always()
@@ -667,7 +689,7 @@ jobs:
     if: always()
     runs-on: ubuntu-latest
     environment: release
-    timeout-minutes: 10
+    timeout-minutes: 35
     steps:
       - name: Configure AWS credentials
         uses: aws-actions/configure-aws-credentials@8df5847569e6427dd6c4fb1cf565c83acfa8afa7 # 6.0.0
@@ -682,9 +704,10 @@ jobs:
           path: ./run-arns
           merge-multiple: true
 
-      - name: Stop Device Farm runs
+      - name: Stop Device Farm runs and download artifacts
         run: |
           echo "Cleaning up Device Farm runs for runId: ${{ needs.build.outputs.runId }}"
+          mkdir -p ./device-farm-logs
 
           for arn_file in run-arns/*.txt; do
             if [ -f "$arn_file" ]; then
@@ -697,30 +720,19 @@ jobs:
               if [ "$STATUS" = "RUNNING" ] || [ "$STATUS" = "PENDING" ]; then
                 echo "Stopping run: $RUN_ARN"
                 aws devicefarm stop-run --arn "$RUN_ARN" || true
-              else
-                echo "Run already finished ($STATUS), skipping"
               fi
-            fi
-          done
 
-      - name: Download Device Farm artifacts
-        run: |
-          mkdir -p ./device-farm-logs
-
-          for arn_file in run-arns/*.txt; do
-            if [ -f "$arn_file" ]; then
-              RUN_ARN=$(cat "$arn_file")
-              DEVICE_NAME=$(basename "$arn_file" .txt)
-
-              echo "Waiting for run to finish: $DEVICE_NAME"
-              for attempt in $(seq 1 30); do
+              echo "Waiting for run to finish: $DEVICE_NAME (up to 30 min)..."
+              for attempt in $(seq 1 120); do
                 STATUS=$(aws devicefarm get-run --arn "$RUN_ARN" --query 'run.status' --output text 2>/dev/null || echo "UNKNOWN")
                 if [ "$STATUS" = "COMPLETED" ] || [ "$STATUS" = "STOPPED" ] || [ "$STATUS" = "ERRORED" ]; then
                   echo "Run $DEVICE_NAME finished with status: $STATUS"
                   break
                 fi
-                echo "Run $DEVICE_NAME still $STATUS (attempt $attempt/30)..."
-                sleep 10
+                if [ $((attempt % 6)) -eq 0 ]; then
+                  echo "Run $DEVICE_NAME still $STATUS (${attempt}/120, $((attempt * 15))s elapsed)..."
+                fi
+                sleep 15
               done
 
               DEVICE_DIR="./device-farm-logs/$DEVICE_NAME"

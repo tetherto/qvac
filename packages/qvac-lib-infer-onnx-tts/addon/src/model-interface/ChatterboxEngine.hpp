@@ -17,6 +17,45 @@ template <typename T> struct TensorData {
   std::vector<T> data;
 };
 
+namespace tensor_ops {
+
+// Concatenate two tensors along the batch dimension (axis 0).
+// Requires a.shape[i] == b.shape[i] for i > 0.
+// Result shape: [a.shape[0] + b.shape[0], ...rest].
+template <typename T>
+TensorData<T> concatBatch(const TensorData<T> &a, const TensorData<T> &b) {
+  TensorData<T> out;
+  out.shape = a.shape;
+  out.shape[0] = a.shape[0] + b.shape[0];
+  out.data.reserve(a.data.size() + b.data.size());
+  out.data.insert(out.data.end(), a.data.begin(), a.data.end());
+  out.data.insert(out.data.end(), b.data.begin(), b.data.end());
+  return out;
+}
+
+// Duplicate a tensor along the batch dimension (axis 0).
+// Input [N, ...] produces output [2N, ...] by concatenating the input with
+// itself.
+template <typename T> TensorData<T> duplicateBatch(const TensorData<T> &a) {
+  TensorData<T> out;
+  out.shape = a.shape;
+  out.shape[0] = a.shape[0] * 2;
+  out.data.reserve(a.data.size() * 2);
+  out.data.insert(out.data.end(), a.data.begin(), a.data.end());
+  out.data.insert(out.data.end(), a.data.begin(), a.data.end());
+  return out;
+}
+
+} // namespace tensor_ops
+
+struct SpeechEncoderCache {
+  TensorData<float> audioFeatures;
+  TensorData<int64_t> promptToken;
+  TensorData<float> speakerEmbeddings;
+  TensorData<float> speakerFeatures;
+  bool valid = false;
+};
+
 class ChatterboxEngine : public IChatterboxEngine {
 protected:
   // Only for testing
@@ -91,6 +130,13 @@ private:
   void ensureSession(std::unique_ptr<IOnnxInferSession> &session,
                      const std::string &modelPath);
   void releaseSession(std::unique_ptr<IOnnxInferSession> &session);
+  void runSpeechEncoderAndCache();
+
+protected:
+  bool hasSpeechEncoderCache() const;
+  void clearSpeechEncoderCache();
+
+private:
   void loadCangjieTableIfNeeded(const std::string &tokenizerPath);
   void loadTextEmbWeight(const std::string &embedTokensPath);
 
@@ -109,11 +155,11 @@ private:
   int64_t runInitialCfgStep(
       const TensorData<float> &condEmbs, const TensorData<float> &uncondEmbs,
       TensorData<int64_t> &positionIds, TensorData<int64_t> &attentionMask,
-      std::unordered_map<std::string, TensorData<float>> &condKv,
-      std::unordered_map<std::string, TensorData<float>> &uncondKv,
+      std::unordered_map<std::string, TensorData<float>> &batchedKv,
       std::vector<int64_t> &generatedTokens);
 
-  std::unordered_map<std::string, TensorData<float>> initEmptyKvCache();
+  std::unordered_map<std::string, TensorData<float>>
+  initEmptyKvCache(int64_t batchSize = 1);
 
   void collectKvShapes(
       std::vector<std::vector<int64_t>> &inputShapes,
@@ -135,8 +181,7 @@ private:
   void runCfgGenerationLoop(
       std::vector<int64_t> &generatedTokens, TensorData<int64_t> &positionIds,
       TensorData<int64_t> &attentionMask,
-      std::unordered_map<std::string, TensorData<float>> &condKv,
-      std::unordered_map<std::string, TensorData<float>> &uncondKv,
+      std::unordered_map<std::string, TensorData<float>> &batchedKv,
       int maxSpeechTokens);
 
   std::vector<int64_t> generateSpeechTokensWithCfg(
@@ -161,6 +206,9 @@ private:
   int64_t textEmbRows_ = 0;
   int64_t textEmbDim_ = 0;
   std::mt19937 rng_{std::random_device{}()};
+
+protected:
+  SpeechEncoderCache speechEncoderCache_;
 };
 
 } // namespace qvac::ttslib::chatterbox
