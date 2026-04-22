@@ -7,6 +7,7 @@ SDK dogfooding tests built on top of `@qvac/test-suite`.
 - `tests/test-definitions.ts` - full SDK test catalog
 - `tests/desktop/consumer.ts` - desktop consumer with broad handler coverage
 - `tests/mobile/consumer.ts` - mobile consumer entry point
+- `tests/shared/...` - shared executors and code (MUST WORK ON ALL PLATFORMS!)
 - `qvac-test.config.js` - producer and consumer framework config
 - `metro.config.js` - SDK-specific Metro config for mobile consumers
 
