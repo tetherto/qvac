@@ -211,7 +211,7 @@ async function runExpectingInvalidPrompt (t, model, prompt, expectedReason, runO
     return
   }
 
-  const message = String(capturedError && capturedError.message ? capturedError.message : capturedError)
+  const message = String(capturedError.message ? capturedError.message : capturedError)
   t.ok(
     message.includes(expectedReason),
     `error includes exact reason: ${expectedReason}`
