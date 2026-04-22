@@ -259,7 +259,7 @@ async function transcribeStreamDuplexMetadata(
     [Symbol.asyncIterator]() {
       if (consumed) {
         throw new TranscriptionFailedError(
-          "TranscribeStreamSession can only be iterated once",
+          "TranscribeStreamMetadataSession can only be iterated once",
         );
       }
       consumed = true;
