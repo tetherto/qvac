@@ -62,6 +62,9 @@ try {
           output: (extra && extra.output) || null,
           reference: (extra && extra.reference) || null
         }
+        // Store quality separately so aggregate.js's Quality Summary
+        // section can render chrF++ in the mobile HTML / MD report.
+        if (extra && extra.quality) entry.quality = extra.quality
         _results.push(entry)
       },
       toJSON () {
@@ -666,6 +669,12 @@ function formatPerformanceMetrics (label, metrics, qualityOpts) {
     execution_provider: ep,
     input: prompt || null,
     output: fullOutput || null,
+    // `quality` is duplicated from metrics.chrfpp so that aggregate.js's
+    // Quality Summary section (which reads `result.quality.*`) renders a
+    // chrF++ column in the HTML/MD mobile + desktop perf-reports. The
+    // Step Summary table keeps reading metrics.chrfpp — no behaviour
+    // change there.
+    quality: quality ? { chrfpp: quality.chrfpp, reference: quality.reference } : null,
     reference: quality ? quality.reference : null
   })
   _scheduleReportWrite()

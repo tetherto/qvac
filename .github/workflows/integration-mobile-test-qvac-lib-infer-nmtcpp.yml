@@ -1620,6 +1620,83 @@ jobs:
           echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
           find "$LOG_DIR" -type f -exec ls -lh {} \; 2>/dev/null || echo "  (no logs downloaded)"
 
+      - name: Extract performance report from Device Farm logs
+        if: always() && steps.schedule_run.outputs.run_arn_1
+        id: extract_perf
+        run: |
+          LOG_DIR="devicefarm-logs/${{ matrix.platform }}"
+          OUTPUT_DIR="perf-results-mobile/${{ matrix.platform }}"
+          mkdir -p "$OUTPUT_DIR"
+
+          if [ ! -d "$LOG_DIR" ] || [ -z "$(ls -A "$LOG_DIR" 2>/dev/null)" ]; then
+            echo "No Device Farm logs downloaded — skipping perf extraction."
+            echo "extracted=false" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+
+          echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+          echo "📊 EXTRACTING PERF REPORT FROM DEVICE FARM LOGS"
+          echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+          echo "Log source: $LOG_DIR"
+          echo "Output:     $OUTPUT_DIR"
+
+          # Pre-flight: show where markers were found, to aid debugging
+          echo ""
+          echo "Files containing PERF_REPORT markers:"
+          for f in $(find "$LOG_DIR" -type f \( -name "*.txt" -o -name "*.log" \)); do
+            N_START=$(grep -c "PERF_REPORT_START" "$f" 2>/dev/null || echo 0)
+            N_CHUNK=$(grep -c "PERF_CHUNK" "$f" 2>/dev/null || echo 0)
+            if [ "${N_START:-0}" != "0" ] || [ "${N_CHUNK:-0}" != "0" ]; then
+              echo "  $f: START=$N_START, CHUNK=$N_CHUNK"
+            fi
+          done
+
+          node scripts/perf-report/extract-from-log.js \
+            "$LOG_DIR" \
+            "$OUTPUT_DIR/performance-report.json" \
+            --run-number "${{ github.run_number }}" || true
+
+          if find "$OUTPUT_DIR" -name "performance-report.json" -type f | head -1 | grep -q .; then
+            echo ""
+            echo "✓ performance-report.json produced. Generating HTML/MD/summary..."
+            node scripts/perf-report/aggregate.js \
+              --dir "$OUTPUT_DIR" \
+              --output-html "$OUTPUT_DIR/performance-report.html" \
+              --output-json "$OUTPUT_DIR/performance-summary.json" \
+              --output "$OUTPUT_DIR/performance-report.md" || true
+            echo "extracted=true" >> "$GITHUB_OUTPUT"
+          else
+            echo ""
+            echo "⚠️  extract-from-log.js produced no performance-report.json."
+            echo "   Raw Device Farm logs are still uploaded as the devicefarm-logs-${{ matrix.platform }} artifact."
+            echo "extracted=false" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Write mobile perf report to GitHub Step Summary
+        if: always() && steps.extract_perf.outputs.extracted == 'true'
+        run: |
+          OUTPUT_DIR="perf-results-mobile/${{ matrix.platform }}"
+          if [ -f "$OUTPUT_DIR/performance-report.md" ]; then
+            {
+              echo "## Mobile Performance: nmtcpp (${{ matrix.platform }})"
+              echo ""
+              cat "$OUTPUT_DIR/performance-report.md"
+            } >> "$GITHUB_STEP_SUMMARY"
+          fi
+
+      - name: Upload mobile performance report
+        if: always() && steps.schedule_run.outputs.run_arn_1
+        uses: actions/upload-artifact@bbbca2ddaa5d8feaa63e36b76fdaad77386f024f # 7.0.0
+        with:
+          name: perf-report-nmtcpp-mobile-${{ matrix.platform }}-${{ github.run_number }}
+          path: |
+            perf-results-mobile/${{ matrix.platform }}/performance-report.json
+            perf-results-mobile/${{ matrix.platform }}/performance-report.html
+            perf-results-mobile/${{ matrix.platform }}/performance-report.md
+            perf-results-mobile/${{ matrix.platform }}/performance-summary.json
+          retention-days: 90
+          if-no-files-found: ignore
+
       - name: Upload Device Farm Logs
         if: always() && steps.schedule_run.outputs.run_arn_1
         uses: actions/upload-artifact@bbbca2ddaa5d8feaa63e36b76fdaad77386f024f # 7.0.0
