@@ -1,4 +1,4 @@
-name: On Merge Trigger (Vla)
+name: on-merge-vla
 
 on:
   push:

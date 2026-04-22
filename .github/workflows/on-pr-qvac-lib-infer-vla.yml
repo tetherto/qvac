@@ -1,4 +1,4 @@
-name: On PR Trigger (Vla)
+name: vla
 
 on:
   pull_request_target:
