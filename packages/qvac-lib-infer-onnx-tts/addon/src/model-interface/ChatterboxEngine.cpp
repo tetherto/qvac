@@ -360,8 +360,8 @@ void ChatterboxEngine::load(const ChatterboxConfig &cfg) {
   loadTextEmbWeight(cfg.embedTokensPath);
 
   if (embedTokensSession_ != nullptr) {
-    isEnglish_ =
-        lang_mode::shouldUseEnglishMode(embedTokensSession_->getInputNames());
+    isEnglish_ = lang_mode::shouldUseEnglishMode(
+        language_, embedTokensSession_->getInputNames());
     if (isEnglish_ && language_ != "en") {
       QLOG(
           Priority::INFO,
@@ -674,8 +674,8 @@ AudioResult ChatterboxEngine::synthesize(const std::string &text) {
   ensureSession(speechEncoderSession_, config_.speechEncoderPath);
   ensureSession(languageModelSession_, config_.languageModelPath);
 
-  bool shouldBeEnglish =
-      lang_mode::shouldUseEnglishMode(embedTokensSession_->getInputNames());
+  bool shouldBeEnglish = lang_mode::shouldUseEnglishMode(
+      language_, embedTokensSession_->getInputNames());
   if (shouldBeEnglish != isEnglish_) {
     isEnglish_ = shouldBeEnglish;
     keyValueOffset_ = isEnglish_ ? OFFSET : OFFSET_MULTILINGUAL;
