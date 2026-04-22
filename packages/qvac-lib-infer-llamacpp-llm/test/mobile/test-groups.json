@@ -6,6 +6,7 @@
     "heavy4": ["runOcrLightonTest"],
     "heavy5": ["runReasoningTest"],
     "heavy6": ["runSlidingContextTest"],
+    "heavy7": ["runQuantizedKvcacheTest"],
     "lightA": [
       "runAfriquegemmaEdgeCasesTest",
       "runAfriquegemmaTranslationTest",
@@ -46,7 +47,8 @@
       "runSlidingContextTest",
       "runToolCallingTest",
       "runUtf8OutputTest",
-      "runTurboquantTest"
+      "runTurboquantTest",
+      "runQuantizedKvcacheTest"
     ]
   }
 }

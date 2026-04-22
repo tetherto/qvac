@@ -1,5 +1,38 @@
 # Changelog
 
+## [Unreleased]
+
+### Added
+
+#### TurboQuant / PolarQuant KV-cache integration tests
+
+- `test/integration/turboquant.test.js` — integration test that exercises the
+  Tether-specific TurboQuant (`tbq3_0`, `tbq4_0`) and PolarQuant (`pq3_0`,
+  `pq4_0`) KV-cache types across Llama-3.2-1B (head_dim=64) and Llama-3.2-3B
+  (head_dim=128) on Vulkan-capable backends. The test accepts the
+  "TurboQuant not supported" load-time error on backends that do not support
+  these formats and skips gracefully.
+- `test/integration/quantized-kvcache.test.js` — benchmark/sanity test that
+  runs f16, q8_0, q4_0 and the TurboQuant/PolarQuant family side-by-side,
+  prints a comparison table (KV MiB and % of f16, TTFT, prompt-eval t/s,
+  decode t/s) and asserts: quantized caches are strictly smaller than f16,
+  q8_0 ~= 55% and q4_0 ~= 28% of the f16 baseline, prefill is within a
+  CI-friendly margin of f16, and `pq*+pq*` is no larger/slower than the
+  corresponding `tbq*+pq*`. Decode speed only has a lower-bound sanity
+  check because f16 can legitimately outperform q4_0 during decode on
+  hardware with fast native fp16 ALUs (no per-token dequantization).
+
+### Changed
+
+#### Hard error when TurboQuant/PolarQuant KV types resolve to an unsupported backend
+
+- `BackendSelection` now throws an `InvalidArgument` status error during
+  model load when `cache-type-k` / `cache-type-v` request a `tbq*` / `pq*`
+  format but the resolved GPU backend is not Vulkan. Previously the
+  addon silently fell back to an engine that ignored the request.
+- Added unit tests (`test/unit/test_backend_selection.cpp`) covering the
+  new error path and the existing backend-selection behaviour.
+
 ## [0.15.0] - 2026-04-09
 
 ### Breaking Changes
