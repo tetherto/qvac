@@ -263,6 +263,11 @@ if(WIN32)
     PRIVATE
       msvcrt.lib
   )
+  target_link_options(
+    ${qvac-lib-inference-tts}_module
+    PRIVATE
+      /FORCE:MULTIPLE
+  )
 endif()
 
 if(UNIX AND NOT APPLE)

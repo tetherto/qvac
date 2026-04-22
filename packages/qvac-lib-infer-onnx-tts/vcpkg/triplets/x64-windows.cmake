@@ -4,7 +4,3 @@ set(VCPKG_LIBRARY_LINKAGE static)
 set(VCPKG_BUILD_TYPE release)
 set(VCPKG_CXX_FLAGS "/wd4709")
 set(VCPKG_C_FLAGS "/wd4709")
-
-if(PORT STREQUAL "mecab")
-  set(VCPKG_LIBRARY_LINKAGE dynamic)
-endif()
