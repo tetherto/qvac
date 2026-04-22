@@ -23,6 +23,19 @@ namespace qvac_lib_inference_addon_tts {
 namespace js = qvac_lib_inference_addon_cpp::js;
 using qvac::ttslib::addon_model::TTSModel;
 
+inline std::string readUtf8String(js_env_t *env, js_value_t *value) {
+  size_t length = 0;
+  JS(js_get_value_string_utf8(env, value, nullptr, 0, &length));
+
+  std::string result(length + 1, '\0');
+  size_t copiedLength = 0;
+  JS(js_get_value_string_utf8(env, value,
+                              reinterpret_cast<utf8_t *>(result.data()),
+                              result.size(), &copiedLength));
+  result.resize(copiedLength);
+  return result;
+}
+
 inline std::unordered_map<std::string, std::string>
 getTTSConfigMap(js_env_t *env, js::Object configurationParams) {
   std::unordered_map<std::string, std::string> configMap;
@@ -30,7 +43,7 @@ getTTSConfigMap(js_env_t *env, js::Object configurationParams) {
   auto addString = [&](const char *key) {
     auto value = configurationParams.getOptionalProperty<js::String>(env, key);
     if (value.has_value()) {
-      configMap[key] = value.value().as<std::string>(env);
+      configMap[key] = readUtf8String(env, value.value());
     }
   };
 
@@ -158,7 +171,7 @@ inline js_value_t *runJob(js_env_t *env, js_callback_info_t *info) try {
   }
 
   TTSModel::AnyInput modelInput;
-  modelInput.text = js::String(env, jsInput).as<std::string>(env);
+  modelInput.text = readUtf8String(env, jsInput);
 
   if (hasProperty(env, inputObj, "config")) {
     auto runtimeConfig = inputObj.getProperty<js::Object>(env, "config");
