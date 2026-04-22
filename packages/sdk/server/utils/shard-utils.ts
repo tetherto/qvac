@@ -4,13 +4,51 @@ import {
 } from "@/utils/errors-server";
 import { generateShortHash } from "./formatting";
 import { validateAndJoinPath } from "./path-security";
-import type { ShardUrl } from "@/schemas";
+import type { ShardPatternInfo, ShardUrl } from "@/schemas";
 import { extractAndWriteTensorsFile } from "./gguf-tensor-extractor";
 import { promises as fsPromises } from "bare-fs";
-import {
-  detectShardedModel,
-  generateShardFilenames,
-} from "@/utils/shard-pattern";
+
+/** Detect if `filename` matches the `<base>-NNNNN-of-NNNNN.<ext>` shard pattern. */
+export function detectShardedModel(filename: string): ShardPatternInfo {
+  const shardPattern = /^(.+)-(\d{5})-of-(\d{5})(\.\w+)$/;
+  const match = filename.match(shardPattern);
+
+  if (match && match[1] && match[2] && match[3] && match[4]) {
+    return {
+      isSharded: true,
+      baseFilename: match[1],
+      currentShard: parseInt(match[2], 10),
+      totalShards: parseInt(match[3], 10),
+      extension: match[4],
+    };
+  }
+
+  return { isSharded: false };
+}
+
+/** Given any shard filename in a group, return all numbered shard filenames in order. */
+export function generateShardFilenames(shardName: string): string[] {
+  const shardInfo = detectShardedModel(shardName);
+
+  if (!shardInfo.isSharded || !shardInfo.totalShards) {
+    throw new ModelLoadFailedError(
+      `Not a sharded model filename: ${shardName}`,
+    );
+  }
+
+  const filenames: string[] = [];
+  const { baseFilename, totalShards, extension } = shardInfo;
+
+  for (let i = 1; i <= totalShards; i++) {
+    const shardNumber = i.toString().padStart(5, "0");
+    const totalShardsStr = totalShards.toString().padStart(5, "0");
+    filenames.push(
+      `${baseFilename}-${shardNumber}-of-${totalShardsStr}${extension}`,
+    );
+  }
+
+  return filenames;
+}
 
 /**
  * Parse pattern-based shard URL and generate all shard URLs with cache key

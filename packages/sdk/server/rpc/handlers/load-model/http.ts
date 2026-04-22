@@ -9,6 +9,7 @@ import {
   getModelsCacheDir,
   getShardedModelCacheDir,
   generateShortHash,
+  detectShardedModel,
   parsePatternBasedShardUrl,
   extractTensorsFromShards,
   calculatePercentage,
@@ -17,12 +18,9 @@ import {
   extractAndValidateShardedArchive,
   validateShardedModelCache,
   checkAllShardsExist,
+  generateShardFilenames,
   hasValidGGUFHeader,
 } from "@/server/utils";
-import {
-  detectShardedModel,
-  generateShardFilenames,
-} from "@/utils/shard-pattern";
 import { getSDKConfig } from "@/server/bare/registry/config-registry";
 import {
   createHttpDownloadKey,

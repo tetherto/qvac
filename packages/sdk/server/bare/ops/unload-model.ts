@@ -6,7 +6,7 @@ import { clearFinetuneRuntimeState } from "@/server/bare/plugins/llamacpp-comple
 import { unregisterAddonLogger, getServerLogger } from "@/logging";
 import { type UnloadModelParams, unloadModelParamsSchema } from "@/schemas";
 import { ModelNotLoadedError } from "@/utils/errors-server";
-import { detectShardedModel } from "@/utils/shard-pattern";
+import { detectShardedModel } from "@/server/utils";
 import { getClearStorageTarget } from "@/server/utils/cache";
 
 const logger = getServerLogger();

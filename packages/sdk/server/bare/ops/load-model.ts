@@ -15,11 +15,11 @@ import {
   startLogBuffering,
   stopLogBufferingWithTimeout,
 } from "@/server/bare/registry/logging-stream-registry";
-import { validateShardedModelCache } from "@/server/utils";
 import {
   detectShardedModel,
   generateShardFilenames,
-} from "@/utils/shard-pattern";
+  validateShardedModelCache,
+} from "@/server/utils";
 import {
   PluginNotFoundError,
   ModelFileNotFoundError,
