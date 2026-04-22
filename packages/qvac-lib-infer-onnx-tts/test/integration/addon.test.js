@@ -3,6 +3,7 @@
 const test = require('brittle')
 const os = require('bare-os')
 const path = require('bare-path')
+const fs = require('bare-fs')
 const { loadChatterboxTTS, runChatterboxTTS, runChatterboxTTSWithSplit } = require('../utils/runChatterboxTTS')
 const { loadSupertonicTTS, runSupertonicTTS, runSupertonicStream, runSupertonicStreaming } = require('../utils/runSupertonicTTS')
 const { ensureChatterboxModels, ensureSupertonicModels, ensureSupertonicModelsMultilingual, ensureWhisperModel, ensureLavaSRModels } = require('../utils/downloadModel')
@@ -368,6 +369,41 @@ function characterErrorRate (expected, actual) {
   return levenshtein(ref, hyp) / ref.length
 }
 
+function resolveMecabDictDir () {
+  const indexJsDir = path.dirname(require.resolve('../../index.js'))
+  return path.join(indexJsDir, 'dict')
+}
+
+function statSizeSafe (p) {
+  try {
+    return fs.statSync(p).size
+  } catch (e) {
+    return null
+  }
+}
+
+function diagnoseMecabDict () {
+  const dictDir = resolveMecabDictDir()
+  const ipadicDir = path.join(dictDir, 'mecab-ipadic')
+  console.log('\n=== MeCab dict diagnostic ===')
+  console.log(`>>> [MECAB] dict root:   ${dictDir} (exists=${fs.existsSync(dictDir)})`)
+  console.log(`>>> [MECAB] ipadic dir:  ${ipadicDir} (exists=${fs.existsSync(ipadicDir)})`)
+  const expectedFiles = ['mecabrc', 'sys.dic', 'unk.dic', 'matrix.bin', 'char.bin', 'dicrc']
+  for (const name of expectedFiles) {
+    const filePath = path.join(ipadicDir, name)
+    const size = statSizeSafe(filePath)
+    console.log(`>>> [MECAB]   ${name.padEnd(12)} -> exists=${size !== null}, size=${size}`)
+  }
+  if (fs.existsSync(ipadicDir)) {
+    try {
+      const entries = fs.readdirSync(ipadicDir)
+      console.log(`>>> [MECAB] readdir ipadic-dir: [${entries.join(', ')}]`)
+    } catch (e) {
+      console.log(`>>> [MECAB] readdir failed: ${e && e.message}`)
+    }
+  }
+}
+
 test('Chatterbox Multilingual TTS: Japanese (kanji + MeCab) with Whisper CER', { timeout: 3600000 }, async (t) => {
   if (isMobile) {
     t.pass('Skipped on mobile')
@@ -395,6 +431,8 @@ test('Chatterbox Multilingual TTS: Japanese (kanji + MeCab) with Whisper CER', {
     minDurationMs: 200,
     maxDurationMs: 300000
   }
+
+  diagnoseMecabDict()
 
   console.log('\n=== Loading Chatterbox multilingual model (ja) ===')
   const model = await loadChatterboxTTS({
