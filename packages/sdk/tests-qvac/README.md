@@ -1,105 +1,112 @@
 # SDK Tests
 
-SDK dogfooding tests built on top of `@qvac/test-suite`.
+SDK dogfooding tests built on [`@tetherto/qvac-test-suite`](https://github.com/tetherto/qvac-test-suite).
+A producer orchestrates a shared queue of tests over MQTT; a consumer runs them on desktop (Node) or mobile
+(Bare + React Native).
 
-## Layout
-
-- `tests/test-definitions.ts` - full SDK test catalog
-- `tests/desktop/consumer.ts` - desktop consumer with broad handler coverage
-- `tests/mobile/consumer.ts` - mobile consumer entry point
-- `qvac-test.config.js` - producer and consumer framework config
-- `metro.config.js` - SDK-specific Metro config for mobile consumers
-
-## Install
-
-From `packages/sdk/tests-qvac`:
+## Running locally
 
 ```bash
-npm i
-npm run build
+cd packages/sdk/tests-qvac
+npm run install:build                # installs deps + builds tests
+cp .env.example .env                 # only needed if you want to point at a remote broker
+
+npx qvac-test run:local:desktop
+npx qvac-test run:local:android
+npx qvac-test run:local:ios
 ```
 
-## Local iOS Run
+**MQTT broker.** `run:local:*` requires a broker serving WebSockets on port 8080 and MQTT/TCP on 1883.
+If nothing is detected on localhost, the command prompts to install `aedes` + `websocket-stream` globally and
+runs an embedded broker for the duration of the test run. Bring your own broker if you prefer — just expose
+`ws://...:8080` and `mqtt://...:1883`.
 
-This flow builds the generated mobile consumer app, installs it on a physical iPhone, then runs the producer locally.
+**Common flags.** All `run:local:*` commands accept `--filter`, `--suite`, `--exclude-suite`, `--runId`.
+Mobile adds `--skip-build` to reuse a previously built APK/IPA (pairs with the baked `runId`). Run
+`npx qvac-test run:local:<platform> --help` for the full list.
 
-### Prerequisites
+**Platform prerequisites.**
 
-- Xcode installed
-- iPhone connected and trusted by Xcode
-- Apple signing configured for the generated app
-- `ios-deploy` installed for CLI install:
+- iOS: Xcode + connected device trusted in Xcode. Team ID auto-detected; override with `QVAC_IOS_TEAM_ID`.
+- Android: `adb` + USB-debuggable device.
+- Desktop: Node 22+.
 
-```bash
-brew install ios-deploy
-```
+## Running in CI
 
-### 1. Export MQTT settings
+### Label-triggered on PRs
 
-Use values reachable from the iPhone on the same local network. In most local runs, `MQTT_HOST` should be the IP of the machine running the producer and broker.
+See [`.github/workflows/on-pr-test-sdk.yml`](../../../.github/workflows/on-pr-test-sdk.yml).
 
-```bash
-export MQTT_PROTOCOL=ws
-export MQTT_HOST=<broker-ip>
-export MQTT_PORT=8080
-export MQTT_PATH=/mqtt
-```
+- `test-e2e-smoke` — runs the `smoke` suite on all platforms.
+- `test-e2e-full` — runs the full catalog on all platforms.
+- Release-branch PRs with SDK changes auto-run the full suite.
+- Success applies the `e2e-tested` label.
 
-If your broker requires auth, also export:
+### Manual runs
 
-```bash
-export MQTT_USERNAME=...
-export MQTT_PASSWORD=...
-```
+Open [Actions → QVAC Tests (sdk) → Run workflow](https://github.com/tetherto/qvac/actions/workflows/test-sdk.yml)
+and submit the form.
 
-### 2. Build the generated iOS consumer
+Non-obvious inputs:
 
-```bash
-npx qvac-test build:consumer:ios --runId <run-id> --config .
-```
+- **"Use workflow from" (GitHub's own selector) vs `test-version`** — these are independent. The selector
+  picks the branch that supplies the *workflow YAML*; `test-version` is the git ref that gets checked out for
+  the *code under test* (and the tests-qvac package). Leave `test-version` blank to test the same branch the
+  workflow was loaded from. Set it to test workflow edits from one branch against SDK code on another.
+- `suite` + `suite-custom` — pick `custom` to pass arbitrary comma-separated suite tags via `suite-custom`.
+- `desktop-platforms` — JSON array of runner labels; defaults to all three GPU runners. Narrow to one during
+  debugging.
 
-### 3. Build the Xcode app for the device
+The remaining inputs (`targets`, `filter`, `exclude-suite`, timeouts, `cache-models`) are self-explanatory in
+the form.
 
-Before building, open the generated workspace in Xcode and verify signing:
+## Developing new tests
 
-- open `build/consumers/ios/ios/QVACTestConsumer.xcworkspace`
-- select the `QVACTestConsumer` target
-- set a valid Apple Team under Signing & Capabilities
-- if signing fails, change the bundle identifier to a unique value for your Apple account
+- **Definitions** live in [`tests/<feature>-tests.ts`](./tests), aggregated in
+  [`tests/test-definitions.ts`](./tests/test-definitions.ts). Each entry is a `TestDefinition` with `testId`,
+  `params`, `expectation`, optional `suites`, and `metadata`.
+- **Executors — pick one of three locations based on runtime requirements:**
+  - [`tests/shared/executors/`](./tests/shared/executors) — **default**. Pure SDK API calls, no Node stdlib,
+    no RN APIs. Runs on both desktop and mobile. Example:
+    [`completion-executor.ts`](./tests/shared/executors/completion-executor.ts).
+  - [`tests/desktop/executors/`](./tests/desktop/executors) — needs `node:fs`, `node:path`, `process.cwd()`,
+    or other Node-only APIs. Example: [`rag-executor.ts`](./tests/desktop/executors/rag-executor.ts) reads
+    documents from disk.
+  - [`tests/mobile/executors/`](./tests/mobile/executors) — needs React Native-specific asset loading
+    (`Platform`, bundled assets). Example:
+    [`mobile/executors/ocr-executor.ts`](./tests/mobile/executors/ocr-executor.ts).
+- Register new executors in [`tests/desktop/consumer.ts`](./tests/desktop/consumer.ts) and
+  [`tests/mobile/consumer.ts`](./tests/mobile/consumer.ts) as applicable. Mobile platform skips go through
+  `SkipExecutor` at the top of the mobile consumer (first match wins).
+- **Smoke suite policy.** If a new feature introduces core functionality that has no existing smoke coverage,
+  tag **1-2** tests with `suites: ["smoke"]` — preferring the most representative, fastest, least-flaky test.
+  Verify it passes predictably on both desktop and mobile before tagging. Smoke must stay focused and fast; do
+  not tag additional tests for a feature that is already covered.
+- Assets go under [`assets/`](./assets). Update [`qvac-test.config.js`](./qvac-test.config.js)
+  `consumers.mobile.assets.patterns` if the new files aren't covered by existing globs.
+- One-time setup (model pre-download, warmup) goes in the exported `bootstrap()` function of each consumer
+  entry.
 
-After signing is configured, you can build from Xcode UI or from the command line below.
+## Troubleshooting
 
-```bash
-cd build/consumers/ios/ios
+- **No device detected** — `adb devices` (Android) or `xcrun devicectl list devices` (iOS). USB
+  trust/debugging must be enabled.
+- **iOS signing errors** — open [`build/consumers/ios/ios/QVACTestConsumer.xcworkspace`](./) in Xcode once and
+  set the Team under Signing & Capabilities, or export `QVAC_IOS_TEAM_ID`. If Xcode keeps failing, change
+  `QVAC_IOS_BUNDLE_ID` to a suffix unique to your Apple account.
+- **MQTT broker unreachable** — the embedded broker needs `aedes` + `websocket-stream`. `run:local:*` offers
+  to install them globally; accept, or run `npm install -g aedes websocket-stream` yourself.
+- **Manual iOS build fallback** — when the automated flow fails, build from the generated Xcode workspace
+  manually:
 
-xcodebuild \
-  -workspace QVACTestConsumer.xcworkspace \
-  -scheme QVACTestConsumer \
-  -configuration Release \
-  -destination 'id=<device-udid>'
-```
-
-### 4. Install the app on the iPhone
-
-```bash
-ios-deploy \
-  --bundle ~/Library/Developer/Xcode/DerivedData/<derived-data-dir>/Build/Products/Release-iphoneos/QVACTestConsumer.app
-```
-
-### 5. Start the producer
-
-Run this in a terminal that still has the same `MQTT_*` exports:
-
-```bash
-npx qvac-test run:producer --runId <run-id> --config .
-```
-
-### 6. Start tests from the phone
-
-Open the installed app on the iPhone and start the automated run. The producer should detect the mobile consumer over MQTT and begin assigning tests.
-
-## Notes
-
-- The generated mobile app uses the local checked-out SDK from `packages/sdk`.
-- The iOS build currently uses the generated Xcode scheme `QVACTestConsumer`.
-- The Metro config includes explicit audio asset extensions required by the mobile test assets.
+    ```bash
+    npx qvac-test build:consumer:ios --runId <run-id> --config .
+    cd build/consumers/ios/ios
+    xcodebuild \
+      -workspace QVACTestConsumer.xcworkspace \
+      -scheme QVACTestConsumer \
+      -configuration Release \
+      -destination 'id=<device-udid>'
+    ios-deploy --bundle ~/Library/Developer/Xcode/DerivedData/<derived-data-dir>/Build/Products/Release-iphoneos/QVACTestConsumer.app
+    npx qvac-test run:producer --runId <run-id> --config .
+    ```
