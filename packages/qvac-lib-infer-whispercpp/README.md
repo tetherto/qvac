@@ -128,16 +128,16 @@ $env:VCPKG_ROOT = "C:\path\to\vcpkg"
 
 **Linux:**
 ```bash
-# Ubuntu/Debian
+# Ubuntu/Debian — includes Clang and libc++ required by the native addon
 sudo apt update
-sudo apt install build-essential cmake git pkg-config
+sudo apt install clang libc++-dev libc++abi-dev build-essential cmake git pkg-config
 
 # CentOS/RHEL/Fedora
 sudo yum groupinstall "Development Tools"
-sudo yum install cmake git pkgconfig
+sudo yum install cmake git pkgconfig clang
 # or for newer versions:
 sudo dnf groupinstall "Development Tools"
-sudo dnf install cmake git pkgconfig
+sudo dnf install cmake git pkgconfig clang
 ```
 
 **macOS:**
