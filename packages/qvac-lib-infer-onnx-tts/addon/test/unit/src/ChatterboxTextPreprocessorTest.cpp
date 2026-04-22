@@ -6,6 +6,14 @@ namespace qvac::ttslib::chatterbox::text_preprocess::testing {
 
 using Preprocessor = ChatterboxTextPreprocessor;
 
+namespace {
+
+std::string asUtf8String(const char8_t *text) {
+  return std::string(reinterpret_cast<const char *>(text));
+}
+
+} // namespace
+
 class Utf8Test : public ::testing::Test {};
 
 TEST_F(Utf8Test, decodesAscii) {
@@ -177,6 +185,14 @@ TEST_F(PreprocessDispatchTest, passesEnglishThrough) {
 TEST_F(PreprocessDispatchTest, passesSpanishThrough) {
   std::string result = preprocessor_.preprocess("Hola mundo", "es");
   EXPECT_EQ(result, "Hola mundo");
+}
+
+TEST_F(PreprocessDispatchTest, passesPortugueseDiacriticsThrough) {
+  const std::string portuguese =
+      asUtf8String(u8"Olá mundo! Essa é uma demonstração de síntese de texto "
+                   u8"para voz usando Chatterbox");
+  const std::string result = preprocessor_.preprocess(portuguese, "pt");
+  EXPECT_EQ(result, portuguese);
 }
 
 } // namespace qvac::ttslib::chatterbox::text_preprocess::testing

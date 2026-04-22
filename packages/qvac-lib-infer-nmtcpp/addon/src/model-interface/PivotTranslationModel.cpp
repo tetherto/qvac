@@ -16,7 +16,6 @@ PivotTranslationModel::PivotTranslationModel(
       firstModel_(std::make_unique<TranslationModel>(firstModelPath)),
       secondModel_(std::make_unique<TranslationModel>(secondModelPath)),
       stopTranslation_(false) {
-
   firstModel_->setConfig(std::move(firstModelConfig));
   secondModel_->setConfig(std::move(secondModelConfig));
 

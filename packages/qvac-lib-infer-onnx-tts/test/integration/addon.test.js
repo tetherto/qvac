@@ -43,6 +43,7 @@ const ENGLISH_SENTENCES_SHORT = [
 
 const MULTILINGUAL_SENTENCES_BASE = {
   es: 'Hola mundo. Esta es una prueba del sistema de texto a voz.',
+  pt: 'Olá mundo! Essa é uma demonstração de síntese de texto para voz usando Chatterbox.',
   he: 'שלום עולם.',
   ko: '안녕하세요. 한글입니다.'
 }
