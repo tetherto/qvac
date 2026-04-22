@@ -18,6 +18,8 @@
     "test:cpp:run": "cd build/test/unit/ && ./addon-test --gtest_output=xml:cpp-test-results.xml",
     "test:cpp": "npm run test:cpp:build && npm run test:cpp:run",
     "test:all": "npm run test:unit && npm run test:integration && npm run test:cpp",
+    "test:mobile:generate": "bare ./scripts/generate-mobile-integration-tests.js",
+    "test:mobile:validate": "node scripts/validate-mobile-tests.js",
     "test:dts": "tsc -p tsconfig.dts.json"
   },
   "files": [

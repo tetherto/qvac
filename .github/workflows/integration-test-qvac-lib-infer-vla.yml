@@ -287,13 +287,41 @@ jobs:
             aws --version
           }
 
+      - if: ${{ matrix.platform == 'linux' }}
+        name: Install AWS CLI on Linux (idempotent, covers self-hosted runners)
+        shell: bash
+        run: |
+          if command -v aws >/dev/null 2>&1; then
+            echo "AWS CLI already installed"
+            aws --version
+          else
+            echo "Installing AWS CLI v2..."
+            ARCH=$(uname -m)
+            case "$ARCH" in
+              x86_64) AWS_ARCH="x86_64" ;;
+              aarch64|arm64) AWS_ARCH="aarch64" ;;
+              *) echo "Unsupported arch $ARCH" ; exit 1 ;;
+            esac
+            curl -sSL "https://awscli.amazonaws.com/awscli-exe-linux-${AWS_ARCH}.zip" -o /tmp/awscliv2.zip
+            sudo apt-get update -y && sudo apt-get install -y unzip
+            unzip -q /tmp/awscliv2.zip -d /tmp/
+            sudo /tmp/aws/install --update
+            rm -rf /tmp/aws /tmp/awscliv2.zip
+            aws --version
+          fi
+
       - name: Configure AWS credentials via OIDC
+        # Intel-mac runners use the Apple Paravirtual GPU which has ~1 GB of
+        # working set — too small for the 4 GB SmolVLA model. Skip S3 download
+        # and e2e there; the surface/rejects tests still run below.
+        if: ${{ !(matrix.platform == 'darwin' && matrix.arch == 'x64') }}
         uses: aws-actions/configure-aws-credentials@8df5847569e6427dd6c4fb1cf565c83acfa8afa7 # 6.0.0
         with:
           role-to-assume: ${{ secrets.AWS_OIDC_ROLE_ARN }}
           aws-region: eu-central-1
 
       - name: Download SmolVLA model from S3
+        if: ${{ !(matrix.platform == 'darwin' && matrix.arch == 'x64') }}
         working-directory: ${{ env.WORKDIR }}
         shell: bash
         run: |
@@ -308,7 +336,7 @@ jobs:
         working-directory: ${{ env.WORKDIR }}
         shell: bash
         env:
-          QVAC_VLA_MODEL: ${{ github.workspace }}/${{ env.WORKDIR }}/model/vla/smolvla-libero-f32-fixed.gguf
+          QVAC_VLA_MODEL: ${{ (matrix.platform == 'darwin' && matrix.arch == 'x64') && '' || format('{0}/{1}/model/vla/smolvla-libero-f32-fixed.gguf', github.workspace, env.WORKDIR) }}
         run: npm run test:integration ${{ matrix.platform }}-${{ matrix.arch }}
 
       - name: Run integration test (Windows)
