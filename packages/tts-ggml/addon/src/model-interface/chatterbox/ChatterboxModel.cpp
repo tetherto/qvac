@@ -1,154 +1,78 @@
 #include "model-interface/chatterbox/ChatterboxModel.hpp"
 
+#include <algorithm>
 #include <atomic>
 #include <chrono>
+#include <cmath>
 #include <cstdint>
-#include <cstdio>
-#include <cstdlib>
-#include <cstring>
 #include <filesystem>
-#include <fstream>
-#include <random>
-#include <sstream>
 #include <stdexcept>
 #include <string>
 #include <vector>
 
-#include <qvac-tts/qvac-tts.h>
+#include <qvac-tts/chatterbox/engine.h>
 
 #include "addon/TTSErrors.hpp"
+#include "qvac-lib-inference-addon-cpp/Errors.hpp"
 
 namespace qvac::ttsggml::chatterbox {
 
 namespace {
 
 using qvac_errors::createTTSError;
+using qvac_errors::StatusError;
 using qvac_errors::tts_error::TTSErrorCode;
+namespace general_error = qvac_errors::general_error;
 
-std::filesystem::path makeScratchWavPath() {
-  auto dir = std::filesystem::temp_directory_path();
-  std::random_device rd;
-  std::mt19937_64 rng(rd());
-  const uint64_t rnd = rng();
-  std::ostringstream name;
-  name << "qvac-tts-ggml-" << std::hex << rnd << ".wav";
-  return dir / name.str();
+qvac_tts::chatterbox::EngineOptions toEngineOptions(const ChatterboxConfig& cfg) {
+  qvac_tts::chatterbox::EngineOptions opts;
+  opts.t3_gguf_path    = cfg.t3ModelPath;
+  opts.s3gen_gguf_path = cfg.s3genModelPath;
+  opts.reference_audio = cfg.referenceAudio;
+  opts.voice_dir       = cfg.voiceDir;
+  if (cfg.seed.has_value())    opts.seed         = *cfg.seed;
+  if (cfg.threads.has_value()) opts.n_threads    = *cfg.threads;
+  if (cfg.nGpuLayers.has_value()) {
+    opts.n_gpu_layers = *cfg.nGpuLayers;
+  } else if (cfg.useGpu) {
+    opts.n_gpu_layers = 99;
+  }
+  if (cfg.streamChunkTokens.has_value())      opts.stream_chunk_tokens       = *cfg.streamChunkTokens;
+  if (cfg.streamFirstChunkTokens.has_value()) opts.stream_first_chunk_tokens = *cfg.streamFirstChunkTokens;
+  if (cfg.streamCfmSteps.has_value())         opts.stream_cfm_steps          = *cfg.streamCfmSteps;
+  return opts;
 }
 
-/** Minimal PCM16 WAV reader. The qvac-tts CLI always writes 16-bit mono PCM
- *  at 24 kHz (see the HiFT vocoder output path in qvac-tts.cpp).  We don't
- *  need to support the full spec — just RIFF/WAVE, a fmt chunk with format=1
- *  channels=1 bits=16, and a data chunk.  Anything else is an engine bug and
- *  we'd rather fail loudly. */
-std::vector<int16_t> readPcm16Wav(const std::filesystem::path& path, int& sampleRate) {
-  std::ifstream f(path, std::ios::binary);
-  if (!f) {
-    throw createTTSError(TTSErrorCode::SynthesisFailed, "failed to open synthesized wav: " + path.string());
+std::vector<int16_t> pcmFloatToInt16(const float* pcm, size_t samples) {
+  std::vector<int16_t> out;
+  out.resize(samples);
+  for (size_t i = 0; i < samples; ++i) {
+    float s = std::clamp(pcm[i], -1.0f, 1.0f);
+    out[i] = static_cast<int16_t>(std::lround(s * 32767.0f));
   }
-  std::vector<uint8_t> bytes((std::istreambuf_iterator<char>(f)),
-                             std::istreambuf_iterator<char>());
-  if (bytes.size() < 44) {
-    throw createTTSError(TTSErrorCode::SynthesisFailed, "synthesized wav is truncated (< 44 bytes): " + path.string());
-  }
-
-  auto read_u32_le = [](const uint8_t* p) {
-    return uint32_t(p[0]) | (uint32_t(p[1]) << 8) | (uint32_t(p[2]) << 16) |
-           (uint32_t(p[3]) << 24);
-  };
-  auto read_u16_le = [](const uint8_t* p) {
-    return uint16_t(p[0]) | (uint16_t(p[1]) << 8);
-  };
-
-  if (std::memcmp(bytes.data(), "RIFF", 4) != 0 ||
-      std::memcmp(bytes.data() + 8, "WAVE", 4) != 0) {
-    throw createTTSError(TTSErrorCode::SynthesisFailed, "synthesized wav missing RIFF/WAVE header");
-  }
-
-  size_t cursor = 12;
-  uint16_t audioFormat = 0;
-  uint16_t numChannels = 0;
-  uint32_t sr = 0;
-  uint16_t bitsPerSample = 0;
-  const uint8_t* dataPtr = nullptr;
-  size_t dataBytes = 0;
-
-  while (cursor + 8 <= bytes.size()) {
-    const uint8_t* id = bytes.data() + cursor;
-    const uint32_t sz = read_u32_le(bytes.data() + cursor + 4);
-    cursor += 8;
-    if (cursor + sz > bytes.size()) break;
-    if (std::memcmp(id, "fmt ", 4) == 0) {
-      if (sz < 16) {
-        throw createTTSError(TTSErrorCode::SynthesisFailed, "synthesized wav fmt chunk too small");
-      }
-      audioFormat = read_u16_le(bytes.data() + cursor);
-      numChannels = read_u16_le(bytes.data() + cursor + 2);
-      sr = read_u32_le(bytes.data() + cursor + 4);
-      bitsPerSample = read_u16_le(bytes.data() + cursor + 14);
-    } else if (std::memcmp(id, "data", 4) == 0) {
-      dataPtr = bytes.data() + cursor;
-      dataBytes = sz;
-      break;
-    }
-    cursor += sz;
-    if ((sz & 1U) != 0U) cursor += 1; // pad byte
-  }
-
-  if (audioFormat != 1 || numChannels != 1 || bitsPerSample != 16 ||
-      dataPtr == nullptr) {
-    throw createTTSError(TTSErrorCode::SynthesisFailed, "synthesized wav is not 16-bit mono PCM");
-  }
-  sampleRate = static_cast<int>(sr);
-  const size_t nSamples = dataBytes / sizeof(int16_t);
-  std::vector<int16_t> pcm(nSamples);
-  std::memcpy(pcm.data(), dataPtr, nSamples * sizeof(int16_t));
-  return pcm;
+  return out;
 }
 
-/** Owning argv builder — keeps strings alive while the argv pointers are used. */
-class ArgvBuilder {
-public:
-  void add(std::string arg) { storage_.emplace_back(std::move(arg)); }
-  // Call after all adds.  Returned (char**, size) pair stays valid while
-  // this builder is alive.
-  std::pair<char**, int> buildArgv() {
-    pointers_.clear();
-    pointers_.reserve(storage_.size());
-    for (auto& s : storage_) {
-      pointers_.push_back(s.data());
-    }
-    return {pointers_.data(), static_cast<int>(pointers_.size())};
-  }
-
-private:
-  std::vector<std::string> storage_;
-  std::vector<char*> pointers_;
-};
-
-int readIntOverride(
-    const ChatterboxModel::JobConfig& overrides, const std::string& key) {
-  auto it = overrides.find(key);
-  if (it == overrides.end()) return -1;
-  try {
-    return std::stoi(it->second);
-  } catch (...) {
-    return -1;
-  }
+std::vector<int16_t> pcmFloatToInt16(const std::vector<float>& pcm) {
+  return pcmFloatToInt16(pcm.data(), pcm.size());
 }
 
 } // namespace
 
 ChatterboxModel::ChatterboxModel(ChatterboxConfig config)
     : cfg_(std::move(config)) {
-  validatePaths(cfg_);
+  validateConfig(cfg_);
+  load();
 }
 
-void ChatterboxModel::validatePaths(const ChatterboxConfig& cfg) {
+ChatterboxModel::~ChatterboxModel() noexcept = default;
+
+void ChatterboxModel::validateConfig(const ChatterboxConfig& cfg) {
   if (cfg.t3ModelPath.empty()) {
-    throw createTTSError(TTSErrorCode::ModelFileNotFound, "t3ModelPath is required");
+    throw StatusError(general_error::InvalidArgument, "t3ModelPath is required");
   }
   if (cfg.s3genModelPath.empty()) {
-    throw createTTSError(TTSErrorCode::ModelFileNotFound, "s3genModelPath is required");
+    throw StatusError(general_error::InvalidArgument, "s3genModelPath is required");
   }
   if (!std::filesystem::exists(cfg.t3ModelPath)) {
     throw createTTSError(TTSErrorCode::ModelFileNotFound, "t3 model not found: " + cfg.t3ModelPath);
@@ -160,99 +84,114 @@ void ChatterboxModel::validatePaths(const ChatterboxConfig& cfg) {
       !std::filesystem::exists(cfg.referenceAudio)) {
     throw createTTSError(TTSErrorCode::ModelFileNotFound, "reference audio not found: " + cfg.referenceAudio);
   }
-  if (!cfg.voiceDir.empty() && !std::filesystem::is_directory(cfg.voiceDir)) {
-    throw createTTSError(TTSErrorCode::ModelFileNotFound, "voice dir not found: " + cfg.voiceDir);
+  if (!cfg.voiceDir.empty()) {
+    if (!std::filesystem::exists(cfg.voiceDir)) {
+      throw createTTSError(TTSErrorCode::ModelFileNotFound, "voice dir not found: " + cfg.voiceDir);
+    }
+    if (!std::filesystem::is_directory(cfg.voiceDir)) {
+      throw StatusError(
+          general_error::InvalidArgument,
+          "voiceDir path exists but is not a directory: " + cfg.voiceDir);
+    }
+  }
+  // The current Chatterbox GGUF only supports English.  Reject anything
+  // else at construction time instead of silently running in English —
+  // this makes the mismatch loud for callers who pass a non-"en" locale
+  // expecting multilingual behaviour (landing with a later port).
+  if (!cfg.language.empty() && cfg.language != "en") {
+    throw StatusError(
+        general_error::InvalidArgument,
+        "language '" + cfg.language + "' is not supported by the current "
+        "Chatterbox GGUF; only 'en' is available today");
   }
 }
 
 void ChatterboxModel::load() {
-  // Nothing to pre-load in v0: each process() call spins up its own model.
-  // This hook exists so the follow-up persistent-engine milestone can drop
-  // in without breaking the AddonCpp::activate() contract.
-  loaded_ = true;
+  std::lock_guard lk(engineMu_);
+  loadLocked();
 }
 
-void ChatterboxModel::unload() { loaded_ = false; }
+void ChatterboxModel::unload() {
+  std::lock_guard lk(engineMu_);
+  unloadLocked();
+}
 
-void ChatterboxModel::reload() { loaded_ = true; }
+void ChatterboxModel::reload() {
+  std::lock_guard lk(engineMu_);
+  unloadLocked();
+  loadLocked();
+}
+
+void ChatterboxModel::loadLocked() {
+  if (engine_) return;
+  try {
+    engine_ = std::make_shared<qvac_tts::chatterbox::Engine>(toEngineOptions(cfg_));
+  } catch (const std::exception& e) {
+    engine_.reset();
+    throw createTTSError(
+        TTSErrorCode::InitializationFailed,
+        std::string("ChatterboxModel::load: ") + e.what());
+  }
+}
+
+void ChatterboxModel::unloadLocked() {
+  engine_.reset();
+}
 
 void ChatterboxModel::cancel() const {
   cancelRequested_.store(true, std::memory_order_relaxed);
+  // Grab a local copy of engine_ under the lock so we can invoke
+  // cancel() safely even if another thread calls unload()/reload() in
+  // parallel.  The Engine itself is responsible for making cancel()
+  // thread-safe against its in-flight synthesize().
+  std::shared_ptr<qvac_tts::chatterbox::Engine> e;
+  {
+    std::lock_guard lk(engineMu_);
+    e = engine_;
+  }
+  if (e) e->cancel();
 }
 
 ChatterboxModel::Output ChatterboxModel::synthesize(
-    const std::string& text, const JobConfig& overrides) {
+    const std::string& text, const ChunkCallback& chunkCallback) {
+  // Capture the engine under the lock; keep it alive for the duration
+  // of synthesize() via the local `engine` shared_ptr even if reload()
+  // concurrently swaps a new one in.  Reload's new engine takes effect
+  // on the NEXT synthesize call.
+  std::shared_ptr<qvac_tts::chatterbox::Engine> engine;
+  {
+    std::lock_guard lk(engineMu_);
+    engine = engine_;
+  }
+  if (!engine) {
+    throw createTTSError(TTSErrorCode::ModelNotLoaded,
+                         "ChatterboxModel::synthesize: engine not loaded");
+  }
+  if (cancelRequested_.load(std::memory_order_relaxed)) {
+    throw createTTSError(TTSErrorCode::SynthesisFailed,
+                         "synthesis cancelled before it started");
+  }
+
   const auto tStart = std::chrono::steady_clock::now();
 
-  if (cancelRequested_.load(std::memory_order_relaxed)) {
-    throw createTTSError(TTSErrorCode::SynthesisFailed, "synthesis cancelled before it started");
-  }
-
-  const auto outPath = makeScratchWavPath();
-
-  ArgvBuilder args;
-  args.add("qvac-tts");
-  args.add("--model");
-  args.add(cfg_.t3ModelPath);
-  args.add("--s3gen-gguf");
-  args.add(cfg_.s3genModelPath);
-  args.add("--text");
-  args.add(text);
-  args.add("--out");
-  args.add(outPath.string());
-
-  if (cfg_.seed.has_value()) {
-    args.add("--seed");
-    args.add(std::to_string(*cfg_.seed));
-  }
-  if (cfg_.threads.has_value()) {
-    args.add("--threads");
-    args.add(std::to_string(*cfg_.threads));
-  }
-  if (cfg_.nGpuLayers.has_value()) {
-    args.add("--n-gpu-layers");
-    args.add(std::to_string(*cfg_.nGpuLayers));
-  } else if (cfg_.useGpu) {
-    args.add("--n-gpu-layers");
-    args.add("99");
-  }
-  if (!cfg_.referenceAudio.empty()) {
-    args.add("--reference-audio");
-    args.add(cfg_.referenceAudio);
-  }
-  if (!cfg_.voiceDir.empty()) {
-    args.add("--ref-dir");
-    args.add(cfg_.voiceDir);
-  }
-
-  auto [argv, argc] = args.buildArgv();
-
-  int rc = 0;
+  qvac_tts::chatterbox::SynthesisResult result;
   try {
-    rc = qvac_tts_cli_main(argc, argv);
+    if (chunkCallback && engine->options().stream_chunk_tokens > 0) {
+      result = engine->synthesize(
+          text,
+          [&chunkCallback](const float* pcm, std::size_t samples,
+                           int chunkIndex, bool isLast) {
+            chunkCallback(pcmFloatToInt16(pcm, samples), chunkIndex, isLast);
+          });
+    } else {
+      result = engine->synthesize(text);
+    }
   } catch (const std::exception& e) {
-    std::error_code ec;
-    std::filesystem::remove(outPath, ec);
-    throw createTTSError(TTSErrorCode::SynthesisFailed, std::string("qvac_tts_cli_main threw: ") + e.what());
+    throw createTTSError(TTSErrorCode::SynthesisFailed,
+                         std::string("engine.synthesize: ") + e.what());
   }
 
-  if (rc != 0) {
-    std::error_code ec;
-    std::filesystem::remove(outPath, ec);
-    throw createTTSError(TTSErrorCode::SynthesisFailed, "qvac_tts_cli_main exited with code " + std::to_string(rc));
-  }
-
-  int sampleRate = 0;
-  std::vector<int16_t> pcm;
-  try {
-    pcm = readPcm16Wav(outPath, sampleRate);
-  } catch (...) {
-    std::error_code ec;
-    std::filesystem::remove(outPath, ec);
-    throw;
-  }
-  std::error_code ec;
-  std::filesystem::remove(outPath, ec);
+  std::vector<int16_t> pcm = pcmFloatToInt16(result.pcm);
 
   const auto tEnd = std::chrono::steady_clock::now();
   const double elapsedSec =
@@ -260,20 +199,15 @@ ChatterboxModel::Output ChatterboxModel::synthesize(
 
   totalTime_ = elapsedSec;
   totalSamples_ = static_cast<int64_t>(pcm.size());
-  audioDurationMs_ =
-      sampleRate > 0 ? (static_cast<double>(pcm.size()) * 1000.0 /
-                        static_cast<double>(sampleRate))
-                     : 0.0;
+  audioDurationMs_ = result.sample_rate > 0
+      ? (static_cast<double>(pcm.size()) * 1000.0 /
+         static_cast<double>(result.sample_rate))
+      : 0.0;
   realTimeFactor_ =
       audioDurationMs_ > 0 ? (elapsedSec * 1000.0) / audioDurationMs_ : 0.0;
   textLength_ = text.size();
   tokensPerSecond_ =
       elapsedSec > 0 ? static_cast<double>(textLength_) / elapsedSec : 0.0;
-
-  // `overrides` reserved for per-request tweaks (e.g. per-request
-  // outputSampleRate resampling, which we'll wire in once the CLI gains that
-  // flag or we move off qvac_tts_cli_main entirely).
-  (void)overrides;
 
   return pcm;
 }
@@ -281,13 +215,44 @@ ChatterboxModel::Output ChatterboxModel::synthesize(
 std::any ChatterboxModel::process(const std::any& input) {
   const auto* anyInput = std::any_cast<AnyInput>(&input);
   if (anyInput == nullptr) {
-    throw createTTSError(TTSErrorCode::SynthesisFailed, "ChatterboxModel::process: expected AnyInput (text + config)");
+    throw StatusError(
+        general_error::InvalidArgument,
+        "ChatterboxModel::process: expected AnyInput (text + chunkCallback)");
   }
   if (anyInput->text.empty()) {
-    throw createTTSError(TTSErrorCode::SynthesisFailed, "ChatterboxModel::process: empty text");
+    throw StatusError(
+        general_error::InvalidArgument, "ChatterboxModel::process: empty text");
   }
+
+  // Serialize concurrent process() calls.  The outer JobRunner already
+  // queues jobs sequentially, but a direct C++ caller (or a future
+  // pipeline that bypasses JobRunner) could still overlap — fail fast
+  // with a clear error instead of data-racing on engine_ state.
+  bool expected = false;
+  if (!jobInProgress_.compare_exchange_strong(
+          expected, true, std::memory_order_acq_rel)) {
+    throw StatusError(
+        general_error::InvalidArgument,
+        "ChatterboxModel::process: another synthesis job is already in progress");
+  }
+  struct InProgressGuard {
+    std::atomic_bool& flag;
+    ~InProgressGuard() { flag.store(false, std::memory_order_release); }
+  } guard{jobInProgress_};
+
   cancelRequested_.store(false, std::memory_order_relaxed);
-  return std::any(synthesize(anyInput->text, anyInput->config));
+  auto pcm = synthesize(anyInput->text, anyInput->chunkCallback);
+  // Streaming mode: chunks have already been published via chunkCallback
+  // → OutputQueue.  Returning the concatenated PCM here would cause a
+  // duplicate final `outputArray` event after all the chunks.  Return an
+  // empty std::any so no output handler matches — JobRunner still emits
+  // JobEnded with runtimeStats on its own.
+  const bool streaming =
+      anyInput->chunkCallback &&
+      engine_ &&
+      engine_->options().stream_chunk_tokens > 0;
+  if (streaming) return {};
+  return std::any(std::move(pcm));
 }
 
 qvac_lib_inference_addon_cpp::RuntimeStats ChatterboxModel::runtimeStats() const {

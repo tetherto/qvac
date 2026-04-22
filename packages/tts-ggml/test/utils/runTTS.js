@@ -4,7 +4,7 @@ const path = require('bare-path')
 const fs = require('bare-fs')
 const os = require('bare-os')
 const { createWavBuffer } = require('./wav-helper')
-const { splitTtsText } = require('../../lib/textChunker.js')
+const { splitTtsText } = require('@qvac/tts-ggml/text-chunker')
 const { concatenatePcmChunks } = require('./pcmConcatenator')
 
 const platform = os.platform()

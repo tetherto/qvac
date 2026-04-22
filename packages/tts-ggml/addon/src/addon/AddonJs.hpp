@@ -26,17 +26,22 @@ namespace js = qvac_lib_inference_addon_cpp::js;
 using chatterbox::ChatterboxModel;
 
 /**
- * Emits PCM chunks to JS as `{ outputArray: Int16Array, sampleRate?: number }`.
- * The sample-rate field is populated eagerly from the shared atomic supplied
- * by the model (defaults to 24000 for Chatterbox).
+ * Emits a `vector<int16_t>` PCM buffer to JS as
+ * `{ outputArray: Int16Array, sampleRate: number }`.  Used for the final
+ * (batch) synthesis result.  The sample rate is hardcoded at 24 kHz —
+ * Chatterbox always emits at that rate today and there is no runtime
+ * resampler in the engine.  If `outputSampleRate` becomes engine-
+ * observable (rather than the current accepted-but-no-op pass-through),
+ * switch this to the atomic-shared-pointer pattern used by
+ * qvac-lib-infer-onnx-tts so the JS sample rate can track reload().
  */
 struct JsAudioOutputHandler
     : qvac_lib_inference_addon_cpp::out_handl::JsBaseOutputHandler<
           std::vector<int16_t>> {
-  explicit JsAudioOutputHandler(int defaultSampleRate = 24000)
+  explicit JsAudioOutputHandler(int sampleRate = 24000)
       : qvac_lib_inference_addon_cpp::out_handl::JsBaseOutputHandler<
             std::vector<int16_t>>(
-            [this, defaultSampleRate](
+            [this, sampleRate](
                 const std::vector<int16_t>& data) -> js_value_t* {
               auto result = js::Object::create(this->env_);
               std::span<const int16_t> outputSpan(data.data(), data.size());
@@ -45,16 +50,47 @@ struct JsAudioOutputHandler
               result.setProperty(this->env_, "outputArray", typedArray);
               result.setProperty(
                   this->env_, "sampleRate",
-                  js::Number::create(this->env_, defaultSampleRate));
+                  js::Number::create(this->env_, sampleRate));
               return result;
             }) {}
 };
 
-inline bool hasProperty(js_env_t* env, js::Object obj, const char* name) {
-  bool result = false;
-  JS(js_has_property(env, obj, js::String::create(env, name), &result));
-  return result;
-}
+/**
+ * Streaming PCM chunk with order + end-of-stream metadata.  Pushed onto
+ * the output queue by `ChatterboxModel::synthesize`'s native chunk
+ * callback; emitted to JS as
+ * `{ outputArray, sampleRate, chunkIndex, isLast }`.
+ */
+struct StreamingPcmChunk {
+  std::vector<int16_t> pcm;
+  int chunkIndex = 0;
+  bool isLast = false;
+};
+
+struct JsStreamingPcmHandler
+    : qvac_lib_inference_addon_cpp::out_handl::JsBaseOutputHandler<
+          StreamingPcmChunk> {
+  explicit JsStreamingPcmHandler(int sampleRate = 24000)
+      : qvac_lib_inference_addon_cpp::out_handl::JsBaseOutputHandler<
+            StreamingPcmChunk>(
+            [this, sampleRate](const StreamingPcmChunk& chunk) -> js_value_t* {
+              auto result = js::Object::create(this->env_);
+              std::span<const int16_t> outputSpan(chunk.pcm.data(), chunk.pcm.size());
+              auto typedArray =
+                  js::TypedArray<int16_t>::create(this->env_, outputSpan);
+              result.setProperty(this->env_, "outputArray", typedArray);
+              result.setProperty(
+                  this->env_, "sampleRate",
+                  js::Number::create(this->env_, sampleRate));
+              result.setProperty(
+                  this->env_, "chunkIndex",
+                  js::Number::create(this->env_, chunk.chunkIndex));
+              result.setProperty(
+                  this->env_, "isLast",
+                  js::Boolean::create(this->env_, chunk.isLast));
+              return result;
+            }) {}
+};
 
 inline js_value_t* createInstance(js_env_t* env, js_callback_info_t* info) try {
   using namespace qvac_lib_inference_addon_cpp;
@@ -70,6 +106,7 @@ inline js_value_t* createInstance(js_env_t* env, js_callback_info_t* info) try {
 
   out_handl::OutputHandlers<out_handl::JsOutputHandlerInterface> outHandlers;
   outHandlers.add(make_shared<JsAudioOutputHandler>());
+  outHandlers.add(make_shared<JsStreamingPcmHandler>());
   unique_ptr<OutputCallBackInterface> callback = make_unique<OutputCallBackJs>(
       env, args.get(0, "jsHandle"), args.getFunction(2, "outputCallback"),
       std::move(outHandlers));
@@ -97,10 +134,25 @@ inline js_value_t* runJob(js_env_t* env, js_callback_info_t* info) try {
   ChatterboxModel::AnyInput modelInput;
   modelInput.text = js::String(env, jsInput).as<std::string>(env);
 
-  if (hasProperty(env, inputObj, "config")) {
-    auto runtimeConfig = inputObj.getProperty<js::Object>(env, "config");
-    modelInput.config = JSAdapter::flattenToStringMap(runtimeConfig, env);
-  }
+  // Per-request config overrides used to flow through `inputObj.config`
+  // into the model, but nothing honoured them — the engine is
+  // persistent and all config is resolved at construction / reload.
+  // Callers who want different knobs should use `model.reload(cfg)`.
+  (void)inputObj;
+
+  // Native streaming: if the ChatterboxModel is built with
+  // streamChunkTokens > 0, publish each chunk's PCM to the output queue
+  // as soon as it's produced so the JS onUpdate fires chunk-by-chunk —
+  // same pattern as qvac-lib-infer-llamacpp-llm's per-token callback.
+  // We pack the PCM with `chunkIndex` + `isLast` so the JS side can
+  // preserve chunk ordering across async callback dispatch and detect
+  // the final chunk without waiting for `JobEnded`.
+  auto outputQueue = instance.addonCpp->outputQueue;
+  modelInput.chunkCallback = [outputQueue](
+      std::vector<int16_t>&& pcm, int chunkIndex, bool isLast) {
+    StreamingPcmChunk chunk{std::move(pcm), chunkIndex, isLast};
+    outputQueue->queueResult(std::any(std::move(chunk)));
+  };
 
   return instance.runJob(std::any(std::move(modelInput)));
 }

@@ -17,9 +17,6 @@
     "test:integration": "brittle-bare test/integration/addon.test.js",
     "test:integration:medium": "INPUT_SENTENCES=medium brittle-bare test/integration/addon.test.js",
     "test:integration:long": "INPUT_SENTENCES=long brittle-bare test/integration/addon.test.js",
-    "test:cpp:build": "bare-make generate -D BUILD_TESTING=ON && bare-make build",
-    "test:cpp:run": "./build/addon/test/unit/qvac-lib-inference-tts-ggml-unit-test",
-    "test:cpp": "npm run test:cpp:build && npm run test:cpp:run",
     "models:ensure": "bare scripts/ensure-models.js",
     "models:ensure:chatterbox": "bare scripts/ensure-chatterbox.js"
   },
@@ -40,6 +37,7 @@
     "test/utils/downloadModel.js",
     "test/utils/wav-helper.js",
     "test/utils/loader.fake.js",
+    "test/utils/pcmConcatenator.js",
     "test/utils/runWhisper.js",
     "LICENSE"
   ],

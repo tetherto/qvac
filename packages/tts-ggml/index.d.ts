@@ -57,10 +57,10 @@ declare interface TTSGgmlOptions {
 }
 
 /**
- * GGML-backed Chatterbox TTS (via @qvac/tts-cpp / qvac-tts.cpp).  API-compatible
- * with the Chatterbox engine exposed by @qvac/tts-onnx — `run`, `runStream`,
- * `runStreaming`, `reload`, `unload`, `destroy` — so downstream consumers can
- * swap backends without touching their orchestration code.
+ * GGML-backed Chatterbox TTS (via the `tts-cpp` / qvac-tts.cpp library).
+ * Owns a persistent native Engine: the T3 GGUF, the S3Gen preload, and any
+ * voice-conditioning tensors are loaded once at `load()` and reused across
+ * every `run()` / `runStream()` / `runStreaming()` call.
  */
 declare class TTSGgml {
   constructor(options?: TTSGgmlOptions)

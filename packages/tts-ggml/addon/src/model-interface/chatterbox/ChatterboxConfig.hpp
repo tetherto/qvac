@@ -8,12 +8,11 @@ namespace qvac::ttsggml::chatterbox {
 /**
  * Configuration for the Chatterbox engine wrapping qvac-tts::qvac-tts.
  *
- * Mirrors the argv flags accepted by the `qvac-tts` CLI — the current
- * implementation of {@link ChatterboxModel::process} assembles these fields
- * into an argv array and calls `qvac_tts_cli_main` (see
- * addon/src/model-interface/chatterbox/ChatterboxModel.cpp).  When a proper
- * struct-based public API is added to qvac-tts.cpp we'll switch this struct
- * to carry the engine handle directly and drop the argv dance.
+ * Mapped 1:1 into `qvac_tts::chatterbox::EngineOptions` by
+ * {@link ChatterboxModel::load} and then passed to a persistent Engine that
+ * owns the T3 + S3Gen + voice-conditioning state for the lifetime of the
+ * addon.  The Engine is re-created on reload() when any of these fields
+ * change (ex: a new reference voice or a flip between CPU / GPU).
  */
 struct ChatterboxConfig {
   /** Path to the T3 (text -> speech tokens) GGUF. */
@@ -36,6 +35,17 @@ struct ChatterboxConfig {
   std::optional<int> outputSampleRate;
   /** Shortcut: if true and nGpuLayers unset, maps to nGpuLayers=99. */
   bool useGpu = false;
+  /**
+   * Native streaming controls.  When `streamChunkTokens > 0` and the
+   * caller passes a chunk callback on the job input, the engine runs
+   * the chunked S3Gen+HiFT loop and emits PCM per chunk (~25 tokens
+   * = 1 s of audio).  0 = batch synthesis.
+   */
+  std::optional<int> streamChunkTokens;
+  /** Smaller first chunk for low first-audio-out latency.  0 = same as streamChunkTokens. */
+  std::optional<int> streamFirstChunkTokens;
+  /** CFM Euler steps for streaming chunks.  0 = library default (2). */
+  std::optional<int> streamCfmSteps;
 };
 
 } // namespace qvac::ttsggml::chatterbox

@@ -2,17 +2,21 @@
 
 #include <js.h>
 #include <qvac-lib-inference-addon-cpp/JsUtils.hpp>
-#include <string>
-#include <unordered_map>
 
 #include "model-interface/chatterbox/ChatterboxConfig.hpp"
 
 namespace qvac::ttsggml {
 
 /**
- * Converts a JS configuration object into a `ChatterboxConfig`.  String /
- * string-map layering mirrors the `@qvac/tts-onnx` addon so the two
- * back-ends share the same JS surface.
+ * Converts a JS configuration object into a `ChatterboxConfig` at
+ * addon construction time.  Reads each property with its native JS
+ * type (String / Number / Boolean) and validates numeric fields so
+ * malformed values surface as `StatusError(InvalidArgument)` rather
+ * than being silently swallowed.
+ *
+ * There is no per-request override path — the engine is persistent and
+ * all knobs are fixed for the instance's lifetime; call
+ * `model.reload(newConfig)` to rebuild it with different options.
  */
 class JSAdapter {
 public:
@@ -21,19 +25,6 @@ public:
   chatterbox::ChatterboxConfig buildConfig(
       qvac_lib_inference_addon_cpp::js::Object configurationParams,
       js_env_t* env);
-
-  /** Flatten a JS object of string/boolean leaves into a key->string map. */
-  static std::unordered_map<std::string, std::string> flattenToStringMap(
-      qvac_lib_inference_addon_cpp::js::Object obj, js_env_t* env);
-
-  /**
-   * Per-request override applicator — layers values from a `{key: string}`
-   * map onto an existing config (currently only `outputSampleRate`; extended
-   * in future milestones as the engine exposes more knobs).
-   */
-  static void applyJobOverrides(
-      chatterbox::ChatterboxConfig& cfg,
-      const std::unordered_map<std::string, std::string>& overrides);
 };
 
 } // namespace qvac::ttsggml

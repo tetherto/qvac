@@ -5,7 +5,7 @@ const os = require('bare-os')
 const path = require('bare-path')
 const fs = require('bare-fs')
 
-const { loadChatterboxTTS, runChatterboxTTS, runChatterboxTTSWithSplit } = require('../utils/runChatterboxTTS')
+const { loadChatterboxTTS, runChatterboxTTS, runChatterboxTTSWithSplit, runChatterboxStreaming } = require('../utils/runChatterboxTTS')
 const { ensureChatterboxModels, ensureWhisperModel } = require('../utils/downloadModel')
 const { loadWhisper, runWhisper } = require('../utils/runWhisper')
 
@@ -62,9 +62,13 @@ test('Chatterbox TTS (ggml): English synthesis + optional WER verification', { t
   const werEntries = []
   const englishSentences = getEnglishSentences()
 
-  console.log(`\n=== English synthesis (${englishSentences.length} sentences, tier: ${INPUT_SENTENCES}) ===`)
+  // `ensureChatterboxModels` may resolve to a different dir on Android
+  // (the adb-push-friendly candidate paths under /sdcard/...), so use
+  // the dir it actually found the GGUFs in.
+  const resolvedModelDir = download.targetDir
+  console.log(`\n=== English synthesis (${englishSentences.length} sentences, tier: ${INPUT_SENTENCES}, modelDir: ${resolvedModelDir}) ===`)
   const model = await loadChatterboxTTS({
-    modelDir: modelsDir,
+    modelDir: resolvedModelDir,
     language: 'en'
   })
   t.ok(model, 'Chatterbox (ggml) model should be loaded')
@@ -148,9 +152,9 @@ test('Chatterbox TTS (ggml): outputSampleRate option is accepted (pass-through f
   // Native output is always 24 kHz for Chatterbox; outputSampleRate resampling
   // is reserved for the persistent-engine milestone.  This test just verifies
   // the option flows end-to-end without errors.
-  const TTSGgml = require('../..')
+  const TTSGgml = require('@qvac/tts-ggml')
   const model = new TTSGgml({
-    files: { modelDir: modelsDir },
+    files: { modelDir: download.targetDir },
     referenceAudio: path.join(__dirname, '..', 'reference-audio', 'jfk.wav'),
     config: { language: 'en', outputSampleRate: 16000 },
     opts: { stats: true }
@@ -172,4 +176,128 @@ test('Chatterbox TTS (ggml): outputSampleRate option is accepted (pass-through f
     // Just a touchpoint so CI logs show output dir; not strictly required.
     try { fs.mkdirSync(path.join(baseDir, 'test', 'output'), { recursive: true }) } catch (e) { /* ignore */ }
   }
+})
+
+test('Chatterbox TTS (ggml): native C++ chunk streaming via streamChunkTokens', { timeout: 600000 }, async (t) => {
+  const baseDir = getBaseDir()
+  const modelsDir = path.join(baseDir, 'models')
+
+  const download = await ensureChatterboxModels({ targetDir: modelsDir })
+  if (!download.success) {
+    t.pass('Skipped: Chatterbox GGUFs not available locally')
+    return
+  }
+
+  // streamChunkTokens > 0 activates the native Engine chunked S3Gen+HiFT
+  // loop.  The addon publishes each chunk's PCM via the outputQueue so
+  // every `onUpdate` carries a distinct chunk of audio rather than one
+  // concatenated final result.
+  const TTSGgml = require('@qvac/tts-ggml')
+  const model = new TTSGgml({
+    files: { modelDir: download.targetDir },
+    referenceAudio: path.join(__dirname, '..', 'reference-audio', 'jfk.wav'),
+    streamChunkTokens: 25,
+    streamFirstChunkTokens: 10,
+    cfmSteps: 1,
+    config: { language: 'en' },
+    opts: { stats: true }
+  })
+  await model.load()
+  t.pass('Chatterbox (ggml) model loaded with native streaming')
+
+  const response = await model.run({
+    type: 'text',
+    input: 'The quick brown fox jumps over the lazy dog. This is a slightly longer sentence to produce multiple native chunks.'
+  })
+
+  const chunkIndices = []
+  let totalSamples = 0
+  let sawIsLast = false
+  let lastSeenIsLast = null
+  await response
+    .onUpdate(data => {
+      if (data && data.outputArray) {
+        chunkIndices.push(data.chunkIndex)
+        totalSamples += data.outputArray.length
+        if (data.isLast === true) sawIsLast = true
+        lastSeenIsLast = data.isLast
+      }
+    })
+    .await()
+
+  t.ok(chunkIndices.length >= 2, `native streaming should emit multiple chunks (got ${chunkIndices.length})`)
+  t.ok(totalSamples > 0, 'native streaming should produce audio samples')
+  for (let i = 0; i < chunkIndices.length; i++) {
+    t.is(chunkIndices[i], i, `chunk ${i} should carry chunkIndex=${i}`)
+  }
+  t.ok(sawIsLast, 'one of the chunks should carry isLast=true')
+  t.is(lastSeenIsLast, true, 'the final chunk should carry isLast=true')
+
+  await model.unload()
+  t.pass('Model unloaded after native streaming')
+})
+
+test('Chatterbox TTS (ggml): streaming input + streaming PCM output (runStreaming + onUpdate)', { timeout: 1800000 }, async (t) => {
+  const baseDir = getBaseDir()
+  const modelsDir = path.join(baseDir, 'models')
+
+  console.log('\n=== Ensuring Chatterbox GGUFs (streaming) ===')
+  const download = await ensureChatterboxModels({ targetDir: modelsDir })
+  if (!download.success) {
+    t.pass('Skipped: Chatterbox GGUFs not available locally')
+    return
+  }
+  t.ok(download.success, 'Chatterbox GGUFs should be available')
+
+  const model = await loadChatterboxTTS({
+    modelDir: download.targetDir,
+    language: 'en'
+  })
+  t.ok(model, 'Chatterbox (ggml) model should be loaded')
+
+  const phrases = [
+    'First phrase arrives from the upstream text stream.',
+    'A short pause could sit between chunks.',
+    'Each yield is one discrete synthesis job.'
+  ]
+
+  const expectation = {
+    minSamples: 15000,
+    maxSamples: 5000000,
+    minDurationMs: 400,
+    maxDurationMs: 300000
+  }
+
+  const saveWav = !isMobile
+  const wavOutputPath = saveWav
+    ? path.join(baseDir, 'test', 'output', 'chatterbox-streaming.wav')
+    : undefined
+
+  console.log(`\n=== Running Chatterbox IO stream synthesis (runStreaming, ${phrases.length} phrases) ===`)
+  const result = await runChatterboxStreaming(
+    model,
+    { phrases, saveWav, wavOutputPath },
+    expectation
+  )
+  console.log(result.output)
+
+  t.ok(result.passed, 'Streaming synthesis should pass expectations')
+  t.ok(result.data.sampleCount > 0, 'Streaming should produce audio samples')
+  t.is(result.data.reportedSampleRate, 24000, 'Streaming sample rate is native 24 kHz')
+  t.is(
+    result.data.streamChunkCount,
+    phrases.length,
+    'runStreaming should emit one chunk per yielded phrase'
+  )
+  t.is(result.data.sentenceChunks.length, phrases.length)
+  for (let i = 0; i < phrases.length; i++) {
+    t.is(
+      result.data.sentenceChunks[i],
+      phrases[i],
+      `chunk ${i} sentenceChunk should match the streamed-in phrase`
+    )
+  }
+
+  await model.unload()
+  t.pass('Chatterbox model unloaded')
 })

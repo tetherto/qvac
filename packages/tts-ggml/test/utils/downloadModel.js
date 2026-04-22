@@ -259,55 +259,100 @@ async function ensureWhisperModel (targetPath = null) {
   return { success: result.success, path: targetPath }
 }
 
+const CHATTERBOX_GGUFS = [
+  { name: 'chatterbox-t3-turbo.gguf', minSize: 500_000_000 },
+  { name: 'chatterbox-s3gen.gguf', minSize: 500_000_000 }
+]
+
+/** Directories searched on Android (in order) when the caller-supplied
+ *  `targetDir` doesn't already have both GGUFs.  All of these are
+ *  `adb push`-friendly locations on a standard (non-rooted) device. */
+const ANDROID_CANDIDATE_DIRS = [
+  '/sdcard/qvac-tts-ggml/models',
+  '/storage/emulated/0/qvac-tts-ggml/models',
+  '/data/local/tmp/qvac-tts-ggml/models'
+]
+
+/** Returns true if `dir` contains every Chatterbox GGUF at the expected size. */
+function hasAllGgufs (dir) {
+  for (const f of CHATTERBOX_GGUFS) {
+    const p = path.join(dir, f.name)
+    if (!fs.existsSync(p)) return false
+    try {
+      const stats = fs.statSync(p)
+      if (stats.size < f.minSize) return false
+    } catch (e) {
+      return false
+    }
+  }
+  return true
+}
+
 /**
- * Ensure the Chatterbox GGUFs are present under `targetDir` as
- *   `chatterbox-t3-turbo.gguf` and `chatterbox-s3gen.gguf`.
+ * Ensure the Chatterbox GGUFs are present under a directory the native
+ * addon can read, and return the directory that won.
  *
  * The GGUFs aren't published to a canonical HuggingFace repo yet (the
- * teammate will pick the home when qvac-tts.cpp stabilises), so for now
- * this helper is **check-only**: it verifies the two files exist and, if
- * they don't, prints actionable instructions for regenerating them from
- * the chatterbox.cpp conversion scripts.
+ * teammate will pick the home when qvac-tts.cpp stabilises), so this
+ * helper is **check-only** — it doesn't download anything.  On Android it
+ * additionally scans a handful of `adb push`-friendly paths because the
+ * mobile test harness's `global.testDir` (the app's internal files dir)
+ * isn't writable by `adb push` on stock Android without `run-as`.
  *
- * TODO: once the GGUFs land on a known HuggingFace repo (e.g.
- * `tetherto/qvac-tts-ggml`), wire up the download URLs here and switch
- * the default to "fetch from HF".
+ * Dev flow on Android:
+ *
+ *   adb push models/chatterbox-t3-turbo.gguf /sdcard/qvac-tts-ggml/models/
+ *   adb push models/chatterbox-s3gen.gguf    /sdcard/qvac-tts-ggml/models/
+ *
+ * TODO: once the GGUFs land on a known HuggingFace repo, wire up the
+ * download URLs here and switch the default to "fetch from HF".
  */
 async function ensureChatterboxModels (options = {}) {
-  const targetDir = options.targetDir || path.join(getBaseDir(), 'models')
-  console.log(`Ensuring Chatterbox GGUFs under ${targetDir}...`)
+  const requestedDir = options.targetDir || path.join(getBaseDir(), 'models')
+  console.log(`Ensuring Chatterbox GGUFs (requested dir: ${requestedDir})...`)
 
-  if (!fs.existsSync(targetDir)) {
-    fs.mkdirSync(targetDir, { recursive: true })
+  const candidateDirs = [requestedDir]
+  if (isMobile && platform === 'android') {
+    for (const d of ANDROID_CANDIDATE_DIRS) {
+      if (!candidateDirs.includes(d)) candidateDirs.push(d)
+    }
   }
 
-  const files = [
-    { name: 'chatterbox-t3-turbo.gguf', minSize: 500_000_000 },
-    { name: 'chatterbox-s3gen.gguf', minSize: 500_000_000 }
-  ]
+  let resolvedDir = null
+  for (const dir of candidateDirs) {
+    if (hasAllGgufs(dir)) {
+      resolvedDir = dir
+      break
+    }
+  }
+
+  if (resolvedDir) {
+    console.log(` ✓ using Chatterbox GGUFs at ${resolvedDir}`)
+    const results = {}
+    for (const f of CHATTERBOX_GGUFS) {
+      results[f.name] = { success: true, path: path.join(resolvedDir, f.name), cached: true }
+    }
+    return { success: true, results, targetDir: resolvedDir }
+  }
+
+  try {
+    if (!fs.existsSync(requestedDir)) fs.mkdirSync(requestedDir, { recursive: true })
+  } catch (e) { /* ignore — informational dir only */ }
 
   const results = {}
-  let allSuccess = true
-
-  for (const f of files) {
-    const targetPath = path.join(targetDir, f.name)
-    if (fs.existsSync(targetPath)) {
-      const stats = fs.statSync(targetPath)
-      if (stats.size >= f.minSize) {
-        console.log(` ✓ ${f.name} present (${stats.size} bytes)`)
-        results[f.name] = { success: true, path: targetPath, cached: true }
-        continue
-      }
-      console.log(` ✗ ${f.name} exists but is too small (${stats.size} bytes, expected ≥ ${f.minSize})`)
-    } else {
-      console.log(` ✗ ${f.name} missing at ${targetPath}`)
-    }
-    results[f.name] = { success: false, path: targetPath }
-    allSuccess = false
+  for (const f of CHATTERBOX_GGUFS) {
+    const p = path.join(requestedDir, f.name)
+    const exists = fs.existsSync(p)
+    const size = exists ? fs.statSync(p).size : 0
+    console.log(` ✗ ${f.name} ${exists ? `too small (${size} bytes, expected ≥ ${f.minSize})` : `missing at ${p}`}`)
+    results[f.name] = { success: false, path: p }
   }
-
-  if (!allSuccess) {
-    console.log('')
+  console.log('')
+  if (isMobile && platform === 'android') {
+    console.log('Chatterbox GGUFs not found.  On Android, `adb push` them to one of:')
+    for (const d of ANDROID_CANDIDATE_DIRS) console.log(`  ${d}`)
+    console.log('(or copy into the app-internal dir that testDir maps to).')
+  } else {
     console.log('Chatterbox GGUFs are not published on HuggingFace yet.  Generate them')
     console.log('locally from the qvac-tts.cpp (née chatterbox.cpp) conversion scripts:')
     console.log('')
@@ -318,10 +363,10 @@ async function ensureChatterboxModels (options = {}) {
     console.log('  python scripts/convert-t3-turbo-to-gguf.py --out chatterbox-t3-turbo.gguf')
     console.log('  python scripts/convert-s3gen-to-gguf.py    --out chatterbox-s3gen.gguf')
     console.log('')
-    console.log(`Then copy both .gguf files into ${targetDir}.`)
+    console.log(`Then copy both .gguf files into ${requestedDir}.`)
   }
 
-  return { success: allSuccess, results, targetDir }
+  return { success: false, results, targetDir: requestedDir }
 }
 
 module.exports = {

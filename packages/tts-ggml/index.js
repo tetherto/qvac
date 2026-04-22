@@ -66,14 +66,15 @@ function ttsOutputDebugString (data) {
 }
 
 /**
- * GGML-backed Chatterbox TTS (via @qvac/tts-cpp / qvac-tts.cpp).
+ * GGML-backed Chatterbox TTS (via the `tts-cpp` / qvac-tts.cpp library).
  *
- * Mirrors the JS API of `@qvac/tts-onnx` for the Chatterbox engine —
- * `run`, `runStream`, `runStreaming`, `reload`, `unload`, `destroy` — so
- * downstream consumers can switch backends without touching their orchestration
- * code.  Backends other than Chatterbox English (Chatterbox multilingual,
- * LavaSR enhancer, Supertonic) will land as the `qvac-tts.cpp` library grows;
- * they live in `@qvac/tts-onnx` for now.
+ * Owns a persistent native engine — T3, S3Gen, and any voice-conditioning
+ * tensors are loaded once at `load()` and reused across every `run()` /
+ * `runStream()` / `runStreaming()` call.  Exposes batch synthesis
+ * (`run({ input })`), sentence-granularity streaming (`runStreaming()` over
+ * an async iterator of sentences), and sub-sentence native chunk streaming
+ * (set `streamChunkTokens` on the constructor; the C++ Engine then emits
+ * PCM per chunk as it's produced).  See README.md for usage.
  */
 class TTSGgml {
   constructor (options = {}) {
@@ -155,6 +156,10 @@ class TTSGgml {
     this._streamChunkTokens = streamChunkTokens
     this._streamFirstChunkTokens = streamFirstChunkTokens
     this._cfmSteps = cfmSteps
+
+    if (this._config.useGPU === undefined && this._nGpuLayers == null) {
+      this._config.useGPU = true
+    }
   }
 
   getApiDefinition () {
@@ -516,8 +521,7 @@ class TTSGgml {
     const params = {
       t3ModelPath: this._t3ModelPath || '',
       s3genModelPath: this._s3genModelPath || '',
-      language: this._config?.language || 'en',
-      lazySessionLoading: this._lazySessionLoading
+      language: this._config?.language || 'en'
     }
     if (this._referenceAudio != null) {
       params.referenceAudio = this._referenceAudio
@@ -525,16 +529,16 @@ class TTSGgml {
     if (this._voiceDir != null) {
       params.voiceDir = this._voiceDir
     }
-    if (this._seed != null) params.seed = String(this._seed)
-    if (this._nGpuLayers != null) params.nGpuLayers = String(this._nGpuLayers)
-    if (this._threads != null) params.threads = String(this._threads)
-    if (this._streamChunkTokens != null) params.streamChunkTokens = String(this._streamChunkTokens)
+    if (this._seed != null) params.seed = this._seed | 0
+    if (this._nGpuLayers != null) params.nGpuLayers = this._nGpuLayers | 0
+    if (this._threads != null) params.threads = this._threads | 0
+    if (this._streamChunkTokens != null) params.streamChunkTokens = this._streamChunkTokens | 0
     if (this._streamFirstChunkTokens != null) {
-      params.streamFirstChunkTokens = String(this._streamFirstChunkTokens)
+      params.streamFirstChunkTokens = this._streamFirstChunkTokens | 0
     }
-    if (this._cfmSteps != null) params.cfmSteps = String(this._cfmSteps)
+    if (this._cfmSteps != null) params.cfmSteps = this._cfmSteps | 0
     if (this._outputSampleRate != null) {
-      params.outputSampleRate = String(this._outputSampleRate)
+      params.outputSampleRate = this._outputSampleRate | 0
     }
     if (this._config?.useGPU != null) {
       params.useGPU = !!this._config.useGPU
@@ -579,18 +583,13 @@ class TTSGgml {
   async _runInternal (input) {
     const response = this._job.start()
     try {
+      // Per-request overrides (e.g. input.outputSampleRate) are not
+      // honoured by the native engine today — all synthesis knobs are
+      // resolved at construction / reload.  Route those through
+      // `model.reload({...})` instead when the engine exposes them.
       const jobData = {
         type: input.type || 'text',
         input: input.input
-      }
-
-      const hasPerRequestOverrides = input.outputSampleRate !== undefined
-
-      if (hasPerRequestOverrides) {
-        jobData.config = {}
-        if (input.outputSampleRate !== undefined) {
-          jobData.config.outputSampleRate = String(input.outputSampleRate)
-        }
       }
 
       await this.addon.runJob(jobData)

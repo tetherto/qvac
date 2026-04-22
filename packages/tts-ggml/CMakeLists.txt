@@ -87,24 +87,13 @@ if(WIN32)
   )
 endif()
 
+# BUILD_TESTING currently has no C++ tests wired up.  The previous
+# skeleton (a `tts-ggml-core` static library with no gtest executable
+# consuming it) was removed so `cmake --build -D BUILD_TESTING=ON` stops
+# producing an orphan artefact.  When the C++ unit-test suite lands
+# (tracked as a follow-up to the persistent-engine milestone), restore
+# the static library plus the `add_executable` + `gtest_discover_tests`
+# wiring under this option.
 if(BUILD_TESTING)
   find_package(GTest REQUIRED)
-
-  # Expose the non-JS engine bits as a static library so the upcoming gtest
-  # suite (ported from qvac-lib-infer-onnx-tts/addon/test/unit) can link
-  # against ChatterboxModel directly without pulling in the bare addon.
-  set(CORE_SRCS
-      ${PROJECT_SOURCE_DIR}/addon/src/model-interface/chatterbox/ChatterboxModel.cpp
-  )
-
-  add_library(tts-ggml-core STATIC ${CORE_SRCS})
-
-  target_link_libraries(tts-ggml-core PRIVATE qvac-tts::qvac-tts)
-
-  target_include_directories(tts-ggml-core PRIVATE
-      ${PROJECT_SOURCE_DIR}/addon/
-      ${PROJECT_SOURCE_DIR}/addon/src/
-      ${CMAKE_BINARY_DIR}/_bare/node_modules/bare-headers/include
-      ${QVAC_LIB_INFERENCE_ADDON_CPP_INCLUDE_DIRS}
-  )
 endif()
