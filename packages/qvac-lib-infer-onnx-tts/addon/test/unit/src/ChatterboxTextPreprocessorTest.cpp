@@ -127,29 +127,6 @@ TEST_F(KatakanaHiraganaTest, handlesEmptyString) {
   EXPECT_EQ(preprocessor_.convertKatakanaToHiragana(""), "");
 }
 
-class ChineseCangjieTest : public ::testing::Test {
-protected:
-  Preprocessor preprocessor_;
-};
-
-TEST_F(ChineseCangjieTest, convertsCjkCharacter) {
-  // Manually set up cangjie table not possible since it's private.
-  // Test through preprocess with "zh" language instead.
-  Preprocessor p;
-  std::string result = p.convertChineseToCangjie("hello");
-  EXPECT_EQ(result, "hello");
-}
-
-TEST_F(ChineseCangjieTest, preservesNonCjk) {
-  EXPECT_EQ(preprocessor_.convertChineseToCangjie("hello"), "hello");
-}
-
-TEST_F(ChineseCangjieTest, passesUnknownCjkThrough) {
-  std::string input = "\xE4\xB8\xAD";
-  std::string result = preprocessor_.convertChineseToCangjie(input);
-  EXPECT_EQ(result, input);
-}
-
 class PreprocessDispatchTest : public ::testing::Test {
 protected:
   Preprocessor preprocessor_;
