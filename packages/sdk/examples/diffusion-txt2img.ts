@@ -21,13 +21,15 @@ console.log(`Model loaded: ${modelId}`);
 
 console.log(`\nGenerating: "${prompt}"`);
 
+// FLUX.2 uses distilled guidance; cfg_scale set to 1 disables classifier-free guidance on the FLUX path.
 const { progressStream, outputs, stats } = diffusion({
   modelId,
   prompt,
   width: 512,
   height: 512,
   steps: 20,
-  cfg_scale: 7.0,
+  guidance: 3.5,
+  cfg_scale: 1,
   seed: -1,
 });
 
