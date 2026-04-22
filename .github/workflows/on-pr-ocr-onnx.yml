@@ -80,7 +80,6 @@ jobs:
           token: ${{ secrets.PAT_TOKEN }}
           sparse-checkout: |
             packages/ocr-onnx
-            .github/actions
           fetch-depth: 0
 
       - name: Fetch PR head and target branch
