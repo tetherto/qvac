@@ -232,18 +232,7 @@ jobs:
         if: matrix.os == 'ai-run-linux-gpu'
         working-directory: ${{ inputs.workdir }}
         shell: bash
-        # ggml Vulkan backend static destructor may SIGSEGV at process exit
-        # after all tests pass (upstream whisper.cpp#2373). Tolerate exit 139
-        # only when TAP output confirms success.
-        run: |
-          set +e
-          npm run test:stand-alone:gpu 2>&1 | tee /tmp/gpu-test-output.txt
-          rc=$?
-          if [ $rc -eq 139 ] && grep -q '^# ok' /tmp/gpu-test-output.txt; then
-            echo "::warning::Tests passed but ggml Vulkan static destructor crashed at exit (whisper.cpp#2373)"
-            exit 0
-          fi
-          exit $rc
+        run: npm run test:stand-alone:gpu
         env:
           GITHUB_TOKEN: ${{ secrets.PAT_TOKEN }}
 
