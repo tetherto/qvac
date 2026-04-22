@@ -59,6 +59,8 @@ export {
   VERBOSITY,
   type Attachment,
   type TranscribeStreamSession,
+  type TranscribeStreamMetadataSession,
+  type TranscribeSegment,
   type CompletionParams,
   type RagSearchResult,
   type RagSaveEmbeddingsResult,
