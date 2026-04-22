@@ -237,8 +237,7 @@ TEST_F(ContextSliderTest, GenerationSlideScenario_NoDiscardAllowed) {
   EXPECT_TRUE(ops.seqAddCalls().empty());
 }
 
-TEST_F(
-    ContextSliderTest, GenerationToolsCompactClampsDiscardToAnchorWindow) {
+TEST_F(ContextSliderTest, GenerationToolsCompactClampsDiscardToAnchorWindow) {
   ToolsCompactController controller(ToolsCompactProfile{});
   FakeLlamaContextOps ops(/*ctxSize=*/140);
   constexpr llama_pos firstMsgTokens = 50;

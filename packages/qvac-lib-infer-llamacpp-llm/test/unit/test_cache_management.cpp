@@ -709,4 +709,3 @@ TEST_F(CacheManagementTest, PersistToWithNoCacheKeyIsNoOp) {
   auto stats = model->runtimeStats();
   EXPECT_EQ(getStatValue(stats, "CacheTokens"), 0.0);
 }
-
