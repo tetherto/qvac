@@ -1,7 +1,7 @@
 ---
 name: handoff
 description: Pick up and execute delegated phases from another tool via the inter-tool handoff protocol
-argument-hint: "[--tool=<name>]"
+argument-hint: "[--agent-root=<path>] [--tool=<name>]"
 disable-model-invocation: true
 ---
 
@@ -11,18 +11,30 @@ Pick up pending handoff requests assigned to this tool and execute them.
 
 ## Usage
 
-`/handoff`
+`/handoff [--agent-root=<path>] [--tool=<name>]`
 
-Scans `.agent-handoff/` for pending requests assigned to this tool, executes each one, and writes result files for the orchestrator to consume.
+Scans the handoff directory (`<agent-root>/.agent-handoff/`) for pending requests assigned to this tool, executes each one, and writes result files for the orchestrator to consume.
 
-Optional: `/handoff --tool=<name>` to override tool identity (for tools without a `setup_<tool>()` function yet).
+### Parameters
+
+| Parameter | Default | Purpose |
+|-----------|---------|---------|
+| `--agent-root=<path>` | `git rev-parse --show-toplevel` (the repo where this CLI was invoked) | Absolute path to the agent tooling directory that contains `.claude/`, `.cursor/`, and `.agent-handoff/`. The handoff directory is derived as `<agent-root>/.agent-handoff/`. When the orchestrator auto-invokes the CLI, it passes this explicitly so the receiver finds files regardless of its own CWD. |
+| `--tool=<name>` | Hardcoded tool identity from setup | Override tool identity (for tools without a `setup_<tool>()` function yet). |
+
+Each handoff request JSON also contains `repoRoot` and `agentRoot` fields (absolute paths set by the orchestrator). After reading a request, use `repoRoot` as the working directory for all git and code operations; the handoff file directory is always `<agentRoot>/.agent-handoff/`.
 
 ## Workflow
 
 ### Step 1: Scan for pending requests
 
-1. Check if `.agent-handoff/` directory exists at the repo root. If not, report "No handoff directory found" and stop.
-2. List all `*-request.json` files in `.agent-handoff/`
+1. **Resolve `agentRoot` and derive the handoff directory:**
+   - If `--agent-root=<path>` was passed, use that as `agentRoot`
+   - Otherwise, default `agentRoot` to `git rev-parse --show-toplevel`
+   - If `agentRoot` is not absolute, treat it as an error: report "agent-root must be absolute, got `<value>`" and stop
+   - Derive `handoffDir` = `<agentRoot>/.agent-handoff/`
+   - If the directory does not exist, report "No handoff directory found at `<handoffDir>`" and stop
+2. List all `*-request.json` files in the resolved handoff directory
 3. Filter to requests where:
    - `status` is `"pending"` (skip `"running"` — another instance may be processing it)
    - `assignedTo` matches __TOOL_IDENTITY__
@@ -38,9 +50,16 @@ For each matching request (in phase order):
 #### 2a. Read and claim the request
 
 1. Read the request JSON file
-2. Derive the **file prefix** from the request filename by stripping `-request.json` (e.g., `plan-review-claude-request.json` → prefix `plan-review-claude`; `implement-request.json` → prefix `implement`). Use this prefix for all derived filenames (heartbeat, result) instead of the `phase` field.
-3. Update the request's `status` field to `"running"` (write back to the same file)
-4. Write initial heartbeat file (`<prefix>-heartbeat.json`):
+2. **Extract path parameters** from the request:
+   - `repoRoot` — absolute path to the repository being worked on (used as working directory for all git/code operations in steps 2b–2d)
+   - `agentRoot` — absolute path to the agent tooling directory; derive `handoffDir` = `<agentRoot>/.agent-handoff/` for writing heartbeat and result files
+   - If either field is missing (e.g., request was written by an older orchestrator version), fall back in this order:
+     1. Try reading `.agent/config.json` → `paths.repoRoot` / `paths.agentRoot` (if the receiver can locate the config file)
+     2. `repoRoot` = `git rev-parse --show-toplevel`
+     3. `agentRoot` = the parent of the directory where the request file was found (one level up from `.agent-handoff/`)
+3. Derive the **file prefix** from the request filename by stripping `-request.json` (e.g., `plan-review-claude-request.json` → prefix `plan-review-claude`; `implement-request.json` → prefix `implement`). Use this prefix for all derived filenames (heartbeat, result) instead of the `phase` field.
+4. Update the request's `status` field to `"running"` (write back to the same file)
+5. Write initial heartbeat file (`<handoffDir>/<prefix>-heartbeat.json`):
    ```json
    {
      "phase": "<phase>",
@@ -52,16 +71,24 @@ For each matching request (in phase order):
 
 #### 2b. Prepare the workspace
 
-1. Update heartbeat: `"message": "Checking out branch"`
-2. Check out the task branch: `git checkout <branch>` (from the request's `branch` field)
-3. Update heartbeat: `"message": "Pulling latest changes"`
-4. Pull latest: `git pull origin <branch>`
+1. **Set working directory** to `repoRoot` (from step 2a). All git commands in this step and subsequent steps run from this directory. Use `git -C <repoRoot>` or `cd <repoRoot>` before executing commands.
+2. Update heartbeat: `"message": "Checking out branch"`
+3. Check out the task branch: `git checkout <branch>` (from the request's `branch` field)
+4. Update heartbeat: `"message": "Pulling latest changes"`
+5. Pull latest: `git pull origin <branch>`
 
 #### 2c. Launch the agent
 
 1. Update heartbeat: `"message": "Agent running — <agent-name>"`
-2. Read the agent definition from `.agent/agents/<agent>.md`
-3. **Before starting, read and follow the agent conduct rules in `.agent/conduct.md`.**
+2. Read the agent definition and conduct rules from the **setup-generated** copy for this tool (all paths under `<agentRoot>`):
+
+   | Tool | Agent definition | Conduct rules |
+   |------|-----------------|---------------|
+   | Claude Code | `<agentRoot>/.claude/agents/<agent>.md` | `<agentRoot>/.claude/agent-conduct.md` |
+   | Cursor | `<agentRoot>/.cursor/rules/agents/<agent>.mdc` | `<agentRoot>/.cursor/rules/agent-conduct.mdc` |
+   | Other tools | `<agentRoot>/.claude/agents/<agent>.md` (fallback) | `<agentRoot>/.claude/agent-conduct.md` (fallback) |
+
+3. **Before starting, read and follow the conduct rules.**
 4. Launch the agent with the request's `instructions` and `context`:
 
    **Claude Code**: Launch the named agent directly:
@@ -73,7 +100,7 @@ For each matching request (in phase order):
    <context from request>
    ```
 
-   **Cursor**: Read `.cursor/rules/agents/<agent>.mdc` and pass the prompt to `Task(subagent_type="generalPurpose")`:
+   **Cursor**: Pass the agent prompt (from the `.mdc` file) to `Task(subagent_type="generalPurpose")`:
    ```
    <agent prompt from .mdc file>
 
@@ -83,19 +110,19 @@ For each matching request (in phase order):
    <context from request>
    ```
 
-   **Other tools (generic fallback)**: Read `.agent/agents/<agent>.md`, strip frontmatter, and use as the agent prompt along with instructions and context.
+   **Other tools (generic fallback)**: Read the agent definition, strip frontmatter, and use as the agent prompt along with instructions and context.
 
 5. Wait for agent completion
 
 #### 2d. Push results
 
 1. Update heartbeat: `"message": "Pushing commits"`
-2. Push commits to remote: `git push origin <branch>`
+2. Push commits to remote (from `repoRoot`): `git -C <repoRoot> push origin <branch>`
 3. If push fails:
    - Collect commit hashes from the local branch (commits since the request's base)
    - Write a failure result (see step 2e) with error type `"push_failure"` and `retryable: true`
    - Include the commit hashes in the result so the orchestrator knows work was done
-   - Delete the heartbeat file (result supersedes it)
+   - Delete the heartbeat file from `<handoffDir>/` (result supersedes it)
    - Skip to the next request
 
 #### 2e. Write result
@@ -105,7 +132,7 @@ For each matching request (in phase order):
    - Commit hashes added during agent execution
    - Agent's summary of what was done
    - Any errors encountered
-3. Write `<prefix>-result.json`:
+3. Write `<handoffDir>/<prefix>-result.json`:
 
    **On success:**
    ```json
@@ -160,7 +187,7 @@ For each matching request (in phase order):
    }
    ```
 
-4. Delete the heartbeat file (result supersedes it)
+4. Delete the heartbeat file from `<handoffDir>/` (result supersedes it)
 
 ### Step 3: Report
 
@@ -188,7 +215,8 @@ If a request has `retryCount` > 0, it is a retry of a previously failed phase. T
 
 ## Important Notes
 
-- **Atomic file writes**: Write result files to a temp file first, then rename to the final path. This prevents the orchestrator from reading a partial file.
+- **Atomic file writes**: Write result files to a temp file first, then rename to the final path in `<handoffDir>/`. This prevents the orchestrator from reading a partial file.
 - **One at a time**: Process requests sequentially in phase order, not in parallel. Each phase may depend on the previous one's output.
 - **Don't modify request files** beyond updating `status` to `"running"`. The orchestrator owns the request format.
 - **Branch safety**: Always pull before starting work and push after completing. The orchestrator expects commits to be on the remote.
+- **Path resolution**: Always use the `repoRoot` from the request for git/code operations and `handoffDir` for file I/O. Never assume the receiver's CWD matches the orchestrator's — the two tools may be launched from different directories (especially in git worktree or Docker setups).

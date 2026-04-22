@@ -31,7 +31,7 @@ The `<task>` argument accepts an Asana task ID or full URL:
         ├── config-sample.json     # Sample config with recommended multi-tool roles
         ├── mcp.json               # Shared MCP server definitions (Asana)
         ├── settings.json          # Canonical settings (permission allowlist)
-        ├── setup.sh               # Generates .claude/ and .cursor/ at the repo root
+        ├── setup.sh               # Generates .claude/ and .cursor/ at the agent root (default: repo root)
         ├── agents/                # Agent definitions
         │   ├── plan-reviewer.md
         │   ├── implementer.md
@@ -53,7 +53,7 @@ The `<task>` argument accepts an Asana task ID or full URL:
             └── handoff/
 ```
 
-`setup.sh` resolves the git repo root via `git rev-parse --show-toplevel` and writes generated files there. This ensures both Cursor and Claude Code discover the config regardless of where `.agent/` lives in the repo. Generated files are gitignored — edit sources in `.agent/` instead.
+`setup.sh` writes generated files to the **agent root** (`paths.agentRoot` in `.agent/config.json`, or the git repo root when not set). When the agent root differs from the repo root, setup also creates symlinks at the repo root pointing into the agent root so both Cursor and Claude Code discover the config from the workspace. Generated files are gitignored — edit sources in `.agent/` instead.
 
 ## Tool Compatibility
 
@@ -88,13 +88,66 @@ Run `/setup all` to configure both tools and create the shared handoff directory
 ```
 
 This does three things:
-1. Generates tool-specific config at the **git repo root** for Claude Code (`.claude/`) and Cursor (`.cursor/`)
-2. Creates `.agent-handoff/` — the shared directory for inter-tool phase delegation
+1. Generates tool-specific config at the **agent root** (defaults to the git repo root; overridable via `paths.agentRoot`) for Claude Code (`.claude/`) and Cursor (`.cursor/`) — when the agent root differs from the repo root, symlinks are created at the repo root so the tools discover it
+2. Creates the handoff directory — always `<agentRoot>/.agent-handoff/`, where `agentRoot` defaults to the repo root or is overridden via `paths.agentRoot` in `.agent/config.json`
 3. Generates tool-specific `/handoff` and `/orchestrate` skills with hardcoded tool identity (so each tool knows who it is when filtering handoff requests)
 
-If you only use one tool, `/setup claude` or `/setup cursor` still works — the `.agent-handoff/` directory is created regardless.
+If you only use one tool, `/setup claude` or `/setup cursor` still works — the handoff directory is created regardless.
 
-Re-run `/setup all` after pulling changes to `.agent/`. If files have changed, the script reports conflicts and prompts for a strategy (`--force` to overwrite, `--keep` to skip, `--clean` to regenerate). Setup also cleans stale handoff files from `.agent-handoff/`.
+Re-run `/setup all` after pulling changes to `.agent/`. If files have changed, the script reports conflicts and prompts for a strategy (`--force` to overwrite, `--keep` to skip, `--clean` to regenerate). Setup also cleans stale handoff files from the handoff directory.
+
+### Path Configuration
+
+The handoff protocol uses two absolute roots (plus one derived directory) so tools can communicate regardless of their individual working directories:
+
+| Path | Resolved from | Purpose |
+|------|---------------|---------|
+| `repoRoot` | `config.json` → `paths.repoRoot`, or `git rev-parse --show-toplevel` if null | Absolute path to the **repository being worked on** — code, docs, tests. All agent operations (checkout, commit, push, build, test) happen here. |
+| `agentRoot` | `config.json` → `paths.agentRoot`, or `<repoRoot>` if null | Absolute path to the directory where **agent tooling lives**: `.claude/`, `.cursor/`, and `.agent-handoff/`. Defaults to the repo root — override when the agent config must live outside the code tree. |
+| `handoffDir` (derived) | `<agentRoot>/.agent-handoff/` — not configurable | Where handoff files (requests, heartbeats, results) are written and read. Always derived from `agentRoot`. |
+
+`repoRoot` and `agentRoot` are included in every handoff request JSON. The orchestrator resolves them once at startup (Phase 0) and propagates them to all downstream operations. The receiver derives its `handoffDir` from `agentRoot` — it never has to be transported explicitly.
+
+Both overrides must be **absolute paths** (starting with `/`). The orchestrator rejects relative values with a clear error instead of silently resolving them against its CWD.
+
+**Custom repo root**: To pin an explicit absolute repo path (e.g., so tools running in different container mount points agree on the same working tree identifier), set `paths.repoRoot` in `.agent/config.json`:
+
+```json
+{
+  "paths": {
+    "repoRoot": "/workspace/qvac"
+  }
+}
+```
+
+The orchestrator verifies the path is a git working tree root at startup. Leave as `null` to auto-detect via `git rev-parse`.
+
+**Custom agent root**: To split agent tooling out from the code tree — for example, keeping `.claude/`, `.cursor/`, and `.agent-handoff/` on a shared volume while the repo is checked out in a worktree — set `paths.agentRoot`:
+
+```json
+{
+  "paths": {
+    "repoRoot": "/workspace/qvac",
+    "agentRoot": "/shared/agent-tooling/qvac"
+  }
+}
+```
+
+With the above, `/setup` writes `.claude/`, `.cursor/` into `/shared/agent-tooling/qvac/`, and the handoff directory becomes `/shared/agent-tooling/qvac/.agent-handoff/`. Leave `agentRoot` as `null` to keep the default (same as `repoRoot`).
+
+**Auto-linking**: Both Claude Code and Cursor discover their config directories (`.claude/`, `.cursor/`) from the workspace root (`repoRoot`). When `agentRoot` differs, `/setup` automatically creates symlinks at `repoRoot` pointing to each generated file at `agentRoot` — so the tools find their config without manual intervention. The linking logic:
+
+| Situation | Action |
+|-----------|--------|
+| File missing at `repoRoot` | Symlink created: `<repoRoot>/<rel> → <agentRoot>/<rel>` |
+| Symlink already points to correct `agentRoot` file | Skipped |
+| File exists at `repoRoot` with identical content | Skipped (no link needed) |
+| File exists at `repoRoot` with different content | Reported as conflict (use `--force` to overwrite, `--keep` to skip) |
+| Dangling symlink at `repoRoot` pointing into `agentRoot` | Removed |
+
+The orchestrator also runs the same check at startup (Phase 0, step 5) — so even if `/setup` wasn't re-run after a config change, the orchestrator detects and fixes missing or stale links interactively.
+
+The handoff directory (`<agentRoot>/.agent-handoff/`) does **not** need a symlink — the handoff protocol passes `agentRoot` explicitly in every request, so tools derive the handoff path directly.
 
 ### Role Configuration
 
@@ -147,11 +200,14 @@ To customize, edit `.agent/config.json` directly. Both Claude Code (`claude -p`)
 2. Run `/setup all` in either tool (only needed once, or after pulling `.agent/` changes)
 3. Edit `.agent/config.json` to assign roles (or copy from `config-sample.json` — see above)
 4. Run `/orchestrate <task>` in the orchestrating tool (typically Claude Code — it has the most capabilities)
-5. When the orchestrator reaches a phase assigned to another tool, it auto-invokes that tool's CLI in the background — no user action needed
-6. The receiving tool executes the agent, pushes commits, writes a result file
-7. The orchestrator detects the result, pulls commits, and continues the pipeline
+5. The orchestrator resolves `repoRoot` and `agentRoot` at startup and includes them in all handoff requests (the handoff directory is derived as `<agentRoot>/.agent-handoff/`)
+6. When the orchestrator reaches a phase assigned to another tool, it auto-invokes that tool's CLI from `repoRoot` with `--agent-root=<agentRoot>` — no user action needed
+7. The receiving tool reads `repoRoot` and `agentRoot` from the request, executes the agent in the correct repo, pushes commits, and writes a result file to `<agentRoot>/.agent-handoff/`
+8. The orchestrator detects the result, pulls commits, and continues the pipeline
 
 **User interaction**: The only user interaction points are in **Phase 0.5 (reviewer feedback rounds + plan approval)**. All other phases — including all cross-tool handoffs — run automatically via CLI auto-invocation.
+
+**Path safety**: `repoRoot` and `agentRoot` are absolute paths resolved once and shared through the handoff protocol (the receiver derives its handoff directory from `agentRoot`). This ensures tools find each other's files even when launched from different directories, different git worktrees, or different Docker container mount points.
 
 ### When to Use Multi-Tool vs Single-Tool
 
@@ -226,7 +282,7 @@ services:
     working_dir: /repo/qvac
 ```
 
-Both tool CLIs (`claude` and `cursor-agent`) run directly inside the container terminal. The orchestrator auto-invokes whichever tool is needed for each phase — no GUI, no display server, no Remote SSH. Both tools share the same filesystem, same git state, and same `.agent-handoff/` directory.
+Both tool CLIs (`claude` and `cursor-agent`) run directly inside the container terminal. The orchestrator auto-invokes whichever tool is needed for each phase — no GUI, no display server, no Remote SSH. Both tools share the same filesystem, same git state, and same handoff directory. The `repoRoot` and `agentRoot` paths in handoff requests use absolute container paths (e.g., `/repo/qvac` for both, with the handoff dir derived as `/repo/qvac/.agent-handoff/`), so both tools resolve them identically regardless of which directory each CLI was started from.
 
 **Caveats:**
 
@@ -244,9 +300,9 @@ No changes to the orchestrator or handoff protocol are needed — they work with
 
 ## How Setup Works
 
-`setup.sh` reads source files from `.agent/` and writes generated config to the **git repo root**:
+`setup.sh` reads source files from `.agent/` and writes generated config to the **agent root** (defaults to the git repo root; overridable via `paths.agentRoot`):
 
-| Source in `.agent/` | Claude Code destination (repo root) | Cursor destination (repo root) |
+| Source in `.agent/` | Claude Code destination (agent root) | Cursor destination (agent root) |
 |---|---|---|
 | `conduct.md` | `.claude/agent-conduct.md` | `.cursor/rules/agent-conduct.mdc` (always-applied rule) |
 | `knowledge/*.md` | `.claude/knowledge/` | `.cursor/rules/knowledge/*.mdc` (requestable rules) |
@@ -377,7 +433,7 @@ cd ../qvac-task-2 && bash packages/ocr-onnx/.agent/setup.sh all
 - **No file-scope constraint** — tasks can freely modify the same files (even the same lines) because each worktree has its own working directory. Conflicts are resolved at merge time, not during development.
 - **Independent git state** — each worktree has its own branch, index, and HEAD. One task's commits, stashes, and rebases don't affect the other. No risk of one agent's `git checkout` disrupting another agent's work.
 - **Isolated build artifacts** — each worktree has its own `node_modules/`, build output, and native addon caches. Builds in one worktree can't corrupt another's intermediate files or trigger unnecessary rebuilds.
-- **Independent handoff state** — each worktree gets its own `.agent-handoff/` directory, so multi-tool handoffs for different tasks don't interfere with each other.
+- **Independent handoff state** — each worktree gets its own `repoRoot` and `agentRoot` (defaulting to the worktree itself, with handoff dir derived as `<worktree>/.agent-handoff/`), so multi-tool handoffs for different tasks don't interfere with each other. The orchestrator resolves these paths per-worktree at startup and includes them in all handoff requests.
 - **Clean rollback** — if a task goes off the rails, delete the worktree (`git worktree remove ../qvac-task-1`) without affecting the main checkout or other tasks. The branch remains in the repository for inspection.
 - **Full context windows** — each tool instance starts fresh in its worktree with no accumulated context from other tasks, avoiding the context pollution that degrades agent quality in long sessions.
 - **No wave sequencing** — tasks run fully in parallel without needing wave-based dependency ordering. Merge to main when each task is independently complete.

@@ -58,7 +58,38 @@ When no Asana task is linked (`file` or `description` mode), Asana-specific oper
      - Slugify: lowercase, hyphens, max 50 chars
    - Create and switch to branch: `git checkout -b <branch-name>`
 
-4. **Determine if planning is needed:**
+4. **Resolve working paths** — the orchestrator works with two distinct roots plus a derived handoff directory:
+
+   | Path | Resolution | Purpose |
+   |------|-----------|---------|
+   | `repoRoot` | Read `.agent/config.json` → `paths.repoRoot`. If null or absent, resolve via `git rev-parse --show-toplevel` | Absolute path to the repository being worked on — code, docs, tests. All agent operations (checkout, commit, push, test runs) happen here. |
+   | `agentRoot` | Read `.agent/config.json` → `paths.agentRoot`. If null or absent, default to `<repoRoot>` | Absolute path to the directory where agent tooling (`.claude/`, `.cursor/`, `.agent-handoff/`) lives. Usually the same as `repoRoot`, but can be split out when agent config is stored separately from the code under edit. |
+   | `handoffDir` (derived) | `<agentRoot>/.agent-handoff/` — **not** configurable directly | Absolute path to the inter-tool handoff files. Computed from `agentRoot`; do not read from config. |
+
+   - Ensure `handoffDir` exists: `mkdir -p <handoffDir>`
+   - All three paths are **absolute** — they must remain valid regardless of which tool reads them or what that tool's CWD is
+   - **Validate** both config overrides: if `paths.repoRoot` or `paths.agentRoot` is set but not absolute (doesn't start with `/`), fail fast with a clear error (`paths.<key> must be an absolute path, got '<value>'`) rather than silently resolving against the orchestrator's CWD
+   - **Validate** the resolved `repoRoot` points at a git working tree: run `git -C <repoRoot> rev-parse --show-toplevel` and confirm the output equals `<repoRoot>`. If it doesn't, fail with `paths.repoRoot '<value>' is not a git working tree root`
+   - Store all three paths in the task context for use in all subsequent phases
+
+5. **Ensure agent tooling is discoverable** (only when `agentRoot ≠ repoRoot`):
+
+   Both Claude Code and Cursor discover their config directories (`.claude/`, `.cursor/`) from the workspace root, which is `repoRoot`. When `agentRoot` differs, the setup-generated files live under `agentRoot` but the tools look for them under `repoRoot`. Bridge the gap by creating symlinks:
+
+   For each file under `<agentRoot>/.claude/` and `<agentRoot>/.cursor/`:
+   1. Compute the equivalent path at `<repoRoot>` (same relative path under the root)
+   2. **Not present at `repoRoot`**: create a symlink `<repoRoot>/<rel> → <agentRoot>/<rel>` (create parent directories as needed)
+   3. **Already a symlink pointing to the correct `agentRoot` file**: skip
+   4. **Exists (file or symlink) with identical content**: skip — no link needed
+   5. **Exists with different content**: warn the user, show the file path and a brief summary of the difference, and ask whether to replace it with a symlink to the `agentRoot` version. If the user declines, log a warning that the tool may use stale or incompatible config for this file, then continue
+
+   After linking, verify the tool config directories exist at `<repoRoot>` (e.g., `ls <repoRoot>/.claude/` succeeds). If a directory is missing entirely, report an error — the tool will not load its generated rules and agents.
+
+   This step is idempotent — running it again repairs any missing or broken links without duplicating existing ones. `/setup` also performs the same linking automatically.
+
+   When `agentRoot == repoRoot`, skip this step entirely (no symlinks needed — the files are already in the right place).
+
+6. **Determine if planning is needed:**
 
    | Signal | Planning needed? |
    |--------|-----------------|
@@ -69,11 +100,14 @@ When no Asana task is linked (`file` or `description` mode), Asana-specific oper
 
    **When planning is skipped**: Phase 1 (Implement) receives the task `description` directly as the plan context. The instructions change to: `"Implement the following task. No plan was created — work directly from the task description and acceptance criteria."` (include `Task ID: <taskId>` only when `inputMode` is `asana`).
 
-5. **Inform the user** of the setup:
+7. **Inform the user** of the setup:
    ```
    Task: <title>
    Source: <source>
    Branch: <branch-name>
+   Repo root: <repoRoot>
+   Agent root: <agentRoot>
+   Handoff dir: <handoffDir>   (derived: <agentRoot>/.agent-handoff/)
    ```
 
 ### Phase 0.5: Plan Review
@@ -92,9 +126,9 @@ Before any implementation, create a plan, have it reviewed, and get user approva
    b. **If unassigned** (not in `roles`, or `roles` is empty): launch plan-reviewer locally on the orchestrating tool (single review). After the agent completes, parse its output to extract `verdict`, `questions`, and `recommendations` (extract `### Verdict`, `### Questions`, `### Recommendations` from the structured output into a `review` object). If `### Verdict` is missing, default to `NEEDS_CLARIFICATION`.
    c. **If string (single tool)**: dispatch to that tool (local or handoff, following standard role dispatch rules). If local, apply the same post-execution parsing as step 3b.
    d. **If array (multiple tools)**: dispatch to ALL listed tools in parallel:
-      - For each tool in the array, write a separate handoff request: `.agent-handoff/plan-review-<tool>-request.json`
+      - For each tool in the array, write a separate handoff request: `<handoffDir>/plan-review-<tool>-request.json`
       - Auto-invoke CLI-capable tools; prompt for non-CLI tools
-      - Poll for ALL result files simultaneously: for each tool in the array, poll for `.agent-handoff/plan-review-<tool>-result.json`
+      - Poll for ALL result files simultaneously: for each tool in the array, poll for `<handoffDir>/plan-review-<tool>-result.json`
 4. **Collect reviews:**
    a. **Single reviewer**: read the review, proceed to step 5
    b. **Multiple reviewers**: wait for ALL reviewers to complete, then apply verdict precedence (`REQUEST_CHANGES` > `NEEDS_CLARIFICATION` > `APPROVE`):
@@ -103,8 +137,8 @@ Before any implementation, create a plan, have it reviewed, and get user approva
       - Else if ANY verdict is `NEEDS_CLARIFICATION` (and none are REQUEST_CHANGES): present the questions to the user, get answers, re-run only the reviewer(s) that had questions (with answers as additional context)
       - Else ALL verdicts are `APPROVE`: if any reviewer included non-empty Recommendations, run step 5 to incorporate them before proceeding to step 6. If no recommendations, proceed directly to step 6
       - Maximum 5 review rounds before stopping and asking the user to decide
-      - **Cleanup between rounds**: before writing new request files for a re-review round, delete all handoff files from the previous round: for each tool, delete `plan-review-<tool>-{request,heartbeat,result,cli.log}`. Same pattern as retry file lifecycle.
-      - **Cleanup after consensus**: after final verdicts are collected (all APPROVE or round limit hit), delete all remaining multi-reviewer handoff files before proceeding.
+      - **Cleanup between rounds**: before writing new request files for a re-review round, delete all handoff files from the previous round: for each tool, delete `<handoffDir>/plan-review-<tool>-{request,heartbeat,result,cli.log}`. Same pattern as retry file lifecycle.
+      - **Cleanup after consensus**: after final verdicts are collected (all APPROVE or round limit hit), delete all remaining multi-reviewer handoff files from `<handoffDir>/` before proceeding.
 5. **Incorporate feedback**: update the plan based on reviewer recommendations (orchestrator does this locally — reviewers don't modify the plan themselves)
 6. **Present the final plan to the user** for approval:
    - Show the plan with a summary of reviewer feedback
@@ -324,12 +358,14 @@ Launch agent locally, as today.
 **If role assigned to a different tool:**
 
 1. Commit and push any pending changes so the other tool has them
-2. Write `.agent-handoff/<phase>-request.json` with full context:
+2. Write `<handoffDir>/<phase>-request.json` with full context:
    ```json
    {
      "phase": "<phase-name>",
      "agent": "<agent-name>",
      "assignedTo": "<tool-key>",
+     "repoRoot": "<absolute path to the repository being worked on>",
+     "agentRoot": "<absolute path to the agent tooling directory (contains .claude/, .cursor/, .agent-handoff/)>",
      "taskId": "<asana-task-id-or-null>",
      "taskContext": {
        "inputMode": "asana|file|description",
@@ -348,13 +384,14 @@ Launch agent locally, as today.
      "createdAt": "<ISO timestamp>"
    }
    ```
-   For retries, include `retryCount` and `retryReason` fields.
+   - `repoRoot` and `agentRoot` are the absolute paths resolved in Phase 0, step 4. The receiver derives its handoff directory as `<agentRoot>/.agent-handoff/` — do not put that path in the request.
+   - For retries, include `retryCount` and `retryReason` fields.
 3. **Auto-invoke or manual fallback:**
    a. Read the target tool's `cli` field from `.agent/config.json`
-   b. **If `cli` is configured** (not null): optionally verify `command -v <cli.command>` to catch "tool not installed." Fire `<cli.command> <cli.args...> "Run /handoff to pick up pending inter-tool handoff requests."` in the background, capturing output to `.agent-handoff/<phase>-cli.log`. Log prominently: *"AUTO-INVOKING [tool] CLI for Phase N ([agent]). Polling for result... Do NOT run /handoff manually."*
-   c. **If `cli` is null**: tell the user: *"Phase N (agent) is assigned to [tool]. Run `/handoff` in your [tool] session."*
-4. Poll for `.agent-handoff/<phase>-result.json` every 10 seconds
-5. While polling, check the heartbeat file and apply adaptive staleness thresholds:
+   b. **If `cli` is configured** (not null): optionally verify `command -v <cli.command>` to catch "tool not installed." Fire the CLI in the background with `<repoRoot>` as its working directory (spawn the subprocess with `cwd=<repoRoot>`; do **not** chain `cd` with `&&` — it violates the project's Bash rules). The command is: `<cli.command> <cli.args...> "Run /handoff --agent-root=<agentRoot> to pick up pending inter-tool handoff requests."`, with output captured to `<handoffDir>/<phase>-cli.log`. Log prominently: *"AUTO-INVOKING [tool] CLI for Phase N ([agent]) in <repoRoot>. Polling for result... Do NOT run /handoff manually."*
+   c. **If `cli` is null**: tell the user: *"Phase N (agent) is assigned to [tool]. Run `/handoff --agent-root=<agentRoot>` in your [tool] session (working directory: `<repoRoot>`)."*
+4. Poll for `<handoffDir>/<phase>-result.json` every 10 seconds
+5. While polling, check `<handoffDir>/<phase>-heartbeat.json` and apply adaptive staleness thresholds:
    - `"Starting"`, `"Checking out"`, `"Pulling"` → stale after 2 minutes
    - `"Agent running"` → stale after 30 minutes
    - `"Pushing"` → stale after 5 minutes
@@ -364,7 +401,7 @@ Launch agent locally, as today.
    - **Auto-invoked tools** (no heartbeat ever written): warn after 2 min, offer fallback after 5 min
    - **Manual fallback tools** (no heartbeat ever written): remind user after 5 min, offer fallback after 15 min
    - **Absolute wall-clock timeout**: Regardless of heartbeat activity, offer local fallback after 60 minutes from request creation. This catches runaway agents that remain active but never complete.
-6. On result: pull latest commits, read result, clean up all handoff files for that phase (request, heartbeat, result, `<phase>-cli.log`), continue pipeline
+6. On result: pull latest commits, read result, clean up all handoff files for that phase from `<handoffDir>/` (request, heartbeat, result, `<phase>-cli.log`), continue pipeline
 7. On failure result: handle same as local agent failure (retry logic, Asana update if `inputMode` is `asana`, stop)
 
 ### Asana proxy for handed-off phases
@@ -383,9 +420,9 @@ Skip the proxy if the receiving tool has `mcp: true` — it is expected to have 
 
 When roles are split across tools, retry loops create cross-tool handoff cycles. The existing max-2-retry limit applies regardless of which tools are involved. Before writing a retry request for the same phase:
 
-1. Read and consume the previous result file
-2. Delete the previous result + heartbeat + request files
-3. Write the new request with incremented `retryCount` and `retryReason`
+1. Read and consume the previous result file from `<handoffDir>/`
+2. Delete the previous result + heartbeat + request files from `<handoffDir>/`
+3. Write the new request to `<handoffDir>/` with incremented `retryCount` and `retryReason`
 
 ## Important notes
 

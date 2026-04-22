@@ -1,5 +1,9 @@
 {
-  "version": 2,
+  "version": 3,
+  "paths": {
+    "repoRoot": null,
+    "agentRoot": null
+  },
   "tools": {
     "claude": {
       "capabilities": {
