@@ -145,7 +145,7 @@ jobs:
         uses: ./.github/actions/cli-rewrite-sdk-scope-for-gpr
 
       - name: Publish to GitHub Packages (dev)
-        uses: tetherto/oss-actions/.github/actions/publish-library-to-gpr@v1.1.0
+        uses: ./.github/actions/publish-library-to-gpr
         with:
           secret-token: ${{ secrets.GITHUB_TOKEN }}
           npm-token: ${{ secrets.NPM_TOKEN }}
@@ -222,7 +222,7 @@ jobs:
         uses: ./.github/actions/cli-rewrite-sdk-scope-for-gpr
 
       - name: Publish to GitHub Packages (feature)
-        uses: tetherto/oss-actions/.github/actions/publish-library-to-gpr@v1.1.0
+        uses: ./.github/actions/publish-library-to-gpr
         with:
           secret-token: ${{ secrets.GITHUB_TOKEN }}
           npm-token: ${{ secrets.NPM_TOKEN }}
@@ -253,7 +253,7 @@ jobs:
         uses: ./.github/actions/cli-rewrite-sdk-scope-for-gpr
 
       - name: Publish to GitHub Packages (tmp)
-        uses: tetherto/oss-actions/.github/actions/publish-library-to-gpr@v1.1.0
+        uses: ./.github/actions/publish-library-to-gpr
         with:
           secret-token: ${{ secrets.GITHUB_TOKEN }}
           npm-token: ${{ secrets.NPM_TOKEN }}

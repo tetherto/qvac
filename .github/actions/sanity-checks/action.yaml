@@ -77,7 +77,7 @@ runs:
     - name: Run lint & unit tests
       id: run_tests
       continue-on-error: true
-      uses: ./.github/actions/run-lint-and-unit-tests.yml
+      uses: ./.github/actions/run-lint-and-unit-tests
       with:
         gpr-token: ${{ inputs.secret-token }}
         pat-token: ${{ inputs.pat-token }}

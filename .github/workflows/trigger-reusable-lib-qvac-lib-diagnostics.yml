@@ -1,6 +1,6 @@
 name: General CI/CD (Qvac-lib-diagnostics)
-# This workflow is used to call the reusable workflows in the oss-actions repository
-# https://github.com/tetherto/oss-actions/blob/production-workflows-tag/.github/workflows/public-reusable.yml
+# This workflow is used to call the reusable workflows in the qvac repository
+# https://github.com/qvac/blob/main/.github/workflows/public-reusable-npm.yml
 
 on:
   push:
@@ -99,7 +99,7 @@ jobs:
           fetch-depth: 0
 
       - name: Publish to GitHub Packages (dev)
-        uses: tetherto/oss-actions/.github/actions/publish-library-to-gpr@v1.1.0
+        uses: ./.github/actions/publish-library-to-gpr
         with:
           secret-token: ${{ secrets.GITHUB_TOKEN }}
           npm-token: ${{ secrets.NPM_TOKEN }}
@@ -114,7 +114,7 @@ jobs:
       packages: write
       id-token: write
     if: needs.publish-logic.outputs.publish_release == 'true'
-    uses: tetherto/oss-actions/.github/workflows/public-reusable-npm.yml@v1.1.0
+    uses: ./.github/workflows/public-reusable-npm.yml
     secrets: inherit
     with:
       workdir: packages/qvac-lib-diagnostics
@@ -149,7 +149,7 @@ jobs:
           fetch-depth: 0
 
       - name: Publish to GitHub Packages (feature)
-        uses: tetherto/oss-actions/.github/actions/publish-library-to-gpr@v1.1.0
+        uses: ./.github/actions/publish-library-to-gpr
         with:
           secret-token: ${{ secrets.GITHUB_TOKEN }}
           npm-token: ${{ secrets.NPM_TOKEN }}
@@ -171,7 +171,7 @@ jobs:
           fetch-depth: 0
 
       - name: Publish to GitHub Packages (tmp)
-        uses: tetherto/oss-actions/.github/actions/publish-library-to-gpr@v1.1.0
+        uses: ./.github/actions/publish-library-to-gpr
         with:
           secret-token: ${{ secrets.GITHUB_TOKEN }}
           npm-token: ${{ secrets.NPM_TOKEN }}

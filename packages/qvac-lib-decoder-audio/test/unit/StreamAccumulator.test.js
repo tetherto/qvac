@@ -2,7 +2,7 @@
 
 const test = require('brittle')
 const createStreamAccumulator = require('../../utils/createStreamAccumulator.js')
-const { QvacErrorDecoderAudio } = require('../../utils/error.js')
+const { QvacErrorDecoderAudio, ERR_CODES } = require('../../utils/error.js')
 
 const TARGET_BUFFER_SIZE = 64000
 
@@ -87,6 +87,21 @@ test('validates buffer size configuration', (t) => {
       targetBufferSize: 1000
     })
   }, QvacErrorDecoderAudio)
+
+  let captured
+  try {
+    createStreamAccumulator({
+      onChunk: () => {},
+      onFinish: () => {},
+      targetBufferSize: 1000
+    })
+  } catch (err) {
+    captured = err
+  }
+  t.ok(captured instanceof QvacErrorDecoderAudio)
+  t.is(captured.code, ERR_CODES.BUFFER_SIZE_TOO_SMALL)
+  t.is(captured.name, 'BUFFER_SIZE_TOO_SMALL')
+  t.is(captured.message, 'Target buffer size is too small')
 
   const accumulator = createStreamAccumulator({
     onChunk: () => {},

@@ -11,7 +11,9 @@ inputs:
   pat-token:
     description: "Optional PAT for fetching GitHub deps via HTTPS (git dependencies)"
     required: false
-  workdir: 
+  workdir:
+    description: "Working directory inside the repo (monorepo package path)"
+    required: false
     default: "."
     type: string
 
@@ -27,14 +29,15 @@ runs:
       id: cache-npm
       uses: actions/cache@668228422ae6a00e4ad889ee87cd7109ec5666a7 # 5.0.4
       with:
-        key: npm-${{ runner.os }}-${{ hashFiles('**/package.json') }}
         path: ~/.npm
+        key: npm-${{ runner.os }}-${{ hashFiles(format('{0}/package.json', inputs.workdir)) }}
         restore-keys: npm-${{ runner.os }}-
 
     - name: Configure .npmrc for both npmjs and GitHub Packages
       shell: bash
+      working-directory: ${{ inputs.workdir }}
       run: |
-        # Clean slate .npmrc in workspace
+        # Clean slate .npmrc in workdir
         : > .npmrc
 
         # Default public registry
@@ -52,15 +55,19 @@ runs:
         if [ -n "${{ inputs.pat-token }}" ]; then
           git config --global url."https://${{ inputs.pat-token }}:@github.com/".insteadOf "https://github.com/"
         fi
+
     - name: Install dependencies
       shell: bash
+      working-directory: ${{ inputs.workdir }}
       run: npm install
     - name: Run linting
       shell: bash
+      working-directory: ${{ inputs.workdir }}
       run: npm run lint
     - name: Install bare globally
       shell: bash
       run: npm install -g bare
     - name: Run integration tests
       shell: bash
+      working-directory: ${{ inputs.workdir }}
       run: npm run test:integration --if-present

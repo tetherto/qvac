@@ -102,11 +102,11 @@ When a new cache key is used for the first time:
 
 ### Cache Initialization (initSystemPromptCache)
 
-Primes a new cache by sending system prompt + tools to the model, then cancels generation after the first output token — it only needs to process the cache priming, not produce a response.
+Primes a new cache by sending system prompt + tools to the model with `{ cacheKey: cachePath }` in `runOptions`, then cancels generation after the first output token — it only needs to process the cache priming, not produce a response.
 
 ### Message Preparation (prepareMessagesForCache)
 
-When cache exists and history is non-empty, sends only `[session path, last message]`. Otherwise sends full history (minus system prompt) prefixed with session path.
+When cache exists and history is non-empty, sends only the new messages (since last cached count). Otherwise sends full history minus the system prompt. The cache file path is passed via `runOptions.cacheKey`, not embedded in the message array.
 
 ### Config Hash Generation (generateConfigHash)
 
@@ -118,8 +118,9 @@ When `kvCache: true`, the cache key is derived from a hash of the conversation h
 
 ## Cache Persistence
 
-- **After each completion** — saved via `model.run([{ role: "session", content: "save" }])`
-- **Session switch** — previous session flushed
+- **After each completion** — saved via `saveCacheToDisk: true` in `runOptions` passed to `model.run()` (the addon persists the cache inline during the same inference call)
+- **Session switch** — when a different `cacheKey` is passed, the addon auto-saves the old session before loading the new one
+- **Omitting `cacheKey`** — the addon auto-saves the active session and clears it
 - **Model unload** — all active caches flushed
 
 ### Deleting Caches
@@ -160,7 +161,6 @@ Enable with `loggerLevel: "debug"` in config. Logs from `cache-logger.ts` show:
 - `[kv-cache] [session-a] REUSING cache` / `CREATING cache`
 - `[kv-cache] [session-a] Initializing cache (prompt: N chars, tools: N)`
 - `[kv-cache] [PROMPT_SEND] Sending N msg(s): [...]`
-- `[kv-cache] Saving session: ...{path}`
 
 ## MCP Compatibility
 
