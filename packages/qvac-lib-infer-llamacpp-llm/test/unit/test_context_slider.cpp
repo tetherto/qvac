@@ -5,7 +5,7 @@
 // integration tests with a real model context (see sliding-context.test.js).
 //
 // Test strategy:
-// - SlideOutcome struct construction and kind variants
+// - ContextSlideOutcome struct construction and kind variants
 // - ToolsCompactController integration (clampDiscard, onSlide,
 // degenerateBoundary)
 // - Edge cases in prefill vs generation sliding logic
@@ -18,8 +18,6 @@
 
 #include "model-interface/ContextSlider.hpp"
 #include "model-interface/ToolsCompactController.hpp"
-
-using namespace qvac_lib_inference_addon_llama::context_slider;
 
 namespace {
 struct SeqRmCall {
@@ -35,26 +33,26 @@ struct SeqAddCall {
   llama_pos delta = 0;
 };
 
-class FakeLlamaContextOps final : public ILlamaContextOps {
+class FakeLlamaContextOps final : public IContextSliderOps {
 public:
   explicit FakeLlamaContextOps(llama_pos ctxSize) : ctxSize_(ctxSize) {}
 
   llama_pos nCtx(llama_context*) const override { return ctxSize_; }
 
-  LlamaMemoryHandle memory(llama_context*) const override {
+  ContextSliderMemoryHandle memory(llama_context*) const override {
     ++memoryCalls_;
     return fakeMemory_;
   }
 
   void seqRm(
-      LlamaMemoryHandle mem, llama_seq_id seqId, llama_pos startPos,
+      ContextSliderMemoryHandle mem, llama_seq_id seqId, llama_pos startPos,
       llama_pos endPos) const override {
     EXPECT_EQ(mem, fakeMemory_);
     seqRmCalls_.push_back({seqId, startPos, endPos});
   }
 
   void seqAdd(
-      LlamaMemoryHandle mem, llama_seq_id seqId, llama_pos startPos,
+      ContextSliderMemoryHandle mem, llama_seq_id seqId, llama_pos startPos,
       llama_pos endPos, llama_pos delta) const override {
     EXPECT_EQ(mem, fakeMemory_);
     seqAddCalls_.push_back({seqId, startPos, endPos, delta});
@@ -66,8 +64,8 @@ public:
 
 private:
   llama_pos ctxSize_;
-  LlamaMemoryHandle fakeMemory_ =
-      reinterpret_cast<LlamaMemoryHandle>(static_cast<uintptr_t>(0x1));
+  ContextSliderMemoryHandle fakeMemory_ =
+      reinterpret_cast<ContextSliderMemoryHandle>(static_cast<uintptr_t>(0x1));
   mutable int memoryCalls_ = 0;
   mutable std::vector<SeqRmCall> seqRmCalls_;
   mutable std::vector<SeqAddCall> seqAddCalls_;
@@ -80,31 +78,31 @@ protected:
 };
 
 // ═══════════════════════════════════════════════════════════════════════════
-// SlideOutcome struct tests
+// ContextSlideOutcome struct tests
 // ═══════════════════════════════════════════════════════════════════════════
 
 TEST_F(ContextSliderTest, SlideOutcomeDefaultIsNotNeeded) {
-  SlideOutcome outcome;
-  EXPECT_EQ(outcome.kind, SlideOutcome::Kind::NotNeeded);
+  ContextSlideOutcome outcome;
+  EXPECT_EQ(outcome.kind, ContextSlideOutcome::Kind::NotNeeded);
   EXPECT_EQ(outcome.newNPast, 0);
   EXPECT_EQ(outcome.discarded, 0);
 }
 
 TEST_F(ContextSliderTest, SlideOutcomeKindCoverage) {
-  EXPECT_EQ(static_cast<int>(SlideOutcome::Kind::NotNeeded), 0);
-  EXPECT_EQ(static_cast<int>(SlideOutcome::Kind::Slid), 1);
-  EXPECT_EQ(static_cast<int>(SlideOutcome::Kind::FullWipe), 2);
-  EXPECT_EQ(static_cast<int>(SlideOutcome::Kind::Overflow), 3);
+  EXPECT_EQ(static_cast<int>(ContextSlideOutcome::Kind::NotNeeded), 0);
+  EXPECT_EQ(static_cast<int>(ContextSlideOutcome::Kind::Slid), 1);
+  EXPECT_EQ(static_cast<int>(ContextSlideOutcome::Kind::FullWipe), 2);
+  EXPECT_EQ(static_cast<int>(ContextSlideOutcome::Kind::Overflow), 3);
 }
 
 TEST_F(ContextSliderTest, SlideOutcomeCanBeConstructedWithValues) {
-  SlideOutcome slid{SlideOutcome::Kind::Slid, 150, 50};
-  EXPECT_EQ(slid.kind, SlideOutcome::Kind::Slid);
+  ContextSlideOutcome slid{ContextSlideOutcome::Kind::Slid, 150, 50};
+  EXPECT_EQ(slid.kind, ContextSlideOutcome::Kind::Slid);
   EXPECT_EQ(slid.newNPast, 150);
   EXPECT_EQ(slid.discarded, 50);
 
-  SlideOutcome wipe{SlideOutcome::Kind::FullWipe, 100, 200};
-  EXPECT_EQ(wipe.kind, SlideOutcome::Kind::FullWipe);
+  ContextSlideOutcome wipe{ContextSlideOutcome::Kind::FullWipe, 100, 200};
+  EXPECT_EQ(wipe.kind, ContextSlideOutcome::Kind::FullWipe);
   EXPECT_EQ(wipe.newNPast, 100);
   EXPECT_EQ(wipe.discarded, 200);
 }
@@ -257,7 +255,7 @@ TEST_F(ContextSliderTest, PrefillSlidInvokesLlamaOpsWithExpectedRanges) {
   ToolsCompactController controller(std::nullopt);
   FakeLlamaContextOps ops(/*ctxSize=*/400);
 
-  SlideOutcome outcome = trySlidePrefill(
+  ContextSlideOutcome outcome = trySlidePrefill(
       /*lctx=*/nullptr,
       /*nPast=*/300,
       /*firstMsgTokens=*/50,
@@ -266,7 +264,7 @@ TEST_F(ContextSliderTest, PrefillSlidInvokesLlamaOpsWithExpectedRanges) {
       controller,
       ops);
 
-  EXPECT_EQ(outcome.kind, SlideOutcome::Kind::Slid);
+  EXPECT_EQ(outcome.kind, ContextSlideOutcome::Kind::Slid);
   EXPECT_EQ(outcome.newNPast, 200);
   EXPECT_EQ(outcome.discarded, 100);
 
@@ -293,7 +291,7 @@ TEST_F(ContextSliderTest, PrefillFullWipeInvokesSeqRmOnly) {
   controller.onEvalComplete(120, 120);
   EXPECT_EQ(controller.anchor(), 50);
 
-  SlideOutcome outcome = trySlidePrefill(
+  ContextSlideOutcome outcome = trySlidePrefill(
       /*lctx=*/nullptr,
       /*nPast=*/120,
       /*firstMsgTokens=*/50,
@@ -302,7 +300,7 @@ TEST_F(ContextSliderTest, PrefillFullWipeInvokesSeqRmOnly) {
       controller,
       ops);
 
-  EXPECT_EQ(outcome.kind, SlideOutcome::Kind::FullWipe);
+  EXPECT_EQ(outcome.kind, ContextSlideOutcome::Kind::FullWipe);
   EXPECT_EQ(outcome.newNPast, 50);
   EXPECT_EQ(outcome.discarded, 70);
   EXPECT_EQ(controller.anchor(), -1);
@@ -405,7 +403,7 @@ TEST_F(ContextSliderTest, GenerationSlidInvokesLlamaOpsWithExpectedRanges) {
   ToolsCompactController controller(std::nullopt);
   FakeLlamaContextOps ops(/*ctxSize=*/400);
 
-  SlideOutcome outcome = trySlideGeneration(
+  ContextSlideOutcome outcome = trySlideGeneration(
       /*lctx=*/nullptr,
       /*nPast=*/400,
       /*firstMsgTokens=*/50,
@@ -413,7 +411,7 @@ TEST_F(ContextSliderTest, GenerationSlidInvokesLlamaOpsWithExpectedRanges) {
       controller,
       ops);
 
-  EXPECT_EQ(outcome.kind, SlideOutcome::Kind::Slid);
+  EXPECT_EQ(outcome.kind, ContextSlideOutcome::Kind::Slid);
   EXPECT_EQ(outcome.newNPast, 280);
   EXPECT_EQ(outcome.discarded, 120);
 
@@ -434,7 +432,7 @@ TEST_F(ContextSliderTest, GenerationNotNeededDoesNotCallLlamaOps) {
   ToolsCompactController controller(std::nullopt);
   FakeLlamaContextOps ops(/*ctxSize=*/500);
 
-  SlideOutcome outcome = trySlideGeneration(
+  ContextSlideOutcome outcome = trySlideGeneration(
       /*lctx=*/nullptr,
       /*nPast=*/499,
       /*firstMsgTokens=*/50,
@@ -442,7 +440,7 @@ TEST_F(ContextSliderTest, GenerationNotNeededDoesNotCallLlamaOps) {
       controller,
       ops);
 
-  EXPECT_EQ(outcome.kind, SlideOutcome::Kind::NotNeeded);
+  EXPECT_EQ(outcome.kind, ContextSlideOutcome::Kind::NotNeeded);
   EXPECT_EQ(outcome.newNPast, 499);
   EXPECT_EQ(outcome.discarded, 0);
 

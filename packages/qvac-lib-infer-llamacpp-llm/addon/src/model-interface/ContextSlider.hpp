@@ -4,32 +4,29 @@
 
 class ToolsCompactController;
 
-namespace qvac_lib_inference_addon_llama {
-namespace context_slider {
-
-using LlamaMemoryHandle =
+using ContextSliderMemoryHandle =
     decltype(llama_get_memory(static_cast<llama_context*>(nullptr)));
 
 /// Small indirection layer around llama context/memory operations.
 ///
 /// This makes ContextSlider testable without requiring a real llama_context.
-struct ILlamaContextOps {
-  virtual ~ILlamaContextOps() = default;
+struct IContextSliderOps {
+  virtual ~IContextSliderOps() = default;
   virtual llama_pos nCtx(llama_context* lctx) const = 0;
-  virtual LlamaMemoryHandle memory(llama_context* lctx) const = 0;
+  virtual ContextSliderMemoryHandle memory(llama_context* lctx) const = 0;
   virtual void seqRm(
-      LlamaMemoryHandle mem, llama_seq_id seqId, llama_pos startPos,
+      ContextSliderMemoryHandle mem, llama_seq_id seqId, llama_pos startPos,
       llama_pos endPos) const = 0;
   virtual void seqAdd(
-      LlamaMemoryHandle mem, llama_seq_id seqId, llama_pos startPos,
+      ContextSliderMemoryHandle mem, llama_seq_id seqId, llama_pos startPos,
       llama_pos endPos, llama_pos delta) const = 0;
 };
 
 /// Returns the default llama-backed ops implementation.
-const ILlamaContextOps& defaultLlamaContextOps();
+const IContextSliderOps& defaultContextSliderOps();
 
 /// Outcome of a sliding-window operation on the KV cache.
-struct SlideOutcome {
+struct ContextSlideOutcome {
   enum class Kind {
     NotNeeded, // Context had enough room; no slide performed
     Slid,      // Successfully discarded tokens via partial slide
@@ -58,12 +55,12 @@ struct SlideOutcome {
 /// @param nTokensToAppend Number of tokens about to be appended
 /// @param nDiscarded     Maximum tokens the caller allows to discard
 /// @param tools          Controller for tools_compact anchor management
-/// @return SlideOutcome describing what happened and the new state
-SlideOutcome trySlidePrefill(
+/// @return ContextSlideOutcome describing what happened and the new state
+ContextSlideOutcome trySlidePrefill(
     llama_context* lctx, llama_pos nPast, llama_pos firstMsgTokens,
     llama_pos nTokensToAppend, llama_pos nDiscarded,
     ToolsCompactController& tools,
-    const ILlamaContextOps& ops = defaultLlamaContextOps());
+    const IContextSliderOps& ops = defaultContextSliderOps());
 
 /// Attempts to slide the context window during generation phase.
 ///
@@ -76,11 +73,8 @@ SlideOutcome trySlidePrefill(
 /// @param firstMsgTokens Number of tokens in the first message (protected)
 /// @param nDiscarded     Maximum tokens the caller allows to discard
 /// @param tools          Controller for tools_compact anchor management
-/// @return SlideOutcome describing what happened and the new state
-SlideOutcome trySlideGeneration(
+/// @return ContextSlideOutcome describing what happened and the new state
+ContextSlideOutcome trySlideGeneration(
     llama_context* lctx, llama_pos nPast, llama_pos firstMsgTokens,
     llama_pos nDiscarded, ToolsCompactController& tools,
-    const ILlamaContextOps& ops = defaultLlamaContextOps());
-
-} // namespace context_slider
-} // namespace qvac_lib_inference_addon_llama
+    const IContextSliderOps& ops = defaultContextSliderOps());

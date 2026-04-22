@@ -19,7 +19,6 @@
 using namespace qvac_lib_inference_addon_llama::errors;
 using namespace qvac_lib_inference_addon_cpp::logger;
 using namespace qvac_lib_inference_addon_llama::utils;
-using namespace qvac_lib_inference_addon_llama::context_slider;
 
 // NOLINTNEXTLINE(readability-function-cognitive-complexity)
 MtmdLlmContext::MtmdLlmContext(
@@ -281,7 +280,7 @@ bool MtmdLlmContext::evalMessageWithTools(
         nDiscarded_,
         tools_);
     switch (outcome.kind) {
-    case SlideOutcome::Kind::Slid:
+    case ContextSlideOutcome::Kind::Slid:
       nPast_ = outcome.newNPast;
       ++nSlides_;
       QLOG_IF(
@@ -291,7 +290,7 @@ bool MtmdLlmContext::evalMessageWithTools(
               "message\n",
               outcome.discarded));
       break;
-    case SlideOutcome::Kind::FullWipe:
+    case ContextSlideOutcome::Kind::FullWipe:
       nPast_ = outcome.newNPast;
       ++nSlides_;
       QLOG_IF(
@@ -301,7 +300,7 @@ bool MtmdLlmContext::evalMessageWithTools(
               "message\n",
               outcome.discarded));
       break;
-    case SlideOutcome::Kind::Overflow: {
+    case ContextSlideOutcome::Kind::Overflow: {
       std::string errorMsg = string_format(
           "[MtmdLlm] context overflow at prefill step (%ld tokens, max "
           "%d)\n",
@@ -310,7 +309,7 @@ bool MtmdLlmContext::evalMessageWithTools(
       throw qvac_errors::StatusError(
           ADDON_ID, toString(ContextOverflow), errorMsg);
     }
-    case SlideOutcome::Kind::NotNeeded:
+    case ContextSlideOutcome::Kind::NotNeeded:
       break;
     }
   }
@@ -377,7 +376,7 @@ void MtmdLlmContext::flushPendingUtf8ToCallback(
 void MtmdLlmContext::applyContextDiscard() {
   auto outcome =
       trySlideGeneration(lctx_, nPast_, firstMsgTokens_, nDiscarded_, tools_);
-  if (outcome.kind == SlideOutcome::Kind::Slid) {
+  if (outcome.kind == ContextSlideOutcome::Kind::Slid) {
     nPast_ = outcome.newNPast;
     ++nSlides_;
     QLOG_IF(

@@ -7,49 +7,46 @@
 
 using namespace qvac_lib_inference_addon_cpp::logger;
 
-namespace qvac_lib_inference_addon_llama {
-namespace context_slider {
-
 namespace {
-class LlamaContextOps final : public ILlamaContextOps {
+class ContextSliderOps final : public IContextSliderOps {
 public:
   llama_pos nCtx(llama_context* lctx) const override {
     return static_cast<llama_pos>(llama_n_ctx(lctx));
   }
 
-  LlamaMemoryHandle memory(llama_context* lctx) const override {
+  ContextSliderMemoryHandle memory(llama_context* lctx) const override {
     return llama_get_memory(lctx);
   }
 
   void seqRm(
-      LlamaMemoryHandle mem, llama_seq_id seqId, llama_pos startPos,
+      ContextSliderMemoryHandle mem, llama_seq_id seqId, llama_pos startPos,
       llama_pos endPos) const override {
     llama_memory_seq_rm(mem, seqId, startPos, endPos);
   }
 
   void seqAdd(
-      LlamaMemoryHandle mem, llama_seq_id seqId, llama_pos startPos,
+      ContextSliderMemoryHandle mem, llama_seq_id seqId, llama_pos startPos,
       llama_pos endPos, llama_pos delta) const override {
     llama_memory_seq_add(mem, seqId, startPos, endPos, delta);
   }
 };
 } // namespace
 
-const ILlamaContextOps& defaultLlamaContextOps() {
-  static const LlamaContextOps ops;
+const IContextSliderOps& defaultContextSliderOps() {
+  static const ContextSliderOps ops;
   return ops;
 }
 
-SlideOutcome trySlidePrefill(
+ContextSlideOutcome trySlidePrefill(
     llama_context* lctx, llama_pos nPast, llama_pos firstMsgTokens,
     llama_pos nTokensToAppend, llama_pos nDiscarded,
-    ToolsCompactController& tools, const ILlamaContextOps& ops) {
+    ToolsCompactController& tools, const IContextSliderOps& ops) {
 
   const auto nCtx = ops.nCtx(lctx);
 
   // Check if sliding is needed
   if (nPast + nTokensToAppend < nCtx) {
-    return {SlideOutcome::Kind::NotNeeded, nPast, 0};
+    return {ContextSlideOutcome::Kind::NotNeeded, nPast, 0};
   }
 
   // Clamp discard so it never eats into tool tokens
@@ -64,7 +61,7 @@ SlideOutcome trySlidePrefill(
     ops.seqAdd(mem, 0, firstMsgTokens + discard, nPast, -discard);
     llama_pos newNPast = nPast - discard;
     tools.onSlide(discard, firstMsgTokens);
-    return {SlideOutcome::Kind::Slid, newNPast, discard};
+    return {ContextSlideOutcome::Kind::Slid, newNPast, discard};
   }
 
   // Fallback: wipe everything after the first message
@@ -76,23 +73,23 @@ SlideOutcome trySlidePrefill(
     if (tools.enabled()) {
       tools.reset();
     }
-    return {SlideOutcome::Kind::FullWipe, firstMsgTokens, wiped};
+    return {ContextSlideOutcome::Kind::FullWipe, firstMsgTokens, wiped};
   }
 
   // Cannot free enough space
-  return {SlideOutcome::Kind::Overflow, nPast, 0};
+  return {ContextSlideOutcome::Kind::Overflow, nPast, 0};
 }
 
-SlideOutcome trySlideGeneration(
+ContextSlideOutcome trySlideGeneration(
     llama_context* lctx, llama_pos nPast, llama_pos firstMsgTokens,
     llama_pos nDiscarded, ToolsCompactController& tools,
-    const ILlamaContextOps& ops) {
+    const IContextSliderOps& ops) {
 
   const auto nCtx = ops.nCtx(lctx);
 
   // Check if sliding is needed (need room for 1 more token)
   if (nPast + 1 <= nCtx || nDiscarded == 0) {
-    return {SlideOutcome::Kind::NotNeeded, nPast, 0};
+    return {ContextSlideOutcome::Kind::NotNeeded, nPast, 0};
   }
 
   // Clamp discard so it never eats into tool tokens
@@ -127,7 +124,7 @@ SlideOutcome trySlideGeneration(
             firstMsgTokens,
             tools.anchor(),
             tools.enabled() ? "true" : "false"));
-    return {SlideOutcome::Kind::NotNeeded, nPast, 0};
+    return {ContextSlideOutcome::Kind::NotNeeded, nPast, 0};
   }
 
   // Perform the slide
@@ -136,8 +133,5 @@ SlideOutcome trySlideGeneration(
   ops.seqAdd(mem, 0, firstMsgTokens + discard, nPast, -discard);
   llama_pos newNPast = nPast - discard;
   tools.onSlide(discard, firstMsgTokens);
-  return {SlideOutcome::Kind::Slid, newNPast, discard};
+  return {ContextSlideOutcome::Kind::Slid, newNPast, discard};
 }
-
-} // namespace context_slider
-} // namespace qvac_lib_inference_addon_llama
