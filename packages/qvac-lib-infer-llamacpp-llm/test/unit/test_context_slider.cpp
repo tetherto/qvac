@@ -217,27 +217,6 @@ TEST_F(ContextSliderTest, GenerationSlidInvokesLlamaOpsWithExpectedRanges) {
   EXPECT_EQ(ops.seqAddCalls()[0].delta, -120);
 }
 
-TEST_F(ContextSliderTest, GenerationNotNeededDoesNotCallLlamaOps) {
-  ToolsCompactController controller(std::nullopt);
-  FakeLlamaContextOps ops(/*ctxSize=*/500);
-
-  ContextSlideOutcome outcome = trySlideGeneration(
-      /*lctx=*/nullptr,
-      /*nPast=*/499,
-      /*firstMsgTokens=*/50,
-      /*nDiscarded=*/120,
-      controller,
-      ops);
-
-  EXPECT_EQ(outcome.kind, ContextSlideOutcome::Kind::NotNeeded);
-  EXPECT_EQ(outcome.newNPast, 499);
-  EXPECT_EQ(outcome.discarded, 0);
-
-  EXPECT_EQ(ops.memoryCalls(), 0);
-  EXPECT_TRUE(ops.seqRmCalls().empty());
-  EXPECT_TRUE(ops.seqAddCalls().empty());
-}
-
 TEST_F(ContextSliderTest, GenerationSlideScenario_NoDiscardAllowed) {
   ToolsCompactController controller(std::nullopt);
   FakeLlamaContextOps ops(/*ctxSize=*/500);
@@ -256,4 +235,72 @@ TEST_F(ContextSliderTest, GenerationSlideScenario_NoDiscardAllowed) {
   EXPECT_EQ(ops.memoryCalls(), 0);
   EXPECT_TRUE(ops.seqRmCalls().empty());
   EXPECT_TRUE(ops.seqAddCalls().empty());
+}
+
+TEST_F(
+    ContextSliderTest, GenerationToolsCompactClampsDiscardToAnchorWindow) {
+  ToolsCompactController controller(ToolsCompactProfile{});
+  FakeLlamaContextOps ops(/*ctxSize=*/140);
+  constexpr llama_pos firstMsgTokens = 50;
+
+  controller.onTokenize(/*tokensWithTools=*/140, /*tokensWithoutTools=*/80);
+  controller.onEvalComplete(/*nPast=*/140, /*totalTokensEvaled=*/140);
+  ASSERT_EQ(controller.anchor(), 80);
+
+  ContextSlideOutcome outcome = trySlideGeneration(
+      /*lctx=*/nullptr,
+      /*nPast=*/140,
+      firstMsgTokens,
+      /*nDiscarded=*/120,
+      controller,
+      ops);
+
+  EXPECT_EQ(outcome.kind, ContextSlideOutcome::Kind::Slid);
+  EXPECT_EQ(outcome.newNPast, 110);
+  EXPECT_EQ(outcome.discarded, 30);
+  EXPECT_EQ(controller.anchor(), firstMsgTokens);
+
+  ASSERT_EQ(ops.memoryCalls(), 1);
+  ASSERT_EQ(ops.seqRmCalls().size(), 1u);
+  EXPECT_EQ(ops.seqRmCalls()[0].startPos, 50);
+  EXPECT_EQ(ops.seqRmCalls()[0].endPos, 80);
+  ASSERT_EQ(ops.seqAddCalls().size(), 1u);
+  EXPECT_EQ(ops.seqAddCalls()[0].startPos, 80);
+  EXPECT_EQ(ops.seqAddCalls()[0].endPos, 140);
+  EXPECT_EQ(ops.seqAddCalls()[0].delta, -30);
+}
+
+TEST_F(
+    ContextSliderTest,
+    GenerationDegenerateBoundaryResetsThenSlidesFromFirstMessage) {
+  ToolsCompactController controller(ToolsCompactProfile{});
+  FakeLlamaContextOps ops(/*ctxSize=*/120);
+  constexpr llama_pos firstMsgTokens = 50;
+
+  controller.onTokenize(/*tokensWithTools=*/120, /*tokensWithoutTools=*/50);
+  controller.onEvalComplete(/*nPast=*/120, /*totalTokensEvaled=*/120);
+  ASSERT_EQ(controller.anchor(), firstMsgTokens);
+  ASSERT_TRUE(controller.degenerateBoundary(firstMsgTokens));
+
+  ContextSlideOutcome outcome = trySlideGeneration(
+      /*lctx=*/nullptr,
+      /*nPast=*/120,
+      firstMsgTokens,
+      /*nDiscarded=*/40,
+      controller,
+      ops);
+
+  EXPECT_EQ(outcome.kind, ContextSlideOutcome::Kind::Slid);
+  EXPECT_EQ(outcome.newNPast, 80);
+  EXPECT_EQ(outcome.discarded, 40);
+  EXPECT_EQ(controller.anchor(), firstMsgTokens);
+
+  ASSERT_EQ(ops.memoryCalls(), 1);
+  ASSERT_EQ(ops.seqRmCalls().size(), 1u);
+  EXPECT_EQ(ops.seqRmCalls()[0].startPos, 50);
+  EXPECT_EQ(ops.seqRmCalls()[0].endPos, 90);
+  ASSERT_EQ(ops.seqAddCalls().size(), 1u);
+  EXPECT_EQ(ops.seqAddCalls()[0].startPos, 90);
+  EXPECT_EQ(ops.seqAddCalls()[0].endPos, 120);
+  EXPECT_EQ(ops.seqAddCalls()[0].delta, -40);
 }

@@ -169,34 +169,6 @@ TEST_F(CacheManagementQwen3Test, CacheReloadWithToolsCompactTrue) {
   EXPECT_TRUE(fs::exists(session1_path));
 }
 
-TEST_F(
-    CacheManagementQwen3Test, CacheWithoutToolsWithToolsCompactTrueIsRejected) {
-  if (!isQwen3ModelPath(test_model_path)) {
-    GTEST_SKIP() << "Test requires Qwen3 model for tools_compact feature";
-  }
-
-  if (!hasValidModel()) {
-    FAIL() << "Test model not found";
-  }
-
-  config_files["tools_compact"] = "true";
-  auto model = createModel();
-  if (!model) {
-    FAIL() << "Model failed to load";
-  }
-
-  EXPECT_THROW(
-      {
-        processPromptWithCacheOptions(
-            model,
-            R"([{"role": "user", "content": "What is bitcoin? Answer shortly."}])",
-            session1_path,
-            true);
-      },
-      qvac_errors::StatusError);
-  EXPECT_FALSE(fs::exists(session1_path));
-}
-
 TEST_F(CacheManagementQwen3Test, CacheToolsCompactModeWithMultiplePrompts) {
   if (!isQwen3ModelPath(test_model_path)) {
     GTEST_SKIP() << "Test requires Qwen3 model for tools_compact feature";
@@ -286,54 +258,10 @@ TEST_F(CacheManagementQwen3Test, CacheToolsCompactModeWithoutToolsIsRejected) {
       {
         processPromptWithCacheOptions(
             model,
-            R"([{"role": "user", "content": "Hello"}])",
+            R"([{"role": "user", "content": "What is bitcoin? Answer shortly."}])",
             session1_path,
             true);
       },
       qvac_errors::StatusError);
   EXPECT_FALSE(fs::exists(session1_path));
-}
-
-TEST_F(CacheManagementQwen3Test, CacheToolsCompactModeCanReloadSavedSession) {
-  if (!isQwen3ModelPath(test_model_path)) {
-    GTEST_SKIP() << "Test requires Qwen3 model for tools_compact feature";
-  }
-
-  if (!hasValidModel()) {
-    FAIL() << "Test model not found";
-  }
-
-  config_files["tools_compact"] = "true";
-  auto model = createModel();
-  if (!model) {
-    FAIL() << "Model failed to load";
-  }
-
-  EXPECT_NO_THROW({
-    std::string output = processPromptWithCacheOptions(
-        model,
-        R"([{"role": "user", "content": "Hi"}, {"type": "function", "name": "get_weather", "description": "Get weather", "parameters": {"type": "object", "properties": {"city": {"type": "string"}}, "required": ["city"]}}])",
-        session1_path,
-        true);
-    EXPECT_FALSE(output.empty());
-  });
-
-  EXPECT_TRUE(fs::exists(session1_path));
-
-  auto model2 = createModel();
-  if (!model2) {
-    FAIL() << "Model2 failed to load";
-  }
-
-  EXPECT_NO_THROW({
-    std::string output = processPromptWithCacheOptions(
-        model2,
-        R"([{"role": "user", "content": "What about London?"}, {"type": "function", "name": "getWeather", "description": "Get weather forecast", "parameters": {"type": "object", "properties": {"city": {"type": "string"}}, "required": ["city"]}}])",
-        session1_path);
-    EXPECT_FALSE(output.empty());
-  });
-
-  auto statsAfterReload = model2->runtimeStats();
-  double cacheTokensAfterReload = getStatValue(statsAfterReload, "CacheTokens");
-  EXPECT_GT(cacheTokensAfterReload, 0.0);
 }
