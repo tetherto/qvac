@@ -4,8 +4,8 @@ import type {
   GenerationParams,
   Tool,
   ToolCall,
-  ToolCallEvent,
 } from "@/schemas";
+import type { ToolCallEvent } from "@/schemas/tools";
 import {
   logCacheDisabled,
   logCacheInit,
