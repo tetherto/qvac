@@ -44,9 +44,8 @@ export function logMessagesToAddon(
   phase: "CACHE_INIT" | "PROMPT_SEND" | "NO_CACHE" = "PROMPT_SEND",
 ): void {
   const typedMessages = messages as ChatMessage[];
-  const nonSessionMsgs = typedMessages.filter((m) => m.role !== "session");
   logger.debug(
-    `[kv-cache] [${phase}] Sending ${nonSessionMsgs.length} msg(s): [${formatMessages(nonSessionMsgs)}]`,
+    `[kv-cache] [${phase}] Sending ${typedMessages.length} msg(s): [${formatMessages(typedMessages)}]`,
   );
 }
 
