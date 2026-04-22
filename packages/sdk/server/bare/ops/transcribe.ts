@@ -18,6 +18,17 @@ import { TranscriptionFailedError } from "@/utils/errors-server";
 import type { TranscribeResponse } from "@/server/bare/types/addon-responses";
 import { nowMs } from "@/profiling";
 import { buildStreamResult } from "@/profiling/model-execution";
+import {
+  assertMetadataSupported,
+  toTranscribeSegment,
+  type WhisperAddonSegment,
+} from "@/server/bare/utils/transcribe-metadata";
+
+export {
+  assertMetadataSupported,
+  toTranscribeSegment,
+  type WhisperAddonSegment,
+};
 
 const logger = getServerLogger();
 
@@ -38,37 +49,6 @@ const SILENCE_MARKERS: Record<string, string> = {
   [ModelType.whispercppTranscription]: "[BLANK_AUDIO]",
   [ModelType.parakeetTranscription]: "[No speech detected]",
 };
-
-interface WhisperAddonSegment {
-  text: string;
-  start?: number;
-  end?: number;
-  toAppend?: boolean;
-  id?: number;
-}
-
-function toTranscribeSegment(chunk: WhisperAddonSegment): TranscribeSegment {
-  return {
-    text: chunk.text,
-    startMs: (chunk.start ?? 0) * 1000,
-    endMs: (chunk.end ?? 0) * 1000,
-    append: chunk.toAppend ?? false,
-    id: chunk.id ?? 0,
-  };
-}
-
-function assertMetadataSupported(
-  modelId: string,
-  engineType: string,
-  metadata: boolean | undefined,
-): void {
-  if (!metadata) return;
-  if (engineType !== ModelType.whispercppTranscription) {
-    throw new TranscriptionFailedError(
-      `metadata mode is not supported on model ${modelId} (engine: ${engineType || "unknown"}); only the whisper engine supports metadata`,
-    );
-  }
-}
 
 function getEngineModelType(modelId: string): string {
   const entry = getModelEntry(modelId);
