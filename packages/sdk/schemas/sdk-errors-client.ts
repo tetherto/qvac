@@ -16,6 +16,7 @@ export const SDK_CLIENT_ERROR_CODES = {
   RPC_REQUEST_NOT_SENT: 50201,
   RPC_RESPONSE_STREAM_NOT_CREATED: 50202,
   RPC_CONNECTION_FAILED: 50203,
+  RPC_INIT_TIMEOUT: 50204,
 
   // Provider/Delegation Errors (50,400-50,599)
   PROVIDER_START_FAILED: 50400,
@@ -89,6 +90,11 @@ const clientErrorDefinitions: ErrorCodesMap = {
   [SDK_CLIENT_ERROR_CODES.RPC_CONNECTION_FAILED]: {
     name: "RPC_CONNECTION_FAILED",
     message: (details: string) => `RPC connection failed: ${details}`,
+  },
+  [SDK_CLIENT_ERROR_CODES.RPC_INIT_TIMEOUT]: {
+    name: "RPC_INIT_TIMEOUT",
+    message: (timeoutMs: number) =>
+      `RPC initialization timed out after ${timeoutMs}ms — the worker process may have failed to start`,
   },
 
   // Provider/Delegation Errors (50,400-50,599)
