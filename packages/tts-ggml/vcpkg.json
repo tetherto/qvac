@@ -8,7 +8,10 @@
       "name": "qvac-lint-cpp",
       "version>=": "1.4.4#2"
     },
-    "tts-cpp",
+    {
+      "name": "tts-cpp",
+      "version>=": "2026-04-21#1"
+    },
     "gtest"
   ],
   "features": {
