@@ -5,7 +5,7 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-## [0.8.5]
+## [0.8.6]
 
 This release combines two parallel efforts: (1) Japanese (ja) language support via MeCab and a refactored text preprocessing layer, and (2) Chatterbox TTS performance improvements where reference-audio encoding is done once during `load()` and cached for every `synthesize()` call, the CFG multilingual path runs with a single batched KV cache instead of two separate sessions, and the ONNX Runtime intra-op thread count is now configurable at construction time. On a 4-core CPU the English q4 model drops from RTF ≈ 20.9 to ≈ 15.7 (~25% faster), and every `synthesize()` call sees the same per-call cost — no more first-call penalty.
 
@@ -33,6 +33,28 @@ This release combines two parallel efforts: (1) Japanese (ja) language support v
 - `ChatterboxEngine` now owns a single `ChatterboxTextPreprocessor` instead of separate Cangjie/MeCab members; `loadTextPreprocessor(tokenizerPath, mecabDictPath)` replaces the previous loader.
 - `decodeUtf8`/`encodeCodepoint` are now `static` utility methods; long loops split into focused helpers (`detectSequenceLength`, `extractLeadingBits`, `decodeCodepointAt`, `isContentNode`, `hasReading`, `appendNodeReading`, `buildHiraganaFromNodes`).
 - `package.json` ships the new `dict/` folder and exposes the `build:mecab-dict` npm script.
+
+### Fixed
+
+- Preserve UTF-8 text correctly at the Chatterbox addon boundary so Portuguese diacritics like `á`, `ã`, `ç`, `é`, and `í` reach tokenization intact.
+
+## [0.8.5]
+
+Performance improvements for the Chatterbox TTS pipeline: reference-audio encoding is done once during `load()` and cached for every `synthesize()` call, the CFG multilingual path runs with a single batched KV cache instead of two separate sessions, and the ONNX Runtime intra-op thread count is now configurable at construction time. On a 4-core CPU the English q4 model drops from RTF ≈ 20.9 to ≈ 15.7 (~25% faster), and every `synthesize()` call sees the same per-call cost — no more first-call penalty.
+
+### Added
+
+- **`numThreads` option** on the `ONNXTTS` constructor. Configures `intraOpThreads` for all Chatterbox ONNX sessions (speech encoder, embed tokens, conditional decoder, language model). Defaults to `0` which preserves the previous behavior (1 intra-op thread). Setting e.g. `4` on a 4-core machine yields ~25% total RTF reduction (LM generation −22%, conditional decoder −30%, speech encoder −25%). Threaded through JS options → `AddonJs` (as string) → `TTSModel::createChatterboxConfig` → `ChatterboxConfig.numThreads` → `OnnxInferSession` constructor.
+- **Speech encoder output caching** in `ChatterboxEngine`. New `SpeechEncoderCache` struct stores audio features, prompt tokens, speaker embeddings, and speaker features produced from the reference audio. The encoder runs once during `load()` and every subsequent `synthesize()` call reuses the cached outputs, so per-call latency is uniform instead of spiking by ~2.7s on the first call. Cache is cleared on `unload()`.
+- **Per-phase timing instrumentation** for Chatterbox. `synthesize()` now emits `QLOG(INFO)` lines with measured durations for speech encoder, LM generation, conditional decoder, and total, so RTF breakdowns can be read straight from logs.
+- **`tensor_ops::concatBatch` / `tensor_ops::duplicateBatch`** tensor helpers in `ChatterboxEngine.hpp`, plus unit tests in `ChatterboxEngineMethodsTest.cpp`.
+
+### Changed
+
+- **Chatterbox CFG multilingual path** now runs conditional and unconditional branches as a single batched ONNX session call (`[2N, ...]` batch) with one shared KV cache, replacing the previous pair of separate session calls and two KV caches. `generateSpeechTokensWithCfg`, `runInitialCfgStep`, `runCfgGenerationLoop`, and `initEmptyKvCache` were refactored accordingly. Pure performance change — math and output are bit-identical to the pre-batched path.
+- **`prepareCfgEmbeddings`** now prepends audio features via `reserve` + single-pass build instead of `std::vector::insert(begin, ...)`, eliminating O(n) element shifting for every embedding vector built per CFG step.
+- **`trimPromptFromWaveform`** uses `std::move` + `resize` instead of `std::vector::erase(begin, begin + N)`, avoiding an unnecessary copy of the full waveform on every `synthesize()`.
+- Fixed bug when using multilingual model for English inference, bypassing model configuration and allowing input tokens to leak into the output
 
 ### Fixed
 
