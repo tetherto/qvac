@@ -1709,13 +1709,22 @@ jobs:
         if: always() && steps.extract_perf.outputs.extracted == 'true'
         run: |
           OUTPUT_DIR="perf-results-mobile/${{ matrix.platform }}"
-          if [ -f "$OUTPUT_DIR/performance-report.md" ]; then
-            {
-              echo "## Mobile Performance: nmtcpp (${{ matrix.platform }})"
-              echo ""
-              cat "$OUTPUT_DIR/performance-report.md"
-            } >> "$GITHUB_STEP_SUMMARY"
+          SCRIPTS_DIR="monorepo/scripts/perf-report"
+          REPORT="$OUTPUT_DIR/performance-report.json"
+
+          if [ ! -f "$REPORT" ] || [ ! -f "$SCRIPTS_DIR/render-step-summary.js" ]; then
+            echo "::warning::Missing $REPORT or render-step-summary.js; skipping"
+            exit 0
           fi
+
+          # Render the same compact single-table layout the desktop
+          # integration tests use (Test | EP | Total Time (ms) | Decode (ms)
+          # | Tokens | TPS | chrF++), so mobile and desktop Step Summaries
+          # share the same headers and reading experience.
+          node "$SCRIPTS_DIR/render-step-summary.js" \
+            "$REPORT" \
+            "$GITHUB_STEP_SUMMARY" \
+            --title "Mobile Performance: nmtcpp (${{ matrix.platform }})"
 
       - name: Upload mobile performance report
         if: always() && steps.schedule_run.outputs.run_arn_1
