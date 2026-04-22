@@ -11,6 +11,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - Fixed bug when using multilingual model for English inference, bypassing model configuration and allowing input tokens to leak into the output
 
+### Fixed
+
+- Preserve UTF-8 text correctly at the Chatterbox addon boundary so Portuguese diacritics like `á`, `ã`, `ç`, `é`, and `í` reach tokenization intact.
+
 ## [0.8.4]
 
 This release adds streaming options for both directions: you can stream **PCM out** from a full string (`run` with `streamOutput`, or `runStream`), and you can feed **incremental text** from an async source (`runStreaming`) with optional sentence accumulation before each native job. Examples and tests cover Supertonic and Chatterbox so you can copy a pattern that matches your integration.
