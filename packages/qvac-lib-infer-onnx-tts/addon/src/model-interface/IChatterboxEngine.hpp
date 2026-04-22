@@ -19,6 +19,7 @@ struct ChatterboxConfig {
   std::string mecabDictPath;
   bool lazySessionLoading = false;
   bool useGPU = false;
+  int numThreads = 0;
 };
 
 class IChatterboxEngine {
