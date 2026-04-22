@@ -12,6 +12,8 @@
     "lint:fix": "standard --fix",
     "lint-cpp": "clang-tidy -p build $(find addon -name '*.cpp')",
     "test:integration": "bare test/integration/addon.test.js",
+    "test:mobile:generate": "bare ./scripts/generate-mobile-integration-tests.js",
+    "test:mobile:validate": "node scripts/validate-mobile-tests.js",
     "test:unit:generate": "brittle -r test/unit/all.js test/unit/*.test.js",
     "test:unit": "npm run test:unit:generate && bare test/unit/all.js --exit",
     "test:cpp:build": "bare-make generate -D BUILD_TESTING=ON && bare-make build --target addon-test",
@@ -22,6 +24,8 @@
   },
   "files": [
     "addon.js",
+    "addonLogging.js",
+    "addonLogging.d.ts",
     "binding.js",
     "index.js",
     "index.d.ts",
@@ -52,7 +56,12 @@
     ".": {
       "types": "./index.d.ts",
       "default": "./index.js"
-    }
+    },
+    "./addonLogging": {
+      "types": "./addonLogging.d.ts",
+      "default": "./addonLogging.js"
+    },
+    "./addonLogging.js": "./addonLogging.js"
   },
   "main": "index.js",
   "types": "index.d.ts"

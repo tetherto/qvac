@@ -18,6 +18,17 @@ js_value_t*
   }
 
   V("sayHello", {{CPP_NAMESPACE}}::sayHello)
+
+  V("createInstance", {{CPP_NAMESPACE}}::createInstance)
+  V("runJob", {{CPP_NAMESPACE}}::runJob)
+
+  V("loadWeights", qvac_lib_inference_addon_cpp::JsInterface::loadWeights)
+  V("activate", qvac_lib_inference_addon_cpp::JsInterface::activate)
+  V("cancel", qvac_lib_inference_addon_cpp::JsInterface::cancel)
+  V("destroyInstance",
+    qvac_lib_inference_addon_cpp::JsInterface::destroyInstance)
+  V("setLogger", qvac_lib_inference_addon_cpp::JsInterface::setLogger)
+  V("releaseLogger", qvac_lib_inference_addon_cpp::JsInterface::releaseLogger)
 #undef V
 // NOLINTEND(cppcoreguidelines-macro-usage)
 
