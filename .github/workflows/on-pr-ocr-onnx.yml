@@ -70,7 +70,9 @@ jobs:
           workdir: packages/qvac-lib-infer-vla
 
   cpp-lint:
-    if: needs.authorize.outputs.allowed == 'true'
+    # Only runs when we have a PR base SHA to diff against. Workflow_dispatch
+    # has no pull_request context, which would make the diff target empty.
+    if: needs.authorize.outputs.allowed == 'true' && github.event_name == 'pull_request_target'
     needs: authorize
     uses: tetherto/oss-actions/.github/workflows/cpp-lint.yaml@v1.1.0
     secrets: inherit
