@@ -46,19 +46,18 @@ test('SD3 Medium txt2img — generates a valid PNG image', { timeout: 900000, sk
   const modelPath = path.join(modelDir, downloadedModelName)
   t.ok(fs.existsSync(modelPath), 'Model file exists on disk')
 
-  const model = new ImgStableDiffusion(
-    {
-      logger: console,
-      diskPath: modelDir,
-      modelName: downloadedModelName
+  const model = new ImgStableDiffusion({
+    files: {
+      model: path.join(modelDir, downloadedModelName)
     },
-    {
+    config: {
       threads: 4,
       device: useCpu ? 'cpu' : 'gpu',
       prediction: 'flow',
       flow_shift: '3.0'
-    }
-  )
+    },
+    logger: console
+  })
 
   const images = []
   const progressTicks = []

@@ -2,7 +2,6 @@
 
 const test = require('brittle')
 const path = require('bare-path')
-const FilesystemDL = require('@qvac/dl-filesystem')
 const LlmLlamacpp = require('../../index.js')
 const {
   ensureModel,
@@ -89,7 +88,7 @@ function assertLossAndAccuracyAreFinite (t, result, modelId) {
 async function runLoraInference (t, modelVariant, modelName, modelDir, loraAdapterPath) {
   t.comment(`[${modelVariant.id}] Running inference with LoRA adapter: ${loraAdapterPath}`)
 
-  const inferLoader = new FilesystemDL({ dirPath: modelDir })
+  const inferModelPath = path.join(modelDir, modelName)
   const inferConfig = {
     gpu_layers: '999',
     ctx_size: '512',
@@ -98,16 +97,12 @@ async function runLoraInference (t, modelVariant, modelName, modelDir, loraAdapt
     lora: loraAdapterPath
   }
 
-  const inferModel = new LlmLlamacpp(
-    {
-      loader: inferLoader,
-      modelName,
-      diskPath: modelDir,
-      logger: console,
-      opts: { stats: true }
-    },
-    inferConfig
-  )
+  const inferModel = new LlmLlamacpp({
+    files: { model: [inferModelPath] },
+    config: inferConfig,
+    logger: console,
+    opts: { stats: true }
+  })
 
   try {
     await inferModel.load()
@@ -122,7 +117,6 @@ async function runLoraInference (t, modelVariant, modelName, modelDir, loraAdapt
     t.comment(`[${modelVariant.id}] LoRA inference stats: ${JSON.stringify(response.stats)}`)
   } finally {
     await inferModel.unload().catch(() => {})
-    await inferLoader.close().catch(() => {})
   }
 }
 
@@ -143,7 +137,7 @@ test('finetuning pause and resume', { timeout: PAUSE_RESUME_TIMEOUT_MS, skip: sk
     })
     const checkpointDir = finetuneConfig.checkpointSaveDir
 
-    const loader = new FilesystemDL({ dirPath: modelDir })
+    const finetuneModelPath = path.join(modelDir, modelName)
     const loggerHandle = attachSpecLogger({ forwardToConsole: true })
 
     const config = {
@@ -153,16 +147,12 @@ test('finetuning pause and resume', { timeout: PAUSE_RESUME_TIMEOUT_MS, skip: sk
       verbosity: '2'
     }
 
-    const model = new LlmLlamacpp(
-      {
-        loader,
-        modelName,
-        diskPath: modelDir,
-        logger: console,
-        opts: { stats: true }
-      },
-      config
-    )
+    const model = new LlmLlamacpp({
+      files: { model: [finetuneModelPath] },
+      config,
+      logger: console,
+      opts: { stats: true }
+    })
 
     try {
       await model.load()
@@ -211,7 +201,6 @@ test('finetuning pause and resume', { timeout: PAUSE_RESUME_TIMEOUT_MS, skip: sk
         )
 
         await model.unload().catch(() => {})
-        await loader.close().catch(() => {})
 
         const loraAdapterPath = path.join(finetuneConfig.outputParametersDir, 'trained-lora-adapter.gguf')
         await runLoraInference(t, modelVariant, modelName, modelDir, loraAdapterPath)
@@ -275,7 +264,6 @@ test('finetuning pause and resume', { timeout: PAUSE_RESUME_TIMEOUT_MS, skip: sk
       t.pass(`[${modelVariant.id}] finetuning pause and resume completed`)
 
       await model.unload().catch(() => {})
-      await loader.close().catch(() => {})
 
       const loraAdapterPath = path.join(finetuneConfig.outputParametersDir, 'trained-lora-adapter.gguf')
       await runLoraInference(t, modelVariant, modelName, modelDir, loraAdapterPath)
@@ -283,7 +271,6 @@ test('finetuning pause and resume', { timeout: PAUSE_RESUME_TIMEOUT_MS, skip: sk
     } finally {
       loggerHandle.release()
       await model.unload().catch(() => {})
-      await loader.close().catch(() => {})
       cleanupCheckpoints(checkpointDir)
     }
   }
@@ -299,24 +286,20 @@ test('cancel() stops finetuning and removes pause checkpoint', { timeout: PAUSE_
   const finetuneConfig = setupParams(modelDir, { checkpointSaveSteps: 5, datasetSize: isMobile ? 8 : 16, testId: 'cancel-test' })
   const checkpointDir = finetuneConfig.checkpointSaveDir
 
-  const loader = new FilesystemDL({ dirPath: modelDir })
+  const cancelModelPath = path.join(modelDir, modelName)
   const loggerHandle = attachSpecLogger({ forwardToConsole: true })
 
-  const model = new LlmLlamacpp(
-    {
-      loader,
-      modelName,
-      diskPath: modelDir,
-      logger: console,
-      opts: { stats: true }
-    },
-    {
+  const model = new LlmLlamacpp({
+    files: { model: [cancelModelPath] },
+    config: {
       gpu_layers: '999',
       ctx_size: '512',
       device: forceCpuDevice ? 'cpu' : 'gpu',
       verbosity: '2'
-    }
-  )
+    },
+    logger: console,
+    opts: { stats: true }
+  })
 
   const fs = require('bare-fs')
 
@@ -352,7 +335,6 @@ test('cancel() stops finetuning and removes pause checkpoint', { timeout: PAUSE_
   } finally {
     loggerHandle.release()
     await model.unload().catch(() => {})
-    await loader.close().catch(() => {})
     cleanupCheckpoints(checkpointDir)
   }
 })
@@ -368,7 +350,7 @@ test('inference with session cache works after finetuning', { timeout: PAUSE_RES
   const checkpointDir = finetuneConfig.checkpointSaveDir
   const sessionFile = path.join(modelDir, 'test-session-finetune.bin')
 
-  const loader = new FilesystemDL({ dirPath: modelDir })
+  const sessionModelPath = path.join(modelDir, modelName)
   const loggerHandle = attachSpecLogger({ forwardToConsole: true })
 
   const config = {
@@ -380,16 +362,12 @@ test('inference with session cache works after finetuning', { timeout: PAUSE_RES
     seed: '42'
   }
 
-  const model = new LlmLlamacpp(
-    {
-      loader,
-      modelName,
-      diskPath: modelDir,
-      logger: console,
-      opts: { stats: true }
-    },
-    config
-  )
+  const model = new LlmLlamacpp({
+    files: { model: [sessionModelPath] },
+    config,
+    logger: console,
+    opts: { stats: true }
+  })
 
   const fs = require('bare-fs')
 
@@ -430,7 +408,6 @@ test('inference with session cache works after finetuning', { timeout: PAUSE_RES
   } finally {
     loggerHandle.release()
     await model.unload().catch(() => {})
-    await loader.close().catch(() => {})
     cleanupCheckpoints(checkpointDir)
     try { fs.unlinkSync(sessionFile) } catch (_) {}
   }
@@ -445,11 +422,13 @@ test('microBatchSize override changes backend batch geometry', { timeout: PAUSE_
 
   async function getTotalBatches (batchSize, microBatchSize, testId) {
     const config = setupParams(modelDir, { batchSize, microBatchSize, checkpointSaveSteps: 0, testId })
-    const loader = new FilesystemDL({ dirPath: modelDir })
-    const model = new LlmLlamacpp(
-      { loader, modelName, diskPath: modelDir, logger: console, opts: { stats: true } },
-      { gpu_layers: '999', ctx_size: '512', device: forceCpuDevice ? 'cpu' : 'gpu', verbosity: '0' }
-    )
+    const batchModelPath = path.join(modelDir, modelName)
+    const model = new LlmLlamacpp({
+      files: { model: [batchModelPath] },
+      config: { gpu_layers: '999', ctx_size: '512', device: forceCpuDevice ? 'cpu' : 'gpu', verbosity: '0' },
+      logger: console,
+      opts: { stats: true }
+    })
     try {
       await model.load()
       const handle = await model.finetune(config)
@@ -459,7 +438,6 @@ test('microBatchSize override changes backend batch geometry', { timeout: PAUSE_
       return totalBatches
     } finally {
       await model.unload().catch(() => {})
-      await loader.close().catch(() => {})
       cleanupCheckpoints(config.checkpointSaveDir)
     }
   }

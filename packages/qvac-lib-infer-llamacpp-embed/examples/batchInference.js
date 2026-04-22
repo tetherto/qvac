@@ -1,6 +1,6 @@
 'use strict'
 
-const FilesystemDL = require('@qvac/dl-filesystem')
+const path = require('bare-path')
 const GGMLBert = require('../index')
 const { downloadModel } = require('./utils')
 
@@ -14,25 +14,19 @@ async function main () {
     'gte-large_fp16.gguf'
   )
 
-  // 2. Initializing data loader
-  const fsDL = new FilesystemDL({ dirPath })
-
-  // 3. Configuring model settings
-  const args = {
-    loader: fsDL,
+  // 2. Configuring model settings
+  const model = new GGMLBert({
+    files: { model: [path.join(dirPath, modelName)] },
+    config: { device: 'gpu', gpu_layers: '25', batch_size: '128' },
     logger: console,
-    opts: { stats: true },
-    diskPath: dirPath,
-    modelName
-  }
-  const config = { device: 'gpu', gpu_layers: '25', batch_size: '128' } // large enough batch size to run all test prompts in one pass
+    opts: { stats: true }
+  })
 
-  // 4. Loading model
-  const model = new GGMLBert(args, config)
+  // 3. Loading model
   await model.load()
 
   try {
-    // 5. Generating embeddings (all prompts in one batch)
+    // 4. Generating embeddings (all prompts in one batch)
     const prompts = [
       'Hello, can you suggest a game I can play with my 1 year old daughter?',
       'What is the capital of Great Britain?',
@@ -53,9 +47,8 @@ async function main () {
     console.error('Error occurred:', errorMessage)
     console.error('Error details:', error)
   } finally {
-    // 6. Cleaning up resources
+    // 5. Cleaning up resources
     await model.unload()
-    await fsDL.close()
   }
 }
 
