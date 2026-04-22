@@ -20,12 +20,17 @@ const logger = getClientLogger();
 function createTtsMulticast(
   request: TtsRequest,
   options?: RPCOptions,
-): { subscribe: () => AsyncGenerator<TtsResponse> } {
+): { subscribe: () => AsyncGenerator<TtsResponse>; done: Promise<boolean> } {
   const queue: TtsResponse[] = [];
   const waiters: Array<() => void> = [];
   const subscriberIndexes: number[] = [];
   let ended = false;
   let fatal: Error | undefined;
+
+  let pumpDoneResolve!: (value: boolean) => void;
+  const pumpDone = new Promise<boolean>((resolve) => {
+    pumpDoneResolve = resolve;
+  });
 
   function notify() {
     for (const fn of waiters.splice(0)) fn();
@@ -56,6 +61,7 @@ function createTtsMulticast(
     } finally {
       ended = true;
       notify();
+      pumpDoneResolve(fatal === undefined);
     }
   }
 
@@ -83,7 +89,7 @@ function createTtsMulticast(
     })();
   }
 
-  return { subscribe };
+  return { subscribe, done: pumpDone };
 }
 
 export function textToSpeech(
@@ -114,17 +120,14 @@ export function textToSpeech(
 
   if (params.stream) {
     if (params.sentenceStream) {
-      const { subscribe } = createTtsMulticast(request, options);
+      const { subscribe, done: multicastDone } = createTtsMulticast(request, options);
 
       const bufferStream = (async function* () {
         for await (const m of subscribe()) {
           if (m.buffer.length > 0) {
             yield* m.buffer;
           }
-          if (m.done) {
-            doneResolver(true);
-            break;
-          }
+          if (m.done) break;
         }
       })();
 
@@ -151,7 +154,7 @@ export function textToSpeech(
         bufferStream,
         chunkUpdates,
         buffer: Promise.resolve([]),
-        done: donePromise,
+        done: multicastDone,
       };
     }
 
