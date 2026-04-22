@@ -1,5 +1,7 @@
 'use strict'
 
+/* global Bare */
+
 /**
  * IndicTrans Backend Integration Test
  *
