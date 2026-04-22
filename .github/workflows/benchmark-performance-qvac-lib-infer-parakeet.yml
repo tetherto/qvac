@@ -11,16 +11,6 @@ on:
         description: "Git ref (branch/tag/SHA) to benchmark"
         required: false
         type: string
-      include_desktop:
-        description: "Run desktop benchmark matrix"
-        required: false
-        type: boolean
-        default: true
-      include_mobile:
-        description: "Run mobile benchmark matrix"
-        required: false
-        type: boolean
-        default: true
 
 permissions:
   contents: read
@@ -33,16 +23,12 @@ jobs:
     outputs:
       repository: ${{ steps.ctx.outputs.repository }}
       ref: ${{ steps.ctx.outputs.ref }}
-      include_desktop: ${{ steps.ctx.outputs.include_desktop }}
-      include_mobile: ${{ steps.ctx.outputs.include_mobile }}
     steps:
       - id: ctx
         shell: bash
         env:
           INPUT_REPO: ${{ inputs.repository }}
           INPUT_REF: ${{ inputs.ref }}
-          INPUT_INCLUDE_DESKTOP: ${{ inputs.include_desktop }}
-          INPUT_INCLUDE_MOBILE: ${{ inputs.include_mobile }}
           REPO: ${{ github.repository }}
           REF_NAME: ${{ github.ref_name }}
         run: |
@@ -50,8 +36,6 @@ jobs:
           ref="${INPUT_REF:-$REF_NAME}"
           echo "repository=$repo" >> "$GITHUB_OUTPUT"
           echo "ref=$ref" >> "$GITHUB_OUTPUT"
-          echo "include_desktop=${INPUT_INCLUDE_DESKTOP}" >> "$GITHUB_OUTPUT"
-          echo "include_mobile=${INPUT_INCLUDE_MOBILE}" >> "$GITHUB_OUTPUT"
 
   prebuild:
     needs: context
@@ -68,7 +52,6 @@ jobs:
 
   desktop-benchmarks:
     needs: [context, prebuild]
-    if: needs.context.outputs.include_desktop != 'false'
     permissions:
       contents: read
       packages: read
@@ -81,24 +64,8 @@ jobs:
       run_integration_tests: false
       run_rtf_benchmarks: true
 
-  mobile-benchmarks:
-    needs: [context, prebuild]
-    if: needs.context.outputs.include_mobile != 'false'
-    permissions:
-      contents: read
-      packages: read
-      pull-requests: write
-      id-token: write
-    uses: ./.github/workflows/integration-mobile-test-qvac-lib-infer-parakeet.yml
-    secrets: inherit
-    with:
-      repository: ${{ needs.context.outputs.repository }}
-      ref: ${{ needs.context.outputs.ref }}
-      test_subdir: test/mobile-benchmark
-      extract_rtf_results: true
-
   summarize:
-    needs: [context, desktop-benchmarks, mobile-benchmarks]
+    needs: [context, desktop-benchmarks]
     if: always()
     runs-on: ubuntu-latest
     permissions:
@@ -112,19 +79,10 @@ jobs:
           token: ${{ secrets.PAT_TOKEN }}
 
       - name: Download desktop benchmark artifacts
-        if: needs.context.outputs.include_desktop != 'false'
         uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # 8.0.1
         with:
           pattern: rtf-results-*
           path: benchmark-artifacts/desktop
-          merge-multiple: true
-
-      - name: Download mobile benchmark artifacts
-        if: needs.context.outputs.include_mobile != 'false'
-        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # 8.0.1
-        with:
-          pattern: mobile-rtf-results-parakeet-*
-          path: benchmark-artifacts/mobile
           merge-multiple: true
 
       - name: Generate consolidated benchmark report

@@ -142,66 +142,6 @@ function isDesktopArtifact (report) {
   return Boolean(report && report.model && report.model.type)
 }
 
-function isMobileFullArtifact (report) {
-  return Boolean(report && report.isMobile && report.model && report.model.type && report.summary)
-}
-
-function isMobileExtractedArtifact (report) {
-  return Boolean(report && report.modelType && report.summary)
-}
-
-function normalizeMobileFullRecord (report, sourceFile) {
-  const summary = report.summary || {}
-  const rtf = summary.rtf || {}
-  const wallMs = summary.wallMs || {}
-  const platformFamily = String(report.platformName || report.platform || '').toLowerCase()
-  const requested = report.requested || {}
-  const labels = report.labels || {}
-  const useGPU = Boolean(
-    report.useGPU !== undefined
-      ? report.useGPU
-      : (requested.useGPU !== undefined ? requested.useGPU : report.config && report.config.useGPU)
-  )
-
-  return {
-    source: 'mobile-ci',
-    device: report.deviceLabel || labels.device || labels.runner || humanizeSourceFile(report.sourceFile || sourceFile),
-    platform: report.platform || platformFamily || 'unknown',
-    platformFamily: platformFamily || 'unknown',
-    model: report.model && report.model.type ? report.model.type : (report.modelType || 'unknown'),
-    gpu: useGPU ? 'gpu' : 'cpu',
-    backend: normalizeBackend(platformFamily, useGPU, report.backendHint || labels.backend || requested.backendHint),
-    meanRtf: Number(rtf.mean),
-    p50: Number(rtf.p50),
-    p95: Number(rtf.p95),
-    wallMs: Number(wallMs.mean),
-    notes: report.runnerLabel || labels.runner || path.basename(sourceFile || '')
-  }
-}
-
-function normalizeMobileRecord (record, sourceFile) {
-  const summary = record.summary || {}
-  const rtf = summary.rtf || {}
-  const wallMs = summary.wallMs || {}
-  const platformFamily = String(record.platformName || record.deviceFarmPlatform || '').toLowerCase()
-  const useGPU = Boolean(record.useGPU)
-
-  return {
-    source: 'mobile-ci',
-    device: record.deviceLabel || record.runnerLabel || humanizeSourceFile(record.sourceFile || sourceFile),
-    platform: record.platform || record.deviceFarmPlatform || platformFamily || 'unknown',
-    platformFamily: platformFamily || 'unknown',
-    model: record.modelType || 'unknown',
-    gpu: useGPU ? 'gpu' : 'cpu',
-    backend: normalizeBackend(platformFamily, useGPU, record.backendHint),
-    meanRtf: Number(rtf.mean),
-    p50: Number(rtf.p50),
-    p95: Number(rtf.p95),
-    wallMs: Number(wallMs.mean),
-    notes: record.runnerLabel || ''
-  }
-}
-
 function normalizeManualRecord (record, sourceFile) {
   const platformFamily = String(record.platformFamily || record.platform || '').toLowerCase()
   const useGPU = record.gpu ? record.gpu === 'gpu' : Boolean(record.useGPU)
@@ -227,30 +167,8 @@ function loadArtifactRecords (inputDir) {
   const files = walkFiles(inputDir).filter(file => /^rtf-benchmark-.*\.json$/.test(path.basename(file)))
   for (const file of files) {
     const report = JSON.parse(fs.readFileSync(file, 'utf8'))
-    if (isMobileFullArtifact(report)) {
-      records.push(normalizeMobileFullRecord(report, file))
-      continue
-    }
     if (isDesktopArtifact(report)) {
       records.push(normalizeDesktopRecord(report, file))
-      continue
-    }
-    if (isMobileExtractedArtifact(report)) {
-      records.push(normalizeMobileRecord(report, file))
-    }
-  }
-  return records
-}
-
-function loadMobileRecords (inputDir) {
-  const records = []
-  const files = walkFiles(inputDir).filter(file => /^rtf-results-.*\.jsonl$/.test(path.basename(file)))
-  for (const file of files) {
-    const content = fs.readFileSync(file, 'utf8').trim()
-    if (!content) continue
-    for (const line of content.split(/\r?\n/)) {
-      const record = JSON.parse(line)
-      records.push(normalizeMobileRecord(record, file))
     }
   }
   return records
@@ -265,12 +183,8 @@ function loadManualRecords (manualDir) {
     const payload = JSON.parse(fs.readFileSync(file, 'utf8'))
     const items = Array.isArray(payload) ? payload : (payload.records || [payload])
     for (const item of items) {
-      if (isMobileFullArtifact(item)) {
-        records.push(normalizeMobileFullRecord(item, file))
-      } else if (isDesktopArtifact(item)) {
+      if (isDesktopArtifact(item)) {
         records.push(normalizeDesktopRecord(item, file))
-      } else if (isMobileExtractedArtifact(item)) {
-        records.push(normalizeMobileRecord(item, file))
       } else {
         records.push(normalizeManualRecord(item, file))
       }
@@ -453,9 +367,8 @@ function main () {
   const manualDir = path.resolve(args.manualDir)
 
   const desktopRecords = loadArtifactRecords(inputDir)
-  const mobileRecords = loadMobileRecords(inputDir)
   const manualRecords = loadManualRecords(manualDir)
-  const records = sortRecords(dedupeRecords(desktopRecords.concat(mobileRecords, manualRecords)))
+  const records = sortRecords(dedupeRecords(desktopRecords.concat(manualRecords)))
   const markdown = renderMarkdown(records)
   const html = renderHtml(records)
 

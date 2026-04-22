@@ -16,16 +16,6 @@ on:
         type: string
         required: false
         default: "packages/qvac-lib-infer-parakeet"
-      test_subdir:
-        description: "Relative path to the mobile test directory inside the package"
-        type: string
-        required: false
-        default: "test/mobile"
-      extract_rtf_results:
-        description: "Extract structured RTF benchmark results from Device Farm logs"
-        type: boolean
-        required: false
-        default: false
   workflow_dispatch:
     inputs:
       ref:
@@ -43,16 +33,6 @@ on:
         type: string
         required: false
         default: "packages/qvac-lib-infer-parakeet"
-      test_subdir:
-        description: "Relative path to the mobile test directory inside the package"
-        type: string
-        required: false
-        default: "test/mobile"
-      extract_rtf_results:
-        description: "Extract structured RTF benchmark results from Device Farm logs"
-        type: boolean
-        required: false
-        default: false
 
 env:
   NODE_VERSION: "lts/*"
@@ -62,7 +42,6 @@ env:
   APP_BUNDLE_ID: "io.tether.test.qvac"
   WORKDIR: ${{ inputs.workdir || github.event.inputs.workdir || 'packages/qvac-lib-infer-parakeet' }}
   ADDON_DIR: addon/${{ inputs.workdir || github.event.inputs.workdir || 'packages/qvac-lib-infer-parakeet' }}
-  TEST_SOURCE_DIR: ${{ inputs.test_subdir || github.event.inputs.test_subdir || 'test/mobile' }}
   TEST_FRAMEWORK_DIR: test-framework
 
 jobs:
@@ -288,30 +267,30 @@ jobs:
         run: |
           echo "Verifying addon has mobile tests..."
 
-          if [ ! -d "${{ env.TEST_SOURCE_DIR }}" ]; then
-            echo "ERROR: ${{ env.TEST_SOURCE_DIR }} directory not found!"
+          if [ ! -d "test/mobile" ]; then
+            echo "ERROR: test/mobile directory not found!"
             echo ""
             echo "This workflow requires the addon to have mobile tests at:"
-            echo "  ${{ env.TEST_SOURCE_DIR }}"
+            echo "  test/mobile/"
             echo ""
             echo "Please create this directory with your test files."
             echo "See qvac-test-addon-mobile README for test file format."
             exit 1
           fi
 
-          CJS_COUNT=$(find "${{ env.TEST_SOURCE_DIR }}" -name "*.cjs" -type f | wc -l)
+          CJS_COUNT=$(find test/mobile -name "*.cjs" -type f | wc -l)
           if [ "$CJS_COUNT" -eq 0 ]; then
-            echo "ERROR: No .cjs test files found in ${{ env.TEST_SOURCE_DIR }}!"
+            echo "ERROR: No .cjs test files found in test/mobile!"
             exit 1
           fi
 
           echo "Mobile test files found:"
-          ls -la "${{ env.TEST_SOURCE_DIR }}"/*.cjs
+          ls -la test/mobile/*.cjs
 
-          if [ -d "${{ env.TEST_SOURCE_DIR }}/testAssets" ]; then
+          if [ -d "test/mobile/testAssets" ]; then
             echo ""
             echo "Test assets found:"
-            ls -lah "${{ env.TEST_SOURCE_DIR }}/testAssets/"
+            ls -lah test/mobile/testAssets/
           else
             echo ""
             echo "No testAssets directory (this is optional)"
@@ -330,7 +309,7 @@ jobs:
           npm install
 
       - name: Validate mobile tests are up-to-date
-        if: github.event_name != 'workflow_dispatch' && env.TEST_SOURCE_DIR == 'test/mobile'
+        if: github.event_name != 'workflow_dispatch'
         working-directory: ${{ env.ADDON_DIR }}
         run: npm run test:mobile:validate
         continue-on-error: true
@@ -369,7 +348,7 @@ jobs:
           echo "Building test app with addon..."
           echo "This will:"
           echo "  1. Install the addon package"
-          echo "  2. Extract test code from addon's ${{ env.TEST_SOURCE_DIR }}/ directory"
+          echo "  2. Extract test code from addon's test/mobile/ directory"
           echo "  3. Auto-detect and order test files by dependencies"
           echo "  4. Generate backend.cjs with test functions"
           echo "  5. Generate e2e tests for each test function"
@@ -378,7 +357,7 @@ jobs:
           echo ""
 
           ADDON_PATH="${GITHUB_WORKSPACE}/${{ env.ADDON_DIR }}"
-          npm run build "$ADDON_PATH" "$ADDON_PATH/${{ env.TEST_SOURCE_DIR }}"
+          npm run build "$ADDON_PATH" "$ADDON_PATH/test/mobile"
 
           echo ""
           echo "Test app built successfully"
@@ -399,11 +378,6 @@ jobs:
           fi
 
           echo "All required files generated successfully"
-
-      - name: Install Device Farm perf report helper
-        working-directory: ./test-framework
-        run: |
-          cp "${GITHUB_WORKSPACE}/addon/scripts/perf-report/devicefarm-perf-report-helper.js" "./e2e/tests/perf-report-helper.js"
 
           echo ""
           echo "EXTRACTED TEST FUNCTIONS:"
@@ -934,13 +908,13 @@ jobs:
             AUTOMATION="UiAutomator2"
             HOST_LINE="android_test_host: amazon_linux_2"
             BUNDLE_ID="${{ env.APP_BUNDLE_ID }}"
-            WDIO_CONFIG='const { persistPerfReport } = require("./perf-report-helper.js");exports.config={runner:"local",hostname:"127.0.0.1",port:4723,path:"/wd/hub",specs:["*.spec.js","*.test.js"],maxInstances:1,bail:0,capabilities:[{platformName:"Android","appium:automationName":"UiAutomator2","appium:appPackage":"'${{ env.APP_BUNDLE_ID }}'","appium:appActivity":"'${{ env.APP_BUNDLE_ID }}'.MainActivity","appium:newCommandTimeout":300,"appium:autoGrantPermissions":true,"appium:autoAcceptAlerts":true,"appium:noReset":true,"appium:dontStopAppOnReset":true,"appium:forceAppLaunch":false}],logLevel:"debug",waitforTimeout:600000,connectionRetryTimeout:30000,connectionRetryCount:3,services:[],framework:"mocha",reporters:["spec"],mochaOpts:{ui:"bdd",timeout:2700000},before:async function(capabilities,specs,browser){const BUNDLE_ID="'${{ env.APP_BUNDLE_ID }}'";global.appCrashed=false;global.checkAppCrash=async(stage)=>{try{const state=await browser.queryAppState(BUNDLE_ID);console.log("["+stage+"] App state: "+state+" (4=foreground,3=background,1=not running)");if(state<3){console.error("\\n APP CRASHED at "+stage+"! State="+state);console.error("Check device logs for BareKit/native errors.\\n");global.appCrashed=true;process.exit(1);}return state;}catch(e){console.log("["+stage+"] queryAppState error: "+e.message);return-1;}};console.log("Checking initial app state...");await global.checkAppCrash("startup");console.log("Waiting for app to initialize...");await browser.pause(5000);await global.checkAppCrash("after-pause");const initText=await browser.$("android=new UiSelector().textContains(\"INITIALIZED\")");await initText.waitForDisplayed({timeout:60000});await global.checkAppCrash("after-init");console.log("App initialized, clicking Run Automated Tests...");const button=await browser.$("android=new UiSelector().textContains(\"Run Automated Tests\")");await button.waitForDisplayed({timeout:15000});await button.click();console.log("Button clicked!");await browser.pause(5000);await global.checkAppCrash("after-click");},afterTest:async function(test,context,{error}){if(global.appCrashed)return;await global.checkAppCrash("after-test:"+test.title);await persistPerfReport(browser,{platformName:"android",bundleId:"${{ env.APP_BUNDLE_ID }}",testName:test.title});}};'
+            WDIO_CONFIG='exports.config={runner:"local",hostname:"127.0.0.1",port:4723,path:"/wd/hub",specs:["*.spec.js","*.test.js"],maxInstances:1,bail:0,capabilities:[{platformName:"Android","appium:automationName":"UiAutomator2","appium:appPackage":"'${{ env.APP_BUNDLE_ID }}'","appium:appActivity":"'${{ env.APP_BUNDLE_ID }}'.MainActivity","appium:newCommandTimeout":300,"appium:autoGrantPermissions":true,"appium:autoAcceptAlerts":true,"appium:noReset":true,"appium:dontStopAppOnReset":true,"appium:forceAppLaunch":false}],logLevel:"debug",waitforTimeout:600000,connectionRetryTimeout:30000,connectionRetryCount:3,services:[],framework:"mocha",reporters:["spec"],mochaOpts:{ui:"bdd",timeout:2700000},before:async function(capabilities,specs,browser){const BUNDLE_ID="'${{ env.APP_BUNDLE_ID }}'";global.appCrashed=false;global.checkAppCrash=async(stage)=>{try{const state=await browser.queryAppState(BUNDLE_ID);console.log("["+stage+"] App state: "+state+" (4=foreground,3=background,1=not running)");if(state<3){console.error("\\n APP CRASHED at "+stage+"! State="+state);console.error("Check device logs for BareKit/native errors.\\n");global.appCrashed=true;process.exit(1);}return state;}catch(e){console.log("["+stage+"] queryAppState error: "+e.message);return-1;}};console.log("Checking initial app state...");await global.checkAppCrash("startup");console.log("Waiting for app to initialize...");await browser.pause(5000);await global.checkAppCrash("after-pause");const initText=await browser.$("android=new UiSelector().textContains(\"INITIALIZED\")");await initText.waitForDisplayed({timeout:60000});await global.checkAppCrash("after-init");console.log("App initialized, clicking Run Automated Tests...");const button=await browser.$("android=new UiSelector().textContains(\"Run Automated Tests\")");await button.waitForDisplayed({timeout:15000});await button.click();console.log("Button clicked!");await browser.pause(5000);await global.checkAppCrash("after-click");},afterTest:async function(test,context,{error}){if(global.appCrashed)return;await global.checkAppCrash("after-test:"+test.title);}};'
           else
             PLATFORM="iOS"
             AUTOMATION="XCUITest"
             HOST_LINE="ios_test_host: macos_sequoia"
             BUNDLE_ID="${{ env.APP_BUNDLE_ID }}"
-            WDIO_CONFIG='const { persistPerfReport } = require("./perf-report-helper.js");exports.config={runner:"local",hostname:"127.0.0.1",port:4723,path:"/wd/hub",specs:["*.spec.js","*.test.js"],maxInstances:1,bail:0,capabilities:[{platformName:"iOS","appium:automationName":"XCUITest","appium:bundleId":"'${{ env.APP_BUNDLE_ID }}'","appium:newCommandTimeout":300,"appium:noReset":true,"appium:forceAppLaunch":false,"appium:usePrebuiltWDA":true,"appium:wdaLocalPort":8100,"appium:showIOSLog":true,"appium:realDeviceLogger":"/usr/local/lib/node_modules/appium/node_modules/deviceconsole/deviceconsole"}],logLevel:"debug",waitforTimeout:600000,connectionRetryTimeout:30000,connectionRetryCount:3,services:[],framework:"mocha",reporters:["spec"],mochaOpts:{ui:"bdd",timeout:2700000},before:async function(capabilities,specs,browser){const BUNDLE_ID="'${{ env.APP_BUNDLE_ID }}'";global.appCrashed=false;global.checkAppCrash=async(stage)=>{try{const state=await browser.queryAppState(BUNDLE_ID);console.log("["+stage+"] App state: "+state+" (4=foreground,3=background,1=not running)");if(state<3){console.error("\\n APP CRASHED at "+stage+"! State="+state);console.error("Check device logs for BareKit/native errors.\\n");global.appCrashed=true;process.exit(1);}return state;}catch(e){console.log("["+stage+"] queryAppState error: "+e.message);return-1;}};console.log("Checking initial app state...");await global.checkAppCrash("startup");console.log("Waiting for app to initialize...");await browser.pause(5000);await global.checkAppCrash("after-pause");const initText=await browser.$("-ios predicate string:label CONTAINS \"INITIALIZED\"");await initText.waitForDisplayed({timeout:60000});await global.checkAppCrash("after-init");console.log("App initialized, clicking Run Automated Tests...");const button=await browser.$("-ios predicate string:label CONTAINS \"Run Automated Tests\"");await button.waitForDisplayed({timeout:15000});await button.click();console.log("Button clicked!");await browser.pause(5000);await global.checkAppCrash("after-click");},afterTest:async function(test,context,{error}){if(global.appCrashed)return;await global.checkAppCrash("after-test:"+test.title);await persistPerfReport(browser,{platformName:"ios",bundleId:"${{ env.APP_BUNDLE_ID }}",testName:test.title});}};'
+            WDIO_CONFIG='exports.config={runner:"local",hostname:"127.0.0.1",port:4723,path:"/wd/hub",specs:["*.spec.js","*.test.js"],maxInstances:1,bail:0,capabilities:[{platformName:"iOS","appium:automationName":"XCUITest","appium:bundleId":"'${{ env.APP_BUNDLE_ID }}'","appium:newCommandTimeout":300,"appium:noReset":true,"appium:forceAppLaunch":false,"appium:usePrebuiltWDA":true,"appium:wdaLocalPort":8100,"appium:showIOSLog":true,"appium:realDeviceLogger":"/usr/local/lib/node_modules/appium/node_modules/deviceconsole/deviceconsole"}],logLevel:"debug",waitforTimeout:600000,connectionRetryTimeout:30000,connectionRetryCount:3,services:[],framework:"mocha",reporters:["spec"],mochaOpts:{ui:"bdd",timeout:2700000},before:async function(capabilities,specs,browser){const BUNDLE_ID="'${{ env.APP_BUNDLE_ID }}'";global.appCrashed=false;global.checkAppCrash=async(stage)=>{try{const state=await browser.queryAppState(BUNDLE_ID);console.log("["+stage+"] App state: "+state+" (4=foreground,3=background,1=not running)");if(state<3){console.error("\\n APP CRASHED at "+stage+"! State="+state);console.error("Check device logs for BareKit/native errors.\\n");global.appCrashed=true;process.exit(1);}return state;}catch(e){console.log("["+stage+"] queryAppState error: "+e.message);return-1;}};console.log("Checking initial app state...");await global.checkAppCrash("startup");console.log("Waiting for app to initialize...");await browser.pause(5000);await global.checkAppCrash("after-pause");const initText=await browser.$("-ios predicate string:label CONTAINS \"INITIALIZED\"");await initText.waitForDisplayed({timeout:60000});await global.checkAppCrash("after-init");console.log("App initialized, clicking Run Automated Tests...");const button=await browser.$("-ios predicate string:label CONTAINS \"Run Automated Tests\"");await button.waitForDisplayed({timeout:15000});await button.click();console.log("Button clicked!");await browser.pause(5000);await global.checkAppCrash("after-click");},afterTest:async function(test,context,{error}){if(global.appCrashed)return;await global.checkAppCrash("after-test:"+test.title);}};'
           fi
 
           WDIO_CONFIG_B64=$(echo "$WDIO_CONFIG" | base64 | tr -d '\n')
@@ -975,12 +949,6 @@ jobs:
             printf '      - echo "Creating wdio config for Device Farm..."\n'
             printf '      - echo "%s" | base64 -d > tests/wdio.config.devicefarm.js\n' "$WDIO_CONFIG_B64"
             printf '      - cat tests/wdio.config.devicefarm.js\n'
-
-          if [ "${{ matrix.platform }}" == "Android" ]; then
-            printf '      - echo "Expanding logcat buffer..."\n'
-            printf '      - adb shell logcat -G 16M 2>/dev/null || true\n'
-            printf '      - adb logcat -c 2>/dev/null || true\n'
-          fi
 
           if [ "${{ matrix.platform }}" == "iOS" ]; then
             printf '      - echo "Configuring WebDriverAgent for iOS..."\n'
@@ -1035,40 +1003,7 @@ jobs:
             printf '    commands:\n'
             printf '      - echo "Test completed"\n'
 
-          if [ "${{ matrix.platform }}" == "Android" ]; then
-            printf '      - adb logcat -d -b all > $DEVICEFARM_LOG_DIR/logcat_full.txt 2>/dev/null || true\n'
-            printf '      - |\n'
-            printf '        echo "=== Android perf report extraction ==="\n'
-            printf '        X="" L=$DEVICEFARM_LOG_DIR B=%s\n' "${{ env.APP_BUNDLE_ID }}"
-            printf '        RP=$(grep -oP "\\[PERF_REPORT_PATH\\]\\K.*" $L/logcat_full.txt 2>/dev/null | tail -1 | tr -d "\\r")\n'
-            printf '        [ -n "$RP" ] && adb shell "cat $RP" >$L/perf-report.json 2>/dev/null && [ -s $L/perf-report.json ] && X=1\n'
-            printf '        [ -z "$X" ] && for P in /sdcard/Android/data/$B/files/perf-report.json /storage/emulated/0/Android/data/$B/files/perf-report.json /data/local/tmp/perf-report.json /tmp/perf-report.json; do adb shell "cat $P" >$L/perf-report.json 2>/dev/null; [ -s $L/perf-report.json ] && X=1 && break; done\n'
-            printf '        [ -z "$X" ] && for S in files/perf-report.json cache/perf-report.json ./perf-report.json; do adb shell "run-as $B cat $S" >$L/perf-report.json 2>/dev/null; [ -s $L/perf-report.json ] && X=1 && break; done\n'
-            printf '        if [ -n "$X" ]; then\n'
-            printf '          echo "[PERF_REPORT_START]"\n'
-            printf '          cat $L/perf-report.json\n'
-            printf '          echo "[PERF_REPORT_END]"\n'
-            printf '        elif grep -q "PERF_REPORT_START\\|PERF_CHUNK" $L/logcat_full.txt 2>/dev/null; then\n'
-            printf '          echo "Extracting perf report from logcat console output..."\n'
-            printf '          sed -n "/PERF_REPORT_START/,/PERF_REPORT_END/p" $L/logcat_full.txt\n'
-            printf '          grep "PERF_CHUNK" $L/logcat_full.txt 2>/dev/null || true\n'
-            printf '        else\n'
-            printf '          echo "No perf data found in files or logcat"\n'
-            printf '          grep -i "perf\\|PERF_REPORT\\|QVAC_RTF" $L/logcat_full.txt 2>/dev/null | tail -30 || true\n'
-            printf '        fi\n'
-          fi
-
           if [ "${{ matrix.platform }}" == "iOS" ]; then
-            printf '      - |\n'
-            printf '        echo "iOS perf report extraction"\n'
-            printf '        for P in "$DEVICEFARM_LOG_DIR/perf-report.json" "/tmp/perf-report.json"; do\n'
-            printf '          if [ -s "$P" ]; then\n'
-            printf '            echo "[PERF_REPORT_START]"\n'
-            printf '            cat "$P"\n'
-            printf '            echo "[PERF_REPORT_END]"\n'
-            printf '            break\n'
-            printf '          fi\n'
-            printf '        done\n'
             printf '      - echo ""\n'
             printf '      - echo "iOS Device Console Logs"\n'
             printf '      - |\n'
@@ -1533,35 +1468,8 @@ jobs:
           echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
           find "$LOG_DIR" -type f -exec ls -lh {} \; 2>/dev/null || echo "  (no logs downloaded)"
 
-      - name: Collect raw mobile perf report files
-        if: always() && steps.schedule_run.outputs.run_arn_1 && inputs.extract_rtf_results == true
-        shell: bash
-        run: |
-          node "${GITHUB_WORKSPACE}/addon/scripts/perf-report/collect-parakeet-mobile-report-files.js" \
-            "devicefarm-logs/${{ matrix.platform }}" \
-            "mobile-benchmark-results/${{ matrix.platform }}/raw" \
-            "${{ matrix.platform }}"
-
-      - name: Extract mobile RTF results
-        if: always() && steps.schedule_run.outputs.run_arn_1 && inputs.extract_rtf_results == true
-        shell: bash
-        run: |
-          node "${GITHUB_WORKSPACE}/addon/scripts/perf-report/extract-parakeet-rtf-from-logs.js" \
-            "mobile-benchmark-results/${{ matrix.platform }}/raw" \
-            "mobile-benchmark-results/${{ matrix.platform }}/normalized"
-
-      - name: Upload mobile RTF results
-        if: always() && steps.schedule_run.outputs.run_arn_1 && inputs.extract_rtf_results == true
-        uses: actions/upload-artifact@v4
-        with:
-          name: mobile-rtf-results-parakeet-${{ matrix.platform }}
-          path: mobile-benchmark-results/
-          retention-days: 30
-          if-no-files-found: ignore
-
       - name: Upload Device Farm Logs
         if: always() && steps.schedule_run.outputs.run_arn_1
-        continue-on-error: true
         uses: actions/upload-artifact@v4
         with:
           name: devicefarm-logs-parakeet-${{ matrix.platform }}
