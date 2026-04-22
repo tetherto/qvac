@@ -18,17 +18,21 @@ This eliminates redundant tokenize → eval → trim cycles during multi-round t
 
 The Qwen3 tools-dynamic template no longer re-injects `<think>…</think>` reasoning blocks into assistant history. Prior assistant messages are replayed with the thinking content stripped, which reduces token waste and avoids the model treating stale reasoning as context.
 
+#### `tools_compact` prompt-shape validation tightened
+
+`tools_compact` now validates prompt layout before inference and fails fast with `InvalidArgument` for malformed inputs (for example: required tools omitted, non-contiguous tool block, tools not attached to the last user/tool anchor, or tools not placed at the end).
+
 ### Fixed
 
 #### Context sliding with `tools_compact` could corrupt tool boundary tracking
 
-When context sliding (token discard) occurred during generation or prefill with `tools_compact` enabled, the `nPastBeforeTools` boundary was not adjusted. This caused the post-generation trim to use a stale boundary, leaving tool tokens in the KV cache across turns.
+When context sliding (token discard) occurred during generation or prefill with `tools_compact` enabled, the `nPastBeforeTools` boundary could become stale. This caused post-generation trim to remove the wrong tail region and could leave tool tokens in the KV cache across turns.
 
-The fix extracts sliding helpers into `DynamicToolsState`:
-- `clampDiscard()` limits discard to conversation-only tokens — never eats into the tool region
-- `adjustAfterSlide()` shifts `nPastBeforeTools` left by the same delta so the trim boundary stays accurate
-- `DynamicToolsState` is reset in the fallback discard path (full conversation wipe)
-- Applied to both `TextLlmContext` and `MtmdLlmContext`
+Sliding is now centralized through `ContextSlider` + `ToolsCompactController`:
+- `clampDiscard()` caps discard so sliding never crosses into protected tool tokens
+- `onSlide()` keeps `nPastBeforeTools` aligned after each slide
+- Fallback full-wipe paths reset controller state to avoid stale boundaries
+- Applied consistently in both `TextLlmContext` and `MtmdLlmContext`
 
 #### Output duplication in streaming mode with `tools_compact`
 
@@ -42,11 +46,15 @@ When `nPast=0` and the only message was a system prompt, `add_generation_prompt`
 
 Messages with role `"tool"` (tool call results) were not triggering `add_generation_prompt`, causing empty responses on tool chain continuation. Now treated the same as `"user"` for generation prompt purposes.
 
+#### Empty chat message array now fails with `EmptyPrompt`
+
+`tokenizeChat()` now throws `StatusError(EmptyPrompt)` when called with no chat messages, making empty prompt handling explicit and consistent for both text and multimodal contexts.
+
 ### Added
 
 - `runtimeDebugStats()` internal method on `LlamaModel` exposing `nPastBeforeTools`, `firstMsgTokens`, and `toolsTrimmed`
 - Comprehensive C++ unit tests for Qwen3 tools-dynamic template and cache management with tools_compact
-- Regression tests for context sliding with anchored tools: clamped discard, `adjustAfterSlide`, unclamped sliding with long conversations, and sliding during generation
+- Regression tests for context sliding with anchored tools: clamped discard, anchor updates after slide, unclamped sliding with long conversations, and sliding during generation
 
 ## [0.16.0] - 2026-04-14
 
@@ -242,9 +250,9 @@ Updated qvac-fabric from 7248.2.1#1 to 7248.2.2, aligning all llamacpp-based add
 
 ### Added
 
-#### `tools_compact` configuration for dynamic tool management in multi-turn conversations
+#### `tools_at_end` configuration for dynamic tool management in multi-turn conversations
 
-New `tools_compact` configuration option (`"true"` or `"false"`, default: `"false"`) places tool definitions at the end of the prompt (after conversation history) instead of in the system prompt. This enables KV cache optimization for multi-turn conversations with dynamic tool sets, where tools change between turns. Currently supports Qwen3 models only.
+New `tools_at_end` configuration option (`"true"` or `"false"`, default: `"false"`) places tool definitions at the end of the prompt (after conversation history) instead of in the system prompt. This enables KV cache optimization for multi-turn conversations with dynamic tool sets, where tools change between turns. Currently supports Qwen3 models only.
 
 - **KV cache trimming**: After each turn, tools are automatically removed from the KV cache, preventing stale tool definitions from accumulating
 - **Conversation history reuse**: History tokens are preserved in cache, saving recomputation on long conversations
