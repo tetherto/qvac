@@ -102,3 +102,91 @@ test("groupCompanionSets: setKey is deterministic", (t: { ok: Function; is: Func
   t.is(result1[0]!.companionSet!.setKey, result2[0]!.companionSet!.setKey);
   t.is(result1[0]!.companionSet!.setKey.length, 16);
 });
+
+// --- Bergamot companion detection ---
+
+test("groupCompanionSets: bergamot shared vocab (4-file set)", (t: { ok: Function; is: Function; absent: Function }) => {
+  const dir = "bergamot/bergamot-enfr/2025-01-01/";
+  const model = makeModel({ registryPath: `${dir}model.enfr.intgemm.alphas.bin` });
+  const lex = makeModel({ registryPath: `${dir}lex.50.50.enfr.s2t.bin` });
+  const vocab = makeModel({ registryPath: `${dir}vocab.enfr.spm` });
+  const meta = makeModel({ registryPath: `${dir}metadata.json` });
+
+  const result = groupCompanionSets([model, lex, vocab, meta]);
+
+  t.ok(result[0]!.companionSet, "primary has companionSet");
+  t.is(result[0]!.companionSet!.primaryKey, "modelPath");
+  t.is(result[0]!.companionSet!.files.length, 4);
+  t.is(result[0]!.companionSet!.files[0]!.primary, true);
+  t.is(result[0]!.companionSet!.files[0]!.targetName, "model.enfr.intgemm.alphas.bin");
+  t.absent(result[0]!.isCompanionOnly);
+  t.is(result[1]!.isCompanionOnly, true);
+  t.is(result[2]!.isCompanionOnly, true);
+  t.is(result[3]!.isCompanionOnly, true);
+
+  const keys = result[0]!.companionSet!.files.map((f) => f.key);
+  t.is(keys[0], "modelPath");
+  t.is(keys[1], "lexPath");
+  t.is(keys[2], "sharedVocabPath");
+  t.is(keys[3], "metadataPath");
+});
+
+test("groupCompanionSets: bergamot split vocab CJK (5-file set)", (t: { ok: Function; is: Function }) => {
+  const dir = "bergamot/bergamot-enja/2025-01-01/";
+  const model = makeModel({ registryPath: `${dir}model.enja.intgemm.alphas.bin` });
+  const lex = makeModel({ registryPath: `${dir}lex.50.50.enja.s2t.bin` });
+  const srcVocab = makeModel({ registryPath: `${dir}srcvocab.enja.spm` });
+  const trgVocab = makeModel({ registryPath: `${dir}trgvocab.enja.spm` });
+  const meta = makeModel({ registryPath: `${dir}metadata.json` });
+
+  const result = groupCompanionSets([model, lex, srcVocab, trgVocab, meta]);
+
+  t.ok(result[0]!.companionSet, "primary has companionSet");
+  t.is(result[0]!.companionSet!.files.length, 5);
+
+  const keys = result[0]!.companionSet!.files.map((f) => f.key);
+  t.ok(keys.includes("srcVocabPath"), "has srcVocabPath");
+  t.ok(keys.includes("dstVocabPath"), "has dstVocabPath");
+  t.is(result[2]!.isCompanionOnly, true);
+  t.is(result[3]!.isCompanionOnly, true);
+});
+
+test("groupCompanionSets: bergamot no-vocab (3-file set)", (t: { ok: Function; is: Function }) => {
+  const dir = "bergamot/bergamot-aren/2025-01-01/";
+  const model = makeModel({ registryPath: `${dir}model.aren.intgemm.alphas.bin` });
+  const lex = makeModel({ registryPath: `${dir}lex.50.50.aren.s2t.bin` });
+  const meta = makeModel({ registryPath: `${dir}metadata.json` });
+
+  const result = groupCompanionSets([model, lex, meta]);
+
+  t.ok(result[0]!.companionSet, "primary has companionSet");
+  t.is(result[0]!.companionSet!.files.length, 3);
+});
+
+test("groupCompanionSets: bergamot model without companions gets no set", (t: { absent: Function }) => {
+  const model = makeModel({
+    registryPath: "bergamot/bergamot-xxxx/model.xxxx.intgemm.alphas.bin",
+  });
+
+  const result = groupCompanionSets([model]);
+
+  t.absent(result[0]!.companionSet);
+  t.absent(result[0]!.isCompanionOnly);
+});
+
+test("groupCompanionSets: bergamot cross-source not paired", (t: { absent: Function }) => {
+  const dir = "bergamot/bergamot-enfr/2025-01-01/";
+  const model = makeModel({
+    registryPath: `${dir}model.enfr.intgemm.alphas.bin`,
+    registrySource: "s3",
+  });
+  const lex = makeModel({
+    registryPath: `${dir}lex.50.50.enfr.s2t.bin`,
+    registrySource: "github",
+  });
+
+  const result = groupCompanionSets([model, lex]);
+
+  t.absent(result[0]!.companionSet);
+});
+
