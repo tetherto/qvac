@@ -1,0 +1,100 @@
+# QVAC SDK E2E Tests - PR Trigger
+#
+# Triggers SDK e2e tests via test-sdk.yml when:
+#   - "test-e2e-smoke" label applied: runs smoke suite on all platforms
+#   - "test-e2e-full" label applied: runs full suite on all platforms
+#   - PR opened/updated targeting release-* branch with packages/sdk/ changes: runs full suite
+#
+# On success, applies "e2e-tested" label to the PR.
+#
+# Uses pull_request_target for secrets access (Device Farm, MQTT).
+# Authorization gate prevents untrusted fork PRs from running.
+
+name: QVAC Tests (sdk) - PR
+
+on:
+  pull_request_target:
+    types: [labeled, opened, synchronize]
+    paths:
+      - "packages/sdk/**"
+
+permissions:
+  contents: read
+  pull-requests: write
+  packages: read
+
+jobs:
+  resolve-config:
+    runs-on: ubuntu-latest
+    outputs:
+      should-run: ${{ steps.check.outputs.should-run }}
+      suite: ${{ steps.check.outputs.suite }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # 6.0.2
+        with:
+          sparse-checkout: .github/actions/authorize-pr
+          sparse-checkout-cone-mode: false
+
+      - name: Authorize PR
+        id: auth
+        uses: ./.github/actions/authorize-pr
+        with:
+          label: safe-to-test
+          github-token: ${{ github.token }}
+
+      - name: Determine test config
+        if: steps.auth.outputs.allowed == 'true'
+        id: check
+        shell: bash
+        run: |
+          EVENT="${{ github.event.action }}"
+          LABEL="${{ github.event.label.name }}"
+          TARGET="${{ github.base_ref }}"
+
+          if [ "$EVENT" = "labeled" ]; then
+            if [ "$LABEL" = "test-e2e-smoke" ]; then
+              echo "should-run=true" >> "$GITHUB_OUTPUT"
+              echo "suite=smoke" >> "$GITHUB_OUTPUT"
+            elif [ "$LABEL" = "test-e2e-full" ]; then
+              echo "should-run=true" >> "$GITHUB_OUTPUT"
+              echo "suite=" >> "$GITHUB_OUTPUT"
+            else
+              echo "::notice::Ignoring unrelated label: $LABEL"
+              echo "should-run=false" >> "$GITHUB_OUTPUT"
+            fi
+          elif echo "$TARGET" | grep -q '^release-'; then
+            # Path filter on the trigger already ensures packages/sdk/ changes exist
+            echo "::notice::Release branch PR with SDK changes — running full suite"
+            echo "should-run=true" >> "$GITHUB_OUTPUT"
+            echo "suite=" >> "$GITHUB_OUTPUT"
+          else
+            echo "should-run=false" >> "$GITHUB_OUTPUT"
+          fi
+
+  run-tests:
+    needs: resolve-config
+    if: needs.resolve-config.outputs.should-run == 'true'
+    uses: ./.github/workflows/test-sdk.yml
+    with:
+      targets: all
+      suite: ${{ needs.resolve-config.outputs.suite }}
+    secrets: inherit
+
+  apply-label:
+    needs: run-tests
+    if: success()
+    runs-on: ubuntu-latest
+    permissions:
+      pull-requests: write
+    steps:
+      - name: Apply e2e-tested label
+        uses: actions/github-script@60a0d83039c74a4aee543508d2ffcb1c3799cdea # 7.0.1
+        with:
+          script: |
+            await github.rest.issues.addLabels({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              issue_number: context.payload.pull_request.number,
+              labels: ['e2e-tested']
+            });
