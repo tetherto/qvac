@@ -4,12 +4,12 @@ import { promises as fsPromises } from "bare-fs";
 import type { AbortSignal } from "bare-abort-controller";
 import {
   generateShortHash,
-  detectShardedModel,
   getShardedModelCacheDir,
   getShardPath,
   extractTensorsFromShards,
   calculatePercentage,
 } from "@/server/utils";
+import { detectShardedModel } from "@/utils/shard-pattern";
 import { getSingleFileCachePath } from "@/server/utils/cache";
 import { getModelByPath, type RegistryItem } from "@/models/registry";
 import { getRegistryClient } from "@/server/bare/registry/registry-client";

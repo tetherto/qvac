@@ -4,11 +4,13 @@ import fs from "bare-fs";
 import { createGunzip } from "bare-zlib";
 import tarStream from "tar-stream";
 import {
-  detectShardedModel,
-  generateShardFilenames,
   extractTensorsFromShards,
   validateShardedModelCache,
 } from "./shard-utils";
+import {
+  detectShardedModel,
+  generateShardFilenames,
+} from "@/utils/shard-pattern";
 import {
   ModelLoadFailedError,
   ArchiveExtractionFailedError,

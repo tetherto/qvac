@@ -6,7 +6,7 @@ import { clearFinetuneRuntimeState } from "@/server/bare/plugins/llamacpp-comple
 import { unregisterAddonLogger, getServerLogger } from "@/logging";
 import { type UnloadModelParams, unloadModelParamsSchema } from "@/schemas";
 import { ModelNotLoadedError } from "@/utils/errors-server";
-import { detectShardedModel } from "@/server/utils";
+import { detectShardedModel } from "@/utils/shard-pattern";
 import { getClearStorageTarget } from "@/server/utils/cache";
 
 const logger = getServerLogger();
@@ -20,10 +20,6 @@ export async function unloadModel(params: UnloadModelParams) {
   }
 
   clearFinetuneRuntimeState(modelId);
-
-  if (entry.local?.loader) {
-    await entry.local.loader.close();
-  }
 
   if (entry.local?.model && entry.local.model.unload) {
     await entry.local.model.unload();

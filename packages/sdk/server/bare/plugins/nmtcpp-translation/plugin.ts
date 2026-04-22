@@ -162,7 +162,7 @@ function createNmtModel(
     opts: { stats: true },
   });
 
-  return { model, loader: null };
+  return { model };
 }
 
 async function resolveBergamotVocab(
@@ -286,7 +286,7 @@ export const nmtPlugin = definePlugin({
     const pivotSrcVocabPath = artifacts["pivotSrcVocabPath"] ?? pivotDerived?.srcVocabPath;
     const pivotDstVocabPath = artifacts["pivotDstVocabPath"] ?? pivotDerived?.dstVocabPath;
 
-    const { model, loader } = createNmtModel(
+    const { model } = createNmtModel(
       params.modelId,
       params.modelPath,
       nmtConfig,
@@ -297,7 +297,7 @@ export const nmtPlugin = definePlugin({
       pivotDstVocabPath,
     );
 
-    return { model, loader };
+    return { model };
   },
 
   handlers: {

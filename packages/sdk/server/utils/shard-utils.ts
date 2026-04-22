@@ -4,59 +4,13 @@ import {
 } from "@/utils/errors-server";
 import { generateShortHash } from "./formatting";
 import { validateAndJoinPath } from "./path-security";
-import type { ShardPatternInfo, ShardUrl } from "@/schemas";
+import type { ShardUrl } from "@/schemas";
 import { extractAndWriteTensorsFile } from "./gguf-tensor-extractor";
 import { promises as fsPromises } from "bare-fs";
-
-/**
- * Detect if model filename follows shard pattern (00001-of-0000x)
- */
-export function detectShardedModel(filename: string): ShardPatternInfo {
-  const shardPattern = /^(.+)-(\d{5})-of-(\d{5})(\.\w+)$/;
-  const match = filename.match(shardPattern);
-
-  if (match && match[1] && match[2] && match[3] && match[4]) {
-    return {
-      isSharded: true,
-      baseFilename: match[1],
-      currentShard: parseInt(match[2], 10),
-      totalShards: parseInt(match[3], 10),
-      extension: match[4],
-    };
-  }
-
-  return { isSharded: false };
-}
-
-/**
- * Generate list of shard filenames for a sharded model
- * Accepts any shard in the group
- *
- * @param shardName - Any shard filename in the group (e.g., "model-00002-of-00005.gguf")
- * @returns Array of all numbered shard filenames
- */
-export function generateShardFilenames(shardName: string): string[] {
-  const shardInfo = detectShardedModel(shardName);
-
-  if (!shardInfo.isSharded || !shardInfo.totalShards) {
-    throw new ModelLoadFailedError(
-      `Not a sharded model filename: ${shardName}`,
-    );
-  }
-
-  const filenames: string[] = [];
-  const { baseFilename, totalShards, extension } = shardInfo;
-
-  for (let i = 1; i <= totalShards; i++) {
-    const shardNumber = i.toString().padStart(5, "0");
-    const totalShardsStr = totalShards.toString().padStart(5, "0");
-    filenames.push(
-      `${baseFilename}-${shardNumber}-of-${totalShardsStr}${extension}`,
-    );
-  }
-
-  return filenames;
-}
+import {
+  detectShardedModel,
+  generateShardFilenames,
+} from "@/utils/shard-pattern";
 
 /**
  * Parse pattern-based shard URL and generate all shard URLs with cache key

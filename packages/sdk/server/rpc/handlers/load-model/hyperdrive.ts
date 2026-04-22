@@ -11,7 +11,6 @@ import { getQvacPath } from "@/server/utils/qvac-paths";
 import {
   getModelsCacheDir,
   generateShortHash,
-  detectShardedModel,
   getShardedModelCacheDir,
   getShardPath,
   checkShardCompleteness,
@@ -19,6 +18,7 @@ import {
   extractTensorsFromShards,
   calculatePercentage,
 } from "@/server/utils";
+import { detectShardedModel } from "@/utils/shard-pattern";
 import { getModelBySrc } from "@/models/registry";
 import {
   createHyperdriveDownloadKey,
