@@ -1549,8 +1549,8 @@ jobs:
       - name: Extract Console Logs
         if: always() && steps.schedule_run.outputs.run_arn_1
         run: |
-          LOG_DIR="devicefarm-logs/${{ matrix.platform }}"
-          CONSOLE_DIR="console-logs/${{ matrix.platform }}"
+          LOG_DIR="devicefarm-logs/${{ matrix.platform }}-${{ matrix.variant }}"
+          CONSOLE_DIR="console-logs/${{ matrix.platform }}-${{ matrix.variant }}"
           mkdir -p "$CONSOLE_DIR"
           for f in "$LOG_DIR"/*; do
             [ -f "$f" ] || continue
