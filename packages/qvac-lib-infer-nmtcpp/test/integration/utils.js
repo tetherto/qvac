@@ -81,6 +81,12 @@ try {
         const json = JSON.stringify(this.toJSON())
         // Write JSON to best-effort device paths so Device Farm artifact
         // collection can grab it. Mirrors OCR's inline reporter.
+        //
+        // On iOS, `global.testDir` (set by qvac-test-addon-mobile) maps
+        // to the app's Documents directory, which Appium's `pullFile`
+        // can reach as `@<bundle>:documents/perf-report.json`. We also
+        // try `os.tmpdir()` (the app's tmp container) which is reachable
+        // as `@<bundle>:tmp/perf-report.json`.
         const dirs = []
         if (typeof global !== 'undefined' && global.testDir) dirs.push(global.testDir)
         if (_platform === 'android') {
@@ -88,6 +94,9 @@ try {
           dirs.push('/storage/emulated/0/Android/data/io.tether.test.qvac/files')
           dirs.push('/data/local/tmp')
         }
+        try {
+          if (os && typeof os.tmpdir === 'function') dirs.push(os.tmpdir())
+        } catch (_) {}
         dirs.push('/tmp')
         for (const d of dirs) {
           try {
@@ -678,6 +687,20 @@ function formatPerformanceMetrics (label, metrics, qualityOpts) {
     reference: quality ? quality.reference : null
   })
   _scheduleReportWrite()
+
+  // On mobile, the Bare process is hosted inside the native app and
+  // typically does not exit between test runs, so `process.on('exit')`
+  // never fires. Flush the perf report after every record() so that
+  // WDIO's after: hook finds a ready-to-pull perf-report.json in the
+  // app's Documents/ (iOS) or /sdcard/.../files/ (Android) directory.
+  // Also emit markers to stdout so Device Farm log collection can
+  // recover the report via extract-from-log.js if pullFile fails.
+  if (isMobile && typeof _perfReporter.writeReport === 'function') {
+    try { _perfReporter.writeReport(_reportPath) } catch (_) {}
+    if (typeof _perfReporter.writeToConsole === 'function') {
+      try { _perfReporter.writeToConsole() } catch (_) {}
+    }
+  }
 
   let out = `${label} Performance Metrics:
     - Total time: ${totalTimeMs.toFixed(0)}ms (${totalSeconds}s)
