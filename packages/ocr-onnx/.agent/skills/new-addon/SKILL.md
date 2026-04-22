@@ -152,6 +152,27 @@ For each copied workflow:
 Create an additional small file the on-pr workflow consumes if referenced:
 - If `cpp-tests-$SHORT_NAME.yml` references a `.lsan-suppressions.txt` at the package root and you didn't ship one, drop the reference rather than creating the file.
 
+### Step 4a — Verify all 7 workflows are present
+
+This is a **hard gate**: if any file is missing, generate it before proceeding — do not defer to the user. A past scaffold run (VLA) shipped with only 6/7 workflows because `on-pr-*.yml` was silently skipped, leaving PRs against the new package with no tests wired up.
+
+Run this check (in Bash) and compare the output to the expected list. The count must equal **7** and every expected filename must be present:
+
+```bash
+ls .github/workflows/ | grep -E "(^on-(pr|pr-close|merge)-$PKG\.yml$|^prebuilds-$PKG\.yml$|^integration-(test|mobile-test)-$PKG\.yml$|^cpp-tests-$SHORT_NAME\.yml$)"
+```
+
+Expected 7 filenames (substitute `$PKG` and `$SHORT_NAME`):
+1. `on-pr-$PKG.yml`
+2. `on-pr-close-$PKG.yml`
+3. `on-merge-$PKG.yml`
+4. `prebuilds-$PKG.yml`
+5. `integration-test-$PKG.yml`
+6. `integration-mobile-test-$PKG.yml`
+7. `cpp-tests-$SHORT_NAME.yml`
+
+If any is missing, return to Step 4 and generate just the missing one(s) from the corresponding `*embed*` template. Do not skip `on-pr-$PKG.yml` under any circumstances — it is the workflow that runs sanity checks, cpp-lint, cpp-tests, ts-checks, prebuilds, and integration tests on every PR against the new package. Without it, PRs land untested.
+
 ## Step 5 — Verify the scaffold builds and tests pass
 
 Run these sequentially from `packages/$PKG/`:
@@ -174,7 +195,18 @@ If any step fails:
 Print a short summary:
 - Path to new package
 - Backend wired in
-- Count of CI workflows generated (expect 7)
+- **CI workflows generated** — list every filename (must be exactly 7, see Step 4a). Report like:
+  ```
+  CI workflows (7/7):
+  - on-pr-$PKG.yml
+  - on-pr-close-$PKG.yml
+  - on-merge-$PKG.yml
+  - prebuilds-$PKG.yml
+  - integration-test-$PKG.yml
+  - integration-mobile-test-$PKG.yml
+  - cpp-tests-$SHORT_NAME.yml
+  ```
+  If the count is anything other than 7, flag it as an error in the summary and stop — do not claim success.
 - Test results: unit/integration/cpp — pass/fail
 - Next step hint: replace the hello-world stub in `addon/src/addon/AddonCpp.hpp` with real logic; add model-interface files under `addon/src/model-interface/`.
 
