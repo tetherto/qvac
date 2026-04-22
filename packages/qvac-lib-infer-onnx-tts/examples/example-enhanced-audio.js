@@ -1,5 +1,7 @@
 'use strict'
 
+/** Uses batch `run({ input })` with LavaSR enhancer. Same `run` / `streamOutput` / `runStreaming` APIs apply as other ONNX TTS examples. */
+
 const path = require('bare-path')
 const ONNXTTS = require('../')
 const { createWav, readWavAsFloat32, resampleLinear } = require('./wav-helper')

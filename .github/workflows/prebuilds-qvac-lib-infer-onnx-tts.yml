@@ -352,7 +352,6 @@ jobs:
 
   merge:
     runs-on: ubuntu-latest
-    environment: release
     needs: prebuild
     permissions:
       contents: write
@@ -368,5 +367,4 @@ jobs:
         with:
           name: prebuilds
           path: prebuilds
-
 

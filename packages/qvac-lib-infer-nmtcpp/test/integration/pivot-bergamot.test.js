@@ -34,6 +34,8 @@ const {
   platform
 } = require('./utils')
 
+const PIVOT_BERGAMOT_FIXTURE = path.resolve(__dirname, 'fixtures/pivot-bergamot.quality.json')
+
 const PIVOT_TIMEOUT = isMobile ? 900_000 : 180_000
 
 const ALL_DEVICE_CONFIGS = [
@@ -167,7 +169,11 @@ for (const deviceConfig of DEVICE_CONFIGS) {
       const addonStats = response.stats || {}
       t.comment(`${label} Native addon stats: ${JSON.stringify(addonStats)}`)
       const metrics = perfCollector.getMetrics(testSentence, addonStats)
-      t.comment(formatPerformanceMetrics(`[Pivot es→en→it] ${label}`, metrics))
+      t.comment(formatPerformanceMetrics(`[Pivot es→en→it] ${label}`, metrics, {
+        fixturePath: PIVOT_BERGAMOT_FIXTURE,
+        srcLang: 'es',
+        dstLang: 'it'
+      }))
 
       t.ok(metrics.fullOutput.length > 0, `${label} pivot translation produced output`)
       t.pass(`${label} Pivot translation completed successfully`)
@@ -506,7 +512,11 @@ for (const deviceConfig of DEVICE_CONFIGS) {
 
       const addonStats = response.stats || {}
       const metrics = perfCollector.getMetrics(testSentence, addonStats)
-      t.comment(formatPerformanceMetrics(`[Pivot fr→en→es] ${label}`, metrics))
+      t.comment(formatPerformanceMetrics(`[Pivot fr→en→es] ${label}`, metrics, {
+        fixturePath: PIVOT_BERGAMOT_FIXTURE,
+        srcLang: 'fr',
+        dstLang: 'es'
+      }))
 
       t.ok(metrics.fullOutput.length > 0, `${label} pivot translation produced output`)
       t.pass(`${label} fr→en→es pivot translation completed successfully`)

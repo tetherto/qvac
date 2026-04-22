@@ -17,8 +17,7 @@ export interface NotSharded {
 
 export type ShardDetection = ShardInfo | NotSharded;
 
-export interface ShardMetadataEntry {
-  filename: string;
+export interface BlobRef {
   expectedSize: number;
   sha256Checksum: string;
   blobCoreKey: string;
@@ -27,17 +26,47 @@ export interface ShardMetadataEntry {
   blobByteOffset: number;
 }
 
-export interface ProcessedModel {
+export interface ShardMetadataEntry extends BlobRef {
+  filename: string;
+}
+
+/**
+ * A single file within a companion set (e.g., an `.onnx` model or its `_data` file).
+ *
+ * @property key - Identifier for this file within the set
+ *   Used by plugins to look up resolved paths from the download artifacts.
+ * @property targetName - Filename used when writing to the cache directory.
+ * @property primary - When true, this is the main file whose resolved path is returned to
+ *   the addon. Exactly one file per set should be primary.
+ */
+export interface CompanionSetMetadataEntry extends BlobRef {
+  key: string;
   registryPath: string;
   registrySource: string;
-  blobCoreKey: string;
-  blobBlockOffset: number;
-  blobBlockLength: number;
-  blobByteOffset: number;
+  targetName: string;
+  primary?: boolean;
+}
+
+/**
+ * Describes a group of files that must be downloaded and cached together
+ *
+ * @property setKey - Deterministic hash identifying this set. Used as the cache
+ *   subdirectory: `<cacheDir>/sets/<setKey>/`.
+ * @property primaryKey - The `key` value of the primary file in the `files` array.
+ *   The resolver returns this file's path to the addon after download.
+ * @property files - All files in the set, including the primary.
+ */
+export interface CompanionSetMetadata {
+  setKey: string;
+  primaryKey: string;
+  files: readonly CompanionSetMetadataEntry[];
+}
+
+export interface ProcessedModel extends BlobRef {
+  registryPath: string;
+  registrySource: string;
   modelId: string;
   addon: ModelRegistryEntryAddon;
-  expectedSize: number;
-  sha256Checksum: string;
   engine: ModelRegistryEngine;
   modelName: string;
   quantization: string;
@@ -46,6 +75,8 @@ export interface ProcessedModel {
   isShardPart?: boolean;
   shardInfo?: ShardInfo;
   shardMetadata?: ShardMetadataEntry[];
+  companionSet?: CompanionSetMetadata;
+  isCompanionOnly?: boolean;
   name?: string;
 }
 
