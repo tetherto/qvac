@@ -4,6 +4,7 @@ const QvacResponse = require('@qvac/response')
 const QvacLogger = require('@qvac/logging')
 const ffmpeg = require('bare-ffmpeg')
 const BaseInference = require('@qvac/infer-base/WeightsProvider/BaseInference')
+const { QvacErrorDecoderAudio, ERR_CODES } = require('./utils/error')
 
 /**
  * FFmpeg-based audio decoder (single-threaded)
@@ -106,7 +107,10 @@ class FFmpegDecoder extends BaseInference {
 
     // Validate audio format
     if (!this.SUPPORTED_AUDIO_FORMATS[this.config.audioFormat]) {
-      throw new Error(`Unsupported audio format: ${this.config.audioFormat}`)
+      throw new QvacErrorDecoderAudio({
+        code: ERR_CODES.UNSUPPORTED_AUDIO_FORMAT,
+        adds: this.config.audioFormat
+      })
     }
 
     this.isLoaded = true
@@ -135,7 +139,7 @@ class FFmpegDecoder extends BaseInference {
    */
   async run (audioStream) {
     if (!this.isLoaded) {
-      throw new Error('Decoder not loaded. Call load() first.')
+      throw new QvacErrorDecoderAudio({ code: ERR_CODES.DECODER_NOT_LOADED })
     }
 
     this.logger.info('Starting new audio stream processing')
@@ -397,7 +401,10 @@ class FFmpegDecoder extends BaseInference {
 
       const streamIndex = this.config.streamIndex || 0
       if (format.streams[streamIndex] === undefined) {
-        throw new Error('Stream index out of bounds')
+        throw new QvacErrorDecoderAudio({
+          code: ERR_CODES.STREAM_INDEX_OUT_OF_BOUNDS,
+          adds: streamIndex
+        })
       }
 
       // Process the stream and generate decoded output

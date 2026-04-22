@@ -131,7 +131,6 @@ swarm.on("connection", (conn) => {
         // Mock completion response - use response stream like client expects
         const responseStream = req.createResponseStream();
 
-        // Send multiple token responses to test streaming
         const tokens = [
           "This is",
           " a test",
@@ -142,23 +141,32 @@ swarm.on("connection", (conn) => {
           " provider",
         ];
 
+        let seq = 0;
+        let rawText = "";
+
         for (const token of tokens) {
+          rawText += token;
+
           const response = {
             type: "completionStream",
-            token: token,
+            events: [{ type: "contentDelta", seq: seq++, text: token }],
           };
-          console.log("📤 Sending completion token via stream:", response);
+          console.log("📤 Sending completion event via stream:", response);
           responseStream.write(JSON.stringify(response) + "\n");
 
-          // Small delay between tokens to simulate real streaming
           await new Promise((resolve) => setTimeout(resolve, 50));
         }
 
-        // Send final completion response
         const finalResponse = {
           type: "completionStream",
-          token: "",
           done: true,
+          events: [
+            {
+              type: "completionDone",
+              seq: seq++,
+              raw: { fullText: rawText },
+            },
+          ],
         };
         responseStream.write(JSON.stringify(finalResponse) + "\n");
 
