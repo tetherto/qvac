@@ -6,16 +6,12 @@ import type { Metadata } from 'next';
  * preview, PR, and local builds.
  *
  * Enable indexing only for the deploy that serves `https://docs.qvac.tether.io`.
- * On Sevalla, set **`DOCS_ALLOW_INDEXING=1`** for that application at **build time**
- * (Next reads this when generating static metadata).
- *
- * Optional: `DOCS_FORCE_NOINDEX=1` forces noindex even when `DOCS_ALLOW_INDEXING` is set.
+ * On Sevalla, set **`DOCS_ALLOW_INDEXING=true`** for that application at **build
+ * time** (Next reads this when generating static metadata). Case-insensitive;
+ * any other value (including `1`) is treated as false.
  */
 export function allowDocsIndexingAtBuildTime() {
-  if (process.env.DOCS_FORCE_NOINDEX === '1' || process.env.DOCS_FORCE_NOINDEX === 'true') {
-    return false;
-  }
-  return process.env.DOCS_ALLOW_INDEXING === '1' || process.env.DOCS_ALLOW_INDEXING === 'true';
+  return process.env.DOCS_ALLOW_INDEXING?.toLowerCase() === 'true';
 }
 
 export function docsRootMetadataRobots(): Metadata['robots'] {

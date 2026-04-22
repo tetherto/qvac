@@ -8,13 +8,7 @@ afterEach(() => {
 describe('allowDocsIndexingAtBuildTime', () => {
   it('is false when no relevant env is set', () => {
     vi.stubEnv('DOCS_ALLOW_INDEXING', '');
-    vi.stubEnv('DOCS_FORCE_NOINDEX', '');
     expect(allowDocsIndexingAtBuildTime()).toBe(false);
-  });
-
-  it('is true when DOCS_ALLOW_INDEXING=1', () => {
-    vi.stubEnv('DOCS_ALLOW_INDEXING', '1');
-    expect(allowDocsIndexingAtBuildTime()).toBe(true);
   });
 
   it('is true when DOCS_ALLOW_INDEXING=true', () => {
@@ -22,16 +16,35 @@ describe('allowDocsIndexingAtBuildTime', () => {
     expect(allowDocsIndexingAtBuildTime()).toBe(true);
   });
 
-  it('is false when DOCS_FORCE_NOINDEX=1 even if allow indexing', () => {
+  it('is true when DOCS_ALLOW_INDEXING=TRUE (case-insensitive)', () => {
+    vi.stubEnv('DOCS_ALLOW_INDEXING', 'TRUE');
+    expect(allowDocsIndexingAtBuildTime()).toBe(true);
+  });
+
+  it('is true when DOCS_ALLOW_INDEXING=True (case-insensitive)', () => {
+    vi.stubEnv('DOCS_ALLOW_INDEXING', 'True');
+    expect(allowDocsIndexingAtBuildTime()).toBe(true);
+  });
+
+  it('is false when DOCS_ALLOW_INDEXING=1 (rejects non-true values)', () => {
     vi.stubEnv('DOCS_ALLOW_INDEXING', '1');
-    vi.stubEnv('DOCS_FORCE_NOINDEX', '1');
+    expect(allowDocsIndexingAtBuildTime()).toBe(false);
+  });
+
+  it('is false when DOCS_ALLOW_INDEXING=yes (rejects non-true values)', () => {
+    vi.stubEnv('DOCS_ALLOW_INDEXING', 'yes');
+    expect(allowDocsIndexingAtBuildTime()).toBe(false);
+  });
+
+  it('is false when DOCS_ALLOW_INDEXING=false', () => {
+    vi.stubEnv('DOCS_ALLOW_INDEXING', 'false');
     expect(allowDocsIndexingAtBuildTime()).toBe(false);
   });
 });
 
 describe('docsRootMetadataRobots', () => {
   it('matches allow flag', () => {
-    vi.stubEnv('DOCS_ALLOW_INDEXING', '1');
+    vi.stubEnv('DOCS_ALLOW_INDEXING', 'true');
     expect(docsRootMetadataRobots()).toEqual({ index: true, follow: true });
   });
 
