@@ -32,7 +32,9 @@ test('preprocessImage: aspect-ratio letterbox leaves padded region', (t) => {
 })
 
 test('preprocessImage: rejects mismatched length', (t) => {
-  t.exception(() => preprocessImage(new Uint8Array(10), 4, 4), /expected 48/)
+  let err = null
+  try { preprocessImage(new Uint8Array(10), 4, 4) } catch (e) { err = e }
+  t.ok(err && /expected 48/.test(err.message))
 })
 
 test('padState: zero-pads to target dim', (t) => {
@@ -44,5 +46,7 @@ test('padState: zero-pads to target dim', (t) => {
 })
 
 test('padState: rejects longer-than-target input', (t) => {
-  t.exception(() => padState([1, 2, 3, 4, 5], 4), /exceeds targetDim/)
+  let err = null
+  try { padState([1, 2, 3, 4, 5], 4) } catch (e) { err = e }
+  t.ok(err && /exceeds targetDim/.test(err.message))
 })
