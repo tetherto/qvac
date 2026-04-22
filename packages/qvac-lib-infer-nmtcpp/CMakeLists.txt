@@ -134,7 +134,19 @@ if(USE_BERGAMOT)
   find_package(bergamot-translator CONFIG REQUIRED)
 endif()
 
-add_bare_module(qvac-lib-infer-nmtcpp EXPORTS)
+bare_target(bare_target_value)
+bare_module_target("." unused_target NAME module_name VERSION unused_version)
+set(BACKENDS_SUBDIR_VALUE "${bare_target_value}/${module_name}")
+message("Building qvac-lib-infer-nmtcpp with BACKENDS_SUBDIR='${BACKENDS_SUBDIR_VALUE}'")
+
+set(BACKEND_DL_LIBS "")
+if((ANDROID OR UNIX) AND NOT APPLE)
+  foreach(_backend ${GGML_AVAILABLE_BACKENDS})
+    list(APPEND BACKEND_DL_LIBS INSTALL TARGET ggml::${_backend})
+  endforeach()
+endif()
+
+add_bare_module(qvac-lib-infer-nmtcpp EXPORTS ${BACKEND_DL_LIBS})
 
 if(CMAKE_SYSTEM_NAME STREQUAL "Linux")
   target_link_options(${qvac-lib-infer-nmtcpp}_module PRIVATE -Wl,--exclude-libs,ALL)
@@ -154,6 +166,7 @@ target_sources(
     ${PROJECT_SOURCE_DIR}/addon/src/model-interface/nmt_graph_encoder.cpp
     ${PROJECT_SOURCE_DIR}/addon/src/model-interface/nmt_beam_search.cpp
     ${PROJECT_SOURCE_DIR}/addon/src/model-interface/nmt_utils.cpp
+    ${PROJECT_SOURCE_DIR}/addon/src/model-interface/NmtLazyInitializeBackend.cpp
 )
 
 # Add bergamot source files if enabled
@@ -184,6 +197,8 @@ target_compile_definitions(
   PRIVATE
     JS_LOGGER
 )
+
+target_compile_definitions(${qvac-lib-infer-nmtcpp} PRIVATE BACKENDS_SUBDIR="${BACKENDS_SUBDIR_VALUE}")
 
 # Add bergamot compile definition if enabled
 if(USE_BERGAMOT)
