@@ -2,6 +2,7 @@ import {
   transcribeResponseSchema,
   transcribeStreamResponseSchema,
   type TranscribeRequest,
+  type TranscribeResponse,
   type TranscribeClientParams,
   type RPCOptions,
   type TranscribeSegment,
@@ -159,34 +160,41 @@ export function transcribeStream(
   return transcribeStreamDuplex(streamParams, options);
 }
 
-async function* transcribeStreamWithAudio(
+/**
+ * Streams `transcribe` wire responses for an upfront-audio request and yields
+ * the value extracted from each response frame until `done` is seen.
+ */
+async function* streamTranscribeValues<T>(
   params: TranscribeClientParams,
-  options?: RPCOptions,
-): AsyncGenerator<string> {
+  options: RPCOptions | undefined,
+  extract: (parsed: TranscribeResponse) => T | undefined,
+): AsyncGenerator<T> {
   const request = buildTranscribeRequest(params);
 
   for await (const response of stream(request, options)) {
     if (response.type === "transcribe") {
       const parsed = transcribeResponseSchema.parse(response);
-      if (parsed.text) yield parsed.text;
+      const value = extract(parsed);
+      if (value !== undefined) yield value;
       if (parsed.done) break;
     }
   }
 }
 
-async function* transcribeStreamWithAudioMetadata(
+function transcribeStreamWithAudio(
+  params: TranscribeClientParams,
+  options?: RPCOptions,
+): AsyncGenerator<string> {
+  return streamTranscribeValues(params, options, (parsed) =>
+    parsed.text ? parsed.text : undefined,
+  );
+}
+
+function transcribeStreamWithAudioMetadata(
   params: TranscribeClientParams,
   options?: RPCOptions,
 ): AsyncGenerator<TranscribeSegment> {
-  const request = buildTranscribeRequest(params);
-
-  for await (const response of stream(request, options)) {
-    if (response.type === "transcribe") {
-      const parsed = transcribeResponseSchema.parse(response);
-      if (parsed.segment) yield parsed.segment;
-      if (parsed.done) break;
-    }
-  }
+  return streamTranscribeValues(params, options, (parsed) => parsed.segment);
 }
 
 function buildTranscribeStreamRequest(
@@ -200,77 +208,85 @@ function buildTranscribeStreamRequest(
   };
 }
 
-async function transcribeStreamDuplex(
+/**
+ * Shared duplex session factory. The per-call line processor decides whether
+ * to surface strings or segments; `sessionName` is only used to label the
+ * "already iterated" error so callers see the correct session type.
+ */
+async function createTranscribeStreamSession<T>(
+  params: TranscribeStreamClientParams,
+  options: RPCOptions | undefined,
+  process: (line: string) => T | undefined | null,
+  sessionName: string,
+): Promise<{
+  write(audioChunk: Buffer): void;
+  end(): void;
+  destroy(): void;
+  [Symbol.asyncIterator](): AsyncIterator<T>;
+}> {
+  const request = buildTranscribeStreamRequest(params);
+
+  const { requestStream, responseStream } = await duplex(request, options);
+
+  const responses = parseLines(responseStream, process);
+  let consumed = false;
+
+  return {
+    write(audioChunk: Buffer) {
+      requestStream.write(audioChunk);
+    },
+    end() {
+      requestStream.end();
+    },
+    destroy() {
+      requestStream.destroy();
+      responseStream.destroy();
+    },
+    [Symbol.asyncIterator]() {
+      if (consumed) {
+        throw new TranscriptionFailedError(
+          `${sessionName} can only be iterated once`,
+        );
+      }
+      consumed = true;
+      return responses;
+    },
+  };
+}
+
+function transcribeStreamDuplex(
   params: TranscribeStreamClientParams,
   options?: RPCOptions,
 ): Promise<TranscribeStreamSession> {
-  const request = buildTranscribeStreamRequest(params);
-
-  const { requestStream, responseStream } = await duplex(request, options);
-
-  const responses = parseResponseLines(responseStream);
-  let consumed = false;
-
-  return {
-    write(audioChunk: Buffer) {
-      requestStream.write(audioChunk);
-    },
-    end() {
-      requestStream.end();
-    },
-    destroy() {
-      requestStream.destroy();
-      responseStream.destroy();
-    },
-    [Symbol.asyncIterator]() {
-      if (consumed) {
-        throw new TranscriptionFailedError(
-          "TranscribeStreamSession can only be iterated once",
-        );
-      }
-      consumed = true;
-      return responses;
-    },
-  };
+  return createTranscribeStreamSession(
+    params,
+    options,
+    processLine,
+    "TranscribeStreamSession",
+  );
 }
 
-async function transcribeStreamDuplexMetadata(
+function transcribeStreamDuplexMetadata(
   params: TranscribeStreamClientParams,
   options?: RPCOptions,
 ): Promise<TranscribeStreamMetadataSession> {
-  const request = buildTranscribeStreamRequest(params);
-
-  const { requestStream, responseStream } = await duplex(request, options);
-
-  const responses = parseResponseLinesMetadata(responseStream);
-  let consumed = false;
-
-  return {
-    write(audioChunk: Buffer) {
-      requestStream.write(audioChunk);
-    },
-    end() {
-      requestStream.end();
-    },
-    destroy() {
-      requestStream.destroy();
-      responseStream.destroy();
-    },
-    [Symbol.asyncIterator]() {
-      if (consumed) {
-        throw new TranscriptionFailedError(
-          "TranscribeStreamMetadataSession can only be iterated once",
-        );
-      }
-      consumed = true;
-      return responses;
-    },
-  };
+  return createTranscribeStreamSession(
+    params,
+    options,
+    processLineMetadata,
+    "TranscribeStreamMetadataSession",
+  );
 }
 
-async function* parseResponseLines(
+/**
+ * Line-delimited parser: reads newline-separated frames from a duplex
+ * response stream, passes each non-empty line through `process`, and yields
+ * whatever values it returns. `null` from `process` terminates the stream.
+ */
+async function* parseLines<T>(
   responseStream: DuplexReadable,
-): AsyncGenerator<string> {
+  process: (line: string) => T | undefined | null,
+): AsyncGenerator<T> {
   let buf = "";
 
   for await (const chunk of responseStream) {
@@ -279,7 +295,7 @@ async function* parseResponseLines(
     buf = lines.pop() || "";
 
     for (const line of lines) {
-      const result = processLine(line);
+      const result = process(line);
       if (result === null) return;
       if (result !== undefined) yield result;
     }
@@ -287,30 +303,7 @@ async function* parseResponseLines(
 
   // Process any residual data after stream ends
   if (buf.trim()) {
-    const result = processLine(buf);
-    if (result !== null && result !== undefined) yield result;
-  }
-}
-
-async function* parseResponseLinesMetadata(
-  responseStream: DuplexReadable,
-): AsyncGenerator<TranscribeSegment> {
-  let buf = "";
-
-  for await (const chunk of responseStream) {
-    buf += chunk.toString();
-    const lines = buf.split("\n");
-    buf = lines.pop() || "";
-
-    for (const line of lines) {
-      const result = processLineMetadata(line);
-      if (result === null) return;
-      if (result !== undefined) yield result;
-    }
-  }
-
-  if (buf.trim()) {
-    const result = processLineMetadata(buf);
+    const result = process(buf);
     if (result !== null && result !== undefined) yield result;
   }
 }
@@ -336,23 +329,31 @@ function parseResponseLine(line: string): TranscribeStreamResponse | null {
   return transcribeStreamResponseSchema.parse(parsed);
 }
 
-function processLine(line: string): string | undefined | null {
+/**
+ * Shared wire-frame decoder. Returns `null` for the terminal `done` frame,
+ * `undefined` for frames the caller should skip, or the value extracted from
+ * the frame.
+ */
+function processWith<T>(
+  line: string,
+  extract: (response: TranscribeStreamResponse) => T | undefined,
+): T | undefined | null {
   const response = parseResponseLine(line);
   if (response === null) return undefined;
   if (response.error) throw new TranscriptionFailedError(response.error);
   if (response.done) return null;
-  if (response.text?.trim()) return response.text;
-  return undefined;
+  return extract(response);
+}
+
+function processLine(line: string): string | undefined | null {
+  return processWith(line, (response) =>
+    response.text?.trim() ? response.text : undefined,
+  );
 }
 
 function processLineMetadata(
   line: string,
 ): TranscribeSegment | undefined | null {
-  const response = parseResponseLine(line);
-  if (response === null) return undefined;
-  if (response.error) throw new TranscriptionFailedError(response.error);
-  if (response.done) return null;
-  if (response.segment) return response.segment;
-  return undefined;
+  return processWith(line, (response) => response.segment);
 }
 
