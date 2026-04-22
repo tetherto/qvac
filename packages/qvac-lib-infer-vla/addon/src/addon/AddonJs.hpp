@@ -31,9 +31,14 @@ inline std::vector<float>
 typedArrayToFloat32Vector(js_env_t* env, js_value_t* value) {
   float* data = nullptr;
   size_t len = 0;
-  if (js_get_typedarray_info(env, value, nullptr,
-                             reinterpret_cast<void**>(&data), &len, nullptr,
-                             nullptr) != 0) {
+  if (js_get_typedarray_info(
+          env,
+          value,
+          nullptr,
+          reinterpret_cast<void**>(&data),
+          &len,
+          nullptr,
+          nullptr) != 0) {
     throw std::runtime_error("expected Float32Array");
   }
   return std::vector<float>(data, data + len);
@@ -43,9 +48,14 @@ inline std::vector<int32_t>
 typedArrayToInt32Vector(js_env_t* env, js_value_t* value) {
   int32_t* data = nullptr;
   size_t len = 0;
-  if (js_get_typedarray_info(env, value, nullptr,
-                             reinterpret_cast<void**>(&data), &len, nullptr,
-                             nullptr) != 0) {
+  if (js_get_typedarray_info(
+          env,
+          value,
+          nullptr,
+          reinterpret_cast<void**>(&data),
+          &len,
+          nullptr,
+          nullptr) != 0) {
     throw std::runtime_error("expected Int32Array");
   }
   return std::vector<int32_t>(data, data + len);
@@ -55,16 +65,21 @@ inline std::vector<uint8_t>
 typedArrayToUint8Vector(js_env_t* env, js_value_t* value) {
   uint8_t* data = nullptr;
   size_t len = 0;
-  if (js_get_typedarray_info(env, value, nullptr,
-                             reinterpret_cast<void**>(&data), &len, nullptr,
-                             nullptr) != 0) {
+  if (js_get_typedarray_info(
+          env,
+          value,
+          nullptr,
+          reinterpret_cast<void**>(&data),
+          &len,
+          nullptr,
+          nullptr) != 0) {
     throw std::runtime_error("expected Uint8Array");
   }
   return std::vector<uint8_t>(data, data + len);
 }
 
-inline js_value_t* float32ArrayFromVector(js_env_t* env,
-                                          const std::vector<float>& data) {
+inline js_value_t*
+float32ArrayFromVector(js_env_t* env, const std::vector<float>& data) {
   js_value_t* arrayBuffer = nullptr;
   void* arrayBufferData = nullptr;
   const size_t byteLen = data.size() * sizeof(float);
@@ -76,8 +91,9 @@ inline js_value_t* float32ArrayFromVector(js_env_t* env,
     std::memcpy(arrayBufferData, data.data(), byteLen);
   }
   js_value_t* typedArray = nullptr;
-  if (js_create_typedarray(env, js_float32array, data.size(), arrayBuffer, 0,
-                           &typedArray) != 0) {
+  if (js_create_typedarray(
+          env, js_float32array, data.size(), arrayBuffer, 0, &typedArray) !=
+      0) {
     throw std::runtime_error("js_create_typedarray failed");
   }
   return typedArray;
@@ -86,8 +102,7 @@ inline js_value_t* float32ArrayFromVector(js_env_t* env,
 } // namespace detail
 
 // createVlaModel(ggufPath: string) -> External<VlaModel*>
-inline js_value_t* createVlaModel(js_env_t* env,
-                                  js_callback_info_t* info) try {
+inline js_value_t* createVlaModel(js_env_t* env, js_callback_info_t* info) try {
   using namespace qvac_lib_inference_addon_cpp;
 
   JsArgsParser args(env, info);
@@ -97,8 +112,9 @@ inline js_value_t* createVlaModel(js_env_t* env,
   auto model = std::make_unique<VlaModel>(ggufPath);
 
   js_value_t* external = nullptr;
-  if (js_create_external(env, model.get(), detail::finalizeVlaModel, nullptr,
-                         &external) != 0) {
+  if (js_create_external(
+          env, model.get(), detail::finalizeVlaModel, nullptr, &external) !=
+      0) {
     throw std::runtime_error("js_create_external failed");
   }
   model.release(); // ownership transferred to the JS-side finalizer
@@ -107,8 +123,8 @@ inline js_value_t* createVlaModel(js_env_t* env,
 JSCATCH
 
 // destroyVlaModel(handle: External) -> undefined
-inline js_value_t* destroyVlaModel(js_env_t* env,
-                                   js_callback_info_t* info) try {
+inline js_value_t*
+destroyVlaModel(js_env_t* env, js_callback_info_t* info) try {
   using namespace qvac_lib_inference_addon_cpp;
 
   JsArgsParser args(env, info);
@@ -136,8 +152,9 @@ JSCATCH
 //     imgHeight: number,
 //     state: Float32Array,
 //     tokens: Int32Array,
-//     mask: Uint8Array,              // attention mask (0/1), same length as tokens
-//     noise?: Float32Array,          // optional (chunk_size × max_action_dim)
+//     mask: Uint8Array,              // attention mask (0/1), same length as
+//     tokens noise?: Float32Array,          // optional (chunk_size ×
+//     max_action_dim)
 //   }
 inline js_value_t* runVlaModel(js_env_t* env, js_callback_info_t* info) try {
   using namespace qvac_lib_inference_addon_cpp;
@@ -151,13 +168,11 @@ inline js_value_t* runVlaModel(js_env_t* env, js_callback_info_t* info) try {
   std::vector<std::vector<float>> images;
   images.reserve(imagesLen);
   for (uint32_t i = 0; i < imagesLen; i++) {
-    js::TypedArray<float> elem =
-        imagesArr.get<js::TypedArray<float>>(env, i);
+    js::TypedArray<float> elem = imagesArr.get<js::TypedArray<float>>(env, i);
     images.push_back(detail::typedArrayToFloat32Vector(env, elem));
   }
 
-  const int imgWidth =
-      opts.getPropertyAs<js::Number, int32_t>(env, "imgWidth");
+  const int imgWidth = opts.getPropertyAs<js::Number, int32_t>(env, "imgWidth");
   const int imgHeight =
       opts.getPropertyAs<js::Number, int32_t>(env, "imgHeight");
 
@@ -174,8 +189,8 @@ inline js_value_t* runVlaModel(js_env_t* env, js_callback_info_t* info) try {
     noise = detail::typedArrayToFloat32Vector(env, *noiseOpt);
   }
 
-  std::vector<float> actions = model->run(
-      images, imgWidth, imgHeight, state, tokens, mask, noise);
+  std::vector<float> actions =
+      model->run(images, imgWidth, imgHeight, state, tokens, mask, noise);
 
   return detail::float32ArrayFromVector(env, actions);
 }
@@ -183,8 +198,7 @@ JSCATCH
 
 // getVlaHparams(handle) -> { chunkSize, actionDim, maxActionDim, maxStateDim,
 //                            tokenizerMaxLength, visionImageSize }
-inline js_value_t* getVlaHparams(js_env_t* env,
-                                 js_callback_info_t* info) try {
+inline js_value_t* getVlaHparams(js_env_t* env, js_callback_info_t* info) try {
   using namespace qvac_lib_inference_addon_cpp;
 
   JsArgsParser args(env, info);

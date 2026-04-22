@@ -12,10 +12,11 @@ namespace qvac_lib_infer_vla {
 
 // Owns a loaded SmolVLA model plus scratch buffers for an inference call.
 class VlaModel {
- public:
+public:
   explicit VlaModel(const std::string& ggufPath) : model_(new smolvla_model()) {
     if (!smolvla_load_model(ggufPath.c_str(), model_.get())) {
-      throw std::runtime_error("failed to load SmolVLA model from: " + ggufPath);
+      throw std::runtime_error(
+          "failed to load SmolVLA model from: " + ggufPath);
     }
   }
 
@@ -36,13 +37,10 @@ class VlaModel {
   // maxActionDim) float32 buffer (null -> model-internal random).
   //
   // Returns a (chunkSize × actionDim) row-major float32 vector.
-  std::vector<float> run(
-      const std::vector<std::vector<float>>& images,
-      int imgWidth,
-      int imgHeight,
-      const std::vector<float>& state,
-      const std::vector<int32_t>& tokens,
-      const std::vector<uint8_t>& mask,
+  std::vector<float>
+  run(const std::vector<std::vector<float>>& images, int imgWidth,
+      int imgHeight, const std::vector<float>& state,
+      const std::vector<int32_t>& tokens, const std::vector<uint8_t>& mask,
       const std::vector<float>& noise) {
     if (images.empty()) {
       throw std::invalid_argument("VlaModel::run: images must not be empty");
@@ -59,8 +57,9 @@ class VlaModel {
     }
 
     std::vector<bool_as_char> maskCopy(mask.begin(), mask.end());
-    static_assert(sizeof(bool_as_char) == sizeof(bool),
-                  "bool sizing assumption violated");
+    static_assert(
+        sizeof(bool_as_char) == sizeof(bool),
+        "bool sizing assumption violated");
 
     const int chunkSize = model_->hparams.chunk_size;
     const int actionDim = model_->hparams.action_dim;
@@ -92,7 +91,7 @@ class VlaModel {
     return actionsBuf;
   }
 
- private:
+private:
   // std::vector<bool> is a bitset; keep a regular char buffer so we can
   // hand a real C bool pointer to the inference code.
   using bool_as_char = unsigned char;

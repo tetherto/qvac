@@ -2,8 +2,7 @@
 
 #include "../addon/AddonJs.hpp"
 
-js_value_t*
-qvacLibInferVlaExports(js_env_t* env, js_value_t* exports) {
+js_value_t* qvacLibInferVlaExports(js_env_t* env, js_value_t* exports) {
 
 // NOLINTBEGIN(cppcoreguidelines-macro-usage)
 #define V(name, fn)                                                            \
@@ -22,7 +21,7 @@ qvacLibInferVlaExports(js_env_t* env, js_value_t* exports) {
   V("runVlaModel", qvac_lib_infer_vla::runVlaModel)
   V("getVlaHparams", qvac_lib_infer_vla::getVlaHparams)
 #undef V
-// NOLINTEND(cppcoreguidelines-macro-usage)
+  // NOLINTEND(cppcoreguidelines-macro-usage)
 
   return exports;
 }
