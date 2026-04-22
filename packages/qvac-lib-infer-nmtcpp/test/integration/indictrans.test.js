@@ -19,6 +19,7 @@
  */
 
 const test = require('brittle')
+const path = require('bare-path')
 const TranslationNmtcpp = require('@qvac/translation-nmtcpp')
 const {
   ensureIndicTransModel,
@@ -29,6 +30,8 @@ const {
   isMobile,
   platform
 } = require('./utils')
+
+const INDICTRANS_FIXTURE = path.resolve(__dirname, 'fixtures/indictrans.quality.json')
 
 /**
  * Device configurations for testing
@@ -96,7 +99,11 @@ for (const deviceConfig of DEVICE_CONFIGS) {
       const addonStats = response.stats || {}
       t.comment(`${label} Native addon stats: ` + JSON.stringify(addonStats))
       const metrics = perfCollector.getMetrics(testSentence, addonStats)
-      t.comment(formatPerformanceMetrics(`[IndicTrans] ${label}`, metrics))
+      t.comment(formatPerformanceMetrics(`[IndicTrans] ${label}`, metrics, {
+        fixturePath: INDICTRANS_FIXTURE,
+        srcLang: 'eng_Latn',
+        dstLang: 'hin_Deva'
+      }))
 
       t.ok(metrics.fullOutput.length > 0, `${label} translation should not be empty`)
       t.pass(`${label} IndicTrans translation completed successfully`)
