@@ -5,6 +5,7 @@
 #include <random>
 #include <algorithm>
 #include <chrono>
+#include <numbers>
 
 // Debug: dump tensor data to a raw file (no-op; set VLA_DUMP_TENSORS=1 in
 // smolvla-ggml dev builds to enable file output for layer-by-layer comparisons
@@ -641,7 +642,7 @@ void compute_sinusoidal_time_embedding(
     for (int i = 0; i < half_dim; i++) {
         float fraction = (float)i / (float)(half_dim - 1);
         float period = min_period * powf(max_period / min_period, fraction);
-        float angle = (1.0f / period) * 2.0f * M_PI * timestep;
+        float angle = (1.0f / period) * 2.0f * std::numbers::pi_v<float> * timestep;
         out[i] = sinf(angle);
         out[half_dim + i] = cosf(angle);
     }
