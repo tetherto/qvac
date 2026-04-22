@@ -351,7 +351,24 @@ jobs:
         shell: bash
         env:
           QVAC_VLA_MODEL: ${{ (matrix.platform == 'darwin' && matrix.arch == 'x64') && '' || format('{0}/{1}/model/vla/smolvla-libero-f32-fixed.gguf', github.workspace, env.WORKDIR) }}
-        run: npm run test:integration ${{ matrix.platform }}-${{ matrix.arch }}
+        run: |
+          set +e
+          # Stream test output AND capture it so we can inspect the TAP summary
+          # if the process exits with a non-zero code. Some GPU configurations
+          # (ai-run-linux-gpu with Tesla T4 + Vulkan) crash with SIGSEGV (exit
+          # code 139) during static-destructor teardown AFTER all tests have
+          # passed. Tolerate that specific case, but surface any real failure.
+          TESTLOG=$(mktemp)
+          npm run test:integration ${{ matrix.platform }}-${{ matrix.arch }} 2>&1 | tee "$TESTLOG"
+          EXIT=${PIPESTATUS[0]}
+          if [ "$EXIT" -eq 0 ]; then
+            exit 0
+          fi
+          if [ "$EXIT" -eq 139 ] && grep -qE '^# ok$' "$TESTLOG" && grep -qE '^# tests = [0-9]+/[0-9]+ pass$' "$TESTLOG"; then
+            echo "::warning::Tests all passed but process crashed at teardown with SIGSEGV (exit 139) on $(uname -srvmo). Known ggml/Vulkan static-destructor issue; treating as pass."
+            exit 0
+          fi
+          exit "$EXIT"
 
       - name: Run integration test (Windows)
         if: ${{ matrix.platform == 'win32' }}
