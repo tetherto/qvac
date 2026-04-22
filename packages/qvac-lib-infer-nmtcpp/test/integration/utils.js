@@ -21,21 +21,236 @@ const isMobile = platform === 'ios' || platform === 'android'
 
 // Dynamic require via path.join prevents bare-pack from statically resolving
 // the path during mobile bundling (the script lives outside the addon package).
-let createPerformanceReporter
+let createPerformanceReporter, evaluateTranslationQuality, findTranslationGroundTruth
 const _scriptBase = path.join('..', '..', '..', '..', 'scripts', 'test-utils')
 try {
   const perfReporterMod = require(path.join(_scriptBase, 'performance-reporter'))
   perfReporterMod.configure({ fs, path, process, os })
   createPerformanceReporter = perfReporterMod.createPerformanceReporter
 } catch (_) {
+  // Mobile bundle — inline lightweight reporter that records metrics and
+  // emits [PERF_REPORT_START]...[PERF_REPORT_END] markers to console so the
+  // NMT mobile workflow (or a manual `grep` on Device Farm logs) can pull
+  // the numbers out. Mirrors the OCR pattern from PR #1625.
   createPerformanceReporter = function (opts) {
-    return {
-      record () {},
-      toJSON () { return { schema_version: '1.0', addon: opts.addon, results: [] } },
-      writeReport () {},
-      writeStepSummary () {},
-      get length () { return 0 }
+    const _results = []
+    const _startedAt = new Date().toISOString()
+    const _addon = (opts && opts.addon) || 'unknown'
+    const _addonType = (opts && opts.addonType) || 'generic'
+    const _platform = (process && process.platform) || ''
+    const _device = {
+      name: _platform,
+      platform: _platform,
+      os_version: '',
+      arch: (os && os.arch) ? os.arch() : '',
+      runner: 'device-farm'
     }
+
+    return {
+      record (testName, metrics, extra) {
+        const entry = {
+          test: testName,
+          execution_provider: (extra && extra.execution_provider) || null,
+          metrics: Object.assign({
+            total_time_ms: null,
+            decode_time_ms: null,
+            generated_tokens: null,
+            tps: null,
+            chrfpp: null
+          }, metrics || {}),
+          input: (extra && extra.input) || null,
+          output: (extra && extra.output) || null,
+          reference: (extra && extra.reference) || null
+        }
+        _results.push(entry)
+      },
+      toJSON () {
+        return {
+          schema_version: '1.0',
+          addon: _addon,
+          addon_type: _addonType,
+          timestamp: _startedAt,
+          device: _device,
+          results: _results
+        }
+      },
+      writeReport (destPath) {
+        const json = JSON.stringify(this.toJSON())
+        // Write JSON to best-effort device paths so Device Farm artifact
+        // collection can grab it. Mirrors OCR's inline reporter.
+        const dirs = []
+        if (typeof global !== 'undefined' && global.testDir) dirs.push(global.testDir)
+        if (_platform === 'android') {
+          dirs.push('/sdcard/Android/data/io.tether.test.qvac/files')
+          dirs.push('/storage/emulated/0/Android/data/io.tether.test.qvac/files')
+          dirs.push('/data/local/tmp')
+        }
+        dirs.push('/tmp')
+        for (const d of dirs) {
+          try {
+            try { fs.mkdirSync(d, { recursive: true }) } catch (_) {}
+            const p = path.join(d, 'perf-report.json')
+            fs.writeFileSync(p, json)
+            console.log('[PERF_REPORT_PATH]' + p)
+          } catch (_) {}
+        }
+        // Also write to the explicit destPath the desktop reporter uses,
+        // when it is writable (e.g. when running integration tests on a
+        // simulator host with shared filesystem).
+        if (destPath) {
+          try {
+            try { fs.mkdirSync(path.dirname(destPath), { recursive: true }) } catch (_) {}
+            fs.writeFileSync(destPath, json)
+          } catch (_) {}
+        }
+      },
+      writeStepSummary () { /* no step summary on mobile */ },
+      writeToConsole () {
+        try {
+          const json = JSON.stringify(this.toJSON())
+          // Chunk large payloads so Android logcat per-entry size limits
+          // don't truncate the report.
+          const CHUNK = 800
+          if (json.length <= CHUNK) {
+            console.log('[PERF_REPORT_START]' + json + '[PERF_REPORT_END]')
+          } else {
+            const id = Date.now().toString(36)
+            const n = Math.ceil(json.length / CHUNK)
+            for (let i = 0; i < n; i++) {
+              console.log('[PERF_CHUNK:' + id + ':' + i + ':' + n + ']' + json.substring(i * CHUNK, (i + 1) * CHUNK))
+            }
+          }
+        } catch (err) {
+          console.log('[perf-reporter] mobile console write failed: ' + err.message)
+        }
+      },
+      get length () { return _results.length }
+    }
+  }
+}
+
+try {
+  const translationQualityMod = require(path.join(_scriptBase, 'translation-quality'))
+  translationQualityMod.configure({ fs, path })
+  evaluateTranslationQuality = translationQualityMod.evaluateTranslationQuality
+  findTranslationGroundTruth = translationQualityMod.findTranslationGroundTruth
+} catch (_) {
+  // Mobile bundle fallback — inline chrF++ + fixture data so quality
+  // scoring works on device without file I/O for fixture JSONs.
+  //
+  // The inline fixtures are a verbatim copy of the three
+  // packages/qvac-lib-infer-nmtcpp/test/integration/fixtures/*.quality.json
+  // files. Keep them in sync if the on-disk fixtures change.
+  const _inlineFixtures = {
+    'bergamot.quality.json': [
+      { source: 'Hello, how are you?', src_lang: 'en', dst_lang: 'it', reference: 'Ciao, come stai?', notes: 'placeholder baseline — verify with native speaker' }
+    ],
+    'indictrans.quality.json': [
+      { source: 'Hello, how are you?', src_lang: 'eng_Latn', dst_lang: 'hin_Deva', reference: 'नमस्ते, आप कैसे हैं?', notes: 'placeholder baseline — verify with native speaker' }
+    ],
+    'pivot-bergamot.quality.json': [
+      { source: 'Buenos días, ¿cómo estás hoy?', src_lang: 'es', dst_lang: 'it', reference: 'Buongiorno, come stai oggi?', notes: 'placeholder baseline — verify with native speaker' },
+      { source: "Bonjour, comment allez-vous aujourd'hui?", src_lang: 'fr', dst_lang: 'es', reference: 'Hola, ¿cómo está usted hoy?', notes: 'placeholder baseline — verify with native speaker' }
+    ]
+  }
+
+  function _cleanWhitespace (text) {
+    return String(text).replace(/\r\n/g, '\n').replace(/[\t\v\f]/g, ' ').replace(/ {2,}/g, ' ').trim()
+  }
+
+  function _extractCharNgrams (text, n) {
+    const stripped = text.replace(/\s+/g, '')
+    const grams = new Map()
+    if (stripped.length < n) return grams
+    for (let i = 0; i <= stripped.length - n; i++) {
+      const g = stripped.slice(i, i + n)
+      grams.set(g, (grams.get(g) || 0) + 1)
+    }
+    return grams
+  }
+
+  function _extractWordNgrams (text, n) {
+    const words = text.split(/\s+/).filter(Boolean)
+    const grams = new Map()
+    if (words.length < n) return grams
+    for (let i = 0; i <= words.length - n; i++) {
+      const g = words.slice(i, i + n).join(' ')
+      grams.set(g, (grams.get(g) || 0) + 1)
+    }
+    return grams
+  }
+
+  function _computePR (hGrams, rGrams) {
+    let hTotal = 0
+    for (const c of hGrams.values()) hTotal += c
+    let rTotal = 0
+    for (const c of rGrams.values()) rTotal += c
+    if (hTotal === 0 || rTotal === 0) return null
+    let matches = 0
+    for (const [g, hc] of hGrams) {
+      const rc = rGrams.get(g)
+      if (rc !== undefined) matches += Math.min(hc, rc)
+    }
+    return { p: matches / hTotal, r: matches / rTotal }
+  }
+
+  function _chrfpp (hypothesis, reference) {
+    const h = _cleanWhitespace(hypothesis)
+    const r = _cleanWhitespace(reference)
+    if (h.length === 0 || r.length === 0) return 0
+    let precSum = 0
+    let recSum = 0
+    let validOrders = 0
+    for (let n = 1; n <= 6; n++) {
+      const res = _computePR(_extractCharNgrams(h, n), _extractCharNgrams(r, n))
+      if (res) {
+        precSum += res.p
+        recSum += res.r
+        validOrders++
+      }
+    }
+    for (let n = 1; n <= 2; n++) {
+      const res = _computePR(_extractWordNgrams(h, n), _extractWordNgrams(r, n))
+      if (res) {
+        precSum += res.p
+        recSum += res.r
+        validOrders++
+      }
+    }
+    if (validOrders === 0) return 0
+    const avgP = precSum / validOrders
+    const avgR = recSum / validOrders
+    if (avgP === 0 && avgR === 0) return 0
+    const b2 = 4 // beta=2 squared
+    return (1 + b2) * avgP * avgR / (b2 * avgP + avgR)
+  }
+
+  function _round4 (v) { return Math.round(v * 10000) / 10000 }
+
+  evaluateTranslationQuality = function (hypothesis, groundTruthEntry) {
+    if (!groundTruthEntry || typeof groundTruthEntry !== 'object') return null
+    const reference = groundTruthEntry.reference || ''
+    return {
+      source: groundTruthEntry.source || null,
+      reference,
+      src_lang: groundTruthEntry.src_lang || null,
+      dst_lang: groundTruthEntry.dst_lang || null,
+      chrfpp: _round4(_chrfpp(hypothesis, reference))
+    }
+  }
+
+  findTranslationGroundTruth = function (fixturePath, source, srcLang, dstLang) {
+    // Map fixture file basename → inline entries. Works on mobile where
+    // the fixture JSON isn't bundled as a readable file.
+    const key = String(fixturePath).split(/[\\/]/).pop()
+    const entries = _inlineFixtures[key]
+    if (!Array.isArray(entries)) return null
+    for (const entry of entries) {
+      if (entry.source === source && entry.src_lang === srcLang && entry.dst_lang === dstLang) {
+        return entry
+      }
+    }
+    return null
   }
 }
 
@@ -54,6 +269,12 @@ function _scheduleReportWrite () {
     if (_perfReporter.length > 0) {
       _perfReporter.writeReport(_reportPath)
       _perfReporter.writeStepSummary()
+      // On mobile, also emit the report to console so Device Farm log
+      // collection captures it. No-op on desktop (writeToConsole is
+      // only defined on the mobile inline reporter).
+      if (isMobile && typeof _perfReporter.writeToConsole === 'function') {
+        _perfReporter.writeToConsole()
+      }
     }
   })
 }
@@ -332,13 +553,55 @@ function createPerformanceCollector () {
      * @returns {Object} Performance metrics
      */
     getMetrics (prompt, addonStats = {}) {
-      // Use native addon stats directly (times are in seconds, convert to milliseconds)
-      const totalTimeMs = addonStats.totalTime ? addonStats.totalTime * 1000 : 0
-      const decodeTimeMs = addonStats.decodeTime ? addonStats.decodeTime * 1000 : 0
+      // The pivot addon reports per-sub-model stats under prefixed keys
+      // (e.g. "BERGAMOT : ->totalTokens", "BERGAMOT : ->TPS") rather than
+      // flat keys, so a naive `addonStats.totalTokens` read returns 0 for
+      // pivot rows even though the data is present.
+      //
+      // We read prefixed values for TOKENS and TPS (better than showing 0
+      // or "-"), but NOT for time — when the addon only reports prefix
+      // stats, those reflect a single sub-model, and wall-clock time is
+      // a more faithful "pivot total time" for the composite operation.
+      function _extractStat (key, { allowPrefix = true } = {}) {
+        if (addonStats == null) return null
+        if (typeof addonStats[key] === 'number') return addonStats[key]
+        if (!allowPrefix) return null
+        for (const k of Object.keys(addonStats)) {
+          if (k === key) return addonStats[k]
+          if (k.endsWith('->' + key) || k.endsWith(key)) {
+            if (typeof addonStats[k] === 'number') return addonStats[k]
+          }
+        }
+        return null
+      }
 
-      // Use native stats directly
-      const generatedTokens = addonStats.totalTokens || 0
-      const tps = addonStats.TPS || 0
+      // Time columns: flat addon time only. Fall back to wall-clock when
+      // the addon omits it (pivot case). For decode, when there is no
+      // better signal we approximate decode ≈ total — prompt processing
+      // is negligible for short NMT sentences, and the pivot addon fires
+      // onUpdate once at the end rather than streaming, so firstTokenTime
+      // ≈ completion time.
+      const now = Date.now()
+      const wallClockTotalMs = startTime ? (now - startTime) : 0
+
+      const addonTotalSec = _extractStat('totalTime', { allowPrefix: false })
+      const addonDecodeSec = _extractStat('decodeTime', { allowPrefix: false })
+
+      const totalTimeMs = (addonTotalSec && addonTotalSec > 0)
+        ? addonTotalSec * 1000
+        : wallClockTotalMs
+      const decodeTimeMs = (addonDecodeSec && addonDecodeSec > 0)
+        ? addonDecodeSec * 1000
+        : totalTimeMs
+
+      // Token count and TPS: accept prefixed values too (pivot). If TPS
+      // is missing but tokens + decode are available, compute it so the
+      // column is never "0" when data is in fact inferrable.
+      const generatedTokens = _extractStat('totalTokens') || 0
+      let tps = _extractStat('TPS') || 0
+      if (!tps && generatedTokens > 0 && decodeTimeMs > 0) {
+        tps = (generatedTokens / decodeTimeMs) * 1000
+      }
 
       return {
         totalTime: totalTimeMs,
@@ -358,9 +621,13 @@ function createPerformanceCollector () {
  *
  * @param {string} label - Test label prefix (e.g., '[Bergamot]')
  * @param {Object} metrics - Metrics object from createPerformanceCollector().getMetrics()
+ * @param {Object} [qualityOpts] - Optional translation-quality context
+ * @param {string} [qualityOpts.fixturePath] - Path to the ground-truth fixture JSON
+ * @param {string} [qualityOpts.srcLang]     - Source language code (matches fixture entry)
+ * @param {string} [qualityOpts.dstLang]     - Destination language code (matches fixture entry)
  * @returns {string} Formatted performance metrics string
  */
-function formatPerformanceMetrics (label, metrics) {
+function formatPerformanceMetrics (label, metrics, qualityOpts) {
   const {
     totalTime,
     generatedTokens,
@@ -375,24 +642,47 @@ function formatPerformanceMetrics (label, metrics) {
   const tpsValue = typeof tps === 'number' ? tps.toFixed(2) : '0.00'
   const decodeTimeMs = typeof decodeTime === 'number' ? decodeTime : 0
 
+  let quality = null
+  if (qualityOpts && qualityOpts.fixturePath && prompt && qualityOpts.srcLang && qualityOpts.dstLang) {
+    try {
+      const gt = findTranslationGroundTruth(qualityOpts.fixturePath, prompt, qualityOpts.srcLang, qualityOpts.dstLang)
+      if (gt) {
+        quality = evaluateTranslationQuality(fullOutput || '', gt)
+      }
+    } catch (err) {
+      console.log(`[translation-quality] evaluation failed: ${err.message}`)
+    }
+  }
+
+  const ep = /\[gpu\]/i.test(label) ? 'gpu' : /\[cpu\]/i.test(label) ? 'cpu' : null
+
   _perfReporter.record(label, {
     total_time_ms: Math.round(totalTimeMs),
     decode_time_ms: Math.round(decodeTimeMs),
     generated_tokens: generatedTokens || null,
-    tps: typeof tps === 'number' ? parseFloat(tpsValue) : null
+    tps: (typeof tps === 'number' && tps > 0) ? parseFloat(tpsValue) : null,
+    chrfpp: quality ? quality.chrfpp : null
   }, {
+    execution_provider: ep,
     input: prompt || null,
-    output: fullOutput || null
+    output: fullOutput || null,
+    reference: quality ? quality.reference : null
   })
   _scheduleReportWrite()
 
-  return `${label} Performance Metrics:
+  let out = `${label} Performance Metrics:
     - Total time: ${totalTimeMs.toFixed(0)}ms (${totalSeconds}s)
     - Decode time: ${decodeTimeMs.toFixed(2)}ms
     - Generated tokens: ${generatedTokens} tokens
     - Prompt: "${prompt}"
     - Tokens per second (TPS): ${tpsValue} t/s
     - Full output: "${fullOutput}"`
+
+  if (quality && typeof quality.chrfpp === 'number') {
+    out += `\n    - chrF++: ${quality.chrfpp.toFixed(4)}`
+  }
+
+  return out
 }
 
 // ============================================================================
