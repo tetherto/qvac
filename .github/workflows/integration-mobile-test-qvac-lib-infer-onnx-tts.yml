@@ -1563,14 +1563,18 @@ jobs:
               prefix=$(echo "$fname" | sed 's/_Customer_Artifacts\.zip$//')
               tmpdir=$(mktemp -d)
               if unzip -qo "$f" -d "$tmpdir" 2>/dev/null; then
-                if [ -f "$tmpdir/bare_console.log" ]; then
-                  cp "$tmpdir/bare_console.log" "$CONSOLE_DIR/${prefix}_bare_console.log"
+                bare_log=$(find "$tmpdir" -name "bare_console.log" -type f 2>/dev/null | head -1)
+                if [ -n "$bare_log" ]; then
+                  cp "$bare_log" "$CONSOLE_DIR/${prefix}_bare_console.log"
                   echo "  Extracted: ${prefix}_bare_console.log"
                 fi
-                if [ -f "$tmpdir/appium.log" ]; then
-                  cp "$tmpdir/appium.log" "$CONSOLE_DIR/${prefix}_appium.log"
+                appium_log=$(find "$tmpdir" -name "appium.log" -type f 2>/dev/null | head -1)
+                if [ -n "$appium_log" ]; then
+                  cp "$appium_log" "$CONSOLE_DIR/${prefix}_appium.log"
                   echo "  Extracted: ${prefix}_appium.log"
                 fi
+              else
+                echo "  WARNING: Failed to unzip $fname"
               fi
               rm -rf "$tmpdir"
             fi
