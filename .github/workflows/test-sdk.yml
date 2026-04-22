@@ -1,5 +1,9 @@
 # QVAC SDK Tests
 # Runs desktop and/or mobile (Android/iOS) e2e tests for the SDK package
+#
+# Triggered via:
+#   - workflow_dispatch: manual runs with full customizability
+#   - workflow_call: called by on-pr-test-sdk.yml for label/release-branch triggers
 
 name: QVAC Tests (sdk)
 
@@ -15,7 +19,21 @@ on:
           - mobile
           - android
           - ios
-        default: desktop
+        default: all
+      suite:
+        description: "Suite selection (full = all tests, smoke = smoke suite, custom = use suite-custom value)"
+        type: choice
+        options:
+          - full
+          - smoke
+          - custom
+        default: full
+      suite-custom:
+        description: "Custom suite value (only used when suite=custom). Comma-separated suite names."
+        type: string
+      exclude-suite:
+        description: "Exclude suites (comma-separated, e.g. 'slow,flaky'). Tests tagged with these suites are skipped."
+        type: string
       filter:
         description: "Test filter (comma-separated categories/prefixes, empty = all tests)"
         type: string
@@ -42,20 +60,39 @@ on:
         description: "Cache downloaded models between runs"
         type: boolean
         default: true
-  # pull_request:
-  #   paths:
-  #     - "packages/sdk/**"
-  #   branches:
-  #     - main
-  #     - release-*
-  # push:
-  #   branches:
-  #     - main
-  #     - release-*
-  #     - feature-*
-  #     - tmp-*
-  #   paths:
-  #     - "packages/sdk/**"
+
+  workflow_call:
+    inputs:
+      targets:
+        description: "Which platforms to test"
+        type: string
+        default: "all"
+      suite:
+        description: "Resolved suite value: empty string = full, 'smoke', or custom comma-separated"
+        type: string
+      exclude-suite:
+        description: "Exclude suites (comma-separated)"
+        type: string
+      filter:
+        description: "Test filter (comma-separated categories/prefixes)"
+        type: string
+      desktop-consumer-timeout:
+        type: number
+        default: 60
+      mobile-consumer-timeout:
+        type: number
+        default: 600
+      device-farm-timeout:
+        type: number
+        default: 30
+      desktop-platforms:
+        type: string
+        default: '["ai-run-windows11-gpu", "ai-run-linux-gpu", "mac-mini-m4-gpu"]'
+      test-version:
+        type: string
+      cache-models:
+        type: boolean
+        default: true
 
 permissions:
   contents: read
@@ -63,8 +100,26 @@ permissions:
   packages: read
 
 jobs:
+  resolve:
+    runs-on: ubuntu-latest
+    outputs:
+      suite: ${{ steps.resolve.outputs.suite }}
+    steps:
+      - name: Resolve suite
+        id: resolve
+        shell: bash
+        run: |
+          SUITE="${{ inputs.suite }}"
+          if [ "$SUITE" = "full" ] || [ -z "$SUITE" ]; then
+            echo "suite=" >> "$GITHUB_OUTPUT"
+          elif [ "$SUITE" = "custom" ]; then
+            echo "suite=${{ inputs.suite-custom }}" >> "$GITHUB_OUTPUT"
+          else
+            echo "suite=$SUITE" >> "$GITHUB_OUTPUT"
+          fi
+
   desktop-tests:
-    # Runs for: all, desktop, empty (future PR/push)
+    needs: resolve
     if: inputs.targets != 'mobile' && inputs.targets != 'android' && inputs.targets != 'ios'
     uses: ./.github/workflows/test-desktop-sdk.yml
     with:
@@ -73,17 +128,19 @@ jobs:
       platforms: ${{ inputs.desktop-platforms || '["ai-run-windows11-gpu", "ai-run-linux-gpu", "mac-mini-m4-gpu"]' }}
       consumer-timeout: ${{ fromJSON(inputs.desktop-consumer-timeout || '60') }}
       filter: ${{ inputs.filter }}
+      suite: ${{ needs.resolve.outputs.suite }}
+      exclude-suite: ${{ inputs.exclude-suite }}
       test-version: ${{ inputs.test-version || '' }}
       cache-models: ${{ inputs.cache-models }}
     secrets: inherit
 
   android-tests:
+    needs: resolve
     permissions:
       id-token: write
       contents: read
       pull-requests: write
       packages: read
-    # Runs for: all, mobile, android, empty (future PR/push)
     if: inputs.targets != 'desktop' && inputs.targets != 'ios'
     uses: ./.github/workflows/test-android-sdk.yml
     with:
@@ -91,6 +148,8 @@ jobs:
       working-directory: "packages/sdk/tests-qvac"
       consumer-timeout: ${{ fromJSON(inputs.mobile-consumer-timeout || '600') }}
       filter: ${{ inputs.filter }}
+      suite: ${{ needs.resolve.outputs.suite }}
+      exclude-suite: ${{ inputs.exclude-suite }}
       device-farm-timeout: ${{ fromJSON(inputs.device-farm-timeout || '90') }}
       device-farm-project-arn: ${{ vars.SDK_DEVICE_FARM_PROJECT_ARN }}
       device-pools: ${{ vars.SDK_DEVICE_FARM_POOLS }}
@@ -98,12 +157,12 @@ jobs:
     secrets: inherit
 
   ios-tests:
+    needs: resolve
     permissions:
       id-token: write
       contents: read
       pull-requests: write
       packages: read
-    # Runs for: all, mobile, ios, empty (future PR/push)
     if: inputs.targets != 'desktop' && inputs.targets != 'android'
     uses: ./.github/workflows/test-ios-sdk.yml
     with:
@@ -111,6 +170,8 @@ jobs:
       working-directory: "packages/sdk/tests-qvac"
       consumer-timeout: ${{ fromJSON(inputs.mobile-consumer-timeout || '600') }}
       filter: ${{ inputs.filter }}
+      suite: ${{ needs.resolve.outputs.suite }}
+      exclude-suite: ${{ inputs.exclude-suite }}
       device-farm-timeout: ${{ fromJSON(inputs.device-farm-timeout || '90') }}
       device-farm-project-arn: ${{ vars.SDK_DEVICE_FARM_PROJECT_ARN }}
       ios-device-pools: ${{ vars.SDK_IOS_DEVICE_FARM_POOLS }}
