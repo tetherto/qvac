@@ -14,17 +14,17 @@ test('integration: module exports expected surface', (t) => {
 
 test('integration: VlaModel rejects empty path', (t) => {
   let err1 = null
-  try { new VlaModel('') } catch (e) { err1 = e }
+  try { const m = new VlaModel(''); m.destroy() } catch (e) { err1 = e }
   t.ok(err1 && /non-empty string/.test(err1.message))
 
   let err2 = null
-  try { new VlaModel() } catch (e) { err2 = e }
+  try { const m = new VlaModel(); m.destroy() } catch (e) { err2 = e }
   t.ok(err2 && /non-empty string/.test(err2.message))
 })
 
 test('integration: VlaModel rejects missing GGUF file', (t) => {
   let err = null
-  try { new VlaModel('/definitely/does/not/exist.gguf') } catch (e) { err = e }
+  try { const m = new VlaModel('/definitely/does/not/exist.gguf'); m.destroy() } catch (e) { err = e }
   t.ok(err, 'expected an error for missing GGUF')
 })
 
