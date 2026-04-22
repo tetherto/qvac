@@ -11,6 +11,7 @@ import { resolve } from 'path';
 import rehypeKatex from 'rehype-katex';
 import remarkMath from 'remark-math';
 import codeImport from 'remark-code-import';
+import { SCHEMA_TYPES } from './src/lib/docs-json-ld';
 
 const monorepoRoot = resolve(process.cwd(), '../..');
 
@@ -22,6 +23,7 @@ export const docs = defineDocs({
       titleStyle: z.enum(["code", "text"]).optional(),
       version: z.string().optional(),
       ogImage: z.string().optional(),
+      schemaType: z.enum(SCHEMA_TYPES).optional(),
     }),
     postprocess: {
       includeProcessedMarkdown: true,
