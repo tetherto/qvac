@@ -1,0 +1,9 @@
+[
+  {
+    "source": "Hello, how are you?",
+    "src_lang": "en",
+    "dst_lang": "it",
+    "reference": "Ciao, come stai?",
+    "notes": "placeholder baseline — verify with native speaker"
+  }
+]
