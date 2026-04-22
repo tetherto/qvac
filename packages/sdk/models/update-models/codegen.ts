@@ -3,21 +3,36 @@ import type { ProcessedModel } from "./types";
 
 export function generateModelsFileContent(models: ProcessedModel[]): string {
   const usedNames = new Set<string>();
+  const named = new Map<ProcessedModel, string>();
+
+  const exportable = models.filter((m) => !m.isCompanionOnly);
+  const companionOnly = models.filter((m) => m.isCompanionOnly);
+
+  for (const m of exportable) {
+    named.set(m, assignName(m, usedNames));
+  }
+  for (const m of companionOnly) {
+    named.set(m, assignName(m, usedNames));
+  }
 
   const modelsWithNames = models.map((m) => ({
     ...m,
-    name: generateExportName({
-      path: m.registryPath,
-      engine: m.engine,
-      name: m.modelName,
-      quantization: m.quantization,
-      params: m.params,
-      tags: m.tags,
-      usedNames,
-    }),
+    name: named.get(m)!,
   }));
 
   return generateFileContentWithNames(modelsWithNames);
+}
+
+function assignName(m: ProcessedModel, usedNames: Set<string>): string {
+  return generateExportName({
+    path: m.registryPath,
+    engine: m.engine,
+    name: m.modelName,
+    quantization: m.quantization,
+    params: m.params,
+    tags: m.tags,
+    usedNames,
+  });
 }
 
 function generateFileContentWithNames(
@@ -46,13 +61,19 @@ function generateFileContentWithNames(
         entry += `,\n    shardMetadata: ${JSON.stringify(m.shardMetadata)}`;
       }
 
+      if (m.companionSet) {
+        entry += `,\n    companionSet: ${JSON.stringify(m.companionSet)}`;
+      }
+
       entry += "\n  }";
       return entry;
     })
     .join(",\n");
 
   const exports = modelsWithNames
-    .map((m, i) => {
+    .filter((m) => !m.isCompanionOnly)
+    .map((m) => {
+      const i = modelsWithNames.indexOf(m);
       return `export const ${m.name} = {
   name: "${m.name}",
   src: \`registry://\${models[${i}].registrySource}/\${models[${i}].registryPath}\`,
@@ -100,6 +121,23 @@ export type RegistryItem = {
     blobBlockLength: number;
     blobByteOffset: number;
   }[];
+  companionSet?: {
+    setKey: string;
+    primaryKey: string;
+    files: readonly {
+      key: string;
+      registryPath: string;
+      registrySource: string;
+      targetName: string;
+      expectedSize: number;
+      sha256Checksum: string;
+      blobCoreKey: string;
+      blobBlockOffset: number;
+      blobBlockLength: number;
+      blobByteOffset: number;
+      primary?: boolean;
+    }[];
+  };
 };
 
 export type ModelConstant = {
