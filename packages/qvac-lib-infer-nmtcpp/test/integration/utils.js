@@ -318,33 +318,49 @@ const TEST_TIMEOUT = isMobile ? MOBILE_TIMEOUT : DESKTOP_TIMEOUT
  * @returns {Promise<void>}
  * @throws {Error} If download fails or redirects exceed limit
  */
-async function downloadFile (url, destPath, maxRedirects = 5) {
+async function downloadFile (url, destPath, maxRedirects = 5, maxRetries = 3) {
   const fetch = require('bare-fetch')
-  console.log(`Downloading: ${url.substring(0, 60)}...`)
 
-  // Fetch with redirect following enabled
-  const response = await fetch(url, {
-    redirect: 'follow',
-    follow: maxRedirects
-  })
-
-  // Check for redirect status codes that weren't followed
-  if ([301, 302, 307, 308].includes(response.status)) {
-    const location = response.headers.get('location')
-    if (location && maxRedirects > 0) {
-      console.log(`   Following redirect to: ${location.substring(0, 60)}...`)
-      return downloadFile(location, destPath, maxRedirects - 1)
+  // Retry loop for transient network errors (CONNECTION_LOST, socket hang up).
+  // Without this an unhandled rejection from bare-fetch on Device Farm's
+  // flaky mobile network can abort the whole Bare process — which surfaced
+  // on Samsung Galaxy S25 Ultra as a SIGABRT inside libbare-kit.so::
+  // js_callback_s::on_call during the second IndicTrans re-download.
+  let lastErr = null
+  for (let attempt = 0; attempt < maxRetries; attempt++) {
+    if (attempt > 0) {
+      const backoffMs = 500 * (2 ** (attempt - 1))
+      console.log(`   Retry ${attempt}/${maxRetries - 1} after ${backoffMs}ms (last error: ${lastErr && lastErr.message})`)
+      await new Promise(resolve => setTimeout(resolve, backoffMs))
     }
-    throw new Error(`HTTP ${response.status}: Redirect not followed (no location header or max redirects exceeded)`)
-  }
+    try {
+      console.log(`Downloading: ${url.substring(0, 60)}...`)
+      const response = await fetch(url, { redirect: 'follow', follow: maxRedirects })
 
-  if (!response.ok) {
-    throw new Error(`HTTP ${response.status}: ${response.statusText}`)
-  }
+      if ([301, 302, 307, 308].includes(response.status)) {
+        const location = response.headers.get('location')
+        if (location && maxRedirects > 0) {
+          console.log(`   Following redirect to: ${location.substring(0, 60)}...`)
+          return downloadFile(location, destPath, maxRedirects - 1, maxRetries)
+        }
+        throw new Error(`HTTP ${response.status}: Redirect not followed (no location header or max redirects exceeded)`)
+      }
 
-  const buffer = await response.arrayBuffer()
-  fs.writeFileSync(destPath, Buffer.from(buffer))
-  console.log(`Downloaded: ${path.basename(destPath)} (${(buffer.byteLength / 1024 / 1024).toFixed(1)}MB)`)
+      if (!response.ok) {
+        throw new Error(`HTTP ${response.status}: ${response.statusText}`)
+      }
+
+      const buffer = await response.arrayBuffer()
+      fs.writeFileSync(destPath, Buffer.from(buffer))
+      console.log(`Downloaded: ${path.basename(destPath)} (${(buffer.byteLength / 1024 / 1024).toFixed(1)}MB)`)
+      return
+    } catch (err) {
+      lastErr = err
+      // Only retry on network errors; HTTP status errors are deterministic.
+      if (err && /HTTP \d{3}/.test(err.message || '')) throw err
+    }
+  }
+  throw new Error(`downloadFile failed after ${maxRetries} attempts: ${lastErr && lastErr.message}`)
 }
 
 // ============================================================================
@@ -453,6 +469,21 @@ async function ensureIndicTransModel () {
   fs.mkdirSync(modelsDir, { recursive: true })
 
   const destPath = path.join(modelsDir, modelFilename)
+
+  // Cache hit: IndicTrans is 200MB+, so re-downloading for every test
+  // variant (GPU/CPU) wastes bandwidth and exposes each run to transient
+  // S3/Device-Farm network failures — the root cause of the Samsung
+  // Galaxy S25 Ultra CONNECTION_LOST → SIGABRT seen in CI run 1212.
+  if (fs.existsSync(destPath)) {
+    const cachedStats = fs.statSync(destPath)
+    const cachedMB = cachedStats.size / (1024 * 1024)
+    if (cachedMB >= 100) {
+      console.log(`Reusing cached IndicTrans model: ${destPath} (${cachedMB.toFixed(1)}MB)`)
+      return destPath
+    }
+    console.log(`Cached IndicTrans model is undersized (${cachedMB.toFixed(2)}MB) — re-downloading`)
+  }
+
   await downloadFile(urlConfig.modelUrl, destPath)
 
   // Validate downloaded model size
