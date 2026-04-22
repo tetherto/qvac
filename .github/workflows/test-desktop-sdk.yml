@@ -71,6 +71,7 @@ permissions:
 
 jobs:
   test-desktop:
+    name: "[desktop] test (${{ matrix.os }})"
     strategy:
       matrix:
         os: ${{ fromJSON(inputs.platforms) }}
@@ -435,6 +436,7 @@ jobs:
           }
 
   compare-results:
+    name: "[desktop] compare-results"
     needs: test-desktop
     if: github.event_name == 'pull_request'
     runs-on: ubuntu-latest
