@@ -79,7 +79,7 @@ Explicitly download a model to cache without loading it into memory.
 
 ### Progress Updates
 
-When `onProgress` is provided, the client uses streaming and receives `ModelProgressUpdate` events with `downloaded`, `total`, `percentage`, `downloadKey`, and optional `shardInfo` or `onnxInfo` for multi-file downloads. See `schemas/load-model.ts` for the `modelProgressUpdateSchema`.
+When `onProgress` is provided, the client uses streaming and receives `ModelProgressUpdate` events with `downloaded`, `total`, `percentage`, `downloadKey`, and optional `shardInfo` or `fileSetInfo` for multi-file downloads. See `schemas/load-model.ts` for the `modelProgressUpdateSchema`.
 
 ### Usage
 
