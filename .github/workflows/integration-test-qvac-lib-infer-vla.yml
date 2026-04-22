@@ -291,9 +291,18 @@ jobs:
         name: Install AWS CLI on Linux (idempotent, covers self-hosted runners)
         shell: bash
         run: |
+          # Self-hosted runners sometimes have a leftover aws install at the
+          # standard path with perms the runner user can't exec. Treat both
+          # "on PATH" and "executable at /usr/local/bin/aws" as "installed".
           if command -v aws >/dev/null 2>&1; then
-            echo "AWS CLI already installed"
+            echo "AWS CLI already on PATH"
             aws --version
+            exit 0
+          fi
+          if [ -x /usr/local/bin/aws ]; then
+            echo "AWS CLI at /usr/local/bin/aws; adding to PATH"
+            echo "/usr/local/bin" >> "$GITHUB_PATH"
+            /usr/local/bin/aws --version
             exit 0
           fi
           echo "Installing AWS CLI v2..."
@@ -308,9 +317,11 @@ jobs:
           unzip -q /tmp/awscliv2.zip -d /tmp/
           sudo /tmp/aws/install --update
           rm -rf /tmp/aws /tmp/awscliv2.zip
-          # Self-hosted runners (e.g. ai-run-linux-gpu) don't always have
-          # /usr/local/bin on PATH. Persist it for subsequent steps.
+          # Persist /usr/local/bin on PATH for subsequent steps, and fix up
+          # perms in case a previous run left the tree world-readable but
+          # not executable for the runner user.
           echo "/usr/local/bin" >> "$GITHUB_PATH"
+          sudo chmod -R a+rX /usr/local/aws-cli /usr/local/bin/aws 2>/dev/null || true
           /usr/local/bin/aws --version
 
       - name: Configure AWS credentials via OIDC

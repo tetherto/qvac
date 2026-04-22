@@ -1110,8 +1110,13 @@ extern "C" bool smolvla_load_model(const char* path, smolvla_model* model_ptr) {
   }
 
   // Always init CPU backend (fallback for unsupported ops, and primary on
-  // platforms with no GPU).
-  model.backend_cpu = ggml_backend_cpu_init();
+  // platforms with no GPU). Use the device API so we work with DL-loaded
+  // backends (Android builds ggml with GGML_BACKEND_DL=ON which puts the
+  // CPU backend in a separate .so — `ggml_backend_cpu_init` is not in the
+  // addon's own link graph in that case).
+  ggml_backend_dev_t cpu_dev =
+      ggml_backend_dev_by_type(GGML_BACKEND_DEVICE_TYPE_CPU);
+  model.backend_cpu = cpu_dev ? ggml_backend_dev_init(cpu_dev, nullptr) : nullptr;
   if (!model.backend_cpu) {
     fprintf(stderr, "%s: failed to init CPU backend\n", __func__);
     return false;
