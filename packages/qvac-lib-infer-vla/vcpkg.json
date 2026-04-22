@@ -3,9 +3,12 @@
   "version": "0.1.0",
   "dependencies": [
     {
+      "name": "opencl",
+      "platform": "android"
+    },
+    {
       "name": "qvac-fabric",
-      "version>=": "7248.2.3",
-      "default-features": false
+      "version>=": "7248.2.3"
     },
     {
       "name": "qvac-lib-inference-addon-cpp",
