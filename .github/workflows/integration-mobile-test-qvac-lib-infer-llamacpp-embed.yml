@@ -1411,6 +1411,17 @@ jobs:
               cp "$f" "$CONSOLE_DIR/"
               echo "  Console log: $fname"
             fi
+            if echo "$fname" | grep -qiE "Customer_Artifacts\.zip$"; then
+              prefix=$(echo "$fname" | sed 's/_Customer_Artifacts\.zip$//')
+              tmpdir=$(mktemp -d)
+              if unzip -qo "$f" -d "$tmpdir" 2>/dev/null; then
+                if [ -f "$tmpdir/bare_console.log" ]; then
+                  cp "$tmpdir/bare_console.log" "$CONSOLE_DIR/${prefix}_bare_console.log"
+                  echo "  Extracted: ${prefix}_bare_console.log"
+                fi
+              fi
+              rm -rf "$tmpdir"
+            fi
           done
           echo ""
           echo "📋 Console logs extracted:"
