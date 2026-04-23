@@ -213,6 +213,14 @@ void TextLlmContext::tokenizeChat(
   inputs.use_jinja = params_.use_jinja;
   inputs.messages = chatMsgs;
   inputs.add_generation_prompt = isLastMessageFromUser;
+  int lastUserIdx = -1;
+  for (int i = static_cast<int>(chatMsgs.size()) - 1; i >= 0; --i) {
+    if (chatMsgs[static_cast<size_t>(i)].role == "user") {
+      lastUserIdx = i;
+      break;
+    }
+  }
+  inputs.chat_template_kwargs["last_user_idx"] = std::to_string(lastUserIdx);
 
   if (!tools.empty()) {
     inputs.tools = tools;

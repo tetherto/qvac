@@ -4,19 +4,14 @@ namespace qvac_lib_inference_addon_llama {
 namespace utils {
 
 const char* getToolsDynamicQwen3Template() {
-  return R"({%- set ns = namespace(last_user_idx=-1) %}
-{%- for message in messages %}
-    {%- if message.role == "user" %}
-        {%- set ns.last_user_idx = loop.index0 %}
-    {%- endif %}
-{%- endfor %}
+  return R"({%- set last_user_idx = (last_user_idx | default('-1')) | int %}
 {%- if messages[0].role == 'system' %}
     {{- '<|im_start|>system\n' + messages[0].content + '<|im_end|>\n' }}
 {%- endif %}
 {%- for message in messages %}
     {%- if (message.role == "user") or (message.role == "system" and not loop.first) %}
         {{- '<|im_start|>' + message.role + '\n' + message.content + '<|im_end|>' + '\n' }}
-        {%- if tools and loop.index0 == ns.last_user_idx %}
+        {%- if tools and loop.index0 == last_user_idx %}
             {{- '<|im_start|>system\n' }}
             {{- "# Tools\n\nYou may call one or more functions to assist with the user query.\n\nYou are provided with function signatures within <tools></tools> XML tags:\n<tools>" }}
             {%- for tool in tools %}
@@ -64,7 +59,7 @@ const char* getToolsDynamicQwen3Template() {
         {%- endif %}
     {%- endif %}
 {%- endfor %}
-{%- if tools and ns.last_user_idx == -1 %}
+{%- if tools and last_user_idx == -1 %}
     {{- '<|im_start|>system\n' }}
     {{- "# Tools\n\nYou may call one or more functions to assist with the user query.\n\nYou are provided with function signatures within <tools></tools> XML tags:\n<tools>" }}
     {%- for tool in tools %}
