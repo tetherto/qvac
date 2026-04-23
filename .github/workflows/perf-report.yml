@@ -176,8 +176,13 @@ jobs:
           # workflow_dispatch passes `runs` as input; schedule defaults to 6.
           RUNS="${{ inputs.runs }}"
           if [ -z "$RUNS" ]; then RUNS=6; fi
+          # Query the umbrella "On PR Trigger (NMTCPP)" workflow — that's
+          # where perf-report-* artifacts are attached. The inner
+          # "Integration Tests (NMTCPP)" workflow is invoked via
+          # workflow_call and its artifacts surface on the umbrella run.
           node scripts/perf-report/comet-score-nmt.js \
             --runs "$RUNS" \
+            --workflow "On PR Trigger (NMTCPP)" \
             --output reports/nmtcpp-comet.md \
             --model Unbabel/wmt22-comet-da || true
 

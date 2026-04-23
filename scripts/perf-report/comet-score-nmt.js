@@ -53,7 +53,12 @@ const path = require('path')
 const os = require('os')
 const { execSync, spawnSync } = require('child_process')
 
-const DEFAULT_WORKFLOW = 'Integration Tests (NMTCPP)'
+// `On PR Trigger (NMTCPP)` is the umbrella workflow that actually runs
+// per-PR integration tests (including the one that emits perf-report-*
+// artifacts). The inner `Integration Tests (NMTCPP)` is invoked via
+// `workflow_call` and its artifacts surface under the umbrella run,
+// not the inner one — so we query the umbrella by default.
+const DEFAULT_WORKFLOW = 'On PR Trigger (NMTCPP)'
 const DEFAULT_RUNS = 6
 const DEFAULT_MODEL = 'Unbabel/wmt22-comet-da'
 const DEFAULT_OUTPUT = 'reports/nmtcpp-comet.md'
@@ -67,6 +72,7 @@ function parseArgs (argv) {
     runs: DEFAULT_RUNS,
     model: DEFAULT_MODEL,
     output: DEFAULT_OUTPUT,
+    workflow: DEFAULT_WORKFLOW,
     repo: null,
     dir: null,
     skipComet: false
@@ -76,6 +82,7 @@ function parseArgs (argv) {
       case '--runs': args.runs = parseInt(argv[++i], 10) || DEFAULT_RUNS; break
       case '--model': args.model = argv[++i]; break
       case '--output': args.output = argv[++i]; break
+      case '--workflow': args.workflow = argv[++i]; break
       case '--repo': args.repo = argv[++i]; break
       case '--dir': args.dir = argv[++i]; break
       case '--skip-comet': args.skipComet = true; break
@@ -336,14 +343,14 @@ function renderMarkdown (triples, cometScores, meta) {
 function main () {
   const args = parseArgs(process.argv)
   console.log('comet-score-nmt starting')
-  console.log(`  runs=${args.runs}  model=${args.model}  output=${args.output}${args.dir ? `  dir=${args.dir}` : ''}${args.skipComet ? '  skip-comet=true' : ''}`)
+  console.log(`  runs=${args.runs}  workflow="${args.workflow}"  model=${args.model}  output=${args.output}${args.dir ? `  dir=${args.dir}` : ''}${args.skipComet ? '  skip-comet=true' : ''}`)
 
   let rootDir
   let tmpDir = null
   if (args.dir) {
     rootDir = args.dir
   } else {
-    const runs = listWorkflowRuns(DEFAULT_WORKFLOW, args.runs, args.repo)
+    const runs = listWorkflowRuns(args.workflow, args.runs, args.repo)
     if (!runs.length) {
       console.error('No completed runs found — cannot score.')
       // Still emit a stub markdown so the workflow's Step Summary writer has something sane.
