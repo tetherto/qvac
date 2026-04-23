@@ -173,7 +173,7 @@ jobs:
             device_label: macos-15-large
             backend: cpu
             use_gpu: false
-            run_python: true
+            run_python: false
           - os: macos-15-large
             platform: darwin
             arch: x64
@@ -291,6 +291,12 @@ jobs:
         run: |
           sudo apt-get update
           sudo apt-get install -y mesa-vulkan-drivers
+
+      - name: macOS - install benchmark client dependencies
+        if: ${{ matrix.platform == 'darwin' }}
+        shell: bash
+        run: |
+          brew install ffmpeg pkg-config
 
       - name: Install benchmark server dependencies
         working-directory: packages/qvac-lib-infer-onnx-tts/benchmarks/server
