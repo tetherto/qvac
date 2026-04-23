@@ -295,6 +295,76 @@ jobs:
         working-directory: ${{ env.ADDON_DIR }}
         run: npm run test:mobile:validate
 
+      - name: Install AWS CLI (Linux, for presign)
+        if: matrix.platform == 'Android'
+        shell: bash
+        run: |
+          if command -v aws >/dev/null 2>&1; then
+            echo "AWS CLI already on PATH"
+            aws --version
+            exit 0
+          fi
+          echo "Installing AWS CLI v2..."
+          ARCH=$(uname -m)
+          case "$ARCH" in
+            x86_64) AWS_ARCH="x86_64" ;;
+            aarch64|arm64) AWS_ARCH="aarch64" ;;
+            *) echo "Unsupported arch $ARCH" ; exit 1 ;;
+          esac
+          curl -sSL "https://awscli.amazonaws.com/awscli-exe-linux-${AWS_ARCH}.zip" -o /tmp/awscliv2.zip
+          sudo apt-get update -y && sudo apt-get install -y unzip
+          unzip -q /tmp/awscliv2.zip -d /tmp/
+          sudo /tmp/aws/install --update
+          rm -rf /tmp/aws /tmp/awscliv2.zip
+          aws --version
+
+      - name: Configure AWS credentials for S3 presign
+        uses: aws-actions/configure-aws-credentials@8df5847569e6427dd6c4fb1cf565c83acfa8afa7 # 6.0.0
+        with:
+          role-to-assume: ${{ secrets.AWS_OIDC_ROLE_ARN }}
+          aws-region: eu-central-1
+          role-duration-seconds: 7200
+
+      - name: Generate SmolVLA Model URL
+        working-directory: ${{ env.ADDON_DIR }}
+        env:
+          AWS_REGION: eu-central-1
+          MODEL_S3_BUCKET: ${{ secrets.MODEL_S3_BUCKET }}
+        run: |
+          echo "🔑 Generating SmolVLA model URL for mobile tests..."
+          chmod +x scripts/generate-smolvla-presigned-url.sh
+          ./scripts/generate-smolvla-presigned-url.sh
+          echo "✅ SmolVLA model URL generated and exported"
+
+      - name: Bundle Model URLs in config files for APK to access
+        working-directory: ${{ env.ADDON_DIR }}
+        env:
+          SMOLVLA_MODEL_URL: ${{ env.SMOLVLA_MODEL_URL }}
+        run: |
+          echo "📝 Creating model URL config files for mobile app bundling..."
+          echo "   SMOLVLA_MODEL_URL: ${SMOLVLA_MODEL_URL:+SET}${SMOLVLA_MODEL_URL:-NOTSET}"
+
+          mkdir -p test/mobile/testAssets
+
+          if [ -n "${SMOLVLA_MODEL_URL:-}" ]; then
+            cat > test/mobile/testAssets/smolvla-urls.json <<JSON
+          {
+            "modelUrl": "${SMOLVLA_MODEL_URL}"
+          }
+          JSON
+            echo "   ✅ SmolVLA URL bundled"
+            # Do not echo the URL itself (it's a presigned URL with creds).
+            head -c 120 test/mobile/testAssets/smolvla-urls.json
+            echo ""
+          else
+            echo "   ⚠️  SmolVLA URL not available"
+            exit 1
+          fi
+
+          echo ""
+          echo "📂 testAssets directory contents:"
+          ls -la test/mobile/testAssets/
+
       - name: Pack addon
         working-directory: ${{ env.ADDON_DIR }}
         run: |

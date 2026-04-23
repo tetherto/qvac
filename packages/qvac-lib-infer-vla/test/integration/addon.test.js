@@ -108,6 +108,101 @@ const _platform = os.platform()
 const _isMobile = _platform === 'ios' || _platform === 'android'
 const _reportPath = path.resolve('.', 'test/results/performance-report.json')
 
+// ---------------------------------------------------------------------------
+// Mobile model download.
+// On AWS Device Farm the addon runs inside the packed test-addon-mobile app
+// so we can't bake a 1-4GB GGUF into the APK. Instead CI bundles a JSON file
+// with a presigned S3 URL into testAssets/ and we download on first test run.
+// Mirrors the pattern used by qvac-lib-infer-nmtcpp (loadConfigFromAssets +
+// ensureIndicTransModel).
+// ---------------------------------------------------------------------------
+
+function _loadUrlsConfig () {
+  if (!global.assetPaths) return null
+  const candidates = [
+    '../../testAssets/smolvla-urls.json',
+    '../mobile/testAssets/smolvla-urls.json',
+    'testAssets/smolvla-urls.json',
+    '../testAssets/smolvla-urls.json'
+  ]
+  for (const candidate of candidates) {
+    const p = global.assetPaths[candidate]
+    if (!p) continue
+    try {
+      const raw = fs.readFileSync(p.replace('file://', ''), 'utf8')
+      return JSON.parse(raw)
+    } catch (err) {
+      console.log(`[vla-model] failed to read ${candidate}: ${err && err.message}`)
+    }
+  }
+  return null
+}
+
+async function _downloadFile (url, destPath, maxRedirects = 5, maxRetries = 3) {
+  const fetch = require('bare-fetch')
+  let lastErr = null
+  for (let attempt = 0; attempt < maxRetries; attempt++) {
+    if (attempt > 0) {
+      const backoffMs = 500 * (2 ** (attempt - 1))
+      console.log(`[vla-model] retry ${attempt}/${maxRetries - 1} after ${backoffMs}ms (last: ${lastErr && lastErr.message})`)
+      await new Promise(resolve => setTimeout(resolve, backoffMs))
+    }
+    try {
+      console.log(`[vla-model] downloading: ${url.substring(0, 60)}...`)
+      const response = await fetch(url, { redirect: 'follow', follow: maxRedirects })
+      if ([301, 302, 307, 308].includes(response.status)) {
+        const location = response.headers.get('location')
+        if (location && maxRedirects > 0) {
+          return _downloadFile(location, destPath, maxRedirects - 1, maxRetries)
+        }
+        throw new Error(`HTTP ${response.status}: redirect not followed`)
+      }
+      if (!response.ok) {
+        throw new Error(`HTTP ${response.status}: ${response.statusText}`)
+      }
+      const buffer = await response.arrayBuffer()
+      fs.writeFileSync(destPath, Buffer.from(buffer))
+      console.log(`[vla-model] downloaded: ${path.basename(destPath)} (${(buffer.byteLength / 1024 / 1024).toFixed(1)}MB)`)
+      return
+    } catch (err) {
+      lastErr = err
+      if (err && /HTTP \d{3}/.test(err.message || '')) throw err
+    }
+  }
+  throw new Error(`[vla-model] download failed after ${maxRetries} attempts: ${lastErr && lastErr.message}`)
+}
+
+async function _ensureMobileModel () {
+  const modelFilename = 'smolvla-libero-f32-fixed.gguf'
+  const writableRoot = global.testDir || '/tmp'
+  const modelsDir = path.join(writableRoot, 'vla-models')
+  try { fs.mkdirSync(modelsDir, { recursive: true }) } catch (_) {}
+  const destPath = path.join(modelsDir, modelFilename)
+
+  // Cache hit: SmolVLA f32 is large (>800MB); re-downloading for every test
+  // variant wastes bandwidth and flakes on Device Farm's mobile network.
+  if (fs.existsSync(destPath)) {
+    const cachedMB = fs.statSync(destPath).size / (1024 * 1024)
+    if (cachedMB >= 100) {
+      console.log(`[vla-model] reusing cached GGUF: ${destPath} (${cachedMB.toFixed(1)}MB)`)
+      return destPath
+    }
+    console.log(`[vla-model] cached GGUF undersized (${cachedMB.toFixed(2)}MB) — re-downloading`)
+  }
+
+  const urlConfig = _loadUrlsConfig()
+  if (!urlConfig || !urlConfig.modelUrl) {
+    throw new Error('smolvla-urls.json not found in testAssets — cannot download GGUF on mobile')
+  }
+
+  await _downloadFile(urlConfig.modelUrl, destPath)
+  const sizeMB = fs.statSync(destPath).size / (1024 * 1024)
+  if (sizeMB < 100) {
+    throw new Error(`downloaded SmolVLA GGUF looks corrupted (${sizeMB.toFixed(2)}MB)`)
+  }
+  return destPath
+}
+
 let _reportFlushed = false
 function _flushPerfReport () {
   if (_reportFlushed) return
@@ -205,11 +300,22 @@ test('integration: VlaModel rejects missing GGUF file', (t) => {
   t.ok(err, 'expected an error for missing GGUF')
 })
 
-// End-to-end smoke test — skipped unless QVAC_VLA_MODEL points at a real
-// SmolVLA GGUF. Run locally with:
+// End-to-end smoke test.
+// Desktop: skipped unless QVAC_VLA_MODEL points at a real SmolVLA GGUF.
 //   QVAC_VLA_MODEL=/path/to/smolvla-libero.gguf npm run test:integration
-test('integration: end-to-end inference runs (needs GGUF)', (t) => {
-  const modelPath = process.env.QVAC_VLA_MODEL
+// Mobile (iOS/Android): downloads the GGUF from the presigned URL bundled
+// into testAssets/smolvla-urls.json by the CI workflow.
+test('integration: end-to-end inference runs (needs GGUF)', async (t) => {
+  let modelPath = process.env.QVAC_VLA_MODEL
+  if (_isMobile) {
+    try {
+      modelPath = await _ensureMobileModel()
+    } catch (err) {
+      t.comment(`skipping: mobile model fetch failed — ${err && err.message}`)
+      t.pass()
+      return
+    }
+  }
   if (!modelPath || !fs.existsSync(modelPath)) {
     t.comment(`skipping: set QVAC_VLA_MODEL to a valid GGUF (got "${modelPath ?? ''}")`)
     t.pass()
