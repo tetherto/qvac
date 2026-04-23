@@ -1212,61 +1212,6 @@
               }
             ]
           },
-          "unit": "short"
-        },
-        "overrides": []
-      },
-      "gridPos": {
-        "h": 4,
-        "w": 4,
-        "x": 12,
-        "y": 37
-      },
-      "id": 20,
-      "options": {
-        "colorMode": "value",
-        "graphMode": "none",
-        "justifyMode": "auto",
-        "orientation": "vertical",
-        "percentChangeColorMode": "standard",
-        "reduceOptions": {
-          "calcs": [
-            "lastNotNull"
-          ],
-          "fields": "",
-          "values": false
-        },
-        "showPercentChange": false,
-        "textMode": "value_and_name",
-        "wideLayout": true
-      },
-      "pluginVersion": "12.4.0",
-      "targets": [
-        {
-          "expr": "qvac_registry_blob_core_contiguous_length{vm_name=~\"$vm\"}",
-          "legendFormat": "{{vm_name}}",
-          "refId": "A"
-        }
-      ],
-      "title": "Blob Core Contiguous",
-      "type": "stat"
-    },
-    {
-      "datasource": {
-        "type": "prometheus"
-      },
-      "fieldConfig": {
-        "defaults": {
-          "mappings": [],
-          "thresholds": {
-            "mode": "absolute",
-            "steps": [
-              {
-                "color": "green",
-                "value": 0
-              }
-            ]
-          },
           "unit": "bytes"
         },
         "overrides": []
@@ -1274,7 +1219,7 @@
       "gridPos": {
         "h": 4,
         "w": 4,
-        "x": 16,
+        "x": 12,
         "y": 37
       },
       "id": 21,
@@ -1365,8 +1310,8 @@
       "gridPos": {
         "h": 8,
         "w": 12,
-        "x": 0,
-        "y": 41
+        "x": 12,
+        "y": 57
       },
       "id": 22,
       "options": {
@@ -1462,8 +1407,8 @@
       "gridPos": {
         "h": 8,
         "w": 12,
-        "x": 12,
-        "y": 41
+        "x": 0,
+        "y": 49
       },
       "id": 23,
       "options": {
@@ -1550,7 +1495,7 @@
         "h": 8,
         "w": 12,
         "x": 0,
-        "y": 49
+        "y": 65
       },
       "id": 24,
       "options": {
@@ -1641,7 +1586,7 @@
         "h": 8,
         "w": 12,
         "x": 12,
-        "y": 49
+        "y": 65
       },
       "id": 25,
       "options": {
@@ -1781,7 +1726,7 @@
       "gridPos": {
         "h": 4,
         "w": 4,
-        "x": 20,
+        "x": 16,
         "y": 37
       },
       "id": 26,
@@ -1873,7 +1818,7 @@
         "h": 8,
         "w": 8,
         "x": 0,
-        "y": 57
+        "y": 41
       },
       "id": 27,
       "options": {
@@ -1960,7 +1905,7 @@
         "h": 8,
         "w": 8,
         "x": 8,
-        "y": 57
+        "y": 41
       },
       "id": 43,
       "options": {
@@ -2055,7 +2000,7 @@
         "h": 8,
         "w": 8,
         "x": 16,
-        "y": 57
+        "y": 41
       },
       "id": 44,
       "options": {
@@ -2144,8 +2089,8 @@
       "gridPos": {
         "h": 8,
         "w": 12,
-        "x": 0,
-        "y": 65
+        "x": 12,
+        "y": 49
       },
       "id": 28,
       "options": {
@@ -2232,8 +2177,8 @@
       "gridPos": {
         "h": 8,
         "w": 12,
-        "x": 12,
-        "y": 65
+        "x": 0,
+        "y": 57
       },
       "id": 29,
       "options": {
