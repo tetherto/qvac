@@ -5,6 +5,7 @@
 #include <cstdint>
 #include <cstring>
 #include <fstream>
+#include <iostream>
 #include <numeric>
 #include <sstream>
 
@@ -827,10 +828,17 @@ AudioResult ChatterboxEngine::synthesize(const std::string &text) {
 }
 
 std::vector<int64_t> ChatterboxEngine::tokenize(const std::string &text) {
+  std::cerr << ">>> [TOKENIZE-CPP] raw input='" << text
+            << "' lang=" << language_ << " isEnglish=" << isEnglish_
+            << std::endl;
   const std::string preprocessed =
       textPreprocessor_.preprocess(text, language_);
+  std::cerr << ">>> [TOKENIZE-CPP] preprocessed='" << preprocessed << "'"
+            << std::endl;
   const std::string preparedText = lang_mode::prepareTextForTokenization(
       preprocessed, language_, isEnglish_);
+  std::cerr << ">>> [TOKENIZE-CPP] preparedText='" << preparedText << "'"
+            << std::endl;
   QLOG(Priority::INFO, "tokenizing text: " + preparedText);
 
   TokenizerEncodeResult result;
@@ -839,6 +847,13 @@ std::vector<int64_t> ChatterboxEngine::tokenize(const std::string &text) {
 
   const std::vector<int64_t> tokens(result.token_ids,
                                     result.token_ids + result.len);
+  std::cerr << ">>> [TOKENIZE-CPP] token count=" << tokens.size() << " ids=[";
+  for (size_t i = 0; i < tokens.size(); ++i) {
+    std::cerr << tokens[i];
+    if (i + 1 < tokens.size())
+      std::cerr << ",";
+  }
+  std::cerr << "]" << std::endl;
   tokenizers_free_encode_results(&result, 1);
 
   return tokens;
@@ -863,9 +878,12 @@ void ChatterboxEngine::loadTextPreprocessor(
 
   if (language_ == "ja") {
     std::filesystem::path mecabDicPath = mecabDictPath / "mecab-ipadic";
+    std::cerr << ">>> [ENGINE-CPP] Loading MeCab dictionary from: "
+              << mecabDicPath.string() << std::endl;
     QLOG(Priority::INFO,
          "Loading MeCab dictionary from: " + mecabDicPath.string());
     textPreprocessor_.loadMeCab(mecabDicPath);
+    std::cerr << ">>> [ENGINE-CPP] MeCab dictionary loaded OK" << std::endl;
     QLOG(Priority::INFO, "MeCab dictionary loaded");
   }
 }

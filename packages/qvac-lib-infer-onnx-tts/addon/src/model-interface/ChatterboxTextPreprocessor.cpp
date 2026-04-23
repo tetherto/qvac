@@ -1,5 +1,6 @@
 #include "ChatterboxTextPreprocessor.hpp"
 
+#include <iostream>
 #include <sstream>
 #include <stdexcept>
 
@@ -284,6 +285,9 @@ void ChatterboxTextPreprocessor::loadCangjieTable(
 void ChatterboxTextPreprocessor::loadMeCab(
     const std::filesystem::path &dicPath) {
   std::filesystem::path rcPath = dicPath / "mecabrc";
+  std::cerr << ">>> [MECAB-CPP] loadMeCab called with dicPath='"
+            << dicPath.string() << "' rcPath='" << rcPath.string() << "'"
+            << std::endl;
   std::vector<std::string> argsStorage = {"mecab", "-r", rcPath.string(), "-d",
                                           dicPath.string()};
   std::vector<char *> argv;
@@ -295,9 +299,12 @@ void ChatterboxTextPreprocessor::loadMeCab(
   if (!mecabTagger_) {
     const char *err = mecab_strerror(nullptr);
     std::string detail = err != nullptr ? err : "unknown";
+    std::cerr << ">>> [MECAB-CPP] mecab_new FAILED: " << detail << std::endl;
     throw std::runtime_error("Failed to create MeCab tagger with dictionary: " +
                              dicPath.string() + " (" + detail + ")");
   }
+  std::cerr << ">>> [MECAB-CPP] mecab_new OK, tagger=" << mecabTagger_.get()
+            << std::endl;
 }
 
 void ChatterboxTextPreprocessor::reset() {
@@ -359,17 +366,28 @@ std::string ChatterboxTextPreprocessor::buildHiraganaFromNodes(
 
 std::string ChatterboxTextPreprocessor::convertJapaneseWithMeCab(
     const std::string &text) const {
+  std::cerr << ">>> [MECAB-CPP] convertJapaneseWithMeCab input='" << text
+            << "' tagger=" << mecabTagger_.get() << std::endl;
   if (!mecabTagger_) {
-    return convertKatakanaToHiragana(text);
+    std::string fallback = convertKatakanaToHiragana(text);
+    std::cerr << ">>> [MECAB-CPP] NO TAGGER, fallback='" << fallback << "'"
+              << std::endl;
+    return fallback;
   }
 
   const mecab_node_t *node =
       mecab_sparse_tonode(mecabTagger_.get(), text.c_str());
   if (!node) {
-    return convertKatakanaToHiragana(text);
+    std::string fallback = convertKatakanaToHiragana(text);
+    std::cerr << ">>> [MECAB-CPP] mecab_sparse_tonode returned NULL, fallback='"
+              << fallback << "'" << std::endl;
+    return fallback;
   }
 
-  return buildHiraganaFromNodes(node);
+  std::string result = buildHiraganaFromNodes(node);
+  std::cerr << ">>> [MECAB-CPP] convertJapaneseWithMeCab output='" << result
+            << "'" << std::endl;
+  return result;
 }
 
 std::string
