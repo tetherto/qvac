@@ -7,6 +7,7 @@ and generates comparison reports.
 
 import argparse
 import logging
+import os
 import random
 import sys
 from pathlib import Path
@@ -16,7 +17,13 @@ import numpy as np
 from .config import Config
 from .client import TTSClient
 from .dataset import load_dataset_texts
-from .utils import save_single_result, save_comparison_report, round_trip_quality_test, round_trip_single_implementation
+from .utils import (
+    round_trip_quality_test,
+    round_trip_single_implementation,
+    save_comparison_report,
+    save_single_result,
+    save_supertonic_perf_report,
+)
 from .whisper_transcriber import WhisperTranscriber
 
 # Mapping for TTS language codes to Whisper language codes (where they differ)
@@ -34,6 +41,75 @@ logging.basicConfig(
     datefmt='%Y-%m-%d %H:%M:%S'
 )
 logger = logging.getLogger(__name__)
+
+
+def _env_bool(name: str, default: bool) -> bool:
+    value = os.environ.get(name)
+    if value is None:
+        return default
+    return value.lower() in {"1", "true", "yes", "on"}
+
+
+def _env_int(name: str, default: int) -> int:
+    value = os.environ.get(name)
+    if value is None:
+        return default
+    try:
+        return int(value)
+    except ValueError:
+        logger.warning("Invalid integer for %s: %s", name, value)
+        return default
+
+
+def apply_supertonic_env_overrides(cfg: Config) -> Config:
+    """Apply workflow-driven Supertonic benchmark overrides from env vars."""
+    dataset_updates = {}
+    comparison_updates = {}
+    model_updates = {}
+
+    if "QVAC_SUPERTONIC_BENCHMARK_MAX_SAMPLES" in os.environ:
+        dataset_updates["max_samples"] = _env_int(
+            "QVAC_SUPERTONIC_BENCHMARK_MAX_SAMPLES",
+            cfg.dataset.max_samples,
+        )
+
+    if "QVAC_SUPERTONIC_BENCHMARK_RUN_PYTHON" in os.environ:
+        comparison_updates["run_python"] = _env_bool(
+            "QVAC_SUPERTONIC_BENCHMARK_RUN_PYTHON",
+            cfg.comparison.run_python,
+        )
+
+    if "QVAC_SUPERTONIC_BENCHMARK_ROUND_TRIP_TEST" in os.environ:
+        comparison_updates["round_trip_test"] = _env_bool(
+            "QVAC_SUPERTONIC_BENCHMARK_ROUND_TRIP_TEST",
+            cfg.comparison.round_trip_test,
+        )
+
+    if "QVAC_SUPERTONIC_BENCHMARK_WHISPER_MODEL" in os.environ:
+        comparison_updates["whisper_model"] = os.environ["QVAC_SUPERTONIC_BENCHMARK_WHISPER_MODEL"]
+
+    if "QVAC_SUPERTONIC_BENCHMARK_NUM_RUNS" in os.environ:
+        comparison_updates["num_runs"] = _env_int(
+            "QVAC_SUPERTONIC_BENCHMARK_NUM_RUNS",
+            cfg.comparison.num_runs,
+        )
+
+    if "QVAC_SUPERTONIC_BENCHMARK_USE_GPU" in os.environ:
+        model_updates["useGPU"] = _env_bool(
+            "QVAC_SUPERTONIC_BENCHMARK_USE_GPU",
+            cfg.model.useGPU,
+        )
+
+    if not dataset_updates and not comparison_updates and not model_updates:
+        return cfg
+
+    return cfg.model_copy(
+        update={
+            "dataset": cfg.dataset.model_copy(update=dataset_updates) if dataset_updates else cfg.dataset,
+            "comparison": cfg.comparison.model_copy(update=comparison_updates) if comparison_updates else cfg.comparison,
+            "model": cfg.model.model_copy(update=model_updates) if model_updates else cfg.model,
+        }
+    )
 
 
 def run_supertonic_benchmark_suite(cfg: Config, config_path: str) -> None:
@@ -119,6 +195,13 @@ def run_supertonic_benchmark_suite(cfg: Config, config_path: str) -> None:
                     addon_round_trip,
                     result_language=lang,
                 )
+                save_supertonic_perf_report(
+                    cfg_eff,
+                    addon_runs,
+                    "addon",
+                    addon_round_trip,
+                    result_language=lang,
+                )
             finally:
                 addon_client.close()
 
@@ -142,6 +225,13 @@ def run_supertonic_benchmark_suite(cfg: Config, config_path: str) -> None:
                 save_single_result(
                     cfg_eff,
                     python_runs[0],
+                    "python-native",
+                    python_round_trip,
+                    result_language=lang,
+                )
+                save_supertonic_perf_report(
+                    cfg_eff,
+                    python_runs,
                     "python-native",
                     python_round_trip,
                     result_language=lang,
@@ -176,6 +266,9 @@ def main():
     except Exception as e:
         logger.error(f"Failed to load config: {e}")
         sys.exit(1)
+
+    if "supertonic" in args.config:
+        cfg = apply_supertonic_env_overrides(cfg)
     
     logger.info("Configuration loaded successfully")
 
