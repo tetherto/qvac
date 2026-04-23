@@ -273,11 +273,8 @@ jobs:
         id: publish
         uses: ./.github/actions/publish-library-to-npm
         with:
-          secret-token: ${{ secrets.NPM_TOKEN }}
           tag: "latest"
           workdir: ${{ env.PKG_DIR }}/shared
-          repo_name: "registry-server"
-          git-token: ${{ secrets.GITHUB_TOKEN }}
 
   publish-schema:
     name: Publish Schema (meta)
@@ -449,11 +446,8 @@ jobs:
         id: publish
         uses: ./.github/actions/publish-library-to-npm
         with:
-          secret-token: ${{ secrets.NPM_TOKEN }}
           tag: "latest"
           workdir: ${{ env.PKG_DIR }}/client
-          repo_name: "registry-client"
-          git-token: ${{ secrets.GITHUB_TOKEN }}
 
   publish-client-release:
     needs: [publish-client-npm]

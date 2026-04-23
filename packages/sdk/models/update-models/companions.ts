@@ -4,6 +4,7 @@ import type {
   CompanionSetMetadata,
   CompanionSetMetadataEntry,
 } from "./types";
+import { BERGAMOT_MODEL_RE } from "@/schemas";
 
 /**
  * Detects companion file relationships among processed models and
@@ -11,11 +12,14 @@ import type {
  * Companion-only entries are marked with `isCompanionOnly` so
  * codegen can exclude them from exported model constants.
  *
- * Currently scoped to ONNX pairs. Detection rules:
- *   - Primary: registryPath ends with `.onnx`
- *   - Companion candidates (same registrySource):
- *       `${primaryPath}_data`
- *       `${primaryPath}.data`
+ * Detection families:
+ *   ONNX pairs:
+ *     Primary: registryPath ends with `.onnx`
+ *     Companion: `${primaryPath}_data` or `${primaryPath}.data`
+ *
+ *   Bergamot NMT sets (directory-based):
+ *     Primary: `model.<langPair>.intgemm.alphas.bin`
+ *     Companions in same directory: lex, vocab/srcvocab+trgvocab, metadata
  */
 export function groupCompanionSets(
   models: ProcessedModel[],
@@ -27,6 +31,23 @@ export function groupCompanionSets(
 
   const companionKeys = new Set<string>();
 
+  groupOnnxCompanions(models, bySourcePath, companionKeys);
+  groupBergamotCompanions(models, bySourcePath, companionKeys);
+
+  return models.map((model) => {
+    const key = sourceKey(model.registrySource, model.registryPath);
+    if (companionKeys.has(key)) {
+      return { ...model, isCompanionOnly: true };
+    }
+    return model;
+  });
+}
+
+function groupOnnxCompanions(
+  models: ProcessedModel[],
+  bySourcePath: Map<string, ProcessedModel>,
+  companionKeys: Set<string>,
+): void {
   for (const model of models) {
     if (!model.registryPath.endsWith(".onnx")) continue;
 
@@ -81,14 +102,108 @@ export function groupCompanionSets(
     model.companionSet = companionSetMetadata;
     companionKeys.add(dataKey);
   }
+}
 
-  return models.map((model) => {
-    const key = sourceKey(model.registrySource, model.registryPath);
-    if (companionKeys.has(key)) {
-      return { ...model, isCompanionOnly: true };
+function groupBergamotCompanions(
+  models: ProcessedModel[],
+  bySourcePath: Map<string, ProcessedModel>,
+  companionKeys: Set<string>,
+): void {
+  for (const model of models) {
+    const match = model.registryPath.match(BERGAMOT_MODEL_RE);
+    if (!match?.[1] || !match[2]) continue;
+
+    const dirPrefix = match[1];
+    const langPair = match[2];
+    const source = model.registrySource;
+
+    const companions = findBergamotCompanions(
+      source,
+      dirPrefix,
+      langPair,
+      bySourcePath,
+    );
+    if (companions.length === 0) continue;
+
+    const primaryFilename = model.registryPath.split("/").pop()!;
+    const setKey = shortHash(`${source}:${model.registryPath}`);
+
+    const primaryEntry: CompanionSetMetadataEntry = {
+      key: "modelPath",
+      registryPath: model.registryPath,
+      registrySource: source,
+      targetName: primaryFilename,
+      expectedSize: model.expectedSize,
+      sha256Checksum: model.sha256Checksum,
+      blobCoreKey: model.blobCoreKey,
+      blobBlockOffset: model.blobBlockOffset,
+      blobBlockLength: model.blobBlockLength,
+      blobByteOffset: model.blobByteOffset,
+      primary: true,
+    };
+
+    const companionEntries: CompanionSetMetadataEntry[] = [];
+    for (const { key: entryKey, model: comp } of companions) {
+      const filename = comp.registryPath.split("/").pop()!;
+      companionEntries.push({
+        key: entryKey,
+        registryPath: comp.registryPath,
+        registrySource: comp.registrySource,
+        targetName: filename,
+        expectedSize: comp.expectedSize,
+        sha256Checksum: comp.sha256Checksum,
+        blobCoreKey: comp.blobCoreKey,
+        blobBlockOffset: comp.blobBlockOffset,
+        blobBlockLength: comp.blobBlockLength,
+        blobByteOffset: comp.blobByteOffset,
+      });
+      companionKeys.add(sourceKey(comp.registrySource, comp.registryPath));
     }
-    return model;
-  });
+
+    model.companionSet = {
+      setKey,
+      primaryKey: "modelPath",
+      files: [primaryEntry, ...companionEntries],
+    };
+  }
+}
+
+function findBergamotCompanions(
+  source: string,
+  dirPrefix: string,
+  langPair: string,
+  bySourcePath: Map<string, ProcessedModel>,
+): { key: string; model: ProcessedModel }[] {
+  const found: { key: string; model: ProcessedModel }[] = [];
+
+  const lexPath = `${dirPrefix}lex.50.50.${langPair}.s2t.bin`;
+  const lexModel = bySourcePath.get(sourceKey(source, lexPath));
+  if (lexModel) {
+    found.push({ key: "lexPath", model: lexModel });
+  }
+
+  const sharedVocabPath = `${dirPrefix}vocab.${langPair}.spm`;
+  const sharedVocab = bySourcePath.get(sourceKey(source, sharedVocabPath));
+  if (sharedVocab) {
+    found.push({ key: "sharedVocabPath", model: sharedVocab });
+  } else {
+    const srcVocabPath = `${dirPrefix}srcvocab.${langPair}.spm`;
+    const trgVocabPath = `${dirPrefix}trgvocab.${langPair}.spm`;
+    const srcVocab = bySourcePath.get(sourceKey(source, srcVocabPath));
+    const trgVocab = bySourcePath.get(sourceKey(source, trgVocabPath));
+    if (srcVocab && trgVocab) {
+      found.push({ key: "srcVocabPath", model: srcVocab });
+      found.push({ key: "dstVocabPath", model: trgVocab });
+    }
+  }
+
+  const metadataPath = `${dirPrefix}metadata.json`;
+  const metadata = bySourcePath.get(sourceKey(source, metadataPath));
+  if (metadata) {
+    found.push({ key: "metadataPath", model: metadata });
+  }
+
+  return found;
 }
 
 function sourceKey(source: string, path: string): string {
