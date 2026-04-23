@@ -18,79 +18,88 @@ import { TextToSpeechStreamFailedError } from "@/utils/errors-client";
 
 const logger = getClientLogger();
 
-function createTtsMulticast(
-  request: TtsRequest,
-  options?: RPCOptions,
-): { subscribe: () => AsyncGenerator<TtsResponse>; done: Promise<boolean> } {
-  const queue: TtsResponse[] = [];
-  const waiters: Array<() => void> = [];
-  const subscriberIndexes: number[] = [];
-  let ended = false;
-  let fatal: Error | undefined;
+/**
+ * Fan-out queue that lets multiple consumers iterate the same TTS RPC stream
+ * independently. Items are retained only until every active subscriber has
+ * consumed them, then trimmed from the queue.
+ */
+class TtsMulticast {
+  private readonly queue: TtsResponse[] = [];
+  private readonly waiters: Array<() => void> = [];
+  private readonly subscriberIndexes: number[] = [];
+  private ended = false;
+  private fatal: Error | undefined;
+  private readonly resolvePumpDone: (value: boolean) => void;
 
-  let pumpDoneResolve!: (value: boolean) => void;
-  const pumpDone = new Promise<boolean>((resolve) => {
-    pumpDoneResolve = resolve;
-  });
+  readonly done: Promise<boolean>;
 
-  function notify() {
-    for (const fn of waiters.splice(0)) fn();
+  constructor(request: TtsRequest, options: RPCOptions | undefined) {
+    let resolve!: (value: boolean) => void;
+    this.done = new Promise<boolean>((r) => {
+      resolve = r;
+    });
+    this.resolvePumpDone = resolve;
+    void this.pump(request, options);
   }
 
-  function trimConsumed() {
-    if (subscriberIndexes.length === 0) return;
-    const minIndex = Math.min(...subscriberIndexes);
+  subscribe(): AsyncGenerator<TtsResponse> {
+    const subIdx = this.subscriberIndexes.length;
+    this.subscriberIndexes.push(0);
+    return this.drain(subIdx);
+  }
+
+  private notify(): void {
+    for (const fn of this.waiters.splice(0)) fn();
+  }
+
+  private trimConsumed(): void {
+    if (this.subscriberIndexes.length === 0) return;
+    const minIndex = Math.min(...this.subscriberIndexes);
     if (minIndex > 0) {
-      queue.splice(0, minIndex);
-      for (let j = 0; j < subscriberIndexes.length; j++) {
-        subscriberIndexes[j] = (subscriberIndexes[j] ?? 0) - minIndex;
+      this.queue.splice(0, minIndex);
+      for (let j = 0; j < this.subscriberIndexes.length; j++) {
+        this.subscriberIndexes[j] = (this.subscriberIndexes[j] ?? 0) - minIndex;
       }
     }
   }
 
-  async function pump() {
+  private async pump(
+    request: TtsRequest,
+    options: RPCOptions | undefined,
+  ): Promise<void> {
     try {
       for await (const response of streamRpc(request, options)) {
         if (response.type !== "textToSpeech") continue;
         const m = ttsResponseSchema.parse(response);
-        queue.push(m);
-        notify();
+        this.queue.push(m);
+        this.notify();
         if (m.done) break;
       }
     } catch (e) {
-      fatal = e instanceof Error ? e : new Error(String(e));
+      this.fatal = e instanceof Error ? e : new Error(String(e));
     } finally {
-      ended = true;
-      notify();
-      pumpDoneResolve(fatal === undefined);
+      this.ended = true;
+      this.notify();
+      this.resolvePumpDone(this.fatal === undefined);
     }
   }
 
-  void pump();
-
-  function subscribe(): AsyncGenerator<TtsResponse> {
-    const subIdx = subscriberIndexes.length;
-    subscriberIndexes.push(0);
-
-    return (async function* () {
-      while (true) {
-        while ((subscriberIndexes[subIdx] ?? 0) < queue.length) {
-          const currentIdx = subscriberIndexes[subIdx] ?? 0;
-          const item = queue[currentIdx] as TtsResponse;
-          subscriberIndexes[subIdx] = currentIdx + 1;
-          trimConsumed();
-          yield item;
-        }
-        if (fatal) throw fatal;
-        if (ended) return;
-        await new Promise<void>((resolve) => {
-          waiters.push(resolve);
-        });
+  private async *drain(subIdx: number): AsyncGenerator<TtsResponse> {
+    while (true) {
+      while ((this.subscriberIndexes[subIdx] ?? 0) < this.queue.length) {
+        const currentIdx = this.subscriberIndexes[subIdx] ?? 0;
+        const item = this.queue[currentIdx] as TtsResponse;
+        this.subscriberIndexes[subIdx] = currentIdx + 1;
+        this.trimConsumed();
+        yield item;
       }
-    })();
+      if (this.fatal) throw this.fatal;
+      if (this.ended) return;
+      await new Promise<void>((resolve) => {
+        this.waiters.push(resolve);
+      });
+    }
   }
-
-  return { subscribe, done: pumpDone };
 }
 
 function buildTtsRequest(params: TtsClientParams): TtsRequest {
@@ -108,6 +117,28 @@ function buildTtsRequest(params: TtsClientParams): TtsRequest {
     }),
     ...(params.sentenceStreamMaxChunkScalars !== undefined && {
       sentenceStreamMaxChunkScalars: params.sentenceStreamMaxChunkScalars,
+    }),
+  };
+}
+
+function buildTextToSpeechStreamRequest(
+  params: TextToSpeechStreamClientParams,
+): TextToSpeechStreamRequest {
+  return {
+    type: "textToSpeechStream",
+    modelId: params.modelId,
+    inputType: params.inputType ?? "text",
+    ...(params.accumulateSentences !== undefined && {
+      accumulateSentences: params.accumulateSentences,
+    }),
+    ...(params.sentenceDelimiterPreset !== undefined && {
+      sentenceDelimiterPreset: params.sentenceDelimiterPreset,
+    }),
+    ...(params.maxBufferScalars !== undefined && {
+      maxBufferScalars: params.maxBufferScalars,
+    }),
+    ...(params.flushAfterMs !== undefined && {
+      flushAfterMs: params.flushAfterMs,
     }),
   };
 }
@@ -133,20 +164,20 @@ function sentenceStreamTts(
   request: TtsRequest,
   options: RPCOptions | undefined,
 ): TextToSpeechStreamResult {
-  const { subscribe, done } = createTtsMulticast(request, options);
+  const multicast = new TtsMulticast(request, options);
 
   return {
-    bufferStream: sentenceBufferStream(subscribe),
-    chunkUpdates: sentenceChunkUpdates(subscribe),
+    bufferStream: sentenceBufferStream(multicast),
+    chunkUpdates: sentenceChunkUpdates(multicast),
     buffer: Promise.resolve([]),
-    done,
+    done: multicast.done,
   };
 }
 
 async function* sentenceBufferStream(
-  subscribe: () => AsyncGenerator<TtsResponse>,
+  multicast: TtsMulticast,
 ): AsyncGenerator<number> {
-  for await (const m of subscribe()) {
+  for await (const m of multicast.subscribe()) {
     if (m.buffer.length > 0) {
       yield* m.buffer;
     }
@@ -155,9 +186,9 @@ async function* sentenceBufferStream(
 }
 
 async function* sentenceChunkUpdates(
-  subscribe: () => AsyncGenerator<TtsResponse>,
+  multicast: TtsMulticast,
 ): AsyncGenerator<TtsSentenceChunkUpdate> {
-  for await (const m of subscribe()) {
+  for await (const m of multicast.subscribe()) {
     const hasAudio = m.buffer.length > 0;
     const hasMeta =
       m.chunkIndex !== undefined ||
@@ -255,23 +286,7 @@ export async function textToSpeechStream(
   params: TextToSpeechStreamClientParams,
   options?: RPCOptions,
 ): Promise<TextToSpeechStreamSession> {
-  const request: TextToSpeechStreamRequest = {
-    type: "textToSpeechStream",
-    modelId: params.modelId,
-    inputType: params.inputType ?? "text",
-    ...(params.accumulateSentences !== undefined && {
-      accumulateSentences: params.accumulateSentences,
-    }),
-    ...(params.sentenceDelimiterPreset !== undefined && {
-      sentenceDelimiterPreset: params.sentenceDelimiterPreset,
-    }),
-    ...(params.maxBufferScalars !== undefined && {
-      maxBufferScalars: params.maxBufferScalars,
-    }),
-    ...(params.flushAfterMs !== undefined && {
-      flushAfterMs: params.flushAfterMs,
-    }),
-  };
+  const request = buildTextToSpeechStreamRequest(params);
 
   const { requestStream, responseStream } = await duplex(request, options);
 
