@@ -39,16 +39,16 @@ function embed(params: { modelId: string; text: string[] }, options?: RPCOptions
 | Field | Type | Description |
 | --- | --- | --- |
 | embedding | `number[]` | The embedding vector(s). Single `number[]` when `text` is a string; `number[][]` when `text` is an array. |
-| stats | `\{ backendDevice?: "cpu" \| "gpu"; tokensPerSecond?: number; totalTime?: number; totalTokens?: number \}` | Performance statistics |
+| stats | `\{ backendDevice?: "gpu" \| "cpu"; tokensPerSecond?: number; totalTime?: number; totalTokens?: number \}` | Performance statistics |
 
 ### `stats`
 
 | Field | Type | Required? | Description |
 | --- | --- | :---: | --- |
-| backendDevice | `"cpu" \| "gpu"` | ✗ | Compute backend used for inference. |
-| tokensPerSecond | `number` | ✗ | Tokens generated per second. |
-| totalTime | `number` | ✗ | — |
-| totalTokens | `number` | ✗ | — |
+| backendDevice | `"gpu" \| "cpu"` | ✗ | Compute backend used for inference |
+| tokensPerSecond | `number` | ✗ | Tokens processed per second |
+| totalTime | `number` | ✗ | Total embedding time in milliseconds |
+| totalTokens | `number` | ✗ | Total tokens processed |
 
 ## Throws
 

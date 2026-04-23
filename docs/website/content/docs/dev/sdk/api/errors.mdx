@@ -34,6 +34,7 @@ Thrown on the client side (response validation, RPC, provider). Access via `SDK_
 | `RPC_REQUEST_NOT_SENT` | 50201 | Request has not been sent yet. | Internal RPC layer |
 | `RPC_RESPONSE_STREAM_NOT_CREATED` | 50202 | Response stream not created. | Internal RPC layer |
 | `RPC_CONNECTION_FAILED` | 50203 | RPC connection failed. | Any API call (startup/transport) |
+| `RPC_INIT_TIMEOUT` | 50204 | RPC initialization timed out after …ms — the worker process may have failed to start | — |
 | `PROVIDER_START_FAILED` | 50400 | Failed to start provider. | `startQVACProvider()` |
 | `PROVIDER_STOP_FAILED` | 50401 | Failed to stop provider. | `stopQVACProvider()` |
 | `DELEGATE_NO_FINAL_RESPONSE` | 50402 | No final response received from delegated provider. | `completion()`, `loadModel()` |

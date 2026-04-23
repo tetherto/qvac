@@ -12,26 +12,29 @@ function diffusion(params: DiffusionClientParams): DiffusionResult;
 
 | Name | Type | Required? | Description |
 | --- | --- | :---: | --- |
-| params | `DiffusionClientParams` | ✓ | Diffusion request parameters (model, prompt, dimensions, sampler, seed, etc.). |
+| params | [`DiffusionClientParams`](#diffusionclientparams) | ✓ | Diffusion request parameters (model, prompt, dimensions, sampler, seed, etc.). |
 
-### `params`
+### `DiffusionClientParams`
 
 | Field | Type | Required? | Description |
 | --- | --- | :---: | --- |
-| batch_count | `number` | ✗ | — |
-| cache_preset | `string` | ✗ | — |
-| cfg_scale | `number` | ✗ | — |
-| guidance | `number` | ✗ | — |
-| height | `number` | ✗ | — |
-| modelId | `string` | ✓ | — |
-| negative_prompt | `string` | ✗ | — |
-| prompt | `string` | ✓ | — |
-| sampling_method | `"euler" \| "euler_a" \| "heun" \| "dpm2" \| "dpm++2m" \| "dpm++2mv2" \| "dpm++2s_a" \| "lcm" \| "ipndm" \| "ipndm_v" \| "ddim_trailing" \| "tcd" \| "res_multistep" \| "res_2s"` | ✗ | — |
-| scheduler | `"lcm" \| "discrete" \| "karras" \| "exponential" \| "ays" \| "gits" \| "sgm_uniform" \| "simple" \| "smoothstep" \| "kl_optimal" \| "bong_tangent"` | ✗ | — |
-| seed | `number` | ✗ | — |
-| steps | `number` | ✗ | — |
-| vae_tiling | `boolean` | ✗ | — |
-| width | `number` | ✗ | — |
+| modelId | `string` | ✓ | The identifier of the loaded diffusion model |
+| prompt | `string` | ✓ | Text prompt describing the image to generate |
+| negative_prompt | `string \| undefined` | ✗ | Text describing what to avoid in the generated image |
+| width | `number \| undefined` | ✗ | Image width in pixels (must be a multiple of 8) |
+| height | `number \| undefined` | ✗ | Image height in pixels (must be a multiple of 8) |
+| steps | `number \| undefined` | ✗ | Number of diffusion steps |
+| cfg_scale | `number \| undefined` | ✗ | Classifier-free guidance scale for SD 1.x / 2.x / XL / SD3 models (typical range 1–20, default 7) |
+| img_cfg_scale | `number \| undefined` | ✗ | — |
+| guidance | `number \| undefined` | ✗ | Distilled guidance for FLUX models (typical range 1–10, default 3.5) |
+| sampling_method | `"euler" \| "euler_a" \| "heun" \| "dpm2" \| "dpm++2m" \| "dpm++2mv2" \| "dpm++2s_a" \| "lcm" \| "ipndm" \| "ipndm_v" \| "ddim_trailing" \| "tcd" \| "res_multistep" \| "res_2s" \| undefined` | ✗ | Sampling algorithm |
+| scheduler | `"lcm" \| "discrete" \| "karras" \| "exponential" \| "ays" \| "gits" \| "sgm_uniform" \| "simple" \| "smoothstep" \| "kl_optimal" \| "bong_tangent" \| undefined` | ✗ | Noise scheduler |
+| seed | `number \| undefined` | ✗ | Random seed for reproducibility |
+| batch_count | `number \| undefined` | ✗ | Number of images to generate |
+| vae_tiling | `boolean \| undefined` | ✗ | Enable VAE tiling for large images on limited VRAM |
+| cache_preset | `string \| undefined` | ✗ | Cache preset identifier |
+| strength | `number \| undefined` | ✗ | — |
+| init_image | `Uint8Array<ArrayBufferLike>` | ✗ | — |
 
 ## Returns
 
@@ -40,10 +43,20 @@ function diffusion(params: DiffusionClientParams): DiffusionResult;
 ## Example
 
 ```typescript
-// Basic usage
+// txt2img
 const { outputs, stats } = diffusion({ modelId, prompt: "a cat" });
 const buffers = await outputs;
 fs.writeFileSync("output.png", buffers[0]);
+
+// img2img (SD/SDXL — SDEdit)
+const initImage = fs.readFileSync("input.png");
+const { outputs } = diffusion({ modelId, prompt: "oil painting style", init_image: initImage, strength: 0.7 });
+
+// img2img (FLUX.2 — in-context conditioning)
+// IMPORTANT: FLUX img2img requires `prediction: "flux2_flow"` to be set on the
+// model config at loadModel time (e.g. `loadModel(src, { modelType: "diffusion",
+// modelConfig: { prediction: "flux2_flow" } })`).
+const { outputs } = diffusion({ modelId, prompt: "turn into watercolor", init_image: initImage });
 
 // With progress tracking
 const { progressStream, outputs } = diffusion({ modelId, prompt: "a cat" });

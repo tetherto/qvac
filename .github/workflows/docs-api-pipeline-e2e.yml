@@ -64,7 +64,12 @@ jobs:
       - name: Snapshot first run output
         run: |
           cp scripts/api-docs/api-data.json /tmp/api-data-run1.json
-          tar -cf /tmp/dev-run1.tar content/docs/dev/sdk/api
+          # Hash every generated MDX by content (sorted by path) so the
+          # comparison ignores filesystem metadata like mtime and inode
+          # ordering; those differ on each run even when the pipeline is
+          # fully deterministic because `fs.writeFile` always refreshes
+          # mtime. We only care that the bytes inside each file match.
+          find content/docs/dev/sdk/api -type f | LC_ALL=C sort | xargs sha256sum > /tmp/dev-run1-hashes.txt
 
       - name: Second generation run (from scratch)
         env:
@@ -81,8 +86,8 @@ jobs:
 
       - name: Assert dev MDX tree is byte-identical across runs
         run: |
-          tar -cf /tmp/dev-run2.tar content/docs/dev/sdk/api
-          cmp /tmp/dev-run1.tar /tmp/dev-run2.tar || {
+          find content/docs/dev/sdk/api -type f | LC_ALL=C sort | xargs sha256sum > /tmp/dev-run2-hashes.txt
+          diff -u /tmp/dev-run1-hashes.txt /tmp/dev-run2-hashes.txt || {
             echo "::error::Dev MDX output differs across repeat runs (non-deterministic rendering)"
             exit 1
           }

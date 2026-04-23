@@ -2495,7 +2495,7 @@ function buildStructuredType(type: any): StructuredType | undefined {
       kind: "union",
       variants: type.types
         .map((t: any) => buildStructuredType(t))
-        .filter((v): v is StructuredType => v !== undefined),
+        .filter((v: StructuredType | undefined): v is StructuredType => v !== undefined),
     };
   }
   if (type.type === "intersection" && Array.isArray(type.types)) {
@@ -2503,7 +2503,7 @@ function buildStructuredType(type: any): StructuredType | undefined {
       kind: "intersection",
       parts: type.types
         .map((t: any) => buildStructuredType(t))
-        .filter((v): v is StructuredType => v !== undefined),
+        .filter((v: StructuredType | undefined): v is StructuredType => v !== undefined),
     };
   }
   if (type.type === "array") {

@@ -5,7 +5,7 @@ description: Generates completion from a language model based on conversation hi
 ---
 
 ```ts
-function completion(params: CompletionParams): { stats: Promise<{ backendDevice?: "cpu" | "gpu"; cacheTokens?: number; timeToFirstToken?: number; tokensPerSecond?: number } | undefined>; text: Promise<string>; tokenStream: AsyncGenerator<string>; toolCalls: Promise<ToolCallWithCall[]>; toolCallStream: AsyncGenerator<{ call: { arguments: Record<string, unknown>; id: string; name: string; raw?: string }; type: "toolCall" } | { error: { code: "PARSE_ERROR" | "VALIDATION_ERROR" | "UNKNOWN_TOOL"; message: string; raw?: string }; type: "toolCallError" }> };
+function completion(params: CompletionParams): CompletionRun;
 ```
 
 ## Parameters
@@ -21,6 +21,8 @@ function completion(params: CompletionParams): { stats: Promise<{ backendDevice?
 | tools | `\{ type: "function"; name: string; description: string; parameters: \{ type: "object"; properties: Record<string, \{ type: "string" \| "number" \| "boolean" \| "object" \| "array" \| "integer"; description?: string \| undefined; enum?: string[] \| undefined; \}>; required?: string[] \| undefined; \}; \}[] \| ToolInput[]` | ✗ | Optional array of tools (Zod-schema ToolInput or full Tool objects) |
 | mcp | `McpClientInput[]` | ✗ | Optional array of MCP client inputs for tool integration |
 | rpcOptions | `\{ timeout?: number \| undefined; healthCheckTimeout?: number \| undefined; forceNewConnection?: boolean \| undefined; profiling?: \{ enabled?: boolean \| undefined; includeServerBreakdown?: boolean \| undefined; mode?: "summary" \| ... 1 more ... \| undefined; \} \| undefined; \}` | ✗ | Optional RPC transport options |
+| captureThinking | `boolean` | ✗ | — |
+| emitRawDeltas | `boolean` | ✗ | — |
 | history | `\{ role: string; content: string; attachments?: \{ path: string; \}[] \| undefined; \}[]` | ✓ | Array of conversation messages sent to the model. |
 | modelId | `string` | ✓ | The identifier of the model to use for completion. |
 | stream | `boolean` | ✓ | Whether to stream tokens or return complete response |
@@ -85,22 +87,55 @@ function completion(params: CompletionParams): { stats: Promise<{ backendDevice?
 
 `object` — Object with the following fields:
 
+### `CompletionRun`
+
 | Field | Type | Description |
 | --- | --- | --- |
-| stats | `Promise<\{ backendDevice?: "cpu" \| "gpu"; cacheTokens?: number; timeToFirstToken?: number; tokensPerSecond?: number \} \| undefined>` | Performance statistics |
+| events | `AsyncIterable<CompletionEvent>` | Ordered stream of typed completion events — the canonical consumption API. |
+| final | `Promise<CompletionFinal>` | Resolves when the stream ends with aggregated content, thinking, tool calls, stats, and raw output. |
+| stats | `Promise<CompletionStats \| undefined>` | Performance statistics |
 | text | `Promise<string>` | Complete generated text (resolves after stream ends) |
 | tokenStream | `AsyncGenerator<string>` | Stream of generated tokens |
 | toolCalls | `Promise<ToolCallWithCall[]>` | Tool calls made during completion (may include `invoke()` when handler is available) |
-| toolCallStream | `AsyncGenerator<\{ call: \{ arguments: Record<string, unknown>; id: string; name: string; raw?: string \}; type: "toolCall" \} \| \{ error: \{ code: "PARSE_ERROR" \| "VALIDATION_ERROR" \| "UNKNOWN_TOOL"; message: string; raw?: string \}; type: "toolCallError" \}>` | Stream of tool call events |
+| toolCallStream | `AsyncGenerator<ToolCallEvent>` | Stream of tool call events |
 
-### `stats`
+### `CompletionFinal`
 
 | Field | Type | Required? | Description |
 | --- | --- | :---: | --- |
-| backendDevice | `"cpu" \| "gpu"` | ✗ | Compute backend used for inference. |
-| cacheTokens | `number` | ✗ | Number of tokens served from the KV cache. |
-| timeToFirstToken | `number` | ✗ | Time to first token in milliseconds. |
-| tokensPerSecond | `number` | ✗ | Tokens generated per second. |
+| contentText | `string` | ✓ | — |
+| raw | `\{ fullText: string; toolDialect?: string \}` | ✓ | — |
+| stats | `CompletionStats` | ✗ | — |
+| thinkingText | `string` | ✗ | — |
+| toolCalls | `ToolCallWithCall[]` | ✓ | — |
+
+#### `CompletionStats`
+
+| Field | Type | Required? | Description |
+| --- | --- | :---: | --- |
+| backendDevice | `"gpu" \| "cpu"` | ✗ | Compute backend used for inference |
+| cacheTokens | `number` | ✗ | Number of cached tokens |
+| timeToFirstToken | `number` | ✗ | Time to first token in milliseconds |
+| tokensPerSecond | `number` | ✗ | Tokens generated per second |
+
+#### `ToolCallWithCall`
+
+| Field | Type | Required? | Description |
+| --- | --- | :---: | --- |
+| arguments | `Record<string, unknown>` | ✓ | Tool arguments |
+| id | `string` | ✓ | Call identifier |
+| name | `string` | ✓ | Tool name |
+| raw | `string` | ✗ | Raw call text (optional) |
+| invoke | `() => Promise<unknown>` | ✗ | Executes the tool handler (present when a matching handler was provided) |
+
+### `CompletionStats`
+
+| Field | Type | Required? | Description |
+| --- | --- | :---: | --- |
+| backendDevice | `"gpu" \| "cpu"` | ✗ | Compute backend used for inference |
+| cacheTokens | `number` | ✗ | Number of cached tokens |
+| timeToFirstToken | `number` | ✗ | Time to first token in milliseconds |
+| tokensPerSecond | `number` | ✗ | Tokens generated per second |
 
 ### `ToolCallWithCall`
 
@@ -124,12 +159,13 @@ function completion(params: CompletionParams): { stats: Promise<{ backendDevice?
 ```typescript
 import { z } from "zod";
 
-const result = completion({
+const run = completion({
   modelId: "llama-2",
   history: [
     { role: "user", content: "What's the weather in Tokyo?" }
   ],
   stream: true,
+  captureThinking: true,
   tools: [{
     name: "get_weather",
     description: "Get current weather",
@@ -142,10 +178,12 @@ const result = completion({
   }]
 });
 
-for await (const token of result.tokenStream) {
-  process.stdout.write(token);
+for await (const event of run.events) {
+  if (event.type === "contentDelta") process.stdout.write(event.text);
+  if (event.type === "toolCall") console.log(event.call.name, event.call.arguments);
 }
 
+const result = await run.final;
 for (const toolCall of await result.toolCalls) {
   if (toolCall.invoke) {
     const toolResult = await toolCall.invoke();
