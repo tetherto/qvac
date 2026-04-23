@@ -172,6 +172,45 @@ TEST_F(Qwen3ToolsDynamicTemplateRenderTest, ToolsAfterLastUserMessage) {
       << "tools block must NOT appear after the first user message";
 }
 
+TEST_F(
+    Qwen3ToolsDynamicTemplateRenderTest,
+    ToolsAfterLastUserWhenConversationContinues) {
+  auto inputs = makeInputs(
+      {msg("user", "Hi"),
+       msg("assistant", "Hello!"),
+       msg("user", "What is the weather in Tokyo?"),
+       msg("assistant", "Let me check that.")},
+      {weatherTool()});
+
+  std::string prompt = render(inputs);
+
+  auto firstUserPos = prompt.find("<|im_start|>user\nHi<|im_end|>");
+  auto firstAssistantPos = prompt.find("<|im_start|>assistant\nHello!<|im_end|>");
+  auto secondUserPos =
+      prompt.find("<|im_start|>user\nWhat is the weather in Tokyo?<|im_end|>");
+  auto toolsPos = prompt.find("<|im_start|>system\n# Tools");
+  auto secondAssistantPos =
+      prompt.find("<|im_start|>assistant\nLet me check that.<|im_end|>");
+
+  ASSERT_NE(firstUserPos, std::string::npos);
+  ASSERT_NE(firstAssistantPos, std::string::npos);
+  ASSERT_NE(secondUserPos, std::string::npos);
+  ASSERT_NE(toolsPos, std::string::npos);
+  ASSERT_NE(secondAssistantPos, std::string::npos);
+
+  EXPECT_LT(firstUserPos, firstAssistantPos);
+  EXPECT_LT(firstAssistantPos, secondUserPos);
+  EXPECT_LT(secondUserPos, toolsPos)
+      << "tools block must follow the last user message";
+  EXPECT_LT(toolsPos, secondAssistantPos)
+      << "tools block must appear before subsequent assistant messages";
+
+  auto betweenFirstUserAndAssistant =
+      prompt.substr(firstUserPos, firstAssistantPos - firstUserPos);
+  EXPECT_EQ(betweenFirstUserAndAssistant.find("# Tools"), std::string::npos)
+      << "tools block must NOT appear after the first user message";
+}
+
 TEST_F(Qwen3ToolsDynamicTemplateRenderTest, ToolResponseMessage) {
   auto inputs = makeInputs(
       {msg("user", "What is the weather in Tokyo?"),
