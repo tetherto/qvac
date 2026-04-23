@@ -185,7 +185,8 @@ TEST_F(
   std::string prompt = render(inputs);
 
   auto firstUserPos = prompt.find("<|im_start|>user\nHi<|im_end|>");
-  auto firstAssistantPos = prompt.find("<|im_start|>assistant\nHello!<|im_end|>");
+  auto firstAssistantPos =
+      prompt.find("<|im_start|>assistant\nHello!<|im_end|>");
   auto secondUserPos =
       prompt.find("<|im_start|>user\nWhat is the weather in Tokyo?<|im_end|>");
   auto toolsPos = prompt.find("<|im_start|>system\n# Tools");
