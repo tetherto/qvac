@@ -1,0 +1,18 @@
+{
+  "perf": [
+    "runMobileRtfBenchmarks"
+  ],
+  "regular": [
+    "runAccuracyMultilangTest",
+    "runAddonMultimodelTest",
+    "runAddonTest",
+    "runColdStartTimingTest",
+    "runCorruptedModelTest",
+    "runIndividualFilePathsTest",
+    "runLiveStreamSimulationTest",
+    "runModelFileValidationTest",
+    "runMultipleTranscriptionsTest",
+    "runNamedPathsAllModelsTest",
+    "runNamedPathsReloadTest"
+  ]
+}
