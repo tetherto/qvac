@@ -131,8 +131,16 @@ jobs:
         if: ${{ !inputs.prebuild_package }}
         uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # 8.0.1
         with:
-          path: ${{ inputs.workdir }}/prebuilds
+          path: ${{ runner.temp }}/prebuilds-staging
           merge-multiple: true
+
+      - name: Move prebuilds from staging to workspace
+        if: ${{ !inputs.prebuild_package }}
+        run: |
+          mkdir -p ${{ inputs.workdir }}/prebuilds
+          cp -r ${{ runner.temp }}/prebuilds-staging/* ${{ inputs.workdir }}/prebuilds/ 2>/dev/null || true
+          echo "Prebuilds moved from staging area"
+        shell: bash
 
       - name: Download prebuilds from package (Unix)
         if: ${{ inputs.prebuild_package && matrix.platform != 'win32' }}
