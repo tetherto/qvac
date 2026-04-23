@@ -980,7 +980,7 @@ jobs:
           else
             BID="${{ env.APP_BUNDLE_ID }}"
             cat > /tmp/wdio-config.js << 'WDIO_EOF'
-          exports.config={runner:"local",hostname:"127.0.0.1",port:4723,path:"/wd/hub",specs:["*.spec.js","*.test.js"],maxInstances:1,bail:0,capabilities:[{platformName:"iOS","appium:automationName":"XCUITest","appium:bundleId":"__BUNDLE_ID__","appium:newCommandTimeout":300,"appium:noReset":true,"appium:forceAppLaunch":false,"appium:usePrebuiltWDA":true,"appium:wdaLocalPort":8100,"appium:showIOSLog":true,"appium:realDeviceLogger":"/usr/local/lib/node_modules/appium/node_modules/deviceconsole/deviceconsole"}],logLevel:"debug",waitforTimeout:120000,connectionRetryTimeout:30000,connectionRetryCount:3,services:[],framework:"mocha",reporters:["spec"],mochaOpts:{ui:"bdd",timeout:1800000,grep:"__MOCHA_GREP__"},before:async function(capabilities,specs,browser){const BUNDLE_ID="__BUNDLE_ID__";const TEST_FILTER="__TEST_FILTER__";global.appCrashed=false;global.checkAppCrash=async(stage)=>{try{const state=await browser.queryAppState(BUNDLE_ID);console.log("["+stage+"] App state: "+state+" (4=foreground,3=background,1=not running)");if(state<3){console.error("\n APP CRASHED at "+stage+"! State="+state);console.error("Check device logs for BareKit/native errors.\n");global.appCrashed=true;process.exit(1);}return state;}catch(e){console.log("["+stage+"] queryAppState error: "+e.message);return-1;}};console.log("Checking initial app state...");await global.checkAppCrash("startup");console.log("Waiting for app to initialize...");await browser.pause(5000);await global.checkAppCrash("after-pause");const initText=await browser.$("-ios predicate string:label CONTAINS \"INITIALIZED\"");await initText.waitForDisplayed({timeout:60000});await global.checkAppCrash("after-init");if(TEST_FILTER!=="__TEST_FILTER__"){try{const b64=Buffer.from(TEST_FILTER).toString("base64");await browser.pushFile("@"+BUNDLE_ID+":documents/testFilter.txt",b64);console.log("Pushed test filter: "+TEST_FILTER);}catch(e){console.log("pushFile failed: "+e.message);}}console.log("App initialized, clicking Run Automated Tests...");const button=await browser.$("-ios predicate string:label CONTAINS \"Run Automated Tests\"");await button.waitForDisplayed({timeout:15000});await button.click();console.log("Button clicked!");await browser.pause(5000);await global.checkAppCrash("after-click");},afterTest:async function(test,context,{error}){if(global.appCrashed)return;await global.checkAppCrash("after-test:"+test.title);},after:async function(){console.log("[perf-extract] Pulling perf-report.json from device...");var BID="__BUNDLE_ID__";var pullPaths=["@"+BID+":documents/perf-report.json","@"+BID+":library/perf-report.json"];for(var i=0;i<pullPaths.length;i++){try{var b64=await browser.pullFile(pullPaths[i]);var json=Buffer.from(b64,"base64").toString();try{require("fs").writeFileSync("perf-report-extract.json",json);console.log("[perf-extract] Written to perf-report-extract.json ("+json.length+" bytes)");}catch(we){console.log("[perf-extract] writeFile failed: "+we.message);}console.log("[perf-extract] Success from "+pullPaths[i]);break;}catch(e){console.log("[perf-extract] "+pullPaths[i]+": "+e.message);}}}};
+          exports.config={runner:"local",hostname:"127.0.0.1",port:4723,path:"/wd/hub",specs:["*.spec.js","*.test.js"],maxInstances:1,bail:0,capabilities:[{platformName:"iOS","appium:automationName":"XCUITest","appium:bundleId":"__BUNDLE_ID__","appium:newCommandTimeout":300,"appium:noReset":true,"appium:forceAppLaunch":false,"appium:usePrebuiltWDA":true,"appium:wdaLocalPort":8100,"appium:showIOSLog":true,"appium:realDeviceLogger":"/usr/local/lib/node_modules/appium/node_modules/deviceconsole/deviceconsole"}],logLevel:"debug",waitforTimeout:120000,connectionRetryTimeout:30000,connectionRetryCount:3,services:[],framework:"mocha",reporters:["spec"],mochaOpts:{ui:"bdd",timeout:1800000,grep:"__MOCHA_GREP__"},before:async function(capabilities,specs,browser){const BUNDLE_ID="__BUNDLE_ID__";const TEST_FILTER="__TEST_FILTER__";global.appCrashed=false;global.checkAppCrash=async(stage)=>{try{const state=await browser.queryAppState(BUNDLE_ID);console.log("["+stage+"] App state: "+state+" (4=foreground,3=background,1=not running)");if(state<3){console.error("\n APP CRASHED at "+stage+"! State="+state);console.error("Check device logs for BareKit/native errors.\n");global.appCrashed=true;process.exit(1);}return state;}catch(e){console.log("["+stage+"] queryAppState error: "+e.message);return-1;}};console.log("Checking initial app state...");await global.checkAppCrash("startup");console.log("Waiting for app to initialize...");await browser.pause(5000);await global.checkAppCrash("after-pause");const initText=await browser.$("-ios predicate string:label CONTAINS \"INITIALIZED\"");await initText.waitForDisplayed({timeout:60000});await global.checkAppCrash("after-init");if(TEST_FILTER!=="__TEST_FILTER__"){try{const b64=Buffer.from(TEST_FILTER).toString("base64");await browser.pushFile("@"+BUNDLE_ID+":documents/testFilter.txt",b64);console.log("Pushed test filter: "+TEST_FILTER);}catch(e){console.log("pushFile failed: "+e.message);}}console.log("App initialized, clicking Run Automated Tests...");const button=await browser.$("-ios predicate string:label CONTAINS \"Run Automated Tests\"");await button.waitForDisplayed({timeout:15000});await button.click();console.log("Button clicked!");await browser.pause(5000);await global.checkAppCrash("after-click");},afterTest:async function(test,context,{error}){if(global.appCrashed)return;await global.checkAppCrash("after-test:"+test.title);},after:async function(){console.log("[perf-extract] Pulling perf-report.json from device...");var BID="__BUNDLE_ID__";var pullPaths=["@"+BID+":documents/perf-report.json","@"+BID+":library/perf-report.json"];for(var i=0;i<pullPaths.length;i++){try{var b64=await browser.pullFile(pullPaths[i]);var json=Buffer.from(b64,"base64").toString();try{require("fs").writeFileSync("perf-report-extract.json",json);console.log("[perf-extract] Written to perf-report-extract.json ("+json.length+" bytes)");}catch(we){console.log("[perf-extract] writeFile failed: "+we.message);}console.log("[perf-extract] Success from "+pullPaths[i]);break;}catch(e){console.log("[perf-extract] "+pullPaths[i]+": "+e.message);}}console.log("[bare-log] Waiting for log flush...");await browser.pause(3000);try{var _h=require("http");var lb64=await new Promise(function(ok,fail){var bd=JSON.stringify({path:"@"+BID+":documents/bare_console.log"});var rq=_h.request({hostname:"127.0.0.1",port:4723,path:"/wd/hub/session/"+browser.sessionId+"/appium/device/pull_file",method:"POST",headers:{"Content-Type":"application/json","Content-Length":Buffer.byteLength(bd)}},function(rs){var d="";rs.on("data",function(c){d+=c;});rs.on("end",function(){try{ok(JSON.parse(d).value);}catch(e){fail(e);}});});rq.on("error",fail);rq.write(bd);rq.end();});var logTxt=Buffer.from(lb64,"base64").toString();var logDir=process.env.DEVICEFARM_LOG_DIR||".";require("fs").writeFileSync(logDir+"/bare_console.log",logTxt);console.log("[bare-log] Written bare_console.log ("+logTxt.length+" bytes)");}catch(le){console.log("[bare-log] pull failed: "+le.message);}}};
           WDIO_EOF
             sed "s#__BUNDLE_ID__#${BID}#g" /tmp/wdio-config.js > /tmp/wdio-config-final.js
             mv /tmp/wdio-config-final.js /tmp/wdio-config.js
@@ -1723,7 +1723,7 @@ jobs:
                   SAFE_ART=$(echo "$ART_NAME" | tr ' /' '__' | tr -cd '[:alnum:]_-')
                   DEST="$LOG_DIR/${SAFE_RUN}_${SAFE_NAME}_${SAFE_SUITE}_${SAFE_ART}.${ART_EXT}"
 
-                  if curl -fsSL -o "$DEST" "$ART_URL" 2>/dev/null; then
+                  if curl -fsSL --max-time 300 -o "$DEST" "$ART_URL" 2>/dev/null; then
                     echo "  Downloaded: $SUITE_NAME / $ART_NAME"
 
                     if echo "$ART_NAME" | grep -qiE "test.spec|testspec"; then
@@ -1746,7 +1746,7 @@ jobs:
                   SAFE_ART=$(echo "$ART_NAME" | tr ' /' '__' | tr -cd '[:alnum:]_-')
                   DEST="$LOG_DIR/${SAFE_RUN}_${SAFE_NAME}_${SAFE_SUITE}_${SAFE_ART}.${ART_EXT}"
 
-                  if curl -fsSL -o "$DEST" "$ART_URL" 2>/dev/null; then
+                  if curl -fsSL --max-time 300 -o "$DEST" "$ART_URL" 2>/dev/null; then
                     echo "  Downloaded: $SUITE_NAME / $ART_NAME (LOG)"
                   fi
                 done
@@ -1769,7 +1769,7 @@ jobs:
                 SAFE_ART=$(echo "$ART_NAME" | tr ' /' '__' | tr -cd '[:alnum:]_-')
                 DEST="$LOG_DIR/${SAFE_RUN}_${SAFE_NAME}_job_${SAFE_ART}.${ART_EXT}"
 
-                if curl -fsSL -o "$DEST" "$ART_URL" 2>/dev/null; then
+                if curl -fsSL --max-time 300 -o "$DEST" "$ART_URL" 2>/dev/null; then
                   echo "  Downloaded (job-level): $ART_NAME"
                 fi
               done
@@ -1782,7 +1782,53 @@ jobs:
           echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
           find "$LOG_DIR" -type f -exec ls -lh {} \; 2>/dev/null || echo "  (no logs downloaded)"
 
-      - name: Upload Device Farm Logs
+      - name: Extract Console Logs
+        if: always() && (steps.schedule_run.outputs.run_arn_perf || steps.schedule_run.outputs.run_arn_regular)
+        run: |
+          LOG_DIR="devicefarm-logs/${{ matrix.platform }}"
+          CONSOLE_DIR="console-logs/${{ matrix.platform }}"
+          mkdir -p "$CONSOLE_DIR"
+          for f in "$LOG_DIR"/*; do
+            [ -f "$f" ] || continue
+            fname=$(basename "$f")
+            if echo "$fname" | grep -qiE "Logcat\."; then
+              cp "$f" "$CONSOLE_DIR/"
+              echo "  Console log: $fname"
+            fi
+            if echo "$fname" | grep -qiE "Customer_Artifacts\.zip$"; then
+              prefix=$(echo "$fname" | sed 's/_Customer_Artifacts\.zip$//')
+              tmpdir=$(mktemp -d)
+              if unzip -qo "$f" -d "$tmpdir" 2>/dev/null; then
+                bare_log=$(find "$tmpdir" -name "bare_console.log" -type f 2>/dev/null | head -1)
+                if [ -n "$bare_log" ]; then
+                  cp "$bare_log" "$CONSOLE_DIR/${prefix}_bare_console.log"
+                  echo "  Extracted: ${prefix}_bare_console.log"
+                fi
+                appium_log=$(find "$tmpdir" -name "appium.log" -type f 2>/dev/null | head -1)
+                if [ -n "$appium_log" ]; then
+                  cp "$appium_log" "$CONSOLE_DIR/${prefix}_appium.log"
+                  echo "  Extracted: ${prefix}_appium.log"
+                fi
+              else
+                echo "  WARNING: Failed to unzip $fname"
+              fi
+              rm -rf "$tmpdir"
+            fi
+          done
+          echo ""
+          echo "📋 Console logs extracted:"
+          find "$CONSOLE_DIR" -type f -exec ls -lh {} \; 2>/dev/null || echo "  (no console logs found)"
+
+      - name: Upload Console Logs
+        if: always() && (steps.schedule_run.outputs.run_arn_perf || steps.schedule_run.outputs.run_arn_regular)
+        uses: actions/upload-artifact@v4
+        with:
+          name: console-logs-ocr-onnx-${{ matrix.platform }}
+          path: console-logs/
+          retention-days: 30
+          if-no-files-found: ignore
+
+      - name: Upload Full Device Farm Logs
         if: always() && (steps.schedule_run.outputs.run_arn_perf || steps.schedule_run.outputs.run_arn_regular)
         uses: actions/upload-artifact@v4
         with:

@@ -168,6 +168,10 @@ const SdGenHandlersMap SD_GEN_HANDLERS = {
      [](SdGenConfig& c, const picojson::value& v) {
        c.negativePrompt = requireStr(v, "negative_prompt");
      }},
+    {"lora",
+     [](SdGenConfig& c, const picojson::value& v) {
+       c.loraPath = requireStr(v, "lora");
+     }},
 
     // ── Image dimensions
     // ────────────────────────────────────────────────────────
