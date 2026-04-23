@@ -183,12 +183,8 @@ jobs:
         id: publish
         uses: ./.github/actions/publish-library-to-npm
         with:
-          secret-token: ${{ secrets.NPM_TOKEN }}
           tag: "latest"
           path: ${{ env.WORKDIR }}
-          repo_name: "onnx-tts"
-          git-token: ${{ secrets.PAT_TOKEN }}
-          create-tag: "false"
 
       - name: Capture published version
         id: capture_version
