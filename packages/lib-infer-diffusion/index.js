@@ -216,6 +216,7 @@ class ImgStableDiffusion {
    * @param {number} [params.batch_count=1]         - Images per call
    * @param {boolean} [params.vae_tiling=false]     - Enable VAE tiling (for large images)
    * @param {string}  [params.cache_preset]         - Cache preset: slow/medium/fast/ultra
+   * @param {string}  [params.lora]                 - Non-empty absolute path to a LoRA adapter (.safetensors, etc.)
    * @param {Uint8Array} [params.init_image]        - Source image bytes for img2img (PNG/JPEG).
    *                                                   FLUX2: in-context conditioning (ref_images).
    *                                                   Others: SDEdit (init_image + strength).
@@ -233,6 +234,15 @@ class ImgStableDiffusion {
         'init_image must be a Uint8Array (e.g. fs.readFileSync("image.png")). ' +
         'Got: ' + typeof params.init_image
       )
+    }
+
+    if (params.lora != null) {
+      if (typeof params.lora !== 'string' || params.lora.length === 0) {
+        throw new TypeError('params.lora must be a non-empty string')
+      }
+      if (!path.isAbsolute(params.lora)) {
+        throw new TypeError(`params.lora must be an absolute path (got: ${params.lora})`)
+      }
     }
 
     // FLUX models require an explicit prediction type for img2img.

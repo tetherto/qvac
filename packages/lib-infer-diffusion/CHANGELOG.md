@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.4.0] - 2026-04-21
+
+### Added
+
+- Add LoRA support to diffusion generation via `run({ lora })`, forwarding a LoRA adapter path through the JS bridge and native addon into stable-diffusion.cpp's `sd_img_gen_params_t.loras` runtime path.
+- Add a real LoRA integration test that downloads a compatible SD2.1 LoRA adapter, runs image generation with it, and verifies a valid PNG output is produced.
+
 ## [0.3.0] - 2026-04-15
 
 This release migrates the diffusion addon off `BaseInference` inheritance and onto the composable `createJobHandler` + `exclusiveRunQueue` utilities from `@qvac/infer-base@^0.4.0`. The constructor signature is replaced with a single object whose `files` field carries absolute paths for every model component, mirroring the parallel embed and LLM addon refactors. This is a breaking change — every caller must update.
