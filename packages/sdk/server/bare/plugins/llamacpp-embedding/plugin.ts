@@ -13,7 +13,7 @@ import {
   type EmbedConfig,
 } from "@/schemas";
 import { createStreamLogger, registerAddonLogger } from "@/logging";
-import { expandGGUFIntoShards } from "@/server/utils/expand-gguf-shards";
+import { expandGGUFIntoShards } from "@/server/utils";
 import { embed } from "@/server/bare/ops/embed";
 import { forwardModelExecution } from "@/profiling/model-execution";
 

@@ -21,7 +21,7 @@ import {
   type LlmConfigInput,
 } from "@/schemas";
 import { createStreamLogger, registerAddonLogger } from "@/logging";
-import { expandGGUFIntoShards } from "@/server/utils/expand-gguf-shards";
+import { expandGGUFIntoShards } from "@/server/utils";
 import { completion } from "@/server/bare/plugins/llamacpp-completion/ops/completion-stream";
 import { finetune } from "@/server/bare/plugins/llamacpp-completion/ops/finetune";
 import { translate } from "@/server/bare/ops/translate";
