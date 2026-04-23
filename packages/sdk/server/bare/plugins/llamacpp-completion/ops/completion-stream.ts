@@ -257,6 +257,7 @@ function prepareMessagesForCache(
 
     const lastMsg = history[history.length - 1] as HistoryMsg;
     const isToolChainContinuation = lastMsg.role === 'tool';
+    const isUserPrompt = lastMsg.role === 'user';
     let lastMessages: HistoryMsg[];
     if (isToolChainContinuation) {
       // Collect all consecutive tool responses from the end of history.
@@ -268,7 +269,7 @@ function prepareMessagesForCache(
           break;
         }
       }
-    } else if (toolsMode === ToolsModeType.dynamic) {
+    } else if (isUserPrompt && toolsMode === ToolsModeType.dynamic) {
       const prevMsg = history[history.length - 2];
       if (prevMsg?.role === 'assistant') {
         lastMessages = [prevMsg, lastMsg];
@@ -378,6 +379,12 @@ async function* processModelResponse(
     promptTokens: responseWithStats.stats?.promptTokens ?? 0,
     generatedTokens: responseWithStats.stats?.generatedTokens ?? 0,
     contextSlides: responseWithStats.stats?.contextSlides ?? 0,
+    // @ts-expect-error test-error
+    nPastBeforeTools: responseWithStats.stats?.nPastBeforeTools ?? 0,
+    // @ts-expect-error test-error
+    toolsTrimmed:responseWithStats.stats?.toolsTrimmed ?? 0,
+    // @ts-expect-error test-error
+    firstMsgTokens: responseWithStats.stats?.firstMsgTokens ?? 0,
   } as CompletionStats;
 
   return {

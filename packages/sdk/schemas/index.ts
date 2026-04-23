@@ -7,6 +7,7 @@ export {
   toolSchema,
   toolCallSchema,
   toolCallErrorSchema,
+  ToolsModeType,
   type Tool,
   type ToolCall,
   type ToolCallError,

@@ -11,6 +11,12 @@ export const completionStatsSchema = z.object({
   tokensPerSecond: z.number().optional(),
   cacheTokens: z.number().optional(),
   backendDevice: z.enum(["cpu", "gpu"]).optional(),
+  promptTokens: z.number().optional(),
+  generatedTokens: z.number().optional(),
+  contextSlides: z.number().optional(),
+  nPastBeforeTools: z.number().optional(),
+  firstMsgTokens: z.number().optional(),
+  toolsTrimmed: z.number().optional(),
 });
 
 export type CompletionStats = z.infer<typeof completionStatsSchema>;
@@ -124,7 +130,7 @@ export type CompletionRun = {
   final: Promise<CompletionFinal>;
 
   tokenStream: AsyncGenerator<string>;
-  toolCallStream: AsyncGenerator<ToolCallEvent>;
+  toolCallStream: AsyncGenerator<ToolCallEvent | ToolErrorEvent>;
   text: Promise<string>;
   toolCalls: Promise<ToolCallWithCall[]>;
   stats: Promise<CompletionStats | undefined>;

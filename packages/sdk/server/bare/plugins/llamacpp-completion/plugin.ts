@@ -1,4 +1,4 @@
-import LlmLlamacpp, { type Loader as LlmLoader } from "@qvac/llm-llamacpp";
+import LlmLlamacpp from "@qvac/llm-llamacpp";
 import llmAddonLogging from "@qvac/llm-llamacpp/addonLogging";
 import {
   definePlugin,
@@ -75,26 +75,24 @@ function createLlmModel(
   llmConfig: LlmConfig,
   projectionModelPath?: string,
 ) {
-  const { dirPath, basePath } = parseModelPath(modelPath);
+  const { dirPath } = parseModelPath(modelPath);
   const loader = new FilesystemDL({ dirPath });
   const logger = createStreamLogger(modelId, ModelType.llamacppCompletion);
   registerAddonLogger(modelId, ModelType.llamacppCompletion, logger);
   const llmConfigStrings = transformLlmConfig(llmConfig);
 
   const args = {
-    loader: asLoader<LlmLoader>(loader),
+    loader: asLoader(loader),
     opts: { stats: true },
     logger,
-    diskPath: dirPath,
-    modelName: basePath,
-    projectionModel: projectionModelPath
-      ? parseModelPath(projectionModelPath).basePath
-      : "",
-    modelPath,
-    modelConfig: llmConfigStrings,
+    files: {
+      model: [modelPath],
+      ...(projectionModelPath ? { projectionModelPath } : {}),
+    },
+    config: llmConfigStrings,
   };
 
-  const model = new LlmLlamacpp(args, llmConfigStrings);
+  const model = new LlmLlamacpp(args);
 
   return { model, loader };
 }

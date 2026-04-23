@@ -71,7 +71,7 @@ async function chatSession ({ modelId, history, tools, kvCache }: ChatSesssionPa
           `\n\n→ Tool Call Detected: ${evt.call.name}(${JSON.stringify(evt.call.arguments)})`,
         );
         console.log(`   ID: ${evt.call.id}`);
-      } else if (evt.type === "toolCallError") {
+      } else if (evt.type === "toolError") {
         console.warn(`\n⚠️  Tool Error: ${evt.error.message}`);
         console.warn(`   Code: ${evt.error.code}`);
       }
@@ -188,7 +188,7 @@ export async function runToolInvocationTest({ kvCache, toolVariants }: ToolInvoc
     const history = [
       {
         role: "system",
-        content:"You are a helpful assistant that can use tools. User's cat name is Windy and dog is Butch",
+        content:"You are a helpful assistant that can use tools. User's personal info: cat name is Windy and dog is Butch",
       },
       {
         role: "user",
@@ -339,5 +339,5 @@ The weather in Tokyo is currently rainy with clouds and a temperature of 08°C. 
 }
 // using same kvCache for a single session
 // await runToolInvocationTest({ kvCache: false, toolVariants: [tools1, tools2] })
-// await runToolInvocationTest({ kvCache: `id-${Date.now()}`, toolVariants: [tools1, tools2, tools3] })
-await runToolInvocationContTest({ kvCache: `id-${Date.now()}`, toolVariants: [tools1, tools2, tools3] })
+await runToolInvocationTest({ kvCache: `id-${Date.now()}`, toolVariants: [tools1, tools2, tools3] })
+// await runToolInvocationContTest({ kvCache: `id-${Date.now()}`, toolVariants: [tools1, tools2, tools3] })

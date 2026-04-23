@@ -71,7 +71,9 @@ import {
   unloadModel,
   type ToolInput,
   QWEN3_1_7B_INST_Q4,
+  type CompletionRun,
 } from "@qvac/sdk"
+import type { ToolCall } from "@/schemas"
 
 // ─── Tool Definitions ────────────────────────────────────────────────────────
 
@@ -108,7 +110,7 @@ const stockTool: ToolInput = {
 
 // ─── Simulated Tool Executor ─────────────────────────────────────────────────
 
-function executeToolCall(name: string, args: Record<string, string>): string {
+function executeToolCall(name: string, args: Record<string, unknown>): string {
   const query = String(args["query"] ?? "").toLowerCase()
 
   if (name === "get_weather") {
@@ -173,30 +175,17 @@ interface ParsedToolCall {
   arguments: Record<string, string>
 }
 
-function parseToolCalls(text: string): ParsedToolCall[] {
-  const pattern = /<tool_call>\s*(\{.*?\})\s*<\/tool_call>/gs
-  const calls: ParsedToolCall[] = []
-
-  let match
-  while ((match = pattern.exec(text)) !== null) {
-    try {
-      const parsed = JSON.parse(match[1] ?? "{}") as { name: string; arguments?: Record<string, string> }
-      calls.push({
-        name: parsed.name,
-        arguments: parsed.arguments ?? {},
-      })
-    } catch {
-      // skip malformed JSON
+async function parseToolCalls(result: CompletionRun): Promise<ToolCall[]> {
+  const toolCalls = []
+  for await (const toolCall of result.toolCallStream) {
+    if (toolCall.type === 'toolCall') {
+      toolCalls.push(toolCall.call)
+    } else {
+      console.error('Error: tool call', toolCall.error)
     }
   }
-  return calls
+  return toolCalls
 }
-
-/*
-function stripThinking(text: string): string {
-  return text.replace(/<think>[\s\S]*?<\/think>/g, "").trim()
-}
-*/
 
 // ─── Agentic Loop ────────────────────────────────────────────────────────────
 
@@ -268,6 +257,7 @@ async function agenticTurn(
       kvCache,
       stream: true,
     })
+    if (verbose) console.log('COMPLETION', { historyLen: history.length, toolsLen: tools.length, kvCache })
 
     // Collect full response
     fullText = ""
@@ -297,11 +287,10 @@ async function agenticTurn(
     }
 
     // Parse tool calls
-    const toolCalls = parseToolCalls(fullText)
+    const toolCalls = await parseToolCalls(result)
 
     if (toolCalls.length === 0) {
       // Final answer — strip thinking, cleanup history
-      // const cleanAnswer = stripThinking(fullText)
       const cleanAnswer = fullText
 
       if (allToolCalls.length > 0) {
@@ -326,6 +315,7 @@ async function agenticTurn(
     for (const tc of toolCalls) {
       const toolResult = executeToolCall(tc.name, tc.arguments)
       history.push({ role: "tool", content: toolResult })
+      // @ts-expect-error test-error
       allToolCalls.push(tc)
       if (verbose) console.log(`  Tool: ${tc.name}(${JSON.stringify(tc.arguments)}) -> ${toolResult.slice(0, 100)}...`)
     }
@@ -593,7 +583,7 @@ const scenarios: Scenario[] = [
       }
       if (verbose) console.log()
       const round1Stats = await round1.stats
-      const toolCalls = parseToolCalls(fullText)
+      const toolCalls = await parseToolCalls(round1)
       assert(toolCalls.length > 0, "round 1 should produce a tool call")
 
       // Inject empty tool response
@@ -611,7 +601,6 @@ const scenarios: Scenario[] = [
       const round2Stats = await round2.stats
 
       const cleanAnswer = answer
-      // const cleanAnswer = stripThinking(answer)
       assert(cleanAnswer.length > 0, "model should produce a response even with empty tool result")
       assert(round1Stats !== undefined, "round 1 should have stats")
       assert(round2Stats !== undefined, "round 2 should have stats")
@@ -630,7 +619,7 @@ const scenarios: Scenario[] = [
         modelSrc: QWEN3_1_7B_INST_Q4,
         modelType: "llm",
         modelConfig: {
-          ctx_size: 768,
+          ctx_size: 512,
           predict: -1,
           n_discarded: 100,
           tools: true,
