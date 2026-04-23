@@ -10,6 +10,7 @@ import {
   type TextToSpeechStreamClientParams,
   type TextToSpeechStreamSession,
   type TextToSpeechStreamResult,
+  type TtsSentenceChunkUpdate,
 } from "@/schemas";
 import { stream as streamRpc, duplex, type DuplexReadable } from "@/client/rpc/rpc-client";
 import { getClientLogger } from "@/logging";
@@ -92,11 +93,8 @@ function createTtsMulticast(
   return { subscribe, done: pumpDone };
 }
 
-export function textToSpeech(
-  params: TtsClientParams,
-  options?: RPCOptions,
-): TextToSpeechStreamResult {
-  const request: TtsRequest = {
+function buildTtsRequest(params: TtsClientParams): TtsRequest {
+  return {
     type: "textToSpeech",
     modelId: params.modelId,
     inputType: params.inputType,
@@ -112,96 +110,139 @@ export function textToSpeech(
       sentenceStreamMaxChunkScalars: params.sentenceStreamMaxChunkScalars,
     }),
   };
+}
 
+export function textToSpeech(
+  params: TtsClientParams,
+  options?: RPCOptions,
+): TextToSpeechStreamResult {
+  const request = buildTtsRequest(params);
+
+  if (params.stream && params.sentenceStream) {
+    return sentenceStreamTts(request, options);
+  }
+
+  if (params.stream) {
+    return plainStreamTts(request, options);
+  }
+
+  return collectTts(request, options);
+}
+
+function sentenceStreamTts(
+  request: TtsRequest,
+  options: RPCOptions | undefined,
+): TextToSpeechStreamResult {
+  const { subscribe, done } = createTtsMulticast(request, options);
+
+  return {
+    bufferStream: sentenceBufferStream(subscribe),
+    chunkUpdates: sentenceChunkUpdates(subscribe),
+    buffer: Promise.resolve([]),
+    done,
+  };
+}
+
+async function* sentenceBufferStream(
+  subscribe: () => AsyncGenerator<TtsResponse>,
+): AsyncGenerator<number> {
+  for await (const m of subscribe()) {
+    if (m.buffer.length > 0) {
+      yield* m.buffer;
+    }
+    if (m.done) break;
+  }
+}
+
+async function* sentenceChunkUpdates(
+  subscribe: () => AsyncGenerator<TtsResponse>,
+): AsyncGenerator<TtsSentenceChunkUpdate> {
+  for await (const m of subscribe()) {
+    const hasAudio = m.buffer.length > 0;
+    const hasMeta =
+      m.chunkIndex !== undefined ||
+      (typeof m.sentenceChunk === "string" && m.sentenceChunk.length > 0);
+    if (hasAudio || hasMeta) {
+      yield {
+        buffer: hasAudio ? [...m.buffer] : [],
+        ...(m.chunkIndex !== undefined ? { chunkIndex: m.chunkIndex } : {}),
+        ...(typeof m.sentenceChunk === "string" && m.sentenceChunk.length > 0
+          ? { sentenceChunk: m.sentenceChunk }
+          : {}),
+      };
+    }
+    if (m.done) break;
+  }
+}
+
+function plainStreamTts(
+  request: TtsRequest,
+  options: RPCOptions | undefined,
+): TextToSpeechStreamResult {
   let doneResolver: (value: boolean) => void = () => {};
-  const donePromise = new Promise<boolean>((resolve) => {
+  const done = new Promise<boolean>((resolve) => {
     doneResolver = resolve;
   });
 
-  if (params.stream) {
-    if (params.sentenceStream) {
-      const { subscribe, done: multicastDone } = createTtsMulticast(request, options);
+  return {
+    bufferStream: plainTtsBufferStream(request, options, doneResolver),
+    buffer: Promise.resolve([]),
+    done,
+  };
+}
 
-      const bufferStream = (async function* () {
-        for await (const m of subscribe()) {
-          if (m.buffer.length > 0) {
-            yield* m.buffer;
-          }
-          if (m.done) break;
-        }
-      })();
-
-      const chunkUpdates = (async function* () {
-        for await (const m of subscribe()) {
-          const hasAudio = m.buffer.length > 0;
-          const hasMeta =
-            m.chunkIndex !== undefined ||
-            (typeof m.sentenceChunk === "string" && m.sentenceChunk.length > 0);
-          if (hasAudio || hasMeta) {
-            yield {
-              buffer: hasAudio ? [...m.buffer] : [],
-              ...(m.chunkIndex !== undefined ? { chunkIndex: m.chunkIndex } : {}),
-              ...(typeof m.sentenceChunk === "string" && m.sentenceChunk.length > 0
-                ? { sentenceChunk: m.sentenceChunk }
-                : {}),
-            };
-          }
-          if (m.done) break;
-        }
-      })();
-
-      return {
-        bufferStream,
-        chunkUpdates,
-        buffer: Promise.resolve([]),
-        done: multicastDone,
-      };
+async function* plainTtsBufferStream(
+  request: TtsRequest,
+  options: RPCOptions | undefined,
+  resolveDone: (value: boolean) => void,
+): AsyncGenerator<number> {
+  for await (const response of streamRpc(request, options)) {
+    if (response.type !== "textToSpeech") continue;
+    const parsed = ttsResponseSchema.parse(response);
+    if (parsed.buffer.length > 0) {
+      yield* parsed.buffer;
     }
-
-    const bufferStream = (async function* () {
-      for await (const response of streamRpc(request, options)) {
-        if (response.type === "textToSpeech") {
-          const streamResponse = ttsResponseSchema.parse(response);
-          if (streamResponse.buffer.length > 0) {
-            yield* streamResponse.buffer;
-          }
-          if (streamResponse.done) {
-            doneResolver(true);
-          }
-        }
-      }
-    })();
-
-    return {
-      bufferStream,
-      buffer: Promise.resolve([]),
-      done: donePromise,
-    };
+    if (parsed.done) {
+      resolveDone(true);
+    }
   }
+}
 
-  const bufferStream = (async function* () {
-    // Empty generator for non-streaming mode
-  })();
-
-  const bufferPromise = (async () => {
-    let buffer: number[] = [];
-    for await (const response of streamRpc(request, options)) {
-      if (response.type === "textToSpeech") {
-        const streamResponse = ttsResponseSchema.parse(response);
-        buffer = buffer.concat(streamResponse.buffer);
-        if (streamResponse.done) {
-          doneResolver(true);
-        }
-      }
-    }
-    return buffer;
-  })();
+function collectTts(
+  request: TtsRequest,
+  options: RPCOptions | undefined,
+): TextToSpeechStreamResult {
+  let doneResolver: (value: boolean) => void = () => {};
+  const done = new Promise<boolean>((resolve) => {
+    doneResolver = resolve;
+  });
 
   return {
-    bufferStream,
-    buffer: bufferPromise,
-    done: donePromise,
+    bufferStream: emptyBufferStream(),
+    buffer: collectTtsBuffer(request, options, doneResolver),
+    done,
   };
+}
+
+async function* emptyBufferStream(): AsyncGenerator<number> {
+  // Non-streaming mode exposes no incremental buffer stream.
+}
+
+async function collectTtsBuffer(
+  request: TtsRequest,
+  options: RPCOptions | undefined,
+  resolveDone: (value: boolean) => void,
+): Promise<number[]> {
+  let buffer: number[] = [];
+  for await (const response of streamRpc(request, options)) {
+    if (response.type !== "textToSpeech") continue;
+    const parsed = ttsResponseSchema.parse(response);
+    buffer = buffer.concat(parsed.buffer);
+    if (parsed.done) {
+      resolveDone(true);
+    }
+  }
+  return buffer;
 }
 
 /**

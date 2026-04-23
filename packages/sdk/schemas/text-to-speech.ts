@@ -138,8 +138,8 @@ export type TextToSpeechStreamClientParams = z.infer<
 >;
 
 export interface TextToSpeechStreamResult {
-  bufferStream: AsyncGenerator<number, void, unknown>;
-  chunkUpdates?: AsyncGenerator<TtsSentenceChunkUpdate, void, unknown>;
+  bufferStream: AsyncGenerator<number>;
+  chunkUpdates?: AsyncGenerator<TtsSentenceChunkUpdate>;
   buffer: Promise<number[]>;
   done: Promise<boolean>;
 }
