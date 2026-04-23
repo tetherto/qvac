@@ -86,6 +86,16 @@ runs:
         HAS_LABEL=$(echo "$LABELS_JSON" | jq -r --arg l "$LABEL_NAME" \
           'if . == null then "false" elif any(. == $l) then "true" else "false" end')
 
+        # On synchronize from a non-writer, reject even if the label is still
+        # present. The label was granted for the previous commit; new unreviewed
+        # code must not run with secrets. The strip step below removes the label
+        # so that a re-review + re-label is required for the next run.
+        if [ "$ACTION" = "synchronize" ]; then
+          echo "::warning::External fork synchronize from non-writer — blocking until re-review"
+          echo "allowed=false" >> "$GITHUB_OUTPUT"
+          exit 0
+        fi
+
         if [ "$HAS_LABEL" = "true" ]; then
           echo "::notice::Fork PR with '$LABEL_NAME' label — authorized"
           echo "allowed=true" >> "$GITHUB_OUTPUT"

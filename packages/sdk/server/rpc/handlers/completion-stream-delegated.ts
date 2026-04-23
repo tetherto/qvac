@@ -54,10 +54,20 @@ export async function* handleCompletionStreamDelegated(
     }
   } catch (error) {
     logger.error("Error in delegated completion stream:", error);
+    const message = error instanceof Error ? error.message : String(error);
     yield {
       type: "completionStream",
-      token: `Error communicating with provider: ${error instanceof Error ? error.message : String(error)}`,
       done: true,
+      events: [
+        {
+          type: "completionDone" as const,
+          seq: 0,
+          stopReason: "error" as const,
+          error: {
+            message: `Error communicating with provider: ${message}`,
+          },
+        },
+      ],
     };
   }
 }

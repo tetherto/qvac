@@ -12,6 +12,7 @@
     "build": "bare-make generate && bare-make build && bare-make install",
     "test:unit": "brittle-bare test/unit/**/*.test.js",
     "test:integration": "brittle-bare test/integration/addon.test.js",
+    "test:benchmark:rtf": "brittle-bare test/benchmark/rtf-benchmark.test.js",
     "test:integration:long": "brittle-bare test/integration/**/longES.test.js",
     "test:cpp:build": "bare-make generate -D BUILD_TESTING=ON && bare-make build --target test-whisper-core && bare-make install",
     "test:cpp:run": "cd build/addon/tests/ && LLVM_PROFILE_FILE=default.profraw ./test-whisper-core --gtest_output=xml:cpp-test-results.xml",

@@ -27,6 +27,14 @@ on:
         description: 'Filter tests by category or testId prefix (comma-separated, e.g., "model,completion")'
         required: false
         type: string
+      suite:
+        description: "Suite filter (e.g. 'smoke'). Empty = all tests."
+        required: false
+        type: string
+      exclude-suite:
+        description: "Exclude suites (comma-separated)"
+        required: false
+        type: string
       test-version:
         description: "Git ref to checkout (branch, tag, or SHA). Defaults to trigger ref."
         required: false
@@ -261,6 +269,10 @@ jobs:
 
             const filter = '${{ inputs.filter }}';
             const filterArgs = filter ? ['--filter=' + filter] : [];
+            const suite = '${{ inputs.suite }}';
+            const suiteArgs = suite ? ['--suite=' + suite] : [];
+            const excludeSuite = '${{ inputs.exclude-suite }}';
+            const excludeSuiteArgs = excludeSuite ? ['--exclude-suite=' + excludeSuite] : [];
 
             const consumer = spawn('npx', [
               'qvac-test', 'run:consumer:desktop',
@@ -309,7 +321,9 @@ jobs:
               '--runId=${{ steps.runid.outputs.runId }}',
               '--consumer-timeout=${{ inputs.consumer-timeout }}',
               '--config=.',
-              ...filterArgs
+              ...filterArgs,
+              ...suiteArgs,
+              ...excludeSuiteArgs
             ];
             console.log('Producer command: npx ' + producerArgs.join(' '));
 

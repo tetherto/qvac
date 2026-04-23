@@ -77,12 +77,13 @@ OrtElementType onnxTypeToOurType(ONNXTensorElementDataType onnxType) {
 
 } // namespace
 
-OnnxInferSession::OnnxInferSession(const std::string &modelPath, bool useGPU) {
+OnnxInferSession::OnnxInferSession(const std::string &modelPath, bool useGPU,
+                                   int numThreads) {
   onnx_addon::SessionConfig sessionCfg;
   sessionCfg.provider = useGPU ? onnx_addon::ExecutionProvider::AUTO_GPU
                                : onnx_addon::ExecutionProvider::CPU;
   sessionCfg.optimization = onnx_addon::GraphOptimizationLevel::EXTENDED;
-  sessionCfg.intraOpThreads = 1;
+  sessionCfg.intraOpThreads = numThreads > 0 ? numThreads : 1;
 
   Ort::SessionOptions options = onnx_addon::buildSessionOptions(sessionCfg);
 

@@ -8,8 +8,8 @@ namespace qvac::ttslib::chatterbox {
 
 class OnnxInferSession : public IOnnxInferSession {
 public:
-  explicit OnnxInferSession(const std::string &modelPath,
-                            bool useGPU = false);
+  explicit OnnxInferSession(const std::string &modelPath, bool useGPU = false,
+                            int numThreads = 0);
   ~OnnxInferSession() override = default;
 
   void run() override;

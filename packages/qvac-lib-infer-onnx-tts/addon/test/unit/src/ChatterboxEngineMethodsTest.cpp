@@ -14,8 +14,12 @@ public:
   using ChatterboxEngine::advancePositionIds;
   using ChatterboxEngine::assembleSpeechTokenSequence;
   using ChatterboxEngine::buildInitialPositionIds;
+  using ChatterboxEngine::clearSpeechEncoderCache;
   using ChatterboxEngine::convertToAudioResult;
+  using ChatterboxEngine::hasSpeechEncoderCache;
   using ChatterboxEngine::selectNextToken;
+
+  SpeechEncoderCache &getMutableCache() { return speechEncoderCache_; }
 };
 
 class BuildInitialPositionIdsTest : public ::testing::Test {
@@ -227,6 +231,145 @@ TEST_F(SelectNextTokenTest, appliesRepetitionPenalty) {
   int64_t token = engine_.selectNextToken(tensor, generatedTokens);
 
   EXPECT_EQ(token, 2);
+}
+
+class SpeechEncoderCacheTest : public ::testing::Test {
+protected:
+  TestableChatterboxEngine engine_;
+};
+
+TEST_F(SpeechEncoderCacheTest, cacheIsInitiallyInvalid) {
+  EXPECT_FALSE(engine_.hasSpeechEncoderCache());
+}
+
+TEST_F(SpeechEncoderCacheTest, cacheBecomesValidWhenPopulated) {
+  auto &cache = engine_.getMutableCache();
+  cache.audioFeatures.data = {1.0f, 2.0f};
+  cache.audioFeatures.shape = {1, 2, 1};
+  cache.promptToken.data = {100, 200};
+  cache.promptToken.shape = {1, 2};
+  cache.speakerEmbeddings.data = {0.5f};
+  cache.speakerEmbeddings.shape = {1, 1};
+  cache.speakerFeatures.data = {0.3f};
+  cache.speakerFeatures.shape = {1, 1};
+  cache.valid = true;
+
+  EXPECT_TRUE(engine_.hasSpeechEncoderCache());
+}
+
+TEST_F(SpeechEncoderCacheTest, clearCacheResetsValidity) {
+  auto &cache = engine_.getMutableCache();
+  cache.valid = true;
+  cache.audioFeatures.data = {1.0f};
+
+  engine_.clearSpeechEncoderCache();
+
+  EXPECT_FALSE(engine_.hasSpeechEncoderCache());
+  EXPECT_TRUE(engine_.getMutableCache().audioFeatures.data.empty());
+}
+
+TEST_F(SpeechEncoderCacheTest, defaultCacheStructHasEmptyData) {
+  SpeechEncoderCache cache;
+  EXPECT_FALSE(cache.valid);
+  EXPECT_TRUE(cache.audioFeatures.data.empty());
+  EXPECT_TRUE(cache.promptToken.data.empty());
+  EXPECT_TRUE(cache.speakerEmbeddings.data.empty());
+  EXPECT_TRUE(cache.speakerFeatures.data.empty());
+}
+
+class TensorOpsConcatBatchTest : public ::testing::Test {};
+
+TEST_F(TensorOpsConcatBatchTest, concatenatesFloatTensorsAlongBatchDim) {
+  TensorData<float> a;
+  a.shape = {1, 2, 3};
+  a.data = {1, 2, 3, 4, 5, 6};
+
+  TensorData<float> b;
+  b.shape = {1, 2, 3};
+  b.data = {7, 8, 9, 10, 11, 12};
+
+  auto result = tensor_ops::concatBatch(a, b);
+
+  EXPECT_EQ(result.shape, (std::vector<int64_t>{2, 2, 3}));
+  EXPECT_EQ(result.data,
+            (std::vector<float>{1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12}));
+}
+
+TEST_F(TensorOpsConcatBatchTest, concatenatesInt64TensorsAlongBatchDim) {
+  TensorData<int64_t> a;
+  a.shape = {1, 3};
+  a.data = {10, 20, 30};
+
+  TensorData<int64_t> b;
+  b.shape = {1, 3};
+  b.data = {40, 50, 60};
+
+  auto result = tensor_ops::concatBatch(a, b);
+
+  EXPECT_EQ(result.shape, (std::vector<int64_t>{2, 3}));
+  EXPECT_EQ(result.data, (std::vector<int64_t>{10, 20, 30, 40, 50, 60}));
+}
+
+TEST_F(TensorOpsConcatBatchTest, handlesEmptySequenceDimension) {
+  TensorData<float> a;
+  a.shape = {1, 16, 0, 64};
+  TensorData<float> b;
+  b.shape = {1, 16, 0, 64};
+
+  auto result = tensor_ops::concatBatch(a, b);
+
+  EXPECT_EQ(result.shape, (std::vector<int64_t>{2, 16, 0, 64}));
+  EXPECT_TRUE(result.data.empty());
+}
+
+TEST_F(TensorOpsConcatBatchTest, preservesMultiBatchInput) {
+  TensorData<float> a;
+  a.shape = {2, 1};
+  a.data = {1, 2};
+
+  TensorData<float> b;
+  b.shape = {3, 1};
+  b.data = {3, 4, 5};
+
+  auto result = tensor_ops::concatBatch(a, b);
+
+  EXPECT_EQ(result.shape, (std::vector<int64_t>{5, 1}));
+  EXPECT_EQ(result.data, (std::vector<float>{1, 2, 3, 4, 5}));
+}
+
+class TensorOpsDuplicateBatchTest : public ::testing::Test {};
+
+TEST_F(TensorOpsDuplicateBatchTest, doublesBatchDimForFloat) {
+  TensorData<float> a;
+  a.shape = {1, 2, 2};
+  a.data = {1.5f, 2.5f, 3.5f, 4.5f};
+
+  auto result = tensor_ops::duplicateBatch(a);
+
+  EXPECT_EQ(result.shape, (std::vector<int64_t>{2, 2, 2}));
+  EXPECT_EQ(result.data, (std::vector<float>{1.5f, 2.5f, 3.5f, 4.5f, 1.5f, 2.5f,
+                                             3.5f, 4.5f}));
+}
+
+TEST_F(TensorOpsDuplicateBatchTest, doublesBatchDimForInt64) {
+  TensorData<int64_t> a;
+  a.shape = {1, 4};
+  a.data = {1, 1, 1, 1};
+
+  auto result = tensor_ops::duplicateBatch(a);
+
+  EXPECT_EQ(result.shape, (std::vector<int64_t>{2, 4}));
+  EXPECT_EQ(result.data, (std::vector<int64_t>{1, 1, 1, 1, 1, 1, 1, 1}));
+}
+
+TEST_F(TensorOpsDuplicateBatchTest, preservesEmptyPastSequence) {
+  TensorData<float> a;
+  a.shape = {1, 16, 0, 64};
+
+  auto result = tensor_ops::duplicateBatch(a);
+
+  EXPECT_EQ(result.shape, (std::vector<int64_t>{2, 16, 0, 64}));
+  EXPECT_TRUE(result.data.empty());
 }
 
 } // namespace qvac::ttslib::chatterbox::testing
