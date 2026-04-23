@@ -335,8 +335,20 @@ jobs:
           $errorPath = Join-Path $PWD "server-error.log"
           $proc = Start-Process -FilePath python -ArgumentList "main.py" -WorkingDirectory $PWD -RedirectStandardOutput $logPath -RedirectStandardError $errorPath -PassThru
           $proc.Id | Out-File -FilePath server.pid -Encoding ascii
-          Start-Sleep -Seconds 10
-          if ($proc.HasExited) {
+          $healthy = $false
+          for ($i = 0; $i -lt 10; $i++) {
+            Start-Sleep -Seconds 2
+            if ($proc.HasExited) {
+              break
+            }
+            try {
+              Invoke-WebRequest -Uri "http://127.0.0.1:8081/" -UseBasicParsing | Out-Null
+              $healthy = $true
+              break
+            } catch {
+            }
+          }
+          if (-not $healthy) {
             if (Test-Path $logPath) { Get-Content $logPath }
             if (Test-Path $errorPath) { Get-Content $errorPath }
             exit 1
@@ -364,8 +376,20 @@ jobs:
           $errorPath = Join-Path $PWD "server-error.log"
           $proc = Start-Process -FilePath npm.cmd -ArgumentList "start" -WorkingDirectory $PWD -RedirectStandardOutput $logPath -RedirectStandardError $errorPath -PassThru
           $proc.Id | Out-File -FilePath server.pid -Encoding ascii
-          Start-Sleep -Seconds 5
-          if ($proc.HasExited) {
+          $healthy = $false
+          for ($i = 0; $i -lt 10; $i++) {
+            Start-Sleep -Seconds 2
+            if ($proc.HasExited) {
+              break
+            }
+            try {
+              Invoke-WebRequest -Uri "http://127.0.0.1:8080/" -UseBasicParsing | Out-Null
+              $healthy = $true
+              break
+            } catch {
+            }
+          }
+          if (-not $healthy) {
             if (Test-Path $logPath) { Get-Content $logPath }
             if (Test-Path $errorPath) { Get-Content $errorPath }
             exit 1
