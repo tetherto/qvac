@@ -32,6 +32,20 @@ makeMsg(const std::string& role, const std::string& content = "") {
   msg.content = content;
   return msg;
 }
+
+common_chat_msg makeAssistantMsgWithToolCalls() {
+  common_chat_msg msg;
+  msg.role = "assistant";
+  msg.content = "";
+
+  common_chat_tool_call toolCall;
+  toolCall.id = "call_01";
+  toolCall.name = "get_weather";
+  toolCall.arguments = "{\"city\":\"Paris\"}";
+  msg.tool_calls.push_back(toolCall);
+
+  return msg;
+}
 } // namespace
 
 TEST(ToolsCompactControllerTest, EnabledReturnsTrueWhenConstructedWithProfile) {
@@ -165,6 +179,21 @@ TEST(
       makeMsg("user", "Need weather"),
       makeMsg(
           "assistant", "<tool_call>{\"name\":\"get_weather\"}</tool_call>")};
+  std::vector<common_chat_tool> tools;
+  EXPECT_THROW(
+      controller.validatePrompt(chatMsgs, tools, layout, false),
+      qvac_errors::StatusError);
+}
+
+TEST(
+    ToolsCompactControllerTest,
+    ValidatePromptRequiresToolsForAssistantToolCallsTailWithoutCache) {
+  ToolsCompactController controller(makeQwen3Profile());
+  PromptLayout layout;
+  std::vector<common_chat_msg> chatMsgs = {
+      makeMsg("system", "You are helpful"),
+      makeMsg("user", "Need weather"),
+      makeAssistantMsgWithToolCalls()};
   std::vector<common_chat_tool> tools;
   EXPECT_THROW(
       controller.validatePrompt(chatMsgs, tools, layout, false),

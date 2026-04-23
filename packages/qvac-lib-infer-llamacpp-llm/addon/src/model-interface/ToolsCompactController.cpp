@@ -47,11 +47,11 @@ void ToolsCompactController::validatePrompt(
       } else if (!hasKvCacheContext) {
         if (lastMsg.role == "tool") {
           requiresTools = true;
-        } else if (
-            lastMsg.role == "assistant" &&
-            !profile_.toolCallStartMarker.empty()) {
-          requiresTools = lastMsg.content.find(profile_.toolCallStartMarker) !=
-                          std::string::npos;
+        } else if (lastMsg.role == "assistant") {
+          requiresTools = !lastMsg.tool_calls.empty() ||
+                          (!profile_.toolCallStartMarker.empty() &&
+                           lastMsg.content.find(profile_.toolCallStartMarker) !=
+                               std::string::npos);
         }
       }
     }
