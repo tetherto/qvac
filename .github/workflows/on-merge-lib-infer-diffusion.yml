@@ -217,11 +217,8 @@ jobs:
         id: publish
         uses: ./.github/actions/publish-library-to-npm
         with:
-          secret-token: ${{ secrets.NPM_TOKEN }}
           tag: "latest"
           workdir: packages/lib-infer-diffusion
-          repo_name: "diffusion-cpp"
-          git-token: ${{ secrets.GITHUB_TOKEN }}
 
   # Create GitHub release only for actual releases (after NPM publish)
   publish-release:

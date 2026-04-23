@@ -39,7 +39,7 @@ npm install @qvac/sdk
 3. Create the quickstart script:
 
 ```js
-import { loadModel, LLAMA_3_2_1B_INST_Q4_0, completion, unloadModel, } from "@qvac/sdk";
+import { loadModel, LLAMA_3_2_1B_INST_Q4_0, completion, unloadModel } from "@qvac/sdk";
 try {
     // Load a model into memory
     const modelId = await loadModel({
