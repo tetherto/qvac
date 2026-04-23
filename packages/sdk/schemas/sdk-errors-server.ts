@@ -106,6 +106,7 @@ export const SDK_SERVER_ERROR_CODES = {
   // Lifecycle (53,600-53,610)
   LIFECYCLE_SUSPEND_FAILED: 53600,
   LIFECYCLE_RESUME_FAILED: 53601,
+  LIFECYCLE_OPERATION_BLOCKED: 53602,
 
   // Security (53,900-53,949)
   PATH_TRAVERSAL: 53900,
@@ -526,6 +527,11 @@ const serverErrorDefinitions: ErrorCodesMap = {
     name: "LIFECYCLE_RESUME_FAILED",
     message: (details?: string) =>
       `Runtime resume failed${details ? `: ${details}` : ""}`,
+  },
+  [SDK_SERVER_ERROR_CODES.LIFECYCLE_OPERATION_BLOCKED]: {
+    name: "LIFECYCLE_OPERATION_BLOCKED",
+    message: (requestType: string, lifecycleState: string) =>
+      `Operation "${requestType}" is blocked while runtime state is "${lifecycleState}"`,
   },
 
   // Security (53,900-53,949)
