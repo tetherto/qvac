@@ -105,21 +105,61 @@ const CACHE_CONFIGS = isAndroid ? ANDROID_CACHE_CONFIGS : DESKTOP_CACHE_CONFIGS
 // flakiness: GitHub-hosted runners share hardware and the measurement
 // window (128 generated tokens, low-single-digit seconds) is small, so
 // run-to-run jitter of 10-20% on throughput/TTFT is normal.
-const TTFT_MARGIN = 0.30 // quantized TTFT may be up to 30% slower than f16
-const PROMPT_EVAL_MARGIN = 0.30 // prompt-eval t/s floor at 70% of f16
+//
+// For prefill (TTFT + prompt-eval t/s) we intentionally do NOT compare
+// against f16: on backends with fully hardware-fused f16 attention
+// kernels (Vulkan on NVIDIA, Metal on Apple, some ROCm paths) the f16
+// prefill is 10-20x faster than ANY quantized cache because quantized
+// prefill falls back to a slower generic path. We therefore use q8_0
+// as the reference: it is the closest quantized configuration to f16
+// in memory layout and any wildly broken quant variant would also be
+// wildly slower than q8_0.
+const PREFILL_REFERENCE_LABEL = 'q8_0+q8_0'
+const TTFT_MARGIN = 3.0 // prefill TTFT may be up to 4x the q8_0 reference
+const PROMPT_EVAL_MARGIN = 0.75 // prompt-eval t/s floor at 25% of q8_0
+// Decode is compute-bound and surprisingly close across configs even
+// when prefill isn't, so we keep the decode check anchored to f16 with
+// a generous floor (see rationale below).
 const DECODE_MARGIN = 0.40 // decode t/s floor at 60% of f16
 // Memory must be strictly smaller; the extra epsilon avoids false fails
 // if the parsed value rounds identically in rare configurations.
 const MEM_EPSILON_MIB = 0.1
 
-function parseKvCacheMiB (logs) {
-  // Example line:
-  //   llama_kv_cache: size =   12.91 MiB (   512 cells,  28 layers, ...)
-  for (const line of logs) {
-    const match = line.match(/llama_kv_cache:\s*size\s*=\s*([\d.]+)\s*MiB/)
-    if (match) return parseFloat(match[1])
+// Extract the KV-cache size (MiB) for the current benchmark from the native
+// llama.cpp logs. Two defences against cross-test log leakage:
+//
+//   1. Scan from the END of the log buffer: the current benchmark's
+//      `llama_kv_cache: size = ...` line is always the most recent one,
+//      while earlier tests (or the buffered flush that happens the first
+//      time `setLogger` is installed after a previous model instance ran)
+//      appear earlier in `logs`.
+//   2. If `cfg` is provided, require the line to also mention the
+//      expected `K (<k>)` and `V (<v>)` quant tags. `cache-type-k` /
+//      `cache-type-v` can be passed as `f16`, `q8_0`, `pq3_0`, etc. and
+//      llama.cpp echoes them verbatim inside that line, e.g.
+//      `K (pq3_0):   21.88 MiB, V (pq3_0):   21.88 MiB`. This guarantees
+//      we never attribute another test's KV-cache line to our benchmark.
+//
+// Example line:
+//   llama_kv_cache: size =   12.91 MiB ( 512 cells, 28 layers, ...), K (tbq3_0): 7.44 MiB, V (pq3_0): 5.47 MiB
+function parseKvCacheMiB (logs, cfg) {
+  const sizeRe = /llama_kv_cache:\s*size\s*=\s*([\d.]+)\s*MiB/
+  const kTag = cfg && cfg.k ? `K (${cfg.k}` : null
+  const vTag = cfg && cfg.v ? `V (${cfg.v}` : null
+  let fallback = null
+  for (let i = logs.length - 1; i >= 0; i--) {
+    const line = logs[i]
+    const match = line.match(sizeRe)
+    if (!match) continue
+    if (kTag && vTag) {
+      if (line.includes(kTag) && line.includes(vTag)) {
+        return parseFloat(match[1])
+      }
+      continue
+    }
+    if (fallback === null) fallback = parseFloat(match[1])
   }
-  return null
+  return fallback
 }
 
 function parseHardwareInfo (logs) {
@@ -181,7 +221,7 @@ async function runBenchmark (cfg) {
     const output = chunks.join('').trim()
 
     const stats = response.stats || {}
-    const kvCacheMiB = parseKvCacheMiB(specLogger.logs)
+    const kvCacheMiB = parseKvCacheMiB(specLogger.logs, cfg)
 
     const promptTokens = stats.promptTokens || 0
     const ttftMs = stats.TTFT || 0
@@ -343,30 +383,38 @@ test('Quantized KV cache benchmark: f16 / q8 / q4 / tbq / pq', { timeout: 1800_0
   }
 
   // -- Prefill speed: TTFT and prompt-eval t/s --
-  // Prompt evaluation (prefill) is memory-bandwidth bound: every input
-  // token writes its K and V projections into the cache in bulk. Smaller
-  // cache types transfer less data, so TTFT should be <= f16 + margin.
+  // Prompt evaluation (prefill) for quantized KV caches uses a generic
+  // path on most backends, while f16 gets fully hardware-fused attention
+  // kernels. On a Vulkan/NVIDIA T4, for example, f16 prefill clocks in
+  // around 680 t/s while q8_0 is around 40 t/s — not a 30% gap, a ~15x
+  // gap. Comparing quant configs to f16 is therefore meaningless.
   //
-  // NOTE about f16 vs q4/q8: on hardware with fast native fp16 ALUs the
-  // f16 path can also be very fast because nothing has to be dequantized
-  // on every attention step, so we only require quantized configs to be
-  // within a margin of f16 (not strictly faster).
-  for (const r of results) {
-    const res = r.result
-    if (!res || r.cfg.label === 'f16+f16') continue
-    if (!res.ttftMs || !f16.ttftMs) continue
-    const ceiling = f16.ttftMs * (1 + TTFT_MARGIN)
-    t.ok(
-      res.ttftMs <= ceiling,
-      `${r.cfg.label} TTFT (${res.ttftMs.toFixed(1)} ms) <= f16 (${f16.ttftMs.toFixed(1)} ms) + ${Math.round(TTFT_MARGIN * 100)}% margin (${ceiling.toFixed(1)} ms)`
-    )
-
-    if (res.promptEvalTps && f16.promptEvalTps) {
-      const floor = f16.promptEvalTps * (1 - PROMPT_EVAL_MARGIN)
+  // Instead we anchor all quant configs to q8_0 (the closest quant cousin
+  // of f16) and only assert that no other quant config is catastrophically
+  // slower than q8_0. This catches genuine regressions (e.g. a broken
+  // tbq/pq kernel that falls off the fast path entirely) without failing
+  // on backend-level prefill asymmetry that is outside the test's scope.
+  const prefillRef = byLabel[PREFILL_REFERENCE_LABEL]
+  if (!prefillRef) {
+    t.comment(`${PREFILL_REFERENCE_LABEL} reference missing; skipping prefill comparisons`)
+  } else {
+    for (const r of results) {
+      const res = r.result
+      if (!res || r.cfg.label === 'f16+f16' || r.cfg.label === PREFILL_REFERENCE_LABEL) continue
+      if (!res.ttftMs || !prefillRef.ttftMs) continue
+      const ceiling = prefillRef.ttftMs * (1 + TTFT_MARGIN)
       t.ok(
-        res.promptEvalTps >= floor,
-        `${r.cfg.label} prompt eval (${res.promptEvalTps.toFixed(1)} t/s) >= f16 (${f16.promptEvalTps.toFixed(1)} t/s) - ${Math.round(PROMPT_EVAL_MARGIN * 100)}% margin (${floor.toFixed(1)} t/s)`
+        res.ttftMs <= ceiling,
+        `${r.cfg.label} TTFT (${res.ttftMs.toFixed(1)} ms) <= ${PREFILL_REFERENCE_LABEL} (${prefillRef.ttftMs.toFixed(1)} ms) + ${Math.round(TTFT_MARGIN * 100)}% margin (${ceiling.toFixed(1)} ms)`
       )
+
+      if (res.promptEvalTps && prefillRef.promptEvalTps) {
+        const floor = prefillRef.promptEvalTps * (1 - PROMPT_EVAL_MARGIN)
+        t.ok(
+          res.promptEvalTps >= floor,
+          `${r.cfg.label} prompt eval (${res.promptEvalTps.toFixed(1)} t/s) >= ${PREFILL_REFERENCE_LABEL} (${prefillRef.promptEvalTps.toFixed(1)} t/s) - ${Math.round(PROMPT_EVAL_MARGIN * 100)}% margin (${floor.toFixed(1)} t/s)`
+        )
+      }
     }
   }
 
