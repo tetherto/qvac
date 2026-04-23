@@ -149,6 +149,6 @@ export const rpcOptionsSchema = z.object({
   profiling: perCallProfilingSchema.optional(),
 });
 
-export type Request = z.infer<typeof requestSchema>;
+export type Request = z.input<typeof requestSchema>;
 export type Response = z.infer<typeof responseSchema>;
 export type RPCOptions = z.infer<typeof rpcOptionsSchema>;
