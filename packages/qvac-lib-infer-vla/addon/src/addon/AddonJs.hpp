@@ -189,10 +189,38 @@ inline js_value_t* runVlaModel(js_env_t* env, js_callback_info_t* info) try {
     noise = detail::typedArrayToFloat32Vector(env, *noiseOpt);
   }
 
-  std::vector<float> actions =
+  VlaModel::RunResult result =
       model->run(images, imgWidth, imgHeight, state, tokens, mask, noise);
 
-  return detail::float32ArrayFromVector(env, actions);
+  js_value_t* obj = nullptr;
+  if (js_create_object(env, &obj) != 0) {
+    throw std::runtime_error("js_create_object failed");
+  }
+
+  js_value_t* actionsArr = detail::float32ArrayFromVector(env, result.actions);
+  if (js_set_named_property(env, obj, "actions", actionsArr) != 0) {
+    throw std::runtime_error("js_set_named_property(actions) failed");
+  }
+
+  js_value_t* stats = nullptr;
+  if (js_create_object(env, &stats) != 0) {
+    throw std::runtime_error("js_create_object(stats) failed");
+  }
+  auto setDouble = [&](const char* name, double value) {
+    js_value_t* v = nullptr;
+    js_create_double(env, value, &v);
+    js_set_named_property(env, stats, name, v);
+  };
+  setDouble("vision_ms", result.timing.vision_ms);
+  setDouble("smollm2_compute_ms", result.timing.smollm2_compute_ms);
+  setDouble("smollm2_total_ms", result.timing.smollm2_total_ms);
+  setDouble("ode_ms", result.timing.ode_ms);
+  setDouble("total_ms", result.timing.total_ms);
+  if (js_set_named_property(env, obj, "stats", stats) != 0) {
+    throw std::runtime_error("js_set_named_property(stats) failed");
+  }
+
+  return obj;
 }
 JSCATCH
 

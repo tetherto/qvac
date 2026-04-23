@@ -31,13 +31,22 @@ public:
 
   const smolvla_hparams& hparams() const { return model_->hparams; }
 
+  // Output of a single inference call.  Keeps the action chunk and the
+  // per-stage wall-clock timings together so the JS layer can surface them
+  // to the test harness / perf reporter.
+  struct RunResult {
+    std::vector<float> actions;
+    smolvla_timing timing;
+  };
+
   // Run one inference call. Image buffers must be contiguous CHW float32 in
   // [-1, 1], already resized+padded to (imgWidth × imgHeight). Tokens +
   // mask describe the instruction; noise is an optional (chunkSize ×
   // maxActionDim) float32 buffer (null -> model-internal random).
   //
-  // Returns a (chunkSize × actionDim) row-major float32 vector.
-  std::vector<float>
+  // Returns a (chunkSize × actionDim) row-major float32 vector plus the
+  // per-stage timing captured during the call.
+  RunResult
   run(const std::vector<std::vector<float>>& images, int imgWidth,
       int imgHeight, const std::vector<float>& state,
       const std::vector<int32_t>& tokens, const std::vector<uint8_t>& mask,
@@ -63,12 +72,13 @@ public:
 
     const int chunkSize = model_->hparams.chunk_size;
     const int actionDim = model_->hparams.action_dim;
-    std::vector<float> actionsBuf(static_cast<size_t>(chunkSize) * actionDim);
+    RunResult result;
+    result.actions.assign(static_cast<size_t>(chunkSize) * actionDim, 0.0f);
     int nActionsOut = 0;
 
     const float* noisePtr = noise.empty() ? nullptr : noise.data();
 
-    const bool ok = smolvla_inference(
+    const bool ok = smolvla_inference_with_timing(
         model_.get(),
         imagePtrs.data(),
         static_cast<int>(imagePtrs.size()),
@@ -80,15 +90,16 @@ public:
         reinterpret_cast<const bool*>(maskCopy.data()),
         static_cast<int>(tokens.size()),
         noisePtr,
-        actionsBuf.data(),
-        &nActionsOut);
+        result.actions.data(),
+        &nActionsOut,
+        &result.timing);
 
     if (!ok) {
       throw std::runtime_error("SmolVLA inference failed");
     }
 
-    actionsBuf.resize(static_cast<size_t>(nActionsOut) * actionDim);
-    return actionsBuf;
+    result.actions.resize(static_cast<size_t>(nActionsOut) * actionDim);
+    return result;
   }
 
 private:

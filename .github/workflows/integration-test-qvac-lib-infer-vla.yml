@@ -377,3 +377,12 @@ jobs:
         env:
           QVAC_VLA_MODEL: ${{ github.workspace }}/${{ env.WORKDIR }}/model/vla/smolvla-libero-f32-fixed.gguf
         run: npm run test:integration ${{ matrix.platform }}-${{ matrix.arch }}
+
+      - name: Upload performance report
+        if: ${{ always() }}
+        uses: actions/upload-artifact@bbbca2ddaa5d8feaa63e36b76fdaad77386f024f # 7.0.0
+        with:
+          name: vla-perf-${{ matrix.platform }}-${{ matrix.arch }}-${{ matrix.os }}
+          path: ${{ env.WORKDIR }}/test/results/performance-report.json
+          if-no-files-found: ignore
+          retention-days: 14

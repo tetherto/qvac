@@ -19,10 +19,23 @@ export interface VlaRunOptions {
   noise?: Float32Array | null
 }
 
+export interface VlaRunStats {
+  vision_ms: number
+  smollm2_compute_ms: number
+  smollm2_total_ms: number
+  ode_ms: number
+  total_ms: number
+}
+
+export interface VlaRunResult {
+  actions: Float32Array
+  stats: VlaRunStats
+}
+
 export class VlaModel {
   constructor (ggufPath: string)
   readonly hparams: VlaHparams
-  run (opts: VlaRunOptions): Float32Array
+  run (opts: VlaRunOptions): VlaRunResult
   destroy (): void
 }
 

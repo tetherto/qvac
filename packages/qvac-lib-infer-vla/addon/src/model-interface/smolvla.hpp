@@ -321,4 +321,24 @@ bool smolvla_inference(
 
 #ifdef __cplusplus
 }
+
+// Per-stage wall-clock timing captured during a single `smolvla_inference`
+// call. All values are milliseconds.
+struct smolvla_timing {
+  double vision_ms = 0.0;
+  double smollm2_compute_ms = 0.0;
+  double smollm2_total_ms = 0.0;
+  double ode_ms = 0.0;
+  double total_ms = 0.0;
+};
+
+// Same as `smolvla_inference` but populates `timing_out` (if non-null) with
+// per-stage timings.  C++-only; keeps the extern "C" ABI stable for the
+// ctypes-based Python wrapper in smolvla-ggml.
+bool smolvla_inference_with_timing(
+    smolvla_model* model, const float** images, int n_images, int img_width,
+    int img_height, const float* state, int state_dim,
+    const int32_t* lang_tokens, const bool* lang_mask, int lang_len,
+    const float* noise, float* actions_out, int* n_actions_out,
+    smolvla_timing* timing_out);
 #endif

@@ -9,7 +9,7 @@ const { preprocessImage, padState, DEFAULT_IMAGE_SIZE } = require('./addon.js')
  *
  * Usage:
  *   const model = new VlaModel('/path/to/smolvla.gguf')
- *   const actions = model.run({
+ *   const { actions, stats } = model.run({
  *     images: [frontCamChw, wristCamChw],  // Float32Array(3*H*W) in [-1, 1]
  *     imgWidth: 512,
  *     imgHeight: 512,
@@ -18,6 +18,8 @@ const { preprocessImage, padState, DEFAULT_IMAGE_SIZE } = require('./addon.js')
  *     mask: attentionMaskU8,               // Uint8Array (0/1)
  *     noise: optionalNoiseF32              // optional Float32Array
  *   })
+ *   // actions: Float32Array(chunkSize * actionDim)
+ *   // stats:   { vision_ms, smollm2_compute_ms, smollm2_total_ms, ode_ms, total_ms }
  *   model.destroy()
  */
 class VlaModel {

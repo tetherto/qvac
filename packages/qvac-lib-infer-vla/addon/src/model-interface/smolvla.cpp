@@ -1604,6 +1604,30 @@ extern "C" bool smolvla_inference(
     int img_height, const float* state, int state_dim,
     const int32_t* lang_tokens, const bool* lang_mask, int lang_len,
     const float* noise, float* actions_out, int* n_actions_out) {
+  return smolvla_inference_with_timing(
+      model_ptr,
+      images,
+      n_images,
+      img_width,
+      img_height,
+      state,
+      state_dim,
+      lang_tokens,
+      lang_mask,
+      lang_len,
+      noise,
+      actions_out,
+      n_actions_out,
+      nullptr);
+}
+
+bool smolvla_inference_with_timing(
+    smolvla_model* model_ptr, const float** images, int n_images, int img_width,
+    int img_height, const float* state, int state_dim,
+    const int32_t* lang_tokens, const bool* lang_mask, int lang_len,
+    const float* noise, float* actions_out, int* n_actions_out,
+    smolvla_timing* timing_out) {
+  const double t_total_start = now_ms();
   smolvla_model& model = *model_ptr;
   const auto& hp = model.hparams;
 
@@ -2306,6 +2330,14 @@ extern "C" bool smolvla_inference(
     }
   }
   *n_actions_out = chunk_size;
+
+  if (timing_out) {
+    timing_out->vision_ms = t_vision_end - t_vision_start;
+    timing_out->smollm2_compute_ms = t_smollm2_compute - t_smollm2_start;
+    timing_out->smollm2_total_ms = t_smollm2_end - t_smollm2_start;
+    timing_out->ode_ms = t_ode_end - t_ode_start;
+    timing_out->total_ms = now_ms() - t_total_start;
+  }
 
   return true;
 }
