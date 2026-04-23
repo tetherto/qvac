@@ -598,8 +598,13 @@ std::string LlamaModel::processPromptImpl(const Prompt& prompt) {
   }
 
   // Post-generation tools trim decision via controller
-  std::string ossStr = needsOutputCapture ? oss.str() : std::string();
-  const std::string& outputToCheck = needsOutputCapture ? ossStr : out;
+  std::string ossStr;
+  if (needsOutputCapture && prompt.outputCallback) {
+    // Only materialize a second copy when output streamed via callback.
+    ossStr = oss.str();
+  }
+  const std::string& outputToCheck =
+      needsOutputCapture ? (prompt.outputCallback ? ossStr : out) : out;
   auto decision = state_->toolsCompact_->onGenerationComplete(
       outputToCheck,
       state_->llmContext_->getNPast(),
