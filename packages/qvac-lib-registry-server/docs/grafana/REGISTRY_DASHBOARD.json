@@ -1067,7 +1067,7 @@
           "refId": "A"
         }
       ],
-      "title": "Models",
+      "title": "Model Files",
       "type": "stat"
     },
     {
@@ -1118,7 +1118,7 @@
         "colorMode": "background",
         "graphMode": "none",
         "justifyMode": "auto",
-        "orientation": "auto",
+        "orientation": "vertical",
         "percentChangeColorMode": "standard",
         "reduceOptions": {
           "calcs": [
@@ -1128,14 +1128,14 @@
           "values": false
         },
         "showPercentChange": false,
-        "textMode": "auto",
+        "textMode": "value_and_name",
         "wideLayout": true
       },
       "pluginVersion": "12.4.0",
       "targets": [
         {
           "expr": "qvac_registry_is_indexer{vm_name=~\"$vm\"}",
-          "legendFormat": "",
+          "legendFormat": "{{vm_name}}",
           "refId": "A"
         }
       ],
@@ -1172,7 +1172,7 @@
         "colorMode": "value",
         "graphMode": "none",
         "justifyMode": "auto",
-        "orientation": "auto",
+        "orientation": "vertical",
         "percentChangeColorMode": "standard",
         "reduceOptions": {
           "calcs": [
@@ -1182,14 +1182,14 @@
           "values": false
         },
         "showPercentChange": false,
-        "textMode": "auto",
+        "textMode": "value_and_name",
         "wideLayout": true
       },
       "pluginVersion": "12.4.0",
       "targets": [
         {
           "expr": "qvac_registry_blob_core_count{vm_name=~\"$vm\"}",
-          "legendFormat": "",
+          "legendFormat": "{{vm_name}}",
           "refId": "A"
         }
       ],
@@ -1202,34 +1202,17 @@
       },
       "fieldConfig": {
         "defaults": {
-          "mappings": [
-            {
-              "options": {
-                "0": {
-                  "color": "red",
-                  "text": "No"
-                },
-                "1": {
-                  "color": "green",
-                  "text": "Yes"
-                }
-              },
-              "type": "value"
-            }
-          ],
+          "mappings": [],
           "thresholds": {
             "mode": "absolute",
             "steps": [
               {
-                "color": "red",
-                "value": 0
-              },
-              {
                 "color": "green",
-                "value": 1
+                "value": 0
               }
             ]
-          }
+          },
+          "unit": "short"
         },
         "overrides": []
       },
@@ -1241,10 +1224,10 @@
       },
       "id": 20,
       "options": {
-        "colorMode": "background",
+        "colorMode": "value",
         "graphMode": "none",
         "justifyMode": "auto",
-        "orientation": "auto",
+        "orientation": "vertical",
         "percentChangeColorMode": "standard",
         "reduceOptions": {
           "calcs": [
@@ -1254,14 +1237,14 @@
           "values": false
         },
         "showPercentChange": false,
-        "textMode": "auto",
+        "textMode": "value_and_name",
         "wideLayout": true
       },
       "pluginVersion": "12.4.0",
       "targets": [
         {
-          "expr": "min(qvac_registry_blob_core_contiguous_length{vm_name=~\"$vm\"} == bool qvac_registry_blob_core_length{vm_name=~\"$vm\"}) and min(qvac_registry_blob_core_length{vm_name=~\"$vm\"}) > bool 0",
-          "legendFormat": "",
+          "expr": "qvac_registry_blob_core_contiguous_length{vm_name=~\"$vm\"}",
+          "legendFormat": "{{vm_name}}",
           "refId": "A"
         }
       ],
@@ -1888,7 +1871,7 @@
       },
       "gridPos": {
         "h": 8,
-        "w": 12,
+        "w": 8,
         "x": 0,
         "y": 57
       },
@@ -1910,21 +1893,196 @@
       "targets": [
         {
           "expr": "qvac_registry_blob_core_length{vm_name=~\"$vm\"}",
-          "legendFormat": "{{ vm_name }} length",
+          "legendFormat": "{{ vm_name }}",
           "refId": "A"
-        },
-        {
-          "expr": "qvac_registry_blob_core_contiguous_length{vm_name=~\"$vm\"}",
-          "legendFormat": "{{ vm_name }} contiguous",
-          "refId": "B"
-        },
-        {
-          "expr": "qvac_registry_blob_core_length{vm_name=~\"$vm\"} - qvac_registry_blob_core_contiguous_length{vm_name=~\"$vm\"}",
-          "legendFormat": "{{ vm_name }} gap",
-          "refId": "C"
         }
       ],
-      "title": "Blob Core Replication",
+      "title": "Blob Core Length",
+      "type": "timeseries"
+    },
+    {
+      "datasource": {
+        "type": "prometheus"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "color": {
+            "mode": "palette-classic"
+          },
+          "custom": {
+            "axisBorderShow": false,
+            "axisCenteredZero": false,
+            "axisColorMode": "text",
+            "axisLabel": "",
+            "axisPlacement": "auto",
+            "barAlignment": 0,
+            "barWidthFactor": 0.6,
+            "drawStyle": "line",
+            "fillOpacity": 15,
+            "gradientMode": "none",
+            "hideFrom": {
+              "legend": false,
+              "tooltip": false,
+              "viz": false
+            },
+            "insertNulls": false,
+            "lineInterpolation": "linear",
+            "lineWidth": 2,
+            "pointSize": 5,
+            "scaleDistribution": {
+              "type": "linear"
+            },
+            "showPoints": "never",
+            "showValues": false,
+            "spanNulls": false,
+            "stacking": {
+              "group": "A",
+              "mode": "none"
+            },
+            "thresholdsStyle": {
+              "mode": "off"
+            }
+          },
+          "mappings": [],
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "green",
+                "value": 0
+              }
+            ]
+          }
+        },
+        "overrides": []
+      },
+      "gridPos": {
+        "h": 8,
+        "w": 8,
+        "x": 8,
+        "y": 57
+      },
+      "id": 43,
+      "options": {
+        "legend": {
+          "calcs": [],
+          "displayMode": "list",
+          "placement": "bottom",
+          "showLegend": true
+        },
+        "tooltip": {
+          "hideZeros": false,
+          "mode": "single",
+          "sort": "none"
+        }
+      },
+      "pluginVersion": "12.4.0",
+      "targets": [
+        {
+          "expr": "qvac_registry_blob_core_contiguous_length{vm_name=~\"$vm\"}",
+          "legendFormat": "{{ vm_name }}",
+          "refId": "A"
+        }
+      ],
+      "title": "Blob Core Contiguous Length",
+      "type": "timeseries"
+    },
+    {
+      "datasource": {
+        "type": "prometheus"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "color": {
+            "mode": "palette-classic"
+          },
+          "custom": {
+            "axisBorderShow": false,
+            "axisCenteredZero": false,
+            "axisColorMode": "text",
+            "axisLabel": "",
+            "axisPlacement": "auto",
+            "barAlignment": 0,
+            "barWidthFactor": 0.6,
+            "drawStyle": "line",
+            "fillOpacity": 15,
+            "gradientMode": "none",
+            "hideFrom": {
+              "legend": false,
+              "tooltip": false,
+              "viz": false
+            },
+            "insertNulls": false,
+            "lineInterpolation": "linear",
+            "lineWidth": 2,
+            "pointSize": 5,
+            "scaleDistribution": {
+              "type": "linear"
+            },
+            "showPoints": "never",
+            "showValues": false,
+            "spanNulls": false,
+            "stacking": {
+              "group": "A",
+              "mode": "none"
+            },
+            "thresholdsStyle": {
+              "mode": "off"
+            }
+          },
+          "mappings": [],
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "green",
+                "value": 0
+              },
+              {
+                "color": "yellow",
+                "value": 1
+              },
+              {
+                "color": "red",
+                "value": 1000000
+              }
+            ]
+          }
+        },
+        "overrides": []
+      },
+      "gridPos": {
+        "h": 8,
+        "w": 8,
+        "x": 16,
+        "y": 57
+      },
+      "id": 44,
+      "options": {
+        "legend": {
+          "calcs": [
+            "lastNotNull",
+            "max"
+          ],
+          "displayMode": "table",
+          "placement": "bottom",
+          "showLegend": true
+        },
+        "tooltip": {
+          "hideZeros": false,
+          "mode": "single",
+          "sort": "none"
+        }
+      },
+      "pluginVersion": "12.4.0",
+      "targets": [
+        {
+          "expr": "qvac_registry_blob_core_length{vm_name=~\"$vm\"} - qvac_registry_blob_core_contiguous_length{vm_name=~\"$vm\"}",
+          "legendFormat": "{{ vm_name }}",
+          "refId": "A"
+        }
+      ],
+      "title": "Blob Core Gap (length - contiguous)",
       "type": "timeseries"
     },
     {
@@ -1986,8 +2144,8 @@
       "gridPos": {
         "h": 8,
         "w": 12,
-        "x": 12,
-        "y": 57
+        "x": 0,
+        "y": 65
       },
       "id": 28,
       "options": {
@@ -2006,17 +2164,12 @@
       "pluginVersion": "12.4.0",
       "targets": [
         {
-          "expr": "qvac_registry_view_core_seeders{vm_name=~\"$vm\"}",
-          "legendFormat": "{{ vm_name }} view",
-          "refId": "A"
-        },
-        {
           "expr": "qvac_registry_blob_core_seeders{vm_name=~\"$vm\"}",
-          "legendFormat": "{{ vm_name }} blob",
-          "refId": "B"
+          "legendFormat": "{{ vm_name }}",
+          "refId": "A"
         }
       ],
-      "title": "Core Seeders (full replicas)",
+      "title": "Blob Core Seeders (full replicas)",
       "type": "timeseries"
     },
     {
@@ -2078,8 +2231,8 @@
       },
       "gridPos": {
         "h": 8,
-        "w": 24,
-        "x": 0,
+        "w": 12,
+        "x": 12,
         "y": 65
       },
       "id": 29,
@@ -2211,64 +2364,6 @@
         "x": 4,
         "y": 74
       },
-      "id": 32,
-      "options": {
-        "colorMode": "background",
-        "graphMode": "none",
-        "justifyMode": "auto",
-        "orientation": "auto",
-        "percentChangeColorMode": "standard",
-        "reduceOptions": {
-          "calcs": [
-            "lastNotNull"
-          ],
-          "fields": "",
-          "values": false
-        },
-        "showPercentChange": false,
-        "textMode": "auto",
-        "wideLayout": true
-      },
-      "pluginVersion": "12.4.0",
-      "targets": [
-        {
-          "expr": "sum(dht_is_firewalled{vm_name=~\"$vm\"})",
-          "legendFormat": "",
-          "refId": "A"
-        }
-      ],
-      "title": "Firewalled Nodes",
-      "type": "stat"
-    },
-    {
-      "datasource": {
-        "type": "prometheus"
-      },
-      "fieldConfig": {
-        "defaults": {
-          "mappings": [],
-          "thresholds": {
-            "mode": "absolute",
-            "steps": [
-              {
-                "color": "green",
-                "value": 0
-              },
-              {
-                "color": "red",
-                "value": 1
-              }
-            ]
-          }
-        },
-        "overrides": []
-      },
-      "gridPos": {
-        "h": 4,
-        "w": 4,
-        "x": 8,
-        "y": 74
-      },
       "id": 33,
       "options": {
         "colorMode": "background",
@@ -2324,7 +2419,7 @@
       "gridPos": {
         "h": 4,
         "w": 4,
-        "x": 12,
+        "x": 8,
         "y": 74
       },
       "id": 34,
@@ -2386,7 +2481,7 @@
       "gridPos": {
         "h": 4,
         "w": 4,
-        "x": 16,
+        "x": 12,
         "y": 74
       },
       "id": 35,
@@ -2440,7 +2535,7 @@
       "gridPos": {
         "h": 4,
         "w": 4,
-        "x": 20,
+        "x": 16,
         "y": 74
       },
       "id": 36,
