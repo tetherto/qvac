@@ -22,14 +22,33 @@ runs an embedded broker for the duration of the test run. Bring your own broker 
 `ws://...:8080` and `mqtt://...:1883`.
 
 **Common flags.** All `run:local:*` commands accept `--filter`, `--suite`, `--exclude-suite`, `--runId`.
-Mobile adds `--skip-build` to reuse a previously built APK/IPA (pairs with the baked `runId`). Run
-`npx qvac-test run:local:<platform> --help` for the full list.
+Mobile adds `--skip-build` (see below). Run `npx qvac-test run:local:<platform> --help` for the full list.
 
 **Platform prerequisites.**
 
 - iOS: Xcode + connected device trusted in Xcode. Team ID auto-detected; override with `QVAC_IOS_TEAM_ID`.
 - Android: `adb` + USB-debuggable device.
 - Desktop: Node 22+.
+
+### Rebuilding after changes
+
+Which rebuild command you run depends on what changed.
+
+| You changed                              | Command                         | Rebuild mobile app?                       |
+| ---------------------------------------- | ------------------------------- | ----------------------------------------- |
+| SDK source (`packages/sdk/` outside tests-qvac) | `npm run install:build:full`    | Yes — `--skip-build` will miss the change |
+| Test code or assets in `tests-qvac/`     | `npm run install:build`         | Yes when running on mobile                |
+| Only the producer side (filter, suite)   | none                            | No — use `--skip-build`                   |
+
+- `install:build` = `npm install --install-links && npm run build`. Picks up changes in this package.
+- `install:build:full` = `prepare:sdk` (bun install + bun run build in `packages/sdk/`) + `install:build`.
+  Use after any SDK change. If you've already rebuilt the SDK yourself (`cd .. && bun run build`), plain
+  `install:build` is enough.
+- **Mobile requires a fresh APK/IPA** to pick up either SDK or test-code changes — the baked app bundle
+  contains the compiled test executors and the SDK. Omit `--skip-build` to rebuild.
+- **`--skip-build` is for fast iteration that doesn't touch compiled code**: re-running the same build with
+  a different `--filter` or `--suite`, or just re-running to debug flakiness. The producer reads
+  definitions fresh each run, so filter / suite changes are picked up without rebuilding.
 
 ## Running in CI
 

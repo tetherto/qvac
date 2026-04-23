@@ -9,13 +9,11 @@ alwaysApply: false
 ## When editing SDK source (`packages/sdk/**` outside `tests-qvac/`)
 
 - **Evaluate e2e impact before finishing.** Check whether existing definitions or executors under `packages/sdk/tests-qvac/tests/` need updates: new params, changed expectations, new `testId`s, suite tagging. Call it out in the PR description.
-- **On SDK API surface or model constant changes:** rebuild the tests package to catch type breaks and import failures early.
-
-  ```bash
-  cd packages/sdk/tests-qvac && npm run install:build
-  ```
-
-  Adapt existing tests or add new ones as needed.
+- **On SDK API surface or model constant changes:** rebuild the tests package to catch type breaks and
+  import failures early. If you've already rebuilt the SDK, run `npm run install:build`; otherwise run
+  `npm run install:build:full` (rebuilds SDK and tests-qvac). Adapt existing tests or add new ones as
+  needed. See [tests-qvac/README.md](../../../packages/sdk/tests-qvac/README.md) "Rebuilding after changes"
+  for the full decision table including mobile app rebuild rules.
 
 ## Adding new e2e tests
 
