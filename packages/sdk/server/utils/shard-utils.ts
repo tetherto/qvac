@@ -8,7 +8,9 @@ import type { ShardPatternInfo, ShardUrl } from "@/schemas";
 import { extractAndWriteTensorsFile } from "./gguf-tensor-extractor";
 import { promises as fsPromises } from "bare-fs";
 
-/** Detect if `filename` matches the `<base>-NNNNN-of-NNNNN.<ext>` shard pattern. */
+/**
+ * Detect if model filename follows shard pattern (00001-of-0000x)
+ */
 export function detectShardedModel(filename: string): ShardPatternInfo {
   const shardPattern = /^(.+)-(\d{5})-of-(\d{5})(\.\w+)$/;
   const match = filename.match(shardPattern);
@@ -26,7 +28,13 @@ export function detectShardedModel(filename: string): ShardPatternInfo {
   return { isSharded: false };
 }
 
-/** Given any shard filename in a group, return all numbered shard filenames in order. */
+/**
+ * Generate list of shard filenames for a sharded model
+ * Accepts any shard in the group
+ *
+ * @param shardName - Any shard filename in the group (e.g., "model-00002-of-00005.gguf")
+ * @returns Array of all numbered shard filenames
+ */
 export function generateShardFilenames(shardName: string): string[] {
   const shardInfo = detectShardedModel(shardName);
 
