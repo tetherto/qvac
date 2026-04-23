@@ -168,7 +168,7 @@ jobs:
         working-directory: ${{ env.PKG_DIR }}
         env:
           CMAKE_FLAGS: ${{ matrix.flags }}
-        run: bare-make generate --target ${{ matrix.platform }} --arch ${{ matrix.arch }} ${{ matrix.flags }}
+        run: bare-make generate --platform ${{ matrix.platform }} --arch ${{ matrix.arch }} ${{ matrix.flags }}
 
       - name: Build addon
         working-directory: ${{ env.PKG_DIR }}
@@ -179,6 +179,9 @@ jobs:
         shell: bash
         working-directory: ${{ env.PKG_DIR }}
         run: |
+          # Diagnostic-only: never fail the step itself.
+          set +e
+          set +o pipefail
           echo "===== Toolchain identity ====="
           echo "uname:    $(uname -a 2>/dev/null || true)"
           echo "cmake:    $(cmake --version 2>/dev/null | head -1 || true)"
