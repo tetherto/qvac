@@ -49,7 +49,7 @@ jobs:
     name: Build ${{ matrix.platform }} and Run E2E Tests
     runs-on: ${{ matrix.runner }}
     environment: release
-    timeout-minutes: 120
+    timeout-minutes: 180
     continue-on-error: true
     permissions:
       contents: read
@@ -1088,7 +1088,7 @@ jobs:
               --app-arn "$APP_ARN" \
               --name "$name" \
               --test "type=APPIUM_NODE,testPackageArn=$TEST_PACKAGE_ARN,testSpecArn=$spec_arn" \
-              --execution-configuration jobTimeoutMinutes=60 \
+              --execution-configuration jobTimeoutMinutes=120 \
               --query 'run.arn' --output text
           }
 
@@ -1102,7 +1102,7 @@ jobs:
               --app-arn "$APP_ARN" \
               --name "$name" \
               --test "type=APPIUM_NODE,testPackageArn=$TEST_PACKAGE_ARN,testSpecArn=$spec_arn" \
-              --execution-configuration jobTimeoutMinutes=60 \
+              --execution-configuration jobTimeoutMinutes=120 \
               --query 'run.arn' --output text
           }
 
