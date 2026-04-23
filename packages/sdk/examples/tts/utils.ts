@@ -1,6 +1,5 @@
-import { writeFileSync, unlinkSync } from "fs";
+import { writeFileSync } from "fs";
 import { spawnSync } from "child_process";
-import { platform } from "os";
 
 /**
  * Create WAV header for 16-bit PCM audio
@@ -65,53 +64,41 @@ export function createWav(
 }
 
 /**
- * Play audio using system audio players
+ * Play a WAV buffer by streaming it into ffplay over stdin.
+ *
+ * ffplay ships with ffmpeg and is cross-platform (macOS/Linux/Windows), so
+ * we avoid the old "write to /tmp then shell out to afplay/aplay/powershell"
+ * dance — no temp files, no platform switch, no hardcoded /tmp path (which
+ * doesn't exist on Windows). Requires ffplay on PATH.
  */
 export function playAudio(audioBuffer: Buffer): void {
-  const currentPlatform = platform();
-  const tempFile = `/tmp/audio-${Date.now()}.wav`;
-
-  // Write audio buffer to temporary file
-  writeFileSync(tempFile, audioBuffer);
-
-  let audioPlayer: string;
-  let args: string[];
-
-  switch (currentPlatform) {
-    case "darwin":
-      audioPlayer = "afplay";
-      args = [tempFile];
-      break;
-    case "linux":
-      audioPlayer = "aplay";
-      args = [tempFile];
-      break;
-    case "win32":
-      audioPlayer = "powershell";
-      args = [
-        "-Command",
-        `Add-Type -AssemblyName presentationCore; (New-Object Media.SoundPlayer).LoadStream([System.IO.File]::ReadAllBytes('${tempFile}')).PlaySync()`,
-      ];
-      break;
-    default:
-      audioPlayer = "aplay";
-      args = [tempFile];
-  }
-
-  const result = spawnSync(audioPlayer, args, {
-    stdio: ["inherit", "inherit", "inherit"],
-  });
-
-  try {
-    unlinkSync(tempFile);
-  } catch {
-    // Ignore cleanup errors
-  }
+  const result = spawnSync(
+    "ffplay",
+    [
+      "-hide_banner",
+      "-loglevel",
+      "error",
+      "-autoexit",
+      "-nodisp",
+      "-i",
+      "pipe:0",
+    ],
+    {
+      input: audioBuffer,
+      stdio: ["pipe", "inherit", "inherit"],
+    },
+  );
 
   if (result.error) {
-    throw new Error(`Audio player failed: ${result.error.message}`);
+    const code = (result.error as NodeJS.ErrnoException).code;
+    if (code === "ENOENT") {
+      throw new Error(
+        "ffplay not found on PATH. Install ffmpeg (ffplay ships with it) and retry.",
+      );
+    }
+    throw new Error(`ffplay failed: ${result.error.message}`);
   }
   if (result.status !== 0) {
-    throw new Error(`Audio player exited with code ${result.status}`);
+    throw new Error(`ffplay exited with code ${result.status}`);
   }
 }

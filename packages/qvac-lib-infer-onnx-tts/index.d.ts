@@ -108,6 +108,13 @@ declare interface ONNXTTSOptions {
   speed?: number
   numInferenceSteps?: number
   supertonicMultilingual?: boolean
+  /**
+   * Chatterbox: ONNX Runtime intra-op thread count for all sessions (speech encoder,
+   * embed tokens, language model, conditional decoder). `0` (default) preserves the
+   * previous behavior of 1 intra-op thread; higher values trade CPU for throughput
+   * (e.g. `4` yields ~25% lower RTF on a 4-core machine).
+   */
+  numThreads?: number
   opts?: object
   exclusiveRun?: boolean
 }

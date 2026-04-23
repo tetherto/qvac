@@ -1,5 +1,8 @@
 import { z } from "zod";
-import { toolSchema, toolCallSchema, toolCallEventSchema } from "./tools";
+import { toolSchema } from "./tools";
+import { completionEventSchema } from "./completion-event";
+
+export { completionStatsSchema, type CompletionStats } from "./completion-event";
 
 export const attachmentSchema = z.object({
   path: z
@@ -96,6 +99,18 @@ export const completionClientParamsSchema = completionParamsSchema.extend({
   generationParams: generationParamsSchema
     .optional()
     .describe("Optional sampling / generation parameters."),
+  captureThinking: z
+    .boolean()
+    .optional()
+    .describe(
+      "When `true`, capture and emit reasoning/thinking deltas separately from content deltas; requires a model that frames its thinking output.",
+    ),
+  emitRawDeltas: z
+    .boolean()
+    .optional()
+    .describe(
+      "When `true`, also emit raw per-token deltas in the event stream in addition to normalized `contentDelta` events.",
+    ),
 });
 
 export const completionStreamRequestSchema =
@@ -103,34 +118,13 @@ export const completionStreamRequestSchema =
     type: z.literal("completionStream"),
   });
 
-export const completionStatsSchema = z.object({
-  timeToFirstToken: z
-    .number()
-    .optional()
-    .describe("Time to first token in milliseconds."),
-  tokensPerSecond: z
-    .number()
-    .optional()
-    .describe("Tokens generated per second."),
-  cacheTokens: z
-    .number()
-    .optional()
-    .describe("Number of tokens served from the KV cache."),
-  backendDevice: z
-    .enum(["cpu", "gpu"])
-    .optional()
-    .describe("Compute backend used for inference."),
-});
-
-export const completionStreamResponseSchema = z.object({
-  type: z.literal("completionStream"),
-  token: z.string(),
-  done: z.boolean().optional(),
-  stats: completionStatsSchema.optional(),
-  toolCallEvent: toolCallEventSchema.optional(),
-  toolCalls: z.array(toolCallSchema).optional(),
-  error: z.string().optional(),
-});
+export const completionStreamResponseSchema = z
+  .object({
+    type: z.literal("completionStream"),
+    done: z.boolean().optional(),
+    events: z.array(completionEventSchema),
+  })
+  .strict();
 
 export type GenerationParams = z.infer<typeof generationParamsSchema>;
 export type CompletionParams = z.infer<typeof completionParamsSchema>;
@@ -144,4 +138,3 @@ export type CompletionStreamResponse = z.infer<
   typeof completionStreamResponseSchema
 >;
 export type Attachment = z.infer<typeof attachmentSchema>;
-export type CompletionStats = z.infer<typeof completionStatsSchema>;

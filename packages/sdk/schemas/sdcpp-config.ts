@@ -1,6 +1,9 @@
 import { z } from "zod";
 import { modelSrcInputSchema } from "./model-src-utils";
 
+const BASE64_PATTERN =
+  /^(?:[A-Za-z0-9+/]{4})*(?:[A-Za-z0-9+/]{2}==|[A-Za-z0-9+/]{3}=)?$/;
+
 export const sdcppConfigSchema = z
   .object({
     threads: z.number().optional(),
@@ -143,6 +146,12 @@ export const diffusionRequestSchema = z.object({
     .describe(
       "Classifier-free guidance scale for SD 1.x / 2.x / XL / SD3 models; typical range 1–20, default 7",
     ),
+  img_cfg_scale: z
+    .number()
+    .default(-1)
+    .describe(
+      "Image CFG scale for img2img/inpaint workflows where the image and prompt should have different guidance weights; defaults to -1 which reuses cfg_scale",
+    ),
   guidance: z
     .number()
     .optional()
@@ -196,17 +205,32 @@ export const diffusionRequestSchema = z.object({
     .string()
     .optional()
     .describe("Optional name of a cached sampler preset to reuse."),
-
+  init_image: z
+    .string()
+    .min(1)
+    .regex(BASE64_PATTERN)
+    .optional()
+    .describe("Base64-encoded image for img2img generation"),
+  strength: z
+    .number()
+    .min(0)
+    .max(1)
+    .optional()
+    .describe(
+      "img2img denoising strength (0.0 = keep source, 1.0 = ignore source); used by the SD/SDXL SDEdit path. No-op for FLUX.2, which uses in-context conditioning and ignores this field.",
+    ),
 });
 
-export type DiffusionRequest = z.infer<typeof diffusionRequestSchema>;
+export type DiffusionRequest = z.input<typeof diffusionRequestSchema>;
 
 export const diffusionStreamRequestSchema = diffusionRequestSchema.extend({
   type: z.literal("diffusionStream"),
 });
 
-export type DiffusionStreamRequest = z.infer<
+export type DiffusionStreamRequest = z.input<
   typeof diffusionStreamRequestSchema
 >;
 
-export type DiffusionClientParams = DiffusionRequest;
+export type DiffusionClientParams = Omit<DiffusionRequest, "init_image"> & {
+  init_image?: Uint8Array;
+};

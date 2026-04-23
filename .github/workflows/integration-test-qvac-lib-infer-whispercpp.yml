@@ -7,6 +7,20 @@ on:
         description: "NPM package containing prebuilds (e.g. @qvac/transcription-whispercpp@1.0.0)"
         required: true
         type: string
+      run_integration_tests:
+        description: "Run the regular integration suite"
+        required: false
+        type: boolean
+        default: true
+      run_rtf_benchmarks:
+        description: "Run RTF performance benchmarks"
+        required: false
+        type: boolean
+        default: true
+      benchmark_matrix_json:
+        description: "Optional JSON array overriding the per-runner benchmark matrix"
+        required: false
+        type: string
       workdir:
         description: "Relative path to package directory in monorepo"
         type: string
@@ -19,6 +33,20 @@ on:
         type: string
       repository:
         type: string
+      run_integration_tests:
+        description: "Run the regular integration suite"
+        type: boolean
+        required: false
+        default: true
+      run_rtf_benchmarks:
+        description: "Run RTF performance benchmarks"
+        type: boolean
+        required: false
+        default: true
+      benchmark_matrix_json:
+        description: "Optional JSON array overriding the per-runner benchmark matrix"
+        type: string
+        required: false
       workdir:
         description: "Relative path to package directory in monorepo"
         required: false
@@ -47,21 +75,33 @@ jobs:
           - os: ubuntu-22.04
             platform: linux
             arch: x64
+            benchmark_matrix_json: >-
+              [{"modelFile":"ggml-tiny.bin","useGPU":false,"backendHint":"cpu"}]
           - os: ai-run-linux-gpu
             platform: linux
             arch: x64
+            benchmark_matrix_json: >-
+              [{"modelFile":"ggml-tiny.bin","useGPU":false,"backendHint":"cpu"},{"modelFile":"ggml-tiny.bin","useGPU":true,"backendHint":"cuda"}]
           - os: ubuntu-24.04-arm
             platform: linux
             arch: arm64
+            benchmark_matrix_json: >-
+              [{"modelFile":"ggml-tiny.bin","useGPU":false,"backendHint":"cpu"}]
           - os: macos-14-xlarge
             platform: darwin
             arch: arm64
+            benchmark_matrix_json: >-
+              [{"modelFile":"ggml-tiny.bin","useGPU":false,"backendHint":"cpu"},{"modelFile":"ggml-tiny.bin","useGPU":true,"backendHint":"coreml"}]
           - os: macos-15-large
             platform: darwin
             arch: x64
+            benchmark_matrix_json: >-
+              [{"modelFile":"ggml-tiny.bin","useGPU":false,"backendHint":"cpu"},{"modelFile":"ggml-tiny.bin","useGPU":true,"backendHint":"coreml"}]
           - os: windows-2022
             platform: win32
             arch: x64
+            benchmark_matrix_json: >-
+              [{"modelFile":"ggml-tiny.bin","useGPU":false,"backendHint":"cpu"},{"modelFile":"ggml-tiny.bin","useGPU":true,"backendHint":"directml"}]
 
     steps:
       - name: Setup Node.js
@@ -206,7 +246,7 @@ jobs:
           brew install --quiet openblas lapack fftw
 
       - name: Run integration test (Unix)
-        if: ${{ matrix.platform != 'win32' }}
+        if: ${{ matrix.platform != 'win32' && inputs.run_integration_tests != false }}
         working-directory: ${{ inputs.workdir }}
         shell: bash
         run: npm run test:integration
@@ -214,12 +254,85 @@ jobs:
           GITHUB_TOKEN: ${{ secrets.PAT_TOKEN }}
 
       - name: Run integration test (Windows)
-        if: ${{ matrix.platform == 'win32' }}
+        if: ${{ matrix.platform == 'win32' && inputs.run_integration_tests != false }}
         working-directory: ${{ inputs.workdir }}
         shell: powershell
         run: npm run test:integration
         env:
           GITHUB_TOKEN: ${{ secrets.PAT_TOKEN }}
+
+      - name: Run RTF benchmark (Unix)
+        if: ${{ always() && matrix.platform != 'win32' && inputs.run_rtf_benchmarks != false }}
+        continue-on-error: true
+        working-directory: ${{ inputs.workdir }}
+        shell: bash
+        run: node scripts/run-rtf-benchmark-matrix.js
+        env:
+          GITHUB_TOKEN: ${{ secrets.PAT_TOKEN }}
+          QVAC_WHISPER_BENCHMARK_DEVICE: ${{ matrix.os }}
+          QVAC_WHISPER_BENCHMARK_RUNNER: ${{ matrix.os }}
+          QVAC_WHISPER_BENCHMARK_MATRIX_JSON: ${{ inputs.benchmark_matrix_json || matrix.benchmark_matrix_json }}
+
+      - name: Run RTF benchmark (Windows)
+        if: ${{ always() && matrix.platform == 'win32' && inputs.run_rtf_benchmarks != false }}
+        continue-on-error: true
+        working-directory: ${{ inputs.workdir }}
+        shell: powershell
+        run: node scripts/run-rtf-benchmark-matrix.js
+        env:
+          GITHUB_TOKEN: ${{ secrets.PAT_TOKEN }}
+          QVAC_WHISPER_BENCHMARK_DEVICE: ${{ matrix.os }}
+          QVAC_WHISPER_BENCHMARK_RUNNER: ${{ matrix.os }}
+          QVAC_WHISPER_BENCHMARK_MATRIX_JSON: ${{ inputs.benchmark_matrix_json || matrix.benchmark_matrix_json }}
+
+      - name: Upload RTF results
+        if: ${{ always() && inputs.run_rtf_benchmarks != false }}
+        continue-on-error: true
+        uses: actions/upload-artifact@bbbca2ddaa5d8feaa63e36b76fdaad77386f024f # 7.0.0
+        with:
+          name: rtf-results-${{ matrix.os }}-${{ matrix.platform }}-${{ matrix.arch }}
+          path: ${{ inputs.workdir }}/benchmarks/results/rtf-benchmark-*.json
+          retention-days: 30
+          if-no-files-found: ignore
+
+      - name: Add RTF summary
+        if: ${{ always() && inputs.run_rtf_benchmarks != false }}
+        continue-on-error: true
+        working-directory: ${{ inputs.workdir }}
+        shell: bash
+        run: |
+          echo "### RTF - ${{ matrix.platform }}-${{ matrix.arch }}" >> "$GITHUB_STEP_SUMMARY"
+          node -e "
+            const fs = require('fs')
+            const path = require('path')
+            const resultsDir = path.resolve('benchmarks/results')
+            if (!fs.existsSync(resultsDir)) process.exit(0)
+            const files = fs.readdirSync(resultsDir)
+              .filter((file) => file.startsWith('rtf-benchmark-') && file.endsWith('.json'))
+              .sort()
+            if (files.length === 0) process.exit(0)
+            const lines = [
+              '| Model | GPU | Backend | Device | Mean RTF | P50 | P95 |',
+              '|-------|-----|---------|--------|----------|-----|-----|'
+            ]
+            for (const file of files) {
+              const report = JSON.parse(fs.readFileSync(path.join(resultsDir, file), 'utf8'))
+              const model = report.model && report.model.name ? report.model.name.replace(/\.bin$/, '') : 'unknown'
+              const summary = report.summary || {}
+              const rtf = summary.rtf || {}
+              lines.push(
+                '| ' + model +
+                ' | ' + ((report.requested && report.requested.useGPU) ? 'yes' : 'no') +
+                ' | ' + ((report.labels && report.labels.backend) || (report.requested && report.requested.backendHint) || 'n/a') +
+                ' | ' + ((report.labels && (report.labels.device || report.labels.runner)) || 'n/a') +
+                ' | ' + (rtf.mean !== undefined ? Number(rtf.mean).toFixed(4) : 'n/a') +
+                ' | ' + (rtf.p50 !== undefined ? Number(rtf.p50).toFixed(4) : 'n/a') +
+                ' | ' + (rtf.p95 !== undefined ? Number(rtf.p95).toFixed(4) : 'n/a') +
+                ' |'
+              )
+            }
+            console.log(lines.join('\n'))
+          " >> "$GITHUB_STEP_SUMMARY"
 
       - name: Print run state (Unix)
         if: ${{ matrix.platform != 'win32' }}
