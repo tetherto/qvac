@@ -1,0 +1,139 @@
+# Build-only workflow. Publishing lives in the merge/release pipelines.
+name: Prebuilds (GGML Classification)
+
+on:
+  workflow_call:
+    inputs:
+      ref:
+        description: "ref"
+        type: string
+      repository:
+        type: string
+        default: "tetherto/qvac"
+  workflow_dispatch:
+
+env:
+  PKG_DIR: packages/qvac-lib-infer-ggml-classification
+
+permissions:
+  contents: read
+
+jobs:
+  prebuild:
+    permissions:
+      contents: write
+      pull-requests: write
+      id-token: write
+      packages: write
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: ubuntu-22.04
+            platform: linux
+            arch: x64
+          - os: ubuntu-22.04-arm
+            platform: linux
+            arch: arm64
+          - os: ubuntu-24.04
+            platform: android
+            arch: arm64
+            flags: -D ANDROID_STL=c++_shared -D BUILD_TESTING=OFF
+          - os: macos-14
+            platform: darwin
+            arch: arm64
+          - os: macos-14
+            platform: ios
+            arch: arm64
+            flags: -D BUILD_TESTING=OFF
+          - os: windows-2022
+            platform: win32
+            arch: x64
+
+    runs-on: ${{ matrix.os }}
+    environment: release
+    name: ${{ matrix.platform }}-${{ matrix.arch }}${{ matrix.tags }}
+
+    steps:
+      - name: Echo workflow inputs
+        shell: bash
+        env:
+          INPUT_REF: ${{ inputs.ref || github.ref }}
+          INPUT_REPO: ${{ inputs.repository || github.repository }}
+          MATRIX_PLATFORM: ${{ matrix.platform }}
+          MATRIX_ARCH: ${{ matrix.arch }}
+          PKG_DIR_VAR: ${{ env.PKG_DIR }}
+        run: |
+          echo "Workflow inputs:"
+          echo "Ref: $INPUT_REF"
+          echo "Repository: $INPUT_REPO"
+          echo "Matrix platform: $MATRIX_PLATFORM"
+          echo "Matrix arch: $MATRIX_ARCH"
+          echo "PKG_DIR: $PKG_DIR_VAR"
+
+      - if: ${{ matrix.os == 'ubuntu-22.04' || matrix.os == 'ubuntu-22.04-arm' || matrix.os == 'ubuntu-24.04' }}
+        name: Update C++ tools
+        run: |
+          wget https://apt.llvm.org/llvm.sh
+          chmod +x llvm.sh
+          sudo ./llvm.sh 19 all
+
+      - if: ${{ matrix.os == 'windows-2022' }}
+        name: Configure Windows runner
+        run: |
+          git config --system core.longpaths true
+
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # 6.0.2
+        with:
+          repository: ${{ inputs.repository || github.repository }}
+          ref: ${{ inputs.ref || github.ref }}
+          token: ${{ secrets.PAT_TOKEN }}
+          submodules: recursive
+
+      - name: Setup AWS + Windows CLI
+        uses: tetherto/qvac/.github/actions/setup-aws-prebuild@0bbdca93da303a0b1634ba14a89cec085621078d
+        with:
+          role-to-assume: ${{ secrets.AWS_OIDC_ROLE_ARN }}
+
+      - name: Setup vcpkg cache
+        uses: tetherto/qvac/.github/actions/setup-vcpkg-cache@0bbdca93da303a0b1634ba14a89cec085621078d
+        env:
+          MODEL_S3_BUCKET: ${{ secrets.MODEL_S3_BUCKET }}
+        with:
+          platform: ${{ matrix.platform }}
+          arch: ${{ matrix.arch }}
+          vcpkg-path: ${{ env.PKG_DIR }}
+          github-packages-token: ${{ secrets.PAT_TOKEN }}
+
+      - name: Setup Node.js
+        uses: actions/setup-node@53b83947a5a98c8d113130e565377fae1a50d02f # 6.3.0
+        with:
+          node-version: 20
+
+      - name: Setup Bare + bare-make
+        uses: tetherto/qvac/.github/actions/setup-bare-toolchain@0bbdca93da303a0b1634ba14a89cec085621078d
+
+      - name: Install npm dependencies
+        working-directory: ${{ env.PKG_DIR }}
+        run: npm install
+
+      - name: Generate build
+        working-directory: ${{ env.PKG_DIR }}
+        env:
+          CMAKE_FLAGS: ${{ matrix.flags }}
+        run: bare-make generate --target ${{ matrix.platform }} --arch ${{ matrix.arch }} ${{ matrix.flags }}
+
+      - name: Build addon
+        working-directory: ${{ env.PKG_DIR }}
+        run: bare-make build
+
+      - name: Install prebuild
+        working-directory: ${{ env.PKG_DIR }}
+        run: bare-make install
+
+      - name: Upload prebuild artifact
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # 4.6.2
+        with:
+          name: prebuild-${{ matrix.platform }}-${{ matrix.arch }}${{ matrix.tags }}
+          path: ${{ env.PKG_DIR }}/prebuilds
+          retention-days: 7

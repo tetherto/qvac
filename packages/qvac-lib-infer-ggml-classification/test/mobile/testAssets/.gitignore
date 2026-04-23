@@ -1,0 +1,11 @@
+# Ignore any large model or image files placed here by ad-hoc scripts.
+# The FP16 GGUF weights for this addon are bundled inside the package
+# at weights/ and resolved via the ImageClassifier's default-path logic,
+# so nothing is required in this directory at present.
+*.gguf
+*.bin
+*.safetensors
+*.ckpt
+
+# Keep this directory tracked.
+!.gitignore

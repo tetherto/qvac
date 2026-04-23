@@ -1,0 +1,114 @@
+cmake_minimum_required(VERSION 3.25)
+
+option(BUILD_TESTING "Build tests" OFF)
+option(ENABLE_COVERAGE "Enable coverage instrumentation for unit tests" OFF)
+if(BUILD_TESTING)
+  list(APPEND VCPKG_MANIFEST_FEATURES "tests")
+endif()
+
+find_package(cmake-bare REQUIRED PATHS node_modules/cmake-bare)
+find_package(cmake-vcpkg REQUIRED PATHS node_modules/cmake-vcpkg)
+
+set(VCPKG_OVERLAY_TRIPLETS "${CMAKE_CURRENT_SOURCE_DIR}/vcpkg/triplets;${VCPKG_OVERLAY_TRIPLETS}")
+
+# Android STL configuration must be set before project()
+if(DEFINED ENV{ANDROID_NDK} OR DEFINED ENV{ANDROID_NDK_HOME})
+  set(ANDROID_STL c++_shared)
+endif()
+
+project(qvac-lib-infer-ggml-classification LANGUAGES C CXX)
+
+if(CMAKE_SYSTEM_NAME STREQUAL "Linux")
+  add_compile_options(-stdlib=libc++)
+  add_link_options(-stdlib=libc++ -static-libstdc++)
+endif()
+
+find_path(VCPKG_INSTALLED_PATH share/qvac-lint-cpp/.clang-format REQUIRED)
+configure_file(${VCPKG_INSTALLED_PATH}/share/qvac-lint-cpp/.clang-format
+               ${CMAKE_CURRENT_SOURCE_DIR}/.clang-format COPYONLY)
+configure_file(${VCPKG_INSTALLED_PATH}/share/qvac-lint-cpp/.clang-tidy
+               ${CMAKE_CURRENT_SOURCE_DIR}/.clang-tidy COPYONLY)
+
+set(CMAKE_CXX_STANDARD 20)
+set(CMAKE_CXX_EXTENSIONS OFF)
+set(CMAKE_POSITION_INDEPENDENT_CODE ON)
+set(CMAKE_EXPORT_COMPILE_COMMANDS ON)
+
+if(WIN32)
+  add_definitions(-DWIN32_LEAN_AND_MEAN -DNOMINMAX -DNOGDI)
+endif()
+
+find_path(QVAC_LIB_INFERENCE_ADDON_CPP_INCLUDE_DIRS
+  "qvac-lib-inference-addon-cpp/JsInterface.hpp" REQUIRED)
+find_path(STB_INCLUDE_DIRS "stb_image.h" REQUIRED)
+
+find_package(ggml CONFIG REQUIRED)
+
+bare_target(bare_target_value)
+bare_module_target("." unused_target NAME module_name VERSION unused_version)
+set(BACKENDS_SUBDIR_VALUE "${bare_target_value}/${module_name}")
+message(STATUS "Building qvac-lib-infer-ggml-classification with BACKENDS_SUBDIR='${BACKENDS_SUBDIR_VALUE}'")
+
+set(BACKEND_DL_LIBS "")
+if((ANDROID OR UNIX) AND NOT APPLE)
+  foreach(_backend ${GGML_AVAILABLE_BACKENDS})
+    list(APPEND BACKEND_DL_LIBS INSTALL TARGET ggml::${_backend})
+  endforeach()
+endif()
+
+add_bare_module(qvac-lib-infer-ggml-classification EXPORTS ${BACKEND_DL_LIBS})
+
+if(CMAKE_SYSTEM_NAME STREQUAL "Linux")
+  target_link_options(${qvac-lib-infer-ggml-classification}_module PRIVATE -Wl,--exclude-libs,ALL)
+endif()
+
+set(ADDON_SOURCES
+  ${PROJECT_SOURCE_DIR}/addon/src/js-interface/binding.cpp
+  ${PROJECT_SOURCE_DIR}/addon/src/model-interface/ClassificationModel.cpp
+  ${PROJECT_SOURCE_DIR}/addon/src/model-interface/ImagePreprocessor.cpp
+  ${PROJECT_SOURCE_DIR}/addon/src/model-interface/MobileNetGraph.cpp
+)
+
+target_sources(
+  ${qvac-lib-infer-ggml-classification}
+  PRIVATE
+    ${ADDON_SOURCES}
+)
+
+target_include_directories(
+  ${qvac-lib-infer-ggml-classification}
+  PRIVATE
+    ${QVAC_LIB_INFERENCE_ADDON_CPP_INCLUDE_DIRS}
+    ${STB_INCLUDE_DIRS}
+    ${PROJECT_SOURCE_DIR}/addon/src
+)
+
+target_link_libraries(
+  ${qvac-lib-infer-ggml-classification}
+  PRIVATE
+    ggml::ggml
+    ggml::ggml-base
+    ggml::ggml-cpu
+)
+
+target_compile_definitions(
+  ${qvac-lib-infer-ggml-classification}
+  PRIVATE
+    JS_LOGGER
+    BACKENDS_SUBDIR="${BACKENDS_SUBDIR_VALUE}"
+)
+
+if(WIN32)
+  target_link_libraries(
+    ${qvac-lib-infer-ggml-classification}
+    PRIVATE
+      msvcrt.lib
+  )
+endif()
+
+if(BUILD_TESTING)
+  find_package(GTest CONFIG REQUIRED)
+  include(GoogleTest)
+  enable_testing()
+  add_subdirectory(test/unit)
+endif()
