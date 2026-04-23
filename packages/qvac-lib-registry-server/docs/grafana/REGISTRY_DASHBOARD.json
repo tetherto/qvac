@@ -1309,7 +1309,7 @@
       },
       "gridPos": {
         "h": 8,
-        "w": 12,
+        "w": 8,
         "x": 0,
         "y": 41
       },
@@ -1331,21 +1331,196 @@
       "targets": [
         {
           "expr": "qvac_registry_view_core_length{vm_name=~\"$vm\"}",
-          "legendFormat": "{{ vm_name }} length",
+          "legendFormat": "{{ vm_name }}",
           "refId": "A"
-        },
-        {
-          "expr": "qvac_registry_view_core_contiguous_length{vm_name=~\"$vm\"}",
-          "legendFormat": "{{ vm_name }} contiguous",
-          "refId": "B"
-        },
-        {
-          "expr": "qvac_registry_view_core_length{vm_name=~\"$vm\"} - qvac_registry_view_core_contiguous_length{vm_name=~\"$vm\"}",
-          "legendFormat": "{{ vm_name }} gap",
-          "refId": "C"
         }
       ],
-      "title": "View Core Replication",
+      "title": "View Core Length",
+      "type": "timeseries"
+    },
+    {
+      "datasource": {
+        "type": "prometheus"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "color": {
+            "mode": "palette-classic"
+          },
+          "custom": {
+            "axisBorderShow": false,
+            "axisCenteredZero": false,
+            "axisColorMode": "text",
+            "axisLabel": "",
+            "axisPlacement": "auto",
+            "barAlignment": 0,
+            "barWidthFactor": 0.6,
+            "drawStyle": "line",
+            "fillOpacity": 15,
+            "gradientMode": "none",
+            "hideFrom": {
+              "legend": false,
+              "tooltip": false,
+              "viz": false
+            },
+            "insertNulls": false,
+            "lineInterpolation": "linear",
+            "lineWidth": 2,
+            "pointSize": 5,
+            "scaleDistribution": {
+              "type": "linear"
+            },
+            "showPoints": "never",
+            "showValues": false,
+            "spanNulls": false,
+            "stacking": {
+              "group": "A",
+              "mode": "none"
+            },
+            "thresholdsStyle": {
+              "mode": "off"
+            }
+          },
+          "mappings": [],
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "green",
+                "value": 0
+              }
+            ]
+          }
+        },
+        "overrides": []
+      },
+      "gridPos": {
+        "h": 8,
+        "w": 8,
+        "x": 8,
+        "y": 41
+      },
+      "id": 45,
+      "options": {
+        "legend": {
+          "calcs": [],
+          "displayMode": "list",
+          "placement": "bottom",
+          "showLegend": true
+        },
+        "tooltip": {
+          "hideZeros": false,
+          "mode": "single",
+          "sort": "none"
+        }
+      },
+      "pluginVersion": "12.4.0",
+      "targets": [
+        {
+          "expr": "qvac_registry_view_core_contiguous_length{vm_name=~\"$vm\"}",
+          "legendFormat": "{{ vm_name }}",
+          "refId": "A"
+        }
+      ],
+      "title": "View Core Contiguous Length",
+      "type": "timeseries"
+    },
+    {
+      "datasource": {
+        "type": "prometheus"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "color": {
+            "mode": "palette-classic"
+          },
+          "custom": {
+            "axisBorderShow": false,
+            "axisCenteredZero": false,
+            "axisColorMode": "text",
+            "axisLabel": "",
+            "axisPlacement": "auto",
+            "barAlignment": 0,
+            "barWidthFactor": 0.6,
+            "drawStyle": "line",
+            "fillOpacity": 15,
+            "gradientMode": "none",
+            "hideFrom": {
+              "legend": false,
+              "tooltip": false,
+              "viz": false
+            },
+            "insertNulls": false,
+            "lineInterpolation": "linear",
+            "lineWidth": 2,
+            "pointSize": 5,
+            "scaleDistribution": {
+              "type": "linear"
+            },
+            "showPoints": "never",
+            "showValues": false,
+            "spanNulls": false,
+            "stacking": {
+              "group": "A",
+              "mode": "none"
+            },
+            "thresholdsStyle": {
+              "mode": "off"
+            }
+          },
+          "mappings": [],
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "green",
+                "value": 0
+              },
+              {
+                "color": "yellow",
+                "value": 1
+              },
+              {
+                "color": "red",
+                "value": 1000000
+              }
+            ]
+          }
+        },
+        "overrides": []
+      },
+      "gridPos": {
+        "h": 8,
+        "w": 8,
+        "x": 16,
+        "y": 41
+      },
+      "id": 46,
+      "options": {
+        "legend": {
+          "calcs": [
+            "lastNotNull",
+            "max"
+          ],
+          "displayMode": "table",
+          "placement": "bottom",
+          "showLegend": true
+        },
+        "tooltip": {
+          "hideZeros": false,
+          "mode": "single",
+          "sort": "none"
+        }
+      },
+      "pluginVersion": "12.4.0",
+      "targets": [
+        {
+          "expr": "qvac_registry_view_core_length{vm_name=~\"$vm\"} - qvac_registry_view_core_contiguous_length{vm_name=~\"$vm\"}",
+          "legendFormat": "{{ vm_name }}",
+          "refId": "A"
+        }
+      ],
+      "title": "View Core Gap (length - contiguous)",
       "type": "timeseries"
     },
     {
@@ -1495,7 +1670,7 @@
         "h": 8,
         "w": 12,
         "x": 0,
-        "y": 65
+        "y": 73
       },
       "id": 24,
       "options": {
@@ -1586,7 +1761,7 @@
         "h": 8,
         "w": 12,
         "x": 12,
-        "y": 65
+        "y": 73
       },
       "id": 25,
       "options": {
@@ -1625,7 +1800,7 @@
         "h": 10,
         "w": 24,
         "x": 0,
-        "y": 102
+        "y": 110
       },
       "id": 13,
       "options": {
@@ -1661,7 +1836,7 @@
         "h": 10,
         "w": 24,
         "x": 0,
-        "y": 112
+        "y": 120
       },
       "id": 14,
       "options": {
@@ -2176,9 +2351,9 @@
       },
       "gridPos": {
         "h": 8,
-        "w": 12,
-        "x": 12,
-        "y": 41
+        "w": 24,
+        "x": 0,
+        "y": 65
       },
       "id": 29,
       "options": {
@@ -2211,7 +2386,7 @@
         "h": 1,
         "w": 24,
         "x": 0,
-        "y": 73
+        "y": 81
       },
       "id": 30,
       "panels": [],
@@ -2249,7 +2424,7 @@
         "h": 4,
         "w": 4,
         "x": 0,
-        "y": 74
+        "y": 82
       },
       "id": 31,
       "options": {
@@ -2307,7 +2482,7 @@
         "h": 4,
         "w": 4,
         "x": 4,
-        "y": 74
+        "y": 82
       },
       "id": 33,
       "options": {
@@ -2365,7 +2540,7 @@
         "h": 4,
         "w": 4,
         "x": 8,
-        "y": 74
+        "y": 82
       },
       "id": 34,
       "options": {
@@ -2427,7 +2602,7 @@
         "h": 4,
         "w": 4,
         "x": 12,
-        "y": 74
+        "y": 82
       },
       "id": 35,
       "options": {
@@ -2481,7 +2656,7 @@
         "h": 4,
         "w": 4,
         "x": 16,
-        "y": 74
+        "y": 82
       },
       "id": 36,
       "options": {
@@ -2572,7 +2747,7 @@
         "h": 8,
         "w": 12,
         "x": 0,
-        "y": 78
+        "y": 86
       },
       "id": 37,
       "options": {
@@ -2660,7 +2835,7 @@
         "h": 8,
         "w": 12,
         "x": 12,
-        "y": 78
+        "y": 86
       },
       "id": 38,
       "options": {
@@ -2747,7 +2922,7 @@
         "h": 8,
         "w": 12,
         "x": 0,
-        "y": 86
+        "y": 94
       },
       "id": 39,
       "options": {
@@ -2850,7 +3025,7 @@
         "h": 8,
         "w": 12,
         "x": 12,
-        "y": 86
+        "y": 94
       },
       "id": 40,
       "options": {
@@ -2943,7 +3118,7 @@
         "h": 8,
         "w": 12,
         "x": 0,
-        "y": 94
+        "y": 102
       },
       "id": 41,
       "options": {
@@ -3035,7 +3210,7 @@
         "h": 8,
         "w": 12,
         "x": 12,
-        "y": 94
+        "y": 102
       },
       "id": 42,
       "options": {
