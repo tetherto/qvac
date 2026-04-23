@@ -111,7 +111,7 @@ jobs:
           node-version: 20
 
       - name: Setup Bare + bare-make
-        uses: tetherto/qvac/.github/actions/setup-bare-toolchain@0bbdca93da303a0b1634ba14a89cec085621078d
+        uses: tetherto/qvac/.github/actions/setup-bare-tooling@0bbdca93da303a0b1634ba14a89cec085621078d
 
       - name: Install npm dependencies
         working-directory: ${{ env.PKG_DIR }}
