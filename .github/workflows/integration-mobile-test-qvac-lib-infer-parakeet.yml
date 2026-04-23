@@ -1002,6 +1002,7 @@ jobs:
             printf '  post_test:\n'
             printf '    commands:\n'
             printf '      - echo "Test completed"\n'
+            printf '      - node -e '\''const fs=require("fs");const path=require("path");const marker="QVAC_RTF_REPORT::";const logDir=process.env.DEVICEFARM_LOG_DIR||"";if(!logDir||!fs.existsSync(logDir)){console.log("No Device Farm log dir found");process.exit(0)}const matches=[];for(const name of fs.readdirSync(logDir)){const filePath=path.join(logDir,name);let stat;try{stat=fs.statSync(filePath)}catch(error){continue}if(!stat.isFile())continue;let text="";try{text=fs.readFileSync(filePath,"utf8")}catch(error){continue}for(const line of text.split(/\\r?\\n/)){const idx=line.indexOf(marker);if(idx!==-1)matches.push(path.basename(filePath)+"\\t"+line.slice(idx))}}const outPath=path.join(logDir,"qvac-rtf-markers.txt");fs.writeFileSync(outPath,matches.join("\\n")+(matches.length?"\\n":""));console.log("Wrote "+matches.length+" RTF marker line(s) to "+outPath);'\''\n'
 
           if [ "${{ matrix.platform }}" == "iOS" ]; then
             printf '      - echo ""\n'
@@ -1346,8 +1347,10 @@ jobs:
           RUN_ARN_2="${{ steps.schedule_run.outputs.run_arn_2 }}"
           RUN_COUNT="${{ steps.schedule_run.outputs.run_count }}"
           LOG_DIR="devicefarm-logs/${{ matrix.platform }}"
+          METADATA_FILE="$LOG_DIR/devicefarm-artifacts.jsonl"
           PLATFORM="${{ matrix.platform }}"
           mkdir -p "$LOG_DIR"
+          : > "$METADATA_FILE"
 
           echo ""
           echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
@@ -1379,6 +1382,8 @@ jobs:
               DEVICE_NAME=$(echo "$JOBS" | jq -r --arg arn "$JOB_ARN" '.jobs[] | select(.arn == $arn) | .device.name // "unknown"')
               JOB_RESULT=$(echo "$JOBS" | jq -r --arg arn "$JOB_ARN" '.jobs[] | select(.arn == $arn) | .result // "UNKNOWN"')
               SAFE_NAME=$(echo "$DEVICE_NAME" | tr ' /' '__' | tr -cd '[:alnum:]_-')
+              DEVICE_DIR="$LOG_DIR/${SAFE_RUN}/${SAFE_NAME}"
+              mkdir -p "$DEVICE_DIR"
 
               echo ""
               echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
@@ -1407,10 +1412,21 @@ jobs:
                   fi
 
                   SAFE_ART=$(echo "$ART_NAME" | tr ' /' '__' | tr -cd '[:alnum:]_-')
-                  DEST="$LOG_DIR/${SAFE_RUN}_${SAFE_NAME}_${SAFE_SUITE}_${SAFE_ART}.${ART_EXT}"
+                  DEST="$DEVICE_DIR/${SAFE_SUITE}_${SAFE_ART}.${ART_EXT}"
 
                   if curl -fsSL -o "$DEST" "$ART_URL" 2>/dev/null; then
                     echo "  Downloaded: $SUITE_NAME / $ART_NAME"
+                    jq -cn \
+                      --arg downloadedPath "$DEST" \
+                      --arg platform "$PLATFORM" \
+                      --arg runLabel "$RUN_LABEL" \
+                      --arg deviceName "$DEVICE_NAME" \
+                      --arg suiteName "$SUITE_NAME" \
+                      --arg artifactName "$ART_NAME" \
+                      --arg jobResult "$JOB_RESULT" \
+                      --arg artifactType "FILE" \
+                      '{downloadedPath:$downloadedPath,platform:$platform,runLabel:$runLabel,deviceName:$deviceName,suiteName:$suiteName,artifactName:$artifactName,jobResult:$jobResult,artifactType:$artifactType}' >> "$METADATA_FILE"
+                    echo "" >> "$METADATA_FILE"
 
                     if echo "$ART_NAME" | grep -qiE "test.spec|testspec"; then
                       echo ""
@@ -1430,10 +1446,21 @@ jobs:
                   [ -z "$ART_URL" ] && continue
 
                   SAFE_ART=$(echo "$ART_NAME" | tr ' /' '__' | tr -cd '[:alnum:]_-')
-                  DEST="$LOG_DIR/${SAFE_RUN}_${SAFE_NAME}_${SAFE_SUITE}_${SAFE_ART}.${ART_EXT}"
+                  DEST="$DEVICE_DIR/${SAFE_SUITE}_${SAFE_ART}.${ART_EXT}"
 
                   if curl -fsSL -o "$DEST" "$ART_URL" 2>/dev/null; then
                     echo "  Downloaded: $SUITE_NAME / $ART_NAME (LOG)"
+                    jq -cn \
+                      --arg downloadedPath "$DEST" \
+                      --arg platform "$PLATFORM" \
+                      --arg runLabel "$RUN_LABEL" \
+                      --arg deviceName "$DEVICE_NAME" \
+                      --arg suiteName "$SUITE_NAME" \
+                      --arg artifactName "$ART_NAME" \
+                      --arg jobResult "$JOB_RESULT" \
+                      --arg artifactType "LOG" \
+                      '{downloadedPath:$downloadedPath,platform:$platform,runLabel:$runLabel,deviceName:$deviceName,suiteName:$suiteName,artifactName:$artifactName,jobResult:$jobResult,artifactType:$artifactType}' >> "$METADATA_FILE"
+                    echo "" >> "$METADATA_FILE"
                   fi
                 done
               done
@@ -1453,10 +1480,21 @@ jobs:
                 fi
 
                 SAFE_ART=$(echo "$ART_NAME" | tr ' /' '__' | tr -cd '[:alnum:]_-')
-                DEST="$LOG_DIR/${SAFE_RUN}_${SAFE_NAME}_job_${SAFE_ART}.${ART_EXT}"
+                DEST="$DEVICE_DIR/job_${SAFE_ART}.${ART_EXT}"
 
                 if curl -fsSL -o "$DEST" "$ART_URL" 2>/dev/null; then
                   echo "  Downloaded (job-level): $ART_NAME"
+                  jq -cn \
+                    --arg downloadedPath "$DEST" \
+                    --arg platform "$PLATFORM" \
+                    --arg runLabel "$RUN_LABEL" \
+                    --arg deviceName "$DEVICE_NAME" \
+                    --arg suiteName "job" \
+                    --arg artifactName "$ART_NAME" \
+                    --arg jobResult "$JOB_RESULT" \
+                    --arg artifactType "JOB_FILE" \
+                    '{downloadedPath:$downloadedPath,platform:$platform,runLabel:$runLabel,deviceName:$deviceName,suiteName:$suiteName,artifactName:$artifactName,jobResult:$jobResult,artifactType:$artifactType}' >> "$METADATA_FILE"
+                  echo "" >> "$METADATA_FILE"
                 fi
               done
             done
@@ -1476,4 +1514,68 @@ jobs:
           path: devicefarm-logs/
           retention-days: 30
           if-no-files-found: ignore
+
+      - name: Extract Mobile RTF Results
+        if: always() && steps.schedule_run.outputs.run_arn_1
+        continue-on-error: true
+        working-directory: ${{ env.ADDON_DIR }}
+        run: |
+          mkdir -p benchmarks/results/mobile
+          node scripts/extract-mobile-rtf-results.js \
+            --input-dir "${GITHUB_WORKSPACE}/devicefarm-logs" \
+            --output-dir "${PWD}/benchmarks/results/mobile" \
+            --manifest "${PWD}/benchmarks/results/mobile/mobile-rtf-results-index.json"
+
+      - name: Upload Mobile RTF Results
+        if: always() && steps.schedule_run.outputs.run_arn_1
+        continue-on-error: true
+        uses: actions/upload-artifact@bbbca2ddaa5d8feaa63e36b76fdaad77386f024f # 7.0.0
+        with:
+          name: mobile-rtf-results-parakeet-${{ matrix.platform }}
+          path: |
+            ${{ github.workspace }}/${{ env.ADDON_DIR }}/benchmarks/results/mobile/rtf-benchmark-*.json
+            ${{ github.workspace }}/${{ env.ADDON_DIR }}/benchmarks/results/mobile/mobile-rtf-results-index.json
+          retention-days: 30
+          if-no-files-found: ignore
+
+      - name: Add Mobile RTF Summary
+        if: always() && steps.schedule_run.outputs.run_arn_1
+        continue-on-error: true
+        working-directory: ${{ env.ADDON_DIR }}
+        run: |
+          echo "### Mobile RTF — ${{ matrix.platform }}" >> $GITHUB_STEP_SUMMARY
+          node -e "
+            const fs = require('fs');
+            const path = require('path');
+            const resultsDir = path.resolve('benchmarks/results/mobile');
+            if (!fs.existsSync(resultsDir)) {
+              console.log('No mobile RTF results directory found.');
+              process.exit(0);
+            }
+            const reportFiles = fs.readdirSync(resultsDir)
+              .filter(name => /^rtf-benchmark-.*\\.json$/.test(name))
+              .sort();
+            console.log('Reports written: ' + reportFiles.length);
+            if (reportFiles.length === 0) {
+              process.exit(0);
+            }
+            console.log('');
+            console.log('| Platform | Device | Model | Backend | Mean RTF |');
+            console.log('|----------|--------|-------|---------|----------|');
+            for (const fileName of reportFiles) {
+              const reportPath = path.join(resultsDir, fileName);
+              const report = JSON.parse(fs.readFileSync(reportPath, 'utf8'));
+              const mean = report.summary && report.summary.rtf && report.summary.rtf.mean;
+              const labels = report.labels || {};
+              const model = report.model || {};
+              console.log(
+                '| ' + (report.platform || 'n/a') +
+                ' | ' + (labels.device || labels.runner || 'n/a') +
+                ' | ' + (model.type || 'unknown') +
+                ' | ' + (labels.backend || 'n/a') +
+                ' | ' + (mean !== undefined ? Number(mean).toFixed(4) : 'n/a') +
+                ' |'
+              );
+            }
+          " >> $GITHUB_STEP_SUMMARY
 

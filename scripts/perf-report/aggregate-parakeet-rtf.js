@@ -77,6 +77,22 @@ function formatMaybeInteger (value) {
 
 function normalizeBackend (platformName, useGPU, backendHint) {
   const hint = String(backendHint || '').toLowerCase()
+  if (hint.endsWith('-requested')) return hint.replace(/-requested$/, '')
+  if (hint === 'auto-gpu-requested' || hint === 'gpu-requested') {
+    switch (String(platformName || '').toLowerCase()) {
+      case 'android':
+        return 'nnapi'
+      case 'ios':
+      case 'darwin':
+        return 'coreml'
+      case 'linux':
+        return 'cuda'
+      case 'win32':
+        return 'directml'
+      default:
+        return 'gpu'
+    }
+  }
   if (hint && hint !== 'mobile-accelerated') return hint
   if (!useGPU) return 'cpu'
 
@@ -109,7 +125,7 @@ function escapeHtml (value) {
     .replace(/'/g, '&#39;')
 }
 
-function normalizeDesktopRecord (report, sourceFile) {
+function normalizeArtifactRecord (report, sourceFile) {
   const summary = report.summary || {}
   const rtf = summary.rtf || {}
   const wallMs = summary.wallMs || {}
@@ -121,9 +137,14 @@ function normalizeDesktopRecord (report, sourceFile) {
   )
   const backend = normalizeBackend(platformName, useGPU, report.labels && report.labels.backend)
   const label = report.labels && (report.labels.device || report.labels.runner || report.labels.label)
+  const source = report.source || (
+    report.isMobile || platformName === 'android' || platformName === 'ios'
+      ? 'mobile-ci'
+      : 'desktop-ci'
+  )
 
   return {
-    source: 'desktop-ci',
+    source,
     device: label || report.platform || 'unknown',
     platform: report.platform || 'unknown',
     platformFamily: platformName || 'unknown',
@@ -138,7 +159,7 @@ function normalizeDesktopRecord (report, sourceFile) {
   }
 }
 
-function isDesktopArtifact (report) {
+function isArtifactReport (report) {
   return Boolean(report && report.model && report.model.type)
 }
 
@@ -167,8 +188,8 @@ function loadArtifactRecords (inputDir) {
   const files = walkFiles(inputDir).filter(file => /^rtf-benchmark-.*\.json$/.test(path.basename(file)))
   for (const file of files) {
     const report = JSON.parse(fs.readFileSync(file, 'utf8'))
-    if (isDesktopArtifact(report)) {
-      records.push(normalizeDesktopRecord(report, file))
+    if (isArtifactReport(report)) {
+      records.push(normalizeArtifactRecord(report, file))
     }
   }
   return records
@@ -183,8 +204,8 @@ function loadManualRecords (manualDir) {
     const payload = JSON.parse(fs.readFileSync(file, 'utf8'))
     const items = Array.isArray(payload) ? payload : (payload.records || [payload])
     for (const item of items) {
-      if (isDesktopArtifact(item)) {
-        records.push(normalizeDesktopRecord(item, file))
+      if (isArtifactReport(item)) {
+        records.push(normalizeArtifactRecord(item, file))
       } else {
         records.push(normalizeManualRecord(item, file))
       }
@@ -263,7 +284,7 @@ function renderMarkdown (records) {
   const lines = []
   const coverage = buildCoverage(records)
 
-  lines.push('## Parakeet Performance Findings')
+  lines.push('## Parakeet RTF Findings')
   lines.push('')
   lines.push('| Source | Device | Platform | Model | GPU | Backend | Mean RTF | P50 | P95 | Mean Wall (ms) | Notes |')
   lines.push('|--------|--------|----------|-------|-----|---------|----------|-----|-----|----------------|-------|')
@@ -308,7 +329,7 @@ function renderHtml (records) {
     '<head>',
     '  <meta charset="utf-8">',
     '  <meta name="viewport" content="width=device-width, initial-scale=1">',
-    '  <title>Parakeet Performance Findings</title>',
+    '  <title>Parakeet RTF Findings</title>',
     '  <style>',
     '    body { font-family: Arial, sans-serif; margin: 24px; color: #1f2937; }',
     '    h1, h2 { margin-bottom: 12px; }',
@@ -321,7 +342,7 @@ function renderHtml (records) {
     '  </style>',
     '</head>',
     '<body>',
-    '  <h1>Parakeet Performance Findings</h1>',
+    '  <h1>Parakeet RTF Findings</h1>',
     '  <table>',
     '    <thead>',
     '      <tr>',
