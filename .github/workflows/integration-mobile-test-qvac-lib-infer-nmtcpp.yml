@@ -1710,10 +1710,10 @@ jobs:
         run: |
           OUTPUT_DIR="perf-results-mobile/${{ matrix.platform }}"
           SCRIPTS_DIR="monorepo/scripts/perf-report"
-          REPORT="$OUTPUT_DIR/performance-report.json"
+          RENDERER="$SCRIPTS_DIR/render-step-summary.js"
 
-          if [ ! -f "$REPORT" ] || [ ! -f "$SCRIPTS_DIR/render-step-summary.js" ]; then
-            echo "::warning::Missing $REPORT or render-step-summary.js; skipping"
+          if [ ! -f "$RENDERER" ]; then
+            echo "::warning::$RENDERER not found; skipping Step Summary"
             exit 0
           fi
 
@@ -1721,10 +1721,34 @@ jobs:
           # integration tests use (Test | EP | Total Time (ms) | Decode (ms)
           # | Tokens | TPS | chrF++), so mobile and desktop Step Summaries
           # share the same headers and reading experience.
-          node "$SCRIPTS_DIR/render-step-summary.js" \
-            "$REPORT" \
-            "$GITHUB_STEP_SUMMARY" \
-            --title "Mobile Performance: nmtcpp (${{ matrix.platform }})"
+          #
+          # extract-from-log.js writes `<OUTPUT_DIR>/performance-report.json`
+          # when the run has a single device (iOS) and
+          # `<OUTPUT_DIR>/<Device_Name>/performance-report.json` when multiple
+          # devices are present (Android matrix: Pixel + Samsung). Cover both.
+          if [ -f "$OUTPUT_DIR/performance-report.json" ]; then
+            node "$RENDERER" \
+              "$OUTPUT_DIR/performance-report.json" \
+              "$GITHUB_STEP_SUMMARY" \
+              --title "Mobile Performance: nmtcpp (${{ matrix.platform }})"
+            exit 0
+          fi
+
+          RENDERED=0
+          for DEV_DIR in "$OUTPUT_DIR"/*/; do
+            DEV_REPORT="$DEV_DIR/performance-report.json"
+            [ -f "$DEV_REPORT" ] || continue
+            DEV_NAME=$(basename "$DEV_DIR" | tr '_' ' ')
+            node "$RENDERER" \
+              "$DEV_REPORT" \
+              "$GITHUB_STEP_SUMMARY" \
+              --title "Mobile Performance: nmtcpp (${{ matrix.platform }} · ${DEV_NAME})"
+            RENDERED=$((RENDERED + 1))
+          done
+
+          if [ "$RENDERED" = "0" ]; then
+            echo "::warning::No performance-report.json found under $OUTPUT_DIR (neither root nor per-device); skipping Step Summary"
+          fi
 
       - name: Upload mobile performance report
         if: always() && steps.schedule_run.outputs.run_arn_1

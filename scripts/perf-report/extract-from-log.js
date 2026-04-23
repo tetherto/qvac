@@ -45,6 +45,13 @@ function cleanJsonFromLogcat (raw) {
   // Only strip trailing ' when the leading wrapper was present
   if (/^'\[Bare\]',\s*'/.test(s)) {
     s = s.replace(/^'\[Bare\]',\s*'/, '').replace(/'$/, '')
+    // The ReactNativeJS bridge wraps content in a JS single-quoted string
+    // literal, which escapes embedded single quotes as \'. Those are valid
+    // JS string escapes but NOT valid JSON escapes — `JSON.parse` bails on
+    // strings like "aujourd\\'hui?" with "Bad escaped character". Unescape
+    // before parsing. `\\'` (literal `\` + `'`) is the only JS-but-not-JSON
+    // escape the bridge produces — `\n`, `\"`, `\\\\` are all shared.
+    s = s.replace(/\\'/g, "'")
   }
 
   return s.trim()
