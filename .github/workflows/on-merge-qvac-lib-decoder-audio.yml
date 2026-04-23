@@ -184,10 +184,7 @@ jobs:
         id: publish
         uses: ./.github/actions/publish-library-to-npm
         with:
-          secret-token: ${{ secrets.NPM_TOKEN }}
           tag: "latest"
-          repo_name: "decoder-audio"
-          git-token: ${{ secrets.GITHUB_TOKEN }}
           workdir: "packages/qvac-lib-decoder-audio"
 
   publish-release:

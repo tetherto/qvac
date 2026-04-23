@@ -185,12 +185,8 @@ jobs:
         id: publish
         uses: ./.github/actions/publish-library-to-npm
         with:
-          secret-token: ${{ secrets.NPM_TOKEN }}
           tag: "latest"
           workdir: packages/qvac-lib-infer-llamacpp-embed
-          repo_name: "llamacpp-embed"
-          git-token: ${{ secrets.GITHUB_TOKEN }}
-          create-tag: "false"
 
   # Create GitHub release only for actual releases (after NPM publish)
   publish-release:
