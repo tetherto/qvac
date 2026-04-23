@@ -3,11 +3,32 @@
 require('./integration-runtime.cjs')
 
 const process = require('bare-process')
+const sharedModuleCandidates = [
+  '../benchmark/rtf-benchmark.shared.js',
+  './test/benchmark/rtf-benchmark.shared.js'
+]
+
+let benchmarkShared = null
+let lastSharedModuleError = null
+
+for (const candidate of sharedModuleCandidates) {
+  try {
+    benchmarkShared = require(candidate)
+    break
+  } catch (error) {
+    lastSharedModuleError = error
+  }
+}
+
+if (!benchmarkShared) {
+  throw lastSharedModuleError || new Error('Unable to load rtf-benchmark.shared.js')
+}
+
 const {
   DEFAULT_MOBILE_BENCHMARK_MATRIX,
   parseBenchmarkMatrixConfig,
   runRtfBenchmarkMatrix
-} = require('../benchmark/rtf-benchmark.shared.js')
+} = benchmarkShared
 
 function getMobileBenchmarkMatrix () {
   return parseBenchmarkMatrixConfig(
