@@ -11,6 +11,7 @@ import {
   ModelType,
   nmtConfigBaseSchema,
   ADDON_NMT,
+  BERGAMOT_CJK_LANG_PAIRS,
   type ModelSrcInput,
   type CreateModelParams,
   type PluginModelResult,
@@ -19,11 +20,17 @@ import {
   type ResolveResult,
 } from "@/schemas";
 import { createStreamLogger, registerAddonLogger } from "@/logging";
+import { parseModelPath } from "@/server/utils";
+import path from "bare-path";
 import { ModelLoadFailedError } from "@/utils/errors-server";
 import { translate } from "@/server/bare/ops/translate";
 import { attachModelExecutionMs } from "@/profiling/model-execution";
 
-const BERGAMOT_CJK_LANG_PAIRS = ["enja", "enko", "enzh"];
+interface PivotModelConfig {
+  modelSrc: string;
+  srcVocabSrc?: ModelSrcInput;
+  dstVocabSrc?: ModelSrcInput;
+}
 
 function buildBergamotVocabSources(basePath: string, langPair: string) {
   if (BERGAMOT_CJK_LANG_PAIRS.includes(langPair)) {
@@ -57,6 +64,29 @@ function deriveBergamotRegistryVocabSources(modelSrc: string) {
   const basePath = match[1];
   const langPair = match[2];
   return buildBergamotVocabSources(basePath, langPair);
+}
+
+/**
+ * Derive absolute vocab paths from a resolved Bergamot model path.
+ * Works for both companion-set layout (colocated files) and any layout where
+ * vocab follows the standard naming convention beside the model binary.
+ * Returns null if modelPath is not a recognisable Bergamot model.
+ */
+function deriveColocatedBergamotVocabPaths(modelPath: string) {
+  const { dirPath, basePath } = parseModelPath(modelPath);
+  const match = basePath.match(/^model\.([a-z]+)\.intgemm\.alphas\.bin$/);
+  if (!match?.[1]) return null;
+
+  const langPair = match[1];
+  if (BERGAMOT_CJK_LANG_PAIRS.includes(langPair)) {
+    return {
+      srcVocabPath: path.join(dirPath, `srcvocab.${langPair}.spm`),
+      dstVocabPath: path.join(dirPath, `trgvocab.${langPair}.spm`),
+    };
+  }
+
+  const sharedPath = path.join(dirPath, `vocab.${langPair}.spm`);
+  return { srcVocabPath: sharedPath, dstVocabPath: sharedPath };
 }
 
 function createNmtModel(
@@ -114,7 +144,7 @@ function createNmtModel(
       ...(nmtConfig.normalize !== undefined && {
         normalize: nmtConfig.normalize,
       }),
-      ...(nmtConfig.pivotModel && {
+      ...(nmtConfig.pivotModel && pivotModelPath && {
         pivotConfig: (() => {
           // eslint-disable-next-line @typescript-eslint/no-unused-vars
           const { modelSrc, dstVocabSrc, srcVocabSrc, ...pivotGenConfig } = nmtConfig.pivotModel;
@@ -135,6 +165,80 @@ function createNmtModel(
   return { model, loader: null };
 }
 
+async function resolveBergamotVocab(
+  nmtConfig: NmtConfig,
+  ctx: ResolveContext,
+  srcVocabSrc: ModelSrcInput | undefined,
+  dstVocabSrc: ModelSrcInput | undefined,
+  pivotModel?: PivotModelConfig,
+): Promise<ResolveResult<Record<string, unknown>>> {
+  let srcSrc: ModelSrcInput | undefined = srcVocabSrc;
+  let dstSrc: ModelSrcInput | undefined = dstVocabSrc;
+
+  if (!srcSrc || !dstSrc) {
+    const derived = ctx.modelSrc.startsWith("pear://")
+      ? deriveBergamotVocabSources(ctx.modelSrc)
+      : ctx.modelSrc.startsWith("registry://")
+        ? deriveBergamotRegistryVocabSources(ctx.modelSrc)
+        : null;
+    if (derived) {
+      srcSrc = srcSrc ?? derived.srcVocabSrc;
+      dstSrc = dstSrc ?? derived.dstVocabSrc;
+    }
+  }
+
+  if (!srcSrc || !dstSrc) {
+    throw new ModelLoadFailedError(
+      "Bergamot requires srcVocabSrc and dstVocabSrc. Provide them in modelConfig or use a pear:// or registry:// model source for auto-derivation.",
+    );
+  }
+
+  if (!pivotModel) {
+    const [srcVocabPath, dstVocabPath] = await Promise.all([
+      ctx.resolveModelPath(srcSrc),
+      ctx.resolveModelPath(dstSrc),
+    ]);
+    return {
+      config: nmtConfig,
+      artifacts: { srcVocabPath, dstVocabPath },
+    };
+  }
+
+  let pivotSrcSrc: ModelSrcInput | undefined = pivotModel.srcVocabSrc;
+  let pivotDstSrc: ModelSrcInput | undefined = pivotModel.dstVocabSrc;
+
+  if (!pivotSrcSrc || !pivotDstSrc) {
+    const pivotDerived = pivotModel.modelSrc.startsWith("pear://")
+      ? deriveBergamotVocabSources(pivotModel.modelSrc)
+      : pivotModel.modelSrc.startsWith("registry://")
+        ? deriveBergamotRegistryVocabSources(pivotModel.modelSrc)
+        : null;
+    if (pivotDerived) {
+      pivotSrcSrc = pivotSrcSrc ?? pivotDerived.srcVocabSrc;
+      pivotDstSrc = pivotDstSrc ?? pivotDerived.dstVocabSrc;
+    }
+  }
+
+  if (!pivotSrcSrc || !pivotDstSrc) {
+    throw new ModelLoadFailedError(
+      "Bergamot pivot model requires srcVocabSrc and dstVocabSrc. Provide them in modelConfig or use a pear:// or registry:// model source for auto-derivation.",
+    );
+  }
+
+  const [srcVocabPath, dstVocabPath, pivotSrcVocabPath, pivotDstVocabPath, pivotModelPath] = await Promise.all([
+      ctx.resolveModelPath(srcSrc),
+      ctx.resolveModelPath(dstSrc),
+      ctx.resolveModelPath(pivotSrcSrc),
+      ctx.resolveModelPath(pivotDstSrc),
+      ctx.resolveModelPath(pivotModel.modelSrc),
+    ]);
+
+  return {
+    config: nmtConfig,
+    artifacts: { srcVocabPath, dstVocabPath, pivotSrcVocabPath, pivotDstVocabPath, pivotModelPath },
+  };
+}
+
 export const nmtPlugin = definePlugin({
   modelType: ModelType.nmtcppTranslation,
   displayName: "NMT (nmtcpp)",
@@ -145,98 +249,52 @@ export const nmtPlugin = definePlugin({
     cfg: Record<string, unknown>,
     ctx: ResolveContext,
   ): Promise<ResolveResult<Record<string, unknown>>> {
-    const { srcVocabSrc, dstVocabSrc, ...nmtConfig } = cfg as {
+    const {
+      srcVocabSrc,
+      dstVocabSrc,
+      pivotModel,
+      ...nmtConfig
+    } = cfg as {
       srcVocabSrc?: ModelSrcInput;
       dstVocabSrc?: ModelSrcInput;
-      pivotModel?: { srcVocabSrc?: ModelSrcInput, dstVocabSrc?: ModelSrcInput, modelSrc: string };
+      pivotModel?: PivotModelConfig;
     } & NmtConfig;
-
 
     if (nmtConfig.engine !== "Bergamot") {
       return { config: nmtConfig };
     }
 
-    let srcSrc: ModelSrcInput | undefined = srcVocabSrc;
-    let dstSrc: ModelSrcInput | undefined = dstVocabSrc;
+    const bergamotConfig = { ...nmtConfig, ...(pivotModel && { pivotModel }) };
 
-    if (!srcSrc || !dstSrc) {
-      const derived = ctx.modelSrc.startsWith("pear://")
-        ? deriveBergamotVocabSources(ctx.modelSrc)
-        : ctx.modelSrc.startsWith("registry://")
-          ? deriveBergamotRegistryVocabSources(ctx.modelSrc)
-          : null;
-      if (derived) {
-        srcSrc = srcSrc ?? derived.srcVocabSrc;
-        dstSrc = dstSrc ?? derived.dstVocabSrc;
-      }
-    }
-
-    if (!srcSrc || !dstSrc) {
-      throw new ModelLoadFailedError(
-        "Bergamot requires srcVocabSrc and dstVocabSrc. Provide them in modelConfig or use a pear:// or registry:// model source for auto-derivation.",
-      );
-    }
-
-    const pivotModel = nmtConfig.pivotModel
-    if (!pivotModel) {
-      const [srcVocabPath, dstVocabPath] = await Promise.all([
-        ctx.resolveModelPath(srcSrc),
-        ctx.resolveModelPath(dstSrc),
-      ]);
-
-      return {
-        config: nmtConfig,
-        artifacts: { srcVocabPath, dstVocabPath },
-      };
-    }
-
-    let pivotSrcSrc: ModelSrcInput | undefined = pivotModel.srcVocabSrc;
-    let pivotDstSrc: ModelSrcInput | undefined = pivotModel.dstVocabSrc;
-
-    if (!pivotSrcSrc || !pivotDstSrc) {
-      const pivotDerived = pivotModel.modelSrc.startsWith("pear://")
-          ? deriveBergamotVocabSources(pivotModel.modelSrc)
-          : pivotModel.modelSrc.startsWith("registry://")
-              ? deriveBergamotRegistryVocabSources(pivotModel.modelSrc)
-              : null;
-      if (pivotDerived) {
-        pivotSrcSrc = pivotSrcSrc ?? pivotDerived.srcVocabSrc;
-        pivotDstSrc = pivotDstSrc ?? pivotDerived.dstVocabSrc;
-      }
-    }
-
-    if (!pivotSrcSrc || !pivotDstSrc) {
-      throw new ModelLoadFailedError(
-          "Bergamot pivot model requires srcVocabSrc and dstVocabSrc. Provide them in modelConfig or use a pear:// or registry:// model source for auto-derivation.",
-      );
-    }
-
-    const [srcVocabPath, dstVocabPath, pivotSrcVocabPath, pivotDstVocabPath, pivotModelPath] = await Promise.all([
-      ctx.resolveModelPath(srcSrc),
-      ctx.resolveModelPath(dstSrc),
-      ctx.resolveModelPath(pivotSrcSrc),
-      ctx.resolveModelPath(pivotDstSrc),
-      ctx.resolveModelPath(pivotModel.modelSrc),
-    ]);
-
-    return {
-      config: nmtConfig,
-      artifacts: { srcVocabPath, dstVocabPath, pivotSrcVocabPath, pivotDstVocabPath, pivotModelPath },
-    };
+    return resolveBergamotVocab(
+      bergamotConfig, ctx, srcVocabSrc, dstVocabSrc, pivotModel,
+    );
   },
 
   createModel(params: CreateModelParams): PluginModelResult {
     const nmtConfig = (params.modelConfig ?? {}) as NmtConfig;
+    const artifacts = params.artifacts ?? {};
+    const derived = deriveColocatedBergamotVocabPaths(params.modelPath);
+
+    const srcVocabPath = artifacts["srcVocabPath"] ?? derived?.srcVocabPath;
+    const dstVocabPath = artifacts["dstVocabPath"] ?? derived?.dstVocabPath;
+
+    const pivotModelPath = artifacts["pivotModelPath"];
+    const pivotDerived = pivotModelPath
+      ? deriveColocatedBergamotVocabPaths(pivotModelPath)
+      : null;
+    const pivotSrcVocabPath = artifacts["pivotSrcVocabPath"] ?? pivotDerived?.srcVocabPath;
+    const pivotDstVocabPath = artifacts["pivotDstVocabPath"] ?? pivotDerived?.dstVocabPath;
 
     const { model, loader } = createNmtModel(
       params.modelId,
       params.modelPath,
       nmtConfig,
-      params.artifacts?.["srcVocabPath"],
-      params.artifacts?.["dstVocabPath"],
-      params.artifacts?.["pivotModelPath"],
-      params.artifacts?.["pivotSrcVocabPath"],
-      params.artifacts?.["pivotDstVocabPath"],
+      srcVocabPath,
+      dstVocabPath,
+      pivotModelPath,
+      pivotSrcVocabPath,
+      pivotDstVocabPath,
     );
 
     return { model, loader };
