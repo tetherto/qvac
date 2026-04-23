@@ -20,7 +20,6 @@ import {
   type ResolveResult,
 } from "@/schemas";
 import { createStreamLogger, registerAddonLogger } from "@/logging";
-import { parseModelPath } from "@/server/utils";
 import path from "bare-path";
 import { ModelLoadFailedError } from "@/utils/errors-server";
 import { translate } from "@/server/bare/ops/translate";
@@ -73,7 +72,8 @@ function deriveBergamotRegistryVocabSources(modelSrc: string) {
  * Returns null if modelPath is not a recognisable Bergamot model.
  */
 function deriveColocatedBergamotVocabPaths(modelPath: string) {
-  const { dirPath, basePath } = parseModelPath(modelPath);
+  const dirPath = path.dirname(modelPath);
+  const basePath = path.basename(modelPath);
   const match = basePath.match(/^model\.([a-z]+)\.intgemm\.alphas\.bin$/);
   if (!match?.[1]) return null;
 

@@ -14,11 +14,11 @@ export function expandGGUFIntoShards(modelPath: string): string[] {
   if (!match || !match[1] || !match[3]) return [modelPath];
 
   const baseFilename = match[1];
-  const totalShards = Number.parseInt(match[3], 10);
-  if (!Number.isFinite(totalShards) || totalShards <= 0) return [modelPath];
+  const totalDigits = match[3];
+  const totalShards = Number.parseInt(totalDigits, 10);
+  if (totalShards <= 0) return [modelPath];
 
   const join = (name: string) => (dir ? `${dir}${sep}${name}` : name);
-  const totalDigits = String(totalShards).padStart(5, "0");
   const shards = [join(`${baseFilename}.tensors.txt`)];
 
   for (let i = 1; i <= totalShards; i++) {

@@ -77,3 +77,8 @@ test("expandGGUFIntoShards: does not match shard-like substring before extension
   );
   t.alike(result, ["/models/foo-00001-of-00002-baseline.gguf"]);
 });
+
+test("expandGGUFIntoShards: returns input for zero-total shard count", (t) => {
+  const result = expandGGUFIntoShards("/models/empty-00000-of-00000.gguf");
+  t.alike(result, ["/models/empty-00000-of-00000.gguf"]);
+});
