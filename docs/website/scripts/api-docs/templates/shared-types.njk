@@ -1,34 +1,47 @@
 {#- Render a shared types reference page.
-    Receives: { types: ApiType[], versionLabel: string } -#}
+    Receives: { types: ApiType[], versionLabel: string }
+    Filters: escapeTableLight
+    Sample shape:
+      ## `TypeName`
+      <prose paragraph, optional>
+      | Field | Type | Required? | Default | Description |
+      | ...   | ...  | ...       | ...     | ...         |
+-#}
 ---
-title: "Types"
-titleStyle: code
-description: "Shared type definitions — {{ versionLabel }}"
+title: Shared types
+description: Shared type definitions used across SDK functions.
 ---
-
-## Overview
-
-Shared TypeScript types used across the `@qvac/sdk` API.
 
 {% for t in types %}
-### `{{ t.name }}`
+## `{{ t.name }}`
+{% if t.description and t.description != "No description available" %}
 
 {{ t.description }}
+{% endif %}
+{% if t.fields and t.fields.length > 0 %}
+{% set hasDefaults = false %}
+{% for f in t.fields %}{% if f.defaultValue %}{% set hasDefaults = true %}{% endif %}{% endfor %}
 
-```typescript
+{% if hasDefaults %}
+| Field | Type | Required? | Default | Description |
+| --- | --- | :---: | --- | --- |
+{% for f in t.fields %}
+| {{ f.name }} | `{{ f.type | escapeTableLight }}` | {{ "✓" if f.required else "✗" }} | {{ ("`" + (f.defaultValue | escapeTableLight) + "`") if f.defaultValue else "—" }} | {{ (f.description or "—") | escapeTableLight }} |
+{% endfor %}
+{% else %}
+| Field | Type | Required? | Description |
+| --- | --- | :---: | --- |
+{% for f in t.fields %}
+| {{ f.name }} | `{{ f.type | escapeTableLight }}` | {{ "✓" if f.required else "✗" }} | {{ (f.description or "—") | escapeTableLight }} |
+{% endfor %}
+{% endif %}
+{% else %}
+
+```ts
 {{ t.definition }}
 ```
-
-{% if t.members and t.members.length > 0 %}
-| Member | Description |
-| --- | --- |
-{% for m in t.members %}
-| `{{ m.name }}` | {{ m.description | escapeTableLight or "—" }} |
-{% endfor %}
-
 {% endif %}
 {% if not loop.last %}
----
 
 {% endif %}
 {% endfor %}

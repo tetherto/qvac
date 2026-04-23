@@ -1,7 +1,7 @@
 ---
 title: "resume( )"
 titleStyle: code
-description: Resumes all suspended Hyperswarm and Corestore resources.
+description: Resumes all suspended Hyperswarm and Corestore resources Idempotent — calling while already active is a no-op.
 ---
 
 ```ts
@@ -12,9 +12,6 @@ Resumes all suspended Hyperswarm and Corestore resources. Idempotent — calling
 
 Typically used in mobile apps when the application returns to the foreground, paired with [`suspend()`](./suspend) when it moves to the background.
 
-## Parameters
-
-None.
 
 ## Returns
 
@@ -24,11 +21,13 @@ None.
 
 | Error | When |
 | --- | --- |
+| `RPCError` | When one or more resources fail to resume. |
 | `INVALID_RESPONSE_TYPE` | Response type does not match expected `"resume"` |
 | `LIFECYCLE_RESUME_FAILED` | One or more resources failed to resume |
 
 ## Example
 
 ```typescript
+// Foreground handler
 await resume();
 ```

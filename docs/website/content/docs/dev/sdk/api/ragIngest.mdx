@@ -12,34 +12,70 @@ Full pipeline: chunk → embed → save. Implicitly opens (or creates) the works
 
 ## Parameters
 
-| Name | Type | Required? | Default | Description |
-| --- | --- | :---: | --- | --- |
-| params.modelId | `string` | ✓ | — | The embedding model identifier |
-| params.documents | `string \| string[]` | ✓ | — | Documents to ingest |
-| params.chunk | `boolean` | ✗ | `true` | Whether to chunk documents before embedding |
-| params.chunkOpts | [`ChunkOptions`](../ragChunk#chunkoptions) | ✗ | — | Chunking options |
-| params.workspace | `string` | ✗ | `"default"` | Workspace for isolated storage. Created if it doesn't exist. |
-| params.onProgress | `(stage, current, total) => void` | ✗ | — | Progress callback |
-| params.progressInterval | `number` | ✗ | — | Minimum interval between progress updates in ms |
-| options | [`RPCOptions`](../index#rpcoptions) | ✗ | — | Optional RPC transport options |
+| Name | Type | Required? | Description |
+| --- | --- | :---: | --- |
+| params | [`RagIngestParams`](#ragingestparams) | ✓ | The parameters for ingestion |
+| options | `RPCOptions` | ✗ | Optional RPC options (timeout, profiling, force new connection, etc.). |
+
+### `RagIngestParams`
+
+| Field | Type | Required? | Description |
+| --- | --- | :---: | --- |
+| workspace | `string \| undefined` | ✗ | — |
+| modelId | `string` | ✓ | — |
+| documents | `string \| string[]` | ✓ | — |
+| chunk | `boolean \| undefined` | ✗ | — |
+| chunkOpts | `\{ chunkSize?: number \| undefined; chunkOverlap?: number \| undefined; chunkStrategy?: "character" \| "paragraph" \| undefined; splitStrategy?: "character" \| "word" \| "token" \| "sentence" \| "line" \| undefined; \} \| undefined` | ✗ | — |
+| progressInterval | `number \| undefined` | ✗ | — |
+| withProgress | `boolean \| undefined` | ✗ | — |
+| onProgress | `(stage: IngestStage, current: number, total: number) => void` | ✗ | — |
+
+#### `chunkOpts`
+
+| Field | Type | Required? | Description |
+| --- | --- | :---: | --- |
+| chunkSize | `number \| undefined` | ✗ | — |
+| chunkOverlap | `number \| undefined` | ✗ | — |
+| chunkStrategy | `"character" \| "paragraph" \| undefined` | ✗ | — |
+| splitStrategy | `"character" \| "word" \| "token" \| "sentence" \| "line" \| undefined` | ✗ | — |
+
+### `options`
+
+| Field | Type | Required? | Description |
+| --- | --- | :---: | --- |
+| forceNewConnection | `boolean` | ✗ | When `true`, skip any cached RPC connection and open a fresh one for this call. |
+| healthCheckTimeout | `number` | ✗ | Timeout in milliseconds for the health-check probe that precedes the RPC call. |
+| profiling | `\{ enabled?: boolean; includeServerBreakdown?: boolean; mode?: "summary" \| "verbose" \}` | ✗ | Per-call profiler configuration; when present, overrides the SDK's global profiler settings for this request. |
+| timeout | `number` | ✗ | Per-call RPC timeout in milliseconds; overrides the SDK-level default for this request only. |
 
 ## Returns
 
+`Promise<{ processed: RagSaveEmbeddingsResult[]; droppedIndices: number[] }>`
+
 | Field | Type | Description |
 | --- | --- | --- |
-| processed | `RagSaveEmbeddingsResult[]` | Array of `{ status: "fulfilled" \| "rejected", id?, error? }` |
 | droppedIndices | `number[]` | Indices of documents that were dropped |
+| processed | `RagSaveEmbeddingsResult[]` | Array of `\{ status: "fulfilled" \| "rejected", id?, error? \}` |
 
 ## Throws
 
 | Error | When |
 | --- | --- |
+| `RAGSaveFailedError` | When the operation fails |
+| `StreamEndedError` | When streaming ends unexpectedly (only when using onProgress) |
 | `RAG_SAVE_FAILED` | The ingestion operation fails |
 | `STREAM_ENDED_WITHOUT_RESPONSE` | Streaming ends unexpectedly (when using `onProgress`) |
 
 ## Example
 
 ```typescript
+// Simple ingest
+const result = await ragIngest({
+  modelId,
+  documents: ["Document 1", "Document 2"],
+});
+
+// With progress tracking
 const result = await ragIngest({
   modelId,
   documents: ["Document 1", "Document 2"],

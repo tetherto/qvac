@@ -1,7 +1,7 @@
 ---
 title: "getModelBySrc( )"
 titleStyle: code
-description: Retrieves a model constant from the built-in registry by its model ID and blob core key.
+description: Looks up a model in the built-in catalog by model file ID and blob core key.
 ---
 
 ```ts
@@ -12,12 +12,12 @@ function getModelBySrc(modelId: string, blobCoreKey: string): RegistryItem | und
 
 | Name | Type | Required? | Description |
 | --- | --- | :---: | --- |
-| modelId | `string` | ✓ | The unique model identifier |
-| blobCoreKey | `string` | ✓ | The Hyperdrive blob core key |
+| modelId | `string` | ✓ | The model file ID to match against the catalog. |
+| blobCoreKey | `string` | ✓ | The Hyperdrive blob core key to match against the catalog. |
 
 ## Returns
 
-[`RegistryItem`](../getModelByName#registryitem) ` | undefined` — The matching model constant, or `undefined` if not found. 
+[`RegistryItem`](../getModelByName#registryitem) ` | undefined` — The matching model constant, or `undefined` if not found.
 
 ## Example
 

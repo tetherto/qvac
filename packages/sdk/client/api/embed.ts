@@ -14,6 +14,7 @@ import { InvalidResponseError } from "@/utils/errors-client";
  * @param params.modelId - The identifier of the embedding model to use
  * @param params.text - The input text to embed
  * @param options - Optional RPC options including per-call profiling
+ * @returns A promise resolving to an object with `embedding` (a single `number[]` vector) and optional `stats` performance data.
  * @throws {QvacErrorBase} When the response type is invalid or when the embedding fails
  */
 export async function embed(
@@ -28,6 +29,7 @@ export async function embed(
  * @param params.modelId - The identifier of the embedding model to use
  * @param params.text - The input texts to embed
  * @param options - Optional RPC options including per-call profiling
+ * @returns A promise resolving to an object with `embedding` (one `number[]` vector per input text, i.e. `number[][]`) and optional `stats` performance data.
  * @throws {QvacErrorBase} When the response type is invalid or when the embedding fails
  */
 export async function embed(

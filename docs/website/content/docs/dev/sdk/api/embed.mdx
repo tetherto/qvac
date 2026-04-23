@@ -13,15 +13,24 @@ function embed(params: { modelId: string; text: string[] }, options?: RPCOptions
 
 | Name | Type | Required? | Description |
 | --- | --- | :---: | --- |
-| params | [`EmbedParams`](#embedparams) | ✓ | The embedding parameters |
-| options | [`RPCOptions`](./shared-types#rpcoptions) | ✗ | Optional RPC transport options |
+| params | `\{ modelId: string; text: string \}` | ✓ | The parameters for the embedding |
+| options | `RPCOptions` | ✗ | Optional RPC options including per-call profiling |
 
-### `EmbedParams`
+### `params`
 
 | Field | Type | Required? | Description |
 | --- | --- | :---: | --- |
 | modelId | `string` | ✓ | The identifier of the embedding model to use |
-| text | `string \| string[]` | ✓ | The input text(s) to embed. A single string returns `number[]`; an array returns `number[][]`. |
+| text | `string` | ✓ | The input text to embed |
+
+### `options`
+
+| Field | Type | Required? | Description |
+| --- | --- | :---: | --- |
+| forceNewConnection | `boolean` | ✗ | When `true`, skip any cached RPC connection and open a fresh one for this call. |
+| healthCheckTimeout | `number` | ✗ | Timeout in milliseconds for the health-check probe that precedes the RPC call. |
+| profiling | `\{ enabled?: boolean; includeServerBreakdown?: boolean; mode?: "summary" \| "verbose" \}` | ✗ | Per-call profiler configuration; when present, overrides the SDK's global profiler settings for this request. |
+| timeout | `number` | ✗ | Per-call RPC timeout in milliseconds; overrides the SDK-level default for this request only. |
 
 ## Returns
 
@@ -29,25 +38,26 @@ function embed(params: { modelId: string; text: string[] }, options?: RPCOptions
 
 | Field | Type | Description |
 | --- | --- | --- |
-| embedding | `number[] \| number[][]` | The embedding vector(s). Single `number[]` when `text` is a string; `number[][]` when `text` is an array. |
-| stats | [`EmbedStats`](#embedstats) ` \| undefined` | Performance statistics |
+| embedding | `number[]` | The embedding vector(s). Single `number[]` when `text` is a string; `number[][]` when `text` is an array. |
+| stats | `\{ backendDevice?: "cpu" \| "gpu"; tokensPerSecond?: number; totalTime?: number; totalTokens?: number \}` | Performance statistics |
 
-### `EmbedStats`
+### `stats`
 
-| Field | Type | Description |
-| --- | --- | --- |
-| totalTime | `number \| undefined` | Total embedding time in milliseconds |
-| tokensPerSecond | `number \| undefined` | Tokens processed per second |
-| totalTokens | `number \| undefined` | Total tokens processed |
-| backendDevice | `"cpu" \| "gpu" \| undefined` | Compute backend used for inference |
+| Field | Type | Required? | Description |
+| --- | --- | :---: | --- |
+| backendDevice | `"cpu" \| "gpu"` | ✗ | Compute backend used for inference. |
+| tokensPerSecond | `number` | ✗ | Tokens generated per second. |
+| totalTime | `number` | ✗ | — |
+| totalTokens | `number` | ✗ | — |
 
 ## Throws
 
 | Error | When |
 | --- | --- |
+| `QvacErrorBase` | When the response type is invalid or when the embedding fails |
 | `INVALID_RESPONSE_TYPE` | Response type does not match expected `"embed"` |
 
-## Examples
+## Example
 
 ```typescript
 // Single text

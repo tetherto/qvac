@@ -6,83 +6,32 @@ description: Starts, resumes, inspects, pauses, or cancels a finetuning job for 
 
 ```ts
 function finetune(params: FinetuneRunParams, rpcOptions?: RPCOptions): FinetuneHandle;
-function finetune(params: FinetuneStopParams | FinetuneGetStateParams, rpcOptions?: RPCOptions): Promise<FinetuneResult>;
+function finetune(params: FinetuneReplyParams, rpcOptions?: RPCOptions): Promise<FinetuneResult>;
 ```
 
 ## Parameters
 
 | Name | Type | Required? | Description |
 | --- | --- | :---: | --- |
-| params | [`FinetuneRunParams`](#finetunerunparams) \| [`FinetuneStopParams`](#finetunestopparams) \| [`FinetuneGetStateParams`](#finetunegetstateparams) | ✓ | The finetuning parameters — shape determines the overload |
-| rpcOptions | [`RPCOptions`](./shared-types#rpcoptions) | ✗ | Optional RPC transport options |
+| params | `FinetuneRunParams` | ✓ | The finetuning parameters |
+| rpcOptions | [`RPCOptions`](#rpcoptions) | ✗ | Optional RPC transport options |
 
-### `FinetuneRunParams`
+### `params`
 
-Used to start or resume a finetuning job.
+| Field | Type | Required? | Default | Description |
+| --- | --- | :---: | --- | --- |
+| modelId | `string` | ✓ | — | The identifier of the loaded model to finetune |
+| operation | `"start" \| "resume"` | ✗ | — | The finetuning operation. Omit it to let the add-on choose whether to start fresh or resume automatically |
+| options | `\{ assistantLossOnly?: boolean; batchSize?: number; chatTemplatePath?: string; checkpointSaveDir?: string; checkpointSaveSteps?: number; contextLength?: number; learningRate?: number; loraAlpha?: number; loraInitStd?: number; loraModules?: string; loraRank?: number; loraSeed?: number; lrMin?: number; lrScheduler?: "constant" \| "cosine" \| "linear"; microBatchSize?: number; numberOfEpochs?: number; outputParametersDir: string; trainDatasetDir: string; validation: \{ type: "none" \} \| \{ fraction?: number; type: "split" \} \| \{ path: string; type: "dataset" \}; warmupRatio?: number; warmupRatioSet?: boolean; warmupSteps?: number; warmupStepsSet?: boolean; weightDecay?: number \}` | ✓ | `finetuneOptionsPayloadSchema` | Finetuning options for run and `getState` operations |
 
-| Field | Type | Required? | Description |
-| --- | --- | :---: | --- |
-| modelId | `string` | ✓ | The identifier of the loaded model to finetune |
-| operation | `"start" \| "resume"` | ✗ | Omit to let the add-on choose whether to start fresh or resume automatically |
-| options | [`FinetuneOptions`](#finetuneoptions) | ✓ | Finetuning configuration |
-
-### `FinetuneStopParams`
-
-Used to pause or cancel a running job.
+### `rpcOptions`
 
 | Field | Type | Required? | Description |
 | --- | --- | :---: | --- |
-| modelId | `string` | ✓ | The identifier of the model |
-| operation | `"pause" \| "cancel"` | ✓ | The stop operation |
-
-### `FinetuneGetStateParams`
-
-Used to inspect the current state of a finetuning job.
-
-| Field | Type | Required? | Description |
-| --- | --- | :---: | --- |
-| modelId | `string` | ✓ | The identifier of the model |
-| operation | `"getState"` | ✓ | Must be `"getState"` |
-| options | [`FinetuneOptions`](#finetuneoptions) | ✓ | Finetuning configuration |
-
-### `FinetuneOptions`
-
-| Field | Type | Required? | Description |
-| --- | --- | :---: | --- |
-| trainDatasetDir | `string` | ✓ | Directory containing the training dataset |
-| validation | [`FinetuneValidation`](#finetunevalidation) | ✓ | Validation configuration |
-| outputParametersDir | `string` | ✓ | Directory where output adapter parameters are written |
-| numberOfEpochs | `number` | ✗ | Number of epochs to run |
-| learningRate | `number` | ✗ | Learning rate override |
-| contextLength | `number` | ✗ | Context length override |
-| batchSize | `number` | ✗ | Batch size override |
-| microBatchSize | `number` | ✗ | Micro batch size override |
-| assistantLossOnly | `boolean` | ✗ | Compute loss only on assistant tokens |
-| loraRank | `number` | ✗ | LoRA rank override |
-| loraAlpha | `number` | ✗ | LoRA alpha override |
-| loraInitStd | `number` | ✗ | LoRA initialization standard deviation |
-| loraSeed | `number` | ✗ | LoRA initialization seed |
-| loraModules | `string` | ✗ | Comma-separated LoRA module selection |
-| checkpointSaveDir | `string` | ✗ | Directory for checkpoint snapshots |
-| checkpointSaveSteps | `number` | ✗ | Checkpoint save interval (in steps) |
-| chatTemplatePath | `string` | ✗ | Custom chat template path |
-| lrScheduler | `"constant" \| "cosine" \| "linear"` | ✗ | Learning rate scheduler |
-| lrMin | `number` | ✗ | Minimum learning rate |
-| warmupRatio | `number` | ✗ | Warmup ratio (0–1) |
-| warmupRatioSet | `boolean` | ✗ | Enable warmup ratio |
-| warmupSteps | `number` | ✗ | Warmup step count |
-| warmupStepsSet | `boolean` | ✗ | Enable explicit warmup steps |
-| weightDecay | `number` | ✗ | Weight decay override |
-
-#### `FinetuneValidation`
-
-Discriminated union on `type`:
-
-| Variant | Fields | Description |
-| --- | --- | --- |
-| `{ type: "none" }` | — | No validation |
-| `{ type: "split", fraction?: number }` | fraction defaults to `0.05` | Split training data for validation |
-| `{ type: "dataset", path: string }` | — | Use a separate validation dataset |
+| forceNewConnection | `boolean` | ✗ | When `true`, skip any cached RPC connection and open a fresh one for this call. |
+| healthCheckTimeout | `number` | ✗ | Timeout in milliseconds for the health-check probe that precedes the RPC call. |
+| profiling | `\{ enabled?: boolean; includeServerBreakdown?: boolean; mode?: "summary" \| "verbose" \}` | ✗ | Per-call profiler configuration; when present, overrides the SDK's global profiler settings for this request. |
+| timeout | `number` | ✗ | Per-call RPC timeout in milliseconds; overrides the SDK-level default for this request only. |
 
 ## Returns
 
@@ -92,58 +41,20 @@ The return type depends on the `operation`:
 
 `FinetuneHandle` — Object with the following fields:
 
-| Field | Type | Description |
-| --- | --- | --- |
-| progressStream | `AsyncGenerator<`[`FinetuneProgress`](#finetuneprogress)`>` | Stream of training progress ticks |
-| result | `Promise<`[`FinetuneResult`](#finetuneresult)`>` | Resolves when the job finishes |
-
-**Reply overload** (`"pause"`, `"cancel"`, or `"getState"`):
-
-`Promise<FinetuneResult>`
-
-### `FinetuneProgress`
+### `FinetuneHandle`
 
 | Field | Type | Description |
 | --- | --- | --- |
-| is_train | `boolean` | Whether this tick is from the training phase (vs validation) |
-| loss | `number \| null` | Current loss value |
-| loss_uncertainty | `number \| null` | Loss uncertainty |
-| accuracy | `number \| null` | Current accuracy |
-| accuracy_uncertainty | `number \| null` | Accuracy uncertainty |
-| global_steps | `number` | Total steps completed |
-| current_epoch | `number` | Current epoch index |
-| current_batch | `number` | Current batch index |
-| total_batches | `number` | Total batches in the epoch |
-| elapsed_ms | `number` | Elapsed time in milliseconds |
-| eta_ms | `number` | Estimated time remaining in milliseconds |
+| progressStream | `AsyncGenerator<\{ accuracy: number \| null; accuracy_uncertainty: number \| null; current_batch: number; current_epoch: number; elapsed_ms: number; eta_ms: number; global_steps: number; is_train: boolean; loss: number \| null; loss_uncertainty: number \| null; total_batches: number \}>` | Stream of training progress ticks |
+| result | `Promise<\{ stats?: \{ epochs_completed: number; global_steps: number; learning_rate?: number; train_accuracy?: number; train_accuracy_uncertainty?: number \| null; train_loss?: number; train_loss_uncertainty?: number \| null; val_accuracy?: number; val_accuracy_uncertainty?: number \| null; val_loss?: number; val_loss_uncertainty?: number \| null \}; status: "IDLE" \| "RUNNING" \| "PAUSED" \| "CANCELLED" \| "COMPLETED"; type: "finetune" \}>` | Resolves when the job finishes |
 
-### `FinetuneResult`
+### `result`
 
-| Field | Type | Description |
-| --- | --- | --- |
-| type | `"finetune"` | Response type discriminator |
-| status | [`FinetuneStatus`](#finetunestatus) | Current job status |
-| stats | [`FinetuneStats`](#finetunestats) ` \| undefined` | Final training statistics (present when completed) |
-
-### `FinetuneStatus`
-
-`"IDLE" | "RUNNING" | "PAUSED" | "CANCELLED" | "COMPLETED"`
-
-### `FinetuneStats`
-
-| Field | Type | Description |
-| --- | --- | --- |
-| train_loss | `number \| undefined` | Final training loss |
-| train_loss_uncertainty | `number \| null \| undefined` | Training loss uncertainty |
-| val_loss | `number \| undefined` | Final validation loss |
-| val_loss_uncertainty | `number \| null \| undefined` | Validation loss uncertainty |
-| train_accuracy | `number \| undefined` | Final training accuracy |
-| train_accuracy_uncertainty | `number \| null \| undefined` | Training accuracy uncertainty |
-| val_accuracy | `number \| undefined` | Final validation accuracy |
-| val_accuracy_uncertainty | `number \| null \| undefined` | Validation accuracy uncertainty |
-| learning_rate | `number \| undefined` | Final learning rate |
-| global_steps | `number` | Total steps completed |
-| epochs_completed | `number` | Total epochs completed |
+| Field | Type | Required? | Default | Description |
+| --- | --- | :---: | --- | --- |
+| stats | `\{ epochs_completed: number; global_steps: number; learning_rate?: number; train_accuracy?: number; train_accuracy_uncertainty?: number \| null; train_loss?: number; train_loss_uncertainty?: number \| null; val_accuracy?: number; val_accuracy_uncertainty?: number \| null; val_loss?: number; val_loss_uncertainty?: number \| null \}` | ✗ | — | — |
+| status | `"IDLE" \| "RUNNING" \| "PAUSED" \| "CANCELLED" \| "COMPLETED"` | ✓ | `finetuneStatusSchema` | — |
+| type | `"finetune"` | ✓ | — | — |
 
 ## Throws
 
@@ -171,19 +82,6 @@ for await (const progress of handle.progressStream) {
 
 console.log(await handle.result);
 
-// Pause a running job
 const pauseResult = await finetune({ modelId, operation: "pause" });
-console.log(pauseResult.status); // "PAUSED"
-
-// Inspect current state
-const state = await finetune({
-  modelId,
-  operation: "getState",
-  options: {
-    trainDatasetDir: "./dataset/train",
-    validation: { type: "none" },
-    outputParametersDir: "./artifacts/lora",
-  },
-});
-console.log(state.status);
+console.log(pauseResult.status);
 ```

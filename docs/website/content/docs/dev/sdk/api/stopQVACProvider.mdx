@@ -5,23 +5,36 @@ description: Stops a running provider service and leaves the specified topic.
 ---
 
 ```ts
-function stopQVACProvider(params: StopProvideParams): Promise<object>;
+function stopQVACProvider(params: StopProvideParams): Promise<{ error?: string; success: boolean; type: "stopProvide" }>;
 ```
 
 ## Parameters
 
 | Name | Type | Required? | Description |
 | --- | --- | :---: | --- |
-| params.topic | `string` | ✓ | Topic hex string to leave |
+| params | [`StopProvideParams`](#stopprovideparams) | ✓ | Options object with required topic. |
+
+### `StopProvideParams`
+
+| Field | Type | Required? | Description |
+| --- | --- | :---: | --- |
+| topic | `string` | ✓ | — |
 
 ## Returns
 
 `Promise<object>` — The stop provide response containing `success` and optional `error`.
 
+| Field | Type | Description |
+| --- | --- | --- |
+| error | `string` | — |
+| success | `boolean` | — |
+| type | `"stopProvide"` | — |
+
 ## Throws
 
 | Error | When |
 | --- | --- |
+| `QvacErrorBase` | When the response type is not "stopProvide" or the request fails. |
 | `INVALID_RESPONSE_TYPE` | Response type does not match expected `"stopProvide"` |
 | `PROVIDER_STOP_FAILED` | The server reports provider stop failure |
 

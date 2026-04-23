@@ -2,7 +2,11 @@ import { z } from "zod";
 import { toolSchema, toolCallSchema, toolCallEventSchema } from "./tools";
 
 export const attachmentSchema = z.object({
-  path: z.string(),
+  path: z
+    .string()
+    .describe(
+      "Absolute or SDK-resolvable path to the attachment file (e.g., image for multimodal models).",
+    ),
 });
 
 const kvCacheSchema = z.union([
@@ -12,34 +16,86 @@ const kvCacheSchema = z.union([
 
 export const generationParamsSchema = z
   .object({
-    temp: z.number().optional(),
-    top_p: z.number().optional(),
-    top_k: z.number().optional(),
-    predict: z.number().optional(),
-    seed: z.number().optional(),
-    frequency_penalty: z.number().optional(),
-    presence_penalty: z.number().optional(),
-    repeat_penalty: z.number().optional(),
+    temp: z
+      .number()
+      .optional()
+      .describe("Sampling temperature (typically 0–2)."),
+    top_p: z
+      .number()
+      .optional()
+      .describe("Top-p (nucleus) sampling cutoff (0–1)."),
+    top_k: z
+      .number()
+      .optional()
+      .describe("Top-k sampling — keep only the top K tokens."),
+    predict: z
+      .number()
+      .optional()
+      .describe(
+        "Max tokens to predict. `-1` = until stop token, `-2` = until context filled.",
+      ),
+    seed: z
+      .number()
+      .optional()
+      .describe("Random seed for reproducibility."),
+    frequency_penalty: z
+      .number()
+      .optional()
+      .describe("Penalty applied to tokens based on frequency so far."),
+    presence_penalty: z
+      .number()
+      .optional()
+      .describe("Penalty applied to tokens that have already appeared."),
+    repeat_penalty: z
+      .number()
+      .optional()
+      .describe("Penalty applied to repeated tokens."),
   })
   .strict();
 
 export const completionParamsSchema = z.object({
-  history: z.array(
-    z.object({
-      role: z.string(),
-      content: z.string(),
-      attachments: z.array(attachmentSchema).optional(),
-    }),
-  ),
-  modelId: z.string(),
-  kvCache: kvCacheSchema.optional(),
+  history: z
+    .array(
+      z.object({
+        role: z
+          .string()
+          .describe(
+            'Message role (e.g., `"user"`, `"assistant"`, `"system"`).',
+          ),
+        content: z.string().describe("Message content."),
+        attachments: z
+          .array(attachmentSchema)
+          .optional()
+          .describe("Optional file attachments for multimodal models."),
+      }),
+    )
+    .describe("Array of conversation messages sent to the model."),
+  modelId: z
+    .string()
+    .describe("The identifier of the model to use for completion."),
+  kvCache: kvCacheSchema
+    .optional()
+    .describe(
+      "KV cache configuration — `true` to auto-generate a cache key from history, a string to use a custom key, or `false`/`undefined` to disable.",
+    ),
 });
 
 export const completionClientParamsSchema = completionParamsSchema.extend({
-  tools: z.array(toolSchema).optional(),
-  stream: z.boolean(),
+  tools: z
+    .array(toolSchema)
+    .optional()
+    .describe(
+      "Optional array of tools (full `Tool` objects or Zod-schema `ToolInput` definitions) the model can call.",
+    ),
+  stream: z
+    .boolean()
+    .describe(
+      "Whether to stream tokens (`true`) or return the complete response once (`false`).",
+    ),
   kvCache: kvCacheSchema.optional(),
-  generationParams: generationParamsSchema.optional(),
+  generationParams: generationParamsSchema
+    .optional()
+    .describe("Optional sampling / generation parameters."),
 });
 
 export const completionStreamRequestSchema =
@@ -48,10 +104,22 @@ export const completionStreamRequestSchema =
   });
 
 export const completionStatsSchema = z.object({
-  timeToFirstToken: z.number().optional(),
-  tokensPerSecond: z.number().optional(),
-  cacheTokens: z.number().optional(),
-  backendDevice: z.enum(["cpu", "gpu"]).optional(),
+  timeToFirstToken: z
+    .number()
+    .optional()
+    .describe("Time to first token in milliseconds."),
+  tokensPerSecond: z
+    .number()
+    .optional()
+    .describe("Tokens generated per second."),
+  cacheTokens: z
+    .number()
+    .optional()
+    .describe("Number of tokens served from the KV cache."),
+  backendDevice: z
+    .enum(["cpu", "gpu"])
+    .optional()
+    .describe("Compute backend used for inference."),
 });
 
 export const completionStreamResponseSchema = z.object({

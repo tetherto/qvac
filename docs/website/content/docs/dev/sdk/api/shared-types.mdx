@@ -3,20 +3,78 @@ title: Shared types
 description: Shared type definitions used across SDK functions.
 ---
 
-## `RPCOptions`
-
-Many functions accept an optional `rpcOptions` parameter for transport-level configuration:
-
-| Field | Type | Required? | Default | Description |
-| --- | --- | :---: | --- | --- |
-| timeout | `number` | ✗ | — | Request timeout in milliseconds (min 100) |
-| forceNewConnection | `boolean` | ✗ | `false` | Force a new RPC connection instead of reusing an existing one |
-| profiling | [`PerCallProfiling`](#percallprofiling) | ✗ | — | Per-call profiling configuration |
-
-### `PerCallProfiling`
+## `Logger`
 
 | Field | Type | Required? | Description |
 | --- | --- | :---: | --- |
-| enabled | `boolean` | ✗ | Enable profiling for this call |
-| includeServerBreakdown | `boolean` | ✗ | Include server-side timing breakdown in profiling data |
-| mode | `"summary" \| "verbose"` | ✗ | Profiling detail level |
+| addTransport | `(transport: LogTransport) => void` | ✓ | Registers an additional log transport with this logger. |
+| debug | `(args: unknown[]) => void` | ✓ | Emits a message at the `debug` level. |
+| error | `(args: unknown[]) => void` | ✓ | Emits a message at the `error` level. |
+| getLevel | `() => LogLevel` | ✓ | Returns the logger's current minimum log level. |
+| info | `(args: unknown[]) => void` | ✓ | Emits a message at the `info` level. |
+| setConsoleOutput | `(enabled: boolean) => void` | ✓ | Enables or disables this logger's default console transport. |
+| setLevel | `(level: LogLevel) => void` | ✓ | Sets the logger's minimum log level. |
+| trace | `(args: unknown[]) => void` | ✓ | Emits a message at the `trace` level. |
+| warn | `(args: unknown[]) => void` | ✓ | Emits a message at the `warn` level. |
+
+## `LogTransport`
+
+Log transport callback signature. Receives the log `level`, namespace
+scoping the message, and the formatted `message`. May return a promise to
+allow async backends (e.g., network sinks).
+
+```ts
+type LogTransport = (level: RagSearchResult, namespace: string, message: string) => void | Promise<void>
+```
+
+## `ModelRegistryEntry`
+
+| Field | Type | Required? | Description |
+| --- | --- | :---: | --- |
+| addon | `"llm" \| "whisper" \| "embeddings" \| "nmt" \| "vad" \| "tts" \| "ocr" \| "parakeet" \| "diffusion" \| "other"` | ✓ | Inference addon / capability category this model belongs to. |
+| blobBlockLength | `number` | ✓ | Number of blocks occupied by the model file. |
+| blobBlockOffset | `number` | ✓ | Starting block offset of the model file in the blob. |
+| blobByteOffset | `number` | ✓ | Starting byte offset of the model file within its block. |
+| blobCoreKey | `string` | ✓ | Hyperdrive blob core key for the model file. |
+| engine | `"sdcpp-generation" \| "llamacpp-embedding" \| "llamacpp-completion" \| "nmtcpp-translation" \| "onnx-ocr" \| "parakeet-transcription" \| "onnx-tts" \| "whispercpp-transcription" \| "onnx-vad"` | ✓ | Canonical inference engine identifier. |
+| expectedSize | `number` | ✓ | Expected total size of the model file in bytes. |
+| modelId | `string` | ✓ | Unique identifier used to reference the model in SDK calls. |
+| name | `string` | ✓ | Catalog name of the model entry. |
+| params | `string` | ✓ | Parameter-count label for the model, e.g. `7B`. |
+| quantization | `string` | ✓ | Quantization identifier, e.g. `Q4_K_M`. |
+| registryPath | `string` | ✓ | Registry-relative path to the model. |
+| registrySource | `string` | ✓ | Registry source identifier, e.g. `huggingface`. |
+| sha256Checksum | `string` | ✓ | Expected SHA-256 checksum of the model file. |
+
+## `RagSaveEmbeddingsResult`
+
+```ts
+type RagSaveEmbeddingsResult = any
+```
+
+## `RagSearchResult`
+
+```ts
+type RagSearchResult = any
+```
+
+## `RegistryItem`
+
+| Field | Type | Required? | Description |
+| --- | --- | :---: | --- |
+| addon | `"llm" \| "whisper" \| "embeddings" \| "nmt" \| "vad" \| "tts" \| "ocr" \| "parakeet" \| "diffusion" \| "other"` | ✓ | — |
+| blobBlockLength | `number` | ✓ | — |
+| blobBlockOffset | `number` | ✓ | — |
+| blobByteOffset | `number` | ✓ | — |
+| blobCoreKey | `string` | ✓ | — |
+| companionSet | `\{ files: readonly \{ blobBlockLength: number; blobBlockOffset: number; blobByteOffset: number; blobCoreKey: string; expectedSize: number; key: string; primary?: boolean; registryPath: string; registrySource: string; sha256Checksum: string; targetName: string \}[]; primaryKey: string; setKey: string \}` | ✗ | — |
+| engine | `string` | ✓ | — |
+| expectedSize | `number` | ✓ | — |
+| modelId | `string` | ✓ | — |
+| name | `string` | ✓ | — |
+| params | `string` | ✓ | — |
+| quantization | `string` | ✓ | — |
+| registryPath | `string` | ✓ | — |
+| registrySource | `string` | ✓ | — |
+| sha256Checksum | `string` | ✓ | — |
+| shardMetadata | `readonly \{ blobBlockLength: number; blobBlockOffset: number; blobByteOffset: number; blobCoreKey: string; expectedSize: number; filename: string; sha256Checksum: string \}[]` | ✗ | — |

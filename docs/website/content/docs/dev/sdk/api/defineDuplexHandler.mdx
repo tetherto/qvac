@@ -5,26 +5,24 @@ description: Helper function to define a duplex (bidirectional streaming) handle
 ---
 
 ```ts
-function defineDuplexHandler<TRequest extends ZodType, TResponse extends ZodType>(
-  definition: DuplexPluginHandlerDefinition<TRequest, TResponse>
-): PluginHandlerDefinition<TRequest, TResponse>;
+function defineDuplexHandler(definition: DuplexPluginHandlerDefinition<TRequest, TResponse>): PluginHandlerDefinition<TRequest, TResponse>;
 ```
 
 ## Parameters
 
 | Name | Type | Required? | Description |
 | --- | --- | :---: | --- |
-| definition | [`DuplexPluginHandlerDefinition`](#duplexpluginhandlerdefinition) | ✓ | The duplex handler definition with schemas and handler function |
+| definition | `DuplexPluginHandlerDefinition<TRequest, TResponse>` | ✓ | The duplex plugin handler definition (request/response schemas and streaming handler function). |
 
 ### `DuplexPluginHandlerDefinition`
 
 | Field | Type | Required? | Description |
 | --- | --- | :---: | --- |
-| requestSchema | `ZodType` | ✓ | Zod schema for validating incoming requests |
-| responseSchema | `ZodType` | ✓ | Zod schema for validating outgoing responses |
+| requestSchema | `TRequest` | ✓ | Zod schema for validating incoming requests |
+| responseSchema | `TResponse` | ✓ | Zod schema for validating outgoing responses |
 | streaming | `true` | ✓ | Must be `true` — duplex handlers are always streaming |
 | duplex | `true` | ✓ | Must be `true` — marks this handler as bidirectional |
-| handler | `(request, inputStream: AsyncIterable<Buffer>) => AsyncGenerator<response>` | ✓ | The handler function — receives a validated request and an input stream, yields validated response chunks |
+| handler | `TRequest extends ZodType<infer I, unknown, $ZodTypeInternals<infer I, unknown>> ? TResponse extends ZodType<infer O, unknown, $ZodTypeInternals<infer O, unknown>> ? (request: I, inputStream: AsyncIterable<...>) => AsyncGenerator<...> : never : never` | ✓ | The handler function — receives a validated request and an input stream, yields validated response chunks |
 
 ## Returns
 

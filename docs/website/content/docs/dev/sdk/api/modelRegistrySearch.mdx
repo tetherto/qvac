@@ -1,18 +1,18 @@
 ---
 title: "modelRegistrySearch( )"
 titleStyle: code
-description: Searches the QVAC model registry with optional filters.
+description: Searches the model registry with optional filters for model type, engine, and quantization.
 ---
 
 ```ts
-function modelRegistrySearch(params?: ModelRegistrySearchParams): Promise<ModelRegistryEntry[]>;
+function modelRegistrySearch(params: ModelRegistrySearchParams): Promise<ModelRegistryEntry[]>;
 ```
 
 ## Parameters
 
-| Name | Type | Required? | Description |
-| --- | --- | :---: | --- |
-| params | [`ModelRegistrySearchParams`](#modelregistrysearchparams) | ✗ | Optional search filters. If omitted, returns all models. |
+| Name | Type | Required? | Default | Description |
+| --- | --- | :---: | --- | --- |
+| params | [`ModelRegistrySearchParams`](#modelregistrysearchparams) | ✓ | `\{\}` | Search filters (all optional). |
 
 ### `ModelRegistrySearchParams`
 
@@ -21,17 +21,18 @@ function modelRegistrySearch(params?: ModelRegistrySearchParams): Promise<ModelR
 | filter | `string` | ✗ | Free-text filter on model name |
 | engine | `string` | ✗ | Filter by inference engine |
 | quantization | `string` | ✗ | Filter by quantization level |
-| modelType | `"llm" \| "whisper" \| "embeddings" \| "nmt" \| "vad" \| "tts" \| "ocr" \| "other"` | ✗ | Filter by model type (alias for `addon`) |
-| addon | `"llm" \| "whisper" \| "embeddings" \| "nmt" \| "vad" \| "tts" \| "ocr" \| "other"` | ✗ | Filter by addon type |
+| modelType | `"llm" \| "whisper" \| "embeddings" \| "nmt" \| "parakeet" \| "tts" \| "ocr" \| "diffusion" \| "vad" \| "other"` | ✗ | Filter by model type (alias for `addon`) |
+| addon | `"llm" \| "whisper" \| "embeddings" \| "nmt" \| "parakeet" \| "tts" \| "ocr" \| "diffusion" \| "vad" \| "other"` | ✗ | Filter by addon type |
 
 ## Returns
 
-`Promise<`[`ModelRegistryEntry[]`](../modelRegistryGetModel#modelregistryentry)`>` — Matching model entries. 
+`Promise<`[`ModelRegistryEntry[]`](../modelRegistryGetModel#modelregistryentry)`>` — Matching model entries.
 
 ## Throws
 
 | Error | When |
 | --- | --- |
+| `ModelRegistryQueryFailedError` | When the registry query fails. |
 | `QVAC_MODEL_REGISTRY_QUERY_FAILED` | The registry query fails |
 
 ## Example

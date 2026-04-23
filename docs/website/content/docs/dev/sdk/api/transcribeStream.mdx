@@ -4,8 +4,17 @@ titleStyle: code
 description: Streams audio transcription results in real-time, yielding text chunks as they become available from the model.
 ---
 
+<Callout type="warn" title="Deprecated">
+Pass audio via `transcribe()` instead. This overload will be
+removed in the next major version.
+
+Streaming transcription with upfront audio: sends full audio, yields text
+chunks as they arrive.
+</Callout>
+
 ```ts
 function transcribeStream(params: TranscribeClientParams, options?: RPCOptions): AsyncGenerator<string>;
+function transcribeStream(params: TranscribeStreamClientParams, options?: RPCOptions): Promise<TranscribeStreamSession>;
 ```
 
 Yields text chunks as they become available from the model.
@@ -14,10 +23,25 @@ Yields text chunks as they become available from the model.
 
 | Name | Type | Required? | Description |
 | --- | --- | :---: | --- |
-| params.modelId | `string` | ✓ | The identifier of the transcription model |
-| params.audioChunk | `string \| Buffer` | ✓ | Audio input as file path (string) or audio buffer |
-| params.prompt | `string` | ✗ | Optional initial prompt to guide the transcription |
-| options | [`RPCOptions`](../index#rpcoptions) | ✗ | Optional RPC transport options |
+| params | [`TranscribeClientParams`](#transcribeclientparams) | ✓ | Transcription parameters including audio source. |
+| options | `RPCOptions` | ✗ | Optional RPC options including per-call profiling. |
+
+### `TranscribeClientParams`
+
+| Field | Type | Required? | Description |
+| --- | --- | :---: | --- |
+| modelId | `string` | ✓ | — |
+| audioChunk | `string \| Buffer<ArrayBufferLike>` | ✓ | — |
+| prompt | `string` | ✗ | — |
+
+### `options`
+
+| Field | Type | Required? | Description |
+| --- | --- | :---: | --- |
+| forceNewConnection | `boolean` | ✗ | When `true`, skip any cached RPC connection and open a fresh one for this call. |
+| healthCheckTimeout | `number` | ✗ | Timeout in milliseconds for the health-check probe that precedes the RPC call. |
+| profiling | `\{ enabled?: boolean; includeServerBreakdown?: boolean; mode?: "summary" \| "verbose" \}` | ✗ | Per-call profiler configuration; when present, overrides the SDK's global profiler settings for this request. |
+| timeout | `number` | ✗ | Per-call RPC timeout in milliseconds; overrides the SDK-level default for this request only. |
 
 ## Returns
 
@@ -39,18 +63,5 @@ const stream = transcribeStream({
 
 for await (const textChunk of stream) {
   process.stdout.write(textChunk);
-}
-```
-
-## `SUPPORTED_AUDIO_FORMATS`
-
-Use this exported constant to check which audio formats are accepted before passing a file to `transcribeStream()`. Avoids runtime errors from unsupported formats.
-
-```typescript
-import { SUPPORTED_AUDIO_FORMATS } from "@qvac/sdk";
-
-const ext = filePath.split(".").pop();
-if (!SUPPORTED_AUDIO_FORMATS.includes(ext)) {
-  console.error(`Unsupported format: ${ext}`);
 }
 ```

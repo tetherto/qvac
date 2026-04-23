@@ -16,29 +16,44 @@ function cancel(params: CancelParams): Promise<void>;
 
 ### `CancelParams`
 
-Discriminated union on `operation`. One of:
-
-#### Cancel inference
+#### `inference`
 
 | Field | Type | Required? | Description |
 | --- | --- | :---: | --- |
-| operation | `"inference"` | ✓ | Operation type |
-| modelId | `string` | ✓ | The model ID to cancel inference for |
+| modelId | `string` | ✓ | — |
+| operation | `"inference"` | ✓ | — |
 
-#### Cancel download
+#### `downloadAsset`
 
-| Field | Type | Required? | Default | Description |
-| --- | --- | :---: | --- | --- |
-| operation | `"downloadAsset"` | ✓ | — | Operation type |
-| downloadKey | `string` | ✓ | — | The download key to cancel |
-| clearCache | `boolean` | ✗ | `false` | If true, deletes the partial download file |
+| Field | Type | Required? | Description |
+| --- | --- | :---: | --- |
+| operation | `"downloadAsset"` | ✓ | — |
+| downloadKey | `string` | ✓ | — |
+| clearCache | `boolean \| undefined` | ✗ | — |
+| delegate | `\{ topic: string; providerPublicKey: string; timeout?: number \| undefined; healthCheckTimeout?: number \| undefined; \} \| undefined` | ✗ | — |
 
-#### Cancel RAG
+##### `delegate`
 
-| Field | Type | Required? | Default | Description |
-| --- | --- | :---: | --- | --- |
-| operation | `"rag"` | ✓ | — | Operation type |
-| workspace | `string` | ✗ | `"default"` | The RAG workspace to cancel |
+| Field | Type | Required? | Description |
+| --- | --- | :---: | --- |
+| topic | `string` | ✓ | — |
+| providerPublicKey | `string` | ✓ | — |
+| timeout | `number \| undefined` | ✗ | — |
+| healthCheckTimeout | `number \| undefined` | ✗ | — |
+
+#### `rag`
+
+| Field | Type | Required? | Description |
+| --- | --- | :---: | --- |
+| operation | `"rag"` | ✓ | — |
+| workspace | `string \| undefined` | ✗ | — |
+
+#### `embeddings`
+
+| Field | Type | Required? | Description |
+| --- | --- | :---: | --- |
+| modelId | `string` | ✓ | — |
+| operation | `"embeddings"` | ✓ | — |
 
 ## Returns
 
@@ -48,32 +63,42 @@ Discriminated union on `operation`. One of:
 
 | Error | When |
 | --- | --- |
+| `QvacErrorBase` | When the response type is invalid or when the cancellation fails |
 | `INVALID_RESPONSE_TYPE` | Response type does not match expected `"cancel"` |
 | `CANCEL_FAILED` | The server reports cancellation failure |
 
 ## Examples
 
-```ts
+```typescript
 // Cancel inference
 await cancel({ operation: "inference", modelId: "model-123" });
 ```
 
-```ts
+```typescript
 // Pause download (preserves partial file for automatic resume)
 await cancel({ operation: "downloadAsset", downloadKey: "download-key" });
 ```
 
-```ts
+```typescript
 // Cancel download completely (deletes partial file)
 await cancel({ operation: "downloadAsset", downloadKey: "download-key", clearCache: true });
 ```
 
-```ts
+```typescript
+// Cancel delegated remote download
+await cancel({
+  operation: "downloadAsset",
+  downloadKey: "download-key",
+  delegate: { topic: "topicHex", providerPublicKey: "peerHex" },
+});
+```
+
+```typescript
 // Cancel RAG operation on default workspace
 await cancel({ operation: "rag" });
 ```
 
-```ts
+```typescript
 // Cancel RAG operation on specific workspace
 await cancel({ operation: "rag", workspace: "my-workspace" });
 ```

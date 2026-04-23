@@ -24,79 +24,73 @@ try {
 
 Thrown on the client side (response validation, RPC, provider). Access via \`SDK_CLIENT_ERROR_CODES.{ERROR_NAME}\`.
 
-| Error | Code | Summary |
-| --- | --- | --- |
-| \`INVALID_RESPONSE_TYPE\` | 50001 | Invalid response type received. |
-| \`RPC_CONNECTION_FAILED\` | 50203 | RPC connection failed. |
+| Error | Code | Summary | Thrown by |
+| --- | --- | --- | --- |
+| \`INVALID_RESPONSE_TYPE\` | 50001 | Invalid response type received. | — |
+| \`RPC_CONNECTION_FAILED\` | 50203 | RPC connection failed. | — |
 
 ## Server errors
 
 Thrown by the server (model operations, downloads, cache, RAG). Access via \`SDK_SERVER_ERROR_CODES.{ERROR_NAME}\`.
 
-| Error | Code | Summary |
-| --- | --- | --- |
-| \`MODEL_NOT_FOUND\` | 52002 | Model ID not found in the registry. |
-| \`DOWNLOAD_CANCELLED\` | 53001 | Download cancelled. |"
+| Error | Code | Summary | Thrown by |
+| --- | --- | --- | --- |
+| \`MODEL_NOT_FOUND\` | 52002 | Model ID not found in the registry. | — |
+| \`DOWNLOAD_CANCELLED\` | 53001 | Download cancelled. | — |"
 `;
 
 exports[`function-page template > renders a full function with all sections 1`] = `
 "---
 title: "completion( )"
 titleStyle: code
-description: "Generates completion from a language model. Returns streamed tokens."
+description: Generates completion from a language model.
 ---
 
 <Callout type="warn" title="Deprecated">
 Use completionV2() instead.
 </Callout>
 
-<WrapCode>
-
-\`\`\`typescript
+\`\`\`ts
 function completion(params: CompletionParams): CompletionResult
 \`\`\`
-
-</WrapCode>
 
 ## Parameters
 
 | Name | Type | Required? | Description |
 | --- | --- | :---: | --- |
-| \`params\` | [\`CompletionParams\`](#completionparams) | ✓ | The completion parameters |
+| params | [\`CompletionParams\`](#completionparams) | ✓ | The completion parameters |
 
 ### \`CompletionParams\`
 
 | Field | Type | Required? | Description |
 | --- | --- | :---: | --- |
-| \`modelId\` | \`string\` | ✓ | The model identifier |
-| \`history\` | \`HistoryMessage[]\` | ✓ | Array of messages |
-| \`stream\` | \`boolean\` | ✗ | Whether to stream tokens |
+| modelId | \`string\` | ✓ | The model identifier |
+| history | \`HistoryMessage[]\` | ✓ | Array of messages |
+| stream | \`boolean\` | ✗ | Whether to stream tokens |
 
 #### \`HistoryMessage\`
 
 | Field | Type | Required? | Description |
 | --- | --- | :---: | --- |
-| \`role\` | \`string\` | ✓ | Message role |
-| \`content\` | \`string\` | ✓ | Message content |
+| role | \`string\` | ✓ | Message role |
+| content | \`string\` | ✓ | Message content |
 
 ## Returns
 
-\`\`\`typescript
-CompletionResult
-\`\`\`
-
 The completion result object.
+
+### \`CompletionResult\`
 
 | Field | Type | Description |
 | --- | --- | --- |
-| \`text\` | \`Promise<string>\` | Complete generated text |
-| \`stats\` | \`CompletionStats \\| —\` | Performance statistics |
+| text | \`Promise<string>\` | Complete generated text |
+| stats | \`CompletionStats \\| —\` | Performance statistics |
 
 ### \`CompletionStats\`
 
 | Field | Type | Required? | Description |
 | --- | --- | :---: | --- |
-| \`tokensPerSecond\` | \`number\` | ✓ | Tokens per second |
+| tokensPerSecond | \`number\` | ✓ | Tokens per second |
 
 ## Throws
 
@@ -116,23 +110,15 @@ exports[`function-page template > renders a minimal function (no optional sectio
 "---
 title: "ping( )"
 titleStyle: code
-description: "Sends a ping request to the server."
+description: Sends a ping request to the server.
 ---
 
-<WrapCode>
-
-\`\`\`typescript
+\`\`\`ts
 function ping(): Promise<{ type: "pong"; number: number }>
 \`\`\`
 
-</WrapCode>
-
 
 ## Returns
-
-\`\`\`typescript
-Promise<{ type: "pong"; number: number }>
-\`\`\`
 
 The pong response."
 `;
@@ -172,17 +158,15 @@ exports[`object-page template > renders an object page with fields 1`] = `
 "---
 title: "CompletionParams"
 titleStyle: code
-description: "Parameters for the completion function."
+description: Parameters for the completion function.
 ---
-
-Parameters for the completion function.
 
 ## Fields
 
 | Field | Type | Required? | Description |
 | --- | --- | :---: | --- |
-| \`modelId\` | \`string\` | ✓ | The model identifier |
-| \`stream\` | \`boolean\` | ✗ | Whether to stream |"
+| modelId | \`string\` | ✓ | The model identifier |
+| stream | \`boolean\` | ✗ | Whether to stream |"
 `;
 
 exports[`renderExpandedTypes > renders a flat expanded type 1`] = `
@@ -190,8 +174,8 @@ exports[`renderExpandedTypes > renders a flat expanded type 1`] = `
 
 | Field | Type | Required? | Description |
 | --- | --- | :---: | --- |
-| \`timeout\` | \`number\` | ✓ | Timeout in ms |
-| \`retries\` | \`number\` | ✗ | — |"
+| timeout | \`number\` | ✓ | Timeout in ms |
+| retries | \`number\` | ✗ | — |"
 `;
 
 exports[`renderExpandedTypes > renders nested expanded types 1`] = `
@@ -199,46 +183,34 @@ exports[`renderExpandedTypes > renders nested expanded types 1`] = `
 
 | Field | Type | Required? | Description |
 | --- | --- | :---: | --- |
-| \`inner\` | \`Inner\` | ✓ | Nested |
+| inner | \`Inner\` | ✓ | Nested |
 
 #### \`Inner\`
 
 | Field | Type | Required? | Description |
 | --- | --- | :---: | --- |
-| \`value\` | \`string\` | ✓ | The value |"
+| value | \`string\` | ✓ | The value |"
 `;
 
 exports[`shared-types template > renders a shared types page 1`] = `
 "---
-title: "Types"
-titleStyle: code
-description: "Shared type definitions — v0.8.0"
+title: Shared types
+description: Shared type definitions used across SDK functions.
 ---
 
-## Overview
-
-Shared TypeScript types used across the \`@qvac/sdk\` API.
-
-### \`ModelType\`
+## \`ModelType\`
 
 Supported model types.
 
-\`\`\`typescript
+\`\`\`ts
 type ModelType = "llm" | "embed" | "tts"
 \`\`\`
 
-| Member | Description |
-| --- | --- |
-| \`llm\` | Large language model |
-| \`embed\` | Embedding model |
-
----
-
-### \`CachePolicy\`
+## \`CachePolicy\`
 
 Cache eviction policies.
 
-\`\`\`typescript
+\`\`\`ts
 type CachePolicy = "lru" | "fifo"
 \`\`\`"
 `;

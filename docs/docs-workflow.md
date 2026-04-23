@@ -441,6 +441,10 @@ The generation pipeline includes an optional AI step that identifies functions w
 
 **Source tagging:** Every AI-generated field is tagged in `api-data.json` with `"descriptionSource": "ai"` or `"examplesSource": "ai"`. Fields populated by TypeDoc extraction have no source tag (or `"extracted"`). Reviewers can search for `"source": "ai"` in the JSON or look for the AI-generated content on the staging site before promoting to production.
 
+**Determinism:** AI augmentation calls a remote LLM, so the same SDK input produces **different** output across runs. Any workflow that depends on reproducible output (CI byte-identity checks, `docs:validate-e2e`, QA review runs) **must** pass `--no-ai`. Use AI augmentation only for curated manual runs where the author reviews and polishes the AI output before committing.
+
+For fully reproducible `api-data.json` also set `SOURCE_DATE_EPOCH` to a fixed Unix timestamp (reproducible-builds convention). Without it, `ApiData.generatedAt` is the literal string `"unspecified"` so byte-identity checks still pass.
+
 **Prompt templates** live in `scripts/api-docs/prompts/` and use `{{variable}}` placeholders:
 - `function-description.txt` -- generates a 2-4 sentence function description
 - `usage-example.txt` -- generates a TypeScript usage example

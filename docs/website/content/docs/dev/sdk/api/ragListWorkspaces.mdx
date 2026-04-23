@@ -12,21 +12,26 @@ function ragListWorkspaces(options?: RPCOptions): Promise<RagWorkspaceInfo[]>;
 
 | Name | Type | Required? | Description |
 | --- | --- | :---: | --- |
-| options | [`RPCOptions`](../index#rpcoptions) | ✗ | Optional RPC transport options |
+| options | `RPCOptions` | ✗ | Optional RPC options (timeout, profiling, force new connection, etc.). |
+
+### `options`
+
+| Field | Type | Required? | Description |
+| --- | --- | :---: | --- |
+| forceNewConnection | `boolean` | ✗ | When `true`, skip any cached RPC connection and open a fresh one for this call. |
+| healthCheckTimeout | `number` | ✗ | Timeout in milliseconds for the health-check probe that precedes the RPC call. |
+| profiling | `\{ enabled?: boolean; includeServerBreakdown?: boolean; mode?: "summary" \| "verbose" \}` | ✗ | Per-call profiler configuration; when present, overrides the SDK's global profiler settings for this request. |
+| timeout | `number` | ✗ | Per-call RPC timeout in milliseconds; overrides the SDK-level default for this request only. |
 
 ## Returns
 
 `Promise<RagWorkspaceInfo[]>` — Array of workspace info.
 
-| Field | Type | Description |
-| --- | --- | --- |
-| name | `string` | Workspace name |
-| open | `boolean` | Whether the workspace is currently loaded in memory |
-
 ## Throws
 
 | Error | When |
 | --- | --- |
+| `RAGListWorkspacesFailedError` | When the operation fails |
 | `RAG_LIST_WORKSPACES_FAILED` | The operation fails |
 
 ## Example

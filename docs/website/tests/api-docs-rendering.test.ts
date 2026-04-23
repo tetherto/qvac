@@ -11,6 +11,7 @@ import {
   formatShortSignature,
   escapeQuotes,
   stripFence,
+  leadingAliasName,
   renderExpandedTypes,
   renderErrorTable,
   renderParamRow,
@@ -36,6 +37,7 @@ function createTestEnv(): nunjucks.Environment {
   env.addFilter('formatShortSignature', formatShortSignature)
   env.addFilter('escapeQuotes', escapeQuotes)
   env.addFilter('stripFence', stripFence)
+  env.addFilter('leadingAliasName', leadingAliasName)
   env.addFilter('lower', (s: string) => s.toLowerCase())
   env.addFilter('replace', (s: string, from: string, to: string) =>
     s.replace(new RegExp(from.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'), 'g'), to),
@@ -43,6 +45,10 @@ function createTestEnv(): nunjucks.Environment {
   env.addGlobal('renderExpandedTypes', renderExpandedTypes)
   env.addGlobal('renderErrorTable', renderErrorTable)
   env.addGlobal('renderParamRow', renderParamRow)
+  // `sharedTypeNames` is populated by `renderApiDocs` at runtime from the
+  // computed shared-types set. Tests render individual templates in
+  // isolation, so provide an empty default to satisfy the `in` operator.
+  env.addGlobal('sharedTypeNames', [])
   return env
 }
 
@@ -358,7 +364,7 @@ describe('object-page template', () => {
     const mdx = env.render('object-page.njk', { obj }).trim()
     expect(mdx).toContain('title: "CompletionParams"')
     expect(mdx).toContain('## Fields')
-    expect(mdx).toContain('`modelId`')
+    expect(mdx).toMatch(/\|\s*modelId\s*\|/)
     expect(mdx).toMatchSnapshot()
   })
 })
@@ -384,9 +390,12 @@ describe('shared-types template', () => {
       },
     ]
     const mdx = env.render('shared-types.njk', { types, versionLabel: 'v0.8.0' }).trim()
-    expect(mdx).toContain('### `ModelType`')
-    expect(mdx).toContain('### `CachePolicy`')
-    expect(mdx).toContain('| `llm`')
+    // New sample-aligned layout: `##` per type (not `###`), prose paragraph,
+    // no `## Overview`, and code fence only when the type has no `fields`.
+    expect(mdx).toContain('## `ModelType`')
+    expect(mdx).toContain('## `CachePolicy`')
+    expect(mdx).toContain('Supported model types.')
+    expect(mdx).toContain('type ModelType = "llm" | "embed" | "tts"')
     expect(mdx).toMatchSnapshot()
   })
 })

@@ -25,10 +25,10 @@ try {
 
 Thrown on the client side (response validation, RPC, provider). Access via `SDK_CLIENT_ERROR_CODES.{ERROR_NAME}`.
 
-| Error | Code | Summary |
-| --- | --- | --- |
+| Error | Code | Summary | Thrown by |
+| --- | --- | --- | --- |
 {% for e in errors.client %}
-| `{{ e.name }}` | {{ e.code }} | {{ e.summary | escapeTable }} |
+| `{{ e.name }}` | {{ e.code }} | {{ e.summary | escapeTable }} | {{ e.thrownBy or "—" }} |
 {% endfor %}
 {% endif %}
 
@@ -37,9 +37,9 @@ Thrown on the client side (response validation, RPC, provider). Access via `SDK_
 
 Thrown by the server (model operations, downloads, cache, RAG). Access via `SDK_SERVER_ERROR_CODES.{ERROR_NAME}`.
 
-| Error | Code | Summary |
-| --- | --- | --- |
+| Error | Code | Summary | Thrown by |
+| --- | --- | --- | --- |
 {% for e in errors.server %}
-| `{{ e.name }}` | {{ e.code }} | {{ e.summary | escapeTable }} |
+| `{{ e.name }}` | {{ e.code }} | {{ e.summary | escapeTable }} | {{ e.thrownBy or "—" }} |
 {% endfor %}
 {% endif %}

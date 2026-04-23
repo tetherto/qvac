@@ -1,0 +1,21 @@
+{#- Render the constants reference page.
+    Receives: { constants: ApiConstant[] }
+    Filters: escapeTableLight -#}
+---
+title: Constants
+description: Exported value constants in the SDK (plugin IDs, model types, registries).
+---
+
+## Overview
+
+The SDK exports a set of value constants alongside its functions and types. These are small enums, plugin identifiers, static lists, and registries that consumers can import directly.
+
+{% if constants and constants.length > 0 %}
+| Name | Type | Value | Description |
+| --- | --- | --- | --- |
+{% for c in constants %}
+| `{{ c.name }}` | `{{ c.type | escapeTableLight }}` | {{ ("`" + (c.value | escapeTableLight) + "`") if c.value else "—" }} | {{ c.description | escapeTableLight or "—" }} |
+{% endfor %}
+{% else %}
+_No exported constants._
+{% endif %}

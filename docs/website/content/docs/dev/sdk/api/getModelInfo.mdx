@@ -1,69 +1,77 @@
 ---
 title: "getModelInfo( )"
 titleStyle: code
-description: Retrieves detailed information about a model, including cache status and loaded instances.
+description: Returns status information for a catalog model, including cache state and loaded instances.
 ---
 
 ```ts
-function getModelInfo(params: GetModelInfoParams): Promise<ModelInfo>;
+function getModelInfo(params: GetModelInfoParams): Promise<{ actualSize?: number; addon: "llm" | "whisper" | "embeddings" | "nmt" | "vad" | "tts" | "ocr" | "parakeet" | "diffusion" | "other"; blobBlockLength?: number; blobBlockOffset?: number; blobByteOffset?: number; blobCoreKey?: string; cachedAt?: Date; cacheFiles: { actualSize?: number; cachedAt?: Date; expectedSize: number; filename: string; isCached: boolean; path: string; sha256Checksum: string }[]; engine?: string; expectedSize: number; isCached: boolean; isLoaded: boolean; loadedInstances?: { config?: unknown; loadedAt: Date; registryId: string }[]; modelId: string; name: string; params?: string; quantization?: string; registryPath?: string; registrySource?: string; sha256Checksum: string }>;
 ```
 
 ## Parameters
 
 | Name | Type | Required? | Description |
 | --- | --- | :---: | --- |
-| params | `object` | ✓ | The query parameters |
-| params.name | `string` | ✓ | The model name to look up |
+| params | [`GetModelInfoParams`](#getmodelinfoparams) | ✓ | Query parameters. |
+
+### `GetModelInfoParams`
+
+| Field | Type | Required? | Description |
+| --- | --- | :---: | --- |
+| name | `string` | ✓ | The model's registry name (as found in the SDK's built-in catalog). |
 
 ## Returns
 
 `Promise<`[`ModelInfo`](#modelinfo)`>` — Detailed information about the model.
 
-### `ModelInfo`
-
 | Field | Type | Description |
 | --- | --- | --- |
-| name | `string` | Model name |
-| modelId | `string` | Unique model identifier |
-| addon | `"llm" \| "whisper" \| "embeddings" \| "nmt" \| "vad" \| "tts" \| "ocr" \| "other"` | Model addon type |
-| expectedSize | `number` | Expected total file size in bytes |
-| sha256Checksum | `string` | SHA-256 checksum |
-| isCached | `boolean` | Whether the model is fully cached locally |
-| isLoaded | `boolean` | Whether the model is currently loaded in memory |
-| cacheFiles | [`CacheFileInfo[]`](#cachefileinfo) | Individual cache file details |
-| registryPath | `string` | Registry path (optional) |
-| registrySource | `string` | Registry source (optional) |
-| engine | `string` | Inference engine (optional) |
-| quantization | `string` | Quantization level (optional) |
-| params | `string` | Model parameter count (optional) |
-| actualSize | `number` | Actual cached size in bytes (optional) |
-| cachedAt | `Date` | When the model was cached (optional) |
-| loadedInstances | [`LoadedInstance[]`](#loadedinstance) | Currently loaded instances (optional) |
+| actualSize | `number` | — |
+| addon | `"llm" \| "whisper" \| "embeddings" \| "nmt" \| "vad" \| "tts" \| "ocr" \| "parakeet" \| "diffusion" \| "other"` | — |
+| blobBlockLength | `number` | — |
+| blobBlockOffset | `number` | — |
+| blobByteOffset | `number` | — |
+| blobCoreKey | `string` | — |
+| cachedAt | `Date` | — |
+| cacheFiles | `\{ actualSize?: number; cachedAt?: Date; expectedSize: number; filename: string; isCached: boolean; path: string; sha256Checksum: string \}[]` | — |
+| engine | `string` | — |
+| expectedSize | `number` | — |
+| isCached | `boolean` | — |
+| isLoaded | `boolean` | — |
+| loadedInstances | `\{ config?: unknown; loadedAt: Date; registryId: string \}[]` | — |
+| modelId | `string` | — |
+| name | `string` | — |
+| params | `string` | — |
+| quantization | `string` | — |
+| registryPath | `string` | — |
+| registrySource | `string` | — |
+| sha256Checksum | `string` | — |
 
-### `CacheFileInfo`
+### `cacheFiles`
 
-| Field | Type | Description |
-| --- | --- | --- |
-| filename | `string` | File name |
-| path | `string` | Full file path |
-| expectedSize | `number` | Expected size in bytes |
-| sha256Checksum | `string` | SHA-256 checksum |
-| isCached | `boolean` | Whether this file is cached |
-| actualSize | `number` | Actual file size (optional) |
-| cachedAt | `Date` | When this file was cached (optional) |
+| Field | Type | Required? | Description |
+| --- | --- | :---: | --- |
+| actualSize | `number` | ✗ | — |
+| cachedAt | `Date` | ✗ | — |
+| expectedSize | `number` | ✓ | — |
+| filename | `string` | ✓ | — |
+| isCached | `boolean` | ✓ | — |
+| path | `string` | ✓ | — |
+| sha256Checksum | `string` | ✓ | — |
 
-### `LoadedInstance`
+### `loadedInstances`
 
-| Field | Type | Description |
-| --- | --- | --- |
-| registryId | `string` | Registry identifier for this loaded instance |
-| loadedAt | `Date` | When the model was loaded |
-| config | `unknown` | Model configuration used at load time (optional) |
+| Field | Type | Required? | Description |
+| --- | --- | :---: | --- |
+| config | `unknown` | ✗ | — |
+| loadedAt | `Date` | ✓ | — |
+| registryId | `string` | ✓ | — |
 
 ## Throws
 
 | Error | When |
 | --- | --- |
+| `QvacErrorBase` | When the response type is invalid (`InvalidResponseError`) or the RPC layer fails. |
 | `INVALID_RESPONSE_TYPE` | Response type does not match expected `"getModelInfo"` |
 
 ## Example

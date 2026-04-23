@@ -2,6 +2,18 @@
 
 We welcome contributions! Feel free to open a pull request, report bugs, or share ideas through issues and discussions.
 
+## API Reference Docs
+
+The SDK's public API reference (`content/docs/(latest)/sdk/api/`) is generated from TypeScript source by a pipeline under `docs/website/scripts/`. To regenerate it locally:
+
+```bash
+cd docs/website
+npm install
+npm run docs:gen-api-dev  # writes to content/docs/dev/sdk/api/
+```
+
+Full workflow, CLI flags, AI augmentation, determinism guarantees, and troubleshooting are documented in [docs/docs-workflow.md](docs/docs-workflow.md). `docs:gen-api-dev` requires `bun` on PATH (listed as a devDependency of `docs/website`).
+
 ## PR Labels
 
 Labels that control CI workflows:

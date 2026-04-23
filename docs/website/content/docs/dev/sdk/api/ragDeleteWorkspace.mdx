@@ -14,8 +14,23 @@ The workspace must not be currently loaded/in-use.
 
 | Name | Type | Required? | Description |
 | --- | --- | :---: | --- |
-| params.workspace | `string` | ✓ | Name of the workspace to delete |
-| options | [`RPCOptions`](../index#rpcoptions) | ✗ | Optional RPC transport options |
+| params | [`RagDeleteWorkspaceParams`](#ragdeleteworkspaceparams) | ✓ | The parameters for deletion |
+| options | `RPCOptions` | ✗ | Optional RPC options (timeout, profiling, force new connection, etc.). |
+
+### `RagDeleteWorkspaceParams`
+
+| Field | Type | Required? | Description |
+| --- | --- | :---: | --- |
+| workspace | `string` | ✓ | — |
+
+### `options`
+
+| Field | Type | Required? | Description |
+| --- | --- | :---: | --- |
+| forceNewConnection | `boolean` | ✗ | When `true`, skip any cached RPC connection and open a fresh one for this call. |
+| healthCheckTimeout | `number` | ✗ | Timeout in milliseconds for the health-check probe that precedes the RPC call. |
+| profiling | `\{ enabled?: boolean; includeServerBreakdown?: boolean; mode?: "summary" \| "verbose" \}` | ✗ | Per-call profiler configuration; when present, overrides the SDK's global profiler settings for this request. |
+| timeout | `number` | ✗ | Per-call RPC timeout in milliseconds; overrides the SDK-level default for this request only. |
 
 ## Returns
 
@@ -25,6 +40,7 @@ The workspace must not be currently loaded/in-use.
 
 | Error | When |
 | --- | --- |
+| `RAGDeleteFailedError` | When the workspace doesn't exist or is currently loaded |
 | `RAG_DELETE_FAILED` | The workspace doesn't exist or is currently loaded |
 
 ## Example

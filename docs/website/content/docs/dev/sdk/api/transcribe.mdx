@@ -1,7 +1,7 @@
 ---
 title: "transcribe( )"
 titleStyle: code
-description: Provides a simple interface for transcribing audio by collecting all streaming results into a single string response.
+description: Transcribe audio and return the complete text.
 ---
 
 ```ts
@@ -14,10 +14,25 @@ Collects all streaming results from [`transcribeStream()`](../transcribeStream) 
 
 | Name | Type | Required? | Description |
 | --- | --- | :---: | --- |
-| params.modelId | `string` | ✓ | The identifier of the transcription model |
-| params.audioChunk | `string \| Buffer` | ✓ | Audio input as file path (string) or audio buffer |
-| params.prompt | `string` | ✗ | Optional initial prompt to guide the transcription |
-| options | [`RPCOptions`](../index#rpcoptions) | ✗ | Optional RPC transport options |
+| params | [`TranscribeClientParams`](#transcribeclientparams) | ✓ | Transcription parameters. |
+| options | `RPCOptions` | ✗ | Optional RPC options including per-call profiling |
+
+### `TranscribeClientParams`
+
+| Field | Type | Required? | Description |
+| --- | --- | :---: | --- |
+| modelId | `string` | ✓ | — |
+| audioChunk | `string \| Buffer<ArrayBufferLike>` | ✓ | — |
+| prompt | `string` | ✗ | — |
+
+### `options`
+
+| Field | Type | Required? | Description |
+| --- | --- | :---: | --- |
+| forceNewConnection | `boolean` | ✗ | When `true`, skip any cached RPC connection and open a fresh one for this call. |
+| healthCheckTimeout | `number` | ✗ | Timeout in milliseconds for the health-check probe that precedes the RPC call. |
+| profiling | `\{ enabled?: boolean; includeServerBreakdown?: boolean; mode?: "summary" \| "verbose" \}` | ✗ | Per-call profiler configuration; when present, overrides the SDK's global profiler settings for this request. |
+| timeout | `number` | ✗ | Per-call RPC timeout in milliseconds; overrides the SDK-level default for this request only. |
 
 ## Returns
 
@@ -37,17 +52,4 @@ const text = await transcribe({
   audioChunk: "/path/to/audio.wav",
 });
 console.log(text);
-```
-
-## `SUPPORTED_AUDIO_FORMATS`
-
-Use this exported constant to check which audio formats are accepted before passing a file to `transcribe()`. Avoids runtime errors from unsupported formats.
-
-```typescript
-import { SUPPORTED_AUDIO_FORMATS } from "@qvac/sdk";
-
-const ext = filePath.split(".").pop();
-if (!SUPPORTED_AUDIO_FORMATS.includes(ext)) {
-  console.error(`Unsupported format: ${ext}`);
-}
 ```

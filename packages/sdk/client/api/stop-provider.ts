@@ -8,10 +8,10 @@ import {
 /**
  * Stops a running provider service and leaves the specified topic.
  *
- * @param options - Options object with required topic
- * @param options.topic - Topic hex string to leave
- * @returns A promise that resolves to the stop provide response containing success status
- * @throws {QvacErrorBase} When the response type is not "stopProvide" or the request fails
+ * @param params - Options object with required topic.
+ * @param params.topic - Topic hex string to leave.
+ * @returns A promise that resolves to the stop provide response containing success status.
+ * @throws {QvacErrorBase} When the response type is not "stopProvide" or the request fails.
  */
 export async function stopQVACProvider(params: StopProvideParams) {
   const request: StopProvideRequest = {

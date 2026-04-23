@@ -12,33 +12,60 @@ For HyperDB, rebalances centroids using k-means clustering. Requires a minimum n
 
 ## Parameters
 
-| Name | Type | Required? | Default | Description |
-| --- | --- | :---: | --- | --- |
-| params.modelId | `string` | ✗ | — | Embedding model ID (required if no cached RAG instance) |
-| params.workspace | `string` | ✗ | `"default"` | Workspace to reindex. Must already exist. |
-| params.onProgress | `(stage, current, total) => void` | ✗ | — | Progress callback |
-| options | [`RPCOptions`](../index#rpcoptions) | ✗ | — | Optional RPC transport options |
+| Name | Type | Required? | Description |
+| --- | --- | :---: | --- |
+| params | [`RagReindexParams`](#ragreindexparams) | ✓ | The parameters for reindexing |
+| options | `RPCOptions` | ✗ | Optional RPC options (timeout, profiling, force new connection, etc.). |
+
+### `RagReindexParams`
+
+| Field | Type | Required? | Description |
+| --- | --- | :---: | --- |
+| modelId | `string \| undefined` | ✗ | — |
+| workspace | `string \| undefined` | ✗ | — |
+| withProgress | `boolean \| undefined` | ✗ | — |
+| onProgress | `(stage: ReindexStage, current: number, total: number) => void` | ✗ | — |
+
+### `options`
+
+| Field | Type | Required? | Description |
+| --- | --- | :---: | --- |
+| forceNewConnection | `boolean` | ✗ | When `true`, skip any cached RPC connection and open a fresh one for this call. |
+| healthCheckTimeout | `number` | ✗ | Timeout in milliseconds for the health-check probe that precedes the RPC call. |
+| profiling | `\{ enabled?: boolean; includeServerBreakdown?: boolean; mode?: "summary" \| "verbose" \}` | ✗ | Per-call profiler configuration; when present, overrides the SDK's global profiler settings for this request. |
+| timeout | `number` | ✗ | Per-call RPC timeout in milliseconds; overrides the SDK-level default for this request only. |
 
 ## Returns
 
-| Field | Type | Description |
-| --- | --- | --- |
-| reindexed | `boolean` | Whether reindexing was performed |
-| details | `Record<string, unknown>` | Additional details (e.g., reason if skipped) — optional |
+`Promise<RagReindexResult>`
 
 ## Throws
 
 | Error | When |
 | --- | --- |
+| `RAGSaveFailedError` | When the operation fails or workspace doesn't exist |
+| `StreamEndedError` | When streaming ends unexpectedly (only when using onProgress) |
 | `RAG_SAVE_FAILED` | The reindex operation fails or workspace doesn't exist |
 | `STREAM_ENDED_WITHOUT_RESPONSE` | Streaming ends unexpectedly (when using `onProgress`) |
 
 ## Example
 
 ```typescript
-const result = await ragReindex({ workspace: "my-docs" });
+// Simple reindex
+const result = await ragReindex({
+  workspace: "my-docs",
+});
 
+// Check result
 if (!result.reindexed) {
   console.log("Reindex skipped:", result.details?.reason);
 }
+
+// With progress tracking
+const result = await ragReindex({
+  workspace: "my-docs",
+  onProgress: (stage, current, total) => {
+    console.log(`[${stage}] ${current}/${total}`);
+  },
+});
 ```

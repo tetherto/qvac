@@ -1,11 +1,11 @@
 ---
 title: "heartbeat( )"
 titleStyle: code
-description: Checks if a delegated provider or the local SDK worker is responsive.
+description: Checks if a delegated provider is online by sending a heartbeat round-trip.
 ---
 
 ```ts
-function heartbeat(params?: { delegate?: DelegateBase }): Promise<HeartbeatResponse>;
+function heartbeat(params?: { delegate?: { healthCheckTimeout?: number; providerPublicKey: string; timeout?: number; topic: string } }): Promise<HeartbeatResponse>;
 ```
 
 Sends a heartbeat round-trip to verify that a delegated provider is online or that the local SDK worker is responsive. When called without arguments, checks the local worker.
@@ -14,33 +14,22 @@ Sends a heartbeat round-trip to verify that a delegated provider is online or th
 
 | Name | Type | Required? | Description |
 | --- | --- | :---: | --- |
-| params | `object` | ✗ | Optional delegation target |
-| params.delegate | [`DelegateBase`](#delegatebase) | ✗ | The provider to check — omit to check the local worker |
-
-### `DelegateBase`
-
-| Field | Type | Required? | Description |
-| --- | --- | :---: | --- |
-| topic | `string` | ✓ | Hyperswarm topic hex string |
-| providerPublicKey | `string` | ✓ | Provider peer public key hex string |
-| timeout | `number` | ✗ | Connection timeout in milliseconds (min 100) |
-| healthCheckTimeout | `number` | ✗ | Health check timeout in milliseconds (min 100) |
+| params | `\{ delegate?: \{ healthCheckTimeout?: number; providerPublicKey: string; timeout?: number; topic: string \} \}` | ✗ | Delegation target to check |
 
 ## Returns
 
 `Promise<HeartbeatResponse>`
 
-### `HeartbeatResponse`
-
 | Field | Type | Description |
 | --- | --- | --- |
-| type | `"heartbeat"` | Response type discriminator |
-| number | `number` | Round-trip sequence number |
+| number | `number` | — |
+| type | `"heartbeat"` | — |
 
 ## Throws
 
 | Error | When |
 | --- | --- |
+| `QvacErrorBase` | When the provider is unreachable or the response is invalid. |
 | `INVALID_RESPONSE_TYPE` | Response type does not match expected `"heartbeat"` |
 
 ## Examples
@@ -55,7 +44,9 @@ try {
 } catch {
   console.log("Provider is offline");
 }
+```
 
+```typescript
 // Check if the local SDK worker is responsive
 await heartbeat();
 ```

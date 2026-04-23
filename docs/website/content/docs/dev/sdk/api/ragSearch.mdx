@@ -10,29 +10,39 @@ function ragSearch(params: RagSearchParams, options?: RPCOptions): Promise<RagSe
 
 ## Parameters
 
-| Name | Type | Required? | Default | Description |
-| --- | --- | :---: | --- | --- |
-| params.modelId | `string` | ✓ | — | The embedding model identifier |
-| params.query | `string` | ✓ | — | The search query text |
-| params.topK | `number` | ✗ | `5` | Number of top results to retrieve |
-| params.n | `number` | ✗ | `3` | Number of centroids for IVF index search |
-| params.workspace | `string` | ✗ | `"default"` | Workspace to search in |
-| options | [`RPCOptions`](../index#rpcoptions) | ✗ | — | Optional RPC transport options |
+| Name | Type | Required? | Description |
+| --- | --- | :---: | --- |
+| params | `RagSearchParams` | ✓ | The parameters for searching |
+| options | `RPCOptions` | ✗ | Optional RPC options (timeout, profiling, force new connection, etc.). |
+
+### `params`
+
+| Field | Type | Required? | Description |
+| --- | --- | :---: | --- |
+| modelId | `string` | ✓ | The identifier of the embedding model to use |
+| n | `number` | ✗ | Number of centroids to use for IVF index search (default: 3) |
+| query | `string` | ✓ | The search query text |
+| topK | `number` | ✗ | Number of top results to retrieve (default: 5) |
+| workspace | `string` | ✗ | Workspace to search in (default: "default"). |
+
+### `options`
+
+| Field | Type | Required? | Description |
+| --- | --- | :---: | --- |
+| forceNewConnection | `boolean` | ✗ | When `true`, skip any cached RPC connection and open a fresh one for this call. |
+| healthCheckTimeout | `number` | ✗ | Timeout in milliseconds for the health-check probe that precedes the RPC call. |
+| profiling | `\{ enabled?: boolean; includeServerBreakdown?: boolean; mode?: "summary" \| "verbose" \}` | ✗ | Per-call profiler configuration; when present, overrides the SDK's global profiler settings for this request. |
+| timeout | `number` | ✗ | Per-call RPC timeout in milliseconds; overrides the SDK-level default for this request only. |
 
 ## Returns
 
 `Promise<RagSearchResult[]>` — Array of search results. Empty array if workspace doesn't exist.
 
-| Field | Type | Description |
-| --- | --- | --- |
-| id | `string` | Document identifier |
-| content | `string` | Document text content |
-| score | `number` | Similarity score |
-
 ## Throws
 
 | Error | When |
 | --- | --- |
+| `RAGSearchFailedError` | When the operation fails |
 | `RAG_SEARCH_FAILED` | The search operation fails |
 
 ## Example

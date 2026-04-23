@@ -9,8 +9,14 @@ import type { AuditResult } from "../scripts/api-docs/types.js";
 /**
  * Ratchet this upward as TSDoc coverage improves.
  * To find the current value, run: npm run docs:audit-tsdoc
+ *
+ * The audit now covers object-method members (e.g. `profiler.enable`) on top
+ * of top-level function exports; the ratchet therefore reflects parity
+ * across both surfaces. Keep 5 percentage points of headroom below the
+ * observed completeness so adding a new undocumented public function
+ * doesn't immediately break CI, but the floor still guards regressions.
  */
-const COMPLETENESS_THRESHOLD = 20;
+const COMPLETENESS_THRESHOLD = 95;
 
 const CRITICAL_FUNCTIONS = [
   "completion",

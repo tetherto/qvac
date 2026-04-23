@@ -12,16 +12,25 @@ function downloadAsset(options: DownloadAssetOptions, rpcOptions?: RPCOptions): 
 
 | Name | Type | Required? | Description |
 | --- | --- | :---: | --- |
-| options | [`DownloadAssetOptions`](#downloadassetoptions) | ✓ | Download configuration |
-| rpcOptions | [`RPCOptions`](../index#rpcoptions) | ✗ | Optional RPC transport options |
+| options | [`DownloadAssetOptions`](#downloadassetoptions) | ✓ | Download configuration including: - assetSrc: The location from which the asset is downloaded (local path, remote URL, or Hyperdrive URL) - seed: Optional boolean for hyperdrive seeding - onProgress: Optional callback for download progress |
+| rpcOptions | [`RPCOptions`](#rpcoptions) | ✗ | Optional RPC options including per-call profiling configuration |
 
 ### `DownloadAssetOptions`
 
 | Field | Type | Required? | Description |
 | --- | --- | :---: | --- |
-| assetSrc | `string` | ✓ | The location from which the asset is downloaded (local path, remote URL, or Hyperdrive `pear://` URL) |
-| seed | `boolean` | ✗ | Whether to seed the asset on Hyperdrive after download |
-| onProgress | `(progress:` [`ModelProgressUpdate`](../loadModel#modelprogressupdate)`) => void` | ✗ | Callback for real-time download progress updates. When provided, streaming is used. |
+| assetSrc | `string \| \{ src: string; name?: string \| undefined; modelId?: string \| undefined; registryPath?: string \| undefined; registrySource?: string \| undefined; blobCoreKey?: string \| undefined; ... 4 more ...; addon?: "llamacpp-completion" \| ... 16 more ... \| undefined; \}` | ✓ | The location from which the asset is downloaded (local path, remote URL, or Hyperdrive `pear://` URL) |
+| seed | `boolean \| undefined` | ✗ | Whether to seed the asset on Hyperdrive after download |
+| onProgress | `(progress: \{ type: "modelProgress"; downloaded: number; total: number; percentage: number; downloadKey: string; shardInfo?: \{ currentShard: number; totalShards: number; shardName: string; overallDownloaded: number; overallTotal: number; overallPercentage: number; \} \| undefined; fileSetInfo?: \{ ...; \} \| undefined; \})...` | ✗ | Callback for real-time download progress updates. When provided, streaming is used. |
+
+### `rpcOptions`
+
+| Field | Type | Required? | Description |
+| --- | --- | :---: | --- |
+| forceNewConnection | `boolean` | ✗ | When `true`, skip any cached RPC connection and open a fresh one for this call. |
+| healthCheckTimeout | `number` | ✗ | Timeout in milliseconds for the health-check probe that precedes the RPC call. |
+| profiling | `\{ enabled?: boolean; includeServerBreakdown?: boolean; mode?: "summary" \| "verbose" \}` | ✗ | Per-call profiler configuration; when present, overrides the SDK's global profiler settings for this request. |
+| timeout | `number` | ✗ | Per-call RPC timeout in milliseconds; overrides the SDK-level default for this request only. |
 
 ## Returns
 
@@ -31,6 +40,7 @@ function downloadAsset(options: DownloadAssetOptions, rpcOptions?: RPCOptions): 
 
 | Error | When |
 | --- | --- |
+| `QvacErrorBase` | When receiving an invalid response type from the server |
 | `DOWNLOAD_ASSET_FAILED` | The download operation fails |
 | `STREAM_ENDED_WITHOUT_RESPONSE` | Streaming ends without a final response (when using `onProgress`) |
 | `INVALID_RESPONSE_TYPE` | Response type does not match expected `"downloadAsset"` |

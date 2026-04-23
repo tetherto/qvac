@@ -76,9 +76,23 @@ export const profilingResponseMetaSchema = z.object({
 });
 
 export const perCallProfilingSchema = z.object({
-  enabled: z.boolean().optional(),
-  includeServerBreakdown: z.boolean().optional(),
-  mode: profilerModeSchema.optional(),
+  enabled: z
+    .boolean()
+    .optional()
+    .describe(
+      "Enable profiling for this call only; when omitted, the SDK-level profiler configuration applies.",
+    ),
+  includeServerBreakdown: z
+    .boolean()
+    .optional()
+    .describe(
+      "Include server-side timing breakdown in the profiling payload.",
+    ),
+  mode: profilerModeSchema
+    .optional()
+    .describe(
+      'Profiling detail level: `"summary"` aggregates only, `"verbose"` retains recent events.',
+    ),
 });
 
 export type ProfilingResponseMeta = z.infer<typeof profilingResponseMetaSchema>;

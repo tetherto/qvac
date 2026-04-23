@@ -14,33 +14,34 @@ Part of the segregated flow: `ragChunk()` → [`embed()`](../embed) → [`ragSav
 
 | Name | Type | Required? | Description |
 | --- | --- | :---: | --- |
-| params | `object` | ✓ | The chunking parameters |
-| params.documents | `string \| string[]` | ✓ | Documents to chunk |
-| params.chunkOpts | [`ChunkOptions`](#chunkoptions) | ✗ | Chunking options |
-| options | [`RPCOptions`](../index#rpcoptions) | ✗ | Optional RPC transport options |
+| params | `RagChunkParams` | ✓ | The parameters for chunking |
+| options | `RPCOptions` | ✗ | Optional RPC options (timeout, profiling, force new connection, etc.). |
 
-### `ChunkOptions`
+### `params`
 
 | Field | Type | Required? | Description |
 | --- | --- | :---: | --- |
-| chunkSize | `number` | ✗ | Maximum chunk size |
-| chunkOverlap | `number` | ✗ | Overlap between chunks |
-| chunkStrategy | `"character" \| "paragraph"` | ✗ | Chunking strategy |
-| splitStrategy | `"character" \| "word" \| "token" \| "sentence" \| "line"` | ✗ | Text splitting strategy |
+| chunkOpts | `\{ chunkOverlap?: number; chunkSize?: number; chunkStrategy?: "character" \| "paragraph"; splitStrategy?: "character" \| "word" \| "token" \| "sentence" \| "line" \}` | ✗ | Chunking options (chunkSize, chunkOverlap, chunkStrategy) |
+| documents | `string \| string[]` | ✓ | Documents to chunk (string or array) |
+
+### `options`
+
+| Field | Type | Required? | Description |
+| --- | --- | :---: | --- |
+| forceNewConnection | `boolean` | ✗ | When `true`, skip any cached RPC connection and open a fresh one for this call. |
+| healthCheckTimeout | `number` | ✗ | Timeout in milliseconds for the health-check probe that precedes the RPC call. |
+| profiling | `\{ enabled?: boolean; includeServerBreakdown?: boolean; mode?: "summary" \| "verbose" \}` | ✗ | Per-call profiler configuration; when present, overrides the SDK's global profiler settings for this request. |
+| timeout | `number` | ✗ | Per-call RPC timeout in milliseconds; overrides the SDK-level default for this request only. |
 
 ## Returns
 
 `Promise<RagDoc[]>` — Array of chunk results.
 
-| Field | Type | Description |
-| --- | --- | --- |
-| id | `string` | Chunk identifier |
-| content | `string` | Chunk text content |
-
 ## Throws
 
 | Error | When |
 | --- | --- |
+| `RAGChunkFailedError` | When the operation fails |
 | `RAG_CHUNK_FAILED` | The chunking operation fails |
 
 ## Example

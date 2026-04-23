@@ -1,7 +1,7 @@
 ---
 title: "modelRegistryGetModel( )"
 titleStyle: code
-description: Retrieves a single model entry from the QVAC model registry by path and source.
+description: Fetches a single model entry from the registry by its path and source.
 ---
 
 ```ts
@@ -12,36 +12,35 @@ function modelRegistryGetModel(registryPath: string, registrySource: string): Pr
 
 | Name | Type | Required? | Description |
 | --- | --- | :---: | --- |
-| registryPath | `string` | ✓ | The registry path of the model |
-| registrySource | `string` | ✓ | The registry source identifier |
+| registryPath | `string` | ✓ | Registry-relative path of the model to fetch. |
+| registrySource | `string` | ✓ | Registry source identifier (e.g., `"huggingface"`, `"local"`). |
 
 ## Returns
 
-`Promise<`[`ModelRegistryEntry`](#modelregistryentry)`>` — The matching model entry.
-
-### `ModelRegistryEntry`
+`Promise<`[`ModelRegistryEntry`](../shared-types#modelregistryentry)`>` — The matching model entry.
 
 | Field | Type | Description |
 | --- | --- | --- |
-| name | `string` | Human-readable model name |
-| registryPath | `string` | Registry path |
-| registrySource | `string` | Registry source |
-| blobCoreKey | `string` | Hyperdrive blob core key |
-| blobBlockOffset | `number` | Blob block offset |
-| blobBlockLength | `number` | Blob block length |
-| blobByteOffset | `number` | Blob byte offset |
-| modelId | `string` | Unique model identifier |
-| addon | `"llm" \| "whisper" \| "embeddings" \| "nmt" \| "vad" \| "tts" \| "ocr" \| "other"` | Model addon type |
-| expectedSize | `number` | Expected file size in bytes |
-| sha256Checksum | `string` | SHA-256 checksum |
-| engine | `string` | Inference engine |
-| quantization | `string` | Quantization level |
-| params | `string` | Parameter count |
+| addon | `"llm" \| "whisper" \| "embeddings" \| "nmt" \| "vad" \| "tts" \| "ocr" \| "parakeet" \| "diffusion" \| "other"` | — |
+| blobBlockLength | `number` | — |
+| blobBlockOffset | `number` | — |
+| blobByteOffset | `number` | — |
+| blobCoreKey | `string` | — |
+| engine | `"sdcpp-generation" \| "llamacpp-embedding" \| "llamacpp-completion" \| "nmtcpp-translation" \| "onnx-ocr" \| "parakeet-transcription" \| "onnx-tts" \| "whispercpp-transcription" \| "onnx-vad"` | — |
+| expectedSize | `number` | — |
+| modelId | `string` | — |
+| name | `string` | — |
+| params | `string` | — |
+| quantization | `string` | — |
+| registryPath | `string` | — |
+| registrySource | `string` | — |
+| sha256Checksum | `string` | — |
 
 ## Throws
 
 | Error | When |
 | --- | --- |
+| `ModelRegistryQueryFailedError` | When the model cannot be located or the registry query fails. |
 | `QVAC_MODEL_REGISTRY_QUERY_FAILED` | The registry query fails or model is not found |
 
 ## Example

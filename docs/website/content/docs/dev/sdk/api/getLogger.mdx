@@ -1,7 +1,7 @@
 ---
 title: "getLogger( )"
 titleStyle: code
-description: Creates or retrieves a cached logger instance for the given namespace.
+description: Creates or retrieves a namespaced logger instance.
 ---
 
 ```ts
@@ -12,47 +12,21 @@ function getLogger(namespace: string, options?: LoggerOptions): Logger;
 
 | Name | Type | Required? | Description |
 | --- | --- | :---: | --- |
-| namespace | `string` | ✓ | Logger namespace (used for identification and filtering) |
-| options | [`LoggerOptions`](#loggeroptions) | ✗ | Optional logger configuration. When omitted, the logger is cached by namespace. When provided, a new logger is always created. |
+| namespace | `string` | ✓ | Namespace used to prefix log messages from this logger (e.g. `"my-app"`, `"@qvac/sdk:embed"`). |
+| options | [`LoggerOptions`](#loggeroptions) | ✗ | Optional logger configuration (custom transports, log level, etc.). When provided, a new logger is always constructed. |
 
 ### `LoggerOptions`
 
 | Field | Type | Required? | Description |
 | --- | --- | :---: | --- |
-| level | `"error" \| "warn" \| "info" \| "debug" \| "trace"` | ✗ | Log level |
-| namespace | `string` | ✗ | Override namespace |
-| transports | [`LogTransport[]`](#logtransport) | ✗ | Custom log transports |
-| enableConsole | `boolean` | ✗ | Whether to output logs to console |
-
-### `LogTransport`
-
-```ts
-type LogTransport = (
-  level: LogLevel,
-  namespace: string,
-  message: string,
-) => void | Promise<void>;
-```
-
-A callback function invoked for each log entry. `LogLevel` is `"error" | "warn" | "info" | "debug" | "trace"`.
+| level | `any` | ✗ | Minimum log level that will be emitted. |
+| namespace | `string` | ✗ | Namespace prefix applied to every message emitted by this logger. |
+| transports | `LogTransport[]` | ✗ | Additional log transports to receive every emitted message. |
+| enableConsole | `boolean` | ✗ | When `false`, disables the default console transport. |
 
 ## Returns
 
-[`Logger`](#logger) — A logger instance.
-
-### `Logger`
-
-| Method | Signature | Description |
-| --- | --- | --- |
-| error | `(...args: unknown[]) => void` | Log at error level |
-| warn | `(...args: unknown[]) => void` | Log at warn level |
-| info | `(...args: unknown[]) => void` | Log at info level |
-| debug | `(...args: unknown[]) => void` | Log at debug level |
-| trace | `(...args: unknown[]) => void` | Log at trace level |
-| setLevel | `(level) => void` | Change the log level |
-| getLevel | `() => LogLevel` | Get the current log level |
-| addTransport | `(transport:` [`LogTransport`](#logtransport)`) => void` | Add a custom transport |
-| setConsoleOutput | `(enabled: boolean) => void` | Enable or disable console output |
+[`Logger`](../shared-types#logger) — A logger instance.
 
 ## Example
 

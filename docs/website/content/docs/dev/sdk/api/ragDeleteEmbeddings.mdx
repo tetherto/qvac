@@ -10,12 +10,27 @@ function ragDeleteEmbeddings(params: RagDeleteEmbeddingsParams, options?: RPCOpt
 
 ## Parameters
 
-| Name | Type | Required? | Default | Description |
-| --- | --- | :---: | --- | --- |
-| params.ids | `string[]` | ✓ | — | Array of document IDs to delete |
-| params.modelId | `string` | ✗ | — | Embedding model ID (required if no cached RAG instance) |
-| params.workspace | `string` | ✗ | `"default"` | Workspace to delete from |
-| options | [`RPCOptions`](../index#rpcoptions) | ✗ | — | Optional RPC transport options |
+| Name | Type | Required? | Description |
+| --- | --- | :---: | --- |
+| params | `RagDeleteEmbeddingsParams` | ✓ | The parameters for deleting embeddings |
+| options | `RPCOptions` | ✗ | Optional RPC options (timeout, profiling, force new connection, etc.). |
+
+### `params`
+
+| Field | Type | Required? | Description |
+| --- | --- | :---: | --- |
+| ids | `string[]` | ✓ | Array of document IDs to delete |
+| modelId | `string` | ✗ | — |
+| workspace | `string` | ✗ | Workspace to delete from (default: "default") |
+
+### `options`
+
+| Field | Type | Required? | Description |
+| --- | --- | :---: | --- |
+| forceNewConnection | `boolean` | ✗ | When `true`, skip any cached RPC connection and open a fresh one for this call. |
+| healthCheckTimeout | `number` | ✗ | Timeout in milliseconds for the health-check probe that precedes the RPC call. |
+| profiling | `\{ enabled?: boolean; includeServerBreakdown?: boolean; mode?: "summary" \| "verbose" \}` | ✗ | Per-call profiler configuration; when present, overrides the SDK's global profiler settings for this request. |
+| timeout | `number` | ✗ | Per-call RPC timeout in milliseconds; overrides the SDK-level default for this request only. |
 
 ## Returns
 
@@ -25,6 +40,7 @@ function ragDeleteEmbeddings(params: RagDeleteEmbeddingsParams, options?: RPCOpt
 
 | Error | When |
 | --- | --- |
+| `RAGDeleteFailedError` | When the operation fails or workspace doesn't exist |
 | `RAG_DELETE_FAILED` | The delete operation fails or workspace doesn't exist |
 
 ## Example

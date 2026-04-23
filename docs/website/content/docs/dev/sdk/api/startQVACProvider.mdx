@@ -5,7 +5,7 @@ description: Starts a provider service that offers QVAC capabilities to remote p
 ---
 
 ```ts
-function startQVACProvider(params: ProvideParams): Promise<object>;
+function startQVACProvider(params: ProvideParams): Promise<{ error?: string; publicKey?: string; success: boolean; type: "provide" }>;
 ```
 
 The provider's keypair can be controlled via the seed option or the `QVAC_HYPERSWARM_SEED` environment variable.
@@ -14,24 +14,31 @@ The provider's keypair can be controlled via the seed option or the `QVAC_HYPERS
 
 | Name | Type | Required? | Description |
 | --- | --- | :---: | --- |
-| params.topic | `string` | ✓ | Topic hex string for peer discovery |
-| params.firewall | [`FirewallConfig`](#firewallconfig) | ✗ | Optional firewall configuration |
+| params | `ProvideParams` | ✓ | Options object with required topic, optional seed, and optional firewall config. |
 
-### `FirewallConfig`
+### `params`
 
-| Field | Type | Required? | Default | Description |
-| --- | --- | :---: | --- | --- |
-| mode | `"allow" \| "deny"` | ✗ | `"allow"` | Firewall mode |
-| publicKeys | `string[]` | ✗ | `[]` | Public keys to allow or deny |
+| Field | Type | Required? | Description |
+| --- | --- | :---: | --- |
+| firewall | `\{ mode: "allow" \| "deny"; publicKeys: string[] \}` | ✗ | Optional firewall configuration to allow/deny specific public keys. |
+| topic | `string` | ✓ | Topic hex string for peer discovery. |
 
 ## Returns
 
 `Promise<object>` — The provide response containing `success`, `publicKey`, and optional `error`.
 
+| Field | Type | Description |
+| --- | --- | --- |
+| error | `string` | — |
+| publicKey | `string` | — |
+| success | `boolean` | — |
+| type | `"provide"` | — |
+
 ## Throws
 
 | Error | When |
 | --- | --- |
+| `QvacErrorBase` | When the response type is not "provide" or the request fails. |
 | `INVALID_RESPONSE_TYPE` | Response type does not match expected `"provide"` |
 | `PROVIDER_START_FAILED` | The server reports provider start failure |
 

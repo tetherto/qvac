@@ -15,8 +15,19 @@
  * TypeDoc. Without it, extraction is skipped when api-data.json is newer than
  * all .ts files under the SDK source tree.
  *
+ * --no-ai skips the optional AI augmentation phase. AI augmentation calls a
+ * remote LLM which produces non-deterministic output, so any reproducibility /
+ * byte-identity / CI workflow MUST pass --no-ai. CI pipelines default this on.
+ * AI augmentation is only intended for curated manual runs where the author
+ * will review and polish the generated content before committing.
+ *
+ * For reproducible output set SOURCE_DATE_EPOCH (reproducible-builds
+ * convention). Without it, ApiData.generatedAt is the literal string
+ * "unspecified" so byte-identity checks pass by default.
+ *
  * Path format: content/docs/v{X.Y.Z}/sdk/api/ and content/docs/(latest)/sdk/api/
- * SDK path: Set SDK_PATH env to point to sdk package (default: ../../packages/sdk from cwd).
+ * SDK path: Set SDK_PATH env to point to sdk package (default: ../../../packages/sdk
+ * relative to this script, i.e. packages/sdk in the monorepo regardless of cwd).
  */
 
 import * as fs from "fs/promises";
@@ -29,9 +40,14 @@ import type { GenerateOptions } from "./api-docs/types.js";
 const SCRIPT_DIR = path.dirname(fileURLToPath(import.meta.url));
 const API_DATA_PATH = path.join(SCRIPT_DIR, "api-docs", "api-data.json");
 
+// Resolve paths relative to this script's location (docs/website/scripts/)
+// rather than process.cwd() so that `npm run docs:gen-api-dev` and
+// `npx bun run scripts/generate-api-docs.ts` work identically whether
+// invoked from the repo root or from the docs/website directory.
+const DOCS_WEBSITE_DIR = path.resolve(SCRIPT_DIR, "..");
 const SDK_PATH =
   process.env.SDK_PATH ||
-  path.join(process.cwd(), "..", "..", "packages", "sdk");
+  path.resolve(SCRIPT_DIR, "..", "..", "..", "packages", "sdk");
 
 async function generateApiDocs(
   version: string,
@@ -52,9 +68,20 @@ async function generateApiDocs(
   }
   console.log(`   SDK path: ${SDK_PATH}`);
 
-  // Phase 1: Extract
+  // Phase 1: Extract (reads SDK via TypeDoc; merges prose fallbacks from
+  // hand-authored samples under content/docs/(latest)/sdk/api/ so functions
+  // without full JSDoc still produce usable output).
+  const samplesDir = path.join(
+    DOCS_WEBSITE_DIR,
+    "content",
+    "docs",
+    "(latest)",
+    "sdk",
+    "api",
+  );
   await extractApiData(SDK_PATH, version, {
     forceExtract: options.forceExtract,
+    samplesDir,
   });
 
   // Phase 1.5: AI augmentation (optional)
@@ -81,22 +108,10 @@ async function generateApiDocs(
   // Phase 2: Render
   const outputFolder = options.devMode ? "dev" : `v${version}`;
   const outputDir = path.join(
-    process.cwd(),
+    DOCS_WEBSITE_DIR,
     "content",
     "docs",
     outputFolder,
-    "sdk",
-    "api",
-  );
-  // Sample passthrough: when a hand-authored sample exists under
-  // `(latest)/sdk/api/`, the renderer copies it verbatim. This guarantees
-  // byte-identical output for already-documented functions and leaves the
-  // Nunjucks templates to handle only newly added SDK APIs.
-  const samplesDir = path.join(
-    process.cwd(),
-    "content",
-    "docs",
-    "(latest)",
     "sdk",
     "api",
   );
@@ -122,7 +137,7 @@ async function generateApiDocs(
 // ---------------------------------------------------------------------------
 
 async function updateLatestSafely(version: string) {
-  const docsBase = path.join(process.cwd(), "content", "docs");
+  const docsBase = path.join(DOCS_WEBSITE_DIR, "content", "docs");
   const latestApiDir = path.join(docsBase, "(latest)", "sdk", "api");
   const versionApiDir = path.join(docsBase, `v${version}`, "sdk", "api");
   const backupDir = path.join(docsBase, ".latest-api-backup");
@@ -180,7 +195,7 @@ async function smokeTestDir(apiDir: string): Promise<void> {
 }
 
 async function rollbackLatest(): Promise<void> {
-  const docsBase = path.join(process.cwd(), "content", "docs");
+  const docsBase = path.join(DOCS_WEBSITE_DIR, "content", "docs");
   const latestApiDir = path.join(docsBase, "(latest)", "sdk", "api");
   const backupDir = path.join(docsBase, ".latest-api-backup");
 

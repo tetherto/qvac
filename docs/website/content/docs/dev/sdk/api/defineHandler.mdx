@@ -5,25 +5,24 @@ description: Helper function to define a handler with full type inference.
 ---
 
 ```ts
-function defineHandler<TRequest extends ZodType, TResponse extends ZodType>(
-  definition: PluginHandlerDefinition<TRequest, TResponse>
-): PluginHandlerDefinition<TRequest, TResponse>;
+function defineHandler(definition: PluginHandlerDefinition<TRequest, TResponse>): PluginHandlerDefinition<TRequest, TResponse>;
 ```
 
 ## Parameters
 
 | Name | Type | Required? | Description |
 | --- | --- | :---: | --- |
-| definition | [`PluginHandlerDefinition`](#pluginhandlerdefinition) | ✓ | The handler definition with schemas and handler function |
+| definition | `PluginHandlerDefinition<TRequest, TResponse>` | ✓ | The plugin handler definition (request/response schemas and handler function). |
 
 ### `PluginHandlerDefinition`
 
 | Field | Type | Required? | Description |
 | --- | --- | :---: | --- |
-| requestSchema | `ZodType` | ✓ | Zod schema for validating incoming requests |
-| responseSchema | `ZodType` | ✓ | Zod schema for validating outgoing responses |
+| requestSchema | `TRequest` | ✓ | Zod schema for validating incoming requests |
+| responseSchema | `TResponse` | ✓ | Zod schema for validating outgoing responses |
 | streaming | `boolean` | ✓ | Whether this handler uses streaming responses |
-| handler | `(request) => Promise<response> \| AsyncGenerator<response>` | ✓ | The handler function — receives validated request, returns validated response |
+| duplex | `boolean` | ✗ | — |
+| handler | `TRequest extends ZodType<infer I, unknown, $ZodTypeInternals<infer I, unknown>> ? TResponse extends ZodType<infer O, unknown, $ZodTypeInternals<infer O, unknown>> ? (request: I, inputStream?: AsyncIterable<...> \| undefined) => Promise<...> \| AsyncGenerator<...> : never : never` | ✓ | The handler function — receives validated request, returns validated response |
 
 ## Returns
 

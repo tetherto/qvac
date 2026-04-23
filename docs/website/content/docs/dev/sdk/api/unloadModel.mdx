@@ -12,10 +12,16 @@ When the last model is unloaded and no providers are active, the RPC connection 
 
 ## Parameters
 
-| Name | Type | Required? | Default | Description |
-| --- | --- | :---: | --- | --- |
-| params.modelId | `string` | ✓ | — | The unique identifier of the model to unload |
-| params.clearStorage | `boolean` | ✗ | `false` | Whether to clear the storage for the model |
+| Name | Type | Required? | Description |
+| --- | --- | :---: | --- |
+| params | `UnloadModelParams` | ✓ | The parameters for unloading the model |
+
+### `params`
+
+| Field | Type | Required? | Description |
+| --- | --- | :---: | --- |
+| clearStorage | `boolean` | ✗ | Whether to clear the storage for the model |
+| modelId | `string` | ✓ | The unique identifier of the model to unload |
 
 ## Returns
 
@@ -25,6 +31,7 @@ When the last model is unloaded and no providers are active, the RPC connection 
 
 | Error | When |
 | --- | --- |
+| `QvacErrorBase` | When the response type is invalid or when the unload operation fails |
 | `INVALID_RESPONSE_TYPE` | Response type does not match expected `"unloadModel"` |
 | `MODEL_UNLOAD_FAILED` | The server reports unload failure |
 

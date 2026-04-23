@@ -26,7 +26,7 @@ Thrown on the client side (response validation, RPC, provider). Access via `SDK_
 | `INVALID_RESPONSE_TYPE` | 50001 | Invalid response type received. | `cancel()`, `downloadAsset()`, `embed()`, `finetune()`, `getModelInfo()`, `heartbeat()`, `loadModel()`, `loggingStream()`, `ragDeleteEmbeddings()`, `ragSaveEmbeddings()`, `ragSearch()`, `resume()`, `startQVACProvider()`, `stopQVACProvider()`, `suspend()`, `unloadModel()` |
 | `INVALID_OPERATION_IN_RESPONSE` | 50002 | Response operation didn't match the expected RAG operation. | `ragDeleteEmbeddings()`, `ragSaveEmbeddings()`, `ragSearch()` |
 | `STREAM_ENDED_WITHOUT_RESPONSE` | 50003 | Streaming RPC ended without a final response. | `downloadAsset()`, `finetune()`, `loadModel()`, `ragDeleteEmbeddings()`, `ragSaveEmbeddings()`, `ragSearch()` |
-| `INVALID_AUDIO_CHUNK_TYPE` | 50004 | Invalid audio chunk input type provided. | `transcribe()`, `transcribeStream()` |
+| `INVALID_AUDIO_CHUNK_TYPE` | 50004 | Invalid audio chunk type. | `transcribe()`, `transcribeStream()` |
 | `INVALID_TOOLS_ARRAY` | 50005 | Invalid tools array provided. | `completion()` |
 | `INVALID_TOOL_SCHEMA` | 50006 | Invalid tool schema provided. | `completion()` |
 | `OCR_FAILED` | 50007 | OCR operation failed. | `ocr()` |
@@ -36,9 +36,9 @@ Thrown on the client side (response validation, RPC, provider). Access via `SDK_
 | `RPC_CONNECTION_FAILED` | 50203 | RPC connection failed. | Any API call (startup/transport) |
 | `PROVIDER_START_FAILED` | 50400 | Failed to start provider. | `startQVACProvider()` |
 | `PROVIDER_STOP_FAILED` | 50401 | Failed to stop provider. | `stopQVACProvider()` |
-| `DELEGATE_NO_FINAL_RESPONSE` | 50402 | No final response received from delegated provider. | `loadModel()`, `completion()` |
-| `DELEGATE_PROVIDER_ERROR` | 50403 | Delegated provider returned an error. | `loadModel()`, `completion()` |
-| `DELEGATE_CONNECTION_FAILED` | 50404 | Failed to connect to delegated provider. | `loadModel()`, `completion()` |
+| `DELEGATE_NO_FINAL_RESPONSE` | 50402 | No final response received from delegated provider. | `completion()`, `loadModel()` |
+| `DELEGATE_PROVIDER_ERROR` | 50403 | Delegated provider returned an error. | `completion()`, `loadModel()` |
+| `DELEGATE_CONNECTION_FAILED` | 50404 | Failed to connect to delegated provider. | `completion()`, `loadModel()` |
 | `SDK_NOT_FOUND_IN_NODE_MODULES` | 50600 | QVAC SDK not found in node_modules. | Any API call (during SDK initialization) |
 | `WORKER_FILE_NOT_FOUND` | 50601 | Worker file not found. | Any API call (during SDK initialization) |
 | `CONFIG_FILE_NOT_FOUND` | 50602 | Config file not found. | Any API call (during SDK initialization) |
@@ -126,8 +126,6 @@ Thrown by the server (model operations, downloads, cache, RAG). Access via `SDK_
 | `DELEGATE_PROVIDER_ERROR` | 53702 | Delegated provider returned an error. | `completion()`, `loadModel()` |
 | `RPC_NO_DATA_RECEIVED` | 53703 | No data received from request. | Internal server RPC |
 | `RPC_UNKNOWN_REQUEST_TYPE` | 53704 | Unknown request type received. | Internal server RPC |
-| `LIFECYCLE_SUSPEND_FAILED` | 53600 | Failed to suspend one or more resources. | `suspend()` |
-| `LIFECYCLE_RESUME_FAILED` | 53601 | Failed to resume one or more resources. | `resume()` |
 | `PLUGIN_NOT_FOUND` | 53850 | Plugin not found for the specified model type. | `invokePlugin()`, `invokePluginStream()`, `loadModel()` |
 | `PLUGIN_HANDLER_NOT_FOUND` | 53851 | Handler not found in plugin. | `invokePlugin()`, `invokePluginStream()` |
 | `PLUGIN_REQUEST_VALIDATION_FAILED` | 53852 | Plugin request validation failed. | `invokePlugin()`, `invokePluginStream()` |
@@ -138,5 +136,7 @@ Thrown by the server (model operations, downloads, cache, RAG). Access via `SDK_
 | `PLUGIN_DEFINITION_INVALID` | 53857 | Plugin definition is invalid. | `definePlugin()` |
 | `PLUGIN_MODEL_TYPE_RESERVED` | 53858 | Model type is reserved for built-in plugins. | `definePlugin()` |
 | `PLUGIN_LOAD_CONFIG_VALIDATION_FAILED` | 53859 | Model config validation failed for plugin. | `loadModel()` |
+| `LIFECYCLE_SUSPEND_FAILED` | 53600 | Failed to suspend one or more resources. | `suspend()` |
+| `LIFECYCLE_RESUME_FAILED` | 53601 | Failed to resume one or more resources. | `resume()` |
 | `PATH_TRAVERSAL` | 53900 | Path traversal detected. | `loadModel()`, `downloadAsset()` |
 | `QVAC_MODEL_REGISTRY_QUERY_FAILED` | 53950 | Model registry query failed. | `modelRegistryGetModel()`, `modelRegistryList()`, `modelRegistrySearch()` |

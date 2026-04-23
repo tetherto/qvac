@@ -16,7 +16,7 @@ description: API reference — {{ versionLabel }}
 | Function | Summary |
 | --- | --- |
 {% for fn in functions %}
-| [`{{ fn.name }}()`](./{{ fn.name }}) | {{ fn.description | firstSentence | replace("|", "\\|") }} |
+| [`{{ fn.name }}()`](./{{ fn.name }}) | {{ (fn.summary or (fn.description | firstSentence)) | replace("|", "\\|") }} |
 {% endfor %}
 
 {% if objects and objects.length > 0 %}
@@ -25,7 +25,7 @@ description: API reference — {{ versionLabel }}
 | Object | Summary |
 | --- | --- |
 {% for obj in objects %}
-| [`{{ obj.name }}`](./{{ obj.name }}) | {{ obj.description | firstSentence | replace("|", "\\|") }} |
+| [`{{ obj.name }}`](./{{ obj.name }}) | {{ (obj.summary or (obj.description | firstSentence)) | replace("|", "\\|") }} |
 {% endfor %}
 
 {% endif %}
@@ -35,6 +35,14 @@ description: API reference — {{ versionLabel }}
   Common type definitions used across SDK functions.
 </Card>
 
+{% if constants and constants.length > 0 %}
+## Constants
+
+<Card href="./constants" title="Constants">
+  Value constants exported by the SDK — plugin IDs, model-type maps, registries.
+</Card>
+
+{% endif %}
 ## Errors
 
 <Card href="./errors" title="Error codes">

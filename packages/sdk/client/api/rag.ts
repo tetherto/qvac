@@ -41,6 +41,7 @@ import {
  * @param params - The parameters for chunking
  * @param params.documents - Documents to chunk (string or array)
  * @param params.chunkOpts - Chunking options (chunkSize, chunkOverlap, chunkStrategy)
+ * @param options - Optional RPC options (timeout, profiling, force new connection, etc.).
  * @returns Array of chunk results with id and content
  * @throws {RAGChunkFailedError} When the operation fails
  *
@@ -100,6 +101,7 @@ export async function ragChunk(
  * @param params.workspace - Workspace for isolated storage (default: "default"). Created if it doesn't exist.
  * @param params.onProgress - Progress callback (stage, current, total)
  * @param params.progressInterval - Minimum interval between progress updates in ms
+ * @param options - Optional RPC options (timeout, profiling, force new connection, etc.).
  * @returns Processing results and dropped indices
  * @throws {RAGSaveFailedError} When the operation fails
  * @throws {StreamEndedError} When streaming ends unexpectedly (only when using onProgress)
@@ -198,6 +200,7 @@ export async function ragIngest(
  * @param params.workspace - Workspace for isolated storage (default: "default"). Created if it doesn't exist.
  * @param params.onProgress - Progress callback (stage, current, total)
  * @param params.progressInterval - Minimum interval between progress updates in ms
+ * @param options - Optional RPC options (timeout, profiling, force new connection, etc.).
  * @returns Array of save results
  * @throws {RAGSaveFailedError} When the operation fails
  * @throws {StreamEndedError} When streaming ends unexpectedly (only when using onProgress)
@@ -289,6 +292,7 @@ export async function ragSaveEmbeddings(
  * @param params.topK - Number of top results to retrieve (default: 5)
  * @param params.n - Number of centroids to use for IVF index search (default: 3)
  * @param params.workspace - Workspace to search in (default: "default").
+ * @param options - Optional RPC options (timeout, profiling, force new connection, etc.).
  * @returns Array of search results with id, content, and score. Empty array if workspace doesn't exist.
  * @throws {RAGSearchFailedError} When the operation fails
  *
@@ -340,6 +344,7 @@ export async function ragSearch(
  * @param params - The parameters for deleting embeddings
  * @param params.ids - Array of document IDs to delete
  * @param params.workspace - Workspace to delete from (default: "default")
+ * @param options - Optional RPC options (timeout, profiling, force new connection, etc.).
  * @throws {RAGDeleteFailedError} When the operation fails or workspace doesn't exist
  *
  * @example
@@ -389,6 +394,7 @@ export async function ragDeleteEmbeddings(
  * @param params - The parameters for reindexing
  * @param params.workspace - Workspace to reindex (default: "default"). Must already exist.
  * @param params.onProgress - Progress callback (stage, current, total)
+ * @param options - Optional RPC options (timeout, profiling, force new connection, etc.).
  * @returns Reindex result with `reindexed` boolean and optional `details`
  * @throws {RAGSaveFailedError} When the operation fails or workspace doesn't exist
  * @throws {StreamEndedError} When streaming ends unexpectedly (only when using onProgress)
@@ -477,6 +483,7 @@ export async function ragReindex(
  * the workspace is currently loaded in memory and holding active resources
  * (Corestore, HyperDB adapter, and possibly a RAG instance).
  *
+ * @param options - Optional RPC options (timeout, profiling, force new connection, etc.).
  * @returns Array of workspace info with name and open status
  * @throws {RAGListWorkspacesFailedError} When the operation fails
  *
@@ -523,6 +530,7 @@ export async function ragListWorkspaces(
  * @param params - The parameters for closing
  * @param params.workspace - Name of the workspace to close (default: "default")
  * @param params.deleteOnClose - If true, deletes the workspace data from disk after closing (default: false)
+ * @param options - Optional RPC options (timeout, profiling, force new connection, etc.).
  * @throws {RAGCloseWorkspaceFailedError} When the operation fails
  *
  * @example
@@ -567,6 +575,7 @@ export async function ragCloseWorkspace(
  *
  * @param params - The parameters for deletion
  * @param params.workspace - Name of the workspace to delete
+ * @param options - Optional RPC options (timeout, profiling, force new connection, etc.).
  * @throws {RAGDeleteFailedError} When the workspace doesn't exist or is currently loaded
  *
  * @example

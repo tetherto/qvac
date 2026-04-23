@@ -5,13 +5,7 @@ description: Generates completion from a language model based on conversation hi
 ---
 
 ```ts
-function completion(params: CompletionParams): {
-  tokenStream: AsyncGenerator<string>;
-  toolCallStream: AsyncGenerator<ToolCallEvent>;
-  text: Promise<string>;
-  toolCalls: Promise<ToolCallWithCall[]>;
-  stats: Promise<CompletionStats | undefined>;
-};
+function completion(params: CompletionParams): { stats: Promise<{ backendDevice?: "cpu" | "gpu"; cacheTokens?: number; timeToFirstToken?: number; tokensPerSecond?: number } | undefined>; text: Promise<string>; tokenStream: AsyncGenerator<string>; toolCalls: Promise<ToolCallWithCall[]>; toolCallStream: AsyncGenerator<{ call: { arguments: Record<string, unknown>; id: string; name: string; raw?: string }; type: "toolCall" } | { error: { code: "PARSE_ERROR" | "VALIDATION_ERROR" | "UNKNOWN_TOOL"; message: string; raw?: string }; type: "toolCallError" }> };
 ```
 
 ## Parameters
@@ -22,104 +16,70 @@ function completion(params: CompletionParams): {
 
 ### `CompletionParams`
 
-| Field | Type | Required? | Default | Description |
-| --- | --- | :---: | --- | --- |
-| modelId | `string` | ✓ | — | The identifier of the model to use for completion |
-| history | [`HistoryMessage[]`](#historymessage) | ✓ | — | Array of conversation messages |
-| stream | `boolean` | ✗ | `true` | Whether to stream tokens or return complete response |
-| tools | [`Tool[]`](#tool) ` \| ` [`ToolInput[]`](#toolinput) | ✗ | — | Optional array of tools (Zod-schema ToolInput or full Tool objects) |
-| mcp | [`McpClientInput[]`](#mcpclientinput) | ✗ | — | Optional array of MCP client inputs for tool integration |
-| kvCache | `boolean \| string` | ✗ | — | KV cache configuration — see [kvCache](#kvcache) |
-| generationParams | [`GenerationParams`](#generationparams) | ✗ | — | Optional sampling / generation parameters |
-| rpcOptions | [`RPCOptions`](../index#rpcoptions) | ✗ | — | Optional RPC transport options |
-
-#### `HistoryMessage`
-
 | Field | Type | Required? | Description |
 | --- | --- | :---: | --- |
-| role | `string` | ✓ | Message role (e.g., `"user"`, `"assistant"`, `"system"`) |
-| content | `string` | ✓ | Message content |
-| attachments | [`Attachment[]`](#attachment) | ✗ | Optional file attachments for multimodal models |
-
-##### `Attachment`
-
-| Field | Type | Required? | Description |
-| --- | --- | :---: | --- |
-| path | `string` | ✓ | File path to the attachment |
-
-#### `Tool`
-
-Full tool definition in JSON Schema format (sent to the model):
-
-| Field | Type | Required? | Description |
-| --- | --- | :---: | --- |
-| type | `"function"` | ✓ | Always `"function"` |
-| name | `string` | ✓ | Tool name |
-| description | `string` | ✓ | What the tool does |
-| parameters | `object` | ✓ | JSON Schema object describing the tool's input |
-| parameters.type | `"object"` | ✓ | Always `"object"` |
-| parameters.properties | `Record<string, { type, description?, enum? }>` | ✓ | Parameter definitions |
-| parameters.required | `string[]` | ✗ | Required parameter names |
-
-#### `ToolInput`
-
-Simplified tool definition using Zod schemas (auto-converted to `Tool` internally):
-
-| Field | Type | Required? | Description |
-| --- | --- | :---: | --- |
-| name | `string` | ✓ | Tool name |
-| description | `string` | ✓ | What the tool does |
-| parameters | `ZodObject` | ✓ | Zod schema describing the tool's input |
-| handler | `(args: Record<string, unknown>) => Promise<unknown>` | ✗ | Handler function — when provided, returned `ToolCallWithCall` objects include an `invoke()` method |
+| tools | `\{ type: "function"; name: string; description: string; parameters: \{ type: "object"; properties: Record<string, \{ type: "string" \| "number" \| "boolean" \| "object" \| "array" \| "integer"; description?: string \| undefined; enum?: string[] \| undefined; \}>; required?: string[] \| undefined; \}; \}[] \| ToolInput[]` | ✗ | Optional array of tools (Zod-schema ToolInput or full Tool objects) |
+| mcp | `McpClientInput[]` | ✗ | Optional array of MCP client inputs for tool integration |
+| rpcOptions | `\{ timeout?: number \| undefined; healthCheckTimeout?: number \| undefined; forceNewConnection?: boolean \| undefined; profiling?: \{ enabled?: boolean \| undefined; includeServerBreakdown?: boolean \| undefined; mode?: "summary" \| ... 1 more ... \| undefined; \} \| undefined; \}` | ✗ | Optional RPC transport options |
+| history | `\{ role: string; content: string; attachments?: \{ path: string; \}[] \| undefined; \}[]` | ✓ | Array of conversation messages sent to the model. |
+| modelId | `string` | ✓ | The identifier of the model to use for completion. |
+| stream | `boolean` | ✓ | Whether to stream tokens or return complete response |
+| kvCache | `string \| boolean \| undefined` | ✗ | KV cache configuration — `true` to auto-generate a cache key from history, a string to use a custom key, or `false`/`undefined` to disable. |
+| generationParams | `\{ temp?: number \| undefined; top_p?: number \| undefined; top_k?: number \| undefined; predict?: number \| undefined; seed?: number \| undefined; frequency_penalty?: number \| undefined; presence_penalty?: number \| undefined; repeat_penalty?: number \| undefined; \} \| undefined` | ✗ | Optional sampling / generation parameters |
 
 #### `McpClientInput`
 
-MCP (Model Context Protocol) client input for tool integration:
-
 | Field | Type | Required? | Description |
 | --- | --- | :---: | --- |
-| client | [`McpClient`](#mcpclient) | ✓ | An MCP client instance |
+| client | `McpClient` | ✓ | An MCP client instance |
 | includeResources | `boolean` | ✗ | Whether to include MCP resources |
 
 ##### `McpClient`
 
-Duck-typed MCP client interface:
-
-| Method | Signature | Required? | Description |
+| Field | Type | Required? | Description |
 | --- | --- | :---: | --- |
-| listTools | `() => Promise<{ tools: McpTool[] }>` | ✓ | Lists available tools |
-| callTool | `(params: { name, arguments }) => Promise<McpToolCallResult>` | ✓ | Calls a tool by name |
-| listResources | `() => Promise<{ resources: McpResource[] }>` | ✗ | Lists available resources |
-| readResource | `(params: { uri }) => Promise<{ contents: unknown[] }>` | ✗ | Reads a resource by URI |
+| listTools | `() => Promise<\{ [key: string]: unknown; tools: McpTool[]; \}>` | ✓ | — |
+| callTool | `(params: \{ name: string; arguments: Record<string, unknown>; \}) => Promise<Record<string, unknown> \| McpToolCallResult>` | ✓ | — |
+| listResources | `() => Promise<\{ [key: string]: unknown; resources: McpResource[]; \}>` | ✗ | — |
+| readResource | `(params: \{ uri: string; \}) => Promise<\{ [key: string]: unknown; contents: unknown[]; \}>` | ✗ | — |
 
-#### `kvCache`
-
-Cache files are organized hierarchically: `{kvCacheKey}/{modelId}/{configHash}.bin`
-
-The `configHash` includes model config + system prompt to ensure cache isolation.
-
-| Value | Behavior |
-| --- | --- |
-| `true` | Auto-generate cache key based on conversation history |
-| `"custom-key"` | Use provided string as cache key for manual session management |
-| `false` / `undefined` | No caching |
-
-When cache exists, only the last message is sent to the model (includes multimodal attachments). Use [`deleteCache()`](../deleteCache) to remove cached sessions.
-
-#### `GenerationParams`
-
-Optional sampling and generation parameters (strict — no extra keys allowed):
+#### `rpcOptions`
 
 | Field | Type | Required? | Description |
 | --- | --- | :---: | --- |
-| temp | `number` | ✗ | Temperature (0–2) |
-| top_p | `number` | ✗ | Top-p (nucleus) sampling (0–1) |
-| top_k | `number` | ✗ | Top-k sampling |
-| predict | `number` | ✗ | Max tokens to predict. `-1` = until stop token, `-2` = until context filled |
-| seed | `number` | ✗ | Random seed for reproducibility |
-| frequency_penalty | `number` | ✗ | Frequency penalty |
-| presence_penalty | `number` | ✗ | Presence penalty |
-| repeat_penalty | `number` | ✗ | Repeat penalty |
+| timeout | `number \| undefined` | ✗ | Per-call RPC timeout in milliseconds; overrides the SDK-level default for this request only. |
+| healthCheckTimeout | `number \| undefined` | ✗ | Timeout in milliseconds for the health-check probe that precedes the RPC call. |
+| forceNewConnection | `boolean \| undefined` | ✗ | When `true`, skip any cached RPC connection and open a fresh one for this call. |
+| profiling | `\{ enabled?: boolean \| undefined; includeServerBreakdown?: boolean \| undefined; mode?: "summary" \| "verbose" \| undefined; \} \| undefined` | ✗ | Per-call profiler configuration; when present, overrides the SDK's global profiler settings for this request. |
+
+##### `profiling`
+
+| Field | Type | Required? | Description |
+| --- | --- | :---: | --- |
+| enabled | `boolean \| undefined` | ✗ | Enable profiling for this call only; when omitted, the SDK-level profiler configuration applies. |
+| includeServerBreakdown | `boolean \| undefined` | ✗ | Include server-side timing breakdown in the profiling payload. |
+| mode | `"summary" \| "verbose" \| undefined` | ✗ | Profiling detail level: `"summary"` aggregates only, `"verbose"` retains recent events. |
+
+#### `history`
+
+| Field | Type | Required? | Description |
+| --- | --- | :---: | --- |
+| role | `string` | ✓ | Message role (e.g., `"user"`, `"assistant"`, `"system"`). |
+| content | `string` | ✓ | Message content. |
+| attachments | `\{ path: string; \}[] \| undefined` | ✗ | Optional file attachments for multimodal models. |
+
+#### `generationParams`
+
+| Field | Type | Required? | Description |
+| --- | --- | :---: | --- |
+| temp | `number \| undefined` | ✗ | Sampling temperature (typically 0–2). |
+| top_p | `number \| undefined` | ✗ | Top-p (nucleus) sampling cutoff (0–1). |
+| top_k | `number \| undefined` | ✗ | Top-k sampling — keep only the top K tokens. |
+| predict | `number \| undefined` | ✗ | Max tokens to predict. `-1` = until stop token, `-2` = until context filled. |
+| seed | `number \| undefined` | ✗ | Random seed for reproducibility. |
+| frequency_penalty | `number \| undefined` | ✗ | Penalty applied to tokens based on frequency so far. |
+| presence_penalty | `number \| undefined` | ✗ | Penalty applied to tokens that have already appeared. |
+| repeat_penalty | `number \| undefined` | ✗ | Penalty applied to repeated tokens. |
 
 ## Returns
 
@@ -127,55 +87,30 @@ Optional sampling and generation parameters (strict — no extra keys allowed):
 
 | Field | Type | Description |
 | --- | --- | --- |
-| tokenStream | `AsyncGenerator<string>` | Stream of generated tokens |
-| toolCallStream | `AsyncGenerator<`[`ToolCallEvent`](#toolcallevent)`>` | Stream of tool call events |
+| stats | `Promise<\{ backendDevice?: "cpu" \| "gpu"; cacheTokens?: number; timeToFirstToken?: number; tokensPerSecond?: number \} \| undefined>` | Performance statistics |
 | text | `Promise<string>` | Complete generated text (resolves after stream ends) |
-| toolCalls | `Promise<`[`ToolCallWithCall[]`](#toolcallwithcall)`>` | Tool calls made during completion (may include `invoke()` when handler is available) |
-| stats | `Promise<`[`CompletionStats`](#completionstats) `\| undefined>` | Performance statistics |
+| tokenStream | `AsyncGenerator<string>` | Stream of generated tokens |
+| toolCalls | `Promise<ToolCallWithCall[]>` | Tool calls made during completion (may include `invoke()` when handler is available) |
+| toolCallStream | `AsyncGenerator<\{ call: \{ arguments: Record<string, unknown>; id: string; name: string; raw?: string \}; type: "toolCall" \} \| \{ error: \{ code: "PARSE_ERROR" \| "VALIDATION_ERROR" \| "UNKNOWN_TOOL"; message: string; raw?: string \}; type: "toolCallError" \}>` | Stream of tool call events |
 
-### `CompletionStats`
+### `stats`
 
-| Field | Type | Description |
-| --- | --- | --- |
-| timeToFirstToken | `number` | Time to first token in milliseconds |
-| tokensPerSecond | `number` | Tokens generated per second |
-| cacheTokens | `number` | Number of cached tokens |
-| backendDevice | `"cpu" \| "gpu" \| undefined` | Compute backend used for inference |
-
-### `ToolCallEvent`
-
-Discriminated union on `type`. One of:
-
-**Tool call:**
-
-| Field | Type | Description |
-| --- | --- | --- |
-| type | `"toolCall"` | Event type |
-| call.id | `string` | Call identifier |
-| call.name | `string` | Tool name |
-| call.arguments | `Record<string, unknown>` | Tool arguments |
-| call.raw | `string` | Raw call text (optional) |
-
-**Tool call error:**
-
-| Field | Type | Description |
-| --- | --- | --- |
-| type | `"toolCallError"` | Event type |
-| error.code | `"PARSE_ERROR" \| "VALIDATION_ERROR" \| "UNKNOWN_TOOL"` | Error code |
-| error.message | `string` | Error message |
-| error.raw | `string` | Raw text (optional) |
+| Field | Type | Required? | Description |
+| --- | --- | :---: | --- |
+| backendDevice | `"cpu" \| "gpu"` | ✗ | Compute backend used for inference. |
+| cacheTokens | `number` | ✗ | Number of tokens served from the KV cache. |
+| timeToFirstToken | `number` | ✗ | Time to first token in milliseconds. |
+| tokensPerSecond | `number` | ✗ | Tokens generated per second. |
 
 ### `ToolCallWithCall`
 
-Extends `ToolCall` with an optional `invoke()` method:
-
-| Field | Type | Description |
-| --- | --- | --- |
-| id | `string` | Call identifier |
-| name | `string` | Tool name |
-| arguments | `Record<string, unknown>` | Tool arguments |
-| raw | `string` | Raw call text (optional) |
-| invoke | `() => Promise<unknown>` | Executes the tool handler (present when a matching handler was provided) |
+| Field | Type | Required? | Description |
+| --- | --- | :---: | --- |
+| arguments | `Record<string, unknown>` | ✓ | Tool arguments |
+| id | `string` | ✓ | Call identifier |
+| name | `string` | ✓ | Tool name |
+| raw | `string` | ✗ | Raw call text (optional) |
+| invoke | `() => Promise<unknown>` | ✗ | Executes the tool handler (present when a matching handler was provided) |
 
 ## Throws
 
@@ -204,11 +139,7 @@ const result = completion({
     handler: async (args) => {
       return { temperature: 22, condition: "sunny" };
     }
-  }],
-  generationParams: {
-    temp: 0.7,
-    top_p: 0.9,
-  }
+  }]
 });
 
 for await (const token of result.tokenStream) {

@@ -1,0 +1,102 @@
+# End-to-end + determinism check for the API reference generation pipeline.
+#
+# Runs on any PR that touches the pipeline itself (`docs/website/scripts/**`),
+# its templates, or the SDK source. Ensures Bruno's acceptance criteria stay
+# green:
+#
+#   1. Pipeline executes cleanly from a fresh checkout (no manual setup).
+#   2. api-data.json + every MDX page is produced.
+#   3. Output is deterministic: running twice with identical source produces
+#      byte-identical api-data.json.
+
+name: Docs API Pipeline End-to-End
+
+on:
+  pull_request:
+    paths:
+      - "docs/website/scripts/**"
+      - "docs/website/package.json"
+      - "docs/website/package-lock.json"
+      - "packages/sdk/**"
+      - ".github/workflows/docs-api-pipeline-e2e.yml"
+    branches:
+      - main
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: docs-api-e2e-${{ github.event.pull_request.number || github.sha }}
+  cancel-in-progress: true
+
+jobs:
+  e2e:
+    name: End-to-end + determinism
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    defaults:
+      run:
+        working-directory: docs/website
+    env:
+      # Reproducible timestamp so ApiData.generatedAt is identical on repeat
+      # runs. Also doubles as a check that SOURCE_DATE_EPOCH support works.
+      SOURCE_DATE_EPOCH: "1704067200" # 2024-01-01T00:00:00Z
+    steps:
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # 6.0.2
+
+      - uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6 # 2.2.0
+        with:
+          bun-version: latest
+
+      - name: Install docs website deps
+        run: bun install
+
+      - name: Install SDK deps
+        working-directory: packages/sdk
+        run: bun install
+
+      - name: First generation run
+        env:
+          SDK_PATH: ${{ github.workspace }}/packages/sdk
+        run: bun run docs:gen-api-dev --force-extract --no-ai
+
+      - name: Snapshot first run output
+        run: |
+          cp scripts/api-docs/api-data.json /tmp/api-data-run1.json
+          tar -cf /tmp/dev-run1.tar content/docs/dev/sdk/api
+
+      - name: Second generation run (from scratch)
+        env:
+          SDK_PATH: ${{ github.workspace }}/packages/sdk
+        run: bun run docs:gen-api-dev --force-extract --no-ai
+
+      - name: Assert api-data.json is byte-identical across runs
+        run: |
+          diff -u /tmp/api-data-run1.json scripts/api-docs/api-data.json || {
+            echo "::error::api-data.json differs across repeat runs (non-deterministic pipeline)"
+            exit 1
+          }
+          echo "api-data.json is byte-identical"
+
+      - name: Assert dev MDX tree is byte-identical across runs
+        run: |
+          tar -cf /tmp/dev-run2.tar content/docs/dev/sdk/api
+          cmp /tmp/dev-run1.tar /tmp/dev-run2.tar || {
+            echo "::error::Dev MDX output differs across repeat runs (non-deterministic rendering)"
+            exit 1
+          }
+          echo "MDX output is byte-identical"
+
+      - name: Assert required output files exist
+        run: |
+          test -f scripts/api-docs/api-data.json
+          test -f content/docs/dev/sdk/api/index.mdx
+          test -f content/docs/dev/sdk/api/errors.mdx
+          test -f content/docs/dev/sdk/api/shared-types.mdx
+          FUNCTION_COUNT=$(find content/docs/dev/sdk/api -name '*.mdx' | wc -l)
+          echo "Generated MDX files: $FUNCTION_COUNT"
+          [ "$FUNCTION_COUNT" -ge 40 ] || {
+            echo "::error::Expected at least 40 MDX files, got $FUNCTION_COUNT"
+            exit 1
+          }

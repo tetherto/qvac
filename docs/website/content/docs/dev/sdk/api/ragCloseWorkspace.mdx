@@ -12,11 +12,26 @@ Releases Corestore, HyperDB adapter, and RAG instance. Workspace data remains on
 
 ## Parameters
 
-| Name | Type | Required? | Default | Description |
-| --- | --- | :---: | --- | --- |
-| params.workspace | `string` | ✗ | `"default"` | Workspace to close |
-| params.deleteOnClose | `boolean` | ✗ | `false` | If true, deletes workspace data from disk after closing |
-| options | [`RPCOptions`](../index#rpcoptions) | ✗ | — | Optional RPC transport options |
+| Name | Type | Required? | Description |
+| --- | --- | :---: | --- |
+| params | `RagCloseWorkspaceParams` | ✗ | The parameters for closing |
+| options | `RPCOptions` | ✗ | Optional RPC options (timeout, profiling, force new connection, etc.). |
+
+### `params`
+
+| Field | Type | Required? | Description |
+| --- | --- | :---: | --- |
+| deleteOnClose | `boolean` | ✗ | If true, deletes the workspace data from disk after closing (default: false) |
+| workspace | `string` | ✗ | Name of the workspace to close (default: "default") |
+
+### `options`
+
+| Field | Type | Required? | Description |
+| --- | --- | :---: | --- |
+| forceNewConnection | `boolean` | ✗ | When `true`, skip any cached RPC connection and open a fresh one for this call. |
+| healthCheckTimeout | `number` | ✗ | Timeout in milliseconds for the health-check probe that precedes the RPC call. |
+| profiling | `\{ enabled?: boolean; includeServerBreakdown?: boolean; mode?: "summary" \| "verbose" \}` | ✗ | Per-call profiler configuration; when present, overrides the SDK's global profiler settings for this request. |
+| timeout | `number` | ✗ | Per-call RPC timeout in milliseconds; overrides the SDK-level default for this request only. |
 
 ## Returns
 
@@ -26,12 +41,13 @@ Releases Corestore, HyperDB adapter, and RAG instance. Workspace data remains on
 
 | Error | When |
 | --- | --- |
+| `RAGCloseWorkspaceFailedError` | When the operation fails |
 | `RAG_WORKSPACE_CLOSE_FAILED` | The close operation fails |
 
 ## Example
 
 ```typescript
-// Close a workspace
+// Close a specific workspace
 await ragCloseWorkspace({ workspace: "my-docs" });
 
 // Close and delete in one call

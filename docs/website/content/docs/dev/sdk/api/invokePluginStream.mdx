@@ -5,18 +5,32 @@ description: Invoke a streaming plugin handler.
 ---
 
 ```ts
-function invokePluginStream<TResponse = unknown, TParams = unknown>(
-  options: InvokePluginOptions<TParams>,
-  rpcOptions?: RPCOptions
-): AsyncGenerator<TResponse>;
+function invokePluginStream(options: InvokePluginOptions<TParams>, rpcOptions?: RPCOptions): AsyncGenerator<TResponse>;
 ```
 
 ## Parameters
 
 | Name | Type | Required? | Description |
 | --- | --- | :---: | --- |
-| options | [`InvokePluginOptions`](../invokePlugin#invokepluginoptions) | ✓ | The invocation options (same as [`invokePlugin()`](../invokePlugin)) |
-| rpcOptions | [`RPCOptions`](../index#rpcoptions) | ✗ | Optional RPC transport options |
+| options | `InvokePluginOptions<TParams>` | ✓ | Invocation payload. |
+| rpcOptions | [`RPCOptions`](#rpcoptions) | ✗ | Optional RPC options (timeout, profiling, force new connection, etc.). |
+
+### `InvokePluginOptions`
+
+| Field | Type | Required? | Description |
+| --- | --- | :---: | --- |
+| modelId | `string` | ✓ | — |
+| handler | `string` | ✓ | — |
+| params | `TParams` | ✓ | — |
+
+### `rpcOptions`
+
+| Field | Type | Required? | Description |
+| --- | --- | :---: | --- |
+| forceNewConnection | `boolean` | ✗ | When `true`, skip any cached RPC connection and open a fresh one for this call. |
+| healthCheckTimeout | `number` | ✗ | Timeout in milliseconds for the health-check probe that precedes the RPC call. |
+| profiling | `\{ enabled?: boolean; includeServerBreakdown?: boolean; mode?: "summary" \| "verbose" \}` | ✗ | Per-call profiler configuration; when present, overrides the SDK's global profiler settings for this request. |
+| timeout | `number` | ✗ | Per-call RPC timeout in milliseconds; overrides the SDK-level default for this request only. |
 
 ## Returns
 
@@ -26,6 +40,7 @@ function invokePluginStream<TResponse = unknown, TParams = unknown>(
 
 | Error | When |
 | --- | --- |
+| `QvacErrorBase` | When an intermediate response has the wrong type (`InvalidResponseError`) or the RPC layer fails. |
 | `INVALID_RESPONSE_TYPE` | A chunk's type does not match expected `"pluginInvokeStream"` |
 
 ## Example

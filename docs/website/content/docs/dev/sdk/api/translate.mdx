@@ -5,27 +5,35 @@ description: Translates text from one language to another using a specified tran
 ---
 
 ```ts
-function translate(params: TranslateClientParams): {
-  tokenStream: AsyncGenerator<string>;
-  text: Promise<string>;
-  stats: Promise<TranslationStats | undefined>;
-};
+function translate(params: TranslateClientParams, options?: RPCOptions): { stats: Promise<{ cacheTokens?: number; decodeTime?: number; encodeTime?: number; timeToFirstToken?: number; tokensPerSecond?: number; totalTime?: number; totalTokens?: number } | undefined>; text: Promise<string>; tokenStream: AsyncGenerator<string> };
 ```
 
 Supports both NMT (Neural Machine Translation) and LLM models.
 
 ## Parameters
 
-| Name | Type | Required? | Default | Description |
-| --- | --- | :---: | --- | --- |
-| params.modelId | `string` | ✓ | — | The identifier of the translation model |
-| params.text | `string \| string[]` | ✓ | — | The input text(s) to translate. NMT supports array; LLM only string. |
-| params.modelType | `"nmt" \| "llm"` | ✓ | — | The type of translation model |
-| params.stream | `boolean` | ✗ | `true` | Whether to stream tokens or return complete response |
-| params.from | `string` | ✗ | auto-detect | Source language code (LLM only) |
-| params.to | `string` | ✓ (LLM) | — | Target language code (LLM only) |
-| params.context | `string` | ✗ | — | Additional context for translation (LLM only) |
-| options | [`RPCOptions`](../index#rpcoptions) | ✗ | — | Optional RPC transport options |
+| Name | Type | Required? | Description |
+| --- | --- | :---: | --- |
+| params | [`TranslateClientParams`](#translateclientparams) | ✓ | Translation configuration object |
+| options | `RPCOptions` | ✗ | Optional RPC options (timeout, profiling, force new connection, etc.). |
+
+### `TranslateClientParams`
+
+| Field | Type | Required? | Description |
+| --- | --- | :---: | --- |
+| modelId | `string` | ✓ | — |
+| text | `string \| string[]` | ✓ | — |
+| stream | `boolean` | ✓ | — |
+| modelType | `"llamacpp-completion" \| "nmtcpp-translation" \| "llm" \| "nmt"` | ✓ | — |
+
+### `options`
+
+| Field | Type | Required? | Description |
+| --- | --- | :---: | --- |
+| forceNewConnection | `boolean` | ✗ | When `true`, skip any cached RPC connection and open a fresh one for this call. |
+| healthCheckTimeout | `number` | ✗ | Timeout in milliseconds for the health-check probe that precedes the RPC call. |
+| profiling | `\{ enabled?: boolean; includeServerBreakdown?: boolean; mode?: "summary" \| "verbose" \}` | ✗ | Per-call profiler configuration; when present, overrides the SDK's global profiler settings for this request. |
+| timeout | `number` | ✗ | Per-call RPC timeout in milliseconds; overrides the SDK-level default for this request only. |
 
 ## Returns
 
@@ -33,21 +41,27 @@ Supports both NMT (Neural Machine Translation) and LLM models.
 
 | Field | Type | Description |
 | --- | --- | --- |
-| tokenStream | `AsyncGenerator<string>` | Stream of translated tokens |
+| stats | `Promise<\{ cacheTokens?: number; decodeTime?: number; encodeTime?: number; timeToFirstToken?: number; tokensPerSecond?: number; totalTime?: number; totalTokens?: number \} \| undefined>` | Translation statistics |
 | text | `Promise<string>` | Complete translated text |
-| stats | `Promise<`[`TranslationStats`](#translationstats) `\| undefined>` | Translation statistics |
+| tokenStream | `AsyncGenerator<string>` | Stream of translated tokens |
 
-### `TranslationStats`
+### `stats`
 
-| Field | Type | Description |
-| --- | --- | --- |
-| processedTokens | `number` | Number of tokens processed |
-| processingTime | `number` | Processing time in milliseconds |
+| Field | Type | Required? | Description |
+| --- | --- | :---: | --- |
+| cacheTokens | `number` | ✗ | Number of tokens served from the KV cache. |
+| decodeTime | `number` | ✗ | — |
+| encodeTime | `number` | ✗ | — |
+| timeToFirstToken | `number` | ✗ | Time to first token in milliseconds. |
+| tokensPerSecond | `number` | ✗ | Tokens generated per second. |
+| totalTime | `number` | ✗ | — |
+| totalTokens | `number` | ✗ | — |
 
 ## Throws
 
 | Error | When |
 | --- | --- |
+| `QvacErrorBase` | When translation fails with an error message or when language detection fails |
 | `TRANSLATION_FAILED` | Translation fails |
 
 ## Example
@@ -55,23 +69,23 @@ Supports both NMT (Neural Machine Translation) and LLM models.
 ```typescript
 // Streaming mode (default)
 const result = translate({
-  modelId: "nmt-model",
+  modelId: "modelId",
   text: "Hello world",
   from: "en",
-  to: "es",
+  to: "es"
   modelType: "llm",
 });
 
 for await (const token of result.tokenStream) {
-  process.stdout.write(token);
+  console.log(token);
 }
 
 // Non-streaming mode
 const response = translate({
-  modelId: "nmt-model",
+  modelId: "modelId",
   text: "Hello world",
   from: "en",
-  to: "es",
+  to: "es"
   modelType: "llm",
   stream: false,
 });

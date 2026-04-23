@@ -1,7 +1,7 @@
 ---
 title: "getModelByName( )"
 titleStyle: code
-description: Retrieves a model constant from the built-in registry by its human-readable name.
+description: Looks up a model in the built-in catalog by its constant name.
 ---
 
 ```ts
@@ -12,30 +12,11 @@ function getModelByName(name: string): RegistryItem | undefined;
 
 | Name | Type | Required? | Description |
 | --- | --- | :---: | --- |
-| name | `string` | ✓ | The human-readable model name (e.g., `"Llama 3.2 3B Q4"`) |
+| name | `string` | ✓ | The model constant name (e.g. `"WHISPER_TINY"`) to look up. |
 
 ## Returns
 
-[`RegistryItem`](#registryitem) ` | undefined` — The matching model constant, or `undefined` if not found.
-
-### `RegistryItem`
-
-| Field | Type | Description |
-| --- | --- | --- |
-| name | `string` | Human-readable model name |
-| registryPath | `string` | Registry path |
-| registrySource | `string` | Registry source |
-| blobCoreKey | `string` | Hyperdrive blob core key |
-| blobBlockOffset | `number` | Blob block offset |
-| blobBlockLength | `number` | Blob block length |
-| blobByteOffset | `number` | Blob byte offset |
-| modelId | `string` | Unique model identifier |
-| addon | `"llm" \| "whisper" \| "embeddings" \| "nmt" \| "vad" \| "tts" \| "ocr" \| "other"` | Model addon type |
-| expectedSize | `number` | Expected file size in bytes |
-| sha256Checksum | `string` | SHA-256 checksum |
-| engine | `string` | Inference engine |
-| quantization | `string` | Quantization level |
-| params | `string` | Model parameter count |
+[`RegistryItem`](../shared-types#registryitem) ` | undefined` — The matching model constant, or `undefined` if not found.
 
 ## Example
 
