@@ -72,7 +72,6 @@ class RegistryService extends ReadyResource {
 
     this.blobsStore = this.store.namespace('blobs')
     this.blobsCores = new Map()
-    this._peerConnectionCounts = new Map()
     this._indexerMonitor = null
     this._mirroredCoreIds = new Set()
     this.blindPeering = null
@@ -155,11 +154,8 @@ class RegistryService extends ReadyResource {
     this.swarm.on('connection', (conn, peerInfo) => {
       const peerKey = peerInfo?.publicKey ? IdEnc.normalize(peerInfo.publicKey) : null
 
-      if (peerKey) this._trackPeerConnection(peerKey)
-
       this.logger.info({ peer: peerKey || 'unknown' }, 'Swarm connection opened')
       conn.on('close', () => {
-        if (peerKey) this._untrackPeerConnection(peerKey)
         this.logger.info({ peer: peerKey || 'unknown' }, 'Swarm connection closed')
       })
 
@@ -343,7 +339,6 @@ class RegistryService extends ReadyResource {
       })
     }
     this.blobsCores.clear()
-    this._peerConnectionCounts.clear()
     this._mirroredCoreIds.clear()
 
     this.logger.info('RegistryService: closed')
@@ -886,34 +881,6 @@ class RegistryService extends ReadyResource {
     }
 
     this.logger.info('Indexer status confirmed')
-  }
-
-  _trackPeerConnection (peerKey) {
-    const current = this._peerConnectionCounts.get(peerKey) || 0
-    this._peerConnectionCounts.set(peerKey, current + 1)
-  }
-
-  _untrackPeerConnection (peerKey) {
-    const current = this._peerConnectionCounts.get(peerKey) || 0
-    if (current <= 1) {
-      this._peerConnectionCounts.delete(peerKey)
-      return
-    }
-
-    this._peerConnectionCounts.set(peerKey, current - 1)
-  }
-
-  getConfiguredBlindPeerKeys () {
-    return [...new Set(this.blindPeerKeys)]
-  }
-
-  isBlindPeerConnected (peerKey) {
-    return (this._peerConnectionCounts.get(peerKey) || 0) > 0
-  }
-
-  getConnectedBlindPeerKeys () {
-    return this.getConfiguredBlindPeerKeys()
-      .filter(peerKey => this.isBlindPeerConnected(peerKey))
   }
 
   async _downloadArtifact (sourceInfo, localPath) {

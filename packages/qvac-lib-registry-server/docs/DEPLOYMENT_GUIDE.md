@@ -539,10 +539,10 @@ Four layers of operational visibility, each independently deployable.
 
 The registry server exposes Prometheus metrics via an HTTP endpoint bound to `127.0.0.1`.
 
-**Start with metrics enabled (default port 9090):**
+**Start with metrics enabled (default port 9210):**
 
 ```bash
-node scripts/bin.js run --storage ./corestore --metrics-port 9090
+node scripts/bin.js run --storage ./corestore --metrics-port 9210
 ```
 
 **Or disable metrics:**
@@ -553,7 +553,7 @@ node scripts/bin.js run --storage ./corestore --metrics-port 0
 
 **What is exposed:**
 
-- **Holepunch P2P metrics** (via `hypercore-stats`, `hyperswarm-stats`, `hypermetrics`): core stats, swarm connections, DHT, UDX bytes/packets, per-core upload/download counters.
+- **Holepunch P2P metrics** (via `hypercore-stats`, `hyperswarm-stats`): aggregate core stats, swarm connections, DHT activity, UDX bytes/packets. Per-core labeled metrics are not exposed — `hypermetrics` is abandoned and incompatible with Hypercore v11, so per-core visibility is provided by the QVAC-specific `registry_blob_core_*` / `registry_view_core_*` gauges below.
 - **QVAC-specific metrics:**
 
 | Metric | Type | Description |
