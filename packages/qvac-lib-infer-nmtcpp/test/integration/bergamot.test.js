@@ -1,5 +1,7 @@
 'use strict'
 
+/* global Bare */
+
 /**
  * Bergamot Backend Integration Test
  *
@@ -13,6 +15,15 @@
  * Usage:
  *   bare test/integration/bergamot.test.js
  */
+
+// Guard against Bare's default abort() on unhandled promise rejections.
+// Without this, a transient network error during model fetch would
+// SIGABRT the process (see notes in indictrans.test.js and pivot-bergamot.test.js).
+if (typeof Bare !== 'undefined' && Bare.on) {
+  Bare.on('unhandledRejection', (err) => {
+    console.error('[bergamot] Unhandled rejection:', err && (err.stack || err.message || err))
+  })
+}
 
 const test = require('brittle')
 const path = require('bare-path')
