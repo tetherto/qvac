@@ -25,7 +25,6 @@ import {
 
 const SCRIPT_DIR = path.dirname(fileURLToPath(import.meta.url));
 const API_DATA_PATH = path.join(SCRIPT_DIR, "api-data.json");
-const TYPEDOC_JSON_PATH = path.join(SCRIPT_DIR, "typedoc.json");
 const EXTRACT_SCRIPT_PATH = fileURLToPath(import.meta.url);
 
 // ---------------------------------------------------------------------------
@@ -167,18 +166,6 @@ export async function extractApiData(
   }
 
   console.log(`✓ TypeDoc analysis complete`);
-
-  // Emit raw TypeDoc reflection alongside our opinionated ApiData. Useful
-  // for interop (external doc renderers, API linters, codegen) that want
-  // the complete structural tree without our rendering-oriented mapping.
-  // Additive — does not affect the ApiData pipeline.
-  try {
-    await app.generateJson(project, TYPEDOC_JSON_PATH);
-    console.log(`\u2713 Wrote ${TYPEDOC_JSON_PATH}`);
-  } catch (err) {
-    const msg = err instanceof Error ? err.message : String(err);
-    console.log(`\u26a0\ufe0f  TypeDoc JSON emission failed (non-fatal): ${msg}`);
-  }
 
   buildTypeMap(project);
   initTsProgram(tsconfigPath);
@@ -2573,17 +2560,6 @@ function populateTypeRefs(apiData: ApiData): void {
       }
     }
   }
-}
-
-function formatSignature(signature: any, displayName?: string): string {
-  const params = (signature.parameters || [])
-    .map(
-      (p: any) =>
-        `${p.name}${p.flags?.isOptional ? "?" : ""}: ${formatType(p.type)}`,
-    )
-    .join(", ");
-  const name = displayName ?? signature.name;
-  return `function ${name}(${params}): ${formatType(signature.type)};`;
 }
 
 /**
