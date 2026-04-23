@@ -5,6 +5,40 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.1.1]
+
+Adds incremental (streaming) transcription for BCI neural signals, closing the main known limitation of `0.1.0`. Implemented entirely in JavaScript as a sliding-window driver over the existing `runJob` entrypoint — no native addon or binding changes.
+
+## Features
+
+### Streaming Transcription API
+
+New `BCIWhispercpp#transcribeStream(neuralStream, streamOpts)` alongside the existing batch `transcribe()`. Returns the standard `QvacResponse` shape, so consumers use `response.onUpdate(cb)` for incremental outputs and `response.await()` for the final transcript. Input can be an async iterable of `Uint8Array` chunks, a single `Uint8Array`, or a chunk array.
+
+```js
+const response = await bci.transcribeStream(neuralChunkStream, {
+  windowTimesteps: 1500, // ~30s window
+  hopTimesteps: 500,     // ~10s hop
+  emit: 'delta'          // or 'full'
+})
+response.onUpdate(segments => {
+  for (const s of segments) console.log(s.windowStartTimestep, s.t0, s.t1, s.text)
+})
+```
+
+- `emit:'delta'` (default) emits the trimmed native segments for the newly-discovered tail; native fields (`text`, `t0`, `t1`, ...) are preserved and each segment is annotated with `windowStartTimestep` so window-local timestamps can be mapped to the stream timeline.
+- `emit:'full'` emits a single `{ text }` entry with the full running transcript (no per-segment timing).
+
+Streaming is mutually exclusive with `transcribe()`. `cancel()` / `unload()` / `destroy()` are stream-aware and fully unwind any in-flight window decode before tearing down the addon.
+
+### New Error Codes
+
+`STREAM_ALREADY_ACTIVE`, `INVALID_STREAM_INPUT`, `INVALID_STREAM_HEADER`, and `WINDOW_TOO_LARGE` surface stream-specific failures with typed errors. Window size is validated against the encoder's 3000-frame ceiling.
+
+### Tests & Example
+
+New `test:unit` script with 21 unit tests for the word-level stitcher, plus three integration tests covering single-window, multi-window, and incremental emission. `examples/transcribe-stream-neural.js` demonstrates end-to-end chunked streaming.
+
 ## [0.1.0]
 
 Initial POC release of `@qvac/bci-whispercpp`, a brain-computer-interface neural
