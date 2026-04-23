@@ -174,6 +174,48 @@ jobs:
         working-directory: ${{ env.PKG_DIR }}
         run: bare-make build
 
+      - name: Dump build context on failure
+        if: failure()
+        shell: bash
+        working-directory: ${{ env.PKG_DIR }}
+        run: |
+          echo "===== Toolchain identity ====="
+          echo "uname:    $(uname -a 2>/dev/null || true)"
+          echo "cmake:    $(cmake --version 2>/dev/null | head -1 || true)"
+          echo "cc:       $(${CC:-cc} --version 2>/dev/null | head -1 || true)"
+          echo "cxx:      $(${CXX:-c++} --version 2>/dev/null | head -1 || true)"
+          echo "VCPKG_ROOT=${VCPKG_ROOT:-<unset>}"
+          echo ""
+          echo "===== build/ tree (top 2 levels) ====="
+          find build -maxdepth 2 -mindepth 1 -print 2>/dev/null | head -100 || true
+          echo ""
+          echo "===== CMake configure logs ====="
+          for f in build/CMakeFiles/CMakeOutput.log build/CMakeFiles/CMakeError.log build/CMakeFiles/CMakeConfigureLog.yaml; do
+            if [ -f "$f" ]; then
+              echo "----- $f (tail 200) -----"
+              tail -200 "$f"
+              echo ""
+            fi
+          done
+          echo ""
+          echo "===== Any *.log under build/ ====="
+          find build -name "*.log" -print 2>/dev/null | while read -r logf; do
+            echo "----- $logf (tail 100) -----"
+            tail -100 "$logf"
+            echo ""
+          done
+          echo ""
+          echo "===== vcpkg buildtrees logs (if any) ====="
+          if [ -n "${VCPKG_ROOT:-}" ] && [ -d "${VCPKG_ROOT}/buildtrees" ]; then
+            find "${VCPKG_ROOT}/buildtrees" -maxdepth 3 -name "*.log" -print 2>/dev/null | head -20 | while read -r logf; do
+              echo "----- $logf (tail 100) -----"
+              tail -100 "$logf"
+              echo ""
+            done
+          else
+            echo "No vcpkg buildtrees directory under VCPKG_ROOT"
+          fi
+
       - name: Install prebuild
         working-directory: ${{ env.PKG_DIR }}
         run: bare-make install
