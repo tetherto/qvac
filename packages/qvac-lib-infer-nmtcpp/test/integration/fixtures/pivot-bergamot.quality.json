@@ -1,0 +1,16 @@
+[
+  {
+    "source": "Buenos días, ¿cómo estás hoy?",
+    "src_lang": "es",
+    "dst_lang": "it",
+    "reference": "Buongiorno, come stai oggi?",
+    "notes": "placeholder baseline — verify with native speaker"
+  },
+  {
+    "source": "Bonjour, comment allez-vous aujourd'hui?",
+    "src_lang": "fr",
+    "dst_lang": "es",
+    "reference": "Hola, ¿cómo está usted hoy?",
+    "notes": "placeholder baseline — verify with native speaker"
+  }
+]

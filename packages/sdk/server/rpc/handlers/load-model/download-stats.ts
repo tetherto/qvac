@@ -1,5 +1,5 @@
 import type { ModelProgressUpdate } from "@/schemas";
-import type { DownloadStats, DownloadResult, DownloadMetricsHooks } from "./types";
+import type { DownloadStats, DownloadResult, DownloadHooks, ResolveResult } from "./types";
 import { downloadModelFromHttp } from "./http";
 import { downloadModelFromRegistry } from "./registry";
 import { downloadModelFromHyperdrive } from "./hyperdrive";
@@ -9,6 +9,7 @@ interface StatsCollector {
   maxBytesDownloaded: number;
   startTimeMs: number;
   cacheHit: boolean | undefined;
+  sharedTransfer: boolean;
   checksumValidationTimeMsTotal: number;
 }
 
@@ -17,11 +18,12 @@ function createStatsCollector(): StatsCollector {
     maxBytesDownloaded: 0,
     startTimeMs: nowMs(),
     cacheHit: undefined,
+    sharedTransfer: false,
     checksumValidationTimeMsTotal: 0,
   };
 }
 
-function createHooks(collector: StatsCollector): DownloadMetricsHooks {
+function createStatsHooks(collector: StatsCollector): DownloadHooks {
   return {
     markCacheHit: () => {
       if (collector.cacheHit === undefined) {
@@ -31,6 +33,9 @@ function createHooks(collector: StatsCollector): DownloadMetricsHooks {
     },
     markCacheMiss: () => {
       collector.cacheHit = false;
+    },
+    markSharedTransfer: () => {
+      collector.sharedTransfer = true;
     },
     addChecksumValidationTimeMs: (durationMs: number) => {
       collector.checksumValidationTimeMsTotal += durationMs;
@@ -46,7 +51,7 @@ function wrapProgressCallback(
     // Don't track bytes for cache hits (they're not real network transfer)
     if (collector.cacheHit !== true) {
       const downloaded =
-        progress.onnxInfo?.overallDownloaded ??
+        progress.fileSetInfo?.overallDownloaded ??
         progress.shardInfo?.overallDownloaded ??
         progress.downloaded ??
         0;
@@ -67,6 +72,10 @@ function computeStats(collector: StatsCollector): DownloadStats | undefined {
 
   const stats: DownloadStats = {};
 
+  if (collector.sharedTransfer) {
+    stats.sharedTransfer = true;
+  }
+
   if (collector.cacheHit !== undefined) {
     stats.cacheHit = collector.cacheHit;
   }
@@ -76,6 +85,13 @@ function computeStats(collector: StatsCollector): DownloadStats | undefined {
   }
 
   if (collector.cacheHit === true) {
+    return Object.keys(stats).length > 0 ? stats : undefined;
+  }
+
+  if (collector.sharedTransfer) {
+    if (downloadTimeMs > 0) {
+      stats.downloadTimeMs = downloadTimeMs;
+    }
     return Object.keys(stats).length > 0 ? stats : undefined;
   }
 
@@ -94,9 +110,10 @@ function computeStats(collector: StatsCollector): DownloadStats | undefined {
 export async function downloadModelFromHttpWithStats(
   url: string,
   progressCallback?: (progress: ModelProgressUpdate) => void,
+  downloadHooks?: DownloadHooks,
 ): Promise<DownloadResult> {
   const collector = createStatsCollector();
-  const hooks = createHooks(collector);
+  const hooks: DownloadHooks = { ...downloadHooks, ...createStatsHooks(collector) };
   const wrappedCallback = wrapProgressCallback(collector, progressCallback);
   const path = await downloadModelFromHttp(url, wrappedCallback, hooks);
   const stats = computeStats(collector);
@@ -108,9 +125,10 @@ export async function downloadModelFromRegistryWithStats(
   registrySource: string,
   progressCallback?: (progress: ModelProgressUpdate) => void,
   expectedChecksum?: string,
+  downloadHooks?: DownloadHooks,
 ): Promise<DownloadResult> {
   const collector = createStatsCollector();
-  const hooks = createHooks(collector);
+  const hooks: DownloadHooks = { ...downloadHooks, ...createStatsHooks(collector) };
   const wrappedCallback = wrapProgressCallback(collector, progressCallback);
   const path = await downloadModelFromRegistry(
     registryPath,
@@ -128,9 +146,10 @@ export async function downloadModelFromHyperdriveWithStats(
   modelFileName: string,
   seed?: boolean,
   progressCallback?: (progress: ModelProgressUpdate) => void,
+  downloadHooks?: DownloadHooks,
 ): Promise<DownloadResult> {
   const collector = createStatsCollector();
-  const hooks = createHooks(collector);
+  const hooks: DownloadHooks = { ...downloadHooks, ...createStatsHooks(collector) };
   const wrappedCallback = wrapProgressCallback(collector, progressCallback);
   const path = await downloadModelFromHyperdrive(
     hyperdriveKey,
@@ -142,3 +161,45 @@ export async function downloadModelFromHyperdriveWithStats(
   const stats = computeStats(collector);
   return stats ? { path, stats } : { path };
 }
+
+export function mergeDownloadStats(
+  results: ResolveResult[],
+): DownloadStats | undefined {
+  const stats = results
+    .map((r) => r.downloadStats)
+    .filter((s): s is DownloadStats => s !== undefined);
+
+  if (stats.length === 0) return undefined;
+
+  const downloadTimeMs = Math.max(
+    ...stats.map((s) => s.downloadTimeMs ?? 0),
+  );
+
+  const totalBytesDownloaded = stats.reduce(
+    (sum, s) => sum + (s.totalBytesDownloaded ?? 0),
+    0,
+  );
+
+  const checksumValidationTimeMs = stats.reduce(
+    (sum, s) => sum + (s.checksumValidationTimeMs ?? 0),
+    0,
+  );
+
+  const cacheHitValues = stats
+    .map((s) => s.cacheHit)
+    .filter((v): v is boolean => v !== undefined);
+
+  const merged: DownloadStats = {};
+
+  if (downloadTimeMs > 0) merged.downloadTimeMs = downloadTimeMs;
+  if (totalBytesDownloaded > 0) merged.totalBytesDownloaded = totalBytesDownloaded;
+  if (downloadTimeMs > 0 && totalBytesDownloaded > 0) {
+    merged.downloadSpeedBps = (totalBytesDownloaded * 1000) / downloadTimeMs;
+  }
+  if (checksumValidationTimeMs > 0) merged.checksumValidationTimeMs = checksumValidationTimeMs;
+  if (cacheHitValues.length > 0) merged.cacheHit = cacheHitValues.every(Boolean);
+  if (stats.some((s) => s.sharedTransfer)) merged.sharedTransfer = true;
+
+  return Object.keys(merged).length > 0 ? merged : undefined;
+}
+

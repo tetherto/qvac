@@ -28,6 +28,8 @@ const {
   platform
 } = require('./utils')
 
+const BERGAMOT_FIXTURE = path.resolve(__dirname, 'fixtures/bergamot.quality.json')
+
 /**
  * Device configurations for testing
  * - Mobile (iOS/Android): Both CPU and GPU
@@ -109,7 +111,11 @@ for (const deviceConfig of DEVICE_CONFIGS) {
       const addonStats = response.stats || {}
       t.comment(`${label} Native addon stats: ` + JSON.stringify(addonStats))
       const metrics = perfCollector.getMetrics(testSentence, addonStats)
-      t.comment(formatPerformanceMetrics(`[Bergamot] ${label}`, metrics))
+      t.comment(formatPerformanceMetrics(`[Bergamot] ${label}`, metrics, {
+        fixturePath: BERGAMOT_FIXTURE,
+        srcLang: 'en',
+        dstLang: 'it'
+      }))
 
       t.ok(metrics.fullOutput.length > 0, `${label} translation should not be empty`)
       t.pass(`${label} Bergamot translation completed successfully`)

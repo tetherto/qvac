@@ -359,6 +359,7 @@ jobs:
           const originalGetEnv = os.getEnv;
           os.getEnv = function(key) {
             if (key === 'CHATTERBOX_VARIANT') return '${{ matrix.variant }}';
+            if (key === 'TTS_INTEGRATION_PROFILE') return 'short';
             return originalGetEnv ? originalGetEnv.call(this, key) : undefined;
           };
           " > test/mobile/inject-env.cjs

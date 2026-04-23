@@ -35,6 +35,23 @@ export type RegistryItem = {
     blobBlockLength: number;
     blobByteOffset: number;
   }[];
+  companionSet?: {
+    setKey: string;
+    primaryKey: string;
+    files: readonly {
+      key: string;
+      registryPath: string;
+      registrySource: string;
+      targetName: string;
+      expectedSize: number;
+      sha256Checksum: string;
+      blobCoreKey: string;
+      blobBlockOffset: number;
+      blobBlockLength: number;
+      blobByteOffset: number;
+      primary?: boolean;
+    }[];
+  };
 };
 
 export type ModelConstant = {

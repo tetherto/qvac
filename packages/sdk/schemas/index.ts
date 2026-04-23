@@ -2,7 +2,16 @@
 export * from "./archive";
 export * from "./cancel";
 export * from "./completion-stream";
-export * from "./tools";
+export * from "./completion-event";
+export {
+  toolSchema,
+  toolCallSchema,
+  toolCallErrorSchema,
+  type Tool,
+  type ToolCall,
+  type ToolCallError,
+  type ToolCallWithCall,
+} from "./tools";
 export * from "./delegate";
 export * from "./delete-cache";
 export * from "./download-asset";

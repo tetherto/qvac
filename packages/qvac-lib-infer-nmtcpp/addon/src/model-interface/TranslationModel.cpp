@@ -49,10 +49,12 @@ BackendType TranslationModel::detectBackendType(const std::string& modelPath) {
         std::string filename = entry.path().filename().string();
         // Check for bergamot model signatures
         if (filename.find(".intgemm") != std::string::npos ||
-            (filename.find("vocab.") != std::string::npos && filename.find(".spm") != std::string::npos)) {
+            (filename.find("vocab.") != std::string::npos &&
+             filename.find(".spm") != std::string::npos)) {
           QLOG(
               qvac_lib_inference_addon_cpp::logger::Priority::INFO,
-              "[TRANSLATION MODEL] Detected Bergamot backend based on model files");
+              "[TRANSLATION MODEL] Detected Bergamot backend based on model "
+              "files");
           return BackendType::BERGAMOT;
         }
       }
@@ -62,14 +64,16 @@ BackendType TranslationModel::detectBackendType(const std::string& modelPath) {
       if (pathStr.find(".intgemm") != std::string::npos) {
         QLOG(
             qvac_lib_inference_addon_cpp::logger::Priority::INFO,
-            "[TRANSLATION MODEL] Detected Bergamot backend based on model filename");
+            "[TRANSLATION MODEL] Detected Bergamot backend based on model "
+            "filename");
         return BackendType::BERGAMOT;
       }
     }
   } catch (const std::exception& e) {
     QLOG(
         qvac_lib_inference_addon_cpp::logger::Priority::WARNING,
-        "[TRANSLATION MODEL] Error during backend detection: " + std::string(e.what()));
+        "[TRANSLATION MODEL] Error during backend detection: " +
+            std::string(e.what()));
   }
 #endif
 
@@ -88,6 +92,33 @@ void TranslationModel::unload() {
 }
 
 void TranslationModel::load() {
+  // Read backend loading config and initialize backends before any model
+  // loading. Keys are preserved in config_ so reload() can re-initialize with
+  // the same backends directory.
+  std::string backendsDir;
+  if (auto it = config_.find("backendsdir"); it != config_.end()) {
+    if (const auto* value = std::get_if<std::string>(&it->second)) {
+      backendsDir = *value;
+    } else {
+      QLOG(
+          qvac_lib_inference_addon_cpp::logger::Priority::WARNING,
+          "[TRANSLATION MODEL] 'backendsdir' config value is not a string; "
+          "ignoring");
+    }
+  }
+  std::string openclCacheDir;
+  if (auto it = config_.find("openclcachedir"); it != config_.end()) {
+    if (const auto* value = std::get_if<std::string>(&it->second)) {
+      openclCacheDir = *value;
+    } else {
+      QLOG(
+          qvac_lib_inference_addon_cpp::logger::Priority::WARNING,
+          "[TRANSLATION MODEL] 'openclcachedir' config value is not a string; "
+          "ignoring");
+    }
+  }
+  backendsHandle_.emplace(backendsDir, openclCacheDir);
+
   QLOG(
       qvac_lib_inference_addon_cpp::logger::Priority::INFO,
       "[TRANSLATION MODEL] modelPath_: " + modelPath_);
@@ -335,10 +366,7 @@ std::any TranslationModel::process(const std::any& input) {
   }
 }
 
-void TranslationModel::cancel() const 
-{
-    reset();
-}
+void TranslationModel::cancel() const { reset(); }
 std::string TranslationModel::processString(const std::string& text) {
 #ifdef HAVE_BERGAMOT
   if (backendType_ == BackendType::BERGAMOT) {
@@ -546,7 +574,8 @@ TranslationModel::getConfig() const {
 }
 
 void TranslationModel::setConfig(
-    std::unordered_map<std::string, std::variant<double, int64_t, std::string>> config) {
+    std::unordered_map<std::string, std::variant<double, int64_t, std::string>>
+        config) {
   config_ = std::move(config);
   updateConfig();
 }

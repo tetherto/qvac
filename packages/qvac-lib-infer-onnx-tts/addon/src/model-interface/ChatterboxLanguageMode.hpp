@@ -6,14 +6,18 @@
 
 namespace qvac::ttslib::chatterbox::lang_mode {
 
-inline bool supportsMultilingualEmbedInputs(const std::vector<std::string> &inputNames) {
-  const bool hasPositionIds = std::find(inputNames.begin(), inputNames.end(), "position_ids") != inputNames.end();
-  const bool hasLanguageId = std::find(inputNames.begin(), inputNames.end(), "language_id") != inputNames.end();
+inline bool
+supportsMultilingualEmbedInputs(const std::vector<std::string> &inputNames) {
+  const bool hasPositionIds = std::find(inputNames.begin(), inputNames.end(),
+                                        "position_ids") != inputNames.end();
+  const bool hasLanguageId = std::find(inputNames.begin(), inputNames.end(),
+                                       "language_id") != inputNames.end();
   return (hasPositionIds && hasLanguageId) || inputNames.size() >= 3;
 }
 
-inline bool shouldUseEnglishMode(const std::string &requestedLanguage,
-                                 const std::vector<std::string> &embedInputNames) {
+inline bool
+shouldUseEnglishMode(const std::string &requestedLanguage,
+                     const std::vector<std::string> &embedInputNames) {
   if (requestedLanguage == "en") {
     return true;
   }

@@ -171,7 +171,6 @@ jobs:
     secrets: inherit
     with:
       workdir: packages/qvac-lib-langdetect-text-cld2
-      repo_name: langdetect-text-cld2
       caller_event_name: ${{ github.event_name }}
 
   publish-feature-gpr:

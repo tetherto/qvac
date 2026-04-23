@@ -248,16 +248,31 @@ jobs:
           fi
 
           awk '
+          /^[[:space:]]*- chrF\+\+: / {
+            last_chrfpp = $0
+            sub(/^.*chrF\+\+: */, "", last_chrfpp)
+            next
+          }
           /^ok [0-9]+ - / {
             name = $0; sub(/^ok [0-9]+ - /, "", name)
             passed++
-            results[++total] = "PASS: " name
+            line = "PASS: " name
+            if (last_chrfpp != "") {
+              line = line "  |  chrF++ = " last_chrfpp
+              last_chrfpp = ""
+            }
+            results[++total] = line
             next
           }
           /^not ok [0-9]+ - / {
             name = $0; sub(/^not ok [0-9]+ - /, "", name)
             failed++
-            results[++total] = "FAIL: " name
+            line = "FAIL: " name
+            if (last_chrfpp != "") {
+              line = line "  |  chrF++ = " last_chrfpp
+              last_chrfpp = ""
+            }
+            results[++total] = line
             capturing = 1
             fail_detail[total] = ""
             next
@@ -336,15 +351,30 @@ jobs:
           $failed = @()
           $failDetails = @{}
           $currentFail = $null
+          $lastChrfpp = $null
 
           foreach ($line in $lines) {
-            if ($line -match '^ok \d+ - (.+)') {
-              $passed += "PASS: $($Matches[1])"
+            if ($line -match '^\s*- chrF\+\+:\s*(.+)$') {
+              $lastChrfpp = $Matches[1].Trim()
+            }
+            elseif ($line -match '^ok \d+ - (.+)') {
+              $name = $Matches[1]
+              if ($lastChrfpp) {
+                $passed += "PASS: $name  |  chrF++ = $lastChrfpp"
+                $lastChrfpp = $null
+              } else {
+                $passed += "PASS: $name"
+              }
               $currentFail = $null
             }
             elseif ($line -match '^not ok \d+ - (.+)') {
               $testName = $Matches[1]
-              $failed += "FAIL: $testName"
+              if ($lastChrfpp) {
+                $failed += "FAIL: $testName  |  chrF++ = $lastChrfpp"
+                $lastChrfpp = $null
+              } else {
+                $failed += "FAIL: $testName"
+              }
               $currentFail = $testName
               $failDetails[$testName] = @()
             }
@@ -392,6 +422,35 @@ jobs:
           Write-Host "::group::Full Raw Test Output (test-output.log)"
           if (Test-Path test-output.log) { Get-Content test-output.log } else { Write-Host "(no test output captured)" }
           Write-Host "::endgroup::"
+
+      - name: Generate HTML performance report
+        if: ${{ always() }}
+        working-directory: ${{ inputs.workdir || env.PKG_DIR }}
+        shell: bash
+        run: |
+          if [ -f test/results/performance-report.json ]; then
+            echo "Found performance-report.json, generating HTML/MD/summary..."
+            node ../../scripts/perf-report/aggregate.js \
+              --dir test/results \
+              --output-html test/results/performance-report.html \
+              --output-json test/results/performance-summary.json \
+              --output test/results/performance-report.md
+          else
+            echo "performance-report.json not found — skipping HTML generation"
+          fi
+
+      - name: Upload performance report
+        if: ${{ always() }}
+        uses: actions/upload-artifact@bbbca2ddaa5d8feaa63e36b76fdaad77386f024f # 7.0.0
+        with:
+          name: perf-report-nmtcpp-${{ matrix.os }}-${{ matrix.arch }}-${{ github.run_number }}
+          path: |
+            ${{ inputs.workdir || env.PKG_DIR }}/test/results/performance-report.json
+            ${{ inputs.workdir || env.PKG_DIR }}/test/results/performance-report.html
+            ${{ inputs.workdir || env.PKG_DIR }}/test/results/performance-summary.json
+            ${{ inputs.workdir || env.PKG_DIR }}/test/results/performance-report.md
+          retention-days: 90
+          if-no-files-found: ignore
 
       - name: Upload test logs
         if: ${{ always() }}
