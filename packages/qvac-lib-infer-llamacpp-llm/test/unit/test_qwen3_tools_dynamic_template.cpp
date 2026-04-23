@@ -47,16 +47,8 @@ protected:
       std::vector<common_chat_tool> tools = {},
       bool addGenerationPrompt = true) {
     common_chat_templates_inputs inputs;
-    int lastUserIdx = -1;
-    for (int i = static_cast<int>(messages.size()) - 1; i >= 0; --i) {
-      if (messages[static_cast<size_t>(i)].role == "user") {
-        lastUserIdx = i;
-        break;
-      }
-    }
     inputs.use_jinja = true;
     inputs.add_generation_prompt = addGenerationPrompt;
-    inputs.chat_template_kwargs["last_user_idx"] = std::to_string(lastUserIdx);
     inputs.messages = std::move(messages);
     inputs.tools = std::move(tools);
     return inputs;
@@ -178,27 +170,6 @@ TEST_F(Qwen3ToolsDynamicTemplateRenderTest, ToolsAfterLastUserMessage) {
       prompt.substr(firstUserPos, assistantPos - firstUserPos);
   EXPECT_EQ(toolsBetweenFirst.find("# Tools"), std::string::npos)
       << "tools block must NOT appear after the first user message";
-}
-
-TEST_F(Qwen3ToolsDynamicTemplateRenderTest, MissingLastUserIdxFallsBackToEnd) {
-  auto inputs = makeInputs(
-      {msg("user", "Hi"),
-       msg("assistant", "Hello!"),
-       msg("user", "What is the weather in Tokyo?")},
-      {weatherTool()});
-  inputs.chat_template_kwargs.erase("last_user_idx");
-
-  std::string prompt = render(inputs);
-
-  auto secondUserPos =
-      prompt.find("<|im_start|>user\nWhat is the weather in Tokyo?<|im_end|>");
-  auto toolsPos = prompt.find("<|im_start|>system\n# Tools");
-
-  ASSERT_NE(secondUserPos, std::string::npos);
-  ASSERT_NE(toolsPos, std::string::npos);
-
-  EXPECT_LT(secondUserPos, toolsPos)
-      << "without last_user_idx, template should fall back to appending tools";
 }
 
 TEST_F(Qwen3ToolsDynamicTemplateRenderTest, ToolResponseMessage) {
