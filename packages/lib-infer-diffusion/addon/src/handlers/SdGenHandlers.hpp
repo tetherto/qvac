@@ -26,6 +26,7 @@ struct SdGenConfig {
   // ── Prompt ────────────────────────────────────────────────────────────────
   std::string prompt;
   std::string negativePrompt;
+  std::string loraPath;
 
   // ── Image dimensions ─────────────────────────────────────────────────────
   int width = 512; // must be a positive multiple of 8
