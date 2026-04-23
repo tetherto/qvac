@@ -239,15 +239,24 @@ function runCometScore (triples, model) {
     return null
   }
 
-  // comet-score output: one "Segment N\tscore: 0.xxxx" line per
-  // input line, plus a final "System score: 0.xxxx" line.
-  const scores = []
+  // comet-score 2.2.x output: one line per MT segment, shaped as
+  //   <mt-filename>\tSegment N\tscore: 0.XXXX
+  // plus a final "System score: 0.XXXX" line. We capture the segment
+  // index so we can place scores back by (captured) index rather than
+  // by stdout line order — safer against any future reordering.
+  const scores = new Array(triples.length).fill(null)
+  let matched = 0
   for (const line of res.stdout.split(/\r?\n/)) {
-    const m = line.match(/^Segment\s+\d+\s+score:\s+(-?\d+(?:\.\d+)?)/)
-    if (m) scores.push(parseFloat(m[1]))
+    const m = line.match(/Segment\s+(\d+)\s+score:\s+(-?\d+(?:\.\d+)?)/)
+    if (!m) continue
+    const idx = parseInt(m[1], 10)
+    if (idx >= 0 && idx < scores.length) {
+      scores[idx] = parseFloat(m[2])
+      matched++
+    }
   }
-  if (scores.length !== triples.length) {
-    console.error(`  comet-score returned ${scores.length} scores, expected ${triples.length}`)
+  if (matched !== triples.length) {
+    console.error(`  comet-score returned ${matched} scores, expected ${triples.length}`)
     console.error(`  stdout preview: ${res.stdout.slice(0, 300)}`)
     return null
   }
