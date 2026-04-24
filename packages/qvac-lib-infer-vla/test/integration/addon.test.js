@@ -142,7 +142,7 @@ function _streamDownload (url, destPath, maxRedirects = 5) {
   const https = require('bare-https')
   return new Promise((resolve, reject) => {
     console.log(`[vla-model] downloading: ${url.substring(0, 60)}...`)
-    const req = https.get(url, (res) => {
+    const req = https.request(url, (res) => {
       if ([301, 302, 307, 308].includes(res.statusCode)) {
         const location = res.headers.location
         if (location && maxRedirects > 0) {
@@ -183,6 +183,7 @@ function _streamDownload (url, destPath, maxRedirects = 5) {
       writeStream.on('error', reject)
     })
     req.on('error', reject)
+    req.end()
   })
 }
 
