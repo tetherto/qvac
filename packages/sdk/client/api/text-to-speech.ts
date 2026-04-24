@@ -54,13 +54,24 @@ class TtsMulticast {
 
   private trimConsumed(): void {
     if (this.subscriberIndexes.length === 0) return;
+    // `Number.POSITIVE_INFINITY` marks an unsubscribed slot; ignore those when
+    // computing how far every live subscriber has advanced.
     const minIndex = Math.min(...this.subscriberIndexes);
+    if (!Number.isFinite(minIndex)) return;
     if (minIndex > 0) {
       this.queue.splice(0, minIndex);
       for (let j = 0; j < this.subscriberIndexes.length; j++) {
-        this.subscriberIndexes[j] = (this.subscriberIndexes[j] ?? 0) - minIndex;
+        const v = this.subscriberIndexes[j] ?? 0;
+        if (Number.isFinite(v)) this.subscriberIndexes[j] = v - minIndex;
       }
     }
+  }
+
+  private unsubscribe(subIdx: number): void {
+    // Park the slot at +Infinity instead of splicing so every other
+    // subscriber's `subIdx` stays valid. `trimConsumed` filters these out.
+    this.subscriberIndexes[subIdx] = Number.POSITIVE_INFINITY;
+    this.trimConsumed();
   }
 
   private async pump(
@@ -85,19 +96,26 @@ class TtsMulticast {
   }
 
   private async *drain(subIdx: number): AsyncGenerator<TtsResponse> {
-    while (true) {
-      while ((this.subscriberIndexes[subIdx] ?? 0) < this.queue.length) {
-        const currentIdx = this.subscriberIndexes[subIdx] ?? 0;
-        const item = this.queue[currentIdx] as TtsResponse;
-        this.subscriberIndexes[subIdx] = currentIdx + 1;
-        this.trimConsumed();
-        yield item;
+    // If the consumer breaks out of a `for await` (or calls `.return()` /
+    // throws), this generator's finally block runs; release the slot so it
+    // no longer pins `trimConsumed`'s min-index and the queue can be GC'd.
+    try {
+      while (true) {
+        while ((this.subscriberIndexes[subIdx] ?? 0) < this.queue.length) {
+          const currentIdx = this.subscriberIndexes[subIdx] ?? 0;
+          const item = this.queue[currentIdx] as TtsResponse;
+          this.subscriberIndexes[subIdx] = currentIdx + 1;
+          this.trimConsumed();
+          yield item;
+        }
+        if (this.fatal) throw this.fatal;
+        if (this.ended) return;
+        await new Promise<void>((resolve) => {
+          this.waiters.push(resolve);
+        });
       }
-      if (this.fatal) throw this.fatal;
-      if (this.ended) return;
-      await new Promise<void>((resolve) => {
-        this.waiters.push(resolve);
-      });
+    } finally {
+      this.unsubscribe(subIdx);
     }
   }
 }
