@@ -381,34 +381,6 @@ jobs:
             exit 1
           fi
 
-      - name: Start TTS Addon server (Windows)
-        if: ${{ matrix.platform == 'win32' }}
-        working-directory: packages/qvac-lib-infer-onnx-tts/benchmarks/server
-        shell: powershell
-        run: |
-          $logPath = Join-Path $PWD "server.log"
-          $errorPath = Join-Path $PWD "server-error.log"
-          $proc = Start-Process -FilePath bare.cmd -ArgumentList "index.js" -WorkingDirectory $PWD -RedirectStandardOutput $logPath -RedirectStandardError $errorPath -PassThru
-          $proc.Id | Out-File -FilePath server.pid -Encoding ascii
-          $healthy = $false
-          for ($i = 0; $i -lt 10; $i++) {
-            Start-Sleep -Seconds 2
-            if ($proc.HasExited) {
-              break
-            }
-            try {
-              Invoke-WebRequest -Uri "http://localhost:8080/" -UseBasicParsing | Out-Null
-              $healthy = $true
-              break
-            } catch {
-            }
-          }
-          if (-not $healthy) {
-            if (Test-Path $logPath) { Get-Content $logPath }
-            if (Test-Path $errorPath) { Get-Content $errorPath }
-            exit 1
-          }
-
       - name: Clean old benchmark results
         working-directory: packages/qvac-lib-infer-onnx-tts
         shell: bash
@@ -416,7 +388,8 @@ jobs:
           rm -rf benchmarks/results/*.json
           rm -rf benchmarks/results/*.md
 
-      - name: Run Supertonic benchmark
+      - name: Run Supertonic benchmark (Unix)
+        if: ${{ matrix.platform != 'win32' }}
         working-directory: packages/qvac-lib-infer-onnx-tts/benchmarks/client
         shell: bash
         env:
@@ -437,6 +410,60 @@ jobs:
         run: |
           python -u -m src.tts.main --config config/config-supertonic.yaml
           rm -rf /tmp/hf_cache || true
+
+      - name: Run Supertonic benchmark (Windows)
+        if: ${{ matrix.platform == 'win32' }}
+        working-directory: packages/qvac-lib-infer-onnx-tts
+        shell: powershell
+        env:
+          PYTHONUNBUFFERED: "1"
+          HF_DATASETS_CACHE: /tmp/hf_cache
+          QVAC_SUPERTONIC_BENCHMARK_ADDON_URL: http://localhost:8080/synthesize-supertonic
+          QVAC_SUPERTONIC_BENCHMARK_PYTHON_URL: http://localhost:8081/synthesize-supertonic
+          QVAC_SUPERTONIC_BENCHMARK_LABEL: ${{ matrix.runner_label }}-${{ matrix.backend }}
+          QVAC_SUPERTONIC_BENCHMARK_RUNNER: ${{ matrix.runner_label }}
+          QVAC_SUPERTONIC_BENCHMARK_DEVICE: ${{ matrix.device_label }}
+          QVAC_SUPERTONIC_BENCHMARK_BACKEND: ${{ matrix.backend }}
+          QVAC_SUPERTONIC_BENCHMARK_MAX_SAMPLES: ${{ needs.context.outputs.max_samples }}
+          QVAC_SUPERTONIC_BENCHMARK_ROUND_TRIP_TEST: ${{ matrix.round_trip_test && needs.context.outputs.round_trip_test != 'false' && 'true' || 'false' }}
+          QVAC_SUPERTONIC_BENCHMARK_WHISPER_MODEL: ${{ needs.context.outputs.whisper_model }}
+          QVAC_SUPERTONIC_BENCHMARK_NUM_RUNS: ${{ needs.context.outputs.num_runs }}
+          QVAC_SUPERTONIC_BENCHMARK_USE_GPU: ${{ matrix.use_gpu && 'true' || 'false' }}
+          QVAC_SUPERTONIC_BENCHMARK_RUN_PYTHON: ${{ needs.context.outputs.run_python != 'false' && matrix.run_python && 'true' || 'false' }}
+        run: |
+          $serverDir = Join-Path $PWD "benchmarks/server"
+          $clientDir = Join-Path $PWD "benchmarks/client"
+          $logPath = Join-Path $serverDir "server.log"
+          $errorPath = Join-Path $serverDir "server-error.log"
+          $proc = Start-Process -FilePath bare.cmd -ArgumentList "index.js" -WorkingDirectory $serverDir -RedirectStandardOutput $logPath -RedirectStandardError $errorPath -PassThru
+          try {
+            $healthy = $false
+            for ($i = 0; $i -lt 15; $i++) {
+              Start-Sleep -Seconds 2
+              if ($proc.HasExited) {
+                break
+              }
+              try {
+                Invoke-WebRequest -Uri "http://localhost:8080/" -UseBasicParsing | Out-Null
+                $healthy = $true
+                break
+              } catch {
+              }
+            }
+
+            if (-not $healthy) {
+              if (Test-Path $logPath) { Get-Content $logPath }
+              if (Test-Path $errorPath) { Get-Content $errorPath }
+              exit 1
+            }
+
+            Push-Location $clientDir
+            python -u -m src.tts.main --config config/config-supertonic.yaml
+            Pop-Location
+          } finally {
+            Stop-Process -Id $proc.Id -Force -ErrorAction SilentlyContinue
+            Remove-Item "$serverDir/server.pid" -ErrorAction SilentlyContinue
+          }
 
       - name: Stop servers (Unix)
         if: ${{ always() && matrix.platform != 'win32' }}
