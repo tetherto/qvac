@@ -325,6 +325,28 @@ jobs:
           sudo chmod -R a+rX /usr/local/aws-cli /usr/local/bin/aws 2>/dev/null || true
           /usr/local/bin/aws --version
 
+      - if: ${{ matrix.platform == 'darwin' && matrix.arch == 'arm64' }}
+        name: Install AWS CLI on macOS (idempotent, covers self-hosted mac-mini-m4)
+        shell: bash
+        run: |
+          if command -v aws >/dev/null 2>&1; then
+            echo "AWS CLI already on PATH"
+            aws --version
+            exit 0
+          fi
+          if [ -x /usr/local/bin/aws ]; then
+            echo "AWS CLI at /usr/local/bin/aws; adding to PATH"
+            echo "/usr/local/bin" >> "$GITHUB_PATH"
+            /usr/local/bin/aws --version
+            exit 0
+          fi
+          echo "Installing AWS CLI v2 for macOS..."
+          curl -sSL "https://awscli.amazonaws.com/AWSCLIV2.pkg" -o /tmp/AWSCLIV2.pkg
+          sudo installer -pkg /tmp/AWSCLIV2.pkg -target /
+          rm -f /tmp/AWSCLIV2.pkg
+          echo "/usr/local/bin" >> "$GITHUB_PATH"
+          /usr/local/bin/aws --version
+
       - name: Configure AWS credentials via OIDC
         # Intel-mac runners use the Apple Paravirtual GPU which has ~1 GB of
         # working set — too small for the 4 GB SmolVLA model. Skip S3 download
