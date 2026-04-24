@@ -40,10 +40,12 @@ export {
   type ModelRegistrySearchParams,
   suspend,
   resume,
+  state,
   type FinetuneHandle,
 } from "./client/api";
 export { close } from "./client";
 export {
+  type LifecycleState,
   type ModelProgressUpdate,
   type LoadModelOptions,
   type DownloadAssetOptions,
@@ -52,6 +54,9 @@ export {
   type ToolCallWithCall,
   type ToolCallError,
   type ToolCallEvent,
+  type CompletionEvent,
+  type CompletionFinal,
+  type CompletionRun,
   type CompletionStats,
   type EmbedStats,
   VERBOSITY,

@@ -139,6 +139,18 @@ export class RPCConnectionFailedError extends QvacErrorBase {
   }
 }
 
+export class RPCInitTimeoutError extends QvacErrorBase {
+  constructor(timeoutMs: number, cause?: unknown) {
+    super(
+      createErrorOptions(
+        SDK_CLIENT_ERROR_CODES.RPC_INIT_TIMEOUT,
+        [timeoutMs],
+        cause,
+      ),
+    );
+  }
+}
+
 // ============== Provider/Delegation Errors ==============
 
 export class ProviderStartFailedError extends QvacErrorBase {

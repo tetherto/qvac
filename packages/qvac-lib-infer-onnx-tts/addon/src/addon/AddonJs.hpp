@@ -75,6 +75,7 @@ getTTSConfigMap(js_env_t *env, js::Object configurationParams) {
   addBool("useGPU");
   addBool("lazySessionLoading");
   addBool("supertonicMultilingual");
+  addString("numThreads");
 
   // LavaSR enhancement config
   addBool("enhance");

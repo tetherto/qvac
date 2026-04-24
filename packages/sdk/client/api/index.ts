@@ -36,3 +36,4 @@ export {
 } from "./registry";
 export { suspend } from "./suspend";
 export { resume } from "./resume";
+export { state } from "./state";

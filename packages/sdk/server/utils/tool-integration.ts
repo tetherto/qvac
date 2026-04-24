@@ -1,4 +1,5 @@
-import type { Tool, ToolCallEvent } from "@/schemas";
+import type { Tool } from "@/schemas";
+import type { ToolCallEvent } from "@/schemas/tools";
 import {
   parseToolCalls,
   convertToolsToGrammar,

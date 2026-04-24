@@ -6,6 +6,7 @@ import {
   getModelsCacheDir,
   getCompanionSetPath,
   getCompanionSetCacheDir,
+  getSingleFileCachePath,
   generateShortHash,
   calculatePercentage,
 } from "@/server/utils";
@@ -68,6 +69,19 @@ export async function downloadCompanionSetFromRegistry(
       hooks?.markCacheHit?.();
       emitFinalProgress(progressCallback, downloadKey, setKey, files);
       return legacyPath;
+    }
+  }
+
+  // Legacy flat-cache compatibility for Bergamot-style companion sets.
+  // This is valid only for families whose runtime still works with explicit
+  // per-file absolute paths; it is not a generic rule for all companion sets.
+  if (!isLegacyOnnxSet(files)) {
+    const flatPath = await checkLegacyFlatCache(files, primaryKey, hooks);
+    if (flatPath) {
+      logger.info(`✅ Using legacy flat cache for companion set: ${flatPath}`);
+      hooks?.markCacheHit?.();
+      emitFinalProgress(progressCallback, downloadKey, setKey, files);
+      return flatPath;
     }
   }
 
@@ -269,4 +283,37 @@ async function checkLegacyOnnxCache(
 function getLegacyOnnxPath(cacheKey: string, filename: string): string {
   const baseCache = getModelsCacheDir();
   return validateAndJoinPath(baseCache, "onnx", cacheKey, filename);
+}
+
+/**
+ * Check if all companion files exist in the flat single-file cache.
+ */
+async function checkLegacyFlatCache(
+  files: readonly CompanionSetMetadataEntry[],
+  primaryKey: string,
+  hooks?: DownloadHooks,
+): Promise<string | null> {
+  let primaryPath: string | null = null;
+
+  for (const file of files) {
+    const flatPath = getSingleFileCachePath(file.registryPath);
+
+    try {
+      const stats = await fsPromises.stat(flatPath);
+      if (stats.size !== file.expectedSize) return null;
+
+      if (file.sha256Checksum && file.sha256Checksum.length === 64) {
+        const checksum = await measureChecksum(flatPath, hooks);
+        if (checksum !== file.sha256Checksum) return null;
+      }
+    } catch {
+      return null;
+    }
+
+    if (file.key === primaryKey) {
+      primaryPath = flatPath;
+    }
+  }
+
+  return primaryPath;
 }

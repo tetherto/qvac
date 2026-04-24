@@ -9,6 +9,8 @@ import {
   modelInfoSchema,
   ModelType,
   SDK_SERVER_ERROR_CODES,
+  type DiffusionStreamResponse,
+  type PluginInvokeStreamResponse,
 } from "@/schemas";
 import {
   loadModelSrcRequestSchema,
@@ -147,6 +149,29 @@ test("diffusionRequestSchema: accepts full txt2img request", (t) => {
   t.is(result.success, true);
 });
 
+test("diffusionRequestSchema: applies img_cfg_scale default of -1 when omitted", (t) => {
+  const result = diffusionRequestSchema.safeParse({
+    modelId: "model-1",
+    prompt: "a cat",
+  });
+  t.is(result.success, true);
+  if (result.success) {
+    t.is(result.data.img_cfg_scale, -1);
+  }
+});
+
+test("diffusionRequestSchema: preserves explicit img_cfg_scale value", (t) => {
+  const result = diffusionRequestSchema.safeParse({
+    modelId: "model-1",
+    prompt: "a cat",
+    img_cfg_scale: 4.5,
+  });
+  t.is(result.success, true);
+  if (result.success) {
+    t.is(result.data.img_cfg_scale, 4.5);
+  }
+});
+
 test("diffusionRequestSchema: rejects missing modelId", (t) => {
   const result = diffusionRequestSchema.safeParse({
     prompt: "a cat",
@@ -195,6 +220,104 @@ test("diffusionRequestSchema: rejects invalid scheduler", (t) => {
     scheduler: "default",
   });
   t.is(result.success, false);
+});
+
+test("diffusionRequestSchema: accepts img2img request with init_image and strength", (t) => {
+  const result = diffusionRequestSchema.safeParse({
+    modelId: "model-1",
+    prompt: "oil painting style",
+    init_image: "iVBORw0KGgoAAAANSUhEUg==",
+    strength: 0.7,
+  });
+  t.is(result.success, true);
+});
+
+test("diffusionRequestSchema: accepts img2img request with init_image only (no strength)", (t) => {
+  const result = diffusionRequestSchema.safeParse({
+    modelId: "model-1",
+    prompt: "watercolor",
+    init_image: "iVBORw0KGgoAAAANSUhEUg==",
+  });
+  t.is(result.success, true);
+});
+
+test("diffusionRequestSchema: rejects strength below 0", (t) => {
+  const result = diffusionRequestSchema.safeParse({
+    modelId: "model-1",
+    prompt: "a cat",
+    strength: -0.1,
+  });
+  t.is(result.success, false);
+});
+
+test("diffusionRequestSchema: rejects strength above 1", (t) => {
+  const result = diffusionRequestSchema.safeParse({
+    modelId: "model-1",
+    prompt: "a cat",
+    strength: 1.5,
+  });
+  t.is(result.success, false);
+});
+
+test("diffusionRequestSchema: rejects empty init_image", (t) => {
+  const result = diffusionRequestSchema.safeParse({
+    modelId: "model-1",
+    prompt: "a cat",
+    init_image: "",
+  });
+  t.is(result.success, false);
+});
+
+test("diffusionRequestSchema: rejects init_image with invalid base64 characters", (t) => {
+  const result = diffusionRequestSchema.safeParse({
+    modelId: "model-1",
+    prompt: "a cat",
+    init_image: "not valid base64!!!",
+  });
+  t.is(result.success, false);
+});
+
+test("diffusionRequestSchema: rejects init_image with base64url characters (-, _)", (t) => {
+  const result = diffusionRequestSchema.safeParse({
+    modelId: "model-1",
+    prompt: "a cat",
+    init_image: "iVBORw0KGgoAAAANSUhE-_==",
+  });
+  t.is(result.success, false);
+});
+
+test("diffusionRequestSchema: rejects init_image with embedded whitespace", (t) => {
+  const result = diffusionRequestSchema.safeParse({
+    modelId: "model-1",
+    prompt: "a cat",
+    init_image: "iVBORw0KGgo\nAAAANSUhEUg==",
+  });
+  t.is(result.success, false);
+});
+
+test("diffusionRequestSchema: rejects init_image with length not a multiple of 4", (t) => {
+  const result = diffusionRequestSchema.safeParse({
+    modelId: "model-1",
+    prompt: "a cat",
+    init_image: "iVBORw0KGgoAAAANSUhEUg",
+  });
+  t.is(result.success, false);
+});
+
+test("diffusionRequestSchema: accepts strength at boundaries (0 and 1)", (t) => {
+  const resultZero = diffusionRequestSchema.safeParse({
+    modelId: "model-1",
+    prompt: "a cat",
+    strength: 0,
+  });
+  t.is(resultZero.success, true);
+
+  const resultOne = diffusionRequestSchema.safeParse({
+    modelId: "model-1",
+    prompt: "a cat",
+    strength: 1,
+  });
+  t.is(resultOne.success, true);
 });
 
 // ============================================
@@ -320,52 +443,34 @@ test("loadModelOptionsBaseSchema: rejects diffusion with unknown config key (str
 // Plugin registration & handler dispatch
 // ============================================
 
-test("diffusion plugin: registers and dispatches diffusionStream", async function (t) {
+// Registers a diffusion plugin whose only per-test variation is the handler
+// body, registers a mock model, runs `body` with the generated modelId, and
+// tears everything down (even if `body` throws).
+async function withMockDiffusionPlugin<T>(
+  handler: (request: unknown) => AsyncGenerator<unknown>,
+  body: (modelId: string) => Promise<T>,
+): Promise<T> {
   clearPlugins();
-  const modelId = "test-diffusion-model-1";
-
+  const modelId = `test-diffusion-mock-${Math.random().toString(36).slice(2, 10)}`;
   const mockPlugin = {
     modelType: ModelType.sdcppGeneration,
     displayName: "Image Generation (stable-diffusion.cpp)",
     addonPackage: "@qvac/diffusion-cpp",
     loadConfigSchema: sdcppConfigSchema,
     createModel: function () {
-      return {
-        model: { load: async function () {} },
-        loader: undefined,
-      };
+      return { model: { load: async function () {} }, loader: undefined };
     },
     handlers: {
       diffusionStream: {
         requestSchema: diffusionRequestSchema as z.ZodType,
         responseSchema: diffusionStreamResponseSchema as z.ZodType,
         streaming: true,
-        handler: async function* () {
-          yield {
-            type: "diffusionStream" as const,
-            step: 1,
-            totalSteps: 2,
-            elapsedMs: 100,
-          };
-          yield {
-            type: "diffusionStream" as const,
-            data: "iVBORw0KGgo=",
-            outputIndex: 0,
-          };
-          yield {
-            type: "diffusionStream" as const,
-            done: true,
-            stats: { generationMs: 200, totalSteps: 2, width: 512, height: 512 },
-          };
-        },
+        handler,
       },
     },
   };
-
   try {
     registerPlugin(mockPlugin);
-    t.ok(hasPlugin(ModelType.sdcppGeneration));
-
     registerModel(modelId, {
       model: {} as unknown as AnyModel,
       path: "/tmp/model.safetensors",
@@ -373,168 +478,245 @@ test("diffusion plugin: registers and dispatches diffusionStream", async functio
       modelType: ModelType.sdcppGeneration,
       loader: undefined,
     });
-
-    const stream = handlePluginInvokeStream({
-      type: "pluginInvokeStream",
-      modelId,
-      handler: "diffusionStream",
-      params: { modelId, prompt: "a cat" },
-    });
-
-    const chunks = [];
-    for await (const chunk of stream) {
-      chunks.push(chunk);
-    }
-
-    // 3 data chunks + 1 final done:true sentinel
-    t.is(chunks.length, 4);
-
-    // First chunk: progress tick
-    t.is(chunks[0]!.done, false);
-    const progressData = chunks[0]!.result as Record<string, unknown>;
-    t.is(progressData.step, 1);
-    t.is(progressData.totalSteps, 2);
-
-    // Second chunk: output data
-    const outputData = chunks[1]!.result as Record<string, unknown>;
-    t.ok(typeof outputData.data === "string");
-    t.is(outputData.outputIndex, 0);
-
-    // Third chunk: final stats
-    const finalData = chunks[2]!.result as Record<string, unknown>;
-    t.is(finalData.done, true);
-    t.ok(finalData.stats);
-    const stats = finalData.stats as Record<string, unknown>;
-    t.is(stats.generationMs, 200);
-    t.is(stats.totalSteps, 2);
-
-    // Last chunk: sentinel
-    t.is(chunks[3]!.done, true);
-    t.is(chunks[3]!.result, null);
+    return await body(modelId);
   } finally {
     unregisterModel(modelId);
     clearPlugins();
   }
+}
+
+test("diffusion plugin: registers and dispatches diffusionStream", async function (t) {
+  await withMockDiffusionPlugin(
+    async function* () {
+      yield {
+        type: "diffusionStream" as const,
+        step: 1,
+        totalSteps: 2,
+        elapsedMs: 100,
+      };
+      yield {
+        type: "diffusionStream" as const,
+        data: "iVBORw0KGgo=",
+        outputIndex: 0,
+      };
+      yield {
+        type: "diffusionStream" as const,
+        done: true,
+        stats: { generationMs: 200, totalSteps: 2, width: 512, height: 512 },
+      };
+    },
+    async (modelId) => {
+      t.ok(hasPlugin(ModelType.sdcppGeneration));
+
+      const stream = handlePluginInvokeStream({
+        type: "pluginInvokeStream",
+        modelId,
+        handler: "diffusionStream",
+        params: { modelId, prompt: "a cat" },
+      });
+
+      const chunks = [];
+      for await (const chunk of stream) {
+        chunks.push(chunk);
+      }
+
+      t.is(chunks.length, 4);
+
+      t.is(chunks[0]!.done, false);
+      const progressData = chunks[0]!.result as Record<string, unknown>;
+      t.is(progressData.step, 1);
+      t.is(progressData.totalSteps, 2);
+
+      const outputData = chunks[1]!.result as Record<string, unknown>;
+      t.ok(typeof outputData.data === "string");
+      t.is(outputData.outputIndex, 0);
+
+      const finalData = chunks[2]!.result as Record<string, unknown>;
+      t.is(finalData.done, true);
+      t.ok(finalData.stats);
+      const stats = finalData.stats as Record<string, unknown>;
+      t.is(stats.generationMs, 200);
+      t.is(stats.totalSteps, 2);
+
+      t.is(chunks[3]!.done, true);
+      t.is(chunks[3]!.result, null);
+    },
+  );
+});
+
+test("diffusion plugin: img2img request reaches handler verbatim after safeParse (init_image, strength, img_cfg_scale default)", async function (t) {
+  const initImageBase64 = "iVBORw0KGgoAAAANSUhEUg==";
+  let observedRequest: unknown = undefined;
+
+  await withMockDiffusionPlugin(
+    async function* (request: unknown) {
+      observedRequest = request;
+      yield { type: "diffusionStream" as const, done: true };
+    },
+    async (modelId) => {
+      const requestParams = {
+        modelId,
+        prompt: "oil painting",
+        init_image: initImageBase64,
+        strength: 0.65,
+      };
+
+      const stream = handlePluginInvokeStream({
+        type: "pluginInvokeStream",
+        modelId,
+        handler: "diffusionStream",
+        params: requestParams,
+      });
+
+      // Drain so the handler runs and observedRequest gets populated.
+      for await (const _ of stream) {
+        // no-op
+      }
+
+      t.alike(observedRequest, { ...requestParams, img_cfg_scale: -1 });
+    },
+  );
+});
+
+test("diffusion plugin: dispatcher forwards interleaved multi-tick + multi-output stream verbatim", async function (t) {
+  const yieldedChunks: DiffusionStreamResponse[] = [
+    { type: "diffusionStream", step: 7, totalSteps: 23, elapsedMs: 110 },
+    { type: "diffusionStream", step: 14, totalSteps: 23, elapsedMs: 220 },
+    { type: "diffusionStream", step: 21, totalSteps: 23, elapsedMs: 330 },
+    { type: "diffusionStream", data: "AAAAQUFBQQ==", outputIndex: 0 },
+    { type: "diffusionStream", data: "BBBBQkJCQg==", outputIndex: 1 },
+    {
+      type: "diffusionStream",
+      done: true,
+      stats: {
+        generationMs: 419,
+        totalSteps: 23,
+        width: 768,
+        height: 512,
+        seed: 13,
+      },
+    },
+  ];
+
+  await withMockDiffusionPlugin(
+    async function* () {
+      for (const chunk of yieldedChunks) {
+        yield chunk;
+      }
+    },
+    async (modelId) => {
+      const stream = handlePluginInvokeStream({
+        type: "pluginInvokeStream",
+        modelId,
+        handler: "diffusionStream",
+        params: { modelId, prompt: "anything" },
+      });
+
+      const chunks: PluginInvokeStreamResponse[] = [];
+      for await (const chunk of stream) {
+        chunks.push(chunk);
+      }
+
+      for (let i = 0; i < yieldedChunks.length; i++) {
+        t.alike(chunks[i], {
+          type: "pluginInvokeStream",
+          result: yieldedChunks[i],
+          done: false,
+        });
+      }
+    },
+  );
+});
+
+test("diffusion plugin: appends { result: null, done: true } sentinel after handler completes", async function (t) {
+  const yieldedChunks: DiffusionStreamResponse[] = [
+    { type: "diffusionStream", step: 1, totalSteps: 1, elapsedMs: 50 },
+  ];
+
+  await withMockDiffusionPlugin(
+    async function* () {
+      for (const chunk of yieldedChunks) {
+        yield chunk;
+      }
+    },
+    async (modelId) => {
+      const stream = handlePluginInvokeStream({
+        type: "pluginInvokeStream",
+        modelId,
+        handler: "diffusionStream",
+        params: { modelId, prompt: "anything" },
+      });
+
+      const chunks: PluginInvokeStreamResponse[] = [];
+      for await (const chunk of stream) {
+        chunks.push(chunk);
+      }
+
+      t.is(chunks.length, yieldedChunks.length + 1);
+      t.alike(chunks[chunks.length - 1], {
+        type: "pluginInvokeStream",
+        result: null,
+        done: true,
+      });
+    },
+  );
 });
 
 test("diffusion plugin: rejects invalid request schema", async function (t) {
-  clearPlugins();
-  const modelId = "test-diffusion-model-2";
-
-  const mockPlugin = {
-    modelType: ModelType.sdcppGeneration,
-    displayName: "Image Generation",
-    addonPackage: "@qvac/diffusion-cpp",
-    loadConfigSchema: sdcppConfigSchema,
-    createModel: function () {
-      return { model: { load: async function () {} }, loader: undefined };
+  await withMockDiffusionPlugin(
+    async function* () {
+      yield { type: "diffusionStream" as const, done: true };
     },
-    handlers: {
-      diffusionStream: {
-        requestSchema: diffusionRequestSchema as z.ZodType,
-        responseSchema: diffusionStreamResponseSchema as z.ZodType,
-        streaming: true,
-        handler: async function* () {
-          yield { type: "diffusionStream" as const, done: true };
-        },
-      },
+    async (modelId) => {
+      const stream = handlePluginInvokeStream({
+        type: "pluginInvokeStream",
+        modelId,
+        handler: "diffusionStream",
+        params: { noModelId: true, noPrompt: true },
+      });
+
+      try {
+        await stream.next();
+        t.fail("Expected request validation to throw");
+      } catch (error) {
+        t.ok(error instanceof PluginRequestValidationFailedError);
+        t.is(
+          (error as PluginRequestValidationFailedError).code,
+          SDK_SERVER_ERROR_CODES.PLUGIN_REQUEST_VALIDATION_FAILED,
+        );
+      }
     },
-  };
-
-  try {
-    registerPlugin(mockPlugin);
-    registerModel(modelId, {
-      model: {} as unknown as AnyModel,
-      path: "/tmp/model.safetensors",
-      config: {},
-      modelType: ModelType.sdcppGeneration,
-      loader: undefined,
-    });
-
-    const stream = handlePluginInvokeStream({
-      type: "pluginInvokeStream",
-      modelId,
-      handler: "diffusionStream",
-      params: { noModelId: true, noPrompt: true },
-    });
-
-    try {
-      await stream.next();
-      t.fail("Expected request validation to throw");
-    } catch (error) {
-      t.ok(error instanceof PluginRequestValidationFailedError);
-      t.is(
-        (error as PluginRequestValidationFailedError).code,
-        SDK_SERVER_ERROR_CODES.PLUGIN_REQUEST_VALIDATION_FAILED,
-      );
-    }
-  } finally {
-    unregisterModel(modelId);
-    clearPlugins();
-  }
+  );
 });
 
 test("diffusion plugin: rejects invalid response from handler", async function (t) {
-  clearPlugins();
-  const modelId = "test-diffusion-model-3";
-
-  const mockPlugin = {
-    modelType: ModelType.sdcppGeneration,
-    displayName: "Image Generation",
-    addonPackage: "@qvac/diffusion-cpp",
-    loadConfigSchema: sdcppConfigSchema,
-    createModel: function () {
-      return { model: { load: async function () {} }, loader: undefined };
+  await withMockDiffusionPlugin(
+    async function* () {
+      yield { type: "wrongType", badField: 123 };
     },
-    handlers: {
-      diffusionStream: {
-        requestSchema: diffusionRequestSchema as z.ZodType,
-        responseSchema: diffusionStreamResponseSchema as z.ZodType,
-        streaming: true,
-        handler: async function* () {
-          yield { type: "wrongType", badField: 123 };
-        },
-      },
+    async (modelId) => {
+      const stream = handlePluginInvokeStream({
+        type: "pluginInvokeStream",
+        modelId,
+        handler: "diffusionStream",
+        params: { modelId, prompt: "a cat" },
+      });
+
+      try {
+        await stream.next();
+        t.fail("Expected response validation to throw");
+      } catch (error) {
+        t.ok(error instanceof PluginResponseValidationFailedError);
+        t.is(
+          (error as PluginResponseValidationFailedError).code,
+          SDK_SERVER_ERROR_CODES.PLUGIN_RESPONSE_VALIDATION_FAILED,
+        );
+      }
     },
-  };
-
-  try {
-    registerPlugin(mockPlugin);
-    registerModel(modelId, {
-      model: {} as unknown as AnyModel,
-      path: "/tmp/model.safetensors",
-      config: {},
-      modelType: ModelType.sdcppGeneration,
-      loader: undefined,
-    });
-
-    const stream = handlePluginInvokeStream({
-      type: "pluginInvokeStream",
-      modelId,
-      handler: "diffusionStream",
-      params: { modelId, prompt: "a cat" },
-    });
-
-    try {
-      await stream.next();
-      t.fail("Expected response validation to throw");
-    } catch (error) {
-      t.ok(error instanceof PluginResponseValidationFailedError);
-      t.is(
-        (error as PluginResponseValidationFailedError).code,
-        SDK_SERVER_ERROR_CODES.PLUGIN_RESPONSE_VALIDATION_FAILED,
-      );
-    }
-  } finally {
-    unregisterModel(modelId);
-    clearPlugins();
-  }
+  );
 });
 
 test("diffusion plugin: stats with all RuntimeStats fields passes response validation", async function (t) {
-  clearPlugins();
-  const modelId = "test-diffusion-model-4";
-
   const fullStats = {
     modelLoadMs: 500,
     generationMs: 1234,
@@ -549,74 +731,45 @@ test("diffusion plugin: stats with all RuntimeStats fields passes response valid
     seed: 42,
   };
 
-  const mockPlugin = {
-    modelType: ModelType.sdcppGeneration,
-    displayName: "Image Generation",
-    addonPackage: "@qvac/diffusion-cpp",
-    loadConfigSchema: sdcppConfigSchema,
-    createModel: function () {
-      return { model: { load: async function () {} }, loader: undefined };
+  await withMockDiffusionPlugin(
+    async function* () {
+      yield {
+        type: "diffusionStream" as const,
+        done: true,
+        stats: fullStats,
+      };
     },
-    handlers: {
-      diffusionStream: {
-        requestSchema: diffusionRequestSchema as z.ZodType,
-        responseSchema: diffusionStreamResponseSchema as z.ZodType,
-        streaming: true,
-        handler: async function* () {
-          yield {
-            type: "diffusionStream" as const,
-            done: true,
-            stats: fullStats,
-          };
-        },
-      },
+    async (modelId) => {
+      const stream = handlePluginInvokeStream({
+        type: "pluginInvokeStream",
+        modelId,
+        handler: "diffusionStream",
+        params: { modelId, prompt: "a cat" },
+      });
+
+      const chunks = [];
+      for await (const chunk of stream) {
+        chunks.push(chunk);
+      }
+
+      t.is(chunks.length, 2);
+
+      const statsChunk = chunks[0]!.result as Record<string, unknown>;
+      const receivedStats = statsChunk.stats as Record<string, unknown>;
+
+      t.is(receivedStats.modelLoadMs, 500);
+      t.is(receivedStats.generationMs, 1234);
+      t.is(receivedStats.totalGenerationMs, 1234);
+      t.is(receivedStats.totalWallMs, 1734);
+      t.is(receivedStats.totalSteps, 20);
+      t.is(receivedStats.totalGenerations, 1);
+      t.is(receivedStats.totalImages, 1);
+      t.is(receivedStats.totalPixels, 262144);
+      t.is(receivedStats.width, 512);
+      t.is(receivedStats.height, 512);
+      t.is(receivedStats.seed, 42);
     },
-  };
-
-  try {
-    registerPlugin(mockPlugin);
-    registerModel(modelId, {
-      model: {} as unknown as AnyModel,
-      path: "/tmp/model.safetensors",
-      config: {},
-      modelType: ModelType.sdcppGeneration,
-      loader: undefined,
-    });
-
-    const stream = handlePluginInvokeStream({
-      type: "pluginInvokeStream",
-      modelId,
-      handler: "diffusionStream",
-      params: { modelId, prompt: "a cat" },
-    });
-
-    const chunks = [];
-    for await (const chunk of stream) {
-      chunks.push(chunk);
-    }
-
-    // data chunk + sentinel
-    t.is(chunks.length, 2);
-
-    const statsChunk = chunks[0]!.result as Record<string, unknown>;
-    const receivedStats = statsChunk.stats as Record<string, unknown>;
-
-    // Verify all RuntimeStats fields survived safeParse validation
-    t.is(receivedStats.modelLoadMs, 500);
-    t.is(receivedStats.generationMs, 1234);
-    t.is(receivedStats.totalGenerationMs, 1234);
-    t.is(receivedStats.totalWallMs, 1734);
-    t.is(receivedStats.totalSteps, 20);
-    t.is(receivedStats.totalGenerations, 1);
-    t.is(receivedStats.totalImages, 1);
-    t.is(receivedStats.totalPixels, 262144);
-    t.is(receivedStats.width, 512);
-    t.is(receivedStats.height, 512);
-    t.is(receivedStats.seed, 42);
-  } finally {
-    unregisterModel(modelId);
-    clearPlugins();
-  }
+  );
 });
 
 // ============================================

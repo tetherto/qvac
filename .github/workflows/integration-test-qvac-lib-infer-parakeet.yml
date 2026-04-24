@@ -12,6 +12,20 @@ on:
         description: "NPM package containing prebuilds (e.g. @qvac/transcription-parakeet@1.0.0)"
         required: true
         type: string
+      run_integration_tests:
+        description: "Run the regular integration suite"
+        required: false
+        type: boolean
+        default: true
+      run_rtf_benchmarks:
+        description: "Run RTF performance benchmarks"
+        required: false
+        type: boolean
+        default: true
+      benchmark_matrix_json:
+        description: "Optional JSON array overriding the per-runner benchmark matrix"
+        required: false
+        type: string
 
   workflow_call:
     inputs:
@@ -20,6 +34,20 @@ on:
         type: string
       repository:
         type: string
+      run_integration_tests:
+        description: "Run the regular integration suite"
+        type: boolean
+        required: false
+        default: true
+      run_rtf_benchmarks:
+        description: "Run RTF performance benchmarks"
+        type: boolean
+        required: false
+        default: true
+      benchmark_matrix_json:
+        description: "Optional JSON array overriding the per-runner benchmark matrix"
+        type: string
+        required: false
 
 jobs:
   run-integration-tests:
@@ -40,21 +68,45 @@ jobs:
           - os: ai-run-ubuntu-22.04
             platform: linux
             arch: x64
+            rtf_gpu_enabled: false
+            rtf_gpu_backend: cpu
+            benchmark_matrix_json: >-
+              [{"modelType":"tdt","useGPU":false,"backendHint":"cpu"},{"modelType":"ctc","useGPU":false,"backendHint":"cpu"},{"modelType":"eou","useGPU":false,"backendHint":"cpu"},{"modelType":"sortformer","useGPU":false,"backendHint":"cpu"}]
           - os: ai-run-linux-gpu
             platform: linux
             arch: x64
+            rtf_gpu_enabled: true
+            rtf_gpu_backend: cuda
+            benchmark_matrix_json: >-
+              [{"modelType":"tdt","useGPU":false,"backendHint":"cpu"},{"modelType":"ctc","useGPU":false,"backendHint":"cpu"},{"modelType":"eou","useGPU":false,"backendHint":"cpu"},{"modelType":"sortformer","useGPU":false,"backendHint":"cpu"},{"modelType":"tdt","useGPU":true,"backendHint":"cuda"},{"modelType":"ctc","useGPU":true,"backendHint":"cuda"},{"modelType":"eou","useGPU":true,"backendHint":"cuda"},{"modelType":"sortformer","useGPU":true,"backendHint":"cuda"}]
           - os: ubuntu-24.04-arm
             platform: linux
             arch: arm64
+            rtf_gpu_enabled: false
+            rtf_gpu_backend: cpu
+            benchmark_matrix_json: >-
+              [{"modelType":"tdt","useGPU":false,"backendHint":"cpu"},{"modelType":"ctc","useGPU":false,"backendHint":"cpu"},{"modelType":"eou","useGPU":false,"backendHint":"cpu"},{"modelType":"sortformer","useGPU":false,"backendHint":"cpu"}]
           - os: macos-14-xlarge
             platform: darwin
             arch: arm64
+            rtf_gpu_enabled: true
+            rtf_gpu_backend: coreml
+            benchmark_matrix_json: >-
+              [{"modelType":"tdt","useGPU":false,"backendHint":"cpu"},{"modelType":"ctc","useGPU":false,"backendHint":"cpu"},{"modelType":"eou","useGPU":false,"backendHint":"cpu"},{"modelType":"sortformer","useGPU":false,"backendHint":"cpu"},{"modelType":"tdt","useGPU":true,"backendHint":"coreml"},{"modelType":"ctc","useGPU":true,"backendHint":"coreml"},{"modelType":"eou","useGPU":true,"backendHint":"coreml"},{"modelType":"sortformer","useGPU":true,"backendHint":"coreml"}]
           - os: macos-15-large
             platform: darwin
             arch: x64
+            rtf_gpu_enabled: true
+            rtf_gpu_backend: coreml
+            benchmark_matrix_json: >-
+              [{"modelType":"tdt","useGPU":false,"backendHint":"cpu"},{"modelType":"ctc","useGPU":false,"backendHint":"cpu"},{"modelType":"eou","useGPU":false,"backendHint":"cpu"},{"modelType":"sortformer","useGPU":false,"backendHint":"cpu"},{"modelType":"tdt","useGPU":true,"backendHint":"coreml"},{"modelType":"ctc","useGPU":true,"backendHint":"coreml"},{"modelType":"eou","useGPU":true,"backendHint":"coreml"},{"modelType":"sortformer","useGPU":true,"backendHint":"coreml"}]
           - os: windows-2022
             platform: win32
             arch: x64
+            rtf_gpu_enabled: true
+            rtf_gpu_backend: directml
+            benchmark_matrix_json: >-
+              [{"modelType":"tdt","useGPU":false,"backendHint":"cpu"},{"modelType":"ctc","useGPU":false,"backendHint":"cpu"},{"modelType":"eou","useGPU":false,"backendHint":"cpu"},{"modelType":"sortformer","useGPU":false,"backendHint":"cpu"},{"modelType":"tdt","useGPU":true,"backendHint":"directml"},{"modelType":"ctc","useGPU":true,"backendHint":"directml"},{"modelType":"eou","useGPU":true,"backendHint":"directml"},{"modelType":"sortformer","useGPU":true,"backendHint":"directml"}]
 
     steps:
       - name: Setup Node.js
@@ -153,6 +205,7 @@ jobs:
           sudo apt-get install -y libgomp1
 
       - name: Run integration test
+        if: ${{ inputs.run_integration_tests != false }}
         shell: bash
         working-directory: ${{ github.workspace }}/packages/qvac-lib-infer-parakeet
         run: npm run test:integration
@@ -162,19 +215,22 @@ jobs:
           LD_LIBRARY_PATH: ${{ github.workspace }}/packages/qvac-lib-infer-parakeet/prebuilds/${{ matrix.platform }}-${{ matrix.arch }}
           DYLD_LIBRARY_PATH: ${{ github.workspace }}/packages/qvac-lib-infer-parakeet/prebuilds/${{ matrix.platform }}-${{ matrix.arch }}
 
-      - name: Run RTF benchmark
-        if: always()
+      - name: Run RTF benchmark matrix
+        if: ${{ always() && inputs.run_rtf_benchmarks != false }}
         continue-on-error: true
         shell: bash
         working-directory: ${{ github.workspace }}/packages/qvac-lib-infer-parakeet
-        run: npm run test:benchmark:rtf
+        run: node scripts/run-rtf-benchmark-matrix.js
         env:
           GITHUB_TOKEN: ${{ secrets.PAT_TOKEN }}
           LD_LIBRARY_PATH: ${{ github.workspace }}/packages/qvac-lib-infer-parakeet/prebuilds/${{ matrix.platform }}-${{ matrix.arch }}
           DYLD_LIBRARY_PATH: ${{ github.workspace }}/packages/qvac-lib-infer-parakeet/prebuilds/${{ matrix.platform }}-${{ matrix.arch }}
+          QVAC_PARAKEET_BENCHMARK_DEVICE: ${{ matrix.os }}
+          QVAC_PARAKEET_BENCHMARK_RUNNER: ${{ matrix.os }}
+          QVAC_PARAKEET_BENCHMARK_MATRIX_JSON: ${{ inputs.benchmark_matrix_json || matrix.benchmark_matrix_json }}
 
       - name: Upload RTF results
-        if: always()
+        if: ${{ always() && inputs.run_rtf_benchmarks != false }}
         continue-on-error: true
         uses: actions/upload-artifact@bbbca2ddaa5d8feaa63e36b76fdaad77386f024f # 7.0.0
         with:
@@ -184,26 +240,39 @@ jobs:
           if-no-files-found: ignore
 
       - name: Add RTF summary
-        if: always()
+        if: ${{ always() && inputs.run_rtf_benchmarks != false }}
         continue-on-error: true
         shell: bash
         working-directory: ${{ github.workspace }}/packages/qvac-lib-infer-parakeet
         run: |
-          RESULT_FILE="benchmarks/results/rtf-benchmark-${{ matrix.platform }}-${{ matrix.arch }}.json"
-
-          if [ -f "$RESULT_FILE" ]; then
-            echo "### RTF — ${{ matrix.platform }}-${{ matrix.arch }}" >> $GITHUB_STEP_SUMMARY
-            node -e "
-              const r = JSON.parse(require('fs').readFileSync('${RESULT_FILE}', 'utf8'));
-              const s = r.summary;
-              const lines = [
-                '| Metric | Mean | P50 | P95 |',
-                '|--------|------|-----|-----|',
-                '| RTF | ' + s.rtf.mean.toFixed(4) + ' | ' + s.rtf.p50.toFixed(4) + ' | ' + s.rtf.p95.toFixed(4) + ' |',
-                '| Wall (ms) | ' + s.wallMs.mean.toFixed(0) + ' | ' + s.wallMs.p50.toFixed(0) + ' | ' + s.wallMs.p95.toFixed(0) + ' |',
-                '| Tokens/s | ' + s.tokensPerSecond.mean.toFixed(1) + ' | ' + s.tokensPerSecond.p50.toFixed(1) + ' | ' + s.tokensPerSecond.p95.toFixed(1) + ' |',
-                '',
-              ];
-              console.log(lines.join('\n'));
-            " >> $GITHUB_STEP_SUMMARY
-          fi
+          echo "### RTF — ${{ matrix.platform }}-${{ matrix.arch }}" >> $GITHUB_STEP_SUMMARY
+          node -e "
+            const fs = require('fs');
+            const path = require('path');
+            const resultsDir = path.resolve('benchmarks/results');
+            if (!fs.existsSync(resultsDir)) process.exit(0);
+            const files = fs.readdirSync(resultsDir)
+              .filter(file => file.startsWith('rtf-benchmark-') && file.endsWith('.json'))
+              .sort();
+            if (files.length === 0) process.exit(0);
+            const lines = [
+              '| Model | GPU | Backend | Device | Mean RTF | P50 | P95 |',
+              '|-------|-----|---------|--------|----------|-----|-----|'
+            ];
+            for (const file of files) {
+              const report = JSON.parse(fs.readFileSync(path.join(resultsDir, file), 'utf8'));
+              const summary = report.summary || {};
+              const rtf = summary.rtf || {};
+              lines.push(
+                '| ' + (report.model?.type || 'unknown') +
+                ' | ' + ((report.requested?.useGPU ? 'yes' : 'no')) +
+                ' | ' + (report.labels?.backend || report.requested?.backendHint || report.labels?.requestedBackend || 'n/a') +
+                ' | ' + (report.labels?.device || report.labels?.runner || 'n/a') +
+                ' | ' + (rtf.mean !== undefined ? Number(rtf.mean).toFixed(4) : 'n/a') +
+                ' | ' + (rtf.p50 !== undefined ? Number(rtf.p50).toFixed(4) : 'n/a') +
+                ' | ' + (rtf.p95 !== undefined ? Number(rtf.p95).toFixed(4) : 'n/a') +
+                ' |'
+              );
+            }
+            console.log(lines.join('\n'));
+          " >> $GITHUB_STEP_SUMMARY
