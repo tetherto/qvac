@@ -146,7 +146,7 @@ test('[stitchSegments] fully-overlapped leading segment is dropped; non-overlapp
   t.is(deltaSegments[0].windowStartTimestep, 2000)
 })
 
-test('[stitchSegments] partial overlap inside a single segment trims that segment\'s text', (t) => {
+test('[stitchSegments] partial overlap inside a single segment trims text and advances t0 proportionally', (t) => {
   const segs = [
     { text: 'the store today', t0: 0, t1: 300 }
   ]
@@ -155,8 +155,8 @@ test('[stitchSegments] partial overlap inside a single segment trims that segmen
   t.is(merged, 'went to the store today')
   t.is(deltaSegments.length, 1)
   t.is(deltaSegments[0].text, 'store today')
-  t.is(deltaSegments[0].t0, 0, 'trimming preserves segment timestamps')
-  t.is(deltaSegments[0].t1, 300)
+  t.is(deltaSegments[0].t0, 100, 't0 is advanced by (t1-t0) * droppedWords/totalWords')
+  t.is(deltaSegments[0].t1, 300, 't1 is unchanged (segment end did not move)')
   t.is(deltaSegments[0].windowStartTimestep, 500)
 })
 
