@@ -123,11 +123,18 @@ const METRIC_COLUMNS = {
     { key: 'chrfpp', label: 'chrF++', format: 'percent' }
   ],
   vision: [
+    { key: 'backend', label: 'Backend' },
+    { key: 'platform', label: 'Platform' },
     { key: 'total_time_ms', label: 'Total Time (ms)' },
+    { key: 'prefill_time_ms', label: 'Prefill (ms)' },
+    { key: 'decode_time_ms', label: 'Decode (ms)' },
+    { key: 'vision_encode_time_ms', label: 'Vision Enc (ms)' },
+    { key: 'image_prefill_time_ms', label: 'Img Prefill (ms)' },
     { key: 'ttft_ms', label: 'TTFT (ms)' },
     { key: 'generated_tokens', label: 'Gen Tokens' },
     { key: 'prompt_tokens', label: 'Prompt Tokens' },
-    { key: 'tps', label: 'TPS' }
+    { key: 'tps', label: 'TPS' },
+    { key: 'status', label: 'Status' }
   ],
   tts: [
     { key: 'total_time_ms', label: 'Total Time (ms)' },
@@ -176,7 +183,10 @@ function createPerformanceReporter (opts) {
           total_time_ms: null,
           detection_time_ms: null,
           recognition_time_ms: null,
+          prefill_time_ms: null,
           decode_time_ms: null,
+          vision_encode_time_ms: null,
+          image_prefill_time_ms: null,
           ttft_ms: null,
           generated_tokens: null,
           prompt_tokens: null,
@@ -185,6 +195,9 @@ function createPerformanceReporter (opts) {
           real_time_factor: null,
           sample_count: null,
           duration_ms: null,
+          backend: null,
+          platform: null,
+          status: null,
           ...metrics
         },
         input: (extra && extra.input) || null,
@@ -337,4 +350,3 @@ module.exports = {
   METRIC_COLUMNS,
   QUALITY_COLUMNS
 }
-

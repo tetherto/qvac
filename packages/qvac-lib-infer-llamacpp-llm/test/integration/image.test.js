@@ -33,6 +33,14 @@ const arch = os.arch()
 const isDarwinX64 = platform === 'darwin' && arch === 'x64'
 const isLinuxArm64 = platform === 'linux' && arch === 'arm64'
 const isMobile = platform === 'ios' || platform === 'android'
+const platformLabel = `${platform}-${arch}`
+
+// NO_GPU=true in CI disables the GPU leg of the matrix (e.g. runners without
+// Vulkan/Metal/OpenCL). Both legs run by default on GPU-capable runners so the
+// weekly perf-report covers CPU + GPU on every platform that supports it.
+const noGpuEnv = (process.env && process.env.NO_GPU) ||
+  (typeof os.getEnv === 'function' ? os.getEnv('NO_GPU') : '')
+const noGpu = String(noGpuEnv || '').toLowerCase() === 'true'
 
 const _perfReporter = createPerformanceReporter({
   addon: 'llamacpp-llm',
@@ -45,11 +53,38 @@ process.on('exit', () => {
   if (_perfReporter.length > 0) {
     _perfReporter.writeReport(_reportPath)
     _perfReporter.writeStepSummary()
+    // On iOS/Android the sandboxed fs write above is a no-op. Emit the JSON
+    // inline to stdout using [PERF_REPORT_START]...[PERF_REPORT_END] markers
+    // so `scripts/perf-report/extract-from-log.js` can reconstruct the
+    // artifact from Device Farm console logs. Matches the NMT / OCR pattern.
+    if (isMobile && typeof _perfReporter.writeToConsole === 'function') {
+      _perfReporter.writeToConsole()
+    }
   }
 })
 
 // CPU is used for: Intel Macs (DarwinX64), and ARM64 Linux
 const useCpu = isDarwinX64 || isLinuxArm64
+
+/**
+ * Maps (platform, device) -> canonical backend label used in the perf report.
+ * The native addon only reports a coarse CPU/GPU flag, so the specific GPU
+ * backend (metal / vulkan / opencl) is derived from the runtime platform.
+ *
+ * @param {string} device - 'cpu' or 'gpu'
+ * @returns {string}
+ */
+function resolveBackend (device) {
+  if (!device || device === 'cpu') return 'cpu'
+  if (platform === 'darwin' || platform === 'ios') return 'metal'
+  if (platform === 'android') {
+    const override = (process.env && process.env.QVAC_GPU_BACKEND) ||
+      (typeof os.getEnv === 'function' ? os.getEnv('QVAC_GPU_BACKEND') : '')
+    return String(override || 'vulkan').toLowerCase()
+  }
+  if (platform === 'linux' || platform === 'win32') return 'vulkan'
+  return 'gpu'
+}
 
 const MULTIMODAL_MODEL_CONFIG = {
   llmModel: {
@@ -81,23 +116,57 @@ const TEST_CONSTANTS = {
   defaultPrompt: 'Describe the image briefly in one sentence.'
 }
 
+// QVAC-17830: VLM perf tests run 1 warmup + N counted iterations per
+// (image x backend). Matches OCR's PERF_RUNS=3 convention in
+// packages/ocr-onnx/test/integration/doctr-*.test.js so aggregate.js
+// produces a meaningful `count=3, mean, std` per cell instead of a
+// single unaveraged data point.
+//
+// Structure differs from OCR intentionally: OCR uses one brittle test()
+// per iteration (cheap setup). VLM model load is multi-GB and already
+// stresses iOS Device Farm memory; we keep one test() per (image x
+// backend) and reuse the loaded LlmLlamacpp instance across all
+// iterations. The aggregator groups by `test` label, so N rows with
+// the same label still average correctly.
+const PERF_RUNS = 3
+const PERF_WARMUP_RUNS = 1
+// Per-test timeout for the multi-iteration perf tests. Must cover
+// (warmup + PERF_RUNS) x one-inference worst case; leave
+// TEST_CONSTANTS.timeout unchanged for the other tests in this file.
+const PERF_TEST_TIMEOUT = 25 * 60 * 1000 // 25 minutes
+
 /**
- * Device configurations for testing
- * - Mobile (iOS/Android): CPU only
- * - Desktop (DarwinX64): CPU only
- * - Desktop (LinuxARM64): CPU only
- * - Desktop (other): GPU only
+ * Device configurations for testing.
+ *
+ * QVAC-17830 requires CPU + GPU perf coverage on every platform that
+ * supports GPU. Runners without GPU set NO_GPU=true so the GPU leg is
+ * skipped automatically.
+ *
+ * Platform support matrix (GPU):
+ *   - darwin-arm64         : metal
+ *   - darwin-x64           : unsupported (CPU only)
+ *   - linux-x64            : vulkan
+ *   - linux-arm64          : unsupported today (CPU only)
+ *   - win32-x64            : vulkan
+ *   - android (any arch)   : vulkan / opencl (runner-dependent)
+ *   - ios                  : metal
  */
 const ALL_DEVICE_CONFIGS = [
-  { id: 'gpu', device: 'gpu' },
-  { id: 'cpu', device: 'cpu' }
+  { id: 'cpu', device: 'cpu' },
+  { id: 'gpu', device: 'gpu' }
 ]
 
-const DEVICE_CONFIGS = isMobile
-  ? ALL_DEVICE_CONFIGS
-  : useCpu
-    ? ALL_DEVICE_CONFIGS.filter(c => c.id === 'cpu')
-    : ALL_DEVICE_CONFIGS.filter(c => c.id === 'gpu')
+const gpuSupported = !useCpu && (
+  isMobile ||
+  (platform === 'darwin' && arch === 'arm64') ||
+  (platform === 'linux' && arch === 'x64') ||
+  (platform === 'win32' && arch === 'x64')
+)
+
+const DEVICE_CONFIGS = ALL_DEVICE_CONFIGS.filter(c => {
+  if (c.id === 'cpu') return true
+  return gpuSupported && !noGpu
+})
 
 /**
  * Creates model configuration for the specified device
@@ -131,7 +200,10 @@ async function setupMultimodalInference (t, device = 'gpu', modelConfig = MULTIM
   const inference = new LlmLlamacpp({
     files: { model: [modelPath], projectionModel: path.join(dirPath, projModelName) },
     config: getConfig(device, modelConfig),
-    logger: console
+    logger: console,
+    // QVAC-17830: enable runtime stats so VLM perf metrics (TTFT, TPS, token
+    // counts, backendDevice) are attached to `response.stats`.
+    opts: { stats: true }
   })
 
   t.teardown(async () => {
@@ -179,7 +251,8 @@ async function describeImage (inference, imageFilePath, prompt = TEST_CONSTANTS.
   return {
     generatedText: generatedText.join(''),
     startTime,
-    endTime: Date.now()
+    endTime: Date.now(),
+    stats: response.stats || null
   }
 }
 
@@ -220,7 +293,8 @@ async function describeMultipleImages (inference, imageFilePaths, prompt) {
   return {
     generatedText: generatedText.join(''),
     startTime,
-    endTime: Date.now()
+    endTime: Date.now(),
+    stats: response.stats || null
   }
 }
 
@@ -245,25 +319,88 @@ function checkKeywordsInText (text, keywords) {
 }
 
 /**
- * Formats performance metrics for test output
- * @param {string} label - Test label (e.g., '[GPU]')
- * @param {number} totalTime - Total execution time in milliseconds
- * @returns {string} Formatted performance metrics string
+ * Safely coerces a value to a finite number or returns null.
+ * @param {*} v
+ * @returns {number|null}
+ */
+function _num (v) {
+  return typeof v === 'number' && Number.isFinite(v) ? v : null
+}
+
+/**
+ * Records VLM performance metrics and returns a human-readable comment.
+ *
+ * Metric derivation (QVAC-17830):
+ *   - prefill_time_ms   = stats.TTFT  (native `t_p_eval_ms` — prompt eval time,
+ *                         inclusive of vision encode + image prefill + text prefill)
+ *   - decode_time_ms    = total_time_ms - prefill_time_ms  (approximation;
+ *                         falls back to generated_tokens / TPS when TTFT absent)
+ *   - vision_encode_ms,
+ *     image_prefill_ms  = null for now. TODO: expose t_vision_encode_ms /
+ *                         t_image_prefill_ms from LlamaModel::runtimeStats so we
+ *                         can separate vision pipeline stages.
+ *
+ * @param {string} label     - Test label (e.g. '[GPU]')
+ * @param {number} totalTime - Wall-clock duration in ms
+ * @param {Object} [extra]
+ * @param {Object|null} [extra.stats]  - response.stats from LlmLlamacpp (when opts.stats:true)
+ * @param {string} [extra._output]     - Generated text, recorded as artifact
+ * @param {string} [extra.deviceId]    - 'cpu' | 'gpu' (explicit device requested)
+ * @returns {string}
  */
 function formatPerformanceMetrics (label, totalTime, extra) {
+  const stats = (extra && extra.stats) || null
   const totalSeconds = (totalTime / 1000).toFixed(2)
 
-  const ep = /\[gpu\]/i.test(label) ? 'gpu' : /\[cpu\]/i.test(label) ? 'cpu' : null
+  const ttftMs = stats ? _num(stats.TTFT) : null
+  const tps = stats ? _num(stats.TPS) : null
+  const generatedTokens = stats ? _num(stats.generatedTokens) : null
+  const promptTokens = stats ? _num(stats.promptTokens) : null
+
+  // stats.backendDevice from addon.js is 'cpu'/'gpu' when stats arrive, else undefined.
+  const reportedDevice = stats && (stats.backendDevice === 'cpu' || stats.backendDevice === 'gpu')
+    ? stats.backendDevice
+    : null
+
+  const labelDevice = /\[gpu\]/i.test(label) ? 'gpu' : /\[cpu\]/i.test(label) ? 'cpu' : null
+  const effectiveDevice = reportedDevice || (extra && extra.deviceId) || labelDevice
+  const backend = resolveBackend(effectiveDevice)
+
+  let decodeMs = null
+  if (ttftMs !== null && totalTime > ttftMs) {
+    decodeMs = Math.round(totalTime - ttftMs)
+  } else if (generatedTokens !== null && tps !== null && tps > 0) {
+    decodeMs = Math.round((generatedTokens / tps) * 1000)
+  }
+
   _perfReporter.record(label, {
+    backend,
+    platform: platformLabel,
     total_time_ms: Math.round(totalTime),
-    ...(extra || {})
+    prefill_time_ms: ttftMs !== null ? Math.round(ttftMs) : null,
+    decode_time_ms: decodeMs,
+    // TODO(QVAC-17830 follow-up): expose these from native runtimeStats.
+    vision_encode_time_ms: null,
+    image_prefill_time_ms: null,
+    ttft_ms: ttftMs !== null ? Math.round(ttftMs) : null,
+    generated_tokens: generatedTokens,
+    prompt_tokens: promptTokens,
+    tps: tps !== null ? Number(tps.toFixed(2)) : null,
+    status: 'ok'
   }, {
-    execution_provider: ep,
+    execution_provider: effectiveDevice,
     output: (extra && extra._output) || null
   })
 
-  return `${label} Performance Metrics:
-    - Total time: ${totalTime}ms (${totalSeconds}s)`
+  const lines = [
+    `${label} Performance Metrics (backend=${backend}, platform=${platformLabel}):`,
+    `    - Total time: ${totalTime}ms (${totalSeconds}s)`,
+    `    - Prefill / TTFT: ${ttftMs !== null ? Math.round(ttftMs) + 'ms' : 'n/a'}`,
+    `    - Decode: ${decodeMs !== null ? decodeMs + 'ms' : 'n/a'}`,
+    `    - TPS: ${tps !== null ? tps.toFixed(2) : 'n/a'}`,
+    `    - Tokens: ${generatedTokens !== null ? generatedTokens : 'n/a'} gen / ${promptTokens !== null ? promptTokens : 'n/a'} prompt`
+  ]
+  return lines.join('\n')
 }
 
 /**
@@ -322,35 +459,77 @@ async function describeImageByPath (inference, imageFilePath, prompt = TEST_CONS
   return generatedText.join('')
 }
 
-for (const testCase of imageTestCases) {
-  test(`llama addon can recognize ${testCase.name} in an image`, { timeout: TEST_CONSTANTS.timeout }, async t => {
-    for (const deviceConfig of DEVICE_CONFIGS) {
-      const label = `[${deviceConfig.id.toUpperCase()}]`
+/**
+ * QVAC-17830: defines one brittle test() per (image x backend) that
+ * loads the model once, then runs PERF_WARMUP_RUNS warmup inferences
+ * (not recorded) followed by PERF_RUNS counted inferences (recorded).
+ *
+ * The perf label is `[${testCase.name}] [${BACKEND}]` so
+ * aggregate.js (which groups by `result.test`) sees N rows with the
+ * same key and produces `count=PERF_RUNS, mean, std` per cell -- the
+ * same shape OCR's doctr-*.test.js produces.
+ *
+ * Keyword content assertions run once, against the last counted
+ * iteration's output, so test correctness still gates the pipeline
+ * without bloating the failure surface with N identical checks.
+ *
+ * @param {ImageTestCase} testCase
+ * @param {{id: string, device: string}} deviceConfig
+ */
+function runImageRecognitionTest (testCase, deviceConfig) {
+  const backendTag = deviceConfig.id.toUpperCase()
+  const label = `[${testCase.name}] [${backendTag}]`
+  const testName = `llama addon can recognize ${testCase.name} in an image [${backendTag}]`
 
-      // Setup test infrastructure
-      const { inference } = await setupMultimodalInference(t, deviceConfig.device)
+  test(testName, { timeout: PERF_TEST_TIMEOUT }, async t => {
+    const { inference } = await setupMultimodalInference(t, deviceConfig.device)
 
-      // Verify image file exists
-      const imageFilePath = getMediaPath(testCase.imageFile)
-      t.ok(fs.existsSync(imageFilePath), `${label} ${testCase.imageFile} image file should exist`)
+    const imageFilePath = getMediaPath(testCase.imageFile)
+    t.ok(fs.existsSync(imageFilePath), `${label} ${testCase.imageFile} image file should exist`)
 
-      // Run image description inference
-      const { generatedText, startTime, endTime } = await describeImage(inference, imageFilePath, TEST_CONSTANTS.defaultPrompt)
-      const totalTime = endTime - startTime
-
-      // Log output and statistics
-      t.comment(`${label} Generated text: ${generatedText}`)
-      t.comment(formatPerformanceMetrics(label, totalTime, { _output: generatedText }))
-
-      // Assertions: Content recognition
-      t.ok(generatedText.length > 0, `${label} Should generate some text output for the image`)
-      const { foundKeywords, hasMatch } = checkKeywordsInText(generatedText, testCase.keywords)
-      t.ok(hasMatch,
-        `${label} Output should contain at least one ${testCase.keywordType} word as a whole word. ` +
-        `Found keywords: ${foundKeywords.join(', ') || 'none'}. ` +
-        `Full output: "${generatedText}"`)
+    // Warmup: primes weight cache / vision projection / GPU command
+    // buffers so the counted iterations are not polluted by cold-start
+    // cost. Output is logged for traceability but NOT fed to the perf
+    // reporter.
+    for (let w = 1; w <= PERF_WARMUP_RUNS; w++) {
+      const { generatedText, startTime, endTime } =
+        await describeImage(inference, imageFilePath, TEST_CONSTANTS.defaultPrompt)
+      t.comment(
+        `${label} warmup ${w}/${PERF_WARMUP_RUNS} (${endTime - startTime}ms, ` +
+        `${generatedText.length} chars) - perf NOT recorded`
+      )
     }
+
+    // Counted iterations: each call to formatPerformanceMetrics()
+    // appends one row to the perf reporter with the shared `label`.
+    let lastGeneratedText = ''
+    for (let run = 1; run <= PERF_RUNS; run++) {
+      const { generatedText, startTime, endTime, stats } =
+        await describeImage(inference, imageFilePath, TEST_CONSTANTS.defaultPrompt)
+      const totalTime = endTime - startTime
+      lastGeneratedText = generatedText
+
+      t.comment(`${label} run ${run}/${PERF_RUNS} Generated text: ${generatedText}`)
+      t.comment(formatPerformanceMetrics(label, totalTime, {
+        _output: generatedText,
+        stats,
+        deviceId: deviceConfig.device
+      }))
+    }
+
+    t.ok(lastGeneratedText.length > 0, `${label} Should generate some text output for the image`)
+    const { foundKeywords, hasMatch } = checkKeywordsInText(lastGeneratedText, testCase.keywords)
+    t.ok(hasMatch,
+      `${label} Output should contain at least one ${testCase.keywordType} word as a whole word. ` +
+      `Found keywords: ${foundKeywords.join(', ') || 'none'}. ` +
+      `Full output: "${lastGeneratedText}"`)
   })
+}
+
+for (const testCase of imageTestCases) {
+  for (const deviceConfig of DEVICE_CONFIGS) {
+    runImageRecognitionTest(testCase, deviceConfig)
+  }
 }
 
 test('llama addon accepts a file path string as media content', { timeout: TEST_CONSTANTS.timeout }, async t => {
@@ -390,7 +569,7 @@ test('llama addon can handle multiple images in one prompt', { timeout: TEST_CON
       t.ok(fs.existsSync(p), `${label} image file should exist: ${p}`)
     }
 
-    const { generatedText, startTime, endTime } = await describeMultipleImages(
+    const { generatedText, startTime, endTime, stats } = await describeMultipleImages(
       inference,
       imagePaths,
       prompt
@@ -398,7 +577,11 @@ test('llama addon can handle multiple images in one prompt', { timeout: TEST_CON
     const totalTime = endTime - startTime
 
     t.comment(`${label} Generated text: ${generatedText}`)
-    t.comment(formatPerformanceMetrics(label, totalTime, { _output: generatedText }))
+    t.comment(formatPerformanceMetrics(label, totalTime, {
+      _output: generatedText,
+      stats,
+      deviceId: deviceConfig.device
+    }))
 
     t.ok(generatedText.length > 0, `${label} Should generate some text for multiple images`)
 

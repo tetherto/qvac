@@ -1630,4 +1630,63 @@ jobs:
           retention-days: 30
           if-no-files-found: ignore
 
+      # QVAC-17830: extract VLM performance metrics emitted by
+      # image.test.js (via _perfReporter.writeToConsole() inside
+      # process.on('exit')) from the Device Farm bare / syslog output,
+      # aggregate them into HTML / MD, and upload as an artifact so the
+      # cross-device combine job (and the weekly perf-report.yml) can
+      # pick them up. Mirrors the OCR mobile workflow pattern.
+      - name: Extract performance report from logs
+        if: always() && steps.schedule_run.outputs.run_arn_1
+        shell: bash
+        run: |
+          set +e
+
+          ARTIFACT_DIR="devicefarm-logs/${{ matrix.platform }}"
+          OUTPUT_DIR="${GITHUB_WORKSPACE}/perf-results/${{ matrix.platform }}"
+          mkdir -p "$OUTPUT_DIR"
+
+          if [ ! -d "$ARTIFACT_DIR" ]; then
+            echo "No Device Farm logs directory at $ARTIFACT_DIR — skipping perf extraction"
+            exit 0
+          fi
+
+          echo "=== Searching for PERF_REPORT markers in $ARTIFACT_DIR ==="
+          MARKER_HITS=$(grep -rl "PERF_REPORT_START" "$ARTIFACT_DIR" 2>/dev/null || true)
+          if [ -z "$MARKER_HITS" ]; then
+            echo "No PERF_REPORT markers found in Device Farm logs — nothing to extract"
+            exit 0
+          fi
+          echo "Files containing markers:"
+          echo "$MARKER_HITS"
+
+          echo "=== Running extract-from-log.js ==="
+          node "${GITHUB_WORKSPACE}/addon/scripts/perf-report/extract-from-log.js" \
+            "$ARTIFACT_DIR" \
+            "$OUTPUT_DIR/performance-report.json" \
+            --run-number "${{ github.run_number }}"
+
+          if find "$OUTPUT_DIR" -name "performance-report.json" -type f 2>/dev/null | head -1 | grep -q .; then
+            echo "=== Generating aggregated HTML / MD report ==="
+            node "${GITHUB_WORKSPACE}/addon/scripts/perf-report/aggregate.js" \
+              --dir "$OUTPUT_DIR" \
+              --output-html "$OUTPUT_DIR/performance-report.html" \
+              --output-json "$OUTPUT_DIR/performance-summary.json" \
+              --output "$OUTPUT_DIR/performance-report.md"
+          else
+            echo "extract-from-log.js did not produce a performance-report.json — nothing to aggregate"
+          fi
+
+      - name: Upload performance report
+        if: always() && steps.schedule_run.outputs.run_arn_1
+        uses: actions/upload-artifact@v4
+        with:
+          name: perf-report-llamacpp-llm-${{ matrix.platform }}-${{ github.run_number }}
+          path: |
+            perf-results/${{ matrix.platform }}/**/performance-report.json
+            perf-results/${{ matrix.platform }}/performance-report.html
+            perf-results/${{ matrix.platform }}/performance-report.md
+            perf-results/${{ matrix.platform }}/performance-summary.json
+          retention-days: 90
+          if-no-files-found: ignore
 

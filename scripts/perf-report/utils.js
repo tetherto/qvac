@@ -45,7 +45,10 @@ const METRIC_LABELS = {
   total_time_ms: 'Total time',
   detection_time_ms: 'Detection time',
   recognition_time_ms: 'Recognition time',
+  prefill_time_ms: 'Prefill time',
   decode_time_ms: 'Decode time',
+  vision_encode_time_ms: 'Vision encode',
+  image_prefill_time_ms: 'Image prefill',
   ttft_ms: 'TTFT',
   generated_tokens: 'Generated tokens',
   prompt_tokens: 'Prompt tokens',
@@ -53,7 +56,9 @@ const METRIC_LABELS = {
   text_regions: 'Text regions',
   real_time_factor: 'RTF',
   sample_count: 'Samples',
-  duration_ms: 'Duration'
+  duration_ms: 'Duration',
+  backend: 'Backend',
+  platform: 'Platform'
 }
 
 function metricLabel (key) {
