@@ -36,17 +36,29 @@ const _perfReporter = createPerformanceReporter({
 })
 
 const _reportPath = path.resolve(__dirname, '../../test/results/performance-report.json')
-let _reportScheduled = false
+let _exitHookInstalled = false
 
-function _scheduleReportWrite () {
-  if (_reportScheduled) return
-  _reportScheduled = true
+function _installExitHook () {
+  if (_exitHookInstalled) return
+  _exitHookInstalled = true
+  // Final flush on clean exit. We additionally write after every metric
+  // so partial reports survive crashes (SIGSEGV, abort) — the on-exit
+  // hook only guarantees the GitHub Step Summary write, since the JSON
+  // file has already been written incrementally.
   process.on('exit', () => {
     if (_perfReporter.length > 0) {
       _perfReporter.writeReport(_reportPath)
       _perfReporter.writeStepSummary()
     }
   })
+}
+
+function _flushReport () {
+  if (_perfReporter.length === 0) return
+  // Crash-survivable: every recorded metric immediately persists to
+  // disk so even SIGSEGV mid-test leaves us with a partial latency
+  // picture for the metrics that completed.
+  _perfReporter.writeReport(_reportPath)
 }
 
 const DESKTOP_TIMEOUT = 120 * 1000
@@ -84,7 +96,27 @@ function recordMetric (label, totalTimeMs, input) {
   }, {
     input: input || null
   })
-  _scheduleReportWrite()
+  _installExitHook()
+  _flushReport()
+}
+
+/**
+ * Record the cost of constructing and loading an `ImageClassifier`
+ * instance. Captures the full warmup + GGML graph build + weights
+ * read latency for the current platform, separate from per-image
+ * classify cost.
+ *
+ * @param {string} label - Test name to associate the load cost with
+ * @param {number} loadTimeMs - elapsed wall time in milliseconds
+ */
+function recordLoadTime (label, loadTimeMs) {
+  _perfReporter.record(label, {
+    total_time_ms: Math.round(loadTimeMs)
+  }, {
+    input: 'load'
+  })
+  _installExitHook()
+  _flushReport()
 }
 
 module.exports = {
@@ -95,5 +127,6 @@ module.exports = {
   IMAGE_DIR,
   loadImage,
   createLogger,
-  recordMetric
+  recordMetric,
+  recordLoadTime
 }

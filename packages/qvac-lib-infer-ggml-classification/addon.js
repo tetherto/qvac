@@ -43,6 +43,15 @@ class ClassificationInterface {
     this._handle = null
     this._logger = logger
     this._pending = null
+    // `_pendingSettled` is a Promise that resolves the moment the native
+    // output callback fires for the in-flight job, regardless of
+    // success or failure. We track it separately from the user-facing
+    // classify() Promise so that unload() can deterministically wait
+    // for the native side to finish before tearing down resources,
+    // without racing the underlying JobRunner / OutputCallbackJs uv_
+    // resources (which are not safe to destroy mid-callback).
+    this._pendingSettled = null
+    this._pendingSettledResolve = null
 
     if (logger && typeof logger === 'object' && !configurationParams.__disableNativeLogger) {
       _ensureLoggerInstalled()
@@ -56,12 +65,20 @@ class ClassificationInterface {
     )
   }
 
+  _markPendingSettled () {
+    const resolve = this._pendingSettledResolve
+    this._pending = null
+    this._pendingSettled = null
+    this._pendingSettledResolve = null
+    if (resolve) resolve()
+  }
+
   _outputCallback (self, event, data, error) {
     const pending = this._pending
     if (!pending) return
 
     if (typeof event === 'string' && event.includes('Error')) {
-      this._pending = null
+      this._markPendingSettled()
       const err = new Error(typeof error === 'string' ? error : 'Classification failed')
       if (error && typeof error === 'object' && error.message) err.message = error.message
       pending.reject(err)
@@ -69,7 +86,7 @@ class ClassificationInterface {
     }
 
     if (Array.isArray(data)) {
-      this._pending = null
+      this._markPendingSettled()
       pending.resolve(data)
     }
   }
@@ -94,18 +111,22 @@ class ClassificationInterface {
     if (!this._handle) throw new Error('Classification addon is not initialized')
     if (this._pending) throw new Error('A classification is already in progress')
 
+    this._pendingSettled = new Promise((resolve) => {
+      this._pendingSettledResolve = resolve
+    })
+
     return new Promise((resolve, reject) => {
       this._pending = { resolve, reject }
       let accepted = false
       try {
         accepted = binding.runJob(this._handle, job)
       } catch (err) {
-        this._pending = null
+        this._markPendingSettled()
         reject(err)
         return
       }
       if (!accepted) {
-        this._pending = null
+        this._markPendingSettled()
         reject(new Error('Classification job was rejected by the native runner'))
       }
     })
@@ -113,13 +134,24 @@ class ClassificationInterface {
 
   /**
    * Tears down the native instance. Idempotent; safe to call repeatedly.
+   *
+   * Waits for any in-flight job's native callback to fire before calling
+   * `binding.destroyInstance`. This is required for safety: the underlying
+   * JobRunner uses a worker thread and OutputCallbackJs uses a uv_async
+   * handle; tearing them down while a callback is still in flight races
+   * the handle's close lifecycle and crashes (use-after-free observed
+   * across linux-x64 / darwin-arm64 / android / ios in CI).
    */
   async unload () {
     if (this._handle === null) return
 
-    if (this._pending) {
-      try { this._pending.reject(new Error('Classifier unloaded during inference')) } catch (_) {}
-      this._pending = null
+    // 1. Wait for any in-flight classify() call to settle naturally.
+    //    The user-facing Promise returned by classify() will resolve
+    //    or reject with whatever the native side produces; we only
+    //    need to ensure the native callback has fired before we
+    //    proceed to destroyInstance.
+    if (this._pendingSettled) {
+      try { await this._pendingSettled } catch (_) {}
     }
 
     // Intentionally do NOT call binding.releaseLogger() here: the logger is

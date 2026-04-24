@@ -3,12 +3,15 @@
 const test = require('brittle')
 
 const ImageClassifier = require('../../index')
-const { IMAGE_SAMPLES, loadImage, createLogger, TEST_TIMEOUT, recordMetric } = require('./utils')
+const { IMAGE_SAMPLES, loadImage, createLogger, TEST_TIMEOUT, recordMetric, recordLoadTime } = require('./utils')
 
 test('load() + classify() returns a shaped result for every sample image', async function (t) {
   t.timeout(TEST_TIMEOUT)
   const classifier = new ImageClassifier({ logger: createLogger() })
+  const loadStart = Date.now()
   await classifier.load()
+  const loadElapsed = Date.now() - loadStart
+  recordLoadTime('load:cold', loadElapsed)
   try {
     for (const sample of IMAGE_SAMPLES) {
       const buffer = loadImage(sample.file)
