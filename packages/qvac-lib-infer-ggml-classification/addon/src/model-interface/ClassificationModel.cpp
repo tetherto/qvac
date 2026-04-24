@@ -131,6 +131,31 @@ void ClassificationModel::load() {
     impl_->labels = {"food", "report", "other"};
   }
   impl_->compute = graph::buildGraph(impl_->weights, impl_->backend);
+
+  // Cold-inference warmup. ggml's backend graph allocator leaves the
+  // intermediate tensor buffers and the input/output tensors in an
+  // uninitialised state after `buildGraph` returns. The very first
+  // inference can therefore observe stale heap residue and produce
+  // non-finite logits on some platforms (notably observed on win32-x64
+  // in CI: meal_1.jpg -> probabilities NaN, sort comparison fails).
+  // Run one zero-input forward pass here so every backend buffer is
+  // written deterministically before any user-visible classify() call.
+  {
+    const size_t inputElems =
+        static_cast<size_t>(preprocess::kInputSize) *
+        preprocess::kInputSize * preprocess::kChannels;
+    std::vector<float> zeros(inputElems, 0.0F);
+    ggml_backend_tensor_set(
+        impl_->compute.input, zeros.data(), 0,
+        zeros.size() * sizeof(float));
+    if (impl_->numThreads > 0) {
+      ggml_backend_cpu_set_n_threads(impl_->backend, impl_->numThreads);
+    }
+    // Result is intentionally discarded; the only goal is to populate
+    // every backend buffer with deterministic values.
+    (void)ggml_backend_graph_compute(impl_->backend, impl_->compute.graph);
+  }
+
   impl_->loaded = true;
 
   QLOG(
