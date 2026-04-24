@@ -1079,20 +1079,40 @@ jobs:
           GROUPS_JSON="${{ github.workspace }}/${{ env.ADDON_WORKDIR }}/test/mobile/test-groups.json"
 
           if [ "${{ matrix.platform }}" == "Android" ]; then
+            # QVAC-17830: image.test.js was split into 3 per-image files so
+            # each image runs in its own Device Farm group. Keeps peak
+            # memory low (one VLM load per group) and isolates the
+            # high-res aurora image (prone to OOM) from the other perf
+            # data. Group names come straight from test-groups.json.
             ANDROID_GROUP_A=$(jq -r '.android.groupA | join("|")' "$GROUPS_JSON")
             ANDROID_GROUP_B=$(jq -r '.android.groupB | join("|")' "$GROUPS_JSON")
+            ANDROID_GROUP_IMG_ELE=$(jq -r '.android.groupImgElephant | join("|")' "$GROUPS_JSON")
+            ANDROID_GROUP_IMG_FRU=$(jq -r '.android.groupImgFruitPlate | join("|")' "$GROUPS_JSON")
+            ANDROID_GROUP_IMG_AUR=$(jq -r '.android.groupImgHighResAurora | join("|")' "$GROUPS_JSON")
 
-            echo "Android test split (2 groups):"
-            echo "  Group A: $ANDROID_GROUP_A"
-            echo "  Group B: $ANDROID_GROUP_B"
+            echo "Android test split (5 groups):"
+            echo "  Group A (non-image light):        $ANDROID_GROUP_A"
+            echo "  Group B (non-image light):        $ANDROID_GROUP_B"
+            echo "  Group Image-Elephant:              $ANDROID_GROUP_IMG_ELE"
+            echo "  Group Image-FruitPlate:            $ANDROID_GROUP_IMG_FRU"
+            echo "  Group Image-HighResAurora:         $ANDROID_GROUP_IMG_AUR"
 
-            make_split "$ANDROID_GROUP_A" testspec-android-a.yml
-            make_split "$ANDROID_GROUP_B" testspec-android-b.yml
+            make_split "$ANDROID_GROUP_A"       testspec-android-a.yml
+            make_split "$ANDROID_GROUP_B"       testspec-android-b.yml
+            make_split "$ANDROID_GROUP_IMG_ELE" testspec-android-img-ele.yml
+            make_split "$ANDROID_GROUP_IMG_FRU" testspec-android-img-fru.yml
+            make_split "$ANDROID_GROUP_IMG_AUR" testspec-android-img-aur.yml
 
             SPEC_ARN_A=$(upload_spec testspec-android-a.yml "Android-A")
             echo "test_spec_arn=$SPEC_ARN_A" >> $GITHUB_OUTPUT
             SPEC_ARN_B=$(upload_spec testspec-android-b.yml "Android-B")
             echo "test_spec_arn_2=$SPEC_ARN_B" >> $GITHUB_OUTPUT
+            SPEC_ARN_IMG_ELE=$(upload_spec testspec-android-img-ele.yml "Android-ImgElephant")
+            echo "test_spec_arn_3=$SPEC_ARN_IMG_ELE" >> $GITHUB_OUTPUT
+            SPEC_ARN_IMG_FRU=$(upload_spec testspec-android-img-fru.yml "Android-ImgFruitPlate")
+            echo "test_spec_arn_4=$SPEC_ARN_IMG_FRU" >> $GITHUB_OUTPUT
+            SPEC_ARN_IMG_AUR=$(upload_spec testspec-android-img-aur.yml "Android-ImgHighResAurora")
+            echo "test_spec_arn_5=$SPEC_ARN_IMG_AUR" >> $GITHUB_OUTPUT
           else
             IOS_GREP_HEAVY_1=$(jq -r '.ios.heavy1 | join("|")' "$GROUPS_JSON")
             IOS_GREP_HEAVY_2=$(jq -r '.ios.heavy2 | join("|")' "$GROUPS_JSON")
@@ -1100,18 +1120,24 @@ jobs:
             IOS_GREP_HEAVY_4=$(jq -r '.ios.heavy4 | join("|")' "$GROUPS_JSON")
             IOS_GREP_HEAVY_5=$(jq -r '.ios.heavy5 | join("|")' "$GROUPS_JSON")
             IOS_GREP_HEAVY_6=$(jq -r '.ios.heavy6 | join("|")' "$GROUPS_JSON")
+            # QVAC-17830: heavy7 / heavy8 host the fruit-plate and
+            # high-res aurora image tests (elephant stays in heavy3).
+            IOS_GREP_HEAVY_7=$(jq -r '.ios.heavy7 | join("|")' "$GROUPS_JSON")
+            IOS_GREP_HEAVY_8=$(jq -r '.ios.heavy8 | join("|")' "$GROUPS_JSON")
             IOS_GREP_LIGHT_A=$(jq -r '.ios.lightA | join("|")' "$GROUPS_JSON")
             IOS_GREP_LIGHT_B=$(jq -r '.ios.lightB | join("|")' "$GROUPS_JSON")
 
-            echo "iOS test split (6 heavy + 2 light = 8 groups):"
-            echo "  Heavy 1 (iPhone 16 Pro Max): $IOS_GREP_HEAVY_1"
-            echo "  Heavy 2 (iPhone 16 Pro Max): $IOS_GREP_HEAVY_2"
-            echo "  Heavy 3 (iPhone 17):         $IOS_GREP_HEAVY_3"
-            echo "  Heavy 4 (iPhone 17):         $IOS_GREP_HEAVY_4"
-            echo "  Heavy 5 (iPhone 17):         $IOS_GREP_HEAVY_5"
-            echo "  Heavy 6 (SlidingContext):     $IOS_GREP_HEAVY_6"
-            echo "  Light A (iPhone 16 Pro):     $IOS_GREP_LIGHT_A"
-            echo "  Light B (iPhone 16 Pro):     $IOS_GREP_LIGHT_B"
+            echo "iOS test split (8 heavy + 2 light = 10 groups):"
+            echo "  Heavy 1 (Finetuning):                  $IOS_GREP_HEAVY_1"
+            echo "  Heavy 2 (ToolCalling):                 $IOS_GREP_HEAVY_2"
+            echo "  Heavy 3 (Image-Elephant):              $IOS_GREP_HEAVY_3"
+            echo "  Heavy 4 (OcrLighton):                  $IOS_GREP_HEAVY_4"
+            echo "  Heavy 5 (Reasoning):                   $IOS_GREP_HEAVY_5"
+            echo "  Heavy 6 (SlidingContext):              $IOS_GREP_HEAVY_6"
+            echo "  Heavy 7 (Image-FruitPlate):            $IOS_GREP_HEAVY_7"
+            echo "  Heavy 8 (Image-HighResAurora):         $IOS_GREP_HEAVY_8"
+            echo "  Light A:                               $IOS_GREP_LIGHT_A"
+            echo "  Light B:                               $IOS_GREP_LIGHT_B"
 
             make_split "$IOS_GREP_HEAVY_1" testspec-heavy-1.yml
             make_split "$IOS_GREP_HEAVY_2" testspec-heavy-2.yml
@@ -1119,6 +1145,8 @@ jobs:
             make_split "$IOS_GREP_HEAVY_4" testspec-heavy-4.yml
             make_split "$IOS_GREP_HEAVY_5" testspec-heavy-5.yml
             make_split "$IOS_GREP_HEAVY_6" testspec-heavy-6.yml
+            make_split "$IOS_GREP_HEAVY_7" testspec-heavy-7.yml
+            make_split "$IOS_GREP_HEAVY_8" testspec-heavy-8.yml
             make_split "$IOS_GREP_LIGHT_A" testspec-light-a.yml
             make_split "$IOS_GREP_LIGHT_B" testspec-light-b.yml
 
@@ -1134,10 +1162,14 @@ jobs:
             echo "test_spec_arn_5=$SPEC_ARN_H5" >> $GITHUB_OUTPUT
             SPEC_ARN_H6=$(upload_spec testspec-heavy-6.yml "iOS-Heavy6")
             echo "test_spec_arn_6=$SPEC_ARN_H6" >> $GITHUB_OUTPUT
+            SPEC_ARN_H7=$(upload_spec testspec-heavy-7.yml "iOS-Heavy7")
+            echo "test_spec_arn_7=$SPEC_ARN_H7" >> $GITHUB_OUTPUT
+            SPEC_ARN_H8=$(upload_spec testspec-heavy-8.yml "iOS-Heavy8")
+            echo "test_spec_arn_8=$SPEC_ARN_H8" >> $GITHUB_OUTPUT
             SPEC_ARN_LA=$(upload_spec testspec-light-a.yml "iOS-LightA")
-            echo "test_spec_arn_7=$SPEC_ARN_LA" >> $GITHUB_OUTPUT
+            echo "test_spec_arn_9=$SPEC_ARN_LA" >> $GITHUB_OUTPUT
             SPEC_ARN_LB=$(upload_spec testspec-light-b.yml "iOS-LightB")
-            echo "test_spec_arn_8=$SPEC_ARN_LB" >> $GITHUB_OUTPUT
+            echo "test_spec_arn_10=$SPEC_ARN_LB" >> $GITHUB_OUTPUT
           fi
 
       - name: Schedule Device Farm Test Run
@@ -1171,8 +1203,11 @@ jobs:
             POOL_ARN="${{ secrets.LLM_ANDROID_DEVICE_POOL_ARN }}"
             TEST_SPEC_ARN_A="${{ steps.upload_test_spec.outputs.test_spec_arn }}"
             TEST_SPEC_ARN_B="${{ steps.upload_test_spec.outputs.test_spec_arn_2 }}"
+            TEST_SPEC_ARN_IMG_ELE="${{ steps.upload_test_spec.outputs.test_spec_arn_3 }}"
+            TEST_SPEC_ARN_IMG_FRU="${{ steps.upload_test_spec.outputs.test_spec_arn_4 }}"
+            TEST_SPEC_ARN_IMG_AUR="${{ steps.upload_test_spec.outputs.test_spec_arn_5 }}"
 
-            echo "🚀 Scheduling 2 Android runs (each runs on all devices in pool)..."
+            echo "🚀 Scheduling 5 Android runs (each runs on all devices in pool)..."
             echo "Device Pool ARN: $POOL_ARN"
 
             RUN_ARN_1=$(schedule_run_with_pool "$POOL_ARN" "$RUN_NAME-Android-GroupA" "$TEST_SPEC_ARN_A")
@@ -1181,9 +1216,21 @@ jobs:
             RUN_ARN_2=$(schedule_run_with_pool "$POOL_ARN" "$RUN_NAME-Android-GroupB" "$TEST_SPEC_ARN_B")
             echo "✅ Android Group B scheduled: $RUN_ARN_2"
 
+            RUN_ARN_3=$(schedule_run_with_pool "$POOL_ARN" "$RUN_NAME-Android-ImgElephant" "$TEST_SPEC_ARN_IMG_ELE")
+            echo "✅ Android Image-Elephant scheduled: $RUN_ARN_3"
+
+            RUN_ARN_4=$(schedule_run_with_pool "$POOL_ARN" "$RUN_NAME-Android-ImgFruitPlate" "$TEST_SPEC_ARN_IMG_FRU")
+            echo "✅ Android Image-FruitPlate scheduled: $RUN_ARN_4"
+
+            RUN_ARN_5=$(schedule_run_with_pool "$POOL_ARN" "$RUN_NAME-Android-ImgHighResAurora" "$TEST_SPEC_ARN_IMG_AUR")
+            echo "✅ Android Image-HighResAurora scheduled: $RUN_ARN_5"
+
             echo "run_arn_1=$RUN_ARN_1" >> $GITHUB_OUTPUT
             echo "run_arn_2=$RUN_ARN_2" >> $GITHUB_OUTPUT
-            echo "run_count=2" >> $GITHUB_OUTPUT
+            echo "run_arn_3=$RUN_ARN_3" >> $GITHUB_OUTPUT
+            echo "run_arn_4=$RUN_ARN_4" >> $GITHUB_OUTPUT
+            echo "run_arn_5=$RUN_ARN_5" >> $GITHUB_OUTPUT
+            echo "run_count=5" >> $GITHUB_OUTPUT
           else
             POOL_ARN="${{ secrets.LLM_IOS_DEVICE_POOL_ARN }}"
             TEST_SPEC_ARN_1="${{ steps.upload_test_spec.outputs.test_spec_arn }}"
@@ -1194,8 +1241,10 @@ jobs:
             TEST_SPEC_ARN_6="${{ steps.upload_test_spec.outputs.test_spec_arn_6 }}"
             TEST_SPEC_ARN_7="${{ steps.upload_test_spec.outputs.test_spec_arn_7 }}"
             TEST_SPEC_ARN_8="${{ steps.upload_test_spec.outputs.test_spec_arn_8 }}"
+            TEST_SPEC_ARN_9="${{ steps.upload_test_spec.outputs.test_spec_arn_9 }}"
+            TEST_SPEC_ARN_10="${{ steps.upload_test_spec.outputs.test_spec_arn_10 }}"
 
-            echo "🚀 Scheduling 8 iOS runs (each runs on ALL devices in pool)..."
+            echo "🚀 Scheduling 10 iOS runs (each runs on ALL devices in pool)..."
             echo "Device Pool ARN: $POOL_ARN"
 
             RUN_ARN_1=$(schedule_run_with_pool "$POOL_ARN" "$RUN_NAME-iOS-Heavy1-Finetuning" "$TEST_SPEC_ARN_1")
@@ -1204,8 +1253,8 @@ jobs:
             RUN_ARN_2=$(schedule_run_with_pool "$POOL_ARN" "$RUN_NAME-iOS-Heavy2-ToolCalling" "$TEST_SPEC_ARN_2")
             echo "✅ Heavy2 (ToolCalling) scheduled: $RUN_ARN_2"
 
-            RUN_ARN_3=$(schedule_run_with_pool "$POOL_ARN" "$RUN_NAME-iOS-Heavy3-Image" "$TEST_SPEC_ARN_3")
-            echo "✅ Heavy3 (Image) scheduled: $RUN_ARN_3"
+            RUN_ARN_3=$(schedule_run_with_pool "$POOL_ARN" "$RUN_NAME-iOS-Heavy3-ImgElephant" "$TEST_SPEC_ARN_3")
+            echo "✅ Heavy3 (Image-Elephant) scheduled: $RUN_ARN_3"
 
             RUN_ARN_4=$(schedule_run_with_pool "$POOL_ARN" "$RUN_NAME-iOS-Heavy4-OcrLighton" "$TEST_SPEC_ARN_4")
             echo "✅ Heavy4 (OcrLighton) scheduled: $RUN_ARN_4"
@@ -1216,11 +1265,17 @@ jobs:
             RUN_ARN_6=$(schedule_run_with_pool "$POOL_ARN" "$RUN_NAME-iOS-Heavy6-SlidingContext" "$TEST_SPEC_ARN_6")
             echo "✅ Heavy6 (SlidingContext) scheduled: $RUN_ARN_6"
 
-            RUN_ARN_7=$(schedule_run_with_pool "$POOL_ARN" "$RUN_NAME-iOS-LightA" "$TEST_SPEC_ARN_7")
-            echo "✅ LightA scheduled: $RUN_ARN_7"
+            RUN_ARN_7=$(schedule_run_with_pool "$POOL_ARN" "$RUN_NAME-iOS-Heavy7-ImgFruitPlate" "$TEST_SPEC_ARN_7")
+            echo "✅ Heavy7 (Image-FruitPlate) scheduled: $RUN_ARN_7"
 
-            RUN_ARN_8=$(schedule_run_with_pool "$POOL_ARN" "$RUN_NAME-iOS-LightB" "$TEST_SPEC_ARN_8")
-            echo "✅ LightB scheduled: $RUN_ARN_8"
+            RUN_ARN_8=$(schedule_run_with_pool "$POOL_ARN" "$RUN_NAME-iOS-Heavy8-ImgHighResAurora" "$TEST_SPEC_ARN_8")
+            echo "✅ Heavy8 (Image-HighResAurora) scheduled: $RUN_ARN_8"
+
+            RUN_ARN_9=$(schedule_run_with_pool "$POOL_ARN" "$RUN_NAME-iOS-LightA" "$TEST_SPEC_ARN_9")
+            echo "✅ LightA scheduled: $RUN_ARN_9"
+
+            RUN_ARN_10=$(schedule_run_with_pool "$POOL_ARN" "$RUN_NAME-iOS-LightB" "$TEST_SPEC_ARN_10")
+            echo "✅ LightB scheduled: $RUN_ARN_10"
 
             echo "run_arn_1=$RUN_ARN_1" >> $GITHUB_OUTPUT
             echo "run_arn_2=$RUN_ARN_2" >> $GITHUB_OUTPUT
@@ -1230,7 +1285,9 @@ jobs:
             echo "run_arn_6=$RUN_ARN_6" >> $GITHUB_OUTPUT
             echo "run_arn_7=$RUN_ARN_7" >> $GITHUB_OUTPUT
             echo "run_arn_8=$RUN_ARN_8" >> $GITHUB_OUTPUT
-            echo "run_count=8" >> $GITHUB_OUTPUT
+            echo "run_arn_9=$RUN_ARN_9" >> $GITHUB_OUTPUT
+            echo "run_arn_10=$RUN_ARN_10" >> $GITHUB_OUTPUT
+            echo "run_count=10" >> $GITHUB_OUTPUT
           fi
 
           echo "All runs scheduled."
@@ -1267,6 +1324,8 @@ jobs:
           RUN_ARN_6="${{ steps.schedule_run.outputs.run_arn_6 }}"
           RUN_ARN_7="${{ steps.schedule_run.outputs.run_arn_7 }}"
           RUN_ARN_8="${{ steps.schedule_run.outputs.run_arn_8 }}"
+          RUN_ARN_9="${{ steps.schedule_run.outputs.run_arn_9 }}"
+          RUN_ARN_10="${{ steps.schedule_run.outputs.run_arn_10 }}"
           RUN_COUNT="${{ steps.schedule_run.outputs.run_count }}"
 
           echo "📊 Monitoring $RUN_COUNT Device Farm run(s)..."
@@ -1317,7 +1376,7 @@ jobs:
           done
 
           RUN_ARNS=("$RUN_ARN_1")
-          for i in 2 3 4 5 6 7 8; do
+          for i in 2 3 4 5 6 7 8 9 10; do
             eval "arn=\$RUN_ARN_$i"
             if [ "$RUN_COUNT" -ge "$i" ] && [ -n "$arn" ]; then
               RUN_ARNS+=("$arn")
@@ -1469,13 +1528,15 @@ jobs:
           RUN_ARN_6="${{ steps.schedule_run.outputs.run_arn_6 }}"
           RUN_ARN_7="${{ steps.schedule_run.outputs.run_arn_7 }}"
           RUN_ARN_8="${{ steps.schedule_run.outputs.run_arn_8 }}"
+          RUN_ARN_9="${{ steps.schedule_run.outputs.run_arn_9 }}"
+          RUN_ARN_10="${{ steps.schedule_run.outputs.run_arn_10 }}"
           RUN_COUNT="${{ steps.schedule_run.outputs.run_count }}"
           LOG_DIR="devicefarm-logs/${{ matrix.platform }}"
           PLATFORM="${{ matrix.platform }}"
           mkdir -p "$LOG_DIR"
 
           RUN_ARNS=("$RUN_ARN_1")
-          for i in 2 3 4 5 6 7 8; do
+          for i in 2 3 4 5 6 7 8 9 10; do
             eval "arn=\$RUN_ARN_$i"
             if [ "$RUN_COUNT" -ge "$i" ] && [ -n "$arn" ]; then
               RUN_ARNS+=("$arn")
@@ -1503,6 +1564,13 @@ jobs:
               DEVICE_NAME=$(echo "$JOBS" | jq -r --arg arn "$JOB_ARN" '.jobs[] | select(.arn == $arn) | .device.name // "unknown"')
               JOB_RESULT=$(echo "$JOBS" | jq -r --arg arn "$JOB_ARN" '.jobs[] | select(.arn == $arn) | .result // "UNKNOWN"')
               SAFE_NAME=$(echo "$DEVICE_NAME" | tr ' /' '__' | tr -cd '[:alnum:]_-')
+              # QVAC-17830: put per-device logs into a subdirectory so
+              # that when the same physical device runs multiple Device
+              # Farm groups (image split → up to 5 Android / 10 iOS
+              # groups per device) extract-from-log.js can use its
+              # path-based deriveDeviceName to bucket them correctly.
+              DEVICE_DIR="$LOG_DIR/$SAFE_NAME"
+              mkdir -p "$DEVICE_DIR"
 
               echo ""
               echo "📱 $DEVICE_NAME ($JOB_RESULT)"
@@ -1526,7 +1594,7 @@ jobs:
                     fi
                   fi
                   SAFE_ART=$(echo "$ART_NAME" | tr ' /' '__' | tr -cd '[:alnum:]_-')
-                  DEST="$LOG_DIR/${SAFE_RUN}_${SAFE_NAME}_${SAFE_SUITE}_${SAFE_ART}.${ART_EXT}"
+                  DEST="$DEVICE_DIR/${SAFE_RUN}_${SAFE_SUITE}_${SAFE_ART}.${ART_EXT}"
                   if curl -fsSL --max-time 300 -o "$DEST" "$ART_URL" 2>/dev/null; then
                     echo "  Downloaded: $SUITE_NAME / $ART_NAME"
                     if echo "$ART_NAME" | grep -qiE "test.spec|testspec"; then
@@ -1543,7 +1611,7 @@ jobs:
                   ART_EXT=$(echo "$ARTIFACT" | jq -r '.extension // "txt"')
                   [ -z "$ART_URL" ] && continue
                   SAFE_ART=$(echo "$ART_NAME" | tr ' /' '__' | tr -cd '[:alnum:]_-')
-                  DEST="$LOG_DIR/${SAFE_RUN}_${SAFE_NAME}_${SAFE_SUITE}_${SAFE_ART}.${ART_EXT}"
+                  DEST="$DEVICE_DIR/${SAFE_RUN}_${SAFE_SUITE}_${SAFE_ART}.${ART_EXT}"
                   if curl -fsSL --max-time 300 -o "$DEST" "$ART_URL" 2>/dev/null; then
                     echo "  Downloaded: $SUITE_NAME / $ART_NAME (LOG)"
                   fi
@@ -1563,7 +1631,7 @@ jobs:
                   fi
                 fi
                 SAFE_ART=$(echo "$ART_NAME" | tr ' /' '__' | tr -cd '[:alnum:]_-')
-                DEST="$LOG_DIR/${SAFE_RUN}_${SAFE_NAME}_job_${SAFE_ART}.${ART_EXT}"
+                DEST="$DEVICE_DIR/${SAFE_RUN}_job_${SAFE_ART}.${ART_EXT}"
                 if curl -fsSL --max-time 300 -o "$DEST" "$ART_URL" 2>/dev/null; then
                   echo "  Downloaded (job-level): $ART_NAME"
                 fi
@@ -1581,12 +1649,17 @@ jobs:
           LOG_DIR="devicefarm-logs/${{ matrix.platform }}"
           CONSOLE_DIR="console-logs/${{ matrix.platform }}"
           mkdir -p "$CONSOLE_DIR"
-          for f in "$LOG_DIR"/*; do
+          # QVAC-17830: logs now live in per-device subdirs
+          # (<LOG_DIR>/<device>/...), so walk recursively. Prefix the
+          # destination with the device name to keep uniqueness when
+          # the same SAFE_RUN runs on multiple devices.
+          find "$LOG_DIR" -type f | while read -r f; do
             [ -f "$f" ] || continue
             fname=$(basename "$f")
+            device=$(basename "$(dirname "$f")")
             if echo "$fname" | grep -qiE "Logcat\."; then
-              cp "$f" "$CONSOLE_DIR/"
-              echo "  Console log: $fname"
+              cp "$f" "$CONSOLE_DIR/${device}_${fname}"
+              echo "  Console log: ${device}/${fname}"
             fi
             if echo "$fname" | grep -qiE "Customer_Artifacts\.zip$"; then
               prefix=$(echo "$fname" | sed 's/_Customer_Artifacts\.zip$//')
@@ -1594,13 +1667,13 @@ jobs:
               if unzip -qo "$f" -d "$tmpdir" 2>/dev/null; then
                 bare_log=$(find "$tmpdir" -name "bare_console.log" -type f 2>/dev/null | head -1)
                 if [ -n "$bare_log" ]; then
-                  cp "$bare_log" "$CONSOLE_DIR/${prefix}_bare_console.log"
-                  echo "  Extracted: ${prefix}_bare_console.log"
+                  cp "$bare_log" "$CONSOLE_DIR/${device}_${prefix}_bare_console.log"
+                  echo "  Extracted: ${device}_${prefix}_bare_console.log"
                 fi
                 appium_log=$(find "$tmpdir" -name "appium.log" -type f 2>/dev/null | head -1)
                 if [ -n "$appium_log" ]; then
-                  cp "$appium_log" "$CONSOLE_DIR/${prefix}_appium.log"
-                  echo "  Extracted: ${prefix}_appium.log"
+                  cp "$appium_log" "$CONSOLE_DIR/${device}_${prefix}_appium.log"
+                  echo "  Extracted: ${device}_${prefix}_appium.log"
                 fi
               else
                 echo "  WARNING: Failed to unzip $fname"
@@ -1630,12 +1703,21 @@ jobs:
           retention-days: 30
           if-no-files-found: ignore
 
-      # QVAC-17830: extract VLM performance metrics emitted by
-      # image.test.js (via _perfReporter.writeToConsole() inside
-      # process.on('exit')) from the Device Farm bare / syslog output,
-      # aggregate them into HTML / MD, and upload as an artifact so the
-      # cross-device combine job (and the weekly perf-report.yml) can
-      # pick them up. Mirrors the OCR mobile workflow pattern.
+      # QVAC-17830: extract VLM performance metrics emitted by the
+      # image-*.test.js files (via the mobile fallback perf reporter's
+      # per-test writeToConsole() checkpoints) from the Device Farm
+      # logcat / syslog output, aggregate them into HTML / MD, and
+      # upload as an artifact so the cross-device combine job (and the
+      # weekly perf-report.yml) can pick them up. Mirrors the OCR
+      # mobile workflow pattern.
+      #
+      # Because we split the image test into 3 per-image files, each
+      # physical device runs multiple Device Farm groups that each
+      # emit their own performance-report.json payload. We pass
+      # --merge so extract-from-log.js concatenates their `results`
+      # arrays (deduped) into one per-device report. Device bucketing
+      # comes from the <LOG_DIR>/<device>/ subdir structure created
+      # by the Download Device Farm Logs step.
       - name: Extract performance report from logs
         if: always() && steps.schedule_run.outputs.run_arn_1
         shell: bash
@@ -1651,6 +1733,24 @@ jobs:
             exit 0
           fi
 
+          # Unzip Customer_Artifacts.zip inline into each device
+          # subdirectory so bare_console.log / appium.log contents
+          # (which carry the PERF_REPORT markers) are scannable by
+          # extract-from-log.js alongside the plain LOG artifacts.
+          echo "=== Unzipping Customer_Artifacts.zip inline ==="
+          find "$ARTIFACT_DIR" -name "*Customer_Artifacts.zip" -type f | while read -r zf; do
+            device_dir=$(dirname "$zf")
+            base=$(basename "$zf" .zip)
+            extract_to="$device_dir/${base}_unpacked"
+            rm -rf "$extract_to"
+            mkdir -p "$extract_to"
+            if unzip -qo "$zf" -d "$extract_to" 2>/dev/null; then
+              echo "  Unpacked: $zf -> $extract_to"
+            else
+              echo "  WARNING: failed to unzip $zf"
+            fi
+          done
+
           echo "=== Searching for PERF_REPORT markers in $ARTIFACT_DIR ==="
           MARKER_HITS=$(grep -rl "PERF_REPORT_START" "$ARTIFACT_DIR" 2>/dev/null || true)
           if [ -z "$MARKER_HITS" ]; then
@@ -1664,7 +1764,8 @@ jobs:
           node "${GITHUB_WORKSPACE}/addon/scripts/perf-report/extract-from-log.js" \
             "$ARTIFACT_DIR" \
             "$OUTPUT_DIR/performance-report.json" \
-            --run-number "${{ github.run_number }}"
+            --run-number "${{ github.run_number }}" \
+            --merge
 
           if find "$OUTPUT_DIR" -name "performance-report.json" -type f 2>/dev/null | head -1 | grep -q .; then
             echo "=== Generating aggregated HTML / MD report ==="

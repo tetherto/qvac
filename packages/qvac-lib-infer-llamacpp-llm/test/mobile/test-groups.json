@@ -2,10 +2,12 @@
   "ios": {
     "heavy1": ["runFinetuningPauseResumeTest"],
     "heavy2": ["runToolCallingTest"],
-    "heavy3": ["runImageTest"],
+    "heavy3": ["runImageElephantTest"],
     "heavy4": ["runOcrLightonTest"],
     "heavy5": ["runReasoningTest"],
     "heavy6": ["runSlidingContextTest"],
+    "heavy7": ["runImageFruitPlateTest"],
+    "heavy8": ["runImageHighResAuroraTest"],
     "lightA": [
       "runAfriquegemmaEdgeCasesTest",
       "runAfriquegemmaTranslationTest",
@@ -33,8 +35,7 @@
       "runConfigParametersTest",
       "runDynamicToolsTest",
       "runFinetuningPauseResumeTest",
-      "runGenerationParamsTest",
-      "runImageTest"
+      "runGenerationParamsTest"
     ],
     "groupB": [
       "runModelLoadingTest",
@@ -45,6 +46,9 @@
       "runSlidingContextTest",
       "runToolCallingTest",
       "runUtf8OutputTest"
-    ]
+    ],
+    "groupImgElephant": ["runImageElephantTest"],
+    "groupImgFruitPlate": ["runImageFruitPlateTest"],
+    "groupImgHighResAurora": ["runImageHighResAuroraTest"]
   }
 }

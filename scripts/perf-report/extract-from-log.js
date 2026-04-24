@@ -297,13 +297,24 @@ function deriveDeviceName (filePath, logDir) {
 }
 
 function parseArgs () {
-  const args = { logDir: null, outputPath: null, runNumber: null, filter: null }
+  const args = {
+    logDir: null,
+    outputPath: null,
+    runNumber: null,
+    filter: null,
+    merge: false,
+    deviceFromFilename: null
+  }
   const positional = []
   for (let i = 2; i < process.argv.length; i++) {
     if (process.argv[i] === '--run-number' && i + 1 < process.argv.length) {
       args.runNumber = parseInt(process.argv[++i], 10) || null
     } else if (process.argv[i] === '--filter' && i + 1 < process.argv.length) {
       args.filter = process.argv[++i]
+    } else if (process.argv[i] === '--merge') {
+      args.merge = true
+    } else if (process.argv[i] === '--device-from-filename' && i + 1 < process.argv.length) {
+      args.deviceFromFilename = process.argv[++i]
     } else {
       positional.push(process.argv[i])
     }
@@ -311,6 +322,66 @@ function parseArgs () {
   args.logDir = positional[0] || null
   args.outputPath = positional[1] || null
   return args
+}
+
+/**
+ * Concatenates `results` from every report found for a given device
+ * into one report. Used when a single physical device runs multiple
+ * Device Farm groups (e.g. QVAC-17830 splits the LLM image test into
+ * three per-image groups on Android / iOS). The default behaviour of
+ * keeping only the largest report would drop two of the three groups.
+ *
+ * Deduping by `(test, output, metrics snapshot)` keeps the reporter's
+ * repeated lightweight flushes from inflating the row count — those
+ * flushes emit cumulative snapshots, so the same (test, iteration)
+ * can appear in many payloads from one group.
+ */
+function mergeDeviceReports (reports) {
+  if (!reports || reports.length === 0) return null
+  const base = JSON.parse(JSON.stringify(reports[0]))
+  base.results = []
+  const seen = new Set()
+  for (const r of reports) {
+    if (!r || !Array.isArray(r.results)) continue
+    for (const row of r.results) {
+      // Perf reporter re-emits cumulative snapshots, so the same row
+      // typically appears in many payloads. Dedupe on a stable
+      // fingerprint that ignores the output text (may be trimmed in
+      // lightweight emits) and focuses on the measured metrics.
+      const m = row.metrics || {}
+      const key = [
+        row.test || '',
+        row.execution_provider || '',
+        m.total_time_ms != null ? m.total_time_ms : '',
+        m.prefill_time_ms != null ? m.prefill_time_ms : '',
+        m.decode_time_ms != null ? m.decode_time_ms : '',
+        m.generated_tokens != null ? m.generated_tokens : '',
+        m.tps != null ? m.tps : ''
+      ].join('|')
+      if (seen.has(key)) continue
+      seen.add(key)
+      base.results.push(row)
+    }
+  }
+  return base
+}
+
+/**
+ * Parses a device name out of a Device Farm artifact filename using
+ * a caller-supplied JavaScript regex whose first capture group is the
+ * device name (underscores converted to spaces). Used when all
+ * artifacts are downloaded into a single flat directory (addon
+ * workflows that pull the `devicefarm-logs-<platform>` zip) and the
+ * directory-based `deriveDeviceName` cannot distinguish devices.
+ */
+function deriveDeviceFromFilename (filePath, regex) {
+  if (!regex) return null
+  try {
+    const re = new RegExp(regex)
+    const m = path.basename(filePath).match(re)
+    if (m && m[1]) return m[1].replace(/_/g, ' ').trim()
+  } catch (_) { /* bad pattern — fall through */ }
+  return null
 }
 
 function filterResults (report, pattern) {
@@ -335,10 +406,10 @@ function injectCIMetadata (report, runNumber) {
 }
 
 function main () {
-  const { logDir, outputPath, runNumber, filter } = parseArgs()
+  const { logDir, outputPath, runNumber, filter, merge, deviceFromFilename } = parseArgs()
 
   if (!logDir || !outputPath) {
-    console.error('Usage: node extract-from-log.js <log-dir> <output-path> [--run-number N] [--filter PATTERN]')
+    console.error('Usage: node extract-from-log.js <log-dir> <output-path> [--run-number N] [--filter PATTERN] [--merge] [--device-from-filename REGEX]')
     process.exit(1)
   }
 
@@ -350,16 +421,25 @@ function main () {
     console.log(`  ${f} (${size} bytes)`)
   }
 
+  // When `merge` is on, collect every valid report per device and
+  // concatenate at the end. When off, keep only the largest per
+  // device (original behaviour — matches OCR pre-QVAC-17830).
   const deviceReports = {}
 
   for (const file of files) {
     const report = extractFromFile(file)
-    if (report && report.results) {
-      const count = report.results.length
-      const deviceName = deriveDeviceName(file, logDir)
-      const key = deviceName || 'unknown'
-      console.log(`  ${file}: found report with ${count} results (device: ${key})`)
+    if (!report || !report.results) continue
+    const count = report.results.length
+    const dirName = deriveDeviceName(file, logDir)
+    const fileName = deriveDeviceFromFilename(file, deviceFromFilename)
+    const key = dirName || fileName || 'unknown'
+    console.log(`  ${file}: found report with ${count} results (device: ${key})`)
 
+    if (merge) {
+      if (!deviceReports[key]) deviceReports[key] = { reports: [], files: [], deviceName: key }
+      deviceReports[key].reports.push(report)
+      deviceReports[key].files.push(file)
+    } else {
       const prev = deviceReports[key]
       if (!prev || count > prev.report.results.length) {
         deviceReports[key] = { report, file, deviceName: key }
@@ -371,6 +451,22 @@ function main () {
   if (devices.length === 0) {
     console.log('No performance report markers found in logs')
     process.exit(0)
+  }
+
+  // After merging, collapse each device's [reports] list into a
+  // single concatenated report so the rest of the pipeline is
+  // identical regardless of --merge.
+  if (merge) {
+    for (const key of devices) {
+      const bucket = deviceReports[key]
+      const merged = mergeDeviceReports(bucket.reports)
+      if (merged && merged.device) merged.device.name = key
+      console.log(
+        `  merged ${key}: ${bucket.reports.length} reports from ${bucket.files.length} files ` +
+        `→ ${merged ? merged.results.length : 0} deduped results`
+      )
+      deviceReports[key] = { report: merged, file: bucket.files.join(','), deviceName: key }
+    }
   }
 
   const outputDir = path.dirname(outputPath)
