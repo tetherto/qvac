@@ -13,13 +13,17 @@ export const completionStatsSchema = z.object({
   backendDevice: z.enum(["cpu", "gpu"]).optional(),
   promptTokens: z.number().optional(),
   generatedTokens: z.number().optional(),
+});
+
+export const completionDebugStatsSchema = z.object({
   contextSlides: z.number().optional(),
   nPastBeforeTools: z.number().optional(),
   firstMsgTokens: z.number().optional(),
   toolsTrimmed: z.number().optional(),
-});
+}).optional();
 
 export type CompletionStats = z.infer<typeof completionStatsSchema>;
+export type CompletionDebugStats = z.infer<typeof completionDebugStatsSchema>;
 
 export const seqSchema = z.number().int().nonnegative();
 
@@ -57,6 +61,7 @@ export const statsEventSchema = z.object({
   type: z.literal("completionStats"),
   seq: seqSchema,
   stats: completionStatsSchema,
+  debugStats: completionDebugStatsSchema,
 });
 
 export const completionErrorSchema = z.object({
@@ -134,6 +139,7 @@ export type CompletionRun = {
   text: Promise<string>;
   toolCalls: Promise<ToolCallWithCall[]>;
   stats: Promise<CompletionStats | undefined>;
+  debugStats?: Promise<CompletionDebugStats | undefined>;
 };
 
 export type ToolCallingCapability = "textParse" | "none";

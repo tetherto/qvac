@@ -70,6 +70,7 @@ import {
   loadModel,
   unloadModel,
   type ToolInput,
+  ToolsModeType,
   QWEN3_1_7B_INST_Q4,
   type CompletionRun,
 } from "@qvac/sdk"
@@ -194,10 +195,14 @@ interface RoundStats {
   cacheTokens: number
   promptTokens: number
   generatedTokens: number
-  contextSlides: number
-  nPastBeforeTools: number
   tokensPerSecond: number
   timeToFirstToken: number
+}
+
+interface DebugStats {
+  round: number
+  contextSlides: number
+  nPastBeforeTools: number
   toolsTrimmed: boolean
 }
 
@@ -212,13 +217,13 @@ function assert(condition: boolean, message: string): void {
   if (!condition) throw new AssertionError(message)
 }
 
-function lastStat(stats: RoundStats[]): RoundStats {
+function lastStat<Stats>(stats: Stats[]): Stats {
   const s = stats[stats.length - 1]
   if (!s) throw new AssertionError("no stats available")
   return s
 }
 
-function firstStat(stats: RoundStats[]): RoundStats {
+function firstStat<Stats>(stats: Stats[]): Stats {
   const s = stats[0]
   if (!s) throw new AssertionError("no stats available")
   return s
@@ -229,6 +234,7 @@ interface AgenticResult {
   toolCalls: ParsedToolCall[]
   rounds: number
   roundStats: RoundStats[]
+  debugStats: DebugStats[] | null
 }
 
 async function agenticTurn(
@@ -242,6 +248,7 @@ async function agenticTurn(
   const chainStartIdx = history.length
   const allToolCalls: ParsedToolCall[] = []
   const roundStats: RoundStats[] = []
+  let debugStats: DebugStats[] | null = []
   let rounds = 0
   let fullText = ""
 
@@ -275,16 +282,25 @@ async function agenticTurn(
         cacheTokens: stats.cacheTokens ?? 0,
         promptTokens: stats.promptTokens ?? 0,
         generatedTokens: stats.generatedTokens ?? 0,
-        contextSlides: stats.contextSlides ?? 0,
-        nPastBeforeTools: stats.nPastBeforeTools ?? 0,
         tokensPerSecond: stats.tokensPerSecond ?? 0,
         timeToFirstToken: stats.timeToFirstToken ?? 0,
-        toolsTrimmed: Boolean(stats.toolsTrimmed),
       }
       roundStats.push(rs)
-      const trimmed = stats.toolsTrimmed ? " toolsTrimmed=YES" : ""
-      console.log(`  Stats: prompt=${rs.promptTokens} cache=${rs.cacheTokens} gen=${rs.generatedTokens} nPastBeforeTools=${rs.nPastBeforeTools} slides=${rs.contextSlides} tps=${rs.tokensPerSecond.toFixed(1)}${trimmed}`)
+      console.log(`  Stats: prompt=${rs.promptTokens} cache=${rs.cacheTokens} gen=${rs.generatedTokens} tps=${rs.tokensPerSecond.toFixed(1)}`)
     }
+    const dStats = await result.debugStats
+    if (dStats && debugStats) {
+      const ds: DebugStats = {
+        round: rounds,
+        contextSlides: dStats.contextSlides ?? 0,
+        nPastBeforeTools: dStats.nPastBeforeTools ?? 0,
+        toolsTrimmed: Boolean(dStats.toolsTrimmed),
+      }
+      debugStats.push(ds)
+      const trimmed = dStats.toolsTrimmed ? " toolsTrimmed=YES" : ""
+      console.log(`  Debug Stats: nPastBeforeTools=${ds.nPastBeforeTools} slides=${ds.contextSlides} ${trimmed}`)
+    }
+    debugStats = (debugStats && debugStats.length > 0) ? debugStats : null
 
     // Parse tool calls
     const toolCalls = await parseToolCalls(result)
@@ -300,7 +316,7 @@ async function agenticTurn(
       }
 
       history.push({ role: "assistant", content: cleanAnswer })
-      return { answer: cleanAnswer, toolCalls: allToolCalls, rounds, roundStats }
+      return { answer: cleanAnswer, toolCalls: allToolCalls, rounds, roundStats, debugStats }
     }
 
     // Tool round — keep full raw output (thinking + tool_call XML) in content.
@@ -321,7 +337,7 @@ async function agenticTurn(
     }
   }
 
-  return { answer: fullText, toolCalls: allToolCalls, rounds, roundStats }
+  return { answer: fullText, toolCalls: allToolCalls, rounds, roundStats, debugStats }
 }
 
 // ─── Test Scenarios ──────────────────────────────────────────────────────────
@@ -330,6 +346,7 @@ type Scenario = {
   name: string
   description: string
   run: (modelId: string, kvCache: string, verbose: boolean) => Promise<{ passed: boolean; detail: string }>
+
 }
 
 const scenarios: Scenario[] = [
@@ -346,12 +363,17 @@ const scenarios: Scenario[] = [
 
       assert(result.toolCalls.some((tc) => tc.name === "get_weather"), "should call get_weather")
       assert(s.length >= 1, "should have at least 1 round of stats")
-      assert(firstStat(s).nPastBeforeTools > 0, `nPastBeforeTools should be > 0, got ${firstStat(s).nPastBeforeTools}`)
       assert(firstStat(s).promptTokens > 0, `promptTokens should be > 0, got ${firstStat(s).promptTokens}`)
       assert(firstStat(s).generatedTokens > 0, `generatedTokens should be > 0, got ${firstStat(s).generatedTokens}`)
-      assert(firstStat(s).contextSlides === 0, `contextSlides should be 0, got ${firstStat(s).contextSlides}`)
+      let detail = `tools=${result.toolCalls.map((t) => t.name).join(",")}`
+      const ds = result.debugStats
+      if (ds) {
+        assert(firstStat(ds).nPastBeforeTools > 0, `nPastBeforeTools should be > 0, got ${firstStat(ds).nPastBeforeTools}`)
+        assert(firstStat(ds).contextSlides === 0, `contextSlides should be 0, got ${firstStat(ds).contextSlides}`)
+        detail += `, nPBT=${firstStat(ds).nPastBeforeTools}`
+      }
 
-      return { passed: true, detail: `tools=${result.toolCalls.map((t) => t.name).join(",")}, nPBT=${firstStat(s).nPastBeforeTools}` }
+      return { passed: true, detail }
     },
   },
   {
@@ -368,10 +390,15 @@ const scenarios: Scenario[] = [
       assert(result.toolCalls.length === 0, `should not call tools, got ${result.toolCalls.length}`)
       assert(result.answer.toLowerCase().includes("paris"), "answer should mention Paris")
       assert(s.length >= 1, "should have stats")
-      assert(firstStat(s).nPastBeforeTools > 0, `nPastBeforeTools should be > 0 (tools were in prompt), got ${firstStat(s).nPastBeforeTools}`)
-      assert(firstStat(s).toolsTrimmed, "toolsTrimmed should be true (model didn't use tools)")
+      let detail = ''
+      const ds = result.debugStats
+      if (ds) {
+        assert(firstStat(ds).nPastBeforeTools > 0, `nPastBeforeTools should be > 0 (tools were in prompt), got ${firstStat(ds).nPastBeforeTools}`)
+        assert(firstStat(ds).toolsTrimmed, "toolsTrimmed should be true (model didn't use tools)")
+        detail += `nPBT=${firstStat(ds).nPastBeforeTools}, trimmed=${firstStat(ds).toolsTrimmed}`
+      }
 
-      return { passed: true, detail: `nPBT=${firstStat(s).nPastBeforeTools}, trimmed=${firstStat(s).toolsTrimmed}` }
+      return { passed: true, detail }
     },
   },
   {
@@ -391,12 +418,16 @@ const scenarios: Scenario[] = [
       assert(names.indexOf("search_web") < names.indexOf("get_weather"), "search should come before weather")
       assert(result.rounds >= 3, `should have at least 3 rounds, got ${result.rounds}`)
 
-      // Stats: anchor should be stable across all rounds
-      const anchor = firstStat(s).nPastBeforeTools
-      assert(anchor > 0, `round 1 nPastBeforeTools should be > 0, got ${anchor}`)
-      for (let i = 1; i < s.length; i++) {
-        const ri = s[i]
-        assert(ri !== undefined && ri.nPastBeforeTools === anchor, `round ${i + 1} nPBT should be ${anchor}, got ${ri?.nPastBeforeTools}`)
+      const ds = result.debugStats
+      let anchor
+      if (ds) {
+        // Stats: anchor should be stable across all rounds
+        anchor = firstStat(ds).nPastBeforeTools
+        assert(anchor > 0, `round 1 nPastBeforeTools should be > 0, got ${anchor}`)
+        for (let i = 1; i < ds.length; i++) {
+          const ri = ds[i]
+          assert(ri !== undefined && ri.nPastBeforeTools === anchor, `round ${i + 1} nPBT should be ${anchor}, got ${ri?.nPastBeforeTools}`)
+        }
       }
 
       // Chain rounds should have small prompt (only tool_response, no tools re-sent)
@@ -405,10 +436,13 @@ const scenarios: Scenario[] = [
         assert(ri !== undefined && ri.promptTokens < 200, `chain round ${i + 1} prompt should be < 200, got ${ri?.promptTokens}`)
       }
 
-      // Final round: toolsTrimmed, cache drops to anchor
-      const last = lastStat(s)
-      assert(last.toolsTrimmed, "final round should have toolsTrimmed=true")
-      assert(last.cacheTokens === anchor, `final cache should equal anchor ${anchor}, got ${last.cacheTokens}`)
+      if (ds && anchor) {
+        // Final round: toolsTrimmed, cache drops to anchor
+        const lastS = lastStat(s)
+        const lastDS = lastStat(ds)
+        assert(lastDS.toolsTrimmed, "final round should have toolsTrimmed=true")
+        assert(lastS.cacheTokens === anchor, `final cache should equal anchor ${anchor}, got ${lastS.cacheTokens}`)
+      }
 
       return { passed: true, detail: `chain=${names.join(" → ")}, anchor=${anchor}, rounds=${result.rounds}` }
     },
@@ -428,9 +462,14 @@ const scenarios: Scenario[] = [
       assert(names.has("get_weather"), "should call get_weather")
       assert(names.has("get_stock_price"), "should call get_stock_price")
       assert(s.length >= 1, "should have stats")
-      assert(firstStat(s).nPastBeforeTools > 0, `nPastBeforeTools should be > 0, got ${firstStat(s).nPastBeforeTools}`)
+      let detail = `tools=${[...names].join(",")}`
+      const ds = result.debugStats
+      if (ds) {
+        assert(firstStat(ds).nPastBeforeTools > 0, `nPastBeforeTools should be > 0, got ${firstStat(ds).nPastBeforeTools}`)
+        detail += `, nPBT=${firstStat(ds).nPastBeforeTools}`
+      }
 
-      return { passed: true, detail: `tools=${[...names].join(",")}, nPBT=${firstStat(s).nPastBeforeTools}` }
+      return { passed: true, detail }
     },
   },
   {
@@ -450,13 +489,19 @@ const scenarios: Scenario[] = [
       assert(names.includes("get_stock_price"), "should call get_stock_price")
       assert(result.answer.length > 10, `answer should be meaningful, got ${result.answer.length} chars`)
       assert(result.rounds === 2, `should be exactly 2 rounds (tools + answer), got ${result.rounds}`)
+      let detail = `tools=${names.join(",")}, rounds=${result.rounds}`
 
-      // Round 2 should have all tool responses and trimmed tools
-      const lastRound = lastStat(s)
-      assert(lastRound.toolsTrimmed, "final round should have toolsTrimmed=true")
-      assert(lastRound.cacheTokens === firstStat(s).nPastBeforeTools, `final cache ${lastRound.cacheTokens} should equal anchor ${firstStat(s).nPastBeforeTools}`)
+      const ds = result.debugStats
+      if (ds) {
+        // Round 2 should have all tool responses and trimmed tools
+        const lastS = lastStat(s)
+        const lastDS = lastStat(ds)
+        assert(lastDS.toolsTrimmed, "final round should have toolsTrimmed=true")
+        assert(lastS.cacheTokens === firstStat(ds).nPastBeforeTools, `final cache ${lastS.cacheTokens} should equal anchor ${firstStat(ds).nPastBeforeTools}`)
+        detail += `, anchor=${firstStat(ds).nPastBeforeTools}`
+      }
 
-      return { passed: true, detail: `tools=${names.join(",")}, rounds=${result.rounds}, anchor=${firstStat(s).nPastBeforeTools}` }
+      return { passed: true, detail }
     },
   },
   {
@@ -475,21 +520,26 @@ const scenarios: Scenario[] = [
       assert(searchCount >= 2, `should have at least 2 searches, got ${searchCount}`)
       assert(names.includes("get_weather"), "should call get_weather")
       assert(result.rounds >= 4, `should have at least 4 rounds, got ${result.rounds}`)
+      let detail = `chain=${names.join(" → ")}, rounds=${result.rounds}`
 
-      // Anchor stable across all rounds
-      const anchor = firstStat(s).nPastBeforeTools
-      assert(anchor > 0, `anchor should be > 0, got ${anchor}`)
-      for (let i = 1; i < s.length; i++) {
-        const ri = s[i]
-        assert(ri !== undefined && ri.nPastBeforeTools === anchor, `round ${i + 1} nPBT should be ${anchor}, got ${ri?.nPastBeforeTools}`)
+      const ds = result.debugStats
+      if (ds) {
+        // Anchor stable across all rounds
+        const anchor = firstStat(ds).nPastBeforeTools
+        assert(anchor > 0, `anchor should be > 0, got ${anchor}`)
+        for (let i = 1; i < s.length; i++) {
+          const ri = ds[i]
+          assert(ri !== undefined && ri.nPastBeforeTools === anchor, `round ${i + 1} nPBT should be ${anchor}, got ${ri?.nPastBeforeTools}`)
+        }
+
+        // Final round trimmed
+        const lastS = lastStat(s)
+        assert(lastStat(ds).toolsTrimmed, "final round should trim tools")
+        assert(lastS.cacheTokens === anchor, `final cache ${lastS.cacheTokens} should equal anchor ${anchor}`)
+        detail += `, anchor=${anchor}`
       }
 
-      // Final round trimmed
-      const last = lastStat(s)
-      assert(last.toolsTrimmed, "final round should trim tools")
-      assert(last.cacheTokens === anchor, `final cache ${last.cacheTokens} should equal anchor ${anchor}`)
-
-      return { passed: true, detail: `chain=${names.join(" → ")}, anchor=${anchor}, rounds=${result.rounds}` }
+      return { passed: true, detail }
     },
   },
   {
@@ -508,13 +558,18 @@ const scenarios: Scenario[] = [
       assert(result.toolCalls.some((tc) => tc.name === "get_weather"), "should call get_weather")
       assert(result.toolCalls.some((tc) => JSON.stringify(tc.arguments).toLowerCase().includes("london")), "should request London")
       assert(s.length >= 1, "should have stats")
-      assert(firstStat(s).nPastBeforeTools > 0, `nPastBeforeTools should be > 0, got ${firstStat(s).nPastBeforeTools}`)
+      let detail = ''
+      const ds = result.debugStats
+      if (ds) {
+        assert(firstStat(ds).nPastBeforeTools > 0, `nPastBeforeTools should be > 0, got ${firstStat(ds).nPastBeforeTools}`)
 
-      // Final round should trim
-      const last = lastStat(s)
-      assert(last.toolsTrimmed, "final round should trim tools")
+        // Final round should trim
+        const last = lastStat(ds)
+        assert(last.toolsTrimmed, "final round should trim tools")
+        detail += `nPBT=${firstStat(ds).nPastBeforeTools}, trimmed=${last.toolsTrimmed}`
+      }
 
-      return { passed: true, detail: `nPBT=${firstStat(s).nPastBeforeTools}, trimmed=${last.toolsTrimmed}` }
+      return { passed: true, detail }
     },
   },
   {
@@ -528,18 +583,22 @@ const scenarios: Scenario[] = [
         { role: "user", content: "Who is their CEO?" },
       ]
       const result = await agenticTurn(modelId, history, [searchTool], kvCache + "-s7", 3, verbose)
-      const s = result.roundStats
 
       console.log('toolCalls', result.toolCalls)
       assert(result.toolCalls.some((tc) => JSON.stringify(tc.arguments).toLowerCase().includes("nexora")), "should search for Nexora")
       const answer = result.answer.toLowerCase()
       assert(answer.includes("elena") || answer.includes("voss"), "answer should mention Elena Voss")
-      assert(firstStat(s).nPastBeforeTools > 0, `nPastBeforeTools should be > 0, got ${firstStat(s).nPastBeforeTools}`)
+      let detail = ''
 
-      const last = lastStat(s)
-      assert(last.toolsTrimmed, "final round should trim tools")
+      const ds = result.debugStats
+      if (ds) {
+        assert(firstStat(ds).nPastBeforeTools > 0, `nPastBeforeTools should be > 0, got ${firstStat(ds).nPastBeforeTools}`)
+        const last = lastStat(ds)
+        assert(last.toolsTrimmed, "final round should trim tools")
+        detail += `nPBT=${firstStat(ds).nPastBeforeTools}, trimmed=${last.toolsTrimmed}`
+      }
 
-      return { passed: true, detail: `nPBT=${firstStat(s).nPastBeforeTools}, trimmed=${last.toolsTrimmed}` }
+      return { passed: true, detail }
     },
   },
   {
@@ -553,16 +612,20 @@ const scenarios: Scenario[] = [
         { role: "user", content: "No, I meant Paris, Texas, not France. Can you check again?" },
       ]
       const result = await agenticTurn(modelId, history, [weatherTool], kvCache + "-s8", 2, verbose)
-      const s = result.roundStats
 
       assert(result.toolCalls.some((tc) => tc.name === "get_weather"), "should call get_weather")
       assert(result.toolCalls.some((tc) => JSON.stringify(tc.arguments).toLowerCase().includes("texas")), "should include Texas")
-      assert(firstStat(s).nPastBeforeTools > 0, `nPastBeforeTools should be > 0, got ${firstStat(s).nPastBeforeTools}`)
+      let detail = ''
+      const ds = result.debugStats
+      if (ds) {
+        assert(firstStat(ds).nPastBeforeTools > 0, `nPastBeforeTools should be > 0, got ${firstStat(ds).nPastBeforeTools}`)
 
-      const last = lastStat(s)
-      assert(last.toolsTrimmed, "final round should trim tools")
+        const last = lastStat(ds)
+        assert(last.toolsTrimmed, "final round should trim tools")
+        detail += `nPBT=${firstStat(ds).nPastBeforeTools}, trimmed=${last.toolsTrimmed}`
+      }
 
-      return { passed: true, detail: `nPBT=${firstStat(s).nPastBeforeTools}, trimmed=${last.toolsTrimmed}` }
+      return { passed: true, detail }
     },
   },
   {
@@ -623,7 +686,7 @@ const scenarios: Scenario[] = [
           predict: -1,
           n_discarded: 100,
           tools: true,
-          toolsMode: "dynamic",
+          toolsMode: ToolsModeType.dynamic,
         },
         onProgress: (p) => process.stdout.write(`\r  ${p.percentage.toFixed(0)}%`),
       })
@@ -637,33 +700,38 @@ const scenarios: Scenario[] = [
         ]
         const result = await agenticTurn(smallModelId, history, [weatherTool, searchTool], kvCache + "-slide", 5, verbose)
         const s = result.roundStats
-
-        // Check that sliding occurred in at least one round
-        const totalSlides = s.reduce((sum, r) => sum + r.contextSlides, 0)
-        console.log(`  Total context slides: ${totalSlides}`)
-        assert(totalSlides > 0, `context sliding should occur with 768 ctx, got ${totalSlides} slides`)
-
         // The chain should still complete (model produces a final answer)
         assert(result.answer.length > 0, "should produce a final answer despite sliding")
         assert(result.rounds >= 2, `should have at least 2 rounds, got ${result.rounds}`)
         assert(result.toolCalls.length > 0, "should have called at least one tool")
+        let detail = `rounds=${result.rounds}, tools=${result.toolCalls.map((t) => t.name).join(",")}`
 
-        // Anchor should be set on first round and adjusted by sliding
-        const firstAnchor = firstStat(s).nPastBeforeTools
-        assert(firstAnchor > 0, `nPastBeforeTools should be > 0, got ${firstAnchor}`)
+        const ds = result.debugStats
+        if (ds) {
+          // Check that sliding occurred in at least one round
+          const totalSlides = ds.reduce((sum, r) => sum + r.contextSlides, 0)
+          console.log(`  Total context slides: ${totalSlides}`)
+          assert(totalSlides > 0, `context sliding should occur with 768 ctx, got ${totalSlides} slides`)
 
-        // After sliding, anchor MUST be smaller than the original.
-        // If it's equal, nPastBeforeTools was not adjusted during sliding
-        // and tool tokens leaked into the KV cache.
-        const last = lastStat(s)
-        assert(last.nPastBeforeTools > 0, `final nPastBeforeTools should be > 0, got ${last.nPastBeforeTools}`)
-        assert(last.nPastBeforeTools < firstAnchor, `anchor must shrink after sliding: first=${firstAnchor}, last=${last.nPastBeforeTools} (if equal, adjustAfterSlide is missing)`)
 
-        // Final round should trim, cache drops to adjusted anchor
-        assert(last.toolsTrimmed, "final round should trim tools")
-        assert(last.cacheTokens === last.nPastBeforeTools, `final cache ${last.cacheTokens} should equal adjusted anchor ${last.nPastBeforeTools}`)
+          // Anchor should be set on first round and adjusted by sliding
+          const firstAnchor = firstStat(ds).nPastBeforeTools
+          assert(firstAnchor > 0, `nPastBeforeTools should be > 0, got ${firstAnchor}`)
 
-        return { passed: true, detail: `slides=${totalSlides}, rounds=${result.rounds}, anchor=${firstAnchor}->${last.nPastBeforeTools}, tools=${result.toolCalls.map((t) => t.name).join(",")}` }
+          // After sliding, anchor MUST be smaller than the original.
+          // If it's equal, nPastBeforeTools was not adjusted during sliding
+          // and tool tokens leaked into the KV cache.
+          const last = lastStat(ds)
+          assert(last.nPastBeforeTools > 0, `final nPastBeforeTools should be > 0, got ${last.nPastBeforeTools}`)
+          assert(last.nPastBeforeTools < firstAnchor, `anchor must shrink after sliding: first=${firstAnchor}, last=${last.nPastBeforeTools} (if equal, adjustAfterSlide is missing)`)
+
+          // Final round should trim, cache drops to adjusted anchor
+          assert(last.toolsTrimmed, "final round should trim tools")
+          assert(lastStat(s).cacheTokens === last.nPastBeforeTools, `final cache ${lastStat(s).cacheTokens} should equal adjusted anchor ${last.nPastBeforeTools}`)
+          detail += `, slides=${totalSlides}, anchor=${firstAnchor}->${last.nPastBeforeTools}`
+        }
+
+        return { passed: true, detail }
       } finally {
         await unloadModel({ modelId: smallModelId, clearStorage: false })
       }
@@ -685,7 +753,7 @@ async function main() {
     modelConfig: {
       ctx_size: 4096,
       tools: true,
-      toolsMode: "dynamic",
+      toolsMode: ToolsModeType.dynamic,
     },
     onProgress: (p) => process.stdout.write(`\r  ${p.percentage.toFixed(0)}%`),
   })

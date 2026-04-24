@@ -1,5 +1,6 @@
 import type { RunOptions } from "@qvac/llm-llamacpp";
 import type {
+  CompletionDebugStats,
   CompletionParams,
   CompletionStats,
   GenerationParams,
@@ -46,14 +47,8 @@ import {
 import type { LlmStats } from "@/server/bare/types/addon-responses";
 import fs, { promises as fsPromises } from "bare-fs";
 
-type DebugStats = {
-  promptTokens: number;
-  generatedTokens: number;
-  contextSlides: number;
-}
-
 interface ResponseWithStats {
-  stats?: LlmStats & DebugStats;
+  stats?: LlmStats & CompletionDebugStats;
 }
 
 interface ChatHistory {
@@ -376,21 +371,23 @@ async function* processModelResponse(
     ...(responseWithStats.stats?.backendDevice !== undefined && {
       backendDevice: responseWithStats.stats.backendDevice,
     }),
-    promptTokens: responseWithStats.stats?.promptTokens ?? 0,
+    // @ts-expect-error test-error
+    promptTokens: responseWithStats.stats?.promptTokens ?? 0, // eslint-disable-line
     generatedTokens: responseWithStats.stats?.generatedTokens ?? 0,
-    contextSlides: responseWithStats.stats?.contextSlides ?? 0,
-    // @ts-expect-error test-error
-    nPastBeforeTools: responseWithStats.stats?.nPastBeforeTools ?? 0, // eslint-disable-line
-    // @ts-expect-error test-error
-    toolsTrimmed:responseWithStats.stats?.toolsTrimmed ?? 0, // eslint-disable-line
-    // @ts-expect-error test-error
-    firstMsgTokens: responseWithStats.stats?.firstMsgTokens ?? 0, // eslint-disable-line
   } as CompletionStats;
+
+  const debugStats: CompletionDebugStats = {
+    contextSlides: responseWithStats.stats?.contextSlides ?? 0,
+    nPastBeforeTools: responseWithStats.stats?.nPastBeforeTools ?? 0,
+    toolsTrimmed:responseWithStats.stats?.toolsTrimmed ?? 0,
+    firstMsgTokens: responseWithStats.stats?.firstMsgTokens ?? 0,
+  } as CompletionDebugStats;
 
   return {
     ...buildStreamResult(
       modelExecutionMs,
       hasDefinedValues(stats) ? stats : undefined,
+      debugStats,
     ),
     toolCalls: toolCallsResult,
   };
