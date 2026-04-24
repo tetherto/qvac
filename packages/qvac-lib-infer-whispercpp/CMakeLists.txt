@@ -1,7 +1,12 @@
 cmake_minimum_required(VERSION 3.25)
 
 option(BUILD_TESTING "Build tests" OFF)
-option(ENABLE_VULKAN "Enable Vulkan GPU acceleration" OFF)
+
+if(CMAKE_SYSTEM_NAME STREQUAL "Linux" OR CMAKE_SYSTEM_NAME STREQUAL "Android" OR CMAKE_SYSTEM_NAME STREQUAL "Windows")
+  option(ENABLE_VULKAN "Enable Vulkan GPU acceleration" ON)
+else()
+  option(ENABLE_VULKAN "Enable Vulkan GPU acceleration" OFF)
+endif()
 
 if(BUILD_TESTING)
   list(APPEND VCPKG_MANIFEST_FEATURES "tests")
