@@ -523,6 +523,40 @@ function runImageRecognitionTest (testCase, deviceConfig) {
     const imageFilePath = getMediaPath(testCase.imageFile)
     t.ok(fs.existsSync(imageFilePath), `${label} ${testCase.imageFile} image file should exist`)
 
+    // QVAC-17830: iOS-only small-image pre-warmup. On Device Farm iPhones
+    // the fruit-plate 10 MB PNG crashes the app during the very first
+    // vision_encode before any perf record() fires — Metal shaders get
+    // JIT-compiled, the KV cache grows, and the image-prefill buffer
+    // allocates all in one shot. Running a cheap inference first on a
+    // tiny image (e.g. elephant.jpg ~23 KB) pays those one-shot costs
+    // ahead of time so the real image's first pass only needs the
+    // incremental delta. Guarded by testCase.iosWarmupImage so it only
+    // fires for the tests that actually opt in (fruit plate today),
+    // and only on iOS so desktop/Android timings are untouched.
+    if (platform === 'ios' && testCase.iosWarmupImage) {
+      try {
+        const warmupPath = getMediaPath(testCase.iosWarmupImage)
+        if (fs.existsSync(warmupPath)) {
+          t.comment(
+            `${label} iOS pre-warmup with ${testCase.iosWarmupImage} ` +
+            '(perf NOT recorded)'
+          )
+          const w = await describeImage(inference, warmupPath, TEST_CONSTANTS.defaultPrompt)
+          t.comment(
+            `${label} iOS pre-warmup done in ${w.endTime - w.startTime}ms ` +
+            `(${w.generatedText.length} chars)`
+          )
+        } else {
+          t.comment(
+            `${label} iOS pre-warmup image not found at ${warmupPath} ` +
+            '— skipping pre-warmup'
+          )
+        }
+      } catch (err) {
+        t.comment(`${label} iOS pre-warmup failed (non-fatal): ${err.message}`)
+      }
+    }
+
     for (let w = 1; w <= PERF_WARMUP_RUNS; w++) {
       const { generatedText, startTime, endTime } =
         await describeImage(inference, imageFilePath, TEST_CONSTANTS.defaultPrompt)

@@ -209,22 +209,41 @@ jobs:
       - name: Fix desktop device names
         shell: bash
         run: |
-          # Every desktop matrix entry now uses a unique `label` in its
-          # artifact name (e.g. linux-x64-cpu / linux-x64-gpu), so the
-          # sed below is really just stripping our fixed prefix + run
-          # number and the remainder IS the device label.
+          # Every desktop matrix entry uses a unique `label` in its
+          # artifact name (e.g. linux-x64-cpu / linux-x64-gpu). The sed
+          # below strips our fixed prefix + run number; the remainder
+          # IS the raw matrix label.
+          #
+          # QVAC-17830 (combined-report fix): the CI matrix intentionally
+          # runs two legs on the same physical Linux x64 target (one
+          # no_gpu=true for pure CPU data, one on a GPU runner for CPU+GPU
+          # data) and likewise two ubuntu versions for linux-arm64. In the
+          # combined summary those should show up as ONE column per
+          # platform — otherwise the GPU row on the "*-cpu" / "*-u22" /
+          # "*-u24" columns renders as "-" and looks like missing data
+          # even though the data lives in the sibling leg.
+          #
+          # We therefore fold them to the physical platform name here so
+          # `aggregate.js` buckets CPU and GPU measurements under one
+          # device. Test labels already carry [CPU]/[GPU], so the rows
+          # stay distinct.
           for dir in combined-reports/perf-report-llamacpp-llm-*/; do
             [ -d "$dir" ] || continue
             base=$(basename "$dir")
             platform=$(echo "$base" | sed "s/^perf-report-llamacpp-llm-//" | sed "s/-${{ github.run_number }}$//")
 
-            # Skip mobile — they already have real device names (e.g. "Pixel 8 Pro").
             case "$platform" in Android|iOS) continue ;; esac
+
+            case "$platform" in
+              linux-x64-cpu|linux-x64-gpu) device_name="linux-x64" ;;
+              linux-arm64-u22|linux-arm64-u24) device_name="linux-arm64" ;;
+              *) device_name="$platform" ;;
+            esac
 
             for json in $(find "$dir" -name "performance-report.json" 2>/dev/null); do
               if command -v jq >/dev/null 2>&1; then
-                jq --arg name "$platform" '.device.name = $name' "$json" > "${json}.tmp" && mv "${json}.tmp" "$json"
-                echo "Patched device name in $json -> $platform"
+                jq --arg name "$device_name" '.device.name = $name' "$json" > "${json}.tmp" && mv "${json}.tmp" "$json"
+                echo "Patched device name in $json -> $device_name (was matrix label $platform)"
               fi
             done
           done
@@ -243,6 +262,8 @@ jobs:
 
           node scripts/perf-report/aggregate.js \
             --dir combined-reports \
+            --addon-type vision \
+            --device-details \
             --output-html combined-output/performance-report-combined.html \
             --output-json combined-output/performance-summary-combined.json \
             --output combined-output/performance-report-combined.md

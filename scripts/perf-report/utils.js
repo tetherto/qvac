@@ -109,7 +109,96 @@ function _shortDeviceName (name) {
     .replace(/^GitHub Actions\s+\d+$/i, name)
 }
 
-function generateMarkdownReport (aggregated) {
+// QVAC-17830: same column list writeStepSummary() uses for vision
+// addons in scripts/test-utils/performance-reporter.js. The combined
+// markdown report rebuilds this table per device so mobile runs that
+// can't write to GITHUB_STEP_SUMMARY (they execute on Device Farm, not
+// on the GitHub runner) still surface a detailed table alongside the
+// desktop ones in the combined summary.
+const _VISION_DETAIL_COLUMNS = [
+  { key: 'backend', label: 'Backend' },
+  { key: 'platform', label: 'Platform' },
+  { key: 'total_time_ms', label: 'Total Time (ms)' },
+  { key: 'prefill_time_ms', label: 'Prefill (ms)' },
+  { key: 'decode_time_ms', label: 'Decode (ms)' },
+  { key: 'vision_encode_time_ms', label: 'Vision Enc (ms)' },
+  { key: 'image_prefill_time_ms', label: 'Img Prefill (ms)' },
+  { key: 'ttft_ms', label: 'TTFT (ms)' },
+  { key: 'generated_tokens', label: 'Gen Tokens' },
+  { key: 'prompt_tokens', label: 'Prompt Tokens' },
+  { key: 'tps', label: 'TPS' },
+  { key: 'status', label: 'Status' }
+]
+
+function _formatDetailCell (key, summary, categoricalVal) {
+  if (categoricalVal != null && categoricalVal !== '') return String(categoricalVal)
+  if (!summary || summary.mean == null) return '-'
+  const v = summary.mean
+  if (key.endsWith('_ms')) return String(Math.round(v))
+  if (key === 'tps') return v.toFixed(2)
+  if (Number.isInteger(v)) return String(v)
+  return v.toFixed(2)
+}
+
+/**
+ * Per-device detail table (one row per test) matching the
+ * writeStepSummary() layout used by desktop matrix legs. When rendered
+ * into the combined step summary this gives every device — mobile
+ * included — the same detail breakdown without requiring a
+ * GITHUB_STEP_SUMMARY write from inside the Device Farm container.
+ */
+function generateDeviceDetailTables (aggregated, addonType) {
+  if (addonType !== 'vision') return ''
+
+  const lines = []
+  const {
+    devices,
+    device_meta: deviceMeta = {},
+    categorical = {},
+    addon,
+    run_numbers: runNumbers = []
+  } = aggregated
+  const deviceNames = Object.keys(devices)
+  if (!deviceNames.length) return ''
+
+  for (const devName of deviceNames) {
+    const tests = devices[devName] || {}
+    const testNames = Object.keys(tests).sort()
+    if (!testNames.length) continue
+
+    const meta = deviceMeta[devName] || {}
+    const platformArch = meta.platform && meta.arch
+      ? `${meta.platform}/${meta.arch}`
+      : meta.platform || '-'
+    const runLabel = runNumbers.length ? runNumbers.join(', ') : 'local'
+
+    lines.push(`### Performance: ${addon}`)
+    lines.push('')
+    lines.push(`> Device: **${devName}** (${platformArch}) | Run: ${runLabel}`)
+    lines.push('')
+
+    const header = ['Test', 'EP', ..._VISION_DETAIL_COLUMNS.map(c => c.label)]
+    lines.push('| ' + header.join(' | ') + ' |')
+    lines.push('| ' + header.map(() => '---').join(' | ') + ' |')
+
+    for (const testName of testNames) {
+      const metrics = tests[testName] || {}
+      const cats = (categorical[devName] && categorical[devName][testName]) || {}
+      const ep = cats.execution_provider || '-'
+      const row = [testName, ep]
+      for (const col of _VISION_DETAIL_COLUMNS) {
+        row.push(_formatDetailCell(col.key, metrics[col.key], cats[col.key]))
+      }
+      lines.push('| ' + row.join(' | ') + ' |')
+    }
+    lines.push('')
+  }
+
+  return lines.join('\n')
+}
+
+function generateMarkdownReport (aggregated, opts) {
+  const options = opts || {}
   const lines = []
   const { addon, generated_at, run_numbers, devices, quality } = aggregated
   const iterCount = _maxIterationCount(devices)
@@ -201,6 +290,17 @@ function generateMarkdownReport (aggregated) {
     }
   }
 
+  if (options.includeDeviceDetails) {
+    const detail = generateDeviceDetailTables(aggregated, options.addonType || 'vision')
+    if (detail) {
+      lines.push('---')
+      lines.push('')
+      lines.push('### Per-Device Detail')
+      lines.push('')
+      lines.push(detail)
+    }
+  }
+
   return lines.join('\n') + '\n'
 }
 
@@ -215,7 +315,9 @@ function generateMarkdownReport (aggregated) {
  * @returns {Object} Aggregated result
  */
 function aggregateReports (reports) {
-  if (!reports.length) return { addon: 'unknown', devices: {}, run_numbers: [], quality: {} }
+  if (!reports.length) {
+    return { addon: 'unknown', devices: {}, run_numbers: [], quality: {}, device_meta: {}, categorical: {} }
+  }
 
   const addon = reports[0].addon
   const runNumbers = [...new Set(reports.map(r => r.run_number).filter(Boolean))]
@@ -223,27 +325,56 @@ function aggregateReports (reports) {
   const deviceMap = {}
   const qualityMap = {}
   const imagePathMap = {}
+  // Per-device metadata (platform / arch) harvested from the first
+  // report that landed under that device name. Used by the per-device
+  // detail tables in the combined summary.
+  const deviceMeta = {}
+  // Categorical metrics (e.g. backend, platform, status) — numeric
+  // summarize() drops these because typeof v !== 'number'. We keep the
+  // most recent string value per [device][test][metric] so the per-
+  // device detail table can render the real backend / platform / status
+  // instead of the blank "-" produced by summarize on strings.
+  const categorical = {}
 
   for (const report of reports) {
     const deviceName = report.device ? report.device.name : 'unknown'
 
     if (!deviceMap[deviceName]) deviceMap[deviceName] = {}
     if (!qualityMap[deviceName]) qualityMap[deviceName] = {}
+    if (!categorical[deviceName]) categorical[deviceName] = {}
+    if (!deviceMeta[deviceName] && report.device) {
+      deviceMeta[deviceName] = {
+        name: report.device.name,
+        platform: report.device.platform || null,
+        arch: report.device.arch || null,
+        os_version: report.device.os_version || null,
+        runner: report.device.runner || null
+      }
+    }
 
     for (const result of (report.results || [])) {
       const testKey = result.test
       if (!deviceMap[deviceName][testKey]) deviceMap[deviceName][testKey] = {}
+      if (!categorical[deviceName][testKey]) categorical[deviceName][testKey] = {}
 
       if (result.image_path && !imagePathMap[testKey]) {
         imagePathMap[testKey] = result.image_path
       }
 
+      if (result.execution_provider != null) {
+        categorical[deviceName][testKey].execution_provider = String(result.execution_provider)
+      }
+
       for (const [metricKey, value] of Object.entries(result.metrics || {})) {
         if (value === null || value === undefined) continue
-        if (!deviceMap[deviceName][testKey][metricKey]) {
-          deviceMap[deviceName][testKey][metricKey] = []
+        if (typeof value === 'number') {
+          if (!deviceMap[deviceName][testKey][metricKey]) {
+            deviceMap[deviceName][testKey][metricKey] = []
+          }
+          deviceMap[deviceName][testKey][metricKey].push(value)
+        } else {
+          categorical[deviceName][testKey][metricKey] = String(value)
         }
-        deviceMap[deviceName][testKey][metricKey].push(value)
       }
 
       if (result.quality) {
@@ -290,7 +421,9 @@ function aggregateReports (reports) {
     devices: summarized,
     quality: qualitySummarized,
     image_paths: imagePathMap,
-    quality_details: qualityDetails
+    quality_details: qualityDetails,
+    device_meta: deviceMeta,
+    categorical
   }
 }
 
@@ -1181,6 +1314,7 @@ module.exports = {
   metricLabel,
   formatMetricValue,
   generateMarkdownReport,
+  generateDeviceDetailTables,
   generateHtmlReport,
   aggregateReports
 }

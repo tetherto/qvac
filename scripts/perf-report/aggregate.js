@@ -27,6 +27,7 @@ const { aggregateReports, generateMarkdownReport, generateHtmlReport } = require
 function parseArgs (argv) {
   const args = {
     addon: null,
+    addonType: null,
     workflow: null,
     runs: 6,
     dir: null,
@@ -34,6 +35,7 @@ function parseArgs (argv) {
     outputJson: null,
     outputHtml: null,
     repo: null,
+    deviceDetails: false,
     help: false
   }
 
@@ -41,6 +43,7 @@ function parseArgs (argv) {
     const arg = argv[i]
     switch (arg) {
       case '--addon': args.addon = argv[++i]; break
+      case '--addon-type': args.addonType = argv[++i]; break
       case '--workflow': args.workflow = argv[++i]; break
       case '--runs': args.runs = parseInt(argv[++i], 10); break
       case '--dir': args.dir = argv[++i]; break
@@ -48,6 +51,7 @@ function parseArgs (argv) {
       case '--output-json': args.outputJson = argv[++i]; break
       case '--output-html': args.outputHtml = argv[++i]; break
       case '--repo': args.repo = argv[++i]; break
+      case '--device-details': args.deviceDetails = true; break
       case '--help': case '-h': args.help = true; break
     }
   }
@@ -62,6 +66,7 @@ Downloads performance artifacts from CI and generates comparison reports.
 
 OPTIONS:
   --addon <name>        Addon name to filter artifacts (e.g. ocr-onnx, nmtcpp)
+  --addon-type <type>   Addon type for per-device detail tables (default: 'vision')
   --workflow <name>     GitHub Actions workflow name to query
   --runs <n>            Number of recent runs to aggregate (default: 6)
   --dir <path>          Use local directory of JSON reports instead of downloading
@@ -69,6 +74,7 @@ OPTIONS:
   --output-json <path>  JSON summary output file (optional)
   --output-html <path>  HTML report file (optional, self-contained)
   --repo <owner/repo>   GitHub repository (default: current repo)
+  --device-details      Append per-device detail tables to the markdown output
   -h, --help            Show this help
 
 EXAMPLES:
@@ -207,7 +213,18 @@ function main () {
   console.log(`\nAggregating ${reports.length} report(s)...`)
   const aggregated = aggregateReports(reports)
 
-  const markdown = generateMarkdownReport(aggregated)
+  // Infer addon type from first report when caller did not pass one.
+  // Per-device detail tables only render for addon types that have an
+  // explicit column list (vision today) — `generateDeviceDetailTables`
+  // returns '' for other types and the flag is a no-op.
+  const resolvedAddonType = args.addonType ||
+    (reports[0] && reports[0].addon_type) ||
+    'vision'
+
+  const markdown = generateMarkdownReport(aggregated, {
+    includeDeviceDetails: args.deviceDetails,
+    addonType: resolvedAddonType
+  })
 
   if (args.output) {
     const dir = path.dirname(args.output)
