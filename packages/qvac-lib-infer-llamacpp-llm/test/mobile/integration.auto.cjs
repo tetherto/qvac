@@ -41,11 +41,6 @@ async function runConfigParametersTest (options = {}) { // eslint-disable-line n
   return runIntegrationModule('../integration/config-parameters.test.js', options)
 }
 
-async function runDynamicToolsTest (options = {}) { // eslint-disable-line no-unused-vars
-  if (typeof __shouldRunTest === 'function' && !__shouldRunTest('runDynamicToolsTest')) return __FILTERED
-  return runIntegrationModule('../integration/dynamic-tools.test.js', options)
-}
-
 async function runFinetuningPauseResumeTest (options = {}) { // eslint-disable-line no-unused-vars
   if (typeof __shouldRunTest === 'function' && !__shouldRunTest('runFinetuningPauseResumeTest')) return __FILTERED
   return runIntegrationModule('../integration/finetuning-pause-resume.test.js', options)
@@ -94,6 +89,11 @@ async function runSlidingContextTest (options = {}) { // eslint-disable-line no-
 async function runToolCallingTest (options = {}) { // eslint-disable-line no-unused-vars
   if (typeof __shouldRunTest === 'function' && !__shouldRunTest('runToolCallingTest')) return __FILTERED
   return runIntegrationModule('../integration/tool-calling.test.js', options)
+}
+
+async function runToolsCompactTest (options = {}) { // eslint-disable-line no-unused-vars
+  if (typeof __shouldRunTest === 'function' && !__shouldRunTest('runToolsCompactTest')) return __FILTERED
+  return runIntegrationModule('../integration/tools-compact.test.js', options)
 }
 
 async function runUtf8OutputTest (options = {}) { // eslint-disable-line no-unused-vars

@@ -37,6 +37,7 @@
 #include "addon/LlmErrors.hpp"
 #include "qvac-lib-inference-addon-cpp/LlamacppUtils.hpp"
 #include "utils/BackendSelection.hpp"
+#include "utils/ChatTemplateUtils.hpp"
 #include "utils/LoggingMacros.hpp"
 #include "utils/ScopeGuard.hpp"
 #include "utils/SharedSnapshot.hpp"
@@ -314,9 +315,9 @@ void LlamaModel::init(bool acquireLock) {
 
   common_params params;
   std::optional<int> adrenoVersion;
-  bool toolsAtEnd = false;
+  ResolvedToolsCompactConfig toolsCompactConfig;
   commonParamsParse(
-      modelPath, configFilemap, params, adrenoVersion, toolsAtEnd);
+      modelPath, configFilemap, params, adrenoVersion, toolsCompactConfig);
 
   const std::string errorWhenFailed = toString(UnableToLoadModel);
   auto streamedFiles =
@@ -338,12 +339,16 @@ void LlamaModel::init(bool acquireLock) {
     return;
   }
 
+  // Create tools compact controller before context (contexts hold reference)
+  snap->toolsCompact_ =
+      std::make_unique<ToolsCompactController>(toolsCompactConfig.profile);
+
   snap->isTextLlm_ = constructionArgs_.projectionPath.empty();
   snap->llmContext_ = createContext(
       std::string(constructionArgs_.projectionPath),
       params,
       std::move(llamaInit),
-      toolsAtEnd);
+      *snap->toolsCompact_);
 
   if (snap->configuredNDiscarded_ > 0 && snap->llmContext_) {
     snap->llmContext_->setNDiscarded(snap->configuredNDiscarded_);
@@ -371,8 +376,8 @@ bool LlamaModel::isLoaded() {
 
 llama_pos LlamaModel::getNPastBeforeTools() const {
   std::shared_lock lock(stateMtx_);
-  if (state_->llmContext_) {
-    return state_->llmContext_->dynamicToolsState().nPastBeforeTools();
+  if (state_->toolsCompact_) {
+    return state_->toolsCompact_->anchor();
   }
   return -1;
 }
@@ -484,21 +489,25 @@ LlamaModel::ResolvedPrompt
 LlamaModel::resolveChatAndTools(const Prompt& prompt) {
   ResolvedPrompt resolved;
   if (state_->cacheManager_.has_value()) {
+    ParsedPromptPayload parsedPrompt;
     resolved.isCacheLoaded = state_->cacheManager_->handleCache(
-        resolved.chatMsgs,
-        resolved.tools,
+        parsedPrompt,
         prompt.input,
         [this](const std::string& inputPrompt) {
           return this->formatPrompt(inputPrompt);
         },
         prompt.cacheKey);
+    resolved.chatMsgs = std::move(parsedPrompt.chatMsgs);
+    resolved.tools = std::move(parsedPrompt.tools);
+    resolved.layout = std::move(parsedPrompt.layout);
     resolved.shouldResetAfterInference =
         state_->cacheManager_->isCacheDisabled() ||
         !state_->cacheManager_->wasCacheUsedInLastPrompt();
   } else {
-    auto formatted = formatPrompt(prompt.input);
-    resolved.chatMsgs = std::move(formatted.first);
-    resolved.tools = std::move(formatted.second);
+    ParsedPromptPayload parsedPrompt = formatPrompt(prompt.input);
+    resolved.chatMsgs = std::move(parsedPrompt.chatMsgs);
+    resolved.tools = std::move(parsedPrompt.tools);
+    resolved.layout = std::move(parsedPrompt.layout);
     resolved.shouldResetAfterInference = true;
   }
   return resolved;
@@ -526,6 +535,14 @@ std::string LlamaModel::processPromptImpl(const Prompt& prompt) {
       state_->llmContext_->getNPast() > 0) {
     resetState(true);
   }
+
+  bool hasKvCacheContext = resolved.isCacheLoaded;
+  if (state_->llmContext_->getNPast() > 0) {
+    hasKvCacheContext = true;
+  }
+
+  state_->toolsCompact_->validatePrompt(
+      resolved.chatMsgs, resolved.tools, resolved.layout, hasKvCacheContext);
 
   if (resolved.chatMsgs.empty() && resolved.tools.empty()) {
     QLOG_IF(Priority::INFO, "No messages to process - returning early\n");
@@ -558,9 +575,15 @@ std::string LlamaModel::processPromptImpl(const Prompt& prompt) {
   }
 
   std::ostringstream oss;
+  bool needsOutputCapture = state_->toolsCompact_->enabled();
   auto callback = prompt.outputCallback;
   if (!prompt.outputCallback) {
     callback = [&](const std::string& token) { oss << token; };
+  } else if (needsOutputCapture) {
+    callback = [&](const std::string& token) {
+      oss << token;
+      prompt.outputCallback(token);
+    };
   }
 
   if (!state_->llmContext_->generateResponse(callback)) {
@@ -573,15 +596,24 @@ std::string LlamaModel::processPromptImpl(const Prompt& prompt) {
   if (!prompt.outputCallback) {
     out = oss.str();
   }
-  auto& dts = state_->llmContext_->dynamicToolsState();
-  if (dts.toolsAtEnd() && !resolved.tools.empty() &&
-      dts.nPastBeforeTools() > 0 &&
-      state_->llmContext_->getNPast() > dts.nPastBeforeTools()) {
-    state_->llmContext_->removeLastNTokens(
-        state_->llmContext_->getNPast() - dts.nPastBeforeTools());
-    dts.reset();
-    if (state_->llmContext_->getFirstMsgTokens() >
-        state_->llmContext_->getNPast()) {
+
+  // Post-generation tools trim decision via controller
+  std::string ossStr;
+  if (needsOutputCapture && prompt.outputCallback) {
+    // Only materialize a second copy when output streamed via callback.
+    ossStr = oss.str();
+  }
+  const std::string& outputToCheck =
+      needsOutputCapture ? (prompt.outputCallback ? ossStr : out) : out;
+  auto decision = state_->toolsCompact_->onGenerationComplete(
+      outputToCheck,
+      state_->llmContext_->getNPast(),
+      state_->llmContext_->getFirstMsgTokens());
+  if (decision.trim) {
+    state_->llmContext_->removeLastNTokens(decision.tokensToRemoveFromTail);
+    if (decision.clampFirstMsgTokensToNPast &&
+        state_->llmContext_->getFirstMsgTokens() >
+            state_->llmContext_->getNPast()) {
       state_->llmContext_->setFirstMsgTokens(state_->llmContext_->getNPast());
     }
   }
@@ -624,14 +656,56 @@ qvac_lib_inference_addon_cpp::RuntimeStats LlamaModel::runtimeStats() const {
       {"backendDevice", runtimeBackendDevice_}};
 }
 
+qvac_lib_inference_addon_cpp::RuntimeStats
+LlamaModel::runtimeDebugStats() const {
+  std::shared_lock lock(stateMtx_);
+  const int64_t firstMsgTokens =
+      state_->llmContext_
+          ? static_cast<int64_t>(state_->llmContext_->getFirstMsgTokens())
+          : 0LL;
+  auto snapshot = state_->toolsCompact_
+                      ? state_->toolsCompact_->debugSnapshot()
+                      : ToolsCompactController::DebugSnapshot{};
+  return {
+      {"nPastBeforeTools", static_cast<int64_t>(snapshot.nPastBeforeTools)},
+      {"firstMsgTokens", firstMsgTokens},
+      {"toolsTrimmed", snapshot.lastToolsTrimmed ? 1LL : 0LL}};
+}
+
+// NOLINTNEXTLINE(readability-convert-member-functions-to-static,readability-function-cognitive-complexity)
+LlamaModel::ResolvedToolsCompactConfig
+LlamaModel::resolveToolsCompactConfig(bool toolsCompactRequested) const {
+  if (!toolsCompactRequested) {
+    return {};
+  }
+
+  auto arch = metadata_.tryGetString("general.architecture");
+  auto modelName = metadata_.tryGetString("general.name");
+  auto marker = qvac_lib_inference_addon_llama::utils::
+      selectToolsCompactMarkerForModelMetadata(arch, modelName);
+
+  if (!marker.has_value()) {
+    return {
+        .resolution = ToolsCompactResolution::RequestedUnsupported,
+        .profile = std::nullopt};
+  }
+
+  ToolsCompactProfile profile;
+  profile.toolCallStartMarker = marker.value();
+  return {
+      .resolution = ToolsCompactResolution::RequestedSupported,
+      .profile = std::move(profile)};
+}
+
 // NOLINTNEXTLINE(readability-convert-member-functions-to-static,readability-function-cognitive-complexity)
 void LlamaModel::commonParamsParse(
     const std::string& modelPath,
     std::unordered_map<std::string, std::string>& configFilemap,
     common_params& params, std::optional<int>& outAdrenoVersion,
-    bool& outToolsAtEnd) {
+    ResolvedToolsCompactConfig& outToolsCompactConfig) {
 
   std::vector<std::string> configVector;
+  outToolsCompactConfig = ResolvedToolsCompactConfig{};
 
   // Check if tools are enabled and exclude it with jinja from the config file
   if (auto iter = configFilemap.find("tools"); iter != configFilemap.end()) {
@@ -672,24 +746,23 @@ void LlamaModel::commonParamsParse(
     configFilemap.erase(iter);
   }
 
-  // parse tools_at_end flag from config
-  if (auto iter = configFilemap.find("tools_at_end");
+  // parse tools_compact flag from config
+  bool toolsCompactRequested = false;
+  if (auto iter = configFilemap.find("tools_compact");
       iter != configFilemap.end()) {
     std::string val = iter->second;
     std::transform(val.begin(), val.end(), val.begin(), ::tolower);
-    outToolsAtEnd = (val == "true");
+    toolsCompactRequested = (val == "true");
     configFilemap.erase(iter);
   }
 
-  if (outToolsAtEnd) {
-    auto arch = metadata_.tryGetString("general.architecture");
-    if (!arch.has_value() || arch.value() != "qwen3") {
-      QLOG_IF(
-          Priority::WARNING,
-          "[LlamaModel] tools_at_end is only supported for Qwen3 models, "
-          "ignoring\n");
-      outToolsAtEnd = false;
-    }
+  outToolsCompactConfig = resolveToolsCompactConfig(toolsCompactRequested);
+  if (outToolsCompactConfig.resolution ==
+      ToolsCompactResolution::RequestedUnsupported) {
+    QLOG_IF(
+        Priority::WARNING,
+        "[LlamaModel] tools_compact is not supported for this model "
+        "architecture, ignoring\n");
   }
 
   auto deviceIt = configFilemap.find("device");
@@ -918,15 +991,15 @@ void LlamaModel::commonParamsParse(
   }
 }
 // NOLINTNEXTLINE(readability-convert-member-functions-to-static,readability-function-cognitive-complexity)
-std::pair<std::vector<common_chat_msg>, std::vector<common_chat_tool>>
-LlamaModel::formatPrompt(const std::string& input) {
+ParsedPromptPayload LlamaModel::formatPrompt(const std::string& input) {
   if (input.empty()) {
     state_->llmContext_->resetMedia();
     std::string errorMsg = string_format("%s: empty prompt\n", __func__);
     throw qvac_errors::StatusError(ADDON_ID, toString(EmptyPrompt), errorMsg);
   }
-  std::vector<common_chat_msg> chatMsgs;
-  std::vector<common_chat_tool> tools;
+  ParsedPromptPayload parsed;
+  std::vector<common_chat_msg>& chatMsgs = parsed.chatMsgs;
+  std::vector<common_chat_tool>& tools = parsed.tools;
 
   picojson::value chatJson;
   std::string err = picojson::parse(chatJson, input);
@@ -934,14 +1007,25 @@ LlamaModel::formatPrompt(const std::string& input) {
   if (err.empty() && chatJson.is<picojson::array>()) {
     auto& obj = chatJson.get<picojson::array>();
 
+    // Build PromptLayout for tools_compact validation
+    PromptLayout layout;
+    layout.totalItems = obj.size();
+
     int addMediaPlaceholder = 0;
     bool isNextUser = false;
-    for (const auto& subObj : obj) {
+    for (size_t i = 0; i < obj.size(); ++i) {
+      const auto& subObj = obj[i];
       if (subObj.is<picojson::object>()) {
         picojson::object jsonObj = subObj.get<picojson::object>();
 
         if (jsonObj.find("type") != jsonObj.end() &&
             jsonObj["type"].get<std::string>() == "function") {
+          if (!layout.firstToolIdx.has_value()) {
+            layout.firstToolIdx = i;
+          }
+          layout.lastToolIdx = i;
+          layout.toolCount++;
+
           common_chat_tool tool;
           tool.name = jsonObj["name"].get<std::string>();
           if (jsonObj.find("description") != jsonObj.end()) {
@@ -961,6 +1045,16 @@ LlamaModel::formatPrompt(const std::string& input) {
               ADDON_ID, toString(NoRoleProvided), errorMsg);
         }
         newMsg.role = jsonObj["role"].get<std::string>();
+
+        // Track last anchor (user/tool) message index for tools_compact
+        if (newMsg.role == "user" || newMsg.role == "tool") {
+          layout.lastAnchorIdx = i;
+        }
+
+        // Track if the very last array item is a user message
+        if (newMsg.role == "user" && i == obj.size() - 1) {
+          layout.lastItemIsUserMsg = true;
+        }
 
         if (jsonObj.find("content") == jsonObj.end()) {
           const char* errorMsg = "content is required in the input\n";
@@ -1005,6 +1099,8 @@ LlamaModel::formatPrompt(const std::string& input) {
       }
     }
 
+    parsed.layout = std::move(layout);
+
     if (addMediaPlaceholder > 0) {
       state_->llmContext_->resetMedia();
       std::string errorMsg =
@@ -1020,7 +1116,7 @@ LlamaModel::formatPrompt(const std::string& input) {
     throw qvac_errors::StatusError(
         ADDON_ID, toString(InvalidInputFormat), errorMsg);
   }
-  return {chatMsgs, tools};
+  return parsed;
 }
 
 void LlamaModel::resetState(bool resetStats) {
@@ -1030,14 +1126,13 @@ void LlamaModel::resetState(bool resetStats) {
 
 std::unique_ptr<LlmContext> LlamaModel::createContext(
     std::string&& projectionPath, common_params& params,
-    common_init_result&& llamaInit, bool toolsAtEnd) {
+    common_init_result&& llamaInit, ToolsCompactController& tools) {
   if (!projectionPath.empty()) {
     params.mmproj.path = std::move(projectionPath);
     return std::make_unique<MtmdLlmContext>(
-        params, std::move(llamaInit), toolsAtEnd);
+        params, std::move(llamaInit), tools);
   }
-  return std::make_unique<TextLlmContext>(
-      params, std::move(llamaInit), toolsAtEnd);
+  return std::make_unique<TextLlmContext>(params, std::move(llamaInit), tools);
 }
 
 bool LlamaModel::loadMedia(const std::vector<uint8_t>& input) {
