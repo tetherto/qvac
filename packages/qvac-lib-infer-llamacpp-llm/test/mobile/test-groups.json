@@ -6,7 +6,7 @@
     "heavy4": ["runOcrLightonTest"],
     "heavy5": ["runReasoningTest"],
     "heavy6": ["runSlidingContextTest"],
-    "heavy7": ["runImageFruitPlateTest"],
+    "heavy7": ["runApiBehaviorTest", "runImageFruitPlateTest"],
     "heavy8": ["runImageHighResAuroraTest"],
     "lightA": [
       "runAfriquegemmaEdgeCasesTest",

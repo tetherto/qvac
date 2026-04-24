@@ -954,7 +954,7 @@ jobs:
             # bare_console.log on normal completion via Appium pull_file).
             # usePrebuiltWDA uses Device Farm's pre-built WebDriverAgent
             # Increased timeout to 30 minutes (1800000ms) for long-running LLM tests
-            WDIO_CONFIG='exports.config={runner:"local",hostname:"127.0.0.1",port:4723,path:"/wd/hub",specs:["*.spec.js","*.test.js"],maxInstances:1,bail:0,capabilities:[{platformName:"iOS","appium:automationName":"XCUITest","appium:bundleId":"'${{ env.APP_BUNDLE_ID }}'","appium:newCommandTimeout":300,"appium:noReset":true,"appium:forceAppLaunch":false,"appium:usePrebuiltWDA":true,"appium:wdaLocalPort":8100,"appium:showIOSLog":true,"appium:realDeviceLogger":"/usr/local/lib/node_modules/appium/node_modules/deviceconsole/deviceconsole"}],logLevel:"debug",waitforTimeout:120000,connectionRetryTimeout:30000,connectionRetryCount:3,services:[],framework:"mocha",reporters:["spec"],mochaOpts:{ui:"bdd",timeout:1800000,grep:"__MOCHA_GREP__"},before:async function(capabilities,specs,browser){const BUNDLE_ID="'${{ env.APP_BUNDLE_ID }}'";const TEST_FILTER="__TEST_FILTER__";global.appCrashed=false;global.checkAppCrash=async(stage)=>{try{const state=await browser.queryAppState(BUNDLE_ID);console.log("["+stage+"] App state: "+state+" (4=foreground,3=background,1=not running)");if(state<3){console.error("\\n🛑 APP CRASHED at "+stage+"! State="+state);console.error("Check device logs for BareKit/native errors.\\n");global.appCrashed=true;setTimeout(function(){process.exit(1);},5000);}return state;}catch(e){console.log("["+stage+"] queryAppState error: "+e.message);return-1;}};console.log("Checking initial app state...");await global.checkAppCrash("startup");console.log("Waiting for app to initialize...");await browser.pause(5000);await global.checkAppCrash("after-pause");const initText=await browser.$("-ios predicate string:label CONTAINS \"INITIALIZED\"");await initText.waitForDisplayed({timeout:60000});await global.checkAppCrash("after-init");if(TEST_FILTER!=="__TEST_FILTER__"){try{const b64=Buffer.from(TEST_FILTER).toString("base64");await browser.pushFile("@"+BUNDLE_ID+":documents/testFilter.txt",b64);console.log("Pushed test filter: "+TEST_FILTER);}catch(e){console.log("pushFile failed: "+e.message);}}console.log("App initialized, clicking Run Automated Tests...");const button=await browser.$("-ios predicate string:label CONTAINS \"Run Automated Tests\"");await button.waitForDisplayed({timeout:15000});await button.click();console.log("Button clicked!");await browser.pause(5000);await global.checkAppCrash("after-click");global.crashMonitor=setInterval(async()=>{if(global.appCrashed)return;try{const s=await browser.queryAppState(BUNDLE_ID);if(s<3){console.error("\\n🛑 BACKGROUND CRASH DETECTED! App state="+s);global.appCrashed=true;setTimeout(function(){process.exit(1);},5000);}}catch(e){}},15000);},after:async function(){if(global.crashMonitor)clearInterval(global.crashMonitor);console.log("[bare-log] Waiting for log flush...");await browser.pause(3000);try{var BID="'${{ env.APP_BUNDLE_ID }}'";var _h=require("http");var lb64=await new Promise(function(ok,fail){var bd=JSON.stringify({path:"@"+BID+":documents/bare_console.log"});var rq=_h.request({hostname:"127.0.0.1",port:4723,path:"/wd/hub/session/"+browser.sessionId+"/appium/device/pull_file",method:"POST",headers:{"Content-Type":"application/json","Content-Length":Buffer.byteLength(bd)}},function(rs){var d="";rs.on("data",function(c){d+=c;});rs.on("end",function(){try{ok(JSON.parse(d).value);}catch(e){fail(e);}});});rq.on("error",fail);rq.write(bd);rq.end();});var logTxt=Buffer.from(lb64,"base64").toString();var logDir=process.env.DEVICEFARM_LOG_DIR||".";require("fs").writeFileSync(logDir+"/bare_console.log",logTxt);console.log("[bare-log] Written bare_console.log ("+logTxt.length+" bytes)");}catch(le){console.log("[bare-log] pull failed: "+le.message);}},afterTest:async function(test,context,{error}){if(global.appCrashed)return;await global.checkAppCrash("after-test:"+test.title);}};'
+            WDIO_CONFIG='exports.config={runner:"local",hostname:"127.0.0.1",port:4723,path:"/wd/hub",specs:["*.spec.js","*.test.js"],maxInstances:1,bail:0,capabilities:[{platformName:"iOS","appium:automationName":"XCUITest","appium:bundleId":"'${{ env.APP_BUNDLE_ID }}'","appium:newCommandTimeout":300,"appium:noReset":true,"appium:forceAppLaunch":false,"appium:usePrebuiltWDA":true,"appium:wdaLocalPort":8100,"appium:showIOSLog":true,"appium:realDeviceLogger":"/usr/local/lib/node_modules/appium/node_modules/deviceconsole/deviceconsole"}],logLevel:"debug",waitforTimeout:120000,connectionRetryTimeout:30000,connectionRetryCount:3,services:[],framework:"mocha",reporters:["spec"],mochaOpts:{ui:"bdd",timeout:1800000,grep:"__MOCHA_GREP__"},before:async function(capabilities,specs,browser){const BUNDLE_ID="'${{ env.APP_BUNDLE_ID }}'";const TEST_FILTER="__TEST_FILTER__";global.appCrashed=false;global.flushBareLog=async function(reason){try{var _h=require("http");var lb64=await new Promise(function(ok,fail){var bd=JSON.stringify({path:"@"+BUNDLE_ID+":documents/bare_console.log"});var rq=_h.request({hostname:"127.0.0.1",port:4723,path:"/wd/hub/session/"+browser.sessionId+"/appium/device/pull_file",method:"POST",headers:{"Content-Type":"application/json","Content-Length":Buffer.byteLength(bd)}},function(rs){var d="";rs.on("data",function(c){d+=c;});rs.on("end",function(){try{ok(JSON.parse(d).value);}catch(e){fail(e);}});});rq.on("error",fail);rq.write(bd);rq.end();});var logTxt=Buffer.from(lb64,"base64").toString();var logDir=process.env.DEVICEFARM_LOG_DIR||".";require("fs").writeFileSync(logDir+"/bare_console.log",logTxt);console.log("[bare-log] "+reason+" flush ok ("+logTxt.length+" bytes)");}catch(e){console.log("[bare-log] "+reason+" flush failed: "+e.message);}};global.checkAppCrash=async(stage)=>{try{const state=await browser.queryAppState(BUNDLE_ID);console.log("["+stage+"] App state: "+state+" (4=foreground,3=background,1=not running)");if(state<3){console.error("\\n🛑 APP CRASHED at "+stage+"! State="+state);console.error("Check device logs for BareKit/native errors.\\n");global.appCrashed=true;try{await browser.pause(1500);await global.flushBareLog("crash-"+stage);}catch(_){}setTimeout(function(){process.exit(1);},5000);}return state;}catch(e){console.log("["+stage+"] queryAppState error: "+e.message);return-1;}};console.log("Checking initial app state...");await global.checkAppCrash("startup");console.log("Waiting for app to initialize...");await browser.pause(5000);await global.checkAppCrash("after-pause");const initText=await browser.$("-ios predicate string:label CONTAINS \"INITIALIZED\"");await initText.waitForDisplayed({timeout:60000});await global.checkAppCrash("after-init");if(TEST_FILTER!=="__TEST_FILTER__"){try{const b64=Buffer.from(TEST_FILTER).toString("base64");await browser.pushFile("@"+BUNDLE_ID+":documents/testFilter.txt",b64);console.log("Pushed test filter: "+TEST_FILTER);}catch(e){console.log("pushFile failed: "+e.message);}}console.log("App initialized, clicking Run Automated Tests...");const button=await browser.$("-ios predicate string:label CONTAINS \"Run Automated Tests\"");await button.waitForDisplayed({timeout:15000});await button.click();console.log("Button clicked!");await browser.pause(5000);await global.checkAppCrash("after-click");global.crashMonitor=setInterval(async()=>{if(global.appCrashed)return;try{const s=await browser.queryAppState(BUNDLE_ID);if(s<3){console.error("\\n🛑 BACKGROUND CRASH DETECTED! App state="+s);global.appCrashed=true;try{await browser.pause(1500);await global.flushBareLog("crash-bg");}catch(_){}setTimeout(function(){process.exit(1);},5000);}}catch(e){}},15000);},after:async function(){if(global.crashMonitor)clearInterval(global.crashMonitor);console.log("[bare-log] Waiting for log flush...");await browser.pause(3000);if(global.flushBareLog)await global.flushBareLog("after");},afterTest:async function(test,context,{error}){if(global.appCrashed)return;await global.checkAppCrash("after-test:"+test.title);}};'
           fi
           
           WDIO_B64=$(echo "$WDIO_CONFIG" | base64 | tr -d '\n')
@@ -1262,19 +1262,12 @@ jobs:
             RUN_ARN_10=$(schedule_run_with_pool "$POOL_ARN" "$RUN_NAME-iOS-LightB" "$TEST_SPEC_ARN_10")
             echo "✅ LightB scheduled: $RUN_ARN_10"
 
-            # QVAC-17830: Heavy7 (fruit plate) is known-flaky on iOS —
-            # Jetsam can kill the app mid-vision-encode on the large
-            # 10 MB image before any perf record() fires, so the first
-            # attempt sometimes returns zero perf data. Schedule a
-            # second, independent Device Farm run of the same spec so
-            # a fresh device / fresh app state gets another shot.
-            # Both runs land in the same per-device folder on download
-            # and extract-from-log.js --merge concats + dedupes, so if
-            # either attempt produces PERF_REPORT markers the data
-            # lands in the combined report. If both produce data we
-            # just get more iterations to average over, which is fine.
-            RUN_ARN_11=$(schedule_run_with_pool "$POOL_ARN" "$RUN_NAME-iOS-Heavy7-ImgFruitPlate-Retry" "$TEST_SPEC_ARN_7")
-            echo "✅ Heavy7-Retry (Image-FruitPlate retry) scheduled: $RUN_ARN_11"
+            # QVAC-17830: a one-shot Heavy7 retry used to live here so
+            # we got a second chance at fruit-plate perf data when the
+            # first attempt SIGABRT'd. Removed at user's request now
+            # that heavy7 itself is a "warm process" group (api-behavior
+            # runs first to pre-warm V8 / native allocators / Metal
+            # shaders, see test-groups.json -> ios.heavy7).
 
             echo "run_arn_1=$RUN_ARN_1" >> $GITHUB_OUTPUT
             echo "run_arn_2=$RUN_ARN_2" >> $GITHUB_OUTPUT
@@ -1286,8 +1279,7 @@ jobs:
             echo "run_arn_8=$RUN_ARN_8" >> $GITHUB_OUTPUT
             echo "run_arn_9=$RUN_ARN_9" >> $GITHUB_OUTPUT
             echo "run_arn_10=$RUN_ARN_10" >> $GITHUB_OUTPUT
-            echo "run_arn_11=$RUN_ARN_11" >> $GITHUB_OUTPUT
-            echo "run_count=11" >> $GITHUB_OUTPUT
+            echo "run_count=10" >> $GITHUB_OUTPUT
           fi
 
           echo "All runs scheduled."
@@ -1326,7 +1318,6 @@ jobs:
           RUN_ARN_8="${{ steps.schedule_run.outputs.run_arn_8 }}"
           RUN_ARN_9="${{ steps.schedule_run.outputs.run_arn_9 }}"
           RUN_ARN_10="${{ steps.schedule_run.outputs.run_arn_10 }}"
-          RUN_ARN_11="${{ steps.schedule_run.outputs.run_arn_11 }}"
           RUN_COUNT="${{ steps.schedule_run.outputs.run_count }}"
 
           echo "📊 Monitoring $RUN_COUNT Device Farm run(s)..."
@@ -1531,14 +1522,13 @@ jobs:
           RUN_ARN_8="${{ steps.schedule_run.outputs.run_arn_8 }}"
           RUN_ARN_9="${{ steps.schedule_run.outputs.run_arn_9 }}"
           RUN_ARN_10="${{ steps.schedule_run.outputs.run_arn_10 }}"
-          RUN_ARN_11="${{ steps.schedule_run.outputs.run_arn_11 }}"
           RUN_COUNT="${{ steps.schedule_run.outputs.run_count }}"
           LOG_DIR="devicefarm-logs/${{ matrix.platform }}"
           PLATFORM="${{ matrix.platform }}"
           mkdir -p "$LOG_DIR"
 
           RUN_ARNS=("$RUN_ARN_1")
-          for i in 2 3 4 5 6 7 8 9 10 11; do
+          for i in 2 3 4 5 6 7 8 9 10; do
             eval "arn=\$RUN_ARN_$i"
             if [ "$RUN_COUNT" -ge "$i" ] && [ -n "$arn" ]; then
               RUN_ARNS+=("$arn")
@@ -1568,10 +1558,10 @@ jobs:
               SAFE_NAME=$(echo "$DEVICE_NAME" | tr ' /' '__' | tr -cd '[:alnum:]_-')
               # QVAC-17830: put per-device logs into a subdirectory so
               # that when the same physical device runs multiple Device
-              # Farm groups (up to 3 Android / 11 iOS groups per device,
-              # the 11th being a Heavy7 fruit-plate retry) extract-from-
-              # log.js can use its path-based deriveDeviceName to bucket
-              # them correctly and --merge to concatenate all reports.
+              # Farm groups (up to 3 Android / 10 iOS groups per device)
+              # extract-from-log.js can use its path-based
+              # deriveDeviceName to bucket them correctly and --merge
+              # to concatenate all reports.
               DEVICE_DIR="$LOG_DIR/$SAFE_NAME"
               mkdir -p "$DEVICE_DIR"
 

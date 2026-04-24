@@ -172,9 +172,14 @@ function generateDeviceDetailTables (aggregated, addonType) {
       : meta.platform || '-'
     const runLabel = runNumbers.length ? runNumbers.join(', ') : 'local'
 
-    lines.push(`### Performance: ${addon}`)
+    // QVAC-17830: previously every device used the same `### Performance: <addon>`
+    // header, which GitHub's step-summary renderer collapses into a single
+    // anchor — making it hard to find mobile detail tables when scrolling
+    // past a long desktop list. Use the device name as the heading so each
+    // section gets its own anchor + TOC entry.
+    lines.push(`### ${devName} \u2014 ${addon} (${platformArch})`)
     lines.push('')
-    lines.push(`> Device: **${devName}** (${platformArch}) | Run: ${runLabel}`)
+    lines.push(`> Run: ${runLabel}`)
     lines.push('')
 
     const header = ['Test', 'EP', ..._VISION_DETAIL_COLUMNS.map(c => c.label)]
@@ -335,13 +340,25 @@ function aggregateReports (reports) {
   // device detail table can render the real backend / platform / status
   // instead of the blank "-" produced by summarize on strings.
   const categorical = {}
+  // QVAC-17830: dedupe by (device, test, run_number). The combined
+  // report folds sibling matrix legs (linux-x64-cpu+linux-x64-gpu,
+  // linux-arm64-u22+linux-arm64-u24) onto one device name so users see
+  // ONE column per physical platform. Without dedupe each shared
+  // [test] [CPU] row gets 3 iters from each leg → iteration count
+  // explodes to 6 ("Run 4 / 5 / 6" headers). First-leg-wins per
+  // (device, test, run_number) keeps it at 3 while still picking up
+  // the GPU leg's exclusive [GPU] rows. The weekly aggregator is
+  // unaffected: it accumulates across DIFFERENT run_numbers.
+  const seenLeg = {}
 
   for (const report of reports) {
     const deviceName = report.device ? report.device.name : 'unknown'
+    const reportRun = report.run_number || 'local'
 
     if (!deviceMap[deviceName]) deviceMap[deviceName] = {}
     if (!qualityMap[deviceName]) qualityMap[deviceName] = {}
     if (!categorical[deviceName]) categorical[deviceName] = {}
+    if (!seenLeg[deviceName]) seenLeg[deviceName] = {}
     if (!deviceMeta[deviceName] && report.device) {
       deviceMeta[deviceName] = {
         name: report.device.name,
@@ -352,8 +369,20 @@ function aggregateReports (reports) {
       }
     }
 
+    // Per-test "claim" set for THIS report. Once a sibling leg has
+    // already contributed a (device, test) pair for this run_number we
+    // skip the current report's rows for that pair — but within a
+    // single report we still keep ALL iterations (e.g. PERF_RUNS=3).
+    const claimedThisReport = new Set()
+
     for (const result of (report.results || [])) {
       const testKey = result.test
+      const legKey = `${testKey}::${reportRun}`
+      const alreadyClaimed = seenLeg[deviceName][legKey]
+      if (alreadyClaimed && !claimedThisReport.has(legKey)) continue
+      claimedThisReport.add(legKey)
+      seenLeg[deviceName][legKey] = true
+
       if (!deviceMap[deviceName][testKey]) deviceMap[deviceName][testKey] = {}
       if (!categorical[deviceName][testKey]) categorical[deviceName][testKey] = {}
 
