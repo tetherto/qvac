@@ -11,15 +11,19 @@
  *   node --test scripts/perf-report/__tests__/comet-score-nmt.test.js
  */
 
+// `node:test` and `node:assert/strict` require the `node:` prefix;
+// fs/os/path are referenced in the bare form to match the style of
+// every other script in scripts/perf-report.
 const test = require('node:test')
 const assert = require('node:assert/strict')
-const fs = require('node:fs')
-const os = require('node:os')
-const path = require('node:path')
+const fs = require('fs')
+const os = require('os')
+const path = require('path')
 
 const {
+  parseArgs,
   canonicalDeviceLabel,
-  collectReports,
+  collectReportsFromDir,
   extractTriples,
   aggregateGroups,
   renderMarkdown,
@@ -202,8 +206,11 @@ test('aggregateGroups: TPS mean and std reflect run-to-run perf drift', () => {
   const g = groups[0]
   assert.equal(g.tpsCount, 3)
   assert.ok(Math.abs(g.tpsMean - 80) < 1e-10, 'mean of 70/80/90 is 80')
-  // Population std of [70, 80, 90] = sqrt(((10^2)+0+(10^2))/3) ≈ 8.165
-  assert.ok(Math.abs(g.tpsStd - Math.sqrt(200 / 3)) < 1e-10)
+  // Sample std of [70, 80, 90] (n-1 denominator) = sqrt(200/2) = 10.
+  // We use sample std intentionally — same formula as utils.stddev,
+  // so this report's "std = X" matches what the aggregate.js report
+  // writes for the same underlying values.
+  assert.ok(Math.abs(g.tpsStd - 10) < 1e-10)
 })
 
 test('aggregateGroups: TPS gracefully null when missing from all triples', () => {
@@ -248,10 +255,11 @@ test('aggregateGroups: non-zero std when values drift between runs', () => {
   const g = groups[0]
   assert.equal(g.runs, 2)
   assert.equal(Math.round(g.chrfppMean * 100) / 100, 0.95)
-  // std over [0.90, 1.00] (population) = 0.05
-  assert.equal(Math.round(g.chrfppStd * 100) / 100, 0.05)
+  // Sample std (n-1 denominator) over [0.90, 1.00] = sqrt(0.005/1) ≈ 0.0707.
+  // Matches utils.stddev so aggregate.js and this report agree.
+  assert.ok(Math.abs(g.chrfppStd - Math.sqrt(0.005)) < 1e-10)
   assert.equal(Math.round(g.cometMean * 100) / 100, 0.90)
-  assert.equal(Math.round(g.cometStd * 100) / 100, 0.05)
+  assert.ok(Math.abs(g.cometStd - Math.sqrt(0.005)) < 1e-10)
 })
 
 test('aggregateGroups: cpu and gpu stay on separate rows (different test labels)', () => {
@@ -286,10 +294,10 @@ test('aggregateGroups: null cometScores (skip/failure path) → cometMean null',
 })
 
 // ---------------------------------------------------------------------------
-// collectReports
+// collectReportsFromDir
 // ---------------------------------------------------------------------------
 
-test('collectReports: walks nested directories and returns valid reports only', () => {
+test('collectReportsFromDir: walks nested directories and returns valid reports only', () => {
   const tmp = fs.mkdtempSync(path.join(os.tmpdir(), 'comet-test-'))
   try {
     fs.mkdirSync(path.join(tmp, 'run-1', 'perf-report-nmtcpp-mobile-iOS'), { recursive: true })
@@ -306,7 +314,7 @@ test('collectReports: walks nested directories and returns valid reports only', 
     fs.mkdirSync(path.join(tmp, 'run-3'), { recursive: true })
     fs.writeFileSync(path.join(tmp, 'run-3', 'performance-report.json'), '{{{ broken')
 
-    const reports = collectReports(tmp)
+    const reports = collectReportsFromDir(tmp)
     assert.equal(reports.length, 2)
     const devices = reports.map(r => r.device.name).sort()
     assert.deepEqual(devices, ['Google Pixel 9', 'iPhone 16 Pro'])
@@ -427,4 +435,85 @@ test('renderMarkdown: cometFailed=true → failure banner appears', () => {
     cometFailed: true
   })
   assert.ok(md.includes('COMET scoring failed'))
+})
+
+test('renderMarkdown: row sort uses explicit \'en\' locale (deterministic on any runner)', () => {
+  // Two devices whose order would flip under a non-en locale (e.g.
+  // Turkish "i" vs "I"). Passing an explicit 'en' locale keeps the
+  // ordering stable across macOS / ubuntu / Windows runners.
+  const groups = [
+    { test: '[Bergamot] [CPU]', canonicalDevice: 'ios-iphone-b', platform: 'ios', arch: 'arm64',
+      runs: 1, chrfppMean: 0.97, chrfppStd: 0, cometMean: null, cometStd: 0, tpsMean: 80, tpsStd: 0 },
+    { test: '[Bergamot] [CPU]', canonicalDevice: 'IOS-IPHONE-A', platform: 'ios', arch: 'arm64',
+      runs: 1, chrfppMean: 0.97, chrfppStd: 0, cometMean: null, cometStd: 0, tpsMean: 80, tpsStd: 0 }
+  ]
+  const md = renderMarkdown(groups, { model: 'm', runs: 1, generatedAt: 't' })
+  const aIdx = md.indexOf('IOS-IPHONE-A')
+  const bIdx = md.indexOf('ios-iphone-b')
+  assert.ok(aIdx > 0 && bIdx > 0)
+  assert.ok(aIdx < bIdx, 'case-insensitive en ordering: A < b')
+})
+
+// ---------------------------------------------------------------------------
+// parseArgs
+// ---------------------------------------------------------------------------
+
+function runParseArgs (flags) {
+  return parseArgs(['node', 'script.js', ...flags])
+}
+
+test('parseArgs: defaults when no flags', () => {
+  const args = runParseArgs([])
+  assert.equal(args.runs, 6)
+  assert.equal(args.model, 'Unbabel/wmt22-comet-da')
+  assert.equal(args.workflow, 'On PR Trigger (NMTCPP)')
+  assert.equal(args.output, 'reports/nmtcpp-comet.md')
+  assert.equal(args.repo, null)
+  assert.equal(args.dir, null)
+  assert.equal(args.skipComet, false)
+})
+
+test('parseArgs: --runs accepts positive integer', () => {
+  assert.equal(runParseArgs(['--runs', '3']).runs, 3)
+  assert.equal(runParseArgs(['--runs', '12']).runs, 12)
+})
+
+test('parseArgs: --runs 0 falls back to default (not silently 0)', () => {
+  // Critical: previously `0 || DEFAULT` truthy-check meant --runs 0
+  // was indistinguishable from --runs unset. Explicit guard now.
+  assert.equal(runParseArgs(['--runs', '0']).runs, 6)
+})
+
+test('parseArgs: --runs with non-numeric value falls back to default', () => {
+  assert.equal(runParseArgs(['--runs', 'abc']).runs, 6)
+  assert.equal(runParseArgs(['--runs', '']).runs, 6)
+})
+
+test('parseArgs: --runs negative value falls back to default', () => {
+  assert.equal(runParseArgs(['--runs', '-3']).runs, 6)
+})
+
+test('parseArgs: string flags pass through verbatim', () => {
+  const args = runParseArgs([
+    '--model', 'Unbabel/custom-model',
+    '--output', '/tmp/out.md',
+    '--workflow', 'Some Workflow',
+    '--repo', 'owner/repo',
+    '--dir', '/tmp/reports'
+  ])
+  assert.equal(args.model, 'Unbabel/custom-model')
+  assert.equal(args.output, '/tmp/out.md')
+  assert.equal(args.workflow, 'Some Workflow')
+  assert.equal(args.repo, 'owner/repo')
+  assert.equal(args.dir, '/tmp/reports')
+})
+
+test('parseArgs: --skip-comet is a boolean toggle', () => {
+  assert.equal(runParseArgs([]).skipComet, false)
+  assert.equal(runParseArgs(['--skip-comet']).skipComet, true)
+})
+
+test('parseArgs: unknown flags are silently ignored (matches aggregate.js)', () => {
+  const args = runParseArgs(['--not-a-real-flag', 'value', '--runs', '2'])
+  assert.equal(args.runs, 2)
 })

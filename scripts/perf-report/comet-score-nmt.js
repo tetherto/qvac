@@ -9,15 +9,16 @@
  * per-PR mobile integration tests.
  *
  * Flow:
- *   1. Mirror aggregate.js and pull the last N completed runs of
- *      "Integration Tests (NMTCPP)" via `gh run list` + `gh run
- *      download`, giving us each run's `performance-report.json`(s).
+ *   1. Mirror aggregate.js and pull the last N completed + successful
+ *      runs of "On PR Trigger (NMTCPP)" via the shared
+ *      `./gh-artifacts` helpers, giving us each run's
+ *      `performance-report.json`(s).
  *   2. Walk those reports, collect (test, device, input, output,
  *      reference, chrfpp, tps) triples. No per-run dedup here — all
  *      triples feed into aggregation so mean / std / run counts are
  *      computed over the full window.
- *   3. Write one row per triple into /tmp/{src,mt,ref}.txt in the
- *      exact 1-line-per-sentence shape unbabel-comet's `comet-score`
+ *   3. Write src/mt/ref lines in a single pass into /tmp/{src,mt,ref}.txt
+ *      in the 1-line-per-sentence shape unbabel-comet's `comet-score`
  *      CLI expects.
  *   4. Shell out to `comet-score -s … -t … -r … --model …`, parse the
  *      per-sentence scores, merge them back onto the triples.
@@ -37,8 +38,9 @@
  *                                               [--skip-comet]
  *
  * Flags:
- *   --runs N       last N completed "Integration Tests (NMTCPP)" runs
- *                  to harvest. Defaults to 6 (matches aggregate.js).
+ *   --runs N       last N completed + successful runs of
+ *                  "On PR Trigger (NMTCPP)" to harvest. Defaults to
+ *                  6 (matches aggregate.js).
  *   --model NAME   HuggingFace model id. Default Unbabel/wmt22-comet-da.
  *   --output PATH  Markdown output. Default reports/nmtcpp-comet.md.
  *   --repo OWNER/REPO  Passed through to gh.
@@ -53,7 +55,9 @@
 const fs = require('fs')
 const path = require('path')
 const os = require('os')
-const { execSync, spawnSync } = require('child_process')
+const { spawnSync } = require('child_process')
+const { listWorkflowRuns, downloadRunArtifactsParallel, collectReportsFromDir } = require('./gh-artifacts')
+const { mean, stddev } = require('./utils')
 
 // `On PR Trigger (NMTCPP)` is the umbrella workflow that actually runs
 // per-PR integration tests (including the one that emits perf-report-*
@@ -64,11 +68,21 @@ const DEFAULT_WORKFLOW = 'On PR Trigger (NMTCPP)'
 const DEFAULT_RUNS = 6
 const DEFAULT_MODEL = 'Unbabel/wmt22-comet-da'
 const DEFAULT_OUTPUT = 'reports/nmtcpp-comet.md'
+const DEFAULT_DOWNLOAD_CONCURRENCY = 3
 
 // ---------------------------------------------------------------------------
 // CLI parsing
 // ---------------------------------------------------------------------------
 
+/**
+ * Parses argv into the known flag shape. Unknown flags are silently
+ * ignored (matches aggregate.js's behaviour). Invalid `--runs`
+ * (0, negative, non-numeric) falls back to DEFAULT_RUNS with a
+ * warning so a caller passing "--runs 0" doesn't quietly aggregate
+ * the default 6.
+ *
+ * Exported for the unit test.
+ */
 function parseArgs (argv) {
   const args = {
     runs: DEFAULT_RUNS,
@@ -81,7 +95,16 @@ function parseArgs (argv) {
   }
   for (let i = 2; i < argv.length; i++) {
     switch (argv[i]) {
-      case '--runs': args.runs = parseInt(argv[++i], 10) || DEFAULT_RUNS; break
+      case '--runs': {
+        const n = parseInt(argv[++i], 10)
+        if (!Number.isFinite(n) || n <= 0) {
+          console.error(`  --runs must be a positive integer, got ${JSON.stringify(argv[i])}; falling back to ${DEFAULT_RUNS}`)
+          args.runs = DEFAULT_RUNS
+        } else {
+          args.runs = n
+        }
+        break
+      }
       case '--model': args.model = argv[++i]; break
       case '--output': args.output = argv[++i]; break
       case '--workflow': args.workflow = argv[++i]; break
@@ -94,68 +117,8 @@ function parseArgs (argv) {
 }
 
 // ---------------------------------------------------------------------------
-// gh CLI helpers (mirrors aggregate.js's shape)
-// ---------------------------------------------------------------------------
-
-function ghExec (cmd) {
-  try {
-    return execSync(cmd, { encoding: 'utf-8', stdio: ['pipe', 'pipe', 'pipe'] }).trim()
-  } catch (err) {
-    console.error(`gh command failed: ${cmd}`)
-    console.error((err.stderr || err.message || '').toString())
-    return ''
-  }
-}
-
-function listWorkflowRuns (workflow, count, repo) {
-  const repoFlag = repo ? ` -R ${repo}` : ''
-  const json = ghExec(
-    `gh run list --workflow "${workflow}" --status completed --limit ${count} --json databaseId,displayTitle,conclusion,number${repoFlag}`
-  )
-  if (!json) return []
-  try { return JSON.parse(json) } catch (_) { return [] }
-}
-
-function downloadRunArtifacts (runId, destDir, repo) {
-  const repoFlag = repo ? ` -R ${repo}` : ''
-  const runDir = path.join(destDir, String(runId))
-  fs.mkdirSync(runDir, { recursive: true })
-  ghExec(`gh run download ${runId} -D "${runDir}" -p "perf-report-*"${repoFlag}`)
-  return runDir
-}
-
-// ---------------------------------------------------------------------------
 // Triple extraction
 // ---------------------------------------------------------------------------
-
-/**
- * Walks `rootDir` for every `performance-report.json`, validates
- * schema minimally, returns flat array of raw reports.
- *
- * @param {string} rootDir
- * @returns {Array<object>}
- */
-function collectReports (rootDir) {
-  const out = []
-  function walk (d) {
-    let entries = []
-    try { entries = fs.readdirSync(d, { withFileTypes: true }) } catch (_) { return }
-    for (const e of entries) {
-      const full = path.join(d, e.name)
-      if (e.isDirectory()) walk(full)
-      else if (e.name === 'performance-report.json') {
-        try {
-          const data = JSON.parse(fs.readFileSync(full, 'utf-8'))
-          if (data && Array.isArray(data.results)) out.push(data)
-        } catch (err) {
-          console.error(`  skipping ${full}: ${err.message}`)
-        }
-      }
-    }
-  }
-  walk(rootDir)
-  return out
-}
 
 /**
  * Collapses an ephemeral runner name to a stable per-matrix-row label
@@ -229,15 +192,15 @@ function extractTriples (reports) {
 }
 
 /**
- * Groups triples by `(canonicalDevice, test)` and summarises chrF++
- * and COMET with mean ± std across the runs in each group.
+ * Groups triples by `(canonicalDevice, test)` and summarises chrF++,
+ * COMET, and TPS with mean ± std across the runs in each group.
  *
  * Mean / std are computed over the values that are actually present
  * (null scores are skipped; each group reports how many runs
- * contributed chrF++ and COMET samples separately). For deterministic
- * metrics on a stable model, std will be 0 — non-zero std means the
- * model's translation output drifted between the aggregated runs,
- * which is exactly the signal the weekly aggregate should surface.
+ * contributed samples for each metric separately). Uses the shared
+ * `utils.stddev` sample-variance formula (`n-1` denominator) — same
+ * as the aggregate.js path, so the two reports don't disagree on
+ * what "std = 0.03" means for a cell.
  *
  * @param {Array<object>} triples - output of extractTriples
  * @param {Array<number | null> | null} cometScores - one per triple
@@ -276,32 +239,30 @@ function aggregateGroups (triples, cometScores) {
       test: g.test,
       runs: g.runs,
       chrfppCount: g.chrfppValues.length,
-      chrfppMean: _mean(g.chrfppValues),
-      chrfppStd: _std(g.chrfppValues),
+      chrfppMean: _meanOrNull(g.chrfppValues),
+      chrfppStd: stddev(g.chrfppValues),
       cometCount: g.cometValues.length,
-      cometMean: _mean(g.cometValues),
-      cometStd: _std(g.cometValues),
+      cometMean: _meanOrNull(g.cometValues),
+      cometStd: stddev(g.cometValues),
       tpsCount: g.tpsValues.length,
-      tpsMean: _mean(g.tpsValues),
-      tpsStd: _std(g.tpsValues)
+      tpsMean: _meanOrNull(g.tpsValues),
+      tpsStd: stddev(g.tpsValues)
     })
   }
   return out
 }
 
-function _mean (arr) {
-  if (!arr || arr.length === 0) return null
-  let sum = 0
-  for (const v of arr) sum += v
-  return sum / arr.length
-}
-
-function _std (arr) {
-  if (!arr || arr.length < 2) return 0
-  const m = _mean(arr)
-  let sq = 0
-  for (const v of arr) sq += (v - m) ** 2
-  return Math.sqrt(sq / arr.length)
+/**
+ * Wrapper around `utils.mean` that returns `null` on an empty array
+ * instead of 0. Downstream rendering uses null as the "no data
+ * available" signal (renders as `-`) — distinct from a legitimate
+ * 0 mean. We keep `utils.stddev` unchanged since it already returns
+ * 0 for <2 samples, which is the correct behaviour for a deterministic
+ * metric with a single observation.
+ */
+function _meanOrNull (values) {
+  if (!values || values.length === 0) return null
+  return mean(values)
 }
 
 // ---------------------------------------------------------------------------
@@ -314,62 +275,81 @@ function _std (arr) {
  * (NOT throws) on any failure — caller renders a COMET-less report
  * and the workflow keeps going.
  *
+ * Temp dir is always cleaned up via try/finally, even on CLI
+ * failure / crash, so repeated weekly runs don't leak `/tmp` state.
+ *
  * @param {Array<object>} triples
  * @param {string} model
  * @returns {number[] | null}
  */
 function runCometScore (triples, model) {
   const tmp = fs.mkdtempSync(path.join(os.tmpdir(), 'comet-nmt-'))
-  const srcPath = path.join(tmp, 'src.txt')
-  const mtPath = path.join(tmp, 'mt.txt')
-  const refPath = path.join(tmp, 'ref.txt')
+  try {
+    const srcPath = path.join(tmp, 'src.txt')
+    const mtPath = path.join(tmp, 'mt.txt')
+    const refPath = path.join(tmp, 'ref.txt')
 
-  // comet-score is strictly one sentence per line — collapse internal
-  // newlines so we never desync with the triple index.
-  const sanitize = s => String(s).replace(/\r?\n/g, ' ').replace(/\s+/g, ' ').trim()
-  fs.writeFileSync(srcPath, triples.map(t => sanitize(t.src)).join('\n') + '\n')
-  fs.writeFileSync(mtPath, triples.map(t => sanitize(t.mt)).join('\n') + '\n')
-  fs.writeFileSync(refPath, triples.map(t => sanitize(t.ref)).join('\n') + '\n')
-
-  console.log(`  Running comet-score on ${triples.length} triples with ${model}...`)
-  const res = spawnSync('comet-score', [
-    '-s', srcPath, '-t', mtPath, '-r', refPath,
-    '--model', model,
-    '--quiet'
-  ], { encoding: 'utf-8' })
-
-  if (res.error) {
-    console.error(`  comet-score spawn failed: ${res.error.message}`)
-    return null
-  }
-  if (res.status !== 0) {
-    console.error(`  comet-score exited ${res.status}`)
-    console.error(res.stderr)
-    return null
-  }
-
-  // comet-score 2.2.x output: one line per MT segment, shaped as
-  //   <mt-filename>\tSegment N\tscore: 0.XXXX
-  // plus a final "System score: 0.XXXX" line. We capture the segment
-  // index so we can place scores back by (captured) index rather than
-  // by stdout line order — safer against any future reordering.
-  const scores = new Array(triples.length).fill(null)
-  let matched = 0
-  for (const line of res.stdout.split(/\r?\n/)) {
-    const m = line.match(/Segment\s+(\d+)\s+score:\s+(-?\d+(?:\.\d+)?)/)
-    if (!m) continue
-    const idx = parseInt(m[1], 10)
-    if (idx >= 0 && idx < scores.length) {
-      scores[idx] = parseFloat(m[2])
-      matched++
+    // Single pass over triples — `comet-score` is strictly one
+    // sentence per line, so we collapse internal newlines as we go
+    // and open each output file once.
+    const srcFd = fs.openSync(srcPath, 'w')
+    const mtFd = fs.openSync(mtPath, 'w')
+    const refFd = fs.openSync(refPath, 'w')
+    const sanitize = s => String(s).replace(/\r?\n/g, ' ').replace(/\s+/g, ' ').trim()
+    try {
+      for (const t of triples) {
+        fs.writeSync(srcFd, sanitize(t.src) + '\n')
+        fs.writeSync(mtFd, sanitize(t.mt) + '\n')
+        fs.writeSync(refFd, sanitize(t.ref) + '\n')
+      }
+    } finally {
+      fs.closeSync(srcFd)
+      fs.closeSync(mtFd)
+      fs.closeSync(refFd)
     }
+
+    console.log(`  Running comet-score on ${triples.length} triples with ${model}...`)
+    const res = spawnSync('comet-score', [
+      '-s', srcPath, '-t', mtPath, '-r', refPath,
+      '--model', model,
+      '--quiet'
+    ], { encoding: 'utf-8' })
+
+    if (res.error) {
+      console.error(`  comet-score spawn failed: ${res.error.message}`)
+      return null
+    }
+    if (res.status !== 0) {
+      console.error(`  comet-score exited ${res.status}`)
+      console.error(res.stderr)
+      return null
+    }
+
+    // comet-score 2.2.x output: one line per MT segment, shaped as
+    //   <mt-filename>\tSegment N\tscore: 0.XXXX
+    // plus a final "System score: 0.XXXX" line. We capture the segment
+    // index so we can place scores back by (captured) index rather than
+    // by stdout line order — safer against any future reordering.
+    const scores = new Array(triples.length).fill(null)
+    let matched = 0
+    for (const line of res.stdout.split(/\r?\n/)) {
+      const m = line.match(/Segment\s+(\d+)\s+score:\s+(-?\d+(?:\.\d+)?)/)
+      if (!m) continue
+      const idx = parseInt(m[1], 10)
+      if (idx >= 0 && idx < scores.length) {
+        scores[idx] = parseFloat(m[2])
+        matched++
+      }
+    }
+    if (matched !== triples.length) {
+      console.error(`  comet-score returned ${matched} scores, expected ${triples.length}`)
+      console.error(`  stdout preview: ${res.stdout.slice(0, 300)}`)
+      return null
+    }
+    return scores
+  } finally {
+    try { fs.rmSync(tmp, { recursive: true, force: true }) } catch (_) {}
   }
-  if (matched !== triples.length) {
-    console.error(`  comet-score returned ${matched} scores, expected ${triples.length}`)
-    console.error(`  stdout preview: ${res.stdout.slice(0, 300)}`)
-    return null
-  }
-  return scores
 }
 
 // ---------------------------------------------------------------------------
@@ -451,13 +431,15 @@ function renderMarkdown (groups, meta) {
     return lines.join('\n') + '\n'
   }
 
-  // Sort: platform ASC, then canonical device ASC, then test ASC
+  // Sort: platform ASC, then canonical device ASC, then test ASC.
+  // Explicit 'en' locale keeps the row order identical across CI
+  // runners regardless of their system locale.
   const sorted = [...groups].sort((a, b) => {
     const pa = a.platform || ''
     const pb = b.platform || ''
-    if (pa !== pb) return pa.localeCompare(pb)
-    if (a.canonicalDevice !== b.canonicalDevice) return a.canonicalDevice.localeCompare(b.canonicalDevice)
-    return a.test.localeCompare(b.test)
+    if (pa !== pb) return pa.localeCompare(pb, 'en')
+    if (a.canonicalDevice !== b.canonicalDevice) return a.canonicalDevice.localeCompare(b.canonicalDevice, 'en')
+    return a.test.localeCompare(b.test, 'en')
   })
 
   lines.push('| Test | Device | Runs | chrF++ (mean ±std) | COMET (mean ±std) | TPS (mean ±std) |')
@@ -482,60 +464,66 @@ function renderMarkdown (groups, meta) {
 // Main
 // ---------------------------------------------------------------------------
 
-function main () {
+async function main () {
   const args = parseArgs(process.argv)
   console.log('comet-score-nmt starting')
   console.log(`  runs=${args.runs}  workflow="${args.workflow}"  model=${args.model}  output=${args.output}${args.dir ? `  dir=${args.dir}` : ''}${args.skipComet ? '  skip-comet=true' : ''}`)
 
   let rootDir
   let tmpDir = null
-  if (args.dir) {
-    rootDir = args.dir
-  } else {
-    const runs = listWorkflowRuns(args.workflow, args.runs, args.repo)
-    if (!runs.length) {
-      console.error('No completed runs found — cannot score.')
-      // Still emit a stub markdown so the workflow's Step Summary writer has something sane.
-      writeOutput(args.output, renderMarkdown([], {
-        model: args.model, runs: args.runs, generatedAt: new Date().toISOString()
-      }))
-      process.exit(0)
+  try {
+    if (args.dir) {
+      rootDir = args.dir
+    } else {
+      // Only aggregate successful runs — failed runs frequently have
+      // missing or partial perf-report artifacts, which would pollute
+      // the weekly aggregate with gaps.
+      const runs = listWorkflowRuns(args.workflow, args.runs, args.repo, { onlySuccess: true })
+      if (!runs.length) {
+        console.error('No successful runs found — cannot score.')
+        // Still emit a stub markdown so the workflow's Step Summary writer has something sane.
+        writeOutput(args.output, renderMarkdown([], {
+          model: args.model, runs: args.runs, generatedAt: new Date().toISOString()
+        }))
+        process.exit(0)
+      }
+      console.log(`  Found ${runs.length} successful runs. Downloading perf-report artifacts (parallel, concurrency=${DEFAULT_DOWNLOAD_CONCURRENCY})...`)
+      for (const r of runs) console.log(`    #${r.number} (${r.databaseId})`)
+      tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), 'comet-nmt-src-'))
+      await downloadRunArtifactsParallel(runs, tmpDir, 'perf-report-*', args.repo,
+        { concurrency: DEFAULT_DOWNLOAD_CONCURRENCY })
+      rootDir = tmpDir
     }
-    console.log(`  Found ${runs.length} runs. Downloading perf-report artifacts...`)
-    tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), 'comet-nmt-src-'))
-    for (const r of runs) {
-      console.log(`    #${r.number} (${r.databaseId})`)
-      downloadRunArtifacts(r.databaseId, tmpDir, args.repo)
+
+    const reports = collectReportsFromDir(rootDir)
+    console.log(`  Collected ${reports.length} perf-report.json file(s)`)
+    const triples = extractTriples(reports)
+    console.log(`  Extracted ${triples.length} triples with input+output+reference`)
+
+    let scores = null
+    if (!args.skipComet && triples.length > 0) {
+      scores = runCometScore(triples, args.model)
     }
-    rootDir = tmpDir
-  }
 
-  const reports = collectReports(rootDir)
-  console.log(`  Collected ${reports.length} perf-report.json file(s)`)
-  const triples = extractTriples(reports)
-  console.log(`  Extracted ${triples.length} triples with input+output+reference`)
+    const groups = aggregateGroups(triples, scores)
+    console.log(`  Aggregated into ${groups.length} groups by (canonicalDevice, test)`)
 
-  let scores = null
-  if (!args.skipComet && triples.length > 0) {
-    scores = runCometScore(triples, args.model)
-  }
-
-  const groups = aggregateGroups(triples, scores)
-  console.log(`  Aggregated into ${groups.length} groups by (canonicalDevice, test)`)
-
-  const md = renderMarkdown(groups, {
-    model: args.model,
-    runs: args.runs,
-    generatedAt: new Date().toISOString(),
-    skipComet: args.skipComet,
-    cometFailed: !args.skipComet && triples.length > 0 && scores === null
-  })
-  writeOutput(args.output, md)
-  console.log(`  Wrote ${args.output} (${md.length} chars, ${groups.length} groups from ${triples.length} triples${scores ? `, ${scores.length} COMET scores` : ''})`)
-
-  // Hygiene: clean up our own tmp dir but only when we own it.
-  if (tmpDir) {
-    try { fs.rmSync(tmpDir, { recursive: true, force: true }) } catch (_) {}
+    const md = renderMarkdown(groups, {
+      model: args.model,
+      runs: args.runs,
+      generatedAt: new Date().toISOString(),
+      skipComet: args.skipComet,
+      cometFailed: !args.skipComet && triples.length > 0 && scores === null
+    })
+    writeOutput(args.output, md)
+    console.log(`  Wrote ${args.output} (${md.length} chars, ${groups.length} groups from ${triples.length} triples${scores ? `, ${scores.length} COMET scores` : ''})`)
+  } finally {
+    // Hygiene: clean up our own tmp dir but only when we own it.
+    // The `try/finally` guarantees we clean up even when main()
+    // throws (previously this code was unreachable on error).
+    if (tmpDir) {
+      try { fs.rmSync(tmpDir, { recursive: true, force: true }) } catch (_) {}
+    }
   }
 }
 
@@ -549,17 +537,16 @@ function writeOutput (outPath, md) {
 }
 
 if (require.main === module) {
-  try {
-    main()
-  } catch (err) {
+  main().catch(err => {
     console.error(`comet-score-nmt crashed: ${err.stack || err.message}`)
     // NEVER fail the workflow from here — chrF++ path must still ship.
-  }
-  process.exit(0)
+  }).finally(() => {
+    process.exit(0)
+  })
 } else {
   module.exports = {
+    parseArgs,
     canonicalDeviceLabel,
-    collectReports,
     extractTriples,
     aggregateGroups,
     renderMarkdown,
@@ -567,6 +554,9 @@ if (require.main === module) {
     fmtComet,
     fmtPctMeanStd,
     fmtCometMeanStd,
-    fmtTpsMeanStd
+    fmtTpsMeanStd,
+    // Re-exported for the unit test so it doesn't have to reach into
+    // ./gh-artifacts directly.
+    collectReportsFromDir
   }
 }

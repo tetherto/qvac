@@ -50,14 +50,23 @@ jobs:
         if: ${{ github.event_name == 'workflow_dispatch' }}
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          # Pass inputs via env rather than ${{ }} interpolation inside
+          # the `run:` block. Even though each input has a constrained
+          # `type: choice`/`type: number`, reading them here via env
+          # removes GH-Actions expression injection as an attack surface
+          # class entirely — `bash` cannot re-evaluate an env var as
+          # workflow syntax.
+          PERF_ADDON: ${{ inputs.addon }}
+          PERF_WORKFLOW: ${{ inputs.workflow_name }}
+          PERF_RUNS: ${{ inputs.runs }}
         run: |
           node scripts/perf-report/aggregate.js \
-            --addon "${{ inputs.addon }}" \
-            --workflow "${{ inputs.workflow_name }}" \
-            --runs ${{ inputs.runs }} \
-            --output "reports/${{ inputs.addon }}-performance.md" \
-            --output-json "reports/${{ inputs.addon }}-performance.json" \
-            --output-html "reports/${{ inputs.addon }}-performance.html"
+            --addon "$PERF_ADDON" \
+            --workflow "$PERF_WORKFLOW" \
+            --runs "$PERF_RUNS" \
+            --output "reports/${PERF_ADDON}-performance.md" \
+            --output-json "reports/${PERF_ADDON}-performance.json" \
+            --output-html "reports/${PERF_ADDON}-performance.html"
 
       - name: Generate performance reports (scheduled - all addons)
         if: ${{ github.event_name == 'schedule' }}
@@ -138,6 +147,14 @@ jobs:
         uses: actions/setup-python@a309ff8b426b58ec0e2a45f0f869d46889d02405 # 6.2.0
         with:
           python-version: '3.11'
+          # `cache: pip` caches ~/.cache/pip keyed on the hash of the
+          # `cache-dependency-path` file (we point at this workflow
+          # itself, since we pin the unbabel-comet version inline).
+          # Saves ~60–90s of PyPI wire time for the weekly run and
+          # avoids cold-downloading ~250MB of torch/transformers wheels
+          # on every trigger.
+          cache: pip
+          cache-dependency-path: .github/workflows/perf-report.yml
 
       - name: Cache HuggingFace model for COMET
         if: |
@@ -159,7 +176,11 @@ jobs:
         continue-on-error: true
         run: |
           python -m pip install --upgrade pip
-          pip install 'unbabel-comet==2.2.*'
+          # Pinned to an exact release so a future 2.2.x patch (or an
+          # unexpected PyTorch transitive pin bump) can't silently
+          # change the COMET scores or break the weekly run. Bump this
+          # deliberately when we want a newer build.
+          pip install 'unbabel-comet==2.2.6'
           comet-score --help | head -5 || true
 
       - name: Score NMT translations with COMET
@@ -171,11 +192,13 @@ jobs:
         continue-on-error: true
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          # Same reasoning as the "Generate performance report (manual)"
+          # step: avoid ${{ }} interpolation inside a `run:` block.
+          PERF_RUNS: ${{ inputs.runs }}
         run: |
           mkdir -p reports
           # workflow_dispatch passes `runs` as input; schedule defaults to 6.
-          RUNS="${{ inputs.runs }}"
-          if [ -z "$RUNS" ]; then RUNS=6; fi
+          RUNS="${PERF_RUNS:-6}"
           # Query the umbrella "On PR Trigger (NMTCPP)" workflow — that's
           # where perf-report-* artifacts are attached. The inner
           # "Integration Tests (NMTCPP)" workflow is invoked via
