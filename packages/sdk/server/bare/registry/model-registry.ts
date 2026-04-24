@@ -3,7 +3,6 @@ import {
   ModelNotFoundError,
   ModelIsDelegatedError,
 } from "@/utils/errors-server";
-import type FilesystemDL from "@qvac/dl-filesystem";
 import type { CanonicalModelType } from "@/schemas";
 import { getServerLogger } from "@/logging";
 import type BaseInference from "@qvac/infer-base";
@@ -34,7 +33,6 @@ interface LocalOptions {
   config: unknown;
   modelType: CanonicalModelType;
   name?: string | undefined;
-  loader?: FilesystemDL;
 }
 
 export interface ModelEntry {
@@ -55,7 +53,6 @@ export function registerModel(
         path: string;
         config: unknown;
         modelType: CanonicalModelType;
-        loader?: FilesystemDL;
         name?: string | undefined;
       }
     | {
@@ -97,7 +94,6 @@ export function registerModel(
         loadedAt: new Date(),
         config: options.config,
         modelType: options.modelType,
-        ...(options.loader && { loader: options.loader }),
         name: options.name,
       },
     });
@@ -214,9 +210,6 @@ export async function unloadAllModels(): Promise<void> {
   for (const modelId of modelIds) {
     const entry = modelRegistry.get(modelId);
     try {
-      if (entry?.local?.loader) {
-        await entry.local.loader.close();
-      }
       if (entry?.local?.model?.unload) {
         await entry.local.model.unload();
       }

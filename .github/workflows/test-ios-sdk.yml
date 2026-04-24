@@ -86,6 +86,7 @@ permissions:
 
 jobs:
   build:
+    name: "[ios] build"
     runs-on: macos-14
     environment: release
     timeout-minutes: 60
@@ -348,6 +349,7 @@ jobs:
           retention-days: 7
 
   device-farm:
+    name: "[ios] device-farm"
     needs: build
     runs-on: ubuntu-latest
     environment: release
@@ -532,6 +534,7 @@ jobs:
           retention-days: 1
 
   run-producer:
+    name: "[ios] run-producer"
     needs: build
     runs-on: ubuntu-latest
     environment: release
@@ -685,6 +688,7 @@ jobs:
           overwrite: true
 
   cleanup-device-farm:
+    name: "[ios] cleanup-device-farm"
     needs: [build, run-producer, device-farm]
     if: always()
     runs-on: ubuntu-latest

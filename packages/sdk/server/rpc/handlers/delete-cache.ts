@@ -1,5 +1,8 @@
 import type { DeleteCacheRequest, DeleteCacheResponse } from "@/schemas";
-import { deleteCache as deleteCacheUtil } from "@/server/bare/ops/kv-cache-utils";
+import {
+  clearCacheRegistry,
+  deleteCache as deleteCacheUtil,
+} from "@/server/bare/ops/kv-cache-utils";
 import { clearCachedMessageCounts } from "@/server/bare/plugins/llamacpp-completion/ops/completion-stream";
 import { getServerLogger } from "@/logging";
 
@@ -12,6 +15,7 @@ export async function handleDeleteCache(
     if ("all" in request && request.all) {
       await deleteCacheUtil({ all: true });
       clearCachedMessageCounts();
+      clearCacheRegistry();
     } else if ("kvCacheKey" in request) {
       const params: { kvCacheKey: string; modelId?: string } = {
         kvCacheKey: request.kvCacheKey,
@@ -19,8 +23,12 @@ export async function handleDeleteCache(
       if (request.modelId !== undefined) {
         params.modelId = request.modelId;
       }
-      await deleteCacheUtil(params);
-      clearCachedMessageCounts();
+      const removedPath = await deleteCacheUtil(params);
+      clearCachedMessageCounts(removedPath);
+      clearCacheRegistry({
+        cacheKey: request.kvCacheKey,
+        modelId: request.modelId,
+      });
     }
 
     return {

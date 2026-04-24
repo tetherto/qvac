@@ -79,8 +79,6 @@ jobs:
           repository: ${{ github.event.pull_request.head.repo.full_name || github.repository }}
           ref: ${{ github.event.pull_request.head.ref || github.ref }}
           token: ${{ secrets.PAT_TOKEN }}
-          sparse-checkout: |
-            packages/qvac-lib-infer-onnx
           fetch-depth: 0
 
       - name: Fetch PR head and target branch

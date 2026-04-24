@@ -83,7 +83,6 @@ export interface PluginModel {
 
 export interface PluginModelResult {
   model: PluginModel;
-  loader: unknown;
 }
 
 export interface PluginLogging {
