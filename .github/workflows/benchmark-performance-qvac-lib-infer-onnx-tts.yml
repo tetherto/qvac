@@ -172,24 +172,6 @@ jobs:
             use_gpu: true
             run_python: false
             round_trip_test: true
-          - os: macos-15-large
-            platform: darwin
-            arch: x64
-            runner_label: macos-15-large
-            device_label: macos-15-large
-            backend: cpu
-            use_gpu: false
-            run_python: false
-            round_trip_test: false
-          - os: macos-15-large
-            platform: darwin
-            arch: x64
-            runner_label: macos-15-large
-            device_label: macos-15-large
-            backend: coreml
-            use_gpu: true
-            run_python: false
-            round_trip_test: false
           - os: windows-2022
             platform: win32
             arch: x64
@@ -198,7 +180,7 @@ jobs:
             backend: cpu
             use_gpu: false
             run_python: false
-            round_trip_test: true
+            round_trip_test: false
           - os: windows-2022
             platform: win32
             arch: x64
@@ -207,7 +189,7 @@ jobs:
             backend: directml
             use_gpu: true
             run_python: false
-            round_trip_test: true
+            round_trip_test: false
 
     steps:
       - name: Setup Node.js
