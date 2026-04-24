@@ -47,8 +47,10 @@
       "runToolCallingTest",
       "runUtf8OutputTest"
     ],
-    "groupImgElephant": ["runImageElephantTest"],
-    "groupImgFruitPlate": ["runImageFruitPlateTest"],
-    "groupImgHighResAurora": ["runImageHighResAuroraTest"]
+    "groupImagesPerf": [
+      "runImageElephantTest",
+      "runImageFruitPlateTest",
+      "runImageHighResAuroraTest"
+    ]
   }
 }

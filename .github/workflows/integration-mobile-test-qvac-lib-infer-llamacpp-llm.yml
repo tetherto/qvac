@@ -937,19 +937,27 @@ jobs:
             AUTOMATION="UiAutomator2"
             HOST_LINE="android_test_host: amazon_linux_2"
             BUNDLE_ID="${{ env.APP_BUNDLE_ID }}"
-            # Android wdio config with crash detection and test filter support
+            # Android wdio config with crash detection and test filter support.
+            # On crash, flushLogsAndExit sleeps 5s so logcat has time to drain the
+            # last stdout lines to the Device Farm runner (bare writes PERF_REPORT
+            # deltas via console.log → Android __android_log_write → logcat) before
+            # process.exit tears down the WDIO session.
             # __TEST_FILTER__ placeholder is replaced per-split by make_split()
-            WDIO_CONFIG='exports.config={runner:"local",hostname:"127.0.0.1",port:4723,path:"/wd/hub",specs:["*.spec.js","*.test.js"],maxInstances:1,bail:0,capabilities:[{platformName:"Android","appium:automationName":"UiAutomator2","appium:appPackage":"'${{ env.APP_BUNDLE_ID }}'","appium:appActivity":"'${{ env.APP_BUNDLE_ID }}'.MainActivity","appium:newCommandTimeout":300,"appium:autoGrantPermissions":true,"appium:autoAcceptAlerts":true,"appium:noReset":true,"appium:dontStopAppOnReset":true,"appium:forceAppLaunch":false}],logLevel:"debug",waitforTimeout:120000,connectionRetryTimeout:30000,connectionRetryCount:3,services:[],framework:"mocha",reporters:["spec"],mochaOpts:{ui:"bdd",timeout:1800000,grep:"__MOCHA_GREP__"},before:async function(capabilities,specs,browser){const BUNDLE_ID="'${{ env.APP_BUNDLE_ID }}'";const TEST_FILTER="__TEST_FILTER__";global.appCrashed=false;global.checkAppCrash=async(stage)=>{try{const state=await browser.queryAppState(BUNDLE_ID);console.log("["+stage+"] App state: "+state+" (4=foreground,3=background,1=not running)");if(state<3){console.error("\\n🛑 APP CRASHED at "+stage+"! State="+state);console.error("Check device logs for BareKit/native errors.\\n");global.appCrashed=true;process.exit(1);}return state;}catch(e){console.log("["+stage+"] queryAppState error: "+e.message);return-1;}};console.log("Checking initial app state...");await global.checkAppCrash("startup");console.log("Waiting for app to initialize...");await browser.pause(5000);await global.checkAppCrash("after-pause");const initText=await browser.$("android=new UiSelector().textContains(\"INITIALIZED\")");await initText.waitForDisplayed({timeout:60000});await global.checkAppCrash("after-init");if(TEST_FILTER!=="__TEST_FILTER__"){try{const b64=Buffer.from(TEST_FILTER).toString("base64");await browser.pushFile("/data/local/tmp/testFilter.txt",b64);console.log("Pushed test filter: "+TEST_FILTER);}catch(e){console.log("pushFile failed: "+e.message);}}console.log("App initialized, clicking Run Automated Tests...");const button=await browser.$("android=new UiSelector().textContains(\"Run Automated Tests\")");await button.waitForDisplayed({timeout:15000});await button.click();console.log("Button clicked!");await browser.pause(5000);await global.checkAppCrash("after-click");global.crashMonitor=setInterval(async()=>{if(global.appCrashed)return;try{const s=await browser.queryAppState(BUNDLE_ID);if(s<3){console.error("\\n🛑 BACKGROUND CRASH DETECTED! App state="+s);global.appCrashed=true;process.exit(1);}}catch(e){}},15000);},after:async function(){if(global.crashMonitor)clearInterval(global.crashMonitor);},afterTest:async function(test,context,{error}){if(global.appCrashed)return;await global.checkAppCrash("after-test:"+test.title);}};'
+            WDIO_CONFIG='exports.config={runner:"local",hostname:"127.0.0.1",port:4723,path:"/wd/hub",specs:["*.spec.js","*.test.js"],maxInstances:1,bail:0,capabilities:[{platformName:"Android","appium:automationName":"UiAutomator2","appium:appPackage":"'${{ env.APP_BUNDLE_ID }}'","appium:appActivity":"'${{ env.APP_BUNDLE_ID }}'.MainActivity","appium:newCommandTimeout":300,"appium:autoGrantPermissions":true,"appium:autoAcceptAlerts":true,"appium:noReset":true,"appium:dontStopAppOnReset":true,"appium:forceAppLaunch":false}],logLevel:"debug",waitforTimeout:120000,connectionRetryTimeout:30000,connectionRetryCount:3,services:[],framework:"mocha",reporters:["spec"],mochaOpts:{ui:"bdd",timeout:1800000,grep:"__MOCHA_GREP__"},before:async function(capabilities,specs,browser){const BUNDLE_ID="'${{ env.APP_BUNDLE_ID }}'";const TEST_FILTER="__TEST_FILTER__";global.appCrashed=false;global.flushLogsAndExit=async function(code){try{console.error("[bare-log] crash-path: waiting 5s for os_log + bare stdout to flush...");}catch(_){}await new Promise(function(r){setTimeout(r,5000);});try{var _plat=((capabilities&&capabilities.platformName)||"").toLowerCase();if(_plat==="ios"){var _h=require("http");var lb64=await new Promise(function(ok,fail){var bd=JSON.stringify({path:"@"+BUNDLE_ID+":documents/bare_console.log"});var rq=_h.request({hostname:"127.0.0.1",port:4723,path:"/wd/hub/session/"+browser.sessionId+"/appium/device/pull_file",method:"POST",headers:{"Content-Type":"application/json","Content-Length":Buffer.byteLength(bd)}},function(rs){var d="";rs.on("data",function(c){d+=c;});rs.on("end",function(){try{ok(JSON.parse(d).value);}catch(e){fail(e);}});});rq.on("error",fail);rq.write(bd);rq.end();});var logTxt=Buffer.from(lb64,"base64").toString();var logDir=process.env.DEVICEFARM_LOG_DIR||".";require("fs").writeFileSync(logDir+"/bare_console.log",logTxt);console.log("[bare-log] crash-path pulled bare_console.log ("+logTxt.length+" bytes)");}}catch(le){console.log("[bare-log] crash-path pull failed: "+le.message);}process.exit(code||1);};global.checkAppCrash=async(stage)=>{try{const state=await browser.queryAppState(BUNDLE_ID);console.log("["+stage+"] App state: "+state+" (4=foreground,3=background,1=not running)");if(state<3){console.error("\\n🛑 APP CRASHED at "+stage+"! State="+state);console.error("Check device logs for BareKit/native errors.\\n");global.appCrashed=true;await global.flushLogsAndExit(1);}return state;}catch(e){console.log("["+stage+"] queryAppState error: "+e.message);return-1;}};console.log("Checking initial app state...");await global.checkAppCrash("startup");console.log("Waiting for app to initialize...");await browser.pause(5000);await global.checkAppCrash("after-pause");const initText=await browser.$("android=new UiSelector().textContains(\"INITIALIZED\")");await initText.waitForDisplayed({timeout:60000});await global.checkAppCrash("after-init");if(TEST_FILTER!=="__TEST_FILTER__"){try{const b64=Buffer.from(TEST_FILTER).toString("base64");await browser.pushFile("/data/local/tmp/testFilter.txt",b64);console.log("Pushed test filter: "+TEST_FILTER);}catch(e){console.log("pushFile failed: "+e.message);}}console.log("App initialized, clicking Run Automated Tests...");const button=await browser.$("android=new UiSelector().textContains(\"Run Automated Tests\")");await button.waitForDisplayed({timeout:15000});await button.click();console.log("Button clicked!");await browser.pause(5000);await global.checkAppCrash("after-click");global.crashMonitor=setInterval(async()=>{if(global.appCrashed)return;try{const s=await browser.queryAppState(BUNDLE_ID);if(s<3){console.error("\\n🛑 BACKGROUND CRASH DETECTED! App state="+s);global.appCrashed=true;await global.flushLogsAndExit(1);}}catch(e){}},15000);},after:async function(){if(global.crashMonitor)clearInterval(global.crashMonitor);},afterTest:async function(test,context,{error}){if(global.appCrashed)return;await global.checkAppCrash("after-test:"+test.title);}};'
           else
             PLATFORM="iOS"
             AUTOMATION="XCUITest"
             # iOS 18+ requires macos_sequoia test host (supports iOS 15-26)
             HOST_LINE="ios_test_host: macos_sequoia"
             BUNDLE_ID="${{ env.APP_BUNDLE_ID }}"
-            # iOS wdio config with crash detection (bail:0 = continue on test failures, crash = process.exit)
+            # iOS wdio config with crash detection (bail:0 = continue on test failures,
+            # crash = flushLogsAndExit which sleeps 5s so bare stdout + os_log can
+            # drain, pulls bare_console.log off-device via Appium pull_file, and
+            # only THEN process.exit — so delta perf emits that landed on disk
+            # before a jetsam kill still reach the aggregator).
             # usePrebuiltWDA uses Device Farm's pre-built WebDriverAgent
             # Increased timeout to 30 minutes (1800000ms) for long-running LLM tests
-            WDIO_CONFIG='exports.config={runner:"local",hostname:"127.0.0.1",port:4723,path:"/wd/hub",specs:["*.spec.js","*.test.js"],maxInstances:1,bail:0,capabilities:[{platformName:"iOS","appium:automationName":"XCUITest","appium:bundleId":"'${{ env.APP_BUNDLE_ID }}'","appium:newCommandTimeout":300,"appium:noReset":true,"appium:forceAppLaunch":false,"appium:usePrebuiltWDA":true,"appium:wdaLocalPort":8100,"appium:showIOSLog":true,"appium:realDeviceLogger":"/usr/local/lib/node_modules/appium/node_modules/deviceconsole/deviceconsole"}],logLevel:"debug",waitforTimeout:120000,connectionRetryTimeout:30000,connectionRetryCount:3,services:[],framework:"mocha",reporters:["spec"],mochaOpts:{ui:"bdd",timeout:1800000,grep:"__MOCHA_GREP__"},before:async function(capabilities,specs,browser){const BUNDLE_ID="'${{ env.APP_BUNDLE_ID }}'";const TEST_FILTER="__TEST_FILTER__";global.appCrashed=false;global.checkAppCrash=async(stage)=>{try{const state=await browser.queryAppState(BUNDLE_ID);console.log("["+stage+"] App state: "+state+" (4=foreground,3=background,1=not running)");if(state<3){console.error("\\n🛑 APP CRASHED at "+stage+"! State="+state);console.error("Check device logs for BareKit/native errors.\\n");global.appCrashed=true;process.exit(1);}return state;}catch(e){console.log("["+stage+"] queryAppState error: "+e.message);return-1;}};console.log("Checking initial app state...");await global.checkAppCrash("startup");console.log("Waiting for app to initialize...");await browser.pause(5000);await global.checkAppCrash("after-pause");const initText=await browser.$("-ios predicate string:label CONTAINS \"INITIALIZED\"");await initText.waitForDisplayed({timeout:60000});await global.checkAppCrash("after-init");if(TEST_FILTER!=="__TEST_FILTER__"){try{const b64=Buffer.from(TEST_FILTER).toString("base64");await browser.pushFile("@"+BUNDLE_ID+":documents/testFilter.txt",b64);console.log("Pushed test filter: "+TEST_FILTER);}catch(e){console.log("pushFile failed: "+e.message);}}console.log("App initialized, clicking Run Automated Tests...");const button=await browser.$("-ios predicate string:label CONTAINS \"Run Automated Tests\"");await button.waitForDisplayed({timeout:15000});await button.click();console.log("Button clicked!");await browser.pause(5000);await global.checkAppCrash("after-click");global.crashMonitor=setInterval(async()=>{if(global.appCrashed)return;try{const s=await browser.queryAppState(BUNDLE_ID);if(s<3){console.error("\\n🛑 BACKGROUND CRASH DETECTED! App state="+s);global.appCrashed=true;process.exit(1);}}catch(e){}},15000);},after:async function(){if(global.crashMonitor)clearInterval(global.crashMonitor);console.log("[bare-log] Waiting for log flush...");await browser.pause(3000);try{var BID="'${{ env.APP_BUNDLE_ID }}'";var _h=require("http");var lb64=await new Promise(function(ok,fail){var bd=JSON.stringify({path:"@"+BID+":documents/bare_console.log"});var rq=_h.request({hostname:"127.0.0.1",port:4723,path:"/wd/hub/session/"+browser.sessionId+"/appium/device/pull_file",method:"POST",headers:{"Content-Type":"application/json","Content-Length":Buffer.byteLength(bd)}},function(rs){var d="";rs.on("data",function(c){d+=c;});rs.on("end",function(){try{ok(JSON.parse(d).value);}catch(e){fail(e);}});});rq.on("error",fail);rq.write(bd);rq.end();});var logTxt=Buffer.from(lb64,"base64").toString();var logDir=process.env.DEVICEFARM_LOG_DIR||".";require("fs").writeFileSync(logDir+"/bare_console.log",logTxt);console.log("[bare-log] Written bare_console.log ("+logTxt.length+" bytes)");}catch(le){console.log("[bare-log] pull failed: "+le.message);}},afterTest:async function(test,context,{error}){if(global.appCrashed)return;await global.checkAppCrash("after-test:"+test.title);}};'
+            WDIO_CONFIG='exports.config={runner:"local",hostname:"127.0.0.1",port:4723,path:"/wd/hub",specs:["*.spec.js","*.test.js"],maxInstances:1,bail:0,capabilities:[{platformName:"iOS","appium:automationName":"XCUITest","appium:bundleId":"'${{ env.APP_BUNDLE_ID }}'","appium:newCommandTimeout":300,"appium:noReset":true,"appium:forceAppLaunch":false,"appium:usePrebuiltWDA":true,"appium:wdaLocalPort":8100,"appium:showIOSLog":true,"appium:realDeviceLogger":"/usr/local/lib/node_modules/appium/node_modules/deviceconsole/deviceconsole"}],logLevel:"debug",waitforTimeout:120000,connectionRetryTimeout:30000,connectionRetryCount:3,services:[],framework:"mocha",reporters:["spec"],mochaOpts:{ui:"bdd",timeout:1800000,grep:"__MOCHA_GREP__"},before:async function(capabilities,specs,browser){const BUNDLE_ID="'${{ env.APP_BUNDLE_ID }}'";const TEST_FILTER="__TEST_FILTER__";global.appCrashed=false;global.flushLogsAndExit=async function(code){try{console.error("[bare-log] crash-path: waiting 5s for os_log + bare stdout to flush...");}catch(_){}await new Promise(function(r){setTimeout(r,5000);});try{var _plat=((capabilities&&capabilities.platformName)||"").toLowerCase();if(_plat==="ios"){var _h=require("http");var lb64=await new Promise(function(ok,fail){var bd=JSON.stringify({path:"@"+BUNDLE_ID+":documents/bare_console.log"});var rq=_h.request({hostname:"127.0.0.1",port:4723,path:"/wd/hub/session/"+browser.sessionId+"/appium/device/pull_file",method:"POST",headers:{"Content-Type":"application/json","Content-Length":Buffer.byteLength(bd)}},function(rs){var d="";rs.on("data",function(c){d+=c;});rs.on("end",function(){try{ok(JSON.parse(d).value);}catch(e){fail(e);}});});rq.on("error",fail);rq.write(bd);rq.end();});var logTxt=Buffer.from(lb64,"base64").toString();var logDir=process.env.DEVICEFARM_LOG_DIR||".";require("fs").writeFileSync(logDir+"/bare_console.log",logTxt);console.log("[bare-log] crash-path pulled bare_console.log ("+logTxt.length+" bytes)");}}catch(le){console.log("[bare-log] crash-path pull failed: "+le.message);}process.exit(code||1);};global.checkAppCrash=async(stage)=>{try{const state=await browser.queryAppState(BUNDLE_ID);console.log("["+stage+"] App state: "+state+" (4=foreground,3=background,1=not running)");if(state<3){console.error("\\n🛑 APP CRASHED at "+stage+"! State="+state);console.error("Check device logs for BareKit/native errors.\\n");global.appCrashed=true;await global.flushLogsAndExit(1);}return state;}catch(e){console.log("["+stage+"] queryAppState error: "+e.message);return-1;}};console.log("Checking initial app state...");await global.checkAppCrash("startup");console.log("Waiting for app to initialize...");await browser.pause(5000);await global.checkAppCrash("after-pause");const initText=await browser.$("-ios predicate string:label CONTAINS \"INITIALIZED\"");await initText.waitForDisplayed({timeout:60000});await global.checkAppCrash("after-init");if(TEST_FILTER!=="__TEST_FILTER__"){try{const b64=Buffer.from(TEST_FILTER).toString("base64");await browser.pushFile("@"+BUNDLE_ID+":documents/testFilter.txt",b64);console.log("Pushed test filter: "+TEST_FILTER);}catch(e){console.log("pushFile failed: "+e.message);}}console.log("App initialized, clicking Run Automated Tests...");const button=await browser.$("-ios predicate string:label CONTAINS \"Run Automated Tests\"");await button.waitForDisplayed({timeout:15000});await button.click();console.log("Button clicked!");await browser.pause(5000);await global.checkAppCrash("after-click");global.crashMonitor=setInterval(async()=>{if(global.appCrashed)return;try{const s=await browser.queryAppState(BUNDLE_ID);if(s<3){console.error("\\n🛑 BACKGROUND CRASH DETECTED! App state="+s);global.appCrashed=true;await global.flushLogsAndExit(1);}}catch(e){}},15000);},after:async function(){if(global.crashMonitor)clearInterval(global.crashMonitor);console.log("[bare-log] Waiting for log flush...");await browser.pause(3000);try{var BID="'${{ env.APP_BUNDLE_ID }}'";var _h=require("http");var lb64=await new Promise(function(ok,fail){var bd=JSON.stringify({path:"@"+BID+":documents/bare_console.log"});var rq=_h.request({hostname:"127.0.0.1",port:4723,path:"/wd/hub/session/"+browser.sessionId+"/appium/device/pull_file",method:"POST",headers:{"Content-Type":"application/json","Content-Length":Buffer.byteLength(bd)}},function(rs){var d="";rs.on("data",function(c){d+=c;});rs.on("end",function(){try{ok(JSON.parse(d).value);}catch(e){fail(e);}});});rq.on("error",fail);rq.write(bd);rq.end();});var logTxt=Buffer.from(lb64,"base64").toString();var logDir=process.env.DEVICEFARM_LOG_DIR||".";require("fs").writeFileSync(logDir+"/bare_console.log",logTxt);console.log("[bare-log] Written bare_console.log ("+logTxt.length+" bytes)");}catch(le){console.log("[bare-log] pull failed: "+le.message);}},afterTest:async function(test,context,{error}){if(global.appCrashed)return;await global.checkAppCrash("after-test:"+test.title);}};'
           fi
           
           WDIO_B64=$(echo "$WDIO_CONFIG" | base64 | tr -d '\n')
@@ -1079,40 +1087,30 @@ jobs:
           GROUPS_JSON="${{ github.workspace }}/${{ env.ADDON_WORKDIR }}/test/mobile/test-groups.json"
 
           if [ "${{ matrix.platform }}" == "Android" ]; then
-            # QVAC-17830: image.test.js was split into 3 per-image files so
-            # each image runs in its own Device Farm group. Keeps peak
-            # memory low (one VLM load per group) and isolates the
-            # high-res aurora image (prone to OOM) from the other perf
-            # data. Group names come straight from test-groups.json.
+            # QVAC-17830: Android handles all 3 image tests in a single
+            # Device Farm group (no OOM pressure like iOS has). The test
+            # files were split at the JS level for iOS isolation, but on
+            # Android we keep them in one "images-perf" group so we use
+            # exactly one Device Farm invocation for perf data.
             ANDROID_GROUP_A=$(jq -r '.android.groupA | join("|")' "$GROUPS_JSON")
             ANDROID_GROUP_B=$(jq -r '.android.groupB | join("|")' "$GROUPS_JSON")
-            ANDROID_GROUP_IMG_ELE=$(jq -r '.android.groupImgElephant | join("|")' "$GROUPS_JSON")
-            ANDROID_GROUP_IMG_FRU=$(jq -r '.android.groupImgFruitPlate | join("|")' "$GROUPS_JSON")
-            ANDROID_GROUP_IMG_AUR=$(jq -r '.android.groupImgHighResAurora | join("|")' "$GROUPS_JSON")
+            ANDROID_GROUP_IMG_PERF=$(jq -r '.android.groupImagesPerf | join("|")' "$GROUPS_JSON")
 
-            echo "Android test split (5 groups):"
+            echo "Android test split (3 groups):"
             echo "  Group A (non-image light):        $ANDROID_GROUP_A"
             echo "  Group B (non-image light):        $ANDROID_GROUP_B"
-            echo "  Group Image-Elephant:              $ANDROID_GROUP_IMG_ELE"
-            echo "  Group Image-FruitPlate:            $ANDROID_GROUP_IMG_FRU"
-            echo "  Group Image-HighResAurora:         $ANDROID_GROUP_IMG_AUR"
+            echo "  Group Images-Perf (all 3 images): $ANDROID_GROUP_IMG_PERF"
 
-            make_split "$ANDROID_GROUP_A"       testspec-android-a.yml
-            make_split "$ANDROID_GROUP_B"       testspec-android-b.yml
-            make_split "$ANDROID_GROUP_IMG_ELE" testspec-android-img-ele.yml
-            make_split "$ANDROID_GROUP_IMG_FRU" testspec-android-img-fru.yml
-            make_split "$ANDROID_GROUP_IMG_AUR" testspec-android-img-aur.yml
+            make_split "$ANDROID_GROUP_A"        testspec-android-a.yml
+            make_split "$ANDROID_GROUP_B"        testspec-android-b.yml
+            make_split "$ANDROID_GROUP_IMG_PERF" testspec-android-img-perf.yml
 
             SPEC_ARN_A=$(upload_spec testspec-android-a.yml "Android-A")
             echo "test_spec_arn=$SPEC_ARN_A" >> $GITHUB_OUTPUT
             SPEC_ARN_B=$(upload_spec testspec-android-b.yml "Android-B")
             echo "test_spec_arn_2=$SPEC_ARN_B" >> $GITHUB_OUTPUT
-            SPEC_ARN_IMG_ELE=$(upload_spec testspec-android-img-ele.yml "Android-ImgElephant")
-            echo "test_spec_arn_3=$SPEC_ARN_IMG_ELE" >> $GITHUB_OUTPUT
-            SPEC_ARN_IMG_FRU=$(upload_spec testspec-android-img-fru.yml "Android-ImgFruitPlate")
-            echo "test_spec_arn_4=$SPEC_ARN_IMG_FRU" >> $GITHUB_OUTPUT
-            SPEC_ARN_IMG_AUR=$(upload_spec testspec-android-img-aur.yml "Android-ImgHighResAurora")
-            echo "test_spec_arn_5=$SPEC_ARN_IMG_AUR" >> $GITHUB_OUTPUT
+            SPEC_ARN_IMG_PERF=$(upload_spec testspec-android-img-perf.yml "Android-ImagesPerf")
+            echo "test_spec_arn_3=$SPEC_ARN_IMG_PERF" >> $GITHUB_OUTPUT
           else
             IOS_GREP_HEAVY_1=$(jq -r '.ios.heavy1 | join("|")' "$GROUPS_JSON")
             IOS_GREP_HEAVY_2=$(jq -r '.ios.heavy2 | join("|")' "$GROUPS_JSON")
@@ -1203,11 +1201,9 @@ jobs:
             POOL_ARN="${{ secrets.LLM_ANDROID_DEVICE_POOL_ARN }}"
             TEST_SPEC_ARN_A="${{ steps.upload_test_spec.outputs.test_spec_arn }}"
             TEST_SPEC_ARN_B="${{ steps.upload_test_spec.outputs.test_spec_arn_2 }}"
-            TEST_SPEC_ARN_IMG_ELE="${{ steps.upload_test_spec.outputs.test_spec_arn_3 }}"
-            TEST_SPEC_ARN_IMG_FRU="${{ steps.upload_test_spec.outputs.test_spec_arn_4 }}"
-            TEST_SPEC_ARN_IMG_AUR="${{ steps.upload_test_spec.outputs.test_spec_arn_5 }}"
+            TEST_SPEC_ARN_IMG_PERF="${{ steps.upload_test_spec.outputs.test_spec_arn_3 }}"
 
-            echo "🚀 Scheduling 5 Android runs (each runs on all devices in pool)..."
+            echo "🚀 Scheduling 3 Android runs (each runs on all devices in pool)..."
             echo "Device Pool ARN: $POOL_ARN"
 
             RUN_ARN_1=$(schedule_run_with_pool "$POOL_ARN" "$RUN_NAME-Android-GroupA" "$TEST_SPEC_ARN_A")
@@ -1216,21 +1212,13 @@ jobs:
             RUN_ARN_2=$(schedule_run_with_pool "$POOL_ARN" "$RUN_NAME-Android-GroupB" "$TEST_SPEC_ARN_B")
             echo "✅ Android Group B scheduled: $RUN_ARN_2"
 
-            RUN_ARN_3=$(schedule_run_with_pool "$POOL_ARN" "$RUN_NAME-Android-ImgElephant" "$TEST_SPEC_ARN_IMG_ELE")
-            echo "✅ Android Image-Elephant scheduled: $RUN_ARN_3"
-
-            RUN_ARN_4=$(schedule_run_with_pool "$POOL_ARN" "$RUN_NAME-Android-ImgFruitPlate" "$TEST_SPEC_ARN_IMG_FRU")
-            echo "✅ Android Image-FruitPlate scheduled: $RUN_ARN_4"
-
-            RUN_ARN_5=$(schedule_run_with_pool "$POOL_ARN" "$RUN_NAME-Android-ImgHighResAurora" "$TEST_SPEC_ARN_IMG_AUR")
-            echo "✅ Android Image-HighResAurora scheduled: $RUN_ARN_5"
+            RUN_ARN_3=$(schedule_run_with_pool "$POOL_ARN" "$RUN_NAME-Android-ImagesPerf" "$TEST_SPEC_ARN_IMG_PERF")
+            echo "✅ Android Images-Perf (all 3 images) scheduled: $RUN_ARN_3"
 
             echo "run_arn_1=$RUN_ARN_1" >> $GITHUB_OUTPUT
             echo "run_arn_2=$RUN_ARN_2" >> $GITHUB_OUTPUT
             echo "run_arn_3=$RUN_ARN_3" >> $GITHUB_OUTPUT
-            echo "run_arn_4=$RUN_ARN_4" >> $GITHUB_OUTPUT
-            echo "run_arn_5=$RUN_ARN_5" >> $GITHUB_OUTPUT
-            echo "run_count=5" >> $GITHUB_OUTPUT
+            echo "run_count=3" >> $GITHUB_OUTPUT
           else
             POOL_ARN="${{ secrets.LLM_IOS_DEVICE_POOL_ARN }}"
             TEST_SPEC_ARN_1="${{ steps.upload_test_spec.outputs.test_spec_arn }}"
@@ -1244,7 +1232,7 @@ jobs:
             TEST_SPEC_ARN_9="${{ steps.upload_test_spec.outputs.test_spec_arn_9 }}"
             TEST_SPEC_ARN_10="${{ steps.upload_test_spec.outputs.test_spec_arn_10 }}"
 
-            echo "🚀 Scheduling 10 iOS runs (each runs on ALL devices in pool)..."
+            echo "🚀 Scheduling 11 iOS runs (each runs on ALL devices in pool)..."
             echo "Device Pool ARN: $POOL_ARN"
 
             RUN_ARN_1=$(schedule_run_with_pool "$POOL_ARN" "$RUN_NAME-iOS-Heavy1-Finetuning" "$TEST_SPEC_ARN_1")
@@ -1277,6 +1265,20 @@ jobs:
             RUN_ARN_10=$(schedule_run_with_pool "$POOL_ARN" "$RUN_NAME-iOS-LightB" "$TEST_SPEC_ARN_10")
             echo "✅ LightB scheduled: $RUN_ARN_10"
 
+            # QVAC-17830: Heavy7 (fruit plate) is known-flaky on iOS —
+            # Jetsam can kill the app mid-vision-encode on the large
+            # 10 MB image before any perf record() fires, so the first
+            # attempt sometimes returns zero perf data. Schedule a
+            # second, independent Device Farm run of the same spec so
+            # a fresh device / fresh app state gets another shot.
+            # Both runs land in the same per-device folder on download
+            # and extract-from-log.js --merge concats + dedupes, so if
+            # either attempt produces PERF_REPORT markers the data
+            # lands in the combined report. If both produce data we
+            # just get more iterations to average over, which is fine.
+            RUN_ARN_11=$(schedule_run_with_pool "$POOL_ARN" "$RUN_NAME-iOS-Heavy7-ImgFruitPlate-Retry" "$TEST_SPEC_ARN_7")
+            echo "✅ Heavy7-Retry (Image-FruitPlate retry) scheduled: $RUN_ARN_11"
+
             echo "run_arn_1=$RUN_ARN_1" >> $GITHUB_OUTPUT
             echo "run_arn_2=$RUN_ARN_2" >> $GITHUB_OUTPUT
             echo "run_arn_3=$RUN_ARN_3" >> $GITHUB_OUTPUT
@@ -1287,7 +1289,8 @@ jobs:
             echo "run_arn_8=$RUN_ARN_8" >> $GITHUB_OUTPUT
             echo "run_arn_9=$RUN_ARN_9" >> $GITHUB_OUTPUT
             echo "run_arn_10=$RUN_ARN_10" >> $GITHUB_OUTPUT
-            echo "run_count=10" >> $GITHUB_OUTPUT
+            echo "run_arn_11=$RUN_ARN_11" >> $GITHUB_OUTPUT
+            echo "run_count=11" >> $GITHUB_OUTPUT
           fi
 
           echo "All runs scheduled."
@@ -1326,6 +1329,7 @@ jobs:
           RUN_ARN_8="${{ steps.schedule_run.outputs.run_arn_8 }}"
           RUN_ARN_9="${{ steps.schedule_run.outputs.run_arn_9 }}"
           RUN_ARN_10="${{ steps.schedule_run.outputs.run_arn_10 }}"
+          RUN_ARN_11="${{ steps.schedule_run.outputs.run_arn_11 }}"
           RUN_COUNT="${{ steps.schedule_run.outputs.run_count }}"
 
           echo "📊 Monitoring $RUN_COUNT Device Farm run(s)..."
@@ -1376,7 +1380,7 @@ jobs:
           done
 
           RUN_ARNS=("$RUN_ARN_1")
-          for i in 2 3 4 5 6 7 8 9 10; do
+          for i in 2 3 4 5 6 7 8 9 10 11; do
             eval "arn=\$RUN_ARN_$i"
             if [ "$RUN_COUNT" -ge "$i" ] && [ -n "$arn" ]; then
               RUN_ARNS+=("$arn")
@@ -1530,13 +1534,14 @@ jobs:
           RUN_ARN_8="${{ steps.schedule_run.outputs.run_arn_8 }}"
           RUN_ARN_9="${{ steps.schedule_run.outputs.run_arn_9 }}"
           RUN_ARN_10="${{ steps.schedule_run.outputs.run_arn_10 }}"
+          RUN_ARN_11="${{ steps.schedule_run.outputs.run_arn_11 }}"
           RUN_COUNT="${{ steps.schedule_run.outputs.run_count }}"
           LOG_DIR="devicefarm-logs/${{ matrix.platform }}"
           PLATFORM="${{ matrix.platform }}"
           mkdir -p "$LOG_DIR"
 
           RUN_ARNS=("$RUN_ARN_1")
-          for i in 2 3 4 5 6 7 8 9 10; do
+          for i in 2 3 4 5 6 7 8 9 10 11; do
             eval "arn=\$RUN_ARN_$i"
             if [ "$RUN_COUNT" -ge "$i" ] && [ -n "$arn" ]; then
               RUN_ARNS+=("$arn")
@@ -1566,9 +1571,10 @@ jobs:
               SAFE_NAME=$(echo "$DEVICE_NAME" | tr ' /' '__' | tr -cd '[:alnum:]_-')
               # QVAC-17830: put per-device logs into a subdirectory so
               # that when the same physical device runs multiple Device
-              # Farm groups (image split → up to 5 Android / 10 iOS
-              # groups per device) extract-from-log.js can use its
-              # path-based deriveDeviceName to bucket them correctly.
+              # Farm groups (up to 3 Android / 11 iOS groups per device,
+              # the 11th being a Heavy7 fruit-plate retry) extract-from-
+              # log.js can use its path-based deriveDeviceName to bucket
+              # them correctly and --merge to concatenate all reports.
               DEVICE_DIR="$LOG_DIR/$SAFE_NAME"
               mkdir -p "$DEVICE_DIR"
 
