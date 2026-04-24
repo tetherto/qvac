@@ -1,6 +1,6 @@
 // @ts-expect-error brittle has no type declarations
 import test from "brittle";
-import { expandGGUFIntoShards } from "@/server/utils";
+import { expandGGUFIntoShards } from "@/server/utils/expand-gguf-shards";
 
 test("expandGGUFIntoShards: returns single path for non-sharded model", (t) => {
   const result = expandGGUFIntoShards("/models/llama-7b.gguf");
