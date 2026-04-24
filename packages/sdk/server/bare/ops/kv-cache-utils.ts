@@ -35,15 +35,24 @@ export function isCacheInitialized(
   );
 }
 
-export function clearCacheRegistry(cacheKey?: string): void {
-  if (cacheKey) {
-    for (const key of initializedCaches) {
-      if (key.includes(`:${cacheKey}`)) {
-        initializedCaches.delete(key);
-      }
-    }
-  } else {
+export function clearCacheRegistry(scope?: {
+  cacheKey?: string | undefined;
+  modelId?: string | undefined;
+}): void {
+  if (!scope || (scope.cacheKey === undefined && scope.modelId === undefined)) {
     initializedCaches.clear();
+    return;
+  }
+  // key format: "modelId:configHash:cacheKey"
+  for (const key of initializedCaches) {
+    const firstSep = key.indexOf(":");
+    const secondSep = key.indexOf(":", firstSep + 1);
+    if (firstSep === -1 || secondSep === -1) continue;
+    const modelId = key.slice(0, firstSep);
+    const cacheKey = key.slice(secondSep + 1);
+    if (scope.cacheKey !== undefined && cacheKey !== scope.cacheKey) continue;
+    if (scope.modelId !== undefined && modelId !== scope.modelId) continue;
+    initializedCaches.delete(key);
   }
 }
 
@@ -183,41 +192,21 @@ export async function customCacheExists(
 
 export async function deleteCache(
   options: { all: true } | { kvCacheKey: string; modelId?: string },
-): Promise<void> {
+): Promise<string> {
   const cacheDir = getKVCacheDir();
 
-  if ("all" in options && options.all) {
-    try {
-      await fsPromises.rm(cacheDir, { recursive: true });
-      await fsPromises.mkdir(cacheDir, { recursive: true });
-    } catch (error) {
-      logger.error(
-        "Error deleting all caches:",
-        error instanceof Error ? error.message : String(error),
-      );
-    }
-  } else if ("kvCacheKey" in options) {
-    const kvCacheDir = validateAndJoinPath(cacheDir, options.kvCacheKey);
-
-    if (options.modelId) {
-      const modelCacheDir = validateAndJoinPath(kvCacheDir, options.modelId);
-      try {
-        await fsPromises.rm(modelCacheDir, { recursive: true });
-      } catch (error) {
-        logger.error(
-          `Error deleting model cache ${options.kvCacheKey}/${options.modelId}:`,
-          error instanceof Error ? error.message : String(error),
-        );
-      }
-    } else {
-      try {
-        await fsPromises.rm(kvCacheDir, { recursive: true });
-      } catch (error) {
-        logger.error(
-          `Error deleting cache ${options.kvCacheKey}:`,
-          error instanceof Error ? error.message : String(error),
-        );
-      }
-    }
+  if ("all" in options) {
+    await fsPromises.rm(cacheDir, { recursive: true, force: true });
+    await fsPromises.mkdir(cacheDir, { recursive: true });
+    return cacheDir;
   }
+
+  const kvCacheDir = validateAndJoinPath(cacheDir, options.kvCacheKey);
+  const targetDir =
+    options.modelId !== undefined
+      ? validateAndJoinPath(kvCacheDir, options.modelId)
+      : kvCacheDir;
+
+  await fsPromises.rm(targetDir, { recursive: true, force: true });
+  return targetDir;
 }

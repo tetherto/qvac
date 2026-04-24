@@ -1,5 +1,61 @@
 # Changelog
 
+## [0.17.0] - 2026-04-21
+
+### Changed
+
+#### `tools_at_end` renamed to `tools_compact`
+
+**Breaking**: The `tools_at_end` configuration option has been renamed to `tools_compact`. The old key is no longer recognized.
+
+#### Anchored tool placement for multi-round tool chains
+
+Tools are now anchored after the **last user message** (via a two-pass Jinja2 template that tracks `last_user_idx`) instead of being appended at the very end of the prompt. The tool boundary is set once on the first round and preserved across chain rounds, so tools stay in the KV cache while the model is still calling tools. Trimming now only happens when the chain completes (output contains no `<tool_call>` tag), instead of after every turn.
+
+This eliminates redundant tokenize → eval → trim cycles during multi-round tool chains and matches the model's expected prompt layout more closely.
+
+#### `<think>` blocks stripped from assistant history
+
+The Qwen3 tools-dynamic template no longer re-injects `<think>…</think>` reasoning blocks into assistant history. Prior assistant messages are replayed with the thinking content stripped, which reduces token waste and avoids the model treating stale reasoning as context.
+
+#### `tools_compact` prompt-shape validation tightened
+
+`tools_compact` now validates prompt layout before inference and fails fast with `InvalidArgument` for malformed inputs (for example: required tools omitted, non-contiguous tool block, tools not attached to the last user/tool anchor, or tools not placed at the end).
+
+### Fixed
+
+#### Context sliding with `tools_compact` could corrupt tool boundary tracking
+
+When context sliding (token discard) occurred during generation or prefill with `tools_compact` enabled, the `nPastBeforeTools` boundary could become stale. This caused post-generation trim to remove the wrong tail region and could leave tool tokens in the KV cache across turns.
+
+Sliding is now centralized through `ContextSlider` + `ToolsCompactController`:
+- `clampDiscard()` caps discard so sliding never crosses into protected tool tokens
+- `onSlide()` keeps `nPastBeforeTools` aligned after each slide
+- Fallback full-wipe paths reset controller state to avoid stale boundaries
+- Applied consistently in both `TextLlmContext` and `MtmdLlmContext`
+
+#### Output duplication in streaming mode with `tools_compact`
+
+In streaming mode the captured output buffer was being returned as the final result, causing the SDK to see every token twice (once streamed, once in the result). The captured buffer is now used only for internal `<tool_call>` detection.
+
+#### Generation prompt added on system-only prefill
+
+When `nPast=0` and the only message was a system prompt, `add_generation_prompt` was hardcoded to `true`, injecting a stale `<|im_start|>assistant` token into the cache. Now checks the actual last message role.
+
+#### `"tool"` role not treated as turn-ending for generation prompt
+
+Messages with role `"tool"` (tool call results) were not triggering `add_generation_prompt`, causing empty responses on tool chain continuation. Now treated the same as `"user"` for generation prompt purposes.
+
+#### Empty chat message array now fails with `EmptyPrompt`
+
+`tokenizeChat()` now throws `StatusError(EmptyPrompt)` when called with no chat messages, making empty prompt handling explicit and consistent for both text and multimodal contexts.
+
+### Added
+
+- `runtimeDebugStats()` internal method on `LlamaModel` exposing `nPastBeforeTools`, `firstMsgTokens`, and `toolsTrimmed`
+- Comprehensive C++ unit tests for Qwen3 tools-dynamic template and cache management with tools_compact
+- Regression tests for context sliding with anchored tools: clamped discard, anchor updates after slide, unclamped sliding with long conversations, and sliding during generation
+
 ## [0.16.0] - 2026-04-14
 
 This release migrates the LLM addon off `BaseInference` inheritance and the `WeightsProvider` download layer onto the composable `createJobHandler` + `exclusiveRunQueue` utilities from `@qvac/infer-base@^0.4.0`. The constructor signature is replaced with a single object whose `files.model` field is an ordered array of absolute paths and `files.projectionModel` is an optional absolute path for multimodal models. This is a breaking change — every caller must update.

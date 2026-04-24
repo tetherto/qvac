@@ -1,7 +1,6 @@
 // @ts-expect-error brittle has no type declarations
 import test from "brittle";
 import { z } from "zod";
-import type FilesystemDL from "@qvac/dl-filesystem";
 import { clearPlugins, registerPlugin } from "@/server/plugins";
 import {
   registerModel,
@@ -38,7 +37,6 @@ test("registerPlugin: rejects invalid plugin definitions (fail-fast)", function 
     createModel: function () {
       return {
         model: { load: async function () {} },
-        loader: {},
       };
     },
     handlers: {
@@ -80,7 +78,6 @@ test("pluginInvokeStream: validates streamed chunks against responseSchema", asy
     createModel: function () {
       return {
         model: { load: async function () {} },
-        loader: {},
       };
     },
     handlers: {
@@ -101,7 +98,6 @@ test("pluginInvokeStream: validates streamed chunks against responseSchema", asy
       path: "/tmp/model.bin",
       config: {},
       modelType: ModelType.llamacppCompletion,
-      loader: {} as unknown as FilesystemDL,
     });
 
     const stream = handlePluginInvokeStream({
@@ -165,7 +161,6 @@ test("registerPlugin: accepts valid plugin and retrieves it", function (t) {
     createModel: function () {
       return {
         model: { load: async function () {} },
-        loader: {},
       };
     },
     handlers: {
@@ -205,7 +200,6 @@ test("registerPlugin: rejects duplicate modelType registration", function (t) {
     createModel: function () {
       return {
         model: { load: async function () {} },
-        loader: {},
       };
     },
     handlers: {},
@@ -253,7 +247,6 @@ test("registerPlugin: rejects alias as modelType", function (t) {
     createModel: function () {
       return {
         model: { load: async function () {} },
-        loader: {},
       };
     },
     handlers: {},

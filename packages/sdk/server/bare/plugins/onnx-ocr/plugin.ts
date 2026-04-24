@@ -127,7 +127,7 @@ export const ocrPlugin = definePlugin({
         ocrConfig,
     );
 
-    return { model, loader: null };
+    return { model };
   },
 
   handlers: {
