@@ -1,6 +1,5 @@
 #include <any>
 #include <filesystem>
-#include <iostream>
 #include <memory>
 #include <string>
 #include <unordered_map>
@@ -14,7 +13,6 @@
 namespace fs = std::filesystem;
 
 using test_common::getStatValue;
-using test_common::processPromptString;
 using test_common::processPromptWithCacheOptions;
 
 namespace {
@@ -87,64 +85,65 @@ protected:
   std::string temp_session_path;
 };
 
-TEST_F(CacheManagementQwen3Test, CacheWithToolsAtEndTrueTrimsToolTokens) {
+// tools_compact prompt-shape contract:
+// - when tools_compact=true and the last message is role=user, tools must be
+//   attached in the same prompt payload regardless of cache.
+// - cache-aware exceptions apply to assistant/tool tails and are covered in
+//   deterministic controller unit tests.
+TEST_F(CacheManagementQwen3Test, CacheWithToolsCompactTruePersistsSession) {
   if (!isQwen3ModelPath(test_model_path)) {
-    GTEST_SKIP() << "Test requires Qwen3 model for tools_at_end feature";
+    GTEST_SKIP() << "Test requires Qwen3 model for tools_compact feature";
   }
 
   if (!hasValidModel()) {
     FAIL() << "Test model not found";
   }
 
-  config_files["tools_at_end"] = "true";
+  config_files["tools_compact"] = "true";
   auto model = createModel();
   if (!model) {
     FAIL() << "Model failed to load";
   }
 
   EXPECT_NO_THROW({
-    processPromptWithCacheOptions(
+    std::string output = processPromptWithCacheOptions(
         model,
         R"([{"role": "user", "content": "What is the weather in Tokyo?"}, {"type": "function", "name": "getWeather", "description": "Get weather forecast", "parameters": {"type": "object", "properties": {"city": {"type": "string"}}, "required": ["city"]}}])",
         session1_path,
         true);
+    EXPECT_FALSE(output.empty());
   });
 
   auto statsBeforeSave = model->runtimeStats();
   double cacheTokensBeforeSave = getStatValue(statsBeforeSave, "CacheTokens");
   EXPECT_GT(cacheTokensBeforeSave, 0.0);
 
-  llama_pos nPastBeforeTools = model->getNPastBeforeTools();
-  EXPECT_EQ(nPastBeforeTools, -1);
-
   EXPECT_TRUE(fs::exists(session1_path));
 }
 
-TEST_F(CacheManagementQwen3Test, CacheReloadWithToolsAtEndTrue) {
+TEST_F(CacheManagementQwen3Test, CacheReloadWithToolsCompactTrue) {
   if (!isQwen3ModelPath(test_model_path)) {
-    GTEST_SKIP() << "Test requires Qwen3 model for tools_at_end feature";
+    GTEST_SKIP() << "Test requires Qwen3 model for tools_compact feature";
   }
 
   if (!hasValidModel()) {
     FAIL() << "Test model not found";
   }
 
-  config_files["tools_at_end"] = "true";
+  config_files["tools_compact"] = "true";
   auto model1 = createModel();
   if (!model1) {
     FAIL() << "Model failed to load";
   }
 
   EXPECT_NO_THROW({
-    processPromptWithCacheOptions(
+    std::string output = processPromptWithCacheOptions(
         model1,
         R"([{"role": "user", "content": "What is the weather in Tokyo?"}, {"type": "function", "name": "getWeather", "description": "Get weather forecast", "parameters": {"type": "object", "properties": {"city": {"type": "string"}}, "required": ["city"]}}])",
         session1_path,
         true);
+    EXPECT_FALSE(output.empty());
   });
-
-  llama_pos nPastBeforeTools1 = model1->getNPastBeforeTools();
-  EXPECT_EQ(nPastBeforeTools1, -1);
 
   EXPECT_TRUE(fs::exists(session1_path));
 
@@ -156,107 +155,63 @@ TEST_F(CacheManagementQwen3Test, CacheReloadWithToolsAtEndTrue) {
   }
 
   EXPECT_NO_THROW({
-    processPromptWithCacheOptions(
+    std::string output = processPromptWithCacheOptions(
         model2,
-        R"([{"role": "user", "content": "What is the weather in London?"}])",
+        R"([{"role": "user", "content": "What is the weather in London?"}, {"type": "function", "name": "getWeather", "description": "Get weather forecast", "parameters": {"type": "object", "properties": {"city": {"type": "string"}}, "required": ["city"]}}])",
         session1_path);
+    EXPECT_FALSE(output.empty());
   });
 
   auto statsAfterReload = model2->runtimeStats();
   double cacheTokensAfterReload = getStatValue(statsAfterReload, "CacheTokens");
   EXPECT_GT(cacheTokensAfterReload, 0.0);
 
-  llama_pos nPastBeforeTools2 = model2->getNPastBeforeTools();
-  EXPECT_EQ(nPastBeforeTools2, -1);
-}
-
-TEST_F(CacheManagementQwen3Test, CacheWithoutToolsWithToolsAtEndTrue) {
-  if (!isQwen3ModelPath(test_model_path)) {
-    GTEST_SKIP() << "Test requires Qwen3 model for tools_at_end feature";
-  }
-
-  if (!hasValidModel()) {
-    FAIL() << "Test model not found";
-  }
-
-  config_files["tools_at_end"] = "true";
-  auto model = createModel();
-  if (!model) {
-    FAIL() << "Model failed to load";
-  }
-
-  EXPECT_NO_THROW({
-    processPromptWithCacheOptions(
-        model,
-        R"([{"role": "user", "content": "What is bitcoin? Answer shortly."}])",
-        session1_path,
-        true);
-  });
-
-  auto statsBeforeSave = model->runtimeStats();
-  double cacheTokensBeforeSave = getStatValue(statsBeforeSave, "CacheTokens");
-  EXPECT_GT(cacheTokensBeforeSave, 0.0);
-
-  llama_pos nPastBeforeTools = model->getNPastBeforeTools();
-  EXPECT_EQ(nPastBeforeTools, -1);
-
   EXPECT_TRUE(fs::exists(session1_path));
 }
 
-TEST_F(CacheManagementQwen3Test, CacheToolsAtEndModeWithMultiplePrompts) {
+TEST_F(CacheManagementQwen3Test, CacheToolsCompactModeWithMultiplePrompts) {
   if (!isQwen3ModelPath(test_model_path)) {
-    GTEST_SKIP() << "Test requires Qwen3 model for tools_at_end feature";
+    GTEST_SKIP() << "Test requires Qwen3 model for tools_compact feature";
   }
 
   if (!hasValidModel()) {
     FAIL() << "Test model not found";
   }
 
-  config_files["tools_at_end"] = "true";
+  config_files["tools_compact"] = "true";
   auto model = createModel();
   if (!model) {
     FAIL() << "Model failed to load";
   }
 
   EXPECT_NO_THROW({
-    processPromptWithCacheOptions(
+    std::string output = processPromptWithCacheOptions(
         model,
         R"([{"role": "user", "content": "Hi"}, {"type": "function", "name": "get_weather", "description": "Get detailed weather forecast data with temperature humidity wind speed precipitation UV visibility pressure sunrise sunset alerts", "parameters": {"type": "object", "properties": {"city": {"type": "string", "description": "The name of the city to get weather for"}, "country": {"type": "string", "description": "Country code or name"}, "lat": {"type": "number", "description": "Latitude coordinate"}, "lon": {"type": "number", "description": "Longitude coordinate"}, "zip": {"type": "string", "description": "ZIP postal code"}, "units": {"type": "string", "description": "Temperature units metric imperial or kelvin"}, "lang": {"type": "string", "description": "Language code for localized descriptions"}, "forecast_days": {"type": "integer", "description": "Number of days to forecast from 1 to 7"}, "hourly": {"type": "boolean", "description": "Include hourly forecast data"}, "alerts": {"type": "boolean", "description": "Include weather alerts and warnings"}, "aqi": {"type": "boolean", "description": "Include air quality index data"}, "tides": {"type": "boolean", "description": "Include tide information"}, "solar": {"type": "boolean", "description": "Include solar data like sunrise sunset"}, "tz": {"type": "string", "description": "Timezone identifier"}, "start_dt": {"type": "string", "description": "Start datetime for historical data"}, "end_dt": {"type": "string", "description": "End datetime for historical data"}, "cnt": {"type": "integer", "description": "Number of data points to return"}, "mode": {"type": "string", "description": "Response mode json xml or html"}, "appid": {"type": "string", "description": "API key for authentication"}}, "required": ["city"]}}])",
         session1_path);
+    EXPECT_FALSE(output.empty());
   });
 
   auto stats1 = model->runtimeStats();
   double cacheTokens1 = getStatValue(stats1, "CacheTokens");
-  double promptTokens1 = getStatValue(stats1, "promptTokens");
   EXPECT_GT(cacheTokens1, 0.0);
-  EXPECT_GT(promptTokens1, 500.0);
-
-  const int maxExpectedCacheTokens = 50;
-  EXPECT_GT(cacheTokens1, 0);
-  EXPECT_LE(cacheTokens1, maxExpectedCacheTokens)
-      << "Cache tokens (" << cacheTokens1 << ") should not exceed "
-      << maxExpectedCacheTokens << " - function tokens should be trimmed";
 
   EXPECT_NO_THROW({
-    processPromptWithCacheOptions(
+    std::string output = processPromptWithCacheOptions(
         model,
-        R"([{"role": "user", "content": "What about London?"}])",
+        R"([{"role": "user", "content": "What about London?"}, {"type": "function", "name": "getWeather", "description": "Get weather forecast", "parameters": {"type": "object", "properties": {"city": {"type": "string"}}, "required": ["city"]}}])",
         session1_path);
+    EXPECT_FALSE(output.empty());
   });
 
   auto stats2 = model->runtimeStats();
   double cacheTokens2 = getStatValue(stats2, "CacheTokens");
-  double promptTokens2 = getStatValue(stats2, "promptTokens");
   EXPECT_GT(cacheTokens2, cacheTokens1);
-  EXPECT_LT(promptTokens2, 500.0);
-  EXPECT_LE(cacheTokens2, maxExpectedCacheTokens)
-      << "Cache tokens (" << cacheTokens1 << ") should not exceed "
-      << maxExpectedCacheTokens << " - function tokens should be trimmed";
 
   EXPECT_NO_THROW({
     processPromptWithCacheOptions(
         model,
-        R"([{"role": "user", "content": "Save checkpoint."}])",
+        R"([{"role": "user", "content": "Save checkpoint."}, {"type": "function", "name": "getWeather", "description": "Get weather forecast", "parameters": {"type": "object", "properties": {"city": {"type": "string"}}, "required": ["city"]}}])",
         session1_path,
         true);
   });
@@ -271,95 +226,42 @@ TEST_F(CacheManagementQwen3Test, CacheToolsAtEndModeWithMultiplePrompts) {
   }
 
   EXPECT_NO_THROW({
-    processPromptWithCacheOptions(
+    std::string output = processPromptWithCacheOptions(
         model2,
-        R"([{"role": "user", "content": "What about Paris?"}])",
+        R"([{"role": "user", "content": "What about Paris?"}, {"type": "function", "name": "getWeather", "description": "Get weather forecast", "parameters": {"type": "object", "properties": {"city": {"type": "string"}}, "required": ["city"]}}])",
         session1_path);
+    EXPECT_FALSE(output.empty());
   });
 
   auto stats3 = model2->runtimeStats();
   double cacheTokens3 = getStatValue(stats3, "CacheTokens");
-  double promptTokens3 = getStatValue(stats3, "promptTokens");
-
   EXPECT_GT(cacheTokens3, cacheTokens2);
-  EXPECT_LT(promptTokens3, 100.0);
+  EXPECT_TRUE(fs::exists(session1_path));
 }
 
-TEST_F(
-    CacheManagementQwen3Test,
-    CacheToolsAtEndModeTrimOnlyWhenNPastBeforeToolsPositive) {
+TEST_F(CacheManagementQwen3Test, CacheToolsCompactModeWithoutToolsIsRejected) {
   if (!isQwen3ModelPath(test_model_path)) {
-    GTEST_SKIP() << "Test requires Qwen3 model for tools_at_end feature";
+    GTEST_SKIP() << "Test requires Qwen3 model for tools_compact feature";
   }
 
   if (!hasValidModel()) {
     FAIL() << "Test model not found";
   }
 
-  config_files["tools_at_end"] = "true";
+  config_files["tools_compact"] = "true";
   auto model = createModel();
   if (!model) {
     FAIL() << "Model failed to load";
   }
 
-  EXPECT_NO_THROW({
-    processPromptWithCacheOptions(
-        model,
-        R"([{"role": "user", "content": "Hello"}])",
-        session1_path,
-        true);
-  });
-
-  llama_pos nPastBeforeTools = model->getNPastBeforeTools();
-  EXPECT_EQ(nPastBeforeTools, -1);
-
-  auto statsAfterSave = model->runtimeStats();
-  double cacheTokensAfterSave = getStatValue(statsAfterSave, "CacheTokens");
-  EXPECT_GT(cacheTokensAfterSave, 0.0);
-
-  EXPECT_TRUE(fs::exists(session1_path));
-}
-
-TEST_F(CacheManagementQwen3Test, CacheToolsAtEndModeRestoresNPastBeforeTools) {
-  if (!isQwen3ModelPath(test_model_path)) {
-    GTEST_SKIP() << "Test requires Qwen3 model for tools_at_end feature";
-  }
-
-  if (!hasValidModel()) {
-    FAIL() << "Test model not found";
-  }
-
-  config_files["tools_at_end"] = "true";
-  auto model = createModel();
-  if (!model) {
-    FAIL() << "Model failed to load";
-  }
-
-  EXPECT_NO_THROW({
-    processPromptWithCacheOptions(
-        model,
-        R"([{"role": "user", "content": "Hi"}, {"type": "function", "name": "get_weather", "description": "Get weather", "parameters": {"type": "object", "properties": {"city": {"type": "string"}}, "required": ["city"]}}])",
-        session1_path,
-        true);
-  });
-
-  llama_pos nPastBeforeTools1 = model->getNPastBeforeTools();
-  EXPECT_EQ(nPastBeforeTools1, -1);
-
-  EXPECT_TRUE(fs::exists(session1_path));
-
-  auto model2 = createModel();
-  if (!model2) {
-    FAIL() << "Model2 failed to load";
-  }
-
-  EXPECT_NO_THROW({
-    processPromptWithCacheOptions(
-        model2,
-        R"([{"role": "user", "content": "What about London?"}])",
-        session1_path);
-  });
-
-  llama_pos nPastBeforeTools2 = model2->getNPastBeforeTools();
-  EXPECT_EQ(nPastBeforeTools2, -1);
+  EXPECT_THROW(
+      {
+        processPromptWithCacheOptions(
+            model,
+            R"([{"role": "user", "content": "What is bitcoin? Answer shortly."}])",
+            session1_path,
+            true);
+      },
+      qvac_errors::StatusError);
+  EXPECT_FALSE(fs::exists(session1_path));
 }

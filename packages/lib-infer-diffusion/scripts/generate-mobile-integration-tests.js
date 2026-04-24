@@ -49,6 +49,14 @@ function buildFileContents (files) {
     }
   }
 
+  lines.push('')
+  lines.push('module.exports = {')
+  for (let i = 0; i < files.length; i++) {
+    const fnName = toFunctionName(files[i])
+    lines.push(`  ${fnName}${i < files.length - 1 ? ',' : ''}`)
+  }
+  lines.push('}')
+
   return `${lines.join('\n')}\n`
 }
 

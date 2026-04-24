@@ -1,5 +1,6 @@
 import { QVACRegistryClient } from "@qvac/registry-client";
 import { groupShardedModels } from "./shards";
+import { groupCompanionSets } from "./companions";
 import { processRegistryModel } from "./processing";
 import type { CollectOptions, ProcessedModel } from "./types";
 import { DEFAULT_REGISTRY_CORE_KEY } from "@/constants";
@@ -38,13 +39,14 @@ export async function collectModels(
   }
 
   const groupedModels = groupShardedModels(models);
+  const withCompanions = groupCompanionSets(groupedModels);
 
   if (noDedup) {
     console.log(`\n⏭️  Skipping deduplication (--no-dedup flag set)`);
-    return groupedModels;
+    return withCompanions;
   }
 
-  return deduplicateModels(groupedModels, showDuplicates);
+  return deduplicateModels(withCompanions, showDuplicates);
 }
 
 function deduplicateModels(

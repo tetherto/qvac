@@ -7,10 +7,10 @@ try {
   global.crypto = crypto
 } catch (e2) {
   if (typeof global === 'undefined' || (typeof global !== 'undefined' && !global.crypto)) {
-    throw new QvacErrorRAG(
-      ERR_CODES.DEPENDENCY_REQUIRED,
-      'No crypto implementation found. Please ensure a crypto module is available in your environment.'
-    )
+    throw new QvacErrorRAG({
+      code: ERR_CODES.DEPENDENCY_REQUIRED,
+      adds: 'No crypto implementation found. Please ensure a crypto module is available in your environment.'
+    })
   }
 }
 const uuid = require('uuid-random')

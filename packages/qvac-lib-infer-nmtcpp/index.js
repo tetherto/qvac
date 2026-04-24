@@ -1,5 +1,6 @@
 'use strict'
 
+const path = require('bare-path')
 const QvacLogger = require('@qvac/logging')
 const { QvacResponse, createJobHandler, exclusiveRunQueue } = require('@qvac/infer-base')
 
@@ -220,6 +221,10 @@ class TranslationNmtcpp {
 
   async _load () {
     const { use_gpu: useGpu, ...otherConfig } = this._config
+
+    if (otherConfig.backendsDir === undefined) {
+      otherConfig.backendsDir = path.join(__dirname, 'prebuilds')
+    }
 
     const configurationParams = {
       path: this._files.model,

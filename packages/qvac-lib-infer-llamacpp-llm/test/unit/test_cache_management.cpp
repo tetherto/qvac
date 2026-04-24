@@ -128,9 +128,7 @@ TEST_F(CacheManagementTest, InitialStateNoCache) {
     std::string output = processPromptString(
         model,
         R"([{"role": "user", "content": "What is bitcoin? Answer shortly."}])");
-    EXPECT_GE(output.length(), 0);
-    auto stats = model->runtimeStats();
-    EXPECT_GE(stats.size(), 0);
+    EXPECT_FALSE(output.empty());
   });
 
   EXPECT_FALSE(fs::exists(session1_path));
@@ -152,9 +150,7 @@ TEST_F(CacheManagementTest, EnableCacheWithFilename) {
         R"([{"role": "user", "content": "What is ethereum? Answer shortly."}])",
         session1_path,
         true);
-    EXPECT_GE(output.length(), 0);
-    auto stats = model->runtimeStats();
-    EXPECT_GE(stats.size(), 0);
+    EXPECT_FALSE(output.empty());
   });
 
   EXPECT_TRUE(fs::exists(session1_path));
@@ -176,7 +172,7 @@ TEST_F(CacheManagementTest, SessionPersistence) {
         R"([{"role": "user", "content": "What is bitcoin? Answer shortly."}])",
         session1_path,
         true);
-    EXPECT_GE(output1.length(), 0);
+    EXPECT_FALSE(output1.empty());
   });
 
   EXPECT_TRUE(fs::exists(session1_path));
@@ -187,62 +183,7 @@ TEST_F(CacheManagementTest, SessionPersistence) {
         R"([{"role": "user", "content": "What did I ask you before? Answer shortly."}])",
         session1_path,
         true);
-    EXPECT_GE(output2.length(), 0);
-  });
-
-  EXPECT_TRUE(fs::exists(session1_path));
-}
-
-TEST_F(CacheManagementTest, ResetAndPersist) {
-  if (!hasValidModel()) {
-    FAIL() << "Test model not found";
-  }
-
-  auto model = createModel();
-  if (!model) {
-    FAIL() << "Model failed to load";
-  }
-
-  EXPECT_NO_THROW({
-    std::string output = processPromptWithCacheOptions(
-        model,
-        R"([{"role": "user", "content": "What is bitcoin? Answer shortly."}])",
-        session2_path,
-        true);
-    EXPECT_GE(output.length(), 0);
-  });
-
-  EXPECT_TRUE(fs::exists(session2_path));
-}
-
-TEST_F(CacheManagementTest, ResetCommand) {
-  if (!hasValidModel()) {
-    FAIL() << "Test model not found";
-  }
-
-  auto model = createModel();
-  if (!model) {
-    FAIL() << "Model failed to load";
-  }
-
-  EXPECT_NO_THROW({
-    std::string output1 = processPromptWithCacheOptions(
-        model,
-        R"([{"role": "user", "content": "What is bitcoin? Answer shortly."}])",
-        session1_path,
-        true);
-    EXPECT_GE(output1.length(), 0);
-  });
-
-  EXPECT_TRUE(fs::exists(session1_path));
-
-  EXPECT_NO_THROW({
-    std::string output2 = processPromptWithCacheOptions(
-        model,
-        R"([{"role": "user", "content": "What did I ask you before? Answer shortly."}])",
-        session1_path,
-        true);
-    EXPECT_GE(output2.length(), 0);
+    EXPECT_FALSE(output2.empty());
   });
 
   EXPECT_TRUE(fs::exists(session1_path));
@@ -301,7 +242,7 @@ TEST_F(CacheManagementTest, DisableCache) {
     std::string output2 = processPromptString(
         model,
         R"([{"role": "user", "content": "What is blockchain? Answer shortly."}])");
-    EXPECT_GE(output2.length(), 0);
+    EXPECT_FALSE(output2.empty());
   });
 }
 
@@ -319,18 +260,18 @@ TEST_F(CacheManagementTest, VerifyStatelessBehavior) {
     std::string output1 = processPromptString(
         model,
         R"([{"role": "user", "content": "What is bitcoin? Answer shortly."}])");
-    EXPECT_GE(output1.length(), 0);
+    EXPECT_FALSE(output1.empty());
     auto stats1 = model->runtimeStats();
-    EXPECT_GE(stats1.size(), 0);
+    EXPECT_GE(getStatValue(stats1, "promptTokens"), 0.0);
   });
 
   EXPECT_NO_THROW({
     std::string output2 = processPromptString(
         model,
         R"([{"role": "user", "content": "What did I ask you before? Answer shortly."}])");
-    EXPECT_GE(output2.length(), 0);
+    EXPECT_FALSE(output2.empty());
     auto stats2 = model->runtimeStats();
-    EXPECT_GE(stats2.size(), 0);
+    EXPECT_GE(getStatValue(stats2, "promptTokens"), 0.0);
   });
 }
 
@@ -348,7 +289,7 @@ TEST_F(CacheManagementTest, ReEnableCacheAfterDisable) {
     std::string output1 = processPromptString(
         model,
         R"([{"role": "user", "content": "What is bitcoin? Answer shortly."}])");
-    EXPECT_GE(output1.length(), 0);
+    EXPECT_FALSE(output1.empty());
   });
 
   EXPECT_NO_THROW({
@@ -631,12 +572,12 @@ TEST_F(CacheManagementTest, CacheTokensExceedContextSize) {
       qvac_errors::StatusError);
 }
 
-TEST_F(CacheManagementTest, CacheWithToolsAtEndFalseSavesFullCache) {
+TEST_F(CacheManagementTest, CacheWithToolsCompactFalseSavesFullCache) {
   if (!hasValidModel()) {
     FAIL() << "Test model not found";
   }
 
-  config_files["tools_at_end"] = "false";
+  config_files["tools_compact"] = "false";
   auto model = createModel();
   if (!model) {
     FAIL() << "Model failed to load";
@@ -767,27 +708,4 @@ TEST_F(CacheManagementTest, PersistToWithNoCacheKeyIsNoOp) {
 
   auto stats = model->runtimeStats();
   EXPECT_EQ(getStatValue(stats, "CacheTokens"), 0.0);
-}
-
-TEST_F(CacheManagementTest, PersistFalseDoesNotWriteToDisk) {
-  if (!hasValidModel()) {
-    FAIL() << "Test model not found";
-  }
-
-  auto model = createModel();
-  if (!model) {
-    FAIL() << "Model failed to load";
-  }
-
-  EXPECT_NO_THROW({
-    processPromptWithCacheOptions(
-        model,
-        R"([{"role": "user", "content": "What is bitcoin?"}])",
-        session1_path);
-  });
-
-  EXPECT_FALSE(fs::exists(session1_path));
-
-  auto stats = model->runtimeStats();
-  EXPECT_GT(getStatValue(stats, "CacheTokens"), 0.0);
 }

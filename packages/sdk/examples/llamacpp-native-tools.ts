@@ -80,15 +80,10 @@ try {
   // Consume tool call events
   const toolsTask = (async () => {
     for await (const evt of result.toolCallStream) {
-      if (evt.type === "toolCall") {
-        console.log(
-          `\n\n→ Tool Call Detected: ${evt.call.name}(${JSON.stringify(evt.call.arguments)})`,
-        );
-        console.log(`   ID: ${evt.call.id}`);
-      } else if (evt.type === "toolCallError") {
-        console.warn(`\n⚠️  Tool Error: ${evt.error.message}`);
-        console.warn(`   Code: ${evt.error.code}`);
-      }
+      console.log(
+        `\n\n→ Tool Call Detected: ${evt.call.name}(${JSON.stringify(evt.call.arguments)})`,
+      );
+      console.log(`   ID: ${evt.call.id}`);
     }
   })();
 

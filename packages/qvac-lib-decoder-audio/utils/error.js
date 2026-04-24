@@ -14,7 +14,10 @@ const ERR_CODES = Object.freeze({
   FAILED_TO_APPEND: 11005,
   FAILED_TO_GET_STATUS: 11006,
   FAILED_TO_DESTROY: 11007,
-  BUFFER_SIZE_TOO_SMALL: 11008
+  BUFFER_SIZE_TOO_SMALL: 11008,
+  UNSUPPORTED_AUDIO_FORMAT: 11009,
+  DECODER_NOT_LOADED: 11010,
+  STREAM_INDEX_OUT_OF_BOUNDS: 11011
 })
 
 addCodes({
@@ -49,6 +52,18 @@ addCodes({
   [ERR_CODES.BUFFER_SIZE_TOO_SMALL]: {
     name: 'BUFFER_SIZE_TOO_SMALL',
     message: 'Target buffer size is too small'
+  },
+  [ERR_CODES.UNSUPPORTED_AUDIO_FORMAT]: {
+    name: 'UNSUPPORTED_AUDIO_FORMAT',
+    message: (format) => `Unsupported audio format: ${format}`
+  },
+  [ERR_CODES.DECODER_NOT_LOADED]: {
+    name: 'DECODER_NOT_LOADED',
+    message: 'Decoder not loaded. Call load() first.'
+  },
+  [ERR_CODES.STREAM_INDEX_OUT_OF_BOUNDS]: {
+    name: 'STREAM_INDEX_OUT_OF_BOUNDS',
+    message: (index) => `Stream index out of bounds: ${index}`
   }
 }, {
   name,

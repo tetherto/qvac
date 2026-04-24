@@ -38,6 +38,23 @@ async function runInputValidationTest (options = {}) { // eslint-disable-line no
   return runIntegrationModule('../integration/input-validation.test.js', options)
 }
 
+async function runLoraBridgeTest (options = {}) { // eslint-disable-line no-unused-vars
+  return runIntegrationModule('../integration/lora-bridge.test.js', options)
+}
+
 async function runModelLoadingTest (options = {}) { // eslint-disable-line no-unused-vars
   return runIntegrationModule('../integration/model-loading.test.js', options)
+}
+
+module.exports = {
+  runApiBehaviorTest,
+  runGenerateImageFlux2I2iTest,
+  runGenerateImageFlux2Test,
+  runGenerateImageSd3I2iTest,
+  runGenerateImageSd3Test,
+  runGenerateImageSdxlTest,
+  runGenerateImageTest,
+  runInputValidationTest,
+  runLoraBridgeTest,
+  runModelLoadingTest
 }

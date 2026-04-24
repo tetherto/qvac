@@ -77,6 +77,7 @@ import {
 } from "./registry";
 import { suspendRequestSchema, suspendResponseSchema } from "./suspend";
 import { resumeRequestSchema, resumeResponseSchema } from "./resume";
+import { stateRequestSchema, stateResponseSchema } from "./state";
 
 export const requestSchema = z.union([
   heartbeatRequestSchema,
@@ -106,6 +107,7 @@ export const requestSchema = z.union([
   modelRegistryGetModelRequestSchema,
   suspendRequestSchema,
   resumeRequestSchema,
+  stateRequestSchema,
 ]);
 
 export const responseSchema = z.discriminatedUnion("type", [
@@ -140,6 +142,7 @@ export const responseSchema = z.discriminatedUnion("type", [
   modelRegistryGetModelResponseSchema,
   suspendResponseSchema,
   resumeResponseSchema,
+  stateResponseSchema,
 ]);
 
 export const rpcOptionsSchema = z.object({
@@ -149,6 +152,6 @@ export const rpcOptionsSchema = z.object({
   profiling: perCallProfilingSchema.optional(),
 });
 
-export type Request = z.infer<typeof requestSchema>;
+export type Request = z.input<typeof requestSchema>;
 export type Response = z.infer<typeof responseSchema>;
 export type RPCOptions = z.infer<typeof rpcOptionsSchema>;

@@ -1,0 +1,92 @@
+{
+  "name": "@qvac/bci-whispercpp",
+  "version": "0.1.0",
+  "description": "Brain-Computer Interface (BCI) neural signal transcription addon for qvac, powered by whisper.cpp",
+  "addon": true,
+  "engines": {
+    "bare": ">=1.24.0"
+  },
+  "scripts": {
+    "lint": "standard \"examples/**/*.js\" \"test/**/*.js\" \"*.js\" \"lib/**/*.js\"",
+    "lint:fix": "standard --fix \"examples/**/*.js\" \"test/**/*.js\" \"*.js\" \"lib/**/*.js\"",
+    "lint-cpp": "clang-tidy -p build addon/src/js-interface/JSAdapter.cpp addon/src/js-interface/binding.cpp addon/src/model-interface/bci/BCIConfig.cpp addon/src/model-interface/bci/BCIModel.cpp addon/src/model-interface/bci/NeuralProcessor.cpp addon/src/addon/AddonJs.hpp addon/src/js-interface/JSAdapter.hpp addon/src/addon/BCIErrors.hpp addon/src/model-interface/BCITypes.hpp addon/src/model-interface/bci/BCIConfig.hpp addon/src/model-interface/bci/BCIModel.hpp addon/src/model-interface/bci/NeuralProcessor.hpp",
+    "build": "bare-make generate && bare-make build && bare-make install",
+    "build:pack": "mkdir -p dist && npm pack --pack-destination dist",
+    "test": "npm run test:integration",
+    "test:integration": "brittle-bare test/integration/addon.test.js",
+    "test:cpp:build": "bare-make generate -D BUILD_TESTING=ON && bare-make build --target test-bci-core && bare-make install",
+    "test:cpp:run": "./build/addon/tests/test-bci-core --gtest_output=xml:cpp-test-results.xml",
+    "test:cpp": "npm run test:cpp:build && npm run test:cpp:run",
+    "test:dts": "tsc -p tsconfig.dts.json"
+  },
+  "files": [
+    "addonLogging.js",
+    "addonLogging.d.ts",
+    "binding.js",
+    "bci.js",
+    "configChecker.js",
+    "index.js",
+    "index.d.ts",
+    "prebuilds",
+    "lib",
+    "README.md",
+    "CHANGELOG.md",
+    "LICENSE",
+    "NOTICE"
+  ],
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/tetherto/qvac.git",
+    "directory": "packages/bci-whispercpp"
+  },
+  "author": "Tether",
+  "keywords": [
+    "tether",
+    "addon",
+    "whisper",
+    "bci",
+    "brain-computer-interface",
+    "neural",
+    "qvac"
+  ],
+  "license": "Apache-2.0",
+  "bugs": "https://github.com/tetherto/qvac/issues",
+  "homepage": "https://github.com/tetherto/qvac/tree/main/packages/bci-whispercpp#readme",
+  "devDependencies": {
+    "@types/node": "^22.15.3",
+    "bare-buffer": "^3.4.2",
+    "brittle": "^3.17.0",
+    "cmake-bare": "^1.7.5",
+    "cmake-vcpkg": "^1.1.0",
+    "fs": "npm:bare-fs",
+    "os": "npm:bare-os@^3.6.2",
+    "standard": "^17.1.2",
+    "tty": "npm:bare-node-tty",
+    "typescript": "^5.9.2"
+  },
+  "dependencies": {
+    "@qvac/error": "^0.1.0",
+    "@qvac/infer-base": "^0.4.0",
+    "@qvac/logging": "^0.1.0",
+    "bare-fs": "^4.5.1",
+    "bare-path": "^3.0.0",
+    "path": "npm:bare-path"
+  },
+  "exports": {
+    "./package": "./package.json",
+    ".": {
+      "types": "./index.d.ts",
+      "default": "./index.js"
+    },
+    "./addonLogging": {
+      "types": "./addonLogging.d.ts",
+      "default": "./addonLogging.js"
+    },
+    "./addonLogging.js": "./addonLogging.js",
+    "./bci": "./bci.js",
+    "./bci.js": "./bci.js",
+    "./binding": "./binding.js",
+    "./binding.js": "./binding.js"
+  },
+  "types": "index.d.ts"
+}

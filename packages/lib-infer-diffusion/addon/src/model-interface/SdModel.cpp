@@ -259,6 +259,31 @@ private:
   const int count_;
 };
 
+struct PreparedLoras {
+  std::vector<std::string> paths;
+  std::vector<sd_lora_t> items;
+};
+
+// Mirrors the pinned fork's CLI flow in examples/common/common.hpp:
+// build owned path storage first, then build sd_lora_t entries that point
+// at that stable storage for the lifetime of generate_image().
+PreparedLoras prepareLoras(const std::string& loraPath) {
+  PreparedLoras prepared;
+  if (loraPath.empty()) {
+    return prepared;
+  }
+
+  prepared.paths.push_back(loraPath);
+
+  sd_lora_t item{};
+  item.is_high_noise = false;
+  item.multiplier = 1.0f;
+  item.path = prepared.paths.back().c_str();
+  prepared.items.push_back(item);
+
+  return prepared;
+}
+
 } // namespace
 
 // ---------------------------------------------------------------------------
@@ -484,6 +509,10 @@ std::any SdModel::process(const std::any& input) {
   sd_img_gen_params_t genParams{};
   sd_img_gen_params_init(&genParams);
 
+  PreparedLoras loras = prepareLoras(gen.loraPath);
+
+  genParams.loras = loras.items.empty() ? nullptr : loras.items.data();
+  genParams.lora_count = static_cast<uint32_t>(loras.items.size());
   genParams.prompt = gen.prompt.c_str();
   genParams.negative_prompt = gen.negativePrompt.c_str();
   genParams.width = gen.width;

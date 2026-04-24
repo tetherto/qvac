@@ -116,7 +116,10 @@ Before building, ensure you have the following installed:
    ```
 
 2. **Build tools** for your platform:
-   - **Linux**: `sudo apt install build-essential autoconf automake libtool pkg-config`
+   - **Linux**:
+     ```bash
+     sudo apt install clang libc++-dev libc++abi-dev build-essential autoconf automake libtool pkg-config
+     ```
    - **macOS**: Xcode command line tools
    - **Windows**: Visual Studio with C++ build tools
 
@@ -131,8 +134,8 @@ Before building, ensure you have the following installed:
 
 1. **Clone the repository**:
    ```bash
-   git clone https://github.com/tetherto/qvac-lib-infer-onnx-tts.git
-   cd qvac-lib-infer-onnx-tts
+   git clone https://github.com/tetherto/qvac
+   cd qvac/packages/qvac-lib-infer-onnx-tts
    ```
 
 2. **Install dependencies**:
@@ -582,6 +585,7 @@ console.log(`Total audio samples generated: ${audioSamples.length}`)
 ## Other Examples
 
 -   [Chatterbox TTS](examples/chatterbox-tts.js) - Voice cloning from reference audio (English or multilingual).
+-   [Chatterbox Langdetect TTS](examples/chatterbox-langdetect-tts.js) - Detects the input language with `@qvac/langdetect-text`, selects the English or multilingual Chatterbox bundle, and synthesizes terminal text.
 -   [Supertonic TTS](examples/supertonic-tts.js) - Pre-trained voice styles (English or multilingual).
 
 ```bash
@@ -593,6 +597,9 @@ bare examples/chatterbox-tts.js english path/to/reference.wav
 
 # Chatterbox Multilingual
 bare examples/chatterbox-tts.js multilingual
+
+# Chatterbox with automatic language detection
+bare examples/chatterbox-langdetect-tts.js "Hola mundo. Esta demo detecta el idioma automaticamente."
 
 # Supertonic English
 bare examples/supertonic-tts.js english

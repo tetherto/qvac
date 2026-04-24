@@ -1,5 +1,7 @@
 'use strict'
 
+/* global Bare */
+
 /**
  * IndicTrans Backend Integration Test
  *
@@ -18,7 +20,20 @@
  *   bare test/integration/indictrans.test.js
  */
 
+// Guard against Bare's default abort() on unhandled promise rejections.
+// Without this, a transient network error from bare-fetch during model
+// download (e.g. CONNECTION_LOST on Device Farm) abort()s the process
+// and surfaces as a SIGABRT inside libbare-kit.so::js_callback_s::on_call
+// — which is how the Android Samsung S25 Ultra job died in CI run 1212.
+// Mirrors the handler in pivot-bergamot.test.js.
+if (typeof Bare !== 'undefined' && Bare.on) {
+  Bare.on('unhandledRejection', (err) => {
+    console.error('[indictrans] Unhandled rejection:', err && (err.stack || err.message || err))
+  })
+}
+
 const test = require('brittle')
+const path = require('bare-path')
 const TranslationNmtcpp = require('@qvac/translation-nmtcpp')
 const {
   ensureIndicTransModel,
@@ -29,6 +44,8 @@ const {
   isMobile,
   platform
 } = require('./utils')
+
+const INDICTRANS_FIXTURE = path.resolve(__dirname, 'fixtures/indictrans.quality.json')
 
 /**
  * Device configurations for testing
@@ -96,7 +113,11 @@ for (const deviceConfig of DEVICE_CONFIGS) {
       const addonStats = response.stats || {}
       t.comment(`${label} Native addon stats: ` + JSON.stringify(addonStats))
       const metrics = perfCollector.getMetrics(testSentence, addonStats)
-      t.comment(formatPerformanceMetrics(`[IndicTrans] ${label}`, metrics))
+      t.comment(formatPerformanceMetrics(`[IndicTrans] ${label}`, metrics, {
+        fixturePath: INDICTRANS_FIXTURE,
+        srcLang: 'eng_Latn',
+        dstLang: 'hin_Deva'
+      }))
 
       t.ok(metrics.fullOutput.length > 0, `${label} translation should not be empty`)
       t.pass(`${label} IndicTrans translation completed successfully`)
