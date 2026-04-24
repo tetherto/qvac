@@ -88,17 +88,11 @@ jobs:
           echo "Matrix tags: $MATRIX_TAGS"
           echo "PKG_DIR: $PKG_DIR_VAR"
 
-      - if: ${{ matrix.os == 'ubuntu-22.04' || matrix.os == 'ubuntu-22.04-arm' || matrix.os == 'ubuntu-24.04' }}
-        name: Update c++ tools
-        run: |
-          wget https://apt.llvm.org/llvm.sh
-          chmod +x llvm.sh
-          sudo ./llvm.sh 19 all
-
-      - if: ${{ matrix.os == 'windows-2022' }}
-        name: Configure windows runner
-        run: |
-          git config --system core.longpaths true
+      - name: Setup build host
+        uses: tetherto/qvac/.github/actions/setup-build-host@3d48906579d044429f42e2d1ff2cba6ec5853d91
+        with:
+          platform: ${{ matrix.platform }}
+          arch: ${{ matrix.arch }}
 
       - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # 6.0.2
         with:
@@ -120,29 +114,21 @@ jobs:
           platform: ${{ matrix.platform }}
           arch: ${{ matrix.arch }}
 
-      - if: ${{ matrix.platform == 'android' }}
-        name: Setup Android NDK
-        uses: nttld/setup-ndk@ed92fe6cadad69be94a966a7ee3271275e62f779 # 1.6.0
-        with:
-          ndk-version: r27c
-          add-to-path: true
-          local-cache: true
-
-      - if: ${{ matrix.platform == 'android' }}
-        name: Configure Android environment variables
-        shell: bash
-        run: |
-          echo "ANDROID_NDK_HOME=$ANDROID_NDK_ROOT" >> $GITHUB_ENV
-          echo "ANDROID_TOOLCHAIN_ROOT=$ANDROID_NDK_ROOT/toolchains/llvm/prebuilt/linux-x86_64" >> $GITHUB_ENV
-          echo "ANDROID_NATIVE_API_LEVEL=24" >> $GITHUB_ENV
-          echo "Android NDK setup:"
-          echo "  NDK_ROOT: $ANDROID_NDK_ROOT"
-          echo "  NDK_HOME: $ANDROID_NDK_ROOT"
-          echo "  Toolchain: $ANDROID_NDK_ROOT/toolchains/llvm/prebuilt/linux-x86_64"
-          echo "  API Level: 24"
-
       - name: Setup Bare tooling
         uses: tetherto/qvac/.github/actions/setup-bare-tooling@0bbdca93da303a0b1634ba14a89cec085621078d
+
+      - name: Setup Apple Clang
+        uses: tetherto/qvac/.github/actions/setup-apple-clang@3d48906579d044429f42e2d1ff2cba6ec5853d91
+
+      - name: Setup Vulkan SDK
+        uses: tetherto/qvac/.github/actions/setup-vulkan-sdk@0bbdca93da303a0b1634ba14a89cec085621078d
+        env:
+          MODEL_S3_BUCKET: ${{ secrets.MODEL_S3_BUCKET }}
+        with:
+          platform: ${{ matrix.platform }}
+          arch: ${{ matrix.arch }}
+          aws-role-to-assume: ${{ secrets.AWS_OIDC_ROLE_ARN }}
+          aws-region: eu-central-1
 
       - if: ${{ matrix.os == 'ubuntu-22.04' }}
         name: Replace bare-make's CMake with compatible version
@@ -168,19 +154,6 @@ jobs:
           # Verify the replacement
           echo "Verifying cmake version used by bare-make:"
           "$BARE_MAKE_CMAKE" --version
-      - if: ${{ matrix.os == 'windows-2022' && matrix.arch == 'arm64' }}
-        name: Rename win sdk folder to disable it
-        run: |
-          Rename-Item -Path "C:\Program Files (x86)\Windows Kits\10\Include\10.0.26100.0" -NewName "C:\Program Files (x86)\Windows Kits\10\Include\old-10.0.26100.0"
-          Rename-Item -Path "C:\Program Files (x86)\Windows Kits\10\bin\10.0.26100.0" -NewName "C:\Program Files (x86)\Windows Kits\10\bin\old-10.0.26100.0"
-          Rename-Item -Path "C:\Program Files (x86)\Windows Kits\10\Lib\10.0.26100.0" -NewName "C:\Program Files (x86)\Windows Kits\10\Lib\old-10.0.26100.0"
-
-      - if: ${{ matrix.platform == 'android' }}
-        name: Select NDK
-        run: |
-          echo "ANDROID_NDK=$ANDROID_NDK_LATEST_HOME" >> $GITHUB_ENV
-          echo "ANDROID_NDK_HOME=$ANDROID_NDK_LATEST_HOME" >> $GITHUB_ENV
-          echo "ANDROID_NDK_ROOT=$ANDROID_NDK_LATEST_HOME" >> $GITHUB_ENV
 
       - name: Print run state
         working-directory: ${{ env.PKG_DIR }}
@@ -198,33 +171,6 @@ jobs:
           echo "Environment variables:"
           env | sort
         continue-on-error: true
-
-      - if: ${{ matrix.os == 'ubuntu-22.04' || matrix.os == 'ubuntu-22.04-arm' || matrix.os == 'ubuntu-24.04' }}
-        name: Update apt sources
-        run: sudo apt-get update
-
-      - if: ${{ matrix.os == 'windows-2022' }}
-        name: Configure cmake generator in windows
-        run: echo "CMAKE_GENERATOR=Visual Studio 17 2022" >> $env:GITHUB_ENV
-
-      - if: ${{ matrix.os == 'windows-2022' && matrix.arch == 'x64' }}
-        run: echo "CMAKE_GENERATOR_PLATFORM=x64" >> $env:GITHUB_ENV
-
-      - if: ${{ matrix.os == 'windows-2022' && matrix.arch == 'x86' }}
-        run: echo "CMAKE_GENERATOR_PLATFORM=Win32" >> $env:GITHUB_ENV
-
-      - if: ${{ matrix.os == 'windows-2022' && matrix.arch == 'arm64' }}
-        run: echo "CMAKE_GENERATOR_PLATFORM=ARM64" >> $env:GITHUB_ENV
-
-      - name: Setup Vulkan SDK
-        uses: tetherto/qvac/.github/actions/setup-vulkan-sdk@0bbdca93da303a0b1634ba14a89cec085621078d
-        env:
-          MODEL_S3_BUCKET: ${{ secrets.MODEL_S3_BUCKET }}
-        with:
-          platform: ${{ matrix.platform }}
-          arch: ${{ matrix.arch }}
-          aws-role-to-assume: ${{ secrets.AWS_OIDC_ROLE_ARN }}
-          aws-region: eu-central-1
 
       - name: Configure git
         shell: bash
@@ -566,4 +512,3 @@ jobs:
         with:
           name: prebuilds
           path: prebuilds
-
