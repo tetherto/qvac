@@ -165,19 +165,26 @@ function sentenceStreamTts(
   options: RPCOptions | undefined,
 ): TextToSpeechStreamResult {
   const multicast = new TtsMulticast(request, options);
+  // Subscribe eagerly, synchronously — before pump() can push its first
+  // item — so both subscribers see the full queue from index 0. If we
+  // deferred subscribing until the generators were iterated, the first
+  // consumer could trim the queue before the second ever registered,
+  // silently dropping earlier frames.
+  const bufferSubscription = multicast.subscribe();
+  const chunkSubscription = multicast.subscribe();
 
   return {
-    bufferStream: sentenceBufferStream(multicast),
-    chunkUpdates: sentenceChunkUpdates(multicast),
+    bufferStream: sentenceBufferStream(bufferSubscription),
+    chunkUpdates: sentenceChunkUpdates(chunkSubscription),
     buffer: Promise.resolve([]),
     done: multicast.done,
   };
 }
 
 async function* sentenceBufferStream(
-  multicast: TtsMulticast,
+  source: AsyncGenerator<TtsResponse>,
 ): AsyncGenerator<number> {
-  for await (const m of multicast.subscribe()) {
+  for await (const m of source) {
     if (m.buffer.length > 0) {
       yield* m.buffer;
     }
@@ -186,9 +193,9 @@ async function* sentenceBufferStream(
 }
 
 async function* sentenceChunkUpdates(
-  multicast: TtsMulticast,
+  source: AsyncGenerator<TtsResponse>,
 ): AsyncGenerator<TtsSentenceChunkUpdate> {
-  for await (const m of multicast.subscribe()) {
+  for await (const m of source) {
     const hasAudio = m.buffer.length > 0;
     const hasMeta =
       m.chunkIndex !== undefined ||
