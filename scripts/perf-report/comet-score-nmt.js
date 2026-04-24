@@ -156,11 +156,36 @@ function collectReports (rootDir) {
 }
 
 /**
- * Converts an array of perf reports into a de-duplicated array of
- * scoring triples. Dedup key is `${deviceName}|${test}` and the
- * last-seen report wins — which means if the same test ran in
- * multiple recent builds, we score the most recently-downloaded one
- * (gh run list returns most-recent-first).
+ * Collapses an ephemeral runner name to a stable per-matrix-row label
+ * so the weekly aggregate doesn't end up with one row per VM.
+ *
+ *   `GitHub Actions 1000320663` + platform=linux arch=x64
+ *     → `linux/x64 (hosted)`
+ *   `ai-run-windows11-gpu-1000320651`
+ *     → `ai-run-windows11-gpu`           (strip trailing 6+ digit suffix)
+ *   `Apple iPhone 16 Pro`, `Google Pixel 9`, `Samsung Galaxy S25 Ultra`
+ *     → unchanged (these are already stable device model names)
+ *
+ * @param {string} name
+ * @param {string} platform
+ * @param {string} arch
+ * @returns {string}
+ */
+function canonicalDeviceLabel (name, platform, arch) {
+  if (!name) return `${platform || '?'}/${arch || '?'} (hosted)`
+  if (/^GitHub Actions \d+$/.test(name)) {
+    return `${platform || '?'}/${arch || '?'} (hosted)`
+  }
+  // Self-hosted runners: `ai-run-windows11-gpu-1000320651` → `ai-run-windows11-gpu`
+  const m = name.match(/^(.+?)-\d{6,}$/)
+  if (m) return m[1]
+  return name
+}
+
+/**
+ * Converts an array of perf reports into a flat array of scoring
+ * triples. All triples are retained (no dedup here — dedup /
+ * aggregation by `(canonicalDevice, test)` happens in `aggregateGroups`).
  *
  * A triple is only emitted if it has non-empty `input`, `output`,
  * AND `reference` — COMET's reference-based model can't score
@@ -168,23 +193,27 @@ function collectReports (rootDir) {
  *
  * @param {Array<object>} reports
  * @returns {Array<object>} triples with shape
- *   { test, device, platform, src, mt, ref, chrfpp }
+ *   { test, device, canonicalDevice, platform, arch,
+ *     src, mt, ref, chrfpp }
  */
 function extractTriples (reports) {
-  const byKey = new Map()
+  const out = []
   for (const report of reports) {
     const dev = (report.device && report.device.name) || 'unknown'
     const platform = (report.device && report.device.platform) || ''
+    const arch = (report.device && report.device.arch) || ''
+    const canonicalDevice = canonicalDeviceLabel(dev, platform, arch)
     for (const r of report.results || []) {
       const src = (r.input || '').trim()
       const mt = (r.output || '').trim()
       const ref = (r.reference || (r.quality && r.quality.reference) || '').trim()
       if (!src || !mt || !ref) continue
-      const key = `${dev}|${r.test}`
-      byKey.set(key, {
+      out.push({
         test: r.test,
         device: dev,
+        canonicalDevice,
         platform,
+        arch,
         src,
         mt,
         ref,
@@ -192,7 +221,78 @@ function extractTriples (reports) {
       })
     }
   }
-  return Array.from(byKey.values())
+  return out
+}
+
+/**
+ * Groups triples by `(canonicalDevice, test)` and summarises chrF++
+ * and COMET with mean ± std across the runs in each group.
+ *
+ * Mean / std are computed over the values that are actually present
+ * (null scores are skipped; each group reports how many runs
+ * contributed chrF++ and COMET samples separately). For deterministic
+ * metrics on a stable model, std will be 0 — non-zero std means the
+ * model's translation output drifted between the aggregated runs,
+ * which is exactly the signal the weekly aggregate should surface.
+ *
+ * @param {Array<object>} triples - output of extractTriples
+ * @param {Array<number | null> | null} cometScores - one per triple
+ * @returns {Array<object>} groups
+ */
+function aggregateGroups (triples, cometScores) {
+  const byKey = new Map()
+  for (let i = 0; i < triples.length; i++) {
+    const t = triples[i]
+    const key = `${t.canonicalDevice}|||${t.test}`
+    if (!byKey.has(key)) {
+      byKey.set(key, {
+        canonicalDevice: t.canonicalDevice,
+        platform: t.platform,
+        arch: t.arch,
+        test: t.test,
+        chrfppValues: [],
+        cometValues: [],
+        runs: 0
+      })
+    }
+    const g = byKey.get(key)
+    g.runs++
+    if (typeof t.chrfpp === 'number') g.chrfppValues.push(t.chrfpp)
+    const c = cometScores ? cometScores[i] : null
+    if (typeof c === 'number') g.cometValues.push(c)
+  }
+  const out = []
+  for (const g of byKey.values()) {
+    out.push({
+      canonicalDevice: g.canonicalDevice,
+      platform: g.platform,
+      arch: g.arch,
+      test: g.test,
+      runs: g.runs,
+      chrfppCount: g.chrfppValues.length,
+      chrfppMean: _mean(g.chrfppValues),
+      chrfppStd: _std(g.chrfppValues),
+      cometCount: g.cometValues.length,
+      cometMean: _mean(g.cometValues),
+      cometStd: _std(g.cometValues)
+    })
+  }
+  return out
+}
+
+function _mean (arr) {
+  if (!arr || arr.length === 0) return null
+  let sum = 0
+  for (const v of arr) sum += v
+  return sum / arr.length
+}
+
+function _std (arr) {
+  if (!arr || arr.length < 2) return 0
+  const m = _mean(arr)
+  let sq = 0
+  for (const v of arr) sq += (v - m) ** 2
+  return Math.sqrt(sq / arr.length)
 }
 
 // ---------------------------------------------------------------------------
@@ -277,20 +377,39 @@ function fmtComet (v) {
   return v.toFixed(3)
 }
 
+function fmtPctMeanStd (mean, std) {
+  if (mean === null || mean === undefined) return '-'
+  // Std shown in the same pp scale as the mean so "97.0% ±0.3%" is easy
+  // to eyeball. Std is hidden when it would always be 0.0% (single run)
+  // to reduce visual clutter, but kept for >=2 runs even if 0 because
+  // "2 runs at exact 0 std" is genuinely informative.
+  const meanStr = (mean * 100).toFixed(1) + '%'
+  if (std === null || std === undefined) return meanStr
+  return `${meanStr} ±${(std * 100).toFixed(1)}%`
+}
+
+function fmtCometMeanStd (mean, std) {
+  if (mean === null || mean === undefined) return '-'
+  const meanStr = mean.toFixed(3)
+  if (std === null || std === undefined) return meanStr
+  return `${meanStr} ±${std.toFixed(3)}`
+}
+
 /**
- * Renders the COMET markdown report. Pure function of (triples,
- * cometScores, meta) so the unit test can exercise it offline.
+ * Renders the COMET markdown report. Pure function of (groups, meta)
+ * so the unit test can exercise it offline.
  *
- * @param {Array<object>} triples
- * @param {number[] | null} cometScores - null when COMET was skipped
+ * @param {Array<object>} groups - output of aggregateGroups
  * @param {object} meta
  * @param {string} meta.model
  * @param {number} meta.runs
  * @param {string} meta.generatedAt - ISO timestamp
  * @param {boolean} [meta.skipComet]
+ * @param {boolean} [meta.cometFailed] - true when scoring was attempted but
+ *                                       no COMET values came back for anyone
  * @returns {string} markdown
  */
-function renderMarkdown (triples, cometScores, meta) {
+function renderMarkdown (groups, meta) {
   const lines = []
   lines.push('## nmtcpp COMET Quality Report')
   lines.push(`Generated: ${meta.generatedAt} | Runs aggregated: ${meta.runs} | Model: \`${meta.model}\``)
@@ -299,39 +418,38 @@ function renderMarkdown (triples, cometScores, meta) {
     lines.push('> COMET scoring skipped (`--skip-comet`). Only chrF++ is shown.')
     lines.push('')
   }
-  if (cometScores === null && !meta.skipComet) {
+  if (meta.cometFailed && !meta.skipComet) {
     lines.push('> **COMET scoring failed for this run** — see workflow log. chrF++ column below is still valid (taken from the per-run artifacts).')
     lines.push('')
   }
-  if (triples.length === 0) {
+  if (!groups || groups.length === 0) {
     lines.push('_No scorable triples found — every result was missing at least one of `input`, `output`, or `reference`._')
     return lines.join('\n') + '\n'
   }
 
-  // Sort: platform ASC, then device ASC, then test base ASC, then CPU before GPU
-  const sorted = [...triples].sort((a, b) => {
-    if (a.platform !== b.platform) return a.platform.localeCompare(b.platform)
-    if (a.device !== b.device) return a.device.localeCompare(b.device)
+  // Sort: platform ASC, then canonical device ASC, then test ASC
+  const sorted = [...groups].sort((a, b) => {
+    const pa = a.platform || ''
+    const pb = b.platform || ''
+    if (pa !== pb) return pa.localeCompare(pb)
+    if (a.canonicalDevice !== b.canonicalDevice) return a.canonicalDevice.localeCompare(b.canonicalDevice)
     return a.test.localeCompare(b.test)
   })
 
-  lines.push('| Test | Device | chrF++ | COMET |')
-  lines.push('| --- | --- | --- | --- |')
-  for (let i = 0; i < sorted.length; i++) {
-    const t = sorted[i]
-    // Align index back to the scores list: the scores were computed
-    // on the un-sorted triples array, so look up by identity.
-    const originalIdx = triples.indexOf(t)
-    const cometVal = (cometScores && originalIdx >= 0) ? cometScores[originalIdx] : null
-    lines.push(`| \`${t.test}\` | ${t.device} | ${fmtPct(t.chrfpp)} | ${fmtComet(cometVal)} |`)
+  lines.push('| Test | Device | Runs | chrF++ (mean ±std) | COMET (mean ±std) |')
+  lines.push('| --- | --- | --- | --- | --- |')
+  for (const g of sorted) {
+    lines.push(`| \`${g.test}\` | ${g.canonicalDevice} | ${g.runs} | ${fmtPctMeanStd(g.chrfppMean, g.chrfppStd)} | ${fmtCometMeanStd(g.cometMean, g.cometStd)} |`)
   }
 
   lines.push('')
   lines.push('### Notes')
   lines.push('- chrF++ is character + word n-gram F-score (sacrebleu-compatible). Values ~0-1 · higher is better.')
   lines.push('- COMET is a neural reference-based MT metric (Unbabel). Values ~0-1 · higher is better · 0.8+ is strong.')
-  lines.push('- The two metrics are not on the same calibration curve (chrF++ is surface n-gram overlap; COMET is neural semantic similarity calibrated to human direct-assessment). They are shown side by side intentionally — interpret each independently, not as a subtraction.')
-  lines.push('- What to watch for: (a) the **absolute COMET** value per row (< 0.6 = suspect, < 0.5 = broken); (b) cross-platform deltas on the **same test** (e.g. mobile IndicTrans COMET 0.51 vs desktop 0.95 → signal of the sacremoses bundling regression tracked as **QVAC-16488**).')
+  lines.push('- The two metrics are not on the same calibration curve (chrF++ is surface n-gram overlap; COMET is neural semantic similarity calibrated to human direct-assessment). They are shown side by side intentionally — interpret each independently.')
+  lines.push('- Rows aggregate the last N `On PR Trigger (NMTCPP)` runs by `(platform/arch or stable device name, test)`. Ephemeral hosted-runner names like `GitHub Actions 1000320663` are collapsed into `linux/x64 (hosted)` etc. so you see one row per matrix cell.')
+  lines.push('- For deterministic metrics on a stable model, std is 0. **Non-zero std means the translation output changed between the aggregated runs** — i.e. a code / model / config drift landed during the aggregation window. That is the signal this report is really here to surface.')
+  lines.push('- Other signals to watch for: (a) absolute COMET per row (< 0.6 = suspect, < 0.5 = broken); (b) cross-platform gap on the same test (e.g. mobile IndicTrans COMET 0.51 vs desktop 0.95 → **QVAC-16488** sacremoses bundling regression).')
   return lines.join('\n') + '\n'
 }
 
@@ -353,7 +471,7 @@ function main () {
     if (!runs.length) {
       console.error('No completed runs found — cannot score.')
       // Still emit a stub markdown so the workflow's Step Summary writer has something sane.
-      writeOutput(args.output, renderMarkdown([], null, {
+      writeOutput(args.output, renderMarkdown([], {
         model: args.model, runs: args.runs, generatedAt: new Date().toISOString()
       }))
       process.exit(0)
@@ -370,21 +488,25 @@ function main () {
   const reports = collectReports(rootDir)
   console.log(`  Collected ${reports.length} perf-report.json file(s)`)
   const triples = extractTriples(reports)
-  console.log(`  Extracted ${triples.length} unique {device,test} triples with input+output+reference`)
+  console.log(`  Extracted ${triples.length} triples with input+output+reference`)
 
   let scores = null
   if (!args.skipComet && triples.length > 0) {
     scores = runCometScore(triples, args.model)
   }
 
-  const md = renderMarkdown(triples, scores, {
+  const groups = aggregateGroups(triples, scores)
+  console.log(`  Aggregated into ${groups.length} groups by (canonicalDevice, test)`)
+
+  const md = renderMarkdown(groups, {
     model: args.model,
     runs: args.runs,
     generatedAt: new Date().toISOString(),
-    skipComet: args.skipComet
+    skipComet: args.skipComet,
+    cometFailed: !args.skipComet && triples.length > 0 && scores === null
   })
   writeOutput(args.output, md)
-  console.log(`  Wrote ${args.output} (${md.length} chars, ${triples.length} rows${scores ? `, ${scores.length} COMET scores` : ''})`)
+  console.log(`  Wrote ${args.output} (${md.length} chars, ${groups.length} groups from ${triples.length} triples${scores ? `, ${scores.length} COMET scores` : ''})`)
 
   // Hygiene: clean up our own tmp dir but only when we own it.
   if (tmpDir) {
@@ -411,10 +533,14 @@ if (require.main === module) {
   process.exit(0)
 } else {
   module.exports = {
+    canonicalDeviceLabel,
     collectReports,
     extractTriples,
+    aggregateGroups,
     renderMarkdown,
     fmtPct,
-    fmtComet
+    fmtComet,
+    fmtPctMeanStd,
+    fmtCometMeanStd
   }
 }
