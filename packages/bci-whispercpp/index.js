@@ -406,6 +406,13 @@ class BCIWhispercpp {
 
       if (this._streamAborted) return
 
+      if (channels === null && headerCarry.byteLength > 0) {
+        throw new QvacErrorAddonBCI({
+          code: ERR_CODES.INVALID_STREAM_HEADER,
+          adds: `stream ended with ${headerCarry.byteLength} header byte(s) buffered; need 8`
+        })
+      }
+
       if (channels !== null) {
         const bufferedTs = Math.floor(bodyBytes / bytesPerTimestep)
         if (bufferedTs > lastDecodedEndTs && bufferedTs > windowStartTs) {
