@@ -2,6 +2,8 @@
 
 require('./integration-runtime.cjs')
 
+/* global shouldRunMobileTest, createSkippedMobileTestResult */
+
 const process = require('bare-process')
 const sharedModuleCandidates = [
   '../benchmark/rtf-benchmark.shared.js',
@@ -38,6 +40,11 @@ function getMobileBenchmarkMatrix () {
 }
 
 async function runMobileRtfBenchmarks (options = {}) { // eslint-disable-line no-unused-vars
+  if (typeof shouldRunMobileTest === 'function' &&
+      !shouldRunMobileTest('runMobileRtfBenchmarks')) {
+    return createSkippedMobileTestResult('runMobileRtfBenchmarks')
+  }
+
   const matrix = getMobileBenchmarkMatrix()
 
   console.log('')
