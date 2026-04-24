@@ -168,6 +168,21 @@ class TranslationNmtcpp {
   }
 
   /**
+   * Returns the name of the currently-loaded non-CPU backend (e.g. 'Vulkan0',
+   * 'OpenCL', 'Metal'), or a sentinel:
+   *   - 'Unloaded'     — model is not loaded
+   *   - 'Bergamot-CPU' — Bergamot model (CPU-only by design)
+   *   - 'CPU'          — GGML backend loaded, only CPU backend registered
+   * @returns {string}
+   */
+  getActiveBackendName () {
+    if (!this.addon) {
+      return 'Unloaded'
+    }
+    return this.addon.getActiveBackendName()
+  }
+
+  /**
    * Checks if this is a Bergamot model
    * @private
    * @returns {boolean}
@@ -220,7 +235,7 @@ class TranslationNmtcpp {
   }
 
   async _load () {
-    const { use_gpu: useGpu, ...otherConfig } = this._config
+    const otherConfig = { ...this._config }
 
     if (otherConfig.backendsDir === undefined) {
       otherConfig.backendsDir = path.join(__dirname, 'prebuilds')
@@ -229,10 +244,6 @@ class TranslationNmtcpp {
     const configurationParams = {
       path: this._files.model,
       config: otherConfig
-    }
-
-    if (useGpu !== undefined) {
-      configurationParams.use_gpu = useGpu
     }
 
     this._configureBergamotModel(configurationParams)

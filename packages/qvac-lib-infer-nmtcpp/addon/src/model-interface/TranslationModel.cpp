@@ -6,6 +6,7 @@
 #include <stdexcept>
 #include <vector>
 
+#include <ggml-backend.h>
 #include <qvac-lib-inference-addon-cpp/Errors.hpp>
 
 #include "nmt_utils.hpp"
@@ -234,9 +235,13 @@ void TranslationModel::load() {
 
   nmt_context_params params = nmt_context_default_params();
   params.use_gpu = useGpu_;
+  params.gpu_backend = gpuBackend_;
 
   std::ostringstream oss;
   oss << "[TRANSLATION MODEL] use_gpu set to: " << (useGpu_ ? "true" : "false");
+  if (!gpuBackend_.empty()) {
+    oss << ", gpu_backend='" << gpuBackend_ << "'";
+  }
   QLOG(qvac_lib_inference_addon_cpp::logger::Priority::INFO, oss.str());
 
   nmtCtx_.reset(nmt_init_from_file_with_params(modelPath_.c_str(), params));
@@ -577,10 +582,54 @@ void TranslationModel::setConfig(
     std::unordered_map<std::string, std::variant<double, int64_t, std::string>>
         config) {
   config_ = std::move(config);
+
+  // use_gpu is lifted out of the generic map because it must be applied
+  // BEFORE load() — the GGML/Bergamot backend picks it up from useGpu_ at
+  // init time, and updateConfig() below is a no-op until nmtCtx_ exists.
+  // getConfigMap() stores booleans as int64 {0,1}, so accept either int64
+  // or double (0.0/1.0) for defensiveness.
+  if (auto it = config_.find("use_gpu"); it != config_.end()) {
+    bool value = false;
+    bool parsed = false;
+    if (const auto* asInt = std::get_if<int64_t>(&it->second)) {
+      value = (*asInt != 0);
+      parsed = true;
+    } else if (const auto* asDouble = std::get_if<double>(&it->second)) {
+      value = (*asDouble != 0.0);
+      parsed = true;
+    } else {
+      QLOG(
+          qvac_lib_inference_addon_cpp::logger::Priority::WARNING,
+          "[TRANSLATION MODEL] 'use_gpu' config value is not a "
+          "boolean/number; ignoring");
+    }
+    if (parsed) {
+      setUseGpu(value);
+    }
+  }
+
+  // Same pre-load lift for gpu_backend — the ggml device selector in
+  // nmt_backend_init_gpu reads it at init time. Accepts strings like
+  // "vulkan", "vulkan0", "opencl", "metal" (case-insensitive substring).
+  if (auto it = config_.find("gpu_backend"); it != config_.end()) {
+    if (const auto* asString = std::get_if<std::string>(&it->second)) {
+      setGpuBackend(*asString);
+    } else {
+      QLOG(
+          qvac_lib_inference_addon_cpp::logger::Priority::WARNING,
+          "[TRANSLATION MODEL] 'gpu_backend' config value is not a string; "
+          "ignoring");
+    }
+  }
+
   updateConfig();
 }
 
 void TranslationModel::setUseGpu(bool useGpu) { useGpu_ = useGpu; }
+
+void TranslationModel::setGpuBackend(const std::string& gpuBackend) {
+  gpuBackend_ = gpuBackend;
+}
 
 void TranslationModel::updateConfig() {
   if (nmtCtx_) {
@@ -636,6 +685,44 @@ void TranslationModel::updateConfig() {
     setInt64Param("topk", &nmt_context::setTopK);
     setDoubleParam("topp", &nmt_context::setTopP);
   }
+}
+
+std::string TranslationModel::getActiveBackendName() const {
+  // Bergamot is CPU-only by design — GGML backends are not consulted for it.
+#ifdef HAVE_BERGAMOT
+  if (backendType_ == BackendType::BERGAMOT) {
+    return "Bergamot-CPU";
+  }
+#endif
+
+  std::scoped_lock<std::mutex> scoped_lock(mtx_);
+
+  if (!nmtCtx_ || !nmtCtx_->state) {
+    return "Unloaded";
+  }
+
+  // nmt_backend_init() pushes the GPU backend first (if any), then ACCEL,
+  // then CPU. Returning the first non-CPU-type device name gives the active
+  // GPU/ACCEL backend name; if none found, fall back to "CPU".
+  for (ggml_backend_t backend : nmtCtx_->state->backends) {
+    if (backend == nullptr) {
+      continue;
+    }
+    ggml_backend_dev_t dev = ggml_backend_get_device(backend);
+    if (dev == nullptr) {
+      continue;
+    }
+    if (ggml_backend_dev_type(dev) == GGML_BACKEND_DEVICE_TYPE_CPU) {
+      continue;
+    }
+    const char* name = ggml_backend_dev_name(dev);
+    if (name == nullptr) {
+      continue;
+    }
+    return std::string(name);
+  }
+
+  return "CPU";
 }
 
 } // namespace qvac_lib_inference_addon_nmt

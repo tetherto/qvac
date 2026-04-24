@@ -97,6 +97,21 @@ class TranslationInterface {
   }
 
   /**
+   * Returns the name of the currently-loaded non-CPU backend (e.g. 'Vulkan0',
+   * 'OpenCL', 'Metal'), or a sentinel string:
+   *   - 'Unloaded'     — model is not loaded
+   *   - 'Bergamot-CPU' — Bergamot model (CPU-only by design)
+   *   - 'CPU'          — GGML backend loaded, only CPU backend registered
+   * @returns {string}
+   */
+  getActiveBackendName () {
+    if (this._handle === null) {
+      return 'Unloaded'
+    }
+    return binding.getActiveBackendName(this._handle)
+  }
+
+  /**
    * Submits a job to the processing pipeline
    * @param {Object} data
    * @param {String} data.type - 'text' for single input, 'sequences' for batch
