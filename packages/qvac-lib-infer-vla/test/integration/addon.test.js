@@ -141,29 +141,41 @@ function _loadUrlsConfig () {
 function _streamDownload (url, destPath, maxRedirects = 5) {
   const https = require('bare-https')
   return new Promise((resolve, reject) => {
+    let resolved = false
+    const safeResolve = () => { if (!resolved) { resolved = true; resolve() } }
+    const safeReject = (err) => { if (!resolved) { resolved = true; reject(err) } }
+
     console.log(`[vla-model] downloading: ${url.substring(0, 60)}...`)
+    const file = fs.createWriteStream(destPath)
+    file.on('error', (err) => {
+      file.destroy()
+      try { fs.unlinkSync(destPath) } catch (_) {}
+      safeReject(err)
+    })
+
     const req = https.request(url, (res) => {
       if ([301, 302, 307, 308].includes(res.statusCode)) {
+        file.destroy()
+        try { fs.unlinkSync(destPath) } catch (_) {}
         const location = res.headers.location
         if (location && maxRedirects > 0) {
-          res.resume()
-          _streamDownload(location, destPath, maxRedirects - 1).then(resolve, reject)
+          _streamDownload(location, destPath, maxRedirects - 1).then(safeResolve, safeReject)
           return
         }
-        reject(new Error(`HTTP ${res.statusCode}: redirect not followed`))
+        safeReject(new Error(`HTTP ${res.statusCode}: redirect not followed`))
         return
       }
       if (res.statusCode < 200 || res.statusCode >= 300) {
-        reject(new Error(`HTTP ${res.statusCode}: ${res.statusMessage || ''}`))
-        res.resume()
+        file.destroy()
+        try { fs.unlinkSync(destPath) } catch (_) {}
+        safeReject(new Error(`HTTP ${res.statusCode}: ${res.statusMessage || ''}`))
         return
       }
+
       const contentLength = parseInt(res.headers['content-length'] || '0', 10)
-      const writeStream = fs.createWriteStream(destPath)
       let downloadedBytes = 0
       let nextLogMB = 50
       res.on('data', (chunk) => {
-        writeStream.write(chunk)
         downloadedBytes += chunk.length
         const mb = downloadedBytes / (1024 * 1024)
         if (mb >= nextLogMB) {
@@ -172,17 +184,23 @@ function _streamDownload (url, destPath, maxRedirects = 5) {
           nextLogMB += 50
         }
       })
-      res.on('end', () => {
-        writeStream.end(() => {
-          const mb = downloadedBytes / (1024 * 1024)
-          console.log(`[vla-model] downloaded: ${path.basename(destPath)} (${mb.toFixed(1)}MB)`)
-          resolve()
-        })
+      res.on('error', (err) => {
+        file.destroy()
+        try { fs.unlinkSync(destPath) } catch (_) {}
+        safeReject(err)
       })
-      res.on('error', reject)
-      writeStream.on('error', reject)
+      res.pipe(file)
+      file.on('close', () => {
+        const mb = downloadedBytes / (1024 * 1024)
+        console.log(`[vla-model] downloaded: ${path.basename(destPath)} (${mb.toFixed(1)}MB)`)
+        safeResolve()
+      })
     })
-    req.on('error', reject)
+    req.on('error', (err) => {
+      file.destroy()
+      try { fs.unlinkSync(destPath) } catch (_) {}
+      safeReject(err)
+    })
     req.end()
   })
 }
