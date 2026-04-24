@@ -2,7 +2,8 @@
   "dependencies": [
     {
       "name": "ggml",
-      "version>=": "2026-01-30#5"
+      "version>=": "2026-01-30#5",
+      "default-features": false
     },
     {
       "name": "qvac-lib-inference-addon-cpp",

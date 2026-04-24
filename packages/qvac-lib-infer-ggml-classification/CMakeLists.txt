@@ -52,7 +52,14 @@ message(STATUS "Building qvac-lib-infer-ggml-classification with BACKENDS_SUBDIR
 set(BACKEND_DL_LIBS "")
 if((ANDROID OR UNIX) AND NOT APPLE)
   foreach(_backend ${GGML_AVAILABLE_BACKENDS})
-    list(APPEND BACKEND_DL_LIBS INSTALL TARGET ggml::${_backend})
+    # GGML_AVAILABLE_BACKENDS advertises every backend the upstream port
+    # knows about, but real CMake targets only exist for those actually
+    # built into the installed package (e.g. ggml-vulkan / ggml-opencl
+    # are absent on Android with our vcpkg feature set). Skip missing
+    # ones so add_bare_module's get_target_property() doesn't error out.
+    if(TARGET ggml::${_backend})
+      list(APPEND BACKEND_DL_LIBS INSTALL TARGET ggml::${_backend})
+    endif()
   endforeach()
 endif()
 
