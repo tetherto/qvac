@@ -65,6 +65,7 @@ def apply_supertonic_env_overrides(cfg: Config) -> Config:
     dataset_updates = {}
     comparison_updates = {}
     model_updates = {}
+    server_updates = {}
 
     if "QVAC_SUPERTONIC_BENCHMARK_MAX_SAMPLES" in os.environ:
         dataset_updates["max_samples"] = _env_int(
@@ -99,11 +100,18 @@ def apply_supertonic_env_overrides(cfg: Config) -> Config:
             cfg.model.useGPU,
         )
 
-    if not dataset_updates and not comparison_updates and not model_updates:
+    if "QVAC_SUPERTONIC_BENCHMARK_ADDON_URL" in os.environ:
+        server_updates["addon_url"] = os.environ["QVAC_SUPERTONIC_BENCHMARK_ADDON_URL"]
+
+    if "QVAC_SUPERTONIC_BENCHMARK_PYTHON_URL" in os.environ:
+        server_updates["python_url"] = os.environ["QVAC_SUPERTONIC_BENCHMARK_PYTHON_URL"]
+
+    if not dataset_updates and not comparison_updates and not model_updates and not server_updates:
         return cfg
 
     return cfg.model_copy(
         update={
+            "server": cfg.server.model_copy(update=server_updates) if server_updates else cfg.server,
             "dataset": cfg.dataset.model_copy(update=dataset_updates) if dataset_updates else cfg.dataset,
             "comparison": cfg.comparison.model_copy(update=comparison_updates) if comparison_updates else cfg.comparison,
             "model": cfg.model.model_copy(update=model_updates) if model_updates else cfg.model,

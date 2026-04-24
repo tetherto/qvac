@@ -414,6 +414,8 @@ jobs:
         env:
           PYTHONUNBUFFERED: "1"
           HF_DATASETS_CACHE: /tmp/hf_cache
+          QVAC_SUPERTONIC_BENCHMARK_ADDON_URL: ${{ matrix.platform == 'win32' && 'http://127.0.0.1:8080/synthesize-supertonic' || 'http://localhost:8080/synthesize-supertonic' }}
+          QVAC_SUPERTONIC_BENCHMARK_PYTHON_URL: ${{ matrix.platform == 'win32' && 'http://127.0.0.1:8081/synthesize-supertonic' || 'http://localhost:8081/synthesize-supertonic' }}
           QVAC_SUPERTONIC_BENCHMARK_LABEL: ${{ matrix.runner_label }}-${{ matrix.backend }}
           QVAC_SUPERTONIC_BENCHMARK_RUNNER: ${{ matrix.runner_label }}
           QVAC_SUPERTONIC_BENCHMARK_DEVICE: ${{ matrix.device_label }}
