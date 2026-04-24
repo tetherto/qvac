@@ -70,13 +70,11 @@ This package supports two TTS engines. The engine is auto-detected based on the 
 | Sample Rate | 24,000 Hz | 44,100 Hz |
 | Voice Method | Voice cloning from reference audio | Pre-trained voice styles (`.bin` files) |
 | ONNX Models | 5 (tokenizer, speech_encoder, embed_tokens, conditional_decoder, language_model) | 3 (text_encoder, latent_denoiser, voice_decoder) |
-| Languages | English (en), Spanish (es), French (fr), German (de), Italian (it), Portuguese (pt), Russian (ru), Arabic (ar), Danish (da), Greek (el), Finnish (fi), Hebrew (he), Hindi (hi), Korean (ko), Malay (ms), Dutch (nl), Norwegian (no), Polish (pl), Swedish (sv), Swahili (sw), Turkish (tr) | English (en), Korean (ko), Spanish (es), Portuguese (pt), French (fr) |
+| Languages | See [Supported Languages](#supported-languages) | English (en), Korean (ko), Spanish (es), Portuguese (pt), French (fr) |
 | Speed Control | N/A | Configurable via `speed` parameter |
 | Inference Steps | Single-pass | Configurable via `numInferenceSteps` (default: 5) |
 | Use Case | Voice cloning from a reference audio sample | General-purpose TTS with selectable voice presets |
 | Real Time Factor | Usually >1.0 | <1.0 |
-
-Note: though Chatterbox models support up to 23 languages, this implementation still only support 7 due to onnx models limitations. We are actively working to provide new onnx models that support all 23 langauges from the original implementation. 
 
 ## Installation
 
@@ -513,6 +511,56 @@ Supertonic includes 10 pre-trained voice styles:
 | `M3` | Male | Male voice style 3 |
 | `M4` | Male | Male voice style 4 |
 | `M5` | Male | Male voice style 5 |
+
+## Supported Languages
+
+The Chatterbox multilingual model supports the following 22 languages:
+
+| Code | Language   |
+|------|------------|
+| en   | English    |
+| es   | Spanish    |
+| pt   | Portuguese |
+| fr   | French     |
+| de   | German     |
+| it   | Italian    |
+| ru   | Russian    |
+| ar   | Arabic     |
+| da   | Danish     |
+| el   | Greek      |
+| fi   | Finnish    |
+| he   | Hebrew     |
+| hi   | Hindi      |
+| ja   | Japanese   |
+| ko   | Korean     |
+| ms   | Malay      |
+| nl   | Dutch      |
+| no   | Norwegian  |
+| pl   | Polish     |
+| sv   | Swedish    |
+| sw   | Swahili    |
+| tr   | Turkish    |
+
+### Language-specific text preprocessing
+
+Some languages require text preprocessing before tokenization. This is handled automatically by the addon when `language` is set:
+
+- **Japanese (`ja`)**: kanji are converted to hiragana using **MeCab** with the IPA dictionary (`dict/mecab-ipadic`, bundled).
+- **Korean (`ko`)**: Hangul syllables are decomposed into Jamo (initial / medial / final) using `utf8proc` NFKD.
+- **Chinese (`zh`)**: not supported in this release.
+
+To select a language at load time, pass `language` to the loader:
+
+```javascript
+const model = await loadChatterboxTTS({
+  tokenizerPath: '...',
+  speechEncoderPath: '...',
+  embedTokensPath: '...',
+  conditionalDecoderPath: '...',
+  languageModelPath: '...',
+  language: 'ja' // any of the codes above
+})
+```
 
 ## Output Format
 
