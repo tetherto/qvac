@@ -327,9 +327,19 @@ export async function textToSpeechStream(
 
   const responses = parseTextToSpeechStreamLines(responseStream);
   let consumed = false;
+  // `closed` flips on `end()` or `destroy()`. Without this guard a late
+  // `write()` would propagate a raw Bare/Node "write after end" stream error
+  // to the caller. Throwing a typed SDK error keeps the duplex session
+  // surface predictable.
+  let closed = false;
 
   return {
     write(textFragment: string | Buffer) {
+      if (closed) {
+        throw new TextToSpeechStreamFailedError(
+          "TextToSpeechStreamSession.write() called after end()/destroy()",
+        );
+      }
       const buf =
         typeof textFragment === "string"
           ? Buffer.from(textFragment, "utf8")
@@ -337,9 +347,12 @@ export async function textToSpeechStream(
       requestStream.write(buf);
     },
     end() {
+      if (closed) return;
+      closed = true;
       requestStream.end();
     },
     destroy() {
+      closed = true;
       requestStream.destroy();
       responseStream.destroy();
     },

@@ -32,11 +32,59 @@ function hasRunStreaming(model: unknown): model is RunStreamingModel {
   );
 }
 
+// Callers (e.g. LLM token deltas) may write raw Buffer chunks whose
+// boundaries split a multi-byte UTF-8 codepoint. A naive `buf.toString("utf8")`
+// per chunk emits U+FFFD at every split point and silently corrupts CJK,
+// emoji, accented scripts, etc. before they reach the tokenizer. Keep a
+// tail-buffer of at most 3 bytes spanning an incomplete trailing codepoint
+// and decode only the complete-codepoint prefix of each combined chunk.
+function findLastCompleteUtf8End(buf: Buffer): number {
+  const len = buf.length;
+  // A UTF-8 codepoint is at most 4 bytes, so a split can only dangle in
+  // the last 3 bytes. Scan backwards to find the most recent leading byte.
+  for (let i = len - 1; i >= 0 && i >= len - 3; i--) {
+    const b = buf[i] as number;
+    if ((b & 0x80) === 0) {
+      // ASCII byte: everything up to and including i is complete.
+      return i + 1;
+    }
+    if ((b & 0xc0) === 0xc0) {
+      // Leading byte of a multi-byte sequence.
+      let expected: number;
+      if ((b & 0xe0) === 0xc0) expected = 2;
+      else if ((b & 0xf0) === 0xe0) expected = 3;
+      else if ((b & 0xf8) === 0xf0) expected = 4;
+      else return len; // Invalid leader; let toString emit U+FFFD.
+      return i + expected <= len ? len : i;
+    }
+  }
+  return len;
+}
+
 async function* buffersToUtf8Fragments(
   inputStream: AsyncIterable<Buffer>,
 ): AsyncGenerator<string, void, unknown> {
+  let pending: Buffer = Buffer.alloc(0);
   for await (const buf of inputStream) {
-    const s = buf.toString("utf8");
+    const combined =
+      pending.length === 0 ? buf : Buffer.concat([pending, buf]);
+    const completeEnd = findLastCompleteUtf8End(combined);
+    if (completeEnd > 0) {
+      const s = combined.subarray(0, completeEnd).toString("utf8");
+      if (s.length > 0) {
+        yield s;
+      }
+    }
+    pending =
+      completeEnd < combined.length
+        ? Buffer.from(combined.subarray(completeEnd))
+        : Buffer.alloc(0);
+  }
+  if (pending.length > 0) {
+    // Stream ended with a dangling partial codepoint — flush as-is so the
+    // tokenizer sees the replacement character rather than silently dropping
+    // the final byte(s).
+    const s = pending.toString("utf8");
     if (s.length > 0) {
       yield s;
     }
