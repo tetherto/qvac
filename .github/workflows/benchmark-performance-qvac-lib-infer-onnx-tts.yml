@@ -125,7 +125,8 @@ jobs:
             device_label: ubuntu-22.04-x64
             backend: cpu
             use_gpu: false
-            run_python: true
+            run_python: false
+            round_trip_test: true
           - os: ai-run-linux-gpu
             platform: linux
             arch: x64
@@ -133,7 +134,8 @@ jobs:
             device_label: ai-run-linux-gpu
             backend: cpu
             use_gpu: false
-            run_python: true
+            run_python: false
+            round_trip_test: true
           - os: ai-run-linux-gpu
             platform: linux
             arch: x64
@@ -142,6 +144,7 @@ jobs:
             backend: cuda
             use_gpu: true
             run_python: false
+            round_trip_test: true
           - os: ubuntu-24.04-arm
             platform: linux
             arch: arm64
@@ -149,7 +152,8 @@ jobs:
             device_label: ubuntu-24.04-arm64
             backend: cpu
             use_gpu: false
-            run_python: true
+            run_python: false
+            round_trip_test: true
           - os: macos-14-xlarge
             platform: darwin
             arch: arm64
@@ -157,7 +161,8 @@ jobs:
             device_label: macos-14-xlarge
             backend: cpu
             use_gpu: false
-            run_python: true
+            run_python: false
+            round_trip_test: true
           - os: macos-14-xlarge
             platform: darwin
             arch: arm64
@@ -166,6 +171,7 @@ jobs:
             backend: coreml
             use_gpu: true
             run_python: false
+            round_trip_test: true
           - os: macos-15-large
             platform: darwin
             arch: x64
@@ -174,6 +180,7 @@ jobs:
             backend: cpu
             use_gpu: false
             run_python: false
+            round_trip_test: false
           - os: macos-15-large
             platform: darwin
             arch: x64
@@ -182,6 +189,7 @@ jobs:
             backend: coreml
             use_gpu: true
             run_python: false
+            round_trip_test: false
           - os: windows-2022
             platform: win32
             arch: x64
@@ -189,7 +197,8 @@ jobs:
             device_label: windows-2022-x64
             backend: cpu
             use_gpu: false
-            run_python: true
+            run_python: false
+            round_trip_test: true
           - os: windows-2022
             platform: win32
             arch: x64
@@ -198,6 +207,7 @@ jobs:
             backend: directml
             use_gpu: true
             run_python: false
+            round_trip_test: true
 
     steps:
       - name: Setup Node.js
@@ -318,6 +328,9 @@ jobs:
         run: |
           pip install --upgrade pip setuptools wheel
           pip install -r requirements.txt
+          if [ "${{ matrix.round_trip_test && 'true' || 'false' }}" = "true" ]; then
+            pip install -r requirements-roundtrip.txt
+          fi
 
       - name: Start Python Native server (Unix)
         if: ${{ matrix.platform != 'win32' && needs.context.outputs.run_python != 'false' && matrix.run_python }}
@@ -348,7 +361,7 @@ jobs:
               break
             }
             try {
-              Invoke-WebRequest -Uri "http://127.0.0.1:8081/" -UseBasicParsing | Out-Null
+              Invoke-WebRequest -Uri "http://localhost:8081/" -UseBasicParsing | Out-Null
               $healthy = $true
               break
             } catch {
@@ -380,7 +393,7 @@ jobs:
         run: |
           $logPath = Join-Path $PWD "server.log"
           $errorPath = Join-Path $PWD "server-error.log"
-          $proc = Start-Process -FilePath npm.cmd -ArgumentList "start" -WorkingDirectory $PWD -RedirectStandardOutput $logPath -RedirectStandardError $errorPath -PassThru
+          $proc = Start-Process -FilePath bare -ArgumentList "index.js" -WorkingDirectory $PWD -RedirectStandardOutput $logPath -RedirectStandardError $errorPath -PassThru
           $proc.Id | Out-File -FilePath server.pid -Encoding ascii
           $healthy = $false
           for ($i = 0; $i -lt 10; $i++) {
@@ -389,7 +402,7 @@ jobs:
               break
             }
             try {
-              Invoke-WebRequest -Uri "http://127.0.0.1:8080/" -UseBasicParsing | Out-Null
+              Invoke-WebRequest -Uri "http://localhost:8080/" -UseBasicParsing | Out-Null
               $healthy = $true
               break
             } catch {
@@ -414,14 +427,14 @@ jobs:
         env:
           PYTHONUNBUFFERED: "1"
           HF_DATASETS_CACHE: /tmp/hf_cache
-          QVAC_SUPERTONIC_BENCHMARK_ADDON_URL: ${{ matrix.platform == 'win32' && 'http://127.0.0.1:8080/synthesize-supertonic' || 'http://localhost:8080/synthesize-supertonic' }}
-          QVAC_SUPERTONIC_BENCHMARK_PYTHON_URL: ${{ matrix.platform == 'win32' && 'http://127.0.0.1:8081/synthesize-supertonic' || 'http://localhost:8081/synthesize-supertonic' }}
+          QVAC_SUPERTONIC_BENCHMARK_ADDON_URL: http://localhost:8080/synthesize-supertonic
+          QVAC_SUPERTONIC_BENCHMARK_PYTHON_URL: http://localhost:8081/synthesize-supertonic
           QVAC_SUPERTONIC_BENCHMARK_LABEL: ${{ matrix.runner_label }}-${{ matrix.backend }}
           QVAC_SUPERTONIC_BENCHMARK_RUNNER: ${{ matrix.runner_label }}
           QVAC_SUPERTONIC_BENCHMARK_DEVICE: ${{ matrix.device_label }}
           QVAC_SUPERTONIC_BENCHMARK_BACKEND: ${{ matrix.backend }}
           QVAC_SUPERTONIC_BENCHMARK_MAX_SAMPLES: ${{ needs.context.outputs.max_samples }}
-          QVAC_SUPERTONIC_BENCHMARK_ROUND_TRIP_TEST: ${{ needs.context.outputs.round_trip_test }}
+          QVAC_SUPERTONIC_BENCHMARK_ROUND_TRIP_TEST: ${{ matrix.round_trip_test && needs.context.outputs.round_trip_test != 'false' && 'true' || 'false' }}
           QVAC_SUPERTONIC_BENCHMARK_WHISPER_MODEL: ${{ needs.context.outputs.whisper_model }}
           QVAC_SUPERTONIC_BENCHMARK_NUM_RUNS: ${{ needs.context.outputs.num_runs }}
           QVAC_SUPERTONIC_BENCHMARK_USE_GPU: ${{ matrix.use_gpu && 'true' || 'false' }}
