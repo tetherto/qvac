@@ -61,12 +61,17 @@ function createAngleBracketAndStarFilter() {
   };
 }
 
-/** Append PCM without `push(...huge)` — spread length hits max stack / argument limits. */
+/**
+ * Append PCM without `push(...huge)` — a spread of hundreds of thousands of
+ * arguments blows the V8 / Bare argument-count limit. Batching with
+ * `Array.prototype.push.apply` is both faster than `push(...slice)` and
+ * avoids allocating an intermediate rest array on the stack per call.
+ */
 function appendPcmSamples(target: number[], chunk: number[]) {
   const batch = 8192;
   for (let i = 0; i < chunk.length; i += batch) {
     const end = Math.min(i + batch, chunk.length);
-    target.push(...chunk.slice(i, end));
+    Array.prototype.push.apply(target, chunk.slice(i, end));
   }
 }
 

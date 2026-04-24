@@ -1,6 +1,7 @@
 import { writeFileSync, unlinkSync } from "fs";
 import { spawn, spawnSync } from "child_process";
-import { platform } from "os";
+import { platform, tmpdir } from "os";
+import { join } from "path";
 
 /**
  * Create WAV header for 16-bit PCM audio
@@ -87,7 +88,13 @@ export function playPcmInt16Chunk(
   const audioData = int16ArrayToBuffer(samples);
   const wavHeader = createWavHeader(audioData.length, sampleRate);
   const wavFile = Buffer.concat([wavHeader, audioData]);
-  const tempFile = `/tmp/qvac-tts-chunk-${Date.now()}-${Math.random().toString(16).slice(2)}.wav`;
+  // `os.tmpdir()` resolves to the OS-specific temp directory (e.g. `%TEMP%`
+  // on Windows), so the Windows branch below no longer tries to read a
+  // POSIX-only `/tmp/...` path.
+  const tempFile = join(
+    tmpdir(),
+    `qvac-tts-chunk-${Date.now()}-${Math.random().toString(16).slice(2)}.wav`,
+  );
   writeFileSync(tempFile, wavFile);
 
   const currentPlatform = platform();
