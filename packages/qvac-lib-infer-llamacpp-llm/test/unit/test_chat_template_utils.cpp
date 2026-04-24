@@ -39,9 +39,57 @@ TEST_F(ChatTemplateUtilsTest, IsQwen3ModelWithNullptr) {
   EXPECT_FALSE(isQwen3Model(nullptr));
 }
 
+TEST_F(ChatTemplateUtilsTest, SelectToolsCompactMarkerForQwen3) {
+  auto marker = selectToolsCompactMarker("qwen3");
+  ASSERT_TRUE(marker.has_value());
+  EXPECT_EQ(marker.value(), "<tool_call>");
+}
+
+TEST_F(
+    ChatTemplateUtilsTest, SelectToolsCompactMarkerForUnsupportedArchitecture) {
+  EXPECT_FALSE(selectToolsCompactMarker("llama").has_value());
+  EXPECT_FALSE(selectToolsCompactMarker("mistral").has_value());
+  EXPECT_FALSE(selectToolsCompactMarker("gemma").has_value());
+}
+
+TEST_F(
+    ChatTemplateUtilsTest, SupportsToolsCompactForModelMetadataByArchitecture) {
+  EXPECT_TRUE(
+      supportsToolsCompactForModelMetadata(std::string("qwen3"), std::nullopt));
+  EXPECT_FALSE(
+      supportsToolsCompactForModelMetadata(std::string("llama"), std::nullopt));
+}
+
+TEST_F(ChatTemplateUtilsTest, SupportsToolsCompactForModelMetadataByModelName) {
+  EXPECT_TRUE(supportsToolsCompactForModelMetadata(
+      std::nullopt, std::string("Qwen3-1.7B-Instruct")));
+  EXPECT_TRUE(supportsToolsCompactForModelMetadata(
+      std::nullopt, std::string("qwen-3-4b")));
+  EXPECT_FALSE(supportsToolsCompactForModelMetadata(
+      std::nullopt, std::string("Llama-3.1-8B")));
+}
+
 TEST_F(
     ChatTemplateUtilsTest,
-    GetChatTemplateForModelWithManualOverrideToolsAtEndFalse) {
+    SelectToolsCompactMarkerForModelMetadataUsesArchitectureOrNameFallback) {
+  auto markerFromArch = selectToolsCompactMarkerForModelMetadata(
+      std::string("qwen3"), std::nullopt);
+  ASSERT_TRUE(markerFromArch.has_value());
+  EXPECT_EQ(markerFromArch.value(), "<tool_call>");
+
+  auto markerFromName = selectToolsCompactMarkerForModelMetadata(
+      std::nullopt, std::string("Qwen3-1.7B-Instruct"));
+  ASSERT_TRUE(markerFromName.has_value());
+  EXPECT_EQ(markerFromName.value(), "<tool_call>");
+
+  EXPECT_FALSE(selectToolsCompactMarkerForModelMetadata(
+                   std::string("llama"), std::string("Llama-3.1-8B"))
+                   .has_value());
+}
+
+TEST_F(
+    ChatTemplateUtilsTest,
+    GetChatTemplateForModelWithManualOverrideToolsCompactFalse) {
   std::string manual_override = "custom template";
   std::string result = getChatTemplateForModel(nullptr, manual_override, false);
   EXPECT_EQ(result, manual_override);
@@ -49,7 +97,7 @@ TEST_F(
 
 TEST_F(
     ChatTemplateUtilsTest,
-    GetChatTemplateForModelWithManualOverrideToolsAtEndTrue) {
+    GetChatTemplateForModelWithManualOverrideToolsCompactTrue) {
   std::string manual_override = "custom template";
   std::string result = getChatTemplateForModel(nullptr, manual_override, true);
   EXPECT_EQ(result, manual_override);
@@ -57,14 +105,14 @@ TEST_F(
 
 TEST_F(
     ChatTemplateUtilsTest,
-    GetChatTemplateForModelEmptyOverrideNullptrToolsAtEndFalse) {
+    GetChatTemplateForModelEmptyOverrideNullptrToolsCompactFalse) {
   std::string result = getChatTemplateForModel(nullptr, "", false);
   EXPECT_EQ(result, "");
 }
 
 TEST_F(
     ChatTemplateUtilsTest,
-    GetChatTemplateForModelEmptyOverrideNullptrToolsAtEndTrue) {
+    GetChatTemplateForModelEmptyOverrideNullptrToolsCompactTrue) {
   std::string result = getChatTemplateForModel(nullptr, "", true);
   EXPECT_EQ(result, "");
 }
@@ -151,7 +199,7 @@ TEST_F(ChatTemplateUtilsTest, TemplatesAreDifferent) {
   EXPECT_STRNE(fixedTemplate, dynamicTemplate);
 }
 
-TEST_F(ChatTemplateUtilsTest, ManualOverrideTakesPrecedenceOverToolsAtEnd) {
+TEST_F(ChatTemplateUtilsTest, ManualOverrideTakesPrecedenceOverToolsCompact) {
   common_params params;
   params.chat_template = "my_custom_template";
   params.use_jinja = true;
@@ -161,7 +209,7 @@ TEST_F(ChatTemplateUtilsTest, ManualOverrideTakesPrecedenceOverToolsAtEnd) {
 }
 
 TEST_F(
-    ChatTemplateUtilsTest, ManualOverrideTakesPrecedenceOverToolsAtEndFalse) {
+    ChatTemplateUtilsTest, ManualOverrideTakesPrecedenceOverToolsCompactFalse) {
   common_params params;
   params.chat_template = "my_custom_template";
   params.use_jinja = true;
