@@ -1,3 +1,6 @@
 build/
 .qvac-cache/
 qvac.config.json
+.env
+.env.bak-*
+rag-hyperdb/
