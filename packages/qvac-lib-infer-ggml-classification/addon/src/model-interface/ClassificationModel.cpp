@@ -4,10 +4,14 @@
 #include <chrono>
 #include <cmath>
 #include <cstdint>
+#include <cstdio>
+#include <cstdlib>
+#include <limits>
 #include <numeric>
 #include <span>
 #include <stdexcept>
 #include <string>
+#include <vector>
 
 #include <ggml-alloc.h>
 #include <ggml-backend.h>
@@ -84,23 +88,65 @@ void ClassificationModel::setNumThreads(int threads) {
 
 namespace {
 
-/// Numerically stable softmax over a short logits vector.
+/// Numerically stable softmax over a short logits vector. Defensive
+/// against non-finite inputs: if every logit is NaN/Inf we return a
+/// uniform distribution rather than propagating the non-finite value;
+/// if the exponential sum degenerates to zero or non-finite we also
+/// fall back to uniform. The caller therefore always receives a
+/// well-formed probability vector that sums to 1 in exactly one of
+/// two ways (computed softmax, or uniform fallback).
 std::vector<float> softmax(std::span<const float> logits) {
-  const float maxLogit = *std::max_element(logits.begin(), logits.end());
+  if (logits.empty()) {
+    return {};
+  }
+
+  // max_element on a span containing NaN is unspecified; walk by hand
+  // and skip non-finite values so maxLogit stays finite whenever at
+  // least one input is finite.
+  float maxLogit = -std::numeric_limits<float>::infinity();
+  for (const float logit : logits) {
+    if (std::isfinite(logit) && logit > maxLogit) {
+      maxLogit = logit;
+    }
+  }
+  if (!std::isfinite(maxLogit)) {
+    const float uniform = 1.0F / static_cast<float>(logits.size());
+    return std::vector<float>(logits.size(), uniform);
+  }
+
   std::vector<float> probs(logits.size());
   float sum = 0.0F;
   for (size_t i = 0; i < logits.size(); ++i) {
-    const float e = std::exp(logits[i] - maxLogit);
+    const float diff = logits[i] - maxLogit;
+    const float e = std::isfinite(diff) ? std::exp(diff) : 0.0F;
     probs[i] = e;
     sum += e;
   }
-  if (sum > 0.0F) {
+
+  if (std::isfinite(sum) && sum > 0.0F) {
     const float inv = 1.0F / sum;
     for (float& p : probs) {
       p *= inv;
     }
+  } else {
+    // Every diff saturated to -inf or the sum itself overflowed;
+    // fall back to a uniform distribution so downstream code always
+    // sees a valid probability vector.
+    const float uniform = 1.0F / static_cast<float>(logits.size());
+    std::fill(probs.begin(), probs.end(), uniform);
   }
   return probs;
+}
+
+/// Environment-variable-gated trace printer for per-inference
+/// diagnostics. Off by default (no output). Turn on with
+/// `QVAC_CLASSIFICATION_TRACE=1` to print raw logits, computed
+/// probabilities, and sorted results to stderr. Invaluable for
+/// debugging platform-specific numerical issues (e.g. the win32 CI
+/// meal_1 anomaly) without changing the public logger wiring.
+bool traceEnabled() {
+  const char* v = std::getenv("QVAC_CLASSIFICATION_TRACE");
+  return v != nullptr && v[0] == '1';
 }
 
 } // namespace
@@ -246,11 +292,56 @@ std::any ClassificationModel::process(const std::any& input) {
                                   : std::string("class_") + std::to_string(i);
     output.results.push_back({label, probs[i]});
   }
+
+  // Sort descending by confidence, with explicit handling of non-finite
+  // values (NaN/Inf): treat them as smaller than any finite value so
+  // the ordering remains strict-weak even with degenerate inputs.
+  // The defensive softmax above should never produce non-finite
+  // probabilities, but we keep the guard so a future upstream bug or
+  // numerical edge case in the ggml CPU backend cannot break sort and
+  // silently land a non-maximum-confidence class at index 0.
   std::sort(
       output.results.begin(), output.results.end(),
       [](const ClassifyResult& a, const ClassifyResult& b) {
+        const bool aFinite = std::isfinite(a.confidence);
+        const bool bFinite = std::isfinite(b.confidence);
+        if (aFinite != bFinite) {
+          return aFinite;
+        }
+        if (!aFinite && !bFinite) {
+          return false;
+        }
         return a.confidence > b.confidence;
       });
+
+  // Optional per-inference trace. Off unless QVAC_CLASSIFICATION_TRACE=1
+  // in the environment. Designed to give us actionable data for
+  // platform-specific numerical issues (e.g. win32 CI meal_1 anomaly)
+  // without requiring any rebuild or workflow change -- a test job
+  // can simply set the env var to get the full picture.
+  if (traceEnabled()) {
+    std::fprintf(
+        stderr,
+        "[qvac-classify] logits=[%.6f, %.6f, %.6f] "
+        "probs_before_sort=[%.6f, %.6f, %.6f] "
+        "sorted=[{%s:%.6f}, {%s:%.6f}, {%s:%.6f}]\n",
+        static_cast<double>(logits[0]), static_cast<double>(logits[1]),
+        static_cast<double>(logits[2]), static_cast<double>(probs[0]),
+        static_cast<double>(probs[1]), static_cast<double>(probs[2]),
+        output.results.size() > 0 ? output.results[0].label.c_str() : "-",
+        output.results.size() > 0
+            ? static_cast<double>(output.results[0].confidence)
+            : 0.0,
+        output.results.size() > 1 ? output.results[1].label.c_str() : "-",
+        output.results.size() > 1
+            ? static_cast<double>(output.results[1].confidence)
+            : 0.0,
+        output.results.size() > 2 ? output.results[2].label.c_str() : "-",
+        output.results.size() > 2
+            ? static_cast<double>(output.results[2].confidence)
+            : 0.0);
+    std::fflush(stderr);
+  }
 
   // Apply topK filter if requested and within bounds.
   if (inPtr->topK > 0 && inPtr->topK < output.results.size()) {

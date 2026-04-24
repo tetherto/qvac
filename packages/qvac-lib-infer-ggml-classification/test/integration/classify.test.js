@@ -19,6 +19,25 @@ test('load() + classify() returns a shaped result for every sample image', async
       const result = await classifier.classify(buffer)
       const elapsed = Date.now() - start
 
+      // Always emit the full result into the TAP stream so CI logs
+      // contain the actual model output for every platform, even on
+      // success. When an assertion fails (e.g. the win32 CI meal_1
+      // anomaly), this line is what lets us diagnose without needing
+      // to add instrumentation in a follow-up commit.
+      t.comment(
+        `${sample.file} elapsed=${elapsed}ms result=` +
+        JSON.stringify(
+          Array.isArray(result)
+            ? result.map((r) => ({
+              label: r && r.label,
+              confidence: typeof r?.confidence === 'number'
+                ? r.confidence.toFixed(6)
+                : String(r?.confidence)
+            }))
+            : result
+        )
+      )
+
       t.ok(Array.isArray(result), `${sample.file}: result is an array`)
       t.is(result.length, 3, `${sample.file}: 3 classes returned`)
       for (const entry of result) {

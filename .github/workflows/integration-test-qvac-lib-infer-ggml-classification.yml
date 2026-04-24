@@ -90,6 +90,12 @@ jobs:
 
       - name: Run JS integration tests
         working-directory: ${{ env.PKG_DIR }}
+        env:
+          # Opt in to the C++ per-inference trace so CI logs contain
+          # raw logits / probs / sorted results for every classification.
+          # Invaluable for debugging platform-specific numerical issues
+          # (noise is bounded to a few lines per sample image).
+          QVAC_CLASSIFICATION_TRACE: "1"
         run: npm run test:integration
 
       - name: Upload performance report
