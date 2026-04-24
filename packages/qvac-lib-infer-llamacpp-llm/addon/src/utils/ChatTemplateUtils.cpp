@@ -1,6 +1,7 @@
 #include "ChatTemplateUtils.hpp"
 
 #include <algorithm>
+#include <cctype>
 
 #include <llama.h>
 
@@ -13,73 +14,131 @@ using namespace qvac_lib_inference_addon_cpp::logger;
 namespace qvac_lib_inference_addon_llama {
 namespace utils {
 
+namespace {
+
+std::string normalizeArchitecture(const std::string& architecture) {
+  std::string normalized = architecture;
+  std::transform(
+      normalized.begin(),
+      normalized.end(),
+      normalized.begin(),
+      [](unsigned char c) { return std::tolower(c); });
+  return normalized;
+}
+
+bool isQwen3Architecture(const std::string& architecture) {
+  const std::string archStr = normalizeArchitecture(architecture);
+  return archStr == "qwen3";
+}
+
+bool modelNameLooksLikeQwen3(const std::string& modelName) {
+  std::string normalizedName = modelName;
+  std::transform(
+      normalizedName.begin(),
+      normalizedName.end(),
+      normalizedName.begin(),
+      [](unsigned char c) { return std::tolower(c); });
+  return normalizedName.find("qwen3") != std::string::npos ||
+         normalizedName.find("qwen-3") != std::string::npos;
+}
+
+std::optional<std::string> getModelName(const ::llama_model* model) {
+  if (model == nullptr) {
+    return std::nullopt;
+  }
+
+  char modelName[256] = {0};
+  int32_t len = llama_model_meta_val_str(
+      model, "general.name", modelName, sizeof(modelName));
+  if (len > 0 && len < sizeof(modelName)) {
+    modelName[len] = '\0';
+    return std::string(modelName);
+  }
+  return std::nullopt;
+}
+
+} // namespace
+
+std::optional<std::string> getModelArchitecture(const ::llama_model* model) {
+  if (model == nullptr) {
+    return std::nullopt;
+  }
+
+  // Check architecture metadata first; this drives family-specific template and
+  // tools_compact profile selection.
+  char arch[64] = {0};
+  int32_t len = llama_model_meta_val_str(
+      model, "general.architecture", arch, sizeof(arch));
+  if (len > 0 && len < sizeof(arch)) {
+    arch[len] = '\0';
+    return normalizeArchitecture(std::string(arch));
+  }
+  return std::nullopt;
+}
+
 bool isQwen3Model(const ::llama_model* model) {
   if (model == nullptr) {
     return false;
   }
 
-  // Check model name metadata
-  char modelName[256] = {0};
-  int32_t len = llama_model_meta_val_str(
-      model, "general.name", modelName, sizeof(modelName));
+  return supportsToolsCompactForModelMetadata(
+      getModelArchitecture(model), getModelName(model));
+}
 
-  if (len > 0 && len < sizeof(modelName)) {
-    modelName[len] = '\0';
-    std::string nameStr(modelName);
-    std::transform(
-        nameStr.begin(), nameStr.end(), nameStr.begin(), [](unsigned char c) {
-          return std::tolower(c);
-        });
-
-    if (nameStr.find("qwen3") != std::string::npos ||
-        nameStr.find("qwen-3") != std::string::npos) {
-      return true;
-    }
+bool supportsToolsCompactForModelMetadata(
+    const std::optional<std::string>& architecture,
+    const std::optional<std::string>& modelName) {
+  if (architecture.has_value() && isQwen3Architecture(architecture.value())) {
+    return true;
   }
-
-  // Check architecture metadata
-  char arch[64] = {0};
-  len = llama_model_meta_val_str(
-      model, "general.architecture", arch, sizeof(arch));
-
-  if (len > 0 && len < sizeof(arch)) {
-    arch[len] = '\0';
-    std::string archStr(arch);
-    std::transform(
-        archStr.begin(), archStr.end(), archStr.begin(), [](unsigned char c) {
-          return std::tolower(c);
-        });
-
-    if (archStr.find("qwen3") != std::string::npos) {
-      return true;
-    }
+  if (modelName.has_value() && modelNameLooksLikeQwen3(modelName.value())) {
+    return true;
   }
-
   return false;
+}
+
+std::optional<std::string>
+selectToolsCompactMarker(const std::string& architecture) {
+  if (isQwen3Architecture(architecture)) {
+    return std::string("<tool_call>");
+  }
+  return std::nullopt;
+}
+
+std::optional<std::string> selectToolsCompactMarkerForModelMetadata(
+    const std::optional<std::string>& architecture,
+    const std::optional<std::string>& modelName) {
+  if (!supportsToolsCompactForModelMetadata(architecture, modelName)) {
+    return std::nullopt;
+  }
+  return std::string("<tool_call>");
 }
 
 std::string getChatTemplateForModel(
     const ::llama_model* model, const std::string& manualOverride,
-    bool toolsAtEnd) {
+    bool toolsCompact) {
   if (!manualOverride.empty()) {
     return manualOverride;
   }
 
+  // Keep a single source of truth for Qwen3 detection so architecture-only and
+  // metadata-name fallback behave consistently across marker/template paths.
   if (isQwen3Model(model)) {
-    return toolsAtEnd ? getToolsDynamicQwen3Template()
-                      : getFixedQwen3Template();
+    return toolsCompact ? getToolsDynamicQwen3Template()
+                        : getFixedQwen3Template();
   }
 
   return "";
 }
 
 std::string getChatTemplate(
-    const ::llama_model* model, const common_params& params, bool toolsAtEnd) {
+    const ::llama_model* model, const common_params& params,
+    bool toolsCompact) {
   // Use fixed Qwen3 template if model is Qwen3 and Jinja is enabled
   std::string chatTemplate = params.chat_template;
   if (params.use_jinja) {
     chatTemplate =
-        getChatTemplateForModel(model, params.chat_template, toolsAtEnd);
+        getChatTemplateForModel(model, params.chat_template, toolsCompact);
     if (!chatTemplate.empty() && chatTemplate != params.chat_template) {
       QLOG_IF(
           Priority::INFO, "[ChatTemplateUtils] Using fixed Qwen3 template\n");
