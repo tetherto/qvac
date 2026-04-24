@@ -199,7 +199,7 @@ function createChatterboxModel(
     opts: { stats: true },
     exclusiveRun: true,
   } as never);
-  return { model, loader: undefined };
+  return { model };
 }
 
 function createSupertonicModel(
@@ -250,7 +250,7 @@ function createSupertonicModel(
     opts: { stats: true },
     exclusiveRun: true,
   } as never);
-  return { model, loader: undefined };
+  return { model };
 }
 
 export const ttsPlugin = definePlugin({

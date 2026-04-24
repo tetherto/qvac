@@ -45,6 +45,7 @@ import {
 } from "@/profiling/model-execution";
 import type { LlmStats } from "@/server/bare/types/addon-responses";
 import fs, { promises as fsPromises } from "bare-fs";
+import path from "bare-path";
 
 interface ResponseWithStats {
   stats?: LlmStats;
@@ -65,11 +66,18 @@ type CompletionRunOptions = Pick<RunOptions, "cacheKey" | "saveCacheToDisk"> & {
   generationParams?: GenerationParams;
 };
 
-export function clearCachedMessageCounts(cachePath?: string): void {
-  if (cachePath) {
-    cachedMessageCounts.delete(cachePath);
-  } else {
+export function clearCachedMessageCounts(prefix?: string): void {
+  if (!prefix) {
     cachedMessageCounts.clear();
+    return;
+  }
+  for (const key of cachedMessageCounts.keys()) {
+    if (key === prefix) {
+      cachedMessageCounts.delete(key);
+      continue;
+    }
+    if (!key.startsWith(prefix + path.sep)) continue;
+    cachedMessageCounts.delete(key);
   }
 }
 
