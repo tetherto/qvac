@@ -61,8 +61,16 @@ function tryParseReport (jsonStr) {
   }
 }
 
-function extractFromText (text) {
-  let lastReport = null
+/**
+ * Scans text for every [PERF_REPORT_START]...[PERF_REPORT_END] marker
+ * pair and returns each successfully parsed report as an element of
+ * the returned array. The mobile fallback reporter emits a delta
+ * (single-row) report per `record()` call so earlier rows survive a
+ * later OOM crash; the caller (typically `main()` with `--merge`)
+ * must union across all of them.
+ */
+function extractAllFromText (text) {
+  const reports = []
   let searchFrom = 0
   while (true) {
     const startIdx = text.indexOf(START_MARKER, searchFrom)
@@ -75,7 +83,6 @@ function extractFromText (text) {
     const jsonRaw = text.substring(jsonStart, endIdx)
     const cleaned = cleanJsonFromLogcat(jsonRaw)
 
-    // Skip content that is clearly shell source code, not JSON.
     if (cleaned.length > 0 && cleaned[0] !== '{' && cleaned[0] !== '[') {
       searchFrom = endIdx + END_MARKER.length
       continue
@@ -83,10 +90,8 @@ function extractFromText (text) {
 
     let parsed = tryParseReport(cleaned)
 
-    // If parse fails, the outer START may have captured interleaved logcat
-    // lines (bare runtime splits output across lines, other logs interleave).
-    // Look for inner START markers closer to the END — the ReactNativeJS
-    // bridge often has the complete report on a single line.
+    // If parse fails, the outer START may have captured interleaved
+    // logcat lines; try inner START markers closer to the END.
     if (!parsed) {
       let innerFrom = startIdx + 1
       while (!parsed) {
@@ -100,7 +105,7 @@ function extractFromText (text) {
     }
 
     if (parsed) {
-      lastReport = parsed
+      reports.push(parsed)
     } else if (cleaned.length > 0 && cleaned[0] === '{') {
       console.error('  Found markers but JSON parse failed (tried outer + inner START positions)')
       try { JSON.parse(cleaned) } catch (err) {
@@ -116,7 +121,13 @@ function extractFromText (text) {
     }
     searchFrom = endIdx + END_MARKER.length
   }
-  return lastReport
+  return reports
+}
+
+/** Legacy single-report API — returns the last parsed report or null. */
+function extractFromText (text) {
+  const all = extractAllFromText(text)
+  return all.length ? all[all.length - 1] : null
 }
 
 /**
@@ -232,21 +243,49 @@ function extractFromJsonLogcat (content) {
   return extractFromText(messages.join('\n'))
 }
 
-function extractFromFile (filePath) {
+function extractAllFromJsonLogcat (content) {
+  let entries
+  try {
+    entries = JSON.parse(content)
+  } catch (_) {
+    return []
+  }
+  if (!Array.isArray(entries)) return []
+  const messages = entries
+    .map(e => (e && e.message) || '')
+    .filter(m => m.includes(START_MARKER))
+  if (messages.length === 0) return []
+  return extractAllFromText(messages.join('\n'))
+}
+
+/**
+ * When `opts.all` is true, returns every report found in the file
+ * (delta-per-record emits plus any chunked final emits). Otherwise
+ * returns the best single report (legacy behaviour).
+ */
+function extractFromFile (filePath, opts) {
   let content
   try {
     content = fs.readFileSync(filePath, 'utf-8')
   } catch (_) {
-    return null
+    return opts && opts.all ? [] : null
   }
 
-  // Try plain text markers first (test spec output, plain logcat)
-  const markerReport = extractFromText(content)
+  if (opts && opts.all) {
+    const textReports = extractAllFromText(content)
+    const chunked = extractChunkedFromText(content)
+    const jsonLogcatReports = textReports.length === 0
+      ? extractAllFromJsonLogcat(content)
+      : []
+    const out = textReports.slice()
+    if (chunked) out.push(chunked)
+    out.push(...jsonLogcatReports)
+    return out
+  }
 
-  // Try chunked format (large reports split across multiple logcat lines)
+  const markerReport = extractFromText(content)
   const chunkedReport = extractChunkedFromText(content)
 
-  // Keep whichever found more results
   let report = null
   if (markerReport && chunkedReport) {
     report = chunkedReport.results.length >= markerReport.results.length
@@ -257,7 +296,6 @@ function extractFromFile (filePath) {
   }
   if (report) return report
 
-  // Try JSON logcat format (Device Farm DEVICE_LOG / LOGCAT artifacts)
   report = extractFromJsonLogcat(content)
   if (report) return report
 
@@ -427,19 +465,26 @@ function main () {
   const deviceReports = {}
 
   for (const file of files) {
-    const report = extractFromFile(file)
-    if (!report || !report.results) continue
-    const count = report.results.length
     const dirName = deriveDeviceName(file, logDir)
     const fileName = deriveDeviceFromFilename(file, deviceFromFilename)
     const key = dirName || fileName || 'unknown'
-    console.log(`  ${file}: found report with ${count} results (device: ${key})`)
 
     if (merge) {
+      // Delta emits: each record() call produces a one-row report, so
+      // scooping every marker is required — the largest one alone
+      // only carries the final iteration.
+      const reports = extractFromFile(file, { all: true }).filter(r => r && Array.isArray(r.results))
+      if (reports.length === 0) continue
+      const totalRows = reports.reduce((n, r) => n + r.results.length, 0)
+      console.log(`  ${file}: found ${reports.length} report(s) with ${totalRows} total row(s) (device: ${key})`)
       if (!deviceReports[key]) deviceReports[key] = { reports: [], files: [], deviceName: key }
-      deviceReports[key].reports.push(report)
+      deviceReports[key].reports.push(...reports)
       deviceReports[key].files.push(file)
     } else {
+      const report = extractFromFile(file)
+      if (!report || !report.results) continue
+      const count = report.results.length
+      console.log(`  ${file}: found report with ${count} results (device: ${key})`)
       const prev = deviceReports[key]
       if (!prev || count > prev.report.results.length) {
         deviceReports[key] = { report, file, deviceName: key }

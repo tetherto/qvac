@@ -48,6 +48,16 @@ try {
   perfReporterMod.configure({ fs, path, process, os })
   createPerformanceReporter = perfReporterMod.createPerformanceReporter
 } catch (_) {
+  // Hard cap on how much of the model's text output we keep in-memory
+  // per record on mobile. The per-test flush (writeReport + console
+  // emit) stringifies the cumulative results; unbounded text for a
+  // verbose VLM response (+ 10MB fruit plate image + Metal compiler
+  // service memory) has been observed to exhaust V8's Zone allocator
+  // on iOS, producing a SIGTRAP from FatalProcessOutOfMemory inside
+  // Builtin_JsonStringify. Disk + console extractors only use metrics
+  // + test name, so the output is already purely diagnostic.
+  const OUTPUT_CAP_CHARS = 400
+
   createPerformanceReporter = function (opts) {
     const _results = []
     const _startedAt = new Date().toISOString()
@@ -59,6 +69,14 @@ try {
       os_version: '',
       arch: os.arch ? os.arch() : '',
       runner: 'device-farm'
+    }
+
+    function _trim (text) {
+      if (text == null) return null
+      const s = String(text)
+      if (s.length <= OUTPUT_CAP_CHARS) return s
+      return s.substring(0, OUTPUT_CAP_CHARS) + '...[truncated ' +
+        (s.length - OUTPUT_CAP_CHARS) + 'c]'
     }
 
     return {
@@ -81,7 +99,7 @@ try {
             status: null
           }, metrics),
           input: (extra && extra.input) || null,
-          output: (extra && extra.output) || null
+          output: _trim(extra && extra.output)
         }
         _results.push(entry)
       },
@@ -126,11 +144,17 @@ try {
         try {
           const data = this.toJSON()
           const lightweight = consoleOpts && consoleOpts.lightweight
-          // On mobile, lightweight omits the output text to keep each
-          // emit small (full text is still in the disk copy written by
-          // writeReport). The final (non-lightweight) emit carries the
-          // full payload for extract-from-log.js to grab.
-          data.results = data.results.map(r => ({
+          // `delta: true` emits ONLY the latest row instead of the full
+          // cumulative results array. Each JSON.stringify then stays
+          // O(1) in the iteration count, which is essential on iOS
+          // where V8's Zone allocator caps out fast under multimodal
+          // memory pressure. extract-from-log.js --merge concatenates
+          // the rows across all emits and dedupes on (test, metrics)
+          // so the reconstructed report is identical to cumulative.
+          const delta = consoleOpts && consoleOpts.delta
+          let rows = data.results
+          if (delta && rows.length > 0) rows = [rows[rows.length - 1]]
+          data.results = rows.map(r => ({
             test: r.test,
             execution_provider: r.execution_provider,
             metrics: r.metrics,
@@ -174,14 +198,13 @@ function _installExitHook () {
   _exitHookInstalled = true
   process.on('exit', () => {
     if (_perfReporter.length > 0) {
-      _perfReporter.writeReport(_reportPath)
-      _perfReporter.writeStepSummary()
-      if (isMobile && typeof _perfReporter.writeToConsole === 'function') {
-        // Final full emit ensures extract-from-log.js sees the
-        // complete cumulative payload even if a mid-test lightweight
-        // emit was the last thing logcat captured.
-        _perfReporter.writeToConsole()
-      }
+      try { _perfReporter.writeReport(_reportPath) } catch (_) {}
+      try { _perfReporter.writeStepSummary() } catch (_) {}
+      // No extra cumulative console emit on mobile: the per-test
+      // delta emits already carry every row, and extract-from-log.js
+      // --merge reassembles them. Emitting a large cumulative payload
+      // here risks a final Zone OOM in V8 on iOS right at the moment
+      // we most need the previous deltas to survive.
     }
   })
 }
@@ -451,15 +474,20 @@ function recordPerformance (label, totalTime, extra) {
 
   _installExitHook()
 
-  // Per-test flush: mirrors OCR's formatOCRPerformanceMetrics pattern
-  // so a crash on run N still leaves runs 1..N-1 in logcat / syslog.
+  // Per-test flush: emit just this iteration's row to the console so
+  // a crash on run N still leaves runs 1..N-1 in logcat / syslog.
+  // extract-from-log.js --merge concatenates the deltas across emits.
+  //
+  // Deliberately NO writeReport() on disk per-record: (a) rewriting
+  // the whole JSON on every iteration is expensive, and (b) the
+  // stringify of the cumulative results array (plus model output
+  // text) has been observed to exhaust V8's Zone allocator on iOS,
+  // producing a SIGTRAP from FatalProcessOutOfMemory. The exit hook
+  // below still performs one final writeReport for the on-device
+  // artifact copy.
   if (isMobile) {
-    if (typeof _perfReporter.writeReport === 'function') {
-      _perfReporter.writeReport(_reportPath)
-    }
     if (typeof _perfReporter.writeToConsole === 'function') {
-      const isCheckpoint = _perfReporter.length % PERF_RUNS === 0
-      _perfReporter.writeToConsole({ lightweight: !isCheckpoint })
+      _perfReporter.writeToConsole({ lightweight: true, delta: true })
     }
   }
 
