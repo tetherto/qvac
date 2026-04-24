@@ -1,5 +1,5 @@
 import { QVACRegistryClient } from "@qvac/registry-client";
-import { getCacheDir } from "@/server/utils/cache";
+import { getCacheDir } from "@/server/utils/cache/paths";
 import {
   registerSwarm,
   unregisterSwarm,

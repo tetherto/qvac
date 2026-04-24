@@ -1,7 +1,12 @@
 import crypto from "bare-crypto";
 import { promises as fsPromises } from "bare-fs";
 import path from "bare-path";
-import { getKVCacheDir, validateAndJoinPath } from "@/server/utils";
+import {
+  type CacheMessage,
+  getAutoCacheLookupHistory,
+  getKVCacheDir,
+  validateAndJoinPath,
+} from "@/server/utils";
 import { getServerLogger } from "@/logging";
 
 const logger = getServerLogger();
@@ -54,12 +59,6 @@ export function clearCacheRegistry(scope?: {
     if (scope.modelId !== undefined && modelId !== scope.modelId) continue;
     initializedCaches.delete(key);
   }
-}
-
-export interface CacheMessage {
-  role: string;
-  content: string;
-  attachments?: { path: string }[] | undefined;
 }
 
 export function extractSystemPrompt(messages: CacheMessage[]): string | null {
@@ -129,8 +128,7 @@ export async function findMatchingCache(
     return null;
   }
 
-  // Generate cache key for history minus the last message
-  const previousHistory = currentHistory.slice(0, -1);
+  const previousHistory = getAutoCacheLookupHistory(currentHistory);
   const cacheKey = generateCacheKey(previousHistory);
   const cachePath = await getCacheFilePath(modelId, configHash, cacheKey);
 
@@ -158,14 +156,16 @@ export async function getCurrentCacheInfo(
 export async function renameCacheFile(
   oldPath: string,
   newPath: string,
-): Promise<void> {
+): Promise<boolean> {
   try {
     await fsPromises.rename(oldPath, newPath);
+    return true;
   } catch (error) {
     logger.error(
       "Error renaming cache file:",
       error instanceof Error ? error.message : String(error),
     );
+    return false;
   }
 }
 

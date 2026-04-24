@@ -1119,3 +1119,256 @@ TEST_F(LlamaModelTest, CommonParamsParseToolsCompactUppercase) {
     model.waitForLoadInitialization();
   });
 }
+
+TEST_F(LlamaModelTest, CommonParamsParseSplitModeNone) {
+  if (!fs::exists(getValidModelPath())) {
+    FAIL() << "Test model not found at: " << getValidModelPath();
+  }
+
+  std::unordered_map<std::string, std::string> config;
+  config["device"] = test_common::getTestDevice();
+  config["ctx_size"] = "2048";
+  config["gpu_layers"] = test_common::getTestGpuLayers();
+  config["n_predict"] = "10";
+  config["split-mode"] = "none";
+
+  fs::path backendDir;
+#ifdef TEST_BINARY_DIR
+  backendDir = fs::path(TEST_BINARY_DIR);
+#else
+  backendDir = fs::current_path() / "build" / "test" / "unit";
+#endif
+  config["backendsDir"] = backendDir.string();
+
+  LlamaModel model(
+      getValidModelPath(),
+      std::string(test_projection_path),
+      std::unordered_map<std::string, std::string>(config));
+  model.waitForLoadInitialization();
+  ASSERT_TRUE(model.isLoaded());
+  EXPECT_EQ(model.getCommonParams().split_mode, LLAMA_SPLIT_MODE_NONE);
+}
+
+TEST_F(LlamaModelTest, CommonParamsParseSplitModeLayer) {
+  if (!fs::exists(getValidModelPath())) {
+    FAIL() << "Test model not found at: " << getValidModelPath();
+  }
+
+  std::unordered_map<std::string, std::string> config;
+  config["device"] = test_common::getTestDevice();
+  config["ctx_size"] = "2048";
+  config["gpu_layers"] = test_common::getTestGpuLayers();
+  config["n_predict"] = "10";
+  config["split-mode"] = "layer";
+
+  fs::path backendDir;
+#ifdef TEST_BINARY_DIR
+  backendDir = fs::path(TEST_BINARY_DIR);
+#else
+  backendDir = fs::current_path() / "build" / "test" / "unit";
+#endif
+  config["backendsDir"] = backendDir.string();
+
+  LlamaModel model(
+      getValidModelPath(),
+      std::string(test_projection_path),
+      std::unordered_map<std::string, std::string>(config));
+  model.waitForLoadInitialization();
+  ASSERT_TRUE(model.isLoaded());
+
+  double backendDevice = getStatValue(model.runtimeStats(), "backendDevice");
+  if (backendDevice == 0.0) {
+    EXPECT_EQ(model.getCommonParams().split_mode, LLAMA_SPLIT_MODE_NONE);
+  } else {
+    EXPECT_EQ(model.getCommonParams().split_mode, LLAMA_SPLIT_MODE_LAYER);
+  }
+}
+
+TEST_F(LlamaModelTest, CommonParamsParseSplitModeRow) {
+  if (!fs::exists(getValidModelPath())) {
+    FAIL() << "Test model not found at: " << getValidModelPath();
+  }
+
+  std::unordered_map<std::string, std::string> config;
+  config["device"] = test_common::getTestDevice();
+  config["ctx_size"] = "2048";
+  config["gpu_layers"] = test_common::getTestGpuLayers();
+  config["n_predict"] = "10";
+  config["split-mode"] = "row";
+
+  fs::path backendDir;
+#ifdef TEST_BINARY_DIR
+  backendDir = fs::path(TEST_BINARY_DIR);
+#else
+  backendDir = fs::current_path() / "build" / "test" / "unit";
+#endif
+  config["backendsDir"] = backendDir.string();
+
+  LlamaModel model(
+      getValidModelPath(),
+      std::string(test_projection_path),
+      std::unordered_map<std::string, std::string>(config));
+  model.waitForLoadInitialization();
+  ASSERT_TRUE(model.isLoaded());
+
+  double backendDevice = getStatValue(model.runtimeStats(), "backendDevice");
+  if (backendDevice == 0.0) {
+    EXPECT_EQ(model.getCommonParams().split_mode, LLAMA_SPLIT_MODE_NONE);
+  } else {
+    EXPECT_EQ(model.getCommonParams().split_mode, LLAMA_SPLIT_MODE_ROW);
+  }
+}
+
+TEST_F(LlamaModelTest, CommonParamsParseSplitModeCaseInsensitive) {
+  if (!fs::exists(getValidModelPath())) {
+    FAIL() << "Test model not found at: " << getValidModelPath();
+  }
+
+  std::unordered_map<std::string, std::string> config;
+  config["device"] = test_common::getTestDevice();
+  config["ctx_size"] = "2048";
+  config["gpu_layers"] = test_common::getTestGpuLayers();
+  config["n_predict"] = "10";
+  config["split-mode"] = "LAYER";
+
+  fs::path backendDir;
+#ifdef TEST_BINARY_DIR
+  backendDir = fs::path(TEST_BINARY_DIR);
+#else
+  backendDir = fs::current_path() / "build" / "test" / "unit";
+#endif
+  config["backendsDir"] = backendDir.string();
+
+  EXPECT_NO_THROW({
+    LlamaModel model(
+        getValidModelPath(),
+        std::string(test_projection_path),
+        std::unordered_map<std::string, std::string>(config));
+    model.waitForLoadInitialization();
+  });
+}
+
+TEST_F(LlamaModelTest, CommonParamsParseSplitModeUnderscoreVariant) {
+  if (!fs::exists(getValidModelPath())) {
+    FAIL() << "Test model not found at: " << getValidModelPath();
+  }
+
+  std::unordered_map<std::string, std::string> config;
+  config["device"] = test_common::getTestDevice();
+  config["ctx_size"] = "2048";
+  config["gpu_layers"] = test_common::getTestGpuLayers();
+  config["n_predict"] = "10";
+  config["split_mode"] = "layer";
+
+  fs::path backendDir;
+#ifdef TEST_BINARY_DIR
+  backendDir = fs::path(TEST_BINARY_DIR);
+#else
+  backendDir = fs::current_path() / "build" / "test" / "unit";
+#endif
+  config["backendsDir"] = backendDir.string();
+
+  EXPECT_NO_THROW({
+    LlamaModel model(
+        getValidModelPath(),
+        std::string(test_projection_path),
+        std::unordered_map<std::string, std::string>(config));
+    model.waitForLoadInitialization();
+  });
+}
+
+TEST_F(LlamaModelTest, CpuFallbackClearsGpuSplitParams) {
+  if (!fs::exists(getValidModelPath())) {
+    FAIL() << "Test model not found at: " << getValidModelPath();
+  }
+
+  std::unordered_map<std::string, std::string> config;
+  config["device"] = "cpu";
+  config["ctx_size"] = "2048";
+  config["n_predict"] = "10";
+  config["split-mode"] = "layer";
+  config["tensor-split"] = "50,50";
+  config["main-gpu"] = "0";
+
+  fs::path backendDir;
+#ifdef TEST_BINARY_DIR
+  backendDir = fs::path(TEST_BINARY_DIR);
+#else
+  backendDir = fs::current_path() / "build" / "test" / "unit";
+#endif
+  config["backendsDir"] = backendDir.string();
+
+  LlamaModel model(
+      getValidModelPath(),
+      std::string(test_projection_path),
+      std::unordered_map<std::string, std::string>(config));
+  model.waitForLoadInitialization();
+  ASSERT_TRUE(model.isLoaded());
+
+  EXPECT_EQ(model.getCommonParams().split_mode, LLAMA_SPLIT_MODE_NONE);
+  double backendDevice = getStatValue(model.runtimeStats(), "backendDevice");
+  EXPECT_EQ(backendDevice, 0.0);
+}
+
+TEST_F(LlamaModelTest, CommonParamsParseSplitModeInvalid) {
+  if (!fs::exists(getValidModelPath())) {
+    FAIL() << "Test model not found at: " << getValidModelPath();
+  }
+
+  std::unordered_map<std::string, std::string> config;
+  config["device"] = test_common::getTestDevice();
+  config["ctx_size"] = "2048";
+  config["gpu_layers"] = test_common::getTestGpuLayers();
+  config["n_predict"] = "10";
+  config["split-mode"] = "invalid_value";
+
+  fs::path backendDir;
+#ifdef TEST_BINARY_DIR
+  backendDir = fs::path(TEST_BINARY_DIR);
+#else
+  backendDir = fs::current_path() / "build" / "test" / "unit";
+#endif
+  config["backendsDir"] = backendDir.string();
+
+  EXPECT_THROW(
+      {
+        LlamaModel model(
+            getValidModelPath(),
+            std::string(test_projection_path),
+            std::unordered_map<std::string, std::string>(config));
+        model.waitForLoadInitialization();
+      },
+      qvac_errors::StatusError);
+}
+
+TEST_F(LlamaModelTest, CommonParamsParseSplitModeBothKeysRejects) {
+  if (!fs::exists(getValidModelPath())) {
+    FAIL() << "Test model not found at: " << getValidModelPath();
+  }
+
+  std::unordered_map<std::string, std::string> config;
+  config["device"] = test_common::getTestDevice();
+  config["ctx_size"] = "2048";
+  config["gpu_layers"] = test_common::getTestGpuLayers();
+  config["n_predict"] = "10";
+  config["split-mode"] = "layer";
+  config["split_mode"] = "layer";
+
+  fs::path backendDir;
+#ifdef TEST_BINARY_DIR
+  backendDir = fs::path(TEST_BINARY_DIR);
+#else
+  backendDir = fs::current_path() / "build" / "test" / "unit";
+#endif
+  config["backendsDir"] = backendDir.string();
+
+  EXPECT_THROW(
+      {
+        LlamaModel model(
+            getValidModelPath(),
+            std::string(test_projection_path),
+            std::unordered_map<std::string, std::string>(config));
+        model.waitForLoadInitialization();
+      },
+      qvac_errors::StatusError);
+}
