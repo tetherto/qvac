@@ -26,7 +26,8 @@ const {
   fmtPct,
   fmtComet,
   fmtPctMeanStd,
-  fmtCometMeanStd
+  fmtCometMeanStd,
+  fmtTpsMeanStd
 } = require('../comet-score-nmt.js')
 
 // ---------------------------------------------------------------------------
@@ -101,6 +102,7 @@ test('extractTriples: emits one triple per result and attaches canonicalDevice',
   assert.equal(t.mt, 'Ciao, come stai?')
   assert.equal(t.ref, 'Ciao, come stai?')
   assert.equal(t.chrfpp, 0.97)
+  assert.equal(t.tps, 249.62)
 })
 
 test('extractTriples: skips results missing input, output, or reference', () => {
@@ -159,13 +161,21 @@ test('extractTriples: chrfpp missing becomes null, not 0', () => {
   assert.equal(triples[0].chrfpp, null)
 })
 
+test('extractTriples: tps missing becomes null (legacy reports without TPS)', () => {
+  const result = { ...SAMPLE_RESULT_OK, metrics: { chrfpp: 0.97 } }
+  const reports = [makeReport('iPhone 16 Pro', 'ios', [result])]
+  const triples = extractTriples(reports)
+  assert.equal(triples[0].chrfpp, 0.97)
+  assert.equal(triples[0].tps, null)
+})
+
 // ---------------------------------------------------------------------------
 // aggregateGroups
 // ---------------------------------------------------------------------------
 
 test('aggregateGroups: single-device single-run → one group with std=0', () => {
   const triples = [
-    { test: '[Bergamot] [CPU]', canonicalDevice: 'linux/x64 (hosted)', platform: 'linux', arch: 'x64', chrfpp: 0.97 }
+    { test: '[Bergamot] [CPU]', canonicalDevice: 'linux/x64 (hosted)', platform: 'linux', arch: 'x64', chrfpp: 0.97, tps: 249.62 }
   ]
   const groups = aggregateGroups(triples, [0.983])
   assert.equal(groups.length, 1)
@@ -175,6 +185,36 @@ test('aggregateGroups: single-device single-run → one group with std=0', () =>
   assert.equal(g.chrfppStd, 0)
   assert.equal(g.cometMean, 0.983)
   assert.equal(g.cometStd, 0)
+  assert.equal(g.tpsMean, 249.62)
+  assert.equal(g.tpsStd, 0)
+  assert.equal(g.tpsCount, 1)
+})
+
+test('aggregateGroups: TPS mean and std reflect run-to-run perf drift', () => {
+  // Same cell, 3 runs, TPS wandered between 70 and 90 tokens/sec.
+  const triples = [
+    { test: '[Bergamot] [CPU]', canonicalDevice: 'linux/x64 (hosted)', platform: 'linux', arch: 'x64', chrfpp: 0.97, tps: 70 },
+    { test: '[Bergamot] [CPU]', canonicalDevice: 'linux/x64 (hosted)', platform: 'linux', arch: 'x64', chrfpp: 0.97, tps: 80 },
+    { test: '[Bergamot] [CPU]', canonicalDevice: 'linux/x64 (hosted)', platform: 'linux', arch: 'x64', chrfpp: 0.97, tps: 90 }
+  ]
+  const groups = aggregateGroups(triples, [0.983, 0.983, 0.983])
+  assert.equal(groups.length, 1)
+  const g = groups[0]
+  assert.equal(g.tpsCount, 3)
+  assert.ok(Math.abs(g.tpsMean - 80) < 1e-10, 'mean of 70/80/90 is 80')
+  // Population std of [70, 80, 90] = sqrt(((10^2)+0+(10^2))/3) ≈ 8.165
+  assert.ok(Math.abs(g.tpsStd - Math.sqrt(200 / 3)) < 1e-10)
+})
+
+test('aggregateGroups: TPS gracefully null when missing from all triples', () => {
+  const triples = [
+    { test: '[Bergamot] [CPU]', canonicalDevice: 'linux/x64 (hosted)', platform: 'linux', arch: 'x64', chrfpp: 0.97, tps: null },
+    { test: '[Bergamot] [CPU]', canonicalDevice: 'linux/x64 (hosted)', platform: 'linux', arch: 'x64', chrfpp: 0.97 }
+  ]
+  const groups = aggregateGroups(triples, [0.983, 0.983])
+  assert.equal(groups[0].tpsCount, 0)
+  assert.equal(groups[0].tpsMean, null)
+  assert.equal(groups[0].tpsStd, 0)
 })
 
 test('aggregateGroups: collapses multiple identical runs into one group', () => {
@@ -305,6 +345,15 @@ test('fmtCometMeanStd: renders mean ±std in raw 0-1 units or "-"', () => {
   assert.equal(fmtCometMeanStd(0.95, 0.05), '0.950 ±0.050')
 })
 
+test('fmtTpsMeanStd: renders mean ±std in t/s, auto-adjusting precision', () => {
+  assert.equal(fmtTpsMeanStd(null, 0), '-')
+  // Below 100 t/s (mobile / desktop CPU regime): keep 1 decimal so "22.8" and "80.0" remain distinguishable.
+  assert.equal(fmtTpsMeanStd(12.345, 0.5), '12.3 ±0.5 t/s')
+  assert.equal(fmtTpsMeanStd(80, 0), '80.0 ±0.0 t/s')
+  // ≥100 t/s (desktop Bergamot regime): drop to integer, the extra decimal is noise at that scale.
+  assert.equal(fmtTpsMeanStd(249.62, 8.16), '250 ±8 t/s')
+})
+
 // ---------------------------------------------------------------------------
 // renderMarkdown
 // ---------------------------------------------------------------------------
@@ -322,29 +371,34 @@ test('renderMarkdown: empty groups → explains why and returns non-empty markdo
 test('renderMarkdown: with groups renders the aggregated table', () => {
   const groups = [
     { test: '[Bergamot] [CPU]', canonicalDevice: 'linux/x64 (hosted)', platform: 'linux', arch: 'x64',
-      runs: 6, chrfppCount: 6, chrfppMean: 0.97, chrfppStd: 0, cometCount: 6, cometMean: 0.983, cometStd: 0 },
+      runs: 6, chrfppCount: 6, chrfppMean: 0.97, chrfppStd: 0, cometCount: 6, cometMean: 0.983, cometStd: 0,
+      tpsCount: 6, tpsMean: 249.62, tpsStd: 8.16 },
     { test: '[IndicTrans] [CPU]', canonicalDevice: 'Apple iPhone 16 Pro', platform: 'ios', arch: 'arm64',
-      runs: 2, chrfppCount: 2, chrfppMean: 0.228, chrfppStd: 0, cometCount: 2, cometMean: 0.509, cometStd: 0 }
+      runs: 2, chrfppCount: 2, chrfppMean: 0.228, chrfppStd: 0, cometCount: 2, cometMean: 0.509, cometStd: 0,
+      tpsCount: 2, tpsMean: 11.4, tpsStd: 0.2 }
   ]
   const md = renderMarkdown(groups, {
     model: 'Unbabel/wmt22-comet-da',
     runs: 6,
     generatedAt: '2026-04-23T12:00:00Z'
   })
-  assert.ok(md.includes('| Test | Device | Runs | chrF++ (mean ±std) | COMET (mean ±std) |'))
+  assert.ok(md.includes('| Test | Device | Runs | chrF++ (mean ±std) | COMET (mean ±std) | TPS (mean ±std) |'))
   assert.ok(!/Δ|COMET − chrF|(\d)pp\b/.test(md), 'no Δ/pp artefacts')
-  // Aggregated linux row must appear once with runs=6
+  // Aggregated linux row must appear once with runs=6 and the full metric triplet
   assert.ok(md.includes('linux/x64 (hosted) | 6 | 97.0% ±0.0%'))
+  assert.ok(md.includes('250 ±8 t/s'), 'TPS cell renders on the desktop row')
   // Mobile row
   assert.ok(md.includes('Apple iPhone 16 Pro | 2 | 22.8% ±0.0%'))
   assert.ok(md.includes('0.509 ±0.000'))
+  assert.ok(md.includes('11.4 ±0.2 t/s'), 'TPS cell renders on the mobile row')
   assert.ok(md.includes('QVAC-16488'))
 })
 
-test('renderMarkdown: COMET-skipped → COMET cells are "-", no failure banner', () => {
+test('renderMarkdown: COMET-skipped → COMET cell "-", TPS cell still rendered', () => {
   const groups = [
     { test: '[Bergamot] [CPU]', canonicalDevice: 'linux/x64 (hosted)', platform: 'linux', arch: 'x64',
-      runs: 6, chrfppCount: 6, chrfppMean: 0.97, chrfppStd: 0, cometCount: 0, cometMean: null, cometStd: 0 }
+      runs: 6, chrfppCount: 6, chrfppMean: 0.97, chrfppStd: 0, cometCount: 0, cometMean: null, cometStd: 0,
+      tpsCount: 6, tpsMean: 249.62, tpsStd: 8.16 }
   ]
   const md = renderMarkdown(groups, {
     model: 'm',
@@ -354,15 +408,17 @@ test('renderMarkdown: COMET-skipped → COMET cells are "-", no failure banner',
   })
   assert.ok(md.includes('COMET scoring skipped'))
   assert.ok(md.includes('97.0% ±0.0%'))
+  assert.ok(md.includes('250 ±8 t/s'), 'TPS is an independent signal and still renders when COMET is skipped')
   const tableLine = md.split('\n').find(l => l.includes('[Bergamot] [CPU]'))
-  assert.ok(tableLine.endsWith('- |'), 'missing COMET mean shows as "-"')
+  assert.ok(tableLine.includes('| - | 250 ±8 t/s |'), 'missing COMET mean shows as "-" immediately before TPS cell')
   assert.ok(!md.includes('COMET scoring failed'), 'no failure banner when skip was explicit')
 })
 
 test('renderMarkdown: cometFailed=true → failure banner appears', () => {
   const groups = [
     { test: '[Bergamot] [CPU]', canonicalDevice: 'iPhone 16 Pro', platform: 'ios', arch: 'arm64',
-      runs: 1, chrfppCount: 1, chrfppMean: 0.97, chrfppStd: 0, cometCount: 0, cometMean: null, cometStd: 0 }
+      runs: 1, chrfppCount: 1, chrfppMean: 0.97, chrfppStd: 0, cometCount: 0, cometMean: null, cometStd: 0,
+      tpsCount: 1, tpsMean: 83.77, tpsStd: 0 }
   ]
   const md = renderMarkdown(groups, {
     model: 'm',

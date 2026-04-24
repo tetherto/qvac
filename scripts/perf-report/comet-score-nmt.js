@@ -13,15 +13,17 @@
  *      "Integration Tests (NMTCPP)" via `gh run list` + `gh run
  *      download`, giving us each run's `performance-report.json`(s).
  *   2. Walk those reports, collect (test, device, input, output,
- *      reference, chrfpp) triples. Deduplicate on (device, test) —
- *      the last-seen wins so the most recent run's numbers show up.
+ *      reference, chrfpp, tps) triples. No per-run dedup here — all
+ *      triples feed into aggregation so mean / std / run counts are
+ *      computed over the full window.
  *   3. Write one row per triple into /tmp/{src,mt,ref}.txt in the
  *      exact 1-line-per-sentence shape unbabel-comet's `comet-score`
  *      CLI expects.
  *   4. Shell out to `comet-score -s … -t … -r … --model …`, parse the
  *      per-sentence scores, merge them back onto the triples.
- *   5. Render reports/nmtcpp-comet.md with a single
- *      `Test | Device | chrF++ | COMET | Δ vs chrF++` table.
+ *   5. Render reports/nmtcpp-comet.md with a
+ *      `Test | Device | Runs | chrF++ | COMET | TPS` table (each
+ *      numeric column aggregated as mean ± std across the window).
  *   6. Always exit 0. Any failure in COMET setup / model download /
  *      scoring is reported but does NOT fail the workflow — the
  *      chrF++ report produced by aggregate.js must still ship.
@@ -194,7 +196,7 @@ function canonicalDeviceLabel (name, platform, arch) {
  * @param {Array<object>} reports
  * @returns {Array<object>} triples with shape
  *   { test, device, canonicalDevice, platform, arch,
- *     src, mt, ref, chrfpp }
+ *     src, mt, ref, chrfpp, tps }
  */
 function extractTriples (reports) {
   const out = []
@@ -208,6 +210,7 @@ function extractTriples (reports) {
       const mt = (r.output || '').trim()
       const ref = (r.reference || (r.quality && r.quality.reference) || '').trim()
       if (!src || !mt || !ref) continue
+      const metrics = r.metrics || {}
       out.push({
         test: r.test,
         device: dev,
@@ -217,7 +220,8 @@ function extractTriples (reports) {
         src,
         mt,
         ref,
-        chrfpp: (r.metrics && typeof r.metrics.chrfpp === 'number') ? r.metrics.chrfpp : null
+        chrfpp: typeof metrics.chrfpp === 'number' ? metrics.chrfpp : null,
+        tps: typeof metrics.tps === 'number' ? metrics.tps : null
       })
     }
   }
@@ -252,12 +256,14 @@ function aggregateGroups (triples, cometScores) {
         test: t.test,
         chrfppValues: [],
         cometValues: [],
+        tpsValues: [],
         runs: 0
       })
     }
     const g = byKey.get(key)
     g.runs++
     if (typeof t.chrfpp === 'number') g.chrfppValues.push(t.chrfpp)
+    if (typeof t.tps === 'number') g.tpsValues.push(t.tps)
     const c = cometScores ? cometScores[i] : null
     if (typeof c === 'number') g.cometValues.push(c)
   }
@@ -274,7 +280,10 @@ function aggregateGroups (triples, cometScores) {
       chrfppStd: _std(g.chrfppValues),
       cometCount: g.cometValues.length,
       cometMean: _mean(g.cometValues),
-      cometStd: _std(g.cometValues)
+      cometStd: _std(g.cometValues),
+      tpsCount: g.tpsValues.length,
+      tpsMean: _mean(g.tpsValues),
+      tpsStd: _std(g.tpsValues)
     })
   }
   return out
@@ -395,6 +404,21 @@ function fmtCometMeanStd (mean, std) {
   return `${meanStr} ±${std.toFixed(3)}`
 }
 
+// TPS (tokens/sec) is the noisiest of the three aggregated metrics —
+// thermal state, warm-vs-cold GPU/Vulkan init, and cross-process CPU
+// contention all move it by ±tens of percent even with identical code.
+// We still render it as mean ± std for consistency with chrF++ / COMET
+// because std IS the signal here (large std = flaky runner or perf
+// drift). Interpret absolute values with a grain of salt and focus on
+// same-cell deltas across runs.
+function fmtTpsMeanStd (mean, std) {
+  if (mean === null || mean === undefined) return '-'
+  const digits = mean >= 100 ? 0 : 1
+  const meanStr = mean.toFixed(digits)
+  if (std === null || std === undefined) return `${meanStr} t/s`
+  return `${meanStr} ±${std.toFixed(digits)} t/s`
+}
+
 /**
  * Renders the COMET markdown report. Pure function of (groups, meta)
  * so the unit test can exercise it offline.
@@ -436,20 +460,21 @@ function renderMarkdown (groups, meta) {
     return a.test.localeCompare(b.test)
   })
 
-  lines.push('| Test | Device | Runs | chrF++ (mean ±std) | COMET (mean ±std) |')
-  lines.push('| --- | --- | --- | --- | --- |')
+  lines.push('| Test | Device | Runs | chrF++ (mean ±std) | COMET (mean ±std) | TPS (mean ±std) |')
+  lines.push('| --- | --- | --- | --- | --- | --- |')
   for (const g of sorted) {
-    lines.push(`| \`${g.test}\` | ${g.canonicalDevice} | ${g.runs} | ${fmtPctMeanStd(g.chrfppMean, g.chrfppStd)} | ${fmtCometMeanStd(g.cometMean, g.cometStd)} |`)
+    lines.push(`| \`${g.test}\` | ${g.canonicalDevice} | ${g.runs} | ${fmtPctMeanStd(g.chrfppMean, g.chrfppStd)} | ${fmtCometMeanStd(g.cometMean, g.cometStd)} | ${fmtTpsMeanStd(g.tpsMean, g.tpsStd)} |`)
   }
 
   lines.push('')
   lines.push('### Notes')
   lines.push('- chrF++ is character + word n-gram F-score (sacrebleu-compatible). Values ~0-1 · higher is better.')
   lines.push('- COMET is a neural reference-based MT metric (Unbabel). Values ~0-1 · higher is better · 0.8+ is strong.')
-  lines.push('- The two metrics are not on the same calibration curve (chrF++ is surface n-gram overlap; COMET is neural semantic similarity calibrated to human direct-assessment). They are shown side by side intentionally — interpret each independently.')
+  lines.push('- TPS is tokens/sec as reported by the native addon (`metrics.tps` per result). Higher is better. Unlike the quality metrics, TPS is inherently noisy (thermal state, cold-vs-warm GPU/Vulkan init, CPU contention on shared runners) — read absolute numbers loosely and watch for cell-level std / drift instead.')
+  lines.push('- Quality and TPS are not on comparable calibration curves (chrF++ and COMET are surface n-gram overlap and neural semantic similarity; TPS is throughput). They are shown side by side intentionally — interpret each independently.')
   lines.push('- Rows aggregate the last N `On PR Trigger (NMTCPP)` runs by `(platform/arch or stable device name, test)`. Ephemeral hosted-runner names like `GitHub Actions 1000320663` are collapsed into `linux/x64 (hosted)` etc. so you see one row per matrix cell.')
-  lines.push('- For deterministic metrics on a stable model, std is 0. **Non-zero std means the translation output changed between the aggregated runs** — i.e. a code / model / config drift landed during the aggregation window. That is the signal this report is really here to surface.')
-  lines.push('- Other signals to watch for: (a) absolute COMET per row (< 0.6 = suspect, < 0.5 = broken); (b) cross-platform gap on the same test (e.g. mobile IndicTrans COMET 0.51 vs desktop 0.95 → **QVAC-16488** sacremoses bundling regression).')
+  lines.push('- For deterministic quality metrics on a stable model, std is 0. **Non-zero quality std means the translation output changed between the aggregated runs** — i.e. a code / model / config drift landed during the aggregation window. TPS std, by contrast, is expected to be non-zero; a sudden jump in TPS std (or a drop in TPS mean) is the signal to watch for perf regressions.')
+  lines.push('- Other signals to watch for: (a) absolute COMET per row (< 0.6 = suspect, < 0.5 = broken); (b) cross-platform gap on the same test (e.g. mobile IndicTrans COMET 0.51 vs desktop 0.95 → **QVAC-16488** sacremoses bundling regression); (c) TPS mean collapsing on a specific platform (e.g. `ai-run-windows11-gpu` at 0.3 t/s vs its usual 80 t/s → Vulkan cold-init flake).')
   return lines.join('\n') + '\n'
 }
 
@@ -541,6 +566,7 @@ if (require.main === module) {
     fmtPct,
     fmtComet,
     fmtPctMeanStd,
-    fmtCometMeanStd
+    fmtCometMeanStd,
+    fmtTpsMeanStd
   }
 }
