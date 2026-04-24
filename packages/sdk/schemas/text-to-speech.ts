@@ -81,13 +81,16 @@ export const ttsResponseSchema = z.object({
   sentenceChunk: z.string().optional(),
 });
 
-export const textToSpeechStreamRequestBaseSchema = z.object({
+// Internal: kept un-exported to present a single request-schema surface to
+// consumers. The inferred `TextToSpeechStreamClientParams` type below uses
+// this shape via `typeof`, no runtime export needed.
+const textToSpeechStreamRequestBaseSchema = z.object({
   modelId: z.string(),
   inputType: z.string().default("text"),
   accumulateSentences: z.boolean().optional(),
   sentenceDelimiterPreset: z.enum(["latin", "cjk", "multilingual"]).optional(),
-  maxBufferScalars: z.number().optional(),
-  flushAfterMs: z.number().optional(),
+  maxBufferScalars: z.number().positive().optional(),
+  flushAfterMs: z.number().positive().optional(),
 });
 
 export const textToSpeechStreamRequestSchema =
