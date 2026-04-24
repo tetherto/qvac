@@ -339,18 +339,17 @@ async function* parseTextToSpeechStreamLines(
 
     for (const line of lines) {
       const yielded = processTextToSpeechStreamLine(line);
-      if (yielded === null) {
-        return;
-      }
-      if (yielded !== undefined) {
-        yield yielded;
-      }
+      if (yielded === undefined) continue;
+      yield yielded;
+      // Close the stream after the terminal frame so consumers don't
+      // depend on the server closing the socket to stop iteration.
+      if (yielded.done) return;
     }
   }
 
   if (buf.trim()) {
     const yielded = processTextToSpeechStreamLine(buf);
-    if (yielded !== null && yielded !== undefined) {
+    if (yielded !== undefined) {
       yield yielded;
     }
   }
@@ -358,7 +357,7 @@ async function* parseTextToSpeechStreamLines(
 
 function processTextToSpeechStreamLine(
   line: string,
-): TextToSpeechStreamResponse | undefined | null {
+): TextToSpeechStreamResponse | undefined {
   if (!line.trim()) {
     return undefined;
   }
@@ -378,11 +377,5 @@ function processTextToSpeechStreamLine(
     );
   }
 
-  const response = textToSpeechStreamResponseSchema.parse(parsed);
-
-  if (response.done) {
-    return response;
-  }
-
-  return response;
+  return textToSpeechStreamResponseSchema.parse(parsed);
 }
