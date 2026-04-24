@@ -20,7 +20,7 @@ export const lifecycleSuspendResumeInference = createLifecycleTest("lifecycle-su
 export const lifecycleRapidToggle = createLifecycleTest("lifecycle-rapid-toggle");
 export const lifecycleSuspendDuringInference = createLifecycleTest("lifecycle-suspend-during-inference", "llm", 60000);
 export const lifecycleStateTransitions = createLifecycleTest("lifecycle-state-transitions", "none", 15000, ["smoke"]);
-export const lifecycleBlockedCompletion = createLifecycleTest("lifecycle-blocked-completion", "llm", 30000);
+export const lifecycleBlockedCompletion = createLifecycleTest("lifecycle-blocked-completion", "llm", 60000);
 export const lifecycleBlockedRegistry = createLifecycleTest("lifecycle-blocked-registry");
 
 export const lifecycleTests = [

@@ -22,7 +22,9 @@ const formatError = (error: unknown): string => error instanceof Error ? error.m
 
 const BLOCKED_ERROR_NAME = "LIFECYCLE_OPERATION_BLOCKED";
 const BLOCKED_TIMEOUT_MS = 5_000;
+const INFERENCE_DURING_SUSPEND_TIMEOUT_MS = 15_000;
 const ENSURE_ACTIVE_MAX_ATTEMPTS = 3;
+const ENSURE_ACTIVE_BACKOFF_BASE_MS = 100;
 
 export class LifecycleExecutor extends AbstractModelExecutor<typeof lifecycleTests> {
   pattern = /^lifecycle-/;
@@ -93,45 +95,55 @@ export class LifecycleExecutor extends AbstractModelExecutor<typeof lifecycleTes
     if (actual !== expected) throw new Error(`Expected state "${expected}", got "${actual}"`);
   }
 
+  /** Races a promise against a timeout; rejects with diagnostics if it hangs. */
+  private async withTimeout<T>(opName: string, p: Promise<T>, timeoutMs: number): Promise<T> {
+    let timeoutId: ReturnType<typeof setTimeout> | undefined;
+    const timeout = new Promise<never>((_, reject) => {
+      timeoutId = setTimeout(
+        () => reject(new Error(`${opName} timed out after ${timeoutMs}ms`)),
+        timeoutMs,
+      );
+    });
+    try {
+      return await Promise.race([p, timeout]);
+    } finally {
+      if (timeoutId) clearTimeout(timeoutId);
+    }
+  }
+
   /** Expects `fn` to throw LIFECYCLE_OPERATION_BLOCKED; times out if it hangs. */
   private async expectBlocked(
     opName: string,
     fn: () => Promise<unknown>,
     timeoutMs = BLOCKED_TIMEOUT_MS,
   ): Promise<void> {
-    let timeoutId: ReturnType<typeof setTimeout> | undefined;
-    const timeout = new Promise<never>((_, reject) => {
-      timeoutId = setTimeout(
-        () => reject(new Error(`${opName} did not fail within ${timeoutMs}ms — expected ${BLOCKED_ERROR_NAME}`)),
-        timeoutMs,
-      );
-    });
     try {
-      await Promise.race([fn(), timeout]);
+      await this.withTimeout(opName, fn(), timeoutMs);
       throw new Error(`${opName} should have thrown ${BLOCKED_ERROR_NAME} while suspended`);
     } catch (error) {
       if ((error as { name?: string }).name === BLOCKED_ERROR_NAME) return;
       throw error;
-    } finally {
-      if (timeoutId) clearTimeout(timeoutId);
     }
   }
 
-  /** Retries resume() until state is "active"; throws after max attempts. */
+  /** Retries resume() with backoff until state is "active"; throws after max attempts. */
   private async ensureActiveStrict(maxAttempts = ENSURE_ACTIVE_MAX_ATTEMPTS): Promise<void> {
     let lastError: unknown;
+    let lastState: LifecycleState | undefined;
     for (let i = 0; i < maxAttempts; i++) {
       try {
         await resume();
-        if ((await state()) === "active") return;
+        lastState = await state();
+        if (lastState === "active") return;
       } catch (error) {
         lastError = error;
       }
+      if (i < maxAttempts - 1) await new Promise(r => setTimeout(r, ENSURE_ACTIVE_BACKOFF_BASE_MS * (i + 1)));
     }
-    throw new Error(
-      `Failed to restore runtime to "active" after ${maxAttempts} attempts` +
-        (lastError ? `: ${formatError(lastError)}` : ""),
-    );
+    const reason = lastError
+      ? formatError(lastError)
+      : `last observed state: "${lastState}"`;
+    throw new Error(`Failed to restore runtime to "active" after ${maxAttempts} attempts: ${reason}`);
   }
 
   private async runSuspendResume(): Promise<string> {
@@ -195,8 +207,15 @@ export class LifecycleExecutor extends AbstractModelExecutor<typeof lifecycleTes
     }).text;
 
     await suspend();
-    const text = await completionPromise;
+
+    const text = await this.withTimeout(
+      "completion during suspend",
+      completionPromise,
+      INFERENCE_DURING_SUSPEND_TIMEOUT_MS,
+    );
+
     await resume();
+    await this.assertState("active");
 
     if (!text?.trim()) throw new Error("In-flight completion returned empty text");
 
@@ -211,6 +230,7 @@ export class LifecycleExecutor extends AbstractModelExecutor<typeof lifecycleTes
 
     if (failures.length > 0) throw new Error(failures.join("; "));
 
+    // Unconditional resume() guarantees "active" because the lifecycle coordinator processes calls serially.
     await resume();
     await this.assertState("active");
     return `Rapid suspend+resume resolved OK, state confirmed active`;
