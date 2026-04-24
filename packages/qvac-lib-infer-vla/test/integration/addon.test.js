@@ -361,7 +361,7 @@ test('integration: VlaModel rejects missing GGUF file', (t) => {
 // + quality comparison must all succeed. Any failure is a hard test failure;
 // silent skips on mobile are forbidden because they produced false-positive
 // PASS results in prior runs (see QVAC-VLA mobile CI history).
-test('integration: end-to-end inference runs (needs GGUF)', async (t) => {
+test('integration: end-to-end inference runs (needs GGUF)', { timeout: 1200000 }, async (t) => {
   let modelPath = process.env.QVAC_VLA_MODEL
   if (_isMobile) {
     // Mobile: fetch or fail. No graceful-skip path.
