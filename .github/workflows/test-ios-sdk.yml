@@ -48,32 +48,40 @@ on:
         required: false
         type: string
     secrets:
+      # MQTT_*, NPM_TOKEN, and Apple signing secrets (TEST_APP_APPLE_*,
+      # APPLE_P12_PASSWORD, APPLE_KEYCHAIN_PASSWORD) are typically provided
+      # via the release environment (see jobs with `environment: release`).
+      # They are declared required: false here so `secrets: inherit` from a
+      # caller with no repo-level values does not fail at the workflow_call
+      # boundary; the jobs that consume them have environment access.
+      # PAT_TOKEN, AWS_OIDC_ROLE_ARN, and APPLE_TEAM_ID remain required:true
+      # because they are repo-level.
       PAT_TOKEN:
         required: true
       NPM_TOKEN:
-        required: true
+        required: false
       MQTT_PROTOCOL:
-        required: true
+        required: false
       MQTT_HOST:
-        required: true
+        required: false
       MQTT_PORT:
-        required: true
+        required: false
       MQTT_USERNAME:
-        required: true
+        required: false
       MQTT_PASSWORD:
-        required: true
+        required: false
       MQTT_CA_CERT:
         required: false
       AWS_OIDC_ROLE_ARN:
         required: true
       TEST_APP_APPLE_DISTRIBUTION_CERTIFICATE:
-        required: true
+        required: false
       APPLE_P12_PASSWORD:
-        required: true
+        required: false
       TEST_APP_APPLE_PROVISIONING_PROFILE:
-        required: true
+        required: false
       APPLE_KEYCHAIN_PASSWORD:
-        required: true
+        required: false
       APPLE_TEAM_ID:
         required: true
 

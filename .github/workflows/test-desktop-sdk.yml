@@ -45,16 +45,21 @@ on:
         type: boolean
         default: true
     secrets:
+      # MQTT_* and NPM_TOKEN are typically provided via the release environment
+      # (see the `environment: release` job). They are declared required: false
+      # here so `secrets: inherit` from a caller with no repo-level values
+      # does not fail at the workflow_call boundary; the jobs that consume
+      # them have environment access.
       MQTT_PROTOCOL:
-        required: true
+        required: false
       MQTT_HOST:
-        required: true
+        required: false
       MQTT_PORT:
-        required: true
+        required: false
       MQTT_USERNAME:
-        required: true
+        required: false
       MQTT_PASSWORD:
-        required: true
+        required: false
       MQTT_CA_CERT:
         required: false
       MQTT_CLIENT_CERT:
@@ -62,7 +67,7 @@ on:
       MQTT_CLIENT_KEY:
         required: false
       NPM_TOKEN:
-        required: true
+        required: false
       PAT_TOKEN:
         required: true
 

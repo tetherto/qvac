@@ -49,26 +49,28 @@ on:
         required: false
         type: string
     secrets:
+      # MQTT_* and NPM_TOKEN are typically provided via the release environment
+      # (see jobs with `environment: release`). They are declared required: false
+      # here so `secrets: inherit` from a caller with no repo-level values does
+      # not fail at the workflow_call boundary; the jobs that consume them have
+      # environment access. AWS auth uses OIDC via AWS_OIDC_ROLE_ARN, so
+      # AWS_ACCESS_KEY_ID / AWS_SECRET_ACCESS_KEY are not declared.
       PAT_TOKEN:
         required: true
       NPM_TOKEN:
-        required: true
+        required: false
       MQTT_PROTOCOL:
-        required: true
+        required: false
       MQTT_HOST:
-        required: true
+        required: false
       MQTT_PORT:
-        required: true
+        required: false
       MQTT_USERNAME:
-        required: true
+        required: false
       MQTT_PASSWORD:
-        required: true
+        required: false
       MQTT_CA_CERT:
         required: false
-      AWS_ACCESS_KEY_ID:
-        required: true
-      AWS_SECRET_ACCESS_KEY:
-        required: true
 
 permissions:
   id-token: write
