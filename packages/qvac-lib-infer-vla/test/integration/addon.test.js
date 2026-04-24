@@ -138,8 +138,55 @@ function _loadUrlsConfig () {
   return null
 }
 
+function _streamDownload (url, destPath, maxRedirects = 5) {
+  const https = require('bare-https')
+  return new Promise((resolve, reject) => {
+    console.log(`[vla-model] downloading: ${url.substring(0, 60)}...`)
+    const req = https.get(url, (res) => {
+      if ([301, 302, 307, 308].includes(res.statusCode)) {
+        const location = res.headers.location
+        if (location && maxRedirects > 0) {
+          res.resume()
+          _streamDownload(location, destPath, maxRedirects - 1).then(resolve, reject)
+          return
+        }
+        reject(new Error(`HTTP ${res.statusCode}: redirect not followed`))
+        return
+      }
+      if (res.statusCode < 200 || res.statusCode >= 300) {
+        reject(new Error(`HTTP ${res.statusCode}: ${res.statusMessage || ''}`))
+        res.resume()
+        return
+      }
+      const contentLength = parseInt(res.headers['content-length'] || '0', 10)
+      const writeStream = fs.createWriteStream(destPath)
+      let downloadedBytes = 0
+      let nextLogMB = 50
+      res.on('data', (chunk) => {
+        writeStream.write(chunk)
+        downloadedBytes += chunk.length
+        const mb = downloadedBytes / (1024 * 1024)
+        if (mb >= nextLogMB) {
+          const pct = contentLength > 0 ? ` (${((downloadedBytes / contentLength) * 100).toFixed(1)}%)` : ''
+          console.log(`[vla-model] progress: ${mb.toFixed(0)}MB${pct}`)
+          nextLogMB += 50
+        }
+      })
+      res.on('end', () => {
+        writeStream.end(() => {
+          const mb = downloadedBytes / (1024 * 1024)
+          console.log(`[vla-model] downloaded: ${path.basename(destPath)} (${mb.toFixed(1)}MB)`)
+          resolve()
+        })
+      })
+      res.on('error', reject)
+      writeStream.on('error', reject)
+    })
+    req.on('error', reject)
+  })
+}
+
 async function _downloadFile (url, destPath, maxRedirects = 5, maxRetries = 3) {
-  const fetch = require('bare-fetch')
   let lastErr = null
   for (let attempt = 0; attempt < maxRetries; attempt++) {
     if (attempt > 0) {
@@ -148,25 +195,12 @@ async function _downloadFile (url, destPath, maxRedirects = 5, maxRetries = 3) {
       await new Promise(resolve => setTimeout(resolve, backoffMs))
     }
     try {
-      console.log(`[vla-model] downloading: ${url.substring(0, 60)}...`)
-      const response = await fetch(url, { redirect: 'follow', follow: maxRedirects })
-      if ([301, 302, 307, 308].includes(response.status)) {
-        const location = response.headers.get('location')
-        if (location && maxRedirects > 0) {
-          return _downloadFile(location, destPath, maxRedirects - 1, maxRetries)
-        }
-        throw new Error(`HTTP ${response.status}: redirect not followed`)
-      }
-      if (!response.ok) {
-        throw new Error(`HTTP ${response.status}: ${response.statusText}`)
-      }
-      const buffer = await response.arrayBuffer()
-      fs.writeFileSync(destPath, Buffer.from(buffer))
-      console.log(`[vla-model] downloaded: ${path.basename(destPath)} (${(buffer.byteLength / 1024 / 1024).toFixed(1)}MB)`)
+      await _streamDownload(url, destPath, maxRedirects)
       return
     } catch (err) {
       lastErr = err
       if (err && /HTTP \d{3}/.test(err.message || '')) throw err
+      try { fs.unlinkSync(destPath) } catch (_) {}
     }
   }
   throw new Error(`[vla-model] download failed after ${maxRetries} attempts: ${lastErr && lastErr.message}`)

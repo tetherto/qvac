@@ -42,7 +42,6 @@
   "homepage": "https://github.com/tetherto/qvac/tree/main/packages/qvac-lib-infer-vla#readme",
   "devDependencies": {
     "@types/node": "^24.2.1",
-    "bare-fetch": "^2.8.2",
     "brittle": "^3.4.0",
     "cmake-bare": "^1.7.1",
     "cmake-vcpkg": "^1.1.0",
