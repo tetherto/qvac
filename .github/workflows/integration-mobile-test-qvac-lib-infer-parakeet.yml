@@ -1141,11 +1141,27 @@ jobs:
           echo "regular_run_arns_json=$(to_json_array "${REGULAR_RUN_ARNS[@]}")" >> $GITHUB_OUTPUT
           echo "run_count=$(( ${#PERF_RUN_ARNS[@]} + ${#REGULAR_RUN_ARNS[@]} ))" >> $GITHUB_OUTPUT
 
+      - name: Refresh AWS credentials before monitoring
+        if: always() && steps.schedule_run.outputs.run_count != '0'
+        uses: aws-actions/configure-aws-credentials@8df5847569e6427dd6c4fb1cf565c83acfa8afa7 # 6.0.0
+        with:
+          role-to-assume: ${{ secrets.AWS_OIDC_ROLE_ARN }}
+          aws-region: us-west-2
+          role-duration-seconds: 7200
+
       - name: Monitor Test Runs (Perf + Regular)
         id: monitor_run
         run: |
-          mapfile -t PERF_RUN_ARNS < <(printf '%s' '${{ steps.schedule_run.outputs.perf_run_arns_json }}' | jq -r '.[]')
-          mapfile -t REGULAR_RUN_ARNS < <(printf '%s' '${{ steps.schedule_run.outputs.regular_run_arns_json }}' | jq -r '.[]')
+          PERF_RUN_ARNS=()
+          while IFS= read -r line; do
+            [ -n "$line" ] && PERF_RUN_ARNS+=("$line")
+          done < <(printf '%s' '${{ steps.schedule_run.outputs.perf_run_arns_json }}' | jq -r '.[]')
+
+          REGULAR_RUN_ARNS=()
+          while IFS= read -r line; do
+            [ -n "$line" ] && REGULAR_RUN_ARNS+=("$line")
+          done < <(printf '%s' '${{ steps.schedule_run.outputs.regular_run_arns_json }}' | jq -r '.[]')
+
           RUN_ARNS=("${PERF_RUN_ARNS[@]}" "${REGULAR_RUN_ARNS[@]}")
           RUN_COUNT=${#RUN_ARNS[@]}
 
@@ -1320,10 +1336,22 @@ jobs:
           fi
           echo "   Totals: $TOTAL_TOTAL | Passed: $TOTAL_PASSED | Failed: $TOTAL_FAILED | Skipped: $TOTAL_SKIPPED"
 
+      - name: Refresh AWS credentials before downloading logs
+        if: always() && steps.schedule_run.outputs.run_count != '0'
+        uses: aws-actions/configure-aws-credentials@8df5847569e6427dd6c4fb1cf565c83acfa8afa7 # 6.0.0
+        with:
+          role-to-assume: ${{ secrets.AWS_OIDC_ROLE_ARN }}
+          aws-region: us-west-2
+          role-duration-seconds: 7200
+
       - name: Download Device Farm Logs
         if: always() && steps.schedule_run.outputs.run_count != '0'
         run: |
-          mapfile -t PERF_RUN_ARNS < <(printf '%s' '${{ steps.schedule_run.outputs.perf_run_arns_json }}' | jq -r '.[]')
+          PERF_RUN_ARNS=()
+          while IFS= read -r line; do
+            [ -n "$line" ] && PERF_RUN_ARNS+=("$line")
+          done < <(printf '%s' '${{ steps.schedule_run.outputs.perf_run_arns_json }}' | jq -r '.[]')
+
           LOG_DIR="devicefarm-logs/${{ matrix.platform }}"
           METADATA_FILE="$LOG_DIR/devicefarm-artifacts.jsonl"
           PLATFORM="${{ matrix.platform }}"
