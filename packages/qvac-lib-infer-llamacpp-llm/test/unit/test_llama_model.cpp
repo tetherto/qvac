@@ -1033,7 +1033,7 @@ TEST_F(LlamaModelTest, ReloadDuringProcessingWaitsAndDoesNotCrash) {
   });
 }
 
-TEST_F(LlamaModelTest, CommonParamsParseToolsAtEndTrue) {
+TEST_F(LlamaModelTest, CommonParamsParseToolsCompactTrue) {
   if (!fs::exists(getValidModelPath())) {
     FAIL() << "Test model not found at: " << getValidModelPath();
   }
@@ -1043,7 +1043,7 @@ TEST_F(LlamaModelTest, CommonParamsParseToolsAtEndTrue) {
   config["ctx_size"] = "2048";
   config["gpu_layers"] = test_common::getTestGpuLayers();
   config["n_predict"] = "10";
-  config["tools_at_end"] = "true";
+  config["tools_compact"] = "true";
 
   fs::path backendDir;
 #ifdef TEST_BINARY_DIR
@@ -1062,7 +1062,7 @@ TEST_F(LlamaModelTest, CommonParamsParseToolsAtEndTrue) {
   });
 }
 
-TEST_F(LlamaModelTest, CommonParamsParseToolsAtEndFalse) {
+TEST_F(LlamaModelTest, CommonParamsParseToolsCompactFalse) {
   if (!fs::exists(getValidModelPath())) {
     FAIL() << "Test model not found at: " << getValidModelPath();
   }
@@ -1072,7 +1072,7 @@ TEST_F(LlamaModelTest, CommonParamsParseToolsAtEndFalse) {
   config["ctx_size"] = "2048";
   config["gpu_layers"] = test_common::getTestGpuLayers();
   config["n_predict"] = "10";
-  config["tools_at_end"] = "false";
+  config["tools_compact"] = "false";
 
   fs::path backendDir;
 #ifdef TEST_BINARY_DIR
@@ -1091,7 +1091,7 @@ TEST_F(LlamaModelTest, CommonParamsParseToolsAtEndFalse) {
   });
 }
 
-TEST_F(LlamaModelTest, CommonParamsParseToolsAtEndUppercase) {
+TEST_F(LlamaModelTest, CommonParamsParseToolsCompactUppercase) {
   if (!fs::exists(getValidModelPath())) {
     FAIL() << "Test model not found at: " << getValidModelPath();
   }
@@ -1101,7 +1101,7 @@ TEST_F(LlamaModelTest, CommonParamsParseToolsAtEndUppercase) {
   config["ctx_size"] = "2048";
   config["gpu_layers"] = test_common::getTestGpuLayers();
   config["n_predict"] = "10";
-  config["tools_at_end"] = "TRUE";
+  config["tools_compact"] = "TRUE";
 
   fs::path backendDir;
 #ifdef TEST_BINARY_DIR

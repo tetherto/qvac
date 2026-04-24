@@ -62,6 +62,9 @@ try {
           output: (extra && extra.output) || null,
           reference: (extra && extra.reference) || null
         }
+        // Store quality separately so aggregate.js's Quality Summary
+        // section can render chrF++ in the mobile HTML / MD report.
+        if (extra && extra.quality) entry.quality = extra.quality
         _results.push(entry)
       },
       toJSON () {
@@ -78,6 +81,12 @@ try {
         const json = JSON.stringify(this.toJSON())
         // Write JSON to best-effort device paths so Device Farm artifact
         // collection can grab it. Mirrors OCR's inline reporter.
+        //
+        // On iOS, `global.testDir` (set by qvac-test-addon-mobile) maps
+        // to the app's Documents directory, which Appium's `pullFile`
+        // can reach as `@<bundle>:documents/perf-report.json`. We also
+        // try `os.tmpdir()` (the app's tmp container) which is reachable
+        // as `@<bundle>:tmp/perf-report.json`.
         const dirs = []
         if (typeof global !== 'undefined' && global.testDir) dirs.push(global.testDir)
         if (_platform === 'android') {
@@ -85,6 +94,9 @@ try {
           dirs.push('/storage/emulated/0/Android/data/io.tether.test.qvac/files')
           dirs.push('/data/local/tmp')
         }
+        try {
+          if (os && typeof os.tmpdir === 'function') dirs.push(os.tmpdir())
+        } catch (_) {}
         dirs.push('/tmp')
         for (const d of dirs) {
           try {
@@ -143,14 +155,14 @@ try {
   // files. Keep them in sync if the on-disk fixtures change.
   const _inlineFixtures = {
     'bergamot.quality.json': [
-      { source: 'Hello, how are you?', src_lang: 'en', dst_lang: 'it', reference: 'Ciao, come stai?', notes: 'placeholder baseline — verify with native speaker' }
+      { source: 'Hello, how are you?', src_lang: 'en', dst_lang: 'it', reference: 'Ciao, come stai?', notes: 'validated 2026-04-23 (informal register)' }
     ],
     'indictrans.quality.json': [
-      { source: 'Hello, how are you?', src_lang: 'eng_Latn', dst_lang: 'hin_Deva', reference: 'नमस्ते, आप कैसे हैं?', notes: 'placeholder baseline — verify with native speaker' }
+      { source: 'Hello, how are you?', src_lang: 'eng_Latn', dst_lang: 'hin_Deva', reference: 'नमस्ते, आप कैसे हैं?', notes: 'validated 2026-04-23 (formal register, आप)' }
     ],
     'pivot-bergamot.quality.json': [
-      { source: 'Buenos días, ¿cómo estás hoy?', src_lang: 'es', dst_lang: 'it', reference: 'Buongiorno, come stai oggi?', notes: 'placeholder baseline — verify with native speaker' },
-      { source: "Bonjour, comment allez-vous aujourd'hui?", src_lang: 'fr', dst_lang: 'es', reference: 'Hola, ¿cómo está usted hoy?', notes: 'placeholder baseline — verify with native speaker' }
+      { source: 'Buenos días, ¿cómo estás hoy?', src_lang: 'es', dst_lang: 'it', reference: 'Buongiorno, come stai oggi?', notes: 'validated 2026-04-23 (informal register)' },
+      { source: "Bonjour, comment allez-vous aujourd'hui?", src_lang: 'fr', dst_lang: 'es', reference: 'Hola, ¿cómo está usted hoy?', notes: 'validated 2026-04-23 (formal register, usted)' }
     ]
   }
 
@@ -306,33 +318,49 @@ const TEST_TIMEOUT = isMobile ? MOBILE_TIMEOUT : DESKTOP_TIMEOUT
  * @returns {Promise<void>}
  * @throws {Error} If download fails or redirects exceed limit
  */
-async function downloadFile (url, destPath, maxRedirects = 5) {
+async function downloadFile (url, destPath, maxRedirects = 5, maxRetries = 3) {
   const fetch = require('bare-fetch')
-  console.log(`Downloading: ${url.substring(0, 60)}...`)
 
-  // Fetch with redirect following enabled
-  const response = await fetch(url, {
-    redirect: 'follow',
-    follow: maxRedirects
-  })
-
-  // Check for redirect status codes that weren't followed
-  if ([301, 302, 307, 308].includes(response.status)) {
-    const location = response.headers.get('location')
-    if (location && maxRedirects > 0) {
-      console.log(`   Following redirect to: ${location.substring(0, 60)}...`)
-      return downloadFile(location, destPath, maxRedirects - 1)
+  // Retry loop for transient network errors (CONNECTION_LOST, socket hang up).
+  // Without this an unhandled rejection from bare-fetch on Device Farm's
+  // flaky mobile network can abort the whole Bare process — which surfaced
+  // on Samsung Galaxy S25 Ultra as a SIGABRT inside libbare-kit.so::
+  // js_callback_s::on_call during the second IndicTrans re-download.
+  let lastErr = null
+  for (let attempt = 0; attempt < maxRetries; attempt++) {
+    if (attempt > 0) {
+      const backoffMs = 500 * (2 ** (attempt - 1))
+      console.log(`   Retry ${attempt}/${maxRetries - 1} after ${backoffMs}ms (last error: ${lastErr && lastErr.message})`)
+      await new Promise(resolve => setTimeout(resolve, backoffMs))
     }
-    throw new Error(`HTTP ${response.status}: Redirect not followed (no location header or max redirects exceeded)`)
-  }
+    try {
+      console.log(`Downloading: ${url.substring(0, 60)}...`)
+      const response = await fetch(url, { redirect: 'follow', follow: maxRedirects })
 
-  if (!response.ok) {
-    throw new Error(`HTTP ${response.status}: ${response.statusText}`)
-  }
+      if ([301, 302, 307, 308].includes(response.status)) {
+        const location = response.headers.get('location')
+        if (location && maxRedirects > 0) {
+          console.log(`   Following redirect to: ${location.substring(0, 60)}...`)
+          return downloadFile(location, destPath, maxRedirects - 1, maxRetries)
+        }
+        throw new Error(`HTTP ${response.status}: Redirect not followed (no location header or max redirects exceeded)`)
+      }
 
-  const buffer = await response.arrayBuffer()
-  fs.writeFileSync(destPath, Buffer.from(buffer))
-  console.log(`Downloaded: ${path.basename(destPath)} (${(buffer.byteLength / 1024 / 1024).toFixed(1)}MB)`)
+      if (!response.ok) {
+        throw new Error(`HTTP ${response.status}: ${response.statusText}`)
+      }
+
+      const buffer = await response.arrayBuffer()
+      fs.writeFileSync(destPath, Buffer.from(buffer))
+      console.log(`Downloaded: ${path.basename(destPath)} (${(buffer.byteLength / 1024 / 1024).toFixed(1)}MB)`)
+      return
+    } catch (err) {
+      lastErr = err
+      // Only retry on network errors; HTTP status errors are deterministic.
+      if (err && /HTTP \d{3}/.test(err.message || '')) throw err
+    }
+  }
+  throw new Error(`downloadFile failed after ${maxRetries} attempts: ${lastErr && lastErr.message}`)
 }
 
 // ============================================================================
@@ -441,6 +469,21 @@ async function ensureIndicTransModel () {
   fs.mkdirSync(modelsDir, { recursive: true })
 
   const destPath = path.join(modelsDir, modelFilename)
+
+  // Cache hit: IndicTrans is 200MB+, so re-downloading for every test
+  // variant (GPU/CPU) wastes bandwidth and exposes each run to transient
+  // S3/Device-Farm network failures — the root cause of the Samsung
+  // Galaxy S25 Ultra CONNECTION_LOST → SIGABRT seen in CI run 1212.
+  if (fs.existsSync(destPath)) {
+    const cachedStats = fs.statSync(destPath)
+    const cachedMB = cachedStats.size / (1024 * 1024)
+    if (cachedMB >= 100) {
+      console.log(`Reusing cached IndicTrans model: ${destPath} (${cachedMB.toFixed(1)}MB)`)
+      return destPath
+    }
+    console.log(`Cached IndicTrans model is undersized (${cachedMB.toFixed(2)}MB) — re-downloading`)
+  }
+
   await downloadFile(urlConfig.modelUrl, destPath)
 
   // Validate downloaded model size
@@ -666,9 +709,29 @@ function formatPerformanceMetrics (label, metrics, qualityOpts) {
     execution_provider: ep,
     input: prompt || null,
     output: fullOutput || null,
+    // `quality` is duplicated from metrics.chrfpp so that aggregate.js's
+    // Quality Summary section (which reads `result.quality.*`) renders a
+    // chrF++ column in the HTML/MD mobile + desktop perf-reports. The
+    // Step Summary table keeps reading metrics.chrfpp — no behaviour
+    // change there.
+    quality: quality ? { chrfpp: quality.chrfpp, reference: quality.reference } : null,
     reference: quality ? quality.reference : null
   })
   _scheduleReportWrite()
+
+  // On mobile, the Bare process is hosted inside the native app and
+  // typically does not exit between test runs, so `process.on('exit')`
+  // never fires. Flush the perf report after every record() so that
+  // WDIO's after: hook finds a ready-to-pull perf-report.json in the
+  // app's Documents/ (iOS) or /sdcard/.../files/ (Android) directory.
+  // Also emit markers to stdout so Device Farm log collection can
+  // recover the report via extract-from-log.js if pullFile fails.
+  if (isMobile && typeof _perfReporter.writeReport === 'function') {
+    try { _perfReporter.writeReport(_reportPath) } catch (_) {}
+    if (typeof _perfReporter.writeToConsole === 'function') {
+      try { _perfReporter.writeToConsole() } catch (_) {}
+    }
+  }
 
   let out = `${label} Performance Metrics:
     - Total time: ${totalTimeMs.toFixed(0)}ms (${totalSeconds}s)

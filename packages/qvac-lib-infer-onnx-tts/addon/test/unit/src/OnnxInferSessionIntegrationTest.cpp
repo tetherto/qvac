@@ -141,4 +141,63 @@ TEST(OnnxInferSessionIntegrationTest,
   EXPECT_GE(outputNames.size(), 1u);
 }
 
+TEST(OnnxInferSessionIntegrationTest,
+     setOutputToInputChainThrowsOnUnknownOutput) {
+  const std::string modelPath = resolveOnnxModelPath();
+  if (modelPath.empty()) {
+    GTEST_SKIP() << "Set ONNX_TEST_MODEL_PATH or run integration to have "
+                    "models/chatterbox/embed_tokens.onnx";
+  }
+
+  OnnxInferSession session(modelPath);
+  const auto inputNames = session.getInputNames();
+  ASSERT_FALSE(inputNames.empty());
+
+  std::vector<std::pair<std::string, std::string>> badMapping = {
+      {"does_not_exist", inputNames[0]}};
+  EXPECT_THROW(session.setOutputToInputChain(badMapping), std::runtime_error);
+}
+
+TEST(OnnxInferSessionIntegrationTest,
+     setOutputToInputChainThrowsOnUnknownInput) {
+  const std::string modelPath = resolveOnnxModelPath();
+  if (modelPath.empty()) {
+    GTEST_SKIP() << "Set ONNX_TEST_MODEL_PATH or run integration to have "
+                    "models/chatterbox/embed_tokens.onnx";
+  }
+
+  OnnxInferSession session(modelPath);
+  const auto outputNames = session.getOutputNames();
+  ASSERT_FALSE(outputNames.empty());
+
+  std::vector<std::pair<std::string, std::string>> badMapping = {
+      {outputNames[0], "does_not_exist"}};
+  EXPECT_THROW(session.setOutputToInputChain(badMapping), std::runtime_error);
+}
+
+TEST(OnnxInferSessionIntegrationTest,
+     isInputChainedIsFalseInitiallyAndAfterClear) {
+  const std::string modelPath = resolveOnnxModelPath();
+  if (modelPath.empty()) {
+    GTEST_SKIP() << "Set ONNX_TEST_MODEL_PATH or run integration to have "
+                    "models/chatterbox/embed_tokens.onnx";
+  }
+
+  OnnxInferSession session(modelPath);
+  const auto inputNames = session.getInputNames();
+  ASSERT_FALSE(inputNames.empty());
+
+  // Before any chaining is configured, no input is chained.
+  for (const auto &name : inputNames) {
+    EXPECT_FALSE(session.isInputChained(name));
+  }
+
+  // clearChainedInputs() is safe to call even when no chaining is active, and
+  // isInputChained() still reports false for every known input.
+  session.clearChainedInputs();
+  for (const auto &name : inputNames) {
+    EXPECT_FALSE(session.isInputChained(name));
+  }
+}
+
 } // namespace qvac::ttslib::chatterbox::testing

@@ -151,6 +151,8 @@ export interface ImgStableDiffusionArgs {
 export interface GenerationParams {
   prompt: string
   negative_prompt?: string
+  /** Non-empty absolute path to a LoRA adapter (.safetensors, etc.) */
+  lora?: string
   width?: number
   height?: number
   steps?: number
