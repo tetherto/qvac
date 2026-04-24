@@ -54,8 +54,8 @@ on:
       # They are declared required: false here so `secrets: inherit` from a
       # caller with no repo-level values does not fail at the workflow_call
       # boundary; the jobs that consume them have environment access.
-      # PAT_TOKEN, AWS_OIDC_ROLE_ARN, and APPLE_TEAM_ID remain required:true
-      # because they are repo-level.
+      # PAT_TOKEN and AWS_OIDC_ROLE_ARN remain required:true because they are
+      # repo-level.
       PAT_TOKEN:
         required: true
       NPM_TOKEN:
@@ -83,7 +83,7 @@ on:
       APPLE_KEYCHAIN_PASSWORD:
         required: false
       APPLE_TEAM_ID:
-        required: true
+        required: false
 
 env:
   APP_BUNDLE_ID: "io.tether.test.qvac"
