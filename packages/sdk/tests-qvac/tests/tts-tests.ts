@@ -81,7 +81,11 @@ export const ttsSupertonicSentenceStream: TestDefinition = {
     stream: true,
     sentenceStream: true,
   },
-  expectation: { validation: "type", expectedType: "string" },
+  // `sentence-streamed` is only emitted by the executor's happy path; the
+  // zero-chunk regression branch returns "produced no audio" and fails the
+  // contains-all match. This catches zero-chunk / empty-buffer regressions
+  // that a bare `expectedType: "string"` expectation would let through.
+  expectation: { validation: "contains-all", contains: ["sentence-streamed", "chunks", "samples"] },
   metadata: { category: "tts", dependency: "tts-supertonic", estimatedDurationMs: 45000 },
 };
 

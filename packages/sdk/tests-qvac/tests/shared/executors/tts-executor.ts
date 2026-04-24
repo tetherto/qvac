@@ -84,6 +84,18 @@ export class TtsExecutor extends AbstractModelExecutor<typeof ttsTests> {
 
         await rs.done;
 
+        // A passing run must produce at least one chunk with audio samples.
+        // Previously the expectation only validated the return type was a
+        // string, so a regression to a zero-chunk stream would have passed
+        // silently. Fail explicitly here; the caller's contains-all
+        // expectation further pins the happy-path string format.
+        if (totalChunks === 0 || totalSamples === 0) {
+          return {
+            passed: false,
+            output: `TTS sentence-stream produced no audio (chunks=${totalChunks}, samples=${totalSamples})`,
+          };
+        }
+
         return ValidationHelpers.validate(
           `sentence-streamed ${totalChunks} chunks (${totalSamples} samples)`,
           expectation as Expectation,
