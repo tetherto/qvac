@@ -66,6 +66,11 @@ async function runMoeTest (options = {}) { // eslint-disable-line no-unused-vars
   return runIntegrationModule('../integration/moe.test.js', options)
 }
 
+async function runMultiGpuTest (options = {}) { // eslint-disable-line no-unused-vars
+  if (typeof __shouldRunTest === 'function' && !__shouldRunTest('runMultiGpuTest')) return __FILTERED
+  return runIntegrationModule('../integration/multi-gpu.test.js', options)
+}
+
 async function runMultiInstanceTest (options = {}) { // eslint-disable-line no-unused-vars
   if (typeof __shouldRunTest === 'function' && !__shouldRunTest('runMultiInstanceTest')) return __FILTERED
   return runIntegrationModule('../integration/multi-instance.test.js', options)

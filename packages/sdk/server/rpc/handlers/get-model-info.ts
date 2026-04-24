@@ -16,7 +16,7 @@ import {
   getShardPath,
   getModelsCacheDir,
   getSingleFileCachePath,
-} from "@/server/utils/cache";
+} from "@/server/utils/cache/paths";
 import { validateAndJoinPath } from "@/server/utils/path-security";
 import { ModelNotFoundError } from "@/utils/errors-server";
 

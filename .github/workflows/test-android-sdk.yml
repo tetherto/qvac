@@ -76,6 +76,7 @@ permissions:
 
 jobs:
   build:
+    name: "[android] build"
     runs-on: ai-run-linux
     environment: release
     timeout-minutes: 30
@@ -238,6 +239,7 @@ jobs:
           retention-days: 7
 
   device-farm:
+    name: "[android] device-farm"
     needs: build
     runs-on: ubuntu-latest
     environment: release
@@ -415,6 +417,7 @@ jobs:
           retention-days: 1
 
   run-producer:
+    name: "[android] run-producer"
     needs: build
     runs-on: ubuntu-latest
     environment: release
@@ -566,6 +569,7 @@ jobs:
           overwrite: true
 
   cleanup-device-farm:
+    name: "[android] cleanup-device-farm"
     needs: [build, run-producer, device-farm]
     if: always()
     runs-on: ubuntu-latest
@@ -651,6 +655,7 @@ jobs:
           retention-days: 30
 
   compare-results:
+    name: "[android] compare-results"
     needs: [build, run-producer]
     if: github.event_name == 'pull_request'
     runs-on: ubuntu-latest
