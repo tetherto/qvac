@@ -576,12 +576,76 @@ function _mdIterationHeaders (count, runNumbers) {
 }
 
 /**
+ * Builds the per-device "row-per-test" detail section in HTML. Mirrors the
+ * markdown `generateDeviceDetailTables` output — same columns, same ordering
+ * — so the combined HTML report has parity with the GitHub step summary.
+ * Each device gets one section; each test is one row with Backend / Platform
+ * / Total Time / .../ Status columns taken from numeric means + preserved
+ * categorical values.
+ *
+ * Without this block mobile rows render as blank categorical cells in the
+ * HTML since `generateStepSummary()` runs per-device on the GitHub runner
+ * and Device Farm containers can't write to GITHUB_STEP_SUMMARY.
+ */
+function _buildHtmlDetailSections (aggregated, addonType) {
+  if (addonType !== 'vision') return ''
+  const { devices, device_meta: deviceMeta = {}, categorical = {}, addon, run_numbers: runNumbers = [] } = aggregated
+  const deviceNames = Object.keys(devices)
+  if (!deviceNames.length) return ''
+
+  let html = ''
+  for (const devName of deviceNames) {
+    const tests = devices[devName] || {}
+    const testNames = Object.keys(tests).sort()
+    if (!testNames.length) continue
+
+    const meta = deviceMeta[devName] || {}
+    const platformArch = meta.platform && meta.arch
+      ? `${meta.platform}/${meta.arch}`
+      : meta.platform || '-'
+    const runLabel = runNumbers.length ? runNumbers.map(n => '#' + n).join(', ') : 'local'
+
+    const headerCells = ['Test', 'EP', ..._VISION_DETAIL_COLUMNS.map(c => c.label)]
+      .map(h => `<th>${escapeHtml(h)}</th>`).join('')
+
+    let bodyRows = ''
+    for (const testName of testNames) {
+      const metrics = tests[testName] || {}
+      const cats = (categorical[devName] && categorical[devName][testName]) || {}
+      const ep = cats.execution_provider || '-'
+      const cells = [escapeHtml(testName), escapeHtml(ep)]
+      for (const col of _VISION_DETAIL_COLUMNS) {
+        cells.push(escapeHtml(_formatDetailCell(col.key, metrics[col.key], cats[col.key])))
+      }
+      bodyRows += '<tr>' + cells.map(c => `<td>${c}</td>`).join('') + '</tr>'
+    }
+
+    html += `
+    <section class="device-card detail-card">
+      <h2 class="device-name">${escapeHtml(devName)} <span class="detail-sub">(${escapeHtml(platformArch)} \u00b7 Run ${escapeHtml(runLabel)} \u00b7 ${escapeHtml(addon)})</span></h2>
+      <div class="test-block">
+        <table class="detail-table">
+          <thead><tr>${headerCells}</tr></thead>
+          <tbody>${bodyRows}</tbody>
+        </table>
+      </div>
+    </section>`
+  }
+
+  return html
+}
+
+/**
  * Generates a self-contained HTML performance report.
  *
  * @param {Object} aggregated - Output of aggregateReports()
+ * @param {Object} [opts]
+ * @param {boolean} [opts.includeDeviceDetails] - Append per-device row-per-test summary tables (vision addons only)
+ * @param {string} [opts.addonType] - Addon type ('vision' enables the detail tables)
  * @returns {string} Complete HTML document
  */
-function generateHtmlReport (aggregated) {
+function generateHtmlReport (aggregated, opts) {
+  const options = opts || {}
   const { addon, generated_at, run_numbers, devices, quality, image_paths } = aggregated
   const timestamp = new Date(generated_at).toLocaleString('en-US', {
     dateStyle: 'medium',
@@ -677,6 +741,10 @@ function generateHtmlReport (aggregated) {
       ${tables}
     </section>`
   }
+
+  const detailSections = options.includeDeviceDetails
+    ? _buildHtmlDetailSections(aggregated, options.addonType || 'vision')
+    : ''
 
   let qualitySection = ''
   const qualityDetails = aggregated.quality_details || {}
@@ -978,6 +1046,36 @@ function generateHtmlReport (aggregated) {
 
   .quality-card { border-color: #c3dfc3; }
 
+  /* QVAC-17830: per-device summary table used by --device-details.
+     Row-per-test layout matching the markdown step-summary tables. */
+  .detail-card .device-name { background: #eef3fa; border-bottom-color: #cfdcee; }
+  .detail-sub {
+    font-size: 0.78rem;
+    font-weight: 400;
+    color: var(--text-secondary);
+    margin-left: 0.4rem;
+  }
+  .detail-table {
+    table-layout: auto;
+    font-size: 0.78rem;
+  }
+  .detail-table thead th {
+    text-transform: none;
+    letter-spacing: 0;
+    font-size: 0.72rem;
+  }
+  .detail-table tbody td {
+    white-space: nowrap;
+    text-align: right;
+  }
+  .detail-table tbody td:first-child,
+  .detail-table tbody td:nth-child(2),
+  .detail-table tbody td:nth-child(3),
+  .detail-table tbody td:nth-child(4),
+  .detail-table tbody td:last-child {
+    text-align: left;
+  }
+
   .q-good {
     background: rgba(40, 167, 69, 0.12);
     color: #1a7f37;
@@ -1190,6 +1288,8 @@ function generateHtmlReport (aggregated) {
     <span>Devices: <strong>${Object.keys(devices).length}</strong></span>
   </div>
 </header>
+
+${detailSections ? `<h2 class="section-divider">Per-Device Summary</h2>` + detailSections : ''}
 
 ${deviceCards}
 

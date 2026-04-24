@@ -566,14 +566,28 @@ function runImageRecognitionTest (testCase, deviceConfig) {
       )
     }
 
+    // QVAC-17830: iOS-only per-test counted-iteration override. Default is
+    // PERF_RUNS=3 everywhere, matching OCR's convention. But iPhone Device
+    // Farm nodes have a hard ~3.3 GB per-app Jetsam ceiling and the 10 MB
+    // fruit-plate PNG + VLM model + KV cache growth over 4 inferences
+    // (warmup + 3 counted) exceeds that even WITH the elephant pre-warmup
+    // (previous run: still SIGABRT'd at t+85s during counted iter 2-3).
+    // Opting that one image into iosPerfRuns=1 drops the cold-path peak
+    // from 4 inferences to 2, which landed under the cap in local sim.
+    // Desktop + Android are untouched; every other iOS image still runs
+    // the full 3 counted iterations.
+    const countedRuns = (platform === 'ios' && Number.isFinite(testCase.iosPerfRuns))
+      ? testCase.iosPerfRuns
+      : PERF_RUNS
+
     let lastGeneratedText = ''
-    for (let run = 1; run <= PERF_RUNS; run++) {
+    for (let run = 1; run <= countedRuns; run++) {
       const { generatedText, startTime, endTime, stats } =
         await describeImage(inference, imageFilePath, TEST_CONSTANTS.defaultPrompt)
       const totalTime = endTime - startTime
       lastGeneratedText = generatedText
 
-      t.comment(`${label} run ${run}/${PERF_RUNS} Generated text: ${generatedText}`)
+      t.comment(`${label} run ${run}/${countedRuns} Generated text: ${generatedText}`)
       t.comment(recordPerformance(label, totalTime, {
         _output: generatedText,
         stats,

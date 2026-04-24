@@ -74,7 +74,7 @@ OPTIONS:
   --output-json <path>  JSON summary output file (optional)
   --output-html <path>  HTML report file (optional, self-contained)
   --repo <owner/repo>   GitHub repository (default: current repo)
-  --device-details      Append per-device detail tables to the markdown output
+  --device-details      Append per-device detail tables to the markdown AND HTML output
   -h, --help            Show this help
 
 EXAMPLES:
@@ -245,7 +245,10 @@ function main () {
   if (args.outputHtml) {
     const dir = path.dirname(args.outputHtml)
     fs.mkdirSync(dir, { recursive: true })
-    const html = generateHtmlReport(aggregated)
+    const html = generateHtmlReport(aggregated, {
+      includeDeviceDetails: args.deviceDetails,
+      addonType: resolvedAddonType
+    })
     fs.writeFileSync(args.outputHtml, html)
     console.log(`HTML report written to ${args.outputHtml}`)
   }

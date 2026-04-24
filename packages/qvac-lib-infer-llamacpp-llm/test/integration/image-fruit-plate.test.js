@@ -19,5 +19,12 @@ runPerImageBackendTests({
   // process limit in local simulation. Desktop + Android are
   // unaffected (see _image-common.js; the pre-warmup is platform === 'ios'
   // only).
-  iosWarmupImage: 'elephant.jpg'
+  iosWarmupImage: 'elephant.jpg',
+  // QVAC-17830: warmup alone wasn't enough — the previous run still
+  // SIGABRT'd at t+85s (V8 bad_alloc during JSON.stringify) on counted
+  // iteration 2-3, leaving zero fruit-plate rows on both iPhone 16 Pro
+  // and iPhone 17. Drop to 1 counted iteration on iOS (alongside the
+  // warmup) so the cold-path peak footprint is 2 inferences instead of
+  // 4. Every other iOS image still runs the full PERF_RUNS=3.
+  iosPerfRuns: 1
 })

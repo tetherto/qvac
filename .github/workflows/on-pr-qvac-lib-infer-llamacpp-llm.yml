@@ -285,6 +285,8 @@ jobs:
             echo "Generating HTML for $device_name..."
             node scripts/perf-report/aggregate.js \
               --dir "$tmp_dir" \
+              --addon-type vision \
+              --device-details \
               --output-html "per-device-reports/HTML-Report-${safe_name}.html" \
               2>/dev/null || true
 
