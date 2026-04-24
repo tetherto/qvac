@@ -164,9 +164,15 @@ function stitchSegments (prevText, segments, maxWords, windowStartTimestep = 0) 
       deltaSegments.push({ ...seg, windowStartTimestep })
     } else {
       const remainingWords = words.slice(toSkip)
+      const hasT0 = typeof seg.t0 === 'number'
+      const hasT1 = typeof seg.t1 === 'number'
+      const approxT0 = (hasT0 && hasT1)
+        ? seg.t0 + Math.round((seg.t1 - seg.t0) * (toSkip / words.length))
+        : seg.t0
       deltaSegments.push({
         ...seg,
         text: remainingWords.join(' '),
+        t0: approxT0,
         windowStartTimestep
       })
       toSkip = 0
