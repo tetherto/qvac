@@ -53,7 +53,7 @@ jobs:
             platform: linux
             arch: arm64
             runner: ubuntu-24.04-arm
-          - os: macos-15-xlarge
+          - os: macos-14-xlarge
             platform: darwin
             arch: arm64
           - os: macos-15-large

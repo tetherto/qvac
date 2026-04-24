@@ -337,20 +337,26 @@ test('integration: VlaModel rejects missing GGUF file', (t) => {
 // End-to-end smoke test.
 // Desktop: skipped unless QVAC_VLA_MODEL points at a real SmolVLA GGUF.
 //   QVAC_VLA_MODEL=/path/to/smolvla-libero.gguf npm run test:integration
-// Mobile (iOS/Android): downloads the GGUF from the presigned URL bundled
-// into testAssets/smolvla-urls.json by the CI workflow.
+// Mobile (iOS/Android): MUST run — the CI workflow bundles the presigned S3
+// URL in testAssets/smolvla-urls.json, so the model fetch + load + inference
+// + quality comparison must all succeed. Any failure is a hard test failure;
+// silent skips on mobile are forbidden because they produced false-positive
+// PASS results in prior runs (see QVAC-VLA mobile CI history).
 test('integration: end-to-end inference runs (needs GGUF)', async (t) => {
   let modelPath = process.env.QVAC_VLA_MODEL
   if (_isMobile) {
+    // Mobile: fetch or fail. No graceful-skip path.
     try {
       modelPath = await _ensureMobileModel()
     } catch (err) {
-      t.comment(`skipping: mobile model fetch failed — ${err && err.message}`)
-      t.pass()
+      t.fail(`mobile model fetch failed — ${err && err.message}`)
       return
     }
-  }
-  if (!modelPath || !fs.existsSync(modelPath)) {
+    t.ok(modelPath && typeof modelPath === 'string', 'mobile: _ensureMobileModel returned a path')
+    t.ok(fs.existsSync(modelPath), `mobile: GGUF exists at ${modelPath}`)
+    const sizeMB = fs.statSync(modelPath).size / (1024 * 1024)
+    t.ok(sizeMB >= 100, `mobile: GGUF size ${sizeMB.toFixed(1)}MB >= 100MB`)
+  } else if (!modelPath || !fs.existsSync(modelPath)) {
     t.comment(`skipping: set QVAC_VLA_MODEL to a valid GGUF (got "${modelPath ?? ''}")`)
     t.pass()
     return
