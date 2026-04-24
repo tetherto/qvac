@@ -15,16 +15,16 @@
 
 #include "model-interface/chatterbox/ChatterboxConfig.hpp"
 
-namespace qvac_tts::chatterbox {
+namespace tts_cpp::chatterbox {
 class Engine;
-} // namespace qvac_tts::chatterbox
+} // namespace tts_cpp::chatterbox
 
 namespace qvac::ttsggml::chatterbox {
 
 /**
- * IModel implementation that wraps the qvac-tts::qvac-tts static library
+ * IModel implementation that wraps the tts-cpp::tts-cpp static library
  * (Chatterbox English GGUF).  Holds a persistent
- * `qvac_tts::chatterbox::Engine` so that each {@link process} call pays only
+ * `tts_cpp::chatterbox::Engine` so that each {@link process} call pays only
  * the T3 autoregressive decode + S3Gen + HiFT synthesis cost.  The T3 GGUF,
  * S3Gen GGUF, and voice-conditioning tensors are loaded once in {@link load}
  * and reused until {@link unload} / destruction.
@@ -96,7 +96,7 @@ private:
   // `shared_ptr` so `cancel()` (and the long-running `synthesize()`) can
   // take a cheap local copy under the lock and then work outside it.
   mutable std::mutex engineMu_;
-  std::shared_ptr<qvac_tts::chatterbox::Engine> engine_;
+  std::shared_ptr<tts_cpp::chatterbox::Engine> engine_;
 
   // Rejects concurrent `process()` invocations; the outer JobRunner also
   // serializes jobs, but belt-and-suspenders enforcement here keeps

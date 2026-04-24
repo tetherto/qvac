@@ -10,7 +10,7 @@
 #include <string>
 #include <vector>
 
-#include <qvac-tts/chatterbox/engine.h>
+#include <tts-cpp/chatterbox/engine.h>
 
 #include "addon/TTSErrors.hpp"
 #include "qvac-lib-inference-addon-cpp/Errors.hpp"
@@ -24,8 +24,8 @@ using qvac_errors::StatusError;
 using qvac_errors::tts_error::TTSErrorCode;
 namespace general_error = qvac_errors::general_error;
 
-qvac_tts::chatterbox::EngineOptions toEngineOptions(const ChatterboxConfig& cfg) {
-  qvac_tts::chatterbox::EngineOptions opts;
+tts_cpp::chatterbox::EngineOptions toEngineOptions(const ChatterboxConfig& cfg) {
+  tts_cpp::chatterbox::EngineOptions opts;
   opts.t3_gguf_path    = cfg.t3ModelPath;
   opts.s3gen_gguf_path = cfg.s3genModelPath;
   opts.reference_audio = cfg.referenceAudio;
@@ -125,7 +125,7 @@ void ChatterboxModel::reload() {
 void ChatterboxModel::loadLocked() {
   if (engine_) return;
   try {
-    engine_ = std::make_shared<qvac_tts::chatterbox::Engine>(toEngineOptions(cfg_));
+    engine_ = std::make_shared<tts_cpp::chatterbox::Engine>(toEngineOptions(cfg_));
   } catch (const std::exception& e) {
     engine_.reset();
     throw createTTSError(
@@ -144,7 +144,7 @@ void ChatterboxModel::cancel() const {
   // cancel() safely even if another thread calls unload()/reload() in
   // parallel.  The Engine itself is responsible for making cancel()
   // thread-safe against its in-flight synthesize().
-  std::shared_ptr<qvac_tts::chatterbox::Engine> e;
+  std::shared_ptr<tts_cpp::chatterbox::Engine> e;
   {
     std::lock_guard lk(engineMu_);
     e = engine_;
@@ -158,7 +158,7 @@ ChatterboxModel::Output ChatterboxModel::synthesize(
   // of synthesize() via the local `engine` shared_ptr even if reload()
   // concurrently swaps a new one in.  Reload's new engine takes effect
   // on the NEXT synthesize call.
-  std::shared_ptr<qvac_tts::chatterbox::Engine> engine;
+  std::shared_ptr<tts_cpp::chatterbox::Engine> engine;
   {
     std::lock_guard lk(engineMu_);
     engine = engine_;
@@ -174,7 +174,7 @@ ChatterboxModel::Output ChatterboxModel::synthesize(
 
   const auto tStart = std::chrono::steady_clock::now();
 
-  qvac_tts::chatterbox::SynthesisResult result;
+  tts_cpp::chatterbox::SynthesisResult result;
   try {
     if (chunkCallback && engine->options().stream_chunk_tokens > 0) {
       result = engine->synthesize(

@@ -6,9 +6,9 @@
 namespace qvac::ttsggml::chatterbox {
 
 /**
- * Configuration for the Chatterbox engine wrapping qvac-tts::qvac-tts.
+ * Configuration for the Chatterbox engine wrapping tts-cpp::tts-cpp.
  *
- * Mapped 1:1 into `qvac_tts::chatterbox::EngineOptions` by
+ * Mapped 1:1 into `tts_cpp::chatterbox::EngineOptions` by
  * {@link ChatterboxModel::load} and then passed to a persistent Engine that
  * owns the T3 + S3Gen + voice-conditioning state for the lifetime of the
  * addon.  The Engine is re-created on reload() when any of these fields
@@ -23,7 +23,7 @@ struct ChatterboxConfig {
   std::string language = "en";
   /** Voice-cloning reference wav path. */
   std::string referenceAudio;
-  /** Directory of baked voice-conditioning tensors (`qvac-tts --ref-dir`). */
+  /** Directory of baked voice-conditioning tensors (`tts-cpp --ref-dir`). */
   std::string voiceDir;
   /** RNG seed for CFM initial noise + SineGen excitation. */
   std::optional<int> seed;

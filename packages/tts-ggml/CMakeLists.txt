@@ -34,7 +34,7 @@ configure_file(${VCPKG_INSTALLED_PATH}/tools/qvac-lint-cpp/hooks/pre-commit
                ${CMAKE_CURRENT_SOURCE_DIR}/.git/hooks/pre-commit COPYONLY)
 
 find_path(QVAC_LIB_INFERENCE_ADDON_CPP_INCLUDE_DIRS "qvac-lib-inference-addon-cpp/ModelInterfaces.hpp")
-find_package(qvac-tts-cpp CONFIG REQUIRED)
+find_package(tts-cpp CONFIG REQUIRED)
 
 set(CMAKE_CXX_STANDARD 20)
 set(CMAKE_CXX_EXTENSIONS OFF)
@@ -74,7 +74,7 @@ target_include_directories(
 target_link_libraries(
   ${tts-ggml}
   PRIVATE
-    qvac-tts::qvac-tts
+    tts-cpp::tts-cpp
 )
 
 target_compile_definitions(${tts-ggml} PUBLIC JS_LOGGER)
