@@ -52,6 +52,8 @@ import { KvCacheExecutor } from "../shared/executors/kv-cache-executor.js";
 import { LoggingExecutor } from "../shared/executors/logging-executor.js";
 import { RegistryExecutor } from "../shared/executors/registry-executor.js";
 import { ModelInfoExecutor } from "../shared/executors/model-info-executor.js";
+import { LoadedModelInfoExecutor } from "../shared/executors/loaded-model-info-executor.js";
+import { WrongModelExecutor } from "../shared/executors/wrong-model-executor.js";
 import { ErrorExecutor } from "../shared/executors/error-executor.js";
 import { MobileTranscriptionExecutor } from "./executors/transcription-executor.js";
 import { MobileParakeetExecutor } from "./executors/parakeet-executor.js";
@@ -348,6 +350,8 @@ export const executor = createExecutor({
     new EmbeddingExecutor(resources),
     new MobileRagExecutor(resources),
     new ModelInfoExecutor(resources),
+    new LoadedModelInfoExecutor(resources),
+    new WrongModelExecutor(resources),
     new ErrorExecutor(resources),
     new ToolsExecutor(resources),
     new TranslationExecutor(resources),

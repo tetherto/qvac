@@ -10,6 +10,7 @@ import { translationLlmTests } from "./translation-llm-tests.js";
 import { translationSalamandraTests } from "./translation-salamandra-tests.js";
 import { translationAfriquegemmaTests } from "./translation-afriquegemma-tests.js";
 import { modelInfoTests } from "./model-info-tests.js";
+import { loadedModelInfoTests } from "./loaded-model-info-tests.js";
 import { kvCacheTests } from "./kv-cache-tests.js";
 import { errorTests } from "./error-tests.js";
 import { toolsTests } from "./tools-tests.js";
@@ -28,6 +29,7 @@ import { diffusionTests } from "./diffusion-tests.js";
 import { finetuneTests } from "./finetune-tests.js";
 import { lifecycleTests } from "./lifecycle-tests.js";
 import { configTests } from "./config-tests.js";
+import { wrongModelTests } from "./wrong-model-tests.js";
 
 // Model loading tests
 export const modelLoadLlm: TestDefinition = {
@@ -143,6 +145,33 @@ export const modelReloadAfterError: TestDefinition = {
   },
 };
 
+export const modelLoadInferredType: TestDefinition = {
+  testId: "model-load-inferred-type",
+  params: {},
+  expectation: { validation: "type", expectedType: "string" },
+  suites: ["smoke"],
+  metadata: {
+    category: "model",
+    dependency: "none",
+    estimatedDurationMs: 60000,
+  },
+};
+
+export const modelLoadMissingTypeStringSrc: TestDefinition = {
+  testId: "model-load-missing-type-string-src",
+  params: { modelPath: "/invalid/path/nonexistent-model.gguf" },
+  expectation: {
+    validation: "throws-error",
+    errorContains: "modelType is required",
+  },
+  suites: ["smoke"],
+  metadata: {
+    category: "model",
+    dependency: "none",
+    estimatedDurationMs: 2000,
+  },
+};
+
 
 // Export all tests as array
 export const tests = [
@@ -194,6 +223,9 @@ export const tests = [
   // Model info tests
   ...modelInfoTests,
 
+  // Loaded model info tests
+  ...loadedModelInfoTests,
+
   // KV cache tests
   ...kvCacheTests,
 
@@ -239,7 +271,12 @@ export const tests = [
   // Registry-download config tests (retries + stream timeout)
   ...configTests,
 
+  // Wrong-model error tests
+  ...wrongModelTests,
+
   // Additional model tests
   modelSwitchLlm,
   modelReloadAfterError,
+  modelLoadInferredType,
+  modelLoadMissingTypeStringSrc,
 ];
