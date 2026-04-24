@@ -112,8 +112,8 @@ jobs:
         with:
           role-to-assume: ${{ secrets.AWS_OIDC_ROLE_ARN }}
 
-      - name: Setup vcpkg cache
-        uses: tetherto/qvac/.github/actions/setup-vcpkg-cache@0bbdca93da303a0b1634ba14a89cec085621078d
+      - name: Setup vcpkg
+        uses: tetherto/qvac/.github/actions/setup-vcpkg@3d48906579d044429f42e2d1ff2cba6ec5853d91
         env:
           MODEL_S3_BUCKET: ${{ secrets.MODEL_S3_BUCKET }}
         with:
@@ -174,24 +174,6 @@ jobs:
           Rename-Item -Path "C:\Program Files (x86)\Windows Kits\10\Include\10.0.26100.0" -NewName "C:\Program Files (x86)\Windows Kits\10\Include\old-10.0.26100.0"
           Rename-Item -Path "C:\Program Files (x86)\Windows Kits\10\bin\10.0.26100.0" -NewName "C:\Program Files (x86)\Windows Kits\10\bin\old-10.0.26100.0"
           Rename-Item -Path "C:\Program Files (x86)\Windows Kits\10\Lib\10.0.26100.0" -NewName "C:\Program Files (x86)\Windows Kits\10\Lib\old-10.0.26100.0"
-
-      - if: ${{ startsWith(matrix.os, 'macos-') }}
-        name: Install vcpkg in macos
-        run: |
-          cd ..
-          git clone --branch 2025.12.12 --single-branch https://github.com/microsoft/vcpkg.git
-          cd vcpkg && ./bootstrap-vcpkg.sh -disableMetrics
-          VCPKG_ROOT=$(pwd)
-          echo "VCPKG_ROOT=$VCPKG_ROOT" >> $GITHUB_ENV
-          echo "$VCPKG_ROOT" >> $GITHUB_PATH
-
-      - if: ${{ matrix.os == 'ubuntu-22.04' || matrix.os == 'ubuntu-22.04-arm' || matrix.os == 'ubuntu-24.04' }}
-        name: Configure vcpkg in linux
-        run: echo "VCPKG_ROOT=$VCPKG_INSTALLATION_ROOT" >> $GITHUB_ENV
-
-      - if: ${{ matrix.os == 'windows-2022' }}
-        name: Configure vcpkg in windows
-        run: echo ("VCPKG_ROOT=$env:VCPKG_INSTALLATION_ROOT" -replace '\\', '/') >> $env:GITHUB_ENV
 
       - if: ${{ matrix.platform == 'android' }}
         name: Select NDK
