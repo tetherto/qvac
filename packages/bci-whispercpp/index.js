@@ -415,7 +415,11 @@ class BCIWhispercpp {
 
       if (!this._streamAborted) {
         this._streamResponse = null
-        response.ended()
+        if (opts.emit === 'full') {
+          response.ended(mergedText.length > 0 ? [{ text: mergedText }] : [])
+        } else {
+          response.ended()
+        }
       }
     } catch (err) {
       this._streamResponse = null
