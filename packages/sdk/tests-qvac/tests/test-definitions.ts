@@ -10,7 +10,6 @@ import { translationLlmTests } from "./translation-llm-tests.js";
 import { translationSalamandraTests } from "./translation-salamandra-tests.js";
 import { translationAfriquegemmaTests } from "./translation-afriquegemma-tests.js";
 import { modelInfoTests } from "./model-info-tests.js";
-import { loadedModelInfoTests } from "./loaded-model-info-tests.js";
 import { kvCacheTests } from "./kv-cache-tests.js";
 import { errorTests } from "./error-tests.js";
 import { toolsTests } from "./tools-tests.js";
@@ -220,11 +219,8 @@ export const tests = [
   // HTTP embedding tests
   ...httpEmbeddingTests,
 
-  // Model info tests
+  // Model info tests (includes both registry-side and loaded-model introspection)
   ...modelInfoTests,
-
-  // Loaded model info tests
-  ...loadedModelInfoTests,
 
   // KV cache tests
   ...kvCacheTests,
