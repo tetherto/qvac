@@ -21,10 +21,6 @@ export async function unloadModel(params: UnloadModelParams) {
 
   clearFinetuneRuntimeState(modelId);
 
-  if (entry.local?.loader) {
-    await entry.local.loader.close();
-  }
-
   if (entry.local?.model && entry.local.model.unload) {
     await entry.local.model.unload();
   }
