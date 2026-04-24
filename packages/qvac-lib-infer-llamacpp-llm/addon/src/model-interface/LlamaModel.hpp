@@ -22,6 +22,7 @@
 #include "LlamaLazyInitializeBackend.hpp"
 #include "LlmContext.hpp"
 #include "ModelMetadata.hpp"
+#include "ToolsCompactController.hpp"
 #include "common/chat.h"
 #include "qvac-lib-inference-addon-cpp/BlobsStream.hpp"
 #include "qvac-lib-inference-addon-cpp/GGUFShards.hpp"
@@ -183,6 +184,7 @@ public:
   common_params& getCommonParams();
 
   qvac_lib_inference_addon_cpp::RuntimeStats runtimeStats() const final;
+  qvac_lib_inference_addon_cpp::RuntimeStats runtimeDebugStats() const;
   static void
   llamaLogCallback(ggml_log_level level, const char* text, void* userData);
 
@@ -222,6 +224,11 @@ private:
     // llmContext_ is destroyed first (members destroyed in reverse order)
     std::optional<LlamaBackendsHandle> backendsHandle_;
 
+    // tools_compact controller - owned by ReloadableState, lifetime matches
+    // the state. Must be declared before llmContext_ so it is destroyed
+    // after contexts that hold references to it.
+    std::unique_ptr<ToolsCompactController> toolsCompact_;
+
     // Store the appropriate context (TextLlmContext or MtmdLlmContext)
     // Destroyed before backendsHandle_ to avoid use-after-free
     std::unique_ptr<LlmContext> llmContext_;
@@ -236,16 +243,31 @@ private:
   struct ResolvedPrompt {
     std::vector<common_chat_msg> chatMsgs;
     std::vector<common_chat_tool> tools;
+    PromptLayout layout;
     bool isCacheLoaded = false;
     bool shouldResetAfterInference = false;
   };
+
+  enum class ToolsCompactResolution {
+    NotRequested,
+    RequestedUnsupported,
+    RequestedSupported
+  };
+
+  struct ResolvedToolsCompactConfig {
+    ToolsCompactResolution resolution = ToolsCompactResolution::NotRequested;
+    std::optional<ToolsCompactProfile> profile;
+  };
+
   ResolvedPrompt resolveChatAndTools(const Prompt& prompt);
+  ResolvedToolsCompactConfig
+  resolveToolsCompactConfig(bool toolsCompactRequested) const;
 
   void commonParamsParse(
       const std::string& modelPath,
       std::unordered_map<std::string, std::string>& configFilemap,
       common_params& params, std::optional<int>& outAdrenoVersion,
-      bool& outToolsAtEnd);
+      ResolvedToolsCompactConfig& outToolsCompactConfig);
 
   /**
    * The Format prompt method. It formats the prompt json to chat messages.
@@ -253,12 +275,11 @@ private:
    * @param input - input prompt.
    * @return formatted chat messages and tools.
    */
-  std::pair<std::vector<common_chat_msg>, std::vector<common_chat_tool>>
-  formatPrompt(const std::string& input);
+  ParsedPromptPayload formatPrompt(const std::string& input);
   void resetState(bool resetStats = true);
   std::unique_ptr<LlmContext> createContext(
       std::string&& projectionPath, common_params& params,
-      common_init_result&& llamaInit, bool toolsAtEnd);
+      common_init_result&& llamaInit, ToolsCompactController& tools);
 
   bool loadMedia(const std::vector<uint8_t>& input);
 
