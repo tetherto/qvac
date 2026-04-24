@@ -183,23 +183,26 @@ export function textToSpeech(
   params: TtsClientParams,
   options?: RPCOptions,
 ): TextToSpeechStreamResult {
+  const stream = params.stream ?? true;
+  const sentenceStream = params.sentenceStream === true;
+
   // `sentenceStream` is only meaningful when the response is streamed; the
-  // collect path ignores it entirely, so accepting this combination would
-  // silently return an empty `chunkUpdates` generator and drop per-sentence
-  // metadata. Fail fast instead of running through the wrong branch.
-  if (params.sentenceStream === true && params.stream === false) {
-    throw new Error(
+  // collect path drops per-sentence metadata entirely. Fail fast with a
+  // typed SDK error (code 52415) so callers can discriminate instead of
+  // catching a bare `Error`.
+  if (sentenceStream && !stream) {
+    throw new TextToSpeechStreamFailedError(
       "textToSpeech: `sentenceStream: true` requires `stream: true`",
     );
   }
 
   const request = buildTtsRequest(params);
 
-  if (params.stream && params.sentenceStream) {
+  if (stream && sentenceStream) {
     return sentenceStreamTts(request, options);
   }
 
-  if (params.stream) {
+  if (stream) {
     return plainStreamTts(request, options);
   }
 
