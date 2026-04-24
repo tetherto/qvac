@@ -1723,16 +1723,22 @@ jobs:
             echo "::warning::No performance-report.json found under $OUTPUT_DIR (neither root nor per-device); skipping Step Summary"
           fi
 
+      # Upload the full per-platform output tree so downstream aggregators
+      # (aggregate.js weekly, comet-score-nmt.js weekly) can read the raw
+      # performance-report.json regardless of whether extract-from-log.js
+      # used the single-device layout (root perf-results-mobile/<platform>/
+      # performance-report.json → used when there is one device, e.g. iOS)
+      # or the multi-device layout (per-device subdirs → used when ≥2
+      # devices are in the matrix, e.g. the Android matrix's Pixel +
+      # Samsung). Prior to this fix the upload enumerated only the
+      # root-level paths, so the Android subdir JSONs were silently
+      # dropped and downstream tools saw zero Android rows.
       - name: Upload mobile performance report
         if: always() && steps.schedule_run.outputs.run_arn_1
         uses: actions/upload-artifact@bbbca2ddaa5d8feaa63e36b76fdaad77386f024f # 7.0.0
         with:
           name: perf-report-nmtcpp-mobile-${{ matrix.platform }}-${{ github.run_number }}
-          path: |
-            perf-results-mobile/${{ matrix.platform }}/performance-report.json
-            perf-results-mobile/${{ matrix.platform }}/performance-report.html
-            perf-results-mobile/${{ matrix.platform }}/performance-report.md
-            perf-results-mobile/${{ matrix.platform }}/performance-summary.json
+          path: perf-results-mobile/${{ matrix.platform }}/
           retention-days: 90
           if-no-files-found: ignore
 

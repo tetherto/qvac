@@ -45,16 +45,21 @@ on:
         type: boolean
         default: true
     secrets:
+      # MQTT_* and NPM_TOKEN are typically provided via the release environment
+      # (see the `environment: release` job). They are declared required: false
+      # here so `secrets: inherit` from a caller with no repo-level values
+      # does not fail at the workflow_call boundary; the jobs that consume
+      # them have environment access.
       MQTT_PROTOCOL:
-        required: true
+        required: false
       MQTT_HOST:
-        required: true
+        required: false
       MQTT_PORT:
-        required: true
+        required: false
       MQTT_USERNAME:
-        required: true
+        required: false
       MQTT_PASSWORD:
-        required: true
+        required: false
       MQTT_CA_CERT:
         required: false
       MQTT_CLIENT_CERT:
@@ -62,7 +67,7 @@ on:
       MQTT_CLIENT_KEY:
         required: false
       NPM_TOKEN:
-        required: true
+        required: false
       PAT_TOKEN:
         required: true
 
@@ -70,6 +75,49 @@ permissions:
   contents: read
 
 jobs:
+  report-start:
+    name: "[desktop] report-start"
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      pull-requests: write
+    outputs:
+      comment-ids: ${{ steps.report.outputs.comment-ids }}
+      platform-keys: ${{ steps.keys.outputs.platforms }}
+    steps:
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # 6.0.2
+        with:
+          sparse-checkout: .github/actions/sdk-e2e-report-start
+          sparse-checkout-cone-mode: false
+
+      - name: Derive desktop platform keys
+        id: keys
+        shell: node {0}
+        env:
+          PLATFORMS_IN: ${{ inputs.platforms }}
+        run: |
+          const fs = require('fs');
+          const runners = JSON.parse(process.env.PLATFORMS_IN || '[]');
+          const keys = runners.map((r) => {
+            const s = String(r).toLowerCase();
+            if (s.includes('win')) return 'windows';
+            if (s.includes('mac') || s.includes('darwin')) return 'macos';
+            return 'linux';
+          });
+          const unique = [...new Set(keys)];
+          fs.appendFileSync(process.env.GITHUB_OUTPUT, `platforms=${JSON.stringify(unique)}\n`);
+          console.log(`Derived platform keys: ${JSON.stringify(unique)}`);
+
+      - name: Post running comments
+        id: report
+        uses: ./.github/actions/sdk-e2e-report-start
+        with:
+          family: desktop
+          platforms: ${{ steps.keys.outputs.platforms }}
+          suite: ${{ inputs.suite }}
+          filter: ${{ inputs.filter }}
+          exclude-suite: ${{ inputs.exclude-suite }}
+
   test-desktop:
     name: "[desktop] test (${{ matrix.os }})"
     strategy:
@@ -404,7 +452,7 @@ jobs:
         if: always()
         uses: actions/upload-artifact@bbbca2ddaa5d8feaa63e36b76fdaad77386f024f # 7.0.0
         with:
-          name: consumer-log-${{ steps.runid.outputs.platform }}
+          name: consumer-log-desktop-${{ steps.runid.outputs.platform }}
           path: ${{ inputs.working-directory }}/consumer.log
           retention-days: 7
 
@@ -412,15 +460,95 @@ jobs:
         if: always()
         uses: actions/upload-artifact@bbbca2ddaa5d8feaa63e36b76fdaad77386f024f # 7.0.0
         with:
-          name: results-${{ steps.runid.outputs.platform }}-${{ github.run_number }}
+          name: results-desktop-${{ steps.runid.outputs.platform }}
           path: ${{ inputs.working-directory }}/reports/
           retention-days: 30
+
+      - name: Download baseline for this platform (best-effort)
+        if: always() && github.event.pull_request.base.ref != ''
+        uses: dawidd6/action-download-artifact@20319c5641d495c8a52e688b7dc5fada6c3a9fbc # v8
+        continue-on-error: true
+        with:
+          workflow: test-desktop-sdk.yml
+          branch: ${{ github.event.pull_request.base.ref }}
+          name: baseline-desktop-${{ steps.runid.outputs.platform }}
+          path: ${{ inputs.working-directory }}/baseline
+          github_token: ${{ github.token }}
+          if_no_artifact_found: warn
+
+      - name: Compare vs baseline
+        if: always()
+        working-directory: ${{ inputs.working-directory }}
+        shell: node {0}
+        run: |
+          const fs = require('fs');
+          const path = require('path');
+          const { execSync } = require('child_process');
+
+          if (!fs.existsSync('baseline')) {
+            console.log('No baseline directory - skipping compare.');
+            process.exit(0);
+          }
+          const baselineFiles = fs.readdirSync('baseline').filter((f) => f.endsWith('.json'));
+          if (baselineFiles.length === 0) {
+            console.log('Baseline directory contains no json files - skipping compare.');
+            process.exit(0);
+          }
+          if (!fs.existsSync('reports')) {
+            console.log('No reports directory - skipping compare.');
+            process.exit(0);
+          }
+          const currentFiles = fs.readdirSync('reports')
+            .filter((f) => f.startsWith('results-') && f.endsWith('.json'));
+          if (currentFiles.length === 0) {
+            console.log('No current results json - skipping compare.');
+            process.exit(0);
+          }
+
+          const baseline = path.join('baseline', baselineFiles[0]);
+          const current = path.join('reports', currentFiles[0]);
+          const platform = '${{ steps.runid.outputs.platform }}';
+          const output = `comparison-${platform}.json`;
+          execSync(
+            `npx qvac-test report:compare --baseline "${baseline}" --current "${current}" --output "${output}"`,
+            { stdio: 'inherit' }
+          );
+
+      - name: Format comparison
+        if: always()
+        working-directory: ${{ inputs.working-directory }}
+        shell: node {0}
+        run: |
+          const fs = require('fs');
+          const { execSync } = require('child_process');
+
+          const platform = '${{ steps.runid.outputs.platform }}';
+          const input = `comparison-${platform}.json`;
+          if (!fs.existsSync(input)) {
+            console.log('No comparison json - skipping format.');
+            process.exit(0);
+          }
+          execSync(
+            `npx qvac-test report:format --input "${input}" --format markdown --output "section-${platform}.md"`,
+            { stdio: 'inherit' }
+          );
+
+      - name: Upload report section
+        if: always()
+        uses: actions/upload-artifact@bbbca2ddaa5d8feaa63e36b76fdaad77386f024f # 7.0.0
+        with:
+          name: report-section-desktop-${{ steps.runid.outputs.platform }}
+          path: |
+            ${{ inputs.working-directory }}/section-*.md
+            ${{ inputs.working-directory }}/comparison-*.json
+          retention-days: 7
+          if-no-files-found: ignore
 
       - name: Upload baseline (main/develop only)
         if: always() && (github.ref == 'refs/heads/main' || github.ref == 'refs/heads/develop')
         uses: actions/upload-artifact@bbbca2ddaa5d8feaa63e36b76fdaad77386f024f # 7.0.0
         with:
-          name: baseline-${{ steps.runid.outputs.platform }}
+          name: baseline-desktop-${{ steps.runid.outputs.platform }}
           path: ${{ inputs.working-directory }}/reports/results-*.json
           retention-days: 90
           overwrite: true
@@ -435,209 +563,25 @@ jobs:
             console.log(fs.readFileSync('consumer.log', 'utf8'));
           }
 
-  compare-results:
-    name: "[desktop] compare-results"
-    needs: test-desktop
-    if: github.event_name == 'pull_request'
+  report-finalize:
+    name: "[desktop] report-finalize"
+    needs: [report-start, test-desktop]
+    if: always()
     runs-on: ubuntu-latest
-    environment: release
-    env:
-      NPM_TOKEN: ${{ secrets.NPM_TOKEN }}
-      PAT_TOKEN: ${{ secrets.PAT_TOKEN }}
     permissions:
+      contents: read
       pull-requests: write
     steps:
       - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # 6.0.2
         with:
-          ref: ${{ inputs.test-version || github.event.pull_request.head.sha || github.sha }}
-          token: ${{ secrets.PAT_TOKEN }}
-          sparse-checkout: ${{ inputs.project-directory }}
+          sparse-checkout: .github/actions/sdk-e2e-report-finalize
+          sparse-checkout-cone-mode: false
 
-      - uses: actions/setup-node@53b83947a5a98c8d113130e565377fae1a50d02f # 6.3.0
+      - uses: ./.github/actions/sdk-e2e-report-finalize
         with:
-          node-version: 22
-      
-      - name: Configure npm registries
-        shell: node {0}
-        run: |
-          const fs = require('fs');
-          const path = require('path');
-
-          const lines = [
-            'registry=https://registry.npmjs.org/',
-            '@qvac:registry=https://registry.npmjs.org/',
-            '@tetherto:registry=https://npm.pkg.github.com/',
-            `//registry.npmjs.org/:_authToken=${process.env.NPM_TOKEN}`,
-            `//npm.pkg.github.com/:_authToken=${process.env.PAT_TOKEN}`
-          ];
-          const npmrc = lines.join('\n');
-          const target = path.join('${{ inputs.project-directory }}', '.npmrc');
-          fs.writeFileSync(target, npmrc, 'utf8');
-
-      - name: Copy .npmrc to consumer directory
-        shell: node {0}
-        run: |
-          const fs = require('fs');
-          const path = require('path');
-          const projectDir = '${{ inputs.project-directory }}';
-          const consumerDir = '${{ inputs.working-directory }}';
-          if (consumerDir !== projectDir) {
-            const source = path.join(projectDir, '.npmrc');
-            const npmrcContent = fs.readFileSync(source, 'utf8');
-            fs.writeFileSync(path.join(consumerDir, '.npmrc'), npmrcContent, 'utf8');
-          }
-      - name: Install dependencies
-        working-directory: ${{ inputs.working-directory }}
-        run: npm install --install-links --ignore-scripts
-
-      - name: Download current results
-        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # 8.0.1
-        with:
-          path: ${{ inputs.working-directory }}/current-results/
-          pattern: results-*
-          merge-multiple: true
-
-      - name: Download baseline results
-        id: download-baseline
-        uses: dawidd6/action-download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # 8.0.1
-        continue-on-error: true
-        with:
-          workflow: test-desktop-sdk.yml
-          branch: ${{ github.event.pull_request.base.ref }}
-          name: baseline-*
-          path: ${{ inputs.working-directory }}/baseline-results/
-          if_no_artifact_found: warn
-
-      - name: Check baseline availability
-        id: check-baseline
-        shell: node {0}
-        run: |
-          const fs = require('fs');
-          const path = require('path');
-          const baselineDir = path.join('${{ inputs.working-directory }}', 'baseline-results');
-          let hasBaseline = false;
-          if (fs.existsSync(baselineDir)) {
-            const files = fs.readdirSync(baselineDir).filter(f => f.endsWith('.json'));
-            hasBaseline = files.length > 0;
-          }
-          fs.appendFileSync(process.env.GITHUB_OUTPUT, `has_baseline=${hasBaseline}\n`, 'utf8');
-          console.log(`Baseline available: ${hasBaseline}`);
-
-      - name: Compare results
-        if: steps.check-baseline.outputs.has_baseline == 'true'
-        working-directory: ${{ inputs.working-directory }}
-        shell: node {0}
-        run: |
-          const { execSync } = require('child_process');
-          const fs = require('fs');
-          const path = require('path');
-
-          function getPlatform(filePath) {
-            try {
-              const json = JSON.parse(fs.readFileSync(filePath, 'utf8'));
-              return json.system?.platform || 'unknown';
-            } catch (e) {
-              return 'unknown';
-            }
-          }
-
-          const currentFiles = fs.existsSync('current-results')
-            ? fs.readdirSync('current-results').filter(f => f.endsWith('.json'))
-            : [];
-          const baselineFiles = fs.existsSync('baseline-results')
-            ? fs.readdirSync('baseline-results').filter(f => f.endsWith('.json'))
-            : [];
-
-          const currentByPlatform = {};
-          for (const f of currentFiles) {
-            const filePath = path.join('current-results', f);
-            const platform = getPlatform(filePath);
-            currentByPlatform[platform] = filePath;
-          }
-
-          const baselineByPlatform = {};
-          for (const f of baselineFiles) {
-            const filePath = path.join('baseline-results', f);
-            const platform = getPlatform(filePath);
-            baselineByPlatform[platform] = filePath;
-          }
-
-          for (const platform of Object.keys(currentByPlatform)) {
-            if (baselineByPlatform[platform]) {
-              const current = currentByPlatform[platform];
-              const baseline = baselineByPlatform[platform];
-              console.log(`Comparing ${platform}: ${baseline} vs ${current}`);
-              execSync(`npx qvac-test report:compare --baseline "${baseline}" --current "${current}" --output "comparison-${platform}.json"`, { stdio: 'inherit' });
-            } else {
-              console.log(`No baseline for platform: ${platform}`);
-            }
-          }
-
-      - name: Format comparison
-        working-directory: ${{ inputs.working-directory }}
-        shell: node {0}
-        run: |
-          const { execSync } = require('child_process');
-          const fs = require('fs');
-          const path = require('path');
-
-          let comment = '# 🧪 QVAC Test Results\n\n';
-          const sha = '${{ github.event.pull_request.head.sha }}'.substring(0, 7);
-          comment += `**Branch**: \`${{ github.head_ref }}\` | **Commit**: \`${sha}\` | **Base**: \`${{ github.event.pull_request.base.ref }}\`\n\n`;
-
-          if ("${{ steps.check-baseline.outputs.has_baseline }}" === "false") {
-            comment += '⚠️ **No baseline found** - showing current results only\n\n';
-            comment += '| Platform | Passed | Failed | Total | Rate | Duration |\n';
-            comment += '|----------|--------|--------|-------|------|----------|\n';
-
-            if (fs.existsSync('current-results')) {
-              const results = fs.readdirSync('current-results').filter(f => f.endsWith('.json'));
-              for (const result of results) {
-                try {
-                  const json = JSON.parse(fs.readFileSync(path.join('current-results', result), 'utf8'));
-                  const platform = json.system?.platform || 'unknown';
-                  comment += `| ${platform} | ${json.summary.passed} | ${json.summary.failed} | ${json.summary.total} | ${json.summary.successRate}% | ${json.summary.duration}s |\n`;
-                } catch (e) {
-                  console.log(`Failed to parse ${result}: ${e.message}`);
-                }
-              }
-            }
-
-            comment += '\n### 📦 Artifacts\n\n';
-            comment += `[View workflow run](https://github.com/${{ github.repository }}/actions/runs/${{ github.run_id }})\n`;
-          } else {
-            const comparisons = fs.readdirSync('.').filter(f => f.startsWith('comparison-') && f.endsWith('.json'));
-            for (const comparison of comparisons) {
-              const platform = path.basename(comparison, '.json').replace('comparison-', '');
-              execSync(`npx qvac-test report:format --input "${comparison}" --format markdown --output "platform-${platform}.md"`, { stdio: 'inherit' });
-
-              comment += `## ${platform}\n`;
-              comment += fs.readFileSync(`platform-${platform}.md`, 'utf8') + '\n';
-            }
-
-            comment += '### 📦 Artifacts\n\n';
-            comment += `[View workflow run](https://github.com/${{ github.repository }}/actions/runs/${{ github.run_id }})\n`;
-          }
-
-          fs.writeFileSync('comment.md', comment, 'utf8');
-
-      - name: Comment on PR
-        uses: actions/github-script@ed597411d8f924073f98dfc5c65a23a2325f34cd # 8.0.0
-        with:
-          script: |
-            const fs = require('fs');
-            const commentPath = '${{ inputs.working-directory }}/comment.md';
-
-            if (!fs.existsSync(commentPath)) {
-              console.log('No comment file generated');
-              return;
-            }
-
-            const body = fs.readFileSync(commentPath, 'utf8');
-
-            await github.rest.issues.createComment({
-              issue_number: context.issue.number,
-              owner: context.repo.owner,
-              repo: context.repo.repo,
-              body: body
-            });
+          family: desktop
+          platforms: ${{ needs.report-start.outputs.platform-keys }}
+          comment-ids: ${{ needs.report-start.outputs.comment-ids }}
+          suite: ${{ inputs.suite }}
+          filter: ${{ inputs.filter }}
+          exclude-suite: ${{ inputs.exclude-suite }}
