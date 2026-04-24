@@ -22,8 +22,7 @@ const {
   extractTriples,
   renderMarkdown,
   fmtPct,
-  fmtComet,
-  fmtDelta
+  fmtComet
 } = require('../comet-score-nmt.js')
 
 // ---------------------------------------------------------------------------
@@ -176,14 +175,6 @@ test('fmtComet: null → "-", number → 3 decimals', () => {
   assert.equal(fmtComet(0.7104), '0.710')
 })
 
-test('fmtDelta: signed pp difference or "-" on missing', () => {
-  assert.equal(fmtDelta(null, 0.97), '-')
-  assert.equal(fmtDelta(0.85, null), '-')
-  assert.equal(fmtDelta(0.85, 0.80), '+5.0pp')
-  assert.equal(fmtDelta(0.55, 0.63), '-8.0pp')
-  assert.equal(fmtDelta(0.80, 0.80), '+0.0pp')
-})
-
 // ---------------------------------------------------------------------------
 // renderMarkdown
 // ---------------------------------------------------------------------------
@@ -209,13 +200,17 @@ test('renderMarkdown: with triples + scores renders a full table', () => {
     runs: 6,
     generatedAt: '2026-04-23T12:00:00Z'
   })
-  assert.ok(md.includes('| Test | Device | chrF++ | COMET'))
+  // Header has 4 columns now (no Δ column — intentionally removed because
+  // chrF++ and COMET aren't on the same calibration curve, so subtracting
+  // them implies a linearity that doesn't hold).
+  assert.ok(md.includes('| Test | Device | chrF++ | COMET |'))
+  assert.ok(!/Δ|COMET − chrF|\bpp\b/.test(md), 'no Δ/pp artefacts leftover')
   assert.ok(md.includes('[Bergamot] [CPU]'))
   assert.ok(md.includes('97.0%'))
   assert.ok(md.includes('0.880'))
   assert.ok(md.includes('22.8%'))
   assert.ok(md.includes('0.550'))
-  assert.ok(md.includes('QVAC-16488'), 'explanation for mobile IndicTrans drop is surfaced')
+  assert.ok(md.includes('QVAC-16488'), 'cross-platform delta guidance surfaces the sacremoses ticket')
 })
 
 test('renderMarkdown: COMET-skipped stub is still well-formed', () => {

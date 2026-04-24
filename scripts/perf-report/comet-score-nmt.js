@@ -277,16 +277,6 @@ function fmtComet (v) {
   return v.toFixed(3)
 }
 
-function fmtDelta (comet, chrfpp) {
-  if (comet === null || chrfpp === null) return '-'
-  // COMET is ~0-1 with 0.8+ "good"; chrF++ is ~0-1 too. Report raw
-  // signed delta (COMET - chrF++) in the same units so a reader
-  // can see at a glance whether COMET agrees or disagrees.
-  const d = comet - chrfpp
-  const sign = d >= 0 ? '+' : '-'
-  return sign + Math.abs(d * 100).toFixed(1) + 'pp'
-}
-
 /**
  * Renders the COMET markdown report. Pure function of (triples,
  * cometScores, meta) so the unit test can exercise it offline.
@@ -325,23 +315,23 @@ function renderMarkdown (triples, cometScores, meta) {
     return a.test.localeCompare(b.test)
   })
 
-  lines.push('| Test | Device | chrF++ | COMET | Δ (COMET − chrF++) |')
-  lines.push('| --- | --- | --- | --- | --- |')
+  lines.push('| Test | Device | chrF++ | COMET |')
+  lines.push('| --- | --- | --- | --- |')
   for (let i = 0; i < sorted.length; i++) {
     const t = sorted[i]
     // Align index back to the scores list: the scores were computed
     // on the un-sorted triples array, so look up by identity.
     const originalIdx = triples.indexOf(t)
     const cometVal = (cometScores && originalIdx >= 0) ? cometScores[originalIdx] : null
-    lines.push(`| \`${t.test}\` | ${t.device} | ${fmtPct(t.chrfpp)} | ${fmtComet(cometVal)} | ${fmtDelta(cometVal, t.chrfpp)} |`)
+    lines.push(`| \`${t.test}\` | ${t.device} | ${fmtPct(t.chrfpp)} | ${fmtComet(cometVal)} |`)
   }
 
   lines.push('')
   lines.push('### Notes')
   lines.push('- chrF++ is character + word n-gram F-score (sacrebleu-compatible). Values ~0-1 · higher is better.')
   lines.push('- COMET is a neural reference-based MT metric (Unbabel). Values ~0-1 · higher is better · 0.8+ is strong.')
-  lines.push('- COMET and chrF++ measure different things (semantic similarity vs n-gram overlap). Large disagreement on the same row is usually meaningful — the row deserves a closer look.')
-  lines.push('- Mobile (iOS / Android) rows may show COMET far below desktop on the same test while chrF++ is already low — this is **tracked as QVAC-16488** (sacremoses data files not bundled by `bare-pack --linked`, causing IndicProcessor tokenization to run without its Unicode tables).')
+  lines.push('- The two metrics are not on the same calibration curve (chrF++ is surface n-gram overlap; COMET is neural semantic similarity calibrated to human direct-assessment). They are shown side by side intentionally — interpret each independently, not as a subtraction.')
+  lines.push('- What to watch for: (a) the **absolute COMET** value per row (< 0.6 = suspect, < 0.5 = broken); (b) cross-platform deltas on the **same test** (e.g. mobile IndicTrans COMET 0.51 vs desktop 0.95 → signal of the sacremoses bundling regression tracked as **QVAC-16488**).')
   return lines.join('\n') + '\n'
 }
 
@@ -425,7 +415,6 @@ if (require.main === module) {
     extractTriples,
     renderMarkdown,
     fmtPct,
-    fmtComet,
-    fmtDelta
+    fmtComet
   }
 }
