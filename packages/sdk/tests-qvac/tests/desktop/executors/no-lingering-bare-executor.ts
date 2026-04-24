@@ -17,6 +17,7 @@ type ShutdownMode = "sigterm" | "close" | "ipc-disconnect";
 const CONSUMER_BOOT_TIMEOUT_MS = 60_000;
 const CONSUMER_EXIT_TIMEOUT_MS = 20_000;
 const BARE_EXIT_GRACE_MS = 15_000;
+const BARE_DISCOVERY_TIMEOUT_MS = 5_000;
 const POLL_INTERVAL_MS = 200;
 
 const consumerScriptPath = join(
@@ -83,7 +84,8 @@ function findBareChildrenWin32(parentPid: number): number[] {
   } catch (error: unknown) {
     const code = (error as { code?: string })?.code;
     if (code === "ENOENT") throw new Error("powershell.exe not found in PATH");
-    return [];
+    const msg = (error as { stderr?: string })?.stderr ?? String(error);
+    throw new Error(`PowerShell query failed: ${msg}`);
   }
 
   const bare: number[] = [];
@@ -94,7 +96,7 @@ function findBareChildrenWin32(parentPid: number): number[] {
     if (sep === -1) continue;
     const pid = Number(trimmed.slice(0, sep));
     const name = trimmed.slice(sep + 1).toLowerCase();
-    if (isNaN(pid)) continue;
+    if (Number.isNaN(pid)) continue;
     if (name === "bare" || name === "bare.exe") {
       bare.push(pid);
     }
@@ -119,6 +121,29 @@ async function pollUntilDead(pid: number, timeoutMs: number): Promise<boolean> {
     await sleep(POLL_INTERVAL_MS);
   }
   return !isAlive(pid);
+}
+
+async function waitForBareChildren(parentPid: number): Promise<number[]> {
+  const deadline = Date.now() + BARE_DISCOVERY_TIMEOUT_MS;
+  while (Date.now() < deadline) {
+    const pids = findBareChildren(parentPid);
+    if (pids.length > 0) return pids;
+    await sleep(POLL_INTERVAL_MS);
+  }
+  return [];
+}
+
+function assertCleanExit(
+  mode: ShutdownMode,
+  exit: { code: number | null; signal: string | null },
+): string | null {
+  if (mode === "close" && (exit.code !== 0 || exit.signal !== null)) {
+    return `close() exit was not clean: code=${exit.code}, signal=${exit.signal}`;
+  }
+  if (mode === "sigterm" && exit.code !== null && exit.code !== 0) {
+    return `sigterm exit code was non-zero: code=${exit.code}, signal=${exit.signal}`;
+  }
+  return null;
 }
 
 export class NoLingeringBareExecutor extends BaseExecutor<typeof noLingeringBareTests> {
@@ -162,15 +187,17 @@ export class NoLingeringBareExecutor extends BaseExecutor<typeof noLingeringBare
         ));
       });
 
-      child.stdout!.on("data", (chunk: Buffer) => {
+      const onData = (chunk: Buffer) => {
         if (settled) return;
         buffer += chunk.toString();
         if (buffer.includes("READY")) {
           settled = true;
           clearTimeout(timeout);
+          child.stdout!.off("data", onData);
           resolve();
         }
-      });
+      };
+      child.stdout!.on("data", onData);
 
       child.once("exit", (code, signal) => {
         fail(new Error(
@@ -198,6 +225,7 @@ export class NoLingeringBareExecutor extends BaseExecutor<typeof noLingeringBare
     const start = Date.now();
     let consumer: ChildProcess | null = null;
     let bareChildren: number[] = [];
+    const cleanedUp = new Set<number>();
     const stderr: string[] = [];
 
     try {
@@ -209,13 +237,13 @@ export class NoLingeringBareExecutor extends BaseExecutor<typeof noLingeringBare
 
       await this.waitForReady(consumer, stderr);
 
-      bareChildren = findBareChildren(consumer.pid!);
+      bareChildren = await waitForBareChildren(consumer.pid!);
       if (bareChildren.length === 0) {
         return {
           passed: false,
           output:
-            "No bare child process found — SDK did not spawn a worker. " +
-            `stderr: ${stderr.join("")}`,
+            `No bare child process found after ${BARE_DISCOVERY_TIMEOUT_MS}ms — ` +
+            `SDK did not spawn a worker. stderr: ${stderr.join("")}`,
         };
       }
 
@@ -226,19 +254,16 @@ export class NoLingeringBareExecutor extends BaseExecutor<typeof noLingeringBare
           consumer.kill("SIGTERM");
           break;
         case "close":
-          if (process.platform === "win32") {
-            consumer.stdin!.write("CLOSE\n");
-          } else {
-            consumer.kill("SIGUSR1");
-          }
+          consumer.stdin!.write("CLOSE\n");
           break;
         case "ipc-disconnect":
           consumer.kill("SIGKILL");
           break;
       }
 
+      let exit: { code: number | null; signal: string | null };
       try {
-        await exitPromise;
+        exit = await exitPromise;
       } catch {
         try { consumer.kill("SIGKILL"); } catch {}
         return {
@@ -249,6 +274,14 @@ export class NoLingeringBareExecutor extends BaseExecutor<typeof noLingeringBare
         };
       }
       consumer = null;
+
+      const exitError = assertCleanExit(mode, exit);
+      if (exitError) {
+        return {
+          passed: false,
+          output: `${exitError}. stderr: ${stderr.join("")}`,
+        };
+      }
 
       const lingering: number[] = [];
       await Promise.all(
@@ -263,6 +296,7 @@ export class NoLingeringBareExecutor extends BaseExecutor<typeof noLingeringBare
       if (lingering.length > 0) {
         for (const pid of lingering) {
           try { process.kill(pid, "SIGKILL"); } catch {}
+          cleanedUp.add(pid);
         }
         return {
           passed: false,
@@ -292,6 +326,7 @@ export class NoLingeringBareExecutor extends BaseExecutor<typeof noLingeringBare
         try { consumer.kill("SIGKILL"); } catch {}
       }
       for (const pid of bareChildren) {
+        if (cleanedUp.has(pid)) continue;
         try {
           if (isAlive(pid)) process.kill(pid, "SIGKILL");
         } catch {}

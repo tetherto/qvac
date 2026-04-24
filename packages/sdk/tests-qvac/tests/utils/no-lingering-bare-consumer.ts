@@ -6,7 +6,8 @@
  * trigger one of three shutdown modes:
  *
  *   sigterm        — harness sends SIGTERM; SDK handler cleans up
- *   close          — harness signals via SIGUSR1 / stdin; we call close()
+ *   close          — harness writes "CLOSE\n" to stdin; we call close()
+ *                    then let the event loop drain (no process.exit)
  *   ipc-disconnect — harness sends SIGKILL; bare worker detects broken IPC
  */
 
@@ -15,7 +16,7 @@ import { modelRegistryList, close } from "@qvac/sdk";
 type Mode = "sigterm" | "close" | "ipc-disconnect";
 
 const VALID_MODES: Mode[] = ["sigterm", "close", "ipc-disconnect"];
-const REGISTRY_INIT_TIMEOUT_MS = 15_000;
+const REGISTRY_INIT_TIMEOUT_MS = 30_000;
 
 const mode = process.argv[2] as Mode | undefined;
 if (!mode || !VALID_MODES.includes(mode)) {
@@ -61,25 +62,20 @@ async function main(): Promise<void> {
 
   if (mode === "close") {
     let closeTriggered = false;
-    const triggerClose = (source: string) => {
-      if (closeTriggered) return;
+    process.stdin.setEncoding("utf-8");
+    process.stdin.on("data", (chunk: string) => {
+      if (closeTriggered || chunk.trim() !== "CLOSE") return;
       closeTriggered = true;
-      log(`received ${source}, calling close()`);
+      log("received CLOSE, calling close()");
       close()
         .then(() => {
-          log("close() returned, exiting");
-          process.exit(0);
+          log("close() returned, letting event loop drain");
+          process.stdin.destroy();
         })
         .catch((err: unknown) => {
           log(`close() failed: ${err instanceof Error ? err.message : String(err)}`);
           process.exit(2);
         });
-    };
-
-    process.once("SIGUSR1", () => triggerClose("SIGUSR1"));            // POSIX
-    process.stdin.setEncoding("utf-8");                                 // Windows
-    process.stdin.on("data", (chunk: string) => {
-      if (chunk.trim() === "CLOSE") triggerClose("stdin CLOSE");
     });
   }
 
