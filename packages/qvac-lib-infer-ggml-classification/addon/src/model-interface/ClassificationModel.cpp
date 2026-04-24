@@ -18,7 +18,6 @@
 #include <ggml-cpu.h>
 #include <ggml.h>
 #include <gguf.h>
-
 #include <qvac-lib-inference-addon-cpp/Errors.hpp>
 #include <qvac-lib-inference-addon-cpp/Logger.hpp>
 
@@ -301,7 +300,8 @@ std::any ClassificationModel::process(const std::any& input) {
   // numerical edge case in the ggml CPU backend cannot break sort and
   // silently land a non-maximum-confidence class at index 0.
   std::sort(
-      output.results.begin(), output.results.end(),
+      output.results.begin(),
+      output.results.end(),
       [](const ClassifyResult& a, const ClassifyResult& b) {
         const bool aFinite = std::isfinite(a.confidence);
         const bool bFinite = std::isfinite(b.confidence);
@@ -325,9 +325,12 @@ std::any ClassificationModel::process(const std::any& input) {
         "[qvac-classify] logits=[%.6f, %.6f, %.6f] "
         "probs_before_sort=[%.6f, %.6f, %.6f] "
         "sorted=[{%s:%.6f}, {%s:%.6f}, {%s:%.6f}]\n",
-        static_cast<double>(logits[0]), static_cast<double>(logits[1]),
-        static_cast<double>(logits[2]), static_cast<double>(probs[0]),
-        static_cast<double>(probs[1]), static_cast<double>(probs[2]),
+        static_cast<double>(logits[0]),
+        static_cast<double>(logits[1]),
+        static_cast<double>(logits[2]),
+        static_cast<double>(probs[0]),
+        static_cast<double>(probs[1]),
+        static_cast<double>(probs[2]),
         output.results.size() > 0 ? output.results[0].label.c_str() : "-",
         output.results.size() > 0
             ? static_cast<double>(output.results[0].confidence)

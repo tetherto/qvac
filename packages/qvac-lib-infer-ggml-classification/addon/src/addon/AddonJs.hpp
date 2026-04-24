@@ -1,5 +1,7 @@
 #pragma once
 
+#include <cstdio>
+#include <cstdlib>
 #include <memory>
 #include <string>
 #include <utility>
@@ -154,22 +156,64 @@ private:
 };
 
 /// Handler mapping ClassifyOutput → JS array of { label, confidence }.
+///
+/// Implementation notes:
+///   - The label string and the confidence float are read into named
+///     local variables before being handed to the JS-side helpers.
+///     This is defensive against compiler code-gen quirks (notably
+///     observed on win32-x64 / clang-cl, where an inline
+///     `static_cast<double>(cppOut.results[i].confidence)` fed
+///     directly into `Number::create(...)` lost the value at index
+///     0 of the result array, while indices 1..N marshalled
+///     correctly). Reading into named locals forces the compiler
+///     to materialise the values before the call sequence and
+///     gives us a stable point to instrument when diagnosing
+///     marshalling issues.
+///   - When `QVAC_CLASSIFICATION_TRACE=1` is set in the
+///     environment, every entry is printed to stderr with both
+///     the C++ float view and the C++ double view of the value.
+///     Combined with the per-inference trace in
+///     `ClassificationModel::process()`, this lets us pinpoint
+///     exactly which step (sort / marshal / JS-side conversion)
+///     loses a value when one ever does.
 struct JsClassifyOutputHandler
     : addon_cpp::out_handl::JsBaseOutputHandler<ClassifyOutput> {
   JsClassifyOutputHandler()
       : JsBaseOutputHandler<ClassifyOutput>(
             [this](const ClassifyOutput& cppOut) -> js_value_t* {
               auto array = jsu::Array::create(this->env_);
+              const bool trace = []() {
+                const char* v = std::getenv("QVAC_CLASSIFICATION_TRACE");
+                return v != nullptr && v[0] == '1';
+              }();
               for (size_t i = 0; i < cppOut.results.size(); ++i) {
+                // Read into named locals BEFORE creating any JS values.
+                const std::string& labelString = cppOut.results[i].label;
+                const float confidenceFloat = cppOut.results[i].confidence;
+                const double confidenceDouble =
+                    static_cast<double>(confidenceFloat);
+
+                if (trace) {
+                  std::fprintf(
+                      stderr,
+                      "[qvac-classify-marshal] i=%zu label='%s' "
+                      "confidence_float=%.9f confidence_double=%.9f\n",
+                      i,
+                      labelString.c_str(),
+                      static_cast<double>(confidenceFloat),
+                      confidenceDouble);
+                  std::fflush(stderr);
+                }
+
                 auto entry = jsu::Object::create(this->env_);
                 entry.setProperty(
-                    this->env_, "label",
-                    jsu::String::create(this->env_, cppOut.results[i].label));
+                    this->env_,
+                    "label",
+                    jsu::String::create(this->env_, labelString));
                 entry.setProperty(
-                    this->env_, "confidence",
-                    jsu::Number::create(
-                        this->env_,
-                        static_cast<double>(cppOut.results[i].confidence)));
+                    this->env_,
+                    "confidence",
+                    jsu::Number::create(this->env_, confidenceDouble));
                 array.set(this->env_, i, entry);
               }
               return array;
