@@ -111,7 +111,7 @@ const stockTool: ToolInput = {
 // ─── Simulated Tool Executor ─────────────────────────────────────────────────
 
 function executeToolCall(name: string, args: Record<string, unknown>): string {
-  const query = String(args["query"] ?? "").toLowerCase()
+  const query = typeof args['query'] === 'string' ? args['query'].toLowerCase() : ''
 
   if (name === "get_weather") {
     return JSON.stringify({
@@ -150,8 +150,8 @@ function executeToolCall(name: string, args: Record<string, unknown>): string {
     }
     return JSON.stringify({
       results: [{
-        title: `Results for: ${args["query"]}`,
-        snippet: `Information about ${args["query"]}. This is a simulated search result.`,
+        title: `Results for: ${query}`,
+        snippet: `Information about ${query}. This is a simulated search result.`,
       }],
     })
   }

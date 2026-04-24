@@ -380,11 +380,11 @@ async function* processModelResponse(
     generatedTokens: responseWithStats.stats?.generatedTokens ?? 0,
     contextSlides: responseWithStats.stats?.contextSlides ?? 0,
     // @ts-expect-error test-error
-    nPastBeforeTools: responseWithStats.stats?.nPastBeforeTools ?? 0,
+    nPastBeforeTools: responseWithStats.stats?.nPastBeforeTools ?? 0, // eslint-disable-line
     // @ts-expect-error test-error
-    toolsTrimmed:responseWithStats.stats?.toolsTrimmed ?? 0,
+    toolsTrimmed:responseWithStats.stats?.toolsTrimmed ?? 0, // eslint-disable-line
     // @ts-expect-error test-error
-    firstMsgTokens: responseWithStats.stats?.firstMsgTokens ?? 0,
+    firstMsgTokens: responseWithStats.stats?.firstMsgTokens ?? 0, // eslint-disable-line
   } as CompletionStats;
 
   return {
