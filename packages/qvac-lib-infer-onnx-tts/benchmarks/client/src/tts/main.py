@@ -23,7 +23,6 @@ from .utils import (
     save_single_result,
     save_supertonic_perf_report,
 )
-from .whisper_transcriber import WhisperTranscriber
 
 # Mapping for TTS language codes to Whisper language codes (where they differ)
 # Whisper uses "no" for Norwegian, but TTS uses "nb" for Norwegian Bokmål
@@ -119,6 +118,12 @@ def apply_supertonic_env_overrides(cfg: Config) -> Config:
     )
 
 
+def load_whisper_transcriber(model_size: str, language: str):
+    """Lazily import WhisperTranscriber only when round-trip checks are enabled."""
+    from .whisper_transcriber import WhisperTranscriber
+    return WhisperTranscriber(model_size=model_size, language=language)
+
+
 def run_supertonic_benchmark_suite(cfg: Config, config_path: str) -> None:
     """English on HF supertonic, Spanish (or other) on multilingual (HF supertonic-2) — one result file per language."""
     if not cfg.model.modelDirV1 or not cfg.model.modelDirMultilingual:
@@ -170,9 +175,7 @@ def run_supertonic_benchmark_suite(cfg: Config, config_path: str) -> None:
             wl = TTS_TO_WHISPER_LANG.get(whisper_lang, whisper_lang)
             logger.info("Loading Whisper for round-trip (lang=%s)", wl)
             try:
-                whisper = WhisperTranscriber(
-                    model_size=cfg.comparison.whisper_model, language=wl
-                )
+                whisper = load_whisper_transcriber(cfg.comparison.whisper_model, wl)
                 whisper.load()
             except Exception as e:
                 logger.error("Failed to load Whisper: %s", e, exc_info=True)
@@ -327,7 +330,7 @@ def main():
         logger.info("=" * 60)
         try:
             whisper_language = TTS_TO_WHISPER_LANG.get(whisper_lang, whisper_lang)
-            whisper = WhisperTranscriber(model_size=cfg.comparison.whisper_model, language=whisper_language)
+            whisper = load_whisper_transcriber(cfg.comparison.whisper_model, whisper_language)
             whisper.load()
             logger.info("✅ Whisper model loaded successfully")
         except Exception as e:
