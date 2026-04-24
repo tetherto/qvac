@@ -132,28 +132,48 @@ void ClassificationModel::load() {
   }
   impl_->compute = graph::buildGraph(impl_->weights, impl_->backend);
 
-  // Cold-inference warmup. ggml's backend graph allocator leaves the
-  // intermediate tensor buffers and the input/output tensors in an
-  // uninitialised state after `buildGraph` returns. The very first
-  // inference can therefore observe stale heap residue and produce
-  // non-finite logits on some platforms (notably observed on win32-x64
-  // in CI: meal_1.jpg -> probabilities NaN, sort comparison fails).
-  // Run one zero-input forward pass here so every backend buffer is
-  // written deterministically before any user-visible classify() call.
+  // Cold-inference warmup. The first user-visible classify() can observe
+  // non-finite logits on some platforms (notably win32-x64 in CI:
+  // meal_1.jpg -> NaN in result[0].confidence) because:
+  //   - ggml's backend graph allocator leaves intermediate buffers
+  //     uninitialised after buildGraph().
+  //   - Some CPU backends lazily JIT or page in SIMD kernels on the
+  //     first non-trivial input, and the cold path can interact badly
+  //     with FP state (FTZ/denormals) left from earlier process work.
+  //
+  // To eliminate this deterministically, run one full forward pass
+  // through the EXACT same pipeline classify() uses: synthesise a small
+  // raw-RGB buffer with a deterministic non-zero gradient, push it
+  // through preprocess::preprocessToTensor (resize + ImageNet
+  // normalise), set the input tensor, compute the graph, and read the
+  // output back. The warmup output is discarded; the goal is to leave
+  // every backend buffer in a fully-written, deterministic state and to
+  // exercise every lazy-init code path before any caller sees the
+  // model. Cost: one synthetic inference at load() time.
   {
-    const size_t inputElems =
-        static_cast<size_t>(preprocess::kInputSize) *
-        preprocess::kInputSize * preprocess::kChannels;
-    std::vector<float> zeros(inputElems, 0.0F);
+    constexpr uint32_t kWarmupSide = 32;  // resized to kInputSize
+    std::vector<uint8_t> warmupRgb(
+        static_cast<size_t>(kWarmupSide) * kWarmupSide * preprocess::kChannels);
+    for (size_t i = 0; i < warmupRgb.size(); ++i) {
+      warmupRgb[i] = static_cast<uint8_t>((i * 7) & 0xFFU);
+    }
+    std::vector<float> warmupTensor = preprocess::preprocessToTensor(
+        std::span<const uint8_t>(warmupRgb.data(), warmupRgb.size()),
+        kWarmupSide, kWarmupSide, preprocess::kChannels);
     ggml_backend_tensor_set(
-        impl_->compute.input, zeros.data(), 0,
-        zeros.size() * sizeof(float));
+        impl_->compute.input, warmupTensor.data(), 0,
+        warmupTensor.size() * sizeof(float));
     if (impl_->numThreads > 0) {
       ggml_backend_cpu_set_n_threads(impl_->backend, impl_->numThreads);
     }
-    // Result is intentionally discarded; the only goal is to populate
-    // every backend buffer with deterministic values.
     (void)ggml_backend_graph_compute(impl_->backend, impl_->compute.graph);
+    // Read the output back so the warmup is observably symmetric with
+    // process(): on some backends the result of compute() only fully
+    // materialises after the first tensor_get on the output buffer.
+    float warmupLogits[graph::kNumClasses] = {0.0F};
+    ggml_backend_tensor_get(
+        impl_->compute.output, warmupLogits, 0, sizeof(warmupLogits));
+    (void)warmupLogits;
   }
 
   impl_->loaded = true;
