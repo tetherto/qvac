@@ -475,19 +475,34 @@ async function main () {
     if (args.dir) {
       rootDir = args.dir
     } else {
-      // Only aggregate successful runs — failed runs frequently have
-      // missing or partial perf-report artifacts, which would pollute
-      // the weekly aggregate with gaps.
-      const runs = listWorkflowRuns(args.workflow, args.runs, args.repo, { onlySuccess: true })
+      // Aggregate ALL completed runs regardless of conclusion.
+      //
+      // The umbrella "On PR Trigger (NMTCPP)" workflow is a big matrix
+      // (desktop × {linux/x64, linux/arm64, darwin/arm64, win32-x64,
+      // ubuntu-22/24} plus mobile × {iOS, Android with 2+ devices}).
+      // A single leg going red (e.g. a transient Vulkan cold-init
+      // flake on ai-run-windows11-gpu, an SSH glitch in the Android
+      // pool) marks the whole run `conclusion=failure`, but the OTHER
+      // legs' perf-report-* artifacts are still attached and valid.
+      // Filtering by `success` was throwing away all the Android /
+      // iOS / hosted-Linux data from those runs — which is exactly
+      // what caused "no Android rows" after the last refactor.
+      //
+      // Truly broken runs (pre-test infra failure, GitHub API
+      // outage) attach zero perf-report-* artifacts, so they
+      // contribute nothing to the aggregate naturally —
+      // collectReportsFromDir just doesn't find any JSON to parse.
+      // No artificial filter needed.
+      const runs = listWorkflowRuns(args.workflow, args.runs, args.repo)
       if (!runs.length) {
-        console.error('No successful runs found — cannot score.')
+        console.error('No completed runs found — cannot score.')
         // Still emit a stub markdown so the workflow's Step Summary writer has something sane.
         writeOutput(args.output, renderMarkdown([], {
           model: args.model, runs: args.runs, generatedAt: new Date().toISOString()
         }))
         process.exit(0)
       }
-      console.log(`  Found ${runs.length} successful runs. Downloading perf-report artifacts (parallel, concurrency=${DEFAULT_DOWNLOAD_CONCURRENCY})...`)
+      console.log(`  Found ${runs.length} completed runs. Downloading perf-report artifacts (parallel, concurrency=${DEFAULT_DOWNLOAD_CONCURRENCY})...`)
       for (const r of runs) console.log(`    #${r.number} (${r.databaseId})`)
       tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), 'comet-nmt-src-'))
       await downloadRunArtifactsParallel(runs, tmpDir, 'perf-report-*', args.repo,
