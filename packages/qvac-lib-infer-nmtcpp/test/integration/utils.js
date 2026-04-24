@@ -664,13 +664,17 @@ function createPerformanceCollector () {
  *
  * @param {string} label - Test label prefix (e.g., '[Bergamot]')
  * @param {Object} metrics - Metrics object from createPerformanceCollector().getMetrics()
- * @param {Object} [qualityOpts] - Optional translation-quality context
- * @param {string} [qualityOpts.fixturePath] - Path to the ground-truth fixture JSON
- * @param {string} [qualityOpts.srcLang]     - Source language code (matches fixture entry)
- * @param {string} [qualityOpts.dstLang]     - Destination language code (matches fixture entry)
+ * @param {Object} [opts] - Optional reporter extras
+ * @param {string} [opts.fixturePath] - Path to the ground-truth fixture JSON (enables chrF++ scoring)
+ * @param {string} [opts.srcLang]     - Source language code (matches fixture entry)
+ * @param {string} [opts.dstLang]     - Destination language code (matches fixture entry)
+ * @param {string} [opts.execution_provider] - Runtime backend tag (e.g. 'Vulkan0', 'OpenCL', 'Metal').
+ *                                             If omitted, falls back to regex-parsing the label for
+ *                                             '[GPU]' / '[CPU]' so call sites that don't know the
+ *                                             actual runtime backend still tag records sensibly.
  * @returns {string} Formatted performance metrics string
  */
-function formatPerformanceMetrics (label, metrics, qualityOpts) {
+function formatPerformanceMetrics (label, metrics, opts = {}) {
   const {
     totalTime,
     generatedTokens,
@@ -686,9 +690,9 @@ function formatPerformanceMetrics (label, metrics, qualityOpts) {
   const decodeTimeMs = typeof decodeTime === 'number' ? decodeTime : 0
 
   let quality = null
-  if (qualityOpts && qualityOpts.fixturePath && prompt && qualityOpts.srcLang && qualityOpts.dstLang) {
+  if (opts && opts.fixturePath && prompt && opts.srcLang && opts.dstLang) {
     try {
-      const gt = findTranslationGroundTruth(qualityOpts.fixturePath, prompt, qualityOpts.srcLang, qualityOpts.dstLang)
+      const gt = findTranslationGroundTruth(opts.fixturePath, prompt, opts.srcLang, opts.dstLang)
       if (gt) {
         quality = evaluateTranslationQuality(fullOutput || '', gt)
       }
@@ -697,7 +701,13 @@ function formatPerformanceMetrics (label, metrics, qualityOpts) {
     }
   }
 
-  const ep = /\[gpu\]/i.test(label) ? 'gpu' : /\[cpu\]/i.test(label) ? 'cpu' : null
+  // Prefer a caller-supplied execution_provider (the true runtime backend
+  // name, e.g. 'Vulkan0' / 'OpenCL') so perf-baselines keyed by EP stay
+  // accurate even when the test label says '[GPU]' but a silent CPU
+  // fallback happened. Fall back to regex-parsing the label so call sites
+  // that don't know the runtime backend still tag records sensibly.
+  const ep = opts.execution_provider ||
+    (/\[gpu\]/i.test(label) ? 'gpu' : /\[cpu\]/i.test(label) ? 'cpu' : null)
 
   _perfReporter.record(label, {
     total_time_ms: Math.round(totalTimeMs),

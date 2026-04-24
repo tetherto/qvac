@@ -1,4 +1,6 @@
 // NOLINTBEGIN
+#include <algorithm>
+#include <cctype>
 #include <cstdint>
 #include <cstring>
 #include <fstream>
@@ -131,34 +133,126 @@ static buft_list_t make_buft_list(nmt_context_params& params) {
   oss2 << "Total backends available: " << ggml_backend_dev_count();
   QLOG(qvac_lib_inference_addon_cpp::logger::Priority::DEBUG, oss2.str());
 
-  // GPU
+  // GPU buft selection — must mirror nmt_backend_init_gpu() so tensor
+  // buffers live on the same device we'll execute on. See the comment in
+  // nmt_state_backend.cpp for the OpenCL-gating and explicit gpu_backend
+  // selection rationale.
+  auto name_contains = [](const char* n, const std::string& needle) {
+    if (n == nullptr || needle.empty()) {
+      return false;
+    }
+    std::string s(n);
+    std::transform(s.begin(), s.end(), s.begin(), [](unsigned char c) {
+      return static_cast<char>(std::tolower(c));
+    });
+    return s.find(needle) != std::string::npos;
+  };
+
+  std::string gpuBackendLower = params.gpu_backend;
+  std::transform(
+      gpuBackendLower.begin(),
+      gpuBackendLower.end(),
+      gpuBackendLower.begin(),
+      [](unsigned char c) { return static_cast<char>(std::tolower(c)); });
+
   if (params.use_gpu) {
-    int cnt = 0;
     for (size_t i = 0; i < ggml_backend_dev_count(); ++i) {
       ggml_backend_dev_t dev = ggml_backend_dev_get(i);
       enum ggml_backend_dev_type dev_type = ggml_backend_dev_type(dev);
       const char* name = ggml_backend_dev_name(dev);
       std::ostringstream oss3;
-      oss3 << "  Backend[" << i << "]: type=" << dev_type << ", name=" << name;
+      oss3 << "  Backend[" << i << "]: type=" << dev_type
+           << ", name=" << (name ? name : "(null)");
       QLOG(qvac_lib_inference_addon_cpp::logger::Priority::DEBUG, oss3.str());
+    }
 
-      if (dev_type == GGML_BACKEND_DEVICE_TYPE_GPU) {
-        QLOG(
-            qvac_lib_inference_addon_cpp::logger::Priority::DEBUG,
-            "  -> This is a GPU backend!");
+    bool selected = false;
 
+    if (!gpuBackendLower.empty()) {
+      // Mode 1: explicit gpu_backend filter.
+      int cnt = 0;
+      for (size_t i = 0; i < ggml_backend_dev_count(); ++i) {
+        ggml_backend_dev_t dev = ggml_backend_dev_get(i);
+        enum ggml_backend_dev_type dev_type = ggml_backend_dev_type(dev);
+        const char* name = ggml_backend_dev_name(dev);
+        if (dev_type == GGML_BACKEND_DEVICE_TYPE_CPU) {
+          continue;
+        }
+        if (!name_contains(name, gpuBackendLower)) {
+          continue;
+        }
         if (cnt == 0 || cnt == params.gpu_device) {
           auto* buft = ggml_backend_dev_buffer_type(dev);
           if (buft) {
             buft_list.emplace_back(dev, buft);
+            selected = true;
             QLOG(
                 qvac_lib_inference_addon_cpp::logger::Priority::DEBUG,
-                "  -> Added to buft_list");
+                "  -> Added explicit gpu_backend buft to buft_list");
           }
         }
-
         if (++cnt > params.gpu_device) {
           break;
+        }
+      }
+    } else {
+#ifdef QVAC_NMTCPP_USE_OPENCL
+      // Mode 2a: prefer OpenCL.
+      int cnt = 0;
+      for (size_t i = 0; i < ggml_backend_dev_count(); ++i) {
+        ggml_backend_dev_t dev = ggml_backend_dev_get(i);
+        enum ggml_backend_dev_type dev_type = ggml_backend_dev_type(dev);
+        const char* name = ggml_backend_dev_name(dev);
+        if (dev_type == GGML_BACKEND_DEVICE_TYPE_CPU) {
+          continue;
+        }
+        if (!name_contains(name, "opencl")) {
+          continue;
+        }
+        if (cnt == 0 || cnt == params.gpu_device) {
+          auto* buft = ggml_backend_dev_buffer_type(dev);
+          if (buft) {
+            buft_list.emplace_back(dev, buft);
+            selected = true;
+            QLOG(
+                qvac_lib_inference_addon_cpp::logger::Priority::DEBUG,
+                "  -> Added OpenCL buft to buft_list");
+          }
+        }
+        if (++cnt > params.gpu_device) {
+          break;
+        }
+      }
+#endif
+
+      // Mode 2b: fallback to any non-CPU compute device (skipping OpenCL
+      // when the guard is off).
+      if (!selected) {
+        int cnt2 = 0;
+        for (size_t i = 0; i < ggml_backend_dev_count(); ++i) {
+          ggml_backend_dev_t dev = ggml_backend_dev_get(i);
+          enum ggml_backend_dev_type dev_type = ggml_backend_dev_type(dev);
+          const char* name = ggml_backend_dev_name(dev);
+          if (dev_type == GGML_BACKEND_DEVICE_TYPE_CPU) {
+            continue;
+          }
+#ifndef QVAC_NMTCPP_USE_OPENCL
+          if (name_contains(name, "opencl")) {
+            continue;
+          }
+#endif
+          if (cnt2 == 0 || cnt2 == params.gpu_device) {
+            auto* buft = ggml_backend_dev_buffer_type(dev);
+            if (buft) {
+              buft_list.emplace_back(dev, buft);
+              QLOG(
+                  qvac_lib_inference_addon_cpp::logger::Priority::DEBUG,
+                  "  -> Added compute buft to buft_list");
+            }
+          }
+          if (++cnt2 > params.gpu_device) {
+            break;
+          }
         }
       }
     }

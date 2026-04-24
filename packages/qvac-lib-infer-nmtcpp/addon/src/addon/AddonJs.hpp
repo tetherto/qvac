@@ -55,7 +55,13 @@ getConfigMap(
       hasPivotModel = true;
       continue;
     }
-    if (js::is<js::Int32>(env, value) || js::is<js::Uint32>(env, value) ||
+    if (js::is<js::Boolean>(env, value)) {
+      // Map booleans to int64 {0,1} so downstream config readers can treat
+      // them uniformly (TranslationModel::setConfig reads "use_gpu" this way).
+      auto jsBool = js::Boolean{env, value};
+      configMap[keyString] = static_cast<int64_t>(jsBool.as<bool>(env) ? 1 : 0);
+    } else if (
+        js::is<js::Int32>(env, value) || js::is<js::Uint32>(env, value) ||
         js::is<js::BigInt>(env, value)) {
       auto jsNumber = js::Number{env, value};
       configMap[keyString] = jsNumber.as<int64_t>(env);
@@ -66,7 +72,8 @@ getConfigMap(
       auto jsString = js::String::fromValue(value);
       configMap[keyString] = jsString.as<std::string>(env);
     } else {
-      std::string msg = "Expected numeric or string value for config key '" +
+      std::string msg = "Expected boolean, numeric or string value for config "
+                        "key '" +
                         keyString + "' but got a different type";
       throw qvac_errors::StatusError(
           qvac_errors::general_error::InvalidArgument, msg);
@@ -138,6 +145,27 @@ inline js_value_t* createInstance(js_env_t* env, js_callback_info_t* info) try {
       std::make_unique<AddonJs>(env, std::move(callback), std::move(model));
 
   return JsInterface::createInstance(env, std::move(addon));
+}
+JSCATCH
+
+inline js_value_t*
+getActiveBackendName(js_env_t* env, js_callback_info_t* info) try {
+  using namespace qvac_lib_inference_addon_cpp;
+
+  JsArgsParser args(env, info);
+  AddonJs& instance = JsInterface::getInstance(env, args.get(0, "instance"));
+
+  // The shared AddonCpp stores the model as IModel& — getActiveBackendName()
+  // only lives on TranslationModel. A downcast failure means the active model
+  // is PivotTranslationModel (Bergamot), which is CPU-only by design.
+  auto* translationModel =
+      dynamic_cast<qvac_lib_inference_addon_nmt::TranslationModel*>(
+          &instance.addonCpp->model.get());
+
+  std::string name = translationModel ? translationModel->getActiveBackendName()
+                                      : std::string("Bergamot-CPU");
+
+  return js::String::create(env, name.c_str());
 }
 JSCATCH
 

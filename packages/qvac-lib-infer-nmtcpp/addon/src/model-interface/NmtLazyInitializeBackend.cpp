@@ -4,8 +4,15 @@
 #include <string>
 
 #include <ggml-backend.h>
+#include <ggml.h>
 
 #include "qvac-lib-inference-addon-cpp/Logger.hpp"
+
+#ifdef __ANDROID__
+#include <android/log.h>
+#include <dlfcn.h>
+#include <link.h>
+#endif
 
 using namespace qvac_lib_inference_addon_cpp::logger;
 
@@ -13,6 +20,136 @@ std::mutex NmtLazyInitializeBackend::g_initMutex;
 bool NmtLazyInitializeBackend::g_initialized = false;
 std::string NmtLazyInitializeBackend::g_recordedBackendsDir;
 int NmtLazyInitializeBackend::g_refCount = 0;
+
+// Forward ggml's internal log stream to QLOG so diagnostic lines
+// (Adreno detection, CL_CHECK errors, OpenCL driver info, etc.) reach
+// logcat on Android instead of silently going to stderr. Mirrors what
+// llama_log_set does in the llamacpp-llm addon. See QVAC-17790.
+namespace {
+void nmtGgmlLogCallback(
+    enum ggml_log_level level, const char* text, void* /*user_data*/) {
+  if (text == nullptr) {
+    return;
+  }
+  Priority priority = Priority::DEBUG;
+  switch (level) {
+  case GGML_LOG_LEVEL_ERROR:
+    priority = Priority::ERROR;
+    break;
+  case GGML_LOG_LEVEL_WARN:
+    priority = Priority::WARNING;
+    break;
+  case GGML_LOG_LEVEL_INFO:
+    priority = Priority::INFO;
+    break;
+  case GGML_LOG_LEVEL_DEBUG:
+  default:
+    break;
+  }
+  // Strip trailing newlines — ggml terminates messages with '\n' but our
+  // logger adds its own. Leaving both produces blank lines in logcat.
+  std::string message(text);
+  while (!message.empty() &&
+         (message.back() == '\n' || message.back() == '\r')) {
+    message.pop_back();
+  }
+  if (message.empty()) {
+    return;
+  }
+
+#ifdef __ANDROID__
+  // Mirror ERROR/WARN through Android's logcat synchronously so crash-
+  // precursor messages (e.g. CL_CHECK error lines right before ggml_abort)
+  // survive even when the JS bridge hasn't flushed the async QLOG queue.
+  // DEBUG/INFO go through QLOG only to keep logcat tidy.
+  if (level == GGML_LOG_LEVEL_ERROR || level == GGML_LOG_LEVEL_WARN) {
+    __android_log_print(
+        level == GGML_LOG_LEVEL_ERROR ? ANDROID_LOG_ERROR : ANDROID_LOG_WARN,
+        "ggml-nmt",
+        "%s",
+        message.c_str());
+  }
+#endif
+
+  QLOG(priority, "[ggml] " + message);
+}
+
+// ggml_abort uses its own callback (not the log callback). Without this
+// hook, the "file:line: GGML_ASSERT(...) failed" message that precedes
+// every SIGABRT goes to stderr — which is dropped on Android. Route it
+// to logcat via __android_log_print (synchronous) so post-mortem logs
+// show the failing assertion site.
+void nmtGgmlAbortCallback(const char* message) {
+  if (message == nullptr) {
+    message = "(null abort message)";
+  }
+#ifdef __ANDROID__
+  __android_log_print(
+      ANDROID_LOG_FATAL, "ggml-nmt-abort", "GGML_ABORT: %s", message);
+#endif
+  QLOG(Priority::ERROR, std::string("[ggml-abort] ") + message);
+}
+
+#ifdef __ANDROID__
+// ggml-backend loads each backend via dlopen(path, RTLD_NOW | RTLD_LOCAL)
+// (see ggml-backend-reg.cpp). Because each backend .so statically links its
+// own copy of libggml-base, the g_logger_state and g_abort_callback symbols
+// inside every backend .so are PRIVATE — calling ggml_log_set /
+// ggml_set_abort_callback from the main .bare only mutates the main .bare's
+// copy. A GGML_ASSERT that fires inside the OpenCL or Vulkan backend (the
+// exact crash we are chasing) therefore goes through an *uninstalled*
+// callback and falls back to stderr, which is dropped on Android.
+//
+// Workaround: enumerate every loaded shared object via dl_iterate_phdr
+// (which yields absolute paths for everything currently mapped into the
+// process, so we don't depend on backendsDir containing the .sos — ggml's
+// internal fallback search paths also load from other locations, making a
+// filesystem walk of backendsDir unreliable). For each libqvac-ggml*.so we
+// re-open with RTLD_NOLOAD (returns the existing handle without re-mapping),
+// dlsym the two setters out of it, and install our callbacks directly into
+// that .so's copy of the state.
+int backendSoIterCallback(
+    struct dl_phdr_info* info, size_t /*size*/, void* /*data*/) {
+  if (info == nullptr || info->dlpi_name == nullptr ||
+      info->dlpi_name[0] == '\0') {
+    return 0;
+  }
+  std::string fullPath(info->dlpi_name);
+  auto slash = fullPath.find_last_of('/');
+  std::string filename =
+      slash == std::string::npos ? fullPath : fullPath.substr(slash + 1);
+  if (filename.find("ggml") == std::string::npos) {
+    return 0;
+  }
+  if (filename.find(".so") == std::string::npos) {
+    return 0;
+  }
+
+  using LogSetFn = void (*)(ggml_log_callback, void*);
+  using AbortSetFn = ggml_abort_callback_t (*)(ggml_abort_callback_t);
+
+  void* handle = dlopen(fullPath.c_str(), RTLD_NOW | RTLD_NOLOAD);
+  if (handle == nullptr) {
+    return 0;
+  }
+  auto logSetFn = reinterpret_cast<LogSetFn>(dlsym(handle, "ggml_log_set"));
+  if (logSetFn != nullptr) {
+    logSetFn(&nmtGgmlLogCallback, nullptr);
+  }
+  auto abortSetFn =
+      reinterpret_cast<AbortSetFn>(dlsym(handle, "ggml_set_abort_callback"));
+  if (abortSetFn != nullptr) {
+    abortSetFn(&nmtGgmlAbortCallback);
+  }
+  dlclose(handle);
+  return 0;
+}
+
+void installCallbacksInLoadedBackendSos() {
+  dl_iterate_phdr(&backendSoIterCallback, nullptr);
+}
+#endif
+} // namespace
 
 bool NmtLazyInitializeBackend::initialize(
     const std::string& backendsDir, const std::string& openclCacheDir) {
@@ -33,6 +170,16 @@ bool NmtLazyInitializeBackend::initialize(
   if (!backendsDir.empty()) {
     g_recordedBackendsDir = backendsDir;
   }
+
+  // Install the ggml log + abort callbacks BEFORE
+  // ggml_backend_load_all_from_path so backend-registration messages, CL_CHECK
+  // error lines, and the actual "file:line: GGML_ASSERT(...) failed" abort
+  // message are captured by the platform logger. Without these, ggml writes to
+  // stderr which is dropped on Android, which is why the Adreno 830 OpenCL
+  // crash looks silent. ggml_abort uses a separate callback from ggml_log_set,
+  // so set both.
+  ggml_log_set(&nmtGgmlLogCallback, nullptr);
+  ggml_set_abort_callback(&nmtGgmlAbortCallback);
 
 #ifdef __ANDROID__
   if (!openclCacheDir.empty()) {
@@ -57,6 +204,12 @@ bool NmtLazyInitializeBackend::initialize(
     QLOG(Priority::DEBUG, "Loading backends using default path");
     ggml_backend_load_all();
   }
+#ifdef __ANDROID__
+  // Must run after backend loading (the backend .sos are only mapped into
+  // the process after ggml_backend_load_all* returns) and regardless of
+  // whether a backendsDir was provided.
+  installCallbacksInLoadedBackendSos();
+#endif
 
   g_initialized = true;
   return true;
