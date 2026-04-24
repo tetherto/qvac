@@ -478,14 +478,27 @@ jobs:
           pip install --upgrade pip setuptools wheel
           pip install -r requirements-supertonic.txt
 
-      - name: Install benchmark client dependencies
+      - name: Install benchmark client dependencies (Unix)
+        if: ${{ matrix.platform != 'win32' }}
         working-directory: ${{ inputs.workdir }}/benchmarks/client
+        shell: bash
         run: |
           pip install --upgrade pip setuptools wheel
           pip install -r requirements.txt
           if [ "${{ matrix.round_trip_test && 'true' || 'false' }}" = "true" ]; then
             pip install -r requirements-roundtrip.txt
           fi
+
+      - name: Install benchmark client dependencies (Windows)
+        if: ${{ matrix.platform == 'win32' }}
+        working-directory: ${{ inputs.workdir }}/benchmarks/client
+        shell: powershell
+        run: |
+          pip install --upgrade pip setuptools wheel
+          pip install -r requirements.txt
+          if ("${{ matrix.round_trip_test && 'true' || 'false' }}" -eq "true") {
+            pip install -r requirements-roundtrip.txt
+          }
 
       - name: Start Python Native server (Unix)
         if: ${{ matrix.platform != 'win32' && inputs.supertonic_run_python && matrix.run_python }}
