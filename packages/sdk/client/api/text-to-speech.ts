@@ -1,5 +1,4 @@
 import {
-  ttsResponseSchema,
   textToSpeechStreamResponseSchema,
   type TtsClientParams,
   type TtsRequest,
@@ -30,15 +29,23 @@ class TtsMulticast {
   private ended = false;
   private fatal: Error | undefined;
   private readonly resolvePumpDone: (value: boolean) => void;
+  private readonly rejectPumpDone: (err: unknown) => void;
 
   readonly done: Promise<boolean>;
 
   constructor(request: TtsRequest, options: RPCOptions | undefined) {
     let resolve!: (value: boolean) => void;
-    this.done = new Promise<boolean>((r) => {
+    let reject!: (err: unknown) => void;
+    this.done = new Promise<boolean>((r, rj) => {
       resolve = r;
+      reject = rj;
     });
+    // Silence unhandled-rejection warnings when the caller never awaits
+    // `done` (e.g. only iterates the buffer stream). Re-awaits still get the
+    // rejection because the underlying promise state is unchanged.
+    this.done.catch(() => {});
     this.resolvePumpDone = resolve;
+    this.rejectPumpDone = reject;
     void this.pump(request, options);
   }
 
@@ -81,8 +88,12 @@ class TtsMulticast {
     try {
       for await (const response of streamRpc(request, options)) {
         if (response.type !== "textToSpeech") continue;
-        const m = ttsResponseSchema.parse(response);
-        this.queue.push(m);
+        // The server owns this response schema; per-frame Zod .parse() adds
+        // non-trivial CPU overhead for large sentences with many PCM frames.
+        // Rely on the discriminated union narrowing at the RPC boundary and
+        // skip re-validation here.
+        this.queue.push(response);
+        const m = response;
         this.notify();
         if (m.done) break;
       }
@@ -91,7 +102,14 @@ class TtsMulticast {
     } finally {
       this.ended = true;
       this.notify();
-      this.resolvePumpDone(this.fatal === undefined);
+      if (this.fatal) {
+        // Reject rather than resolving false so callers awaiting `done`
+        // with no iteration — and callers iterating drain() — both see the
+        // real error instead of a silent sentinel.
+        this.rejectPumpDone(this.fatal);
+      } else {
+        this.resolvePumpDone(true);
+      }
     }
   }
 
@@ -245,13 +263,16 @@ function plainStreamTts(
   request: TtsRequest,
   options: RPCOptions | undefined,
 ): TextToSpeechStreamResult {
-  let doneResolver: (value: boolean) => void = () => {};
-  const done = new Promise<boolean>((resolve) => {
-    doneResolver = resolve;
+  let resolveDone!: (value: boolean) => void;
+  let rejectDone!: (err: unknown) => void;
+  const done = new Promise<boolean>((resolve, reject) => {
+    resolveDone = resolve;
+    rejectDone = reject;
   });
+  done.catch(() => {});
 
   return {
-    bufferStream: plainTtsBufferStream(request, options, doneResolver),
+    bufferStream: plainTtsBufferStream(request, options, resolveDone, rejectDone),
     buffer: Promise.resolve([]),
     done,
   };
@@ -261,16 +282,32 @@ async function* plainTtsBufferStream(
   request: TtsRequest,
   options: RPCOptions | undefined,
   resolveDone: (value: boolean) => void,
+  rejectDone: (err: unknown) => void,
 ): AsyncGenerator<number> {
-  for await (const response of streamRpc(request, options)) {
-    if (response.type !== "textToSpeech") continue;
-    const parsed = ttsResponseSchema.parse(response);
-    if (parsed.buffer.length > 0) {
-      yield* parsed.buffer;
+  let settled = false;
+  try {
+    for await (const response of streamRpc(request, options)) {
+      if (response.type !== "textToSpeech") continue;
+      // See TtsMulticast.pump — skip per-frame Zod validation; the server is
+      // the source of truth for this wire shape.
+      if (response.buffer.length > 0) {
+        yield* response.buffer;
+      }
+      if (response.done) {
+        settled = true;
+        resolveDone(true);
+      }
     }
-    if (parsed.done) {
-      resolveDone(true);
+  } catch (e) {
+    if (!settled) {
+      settled = true;
+      rejectDone(e);
     }
+    throw e;
+  } finally {
+    // Consumer broke out of the for-await before `done` arrived; resolve
+    // with `false` so `await result.done` never hangs.
+    if (!settled) resolveDone(false);
   }
 }
 
@@ -278,14 +315,17 @@ function collectTts(
   request: TtsRequest,
   options: RPCOptions | undefined,
 ): TextToSpeechStreamResult {
-  let doneResolver: (value: boolean) => void = () => {};
-  const done = new Promise<boolean>((resolve) => {
-    doneResolver = resolve;
+  let resolveDone!: (value: boolean) => void;
+  let rejectDone!: (err: unknown) => void;
+  const done = new Promise<boolean>((resolve, reject) => {
+    resolveDone = resolve;
+    rejectDone = reject;
   });
+  done.catch(() => {});
 
   return {
     bufferStream: emptyBufferStream(),
-    buffer: collectTtsBuffer(request, options, doneResolver),
+    buffer: collectTtsBuffer(request, options, resolveDone, rejectDone),
     done,
   };
 }
@@ -298,17 +338,22 @@ async function collectTtsBuffer(
   request: TtsRequest,
   options: RPCOptions | undefined,
   resolveDone: (value: boolean) => void,
+  rejectDone: (err: unknown) => void,
 ): Promise<number[]> {
   let buffer: number[] = [];
-  for await (const response of streamRpc(request, options)) {
-    if (response.type !== "textToSpeech") continue;
-    const parsed = ttsResponseSchema.parse(response);
-    buffer = buffer.concat(parsed.buffer);
-    if (parsed.done) {
-      resolveDone(true);
+  try {
+    for await (const response of streamRpc(request, options)) {
+      if (response.type !== "textToSpeech") continue;
+      buffer = buffer.concat(response.buffer);
+      if (response.done) {
+        resolveDone(true);
+      }
     }
+    return buffer;
+  } catch (e) {
+    rejectDone(e);
+    throw e;
   }
-  return buffer;
 }
 
 /**
@@ -358,9 +403,19 @@ export async function textToSpeechStream(
     },
     [Symbol.asyncIterator]() {
       if (consumed) {
-        throw new TextToSpeechStreamFailedError(
-          "TextToSpeechStreamSession can only be iterated once",
-        );
+        // Return an iterator whose first .next() rejects asynchronously so
+        // `for await` surfaces the error in the normal async-iteration
+        // control flow instead of a synchronous throw from the iterator
+        // protocol (which callers commonly forget to wrap in try/catch).
+        return {
+          next(): Promise<IteratorResult<TextToSpeechStreamResponse>> {
+            return Promise.reject(
+              new TextToSpeechStreamFailedError(
+                "TextToSpeechStreamSession can only be iterated once",
+              ),
+            );
+          },
+        } as AsyncIterator<TextToSpeechStreamResponse>;
       }
       consumed = true;
       return responses;
