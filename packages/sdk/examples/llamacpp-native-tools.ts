@@ -46,7 +46,6 @@ try {
     modelConfig: {
       ctx_size: 4096,
       tools: true, // Enable tools support
-      toolsMode: 'dynamic',
     },
     onProgress: (progress) =>
       console.log(`Loading: ${progress.percentage.toFixed(1)}%`),
