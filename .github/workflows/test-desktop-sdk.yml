@@ -454,7 +454,7 @@ jobs:
       - uses: actions/setup-node@53b83947a5a98c8d113130e565377fae1a50d02f # 6.3.0
         with:
           node-version: 22
-
+      
       - name: Configure npm registries
         shell: node {0}
         run: |
@@ -484,7 +484,6 @@ jobs:
             const npmrcContent = fs.readFileSync(source, 'utf8');
             fs.writeFileSync(path.join(consumerDir, '.npmrc'), npmrcContent, 'utf8');
           }
-
       - name: Install dependencies
         working-directory: ${{ inputs.working-directory }}
         run: npm install --install-links --ignore-scripts

@@ -84,10 +84,8 @@ jobs:
       workdir: packages/lib-infer-diffusion
 
   ts-checks:
-    if: needs.authorize.outputs.allowed == 'true'
     needs: authorize
     runs-on: ubuntu-latest
-    environment: release
     steps:
       - name: Checkout code
         uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # 6.0.2
