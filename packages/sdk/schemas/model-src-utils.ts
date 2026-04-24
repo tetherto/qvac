@@ -1,5 +1,10 @@
 import { z } from "zod";
-import { modelTypeInputSchema } from "./model-types";
+import {
+  modelTypeInputSchema,
+  normalizeModelType,
+  isCanonicalModelType,
+  isModelTypeAlias,
+} from "./model-types";
 
 // Addon field accepts model type inputs plus "vad"
 const addonSchema = z.union([modelTypeInputSchema, z.literal("vad")]);
@@ -45,3 +50,26 @@ export const modelInputToNameSchema = modelSrcInputSchema.transform(
     return undefined;
   },
 );
+
+export function inferModelTypeFromModelSrc(
+  modelSrc: unknown,
+): string | undefined {
+  if (typeof modelSrc !== "object" || modelSrc === null) {
+    return undefined;
+  }
+  const descriptor = modelSrc as Record<string, unknown>;
+
+  const engine = descriptor["engine"];
+  if (typeof engine === "string" && engine.length > 0) {
+    return engine;
+  }
+
+  const addon = descriptor["addon"];
+  if (typeof addon === "string" && addon.length > 0) {
+    if (isCanonicalModelType(addon) || isModelTypeAlias(addon)) {
+      return normalizeModelType(addon);
+    }
+  }
+
+  return undefined;
+}
