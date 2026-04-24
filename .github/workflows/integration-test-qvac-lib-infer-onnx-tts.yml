@@ -561,7 +561,7 @@ jobs:
         run: |
           $logPath = Join-Path $PWD "server.log"
           $errorPath = Join-Path $PWD "server-error.log"
-          $proc = Start-Process -FilePath bare -ArgumentList "index.js" -WorkingDirectory $PWD -RedirectStandardOutput $logPath -RedirectStandardError $errorPath -PassThru
+          $proc = Start-Process -FilePath bare.cmd -ArgumentList "index.js" -WorkingDirectory $PWD -RedirectStandardOutput $logPath -RedirectStandardError $errorPath -PassThru
           $proc.Id | Out-File -FilePath server.pid -Encoding ascii
           $healthy = $false
           for ($i = 0; $i -lt 10; $i++) {
