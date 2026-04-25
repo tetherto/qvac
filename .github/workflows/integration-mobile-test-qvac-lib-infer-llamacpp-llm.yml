@@ -1262,14 +1262,18 @@ jobs:
             RUN_ARN_10=$(schedule_run_with_pool "$POOL_ARN" "$RUN_NAME-iOS-LightB" "$TEST_SPEC_ARN_10")
             echo "✅ LightB scheduled: $RUN_ARN_10"
 
-            # QVAC-17830: a one-shot Heavy7 retry used to live here so
-            # we got a second chance at fruit-plate perf data when the
-            # first attempt SIGABRT'd. Removed at user's request now
-            # that heavy7 itself is a "warm process" group — the small
-            # elephant image test (SmolVLM2 + mmproj + Metal vision
-            # shaders, same code path fruit-plate hits) runs first to
-            # pre-warm the VLM pipeline before the 10 MB fruit-plate
-            # PNG lands. See test-groups.json -> ios.heavy7.
+            # QVAC-17830: a one-shot Heavy7 retry used to live here
+            # so we got a second chance at fruit-plate perf data when
+            # the first attempt SIGABRT'd. Removed at user's request.
+            # Heavy7 = ["runImageFruitPlateTest"] only (cold process).
+            # Memory pressure is now bounded inside the test itself:
+            # iosWarmupImage='elephant.jpg' performs ONE small VLM
+            # inference before the 10 MB fruit-plate PNG, the standard
+            # warmup loop is skipped on iOS because the pre-warmup
+            # already exercised the multimodal pipeline, and
+            # iosPerfRuns=1 caps counted iterations at one — so iOS
+            # fruit-plate runs exactly 2 inferences cold. See
+            # _image-common.js + image-fruit-plate.test.js.
 
             echo "run_arn_1=$RUN_ARN_1" >> $GITHUB_OUTPUT
             echo "run_arn_2=$RUN_ARN_2" >> $GITHUB_OUTPUT

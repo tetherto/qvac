@@ -532,7 +532,14 @@ function runImageRecognitionTest (testCase, deviceConfig) {
     // ahead of time so the real image's first pass only needs the
     // incremental delta. Guarded by testCase.iosWarmupImage so it only
     // fires for the tests that actually opt in (fruit plate today),
-    // and only on iOS so desktop/Android timings are untouched.
+    // and only on iOS so desktop/Android timings are untouched. When
+    // this pre-warmup successfully runs we treat it AS the test's
+    // warmup pass and skip the standard PERF_WARMUP_RUNS loop below
+    // — the whole point is to keep the iOS cold-path inference count
+    // as low as possible (1 small + 1 real instead of 1 small + 1 +
+    // counted), so a heavy image like fruit-plate stays under the
+    // ~3.3 GB Jetsam ceiling.
+    let iosPreWarmupRan = false
     if (platform === 'ios' && testCase.iosWarmupImage) {
       try {
         const warmupPath = getMediaPath(testCase.iosWarmupImage)
@@ -546,6 +553,7 @@ function runImageRecognitionTest (testCase, deviceConfig) {
             `${label} iOS pre-warmup done in ${w.endTime - w.startTime}ms ` +
             `(${w.generatedText.length} chars)`
           )
+          iosPreWarmupRan = true
         } else {
           t.comment(
             `${label} iOS pre-warmup image not found at ${warmupPath} ` +
@@ -557,12 +565,19 @@ function runImageRecognitionTest (testCase, deviceConfig) {
       }
     }
 
-    for (let w = 1; w <= PERF_WARMUP_RUNS; w++) {
-      const { generatedText, startTime, endTime } =
-        await describeImage(inference, imageFilePath, TEST_CONSTANTS.defaultPrompt)
+    if (!iosPreWarmupRan) {
+      for (let w = 1; w <= PERF_WARMUP_RUNS; w++) {
+        const { generatedText, startTime, endTime } =
+          await describeImage(inference, imageFilePath, TEST_CONSTANTS.defaultPrompt)
+        t.comment(
+          `${label} warmup ${w}/${PERF_WARMUP_RUNS} (${endTime - startTime}ms, ` +
+          `${generatedText.length} chars) - perf NOT recorded`
+        )
+      }
+    } else {
       t.comment(
-        `${label} warmup ${w}/${PERF_WARMUP_RUNS} (${endTime - startTime}ms, ` +
-        `${generatedText.length} chars) - perf NOT recorded`
+        `${label} skipping standard warmup — iOS pre-warmup with ` +
+        `${testCase.iosWarmupImage} already exercised the multimodal pipeline`
       )
     }
 
@@ -570,12 +585,12 @@ function runImageRecognitionTest (testCase, deviceConfig) {
     // PERF_RUNS=3 everywhere, matching OCR's convention. But iPhone Device
     // Farm nodes have a hard ~3.3 GB per-app Jetsam ceiling and the 10 MB
     // fruit-plate PNG + VLM model + KV cache growth over 4 inferences
-    // (warmup + 3 counted) exceeds that even WITH the elephant pre-warmup
-    // (previous run: still SIGABRT'd at t+85s during counted iter 2-3).
-    // Opting that one image into iosPerfRuns=1 drops the cold-path peak
-    // from 4 inferences to 2, which landed under the cap in local sim.
-    // Desktop + Android are untouched; every other iOS image still runs
-    // the full 3 counted iterations.
+    // (warmup + 3 counted) blows that even WITH the elephant pre-warmup.
+    // Opting an image into iosPerfRuns=1 — combined with the pre-warmup
+    // replacing the standard warmup pass above — drops the cold-path peak
+    // for iOS to exactly 2 inferences (1 small pre-warmup + 1 counted real
+    // image). Desktop + Android are untouched; every other iOS image still
+    // runs the full 1 warmup + 3 counted iterations.
     const countedRuns = (platform === 'ios' && Number.isFinite(testCase.iosPerfRuns))
       ? testCase.iosPerfRuns
       : PERF_RUNS
