@@ -1265,9 +1265,11 @@ jobs:
             # QVAC-17830: a one-shot Heavy7 retry used to live here so
             # we got a second chance at fruit-plate perf data when the
             # first attempt SIGABRT'd. Removed at user's request now
-            # that heavy7 itself is a "warm process" group (api-behavior
-            # runs first to pre-warm V8 / native allocators / Metal
-            # shaders, see test-groups.json -> ios.heavy7).
+            # that heavy7 itself is a "warm process" group — the small
+            # elephant image test (SmolVLM2 + mmproj + Metal vision
+            # shaders, same code path fruit-plate hits) runs first to
+            # pre-warm the VLM pipeline before the 10 MB fruit-plate
+            # PNG lands. See test-groups.json -> ios.heavy7.
 
             echo "run_arn_1=$RUN_ARN_1" >> $GITHUB_OUTPUT
             echo "run_arn_2=$RUN_ARN_2" >> $GITHUB_OUTPUT
