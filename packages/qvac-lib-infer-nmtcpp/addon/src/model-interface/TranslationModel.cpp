@@ -1,5 +1,7 @@
 #include "TranslationModel.hpp"
 
+#include <climits>
+#include <cmath>
 #include <filesystem>
 #include <mutex>
 #include <sstream>
@@ -86,8 +88,11 @@ BackendType TranslationModel::detectBackendType(const std::string& modelPath) {
 }
 
 void TranslationModel::unload() {
+  {
+    std::scoped_lock<std::mutex> lock(mtx_);
+    activeBackendName_.clear();
+  }
   nmtCtx_ = nullptr;
-  activeBackendName_.clear();
 #ifdef HAVE_BERGAMOT
   bergamotCtx_ = nullptr;
 #endif
@@ -265,10 +270,10 @@ void TranslationModel::load() {
   srcLang_.clear();
   tgtLang_.clear();
 
-  // Cache the active backend name so getActiveBackendName() doesn't need to
-  // acquire the mutex and traverse the ggml API on every call.
+  // Cache the active backend name under the mutex so getActiveBackendName()
+  // reads are race-free.
   {
-    activeBackendName_ = "CPU";
+    std::string cachedName = "CPU";
     if (nmtCtx_->state) {
       for (ggml_backend_t backend : nmtCtx_->state->backends) {
         if (backend == nullptr) {
@@ -283,11 +288,13 @@ void TranslationModel::load() {
         }
         const char* name = ggml_backend_dev_name(dev);
         if (name != nullptr) {
-          activeBackendName_ = std::string(name);
+          cachedName = std::string(name);
         }
         break;
       }
     }
+    std::scoped_lock<std::mutex> lock(mtx_);
+    activeBackendName_ = std::move(cachedName);
   }
 
   QLOG(
@@ -655,7 +662,16 @@ void TranslationModel::setConfig(
     if (const auto* asInt = std::get_if<int64_t>(&it->second)) {
       setGpuDevice(static_cast<int>(*asInt));
     } else if (const auto* asDouble = std::get_if<double>(&it->second)) {
-      setGpuDevice(static_cast<int>(*asDouble));
+      double v = *asDouble;
+      if (std::isfinite(v) && v >= 0.0 &&
+          v <= static_cast<double>(INT_MAX)) {
+        setGpuDevice(static_cast<int>(v));
+      } else {
+        QLOG(
+            qvac_lib_inference_addon_cpp::logger::Priority::WARNING,
+            "[TRANSLATION MODEL] 'gpu_device' double value out of range; "
+            "ignoring");
+      }
     } else {
       QLOG(
           qvac_lib_inference_addon_cpp::logger::Priority::WARNING,
@@ -671,18 +687,33 @@ void TranslationModel::setUseGpu(bool useGpu) { useGpu_ = useGpu; }
 
 void TranslationModel::setGpuBackend(const std::string& gpuBackend) {
   static constexpr size_t kMaxGpuBackendLen = 64;
-  if (gpuBackend.size() > kMaxGpuBackendLen) {
+  std::string sanitized;
+  sanitized.reserve(
+      std::min(gpuBackend.size(), kMaxGpuBackendLen));
+  for (size_t i = 0; i < gpuBackend.size() && i < kMaxGpuBackendLen; ++i) {
+    unsigned char c = static_cast<unsigned char>(gpuBackend[i]);
+    if (c >= 0x20 && c < 0x7F) {
+      sanitized.push_back(static_cast<char>(c));
+    }
+  }
+  if (sanitized.size() != gpuBackend.size()) {
     QLOG(
         qvac_lib_inference_addon_cpp::logger::Priority::WARNING,
-        "[TRANSLATION MODEL] gpu_backend string too long; truncating to 64");
-    gpuBackend_ = gpuBackend.substr(0, kMaxGpuBackendLen);
-  } else {
-    gpuBackend_ = gpuBackend;
+        "[TRANSLATION MODEL] gpu_backend sanitized (non-printable chars "
+        "removed or truncated)");
   }
+  gpuBackend_ = std::move(sanitized);
 }
 
 void TranslationModel::setGpuDevice(int gpuDevice) {
-  gpuDevice_ = gpuDevice;
+  if (gpuDevice < 0) {
+    QLOG(
+        qvac_lib_inference_addon_cpp::logger::Priority::WARNING,
+        "[TRANSLATION MODEL] gpu_device is negative; clamping to 0");
+    gpuDevice_ = 0;
+  } else {
+    gpuDevice_ = gpuDevice;
+  }
 }
 
 void TranslationModel::updateConfig() {

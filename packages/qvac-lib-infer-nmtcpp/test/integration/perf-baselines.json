@@ -7,16 +7,7 @@
   },
   "buckets": [
     {
-      "name": "android-arm64-midrange-opencl",
-      "platform": "android",
-      "execution_provider": "opencl",
-      "thresholds": {
-        "tps_min": null,
-        "total_time_ms_max": null
-      }
-    },
-    {
-      "name": "android-arm64-highend-opencl",
+      "name": "android-arm64-opencl",
       "platform": "android",
       "execution_provider": "opencl",
       "thresholds": {

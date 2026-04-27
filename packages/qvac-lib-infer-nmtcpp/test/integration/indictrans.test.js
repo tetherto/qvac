@@ -272,6 +272,7 @@ test('IndicTrans CPU vs GPU output parity (EN->Hindi, beam=1)', { timeout: TEST_
       modelPath, logger, useGpu: false, label: '[PARITY-CPU]'
     })
     await cpuRun.model.unload()
+    cpuRun.model = null
 
     gpuRun = await runSingleTranslation(t, {
       modelPath, logger, useGpu: true, label: '[PARITY-GPU]'

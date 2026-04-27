@@ -1,4 +1,6 @@
 // NOLINTBEGIN
+#include <cctype>
+#include <string>
 #include <thread>
 
 #include <ggml-backend.h>
@@ -70,5 +72,26 @@ bool ggml_graph_compute_helper(
   }
 
   return t;
+}
+bool nmt_name_contains_ci(
+    const char* name, const std::string& needle_lower) {
+  if (name == nullptr || needle_lower.empty()) {
+    return false;
+  }
+  const char* const needle = needle_lower.c_str();
+  for (const char* p = name; *p != '\0'; ++p) {
+    const char* s = p;
+    const char* n = needle;
+    while (*s != '\0' && *n != '\0' &&
+           static_cast<char>(
+               std::tolower(static_cast<unsigned char>(*s))) == *n) {
+      ++s;
+      ++n;
+    }
+    if (*n == '\0') {
+      return true;
+    }
+  }
+  return false;
 }
 // NOLINTEND
