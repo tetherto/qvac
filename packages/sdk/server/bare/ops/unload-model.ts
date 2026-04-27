@@ -7,7 +7,7 @@ import { unregisterAddonLogger, getServerLogger } from "@/logging";
 import { type UnloadModelParams, unloadModelParamsSchema } from "@/schemas";
 import { ModelNotLoadedError } from "@/utils/errors-server";
 import { detectShardedModel } from "@/server/utils";
-import { getClearStorageTarget } from "@/server/utils/cache";
+import { getClearStorageTarget } from "@/server/utils/cache/paths";
 
 const logger = getServerLogger();
 
@@ -20,10 +20,6 @@ export async function unloadModel(params: UnloadModelParams) {
   }
 
   clearFinetuneRuntimeState(modelId);
-
-  if (entry.local?.loader) {
-    await entry.local.loader.close();
-  }
 
   if (entry.local?.model && entry.local.model.unload) {
     await entry.local.model.unload();

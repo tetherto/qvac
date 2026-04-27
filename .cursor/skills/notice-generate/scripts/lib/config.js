@@ -74,8 +74,7 @@ const PYTHON_DEP_PATHS = {
   ],
   'qvac-lib-infer-nmtcpp': [
     'scripts/conversion_scripts/requirements.txt',
-    'benchmarks/quality_eval/requirements.txt',
-    'benchmarks/client/pyproject.toml'
+    'benchmarks/quality_eval/requirements.txt'
   ],
   'qvac-lib-infer-onnx-tts': [
     'benchmarks/python-server/requirements-supertonic.txt',

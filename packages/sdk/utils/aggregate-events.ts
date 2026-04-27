@@ -5,6 +5,7 @@ import type {
   CompletionStats,
   ToolCall,
 } from "@/schemas";
+import { normalizeAssistantCacheContent } from "@/utils/cache-normalize";
 import {
   attachHandlersToToolCalls,
   type ToolHandlerMap,
@@ -56,12 +57,22 @@ export function buildFinalFromEvents(
   const { contentText, thinkingText, stats, toolCalls, rawFullText, error } =
     aggregateEvents(events);
 
+  const attachedToolCalls = attachHandlersToToolCalls(toolCalls, handlers);
+  const fullText = rawFullText ?? contentText;
+  const cacheableAssistantContent =
+    attachedToolCalls.length === 0
+      ? normalizeAssistantCacheContent(fullText)
+      : undefined;
+
   const final: CompletionFinal = {
     contentText,
     ...(thinkingText && { thinkingText }),
-    toolCalls: attachHandlersToToolCalls(toolCalls, handlers),
+    toolCalls: attachedToolCalls,
     ...(stats && { stats }),
-    raw: { fullText: rawFullText ?? contentText },
+    raw: { fullText },
+    ...(cacheableAssistantContent !== undefined && {
+      cacheableAssistantContent,
+    }),
   };
 
   return { final, error };

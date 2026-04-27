@@ -74,6 +74,10 @@ public:
   AudioResult synthesize(const std::string &text) override;
 
 protected:
+  // All protected members below are exposed to `TestableChatterboxEngine`
+  // (see test/unit/src/ChatterboxEngineMethodsTest.cpp) so individual pieces
+  // of the generation pipeline can be exercised in isolation.
+
   TensorData<int64_t>
   buildInitialPositionIds(const std::vector<int64_t> &inputIds);
 
@@ -88,7 +92,20 @@ protected:
 
   AudioResult convertToAudioResult(const std::vector<float> &wav);
 
-  bool isEnglish_ = true;
+  bool hasSpeechEncoderCache() const;
+  void clearSpeechEncoderCache();
+
+  void cachePastKeyValues(
+      std::unordered_map<std::string, TensorData<float>> &pastKeyValues);
+
+  void writeKvToTensors(
+      const std::unordered_map<std::string, TensorData<float>> &pastKeyValues);
+
+  // Configure the language-model session so that each `present.*` output is
+  // moved back into the corresponding `past_key_values.*` input at the end of
+  // every run(). This eliminates the per-step KV copy between ORT tensors and
+  // user vectors (O(N^2) total for an N-step generation).
+  void enableKvCacheChaining();
 
 private:
   std::vector<int64_t> tokenize(const std::string &text);
@@ -100,9 +117,6 @@ private:
       TensorData<float> &inputsEmbs, TensorData<int64_t> &promptToken,
       TensorData<float> &speakerEmbeddings, TensorData<float> &speakerFeatures,
       TensorData<int64_t> &positionIds, TensorData<int64_t> &attentionMask,
-      std::unordered_map<std::string, TensorData<float>> &pastKeyValues);
-
-  void cachePastKeyValues(
       std::unordered_map<std::string, TensorData<float>> &pastKeyValues);
 
   std::vector<int64_t> generateSpeechTokens(
@@ -132,11 +146,6 @@ private:
   void releaseSession(std::unique_ptr<IOnnxInferSession> &session);
   void runSpeechEncoderAndCache();
 
-protected:
-  bool hasSpeechEncoderCache() const;
-  void clearSpeechEncoderCache();
-
-private:
   void loadCangjieTableIfNeeded(const std::string &tokenizerPath);
   void loadTextEmbWeight(const std::string &embedTokensPath);
 
@@ -165,9 +174,6 @@ private:
       std::vector<std::vector<int64_t>> &inputShapes,
       const std::unordered_map<std::string, TensorData<float>> &pastKeyValues);
 
-  void writeKvToTensors(
-      const std::unordered_map<std::string, TensorData<float>> &pastKeyValues);
-
   void runGenerationLoop(
       std::vector<int64_t> &inputIds, TensorData<int64_t> &positionIds,
       TensorData<int64_t> &attentionMask,
@@ -193,13 +199,11 @@ private:
   std::unique_ptr<IOnnxInferSession> speechEncoderSession_;
   std::unique_ptr<IOnnxInferSession> embedTokensSession_;
   std::unique_ptr<IOnnxInferSession> conditionalDecoderSession_;
-  std::unique_ptr<IOnnxInferSession> languageModelSession_;
 
   ChatterboxConfig config_;
   bool loaded_ = false;
   bool lazySessionLoading_ = false;
   std::string language_;
-  int keyValueOffset_ = 0;
   text_preprocess::CangjieTable cangjieTable_;
 
   std::vector<float> textEmbWeight_;
@@ -208,6 +212,9 @@ private:
   std::mt19937 rng_{std::random_device{}()};
 
 protected:
+  bool isEnglish_ = true;
+  std::unique_ptr<IOnnxInferSession> languageModelSession_;
+  int keyValueOffset_ = 0;
   SpeechEncoderCache speechEncoderCache_;
 };
 

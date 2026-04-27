@@ -1,0 +1,289 @@
+name: SDK E2E Report Finalize
+description: >
+  Aggregates per-platform SDK e2e results produced by the test jobs of a
+  single run, writes GITHUB_STEP_SUMMARY for every platform (always), and
+  when run in PR context updates the per-platform comments posted earlier by
+  sdk-e2e-report-start. Expects each test job to have uploaded a results
+  artifact (results-<family>[-<platform>]) and, when a baseline existed, a
+  pre-formatted section artifact (report-section-<family>[-<platform>])
+  containing section-<platform>.md and comparison-<platform>.json. Does not
+  npm install and does not invoke the qvac-test CLI.
+
+inputs:
+  family:
+    description: "SDK e2e family: desktop | android | ios"
+    required: true
+  platforms:
+    description: >
+      JSON array of platform keys that participated in this run, e.g.
+      ["linux","windows","macos"] for desktop or ["android"] / ["ios"].
+    required: true
+  comment-ids:
+    description: >
+      JSON object mapping platform key -> PR comment id (output of
+      sdk-e2e-report-start). Pass '{}' for non-PR runs.
+    required: false
+    default: "{}"
+  suite:
+    description: "Suite filter used for the run (empty = full)"
+    required: false
+    default: ""
+  filter:
+    description: "Test filter used for the run (empty = all)"
+    required: false
+    default: ""
+  exclude-suite:
+    description: "Exclude-suite filter used for the run"
+    required: false
+    default: ""
+
+runs:
+  using: composite
+  steps:
+    - name: Resolve artifact patterns
+      id: patterns
+      shell: bash
+      env:
+        FAMILY: ${{ inputs.family }}
+      run: |
+        case "$FAMILY" in
+          desktop)
+            echo "results-pattern=results-desktop-*" >> "$GITHUB_OUTPUT"
+            echo "section-pattern=report-section-desktop-*" >> "$GITHUB_OUTPUT"
+            ;;
+          android)
+            echo "results-pattern=results-android" >> "$GITHUB_OUTPUT"
+            echo "section-pattern=report-section-android" >> "$GITHUB_OUTPUT"
+            ;;
+          ios)
+            echo "results-pattern=results-ios" >> "$GITHUB_OUTPUT"
+            echo "section-pattern=report-section-ios" >> "$GITHUB_OUTPUT"
+            ;;
+          *)
+            echo "Unknown family: $FAMILY" >&2
+            exit 1
+            ;;
+        esac
+
+    - name: Download current results
+      uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # 8.0.1
+      with:
+        pattern: ${{ steps.patterns.outputs.results-pattern }}
+        path: .sdk-e2e-report/current-results
+
+    - name: Download report sections (optional)
+      uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # 8.0.1
+      continue-on-error: true
+      with:
+        pattern: ${{ steps.patterns.outputs.section-pattern }}
+        path: .sdk-e2e-report/report-sections
+
+    - name: Build and publish reports
+      uses: actions/github-script@ed597411d8f924073f98dfc5c65a23a2325f34cd # 8.0.0
+      env:
+        FAMILY: ${{ inputs.family }}
+        PLATFORMS: ${{ inputs.platforms }}
+        COMMENT_IDS: ${{ inputs.comment-ids }}
+        SUITE: ${{ inputs.suite }}
+        FILTER: ${{ inputs.filter }}
+        EXCLUDE_SUITE: ${{ inputs.exclude-suite }}
+      with:
+        script: |
+          const fs = require('fs');
+          const path = require('path');
+
+          const family = process.env.FAMILY;
+          const platforms = JSON.parse(process.env.PLATFORMS || '[]');
+          const commentIds = JSON.parse(process.env.COMMENT_IDS || '{}');
+          const suite = process.env.SUITE || '';
+          const filter = process.env.FILTER || '';
+          const excludeSuite = process.env.EXCLUDE_SUITE || '';
+
+          const pr = context.payload.pull_request?.number;
+          const runUrl =
+            `${context.serverUrl}/${context.repo.owner}/${context.repo.repo}` +
+            `/actions/runs/${context.runId}`;
+          const artifactsUrl = `${runUrl}/artifacts`;
+
+          const resultsRoot = '.sdk-e2e-report/current-results';
+          const sectionsRoot = '.sdk-e2e-report/report-sections';
+
+          const artifactDir = (platform) =>
+            family === 'desktop' ? `results-desktop-${platform}` : `results-${family}`;
+          const sectionArtifactDir = (platform) =>
+            family === 'desktop' ? `report-section-desktop-${platform}` : `report-section-${family}`;
+          const marker = (platform) =>
+            `<!-- sdk-e2e-report:pr=${pr ?? 'none'}:family=${family}:platform=${platform} -->`;
+
+          const fmt = (v) => (v && v.length > 0 ? `\`${v}\`` : '`(none)`');
+          const configLine =
+            `**Config:** suite=${fmt(suite)} · filter=${fmt(filter)} · exclude=${fmt(excludeSuite)}`;
+          const linksLine = `[View run](${runUrl}) · [Artifacts](${artifactsUrl})`;
+
+          function findResultsJson(platform) {
+            const dir = path.join(resultsRoot, artifactDir(platform));
+            if (!fs.existsSync(dir)) return null;
+            const files = fs.readdirSync(dir).filter((f) => f.endsWith('.json'));
+            if (files.length === 0) return null;
+            // Pick the first results-*.json; there is normally only one per platform per run.
+            const target = files.find((f) => f.startsWith('results-')) || files[0];
+            return path.join(dir, target);
+          }
+
+          function findSectionFiles(platform) {
+            const dir = path.join(sectionsRoot, sectionArtifactDir(platform));
+            if (!fs.existsSync(dir)) return { md: null, comparison: null };
+            const entries = fs.readdirSync(dir);
+            const md = entries.find((f) => f.endsWith('.md'));
+            const comparison = entries.find((f) => f.startsWith('comparison-') && f.endsWith('.json'));
+            return {
+              md: md ? path.join(dir, md) : null,
+              comparison: comparison ? path.join(dir, comparison) : null,
+            };
+          }
+
+          function truncate(s, n) {
+            if (!s) return '';
+            const first = s.split('\n')[0].trim();
+            return first.length > n ? `${first.slice(0, n - 1)}…` : first;
+          }
+
+          function buildBody(platform, results, section) {
+            const mark = marker(platform);
+            const summary = results.summary || {};
+            const total = Number(summary.total || 0);
+            const passed = Number(summary.passed || 0);
+            const failed = Number(summary.failed || 0);
+            const duration = Math.round(Number(summary.duration || 0));
+            const rate = summary.successRate ?? '0.0';
+            const categories = results.categories || {};
+            const tests = Array.isArray(results.tests) ? results.tests : [];
+
+            // Parse comparison JSON (if any) for fixed/new-failure counts.
+            let fixedCount = 0;
+            let newFailuresCount = 0;
+            let overallDelta = 0;
+            if (section.comparison && fs.existsSync(section.comparison)) {
+              try {
+                const cmp = JSON.parse(fs.readFileSync(section.comparison, 'utf8'));
+                fixedCount = cmp.changes?.fixedTests?.length || 0;
+                newFailuresCount = cmp.changes?.newFailures?.length || 0;
+                overallDelta = Number(cmp.summary?.delta || 0);
+              } catch (err) {
+                core.warning(`Failed to parse comparison json for ${platform}: ${err.message}`);
+              }
+            }
+
+            if (failed === 0) {
+              const lines = [
+                mark,
+                `### QVAC E2E — \`${platform}\` — ✅ all tests passed (${passed}/${total}, ${duration}s)`,
+                configLine,
+                linksLine,
+              ];
+              if (fixedCount > 0) {
+                lines.push(`**Fixed vs baseline:** ${fixedCount}`);
+              }
+              return lines.join('\n');
+            }
+
+            const lines = [
+              mark,
+              `### QVAC E2E — \`${platform}\` — ❌ failed`,
+              `**Totals:** ${passed}/${total} passed · ${failed} failed · ${rate}% · ${duration}s`,
+              configLine,
+              linksLine,
+              '',
+              '**Results by section**',
+            ];
+
+            const failingCats = Object.entries(categories)
+              .filter(([, c]) => Number(c.failed || 0) > 0)
+              .sort(([a], [b]) => a.localeCompare(b));
+            if (failingCats.length === 0) {
+              lines.push('- (no category breakdown available)');
+            } else {
+              for (const [cat, c] of failingCats) {
+                lines.push(`- ${cat}: ${c.passed}/${c.total} ❌`);
+              }
+            }
+
+            lines.push('');
+            lines.push('**Failed tests**');
+            const failedTests = tests.filter((t) => t.outcome === 'failure');
+            if (failedTests.length === 0) {
+              lines.push('- (no per-test details available)');
+            } else {
+              const byCat = new Map();
+              for (const t of failedTests) {
+                const cat = String(t.testId || '').split('-')[0] || 'uncategorized';
+                if (!byCat.has(cat)) byCat.set(cat, []);
+                byCat.get(cat).push(t);
+              }
+              for (const [, list] of [...byCat.entries()].sort(([a], [b]) => a.localeCompare(b))) {
+                for (const t of list) {
+                  lines.push(`- \`${t.testId}\`: ${truncate(t.error || 'no error message', 200)}`);
+                }
+              }
+            }
+
+            if (section.md && fs.existsSync(section.md)) {
+              lines.push('');
+              lines.push('**Baseline delta**');
+              lines.push(fs.readFileSync(section.md, 'utf8').trim());
+            } else if (newFailuresCount > 0 || fixedCount > 0) {
+              lines.push('');
+              lines.push('**Baseline delta**');
+              lines.push(
+                `New failures: ${newFailuresCount} · Fixed: ${fixedCount} · Overall: ${overallDelta >= 0 ? `+${overallDelta}` : overallDelta}`,
+              );
+            }
+            return lines.join('\n');
+          }
+
+          const summaryPath = process.env.GITHUB_STEP_SUMMARY;
+
+          for (const platform of platforms) {
+            const resultsPath = findResultsJson(platform);
+            let body;
+            if (!resultsPath) {
+              body = [
+                marker(platform),
+                `### QVAC E2E — \`${platform}\` — ⚠️ no results`,
+                configLine,
+                linksLine,
+                '',
+                'The test job did not produce a results artifact. Check the run for job-level failures.',
+              ].join('\n');
+            } else {
+              let results;
+              try {
+                results = JSON.parse(fs.readFileSync(resultsPath, 'utf8'));
+              } catch (err) {
+                core.warning(`Failed to parse results JSON for ${platform}: ${err.message}`);
+                results = { summary: {}, categories: {}, tests: [] };
+              }
+              const section = findSectionFiles(platform);
+              body = buildBody(platform, results, section);
+            }
+
+            if (summaryPath) {
+              fs.appendFileSync(summaryPath, `${body}\n\n`);
+            }
+
+            if (pr && commentIds[platform]) {
+              try {
+                await github.rest.issues.updateComment({
+                  owner: context.repo.owner,
+                  repo: context.repo.repo,
+                  comment_id: commentIds[platform],
+                  body,
+                });
+                core.info(`Updated comment for ${platform} (id=${commentIds[platform]}).`);
+              } catch (err) {
+                core.warning(`Failed to update comment for ${platform}: ${err.message}`);
+              }
+            } else if (pr) {
+              core.info(`No comment-id recorded for ${platform}; skipping update.`);
+            }
+          }

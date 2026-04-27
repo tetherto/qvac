@@ -4,30 +4,34 @@ namespace qvac_lib_inference_addon_llama {
 namespace utils {
 
 const char* getToolsDynamicQwen3Template() {
-  return R"({%- if messages[0].role == 'system' %}
+  return R"({%- set ns = namespace(last_user_idx=-1) %}
+{%- for message in messages[::-1] %}
+    {%- if ns.last_user_idx == -1 and message.role == "user" %}
+        {%- set ns.last_user_idx = (messages|length - 1) - loop.index0 %}
+    {%- endif %}
+{%- endfor %}
+{%- if messages[0].role == 'system' %}
     {{- '<|im_start|>system\n' + messages[0].content + '<|im_end|>\n' }}
 {%- endif %}
 {%- for message in messages %}
     {%- if (message.role == "user") or (message.role == "system" and not loop.first) %}
         {{- '<|im_start|>' + message.role + '\n' + message.content + '<|im_end|>' + '\n' }}
+        {%- if tools and loop.index0 == ns.last_user_idx %}
+            {{- '<|im_start|>system\n' }}
+            {{- "# Tools\n\nYou may call one or more functions to assist with the user query.\n\nYou are provided with function signatures within <tools></tools> XML tags:\n<tools>" }}
+            {%- for tool in tools %}
+                {{- "\n" }}
+                {{- tool | tojson }}
+            {%- endfor %}
+            {{- "\n</tools>\n\nFor each function call, return a json object with function name and arguments within <tool_call></tool_call> XML tags:\n<tool_call>\n{\"name\": <function-name>, \"arguments\": <args-json-object>}\n</tool_call><|im_end|>\n" }}
+        {%- endif %}
     {%- elif message.role == "assistant" %}
         {%- set content = message.content %}
-        {%- set reasoning_content = '' %}
-        {%- if message.reasoning_content is defined and message.reasoning_content is not none %}
-            {%- set reasoning_content = message.reasoning_content %}
-        {%- else %}
-            {%- if '</think>' in message.content %}
-                {%- set parts = message.content.split('</think>') %}
-                {%- set content = parts[-1] | trim %}
-                {%- set think_parts = parts[0].split('<think>') %}
-                {%- set reasoning_content = think_parts[-1] | trim %}
-            {%- endif %}
+        {%- if '</think>' in message.content %}
+            {%- set parts = message.content.split('</think>') %}
+            {%- set content = parts[-1] | trim %}
         {%- endif %}
-        {%- if reasoning_content %}
-            {{- '<|im_start|>' + message.role + '\n<think>\n' + (reasoning_content | trim) + '\n</think>\n\n' + (content | trim) }}
-        {%- else %}
-            {{- '<|im_start|>' + message.role + '\n' + content }}
-        {%- endif %}
+        {{- '<|im_start|>' + message.role + '\n' + content }}
         {%- if message.tool_calls %}
             {%- for tool_call in message.tool_calls %}
                 {%- if (loop.first and content) or (not loop.first) %}
@@ -60,7 +64,7 @@ const char* getToolsDynamicQwen3Template() {
         {%- endif %}
     {%- endif %}
 {%- endfor %}
-{%- if tools %}
+{%- if tools and ns.last_user_idx == -1 %}
     {{- '<|im_start|>system\n' }}
     {{- "# Tools\n\nYou may call one or more functions to assist with the user query.\n\nYou are provided with function signatures within <tools></tools> XML tags:\n<tools>" }}
     {%- for tool in tools %}

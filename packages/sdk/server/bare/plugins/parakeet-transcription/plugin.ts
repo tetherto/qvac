@@ -19,12 +19,10 @@ import {
   type ResolveResult,
 } from "@/schemas";
 import { createStreamLogger, registerAddonLogger } from "@/logging";
-import { parseModelPath } from "@/server/utils";
 import {
   ModelLoadFailedError,
   ParakeetArtifactsRequiredError,
 } from "@/utils/errors-server";
-import FilesystemDL from "@qvac/dl-filesystem";
 import { transcribe } from "@/server/bare/ops/transcribe";
 import { attachModelExecutionMs } from "@/profiling/model-execution";
 
@@ -169,8 +167,6 @@ function createParakeetModel(
     );
   }
 
-  const { dirPath } = parseModelPath(primaryPath);
-  const loader = new FilesystemDL({ dirPath });
   const logger = createStreamLogger(params.modelId, ModelType.parakeetTranscription);
   registerAddonLogger(params.modelId, ModelType.parakeetTranscription, logger);
 
@@ -198,7 +194,7 @@ function createParakeetModel(
     logger,
   });
 
-  return { model, loader };
+  return { model };
 }
 
 export const parakeetPlugin = definePlugin({
