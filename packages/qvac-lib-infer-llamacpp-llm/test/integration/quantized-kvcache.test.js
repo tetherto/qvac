@@ -40,14 +40,19 @@ const os = require('bare-os')
 
 const platform = os.platform()
 const arch = os.arch()
+const isDarwinX64 = platform === 'darwin' && arch === 'x64'
 
 // TurboQuant/PolarQuant formats currently require a Vulkan backend on
 // Linux/Windows x64 or a supported Android GPU. On other platforms the
-// addon throws `TurboQuant ... not supported` during model load; the test
-// detects that and skips the offending rows instead of failing.
+// addon throws `TurboQuant ... not supported` during model load; the benchmark
+// detects that and skips the offending rows instead of failing. macOS x64 CI
+// is more unstable for GPU benchmarks, so skip the whole benchmark there.
 const isDesktopGpu = (platform === 'linux' || platform === 'win32') && arch === 'x64'
 const isAndroid = platform === 'android'
 const tbqPqSupported = isDesktopGpu || isAndroid
+const skipReason = isDarwinX64
+  ? 'Quantized KV cache benchmark is skipped on macOS x64'
+  : false
 
 // Model selection by platform.
 //
@@ -311,7 +316,7 @@ function printTable (results) {
   console.log(sep + '\n')
 }
 
-test('Quantized KV cache benchmark: f16 / q8 / q4 / tbq / pq', { timeout: 1800_000 }, async t => {
+test('Quantized KV cache benchmark: f16 / q8 / q4 / tbq / pq', { skip: skipReason, timeout: 1800_000 }, async t => {
   const results = CACHE_CONFIGS.map(cfg => ({ cfg, result: null, samples: [], skipped: false, error: null }))
 
   for (const entry of results) {

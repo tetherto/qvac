@@ -10,11 +10,14 @@ const LlmLlamacpp = require('../../index.js')
 const platform = os.platform()
 const arch = os.arch()
 
+const isDarwinX64 = platform === 'darwin' && arch === 'x64'
 const isDesktopGpu = (platform === 'linux' || platform === 'win32') &&
   arch === 'x64'
 const isAndroid = platform === 'android'
-const skipReason = !(isDesktopGpu || isAndroid)
-  ? 'TurboQuant KV cache tests require Vulkan GPU on Linux, Windows, or Android'
+const useCpu = isDarwinX64
+const isSupportedPlatform = isDesktopGpu || isAndroid || isDarwinX64
+const skipReason = !isSupportedPlatform
+  ? 'TurboQuant KV cache tests require Linux/Windows/Android GPU or macOS x64 CPU'
   : false
 
 const MODELS = [
@@ -57,7 +60,7 @@ async function setupModel (t, model, kvTypes) {
   const specLogger = attachSpecLogger({ forwardToConsole: true })
 
   const config = {
-    device: 'gpu',
+    device: useCpu ? 'cpu' : 'gpu',
     gpu_layers: '999',
     ctx_size: '512',
     n_predict: '48',
