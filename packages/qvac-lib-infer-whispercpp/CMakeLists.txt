@@ -2,7 +2,13 @@ cmake_minimum_required(VERSION 3.25)
 
 option(BUILD_TESTING "Build tests" OFF)
 
-if(CMAKE_SYSTEM_NAME STREQUAL "Linux" OR CMAKE_SYSTEM_NAME STREQUAL "Android" OR CMAKE_SYSTEM_NAME STREQUAL "Windows")
+if(DEFINED CMAKE_SYSTEM_NAME)
+  set(_qvac_whispercpp_target_os "${CMAKE_SYSTEM_NAME}")
+else()
+  set(_qvac_whispercpp_target_os "${CMAKE_HOST_SYSTEM_NAME}")
+endif()
+
+if(_qvac_whispercpp_target_os STREQUAL "Linux" OR _qvac_whispercpp_target_os STREQUAL "Android" OR _qvac_whispercpp_target_os STREQUAL "Windows")
   option(ENABLE_VULKAN "Enable Vulkan GPU acceleration" ON)
 else()
   option(ENABLE_VULKAN "Enable Vulkan GPU acceleration" OFF)
