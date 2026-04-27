@@ -20,11 +20,18 @@ import { TextToSpeechStreamFailedError } from "@/utils/errors-client";
 const logger = getClientLogger();
 
 /**
- * Fan-out queue that lets multiple consumers iterate the same TTS RPC stream
- * independently. Items are retained only until every active subscriber has
- * consumed them, then trimmed from the queue.
+ * Fan-out queue that lets multiple consumers iterate the same TTS response
+ * stream independently. Items are retained only until every active subscriber
+ * has consumed them, then trimmed from the queue.
+ *
+ * The source is injected as an `AsyncIterable<TtsResponse>` so this class can
+ * be unit-tested directly against the real implementation (without mocking
+ * the RPC layer). Production callsites adapt `streamRpc(...)` via
+ * `ttsResponseSource()` below.
+ *
+ * Exported for test use; not part of the public SDK surface.
  */
-class TtsMulticast {
+export class TtsMulticast {
   private readonly queue: TtsResponse[] = [];
   private readonly waiters: Array<() => void> = [];
   private readonly subscriberIndexes: number[] = [];
@@ -35,7 +42,7 @@ class TtsMulticast {
 
   readonly done: Promise<boolean>;
 
-  constructor(request: TtsRequest, options: RPCOptions | undefined) {
+  constructor(source: AsyncIterable<TtsResponse>) {
     let resolve!: (value: boolean) => void;
     let reject!: (err: unknown) => void;
     this.done = new Promise<boolean>((r, rj) => {
@@ -48,7 +55,7 @@ class TtsMulticast {
     this.done.catch(() => {});
     this.resolvePumpDone = resolve;
     this.rejectPumpDone = reject;
-    void this.pump(request, options);
+    void this.pump(source);
   }
 
   subscribe(): AsyncGenerator<TtsResponse> {
@@ -83,21 +90,16 @@ class TtsMulticast {
     this.trimConsumed();
   }
 
-  private async pump(
-    request: TtsRequest,
-    options: RPCOptions | undefined,
-  ): Promise<void> {
+  private async pump(source: AsyncIterable<TtsResponse>): Promise<void> {
     try {
-      for await (const response of streamRpc(request, options)) {
-        if (response.type !== "textToSpeech") continue;
+      for await (const response of source) {
         // The server owns this response schema; per-frame Zod .parse() adds
         // non-trivial CPU overhead for large sentences with many PCM frames.
         // Rely on the discriminated union narrowing at the RPC boundary and
         // skip re-validation here.
         this.queue.push(response);
-        const m = response;
         this.notify();
-        if (m.done) break;
+        if (response.done) break;
       }
     } catch (e) {
       this.fatal = e instanceof Error ? e : new Error(String(e));
@@ -204,11 +206,24 @@ export function textToSpeech(
   return collectTts(request, options);
 }
 
+// Adapts the raw RPC stream into the filtered `TtsResponse` source the
+// multicast expects. Kept here (not inlined) so the multicast can be
+// constructed in tests with a hand-rolled source instead.
+async function* ttsResponseSource(
+  request: TtsRequest,
+  options: RPCOptions | undefined,
+): AsyncGenerator<TtsResponse> {
+  for await (const response of streamRpc(request, options)) {
+    if (response.type !== "textToSpeech") continue;
+    yield response;
+  }
+}
+
 function sentenceStreamTts(
   request: TtsRequest,
   options: RPCOptions | undefined,
 ): TextToSpeechStreamResult {
-  const multicast = new TtsMulticast(request, options);
+  const multicast = new TtsMulticast(ttsResponseSource(request, options));
   // Subscribe eagerly, synchronously — before pump() can push its first
   // item — so both subscribers see the full queue from index 0. If we
   // deferred subscribing until the generators were iterated, the first
