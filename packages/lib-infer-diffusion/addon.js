@@ -159,19 +159,7 @@ class SdInterface {
       const imgBufs = serializable.init_images
       delete serializable.init_images
 
-      // Pre-fill missing dimensions from first reference image.
-      // If caller provided one axis but not the other, only fill the missing one.
-      if (!serializable.width || !serializable.height) {
-        const dims = readImageDimensions(imgBufs[0])
-        if (dims) {
-          if (!serializable.width) {
-            serializable.width = Math.ceil(dims.width / 8) * 8
-          }
-          if (!serializable.height) {
-            serializable.height = Math.ceil(dims.height / 8) * 8
-          }
-        }
-      }
+      this._fillDimsFromImage(serializable, imgBufs[0])
 
       const paramsJson = JSON.stringify(serializable)
       return this._binding.runJob(this._handle, {
@@ -190,13 +178,7 @@ class SdInterface {
       const imgBuf = serializable.init_image
       delete serializable.init_image
 
-      if (!serializable.width || !serializable.height) {
-        const dims = readImageDimensions(imgBuf)
-        if (dims) {
-          serializable.width = Math.ceil(dims.width / 8) * 8
-          serializable.height = Math.ceil(dims.height / 8) * 8
-        }
-      }
+      this._fillDimsFromImage(serializable, imgBuf)
 
       const paramsJson = JSON.stringify(serializable)
       return this._binding.runJob(this._handle, {
@@ -208,6 +190,26 @@ class SdInterface {
 
     const paramsJson = JSON.stringify(params)
     return this._binding.runJob(this._handle, { type: 'text', input: paramsJson })
+  }
+
+  /**
+   * Helper: fill missing dimensions from image buffer, preserving explicit values.
+   * If neither width nor height is set, read from the image and align to 8-pixel boundary.
+   * If one axis is set, only fill the missing axis from the image.
+   * @private
+   */
+  _fillDimsFromImage (params, buf) {
+    if (params.width && params.height) return // Both provided, no-op
+
+    const dims = readImageDimensions(buf)
+    if (!dims) return
+
+    if (!params.width) {
+      params.width = Math.ceil(dims.width / 8) * 8
+    }
+    if (!params.height) {
+      params.height = Math.ceil(dims.height / 8) * 8
+    }
   }
 
   /**

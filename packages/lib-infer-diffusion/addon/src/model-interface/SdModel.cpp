@@ -635,11 +635,12 @@ std::any SdModel::process(const std::any& input) {
       }
 
       // Use the first reference to pick sensible output dimensions if the
-      // caller left the defaults at 512x512 -- auto_resize_ref_image handles
-      // the remaining refs.
+      // caller passed 0 as a sentinel (see addon.js) — auto_resize_ref_image
+      // handles the remaining refs. A caller who explicitly requests 512x512
+      // will get 512x512; one who omits dimensions gets first ref's size.
       const int refW = static_cast<int>(refImgs.front().width);
       const int refH = static_cast<int>(refImgs.front().height);
-      if (gen.width == 512 && gen.height == 512) {
+      if (gen.width == 0 && gen.height == 0) {
         genParams.width = refW;
         genParams.height = refH;
       }

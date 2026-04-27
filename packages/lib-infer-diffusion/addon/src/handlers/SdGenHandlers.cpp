@@ -305,13 +305,14 @@ const SdGenHandlersMap SD_GEN_HANDLERS = {
 
     // -- Multi-reference (FLUX/FLUX2 fusion) ------------------------------
     //
-    // increase_ref_index: when true, every ref_image gets a distinct RoPE
-    //   index so `@image1`, `@image2`, ... resolve to separate references.
-    //   Required for proper FLUX2 multi-image "fusion"; default is true in
-    //   our SdGenConfig (overrides the library default of false).
+    // increase_ref_index: when false (default) every ref shares one RoPE
+    //   slot and the references blend visually via attention — recommended
+    //   for FLUX.2-klein. When true each ref gets its own RoPE index — use
+    //   with models whose text encoder receives per-image vision tokens
+    //   (e.g. Qwen-Image-Edit, Z-Image-Omni). See SdGenConfig::increaseRefIndex.
     //
-    // auto_resize_ref_image: when true, each ref image is resized to the
-    //   target width/height before being VAE-encoded.
+    // auto_resize_ref_image: when true (default), each ref image is resized to
+    //   the target width/height before being VAE-encoded.
     {"increase_ref_index",
      [](SdGenConfig& c, const picojson::value& v) {
        if (!v.is<bool>())

@@ -6,7 +6,7 @@
 
 - **FLUX.2 multi-reference fusion** (`init_images` parameter) — blend multiple reference images into a single output via in-context conditioning with RoPE-separated latent tokens
 - `@imageN` tag support in prompts for semantic anchoring of reference images (FLUX.2-klein + Qwen3 text encoder)
-- Fusion-specific parameters: `increase_ref_index`, `auto_resize_ref_image` for fine-grained control over multi-ref conditioning
+- Fusion-specific parameters: `increase_ref_index` (default `false` — refs share one RoPE slot and blend via attention; recommended for FLUX.2-klein) and `auto_resize_ref_image` (default `true`) for fine-grained control over multi-ref conditioning
 - Comprehensive integration tests for FLUX.2 multi-reference fusion — both "injective" (spatial composition, `generate-image-flux2-fusion.test.js`) and "surjective" (face morphing / feature averaging, `generate-image-flux2-fusion-surjective.test.js`) scenarios
 - Example script demonstrating fusion workflow with two scientists (`examples/generate-fusion.js`)
 - Detailed README section on multi-reference fusion, `@imageN` tags, and best practices
