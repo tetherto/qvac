@@ -162,22 +162,28 @@ async function runSingleTranslation (t, { modelPath, logger, useGpu, label }) {
     try { await model.unload() } catch (_) { /* noop */ }
     throw err
   }
-  t.pass(`${label} IndicTrans model loaded successfully`)
 
-  const backendName = model.getActiveBackendName()
-  t.comment(`${label} Active backend: ${backendName}`)
+  try {
+    t.pass(`${label} IndicTrans model loaded successfully`)
 
-  perfCollector.start()
-  const response = await model.run(TEST_SENTENCE)
-  await response
-    .onUpdate(data => perfCollector.onToken(data))
-    .await()
+    const backendName = model.getActiveBackendName()
+    t.comment(`${label} Active backend: ${backendName}`)
 
-  const addonStats = response.stats || {}
-  t.comment(`${label} Native addon stats: ` + JSON.stringify(addonStats))
-  const metrics = perfCollector.getMetrics(TEST_SENTENCE, addonStats)
+    perfCollector.start()
+    const response = await model.run(TEST_SENTENCE)
+    await response
+      .onUpdate(data => perfCollector.onToken(data))
+      .await()
 
-  return { model, metrics, backendName, translation: metrics.fullOutput }
+    const addonStats = response.stats || {}
+    t.comment(`${label} Native addon stats: ` + JSON.stringify(addonStats))
+    const metrics = perfCollector.getMetrics(TEST_SENTENCE, addonStats)
+
+    return { model, metrics, backendName, translation: metrics.fullOutput }
+  } catch (err) {
+    try { await model.unload() } catch (_) { /* noop */ }
+    throw err
+  }
 }
 
 for (const deviceConfig of DEVICE_CONFIGS) {

@@ -225,7 +225,16 @@ ggml_backend_dev_t nmt_select_gpu_device(
 
   // Mode 2b: fallback to any non-CPU compute device (skipping OpenCL when
   // the build-time guard is off — Adreno 830 mitigation).
+  // When falling through from Mode 2a (OpenCL preference didn't find enough
+  // devices), reset the ordinal to 0 — the caller's gpu_device referred to
+  // the OpenCL device namespace, not the full device list.
   if (dev == nullptr) {
+    const int fallback_ordinal =
+#ifdef QVAC_NMTCPP_USE_OPENCL
+        0;
+#else
+        gpu_device;
+#endif
     int cnt2 = 0;
     for (size_t i = 0; i < devCount; ++i) {
       ggml_backend_dev_t dev_cur = ggml_backend_dev_get(i);
@@ -239,7 +248,7 @@ ggml_backend_dev_t nmt_select_gpu_device(
         continue;
       }
 #endif
-      if (cnt2 == gpu_device) {
+      if (cnt2 == fallback_ordinal) {
         ggml_backend_buffer_type_t buft = ggml_backend_dev_buffer_type(dev_cur);
         if (buft != nullptr) {
           dev = dev_cur;
@@ -258,7 +267,7 @@ ggml_backend_dev_t nmt_select_gpu_device(
               oss.str());
         }
       }
-      if (++cnt2 > gpu_device) {
+      if (++cnt2 > fallback_ordinal) {
         break;
       }
     }
