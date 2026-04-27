@@ -7,7 +7,17 @@
   },
   "buckets": [
     {
+      "name": "android-arm64-vulkan",
+      "platform": "android",
+      "execution_provider": "vulkan",
+      "thresholds": {
+        "tps_min": null,
+        "total_time_ms_max": null
+      }
+    },
+    {
       "name": "android-arm64-opencl",
+      "_comment": "Reachable only when caller opts into OpenCL via config.gpu_backend='opencl' on a build with QVAC_NMTCPP_USE_OPENCL defined; default Android backend is Vulkan since QVAC-17790.",
       "platform": "android",
       "execution_provider": "opencl",
       "thresholds": {

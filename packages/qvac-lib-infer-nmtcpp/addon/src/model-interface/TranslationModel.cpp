@@ -216,13 +216,23 @@ void TranslationModel::load() {
         qvac_lib_inference_addon_cpp::logger::Priority::INFO,
         "[TRANSLATION MODEL] Dst vocab: " + params.dst_vocab_path);
 
-    bergamotCtx_.reset(bergamot_init(modelPath_.c_str(), params));
+    // Build the freshly-loaded Bergamot context outside the lock so the
+    // heavy bergamot_init call doesn't serialize against
+    // getActiveBackendName(); commit it under mtx_ so any concurrent reader
+    // sees a consistent context state. Mirrors the GGML path below.
+    std::unique_ptr<bergamot_context, decltype(&bergamot_free)> freshBergamot(
+        bergamot_init(modelPath_.c_str(), params), &bergamot_free);
 
-    if (bergamotCtx_ == nullptr) {
+    if (freshBergamot == nullptr) {
       QLOG(
           qvac_lib_inference_addon_cpp::logger::Priority::ERROR,
           "[TRANSLATION MODEL] ERROR: Failed to initialize Bergamot backend!");
       throw std::runtime_error("Failed to load model with Bergamot backend");
+    }
+
+    {
+      std::scoped_lock<std::mutex> lock(mtx_);
+      bergamotCtx_ = std::move(freshBergamot);
     }
 
     QLOG(
@@ -295,11 +305,10 @@ void TranslationModel::load() {
     std::scoped_lock<std::mutex> lock(mtx_);
     nmtCtx_ = std::move(freshCtx);
     activeBackendName_ = std::move(cachedName);
+    isFirstSentence_ = true;
+    srcLang_.clear();
+    tgtLang_.clear();
   }
-
-  isFirstSentence_ = true;
-  srcLang_.clear();
-  tgtLang_.clear();
 
   QLOG(
       qvac_lib_inference_addon_cpp::logger::Priority::INFO,
@@ -680,6 +689,12 @@ void TranslationModel::setConfig(
       double v = *asDouble;
       if (std::isfinite(v) && v >= 0.0 &&
           v <= static_cast<double>(kMaxGpuDevice)) {
+        if (v != std::floor(v)) {
+          QLOG(
+              qvac_lib_inference_addon_cpp::logger::Priority::WARNING,
+              "[TRANSLATION MODEL] 'gpu_device' double has fractional part; "
+              "truncating toward zero");
+        }
         setGpuDevice(static_cast<int>(v));
       } else {
         QLOG(
@@ -701,20 +716,25 @@ void TranslationModel::setConfig(
 void TranslationModel::setUseGpu(bool useGpu) { useGpu_ = useGpu; }
 
 void TranslationModel::setGpuBackend(const std::string& gpuBackend) {
+  // Tight allowlist — every valid ggml device name substring fits in
+  // [a-zA-Z0-9_-]. Rejecting other printable chars (quotes, equals, spaces,
+  // etc.) prevents log-line spoofing in messages that embed the value.
   static constexpr size_t kMaxGpuBackendLen = 64;
   std::string sanitized;
   sanitized.reserve(std::min(gpuBackend.size(), kMaxGpuBackendLen));
   for (size_t i = 0; i < gpuBackend.size() && i < kMaxGpuBackendLen; ++i) {
     unsigned char c = static_cast<unsigned char>(gpuBackend[i]);
-    if (c >= 0x20 && c < 0x7F) {
+    const bool allowed = (c >= 'a' && c <= 'z') || (c >= 'A' && c <= 'Z') ||
+                         (c >= '0' && c <= '9') || c == '_' || c == '-';
+    if (allowed) {
       sanitized.push_back(static_cast<char>(c));
     }
   }
   if (sanitized.size() != gpuBackend.size()) {
     QLOG(
         qvac_lib_inference_addon_cpp::logger::Priority::WARNING,
-        "[TRANSLATION MODEL] gpu_backend sanitized (non-printable chars "
-        "removed or truncated)");
+        "[TRANSLATION MODEL] gpu_backend sanitized (only [a-zA-Z0-9_-] "
+        "allowed; other chars stripped or value truncated to 64 bytes)");
   }
   gpuBackend_ = std::move(sanitized);
 }

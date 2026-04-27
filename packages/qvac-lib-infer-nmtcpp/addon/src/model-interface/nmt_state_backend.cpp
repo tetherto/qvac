@@ -359,6 +359,19 @@ static ggml_backend_t nmt_backend_init_gpu(const nmt_context_params& params) {
     const size_t devCount = ggml_backend_dev_count();
 
     if (!gpuBackendLower.empty()) {
+#ifndef QVAC_NMTCPP_USE_OPENCL
+      // OpenCL is opt-in via explicit gpu_backend even when the build-time
+      // guard is off. Warn loudly because the guard exists specifically to
+      // mitigate the Adreno 830 q4_0 transpose abort (QVAC-17790); callers
+      // bypassing it must accept the risk.
+      if (gpuBackendLower.find("opencl") != std::string::npos) {
+        QLOG(
+            qvac_lib_inference_addon_cpp::logger::Priority::WARNING,
+            "[nmt_backend_init_gpu] Explicit gpu_backend='opencl' bypasses "
+            "the QVAC_NMTCPP_USE_OPENCL=OFF guard — Adreno 830 devices may "
+            "still abort with GGML_ASSERT(M % 4 == 0). Caller assumes risk.");
+      }
+#endif
       // Mode 1: explicit gpu_backend filter.
       int cnt = 0;
       for (size_t i = 0; i < devCount; ++i) {
