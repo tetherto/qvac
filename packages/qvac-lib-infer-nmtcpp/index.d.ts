@@ -36,23 +36,36 @@ export interface TranslationNmtcppConfig {
   /**
    * Enable GPU (non-CPU) compute backend. Read once at load() time.
    * Bergamot is CPU-only by design — this flag is a no-op for that backend.
+   *
+   * `use_gpu` mirrors the C-struct field (`nmt_context_params::use_gpu`);
+   * `useGpu` is the camelCase alias preferred for new code so the config
+   * object reads consistently with `backendsDir`/`openclCacheDir`. Both
+   * forms are accepted; if both are set, `use_gpu` wins.
    * @default false
    */
   use_gpu?: boolean
+  useGpu?: boolean
 
   /**
    * Case-insensitive substring filter over the ggml device name when selecting
    * a compute backend (e.g. "vulkan", "vulkan0", "opencl", "metal"). When set,
    * replaces the default gated selector with a single explicit pass.
    * An explicit "opencl" bypasses the build-time USE_OPENCL guard.
+   *
+   * `gpuBackend` is the camelCase alias (preferred for new code); the
+   * snake_case form mirrors the C-struct field. Both accepted.
    */
   gpu_backend?: string
+  gpuBackend?: string
 
   /**
    * Ordinal within the matching compute devices. Defaults to 0.
-   * Example: { gpu_backend: "vulkan", gpu_device: 1 } → second Vulkan adapter.
+   * Example: { gpuBackend: "vulkan", gpuDevice: 1 } → second Vulkan adapter.
+   *
+   * `gpuDevice` is the camelCase alias; `gpu_device` mirrors the C struct.
    */
   gpu_device?: number
+  gpuDevice?: number
 
   /**
    * Path to the directory containing backend shared libraries

@@ -133,143 +133,23 @@ static buft_list_t make_buft_list(const nmt_context_params& params) {
   oss2 << "Total backends available: " << ggml_backend_dev_count();
   QLOG(qvac_lib_inference_addon_cpp::logger::Priority::DEBUG, oss2.str());
 
-  // GPU buft selection — must mirror nmt_backend_init_gpu() so tensor
-  // buffers live on the same device we'll execute on. See the comment in
-  // nmt_state_backend.cpp for the OpenCL-gating and explicit gpu_backend
-  // selection rationale.
-  std::string gpuBackendLower = params.gpu_backend;
-  std::transform(
-      gpuBackendLower.begin(),
-      gpuBackendLower.end(),
-      gpuBackendLower.begin(),
-      [](unsigned char c) { return static_cast<char>(std::tolower(c)); });
-
-  if (params.use_gpu) {
-    const size_t devCount = ggml_backend_dev_count();
-    bool selected = false;
-
-    if (!gpuBackendLower.empty()) {
-#ifndef QVAC_NMTCPP_USE_OPENCL
-      // Mirror the warning in nmt_backend_init_gpu so callers see the same
-      // diagnostic from both selection paths when explicit OpenCL bypasses
-      // the build-time guard. See QVAC-17790.
-      if (gpuBackendLower.find("opencl") != std::string::npos) {
-        QLOG(
-            qvac_lib_inference_addon_cpp::logger::Priority::WARNING,
-            "[make_buft_list] Explicit gpu_backend='opencl' bypasses the "
-            "QVAC_NMTCPP_USE_OPENCL=OFF guard — Adreno 830 devices may still "
-            "abort with GGML_ASSERT(M % 4 == 0). Caller assumes risk.");
-      }
-#endif
-      // Mode 1: explicit gpu_backend filter.
-      int cnt = 0;
-      for (size_t i = 0; i < devCount; ++i) {
-        ggml_backend_dev_t dev = ggml_backend_dev_get(i);
-        enum ggml_backend_dev_type dev_type = ggml_backend_dev_type(dev);
-        const char* name = ggml_backend_dev_name(dev);
-        if (dev_type == GGML_BACKEND_DEVICE_TYPE_CPU) {
-          continue;
-        }
-        if (!nmt_name_contains_ci(name, gpuBackendLower)) {
-          continue;
-        }
-        if (cnt == params.gpu_device) {
-          auto* buft = ggml_backend_dev_buffer_type(dev);
-          if (buft) {
-            buft_list.emplace_back(dev, buft);
-            selected = true;
-            QLOG(
-                qvac_lib_inference_addon_cpp::logger::Priority::DEBUG,
-                "  -> Added explicit gpu_backend buft to buft_list");
-          } else {
-            QLOG(
-                qvac_lib_inference_addon_cpp::logger::Priority::WARNING,
-                "[make_buft_list] gpu_backend matched device but buffer type "
-                "is null — will use CPU buffers");
-          }
-        }
-        if (++cnt > params.gpu_device) {
-          break;
-        }
-      }
-      if (!selected) {
-        QLOG(
-            qvac_lib_inference_addon_cpp::logger::Priority::WARNING,
-            "[make_buft_list] Explicit gpu_backend='" + params.gpu_backend +
-                "' matched no registered device — will use CPU buffers");
-      }
-    } else {
-#ifdef QVAC_NMTCPP_USE_OPENCL
-      // Mode 2a: prefer OpenCL.
-      int cnt = 0;
-      for (size_t i = 0; i < devCount; ++i) {
-        ggml_backend_dev_t dev = ggml_backend_dev_get(i);
-        enum ggml_backend_dev_type dev_type = ggml_backend_dev_type(dev);
-        const char* name = ggml_backend_dev_name(dev);
-        if (dev_type == GGML_BACKEND_DEVICE_TYPE_CPU) {
-          continue;
-        }
-        if (!nmt_name_contains_ci(name, "opencl")) {
-          continue;
-        }
-        if (cnt == params.gpu_device) {
-          auto* buft = ggml_backend_dev_buffer_type(dev);
-          if (buft) {
-            buft_list.emplace_back(dev, buft);
-            selected = true;
-            QLOG(
-                qvac_lib_inference_addon_cpp::logger::Priority::DEBUG,
-                "  -> Added OpenCL buft to buft_list");
-          } else {
-            QLOG(
-                qvac_lib_inference_addon_cpp::logger::Priority::WARNING,
-                "[make_buft_list] OpenCL device matched but buffer type is "
-                "null — falling through to compute fallback");
-          }
-        }
-        if (++cnt > params.gpu_device) {
-          break;
-        }
-      }
-#endif
-
-      // Mode 2b: fallback to any non-CPU compute device (skipping OpenCL
-      // when the guard is off).
-      if (!selected) {
-        int cnt2 = 0;
-        for (size_t i = 0; i < devCount; ++i) {
-          ggml_backend_dev_t dev = ggml_backend_dev_get(i);
-          enum ggml_backend_dev_type dev_type = ggml_backend_dev_type(dev);
-          const char* name = ggml_backend_dev_name(dev);
-          if (dev_type == GGML_BACKEND_DEVICE_TYPE_CPU) {
-            continue;
-          }
-#ifndef QVAC_NMTCPP_USE_OPENCL
-          if (nmt_name_contains_ci(name, "opencl")) {
-            continue;
-          }
-#endif
-          if (cnt2 == params.gpu_device) {
-            auto* buft = ggml_backend_dev_buffer_type(dev);
-            if (buft) {
-              buft_list.emplace_back(dev, buft);
-              selected = true;
-              QLOG(
-                  qvac_lib_inference_addon_cpp::logger::Priority::DEBUG,
-                  "  -> Added compute buft to buft_list");
-            } else {
-              QLOG(
-                  qvac_lib_inference_addon_cpp::logger::Priority::WARNING,
-                  "[make_buft_list] Compute device matched but buffer type "
-                  "is null — will use CPU buffers");
-            }
-          }
-          if (++cnt2 > params.gpu_device) {
-            break;
-          }
-        }
-      }
+  // GPU buft selection — delegate to the shared selector in nmt_utils so
+  // tensor buffers live on the same device nmt_backend_init_gpu picks.
+  // Repeated drift between this path and nmt_backend_init_gpu has been a
+  // recurring source of scheduler crashes (R2-C1, R4-C2); the shared helper
+  // is the structural fix per QVAC-17790 round-8 R8-D1.
+  ggml_backend_dev_t selected_dev = nmt_select_gpu_device(
+      params.use_gpu, params.gpu_backend, params.gpu_device, "make_buft_list");
+  if (selected_dev != nullptr) {
+    auto* buft = ggml_backend_dev_buffer_type(selected_dev);
+    if (buft != nullptr) {
+      buft_list.emplace_back(selected_dev, buft);
+      QLOG(
+          qvac_lib_inference_addon_cpp::logger::Priority::DEBUG,
+          "  -> Added GPU buft to buft_list");
     }
+    // If buft is null here, the shared helper already emitted a WARNING and
+    // we fall through to CPU buffers — same behaviour as before the refactor.
   }
 
   std::ostringstream oss_selected;
