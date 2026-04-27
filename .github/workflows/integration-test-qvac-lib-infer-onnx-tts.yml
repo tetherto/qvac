@@ -605,6 +605,7 @@ jobs:
           QVAC_SUPERTONIC_BENCHMARK_RUN_PYTHON: ${{ inputs.supertonic_run_python && matrix.run_python && 'true' || 'false' }}
         run: |
           $serverDir = Join-Path $PWD "benchmarks/server"
+          $clientDir = Join-Path $PWD "benchmarks/client"
           $logPath = Join-Path $serverDir "server.log"
           $errorPath = Join-Path $serverDir "server-error.log"
           $proc = Start-Process -FilePath bare.cmd -ArgumentList "index.js" -WorkingDirectory $serverDir -RedirectStandardOutput $logPath -RedirectStandardError $errorPath -PassThru
@@ -629,7 +630,9 @@ jobs:
               exit 1
             }
 
+            Push-Location $clientDir
             python -u -m src.tts.main --config config/config-supertonic.yaml
+            Pop-Location
           } finally {
             Stop-Process -Id $proc.Id -Force -ErrorAction SilentlyContinue
             Remove-Item "$serverDir/server.pid" -ErrorAction SilentlyContinue
