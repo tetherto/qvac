@@ -50,7 +50,9 @@ export const llmConfigBaseSchema = z.object({
     .optional(),
   "cache-type-k": z.string().optional(),
   "cache-type-v": z.string().optional(),
-  "main-gpu": z.union([z.number().int(), z.string()]).optional(),
+  "main-gpu": z
+    .union([z.number().int().min(0), z.enum(["integrated", "dedicated"])])
+    .optional(),
   "split-mode": z.enum(["none", "layer", "row"]).optional(),
   split_mode: z.enum(["none", "layer", "row"]).optional(),
   "tensor-split": z.string().optional(),
