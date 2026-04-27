@@ -309,7 +309,8 @@ const SdGenHandlersMap SD_GEN_HANDLERS = {
     //   slot and the references blend visually via attention — recommended
     //   for FLUX.2-klein. When true each ref gets its own RoPE index — use
     //   with models whose text encoder receives per-image vision tokens
-    //   (e.g. Qwen-Image-Edit, Z-Image-Omni). See SdGenConfig::increaseRefIndex.
+    //   (e.g. Qwen-Image-Edit, Z-Image-Omni). See
+    //   SdGenConfig::increaseRefIndex.
     //
     // auto_resize_ref_image: when true (default), each ref image is resized to
     //   the target width/height before being VAE-encoded.
