@@ -258,6 +258,13 @@ class ImgStableDiffusion {
     }
 
     // ── init_image / init_images validation ────────────────────────────────
+    // Type-check: reject non-array init_images to prevent silent fallback to txt2img
+    if (params.init_images != null && !Array.isArray(params.init_images)) {
+      throw new TypeError(
+        'init_images must be an Array of Uint8Array; got ' + typeof params.init_images
+      )
+    }
+
     const hasInitImages =
       Array.isArray(params.init_images) && params.init_images.length > 0
 
