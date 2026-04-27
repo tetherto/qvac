@@ -386,7 +386,7 @@ static ggml_backend_t nmt_backend_init_gpu(const nmt_context_params& params) {
           } else {
             QLOG(
                 qvac_lib_inference_addon_cpp::logger::Priority::WARNING,
-                "[GPU] gpu_backend matched device but buffer type is null — "
+                "[nmt_backend_init_gpu] gpu_backend matched device but buffer type is null — "
                 "skipping");
           }
         }
@@ -397,7 +397,7 @@ static ggml_backend_t nmt_backend_init_gpu(const nmt_context_params& params) {
       if (dev == nullptr) {
         QLOG(
             qvac_lib_inference_addon_cpp::logger::Priority::WARNING,
-            "[GPU] Explicit gpu_backend='" + params.gpu_backend +
+            "[nmt_backend_init_gpu] Explicit gpu_backend='" + params.gpu_backend +
                 "' matched no registered device — falling back to CPU");
       }
     } else {
@@ -427,7 +427,7 @@ static ggml_backend_t nmt_backend_init_gpu(const nmt_context_params& params) {
           } else {
             QLOG(
                 qvac_lib_inference_addon_cpp::logger::Priority::WARNING,
-                "[GPU] OpenCL device matched but buffer type is null — "
+                "[nmt_backend_init_gpu] OpenCL device matched but buffer type is null — "
                 "skipping");
           }
         }
@@ -465,7 +465,7 @@ static ggml_backend_t nmt_backend_init_gpu(const nmt_context_params& params) {
             } else {
               QLOG(
                   qvac_lib_inference_addon_cpp::logger::Priority::WARNING,
-                  "[GPU] Compute device matched but buffer type is null — "
+                  "[nmt_backend_init_gpu] Compute device matched but buffer type is null — "
                   "skipping");
             }
           }

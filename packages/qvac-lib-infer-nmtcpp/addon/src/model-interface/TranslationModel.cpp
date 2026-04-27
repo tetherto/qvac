@@ -250,50 +250,56 @@ void TranslationModel::load() {
   }
   QLOG(qvac_lib_inference_addon_cpp::logger::Priority::INFO, oss.str());
 
-  nmtCtx_.reset(nmt_init_from_file_with_params(modelPath_.c_str(), params));
+  // Build the freshly-loaded context outside the lock so the heavy
+  // nmt_init_from_file_with_params call doesn't serialize against
+  // getActiveBackendName(). Then commit nmtCtx_ + activeBackendName_ together
+  // under mtx_ so any concurrent reader sees a consistent (ctx, name) pair.
+  std::unique_ptr<nmt_context, decltype(&nmt_free)> freshCtx(
+      nmt_init_from_file_with_params(modelPath_.c_str(), params), &nmt_free);
 
   std::ostringstream ctxMsg;
   ctxMsg
       << "[TRANSLATION MODEL] nmt_init_from_file_with_params() returned, ctx="
-      << (void*)nmtCtx_.get();
+      << (void*)freshCtx.get();
   QLOG(qvac_lib_inference_addon_cpp::logger::Priority::INFO, ctxMsg.str());
 
-  if (nmtCtx_ == nullptr) {
+  if (freshCtx == nullptr) {
     QLOG(
         qvac_lib_inference_addon_cpp::logger::Priority::ERROR,
         "[TRANSLATION MODEL] ERROR: nmtCtx_ is NULL!");
     throw std::runtime_error("Failed to load model");
   }
+
+  std::string cachedName = "CPU";
+  if (freshCtx->state) {
+    for (ggml_backend_t backend : freshCtx->state->backends) {
+      if (backend == nullptr) {
+        continue;
+      }
+      ggml_backend_dev_t dev = ggml_backend_get_device(backend);
+      if (dev == nullptr) {
+        continue;
+      }
+      if (ggml_backend_dev_type(dev) == GGML_BACKEND_DEVICE_TYPE_CPU) {
+        continue;
+      }
+      const char* name = ggml_backend_dev_name(dev);
+      if (name != nullptr) {
+        cachedName = std::string(name);
+      }
+      break;
+    }
+  }
+
+  {
+    std::scoped_lock<std::mutex> lock(mtx_);
+    nmtCtx_ = std::move(freshCtx);
+    activeBackendName_ = std::move(cachedName);
+  }
+
   isFirstSentence_ = true;
   srcLang_.clear();
   tgtLang_.clear();
-
-  // Cache the active backend name under the mutex so getActiveBackendName()
-  // reads are race-free.
-  {
-    std::string cachedName = "CPU";
-    if (nmtCtx_->state) {
-      for (ggml_backend_t backend : nmtCtx_->state->backends) {
-        if (backend == nullptr) {
-          continue;
-        }
-        ggml_backend_dev_t dev = ggml_backend_get_device(backend);
-        if (dev == nullptr) {
-          continue;
-        }
-        if (ggml_backend_dev_type(dev) == GGML_BACKEND_DEVICE_TYPE_CPU) {
-          continue;
-        }
-        const char* name = ggml_backend_dev_name(dev);
-        if (name != nullptr) {
-          cachedName = std::string(name);
-        }
-        break;
-      }
-    }
-    std::scoped_lock<std::mutex> lock(mtx_);
-    activeBackendName_ = std::move(cachedName);
-  }
 
   QLOG(
       qvac_lib_inference_addon_cpp::logger::Priority::INFO,
@@ -656,19 +662,30 @@ void TranslationModel::setConfig(
   }
 
   // Same pre-load lift for gpu_device — ordinal among matching devices.
+  // Cap to a small upper bound to keep the per-device-loop counter (`int`)
+  // safely away from overflow and to reject obviously-bogus inputs.
+  static constexpr int64_t kMaxGpuDevice = 64;
   if (auto it = config_.find("gpu_device"); it != config_.end()) {
     if (const auto* asInt = std::get_if<int64_t>(&it->second)) {
-      setGpuDevice(static_cast<int>(*asInt));
+      const int64_t v = *asInt;
+      if (v < 0 || v > kMaxGpuDevice) {
+        QLOG(
+            qvac_lib_inference_addon_cpp::logger::Priority::WARNING,
+            "[TRANSLATION MODEL] 'gpu_device' int value out of range "
+            "[0, 64]; ignoring");
+      } else {
+        setGpuDevice(static_cast<int>(v));
+      }
     } else if (const auto* asDouble = std::get_if<double>(&it->second)) {
       double v = *asDouble;
       if (std::isfinite(v) && v >= 0.0 &&
-          v <= static_cast<double>(INT_MAX)) {
+          v <= static_cast<double>(kMaxGpuDevice)) {
         setGpuDevice(static_cast<int>(v));
       } else {
         QLOG(
             qvac_lib_inference_addon_cpp::logger::Priority::WARNING,
-            "[TRANSLATION MODEL] 'gpu_device' double value out of range; "
-            "ignoring");
+            "[TRANSLATION MODEL] 'gpu_device' double value out of range "
+            "[0, 64]; ignoring");
       }
     } else {
       QLOG(
@@ -775,7 +792,8 @@ std::string TranslationModel::getActiveBackendName() const {
 
 #ifdef HAVE_BERGAMOT
   if (backendType_ == BackendType::BERGAMOT) {
-    return "Bergamot-CPU";
+    return bergamotCtx_ ? std::string("Bergamot-CPU")
+                        : std::string("Unloaded");
   }
 #endif
 

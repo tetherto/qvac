@@ -208,6 +208,11 @@ static buft_list_t make_buft_list(nmt_context_params& params) {
             QLOG(
                 qvac_lib_inference_addon_cpp::logger::Priority::DEBUG,
                 "  -> Added OpenCL buft to buft_list");
+          } else {
+            QLOG(
+                qvac_lib_inference_addon_cpp::logger::Priority::WARNING,
+                "[make_buft_list] OpenCL device matched but buffer type is "
+                "null — falling through to compute fallback");
           }
         }
         if (++cnt > params.gpu_device) {
@@ -240,6 +245,11 @@ static buft_list_t make_buft_list(nmt_context_params& params) {
               QLOG(
                   qvac_lib_inference_addon_cpp::logger::Priority::DEBUG,
                   "  -> Added compute buft to buft_list");
+            } else {
+              QLOG(
+                  qvac_lib_inference_addon_cpp::logger::Priority::WARNING,
+                  "[make_buft_list] Compute device matched but buffer type "
+                  "is null — will use CPU buffers");
             }
           }
           if (++cnt2 > params.gpu_device) {

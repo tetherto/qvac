@@ -158,13 +158,19 @@ getActiveBackendName(js_env_t* env, js_callback_info_t* info) try {
   // The shared AddonCpp stores the model as IModel& — getActiveBackendName()
   // only lives on TranslationModel. A downcast failure means the active model
   // is PivotTranslationModel (Bergamot), which is CPU-only by design.
+  auto& model = instance.addonCpp->model.get();
   auto* translationModel =
-      dynamic_cast<qvac_lib_inference_addon_nmt::TranslationModel*>(
-          &instance.addonCpp->model.get());
-
-  std::string name = translationModel ? translationModel->getActiveBackendName()
-                                      : std::string("Bergamot-CPU");
-
+      dynamic_cast<qvac_lib_inference_addon_nmt::TranslationModel*>(&model);
+  if (translationModel != nullptr) {
+    return js::String::create(
+        env, translationModel->getActiveBackendName().c_str());
+  }
+  auto* pivotModel =
+      dynamic_cast<qvac_lib_inference_addon_nmt::PivotTranslationModel*>(
+          &model);
+  std::string name = (pivotModel != nullptr && pivotModel->isLoaded())
+                         ? std::string("Bergamot-CPU")
+                         : std::string("Unloaded");
   return js::String::create(env, name.c_str());
 }
 JSCATCH

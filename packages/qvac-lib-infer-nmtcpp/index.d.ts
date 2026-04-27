@@ -89,8 +89,9 @@ export default class TranslationNmtcpp {
 
   /**
    * Returns the name of the compute backend that load() actually selected,
-   * or one of the sentinels "Unloaded", "Bergamot-CPU", "CPU".
+   * or one of the sentinels "Unloaded", "Bergamot-CPU", "CPU". Open-ended
+   * device names like "Vulkan0", "OpenCL", "Metal" are also possible.
    * Call after load() to confirm use_gpu / gpu_backend took effect.
    */
-  getActiveBackendName(): string
+  getActiveBackendName(): 'Unloaded' | 'Bergamot-CPU' | 'CPU' | string
 }
