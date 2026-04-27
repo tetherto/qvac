@@ -30,13 +30,10 @@ bool nmt_name_contains_ci(const char* name, const std::string& needle_lower);
 // "[make_buft_list]"). Does NOT take the global init mutex; caller must
 // ensure backend registration is complete before calling.
 //
-// Returns the selected non-CPU device (or nullptr if no eligible device was
-// found). The caller must independently verify
-// `ggml_backend_dev_buffer_type(returned_dev) != nullptr` if it needs a
-// buffer type — the helper guarantees the dev is selectable but does NOT
-// guarantee a valid buft (warnings about null buft are emitted inside the
-// helper but the return value is the dev that triggered the warning, so
-// callers can still emit follow-on context).
+// Returns the selected non-CPU device whose buffer type is verified non-null,
+// or nullptr if no eligible device was found (including when a device matched
+// but its buffer type was null — a WARNING is emitted in that case). Callers
+// do NOT need to re-check the buffer type of a non-null return value.
 ggml_backend_dev_t nmt_select_gpu_device(
     bool use_gpu, const std::string& gpu_backend, int gpu_device,
     const char* log_prefix);

@@ -20,6 +20,7 @@ std::mutex NmtLazyInitializeBackend::g_initMutex;
 bool NmtLazyInitializeBackend::g_initialized = false;
 std::string NmtLazyInitializeBackend::g_recordedBackendsDir;
 std::string NmtLazyInitializeBackend::g_recordedOpenclCacheDir;
+std::string NmtLazyInitializeBackend::g_recordedOpenclCacheDirInput;
 int NmtLazyInitializeBackend::g_refCount = 0;
 
 // Forward ggml's internal log stream to QLOG so diagnostic lines
@@ -193,20 +194,21 @@ bool NmtLazyInitializeBackend::initializeLocked(
               g_recordedBackendsDir + ", requested: " + backendsDir);
     }
 #ifdef __ANDROID__
-    // Mirror the backendsDir mismatch diagnostic — caller's openclCacheDir
-    // is silently ignored here because GGML_OPENCL_CACHE_DIR was set at
-    // first init (the singleton's "first wins" contract). Surface that the
-    // request is being dropped so the operator can correlate the unexpected
-    // cache location with this re-init attempt.
-    if (!openclCacheDir.empty() && !g_recordedOpenclCacheDir.empty() &&
-        // Compare just the supplied prefix because g_recordedOpenclCacheDir
-        // already has the "/opencl-cache" suffix appended at first init.
-        g_recordedOpenclCacheDir.find(openclCacheDir) != 0) {
+    if (!openclCacheDir.empty() && !g_recordedOpenclCacheDirInput.empty() &&
+        openclCacheDir != g_recordedOpenclCacheDirInput) {
+      std::string sanitizedRequested;
+      sanitizedRequested.reserve(openclCacheDir.size());
+      for (char raw : openclCacheDir) {
+        unsigned char c = static_cast<unsigned char>(raw);
+        sanitizedRequested.push_back(
+            (c >= 0x20 && c < 0x7F) ? static_cast<char>(c) : '?');
+      }
       QLOG(
           Priority::WARNING,
           "Backend already initialized with different openclCacheDir. "
           "Previously initialized at: " +
-              g_recordedOpenclCacheDir + ", requested: " + openclCacheDir);
+              g_recordedOpenclCacheDirInput +
+              ", requested: " + sanitizedRequested);
     }
 #endif
     return false;
@@ -268,6 +270,7 @@ bool NmtLazyInitializeBackend::initializeLocked(
           (requested.lexically_normal() / "opencl-cache").string();
       setenv("GGML_OPENCL_CACHE_DIR", oclCachePath.c_str(), /*overwrite=*/1);
       g_recordedOpenclCacheDir = std::move(oclCachePath);
+      g_recordedOpenclCacheDirInput = openclCacheDir;
     }
   }
 #endif
@@ -320,6 +323,7 @@ void NmtLazyInitializeBackend::decrementRefCount() {
       if (!g_recordedOpenclCacheDir.empty()) {
         unsetenv("GGML_OPENCL_CACHE_DIR");
         g_recordedOpenclCacheDir.clear();
+        g_recordedOpenclCacheDirInput.clear();
       }
 #endif
     }
