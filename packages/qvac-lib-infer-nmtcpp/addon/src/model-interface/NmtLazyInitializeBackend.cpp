@@ -146,8 +146,7 @@ void nmtInstallCallbacksInLoadedBackendSos() {
     if (handle == nullptr) {
       continue;
     }
-    auto logSetFn =
-        reinterpret_cast<LogSetFn>(dlsym(handle, "ggml_log_set"));
+    auto logSetFn = reinterpret_cast<LogSetFn>(dlsym(handle, "ggml_log_set"));
     if (logSetFn != nullptr) {
       logSetFn(&nmtGgmlLogCallback, nullptr);
     }
