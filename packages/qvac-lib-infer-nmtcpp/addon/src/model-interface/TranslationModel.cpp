@@ -703,8 +703,7 @@ void TranslationModel::setUseGpu(bool useGpu) { useGpu_ = useGpu; }
 void TranslationModel::setGpuBackend(const std::string& gpuBackend) {
   static constexpr size_t kMaxGpuBackendLen = 64;
   std::string sanitized;
-  sanitized.reserve(
-      std::min(gpuBackend.size(), kMaxGpuBackendLen));
+  sanitized.reserve(std::min(gpuBackend.size(), kMaxGpuBackendLen));
   for (size_t i = 0; i < gpuBackend.size() && i < kMaxGpuBackendLen; ++i) {
     unsigned char c = static_cast<unsigned char>(gpuBackend[i]);
     if (c >= 0x20 && c < 0x7F) {

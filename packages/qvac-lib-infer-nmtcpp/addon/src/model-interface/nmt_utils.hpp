@@ -16,4 +16,3 @@ bool ggml_graph_compute_helper(
 // Used by nmt_backend_init_gpu and make_buft_list to keep device selection
 // in lock-step.
 bool nmt_name_contains_ci(const char* name, const std::string& needle_lower);
-
