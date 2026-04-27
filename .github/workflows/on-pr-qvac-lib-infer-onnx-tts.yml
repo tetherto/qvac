@@ -28,6 +28,14 @@ on:
         required: false
         type: string
         default: "packages/qvac-lib-infer-onnx-tts"
+      tts_integration_profile:
+        description: "TTS integration profile (PR runs always use short)."
+        required: false
+        type: choice
+        default: "short"
+        options:
+          - short
+          - long
 
   workflow_call:
     inputs:
@@ -45,6 +53,10 @@ on:
         required: false
         type: string
         default: "packages/qvac-lib-infer-onnx-tts"
+      tts_integration_profile:
+        required: false
+        type: string
+        default: "short"
 
 permissions:
   contents: read
@@ -82,6 +94,7 @@ jobs:
       head_sha: ${{ steps.ctx.outputs.head_sha }}
       run_verify: ${{ steps.ctx.outputs.run_verify }}
       workdir: ${{ steps.ctx.outputs.workdir }}
+      tts_integration_profile: ${{ steps.ctx.outputs.tts_integration_profile }}
     steps:
       - id: ctx
         shell: bash
@@ -91,6 +104,7 @@ jobs:
           INPUT_REPO: ${{ inputs.repository }}
           INPUT_REF: ${{ inputs.ref }}
           INPUT_VERIFY: ${{ inputs.run_verify }}
+          INPUT_TTS_INTEGRATION_PROFILE: ${{ inputs.tts_integration_profile || 'short' }}
           REPO: ${{ github.repository }}
           REF_NAME: ${{ github.ref_name }}
           SHA: ${{ github.sha }}
@@ -117,12 +131,19 @@ jobs:
             head_sha="$HEAD_SHA"
           fi
 
+          if [[ "$EVENT_NAME" == "pull_request_target" ]]; then
+            tts_integration_profile="short"
+          else
+            tts_integration_profile="${INPUT_TTS_INTEGRATION_PROFILE:-short}"
+          fi
+
           echo "repository=$repo" >> "$GITHUB_OUTPUT"
           echo "ref=$ref" >> "$GITHUB_OUTPUT"
           echo "base_sha=$base_sha" >> "$GITHUB_OUTPUT"
           echo "head_sha=$head_sha" >> "$GITHUB_OUTPUT"
           echo "run_verify=$run_verify" >> "$GITHUB_OUTPUT"
           echo "workdir=$workdir" >> "$GITHUB_OUTPUT"
+          echo "tts_integration_profile=$tts_integration_profile" >> "$GITHUB_OUTPUT"
 
           echo "Resolved:"
           echo "  repo=$repo"
@@ -131,6 +152,7 @@ jobs:
           echo "  head_sha=$head_sha"
           echo "  run_verify=$run_verify"
           echo "  workdir=$workdir"
+          echo "  tts_integration_profile=$tts_integration_profile"
 
   sanity-checks:
     if: needs.authorize.outputs.allowed == 'true'
@@ -205,6 +227,7 @@ jobs:
       repository: ${{ needs.context.outputs.repository }}
       ref: ${{ needs.context.outputs.ref }}
       workdir: ${{ needs.context.outputs.workdir }}
+      tts_integration_profile: ${{ needs.context.outputs.tts_integration_profile }}
 
   run-mobile-integration-tests:
     permissions:

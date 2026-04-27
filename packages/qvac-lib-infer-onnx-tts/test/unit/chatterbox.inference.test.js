@@ -72,6 +72,19 @@ test('Chatterbox: run returns audio output and stats', async (t) => {
   await model.unload()
 })
 
+test('Chatterbox: preserves Portuguese diacritics at JS binding boundary', async (t) => {
+  const binding = new MockedBinding()
+  const model = createMockedChatterboxModel({ binding })
+  const text = 'Olá mundo! Essa é uma demonstração de síntese de texto para voz usando Chatterbox'
+
+  await model.load()
+  const response = await model.run({ type: 'text', input: text })
+  await response.await()
+
+  t.is(binding.lastRunJob?.input, text, 'Binding should receive the exact UTF-8 string')
+  await model.unload()
+})
+
 test('Chatterbox: exclusiveRun does not deadlock run()', async (t) => {
   const model = createMockedChatterboxModel({ exclusiveRun: true })
   await model.load()

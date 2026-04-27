@@ -1,6 +1,6 @@
 # Changelog
 
-## [0.5.0] - 2026-04-20
+## [0.5.0] - 2026-04-21
 
 ### Added
 
@@ -11,6 +11,8 @@
 - Example script demonstrating fusion workflow with two scientists (`examples/generate-fusion.js`)
 - Detailed README section on multi-reference fusion, `@imageN` tags, and best practices
 - Claude Shannon test image under `assets/` (Bell Labs / Wikimedia Commons, CC BY-SA) alongside the existing von Neumann image, with a credits section documenting both sources and licenses
+- **LoRA support** — add LoRA adapter conditioning via `run({ lora })`, forwarding a LoRA adapter path through the JS bridge and native addon into stable-diffusion.cpp's `sd_img_gen_params_t.loras` runtime path
+- Real LoRA integration test that downloads a compatible SD2.1 LoRA adapter, runs image generation with it, and verifies a valid PNG output is produced
 
 ### Changed
 

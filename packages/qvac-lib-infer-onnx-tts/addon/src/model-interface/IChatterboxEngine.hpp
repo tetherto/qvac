@@ -18,6 +18,7 @@ struct ChatterboxConfig {
   std::string languageModelPath;
   bool lazySessionLoading = false;
   bool useGPU = false;
+  int numThreads = 0;
 };
 
 class IChatterboxEngine {

@@ -84,6 +84,71 @@ test('readImageDimensions | unrecognised format returns null', async (t) => {
   t.is(readImageDimensions(gif), null, 'GIF buffer returns null')
 })
 
+// ---------- LoRA path validation ----------
+
+test('run | throws when lora is an empty string', async (t) => {
+  const model = new ImgStableDiffusion({
+    files: {
+      model: '/tmp/stable-diffusion-v2-1-Q4_0.gguf'
+    },
+    config: { threads: 1 },
+    logger: console
+  })
+
+  try {
+    await model.run({ prompt: 'test', lora: '' })
+    t.fail('should have thrown')
+  } catch (err) {
+    t.ok(err instanceof TypeError, 'throws TypeError')
+    t.ok(
+      /params\.lora must be a non-empty string/.test(err.message),
+      'error message explains lora must be non-empty'
+    )
+  }
+})
+
+test('run | throws when lora is not a string', async (t) => {
+  const model = new ImgStableDiffusion({
+    files: {
+      model: '/tmp/stable-diffusion-v2-1-Q4_0.gguf'
+    },
+    config: { threads: 1 },
+    logger: console
+  })
+
+  try {
+    await model.run({ prompt: 'test', lora: 42 })
+    t.fail('should have thrown')
+  } catch (err) {
+    t.ok(err instanceof TypeError, 'throws TypeError')
+    t.ok(
+      /params\.lora must be a non-empty string/.test(err.message),
+      'error message explains lora must be a string'
+    )
+  }
+})
+
+test('run | throws when lora is a relative path', async (t) => {
+  const model = new ImgStableDiffusion({
+    files: {
+      model: '/tmp/stable-diffusion-v2-1-Q4_0.gguf'
+    },
+    config: { threads: 1 },
+    logger: console
+  })
+
+  try {
+    await model.run({ prompt: 'test', lora: 'adapter.safetensors' })
+    t.fail('should have thrown')
+  } catch (err) {
+    t.ok(err instanceof TypeError, 'throws TypeError')
+    t.ok(
+      /params\.lora must be an absolute path/.test(err.message),
+      'error message explains lora must be absolute'
+    )
+  }
+})
+
 // ---------- FLUX img2img prediction guard ----------
 
 test('FLUX img2img | throws when prediction is omitted', async (t) => {

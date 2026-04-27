@@ -1,5 +1,8 @@
 import { z } from "zod";
-import { toolSchema, toolCallSchema, toolCallEventSchema } from "./tools";
+import { toolSchema } from "./tools";
+import { completionEventSchema } from "./completion-event";
+
+export { completionStatsSchema, type CompletionStats } from "./completion-event";
 
 export const attachmentSchema = z.object({
   path: z.string(),
@@ -40,6 +43,8 @@ export const completionClientParamsSchema = completionParamsSchema.extend({
   stream: z.boolean(),
   kvCache: kvCacheSchema.optional(),
   generationParams: generationParamsSchema.optional(),
+  captureThinking: z.boolean().optional(),
+  emitRawDeltas: z.boolean().optional(),
 });
 
 export const completionStreamRequestSchema =
@@ -47,22 +52,13 @@ export const completionStreamRequestSchema =
     type: z.literal("completionStream"),
   });
 
-export const completionStatsSchema = z.object({
-  timeToFirstToken: z.number().optional(),
-  tokensPerSecond: z.number().optional(),
-  cacheTokens: z.number().optional(),
-  backendDevice: z.enum(["cpu", "gpu"]).optional(),
-});
-
-export const completionStreamResponseSchema = z.object({
-  type: z.literal("completionStream"),
-  token: z.string(),
-  done: z.boolean().optional(),
-  stats: completionStatsSchema.optional(),
-  toolCallEvent: toolCallEventSchema.optional(),
-  toolCalls: z.array(toolCallSchema).optional(),
-  error: z.string().optional(),
-});
+export const completionStreamResponseSchema = z
+  .object({
+    type: z.literal("completionStream"),
+    done: z.boolean().optional(),
+    events: z.array(completionEventSchema),
+  })
+  .strict();
 
 export type GenerationParams = z.infer<typeof generationParamsSchema>;
 export type CompletionParams = z.infer<typeof completionParamsSchema>;
@@ -76,4 +72,3 @@ export type CompletionStreamResponse = z.infer<
   typeof completionStreamResponseSchema
 >;
 export type Attachment = z.infer<typeof attachmentSchema>;
-export type CompletionStats = z.infer<typeof completionStatsSchema>;

@@ -89,9 +89,9 @@ async function main () {
     throw err
   }
 
-  const language = isMultilingual ? 'es' : 'en'
+  const language = isMultilingual ? 'pt' : 'en'
   const textToSynthesize = isMultilingual
-    ? 'Hola mundo. Esta es una demostración de la síntesis de texto a voz usando Chatterbox.'
+    ? 'Olá mundo. Esta é uma demonstração da síntese de texto em voz usando Chatterbox.'
     : 'Hello world. This is a demonstration of the text to speech synthesis using Chatterbox.'
   const outputFile = path.join(__dirname, isMultilingual ? 'chatterbox-multilingual-output.wav' : 'chatterbox-output.wav')
 

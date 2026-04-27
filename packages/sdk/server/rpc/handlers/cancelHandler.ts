@@ -1,6 +1,6 @@
 import type { CancelRequest, CancelResponse } from "@/schemas/cancel";
 import { cancel } from "@/server/bare/ops/cancel";
-import { createCancelFunction } from "@/server/rpc/handlers/load-model/download-manager";
+import { cancelTransfer } from "@/server/rpc/handlers/load-model/download-manager";
 import {
   cancelRagOperation,
   DEFAULT_WORKSPACE,
@@ -18,14 +18,9 @@ export async function cancelHandler(
       case "embeddings":
         await cancel({ modelId: request.modelId });
         break;
-      case "downloadAsset": {
-        const cancelDownload = createCancelFunction(
-          request.downloadKey,
-          request.clearCache,
-        );
-        cancelDownload();
+      case "downloadAsset":
+        cancelTransfer(request.downloadKey, request.clearCache);
         break;
-      }
       case "rag": {
         const cancelled = cancelRagOperation(request.workspace);
         if (!cancelled) {

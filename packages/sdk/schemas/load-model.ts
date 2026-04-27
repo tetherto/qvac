@@ -418,8 +418,9 @@ export const modelProgressUpdateSchema = z.object({
       overallPercentage: z.number(),
     })
     .optional(),
-  onnxInfo: z
+  fileSetInfo: z
     .object({
+      setKey: z.string(),
       currentFile: z.string(),
       fileIndex: z.number(),
       totalFiles: z.number(),

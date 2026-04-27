@@ -3,7 +3,6 @@ import type {
   LoadModelResponse,
   ModelProgressUpdate,
   ReloadConfigRequest,
-  ResolveContext,
 } from "@/schemas";
 import {
   normalizeModelType,
@@ -12,11 +11,7 @@ import {
   type OperationEvent,
 } from "@/schemas";
 import { loadModel } from "@/server/bare/ops/load-model";
-import {
-  resolveModelPath,
-  resolveModelPathWithStats,
-} from "@/server/rpc/handlers/load-model/resolve";
-import type { ResolveResult } from "./types";
+import { createResolveSession } from "@/server/rpc/handlers/load-model/resolve-session";
 import { nowMs, generateProfileId } from "@/profiling/clock";
 import {
   getModelEntry,
@@ -27,6 +22,7 @@ import {
   canonicalConfigString,
   transformConfigForReload,
 } from "@/server/utils";
+import { buildDownloadProfilingFields } from "@/server/rpc/handlers/load-model/types";
 import {
   ConfigReloadNotSupportedError,
   ModelTypeMismatchError,
@@ -89,38 +85,33 @@ export async function handleLoadModel(
 
     const totalLoadStart = profilingEnabled ? nowMs() : 0;
 
-    let resolveResult: ResolveResult | undefined;
+    const session = createResolveSession({
+      progressCallback,
+      seed,
+      profilingEnabled,
+    });
+
+    const primaryResolve = session.resolvePrimaryModelPath(modelSrc);
+
     let resolvedModelPath: string;
+    let pluginResolveResult: Awaited<ReturnType<NonNullable<typeof plugin.resolveConfig>>> | undefined;
 
-    if (profilingEnabled) {
-      resolveResult = await resolveModelPathWithStats(
-        modelSrc,
-        progressCallback,
-        seed,
-      );
-      resolvedModelPath = resolveResult.path;
-    } else {
-      resolvedModelPath = await resolveModelPath(
-        modelSrc,
-        progressCallback,
-        seed,
-      );
-    }
+    try {
+      const pluginResolve = plugin.resolveConfig
+        ? Promise.resolve().then(() =>
+            plugin.resolveConfig!(
+              resolvedModelConfig,
+              session.createResolveContext(modelSrc, canonicalModelType, modelName),
+            ),
+          )
+        : undefined;
 
-    let pluginArtifacts: Record<string, string> = {};
-    if (plugin.resolveConfig) {
-      const ctx: ResolveContext = {
-        resolveModelPath: (src) =>
-          resolveModelPath(src, progressCallback, seed),
-        modelSrc,
-        modelType: canonicalModelType,
-        ...(modelName !== undefined && { modelName }),
-      };
-      const result = await plugin.resolveConfig(resolvedModelConfig, ctx);
-      resolvedModelConfig = result.config;
-      if (result.artifacts) {
-        pluginArtifacts = result.artifacts as Record<string, string>;
-      }
+      [resolvedModelPath, pluginResolveResult] = pluginResolve
+        ? await Promise.all([primaryResolve, pluginResolve])
+        : [await primaryResolve, undefined];
+    } catch (error) {
+      session.cancelAll();
+      throw error;
     }
 
     const configStr = canonicalConfigString(
@@ -129,14 +120,22 @@ export async function handleLoadModel(
     const modelHashInput = `${request.modelType}:${modelSrc}:${configStr}`;
     const modelId = generateShortHash(modelHashInput);
 
-    if ("modelPath" in pluginArtifacts) {
-      logger.warn(
-        "Plugin returned 'modelPath' artifact which was overridden by core",
-      );
+    let pluginArtifacts: Record<string, string> = {};
+    if (pluginResolveResult) {
+      resolvedModelConfig = pluginResolveResult.config;
+      if (pluginResolveResult.artifacts) {
+        pluginArtifacts = pluginResolveResult.artifacts as Record<
+          string,
+          string
+        >;
+      }
     }
 
-    // eslint-disable-next-line @typescript-eslint/no-unused-vars
-    const { modelPath: _, ...artifacts } = pluginArtifacts;
+    if ("modelPath" in pluginArtifacts) {
+      throw new ModelLoadFailedError(
+        "Plugin returned reserved key \"modelPath\" in artifacts; primary model resolution is core-owned",
+      );
+    }
 
     if (!resolvedModelPath) {
       throw new ModelLoadFailedError("modelPath resolution failed");
@@ -151,7 +150,7 @@ export async function handleLoadModel(
           modelType: canonicalModelType,
           modelConfig: resolvedModelConfig,
         },
-        artifacts: Object.keys(artifacts).length > 0 ? artifacts : undefined,
+        artifacts: Object.keys(pluginArtifacts).length > 0 ? pluginArtifacts : undefined,
         modelName,
       },
       profilingEnabled ? { collectTiming: true } : undefined,
@@ -167,38 +166,18 @@ export async function handleLoadModel(
       const totalLoadTimeMs = nowMs() - totalLoadStart;
       const profileId = profilingMeta?.id ?? generateProfileId();
 
-      const gauges: Record<string, number> = {
-        totalLoadTime: totalLoadTimeMs,
-      };
+      const resolveResult = session.getAggregateResult();
+      const { gauges, tags } = buildDownloadProfilingFields(
+        resolveResult?.downloadStats,
+        resolveResult?.sourceType,
+      );
+      gauges["totalLoadTime"] = totalLoadTimeMs;
       if (loadResult.timing?.modelInitializationTimeMs !== undefined) {
         gauges["modelInitializationTime"] =
           loadResult.timing.modelInitializationTimeMs;
       }
-      if (resolveResult?.downloadStats) {
-        const ds = resolveResult.downloadStats;
-        if (ds.downloadTimeMs !== undefined) {
-          gauges["downloadTime"] = ds.downloadTimeMs;
-        }
-        if (ds.totalBytesDownloaded !== undefined) {
-          gauges["totalBytesDownloaded"] = ds.totalBytesDownloaded;
-        }
-        if (ds.downloadSpeedBps !== undefined) {
-          gauges["downloadSpeedBps"] = ds.downloadSpeedBps;
-        }
-        if (ds.checksumValidationTimeMs !== undefined) {
-          gauges["checksumValidationTime"] = ds.checksumValidationTimeMs;
-        }
-      }
-
-      const tags: Record<string, string> = {};
       if (canonicalModelType) {
         tags["modelType"] = canonicalModelType;
-      }
-      if (resolveResult?.sourceType) {
-        tags["sourceType"] = resolveResult.sourceType;
-      }
-      if (resolveResult?.downloadStats?.cacheHit !== undefined) {
-        tags["cacheHit"] = resolveResult.downloadStats.cacheHit ? "true" : "false";
       }
 
       const operationEvent: OperationEvent = {
@@ -285,3 +264,4 @@ function isReloadConfigRequest(
 ): request is ReloadConfigRequest {
   return "modelId" in request && !("modelSrc" in request);
 }
+

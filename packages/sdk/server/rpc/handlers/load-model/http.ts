@@ -1,13 +1,9 @@
-import type {
-  ModelProgressUpdate,
-  HttpDownloadEntry,
-  ShardUrl,
-} from "@/schemas";
+import type { ModelProgressUpdate, ShardUrl } from "@/schemas";
 import fs, { promises as fsPromises } from "bare-fs";
 import path from "bare-path";
 import { Readable, type Writable } from "bare-stream";
 import fetch from "bare-fetch";
-import { AbortController, type AbortSignal } from "bare-abort-controller";
+import type { AbortSignal } from "bare-abort-controller";
 import { withTimeout } from "@/utils/withTimeout";
 import {
   getModelsCacheDir,
@@ -27,12 +23,9 @@ import {
 } from "@/server/utils";
 import { getSDKConfig } from "@/server/bare/registry/config-registry";
 import {
-  getActiveDownload,
-  registerDownload,
-  unregisterDownload,
   createHttpDownloadKey,
-  shouldClearCache,
-  clearClearCacheFlag,
+  startOrJoinDownload,
+  applyJoinedDownloadStats,
 } from "@/server/rpc/handlers/load-model/download-manager";
 import {
   DownloadCancelledError,
@@ -42,7 +35,7 @@ import {
   ResponseBodyNotReadableError,
 } from "@/utils/errors-server";
 import { getServerLogger } from "@/logging";
-import type { DownloadMetricsHooks } from "./types";
+import type { DownloadHooks } from "./types";
 
 const logger = getServerLogger();
 
@@ -305,7 +298,7 @@ async function performHttpDownload(
       await new Promise((resolve, reject) => {
         // Handle abort signal
         const abortHandler = () => {
-          const error = new Error("Download cancelled");
+          const error = new DownloadCancelledError();
           (body as Readable).destroy();
           writeStream.destroy();
           reject(error);
@@ -437,7 +430,7 @@ async function performHttpDownload(
 export async function downloadModelFromHttp(
   url: string,
   progressCallback?: (progress: ModelProgressUpdate) => void,
-  hooks?: DownloadMetricsHooks,
+  hooks?: DownloadHooks,
 ) {
   const filename = extractFilenameFromUrl(url);
 
@@ -452,35 +445,27 @@ export async function downloadModelFromHttp(
   }
 
   const downloadKey = createHttpDownloadKey(url);
-
-  const existing = getActiveDownload(downloadKey);
-  if (existing) {
-    logger.info(`📥 Reusing existing download for: ${downloadKey}`);
-    hooks?.markCacheMiss();
-    return existing.promise;
-  }
-
+  hooks?.onDownloadKey?.(downloadKey);
   const cacheDir = getModelsCacheDir();
   const sourceHash = generateShortHash(url);
   const modelPath = `${cacheDir}/${sourceHash}_${filename}`;
 
-  // Create managed download with AbortController
-  const abortController = new AbortController();
-
-  const downloadPromise = (async () => {
-    try {
-      // Check if already cached
-      const cachedPath = await validateCachedFile(
-        modelPath,
-        url,
-        abortController.signal,
-      );
-      if (cachedPath) {
-        hooks?.markCacheHit();
-        if (progressCallback) {
+  const result = startOrJoinDownload(
+    downloadKey,
+    async (ctx) => {
+      try {
+        // Check if already cached
+        const cachedPath = await validateCachedFile(
+          modelPath,
+          url,
+          ctx.signal,
+        );
+        if (cachedPath) {
+          hooks?.markCacheHit?.();
+          ctx.setCacheHit(true);
           try {
             const stats = await fsPromises.stat(cachedPath);
-            progressCallback({
+            ctx.broadcastProgress({
               type: "modelProgress",
               downloaded: stats.size,
               total: stats.size,
@@ -493,25 +478,23 @@ export async function downloadModelFromHttp(
               error,
             });
           }
+          return cachedPath;
         }
-        return cachedPath;
-      }
 
-      // Download the file
-      hooks?.markCacheMiss();
-      await performHttpDownload(
-        url,
-        modelPath,
-        downloadKey,
-        progressCallback,
-        abortController.signal,
-      );
+        // Download the file
+        hooks?.markCacheMiss?.();
+        ctx.setCacheHit(false);
+        await performHttpDownload(
+          url,
+          modelPath,
+          downloadKey,
+          ctx.broadcastProgress,
+          ctx.signal,
+        );
 
-      // Send final 100% progress update
-      if (progressCallback) {
         try {
           const stats = await fsPromises.stat(modelPath);
-          progressCallback({
+          ctx.broadcastProgress({
             type: "modelProgress",
             downloaded: stats.size,
             total: stats.size,
@@ -524,359 +507,342 @@ export async function downloadModelFromHttp(
             error,
           });
         }
-      }
 
-      return modelPath;
-    } catch (error) {
-      logger.error(
-        "❌ Error downloading model:",
-        error instanceof Error ? error.message : String(error),
-      );
+        return modelPath;
+      } catch (error) {
+        logger.error(
+          "❌ Error downloading model:",
+          error instanceof Error ? error.message : String(error),
+        );
 
-      // Check if we should delete the partial file (clearCache was requested)
-      if (error instanceof Error && error.message === "Download cancelled") {
-        if (shouldClearCache(downloadKey)) {
-          logger.info("🗑️ Clearing cache - deleting partial file");
-          try {
-            await fsPromises.unlink(modelPath);
-            logger.info(`✅ Deleted partial file: ${modelPath}`);
-          } catch (error) {
-            logger.debug("Failed to delete partial file during cleanup", {
-              path: modelPath,
-              error,
-            });
+        // Check if we should delete the partial file (clearCache was requested)
+        if (error instanceof DownloadCancelledError) {
+          if (ctx.shouldClearCache()) {
+            logger.info("🗑️ Clearing cache - deleting partial file");
+            try {
+              await fsPromises.unlink(modelPath);
+              logger.info(`✅ Deleted partial file: ${modelPath}`);
+            } catch (error) {
+              logger.debug("Failed to delete partial file during cleanup", {
+                path: modelPath,
+                error,
+              });
+            }
+          } else {
+            logger.info("📥 Download paused - partial file preserved for resume");
           }
-        } else {
-          logger.info("📥 Download paused - partial file preserved for resume");
         }
-        clearClearCacheFlag(downloadKey);
+
+        const errorToThrow =
+          error instanceof Error ? error : new Error(String(error));
+        throw errorToThrow;
       }
+    },
+    progressCallback,
+  );
 
-      const errorToThrow =
-        error instanceof Error ? error : new Error(String(error));
-      throw errorToThrow;
-    } finally {
-      // Cleanup from download manager
-      unregisterDownload(downloadKey);
-    }
-  })();
-
-  // Register download
-  const downloadEntry: HttpDownloadEntry = {
-    key: downloadKey,
-    promise: downloadPromise,
-    abortController,
-    startTime: Date.now(),
-    type: "http",
-    url,
-    modelPath,
-    ...(progressCallback && { onProgress: progressCallback }),
-  };
-
-  registerDownload(downloadKey, downloadEntry);
-
-  return downloadPromise;
+  return applyJoinedDownloadStats(result, hooks);
 }
 
 async function downloadShardedModelFromHttp(
   shardUrl: string,
   progressCallback?: (progress: ModelProgressUpdate) => void,
-  hooks?: DownloadMetricsHooks,
+  hooks?: DownloadHooks,
 ) {
   const config = getSDKConfig();
   const concurrency = config.httpDownloadConcurrency ?? DEFAULT_CONCURRENCY;
   const { shardUrls: shardInfos, cacheKey } =
     parsePatternBasedShardUrl(shardUrl);
   const downloadKey = `http-sharded:${cacheKey}`;
+  hooks?.onDownloadKey?.(downloadKey);
 
   logger.info(
     `📥 HTTP sharded download: ${shardInfos.length} shards detected from ${shardUrl}`,
   );
 
-  const existing = getActiveDownload(downloadKey);
-  if (existing) {
-    logger.info(`📥 Reusing existing sharded download for: ${downloadKey}`);
-    hooks?.markCacheMiss();
-    return existing.promise;
-  }
-
-  const abortController = new AbortController();
   const shardDir = getShardedModelCacheDir(cacheKey);
 
-  const downloadPromise = (async () => {
-    try {
-      const shardStates: ShardDownloadState[] = await Promise.all(
-        shardInfos.map(async (shard, index) => {
-          const shardPath = path.join(shardDir, shard.filename);
-          let expectedSize = 0;
+  const result = startOrJoinDownload(
+    downloadKey,
+    async (ctx) => {
+      try {
+        const shardStates: ShardDownloadState[] = await Promise.all(
+          shardInfos.map(async (shard, index) => {
+            const shardPath = path.join(shardDir, shard.filename);
+            let expectedSize = 0;
 
-          try {
-            const response = await fetch(shard.url, {
-              method: "HEAD",
-              signal: abortController.signal,
-            });
-            expectedSize = parseInt(
-              response.headers.get("content-length") || "0",
+            try {
+              const response = await fetch(shard.url, {
+                method: "HEAD",
+                signal: ctx.signal,
+              });
+              expectedSize = parseInt(
+                response.headers.get("content-length") || "0",
+              );
+            } catch (error) {
+              logger.warn("Failed to get shard size via HEAD request", {
+                url: shard.url,
+                error,
+              });
+            }
+
+            return {
+              index,
+              shard,
+              shardPath,
+              expectedSize,
+              downloadedBytes: 0,
+              isComplete: false,
+            };
+          }),
+        );
+
+        const overallTotal = shardStates.reduce(
+          (sum, s) => sum + s.expectedSize,
+          0,
+        );
+
+        logger.info(
+          `📏 Total size: ${overallTotal} bytes (${(overallTotal / 1024 / 1024).toFixed(2)} MB)`,
+        );
+
+        const cacheChecks = await Promise.all(
+          shardStates.map(async (state) => {
+            const cached = await validateCachedFile(
+              state.shardPath,
+              state.shard.url,
+              ctx.signal,
             );
-          } catch (error) {
-            logger.warn("Failed to get shard size via HEAD request", {
-              url: shard.url,
-              error,
-            });
-            // expectedSize remains 0, progress percentage will be 0
-          }
+            return { state, isCached: cached !== null };
+          }),
+        );
 
-          return {
-            index,
-            shard,
-            shardPath,
-            expectedSize,
-            downloadedBytes: 0,
-            isComplete: false,
-          };
-        }),
-      );
+        const shardsToDownload = cacheChecks
+          .filter((c) => !c.isCached)
+          .map((c) => c.state);
 
-      const overallTotal = shardStates.reduce(
-        (sum, s) => sum + s.expectedSize,
-        0,
-      );
-
-      logger.info(
-        `📏 Total size: ${overallTotal} bytes (${(overallTotal / 1024 / 1024).toFixed(2)} MB)`,
-      );
-
-      const cacheChecks = await Promise.all(
-        shardStates.map(async (state) => {
-          const cached = await validateCachedFile(
-            state.shardPath,
-            state.shard.url,
-            abortController.signal,
-          );
-          return { state, isCached: cached !== null };
-        }),
-      );
-
-      const shardsToDownload = cacheChecks
-        .filter((c) => !c.isCached)
-        .map((c) => c.state);
-
-      for (const check of cacheChecks) {
-        if (check.isCached) {
-          check.state.isComplete = true;
-          check.state.downloadedBytes = check.state.expectedSize;
-        }
-      }
-
-      logger.info(
-        `📥 ${shardsToDownload.length} of ${shardInfos.length} shards need downloading`,
-      );
-
-      if (shardsToDownload.length === 0) {
-        hooks?.markCacheHit();
-      } else {
-        hooks?.markCacheMiss();
-      }
-
-      await downloadShardsWithConcurrency(
-        shardsToDownload,
-        shardStates,
-        concurrency,
-        abortController.signal,
-        downloadKey,
-        overallTotal,
-        progressCallback,
-      );
-
-      logger.info(`✅ All ${shardInfos.length} shards downloaded successfully`);
-
-      await extractTensorsFromShards(shardDir, shardInfos[0]!.filename);
-
-      return path.join(shardDir, shardInfos[0]!.filename);
-    } catch (error) {
-      logger.error(
-        "❌ Error during sharded download:",
-        error instanceof Error ? error.message : String(error),
-      );
-
-      if (error instanceof Error && error.message === "Download cancelled") {
-        if (shouldClearCache(downloadKey)) {
-          logger.info("🗑️ Clearing cache - deleting partial shard files");
-          try {
-            await fsPromises.rm(shardDir, { recursive: true, force: true });
-            logger.info(`✅ Deleted shard directory: ${shardDir}`);
-          } catch (cleanupError) {
-            logger.debug("Failed to delete shard directory during cleanup", {
-              path: shardDir,
-              error: cleanupError,
-            });
+        for (const check of cacheChecks) {
+          if (check.isCached) {
+            check.state.isComplete = true;
+            check.state.downloadedBytes = check.state.expectedSize;
           }
         }
+
+        logger.info(
+          `📥 ${shardsToDownload.length} of ${shardInfos.length} shards need downloading`,
+        );
+
+        if (shardsToDownload.length === 0) {
+          hooks?.markCacheHit?.();
+          ctx.setCacheHit(true);
+        } else {
+          hooks?.markCacheMiss?.();
+          ctx.setCacheHit(false);
+        }
+
+        await downloadShardsWithConcurrency(
+          shardsToDownload,
+          shardStates,
+          concurrency,
+          ctx.signal,
+          downloadKey,
+          overallTotal,
+          ctx.broadcastProgress,
+        );
+
+        logger.info(
+          `✅ All ${shardInfos.length} shards downloaded successfully`,
+        );
+
+        await extractTensorsFromShards(shardDir, shardInfos[0]!.filename);
+
+        return path.join(shardDir, shardInfos[0]!.filename);
+      } catch (error) {
+        logger.error(
+          "❌ Error during sharded download:",
+          error instanceof Error ? error.message : String(error),
+        );
+
+        if (error instanceof DownloadCancelledError) {
+          if (ctx.shouldClearCache()) {
+            logger.info("🗑️ Clearing cache - deleting partial shard files");
+            try {
+              await fsPromises.rm(shardDir, { recursive: true, force: true });
+              logger.info(`✅ Deleted shard directory: ${shardDir}`);
+            } catch (cleanupError) {
+              logger.debug(
+                "Failed to delete shard directory during cleanup",
+                {
+                  path: shardDir,
+                  error: cleanupError,
+                },
+              );
+            }
+          }
+        }
+
+        throw error;
       }
+    },
+    progressCallback,
+  );
 
-      throw error;
-    } finally {
-      unregisterDownload(downloadKey);
-      clearClearCacheFlag(downloadKey);
-    }
-  })();
-
-  registerDownload(downloadKey, {
-    key: downloadKey,
-    promise: downloadPromise,
-    abortController,
-    startTime: Date.now(),
-    type: "http",
-    url: shardUrl,
-    modelPath: shardDir,
-  } as HttpDownloadEntry);
-
-  return downloadPromise;
+  return applyJoinedDownloadStats(result, hooks);
 }
 
 async function downloadShardedModelFromArchive(
   archiveUrl: string,
   progressCallback?: (progress: ModelProgressUpdate) => void,
-  hooks?: DownloadMetricsHooks,
+  hooks?: DownloadHooks,
 ) {
   const filename = extractFilenameFromUrl(archiveUrl);
   const sourceHash = generateShortHash(archiveUrl);
   const downloadKey = `http-archive:${sourceHash}`;
+  hooks?.onDownloadKey?.(downloadKey);
 
   logger.info(`📦 HTTP archive download: ${filename}`);
 
-  const existing = getActiveDownload(downloadKey);
-  if (existing) {
-    logger.info(`📥 Reusing existing archive download for: ${downloadKey}`);
-    hooks?.markCacheMiss();
-    return existing.promise;
-  }
-
-  const abortController = new AbortController();
   const extractDir = getShardedModelCacheDir(sourceHash);
   const archivePath = path.join(extractDir, `${sourceHash}_${filename}`);
 
-  const downloadPromise = (async () => {
-    try {
-      await fsPromises.mkdir(extractDir, { recursive: true });
-
-      const files = await fsPromises.readdir(extractDir);
-      const shardedFile = files.find(
-        (f) => detectShardedModel(String(f)).isSharded,
-      );
-
-      if (!shardedFile) {
-        hooks?.markCacheMiss();
-        return downloadAndExtractArchive();
-      }
-
-      const shardFilename = String(shardedFile);
-      const allShardsExist = await checkAllShardsExist(
-        extractDir,
-        shardFilename,
-      );
-
-      if (!allShardsExist) {
-        logger.warn(`⚠️ Incomplete shards found, re-downloading archive`);
-        hooks?.markCacheMiss();
-        return downloadAndExtractArchive();
-      }
-
-      const shardFilenames = generateShardFilenames(shardFilename);
-      const firstShard = path.join(extractDir, shardFilenames[0]!);
-      const isComplete = await validateShardedModelCache(
-        extractDir,
-        shardFilename,
-      );
-
-      if (isComplete) {
-        logger.info(`✅ Archive already extracted: ${extractDir}`);
-        hooks?.markCacheHit();
-        if (progressCallback) {
-          progressCallback({
-            type: "modelProgress",
-            downloaded: 1,
-            total: 1,
-            percentage: 100,
-            downloadKey,
-          });
-        }
-        return firstShard;
-      }
-
-      logger.info(
-        `📝 All shards present but tensors.txt missing, extracting tensors...`,
-      );
+  const result = startOrJoinDownload(
+    downloadKey,
+    async (ctx) => {
       try {
-        await extractTensorsFromShards(extractDir, shardFilename);
-        logger.info(`✅ Tensors extracted successfully`);
-        hooks?.markCacheHit();
-        if (progressCallback) {
-          progressCallback({
+        await fsPromises.mkdir(extractDir, { recursive: true });
+
+        const files = await fsPromises.readdir(extractDir);
+        const shardedFile = files.find(
+          (f) => detectShardedModel(String(f)).isSharded,
+        );
+
+        if (!shardedFile) {
+          hooks?.markCacheMiss?.();
+          ctx.setCacheHit(false);
+          return downloadAndExtractArchive();
+        }
+
+        const shardFilename = String(shardedFile);
+        const allShardsExist = await checkAllShardsExist(
+          extractDir,
+          shardFilename,
+        );
+
+        if (!allShardsExist) {
+          logger.warn(`⚠️ Incomplete shards found, re-downloading archive`);
+          hooks?.markCacheMiss?.();
+          ctx.setCacheHit(false);
+          return downloadAndExtractArchive();
+        }
+
+        const shardFilenames = generateShardFilenames(shardFilename);
+        const firstShard = path.join(extractDir, shardFilenames[0]!);
+        const isComplete = await validateShardedModelCache(
+          extractDir,
+          shardFilename,
+        );
+
+        if (isComplete) {
+          logger.info(`✅ Archive already extracted: ${extractDir}`);
+          hooks?.markCacheHit?.();
+          ctx.setCacheHit(true);
+          ctx.broadcastProgress({
             type: "modelProgress",
             downloaded: 1,
             total: 1,
             percentage: 100,
             downloadKey,
           });
+          return firstShard;
         }
-        return firstShard;
+
+        logger.info(
+          `📝 All shards present but tensors.txt missing, extracting tensors...`,
+        );
+        try {
+          await extractTensorsFromShards(extractDir, shardFilename);
+          logger.info(`✅ Tensors extracted successfully`);
+          hooks?.markCacheHit?.();
+          ctx.setCacheHit(true);
+          ctx.broadcastProgress({
+            type: "modelProgress",
+            downloaded: 1,
+            total: 1,
+            percentage: 100,
+            downloadKey,
+          });
+          return firstShard;
+        } catch (error) {
+          logger.warn(`Failed to extract tensors, will re-download archive`, {
+            error,
+          });
+          hooks?.markCacheMiss?.();
+          ctx.setCacheHit(false);
+          return downloadAndExtractArchive();
+        }
       } catch (error) {
-        logger.warn(`Failed to extract tensors, will re-download archive`, {
-          error,
-        });
-        hooks?.markCacheMiss();
-        return downloadAndExtractArchive();
-      }
-    } catch (error) {
-      logger.error("❌ Error downloading/extracting archive:", error);
-      throw error;
-    } finally {
-      unregisterDownload(downloadKey);
-    }
+        logger.error("❌ Error downloading/extracting archive:", error);
 
-    async function downloadAndExtractArchive() {
-      await performHttpDownload(
-        archiveUrl,
-        archivePath,
-        downloadKey,
-        progressCallback,
-        abortController.signal,
-      );
+        if (error instanceof DownloadCancelledError) {
+          if (ctx.shouldClearCache()) {
+            logger.info(
+              "🗑️ Clearing cache - deleting archive extract directory",
+            );
+            try {
+              await fsPromises.rm(extractDir, {
+                recursive: true,
+                force: true,
+              });
+              logger.info(`✅ Deleted extract directory: ${extractDir}`);
+            } catch (cleanupError) {
+              logger.debug(
+                "Failed to delete extract directory during cleanup",
+                {
+                  path: extractDir,
+                  error: cleanupError,
+                },
+              );
+            }
+          }
+        }
 
-      logger.info(`✅ Archive downloaded, extracting to: ${extractDir}`);
-
-      const firstShardPath = await extractAndValidateShardedArchive(
-        archivePath,
-        extractDir,
-        abortController.signal,
-      );
-
-      try {
-        await fsPromises.unlink(archivePath);
-        logger.info(`🗑️ Cleaned up archive file: ${archivePath}`);
-      } catch (cleanupError) {
-        logger.debug("Failed to delete archive file during cleanup", {
-          path: archivePath,
-          error: cleanupError,
-        });
+        throw error;
       }
 
-      return firstShardPath;
-    }
-  })();
+      async function downloadAndExtractArchive() {
+        await performHttpDownload(
+          archiveUrl,
+          archivePath,
+          downloadKey,
+          ctx.broadcastProgress,
+          ctx.signal,
+        );
 
-  registerDownload(downloadKey, {
-    key: downloadKey,
-    promise: downloadPromise,
-    abortController,
-    startTime: Date.now(),
-    type: "http",
-    url: archiveUrl,
-    modelPath: archivePath,
-  } as HttpDownloadEntry);
+        logger.info(`✅ Archive downloaded, extracting to: ${extractDir}`);
 
-  return downloadPromise;
+        const firstShardPath = await extractAndValidateShardedArchive(
+          archivePath,
+          extractDir,
+          ctx.signal,
+        );
+
+        try {
+          await fsPromises.unlink(archivePath);
+          logger.info(`🗑️ Cleaned up archive file: ${archivePath}`);
+        } catch (cleanupError) {
+          logger.debug("Failed to delete archive file during cleanup", {
+            path: archivePath,
+            error: cleanupError,
+          });
+        }
+
+        return firstShardPath;
+      }
+    },
+    progressCallback,
+  );
+
+  return applyJoinedDownloadStats(result, hooks);
 }
 
 async function downloadShardsWithConcurrency(

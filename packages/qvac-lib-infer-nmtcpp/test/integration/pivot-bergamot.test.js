@@ -25,7 +25,7 @@ const test = require('brittle')
 const path = require('bare-path')
 const fs = require('bare-fs')
 const TranslationNmtcpp = require('@qvac/translation-nmtcpp')
-const { downloadBergamotFromFirefox } = require('@qvac/translation-nmtcpp/lib/bergamot-model-fetcher')
+const { ensureBergamotModelFiles } = require('@qvac/translation-nmtcpp/lib/bergamot-model-fetcher')
 const {
   createLogger,
   createPerformanceCollector,
@@ -33,6 +33,8 @@ const {
   isMobile,
   platform
 } = require('./utils')
+
+const PIVOT_BERGAMOT_FIXTURE = path.resolve(__dirname, 'fixtures/pivot-bergamot.quality.json')
 
 const PIVOT_TIMEOUT = isMobile ? 900_000 : 180_000
 
@@ -67,7 +69,15 @@ async function ensureModelPair (src, dst) {
 
   const writableRoot = isMobile ? (global.testDir || '/tmp') : path.resolve(__dirname, '../..')
   const destDir = path.join(writableRoot, 'model', 'bergamot', pairKey)
-  return downloadBergamotFromFirefox(src, dst, destDir)
+  // `ensureBergamotModelFiles` (not the raw `downloadBergamotFromFirefox`)
+  // short-circuits when destDir is already populated — important for the
+  // pivot test which calls this for the same language pair across four
+  // sub-tests (GPU/CPU × es→en→it and fr→en→es × 2 variants each). Without
+  // the short-circuit the test re-fetches every pair from Firefox CDN and
+  // blows through the 20-min per-test WDIO timeout on slow Device Farm
+  // lanes (root cause of the Samsung Galaxy S25 Ultra timeout in CI
+  // run 24796639547).
+  return ensureBergamotModelFiles(src, dst, destDir)
 }
 
 /**
@@ -167,7 +177,11 @@ for (const deviceConfig of DEVICE_CONFIGS) {
       const addonStats = response.stats || {}
       t.comment(`${label} Native addon stats: ${JSON.stringify(addonStats)}`)
       const metrics = perfCollector.getMetrics(testSentence, addonStats)
-      t.comment(formatPerformanceMetrics(`[Pivot es→en→it] ${label}`, metrics))
+      t.comment(formatPerformanceMetrics(`[Pivot es→en→it] ${label}`, metrics, {
+        fixturePath: PIVOT_BERGAMOT_FIXTURE,
+        srcLang: 'es',
+        dstLang: 'it'
+      }))
 
       t.ok(metrics.fullOutput.length > 0, `${label} pivot translation produced output`)
       t.pass(`${label} Pivot translation completed successfully`)
@@ -506,7 +520,11 @@ for (const deviceConfig of DEVICE_CONFIGS) {
 
       const addonStats = response.stats || {}
       const metrics = perfCollector.getMetrics(testSentence, addonStats)
-      t.comment(formatPerformanceMetrics(`[Pivot fr→en→es] ${label}`, metrics))
+      t.comment(formatPerformanceMetrics(`[Pivot fr→en→es] ${label}`, metrics, {
+        fixturePath: PIVOT_BERGAMOT_FIXTURE,
+        srcLang: 'fr',
+        dstLang: 'es'
+      }))
 
       t.ok(metrics.fullOutput.length > 0, `${label} pivot translation produced output`)
       t.pass(`${label} fr→en→es pivot translation completed successfully`)

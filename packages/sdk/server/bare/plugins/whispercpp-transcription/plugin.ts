@@ -52,7 +52,7 @@ function createWhisperModel(
 
   const model = new TranscriptionWhispercpp(args, config);
 
-  return { model, loader: null };
+  return { model };
 }
 
 export const whisperPlugin = definePlugin({
@@ -78,14 +78,14 @@ export const whisperPlugin = definePlugin({
   createModel(params: CreateModelParams): PluginModelResult {
     const whisperConfig = (params.modelConfig ?? {}) as WhisperConfig;
 
-    const { model, loader } = createWhisperModel(
+    const { model } = createWhisperModel(
       params.modelId,
       params.modelPath,
       whisperConfig,
       params.artifacts?.["vadModelPath"],
     );
 
-    return { model, loader };
+    return { model };
   },
 
   handlers: {

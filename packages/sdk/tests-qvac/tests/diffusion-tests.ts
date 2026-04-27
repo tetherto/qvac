@@ -141,6 +141,22 @@ export const diffusionBatchCount = createDiffusionTest(
   600000,
 );
 
+// ---- img2img ----
+
+export const diffusionBasicImg2img = createDiffusionTest(
+  "diffusion-basic-img2img",
+  {
+    prompt: "oil painting style, vibrant colors",
+    init_image: "elephant.jpg",
+    strength: 0.5,
+    width: 256,
+    height: 256,
+    steps: 4,
+    seed: 42,
+  },
+  { validation: "type", expectedType: "array" },
+);
+
 // ---- streaming ----
 
 export const diffusionStreaming = createDiffusionTest(
@@ -207,6 +223,7 @@ export const diffusionTests = [
   diffusionSchedulerKarras,
   diffusionSeedReproducibility,
   diffusionBatchCount,
+  diffusionBasicImg2img,
   diffusionStreaming,
   diffusionStreamingProgress,
   diffusionStatsPresent,

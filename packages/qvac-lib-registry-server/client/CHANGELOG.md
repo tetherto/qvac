@@ -1,5 +1,13 @@
 # Changelog
 
+## [0.4.1]
+
+Release Date: 2026-04-22
+
+### ✨ Features
+
+- Add `corestoreOpts` constructor option to `QVACRegistryClient` — forwarded to the underlying `Corestore` so consumers can opt into `{ wait: true }` (`waitForLock` semantics) and avoid `tryLock` collisions when multiple SDK instances on the same machine share `~/.qvac/registry-corestore/<key>` (#1480)
+
 ## [0.4.0]
 
 Release Date: 2026-04-12
