@@ -191,6 +191,13 @@ jobs:
         run: |
           brew install --quiet openblas lapack fftw
 
+      - name: Windows - install Vulkan runtime
+        if: matrix.platform == 'win32'
+        uses: tetherto/qvac/.github/actions/setup-vulkan-sdk@0bbdca93da303a0b1634ba14a89cec085621078d
+        with:
+          platform: ${{ matrix.platform }}
+          arch: ${{ matrix.arch }}
+
       - name: Run integration test (Unix)
         if: ${{ matrix.platform != 'win32' && inputs.run_integration_tests != false }}
         working-directory: ${{ inputs.workdir }}
@@ -207,6 +214,14 @@ jobs:
         env:
           GITHUB_TOKEN: ${{ secrets.PAT_TOKEN }}
 
+      - name: Run Vulkan GPU smoke test
+        if: matrix.os == 'ai-run-linux-gpu'
+        working-directory: ${{ inputs.workdir }}
+        shell: bash
+        run: npm run test:stand-alone:gpu
+        env:
+          GITHUB_TOKEN: ${{ secrets.PAT_TOKEN }}
+          
       - name: Run RTF benchmark (Unix)
         if: ${{ always() && matrix.platform != 'win32' && inputs.run_rtf_benchmarks != false }}
         continue-on-error: true

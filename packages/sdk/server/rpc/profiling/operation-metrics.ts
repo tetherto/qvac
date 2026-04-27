@@ -218,6 +218,24 @@ registerOperationMetrics<{ modelId?: string }, { stats?: TtsStats }>({
   },
 });
 
+// Duplex sibling of `textToSpeech`. Server emits the same `TtsStats` on the
+// final chunk (via `collectTtsStats`), so the gauge set mirrors the
+// non-streaming path; without registering here, sessions would silently
+// skip `modelExecutionTime` / `audioDuration` / `totalSamples` metrics.
+registerOperationMetrics<{ modelId?: string }, { stats?: TtsStats }>({
+  op: "textToSpeechStream",
+  kind: "handler",
+  getTags: (req) => (req.modelId ? { modelId: req.modelId } : {}),
+  fromFinalChunk: (res) => {
+    const gauges: Record<string, number> = {};
+    const modelExecMs = readModelExecutionMs(res);
+    if (modelExecMs !== undefined) gauges["modelExecutionTime"] = modelExecMs;
+    if (res.stats?.audioDuration !== undefined) gauges["audioDuration"] = res.stats.audioDuration;
+    if (res.stats?.totalSamples !== undefined) gauges["totalSamples"] = res.stats.totalSamples;
+    return Object.keys(gauges).length > 0 ? gauges : undefined;
+  },
+});
+
 registerOperationMetrics<{ modelId?: string }, { stats?: EmbedStats }>({
   op: "embed",
   kind: "handler",

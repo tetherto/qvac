@@ -36,6 +36,7 @@ export const SDK_SERVER_ERROR_CODES = {
   OCR_FAILED: 52412,
   IMAGE_FILE_NOT_FOUND: 52413,
   INVALID_IMAGE_INPUT: 52414,
+  TEXT_TO_SPEECH_STREAM_FAILED: 52415,
 
   // RAG Operations (52,800-52,999)
   RAG_SAVE_FAILED: 52800,
@@ -234,6 +235,11 @@ const serverErrorDefinitions: ErrorCodesMap = {
     name: "TEXT_TO_SPEECH_FAILED",
     message: (details?: string) =>
       `Text-to-speech operation failed${details ? `: ${details}` : ""}`,
+  },
+  [SDK_SERVER_ERROR_CODES.TEXT_TO_SPEECH_STREAM_FAILED]: {
+    name: "TEXT_TO_SPEECH_STREAM_FAILED",
+    message: (details?: string) =>
+      `Text-to-speech stream operation failed${details ? `: ${details}` : ""}`,
   },
   [SDK_SERVER_ERROR_CODES.CONFIG_RELOAD_NOT_SUPPORTED]: {
     name: "CONFIG_RELOAD_NOT_SUPPORTED",

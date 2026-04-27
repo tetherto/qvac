@@ -18,7 +18,7 @@
         "@qvac/transcription-parakeet": "^0.3.1",
         "@qvac/transcription-whispercpp": "^0.6.1",
         "@qvac/translation-nmtcpp": "^2.0.1",
-        "@qvac/tts-onnx": "^0.8.2",
+        "@qvac/tts-onnx": "^0.8.4",
         "fast-safe-stringify": "2.1.1",
         "which-runtime": "^1.3.2",
         "zod": "^4.0.17",
@@ -510,7 +510,7 @@
 
     "@qvac/translation-nmtcpp": ["@qvac/translation-nmtcpp@2.0.2", "", { "dependencies": { "@qvac/error": "^0.1.0", "@qvac/infer-base": "^0.4.0", "@qvac/logging": "^0.1.0" } }, "sha512-U+2ZsX9fWLTi4IctxFRJSV7ZAazCIENXQhievHBB3v5Z/3VlCeixxZ5nEpE/0tHaha1ZuknUiepLxkzklrhi/w=="],
 
-    "@qvac/tts-onnx": ["@qvac/tts-onnx@0.8.5", "", { "dependencies": { "@qvac/error": "^0.1.0", "@qvac/infer-base": "^0.4.0", "@qvac/onnx": "^0.14.0", "bare-fs": "^4.5.6", "bare-os": "^3.8.0", "bare-path": "^3.0.0" } }, "sha512-zlexT/RA9yGbT7MrgH0TjLjQbLY0fvwLsGKURodP2p+DuuXV+mZv4Krlwj4ub0WhEg0rIY/mVBk0ZS1MOxmeiQ=="],
+    "@qvac/tts-onnx": ["@qvac/tts-onnx@0.8.4", "", { "dependencies": { "@qvac/error": "^0.1.0", "@qvac/infer-base": "^0.4.0", "@qvac/onnx": "^0.14.0", "bare-fs": "^4.5.6", "bare-os": "^3.8.0", "bare-path": "^3.0.0" } }, "sha512-yJsamtlWiE4GFVwuzIbgpE0rSb2QczUxNWIJ3gLCuTk2+/sHtC/Um4BiuPtF1RiVyz1V5brPK1GwLrFJBAV0UQ=="],
 
     "@react-native/assets-registry": ["@react-native/assets-registry@0.85.2", "", {}, "sha512-kauC/oPaxklU4Y+u9gBfCBJm51qX6WBZq4xx0USCdimtp+G8+554kpygfSWIjoqCJa2o06bWxBEjesiuCv+LzA=="],
 
