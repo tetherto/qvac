@@ -58,7 +58,7 @@ export const ttsClientParamsSchema = z.object({
   inputType: z.string().default("text"),
   text: z.string().trim().min(1, "text must not be empty or whitespace-only"),
   stream: z.boolean().default(true),
-  sentenceStream: z.boolean().optional(),
+  sentenceStream: z.boolean().default(false),
   sentenceStreamLocale: z.string().optional(),
   sentenceStreamMaxChunkScalars: z.number().positive().optional(),
 });
@@ -118,7 +118,8 @@ export type TtsSupertonicRuntimeConfig = z.infer<
   typeof ttsSupertonicRuntimeConfigSchema
 >;
 export type TtsRuntimeConfig = z.infer<typeof ttsRuntimeConfigSchema>;
-export type TtsClientParams = z.infer<typeof ttsClientParamsSchema>;
+export type TtsClientParamsInput = z.input<typeof ttsClientParamsSchema>;
+export type TtsClientParams = z.output<typeof ttsClientParamsSchema>;
 export type TtsRequest = z.infer<typeof ttsRequestSchema>;
 export type TtsResponse = z.infer<typeof ttsResponseSchema>;
 export type TtsStats = z.infer<typeof ttsStatsSchema>;

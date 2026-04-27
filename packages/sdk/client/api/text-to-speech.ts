@@ -1,6 +1,8 @@
 import {
   textToSpeechStreamResponseSchema,
+  ttsClientParamsSchema,
   type TtsClientParams,
+  type TtsClientParamsInput,
   type TtsRequest,
   type RPCOptions,
   type TtsResponse,
@@ -145,9 +147,7 @@ function buildTtsRequest(params: TtsClientParams): TtsRequest {
     inputType: params.inputType,
     text: params.text,
     stream: params.stream,
-    ...(params.sentenceStream !== undefined && {
-      sentenceStream: params.sentenceStream,
-    }),
+    sentenceStream: params.sentenceStream,
     ...(params.sentenceStreamLocale !== undefined && {
       sentenceStreamLocale: params.sentenceStreamLocale,
     }),
@@ -180,29 +180,24 @@ function buildTextToSpeechStreamRequest(
 }
 
 export function textToSpeech(
-  params: TtsClientParams,
+  params: TtsClientParamsInput,
   options?: RPCOptions,
 ): TextToSpeechStreamResult {
-  const stream = params.stream ?? true;
-  const sentenceStream = params.sentenceStream === true;
+  const parsed: TtsClientParams = ttsClientParamsSchema.parse(params);
 
-  // `sentenceStream` is only meaningful when the response is streamed; the
-  // collect path drops per-sentence metadata entirely. Fail fast with a
-  // typed SDK error (code 52415) so callers can discriminate instead of
-  // catching a bare `Error`.
-  if (sentenceStream && !stream) {
+  if (parsed.sentenceStream && !parsed.stream) {
     throw new TextToSpeechStreamFailedError(
       "textToSpeech: `sentenceStream: true` requires `stream: true`",
     );
   }
 
-  const request = buildTtsRequest(params);
+  const request = buildTtsRequest(parsed);
 
-  if (stream && sentenceStream) {
+  if (parsed.stream && parsed.sentenceStream) {
     return sentenceStreamTts(request, options);
   }
 
-  if (stream) {
+  if (parsed.stream) {
     return plainStreamTts(request, options);
   }
 
