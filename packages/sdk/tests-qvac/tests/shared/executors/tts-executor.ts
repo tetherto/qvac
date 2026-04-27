@@ -12,8 +12,11 @@ export class TtsExecutor extends AbstractModelExecutor<typeof ttsTests> {
 
     protected handlers = Object.fromEntries(
       ttsTests.map((test) => {
-        const params = test.params as { stream?: boolean };
+        const params = test.params as { stream?: boolean; sentenceStream?: boolean };
         const dep = test.metadata?.dependency || "tts-chatterbox";
+        if (params.stream && params.sentenceStream) {
+          return [test.testId, this.makeSentenceStream(dep)];
+        }
         if (params.stream) {
           return [test.testId, this.makeStreaming(dep)];
         }
@@ -49,6 +52,57 @@ export class TtsExecutor extends AbstractModelExecutor<typeof ttsTests> {
         }
         const errorMsg = error instanceof Error ? error.message : String(error);
         return { passed: false, output: `TTS error: ${errorMsg}` };
+      }
+    };
+  }
+
+  private makeSentenceStream(dep: string) {
+    return async (params: unknown, expectation: unknown): Promise<TestResult> => {
+      const p = params as { text: string };
+      const modelId = await this.resources.ensureLoaded(dep);
+
+      try {
+        const result = textToSpeech({
+          modelId,
+          text: p.text,
+          inputType: "text",
+          stream: true,
+          sentenceStream: true,
+        });
+
+        const rs = result as unknown as {
+          chunkUpdates: AsyncIterable<{ buffer: number[]; chunkIndex?: number; sentenceChunk?: string }>;
+          done: Promise<boolean>;
+        };
+
+        let totalChunks = 0;
+        let totalSamples = 0;
+        for await (const chunk of rs.chunkUpdates) {
+          totalChunks++;
+          totalSamples += chunk.buffer.length;
+        }
+
+        await rs.done;
+
+        // A passing run must produce at least one chunk with audio samples.
+        // Previously the expectation only validated the return type was a
+        // string, so a regression to a zero-chunk stream would have passed
+        // silently. Fail explicitly here; the caller's contains-all
+        // expectation further pins the happy-path string format.
+        if (totalChunks === 0 || totalSamples === 0) {
+          return {
+            passed: false,
+            output: `TTS sentence-stream produced no audio (chunks=${totalChunks}, samples=${totalSamples})`,
+          };
+        }
+
+        return ValidationHelpers.validate(
+          `sentence-streamed ${totalChunks} chunks (${totalSamples} samples)`,
+          expectation as Expectation,
+        );
+      } catch (error) {
+        const errorMsg = error instanceof Error ? error.message : String(error);
+        return { passed: false, output: `TTS sentence-stream error: ${errorMsg}` };
       }
     };
   }
