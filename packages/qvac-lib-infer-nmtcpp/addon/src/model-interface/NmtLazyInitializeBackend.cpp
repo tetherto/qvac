@@ -282,18 +282,11 @@ bool NmtLazyInitializeBackend::initializeLocked(
       }
     }
     if (!validBackendsDir) {
-      std::string sanitized;
-      sanitized.reserve(backendsDir.size());
-      for (char raw : backendsDir) {
-        unsigned char c = static_cast<unsigned char>(raw);
-        sanitized.push_back(
-            (c >= 0x20 && c < 0x7F) ? static_cast<char>(c) : '?');
-      }
       QLOG(
           Priority::WARNING,
           "Rejecting suspicious backendsDir (must be absolute and free of "
           "'..' segments): " +
-              sanitized);
+              sanitizePrintableAscii(backendsDir));
     } else {
       std::filesystem::path backendsDirPath = requested.lexically_normal();
 #ifdef BACKENDS_SUBDIR
@@ -303,7 +296,8 @@ bool NmtLazyInitializeBackend::initializeLocked(
 #endif
       QLOG(
           Priority::INFO,
-          "Loading backends from directory: " + backendsDirPath.string());
+          "Loading backends from directory: " +
+              sanitizePrintableAscii(backendsDirPath.string()));
       ggml_backend_load_all_from_path(backendsDirPath.string().c_str());
     }
   } else {
