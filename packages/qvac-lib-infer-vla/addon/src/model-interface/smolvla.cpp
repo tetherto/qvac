@@ -7,6 +7,13 @@
 #include <numbers>
 #include <random>
 
+#ifndef _WIN32
+#include <fcntl.h>
+#include <sys/mman.h>
+#include <sys/stat.h>
+#include <unistd.h>
+#endif
+
 // Debug: dump tensor data to a raw file (no-op; set VLA_DUMP_TENSORS=1 in
 // smolvla-ggml dev builds to enable file output for layer-by-layer comparisons
 // against PyTorch).
@@ -1147,10 +1154,14 @@ extern "C" bool smolvla_load_model(const char* path, smolvla_model* model_ptr) {
     fprintf(stderr, "%s: using CPU backend\n", __func__);
   }
 
-  // 1. Open GGUF file — let it create a ggml_context and load tensor data
+  // 1. Open GGUF file with no_alloc=true — creates a ggml_context with
+  // tensor metadata only (data pointers stay NULL). Tensor data is wired
+  // up later either by mmap+buffer_from_host_ptr (Apple Metal / CPU) or
+  // by alloc+copy from disk (Vulkan / Android). This mirrors llama.cpp's
+  // model-loader pattern (qvac-fabric src/llama-model.cpp:6648).
   struct ggml_context* ctx_data = nullptr;
   struct gguf_init_params gguf_params = {
-      /*.no_alloc =*/false,
+      /*.no_alloc =*/true,
       /*.ctx      =*/&ctx_data,
   };
 
@@ -1335,185 +1346,204 @@ extern "C" bool smolvla_load_model(const char* path, smolvla_model* model_ptr) {
 
   fprintf(stderr, "%s: all tensors mapped\n", __func__);
 
-  // Clean up GGUF context (keeps the ggml_context with tensor data)
-  gguf_free(gguf);
+  // ── Allocate backend storage for weights ──────────────────────────────────
+  //
+  // Two paths, mirroring qvac-fabric src/llama-model.cpp:6648 (create_backend_buffers):
+  //
+  //   FAST PATH (Apple Metal, CPU): the device reports
+  //     caps.buffer_from_host_ptr=true. We mmap the GGUF file and wrap the
+  //     tensor-data region in a backend buffer with
+  //     ggml_backend_dev_buffer_from_host_ptr(). The Metal backend internally
+  //     slices that range into per-tensor sub-buffers each ≤ max_tensor_size,
+  //     so a 2.2 GB f32 model becomes many small Metal sub-buffers instead of
+  //     one shared-mode allocation that iOS Metal cannot service (root cause
+  //     of EXC_BAD_ACCESS in ggml_metal_buffer_is_shared at NULL+0x10).
+  //
+  //   FALLBACK (Vulkan / Android, Windows, or any device without
+  //     buffer_from_host_ptr): allocate the buffer with
+  //     ggml_backend_alloc_ctx_tensors_from_buft() then read tensor data
+  //     from the file and copy via ggml_backend_tensor_set(). This is the
+  //     same path llama.cpp's else branch takes.
+  ggml_backend_buffer_type_t buft =
+      ggml_backend_get_default_buffer_type(model.backend);
+  ggml_backend_dev_t dev = ggml_backend_buft_get_device(buft);
+  bool host_ptr_supported = false;
+  bool is_default_buft = false;
+  if (dev) {
+    ggml_backend_dev_props props;
+    ggml_backend_dev_get_props(dev, &props);
+    host_ptr_supported = props.caps.buffer_from_host_ptr;
+    is_default_buft = (buft == ggml_backend_dev_buffer_type(dev));
+  }
 
-  // If GPU backend available, create a duplicate context on GPU and copy
-  // weights
-  if (model.has_gpu) {
-    fprintf(stderr, "%s: copying weights to GPU...\n", __func__);
+  size_t data_offset = gguf_get_data_offset(gguf);
+  int64_t n_tensors_in_gguf = gguf_get_n_tensors(gguf);
 
-    // Count tensors and total size
+  bool used_mmap = false;
+
+#ifndef _WIN32
+  if (host_ptr_supported && is_default_buft) {
+    // FAST PATH: mmap the GGUF and wrap the tensor-data region.
+    int fd = open(path, O_RDONLY);
+    if (fd >= 0) {
+      struct stat st {};
+      if (fstat(fd, &st) == 0 && st.st_size > 0) {
+        size_t file_size = (size_t)st.st_size;
+        void* addr = mmap(nullptr, file_size, PROT_READ, MAP_PRIVATE, fd, 0);
+        // The fd may be closed once mmap succeeds; the mapping holds a ref.
+        close(fd);
+        if (addr != MAP_FAILED) {
+          void* tensor_data_base = (char*)addr + data_offset;
+          size_t tensor_data_size = file_size - data_offset;
+          size_t max_tensor_size = ggml_get_max_tensor_size(ctx_data);
+
+          ggml_backend_buffer_t buf = ggml_backend_dev_buffer_from_host_ptr(
+              dev, tensor_data_base, tensor_data_size, max_tensor_size);
+
+          if (buf) {
+            // Wire each tensor to its position inside the mmap'd region.
+            int n_alloc_ok = 0;
+            int n_alloc_fail = 0;
+            for (int64_t i = 0; i < n_tensors_in_gguf; i++) {
+              const char* name = gguf_get_tensor_name(gguf, i);
+              struct ggml_tensor* t = ggml_get_tensor(ctx_data, name);
+              if (!t) {
+                continue;
+              }
+              size_t off = gguf_get_tensor_offset(gguf, i);
+              void* tensor_addr = (char*)tensor_data_base + off;
+              if (ggml_backend_tensor_alloc(buf, t, tensor_addr) ==
+                  GGML_STATUS_SUCCESS) {
+                n_alloc_ok++;
+              } else {
+                n_alloc_fail++;
+                fprintf(
+                    stderr,
+                    "%s: tensor_alloc failed for '%s'\n",
+                    __func__,
+                    name);
+              }
+            }
+            ggml_backend_buffer_set_usage(buf, GGML_BACKEND_BUFFER_USAGE_WEIGHTS);
+            model.bufs_w.push_back(buf);
+            model.mmap_addr = addr;
+            model.mmap_size = file_size;
+            used_mmap = true;
+            fprintf(
+                stderr,
+                "%s: mmap+host_ptr buffer: %.1f MB (max_tensor=%.1f MB), "
+                "%d/%lld tensors wired\n",
+                __func__,
+                tensor_data_size / (1024.0 * 1024.0),
+                max_tensor_size / (1024.0 * 1024.0),
+                n_alloc_ok,
+                (long long)n_tensors_in_gguf);
+            if (n_alloc_fail > 0) {
+              fprintf(
+                  stderr,
+                  "%s: WARNING %d tensor_alloc calls failed\n",
+                  __func__,
+                  n_alloc_fail);
+            }
+          } else {
+            fprintf(
+                stderr,
+                "%s: buffer_from_host_ptr returned NULL — falling back to "
+                "alloc+copy\n",
+                __func__);
+            munmap(addr, file_size);
+          }
+        } else {
+          fprintf(stderr, "%s: mmap failed (errno=%d)\n", __func__, errno);
+        }
+      } else {
+        fprintf(stderr, "%s: fstat failed for '%s'\n", __func__, path);
+        close(fd);
+      }
+    } else {
+      fprintf(stderr, "%s: open() failed for '%s'\n", __func__, path);
+    }
+  }
+#endif
+
+  if (!used_mmap) {
+    // FALLBACK: allocate backend buffer then read+copy from file.
     size_t total_size = 0;
-    int n_tensors_total = 0;
     for (struct ggml_tensor* t = ggml_get_first_tensor(ctx_data); t;
          t = ggml_get_next_tensor(ctx_data, t)) {
       total_size += ggml_nbytes(t);
-      n_tensors_total++;
     }
+    fprintf(
+        stderr,
+        "%s: alloc+copy path: total weights %.1f MB\n",
+        __func__,
+        total_size / (1024.0 * 1024.0));
 
-    // Create a new ggml_context with same tensor metadata but no_alloc=true
-    size_t meta_size = n_tensors_total * ggml_tensor_overhead() + 1024 * 1024;
-    struct ggml_init_params gpu_params = {meta_size, nullptr, true};
-    struct ggml_context* ctx_gpu = ggml_init(gpu_params);
+    ggml_backend_buffer_t buf =
+        ggml_backend_alloc_ctx_tensors_from_buft(ctx_data, buft);
+    if (!buf) {
+      fprintf(
+          stderr,
+          "%s: ggml_backend_alloc_ctx_tensors_from_buft FAILED for %.1f MB "
+          "on backend '%s'\n",
+          __func__,
+          total_size / (1024.0 * 1024.0),
+          ggml_backend_name(model.backend));
+      gguf_free(gguf);
+      return false;
+    }
+    ggml_backend_buffer_set_usage(buf, GGML_BACKEND_BUFFER_USAGE_WEIGHTS);
+    model.bufs_w.push_back(buf);
 
-    if (ctx_gpu) {
-      // Duplicate all tensors (metadata only, no data)
-      for (struct ggml_tensor* t = ggml_get_first_tensor(ctx_data); t;
-           t = ggml_get_next_tensor(ctx_data, t)) {
-        struct ggml_tensor* gpu_t = ggml_dup_tensor(ctx_gpu, t);
-        ggml_set_name(gpu_t, ggml_get_name(t));
+    // Read each tensor from disk and upload to the backend buffer.
+    FILE* f = fopen(path, "rb");
+    if (!f) {
+      fprintf(stderr, "%s: fopen failed for '%s'\n", __func__, path);
+      gguf_free(gguf);
+      return false;
+    }
+    std::vector<uint8_t> read_buf;
+    int n_copied = 0;
+    for (int64_t i = 0; i < n_tensors_in_gguf; i++) {
+      const char* name = gguf_get_tensor_name(gguf, i);
+      struct ggml_tensor* t = ggml_get_tensor(ctx_data, name);
+      if (!t) {
+        continue;
       }
-
-      // Allocate all tensors on GPU
-      ggml_backend_buffer_t gpu_buf =
-          ggml_backend_alloc_ctx_tensors(ctx_gpu, model.backend);
-
-      if (gpu_buf) {
-        ggml_backend_buffer_set_usage(
-            gpu_buf, GGML_BACKEND_BUFFER_USAGE_WEIGHTS);
-
-        // Copy data from CPU to GPU tensors, matched by name
-        int n_copied = 0;
-        for (struct ggml_tensor* gpu_t = ggml_get_first_tensor(ctx_gpu); gpu_t;
-             gpu_t = ggml_get_next_tensor(ctx_gpu, gpu_t)) {
-          struct ggml_tensor* cpu_t =
-              ggml_get_tensor(ctx_data, ggml_get_name(gpu_t));
-          if (cpu_t) {
-            ggml_backend_tensor_set(gpu_t, cpu_t->data, 0, ggml_nbytes(cpu_t));
-            n_copied++;
-          } else {
-            fprintf(stderr, "  COPY MISS: %s\n", ggml_get_name(gpu_t));
-          }
-        }
-
-        // Remap model pointers to GPU tensors
-        // The tensor names match, so look up each one
-        int remap_ok = 0, remap_fail = 0;
-        auto remap = [&](struct ggml_tensor*& ptr) {
-          if (ptr) {
-            struct ggml_tensor* gpu =
-                ggml_get_tensor(ctx_gpu, ggml_get_name(ptr));
-            if (gpu) {
-              ptr = gpu;
-              remap_ok++;
-            } else {
-              fprintf(stderr, "  REMAP FAIL: %s\n", ggml_get_name(ptr));
-              remap_fail++;
-            }
-          }
-        };
-
-        // Vision
-        remap(model.vision.patch_embed_weight);
-        remap(model.vision.patch_embed_bias);
-        remap(model.vision.pos_embed);
-        remap(model.vision.post_ln_weight);
-        remap(model.vision.post_ln_bias);
-        for (auto& l : model.vision.layers) {
-          remap(l.ln1_weight);
-          remap(l.ln1_bias);
-          remap(l.qkv_proj_w);
-          remap(l.qkv_proj_b);
-          remap(l.q_proj_w);
-          remap(l.q_proj_b);
-          remap(l.k_proj_w);
-          remap(l.k_proj_b);
-          remap(l.v_proj_w);
-          remap(l.v_proj_b);
-          remap(l.out_proj_w);
-          remap(l.out_proj_b);
-          remap(l.ln2_weight);
-          remap(l.ln2_bias);
-          remap(l.fc1_weight);
-          remap(l.fc1_bias);
-          remap(l.fc2_weight);
-          remap(l.fc2_bias);
-        }
-        remap(model.connector.proj_weight);
-
-        // Text + Expert (same struct)
-        remap(model.text.embed_tokens);
-        remap(model.text.final_norm_weight);
-        remap(model.expert.final_norm_weight);
-        auto remap_transformer =
-            [&](std::vector<transformer_layer_weights>& layers) {
-              for (auto& l : layers) {
-                remap(l.attn_norm_weight);
-                remap(l.qkv_proj_weight);
-                remap(l.q_proj_weight);
-                remap(l.k_proj_weight);
-                remap(l.v_proj_weight);
-                remap(l.o_proj_weight);
-                remap(l.ffn_norm_weight);
-                remap(l.gate_up_weight);
-                remap(l.gate_proj_weight);
-                remap(l.up_proj_weight);
-                remap(l.down_proj_weight);
-              }
-            };
-        remap_transformer(model.text.layers);
-        remap_transformer(model.expert.layers);
-
-        // Projections
-        remap(model.state_proj_weight);
-        remap(model.state_proj_bias);
-        remap(model.action_in_proj_weight);
-        remap(model.action_in_proj_bias);
-        remap(model.action_out_proj_weight);
-        remap(model.action_out_proj_bias);
-        remap(model.action_time_mlp_in_weight);
-        remap(model.action_time_mlp_in_bias);
-        remap(model.action_time_mlp_out_weight);
-        remap(model.action_time_mlp_out_bias);
-
-        model.buf_w = gpu_buf;
+      size_t off = data_offset + gguf_get_tensor_offset(gguf, i);
+      size_t nbytes = ggml_nbytes(t);
+      if (read_buf.size() < nbytes) {
+        read_buf.resize(nbytes);
+      }
+      if (fseek(f, (long)off, SEEK_SET) != 0 ||
+          fread(read_buf.data(), 1, nbytes, f) != nbytes) {
         fprintf(
             stderr,
-            "%s: copied %d tensors (%.1f MB) to GPU\n",
+            "%s: failed to read tensor '%s' at offset %zu\n",
             __func__,
-            n_copied,
-            total_size / (1024.0 * 1024.0));
-        fprintf(
-            stderr,
-            "%s: remapped %d OK, %d failed\n",
-            __func__,
-            remap_ok,
-            remap_fail);
-
-        // Verify a weight: read back from GPU and compare with CPU
-        {
-          struct ggml_tensor* cpu_t =
-              ggml_get_tensor(ctx_data, "t.blk.0.attn_q.weight");
-          struct ggml_tensor* gpu_t =
-              ggml_get_tensor(ctx_gpu, "t.blk.0.attn_q.weight");
-          if (cpu_t && gpu_t) {
-            size_t nbytes = ggml_nbytes(cpu_t);
-            std::vector<uint8_t> gpu_data(nbytes);
-            ggml_backend_tensor_get(gpu_t, gpu_data.data(), 0, nbytes);
-            int mismatches = 0;
-            for (size_t i = 0; i < std::min(nbytes, (size_t)100); i++) {
-              if (((uint8_t*)cpu_t->data)[i] != gpu_data[i])
-                mismatches++;
-            }
-            fprintf(
-                stderr,
-                "%s: weight verify: %d mismatches in first 100 bytes "
-                "(type=%d)\n",
-                __func__,
-                mismatches,
-                cpu_t->type);
-          }
-        }
-      } else {
-        fprintf(
-            stderr, "%s: failed to alloc GPU buffer, using CPU\n", __func__);
-        ggml_free(ctx_gpu);
-        model.has_gpu = false;
-        model.backend = model.backend_cpu;
+            name,
+            off);
+        fclose(f);
+        gguf_free(gguf);
+        return false;
       }
+      ggml_backend_tensor_set(t, read_buf.data(), 0, nbytes);
+      n_copied++;
     }
+    fclose(f);
+    fprintf(
+        stderr,
+        "%s: alloc+copy buffer ready: %d tensors, backend='%s'\n",
+        __func__,
+        n_copied,
+        ggml_backend_name(model.backend));
   }
+
+  // Tensors keep the same ggml_tensor* pointers from ctx_data; no remapping
+  // needed because we never created a duplicate context.
+
+  // Clean up GGUF context — backend buffer(s) own the actual storage now.
+  gguf_free(gguf);
 
   fprintf(stderr, "%s: model loaded successfully\n", __func__);
   return true;
@@ -1521,10 +1551,21 @@ extern "C" bool smolvla_load_model(const char* path, smolvla_model* model_ptr) {
 
 extern "C" void smolvla_free_model(smolvla_model* model_ptr) {
   smolvla_model& model = *model_ptr;
-  if (model.buf_w) {
-    ggml_backend_buffer_free(model.buf_w);
-    model.buf_w = nullptr;
+  // Free backend buffers BEFORE the underlying mmap so any tensor pointers
+  // they hold remain valid through the free callback.
+  for (ggml_backend_buffer_t buf : model.bufs_w) {
+    if (buf) {
+      ggml_backend_buffer_free(buf);
+    }
   }
+  model.bufs_w.clear();
+#ifndef _WIN32
+  if (model.mmap_addr) {
+    munmap(model.mmap_addr, model.mmap_size);
+    model.mmap_addr = nullptr;
+    model.mmap_size = 0;
+  }
+#endif
   if (model.ctx_w) {
     ggml_free(model.ctx_w);
     model.ctx_w = nullptr;

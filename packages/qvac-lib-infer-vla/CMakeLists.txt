@@ -90,6 +90,14 @@ target_compile_definitions(${qvac-lib-infer-vla}
   PRIVATE
     BACKENDS_SUBDIR="${BACKENDS_SUBDIR_VALUE}")
 
+# Mirror the diffusion addon: when ggml is built with GGML_BACKEND_DL=ON
+# (Android), tell the addon's translation units so any conditional code
+# (e.g. ggml_backend_load_all_from_path call sites) compiles consistently
+# with the headers and the bundled backend modules.
+if(GGML_BACKEND_DL)
+  target_compile_definitions(${qvac-lib-infer-vla} PRIVATE GGML_BACKEND_DL)
+endif()
+
 if(WIN32)
   target_link_libraries(
     ${qvac-lib-infer-vla}

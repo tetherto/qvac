@@ -188,8 +188,17 @@ struct smolvla_model {
   // GGML context for weights
   struct ggml_context* ctx_w;
 
-  // Backend buffer for weights
-  ggml_backend_buffer_t buf_w;
+  // Backend buffer(s) for weights. Multiple buffers when the backend's
+  // buffer_from_host_ptr path slices a large mmap range into several
+  // sub-buffers (matches llama.cpp's pattern); single buffer for the
+  // alloc+copy fallback used by Vulkan/CPU.
+  std::vector<ggml_backend_buffer_t> bufs_w;
+
+  // mmap of the GGUF file when the zero-copy path is used (Apple Metal,
+  // CPU). nullptr when we fell back to alloc+copy. Owned by the model;
+  // released in smolvla_free_model.
+  void* mmap_addr = nullptr;
+  size_t mmap_size = 0;
 
   // Backends
   ggml_backend_t backend;     // primary (Vulkan if available)
