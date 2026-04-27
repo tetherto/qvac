@@ -60,6 +60,7 @@ private:
   static bool g_initialized;
   static std::string g_recordedBackendsDir;
   static std::string g_recordedOpenclCacheDir;
+  static std::string g_recordedOpenclCacheDirInput;
   static int g_refCount;
 };
 

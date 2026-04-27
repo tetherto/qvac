@@ -54,6 +54,7 @@ export interface TranslationNmtcppConfig {
    *
    * `gpuBackend` is the camelCase alias (preferred for new code); the
    * snake_case form mirrors the C-struct field. Both accepted.
+   * If both are set, `gpu_backend` wins.
    */
   gpu_backend?: string
   gpuBackend?: string
@@ -63,6 +64,7 @@ export interface TranslationNmtcppConfig {
    * Example: { gpuBackend: "vulkan", gpuDevice: 1 } → second Vulkan adapter.
    *
    * `gpuDevice` is the camelCase alias; `gpu_device` mirrors the C struct.
+   * If both are set, `gpu_device` wins.
    */
   gpu_device?: number
   gpuDevice?: number
