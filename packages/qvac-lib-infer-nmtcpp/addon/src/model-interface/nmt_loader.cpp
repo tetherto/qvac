@@ -137,17 +137,6 @@ static buft_list_t make_buft_list(nmt_context_params& params) {
   // buffers live on the same device we'll execute on. See the comment in
   // nmt_state_backend.cpp for the OpenCL-gating and explicit gpu_backend
   // selection rationale.
-  auto name_contains = [](const char* n, const std::string& needle) {
-    if (n == nullptr || needle.empty()) {
-      return false;
-    }
-    std::string s(n);
-    std::transform(s.begin(), s.end(), s.begin(), [](unsigned char c) {
-      return static_cast<char>(std::tolower(c));
-    });
-    return s.find(needle) != std::string::npos;
-  };
-
   std::string gpuBackendLower = params.gpu_backend;
   std::transform(
       gpuBackendLower.begin(),
@@ -156,7 +145,8 @@ static buft_list_t make_buft_list(nmt_context_params& params) {
       [](unsigned char c) { return static_cast<char>(std::tolower(c)); });
 
   if (params.use_gpu) {
-    for (size_t i = 0; i < ggml_backend_dev_count(); ++i) {
+    const size_t devCount = ggml_backend_dev_count();
+    for (size_t i = 0; i < devCount; ++i) {
       ggml_backend_dev_t dev = ggml_backend_dev_get(i);
       enum ggml_backend_dev_type dev_type = ggml_backend_dev_type(dev);
       const char* name = ggml_backend_dev_name(dev);
@@ -171,17 +161,17 @@ static buft_list_t make_buft_list(nmt_context_params& params) {
     if (!gpuBackendLower.empty()) {
       // Mode 1: explicit gpu_backend filter.
       int cnt = 0;
-      for (size_t i = 0; i < ggml_backend_dev_count(); ++i) {
+      for (size_t i = 0; i < devCount; ++i) {
         ggml_backend_dev_t dev = ggml_backend_dev_get(i);
         enum ggml_backend_dev_type dev_type = ggml_backend_dev_type(dev);
         const char* name = ggml_backend_dev_name(dev);
         if (dev_type == GGML_BACKEND_DEVICE_TYPE_CPU) {
           continue;
         }
-        if (!name_contains(name, gpuBackendLower)) {
+        if (!nmt_name_contains_ci(name, gpuBackendLower)) {
           continue;
         }
-        if (cnt == 0 || cnt == params.gpu_device) {
+        if (cnt == params.gpu_device) {
           auto* buft = ggml_backend_dev_buffer_type(dev);
           if (buft) {
             buft_list.emplace_back(dev, buft);
@@ -195,21 +185,27 @@ static buft_list_t make_buft_list(nmt_context_params& params) {
           break;
         }
       }
+      if (!selected) {
+        QLOG(
+            qvac_lib_inference_addon_cpp::logger::Priority::WARNING,
+            "[make_buft_list] Explicit gpu_backend='" + params.gpu_backend +
+                "' matched no registered device — will use CPU buffers");
+      }
     } else {
 #ifdef QVAC_NMTCPP_USE_OPENCL
       // Mode 2a: prefer OpenCL.
       int cnt = 0;
-      for (size_t i = 0; i < ggml_backend_dev_count(); ++i) {
+      for (size_t i = 0; i < devCount; ++i) {
         ggml_backend_dev_t dev = ggml_backend_dev_get(i);
         enum ggml_backend_dev_type dev_type = ggml_backend_dev_type(dev);
         const char* name = ggml_backend_dev_name(dev);
         if (dev_type == GGML_BACKEND_DEVICE_TYPE_CPU) {
           continue;
         }
-        if (!name_contains(name, "opencl")) {
+        if (!nmt_name_contains_ci(name, "opencl")) {
           continue;
         }
-        if (cnt == 0 || cnt == params.gpu_device) {
+        if (cnt == params.gpu_device) {
           auto* buft = ggml_backend_dev_buffer_type(dev);
           if (buft) {
             buft_list.emplace_back(dev, buft);
@@ -229,7 +225,7 @@ static buft_list_t make_buft_list(nmt_context_params& params) {
       // when the guard is off).
       if (!selected) {
         int cnt2 = 0;
-        for (size_t i = 0; i < ggml_backend_dev_count(); ++i) {
+        for (size_t i = 0; i < devCount; ++i) {
           ggml_backend_dev_t dev = ggml_backend_dev_get(i);
           enum ggml_backend_dev_type dev_type = ggml_backend_dev_type(dev);
           const char* name = ggml_backend_dev_name(dev);
@@ -237,11 +233,11 @@ static buft_list_t make_buft_list(nmt_context_params& params) {
             continue;
           }
 #ifndef QVAC_NMTCPP_USE_OPENCL
-          if (name_contains(name, "opencl")) {
+          if (nmt_name_contains_ci(name, "opencl")) {
             continue;
           }
 #endif
-          if (cnt2 == 0 || cnt2 == params.gpu_device) {
+          if (cnt2 == params.gpu_device) {
             auto* buft = ggml_backend_dev_buffer_type(dev);
             if (buft) {
               buft_list.emplace_back(dev, buft);

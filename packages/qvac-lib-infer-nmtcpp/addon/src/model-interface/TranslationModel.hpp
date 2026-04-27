@@ -50,6 +50,8 @@ public:
 
   void setGpuBackend(const std::string& gpuBackend);
 
+  void setGpuDevice(int gpuDevice);
+
   std::unordered_map<std::string, std::variant<double, int64_t, std::string>>
   getConfig() const;
 
@@ -125,6 +127,13 @@ private:
   // key by setConfig(). Empty → default gated selection in
   // nmt_backend_init_gpu.
   std::string gpuBackend_;
+
+  int gpuDevice_ = 0;
+
+  // Cached at load() time; cleared on unload(). Avoids mutex + ggml traversal
+  // on every getActiveBackendName() call since the active backend is immutable
+  // after load().
+  std::string activeBackendName_;
 
   std::unordered_map<std::string, std::variant<double, int64_t, std::string>>
       config_;
