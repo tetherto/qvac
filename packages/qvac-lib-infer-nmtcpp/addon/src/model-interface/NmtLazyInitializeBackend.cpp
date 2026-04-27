@@ -165,7 +165,24 @@ void nmtInstallCallbacksInLoadedBackendSos() {
 bool NmtLazyInitializeBackend::initialize(
     const std::string& backendsDir, const std::string& openclCacheDir) {
   std::lock_guard<std::mutex> lock(g_initMutex);
+  return initializeLocked(backendsDir, openclCacheDir);
+}
 
+bool NmtLazyInitializeBackend::initializeAndRef(
+    const std::string& backendsDir, const std::string& openclCacheDir) {
+  std::lock_guard<std::mutex> lock(g_initMutex);
+  bool didInit = initializeLocked(backendsDir, openclCacheDir);
+  // Increment unconditionally so every NmtBackendsHandle holds a reference,
+  // whether it triggered the one-time init or attached to an existing one.
+  // Lives in the same critical section as initializeLocked() so the count
+  // and the g_initialized flag advance atomically (closes the TOCTOU
+  // between two separate g_initMutex acquisitions).
+  g_refCount++;
+  return didInit;
+}
+
+bool NmtLazyInitializeBackend::initializeLocked(
+    const std::string& backendsDir, const std::string& openclCacheDir) {
   if (g_initialized) {
     if (!backendsDir.empty() && !g_recordedBackendsDir.empty() &&
         backendsDir != g_recordedBackendsDir) {
@@ -194,19 +211,19 @@ bool NmtLazyInitializeBackend::initialize(
 
 #ifdef __ANDROID__
   if (!openclCacheDir.empty()) {
-    // lexically_normal() collapses redundant separators and `.`/`..` segments
-    // syntactically, but it does NOT prevent a caller-supplied absolute path
-    // with embedded `..` from escaping (e.g. `/tmp/foo/../../etc` →
-    // `/etc`). Defense-in-depth: require the input to be an absolute path
-    // and reject any normalised result that still contains a `..` segment
-    // (which would mean the original was relative and traversed upward).
-    // Skip the setenv when the input fails validation rather than forwarding
-    // a suspect path to GGML_OPENCL_CACHE_DIR.
+    // Defense-in-depth against path traversal: require the input to be an
+    // absolute path AND reject any input whose RAW (pre-normalisation)
+    // components contain `..`. We must check the input — not the normalised
+    // form — because lexically_normal() consumes `..` segments syntactically
+    // (e.g. /a/b/../c → /a/c), so a check on the normalised path can never
+    // see a `..` and would silently allow `/data/app/../../etc/passwd` to
+    // resolve to `/etc/passwd`. Rejecting any `..` in the request itself
+    // closes that escape; we accept the conservative trade-off that legit
+    // cache paths happen never to contain `..` segments in practice.
     std::filesystem::path requested(openclCacheDir);
-    std::filesystem::path normalized = requested.lexically_normal();
     bool validPath = requested.is_absolute();
     if (validPath) {
-      for (const auto& seg : normalized) {
+      for (const auto& seg : requested) {
         if (seg == "..") {
           validPath = false;
           break;
@@ -214,15 +231,26 @@ bool NmtLazyInitializeBackend::initialize(
       }
     }
     if (!validPath) {
+      // Sanitize the value before embedding in the warning so a malformed
+      // path with control chars (\n, \r, ANSI) cannot inject fake log
+      // lines. Mirrors the gpu_backend sanitization in setGpuBackend().
+      std::string sanitized;
+      sanitized.reserve(openclCacheDir.size());
+      for (char raw : openclCacheDir) {
+        unsigned char c = static_cast<unsigned char>(raw);
+        sanitized.push_back(
+            (c >= 0x20 && c < 0x7F) ? static_cast<char>(c) : '?');
+      }
       QLOG(
           Priority::WARNING,
           "Rejecting suspicious openclCacheDir (must be absolute and free of "
-          "'..' segments after normalization): " +
-              openclCacheDir);
+          "'..' segments): " +
+              sanitized);
     } else {
-      auto oclCachePath = (normalized / "opencl-cache").string();
+      auto oclCachePath =
+          (requested.lexically_normal() / "opencl-cache").string();
       setenv("GGML_OPENCL_CACHE_DIR", oclCachePath.c_str(), /*overwrite=*/1);
-      g_recordedOpenclCacheDir = oclCachePath;
+      g_recordedOpenclCacheDir = std::move(oclCachePath);
     }
   }
 #endif
@@ -284,8 +312,10 @@ void NmtLazyInitializeBackend::decrementRefCount() {
 NmtBackendsHandle::NmtBackendsHandle(
     const std::string& backendsDir, const std::string& openclCacheDir)
     : ownsHandle_(true) {
-  NmtLazyInitializeBackend::initialize(backendsDir, openclCacheDir);
-  NmtLazyInitializeBackend::incrementRefCount();
+  // Single-locked init+ref so a racing destructor cannot decrement to zero
+  // (and tear down the env var / backend state) between the initialize()
+  // unlock and the incrementRefCount() lock.
+  NmtLazyInitializeBackend::initializeAndRef(backendsDir, openclCacheDir);
 }
 
 NmtBackendsHandle::~NmtBackendsHandle() {
