@@ -92,6 +92,12 @@ export default class TranslationNmtcpp {
    * or one of the sentinels "Unloaded", "Bergamot-CPU", "CPU". Open-ended
    * device names like "Vulkan0", "OpenCL", "Metal" are also possible.
    * Call after load() to confirm use_gpu / gpu_backend took effect.
+   *
+   * Return-type note: `(string & {})` keeps the literal sentinels
+   * IDE-completable. Plain `'Unloaded' | ... | string` collapses to `string`
+   * via TypeScript's union absorption rule, hiding the sentinels from
+   * autocomplete; `(string & {})` is the established workaround that
+   * preserves both the open enum and the named members.
    */
   getActiveBackendName(): 'Unloaded' | 'Bergamot-CPU' | 'CPU' | (string & {})
 }

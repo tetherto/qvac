@@ -37,6 +37,7 @@ private:
   static std::mutex g_initMutex;
   static bool g_initialized;
   static std::string g_recordedBackendsDir;
+  static std::string g_recordedOpenclCacheDir;
   static int g_refCount;
 };
 
