@@ -1,0 +1,125 @@
+name: Setup build host
+description: >-
+  Install and configure the OS-level prerequisites needed by prebuild
+  workflows. Runs a fixed set of steps per runner/platform/arch: on ubuntu we
+  maximize disk space and install llvm-19; on windows we enable long paths,
+  configure the CMake generator, and (on arm64) rename the Windows 10 SDK; on
+  linux we install the base X11 dev headers plus any caller-supplied extras;
+  on android we export the NDK / toolchain env and install the ubuntu cross
+  toolchain.
+
+inputs:
+  platform:
+    description: Build platform (linux, android, darwin, ios, win32)
+    required: true
+  arch:
+    description: Build architecture (x64, arm64)
+    required: true
+  linux-extra-packages:
+    description: >-
+      Additional apt packages to install on linux runners, on top of the
+      always-installed base set (libxi-dev libxtst-dev libxrandr-dev).
+    required: false
+    default: ""
+
+runs:
+  using: composite
+  steps:
+    - if: ${{ inputs.platform == 'android' }}
+      name: Select Android NDK
+      shell: bash
+      run: |
+        echo "ANDROID_NDK=$ANDROID_NDK_LATEST_HOME" >> "$GITHUB_ENV"
+        echo "ANDROID_NDK_HOME=$ANDROID_NDK_LATEST_HOME" >> "$GITHUB_ENV"
+        echo "ANDROID_NDK_ROOT=$ANDROID_NDK_LATEST_HOME" >> "$GITHUB_ENV"
+
+    - if: ${{ runner.os == 'Linux' }}
+      name: Maximize build space
+      shell: bash
+      env:
+        INPUT_PLATFORM: ${{ inputs.platform }}
+      run: |
+        echo "=== Disk space before cleanup ==="
+        df -h /
+        sudo docker image prune --all --force
+        sudo rm -rf /opt/hostedtoolcache/CodeQL
+        sudo rm -rf /opt/ghc
+        sudo rm -rf /usr/share/dotnet
+        sudo rm -rf /usr/share/swift
+        sudo rm -rf /opt/hostedtoolcache/go
+        if [ "$INPUT_PLATFORM" != "android" ]; then
+          sudo rm -rf /usr/local/lib/android
+        fi
+        echo "=== Disk space after cleanup ==="
+        df -h /
+
+    - if: ${{ runner.os == 'Linux' }}
+      name: Install llvm-19
+      shell: bash
+      run: |
+        set -euo pipefail
+        wget -qO- https://apt.llvm.org/llvm-snapshot.gpg.key | sudo tee /etc/apt/trusted.gpg.d/apt.llvm.org.asc > /dev/null
+        sudo chmod 644 /etc/apt/trusted.gpg.d/apt.llvm.org.asc
+        wget -q https://apt.llvm.org/llvm.sh
+        chmod +x llvm.sh
+        sudo ./llvm.sh 19 all
+
+    - if: ${{ runner.os == 'Windows' }}
+      name: Configure Windows long paths
+      shell: powershell
+      run: |
+        git config --system core.longpaths true
+
+    - if: ${{ runner.os == 'Windows' && inputs.arch == 'arm64' }}
+      name: Rename Windows 10 SDK folders (arm64 only)
+      shell: powershell
+      run: |
+        Rename-Item -Path "C:\Program Files (x86)\Windows Kits\10\Include\10.0.26100.0" -NewName "old-10.0.26100.0"
+        Rename-Item -Path "C:\Program Files (x86)\Windows Kits\10\bin\10.0.26100.0" -NewName "old-10.0.26100.0"
+        Rename-Item -Path "C:\Program Files (x86)\Windows Kits\10\Lib\10.0.26100.0" -NewName "old-10.0.26100.0"
+
+    - if: ${{ runner.os == 'Windows' }}
+      name: Configure CMake generator on Windows
+      shell: powershell
+      env:
+        INPUT_ARCH: ${{ inputs.arch }}
+      run: |
+        echo "CMAKE_GENERATOR=Visual Studio 17 2022" >> $env:GITHUB_ENV
+        switch ($env:INPUT_ARCH) {
+          'x64'   { echo "CMAKE_GENERATOR_PLATFORM=x64"   >> $env:GITHUB_ENV }
+          'arm64' { echo "CMAKE_GENERATOR_PLATFORM=ARM64" >> $env:GITHUB_ENV }
+          'x86'   { echo "CMAKE_GENERATOR_PLATFORM=Win32" >> $env:GITHUB_ENV }
+          default { Write-Host "Unknown arch '$env:INPUT_ARCH'; CMAKE_GENERATOR_PLATFORM left unset" }
+        }
+
+    - if: ${{ runner.os == 'Linux' }}
+      name: Refresh apt sources
+      shell: bash
+      run: sudo apt-get update
+
+    - if: ${{ inputs.platform == 'linux' }}
+      name: Install linux base packages
+      shell: bash
+      run: |
+        sudo apt-get install -y libxi-dev libxtst-dev libxrandr-dev
+
+    - if: ${{ runner.os == 'Linux' && inputs.linux-extra-packages != '' }}
+      name: Install linux extra packages
+      shell: bash
+      env:
+        PKGS: ${{ inputs.linux-extra-packages }}
+      run: |
+        sudo apt-get install -y $PKGS
+
+    - if: ${{ inputs.platform == 'android' && runner.os == 'Linux' }}
+      name: Install ubuntu cross toolchain for android
+      shell: bash
+      run: |
+        sudo apt-get install -y gcc-aarch64-linux-gnu g++-aarch64-linux-gnu libc6-dev-arm64-cross lld
+
+    - if: ${{ inputs.platform == 'android' }}
+      name: Export Android toolchain env
+      shell: bash
+      run: |
+        echo "ANDROID_TOOLCHAIN_ROOT=${ANDROID_NDK_HOME}/toolchains/llvm/prebuilt/linux-x86_64" >> "$GITHUB_ENV"
+        echo "ANDROID_NATIVE_API_LEVEL=34" >> "$GITHUB_ENV"

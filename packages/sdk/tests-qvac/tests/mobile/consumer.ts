@@ -64,6 +64,7 @@ import { DownloadExecutor } from "../shared/executors/download-executor.js";
 import { DelegatedInferenceExecutor } from "../shared/executors/delegated-inference-executor.js";
 import { MobileDiffusionExecutor } from "./executors/diffusion-executor.js";
 import { LifecycleExecutor } from "../shared/executors/lifecycle-executor.js";
+import { ConfigExecutor } from "../shared/executors/config-executor.js";
 
 const resources = new ResourceManager();
 
@@ -364,6 +365,7 @@ export const executor = createExecutor({
     new DelegatedInferenceExecutor(),
     new MobileDiffusionExecutor(resources),
     new LifecycleExecutor(resources),
+    new ConfigExecutor(),
   ],
   profiling: {
     init: () => profiler.enable({ mode: "summary", includeServerBreakdown: true }),

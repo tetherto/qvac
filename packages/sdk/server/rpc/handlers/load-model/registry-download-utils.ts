@@ -8,6 +8,8 @@ import {
   calculatePercentage,
 } from "@/server/utils";
 import { getRegistryClient } from "@/server/bare/registry/registry-client";
+import { getSDKConfig } from "@/server/bare/registry/config-registry";
+import { buildRegistryClientOptions } from "./registry-client-options";
 import {
   ChecksumValidationFailedError,
   DownloadCancelledError,
@@ -17,7 +19,11 @@ import type { DownloadHooks } from "./types";
 
 const logger = getServerLogger();
 
-const REGISTRY_STREAM_TIMEOUT_MS = 60_000;
+export {
+  DEFAULT_REGISTRY_STREAM_TIMEOUT_MS,
+  buildRegistryClientOptions,
+} from "./registry-client-options";
+export type { RegistryClientDownloadOptions } from "./registry-client-options";
 
 export function buildBlobBinding(meta: {
   blobCoreKey: string;
@@ -122,12 +128,12 @@ export async function downloadSingleFileFromRegistry(
       }
     : undefined;
 
-  const clientOptions = {
-    timeout: REGISTRY_STREAM_TIMEOUT_MS,
+  const clientOptions = buildRegistryClientOptions({
+    sdkConfig: getSDKConfig(),
     outputFile: modelPath,
-    ...(onProgress && { onProgress }),
-    ...(signal && { signal: signal as unknown as globalThis.AbortSignal }),
-  };
+    onProgress,
+    signal,
+  });
 
   if (blobBinding) {
     logger.info(`📥 Downloading blob directly: ${modelFileName}`);
