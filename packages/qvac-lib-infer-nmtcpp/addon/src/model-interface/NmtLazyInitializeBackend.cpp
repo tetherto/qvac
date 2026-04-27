@@ -192,6 +192,23 @@ bool NmtLazyInitializeBackend::initializeLocked(
           "Previously initialized at: " +
               g_recordedBackendsDir + ", requested: " + backendsDir);
     }
+#ifdef __ANDROID__
+    // Mirror the backendsDir mismatch diagnostic — caller's openclCacheDir
+    // is silently ignored here because GGML_OPENCL_CACHE_DIR was set at
+    // first init (the singleton's "first wins" contract). Surface that the
+    // request is being dropped so the operator can correlate the unexpected
+    // cache location with this re-init attempt.
+    if (!openclCacheDir.empty() && !g_recordedOpenclCacheDir.empty() &&
+        // Compare just the supplied prefix because g_recordedOpenclCacheDir
+        // already has the "/opencl-cache" suffix appended at first init.
+        g_recordedOpenclCacheDir.find(openclCacheDir) != 0) {
+      QLOG(
+          Priority::WARNING,
+          "Backend already initialized with different openclCacheDir. "
+          "Previously initialized at: " +
+              g_recordedOpenclCacheDir + ", requested: " + openclCacheDir);
+    }
+#endif
     return false;
   }
 

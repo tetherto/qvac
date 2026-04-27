@@ -237,6 +237,24 @@ class TranslationNmtcpp {
   async _load () {
     const otherConfig = { ...this._config }
 
+    // Accept camelCase aliases for the GPU keys so the config object can
+    // stay consistent with backendsDir/openclCacheDir. The C++ binding
+    // expects snake_case (mirrors nmt_context_params field names), so we
+    // translate camelCase → snake_case here. snake_case takes precedence
+    // when both are present (explicit user choice wins over alias).
+    if (otherConfig.use_gpu === undefined && otherConfig.useGpu !== undefined) {
+      otherConfig.use_gpu = otherConfig.useGpu
+    }
+    if (otherConfig.gpu_backend === undefined && otherConfig.gpuBackend !== undefined) {
+      otherConfig.gpu_backend = otherConfig.gpuBackend
+    }
+    if (otherConfig.gpu_device === undefined && otherConfig.gpuDevice !== undefined) {
+      otherConfig.gpu_device = otherConfig.gpuDevice
+    }
+    delete otherConfig.useGpu
+    delete otherConfig.gpuBackend
+    delete otherConfig.gpuDevice
+
     if (otherConfig.backendsDir === undefined) {
       otherConfig.backendsDir = path.join(__dirname, 'prebuilds')
     }
