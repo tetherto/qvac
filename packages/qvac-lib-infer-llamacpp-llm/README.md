@@ -173,7 +173,7 @@ const config = {
 | presence_penalty  | float                                       | 0                            | Presence penalty for sampling                         |
 | frequency_penalty | float                                       | 0                            | Frequency penalty for sampling                        |
 | tools             | `"true"` or `"false"`                       | `"false"`                    | Enable tool calling with jinja templating             |
-| tools_at_end      | `"true"` or `"false"`                       | `"false"`                    | Place tools at end of prompt ([details](./docs/tools-at-end.md)) |
+| tools_compact      | `"true"` or `"false"`                       | `"false"`                    | Compact tool tokens from KV cache between turns ([details](./docs/tools-compact.md)) |
 | verbosity         | 0 – 3 (0=ERROR, 1=WARNING, 2=INFO, 3=DEBUG) | 0                            | Logging verbosity level                               |
 | n_discarded       | integer                                     | 0                            | Tokens to discard in sliding window context           |
 | main-gpu          | integer, `"integrated"`, or `"dedicated"`   | —                            | GPU selection for multi-GPU systems                   |
@@ -315,7 +315,7 @@ npm run quickstart
 -   [LoRA Finetuning Pause/Resume](./examples/finetune/simple-lora-finetune-pause-resume.js) – Pause and resume finetuning.
 -   [LoRA Inference](./examples/simple-lora-inference.js) – Inference with a finetuned LoRA adapter.
 -   [Smart Home Finetune Showcase](./examples/finetune/showcase/smart-home-finetune.js) – Train a smart home tool-calling specialist, then [evaluate](./examples/finetune/showcase/smart-home-finetuned-test.js) baseline vs finetuned.
--   [Bench Tools Placement](./examples/benchToolsPlacement.js) – Benchmarks standard vs `tools_at_end` placement across multi-turn conversations.
+-   [Bench Tools Placement](./examples/benchToolsPlacement.js) – Benchmarks standard vs `tools_compact` placement across multi-turn conversations.
 -   [Test Tool Removal](./examples/testToolRemoval.js) – Demonstrates dynamic tool addition and removal between turns.
 
 ## OCR with Vision-Language Models

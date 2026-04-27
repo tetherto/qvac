@@ -80,24 +80,6 @@ jobs:
     name: ${{ matrix.platform }}-${{ matrix.arch }}${{ matrix.tags }}
 
     steps:
-      - if: ${{ matrix.platform == 'android' }}
-        name: Select NDK
-        run: |
-          echo "ANDROID_NDK=$ANDROID_NDK_LATEST_HOME" >> $GITHUB_ENV
-          echo "ANDROID_NDK_HOME=$ANDROID_NDK_LATEST_HOME" >> $GITHUB_ENV
-          echo "ANDROID_NDK_ROOT=$ANDROID_NDK_LATEST_HOME" >> $GITHUB_ENV
-
-      - name: print env
-        run: printenv
-
-      - if: ${{ startsWith(matrix.os, 'ubuntu-') }}
-        name: Maximize build space
-        run: |
-          sudo docker image prune --all --force
-          sudo rm -rf /opt/hostedtoolcache/CodeQL
-          sudo rm -rf /opt/ghc
-          sudo rm -rf /usr/share/dotnet
-
       - name: Echo workflow inputs
         shell: bash
         env:
@@ -116,19 +98,11 @@ jobs:
           echo "Matrix arch: $MATRIX_ARCH"
           echo "Matrix tags: $MATRIX_TAGS"
 
-      - if: ${{ startsWith(matrix.os, 'ubuntu-') }}
-        name: Install llvm-19
-        run: |
-          wget -q https://apt.llvm.org/llvm.sh
-          chmod +x llvm.sh
-          sudo ./llvm.sh 19 all
-
-      - if: ${{ matrix.os == 'windows-2022' }}
-        name: Configure windows runner
-        shell: powershell
-        run: |
-          git config --system core.longpaths true
-          choco upgrade llvm
+      - name: Setup build host
+        uses: tetherto/qvac/.github/actions/setup-build-host@1d9b2165867d03c6edd675e402ee101a5d48a6d8
+        with:
+          platform: ${{ matrix.platform }}
+          arch: ${{ matrix.arch }}
 
       - name: Checkout repository
         uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # 6.0.2
@@ -142,8 +116,8 @@ jobs:
         with:
           role-to-assume: ${{ secrets.AWS_OIDC_ROLE_ARN }}
 
-      - name: Setup vcpkg cache
-        uses: tetherto/qvac/.github/actions/setup-vcpkg-cache@0bbdca93da303a0b1634ba14a89cec085621078d
+      - name: Setup vcpkg
+        uses: tetherto/qvac/.github/actions/setup-vcpkg@1d9b2165867d03c6edd675e402ee101a5d48a6d8
         env:
           MODEL_S3_BUCKET: ${{ secrets.MODEL_S3_BUCKET }}
         with:
@@ -153,58 +127,8 @@ jobs:
       - name: Setup Bare tooling
         uses: tetherto/qvac/.github/actions/setup-bare-tooling@0bbdca93da303a0b1634ba14a89cec085621078d
 
-      - if: ${{ matrix.os == 'windows-2022' && matrix.arch == 'arm64' }}
-        name: Rename win sdk folder to disable it
-        shell: powershell
-        run: |
-          Rename-Item -Path "C:\Program Files (x86)\Windows Kits\10\Include\10.0.26100.0" -NewName "C:\Program Files (x86)\Windows Kits\10\Include\old-10.0.26100.0"
-          Rename-Item -Path "C:\Program Files (x86)\Windows Kits\10\bin\10.0.26100.0" -NewName "C:\Program Files (x86)\Windows Kits\10\bin\old-10.0.26100.0"
-          Rename-Item -Path "C:\Program Files (x86)\Windows Kits\10\Lib\10.0.26100.0" -NewName "C:\Program Files (x86)\Windows Kits\10\Lib\old-10.0.26100.0"
-
-      - if: ${{ startsWith(matrix.os, 'macos-') }}
-        name: Install vcpkg in macos
-        shell: bash
-        run: |
-          cd ..
-          git clone --branch 2025.12.12 --single-branch https://github.com/microsoft/vcpkg.git
-          cd vcpkg && ./bootstrap-vcpkg.sh -disableMetrics
-          VCPKG_ROOT=$(pwd)
-          echo "VCPKG_ROOT=$VCPKG_ROOT" >> $GITHUB_ENV
-          echo "$VCPKG_ROOT" >> $GITHUB_PATH
-
-      - if: ${{ startsWith(matrix.os, 'ubuntu-') }}
-        name: Configure vcpkg in linux
-        run: echo "VCPKG_ROOT=$VCPKG_INSTALLATION_ROOT" >> $GITHUB_ENV
-
-      - if: ${{ matrix.os == 'windows-2022' }}
-        name: Configure vcpkg in windows
-        shell: powershell
-        run: echo ("VCPKG_ROOT=$env:VCPKG_INSTALLATION_ROOT" -replace '\\', '/') >> $env:GITHUB_ENV
-
-      - if: ${{ matrix.os == 'windows-2022' }}
-        name: Configure cmake generator in windows
-        shell: powershell
-        run: echo "CMAKE_GENERATOR=Visual Studio 17 2022" >> $env:GITHUB_ENV
-
-      - if: ${{ matrix.os == 'windows-2022' && matrix.arch == 'x64' }}
-        shell: powershell
-        run: echo "CMAKE_GENERATOR_PLATFORM=x64" >> $env:GITHUB_ENV
-
-      - if: ${{ matrix.os == 'windows-2022' && matrix.arch == 'x86' }}
-        shell: powershell
-        run: echo "CMAKE_GENERATOR_PLATFORM=Win32" >> $env:GITHUB_ENV
-
-      - if: ${{ matrix.os == 'windows-2022' && matrix.arch == 'arm64' }}
-        shell: powershell
-        run: echo "CMAKE_GENERATOR_PLATFORM=ARM64" >> $env:GITHUB_ENV
-
-      - if: ${{ startsWith(matrix.os, 'ubuntu-') }}
-        name: Update apt sources
-        run: sudo apt-get update
-
-      - if: ${{ matrix.platform == 'linux' }}
-        name: Install required packages linux
-        run: sudo apt-get install libxi-dev libxtst-dev libxrandr-dev
+      - name: Setup Apple Clang
+        uses: tetherto/qvac/.github/actions/setup-apple-clang@1d9b2165867d03c6edd675e402ee101a5d48a6d8
 
       - name: Setup Vulkan SDK
         uses: tetherto/qvac/.github/actions/setup-vulkan-sdk@0bbdca93da303a0b1634ba14a89cec085621078d
@@ -216,22 +140,9 @@ jobs:
           aws-role-to-assume: ${{ secrets.AWS_OIDC_ROLE_ARN }}
           aws-region: eu-central-1
 
-      - if: ${{ matrix.platform == 'android' }}
-        name: Configure runner for cross compilation - android
-        run: |
-          echo "ANDROID_TOOLCHAIN_ROOT=$(echo $ANDROID_NDK_HOME)/toolchains/llvm/prebuilt/linux-x86_64" >> $GITHUB_ENV
-          echo "ANDROID_NATIVE_API_LEVEL=34" >> $GITHUB_ENV
-
       - name: Install npm dependencies
         working-directory: ${{ env.WORKDIR }}
         run: npm install
-
-      - if: ${{ matrix.platform == 'ios' || matrix.platform == 'darwin' }}
-        name: Use Apple clang for Apple platform builds
-        run: |
-          sudo mv /opt/homebrew/opt/llvm@18 /opt/homebrew/opt/llvm@18.bak 2>/dev/null || true
-          sudo mv /opt/homebrew/opt/llvm /opt/homebrew/opt/llvm.bak 2>/dev/null || true
-          sudo rm -f /opt/homebrew/bin/clang /opt/homebrew/bin/clang++ 2>/dev/null || true
 
       - name: Run bare-make generate
         working-directory: ${{ env.WORKDIR }}
@@ -275,17 +186,10 @@ jobs:
           find prebuilds -maxdepth 1 -type d -print || true
 
       - name: Strip debug symbols
-        if: ${{ matrix.platform != 'win32' }}
-        shell: bash
-        working-directory: ${{ env.WORKDIR }}
-        run: |
-          if [[ "${{ matrix.platform }}" == "android" ]]; then
-            find prebuilds \( -name "*.bare" -o -name "*.so" \) -exec $ANDROID_NDK/toolchains/llvm/prebuilt/linux-x86_64/bin/llvm-strip {} \;
-          elif [[ "${{ matrix.platform }}" == "darwin" || "${{ matrix.platform }}" == "ios" ]]; then
-            find prebuilds -name "*.bare" -exec strip -S {} \;
-          else
-            find prebuilds -name "*.bare" -exec strip --strip-debug {} \;
-          fi
+        uses: tetherto/qvac/.github/actions/strip-prebuilds@1d9b2165867d03c6edd675e402ee101a5d48a6d8
+        with:
+          platform: ${{ matrix.platform }}
+          workdir: ${{ env.WORKDIR }}
 
       - uses: actions/upload-artifact@bbbca2ddaa5d8feaa63e36b76fdaad77386f024f # 7.0.0
         with:
@@ -309,4 +213,3 @@ jobs:
         with:
           name: prebuilds
           path: prebuilds
-

@@ -197,7 +197,7 @@ function validateToolCalls (turnIndex, output, availableTools) {
 
 // ─── Helpers ────────────────────────────────────────────────────────────────
 
-function makeBaseConfig (toolsAtEnd) {
+function makeBaseConfig (toolsCompact) {
   return {
     device: useCpu ? 'cpu' : 'gpu',
     gpu_layers: '999',
@@ -207,7 +207,7 @@ function makeBaseConfig (toolsAtEnd) {
     seed: '1',
     verbosity: '0',
     tools: 'true',
-    tools_at_end: toolsAtEnd ? 'true' : 'false'
+    tools_compact: toolsCompact ? 'true' : 'false'
   }
 }
 
@@ -246,13 +246,13 @@ function cleanCache (cachePath) {
 // ─── Generic scenario runner ────────────────────────────────────────────────
 
 async function runScenario (dirPath, modelName, opts) {
-  const { name, toolsAtEnd, dynamicTools, conversationTurns, getToolsForTurn, cacheName } = opts
+  const { name, toolsCompact, dynamicTools, conversationTurns, getToolsForTurn, cacheName } = opts
 
   console.log('\n' + '='.repeat(70))
   console.log(name)
   console.log('='.repeat(70))
 
-  const config = makeBaseConfig(toolsAtEnd)
+  const config = makeBaseConfig(toolsCompact)
   const { model } = await loadModel(dirPath, modelName, config)
   const cachePath = path.join(dirPath, cacheName)
   cleanCache(cachePath)
@@ -271,8 +271,8 @@ async function runScenario (dirPath, modelName, opts) {
 
       let runOptions = { cacheKey: cachePath }
 
-      if (toolsAtEnd) {
-        // tools_at_end: session cache + re-send last assistant response + new user + tools
+      if (toolsCompact) {
+        // tools_compact: session cache + re-send last assistant response + new user + tools
         prompt = [
           ...(i === 0
             ? [{ role: 'system', content: 'You are a helpful assistant.' }, { role: 'user', content: turn.user }]
@@ -420,17 +420,17 @@ function printToolValidationSummary (label, validations) {
 // ─── Main ───────────────────────────────────────────────────────────────────
 
 async function main () {
-  console.log('Benchmark: tools_at_end vs tools_in_system — performance & correctness')
+  console.log('Benchmark: tools_compact vs tools_in_system — performance & correctness')
   console.log(`Model: ${MODEL.name}`)
   console.log(`Turns: ${NUM_TURNS}`)
   console.log(`Device: ${useCpu ? 'CPU' : 'GPU'}`)
 
   const [modelName, dirPath] = await downloadModel(MODEL.url, MODEL.name)
 
-  // // ── Scenario A: tools_at_end, same tools every turn ──
+  // // ── Scenario A: tools_compact, same tools every turn ──
   // const resultA = await runScenario(dirPath, modelName, {
-  //   name: 'SCENARIO A: tools_at_end = true, SAME tools every turn',
-  //   toolsAtEnd: true,
+  //   name: 'SCENARIO A: tools_compact = true, SAME tools every turn',
+  //   toolsCompact: true,
   //   conversationTurns: CONVERSATION_TURNS_FIXED,
   //   getToolsForTurn: () => FIXED_TOOLS,
   //   cacheName: 'bench-A-at-end-same.bin'
@@ -438,17 +438,17 @@ async function main () {
 
   // // ── Scenario B: tools_in_system (standard), same tools every turn ──
   // const resultB = await runScenario(dirPath, modelName, {
-  //   name: 'SCENARIO B: tools_at_end = false (standard), SAME tools every turn',
-  //   toolsAtEnd: false,
+  //   name: 'SCENARIO B: tools_compact = false (standard), SAME tools every turn',
+  //   toolsCompact: false,
   //   conversationTurns: CONVERSATION_TURNS_FIXED,
   //   getToolsForTurn: () => FIXED_TOOLS,
   //   cacheName: 'bench-B-in-system-same.bin'
   // })
 
-  // ── Scenario C: tools_at_end with dynamic tools ──
+  // ── Scenario C: tools_compact with dynamic tools ──
   const resultC = await runScenario(dirPath, modelName, {
-    name: 'SCENARIO C: tools_at_end = true, DIFFERENT tools each turn',
-    toolsAtEnd: true,
+    name: 'SCENARIO C: tools_compact = true, DIFFERENT tools each turn',
+    toolsCompact: true,
     dynamicTools: true,
     conversationTurns: CONVERSATION_TURNS_DYNAMIC,
     getToolsForTurn: (i) => DYNAMIC_TOOLS_PER_TURN[i],
@@ -457,8 +457,8 @@ async function main () {
 
   // ── Scenario D: tools_in_system with dynamic tools (must replay each turn) ──
   const resultD = await runScenario(dirPath, modelName, {
-    name: 'SCENARIO D: tools_at_end = false, DIFFERENT tools each turn (full replay)',
-    toolsAtEnd: false,
+    name: 'SCENARIO D: tools_compact = false, DIFFERENT tools each turn (full replay)',
+    toolsCompact: false,
     dynamicTools: true,
     conversationTurns: CONVERSATION_TURNS_DYNAMIC,
     getToolsForTurn: (i) => DYNAMIC_TOOLS_PER_TURN[i],
@@ -471,7 +471,7 @@ async function main () {
   console.log('#'.repeat(80))
 
   printComparison(
-    'tools_at_end (dynamic tools)',
+    'tools_compact (dynamic tools)',
     resultC.turnStats,
     'tools_in_system (dynamic tools, full replay)',
     resultD.turnStats
@@ -482,20 +482,20 @@ async function main () {
   console.log('#  TOOL CALL CORRECTNESS')
   console.log('#'.repeat(80))
 
-  printToolValidationSummary('Scenario C — tools_at_end, dynamic tools', resultC.toolValidations)
+  printToolValidationSummary('Scenario C — tools_compact, dynamic tools', resultC.toolValidations)
   printToolValidationSummary('Scenario D — tools_in_system, dynamic tools (full replay)', resultD.toolValidations)
 
   console.log('\n' + '─'.repeat(80))
   console.log('Key:')
-  console.log('  Scenario C: tools_at_end=true with dynamic tools — trims & re-sends prev response')
-  console.log('  Scenario D: tools_at_end=false with dynamic tools — replay full history without cache')
+  console.log('  Scenario C: tools_compact=true with dynamic tools — trims & re-sends prev response')
+  console.log('  Scenario D: tools_compact=false with dynamic tools — replay full history without cache')
   console.log('  PASS = model only called tools available in that turn')
   console.log('  FAIL = model called a tool from a previous turn (stale/trimmed tool leak)')
   console.log('─'.repeat(80))
 
   // ── ASCII Graph: wall time per turn ──
   console.log('\n' + '#'.repeat(80))
-  console.log('#  TIME (ms) vs TURN — tools_at_end (C) vs tools_in_system+replay (D)')
+  console.log('#  TIME (ms) vs TURN — tools_compact (C) vs tools_in_system+replay (D)')
   console.log('#'.repeat(80))
   console.log('')
 

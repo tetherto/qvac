@@ -107,40 +107,6 @@ jobs:
         with:
           node-version: ${{ env.NODE_VERSION }}
 
-      - name: Configure scoped registry for @qvac and @tetherto packages
-        env:
-          GPR_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-          NPM_TOKEN: ${{ secrets.NPM_TOKEN }}
-          GIT_PAT: ${{ secrets.PAT_TOKEN }}
-        run: |
-          echo "Configuring scoped registry for @tetherto and @qvac packages..."
-
-          # Configure addon registry
-          cd monorepo/${{ inputs.workdir || env.PKG_DIR }}
-          cat > .npmrc <<NPMRC
-          always-auth=true
-          registry=https://registry.npmjs.org/
-          @qvac:registry=https://registry.npmjs.org/
-          @tetherto:registry=https://npm.pkg.github.com/
-          //registry.npmjs.org/:_authToken=${NPM_TOKEN}
-          //npm.pkg.github.com/:_authToken=${GPR_TOKEN}
-          NPMRC
-
-          # Configure test-framework registry (always npmjs for public @qvac deps)
-          cd $GITHUB_WORKSPACE/test-framework
-          cat > .npmrc <<NPMRC
-          registry=https://registry.npmjs.org/
-          @qvac:registry=https://registry.npmjs.org/
-          @tetherto:registry=https://npm.pkg.github.com/
-          //registry.npmjs.org/:_authToken=${NPM_TOKEN}
-          //npm.pkg.github.com/:_authToken=${GPR_TOKEN}
-          NPMRC
-
-          # Configure git for private repos
-          git config --global url."https://${GIT_PAT}:x-oauth-basic@github.com/".insteadOf "https://github.com/"
-          git config --global url."https://${GIT_PAT}:x-oauth-basic@github.com/".insteadOf "git@github.com:"
-          git config --global url."https://${GIT_PAT}:x-oauth-basic@github.com/".insteadOf "ssh://git@github.com/"
-
       - name: Install global dependencies
         run: |
           echo "Installing global dependencies..."
@@ -1757,16 +1723,22 @@ jobs:
             echo "::warning::No performance-report.json found under $OUTPUT_DIR (neither root nor per-device); skipping Step Summary"
           fi
 
+      # Upload the full per-platform output tree so downstream aggregators
+      # (aggregate.js weekly, comet-score-nmt.js weekly) can read the raw
+      # performance-report.json regardless of whether extract-from-log.js
+      # used the single-device layout (root perf-results-mobile/<platform>/
+      # performance-report.json → used when there is one device, e.g. iOS)
+      # or the multi-device layout (per-device subdirs → used when ≥2
+      # devices are in the matrix, e.g. the Android matrix's Pixel +
+      # Samsung). Prior to this fix the upload enumerated only the
+      # root-level paths, so the Android subdir JSONs were silently
+      # dropped and downstream tools saw zero Android rows.
       - name: Upload mobile performance report
         if: always() && steps.schedule_run.outputs.run_arn_1
         uses: actions/upload-artifact@bbbca2ddaa5d8feaa63e36b76fdaad77386f024f # 7.0.0
         with:
           name: perf-report-nmtcpp-mobile-${{ matrix.platform }}-${{ github.run_number }}
-          path: |
-            perf-results-mobile/${{ matrix.platform }}/performance-report.json
-            perf-results-mobile/${{ matrix.platform }}/performance-report.html
-            perf-results-mobile/${{ matrix.platform }}/performance-report.md
-            perf-results-mobile/${{ matrix.platform }}/performance-summary.json
+          path: perf-results-mobile/${{ matrix.platform }}/
           retention-days: 90
           if-no-files-found: ignore
 

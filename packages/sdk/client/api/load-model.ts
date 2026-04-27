@@ -2,21 +2,45 @@ import { send, stream } from "@/client/rpc/rpc-client";
 import { startLoggingStreamForModel } from "@/client/logging-stream-registry";
 import {
   type LoadModelOptions,
+  type LoadCustomPluginModelOptions,
+  type LoadModelDescriptorOnlyOptions,
+  type LoadModelDescriptorParam,
   type ReloadConfigOptions,
   type RPCOptions,
+  type ModelDescriptor,
   loadModelOptionsToRequestSchema,
   reloadConfigOptionsToRequestSchema,
   isModelTypeAlias,
   normalizeModelType,
+  inferModelTypeFromModelSrc,
 } from "@/schemas";
 import {
   ModelLoadFailedError,
+  ModelTypeRequiredError,
   StreamEndedError,
   InvalidResponseError,
 } from "@/utils/errors-client";
+import { assertModelSrcMatchesModelType } from "@/utils/load-model-validation";
 import { getClientLogger } from "@/logging";
 
 const logger = getClientLogger();
+
+/**
+ * Loads a model from a descriptor; `modelType` is inferred from `modelSrc`.
+ * `modelConfig` narrows per-engine when `modelSrc.engine` is a literal,
+ * otherwise falls back to a permissive shape. Throws `ModelTypeRequiredError`
+ * if `modelType` cannot be inferred at runtime.
+ *
+ * @example
+ * ```typescript
+ * await loadModel({ modelSrc: LLAMA_3_2_1B_INST_Q4_0, modelConfig: { ctx_size: 2048 } });
+ * await loadModel({ modelSrc: WHISPER_TINY });
+ * ```
+ */
+export function loadModel<S extends ModelDescriptor>(
+  options: LoadModelDescriptorParam<S>,
+  rpcOptions?: RPCOptions,
+): Promise<string>;
 
 /**
  * Loads a machine learning model from a local path, remote URL, or Hyperdrive key.
@@ -47,7 +71,7 @@ const logger = getClientLogger();
  * const localModelId = await loadModel({
  *   modelSrc: "/home/user/models/llama-7b.gguf",
  *   modelType: "llm",
- *   modelConfig: { contextSize: 2048 }
+ *   modelConfig: { ctx_size: 2048 }
  * });
  *
  * // Local file path - relative path
@@ -60,7 +84,7 @@ const logger = getClientLogger();
  * const hyperdriveId = await loadModel({
  *   modelSrc: "pear://<hyperdrive-key>/llama-7b.gguf",
  *   modelType: "llm",
- *   modelConfig: { contextSize: 2048 }
+ *   modelConfig: { ctx_size: 2048 }
  * });
  *
  * // Remote HTTP/HTTPS URL with progress tracking
@@ -115,6 +139,15 @@ export function loadModel(
 ): Promise<string>;
 
 /**
+ * Loads a custom plugin model (any non-built-in `modelType` string).
+ * `modelConfig` is plugin-defined; SDK does not narrow it.
+ */
+export function loadModel<T extends string>(
+  options: LoadCustomPluginModelOptions<T>,
+  rpcOptions?: RPCOptions,
+): Promise<string>;
+
+/**
  * Hot-reloads configuration on an already loaded model.
  *
  * @param options - Configuration for reloading config on an existing model:
@@ -151,24 +184,51 @@ export function loadModel(
 ): Promise<string>;
 
 export async function loadModel(
-  options: LoadModelOptions | ReloadConfigOptions,
+  options:
+    | LoadModelOptions
+    | LoadCustomPluginModelOptions<string>
+    | LoadModelDescriptorOnlyOptions
+    | ReloadConfigOptions,
   rpcOptions?: RPCOptions,
 ): Promise<string> {
   const isReloadConfig = "modelId" in options && !("modelSrc" in options);
 
-  // Warn about deprecated alias usage
-  if (!isReloadConfig && isModelTypeAlias(options.modelType)) {
-    const canonical = normalizeModelType(options.modelType);
-    logger.warn(
-      `Model type "${options.modelType}" is an alias and will be deprecated. Use "${canonical}" instead.`,
-    );
+  // Infer `modelType` from `modelSrc` when omitted; the schema still validates
+  // the resolved options below.
+  let resolvedOptions: Record<string, unknown> = options as unknown as Record<
+    string,
+    unknown
+  >;
+  if (!isReloadConfig) {
+    let modelType = resolvedOptions["modelType"];
+    if (typeof modelType === "string") {
+      assertModelSrcMatchesModelType(resolvedOptions["modelSrc"], modelType);
+    } else if (modelType === undefined) {
+      const inferred = inferModelTypeFromModelSrc(resolvedOptions["modelSrc"]);
+      if (!inferred) {
+        throw new ModelTypeRequiredError();
+      }
+      resolvedOptions = { ...resolvedOptions, modelType: inferred };
+      modelType = inferred;
+    }
+
+    if (typeof modelType === "string" && isModelTypeAlias(modelType)) {
+      const canonical = normalizeModelType(modelType);
+      logger.warn(
+        `Model type "${modelType}" is an alias and will be deprecated. Use "${canonical}" instead.`,
+      );
+    }
   }
 
   const request = isReloadConfig
-    ? reloadConfigOptionsToRequestSchema.parse(options)
-    : loadModelOptionsToRequestSchema.parse(options);
-  const modelLogger = isReloadConfig ? undefined : options.logger;
-  const onProgress = isReloadConfig ? undefined : options.onProgress;
+    ? reloadConfigOptionsToRequestSchema.parse(resolvedOptions)
+    : loadModelOptionsToRequestSchema.parse(resolvedOptions);
+  const modelLogger = isReloadConfig
+    ? undefined
+    : (resolvedOptions["logger"] as LoadModelOptions["logger"]);
+  const onProgress = isReloadConfig
+    ? undefined
+    : (resolvedOptions["onProgress"] as LoadModelOptions["onProgress"]);
 
   if (onProgress) {
     // Use streaming for progress updates

@@ -218,14 +218,14 @@ async function handleConfigReload(
       throw new ModelIsDelegatedError(modelId);
     }
 
-    const storedModelType = entry.local!.modelType;
+    const storedModelType = entry.local.modelType;
     const normalizedRequestType = normalizeModelType(modelType);
     if (storedModelType !== normalizedRequestType) {
       throw new ModelTypeMismatchError(storedModelType, normalizedRequestType);
     }
 
-    const model = entry.local!.model;
-    const currentConfig = entry.local!.config;
+    const model = entry.local.model;
+    const currentConfig = entry.local.config;
 
     if (typeof model.reload !== "function") {
       throw new ConfigReloadNotSupportedError(modelId);

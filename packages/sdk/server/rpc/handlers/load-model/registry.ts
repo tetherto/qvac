@@ -10,7 +10,7 @@ import {
   extractTensorsFromShards,
   calculatePercentage,
 } from "@/server/utils";
-import { getSingleFileCachePath } from "@/server/utils/cache";
+import { getSingleFileCachePath } from "@/server/utils/cache/paths";
 import { getModelByPath, type RegistryItem } from "@/models/registry";
 import { getRegistryClient } from "@/server/bare/registry/registry-client";
 import {

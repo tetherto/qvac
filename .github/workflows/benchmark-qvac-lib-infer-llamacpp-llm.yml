@@ -270,31 +270,6 @@ jobs:
           cache: pip
           cache-dependency-path: ${{ inputs.workdir }}/benchmarks/client/requirements.txt
 
-      - name: Configure scoped registry for @tetherto and @qvac packages
-        env:
-          NPM_TOKEN: ${{ secrets.NPM_TOKEN }}
-          GIT_PAT: ${{ secrets.PAT_TOKEN }}
-        shell: bash
-        working-directory: ${{ inputs.workdir }}
-        run: |
-          echo "Configuring scoped registry for @tetherto and @qvac packages..."
-          set -eu
-          {
-            echo "registry=https://registry.npmjs.org/"
-            echo "@qvac:registry=https://registry.npmjs.org/"
-            echo "@tetherto:registry=https://npm.pkg.github.com/"
-            echo "//registry.npmjs.org/:_authToken=${NPM_TOKEN}"
-            echo "//npm.pkg.github.com/:_authToken=${GIT_PAT}"
-          } > .npmrc
-
-          if [ -n "${GIT_PAT:-}" ]; then
-            git config --global url."https://${GIT_PAT}:@github.com/".insteadOf "https://github.com/"
-            git config --global url."https://${GIT_PAT}:@github.com/".insteadOf "git@github.com:"
-          else
-            git config --global url."https://${{ github.token }}:@github.com/".insteadOf "https://github.com/"
-            git config --global url."https://${{ github.token }}:@github.com/".insteadOf "git@github.com:"
-          fi
-
       - name: Install bare runtime
         working-directory: ${{ inputs.workdir }}
         run: npm install -g bare

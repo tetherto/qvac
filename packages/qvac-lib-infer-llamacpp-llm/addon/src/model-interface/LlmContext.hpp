@@ -1,5 +1,6 @@
 #pragma once
 
+#include <algorithm>
 #include <functional>
 #include <optional>
 
@@ -110,32 +111,6 @@ struct ThreadPoolDeleter {
 };
 using ThreadPoolPtr = std::unique_ptr<ggml_threadpool, ThreadPoolDeleter>;
 
-class DynamicToolsState {
-public:
-  void setToolsAtEnd(bool v) { toolsAtEnd_ = v; }
-  [[nodiscard]] bool toolsAtEnd() const { return toolsAtEnd_; }
-  [[nodiscard]] llama_pos nPastBeforeTools() const { return nPastBeforeTools_; }
-  void setNPastBeforeTools(llama_pos pos) { nPastBeforeTools_ = pos; }
-  void recordToolBoundary(llama_pos nPast, llama_pos totalTokens) {
-    if (toolsAtEnd_ && nConversationOnlyTokens_ > 0) {
-      nPastBeforeTools_ = nPast - (totalTokens - nConversationOnlyTokens_);
-    }
-  }
-  void setConversationOnlyTokens(llama_pos n) { nConversationOnlyTokens_ = n; }
-  [[nodiscard]] llama_pos conversationOnlyTokens() const {
-    return nConversationOnlyTokens_;
-  }
-  void reset() {
-    nConversationOnlyTokens_ = 0;
-    nPastBeforeTools_ = -1;
-  }
-
-private:
-  bool toolsAtEnd_ = false;
-  llama_pos nConversationOnlyTokens_ = 0;
-  llama_pos nPastBeforeTools_ = -1;
-};
-
 class LlmContext { // NOLINT(cppcoreguidelines-special-member-functions)
 public:
   LlmContext() = default;
@@ -237,11 +212,6 @@ public:
    */
   virtual void setNDiscarded(llama_pos nDiscarded) = 0;
 
-  DynamicToolsState& dynamicToolsState() { return dynamicToolsState_; }
-  [[nodiscard]] const DynamicToolsState& dynamicToolsState() const {
-    return dynamicToolsState_;
-  }
-
   /**
    * Get the number of context slides (discards) that have occurred.
    */
@@ -307,7 +277,4 @@ public:
    *
    */
   virtual void resetMedia() {};
-
-private:
-  DynamicToolsState dynamicToolsState_;
 };

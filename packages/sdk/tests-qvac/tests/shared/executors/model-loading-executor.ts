@@ -17,6 +17,8 @@ import {
   modelReloadLlm,
   modelSwitchLlm,
   modelReloadAfterError,
+  modelLoadInferredType,
+  modelLoadMissingTypeStringSrc,
 } from "../../test-definitions.js";
 
 const modelLoadTests = [
@@ -29,6 +31,8 @@ const modelLoadTests = [
   modelReloadLlm,
   modelSwitchLlm,
   modelReloadAfterError,
+  modelLoadInferredType,
+  modelLoadMissingTypeStringSrc,
 ] as const;
 
 export class ModelLoadingExecutor extends AbstractModelExecutor<
@@ -47,6 +51,9 @@ export class ModelLoadingExecutor extends AbstractModelExecutor<
     [modelReloadLlm.testId]: this.reloadLlm.bind(this),
     [modelSwitchLlm.testId]: this.switchLlm.bind(this),
     [modelReloadAfterError.testId]: this.reloadAfterError.bind(this),
+    [modelLoadInferredType.testId]: this.loadInferredType.bind(this),
+    [modelLoadMissingTypeStringSrc.testId]:
+      this.loadMissingTypeStringSrc.bind(this),
   };
 
   async loadLlm(
@@ -209,5 +216,37 @@ export class ModelLoadingExecutor extends AbstractModelExecutor<
     });
     this.resources.register("llm", this.llmModelId);
     return ValidationHelpers.validate(this.llmModelId, expectation);
+  }
+
+  async loadInferredType(
+    params: typeof modelLoadInferredType.params,
+    expectation: typeof modelLoadInferredType.expectation,
+  ): Promise<TestResult> {
+    const modelId = await loadModel({
+      modelSrc: LLAMA_3_2_1B_INST_Q4_0,
+      modelConfig: { verbosity: 0, ctx_size: 2048, n_discarded: 256 },
+    });
+    this.llmModelId = modelId;
+    this.resources.register("llm", modelId);
+    return ValidationHelpers.validate(modelId, expectation);
+  }
+
+  async loadMissingTypeStringSrc(
+    params: typeof modelLoadMissingTypeStringSrc.params,
+    expectation: typeof modelLoadMissingTypeStringSrc.expectation,
+  ): Promise<TestResult> {
+    try {
+      await loadModel({
+        modelSrc: params.modelPath,
+      } as unknown as Parameters<typeof loadModel>[0]);
+      return {
+        passed: false,
+        output: "Should have thrown ModelTypeRequiredError for plain-string modelSrc without modelType",
+      };
+    } catch (error) {
+      const errorMsg =
+        error instanceof Error ? error.message : JSON.stringify(error);
+      return ValidationHelpers.validate(errorMsg, expectation);
+    }
   }
 }

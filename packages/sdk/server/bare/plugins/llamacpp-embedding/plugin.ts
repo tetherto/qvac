@@ -1,7 +1,4 @@
-import EmbedLlamacpp, {
-  type GGMLConfig,
-  type Loader as EmbedLoader,
-} from "@qvac/embed-llamacpp";
+import EmbedLlamacpp, { type GGMLConfig } from "@qvac/embed-llamacpp";
 import embedAddonLogging from "@qvac/embed-llamacpp/addonLogging";
 import {
   definePlugin,
@@ -16,9 +13,7 @@ import {
   type EmbedConfig,
 } from "@/schemas";
 import { createStreamLogger, registerAddonLogger } from "@/logging";
-import { parseModelPath } from "@/server/utils";
-import FilesystemDL from "@qvac/dl-filesystem";
-import { asLoader } from "@/server/bare/utils/loader-adapter";
+import { expandGGUFIntoShards } from "@/server/utils";
 import { embed } from "@/server/bare/ops/embed";
 import { forwardModelExecution } from "@/profiling/model-execution";
 
@@ -68,25 +63,20 @@ function createEmbeddingsModel(
   modelPath: string,
   embedConfig: EmbedConfig,
 ) {
-  const { dirPath, basePath } = parseModelPath(modelPath);
-  const loader = new FilesystemDL({ dirPath });
   const logger = createStreamLogger(modelId, ModelType.llamacppEmbedding);
   registerAddonLogger(modelId, ModelType.llamacppEmbedding, logger);
 
   const config = transformEmbedConfig(embedConfig);
+  const modelFiles = expandGGUFIntoShards(modelPath);
 
-  const args = {
-    loader: asLoader<EmbedLoader>(loader),
-    opts: { stats: true },
+  const model = new EmbedLlamacpp({
+    files: { model: modelFiles },
+    config,
     logger,
-    diskPath: dirPath,
-    modelName: basePath,
-    modelPath,
-  };
+    opts: { stats: true },
+  });
 
-  const model = new EmbedLlamacpp(args, config);
-
-  return { model, loader };
+  return { model };
 }
 
 export const embeddingsPlugin = definePlugin({
@@ -98,13 +88,13 @@ export const embeddingsPlugin = definePlugin({
   createModel(params: CreateModelParams): PluginModelResult {
     const embedConfig = (params.modelConfig ?? {}) as EmbedConfig;
 
-    const { model, loader } = createEmbeddingsModel(
+    const { model } = createEmbeddingsModel(
       params.modelId,
       params.modelPath,
       embedConfig,
     );
 
-    return { model, loader };
+    return { model };
   },
 
   handlers: {
