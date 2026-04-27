@@ -107,7 +107,7 @@ jobs:
           echo "Matrix tags: $MATRIX_TAGS"
 
       - name: Setup build host
-        uses: tetherto/qvac/.github/actions/setup-build-host@3d48906579d044429f42e2d1ff2cba6ec5853d91
+        uses: tetherto/qvac/.github/actions/setup-build-host@1d9b2165867d03c6edd675e402ee101a5d48a6d8
         with:
           platform: ${{ matrix.platform }}
           arch: ${{ matrix.arch }}
@@ -125,7 +125,7 @@ jobs:
           role-to-assume: ${{ secrets.AWS_OIDC_ROLE_ARN }}
 
       - name: Setup vcpkg
-        uses: tetherto/qvac/.github/actions/setup-vcpkg@3d48906579d044429f42e2d1ff2cba6ec5853d91
+        uses: tetherto/qvac/.github/actions/setup-vcpkg@1d9b2165867d03c6edd675e402ee101a5d48a6d8
         env:
           MODEL_S3_BUCKET: ${{ secrets.MODEL_S3_BUCKET }}
         with:
@@ -136,7 +136,7 @@ jobs:
         uses: tetherto/qvac/.github/actions/setup-bare-tooling@0bbdca93da303a0b1634ba14a89cec085621078d
 
       - name: Setup Apple Clang
-        uses: tetherto/qvac/.github/actions/setup-apple-clang@3d48906579d044429f42e2d1ff2cba6ec5853d91
+        uses: tetherto/qvac/.github/actions/setup-apple-clang@1d9b2165867d03c6edd675e402ee101a5d48a6d8
 
       - name: Setup Vulkan SDK
         uses: tetherto/qvac/.github/actions/setup-vulkan-sdk@0bbdca93da303a0b1634ba14a89cec085621078d
@@ -192,7 +192,7 @@ jobs:
           find prebuilds -maxdepth 1 -type d -print || true
 
       - name: Strip debug symbols
-        uses: tetherto/qvac/.github/actions/strip-prebuilds@3d48906579d044429f42e2d1ff2cba6ec5853d91
+        uses: tetherto/qvac/.github/actions/strip-prebuilds@1d9b2165867d03c6edd675e402ee101a5d48a6d8
         with:
           platform: ${{ matrix.platform }}
           workdir: ${{ env.WORKDIR }}
