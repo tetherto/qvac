@@ -159,11 +159,17 @@ class SdInterface {
       const imgBufs = serializable.init_images
       delete serializable.init_images
 
+      // Pre-fill missing dimensions from first reference image.
+      // If caller provided one axis but not the other, only fill the missing one.
       if (!serializable.width || !serializable.height) {
         const dims = readImageDimensions(imgBufs[0])
         if (dims) {
-          serializable.width = Math.ceil(dims.width / 8) * 8
-          serializable.height = Math.ceil(dims.height / 8) * 8
+          if (!serializable.width) {
+            serializable.width = Math.ceil(dims.width / 8) * 8
+          }
+          if (!serializable.height) {
+            serializable.height = Math.ceil(dims.height / 8) * 8
+          }
         }
       }
 
