@@ -792,8 +792,7 @@ std::string TranslationModel::getActiveBackendName() const {
 
 #ifdef HAVE_BERGAMOT
   if (backendType_ == BackendType::BERGAMOT) {
-    return bergamotCtx_ ? std::string("Bergamot-CPU")
-                        : std::string("Unloaded");
+    return bergamotCtx_ ? std::string("Bergamot-CPU") : std::string("Unloaded");
   }
 #endif
 
