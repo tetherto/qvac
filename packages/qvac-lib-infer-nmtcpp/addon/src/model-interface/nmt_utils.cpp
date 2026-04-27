@@ -92,8 +92,8 @@ bool nmt_name_contains_ci(
     const char* s = p;
     const char* n = needle;
     while (s < name_end && *n != '\0' &&
-           static_cast<char>(
-               std::tolower(static_cast<unsigned char>(*s))) == *n) {
+           static_cast<char>(std::tolower(static_cast<unsigned char>(*s))) ==
+               *n) {
       ++s;
       ++n;
     }
