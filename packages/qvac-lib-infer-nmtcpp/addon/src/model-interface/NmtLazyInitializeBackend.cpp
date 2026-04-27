@@ -19,6 +19,7 @@ using namespace qvac_lib_inference_addon_cpp::logger;
 std::mutex NmtLazyInitializeBackend::g_initMutex;
 bool NmtLazyInitializeBackend::g_initialized = false;
 std::string NmtLazyInitializeBackend::g_recordedBackendsDir;
+std::string NmtLazyInitializeBackend::g_recordedOpenclCacheDir;
 int NmtLazyInitializeBackend::g_refCount = 0;
 
 // Forward ggml's internal log stream to QLOG so diagnostic lines
@@ -193,15 +194,36 @@ bool NmtLazyInitializeBackend::initialize(
 
 #ifdef __ANDROID__
   if (!openclCacheDir.empty()) {
-    // Canonicalize the caller-supplied path before forwarding to setenv() so
-    // a value containing `..` segments cannot redirect the OpenCL JIT cache
-    // outside the caller-intended directory. lexically_normal() collapses
-    // path-traversal sequences without requiring the directory to exist on
-    // disk yet (the cache subdirectory is created on first use).
-    std::filesystem::path normalized =
-        std::filesystem::path(openclCacheDir).lexically_normal();
-    auto oclCachePath = (normalized / "opencl-cache").string();
-    setenv("GGML_OPENCL_CACHE_DIR", oclCachePath.c_str(), /*overwrite=*/1);
+    // lexically_normal() collapses redundant separators and `.`/`..` segments
+    // syntactically, but it does NOT prevent a caller-supplied absolute path
+    // with embedded `..` from escaping (e.g. `/tmp/foo/../../etc` →
+    // `/etc`). Defense-in-depth: require the input to be an absolute path
+    // and reject any normalised result that still contains a `..` segment
+    // (which would mean the original was relative and traversed upward).
+    // Skip the setenv when the input fails validation rather than forwarding
+    // a suspect path to GGML_OPENCL_CACHE_DIR.
+    std::filesystem::path requested(openclCacheDir);
+    std::filesystem::path normalized = requested.lexically_normal();
+    bool validPath = requested.is_absolute();
+    if (validPath) {
+      for (const auto& seg : normalized) {
+        if (seg == "..") {
+          validPath = false;
+          break;
+        }
+      }
+    }
+    if (!validPath) {
+      QLOG(
+          Priority::WARNING,
+          "Rejecting suspicious openclCacheDir (must be absolute and free of "
+          "'..' segments after normalization): " +
+              openclCacheDir);
+    } else {
+      auto oclCachePath = (normalized / "opencl-cache").string();
+      setenv("GGML_OPENCL_CACHE_DIR", oclCachePath.c_str(), /*overwrite=*/1);
+      g_recordedOpenclCacheDir = oclCachePath;
+    }
   }
 #endif
 
@@ -246,6 +268,15 @@ void NmtLazyInitializeBackend::decrementRefCount() {
           "Resetting backend state (reference count reached zero)");
       g_initialized = false;
       g_recordedBackendsDir.clear();
+#ifdef __ANDROID__
+      // Clear the process-global GGML_OPENCL_CACHE_DIR set during
+      // initialize() so a fresh initialize() with a different path is not
+      // shadowed by the stale value.
+      if (!g_recordedOpenclCacheDir.empty()) {
+        unsetenv("GGML_OPENCL_CACHE_DIR");
+        g_recordedOpenclCacheDir.clear();
+      }
+#endif
     }
   }
 }

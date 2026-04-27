@@ -220,10 +220,11 @@ void TranslationModel::load() {
     // heavy bergamot_init call doesn't serialize against
     // getActiveBackendName(); commit it under mtx_ so any concurrent reader
     // sees a consistent context state. Mirrors the GGML path below.
-    std::unique_ptr<bergamot_context, decltype(&bergamot_free)> freshBergamot(
-        bergamot_init(modelPath_.c_str(), params), &bergamot_free);
+    std::unique_ptr<bergamot_context, decltype(&bergamot_free)>
+        freshBergamotCtx(
+            bergamot_init(modelPath_.c_str(), params), &bergamot_free);
 
-    if (freshBergamot == nullptr) {
+    if (freshBergamotCtx == nullptr) {
       QLOG(
           qvac_lib_inference_addon_cpp::logger::Priority::ERROR,
           "[TRANSLATION MODEL] ERROR: Failed to initialize Bergamot backend!");
@@ -232,7 +233,7 @@ void TranslationModel::load() {
 
     {
       std::scoped_lock<std::mutex> lock(mtx_);
-      bergamotCtx_ = std::move(freshBergamot);
+      bergamotCtx_ = std::move(freshBergamotCtx);
     }
 
     QLOG(

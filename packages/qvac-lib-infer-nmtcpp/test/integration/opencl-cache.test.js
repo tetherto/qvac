@@ -55,7 +55,16 @@ async function loadAndTranslate (t, { modelPath, openclCacheDir, label }) {
   model.logger.setLevel('debug')
 
   const loadStart = Date.now()
-  await model.load()
+  // If load() throws, the freshly-constructed model is otherwise unreachable
+  // by the caller's finally block — tear it down explicitly so the native
+  // OpenCL context is released deterministically (Bare/mobile GC timing is
+  // non-deterministic). Mirrors the pattern in indictrans.test.js.
+  try {
+    await model.load()
+  } catch (err) {
+    try { await model.unload() } catch (_) { /* noop */ }
+    throw err
+  }
   const loadMs = Date.now() - loadStart
   const backendName = model.getActiveBackendName()
   t.comment(`${label} load wall-clock: ${loadMs} ms, backend=${backendName}`)
