@@ -67,6 +67,7 @@ import { DelegatedInferenceExecutor } from "./executors/delegated-inference-exec
 import { DesktopDiffusionExecutor } from "./executors/diffusion-executor.js";
 import { FinetuneExecutor } from "./executors/finetune-executor.js";
 import { LifecycleExecutor } from "../shared/executors/lifecycle-executor.js";
+import { ConfigExecutor } from "../shared/executors/config-executor.js";
 
 const resources = new ResourceManager();
 
@@ -325,6 +326,16 @@ resources.define("diffusion", {
 });
 
 export async function bootstrap() {
+  // Point the SDK at the committed e2e fixture unless the developer
+  // already provided their own qvac.config.json / QVAC_CONFIG_PATH.
+  // This exercises the registryDownloadMaxRetries + registryStreamTimeoutMs
+  // propagation end-to-end (see tests/config-tests.ts).
+  if (!process.env["QVAC_CONFIG_PATH"]) {
+    process.env["QVAC_CONFIG_PATH"] = path.resolve(
+      process.cwd(),
+      "fixtures/qvac.config.e2e.json",
+    );
+  }
   await resources.downloadAllOnce(console.log);
 };
 
@@ -355,6 +366,7 @@ export const executor = createExecutor({
     new DesktopDiffusionExecutor(resources),
     new FinetuneExecutor(resources),
     new LifecycleExecutor(resources),
+    new ConfigExecutor(),
   ],
   profiling: {
     init: () => profiler.enable({ mode: "summary", includeServerBreakdown: true }),
